@@ -700,3 +700,4 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
   .lp-card-off .lp-poster-card{display:none}
   .lp-card-off .lp-poster-page{break-after:auto}
 }
+.lp-screen-wait{font-size:clamp(1.4rem,3vw,2.2rem);color:var(--muted-foreground);margin-top:24px}

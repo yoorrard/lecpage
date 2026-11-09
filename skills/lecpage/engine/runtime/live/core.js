@@ -751,7 +751,7 @@
       var tmp = assign({}, op.doc, { id: 'tmp_' + op.cid, cid: op.cid, createdAt: now, updatedAt: now, _pending: true });
       if (this._me) tmp.by = this._me.id;
       if (op.col === 'questions') assign(tmp, { votes: 0, status: 'open', pinned: false, nickname: op.doc.anonymous === false && this._me ? this._me.nickname : '' });
-      if (op.col === 'posts') assign(tmp, { likes: 0, hidden: false, nickname: this._me ? this._me.nickname : '' });
+      if (op.col === 'posts') assign(tmp, { likes: 0, hidden: !!(this._state.ui || {}).moderation, nickname: this._me ? this._me.nickname : '' });
       if (op.col === 'chat' || op.col === 'help') tmp.nickname = this._me ? this._me.nickname : '';
       if (op.col === 'help') assign(tmp, { status: 'open', assignee: '' });
       if (op.col === 'progress' || op.col === 'answers' || op.col === 'survey' || op.col === 'attendance') {

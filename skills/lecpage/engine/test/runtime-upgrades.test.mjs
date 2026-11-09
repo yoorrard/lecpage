@@ -205,3 +205,27 @@ test('runtime scripts parse as classic scripts', () => {
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(runtimeDir, f), 'utf8'), { filename: f }), f);
   }
 });
+
+test('board moderation: new posts stay hidden until the instructor shows them (server and local)', async () => {
+  const srv = await startNodeServer({ adminKey: 'admin-key-2' });
+  try {
+    const a = api(srv.url, 'MODR1');
+    const p = (await a.call('POST', '/join', { body: { nickname: '글쓴이' } })).body;
+    const open = await a.call('POST', '/posts', { token: p.token, body: { text: '바로 보여요' } });
+    assert.equal(open.body.hidden, false);
+    assert.equal((await a.call('PUT', '/state', { admin: 'admin-key-2', body: { ui: { moderation: true } } })).status, 200);
+    const held = await a.call('POST', '/posts', { token: p.token, body: { text: '확인 뒤에 보여요' } });
+    assert.equal(held.body.hidden, true);
+    const pub = (await a.call('GET', '/snapshot?since=0')).body.posts.find((x) => x.id === held.body.id);
+    assert.equal(pub.text, '', 'hidden text is not sent to participants');
+    await a.call('PATCH', '/posts/' + held.body.id, { admin: 'admin-key-2', body: { hidden: false } });
+    assert.equal((await a.call('GET', '/snapshot?since=0')).body.posts.find((x) => x.id === held.body.id).text, '확인 뒤에 보여요');
+    assert.equal((await a.call('PUT', '/state', { body: { ui: { moderation: null } } })).status, 401, 'only the admin can switch it');
+  } finally { await srv.close(); }
+  const L = core(['local.js']);
+  const c = L.create({ provider: 'local', code: 'MODL' + Math.random().toString(36).slice(2, 6) });
+  await c.connect(); await c.join({ nickname: '로컬' });
+  await c.setState({ ui: { moderation: true } });
+  assert.equal((await c.add('posts', { text: '대기' })).hidden, true);
+  await c.close();
+});

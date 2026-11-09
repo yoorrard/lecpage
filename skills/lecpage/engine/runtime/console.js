@@ -2,6 +2,8 @@
  * 켜진 기능과 섹션의 패널만 만듭니다. 맨 위 '지금' 띠: 참여자·도움 요청·도와주세요 신호·열린 투표. */
 (function () {
   'use strict';
+  // 다른 사이트가 강사 화면을 틀(iframe)에 넣어 관리자 키를 가로채지 못하게(헤더를 못 바꾸는 GitHub Pages 대비). 앱 미리보기는 예외
+  try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.</p></body>'; return; } } catch (e) { return; }
   var doc = document, $ = function (s, r) { return (r || doc).querySelector(s); };
   var DATA = {}, BP = {};
   try { DATA = JSON.parse($('#lp-data').textContent); BP = JSON.parse($('#lp-blueprint').textContent); } catch (e) { }
@@ -16,6 +18,7 @@
   function has(f) { return feats.indexOf(f) >= 0; }
   function hasSec(t) { return secs.some(function (s) { return s.type === t; }); }
   var polls = []; secs.forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });
+  var MODERATE = secs.some(function (s) { return s.type === 'board' && s.moderation; });
   // 켜진 것만: 패널·불러올 컬렉션·내려받기 종류가 모두 이걸 따릅니다
   var ON = {
     progress: stations.length > 0 && has('progress'), help: has('help'), qa: hasSec('qa') || has('qa'), signal: has('signal'),
@@ -37,6 +40,8 @@
     }).then(function () {
       try { sessionStorage.setItem('lp-admin:' + DATA.live.code, key); } catch (e) { }
       form.hidden = true; main.hidden = false; build(); loadAll(); conn.subscribe(onEvent);
+      // 보드 '먼저 확인'(board.moderation): 서버가 새 글을 숨긴 채 받도록 상태에 적어 둠(관리자만 바꿀 수 있음)
+      var mod = MODERATE || null; if (((state.ui || {}).moderation || null) !== mod) conn.setState({ ui: { moderation: mod } }).catch(function () { });
     }, function (err) { toast('연결하지 못했어요: ' + (err && err.message || '키와 서버 주소를 확인해 주세요.')); });
   }
   function loadAll() {
@@ -220,7 +225,10 @@
   function renderBoard() {
     var bl = P.board.body; bl.textContent = ''; var bul = el('ul', 'lp-list'); var posts = vals('posts').sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
     if (!posts.length) bul.appendChild(el('li', 'lp-empty', '아직 글이 없어요.'));
-    posts.forEach(function (p) { var li = el('li'); li.appendChild(el('span', '', (p.nickname || '익명') + ': ' + (p.text || '(파일)').slice(0, 60) + (p.hidden ? ' · 숨김' : ''))); li.appendChild(btn(p.hidden ? '보이기' : '숨기기', 'lp-danger', function () { conn.update('posts', p.id, { hidden: !p.hidden }).catch(err); })); bul.appendChild(li); });
+    var waiting = posts.filter(function (p) { return p.hidden; }).length;
+    P.board.h.textContent = MODERATE ? '보드 관리 · 확인 기다림 ' + waiting : '보드 관리';
+    posts.forEach(function (p) { var li = el('li'); li.appendChild(el('span', '', (p.nickname || '익명') + ': ' + (p.text || '(파일)').slice(0, 60) + (p.hidden ? (MODERATE ? ' · 확인 기다림' : ' · 숨김') : ''))); li.appendChild(btn(p.hidden ? (MODERATE ? '보드에 올리기' : '보이기') : '숨기기', p.hidden ? (MODERATE ? 'lp-btn-primary' : '') : 'lp-danger', function () { conn.update('posts', p.id, { hidden: !p.hidden }).catch(err); })); bul.appendChild(li); });
+    if (MODERATE) bl.appendChild(el('p', 'lp-small', '먼저 확인하기가 켜져 있어요. 새 글은 \'보드에 올리기\'를 눌러야 참가자에게 보여요.'));
     bl.appendChild(bul);
   }
 
@@ -240,7 +248,7 @@
     if (BP.deck) {
       var r3 = el('div', 'lp-row'); var inp = el('input'); inp.type = 'number'; inp.min = 1; inp.max = BP.deck; inp.placeholder = '쪽'; inp.style.width = '6em'; inp.setAttribute('aria-label', '교재 쪽');
       r3.appendChild(el('span', '', '교재')); r3.appendChild(inp);
-      r3.appendChild(btn('이 쪽 보내기', '', function () { setState({ slide: +inp.value || 1 }); }));
+      r3.appendChild(btn('이 쪽 보내기', '', function () { setState({ slide: Math.max(1, Math.min(BP.deck, Math.round(+inp.value) || 1)) }); }));
       var pv = btn('◀', '', function () { setState({ slide: Math.max(1, (state.slide || 1) - 1) }); }); pv.setAttribute('aria-label', '앞 쪽'); r3.appendChild(pv);
       var nx = btn('▶', '', function () { setState({ slide: Math.min(BP.deck, (state.slide || 0) + 1) }); }); nx.setAttribute('aria-label', '다음 쪽'); r3.appendChild(nx);
       b.appendChild(r3); C.slide = inp;

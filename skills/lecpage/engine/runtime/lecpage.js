@@ -518,7 +518,7 @@
         var btn = bf.querySelector('[type=submit]'); btn.disabled = true; toast('올리는 중이에요…');
         var ups = Array.prototype.slice.call(files).map(function (f) { return conn.upload(f); });
         Promise.all(ups).then(function (fs) { return conn.add('posts', { kind: fd.get('kind') || '', text: (fd.get('text') || '').trim(), nickname: me.nickname, files: fs, license: fd.get('license') || 'own' }); })
-          .then(function (d) { if (d && d.id) posts[d.id] = d; bf.reset(); bf.hidden = true; drawBoard(); toast('올렸어요.'); }, function (err) { toast('올리지 못했어요: ' + (err && err.message || '파일 크기나 종류를 확인해 주세요.')); })
+          .then(function (d) { if (d && d.id) posts[d.id] = d; bf.reset(); bf.hidden = true; drawBoard(); toast(d && d.hidden ? '보냈어요. 강사가 확인하면 보드에 보여요.' : '올렸어요.'); }, function (err) { toast('올리지 못했어요: ' + (err && err.message || '파일 크기나 종류를 확인해 주세요.')); })
           .then(function () { btn.disabled = false; });
       });
     }

@@ -34,11 +34,33 @@ function robotsMeta(ctx, page) {
   return page === 'index' && ctx.bp.access?.mode === 'public' ? '' : '<meta name="robots" content="noindex, nofollow">';
 }
 
+/** 생성 사이트 보안 정책(CSP): 스크립트는 이 사이트와 지문을 고정한 라이브러리 경로만, 플러그인·base 바꾸기·틀 넣기 금지.
+ * file:은 USB·ZIP으로 열 때를 위해. 실시간 서버가 http(교실 LAN)면 그 주소도 허용 */
+export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/', 'https://cdn.jsdelivr.net/npm/ogl@1.0.11/', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/'];
+function cspMeta(ctx) {
+  let lan = '';
+  try { const u = new URL(ctx.bp.live?.url || ''); if (u.protocol === 'http:') lan = ` ${u.origin} ws://${u.host}`; } catch { /* 없음 */ }
+  const fonts = 'https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net';
+  const p = [
+    "default-src 'self' file:",
+    `script-src 'self' file: ${LIB_SCRIPT_SOURCES.join(' ')}`,
+    `style-src 'self' file: 'unsafe-inline' ${fonts}`,
+    "font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net",
+    "img-src 'self' file: data: blob: https:",
+    "media-src 'self' file: blob: https:",
+    `connect-src 'self' file: https: wss:${lan}`,
+    "frame-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'self'",
+  ];
+  return `<meta http-equiv="Content-Security-Policy" content="${p.join('; ')}">`;
+}
+
 function headTags(ctx, title, extraCss = [], page = 'app') {
   const m = ctx.bp.meta;
   const desc = m.description || m.subtitle || `${m.title} 연수 안내`;
   const bg = ctx.themeColor;
   return `<meta charset="utf-8">
+${cspMeta(ctx)}
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
@@ -308,7 +330,7 @@ export function renderPrivacy(ctx) {
 <h2>3. 보유 기간</h2><p>연수 종료 후 ${pv.retentionDays}일. 기간이 지나면 지체 없이 파기합니다.</p>
 <h2>4. 거부할 권리</h2><p>동의하지 않아도 사이트의 안내·교재·실습 화면은 그대로 쓸 수 있습니다. 다만 출석 확인 등 이름이 필요한 기능은 쓸 수 없습니다.</p>
 <h2>5. 처리 위탁 및 국외 이전</h2>${procs.length ? `<ul>${procs.map((p) => `<li>${esc(p.name)} (${esc(p.country)}) – ${esc(p.purpose)}</li>`).join('')}</ul>` : '<p>없음</p>'}
-<h2>6. 문의</h2><p>${esc(pv.contact || bp.instructors.find((i) => i.email)?.email || '연수 운영자에게 문의해 주세요.')}</p>
+<h2>6. 문의</h2><p>${esc(pv.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '연수 운영자에게 문의해 주세요.')}</p>
 <p class="lp-small">이 안내는 lecpage가 연수 설정에서 자동으로 만들었습니다. 기관의 개인정보 처리방침이 있으면 그것을 따릅니다.</p>
 <p><a class="lp-link" href="index.html">연수 사이트로 돌아가기</a></p></main>`;
   return appShell(ctx, `개인정보 처리 안내 · ${bp.meta.title}`, 'lp-body-doc', inner, []);

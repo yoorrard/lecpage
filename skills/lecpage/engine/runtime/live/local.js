@@ -132,7 +132,7 @@
         if (col === 'answers') match = function (x) { return x.by === by && x.poll === d.poll; };
         if (col === 'survey') match = function (x) { return x.by === by; };
         if (col === 'questions') U.assign(d, { anonymous: d.anonymous !== false, votes: 0, status: 'open', pinned: false, nickname: d.anonymous === false ? p.nickname : '' });
-        if (col === 'posts') U.assign(d, { likes: 0, hidden: false, nickname: p.nickname, files: d.files || [] });
+        if (col === 'posts') U.assign(d, { likes: 0, hidden: !!(config.moderation || (adapter._state().ui || {}).moderation), nickname: p.nickname, files: d.files || [] });
         if (col === 'chat') U.assign(d, { nickname: p.nickname, hidden: false });
         if (col === 'help') U.assign(d, { nickname: p.nickname, status: 'open', assignee: '' });
         if (col === 'polls') d.open = !!d.open;

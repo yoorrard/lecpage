@@ -600,6 +600,7 @@ export class LiveCore {
     if (s.maxUploadMb != null) settings.maxUploadMb = cleanNum(s.maxUploadMb, 'maxUploadMb', 1, Math.floor(this.cfg.maxUploadBytes / 1048576), { int: true });
     if (s.uploads != null) settings.uploads = cleanBool(s.uploads, 'uploads', true);
     if (s.title != null) settings.title = cleanText(s.title, 120, 'title');
+    if (s.moderation != null) settings.moderation = cleanBool(s.moderation, 'moderation', false);
     const now = this.now();
     this.db.run(`INSERT INTO trainings (code, admin_hash, settings, created_at, last_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET admin_hash = excluded.admin_hash, settings = excluded.settings, last_at = excluded.last_at`, code, hash, JSON.stringify(settings), now, now);
     return { status: existing ? 200 : 201, body: { ok: true, code, settings } };
@@ -719,7 +720,8 @@ export class LiveCore {
       case 'survey': k = by; break;
       case 'help': Object.assign(data, { nickname, status: 'open', assignee: '' }); break;
       case 'questions': Object.assign(data, { nickname: data.anonymous ? '' : nickname, votes: 0, status: 'open', pinned: false }); break;
-      case 'posts': Object.assign(data, { nickname, likes: 0, hidden: false }); break;
+      // board pre-moderation: new posts stay hidden until the instructor shows them (init setting or state.ui.moderation, both admin-only)
+      case 'posts': Object.assign(data, { nickname, likes: 0, hidden: !admin && (t.settingsObj?.moderation === true || this.state(code, t).ui?.moderation === true) }); break;
       case 'chat': Object.assign(data, { nickname, hidden: false }); break;
       default: break;
     }

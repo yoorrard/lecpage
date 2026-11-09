@@ -10,7 +10,7 @@
 //   node lecpage.mjs serve <dist> [--port 4173]
 //   node lecpage.mjs qa <dist> [--out qa]
 //   node lecpage.mjs pack <dist> -o site.zip
-import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync } from 'node:fs';
 import { join, extname, resolve, dirname, relative, isAbsolute } from 'node:path';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -96,6 +96,8 @@ switch (cmd) {
     const n = N.writeFiles(dir, files).length;
     const tdir = dir + '-강사용';
     N.writeFiles(tdir, r.teacher);
+    // 예전 판이 사이트 폴더에 남긴 강사용 파일은 지움(올리면 공개되므로)
+    for (const f of Object.keys(r.teacher)) { try { rmSync(join(dir, f), { force: true }); } catch { /* 없음 */ } }
     console.log(`완료: ${dir} (파일 ${n}개, 약 ${r.report.sizeKB}KB) · 프리셋 ${r.report.preset} · 모션 ${r.report.motion} · 실시간 ${r.report.live} · 공개 ${password ? "암호" : r.blueprint.access.mode}`);
     console.log(`강사용 파일(올리지 마세요): ${tdir} (DESIGN.md · 운영안내.md · 설계도)`);
     console.log('효과: ' + (r.report.effects.join(', ') || '없음'));

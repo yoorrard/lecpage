@@ -214,6 +214,8 @@
     if (p) {
       main.appendChild(el('h2', 'lp-h2', p.question));
       var list = Object.keys(answers).map(function (k) { return answers[k]; }).filter(function (a) { return a.poll === p.id; }), total = list.length;
+      // 결과는 강사가 '결과 공개'를 누른 뒤에만(먼저 보이면 다른 사람 답을 따라가게 됨)
+      if (X.revealed && !X.revealed(state, p.id)) { main.appendChild(el('p', 'lp-screen-wait', '응답 ' + total + '명 · 강사가 결과를 공개하면 여기에 보여요')); return; }
       if (p.kind === 'word') {
         var words = U.wordCloud(list, p.id, { hidden: X.hiddenWords(state) }), wt = words.reduce(function (a, w) { return a + w.count; }, 0) || 1;
         var cl = el('div', 'lp-cloud'); words.slice(0, 50).forEach(function (w) { var s = el('span', '', w.word); s.style.fontSize = (1.4 + Math.min(4, w.count / wt * 10)) + 'rem'; cl.appendChild(s); }); main.appendChild(cl);

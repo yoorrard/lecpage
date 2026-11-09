@@ -59,14 +59,23 @@
     if (!/^[a-z]+:/i.test(url) && url.indexOf('//') !== 0) return true; // 같은 사이트 상대 경로(USB·오프라인 배포)
     return /^https:\/\/cdn\.jsdelivr\.net\/(npm|gh)\/[^/]+@\d/.test(url) || /^https:\/\/cdn\.jsdelivr\.net\/(npm|gh)\/@[^/]+\/[^/]+@\d/.test(url);
   }
+  // 외부 라이브러리는 내용 지문(SRI)이 맞을 때만 실행(CDN이 바뀌거나 뚫려도 다른 코드가 돌지 않게)
+  var SRI = {
+    'https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js': 'sha384-3vCAhD+a3BOliP3QqjQINn6ZWiZxoqu0WFxX5ZQZgqekDZuSb1mJBrrLMmu94H8f',
+    'https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/ScrollTrigger.min.js': 'sha384-H2WL1iy/jKQQ7MTHU2hskZKNHTYWWD/KgKE1vCNnaWY8An2ESTh23KN/fTp8XS3j',
+    'https://cdn.jsdelivr.net/npm/lenis@1.3.27/dist/lenis.min.js': 'sha384-R18XzqnxvVLEF+BYfhpmDx30v7eP83fAckyfoRzK7/Uf6nGqufcmsk0eAKo7S3RU'
+  };
   function load(url) {
     if (loads[url]) return loads[url];
     loads[url] = new Promise(function (res) {
       if (!allowed(url)) { res(false); return; }
+      var abs = /^https:/i.test(url);
+      if (abs && !SRI[url]) { res(false); return; } // 지문이 없는 외부 스크립트는 받지 않음
       var s = d.createElement('script');
       var t = setTimeout(function () { done(false); }, 12000);
       function done(ok) { clearTimeout(t); s.onload = s.onerror = null; res(ok); }
       s.src = url; s.async = true; s.crossOrigin = 'anonymous';
+      if (abs) s.integrity = SRI[url];
       s.onload = function () { done(true); };
       s.onerror = function () { done(false); };
       (d.head || html).appendChild(s);
@@ -78,7 +87,9 @@
     if (loads['esm:' + url]) return loads['esm:' + url];
     loads['esm:' + url] = new Promise(function (res) {
       if (!allowed(url)) { res(null); return; }
-      try { dynImport = dynImport || new Function('u', 'return import(u)'); } catch (e) { res(null); return; }
+      // ESM은 정해 둔 한 곳(OGL 고정 판)만. eval·new Function을 쓰지 않아 엄격한 CSP에서도 동작
+      if (url !== 'https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm') { res(null); return; }
+      dynImport = dynImport || function (u) { return import(u); };
       var t = setTimeout(function () { res(null); }, 15000);
       dynImport(url).then(function (m) { clearTimeout(t); res(m); }, function () { clearTimeout(t); res(null); });
     });

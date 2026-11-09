@@ -5,7 +5,7 @@ import { resolveDesign } from './decide/design.js';
 import { decideInfra } from './decide/infra.js';
 import { themeCSS, themeTokens, presetWithOverrides } from './design/tokens.js';
 import { getPreset } from './design/presets.js';
-import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, designDoc, opsDoc } from './render/pages.js';
+import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, renderPoster, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
@@ -66,6 +66,7 @@ export function build(input, opts = {}) {
   files['index.html'] = renderIndex(ctx);
   files['check.html'] = renderCheck(ctx);
   files['screen.html'] = renderScreen(ctx);
+  files['poster.html'] = renderPoster(ctx); // A4 QR 안내문(인쇄용) + 강사용 카드
   if (live) { files['console.html'] = renderConsole(ctx); files['privacy.html'] = renderPrivacy(ctx); }
 
   files['assets/theme.css'] = theme.css;
@@ -93,6 +94,9 @@ export function build(input, opts = {}) {
   }
 
   const infra = opts.infra ? decideInfra(opts.infra) : null;
+  // Netlify·Cloudflare가 읽는 응답 헤더(GitHub Pages는 무시): 강사 화면을 다른 사이트 틀(iframe)에 못 넣게
+  files['_headers'] = ['/*', '  X-Content-Type-Options: nosniff', '  Referrer-Policy: strict-origin-when-cross-origin', '  Permissions-Policy: camera=(), microphone=(), geolocation=()', '',
+    ...['/console.html', '/screen.html', '/poster.html'].flatMap((p) => [p, "  Content-Security-Policy: frame-ancestors 'none'", '  X-Frame-Options: DENY', '']), '/assets/*', '  X-Content-Type-Options: nosniff', ''].join('\n');
   // 검색 노출: 'public'일 때만 허용(기본은 주소·QR을 받은 사람만)
   files['robots.txt'] = bp.access.mode === 'public' ? 'User-agent: *\nAllow: /\n' : 'User-agent: *\nDisallow: /\n';
   // 강사용 파일은 올리는 사이트와 따로 돌려줌(설계도에는 강사 메일 등 공개하지 않을 값이 있을 수 있음)
