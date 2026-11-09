@@ -8,6 +8,10 @@
  *   POST text/plain {a:'join'|'snapshot'|'add'|'update'|'remove'|'vote'|'like'|'setState'|'react'|'upload'|'export'|'purge'|'checkAdmin', ...}
  *   → {ok:true, data} or {ok:false, status, error, message}   (Apps Script cannot set HTTP status codes)
  * Writes take LockService's script lock. Values that look like formulas are stored as text.
+ * Security: one sheet = one training code (fixed by setup, or by the first join/admin call); wrong admin keys are
+ * counted (20 per 10 minutes, then 429 for everyone — Apps Script cannot see client IPs); board files must be Drive
+ * files this script created for that participant; they are shared only while their post is visible and trashed on
+ * remove, purge and retention clean-up.
  */
 var VERSION = '1.0.0';
 var COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
@@ -26,6 +30,11 @@ var BASE = ['id', 'code', 'by', 'key', 'cid', 'createdAt', 'updatedAt'];
 var TYPES = { createdAt: 'n', updatedAt: 'n', votes: 'n', likes: 'n', at: 'n', consentAt: 'n', anonymous: 'b', pinned: 'b', hidden: 'b', open: 'b', files: 'j', options: 'j', value: 'j', answers: 'j' };
 var LIMITS = { nickname: 20, name: 40, school: 60, question: 500, post: 1000, chat: 300, help: 300, seat: 20, id: 64, kind: 32, pollQuestion: 200, option: 100, answer: 200, notice: 300, timerLabel: 40, license: 40, assignee: 20, cid: 40 };
 var RATE = { write: 90, questions: 8, help: 6, posts: 12, chat: 30, vote: 120, react: 90, upload: 10, join: 600 };
+var AUTH_FAILS = 20;          // wrong admin keys per 10 minutes before the sheet answers 429
+var MAX_PARTICIPANTS = 500;
+var RESERVED = ['강사', '강사님', '운영자', '운영자님', 'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'];
+var WEAK_KEYS = ['change-me', 'changeme', 'change-me-관리자키', '관리자키', '관리자 키', '연수관리자키', '내관리자키', '관리자키-8자-이상',
+  '여기에-관리자-키-8자-이상', 'admin', 'administrator', 'password', 'password123', 'qwerty', '12345678', '123456789012', 'lecpage', 'correct-horse-battery'];
 var EMOJIS = ['👍', '❤️', '👏', '🎉', '😂', '😮', '🤔', '🙏', '🔥', '💯', '🙌', '😢', '✅', '❓', '💡'];
 var UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'application/pdf': 'pdf', 'audio/mpeg': 'mp3', 'video/mp4': 'mp4' };
 
@@ -41,9 +50,11 @@ function onOpen() {
     .addItem('실시간 데이터 모두 지우기', 'menuPurge')
     .addToUi();
 }
-function setup() {
+/** setup('AB12CD') from the editor, or the menu (asks for the code). Fixes the training code of this sheet:
+ *  requests with any other code are refused (L11). Without a code the first join or admin call fixes it. */
+function setup(code) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  COLS.concat(['tombstones', 'votes']).forEach(function (name) {
+  COLS.concat(['tombstones', 'votes', 'files']).forEach(function (name) {
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
     var head = headerOf(name);
     sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
@@ -52,19 +63,29 @@ function setup() {
   });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('RETENTION_DAYS')) props.setProperty('RETENTION_DAYS', '30');
-  try { SpreadsheetApp.getUi().alert('준비가 끝났어요. 이제 lecpage 메뉴에서 "관리자 키 정하기"를 눌러 주세요.'); } catch (e) { /* run from editor */ }
+  if (typeof code === 'string' && code.trim()) props.setProperty('CODE', checkCode(code));
+  try {
+    var ui = SpreadsheetApp.getUi();
+    if (!props.getProperty('CODE')) {
+      var r = ui.prompt('연수 코드', '사이트의 연수 코드(영문·숫자, 예: AB12CD)를 적어 주세요. 이 시트는 이 코드만 받습니다.', ui.ButtonSet.OK_CANCEL);
+      if (r.getSelectedButton() === ui.Button.OK && String(r.getResponseText() || '').trim()) props.setProperty('CODE', checkCode(r.getResponseText()));
+    }
+    ui.alert('준비가 끝났어요. 이제 lecpage 메뉴에서 "관리자 키 정하기"를 눌러 주세요.');
+  } catch (e) { if (e && e.lec) throw e; /* run from the editor */ }
 }
 function headerOf(name) {
   if (name === 'tombstones') return ['col', 'id', 'code', 'at'];
   if (name === 'votes') return ['col', 'doc', 'by', 'code'];
+  if (name === 'files') return ['id', 'code', 'by', 'post', 'type', 'createdAt'];
   return BASE.concat(FIELDS[name]);
 }
 function menuSetAdminKey() {
   var ui = SpreadsheetApp.getUi();
-  var r = ui.prompt('관리자 키 정하기', '강사 콘솔에 넣을 비밀번호를 8자 이상으로 정해 주세요. 시트에는 저장되지 않고, 해시(SHA-256)만 스크립트 속성에 남습니다.', ui.ButtonSet.OK_CANCEL);
+  var r = ui.prompt('관리자 키 정하기', '강사 콘솔에 넣을 비밀번호를 12자 이상으로 정해 주세요. 시트에는 저장되지 않고, 해시(SHA-256)만 스크립트 속성에 남습니다.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var key = r.getResponseText();
-  if (!key || key.length < 8) { ui.alert('8자 이상으로 정해 주세요.'); return; }
+  var why = keyProblem(key);
+  if (why) { ui.alert(why); return; }
   PropertiesService.getScriptProperties().setProperty('ADMIN_HASH', sha256hex(key));
   ui.alert('관리자 키를 저장했어요. 키는 다시 보여 주지 않으니 따로 적어 두세요.');
 }
@@ -73,18 +94,18 @@ function menuSetCode() {
   var r = ui.prompt('연수 코드', '이 시트를 쓸 연수 코드(영문·숫자). 비우면 어떤 코드든 받습니다.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var c = String(r.getResponseText() || '').trim().toUpperCase();
-  if (c) PropertiesService.getScriptProperties().setProperty('CODE', normCode(c)); else PropertiesService.getScriptProperties().deleteProperty('CODE');
-  ui.alert(c ? '연수 코드를 ' + c + '(으)로 고정했어요.' : '연수 코드 고정을 풀었어요.');
+  if (c) PropertiesService.getScriptProperties().setProperty('CODE', checkCode(c)); else PropertiesService.getScriptProperties().deleteProperty('CODE');
+  ui.alert(c ? '연수 코드를 ' + c + '(으)로 고정했어요.' : '연수 코드 고정을 풀었어요. 다음 참여나 관리자 연결 때의 코드로 다시 고정됩니다.');
 }
 function menuToggleUploads() {
   var p = PropertiesService.getScriptProperties();
   var on = p.getProperty('UPLOADS') === 'on';
   p.setProperty('UPLOADS', on ? 'off' : 'on');
-  SpreadsheetApp.getUi().alert(on ? '파일 올리기를 껐어요.' : '파일 올리기를 켰어요. 올린 파일은 내 드라이브의 "lecpage 업로드" 폴더에 "링크가 있는 모든 사용자 보기"로 저장됩니다(학교 계정은 막혀 있을 수 있어요).');
+  SpreadsheetApp.getUi().alert(on ? '파일 올리기를 껐어요.' : '파일 올리기를 켰어요. 올린 파일은 내 드라이브의 "lecpage 업로드" 폴더에 저장되고, 보드에 보이는 동안만 "링크가 있는 모든 사용자 보기"로 공유됩니다(숨기면 비공개, 지우거나 보관 기간이 끝나면 휴지통). 학교 계정은 막혀 있을 수 있어요.');
 }
 function menuShowSettings() {
   var p = PropertiesService.getScriptProperties();
-  SpreadsheetApp.getUi().alert('관리자 키: ' + (p.getProperty('ADMIN_HASH') ? '설정됨' : '없음(꼭 정하세요)') + '\n연수 코드: ' + (p.getProperty('CODE') || '제한 없음') + '\n파일 올리기: ' + (p.getProperty('UPLOADS') === 'on' ? '켜짐' : '꺼짐') + '\n보관 기간: ' + (p.getProperty('RETENTION_DAYS') || '30') + '일\n버전: ' + VERSION);
+  SpreadsheetApp.getUi().alert('관리자 키: ' + (p.getProperty('ADMIN_HASH') ? '설정됨' : '없음(꼭 정하세요)') + '\n연수 코드: ' + (p.getProperty('CODE') || '아직 없음(첫 참여 때 고정)') + '\n파일 올리기: ' + (p.getProperty('UPLOADS') === 'on' ? '켜짐' : '꺼짐') + '\n보관 기간: ' + (p.getProperty('RETENTION_DAYS') || '30') + '일\n버전: ' + VERSION);
 }
 function menuPurge() {
   var ui = SpreadsheetApp.getUi();
@@ -98,6 +119,8 @@ function cleanup() {
   var days = Number(p.getProperty('RETENTION_DAYS') || 30);
   var last = Number(p.getProperty('LAST_AT') || 0);
   if (last && Date.now() - last > days * 864e5) withLock(function () { wipeAll(); });
+  // uploads never attached to a post within a day go to the Drive trash
+  else withLock(function () { trashFiles(rows('files').filter(function (r) { return !r.post && Date.now() - Number(r.createdAt || 0) > 864e5; }).map(function (r) { return r.id; })); });
 }
 
 // ---------------------------------------------------------------- web app entry points
@@ -128,8 +151,8 @@ function doPost(e) {
       case 'react': return react(b);
       case 'upload': return upload(b);
       case 'export': return exportCsv(b);
-      case 'purge': return withLock(function () { requireAdmin(b.admin); wipeAll(); return { ok: true }; });
-      case 'checkAdmin': return isAdmin(b.admin);
+      case 'purge': return withLock(function () { normCode(b.code); requireAdmin(b.admin); wipeAll(); return { ok: true }; });
+      case 'checkAdmin': { var c0 = normCode(b.code); var ok = adminOk(b.admin); if (ok) normCode(c0, true); return ok; }
       default: throw httpErr(400, 'bad_action', '알 수 없는 요청입니다.');
     }
   });
@@ -159,18 +182,53 @@ function hashEqual(a, b) {
   var d = 0; for (var i = 0; i < 64; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-function normCode(c) {
+function checkCode(c) {
   c = String(c || '').trim().toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9_-]{2,39}$/.test(c)) throw httpErr(400, 'bad_code', '연수 코드는 영문·숫자 3~40자입니다.');
-  var fixed = PropertiesService.getScriptProperties().getProperty('CODE');
+  return c;
+}
+/** One sheet = one training (L11). claim: a join or an admin call fixes the code when setup did not. */
+function normCode(c, claim) {
+  c = checkCode(c);
+  var props = PropertiesService.getScriptProperties();
+  var fixed = props.getProperty('CODE');
+  if (!fixed && claim) { props.setProperty('CODE', c); fixed = c; }
   if (fixed && fixed !== c) throw httpErr(404, 'unknown_training', '이 시트는 다른 연수 코드용입니다.');
   return c;
+}
+function keyProblem(key) {
+  var k = String(key || '').normalize('NFC').trim().toLowerCase();
+  if (Array.from(k).length < 12) return '관리자 키는 12자 이상이어야 합니다.';
+  if (WEAK_KEYS.indexOf(k) >= 0 || /^change-?me/.test(k)) return '예시로 쓰인 관리자 키는 쓸 수 없습니다. 새로 만들어 주세요.';
+  var seen = {}; Array.from(k).forEach(function (ch) { seen[ch] = 1; });
+  if (Object.keys(seen).length < 4) return '같은 글자가 반복된 키는 쓸 수 없습니다.';
+  return null;
 }
 function isAdmin(key) {
   var h = PropertiesService.getScriptProperties().getProperty('ADMIN_HASH');
   return !!(h && typeof key === 'string' && key.length > 0 && key.length <= 200 && hashEqual(sha256hex(key), h));
 }
-function requireAdmin(key) { if (!isAdmin(key)) throw httpErr(key ? 403 : 401, 'admin_required', '관리자 키가 필요합니다.'); }
+/** H4: a sent admin key is checked here. Wrong keys are counted in CacheService (10-minute windows); after
+ *  AUTH_FAILS every admin call answers 429 — the right key too, so guessing learns nothing. */
+function adminOk(key) {
+  if (key == null || key === '') return false;
+  var cache = CacheService.getScriptCache(); var win = Math.floor(Date.now() / 600000); var k = 'af:' + win;
+  var n = Number(cache.get(k) || 0);
+  if (n >= AUTH_FAILS) throw httpErr(429, 'rate_limited', '관리자 키가 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.', { retryAfter: Math.max(1, Math.ceil(((win + 1) * 600000 - Date.now()) / 1000)) });
+  if (isAdmin(key)) return true;
+  cache.put(k, String(n + 1), 900);
+  return false;
+}
+function requireAdmin(key) { if (!adminOk(key)) throw httpErr(key ? 403 : 401, 'admin_required', '관리자 키가 필요합니다.'); }
+function reservedNick(n) {
+  var s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '');
+  return RESERVED.indexOf(s) >= 0;
+}
+function cleanNick(v, required) {
+  var s = cleanText(v, LIMITS.nickname, 'nickname', { required: !!required });
+  if (s && reservedNick(s)) throw httpErr(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.');
+  return s;
+}
 function stamp() {
   var p = PropertiesService.getScriptProperties();
   var t = Math.max(Date.now(), Number(p.getProperty('STAMP') || 0) + 1);
@@ -205,15 +263,56 @@ function cleanEnum(v, list, field, dflt) {
 }
 function cleanBool(v, field, dflt) { if (v == null) return dflt; if (typeof v !== 'boolean') throw httpErr(400, 'invalid_type', field + ': true/false'); return v; }
 function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
-function cleanFiles(v) {
+function driveUrl(id, type) { return type.indexOf('image/') === 0 ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1600' : 'https://drive.google.com/file/d/' + id + '/view'; }
+function driveId(f) {
+  if (isObj(f) && typeof f.id === 'string' && /^[A-Za-z0-9_-]{10,100}$/.test(f.id)) return f.id;
+  var m = /^https:\/\/drive\.google\.com\/(?:thumbnail\?id=|file\/d\/)([A-Za-z0-9_-]{10,100})(?:[&/][^\s<>"]*)?$/.exec(String((f && f.url) || ''));
+  return m ? m[1] : null;
+}
+/** M7: only Drive files this script created for this participant and training, not used by another post.
+ *  The URL is rebuilt from the file id (never an outside address). */
+function cleanFiles(v, code, me, postId) {
   if (v == null) return [];
   if (!Array.isArray(v) || v.length > 5) throw httpErr(400, 'invalid_value', 'files: 5개까지');
+  var seen = {};
   return v.map(function (f) {
     if (!isObj(f) || !UPLOAD_TYPES[f.type]) throw httpErr(415, 'unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.');
-    var url = cleanText(f.url, 500, 'files.url', { required: true });
-    if (!/^https:\/\/[^\s<>"]+$/.test(url)) throw httpErr(400, 'invalid_value', 'files.url: https 주소');
-    return { url: url, name: cleanText(f.name, 120, 'files.name'), type: f.type, size: typeof f.size === 'number' ? Math.max(0, Math.floor(f.size)) : 0 };
+    var id = driveId(f);
+    var rec = id && !seen[id] && me ? rows('files').filter(function (r) { return r.id === id && r.code === code && r.by === me.id; })[0] : null;
+    if (!rec || (rec.post && rec.post !== postId)) throw httpErr(400, 'invalid_value', 'files: 이 연수에 내가 올린 파일만 붙일 수 있어요.');
+    seen[id] = 1;
+    var type = UPLOAD_TYPES[rec.type] ? rec.type : f.type;
+    return { id: id, url: driveUrl(id, type), name: cleanText(f.name, 120, 'files.name'), type: type, size: typeof f.size === 'number' ? Math.max(0, Math.floor(f.size)) : 0 };
   });
+}
+function uploadsOn(code) {
+  var p = PropertiesService.getScriptProperties();
+  return p.getProperty('UPLOADS') === 'on' && (getState(code).ui || {}).uploads !== false;
+}
+function moderated(code) {
+  return PropertiesService.getScriptProperties().getProperty('MODERATION') === 'on' || (getState(code).ui || {}).moderation === true;
+}
+/** H3: Drive sharing follows the post — link-shared while visible, private while hidden, trashed when removed. */
+function shareFiles(code, postId, files, visible) {
+  (files || []).forEach(function (f) {
+    var id = driveId(f); if (!id) return;
+    var rec = rows('files').filter(function (r) { return r.id === id && r.code === code; })[0];
+    if (!rec) return;
+    if (postId && rec.post !== postId) { rec.post = postId; writeRow('files', rec); }
+    try {
+      var file = DriveApp.getFileById(id);
+      if (visible) file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      else file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+    } catch (e) { console.error('lecpage share: ' + (e && e.message)); }
+  });
+}
+function trashFiles(ids) {
+  var gone = {};
+  (ids || []).forEach(function (id) { if (!id || gone[id]) return; gone[id] = 1; try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* already gone */ } });
+  if (!Object.keys(gone).length) return;
+  var sh = sheet('files');
+  rows('files').filter(function (r) { return gone[r.id]; }).map(function (r) { return r._row; }).sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+  delete memo.files;
 }
 function cleanValue(v) {
   if (Array.isArray(v)) {
@@ -278,10 +377,12 @@ function writeRow(col, doc) {
   else { sh.appendRow(line); doc._row = sh.getLastRow(); if (memo[col]) memo[col].push(doc); }
   return doc;
 }
-function out(col, d, admin) {
+var OWN_BY = { answers: 1, progress: 1, help: 1 };
+/** viewer: the reading participant — answers/progress/help keep `by` only on the reader's own docs (L3). */
+function out(col, d, admin, viewer) {
   var o = { id: d.id, createdAt: d.createdAt, updatedAt: d.updatedAt };
   FIELDS[col].forEach(function (f) { o[f] = d[f]; });
-  if (d.by && col !== 'questions' && col !== 'participants') o.by = d.by;
+  if (d.by && col !== 'questions' && col !== 'participants' && (admin || !OWN_BY[col] || (viewer && d.by === viewer))) o.by = d.by;
   if (d.cid) o.cid = d.cid;
   if (!admin) {
     if (col === 'questions' && o.status === 'hidden') o.text = '';
@@ -309,11 +410,12 @@ function getState(code) {
 
 // ---------------------------------------------------------------- actions
 function join(b) {
-  var code = normCode(b.code);
-  var nickname = cleanText(b.nickname, LIMITS.nickname, 'nickname') || '참가자';
+  var code = normCode(b.code, true);
+  var nickname = cleanNick(b.nickname) || '참가자';
   var name = cleanText(b.name, LIMITS.name, 'name'); var school = cleanText(b.school, LIMITS.school, 'school');
   if ((name || school) && b.consent !== true) throw httpErr(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
   rateHit('join', code, RATE.join);
+  if (rows('participants').filter(function (r) { return r.code === code; }).length >= MAX_PARTICIPANTS) throw httpErr(403, 'room_full', '참가 인원이 가득 찼어요. 강사에게 알려 주세요.');
   var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   var now = stamp();
   var d = { id: uid('p'), code: code, by: '', key: sha256hex(token), createdAt: now, updatedAt: now, nickname: nickname, name: name, school: school, consentAt: b.consent === true ? now : null };
@@ -324,7 +426,8 @@ function join(b) {
 function snapshot(b) {
   var code = normCode(b.code);
   var since = Math.max(0, Number(b.since) || 0);
-  var admin = isAdmin(b.admin);
+  var admin = adminOk(b.admin);
+  if (admin) normCode(code, true);
   var cache = CacheService.getScriptCache();
   var full = null;
   if (!admin) { var c = cache.get('snap'); if (c) { try { full = JSON.parse(c); } catch (e) { full = null; } } }
@@ -343,7 +446,11 @@ function snapshot(b) {
   if (!admin && b.token) {
     try {
       var me = participant(code, b.token);
-      ['attendance', 'survey'].forEach(function (col) { res[col] = rows(col).filter(function (r) { return r.code === code && r.by === me.id && r.updatedAt > since; }).map(function (r) { return out(col, r, false); }); });
+      ['attendance', 'survey'].forEach(function (col) { res[col] = rows(col).filter(function (r) { return r.code === code && r.by === me.id && r.updatedAt > since; }).map(function (r) { return out(col, r, false, me.id); }); });
+      ['answers', 'progress', 'help'].forEach(function (col) {
+        var mine = {}; rows(col).forEach(function (r) { if (r.code === code && r.by === me.id) mine[r.id] = 1; });
+        (res[col] || []).forEach(function (d) { if (mine[d.id]) d.by = me.id; });
+      });
       res.me = { id: me.id, nickname: me.nickname };
     } catch (e) { /* not joined */ }
   }
@@ -359,7 +466,7 @@ function add(b) {
   if (COLS.indexOf(col) < 0 || col === 'participants') throw httpErr(404, 'unknown_collection', '없는 컬렉션입니다.');
   if (!isObj(doc)) throw httpErr(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.');
   var me = null;
-  if (col === 'polls') requireAdmin(b.admin);
+  if (col === 'polls') { requireAdmin(b.admin); normCode(code, true); }
   else { me = participant(code, b.token); rateHit('write', me.id, RATE.write); if (RATE[col]) rateHit(col, me.id, RATE[col]); }
   var cid = doc.cid == null ? '' : cleanText(doc.cid, LIMITS.cid, 'cid');
   var by = me ? me.id : '';
@@ -376,8 +483,9 @@ function add(b) {
       break;
     }
     case 'posts':
-      d = { kind: cleanText(doc.kind || 'post', LIMITS.kind, 'kind'), text: cleanText(doc.text, LIMITS.post, 'text', { multiline: true }), files: cleanFiles(doc.files), license: cleanText(doc.license, LIMITS.license, 'license'), nickname: me.nickname, likes: 0, hidden: false };
+      d = { kind: cleanText(doc.kind || 'post', LIMITS.kind, 'kind'), text: cleanText(doc.text, LIMITS.post, 'text', { multiline: true }), files: cleanFiles(doc.files, code, me, ''), license: cleanText(doc.license, LIMITS.license, 'license'), nickname: me.nickname, likes: 0, hidden: moderated(code) };
       if (!d.text && !d.files.length) throw httpErr(400, 'required', 'text 또는 files가 필요합니다.');
+      if (d.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
       break;
     case 'polls': {
       if (doc.options != null && (!Array.isArray(doc.options) || doc.options.length > 20)) throw httpErr(400, 'invalid_value', 'options: 20개까지');
@@ -405,6 +513,7 @@ function add(b) {
   var row = { id: uid(col.charAt(0)), code: code, by: by, key: key, cid: cid, createdAt: now, updatedAt: now };
   Object.keys(d).forEach(function (k) { row[k] = d[k]; });
   writeRow(col, row);
+  if (col === 'posts' && row.files && row.files.length) shareFiles(code, row.id, row.files, !row.hidden);
   return out(col, row, true);
 }
 var OWNER_PATCH = { participants: ['nickname'], progress: ['status'], help: ['station', 'seat', 'message', 'status'], questions: ['text'], posts: ['kind', 'text', 'files', 'license'], answers: ['value'], survey: ['answers'] };
@@ -413,7 +522,8 @@ function update(b) {
   var code = normCode(b.code); var col = b.col;
   if (COLS.indexOf(col) < 0) throw httpErr(404, 'unknown_collection', '없는 컬렉션입니다.');
   if (!isObj(b.patch)) throw httpErr(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.');
-  var admin = isAdmin(b.admin);
+  var admin = adminOk(b.admin);
+  if (b.admin && !admin) throw httpErr(403, 'admin_required', '관리자 키가 필요합니다.');
   var cur = rows(col).filter(function (r) { return r.code === code && r.id === b.id; })[0];
   if (!cur) throw httpErr(404, 'not_found', '없는 글입니다.');
   var owner = false;
@@ -422,14 +532,17 @@ function update(b) {
     owner = col === 'participants' ? cur.id === me.id : cur.by === me.id;
     if (!owner) throw httpErr(403, 'forbidden', '내 글만 고칠 수 있어요.');
     if ((col === 'questions' && cur.status === 'hidden') || ((col === 'posts' || col === 'chat') && cur.hidden)) throw httpErr(403, 'forbidden', '숨겨진 글은 고칠 수 없어요.');
+    // L1: an answer cannot change once its poll is closed (same rule as a new answer)
+    if (col === 'answers') { var poll = rows('polls').filter(function (r) { return r.code === code && r.id === cur.poll; })[0]; if (poll && poll.open === false) throw httpErr(409, 'poll_closed', '투표가 닫혔어요.'); }
   }
+  var oldFiles = col === 'posts' ? (cur.files || []).slice() : null; var wasHidden = !!cur.hidden;
   var allowed = (admin ? ADMIN_PATCH[col] : OWNER_PATCH[col]) || [];
   var p = b.patch; var changed = 0;
   Object.keys(p).forEach(function (k) {
     if (allowed.indexOf(k) < 0) return;
     var v = p[k]; changed++;
     switch (col + '.' + k) {
-      case 'participants.nickname': cur.nickname = cleanText(v, LIMITS.nickname, k, { required: true }); break;
+      case 'participants.nickname': cur.nickname = admin ? cleanText(v, LIMITS.nickname, k, { required: true }) : cleanNick(v, true); break;
       case 'progress.status': cur.status = cleanEnum(v, ['doing', 'done', 'stuck'], k); break;
       case 'help.station': cur.station = cleanText(v, LIMITS.id, k); break;
       case 'help.seat': cur.seat = cleanText(v, LIMITS.seat, k); break;
@@ -441,7 +554,7 @@ function update(b) {
       case 'questions.pinned': case 'posts.hidden': case 'polls.open': case 'chat.hidden': cur[k] = cleanBool(v, k, false); break;
       case 'posts.kind': cur.kind = cleanText(v, LIMITS.kind, k, { required: true }); break;
       case 'posts.text': cur.text = cleanText(v, LIMITS.post, k, { multiline: true }); break;
-      case 'posts.files': cur.files = cleanFiles(v); break;
+      case 'posts.files': cur.files = cleanFiles(v, code, me, cur.id); if (cur.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); break;
       case 'posts.license': cur.license = cleanText(v, LIMITS.license, k); break;
       case 'polls.question': cur.question = cleanText(v, LIMITS.pollQuestion, k, { required: true }); break;
       case 'polls.kind': cur.kind = cleanEnum(v, ['choice', 'word', 'scale'], k); break;
@@ -454,14 +567,20 @@ function update(b) {
   if (!changed) throw httpErr(400, 'nothing_to_update', '바꿀 수 있는 항목이 없습니다.');
   cur.updatedAt = stamp();
   writeRow(col, cur);
+  if (col === 'posts') {
+    var keep = {}; (cur.files || []).forEach(function (f) { var id = driveId(f); if (id) keep[id] = 1; });
+    trashFiles((oldFiles || []).map(driveId).filter(function (id) { return id && !keep[id]; }));
+    if (!!cur.hidden !== wasHidden || 'files' in p) shareFiles(code, cur.id, cur.files, !cur.hidden);
+  }
   return out(col, cur, true);
 }
 function remove(b) {
-  requireAdmin(b.admin);
   var code = normCode(b.code); var col = b.col;
+  requireAdmin(b.admin);
   if (COLS.indexOf(col) < 0) throw httpErr(404, 'unknown_collection', '없는 컬렉션입니다.');
   var cur = rows(col).filter(function (r) { return r.code === code && r.id === b.id; })[0];
   if (!cur) throw httpErr(404, 'not_found', '없는 글입니다.');
+  if (col === 'posts') trashFiles((cur.files || []).map(driveId).concat(rows('files').filter(function (r) { return r.code === code && r.post === cur.id; }).map(function (r) { return r.id; })));
   sheet(col).deleteRow(cur._row);
   writeRow('tombstones', { col: col, id: cur.id, code: code, at: stamp() });
   return { ok: true };
@@ -482,8 +601,9 @@ function vote(b, col, field) {
   r[field] = cur[field]; r.voted = true; return r;
 }
 function setState(b) {
-  requireAdmin(b.admin);
   var code = normCode(b.code); var p = b.patch;
+  requireAdmin(b.admin);
+  normCode(code, true);
   if (!isObj(p)) throw httpErr(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.');
   var cur = getState(code); var n = 0;
   if ('step' in p) { cur.step = p.step == null ? null : typeof p.step === 'number' ? Math.trunc(p.step) : cleanText(p.step, LIMITS.id, 'step'); n++; }
@@ -525,8 +645,8 @@ function react(b) {
 }
 function upload(b) {
   var props = PropertiesService.getScriptProperties();
-  if (props.getProperty('UPLOADS') !== 'on') throw httpErr(503, 'uploads_disabled', '이 시트는 파일 올리기를 쓰지 않습니다.');
   var code = normCode(b.code);
+  if (!uploadsOn(code)) throw httpErr(503, 'uploads_disabled', '이 시트는 파일 올리기를 쓰지 않습니다.');
   var me = participant(code, b.token); rateHit('upload', me.id, RATE.upload);
   var ext = UPLOAD_TYPES[b.type];
   if (!ext) throw httpErr(415, 'unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.');
@@ -539,11 +659,11 @@ function upload(b) {
   var it = DriveApp.getFoldersByName('lecpage 업로드');
   var folder = it.hasNext() ? it.next() : DriveApp.createFolder('lecpage 업로드');
   var name = cleanText(b.name || 'file', 120, 'name').replace(/[\\/:*?"<>|]/g, '_');
+  // private until a visible post uses it (shareFiles); recorded so wipe/clean-up can trash it (H3)
   var file = folder.createFile(Utilities.newBlob(bytes, b.type, name));
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   var id = file.getId();
-  var url = b.type.indexOf('image/') === 0 ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1600' : 'https://drive.google.com/file/d/' + id + '/view';
-  return { url: url, name: name, type: b.type, size: bytes.length };
+  withLock(function () { writeRow('files', { id: id, code: code, by: me.id, post: '', type: b.type, createdAt: Date.now() }); });
+  return { id: id, url: driveUrl(id, b.type), name: name, type: b.type, size: bytes.length };
 }
 function sniff(b) {
   var at = function (i, xs) { return xs.every(function (x, j) { return b[i + j] === x; }); };
@@ -557,8 +677,8 @@ function sniff(b) {
   return null;
 }
 function exportCsv(b) {
-  requireAdmin(b.admin);
   var code = normCode(b.code);
+  requireAdmin(b.admin);
   var kinds = ['attendance', 'progress', 'questions', 'survey', 'participants', 'posts', 'help', 'chat', 'answers'];
   if (kinds.indexOf(b.kind) < 0) throw httpErr(400, 'bad_kind', 'kind: ' + kinds.join('|'));
   var data = {};
@@ -567,7 +687,8 @@ function exportCsv(b) {
   return toCsv(t.columns, t.rows);
 }
 function wipeAll() {
-  COLS.concat(['tombstones', 'votes']).forEach(function (c) {
+  trashFiles(rows('files').map(function (r) { return r.id; }));
+  COLS.concat(['tombstones', 'votes', 'files']).forEach(function (c) {
     var sh = sheet(c); var n = sh.getLastRow();
     if (n > 1) sh.deleteRows(2, n - 1);
   });

@@ -94,7 +94,7 @@ export function materialToDraft(material, info = {}) {
     joinUrl: info.joinUrl || ev.joinUrl || '',
     contact: info.contact || findLine([...pages.slice(0, 3), ...pages.slice(-3)], CONTACT_LINE),
     lang: 'ko',
-    admin: { kind: info.adminKind || 'school', completionRate: 90, hours: Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
+    admin: { kind: info.adminKind || 'school', completionRate: +info.completionRate || 90, hours: Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
     sessions: [],
   };
   if (meta.subtitle === meta.title) meta.subtitle = '';

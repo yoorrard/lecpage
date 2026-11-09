@@ -53,7 +53,7 @@ lecpage/
 {
   "version": 1,
   "meta": { "title": "", "subtitle": "", "organizer": "", "date": "2026-11-04", "start": "15:10", "end": "16:40",
-            "venue": "", "mode": "offline|online|hybrid", "joinUrl": "", "shortUrl": "", "lang": "ko",
+            "venue": "", "mode": "offline|online|hybrid", "joinUrl": "", "shortUrl": "", "contact": "", "lang": "ko",
             "admin": { "kind": "school|official|conference|student", "completionRate": 90, "hours": 1.5 },
             "sessions": [ { "no": 1, "date": "", "start": "", "end": "", "title": "" } ] },
   "audience": { "type": "teachers-elementary", "size": 28, "level": "beginner|intermediate|advanced",
@@ -78,6 +78,7 @@ lecpage/
 | type | 필드 요약 |
 |---|---|
 | `hero` | eyebrow, title, subtitle, ctas[{label,href}], meta[{label,value}] |
+| `goals` | items[] (연수 목표 2~4개), who (대상). 직무연수면 이수 기준 줄 자동 |
 | `glance` | items[{value,label,note}] (한눈에 보기) |
 | `message` | text, note, style: statement\|formula\|quote, parts[] (formula일 때) |
 | `steps5` | title, items[{word,desc}] (핵심 단계·키워드 나열) |
@@ -98,7 +99,8 @@ lecpage/
 | `closing` | lead, text, thanks |
 | `faq` · `glossary` | items[{q,a}] · items[{term,desc}] |
 | `video` · `gallery` | items[{title,url,thumb}] · items[{src,caption}] |
-| `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시) |
+| `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시, status를 비우면 날짜로 마침·오늘·다음 자동) |
+| `followup` | items[{title,desc,url,kind: recording\|community\|next\|read\|link}], completion (연수 후 안내. 끝난 뒤 첫 화면 아래로) |
 | `speakers` | items[{name,role,org,photo,talk,time}] (라이브형) |
 | `reflection` | prompts[] (나의 기록·다짐, 내려받기) |
 | `attendance` | (live 필요) 입실·퇴실 |

@@ -7,14 +7,27 @@ export function parseTextFile(bytes, ctx, { markdown = false } = {}) {
   return parseText(raw, ctx, { markdown });
 }
 
+// 마크다운 주석(<!-- … -->)은 화면에 보이지 않는 글이라 뺌: 숨겨 둔 지시문·주소가 사이트로 옮겨지지 않게. 코드 블록 안은 그대로
+function stripMdComments(src) {
+  const out = []; let buf = []; let inFence = false;
+  const flush = () => { if (buf.length) { out.push(buf.join('\n').replace(/<!--[\s\S]*?(?:-->|$)/g, '')); buf = []; } };
+  for (const line of src.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) { if (!inFence) flush(); inFence = !inFence; out.push(line); continue; }
+    (inFence ? out : buf).push(line);
+  }
+  flush();
+  return out.join('\n');
+}
+
 export function parseText(raw, ctx, { markdown = false } = {}) {
-  const text = normText(String(raw || '').replace(/\t/g, '    '));
-  const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n');
+  raw = String(raw || '').replace(/\r\n?/g, '\n');
+  const md = markdown || /^#{1,6}\s|\n#{1,6}\s|```|\n\s*[-*]\s|\[[^\]]+\]\(https?:/.test(normText(raw.replace(/\t/g, '    ')));
+  if (md) raw = stripMdComments(raw);
+  const lines = raw.split('\n');
   const blocks = [];
   let gap = false;
   let fence = null;
   let table = null;
-  const md = markdown || /^#{1,6}\s|\n#{1,6}\s|```|\n\s*[-*]\s|\[[^\]]+\]\(https?:/.test(text);
 
   const flushTable = () => { if (table && table.length) blocks.push({ type: 'table', rows: table }); table = null; };
   for (let rawLine of lines) {

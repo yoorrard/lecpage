@@ -219,9 +219,12 @@ test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudg
   await new Promise((r) => setTimeout(r, 2200));
   const n1 = calls.filter(([n]) => n === 'lec_snapshot').length;
   assert.ok(n1 - n0 >= 1 && n1 - n0 <= 2, 'forged ticks: ' + (n1 - n0) + ' reads');
+  // the gap doubled (≥ 3 s from the last read, which was ≤ 0.5 s into the first flood): nothing for a while now
   for (let i = 0; i < 30; i++) channels[0].fire({ rev: 1e15 });
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((r) => setTimeout(r, 600));
   assert.equal(calls.filter(([n]) => n === 'lec_snapshot').length, n1, 'hints that brought nothing new back off');
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.ok(calls.filter(([n]) => n === 'lec_snapshot').length <= n1 + 1, 'still at most one read per back-off step');
   // PT429 → LiveError status 429, not queued
   await assert.rejects(c.add('questions', { text: 'spam' }), (e) => e.status === 429 && e.code === 'rate_limited');
   c.close();

@@ -29,7 +29,7 @@ function lockPage({ title, page, payload }) {
 <link rel="stylesheet" href="assets/theme.css">
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--background,#fff);color:var(--foreground,#111);font-family:var(--font-sans,system-ui,sans-serif);padding:20px;word-break:keep-all}
-.lk{width:min(420px,100%);display:grid;gap:14px;padding:28px;border-radius:var(--radius,16px);background:var(--card,#fff);border:var(--border-w,1px) solid var(--border,#ddd)}
+.lk{box-sizing:border-box;width:min(420px,100%);display:grid;gap:14px;padding:28px;border-radius:var(--radius,16px);background:var(--card,#fff);border:var(--border-w,1px) solid var(--border,#ddd)}
 .lk h1{margin:0;font-size:1.35rem;line-height:1.35}
 .lk p{margin:0;color:var(--muted-foreground,#555);line-height:1.6}
 .lk label{display:grid;gap:6px;font-weight:600}

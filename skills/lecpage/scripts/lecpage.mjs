@@ -11,7 +11,7 @@
 //   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
 //   doctor                                           환경 점검과 설치 방법
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
-//   validate <blueprint.json> · qa <dist> · serve <dist> [--port 4173] · pack <dist> -o site.zip
+//   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
 //   design <blueprint.json> · decide-infra -i info.json · presets · effects
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -173,64 +173,86 @@ function brokenRefs(dir) {
   return [...bad];
 }
 
-/** 다른 작업이 만드는 검사기(scripts/design-lint.mjs·copy-lint.mjs). 없으면 건너뜀 */
+/**
+ * 다른 작업이 만드는 검사기. 없으면 건너뜀.
+ *   design-lint.mjs: lintPage(page) — 브라우저 화면에서(밝은 화면 PC·휴대폰)
+ *   copy-lint.mjs:   lintHtml(html, file) — 만든 페이지 글에서(브라우저 없이도)
+ * blocking: 디자인 검사 error는 점검 실패. 문구는 교재 원문이 섞여 있어 알림만
+ */
 async function loadLinters() {
   const list = [];
-  for (const [name, file] of [['디자인', 'design-lint.mjs'], ['문구', 'copy-lint.mjs']]) {
+  for (const [name, file, blocking] of [['디자인', 'design-lint.mjs', true], ['문구', 'copy-lint.mjs', false]]) {
     const p = join(HERE, file);
-    if (!existsSync(p)) { list.push({ name, status: 'missing' }); continue; }
+    if (!existsSync(p)) { list.push({ name, status: 'missing', issues: [] }); continue; }
     try {
       const mod = await import(pathToFileURL(p).href);
-      const fn = mod.lintPage || mod.lint || mod.default;
-      list.push(typeof fn === 'function' ? { name, fn, status: 'ok' } : { name, status: 'missing' });
-    } catch (e) { list.push({ name, status: 'error', error: cut(e.message, 80) }); }
+      const page = mod.lintPage || (typeof mod.default === 'function' ? mod.default : null);
+      if (page) list.push({ name, page, blocking, status: 'ok', issues: [] });
+      else if (mod.lintHtml) list.push({ name, html: mod.lintHtml, blocking, status: 'ok', issues: [] });
+      else list.push({ name, status: 'missing', issues: [] });
+    } catch (e) { list.push({ name, status: 'error', error: cut(e.message, 80), issues: [] }); }
   }
   return list;
 }
 function lintIssues(res) {
   const arr = Array.isArray(res) ? res : res?.issues || res?.problems || res?.findings || [];
-  return arr.map((x) => (typeof x === 'string' ? { level: 'warn', message: x } : { level: /err|high|fail/i.test(x.level || x.severity || '') ? 'error' : 'warn', message: x.message_ko || x.message || x.msg || x.rule || JSON.stringify(x), where: x.selector || x.where || x.path || '' }));
+  return arr.map((x) => (typeof x === 'string' ? { level: 'warn', message: x } : {
+    level: /err|high|fail/i.test(x.level || x.severity || '') ? 'error' : 'warn',
+    message: x.message_ko || x.message || x.msg || (x.why ? `${x.hit ? `"${cut(x.hit, 24)}" ` : ''}${x.why}${x.fix ? ` → ${x.fix}` : ''}` : x.rule || JSON.stringify(x)),
+    where: x.selector || x.where || x.path || '',
+  }));
 }
+const addIssues = (L, list) => { for (const it of list) if (!L.issues.some((x) => x.message === it.message)) L.issues.push(it); };
 
-async function runQa(dir, { outDir } = {}) {
+async function runQa(dir, { outDir, password = '' } = {}) {
   dir = resolve(dir);
   if (!existsSync(join(dir, 'index.html'))) return { ok: false, error: `${rel(dir)}에 index.html이 없어요.` };
   outDir = resolve(outDir || join(dir, '..', 'qa'));
   const broken = brokenRefs(dir);
   const res = { ok: true, dir, outDir, views: [], broken, lint: [], shots: [], skipped: '' };
   const protectedSite = /lp-locked|unlock\.js/.test(readFileSync(join(dir, 'index.html'), 'utf8'));
+  const unlock = protectedSite && password; // 암호를 알면 #k=로 열어 실제 내용을 점검
+  const linters = protectedSite && !unlock ? [] : await loadLinters();
+  // 글 검사(브라우저 없이): 참가자·강사가 보는 페이지
+  for (const L of linters.filter((x) => x.html && !protectedSite)) {
+    try { for (const f of readdirSync(dir).filter((x) => /^(index|console|screen|check|poster)\.html$/.test(x))) addIssues(L, lintIssues(L.html(readFileSync(join(dir, f), 'utf8'), f))); }
+    catch (e) { L.status = 'error'; L.error = cut(e.message, 80); }
+  }
+  const finish = () => {
+    res.lint = linters.map(({ name, status, issues = [], error, blocking }) => ({ name, status, issues, error, blocking: !!blocking }));
+    const badViews = res.views.filter((r) => r.errors.length || r.overflow || r.imgsNoAlt || r.h1 !== 1 || r.btnNoName);
+    res.ok = !badViews.length && !broken.length && !res.lint.some((l) => l.blocking && l.issues.some((i) => i.level === 'error'));
+    if (res.views.length) writeJson(join(outDir, 'report.json'), res);
+    return res;
+  };
   const pw = await loadPlaywright();
-  if (!pw) { res.skipped = 'Playwright 없음'; res.ok = !broken.length; return res; }
+  if (!pw) { res.skipped = 'Playwright 없음'; return finish(); }
   let browser;
-  try { browser = await pw.chromium.launch(); } catch (e) { res.skipped = 'Chromium 실행 실패(npx playwright install chromium)'; res.ok = !broken.length; return res; }
+  try { browser = await pw.chromium.launch(); } catch { res.skipped = 'Chromium 실행 실패(npx playwright install chromium)'; return finish(); }
   mkdirSync(outDir, { recursive: true });
-  const linters = protectedSite ? [] : await loadLinters();
   for (const [w, h, name] of [[1280, 860, 'desktop'], [390, 844, 'phone']]) {
     for (const scheme of ['light', 'dark']) {
       const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme });
       const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
-      await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load', timeout: 20000 }).catch(() => {});
+      await page.goto(pathToFileURL(join(dir, 'index.html')).href + (unlock ? '#k=' + encodeURIComponent(password) : ''), { waitUntil: 'load', timeout: 20000 }).catch(() => {});
+      if (unlock) await page.waitForSelector('main', { timeout: 15000 }).catch(() => errs.push('암호로 열지 못했어요'));
       await page.waitForTimeout(700);
       const m = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, imgsNoAlt: [...document.images].filter((i) => !i.hasAttribute('alt')).length, h1: document.querySelectorAll('h1').length, btnNoName: [...document.querySelectorAll('button')].filter((b) => !(b.textContent.trim() || b.getAttribute('aria-label') || b.getAttribute('title'))).length }));
       const shot = join(outDir, `${name}-${scheme}.png`);
       await page.screenshot({ path: shot, fullPage: false });
       res.shots.push(shot);
       const v = { view: `${name}-${scheme}`, errors: errs.filter((e) => !/net::ERR|Failed to load resource/.test(e)), ...m };
-      if (protectedSite) v.h1 = 1; // 잠금 화면은 h1 검사 제외
+      if (protectedSite && !unlock) v.h1 = 1; // 잠금 화면은 h1 검사 제외
       res.views.push(v);
-      if (scheme === 'light') for (const L of linters.filter((x) => x.fn)) {
-        try { for (const it of lintIssues(await L.fn(page, { view: name, dir }))) { L.issues = L.issues || []; if (!L.issues.some((x) => x.message === it.message)) L.issues.push(it); } }
+      if (scheme === 'light') for (const L of linters.filter((x) => x.page && x.status === 'ok')) {
+        try { addIssues(L, lintIssues(await L.page(page, { view: name, dir }))); }
         catch (e) { L.status = 'error'; L.error = cut(e.message, 80); }
       }
       await page.close();
     }
   }
   await browser.close();
-  res.lint = linters.map(({ name, status, issues = [], error }) => ({ name, status, issues, error }));
-  const badViews = res.views.filter((r) => r.errors.length || r.overflow || r.imgsNoAlt || r.h1 !== 1 || r.btnNoName);
-  res.ok = !badViews.length && !broken.length && !res.lint.some((l) => l.issues.some((i) => i.level === 'error'));
-  writeJson(join(outDir, 'report.json'), res);
-  return res;
+  return finish();
 }
 
 function qaLines(q) {
@@ -243,10 +265,15 @@ function qaLines(q) {
   }
   if (q.broken.length) problems.push(`  깨진 자료 ${q.broken.length}: ${plural(q.broken.map((b) => cut(b, 40)), 3, ', ')}`);
   const missing = q.lint.filter((l) => l.status === 'missing').map((l) => l.name);
-  const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} 검사 ${l.issues.length ? `${l.issues.length}건` : '이상 없음'}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
+  const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
+  const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
   const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
   lines.push(head, ...problems);
-  for (const l of q.lint) for (const it of l.issues.slice(0, 3)) lines.push(`  ${l.name}: ${cut(it.message, 70)}${it.where ? ` (${cut(it.where, 30)})` : ''}`);
+  for (const l of q.lint) {
+    const top = [...l.issues].sort((a, b) => (a.level === 'error' ? -1 : 0) - (b.level === 'error' ? -1 : 0)).slice(0, 3);
+    for (const it of top) lines.push(`  ${l.name} ${it.level === 'error' ? '고침' : '살핌'}: ${cut(it.message, 70)}${it.where ? ` (${cut(it.where, 30)})` : ''}`);
+    if (l.issues.length > 3) lines.push(`  ${l.name} 외 ${l.issues.length - 3}건(qa/report.json)`);
+  }
   if (q.shots.length) lines.push(`  스크린샷 ${rel(q.outDir)}/*.png ${q.shots.length}장 — 직접 열어 보세요`);
   return lines;
 }
@@ -451,7 +478,7 @@ const commands = {
     saveState(work, { out, assets, info: args.i ? resolve(args.i) : '', blueprint: bpPath, inputs });
 
     // 4) 점검
-    const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa') });
+    const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '' });
     const bm = briefMaterial(m), bb = briefBlueprint(raw);
     const sec = ((Date.now() - t0) / 1000).toFixed(0);
     const base = dirname(out);
@@ -507,7 +534,7 @@ const commands = {
     else {
       b = await buildSite(r.raw, { out, assets: state.assets || join(work, 'assets'), info: state.info && existsSync(state.info) ? readJson(state.info) : null, password: args.password });
       if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; }
-      else if (args.qa) q = await runQa(out);
+      else if (args.qa) q = await runQa(out, { password: args.password || process.env.LECPAGE_PASSWORD || '' });
     }
     const lines = [
       `${args.undo ? '되돌림' : '고침'} ${changes.length}건 → ${rel(bpPath)}${changes.length && !args.undo ? ` (이전 판 ${basename(prev)}, --undo로 되돌리기)` : ''}${r.note ? ` · ${r.note}` : ''}`,
@@ -678,7 +705,7 @@ const commands = {
   },
 
   async qa() {
-    const q = await runQa(args._[0] || 'dist', { outDir: args.out });
+    const q = await runQa(args._[0] || 'dist', { outDir: args.out, password: args.password || process.env.LECPAGE_PASSWORD || '' });
     say(qaLines(q), q);
     process.exitCode = q.ok ? 0 : 1;
   },

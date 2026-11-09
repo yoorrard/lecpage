@@ -59,8 +59,9 @@ export function chooseEffects({ presetId, moods = [], topics = [], cap = 3, noLi
     if (alt) { effects[slot] = alt; notes.push(`${slot}: ${id} → ${alt}`); }
   }
   // 변주: 제목 효과와 섹션 진입 효과를 후보 중에서 고름(시드 고정 → 같은 연수는 늘 같은 결과)
-  for (const [i, slot] of ['hero.title', 'section.title', 'cards'].entries()) {
-    const list = candidatesFor(slot, ctx).slice(0, 3);
+  // 카드 효과(기울기 등)는 변주하지 않음: 목록을 상자 대신 줄로 짜므로 어색하고, AI 생성 화면의 흔한 버릇이라서
+  for (const [i, slot] of ['hero.title', 'section.title'].entries()) {
+    const list = candidatesFor(slot, ctx).filter((id) => byId.get(id)?.trend !== 'warn').slice(0, 3); // 그라데이션 글자·타자기 같은 '주의' 효과는 변주로 넣지 않음
     if (list.length > 1 && ((h >> (i * 3)) & 3) === 0) effects[slot] = list[(h >> (i * 5)) % list.length];
   }
   const graphicList = candidatesFor('hero.graphic', ctx);

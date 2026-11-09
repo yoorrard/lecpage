@@ -1,37 +1,49 @@
 # 빈칸 인터뷰 질문
 
-교재와 대화에서 이미 알아낸 항목은 묻지 않는다. 남은 것만 **최대 10개**, 고르기형으로 묻는다(선택지 + "직접 입력").
-첫 메시지에서 교재에서 알아낸 것을 한 줄로 요약해 신뢰를 준다. 예: "교재 86쪽을 읽었어요. Gemini 실습 7개, 프롬프트 23개가 있어 실습형+스토리형으로 잡았어요. 네 가지만 확인할게요."
+교재와 대화에서 이미 알아낸 항목은 묻지 않는다. **기본 4문항**, 상황에 따라 몇 개 더(합쳐 7개 안). 모두 고르기형(선택지 + "직접 입력").
+디자인(분위기·움직임·색·글꼴)과 운영 방식(서버·숙련도)은 여기서 묻지 않는다. 5·6단계에서 미리보기를 보여 주며 정한다.
+첫 메시지에서 교재에서 알아낸 것을 한 줄로 요약해 신뢰를 준다. 예: "교재 86쪽을 읽었어요. Gemini 실습 7개, 프롬프트 23개가 있어 실습형으로 잡았어요. 네 가지만 확인할게요."
 
 질문 순서(중요도 순). 답은 `work/info.json`에 아래 키로 저장하고 `lecpage.mjs make 교재 -i work/info.json -o dist --fresh`로 반영한다.
 
+## 1. 기본 질문(교재로 알 수 없을 때만)
 | # | 질문 | 선택지 | info 키 | 정해지는 것 |
 |---|---|---|---|---|
-| 1 | 참가 인원은? | 30명 이하 / 31~100명 / 101~300명 / 300명 넘음 | `size` (대표값 25/60/200/500) | 운영 단계, 사이트 유형 |
-| 2 | 연수 형식은? | 강의 중심 / 실습 중심 / 강의+실습 / 설명회·컨퍼런스 / 여러 차시 과정 | `format`: lecture·practice·workshop·conference·course | 사이트 유형 |
-| 3 | 꼭 필요한 참여 기능(여러 개) | 실시간 질문 / 막혔어요·진행 현황 / 결과물 공유 보드 / 투표·워드클라우드 / 신호등(이해 정도) / 출석·이수 확인 / 채팅 / 필요 없음 | `features`: qa, help+progress, board, poll, signal, attendance, chat | 모듈, 운영 단계 |
-| 4 | 참가자는 주로 무엇으로 접속하나요? | 개인 노트북 / 학교 크롬북 / 태블릿 / 휴대폰만 / 섞여 있음 | `devices` | 휴대폰 우선, 모션 상한 |
-| 5 | 연수 장소 인터넷은? | 잘 됨 / 느림 / 학교망이라 막히는 곳이 있음 / 인터넷 없음 | `network`: good·slow·restricted·offline | 접속 진단, 교실 서버(LAN) |
-| 6 | 사이트 분위기는? | 차분하고 따뜻하게 / 밝고 경쾌하게 / 미래적·테크 / 공식적·단정하게 / 감성적·울림 / 손그림·아날로그 / 직접 입력 | `mood` (낱말 그대로) | 프리셋 |
-| 7 | 움직임은 어느 정도? | 차분하게 / 보통 / 화려하게 | `motion`: 1·2·3 | 모션 단계 |
-| 8 | 기관 색이나 로고가 있나요? | 없음 / 색만(예: #12306b) / 로고 파일 있음 | `accent`, `logo` | 강조색 |
-| 9 | 사이트 관리 숙련도는? | 클릭만 할게요 / 설정값 붙여넣기 정도 / 코드도 고칠 수 있어요 | `skill`: click·set·dev | 배포 방식 |
-| 10 | 이미 가진 서버·계정이 있나요?(여러 개) | 없음 / GitHub / Cloudflare / Supabase / 구글 계정 / AWS / 학교·기관 서버 / NAS | `infra` | 호스팅·백엔드 |
+| 1 | 어떤 연수인가요? | 교내 자율연수 / 교육청 승인 직무연수(이수 처리) / 설명회·컨퍼런스 / 학생 대상 | `admin`: school·official·conference·student (학생 대상이면 `minor: true`도) | 이수 기준 표시, 출석, 개인정보 수집 범위 |
+| 2 | 몇 명이 참여하나요? | 30명 이하 / 31~100명 / 101~300명 / 300명 넘음 | `size` (대표값 25/60/200/500) | 사이트 유형, 운영 단계 |
+| 3 | 꼭 필요한 참여 기능(여러 개) | 실시간 질문 / 막혔어요·진행 현황 / 결과물 공유 보드 / 투표·워드클라우드 / 신호등(이해 정도) / 출석·이수 확인 / 필요 없음 | `features`: qa, help+progress, board, poll, signal, attendance | 칸, 운영 단계 |
+| 4 | 참가자 기기와 인터넷은?(여러 개) | 노트북·크롬북 / 휴대폰 위주 / 학교망이라 막히는 사이트가 있음 / 인터넷이 없거나 아주 느림 | `devices`(laptop·chromebook·phone), `network`(good·restricted·offline) | 휴대폰 우선 배치, 접속 진단, 교실 서버 |
 
-상황에 따라 추가로(10개 한도 안에서 바꿔 묻기)
-- 대상이 학생(만 14세 미만)인가? → `minor: true` (별명만 받기, 업로드 제한)
-- 교육청 승인 직무연수인가? → `admin: official` (출석 2회·이수율·출석부)
-- 사이트 유지 기간? 당일 / 한 달 / 여러 주 → `duration`: day·month·long
-- 강사료가 있는 유료 연수인가? → `commercial: true` (Vercel 무료 회피)
-- 교재 내려받기를 허용할까? → deck.download, materials
-- 만족도 조사 주소(구글 설문 등)가 있나? → survey.url
+## 2. 상황별(해당할 때만)
+| 언제 | 질문 | info 키 |
+|---|---|---|
+| 형식이 교재로 애매할 때 | 강의 중심 / 실습 중심 / 강의+실습 / 여러 차시 과정 | `format`: lecture·practice·workshop·course |
+| 장소가 교재에 없거나 온라인 낌새가 있을 때 | 어디서 하나요? 오프라인 / 온라인 / 둘 다 → 온라인이면 회의 주소(Zoom·Meet) | `mode`, `joinUrl` |
+| 교재에 문의처가 없을 때 | 참가자가 연락할 곳은? 강사 이메일 / 연수 담당자 연락처(직접 입력) / 없음 | `contact` |
+| 직무연수인데 이수 기준을 모를 때 | 출석 기준은? 90% / 80% / 직접 입력 | `completionRate` |
+| 날짜가 여러 개(과정형)일 때 | 차시 날짜가 이게 맞나요?(초안 날짜 보여 주기) | `dates` |
+| 실시간 설문을 안 쓸 때 | 기관 설문 주소(구글 설문 등)가 있나요? | `surveyUrl` |
+| 교재 파일을 올릴 때 | 교재 내려받기를 허용할까요? | deck.download, materials |
+| 강사료가 있는 유료 연수일 때 | (6단계에서) | `commercial: true` |
 
-기본값(사용자가 "알아서"라고 할 때): size 30, format workshop, features [qa, help, progress], devices [laptop], network good, mood 교재 주제에서 추론, motion 2, skill click, infra [], duration day.
+연수 목표는 묻지 않는다. 초안이 교재에서 찾은 목표(없으면 AI가 교재로 쓴 2~4개)를 보여 주고 "이대로 둘까요?"로 확인만 한다. 강사가 직접 주면 `goals`, 대상은 `who`.
+
+## 3. 묻지 않고 정하는 것(기본값)
+| 항목 | 기본값 |
+|---|---|
+| 글꼴 | 교재에 쓰인 글꼴을 따른다(웹에서 쓸 수 있는 같은 계열로). 사용자가 바꾸자고 할 때만 |
+| 색 | 교재의 주 색을 강조색으로. 기관 색은 사용자가 말할 때만(`accent`, `logo`) |
+| 분위기·움직임 | 교재 주제로 추론, 움직임 2(직무연수는 1). 5단계에서 3안 미리보기로 고른다(`mood`, `motion`) |
+| 운영 숙련도·서버 | 6단계에서 묻는다(`skill` click, `infra` []) |
+| 사이트 유지 기간 | 연수가 끝나면 사이트가 저절로 '연수 후' 보기로 바뀌므로 묻지 않는다(`duration` day) |
+| 형식 | 교재의 실습 비중으로 추론(`format` workshop) |
+
+기본값(사용자가 "알아서"라고 할 때): admin school, size 30, features [qa, help, progress], devices [laptop], network good. 무엇을 가정했는지 한 줄로 알린다.
 
 강사에게 직접 받은 값만 넣는 키(패치로는 못 바꿈): `access`(link·public·password), `siteUrl`·`joinUrl`·`shortUrl`, `live`({provider, url, anonKey}). 암호는 파일에 쓰지 않고 `--password`로.
 
 info.json 예시
 ```json
-{ "size": 28, "format": "workshop", "features": ["qa", "help", "progress", "board"], "devices": ["laptop", "chromebook"],
-  "network": "good", "mood": ["밝고 경쾌하게"], "motion": 2, "accent": "", "skill": "set", "infra": ["github"], "duration": "day" }
+{ "admin": "official", "size": 28, "features": ["qa", "help", "progress", "board"], "devices": ["laptop", "chromebook"],
+  "network": "restricted", "mode": "offline", "contact": "연수 담당 김하나 02-123-4567", "completionRate": 80 }
 ```

@@ -5,7 +5,7 @@
 export const PRESETS = [
   {
     id: 'night-story', name_ko: '밤하늘 서사', name_en: 'Night Story',
-    desc_ko: '밤에서 새벽으로 바뀌는 톤 여정과 빛나는 그라데이션 제목. 메시지와 감동이 중심인 특강에.',
+    desc_ko: '밤에서 새벽으로 바뀌는 톤 여정과 큰 제목. 메시지와 감동이 중심인 특강에.',
     moods: ['emotional', 'warm', 'futuristic', 'bold'], topics: ['sel', 'counseling', 'general', 'career', 'ai'],
     archetypes: ['story', 'live'], theme: 'dark', motion: 3,
     fonts: { display: 'pretendard', body: 'pretendard', mono: 'spaceGrotesk', displayWeight: 800 },
@@ -14,7 +14,7 @@ export const PRESETS = [
     shape: { radius: 18, radiusSm: 10, radiusLg: 28, borderW: 1, shadow: 'soft' },
     variants: { hero: 'stage', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: true },
     graphic: 'perspective-grid', closingGraphic: 'particles-network', signature: 'tone-journey',
-    effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', 'section.enter': 'reveal-up', numbers: 'counter', message: 'scroll-fill', cards: 'tilt', 'closing.title': 'gradient-text', scroll: 'smooth-scroll', schedule: 'line-draw', celebrate: 'confetti' },
+    effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', numbers: 'counter', message: 'scroll-fill', 'closing.title': 'split-reveal', scroll: 'smooth-scroll', schedule: 'line-draw', celebrate: 'confetti' },
   },
   {
     id: 'paper-workbook', name_ko: '종이 워크북', name_en: 'Paper Workbook',
@@ -27,11 +27,11 @@ export const PRESETS = [
     shape: { radius: 14, radiusSm: 8, radiusLg: 22, borderW: 1.5, shadow: 'paper' },
     variants: { hero: 'split', card: 'paper', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: 'paper-stack', closingGraphic: 'confetti-shapes', signature: 'micro-copy',
-    effects: { 'hero.title': 'reveal-up', progress: 'guided-progress', celebrate: 'confetti', 'section.enter': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+    effects: { 'hero.title': 'reveal-up', progress: 'guided-progress', celebrate: 'confetti', numbers: 'counter', message: 'highlight-sweep' },
   },
   {
     id: 'glass-lab', name_ko: '유리 실험실', name_en: 'Glass Lab',
-    desc_ko: '은은한 오로라 위 유리 패널과 손전등 커서. AI·에듀테크·미래교육 연수에.',
+    desc_ko: '은은한 오로라와 손전등 빛, 또렷한 글자. AI·에듀테크·미래교육 연수에.',
     moods: ['tech', 'futuristic', 'minimal'], topics: ['ai', 'edutech', 'coding', 'science'],
     archetypes: ['story', 'lab', 'live'], theme: 'dark', motion: 2,
     fonts: { display: 'wanted', body: 'pretendard', mono: 'jetbrains', displayWeight: 700 },
@@ -40,7 +40,7 @@ export const PRESETS = [
     shape: { radius: 20, radiusSm: 12, radiusLg: 28, borderW: 1, shadow: 'glow' },
     variants: { hero: 'center', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
     graphic: 'aurora', closingGraphic: 'shader-gradient', signature: 'spotlight',
-    effects: { 'hero.title': 'scramble', 'section.title': 'split-reveal', 'section.enter': 'reveal-up', cards: 'spotlight', numbers: 'counter', message: 'scroll-fill', 'closing.title': 'gradient-text', cursor: 'cursor-follower' },
+    effects: { 'hero.title': 'scramble', 'section.title': 'split-reveal', numbers: 'counter', message: 'scroll-fill', 'closing.title': 'split-reveal' },
   },
   {
     id: 'playground', name_ko: '놀이터', name_en: 'Neo-brutal Playground',
@@ -52,8 +52,8 @@ export const PRESETS = [
     dark: { bg: '#161616', fg: '#fff8e1', card: '#232323', muted: '#c9c3aa', primary: '#ff5fa2', primaryFg: '#121212', accent: '#3ec5ff', accent2: '#ffd23f', accent3: '#7bd88f', border: '#fff8e1', heroFrom: '#3a2f00', heroTo: '#3d0f24' },
     shape: { radius: 12, radiusSm: 8, radiusLg: 18, borderW: 2.5, shadow: 'hard' },
     variants: { hero: 'split', card: 'brutal', nav: 'bar', btn: 'brutal', heading: 'heavy', tones: false },
-    graphic: 'confetti-shapes', closingGraphic: 'confetti-shapes', signature: 'marquee',
-    effects: { 'hero.title': 'split-reveal', divider: 'marquee', cards: 'tilt', 'section.enter': 'reveal-up', numbers: 'counter', celebrate: 'confetti', 'hero.cta': 'magnetic' },
+    graphic: 'confetti-shapes', closingGraphic: 'confetti-shapes', signature: 'confetti',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter', celebrate: 'confetti', 'hero.cta': 'magnetic' },
   },
   {
     id: 'calm-forest', name_ko: '숲의 숨', name_en: 'Calm Forest',
@@ -66,7 +66,7 @@ export const PRESETS = [
     shape: { radius: 22, radiusSm: 12, radiusLg: 32, borderW: 1, shadow: 'soft' },
     variants: { hero: 'editorial', card: 'soft', nav: 'bar', btn: 'pill', heading: 'serif', tones: false },
     graphic: 'topo-lines', closingGraphic: 'grain', signature: 'scroll-fill',
-    effects: { 'hero.title': 'reveal-up', message: 'scroll-fill', 'section.enter': 'reveal-up', 'hero.graphic.overlay': 'grain', schedule: 'line-draw' },
+    effects: { 'hero.title': 'reveal-up', message: 'scroll-fill', 'hero.graphic.overlay': 'grain', schedule: 'line-draw' },
   },
   {
     id: 'official-brief', name_ko: '공식 브리핑', name_en: 'Official Brief',
@@ -79,7 +79,7 @@ export const PRESETS = [
     shape: { radius: 8, radiusSm: 6, radiusLg: 12, borderW: 1, shadow: 'flat' },
     variants: { hero: 'editorial', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: 'blueprint-grid', closingGraphic: '', signature: 'counter',
-    effects: { numbers: 'counter', 'section.enter': 'reveal-up', schedule: 'line-draw' },
+    effects: { numbers: 'counter', schedule: 'line-draw' },
   },
   {
     id: 'editorial-ink', name_ko: '잉크 에디토리얼', name_en: 'Editorial Ink',
@@ -92,7 +92,7 @@ export const PRESETS = [
     shape: { radius: 4, radiusSm: 2, radiusLg: 6, borderW: 1, shadow: 'flat' },
     variants: { hero: 'editorial', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: '', closingGraphic: '', signature: 'split-reveal',
-    effects: { 'hero.title': 'split-reveal', 'section.title': 'split-reveal', message: 'scroll-fill', 'section.enter': 'reveal-up', gallery: 'clip-reveal' },
+    effects: { 'hero.title': 'split-reveal', 'section.title': 'split-reveal', message: 'scroll-fill', gallery: 'clip-reveal' },
   },
   {
     id: 'retro-pop', name_ko: '도파민 팝', name_en: 'Retro Pop',
@@ -104,8 +104,8 @@ export const PRESETS = [
     dark: { bg: '#1a0824', fg: '#fdeaff', card: '#26103a', muted: '#cbb2d6', primary: '#ff5c9a', primaryFg: '#1a0824', accent: '#a08bff', accent2: '#2fe0c4', accent3: '#ffe066', heroFrom: '#4a0d3a', heroTo: '#24124d' },
     shape: { radius: 24, radiusSm: 14, radiusLg: 36, borderW: 2, shadow: 'pop' },
     variants: { hero: 'center', card: 'soft', nav: 'pill', btn: 'pill', heading: 'heavy', tones: false },
-    graphic: 'blobs-morph', closingGraphic: 'confetti-shapes', signature: 'marquee',
-    effects: { 'hero.title': 'split-reveal', divider: 'marquee', cards: 'tilt', 'section.enter': 'reveal-up', 'hero.cta': 'magnetic', celebrate: 'confetti' },
+    graphic: 'blobs-morph', closingGraphic: 'confetti-shapes', signature: 'magnetic',
+    effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', celebrate: 'confetti' },
   },
   {
     id: 'chalkboard', name_ko: '칠판 교실', name_en: 'Chalkboard',
@@ -118,7 +118,7 @@ export const PRESETS = [
     shape: { radius: 16, radiusSm: 10, radiusLg: 24, borderW: 2, shadow: 'soft' },
     variants: { hero: 'split', card: 'outline', nav: 'bar', btn: 'pill', heading: 'display', tones: false },
     graphic: 'chalkboard', closingGraphic: 'doodle-scribbles', signature: 'doodle-scribbles',
-    effects: { 'hero.title': 'reveal-up', message: 'highlight-sweep', schedule: 'line-draw', 'section.enter': 'reveal-up', celebrate: 'confetti' },
+    effects: { 'hero.title': 'reveal-up', message: 'highlight-sweep', schedule: 'line-draw', celebrate: 'confetti' },
   },
   {
     id: 'blueprint-tech', name_ko: '설계도', name_en: 'Blueprint Tech',
@@ -131,7 +131,7 @@ export const PRESETS = [
     shape: { radius: 6, radiusSm: 4, radiusLg: 10, borderW: 1, shadow: 'flat' },
     variants: { hero: 'split', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: 'blueprint-grid', closingGraphic: 'particles-network', signature: 'line-draw',
-    effects: { 'hero.title': 'scramble', schedule: 'line-draw', 'section.enter': 'reveal-up', numbers: 'counter', progress: 'guided-progress' },
+    effects: { 'hero.title': 'scramble', schedule: 'line-draw', numbers: 'counter', progress: 'guided-progress' },
   },
   {
     id: 'riso-zine', name_ko: '리소 진', name_en: 'Riso Zine',
@@ -144,7 +144,7 @@ export const PRESETS = [
     shape: { radius: 2, radiusSm: 2, radiusLg: 4, borderW: 2, shadow: 'offset' },
     variants: { hero: 'editorial', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: 'riso', closingGraphic: 'riso', signature: 'highlight-sweep',
-    effects: { 'hero.title': 'split-reveal', message: 'highlight-sweep', gallery: 'clip-reveal', 'section.enter': 'reveal-up' },
+    effects: { 'hero.title': 'split-reveal', message: 'highlight-sweep', gallery: 'clip-reveal' },
   },
   {
     id: 'sunrise-warm', name_ko: '새벽빛', name_en: 'Sunrise Warm',
@@ -156,8 +156,8 @@ export const PRESETS = [
     dark: { bg: '#1b1220', fg: '#fbeef3', card: '#26192c', muted: '#cdb9c6', primary: '#ff7d94', primaryFg: '#1b1220', accent: '#b4a1ff', accent2: '#ffb36b', accent3: '#6fd3c5', heroFrom: '#3a1e2e', heroTo: '#221a3d' },
     shape: { radius: 20, radiusSm: 12, radiusLg: 30, borderW: 1, shadow: 'soft' },
     variants: { hero: 'center', card: 'soft', nav: 'pill', btn: 'pill', heading: 'serif', tones: false },
-    graphic: 'mesh-gradient', closingGraphic: 'bokeh', signature: 'reveal-up',
-    effects: { 'hero.title': 'split-reveal', message: 'scroll-fill', 'section.enter': 'reveal-up', gallery: 'clip-reveal', 'closing.title': 'gradient-text' },
+    graphic: 'mesh-gradient', closingGraphic: 'bokeh', signature: 'mesh-gradient',
+    effects: { 'hero.title': 'split-reveal', message: 'scroll-fill', gallery: 'clip-reveal', 'closing.title': 'split-reveal' },
   },
 ];
 
