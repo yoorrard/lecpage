@@ -32,7 +32,54 @@ export const RATE = {
   write: [90, 60e3], questions: [8, 60e3], help: [6, 60e3], posts: [12, 60e3], chat: [30, 60e3],
   vote: [120, 60e3], react: [90, 60e3], upload: [10, 60e3], admin: [600, 60e3],
   joinIp: [600, 600e3], ip: [6000, 60e3], joinCode: [1500, 600e3],
+  // reads per IP (soft: a whole school polling through one NAT stays well below it)
+  read: [6000, 60e3],
+  // wrong admin keys / setup tokens: per (code, IP) and per IP, then 429 until the window ends
+  authFail: [10, 600e3], authFailIp: [20, 600e3],
+  // trainings auto-created per IP (single-teacher mode: a join or the console creates the code on first use)
+  create: [10, 3600e3],
 };
+/** Per-training caps. Hosts may override them through config (maxParticipants, maxDocs). */
+export const CAPS = { participants: 500, docs: 20000 };
+
+// ---------- admin key policy ----------
+/** Known example/default keys from our own docs and templates (compared after NFC + lower case). */
+export const WEAK_KEYS = [
+  'change-me', 'changeme', 'change-me-관리자키', 'change-me-admin-key', '관리자키', '관리자 키', '연수관리자키', '내관리자키', '관리자키-8자-이상',
+  '여기에-관리자-키-8자-이상', 'admin', 'administrator', 'password', 'password1', 'password123', 'passw0rd', 'qwerty', 'qwerty123',
+  '12345678', '123456789', '1234567890', '123456789012', 'lecpage', 'lecpage-admin', 'correct-horse-battery', 'secret', 'letmein',
+];
+export const MIN_KEY_LENGTH = 12;
+const normKey = (k) => String(k == null ? '' : k).normalize('NFC').trim().toLowerCase();
+/** Returns a Korean reason when an admin key / setup token is too weak, otherwise null. */
+export function keyProblem(key) {
+  const k = normKey(key);
+  if ([...k].length < MIN_KEY_LENGTH) return `관리자 키는 ${MIN_KEY_LENGTH}자 이상이어야 합니다.`;
+  if (WEAK_KEYS.includes(k) || /^change-?me/.test(k)) return '예시로 쓰인 관리자 키는 쓸 수 없습니다. 새로 만들어 주세요(예: openssl rand -hex 12).';
+  if (new Set(k).size < 4) return '같은 글자가 반복된 키는 쓸 수 없습니다.';
+  return null;
+}
+let weakHashes = null;
+/** True when a SHA-256 hex digest is the hash of a known example key (hash-only configs and /init). */
+export async function isWeakKeyHash(hash) {
+  if (!weakHashes) {
+    const all = new Set();
+    for (const k of WEAK_KEYS) for (const v of [k, k.toUpperCase(), k.charAt(0).toUpperCase() + k.slice(1)]) all.add(await sha256hex(v));
+    weakHashes = all;
+  }
+  return weakHashes.has(String(hash || '').toLowerCase());
+}
+/** Participant nicknames that would impersonate the instructor or the service. */
+export const RESERVED_NICKNAMES = ['강사', '운영자', 'admin', 'lecpage'];
+export function reservedNickname(n) {
+  const s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '');
+  return s === 'administrator' || RESERVED_NICKNAMES.some((r) => s === r || s === r + '님');
+}
+function cleanNickname(v, field = 'nickname', required = false) {
+  const s = cleanText(v, LIMITS.nickname, field, { required });
+  if (s && reservedNickname(s)) throw new HttpError(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.');
+  return s;
+}
 
 /** Allowed upload types → extension. SVG/HTML are never accepted. */
 export const UPLOAD_TYPES = {
@@ -118,12 +165,38 @@ function cleanNum(v, field, min, max, { int = false, nullable = false } = {}) {
   return n;
 }
 function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+const FILE_NAME_RE = /^[a-f0-9]{24}\.(png|jpg|gif|webp|pdf|mp3|mp4)$/;
+const FILE_PATH_RE = /^\/api\/([A-Z0-9][A-Z0-9_-]{2,39})\/files\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|pdf|mp3|mp4))$/;
+/** Board files may only point at this server's own uploads: `/api/<CODE>/files/<name>` (relative, or absolute with any
+ *  origin — the origin is dropped). Stored canonical and relative, so a post can never point at another host. */
 function cleanFileUrl(u) {
   const s = cleanText(u, 500, 'files.url', { required: true });
-  if (/^\/api\/[A-Z0-9_-]+\/files\/[a-z0-9]+\.[a-z0-9]{2,4}$/.test(s)) return s;
-  let url; try { url = new URL(s); } catch { throw bad('invalid_value', 'files.url'); }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw bad('invalid_value', 'files.url');
-  return url.href;
+  let p = s;
+  if (!s.startsWith('/')) {
+    let url; try { url = new URL(s); } catch { throw bad('invalid_value', 'files.url: 이 서버에 올린 파일만 붙일 수 있어요.'); }
+    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.search || url.hash || url.username || url.password) throw bad('invalid_value', 'files.url: 이 서버에 올린 파일만 붙일 수 있어요.');
+    p = url.pathname;
+  }
+  const m = FILE_PATH_RE.exec(p);
+  if (!m) throw bad('invalid_value', 'files.url: 이 서버에 올린 파일만 붙일 수 있어요.');
+  return `/api/${m[1]}/files/${m[2]}`;
+}
+/** '/api/CODE/files/<name>' (or an absolute URL with that path) → { code, name } | null. */
+export function fileRef(u) {
+  let p = String(u || '');
+  if (!p.startsWith('/')) { try { p = new URL(p).pathname; } catch { return null; } }
+  const m = FILE_PATH_RE.exec(p);
+  return m ? { code: m[1], name: m[2] } : null;
+}
+/** Absolute URLs for this server's relative upload paths (per response; `origin` is the origin the reader used). */
+export function absolutizeFiles(body, origin) {
+  if (!origin || !body || typeof body !== 'object') return body;
+  const fix = (d) => {
+    if (d && Array.isArray(d.files)) d.files = d.files.map((f) => (f && typeof f.url === 'string' && f.url.startsWith('/api/') ? { ...f, url: origin + f.url } : f));
+  };
+  if (Array.isArray(body)) body.forEach(fix);
+  else { fix(body); if (Array.isArray(body.posts)) body.posts.forEach(fix); }
+  return body;
 }
 function cleanFiles(v) {
   if (v == null) return [];
@@ -206,7 +279,7 @@ export function cleanPatch(col, b, role) {
     if (!allowed.has(k)) continue;
     const v = b[k];
     switch (`${col}.${k}`) {
-      case 'participants.nickname': out[k] = cleanText(v, LIMITS.nickname, k, { required: true }); break;
+      case 'participants.nickname': out[k] = role.admin ? cleanText(v, LIMITS.nickname, k, { required: true }) : cleanNickname(v, k, true); break;
       case 'progress.status': out[k] = cleanEnum(v, ['doing', 'done', 'stuck'], k); break;
       case 'help.station': out[k] = cleanText(v, LIMITS.id, k); break;
       case 'help.seat': out[k] = cleanText(v, LIMITS.seat, k); break;
@@ -417,6 +490,11 @@ export class Limiter {
     if (e.c >= max) return e.reset - now;
     e.c++; return 0;
   }
+  /** Like hit() but never counts: ms until the window resets when the bucket is full, else 0. */
+  peek(key, [max], now = Date.now()) {
+    const e = this.m.get(key);
+    return e && e.reset > now && e.c >= max ? e.reset - now : 0;
+  }
   prune(now = Date.now()) { for (const [k, e] of this.m) if (e.reset <= now) this.m.delete(k); }
 }
 
@@ -432,6 +510,10 @@ export const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS tomb_since ON tombstones (code, at)`,
   `CREATE TABLE IF NOT EXISTS state (code TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS files (code TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, by TEXT, created_at INTEGER NOT NULL, PRIMARY KEY (code, name))`,
+  // Which post a file belongs to. A row with post NULL = uploaded but not attached yet. A tracked file is served only
+  // while its post exists and is not hidden; files without a row (uploaded before this table existed) are legacy.
+  `CREATE TABLE IF NOT EXISTS file_refs (code TEXT NOT NULL, name TEXT NOT NULL, post TEXT, PRIMARY KEY (code, name))`,
+  `CREATE INDEX IF NOT EXISTS file_refs_post ON file_refs (code, post)`,
 ];
 
 // ---------- the core ----------

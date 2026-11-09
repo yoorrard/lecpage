@@ -131,8 +131,11 @@
   }
 
   // ---------------------------------------------------------------- script loader (never rejects: resolves false)
+  // loadScript(url, timeoutMs, { integrity: 'sha384-…' }) — a remote (http/https) script without an SRI hash is refused.
   var loading = {};
-  function loadScript(url, timeoutMs) {
+  function loadScript(url, timeoutMs, opts) {
+    var integrity = opts && typeof opts.integrity === 'string' ? opts.integrity : '';
+    if (/^(https?:)?\/\//i.test(String(url)) && !/^sha(256|384|512)-[A-Za-z0-9+/=]{40,}$/.test(integrity)) return Promise.resolve(false);
     if (loading[url]) return loading[url];
     loading[url] = new Promise(function (resolve) {
       if (!root.document) return resolve(false);
@@ -140,6 +143,7 @@
       var done = false;
       var t = setTimeout(function () { finish(false); }, timeoutMs || 12000);
       function finish(ok) { if (done) return; done = true; clearTimeout(t); if (!ok) delete loading[url]; resolve(ok); }
+      if (integrity) s.integrity = integrity;
       s.src = url; s.async = true; s.crossOrigin = 'anonymous';
       s.onload = function () { finish(true); };
       s.onerror = function () { finish(false); };
