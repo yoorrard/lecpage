@@ -17,13 +17,22 @@ function b64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000)
 /**
  * GitHub Pages 배포: 저장소 만들기(없으면) → 이미지 등 바이너리 blob(분당 80회 제한 고려해 천천히) → 글 파일은 tree에 바로 → 커밋 → Pages 켜기
  */
-export async function deployGitHub({ token, repo, files, onProgress = () => { } }) {
+export async function deployGitHub({ token, repo, files, onProgress = () => { }, allowExisting = false }) {
   const me = await gh(token, 'GET', '/user');
   const owner = me.login;
   onProgress({ step: '저장소 확인', pct: 3 });
   let r;
-  try { r = await gh(token, 'GET', `/repos/${owner}/${repo}`); }
+  try {
+    r = await gh(token, 'GET', `/repos/${owner}/${repo}`);
+    // 이미 있는 저장소는 lecpage가 만든 것(표지 파일)이거나 강사가 덮어쓰기를 확인했을 때만
+    if (!allowExisting) {
+      let mine = false;
+      try { await gh(token, 'GET', `/repos/${owner}/${repo}/contents/.lecpage-site`); mine = true; } catch (e2) { if (e2.status !== 404) throw e2; }
+      if (!mine) { const e3 = new Error('이미 있는 저장소예요.'); e3.code = 'exists'; throw e3; }
+    }
+  }
   catch (e) {
+    if (e.code === 'exists') throw e;
     if (e.status !== 404) throw e;
     onProgress({ step: '저장소 만들기', pct: 6 });
     r = await gh(token, 'POST', '/user/repos', { name: repo, description: 'lecpage로 만든 연수 사이트', auto_init: true, has_issues: false, has_wiki: false, has_projects: false });
@@ -46,6 +55,7 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { } 
     if (bins.length > 40) await sleep(800); // 콘텐츠 생성 요청 분당 80회 제한
   }
   tree.push({ path: '.nojekyll', mode: '100644', type: 'blob', content: '' });
+  tree.push({ path: '.lecpage-site', mode: '100644', type: 'blob', content: 'lecpage로 만든 연수 사이트 저장소예요. 다시 올리면 이 저장소의 파일이 바뀌어요.\n' });
   onProgress({ step: '파일 묶기', pct: 84 });
   const t = await gh(token, 'POST', `/repos/${owner}/${repo}/git/trees`, { tree }); // base_tree 없이: 사이트 파일만 남김
   const c = await gh(token, 'POST', `/repos/${owner}/${repo}/git/commits`, { message: 'lecpage로 연수 사이트 배포', tree: t.sha, parents: [baseSha] });

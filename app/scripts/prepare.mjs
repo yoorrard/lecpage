@@ -8,7 +8,7 @@ const PUB = join(HERE, '..', 'public');
 const E = await import(pathToFileURL(join(SKILL, 'engine', 'src', 'index.js')).href);
 const N = await import(pathToFileURL(join(SKILL, 'engine', 'node.js')).href);
 rmSync(join(PUB, 'examples'), { recursive: true, force: true });
-for (const id of ['sel-story', 'ai-lab']) {
+for (const id of ['forest-story', 'data-lab']) {
   const bp = JSON.parse(readFileSync(join(SKILL, 'examples', `${id}.blueprint.json`), 'utf8'));
   const r = E.build(bp, { runtime: N.nodeRuntime(), assets: N.readAssetDir(join(SKILL, 'examples', 'assets', id), 'assets/') });
   if (r.errors.length) { console.error(id, r.errors); process.exit(1); }

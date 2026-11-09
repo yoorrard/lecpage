@@ -111,7 +111,11 @@
       }).then(function (b64) { return post({ a: 'upload', name: file.name || 'file', type: file.type, data: b64, token: ctx.token() }); });
     };
     a.checkAdmin = function () { return post({ a: 'checkAdmin', admin: ctx.adminKey() || '' }).then(function (ok) { return ok === true; }); };
-    a.exportCsv = function (kind) { return post({ a: 'export', kind: kind, admin: ctx.adminKey() }); };
+    a.exportCsv = function (kind, opts) {
+      // 'completion' needs the course times, which the sheet does not know: build it from the admin snapshot here
+      if (kind === 'completion') return post({ a: 'snapshot', since: 0, admin: ctx.adminKey() }).then(function (s) { var t = U.exportTable(kind, s || {}, undefined, opts); return U.toCsv(t.columns, t.rows); });
+      return post({ a: 'export', kind: kind, admin: ctx.adminKey() });
+    };
     a.purge = function () { return post({ a: 'purge', admin: ctx.adminKey() }).then(function () { return true; }); };
     return a;
   });

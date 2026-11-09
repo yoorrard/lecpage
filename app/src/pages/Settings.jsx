@@ -10,6 +10,8 @@ export function Settings() {
   const [keys, setKeys] = useState({});
   const [st, setSt] = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [adv, setAdv] = useState(() => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } });
+  const toggleAdv = (v) => { setAdv(v); try { localStorage.setItem('lecpage:advanced', v ? '1' : '0'); } catch { } toast(v ? '고급 기능을 보여 드려요.' : '고급 기능을 숨겼어요.'); };
   useEffect(() => { (async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); setSt(await storageInfo()); })(); }, []);
   const applyTheme = (t) => { setTheme(t); document.documentElement.dataset.theme = t; try { localStorage.setItem('lecpage:theme', t); } catch { } };
   async function exportAll() {
@@ -20,7 +22,7 @@ export function Settings() {
   async function wipe() {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
     for (const p of await projects.all()) await projects.remove(p.id);
-    for (const k of Object.keys(PROVIDERS)) await forgetKey(k);
+    for (const k of [...Object.keys(PROVIDERS), 'deploy-netlify', 'deploy-github']) await forgetKey(k);
     toast('이 브라우저의 lecpage 데이터를 모두 지웠어요.'); setConfirmDel(false); setSt(await storageInfo());
   }
   return (
@@ -34,10 +36,16 @@ export function Settings() {
       </Sheet>
       <Sheet fold={false}>
         <div class="stack">
+          <h2 style={{ fontSize: '1.2rem' }}>고급 기능</h2>
+          <label class="check"><input type="checkbox" checked={adv} onChange={(e) => toggleAdv(e.target.checked)} /><span>고급 기능 보기 <span class="small muted">(칸 내용을 코드(JSON)로 고치기, 적용된 효과 이름 등. 개발자·파워 사용자용)</span></span></label>
+        </div>
+      </Sheet>
+      <Sheet fold={false}>
+        <div class="stack">
           <h2 style={{ fontSize: '1.2rem' }}>AI 연결</h2>
-          <p class="small muted">키는 기본적으로 이 탭에서만 기억하고, '이 기기에서 기억'을 켠 경우에만 암호화해 저장해요. 키는 AI 회사로만 가요.</p>
+          <p class="small muted">키는 기본적으로 이 탭의 메모리에만 두고(새로 고침하면 사라짐), '이 기기에서 기억'을 켠 경우에만 암호화해 저장해요. 키는 AI 회사로만 가요.</p>
           {Object.entries(PROVIDERS).map(([id, v]) => (
-            <div class="spread card"><div><b>{v.name}</b><div class="small muted">{keys[id]?.key ? (keys[id].remembered ? '이 기기에 저장됨' : '이 탭에서만 기억 중') : '연결 안 됨'}</div></div>
+            <div class="spread card"><div><b>{v.name}</b><div class="small muted">{keys[id]?.key ? (keys[id].remembered ? '이 기기에 암호화해 저장됨' : '이 탭에서만 기억 중') : '연결 안 됨'}</div></div>
               {keys[id]?.key ? <button class="btn btn-sm btn-danger" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('키를 지웠어요.'); }}>키 지우기</button> : <a class="btn btn-sm" href={v.keyUrl} target="_blank" rel="noopener">키 받으러 가기</a>}
             </div>
           ))}

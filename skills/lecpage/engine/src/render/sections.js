@@ -216,10 +216,33 @@ function sessions(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '차시') + `<ol class="lp-sessions">${s.items.map((x) => `<li class="lp-card" data-status="${esc(x.status)}"><span class="lp-idx">${x.no}차시</span><div><h3>${esc(x.title)}</h3>${x.date ? `<small>${esc(koDate(x.date))}</small>` : ''}${x.desc ? `<p>${esc(x.desc)}</p>` : ''}${x.links.length ? `<div class="lp-st-links">${x.links.map((l) => `<a class="lp-link" ${href(l.url)}>${esc(l.label || '열기')}${icon('arrow')}</a>`).join('')}</div>` : ''}</div>${x.status ? `<span class="lp-chip">${label[x.status]}</span>` : ''}</li>`).join('')}</ol>`);
 }
 
+// 설문 항목 열쇠(결과 CSV의 열 이름): "1. 질문 앞부분"
+export function surveyKey(q, n) { return `${n + 1}. ${[...String(q.q || '')].slice(0, 30).join('')}`.trim(); }
+const SCALE_KO = ['전혀 아니에요', '아니에요', '보통이에요', '그래요', '매우 그래요'];
+
+function surveyForm(s) {
+  const qs = s.questions.map((q, n) => {
+    const key = esc(surveyKey(q, n)); const name = `sv-${esc(s.id)}-${n}`;
+    const qText = `<span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}`;
+    const legend = `<legend>${qText}</legend>`;
+    if (q.kind === 'text') return `<li class="lp-card"><label class="lp-sv-text"><span class="lp-sv-q">${qText}</span><textarea name="${name}" rows="3" maxlength="1000" data-sv-key="${key}"></textarea></label></li>`;
+    const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
+    return `<li class="lp-card"><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b>` : ''}${esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
+  }).join('');
+  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state>제출한 뒤에도 다시 내면 고쳐져요. 이름 없이 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">설문 제출하기</button></div></form>`;
+}
+
 function survey(s, ctx) {
   const url = s.url;
+  const inner = s.questions.length && ctx.live;
+  const title = `<h2 class="lp-h2" id="${esc(s.id)}-h"${fx(ctx, 'section.title')}>${br(s.title || '만족도 조사에 참여해 주세요')}</h2>`;
+  const defLead = '오늘 연수에 대한 의견을 들려주세요. 다음 연수를 더 좋게 만드는 데 씁니다.';
+  const lead = `<p class="lp-lead">${br(s.lead || defLead)}</p>`;
+  if (inner) {
+    return wrap({ ...s, title: s.title || '만족도 조사' }, ctx, `${head({ ...s, title: s.title || '만족도 조사에 참여해 주세요', lead: s.lead || defLead }, ctx)}${surveyForm(s)}${url ? `<p class="lp-small">기관 설문도 있어요: <a class="lp-link" ${href(url)}>설문 열기${icon('external')}</a></p>` : ''}`);
+  }
   return wrap(s, ctx, `<div class="lp-survey lp-card">
-<div><h2 class="lp-h2" id="${esc(s.id)}-h"${fx(ctx, 'section.title')}>${br(s.title || '만족도 조사에 참여해 주세요')}</h2>${s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : '<p class="lp-lead">오늘 연수에 대한 의견을 들려주세요. 다음 연수를 더 좋게 만드는 데 씁니다.</p>'}
+<div>${title}${lead}
 ${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>바로 참여하기</span>${icon('external')}</a>` : '<p class="lp-note">설문 주소가 아직 없어요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
 ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label="설문 QR 코드"></div>` : ''}</div>`);
 }
@@ -243,7 +266,7 @@ function gallery(s, ctx) {
 }
 function reflection(s, ctx) {
   const prompts = s.prompts.length ? s.prompts : ['오늘 가장 기억에 남는 것', '다음 주 수업에서 해 볼 한 가지'];
-  return wrap(s, ctx, head(s, ctx, '나의 기록') + `<form class="lp-reflect" data-reflect="${esc(s.id)}" onsubmit="return false">${prompts.map((p, i) => `<label><span>${esc(p)}</span><textarea rows="3" data-reflect-q="${i}"></textarea></label>`).join('')}<div class="lp-compose-f"><small>이 브라우저에만 저장돼요.</small><button class="lp-btn lp-btn-primary" type="button" data-reflect-save>${icon('download')}<span>내려받기</span></button></div></form>`);
+  return wrap(s, ctx, head(s, ctx, '나의 기록') + `<form class="lp-reflect" data-reflect="${esc(s.id)}">${prompts.map((p, i) => `<label><span>${esc(p)}</span><textarea rows="3" data-reflect-q="${i}"></textarea></label>`).join('')}<div class="lp-compose-f"><small>이 브라우저에만 저장돼요.</small><button class="lp-btn lp-btn-primary" type="button" data-reflect-save>${icon('download')}<span>내려받기</span></button></div></form>`);
 }
 function text(s, ctx) { return wrap(s, ctx, head(s, ctx) + `<div class="lp-prose">${md(s.md)}</div>`); }
 

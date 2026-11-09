@@ -146,12 +146,15 @@ export function validate(input) {
 
   const dp = b.deploy || {};
   const deploy = { target: pick(dp.target, DEPLOY_TARGETS, 'zip'), base: str(dp.base, 120) || '/' };
+  // 누가 볼 수 있나: link(주소·QR을 받은 사람, 검색 제외, 기본) · public(검색 허용) · password(암호를 아는 사람, 내용 암호화)
+  const access = { mode: pick(b.access?.mode, ['link', 'public', 'password'], 'link') };
 
   // 섹션
   const seen = new Set();
   const sections = [];
   arr(b.sections).forEach((s, i) => {
     if (!s || typeof s !== 'object') return;
+    if (s.hidden === true) return; // 강사가 숨긴 칸(내용은 설계도에 남김)
     const type = s.type;
     if (!SECTION_TYPES.includes(type)) { warnings.push({ path: `sections[${i}]`, message_ko: `알 수 없는 섹션 종류 "${str(type, 20)}"를 뺐습니다.` }); return; }
     let id = slug(s.id || type, i + 1);
@@ -170,10 +173,18 @@ export function validate(input) {
     warnings.push({ path: 'sections', message_ko: '첫 화면(hero)이 없어 추가했습니다.' });
   }
 
-  return { blueprint: { version: 1, meta, audience, archetype, design, instructors, sections, live, privacy, deploy, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
+  return { blueprint: { version: 1, meta, audience, archetype, design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
 }
 
-/** 6자리 참여 코드(헷갈리는 글자 제외) */
+/** 무작위 연수 코드(헷갈리는 글자 제외, 기본 10자 ≈ 50비트). 같은 서버를 여러 연수가 함께 써도 남이 짐작할 수 없게 */
+export function randomCode(n = 10) {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const u = new Uint32Array(n);
+  (globalThis.crypto || {}).getRandomValues ? globalThis.crypto.getRandomValues(u) : u.forEach((_, i) => { u[i] = Math.floor(Math.random() * 2 ** 32); });
+  return Array.from(u, (x) => A[x % A.length]).join('');
+}
+
+/** 6자리 참여 코드(헷갈리는 글자 제외). 설계도에 코드가 없을 때만 쓰는 예비값(제목·날짜로 정해지므로 짐작될 수 있음) */
 export function makeCode(seed = '') {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let h = 2166136261 >>> 0;

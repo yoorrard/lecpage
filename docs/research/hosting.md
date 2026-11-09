@@ -1,5 +1,14 @@
 # 호스팅·실시간 백엔드 조사 노트
 
+> **2026-11-09 재검증: hosting-2026-11 요약**
+> - 앱 호스팅은 **Cloudflare Workers 정적 자산 + Workers Builds(Git 연결)**로 정했습니다. Cloudflare Pages 첫 화면이 "새 프로젝트는 Workers로 시작"을 권합니다(Pages 종료 일정은 없음). 설정 순서: `docs/operations.md`.
+> - Workers 정적 요청은 무료·무제한. 단 'Workers Caching'을 켜거나 `run_worker_first` 경로는 하루 10만 요청 한도에 들어갑니다. Workers 내 도메인은 도메인이 Cloudflare 영역(네임서버)이어야 합니다.
+> - **Firebase Spark 호스팅 전송은 월 10GB**(넘으면 다음 달 1일까지 꺼짐). 예전 "360MB/일"은 틀린 해석이었습니다.
+> - **Netlify Drop**: 계정 없이 올리되 claim 전에는 비밀번호로 잠김, 1시간 안에 claim, 익명은 IP당 3개. **Vercel Drop**(2026-06)이 새로 생김. **Deno Deploy**는 2027년 4월 무렵 종료 예정.
+> - **Cloudflare Registrar는 `.kr`을 팔지 않습니다**(`.com` $11.17). lecpage.com·.kr 등 후보 도메인은 2026-11-09 모두 미등록.
+> - Quick Tunnel 문서 주소가 바뀌었습니다(값은 같음: 동시 요청 200, SSE 안 됨).
+> - 운영자 공용 실시간 중계는 하지 않기로 했습니다. 결정 기록: `docs/research/2026-11-review.md`.
+
 - 조사일: **2026-11-09**. 각 공식 페이지를 직접 내려받아(curl) 확인했습니다. 웹 검색으로만 확인한 값은 "2차 출처", 확인 못 한 값은 ⚠️.
 - 이 노트의 결론은 `skills/lecpage/references/infra-decision.md`(결정 규칙)와 `references/deploy/*.md`(따라 하기)에 반영했습니다.
 - 가격·한도는 자주 바뀝니다. 6개월마다 다시 확인하세요(확인일을 이 파일 맨 위에 갱신).
@@ -11,11 +20,12 @@
 | 서비스 | 무료 범위 | 주요 한도 | 상업 이용 | 내 도메인 | HTTPS | 한국 체감 속도(메모) | 설정 난이도 | 데이터 위치 |
 |---|---|---|---|---|---|---|---|---|
 | **GitHub Pages** | 0원 | 사이트 1GB, 월 100GB(소프트), 시간당 10빌드(Actions 예외), 배포 10분 제한, 무료는 공개 저장소 | 온라인 사업·상업 SaaS 금지 | ✓ | ✓ 자동 | 양호 ⚠️(CDN 경로 미확인) | ★★ | 미국 회사, 글로벌 CDN |
-| **Cloudflare Workers 정적 자산** | 0원 | 정적 요청 **무료·무제한**, 2만 파일, 25MiB/파일, `_headers` 100규칙 | 가능 | ✓ | ✓ 자동 | 서울 PoP 있음. 통신사별로 해외 경유 가능 ⚠️ | ★★(CLI) | 글로벌 |
-| **Cloudflare Pages** | 0원 | 끌어 놓기 1,000파일, Wrangler 2만, 25MiB/파일, 월 500빌드, 프로젝트 100개, 도메인 100개/프로젝트 | 가능 | ✓ | ✓ 자동 | 위와 같음 | ★(끌어 놓기) | 글로벌 |
-| **Netlify** | 월 300크레딧(하드 한도) | 배포 15, 전송 GB당 20, 1만 요청당 2크레딧. 소진 시 **계정 전체 정지**. 새 프로젝트는 비공개로 시작 | 가능 | ✓ | ✓ 자동 | ⚠️ | ★(Drop) | 글로벌 |
-| **Vercel Hobby** | 0원 | 전송 100GB, CDN 요청 100만, 함수 100만, 초과 시 30일 대기 | **비상업 개인만** | ✓ | ✓ 자동 | 서울(icn1) 지역 있음 ⚠️ | ★★ | 글로벌 |
-| **Firebase Hosting(Spark)** | 0원 | 저장 10GB, **전송 360MB/일** | 가능 | ✓ | ✓ 자동 | ⚠️ | ★★★(CLI) | 글로벌 |
+| **Cloudflare Workers 정적 자산** | 0원 | 정적 요청 **무료·무제한**, 2만 파일, 25MiB/파일, `_headers` 100규칙, Git 연결 빌드 월 3,000분 | 가능 | ✓(Cloudflare 영역 필요) | ✓ 자동 | 서울 PoP 있음. 통신사별로 해외 경유 가능 ⚠️ | ★★(Git 연결 대시보드 또는 CLI) | 글로벌 |
+| **Cloudflare Pages** | 0원 | 끌어 놓기 1,000파일, Wrangler 2만, 25MiB/파일, 월 500빌드, 프로젝트 100개, 도메인 100개/프로젝트. Cloudflare는 새 프로젝트를 Workers로 권장 | 가능 | ✓(하위 도메인은 CNAME만으로) | ✓ 자동 | 위와 같음 | ★(끌어 놓기) | 글로벌 |
+| **Netlify** | 월 300크레딧(하드 한도) | 배포 15, 전송 GB당 20, 1만 요청당 2크레딧. 소진 시 **계정 전체 정지**. 새 프로젝트는 비공개로 시작. Drop: 익명은 IP당 3개, claim 전 비밀번호 잠금, 1시간 안에 claim | 가능 | ✓ | ✓ 자동 | ⚠️ | ★(Drop) | 글로벌 |
+| **Vercel Hobby** | 0원 | 전송 100GB, CDN 요청 100만, 함수 100만, 초과 시 30일 대기. Drop(2026-06): 계정 없이 임시 배포, 파일당 100MB·1회 1GB | **비상업 개인만** | ✓ | ✓ 자동 | 서울(icn1) 지역 있음 ⚠️ | ★★(Drop은 ★) | 글로벌 |
+| **Firebase Hosting(Spark)** | 0원 | 저장 10GB, **전송 월 10GB**(넘으면 다음 달 1일까지 비활성) | 가능 | ✓ | ✓ 자동 | ⚠️ | ★★★(CLI) | 글로벌 |
+| **Deno Deploy** | 요청 100만·전송 20GiB/월 | **2027-04 무렵 종료 예정**(2026-10 Cloudflare 합류) | 개인·소규모 | ✓ | ✓ | — | — | 비권장 |
 | **AWS S3+CloudFront** | CloudFront 종량제 상시 무료 월 1TB(+요청 1천만: 2차 출처 ⚠️) / 정액 Free 플랜 $0(요청 100만·100GB·S3 5GB) | 신규 계정 무료 플랜 6개월 | 가능 | ✓(ACM us-east-1) | ✓ | 서울 엣지 다수(재확인 안 함 ⚠️) | ★★★ | 원본 S3 리전 선택(서울 가능) |
 | **AWS Amplify Hosting** | 신규 계정 크레딧 | 전송 GB당 $0.15, 저장 $0.023/GB-월, ZIP 5GB | 가능 | ✓ | ✓ | CloudFront 기반 | ★★(끌어 놓기) | 리전 선택 |
 | **Azure Static Web Apps(Free)** | 0원 | 월 100GB, 환경당 250MB(합계 500MB), 1.5만 파일, 도메인 2개 | 가능 | ✓ | ✓ | ⚠️ | ★★ | 글로벌 배포 |
@@ -54,9 +64,9 @@
 ## 3. 수치 계산 메모
 
 - 사이트 크기: 슬라이드 WebP 1장 150KB × 120장 ≈ 18MB + 나머지 2MB ≈ 20MB.
-- 40명 × 3회 × 20MB = 2.4GB/회. → GitHub(월 100GB), Cloudflare(무제한), Vercel(100GB), Azure(100GB) 여유. Netlify는 48크레딧+배포. Render 정적 월 5GB면 2회 연수로 소진. Firebase Spark는 하루 360MB라 불가.
+- 40명 × 3회 × 20MB = 2.4GB/회. → GitHub(월 100GB), Cloudflare(무제한), Vercel(100GB), Azure(100GB) 여유. Netlify는 48크레딧+배포. Render 정적 월 5GB면 2회 연수로 소진. Firebase Spark는 월 10GB라 한 달에 4회까지.
 - Supabase 메시지(받는 사람마다 1개): 참가자 40 + 강사 화면 2. 상태 방송 1번 = 41~43개. 초당 100 한도 → 초당 방송 2번이 한계. 반응(이모지)은 묶어서 보내야 함(어댑터 설계 요구사항).
-- Supabase 익명 로그인: 학교는 NAT 하나 → 시간당 30명. **연수 전 대시보드에서 한도 상향**(Auth → Rate Limits). 또는 익명 로그인 없이 RPC로 참가 토큰 발급.
+- Supabase 익명 로그인: 학교는 NAT 하나 → 시간당 30명. → lecpage는 익명 로그인을 쓰지 않고 RPC로 참가 토큰을 발급하도록 구현했습니다(한도 조정 불필요).
 - Cloudflare 폴링 시 요청: 40명 × 12회/분(5초) × 90분 = 43,200 → 무료 10만/일 안. 150명이면 162,000 → 초과 → 폴링 15초 이상 또는 WS/SSE 필수.
 - DO 실행 시간: 128MB 고정 과금. 연결 유지(하이버네이션 불가 상태) 2시간 = 7,200초 × 0.125GB = 900GB-s (한도 13,000/일). WebSocket 하이버네이션이면 쉬는 동안 0.
 - Apps Script 동시 실행: 40명 × (1/10초) × 0.7초 ≈ 2.8 동시 → 한도 30에 여유. 120명·5초면 ≈ 17, 쓰기 잠금(LockService) 대기까지 생각하면 위험.
@@ -77,8 +87,11 @@
 - DO 위치: 처음 요청 근처. 관할(jurisdiction)은 `eu`, `fedramp`만. 위치 힌트는 최선 노력.
 - Pages: 끌어 놓기 1,000파일/25MiB, Wrangler 2만, 끌어 놓기 프로젝트는 Git 연결로 전환 불가, 빌드 월 500, 프로젝트 100, 도메인 100/프로젝트, `_headers` 100규칙·줄당 2,000자, `_redirects` 2,100개.
 - Workers 정적 자산: `assets.directory`, `not_found_handling`, `html_handling`(기본 auto-trailing-slash: `/file.html` → `/file` 307), `.assetsignore`, `_headers`는 Worker 코드가 만든 응답에는 적용되지 않음.
-- Quick Tunnel(trycloudflare): 시험용, 가동 보장 없음, 동시 요청 200, **SSE 미지원**.
-- 출처: https://developers.cloudflare.com/workers/platform/pricing/ · https://developers.cloudflare.com/workers/platform/limits/ · https://developers.cloudflare.com/durable-objects/platform/limits/ · https://developers.cloudflare.com/durable-objects/reference/data-location/ · https://developers.cloudflare.com/pages/platform/limits/ · https://developers.cloudflare.com/pages/get-started/direct-upload/ · https://developers.cloudflare.com/workers/static-assets/ · https://developers.cloudflare.com/workers/static-assets/headers/ · https://developers.cloudflare.com/workers/static-assets/routing/advanced/html-handling/ · https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/
+- Quick Tunnel(trycloudflare): 계정 없음, 시험용, 가동 보장 없음, 동시 요청 200(넘으면 429), **SSE 미지원**, 웹소켓은 실제로 되지만 문서에 명시 없음 ⚠️, 실행마다 주소가 바뀜. 50명 연수의 진짜 한계는 노트북 업로드 속도.
+- Workers Builds(2026-11-09): 루트 디렉터리의 `wrangler.jsonc`를 읽음, 대시보드 Worker 이름 = `name` 필수, 한 저장소로 Worker 여러 개 가능(루트 디렉터리·감시 경로를 따로). 무료 월 3,000빌드분, 동시 1개, 20분 제한. Wrangler 파일의 `[build]`는 무시.
+- Workers 정적 자산: 'Workers Caching'을 켜거나 `run_worker_first` 경로는 무료 무제한에서 빠짐(후자는 한도 초과 시 429). 내 도메인은 Cloudflare 영역 필수(Pages는 하위 도메인 CNAME 가능). `workers.dev`는 "개인·취미 프로젝트용"으로 취급, 실서비스는 내 도메인 권장.
+- Registrar: `.com .net .app .dev .page .io` 판매, **`.kr` 없음**. 원가 판매(2차 출처 값: `.com` $11.17/$11.17, `.app` $8.20/$14.20, `.dev` $8.20/$12.20, `.page` $10.20/$10.20, `.io` $32/$50). CNAME(부분) 설정은 Business 플랜이라 `.kr`은 네임서버를 옮겨야 함.
+- 출처: https://developers.cloudflare.com/workers/platform/pricing/ · https://developers.cloudflare.com/workers/platform/limits/ · https://developers.cloudflare.com/durable-objects/platform/limits/ · https://developers.cloudflare.com/durable-objects/reference/data-location/ · https://developers.cloudflare.com/pages/platform/limits/ · https://developers.cloudflare.com/pages/get-started/direct-upload/ · https://developers.cloudflare.com/workers/static-assets/ · https://developers.cloudflare.com/workers/static-assets/headers/ · https://developers.cloudflare.com/workers/static-assets/routing/advanced/html-handling/ · https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/ · https://developers.cloudflare.com/workers/ci-cd/builds/ · https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/ · https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/ · https://developers.cloudflare.com/pages/ · https://www.cloudflare.com/tld-policies/
 
 ### Supabase
 - Free: MAU 5만, DB 500MB, 공유 CPU·RAM 500MB, 전송 5GB(+캐시 5GB), 파일 1GB, "1주 비활성 시 정지, 활성 프로젝트 2개"(정지된 것은 개수에서 빠짐). 정지 약 1주 전 경고 메일, 대시보드에서 1년 안 복구.
@@ -97,18 +110,19 @@
 - Hobby: 비상업 개인용. 전송 100GB, Origin 10GB, CDN 요청 100만, Active CPU 4시간, 함수 호출 100만, 프로젝트 200, 함수 최대 300초. 초과 시 대부분 30일 대기.
 - 상업 이용 정의: 프로젝트 제작 관련자 누구든 금전적 이득(결제, 상품·서비스 광고, 사이트 제작·호스팅 대가, 광고 게재 등). 기부 요청은 예외. → 강사료 받는 연수의 사이트는 회색지대로 판단.
 - WebSocket: 함수에서 공개 베타, 최대 실행 시간이 되면 연결 종료.
-- 출처: https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/limits · https://vercel.com/docs/functions/websockets · https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections
+- Vercel Drop(2026-06): vercel.com/drop에 정적 폴더를 놓으면 계정 없이 임시 배포, claim하지 않으면 만료. 파일당 100MB, 1회 1GB. claim 뒤에는 Hobby 비상업 조건.
+- 출처: https://vercel.com/docs/drop · https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/limits · https://vercel.com/docs/functions/websockets · https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections
 
 ### Netlify
 - 2025-09-04 이후 신규 계정은 크레딧 요금제. Free 300크레딧/월 하드 한도(추가 구매 불가), Personal 1,000, Pro 3,000~.
 - 운영 배포 15, 컴퓨팅 GB-시간당 10, 전송 GB당 20, 요청 1만당 2, 폼 제출 무료.
 - 크레딧 소진 시 모든 프로젝트 정지("Site not available"), 새 배포 불가.
 - 새 프로젝트는 비공개로 시작해 공개를 선택해야 함(가격 페이지 문구).
-- 계정 없는 배포(`--allow-anonymous`)는 1시간 안에 claim.
-- 출처: https://www.netlify.com/pricing/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/how-credits-work/ · https://docs.netlify.com/deploy/create-deploys/
+- 계정 없는 배포(`--allow-anonymous`, Drop 웹 포함)는 1시간 안에 claim. claim 전에는 비밀번호로 잠겨 남이 못 봄(2024~), 익명 사이트는 IP당 3개(2022~), claim하지 않으면 정지 후 1주 뒤 삭제. 2026 여름부터 Drop 사이트도 다시 배포·내 도메인 가능.
+- 출처: https://www.netlify.com/blog/thirteen-years-of-netlify-drop · https://www.netlify.com/pricing/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/how-credits-work/ · https://docs.netlify.com/deploy/create-deploys/
 
 ### Firebase
-- Spark: Hosting 저장 10GB, 전송 360MB/일, 도메인·SSL ✓. RTDB 동시 100·1GB·10GB/월. Firestore 1GiB·읽기 5만/일·쓰기 2만/일·삭제 2만/일·전송 10GiB/월.
+- Spark: Hosting 저장 10GB, **전송 월 10GB**(호스팅 문서 2026-11-05. 요금 페이지는 아직 "360MB/일" 표기), 넘으면 짧은 유예 뒤 다음 달 1일까지 사이트 비활성. Blaze는 GB당 $0.15. 도메인·SSL ✓. RTDB 동시 100·1GB·10GB/월. Firestore 1GiB·읽기 5만/일·쓰기 2만/일·삭제 2만/일·전송 10GiB/월.
 - Cloud Storage for Firebase: Spark 프로젝트는 기본 버킷 포함 접근 불가 → Blaze 필수(무료 사용량은 Blaze에서도 유지).
 - 출처: https://firebase.google.com/pricing · https://firebase.google.com/docs/hosting/usage-quotas-pricing · https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024
 
@@ -176,13 +190,14 @@
 ## 5. 확인하지 못한 것(⚠️ 목록)
 1. CloudFront 종량제 상시 무료의 "요청 1천만·함수 200만"(공식 페이지 본문에서 1TB만 확인), 정액 Free 플랜과 무료 플랜 계정 호환성.
 2. App Runner 신규 중단 날짜(2026-04-30)는 2차 출처. 공식 문서는 "신규 받지 않음"만.
-3. Netlify Drop(웹)의 1시간 claim 규칙 — CLI 익명 배포 문서로 유추.
+3. ~~Netlify Drop(웹)의 1시간 claim 규칙~~ → 2026-11-09 확인(Netlify 블로그).
 4. Fly.io 서울 리전 유무, Railway 아시아 리전 이름.
 5. Lightsail 컨테이너 서비스 공개 엔드포인트의 WebSocket 지원, 영구 저장 없음의 영향.
 6. 한국 통신사별 Cloudflare·Fastly(GitHub Pages)·Netlify 경로와 실제 지연 → **check.html로 현장 측정**하도록 설계.
 7. Tiiny.host, 카페24·가비아 웹호스팅의 현재 가격·한도.
 8. 국내 단축 URL 서비스(vo.la, han.gl)의 운영 상태, 네이버 me2.do 기존 링크 중단일.
 9. 학교 Workspace 관리 계정에서 Apps Script 웹 앱 "모든 사용자" 배포 허용 여부(학교마다 다름).
-10. Cloudflare Registrar의 `.kr` 지원 여부.
+10. ~~Cloudflare Registrar의 `.kr` 지원 여부~~ → 2026-11-09 확인: 판매하지 않음.
 11. Synology Container Manager 지원 모델·메뉴 이름(공식 도움말 본문 미확인).
-12. Supabase 어댑터가 WebSocket 차단 시 폴링으로 전환하는지(백엔드 구현 확인 필요).
+12. ~~Supabase 어댑터가 WebSocket 차단 시 폴링으로 전환하는지~~ → 구현 확인: 7초 새로 읽기로 전환.
+13. 한국 통신사(특히 KT)에서 Cloudflare 무료 플랜 요청이 해외 PoP(SEA·LAX·NRT·HKG)로 가는 현상: 2026 커뮤니티 글만 있고 공식 설명 없음 → `check.html`에서 `/cdn-cgi/trace`의 `colo=` 표시로 측정.

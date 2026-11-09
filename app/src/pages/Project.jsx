@@ -1,67 +1,68 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { projects } from '../lib/db.js';
-import { debounce, toast } from '../lib/util.js';
+import { debounce, toast, saveFile, safeName } from '../lib/util.js';
+import { exportProjectFile, stageOf } from '../lib/project.js';
 import { Mascot } from '../components/Mascot.jsx';
-import { StepMaterials } from './steps/Materials.jsx';
-import { StepInfo } from './steps/Info.jsx';
-import { StepGenerate } from './steps/Generate.jsx';
-import { StepOutline } from './steps/Outline.jsx';
-import { StepDesign } from './steps/Design.jsx';
-import { StepOperate } from './steps/Operate.jsx';
-import { StepPublish } from './steps/Publish.jsx';
+import { StepStart } from './steps/Start.jsx';
+import { StepEdit } from './steps/Edit.jsx';
+import { StepShare } from './steps/Share.jsx';
 
 export const STEPS = [
-  { n: 1, name: '자료', C: StepMaterials },
-  { n: 2, name: '연수 정보', C: StepInfo },
-  { n: 3, name: 'AI 설계', C: StepGenerate },
-  { n: 4, name: '내용 다듬기', C: StepOutline },
-  { n: 5, name: '디자인', C: StepDesign },
-  { n: 6, name: '운영 방식', C: StepOperate },
-  { n: 7, name: '완성·배포', C: StepPublish },
+  { n: 1, name: '교재 넣기', C: StepStart },
+  { n: 2, name: '살펴보고 고치기', C: StepEdit },
+  { n: 3, name: '공유하기', C: StepShare },
 ];
 
 export function Project({ id, step }) {
   const [p, setP] = useState(null);
   const [missing, setMissing] = useState(false);
   const ref = useRef(null);
+  const headRef = useRef(null);
   const save = useMemo(() => debounce((v) => projects.put(v).catch(() => toast('저장하지 못했어요. 저장 공간을 확인해 주세요.')), 400), []);
-  useEffect(() => { projects.get(id).then((v) => { if (!v) setMissing(true); else { ref.current = v; setP(v); } }); }, [id]);
-  const s = step || p?.step || 1;
-  useEffect(() => { if (p && p.step !== s) update({ step: s }); }, [s, !!p]);
+  useEffect(() => { projects.get(id).then((v) => { if (!v) setMissing(true); else { if (!v.stage) v.stage = stageOf(v.step || 1); ref.current = v; setP(v); } }); }, [id]);
+  const s = step > 3 ? stageOf(step) : Math.min(3, Math.max(1, step || p?.stage || 1));
+  useEffect(() => { if (p && p.stage !== s) update({ stage: s, visited: { ...(p.visited || {}), [s]: true } }); }, [s, !!p]);
+  // 단계가 바뀌면 그 단계 제목으로 초점을 옮겨 화면 읽기 프로그램이 알 수 있게
+  useEffect(() => { if (p) setTimeout(() => document.querySelector('.wiz-main h1')?.focus({ preventScroll: true }), 30); }, [s, !!p]);
   function update(patch) {
     const next = { ...ref.current, ...(typeof patch === 'function' ? patch(ref.current) : patch) };
     if (next.blueprint?.meta?.title) next.title = next.blueprint.meta.title; else if (next.info?.title) next.title = next.info.title;
     ref.current = next; setP(next); save(next);
   }
-  if (missing) return <div class="empty"><Mascot size={84} mood="oops" /><p>이 연수를 찾지 못했어요. 다른 브라우저에서 만들었다면 그 브라우저에서 프로젝트 파일(.lecpage)로 내보내 여기서 열어 주세요.</p><a class="btn" href="#/">처음으로</a></div>;
+  if (missing) return <div class="empty"><Mascot size={84} mood="oops" /><p>이 연수를 찾지 못했어요. 다른 브라우저에서 만들었다면 그 브라우저에서 '파일로 저장'한 뒤 여기서 열어 주세요.</p><a class="btn" href="#/">처음으로</a></div>;
   if (!p) return <p class="muted">불러오는 중…</p>;
   const cur = STEPS.find((x) => x.n === s) || STEPS[0];
   const go = (n) => { location.hash = `#/p/${id}/${n}`; };
-  const doneUpTo = p.blueprint ? 4 : p.material || p.info?.title ? 2 : 0;
+  const done = (n) => (n === 1 ? !!p.blueprint : n === 2 ? !!p.visited?.[3] : !!p.deploy?.lastUrl);
+  async function saveProjectFile() { const z = await exportProjectFile(p); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip'); toast('프로젝트 파일을 저장했어요. 다른 컴퓨터의 lecpage에서 열 수 있어요.'); }
   return (
-    <div class="wiz">
+    <div class={`wiz stage-${s}`}>
       <aside class="wiz-side">
         <div class="wiz-title">{p.title || '새 연수'}</div>
-        <ol class="stepper">
+        <ol class="stepper" aria-label="만드는 순서">
           {STEPS.map((x) => (
-            <li><a href={`#/p/${id}/${x.n}`} class={x.n <= doneUpTo && x.n !== s ? 'done' : ''} aria-current={x.n === s ? 'step' : undefined}><span class="n">{x.n}</span><span>{x.name}</span></a></li>
+            <li><a href={`#/p/${id}/${x.n}`} class={done(x.n) && x.n !== s ? 'done' : ''} aria-current={x.n === s ? 'step' : undefined} aria-disabled={x.n > 1 && !p.blueprint ? 'true' : undefined} onClick={(e) => { if (x.n > 1 && !p.blueprint) { e.preventDefault(); toast('먼저 사이트 초안을 만들어 주세요.'); } }}><span class="n">{x.n}</span><span>{x.name}</span></a></li>
           ))}
         </ol>
-        <p class="small muted">자동으로 저장돼요. 다른 컴퓨터에서 이어 하려면 7단계에서 프로젝트 파일을 내려받으세요.</p>
+        <p class="stage-mini" aria-hidden="true">{s}/3 · {cur.name}</p>
+        <div class="side-tools">
+          <p class="small muted">이 브라우저에 저절로 저장돼요.</p>
+          <button class="btn btn-sm" onClick={saveProjectFile}>파일로 저장(.lecpage)</button>
+        </div>
       </aside>
       <div class="wiz-main"><cur.C p={p} update={update} go={go} /></div>
     </div>
   );
 }
 
-export function StepHead({ title, desc }) {
-  return <div class="step-head"><h1>{title}</h1>{desc && <p>{desc}</p>}</div>;
+export function StepHead({ title, desc, children }) {
+  return <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>{title}</h1>{desc && <p>{desc}</p>}</div>{children}</div>;
 }
-export function StepFoot({ go, prev, next, nextLabel = '다음', disabled }) {
+export function StepFoot({ go, prev, next, nextLabel = '다음', disabled, onNext }) {
   return (
     <div class="step-foot">
       {prev ? <button class="btn btn-quiet" onClick={() => go(prev)}>이전</button> : <span />}
-      {next && <button class="btn btn-primary" disabled={disabled} onClick={() => go(next)}>{nextLabel}</button>}
+      {next && <button class="btn btn-primary btn-lg" aria-disabled={disabled ? 'true' : undefined} onClick={() => { if (onNext && onNext() === false) return; if (!disabled) go(next); }}>{nextLabel}</button>}
     </div>
   );
 }

@@ -14,7 +14,8 @@
 - 출처: https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
 
 ## 준비물
-- GitHub 계정, lecpage가 만든 사이트 폴더(`index.html`이 맨 위에 있는 폴더).
+- GitHub 계정, lecpage가 만든 사이트 폴더(`dist/`, `index.html`이 맨 위에 있는 폴더). 강사용 파일(`dist-강사용/`의 운영안내·DESIGN·설계도)은 **올리지 않습니다**.
+- 무료 계정은 **공개 저장소**라서 사이트 파일(교재 그림·원본 자료 포함)을 누구나 내려받을 수 있습니다. 공개 범위를 빌드할 때 정하세요: 링크(기본, 검색 제외) · 공개 · **암호**(페이지와 교재 그림까지 암호화되어 저장소에서도 내용이 안 보임). 교재 원본을 자료실에 넣었다면 암호를 권합니다.
 - 파일이 100개를 넘으면(슬라이드가 많으면) 웹 업로드는 여러 번 나눠야 합니다(한 번에 100개, 파일당 25MiB). → GitHub Desktop 또는 아래 CLI 방법이 편합니다.
 
 ## 따라 하기 — 클릭만 (웹 업로드, 가장 쉬움)
@@ -22,7 +23,6 @@
 2. Repository name: 예) `lec-20261104` → **Public** 선택 → **Create repository**.
 3. 새 저장소 화면의 **uploading an existing file** 링크(또는 **Add file → Upload files**)를 누릅니다.
 4. 사이트 폴더 **안의 내용물**(index.html, console.html, assets 폴더 …)을 끌어다 놓습니다. 폴더 자체가 아니라 내용물입니다.
-   - `.md` 파일(DESIGN.md, 운영안내.md)은 올리지 않아도 됩니다.
 5. 아래 **Commit changes** 누르기.
 6. 저장소 **Settings → Pages** → Build and deployment의 Source: **Deploy from a branch** → Branch: `main`, 폴더 `/ (root)` → **Save**.
 7. 1~2분 뒤 같은 화면 위쪽에 `Your site is live at https://<아이디>.github.io/lec-20261104/`가 뜹니다.

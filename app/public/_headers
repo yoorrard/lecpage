@@ -1,13 +1,19 @@
-# Cloudflare Pages·Netlify에서 적용되는 보안 헤더(GitHub Pages는 무시하고 index.html의 meta CSP를 씀)
+# Cloudflare Workers 정적 자산(기본 주소)에서 적용되는 보안 헤더. GitHub Pages 미러는 이 파일을 무시하고 index.html의 meta CSP만 씁니다.
+# 아래 CSP는 meta CSP에 더해지는 것(둘 다 지켜야 함): 다른 사이트가 앱을 틀(iframe)에 넣지 못하게, 플러그인·base 바꾸기 금지.
 /*
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
   X-Frame-Options: DENY
   Cross-Origin-Opener-Policy: same-origin
+  Strict-Transport-Security: max-age=31536000
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 /sw.js
+  Cache-Control: no-cache
+
+/index.html
   Cache-Control: no-cache

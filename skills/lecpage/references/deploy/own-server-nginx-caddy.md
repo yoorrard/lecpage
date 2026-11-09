@@ -13,7 +13,8 @@
 ## 준비물
 - Linux 서버(Ubuntu 22.04/24.04 등), 공인 IP 또는 학교 내부 IP, (인터넷 공개 시) 도메인과 80·443 포트.
 - `templates/deploy/server/` 의 `docker-compose.yml`, `Caddyfile`, `.env.example` (또는 `nginx.conf`).
-- `skills/lecpage/backends/node-server/` (의존성 없는 Node 서버, Node 22.5 이상), lecpage 사이트 폴더.
+- `skills/lecpage/backends/node-server/` (의존성 없는 Node 서버, Node 22.5 이상), lecpage 사이트 폴더(빌드 결과 `dist/`만. 강사용 파일 `dist-강사용/`은 서버에 두지 않음).
+- 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(페이지와 교재 그림 암호화, https 주소에서만 열림). 학교 내부망에서 http로만 쓰면 암호는 고르지 마세요.
 
 ## 방법 A — Docker Compose + Caddy (권장, HTTPS 자동)
 ```bash

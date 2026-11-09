@@ -3,12 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "description": "연수 교재와 연수 정보로 맞춤 연수 사이트를 만드는 Agent Skill과 웹앱",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test \"skills/lecpage/engine/test/*.test.mjs\"",
-    "examples": "node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/sel-story.blueprint.json -o .out/sel-story && node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/ai-lab.blueprint.json -o .out/ai-lab",
+    "examples": "node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/forest-story.blueprint.json -o .out/forest-story && node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/data-lab.blueprint.json -o .out/data-lab",
     "app:dev": "npm --prefix app run dev",
     "app:build": "npm --prefix app run build"
   }

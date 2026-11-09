@@ -188,9 +188,9 @@
       });
     };
     adapter.checkAdmin = function () { return Promise.resolve(true); };
-    adapter.exportCsv = function (kind) {
+    adapter.exportCsv = function (kind, opts) {
       var data = {}; L.cols.forEach(function (c) { data[c] = readCol(c).sort(function (a, b) { return a.createdAt - b.createdAt; }); });
-      var t = U.exportTable(kind, data);
+      var t = U.exportTable(kind, data, undefined, opts);
       return Promise.resolve(U.toCsv(t.columns, t.rows));
     };
     adapter.purge = function () {

@@ -14,7 +14,7 @@
 - DSM 관리자 계정, **패키지 센터 → Container Manager** 설치.
 - File Station에 폴더 `docker/lecpage/` 만들고 다음을 넣기:
   - `docker-compose.yml`, `Caddyfile`, `.env`(← `templates/deploy/server/`, `.env.example`을 `.env`로)
-  - `site/`(lecpage 빌드 결과), `node-server/`(backends/node-server)
+  - `site/`(lecpage 빌드 결과 `dist/`만. 강사용 파일 `dist-강사용/`은 넣지 않음), `node-server/`(backends/node-server)
 - `.env`에서 **포트 바꾸기**: DSM이 80·443을 쓰므로 `LEC_HTTP_PORT=8080`, `LEC_HTTPS_PORT=8443`, `LEC_SITE_ADDRESS=:80`.
 
 ## 따라 하기 — 클릭
@@ -31,10 +31,12 @@
 
 > 메뉴 위치는 DSM 버전마다 조금씩 다릅니다 ⚠️.
 
+- 공개 범위: 학교 안에서만 쓰면 "링크"(기본)로 충분합니다. **암호 보호**는 https 주소(4번의 외부 공개)에서만 열립니다. `http://<NAS IP>`로 쓸 때는 고르지 마세요.
+
 ## 공유기 포트를 못 열 때 — Cloudflare Tunnel
 - Cloudflare 계정 + 도메인이 있으면 NAS에서 `cloudflared` 컨테이너로 **이름 있는 터널**을 만들어 `https://lec.example.kr → http://web:80` 연결(포트 열기 불필요).
-- `trycloudflare.com` 임시 터널(Quick Tunnel)은 **SSE 미지원·동시 요청 200개·가동 보장 없음** → 시험용으로만.
-- 출처: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/
+- `trycloudflare.com` 임시 터널(Quick Tunnel)은 **SSE 미지원·동시 요청 200개·가동 보장 없음** → 임시용으로만(`local-lan-classroom.md`의 Quick Tunnel 상자).
+- 출처: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
 
 ## 확인하기
 - Container Manager에서 `lecpage-web-1`, `lecpage-live-1` 둘 다 실행 중.

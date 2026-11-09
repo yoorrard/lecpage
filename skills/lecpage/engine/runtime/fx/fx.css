@@ -45,6 +45,8 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 
 /*@fx:scramble*/
 .fx-scramble .fx-c { display: inline-block; text-align: center; font-variant-numeric: tabular-nums; }
+.fx-scramble .fx-c.fx-wait { opacity: .2; }
+.fx-scramble .fx-c { transition: opacity 140ms linear; }
 
 /*@fx:gradient-text*/
 .fx-gradient-text { color: var(--primary); }

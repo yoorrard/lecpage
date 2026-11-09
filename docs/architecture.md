@@ -254,10 +254,12 @@ console.html      강사 콘솔(관리자 키 입력)
 screen.html       프로젝터 화면(큰 QR·질문·투표·타이머)
 check.html        접속 진단
 privacy.html      개인정보 처리 안내(수집할 때만)
+robots.txt        access.mode가 public일 때만 Allow, 그 밖에는 Disallow
 assets/lecpage.css · theme.css · lecpage.js · fx.js · live.js · site.json
 assets/slides/*.webp · assets/media/*
-DESIGN.md · 운영안내.md
 ```
+- 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
+- `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
 
 ## 7. 작업 규칙
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").

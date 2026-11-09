@@ -1,4 +1,4 @@
-// AI 연결: 키는 기본적으로 이 탭에서만(sessionStorage), 원하면 이 기기에 암호화해 저장(WebCrypto, 꺼낼 수 없는 키).
+// AI 연결: 키는 기본적으로 이 탭의 메모리에만(새로 고침하면 사라짐), 원하면 이 기기에 암호화해 저장(WebCrypto, 꺼낼 수 없는 키).
 // 키와 교재는 운영자 서버로 가지 않고, 브라우저에서 AI 회사로 바로 갑니다.
 import { kv } from './db.js';
 import { E } from './engine.js';
@@ -10,7 +10,7 @@ export const PROVIDERS = {
   openai: { name: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', note: '종량제 결제가 필요한 개발자 키예요. ChatGPT 구독과는 별개예요.', modelHint: /^gpt-/i },
 };
 
-const SS = 'lecpage:key:';
+const mem = new Map(); // 탭 메모리(저장소에 남기지 않음)
 let cryptoKeyP = null;
 async function deviceKey() {
   if (cryptoKeyP) return cryptoKeyP;
@@ -23,25 +23,25 @@ async function deviceKey() {
 }
 
 export async function saveKey(provider, key, remember) {
-  try { sessionStorage.setItem(SS + provider, key); } catch { }
-  if (remember) {
+  if (key) mem.set(provider, key); else mem.delete(provider);
+  if (remember && key) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await deviceKey(), new TextEncoder().encode(key));
     await kv.set('ai:' + provider, { iv, ct });
   } else await kv.del('ai:' + provider);
 }
 export async function loadKey(provider) {
-  try { const s = sessionStorage.getItem(SS + provider); if (s) return { key: s, remembered: !!(await kv.get('ai:' + provider)) }; } catch { }
+  if (mem.has(provider)) return { key: mem.get(provider), remembered: !!(await kv.get('ai:' + provider)) };
   const rec = await kv.get('ai:' + provider);
   if (!rec) return { key: '', remembered: false };
   try {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.iv }, await deviceKey(), rec.ct);
     const key = new TextDecoder().decode(pt);
-    try { sessionStorage.setItem(SS + provider, key); } catch { }
+    mem.set(provider, key);
     return { key, remembered: true };
   } catch { return { key: '', remembered: false }; }
 }
-export async function forgetKey(provider) { try { sessionStorage.removeItem(SS + provider); } catch { } await kv.del('ai:' + provider); }
+export async function forgetKey(provider) { mem.delete(provider); await kv.del('ai:' + provider); }
 
 export async function models(provider, key) {
   const list = await E.listModels({ provider, apiKey: key });

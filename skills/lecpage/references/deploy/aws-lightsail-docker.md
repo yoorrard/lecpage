@@ -25,7 +25,7 @@ sudo usermod -aG docker $USER && newgrp docker
 mkdir -p ~/lecpage && cd ~/lecpage
 # 아래 파일들을 올립니다(scp 또는 git clone):
 #   docker-compose.yml, Caddyfile, .env  ← skills/lecpage/templates/deploy/server/
-#   site/        ← lecpage 빌드 결과
+#   site/        ← lecpage 빌드 결과(dist/만. 강사용 파일 dist-강사용/은 올리지 않음)
 #   node-server/ ← skills/lecpage/backends/node-server/ (빌드 없이 node:24 이미지로 실행됨)
 cp .env.example .env && nano .env      # LEC_SITE_ADDRESS=lec.example.kr
 docker compose up -d
@@ -33,6 +33,7 @@ docker compose logs -f web             # 인증서 발급 로그 확인 후 Ctrl
 docker compose logs live | grep 관리자  # 처음 한 번 나오는 관리자 키를 적어 두기
 ```
 5. `https://lec.example.kr/check.html` 확인.
+- 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(페이지와 교재 그림 암호화, https 주소에서만 열림).
 
 ## 방법 2 — 컨테이너 서비스(서버 관리 없음)
 ```bash

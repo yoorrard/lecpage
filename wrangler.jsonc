@@ -1,0 +1,16 @@
+// lecpage 웹앱을 Cloudflare Workers(정적 자산 전용)로 배포하는 설정입니다. Worker 코드는 없고 app/dist만 내보냅니다.
+// Cloudflare 대시보드 → Workers & Pages → Create → GitHub 저장소 연결(Workers Builds) 때 이 파일을 읽습니다.
+//   Build command : npm --prefix app ci && npm --prefix app run build
+//   Deploy command: npx wrangler@4.151.3 deploy
+// 정적 요청은 무료·무제한입니다. 'Workers Caching'과 run_worker_first는 켜지 마세요(하루 10만 요청 한도에 들어가게 됨).
+// 자세한 순서: docs/operations.md
+{
+  "name": "lecpage",
+  "compatibility_date": "2026-11-09",
+  "assets": {
+    "directory": "./app/dist",
+    "not_found_handling": "404-page"
+  },
+  "workers_dev": true,
+  "preview_urls": false
+}

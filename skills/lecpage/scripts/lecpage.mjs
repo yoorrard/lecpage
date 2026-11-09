@@ -6,12 +6,12 @@
 //   node lecpage.mjs validate <blueprint.json>
 //   node lecpage.mjs decide-infra -i info.json      (또는 --size 30 --features qa,progress --skill click)
 //   node lecpage.mjs design <blueprint.json>          (프리셋 순위·효과 결정 보기)
-//   node lecpage.mjs build <blueprint.json> -o dist [--assets 폴더] [-i info.json]
+//   node lecpage.mjs build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]  (강사용 파일은 dist-강사용/에)
 //   node lecpage.mjs serve <dist> [--port 4173]
 //   node lecpage.mjs qa <dist> [--out qa]
 //   node lecpage.mjs pack <dist> -o site.zip
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync } from 'node:fs';
-import { join, extname, resolve, dirname } from 'node:path';
+import { join, extname, resolve, dirname, relative, isAbsolute } from 'node:path';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -85,8 +85,19 @@ switch (cmd) {
     for (const w of r.warnings) console.log('주의 ' + w.path + ': ' + w.message_ko);
     if (r.errors.length) { for (const e of r.errors) console.log('오류 ' + e.path + ': ' + e.message_ko); process.exit(1); }
     const dir = resolve(args.o || 'dist');
-    const n = N.writeFiles(dir, r.files).length;
-    console.log(`완료: ${dir} (파일 ${n}개, 약 ${r.report.sizeKB}KB) · 프리셋 ${r.report.preset} · 모션 ${r.report.motion} · 실시간 ${r.report.live}`);
+    const password = args.password || process.env.LECPAGE_PASSWORD || '';
+    let files = r.files;
+    if (r.blueprint.access.mode === 'password' && !password) fail('이 설계도는 암호 보호(access.mode=password)예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.');
+    if (password) {
+      const { webcrypto } = await import('node:crypto');
+      files = await E.protectSite(files, password, { runtime: N.nodeRuntime(), title: r.blueprint.meta.title, crypto: webcrypto });
+      console.log('암호 보호: 페이지와 교재 그림을 잠갔어요. 참가자용 QR은 주소 뒤에 #k=암호 를 붙이면 저절로 열려요.');
+    }
+    const n = N.writeFiles(dir, files).length;
+    const tdir = dir + '-강사용';
+    N.writeFiles(tdir, r.teacher);
+    console.log(`완료: ${dir} (파일 ${n}개, 약 ${r.report.sizeKB}KB) · 프리셋 ${r.report.preset} · 모션 ${r.report.motion} · 실시간 ${r.report.live} · 공개 ${password ? "암호" : r.blueprint.access.mode}`);
+    console.log(`강사용 파일(올리지 마세요): ${tdir} (DESIGN.md · 운영안내.md · 설계도)`);
     console.log('효과: ' + (r.report.effects.join(', ') || '없음'));
     break;
   }
@@ -94,10 +105,12 @@ switch (cmd) {
     const dir = resolve(args._[0] || 'dist'); const port = +args.port || 4173;
     const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.md': 'text/markdown; charset=utf-8', '.pdf': 'application/pdf', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.woff2': 'font/woff2' };
     createServer((req, res) => {
-      let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
-      const f = join(dir, p); if (!f.startsWith(dir) || !existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
+      let p; try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end('bad request'); }
+      if (p.endsWith('/')) p += 'index.html';
+      const f = join(dir, p); const rel = relative(dir, f);
+      if (rel.startsWith('..') || isAbsolute(rel) || !existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
       res.writeHead(200, { 'content-type': types[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }); createReadStream(f).pipe(res);
-    }).listen(port, () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C)`));
+    }).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
     break;
   }
   case 'qa': {

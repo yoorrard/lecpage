@@ -1,15 +1,17 @@
 // 엔진(skills/lecpage/engine)을 앱에서 쓰기: 런타임 파일을 문자열로 묶고, 미리보기용 한 파일 HTML을 만듭니다.
 import * as E from '@engine/src/index.js';
 
-const RAW = import.meta.glob('../../../skills/lecpage/engine/runtime/**/*.{js,css}', { query: '?raw', import: 'default', eager: true });
-const runtimeFiles = {};
-for (const [k, v] of Object.entries(RAW)) runtimeFiles[k.replace(/^.*\/engine\/runtime\//, '')] = v;
-export const runtime = { read: (p) => { if (!(p in runtimeFiles)) throw new Error('없음: ' + p); return runtimeFiles[p]; } };
+let runtimePromise = null;
+/** 실행 파일 묶음은 처음 빌드할 때 한 번만 불러옵니다. */
+export function loadRuntime() {
+  if (!runtimePromise) runtimePromise = import('./runtime-files.js').then((m) => m.runtime);
+  return runtimePromise;
+}
 
 export { E };
 
-export function buildSite(blueprint, assets = {}, infra = null) {
-  return E.build(blueprint, { runtime, assets, infra });
+export async function buildSite(blueprint, assets = {}, infra = null) {
+  return E.build(blueprint, { runtime: await loadRuntime(), assets, infra });
 }
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', pdf: 'application/pdf', mp3: 'audio/mpeg', mp4: 'video/mp4' };
@@ -39,6 +41,9 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6 } 
   });
   // 미리보기 안에서는 다른 페이지 링크가 동작하지 않으니 표시만
   html = html.replace('<body', '<body data-lp-preview="1"');
+  // '고칠 곳 고르기': 앱이 켜면 칸에 마우스를 올려 고르고, 누르면 그 칸의 id만 앱으로 보냄(앱은 아는 id인지 다시 확인)
+  const pick = `<script>(function(){var on=false;var st=document.createElement('style');st.textContent='html.lp-pick main [id]:not(main [id] [id]):hover{outline:3px dashed #5B49B0;outline-offset:-3px;cursor:pointer}';document.head.appendChild(st);addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type==='lp-pick'){on=!!d.on;document.documentElement.classList.toggle('lp-pick',on);}});document.addEventListener('click',function(e){if(!on)return;var m=document.querySelector('main');var s=e.target.closest&&e.target.closest('[id]');while(s&&s.parentElement&&s.parentElement.closest&&s.parentElement.closest('main [id]'))s=s.parentElement.closest('main [id]');if(!s||!m||!m.contains(s))return;e.preventDefault();e.stopPropagation();parent.postMessage({type:'lp-picked',id:String(s.id).slice(0,80)},'*');},true);})();<\/script>`;
+  html = html.includes('</body>') ? html.replace('</body>', pick + '</body>') : html + pick;
   return html;
 }
 

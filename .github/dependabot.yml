@@ -1,0 +1,19 @@
+# 의존성 업데이트: 매주, 새 버전이 나오고 7일 지난 것만(공급망 공격 대비)
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { app: { patterns: ['*'] } }
+  - package-ecosystem: npm
+    directory: /skills/lecpage/backends/cloudflare
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: docker
+    directory: /skills/lecpage/backends/node-server
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }

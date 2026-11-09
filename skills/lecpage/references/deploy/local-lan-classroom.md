@@ -37,7 +37,7 @@ cd ~/lecpage
 node ./node-server/server.mjs --static ./site --data ./data --port 8787 --admin-key "연수관리자키"
 ```
 - `--admin-key`를 빼면 서버가 키를 만들어 **처음 한 번** 화면에 보여 줍니다. 적어 두세요.
-- `site/` 안의 `운영안내.md`·`DESIGN.md`는 그대로 열람될 수 있으니 실행 전에 다른 폴더로 옮겨 두세요.
+- `site/`에는 빌드 결과 폴더(`dist/`)만 넣습니다. 강사용 파일(`dist-강사용/`)은 넣지 않습니다.
 - 옵션 전체는 `node-server/server.mjs` 머리말에 있습니다(업로드 한도 `--max-upload-mb`, 보관 기간 `--retention-days` 등).
 - 처음 실행 때 Windows 방화벽 창이 뜨면 **개인 네트워크 허용**을 누릅니다. 와이파이 네트워크 프로필이 "공용"이면 "개인"으로 바꿉니다(설정 → 네트워크 → 와이파이 → 속성).
 - macOS: "들어오는 연결 허용"을 누릅니다.
@@ -60,9 +60,25 @@ node ./node-server/server.mjs --static ./site --data ./data --port 8787 --admin-
 
 ## 알아 둘 점
 - http(자물쇠 없음)라서 일부 브라우저 기능(클립보드 자동 복사 등)이 제한될 수 있습니다 ⚠️. 런타임은 대체 방법을 씁니다.
+- **암호 보호(access=password)는 쓰지 않습니다.** 잠금 풀기는 https 주소에서만 됩니다. 교실 LAN은 와이파이 비밀번호로 이미 닫혀 있으니 공개 범위는 "링크"(기본)로 빌드하세요.
 - 인터넷이 없으면 외부 링크(도구 사이트, 영상)는 열리지 않습니다. 필요한 자료는 사이트 `assets/media/`에 넣어 두세요.
 - IP는 공유기가 바꿀 수 있습니다. 연수 직전에 다시 확인하거나 공유기에서 노트북 IP를 고정(DHCP 예약)하세요.
 - 라즈베리 파이를 노트북 대신 써도 됩니다(64비트 OS + Node 22.5 이상, 또는 Docker). 전원만 꽂으면 켜지게 systemd로 등록.
+
+## 잠깐 인터넷에 열기 — Cloudflare Quick Tunnel
+> 노트북에 인터넷은 되지만 참가자가 같은 와이파이에 붙을 수 없을 때(학교 와이파이의 기기 간 차단, 휴대폰 데이터로 들어오는 참가자), 노트북 서버를 인터넷 주소로 잠깐 열 수 있습니다. 2시간짜리 연수 한 번 정도의 **임시용**입니다.
+>
+> ```bash
+> # cloudflared 설치: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
+> cloudflared tunnel --url http://localhost:8787
+> # → https://<임의의-이름>.trycloudflare.com  (실행할 때마다 바뀜)
+> ```
+> - 계정이 필요 없습니다. 주소가 매번 바뀌므로 **터널을 켠 뒤에** QR·주소를 만듭니다(엔진 `meta.joinUrl` 또는 screen.html에서 확인).
+> - **웹소켓은 대체로 되고, SSE는 되지 않습니다.** 웹소켓이 막히면 lecpage는 새로 읽기(폴링)로 넘어가므로 기능은 유지됩니다.
+> - 동시에 처리 중인 요청 200개까지(넘으면 429). 50명 웹소켓과 페이지 열기는 이 안에 들어옵니다. 가동 보장은 없습니다.
+> - **진짜 한계는 노트북의 업로드 속도**입니다. 50명 × 20MB면 처음 몇 분 동안 약 1GB를 노트북이 내보냅니다. 슬라이드 화질을 낮추거나 사이트는 Cloudflare·GitHub Pages에 두고 실시간만 터널로 여세요.
+> - https 주소라 이 경우에는 암호 보호도 됩니다.
+> - 자주 쓸 거라면 Cloudflare 계정과 내 도메인으로 **이름 있는 터널**을 만드세요(`nas-synology.md` 참고). ngrok·Tailscale Funnel은 무료 한도(월 1GB 등)나 대역폭이 불분명해 권하지 않습니다.
 
 ## 되돌리기
 - 사이트를 고치면 `site/` 폴더만 바꾸고 참가자에게 새로고침을 부탁합니다(서버 재시작 불필요).

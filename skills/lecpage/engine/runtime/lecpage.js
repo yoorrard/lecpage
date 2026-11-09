@@ -45,10 +45,55 @@
     } catch (e) { return ''; }
   }
   window.LecPage.qr = qrSvg;
-  function pageUrl() { return DATA.siteUrl || location.href.split('#')[0].replace(/(check|console|screen|privacy)\.html$/, ''); }
+  // 주소: 파일로 열었거나(file:) 앱 미리보기(about:)면 진짜 주소가 없으니 안내 문구를 보여 줍니다(meta.siteUrl이 있으면 그 주소).
+  var LOCAL_PAGE = /^(file|about|blob|data):$/.test(location.protocol);
+  var URL_OFF = '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
+  function pageUrl() {
+    if (DATA.siteUrl) return DATA.siteUrl;
+    if (LOCAL_PAGE) return '';
+    return location.href.split('#')[0].replace(/(check|console|screen|privacy|poster)\.html$/, '');
+  }
+  // 방 안에 있는 사람용 주소(QR·복사): 암호 보호 사이트면 #k=…를 붙여 바로 열리게(보이는 글자에는 붙이지 않음)
+  function unlockFrag() { var m = $('meta[name="lp-unlock"]'); return m && m.getAttribute('content') ? '#' + m.getAttribute('content') : ''; }
+  function joinUrl() { var u = pageUrl(); return u ? u.split('#')[0] + unlockFrag() : ''; }
+  function siblingUrl(page) {
+    if (!LOCAL_PAGE) return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '') + page;
+    var b = (DATA.base || '').split('#')[0].split('?')[0]; if (!b) return '';
+    return (/\.html?$/i.test(b) ? b.replace(/[^/]*$/, '') : b.replace(/\/?$/, '/')) + page;
+  }
+  function fillQR(n, url, offText) {
+    if (url) { n.innerHTML = qrSvg(url); return; }
+    n.textContent = ''; n.appendChild(el('span', 'lp-qr-off', offText || URL_OFF));
+  }
   function drawQRs() {
     $$('[data-qr]').forEach(function (n) { n.innerHTML = qrSvg(n.getAttribute('data-qr')); });
-    $$('[data-qr-self]').forEach(function (n) { n.innerHTML = qrSvg(pageUrl()); });
+    $$('[data-qr-self]').forEach(function (n) { fillQR(n, joinUrl()); });
+    $$('[data-url-self]').forEach(function (n) { var u = pageUrl(); n.textContent = u ? u.replace(/^https?:\/\//, '').replace(/\/$/, '') : URL_OFF; });
+    $$('[data-qr-page]').forEach(function (n) { fillQR(n, siblingUrl(n.getAttribute('data-qr-page')), '인터넷에 올리면 QR이 나와요.'); });
+    $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '올린 사이트 주소 + ' + n.getAttribute('data-url-page'); });
+  }
+  window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, off: URL_OFF };
+
+  /* ── 대화상자: 열 때 누른 버튼을 기억했다가 닫으면 그 버튼으로 초점을 돌려줍니다 ── */
+  function closeDialog(d) { if (d.close && d.open) d.close(); else d.removeAttribute('open'); }
+  function openDialog(d, opener) {
+    if (!d) return;
+    d._opener = opener || doc.activeElement;
+    if (!d._hooked) {
+      d._hooked = true;
+      d.addEventListener('close', function () { var o = d._opener; d._opener = null; if (o && o.focus && doc.contains(o)) setTimeout(function () { o.focus(); }, 0); });
+      d.addEventListener('click', function (e) { if (e.target === d) closeDialog(d); });
+      $$('[data-sheet-close]', d).forEach(function (b) { b.addEventListener('click', function () { closeDialog(d); }); });
+    }
+    if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
+  }
+  // 메뉴 높이만큼 앵커 이동 여백을 맞춤(지금 줄이 생기면 메뉴가 길어짐)
+  function fitScrollPad() { var h = $('.lp-nav'); if (h) root.style.scrollPaddingTop = (h.offsetHeight + 16) + 'px'; }
+  function goTo(id) {
+    var t = doc.getElementById(id); if (!t) return;
+    if (location.hash === '#' + id) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); else location.hash = id;
+    if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '-1');
+    try { t.focus({ preventScroll: true }); } catch (e) { }
   }
 
   /* ── 테마·움직임 ───────────────────────── */
@@ -72,21 +117,43 @@
 
     var share = $('[data-share]'), dlg = $('[data-share-dialog]');
     if (share && dlg) share.addEventListener('click', function () {
-      var u = pageUrl(); var su = $('[data-share-url]', dlg); if (su) su.textContent = u;
-      $$('[data-qr-self]', dlg).forEach(function (n) { n.innerHTML = qrSvg(u); });
-      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+      var u = pageUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
+      if (su) su.textContent = u; if (off) off.hidden = !!u; if (cb) cb.hidden = !u;
+      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !u; fillQR(n, joinUrl()); });
+      openDialog(dlg, share);
     });
-    var cu = $('[data-copy-url]'); if (cu) cu.addEventListener('click', function () { copyText(pageUrl(), '주소를 복사했어요.'); });
+    var cu = $('[data-copy-url]'); if (cu) cu.addEventListener('click', function () { copyText(joinUrl(), '주소를 복사했어요.'); });
+
+    // 메뉴 '더보기'(데스크톱)와 '목차' 시트(휴대폰)
+    var more = $('[data-more]');
+    if (more) {
+      doc.addEventListener('click', function (e) { if (more.open && !more.contains(e.target)) more.open = false; });
+      more.addEventListener('keydown', function (e) { if (e.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus(); } });
+      more.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('a')) more.open = false; });
+    }
+    var tocBtn = $('[data-toc-open]'), toc = $('[data-toc-sheet]');
+    if (tocBtn && toc) {
+      tocBtn.addEventListener('click', function () { openDialog(toc, tocBtn); var c = $('[data-toc-link][aria-current="true"]', toc); if (c) c.focus(); });
+      toc.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('[data-toc-link]'); if (!a) return;
+        e.preventDefault(); toc._opener = null; closeDialog(toc); goTo(a.getAttribute('data-toc-link'));
+      });
+    }
+    fitScrollPad(); window.addEventListener('resize', fitScrollPad);
 
     // 메뉴 현재 위치 + 스크롤 진행 막대
     var links = $$('[data-nav-link]');
     if (links.length && 'IntersectionObserver' in window) {
       var map = {}; links.forEach(function (a) { map[a.getAttribute('data-nav-link')] = a; });
+      var tocLinks = $$('[data-toc-link]');
       var io = new IntersectionObserver(function (es) {
         es.forEach(function (e) {
           if (!e.isIntersecting) return;
           links.forEach(function (a) { a.removeAttribute('aria-current'); });
-          var a = map[e.target.id]; if (a) { a.setAttribute('aria-current', 'true'); if (a.scrollIntoView && a.parentNode.scrollWidth > a.parentNode.clientWidth) a.parentNode.scrollTo({ left: a.offsetLeft - 40, behavior: 'smooth' }); }
+          tocLinks.forEach(function (a) { if (a.getAttribute('data-toc-link') === e.target.id) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+          var a = map[e.target.id];
+          if (more) more.classList.toggle('is-current', !!(a && more.contains(a)));
+          if (a) { a.setAttribute('aria-current', 'true'); if (a.scrollIntoView && a.parentNode.scrollWidth > a.parentNode.clientWidth) a.parentNode.scrollTo({ left: a.offsetLeft - 40, behavior: RM ? 'auto' : 'smooth' }); }
         });
       }, { rootMargin: '-40% 0px -55% 0px' });
       $$('main > section[id]').forEach(function (s) { io.observe(s); });
@@ -197,11 +264,13 @@
     slides.forEach(function (s, i) {
       var b = el('button'); b.type = 'button'; b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽');
       var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.src = img.getAttribute('src'); t.alt = ''; t.loading = 'lazy'; b.appendChild(t); } else b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
+      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
       b.addEventListener('click', function () { go(i); });
       thumbs.appendChild(b);
     });
     bar.parentNode.insertBefore(thumbs, bar.nextSibling);
+    // 그림 주소가 나중에 바뀌면(암호 보호 사이트의 blob: 주소) 미리보기도 따라 바꿈
+    if (window.MutationObserver) new MutationObserver(function (ms) { ms.forEach(function (m) { if (m.target._lpThumb) m.target._lpThumb.src = m.target.src; }); }).observe(stage, { attributes: true, attributeFilter: ['src'], subtree: true });
     function go(i, opt) {
       cur = Math.max(0, Math.min(slides.length - 1, i));
       slides.forEach(function (s, k) { s.classList.toggle('is-active', k === cur); });
@@ -231,7 +300,7 @@
     var grid = el('div', 'lp-overview-grid'); ov.appendChild(grid);
     var btns = slides.map(function (s, i) {
       var b = el('button'); b.type = 'button'; var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.src = img.getAttribute('src'); t.alt = ''; t.loading = 'lazy'; b.appendChild(t); }
+      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); }
       b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
       b.addEventListener('click', function () { done(); pick(i); });
       b._q = ((s.getAttribute('data-title') || '') + ' ' + (s.getAttribute('data-text') || '')).toLowerCase();
@@ -338,13 +407,14 @@
   /* ── 실시간 ─────────────────────────────── */
   var live = { ready: false, progress: function () { }, help: function () { toast('실시간 연결이 꺼져 있어요. 손을 들어 강사에게 알려 주세요.'); } };
   function initLive() {
-    if (!DATA.live || !window.LecLive || !$('[data-dock]') && !$('[data-qa]') && !$('[data-board]')) return;
+    if (!DATA.live || !window.LecLive || !$('[data-dock]') && !$('[data-qa]') && !$('[data-board]') && !$('[data-survey]')) return;
     var conn;
     try { conn = LecLive.create(DATA.live); } catch (e) { return; }
     var me = store.get('me', null), feats = DATA.live.features || [];
     var dock = $('[data-dock]'), dot = $('[data-live-status]');
     var qs = {}, posts = {}, answers = {}, state = {}, voted = store.get('voted', {});
-    if (dock) dock.hidden = false;
+    var X = LecLive.util.ext, U = LecLive.util;
+    if (dock) { dock.hidden = false; root.classList.add('lp-dock-on'); }
     $$('[data-live-off]').forEach(function (n) { n.hidden = true; });
     if (feats.indexOf('help') >= 0) $$('[data-stuck]').forEach(function (b) { b.hidden = false; });
     if (deckApi) deckApi.showFollow();
@@ -463,7 +533,8 @@
       if (!p) { host.appendChild(el('p', 'lp-empty', '강사가 투표를 열면 여기에 나타나요.')); return; }
       host.appendChild(el('h3', '', p.question));
       var mine = store.get('ans:' + p.id, null);
-      var tally = {}; Object.keys(answers).forEach(function (k) { var a = answers[k]; if (a.poll === p.id) tally[a.value] = (tally[a.value] || 0) + 1; });
+      var list = Object.keys(answers).map(function (k) { return answers[k]; }).filter(function (a) { return a.poll === p.id; });
+      var tally = {}; list.forEach(function (a) { tally[a.value] = (tally[a.value] || 0) + 1; });
       if (mine === null) {
         if (p.kind === 'word') {
           var f = el('form', 'lp-row'); var i = el('input'); i.maxLength = 20; i.placeholder = '낱말 하나'; i.required = true; i.setAttribute('aria-label', '응답');
@@ -475,14 +546,21 @@
         }
       } else {
         host.appendChild(el('p', 'lp-small', '응답했어요: ' + mine));
-        var total = Object.keys(tally).reduce(function (a, k) { return a + tally[k]; }, 0) || 1;
-        if (p.kind === 'word') { var cl = el('div', 'lp-cloud'); Object.keys(tally).sort(function (a, b) { return tally[b] - tally[a]; }).slice(0, 40).forEach(function (w) { var s = el('span', '', w); s.style.fontSize = (1 + Math.min(2.4, tally[w] / total * 6)) + 'rem'; cl.appendChild(s); }); host.appendChild(cl); }
+        // 결과는 강사가 '결과 공개'를 눌러야 보임(먼저 본 답에 끌려가지 않게)
+        if (!X.revealed(state, p.id)) { host.appendChild(el('p', 'lp-note', '결과는 강사가 공개하면 여기에 보여요.')); return; }
+        var total = list.length || 1;
+        if (p.kind === 'word') {
+          var words = U.wordCloud(list, p.id, { hidden: X.hiddenWords(state) }), wt = words.reduce(function (a, w) { return a + w.count; }, 0) || 1;
+          var cl = el('div', 'lp-cloud'); words.slice(0, 40).forEach(function (w) { var s = el('span', '', w.word); s.style.fontSize = (1 + Math.min(2.4, w.count / wt * 6)) + 'rem'; s.title = w.count + '명'; cl.appendChild(s); });
+          if (!words.length) cl.appendChild(el('p', 'lp-small', '아직 보여 줄 낱말이 없어요.'));
+          host.appendChild(cl);
+        }
         else { var bars = el('div', 'lp-bars'); (p.options.length ? p.options : Object.keys(tally)).forEach(function (o) { var n = tally[o] || 0; var row = el('div', 'lp-bar'); row.appendChild(el('span', '', o + ' · ' + n + '명')); var tr = el('div', 'lp-bar-track'); var fi = el('div', 'lp-bar-fill'); fi.style.setProperty('--w', Math.round(n / total * 100) + '%'); tr.appendChild(fi); row.appendChild(tr); bars.appendChild(row); }); host.appendChild(bars); }
       }
     }
     function answer(p, v) {
       if (!v) return;
-      ensureJoin().then(function () { return conn.add('answers', { poll: p.id, value: v }); }).then(function (d) { store.set('ans:' + p.id, v); if (d && d.id) answers[d.id] = d; drawPoll(); toast('응답했어요.'); }, function () { });
+      ensureJoin().then(function () { return conn.add('answers', { poll: p.id, value: v }); }).then(function (d) { store.set('ans:' + p.id, v); if (d && d.id) answers[d.id] = d; drawPoll(); drawNow(); toast('응답했어요.'); }, function () { });
     }
 
     // 출석
@@ -495,27 +573,84 @@
     });
 
     // 도움 요청
+    var hd = $('[data-help-dialog]'), hf = hd && $('[data-help-form]', hd);
+    function sendHelp(station, seat, message) {
+      store.set('seat', seat);
+      return conn.add('help', { station: station, seat: seat.slice(0, 20), nickname: me.nickname, message: message }).then(function () { toast('도움을 요청했어요. 곧 갈게요!'); if (live.ready && station) live.progress(station, 'stuck'); }, function (err) { toast('보내지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
+    }
     live.help = function (stationId) {
+      var opener = doc.activeElement;
       ensureJoin().then(function () {
-        var seat = window.prompt ? window.prompt('자리 번호나 위치를 적어 주세요(예: 3모둠, 창가 두 번째)', store.get('seat', '')) : '';
-        if (seat === null) return;
-        store.set('seat', seat || '');
-        return conn.add('help', { station: stationId || (stApi && stApi.current()) || '', seat: (seat || '').slice(0, 30), nickname: me.nickname, message: '' }).then(function () { toast('도움을 요청했어요. 곧 갈게요!'); if (live.ready) live.progress(stationId || (stApi && stApi.current()), 'stuck'); });
+        var station = stationId || (stApi && stApi.current()) || '';
+        if (!hf) return sendHelp(station, store.get('seat', ''), '');
+        hd._station = station; hf.elements.seat.value = store.get('seat', ''); hf.elements.message.value = '';
+        openDialog(hd, opener);
+        var f = hf.elements.seat.value ? hf.elements.message : hf.elements.seat; setTimeout(function () { f.focus(); }, 30);
       }, function () { });
     };
+    if (hf) hf.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var seat = hf.elements.seat.value.trim(), msg = hf.elements.message.value.trim();
+      closeDialog(hd); sendHelp(hd._station || '', seat, msg);
+    });
     var dh = $('[data-dock-help]'); if (dh) dh.addEventListener('click', function () { live.help(stApi && stApi.current()); });
     var dq = $('[data-dock-qa]'); if (dq) dq.addEventListener('click', function () { if (qaBox) { qaBox.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); var t = qaBox.querySelector('textarea'); if (t) setTimeout(function () { t.focus(); }, 300); } });
     // 신호등: 참가자당 하나(answers, poll='signal')를 덮어씀
-    var mySignal = store.get('signal', '');
-    function paintSignal() { $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-signal') === mySignal)); }); }
+    var mySignal = store.get('signal', null);
+    if (typeof mySignal === 'string') mySignal = mySignal ? { v: mySignal, at: 0 } : null;
+    function paintSignal() { $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(!!mySignal && b.getAttribute('data-signal') === mySignal.v)); }); }
+    function checkSignalReset() {
+      var r = X.signalReset(state);
+      if (mySignal && r && r > (mySignal.at || 0)) { mySignal = null; store.del('signal'); paintSignal(); if ($('[data-signal]')) toast('강사가 신호를 새로 받아요. 지금 상태를 다시 눌러 주세요.'); }
+    }
     paintSignal();
     $$('[data-signal]').forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-signal');
-        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = v; store.set('signal', v); paintSignal(); toast({ green: '이해했어요를 보냈어요.', yellow: '조금 헷갈려요를 보냈어요.', red: '도와주세요를 보냈어요. 곧 갈게요!' }[v]); }, function () { });
+        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '이해했어요를 보냈어요.', yellow: '조금 헷갈려요를 보냈어요.', red: '도와주세요를 보냈어요. 곧 갈게요!' }[v]); }, function () { });
       });
     });
-    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); if (conn.react) conn.react(e).catch(function () { }); }); });
+    // 반응: 휴대폰에서는 버튼 하나로 접어 둠
+    var rt = $('[data-react-toggle]'), rbox = rt && rt.parentNode;
+    function setReact(open) { if (!rbox) return; rbox.classList.toggle('is-open', open); rt.setAttribute('aria-expanded', String(open)); }
+    if (rt) {
+      rt.addEventListener('click', function () { setReact(!rbox.classList.contains('is-open')); });
+      doc.addEventListener('click', function (e) { if (rbox.classList.contains('is-open') && !rbox.contains(e.target)) setReact(false); });
+      rbox.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rbox.classList.contains('is-open')) { setReact(false); rt.focus(); } });
+    }
+    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); setReact(false); if (conn.react) conn.react(e).catch(function () { }); }); });
+
+    // 만족도 설문(참가자당 하나, 다시 내면 덮어씀)
+    $$('[data-survey]').forEach(function (f) {
+      var sk = 'survey:' + f.getAttribute('data-survey'), saved = store.get(sk, null), st = $('[data-sv-state]', f);
+      function collect() {
+        var out = {}, missing = 0;
+        $$('[data-sv-key]', f).forEach(function (n) {
+          var key = n.getAttribute('data-sv-key'), v;
+          if (n.tagName === 'TEXTAREA') v = n.value.trim();
+          else { var c = n.querySelector('input:checked'); v = c ? c.value : ''; if (!v) missing++; }
+          if (v) out[key] = n.className.indexOf('lp-sv-scale') >= 0 && /^\d+$/.test(v) ? +v : v;
+        });
+        return { answers: out, missing: missing };
+      }
+      if (saved) {
+        $$('[data-sv-key]', f).forEach(function (n) {
+          var v = saved[n.getAttribute('data-sv-key')]; if (v === undefined) return;
+          if (n.tagName === 'TEXTAREA') n.value = v; else $$('input', n).forEach(function (i) { i.checked = String(i.value) === String(v); });
+        });
+        if (st) st.textContent = '제출했어요. 고칠 게 있으면 바꾼 뒤 다시 내 주세요.';
+      }
+      f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var r = collect();
+        if (!Object.keys(r.answers).length) return toast('한 문항 이상 답해 주세요.');
+        if (r.missing && !window.confirm('답하지 않은 문항이 ' + r.missing + '개 있어요. 이대로 낼까요?')) return;
+        var btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
+        ensureJoin().then(function () { return conn.add('survey', { answers: r.answers }); }).then(function () {
+          store.set(sk, r.answers); if (st) st.textContent = '제출했어요. 고마워요! 고칠 게 있으면 바꾼 뒤 다시 내 주세요.'; toast('설문을 제출했어요. 고마워요!');
+        }, function (err) { if (err && err.message !== 'cancel') toast('제출하지 못했어요: ' + (err.message || '잠시 뒤 다시 해 주세요.')); }).then(function () { if (btn) btn.disabled = false; });
+      });
+    });
 
     var lastProg = {};
     live.progress = function (station, status) {
@@ -524,25 +659,62 @@
       conn.add('progress', { station: station, status: status }).catch(function () { });
     };
 
-    // 상태(공지·타이머·따라가기·투표)
-    var timerIv;
+    // 상태 → '지금' 줄: 열린 투표 > 공지 > 강사가 보는 실습·쪽, 오른쪽에 타이머. 할 일 하나만 버튼으로
+    var nowEl = $('[data-now]'), timerIv, nowKey = '';
+    var pollSec = pollBox && pollBox.closest('section');
+    function runningTimer() {
+      if (state.timer && state.timer.running && state.timer.endsAt) return state.timer;
+      return X.timers(state).filter(function (t) { return t.running && t.endsAt; })[0] || null;
+    }
+    function drawNow() {
+      if (!nowEl) return;
+      var main = '', sub = '', cta = null, sts = DATA.stations || [];
+      var p = pollDefs.filter(function (x) { return x.id === state.openPoll; })[0];
+      var si = state.step ? sts.map(function (x) { return x.id; }).indexOf(state.step) : -1;
+      if (p) {
+        main = '투표: ' + p.question;
+        if (store.get('ans:' + p.id, null) === null) cta = { label: '투표하기', href: '#' + (pollSec ? pollSec.id : ''), poll: true };
+        else if (X.revealed(state, p.id)) cta = { label: '결과 보기', href: '#' + (pollSec ? pollSec.id : ''), poll: true };
+      } else if (si >= 0 && stApi) {
+        main = (si + 1) + '번 실습 · ' + sts[si].name;
+        if (stApi.current() !== state.step) cta = { label: (si + 1) + '번 실습 열기', href: '#st-' + state.step };
+      } else if (state.slide > 0 && deckApi) {
+        main = '교재 ' + state.slide + '쪽';
+        cta = { label: state.slide + '쪽 보기', href: '#deck-p' + state.slide };
+      }
+      var notice = state.notice && state.notice.text;
+      if (notice) { sub = main; main = notice; }
+      var t = runningTimer();
+      nowEl.classList.toggle('has-notice', !!notice);
+      if (notice && state.notice.level) nowEl.setAttribute('data-level', state.notice.level); else nowEl.removeAttribute('data-level');
+      var key = main + '|' + sub;
+      if (key !== nowKey) { nowKey = key; $('[data-now-main]', nowEl).textContent = main; $('[data-now-sub]', nowEl).textContent = sub; }
+      var a = $('[data-now-cta]', nowEl);
+      a.hidden = !cta; if (cta) { a.textContent = cta.label; a.setAttribute('href', cta.href); a._poll = !!cta.poll; }
+      var tm = $('[data-timer]', nowEl); clearInterval(timerIv);
+      tm.hidden = !t;
+      if (t) {
+        var tick = function () { var left = Math.round((t.endsAt - (conn.now ? conn.now() : Date.now())) / 1000); tm.classList.toggle('is-over', left <= 0); var ab = Math.abs(left); tm.textContent = (t.label ? t.label + ' ' : '') + (left < 0 ? '-' : '') + Math.floor(ab / 60) + ':' + String(ab % 60).padStart(2, '0'); tm.setAttribute('aria-label', (t.label || '타이머') + (left <= 0 ? ' 시간이 다 됐어요' : ' 남은 시간')); };
+        tick(); timerIv = setInterval(tick, 1000);
+      }
+      var was = nowEl.hidden; nowEl.hidden = !main && !t;
+      if (was !== nowEl.hidden) fitScrollPad();
+    }
+    if (nowEl) {
+      $('[data-now-cta]', nowEl).addEventListener('click', function (e) {
+        if (!this._poll || !pollBox) return;
+        e.preventDefault(); goTo(pollSec.id);
+        setTimeout(function () { var f = pollBox.querySelector('[data-poll-live] input, [data-poll-live] button'); if (f) f.focus({ preventScroll: true }); }, RM ? 0 : 400);
+      });
+      window.addEventListener('hashchange', function () { setTimeout(drawNow, 0); });
+    }
     function applyState(s) {
       state = s || {};
-      var n = $('[data-notice]');
-      if (n) { if (state.notice && state.notice.text) { n.hidden = false; n.textContent = state.notice.text; n.setAttribute('data-level', state.notice.level || ''); } else n.hidden = true; }
-      var tm = $('[data-timer]'); clearInterval(timerIv);
-      if (tm) {
-        if (state.timer && state.timer.running && state.timer.endsAt) {
-          tm.hidden = false;
-          var tick = function () { var left = Math.round((state.timer.endsAt - Date.now()) / 1000); tm.classList.toggle('is-over', left <= 0); var a = Math.abs(left); tm.textContent = (state.timer.label ? state.timer.label + ' ' : '') + (left < 0 ? '-' : '') + Math.floor(a / 60) + ':' + String(a % 60).padStart(2, '0'); };
-          tick(); timerIv = setInterval(tick, 1000);
-        } else tm.hidden = true;
-      }
       if (state.follow) {
         if (state.step && stApi) stApi.go(state.step);
         if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide);
       }
-      drawPoll();
+      checkSignalReset(); drawPoll(); drawNow();
     }
     function floatReaction(emoji) {
       var host = $('[data-reactions]'); if (!host || RM) return;
@@ -575,8 +747,22 @@
     }, function () { setStatus('offline'); toast('실시간 서버에 연결하지 못했어요. 페이지는 그대로 쓸 수 있어요.'); });
   }
 
+  /* ── 인쇄용 QR 안내문 ─────────────────── */
+  function initPoster() {
+    var pb = $('[data-print]'); if (pb) pb.addEventListener('click', function () { window.print(); });
+    var cb = $('[data-card-print]');
+    if (cb) {
+      cb.checked = store.get('card-print', true) !== false;
+      var upd = function () { doc.body.classList.toggle('lp-card-off', !cb.checked); };
+      upd(); cb.addEventListener('change', function () { store.set('card-print', cb.checked); upd(); });
+    }
+  }
+
   function start() {
-    drawQRs(); initChrome(); initPrompts(); initSchedule(); initReadiness(); initDeck(); initStations(); initQuiz(); initLive();
+    // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
+    doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
+    $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
+    drawQRs(); initChrome(); initPrompts(); initSchedule(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

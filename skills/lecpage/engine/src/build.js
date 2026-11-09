@@ -8,6 +8,9 @@ import { getPreset } from './design/presets.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
 
+/** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
+export const USER_ASSET = /^(?:assets\/)?(?:slides|media)\/[\w가-힣ㄱ-ㅎㅏ-ㅣ.\-()\[\] ]{1,140}\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx|ppsx|docx|hwpx|xlsx|txt|zip)$/i;
+
 const LIVE_FILES = { local: 'live/local.js', http: 'live/http.js', supabase: 'live/supabase.js', sheets: 'live/sheets.js' };
 
 // fx.css에서 쓰는 효과 묶음만 남김(표지: 줄 맨 앞의 @fx:id 주석, 아이디가 별표면 공통)
@@ -38,8 +41,9 @@ function favicon(design) {
 
 /**
  * @param {object} input 설계도(검증 전이어도 됨)
- * @param {object} opts { runtime: {read(path)}, assets: {path: Uint8Array|string}, infra: decideInfra 입력, include: { blueprint: true } }
- * @returns {{ files: Object<string,string|Uint8Array>, blueprint, design, warnings, errors, infra, report }}
+ * @param {object} opts { runtime: {read(path)}, assets: {path: Uint8Array|string}, infra: decideInfra 입력, include: { blueprint: true, teacherFiles: false } }
+ * @returns {{ files: Object<string,string|Uint8Array>, teacher: Object<string,string>, blueprint, design, warnings, errors, infra, report }}
+ * files = 올릴 사이트, teacher = 강사만 볼 파일(DESIGN.md·운영안내.md·설계도). include.teacherFiles=true면 files에도 넣음
  */
 export function build(input, opts = {}) {
   const { blueprint: bp, errors, warnings } = validate(input);
@@ -49,7 +53,7 @@ export function build(input, opts = {}) {
   const read = (p) => { try { return runtime.read(p); } catch { return ''; } };
 
   const design = resolveDesign(bp);
-  const hasLiveSections = bp.sections.some((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type));
+  const hasLiveSections = bp.sections.some((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type) || (s.type === 'survey' && s.questions?.length));
   const live = bp.live.provider !== 'none' && (hasLiveSections || bp.live.features.length > 0);
   const theme = themeCSS(design);
   const preset = presetWithOverrides(design);
@@ -89,12 +93,17 @@ export function build(input, opts = {}) {
   }
 
   const infra = opts.infra ? decideInfra(opts.infra) : null;
-  files['DESIGN.md'] = designDoc(ctx);
-  files['운영안내.md'] = opsDoc(ctx, infra);
-  if (opts.include?.blueprint !== false) files['lecpage.blueprint.json'] = JSON.stringify(bp, null, 2);
+  // 검색 노출: 'public'일 때만 허용(기본은 주소·QR을 받은 사람만)
+  files['robots.txt'] = bp.access.mode === 'public' ? 'User-agent: *\nAllow: /\n' : 'User-agent: *\nDisallow: /\n';
+  // 강사용 파일은 올리는 사이트와 따로 돌려줌(설계도에는 강사 메일 등 공개하지 않을 값이 있을 수 있음)
+  const teacher = { 'DESIGN.md': designDoc(ctx), '운영안내.md': opsDoc(ctx, infra) };
+  if (opts.include?.blueprint !== false) teacher['lecpage.blueprint.json'] = JSON.stringify(bp, null, 2);
+  if (opts.include?.teacherFiles) Object.assign(files, teacher);
 
+  // 사용자 자료는 정해진 폴더·형식만(엔진이 만든 파일은 절대 덮어쓰지 않음, 스크립트·SVG·HTML 금지)
   for (const [p, data] of Object.entries(opts.assets || {})) {
-    if (/^(assets|media|slides)\//.test(p) && !p.includes('..')) files[p] = data;
+    if (!USER_ASSET.test(p) || p.includes('..') || p in files) { warnings.push({ path: p, message_ko: `허용되지 않는 자료라 뺐습니다: ${p}` }); continue; }
+    files[p] = data;
   }
   if (missingFx.length) warnings.push({ path: 'design.effects', message_ko: `효과 파일이 없어 뺐습니다: ${missingFx.join(', ')}` });
 
@@ -103,5 +112,5 @@ export function build(input, opts = {}) {
     pages: Object.keys(files).filter((f) => f.endsWith('.html')), sizeKB: Math.round(Object.values(files).reduce((a, v) => a + (typeof v === 'string' ? new TextEncoder().encode(v).length : v.byteLength || 0), 0) / 1024),
     notes: design._notes || [],
   };
-  return { files, blueprint: bp, design, warnings, errors, infra, report };
+  return { files, teacher, blueprint: bp, design, warnings, errors, infra, report };
 }

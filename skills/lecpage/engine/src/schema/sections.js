@@ -35,3 +35,12 @@ export const LIVE_FEATURES = ['qa', 'help', 'progress', 'board', 'poll', 'chat',
 export const LIVE_PROVIDERS = ['none', 'local', 'supabase', 'sheets', 'http'];
 export const ARCHETYPES = ['story', 'lab', 'live', 'course'];
 export const DEPLOY_TARGETS = ['github-pages', 'cloudflare', 'vercel', 'netlify', 'firebase', 's3', 'server', 'lan', 'zip'];
+
+// 기본 만족도 설문(연수 끝에 흔히 묻는 다섯 문항). 실시간 기능이 켜져 있으면 사이트 안에서 바로 모읍니다.
+export const DEFAULT_SURVEY = [
+  { q: '오늘 연수에 전반적으로 만족하시나요?', kind: 'scale' },
+  { q: '배운 내용을 내 수업이나 업무에 써 볼 수 있을 것 같나요?', kind: 'scale' },
+  { q: '진행 속도는 어땠나요?', kind: 'choice', options: ['빨랐어요', '알맞았어요', '느렸어요'] },
+  { q: '가장 도움이 된 것은 무엇인가요?', kind: 'text' },
+  { q: '아쉬웠던 점이나 다음에 바라는 점을 적어 주세요.', kind: 'text' },
+];

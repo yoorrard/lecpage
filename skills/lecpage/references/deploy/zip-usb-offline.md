@@ -20,12 +20,14 @@
 | 영상(YouTube) | 인터넷 있을 때만 |
 
 ## 만드는 법
-- 엔진 CLI: `node skills/lecpage/scripts/lecpage.mjs build <설계도.json> --target zip` ⚠️ 옵션 이름은 CLI 도움말 기준.
+- 엔진 CLI: `node skills/lecpage/scripts/lecpage.mjs build <설계도.json> -o dist` 다음 `node skills/lecpage/scripts/lecpage.mjs pack dist -o site.zip`.
+- 웹앱: 마지막 단계의 "사이트 파일 받기(ZIP)". 강사용 파일은 따로 받습니다.
 - 직접: 사이트 폴더 이름을 `연수명_날짜`로 바꾸고 압축.
   - Windows: 폴더 우클릭 → **압축(ZIP) 폴더로 보내기**(Windows 11은 **ZIP 파일로 압축**).
   - macOS: 폴더 우클릭 → **압축**.
 - `live.provider`는 `none` 또는 `local`로 빌드합니다. CSP `<meta>`는 넣지 않습니다(file://에서 막힐 수 있음).
-- `운영안내.md`, `DESIGN.md`는 참가자용 ZIP에서는 빼도 됩니다.
+- 강사용 파일(운영안내·DESIGN·설계도)은 이제 사이트 폴더에 들어가지 않습니다(CLI는 `dist-강사용/`, 앱은 따로 내려받기). 참가자용 ZIP에는 넣지 마세요.
+- **암호 보호는 쓰지 않습니다.** 잠금 풀기가 https 주소에서만 되어 `file://`로 열면 내용이 보이지 않습니다. ZIP을 받은 사람만 볼 수 있으니 공개 범위는 "링크"(기본)로 빌드하세요.
 - 파일 이름은 영문·숫자 권장(한글 파일 이름은 일부 압축 프로그램에서 깨짐 ⚠️).
 
 ## 받은 사람 안내문(그대로 붙여 쓰기)

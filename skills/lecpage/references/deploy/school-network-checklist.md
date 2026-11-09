@@ -51,7 +51,8 @@
 | Firebase | `*.web.app`, `*.firebaseapp.com` |
 | AWS | `*.cloudfront.net`, `*.amplifyapp.com` |
 | Azure | `*.azurestaticapps.net` |
-| Render·Fly·Railway | `*.onrender.com`, `*.fly.dev`, `*.up.railway.app` |
+| Render·Fly·Railway(`paas-node-hosting.md`) | `*.onrender.com`, `*.fly.dev`, `*.up.railway.app` |
+| Cloudflare Quick Tunnel(임시) | `*.trycloudflare.com` |
 
 공용 호스팅 주소는 같은 주소 아래 다른 사람 사이트도 있어서 **분류 필터가 통째로 막는 경우**가 있습니다 ⚠️. 이때 가장 확실한 해결은 **내 도메인**(`custom-domain-and-short-url.md`)입니다.
 
@@ -70,7 +71,7 @@
 - [ ] 연수실 와이파이로 `check.html` 모두 초록(또는 대안 결정)
 - [ ] `console.html` 관리자 키 입력 → 상태 `live`(또는 `polling`)
 - [ ] `screen.html` 프로젝터 출력, QR을 휴대폰 2대(안드로이드·아이폰)로 찍어 보기
-- [ ] Supabase라면 프로젝트가 "일시 정지" 아님, 익명 로그인 한도 상향 확인
+- [ ] Supabase라면 프로젝트가 "일시 정지" 아님(lecpage는 익명 로그인을 쓰지 않아 한도 조정은 필요 없음)
 - [ ] Cloudflare 중계라면 오늘 요청 수가 여유 있음(09:00 KST 초기화)
 - [ ] 노트북 절전 끄기, 전원 연결
 - [ ] 비상용: ZIP 파일과 주소 적힌 종이

@@ -192,9 +192,10 @@
       });
     };
     a.checkAdmin = function () { return rpc('lec_check_admin', { p_code: code, p_admin: ctx.adminKey() || '' }).then(function (ok) { return ok === true; }); };
-    a.exportCsv = function (kind) {
-      return rpc('lec_export', { p_code: code, p_admin: ctx.adminKey() || null, p_kind: kind }).then(function (data) {
-        var t = U.exportTable(kind, data);
+    a.exportCsv = function (kind, opts) {
+      // lec_export returns the whole admin snapshot; 'completion' is built from it here (no schema change needed)
+      return rpc('lec_export', { p_code: code, p_admin: ctx.adminKey() || null, p_kind: kind === 'completion' ? 'attendance' : kind }).then(function (data) {
+        var t = U.exportTable(kind, data, undefined, opts);
         return U.toCsv(t.columns, t.rows);
       });
     };

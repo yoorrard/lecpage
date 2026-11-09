@@ -21,7 +21,7 @@ export const HOSTS = {
   cloudflare: { name_ko: 'Cloudflare Pages/Workers', cost: '0원', note_ko: '정적 파일 요청 무료·무제한, 상업 이용 가능.' },
   netlify: { name_ko: 'Netlify', cost: '0원(크레딧 300)', note_ko: '끌어다 놓기 배포가 쉬움. 크레딧 초과 시 계정 전체 정지.' },
   vercel: { name_ko: 'Vercel Hobby', cost: '0원', note_ko: '비상업 용도만. 강사료가 있는 연수는 애매합니다.' },
-  firebase: { name_ko: 'Firebase Hosting', cost: '0원', note_ko: '구글 계정으로 시작. 하루 전송량 제한이 있습니다.' },
+  firebase: { name_ko: 'Firebase Hosting', cost: '0원', note_ko: '구글 계정으로 시작. 무료 전송량은 월 10GB이고, 넘으면 그달 사이트가 멈춥니다.' },
   s3: { name_ko: 'AWS S3 + CloudFront', cost: '소액', note_ko: 'AWS 계정이 있을 때. 1년 무료 이후 사용량 과금.' },
   server: { name_ko: '보유 서버(nginx·Caddy)', cost: '보유 비용', note_ko: '학교·기관 서버, NAS, VPS.' },
   lan: { name_ko: '노트북에서 직접', cost: '0원', note_ko: '연수 장소에서만 열립니다.' },
@@ -54,6 +54,11 @@ export function decideInfra(input = {}) {
     backend = 'sheets'; tier = 2;
     reasons.push('출석·제출처럼 모으기만 하면 되는 기능이라 실시간 연결이 필요 없습니다. 결과가 구글 시트에 쌓입니다.');
     if (size > 30) warnings.push('Apps Script는 계정당 동시 실행이 30개라 한꺼번에 제출하면 늦어질 수 있습니다.');
+  } else if (skill === 'click' && size <= 50) {
+    backend = 'sheets'; tier = 2;
+    reasons.push('구글 계정만 있으면 10분 안에 직접 연결할 수 있어요. 질문·막혔어요·진행 체크가 5~10초마다 새로 읽혀요(50명 안팎까지).');
+    if (size > 30) warnings.push('Apps Script는 계정당 동시 실행이 30개라 한꺼번에 몰리면 조금 늦어질 수 있어요.');
+    if (features.includes('reactions')) warnings.push('박수·좋아요 같은 반응은 시트 방식에서 몇 초 늦게 보여요.');
   } else if (size <= 100) {
     backend = 'supabase'; tier = 3;
     reasons.push(realtime ? '질문·진행 현황처럼 화면이 바로 바뀌는 기능이 있어 실시간 연결이 필요합니다.' : '인원이 많아 시트보다 DB가 안정적입니다.');
@@ -75,7 +80,7 @@ export function decideInfra(input = {}) {
   else if (backend === 'server') hosts.push('server');
   else {
     if (infra.includes('aws') && skill !== 'click') hosts.push('s3');
-    if (skill === 'click') hosts.push('github-pages', 'netlify', 'cloudflare');
+    if (skill === 'click') hosts.push('netlify', 'cloudflare', 'github-pages'); // 앱에서 연결 코드로 바로 올리기 → 끌어다 놓기 → 공개 저장소
     else hosts.push('cloudflare', 'github-pages', 'netlify');
     if (!paid) hosts.push('vercel'); else warnings.push('강사료가 있는 연수는 Vercel 무료(비상업 전용) 대신 Cloudflare를 권합니다.');
     hosts.push('firebase', 'zip');

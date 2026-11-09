@@ -13,6 +13,7 @@
 ## 준비물
 - Azure 구독, Node.js(CLI 배포용).
 - 사이트 폴더 맨 위에 `staticwebapp.config.json`(`templates/deploy/azure/`에서 복사, `{{…}}` 치환).
+- 빌드 결과 폴더(`dist/`)만 올립니다. 강사용 파일(`dist-강사용/`)은 올리지 않습니다. 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(페이지와 교재 그림 암호화, https 주소에서만 열림).
 
 ## 따라 하기 — 포털 + CLI
 1. https://portal.azure.com → **리소스 만들기** → "Static Web App" 검색 → **만들기**.

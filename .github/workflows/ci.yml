@@ -8,8 +8,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # 액션은 커밋 SHA로 고정(태그가 바뀌어도 같은 코드). 업데이트는 Dependabot이 PR로 올림
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
       - name: 엔진 테스트
         run: npm test
@@ -17,3 +19,5 @@ jobs:
         run: npm run examples
       - name: 앱 빌드
         run: npm --prefix app ci && npm --prefix app run build
+      - name: 의존성 보안 점검(앱 배포 묶음)
+        run: npm --prefix app audit --omit=dev --audit-level=high

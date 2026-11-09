@@ -213,8 +213,9 @@
   }
   var STATUS_KO = { doing: '하는 중', done: '완료', stuck: '막힘', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
   function uniq(a) { var s = {}; var o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }
-  function exportTable(kind, data, tz) {
+  function exportTable(kind, data, tz, opts) {
     var t = function (ms) { return fmtTime(ms, tz); };
+    if (kind === 'completion') return completionTable(data, opts, tz);
     var P = data.participants || []; var people = {}; P.forEach(function (p) { people[p.id] = p; });
     var nick = function (id) { return (people[id] || {}).nickname || ''; };
     switch (kind) {
@@ -240,6 +241,130 @@
       default: throw LiveError('bad_kind', '내보낼 수 없는 종류입니다: ' + kind, { status: 400 });
     }
   }
+
+  // ---------------------------------------------------------------- completion (이수 확인) — same rule as protocol.js
+  // opts: { date:'YYYY-MM-DD', start:'HH:MM', end:'HH:MM', rate: 0~100, survey: bool (site has survey questions), stations: n }
+  function tzOffset(ms, tz) {
+    try {
+      var p = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        .formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = +x.value; });
+      return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+    } catch (e) { return 9 * 3600000; }
+  }
+  /** Wall-clock date + 'HH:MM' in a time zone → epoch ms (null when malformed). */
+  function zonedMs(date, hm, tz) {
+    var d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''), h = /^(\d{1,2}):(\d{2})$/.exec(hm || '');
+    if (!d || !h) return null;
+    var guess = Date.UTC(+d[1], +d[2] - 1, +d[3], +h[1], +h[2]);
+    var off = tzOffset(guess, tz || 'Asia/Seoul'), ms = guess - off, off2 = tzOffset(ms, tz || 'Asia/Seoul');
+    return off2 === off ? ms : guess - off2;
+  }
+  function dayOf(ms, tz) { return fmtTime(ms, tz).slice(0, 10); }
+  var COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '이수'];
+  function completionTable(data, opts, tz) {
+    opts = opts || {}; tz = tz || 'Asia/Seoul';
+    var rate = typeof opts.rate === 'number' && opts.rate >= 0 && opts.rate <= 100 ? opts.rate : 90;
+    var att = {}, done = {}, sv = {}, seen = {}, stations = [];
+    (data.attendance || []).forEach(function (a) { var r = att[a.by] || (att[a.by] = {}); var at = a.at || a.createdAt; if (a.kind === 'in' || a.kind === 'out') r[a.kind] = at; });
+    (data.progress || []).forEach(function (x) { if (!seen[x.station]) { seen[x.station] = 1; stations.push(x.station); } if (x.status === 'done') (done[x.by] || (done[x.by] = {}))[x.station] = 1; });
+    (data.survey || []).forEach(function (s) { if (s.by) sv[s.by] = 1; });
+    var total = opts.stations > 0 ? Math.floor(opts.stations) : stations.length;
+    var rows = (data.participants || []).slice().sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }).map(function (p) {
+      var r = att[p.id] || {}, inAt = r['in'], outAt = r.out;
+      var day = opts.date || (inAt ? dayOf(inAt, tz) : '');
+      var s0 = zonedMs(day, opts.start, tz), s1 = zonedMs(day, opts.end, tz);
+      var sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
+      var mins = '';
+      if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
+      var n = Object.keys(done[p.id] || {}).length;
+      var verdict = '확인 필요';
+      if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!opts.survey || sv[p.id]) ? 'O' : 'X';
+      return [p.nickname, p.name, p.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', opts.survey ? (sv[p.id] ? 'O' : 'X') : '해당 없음', verdict];
+    });
+    return { columns: COMPLETION_COLS.slice(), rows: rows };
+  }
+
+  // ---------------------------------------------------------------- word cloud cleaning
+  var PARTICLES = '은는이가을를의에도요';
+  var KEEP_WORDS = ['고양이', '어린이', '호랑이', '원숭이', '지렁이', '올챙이', '두꺼비'];
+  var BANNED = DEFAULT_BANNED();
+  function DEFAULT_BANNED() {
+    return ['바보', '멍청이', '등신', '쓰레기', '죽어', '죽을래', '한남', '한녀', '틀딱', '맘충', '급식충', '김치녀', '섹스', 'sex', 'porn', '야동'];
+  }
+  /** NFC, trim, lowercase latin, strip edge punctuation and one trailing particle (when ≥2 chars remain). */
+  function normWord(v) {
+    if (v == null) return '';
+    var s = String(v); if (s.normalize) s = s.normalize('NFC');
+    s = s.replace(CTRL, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    s = s.replace(/^[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+|[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+$/g, '');
+    var c = cps(s);
+    if (c.length >= 3 && PARTICLES.indexOf(c[c.length - 1]) >= 0 && KEEP_WORDS.indexOf(s) < 0) s = c.slice(0, -1).join('').trim();
+    return s;
+  }
+  function makeBanned(extra) {
+    var list = BANNED.concat(DEFAULT_WORDS, extra || []).map(normWord).filter(Boolean);
+    return function (w) {
+      if (!w || /^[*\s]+$/.test(w) || w.indexOf('**') >= 0) return true;
+      for (var i = 0; i < list.length; i++) if (w.indexOf(list[i]) >= 0) return true;
+      return false;
+    };
+  }
+  /** answers[] of one poll → [{word, count}] merged by normWord, minus hidden and banned words, most first. */
+  function wordCloud(answers, pollId, opts) {
+    opts = opts || {};
+    var hidden = {}; (opts.hidden || []).forEach(function (w) { hidden[normWord(w)] = 1; });
+    var banned = makeBanned(opts.banned);
+    var tally = {}, order = [];
+    (answers || []).forEach(function (a) {
+      if (!a || (pollId && a.poll !== pollId)) return;
+      [].concat(a.value).forEach(function (v) {
+        var w = normWord(v); if (!w || hidden[w] || banned(w)) return;
+        if (!tally[w]) { tally[w] = 0; order.push(w); }
+        tally[w]++;
+      });
+    });
+    return order.map(function (w) { return { word: w, count: tally[w] }; }).sort(function (a, b) { return b.count - a.count; });
+  }
+
+  // ---------------------------------------------------------------- state extensions
+  // Servers keep unknown top-level state keys out, so new instructor settings live in state.ui (scalars, ≤200 chars):
+  //   ui.reveal = 'pollA|pollB'   ui.signalReset = ms   ui.hiddenWords = 'w1|w2'   ui.timers = '[[label,endsAt,remaining,running]…]'
+  // Readers also accept the top-level forms (pollReveal{}, signalReset, hiddenWords[], timers[]) if a backend stores them.
+  var UI_MAX = 200;
+  function splitList(s) { return typeof s === 'string' && s ? s.split('|').filter(Boolean) : []; }
+  function joinList(list) {
+    var a = list.filter(Boolean).map(function (x) { return String(x).replace(/\|/g, ' '); });
+    while (a.length && a.join('|').length > UI_MAX) a.shift();
+    return a.join('|');
+  }
+  function uiOf(st) { return (st && st.ui) || {}; }
+  var ext = {
+    revealed: function (st, id) { return !!(st && ((st.pollReveal && st.pollReveal[id]) || splitList(uiOf(st).reveal).indexOf(id) >= 0)); },
+    revealPatch: function (st, id, on) {
+      var list = splitList(uiOf(st).reveal).filter(function (x) { return x !== id; });
+      if (on) list.push(id);
+      return { ui: { reveal: joinList(list) || null } };
+    },
+    signalReset: function (st) { return Math.max(+(st && st.signalReset) || 0, +uiOf(st).signalReset || 0); },
+    hiddenWords: function (st) { return (st && Array.isArray(st.hiddenWords) ? st.hiddenWords : []).concat(splitList(uiOf(st).hiddenWords)); },
+    hiddenPatch: function (st, word, hide) {
+      var w = normWord(word); var list = splitList(uiOf(st).hiddenWords).filter(function (x) { return x !== w; });
+      if (hide && w) list.push(w);
+      return { ui: { hiddenWords: joinList(list) || null } };
+    },
+    /** → [{label, endsAt, remaining, running}] */
+    timers: function (st) {
+      if (st && Array.isArray(st.timers)) return st.timers;
+      var raw = uiOf(st).timers; if (!raw) return [];
+      try { return JSON.parse(raw).map(function (t) { return { label: String(t[0] || ''), endsAt: +t[1] || 0, remaining: +t[2] || 0, running: !!t[3] }; }); } catch (e) { return []; }
+    },
+    timersValue: function (list) {
+      var out = (list || []).slice(0, 8).map(function (t) { return [cps(String(t.label || '')).slice(0, 12).join(''), t.endsAt || 0, t.remaining || 0, t.running ? 1 : 0]; });
+      var s = JSON.stringify(out);
+      while (out.length && s.length > UI_MAX) { out.pop(); s = JSON.stringify(out); }
+      return out.length ? s : null;
+    },
+  };
 
   // ---------------------------------------------------------------- registry & global events
   var registry = {};
@@ -783,7 +908,17 @@
     if (file.type && !UPLOAD_TYPES[file.type]) return Promise.reject(LiveError('unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.', { status: 415, retryable: false }));
     return this._ensureJoined().then(function () { return self._call('upload', [file], { tries: 2 }); });
   };
-  C.exportCsv = function (kind) { return this._call('exportCsv', [kind || 'attendance'], { tries: 2 }); };
+  /** exportCsv(kind, opts) — opts only matter for 'completion' (see completionTable). Servers that do not know
+   *  'completion' yet are covered by building it here from the admin store. */
+  C.exportCsv = function (kind, opts) {
+    var self = this; kind = kind || 'attendance';
+    return this._call('exportCsv', [kind, opts || {}], { tries: 2 }).catch(function (err) {
+      if (kind !== 'completion' || !self._adminKey || !err || !(err.code === 'bad_kind' || err.code === 'unsupported' || err.status === 400 || err.status === 404)) throw err;
+      var data = {}; ['participants', 'attendance', 'progress', 'survey'].forEach(function (c) { data[c] = self.store(c); });
+      var t = completionTable(data, opts);
+      return toCsv(t.columns, t.rows);
+    });
+  };
   C.purge = function () {
     var self = this;
     return this._call('purge', [], { tries: 1 }).then(function (r) { self._reset(); return r === undefined ? true : r; });
@@ -819,7 +954,7 @@
       uid: uid, sleep: sleep, jitter: jitter, backoff: backoff, assign: assign, clone: clone, sha256: sha256, sha256sync: function (s) { return sha256js(utf8(String(s))); },
       loadScript: loadScript, cleanText: cleanText, toCsv: toCsv, exportTable: exportTable, fmtTime: fmtTime, Emitter: Emitter,
       storage: { local: local, session: session }, isHidden: isHidden, normCode: normCode, defaultState: defaultState, hashStr: hashStr,
-      fields: FIELDS,
+      fields: FIELDS, normWord: normWord, wordCloud: wordCloud, banned: makeBanned, zonedMs: zonedMs, completionColumns: COMPLETION_COLS.slice(), ext: ext,
     },
   };
   root.LecLive = api;

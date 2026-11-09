@@ -313,8 +313,9 @@ const STATUS_KO = { doing: '하는 중', done: '완료', stuck: '막힘', open: 
  * Builds export rows. `data` = { participants:[], attendance:[], progress:[], questions:[], survey:[], posts:[], help:[], chat:[], answers:[] } (full docs).
  * Shared column layout for every backend that exports on the server.
  */
-export function exportTable(kind, data, timeZone) {
+export function exportTable(kind, data, timeZone, opts) {
   const t = (ms) => fmtTime(ms, timeZone);
+  if (kind === 'completion') return completionTable(data, opts, timeZone);
   const people = new Map((data.participants || []).map((p) => [p.id, p]));
   const nick = (id) => (people.get(id) || {}).nickname || '';
   switch (kind) {
@@ -345,10 +346,65 @@ export function exportTable(kind, data, timeZone) {
       return { columns: ['시각', '별명', '내용', '숨김'], rows: (data.chat || []).map((x) => [t(x.createdAt), x.nickname, x.text, x.hidden ? '예' : '']) };
     case 'answers':
       return { columns: ['투표', '별명', '응답', '시각'], rows: (data.answers || []).map((x) => [x.poll, nick(x.by), x.value, t(x.updatedAt)]) };
-    default: throw bad('bad_kind', 'kind: attendance|progress|questions|survey|participants|posts|help|chat|answers');
+    default: throw bad('bad_kind', 'kind: ' + EXPORT_KINDS.join('|'));
   }
 }
-export const EXPORT_KINDS = ['attendance', 'progress', 'questions', 'survey', 'participants', 'posts', 'help', 'chat', 'answers'];
+export const EXPORT_KINDS = ['attendance', 'progress', 'questions', 'survey', 'participants', 'posts', 'help', 'chat', 'answers', 'completion'];
+
+// ---------- completion (이수 확인): one row per participant. Same rule as engine/runtime/live/core.js ----------
+// opts: { date:'YYYY-MM-DD', start:'HH:MM', end:'HH:MM', rate: 0~100, survey: bool (site has survey questions), stations: n }
+// 이수 = O when minutes present (clipped to the schedule) ≥ rate% of the scheduled minutes, and a survey was sent if the site has one.
+// Missing check-in/out or schedule → '확인 필요'. Only nickname, name and school: never NEIS or phone numbers.
+export const COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '이수'];
+function tzOffset(ms, timeZone) {
+  try {
+    const p = {};
+    for (const x of new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms))) p[x.type] = +x.value;
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+  } catch { return 9 * 3600000; }
+}
+/** Wall-clock date + 'HH:MM' in a time zone → epoch ms (null when malformed). */
+export function zonedMs(date, hm, timeZone = 'Asia/Seoul') {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''); const h = /^(\d{1,2}):(\d{2})$/.exec(hm || '');
+  if (!d || !h) return null;
+  const guess = Date.UTC(+d[1], +d[2] - 1, +d[3], +h[1], +h[2]);
+  const off = tzOffset(guess, timeZone); const ms = guess - off; const off2 = tzOffset(ms, timeZone);
+  return off2 === off ? ms : guess - off2;
+}
+export function completionTable(data, opts, timeZone) {
+  const o = opts || {}; const tz = timeZone || 'Asia/Seoul';
+  const rate = typeof o.rate === 'number' && o.rate >= 0 && o.rate <= 100 ? o.rate : 90;
+  const att = new Map(); const done = new Map(); const sv = new Set(); const stations = new Set();
+  for (const a of data.attendance || []) { const r = att.get(a.by) || {}; if (a.kind === 'in' || a.kind === 'out') r[a.kind] = a.at || a.createdAt; att.set(a.by, r); }
+  for (const x of data.progress || []) { stations.add(x.station); if (x.status === 'done') { const r = done.get(x.by) || new Set(); r.add(x.station); done.set(x.by, r); } }
+  for (const s of data.survey || []) if (s.by) sv.add(s.by);
+  const total = o.stations > 0 ? Math.floor(o.stations) : stations.size;
+  const rows = [...(data.participants || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((p) => {
+    const r = att.get(p.id) || {}; const inAt = r.in; const outAt = r.out;
+    const day = o.date || (inAt ? fmtTime(inAt, tz).slice(0, 10) : '');
+    const s0 = zonedMs(day, o.start, tz); const s1 = zonedMs(day, o.end, tz);
+    const sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
+    let mins = '';
+    if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
+    const n = (done.get(p.id) || new Set()).size;
+    let verdict = '확인 필요';
+    if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!o.survey || sv.has(p.id)) ? 'O' : 'X';
+    return [p.nickname, p.name, p.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', o.survey ? (sv.has(p.id) ? 'O' : 'X') : '해당 없음', verdict];
+  });
+  return { columns: [...COMPLETION_COLS], rows };
+}
+/** Reads completion options from export.csv query parameters (?date=&start=&end=&rate=&survey=1&stations=). */
+export function completionOpts(query) {
+  const g = (k) => (query && typeof query.get === 'function' ? query.get(k) : null);
+  const o = {};
+  if (/^\d{4}-\d{2}-\d{2}$/.test(g('date') || '')) o.date = g('date');
+  if (/^\d{1,2}:\d{2}$/.test(g('start') || '')) o.start = g('start');
+  if (/^\d{1,2}:\d{2}$/.test(g('end') || '')) o.end = g('end');
+  const rate = Number(g('rate')); if (g('rate') != null && g('rate') !== '' && rate >= 0 && rate <= 100) o.rate = rate;
+  const st = Number(g('stations')); if (Number.isInteger(st) && st > 0 && st <= 500) o.stations = st;
+  o.survey = g('survey') === '1' || g('survey') === 'true';
+  return o;
+}
 
 // ---------- rate limiter (memory, soft) ----------
 export class Limiter {
@@ -511,7 +567,7 @@ export class LiveCore {
       if (m === 'PUT' || m === 'PATCH' || m === 'POST') return this.setState(code, req.body, cred, req.ip);
     }
     if (m === 'POST' && a === 'react' && !b) return this.react(code, req.body, cred, req.ip);
-    if (m === 'GET' && a === 'export.csv' && !b) return this.exportCsv(code, req.query.get('kind') || 'attendance', cred);
+    if (m === 'GET' && a === 'export.csv' && !b) return this.exportCsv(code, req.query.get('kind') || 'attendance', cred, completionOpts(req.query));
     if (m === 'DELETE' && a == null) return this.purge(code, cred);
     if (a && COLS.includes(a)) {
       if (!b && m === 'GET') return this.list(code, a, req.query, cred);
@@ -759,11 +815,11 @@ export class LiveCore {
     for (const r of this.db.all(`SELECT * FROM docs WHERE code = ? ORDER BY created_at`, code)) data[r.col].push(this.out(r.col, r, true));
     return data;
   }
-  exportCsv(code, kind, cred) {
+  exportCsv(code, kind, cred, opts) {
     const t = this.training(code);
     this.requireAdmin(t, cred);
     if (!EXPORT_KINDS.includes(kind)) throw bad('bad_kind', 'kind: ' + EXPORT_KINDS.join('|'));
-    const tbl = exportTable(kind, t ? this.allDocs(code) : Object.fromEntries(COLS.map((c) => [c, []])), this.cfg.timeZone);
+    const tbl = exportTable(kind, t ? this.allDocs(code) : Object.fromEntries(COLS.map((c) => [c, []])), this.cfg.timeZone, opts);
     return { status: 200, contentType: 'text/csv; charset=utf-8', body: toCsv(tbl.columns, tbl.rows), filename: `${code}-${kind}.csv` };
   }
 

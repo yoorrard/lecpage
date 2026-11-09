@@ -262,7 +262,12 @@
       if (!ctx.adminKey()) return Promise.resolve(false);
       return request('GET', '/participants?since=9000000000000', { noToken: true }).then(function () { return true; }, function (e) { if (e.status === 401 || e.status === 403) return false; throw e; });
     };
-    a.exportCsv = function (kindName) { return request('GET', '/export.csv?kind=' + encodeURIComponent(kindName), { text: true }); };
+    a.exportCsv = function (kindName, opts) {
+      var q = '?kind=' + encodeURIComponent(kindName);
+      if (kindName === 'completion' && opts) ['date', 'start', 'end', 'rate', 'stations'].forEach(function (k) { if (opts[k] != null && opts[k] !== '') q += '&' + k + '=' + encodeURIComponent(opts[k]); });
+      if (kindName === 'completion' && opts && opts.survey) q += '&survey=1';
+      return request('GET', '/export.csv' + q, { text: true });
+    };
     a.purge = function () { return request('DELETE', '').then(function () { return true; }); };
     return a;
   });

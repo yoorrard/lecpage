@@ -1,5 +1,6 @@
 // AI 없이 교재만으로 연수 설계도(blueprint v1) 초안 만들기. docs/architecture.md §2를 따릅니다.
 // 결과는 validate()로 한 번 더 다듬어 쓰면 됩니다. 감지가 틀릴 수 있으니 사람이 고칠 자리를 비워 둡니다(지어내지 않음).
+import { randomCode } from '../validate.js';
 import { detect } from './detect.js';
 import { normLine, normText, truncate, textKey, sizeLabel, hostOf, extOf } from './util.js';
 import { getTool } from './tools-db.js';
@@ -269,7 +270,7 @@ export function materialToDraft(material, info = {}) {
 
   return {
     version: 1, meta, audience, archetype, design, instructors, sections,
-    live: { provider: 'none', features: [], anonymous: true },
+    live: { provider: 'none', features: [], anonymous: true, code: randomCode() },
     privacy: { collect: ['nickname'], retentionDays: 30, consent: true, processors: [] },
     deploy: { target: 'zip', base: '/' },
     sources: files.map((f) => ({ id: f.id, name: f.name, pages: f.pages || 0 })),

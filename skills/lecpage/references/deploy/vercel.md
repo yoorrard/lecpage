@@ -4,17 +4,25 @@
 
 ## 언제 고르나요
 - 이미 Vercel을 쓰는 개발자, 사이트만 올릴 때(실시간은 Supabase·Sheets·cf-relay).
-- 고르지 말 것: **강사료를 받는 연수**(Hobby 약관상 회색지대 → Cloudflare·GitHub Pages 권장), 클릭만 하는 선생님(끌어 놓기 없음), 실시간 서버를 Vercel 안에 두려는 경우(WebSocket은 공개 베타이고 Hobby 함수 최대 300초라 연결이 5분마다 끊김).
+- 고르지 말 것: **강사료를 받는 연수**(Hobby 약관상 회색지대 → Cloudflare·GitHub Pages 권장), 실시간 서버를 Vercel 안에 두려는 경우(WebSocket은 공개 베타이고 Hobby 함수 최대 300초라 연결이 5분마다 끊김).
+- 끌어 놓기도 됩니다(**Vercel Drop**, 아래). 다만 계속 쓰려면 가입해야 하고, 가입 뒤에도 Hobby의 비상업 조건은 같습니다.
 
 ## 비용과 한도 (2026-11 확인)
 - Hobby 0원: 전송 월 100GB, CDN 요청 월 100만, 함수 호출 100만, 프로젝트 200개.
 - 넘으면 대부분 **30일 동안 그 기능을 못 씀**. 상업 이용은 Pro 이상.
 - 상업 이용의 예: 사이트 제작·호스팅에 대가를 받음, 광고, 결제. (기부 요청은 해당 안 됨)
-- 출처: https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/functions/websockets
+- Vercel Drop(2026-06~): 계정 없이 정적 폴더를 올리면 **임시 주소**가 생기고, 저장(claim)하지 않으면 만료됩니다. 파일당 100MB, 한 번에 1GB.
+- 출처(2026-11-09 확인): https://vercel.com/docs/drop · https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/functions/websockets
 
 ## 준비물
 - Vercel 계정(GitHub 로그인 가능), Node.js(CLI 쓸 때).
 - 사이트 폴더 맨 위에 `vercel.json`, `.vercelignore` (`templates/deploy/vercel/`에서 복사, `{{…}}` 치환).
+- 빌드 결과 폴더(`dist/`)만 올립니다. 강사용 파일(`dist-강사용/`)은 넣지 않습니다. 공개 범위는 빌드할 때 링크(기본)·공개·암호 중에서 고릅니다.
+
+## 따라 하기 — Vercel Drop(빠른 미리 보기)
+1. https://vercel.com/drop 에 사이트 폴더를 끌어다 놓습니다.
+2. 임시 주소가 생깁니다. 화면의 남은 시간이 지나면 사라집니다.
+3. 계속 쓰려면 로그인해서 저장(claim)합니다.
 
 ## 따라 하기 — Git 연결(웹)
 1. 사이트를 GitHub 저장소에 올립니다(`github-pages.md`의 1~5단계).

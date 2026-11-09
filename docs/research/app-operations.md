@@ -1,5 +1,12 @@
 # lecpage 웹 서비스 운영 조사: 운영비를 0원 가까이로
 
+> **2026-11-09 재검증: hosting-2026-11 요약** (자세히: `docs/research/2026-11-review.md`, 실행 순서: `docs/operations.md`)
+> - 앱 호스팅은 Cloudflare **Pages가 아니라 Workers 정적 자산 + Workers Builds(Git 연결)**로 정했습니다. Cloudflare가 새 프로젝트는 Workers로 시작하라고 안내합니다. 저장소 맨 위 `wrangler.jsonc`.
+> - 도메인은 **lecpage.com**(Cloudflare Registrar, 연 $11.17). Registrar는 `.kr`을 팔지 않아, `.kr`이면 가비아에서 사고 네임서버를 Cloudflare로 옮깁니다. 이 문서의 도메인 예시도 `lecpage.com`으로 바꿨습니다(예전 예시는 `.kr`).
+> - **운영자 공용 실시간 중계는 하지 않습니다**(개인정보 처리자 책임, 공용 무료 한도가 공격 대상, 신고·삭제 의무, 사용자 비례 비용). 대신 강사 소유 백엔드를 쉽게 만듭니다(클릭만 하는 50명 이하 → Google Sheets 안내, Deploy to Cloudflare 버튼).
+> - 분석 도구는 넣지 않고 Workers 대시보드 요청 수만 봅니다. 오류 보고는 GitHub 이슈로 받습니다.
+> - Netlify Free는 하드 한도라 넘으면 모든 프로젝트가 멈추고 결제로 풀 수 없습니다. Firebase Spark 호스팅은 월 10GB입니다.
+
 - 조사일: 2026-11-09. 가격·한도는 자주 바뀌므로 출시 전에 [출처](#출처)의 원문을 다시 확인합니다.
 - 전제: 운영자는 개인 교사 한 명이고 AI·서버 비용을 낼 수 없습니다. 사용자는 비전문가 교사입니다. AI 비용은 사용자 쪽에서 냅니다(프롬프트 복사, BYOK, OpenRouter PKCE, Claude 아티팩트, Agent Skill).
 - 검증 방법: 공식 문서를 직접 조회했습니다. CORS는 `Origin: https://example.app` 헤더를 붙인 `curl`로 직접 측정했습니다(OPTIONS 사전 요청, 잘못된 토큰을 넣은 실제 요청). 단, 이 조사 환경의 보안 프록시가 `github.com`·`api.github.com` 요청을 가로챘습니다. 그래서 GitHub 항목은 공식 문서와, 프록시를 통과한 실제 응답의 헤더 일부로 판단했습니다(4.5절).
@@ -13,14 +20,14 @@
 | 구조 | **로컬 우선 정적 PWA + 아주 작은 Cloudflare Worker(선택)**. 가설을 대체로 채택하되 아래 네 가지를 보완합니다 | 운영자가 개인정보·데이터를 갖지 않으면 비용·법적 부담·보안 범위가 동시에 0에 가까워짐 |
 | 보완 1 | 기기를 옮겨 다니는 문제(학교 PC↔집 PC↔연수장 PC) → `.lecpage` 파일, **배포한 사이트에서 다시 열기**, 선택형 Google Drive/GitHub 저장 | 로컬 우선의 가장 큰 약점 |
 | 보완 2 | 생성 사이트 **미리보기를 다른 출처(origin)나 `sandbox` iframe으로 격리** | 앱과 같은 출처에서 미리보기를 돌리면 앱의 토큰·키가 노출될 수 있음 |
-| 보완 3 | 공용 실시간 릴레이는 **기본 꺼짐**. 켤 때도 종단간 암호화(E2E), 24시간 보존, 저장 최소화 | 운영자가 참가자 데이터를 보관하는 순간 개인정보 책임이 생김 |
+| 보완 3 | 공용 실시간 릴레이는 **운영하지 않음**(2026-11-09 결정). 강사 소유 백엔드를 쉽게 만듦 | 운영자가 참가자 데이터를 보관하는 순간 개인정보 책임이 생기고, 공용 무료 한도가 공격 대상이 됨 |
 | 보완 4 | **한도를 넘으면 과금이 아니라 정지되는** 무료 플랜만 사용(Workers Free, Netlify Free 등) | 결제수단 없는 운영 원칙 |
-| 앱 호스팅 | 기본: **Cloudflare**(Pages 또는 Workers 정적 자산) + 자체 도메인. 대체: **GitHub Pages 미러** | 정적 요청 무료·무제한 / GitHub는 비상업 무료 도구 허용, 소프트 한도 100GB |
+| 앱 호스팅 | 기본: **Cloudflare Workers 정적 자산(Workers Builds)** + 자체 도메인(lecpage.com). 대체: **GitHub Pages 미러** | 정적 요청 무료·무제한, Cloudflare가 새 프로젝트는 Workers 권장 / GitHub는 비상업 무료 도구 허용, 소프트 한도 100GB |
 | 로그인 | **계정 없음.** 필요할 때만 '연결'(Google Drive=GIS 토큰 모델, Netlify=OAuth implicit, GitHub=권한을 미리 채운 fine-grained PAT, OpenRouter=PKCE) | 순수 정적 사이트로 가능(GitHub OAuth만 Worker 필요) |
 | 생성 사이트 배포 | ① ZIP·폴더 저장(항상) ② 원클릭: **Netlify**(100% 브라우저), **GitHub Pages**(100% 브라우저, PAT) ③ 직접 올리기 안내: Cloudflare 드래그 앤 드롭, Netlify Drop, GitHub 웹 업로드 | Cloudflare API·Supabase Management API는 브라우저 CORS를 막음(실측) |
 | 저장 | IndexedDB(메타·설계도) + OPFS(이미지·원본) + `navigator.storage.persist()` + `.lecpage`(zip) 내보내기 | 모든 주요 브라우저 지원. File System Access는 Chromium만 |
 | 보안 | CSP와 Trusted Types, 설계도 JSON만 받기, 렌더러 이스케이프와 URL 허용 목록, 키는 기본 세션 보관, 파일 크기·압축비 제한, pdf.js ≥ 4.2.67 | AI 출력과 업로드 교재를 '신뢰하지 않는 입력'으로 취급 |
-| 운영비 | **도메인 비용(연 1~3만 원)만** 듭니다. 나머지는 0원(1만 MAU까지) | 아래 2.2절 |
+| 운영비 | **도메인 비용(`.com` 연 $11.17 ≈ 1.6만 원)만** 듭니다. 나머지는 0원(5만 MAU까지) | 아래 2.2절 |
 
 ---
 
@@ -82,7 +89,7 @@
 | 만 14세 미만 동의 | 제22조의2 | 앱은 교사 전용으로 명시 | 학생 가입 시 법정대리인 동의 |
 
 - **B의 도우미 Worker**: 토큰과 코드가 *통과*만 하고 저장되지 않도록 설계합니다. Workers Logs에 요청 본문이 남지 않게 하고, 로그에는 IP 같은 최소 정보만 남깁니다. 처리방침에 "통과 처리"를 명시합니다.
-- **공용 실시간 릴레이**: 참가자 별명·질문을 운영자 서버에 보관하면 운영자가 처리자나 수탁자가 될 수 있습니다. **완화책**은 페이로드를 방 키(URL `#` 조각)로 종단간 암호화해서 운영자가 내용을 못 읽게 하고, 24시간 뒤 자동 삭제하는 것입니다. 법적 판단은 전문가 확인이 필요하지만 위험은 크게 줄어듭니다.
+- **공용 실시간 릴레이**: 참가자 별명·질문을 운영자 서버에 보관하면 운영자가 처리자나 수탁자가 될 수 있습니다. 종단간 암호화와 24시간 삭제로 위험을 줄일 수는 있지만, 메타데이터(IP·시각) 처리와 공용 한도 남용·신고 대응은 남습니다. **2026-11-09에 운영하지 않기로 결정**했습니다(`docs/operations.md` §2).
 - **생성된 연수 사이트에서는 그 사이트를 운영하는 교사(또는 연수 기관)가 처리자입니다.** 앱은 기본값을 익명으로 두고, `privacy.html`, 보유기간, `purge()` 안내를 자동으로 만들어 교사를 돕습니다.
 
 ### 2.4 가설 검증: 로컬 우선이 불리한 지점과 보완책
@@ -108,16 +115,16 @@
 | 호스트 | 무료 한도 | 파일 제한 | 빌드 | 이용 조건 | 커스텀 헤더(CSP) | 한도 초과 시 |
 |---|---|---|---|---|---|---|
 | **Cloudflare Pages** | 정적 요청 무료·**무제한**, 프로젝트 100개 | 사이트당 **20,000개**, 파일당 **25MiB** | 월 500회, 동시 1 | 일반 약관 | `_headers`(규칙 100개, 헤더당 2,000자) | 빌드만 제한 |
-| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한(Cloudflare가 신규 프로젝트에 권장) | 버전당 20,000개(Free), 25MiB | 직접 업로드·CI | 일반 약관 | `_headers` 지원 | 정적은 무제한. Worker 코드는 10만/일 |
+| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한(Cloudflare가 신규 프로젝트에 권장) | 버전당 20,000개(Free), 25MiB | Workers Builds(Git 연결, 월 3,000분)·직접 업로드 | 일반 약관 | `_headers` 지원 | 정적은 무제한('Workers Caching'·`run_worker_first`는 제외). Worker 코드는 10만/일 |
 | **GitHub Pages** | **소프트** 100GB/월, 사이트 1GB, 빌드 10회/시간(Actions 배포는 예외) | 저장소 권장 1GB | Actions | **상업 SaaS·쇼핑몰 금지**, 비밀번호·카드 같은 민감 거래 금지 | **불가**(CSP는 `<meta>`로만) | 안내 메일, 429 |
 | Vercel Hobby | 전송 100GB, 요청 100만 | 업로드 100MB(CLI) | 배포 100회/일 | **비상업 개인용만**("제작 관련 누구든 금전적 이득"이 있으면 상업) | `vercel.json` | 정지 |
-| Netlify Free(크레딧제) | 월 300크레딧: 웹 요청 1만 건당 2크레딧, 전송 1GB당 20크레딧, **프로덕션 배포 1회당 15크레딧** | zip 25,000개 | 크레딧 소모 | 일반 | `_headers` | 프로젝트 정지(자동 충전을 끄면 과금 없음) |
-| Firebase Hosting(Spark) | 저장 10GB, **전송 10GB/월** | | CLI | 일반 | `firebase.json` | Spark는 정지 |
+| Netlify Free(크레딧제) | 월 300크레딧: 웹 요청 1만 건당 2크레딧, 전송 1GB당 20크레딧, **프로덕션 배포 1회당 15크레딧** | zip 25,000개 | 크레딧 소모 | 일반 | `_headers` | **하드 한도**: 모든 프로젝트 정지, 다음 주기까지. Free에는 충전·결제 선택이 없음 |
+| Firebase Hosting(Spark) | 저장 10GB, **전송 10GB/월** | | CLI | 일반 | `firebase.json` | 짧은 유예 뒤 다음 달 1일까지 비활성 |
 | AWS S3+CloudFront | 2025-07 이후 신규 계정은 '최대 $200 크레딧, 6개월 무료 플랜' | | | **카드 필수** | 가능 | 과금 |
 | Azure Static Web Apps Free | 대역폭 100GB/월, 앱 10개, 앱당 저장 250MB, 파일 15,000개, 도메인 2개 | | GitHub Actions | 일반 | `staticwebapp.config.json` | 초과 불가(Free) |
 
 **권고**
-- **기본: Cloudflare(Pages 또는 Workers 정적 자산) + 자체 도메인**(예: `lecpage.kr`). 이유는 무제한 정적 전송, `_headers`로 CSP·보안 헤더 적용, 같은 계정에서 도우미 Worker 운영, 무료 Web Analytics(쿠키 없음)입니다.
+- **기본: Cloudflare Workers 정적 자산 + Workers Builds(Git 연결) + 자체 도메인 `lecpage.com`**(2026-11-09 결정). 이유는 무제한 정적 전송, `_headers`로 CSP·보안 헤더 적용, 같은 계정에서 도우미 Worker 운영입니다. 설정 순서는 `docs/operations.md`. 분석 도구는 넣지 않습니다(Workers 대시보드 요청 수만).
 - **대체: GitHub Pages 미러**(`yoorrard.github.io/lecpage/`). 같은 CI에서 동시에 배포합니다. 앱은 해시 라우팅과 상대 경로로 만들어 `base`가 달라도 동작해야 합니다. CSP는 `<meta>`로만 넣습니다. lecpage는 무료·비상업·오픈소스 도구라 '상업 SaaS 금지' 조항에 걸리지 않습니다.
 - **Vercel과 Netlify를 앱 호스트로 쓰는 것은 피합니다.** Vercel은 비상업 조건, Netlify는 크레딧 소진 시 정지(30GB 전송이면 600크레딧이 필요해 월 300크레딧을 넘음)가 이유입니다.
 - 장애 시에는 DNS(CNAME)를 GitHub Pages로 돌리고, 도메인 없이도 미러 주소를 공지합니다.
@@ -196,8 +203,8 @@
 | `/proxy/supabase/*` | Management API 프록시(프로젝트 생성, SQL 실행). 경로 허용 목록 | 없음 | 나중 |
 | `GET /s/:id`, `POST /s` | 짧은 주소(KV, 하루 1,000건 쓰기) | 원본 URL(공개 정보) | 다음 |
 | `POST /share`, `GET /share/:id` | E2E 암호문 보관(KV, TTL 30일, 최대 1MB) | 암호문만 | 나중 |
-| `/relay/:room`(WebSocket) | 공용 실시간 릴레이(DO, Hibernation, E2E, 24h TTL) | 암호문, 짧게 | 나중·선택 |
-| `POST /e` | 오류 신호(PII 없음, 표본 추출) → Workers Logs(3일 보존) | 최소 | MVP |
+| ~~`/relay/:room`(WebSocket)~~ | ~~공용 실시간 릴레이~~ → **하지 않음**(2026-11-09 결정) | — | — |
+| ~~`POST /e`~~ | ~~오류 신호~~ → **하지 않음**. 오류는 GitHub 이슈로 받음(2026-11-09 결정) | — | — |
 
 공통 원칙: `Origin` 허용 목록(앱 도메인과 미러), Turnstile(무료, 짧은 주소·공유 생성에 적용), Rate Limiting 바인딩, 요청 본문을 로그에 남기지 않음. **AI 요청 프록시는 절대 하지 않습니다**(비용·책임 전가 방지).
 
@@ -281,7 +288,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 | OneDrive(나중) | MSAL.js(SPA·PKCE) | 교육청 MS 365 계정 사용 학교 | 앱 등록, 조직 정책 |
 
 ### 6.5 공유 링크(Excalidraw 패턴)
-- 브라우저에서 무작위 AES-GCM 키를 만들고 → 설계도를 압축·암호화해 → 암호문만 Worker KV에 올리고(TTL 30일) → `https://lecpage.kr/#/s/<id>,<key>` 형태로 공유합니다. "`#` 뒤는 서버로 전송되지 않으므로" 운영자는 내용을 읽을 수 없습니다(Excalidraw 공식 블로그).
+- 브라우저에서 무작위 AES-GCM 키를 만들고 → 설계도를 압축·암호화해 → 암호문만 Worker KV에 올리고(TTL 30일) → `https://lecpage.com/#/s/<id>,<key>` 형태로 공유합니다. "`#` 뒤는 서버로 전송되지 않으므로" 운영자는 내용을 읽을 수 없습니다(Excalidraw 공식 블로그).
 - 서버 없이 URL 안에 모두 넣는 방식(압축 후 base64url)은 수 KB 이하만 가능합니다(메신저·QR 길이 한계). 설계도 전체는 보통 이보다 크므로 KV 방식을 씁니다. KV 값은 최대 25MiB이고, 무료 쓰기는 하루 1,000건입니다.
 - 공유 대상은 **설계도와 작은 이미지까지**입니다. 슬라이드 묶음은 `.lecpage` 파일로 주고받습니다.
 
@@ -293,7 +300,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 **Cloudflare `_headers`(권장)**
 ```
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://accounts.google.com/gsi/style; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' https://api.lecpage.kr https://accounts.google.com/gsi/ https://www.googleapis.com https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.github.com https://api.netlify.com https://api.vercel.com; frame-src https://preview.lecpage.kr https://accounts.google.com/gsi/; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types lecpage dompurify; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://accounts.google.com/gsi/style; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' https://api.lecpage.com https://accounts.google.com/gsi/ https://www.googleapis.com https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.github.com https://api.netlify.com https://api.vercel.com; frame-src https://preview.lecpage.com https://accounts.google.com/gsi/; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types lecpage dompurify; upgrade-insecure-requests
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
@@ -305,7 +312,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 
 ### 7.2 생성 사이트 미리보기 격리(필수)
 - 생성 사이트는 AI가 쓴 텍스트, 외부 링크, jsDelivr 스크립트를 포함합니다. 앱과 **같은 출처**에서 돌리면 렌더러에 버그가 하나만 있어도 앱의 IndexedDB(토큰·키)가 노출됩니다.
-- 방법 1(권장): `preview.lecpage.kr`(별도 출처의 정적 페이지 + 서비스 워커 가상 파일 시스템)에 `postMessage`로 파일 묶음을 전달합니다.
+- 방법 1(권장): `preview.lecpage.com`(별도 출처의 정적 페이지 + 서비스 워커 가상 파일 시스템)에 `postMessage`로 파일 묶음을 전달합니다.
 - 방법 2(미러용): `<iframe sandbox="allow-scripts allow-popups">`(**`allow-same-origin` 금지**)에 `srcdoc`이나 blob URL로 넣습니다. 제약: `localStorage`를 쓸 수 없으므로 미리보기 모드에서는 live 어댑터를 메모리로 동작시킵니다.
 
 ### 7.3 AI 출력과 프롬프트 인젝션
@@ -395,7 +402,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 - GitHub OAuth 토큰 교환, 짧은 주소(KV), Cloudflare 배포 프록시, Google Drive(`drive.file`) 저장, 사이트 주소에서 다시 열기.
 
 **나중(선택)**
-- E2E 공유 링크, 공용 실시간 릴레이(DO, E2E, 24h), Supabase 자동 세팅 프록시, OneDrive, 템플릿 갤러리(GitHub PR 기반).
+- E2E 공유 링크, Supabase 자동 세팅 프록시, OneDrive, 템플릿 갤러리(GitHub PR 기반). (공용 실시간 릴레이는 2026-11-09에 하지 않기로 함)
 
 ### 9.2 앱 라우트 맵(정적 호스팅용 해시 라우트)
 | 경로 | 화면 | 비고 |
@@ -406,7 +413,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 | `#/p/:id/ai` | AI 연결: 프롬프트 복사, BYOK, OpenRouter, 아티팩트·스킬 안내, **설계도 JSON 붙여넣기·검증** | |
 | `#/p/:id/edit` | 설계도 편집: 섹션 목록, 폼, 오른쪽 미리보기 | |
 | `#/p/:id/design` | 디자인 프리셋, 효과 갤러리, 테마 | fx-catalog |
-| `#/p/:id/live` | 실시간 백엔드 선택과 설정 마법사(없음/로컬/Supabase/Sheets/Worker/공용 릴레이) | |
+| `#/p/:id/live` | 실시간 백엔드 선택과 설정 마법사(없음/로컬/Supabase/Sheets/Worker). 공용 릴레이 없음 | |
 | `#/p/:id/preview` | 전체 화면 미리보기(참가자, 강사 콘솔, 프로젝터, 폰 크기) | **별도 출처 iframe** |
 | `#/p/:id/publish` | 링크 검토 → 내보내기·배포(5.3절) → 배포 기록 | |
 | `#/p/:id/run` | 운영 도우미: QR·짧은 주소, 관리자 키 보관, 연수 전날 점검, 끝난 뒤 데이터 삭제(purge) | |
@@ -414,8 +421,8 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 | `#/s/:id,:key` | E2E 공유 링크 열기(나중) | 키는 `#` 안 |
 | `#/help` · `#/privacy` · `#/about` | 도움말, 개인정보 안내, 오픈소스 고지 | |
 | `/auth/callback.html` | OAuth 복귀용 **실제 파일**(Netlify implicit `#access_token`, GitHub code, OpenRouter code) → `postMessage` 후 닫기 | `redirect_uri`에는 # 조각을 쓸 수 없음 |
-| `preview.lecpage.kr/` | 미리보기 전용 출처(서비스 워커 가상 파일) | |
-| `api.lecpage.kr/*` | 도우미 Worker(4.6절) | |
+| `preview.lecpage.com/` | 미리보기 전용 출처(서비스 워커 가상 파일) | |
+| `api.lecpage.com/*` | 도우미 Worker(4.6절) | |
 
 ### 9.3 무엇을 어디에 저장하나
 | 데이터 | 위치 | 보존 | 내보내기 |
@@ -426,18 +433,18 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 | AI 키·배포 토큰 | 메모리(기본) / 암호화된 IndexedDB(선택) | 탭·사용자 선택 | **절대 안 함** |
 | 클라우드 사본 | 사용자 Drive(`drive.file`)·GitHub | 사용자 소유 | |
 | 배포된 사이트 | 사용자의 Netlify·GitHub·Cloudflare 계정 | 사용자 소유 | |
-| 실시간 데이터(질문, 진행 등) | 교사 본인 백엔드(기본) / 공용 릴레이(E2E, 24h) | 교사가 정한 보존기간 | CSV |
-| 운영자 서버 | **없음.** 짧은 주소·공유 암호문·오류 신호만(선택) | KV TTL, 로그 3일 | |
+| 실시간 데이터(질문, 진행 등) | 교사 본인 백엔드만 | 교사가 정한 보존기간 | CSV |
+| 운영자 서버 | **없음.** 짧은 주소·공유 암호문만(선택, 나중) | KV TTL | |
 
 ### 9.4 운영 체크리스트
 | 항목 | 할 일 | 비용 |
 |---|---|---|
-| 도메인 | `.kr` 또는 `.com` 1개(Google 브랜드 검증, 학교망 필터 대비, 이전 가능성). 레지스트라 2단계 인증 | 연 1~3만 원 |
+| 도메인 | **`lecpage.com`**(Cloudflare Registrar, 대안 `.kr`은 가비아+네임서버 이전). Google 브랜드 검증, 학교망 필터 대비. 2단계 인증, 자동 갱신, Email Routing | 연 $11.17 |
 | 계정 보안 | Cloudflare·GitHub·Google Cloud 모두 2단계 인증(보안 키나 패스키), 공동 관리자 1명 지정(버스 팩터) | 0 |
-| 호스팅 | Cloudflare(기본) + GitHub Pages(미러). CI에서 두 곳에 동시 배포. 미러로 전환하는 절차를 문서화 | 0 |
+| 호스팅 | Cloudflare Workers 정적 자산(Workers Builds, 기본) + GitHub Pages(미러, Actions). `main`에 합치면 두 곳에 동시 배포. 절차: `docs/operations.md` | 0 |
 | Worker | Free 플랜 유지(초과 시 정지). Rate Limiting, Turnstile, 출처 허용 목록. 비밀값은 `wrangler secret` | 0 |
-| 분석 | Cloudflare Web Analytics(쿠키 없음) | 0 |
-| 오류 보고 | `POST /e` → Workers Logs(3일) 또는 Sentry Developer(무료) | 0 |
+| 분석 | **없음**(2026-11-09 결정). Workers 대시보드 요청 수만 | 0 |
+| 오류 보고 | **GitHub 이슈**(자동 수집 없음) | 0 |
 | 상태 페이지 | Upptime(GitHub Actions 기반, 공개 저장소에서 무료) 또는 GitHub Discussions 공지 | 0 |
 | 백업 | 코드: GitHub와 다른 원격 미러(Codeberg 등). 운영자 데이터: 없음(KV 짧은 주소는 주 1회 JSON 내보내기). 사용자 데이터: 앱이 '파일로 저장'을 유도 | 0 |
 | 법·정책 | 개인정보 안내, 이용 안내(교재 저작권은 사용자 책임, 학생 개인정보 업로드 금지), 오픈소스 고지 | 0 |
@@ -447,7 +454,7 @@ myproject.lecpage            (zip, 확장자만 다름. MIME application/zip)
 
 ### 9.5 다시 검토할 신호
 - Cloudflare나 GitHub의 무료 정책 변경 → 미러를 기본으로 전환.
-- Worker가 하루 10만 요청에 근접 → 공용 릴레이를 끄고 교사 본인 백엔드로 유도하거나, $5 플랜 검토.
+- 도우미 Worker를 두게 되어 하루 10만 요청에 근접 → $5 플랜 검토(공용 릴레이는 두지 않음).
 - "기기 간 자동 동기화" 요청이 압도적 → Drive `drive.file` 자동 저장 강화(계정 시스템 없이).
 - 커뮤니티 템플릿 수요 → GitHub PR 기반 갤러리부터 시작.
 

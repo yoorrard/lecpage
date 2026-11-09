@@ -49,10 +49,21 @@ export function Seg({ options, value, onChange, label }) {
   );
 }
 
-export function Dialog({ open, onClose, children, label }) {
+export function Dialog({ open, onClose, children, label, wide }) {
   const ref = useRef();
   useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal?.(); if (!open && d.open) d.close(); }, [open]);
-  return <dialog ref={ref} class="dlg" aria-label={label} onClose={onClose} onCancel={onClose}><div class="dlg-in">{children}</div></dialog>;
+  return <dialog ref={ref} class={`dlg${wide ? ' dlg-wide' : ''}`} aria-label={label} onClose={onClose} onCancel={onClose}><div class="dlg-in">{children}<button class="icon-btn dlg-x" onClick={onClose} aria-label="닫기">✕</button></div></dialog>;
+}
+
+/** 탭(내용·디자인·참여 기능·더 자세히) */
+export function Tabs({ tabs, value, onChange, label }) {
+  return (
+    <div class="tabs" role="tablist" aria-label={label}>
+      {tabs.map((t) => <button type="button" role="tab" id={`tab-${t.value}`} aria-selected={String(value === t.value)} aria-controls={`panel-${t.value}`} tabIndex={value === t.value ? 0 : -1}
+        onClick={() => onChange(t.value)}
+        onKeyDown={(e) => { const i = tabs.findIndex((x) => x.value === value); const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); const n = tabs[(i + d + tabs.length) % tabs.length]; onChange(n.value); setTimeout(() => document.getElementById(`tab-${n.value}`)?.focus(), 0); } }}>{t.label}{t.badge ? <span class="tab-badge">{t.badge}</span> : null}</button>)}
+    </div>
+  );
 }
 
 export function Progress({ pct }) { return <div class="progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }

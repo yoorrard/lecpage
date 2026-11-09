@@ -56,6 +56,7 @@ export const blobs = {
     }
     return out;
   },
+  remove: (pid, path) => tx('blobs', 'readwrite', (s) => req(s.delete(pid + ':' + path))),
   removePrefix: async (pid, prefix) => {
     const keys = (await blobs.keys(pid)).filter((k) => k.startsWith(prefix));
     await tx('blobs', 'readwrite', (s) => Promise.all(keys.map((k) => req(s.delete(pid + ':' + k)))));

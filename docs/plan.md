@@ -14,7 +14,7 @@
 | 실시간 | Supabase 중심 | **어댑터 5종**(브라우저 미리보기·Supabase·Sheets·Cloudflare·자체 서버) + 공통 HTTP 프로토콜 | 인원·인프라·인터넷 없는 교실까지 대응 |
 | 참가자 로그인 | 익명 로그인 | **로그인 없음, 참여 토큰** | Supabase 익명 로그인은 IP당 시간당 30회라 한 학교(공인 IP 하나)에서 31번째부터 막힘 |
 | AI 연결 | BYOK + 계정 연결 | 복사·붙여넣기(기본) · BYOK(Gemini 무료 키) · OpenRouter PKCE · AI 없는 초안 · skill | Claude·Google 구독 OAuth 재사용은 약관 금지(정지 사례). 모델 이름은 사용자 키로 목록을 불러와 고름 |
-| 웹앱 운영 | 미정 | **로컬 우선 정적 PWA**, 로그인·운영자 DB 없음, GitHub Pages(지금) → Cloudflare Pages(권장) | 운영비 0원, 개인정보 책임 최소. diagrams.net·Excalidraw 방식 |
+| 웹앱 운영 | 미정 | **로컬 우선 정적 PWA**, 로그인·운영자 DB 없음, **Cloudflare Workers 정적 자산(Workers Builds) + lecpage.com**, GitHub Pages는 미러 | 운영비 0원(도메인 값만), 개인정보 책임 최소. diagrams.net·Excalidraw 방식. 순서: `docs/operations.md` |
 
 ## 3. 구성
 1. **엔진**(`skills/lecpage/engine/src`): 설계도 검증·자동 보정 → 결정 규칙(유형·디자인·운영) → 렌더러(섹션 28종, 페이지 5종) → 빌드(파일 묶음) · 교재 해석(PPTX·PDF·HWPX·DOCX) · AI 프롬프트 팩.
@@ -34,11 +34,14 @@
 입력: 인원·필요 기능·기간·숙련도·가진 인프라·네트워크·유료 여부·미성년자.
 - 기록이 필요 없음 → 정적(서버 없음)
 - 모으기만, 40명 이하 → Google Sheets
+- 클릭만 하는 강사, 50명 이하(질문·막혔어요·진행 포함) → Google Sheets
 - 실시간, 100명 이하 → Supabase 무료(강사 소유)
-- 100명 초과 → Cloudflare Workers + Durable Objects
+- 100명 초과 → Cloudflare Workers + Durable Objects(강사 계정, Deploy 버튼)
+- 운영자 공용 중계는 두지 않음(모두 강사 소유)
 - 가진 서버(AWS·학교·NAS) + 설정 가능 → 자체 Node 서버(Docker)
 - 인터넷 없음 → 강사 노트북 서버(LAN)
-호스팅: Cloudflare(기본 권장) · GitHub Pages · Netlify · Vercel(비상업만) · Firebase · AWS · 자체 서버 · ZIP/USB. 상세: `references/infra-decision.md`, `references/deploy/*.md`(18종).
+호스팅: Cloudflare(기본 권장) · GitHub Pages · Netlify · Vercel(비상업만) · Firebase · AWS · 자체 서버 · ZIP/USB. 상세: `references/infra-decision.md`, `references/deploy/*.md`(15종).
+생성 사이트 공개 범위: 링크(기본, 검색 제외) · 공개 · 암호(AES-GCM 암호화, QR `#k=`로 자동 열기). 강사용 파일(DESIGN.md·운영안내.md·설계도)은 올리는 사이트에 넣지 않음.
 
 ## 7. 개인정보·보안
 별명 + 참여 코드가 기본, 이름·소속은 출석 기능에서만(동의 화면·처리 안내 자동), 보관 30일 후 일괄 삭제, 14세 미만은 별명만. 관리자 키는 해시만 서버에. AI·사용자 입력은 JSON 데이터로만 다루고 렌더러가 모두 이스케이프, 링크는 https만. 웹앱은 키를 탭에만 기억(선택 시 WebCrypto 암호화), 미리보기는 샌드박스.
@@ -46,10 +49,10 @@
 ## 8. 로드맵
 - **v1.0(완료)**: 엔진·런타임·효과 52·프리셋 12·실시간 어댑터 5·백엔드 4·skill·웹앱·배포 안내 18·테스트
 - **v1.1**: 참가 확인서(PDF), 채팅 UI, 모둠 편성, 교재 도우미 AI(강사 키), 사전·사후 설문 비교
-- **v1.2**: Cloudflare 도우미 Worker(GitHub OAuth, Cloudflare·Supabase 원클릭 프로비저닝, 공용 실시간 중계 선택), Google Drive 저장
+- **v1.2**: Cloudflare 도우미 Worker(GitHub OAuth, Cloudflare·Supabase 원클릭 프로비저닝), Google Drive 저장
 - **v2**: 챗봇 연결(MCP 서버·MCP Apps, ChatGPT 플러그인·Claude 커넥터), Sign in with ChatGPT(승인 시), 설계도 공유·복제 갤러리
 
 ## 9. 남은 결정(운영자)
-1. 웹앱 주소: GitHub Pages 그대로 vs Cloudflare Pages + 자기 도메인(권장)
+1. ~~웹앱 주소~~ → 2026-11-09 결정: Cloudflare Workers 정적 자산 + lecpage.com, GitHub Pages 미러(`docs/operations.md`)
 2. Sign in with ChatGPT 대기 신청 여부
-3. 공용 실시간 중계 운영 여부(강사 설정 부담 ↓ vs 운영자 관리 ↑)
+3. ~~공용 실시간 중계 운영 여부~~ → 2026-11-09 결정: 운영하지 않음. 강사 소유 백엔드를 쉽게(`docs/research/2026-11-review.md`)

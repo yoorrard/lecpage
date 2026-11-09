@@ -163,7 +163,7 @@
 ## 6. 시험 결과(Playwright Chromium, 2026-11-09)
 - demo.html: 1280·390 폭 × 라이트·다크 × 동작 줄이기 켬/끔(6 조합): **콘솔 오류 0, 가로 넘침 0, 남은 숨김 0, 효과 실패 0**.
 - 실패 시나리오: jsDelivr 차단 시 라이브러리 효과 3종이 조용히 물러남(OGL 구는 점무늬 CSS 구 유지), init 예외 시 요소가 보이고 `data-fx-error`, JS 꺼짐 시 모든 글 보임, 멈춤 버튼 저장·새로고침 유지·CSS 반복 정지.
-- 한국어 줄바꿈 회귀 시험: "디지털로 마음과 관계를 키우는 인천형 사회정서학습"을 1280/820/390 폭에서 나눔 효과 6종(split-reveal chars·lines, scramble, typewriter, kinetic-weight pointer, scroll-fill)이 원문 keep-all과 같은 자리에서 줄바꿈. 수정 전 코드에선 "키우 / 는"으로 깨지는 것을 같은 시험이 잡음.
+- 한국어 줄바꿈 회귀 시험: "학교 숲 한 시간에서 시작하는 생태전환교육 수업 이야기"을 1280/820/390 폭에서 나눔 효과 6종(split-reveal chars·lines, scramble, typewriter, kinetic-weight pointer, scroll-fill)이 원문 keep-all과 같은 자리에서 줄바꿈. 수정 전 코드에선 "키우 / 는"으로 깨지는 것을 같은 시험이 잡음.
 - 성능: 기본(소프트웨어 합성) 렌더러에서 그래픽 효과 모두 60fps. SwiftShader GL 에뮬레이션에서는 캔버스 2D가 느려 스크린숏이 지연되지만 실제 GPU와 무관한 시험 환경 문제였음.
 - 스크린숏: `/tmp/claude-0/-home-user/6c566d4e-a9d8-5130-a565-63612608ad41/scratchpad/fx-shots/`
 

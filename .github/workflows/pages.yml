@@ -1,26 +1,29 @@
+# GitHub Pages 미러(예비 주소). 기본 주소는 Cloudflare Workers(wrangler.jsonc, docs/operations.md)
 name: Deploy app to GitHub Pages
 on:
   push: { branches: [main] }
   workflow_dispatch:
-permissions: { contents: read, pages: write, id-token: write }
+permissions: { contents: read }
 concurrency: { group: pages, cancel-in-progress: true }
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
       - run: npm --prefix app ci
       - run: npm --prefix app run build
-      - run: cp app/dist/index.html app/dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with: { path: app/dist }
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # 배포 권한은 배포 단계에만
+    permissions: { pages: write, id-token: write }
     environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
     steps:
       - id: d
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
