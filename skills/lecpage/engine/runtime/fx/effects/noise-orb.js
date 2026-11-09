@@ -6,6 +6,9 @@ LecFX.define('noise-orb', {
     var ly = ctx.layer(el);
     ly.innerHTML = '<div class="fx-orb"><i class="fx-orb-glow"></i><i class="fx-orb-swirl"></i><i class="fx-orb-core"></i><i class="fx-orb-shine"></i></div>';
     var orb = ly.firstChild;
+    var hi = function () { ly.style.setProperty('--fx-hi', ctx.light()); };
+    hi();
+    ctx.onTheme(hi);
     if (o.align) ly.setAttribute('data-align', o.align);
     if (o.size) ly.style.setProperty('--fx-orb-s', o.size);
     if (ctx.reduced || ctx.lowPower) ly.classList.add('fx-still');

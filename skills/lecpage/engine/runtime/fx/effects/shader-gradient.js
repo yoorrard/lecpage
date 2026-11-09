@@ -13,11 +13,11 @@ LecFX.define('shader-gradient', {
     var FS = 'precision mediump float;uniform vec2 r;uniform float t;uniform vec3 c0,c1,c2,c3,bg;uniform float veil;' +
       'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}' +
       'float n(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),u.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),u.x),u.y);}' +
-      'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*n(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}' +
-      'void main(){vec2 uv=gl_FragCoord.xy/r;vec2 p=uv*vec2(r.x/r.y,1.)*1.5;float T=t*.05;' +
+      'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<3;i++){v+=a*n(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}' +
+      'void main(){vec2 uv=gl_FragCoord.xy/r;vec2 p=uv*vec2(r.x/r.y,1.)*.95;float T=t*.05;' +
       'vec2 q=vec2(fbm(p+vec2(T,-T*.6)),fbm(p+vec2(5.2,1.3)-T));float f=fbm(p+2.4*q+vec2(T*.7,-T*.4));' +
-      'vec3 col=mix(c0,c1,smoothstep(.2,.8,f));col=mix(col,c2,smoothstep(.45,.95,q.x)*.85);col=mix(col,c3,smoothstep(.5,1.,q.y)*.6);' +
-      'col=mix(col,bg,veil*(1.-uv.y*.35));col+=(h(gl_FragCoord.xy+fract(t))-.5)*.03;gl_FragColor=vec4(col,1.);}';
+      'vec3 col=mix(c0,c1,smoothstep(.32,.62,f));col=mix(col,c2,smoothstep(.47,.66,q.x)*.92);col=mix(col,c3,smoothstep(.5,.7,q.y)*.8);' +
+      'col=mix(col,bg,clamp(veil+(.55-uv.x)*.7,0.,.9));col+=(h(gl_FragCoord.xy+fract(t))-.5)*.03;gl_FragColor=vec4(col,1.);}';
     var sh = function (type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null; };
     var vs = sh(gl.VERTEX_SHADER, VS), fs = sh(gl.FRAGMENT_SHADER, FS), pr = gl.createProgram();
     if (!vs || !fs) { cv.el.remove(); css(); return; }
@@ -32,10 +32,12 @@ LecFX.define('shader-gradient', {
     var U = {}; ['r', 't', 'c0', 'c1', 'c2', 'c3', 'bg', 'veil'].forEach(function (k) { U[k] = gl.getUniformLocation(pr, k); });
     var col = function (name) { var c = ctx.rgb(name, el); return [c[0] / 255, c[1] / 255, c[2] / 255]; };
     var colors = function () {
-      var bg = col('background'), p = col('primary');
-      gl.uniform3fv(U.c0, bg.map(function (v, i) { return v * 0.55 + p[i] * 0.45; }));
-      gl.uniform3fv(U.c1, p); gl.uniform3fv(U.c2, col('accent')); gl.uniform3fv(U.c3, col('accent-2')); gl.uniform3fv(U.bg, bg);
-      gl.uniform1f(U.veil, o.veil == null ? 0.28 : +o.veil);
+      /* 바탕 쪽으로 섞어 글 대비를 지킨다(strength 0~1, 기본 0.45) */
+      var bg = col('background'), k = o.strength == null ? 0.7 : +o.strength;
+      var m = function (c, t) { return bg.map(function (v, i) { return v + (c[i] - v) * t; }); };
+      gl.uniform3fv(U.c0, m(col('primary'), k * 0.35));
+      gl.uniform3fv(U.c1, m(col('primary'), k)); gl.uniform3fv(U.c2, m(col('accent'), k)); gl.uniform3fv(U.c3, m(col('accent-2'), k * 0.9)); gl.uniform3fv(U.bg, bg);
+      gl.uniform1f(U.veil, o.veil == null ? 0.12 : +o.veil);
     };
     colors();
     var lost = false;

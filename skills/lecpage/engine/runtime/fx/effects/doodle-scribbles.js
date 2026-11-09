@@ -61,7 +61,7 @@
       if (o.mode === 'decor' || (!o.mode && /^(SECTION|HEADER|FOOTER|DIV|MAIN|ASIDE)$/.test(el.tagName) && el.children.length > 1)) {
         var ly = ctx.layer(el, 'fx-doodle-decor'), keys = o.shapes || ['star', 'spiral', 'squiggle', 'arrow', 'heart', 'circle', 'plus', 'sparkle'], n = o.count || 6, spots = [];
         for (var i = 0; i < n; i++) {
-          var edge = i % 4, x = edge === 0 ? rnd() * 0.18 : edge === 1 ? 0.82 + rnd() * 0.14 : 0.08 + rnd() * 0.84, y = edge < 2 ? 0.08 + rnd() * 0.8 : edge === 2 ? rnd() * 0.12 : 0.84 + rnd() * 0.1;
+          var sp = U.spot(rnd, i), x = sp[0] / 100, y = sp[1] / 100;
           var s = document.createElementNS(NS, 'svg'), p = document.createElementNS(NS, 'path'), k = keys[(i + (o.seed || 0)) % keys.length];
           s.setAttribute('viewBox', '0 0 100 100');
           s.setAttribute('class', 'fx-doodle');
@@ -78,11 +78,18 @@
       svg.style.color = 'var(--' + col + ')';
       el.classList.add('fx-annot-host');
       el.appendChild(svg);
+      svg.setAttribute('width', '0'); svg.setAttribute('height', '0');
       var render = function () {
         var seedRnd = U.rand(o.seed || U.hash(el.textContent || 'x'));
-        var host = el.getBoundingClientRect(), rg = document.createRange();
-        rg.selectNodeContents(el);
-        var rects = Array.prototype.filter.call(rg.getClientRects(), function (r) { return r.width > 2 && r.height > 2; });
+        svg.style.display = 'none';
+        var host = el.getBoundingClientRect(), rects = [], tw = document.createTreeWalker(el, 4), tn;
+        while ((tn = tw.nextNode())) {
+          if (!tn.nodeValue.trim() || (tn.parentNode.closest && tn.parentNode.closest('.fx-sr'))) continue;
+          var rg = document.createRange();
+          rg.selectNodeContents(tn);
+          Array.prototype.forEach.call(rg.getClientRects(), function (r) { if (r.width > 2 && r.height > 2) rects.push(r); });
+        }
+        svg.style.display = '';
         if (!rects.length) return;
         var L = Infinity, T = Infinity, Rr = -Infinity, B = -Infinity, d = '';
         var lines = [];

@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as E from '../src/index.js';
+import { pruneFxCss } from '../src/build.js';
+const await_import_prune = (css, ids) => pruneFxCss(css, ids);
 import { nodeRuntime } from '../node.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -102,4 +104,19 @@ test('ZIP 쓰기: 서명과 파일 수', () => {
   const dv = new DataView(z.buffer);
   assert.equal(dv.getUint32(0, true), 0x04034b50);
   assert.equal(dv.getUint16(z.length - 22 + 10, true), 2);
+});
+
+test('효과 CSS는 쓰는 효과 묶음만 남긴다', () => {
+  const css = '/* 공통 */.a{}\n/*@fx:marquee*/.m{}\n/*@fx:aurora blobs-morph*/.b{}\n/*@fx:**/.c{}\n';
+  const out = E.build ? (await_import_prune(css, ['blobs-morph'])) : '';
+  assert.ok(out.includes('.a{}') && out.includes('.b{}') && out.includes('.c{}') && !out.includes('.m{}'));
+});
+
+test('색 조합 34가지 × 라이트·다크 대비', () => {
+  for (const s of E.PALETTE_SEEDS) for (const t of ['light', 'dark']) {
+    const k = E.themeTokens(E.presetWithOverrides({ preset: 'paper-workbook', palette: s.id }), t);
+    assert.ok(E.contrast(k['--foreground'], k['--background']) >= 4.5, s.id + t);
+    assert.ok(E.contrast(k['--muted-foreground'], k['--background']) >= 4.5, s.id + t + ' muted');
+    assert.ok(E.contrast(k['--primary-foreground'], k['--primary']) >= 4.5, s.id + t + ' primary');
+  }
 });

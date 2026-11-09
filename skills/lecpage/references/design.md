@@ -87,7 +87,75 @@
 | `gsap-scroll` | 고정 섹션 스크럽 (GSAP ScrollTrigger scrub) | 3 | 섹션 등장, 핵심 문장, 일정 | GSAP ScrollTrigger로 섹션을 잠깐 고정하고 안쪽 요소가 스크롤에 맞춰 차례로 떠오릅니다(scrub). 넓은 화면만 고정. · 외부 라이브러리 |
 | `three-hero` | 점 구름 구체(WebGL) (Point-cloud sphere (OGL)) | 3 | 첫 화면 그래픽 | OGL(작은 WebGL 라이브러리)로 만든 2,400개 점의 구체가 천천히 돌고 표면이 숨 쉬며 포인터 쪽으로 기웁니다. · 외부 라이브러리 |
 
-## 5. 글꼴
+## 5. 색 조합 34가지(`design.palette`)
+프리셋의 모양·효과는 그대로 두고 색만 바꾼다. 모두 라이트·다크에서 글자 대비 4.5:1 이상.
+| id | 이름 | 분위기 | 주제 |
+|---|---|---|---|
+| `night-story` | 밤 이야기 | emotional, calm, warm | sel, counseling, reading, parent |
+| `dawn-letter` | 새벽 편지 | emotional, calm, warm | sel, counseling, reading, korean |
+| `classroom-chalk` | 칠판 교실 | handmade, retro, warm | math, korean, history, general |
+| `pencil-notebook` | 연필과 공책 | handmade, calm, minimal | korean, reading, math, parent |
+| `forest-walk` | 숲길 | natural, calm, warm | environment, science, pe, career |
+| `ocean-calm` | 잔잔한 바다 | calm, natural, minimal | counseling, environment, science, general |
+| `spring-campus` | 봄 교정 | playful, warm, natural | general, parent, english, career |
+| `maker-orange` | 메이커 공방 | energetic, bold, tech | maker, coding, science, career |
+| `code-terminal` | 코드 터미널 | tech, retro, minimal | coding, ai, maker, edutech |
+| `ai-lab` | AI 실험실 | futuristic, tech, bold | ai, edutech, coding, science |
+| `future-glass` | 미래 유리 | futuristic, minimal, calm | ai, edutech, policy, general |
+| `data-blue` | 데이터 블루 | formal, minimal, tech | policy, admin, edutech, general |
+| `office-navy` | 교육청 남색 | formal, calm, minimal | policy, admin, safety, general |
+| `hanji-ink` | 한지와 먹 | editorial, calm, minimal | korean, history, reading, art |
+| `dancheong` | 단청 | bold, retro, warm | history, korean, art, music |
+| `ink-wash` | 수묵 | minimal, editorial, calm | korean, history, art, reading |
+| `math-grid` | 수학 모눈 | minimal, playful, tech | math, science, coding, edutech |
+| `playground` | 놀이터 | playful, energetic, bold | math, pe, english, parent |
+| `crayon` | 크레파스 | playful, handmade, warm | art, parent, korean, math |
+| `science-lab` | 과학실 | tech, energetic, natural | science, environment, maker, ai |
+| `eco-leaf` | 생태 잎 | natural, warm, calm | environment, science, safety, parent |
+| `sunset-retro` | 노을 레트로 | retro, bold, emotional, futuristic | music, art, sel, coding |
+| `riso-press` | 리소 인쇄 | retro, editorial, playful, bold | art, reading, music, korean |
+| `music-room` | 음악실 | emotional, warm, editorial | music, art, sel, parent |
+| `sport-court` | 체육관 | energetic, bold, playful | pe, safety, career, general |
+| `global-cafe` | 세계 카페 | warm, playful, editorial | english, career, parent, general |
+| `career-compass` | 진로 나침반 | formal, warm, calm | career, policy, general, parent |
+| `safety-first` | 안전 우선 | bold, formal, energetic | safety, policy, admin, pe |
+| `parent-warm` | 학부모 소통 | warm, calm, emotional | parent, counseling, sel, general |
+| `mono-blue` | 미니멀 흑백 | minimal, formal, editorial | policy, admin, general, coding |
+| `museum-stone` | 박물관 | editorial, formal, calm | history, art, korean, reading |
+| `library-lamp` | 도서관 등불 | calm, editorial, warm | reading, korean, history, general |
+| `counsel-sage` | 상담실 세이지 | calm, natural, warm | counseling, sel, parent, general |
+| `edutech-mint` | 에듀테크 민트 | tech, playful, minimal | edutech, coding, ai, math |
+
+## 6. 글꼴 짝 25가지(`design.fontPair`)
+| id | 이름 | 제목 | 본문 | 분위기 |
+|---|---|---|---|---|
+| `pretendard-solo` | 프리텐다드 단일 | Pretendard Variable | Pretendard Variable | minimal, formal, tech, calm |
+| `suit-sharp` | SUIT 또렷함 | SUIT Variable | Pretendard Variable | minimal, tech, bold, futuristic |
+| `wanted-product` | 원티드 산스 | Wanted Sans Variable | Wanted Sans Variable | tech, minimal, futuristic, formal |
+| `serif-editorial` | 잡지 명조 | Noto Serif KR | Pretendard Variable | editorial, formal, emotional |
+| `gowun-letter` | 고운 편지 | Gowun Batang | Gowun Dodum | warm, emotional, calm, handmade |
+| `hahmlet-modern` | 함렛 모던 세리프 | Hahmlet | IBM Plex Sans KR | editorial, formal, bold |
+| `plex-briefing` | IBM Plex 브리핑 | IBM Plex Sans KR | IBM Plex Sans KR | formal, tech, minimal |
+| `blackhan-poster` | 검은고딕 포스터 | Black Han Sans | Pretendard Variable | bold, energetic, retro |
+| `dohyeon-class` | 도현 교실 | Do Hyeon | Gowun Dodum | playful, warm, bold |
+| `jua-round` | 주아 동글 | Jua | Pretendard Variable | playful, warm |
+| `gaegu-notebook` | 개구 공책 | Gaegu | Gowun Dodum | handmade, playful, warm |
+| `pen-diary` | 나눔손글씨 일기 | Nanum Pen Script | Gowun Dodum | handmade, emotional, warm |
+| `gasoek-impact` | 가석 임팩트 | Gasoek One | Pretendard Variable | bold, editorial, energetic |
+| `orbit-future` | 오르빗 미래 | Orbit | Pretendard Variable | futuristic, tech, minimal |
+| `songmyung-classic` | 송명 고전 | Song Myung | Nanum Myeongjo | retro, editorial, formal |
+| `dongle-cute` | 동글 귀염 | Dongle | Pretendard Variable | playful, warm |
+| `myeongjo-reading` | 나눔명조 읽기 | Nanum Myeongjo | Nanum Myeongjo | editorial, calm, formal |
+| `maruburi-calm` | 마루 부리 차분 | MaruBuri | Pretendard Variable | calm, editorial, emotional |
+| `nanumsquare-office` | 나눔스퀘어 네오 공문 | NanumSquareNeo | NanumSquareNeo | formal, minimal |
+| `galmuri-pixel` | 갈무리 픽셀 | Galmuri11 | Pretendard Variable | retro, playful, tech |
+| `gothic-a1-swiss` | 고딕 A1 스위스 | Gothic A1 | Gothic A1 | minimal, editorial, bold |
+| `diphylleia-elegant` | 디필레이아 우아 | Diphylleia | Gowun Batang | editorial, emotional, calm |
+| `bagel-pop` | 베이글 팝 | Bagel Fat One | Pretendard Variable | playful, bold, energetic |
+| `yeonsung-friendly` | 연성 다정 | Yeon Sung | Gowun Dodum | handmade, warm, playful |
+| `noto-neutral` | 노토 산스 중립 | Noto Sans KR | Noto Sans KR | minimal, formal |
+
+## 7. 글꼴
 | 키 | 글꼴 | 종류 | 라이선스 |
 |---|---|---|---|
 | `pretendard` | Pretendard | sans | OFL-1.1 |

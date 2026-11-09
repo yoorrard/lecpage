@@ -15,7 +15,7 @@ LecFX.define('chalkboard', {
       check: line(18, 52, 40, 76) + line(40, 76, 84, 22)
     };
     var keys = o.marks || ['jeong', 'arrow', 'star', 'plus', 'eq', 'loop', 'check'];
-    var spots = [[0.06, 0.12], [0.84, 0.1], [0.9, 0.66], [0.04, 0.72], [0.62, 0.84], [0.28, 0.86], [0.74, 0.36]];
+    var spots = [[0.86, 0.16], [0.93, 0.66], [0.64, 0.86], [0.05, 0.9], [0.72, 0.4], [0.52, 0.1], [0.36, 0.92]];
     var html = '<svg class="fx-chalk-defs" width="0" height="0" aria-hidden="true"><filter id="' + id + '" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.75" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in" result="e"/><feDisplacementMap in="e" in2="n" scale="2" xChannelSelector="R" yChannelSelector="G"/></filter></svg><div class="fx-chalk-dust"></div>';
     keys.slice(0, o.count || 6).forEach(function (k, i) {
       var p = spots[i % spots.length];

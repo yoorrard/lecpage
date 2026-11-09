@@ -4,6 +4,9 @@ LecFX.define('tilt', {
   init: function (el, o, ctx) {
     if (ctx.reduced || !ctx.fine) return;
     var cards = ctx.util.items(el, o), max = o.max || 6, glares = [];
+    var hi = function () { el.style.setProperty('--fx-hi', ctx.light()); };
+    hi();
+    ctx.onTheme(hi);
     cards.forEach(function (c) {
       c.classList.add('fx-tilt');
       if (o.glare !== false) { var g = document.createElement('span'); g.className = 'fx-tilt-glare'; g.setAttribute('aria-hidden', 'true'); c.appendChild(g); glares.push(g); }

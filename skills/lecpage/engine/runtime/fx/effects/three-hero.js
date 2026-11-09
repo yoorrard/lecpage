@@ -22,7 +22,7 @@ LecFX.define('three-hero', {
       gl.canvas.className = 'fx-canvas';
       gl.canvas.setAttribute('aria-hidden', 'true');
       var camera = new M.Camera(gl, { fov: 35 });
-      camera.position.z = 6.2;
+      camera.position.z = 5.4;
       var scene = new M.Transform();
       var N = o.count || 2400, pos = new Float32Array(N * 3), rnd = new Float32Array(N);
       for (var i = 0; i < N; i++) {
@@ -35,8 +35,8 @@ LecFX.define('three-hero', {
           'void main(){vec3 p=position;float w=sin(p.y*4.+uTime*.9+random*2.)*cos(p.x*3.+uTime*.6);p*=1.+.11*w+.03*sin(uTime*1.7+random*6.28);' +
           'vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=uSize*(.55+random*.9)/-mv.z;vR=random;vY=p.y;}',
         fragment: 'precision mediump float;uniform vec3 uC1;uniform vec3 uC2;varying float vR;varying float vY;' +
-          'void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,.08,d);gl_FragColor=vec4(mix(uC1,uC2,clamp(vY*.5+.5+vR*.2-.1,0.,1.)),a*(.45+vR*.5));}',
-        uniforms: { uTime: { value: 0 }, uSize: { value: 18 * dpr }, uC1: { value: col('primary') }, uC2: { value: col('accent') } },
+          'void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,.08,d);gl_FragColor=vec4(mix(uC1,uC2,clamp(vY*.5+.5+vR*.2-.1,0.,1.)),a*(.6+vR*.4));}',
+        uniforms: { uTime: { value: 0 }, uSize: { value: 30 * dpr }, uC1: { value: col('primary') }, uC2: { value: col('accent') } },
         transparent: true, depthTest: false
       });
       var geo = new M.Geometry(gl, { position: { size: 3, data: pos }, random: { size: 1, data: rnd } });

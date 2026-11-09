@@ -14,8 +14,7 @@ LecFX.define('confetti-shapes', {
       '<rect x="20" y="20" width="60" height="60" rx="6" fill="currentColor"/>'
     ];
     for (var i = 0; i < n; i++) {
-      var side = i % 4, x, y;
-      if (side === 0) { x = rnd() * 16; y = 6 + rnd() * 86; } else if (side === 1) { x = 84 + rnd() * 12; y = 6 + rnd() * 86; } else if (side === 2) { x = 16 + rnd() * 68; y = rnd() * 12; } else { x = 16 + rnd() * 68; y = 86 + rnd() * 10; }
+      var sp = U.spot(rnd, i), x = sp[0], y = sp[1];
       html += '<svg viewBox="0 0 100 100" class="fx-memphis" style="left:' + x.toFixed(1) + '%;top:' + y.toFixed(1) + '%;--sz:' + (18 + rnd() * 34).toFixed(0) + 'px;--r:' + (rnd() * 360).toFixed(0) + 'deg;--z:' + (0.4 + rnd()).toFixed(2) + ';color:var(--' + cs[(i * 7 + 3) % 4] + ')">' + S[i % S.length] + '</svg>';
     }
     ly.innerHTML = html;

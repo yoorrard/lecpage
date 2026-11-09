@@ -10,7 +10,7 @@ LecFX.define('blobs-morph', {
       '<linearGradient id="' + id + 'c" x1="0" y1="1" x2="1" y2="0"><stop offset="0" style="stop-color:var(--accent-3)"/><stop offset="1" style="stop-color:var(--accent)"/></linearGradient>' +
       '</defs></svg>';
     var svg = ly.firstChild, rnd = ctx.util.rand(o.seed || 9);
-    var B = [[128, 24, 30, 'a', 0.5], [26, 84, 24, 'b', 0.42], [96, 82, 9, 'c', 0.6]].map(function (b) {
+    var B = [[128, 24, 30, 'a', 0.62], [26, 84, 24, 'b', 0.55], [96, 82, 9, 'c', 0.75]].map(function (b) {
       var p = document.createElementNS(NS, 'path');
       p.setAttribute('fill', 'url(#' + id + b[3] + ')');
       p.setAttribute('fill-opacity', b[4]);

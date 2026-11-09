@@ -52,6 +52,9 @@ LecFX.define('guided-progress', {
         chip.textContent = (idx + 1) + ' / ' + links.length + '  ' + links[idx].name;
       };
     });
+    var idle = 0;
+    if (chip) ctx.on(window, 'scroll', function () { chip.classList.add('is-show'); clearTimeout(idle); idle = setTimeout(function () { chip.classList.remove('is-show'); }, 1600); }, { passive: true });
+    ctx.cleanup(function () { clearTimeout(idle); });
     return function () { bar.remove(); if (nav) nav.remove(); if (chip) chip.remove(); el.classList.remove('fx-gp'); };
   }
 });

@@ -5,7 +5,7 @@ LecFX.define('perspective-grid', {
   init: function (el, o, ctx) {
     if (o.surface !== 'keep') ctx.surface(el, 'dark');
     var ly = ctx.layer(el);
-    ly.innerHTML = '<div class="fx-pg-sky"></div>' + (o.sun ? '<div class="fx-pg-sun"></div>' : '') + '<div class="fx-pg-floor"><div class="fx-pg-plane"></div></div>';
+    ly.innerHTML = '<div class="fx-pg-sky">' + (o.sun ? '<div class="fx-pg-sun"></div>' : '') + '</div><div class="fx-pg-floor"><div class="fx-pg-plane"></div></div>';
     if (o.horizon) ly.style.setProperty('--fx-pg-h', o.horizon);
     if (ctx.reduced || ctx.lowPower) ly.classList.add('fx-still');
     ctx.visible(ly, function (on) { ly.classList.toggle('fx-off', !on); }, { once: false, rootMargin: '100px' });

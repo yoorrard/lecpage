@@ -34,7 +34,18 @@ ${E.PRESETS.map((p) => `| \`${p.id}\` | ${p.name_ko} | ${p.desc_ko} | ${p.moods.
 |---|---|---|---|---|
 ${E.FX.map((f) => `| \`${f.id}\` | ${f.name_ko} (${f.name_en}) | ${f.level} | ${(f.slots || []).map((s) => SLOT[s] || s).join(', ')} | ${(f.desc_ko || '').replace(/\|/g, '/')}${f.libs?.length ? ' · 외부 라이브러리' : ''} |`).join('\n')}
 
-## 5. 글꼴
+## 5. 색 조합 ${E.PALETTE_SEEDS.length}가지(\`design.palette\`)
+프리셋의 모양·효과는 그대로 두고 색만 바꾼다. 모두 라이트·다크에서 글자 대비 4.5:1 이상.
+| id | 이름 | 분위기 | 주제 |
+|---|---|---|---|
+${E.PALETTE_SEEDS.map((s) => `| \`${s.id}\` | ${s.name_ko} | ${(s.moods || []).join(', ')} | ${(s.topics || []).join(', ')} |`).join('\n')}
+
+## 6. 글꼴 짝 ${E.FONT_PAIRS.length}가지(\`design.fontPair\`)
+| id | 이름 | 제목 | 본문 | 분위기 |
+|---|---|---|---|---|
+${E.FONT_PAIRS.map((f) => `| \`${f.id}\` | ${f.name_ko} | ${f.display.family} | ${f.body.family} | ${(f.moods || []).join(', ')} |`).join('\n')}
+
+## 7. 글꼴
 | 키 | 글꼴 | 종류 | 라이선스 |
 |---|---|---|---|
 ${Object.entries(E.FONTS).map(([k, f]) => `| \`${k}\` | ${f.label} | ${f.kind} | ${f.license} |`).join('\n')}

@@ -2,6 +2,25 @@
 import { mix, alpha, ensureContrast, readableOn, isHex, contrast } from './color.js';
 import { fontStack, fontAssets, FONTS } from './fonts.js';
 import { getPreset } from './presets.js';
+import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './seeds.js';
+
+/** 색 조합(seeds) → 프리셋 압축 팔레트 모양 */
+function seedPalette(seed, theme) {
+  const c = seed[theme];
+  const card = theme === 'light' ? mix(c.background, '#ffffff', 0.7) : mix(c.background, c.foreground, 0.06);
+  return {
+    bg: c.background, fg: c.foreground, card, muted: mix(c.foreground, c.background, 0.38), border: c.border,
+    primary: c.primary, primaryFg: c.primaryForeground || readableOn(c.primary), accent: c.accent, accent2: c.accent2 || c.accent, accent3: c.accent3 || c.accent,
+    heroFrom: c.primary, heroTo: c.accent,
+  };
+}
+/** 디자인 설정에 색 조합이 있으면 프리셋 사본의 색을 바꿈 */
+export function presetWithOverrides(design = {}) {
+  const base = getPreset(design.preset);
+  const seed = PALETTE_BY_ID[design.palette];
+  if (!seed) return base;
+  return { ...base, light: seedPalette(seed, 'light'), dark: seedPalette(seed, 'dark') };
+}
 
 const SEMANTIC = {
   light: { success: '#13794a', warning: '#a15c00', danger: '#c22f3a' },
@@ -89,15 +108,23 @@ const block = (sel, map) => `${sel}{${Object.entries(map).map(([k, v]) => `${k}:
 
 /** 디자인 설정 → theme.css 문자열 + 글꼴 링크 */
 export function themeCSS(design = {}) {
-  const preset = getPreset(design.preset);
+  const preset = presetWithOverrides(design);
   const opts = { accent: design.accent, fonts: design.fonts && pickFontKeys(design.fonts), motion: design.motion };
   const light = themeTokens(preset, 'light', opts), dark = themeTokens(preset, 'dark', opts);
   const fonts = { ...preset.fonts, ...(opts.fonts || {}) };
   const assets = fontAssets([fonts.display, fonts.body, fonts.mono]);
+  const pair = FONT_PAIR_BY_ID[design.fontPair];
+  const base = baseTokens(preset, opts);
+  if (pair) {
+    base['--font-display'] = pair.display.stack || `'${pair.display.family}', sans-serif`;
+    base['--font-sans'] = pair.body.stack || `'${pair.body.family}', sans-serif`;
+    if (pair.display.weight) base['--display-weight'] = String(pair.display.weight);
+    assets.links = [...new Set([pair.display.css, pair.body.css, ...assets.links.filter((u) => u === FONTS[fonts.mono]?.css)].filter(Boolean))];
+  }
   const css = [
     `/* lecpage theme: ${preset.id} */`,
     assets.faceCss.trim(),
-    block(':root', baseTokens(preset, opts)),
+    block(':root', base),
     block(':root[data-theme="light"],:root[data-theme="auto"]', { ...light, 'color-scheme': 'light' }),
     block(':root[data-theme="dark"]', { ...dark, 'color-scheme': 'dark' }),
     `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"]', { ...dark, 'color-scheme': 'dark' })}}`,

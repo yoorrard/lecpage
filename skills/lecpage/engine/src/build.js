@@ -3,12 +3,23 @@
 import { validate } from './validate.js';
 import { resolveDesign } from './decide/design.js';
 import { decideInfra } from './decide/infra.js';
-import { themeCSS, themeTokens } from './design/tokens.js';
+import { themeCSS, themeTokens, presetWithOverrides } from './design/tokens.js';
 import { getPreset } from './design/presets.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
 
 const LIVE_FILES = { local: 'live/local.js', http: 'live/http.js', supabase: 'live/supabase.js', sheets: 'live/sheets.js' };
+
+// fx.css에서 쓰는 효과 묶음만 남김(표지: 줄 맨 앞의 @fx:id 주석, 아이디가 별표면 공통)
+export function pruneFxCss(css, ids) {
+  const used = new Set(ids);
+  return String(css || '').split(/^(?=\/\*@fx:)/m).filter((chunk, i) => {
+    const m = /^\/\*@fx:(.*?)\*\//.exec(chunk);
+    if (!m) return i === 0;
+    const list = m[1].trim().split(/[\s,]+/).filter(Boolean);
+    return list.includes('*') || list.some((x) => used.has(x));
+  }).join('');
+}
 
 export function collectEffects(design, bp) {
   const ids = new Set();
@@ -20,7 +31,7 @@ export function collectEffects(design, bp) {
 }
 
 function favicon(design) {
-  const p = getPreset(design.preset);
+  const p = presetWithOverrides(design);
   const t = themeTokens(p, p.theme, { accent: design.accent });
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="${esc(t['--primary'])}"/><path d="M20 18h17l9 9v19a2 2 0 0 1-2 2H20a2 2 0 0 1-2-2V20a2 2 0 0 1 2-2z" fill="${esc(t['--primary-foreground'])}" opacity=".95"/><path d="M37 18v9h9" fill="none" stroke="${esc(t['--primary'])}" stroke-width="3"/></svg>`;
 }
@@ -41,7 +52,7 @@ export function build(input, opts = {}) {
   const hasLiveSections = bp.sections.some((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type));
   const live = bp.live.provider !== 'none' && (hasLiveSections || bp.live.features.length > 0);
   const theme = themeCSS(design);
-  const preset = getPreset(design.preset);
+  const preset = presetWithOverrides(design);
   const themeName = design.theme && design.theme !== 'preset' ? design.theme : preset.theme;
   const tok = themeTokens(preset, themeName === 'dark' ? 'dark' : 'light', { accent: design.accent });
   const effectIds = design.motion > 0 || design.graphic ? collectEffects(design, bp) : [];
@@ -74,7 +85,7 @@ export function build(input, opts = {}) {
     }
     parts.push('if(window.LecFX){document.readyState!=="loading"?LecFX.start():document.addEventListener("DOMContentLoaded",function(){LecFX.start()})}');
     files['assets/fx.js'] = parts.join('\n;\n');
-    files['assets/fx.css'] = read('fx/fx.css');
+    files['assets/fx.css'] = pruneFxCss(read('fx/fx.css'), effectIds);
   }
 
   const infra = opts.infra ? decideInfra(opts.infra) : null;

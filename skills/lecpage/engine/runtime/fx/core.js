@@ -282,6 +282,14 @@
       if (kids.length >= 2) { var ds = w.getComputedStyle(el).display; if (/grid|flex/.test(ds)) return kids; }
       return [el];
     },
+    /* 꾸밈 조각 자리: 왼쪽 가운데(보통 글이 놓이는 곳)를 피해 오른쪽 띠·위아래 띠·왼쪽 모서리에 [x%, y%] */
+    spot: function (rnd, i) {
+      var z = i == null ? rnd() : (i % 7) / 7 + rnd() * 0.01;
+      if (z < 0.38) return [74 + rnd() * 23, 6 + rnd() * 88];
+      if (z < 0.58) return [38 + rnd() * 58, 3 + rnd() * 11];
+      if (z < 0.84) return [34 + rnd() * 62, 87 + rnd() * 10];
+      return [2 + rnd() * 8, rnd() < 0.5 ? 3 + rnd() * 9 : 88 + rnd() * 9];
+    },
     progress: function (el, vh, a, b) { // 요소가 화면 a(아래)→b(위) 지점을 지나는 정도 0..1
       var r = el.getBoundingClientRect();
       a = a == null ? 1 : a; b = b == null ? 0 : b;
@@ -326,6 +334,8 @@
       token: function (name, from) { return token(name, from || el); },
       rgb: function (name, from) { return parse(token(name, from || el)); },
       color: function (name, a, from) { return rgba(parse(token(name, from || el)), a); },
+      /* 바탕·글자색 중 밝은 쪽(하이라이트·반사광용) */
+      light: function (from) { var b = parse(token('background', from || el)), f = parse(token('foreground', from || el)); return rgba(lum(b) > lum(f) ? b : f, 1); },
       onPause: function (cb) { pauseSubs.push(cb); cl.push(function () { rm(pauseSubs, cb); }); },
       onTheme: function (cb) { themeSubs.push(cb); cl.push(function () { rm(themeSubs, cb); }); },
       onScroll: function (fn, o) { var off = onScroll(fn, o); cl.push(off); return off; },
@@ -454,7 +464,10 @@
         if (contrast(base, light) < 7) base = mix(dark, pr, 0.04);
         var muted = mix(light, base, 0.28);
         if (contrast(muted, base) < 4.5) muted = mix(light, base, 0.12);
+        var pr2 = pr, k = 0;
+        while (contrast(pr2, base) < 4.5 && k++ < 10) pr2 = mix(pr2, light, 0.18);
         var vars = {
+          '--primary': rgba(pr2), '--ring': rgba(pr2), '--primary-foreground': rgba(contrast(pr2, base) >= contrast(pr2, light) ? base : light),
           '--background': rgba(base), '--foreground': rgba(light),
           '--muted-foreground': rgba(muted), '--border': rgba(mix(base, light, 0.18)),
           '--card': rgba(mix(base, light, 0.06)), '--card-foreground': rgba(light),
@@ -484,7 +497,7 @@
     if (!spec) return;
     el.__lecfx = el.__lecfx || {};
     if (el.__lecfx[id]) return;
-    if ((spec.level || 1) > level()) { el.__lecfx[id] = { skipped: true }; return; }
+    if ((spec.level == null ? 1 : spec.level) > level()) { el.__lecfx[id] = { skipped: true }; return; }
     var inst = { el: el, id: id, cleanups: [], dead: false };
     el.__lecfx[id] = inst;
     insts.push(inst);

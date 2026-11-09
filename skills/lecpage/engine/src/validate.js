@@ -4,6 +4,7 @@ import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES,
 import { PRESET_IDS } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
+import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 import { detectTopics, moodsForTopics } from './decide/topic.js';
 
 const LIMITS = { short: 80, title: 160, text: 1200, long: 6000, items: 200 };
@@ -114,6 +115,7 @@ export function validate(input) {
     signature: str(d.signature, 40), graphic: d.graphic === undefined ? undefined : str(d.graphic, 40), closingGraphic: d.closingGraphic === undefined ? undefined : str(d.closingGraphic, 40),
     effects: (d.effects && typeof d.effects === 'object') ? Object.fromEntries(Object.entries(d.effects).slice(0, 40).map(([k, v]) => [str(k, 40), str(v, 40)])) : {},
     logo: safeUrl(d.logo), brandName: str(d.brandName, 40), seed: str(d.seed, 20),
+    palette: PALETTE_BY_ID[d.palette] ? d.palette : '', fontPair: FONT_PAIR_BY_ID[d.fontPair] ? d.fontPair : '',
   };
   if (!d.preset || !PRESET_IDS.includes(d.preset)) {
     // 프리셋이 없으면 주제·분위기·유형으로 1순위를 고른다
