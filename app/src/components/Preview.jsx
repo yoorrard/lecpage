@@ -15,7 +15,7 @@ export function dropAssetCache(pid) { assetCache.delete(pid); }
 /**
  * 샌드박스 iframe 미리보기. allow-same-origin을 주지 않아 미리보기 안 코드는 앱 저장소(키·프로젝트)에 닿지 못합니다.
  */
-export function Preview({ p, height, onPick }) {
+export function Preview({ p, height, onPick, frameRef, marking, onMark }) {
   const [device, setDevice] = useState('desktop');
   const [page, setPage] = useState('index.html');
   const [html, setHtml] = useState('');
@@ -51,11 +51,12 @@ export function Preview({ p, height, onPick }) {
         <div class="row" style={{ gap: '6px' }}>
           <Seg label="기기" value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'PC' }, { value: 'phone', label: '휴대폰' }]} />
           {onPick && page === 'index.html' && <button class={`btn btn-sm${picking ? ' btn-ink' : ''}`} aria-pressed={String(picking)} onClick={() => setPicking(!picking)} title="미리보기에서 칸을 누르면 바로 고칠 수 있어요">{picking ? '고칠 칸을 누르세요' : '눌러서 고치기'}</button>}
+          {onMark && <button class="btn btn-sm" disabled={!!marking} onClick={() => onMark('draw')} title="미리보기에 펜으로 표시해 AI에게 고쳐 달라고 해요">✎ 표시해서 요청</button>}
         </div>
         <Seg label="미리볼 화면" value={page} onChange={setPage} options={[{ value: 'index.html', label: '참가자' }, ...(live ? [{ value: 'console.html', label: '강사 화면' }] : []), { value: 'screen.html', label: '발표 화면' }, { value: 'check.html', label: '와이파이 점검' }]} />
       </div>
-      <div class={`preview-frame${device === 'phone' ? ' phone' : ''}`} style={height ? { height } : undefined}>
-        {html ? <iframe ref={frame} onLoad={() => sendPick(picking)} title="연수 사이트 미리보기" tabIndex={focusable ? 0 : -1} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals" srcdoc={html} loading="lazy" /> : <p class="muted" style={{ padding: '20px' }}>미리보기를 만드는 중…</p>}
+      <div class={`preview-frame${device === 'phone' ? ' phone' : ''}${marking ? ' marking' : ''}`} style={height ? { height } : undefined}>
+        {html ? <iframe ref={(el) => { frame.current = el; if (frameRef) frameRef.current = el; }} onLoad={() => sendPick(picking)} title="연수 사이트 미리보기" tabIndex={focusable ? 0 : -1} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals" srcdoc={html} loading="lazy" /> : <p class="muted" style={{ padding: '20px' }}>미리보기를 만드는 중…</p>}
       </div>
       <div class="spread small muted">
         <span>{live ? '참여 기능은 미리보기 안에서 시험해 볼 수 있어요.' : '고친 내용이 바로 반영돼요.'}{size ? ` · 사이트 크기 약 ${size >= 1000 ? (size / 1000).toFixed(1) + 'MB' : size + 'KB'}` : ''}</span>

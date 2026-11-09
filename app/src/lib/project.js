@@ -16,7 +16,7 @@ export const DEFAULT_INFO = {
   title: '', subtitle: '', organizer: '', date: '', start: '', end: '', venue: '', mode: 'offline',
   size: 25, format: 'workshop', features: [], devices: ['laptop'], network: 'good',
   minor: false, admin: 'school', commercial: false, completionRate: 80,
-  surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '',
+  surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '', contact: '', joinUrl: '',
 };
 
 /** 첫 화면에 놓은 교재 파일을 '교재 넣기' 화면으로 넘길 때 잠시 보관 */

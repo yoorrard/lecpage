@@ -6,6 +6,7 @@ import { blueprintGuide } from './bridge.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const LIVE_TYPES = SECTION_TYPES.filter((t) => SECTION_DEFS[t].live); // 참여 기능 칸: '참여 기능' 탭에서만 켜고 끔
+const LIVE_MSG = "참여 기능 칸은 '참여 기능' 탭에서 켜고 꺼요.";
 const META_OK = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue', 'description', 'mode'];
 const URL_KEY = /^(url|href|src|link|image|poster|joinUrl|siteUrl|shortUrl)$/i;
 const URL_VAL = /^\s*(?:(?:https?|javascript|vbscript|data|file|blob|ftp|mailto|tel|sms|intent):|\/\/)/i; // 주소로 쓰이는 값만("Tip: …" 같은 글은 아님)
@@ -133,11 +134,12 @@ function collectUrls(v, out = new Set()) {
 /**
  * AI가 준 패치를 '수정 요청'에 맞게 거름(적용 전에 늘 부름). 실시간 연결·공개 범위·주소와 참여 기능 칸은 바꾸지 못하게.
  * 새 주소는 지금 설계도에 이미 있거나 강사가 요청 글에 직접 적은 것만 받음(그림·교재 속 지시로 링크를 바꾸는 것을 막음).
- * @returns {{ patch: object, dropped: string[] }} dropped: 뺀 항목(사용자에게 보여 줄 짧은 설명)
+ * @returns {{ patch: object, dropped: string[], paths: string[] }} dropped: 사용자에게 보여 줄 짧은 설명(중복 없음), paths: 뺀 곳
  */
 export function sanitizeReviewPatch(patch, { blueprint = {}, request = '' } = {}) {
-  const dropped = [];
-  if (!isObj(patch)) return { patch: {}, dropped: ['답이 패치 모양이 아니에요'] };
+  const dropped = [], paths = [];
+  const drop = (msg, path) => { if (!dropped.includes(msg)) dropped.push(msg); paths.push(path); };
+  if (!isObj(patch)) return { patch: {}, dropped: ['답이 패치 모양이 아니에요.'], paths: [''] };
   const allow = collectUrls(blueprint);
   for (const m of String(request).match(/https?:\/\/[^\s"'<>)]+/g) || []) allow.add(m);
   const out = {};
@@ -145,18 +147,19 @@ export function sanitizeReviewPatch(patch, { blueprint = {}, request = '' } = {}
   const types = new Map((blueprint.sections || []).map((s) => [s?.id, s?.type]));
   // 값 속 주소 거르기(배열·객체 깊이까지): 허용되지 않은 주소는 빈 값으로
   const cleanUrls = (v, path) => {
-    if (typeof v === 'string') { if (URL_VAL.test(v) && !allow.has(v.trim())) { dropped.push(`${path}: 새 주소는 넣지 않았어요(직접 고쳐 주세요)`); return ''; } return v; }
+    if (typeof v === 'string') { if (URL_VAL.test(v) && !allow.has(v.trim())) { drop('새 링크는 넣지 않았어요. 링크는 직접 고쳐 주세요.', path); return ''; } return v; }
     if (Array.isArray(v)) return v.map((x, i) => cleanUrls(x, `${path}[${i}]`));
     if (isObj(v)) { const o = {}; for (const [k, x] of Object.entries(v)) { if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue; o[k] = cleanUrls(x, `${path}.${k}`); } return o; }
     return v;
   };
   for (const k of Object.keys(patch)) {
-    if (!['meta', 'design', 'sections', 'add', 'order', 'note'].includes(k)) dropped.push(`${k}: 수정 요청으로는 바꾸지 않아요`);
+    if (['meta', 'design', 'sections', 'add', 'order', 'note'].includes(k)) continue;
+    drop(['instructors', 'audience', 'privacy'].includes(k) ? "강사·참가자 정보는 '더 자세히' 탭에서 고쳐 주세요." : '참여 기능 연결·공개 범위는 바꾸지 않았어요.', k);
   }
   if (isObj(patch.meta)) {
     const m = {};
     for (const [k, v] of Object.entries(patch.meta)) {
-      if (!META_OK.includes(k)) { dropped.push(`meta.${k}: 바꾸지 않아요`); continue; }
+      if (!META_OK.includes(k)) { drop(/url/i.test(k) ? '사이트 주소는 바꾸지 않았어요.' : "이 설정은 '더 자세히' 탭에서 고쳐 주세요.", `meta.${k}`); continue; }
       m[k] = cleanUrls(v, `meta.${k}`);
     }
     if (Object.keys(m).length) out.meta = m;
@@ -169,8 +172,8 @@ export function sanitizeReviewPatch(patch, { blueprint = {}, request = '' } = {}
     const s = {};
     for (const [id, ch] of Object.entries(patch.sections)) {
       if (id === '__proto__' || id === 'constructor' || id === 'prototype') continue;
-      if (ch === null && LIVE_TYPES.includes(types.get(id))) { dropped.push(`${id}: 참여 기능 칸은 '참여 기능' 탭에서 꺼 주세요`); continue; }
-      if (isObj(ch) && ch.type && ch.type !== types.get(id) && (LIVE_TYPES.includes(ch.type) || LIVE_TYPES.includes(types.get(id)))) { dropped.push(`${id}: 참여 기능 칸으로 바꾸지 않아요`); continue; }
+      if (ch === null && LIVE_TYPES.includes(types.get(id))) { drop(LIVE_MSG, `sections.${id}`); continue; }
+      if (isObj(ch) && ch.type && ch.type !== types.get(id) && (LIVE_TYPES.includes(ch.type) || LIVE_TYPES.includes(types.get(id)))) { drop(LIVE_MSG, `sections.${id}.type`); continue; }
       if (!ids.has(id)) { s[id] = ch; continue; } // 없는 id는 patch.js가 경고로 알림
       s[id] = ch === null ? null : cleanUrls(ch, `sections.${id}`);
     }
@@ -181,12 +184,12 @@ export function sanitizeReviewPatch(patch, { blueprint = {}, request = '' } = {}
     const add = [];
     for (const a of list) {
       const t = a?.section?.type;
-      if (LIVE_TYPES.includes(t)) { dropped.push(`${t} 칸: 참여 기능은 '참여 기능' 탭에서 켜 주세요`); continue; }
+      if (LIVE_TYPES.includes(t)) { drop(LIVE_MSG, `add.${t}`); continue; }
       add.push(isObj(a) ? { after: a.after ?? null, section: cleanUrls(a.section, 'add') } : a);
     }
     if (add.length) out.add = add;
   }
   if (Array.isArray(patch.order)) out.order = patch.order.filter((x) => typeof x === 'string').slice(0, 200);
   if (typeof patch.note === 'string') out.note = patch.note.slice(0, 200);
-  return { patch: out, dropped };
+  return { patch: out, dropped, paths };
 }

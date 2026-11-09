@@ -3,6 +3,7 @@ import { StepHead, StepFoot } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { Preview } from '../../components/Preview.jsx';
 import { AiPanel, useAiResume } from '../../components/AiPanel.jsx';
+import { ReviewChat } from '../../components/ReviewChat.jsx';
 import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyInfo } from '../../lib/blueprint.js';
@@ -22,6 +23,10 @@ export function StepEdit({ p, update, go }) {
   const onPick = (id) => { setTab('content'); setFocusId(id + ':' + Date.now()); };
   const [ai, setAi] = useState(false);
   useAiResume(setAi);
+  // 수정 요청: 미리보기에 표시 → 대화창에 그림이 붙음
+  const [marking, setMarking] = useState(false);
+  const frameRef = useRef(null); const review = useRef(null);
+  const onMark = (mode) => { setTab('review'); review.current?.start(mode); };
   const [, force] = useState(0);
   const stack = undoStacks.get(p.id) || []; undoStacks.set(p.id, stack);
   const pushUndo = (label) => { stack.push({ label, blueprint: JSON.parse(JSON.stringify(p.blueprint)), info: { ...p.info } }); if (stack.length > 20) stack.shift(); force((x) => x + 1); };
@@ -40,6 +45,7 @@ export function StepEdit({ p, update, go }) {
     { value: 'design', label: '디자인' },
     { value: 'live', label: '참여 기능', badge: liveCount ? String(liveCount) : '' },
     { value: 'more', label: '더 자세히' },
+    { value: 'review', label: '수정 요청' },
   ];
   return (
     <>
@@ -57,9 +63,10 @@ export function StepEdit({ p, update, go }) {
             {tab === 'design' && <DesignPanel p={p} update={update} />}
             {tab === 'live' && <FeaturesPanel p={p} update={update} setInfo={setInfo} />}
             {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} />}
+            <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} />
           </div>
         </div>
-        <Preview p={p} onPick={onPick} />
+        <Preview p={p} onPick={onPick} frameRef={frameRef} marking={marking} onMark={onMark} />
       </div>
       <StepFoot go={go} prev={1} next={3} nextLabel="공유하기 →" />
       <Dialog open={ai} onClose={() => setAi(false)} label="AI로 다듬기" wide>
@@ -107,8 +114,13 @@ function DetailsPanel({ p, setInfo }) {
         <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
         <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
         <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
-        <Field label="장소 또는 접속 링크"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
+        <Field label="장소"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
+        <Field label="문의처" hint="참가자가 연락할 곳(연수 담당자 전화·메일)"><input value={info.contact || ''} onInput={set('contact')} maxLength={120} /></Field>
       </div>
+      <fieldset class="field plain-fieldset"><legend>진행 방식</legend>
+        <Radios name="mode" value={info.mode || 'offline'} onChange={(v) => setInfo({ mode: v })} options={[{ value: 'offline', label: '오프라인' }, { value: 'online', label: '온라인' }, { value: 'hybrid', label: '함께' }]} label="진행 방식" />
+      </fieldset>
+      {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 단추로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
       <h3 class="h-sub">강사</h3>
       <div class="form-grid">
         <Field label="이름"><input value={info.instructorName} onInput={set('instructorName')} maxLength={40} /></Field>

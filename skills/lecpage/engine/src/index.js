@@ -16,5 +16,6 @@ export { decideArchetype, ARCHETYPE_SECTIONS } from './decide/archetype.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 export { buildPrompt, extractJson, callProvider, listModels, blueprintGuide } from './prompt/bridge.js';
 export { applyBlueprintPatch, diffSummary, withSectionIds, PROTECTED_PATHS } from './patch.js';
+export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META } from './intake.js';
 export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
 export const VERSION = '1.0.0';

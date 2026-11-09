@@ -67,64 +67,6 @@ async function loadPlaywright() {
   try { return createRequire(import.meta.url)('playwright'); } catch { return null; }
 }
 
-/** 강사에게 직접 받은 값만 설계도에 넣음(패치·교재로는 못 바꿈): 공개 범위, 사이트·참여 주소, 실시간 연결 */
-function applyTeacherInfo(bp, info = {}, opts = {}) {
-  const access = opts.access || info.access || (opts.password ? 'password' : '');
-  if (['link', 'public', 'password'].includes(access)) bp.access = { mode: access };
-  bp.meta = bp.meta || {};
-  for (const k of ['siteUrl', 'joinUrl', 'shortUrl']) if (info[k]) bp.meta[k] = info[k];
-  if (info.live && typeof info.live === 'object') {
-    bp.live = { ...(bp.live || {}) };
-    for (const k of ['provider', 'url', 'anonKey', 'code', 'features']) if (info.live[k] !== undefined) bp.live[k] = info.live[k];
-  }
-  return bp;
-}
-
-/** 인터뷰 답(info.json, references/intake.md 키)을 초안 입력으로: 형식→유형(칸 순서), 대상 */
-function draftInfo(info = {}, material = null) {
-  const d = { ...info };
-  if (info.format && !info.archetype) {
-    const ev = material?.detected?.event || {};
-    const mins = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : NaN; };
-    const dur = mins(info.end || ev.end) - mins(info.start || ev.start);
-    d.archetype = E.decideArchetype({ format: info.format, size: info.size, durationMin: dur > 0 ? dur : undefined, practiceRatio: material?.detected?.practice?.ratio }).primary;
-  }
-  d.audience = { ...(info.audience || {}), ...(info.devices ? { devices: [].concat(info.devices) } : {}), ...(info.network ? { network: info.network === 'offline' ? 'restricted' : info.network } : {}), ...(info.minor !== undefined ? { minor: !!info.minor } : {}) };
-  if (info.admin) d.adminKind = info.admin;
-  return d;
-}
-
-const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'chat', 'signal'];
-/** 인터뷰 답 중 초안이 쓰지 않는 것(분위기·움직임·강조색·참여 기능)을 설계도에. info에 있는 키만 바꿈 */
-function applyIntake(bp, info = {}) {
-  bp.design = { ...(bp.design || {}) };
-  if (info.mood) { const m = E.moodFromWords([].concat(info.mood)); if (m.length) bp.design.mood = m; }
-  if (info.motion !== undefined && info.motion !== '') bp.design.motion = +info.motion;
-  if ('accent' in info) { if (info.accent) bp.design.accent = info.accent; else delete bp.design.accent; }
-  if (info.logo) bp.design.logo = info.logo;
-  if (info.preset) bp.design.preset = info.preset;
-  if (info.admin || info.completionRate) bp.meta = { ...(bp.meta || {}), admin: { ...(bp.meta?.admin || {}), ...(info.admin ? { kind: info.admin } : {}), ...(info.completionRate ? { completionRate: +info.completionRate } : {}) } };
-  if (!Array.isArray(info.features)) return bp;
-  // 참여 기능 → 칸(질문·보드·투표·출석·설문)과 live.features. 연결 전에는 local(한 기기 미리보기)
-  const f = info.features.flatMap((x) => String(x).split('+'));
-  const on = (k) => f.includes(k);
-  bp.sections = Array.isArray(bp.sections) ? bp.sections : [];
-  const has = (t) => bp.sections.some((s) => s?.type === t);
-  const before = (types, sec) => { const i = bp.sections.findIndex((s) => types.includes(s?.type)); bp.sections.splice(i < 0 ? bp.sections.length : i, 0, sec); };
-  if (on('attendance') && !has('attendance')) before(['readiness', 'outline', 'stations'], { id: 'attendance', type: 'attendance', title: '출석 확인' });
-  if (on('poll') && !has('poll')) before(['qa', 'board', 'materials', 'instructor', 'closing', 'survey'], { id: 'poll', type: 'poll', title: '함께 답해요', items: [{ id: 'word', question: '오늘 연수를 한 낱말로 말하면?', kind: 'word', options: [] }] });
-  if (on('qa') && !has('qa')) before(['board', 'materials', 'instructor', 'closing', 'survey'], { id: 'qa', type: 'qa', title: '궁금한 점을 남겨 주세요' });
-  if (on('board') && !has('board')) before(['materials', 'instructor', 'closing', 'survey'], { id: 'board', type: 'board', title: '함께 나누는 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }], allowFiles: !info.minor });
-  bp.sections = bp.sections.filter((s) => !['qa', 'board', 'attendance'].includes(s?.type) || on(s.type));
-  const liveOn = f.some((x) => LIVE_KEYS.includes(x));
-  if (liveOn && !has('survey')) bp.sections.push({ id: 'survey', type: 'survey', title: '만족도 조사에 참여해 주세요', url: info.surveyUrl || '', qr: true, questions: E.DEFAULT_SURVEY.map((q) => ({ ...q })) });
-  if (liveOn) bp.sections.forEach((s) => { if (s?.type === 'survey' && !s.questions?.length) s.questions = E.DEFAULT_SURVEY.map((q) => ({ ...q })); });
-  const prev = bp.live || {};
-  bp.live = { ...prev, features: f.filter((x) => LIVE_KEYS.includes(x)), provider: liveOn ? (prev.provider && prev.provider !== 'none' ? prev.provider : 'local') : 'none' };
-  bp.privacy = { ...(bp.privacy || {}), collect: info.minor ? ['nickname'] : on('attendance') ? ['nickname', 'name', 'school'] : ['nickname'] };
-  return bp;
-}
-
 /** 자료 폴더 → 빌드 자료. 설계도는 assets/slides/…·assets/media/…를 가리키므로 앞에 assets/를 맞춰 붙임 */
 function assetFiles(dir) {
   const raw = N.readAssetDir(dir, '');
@@ -481,12 +423,13 @@ const commands = {
     // 2) 초안과 설계도(이미 고친 설계도가 있으면 지키고, --fresh면 새로)
     const info = args.i ? readJson(args.i) : {};
     const api = await ingestApi();
-    const draft = api.materialToDraft(m, { today: args.today || undefined, ...draftInfo(info, m) });
+    // 인터뷰 답 → 초안 입력(엔진 intake.js, 앱과 같은 규칙). 쪽 그림·그림 경로는 교재 해석이 적어 둔 것을 씀
+    const draft = api.materialToDraft(m, { ...E.draftInfo({ ...info, archetype: info.archetype || E.archetypeFor(info, m) || undefined, today: args.today || undefined }, false), imageBase: undefined });
     writeJson(draftPath, draft);
     let raw, kept = false;
-    if (existsSync(bpPath) && !args.fresh) { raw = readJson(bpPath); kept = true; } else raw = applyIntake(structuredClone(draft), info);
-    if (args.preset) raw.design = { ...(raw.design || {}), preset: args.preset };
-    applyTeacherInfo(raw, info, { access: args.access, password: args.password });
+    if (existsSync(bpPath) && !args.fresh) { raw = readJson(bpPath); kept = true; } else raw = E.applyInfo(draft, info, m, null);
+    if (args.preset) { raw.design = { ...(raw.design || {}), preset: args.preset }; delete raw._presetAuto; }
+    E.applyTeacherValues(raw, info, { access: args.access, password: args.password });
     writeJson(bpPath, raw);
 
     // 3) 검증·빌드
@@ -539,7 +482,7 @@ const commands = {
       if (!src && !args.set.length && !args.i) fail('고칠 내용을 주세요: patch.json 파일, \'{"meta":{…}}\', 또는 --set 경로=값');
     }
     const r = E.applyBlueprintPatch(before, patch);
-    if (args.i) { const info = readJson(args.i); applyIntake(r.raw, info); applyTeacherInfo(r.raw, info, { access: args.access }); }
+    if (args.i) { const info = readJson(args.i); r.raw = E.applyTeacherValues(E.syncInfo(r.raw, info), info, { access: args.access }); }
     const final = args.i ? E.validate(r.raw) : { errors: r.errors, warnings: r.warnings.filter((w) => w.kind !== 'patch') };
     const pw = r.warnings.filter((w) => w.kind === 'patch');
     if (final.errors.length) fail('검증 실패로 저장하지 않았어요: ' + final.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '), { warnings: pw });

@@ -81,9 +81,9 @@ lecpage에 옮긴 것: 디자인 상투를 엔진 프리셋·디자인 검사로
 - `engine/src/patch.js`: `applyBlueprintPatch`·`diffSummary`(앱과 공용). 패치로는 `meta.siteUrl·joinUrl·shortUrl`, `live.url·code·anonKey`, `access`를 못 바꿈.
 - 고친 문제: ① `build --assets`가 쪽 그림을 `dist/slides/`에 써서 교재 뷰어 그림이 깨지던 것(설계도는 `assets/slides/`를 가리킴), 점검은 "Failed to load resource"를 걸러 놓쳐 왔음 ② 마크다운 교재의 `<!-- -->` 주석 속 주소가 실습 링크로 사이트에 실리던 것 ③ 암호 잠금 화면이 휴대폰에서 가로로 넘치던 것.
 - SKILL.md 다시 씀, `references/cli.md` 새로, `qa-checklist.md` 정리, `evals/` 추가.
+- 연수 정보 → 설계도 규칙을 엔진 `intake.js`로 합침(앱 `lib/blueprint.js`와 CLI가 함께 씀). 온라인 접속 주소(`meta.joinUrl`)는 강사가 적은 `info.joinUrl`만.
 
 ## 9. 다음 후보
-- 앱의 `applyInfo`·`applyFeatures`(인터뷰 답 → 설계도)를 엔진으로 옮겨 CLI의 `applyIntake`와 하나로.
 - 오피스 기본 테마 색(#4F81BD 등)을 기관 색으로 쓰지 않기(초안의 `design.accent`).
 - 마크다운 교재의 강사 줄("강사: 이름(소속)") 감지.
 - 켜짐 평가를 실제로 돌려 description을 다듬기(세 번씩, 해당/비해당 나눠).

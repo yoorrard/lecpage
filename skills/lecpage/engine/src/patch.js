@@ -88,6 +88,7 @@ export function applyBlueprintPatch(bp, patch) {
     if (!isObj(p[k])) { warnings.push({ path: k, message_ko: `${k}는 객체여야 해요.` }); continue; }
     raw[k] = mergeDeep(raw[k], p[k]); applied++;
   }
+  if (isObj(p.design) && p.design.preset) delete raw._presetAuto; // 직접 고른 디자인(자동 추천 아님)
   for (const k of REPLACE_KEYS) {
     if (!(k in p)) continue;
     if (!Array.isArray(p[k])) { warnings.push({ path: k, message_ko: `${k}는 배열이어야 해요.` }); continue; }

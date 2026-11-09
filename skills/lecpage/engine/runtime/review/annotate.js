@@ -125,6 +125,8 @@
       // 문서 전체를 넘기면 화면 밖 lazy 그림까지 기다려(최대 몇 초) 느려짐 → 빈 요소로 맥락만 만들고 대상만 바꿈
       return MS.createContext(D.createElement('i'), {
         width: w, height: h, scale: scale, sandbox: sandbox, timeout: 8000, font: css ? { cssText: css } : false,
+        // SVG 안 url(#id) 같은 문서 안 참조는 받아 올 것이 아님
+        fetchFn: function (u) { return Promise.resolve(/(?:#|%23)[\w-]*$/.test(u) && !/\.(?:png|jpe?g|gif|webp|avif|svg|woff2?|ttf|otf)(?:[?#]|$)/i.test(u) ? 'data:,' : false); },
         style: { marginTop: (-y) + 'px', marginLeft: (-x) + 'px' },
         filter: function (n) { if (n.nodeType === 1 && n.hasAttribute('data-lp-annotate')) return false; var p = n.parentElement; return !(p && p.hasAttribute('data-lp-skip')); },
         onCloneNode: function (root) {
@@ -272,7 +274,7 @@
   function buildBar() {
     var tools = el('div', { class: 'grp', role: 'group', 'aria-label': '도구' });
     TOOLS.forEach(function (t) {
-      var b = btn('tool', null, svg(t[0]) + '<span>' + t[1] + '</span>', function () { setTool(t[0]); }, { 'aria-pressed': String(S.tool === t[0]), 'data-tool': t[0], title: t[1] });
+      var b = btn('tool', null, svg(t[0]) + '<span>' + t[1] + '</span>', function () { setTool(t[0]); }, { 'aria-pressed': String(S.tool === t[0]), 'data-tool': t[0], title: t[1], 'aria-label': t[1] });
       tools.appendChild(b);
     });
     var cols = el('div', { class: 'grp', role: 'group', 'aria-label': '색' });

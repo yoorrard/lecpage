@@ -17,9 +17,11 @@ const TEMPLATES = {
   closing: { text: '마지막 한 문장', thanks: '함께해 주셔서 감사합니다.' }, reflection: { title: '나의 기록', prompts: ['오늘 가장 기억에 남는 것'] },
   attendance: { title: '출석 확인' }, text: { title: '', md: '자유롭게 써 주세요.' }, glance: { title: '한눈에 보기', items: [{ value: '3', label: '실습' }] },
   video: { title: '영상', items: [{ title: '영상 제목', url: 'https://' }] }, instructor: { title: '강사 소개' },
+  goals: { title: '연수 목표', items: ['연수를 마치면 할 수 있는 것을 한 줄로 써 주세요'], who: '' },
+  followup: { title: '연수가 끝난 뒤', items: [{ title: '다시 보기', desc: '연수 자료와 영상을 다시 볼 수 있어요.', url: '', kind: 'recording' }], completion: '' },
 };
 
-const COMMON = ['message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'text'];
+const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text'];
 export const isAdvanced = () => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } };
 
 /** 내용 탭: 사이트를 이루는 칸(섹션) 목록과 칸별 고치기 */

@@ -77,7 +77,11 @@ function inPage() {
     const L = px(s.borderLeftWidth), R = px(s.borderRightWidth), T = px(s.borderTopWidth), B = px(s.borderBottomWidth);
     const side = (L >= 2 && L > T + 0.5 && L > R + 0.5 && s.borderLeftStyle !== 'none') || (R >= 2 && R > T + 0.5 && R > L + 0.5 && s.borderRightStyle !== 'none');
     const insetStripe = /inset\s+-?[2-9]\d*px\s+0(px)?\s+0(px)?/.test(s.boxShadow) && r.height > 24;
-    if ((side || insetStripe) && r.height > 20 && r.width > 40 && (e.innerText || '').trim()) add('side-stripe', e);
+    // 색이 있는 띠이거나(채도), 배경·둥근 모서리가 있는 상자에 붙은 띠만 셈(무채색 단 나눔 선은 제외)
+    const sc = side ? (L > R ? s.borderLeftColor : s.borderRightColor) : (s.boxShadow.match(/rgba?\([^)]*\)/) || [''])[0];
+    const ch = (sc.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number); const chroma = ch.length === 3 ? Math.max(...ch) - Math.min(...ch) : 0;
+    const boxy = opaque(s.backgroundColor) || px(s.borderTopLeftRadius) > 0;
+    if ((side || insetStripe) && (chroma > 40 || boxy) && r.height > 20 && r.width > 40 && (e.innerText || '').trim()) add('side-stripe', e);
     // 알약 꼬리표: 높이 14~40px, 반지름 ≥ 높이/2, 배경·테두리, 글 있음, 누르는 것이 아님
     const rad = px(s.borderTopLeftRadius);
     if (r.height >= 14 && r.height <= 40 && rad >= r.height / 2 - 1 && r.width > r.height * 1.3 && (opaque(s.backgroundColor) || T > 0) && (e.innerText || '').trim() && !e.matches(INTERACTIVE) && !e.closest(INTERACTIVE)) add('pill-chip', e);
@@ -101,7 +105,7 @@ function inPage() {
   // 글자 크기: 본문 크기(문단 글자 수로 가중), 제목 비율, 가짓수
   const sizeW = new Map(); const sizes = new Set();
   for (const e of all) {
-    const t = ownText(e); if (!t) continue;
+    const t = ownText(e); if (!t || e.closest('[data-react],.lp-react,.lp-slide,.lp-deck-thumbs,.lp-qr')) continue;
     const fs = Math.round(px(getComputedStyle(e).fontSize) * 2) / 2;
     sizes.add(fs);
     if (e.closest('p,li,dd') && !e.closest('h1,h2,h3,button,.lp-btn,nav,.lp-nav')) sizeW.set(fs, (sizeW.get(fs) || 0) + t.length);
@@ -117,7 +121,7 @@ function inPage() {
   // 한 줄 길이: 글자 평균 폭으로 한 줄에 들어가는 글자 수를 셈(한국어 40자, 그 밖 80자)
   const cv = document.createElement('canvas').getContext('2d');
   let maxCpl = 0;
-  for (const e of all.filter((x) => x.matches('p,li,dd,blockquote') && !x.closest('nav,button,.lp-btn,.lp-qr,figcaption'))) {
+  for (const e of all.filter((x) => x.matches('p,li,dd,blockquote') && !x.querySelector('p,div,h1,h2,h3,h4,ul,ol,dl,fieldset') && !x.closest('nav,button,.lp-btn,.lp-qr,figcaption,.lp-slide'))) {
     const t = (e.innerText || '').trim(); if (t.length < 60) continue;
     const s = getComputedStyle(e); const w = e.clientWidth - px(s.paddingLeft) - px(s.paddingRight); if (w < 200) continue;
     if (e.getBoundingClientRect().height < px(s.lineHeight) * 1.8) continue; // 한 줄짜리는 길이와 상관없음
@@ -131,7 +135,7 @@ function inPage() {
 
   // 단추·메뉴·라벨 글: 길거나 '(을)를' 같은 틀 말투
   for (const e of all.filter((x) => x.matches('button,.lp-btn,a.lp-link,.lp-nav-links a,[role=tab],label > span:first-child,summary,legend,th,dt'))) {
-    const t = (e.innerText || '').trim().replace(/\s+/g, ' '); if (!t || e.closest('.lp-faq,.lp-quiz,.lp-sv-list,.lp-poll-list')) continue;
+    const t = (e.innerText || '').trim().replace(/\s+/g, ' '); if (!t || e.closest('.lp-faq,.lp-quiz,.lp-sv-list,.lp-poll-list,.lp-deck-thumbs,.lp-overview,.lp-slide')) continue;
     const isAction = e.matches('button,.lp-btn,a.lp-link,.lp-nav-links a,[role=tab]');
     const len = [...t].length;
     if ((isAction && len > 16) || (!isAction && len > 40) || /\((을|를|이|가|은|는|와|과)\)/.test(t) || /하시기 바랍니다|해 주시기 바랍니다|클릭하세요/.test(t)) add('long-label', e, `${label(e)} (${len}자)`);
