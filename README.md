@@ -4,7 +4,7 @@
 
 **교재를 넣으면 연수 사이트가 나와요.** 연수 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로, 그 연수에 맞는 디자인·모션·실습 안내·실시간 참여 기능·서버 운영 방식까지 갖춘 연수 사이트를 만들어 주는 도구입니다.
 
-- **웹앱**: 회원가입 없이 브라우저에서. 교재와 AI 키는 브라우저 밖으로 나가지 않아요.
+- **웹앱**: 회원가입 없이 브라우저에서. 교재와 AI 키는 브라우저 밖으로 나가지 않아요. → https://yoorrard.github.io/lecpage/ (저장소 Settings → Pages → Source를 GitHub Actions로 켠 뒤 열려요)
 - **Agent Skill**: Claude Code·Codex·Cursor·Gemini CLI·Antigravity 등 내가 쓰는 AI 도구 안에서 구독 그대로.
 
 ```bash
