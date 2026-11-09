@@ -1,0 +1,46 @@
+# lecpage node-server(실시간) → Fly.io
+# 놓는 곳: backends/node-server/ 폴더. Dockerfile 이 없으면 templates/deploy/server/Dockerfile.node-server 를
+#         그 폴더에 Dockerfile 로 복사. 정적 사이트는 다른 곳(Cloudflare 등)에 둡니다(또는 LEC_STATIC 로 함께 제공).
+# 처음:  fly launch --no-deploy --copy-config   →  fly volumes create lecdata --region nrt --size 1
+#        fly secrets set LEC_ADMIN_KEY_HASH=$(node server.mjs --hash '내관리자키')
+#        fly deploy --ha=false        # 데이터가 한 기계의 볼륨에 있으므로 기계는 1대만
+# 지우기: fly apps destroy {{APP_NAME}}   (볼륨·데이터도 함께 삭제)
+# 비용(2026-11 확인): 256MB 기계 상시 실행 약 $2.19/30일, 볼륨 GB당 별도, 체험 크레딧 $1(7일).
+#   https://fly.io/docs/about/pricing/
+# 환경 변수 목록: backends/node-server/server.mjs 머리말
+
+app = "{{APP_NAME}}"
+# 한국에서 가까운 곳: nrt(도쿄). ⚠️ 서울 리전은 2026-11 기준 확인하지 못함
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+  LEC_DATA = "/data"
+  LEC_TRUST_PROXY = "1"
+  TZ = "Asia/Seoul"
+  # 정적 사이트 주소(쉼표 구분). 예) https://lec-1104.pages.dev  (비우면 모든 주소 허용)
+  LEC_ORIGINS = "{{SITE_ORIGIN}}"
+
+[[mounts]]
+  source = "lecdata"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # 아무도 안 쓰면 멈춰서 비용 절약, 요청이 오면 다시 켜짐(첫 접속 몇 초 지연)
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 400
+    hard_limit = 500
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

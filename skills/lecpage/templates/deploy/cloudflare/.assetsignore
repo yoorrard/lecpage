@@ -1,0 +1,7 @@
+# Cloudflare Workers 정적 자산으로 올리지 않을 파일 (사이트 폴더 안에 둡니다)
+# 문법은 .gitignore 와 같습니다.
+*.md
+.env*
+data/
+.DS_Store
+Thumbs.db

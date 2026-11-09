@@ -1,0 +1,24 @@
+{
+  "name": "lecpage-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4174",
+    "prebuild": "node scripts/prepare.mjs",
+    "predev": "node scripts/prepare.mjs"
+  },
+  "dependencies": {
+    "@fontsource/jua": "5.2.5",
+    "@fontsource/quicksand": "5.2.6",
+    "pdfjs-dist": "4.10.38",
+    "preact": "10.26.4",
+    "pretendard": "1.3.9"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.1",
+    "vite": "6.2.6"
+  }
+}

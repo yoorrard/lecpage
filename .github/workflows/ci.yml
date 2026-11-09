@@ -1,0 +1,19 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: 엔진 테스트
+        run: npm test
+      - name: 견본 사이트 빌드
+        run: npm run examples
+      - name: 앱 빌드
+        run: npm --prefix app ci && npm --prefix app run build

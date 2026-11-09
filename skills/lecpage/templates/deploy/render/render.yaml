@@ -1,0 +1,58 @@
+# lecpage → Render Blueprint (저장소 맨 위에 render.yaml 로 둡니다)
+# 구성: ./site (생성 사이트), ./node-server (backends/node-server 복사)
+# Render 대시보드 → New → Blueprint → 저장소 선택.
+# 비용(2026-11 확인): 정적 사이트 무료(Hobby 워크스페이스 대역폭 월 5GB 포함),
+#   웹 서비스 Free는 15분 쉬면 잠들고 파일이 지워짐 → 실시간 데이터 보관 불가.
+#   데이터를 지키려면 유료 인스턴스(Starter 월 $7부터)+디스크가 필요합니다.
+#   https://render.com/docs/free  https://render.com/pricing
+# 환경 변수 목록: backends/node-server/server.mjs 머리말.
+# node-server/Dockerfile 이 없으면 templates/deploy/server/Dockerfile.node-server 를 그 이름으로 복사.
+
+services:
+  - type: web
+    name: lecpage-site
+    runtime: static
+    buildCommand: echo "no build"
+    staticPublishPath: ./site
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net {{SCRIPT_HASHES}}; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://hangeul.pstatic.net; font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com {{LIVE_ORIGIN}}; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/slides/*
+        name: Cache-Control
+        value: public, max-age=3600
+
+  # 실시간 서버가 필요할 때만 남기세요(유료).
+  - type: web
+    name: lecpage-live
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerContext: ./node-server
+    dockerfilePath: ./node-server/Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: lecdata
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "8787"
+      - key: LEC_DATA
+        value: /data
+      - key: LEC_TRUST_PROXY
+        value: "1"
+      - key: TZ
+        value: Asia/Seoul
+      # 관리자 키: 비워 두면 첫 실행 로그에 한 번 나옴(디스크에 해시 저장). 직접 정하려면 LEC_ADMIN_KEY_HASH 추가.
+      - key: LEC_ORIGINS
+        value: "{{SITE_ORIGIN}}"

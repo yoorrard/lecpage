@@ -1,0 +1,13 @@
+<!--
+  lecpage CSP <meta> 조각 — 서버 헤더를 못 붙이는 호스팅(GitHub Pages, Surge, 학교 홈페이지 게시판 등)용.
+  엔진이 index.html · console.html · screen.html · check.html의 <head> 맨 앞(charset 다음)에 넣습니다.
+
+  치환: {{LIVE_ORIGIN}}, {{SCRIPT_HASHES}} — _headers와 같은 규칙.
+
+  주의
+  - <meta>로는 frame-ancestors, report-uri, sandbox가 동작하지 않습니다(브라우저가 무시).
+  - ZIP/USB(file://)로 열 때는 넣지 마세요. file:// 에서는 'self'가 기대대로 맞지 않아 글꼴·스크립트가 막힐 수 있습니다.
+  - 노트북 LAN 수업(http://192.168.x.x)에서는 upgrade-insecure-requests를 빼야 합니다(아래는 HTTPS 호스팅 기준).
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net {{SCRIPT_HASHES}}; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://hangeul.pstatic.net; font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com {{LIVE_ORIGIN}}; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">

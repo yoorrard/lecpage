@@ -1,0 +1,13 @@
+# Cloudflare Pages·Netlify에서 적용되는 보안 헤더(GitHub Pages는 무시하고 index.html의 meta CSP를 씀)
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache

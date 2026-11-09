@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "디지털로 마음과 관계를 키우는 인천형 사회정서학습",
+    "subtitle": "AI·에듀테크와 함께 완성하는 사회정서학습",
+    "organizer": "인천광역시교육청 사회정서학습(SEL) 현장지원단 연수",
+    "date": "2026-11-04", "start": "15:10", "end": "16:40",
+    "venue": "인천광역시교육청", "mode": "offline",
+    "admin": { "kind": "official", "hours": 1.5 }
+  },
+  "audience": { "type": "teachers-elementary", "size": 60, "level": "beginner", "devices": ["laptop", "phone"], "network": "good", "projector": true },
+  "archetype": { "primary": "story", "mix": ["lab"] },
+  "design": { "preset": "night-story", "mood": ["emotional", "warm"], "topics": ["sel", "edutech"], "theme": "preset", "motion": 3 },
+  "instructors": [{
+    "name": "유영재", "role": "교사", "org": "안산양지초등학교",
+    "tags": ["에듀테크", "독서교육", "노벨 엔지니어링"], "showEmail": false,
+    "links": [{ "label": "책스책", "url": "https://chekschek.com" }],
+    "timeline": [
+      { "group": "학력", "items": [{ "text": "경인교대 교육대학원 에듀테크협동교육 전공 석사" }] },
+      { "group": "활동", "items": [{ "text": "AIEDAP 마스터교원", "year": "2024~" }, { "text": "경기도 노벨엔지니어링 교육 연구회 운영진", "year": "2024~" }, { "text": "안산교육지원청 초등 ON-배움 지원단", "year": "2026~" }] },
+      { "group": "저서", "items": [{ "text": "『교사를 위한 AI 에듀테크 수업·생활·업무 대백과』(공저)" }, { "text": "『스토리텔링 AI, 엔트리 인공지능을 만나다』(공저)" }] },
+      { "group": "개발", "items": [{ "text": "디지털 독서교육 플랫폼 책스책", "url": "https://chekschek.com" }, { "text": "걱정 나무", "url": "https://worrytree.vercel.app" }, { "text": "자기 표현 문장 앱", "url": "https://ilovena.vercel.app" }, { "text": "어린이 주식왕", "url": "https://kidstock.vercel.app" }] }
+    ]
+  }],
+  "sections": [
+    { "id": "hero", "type": "hero", "tone": "night", "ctas": [{ "label": "연수 교재 보기", "href": "#deck" }, { "label": "체험 도구 바로 가기", "href": "#tools" }] },
+    { "id": "formula", "type": "message", "tone": "night", "style": "formula", "parts": ["디지털", "사회정서학습", "선생님"], "result": "사이좋은 우리 반", "text": "디지털은 관계를 대신하지 않고, 교실 속 실제 만남을 돕는 도구입니다." },
+    { "id": "five", "type": "steps5", "tone": "night", "title": "디지털이 사회정서학습에 더하는 다섯 가지", "lead": "말로 꺼내기 어려운 마음부터 교실 밖 세상까지",
+      "items": [{ "word": "꺼내기", "desc": "말하기 어려운 마음을 꺼냅니다" }, { "word": "모으기", "desc": "모두의 생각을 한 번에 모읍니다" }, { "word": "돌아보기", "desc": "쌓인 기록으로 다시 돌아봅니다" }, { "word": "만들기", "desc": "공감을 결과물로 만들어 냅니다" }, { "word": "잇기", "desc": "배운 마음을 세상과 잇습니다" }],
+      "close": "디지털로 꺼내고 모은 마음은 교실에서 얼굴 보며 나눌 때 힘이 됩니다." },
+    { "id": "outline", "type": "outline", "nav": "차례", "tone": "night", "title": "오늘 나눌 세 가지 이야기", "lead": "왜 디지털인지, 교실에서 어떻게 썼는지, 선생님은 무엇을 쓰면 좋은지 차례로 나눕니다.",
+      "items": [
+        { "part": "PART 01", "title": "디지털과 사회정서학습의 만남", "desc": "왜 디지털 위에 사회정서학습을 세울까", "tags": ["학생의 삶", "사회정서학습", "디지털의 힘"], "target": "deck:6" },
+        { "part": "PART 02", "title": "디지털 사회정서학습 수업 나눔", "desc": "노벨 엔지니어링으로 짠 네 가지 수업 사례", "tags": ["나와 친구", "우리 반", "마음", "삶으로"], "target": "deck:22" },
+        { "part": "PART 03", "title": "선생님을 위한 AI·에듀테크", "desc": "학생 이해와 수업 준비를 돕는 도구 체험", "tags": ["클래시파이", "Gemini", "Apps Script"], "target": "deck:85" }
+      ] },
+    { "id": "deck", "type": "deck", "nav": "교재", "tone": "night", "title": "한 장씩 넘겨 보는 연수 교재", "lead": "교재를 그대로 옮겼어요. 넘겨 보고, 전체 보기로 원하는 쪽을 바로 찾아보세요.",
+      "slides": [
+        { "page": 1, "title": "디지털로 마음과 관계를 키우는 인천형 사회정서학습", "text": "2026년 11월 4일 15:10~16:40 · 안산양지초등학교 교사 유영재" },
+        { "page": 6, "title": "PART 01 디지털과 사회정서학습의 만남", "text": "학생의 삶 · 사회정서학습 · 디지털의 힘" },
+        { "page": 22, "title": "PART 02 디지털 사회정서학습 수업 나눔", "text": "노벨 엔지니어링으로 짠 네 가지 수업 사례", "tools": ["자기 표현 문장 앱", "걱정나무 앱"] },
+        { "page": 34, "title": "마음을 꺼내는 글쓰기", "text": "자기 표현 문장 앱과 ChatGPT로 감정 어휘를 넓힙니다.", "tools": ["ChatGPT", "자기 표현 문장 앱"] },
+        { "page": 85, "title": "PART 03 선생님을 위한 AI·에듀테크", "text": "클래시파이, Gemini, Apps Script", "tools": ["클래시파이", "Gemini", "Apps Script"] },
+        { "page": 124, "title": "사이좋은 우리 반", "text": "긴 시간 함께해 주셔서 감사합니다." }
+      ],
+      "download": { "href": "assets/media/sel-textbook.pptx", "label": "교재 내려받기", "size": "29.3MB" },
+      "notice": "교재에 실린 그림책 표지, 학생 사진과 작품은 연수 목적으로만 써 주세요. 촬영과 재배포는 삼가 주세요." },
+    { "id": "tools", "type": "tools", "nav": "도구", "tone": "dawn", "title": "연수에서 함께 쓰는 도구", "lead": "카드를 누르면 도구 누리집이 새 창에서 열리고, 쪽 번호를 누르면 교재의 그 쪽이 열립니다.",
+      "items": [
+        { "name": "자기 표현 문장 앱", "url": "https://ilovena.vercel.app", "pages": [34, 39, 40] },
+        { "name": "띵커벨", "url": "https://www.tkbell.co.kr/", "pages": [15, 40, 41] },
+        { "name": "ChatGPT", "url": "https://chatgpt.com", "pages": [34, 52] },
+        { "name": "Suno", "url": "https://suno.com", "pages": [5, 34, 54] },
+        { "name": "스크루블리", "url": "https://scroobly.com", "pages": [34, 59, 60] },
+        { "name": "걱정나무 앱", "url": "https://worrytree.vercel.app", "pages": [56, 57, 61] },
+        { "name": "Vrew", "url": "https://vrew.ai", "pages": [19, 73, 74] },
+        { "name": "구글 어스", "url": "https://earth.google.com/", "pages": [19, 34, 71] },
+        { "name": "클래시파이", "url": "https://www.classify.co.kr/", "pages": [85, 86, 87] },
+        { "name": "Gemini", "url": "https://gemini.google.com/", "pages": [85, 86, 100] },
+        { "name": "Apps Script", "url": "https://script.google.com/", "pages": [108, 109, 110] },
+        { "name": "책스책", "url": "https://chekschek.com", "pages": [2] }
+      ],
+      "notice": "개인 구글 계정과 노트북이면 체험 준비 끝! 체험 활동에 사용합니다." },
+    { "id": "board", "type": "board", "nav": "보드", "tone": "dawn", "title": "함께 나누는 참여 보드", "lead": "체험 결과물과 연수 소감을 자유롭게 올려 주세요. 사진·PDF·영상도 올릴 수 있어요.",
+      "categories": [{ "id": "work", "label": "체험 결과물" }, { "id": "reflection", "label": "연수 소감" }], "allowFiles": true, "maxFiles": 4 },
+    { "id": "materials", "type": "materials", "nav": "자료", "tone": "dawn", "title": "연수 자료 내려받기", "lead": "교재를 비롯한 연수 자료를 모아 두었어요. 자료는 계속 추가됩니다.",
+      "items": [{ "title": "연수 교재", "desc": "디지털로 마음과 관계를 키우는 인천형 사회정서학습 — 연수에서 쓰는 PPT 원본 파일입니다.", "href": "assets/media/sel-textbook.pptx", "kind": "PPTX", "size": "29.3MB · 124쪽" }],
+      "notice": "교재에 실린 그림책 표지, 학생 사진과 작품은 연수 목적으로만 써 주세요. 촬영과 재배포는 삼가 주세요." },
+    { "id": "instructor", "type": "instructor", "nav": "강사", "tone": "night", "title": "강사 소개", "lead": "안녕하세요, 유영재입니다." },
+    { "id": "closing", "type": "closing", "tone": "night", "lead": "디지털 도구가 아니라, 도구를 적재적소에 잘 쓰는 선생님이 만드는", "text": "사이좋은 우리 반", "thanks": "긴 시간 함께해 주셔서 감사합니다" },
+    { "id": "survey", "type": "survey", "nav": "설문", "tone": "night", "title": "만족도 조사에 참여해 주세요", "url": "https://2zt.kr/1122", "qr": true }
+  ],
+  "live": { "provider": "local", "features": ["board", "reactions", "qa"] },
+  "privacy": { "collect": ["nickname"], "retentionDays": 30 }
+}

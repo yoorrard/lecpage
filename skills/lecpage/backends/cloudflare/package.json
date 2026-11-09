@@ -1,0 +1,35 @@
+{
+  "name": "lecpage-live-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "description": "lecpage 실시간 서버(Cloudflare Workers + Durable Objects). HTTP 프로토콜 v1.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ADMIN_KEY": {
+        "description": "연수 **관리자 키**입니다. 강사 콘솔(console.html)에 넣을 비밀번호로, 강사만 알게 정하세요. 예: `openssl rand -hex 12` 로 만든 값."
+      },
+      "SETUP_TOKEN": {
+        "description": "(선택) 여러 강사가 함께 쓰는 **공유 서버**일 때 강사들이 자기 연수 코드를 등록(`POST /api/<코드>/init`)하는 데 쓰는 토큰입니다. 혼자 쓰면 비워 두세요."
+      },
+      "ALLOWED_ORIGINS": {
+        "description": "이 서버를 부를 수 있는 사이트 주소(쉼표로 구분). 비우면 모든 사이트 허용. 예: `https://teacher.github.io`"
+      },
+      "RETENTION_DAYS": {
+        "description": "마지막 사용 뒤 며칠이 지나면 연수 데이터를 자동으로 지울지(개인정보 보유 기간). 기본 30."
+      },
+      "LIVE": {
+        "description": "연수 코드마다 하나씩 생기는 Durable Object(SQLite)입니다. 그대로 두세요."
+      }
+    }
+  }
+}

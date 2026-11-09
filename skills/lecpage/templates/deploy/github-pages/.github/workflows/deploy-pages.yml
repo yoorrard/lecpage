@@ -1,0 +1,67 @@
+# lecpage 생성 사이트 → GitHub Pages 배포 (GitHub Actions)
+# 놓는 곳: 생성 사이트 저장소의 .github/workflows/deploy-pages.yml
+# 준비: 저장소 Settings → Pages → Build and deployment → Source: "GitHub Actions"
+# 공식 예시 기준 액션 버전: https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
+#
+# 하는 일
+#  1) 사이트 폴더(SITE_DIR)를 _site로 복사하면서 공개하면 안 되는 파일(.md, .env, data/ 등)을 뺍니다.
+#  2) Pages 아티팩트로 올리고 배포합니다.
+# 주의: GitHub Pages는 응답 헤더를 바꿀 수 없습니다. CSP는 csp-meta.html 방식(<meta>)을 씁니다.
+
+name: Deploy lecpage site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # 사이트 파일이 저장소 맨 위에 있으면 ".", site/ 폴더 안에 있으면 "site"
+  SITE_DIR: "."
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare _site (공개 파일만 복사)
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          rsync -a \
+            --exclude '.git' --exclude '.github' --exclude '_site' \
+            --exclude '*.md' --exclude '.env*' --exclude '/data/' \
+            --exclude 'node_modules/' \
+            "${SITE_DIR}/" _site/
+          test -f _site/index.html || { echo "index.html이 없습니다. SITE_DIR를 확인하세요."; exit 1; }
+          du -sh _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,52 @@
+# lecpage 생성 사이트용 _headers
+# 쓰는 곳: Cloudflare(Workers 정적 자산·Pages), Netlify. 사이트 폴더 맨 위(index.html 옆)에 둡니다.
+# GitHub Pages·ZIP에서는 이 파일이 무시됩니다(csp-meta.html 참고).
+#
+# 치환 토큰(엔진이 채움. 없으면 빈 문자열):
+#   {{LIVE_ORIGIN}}    실시간 백엔드 주소. 공백으로 구분. 예)
+#                      supabase : https://abcd1234.supabase.co wss://abcd1234.supabase.co
+#                      sheets   : https://script.google.com https://script.googleusercontent.com
+#                      http     : https://relay.example.workers.dev wss://relay.example.workers.dev
+#                      none/local: (빈 문자열)
+#   {{SCRIPT_HASHES}}  index.html 등에 인라인 <script>가 있으면 'sha256-...' 값들. 없으면 빈 문자열.
+#
+# 한 줄 최대 2,000자, 규칙 최대 100개(Cloudflare 기준).
+# 같은 헤더가 두 규칙에 걸리면 값이 쉼표로 합쳐지므로 Cache-Control은 겹치지 않게 경로를 나눴습니다.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net {{SCRIPT_HASHES}}; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://hangeul.pstatic.net; font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com {{LIVE_ORIGIN}}; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  X-Frame-Options: SAMEORIGIN
+  Strict-Transport-Security: max-age=15552000
+
+# 사이트 전체를 검색에 노출하지 않으려면 위 /* 블록 안에 다음 줄을 (들여쓰기 두 칸으로) 추가하세요.
+#   X-Robots-Tag: noindex, nofollow
+
+# Cloudflare는 /console.html 요청을 /console 로 바꿔(307) 보내므로 두 모양을 모두 적습니다.
+/console
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
+
+/console.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
+
+/screen
+  X-Robots-Tag: noindex, nofollow
+
+/screen.html
+  X-Robots-Tag: noindex, nofollow
+
+/check
+  X-Robots-Tag: noindex
+
+/check.html
+  X-Robots-Tag: noindex
+
+/assets/slides/*
+  Cache-Control: public, max-age=3600
+
+/assets/media/*
+  Cache-Control: public, max-age=3600

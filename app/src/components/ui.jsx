@@ -1,0 +1,60 @@
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { onToast } from '../lib/util.js';
+
+/** 로고의 접힌 모서리 */
+export function Fold() {
+  return (
+    <svg class="fold" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M0 -2H50V48Z" style={{ fill: 'var(--bg)' }} />
+      <path d="M0 0L48 48L14 48Q0 48 0 34Z" style={{ fill: 'var(--lav)' }} stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" />
+    </svg>
+  );
+}
+export function Sheet({ fold = true, class: cls = '', children, ...rest }) {
+  return <section class={`sheet ${cls}`} {...rest}>{fold && <Fold />}{children}</section>;
+}
+
+export function Toast() {
+  const [msg, setMsg] = useState(''); const [on, setOn] = useState(false); const t = useRef();
+  useEffect(() => onToast((m) => { setMsg(m); setOn(true); clearTimeout(t.current); t.current = setTimeout(() => setOn(false), 2600); }), []);
+  return <div class={`toast${on ? ' on' : ''}`} role="status" aria-live="polite">{msg}</div>;
+}
+
+export function Field({ label, hint, children }) {
+  return <label class="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
+}
+
+/** 고르기 칩: multiple이면 배열 값 */
+export function Chips({ options, value, onChange, multiple = false, label }) {
+  const isOn = (v) => (multiple ? (value || []).includes(v) : value === v);
+  const toggle = (v) => {
+    if (!multiple) return onChange(v);
+    const cur = new Set(value || []); cur.has(v) ? cur.delete(v) : cur.add(v); onChange([...cur]);
+  };
+  return (
+    <div class="chips" role="group" aria-label={label}>
+      {options.map((o) => {
+        const v = typeof o === 'string' ? o : o.value; const t = typeof o === 'string' ? o : o.label;
+        return <button type="button" class="chip" aria-pressed={String(isOn(v))} onClick={() => toggle(v)}>{t}</button>;
+      })}
+    </div>
+  );
+}
+
+export function Seg({ options, value, onChange, label }) {
+  return (
+    <div class="seg" role="group" aria-label={label}>
+      {options.map((o) => <button type="button" aria-pressed={String(value === o.value)} onClick={() => onChange(o.value)}>{o.label}</button>)}
+    </div>
+  );
+}
+
+export function Dialog({ open, onClose, children, label }) {
+  const ref = useRef();
+  useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal?.(); if (!open && d.open) d.close(); }, [open]);
+  return <dialog ref={ref} class="dlg" aria-label={label} onClose={onClose} onCancel={onClose}><div class="dlg-in">{children}</div></dialog>;
+}
+
+export function Progress({ pct }) { return <div class="progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }
+
+export function Notice({ kind = '', children }) { return <div class={`notice ${kind}`}>{children}</div>; }

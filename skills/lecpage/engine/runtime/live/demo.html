@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LecLive 시험대</title>
+<meta name="referrer" content="no-referrer">
+<style>
+  :root {
+    --background: #f7f6f3; --foreground: #1d1c1a; --card: #ffffff; --muted: #6b6862; --border: #dedad2;
+    --primary: #2b59c3; --primary-foreground: #ffffff; --success: #1f7a4d; --warning: #9a6200; --danger: #b3261e;
+    --radius: 10px; --font-sans: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --background: #151514; --foreground: #ecebe8; --card: #1f1f1d; --muted: #a29f98; --border: #393833; --primary: #8fb0ff; --primary-foreground: #0f1830; --success: #6fd3a0; --warning: #f2c46b; --danger: #ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--foreground); font: 15px/1.5 var(--font-sans); }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+  h1 { font-size: 1.25rem; margin: 4px 0 0; }
+  h2 { font-size: 1rem; margin: 0 0 8px; }
+  p.lead { margin: 0; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+  input, select, textarea { font: inherit; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; width: 100%; min-width: 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  .row > label { flex: 1 1 140px; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--card); color: var(--foreground); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button.primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: .85rem; }
+  .pill[data-s="live"] { color: var(--success); border-color: currentColor; }
+  .pill[data-s="polling"] { color: var(--warning); border-color: currentColor; }
+  .pill[data-s="offline"] { color: var(--danger); border-color: currentColor; }
+  ul.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  ul.list li { display: flex; gap: 8px; align-items: start; justify-content: space-between; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  ul.list li .t { white-space: pre-wrap; overflow-wrap: anywhere; }
+  ul.list li .m { color: var(--muted); font-size: .8rem; }
+  pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; max-height: 220px; overflow: auto; }
+  .reactions { min-height: 1.6em; font-size: 1.3rem; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>LecLive 시험대</h1>
+    <p class="lead">실시간 어댑터(local · http · supabase · sheets)를 손으로 확인하는 페이지입니다. 글은 모두 textContent로만 그립니다.</p>
+  </header>
+
+  <section class="card" aria-labelledby="h-conn">
+    <h2 id="h-conn">연결</h2>
+    <form id="conn" class="row">
+      <label>방식
+        <select id="provider" name="provider">
+          <option value="local">local (같은 브라우저 탭끼리)</option>
+          <option value="http">http (Cloudflare · Node 서버)</option>
+          <option value="supabase">supabase</option>
+          <option value="sheets">sheets (Apps Script)</option>
+        </select>
+      </label>
+      <label>서버 주소 <input id="url" name="url" placeholder="https://… (http·supabase·sheets)" autocomplete="off"></label>
+      <label>anon 키 <input id="anonKey" name="anonKey" placeholder="supabase만" autocomplete="off"></label>
+      <label>연수 코드 <input id="code" name="code" value="DEMO1" autocomplete="off"></label>
+      <label>관리자 키 <input id="adminKey" name="adminKey" type="password" autocomplete="off"></label>
+      <button class="primary" id="btn-connect" type="submit">연결</button>
+      <button id="btn-close" type="button">끊기</button>
+    </form>
+    <p>상태 <span class="pill" id="status" data-s="offline">offline</span> · 방식 <span id="mode">-</span> · 나 <span id="me">-</span> · 대기열 <span id="queue">0</span></p>
+  </section>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="h-q">
+      <h2 id="h-q">질문</h2>
+      <form id="join" class="row">
+        <label>별명 <input id="nickname" maxlength="20" autocomplete="off"></label>
+        <button id="btn-join" type="submit">참여</button>
+      </form>
+      <form id="ask" class="row" style="margin-top:8px">
+        <label>질문 <textarea id="question" rows="2" maxlength="500"></textarea></label>
+        <label style="flex:0 0 auto"><span><input type="checkbox" id="anon" checked style="width:auto"> 익명</span></label>
+        <button class="primary" id="btn-ask" type="submit">올리기</button>
+      </form>
+      <ul class="list" id="questions" style="margin-top:10px" aria-live="polite"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="h-s">
+      <h2 id="h-s">강사 상태</h2>
+      <form id="stateForm" class="row">
+        <label>쪽 <input id="slide" type="number" min="0" value="0"></label>
+        <label>공지 <input id="notice" maxlength="300"></label>
+        <button id="btn-state" type="submit">보내기</button>
+      </form>
+      <div class="row" style="margin-top:8px">
+        <button type="button" data-react="👏">👏</button><button type="button" data-react="💡">💡</button><button type="button" data-react="❤️">❤️</button>
+        <button type="button" id="btn-csv">질문 CSV</button>
+        <button type="button" id="btn-purge">전부 지우기</button>
+      </div>
+      <p class="reactions" id="reactions" aria-hidden="true"></p>
+      <pre id="state">{}</pre>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="h-log">
+    <h2 id="h-log">기록</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script src="core.js"></script>
+<script src="local.js"></script>
+<script src="http.js"></script>
+<script src="supabase.js"></script>
+<script src="sheets.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var qs = new URLSearchParams(location.search);
+  ['provider', 'url', 'anonKey', 'code', 'adminKey', 'nickname'].forEach(function (k) { if (qs.get(k) != null) $(k).value = qs.get(k); });
+  var live = null;
+
+  function log(msg) {
+    var line = new Date().toLocaleTimeString('ko-KR') + '  ' + msg;
+    var el = $('log'); el.textContent = (line + '\n' + el.textContent).slice(0, 6000);
+  }
+  function renderQuestions(docs) {
+    var ul = $('questions'); ul.textContent = '';
+    docs.slice().sort(function (a, b) { return (b.votes || 0) - (a.votes || 0) || a.createdAt - b.createdAt; }).forEach(function (q) {
+      var li = document.createElement('li'); li.dataset.id = q.id;
+      var box = document.createElement('div');
+      var t = document.createElement('div'); t.className = 't'; t.textContent = q.status === 'hidden' ? '(숨긴 질문)' : q.text;
+      var m = document.createElement('div'); m.className = 'm';
+      m.textContent = (q.nickname || '익명') + ' · 공감 ' + (q.votes || 0) + (q._pending ? ' · 보내는 중' : '') + (q.pinned ? ' · 고정' : '');
+      box.appendChild(t); box.appendChild(m);
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = live && live.voted(q.id) ? '공감함' : '공감';
+      b.disabled = live && live.voted(q.id);
+      b.addEventListener('click', function () { live.vote(q.id).catch(function (e) { log('공감 실패: ' + e.message); }); });
+      li.appendChild(box); li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  function showMe() { var me = live && live.me(); $('me').textContent = me ? me.nickname : '-'; }
+
+  $('conn').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (live) live.close();
+    try {
+      live = LecLive.create({
+        provider: $('provider').value, url: $('url').value.trim(), anonKey: $('anonKey').value.trim(), code: $('code').value.trim(),
+        adminKey: $('adminKey').value || undefined, identity: qs.get('session') ? 'session' : 'local',
+        transports: qs.get('transports') ? qs.get('transports').split(',') : undefined, pollMs: Number(qs.get('pollMs')) || undefined,
+      });
+    } catch (err) { log('만들기 실패: ' + err.message); return; }
+    live.on('status', function (s) { var el = $('status'); el.textContent = s; el.dataset.s = s; log('상태: ' + s); });
+    live.on('queue', function (n) { $('queue').textContent = n; });
+    live.on('error', function (err) { log('오류: ' + (err && err.message)); });
+    live.onChange('questions', renderQuestions);
+    live.onChange('state', function (st) { $('state').textContent = JSON.stringify(st, null, 2); });
+    live.on('reaction', function (r) { var el = $('reactions'); el.textContent = (el.textContent + r.emoji).slice(-24); });
+    live.connect().then(function (info) {
+      $('mode').textContent = info.mode + (info.transport ? ' (' + info.transport + ')' : '');
+      document.body.dataset.ready = '1';
+      log('연결됨: ' + JSON.stringify(info));
+      showMe();
+    }, function (err) { log('연결 실패: ' + err.message); document.body.dataset.ready = 'error'; });
+  });
+  $('btn-close').addEventListener('click', function () { if (live) live.close(); });
+  $('join').addEventListener('submit', function (e) {
+    e.preventDefault();
+    live.join({ nickname: $('nickname').value }).then(function (r) { log('참여: ' + r.id); showMe(); }, function (err) { log('참여 실패: ' + err.message); });
+  });
+  $('ask').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var text = $('question').value;
+    if (!text.trim()) return;
+    live.add('questions', { text: text, anonymous: $('anon').checked }).then(function () { $('question').value = ''; showMe(); }, function (err) { log('질문 실패: ' + err.message); });
+  });
+  $('stateForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = $('notice').value.trim();
+    live.setState({ slide: Number($('slide').value) || 0, notice: n ? { text: n, level: 'info' } : null }).then(function () { log('상태 보냄'); }, function (err) { log('상태 실패: ' + err.message); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-react]'), function (b) {
+    b.addEventListener('click', function () { live && live.react(b.getAttribute('data-react')); });
+  });
+  $('btn-csv').addEventListener('click', function () {
+    live.exportCsv('questions').then(function (csv) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'questions.csv'; a.click();
+    }, function (err) { log('CSV 실패: ' + err.message); });
+  });
+  $('btn-purge').addEventListener('click', function () {
+    if (!confirm('이 연수의 실시간 데이터를 모두 지울까요?')) return;
+    live.purge().then(function () { log('모두 지움'); }, function (err) { log('지우기 실패: ' + err.message); });
+  });
+  if (qs.get('autoconnect')) $('conn').requestSubmit();
+})();
+</script>
+</body>
+</html>

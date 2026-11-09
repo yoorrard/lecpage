@@ -1,0 +1,65 @@
+# lecpage 실시간 서버 하나로 사이트까지 함께 띄우기 (컨테이너 1개)
+#
+# 폴더 구성(이 파일이 있는 node-server 폴더 기준)
+#   ./site/   lecpage가 만든 사이트(index.html, console.html, assets/ …) — 없으면 API만 동작
+#   ./data/   실시간 데이터·올린 파일(연수 뒤 지우면 삭제 완료)
+#   ./.env    필요하면 아래 변수를 적습니다(예: LEC_ADMIN_KEY_HASH=…)
+#
+# 실행:        docker compose up -d            → http://이컴퓨터주소:8787
+# 관리자 키:   docker compose logs live | grep 관리자   (LEC_ADMIN_KEY_HASH 를 비워 두면 첫 실행 때 한 번 보여 줌)
+# 키 해시 만들기: docker compose run --rm live node server.mjs --hash '내관리자키'
+# HTTPS(도메인 있을 때): .env 에 LEC_DOMAIN=lec.school.kr 적고  docker compose --profile https up -d
+#                        (80·443 포트가 이 컴퓨터로 열려 있어야 Caddy가 인증서를 자동으로 받습니다)
+# 멈춤:        docker compose down   ·   완전 삭제: docker compose down && rm -rf ./data
+#
+# 사이트+Caddy를 나눠 띄우는 구성은 skills/lecpage/templates/deploy/server/docker-compose.yml 을 쓰세요.
+name: lecpage-live
+
+services:
+  live:
+    build: .
+    image: lecpage-live:1
+    restart: unless-stopped
+    ports:
+      - "${LEC_PORT:-8787}:8787"
+    environment:
+      LEC_DATA: /data
+      LEC_STATIC: /site
+      # 관리자 키의 SHA-256(위 '키 해시 만들기'). 비우면 첫 실행 때 만들어 로그에 한 번 보여 줍니다.
+      LEC_ADMIN_KEY_HASH: ${LEC_ADMIN_KEY_HASH:-}
+      # 다른 주소의 사이트(GitHub Pages 등)가 이 서버를 부르면 그 주소를 쉼표로. 비우면 모든 주소 허용.
+      LEC_ORIGINS: ${LEC_ORIGINS:-}
+      # https 프로필(Caddy) 뒤에서 참가자 IP를 구분할 때 1. 바로 열어 둘 때는 0.
+      LEC_TRUST_PROXY: ${LEC_TRUST_PROXY:-0}
+      LEC_MAX_UPLOAD_MB: ${LEC_MAX_UPLOAD_MB:-20}
+      LEC_RETENTION_DAYS: ${LEC_RETENTION_DAYS:-30}
+      # 여러 강사가 함께 쓰는 서버(공유 모드)라면 설정 토큰을 정합니다(/init 허용).
+      LEC_SETUP_TOKEN: ${LEC_SETUP_TOKEN:-}
+      TZ: Asia/Seoul
+    volumes:
+      - ./data:/data
+      - ./site:/site:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  https:
+    profiles: ["https"]
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [live]
+    # SSE(text/event-stream)는 Caddy가 자동으로 바로 흘려보내고, WebSocket도 그대로 넘깁니다.
+    command: ["caddy", "reverse-proxy", "--from", "${LEC_DOMAIN:-localhost}", "--to", "live:8787"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

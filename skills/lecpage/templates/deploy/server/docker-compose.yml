@@ -1,0 +1,72 @@
+# lecpage: 정적 사이트(Caddy) + 실시간 서버(node-server) 한 번에 띄우기
+# 어디서나: 개인 서버(VPS), 학교 서버, Synology NAS(Container Manager), 라즈베리 파이, 강사 노트북(Docker Desktop)
+#
+# 폴더 구성(이 파일이 있는 폴더 기준)
+#   ./docker-compose.yml
+#   ./Caddyfile                 (templates/deploy/server/Caddyfile)
+#   ./.env                      (.env.example 복사 후 수정)
+#   ./site/                     (lecpage가 만든 사이트: index.html, console.html, assets/ …)
+#   ./node-server/              (skills/lecpage/backends/node-server/ 폴더를 그대로 복사. 빌드 불필요)
+#   ./data/                     (실시간 데이터·올린 파일이 쌓이는 곳. 연수 뒤 지우면 데이터 삭제 완료)
+#
+# 실행:      docker compose up -d
+# 관리자 키: docker compose logs live | grep 관리자   (LEC_ADMIN_KEY_HASH 를 비워 두면 첫 실행 때 한 번 만들어 보여 줌)
+# 상태:      docker compose ps   ·   docker compose logs -f live
+# 멈춤:      docker compose down          (데이터는 ./data 에 남음)
+# 완전 삭제: docker compose down && rm -rf ./data
+#
+# node-server 옵션의 최종 기준: skills/lecpage/backends/node-server/server.mjs 머리말(환경 변수 목록)
+
+name: lecpage
+
+services:
+  web:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - live
+    ports:
+      # NAS처럼 80/443을 이미 쓰는 기기는 .env 에서 LEC_HTTP_PORT=8080 처럼 바꿉니다.
+      - "${LEC_HTTP_PORT:-80}:80"
+      - "${LEC_HTTPS_PORT:-443}:443"
+    environment:
+      LEC_SITE_ADDRESS: ${LEC_SITE_ADDRESS:-:80}
+      LEC_LIVE_UPSTREAM: live:8787
+      LEC_SITE_ROOT: /srv/site
+      LEC_CSP_CONNECT_EXTRA: ${LEC_CSP_CONNECT_EXTRA:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  live:
+    # 의존성 없는 서버라 공식 Node 이미지에 폴더만 연결해서 실행합니다(Node 22.5+ 필요).
+    image: node:24-alpine
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "--disable-warning=ExperimentalWarning", "server.mjs"]
+    environment:
+      PORT: "8787"
+      LEC_HOST: 0.0.0.0
+      LEC_DATA: /data
+      # 관리자 키의 SHA-256. 만들기: node node-server/server.mjs --hash '내관리자키'
+      # 비워 두면 첫 실행 때 키를 만들어 로그에 한 번 보여 주고 해시만 ./data 에 저장합니다.
+      LEC_ADMIN_KEY_HASH: ${LEC_ADMIN_KEY_HASH:-}
+      # 사이트와 같은 주소(이 compose의 Caddy)로 쓰면 비워 둬도 됩니다.
+      # 다른 주소의 사이트(예: GitHub Pages)가 부르면 그 주소를 쉼표로. 비우면 모든 주소 허용.
+      LEC_ORIGINS: ${LEC_ORIGINS:-}
+      # Caddy 뒤에 있으므로 X-Forwarded-For 로 참가자 IP를 구분(속도 제한용)
+      LEC_TRUST_PROXY: "1"
+      LEC_MAX_UPLOAD_MB: ${LEC_MAX_UPLOAD_MB:-20}
+      LEC_RETENTION_DAYS: ${LEC_RETENTION_DAYS:-30}
+      TZ: Asia/Seoul
+    volumes:
+      - ./node-server:/app:ro
+      - ./data:/data
+    expose:
+      - "8787"
+
+volumes:
+  caddy_data:
+  caddy_config:

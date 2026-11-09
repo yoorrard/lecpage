@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.out/
+qa/
+*.log
+.DS_Store
+app/public/examples/
+app/public/fx-demo/
+skills/lecpage/backends/cloudflare/.wrangler/
+skills/lecpage/backends/node-server/data/
+.env
+.env.*

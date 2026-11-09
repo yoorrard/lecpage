@@ -1,0 +1,45 @@
+# lecpage 생성 사이트 + node-server(실시간) — Caddy 설정
+# docker-compose.yml 과 함께 쓰도록 만들었습니다. 값은 .env 파일(환경 변수)로 바꿉니다.
+#
+#   LEC_SITE_ADDRESS       ":80"            → 노트북·NAS·교실 LAN (http, 인증서 없음)
+#                          "lec.school.kr"  → 인터넷 공개 서버. Caddy가 HTTPS 인증서를 자동 발급(80·443 포트 열려 있어야 함)
+#   LEC_LIVE_UPSTREAM      node-server 주소 (기본 live:8787 — compose 서비스 이름)
+#   LEC_SITE_ROOT          사이트 폴더 (기본 /srv/site)
+#   LEC_CSP_CONNECT_EXTRA  connect-src 에 더할 주소(공백 구분). 예) "wss://lec.school.kr" 또는 Supabase 주소
+#
+# 확인: caddy validate --config Caddyfile --adapter caddyfile   (docker compose exec web caddy validate --config /etc/caddy/Caddyfile)
+# 참고: http(LAN)에서도 동작하도록 upgrade-insecure-requests 와 HSTS 는 넣지 않았습니다.
+
+{$LEC_SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://hangeul.pstatic.net; font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' {$LEC_CSP_CONNECT_EXTRA} https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	# 공개하지 않을 파일
+	@hidden path *.md /.* /data/*
+	respond @hidden 404
+
+	# 실시간 API: WebSocket 업그레이드는 Caddy가 자동 처리. SSE는 즉시 전달.
+	handle /api/* {
+		reverse_proxy {$LEC_LIVE_UPSTREAM:live:8787} {
+			flush_interval -1
+		}
+	}
+
+	# 정적 사이트
+	handle {
+		root * {$LEC_SITE_ROOT:/srv/site}
+		@nocache path / *.html /assets/site.json
+		header @nocache Cache-Control "no-cache"
+		@longcache path /assets/slides/* /assets/media/*
+		header @longcache Cache-Control "public, max-age=3600"
+		file_server
+	}
+}

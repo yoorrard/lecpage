@@ -1,0 +1,25 @@
+// lecpage 생성 사이트 → Cloudflare Workers 정적 자산(Static Assets)
+// 놓는 곳: 사이트 폴더(예: ./site)의 "바깥" 상위 폴더. 사이트 폴더 안에는 _headers, .assetsignore 를 둡니다.
+// 배포: npx wrangler@4 deploy   (처음 한 번 npx wrangler@4 login)
+// 정적 자산 요청은 무료·무제한입니다(Workers 요청 10만/일 한도에 포함되지 않음).
+//   https://developers.cloudflare.com/workers/platform/pricing/
+//   https://developers.cloudflare.com/workers/static-assets/
+// 실시간 중계(Durable Objects)는 backends/cloudflare/ 의 별도 Worker로 배포합니다(이 파일은 정적 사이트 전용).
+{
+  "name": "{{SITE_NAME}}",
+  // 배포하는 날짜 근처로 둡니다. 엔진이 빌드 날짜(YYYY-MM-DD)로 채웁니다.
+  "compatibility_date": "{{COMPAT_DATE}}",
+  "assets": {
+    "directory": "./site",
+    // 없는 주소는 404.html(있으면)로 응답
+    "not_found_handling": "404-page",
+    // 기본값. /console.html 은 /console 로 307 이동 후 제공됩니다. (_headers에 두 모양 모두 적어 둠)
+    "html_handling": "auto-trailing-slash"
+  },
+  // 무료 주소 https://{{SITE_NAME}}.<계정-하위도메인>.workers.dev 사용
+  "workers_dev": true,
+  // 버전별 미리보기 주소는 끕니다(연수용으로는 필요 없음)
+  "preview_urls": false
+  // 내 도메인을 붙일 때(도메인이 Cloudflare DNS에 있어야 함):
+  // ,"routes": [ { "pattern": "lec.example.kr", "custom_domain": true } ]
+}

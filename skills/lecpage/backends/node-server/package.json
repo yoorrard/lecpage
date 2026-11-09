@@ -1,0 +1,14 @@
+{
+  "name": "lecpage-live-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "lecpage 실시간 서버(의존성 없음). HTTP 프로토콜 v1 + 정적 사이트 제공.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.5" },
+  "bin": { "lecpage-live": "server.mjs" },
+  "scripts": {
+    "start": "node --experimental-sqlite --disable-warning=ExperimentalWarning server.mjs",
+    "hash": "node server.mjs --hash"
+  }
+}

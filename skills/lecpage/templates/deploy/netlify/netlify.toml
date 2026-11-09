@@ -1,0 +1,16 @@
+# lecpage 생성 사이트 → Netlify
+# 놓는 곳: 사이트 폴더 맨 위(index.html 옆). 보안 헤더·캐시는 같은 폴더의 _headers 파일이 맡습니다
+# (templates/deploy/_headers 를 복사). 같은 헤더를 여기와 _headers 양쪽에 쓰면 값이 겹치니 한쪽만 쓰세요.
+#
+# 이미 완성된 정적 파일이라 빌드 명령이 필요 없습니다.
+# Netlify Drop(끌어 놓기)으로 올릴 때는 이 파일이 없어도 됩니다.
+
+[build]
+  publish = "."
+  command = ""
+
+# 예전 주소가 바뀌었을 때만 사용(예: /1104 → /)
+# [[redirects]]
+#   from = "/old"
+#   to = "/"
+#   status = 301

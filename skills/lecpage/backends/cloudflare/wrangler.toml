@@ -1,0 +1,42 @@
+# lecpage 실시간 서버 — Cloudflare Workers + Durable Objects (무료 플랜에서 동작)
+# 배포: npx wrangler deploy   ·   로컬 실행: npx wrangler dev
+# 비밀 값은 이 파일에 쓰지 말고: npx wrangler secret put ADMIN_KEY  (공유 모드면 SETUP_TOKEN 도)
+name = "lecpage-live"
+main = "src/index.js"
+compatibility_date = "2026-10-15"
+workers_dev = true
+
+# 연수 코드 하나당 Durable Object 하나(SQLite 저장소). 무료 플랜은 SQLite 방식만 쓸 수 있습니다.
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveRoom"]
+
+[vars]
+# 비우면 모든 사이트에서 부를 수 있습니다. 예) "https://teacher.github.io,https://lec.school.kr"
+ALLOWED_ORIGINS = ""
+# 마지막 사용 뒤 며칠이 지나면 연수 데이터를 지울지(개인정보 보유 기간)
+RETENTION_DAYS = "30"
+MAX_UPLOAD_MB = "20"
+# 비우면 어떤 코드든 쓸 수 있습니다(ADMIN_KEY가 있을 때). 예) "AB12CD,XY34ZW"
+ALLOWED_CODES = ""
+# "true"면 /init을 처음 부른 사람이 코드를 차지합니다. 공개 인터넷에서는 켜지 마세요.
+OPEN_INIT = "false"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
+
+# ── 파일 올리기(선택) ──────────────────────────────────────────────
+# R2를 켜려면 대시보드에서 R2를 활성화(결제 수단 등록 필요, 10GB까지 무료)한 뒤
+#   npx wrangler r2 bucket create lecpage-uploads
+# 를 실행하고 아래 세 줄의 # 를 지우세요. 없으면 /upload 가 "uploads_disabled"로 답합니다.
+# [[r2_buckets]]
+# binding = "UPLOADS"
+# bucket_name = "lecpage-uploads"
