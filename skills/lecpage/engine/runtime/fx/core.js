@@ -217,8 +217,10 @@
       t.nodeValue.split(/(\s+)/).forEach(function (p) {
         if (!p) return;
         if (/^\s+$/.test(p)) { frag.appendChild(d.createTextNode(p)); return; }
+        /* 낱말 단위는 줄바꿈되지 않는 덩어리(.fx-w: nowrap, 글자 모드는 inline-block).
+           공백은 텍스트 노드로 남겨 낱말 사이에서만 줄이 바뀐다 → word-break: keep-all과 같은 결과 */
         var ws = d.createElement('span');
-        ws.className = 'fx-w';
+        ws.className = mode === 'chars' ? 'fx-w fx-wc' : 'fx-w';
         if (mode === 'chars') {
           Array.from(p).forEach(function (ch) {
             var cs = d.createElement('span');
@@ -350,6 +352,11 @@
       },
       /* 그래픽 효과 공통: 꾸밈 층(aria-hidden, 클릭 통과)을 호스트 맨 앞에 넣는다 */
       layer: function (host, cls) {
+        /* 띠(구분선)처럼 낮은 호스트에는 최소 높이 64px */
+        if (host.getBoundingClientRect().height < 40 && !host.style.minHeight) {
+          host.style.minHeight = '64px';
+          cl.push(function () { host.style.minHeight = ''; });
+        }
         var ly = d.createElement('div');
         ly.className = 'fx-layer ' + (cls || 'fx-' + inst.id);
         ly.setAttribute('aria-hidden', 'true');

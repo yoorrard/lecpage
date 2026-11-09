@@ -12,7 +12,7 @@ LecFX.define('guided-progress', {
     bar.appendChild(fill);
     el.appendChild(bar);
     var links = [], chip = null, nav = null;
-    if (secs.length > 1 && o.steps !== false) {
+    if (secs.length > 1 && o.steps !== false && !el.closest('[aria-hidden="true"]')) {
       nav = document.createElement('nav');
       nav.className = 'fx-gp-steps';
       nav.setAttribute('aria-label', o.label || '연수 진행 단계');

@@ -3,7 +3,7 @@
 // 익명 로그인 IP당 시간당 30회(그래서 lecpage는 Supabase Auth를 쓰지 않음), Apps Script 계정당 동시 실행 30,
 // Cloudflare Workers 무료 하루 10만 요청·정적 파일 무제한·Durable Objects 대기 중 웹소켓 과금 없음.
 
-export const REALTIME_FEATURES = ['qa', 'help', 'progress', 'poll', 'chat', 'reactions'];
+export const REALTIME_FEATURES = ['qa', 'help', 'progress', 'poll', 'chat', 'reactions', 'signal'];
 export const STORE_FEATURES = ['attendance', 'board', 'survey'];
 
 export const BACKENDS = {

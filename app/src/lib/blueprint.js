@@ -1,7 +1,7 @@
 // 연수 정보(마법사 답) ↔ 설계도 연결
 import { E } from './engine.js';
 
-const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'chat'];
+const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'chat', 'signal'];
 
 export function minutesBetween(a, b) {
   const m = (t) => { const x = /^(\d{1,2}):(\d{2})/.exec(t || ''); return x ? +x[1] * 60 + +x[2] : null; };

@@ -59,7 +59,8 @@
     // ---------------------------------------------------------------- realtime
     function onTick(p) {
       if (!p || typeof p !== 'object') return;
-      if (p.reset) { ctx.emit({ type: 'reset' }); return; }
+      // never trust the payload: a "reset" only triggers a full reload from the database
+      if (p.reset) { ctx.emit({ type: 'resync', full: true }); return; }
       if (p.r && typeof p.r === 'object') Object.keys(p.r).forEach(function (e) { emit({ type: 'reaction', doc: { emoji: e, count: Math.min(50, Number(p.r[e]) || 1) } }); });
       if (typeof p.rev === 'number' && p.rev > (Number(ctx.cursor()) || 0) && !timers.resync) {
         // spread the follow-up reads of a full room over ~0.5 s

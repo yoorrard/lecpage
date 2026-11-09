@@ -3,6 +3,10 @@ LecFX.define('horizontal-snap', {
   level: 1,
   init: function (el, o, ctx) {
     if (el.children.length < 2) return;
+    if (el.closest('[aria-hidden="true"]')) { /* 꾸밈 영역: 버튼·포커스 대상은 만들지 않는다 */
+      el.classList.add('fx-hsnap');
+      return function () { el.classList.remove('fx-hsnap'); };
+    }
     var parent = el.parentNode, wrap = document.createElement('div'), bar = document.createElement('div');
     wrap.className = 'fx-hsnap-wrap';
     wrap.setAttribute('role', 'region');

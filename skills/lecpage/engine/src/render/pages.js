@@ -111,6 +111,7 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>막혔어요</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
+  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-signal" role="group" aria-label="지금 이해 정도"><button type="button" data-signal="green" aria-pressed="false" title="이해했어요"><i></i><span class="lp-sr">이해했어요</span></button><button type="button" data-signal="yellow" aria-pressed="false" title="조금 헷갈려요"><i></i><span class="lp-sr">조금 헷갈려요</span></button><button type="button" data-signal="red" aria-pressed="false" title="도와주세요"><i></i><span class="lp-sr">도와주세요</span></button></div>` : ''}
   ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-react" role="group" aria-label="반응 보내기"><button type="button" data-react="👏" aria-label="박수">👏</button><button type="button" data-react="💡" aria-label="좋은 생각">💡</button><button type="button" data-react="❤️" aria-label="좋아요">❤️</button></div>` : ''}
 </div><div class="lp-timer" data-timer hidden role="timer" aria-live="off"></div><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;

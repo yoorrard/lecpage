@@ -11,6 +11,10 @@
 npx skills add yoorrard/lecpage
 ```
 
+<p align="center"><img src="docs/images/app-home.webp" width="49%" alt="lecpage 첫 화면"> <img src="docs/images/app-design.webp" width="49%" alt="디자인 3안 고르기와 미리보기"></p>
+<p align="center"><img src="docs/images/presets.webp" width="98%" alt="같은 연수 내용을 12개 무드 프리셋으로 만든 첫 화면"></p>
+<p align="center"><img src="docs/images/example-sel.webp" width="49%" alt="견본: 스토리형 사회정서학습 연수 사이트"> <img src="docs/images/console.webp" width="49%" alt="강사 콘솔: 진행 현황·도움 요청·질문 관리"></p>
+
 ## 무엇을 만들어 주나요
 | | |
 |---|---|

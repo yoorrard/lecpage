@@ -494,6 +494,16 @@
     };
     var dh = $('[data-dock-help]'); if (dh) dh.addEventListener('click', function () { live.help(stApi && stApi.current()); });
     var dq = $('[data-dock-qa]'); if (dq) dq.addEventListener('click', function () { if (qaBox) { qaBox.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); var t = qaBox.querySelector('textarea'); if (t) setTimeout(function () { t.focus(); }, 300); } });
+    // 신호등: 참가자당 하나(answers, poll='signal')를 덮어씀
+    var mySignal = store.get('signal', '');
+    function paintSignal() { $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-signal') === mySignal)); }); }
+    paintSignal();
+    $$('[data-signal]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var v = b.getAttribute('data-signal');
+        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = v; store.set('signal', v); paintSignal(); toast({ green: '이해했어요를 보냈어요.', yellow: '조금 헷갈려요를 보냈어요.', red: '도와주세요를 보냈어요. 곧 갈게요!' }[v]); }, function () { });
+      });
+    });
     $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); if (conn.react) conn.react(e).catch(function () { }); }); });
 
     var lastProg = {};

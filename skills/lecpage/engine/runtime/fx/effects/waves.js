@@ -4,6 +4,7 @@ LecFX.define('waves', {
   loop: true,
   init: function (el, o, ctx) {
     var ly = ctx.layer(el);
+    if (el.getBoundingClientRect().height < 140) ly.classList.add('fx-waves--band');
     var wave = function (amp, ph) {
       var d = 'M0 ' + (60 + amp * Math.sin(ph)).toFixed(1);
       for (var x = 0; x <= 2880; x += 40) d += ' L' + x + ' ' + (60 + amp * Math.sin(ph + x / 1440 * Math.PI * 4)).toFixed(1);

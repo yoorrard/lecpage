@@ -550,7 +550,8 @@
       "help",
       "progress",
       "board",
-      "reactions"
+      "reactions",
+      "signal"
     ]
   },
   "privacy": {

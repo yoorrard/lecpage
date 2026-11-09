@@ -421,6 +421,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .lp-react{display:flex;gap:2px}
 .lp-react button{border:0;background:transparent;font-size:1.25rem;width:38px;height:38px;border-radius:50%;cursor:pointer}
 .lp-react button:hover{background:var(--muted)}
+.lp-signal{display:flex;gap:4px;padding:0 4px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.lp-signal button{width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:transparent;cursor:pointer;display:grid;place-items:center}
+.lp-signal i{width:16px;height:16px;border-radius:50%;display:block}
+.lp-signal [data-signal="green"] i{background:#1f9d55}.lp-signal [data-signal="yellow"] i{background:#e8b100}.lp-signal [data-signal="red"] i{background:#d63b2f}
+.lp-signal button[aria-pressed="true"]{border-color:var(--foreground)}
+.lp-signal-bar{display:flex;height:18px;border-radius:999px;overflow:hidden;background:var(--muted)}
+.lp-signal-bar i{display:block;height:100%}
 .lp-live-dot{width:10px;height:10px;border-radius:50%;background:var(--muted-foreground);margin:0 4px}
 .lp-live-dot[data-state="live"]{background:var(--success)}
 .lp-live-dot[data-state="polling"]{background:var(--warning)}

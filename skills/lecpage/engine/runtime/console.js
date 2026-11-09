@@ -50,6 +50,7 @@
     panel('help', '도움 요청');
     panel('control', '진행 맞추기·공지·타이머');
     panel('qa', '질문 관리');
+    panel('signal', '신호등', 'is-third');
     panel('poll', '투표', 'is-third');
     panel('board', '보드 관리', 'is-third');
     panel('data', '기록·정리', 'is-third');
@@ -104,6 +105,22 @@
       li.appendChild(t); li.appendChild(a); qul.appendChild(li);
     });
     ql.appendChild(qul);
+    // 신호등
+    var sg = P.signal.body; sg.textContent = '';
+    var sig = { green: 0, yellow: 0, red: 0 }, latestSig = {};
+    vals('answers').forEach(function (a) { if (a.poll === 'signal' && (!latestSig[a.by] || (a.createdAt || 0) >= (latestSig[a.by].createdAt || 0))) latestSig[a.by] = a; });
+    Object.keys(latestSig).forEach(function (k) { var v = latestSig[k].value; if (sig[v] !== undefined) sig[v]++; });
+    var tot = sig.green + sig.yellow + sig.red;
+    if (!tot) sg.appendChild(el('p', 'lp-small', '참가자가 신호를 보내면 여기에 모여요.'));
+    else {
+      var bar = el('div', 'lp-signal-bar');
+      [['green', '#1f9d55'], ['yellow', '#e8b100'], ['red', '#d63b2f']].forEach(function (c) { var i = el('i'); i.style.width = (sig[c[0]] / tot * 100) + '%'; i.style.background = c[1]; bar.appendChild(i); });
+      sg.appendChild(bar);
+      sg.appendChild(el('p', 'lp-small', '이해했어요 ' + sig.green + ' · 조금 헷갈려요 ' + sig.yellow + ' · 도와주세요 ' + sig.red));
+      var redShare = sig.red / tot;
+      if (redShare >= 0.25 && !render._sigAlert) { render._sigAlert = true; toast('도와주세요 신호가 ' + Math.round(redShare * 100) + '%예요. 잠시 멈추고 확인해 보세요.'); }
+      if (redShare < 0.2) render._sigAlert = false;
+    }
     // 투표
     var pl = P.poll.body; pl.textContent = '';
     var polls = []; (BP.sections || []).forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });

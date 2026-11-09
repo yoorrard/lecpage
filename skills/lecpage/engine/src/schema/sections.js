@@ -31,7 +31,7 @@ export const SECTION_DEFS = {
 };
 
 export const SECTION_TYPES = Object.keys(SECTION_DEFS);
-export const LIVE_FEATURES = ['qa', 'help', 'progress', 'board', 'poll', 'chat', 'attendance', 'reactions'];
+export const LIVE_FEATURES = ['qa', 'help', 'progress', 'board', 'poll', 'chat', 'attendance', 'reactions', 'signal'];
 export const LIVE_PROVIDERS = ['none', 'local', 'supabase', 'sheets', 'http'];
 export const ARCHETYPES = ['story', 'lab', 'live', 'course'];
 export const DEPLOY_TARGETS = ['github-pages', 'cloudflare', 'vercel', 'netlify', 'firebase', 's3', 'server', 'lan', 'zip'];

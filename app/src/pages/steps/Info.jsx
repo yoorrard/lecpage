@@ -3,7 +3,7 @@ import { Sheet, Field, Chips } from '../../components/ui.jsx';
 
 const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
 const FORMAT = [{ value: 'lecture', label: '강의 중심' }, { value: 'practice', label: '실습 중심' }, { value: 'workshop', label: '강의+실습' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'course', label: '여러 차시 과정' }];
-const FEATURES = [{ value: 'qa', label: '실시간 질문' }, { value: 'help', label: '막혔어요(도움 요청)' }, { value: 'progress', label: '실습 진행 현황' }, { value: 'board', label: '결과물 공유 보드' }, { value: 'poll', label: '투표·워드클라우드' }, { value: 'attendance', label: '출석·이수 확인' }, { value: 'reactions', label: '박수·반응' }];
+const FEATURES = [{ value: 'qa', label: '실시간 질문' }, { value: 'help', label: '막혔어요(도움 요청)' }, { value: 'progress', label: '실습 진행 현황' }, { value: 'board', label: '결과물 공유 보드' }, { value: 'poll', label: '투표·워드클라우드' }, { value: 'attendance', label: '출석·이수 확인' }, { value: 'signal', label: '신호등(이해 정도)' }, { value: 'reactions', label: '박수·반응' }];
 const DEVICES = [{ value: 'laptop', label: '개인 노트북' }, { value: 'chromebook', label: '학교 크롬북' }, { value: 'tablet', label: '태블릿' }, { value: 'phone', label: '휴대폰' }];
 const NETWORK = [{ value: 'good', label: '잘 됨' }, { value: 'slow', label: '느림' }, { value: 'restricted', label: '학교망(막힌 곳 있음)' }, { value: 'offline', label: '인터넷 없음' }];
 const MOODS = ['차분하고 따뜻하게', '밝고 경쾌하게', '미래적·테크', '공식적·단정하게', '감성적·울림', '손그림·아날로그', '레트로·팝', '자연·숲', '글 중심·잡지처럼'];

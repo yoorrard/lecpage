@@ -24,6 +24,37 @@ LecFX.define('line-draw', {
       if (o.scrub === false) ctx.visible(el, function () { el.classList.add('fx-line-draw--once'); paths.forEach(function (pa) { pa.style.strokeDashoffset = 0; }); }, { once: true, rootMargin: '0px 0px -15% 0px' });
       return function () { paths.forEach(function (pa) { pa.style.strokeDasharray = ''; pa.style.strokeDashoffset = ''; }); el.classList.remove('fx-line-draw', 'fx-line-draw--once'); };
     }
+    if (!o.items && !/^(UL|OL)$/.test(el.tagName) && o.mode !== 'rail') {
+      /* 구분 띠: 낱말 사이를 잇는 선이 스크롤에 맞춰 차오른다(낱말이 없으면 한 줄) */
+      var words = Array.prototype.slice.call(el.children), segs = [];
+      el.classList.add('fx-ld-divider');
+      var seg = function (before) { var x = document.createElement('i'); x.className = 'fx-ld-seg'; x.setAttribute('aria-hidden', 'true'); el.insertBefore(x, before); segs.push(x); };
+      words.forEach(function (wd) { wd.classList.add('fx-ld-word'); seg(wd); });
+      seg(null);
+      var fit = function () {
+        words.forEach(function (wd) { wd.classList.remove('is-cut'); });
+        for (var k = words.length - 1; k >= 0 && el.scrollWidth > el.clientWidth + 1; k--) words[k].classList.add('is-cut');
+      };
+      fit();
+      var lw = el.clientWidth;
+      ctx.on(window, 'resize', function () { if (el.clientWidth !== lw) { lw = el.clientWidth; fit(); } });
+      var lastD = -1;
+      ctx.onScroll(function (y, vh) {
+        var p = U.progress(el, vh, 0.95, 0.45);
+        return function () {
+          if (Math.abs(p - lastD) < 0.002) return;
+          lastD = p;
+          var vis = segs.filter(function (x) { var nx = x.nextElementSibling; return !nx || !nx.classList.contains('is-cut'); }), m = vis.length;
+          vis.forEach(function (x, i) {
+            var f = U.clamp(p * m - i, 0, 1);
+            x.style.setProperty('--fx-f', f.toFixed(3));
+            var nx = x.nextElementSibling;
+            if (nx && nx.classList.contains('fx-ld-word')) nx.classList.toggle('is-reached', f >= 1);
+          });
+        };
+      }, { el: el });
+      return function () { segs.forEach(function (x) { x.remove(); }); words.forEach(function (wd) { wd.classList.remove('fx-ld-word', 'is-reached', 'is-cut'); }); el.classList.remove('fx-ld-divider'); };
+    }
     var items = Array.prototype.slice.call(o.items ? el.querySelectorAll(o.items) : el.children);
     if (!items.length) return;
     var rail = document.createElement('span'), fill = document.createElement('span');
