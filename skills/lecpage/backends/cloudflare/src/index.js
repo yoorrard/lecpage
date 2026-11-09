@@ -13,6 +13,7 @@
 //   ALLOWED_CODES="A1,B2"     restrict which codes exist          ALLOWED_ORIGINS="https://site"  CORS allow-list
 //   RETENTION_DAYS="30"       idle days before a training is wiped   MAX_UPLOAD_MB="20"
 //   MAX_PARTICIPANTS="500"    per training      MAX_SOCKETS_PER_IP="500"  WebSocket/SSE per IP per training
+//   NEW_CODES_PER_HOUR="30"   trainings a single IP may bring to life per hour (single-teacher mode)
 // A code comes to life only on its first write that may create a training (single-teacher mode: ADMIN_KEY or
 // ALLOWED_CODES) or on /init: plain reads of an unknown code never create storage, and an object without a training
 // deletes everything it holds in its alarm. A Guard object per client IP (binding GUARD) counts wrong admin keys and
@@ -109,6 +110,7 @@ export class LiveRoom extends DurableObject {
     this.reactTimer = null;
     this.pingTimer = null;
     this.corePromise = null;
+    this.wsFails = new WeakMap(); // wrong auth messages per socket (messages may be handled concurrently)
     // Answered by the runtime without waking the object (no duration charge).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -139,6 +141,7 @@ export class LiveRoom extends DurableObject {
             retentionDays: Number(env.RETENTION_DAYS || 30),
             maxUploadBytes: Math.max(1, Number(env.MAX_UPLOAD_MB || 20)) * 1048576,
             maxParticipants: Math.max(1, Number(env.MAX_PARTICIPANTS) || 500),
+            ...(Number(env.NEW_CODES_PER_HOUR) > 0 ? { rate: { create: [Math.floor(Number(env.NEW_CODES_PER_HOUR)), 3600e3] } } : {}),
             // no tables (and no storage bill) until the first write that may create a training
             lazySchema: true,
             // tables were just created: make sure an object that ends up without a training is emptied
@@ -202,19 +205,25 @@ export class LiveRoom extends DurableObject {
     if (message === 'ping') { ws.send('pong'); return; }
     let o; try { o = JSON.parse(message); } catch { return; }
     if (o && o.type === 'auth' && typeof o.admin === 'string' && o.admin.length <= 200) {
-      const att = ws.deserializeAttachment() || {};
+      const att0 = ws.deserializeAttachment() || {};
+      if (att0.closing) return;
       try {
         const core = await this.core();
         // same throttle as the HTTP header: per (code, IP) here and per IP in the Guard; 429 closes the socket
-        const ok = await core.wsAuth(att.code || '', o.admin, att.ip || '');
-        att.admin = ok; if (!ok) att.fails = (att.fails || 0) + 1;
+        const ok = await core.wsAuth(att0.code || '', o.admin, att0.ip || '');
+        const att = ws.deserializeAttachment() || att0; // re-read: other messages may have run meanwhile
+        const fails = ok ? 0 : Math.max(this.wsFails.get(ws) || 0, att.fails || 0) + 1;
+        if (!ok) this.wsFails.set(ws, fails);
+        att.admin = ok; att.fails = fails; if (!ok && fails >= 3) att.closing = true;
         ws.serializeAttachment(att);
         ws.send(JSON.stringify({ type: 'auth', ok }));
-        if (!ok && att.fails >= 3) ws.close(1008, 'auth');
+        if (att.closing) ws.close(1008, 'auth');
       } catch (e) {
         const { body, retryAfter } = errorBody(e);
-        att.admin = false; ws.serializeAttachment(att);
-        try { ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); ws.close(1008, 'auth'); } catch { /* closed */ }
+        try {
+          const att = ws.deserializeAttachment() || att0; att.admin = false; att.closing = true; ws.serializeAttachment(att);
+          ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); ws.close(1008, 'auth');
+        } catch { /* closed */ }
       }
     } else if (o && o.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now: Date.now() }));
   }

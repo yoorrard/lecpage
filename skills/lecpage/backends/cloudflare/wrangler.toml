@@ -38,6 +38,8 @@ OPEN_INIT = "false"
 # 연수 하나에 참가할 수 있는 최대 인원, 한 IP(학교 공유기 하나)에서 연수 하나에 여는 실시간 연결 수
 MAX_PARTICIPANTS = "500"
 MAX_SOCKETS_PER_IP = "500"
+# IP 하나(학교 공유기 하나)가 한 시간에 새로 만들 수 있는 연수 코드 수(ADMIN_KEY로 코드를 자동으로 만드는 경우)
+NEW_CODES_PER_HOUR = "30"
 
 [observability]
 enabled = true

@@ -31,7 +31,7 @@ $L doctor                                                  # 환경 점검
 ## 작업 흐름
 1. **자료 받기**: PPTX·PDF·HWPX·DOCX·TXT·MD. 구형 HWP·PPT·DOC는 "PDF나 HWPX·PPTX로 저장해 주세요"라고 안내한다. PPTX와 그 PDF를 함께 받으면 쪽 그림이 원본 글꼴 그대로 나온다.
 2. **바로 만들기**: `make 교재 -o dist`. 1분 안에 첫 사이트가 나온다. 요약의 칸 목록·빈칸·점검 결과를 읽는다.
-3. **빈칸 인터뷰**: 요약의 "빈칸"과 `references/intake.md`에서 교재로 알 수 없는 것만, 10개 이내, 고르기형으로 묻는다. 첫 메시지에 교재에서 알아낸 것을 한 줄로 알린다. "알아서"라고 하면 기본값을 쓰고 무엇을 가정했는지 한 줄로 말한다. 답은 `work/info.json`.
+3. **빈칸 인터뷰**: 요약의 "빈칸"과 `references/intake.md`에서 교재로 알 수 없는 것만 고르기형으로 묻는다(기본 4문항, 많아야 7개). 디자인·운영 방식은 여기서 묻지 않고 6·7단계에서 정한다. 첫 메시지에 교재에서 알아낸 것을 한 줄로 알린다. "알아서"라고 하면 기본값을 쓰고 무엇을 가정했는지 한 줄로 말한다. 답은 `work/info.json`.
 4. **답 반영**: `make 교재 -i work/info.json -o dist --fresh`. 교재 해석은 재사용되고 설계도만 새 초안으로 바뀐다.
 5. **내용 다듬기**: `brief`로 칸을 보고 `patch`로 고친다. 한 줄은 `--set`, 여러 곳은 패치 파일(`references/cli.md` §3). 설계도 전체를 다시 쓰지 않는다. 칸별 요령은 `references/blueprint.md`, 칸 구성은 `references/modules.md`, 문구는 `references/copywriting.md`.
 6. **디자인 고르기**: `options` → `work/options/contact-sheet.png`를 강사에게 보여 주고 고르게 한다. `patch … --set design.preset=<id>`. 기관 색은 `design.accent`. 사이트 글꼴은 기본으로 교재 글꼴을 따른다. 프리셋·효과 자세히: `references/design.md`.

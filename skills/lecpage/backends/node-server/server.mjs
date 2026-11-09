@@ -19,6 +19,7 @@
 //   --no-uploads / LEC_UPLOADS=0     --quiet / LEC_LOG=0
 //   --max-connections / LEC_MAX_CONNECTIONS (5000)   --max-sockets-per-ip / LEC_MAX_SOCKETS_PER_IP (500)
 //   --max-participants / LEC_MAX_PARTICIPANTS (500 per training)
+//   --new-codes-per-hour / LEC_NEW_CODES_PER_HOUR (30)  trainings one IP may bring to life per hour (default-key mode)
 // Admin keys and setup tokens must be at least 12 characters and not a known example ("change-me-…"); the server
 // refuses to start otherwise. Without a key it generates one and writes it to <data>/admin-key.txt (mode 0600).
 // Static serving never returns dotfiles, *.md, lecpage.blueprint.json, admin-key files or database files (404).
@@ -73,6 +74,7 @@ export function readOptions(argv = process.argv.slice(2), env = process.env) {
     maxConnections: Math.max(10, Number(pick('max-connections', 'LEC_MAX_CONNECTIONS', 5000)) || 5000),
     maxSocketsPerIp: Math.max(1, Number(pick('max-sockets-per-ip', 'LEC_MAX_SOCKETS_PER_IP', 500)) || 500),
     maxParticipants: Math.max(1, Number(pick('max-participants', 'LEC_MAX_PARTICIPANTS', 500)) || 500),
+    newCodesPerHour: Math.max(1, Number(pick('new-codes-per-hour', 'LEC_NEW_CODES_PER_HOUR', 30)) || 30),
     uploads: flags['no-uploads'] ? false : !/^(0|false|no|off)$/i.test(String(env.LEC_UPLOADS || '1')),
     quiet: flags.quiet === true || /^(0|false|off)$/i.test(String(env.LEC_LOG || '1')),
     generateKey: flags['no-generate-key'] ? false : !/^(0|false)$/i.test(String(env.LEC_GENERATE_KEY || '1')),
@@ -168,7 +170,7 @@ export async function start(opts = readOptions()) {
       retentionDays: opts.retentionDays,
       maxUploadBytes: Math.max(1, opts.maxUploadMb) * 1024 * 1024,
       maxParticipants: opts.maxParticipants || 500,
-      ...(opts.rate ? { rate: opts.rate } : {}),
+      rate: { create: [opts.newCodesPerHour || 30, 3600e3], ...(opts.rate || {}) },
     },
   });
   const hops = opts.trustedProxies || 0;

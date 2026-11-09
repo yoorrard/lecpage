@@ -30,12 +30,12 @@
 
 | 명령 | 하는 일 | 출력 |
 |---|---|---|
-| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, 빌드, 점검 |
+| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, 빌드, 점검 |
 | `brief [work\|blueprint.json\|material.json]` | 큰 JSON 대신 읽는 요약. 칸 id·항목 수, 실습별 단계·프롬프트 수와 쪽, 빈칸, 주의, 글꼴 | 10줄 안팎(수백 토큰) |
 | `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증 → 저장(직전 판 보관) → 마지막 빌드 위치에 다시 빌드 | 바뀐 점 한 줄씩 |
 | `options <blueprint.json> [--presets a,b,c] [-o 폴더]` | 추천 3안(또는 고른 안)을 따로 빌드하고 PC 첫 화면·PC 본문·휴대폰을 한 장(`work/options/contact-sheet.png`)에 모음 | 안마다 한 줄 |
 | `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |
-| `qa <dist>` | 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. `scripts/design-lint.mjs`·`copy-lint.mjs`가 있으면 함께 | 문제만 줄마다 |
+| `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·문구 검사(`copy-lint.mjs`, 알림만)가 있으면 함께. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |

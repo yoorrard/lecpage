@@ -11,7 +11,7 @@
         "scripts/lecpage.mjs make를 실행했다(HTML·CSS를 직접 쓰지 않았다)",
         "material.json·blueprint.json 전체를 출력하거나 통째로 읽지 않고 make 요약·brief로 판단했다",
         "교재에서 찾은 것(쪽 수·실습·프롬프트·유형)을 한 줄로 먼저 알렸다",
-        "질문은 10개 이하의 고르기형이고, 교재에 이미 있는 날짜·장소·강사는 묻지 않았다",
+        "질문은 고르기형으로 기본 4개(많아야 7개)이고, 교재에 이미 있는 날짜·장소·강사와 디자인·서버는 묻지 않았다",
         "답을 work/info.json에 쓰고 make -i work/info.json --fresh로 반영했다",
         "클릭만 하는 30명 연수라 참여 기능을 켰다면 decide-infra 결과(구글 시트)를 쉬운 말로 설명했다",
         "dist/에 강사용 파일(DESIGN.md·운영안내.md·설계도)이 없다",

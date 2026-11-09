@@ -103,7 +103,7 @@ function applyIntake(bp, info = {}) {
   if ('accent' in info) { if (info.accent) bp.design.accent = info.accent; else delete bp.design.accent; }
   if (info.logo) bp.design.logo = info.logo;
   if (info.preset) bp.design.preset = info.preset;
-  if (info.admin) bp.meta = { ...(bp.meta || {}), admin: { ...(bp.meta?.admin || {}), kind: info.admin } };
+  if (info.admin || info.completionRate) bp.meta = { ...(bp.meta || {}), admin: { ...(bp.meta?.admin || {}), ...(info.admin ? { kind: info.admin } : {}), ...(info.completionRate ? { completionRate: +info.completionRate } : {}) } };
   if (!Array.isArray(info.features)) return bp;
   // 참여 기능 → 칸(질문·보드·투표·출석·설문)과 live.features. 연결 전에는 local(한 기기 미리보기)
   const f = info.features.flatMap((x) => String(x).split('+'));
@@ -160,6 +160,18 @@ async function buildSite(bp, { out, assets = '', info = null, password = '' }) {
 
 const buildLine = (b) => `사이트 ${rel(b.dir)} (파일 ${b.files}개, ${b.sizeKB}KB) · 디자인 ${b.report.preset} · 움직임 ${b.report.motion} · 참여 기능 ${b.report.live === 'none' ? '없음' : b.report.live} · 공개 ${ACCESS_KO[b.access] || b.access}`;
 
+/** 정적 파일 서버(serve·qa 공용). 폴더 밖으로 나가는 경로와 잘못된 % 는 막음 */
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.pdf': 'application/pdf', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2', '.enc': 'application/octet-stream' };
+function staticServer(dir) {
+  return createServer((req, res) => {
+    let p; try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end('bad request'); }
+    if (p.endsWith('/')) p += 'index.html';
+    const f = join(dir, p); const r = relative(dir, f);
+    if (r.startsWith('..') || isAbsolute(r) || !existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'content-type': TYPES[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }); createReadStream(f).pipe(res);
+  });
+}
+
 // ── 점검(qa) ─────────────────────────────────────
 /** 사이트 안 상대 주소(src·href·자료 경로)가 실제 파일을 가리키는지 */
 function brokenRefs(dir) {
@@ -214,6 +226,7 @@ async function runQa(dir, { outDir, password = '' } = {}) {
   const unlock = protectedSite && password; // 암호를 알면 #k=로 열어 실제 내용을 점검
   const linters = protectedSite && !unlock ? [] : await loadLinters();
   // 글 검사(브라우저 없이): 참가자·강사가 보는 페이지
+  for (const L of linters.filter((x) => x.html && protectedSite)) L.status = 'skipped';
   for (const L of linters.filter((x) => x.html && !protectedSite)) {
     try { for (const f of readdirSync(dir).filter((x) => /^(index|console|screen|check|poster)\.html$/.test(x))) addIssues(L, lintIssues(L.html(readFileSync(join(dir, f), 'utf8'), f))); }
     catch (e) { L.status = 'error'; L.error = cut(e.message, 80); }
@@ -230,11 +243,15 @@ async function runQa(dir, { outDir, password = '' } = {}) {
   let browser;
   try { browser = await pw.chromium.launch(); } catch { res.skipped = 'Chromium 실행 실패(npx playwright install chromium)'; return finish(); }
   mkdirSync(outDir, { recursive: true });
+  // 실제 호스팅처럼 http로 엶(127.0.0.1은 보안 컨텍스트라 암호 풀기·fetch가 동작)
+  const server = staticServer(dir);
+  await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+  const base = `http://127.0.0.1:${server.address().port}/`;
   for (const [w, h, name] of [[1280, 860, 'desktop'], [390, 844, 'phone']]) {
     for (const scheme of ['light', 'dark']) {
       const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme });
       const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
-      await page.goto(pathToFileURL(join(dir, 'index.html')).href + (unlock ? '#k=' + encodeURIComponent(password) : ''), { waitUntil: 'load', timeout: 20000 }).catch(() => {});
+      await page.goto(base + 'index.html' + (unlock ? '#k=' + encodeURIComponent(password) : ''), { waitUntil: 'load', timeout: 20000 }).catch(() => {});
       if (unlock) await page.waitForSelector('main', { timeout: 15000 }).catch(() => errs.push('암호로 열지 못했어요'));
       await page.waitForTimeout(700);
       const m = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, imgsNoAlt: [...document.images].filter((i) => !i.hasAttribute('alt')).length, h1: document.querySelectorAll('h1').length, btnNoName: [...document.querySelectorAll('button')].filter((b) => !(b.textContent.trim() || b.getAttribute('aria-label') || b.getAttribute('title'))).length }));
@@ -252,6 +269,7 @@ async function runQa(dir, { outDir, password = '' } = {}) {
     }
   }
   await browser.close();
+  server.close();
   return finish();
 }
 
@@ -266,13 +284,14 @@ function qaLines(q) {
   if (q.broken.length) problems.push(`  깨진 자료 ${q.broken.length}: ${plural(q.broken.map((b) => cut(b, 40)), 3, ', ')}`);
   const missing = q.lint.filter((l) => l.status === 'missing').map((l) => l.name);
   const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
-  const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
+  const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'skipped' ? `${l.name} 검사 건너뜀(암호 페이지)` : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
   const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
   lines.push(head, ...problems);
+  // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(교재 원문이 섞여 있어 참고용, qa/report.json)
   for (const l of q.lint) {
-    const top = [...l.issues].sort((a, b) => (a.level === 'error' ? -1 : 0) - (b.level === 'error' ? -1 : 0)).slice(0, 3);
-    for (const it of top) lines.push(`  ${l.name} ${it.level === 'error' ? '고침' : '살핌'}: ${cut(it.message, 70)}${it.where ? ` (${cut(it.where, 30)})` : ''}`);
-    if (l.issues.length > 3) lines.push(`  ${l.name} 외 ${l.issues.length - 3}건(qa/report.json)`);
+    const shown = l.issues.filter((it) => it.level === 'error' || l.blocking);
+    for (const it of shown.slice(0, 3)) lines.push(`  ${l.name} ${it.level === 'error' ? '고침' : '살핌'}: ${cut(it.message, 70)}${it.where ? ` (${cut(it.where, 30)})` : ''}`);
+    if (shown.length > 3) lines.push(`  ${l.name} 외 ${shown.length - 3}건(${rel(join(q.outDir, 'report.json'))})`);
   }
   if (q.shots.length) lines.push(`  스크린샷 ${rel(q.outDir)}/*.png ${q.shots.length}장 — 직접 열어 보세요`);
   return lines;
@@ -492,7 +511,7 @@ const commands = {
       ...bb.lines,
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
-      `다음 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
+      `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
     ];
     say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
     process.exitCode = q && !q.ok ? 1 : 0;
@@ -711,15 +730,8 @@ const commands = {
   },
 
   serve() {
-    const dir = resolve(args._[0] || 'dist'); const port = +args.port || 4173;
-    const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.md': 'text/markdown; charset=utf-8', '.pdf': 'application/pdf', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.woff2': 'font/woff2' };
-    createServer((req, res) => {
-      let p; try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end('bad request'); }
-      if (p.endsWith('/')) p += 'index.html';
-      const f = join(dir, p); const r = relative(dir, f);
-      if (r.startsWith('..') || isAbsolute(r) || !existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
-      res.writeHead(200, { 'content-type': types[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }); createReadStream(f).pipe(res);
-    }).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
+    const port = +args.port || 4173;
+    staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
 
   pack() {

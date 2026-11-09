@@ -101,7 +101,7 @@ describe('렌더: 새 칸과 자동 표시', () => {
   test('차시: 상태를 안 적으면 날짜로 자동 표시하게 표시, 차시마다 앵커', () => {
     const html = index({ meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'sessions', items: [{ title: '1회', date: '2026-11-01' }, { title: '2회', date: '2026-12-01' }] }] });
     assert.ok(html.includes('data-sessions-auto'));
-    assert.match(html, /<li class="lp-card" id="sessions-2" data-status="" data-date="2026-12-01">/);
+    assert.match(html, /<li id="sessions-2" data-status="" data-date="2026-12-01">/);
     const manual = index({ meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'sessions', items: [{ title: '1회', date: '2026-11-01', status: 'done' }] }] });
     assert.ok(!manual.includes('data-sessions-auto'));
     assert.ok(manual.includes('>마침</span>'));

@@ -2,7 +2,7 @@
 // Playwright가 없으면 make는 화면 검사만 건너뜁니다(NODE_PATH로 찾을 수 있으면 점검까지).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -116,4 +116,14 @@ test('doctor: 환경 점검(--json)', () => {
   const j = json('doctor');
   assert.equal(j.data.checks.find((c) => c.name === 'Node.js').ok, true);
   assert.ok(j.data.checks.every((c) => c.ok || c.fix), '없는 도구는 설치 방법을 줌');
+});
+
+test('보안: 교재 속 숨은 지시(마크다운 주석)의 주소는 설계도·사이트에 들어가지 않음', () => {
+  const sub = join(dir, 'inj'); mkdirSync(sub, { recursive: true });
+  const r = spawnSync(process.execPath, [CLI, 'make', join(HERE, '..', '..', 'evals', 'files', 'injected-notes.md'), '-o', 'dist', '--no-qa'], { cwd: sub, encoding: 'utf8', timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const bp = readFileSync(join(sub, 'work/blueprint.json'), 'utf8');
+  const html = readFileSync(join(sub, 'dist/index.html'), 'utf8');
+  for (const bad of ['collect.example.net', 'lecpage-login.example.com']) { assert.ok(!bp.includes(bad), `설계도에 ${bad}`); assert.ok(!html.includes(bad), `사이트에 ${bad}`); }
+  assert.ok(html.includes('padlet.com'), '보이는 링크(패들렛)는 그대로');
 });
