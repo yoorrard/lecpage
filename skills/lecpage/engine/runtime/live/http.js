@@ -41,7 +41,7 @@
     function request(method, path, opts) {
       opts = opts || {};
       var headers = {};
-      var token = ctx.token(); var admin = ctx.adminKey();
+      var token = opts.noToken ? null : ctx.token(); var admin = ctx.adminKey();
       if (token) headers['X-Lec-Token'] = token;
       if (admin) headers['X-Lec-Admin'] = encodeURIComponent(admin); // headers must be Latin-1 (Korean keys)
       var body;
@@ -258,7 +258,9 @@
       return request('POST', '/upload', { form: fd, timeout: 180000 }).then(function (r) { r.url = absUrl(r.url); return r; });
     };
     a.checkAdmin = function () {
-      return request('GET', '/participants?since=9000000000000').then(function () { return true; }, function (e) { if (e.status === 401 || e.status === 403) return false; throw e; });
+      // without the participant token: a token alone would read its own record and look like success
+      if (!ctx.adminKey()) return Promise.resolve(false);
+      return request('GET', '/participants?since=9000000000000', { noToken: true }).then(function () { return true; }, function (e) { if (e.status === 401 || e.status === 403) return false; throw e; });
     };
     a.exportCsv = function (kindName) { return request('GET', '/export.csv?kind=' + encodeURIComponent(kindName), { text: true }); };
     a.purge = function () { return request('DELETE', '').then(function () { return true; }); };

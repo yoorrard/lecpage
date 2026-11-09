@@ -190,6 +190,26 @@ status                    'connecting'|'live'|'polling'|'offline'
 
 공통: 모든 문서에 `id`, `createdAt`. 서버는 길이 제한(질문 500자, 글 1000자, 별명 20자)과 간단한 속도 제한을 둡니다. 관리자 인증은 **관리자 키**(배포 때 만들고 강사만 앎). 서버에는 키의 SHA-256만 저장합니다.
 
+#### 5.0 보완 규칙 (실시간 구현에서 확정, 2026-11)
+위 계약은 그대로 지키고, 아래를 덧붙입니다. 화면 코드(lecpage.js·console.js·screen.js)는 위 메서드만 써도 동작합니다.
+
+- **`LecLive.create(config)`가 돌려주는 것은 어댑터를 감싼 클라이언트**입니다. 메서드 이름·인자는 위 계약과 같고(`connect … purge`, `status`), 다음이 더 있습니다.
+  `on('status'|'change'|'reaction'|'error'|'queue'|'join', cb)` · `onChange(col|'state'|'*', cb(docs, change))` · `store(col, {visible, mine})` · `get(col,id)` · `state` · `me()` · `mine(col)` · `voted(id)` · `like(postId) → {likes}` · `isAdmin()` · `setAdminKey(key)` · `checkAdmin() → boolean` · `sync(full)` · `now()`(서버 시각 보정) · `leave()`(공용 PC에서 참가 정보 지우기) · `close()`.
+  전역: `LecLive.on('status', cb)`, `LecLive.store(col)`, `LecLive.onChange(col, cb)`는 마지막으로 만든 클라이언트를 가리킵니다. `LecLive.mask(text)`, `LecLive.limits`, `LecLive.emojis`, `LecLive.util`.
+- config: `{provider, url, anonKey, code, adminKey?, pollMs?, transports?: ['ws','sse','poll'], identity?: 'local'|'session', profanity?: true|false|{words,extra,allow}, nickname?, maxUploadMb?}`. `role` 등 모르는 키는 무시합니다.
+- 클라이언트가 하는 일: 재시도(네트워크·5xx·429만, 지수 백오프), 참가 정보(`{id, token, nickname}`만) localStorage 저장(try/catch), 끊긴 동안의 쓰기 대기열(localStorage, 최대 100개, 다시 연결되면 순서대로, `cid`로 중복 방지), 낙관적 표시(`_pending: true`), id 기준 병합과 `updatedAt` 비교(오래된 것 무시), 길이 자르기, 욕설 가리기(보낼 때·받을 때). 토큰이 무효(401 `invalid_token`)면 같은 별명으로 다시 참가해 한 번 더 시도합니다.
+- **어댑터 factory는 `factory(config, ctx)`** 입니다. `ctx = {token(), me(), adminKey(), cursor(), emit(evt), storage, util, error}`. 어댑터는 `subscribe(handler)`로 받은 handler(=`ctx.emit`)에 위 이벤트 외에 `{type:'status', status, mode}`, `{type:'resync', full?}`(클라이언트가 커서 이후를 다시 읽음, 결과 Promise `{changes, error}`), `{type:'hello', now}`, `{type:'reset'}`(모두 지움 → 전체 다시 읽기)를 보낼 수 있습니다. 클라이언트가 핸들러에 넘기는 이벤트 종류에도 `'reset'`이 더해집니다.
+- 선택 메서드: `snapshot({since, admin}) → {state, <col>[]…, removed:[{col,id}], now, time?, full}` (있으면 한 번에 동기화, 없으면 `list`를 컬렉션마다 부름) · `like(id)` · `checkAdmin()` · `setAdmin(key)` · `close()`.
+- **커서(`since`/`now`)는 불투명한 값**입니다. http·local·sheets는 서버의 단조 증가 ms 도장, supabase는 정수 `rev`. 모든 문서에 `updatedAt`이 있고 커서는 `updatedAt`(또는 rev) 기준이며, 지운 문서는 `removed`(tombstone)로 알립니다.
+- 공개 범위: 공개 컬렉션 = questions·posts·help·progress·polls·answers·chat(+state). 비공개 = participants·attendance·survey(관리자만, 참가자 토큰은 **자기 것만**). questions는 누구에게도 `by`를 주지 않습니다(익명 보장; 내 질문은 클라이언트가 id로 기억). 숨긴 글(questions `status:'hidden'`, posts·chat `hidden:true`)은 비관리자에게 `text:''`(posts는 `files:[]`)로 내려갑니다.
+- 덮어쓰기 키: progress(by+station), answers(poll+by), survey(by), attendance(by+kind). answers의 `value`는 글자·숫자 또는 그 배열(최대 5개, 워드클라우드). 서버에 같은 id의 `polls` 문서가 있고 `open:false`면 409 `poll_closed`(설계도에만 있는 투표 id도 받음).
+- 문서에 `cid`(클라이언트 작업 id, 40자 이하)를 넣으면 같은 참가자·같은 cid의 재전송은 같은 문서를 돌려줍니다.
+- 상태 `setState`: 얕은 병합, `timer`·`notice`는 통째로 교체, `null`이면 지움. 상태에 `timer.remaining`(일시정지 남은 ms)과 `ui:{키: 글자|숫자|불}`(콘솔·프로젝터 부가 설정, 20개까지, `null`이면 그 키 삭제)를 더했습니다. 모르는 키는 버립니다.
+- 반응 `react(emoji)`는 허용 목록(`LecLive.emojis`: 👍 ❤️ 👏 🎉 😂 😮 🤔 🙏 🔥 💯 🙌 😢 ✅ ❓ 💡)만 받고, 서버가 0.4~2초씩 모아 `{type:'reaction', doc:{emoji, count}}`로 보냅니다.
+- 오류: 어댑터는 `LecLive.error(code, message, {status, retryAfter})`를 throw합니다. `code`는 `too_long`, `required`, `invalid_type`, `invalid_value`, `consent_required`, `invalid_token`(401), `admin_required`(401/403), `forbidden`(403), `not_found`·`unknown_training`·`unknown_collection`(404), `poll_closed`·`hidden`(409), `too_large`(413), `unsupported_type`(415), `rate_limited`(429), `uploads_disabled`(503) 등이고 `message`는 한국어 안내입니다.
+- 업로드: 이미지(PNG·JPG·GIF·WEBP)·PDF·MP3·MP4, 기본 20MB(설정 가능). 형식은 서버가 **파일 내용(매직 바이트)** 으로 판정하고 SVG·HTML은 받지 않습니다.
+- 백엔드별 실시간 방식: http = WebSocket(Hibernation)·SSE·폴링, supabase = 공개 Broadcast 채널 `lec:<코드>`(콘솔은 `lec:<코드>:adm`)의 **2초 간격 '틱'** 을 받고 rev 이후 행을 RLS로 읽음(무료 플랜 초당 100메시지 대비), sheets = 7초 폴링, local = BroadcastChannel(+storage 이벤트).
+
 ### 5.1 HTTP 프로토콜 v1 (Cloudflare Worker와 Node 자체 서버가 같이 구현)
 ```
 POST   /api/:code/join                     {nickname,name?,school?,consent} → {id, token}
@@ -210,6 +230,22 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 대체:   snapshot?since 폴링(5~10초)
 ```
 클라이언트(http 어댑터)는 WebSocket → SSE → 폴링 순서로 시도하고, 4초 안에 연결이 안 되면 다음 방식으로 넘어갑니다.
+
+#### 5.1.1 프로토콜 v1 보완(구현과 테스트 기준: `backends/node-server/lib/protocol.js` = `backends/cloudflare/src/protocol.js`)
+- 연수 코드: 영문·숫자로 시작하는 `[A-Z0-9_-]` 3~40자, 대소문자 구분 없음(서버가 대문자로 바꿈).
+- `snapshot` 응답: `{state, <공개 컬렉션>[], removed:[{col,id}], now, since, full}`. `since`는 **초과(>)** 비교이고 `now`는 서버가 이번 응답용으로 확보한 단조 증가 도장이라 다음 `since`로 그대로 쓰면 빠짐·중복이 없습니다. `x-lec-admin`이 맞으면 participants·attendance·survey도 들어오고, `x-lec-token`이 있으면 자기 attendance·survey와 `me:{id,nickname}`가 들어옵니다. 채팅은 최근 500개까지.
+- `GET /api/:code/participants|attendance|survey`: 관리자는 전부, 토큰은 자기 것만, 둘 다 없으면 401.
+- 추가: `POST /api/:code/posts/:id/like` (x-lec-token) → `{likes}` · `GET /api/:code/files/:name`(올린 파일, `nosniff`·CSP·Range 지원) · `GET /api/health` → `{ok, protocol:1}`.
+- `vote`·`like`는 참가자당 1번이며 다시 부르면 `{votes, already:true}`(멱등). `PUT /api/:code/state`는 PATCH·POST도 받습니다.
+- 헤더 값은 Latin-1만 가능하므로 **`x-lec-admin`·`x-lec-setup`은 `encodeURIComponent`로 인코딩**해 보냅니다(서버가 디코딩, ASCII 값은 그대로 통과). 토큰(`x-lec-token`)은 base64url.
+- 오류 본문: `{error, message, ...}` + HTTP 상태(5.0 목록), 429에는 `Retry-After`.
+- `init`: 헤더 `x-lec-setup: <설정 토큰>`(서버의 `SETUP_TOKEN`/`LEC_SETUP_TOKEN`), 본문 `{adminKeyHash, settings:{retentionDays, maxUploadMb, uploads, title}}`. 이미 키가 있는 코드를 다시 init하려면 지금 관리자 키(`x-lec-admin`)가 필요합니다. 서버에 기본 관리자 키(`ADMIN_KEY`/`LEC_ADMIN_KEY`)가 있으면 등록 없이 모든 코드가 첫 쓰기 때 자동으로 생깁니다(한 강사용 서버).
+- `upload`: multipart의 `file` 필드, 또는 원본 바이트 + `x-lec-filename`(URL 인코딩). 응답 `url`은 `/api/<코드>/files/<임의24hex>.<확장자>`(어댑터가 절대 주소로 바꿈).
+- `export.csv`: kind에 participants·posts·help·chat·answers 추가. UTF-8 BOM(엑셀), 수식 주입 방지(`= + - @`로 시작하면 `'` 붙임), 시각은 Asia/Seoul.
+- `DELETE /api/:code`: 문서·투표·상태·파일을 지우고 연결된 모두에게 `{type:'reset'}`을 보냅니다(관리자 키 등록은 남음). 보관 기간(기본 30일, 마지막 쓰기 기준)이 지나면 서버가 연수를 통째로 지웁니다.
+- WebSocket: 연결되면 서버가 `{type:'hello', now, mode:'ws'}`. 클라이언트는 25초마다 텍스트 `ping` → `pong`(Cloudflare는 객체를 깨우지 않고 자동 응답). 관리자는 `{type:'auth', admin}`을 보내 `{type:'auth', ok}`를 받으면 비공개 컬렉션 이벤트(전체 문서)도 받습니다. 공개 연결은 공개용으로 걸러진 문서만 받습니다.
+- SSE: `retry: 3000`, 2KB 패딩, 첫 메시지 `hello`, 20초마다 `{type:'ping'}`. SSE로는 비공개 컬렉션 이벤트를 보내지 않습니다(관리자 화면은 15초마다 다시 읽음).
+- 폴링: 기본 5초, 변화가 없으면 최대 10~15초, 숨긴 탭 30초, 오류 시 최대 60초까지 늘림. 실시간이 끊기면 지수 백오프+지터로 다시 연결하고 매번 `since` 이후를 다시 읽으며, 폴링 중에도 3분마다 실시간 연결을 다시 시도합니다. 같은 방식이 30초 안에 3번 끊기면 그 탭에서는 10분 동안 건너뜁니다.
 
 ## 6. 빌드 결과(생성 사이트) 파일
 ```

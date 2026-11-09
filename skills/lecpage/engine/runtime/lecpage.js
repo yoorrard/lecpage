@@ -423,6 +423,17 @@
         }
         if (p.text) li.appendChild(el('p', '', p.text));
         var ft = el('div', 'lp-post-f'); ft.appendChild(el('span', '', (p.nickname || '익명') + ' · ' + new Date(p.createdAt || Date.now()).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })));
+        if (conn.like) {
+          var lk = el('button', 'lp-like'); lk.type = 'button';
+          var liked = !!store.get('like:' + p.id, false);
+          lk.setAttribute('aria-pressed', String(liked)); lk.setAttribute('aria-label', '좋아요 ' + (p.likes || 0));
+          lk.textContent = '♥ ' + (p.likes || 0);
+          lk.addEventListener('click', function () {
+            if (store.get('like:' + p.id, false)) return toast('이미 좋아요를 눌렀어요.');
+            ensureJoin().then(function () { return conn.like(p.id); }).then(function (r) { store.set('like:' + p.id, true); p.likes = (r && r.likes !== undefined) ? r.likes : (p.likes || 0) + 1; drawBoard(); }, function () { });
+          });
+          ft.appendChild(lk);
+        }
         li.appendChild(ft); list.appendChild(li);
       });
     }

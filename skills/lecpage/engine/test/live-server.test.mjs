@@ -116,3 +116,20 @@ test('node: SSE keeps working for many listeners and does not leak private event
     assert.ok(!msgs.some((m) => m.col === 'participants'));
   }
 });
+
+test('node + http adapter (no browser): checkAdmin is not fooled by a participant token', async () => {
+  const { default: vm } = await import('node:vm');
+  const { liveDir } = await import('./live-helpers.mjs');
+  const win = { console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, URL, TextEncoder, Intl, JSON, Math, Date, fetch, crypto: globalThis.crypto, Uint8Array, Array, Object, String, Number, RegExp, Error, AbortController, addEventListener() {}, removeEventListener() {} };
+  win.window = win; vm.createContext(win);
+  for (const f of ['core.js', 'http.js']) vm.runInContext(fs.readFileSync(path.join(liveDir, f), 'utf8'), win);
+  const c = win.LecLive.create({ provider: 'http', url: srv.url, code: 'CHKADM', identity: 'session' });
+  await c.join({ nickname: '참가자' });
+  await c.setAdminKey('틀린-키');
+  assert.equal(await c.checkAdmin(), false);
+  await c.setAdminKey(ADMIN);
+  assert.equal(await c.checkAdmin(), true);
+  const st = await c.setState({ slide: 9 });
+  assert.equal(st.slide, 9);
+  c.close();
+});

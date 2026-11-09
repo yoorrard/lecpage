@@ -18,7 +18,10 @@ export async function startNodeServer(opts = {}) {
   const { start, readOptions } = await import(path.join(nodeServerDir, 'server.mjs'));
   const o = readOptions([], {});
   Object.assign(o, { port: 0, host: '127.0.0.1', data: tmpDir(), quiet: true, generateKey: false }, opts);
-  return start(o);
+  const s = await start(o);
+  const close = s.close;
+  s.close = async () => { await close(); fs.rmSync(o.data, { recursive: true, force: true }); };
+  return s;
 }
 
 export function api(base, code) {

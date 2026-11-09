@@ -131,7 +131,10 @@
     if (!v) return [0, 0, 0, 0];
     if (pcache[v]) return pcache[v];
     var out, m = /^#([0-9a-f]{3,8})$/i.exec(v);
-    if (m) {
+    var r = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+)(%?))?\s*\)$/i.exec(v);
+    if (r) {
+      out = [Math.round(+r[1]), Math.round(+r[2]), Math.round(+r[3]), r[4] == null ? 1 : r[5] ? +r[4] / 100 : +r[4]];
+    } else if (m) {
       var hx = m[1];
       if (hx.length < 6) hx = hx.split('').map(function (c) { return c + c; }).join('');
       out = [parseInt(hx.slice(0, 2), 16), parseInt(hx.slice(2, 4), 16), parseInt(hx.slice(4, 6), 16), hx.length > 6 ? parseInt(hx.slice(6, 8), 16) / 255 : 1];

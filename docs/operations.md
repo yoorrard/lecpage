@@ -16,6 +16,17 @@
 | 보안 | CSP(meta), 사용자·AI 입력은 JSON 데이터로만(렌더러 이스케이프, https 링크만), 키는 탭 기억이 기본·선택 시 WebCrypto 암호화, 의존성 버전 고정·lockfile, 분석 도구·쿠키 없음 | |
 | 도우미 Worker | **지금은 없음**(선택). 필요해지면 Cloudflare Worker 하나로: GitHub OAuth 코드 교환, Cloudflare·Supabase API 중계, 공용 실시간 중계(기본 꺼짐, 종단간 암호화·24시간 삭제) | 무료 등급은 한도에서 멈추고 과금되지 않음 |
 
+## 배포 방법
+### 지금: GitHub Pages(한 번만 설정)
+1. 저장소 Settings → Pages → Build and deployment → Source를 **GitHub Actions**로 바꾼다.
+2. Actions 탭에서 'Deploy app to GitHub Pages'를 다시 실행하거나 main에 커밋하면 `https://yoorrard.github.io/lecpage/`에 올라간다.
+
+### 권장: Cloudflare Pages + 자기 도메인
+1. Cloudflare 대시보드 → Workers & Pages → Create → Pages → Connect to Git → `yoorrard/lecpage`.
+2. Build command: `npm --prefix app ci && npm --prefix app run build` · Build output: `app/dist` · 환경 변수 `NODE_VERSION=22`.
+3. Custom domains에서 도메인을 연결하면 `app/public/_headers`의 보안 헤더가 적용된다.
+4. GitHub Pages는 예비 주소로 그대로 둔다.
+
 ## 비용
 - 월 1만 명까지: 0원(정적 호스팅). 도메인을 쓰면 연 1~3만 원.
 - AI·호스팅·DB는 사용자 각자의 무료 등급이나 구독을 씀.

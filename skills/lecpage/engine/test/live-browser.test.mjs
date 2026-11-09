@@ -130,3 +130,21 @@ test('browser: writes made offline are queued and delivered after reconnect', { 
     assert.equal(texts.filter((t) => t === '끊겼을 때 쓴 질문').length, 1, 'delivered exactly once');
   } finally { await c1.close(); await c2.close(); }
 });
+
+// Optional: the same two-device check against the Cloudflare Worker (wrangler dev), cross-origin.
+const CF = process.env.LEC_CF_URL;
+test('browser: http adapter against the Cloudflare Worker (WebSocket Hibernation)', { skip: skip || (!CF && 'LEC_CF_URL not set') }, async () => {
+  const code = 'PWCF' + Math.random().toString(36).slice(2, 7).toUpperCase();
+  const c1 = await browser.newContext(); const c2 = await browser.newContext();
+  try {
+    const a = await c1.newPage(); const b = await c2.newPage();
+    await a.goto(demo({ provider: 'http', url: CF, code, adminKey: process.env.LEC_CF_ADMIN || '', autoconnect: '1' }));
+    await b.goto(demo({ provider: 'http', url: CF, code, autoconnect: '1' }));
+    await ready(a); await ready(b);
+    assert.match(await b.textContent('#mode'), /realtime \(ws\)/);
+    await ask(a, '워커로 보낸 질문');
+    await seeQuestion(b, '워커로 보낸 질문');
+    await a.fill('#notice', '워커 공지'); await a.click('#btn-state');
+    await b.waitForFunction(() => document.getElementById('state').textContent.includes('워커 공지'), null, { timeout: 8000 });
+  } finally { await c1.close(); await c2.close(); }
+});
