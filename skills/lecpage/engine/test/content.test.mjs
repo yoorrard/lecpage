@@ -202,3 +202,26 @@ describe('문구 규칙', () => {
     assert.ok(COPY_RULES.length >= 10);
   });
 });
+
+describe('교재 읽기 보강: 기관 색·강사 줄', () => {
+  test('기본 테마 색(Office·Google·Keynote)은 강조색으로 쓰지 않음', async () => {
+    const { brandAccent } = await import('../src/ingest/draft.js');
+    for (const c of ['#4F81BD', '#4472C4', '#5B9BD5', '#ED7D31', '#A5A5A5', '#FFC000', '#70AD47', '#156082', '#4285F4', '#007AFF']) assert.equal(brandAccent({ accent1: c }), '', c);
+    assert.equal(brandAccent({ accent1: '#12306b' }), '#12306B', '기관 색은 씀');
+    assert.equal(brandAccent({ accent1: '#808080' }), '', '회색은 뺌');
+    const m = ingestText('# 연수\n본문'); m.design = { colors: { accent1: '#4F81BD' } };
+    assert.equal(materialToDraft(m).design.accent, undefined);
+  });
+  test('md·txt의 "강사: 이름(소속)" 줄로 강사를 찾고, 그 줄을 장소로 오해하지 않음', async () => {
+    const { parseInstructorLine } = await import('../src/ingest/detect.js');
+    assert.deepEqual(parseInstructorLine('홍길동(○○초)'), { name: '홍길동', org: '○○초', role: '' });
+    assert.deepEqual(parseInstructorLine('유영재 · 안산양지초등학교 교사'), { name: '유영재', org: '안산양지초등학교', role: '교사' });
+    assert.deepEqual(parseInstructorLine('○○초 교사 홍길동'), { name: '홍길동', org: '○○초', role: '교사' });
+    assert.equal(parseInstructorLine('실습 → 나눔'), null);
+    const d = materialToDraft(ingestText('# 생성형 AI 수업\n일시: 2026. 11. 20.(금) 15:00~17:00\n강사: 홍길동(○○초)\n'), { today: '2026-11-01' });
+    assert.equal(d.instructors[0].name, '홍길동');
+    assert.deepEqual(d.sections[0].meta.find((x) => x.label === '강사'), { label: '강사', value: '홍길동 · ○○초' });
+    const d2 = materialToDraft(ingestText('# 연수\n발표: 유영재 · 안산양지초등학교 교사\n'));
+    assert.equal(d2.meta.venue, '', '강사 줄의 학교 이름은 장소가 아님');
+  });
+});

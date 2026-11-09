@@ -24,7 +24,7 @@
 ## 공통 준비
 - `skills/lecpage/backends/node-server/`. Dockerfile이 없으면 `templates/deploy/server/Dockerfile.node-server`를 그 폴더에 `Dockerfile`로 복사.
 - 환경 변수(이름은 `server.mjs` 머리말 기준): `PORT=8787`, `LEC_DATA=/data`, `LEC_TRUST_PROXY=1`, `TZ=Asia/Seoul`, `LEC_ORIGINS=<사이트 주소>`(쉼표로 여러 개), `LEC_ADMIN_KEY_HASH=<해시>`.
-  - 해시 만들기: `node server.mjs --hash '내관리자키'`. 비우면 첫 실행 로그에 관리자 키가 한 번 나옵니다. 로그는 남으니 해시를 넣는 편이 안전합니다.
+  - 해시 만들기: `node server.mjs --hash '내관리자키'`. 비우면 첫 실행 때 키를 만들어 `data/admin-key.txt`에 둡니다(로그에는 남기지 않음). 영구 디스크가 없는 서비스라면 키를 직접 정해 해시만 넣으세요.
 - 사이트에는 빌드 결과(`dist/`)만 올립니다. 강사용 파일(`dist-강사용/`)은 올리지 않습니다.
 
 ## 따라 하기 — Fly.io

@@ -30,7 +30,7 @@ mkdir -p ~/lecpage && cd ~/lecpage
 cp .env.example .env && nano .env      # LEC_SITE_ADDRESS=lec.example.kr
 docker compose up -d
 docker compose logs -f web             # 인증서 발급 로그 확인 후 Ctrl+C
-docker compose logs live | grep 관리자  # 처음 한 번 나오는 관리자 키를 적어 두기
+docker compose exec live cat /data/admin-key.txt  # 처음 만든 관리자 키(로그에는 남기지 않음)
 ```
 5. `https://lec.example.kr/check.html` 확인.
 - 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(페이지와 교재 그림 암호화, https 주소에서만 열림).

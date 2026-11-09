@@ -33,6 +33,13 @@ export async function pingLive(live, code) {
   return '서버와 연결됐어요.';
 }
 
+/** Supabase 연수 등록 SQL: 보관 기간·파일 올리기·사전 검토를 서버에도 똑같이 걸어 둠 */
+function initSql(code, hash, bp) {
+  const board = (bp.sections || []).find((x) => x.type === 'board');
+  const settings = { retentionDays: bp.privacy?.retentionDays || 30, uploads: !!board && board.allowFiles !== false && !bp.audience?.minor, moderation: !!board?.moderation };
+  return `select lec_private.init_training_hash('${code}', '${hash}', '${JSON.stringify(settings)}');`;
+}
+
 export function LiveSetup({ p, update }) {
   const bp = p.blueprint; const live = bp.live || {}; const info = p.info;
   const code = E.validate(bp).blueprint.live.code;
@@ -84,8 +91,8 @@ export function LiveSetup({ p, update }) {
             <li>관리자 키를 만들고, 나오는 SQL 한 줄을 같은 곳에서 실행해 연수를 등록해요.
               {!adm ? <div><button class="btn btn-sm" onClick={makeAdmin}>관리자 키 만들기</button></div> : <div class="stack" style={{ gap: '6px', marginTop: '6px' }}>
                 <div class="keybox">{adm.key}</div><div class="btn-row"><button class="btn btn-sm" onClick={() => copy(adm.key, '관리자 키를 복사했어요. 안전한 곳에 적어 두세요.')}>키 복사</button><span class="small muted">강사 화면에 들어갈 때 써요. 적어 두세요.</span></div>
-                <div class="prompt-box">{`select lec_private.init_training_hash('${code}', '${adm.hash}', '{"retentionDays": ${bp.privacy?.retentionDays || 30}${bp.audience?.minor ? ', "uploads": false' : ''}}');`}</div>
-                <div><button class="btn btn-sm" onClick={() => copy(`select lec_private.init_training_hash('${code}', '${adm.hash}', '{"retentionDays": ${bp.privacy?.retentionDays || 30}${bp.audience?.minor ? ', "uploads": false' : ''}}');`, 'SQL 한 줄을 복사했어요.')}>SQL 한 줄 복사</button></div></div>}</li>
+                <div class="prompt-box">{initSql(code, adm.hash, bp)}</div>
+                <div><button class="btn btn-sm" onClick={() => copy(initSql(code, adm.hash, bp), 'SQL 한 줄을 복사했어요.')}>SQL 한 줄 복사</button></div></div>}</li>
             <li><b>Project Settings → API Keys</b>에서 프로젝트 URL과 <b>publishable 키</b>(sb_publishable_…)를 아래에 붙여 넣어요. secret 키는 넣지 마세요.</li>
           </ol>
         )}

@@ -29,14 +29,14 @@ node-server 하나가 **사이트와 실시간을 함께** 제공합니다(`--st
 **Windows (PowerShell)**
 ```powershell
 cd C:\lecpage
-node .\node-server\server.mjs --static .\site --data .\data --port 8787 --admin-key "연수관리자키"
+node .\node-server\server.mjs --static .\site --data .\data --port 8787 --admin-key "12자-이상-관리자-키"
 ```
 **macOS (터미널)**
 ```bash
 cd ~/lecpage
-node ./node-server/server.mjs --static ./site --data ./data --port 8787 --admin-key "연수관리자키"
+node ./node-server/server.mjs --static ./site --data ./data --port 8787 --admin-key "12자-이상-관리자-키"
 ```
-- `--admin-key`를 빼면 서버가 키를 만들어 **처음 한 번** 화면에 보여 줍니다. 적어 두세요.
+- `--admin-key`를 빼면 서버가 키를 만들어 `data/admin-key.txt`에 둡니다. 직접 정할 때는 12자 이상으로(예시 값은 거절돼요).
 - `site/`에는 빌드 결과 폴더(`dist/`)만 넣습니다. 강사용 파일(`dist-강사용/`)은 넣지 않습니다.
 - 옵션 전체는 `node-server/server.mjs` 머리말에 있습니다(업로드 한도 `--max-upload-mb`, 보관 기간 `--retention-days` 등).
 - 처음 실행 때 Windows 방화벽 창이 뜨면 **개인 네트워크 허용**을 누릅니다. 와이파이 네트워크 프로필이 "공용"이면 "개인"으로 바꿉니다(설정 → 네트워크 → 와이파이 → 속성).

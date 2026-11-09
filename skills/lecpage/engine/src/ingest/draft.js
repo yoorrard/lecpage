@@ -181,7 +181,7 @@ export function materialToDraft(material, info = {}) {
   if (dateText) heroMeta.push({ label: '일시', value: dateText });
   const place = [meta.venue, meta.mode === 'online' || meta.mode === 'hybrid' ? '온라인' : ''].filter(Boolean).join(' · ');
   if (place) heroMeta.push({ label: '장소', value: place });
-  if (instructors[0]) heroMeta.push({ label: '강사', value: [instructors[0].name, instructors[0].role].filter(Boolean).join(' · ') });
+  if (instructors[0]) heroMeta.push({ label: '강사', value: [instructors[0].name, [instructors[0].org, instructors[0].role].filter(Boolean).join(' ')].filter(Boolean).join(' · ') });
   const ctas = [];
   if (stations.length) ctas.push({ label: '실습 시작', href: '#stations' });
   if (hasDeckFile) ctas.push({ label: '교재 보기', href: '#deck' });
@@ -317,8 +317,8 @@ export function materialToDraft(material, info = {}) {
     projector: info.audience?.projector ?? true, minor: !!info.audience?.minor,
   };
   const design = { mood: [], theme: 'preset' };
-  const accent = material.design?.colors?.accent1;
-  if (accent && /^#[0-9A-F]{6}$/i.test(accent)) design.accent = accent;
+  const accent = brandAccent(material.design?.colors);
+  if (accent) design.accent = accent;
   if (d.fonts) design.sourceFonts = { display: d.fonts.display, body: d.fonts.body }; // 교재 글꼴 → 사이트 글꼴(resolveDesign)
 
   return {
@@ -344,6 +344,35 @@ export function materialToDraft(material, info = {}) {
       ].filter(Boolean),
     },
   };
+}
+
+// 오피스·구글 슬라이드·키노트·리브레오피스의 기본 테마 색과 표준 색은 기관 색이 아님(강조색으로 쓰지 않음)
+const DEFAULT_THEME_COLORS = new Set([
+  // Office 2007~2010
+  '1F497D', 'EEECE1', '4F81BD', 'C0504D', '9BBB59', '8064A2', '4BACC6', 'F79646', '0000FF', '800080',
+  // Office 2013~2022
+  '44546A', 'E7E6E6', '4472C4', 'ED7D31', 'A5A5A5', 'FFC000', '5B9BD5', '70AD47', '0563C1', '954F72',
+  // Office 2023~
+  '0E2841', 'E8E8E8', '156082', 'E97132', '196B24', '0F9ED5', 'A02B93', '4EA72E', '467886', '96607D',
+  // Office 표준 색 줄
+  'C00000', 'FF0000', 'FFFF00', '92D050', '00B050', '00B0F0', '0070C0', '002060', '7030A0',
+  // Google 슬라이드 기본(Simple Light·Dark)과 Google 색
+  '595959', 'EEEEEE', '4285F4', '212121', '78909C', 'FFAB40', '0097A7', 'EEFF41', '1A73E8', 'EA4335', 'FBBC04', 'FBBC05', '34A853',
+  // Keynote·Apple 기본 색
+  '007AFF', '0A84FF', '34C759', '30D158', 'FF9500', 'FF9F0A', 'FF3B30', 'FF453A', 'AF52DE', 'BF5AF2', '5856D6', '5E5CE6', 'FFCC00', 'FFD60A', 'FF2D55', '5AC8FA', '64D2FF',
+  // LibreOffice Impress 기본
+  '18A303', '0369A3', 'A33E03', '8E03A3', 'C99C00', 'C9211E', '004586', '729FCF',
+]);
+/** 교재 테마에서 기관 색 고르기: 기본 팔레트가 아닌 accent1(없으면 accent2)만. 회색·거의 흰색·검은색은 뺌 */
+export function brandAccent(colors = {}) {
+  for (const k of ['accent1', 'accent2']) {
+    const c = String(colors?.[k] || '').toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(c) || DEFAULT_THEME_COLORS.has(c.slice(1))) continue;
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 28 || Math.max(r, g, b) < 40 || Math.min(r, g, b) > 230) continue;
+    return c;
+  }
+  return '';
 }
 
 function accountShort(a) {

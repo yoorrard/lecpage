@@ -515,6 +515,48 @@ function detectInstructor(pages, profilePages = []) {
   return best;
 }
 
+// 표지·끝 쪽의 "강사: 홍길동(○○초)", "발표 · 유영재 · 안산양지초등학교 교사" 같은 한 줄(md·txt·docx·hwpx도 같은 길)
+const LABEL_LINE = /^\s*(?:강\s*사|발\s*표\s*자?|연\s*사|진\s*행\s*자?|강\s*연\s*자?|speaker|presenter)\s*(?:[:：|·]\s*|\s+(?=[가-힣]{2,4}(?:\s|$|[(（])))(.{2,80})$/i;
+const SCHOOL_SHORT = /([가-힣○◯OＯ]{1,12}(?:초등학교|중학교|고등학교|학교|교육청|교육지원청|연수원|교육원|대학교|연구소|연구회|초|중|고))(?![가-힣])/;
+const TITLE_WORD = /^(?:선생님|교사|강사|교수|연구사|장학사|장학관|박사|수석교사|교감|교장)$/;
+export function parseInstructorLine(value) {
+  let v = normLine(value).replace(/\s*(?:님|드림)$/, '');
+  let paren = '';
+  const pm = /[(（]([^)）]{1,60})[)）]/.exec(v);
+  if (pm) { paren = pm[1]; v = v.replace(pm[0], ' '); }
+  const parts = v.split(/\s*[·|,/]\s*|\s{2,}/).map((x) => x.trim()).filter(Boolean);
+  let name = '';
+  const rest = [];
+  for (const part of parts) {
+    const words = part.split(/\s+/);
+    // "홍길동", "홍길동 선생님", "○○초 교사 홍길동"
+    const i = name ? -1 : words.findIndex((w) => /^[가-힣]{2,4}$/.test(w) && !NAME_STOP.has(w) && !TITLE_WORD.test(w) && !ROLE_WORD.test(w) && !SCHOOL_SHORT.test(w) && !/(님|요|다)$/.test(w));
+    if (i >= 0 && (words.length === 1 || words.every((w, k) => k === i || TITLE_WORD.test(w) || ROLE_WORD.test(w) || SCHOOL_SHORT.test(w)))) {
+      name = words[i];
+      const other = words.filter((_, k) => k !== i && words[k] !== '선생님').join(' ');
+      if (other) rest.push(other);
+    } else if (!(name && /^[가-힣]{2,4}$/.test(part) && !TITLE_WORD.test(part) && !ROLE_WORD.test(part) && !SCHOOL_SHORT.test(part))) rest.push(part); // 함께 맡은 강사 이름은 소속·직함이 아님
+  }
+  if (!name) return null;
+  if (paren) rest.push(paren);
+  const restText = normLine(rest.join(' '));
+  const om = SCHOOL_SHORT.exec(restText);
+  const org = om ? om[1] : '';
+  const role = normLine(restText.replace(org, '')).replace(/^[\s,·|/-]+|[\s,·|/-]+$/g, '');
+  return { name, org, role: truncate(role, 60) };
+}
+function labelInstructor(pages) {
+  const near = [...pages.slice(0, 3), ...pages.slice(-2)].filter((p, i, a) => a.indexOf(p) === i);
+  for (const p of near) {
+    for (const t of linesOf(p, { withTitle: true, withTables: false }).map((x) => x.text)) {
+      const m = LABEL_LINE.exec(t);
+      const r = m && parseInstructorLine(m[1]);
+      if (r) return { ...r, bio: [], email: '', links: [], ...ref(p), photo: '' };
+    }
+  }
+  return null;
+}
+
 // ── 일시·장소·주최 ─────────────────────────────────────
 const VENUE_LABEL = /(?:^|[\s|/·,])(?:장\s*소|곳|위\s*치|교육\s*장소|연수\s*장소|venue|where|📍|🏫)\s*[:：]?\s*([^|/\n]{2,60})/i;
 const VENUE_KEY = /(대강당|소강당|강당|대회의실|회의실|연수실|시청각실|강의실|세미나실|컴퓨터실|정보실|과학실|도서관|체육관|다목적실|교육관|컨벤션|아트홀|홀|교육청|교육지원청|연수원|교육원|캠퍼스|\d+\s*층|[가-힣]+(?:초등학교|중학교|고등학교))/;
@@ -577,7 +619,7 @@ function detectEvent(pages, refYear) {
   if (!ev.venue) {
     outer2: for (const p of venuePages) {
       for (const t of linesOf(p, { withTitle: false }).map((x) => x.text)) {
-        if (t.length > 60 || parseKoreanDates(t, refYear).length && !VENUE_KEY.test(t.replace(/\d{4}.*?\)/, ''))) continue;
+        if (t.length > 60 || LABEL_LINE.test(t) || parseKoreanDates(t, refYear).length && !VENUE_KEY.test(t.replace(/\d{4}.*?\)/, ''))) continue;
         const m = VENUE_KEY.exec(t);
         if (m && !/(교육청|교육지원청|연수원)$/.test(normLine(t))) { ev.venue = cleanVenue(t); break outer2; }
       }
@@ -847,7 +889,12 @@ export function detect(material, opts = {}) {
   const steps = detectSteps(pages, promptKeys, agendaPages);
   const links = detectLinks(pages);
   const profilePages = [];
-  const instructor = detectInstructor(pages, profilePages);
+  let instructor = detectInstructor(pages, profilePages);
+  // 소개 쪽이 없거나 이름을 못 찾았으면 표지의 "강사: 이름(소속)" 줄로
+  if (!instructor?.name) {
+    const li = labelInstructor(pages);
+    if (li) instructor = instructor ? { ...instructor, name: li.name, org: instructor.org || li.org, role: instructor.role || li.role } : li;
+  }
   const tools = detectTools(pages.filter((p) => !profilePages.includes(p)), links);
   const event = detectEvent(pages, refYear);
   const { title, subtitle } = detectTitle(material, pages);

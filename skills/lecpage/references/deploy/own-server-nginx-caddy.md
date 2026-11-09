@@ -25,11 +25,11 @@ cp -r /path/to/site ./site
 cp -r /path/to/skills/lecpage/backends/node-server ./node-server
 cp .env.example .env
 # .env: LEC_SITE_ADDRESS=lec.school.kr  (학교 내부망만이면 :80)
-#       LEC_ADMIN_KEY_HASH= (비우면 첫 실행 로그에 관리자 키가 한 번 나옴)
+#       LEC_ADMIN_KEY_HASH= (비우면 첫 실행 때 키를 만들어 data/admin-key.txt에 둠)
 #       LEC_CSP_CONNECT_EXTRA=wss://lec.school.kr
 docker compose up -d
 docker compose logs -f web      # "certificate obtained successfully" 확인
-docker compose logs live | grep 관리자   # 관리자 키 적어 두기
+docker compose exec live cat /data/admin-key.txt   # 관리자 키 확인
 ```
 - DNS: `lec.school.kr`의 A 레코드를 서버 IP로. 80·443이 인터넷에서 열려 있어야 인증서가 발급됩니다.
 - 라즈베리 파이(64비트 OS)도 같은 방법(caddy·node 이미지가 arm64 지원).
@@ -44,7 +44,7 @@ docker run -d --name lec-live --restart unless-stopped \
   -v /path/to/node-server:/app:ro -v /srv/lecpage-data:/data -w /app \
   -e LEC_DATA=/data -e LEC_TRUST_PROXY=1 -e TZ=Asia/Seoul \
   node:24-alpine node --disable-warning=ExperimentalWarning server.mjs
-docker logs lec-live | grep 관리자     # 첫 실행 때 한 번 나오는 관리자 키
+docker exec lec-live cat /data/admin-key.txt     # 첫 실행 때 만든 관리자 키
 ```
    Docker가 없으면 Node 22.5 이상으로 직접 실행: `LEC_DATA=/srv/lecpage-data LEC_TRUST_PROXY=1 node server.mjs --host 127.0.0.1` (systemd 서비스로 등록 권장). 옵션 목록은 `server.mjs` 머리말.
 3. `templates/deploy/server/nginx.conf`를 `/etc/nginx/conf.d/lecpage.conf`로 복사 → `{{DOMAIN}}`, `{{SITE_ROOT}}`, `{{LIVE_UPSTREAM}}`(=`127.0.0.1:8787`) 치환.
