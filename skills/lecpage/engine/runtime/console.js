@@ -19,6 +19,8 @@
   function hasSec(t) { return secs.some(function (s) { return s.type === t; }); }
   var polls = []; secs.forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });
   var MODERATE = secs.some(function (s) { return s.type === 'board' && s.moderation; });
+  // 파일 올리기: 보드가 파일을 받지 않으면(allowFiles:false, 만 14세 미만 연수 등) 서버도 받지 않게 상태에 적어 둠
+  var NOFILES = !secs.some(function (s) { return s.type === 'board' && s.allowFiles !== false && s.maxFiles !== 0; });
   // 켜진 것만: 패널·불러올 컬렉션·내려받기 종류가 모두 이걸 따릅니다
   var ON = {
     progress: stations.length > 0 && has('progress'), help: has('help'), qa: hasSec('qa') || has('qa'), signal: has('signal'),
@@ -41,7 +43,10 @@
       try { sessionStorage.setItem('lp-admin:' + DATA.live.code, key); } catch (e) { }
       form.hidden = true; main.hidden = false; build(); loadAll(); conn.subscribe(onEvent);
       // 보드 '먼저 확인'(board.moderation): 서버가 새 글을 숨긴 채 받도록 상태에 적어 둠(관리자만 바꿀 수 있음)
-      var mod = MODERATE || null; if (((state.ui || {}).moderation || null) !== mod) conn.setState({ ui: { moderation: mod } }).catch(function () { });
+      var mod = MODERATE || null, nof = NOFILES ? false : null, ui0 = state.ui || {}, pol = {};
+      if ((ui0.moderation || null) !== mod) pol.moderation = mod;
+      if ((ui0.uploads === false ? false : null) !== nof) pol.uploads = nof;
+      if (Object.keys(pol).length) conn.setState({ ui: pol }).catch(function () { });
     }, function (err) { toast('연결하지 못했어요: ' + (err && err.message || '키와 서버 주소를 확인해 주세요.')); });
   }
   function loadAll() {
@@ -68,7 +73,8 @@
     vals('answers').forEach(function (a) {
       if (a.poll !== 'signal') return; var t = a.updatedAt || a.createdAt || 0;
       if (t < reset) return;
-      if (!latest[a.by] || t >= (latest[a.by].updatedAt || latest[a.by].createdAt || 0)) latest[a.by] = a;
+      var who = a.by || a.id; // one signal doc per participant: the id works when `by` is not shown
+      if (!latest[who] || t >= (latest[who].updatedAt || latest[who].createdAt || 0)) latest[who] = a;
     });
     var c = { green: 0, yellow: 0, red: 0, total: 0 };
     Object.keys(latest).forEach(function (k) { var v = latest[k].value; if (c[v] !== undefined) { c[v]++; c.total++; } });
@@ -128,7 +134,7 @@
     syncControl();
   }
   function renderHeat(parts) {
-    var latest = {}; vals('progress').forEach(function (p) { var k = p.by + '|' + p.station; if (!latest[k] || (p.at || p.createdAt) >= (latest[k].at || latest[k].createdAt)) latest[k] = p; });
+    var latest = {}; vals('progress').forEach(function (p) { var k = (p.by || p.id) + '|' + p.station; if (!latest[k] || (p.at || p.createdAt) >= (latest[k].at || latest[k].createdAt)) latest[k] = p; });
     var prog = Object.keys(latest).map(function (k) { return latest[k]; });
     var hb = P.heat.body; hb.textContent = '';
     var total = Math.max(parts.length, 1), heat = el('div', 'lp-heat');

@@ -195,7 +195,7 @@
   function drawSignal() {
     var box = $('[data-screen-signal]'); if (!box) return;
     var reset = X.signalReset(state), latest = {}, c = { green: 0, yellow: 0, red: 0 }, total = 0;
-    Object.keys(answers).forEach(function (k) { var a = answers[k]; if (a.poll !== 'signal') return; var t = a.updatedAt || a.createdAt || 0; if (t < reset) return; if (!latest[a.by] || t >= (latest[a.by].updatedAt || latest[a.by].createdAt || 0)) latest[a.by] = a; });
+    Object.keys(answers).forEach(function (k) { var a = answers[k]; if (a.poll !== 'signal') return; var t = a.updatedAt || a.createdAt || 0; if (t < reset) return; var who = a.by || a.id; if (!latest[who] || t >= (latest[who].updatedAt || latest[who].createdAt || 0)) latest[who] = a; });
     Object.keys(latest).forEach(function (k) { var v = latest[k].value; if (c[v] !== undefined) { c[v]++; total++; } });
     box.hidden = !total; box.textContent = ''; if (!total) return;
     var bar = el('div', 'lp-signal-bar'); bar.setAttribute('aria-hidden', 'true');

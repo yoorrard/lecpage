@@ -517,26 +517,48 @@ export const SCHEMA = [
 ];
 
 // ---------- the core ----------
+/** Collections whose `by` (participant id) is shown to non-admins only on the reader's own docs. */
+const OWN_BY = new Set(['answers', 'progress', 'help']);
+
 /**
  * new LiveCore({ db, config }) — db: { all, get, run, tx }.
  * config: { adminKeyHash, setupTokenHash, openInit, autoCreate, allowedCodes:Set|null, retentionDays,
- *           maxRetentionDays, maxUploadBytes, timeZone, rate:{...} }
+ *           maxRetentionDays, maxUploadBytes, timeZone, rate:{...}, maxParticipants, maxDocs,
+ *           lazySchema  — create the tables only on the first write that may create a training (Durable Objects),
+ *           onSchema()  — called once when the tables were just created (the host can schedule a clean-up),
+ *           guard       — optional cross-instance limiter { hit(key,[max,win]) → ms, peek(key,[max,win]) → ms } (async) }
  */
 export class LiveCore {
   constructor({ db, config = {}, now = () => Date.now() }) {
     this.db = db; this.now = now;
-    this.cfg = { retentionDays: 30, maxRetentionDays: 365, maxUploadBytes: 20 * 1024 * 1024, timeZone: 'Asia/Seoul', openInit: false, ...config };
-    if (this.cfg.autoCreate == null) this.cfg.autoCreate = !!this.cfg.adminKeyHash;
+    this.cfg = { retentionDays: 30, maxRetentionDays: 365, maxUploadBytes: 20 * 1024 * 1024, timeZone: 'Asia/Seoul', openInit: false, maxParticipants: CAPS.participants, maxDocs: CAPS.docs, ...config };
+    // Single-teacher mode (a default admin key or a fixed code list): a code comes to life on its first write.
+    // Otherwise a code must be registered with /init first.
+    if (this.cfg.autoCreate == null) this.cfg.autoCreate = !!(this.cfg.adminKeyHash || this.cfg.allowedCodes);
     this.rate = { ...RATE, ...(this.cfg.rate || {}) };
     this.limiter = new Limiter();
     this.stamps = new Map();
-    for (const s of SCHEMA) db.run(s);
+    this.counts = new Map();
+    this.guardOk = new Map();
+    this.ready = false;
+    if (!this.cfg.lazySchema || this.hasSchema()) this.ensureSchema(true);
+  }
+
+  // ----- schema (lazy on Durable Objects: plain reads of unknown codes never create storage) -----
+  hasSchema() {
+    try { return !!this.db.get(`SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = 'trainings'`); } catch { return false; }
+  }
+  ensureSchema(existing = false) {
+    if (this.ready) return;
+    for (const s of SCHEMA) this.db.run(s);
+    this.ready = true;
+    if (!existing && typeof this.cfg.onSchema === 'function') { try { this.cfg.onSchema(); } catch { /* host hook */ } }
   }
 
   // ----- clock: strictly increasing per training so `since` cursors are exact -----
   tick(code) {
     let last = this.stamps.get(code);
-    if (last == null) last = this._maxStamp(code);
+    if (last == null) last = this.ready ? this._maxStamp(code) : 0;
     const t = Math.max(this.now(), last + 1);
     this.stamps.set(code, t);
     return t;
@@ -549,8 +571,9 @@ export class LiveCore {
   // ----- trainings -----
   training(code, create = false) {
     if (this.cfg.allowedCodes && !this.cfg.allowedCodes.has(code)) throw new HttpError(404, 'unknown_training', '등록되지 않은 연수 코드입니다.');
-    let t = this.db.get(`SELECT * FROM trainings WHERE code = ?`, code);
+    let t = this.ready ? this.db.get(`SELECT * FROM trainings WHERE code = ?`, code) : null;
     if (!t && create && this.cfg.autoCreate) {
+      this.ensureSchema();
       const now = this.now();
       this.db.run(`INSERT OR IGNORE INTO trainings (code, admin_hash, settings, created_at, last_at) VALUES (?, NULL, '{}', ?, ?)`, code, now, now);
       t = this.db.get(`SELECT * FROM trainings WHERE code = ?`, code);
@@ -559,6 +582,8 @@ export class LiveCore {
     if (t) t.settingsObj = safeJson(t.settings, {});
     return t || null;
   }
+  trainingOrNull(code) { try { return this.training(code); } catch { return null; } }
+  exists(code) { return !!this.trainingOrNull(code); }
   touch(t) {
     const now = this.now();
     if (now - t.last_at > 60e3) { this.db.run(`UPDATE trainings SET last_at = ? WHERE code = ?`, now, t.code); t.last_at = now; }
@@ -571,6 +596,24 @@ export class LiveCore {
     const mb = t && t.settingsObj && t.settingsObj.maxUploadMb;
     return mb ? Math.min(mb * 1024 * 1024, this.cfg.maxUploadBytes) : this.cfg.maxUploadBytes;
   }
+  /** Board files allowed? init `settings.uploads` or the instructor's state.ui.uploads (admin-only), both default on. */
+  uploadsAllowed(code, t) {
+    if (!t) return false;
+    if (t.settingsObj && t.settingsObj.uploads === false) return false;
+    return (this.state(code, t).ui || {}).uploads !== false;
+  }
+  /** Docs per (training, collection), cached; join/add/remove/wipe keep it current. */
+  count(code, col) {
+    const k = code + '|' + col;
+    let n = this.counts.get(k);
+    if (n == null) {
+      n = this.ready ? (this.db.get(`SELECT COUNT(*) AS n FROM docs WHERE code = ? AND col = ?`, code, col) || {}).n || 0 : 0;
+      if (this.counts.size > 20000) this.counts.clear();
+      this.counts.set(k, n);
+    }
+    return n;
+  }
+  bumpCount(code, col, d) { const k = code + '|' + col; if (this.counts.has(k)) this.counts.set(k, Math.max(0, this.counts.get(k) + d)); }
 
   // ----- auth -----
   /** Hash credentials first (async), then everything else is synchronous. */
@@ -590,7 +633,7 @@ export class LiveCore {
     return !!expected && hashEqual(cred.adminHash, expected);
   }
   participant(code, cred) {
-    if (!cred.tokenHash) return null;
+    if (!cred.tokenHash || !this.ready) return null;
     const row = this.db.get(`SELECT id, data FROM docs WHERE code = ? AND col = 'participants' AND k = ?`, code, cred.tokenHash);
     return row ? { id: row.id, ...safeJson(row.data, {}) } : null;
   }
@@ -608,12 +651,51 @@ export class LiveCore {
     const w = this.limiter.hit(bucket + ':' + who, this.rate[bucket] || this.rate.write, now);
     if (w) throw rateErr(w);
   }
+  /** Cross-instance counter (Cloudflare: one Guard object per IP); this process's limiter otherwise or when it fails. */
+  async gHit(key, rate) {
+    if (this.cfg.guard) { try { return Number(await this.cfg.guard.hit(key, rate)) || 0; } catch { /* fall back */ } }
+    return this.limiter.hit('g:' + key, rate, this.now());
+  }
+  async gPeek(key, rate) {
+    if (this.cfg.guard) { try { return Number(await this.cfg.guard.peek(key, rate)) || 0; } catch { /* fall back */ } }
+    return this.limiter.peek('g:' + key, rate, this.now());
+  }
+  /** 429 while this (code, IP) or this IP has too many wrong admin keys / setup tokens. Checked before the key, so a
+   *  locked client learns nothing — the right key is refused too until the window ends. */
+  async authGate(code, ip) {
+    const who = ip || '?'; const now = this.now();
+    let w = this.limiter.peek('af:' + code + '|' + who, this.rate.authFail, now);
+    if (!w) {
+      const ok = this.guardOk.get(who);
+      if (!(ok && ok > now)) {
+        w = await this.gPeek('afip:' + who, this.rate.authFailIp);
+        if (!w) { if (this.guardOk.size > 5000) this.guardOk.clear(); this.guardOk.set(who, now + 30e3); }
+      }
+    }
+    if (w) throw new HttpError(429, 'rate_limited', '관리자 키가 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.', { retryAfter: Math.max(1, Math.ceil(w / 1000)) });
+  }
+  async authFail(code, ip) {
+    const who = ip || '?';
+    this.limiter.hit('af:' + code + '|' + who, this.rate.authFail, this.now());
+    this.guardOk.delete(who);
+    await this.gHit('afip:' + who, this.rate.authFailIp);
+  }
+  /** WebSocket {type:'auth'}: same throttle as the header. Resolves true/false; throws 429 while locked. */
+  async wsAuth(code, key, ip) {
+    const c = normCode(code);
+    await this.authGate(c, ip);
+    const hash = typeof key === 'string' && key && key.length <= 200 ? await sha256hex(key) : null;
+    const ok = !!hash && this.isAdmin(this.trainingOrNull(c), { adminHash: hash });
+    if (!ok) await this.authFail(c, ip);
+    return ok;
+  }
 
   // ----- doc helpers -----
-  out(col, row, admin) {
+  /** viewer: the reading participant's id (public view) — answers/progress/help carry `by` only on the reader's own docs. */
+  out(col, row, admin, viewer) {
     const d = safeJson(row.data, {});
     const doc = { id: row.id, ...d, createdAt: row.created_at, updatedAt: row.updated_at };
-    if (row.by && col !== 'questions' && col !== 'participants') doc.by = row.by;
+    if (row.by && col !== 'questions' && col !== 'participants' && (admin || !OWN_BY.has(col) || (viewer && row.by === viewer))) doc.by = row.by;
     if (row.cid) doc.cid = row.cid;
     if (!admin) {
       if (col === 'questions' && doc.status === 'hidden') doc.text = '';
@@ -632,14 +714,72 @@ export class LiveCore {
     return { ...row, data: JSON.stringify(data), updated_at: now };
   }
 
+  // ----- board files (M7/M8/H3) -----
+  /** Files on a post must be this training's own uploads by the same participant, not used by another post, and only
+   *  while uploads are allowed. The recorded type and size replace what the client sent. */
+  ownFiles(code, t, me, files, postId) {
+    if (!files || !files.length) return [];
+    if (!this.uploadsAllowed(code, t)) throw new HttpError(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
+    const seen = new Set();
+    return files.map((f) => {
+      const ref = fileRef(f.url);
+      const row = ref && ref.code === code && !seen.has(ref.name) && me
+        ? this.db.get(`SELECT f.type, f.size, f.by, r.post FROM files f LEFT JOIN file_refs r ON r.code = f.code AND r.name = f.name WHERE f.code = ? AND f.name = ?`, code, ref.name) : null;
+      if (!row || row.by !== me.id || (row.post && row.post !== postId)) throw bad('invalid_value', 'files.url: 이 연수에 내가 올린 파일만 붙일 수 있어요.');
+      seen.add(ref.name);
+      return { url: `/api/${code}/files/${ref.name}`, name: f.name, type: row.type, size: row.size };
+    });
+  }
+  /** Own upload names referenced by a post (its files[] plus anything linked to it). */
+  postFileNames(code, postId, files) {
+    const names = new Set();
+    for (const f of files || []) { const r = fileRef(f && f.url); if (r && r.code === code) names.add(r.name); }
+    for (const r of this.db.all(`SELECT name FROM file_refs WHERE code = ? AND post = ?`, code, postId)) names.add(r.name);
+    return [...names];
+  }
+  /** Links files to a post (only files this training really has). Untracked legacy files become tracked, so hiding works. */
+  linkFiles(code, postId, names) {
+    for (const n of names) {
+      if (this.db.get(`SELECT 1 AS x FROM files WHERE code = ? AND name = ?`, code, n)) {
+        this.db.run(`INSERT INTO file_refs (code, name, post) VALUES (?, ?, ?) ON CONFLICT(code, name) DO UPDATE SET post = excluded.post`, code, n, postId);
+      }
+    }
+  }
+  dropFiles(code, names) {
+    for (const n of names) { this.db.run(`DELETE FROM files WHERE code = ? AND name = ?`, code, n); this.db.run(`DELETE FROM file_refs WHERE code = ? AND name = ?`, code, n); }
+  }
+
   // ----- router -----
   /**
-   * req = { method, code, rest: string[], query: URLSearchParams, headers: Headers-like, body, ip }
-   * → { status, body, contentType?, events?: [{type,col,doc,pub}], reaction?: emoji, purgedFiles?: string[] }
+   * req = { method, code, rest: string[], query: URLSearchParams, headers: Headers-like, body, ip, origin? }
+   * → { status, body, contentType?, events?: [{type,col,doc,pub}], reaction?: emoji,
+   *     purgedFiles?: string[] (whole training wiped: delete every stored file of the code),
+   *     deleteFiles?: string[] (delete just these stored names) }
+   * `origin` (the scheme://host the reader used) turns relative upload paths in the response into absolute URLs.
    */
   async handle(req) {
     const code = normCode(req.code);
     const cred = await this.credentials(req.headers);
+    const [a, b] = req.rest; const m = req.method; const ip = req.ip || '';
+    // Wrong admin keys / setup tokens count on every route (a wrong key on a read silently falls back to the public
+    // view, which would otherwise be a free oracle).
+    if (cred.adminHash || (a === 'init' && cred.setupHash)) {
+      await this.authGate(code, ip);
+      let wrong = !!cred.adminHash && !this.isAdmin(this.trainingOrNull(code), cred);
+      if (a === 'init' && cred.setupHash && !(this.cfg.setupTokenHash && hashEqual(cred.setupHash, this.cfg.setupTokenHash))) wrong = true;
+      if (wrong) await this.authFail(code, ip);
+    }
+    if ((m === 'GET' || m === 'HEAD') && ip) { const w = this.limiter.hit('read:' + ip, this.rate.read, this.now()); if (w) throw rateErr(w); }
+    // auto-created trainings per IP (counted across rooms through the guard)
+    if (this.cfg.autoCreate && !b && ((m === 'POST' && (a === 'join' || a === 'polls')) || (a === 'state' && m !== 'GET'))
+      && (!this.cfg.allowedCodes || this.cfg.allowedCodes.has(code)) && !this.exists(code)) {
+      const w = await this.gHit('create:' + (ip || '?'), this.rate.create); if (w) throw rateErr(w);
+    }
+    const out = await this.route(code, cred, req);
+    if (req.origin && out && out.body && !out.contentType) absolutizeFiles(out.body, req.origin);
+    return out;
+  }
+  async route(code, cred, req) {
     const [a, b, c] = req.rest; const m = req.method;
     if (m === 'POST' && a === 'init' && !b) return this.init(code, req.body, cred);
     if (m === 'POST' && a === 'join' && !b) return this.join(code, req.body, req.ip);
@@ -663,10 +803,11 @@ export class LiveCore {
     throw new HttpError(405, 'method_not_allowed', '지원하지 않는 요청입니다.');
   }
 
-  init(code, body, cred) {
+  async init(code, body, cred) {
     if (!isObj(body)) throw bad('invalid_body', '본문이 JSON 객체가 아닙니다.');
     const hash = String(body.adminKeyHash || '').toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(hash)) throw bad('invalid_value', 'adminKeyHash: SHA-256 hex 64자');
+    if (await isWeakKeyHash(hash)) throw bad('weak_key', '예시로 쓰인 관리자 키입니다. 새로 만든 키(12자 이상)를 쓰세요.');
     const existing = this.training(code);
     if (existing && existing.admin_hash) {
       // Re-init (key rotation / settings) requires the current admin key.
@@ -675,7 +816,6 @@ export class LiveCore {
       if (!this.cfg.setupTokenHash) throw new HttpError(403, 'init_disabled', '이 서버는 연수 등록을 받지 않습니다(설정 토큰 없음).');
       if (!cred.setupHash || !hashEqual(cred.setupHash, this.cfg.setupTokenHash)) throw new HttpError(403, 'setup_required', '서버 설정 토큰이 맞지 않습니다.');
     }
-    if (this.cfg.allowedCodes && !this.cfg.allowedCodes.has(code)) throw new HttpError(404, 'unknown_training', '등록되지 않은 연수 코드입니다.');
     const s = isObj(body.settings) ? body.settings : {};
     const settings = {};
     if (s.retentionDays != null) settings.retentionDays = cleanNum(s.retentionDays, 'retentionDays', 1, this.cfg.maxRetentionDays, { int: true });
@@ -683,6 +823,7 @@ export class LiveCore {
     if (s.uploads != null) settings.uploads = cleanBool(s.uploads, 'uploads', true);
     if (s.title != null) settings.title = cleanText(s.title, 120, 'title');
     if (s.moderation != null) settings.moderation = cleanBool(s.moderation, 'moderation', false);
+    this.ensureSchema();
     const now = this.now();
     this.db.run(`INSERT INTO trainings (code, admin_hash, settings, created_at, last_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET admin_hash = excluded.admin_hash, settings = excluded.settings, last_at = excluded.last_at`, code, hash, JSON.stringify(settings), now, now);
     return { status: existing ? 200 : 201, body: { ok: true, code, settings } };
@@ -690,33 +831,36 @@ export class LiveCore {
 
   async join(code, body, ip) {
     if (!isObj(body)) throw bad('invalid_body', '본문이 JSON 객체가 아닙니다.');
-    const nickname = cleanText(body.nickname, LIMITS.nickname, 'nickname') || '참가자';
+    const nickname = cleanNickname(body.nickname) || '참가자';
     const name = cleanText(body.name, LIMITS.name, 'name');
     const school = cleanText(body.school, LIMITS.school, 'school');
     const consent = body.consent === true;
     if ((name || school) && !consent) throw bad('consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
-    this.training(code, true);
+    if (this.cfg.allowedCodes && !this.cfg.allowedCodes.has(code)) throw new HttpError(404, 'unknown_training', '등록되지 않은 연수 코드입니다.');
+    if (!this.exists(code) && !this.cfg.autoCreate) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (ip) { const w = this.limiter.hit('joinIp:' + ip, this.rate.joinIp, this.now()); if (w) throw rateErr(w); }
     const wc = this.limiter.hit('joinCode:' + code, this.rate.joinCode, this.now()); if (wc) throw rateErr(wc);
     const token = randomToken();
     const tokenHash = await sha256hex(token);
     // synchronous from here on
     const t = this.training(code, true);
+    if (this.count(code, 'participants') >= this.cfg.maxParticipants) throw new HttpError(403, 'room_full', `참가 인원이 가득 찼어요(최대 ${this.cfg.maxParticipants}명). 강사에게 알려 주세요.`);
     const id = 'p' + randomId(9); const now = this.tick(code);
     const data = { nickname, name, school, consentAt: consent ? now : null };
     this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, 'participants', ?, ?, ?, NULL, ?, ?, ?)`, code, id, id, tokenHash, JSON.stringify(data), now, now);
+    this.bumpCount(code, 'participants', 1);
     this.touch(t);
     const row = this.getRow(code, 'participants', id);
     return { status: 201, body: { id, token, nickname }, events: [this.event('add', 'participants', row)] };
   }
 
   state(code, t) {
-    const row = t ? this.db.get(`SELECT data, updated_at FROM state WHERE code = ?`, code) : null;
+    const row = t && this.ready ? this.db.get(`SELECT data, updated_at FROM state WHERE code = ?`, code) : null;
     return row ? { ...DEFAULT_STATE(), ...safeJson(row.data, {}), updatedAt: row.updated_at } : DEFAULT_STATE();
   }
   setState(code, body, cred, ip) {
+    this.requireAdmin(this.training(code), cred);
     const t = this.training(code, true);
-    this.requireAdmin(t, cred);
     this.limit('admin', 'admin:' + code, null);
     const patch = cleanStatePatch(body);
     const cur = this.state(code, t);
@@ -734,23 +878,21 @@ export class LiveCore {
     const t = this.training(code);
     const since = Math.max(0, Number(query.get('since')) || 0);
     const admin = this.isAdmin(t, cred);
-    const now = this.tick(code);
     const cols = admin ? [...PUBLIC_COLS, ...PRIVATE_COLS] : PUBLIC_COLS;
-    const out = { state: this.state(code, t), now, since, full: since === 0, removed: [] };
+    const out = { state: this.state(code, t), now: 0, since, full: since === 0, removed: [] };
     for (const c of cols) out[c] = [];
-    if (!t) return { status: 200, body: out };
-    const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND updated_at > ? AND updated_at <= ? ORDER BY updated_at LIMIT 20000`, code, since, now);
-    for (const r of rows) if (out[r.col]) out[r.col].push(this.out(r.col, r, admin));
+    if (!t) { out.now = this.now(); return { status: 200, body: out }; }
+    out.now = this.tick(code);
+    const me = !admin && cred.tokenHash ? this.participant(code, cred) : null;
+    const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND updated_at > ? AND updated_at <= ? ORDER BY updated_at LIMIT 20000`, code, since, out.now);
+    for (const r of rows) if (out[r.col]) out[r.col].push(this.out(r.col, r, admin, me && me.id));
     if (out.chat.length > 500) out.chat = out.chat.slice(-500);
-    if (!admin && cred.tokenHash) {
+    if (me) {
       // A participant also gets their own private docs (attendance, survey) so a reload restores them.
-      const me = this.participant(code, cred);
-      if (me) {
-        for (const c of ['attendance', 'survey']) out[c] = rows.filter((r) => r.col === c && r.by === me.id).map((r) => this.out(c, r, false));
-        out.me = { id: me.id, nickname: me.nickname };
-      }
+      for (const c of ['attendance', 'survey']) out[c] = rows.filter((r) => r.col === c && r.by === me.id).map((r) => this.out(c, r, false, me.id));
+      out.me = { id: me.id, nickname: me.nickname };
     }
-    if (since) out.removed = this.db.all(`SELECT col, id FROM tombstones WHERE code = ? AND at > ? AND at <= ?`, code, since, now).filter((r) => cols.includes(r.col));
+    if (since) out.removed = this.db.all(`SELECT col, id FROM tombstones WHERE code = ? AND at > ? AND at <= ?`, code, since, out.now).filter((r) => cols.includes(r.col));
     return { status: 200, body: out };
   }
 
@@ -762,20 +904,22 @@ export class LiveCore {
     if (PRIVATE_COLS.includes(col) && !admin) {
       const me = this.requireParticipant(code, cred);
       const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND col = ? AND by = ? AND updated_at > ? ORDER BY updated_at`, code, col, me.id, since);
-      return { status: 200, body: rows.map((r) => this.out(col, r, false)) };
+      return { status: 200, body: rows.map((r) => this.out(col, r, false, me.id)) };
     }
+    const viewer = !admin && cred.tokenHash ? (this.participant(code, cred) || {}).id : null;
     const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND col = ? AND updated_at > ? ORDER BY updated_at LIMIT 20000`, code, col, since);
-    return { status: 200, body: rows.map((r) => this.out(col, r, admin)) };
+    return { status: 200, body: rows.map((r) => this.out(col, r, admin, viewer)) };
   }
 
   add(code, col, body, cred, ip) {
-    const t = this.training(code, true);
+    if (col === 'participants') throw new HttpError(405, 'use_join', '참가자는 /join으로 만듭니다.');
+    let t = this.training(code);
     const admin = this.isAdmin(t, cred);
     let me = null;
-    if (col === 'participants') throw new HttpError(405, 'use_join', '참가자는 /join으로 만듭니다.');
-    if (col === 'polls') { this.requireAdmin(t, cred); this.limit('admin', 'admin:' + code, null); }
+    if (col === 'polls') { this.requireAdmin(t, cred); this.limit('admin', 'admin:' + code, null); t = t || this.training(code, true); }
     else if (PARTICIPANT_WRITE.has(col)) {
       me = this.requireParticipant(code, cred);
+      if (!t) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
       this.limit('write', me.id, ip);
       if (this.rate[col]) this.limit(col, me.id, null);
     } else throw new HttpError(404, 'unknown_collection', '없는 컬렉션입니다.');
@@ -785,8 +929,9 @@ export class LiveCore {
     // idempotent retry
     if (cid) {
       const dup = this.db.get(`SELECT * FROM docs WHERE code = ? AND col = ? AND by IS ? AND cid = ?`, code, col, by, cid);
-      if (dup) return { status: 200, body: this.out(col, dup, admin) };
+      if (dup) return { status: 200, body: this.out(col, dup, admin || !!me) };
     }
+    if (col === 'posts') data.files = this.ownFiles(code, t, me, data.files, null);
     const now = this.tick(code);
     const nickname = me ? me.nickname : '강사';
     let k = null;
@@ -816,19 +961,22 @@ export class LiveCore {
         row = { ...existing, data: JSON.stringify(merged), updated_at: now, cid };
         type = 'update';
       } else {
+        if (this.count(code, col) >= this.cfg.maxDocs) throw new HttpError(409, 'collection_full', '이 연수에 쌓인 글이 너무 많아요. 강사에게 알려 주세요.');
         const id = col.slice(0, 1) + randomId(9);
         this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, code, col, id, by, k, cid, JSON.stringify(data), now, now);
         row = { code, col, id, by, k, cid, data: JSON.stringify(data), created_at: now, updated_at: now };
+        if (col === 'posts') this.linkFiles(code, id, this.postFileNames(code, id, data.files));
       }
     });
+    if (type === 'add') this.bumpCount(code, col, 1);
     this.touch(t);
     return { status: type === 'add' ? 201 : 200, body: this.out(col, row, true), events: [this.event(type, col, row)] };
   }
 
   update(code, col, id, body, cred, ip) {
-    const t = this.training(code, true);
+    const t = this.training(code);
     const admin = this.isAdmin(t, cred);
-    const row = this.getRow(code, col, cleanId(id, 'id'));
+    const row = t ? this.getRow(code, col, cleanId(id, 'id')) : null;
     if (!row) throw new HttpError(404, 'not_found', '없는 글입니다.');
     const me = admin ? null : this.requireParticipant(code, cred);
     const owner = !!me && (col === 'participants' ? row.id === me.id : row.by === me.id);
@@ -837,32 +985,56 @@ export class LiveCore {
     const patch = cleanPatch(col, body, { admin, owner });
     const cur = safeJson(row.data, {});
     if (owner && !admin && col === 'questions' && cur.status === 'hidden') throw new HttpError(403, 'forbidden', '숨겨진 질문은 고칠 수 없어요.');
+    if (owner && !admin && (col === 'posts' || col === 'chat') && cur.hidden) throw new HttpError(403, 'forbidden', '숨겨진 글은 고칠 수 없어요.');
+    // L1: an answer cannot change once its poll is closed (same rule as a new answer)
+    if (col === 'answers' && !admin) {
+      const poll = this.getRow(code, 'polls', String(cur.poll || ''));
+      if (poll && safeJson(poll.data, {}).open === false) throw new HttpError(409, 'poll_closed', '투표가 닫혔어요.');
+    }
+    let dropped = [];
+    if (col === 'posts' && patch.files) {
+      patch.files = this.ownFiles(code, t, me, patch.files, row.id);
+      const keep = new Set(patch.files.map((f) => fileRef(f.url).name));
+      dropped = this.postFileNames(code, row.id, cur.files).filter((n) => !keep.has(n));
+    }
     const next = { ...cur, ...patch };
     const now = this.tick(code);
-    const nrow = this.writeRow(code, col, row, next, now);
+    let nrow;
+    this.db.tx(() => {
+      nrow = this.writeRow(code, col, row, next, now);
+      if (col === 'posts') {
+        if (dropped.length) this.dropFiles(code, dropped);
+        // hiding/showing or new files: (re)link so the file route follows the post's visibility
+        if (patch.files || 'hidden' in patch) this.linkFiles(code, row.id, this.postFileNames(code, row.id, next.files));
+      }
+    });
     this.touch(t);
-    return { status: 200, body: this.out(col, nrow, true), events: [this.event('update', col, nrow)] };
+    return { status: 200, body: this.out(col, nrow, true), events: [this.event('update', col, nrow)], ...(dropped.length ? { deleteFiles: dropped } : {}) };
   }
 
   remove(code, col, id, cred) {
-    const t = this.training(code, true);
+    const t = this.training(code);
     this.requireAdmin(t, cred);
-    const row = this.getRow(code, col, cleanId(id, 'id'));
+    const row = t ? this.getRow(code, col, cleanId(id, 'id')) : null;
     if (!row) throw new HttpError(404, 'not_found', '없는 글입니다.');
+    const gone = col === 'posts' ? this.postFileNames(code, row.id, safeJson(row.data, {}).files) : [];
     const now = this.tick(code);
     this.db.tx(() => {
       this.db.run(`DELETE FROM docs WHERE code = ? AND col = ? AND id = ?`, code, col, row.id);
       this.db.run(`DELETE FROM votes WHERE code = ? AND col = ? AND doc = ?`, code, col, row.id);
       this.db.run(`INSERT INTO tombstones (code, col, id, at) VALUES (?, ?, ?, ?) ON CONFLICT(code, col, id) DO UPDATE SET at = excluded.at`, code, col, row.id, now);
+      if (gone.length) this.dropFiles(code, gone);
     });
+    this.bumpCount(code, col, -1);
     const ev = { type: 'remove', col, doc: { id: row.id }, pub: PUBLIC_COLS.includes(col) ? { id: row.id } : null };
-    return { status: 200, body: { ok: true }, events: [ev] };
+    return { status: 200, body: { ok: true }, events: [ev], ...(gone.length ? { deleteFiles: gone } : {}) };
   }
 
   /** One vote (questions) / like (posts) per participant; idempotent. */
   vote(code, col, id, cred, ip) {
-    const t = this.training(code, true);
     const me = this.requireParticipant(code, cred);
+    const t = this.training(code);
+    if (!t) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     this.limit('vote', me.id, ip);
     const row = this.getRow(code, col, cleanId(id, 'id'));
     if (!row) throw new HttpError(404, 'not_found', '없는 글입니다.');
@@ -914,16 +1086,19 @@ export class LiveCore {
     return { status: 200, body: { ok: true }, ...this.wipe(code), events: [{ type: 'reset', col: null, doc: null, pub: {} }] };
   }
   wipe(code, dropTraining = false) {
+    if (!this.ready) return { purgedFiles: [] };
     const files = this.db.all(`SELECT name FROM files WHERE code = ?`, code).map((r) => r.name);
     this.db.tx(() => {
-      for (const tbl of ['docs', 'votes', 'tombstones', 'state', 'files']) this.db.run(`DELETE FROM ${tbl} WHERE code = ?`, code);
+      for (const tbl of ['docs', 'votes', 'tombstones', 'state', 'files', 'file_refs']) this.db.run(`DELETE FROM ${tbl} WHERE code = ?`, code);
       if (dropTraining) this.db.run(`DELETE FROM trainings WHERE code = ?`, code);
     });
     this.stamps.delete(code);
+    for (const c of COLS) this.counts.delete(code + '|' + c);
     return { purgedFiles: files };
   }
   /** Drops trainings idle past their retention. Returns [{code, files}]. Run hourly/daily. */
   cleanup() {
+    if (!this.ready) return [];
     const now = this.now(); const out = [];
     for (const t of this.db.all(`SELECT * FROM trainings`)) {
       t.settingsObj = safeJson(t.settings, {});
@@ -933,14 +1108,22 @@ export class LiveCore {
     this.db.run(`DELETE FROM tombstones WHERE at < ?`, now - this.cfg.maxRetentionDays * DAY);
     return out;
   }
+  /** Uploads never attached to a post within maxAge: records dropped, [{code, name}] returned for the host to delete. */
+  sweepOrphans(maxAge = DAY) {
+    if (!this.ready) return [];
+    const rows = this.db.all(`SELECT f.code AS code, f.name AS name FROM files f JOIN file_refs r ON r.code = f.code AND r.name = f.name WHERE r.post IS NULL AND f.created_at < ?`, this.now() - maxAge);
+    if (rows.length) this.db.tx(() => { for (const r of rows) this.dropFiles(r.code, [r.name]); });
+    return rows;
+  }
 
   // ----- uploads (host stores bytes; core validates & records) -----
   async authorizeUpload(code, headers, ip) {
     const cred = await this.credentials(headers);
     const c = normCode(code);
-    const t = this.training(c, true);
-    if (t.settingsObj.uploads === false) throw new HttpError(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
+    const t = this.training(c);
     const me = this.requireParticipant(c, cred);
+    if (!t) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
+    if (!this.uploadsAllowed(c, t)) throw new HttpError(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
     this.limit('upload', me.id, ip);
     return { code: c, me, maxBytes: this.uploadLimit(t), training: t };
   }
@@ -953,12 +1136,24 @@ export class LiveCore {
     if (!type) throw new HttpError(415, 'unsupported_type', '이미지(PNG·JPG·GIF·WEBP)·PDF·MP3·MP4만 올릴 수 있어요.');
     return { type, stored: randomId(12) + '.' + UPLOAD_TYPES[type], name: safeFileName(name, type) };
   }
+  /** Records an upload as "not attached yet": it is served only once a visible post links it. */
   recordFile(code, { stored, type, size, by }) {
-    this.db.run(`INSERT INTO files (code, name, type, size, by, created_at) VALUES (?, ?, ?, ?, ?, ?)`, code, stored, type, size, by, this.now());
+    this.db.tx(() => {
+      this.db.run(`INSERT INTO files (code, name, type, size, by, created_at) VALUES (?, ?, ?, ?, ?, ?)`, code, stored, type, size, by, this.now());
+      this.db.run(`INSERT INTO file_refs (code, name, post) VALUES (?, ?, NULL) ON CONFLICT(code, name) DO NOTHING`, code, stored);
+    });
   }
+  /** The stored file when it may be served, else null (unknown, not attached, or its post is hidden/removed). */
   fileMeta(code, name) {
-    if (!/^[a-f0-9]{24}\.(png|jpg|gif|webp|pdf|mp3|mp4)$/.test(name)) return null;
-    return this.db.get(`SELECT * FROM files WHERE code = ? AND name = ?`, code, name) || null;
+    if (!this.ready || !FILE_NAME_RE.test(name)) return null;
+    const f = this.db.get(`SELECT f.*, r.name AS tracked, r.post AS post FROM files f LEFT JOIN file_refs r ON r.code = f.code AND r.name = f.name WHERE f.code = ? AND f.name = ?`, code, name);
+    if (!f) return null;
+    if (f.tracked) {
+      if (!f.post) return null;
+      const p = this.getRow(code, 'posts', f.post);
+      if (!p || safeJson(p.data, {}).hidden) return null;
+    }
+    return f;
   }
 }
 
