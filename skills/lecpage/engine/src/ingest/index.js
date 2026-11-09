@@ -8,7 +8,7 @@
 //
 // Material 모양은 skills/lecpage/references/material-format.md 에 적어 두었습니다.
 import {
-  DEFAULT_LIMITS, IngestError, makeError, toUserError, toBytes, sniff, extOf, baseName, stripExt, normLine, normText,
+  DEFAULT_LIMITS, IngestError, makeError, toUserError, toBytes, sniff, extOf, baseName, normLine, normText,
   findUrls, cleanUrl, hostOf, findBoilerplate, textKey, urlKey, pageText, sizeLabel,
 } from './util.js';
 import { Zip } from './zip.js';

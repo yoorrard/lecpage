@@ -109,9 +109,13 @@ function addRef(e, file, page) {
 
 // ── 프롬프트 ──────────────────────────────────────────
 const END = '[\\s.!?~"”’\'」』)]*$';
-const REQ_STRONG = new RegExp(`(?:해\\s?줘|해\\s?줄래|줘|줄래|줘요|해\\s?봐|해\\s?볼래|해\\s?주라|하라|하시오|해라|써\\s?줘|알려\\s?줘|만들어\\s?줘|그려\\s?줘|짜\\s?줘|골라\\s?줘|바꿔\\s?줘|찾아\\s?줘|해\\s?줄\\s?수\\s?있어\\??)${END}`);
+const REQ_STRONG = new RegExp(`(?:해\\s?줘|해\\s?줄래|줘|줄래|줘요|해\\s?봐|해\\s?볼래|해\\s?주라|하라|해라|써\\s?줘|알려\\s?줘|만들어\\s?줘|그려\\s?줘|짜\\s?줘|골라\\s?줘|바꿔\\s?줘|찾아\\s?줘|해\\s?줄\\s?수\\s?있어\\??)${END}`);
 const REQ_POLITE = new RegExp(`(?:주세요|주십시오|주실래요|주시겠어요|줄\\s?수\\s?있나요|해\\s?주실\\s?수\\s?있나요)${END}`);
 const AI_CUE = /(너는|당신은|넌\s|너의\s|역할|AI\s?야|챗봇|로서|형식으로|표로|표\s?형식|단계별로|한국어로|영어로|쉽게|초등학생|중학생|고등학생|\d+\s*학년|수준으로|\d+\s*(?:개|가지|줄|문장|자|단어|문단)|이내로|요약|정리|작성|만들어|추천|분석|비교|설명|번역|바꿔|생성|제안|그려|써\s?줘|알려|평가|피드백|채점|아이디어|예시를|퀴즈|문제를)/;
+// 해요체 요청이 AI에게 하는 말인지: 역할·형식·분량·수준 같은 분명한 단서가 있을 때만(“소감을 작성해 주세요”는 참가자 안내)
+const AI_STRONG = /(너는|당신은|넌\s|역할|\bAI\b|챗봇|로서|형식으로|표로|표\s?형식|단계별로|한국어로|영어로|일본어로|중국어로|초등학생|중학생|고등학생|\d+\s*학년|수준으로|눈높이|\d+\s*(?:개|가지|줄|문장|자|단어|문단|문항)|이내로|예시를|퀴즈를|문제를|아이디어를|번역|프롬프트)/;
+const TO_PEOPLE = /(여러분|선생님들|선생님께서|모두\s|함께\s|같이\s|짝과|모둠|조원)/;
+const EXAM = /(고르(?:세요|시오)|답하(?:세요|시오)|쓰시오|물음에|빈칸에|알맞은)/;
 const INSTRUCT = /(접속|클릭|로그인|선택하|누르|입력하|입력해|복사|붙여|다운로드|업로드|들어가|열어|저장하|확인하|공유하|참여하|따라|제출|설치|설정하|올려)/;
 const LABEL = /^\s*[\[【<(「]?\s*(?:예시\s*|추천\s*|실습\s*)?(?:프롬프트|prompt|명령어|명령문|질문\s*예시|입력\s*(?:문장|예시|내용|창에)|요청\s*(?:문장|예시)|지시문|이렇게\s*입력|이렇게\s*물어)\s*(?:예시|예|\d{1,2}|[①-⑳])?\s*[\]】>)」]?\s*(?:[:：\-–—▶→]\s*|$)(.*)$/i;
 const TEMPLATE_LINE = /^(?:#{1,3}\s*\S|[\[【]?\s*(?:역할|목표|목적|조건|형식|출력\s*형식|출력|맥락|상황|배경|지시|지시\s*사항|규칙|제약|제약\s*조건|대상|독자|톤|어조|분량|예시|참고|입력|role|task|context|format|constraints?|goal|audience|tone|output|instructions?)\s*[\]】]?\s*[:：])/i;
@@ -129,7 +133,10 @@ function cleanPrompt(t) {
   if (q && !/[“"「『‘’”」』]/.test(q[1])) s = q[1];
   return normText(s);
 }
-export function isRequestLine(t) { return REQ_STRONG.test(t) || (REQ_POLITE.test(t) && AI_CUE.test(t) && !INSTRUCT.test(t.replace(/입력해\s*줘/, ''))); }
+export function isRequestLine(t) {
+  if (EXAM.test(t)) return false;
+  return REQ_STRONG.test(t) || (REQ_POLITE.test(t) && AI_STRONG.test(t) && !INSTRUCT.test(t.replace(/입력해\s*줘/, '')));
+}
 
 function detectPrompts(pages) {
   const found = [];
@@ -188,15 +195,16 @@ function detectPrompts(pages) {
       while ((m = QUOTE_RE.exec(x.text))) {
         const q = m[1].trim();
         const near = /(입력|물어|질문|요청|프롬프트|검색|말해|타이핑|명령|쳐|적어)/.test(x.text.replace(m[0], ''));
-        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q))) { add(p, q, 'quote', 4); used.add(x); }
+        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q) && !EXAM.test(q))) { add(p, q, 'quote', 4); used.add(x); }
       }
     }
     // 4) 요청 어미(~해줘, ~만들어줘 …)로 끝나는 줄
     for (const x of paras) {
       if (used.has(x) || x.role === 'heading' || x.text.length < 8) continue;
       const t = x.text.replace(LEAD_MARK, '');
+      if (EXAM.test(t) || (TO_PEOPLE.test(t) && !AI_STRONG.test(t))) continue;
       if (REQ_STRONG.test(t)) { add(p, t, 'request', 3); used.add(x); }
-      else if (REQ_POLITE.test(t) && AI_CUE.test(t) && !INSTRUCT.test(t)) { add(p, t, 'request', 2); used.add(x); }
+      else if (REQ_POLITE.test(t) && AI_STRONG.test(t) && !INSTRUCT.test(t) && !TO_PEOPLE.test(t)) { add(p, t, 'request', 2); used.add(x); }
       else if (EN_PROMPT.test(t) && t.length >= 15 && !/[가-힣]/.test(t.slice(0, 10))) { add(p, t, 'english', 2); used.add(x); }
       else if (x.role === 'code' && (TEMPLATE_LINE.test(t) || PLACEHOLDER.test(t) || AI_CUE.test(t))) { add(p, t, 'code', 3); used.add(x); }
     }

@@ -18,16 +18,16 @@ description: 연수·강의·워크숍·설명회·직무연수용 웹사이트�
 
 ### 2. 교재 읽기
 ```bash
-node $SKILL/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media
-bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides   # 교재 뷰어용 쪽 이미지(LibreOffice 필요, 없으면 건너뜀)
+node $SKILL/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media --slides work/assets/slides --draft work/draft.json
 ```
+`--slides`는 교재 뷰어용 쪽 그림을 만든다(LibreOffice·pdftoppm이 없으면 건너뛰고 안내). PPTX와 그 PDF를 함께 넣으면 PDF는 쪽 그림용으로만 쓴다.
 결과 형식은 `references/material-format.md`. 실패하면 `python3 $SKILL/scripts/ingest.py`로 다시 시도한다.
 
 ### 3. 빈칸 인터뷰 (질문 10개 이내)
 `references/intake.md`의 질문 목록에서 **교재로 알 수 없는 것만** 고르기형으로 묻는다. 사용자가 "알아서"라고 하면 기본값을 쓰고 무엇을 가정했는지 한 줄로 알린다. 답을 `work/info.json`으로 저장한다.
 
 ### 4. 설계도 쓰기 (핵심)
-1. 초안: `node $SKILL/scripts/lecpage.mjs draft work/material.json -i work/info.json -o work/draft.json`
+1. 초안: 2단계의 `work/draft.json`(인터뷰 뒤라면 `node $SKILL/scripts/lecpage.mjs draft work/material.json -i work/info.json -o work/draft.json`로 다시)
 2. `references/blueprint.md`를 읽고, material과 초안을 바탕으로 `work/blueprint.json`을 **직접** 완성한다.
    - 사이트 유형(스토리형·실습형·라이브형·과정형)과 섹션 순서를 정한다(`references/modules.md`).
    - 교재에 없는 사실을 지어내지 않는다. 실습 단계·프롬프트는 교재 문장 그대로. 모든 스테이션·개요에 `source.pages`.
@@ -48,7 +48,7 @@ bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides   # 교재 �
 ```bash
 node $SKILL/scripts/lecpage.mjs build work/blueprint.json -o dist --assets work/assets -i work/info.json
 ```
-쪽 이미지를 만들었다면 deck 섹션의 각 slide `src`를 `assets/slides/slide-001.webp`처럼 채운 뒤 빌드한다.
+`--slides`로 만든 쪽 그림은 초안의 deck 섹션 slide `src`에 이미 들어 있다. 직접 쓴 설계도라면 `assets/slides/slide-001.webp`처럼 채운다.
 빌드 결과: `index.html`(참가자) · `console.html`(강사 콘솔) · `screen.html`(프로젝터) · `check.html`(접속 진단) · `privacy.html` · `DESIGN.md` · `운영안내.md`.
 
 ### 8. 점검

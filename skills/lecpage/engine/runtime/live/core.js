@@ -535,6 +535,7 @@
   C.disconnect = C.close = function () {
     this._closed = true;
     if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+    if (this._flushTimer) { clearTimeout(this._flushTimer); this._flushTimer = null; }
     if (root.removeEventListener) root.removeEventListener('online', this._onOnline);
     this._connecting = null;
     var a = this._adapter;

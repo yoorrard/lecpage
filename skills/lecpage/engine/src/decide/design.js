@@ -82,12 +82,20 @@ export function resolveDesign(bp) {
   const motion = Math.min(cap, d.motion ?? preset.motion);
   const noLibs = bp.audience?.network === 'restricted';
   const chosen = chooseEffects({ presetId: preset.id, moods: d.mood || [], topics: d.topics || [], cap: motion, noLibs, seed: (bp.meta?.title || '') + (d.seed || ''), overrides: d.effects || {} });
+  const effects = { ...chosen.effects };
+  const signature = d.signature || chosen.signature;
+  const sig = byId.get(signature);
+  if (sig && fits(sig, { cap: motion, noLibs }) && !(sig.slots || []).includes('scroll') && !Object.values(effects).includes(signature)) {
+    const RENDERED = ['divider', 'message', 'hero.title', 'closing.title', 'section.title', 'cards', 'numbers', 'schedule', 'gallery', 'hero.cta', 'progress', 'celebrate', 'cursor'];
+    const slot = (sig.slots || []).find((x) => RENDERED.includes(x));
+    if (slot) effects[slot] = signature;
+  }
   return {
     ...d, preset: preset.id, motion,
     graphic: d.graphic !== undefined ? (fits(byId.get(d.graphic), { cap: motion, noLibs }) ? d.graphic : '') : chosen.graphic,
     closingGraphic: d.closingGraphic !== undefined ? d.closingGraphic : chosen.closingGraphic,
-    signature: d.signature || chosen.signature,
-    effects: chosen.effects,
+    signature: sig && fits(sig, { cap: motion, noLibs }) ? signature : '',
+    effects,
     _notes: [...why, ...chosen.notes],
   };
 }

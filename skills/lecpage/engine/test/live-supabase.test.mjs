@@ -20,6 +20,20 @@ const isRoot = process.getuid && process.getuid() === 0;
 const hasRunuser = isRoot && spawnSync('runuser', ['--help']).status === 0 && spawnSync('id', ['postgres']).status === 0;
 const skip = !pgBin ? 'PostgreSQL server binaries not found' : isRoot && !hasRunuser ? 'running as root without a postgres user' : false;
 
+const STUBS = `
+create role anon nologin noinherit; create role authenticated nologin noinherit; create role service_role nologin noinherit bypassrls;
+create schema realtime;
+create table realtime.sent (id bigserial primary key, topic text, event text, payload jsonb, private boolean);
+create function realtime.send(payload jsonb, event text, topic text, private boolean default true) returns void language sql
+  as $$ insert into realtime.sent (topic, event, payload, private) values (topic, event, payload, private) $$;
+create schema storage;
+create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid, metadata jsonb);
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated;
+grant select, insert, delete on storage.objects to anon, authenticated;
+`;
+
 let dir; let port;
 const asPg = (cmd, args) => (isRoot ? execFileSync('runuser', ['-u', 'postgres', '--', cmd, ...args], { stdio: 'pipe' }) : execFileSync(cmd, args, { stdio: 'pipe' }));
 
@@ -39,19 +53,6 @@ after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const STUBS = `
-create role anon nologin noinherit; create role authenticated nologin noinherit; create role service_role nologin noinherit bypassrls;
-create schema realtime;
-create table realtime.sent (id bigserial primary key, topic text, event text, payload jsonb, private boolean);
-create function realtime.send(payload jsonb, event text, topic text, private boolean default true) returns void language sql
-  as $$ insert into realtime.sent (topic, event, payload, private) values (topic, event, payload, private) $$;
-create schema storage;
-create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid, metadata jsonb);
-alter table storage.objects enable row level security;
-grant usage on schema storage to anon, authenticated;
-grant select, insert, delete on storage.objects to anon, authenticated;
-`;
 
 /** Runs SQL; returns the last output line parsed as JSON when possible. Throws {sqlstate, message, hint} on error. */
 function psql(sql, { role = 'anon', code = null, file = null } = {}) {
@@ -70,8 +71,8 @@ function psql(sql, { role = 'anon', code = null, file = null } = {}) {
     Object.assign(e, { sqlstate: m[1], msg: m[2], hint, stderr: r.stderr });
     throw e;
   }
-  const lines = r.stdout.trim().split('\n').filter(Boolean);
-  const last = lines[lines.length - 1];
+  const lines = r.stdout.replace(/\n$/, '').split('\n');
+  const last = lines[lines.length - 1] ?? '';
   try { return JSON.parse(last); } catch { return last; }
 }
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
@@ -87,7 +88,7 @@ test('supabase: schema loads (twice: re-runnable) and passes basic advisor check
   psql('', { role: null, file: schemaFile });
   const noRls = psql(`select coalesce(json_agg(relname), '[]') from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and relkind = 'r' and relname like 'lec\\_%' and not relrowsecurity`, { role: null });
   assert.deepEqual(noRls, [], 'every public lec_ table has RLS');
-  const badDefiner = psql(`select coalesce(json_agg(p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public', 'lec_private') and p.prosecdef and not coalesce(p.proconfig::text like '%search_path=""%', false)`, { role: null });
+  const badDefiner = psql(`select coalesce(json_agg(p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public', 'lec_private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')`, { role: null });
   assert.deepEqual(badDefiner, [], 'security definer functions pin search_path');
   const anonExec = psql(`select coalesce(json_agg(p.proname order by p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'lec_private' and has_function_privilege('anon', p.oid, 'execute')`, { role: null });
   assert.deepEqual(anonExec, ['code', 'cur_rev', 'delete_allowed', 'fail', 'ms', 'req_code', 'upload_allowed']);

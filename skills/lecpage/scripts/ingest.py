@@ -936,7 +936,12 @@ def post_process(m, fid):
         for p in pages:
             seen = set()
             for para in p['paragraphs']:
-                k = text_key(para['text'])
+                t = para['text']
+                if para.get('num') or para.get('bullet') or para.get('role') in ('body', 'heading') or len(t) > 60:
+                    continue
+                if re.match(r'^(\d{1,2}\s*[.)]|[①-⑳]|step\s*\d|프롬프트)', t, re.I) or re.search(r'(줘|주세요|하세요|합니다)[.!]?$', t):
+                    continue
+                k = text_key(t)
                 if k and len(k) <= 80 and k not in seen:
                     seen.add(k)
                     count[k] = count.get(k, 0) + 1

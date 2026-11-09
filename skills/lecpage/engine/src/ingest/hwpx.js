@@ -1,11 +1,14 @@
 // HWPX(한글 OWPML, ZIP) 해석: Contents/content.hpf(목록·순서) → Contents/section*.xml의 hp:p/hp:run/hp:t,
 // 표(hp:tbl), 그림(hp:pic → BinData), 하이퍼링크(필드), 글상자, 개요 스타일 → 제목 기준 '쪽(section)'
 import { kid, kids, all, first, attr, textOf, isEl } from './xml.js';
-import { normText, normLine, extOf, baseName, mimeOf, WEB_IMAGE, cleanUrl, IngestError } from './util.js';
+import { normText, normLine, extOf, baseName, mimeOf, WEB_IMAGE, cleanUrl, IngestError, decodeText } from './util.js';
 import { blocksToPages } from './blocks.js';
 
 export function parseHwpx(zip, ctx) {
   zip.preload((n) => /\.(xml|hpf)$/i.test(n));
+  // 암호 걸린 HWPX: META-INF/manifest.xml에 encryption-data가 있음
+  const mf = zip.has('META-INF/manifest.xml') ? zip.text('META-INF/manifest.xml') || '' : '';
+  if (/encryption-data/i.test(mf)) throw new IngestError('encrypted');
   // 1) 목록·순서
   const hpfPath = findHpf(zip);
   const hpf = hpfPath ? zip.xml(hpfPath) : null;
@@ -50,7 +53,14 @@ export function parseHwpx(zip, ctx) {
     if (si > 0 && blocks.length > before) blocks[before].pageBreakBefore = true;
   });
 
-  const pages = blocksToPages(blocks, { fileId: ctx.fileId, unit: 'section', maxPages: ctx.limits.maxPages });
+  let pages = blocksToPages(blocks, { fileId: ctx.fileId, unit: 'section', maxPages: ctx.limits.maxPages });
+  // 본문을 못 읽었으면 미리보기 글(Preview/PrvText.txt)이라도
+  if (!pages.length && zip.has('Preview/PrvText.txt')) {
+    const raw = decodeText(zip.get('Preview/PrvText.txt'));
+    const pv = raw.split(/\r?\n/).map((t) => normText(t.replace(/^<|>$/g, ''))).filter(Boolean).map((text) => ({ type: 'p', text, level: 0, heading: null, links: [], images: [] }));
+    pages = blocksToPages(pv, { fileId: ctx.fileId, unit: 'section', maxPages: ctx.limits.maxPages });
+    if (pages.length) ctx.warn('parse-failed', { detail: 'HWPX 본문 대신 미리보기 글을 읽음' });
+  }
   if (c.unsupportedExt.size) ctx.warn('images-unsupported', { exts: [...c.unsupportedExt].join(', ') });
   if (ctx.opts.withImages) {
     const want = new Set(pages.flatMap((p) => p.images.map((im) => im.path)));

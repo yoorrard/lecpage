@@ -9,7 +9,8 @@ function head(s, ctx, fallbackTitle) {
 
 function wrap(s, ctx, inner, extraAttrs = '') {
   const labelled = s.title ? ` aria-labelledby="${esc(s.id)}-h"` : '';
-  const enter = ctx.design.effects?.['section.enter'] ? ` data-enter="${esc(ctx.design.effects['section.enter'])}"` : '';
+  const enterId = ctx.design.effects?.['section.enter'];
+  const enter = enterId && !['stations', 'deck', 'qa', 'board'].includes(s.type) ? ` data-fx="${esc(enterId)}"` : '';
   return `<section id="${esc(s.id)}" class="lp-sec lp-sec-${esc(s.type)}"${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
 }
 

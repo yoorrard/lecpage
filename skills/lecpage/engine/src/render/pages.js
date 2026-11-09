@@ -4,6 +4,23 @@ import { renderSection } from './sections.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { getPreset } from '../design/presets.js';
 import { SECTION_DEFS } from '../schema/sections.js';
+import { fxInfo } from '../decide/design.js';
+
+/** 구분 띠: 첫 화면 아래에 흐르는 띠(marquee)나 선·물결 장식 */
+function dividerBand(ctx) {
+  const id = ctx.design.effects?.divider; if (!id) return '';
+  const bp = ctx.bp;
+  const words = [];
+  for (const s of bp.sections) {
+    if (s.type === 'tools') words.push(...s.items.map((t) => t.name));
+    if (s.type === 'outline') words.push(...s.items.map((t) => t.title));
+    if (s.type === 'stations') words.push(...s.items.map((t) => t.name));
+  }
+  const list = [...new Set(words.filter(Boolean))].slice(0, 12);
+  if (!list.length) list.push(...bp.sections.filter((s) => s.nav).map((s) => s.nav));
+  if (!list.length) list.push(bp.meta.title);
+  return `<div class="lp-divider" data-fx="${esc(id)}" aria-hidden="true">${list.map((w) => `<span>${esc(w)}</span>`).join('')}</div>`;
+}
 
 const VERSION = '1.0.0';
 
@@ -60,7 +77,7 @@ function nav(ctx) {
     <button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>
   </div>
 </div>
-${ctx.design.effects?.progress === 'guided-progress' ? '<div class="lp-scrollbar" data-fx="guided-progress" aria-hidden="true"></div>' : '<div class="lp-scrollbar" data-scrollbar aria-hidden="true"></div>'}
+${ctx.design.effects?.progress === 'guided-progress' ? '<div class="lp-scrollbar" data-fx="guided-progress"></div>' : '<div class="lp-scrollbar" data-scrollbar aria-hidden="true"></div>'}
 </header>`;
 }
 
@@ -101,14 +118,18 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
 
 export function renderIndex(ctx) {
   const bp = ctx.bp;
-  const body = bp.sections.map((s) => renderSection(s, ctx)).join('\n\n');
+  const parts = bp.sections.map((s) => renderSection(s, ctx));
+  const div = dividerBand(ctx);
+  if (div) { const hi = bp.sections.findIndex((s) => s.type === 'hero'); parts.splice(hi + 1, 0, div); }
+  const body = parts.join('\n\n');
+  const pageFx = ctx.design.signature && (fxInfo(ctx.design.signature)?.slots || []).includes('scroll') ? ctx.design.signature : '';
   const scripts = ['assets/qr.js', ctx.hasFx && 'assets/fx.js', ctx.live && 'assets/live.js', 'assets/lecpage.js'].filter(Boolean);
   return `<!doctype html>
 <html lang="ko" ${attrs(htmlAttrs(ctx.design))}${ctx.design.signature === 'tone-journey' ? ' data-tones="1"' : ''}>
 <head>
 ${headTags(ctx, bp.meta.title)}
 </head>
-<body${ctx.design.signature ? ` data-fx="${esc(ctx.design.signature)}"` : ''}>
+<body${pageFx ? ` data-fx="${esc(pageFx)}"` : ''}>
 <a class="lp-skip" href="#main">본문 바로 가기</a>
 ${nav(ctx)}
 <div class="lp-notice" data-notice hidden role="status"></div>

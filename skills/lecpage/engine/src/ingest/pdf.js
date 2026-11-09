@@ -23,8 +23,15 @@ function nodeAssetUrl(sub) {
   try {
     if (typeof import.meta.resolve !== 'function') return undefined;
     const u = import.meta.resolve(PDFJS_NODE); // file:///…/pdfjs-dist/legacy/build/pdf.mjs
-    return new URL(`../../${sub}/`, u).href.replace(/^file:\/\//, '');
+    return fileUrlToPath(new URL('../../' + sub + '/', u).href);
   } catch { return undefined; }
+}
+
+/** file:///C:/a%20b/ → C:/a b/ (윈도우), file:///home/x/ → /home/x/ */
+export function fileUrlToPath(href) {
+  let p = decodeURIComponent(new URL(href).pathname);
+  if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
+  return p;
 }
 
 export async function parsePdf(bytes, ctx) {

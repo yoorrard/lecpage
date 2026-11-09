@@ -3,6 +3,8 @@
 import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS } from './schema/sections.js';
 import { PRESET_IDS } from './design/presets.js';
 import { isHex } from './design/color.js';
+import { rankPresets } from './decide/design.js';
+import { detectTopics, moodsForTopics } from './decide/topic.js';
 
 const LIMITS = { short: 80, title: 160, text: 1200, long: 6000, items: 200 };
 
@@ -113,7 +115,13 @@ export function validate(input) {
     effects: (d.effects && typeof d.effects === 'object') ? Object.fromEntries(Object.entries(d.effects).slice(0, 40).map(([k, v]) => [str(k, 40), str(v, 40)])) : {},
     logo: safeUrl(d.logo), brandName: str(d.brandName, 40), seed: str(d.seed, 20),
   };
-  if (d.preset && !PRESET_IDS.includes(d.preset)) warnings.push({ path: 'design.preset', message_ko: `알 수 없는 프리셋 "${str(d.preset, 30)}"이라 기본값을 썼습니다.` });
+  if (!d.preset || !PRESET_IDS.includes(d.preset)) {
+    // 프리셋이 없으면 주제·분위기·유형으로 1순위를 고른다
+    if (!design.topics.length) design.topics = detectTopics([meta.title, meta.subtitle, ...arr(b.sections).map((s) => s?.title || '')].join(' '));
+    const moods = design.mood.length ? design.mood : moodsForTopics(design.topics);
+    design.preset = rankPresets({ moods, topics: design.topics, archetype: pick(b.archetype?.primary, ARCHETYPES, 'story'), admin: meta.admin.kind, minor: !!b.audience?.minor })[0].id;
+    if (d.preset) warnings.push({ path: 'design.preset', message_ko: `알 수 없는 프리셋 "${str(d.preset, 30)}" 대신 "${design.preset}"을 골랐습니다.` });
+  }
 
   const instructors = arr(b.instructors || (b.instructor ? [b.instructor] : [])).slice(0, 12).map((p) => ({
     name: str(p.name, 40), role: str(p.role, 80), org: str(p.org, 80), photo: safeUrl(p.photo), bio: str(p.bio, 800),

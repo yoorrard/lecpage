@@ -112,6 +112,13 @@ export function decodeText(bytes, { fallbackKorean = true } = {}) {
   if (!bytes || !bytes.length) return '';
   if (bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
   if (bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  // BOM 없는 UTF-16LE(윈도우 메모장·한글 미리보기 글): 홀수 자리에 0이 많거나 한글 상위 바이트(0xAC~0xD7)가 많음
+  if (bytes.length >= 4 && bytes.length % 2 === 0) {
+    let zeroOdd = 0, hangulOdd = 0;
+    const n = Math.min(bytes.length, 2048);
+    for (let i = 1; i < n; i += 2) { if (bytes[i] === 0) zeroOdd++; else if (bytes[i] >= 0xAC && bytes[i] <= 0xD7) hangulOdd++; }
+    if ((zeroOdd + hangulOdd) / (n / 2) > 0.6 && zeroOdd > 0) return new TextDecoder('utf-16le').decode(bytes);
+  }
   const start = (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) ? 3 : 0;
   try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(start)); } catch { /* 아래 */ }
   if (fallbackKorean) {
@@ -267,6 +274,9 @@ export function findBoilerplate(pages) {
   for (const p of pages) {
     const seen = new Set();
     for (const para of p.paragraphs || []) {
+      // 머리글·바닥글 후보: 짧고, 번호·글머리표·본문 자리가 아닌 줄(같은 실습 단계가 반복돼도 지우지 않음)
+      if (para.num || para.bullet || para.role === 'body' || para.role === 'heading' || para.text.length > 60) continue;
+      if (/^(\d{1,2}\s*[.)]|[①-⑳]|step\s*\d|프롬프트)/i.test(para.text) || /(줘|주세요|하세요|합니다)[.!]?$/.test(para.text)) continue;
       const k = textKey(para.text);
       if (!k || k.length > 80 || seen.has(k)) continue;
       seen.add(k);

@@ -135,8 +135,10 @@ export function materialToDraft(material, info = {}) {
         if (stepKeys.has(k) || linkLabels.has(k) || promptKeys.some((pk) => pk && (k.includes(pk) || pk.includes(k)))) return false;
         return !/^(\d{1,2}[.)]|[①-⑳]|step\s*\d)/i.test(t) && !/https?:\/\/|[a-z0-9-]+\.(com|net|org|io|ai|kr)\b/i.test(t) && !/^[^:：]{1,10}[:：]/.test(t);
       }) || '';
-    const images = info.imageBase ? g.pages.flatMap((p) => (p.images || []).filter((im) => !im.repeated && im.web !== false && (im.share || 0.3) >= 0.08)).slice(0, 8)
-      .map((im) => ({ src: info.imageBase + imageName(im), caption: im.alt || '' })) : [];
+    // 그림 주소: info.imageBase가 있으면 그 아래 <id>.<확장자>, 없으면 CLI가 쓴 상대 경로(assets/… · media/…)
+    const imgSrc = (im) => (info.imageBase ? info.imageBase + imageName(im) : (/^(assets|media|slides)\//.test(im.src || '') ? im.src : ''));
+    const images = g.pages.flatMap((p) => (p.images || []).filter((im) => !im.repeated && im.web !== false && (im.share || 0.3) >= 0.08))
+      .map((im) => ({ src: imgSrc(im), caption: im.alt || '' })).filter((im) => im.src).slice(0, 8);
     const title = normLine(g.title) || `실습 ${i + 1}`;
     return {
       id: `st${i + 1}`, name: truncate(title.replace(/^(실습|활동|미션)\s*\d*\s*[.:)\-–]?\s*/, '') || title, 30), title: truncate(title, 100),

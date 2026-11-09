@@ -227,5 +227,5 @@ DESIGN.md · 운영안내.md
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").
 - 접근성: 키보드 조작, 포커스 표시, 대비 4.5:1, `prefers-reduced-motion`, 5초 넘게 움직이면 멈춤 버튼.
 - 성능: 참가자 첫 화면 JS·CSS 합계 200KB 안팎(라이브러리 지연 로드 제외).
-- 테스트: `node --test skills/lecpage/engine/test` 와 Playwright 스모크 테스트.
+- 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`)와 Playwright 스모크 테스트.
 - 커밋·푸시는 통합 담당만 합니다. 병렬 작업자는 자기 디렉터리에만 씁니다.

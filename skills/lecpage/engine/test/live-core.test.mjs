@@ -148,3 +148,74 @@ test('core: sha256 fallback matches Web Crypto (file:// pages may lack crypto.su
     assert.equal(LecLive.util.sha256sync(s), web);
   }
 });
+
+test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudges, polling fallback, error mapping', async () => {
+  const calls = []; const channels = []; let created = null; let subscribeStatus = 'SUBSCRIBED';
+  const rows = []; let rev = 0;
+  const handlers = {
+    lec_snapshot: (a) => ({ data: { now: rev, time: Date.now(), state: { slide: 1, updatedAt: 1 }, questions: rows.filter((r) => r.rev > a.p_since).map(({ rev: _r, ...d }) => d) } }),
+    lec_admin_snapshot: (a) => (a.p_admin === 'k' ? handlers.lec_snapshot(a) : { error: { code: 'PT403', message: 'admin_required', hint: '관리자 키가 필요합니다.' }, status: 403 }),
+    lec_mine: () => ({ data: { me: { id: 'p1' }, attendance: [], survey: [] } }),
+    lec_join: () => ({ data: { id: 'p1', token: 't'.repeat(64), nickname: '나', _flush: 0 } }),
+    lec_add: (a) => {
+      if (a.p_doc.text === 'spam') return { error: { code: 'PT429', message: 'rate_limited', hint: '잠시 후 다시 시도해 주세요.' }, status: 429 };
+      rev++; const d = { id: 'q' + rev, text: a.p_doc.text, cid: a.p_doc.cid, votes: 0, createdAt: rev, updatedAt: rev, rev };
+      rows.push(d); const { rev: _r, ...out } = d; return { data: { ...out, _flush: rev > 1 ? 120 : 0 } };
+    },
+    lec_flush: () => ({ data: { _flush: 0 } }),
+  };
+  const fake = {
+    rpc(name, args) { calls.push([name, args]); return Promise.resolve({ status: 200, error: null, ...(handlers[name] || (() => ({ data: null })))(args) }); },
+    channel(topic, opts) {
+      const ch = { topic, opts, cbs: [], on(t, f, cb) { this.cbs.push(cb); return this; }, subscribe(cb) { this.statusCb = cb; setTimeout(() => cb(subscribeStatus), 5); return this; }, fire(p) { this.cbs.forEach((cb) => cb({ type: 'broadcast', event: 'tick', payload: p })); } };
+      channels.push(ch); return ch;
+    },
+    removeChannel() {}, removeAllChannels() {},
+  };
+  function win() {
+    const w = makeWindow({ scripts: ['supabase.js'] });
+    w.supabase = { createClient: (url, key, opts) => { created = { url, key, opts }; return fake; } };
+    w.document = { createElement: () => ({}), head: { appendChild: (el) => setTimeout(() => el.onload(), 1) }, addEventListener() {}, visibilityState: 'visible' };
+    return w;
+  }
+  const W = win();
+  const c = W.LecLive.create({ provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'sb_publishable_x', code: 'sb1' });
+  const info = await c.connect();
+  assert.equal(info.mode, 'realtime'); assert.equal(c.status, 'live');
+  assert.equal(created.opts.global.headers['x-lec-code'], 'SB1');
+  assert.equal(created.opts.auth.persistSession, false);
+  assert.equal(channels[0].topic, 'lec:SB1'); assert.equal(channels[0].opts.config.private, false);
+  await c.join({ nickname: '나' });
+  const q1 = await c.add('questions', { text: '첫 질문' });
+  assert.equal(q1._flush, undefined, '_flush is stripped');
+  await c.add('questions', { text: '둘째' });
+  await new Promise((r) => setTimeout(r, 250));
+  assert.ok(calls.some(([n]) => n === 'lec_flush'), 'a pending tick is nudged out by the writer');
+  // someone else's write → tick → fetch rows newer than my cursor
+  await c.sync();
+  rows.push({ id: 'q99', text: '남의 질문', votes: 0, createdAt: 99, updatedAt: 99, rev: ++rev });
+  const before = calls.filter(([n]) => n === 'lec_snapshot').length;
+  const reacts = []; c.on('reaction', (r) => reacts.push(r));
+  channels[0].fire({ rev, r: { '👏': 4 } });
+  await new Promise((r) => setTimeout(r, 700));
+  const snaps = calls.filter(([n]) => n === 'lec_snapshot');
+  assert.equal(snaps.length, before + 1);
+  assert.ok(snaps.at(-1)[1].p_since > 0, 'incremental fetch');
+  assert.ok(c.get('questions', 'q99'));
+  assert.deepEqual(reacts.map((r) => [r.emoji, r.count]), [['👏', 4]]);
+  // stale/forged tick (rev not newer) causes no fetch
+  channels[0].fire({ rev: 1 });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal(calls.filter(([n]) => n === 'lec_snapshot').length, before + 1);
+  // PT429 → LiveError status 429, not queued
+  await assert.rejects(c.add('questions', { text: 'spam' }), (e) => e.status === 429 && e.code === 'rate_limited');
+  c.close();
+  // realtime blocked → polling
+  subscribeStatus = 'CHANNEL_ERROR';
+  const W2 = win();
+  const c2 = W2.LecLive.create({ provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'k', code: 'SB1', adminKey: 'k' });
+  assert.equal((await c2.connect()).mode, 'polling');
+  assert.equal(c2.status, 'polling');
+  assert.ok(calls.some(([n, a]) => n === 'lec_admin_snapshot' && a.p_admin === 'k'));
+  c2.close();
+});
