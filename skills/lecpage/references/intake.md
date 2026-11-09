@@ -3,7 +3,7 @@
 교재와 대화에서 이미 알아낸 항목은 묻지 않는다. 남은 것만 **최대 10개**, 고르기형으로 묻는다(선택지 + "직접 입력").
 첫 메시지에서 교재에서 알아낸 것을 한 줄로 요약해 신뢰를 준다. 예: "교재 86쪽을 읽었어요. Gemini 실습 7개, 프롬프트 23개가 있어 실습형+스토리형으로 잡았어요. 네 가지만 확인할게요."
 
-질문 순서(중요도 순). 답은 `work/info.json`에 아래 키로 저장한다.
+질문 순서(중요도 순). 답은 `work/info.json`에 아래 키로 저장하고 `lecpage.mjs make 교재 -i work/info.json -o dist --fresh`로 반영한다.
 
 | # | 질문 | 선택지 | info 키 | 정해지는 것 |
 |---|---|---|---|---|
@@ -27,6 +27,8 @@
 - 만족도 조사 주소(구글 설문 등)가 있나? → survey.url
 
 기본값(사용자가 "알아서"라고 할 때): size 30, format workshop, features [qa, help, progress], devices [laptop], network good, mood 교재 주제에서 추론, motion 2, skill click, infra [], duration day.
+
+강사에게 직접 받은 값만 넣는 키(패치로는 못 바꿈): `access`(link·public·password), `siteUrl`·`joinUrl`·`shortUrl`, `live`({provider, url, anonKey}). 암호는 파일에 쓰지 않고 `--password`로.
 
 info.json 예시
 ```json

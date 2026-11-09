@@ -36,7 +36,7 @@ export function Home() {
       <section class="hero">
         <div>
           <h1>교재를 넣으면<br /><span class="hl">연수 사이트</span>가 나와요</h1>
-          <p class="lead">PPT·PDF·한글 교재를 놓으면 실습 안내, 프롬프트 복사, 교재 넘겨 보기를 갖춘 사이트 초안이 바로 나와요. 질문 받기·막혔어요·진행 체크·만족도 설문도 켤 수 있어요.</p>
+          <p class="lead">PPT·PDF·한글 교재를 놓으면 실습 안내, 프롬프트 복사, 교재 넘겨 보기를 갖춘 사이트 초안이 바로 나와요. 질문 받기·진행 체크·만족도 설문도 켤 수 있어요.</p>
           <div class={`drop drop-home${over ? ' over' : ''}`} ref={dropRef} role="button" tabIndex={0} aria-label="교재 파일을 골라 새 연수 만들기"
             onClick={() => dropRef.current?.querySelector('input')?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && dropRef.current?.querySelector('input')?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -61,7 +61,7 @@ export function Home() {
         </div>
       </section>
 
-      <div class="section-title"><h2>견본에서 시작하기</h2><span class="small muted">견본을 열어 보고, 마음에 들면 그대로 고쳐 쓰세요.</span></div>
+      <div class="section-title"><h2>견본에서 시작하기</h2><span class="small muted">마음에 들면 그대로 고쳐 쓰세요.</span></div>
       <div class="grid grid-2">
         {EXAMPLES.map((x) => (
           <article class="ex-card">
@@ -98,8 +98,8 @@ export function Home() {
       )}
       <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
         <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
-        <p>이 브라우저에 저장된 교재·그림·고친 내용이 모두 지워져요. 이미 올린 사이트는 그대로 있어요. 필요하면 먼저 '파일로 저장'해 두세요.</p>
-        <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" onClick={() => setDel(null)}>그만두기</button></div>
+        <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 올린 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>
+        <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" onClick={() => setDel(null)}>취소</button></div>
       </Dialog>
     </>
   );

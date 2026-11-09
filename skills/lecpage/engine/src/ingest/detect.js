@@ -2,6 +2,7 @@
 // 찾는 것: 프롬프트, 실습 단계, 링크, 도구, 부(Part)·차례, 퀴즈·질문, 용어, 핵심 문장, 강사 소개, 일시·장소, 실습 비율 → 유형 힌트
 import { normText, normLine, textKey, findUrls, urlKey, hostOf, pageText, truncate } from './util.js';
 import { matchToolsInText, toolForUrl, getTool, CATEGORIES } from './tools-db.js';
+import { detectFonts } from './fonts.js';
 
 const WD = '일월화수목금토';
 
@@ -875,6 +876,7 @@ export function detect(material, opts = {}) {
 
   return {
     title, subtitle, event, instructor, agenda, sections, prompts, steps, links, tools, quiz, faq, glossary, messages, practice, archetype,
+    fonts: detectFonts(material),
     stats: {
       pages: (material.pages || []).length,
       hidden: (material.pages || []).filter((p) => p.hidden).length,

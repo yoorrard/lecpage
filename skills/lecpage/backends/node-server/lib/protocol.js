@@ -37,7 +37,7 @@ export const RATE = {
   // wrong admin keys / setup tokens: per (code, IP) and per IP, then 429 until the window ends
   authFail: [10, 600e3], authFailIp: [20, 600e3],
   // trainings auto-created per IP (single-teacher mode: a join or the console creates the code on first use)
-  create: [10, 3600e3],
+  create: [30, 3600e3],
 };
 /** Per-training caps. Hosts may override them through config (maxParticipants, maxDocs). */
 export const CAPS = { participants: 500, docs: 20000 };
@@ -859,8 +859,10 @@ export class LiveCore {
     return row ? { ...DEFAULT_STATE(), ...safeJson(row.data, {}), updatedAt: row.updated_at } : DEFAULT_STATE();
   }
   setState(code, body, cred, ip) {
-    this.requireAdmin(this.training(code), cred);
-    const t = this.training(code, true);
+    const t0 = this.training(code);
+    if (!t0 && !this.cfg.autoCreate) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
+    this.requireAdmin(t0, cred);
+    const t = t0 || this.training(code, true);
     this.limit('admin', 'admin:' + code, null);
     const patch = cleanStatePatch(body);
     const cur = this.state(code, t);

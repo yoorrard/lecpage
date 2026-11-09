@@ -50,7 +50,7 @@ export function Preview({ p, height, onPick }) {
       <div class="spread">
         <div class="row" style={{ gap: '6px' }}>
           <Seg label="기기" value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'PC' }, { value: 'phone', label: '휴대폰' }]} />
-          {onPick && page === 'index.html' && <button class={`btn btn-sm${picking ? ' btn-ink' : ''}`} aria-pressed={String(picking)} onClick={() => setPicking(!picking)} title="미리보기에서 칸을 누르면 그 칸을 고칠 수 있어요">{picking ? '고를 칸을 누르세요' : '눌러서 고치기'}</button>}
+          {onPick && page === 'index.html' && <button class={`btn btn-sm${picking ? ' btn-ink' : ''}`} aria-pressed={String(picking)} onClick={() => setPicking(!picking)} title="미리보기에서 칸을 누르면 바로 고칠 수 있어요">{picking ? '고칠 칸을 누르세요' : '눌러서 고치기'}</button>}
         </div>
         <Seg label="미리볼 화면" value={page} onChange={setPage} options={[{ value: 'index.html', label: '참가자' }, ...(live ? [{ value: 'console.html', label: '강사 화면' }] : []), { value: 'screen.html', label: '발표 화면' }, { value: 'check.html', label: '와이파이 점검' }]} />
       </div>
@@ -59,7 +59,7 @@ export function Preview({ p, height, onPick }) {
       </div>
       <div class="spread small muted">
         <span>{live ? '참여 기능은 미리보기 안에서 시험해 볼 수 있어요.' : '고친 내용이 바로 반영돼요.'}{size ? ` · 사이트 크기 약 ${size >= 1000 ? (size / 1000).toFixed(1) + 'MB' : size + 'KB'}` : ''}</span>
-        <button class="btn btn-sm btn-quiet" onClick={() => setFocusable(!focusable)} aria-pressed={String(focusable)}>{focusable ? '미리보기 키보드 끄기' : '미리보기 안을 키보드로 둘러보기'}</button>
+        <button class="btn btn-sm btn-quiet" onClick={() => setFocusable(!focusable)} aria-pressed={String(focusable)}>{focusable ? '키보드 둘러보기 끄기' : '키보드로 미리보기 둘러보기'}</button>
       </div>
     </div>
   );

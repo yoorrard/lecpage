@@ -115,6 +115,8 @@ export function themeCSS(design = {}) {
   const assets = fontAssets([fonts.display, fonts.body, fonts.mono]);
   const pair = FONT_PAIR_BY_ID[design.fontPair];
   const base = baseTokens(preset, opts);
+  // 제목 글꼴을 바꿨으면 그 글꼴에 있는 굵기로(한 굵기뿐인 글꼴에 가짜 굵게가 생기지 않게)
+  if (fonts.display !== preset.fonts.display || FONTS[fonts.display]?.displayWeight) base['--display-weight'] = String(FONTS[fonts.display]?.displayWeight || (fonts.display !== preset.fonts.display ? 700 : preset.fonts.displayWeight || 800));
   if (pair) {
     base['--font-display'] = pair.display.stack || `'${pair.display.family}', sans-serif`;
     base['--font-sans'] = pair.body.stack || `'${pair.body.family}', sans-serif`;

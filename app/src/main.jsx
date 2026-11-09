@@ -45,10 +45,11 @@ function App() {
     try { const t = localStorage.getItem('lecpage:theme'); if (t) document.documentElement.dataset.theme = t; } catch { }
   }, []);
   let page;
-  if (route === 'p' && a) page = <Lazy name="project" id={a} step={Number(b) || 0} />;
-  else if (route === 'settings') page = <Lazy name="settings" />;
-  else if (route === 'gallery') page = <Lazy name="gallery" />;
-  else if (route === 'help') page = <Lazy name="help" topic={a} />;
+  // key: 화면이 바뀔 때 이전 화면 컴포넌트가 새 화면의 값을 받지 않게
+  if (route === 'p' && a) page = <Lazy key="project" name="project" id={a} step={Number(b) || 0} />;
+  else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
+  else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" />;
+  else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
   else page = <Home />;
   const cur = (r) => (route === r || (!route && r === '') ? 'page' : undefined);
   return (
@@ -66,7 +67,7 @@ function App() {
       <main class="page" id="main" tabIndex={-1}>{page}</main>
       <footer class="foot"><div class="foot-in">
         <span><b class="latin">lecpage</b> · 교재를 넣으면 연수 사이트가 나와요</span>
-        <span>회원가입 없음 · 교재는 이 브라우저 안에서만 읽어요(AI·배포는 고른 곳으로만 보내요)</span>
+        <span>회원가입 없음 · 교재는 이 브라우저에서만 읽어요</span>
         <a href="#/help/privacy">개인정보 안내</a>
         <a href="#/help/license">오픈소스·라이선스</a>
         <a href="https://github.com/yoorrard/lecpage" target="_blank" rel="noopener">GitHub</a>

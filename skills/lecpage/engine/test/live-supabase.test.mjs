@@ -55,10 +55,10 @@ after(() => {
 
 
 /** Runs SQL; returns the last output line parsed as JSON when possible. Throws {sqlstate, message, hint} on error. */
-function psql(sql, { role = 'anon', code = null, file = null } = {}) {
+function psql(sql, { role = 'anon', code = null, file = null, xff = '10.0.0.7, 172.16.0.1' } = {}) {
   let script = '\\set ON_ERROR_STOP 1\n\\set VERBOSITY verbose\n';
   if (role) script += `set role ${role};\n`;
-  if (code !== null) script += `select set_config('request.headers', '${JSON.stringify({ 'x-lec-code': code, 'x-forwarded-for': '10.0.0.7, 172.16.0.1' })}', false) \\g /dev/null\n`;
+  if (code !== null) script += `select set_config('request.headers', '${JSON.stringify({ 'x-lec-code': code, 'x-forwarded-for': xff })}', false) \\g /dev/null\n`;
   script += sql + '\n';
   const args = ['-h', dir, '-p', String(port), '-U', 'postgres', '-d', 'postgres', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1'];
   if (file) args.push('-f', file);
@@ -81,6 +81,10 @@ function fails(fn, sqlstate, msg) {
   try { fn(); } catch (e) { assert.equal(e.sqlstate, sqlstate, e.message); if (msg) assert.equal(e.msg, msg); return e; }
   assert.fail(`expected ${sqlstate}`);
 }
+/** Admin errors are returned (not raised) so the failure counter commits; PostgREST sends response.status. */
+function isErr(out, status, code = 'admin_required') {
+  assert.equal(out && out.code, 'PT' + status, JSON.stringify(out)); assert.equal(out.message, code);
+}
 const sent = (topic) => psql(`select coalesce(json_agg(payload order by id), '[]') from realtime.sent where topic = ${q(topic)}`, { role: null });
 
 test('supabase: schema loads (twice: re-runnable) and passes basic advisor checks', { skip }, () => {
@@ -91,10 +95,11 @@ test('supabase: schema loads (twice: re-runnable) and passes basic advisor check
   const badDefiner = psql(`select coalesce(json_agg(p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public', 'lec_private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')`, { role: null });
   assert.deepEqual(badDefiner, [], 'security definer functions pin search_path');
   const anonExec = psql(`select coalesce(json_agg(p.proname order by p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'lec_private' and has_function_privilege('anon', p.oid, 'execute')`, { role: null });
-  assert.deepEqual(anonExec, ['code', 'cur_rev', 'delete_allowed', 'fail', 'ms', 'req_code', 'upload_allowed']);
+  assert.deepEqual(anonExec, ['code', 'cur_rev', 'delete_allowed', 'fail', 'file_readable', 'ms', 'req_code', 'trashed', 'upload_allowed', 'upload_ok']);
   const bucket = psql(`select row_to_json(b) from storage.buckets b where id = 'lec-uploads'`, { role: null });
+  assert.equal(bucket.public, false, 'private bucket: signed URLs only (H3)');
   assert.equal(bucket.file_size_limit, 20971520); assert.ok(bucket.allowed_mime_types.includes('video/mp4')); assert.ok(!bucket.allowed_mime_types.includes('image/svg+xml'));
-  const init = psql(`select lec_private.init_training('SUPA1', '관리자키-supa-1', '{"retentionDays": 7}')`, { role: null });
+  const init = psql(`select lec_private.init_training('SUPA1', '관리자키-supa-0001', '{"retentionDays": 7}')`, { role: null });
   assert.equal(init.ok, true); assert.equal(init.retentionDays, 7);
   fails(() => psql(`select lec_private.init_training('SUPA9', 'x', '{}')`), '42501'); // anon cannot call setup functions
 });
@@ -113,7 +118,7 @@ test('supabase: anon cannot touch tables directly; RLS scopes reads by the x-lec
 });
 
 test('supabase: join/add/vote/validation/rate limits through RPCs', { skip }, () => {
-  psql(`select lec_private.init_training('SUPA2', '관리자키-supa-2')`, { role: null });
+  psql(`select lec_private.init_training('SUPA2', '관리자키-supa-0002')`, { role: null });
   const o = { code: 'SUPA2' };
   const a = psql(`select public.lec_join('SUPA2', '  가나다  ')`, o);
   assert.match(a.token, /^[0-9a-f]{64}$/); assert.equal(a.nickname, '가나다');
@@ -130,7 +135,7 @@ test('supabase: join/add/vote/validation/rate limits through RPCs', { skip }, ()
   fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'questions', ${j({ text: 'ㄱ'.repeat(501) })})`, o), 'PT400', 'too_long');
   fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'secrets', ${j({})})`, o), 'PT404');
   fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'questions', ${j({ text: { x: 1 } })})`, o), 'PT400', 'invalid_type');
-  fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'polls', ${j({ question: 'x' })})`, o), 'PT401', 'admin_required');
+  isErr(psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'polls', ${j({ question: 'x' })})`, o), 401);
   assert.equal(psql(`select public.lec_vote('SUPA2', ${q(b.token)}, ${q(qd.id)})`, o).votes, 1);
   assert.equal(psql(`select public.lec_vote('SUPA2', ${q(b.token)}, ${q(qd.id)})`, o).already, true);
   assert.equal(psql(`select public.lec_vote('SUPA2', ${q(a.token)}, ${q(qd.id)})`, o).votes, 2);
@@ -143,6 +148,7 @@ test('supabase: join/add/vote/validation/rate limits through RPCs', { skip }, ()
   const sv = psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'survey', ${j({ answers: { q1: '좋아요', q2: 5, q3: true } })})`, o);
   assert.equal(sv.answers.q2, 5);
   fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'posts', ${j({ text: 'x', files: [{ url: 'javascript:alert(1)', type: 'image/png' }] })})`, o), 'PT400');
+  fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'posts', ${j({ text: 'x', files: [{ url: 'https://tracker.example/p.png', type: 'image/png' }] })})`, o), 'PT400');
   fails(() => psql(`select public.lec_add('SUPA2', ${q(a.token)}, 'posts', ${j({ text: 'x', files: [{ url: 'https://x/a.svg', type: 'image/svg+xml' }] })})`, o), 'PT415');
   // owner edits; others cannot
   const edited = psql(`select public.lec_update('SUPA2', ${q(a.token)}, null, 'questions', ${q(qd.id)}, ${j({ text: '고친 질문', votes: 99, status: 'answered' })})`, o);
@@ -158,7 +164,7 @@ test('supabase: join/add/vote/validation/rate limits through RPCs', { skip }, ()
 });
 
 test('supabase: snapshot cursor, hidden content, admin RPCs, throttled realtime ticks', { skip }, () => {
-  psql(`select lec_private.init_training('SUPA3', '관리자키-supa-3', '{"flushMs": 1500}')`, { role: null });
+  psql(`select lec_private.init_training('SUPA3', '관리자키-supa-0003', '{"flushMs": 1500}')`, { role: null });
   const o = { code: 'SUPA3' };
   const a = psql(`select public.lec_join('SUPA3', '하나')`, o);
   const s0 = psql(`select public.lec_snapshot('SUPA3', 0)`, o);
@@ -173,12 +179,12 @@ test('supabase: snapshot cursor, hidden content, admin RPCs, throttled realtime 
   assert.deepEqual(s1.questions.map((x) => x.text), ['첫째', '둘째']);
   assert.equal(s1.questions[1].nickname, '하나');
   // state: admin only; validated
-  fails(() => psql(`select public.lec_set_state('SUPA3', null, ${j({ slide: 2 })})`, o), 'PT401');
-  fails(() => psql(`select public.lec_set_state('SUPA3', 'wrong-key', ${j({ slide: 2 })})`, o), 'PT403');
-  fails(() => psql(`select public.lec_set_state('SUPA3', '관리자키-supa-3', ${j({ notice: { text: 'x', level: 'party' } })})`, o), 'PT400');
-  const st = psql(`select public.lec_set_state('SUPA3', '관리자키-supa-3', ${j({ slide: 3, follow: true, notice: { text: '쉬는 시간', level: 'warn' }, ui: { qr: true }, evil: 1 })})`, o);
+  isErr(psql(`select public.lec_set_state('SUPA3', null, ${j({ slide: 2 })})`, o), 401);
+  isErr(psql(`select public.lec_set_state('SUPA3', 'wrong-key', ${j({ slide: 2 })})`, o), 403);
+  fails(() => psql(`select public.lec_set_state('SUPA3', '관리자키-supa-0003', ${j({ notice: { text: 'x', level: 'party' } })})`, o), 'PT400');
+  const st = psql(`select public.lec_set_state('SUPA3', '관리자키-supa-0003', ${j({ slide: 3, follow: true, notice: { text: '쉬는 시간', level: 'warn' }, ui: { qr: true }, evil: 1 })})`, o);
   assert.equal(st.slide, 3); assert.equal(st.notice.level, 'warn'); assert.equal(st.evil, undefined); assert.equal(st.ui.qr, true);
-  const st2 = psql(`select public.lec_set_state('SUPA3', '관리자키-supa-3', ${j({ notice: null, ui: { qr: null } })})`, o);
+  const st2 = psql(`select public.lec_set_state('SUPA3', '관리자키-supa-0003', ${j({ notice: null, ui: { qr: null } })})`, o);
   assert.equal(st2.notice, null); assert.equal(st2.slide, 3); assert.deepEqual(st2.ui, {});
   // flush later sends the pending tick
   spawnSync('sleep', ['1.6']);
@@ -187,36 +193,38 @@ test('supabase: snapshot cursor, hidden content, admin RPCs, throttled realtime 
   assert.ok(ticks.length >= 2); assert.equal(ticks.at(-1).rev, psql(`select pub_rev from lec_private.trainings where code = 'SUPA3'`, { role: null }));
   assert.ok(sent('lec:SUPA3:adm').length >= 1, 'console channel gets ticks too');
   // hide: content leaves the readable table
-  psql(`select public.lec_update('SUPA3', null, '관리자키-supa-3', 'questions', ${q(q1.id)}, ${j({ status: 'hidden' })})`, o);
+  psql(`select public.lec_update('SUPA3', null, '관리자키-supa-0003', 'questions', ${q(q1.id)}, ${j({ status: 'hidden' })})`, o);
   assert.equal(psql(`select text from public.lec_questions where id = ${q(q1.id)}`, o), '');
-  const adm = psql(`select public.lec_admin_snapshot('SUPA3', '관리자키-supa-3', 0)`, o);
+  const adm = psql(`select public.lec_admin_snapshot('SUPA3', '관리자키-supa-0003', 0)`, o);
   assert.equal(adm.questions.find((x) => x.id === q1.id).text, '첫째');
   assert.equal(adm.participants.length, 1); assert.equal(adm.participants[0].token_hash, undefined);
   fails(() => psql(`select public.lec_vote('SUPA3', ${q(a.token)}, ${q(q1.id)})`, o), 'PT409');
-  psql(`select public.lec_update('SUPA3', null, '관리자키-supa-3', 'questions', ${q(q1.id)}, ${j({ status: 'open' })})`, o);
+  psql(`select public.lec_update('SUPA3', null, '관리자키-supa-0003', 'questions', ${q(q1.id)}, ${j({ status: 'open' })})`, o);
   assert.equal(psql(`select text from public.lec_questions where id = ${q(q1.id)}`, o), '첫째');
   // remove → tombstone in the next snapshot
   const before = psql(`select public.lec_snapshot('SUPA3', 0)`, o).now;
-  fails(() => psql(`select public.lec_remove('SUPA3', 'nope', 'questions', ${q(q2.id)})`, o), 'PT403');
-  psql(`select public.lec_remove('SUPA3', '관리자키-supa-3', 'questions', ${q(q2.id)})`, o);
+  isErr(psql(`select public.lec_remove('SUPA3', 'nope', 'questions', ${q(q2.id)})`, o), 403);
+  psql(`select public.lec_remove('SUPA3', '관리자키-supa-0003', 'questions', ${q(q2.id)})`, o);
   assert.deepEqual(psql(`select public.lec_snapshot('SUPA3', ${before})`, o).removed, [{ col: 'questions', id: q2.id }]);
   // reactions are aggregated into the public tick
   spawnSync('sleep', ['1.6']);
   psql(`select public.lec_react('SUPA3', ${q(a.token)}, ${j({ '👏': 3, '💡': 1 })})`, o);
   fails(() => psql(`select public.lec_react('SUPA3', ${q(a.token)}, ${j({ '<script>': 1 })})`, o), 'PT400');
-  assert.deepEqual(sent('lec:SUPA3').at(-1).r, { '👏': 3, '💡': 1 });
-  assert.equal(psql(`select public.lec_check_admin('SUPA3', '관리자키-supa-3')`, o), 't');
+  assert.deepEqual(sent('lec:SUPA3').at(-1).r, { '👏': 3, '💡': 1 }, 'older clients still get r');
+  const rx = psql(`select public.lec_reactions('SUPA3')`, o);
+  assert.equal(rx.rx, sent('lec:SUPA3').at(-1).rx); assert.deepEqual(rx.r, { '👏': 3, '💡': 1 }, 'new clients read the batch through the RPC');
+  assert.equal(psql(`select public.lec_check_admin('SUPA3', '관리자키-supa-0003')`, o), 't');
   assert.equal(psql(`select public.lec_check_admin('SUPA3', 'x')`, o), 'f');
   // participant's own private docs
   psql(`select public.lec_add('SUPA3', ${q(a.token)}, 'attendance', ${j({ kind: 'in' })})`, o);
   const mine = psql(`select public.lec_mine('SUPA3', ${q(a.token)})`, o);
   assert.equal(mine.attendance.length, 1); assert.equal(mine.me.id, a.id);
-  const exp = psql(`select public.lec_export('SUPA3', '관리자키-supa-3', 'attendance')`, o);
+  const exp = psql(`select public.lec_export('SUPA3', '관리자키-supa-0003', 'attendance')`, o);
   assert.equal(exp.kind, 'attendance'); assert.equal(exp.attendance.length, 1);
 });
 
 test('supabase: upload tickets gate storage inserts; purge and retention cleanup', { skip }, () => {
-  psql(`select lec_private.init_training('SUPA4', '관리자키-supa-4', '{"maxUploadMb": 5}')`, { role: null });
+  psql(`select lec_private.init_training('SUPA4', '관리자키-supa-0004', '{"maxUploadMb": 5}')`, { role: null });
   const o = { code: 'SUPA4' };
   const a = psql(`select public.lec_join('SUPA4', '올리기')`, o);
   fails(() => psql(`select public.lec_upload_ticket('SUPA4', ${q(a.token)}, 'x.svg', 'image/svg+xml', 100)`, o), 'PT415');
@@ -227,19 +235,98 @@ test('supabase: upload tickets gate storage inserts; purge and retention cleanup
   fails(() => psql(`insert into storage.objects (bucket_id, name) values ('lec-uploads', 'SUPA4/guessed.png')`, o), '42501');
 });
 
-test('supabase: purge wipes rows and opens a short storage delete window; cleanup honours retention', { skip }, () => {
+test('supabase: purge wipes rows and puts the files in the trash (deletable); cleanup honours retention', { skip }, () => {
   const o = { code: 'SUPA4' };
   assert.equal(psql(`with d as (delete from storage.objects where bucket_id = 'lec-uploads' returning 1) select count(*) from d`, o), 0, 'no delete before purge');
   const a = psql(`select public.lec_join('SUPA4', '둘')`, o);
   psql(`select public.lec_add('SUPA4', ${q(a.token)}, 'questions', ${j({ text: '지워질 질문' })})`, o);
-  fails(() => psql(`select public.lec_purge('SUPA4', 'nope')`, o), 'PT403');
-  const r = psql(`select public.lec_purge('SUPA4', '관리자키-supa-4')`, o);
+  isErr(psql(`select public.lec_purge('SUPA4', 'nope')`, o), 403);
+  const r = psql(`select public.lec_purge('SUPA4', '관리자키-supa-0004')`, o);
   assert.equal(r.files.length, 1);
   assert.equal(psql(`select count(*) from public.lec_questions`, o), 0);
   assert.deepEqual(sent('lec:SUPA4').at(-1), { reset: true });
   fails(() => psql(`select public.lec_add('SUPA4', ${q(a.token)}, 'questions', ${j({ text: 'x' })})`, o), 'PT401');
-  assert.equal(psql(`with d as (delete from storage.objects where bucket_id = 'lec-uploads' and name like 'SUPA4/%' returning 1) select count(*) from d`, o), 1, 'admin client may now remove the files');
+  assert.equal(psql(`with d as (delete from storage.objects where bucket_id = 'lec-uploads' and name like 'SUPA4/%' returning 1) select count(*) from d`, o), 1, 'trashed files may now be removed');
   psql(`update lec_private.trainings set last_at = now() - interval '8 days' where code = 'SUPA1'`, { role: null });
   assert.equal(psql(`select lec_private.cleanup()`, { role: null }), 1);
   assert.equal(psql(`select count(*) from public.lec_participants where training_code = 'SUPA1'`, { role: null }), 0, 'rows cascade with the training');
+});
+
+// ---------------------------------------------------------------- security regressions (2026-11 review)
+test('supabase (H4): weak keys refused; wrong admin keys are counted (the count survives) and lock with 429', { skip }, () => {
+  fails(() => psql(`select lec_private.init_training('WEAK1', 'change-me-관리자키')`, { role: null }), 'PT400', 'weak_key');
+  fails(() => psql(`select lec_private.init_training('WEAK1', 'short-key')`, { role: null }), 'PT400', 'weak_key');
+  const weakHash = psql(`select lec_private.hash('change-me-관리자키')`, { role: null });
+  fails(() => psql(`select lec_private.init_training_hash('WEAK1', ${q(weakHash)})`, { role: null }), 'PT400', 'weak_key');
+  psql(`select lec_private.init_training('SUPA6', '관리자키-supa-0006')`, { role: null });
+  const o = { code: 'SUPA6', xff: '203.0.113.9, 10.9.9.9' };
+  for (let i = 0; i < 10; i++) isErr(psql(`select public.lec_set_state('SUPA6', ${q('guess-' + i)}, ${j({ slide: 1 })})`, o), 403);
+  const hits = psql(`select max(hits) from lec_private.rate where bucket = 'authfail' and key like 'af:SUPA6|%'`, { role: null });
+  assert.equal(hits, 10, 'failures were committed although each call answered 403');
+  fails(() => psql(`select public.lec_set_state('SUPA6', '관리자키-supa-0006', ${j({ slide: 1 })})`, o), 'PT429', 'rate_limited');
+  fails(() => psql(`select public.lec_check_admin('SUPA6', '관리자키-supa-0006')`, o), 'PT429');
+  // a different left-most (spoofable) entry does not help: the right-most hop is counted too
+  fails(() => psql(`select public.lec_admin_snapshot('SUPA6', '관리자키-supa-0006', 0)`, { code: 'SUPA6', xff: '198.51.100.1, 10.9.9.9' }), 'PT429');
+  assert.equal(psql(`select public.lec_admin_snapshot('SUPA6', '관리자키-supa-0006', 0)`, { code: 'SUPA6', xff: '198.51.100.2, 10.8.8.8' }).admin, true, 'other clients are not locked');
+});
+
+test('supabase (M7, H3, M8): own uploads only; hidden/removed posts make files unreadable and trashed; uploads=false', { skip }, () => {
+  psql(`select lec_private.init_training('SUPA7', '관리자키-supa-0007')`, { role: null });
+  const o = { code: 'SUPA7', xff: '10.7.7.7' }; const K = '관리자키-supa-0007';
+  const a = psql(`select public.lec_join('SUPA7', '하나')`, o); const b = psql(`select public.lec_join('SUPA7', '둘')`, o);
+  const tk = psql(`select public.lec_upload_ticket('SUPA7', ${q(a.token)}, 'a.png', 'image/png', 1000)`, o);
+  psql(`insert into storage.objects (bucket_id, name, metadata) values ('lec-uploads', ${q(tk.path)}, '{"size": 1000, "mimetype": "image/png"}')`, o);
+  const tkBig = psql(`select public.lec_upload_ticket('SUPA7', ${q(a.token)}, 'b.png', 'image/png', 1000)`, o);
+  fails(() => psql(`insert into storage.objects (bucket_id, name, metadata) values ('lec-uploads', ${q(tkBig.path)}, '{"size": 99999999, "mimetype": "image/png"}')`, o), '42501');
+  fails(() => psql(`insert into storage.objects (bucket_id, name, metadata) values ('lec-uploads', ${q(tkBig.path)}, '{"size": 10, "mimetype": "text/html"}')`, o), '42501');
+  const file = (x) => ({ ...x, name: 'a.png', type: 'image/png', size: 1000 });
+  fails(() => psql(`select public.lec_add('SUPA7', ${q(b.token)}, 'posts', ${j({ text: '남의 파일', files: [file({ path: tk.path })] })})`, o), 'PT400');
+  fails(() => psql(`select public.lec_add('SUPA7', ${q(a.token)}, 'posts', ${j({ text: 'x', files: [file({ url: 'https://evil.example/storage/v1/object/public/lec-uploads/SUPA7/' + 'a'.repeat(32) + '.png' })] })})`, o), 'PT400');
+  const post = psql(`select public.lec_add('SUPA7', ${q(a.token)}, 'posts', ${j({ text: '사진', files: [file({ url: 'https://x.supabase.co/storage/v1/object/public/lec-uploads/' + tk.path })] })})`, o);
+  assert.equal(post.files[0].path, tk.path); assert.equal(post.files[0].url, '', 'no stored URL: clients sign the path');
+  fails(() => psql(`select public.lec_add('SUPA7', ${q(a.token)}, 'posts', ${j({ text: '또', files: [file({ path: tk.path })] })})`, o), 'PT400');
+  const readable = () => psql(`select count(*) from storage.objects where name = ${q(tk.path)}`, o);
+  assert.equal(readable(), 1, 'visible post → signable');
+  psql(`select public.lec_update('SUPA7', null, ${q(K)}, 'posts', ${q(post.id)}, ${j({ hidden: true })})`, o);
+  assert.equal(readable(), 0, 'hidden post → unreadable at once');
+  psql(`select public.lec_update('SUPA7', null, ${q(K)}, 'posts', ${q(post.id)}, ${j({ hidden: false })})`, o);
+  assert.equal(readable(), 1);
+  psql(`select public.lec_remove('SUPA7', ${q(K)}, 'posts', ${q(post.id)})`, o);
+  assert.deepEqual(psql(`select public.lec_trash('SUPA7', ${q(K)})`, o).paths, [tk.path], 'the console is told to delete it');
+  assert.deepEqual(psql(`select public.lec_trash('SUPA7')`, o).paths, [], 'without the key: only trash of deleted trainings');
+  assert.equal(psql(`with d as (delete from storage.objects where name = ${q(tk.path)} returning 1) select count(*) from d`, o), 1);
+  assert.deepEqual(psql(`select public.lec_trash('SUPA7', ${q(K)})`, o).paths, [], 'deleted objects leave the trash');
+  // M8: instructor switches uploads off / moderation on (state.ui, admin only)
+  psql(`select public.lec_set_state('SUPA7', ${q(K)}, ${j({ ui: { uploads: false, moderation: true } })})`, o);
+  fails(() => psql(`select public.lec_upload_ticket('SUPA7', ${q(a.token)}, 'c.png', 'image/png', 10)`, o), 'PT503', 'uploads_disabled');
+  fails(() => psql(`select public.lec_add('SUPA7', ${q(a.token)}, 'posts', ${j({ text: 'x', files: [file({ path: tkBig.path })] })})`, o), 'PT403', 'uploads_disabled');
+  const held = psql(`select public.lec_add('SUPA7', ${q(a.token)}, 'posts', ${j({ text: '확인 뒤에' })})`, o);
+  assert.equal(held.hidden, true);
+  assert.equal(psql(`select text from public.lec_posts where id = ${q(held.id)}`, o), '', 'held content is not readable through the API');
+});
+
+test('supabase (L1, L3, nicknames, L12): closed polls, no `by` for the public, reserved names, cheap flush', { skip }, () => {
+  psql(`select lec_private.init_training('SUPA8', '관리자키-supa-0008')`, { role: null });
+  const o = { code: 'SUPA8', xff: '10.8.0.1' }; const K = '관리자키-supa-0008';
+  for (const n of ['강사', ' 운영자 ', 'Admin', 'lecpage님']) fails(() => psql(`select public.lec_join('SUPA8', ${q(n)})`, o), 'PT400', 'reserved_nickname');
+  const a = psql(`select public.lec_join('SUPA8', '김강사')`, o);
+  fails(() => psql(`select public.lec_update('SUPA8', ${q(a.token)}, null, 'participants', ${q(a.id)}, ${j({ nickname: '강사' })})`, o), 'PT400', 'reserved_nickname');
+  const poll = psql(`select public.lec_add('SUPA8', null, 'polls', ${j({ question: '좋았나요?', options: ['예', '아니요'], open: true })}, ${q(K)})`, o);
+  const ans = psql(`select public.lec_add('SUPA8', ${q(a.token)}, 'answers', ${j({ poll: poll.id, value: '예' })})`, o);
+  psql(`select public.lec_add('SUPA8', ${q(a.token)}, 'progress', ${j({ station: 's1', status: 'stuck' })})`, o);
+  psql(`select public.lec_add('SUPA8', ${q(a.token)}, 'help', ${j({ message: '도와주세요' })})`, o);
+  psql(`select public.lec_update('SUPA8', null, ${q(K)}, 'polls', ${q(poll.id)}, ${j({ open: false })})`, o);
+  fails(() => psql(`select public.lec_update('SUPA8', ${q(a.token)}, null, 'answers', ${q(ans.id)}, ${j({ value: '아니요' })})`, o), 'PT409', 'poll_closed');
+  const snap = psql(`select public.lec_snapshot('SUPA8', 0)`, o);
+  for (const col of ['answers', 'progress', 'help']) assert.ok(snap[col].length && snap[col].every((d) => d.by === undefined), col);
+  for (const t of ['lec_answers', 'lec_progress', 'lec_help']) fails(() => psql(`select by from public.${t}`, o), '42501');
+  const mine = psql(`select public.lec_mine('SUPA8', ${q(a.token)})`, o);
+  assert.equal(mine.answers[0].by, a.id); assert.equal(mine.progress[0].by, a.id); assert.equal(mine.help[0].by, a.id);
+  // L12: nothing pending → no lock taken, nothing sent; snapshots past the cursor skip the aggregates
+  spawnSync('sleep', ['2.1']); psql(`select public.lec_flush('SUPA8')`, o);
+  const before = sent('lec:SUPA8').length;
+  assert.deepEqual(psql(`select public.lec_flush('SUPA8')`, o), { _flush: 0 });
+  assert.equal(sent('lec:SUPA8').length, before);
+  const probe = psql(`select public.lec_snapshot('SUPA8', 9007199254740991)`, o);
+  assert.deepEqual(probe.answers, []); assert.ok(probe.state);
 });

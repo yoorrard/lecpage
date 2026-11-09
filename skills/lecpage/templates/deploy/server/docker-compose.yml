@@ -10,7 +10,7 @@
 #   ./data/                     (실시간 데이터·올린 파일이 쌓이는 곳. 연수 뒤 지우면 데이터 삭제 완료)
 #
 # 실행:      docker compose up -d
-# 관리자 키: docker compose logs live | grep 관리자   (LEC_ADMIN_KEY_HASH 를 비워 두면 첫 실행 때 한 번 만들어 보여 줌)
+# 관리자 키: sudo cat ./data/admin-key.txt   (LEC_ADMIN_KEY_HASH 를 비워 두면 첫 실행 때 만들어 이 파일(권한 0600)에 둠)
 # 상태:      docker compose ps   ·   docker compose logs -f live
 # 멈춤:      docker compose down          (데이터는 ./data 에 남음)
 # 완전 삭제: docker compose down && rm -rf ./data
@@ -51,13 +51,13 @@ services:
       LEC_HOST: 0.0.0.0
       LEC_DATA: /data
       # 관리자 키의 SHA-256. 만들기: node node-server/server.mjs --hash '내관리자키'
-      # 비워 두면 첫 실행 때 키를 만들어 로그에 한 번 보여 주고 해시만 ./data 에 저장합니다.
+      # 비워 두면 첫 실행 때 키를 만들어 ./data/admin-key.txt(권한 0600)에 두고 로그에는 남기지 않습니다.
       LEC_ADMIN_KEY_HASH: ${LEC_ADMIN_KEY_HASH:-}
       # 사이트와 같은 주소(이 compose의 Caddy)로 쓰면 비워 둬도 됩니다.
       # 다른 주소의 사이트(예: GitHub Pages)가 부르면 그 주소를 쉼표로. 비우면 모든 주소 허용.
       LEC_ORIGINS: ${LEC_ORIGINS:-}
-      # Caddy 뒤에 있으므로 X-Forwarded-For 로 참가자 IP를 구분(속도 제한용)
-      LEC_TRUST_PROXY: "1"
+      # Caddy 한 단계 뒤에 있으므로 X-Forwarded-For 의 오른쪽 끝(Caddy가 본 주소)으로 참가자 IP를 구분(속도 제한용)
+      LEC_TRUSTED_PROXIES: "1"
       LEC_MAX_UPLOAD_MB: ${LEC_MAX_UPLOAD_MB:-20}
       LEC_RETENTION_DAYS: ${LEC_RETENTION_DAYS:-30}
       TZ: Asia/Seoul

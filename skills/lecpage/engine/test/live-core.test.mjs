@@ -163,7 +163,9 @@ test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudg
       rows.push(d); const { rev: _r, ...out } = d; return { data: { ...out, _flush: rev > 1 ? 120 : 0 } };
     },
     lec_flush: () => ({ data: { _flush: 0 } }),
+    lec_reactions: () => ({ data: { rx: reactSeq, r: { '👏': 4 } } }),
   };
+  let reactSeq = 0;
   const fake = {
     rpc(name, args) { calls.push([name, args]); return Promise.resolve({ status: 200, error: null, ...(handlers[name] || (() => ({ data: null })))(args) }); },
     channel(topic, opts) {
@@ -196,17 +198,30 @@ test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudg
   rows.push({ id: 'q99', text: '남의 질문', votes: 0, createdAt: 99, updatedAt: 99, rev: ++rev });
   const before = calls.filter(([n]) => n === 'lec_snapshot').length;
   const reacts = []; c.on('reaction', (r) => reacts.push(r));
-  channels[0].fire({ rev, r: { '👏': 4 } });
-  await new Promise((r) => setTimeout(r, 700));
+  reactSeq = 1;
+  channels[0].fire({ rev, rx: 1, r: { '👏': 50, '🔥': 50 } });
+  await new Promise((r) => setTimeout(r, 900));
   const snaps = calls.filter(([n]) => n === 'lec_snapshot');
   assert.equal(snaps.length, before + 1);
   assert.ok(snaps.at(-1)[1].p_since > 0, 'incremental fetch');
   assert.ok(c.get('questions', 'q99'));
-  assert.deepEqual(reacts.map((r) => [r.emoji, r.count]), [['👏', 4]]);
+  assert.deepEqual(reacts.map((r) => [r.emoji, r.count]), [['👏', 4]], 'counts come from lec_reactions, never from the payload');
+  channels[0].fire({ rx: 1, r: { '🔥': 50 } });
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(reacts.length, 1, 'a replayed or forged batch number shows nothing');
   // stale/forged tick (rev not newer) causes no fetch
   channels[0].fire({ rev: 1 });
   await new Promise((r) => setTimeout(r, 600));
   assert.equal(calls.filter(([n]) => n === 'lec_snapshot').length, before + 1);
+  // M1: a flood of forged hints (huge rev, reset) costs at most one read per back-off step, not one per message
+  const n0 = calls.filter(([n]) => n === 'lec_snapshot').length;
+  for (let i = 0; i < 30; i++) channels[0].fire(i % 2 ? { rev: 1e15 } : { reset: true });
+  await new Promise((r) => setTimeout(r, 2200));
+  const n1 = calls.filter(([n]) => n === 'lec_snapshot').length;
+  assert.ok(n1 - n0 >= 1 && n1 - n0 <= 2, 'forged ticks: ' + (n1 - n0) + ' reads');
+  for (let i = 0; i < 30; i++) channels[0].fire({ rev: 1e15 });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(calls.filter(([n]) => n === 'lec_snapshot').length, n1, 'hints that brought nothing new back off');
   // PT429 → LiveError status 429, not queued
   await assert.rejects(c.add('questions', { text: 'spam' }), (e) => e.status === 429 && e.code === 'rate_limited');
   c.close();

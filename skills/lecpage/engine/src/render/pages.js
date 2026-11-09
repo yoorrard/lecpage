@@ -1,6 +1,6 @@
 // 페이지 조립: index(참가자) · console(강사) · screen(프로젝터) · check(접속 진단) · privacy · poster(인쇄용 QR 안내문)
 import { esc, br, href, icon, koDate, host } from './html.js';
-import { renderSection } from './sections.js';
+import { renderSection, contactHtml } from './sections.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { getPreset } from '../design/presets.js';
 import { SECTION_DEFS } from '../schema/sections.js';
@@ -92,7 +92,29 @@ function siteData(ctx) {
     base: bp.meta.siteUrl || '',
     admin: { completionRate: bp.meta.admin?.completionRate ?? 90 },
     survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
+    phase: phaseWindow(bp),
   };
+}
+
+/** 연수 기간(현지 시각): 첫날 시작 ~ 마지막 날 끝. 끝난 뒤에는 참가자 화면이 '연수 후' 보기로 바뀜 */
+export function phaseWindow(bp) {
+  const m = bp.meta, ses = m.sessions || [];
+  const dates = [m.date, ...ses.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
+  if (!dates.length) return null;
+  const last = dates[dates.length - 1], lastSes = ses.find((x) => x.date === last);
+  return { start: `${dates[0]}T${m.start || '00:00'}`, end: `${last}T${lastSes?.end || m.end || '23:59'}` };
+}
+
+/** 연수가 끝난 뒤 맨 위에 뜨는 줄: 끝난 날짜와 가장 먼저 볼 칸(연수 후 안내 > 자료 > 교재 > 설문) */
+function phaseBar(ctx) {
+  const w = phaseWindow(ctx.bp); if (!w) return '';
+  const find = (t) => ctx.bp.sections.find((s) => s.type === t);
+  const go = [['followup', '연수 후 안내'], ['materials', '자료 받기'], ['deck', '교재 다시 보기'], ['survey', '설문 참여']].map(([t, label]) => find(t) && { id: find(t).id, label }).find(Boolean);
+  return `<div class="lp-now lp-phase" data-phase-bar hidden><div class="lp-now-in" role="region" aria-label="연수 안내">
+<span class="lp-now-tag" aria-hidden="true">종료</span>
+<p class="lp-now-text"><b>${esc(koDate(w.end.slice(0, 10)))}에 끝난 연수예요.</b></p>
+${go ? `<a class="lp-btn lp-btn-primary lp-btn-sm lp-now-cta" href="#${esc(go.id)}">${esc(go.label)}</a>` : ''}
+</div></div>`;
 }
 
 /** 메뉴 고르기: 데스크톱은 6개까지(실습·질문·교재는 늘 남김), 나머지는 '더보기'. 목차 시트에는 전부 */
@@ -134,7 +156,7 @@ function nav(ctx) {
     <button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>
   </div>
 </div>
-${nowBar(ctx)}
+${nowBar(ctx)}${phaseBar(ctx)}
 ${ctx.design.effects?.progress === 'guided-progress' ? '<div class="lp-scrollbar" data-fx="guided-progress"></div>' : '<div class="lp-scrollbar" data-scrollbar aria-hidden="true"></div>'}
 </header>`;
 }
@@ -144,7 +166,7 @@ function footer(ctx) {
   const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
   const collects = ctx.bp.privacy.collect.some((c) => c !== 'nickname') && ctx.live;
   return `<footer class="lp-foot"><div class="lp-wrap">
-<div class="lp-foot-main"><p class="lp-foot-title">${esc(m.title)}</p>${m.organizer ? `<p>${esc(m.organizer)}</p>` : ''}${m.date ? `<p>${esc(koDate(m.date))}${m.venue ? ` · ${esc(m.venue)}` : ''}</p>` : ''}</div>
+<div class="lp-foot-main"><p class="lp-foot-title">${esc(m.title)}</p>${m.organizer ? `<p>${esc(m.organizer)}</p>` : ''}${m.date ? `<p>${esc(koDate(m.date))}${m.venue ? ` · ${esc(m.venue)}` : ''}</p>` : ''}${m.contact ? `<p>문의 ${contactHtml(m.contact)}</p>` : ''}</div>
 ${links.length ? `<nav class="lp-foot-links" aria-label="바닥글 메뉴">${links.map((s) => `<a href="#${esc(s.id)}">${esc(s.nav)}</a>`).join('')}</nav>` : ''}
 <div class="lp-foot-meta">${collects || ctx.live ? '<a href="privacy.html">개인정보 처리 안내</a>' : ''}<a href="check.html">접속 진단</a><span>lecpage로 만들었어요</span><a href="#main" class="lp-totop">맨 위로 ${icon('up')}</a></div>
 </div></footer>`;
@@ -162,10 +184,10 @@ function helpSheet(ctx) {
   if (!ctx.live || !ctx.bp.live.features.includes('help')) return '';
   return `<dialog class="lp-dialog lp-sheet" data-help-dialog aria-labelledby="lp-help-h"><form class="lp-dialog-in" data-help-form>
 <div class="lp-sheet-h"><h2 id="lp-help-h">도움 요청</h2><button class="lp-icon-btn" type="button" data-sheet-close aria-label="닫기">${icon('close')}</button></div>
-<p class="lp-small">강사나 도우미 선생님이 자리로 갈게요. 자리는 이 기기에 기억해 두어요.</p>
+<p class="lp-small">강사가 자리로 갈게요. 자리는 이 기기에 저장돼요.</p>
 <label><span>자리</span><input name="seat" maxlength="20" autocomplete="off" placeholder="예: 3모둠, 창가 두 번째"></label>
-<label><span>무엇이 막혔나요? (적지 않아도 돼요)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>취소</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>도움 요청 보내기</span></button></div></form></dialog>`;
+<label><span>무엇이 막혔나요? (선택)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>취소</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
 }
 
 function dialogs(ctx) {
@@ -173,15 +195,15 @@ function dialogs(ctx) {
   const needName = pv.collect.includes('name');
   const needSchool = pv.collect.includes('school');
   return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
-<h2 id="lp-share-h">이 연수 사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
+<h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
 <p class="lp-share-url" data-share-url></p><p class="lp-small lp-share-off" data-url-off hidden>인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">참여 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
-<h2 id="lp-join-h">참여하기</h2><p class="lp-small">질문·막혔어요·보드에 쓰일 이름을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
+<h2 id="lp-join-h">참여하기</h2><p class="lp-small">질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
 <label><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname"></label>
 ${needName ? '<label><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
 ${needSchool ? '<label><span>소속(학교)</span><input name="school" maxlength="40" required autocomplete="organization"></label>' : ''}
-${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input type="checkbox" name="consent" required><span>이름·소속을 연수 출석 확인에만 쓰고, 연수가 끝나고 ${pv.retentionDays}일 뒤 지우는 데 동의합니다. 동의하지 않으면 출석 확인을 할 수 없어요. <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
+${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input type="checkbox" name="consent" required><span>이름·소속을 출석 확인에만 쓰고, 연수가 끝나고 ${pv.retentionDays}일 뒤 지우는 데 동의합니다. 동의하지 않으면 출석 확인을 할 수 없어요. <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
@@ -243,7 +265,7 @@ ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n')}
 export function renderConsole(ctx) {
   const inner = `<div class="lp-app" data-console>
 <header class="lp-app-h"><div><p class="lp-small">강사 콘솔</p><h1>${esc(ctx.bp.meta.title)}</h1></div><div class="lp-app-h-act"><a class="lp-btn lp-btn-ghost lp-btn-sm" href="screen.html" target="_blank" rel="opener">${icon('expand')}<span>프로젝터 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html" target="_blank">${icon('external')}<span>참가자 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="poster.html" target="_blank">${icon('print')}<span>QR 안내문 인쇄</span></a></div></header>
-<form class="lp-card lp-login" data-admin-form><h2>관리자 키 입력</h2><p class="lp-small">배포할 때 만든 관리자 키를 넣어 주세요. 키는 이 탭에만 기억합니다.</p><label><span class="lp-sr">관리자 키</span><input type="password" name="key" autocomplete="current-password" required></label><button class="lp-btn lp-btn-primary" type="submit">시작</button>${ctx.bp.live.provider === 'local' ? '<p class="lp-small">미리보기 모드에서는 아무 키나 넣어도 됩니다.</p>' : ''}</form>
+<form class="lp-card lp-login" data-admin-form><h2>관리자 키</h2><p class="lp-small">배포할 때 만든 관리자 키를 넣어 주세요. 키는 이 탭에만 남아요.</p><label><span class="lp-sr">관리자 키</span><input type="password" name="key" autocomplete="current-password" required></label><button class="lp-btn lp-btn-primary" type="submit">들어가기</button>${ctx.bp.live.provider === 'local' ? '<p class="lp-small">미리보기에서는 아무 키나 넣어도 돼요.</p>' : ''}</form>
 <main class="lp-console" data-console-main hidden></main>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div></div>`;
   return appShell(ctx, `강사 콘솔 · ${ctx.bp.meta.title}`, 'lp-body-app', inner, ['assets/qr.js', 'assets/live.js', 'assets/console.js']);
@@ -260,7 +282,7 @@ export function renderScreen(ctx) {
 <div class="lp-timers" data-timers hidden role="region" aria-label="타이머"></div>
 ${signal ? '<div class="lp-screen-signal" data-screen-signal hidden role="region" aria-label="이해 신호"></div>' : ''}
 <section class="lp-stage" data-tool-stage hidden aria-live="polite" aria-labelledby="lp-stage-h"><div class="lp-stage-h"><h2 id="lp-stage-h" data-stage-title></h2><button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-stage-close>${icon('close')}<span>닫기</span></button></div><div data-stage-body></div></section>
-<div class="lp-screen-main" data-screen-main><p class="lp-empty">${ctx.live ? '질문과 투표 결과가 여기에 크게 보여요.' : '오른쪽 위 도구 버튼으로 이름 뽑기·모둠 만들기·타이머를 쓸 수 있어요.'}</p></div>
+<div class="lp-screen-main" data-screen-main><p class="lp-empty">${ctx.live ? '질문과 투표 결과가 여기에 크게 보여요.' : '오른쪽 위 도구에서 이름 뽑기·모둠·타이머를 쓸 수 있어요.'}</p></div>
 </main>
 <aside class="lp-drawer" id="lp-tools" data-tools hidden aria-labelledby="lp-tools-h"><div class="lp-drawer-h"><h2 id="lp-tools-h" tabindex="-1">도구</h2><button class="lp-icon-btn" type="button" data-tools-close aria-label="도구 닫기">${icon('close')}</button></div><div data-tools-body></div>
 <p class="lp-drawer-links"><a class="lp-link" href="poster.html" target="_blank">${icon('print')}QR 안내문 인쇄</a>${ctx.live ? `<a class="lp-link" href="console.html" target="_blank">${icon('external')}강사 콘솔</a>` : ''}</p></aside>
@@ -306,7 +328,7 @@ export function renderCheck(ctx) {
   ];
   const uniq = []; const seen = new Set();
   for (const c of checks) { const h = host(c.url) || c.url; if (!seen.has(h)) { seen.add(h); uniq.push(c); } }
-  const inner = `<main class="lp-wrap lp-check"><h1 class="lp-h2">접속 진단</h1><p class="lp-lead">연수에 필요한 사이트가 이 기기와 네트워크에서 열리는지 확인합니다. 결과를 정보 담당 선생님께 보여 주면 차단을 풀 때 도움이 됩니다.</p>
+  const inner = `<main class="lp-wrap lp-check"><h1 class="lp-h2">접속 진단</h1><p class="lp-lead">연수에 쓰는 사이트가 이 기기와 네트워크에서 열리는지 확인해요. 막힌 곳이 있으면 결과를 복사해 정보 담당 선생님께 보내 주세요.</p>
 <div class="lp-diag lp-card" data-diag='${esc(JSON.stringify(uniq))}' data-diag-auto data-live-check="${ctx.live ? 1 : 0}"><div class="lp-diag-h"><h2>확인 항목 ${uniq.length}개</h2><button class="lp-btn lp-btn-primary" type="button" data-diag-run>다시 확인</button></div>
 <ul class="lp-diag-list">${uniq.map((c) => `<li data-url="${esc(c.url)}"><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul>
 ${ctx.live ? '<p class="lp-small" data-live-diag>실시간 연결 방식: 확인 중…</p>' : ''}
@@ -324,13 +346,13 @@ export function renderPrivacy(ctx) {
   const items = { nickname: '별명', name: '이름', school: '소속(학교)', email: '이메일' };
   const procs = pv.processors.length ? pv.processors : defaultProcessors(bp);
   const inner = `<main class="lp-wrap lp-prose lp-privacy"><h1 class="lp-h2">개인정보 처리 안내</h1>
-<p>${esc(bp.meta.organizer || bp.instructors[0]?.name || '연수 운영자')}는 「${esc(bp.meta.title)}」 연수를 운영하면서 아래와 같이 최소한의 정보만 처리합니다.</p>
+<p>${esc(bp.meta.organizer || bp.instructors[0]?.name || '연수 운영자')}는 「${esc(bp.meta.title)}」 연수를 운영하며 아래 정보만 처리합니다.</p>
 <h2>1. 처리 목적</h2><p>연수 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
 <h2>2. 처리 항목</h2><p>${pv.collect.map((c) => items[c]).filter(Boolean).join(', ')} / 참여 중 작성한 질문·글·파일, 실습 진행 상태.</p>
 <h2>3. 보유 기간</h2><p>연수 종료 후 ${pv.retentionDays}일. 기간이 지나면 지체 없이 파기합니다.</p>
 <h2>4. 거부할 권리</h2><p>동의하지 않아도 사이트의 안내·교재·실습 화면은 그대로 쓸 수 있습니다. 다만 출석 확인 등 이름이 필요한 기능은 쓸 수 없습니다.</p>
 <h2>5. 처리 위탁 및 국외 이전</h2>${procs.length ? `<ul>${procs.map((p) => `<li>${esc(p.name)} (${esc(p.country)}) – ${esc(p.purpose)}</li>`).join('')}</ul>` : '<p>없음</p>'}
-<h2>6. 문의</h2><p>${esc(pv.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '연수 운영자에게 문의해 주세요.')}</p>
+<h2>6. 문의</h2><p>${contactHtml(pv.contact || bp.meta.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '연수 운영자에게 문의해 주세요.')}</p>
 <p class="lp-small">이 안내는 lecpage가 연수 설정에서 자동으로 만들었습니다. 기관의 개인정보 처리방침이 있으면 그것을 따릅니다.</p>
 <p><a class="lp-link" href="index.html">연수 사이트로 돌아가기</a></p></main>`;
   return appShell(ctx, `개인정보 처리 안내 · ${bp.meta.title}`, 'lp-body-doc', inner, []);
@@ -393,7 +415,8 @@ ${live ? `3. 관리자 키로 \`console.html\`에 들어가 참가자 화면과 
 ${live ? '- 콘솔에서 진행 현황(누가 어디까지 했는지)과 막힌 사람을 봅니다. 도움 요청은 "맡기" → "해결"로 처리합니다.\n- 타이머·공지를 보내면 참가자 화면 위에 나타납니다. "강사 따라가기"를 켜면 지금 단계·쪽으로 참가자 화면이 움직입니다.\n- 프로젝터에는 `screen.html`을 띄웁니다.\n' : '- 프로젝터에 첫 화면의 QR(공유 버튼)을 띄워 접속을 안내합니다.\n'}
 ## 연수 후
 - 만족도 조사 응답을 확인합니다.
-${live ? `- 콘솔에서 출석·진행·질문 기록을 CSV로 내려받습니다.\n- 보유 기간(${bp.privacy.retentionDays}일)이 지나면 콘솔의 "데이터 모두 지우기"를 누릅니다.\n- 계속 공개할 사이트라면 실시간 기능을 끄고 다시 만들어 정적 아카이브로 바꿉니다.\n` : '- 사이트는 그대로 두면 자료 아카이브로 쓸 수 있습니다.\n'}
+${live ? `- 콘솔에서 출석·진행·질문 기록을 CSV로 내려받습니다.\n- 보유 기간(${bp.privacy.retentionDays}일)이 지나면 콘솔의 "데이터 모두 지우기"를 누릅니다.\n- 계속 공개할 사이트라면 실시간 기능을 끄고 다시 만들어 정적 아카이브로 바꿉니다.\n` : '- 사이트는 그대로 두면 자료 아카이브로 쓸 수 있습니다.\n'}- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 뜨고, \`연수 후 안내\` 칸이 첫 화면 바로 아래로 올라옵니다. 다시 보기 영상·소통방·이수 처리 일정을 그 칸에 넣어 다시 빌드하세요(미리 보기: 주소 끝에 \`?phase=after\`).
+
 ${infra ? `## 운영 방식 결정 이유\n${infra.reasons.map((r) => `- ${r}`).join('\n')}\n${infra.warnings.length ? `\n주의\n${infra.warnings.map((w) => `- ${w}`).join('\n')}\n` : ''}` : ''}`;
 }
 

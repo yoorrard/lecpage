@@ -2,6 +2,7 @@
 // Node: 'pdfjs-dist/legacy/build/pdf.mjs'가 설치돼 있으면 동적 import, 없으면 'needs-pdfjs' 오류(fallback:'python')를 돌려줍니다.
 // 글 조각(텍스트 항목)을 줄로 묶고, 글자 크기로 제목을 고르고, 링크 주석의 표시 글자를 찾습니다.
 import { normText, normLine, cleanUrl, IngestError, isNode } from './util.js';
+import { FontRoles } from './fonts.js';
 
 const PDFJS_NODE = 'pdfjs-dist/legacy/build/pdf.mjs';
 
@@ -70,6 +71,7 @@ export async function parsePdf(bytes, ctx) {
   const pages = [];
   let chars = 0;
   let size = null;
+  const fontRoles = new FontRoles();
   for (let i = 1; i <= n; i++) {
     let page;
     try {
@@ -80,6 +82,7 @@ export async function parsePdf(bytes, ctx) {
       let anns = [];
       try { anns = await page.getAnnotations(); } catch { /* 주석 없음 */ }
       const p = buildPage(lib, tc.items || [], anns, vp, i, ctx);
+      if (i <= FONT_PAGES) await tallyPdfFonts(page, tc.items || [], fontRoles);
       chars += p.paragraphs.reduce((s, x) => s + x.text.length, 0) + p.title.length;
       pages.push(p);
     } catch (e) {
@@ -91,7 +94,35 @@ export async function parsePdf(bytes, ctx) {
   try { await doc.destroy(); } catch { /* 무시 */ }
   if (chars < Math.max(20, n * 8)) ctx.warn('no-text');
   const design = { slideSize: size ? { ...size, ratio: ratioName(size.width, size.height) } : undefined };
+  if (fontRoles.size) design.fontRoles = fontRoles.result();
   return { pages, design, meta, unit: 'page' };
+}
+
+/** 글꼴 이름 세기(앞 FONT_PAGES쪽만): 글 조각의 fontName은 내부 번호라, 연산 목록을 받아 글꼴 객체의 실제 이름(ABCDEF+NanumGothic)을 읽습니다.
+ *  쪽에서 글자가 큰 짧은 조각 = 제목(display), 나머지 = 본문(body). 실패해도 해석은 계속합니다. */
+const FONT_PAGES = 12;
+async function tallyPdfFonts(page, items, roles) {
+  try {
+    await page.getOperatorList();
+    const objs = page.commonObjs;
+    const sized = items.filter((it) => typeof it.str === 'string' && it.str.trim() && it.fontName)
+      .map((it) => ({ it, size: Math.hypot(it.transform?.[2] || 0, it.transform?.[3] || 0) || it.height || 0 }));
+    if (!sized.length) return;
+    const sizes = sized.map((x) => x.size).sort((a, b) => a - b);
+    const med = sizes[Math.floor(sizes.length / 2)] || 1;
+    const nameOf = new Map();
+    for (const { it, size } of sized) {
+      if (!nameOf.has(it.fontName)) {
+        let nm = '';
+        try { if (objs.has(it.fontName)) { const f = objs.get(it.fontName); nm = f?.name || f?.fallbackName || ''; } } catch { /* 아직 안 읽힘 */ }
+        nameOf.set(it.fontName, nm);
+      }
+      const name = nameOf.get(it.fontName);
+      if (!name) continue;
+      const role = size >= med * 1.35 && it.str.trim().length <= 60 ? 'display' : 'body';
+      roles.add(role, name, it.str.replace(/\s/g, '').length);
+    }
+  } catch { /* 글꼴 이름 없음 */ }
 }
 
 function pdfDate(s) {

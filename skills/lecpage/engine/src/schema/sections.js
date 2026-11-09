@@ -1,6 +1,7 @@
 // 섹션(모듈) 정의: 타입, 기본 메뉴 이름, 실시간 필요 여부, 배열 필드, 설명
 export const SECTION_DEFS = {
   hero:       { nav: '처음', live: false, label: '첫 화면', desc: '연수명·일시·강사·시작 버튼' },
+  goals:      { nav: '', live: false, label: '연수 목표', desc: '마치면 할 수 있는 것·대상·이수 기준', list: 'items' },
   glance:     { nav: '', live: false, label: '한눈에 보기', desc: '숫자로 보는 연수 요약', list: 'items' },
   message:    { nav: '', live: false, label: '핵심 메시지', desc: '문장·공식·인용' },
   steps5:     { nav: '', live: false, label: '핵심 단계', desc: '키워드 단계 나열', list: 'items' },
@@ -18,8 +19,9 @@ export const SECTION_DEFS = {
   materials:  { nav: '자료', live: false, label: '자료실', desc: '내려받기와 이용 안내', list: 'items' },
   instructor: { nav: '강사', live: false, label: '강사 소개', desc: '프로필·이력·연락처' },
   speakers:   { nav: '연사', live: false, label: '연사', desc: '여러 연사 카드', list: 'items' },
-  sessions:   { nav: '차시', live: false, label: '차시 목록', desc: '과정형 연수의 차시', list: 'items' },
-  survey:     { nav: '설문', live: false, label: '만족도 조사', desc: 'QR과 바로가기' },
+  sessions:   { nav: '차시', live: false, label: '차시 목록', desc: '과정형 연수의 차시, 날짜로 지금 차시 표시', list: 'items' },
+  survey:     { nav: '설문', live: false, label: '만족도 조사', desc: '사이트 안 설문 또는 QR·링크' },
+  followup:   { nav: '연수 후', live: false, label: '연수 후 안내', desc: '다시 보기·소통방·이수 안내, 끝난 뒤 맨 위로', list: 'items' },
   closing:    { nav: '', live: false, label: '마무리', desc: '마지막 문장과 인사' },
   faq:        { nav: 'FAQ', live: false, label: '자주 묻는 질문', desc: '접었다 펴는 질문과 답', list: 'items' },
   glossary:   { nav: '용어', live: false, label: '용어 풀이', desc: '어려운 낱말 설명', list: 'items' },
@@ -36,11 +38,14 @@ export const LIVE_PROVIDERS = ['none', 'local', 'supabase', 'sheets', 'http'];
 export const ARCHETYPES = ['story', 'lab', 'live', 'course'];
 export const DEPLOY_TARGETS = ['github-pages', 'cloudflare', 'vercel', 'netlify', 'firebase', 's3', 'server', 'lan', 'zip'];
 
-// 기본 만족도 설문(연수 끝에 흔히 묻는 다섯 문항). 실시간 기능이 켜져 있으면 사이트 안에서 바로 모읍니다.
+// 기본 만족도 설문(교원 연수 만족도에서 흔히 묻는 다섯 문항). 실시간 기능이 켜져 있으면 사이트 안에서 바로 모읍니다.
 export const DEFAULT_SURVEY = [
-  { q: '오늘 연수에 전반적으로 만족하시나요?', kind: 'scale' },
-  { q: '배운 내용을 내 수업이나 업무에 써 볼 수 있을 것 같나요?', kind: 'scale' },
+  { q: '연수에 전반적으로 만족하시나요?', kind: 'scale' },
+  { q: '배운 내용을 수업이나 업무에 쓸 수 있을 것 같나요?', kind: 'scale' },
   { q: '진행 속도는 어땠나요?', kind: 'choice', options: ['빨랐어요', '알맞았어요', '느렸어요'] },
-  { q: '가장 도움이 된 것은 무엇인가요?', kind: 'text' },
-  { q: '아쉬웠던 점이나 다음에 바라는 점을 적어 주세요.', kind: 'text' },
+  { q: '가장 도움이 된 내용은 무엇인가요?', kind: 'text' },
+  { q: '아쉬운 점이나 바라는 점을 적어 주세요.', kind: 'text' },
 ];
+
+// 연수 후 안내 항목 종류: 주소를 보고 자동으로 정합니다(직접 줄 수도 있음)
+export const FOLLOWUP_KINDS = ['recording', 'community', 'next', 'read', 'link'];

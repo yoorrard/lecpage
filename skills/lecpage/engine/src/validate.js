@@ -1,6 +1,6 @@
 // 설계도 검증·자동 보정. AI나 사람이 만든 설계도를 안전하고 일관된 모양으로 바꿉니다.
 // 원칙: 고칠 수 있으면 고치고(warnings), 진행할 수 없을 때만 errors.
-import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS } from './schema/sections.js';
+import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS } from './schema/sections.js';
 import { PRESET_IDS } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
@@ -41,13 +41,22 @@ const date = (v) => { const m = /^(\d{4})[-./ ]\s*(\d{1,2})[-./ ]\s*(\d{1,2})/.e
 
 function link(l) { return { label: str(l?.label ?? l?.title, LIMITS.short), url: safeUrl(l?.url ?? l?.href) }; }
 function links(v) { return arr(v).map(link).filter((l) => l.url); }
+/** 연수 후 안내 항목 종류: 주소로 짐작(다시 보기 영상·소통방), 모르면 link */
+export function followupKind(url) {
+  const u = String(url || '').toLowerCase();
+  if (/youtube\.com|youtu\.be|vimeo\.com|tv\.naver\.com|zoom\.us\/rec|drive\.google\.com\/file\/[^?]*\/view.*(mp4|video)/.test(u)) return 'recording';
+  if (/open\.kakao\.com|band\.us|padlet\.com|cafe\.naver\.com|discord\.(gg|com)|slack\.com|teams\.microsoft\.com\/l\/(team|channel)/.test(u)) return 'community';
+  return 'link';
+}
+const textItem = (x, max) => str(x && typeof x === 'object' ? (x.text ?? x.title) : x, max);
 function source(v) { if (!v || typeof v !== 'object') return undefined; const pages = arr(v.pages).map((n) => num(n, 0, 1, 9999)).filter(Boolean); return pages.length || v.file ? { file: str(v.file, 40), pages } : undefined; }
 
 // 섹션별 정리 함수
 const SECTION_FIX = {
   hero: (s) => ({ eyebrow: str(s.eyebrow, LIMITS.short), title: str(s.title, LIMITS.title), subtitle: str(s.subtitle, 400),
     ctas: arr(s.ctas).slice(0, 3).map((c) => ({ label: str(c.label, 30), href: safeUrl(c.href) || '#main' })).filter((c) => c.label),
-    meta: arr(s.meta).slice(0, 6).map((m) => ({ label: str(m.label, 20), value: str(m.value, 80) })).filter((m) => m.value) }),
+    meta: arr(s.meta).slice(0, 6).map((m) => ({ label: str(m.label, 20), value: str(m.value, 80), url: safeUrl(m.url) || undefined })).filter((m) => m.value) }),
+  goals: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((x) => textItem(x, 120)).filter(Boolean).slice(0, 6), who: str(s.who, 160) }),
   glance: (s) => ({ items: arr(s.items).slice(0, 8).map((i) => ({ value: str(i.value, 20), label: str(i.label, 40), note: str(i.note, 80) })).filter((i) => i.value) }),
   message: (s) => ({ text: str(s.text, 600), note: str(s.note, 300), style: pick(s.style, ['statement', 'formula', 'quote'], 'statement'), parts: strArr(s.parts, 30).slice(0, 6), result: str(s.result, 40), cite: str(s.cite, 80) }),
   steps5: (s) => ({ lead: str(s.lead, 200), items: arr(s.items).slice(0, 8).map((i) => ({ word: str(i.word ?? i.title, 20), desc: str(i.desc, 120) })).filter((i) => i.word), close: str(s.close, 200) }),
@@ -71,6 +80,8 @@ const SECTION_FIX = {
   speakers: (s) => ({ items: arr(s.items).map((i) => ({ name: str(i.name, 40), role: str(i.role, 60), org: str(i.org, 60), photo: safeUrl(i.photo), talk: str(i.talk, 120), time: str(i.time, 20) })).filter((i) => i.name) }),
   sessions: (s) => ({ items: arr(s.items).map((i, n) => ({ no: num(i.no, n + 1, 1, 999), date: date(i.date), title: str(i.title, 120), desc: str(i.desc, 300), status: pick(i.status, ['done', 'now', 'next', ''], ''), links: links(i.links) })).filter((i) => i.title) }),
   survey: (s) => ({ lead: str(s.lead, 300), url: safeUrl(s.url), qr: s.qr !== false, questions: arr(s.questions).slice(0, 20).map((q) => ({ q: str(q.q, 200), kind: pick(q.kind, ['scale', 'choice', 'text'], 'scale'), options: strArr(q.options, 60).slice(0, 8) })).filter((q) => q.q) }),
+  followup: (s) => ({ lead: str(s.lead, 300), completion: str(s.completion, 300),
+    items: arr(s.items).slice(0, 12).map((i) => { const url = safeUrl(i?.url ?? i?.href); return { title: str(i?.title ?? i?.label, 80), desc: str(i?.desc, 200), url, kind: pick(i?.kind, FOLLOWUP_KINDS, followupKind(url)) }; }).filter((i) => i.title && (i.url || i.desc)) }),
   closing: (s) => ({ lead: str(s.lead, 200), text: str(s.text, 200), thanks: str(s.thanks, 200) }),
   faq: (s) => ({ items: arr(s.items).map((i) => ({ q: str(i.q, 200), a: str(i.a, 1200) })).filter((i) => i.q && i.a) }),
   glossary: (s) => ({ items: arr(s.items).map((i) => ({ term: str(i.term, 60), desc: str(i.desc, 400) })).filter((i) => i.term) }),
@@ -91,7 +102,7 @@ export function validate(input) {
     title: str(m.title, LIMITS.title), subtitle: str(m.subtitle, 400), organizer: str(m.organizer, 120),
     date: date(m.date), start: time(m.start), end: time(m.end), venue: str(m.venue, 120),
     mode: pick(m.mode, ['offline', 'online', 'hybrid'], 'offline'), joinUrl: safeUrl(m.joinUrl), shortUrl: safeUrl(m.shortUrl), siteUrl: safeUrl(m.siteUrl),
-    lang: 'ko', description: str(m.description, 300),
+    lang: 'ko', description: str(m.description, 300), contact: str(m.contact, 120),
     admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 90, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
     sessions: arr(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
   };
@@ -116,6 +127,7 @@ export function validate(input) {
     effects: (d.effects && typeof d.effects === 'object') ? Object.fromEntries(Object.entries(d.effects).slice(0, 40).map(([k, v]) => [str(k, 40), str(v, 40)])) : {},
     logo: safeUrl(d.logo), brandName: str(d.brandName, 40), seed: str(d.seed, 20),
     palette: PALETTE_BY_ID[d.palette] ? d.palette : '', fontPair: FONT_PAIR_BY_ID[d.fontPair] ? d.fontPair : '',
+    sourceFonts: sourceFonts(d.sourceFonts), fontFrom: pick(d.fontFrom, ['material', 'preset'], 'material'),
   };
   if (!d.preset || !PRESET_IDS.includes(d.preset)) {
     // 프리셋이 없으면 주제·분위기·유형으로 1순위를 고른다
@@ -163,7 +175,7 @@ export function validate(input) {
     const def = SECTION_DEFS[type];
     const fixed = SECTION_FIX[type](s);
     const out = { id, type, title: str(s.title, LIMITS.title), nav: s.nav === undefined ? def.nav : str(s.nav, 12), tone: pick(s.tone, ['night', 'dawn', 'day', ''], ''), lead: fixed.lead ?? str(s.lead, 300), ...fixed, source: source(s.source) };
-    if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐습니다.` }); return; }
+    if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type) && !(type === 'followup' && out.completion)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐습니다.` }); return; }
     if (def.live && live.provider === 'none' && type !== 'board') warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}"는 실시간 연결이 필요합니다. 연결 전에는 안내 문구만 보입니다.` });
     sections.push(out);
   });
@@ -193,4 +205,12 @@ export function makeCode(seed = '') {
   let out = '';
   for (let i = 0; i < 6; i++) { out += A[h % A.length]; h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; }
   return out;
+}
+
+/** 교재 글꼴(감지 결과) → { display:{name,share}, body:{name,share} } | undefined */
+function sourceFonts(v) {
+  if (!v || typeof v !== 'object') return undefined;
+  const one = (x) => (x && typeof x === 'object' && str(x.name, 60) ? { name: str(x.name, 60), share: num(x.share, 0, 0, 1) } : undefined);
+  const out = { display: one(v.display), body: one(v.body) };
+  return out.display || out.body ? out : undefined;
 }

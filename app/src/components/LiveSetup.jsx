@@ -1,6 +1,5 @@
 import { useState } from 'preact/hooks';
 import { Field, Notice, Seg } from './ui.jsx';
-import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
 import { copy, randomKey, sha256Hex, toast } from '../lib/util.js';
 
@@ -15,13 +14,13 @@ export async function pingLive(live, code) {
   if (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.)/.test(url)) throw new Error('https:// 로 시작하는 주소를 넣어 주세요.');
   const t = AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined;
   if (live.provider === 'sheets') {
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) throw new Error('웹 앱 주소는 https://script.google.com/macros/s/…/exec 모양이에요. 배포 → 배포 관리에서 "웹 앱 URL"을 복사해 주세요.');
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) throw new Error('웹 앱 URL은 https://script.google.com/macros/s/…/exec 모양이에요. 배포 → 배포 관리에서 복사해 주세요.');
     const r = await fetch(url + '?a=ping', { signal: t }); const j = await r.json().catch(() => null);
     if (!j || j.ok !== true) throw new Error('시트가 답하지 않아요. 배포할 때 "액세스 권한: 모든 사용자"로 골랐는지 확인해 주세요.');
     return '구글 시트와 연결됐어요.';
   }
   if (live.provider === 'supabase') {
-    if (!live.anonKey) throw new Error('publishable(공개) 키를 넣어 주세요.');
+    if (!live.anonKey) throw new Error('publishable 키를 넣어 주세요.');
     const r = await fetch(url + '/rest/v1/rpc/lec_snapshot', { method: 'POST', signal: t, headers: { apikey: live.anonKey, authorization: 'Bearer ' + live.anonKey, 'content-type': 'application/json', 'x-lec-code': code }, body: JSON.stringify({ p_code: code, p_since: 9007199254740991 }) });
     const j = await r.json().catch(() => ({}));
     if (r.ok) return 'Supabase와 연결됐어요.';
@@ -62,7 +61,7 @@ export function LiveSetup({ p, update }) {
   return (
     <div class="stack">
       {connected ? (
-        <Notice kind="ok"><Mascot size={36} mood="happy" /><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
+        <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
       ) : (
         <Notice kind="lav"><span><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</span></Notice>
       )}
@@ -73,8 +72,8 @@ export function LiveSetup({ p, update }) {
           <ol class="how">
             <li><a class="btn btn-sm" href="https://sheets.new" target="_blank" rel="noopener">새 구글 시트 열기</a> 이름을 "○○ 연수 참여"처럼 바꿔요.</li>
             <li>시트 메뉴 <b>확장 프로그램 → Apps Script</b>를 누르고, 편집기의 글을 모두 지운 뒤 <button class="btn btn-sm btn-primary" onClick={() => copyRaw('gs')}>lecpage 코드 복사</button>를 눌러 붙여 넣고 <b>저장(💾)</b>해요.</li>
-            <li>위쪽 함수 칸에서 <b>setup</b>을 고르고 <b>실행</b>. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동 → 허용</b>. 내가 붙여 넣은 내 코드라서 나오는 안내예요.</li>
-            <li>시트로 돌아와 새로 고침 → 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>. 강사 화면 비밀번호예요(8자 이상, 적어 두세요). <b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm btn-quiet" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</li>
+            <li>위쪽 함수 칸에서 <b>setup</b>을 고르고 <b>실행</b>. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동 → 허용</b>. 내가 붙여 넣은 코드라 나오는 안내예요.</li>
+            <li>시트로 돌아와 새로 고침 → 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에서 8자 이상으로 정하고 적어 두세요. <b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm btn-quiet" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</li>
             <li>Apps Script 오른쪽 위 <b>배포 → 새 배포 → 웹 앱</b>. 실행: <b>나</b>, 액세스: <b>모든 사용자</b> → 배포. 나온 <b>웹 앱 URL</b>을 아래에 붙여 넣어요.</li>
           </ol>
         )}
@@ -82,25 +81,25 @@ export function LiveSetup({ p, update }) {
           <ol class="how">
             <li><a class="btn btn-sm" href="https://supabase.com/dashboard/new" target="_blank" rel="noopener">Supabase 새 프로젝트</a> 지역은 <b>Northeast Asia (Seoul)</b>.</li>
             <li>왼쪽 <b>SQL Editor → New query</b>에 <button class="btn btn-sm btn-primary" onClick={() => copyRaw('sql')}>설치 SQL 복사</button>를 붙여 넣고 <b>Run</b>.</li>
-            <li>강사 화면 열쇠를 만들고, 그 아래 SQL 한 줄을 같은 곳에서 실행해 연수를 등록해요.
+            <li>관리자 키를 만들고, 나오는 SQL 한 줄을 같은 곳에서 실행해 연수를 등록해요.
               {!adm ? <div><button class="btn btn-sm" onClick={makeAdmin}>관리자 키 만들기</button></div> : <div class="stack" style={{ gap: '6px', marginTop: '6px' }}>
-                <div class="keybox">{adm.key}</div><div class="btn-row"><button class="btn btn-sm" onClick={() => copy(adm.key, '관리자 키를 복사했어요. 안전한 곳에 적어 두세요.')}>키 복사(적어 두세요)</button></div>
+                <div class="keybox">{adm.key}</div><div class="btn-row"><button class="btn btn-sm" onClick={() => copy(adm.key, '관리자 키를 복사했어요. 안전한 곳에 적어 두세요.')}>키 복사</button><span class="small muted">강사 화면에 들어갈 때 써요. 적어 두세요.</span></div>
                 <div class="prompt-box">{`select lec_private.init_training_hash('${code}', '${adm.hash}', '{"retentionDays": ${bp.privacy?.retentionDays || 30}${bp.audience?.minor ? ', "uploads": false' : ''}}');`}</div>
                 <div><button class="btn btn-sm" onClick={() => copy(`select lec_private.init_training_hash('${code}', '${adm.hash}', '{"retentionDays": ${bp.privacy?.retentionDays || 30}${bp.audience?.minor ? ', "uploads": false' : ''}}');`, 'SQL 한 줄을 복사했어요.')}>SQL 한 줄 복사</button></div></div>}</li>
-            <li><b>Project Settings → API Keys</b>에서 프로젝트 주소와 <b>publishable 키(sb_publishable_…)</b>를 아래에 붙여 넣어요. secret 키는 절대 넣지 마세요.</li>
+            <li><b>Project Settings → API Keys</b>에서 프로젝트 URL과 <b>publishable 키</b>(sb_publishable_…)를 아래에 붙여 넣어요. secret 키는 넣지 마세요.</li>
           </ol>
         )}
         {method === 'http' && (
           <div class="stack">
-            <p class="small">Cloudflare 계정(무료)이 있으면 단추 하나로 내 실시간 서버를 만들 수 있어요. 배포할 때 넣는 <b>ADMIN_KEY</b>가 강사 화면 비밀번호예요. 학교 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
+            <p class="small">Cloudflare 무료 계정이 있으면 버튼 하나로 내 실시간 서버를 만들어요. 배포할 때 넣는 <b>ADMIN_KEY</b>가 관리자 키예요. 학교 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
             <div><a class="btn btn-sm" href={CF_DEPLOY} target="_blank" rel="noopener">Cloudflare에 내 실시간 서버 만들기</a></div>
           </div>
         )}
         <div class="form-grid">
-          <Field label={method === 'sheets' ? '웹 앱 URL' : method === 'supabase' ? '프로젝트 주소' : '서버 주소'} hint={method === 'sheets' ? 'https://script.google.com/macros/s/…/exec' : method === 'supabase' ? 'https://xxxx.supabase.co' : 'https://lecpage-live.내계정.workers.dev'}>
+          <Field label={method === 'sheets' ? '웹 앱 URL' : method === 'supabase' ? '프로젝트 URL' : '서버 URL'} hint={method === 'sheets' ? 'https://script.google.com/macros/s/…/exec' : method === 'supabase' ? 'https://xxxx.supabase.co' : 'https://lecpage-live.내계정.workers.dev'}>
             <input type="url" value={draft.url} onInput={(e) => setDraft({ ...draft, url: e.target.value })} placeholder="https://" />
           </Field>
-          {method === 'supabase' && <Field label="publishable(공개) 키"><input value={draft.anonKey} onInput={(e) => setDraft({ ...draft, anonKey: e.target.value })} placeholder="sb_publishable_…" /></Field>}
+          {method === 'supabase' && <Field label="publishable 키"><input value={draft.anonKey} onInput={(e) => setDraft({ ...draft, anonKey: e.target.value })} placeholder="sb_publishable_…" /></Field>}
         </div>
         <div class="btn-row"><button class="btn btn-primary" disabled={!draft.url || state.busy} onClick={() => test(false)}>{state.busy ? '확인하는 중…' : '연결 확인'}</button><button class="btn btn-sm btn-quiet" onClick={useLocal}>지금은 이 컴퓨터에서만 시험할게요</button></div>
         {state.msg && <Notice kind={state.ok ? 'ok' : 'bad'}>{state.msg}</Notice>}

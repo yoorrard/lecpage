@@ -5,7 +5,7 @@
 #
 #   docker build -t lec-live .
 #   docker run -p 8787:8787 -v "$PWD/data:/data" lec-live
-#   → 처음 실행 로그에 관리자 키가 한 번 나옵니다(LEC_ADMIN_KEY_HASH 를 주면 생략).
+#   → 처음 실행 때 관리자 키를 만들어 /data/admin-key.txt(권한 0600)에 둡니다(LEC_ADMIN_KEY_HASH 를 주면 생략, 로그에는 안 남김).
 
 FROM node:24-alpine
 WORKDIR /app

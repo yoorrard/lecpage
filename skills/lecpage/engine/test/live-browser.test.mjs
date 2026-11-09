@@ -13,7 +13,7 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch { /* not installed */ }
 const skip = !chromium && 'playwright is not installed';
 
-const ADMIN = '강사키-브라우저';
+const ADMIN = '강사키-브라우저-테스트용';
 let srv; let browser;
 before(async () => {
   if (skip) return;

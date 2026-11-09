@@ -76,6 +76,9 @@ export function applyInfo(bp0, info, material, prev = null) {
   const topics = E.detectTopics([info.title, info.subtitle, (material?.pages || []).slice(0, 30).map((p) => p.title || '').join(' ')].join(' '));
   const keepDesign = prev?.design && !prev._presetAuto ? prev.design : null;
   bp.design = keepDesign ? clone(keepDesign) : { ...(bp.design || {}), mood: bp.design?.mood?.length ? bp.design.mood : E.moodsForTopics(topics), topics: bp.design?.topics?.length ? bp.design.topics : topics };
+  // 교재 글꼴(엔진이 교재에서 찾아 초안에 넣음): 새 초안 값이 있으면 그것을, 없으면(AI 답 등) 이전 값을 지킴. fontFrom(따를지)은 강사가 고른 값 그대로
+  const srcFonts = bp0?.design?.sourceFonts || prev?.design?.sourceFonts;
+  if (srcFonts) bp.design.sourceFonts = clone(srcFonts);
   if (!keepDesign && (!bp.design.preset || !E.PRESET_IDS.includes(bp.design.preset) || bp._presetAuto)) {
     bp.design.preset = E.rankPresets({ moods: bp.design.mood, topics: bp.design.topics, archetype: bp.archetype.primary, admin: info.admin, minor: info.minor })[0].id;
     bp._presetAuto = true;

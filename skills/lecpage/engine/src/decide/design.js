@@ -1,6 +1,7 @@
 // 디자인 결정: 분위기·주제·유형·대상·환경 → 프리셋 순위, 슬롯별 효과, 그래픽, 모션 상한
 import { PRESETS, getPreset } from '../design/presets.js';
 import { FX } from '../design/fx-catalog.js';
+import { fontsFromSource } from '../design/fonts.js';
 
 const byId = new Map(FX.map((f) => [f.id, f]));
 export function fxInfo(id) { return byId.get(id); }
@@ -90,12 +91,25 @@ export function resolveDesign(bp) {
     const slot = (sig.slots || []).find((x) => RENDERED.includes(x));
     if (slot) effects[slot] = signature;
   }
+  // 교재 글꼴: 선생님이 글꼴 짝이나 글꼴을 따로 고르지 않았으면 교재와 같은 글꼴(없으면 결이 비슷한 무료 글꼴)을 씀
+  let fonts = d.fonts, fontMatch;
+  const fontNotes = [];
+  if (d.sourceFonts && d.fontFrom !== 'preset' && !d.fontPair) {
+    const fm = fontsFromSource(d.sourceFonts);
+    if (fm) {
+      fontMatch = fm.match;
+      if (!d.fonts && Object.keys(fm.fonts).length) fonts = { ...fm.fonts };
+      for (const [role, m] of Object.entries(fm.match)) {
+        fontNotes.push(`교재 ${role === 'display' ? '제목' : '본문'} 글꼴 "${m.from}" → ${m.system ? `프로그램 기본 글꼴이라 프리셋 글꼴 유지` : `${m.label}${m.exact ? '(같은 글꼴)' : '(비슷한 무료 글꼴)'}`}`);
+      }
+    }
+  }
   return {
-    ...d, preset: preset.id, motion,
+    ...d, preset: preset.id, motion, fonts, fontMatch,
     graphic: d.graphic !== undefined ? (fits(byId.get(d.graphic), { cap: motion, noLibs }) ? d.graphic : '') : chosen.graphic,
     closingGraphic: d.closingGraphic !== undefined ? d.closingGraphic : chosen.closingGraphic,
     signature: sig && fits(sig, { cap: motion, noLibs }) ? signature : '',
     effects,
-    _notes: [...why, ...chosen.notes],
+    _notes: [...why, ...chosen.notes, ...fontNotes],
   };
 }

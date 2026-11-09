@@ -17,9 +17,11 @@ export function tmpDir(prefix = 'lec-live-') { return fs.mkdtempSync(path.join(o
 export async function startNodeServer(opts = {}) {
   const { start, readOptions } = await import(path.join(nodeServerDir, 'server.mjs'));
   const o = readOptions([], {});
-  Object.assign(o, { port: 0, host: '127.0.0.1', data: tmpDir(), quiet: true, generateKey: false }, opts);
+  // many test codes come from one IP: relax the per-IP "new training" limit unless a test sets its own
+  Object.assign(o, { port: 0, host: '127.0.0.1', data: tmpDir(), quiet: true, generateKey: false, rate: { create: [100000, 3600e3] } }, opts);
   const s = await start(o);
   const close = s.close;
+  s.dataDir = o.data;
   s.close = async () => { await close(); fs.rmSync(o.data, { recursive: true, force: true }); };
   return s;
 }
@@ -68,9 +70,9 @@ export async function sseUntil(url, pred, timeoutMs = 5000) {
   throw new Error('SSE: expected message not received; got ' + JSON.stringify(msgs));
 }
 
-export function wsOpen(url, { admin } = {}) {
+export function wsOpen(url, { admin, headers } = {}) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
+    const ws = headers ? new WebSocket(url, { headers }) : new WebSocket(url);
     const msgs = []; const waiters = [];
     const t = setTimeout(() => reject(new Error('ws timeout')), 5000);
     ws.onmessage = (e) => {
@@ -79,8 +81,9 @@ export function wsOpen(url, { admin } = {}) {
       if (m.type === 'hello') { clearTimeout(t); if (admin) ws.send(JSON.stringify({ type: 'auth', admin })); resolve(api); }
     };
     ws.onerror = (e) => reject(new Error('ws error ' + (e.message || '')));
+    let closedWith = null; const closed = new Promise((res) => { ws.onclose = (e) => { closedWith = e.code; res(e.code); }; });
     const api = {
-      ws, msgs,
+      ws, msgs, closed, get closeCode() { return closedWith; },
       next(pred, ms = 5000) {
         const hit = msgs.find(pred); if (hit) { msgs.splice(msgs.indexOf(hit), 1); return Promise.resolve(hit); }
         return new Promise((res, rej) => { const w = { pred, resolve: (m) => { msgs.splice(msgs.indexOf(m), 1); clearTimeout(w.t); res(m); } }; w.t = setTimeout(() => rej(new Error('ws: no matching message; got ' + JSON.stringify(msgs))), ms); waiters.push(w); });
@@ -299,6 +302,78 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.equal((await a.call('POST', '/questions', { token: p.token, body: { text: '삭제 뒤' } })).status, 401, 'old tokens are gone');
   });
 
+  test(`${name}: answers cannot change after the poll closes; \`by\` only on my own answers, progress and help`, async () => {
+    const c = fresh('L'); const a = api(c.base, c.code);
+    const p1 = await joinAs(a, '하나'); const p2 = await joinAs(a, '둘');
+    const poll = (await a.call('POST', '/polls', { admin: c.adminKey, body: { question: '좋았나요?', options: ['예', '아니요'], open: true } })).body;
+    const a1 = (await a.call('POST', '/answers', { token: p1.token, body: { poll: poll.id, value: '예' } })).body;
+    await a.call('POST', '/answers', { token: p2.token, body: { poll: poll.id, value: '아니요' } });
+    await a.call('POST', '/progress', { token: p1.token, body: { station: 's1', status: 'stuck' } });
+    await a.call('POST', '/help', { token: p1.token, body: { station: 's1', message: '막혔어요' } });
+    assert.equal((await a.call('PATCH', `/answers/${a1.id}`, { token: p1.token, body: { value: '아니요' } })).status, 200, 'open poll: change allowed');
+    await a.call('PATCH', `/polls/${poll.id}`, { admin: c.adminKey, body: { open: false } });
+    const late = await a.call('PATCH', `/answers/${a1.id}`, { token: p1.token, body: { value: '예' } });
+    assert.equal(late.status, 409); assert.equal(late.body.error, 'poll_closed');
+    assert.equal((await a.call('POST', '/answers', { token: p1.token, body: { poll: poll.id, value: '예' } })).status, 409);
+    const pub = (await a.call('GET', '/snapshot?since=0')).body;
+    for (const col of ['answers', 'progress', 'help']) assert.ok(pub[col].length && pub[col].every((d) => d.by === undefined), `${col}: no by for the public`);
+    const mine = (await a.call('GET', '/snapshot?since=0', { token: p1.token })).body;
+    assert.equal(mine.answers.find((d) => d.id === a1.id).by, p1.id, 'my own answer keeps by');
+    assert.ok(mine.answers.filter((d) => d.id !== a1.id).every((d) => d.by === undefined), 'other people\'s answers do not');
+    assert.equal((await a.call('GET', '/answers', { token: p2.token })).body.find((d) => d.id === a1.id).by, undefined);
+    const adm = (await a.call('GET', '/snapshot?since=0', { admin: c.adminKey })).body;
+    assert.ok(adm.answers.every((d) => d.by), 'the admin sees who answered');
+  });
+
+  test(`${name}: reserved nicknames (강사·운영자·admin·lecpage) are refused for participants`, async () => {
+    const c = fresh('V'); const a = api(c.base, c.code);
+    for (const n of ['강사', ' 운영자 ', 'Admin', 'LECPAGE', '강사님', '강 사']) {
+      const r = await a.call('POST', '/join', { body: { nickname: n } });
+      assert.equal(r.status, 400, n); assert.equal(r.body.error, 'reserved_nickname', n);
+    }
+    const p = await joinAs(a, '김강사');
+    assert.ok(p.token, 'a name that only contains the word is fine');
+    const ren = await a.call('PATCH', `/participants/${p.id}`, { token: p.token, body: { nickname: '운영자' } });
+    assert.equal(ren.status, 400); assert.equal(ren.body.error, 'reserved_nickname');
+  });
+
+  if (uploads) test(`${name}: board files — only my own uploads; hide, remove and uploads=false take effect on the server`, async () => {
+    const c = fresh('F'); const a = api(c.base, c.code);
+    const p1 = await joinAs(a, '하나'); const p2 = await joinAs(a, '둘');
+    const send = (tok) => { const fd = new FormData(); fd.append('file', new Blob([PNG_1PX], { type: 'image/png' }), 'a.png'); return a.call('POST', '/upload', { token: tok, body: fd }); };
+    const up = (await send(p1.token)).body;
+    const file = (u) => ({ url: u, name: 'a.png', type: 'image/png', size: PNG_1PX.length });
+    const abs = (u) => (u.startsWith('/') ? c.base + u : u);
+    // M7: no external URLs, no other people's files, no files of another training
+    for (const u of ['https://tracker.example/pixel.png?u=1', 'http://attacker.example/api/' + c.code + '/files/' + 'a'.repeat(24) + '.png', `/api/${c.code}/files/${'b'.repeat(24)}.png`, up.url.replace(c.code, 'OTHER' + c.code)]) {
+      const r = await a.call('POST', '/posts', { token: p1.token, body: { text: 'x', files: [file(u)] } });
+      assert.equal(r.status, 400, u); assert.equal(r.body.error, 'invalid_value');
+    }
+    assert.equal((await a.call('POST', '/posts', { token: p2.token, body: { text: '남의 파일', files: [file(up.url)] } })).status, 400, 'someone else\'s upload');
+    const post = await a.call('POST', '/posts', { token: p1.token, body: { text: '내 사진', files: [{ ...file(up.url), type: 'video/mp4', size: 999 }] } });
+    assert.equal(post.status, 201);
+    assert.equal(post.body.files[0].type, 'image/png', 'type and size come from the server record'); assert.equal(post.body.files[0].size, PNG_1PX.length);
+    assert.match(post.body.files[0].url, /^https?:\/\/.+\/api\/[A-Z0-9_-]+\/files\/[a-f0-9]{24}\.png$/, 'absolute URL of this server');
+    assert.equal((await a.call('POST', '/posts', { token: p1.token, body: { text: '또', files: [file(up.url)] } })).status, 400, 'one file, one post');
+    assert.equal((await fetch(abs(up.url))).status, 200);
+    // H3: hiding takes the file down at once; showing brings it back; removing deletes it
+    await a.call('PATCH', `/posts/${post.body.id}`, { admin: c.adminKey, body: { hidden: true } });
+    assert.equal((await fetch(abs(up.url))).status, 404, 'hidden post → file 404');
+    await a.call('PATCH', `/posts/${post.body.id}`, { admin: c.adminKey, body: { hidden: false } });
+    assert.equal((await fetch(abs(up.url))).status, 200);
+    assert.equal((await a.call('DELETE', `/posts/${post.body.id}`, { admin: c.adminKey })).status, 200);
+    assert.equal((await fetch(abs(up.url))).status, 404, 'removed post → file 404');
+    // M8: the instructor switches uploads off (state.ui.uploads=false, admin only)
+    const up2 = (await send(p1.token)).body;
+    assert.equal((await a.call('PUT', '/state', { token: p1.token, body: { ui: { uploads: false } } })).status, 401);
+    assert.equal((await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { uploads: false } } })).status, 200);
+    const off = await send(p1.token);
+    assert.equal(off.status, 503); assert.equal(off.body.error, 'uploads_disabled');
+    const late = await a.call('POST', '/posts', { token: p1.token, body: { text: '파일', files: [file(up2.url)] } });
+    assert.equal(late.status, 403); assert.equal(late.body.error, 'uploads_disabled');
+    assert.equal((await a.call('POST', '/posts', { token: p1.token, body: { text: '글만은 돼요' } })).status, 201);
+  });
+
   if (uploads) test(`${name}: uploads — sniffed type, size limit, safe serving`, async () => {
     const c = fresh('U'); const a = api(c.base, c.code);
     const p = await joinAs(a);
@@ -306,8 +381,7 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     const up = await a.call('POST', '/upload', { token: p.token, body: fd });
     assert.equal(up.status, 201, JSON.stringify(up.body)); assert.equal(up.body.type, 'image/png'); assert.match(up.body.url, /\/files\/[a-f0-9]{24}\.png$/);
     const fileUrl = up.body.url.startsWith('/') ? c.base + up.body.url : up.body.url;
-    const got = await fetch(fileUrl);
-    assert.equal(got.status, 200); assert.equal(got.headers.get('content-type'), 'image/png'); assert.equal(got.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal((await fetch(fileUrl)).status, 404, 'an upload is served only once a post uses it');
     const html = new FormData(); html.append('file', new Blob(['<html><script>alert(1)</script>'], { type: 'image/png' }), 'x.png');
     assert.equal((await a.call('POST', '/upload', { token: p.token, body: html })).status, 415);
     const svg = new FormData(); svg.append('file', new Blob(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], { type: 'image/svg+xml' }), 'x.svg');
@@ -316,6 +390,9 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.equal((await a.call('POST', '/upload', { body: noTok })).status, 401);
     const post = await a.call('POST', '/posts', { token: p.token, body: { text: '결과물', files: [{ url: up.body.url, name: up.body.name, type: 'image/png', size: up.body.size }] } });
     assert.equal(post.status, 201);
+    const got = await fetch(fileUrl);
+    assert.equal(got.status, 200); assert.equal(got.headers.get('content-type'), 'image/png'); assert.equal(got.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(got.headers.get('cache-control'), 'private, max-age=300');
     const badFile = await a.call('POST', '/posts', { token: p.token, body: { text: 'x', files: [{ url: 'javascript:alert(1)', name: 'a', type: 'image/png', size: 1 }] } });
     assert.equal(badFile.status, 400);
     const like = await a.call('POST', `/posts/${post.body.id}/like`, { token: p.token, body: {} });

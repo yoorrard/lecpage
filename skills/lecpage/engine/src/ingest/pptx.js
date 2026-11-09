@@ -4,6 +4,7 @@ import { kid, kids, all, first, attr, relAttr, textOf, path, isEl } from './xml.
 import { normText, normLine, extOf, baseName, mimeOf, WEB_IMAGE, cleanUrl, IngestError } from './util.js';
 import { parseTheme, parseCoreProps, StyleTally, colorOf, luminance } from './ooxml.js';
 import { relOfType } from './zip.js';
+import { FontRoles, pickScript, hasHangul } from './fonts.js';
 
 const SKIP_PH = new Set(['dt', 'ftr', 'sldNum', 'hdr', 'sldImg']);
 const TITLE_PH = new Set(['title', 'ctrTitle']);
@@ -44,6 +45,7 @@ export function parsePptx(zip, ctx) {
   const themeFonts = theme ? theme.fonts : null;
 
   const tally = new StyleTally();
+  const fontRoles = new FontRoles();
   const layoutCache = new Map();
   const mediaUse = new Map();
   const unsupportedExt = new Set();
@@ -54,7 +56,7 @@ export function parsePptx(zip, ctx) {
   slidePaths.slice(0, maxPages).forEach((sp, i) => {
     let page;
     try {
-      page = parseSlide(zip, sp, i + 1, { ...ctx, zip, cx, cy, master, theme, themeFonts, tally, layoutCache, mediaUse, unsupportedExt });
+      page = parseSlide(zip, sp, i + 1, { ...ctx, zip, cx, cy, master, theme, themeFonts, tally, fontRoles, layoutCache, mediaUse, unsupportedExt });
     } catch (e) {
       if (e instanceof IngestError && e.code === 'zip-bomb') throw e;
       page = { file: ctx.fileId, page: i + 1, kind: 'slide', title: '', paragraphs: [], notes: '', links: [], images: [], tables: [], error: 'parse-failed' };
@@ -85,6 +87,7 @@ export function parsePptx(zip, ctx) {
     background: bg,
     dark: bg ? luminance(bg) < 0.2 : undefined,
     slideSize: slideSize(cx, cy),
+    fontRoles: fontRoles.result(),
   };
   if (design.dark === undefined) delete design.dark;
 
@@ -127,6 +130,7 @@ function parseSlide(zip, slidePath, no, c) {
     if (g) { title = g.paras.map((p) => p.text).filter(Boolean).join(' '); g.isTitle = true; titleGuessed = true; }
   }
   if (titleShape) titleShape.isTitle = true;
+  if (c.fontRoles) tallyFonts(shapes, c);
 
   const paragraphs = [];
   const links = [];
@@ -170,6 +174,29 @@ function parseSlide(zip, slidePath, no, c) {
   if (layout?.name) page.layoutName = layout.name;
   if (hidden) page.hidden = true;
   return page;
+}
+
+/** 글꼴 역할 집계: 제목(자리표시자·추정 제목·아주 큰 짧은 글) = display, 나머지 = body. 글꼴을 안 적은 글은 테마 글꼴 */
+function tallyFonts(shapes, c) {
+  for (const s of shapes) {
+    if (!s.paras) continue;
+    for (const p of s.paras) {
+      if (!p.runs) continue;
+      const display = s.isTitle || (p.sz >= 3200 && p.text.length <= 40 && !p.bullet);
+      const pair = display ? c.themeFonts?.major : c.themeFonts?.minor;
+      for (const r of p.runs) c.fontRoles.add(display ? 'display' : 'body', r.font || pickScript(pair, r.t), r.n);
+    }
+  }
+}
+/** 글자 조각의 글꼴: 한글은 ea, 그 밖은 latin(+mj-ea 같은 테마 참조는 풀어서). 안 적혀 있으면 '' */
+function runFont(rPr, t, themeFonts) {
+  if (!rPr) return '';
+  const pick = (k) => {
+    let tf = attr(kid(rPr, k), 'typeface') || '';
+    if (tf.startsWith('+') && themeFonts) { const w = tf.startsWith('+mj') ? themeFonts.major : themeFonts.minor; tf = (tf.endsWith('-ea') ? w?.ea : w?.latin) || ''; }
+    return tf.startsWith('+') ? '' : tf;
+  };
+  return hasHangul(t) ? pick('ea') : pick('latin');
 }
 
 function phKey(t) { return t === 'ctrTitle' ? 'title' : (t === 'obj' || !t) ? 'body' : t; }
@@ -306,6 +333,7 @@ function readParas(txBody, c, bodyPh) {
     let text = '';
     let maxSz = 0;
     const links = [];
+    const runs = [];
     let last = null;
     for (const r of p.children) {
       if (!isEl(r)) continue;
@@ -315,6 +343,7 @@ function readParas(txBody, c, bodyPh) {
         const sz = +attr(rPr, 'sz') || 0;
         if (sz > maxSz) maxSz = sz;
         c.tally.rPr(rPr, Math.max(1, t.length), c.themeFonts);
+        if (t.trim()) runs.push({ font: runFont(rPr, t, c.themeFonts), n: t.replace(/\s/g, '').length, t });
         const h = kid(rPr, 'hlinkClick');
         let url = '';
         if (h) { const rel = c.rels.get(relAttr(h, 'id')); if (rel && rel.external) url = rel.target; }
@@ -337,7 +366,7 @@ function readParas(txBody, c, bodyPh) {
     } else if (kid(pPr, 'buChar') || kid(pPr, 'buBlip')) bullet = true;
     else if (bodyPh) bullet = c.master.bodyBullet[lvl] !== false;
     if (!auto) counters.length = lvl; else counters.length = lvl + 1;
-    out.push({ text, level: lvl, bullet, num, sz: maxSz, links, gap });
+    out.push({ text, level: lvl, bullet, num, sz: maxSz, links, gap, runs });
     gap = false;
   }
   return out;
