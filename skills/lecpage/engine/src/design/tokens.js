@@ -127,6 +127,8 @@ export function themeCSS(design = {}) {
     `/* lecpage theme: ${preset.id} */`,
     assets.faceCss.trim(),
     block(':root', base),
+    // 한 굵기뿐인 장식 제목 글꼴(검은고딕·주아·도현 등)은 자간을 거의 좁히지 않음(뭉개짐 방지)
+    ['display', 'hand'].includes(FONTS[pair ? '' : fonts.display]?.kind) || (pair && pair.display.weight && pair.display.weight <= 400) ? 'html:root{--display-tracking:-.005em}' : '',
     block(':root[data-theme="light"],:root[data-theme="auto"]', { ...light, 'color-scheme': 'light' }),
     block(':root[data-theme="dark"]', { ...dark, 'color-scheme': 'dark' }),
     `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"]', { ...dark, 'color-scheme': 'dark' })}}`,

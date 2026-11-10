@@ -394,6 +394,7 @@ ${fx || '| - | - |'}
 - 동작 줄이기 설정과 '움직임 멈춤' 버튼을 항상 존중합니다.
 - 글자 대비 4.5:1 이상, 한글 줄바꿈은 낱말 단위(word-break: keep-all).
 - 보라→파랑 그라데이션 첫 화면, 똑같은 카드 3장 나열, 흔한 AI 이미지를 피합니다.
+- 상자는 꼭 필요할 때만 씁니다. 알약 모양 꼬리표, 상자 한쪽 색 띠, 상자 속 상자, 그라데이션 글자, 이모지 아이콘을 쓰지 않습니다(lecpage \`references/design-quality.md\`, 검사: \`scripts/design-lint.mjs\`).
 ${(ctx.design._notes || []).length ? `\n## 결정 메모\n${ctx.design._notes.map((n) => `- ${n}`).join('\n')}\n` : ''}`;
 }
 
