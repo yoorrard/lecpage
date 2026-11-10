@@ -112,8 +112,12 @@ export async function renderSlides(file, outDir, { dpi = 110, timeoutMs = 600000
   const script = url.fileURLToPath(scriptPath('render_slides.sh'));
   await fs.mkdir(outDir, { recursive: true });
   const r = cp.spawnSync('bash', [script, file, outDir, String(dpi)], { encoding: 'utf8', timeout: timeoutMs });
-  if (r.status !== 0) return { ok: false, files: [], message: (r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' ') };
-  const files = (await fs.readdir(outDir)).filter((f) => /^slide-\d{3,}\.(webp|png)$/.test(f)).sort().map((f) => path.join(outDir, f));
+  const files = r.status === 0 ? (await fs.readdir(outDir)).filter((f) => /^slide-\d{3,}\.(webp|png)$/.test(f)).sort().map((f) => path.join(outDir, f)) : [];
+  if (!files.length) {
+    await fs.rmdir(outDir).catch(() => {}); // 실패하면 빈 폴더를 남기지 않음(비어 있을 때만 지워짐)
+    const msg = (r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' ');
+    return { ok: false, files: [], message: msg || '그림이 한 장도 나오지 않았어요.' };
+  }
   return { ok: true, files };
 }
 
@@ -139,6 +143,7 @@ export async function attachSlides(m, slidesDir, outPath) {
     if (srcFile) m.pages.filter((p) => p.file === srcFile.id).forEach((p, i) => { const img = r.files[i]; if (img) p.image = rel(img); });
     f.rendered = r.files.length;
   }
+  if (!m.files.some((f) => f.rendered)) await (await node()).fs.rmdir(slidesDir).catch(() => {});
   return m;
 }
 

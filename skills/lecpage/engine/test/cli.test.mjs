@@ -38,8 +38,18 @@ test('make: 교재 → 사이트·강사용 파일·설계도를 한 번에, 짧
 
 test('make: 쪽 그림은 설계도가 가리키는 assets/slides에 들어가고 깨진 자료가 없음', (t) => {
   const slides = join(dir, 'work/assets/slides');
-  if (!existsSync(slides) || !readdirSync(slides).length) return t.skip('pdftoppm 없음: 쪽 그림을 만들지 않음');
-  assert.ok(existsSync(join(dir, 'dist/assets/slides/slide-001.webp')) || existsSync(join(dir, 'dist/assets/slides/slide-001.png')));
+  const imgs = existsSync(slides) ? readdirSync(slides, { recursive: true }).filter((f) => /slide-\d{3,}\.(webp|png)$/.test(f)) : [];
+  if (!imgs.length) {
+    assert.ok(!existsSync(slides), '쪽 그림을 못 만들면 빈 폴더를 남기지 않음');
+    return t.skip('LibreOffice·pdftoppm 없음: 쪽 그림을 만들지 않음');
+  }
+  const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));
+  const srcs = (bp.sections.find((s) => s.type === 'deck')?.slides || []).map((s) => s.src).filter(Boolean);
+  assert.ok(srcs.length, '교재 칸이 쪽 그림을 가리킴');
+  for (const src of srcs) {
+    assert.match(src, /^assets\/slides\//, src);
+    assert.ok(existsSync(join(dir, 'dist', src)), `사이트에 없음: ${src}`);
+  }
   assert.ok(!existsSync(join(dir, 'dist/slides')), '예전 경로(dist/slides)에 쓰면 안 됨');
   assert.match(make.out, /깨진 자료 0/);
 });
