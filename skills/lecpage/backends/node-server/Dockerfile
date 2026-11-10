@@ -7,7 +7,7 @@
 #     보기: docker run --rm -v lec-data:/data alpine cat /data/admin-key.txt
 #
 # 환경 변수 전체 목록은 server.mjs 머리말을 보세요(LEC_DATA, LEC_STATIC, LEC_ORIGINS, LEC_ADMIN_KEY_HASH, LEC_TRUSTED_PROXIES …).
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /app
 COPY package.json server.mjs ./
 COPY lib ./lib
