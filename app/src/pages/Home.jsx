@@ -61,8 +61,8 @@ export function Home() {
         </div>
       </section>
 
-      <div class="section-title"><h2>견본에서 시작하기</h2><span class="small muted">마음에 들면 그대로 고쳐 쓰세요.</span></div>
-      <div class="grid grid-2">
+      <div class="section-title"><h2>견본에서 시작하기</h2><p class="muted">마음에 들면 그대로 고쳐 쓰세요.</p></div>
+      <div class="grid grid-fill">
         {EXAMPLES.map((x) => (
           <article class="ex-card">
             <a class="ex-img" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener" aria-label={`${x.title} 견본 사이트 새 창으로 보기`}><img src={x.img} alt="" loading="lazy" width="640" height="400" onError={(e) => { e.currentTarget.style.display = 'none'; }} /></a>

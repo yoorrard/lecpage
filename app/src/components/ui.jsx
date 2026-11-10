@@ -55,7 +55,7 @@ export function Dialog({ open, onClose, children, label, wide }) {
   return <dialog ref={ref} class={`dlg${wide ? ' dlg-wide' : ''}`} aria-label={label} onClose={onClose} onCancel={onClose}><div class="dlg-in">{children}<button class="icon-btn dlg-x" onClick={onClose} aria-label="닫기">✕</button></div></dialog>;
 }
 
-/** 탭(내용·디자인·참여 기능·더 자세히) */
+/** 탭(내용·디자인·참여 기능·연수 정보·수정 요청) */
 export function Tabs({ tabs, value, onChange, label }) {
   return (
     <div class="tabs" role="tablist" aria-label={label}>

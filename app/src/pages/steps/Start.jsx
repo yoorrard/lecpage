@@ -146,7 +146,7 @@ export function StepStart({ p, update, go }) {
             <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 수업에 바로 쓰는 생성형 AI" aria-required="true" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
           </Field>
           <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
-          <div class="row" style={{ gap: '10px', alignItems: 'end', flexWrap: 'nowrap' }}>
+          <div class="pair">
             <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
             <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
           </div>

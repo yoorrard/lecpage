@@ -1,5 +1,5 @@
 import { useRef, useState } from 'preact/hooks';
-import { StepHead, StepFoot } from '../Project.jsx';
+import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { Preview } from '../../components/Preview.jsx';
 import { AiPanel, useAiResume } from '../../components/AiPanel.jsx';
@@ -44,7 +44,7 @@ export function StepEdit({ p, update, go }) {
     { value: 'content', label: '내용' },
     { value: 'design', label: '디자인' },
     { value: 'live', label: '참여 기능', badge: liveCount ? String(liveCount) : '' },
-    { value: 'more', label: '더 자세히' },
+    { value: 'more', label: '연수 정보' },
     { value: 'review', label: '수정 요청' },
   ];
   return (
@@ -53,6 +53,7 @@ export function StepEdit({ p, update, go }) {
         <div class="btn-row head-tools">
           <button class="btn btn-sm" onClick={() => setAi(true)}>AI로 다듬기</button>
           <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label}` : '되돌릴 것이 없어요'}>되돌리기</button>
+          <button class="btn btn-primary" onClick={() => go(3)}>공유하기 →</button>
         </div>
       </StepHead>
       <div class="workspace">
@@ -68,7 +69,6 @@ export function StepEdit({ p, update, go }) {
         </div>
         <Preview p={p} onPick={onPick} frameRef={frameRef} marking={marking} onMark={onMark} />
       </div>
-      <StepFoot go={go} prev={1} next={3} nextLabel="공유하기 →" />
       <Dialog open={ai} onClose={() => setAi(false)} label="AI로 다듬기" wide>
         {ai && <AiPanel p={p} onBlueprint={onAi} />}
       </Dialog>

@@ -24,6 +24,8 @@ export function Project({ id, step }) {
   useEffect(() => { if (p && p.stage !== s) update({ stage: s, visited: { ...(p.visited || {}), [s]: true } }); }, [s, !!p]);
   // 단계가 바뀌면 그 단계 제목으로 초점을 옮겨 화면 읽기 프로그램이 알 수 있게
   useEffect(() => { if (p) setTimeout(() => document.querySelector('.wiz-main h1')?.focus({ preventScroll: true }), 30); }, [s, !!p]);
+  // 고치기 단계는 미리보기 자리를 넓게(화면 폭 가득)
+  useEffect(() => { const h = document.documentElement; h.classList.toggle('is-wide', s === 2); return () => h.classList.remove('is-wide'); }, [s]);
   function update(patch) {
     const next = { ...ref.current, ...(typeof patch === 'function' ? patch(ref.current) : patch) };
     if (next.blueprint?.meta?.title) next.title = next.blueprint.meta.title; else if (next.info?.title) next.title = next.info.title;
@@ -37,19 +39,18 @@ export function Project({ id, step }) {
   async function saveProjectFile() { const z = await exportProjectFile(p); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip'); toast('프로젝트 파일을 저장했어요. 다른 컴퓨터의 lecpage에서 열 수 있어요.'); }
   return (
     <div class={`wiz stage-${s}`}>
-      <aside class="wiz-side">
-        <div class="wiz-title">{p.title || '새 연수'}</div>
+      <header class="wiz-head">
+        <p class="wiz-title" title={p.title || '새 연수'}>{p.title || '새 연수'}</p>
         <ol class="stepper" aria-label="만드는 순서">
           {STEPS.map((x) => (
-            <li><a href={`#/p/${id}/${x.n}`} class={done(x.n) && x.n !== s ? 'done' : ''} aria-current={x.n === s ? 'step' : undefined} aria-disabled={x.n > 1 && !p.blueprint ? 'true' : undefined} onClick={(e) => { if (x.n > 1 && !p.blueprint) { e.preventDefault(); toast('먼저 사이트 초안을 만들어 주세요.'); } }}><span class="n">{x.n}</span><span>{x.name}</span></a></li>
+            <li><a href={`#/p/${id}/${x.n}`} class={done(x.n) && x.n !== s ? 'done' : ''} aria-current={x.n === s ? 'step' : undefined} aria-disabled={x.n > 1 && !p.blueprint ? 'true' : undefined} onClick={(e) => { if (x.n > 1 && !p.blueprint) { e.preventDefault(); toast('먼저 사이트 초안을 만들어 주세요.'); } }}><span class="n">{x.n}</span><span class="t">{x.name}</span></a></li>
           ))}
         </ol>
-        <p class="stage-mini" aria-hidden="true">{s}/3 · {cur.name}</p>
         <div class="side-tools">
-          <p class="small muted">이 브라우저에 자동으로 저장돼요.</p>
-          <button class="btn btn-sm" onClick={saveProjectFile}>파일로 저장(.lecpage)</button>
+          <span class="small muted" title="이 브라우저에 자동으로 저장돼요">자동 저장</span>
+          <button class="btn btn-sm" onClick={saveProjectFile} title="다른 컴퓨터에서 이어 하려면 파일로 저장해 옮기세요">파일로 저장</button>
         </div>
-      </aside>
+      </header>
       <div class="wiz-main"><cur.C p={p} update={update} go={go} /></div>
     </div>
   );

@@ -9,9 +9,9 @@ const TOPICS = [
 
 export function Help({ topic = 'start' }) {
   return (
-    <div class="wiz">
-      <aside class="wiz-side"><nav aria-label="도움말 목차"><ul class="help-nav">{TOPICS.map(([id, name]) => <li><a href={`#/help/${id}`} aria-current={topic === id ? 'page' : undefined}>{name}</a></li>)}</ul></nav></aside>
-      <div class="wiz-main"><Sheet><div class="prose">{BODY[topic] || BODY.start}</div></Sheet></div>
+    <div class="help-layout">
+      <aside><nav aria-label="도움말 목차"><ul class="help-nav">{TOPICS.map(([id, name]) => <li><a href={`#/help/${id}`} aria-current={topic === id ? 'page' : undefined}>{name}</a></li>)}</ul></nav></aside>
+      <div class="help-main"><Sheet><div class="prose">{BODY[topic] || BODY.start}</div></Sheet></div>
     </div>
   );
 }

@@ -69,7 +69,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
         })}
       </ol>
       <div class="row">
-        <select class="input" style={{ width: 'auto', flex: 1 }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 칸 고르기">
+        <select class="input" style={{ width: '100%' }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 칸 고르기">
           <option value="">+ 칸 추가…</option>
           <optgroup label="자주 쓰는 칸">{COMMON.map((t) => <option value={t}>{E.SECTION_DEFS[t].label} — {E.SECTION_DEFS[t].desc}</option>)}</optgroup>
           <optgroup label="더 보기">{Object.entries(E.SECTION_DEFS).filter(([t]) => t !== 'hero' && !COMMON.includes(t)).map(([t, d]) => <option value={t}>{d.label} — {d.desc}</option>)}</optgroup>
