@@ -56,6 +56,8 @@ function applyAccent(pal, accent, theme) {
 export function themeTokens(preset, theme, opts = {}) {
   let p = { ...preset[theme] };
   if (opts.accent) p = applyAccent(p, opts.accent, theme);
+  // 강조색은 작은 글자(번호·링크)로도 쓰므로 바탕과 4.5:1 이상
+  p.primary = ensureContrast(p.primary, p.bg, 4.5);
   const border = p.border || mix(p.bg, p.fg, theme === 'dark' ? 0.18 : 0.14);
   const muted = ensureContrast(p.muted || mix(p.fg, p.bg, 0.35), p.bg, 4.5);
   const primaryFg = contrast(p.primary, p.primaryFg) >= 4.5 ? p.primaryFg : readableOn(p.primary);
