@@ -4,9 +4,9 @@ import { onToast } from '../lib/util.js';
 /** 로고의 접힌 모서리 */
 export function Fold() {
   return (
-    <svg class="fold" viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M0 -2H50V48Z" style={{ fill: 'var(--bg)' }} />
-      <path d="M0 0L48 48L14 48Q0 48 0 34Z" style={{ fill: 'var(--lav)' }} stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" />
+    <svg class="fold" viewBox="0 0 34 34" aria-hidden="true">
+      <path d="M0 -1H35V34Z" style={{ fill: 'var(--bg)' }} />
+      <path d="M.5 .5L33.5 33.5H9.5Q.5 33.5 .5 24.5Z" style={{ fill: 'var(--lav-fold)' }} stroke="var(--line-strong)" stroke-width="1" stroke-linejoin="round" />
     </svg>
   );
 }

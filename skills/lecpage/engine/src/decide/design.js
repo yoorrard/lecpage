@@ -76,6 +76,23 @@ export function chooseEffects({ presetId, moods = [], topics = [], cap = 3, noLi
   return { effects, graphic, closingGraphic, signature, notes, alternatives: { graphic: graphicList.slice(0, 6), title: candidatesFor('hero.title', ctx).slice(0, 6) } };
 }
 
+/**
+ * 프리셋 안의 글꼴 후보(기본 + fontAlts) 가운데 주제·분위기에 맞는 것을 고름.
+ * 맞는 정도가 같으면 연수 제목으로 정해(같은 연수는 늘 같은 결과), 같은 프리셋이라도 연수마다 글꼴이 달라질 수 있음.
+ * @returns {{display, body, mono?, index}|null} index 0은 프리셋 기본
+ */
+export function chooseFonts({ presetId, topics = [], moods = [], seed = '' } = {}) {
+  const p = getPreset(presetId);
+  const alts = [p.fonts, ...(p.fontAlts || [])];
+  if (alts.length < 2) return null;
+  const scored = alts.map((f, i) => ({ i, s: (f.topics || []).filter((t) => topics.includes(t)).length * 2 + (f.moods || []).filter((m) => moods.includes(m)).length }));
+  const best = Math.max(...scored.map((x) => x.s));
+  const pool = scored.filter((x) => x.s === best);
+  const pick = pool[hashSeed(seed + p.id + ':font') % pool.length].i;
+  const f = alts[pick];
+  return { display: f.display, body: f.body, ...(f.mono ? { mono: f.mono } : {}), index: pick };
+}
+
 /** 설계도의 design을 완성 */
 export function resolveDesign(bp) {
   const d = bp.design || {};
@@ -104,6 +121,11 @@ export function resolveDesign(bp) {
         fontNotes.push(`교재 ${role === 'display' ? '제목' : '본문'} 글꼴 "${m.from}" → ${m.system ? `프로그램 기본 글꼴이라 프리셋 글꼴 유지` : `${m.label}${m.exact ? '(같은 글꼴)' : '(비슷한 무료 글꼴)'}`}`);
       }
     }
+  }
+  // 글꼴을 따로 정하지 않았으면(교재 글꼴·글꼴 짝·직접 지정 없음) 주제·분위기에 맞춰 프리셋 안 후보에서 고름
+  if (!fonts && !d.fontPair) {
+    const cf = chooseFonts({ presetId: preset.id, topics: d.topics || [], moods: d.mood || [], seed: bp.meta?.title || '' }); // '다시 뽑기'(움직임)와 따로
+    if (cf && cf.index > 0) { fonts = { display: cf.display, body: cf.body, ...(cf.mono ? { mono: cf.mono } : {}) }; fontNotes.push(`주제·분위기에 맞춰 글꼴 후보 ${cf.index + 1}번`); }
   }
   return {
     ...d, preset: preset.id, motion, fonts, fontMatch,

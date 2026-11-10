@@ -10,9 +10,7 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [fflate](https://github.com/101arrowz/fflate) | 0.8.2 | MIT | 교재 해석(zip 읽기)·ZIP 쓰기, `skills/lecpage/engine/vendor/fflate.js` |
 | [Preact](https://github.com/preactjs/preact) | 10.26.4 | MIT | 웹앱 |
 | [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석 |
-| [Pretendard](https://github.com/orioncactus/pretendard) | 1.3.9 | SIL OFL 1.1 | 웹앱 글꼴 |
-| [Jua](https://fonts.google.com/specimen/Jua) (@fontsource/jua) | 5.2.5 | SIL OFL 1.1 | 웹앱 제목 글꼴 |
-| [Quicksand](https://fonts.google.com/specimen/Quicksand) (@fontsource/quicksand) | 5.2.6 | SIL OFL 1.1 | 웹앱 로고 글꼴 |
+| [Wanted Sans](https://github.com/wanteddev/wanted-sans) (wanted-sans) | 1.0.3 | SIL OFL 1.1 | 웹앱 글꼴(가변, 글자 범위별로 나눠 필요한 부분만 받음) |
 | [modern-screenshot](https://github.com/qq15725/modern-screenshot) (wxm) | 4.7.0 | MIT | 수정 요청의 화면 담기, `skills/lecpage/engine/runtime/review/vendor/modern-screenshot.js` (npm `dist/index.js` 그대로, sha256 `bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b`). 앱 미리보기·로컬 검토 서버에서만 쓰고 만든 사이트에는 넣지 않음 |
 | [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (Stephen Ruiz Ltd) | 1.2.3 | MIT | 수정 요청의 펜 획, `skills/lecpage/engine/runtime/review/vendor/perfect-freehand.js` (npm `dist/esm/index.mjs` sha256 `a02e221f71a757e46915a51d8f5ffc8d1788d9134e063b3edd21f429c973d46c`의 export 줄만 바꿈). 만든 사이트에는 넣지 않음 |
 

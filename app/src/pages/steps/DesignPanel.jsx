@@ -24,7 +24,7 @@ function Thumb({ preset, design, title, pressed, onPick, why }) {
   const family = fpair ? fpair.display.stack || `'${fpair.display.family}', sans-serif` : font ? `'${font.family}', ${font.fallback || 'sans-serif'}` : 'inherit';
   const style = { background: t['--background'], color: t['--foreground'], fontFamily: t['--font-sans'] };
   return (
-    <button class="thumb" aria-pressed={String(pressed)} onClick={onPick} style={{ borderColor: pressed ? 'var(--line)' : undefined }}>
+    <button class="thumb" aria-pressed={String(pressed)} onClick={onPick} >
       <div class="thumb-art" style={style}>
         <span class="thumb-eyebrow" style={{ color: t['--muted-foreground'] }}>{preset.name_ko}</span>
         <span class="thumb-title" style={{ fontFamily: family, fontWeight: 700 }}>{title || '연수 제목'}</span>
@@ -68,14 +68,14 @@ export function DesignPanel({ p, update }) {
         <summary>다른 분위기 {others.length}가지 더 보기</summary>
         <div class="thumbs" style={{ marginTop: '10px' }}>{others.map((pr) => <Thumb preset={pr} design={d} title={title} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
       </details>
-      <SourceFonts d={d} resolved={resolved} setD={setD} />
+      <FontPicker d={d} resolved={resolved} setD={setD} title={title} />
       <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v })} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>
       <Field label={`움직임: ${MOTION[d.motion ?? resolved.motion]}`} hint={resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분하게 유지돼요. 참가자는 사이트에서 움직임을 끌 수 있어요.'}>
         <input class="range" type="range" min="0" max="3" step="1" value={d.motion ?? resolved.motion} onInput={(e) => setD({ motion: +e.target.value })} aria-valuetext={MOTION[d.motion ?? resolved.motion]} />
       </Field>
       <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) })}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 움직임 조합만 바꿔요.</span></div>
       <details>
-        <summary>더 바꾸기: 색·글꼴·첫 화면 그래픽</summary>
+        <summary>더 바꾸기: 색·기관 색·첫 화면 그래픽</summary>
         <div class="stack" style={{ marginTop: '12px' }}>
           <Field label="색 조합" hint="모양과 움직임은 그대로, 색만 바꿔요. 모두 글자가 잘 보이는 조합이에요.">
             <div class="stack" style={{ gap: '8px' }}>
@@ -92,12 +92,6 @@ export function DesignPanel({ p, update }) {
                 {E.PALETTE_SEEDS.map((s) => <option value={s.id}>{s.name_ko}</option>)}
               </select>
             </div>
-          </Field>
-          <Field label="글꼴 직접 고르기" hint={E.FONT_PAIR_BY_ID[d.fontPair] ? `제목 ${E.FONT_PAIR_BY_ID[d.fontPair].display.family} · 본문 ${E.FONT_PAIR_BY_ID[d.fontPair].body.family}` : '제목과 본문 글꼴을 함께 바꿔요.'}>
-            <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value })}>
-              <option value="">디자인 기본 글꼴</option>
-              {E.FONT_PAIRS.map((f) => <option value={f.id}>{f.name_ko}</option>)}
-            </select>
           </Field>
           <div class="field"><span>기관 색(강조색)</span>
             <div class="row">
@@ -126,6 +120,47 @@ export function DesignPanel({ p, update }) {
   );
 }
 
+/** 글꼴 짝 추천: 분위기가 맞는 순 */
+function topFontPairs(d, preset, n = 5) {
+  const moods = (d.mood && d.mood.length ? d.mood : preset.moods) || [];
+  return E.FONT_PAIRS.map((f, i) => ({ f, i, s: (f.moods || []).filter((m) => moods.includes(m)).length }))
+    .sort((a, b) => b.s - a.s || a.i - b.i).slice(0, n).map((x) => x.f);
+}
+const stackOf = (k) => (E.FONTS[k] ? `'${E.FONTS[k].family}', ${E.FONTS[k].fallback || 'sans-serif'}` : 'inherit');
+
+/** 글꼴: 실제 글꼴로 쓴 연수명을 보고 고름. 기본은 '디자인·교재에 맞춘 글꼴' */
+function FontPicker({ d, resolved, setD, title }) {
+  const preset = E.getPreset(resolved.preset);
+  const auto = { ...(preset.fonts || {}), ...(resolved.fonts || {}) };
+  const pairs = topFontPairs(d, preset);
+  const cur = E.FONT_PAIR_BY_ID[d.fontPair];
+  const list = cur && !pairs.includes(cur) ? [cur, ...pairs.slice(0, -1)] : pairs;
+  useFontCss([E.FONTS[auto.display]?.css, E.FONTS[auto.body]?.css, ...list.flatMap((f) => [f.display.css, f.body.css])].filter(Boolean));
+  const sample = title || '연수 제목';
+  const card = (key, name, disp, body, pressed, onPick, note) => (
+    <button type="button" class="font-card" aria-pressed={String(pressed)} onClick={onPick} key={key}>
+      <span class="fc-title" style={{ fontFamily: disp.family, fontWeight: disp.weight || 700 }}>{sample}</span>
+      <span class="fc-body" style={{ fontFamily: body.family }}>오늘 배운 것을 내일 수업에 바로 씁니다.</span>
+      <span class="fc-cap"><b>{name}</b>{note && <small>{note}</small>}</span>
+    </button>
+  );
+  const label = (k) => E.FONTS[k]?.label || k;
+  const autoName = resolved.fontMatch && d.fontFrom !== 'preset' && Object.values(resolved.fontMatch).some((m) => !m.system) ? '교재 글꼴 따르기' : '디자인에 맞춘 글꼴';
+  return (
+    <div class="field"><span>글꼴</span>
+      <SourceFonts d={d} resolved={resolved} setD={setD} />
+      <div class="font-cards" role="group" aria-label="글꼴 고르기">
+        {card('auto', autoName, { family: stackOf(auto.display), weight: E.FONTS[auto.display]?.displayWeight || auto.displayWeight }, { family: stackOf(auto.body) }, !d.fontPair, () => setD({ fontPair: '' }), [...new Set([label(auto.display), label(auto.body)])].join(' · '))}
+        {list.map((f) => card(f.id, f.name_ko, { family: f.display.stack || `'${f.display.family}', sans-serif`, weight: f.display.weight }, { family: f.body.stack || `'${f.body.family}', sans-serif` }, d.fontPair === f.id, () => setD({ fontPair: f.id }), [...new Set([f.display.family, f.body.family])].join(' · ')))}
+      </div>
+      <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value })} aria-label="모든 글꼴 짝">
+        <option value="">모든 글꼴 짝 {E.FONT_PAIRS.length}가지에서 고르기</option>
+        {E.FONT_PAIRS.map((f) => <option value={f.id}>{f.name_ko} — {f.note_ko}</option>)}
+      </select>
+    </div>
+  );
+}
+
 /** 교재 글꼴 한 줄: "교재 글꼴 나눔스퀘어 · 맑은 고딕 → 사이트 나눔스퀘어 · Pretendard" + 따를지 고르기 */
 function SourceFonts({ d, resolved, setD }) {
   const src = d.sourceFonts; if (!src || !(src.display?.name || src.body?.name)) return null;
@@ -140,11 +175,10 @@ function SourceFonts({ d, resolved, setD }) {
     : mode === 'material' && fm ? [label(fm.fonts.display || pf.display), label(fm.fonts.body || pf.body)]
       : [label(pf.display), label(pf.body)];
   return (
-    <div class="field"><span>글꼴</span>
+    <div class="src-fonts">
       <p class="small">교재 <b>{uniq([src.display?.name, src.body?.name])}</b> → 사이트 <b>{uniq(site)}</b></p>
-      {usable ? <Seg label="글꼴" value={mode === 'pair' ? '' : mode} onChange={(v) => setD({ fontFrom: v, fontPair: '' })} options={[{ value: 'material', label: '교재 글꼴 따르기' }, { value: 'preset', label: '디자인 글꼴' }]} />
-        : mode !== 'pair' && <small>교재가 기본 글꼴이라 디자인 글꼴을 써요.</small>}
-      {mode === 'pair' && <small>'더 바꾸기'에서 고른 글꼴을 쓰고 있어요.</small>}
+      {usable ? <Seg label="교재 글꼴" value={mode === 'pair' ? '' : mode} onChange={(v) => setD({ fontFrom: v, fontPair: '' })} options={[{ value: 'material', label: '교재 글꼴 따르기' }, { value: 'preset', label: '디자인 글꼴' }]} />
+        : mode !== 'pair' && <small class="muted">교재가 프로그램 기본 글꼴(맑은 고딕 등)이라 디자인에 맞춘 글꼴을 써요.</small>}
     </div>
   );
 }

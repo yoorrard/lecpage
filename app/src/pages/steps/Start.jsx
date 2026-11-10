@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { StepHead } from '../Project.jsx';
-import { Sheet, Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
+import { Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPanel, useAiResume } from '../../components/AiPanel.jsx';
 import { blobs } from '../../lib/db.js';
@@ -114,8 +114,7 @@ export function StepStart({ p, update, go }) {
     <>
       <StepHead title={p.blueprint ? '교재와 기본 정보' : '교재를 넣으면 초안이 바로 나와요'} desc="PPT·PDF·한글(HWPX)·워드 파일을 이 브라우저 안에서만 읽어요." />
       {p.blueprint && <Notice kind="ok">초안이 있어요. 여기서 고친 정보는 사이트에 바로 반영돼요.</Notice>}
-      <Sheet>
-        <div class="stack">
+      <section class="stack" aria-label="교재 파일">
           <div class={`drop${over ? ' over' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -136,8 +135,7 @@ export function StepStart({ p, update, go }) {
             </ul>
           )}
           {mat && <p class="small muted">교재에서 찾은 것: 실습 {d.steps?.length || 0}개 · 프롬프트 {d.prompts?.length || 0}개 · 도구 {d.tools?.length || 0}개 · 링크 {d.links?.length || 0}개</p>}
-        </div>
-      </Sheet>
+      </section>
 
       <section class="block">
         <h2 class="h-sub">기본 정보 {mat && <span class="small muted">교재에서 찾은 값을 채웠어요</span>}</h2>

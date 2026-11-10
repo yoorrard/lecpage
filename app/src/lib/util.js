@@ -3,7 +3,7 @@ export const uid = (n = 10) => {
   const b = crypto.getRandomValues(new Uint8Array(n));
   return Array.from(b, (x) => a[x % a.length]).join('');
 };
-export const fmtBytes = (n) => (n > 1e6 ? (n / 1e6).toFixed(1) + 'MB' : n > 1e3 ? Math.round(n / 1e3) + 'KB' : n + 'B');
+export const fmtBytes = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + 'GB' : n > 1e6 ? (n / 1e6).toFixed(1) + 'MB' : n > 1e3 ? Math.round(n / 1e3) + 'KB' : n + 'B');
 export const fmtDate = (t) => (t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 export function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 

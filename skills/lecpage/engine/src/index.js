@@ -10,7 +10,7 @@ export { themeCSS, themeTokens, htmlAttrs, presetWithOverrides } from './design/
 export { PALETTE_SEEDS, FONT_PAIRS, PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 export { contrast, mix, readableOn } from './design/color.js';
 export { FX, TOPICS, TOPIC_LABELS } from './design/fx-catalog.js';
-export { rankPresets, chooseEffects, resolveDesign, motionCap, fxInfo } from './decide/design.js';
+export { rankPresets, chooseEffects, chooseFonts, resolveDesign, motionCap, fxInfo } from './decide/design.js';
 export { decideInfra, BACKENDS, HOSTS, REALTIME_FEATURES, STORE_FEATURES } from './decide/infra.js';
 export { decideArchetype, ARCHETYPE_SECTIONS } from './decide/archetype.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';

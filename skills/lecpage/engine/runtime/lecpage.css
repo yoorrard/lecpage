@@ -604,9 +604,10 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-screen{min-height:100vh;display:grid;align-content:start;gap:24px;padding:calc(28px + env(safe-area-inset-top,0px)) max(28px,env(safe-area-inset-right,0px)) 28px max(28px,env(safe-area-inset-left,0px))}
 .lp-screen-h{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap}
 .lp-screen-h h1{font-size:clamp(1.8rem,3.6vw,3.2rem)}
-.lp-screen-join{display:flex;gap:18px;align-items:center}
+.lp-screen-join{display:flex;gap:18px;align-items:center;flex-wrap:wrap;min-width:0}
+.lp-screen-join>div{min-width:0}
 .lp-screen-join .lp-qr{width:clamp(140px,14vw,220px)}
-.lp-screen-url{font-family:var(--font-mono);font-size:clamp(1rem,1.6vw,1.4rem);font-weight:600}
+.lp-screen-url{font-family:var(--font-mono);font-size:clamp(1rem,1.6vw,1.4rem);font-weight:600;overflow-wrap:anywhere}
 .lp-screen-code b{font-family:var(--font-mono);font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:.14em}
 .lp-screen-notice{font-size:clamp(1.4rem,3vw,2.4rem);font-weight:800;padding:18px 24px;border-radius:var(--radius);background:var(--foreground);color:var(--background)}
 .lp-screen-timer{font-family:var(--font-mono);font-size:clamp(4rem,14vw,12rem);font-weight:700;text-align:center;line-height:1;font-variant-numeric:tabular-nums}
@@ -675,20 +676,21 @@ input,textarea,select{font-size:max(16px,1em)}
 /* 인쇄용 QR 안내문 */
 .lp-body-poster{background:var(--surface-2)}
 .lp-poster-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:center;padding:16px}
-.lp-poster{display:grid;gap:24px;justify-items:center;padding:0 16px 40px}
+.lp-poster{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;justify-items:center;padding:0 16px 40px}
 .lp-poster-page,.lp-poster-card{width:min(210mm,100%);background:#fff;color:#111;box-shadow:0 10px 40px rgba(0,0,0,.18);border-radius:4px}
 .lp-poster-page{aspect-ratio:210/297;padding:clamp(20px,6%,16mm);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2.4%,6mm);text-align:center;border-top:12px solid var(--primary)}
 .lp-poster-org{font-weight:700;color:#444}
-.lp-poster-page h1{font-size:clamp(1.6rem,6vw,30pt);line-height:1.2;color:#111}
+.lp-poster-page h1{font-size:clamp(1.6rem,6vw,30pt);line-height:1.2;color:#111;max-width:100%}
+.lp-poster-page>*{max-width:100%}
 .lp-poster-sub{color:#333;font-size:clamp(1rem,2.4vw,14pt)}
 .lp-poster-meta{display:grid;gap:2px;font-size:clamp(1rem,2.6vw,15pt)}
 .lp-poster-meta div{display:flex;gap:10px;justify-content:center}
 .lp-poster-meta dt{font-weight:800}.lp-poster-meta dd{margin:0}
 .lp-poster-qr{width:min(105mm,62%);padding:0;border-radius:0}
 .lp-poster-cta{font-weight:700;font-size:clamp(1rem,2.6vw,15pt)}
-.lp-poster-url{font-family:var(--font-mono);font-weight:700;font-size:clamp(1.1rem,3.6vw,20pt);word-break:break-all;line-height:1.3}
+.lp-poster-url{font-family:var(--font-mono);font-weight:700;font-size:clamp(1.1rem,3.6vw,20pt);word-break:break-all;overflow-wrap:anywhere;line-height:1.3}
 .lp-poster-code b{font-family:var(--font-mono);font-size:clamp(1.4rem,4vw,24pt);letter-spacing:.14em}
-.lp-poster-wifi{display:grid;grid-template-columns:auto auto 1fr auto 1fr;gap:8px;align-items:end;width:100%;max-width:150mm;margin-top:auto;font-size:clamp(.9rem,2.2vw,13pt)}
+.lp-poster-wifi{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:end;width:100%;max-width:150mm;margin-top:auto;font-size:clamp(.9rem,2.2vw,13pt)}
 .lp-poster-wifi i{display:block;border-bottom:1.5px solid #555;height:1.4em}
 .lp-poster-card{padding:clamp(18px,5%,12mm);display:grid;gap:10px;align-content:start;border:2px dashed #888}
 .lp-poster-only{justify-self:start;font-weight:800;padding:2px 12px;border-radius:999px;background:#111;color:#fff}

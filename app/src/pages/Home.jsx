@@ -53,11 +53,9 @@ export function Home() {
           <p class="small muted" style={{ marginTop: '10px' }}>회원가입 없이 무료. 교재는 이 브라우저 안에서만 읽어요.</p>
         </div>
         <div class="hero-art" aria-hidden="true">
-          <div class="page-stack">
-            <div class="sheet" style={{ padding: '18px' }}><div class="line-ph" style={{ width: '60%' }} /><div class="line-ph" /><div class="line-ph" style={{ width: '80%' }} /></div>
-            <div class="sheet" style={{ padding: '18px' }}><div class="line-ph" style={{ width: '40%', background: 'var(--lav)' }} /><div class="line-ph" /><div class="line-ph" style={{ width: '70%' }} /></div>
-            <div class="sheet"><Mascot size={150} look bob /></div>
-          </div>
+          <div class="shot shot-back"><i class="shot-bar"><b /><b /><b /></i><img src="img/example-data-lab.webp" alt="" width="640" height="400" /></div>
+          <div class="shot shot-front"><i class="shot-bar"><b /><b /><b /></i><img src="img/example-forest-story.webp" alt="" width="640" height="400" /></div>
+          <div class="shot-file"><Mascot size={64} /><span><b>연수교재.pptx</b><small>32쪽</small></span></div>
         </div>
       </section>
 
