@@ -381,6 +381,7 @@ def parse_pdf(path, fid, sink, warnings):
     chars = 0
     size = None
     xref_use, saved = {}, {}
+    font_roles = {'display': {}, 'body': {}}
     for i, pg in enumerate(doc):
         if i >= MAX_PAGES:
             break
@@ -400,6 +401,17 @@ def parse_pdf(path, fid, sink, warnings):
                 x0, y0, x1, y1 = ln['bbox']
                 raw.append({'spans': spans, 'x': x0, 'y': y0, 'right': x1, 'size': max(s['size'] for s in spans),
                             'text': ''.join(s['text'] for s in ln['spans'])})
+        # 글꼴 역할: 쪽에서 글자가 큰 짧은 줄 = 제목(display), 나머지 = 본문(body)
+        if raw:
+            szs = sorted(l['size'] for l in raw)
+            med = szs[len(szs) // 2]
+            for l in raw:
+                role = 'display' if l['size'] >= med * 1.35 and len(l['text'].strip()) <= 60 else 'body'
+                for sp in l['spans']:
+                    fn = re.sub(r'^[A-Z]{6}\+', '', sp.get('font', '') or '')
+                    n = len(re.sub(r'\s', '', sp.get('text', '')))
+                    if fn and n:
+                        font_roles[role][fn] = font_roles[role].get(fn, 0) + n
         # 같은 높이의 조각을 한 줄로(번호 "1."이 따로 떨어진 경우 등)
         raw.sort(key=lambda l: (l['y'], l['x']))
         merged = []
@@ -526,6 +538,9 @@ def parse_pdf(path, fid, sink, warnings):
     meta = {k: v for k, v in {'title': norm_line(md.get('title', '')), 'author': norm_line(md.get('author', '')),
                               'creator': norm_line(md.get('creator', ''))}.items() if v}
     design = {'slideSize': {'width': size[0], 'height': size[1], 'ratio': ratio_name(*size)}} if size else {}
+    top = lambda d: [{'name': k, 'n': v} for k, v in sorted(d.items(), key=lambda x: -x[1])[:8]]
+    if font_roles['display'] or font_roles['body']:
+        design['fontRoles'] = {'display': top(font_roles['display']), 'body': top(font_roles['body'])}
     return pages, design, meta, 'page'
 
 
@@ -1041,6 +1056,8 @@ def ingest(path, fid=None, images=None, out=None):
                 f[k] = meta[k]
         if design.get('slideSize'):
             f['slideSize'] = design['slideSize']
+        if design.get('fontRoles'):
+            f['fonts'] = design.pop('fontRoles')
         m['files'].append(f)
         m['pages'] = pages
         m['design'] = {k: v for k, v in design.items() if v not in ('', None, [], {})}

@@ -1,0 +1,16 @@
+[
+  { "query": "연수 사이트 만들어 줘. 교재는 첨부한 PPT야", "should_trigger": true },
+  { "query": "이 PDF 교안으로 강의 페이지 하나 만들어서 수강생들한테 링크로 주고 싶어", "should_trigger": true },
+  { "query": "다음 주 교원 직무연수에서 QR로 나눠 줄 실습 안내 웹페이지가 필요해요. 질문도 실시간으로 받고 싶고요", "should_trigger": true },
+  { "query": "turn my workshop slides into a website attendees can follow along on their phones", "should_trigger": true },
+  { "query": "학부모 설명회 안내 페이지 만들어 줄래? 일정이랑 자료 내려받기 있으면 좋겠어", "should_trigger": true },
+  { "query": "한글 파일(hwpx)로 된 연수 계획서가 있는데 이걸로 참가자용 사이트 만들 수 있어?", "should_trigger": true },
+  { "query": "지난번에 만든 연수 사이트에서 장소만 바꿔 줘 (work/blueprint.json 있음)", "should_trigger": true },
+  { "query": "컨퍼런스 세션 페이지에 투표랑 만족도 설문 붙여서 배포까지 해 줘", "should_trigger": true },
+  { "query": "이 PPT 슬라이드 디자인 좀 예쁘게 다듬어서 pptx로 다시 줘", "should_trigger": false },
+  { "query": "오늘 연수 결과 보고서를 한글 문서로 써 줘", "should_trigger": false },
+  { "query": "우리 회사 신제품 소개 랜딩 페이지를 Next.js로 만들어 줘", "should_trigger": false },
+  { "query": "강의 교안 PDF 핵심만 다섯 줄로 요약해 줘", "should_trigger": false },
+  { "query": "구글 폼으로 연수 만족도 설문지 만들어 줘", "should_trigger": false },
+  { "query": "학원 수강 신청과 결제가 되는 웹 서비스를 React로 개발하고 싶어", "should_trigger": false }
+]

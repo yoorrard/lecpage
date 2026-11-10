@@ -3,6 +3,7 @@
 import { kid, kids, all, first, attr, textOf, isEl } from './xml.js';
 import { normText, normLine, extOf, baseName, mimeOf, WEB_IMAGE, cleanUrl, IngestError, decodeText } from './util.js';
 import { blocksToPages } from './blocks.js';
+import { FontRoles } from './fonts.js';
 
 export function parseHwpx(zip, ctx) {
   zip.preload((n) => /\.(xml|hpf)$/i.test(n));
@@ -41,7 +42,7 @@ export function parseHwpx(zip, ctx) {
 
   // 2) 머리(스타일·문단 모양·글꼴)
   const header = readHeader(zip.xml(zip.has('Contents/header.xml') ? 'Contents/header.xml' : (manifest.get('header')?.href || '')));
-  const c = { ...ctx, zip, manifest, header, imgSeq: 0, unsupportedExt: new Set(), fontUse: new Map(), counters: [] };
+  const c = { ...ctx, zip, manifest, header, imgSeq: 0, unsupportedExt: new Set(), fontUse: new Map(), fontRoles: new FontRoles(), counters: [] };
 
   // 3) 본문
   const blocks = [];
@@ -71,7 +72,7 @@ export function parseHwpx(zip, ctx) {
   const design = {
     theme: '', colors: {},
     fonts: { major: { latin: header.fonts.LATIN || '', ea: header.fonts.HANGUL || '' }, minor: { latin: header.fonts.LATIN || '', ea: header.fonts.HANGUL || '' } },
-    fontsUsed, palette: [],
+    fontsUsed, palette: [], fontRoles: c.fontRoles.result(),
   };
   return { pages, design, meta, unit: 'section' };
 }
@@ -131,12 +132,15 @@ function headingOf(p, c) {
 
 /** hp:p 하나 → 블록(들). 표·글상자는 따로 블록으로 */
 function readPara(p, c, out, inCell) {
-  const st = { text: '', links: [], images: [], tables: [], extra: [], field: null, chars: 0, bold: 0, maxH: 0 };
+  const st = { text: '', links: [], images: [], tables: [], extra: [], field: null, chars: 0, bold: 0, maxH: 0, runs: [] };
   for (const run of kids(p, 'run')) readRun(run, c, st, inCell);
   // 문단 바로 아래의 그림·표(드물게 run 밖)
   for (const n of p.children) if (isEl(n) && n.local !== 'run' && n.local !== 'linesegarray') readObject(n, c, st, inCell);
   const text = normText(st.text);
   const h = headingOf(p, c);
+  // 글꼴 역할: 개요·제목 문단이나 16pt 넘는 짧은 문단 = display
+  const display = h.heading != null || (st.maxH >= 1600 && text.length <= 60);
+  for (const r of st.runs) c.fontRoles.add(display ? 'display' : 'body', r.font, r.n);
   const block = {
     type: 'p', text, level: h.level || 0, bullet: !!h.bullet, num: 0,
     heading: h.heading ?? null, links: st.links, images: st.images,
@@ -174,7 +178,7 @@ function readRun(run, c, st, inCell) {
       if (cf) {
         if (cf.bold) st.bold += t.length;
         if (cf.height > st.maxH) st.maxH = cf.height;
-        if (cf.font && t.trim()) c.fontUse.set(cf.font, (c.fontUse.get(cf.font) || 0) + t.length);
+        if (cf.font && t.trim()) { c.fontUse.set(cf.font, (c.fontUse.get(cf.font) || 0) + t.length); st.runs.push({ font: cf.font, n: t.replace(/\s/g, '').length }); }
       }
       if (st.field && st.field.type === 'HYPERLINK') st.field.label += t;
     } else if (n.local === 'ctrl') {

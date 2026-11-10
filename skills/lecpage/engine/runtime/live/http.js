@@ -27,6 +27,7 @@
     var kind = null, ws = null, es = null;
     var timers = {};
     var lastMsg = 0, openedAt = 0, attempt = 0, closed = true, pollErr = 0, emptyPolls = 0;
+    var authBad = false; // the server refused the admin key on the socket: stop resending it until setAdmin()
 
     function emit(evt) { var r; handlers.forEach(function (h, i) { try { var x = h(evt); if (i === 0) r = x; } catch (e) { /* isolate */ } }); return r; }
     function setStatus(s, mode) { if (a.status === s) return; a.status = s; emit({ type: 'status', status: s, mode: mode }); }
@@ -67,6 +68,12 @@
         });
     }
     function absUrl(u) { return u && u.charAt(0) === '/' ? origin + u : u; }
+    // Servers store board files as '/api/<code>/files/<name>' (their own uploads only); show them from this server.
+    function fixDoc(d) {
+      if (d && Array.isArray(d.files)) d.files = d.files.map(function (f) { return f && typeof f.url === 'string' && f.url.indexOf('/api/') === 0 ? U.assign({}, f, { url: absUrl(f.url) }) : f; });
+      return d;
+    }
+    function fixList(list) { if (Array.isArray(list)) list.forEach(fixDoc); return list; }
 
     // ---------------------------------------------------------------- realtime transports
     function onMessage(raw) {
@@ -75,7 +82,15 @@
       var m; try { m = JSON.parse(raw); } catch (e) { return null; }
       if (!m || typeof m !== 'object') return null;
       if (m.type === 'hello') { emit({ type: 'hello', now: m.now }); return m; }
-      if (m.type === 'ping' || m.type === 'pong' || m.type === 'auth') return m;
+      if (m.type === 'auth') {
+        if (m.ok === false) {
+          authBad = true;
+          emit({ type: 'error', error: L.error(m.error || 'admin_required', m.message || '관리자 키가 맞지 않아요.', { status: m.error === 'rate_limited' ? 429 : 403, retryAfter: m.retryAfter || 0 }) });
+        }
+        return m;
+      }
+      if (m.type === 'ping' || m.type === 'pong') return m;
+      if (m.col === 'posts' && m.doc) fixDoc(m.doc);
       emit(m);
       return m;
     }
@@ -96,7 +111,7 @@
             resolve(s);
           }
         };
-        s.onopen = function () { var k = ctx.adminKey(); if (k) s.send(JSON.stringify({ type: 'auth', admin: k })); };
+        s.onopen = function () { var k = ctx.adminKey(); if (k && !authBad) s.send(JSON.stringify({ type: 'auth', admin: k })); };
         s.onerror = fail;
         s.onclose = fail;
       });
@@ -239,14 +254,14 @@
       setStatus('offline');
     };
     a.transport = function () { return kind; };
-    a.setAdmin = function (key) { if (ws && ws.readyState === 1 && key) ws.send(JSON.stringify({ type: 'auth', admin: key })); };
+    a.setAdmin = function (key) { authBad = false; if (ws && ws.readyState === 1 && key) ws.send(JSON.stringify({ type: 'auth', admin: key })); };
     a.join = function (p) { return request('POST', '/join', { body: p }); };
     a.snapshot = function (o) {
-      return request('GET', '/snapshot?since=' + encodeURIComponent((o && o.since) || 0)).then(function (s) { if (s) s.time = s.now; return s; });
+      return request('GET', '/snapshot?since=' + encodeURIComponent((o && o.since) || 0)).then(function (s) { if (s) { s.time = s.now; fixList(s.posts); } return s; });
     };
-    a.list = function (col, o) { return request('GET', '/' + encodeURIComponent(col) + '?since=' + encodeURIComponent((o && o.since) || 0)); };
-    a.add = function (col, doc) { return request('POST', '/' + encodeURIComponent(col), { body: doc }); };
-    a.update = function (col, id, patch) { return request('PATCH', '/' + encodeURIComponent(col) + '/' + encodeURIComponent(id), { body: patch }); };
+    a.list = function (col, o) { return request('GET', '/' + encodeURIComponent(col) + '?since=' + encodeURIComponent((o && o.since) || 0)).then(fixList); };
+    a.add = function (col, doc) { return request('POST', '/' + encodeURIComponent(col), { body: doc }).then(fixDoc); };
+    a.update = function (col, id, patch) { return request('PATCH', '/' + encodeURIComponent(col) + '/' + encodeURIComponent(id), { body: patch }).then(fixDoc); };
     a.remove = function (col, id) { return request('DELETE', '/' + encodeURIComponent(col) + '/' + encodeURIComponent(id)).then(function () { return true; }); };
     a.vote = function (id) { return request('POST', '/questions/' + encodeURIComponent(id) + '/vote', { body: {} }); };
     a.like = function (id) { return request('POST', '/posts/' + encodeURIComponent(id) + '/like', { body: {} }); };

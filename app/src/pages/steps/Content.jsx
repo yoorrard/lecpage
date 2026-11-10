@@ -17,9 +17,11 @@ const TEMPLATES = {
   closing: { text: '마지막 한 문장', thanks: '함께해 주셔서 감사합니다.' }, reflection: { title: '나의 기록', prompts: ['오늘 가장 기억에 남는 것'] },
   attendance: { title: '출석 확인' }, text: { title: '', md: '자유롭게 써 주세요.' }, glance: { title: '한눈에 보기', items: [{ value: '3', label: '실습' }] },
   video: { title: '영상', items: [{ title: '영상 제목', url: 'https://' }] }, instructor: { title: '강사 소개' },
+  goals: { title: '연수 목표', items: ['연수를 마치면 할 수 있는 것을 한 줄로 써 주세요'], who: '' },
+  followup: { title: '연수가 끝난 뒤', items: [{ title: '다시 보기', desc: '연수 자료와 영상을 다시 볼 수 있어요.', url: '', kind: 'recording' }], completion: '' },
 };
 
-const COMMON = ['message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'text'];
+const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text'];
 export const isAdvanced = () => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } };
 
 /** 내용 탭: 사이트를 이루는 칸(섹션) 목록과 칸별 고치기 */
@@ -37,13 +39,13 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
   const setSec = (i, patch) => setSections(sections.map((s, k) => (k === i ? { ...s, ...patch } : s)));
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= sections.length) return; const n = sections.slice(); [n[i], n[j]] = [n[j], n[i]]; setSections(n); };
   const toggle = (i) => { setSec(i, { hidden: !sections[i].hidden }); };
-  const remove = (i) => { pushUndo?.('칸 빼기'); setSections(sections.filter((_, k) => k !== i)); toast('칸을 뺐어요. 위의 [되돌리기]로 되살릴 수 있어요.'); };
-  const add = (t) => { if (!t) return; const id = t + '-' + Math.random().toString(36).slice(2, 6); const def = E.SECTION_DEFS[t]; const n = sections.slice(); const closeIdx = n.findIndex((s) => s.type === 'closing'); n.splice(closeIdx < 0 ? n.length : closeIdx, 0, { id, type: t, nav: def.nav, ...JSON.parse(JSON.stringify(TEMPLATES[t] || {})) }); setSections(n); setOpen(id); setAddType(''); toast(`${def.label} 칸을 넣었어요.`); };
+  const remove = (i) => { pushUndo?.('칸 빼기'); setSections(sections.filter((_, k) => k !== i)); toast('칸을 뺐어요. [되돌리기]로 되살릴 수 있어요.'); };
+  const add = (t) => { if (!t) return; const id = t + '-' + Math.random().toString(36).slice(2, 6); const def = E.SECTION_DEFS[t]; const n = sections.slice(); const closeIdx = n.findIndex((s) => s.type === 'closing'); n.splice(closeIdx < 0 ? n.length : closeIdx, 0, { id, type: t, nav: def.nav, ...JSON.parse(JSON.stringify(TEMPLATES[t] || {})) }); setSections(n); setOpen(id); setAddType(''); toast(`${def.label} 칸을 추가했어요.`); };
   const meta = bp.meta || {};
   const v = E.validate(bp);
   return (
     <div class="stack">
-      <p class="small muted">칸을 눌러 문구를 고치세요. 눈 모양 단추로 잠깐 숨길 수 있어요. 실습 프롬프트는 교재 원문을 그대로 두는 것이 좋아요.</p>
+      <p class="small muted">칸을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
       <ol class="sec-list">
         {sections.map((s, i) => {
           const def = E.SECTION_DEFS[s.type] || { label: s.type };
@@ -56,7 +58,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
                   <button class="icon-btn" aria-label={`${def.label} 아래로`} onClick={() => move(i, 1)} disabled={i === sections.length - 1}>↓</button>
                 </div>
                 <button class="sec-open" onClick={() => setOpen(isOpen ? null : s.id)} aria-expanded={String(isOpen)}>
-                  <div class="type">{def.label}{s.nav ? ` · 위쪽 메뉴 "${s.nav}"` : ''}{def.live ? ' · 참여 기능' : ''}{s.hidden ? ' · 숨김' : ''}</div>
+                  <div class="type">{def.label}{s.nav ? ` · 메뉴 "${s.nav}"` : ''}{def.live ? ' · 참여 기능' : ''}{s.hidden ? ' · 숨김' : ''}</div>
                   <div class="ttl">{s.type === 'hero' ? (s.title || meta.title) : (s.title || s.text || def.label)}</div>
                 </button>
                 <button class="icon-btn" onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 보이기` : `${def.label} 숨기기`} title={s.hidden ? '보이기' : '숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
@@ -68,7 +70,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
       </ol>
       <div class="row">
         <select class="input" style={{ width: 'auto', flex: 1 }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 칸 고르기">
-          <option value="">+ 칸 더하기…</option>
+          <option value="">+ 칸 추가…</option>
           <optgroup label="자주 쓰는 칸">{COMMON.map((t) => <option value={t}>{E.SECTION_DEFS[t].label} — {E.SECTION_DEFS[t].desc}</option>)}</optgroup>
           <optgroup label="더 보기">{Object.entries(E.SECTION_DEFS).filter(([t]) => t !== 'hero' && !COMMON.includes(t)).map(([t, d]) => <option value={t}>{d.label} — {d.desc}</option>)}</optgroup>
         </select>
@@ -83,7 +85,7 @@ function SectionEditor({ s, set, onRemove }) {
   const common = (
     <div class="form-grid">
       <Field label="제목"><input value={s.title || ''} onInput={(e) => set({ title: e.target.value })} /></Field>
-      <Field label="위쪽 메뉴 이름" hint="비우면 메뉴에 안 보여요"><input value={s.nav || ''} maxLength={12} onInput={(e) => set({ nav: e.target.value })} /></Field>
+      <Field label="메뉴 이름" hint="비우면 메뉴에 안 보여요"><input value={s.nav || ''} maxLength={12} onInput={(e) => set({ nav: e.target.value })} /></Field>
     </div>
   );
   let body = null;
@@ -103,7 +105,7 @@ function SectionEditor({ s, set, onRemove }) {
           <div><button class="btn btn-sm" onClick={() => { try { const o = JSON.parse(json); set({ ...o, id: s.id, type: s.type }); toast('반영했어요.'); } catch { toast('JSON 형식이 맞지 않아요.'); } }}>반영</button></div>
         </div>}
       </details>}
-      {onRemove && <div><button class="btn btn-sm btn-danger" onClick={onRemove}>이 칸 완전히 빼기</button></div>}
+      {onRemove && <div><button class="btn btn-sm btn-danger" onClick={onRemove}>이 칸 빼기</button></div>}
     </div>
   );
 }
@@ -139,7 +141,7 @@ function SurveyEditor({ s, set }) {
   const put = (i, patch) => set({ questions: qs.map((q, k) => (k === i ? { ...q, ...patch } : q)) });
   return (
     <div class="stack" style={{ gap: '10px' }}>
-      <p class="small muted">실시간 기능이 켜져 있으면 이 문항들이 사이트 안에 바로 뜨고, 답은 강사 콘솔의 '기록·정리'에서 CSV로 받아요. 기관 설문 주소가 따로 있으면 아래에 넣으세요.</p>
+      <p class="small muted">참여 기능이 켜져 있으면 사이트 안에 이 문항이 떠요. 답은 강사 화면에서 CSV로 받아요.</p>
       {qs.map((q, i) => (
         <div class="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <Field label={`문항 ${i + 1}`}><input value={q.q} maxLength={200} onInput={(e) => put(i, { q: e.target.value })} style={{ minWidth: '16rem' }} /></Field>
@@ -149,10 +151,10 @@ function SurveyEditor({ s, set }) {
         </div>
       ))}
       <div class="btn-row">
-        <button class="btn btn-sm" onClick={() => set({ questions: [...qs, { q: '', kind: 'scale' }] })}>문항 더하기</button>
+        <button class="btn btn-sm" onClick={() => set({ questions: [...qs, { q: '', kind: 'scale' }] })}>문항 추가</button>
         {!qs.length && <button class="btn btn-sm" onClick={() => set({ questions: E.DEFAULT_SURVEY.map((q) => ({ ...q })) })}>기본 5문항 넣기</button>}
       </div>
-      <Field label="기관 설문 주소(선택)" hint="구글 설문 등. 넣으면 버튼과 QR이 함께 보여요."><input type="url" value={s.url || ''} onInput={(e) => set({ url: e.target.value })} placeholder="https://" /></Field>
+      <Field label="기관 설문 주소(선택)" hint="구글 설문 등. 넣으면 버튼과 QR이 보여요."><input type="url" value={s.url || ''} onInput={(e) => set({ url: e.target.value })} placeholder="https://" /></Field>
     </div>
   );
 }

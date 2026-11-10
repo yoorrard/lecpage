@@ -1,6 +1,7 @@
 # lecpage 실시간 서버 — Cloudflare Workers + Durable Objects (무료 플랜에서 동작)
 # 배포: npx wrangler deploy   ·   로컬 실행: npx wrangler dev
 # 비밀 값은 이 파일에 쓰지 말고: npx wrangler secret put ADMIN_KEY  (공유 모드면 SETUP_TOKEN 도)
+# 관리자 키는 12자 이상, 예시 값이 아니어야 합니다(아니면 API가 503 weak_admin_key). 만들기: openssl rand -hex 12
 name = "lecpage-live"
 main = "src/index.js"
 compatibility_date = "2026-10-15"
@@ -15,16 +16,30 @@ class_name = "LiveRoom"
 tag = "v1"
 new_sqlite_classes = ["LiveRoom"]
 
+# IP마다 하나씩: 틀린 관리자 키·새 연수 만들기 횟수를 모든 연수 코드에 걸쳐 셉니다(몇 바이트, 스스로 지워짐).
+[[durable_objects.bindings]]
+name = "GUARD"
+class_name = "Guard"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Guard"]
+
 [vars]
 # 비우면 모든 사이트에서 부를 수 있습니다. 예) "https://teacher.github.io,https://lec.school.kr"
 ALLOWED_ORIGINS = ""
 # 마지막 사용 뒤 며칠이 지나면 연수 데이터를 지울지(개인정보 보유 기간)
 RETENTION_DAYS = "30"
 MAX_UPLOAD_MB = "20"
-# 비우면 어떤 코드든 쓸 수 있습니다(ADMIN_KEY가 있을 때). 예) "AB12CD,XY34ZW"
+# 비우면 어떤 코드든 쓸 수 있습니다(ADMIN_KEY가 있을 때). 예) "AB12CD,XY34ZW" — 혼자 쓰는 서버라면 내 코드만 적는 게 가장 안전합니다.
 ALLOWED_CODES = ""
 # "true"면 /init을 처음 부른 사람이 코드를 차지합니다. 공개 인터넷에서는 켜지 마세요.
 OPEN_INIT = "false"
+# 연수 하나에 참가할 수 있는 최대 인원, 한 IP(학교 공유기 하나)에서 연수 하나에 여는 실시간 연결 수
+MAX_PARTICIPANTS = "500"
+MAX_SOCKETS_PER_IP = "500"
+# IP 하나(학교 공유기 하나)가 한 시간에 새로 만들 수 있는 연수 코드 수(ADMIN_KEY로 코드를 자동으로 만드는 경우)
+NEW_CODES_PER_HOUR = "30"
 
 [observability]
 enabled = true

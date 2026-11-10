@@ -103,17 +103,17 @@ test('completion: local adapter passes options; core builds it from the admin st
 });
 
 test('completion: node server reads the options from export.csv query parameters', async () => {
-  const srv = await startNodeServer({ adminKey: 'admin-key-1' });
+  const srv = await startNodeServer({ adminKey: 'admin-key-0001' });
   try {
     const a = api(srv.url, 'CMPL1');
     const p = (await a.call('POST', '/join', { body: { nickname: '서버' } })).body;
     await a.call('POST', '/join', { body: { nickname: '없음' } });
     assert.equal((await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } })).status, 201);
     await a.call('POST', '/attendance', { token: p.token, body: { kind: 'out' } });
-    const plain = await a.call('GET', '/export.csv?kind=completion', { admin: 'admin-key-1' });
+    const plain = await a.call('GET', '/export.csv?kind=completion', { admin: 'admin-key-0001' });
     assert.equal(plain.status, 200);
     assert.ok(plain.body.split('\r\n').slice(1, 3).every((l) => l.endsWith('확인 필요')));
-    const q = await a.call('GET', '/export.csv?kind=completion&date=2000-01-01&start=09:00&end=10:00&rate=90&survey=1&stations=3', { admin: 'admin-key-1' });
+    const q = await a.call('GET', '/export.csv?kind=completion&date=2000-01-01&start=09:00&end=10:00&rate=90&survey=1&stations=3', { admin: 'admin-key-0001' });
     const lines = q.body.trim().split('\r\n');
     assert.match(lines[1], /^서버,,,.+,0,0 \/ 3,X,X$/);
     assert.match(lines[2], /^없음,,,,,,0 \/ 3,X,확인 필요$/);
@@ -207,18 +207,18 @@ test('runtime scripts parse as classic scripts', () => {
 });
 
 test('board moderation: new posts stay hidden until the instructor shows them (server and local)', async () => {
-  const srv = await startNodeServer({ adminKey: 'admin-key-2' });
+  const srv = await startNodeServer({ adminKey: 'admin-key-0002' });
   try {
     const a = api(srv.url, 'MODR1');
     const p = (await a.call('POST', '/join', { body: { nickname: '글쓴이' } })).body;
     const open = await a.call('POST', '/posts', { token: p.token, body: { text: '바로 보여요' } });
     assert.equal(open.body.hidden, false);
-    assert.equal((await a.call('PUT', '/state', { admin: 'admin-key-2', body: { ui: { moderation: true } } })).status, 200);
+    assert.equal((await a.call('PUT', '/state', { admin: 'admin-key-0002', body: { ui: { moderation: true } } })).status, 200);
     const held = await a.call('POST', '/posts', { token: p.token, body: { text: '확인 뒤에 보여요' } });
     assert.equal(held.body.hidden, true);
     const pub = (await a.call('GET', '/snapshot?since=0')).body.posts.find((x) => x.id === held.body.id);
     assert.equal(pub.text, '', 'hidden text is not sent to participants');
-    await a.call('PATCH', '/posts/' + held.body.id, { admin: 'admin-key-2', body: { hidden: false } });
+    await a.call('PATCH', '/posts/' + held.body.id, { admin: 'admin-key-0002', body: { hidden: false } });
     assert.equal((await a.call('GET', '/snapshot?since=0')).body.posts.find((x) => x.id === held.body.id).text, '확인 뒤에 보여요');
     assert.equal((await a.call('PUT', '/state', { body: { ui: { moderation: null } } })).status, 401, 'only the admin can switch it');
   } finally { await srv.close(); }

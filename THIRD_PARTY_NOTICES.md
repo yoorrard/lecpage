@@ -13,6 +13,8 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [Pretendard](https://github.com/orioncactus/pretendard) | 1.3.9 | SIL OFL 1.1 | 웹앱 글꼴 |
 | [Jua](https://fonts.google.com/specimen/Jua) (@fontsource/jua) | 5.2.5 | SIL OFL 1.1 | 웹앱 제목 글꼴 |
 | [Quicksand](https://fonts.google.com/specimen/Quicksand) (@fontsource/quicksand) | 5.2.6 | SIL OFL 1.1 | 웹앱 로고 글꼴 |
+| [modern-screenshot](https://github.com/qq15725/modern-screenshot) (wxm) | 4.7.0 | MIT | 수정 요청의 화면 담기, `skills/lecpage/engine/runtime/review/vendor/modern-screenshot.js` (npm `dist/index.js` 그대로, sha256 `bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b`). 앱 미리보기·로컬 검토 서버에서만 쓰고 만든 사이트에는 넣지 않음 |
+| [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (Stephen Ruiz Ltd) | 1.2.3 | MIT | 수정 요청의 펜 획, `skills/lecpage/engine/runtime/review/vendor/perfect-freehand.js` (npm `dist/esm/index.mjs` sha256 `a02e221f71a757e46915a51d8f5ffc8d1788d9134e063b3edd21f429c973d46c`의 export 줄만 바꿈). 만든 사이트에는 넣지 않음 |
 
 MIT 전문은 각 파일 머리말과 원 저장소에 있습니다. SIL OFL 1.1 전문: https://openfontlicense.org
 

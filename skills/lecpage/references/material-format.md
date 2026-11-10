@@ -5,6 +5,8 @@ JS 엔진(`engine/src/ingest`, 브라우저·Node 공통)과 파이썬 보조 �
 
 ## 1. 만들기
 
+보통은 `lecpage.mjs make 교재…`가 해석부터 빌드까지 한 번에 하고 `work/material.json`을 남깁니다. 이 JSON은 크므로(교재 13쪽에 4만 자 안팎) 통째로 읽지 말고 `lecpage.mjs brief work/material.json`으로 요약을 봅니다(1천 자 안팎: 쪽 수, 일시·장소·강사, 실습·프롬프트·도구와 쪽 번호, 유형, 글꼴, 빈칸).
+
 ```bash
 # Node(권장): 여러 파일을 한 번에. PDF는 pdfjs-dist가 있으면 JS로, 없으면 자동으로 파이썬(PyMuPDF)으로 읽음
 node $SKILL/scripts/ingest.mjs 교재.pptx 교재.pdf 안내.hwpx -o work/material.json \

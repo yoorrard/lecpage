@@ -9,12 +9,26 @@ import path from 'node:path';
 import vm from 'node:vm';
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
-import { skillDir, liveDir } from './live-helpers.mjs';
+import { skillDir, liveDir, PNG_1PX } from './live-helpers.mjs';
 
 const ADMIN = '시트관리자키-1234';
 function makeGas() {
   const sheets = new Map(); const props = new Map(); const cache = new Map();
   const formulas = [];
+  // Drive: just enough to see sharing and trash
+  const drive = { files: new Map(), seq: 0 };
+  const DriveApp = {
+    Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK', PRIVATE: 'PRIVATE' }, Permission: { VIEW: 'VIEW', NONE: 'NONE' },
+    getFoldersByName: () => ({ hasNext: () => false }),
+    createFolder: () => ({
+      createFile: () => {
+        const id = 'drv' + String(++drive.seq).padStart(24, '0');
+        const f = { id, sharing: 'PRIVATE', trashed: false, getId: () => id, setSharing(a) { this.sharing = a; return this; }, setTrashed(t) { this.trashed = t; return this; } };
+        drive.files.set(id, f); return f;
+      },
+    }),
+    getFileById: (id) => { const f = drive.files.get(id); if (!f) throw new Error('no such file'); return f; },
+  };
   const toSigned = (buf) => [...buf].map((b) => (b > 127 ? b - 256 : b));
   function sheetObj(name) {
     const data = [];
@@ -33,7 +47,7 @@ function makeGas() {
   const ss = { getSheetByName: (n) => sheets.get(n) || null, insertSheet: (n) => { const s = sheetObj(n); sheets.set(n, s); return s; } };
   const g = {
     console, JSON, Math, Date, Array, Object, String, Number, RegExp, Error, Intl,
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, getUi: () => { throw new Error('no ui'); } },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ss, getUi: () => { throw new Error('no ui'); } }, DriveApp,
     PropertiesService: { getScriptProperties: () => ({
       getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => { props.set(k, String(v)); },
       setProperties: (o) => { for (const k in o) props.set(k, String(o[k])); }, deleteProperty: (k) => { props.delete(k); }, getKeys: () => [...props.keys()],
@@ -43,14 +57,14 @@ function makeGas() {
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
       computeDigest: (alg, s) => toSigned(createHash('sha256').update(String(s), 'utf8').digest()),
-      getUuid: () => randomUUID(), base64Decode: (s) => toSigned(Buffer.from(s, 'base64')),
+      getUuid: () => randomUUID(), base64Decode: (s) => toSigned(Buffer.from(s, 'base64')), newBlob: (bytes, type, name) => ({ bytes, type, name }),
       formatDate: (d) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d),
     },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ setMimeType() { return this; }, getContent: () => s }) },
   };
   vm.createContext(g);
   vm.runInContext(fs.readFileSync(path.join(skillDir, 'backends/apps-script/Code.gs'), 'utf8'), g, { filename: 'Code.gs' });
-  return { g, sheets, props, formulas };
+  return { g, sheets, props, formulas, cache, drive };
 }
 
 let gas; let server; let url;
@@ -117,7 +131,7 @@ function makeWindow() {
 }
 
 test('apps-script + sheets.js: two clients sync by polling; admin sees private data; purge resets others', async () => {
-  const code = 'SHEET2';
+  const code = 'SHEET1'; // one sheet = one training code (fixed by the first join above)
   const A = makeWindow(); const B = makeWindow();
   const a = A.LecLive.create({ provider: 'sheets', url, code, allowAnyUrl: true });
   const b = B.LecLive.create({ provider: 'sheets', url, code, allowAnyUrl: true, adminKey: ADMIN });
@@ -141,4 +155,65 @@ test('apps-script + sheets.js: two clients sync by polling; admin sees private d
   await a.sync();
   assert.equal(a.store('questions').length, 0);
   a.close(); b.close();
+});
+
+// ---------------------------------------------------------------- security regressions (2026-11 review)
+const PNG_B64 = Buffer.from(PNG_1PX).toString('base64');
+
+test('apps-script (L11, L1, L3, nicknames): one code per sheet, closed polls, no `by` for the public', async () => {
+  const code = 'SHEET1';
+  const other = await call({ a: 'join', code: 'OTHER1', nickname: 'x' });
+  assert.equal(other.status, 404); assert.equal(other.error, 'unknown_training', 'a code the sheet was not set up for is refused');
+  for (const n of ['강사', 'Admin', '운영자님']) assert.equal((await call({ a: 'join', code, nickname: n })).error, 'reserved_nickname', n);
+  const a = (await call({ a: 'join', code, nickname: '하나' })).data;
+  assert.equal((await call({ a: 'update', code, token: a.token, col: 'participants', id: a.id, patch: { nickname: 'LECPAGE' } })).error, 'reserved_nickname');
+  const poll = (await call({ a: 'add', code, admin: ADMIN, col: 'polls', doc: { question: '좋았나요?', options: ['예', '아니요'], open: true } })).data;
+  const ans = (await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: poll.id, value: '예' } })).data;
+  await call({ a: 'add', code, token: a.token, col: 'progress', doc: { station: 's1', status: 'stuck' } });
+  await call({ a: 'update', code, admin: ADMIN, col: 'polls', id: poll.id, patch: { open: false } });
+  const late = await call({ a: 'update', code, token: a.token, col: 'answers', id: ans.id, patch: { value: '아니요' } });
+  assert.equal(late.status, 409); assert.equal(late.error, 'poll_closed');
+  const pub = (await (await fetch(`${url}?a=snapshot&code=${code}&since=0`)).json()).data;
+  assert.ok(pub.answers.length && pub.answers.every((d) => d.by === undefined)); assert.ok(pub.progress.every((d) => d.by === undefined));
+  const mine = (await call({ a: 'snapshot', code, since: 0, token: a.token })).data;
+  assert.equal(mine.answers.find((d) => d.id === ans.id).by, a.id, 'my own answer keeps by');
+});
+
+test('apps-script (M7, H3, M8): own Drive files only; sharing follows the post; trash on remove and purge', async () => {
+  const code = 'SHEET1'; gas.props.set('UPLOADS', 'on');
+  const a = (await call({ a: 'join', code, nickname: '하나' })).data; const b = (await call({ a: 'join', code, nickname: '둘' })).data;
+  const up = (await call({ a: 'upload', code, token: a.token, name: 'a.png', type: 'image/png', data: PNG_B64 })).data;
+  const f = () => gas.drive.files.get(up.id);
+  assert.equal(f().sharing, 'PRIVATE', 'private until a visible post uses it');
+  const file = (u) => ({ url: u, name: 'a.png', type: 'image/png', size: 1 });
+  for (const u of ['https://tracker.example/p.png', 'https://drive.google.com/thumbnail?id=' + 'x'.repeat(28) + '&sz=w1600']) {
+    assert.equal((await call({ a: 'add', code, token: a.token, col: 'posts', doc: { text: 'x', files: [file(u)] } })).status, 400, u);
+  }
+  assert.equal((await call({ a: 'add', code, token: b.token, col: 'posts', doc: { text: '남의 파일', files: [file(up.url)] } })).status, 400);
+  const post = (await call({ a: 'add', code, token: a.token, col: 'posts', doc: { text: '사진', files: [file(up.url)] } })).data;
+  assert.equal(f().sharing, 'ANYONE_WITH_LINK');
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'posts', doc: { text: '또', files: [file(up.url)] } })).status, 400, 'one file, one post');
+  await call({ a: 'update', code, admin: ADMIN, col: 'posts', id: post.id, patch: { hidden: true } });
+  assert.equal(f().sharing, 'PRIVATE', 'hidden → private at once');
+  await call({ a: 'update', code, admin: ADMIN, col: 'posts', id: post.id, patch: { hidden: false } });
+  assert.equal(f().sharing, 'ANYONE_WITH_LINK');
+  await call({ a: 'remove', code, admin: ADMIN, col: 'posts', id: post.id });
+  assert.equal(f().trashed, true, 'removed post → file in the Drive trash');
+  const up2 = (await call({ a: 'upload', code, token: a.token, name: 'b.png', type: 'image/png', data: PNG_B64 })).data;
+  await call({ a: 'setState', code, admin: ADMIN, patch: { ui: { uploads: false } } });
+  assert.equal((await call({ a: 'upload', code, token: a.token, name: 'c.png', type: 'image/png', data: PNG_B64 })).error, 'uploads_disabled');
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'posts', doc: { text: 'x', files: [file(up2.url)] } })).error, 'uploads_disabled');
+  await call({ a: 'purge', code, admin: ADMIN });
+  assert.equal(gas.drive.files.get(up2.id).trashed, true, 'purge trashes every recorded upload');
+});
+
+test('apps-script (H4): wrong admin keys are counted; after 20 the sheet answers 429, the right key too', async () => {
+  const code = 'SHEET1';
+  for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k); // earlier tests sent wrong keys too
+  for (let i = 0; i < 20; i++) assert.equal((await call({ a: 'checkAdmin', code, admin: 'guess-' + i })).data, false);
+  const locked = await call({ a: 'setState', code, admin: ADMIN, patch: { slide: 1 } });
+  assert.equal(locked.status, 429); assert.ok(locked.retryAfter > 0);
+  assert.equal((await call({ a: 'snapshot', code, since: 0, admin: 'guess' })).status, 429, 'reads with a key are gated too');
+  for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
+  assert.equal((await call({ a: 'setState', code, admin: ADMIN, patch: { slide: 1 } })).ok, true);
 });

@@ -53,7 +53,7 @@ lecpage/
 {
   "version": 1,
   "meta": { "title": "", "subtitle": "", "organizer": "", "date": "2026-11-04", "start": "15:10", "end": "16:40",
-            "venue": "", "mode": "offline|online|hybrid", "joinUrl": "", "shortUrl": "", "lang": "ko",
+            "venue": "", "mode": "offline|online|hybrid", "joinUrl": "", "shortUrl": "", "contact": "", "lang": "ko",
             "admin": { "kind": "school|official|conference|student", "completionRate": 90, "hours": 1.5 },
             "sessions": [ { "no": 1, "date": "", "start": "", "end": "", "title": "" } ] },
   "audience": { "type": "teachers-elementary", "size": 28, "level": "beginner|intermediate|advanced",
@@ -78,6 +78,7 @@ lecpage/
 | type | 필드 요약 |
 |---|---|
 | `hero` | eyebrow, title, subtitle, ctas[{label,href}], meta[{label,value}] |
+| `goals` | items[] (연수 목표 2~4개), who (대상). 직무연수면 이수 기준 줄 자동 |
 | `glance` | items[{value,label,note}] (한눈에 보기) |
 | `message` | text, note, style: statement\|formula\|quote, parts[] (formula일 때) |
 | `steps5` | title, items[{word,desc}] (핵심 단계·키워드 나열) |
@@ -98,7 +99,8 @@ lecpage/
 | `closing` | lead, text, thanks |
 | `faq` · `glossary` | items[{q,a}] · items[{term,desc}] |
 | `video` · `gallery` | items[{title,url,thumb}] · items[{src,caption}] |
-| `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시) |
+| `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시, status를 비우면 날짜로 마침·오늘·다음 자동) |
+| `followup` | items[{title,desc,url,kind: recording\|community\|next\|read\|link}], completion (연수 후 안내. 끝난 뒤 첫 화면 아래로) |
 | `speakers` | items[{name,role,org,photo,talk,time}] (라이브형) |
 | `reflection` | prompts[] (나의 기록·다짐, 내려받기) |
 | `attendance` | (live 필요) 입실·퇴실 |
@@ -247,13 +249,26 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 - SSE: `retry: 3000`, 2KB 패딩, 첫 메시지 `hello`, 20초마다 `{type:'ping'}`. SSE로는 비공개 컬렉션 이벤트를 보내지 않습니다(관리자 화면은 15초마다 다시 읽음).
 - 폴링: 기본 5초, 변화가 없으면 최대 10~15초, 숨긴 탭 30초, 오류 시 최대 60초까지 늘림. 실시간이 끊기면 지수 백오프+지터로 다시 연결하고 매번 `since` 이후를 다시 읽으며, 폴링 중에도 3분마다 실시간 연결을 다시 시도합니다. 같은 방식이 30초 안에 3번 끊기면 그 탭에서는 10분 동안 건너뜁니다.
 
+#### 5.1.2 보안 보강(2026-11, 프로토콜 v1과 호환)
+- **관리자 키**: 12자 미만이거나 예시 값(`change-me…` 등)이면 서버가 켜지지 않거나(node) 503으로 답합니다(Cloudflare). 틀린 키는 (코드, IP)당 10분 10번·IP당 20번을 넘으면 정답 키까지 429(`Retry-After`). WebSocket 인증은 3번 틀리면 끊습니다.
+- **올린 파일**: 보이는 게시물이 쓰는 동안에만 제공합니다. 숨기면 바로 404, 지우기·전부 삭제·보관 기간 만료·쓰이지 않은 업로드는 파일까지 지웁니다. `Cache-Control: private, max-age=300`. 게시물 `files`에는 **이 서버가 받은 그 참가자의 업로드 주소만** 받습니다(외부 URL은 400).
+- **설정**: `init`의 `settings`에 `uploads`(false면 `/upload`·`posts.files` 거절)와 `moderation`(새 게시물은 숨김 상태로, 강사가 보이기). 앱은 `board.allowFiles`·만 14세 미만·`board.moderation`을 그대로 넘깁니다.
+- **투표**: 닫힌 투표의 답은 고칠 수 없습니다(409). 공개 `answers`·`progress`·`help`에는 `by` 대신 `mine` 표시만.
+- **IP**: `X-Forwarded-For`는 믿지 않습니다. 프록시 뒤라면 `LEC_TRUSTED_PROXIES=<홉 수>`로 오른쪽에서 읽습니다. 읽기는 IP당 분당 6,000(부드러운 제한), 방 하나 참가자·연결 수, 새 코드 수에 상한.
+- **방 만들기(Cloudflare)**: 모르는 코드로 읽기만 하면 저장소를 만들지 않습니다. 빈 방은 알람 때 지웁니다.
+- **별명**: '강사'·'운영자'·'admin'·'lecpage'는 참가자가 쓸 수 없습니다.
+- **Supabase**: 파일 버킷은 비공개, 1시간짜리 서명 주소로 제공. 지운 파일은 휴지통 표에 모았다가 콘솔이 연결될 때 Storage API로 지웁니다. 공개 Broadcast 내용(반응 수·다시 읽기 신호)은 믿지 않고 다시 읽습니다(비공개 채널은 로그인 사용자가 필요해 쓰지 않음).
+- **Apps Script**: `setup()`이 연수 코드를 고정하고 다른 코드는 거절. 파일은 게시물이 보일 때만 '링크 공유', 지우면 휴지통.
+
 ## 6. 빌드 결과(생성 사이트) 파일
 ```
 index.html        참가자 화면(내용이 JS 없이도 모두 보임)
 console.html      강사 콘솔(관리자 키 입력)
 screen.html       프로젝터 화면(큰 QR·질문·투표·타이머)
 check.html        접속 진단
+poster.html       A4 QR 안내문(인쇄용) + 강사 카드
 privacy.html      개인정보 처리 안내(수집할 때만)
+_headers          Netlify·Cloudflare용 보안 헤더(강사 화면 틀 넣기 금지)
 robots.txt        access.mode가 public일 때만 Allow, 그 밖에는 Disallow
 assets/lecpage.css · theme.css · lecpage.js · fx.js · live.js · site.json
 assets/slides/*.webp · assets/media/*

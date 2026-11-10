@@ -3,10 +3,12 @@
 ## 1. 유형 고르기
 | 유형 | 언제 | 기본 섹션 순서 |
 |---|---|---|
-| 스토리형 story | 특강·강의 60~120분, 메시지·사례 전달 | hero → message → steps5 → outline → schedule → deck → tools → stations → qa → board → materials → instructor → closing → survey |
-| 실습형 lab | 워크숍 2~4시간, 따라 하기 | hero → readiness → outline → stations → prompts → tools → qa → board → reflection → materials → instructor → survey |
-| 라이브형 live | 설명회·컨퍼런스 100~1000명 | hero → glance → schedule → speakers → qa → poll → deck → materials → faq → survey → closing |
-| 과정형 course | 15·30시간 직무연수, 여러 차시 | hero → glance → sessions → readiness → stations → board → materials → attendance → faq → instructor → survey |
+| 스토리형 story | 특강·강의 60~120분, 메시지·사례 전달 | hero → message → goals → steps5 → outline → schedule → deck → tools → stations → qa → board → materials → followup → instructor → survey → closing |
+| 실습형 lab | 워크숍 2~4시간, 따라 하기 | hero → goals → readiness → outline → stations → prompts → tools → qa → board → reflection → materials → followup → instructor → survey → closing |
+| 라이브형 live | 설명회·컨퍼런스 100~1000명 | hero → glance → goals → schedule → speakers → qa → poll → deck → materials → faq → followup → survey → closing |
+| 과정형 course | 15·30시간 직무연수, 여러 차시 | hero → goals → glance → sessions → readiness → stations → board → materials → attendance → faq → followup → instructor → survey |
+
+순서 원칙: **첫 화면 → 무엇을 얻나(goals) → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리.** 설문은 마무리 앞에 둔다(마무리 문장에서 사람들이 멈춤). goals는 메뉴에 넣지 않고 첫 화면 바로 아래에 둔다.
 
 규칙(엔진 `decideArchetype`과 같음): 차시 3회 이상 → 과정형 / 150명 이상·컨퍼런스 → 라이브형 / 실습 비중 45% 이상·실습 중심 → 실습형 / 그 외 스토리형.
 혼합: 실습형인데 90분 이상이면 앞에 스토리형 도입(message·outline), 스토리형인데 실습 20% 이상이면 stations를 넣는다.
@@ -14,7 +16,9 @@
 ## 2. 기능 35개와 섹션·실시간 기능
 | 단계 | 기능 | 구현 | 실시간 기능 키 |
 |---|---|---|---|
-| 연수 전 | 안내 첫 화면 | hero | - |
+| 연수 전 | 안내 첫 화면(연수명·일시·장소·강사, 온라인이면 입장 버튼) | hero, `meta.joinUrl` | - |
+| | 연수 목표·대상·이수 기준 | goals(이수 기준은 `meta.admin`에서 자동) | - |
+| | 문의처 | `meta.contact`(바닥글·연수 후 안내·개인정보 안내) | - |
 | | 일정표(지금 순서 강조) | schedule | - |
 | | 준비 점검 + 접속 진단 | readiness, check.html | - |
 | | 사전 설문 | survey(사전) | - |
@@ -40,12 +44,14 @@
 | | 투표 열기·닫기·결과 | console.html, screen.html | poll |
 | | 프로젝터 화면(큰 QR·질문·투표·타이머) | screen.html | - |
 | | 기록 CSV·데이터 일괄 삭제 | console.html | - |
-| 연수 후 | 만족도 조사 | survey | - |
+| 연수 후 | 연수 후 보기(끝난 날짜 줄, 연수 후 안내를 첫 화면 아래로, 입장 버튼·참여 도크 숨김) | 자동(`meta.date`·차시 날짜) | - |
+| | 다시 보기·소통방·다음 연수·더 읽을거리·이수 처리 일정 | followup | - |
+| | 만족도 조사 | survey | - |
 | | 나의 기록 내려받기 | stations, reflection | - |
 | | 자료실·이용 안내 | materials | - |
 | | 참가 확인서 | (다음 판) | attendance |
-| | 아카이브 전환 | live.provider를 none으로 다시 빌드 | - |
-| | 후속 안내 | text, closing | - |
+| | 아카이브 전환 | live.provider를 none으로 다시 빌드(연수 후 보기는 그대로 동작) | - |
+| | 질문 정리(Q&A 아카이브) | 콘솔에서 질문 CSV → 답을 달아 faq에 넣고 다시 빌드 | - |
 
 실시간 기능을 하나라도 쓰면 `live.provider`가 none이 아니어야 한다(6단계). 미리보기·리허설은 `local`(같은 기기 탭끼리만 동기화).
 
@@ -56,3 +62,29 @@
 - 프로젝터(`screen.html`)의 **도구**: 이름 뽑기(모두 뽑힐 때까지 중복 없음, 참가자 별명 불러오기), 모둠 무작위 나누기, 타이머 여러 개. 실시간 연결 없이도 동작.
 - `poster.html`: A4 한 장 QR 안내문(제목·일시·장소·큰 QR·주소·참여 코드·Wi-Fi 적는 줄) + 따로 인쇄되는 '강사만' 카드(콘솔·프로젝터·진단 주소).
 - 새 상태 값은 서버가 모르는 키를 버리므로 `state.ui`에 둡니다: `ui.reveal`('투표id|…'), `ui.signalReset`(ms), `ui.hiddenWords`('낱말|…'), `ui.timers`(JSON 문자열). 워드클라우드는 NFC·소문자·조사 하나(은는이가을를의에도요) 떼기·합치기·금지어 빼기를 거칩니다.
+
+## 3. 연수 전·중·후: 무엇이 먼저 보이나
+사이트 하나가 세 시기를 모두 맡는다. 첫 화면 바로 아래(휴대폰 첫 스크롤)에 오는 것이 시기마다 다르다.
+
+| 시기 | 참가자가 찾는 것 | 첫 화면·바로 아래 |
+|---|---|---|
+| 전(공문·QR을 받고) | 언제·어디서·어떻게 들어가나, 무엇을 얻나, 무엇을 준비하나 | hero(일시·장소·입장 버튼) → goals(목표·대상·이수 기준) → readiness |
+| 중(연수 당일) | 지금 할 일, 실습 단계, 프롬프트, 도움 | '지금' 줄(실시간), schedule의 지금 순서, stations, 막혔어요 |
+| 후(연수가 끝난 뒤) | 다시 보기, 자료, 설문, 이수 처리, 문의 | '끝난 연수' 줄 → followup(첫 화면 아래로 올라옴) → materials·survey |
+
+- 시기는 `meta.date`·`meta.start`·`meta.end`와 차시 날짜로 계산한다(`lp-data.phase`). 주소 끝에 `?phase=after`를 붙이면 끝난 뒤 보기를 미리 볼 수 있다.
+- 차시(sessions)는 상태를 적지 않으면 날짜로 '마침·오늘·다음'이 붙는다. 차시마다 `#<섹션id>-<번호>` 주소가 있어 공지에 바로 걸 수 있다.
+- 온라인·혼합(`meta.mode`)이면 `meta.joinUrl`이 첫 화면 첫 버튼("Zoom 입장" 등)이 되고, 장소에 "온라인 (Zoom)"이 붙는다. 끝난 뒤에는 숨는다.
+- 교육청 승인 직무연수(`meta.admin.kind: official`)면 이수 기준("3시간 · 출석 80% 이상 · 설문 제출")이 연수 목표 칸에(없으면 첫 화면에), 출석·설문 칸에 "이수가 확인돼요" 안내가 붙는다.
+
+## 4. 넣지 않은 것(검토 후 뺌)
+| 후보 | 결정 |
+|---|---|
+| 글자 크기 조절 버튼 | 브라우저 확대(Ctrl +, 손가락 확대)로 충분. 확대를 막지 않고 200%에서도 줄바꿈되게 유지 |
+| 인쇄용 실습지 버튼 | 브라우저 인쇄로 모든 실습이 펼쳐져 인쇄됨(인쇄 CSS). 버튼은 늘리지 않음 |
+| 차시별 별도 페이지 | 한 페이지 + 차시 앵커 + 날짜 자동 표시로 충분. 페이지를 나누면 QR·메뉴·실시간 연결이 갈라짐 |
+| 지난 일정 접기('오늘' 보기) | 일정은 6~8줄이라 지난 순서를 흐리게 하는 것으로 충분 |
+| 시간대 표시 | 국내 연수는 한국 시간 하나. 해외 참가자가 있으면 hero.meta에 직접 적음 |
+| 오늘 만들 것 미리보기 칸 | goals 문장과 실습 outcome, 보드·갤러리로 충분. 새 칸을 늘리지 않음 |
+| Wi-Fi 칸, 지도 칸 | Wi-Fi는 QR 안내문(poster)에 적는 줄이 있음. 지도는 hero.meta 항목에 `url`을 걸면 됨 |
+| 사이트 저작권 표시 칸 | 교재·자료 칸의 `notice`와 보드 이용 조건으로 충분 |

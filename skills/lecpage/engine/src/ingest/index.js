@@ -110,6 +110,7 @@ export async function ingestFile(name, bytes, opts = {}) {
     if (res.meta?.author) file.author = res.meta.author;
     if (res.meta?.modified) file.modified = res.meta.modified;
     if (res.design?.slideSize) file.slideSize = res.design.slideSize;
+    if (res.design?.fontRoles) { if (res.design.fontRoles.display.length || res.design.fontRoles.body.length) file.fonts = res.design.fontRoles; delete res.design.fontRoles; }
     mat.files.push(file);
     mat.pages = res.pages;
     mat.design = cleanDesign(res.design);
@@ -352,10 +353,12 @@ export function summarizeMaterial(m) {
   if (d.steps?.length) bits.push(`실습 단계 ${d.steps.length}묶음`);
   if (d.tools?.length) bits.push(`도구 ${d.tools.slice(0, 5).map((t) => t.name).join('·')}${d.tools.length > 5 ? ` 외 ${d.tools.length - 5}` : ''}`);
   if (d.practice) bits.push(`실습 비율 ${Math.round(d.practice.ratio * 100)}%`);
+  if (d.fonts) bits.push(`글꼴 ${d.fonts.display.name}${d.fonts.body.name !== d.fonts.display.name ? '·' + d.fonts.body.name : ''}`);
   return `${parts.join(', ')}${bits.length ? ' — ' + bits.join(', ') : ''}`;
 }
 
 export { detect } from './detect.js';
+export { detectFonts } from './fonts.js';
 export { materialToDraft } from './draft.js';
 export { materialToAIContext } from './outline.js';
 export { TOOLS, CATEGORIES, matchToolsInText, toolForUrl, getTool, findTool } from './tools-db.js';

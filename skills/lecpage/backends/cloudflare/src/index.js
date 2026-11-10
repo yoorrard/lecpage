@@ -6,13 +6,20 @@
 // Uploads go to R2 when an `UPLOADS` binding exists; otherwise /upload answers 503 uploads_disabled.
 //
 // Settings (wrangler.toml [vars] or secrets):
-//   ADMIN_KEY (secret)        default admin key for every training (single-teacher deploy)
+//   ADMIN_KEY (secret)        default admin key for every training (single-teacher deploy). ≥ 12 characters and not
+//                             an example value, otherwise every API call answers 503 weak_admin_key.
 //   SETUP_TOKEN (secret)      lets instructors register their own codes with POST /api/:code/init (shared relay)
 //   OPEN_INIT="true"          first /init call claims a code (no token) — only for closed networks
 //   ALLOWED_CODES="A1,B2"     restrict which codes exist          ALLOWED_ORIGINS="https://site"  CORS allow-list
 //   RETENTION_DAYS="30"       idle days before a training is wiped   MAX_UPLOAD_MB="20"
+//   MAX_PARTICIPANTS="500"    per training      MAX_SOCKETS_PER_IP="500"  WebSocket/SSE per IP per training
+//   NEW_CODES_PER_HOUR="30"   trainings a single IP may bring to life per hour (single-teacher mode)
+// A code comes to life only on its first write that may create a training (single-teacher mode: ADMIN_KEY or
+// ALLOWED_CODES) or on /init: plain reads of an unknown code never create storage, and an object without a training
+// deletes everything it holds in its alarm. A Guard object per client IP (binding GUARD) counts wrong admin keys and
+// new trainings across all codes.
 import { DurableObject } from 'cloudflare:workers';
-import { LiveCore, HttpError, errorBody, normCode, sha256hex, PROTOCOL } from './protocol.js';
+import { LiveCore, HttpError, errorBody, normCode, sha256hex, keyProblem, isWeakKeyHash, PROTOCOL } from './protocol.js';
 
 const DAY = 864e5;
 const enc = new TextEncoder();
@@ -50,6 +57,18 @@ function errorResponse(e, extra) {
   if (retryAfter) h.set('Retry-After', String(retryAfter));
   return json(status, body, h);
 }
+/** Refuses to run with an example or short ADMIN_KEY / SETUP_TOKEN (a Worker has no start-up step, so: per request). */
+let weakChecked = null;
+async function configProblem(env) {
+  const sig = `${env.ADMIN_KEY || ''}\u0000${env.ADMIN_KEY_HASH || ''}\u0000${env.SETUP_TOKEN || ''}`;
+  if (weakChecked && weakChecked.sig === sig) return weakChecked.why;
+  let why = null;
+  if (env.ADMIN_KEY && keyProblem(env.ADMIN_KEY)) why = 'ADMIN_KEY: ' + keyProblem(env.ADMIN_KEY);
+  else if (!env.ADMIN_KEY && env.ADMIN_KEY_HASH && (!/^[0-9a-f]{64}$/i.test(env.ADMIN_KEY_HASH) || await isWeakKeyHash(env.ADMIN_KEY_HASH))) why = 'ADMIN_KEY_HASH: SHA-256가 아니거나 예시 키의 해시입니다.';
+  else if (env.SETUP_TOKEN && keyProblem(env.SETUP_TOKEN)) why = 'SETUP_TOKEN: ' + keyProblem(env.SETUP_TOKEN).replace('관리자 키', '설정 토큰');
+  weakChecked = { sig, why };
+  return why;
+}
 function withHeaders(res, extra) {
   if (res.status === 101 || res.webSocket) return res;
   const h = new Headers(res.headers);
@@ -67,7 +86,9 @@ export default {
     const cors = corsHeaders(request, env);
     try {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-      if (p === '/api/health') return json(200, { ok: true, protocol: PROTOCOL, uploads: !!env.UPLOADS, runtime: 'cloudflare' }, cors);
+      const why = await configProblem(env);
+      if (p === '/api/health') return json(200, { ok: !why, protocol: PROTOCOL, uploads: !!env.UPLOADS, runtime: 'cloudflare', ...(why ? { error: 'weak_admin_key', message: why } : {}) }, cors);
+      if (why) throw new HttpError(503, 'weak_admin_key', `서버 설정을 고쳐 주세요 — ${why}`);
       if (!originAllowed(request, env) && (request.method !== 'GET' || p.endsWith('/ws'))) throw new HttpError(403, 'origin_not_allowed', '허용되지 않은 사이트에서 온 요청입니다.');
       const raw = p.slice(5).split('/')[0];
       let code;
@@ -84,11 +105,12 @@ export default {
 export class LiveRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.sse = new Set();
+    this.sse = new Set(); // { w: WritableStreamDefaultWriter, ip }
     this.react = new Map();
     this.reactTimer = null;
     this.pingTimer = null;
     this.corePromise = null;
+    this.wsFails = new WeakMap(); // wrong auth messages per socket (messages may be handled concurrently)
     // Answered by the runtime without waking the object (no duration charge).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -103,6 +125,12 @@ export class LiveRoom extends DurableObject {
           run: (q, ...p) => { sql.exec(q, ...p).toArray(); },
           tx: (fn) => this.ctx.storage.transactionSync(fn),
         };
+        // one Guard object per client IP counts wrong admin keys and new trainings across every code
+        const guardOf = (key) => env.GUARD.getByName('ip:' + String(key).slice(String(key).indexOf(':') + 1));
+        const guard = env.GUARD ? {
+          hit: (key, [max, win]) => guardOf(key).hit(key, max, win),
+          peek: (key, [max, win]) => guardOf(key).peek(key, max, win),
+        } : null;
         return new LiveCore({
           db,
           config: {
@@ -112,6 +140,13 @@ export class LiveRoom extends DurableObject {
             allowedCodes: list(env.ALLOWED_CODES).length ? new Set(list(env.ALLOWED_CODES).map((c) => c.toUpperCase())) : null,
             retentionDays: Number(env.RETENTION_DAYS || 30),
             maxUploadBytes: Math.max(1, Number(env.MAX_UPLOAD_MB || 20)) * 1048576,
+            maxParticipants: Math.max(1, Number(env.MAX_PARTICIPANTS) || 500),
+            ...(Number(env.NEW_CODES_PER_HOUR) > 0 ? { rate: { create: [Math.floor(Number(env.NEW_CODES_PER_HOUR)), 3600e3] } } : {}),
+            // no tables (and no storage bill) until the first write that may create a training
+            lazySchema: true,
+            // tables were just created: make sure an object that ends up without a training is emptied
+            onSchema: () => { this.ctx.storage.getAlarm().then((a) => (a ? null : this.ctx.storage.setAlarm(Date.now() + DAY))).catch(() => {}); },
+            guard,
           },
         });
       })();
@@ -123,21 +158,22 @@ export class LiveRoom extends DurableObject {
     const url = new URL(request.url);
     const parts = url.pathname.slice(5).split('/').filter(Boolean).map((s) => { try { return decodeURIComponent(s); } catch { return s; } });
     const [rawCode, a, b] = parts;
-    const code = normCode(rawCode);
-    const core = await this.core();
     const ip = request.headers.get('CF-Connecting-IP') || '';
     const headers = request.headers;
     try {
-      if (a === 'ws') return this.openWebSocket(request);
-      if (a === 'events' && parts.length === 2 && request.method === 'GET') return this.openSse();
+      const code = normCode(rawCode);
+      const core = await this.core();
+      if (a === 'ws') return this.openWebSocket(request, code, ip);
+      if (a === 'events' && parts.length === 2 && request.method === 'GET') return this.openSse(ip);
       if (a === 'upload' && parts.length === 2 && request.method === 'POST') return await this.upload(core, code, request, ip);
       if (a === 'files' && b && parts.length === 3 && (request.method === 'GET' || request.method === 'HEAD')) return await this.serveFile(core, code, b, request);
       const body = await readJson(request);
-      const out = await core.handle({ method: request.method, code, rest: parts.slice(1), query: url.searchParams, headers, body, ip });
+      const out = await core.handle({ method: request.method, code, rest: parts.slice(1), query: url.searchParams, headers, body, ip, origin: url.origin });
       if (out.events) this.broadcast(out.events);
       if (out.reaction) this.addReaction(out.reaction);
       if (out.purgedFiles) await this.deleteFiles(code);
-      if (request.method !== 'GET') await this.scheduleCleanup(core, code);
+      if (out.deleteFiles) await this.deleteNames(code, out.deleteFiles);
+      if (request.method !== 'GET' && core.ready) await this.scheduleCleanup(core, code);
       if (out.contentType) {
         return new Response(out.body, { status: out.status, headers: { 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` } });
       }
@@ -148,13 +184,19 @@ export class LiveRoom extends DurableObject {
   }
 
   // ---------------------------------------------------------------- realtime
-  openWebSocket(request) {
+  socketsOf(ip) {
+    let n = this.ctx.getWebSockets('ip:' + String(ip).slice(0, 64)).length;
+    for (const x of this.sse) if (x.ip === ip) n++;
+    return n;
+  }
+  openWebSocket(request, code, ip) {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') throw new HttpError(426, 'upgrade_required', 'WebSocket으로 연결하세요.');
     if (this.ctx.getWebSockets().length + this.sse.size > 5000) throw new HttpError(503, 'too_many_connections', '접속이 너무 많습니다.');
+    if (this.socketsOf(ip) >= (Number(this.env.MAX_SOCKETS_PER_IP) || 500)) throw new HttpError(429, 'too_many_connections', '이 주소에서 연결이 너무 많습니다.', { retryAfter: 30 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ admin: false });
+    this.ctx.acceptWebSocket(server, ['ip:' + String(ip).slice(0, 64)]);
+    server.serializeAttachment({ admin: false, code, ip, fails: 0 });
     server.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL }));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -163,13 +205,26 @@ export class LiveRoom extends DurableObject {
     if (message === 'ping') { ws.send('pong'); return; }
     let o; try { o = JSON.parse(message); } catch { return; }
     if (o && o.type === 'auth' && typeof o.admin === 'string' && o.admin.length <= 200) {
-      const core = await this.core();
-      const hash = await sha256hex(o.admin);
-      // the training row tells us the code; any code works for the default ADMIN_KEY
-      const t = core.db.get('SELECT * FROM trainings LIMIT 1');
-      const ok = core.isAdmin(t || null, { adminHash: hash });
-      ws.serializeAttachment({ admin: ok });
-      ws.send(JSON.stringify({ type: 'auth', ok }));
+      const att0 = ws.deserializeAttachment() || {};
+      if (att0.closing) return;
+      try {
+        const core = await this.core();
+        // same throttle as the HTTP header: per (code, IP) here and per IP in the Guard; 429 closes the socket
+        const ok = await core.wsAuth(att0.code || '', o.admin, att0.ip || '');
+        const att = ws.deserializeAttachment() || att0; // re-read: other messages may have run meanwhile
+        const fails = ok ? 0 : Math.max(this.wsFails.get(ws) || 0, att.fails || 0) + 1;
+        if (!ok) this.wsFails.set(ws, fails);
+        att.admin = ok; att.fails = fails; if (!ok && fails >= 3) att.closing = true;
+        ws.serializeAttachment(att);
+        ws.send(JSON.stringify({ type: 'auth', ok }));
+        if (att.closing) ws.close(1008, 'auth');
+      } catch (e) {
+        const { body, retryAfter } = errorBody(e);
+        try {
+          const att = ws.deserializeAttachment() || att0; att.admin = false; att.closing = true; ws.serializeAttachment(att);
+          ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); ws.close(1008, 'auth');
+        } catch { /* closed */ }
+      }
     } else if (o && o.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now: Date.now() }));
   }
   async webSocketClose(ws, code, reason) {
@@ -178,13 +233,15 @@ export class LiveRoom extends DurableObject {
   async webSocketError(ws) {
     try { ws.close(1011, 'error'); } catch { /* ignore */ }
   }
-  openSse() {
+  openSse(ip) {
     if (this.ctx.getWebSockets().length + this.sse.size > 5000) throw new HttpError(503, 'too_many_connections', '접속이 너무 많습니다.');
+    if (this.socketsOf(ip) >= (Number(this.env.MAX_SOCKETS_PER_IP) || 500)) throw new HttpError(429, 'too_many_connections', '이 주소에서 연결이 너무 많습니다.', { retryAfter: 30 });
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
+    const entry = { w: writer, ip };
     const hello = JSON.stringify({ type: 'hello', now: Date.now(), mode: 'sse', protocol: PROTOCOL });
-    writer.write(enc.encode(`retry: 3000\n:${' '.repeat(2048)}\n\ndata: ${hello}\n\n`)).catch(() => this.sse.delete(writer));
-    this.sse.add(writer);
+    writer.write(enc.encode(`retry: 3000\n:${' '.repeat(2048)}\n\ndata: ${hello}\n\n`)).catch(() => this.sse.delete(entry));
+    this.sse.add(entry);
     if (!this.pingTimer) {
       this.pingTimer = setInterval(() => {
         if (!this.sse.size) { clearInterval(this.pingTimer); this.pingTimer = null; return; }
@@ -195,7 +252,7 @@ export class LiveRoom extends DurableObject {
   }
   sendSse(text) {
     const bytes = enc.encode(text);
-    for (const w of this.sse) w.write(bytes).catch(() => { this.sse.delete(w); try { w.abort(); } catch { /* ignore */ } });
+    for (const x of this.sse) x.w.write(bytes).catch(() => { this.sse.delete(x); try { x.w.abort(); } catch { /* ignore */ } });
   }
   broadcast(events) {
     const sockets = this.ctx.getWebSockets();
@@ -246,12 +303,14 @@ export class LiveRoom extends DurableObject {
     return json(201, { url: `/api/${code}/files/${meta.stored}`, name: meta.name, type: meta.type, size: bytes.length });
   }
   async serveFile(core, code, name, request) {
+    // 404 unless the file is attached to a post that exists and is not hidden (core.fileMeta)
     const meta = core.fileMeta(code, name);
     if (!meta || !this.env.UPLOADS) throw new HttpError(404, 'not_found', '파일이 없습니다.');
     const obj = await this.env.UPLOADS.get(`${code}/${meta.name}`, { range: request.headers });
     if (!obj) throw new HttpError(404, 'not_found', '파일이 없습니다.');
     const h = new Headers({
-      'Content-Type': meta.type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=31536000, immutable',
+      // short private cache: a hidden or removed post's files must stop being served quickly (no shared caches)
+      'Content-Type': meta.type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=300',
       'Cross-Origin-Resource-Policy': 'cross-origin', 'Accept-Ranges': 'bytes', 'Content-Disposition': 'inline', ETag: obj.httpEtag,
     });
     if (meta.type !== 'application/pdf') h.set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
@@ -274,12 +333,17 @@ export class LiveRoom extends DurableObject {
       cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
   }
+  /** Deletes single uploads (a removed post's files, replaced files, never-attached uploads). */
+  async deleteNames(code, names) {
+    if (!this.env.UPLOADS || !names || !names.length) return;
+    const keys = names.filter((n) => /^[a-f0-9]{24}\.[a-z0-9]{2,4}$/.test(n)).map((n) => `${code}/${n}`);
+    for (let i = 0; i < keys.length; i += 1000) await this.env.UPLOADS.delete(keys.slice(i, i + 1000));
+  }
 
   // ---------------------------------------------------------------- retention
   async scheduleCleanup(core, code) {
-    const t = core.db.get('SELECT * FROM trainings WHERE code = ?', code);
+    const t = core.trainingOrNull(code);
     if (!t) return;
-    t.settingsObj = JSON.parse(t.settings || '{}');
     const due = Date.now() + core.retentionDays(t) * DAY + 3600e3;
     if (this.alarmAt && this.alarmAt >= due - DAY / 2) return; // cached: avoid a storage read per write
     const cur = await this.ctx.storage.getAlarm();
@@ -287,18 +351,52 @@ export class LiveRoom extends DurableObject {
   }
   async alarm() {
     const core = await this.core();
-    const t = core.db.get('SELECT * FROM trainings LIMIT 1');
-    if (!t) return;
+    const t = core.ready ? core.db.get('SELECT * FROM trainings LIMIT 1') : null;
+    if (!t) {
+      // no training here (never created, or created and wiped): drop every byte this object holds
+      await this.ctx.storage.deleteAll();
+      this.corePromise = null; this.alarmAt = 0;
+      return;
+    }
     const removed = core.cleanup();
+    for (const o of core.sweepOrphans()) await this.deleteNames(o.code, [o.name]);
     if (removed.length) {
       for (const r of removed) await this.deleteFiles(r.code);
       this.broadcast([{ type: 'reset', col: null, doc: null, pub: {} }]);
-      // drop every byte this object holds; the schema is recreated on the next request
+      // drop every byte this object holds; the schema is recreated on the next authorised write
       await this.ctx.storage.deleteAll();
       this.corePromise = null; this.alarmAt = 0;
     } else {
+      this.alarmAt = 0;
       await this.scheduleCleanup(core, t.code);
     }
+  }
+}
+
+/** Per-IP counters shared by every room (wrong admin keys, new trainings). Tiny storage, wiped by its own alarm. */
+export class Guard extends DurableObject {
+  async hit(key, max, win) {
+    const now = Date.now();
+    let e = await this.ctx.storage.get(key);
+    if (!e || e.reset <= now) e = { c: 0, reset: now + win };
+    if (e.c >= max) return e.reset - now;
+    e.c++;
+    await this.ctx.storage.put(key, e);
+    const cur = await this.ctx.storage.getAlarm();
+    if (!cur || cur < e.reset) await this.ctx.storage.setAlarm(e.reset + 1000);
+    return 0;
+  }
+  async peek(key, max) {
+    const now = Date.now();
+    const e = await this.ctx.storage.get(key);
+    return e && e.reset > now && e.c >= max ? e.reset - now : 0;
+  }
+  async alarm() {
+    const now = Date.now(); let next = 0;
+    for (const [k, e] of await this.ctx.storage.list()) {
+      if (!e || e.reset <= now) await this.ctx.storage.delete(k); else next = Math.max(next, e.reset);
+    }
+    if (next) await this.ctx.storage.setAlarm(next + 1000); else await this.ctx.storage.deleteAll();
   }
 }
 

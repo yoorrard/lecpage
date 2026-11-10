@@ -117,6 +117,31 @@ export async function renderSlides(file, outDir, { dpi = 110, timeoutMs = 600000
   return { ok: true, files };
 }
 
+/**
+ * 쪽 그림을 만들어 material에 붙임(pages[].image, files[].rendered). 실패는 warnings에 남김.
+ * PPTX에 짝 PDF(renderSource)가 있으면 그 PDF로 그림(글꼴이 원본과 같아 더 정확)
+ * @param {object} m Material  @param {string} slidesDir 그림 폴더  @param {string} outPath material.json 경로(상대 경로 기준)
+ */
+export async function attachSlides(m, slidesDir, outPath) {
+  const { path } = await node();
+  const outDir = path.dirname(path.resolve(outPath));
+  for (const f of m.files) {
+    if (!f.path || f.renderOf || !['pptx', 'pdf', 'docx', 'hwpx'].includes(f.type)) continue;
+    const srcFile = f.renderSource ? m.files.find((x) => x.id === f.renderSource) : null;
+    const dir = m.files.filter((x) => !x.renderOf).length > 1 ? path.join(slidesDir, f.id) : slidesDir;
+    const r = await renderSlides((srcFile && srcFile.path) || f.path, dir);
+    if (!r.ok) { m.warnings.push({ code: 'render-failed', message_ko: `쪽 그림을 만들지 못했어요(LibreOffice·pdftoppm 확인): ${r.message || ''}`.trim(), file: f.name }); continue; }
+    const rel = (img) => path.relative(outDir, img).split(path.sep).join('/');
+    if (f.unit === 'section') { f.pageImages = r.files.map(rel); f.rendered = r.files.length; continue; } // 문서형: 실제 쪽 ≠ 절
+    let pages = m.pages.filter((p) => p.file === f.id);
+    if (srcFile && srcFile.skipsHidden) pages = pages.filter((p) => !p.hidden);
+    pages.forEach((p, i) => { const img = r.files[i]; if (img) p.image = rel(img); });
+    if (srcFile) m.pages.filter((p) => p.file === srcFile.id).forEach((p, i) => { const img = r.files[i]; if (img) p.image = rel(img); });
+    f.rendered = r.files.length;
+  }
+  return m;
+}
+
 const HELP = `사용법: node ingest.mjs <파일 또는 링크...> -o material.json [옵션]
 
   -o, --out <파일>        결과 Material JSON (기본: material.json)
@@ -155,24 +180,7 @@ export async function runIngestCli(argv = []) {
   const opts = { withImages: !!a.images, python: a.python, today: a.today || undefined };
   const m = await ingestPaths(a.files, opts);
 
-  // 쪽 그림: PPTX에 짝 PDF(renderSource)가 있으면 그 PDF로 그림(글꼴이 원본과 같아 더 정확)
-  if (a.slides) {
-    const outDir = path.dirname(path.resolve(a.out));
-    for (const f of m.files) {
-      if (!f.path || f.renderOf || !['pptx', 'pdf', 'docx', 'hwpx'].includes(f.type)) continue;
-      const srcFile = f.renderSource ? m.files.find((x) => x.id === f.renderSource) : null;
-      const dir = m.files.filter((x) => !x.renderOf).length > 1 ? path.join(a.slides, f.id) : a.slides;
-      const r = await renderSlides((srcFile && srcFile.path) || f.path, dir);
-      if (!r.ok) { m.warnings.push({ code: 'render-failed', message_ko: `쪽 그림을 만들지 못했어요(LibreOffice·pdftoppm 확인): ${r.message || ''}`.trim(), file: f.name }); continue; }
-      const rel = (img) => path.relative(outDir, img).split(path.sep).join('/');
-      if (f.unit === 'section') { f.pageImages = r.files.map(rel); f.rendered = r.files.length; continue; } // 문서형: 실제 쪽 ≠ 절
-      let pages = m.pages.filter((p) => p.file === f.id);
-      if (srcFile && srcFile.skipsHidden) pages = pages.filter((p) => !p.hidden);
-      pages.forEach((p, i) => { const img = r.files[i]; if (img) p.image = path.relative(outDir, img).split(path.sep).join('/'); });
-      if (srcFile) m.pages.filter((p) => p.file === srcFile.id).forEach((p, i) => { const img = r.files[i]; if (img) p.image = path.relative(outDir, img).split(path.sep).join('/'); });
-      f.rendered = r.files.length;
-    }
-  }
+  if (a.slides) await attachSlides(m, a.slides, a.out);
   const { written } = await writeMaterial(m, a.out, { imagesDir: a.images || '' });
   if (a.draft) await fs.writeFile(a.draft, JSON.stringify(api.materialToDraft(m, { today: a.today || undefined }), null, 2) + '\n', 'utf8');
   if (a.context) await fs.writeFile(a.context, api.materialToAIContext(m, { maxChars: a.maxChars }) + '\n', 'utf8');

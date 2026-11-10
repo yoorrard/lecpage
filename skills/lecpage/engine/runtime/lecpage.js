@@ -203,6 +203,32 @@
     });
   }
   function toMin(t) { var m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  /* ── 차시: 날짜로 마침·오늘·다음 표시(상태를 직접 적지 않은 경우) ── */
+  function initSessions() {
+    $$('[data-sessions-auto]').forEach(function (ol) {
+      var today = ymd(new Date()), next = false;
+      $$('li[data-date]', ol).forEach(function (li) {
+        var d = li.getAttribute('data-date'), st = d < today ? 'done' : d === today ? 'now' : (!next ? (next = true, 'next') : '');
+        li.setAttribute('data-status', st);
+        var c = $('[data-session-chip]', li); if (c) { c.textContent = { done: '마침', now: '오늘', next: '다음' }[st] || ''; c.hidden = !st; }
+      });
+    });
+  }
+
+  /* ── 연수 전·중·후: 끝난 뒤에는 '연수 후 안내'를 첫 화면 아래로 올리고 회의 입장 버튼을 숨김(?phase=after로 미리 보기) ── */
+  function initPhase() {
+    var w = DATA.phase; if (!w || !w.end) return;
+    var now = new Date(), q = /[?&]phase=(before|during|after)\b/.exec(location.search);
+    var phase = q ? q[1] : now > new Date(w.end) ? 'after' : now >= new Date(w.start) ? 'during' : 'before';
+    root.setAttribute('data-phase', phase);
+    if (phase !== 'after') return;
+    $$('[data-phase-hide="after"]').forEach(function (n) { n.hidden = true; });
+    var fu = $('[data-followup]'), hero = $('main > .lp-hero');
+    if (fu && hero) { var at = hero.nextElementSibling; if (at && at.classList.contains('lp-divider')) at = at.nextElementSibling; if (at !== fu) hero.parentNode.insertBefore(fu, at); }
+    var bar = $('[data-phase-bar]'); if (bar) { bar.hidden = false; fitScrollPad(); }
+  }
 
   /* ── 준비 점검·접속 진단 ──────────────────── */
   function initReadiness() {
@@ -262,9 +288,10 @@
     deck.classList.add('is-ready'); bar.hidden = false;
     var thumbs = el('div', 'lp-deck-thumbs'); thumbs.setAttribute('aria-label', '쪽 미리보기');
     slides.forEach(function (s, i) {
-      var b = el('button'); b.type = 'button'; b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽');
+      var b = el('button'); b.type = 'button';
       var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
+      // 그림만 있는 단추는 쪽 번호를 이름으로, 글자가 보이는 단추는 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
+      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
       b.addEventListener('click', function () { go(i); });
       thumbs.appendChild(b);
     });
@@ -348,7 +375,7 @@
       var b = e.target.closest('[data-done]');
       if (b) {
         var id = b.closest('.lp-st').getAttribute('data-st'), k = done.indexOf(id);
-        if (k >= 0) { done.splice(k, 1); toast('완료 체크를 풀었어요.'); } else { done.push(id); toast('완료! 다음 실습으로 넘어가 볼까요?'); celebrate(b); }
+        if (k >= 0) { done.splice(k, 1); toast('완료 체크를 풀었어요.'); } else { done.push(id); toast('완료했어요.'); celebrate(b); }
         store.set('done', done); paint();
         if (live.ready) live.progress(id, k >= 0 ? 'doing' : 'done');
         return;
@@ -414,7 +441,7 @@
     var dock = $('[data-dock]'), dot = $('[data-live-status]');
     var qs = {}, posts = {}, answers = {}, state = {}, voted = store.get('voted', {});
     var X = LecLive.util.ext, U = LecLive.util;
-    if (dock) { dock.hidden = false; root.classList.add('lp-dock-on'); }
+    if (dock && root.getAttribute('data-phase') !== 'after') { dock.hidden = false; root.classList.add('lp-dock-on'); } // 끝난 연수에는 막혔어요·신호 도크를 띄우지 않음
     $$('[data-live-off]').forEach(function (n) { n.hidden = true; });
     if (feats.indexOf('help') >= 0) $$('[data-stuck]').forEach(function (b) { b.hidden = false; });
     if (deckApi) deckApi.showFollow();
@@ -447,7 +474,7 @@
       var arr = Object.keys(qs).map(function (k) { return qs[k]; }).filter(function (q) { return q.status !== 'hidden'; });
       arr.sort(function (a, b) { if (!!b.pinned - !!a.pinned) return !!b.pinned - !!a.pinned; return sortBy === 'votes' ? ((b.votes || 0) - (a.votes || 0) || (b.createdAt || 0) - (a.createdAt || 0)) : (b.createdAt || 0) - (a.createdAt || 0); });
       list.textContent = '';
-      if (!arr.length) { list.appendChild(el('li', 'lp-empty', '첫 질문을 남겨 주세요. 다른 사람의 질문에 공감을 누를 수도 있어요.')); return; }
+      if (!arr.length) { list.appendChild(el('li', 'lp-empty', '아직 질문이 없어요. 첫 질문을 올려 주세요.')); return; }
       arr.forEach(function (q) {
         var li = el('li', 'lp-qa-item' + (q.pinned ? ' is-pinned' : '') + (q.status === 'answered' ? ' is-answered' : ''));
         var v = el('button', 'lp-vote'); v.type = 'button'; v.setAttribute('aria-pressed', String(!!voted[q.id])); v.setAttribute('aria-label', '공감 ' + (q.votes || 0));
@@ -576,7 +603,7 @@
     var hd = $('[data-help-dialog]'), hf = hd && $('[data-help-form]', hd);
     function sendHelp(station, seat, message) {
       store.set('seat', seat);
-      return conn.add('help', { station: station, seat: seat.slice(0, 20), nickname: me.nickname, message: message }).then(function () { toast('도움을 요청했어요. 곧 갈게요!'); if (live.ready && station) live.progress(station, 'stuck'); }, function (err) { toast('보내지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
+      return conn.add('help', { station: station, seat: seat.slice(0, 20), nickname: me.nickname, message: message }).then(function () { toast('도움을 요청했어요. 곧 갈게요.'); if (live.ready && station) live.progress(station, 'stuck'); }, function (err) { toast('보내지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
     }
     live.help = function (stationId) {
       var opener = doc.activeElement;
@@ -607,7 +634,7 @@
     $$('[data-signal]').forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-signal');
-        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '이해했어요를 보냈어요.', yellow: '조금 헷갈려요를 보냈어요.', red: '도와주세요를 보냈어요. 곧 갈게요!' }[v]); }, function () { });
+        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '‘이해했어요’를 보냈어요.', yellow: '‘조금 헷갈려요’를 보냈어요.', red: '‘도와주세요’를 보냈어요. 곧 갈게요.' }[v]); }, function () { });
       });
     });
     // 반응: 휴대폰에서는 버튼 하나로 접어 둠
@@ -647,7 +674,7 @@
         if (r.missing && !window.confirm('답하지 않은 문항이 ' + r.missing + '개 있어요. 이대로 낼까요?')) return;
         var btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
         ensureJoin().then(function () { return conn.add('survey', { answers: r.answers }); }).then(function () {
-          store.set(sk, r.answers); if (st) st.textContent = '제출했어요. 고마워요! 고칠 게 있으면 바꾼 뒤 다시 내 주세요.'; toast('설문을 제출했어요. 고마워요!');
+          store.set(sk, r.answers); if (st) st.textContent = '제출했어요. 고칠 게 있으면 바꾼 뒤 다시 내 주세요.'; toast('제출했어요. 고마워요.');
         }, function (err) { if (err && err.message !== 'cancel') toast('제출하지 못했어요: ' + (err.message || '잠시 뒤 다시 해 주세요.')); }).then(function () { if (btn) btn.disabled = false; });
       });
     });
@@ -762,7 +789,7 @@
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
     $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
-    drawQRs(); initChrome(); initPrompts(); initSchedule(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
+    drawQRs(); initChrome(); initPhase(); initPrompts(); initSchedule(); initSessions(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

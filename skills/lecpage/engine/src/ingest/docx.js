@@ -5,6 +5,7 @@ import { parseTheme, parseCoreProps, StyleTally } from './ooxml.js';
 import { relOfType } from './zip.js';
 import { findMainPart, findCorePath } from './pptx.js';
 import { blocksToPages } from './blocks.js';
+import { FontRoles, pickScript, hasHangul } from './fonts.js';
 
 export function parseDocx(zip, ctx) {
   zip.preload((n) => /\.(xml|rels)$/i.test(n));
@@ -18,7 +19,8 @@ export function parseDocx(zip, ctx) {
   const themeRel = relOfType(rels, 'theme');
   const theme = parseTheme(zip.xml(themeRel ? themeRel.target : 'word/theme/theme1.xml'));
   const tally = new StyleTally();
-  const c = { ...ctx, zip, rels, styles, numbering, tally, imgSeq: 0, counters: new Map(), unsupportedExt: new Set() };
+  const fontRoles = new FontRoles();
+  const c = { ...ctx, zip, rels, styles, numbering, tally, theme, fontRoles, imgSeq: 0, counters: new Map(), unsupportedExt: new Set() };
 
   const blocks = [];
   walkBody(body, c, blocks);
@@ -34,7 +36,7 @@ export function parseDocx(zip, ctx) {
   const design = {
     theme: theme?.name || '', colors: theme?.colors || {},
     fonts: theme?.fonts || { major: { latin: '', ea: '' }, minor: { latin: '', ea: '' } },
-    fontsUsed: st.fontsUsed, palette: st.palette,
+    fontsUsed: st.fontsUsed, palette: st.palette, fontRoles: fontRoles.result(),
   };
   return { pages, design, meta: parseCoreProps(zip.xml(findCorePath(zip))), unit: 'section' };
 }
@@ -97,8 +99,11 @@ function readPara(p, c, out) {
     }
   }
 
-  const st = { text: '', links: [], images: [], extra: [], field: null, pageBreak: false, bold: 0, chars: 0, sz: 0 };
+  const st = { text: '', links: [], images: [], extra: [], field: null, pageBreak: false, bold: 0, chars: 0, sz: 0, runs: [] };
   readRuns(p, c, st);
+  // 글꼴 역할: 제목 스타일 = display. 글꼴을 안 적은 글은 문단 스타일 → 문서 기본 → 테마 글꼴 순
+  const role = heading !== null ? 'display' : 'body';
+  for (const r of st.runs) c.fontRoles.add(role, r.font || rfName(style.rf, r.t, c.theme) || rfName(c.styles.defaultRf, r.t, c.theme) || pickScript(role === 'display' ? c.theme?.fonts.major : c.theme?.fonts.minor, r.t), r.n);
   const text = normText(st.text);
   const block = {
     type: 'p', text, level, bullet, num, heading, style: style.name || styleId,
@@ -161,6 +166,7 @@ function readRun(r, c, st) {
         const sz = +attr(kid(rPr, 'sz'), 'val') || 0;
         if (sz > st.sz) st.sz = sz;
         const fonts = kid(rPr, 'rFonts');
+        if (t.trim()) st.runs.push({ font: rfName(fonts, t, c.theme), n: t.replace(/\s/g, '').length, t });
         if (fonts) { c.tally.font(attr(fonts, 'eastAsia'), t.length); c.tally.font(attr(fonts, 'ascii'), t.length * 0.5); }
         const color = attr(kid(rPr, 'color'), 'val');
         if (color && /^[0-9a-f]{6}$/i.test(color)) c.tally.color('#' + color.toUpperCase(), t.length);
@@ -232,7 +238,7 @@ function addImg(c, st, relId, alt) {
 function readStyles(doc) {
   const map = new Map();
   let defaultPara = '', defaultFont = '';
-  if (!doc) return { map, defaultPara, defaultFont };
+  if (!doc) return { map, defaultPara, defaultFont, defaultRf: null };
   const rFonts = path(first(doc, 'docDefaults'), 'rPrDefault', 'rPr', 'rFonts');
   if (rFonts) defaultFont = attr(rFonts, 'eastAsia') || attr(rFonts, 'ascii') || '';
   const raw = new Map();
@@ -241,7 +247,7 @@ function readStyles(doc) {
     const id = attr(s, 'styleId');
     const name = (attr(kid(s, 'name'), 'val') || '').trim();
     const ol = attr(path(s, 'pPr', 'outlineLvl'), 'val');
-    raw.set(id, { id, name, basedOn: attr(kid(s, 'basedOn'), 'val'), outline: ol !== undefined ? +ol : null, numPr: path(s, 'pPr', 'numPr') });
+    raw.set(id, { id, name, basedOn: attr(kid(s, 'basedOn'), 'val'), outline: ol !== undefined ? +ol : null, numPr: path(s, 'pPr', 'numPr'), rf: path(s, 'rPr', 'rFonts') });
     if (attr(s, 'default') === '1') defaultPara = id;
   }
   const headingOf = (st, depth = 0) => {
@@ -253,8 +259,9 @@ function readStyles(doc) {
     if (st.outline !== null && st.outline < 9) return st.outline + 1;
     return headingOf(raw.get(st.basedOn), depth + 1);
   };
-  for (const [id, st] of raw) map.set(id, { name: st.name, heading: headingOf(st), numPr: st.numPr });
-  return { map, defaultPara, defaultFont };
+  const rfOf = (st, depth = 0) => (!st || depth > 10 ? null : st.rf || rfOf(raw.get(st.basedOn), depth + 1));
+  for (const [id, st] of raw) map.set(id, { name: st.name, heading: headingOf(st), numPr: st.numPr, rf: rfOf(st) });
+  return { map, defaultPara, defaultFont, defaultRf: rFonts || null };
 }
 
 function readNumbering(doc) {
@@ -269,4 +276,15 @@ function readNumbering(doc) {
   }
   const get = (numId, ilvl) => abs.get(nums.get(numId))?.get(ilvl);
   return { fmt: (numId, ilvl) => get(numId, ilvl)?.fmt || '', start: (numId, ilvl) => get(numId, ilvl)?.start || 1 };
+}
+
+/** w:rFonts → 글꼴 이름(한글은 eastAsia, 그 밖은 ascii/hAnsi, 테마 참조는 테마 글꼴로) */
+function rfName(rf, t, theme) {
+  if (!rf) return '';
+  const h = hasHangul(t);
+  const direct = h ? attr(rf, 'eastAsia') : (attr(rf, 'ascii') || attr(rf, 'hAnsi'));
+  if (direct) return direct;
+  const th = attr(rf, h ? 'eastAsiaTheme' : 'asciiTheme') || (h ? '' : attr(rf, 'hAnsiTheme'));
+  if (th && theme) { const w = /^major/.test(th) ? theme.fonts.major : theme.fonts.minor; return (h ? w.ea : w.latin) || ''; }
+  return '';
 }

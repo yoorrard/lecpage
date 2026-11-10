@@ -56,6 +56,8 @@ function applyAccent(pal, accent, theme) {
 export function themeTokens(preset, theme, opts = {}) {
   let p = { ...preset[theme] };
   if (opts.accent) p = applyAccent(p, opts.accent, theme);
+  // 강조색은 작은 글자(번호·링크)로도 쓰므로 바탕과 4.5:1 이상
+  p.primary = ensureContrast(p.primary, p.bg, 4.5);
   const border = p.border || mix(p.bg, p.fg, theme === 'dark' ? 0.18 : 0.14);
   const muted = ensureContrast(p.muted || mix(p.fg, p.bg, 0.35), p.bg, 4.5);
   const primaryFg = contrast(p.primary, p.primaryFg) >= 4.5 ? p.primaryFg : readableOn(p.primary);
@@ -115,6 +117,8 @@ export function themeCSS(design = {}) {
   const assets = fontAssets([fonts.display, fonts.body, fonts.mono]);
   const pair = FONT_PAIR_BY_ID[design.fontPair];
   const base = baseTokens(preset, opts);
+  // 제목 글꼴을 바꿨으면 그 글꼴에 있는 굵기로(한 굵기뿐인 글꼴에 가짜 굵게가 생기지 않게)
+  if (fonts.display !== preset.fonts.display || FONTS[fonts.display]?.displayWeight) base['--display-weight'] = String(FONTS[fonts.display]?.displayWeight || (fonts.display !== preset.fonts.display ? 700 : preset.fonts.displayWeight || 800));
   if (pair) {
     base['--font-display'] = pair.display.stack || `'${pair.display.family}', sans-serif`;
     base['--font-sans'] = pair.body.stack || `'${pair.body.family}', sans-serif`;
@@ -125,6 +129,8 @@ export function themeCSS(design = {}) {
     `/* lecpage theme: ${preset.id} */`,
     assets.faceCss.trim(),
     block(':root', base),
+    // 한 굵기뿐인 장식 제목 글꼴(검은고딕·주아·도현 등)은 자간을 거의 좁히지 않음(뭉개짐 방지)
+    ['display', 'hand'].includes(FONTS[pair ? '' : fonts.display]?.kind) || (pair && pair.display.weight && pair.display.weight <= 400) ? 'html:root{--display-tracking:-.005em}' : '',
     block(':root[data-theme="light"],:root[data-theme="auto"]', { ...light, 'color-scheme': 'light' }),
     block(':root[data-theme="dark"]', { ...dark, 'color-scheme': 'dark' }),
     `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"]', { ...dark, 'color-scheme': 'dark' })}}`,

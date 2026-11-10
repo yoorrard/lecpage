@@ -46,7 +46,7 @@ export function Project({ id, step }) {
         </ol>
         <p class="stage-mini" aria-hidden="true">{s}/3 · {cur.name}</p>
         <div class="side-tools">
-          <p class="small muted">이 브라우저에 저절로 저장돼요.</p>
+          <p class="small muted">이 브라우저에 자동으로 저장돼요.</p>
           <button class="btn btn-sm" onClick={saveProjectFile}>파일로 저장(.lecpage)</button>
         </div>
       </aside>

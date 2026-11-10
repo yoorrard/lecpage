@@ -131,8 +131,11 @@
   }
 
   // ---------------------------------------------------------------- script loader (never rejects: resolves false)
+  // loadScript(url, timeoutMs, { integrity: 'sha384-…' }) — a remote (http/https) script without an SRI hash is refused.
   var loading = {};
-  function loadScript(url, timeoutMs) {
+  function loadScript(url, timeoutMs, opts) {
+    var integrity = opts && typeof opts.integrity === 'string' ? opts.integrity : '';
+    if (/^(https?:)?\/\//i.test(String(url)) && !/^sha(256|384|512)-[A-Za-z0-9+/=]{40,}$/.test(integrity)) return Promise.resolve(false);
     if (loading[url]) return loading[url];
     loading[url] = new Promise(function (resolve) {
       if (!root.document) return resolve(false);
@@ -140,6 +143,7 @@
       var done = false;
       var t = setTimeout(function () { finish(false); }, timeoutMs || 12000);
       function finish(ok) { if (done) return; done = true; clearTimeout(t); if (!ok) delete loading[url]; resolve(ok); }
+      if (integrity) s.integrity = integrity;
       s.src = url; s.async = true; s.crossOrigin = 'anonymous';
       s.onload = function () { finish(true); };
       s.onerror = function () { finish(false); };
@@ -484,6 +488,9 @@
     doc = this._maskDoc(col, clone(doc));
     var old = m[doc.id];
     if (old && !old._pending && old.updatedAt && doc.updatedAt && doc.updatedAt < old.updatedAt) return false;
+    // Servers show `by` of answers/progress/help only to their owner (and the admin); public events omit it.
+    // Same id = same owner, so keep what we knew.
+    if (old && old.by != null && doc.by == null) doc.by = old.by;
     if (doc.cid) {
       for (var k in m) {
         if (m[k]._pending && m[k].cid === doc.cid && k !== doc.id) {

@@ -13,15 +13,23 @@
 //   --setup-token / LEC_SETUP_TOKEN     --open-init / LEC_OPEN_INIT=1
 //   --codes / LEC_CODES (comma list)    --origins / LEC_ORIGINS (comma list; empty = any origin)
 //   --max-upload-mb / LEC_MAX_UPLOAD_MB (20)    --retention-days / LEC_RETENTION_DAYS (30)
-//   --trust-proxy / LEC_TRUST_PROXY=1   --no-uploads / LEC_UPLOADS=0     --quiet / LEC_LOG=0
-// Static serving never returns dotfiles, *.md, lecpage.blueprint.json or database files (404).
+//   --trusted-proxies / LEC_TRUSTED_PROXIES (0)  number of reverse proxies in front (Caddy/nginx = 1). The client IP is
+//       read from X-Forwarded-For counting that many hops from the right; 0 = the socket address (the header is ignored).
+//       LEC_TRUST_PROXY=1 (older name) means one proxy.
+//   --no-uploads / LEC_UPLOADS=0     --quiet / LEC_LOG=0
+//   --max-connections / LEC_MAX_CONNECTIONS (5000)   --max-sockets-per-ip / LEC_MAX_SOCKETS_PER_IP (500)
+//   --max-participants / LEC_MAX_PARTICIPANTS (500 per training)
+//   --new-codes-per-hour / LEC_NEW_CODES_PER_HOUR (30)  trainings one IP may bring to life per hour (default-key mode)
+// Admin keys and setup tokens must be at least 12 characters and not a known example ("change-me-…"); the server
+// refuses to start otherwise. Without a key it generates one and writes it to <data>/admin-key.txt (mode 0600).
+// Static serving never returns dotfiles, *.md, lecpage.blueprint.json, admin-key files or database files (404).
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { LiveCore, HttpError, errorBody, normCode, sha256hex, randomToken, PROTOCOL } from './lib/protocol.js';
+import { LiveCore, HttpError, errorBody, normCode, sha256hex, randomToken, keyProblem, isWeakKeyHash, PROTOCOL } from './lib/protocol.js';
 import { acceptWebSocket } from './lib/ws.js';
 
 const VERSION = '1.0.0';
@@ -62,11 +70,34 @@ export function readOptions(argv = process.argv.slice(2), env = process.env) {
     origins: list(pick('origins', 'LEC_ORIGINS', '')),
     maxUploadMb: Number(pick('max-upload-mb', 'LEC_MAX_UPLOAD_MB', 20)),
     retentionDays: Number(pick('retention-days', 'LEC_RETENTION_DAYS', 30)),
-    trustProxy: truthy(pick('trust-proxy', 'LEC_TRUST_PROXY', '')),
+    trustedProxies: proxyHops(pick('trusted-proxies', 'LEC_TRUSTED_PROXIES', ''), pick('trust-proxy', 'LEC_TRUST_PROXY', '')),
+    maxConnections: Math.max(10, Number(pick('max-connections', 'LEC_MAX_CONNECTIONS', 5000)) || 5000),
+    maxSocketsPerIp: Math.max(1, Number(pick('max-sockets-per-ip', 'LEC_MAX_SOCKETS_PER_IP', 500)) || 500),
+    maxParticipants: Math.max(1, Number(pick('max-participants', 'LEC_MAX_PARTICIPANTS', 500)) || 500),
+    newCodesPerHour: Math.max(1, Number(pick('new-codes-per-hour', 'LEC_NEW_CODES_PER_HOUR', 30)) || 30),
     uploads: flags['no-uploads'] ? false : !/^(0|false|no|off)$/i.test(String(env.LEC_UPLOADS || '1')),
     quiet: flags.quiet === true || /^(0|false|off)$/i.test(String(env.LEC_LOG || '1')),
     generateKey: flags['no-generate-key'] ? false : !/^(0|false)$/i.test(String(env.LEC_GENERATE_KEY || '1')),
   };
+}
+
+/** LEC_TRUSTED_PROXIES=<n> wins; the older LEC_TRUST_PROXY=1/true means one proxy (or a number of hops). */
+function proxyHops(hops, legacy) {
+  const n = Number(hops);
+  if (hops !== '' && hops != null && Number.isInteger(n) && n >= 0) return Math.min(n, 10);
+  if (legacy === true || /^(true|yes|on)$/i.test(String(legacy || ''))) return 1;
+  const l = Number(legacy);
+  return Number.isInteger(l) && l > 0 ? Math.min(l, 10) : 0;
+}
+/** Client IP: with N trusted proxies in front, the Nth X-Forwarded-For entry from the right (what the outermost proxy
+ *  saw); never the leftmost one, which the client can write. Without proxies, the socket address. */
+export function clientIpOf(req, hops = 0) {
+  const sock = String((req.socket && req.socket.remoteAddress) || '').replace(/^::ffff:/, '');
+  if (!hops) return sock;
+  const raw = req.headers['x-forwarded-for'];
+  const list = String(Array.isArray(raw) ? raw.join(',') : raw || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const ip = list.length >= hops ? list[list.length - hops] : '';
+  return /^[0-9a-fA-F:.]{2,45}$/.test(ip) ? ip.replace(/^::ffff:/, '') : sock;
 }
 
 function openDb(file) {
@@ -94,24 +125,37 @@ export function isPrivateFile(rel) {
   const segs = String(rel).split(/[\\/]+/).filter(Boolean);
   if (segs.some((x) => x.startsWith('.'))) return true; // dotfiles and dot-directories (.env, .git/)
   const base = (segs[segs.length - 1] || '').toLowerCase();
-  return base.endsWith('.md') || base === 'lecpage.blueprint.json' || base === 'admin-key.sha256' || /\.(sqlite|sqlite-wal|sqlite-shm|db)$/.test(base);
+  return base.endsWith('.md') || base === 'lecpage.blueprint.json' || base === 'admin-key.sha256' || base === 'admin-key.txt' || /\.(sqlite|sqlite-wal|sqlite-shm|db)$/.test(base);
 }
 
 /** Starts the server. Returns { server, port, url, close() }. */
 export async function start(opts = readOptions()) {
   const log = opts.quiet ? () => {} : (...a) => console.log(new Date().toISOString(), ...a);
-  await fsp.mkdir(path.join(opts.data, 'uploads'), { recursive: true });
+  try { await fsp.mkdir(path.join(opts.data, 'uploads'), { recursive: true }); fs.accessSync(opts.data, fs.constants.W_OK); } catch (e) {
+    if (e && (e.code === 'EACCES' || e.code === 'EPERM' || e.code === 'EROFS')) {
+      throw new Error(`데이터 폴더(${opts.data})에 쓸 수 없습니다. 컨테이너는 node 사용자(uid 1000)로 실행되니 호스트에서 "mkdir -p data && sudo chown 1000:1000 data" 를 한 번 실행하세요.`);
+    }
+    throw e;
+  }
 
-  // ---- admin key: env/CLI, or a generated one kept as a hash in the data folder ----
+  // ---- admin key: env/CLI, or a generated one (plaintext only in a 0600 file, never in the logs) ----
+  // Weak or example keys are refused: anyone could guess them and read names, schools and survey answers.
+  if (opts.adminKey) { const why = keyProblem(opts.adminKey); if (why) throw new Error(`관리자 키(--admin-key / LEC_ADMIN_KEY)를 쓸 수 없습니다: ${why}`); }
+  if (opts.setupToken) { const why = keyProblem(opts.setupToken); if (why) throw new Error(`설정 토큰(--setup-token / LEC_SETUP_TOKEN)을 쓸 수 없습니다: ${why.replace('관리자 키', '설정 토큰')}`); }
+  if (opts.adminKeyHash && (!/^[0-9a-f]{64}$/i.test(String(opts.adminKeyHash)) || await isWeakKeyHash(opts.adminKeyHash))) {
+    throw new Error('LEC_ADMIN_KEY_HASH 가 SHA-256(64자리 16진수)가 아니거나 예시 키의 해시입니다. 새 키로 다시 만드세요: node server.mjs --hash \'새-관리자-키\'');
+  }
   let adminKeyHash = opts.adminKeyHash ? String(opts.adminKeyHash).toLowerCase() : opts.adminKey ? await sha256hex(opts.adminKey) : '';
   const keyFile = path.join(opts.data, 'admin-key.sha256');
+  const keyText = path.join(opts.data, 'admin-key.txt');
   if (!adminKeyHash && !opts.setupToken && !opts.openInit && opts.generateKey) {
     if (fs.existsSync(keyFile)) adminKeyHash = fs.readFileSync(keyFile, 'utf8').trim();
     else {
-      const key = randomToken().slice(0, 16);
+      const key = randomToken().slice(0, 20);
       adminKeyHash = await sha256hex(key);
+      fs.writeFileSync(keyText, `${key}\n`, { mode: 0o600 });
       fs.writeFileSync(keyFile, adminKeyHash + '\n', { mode: 0o600 });
-      console.log(`\n  관리자 키를 새로 만들었습니다(이번 한 번만 보여 줍니다): ${key}\n  잊어버리면 ${keyFile} 를 지우고 다시 실행하세요.\n`);
+      console.log(`\n  관리자 키를 새로 만들어 ${keyText} 에 저장했습니다(권한 0600, 로그에는 남기지 않음).\n  키를 따로 적어 둔 뒤 그 파일은 지워도 됩니다. 잊어버리면 ${keyFile} 를 지우고 다시 실행하세요.\n`);
     }
   }
 
@@ -125,8 +169,11 @@ export async function start(opts = readOptions()) {
       allowedCodes: opts.codes.length ? new Set(opts.codes) : null,
       retentionDays: opts.retentionDays,
       maxUploadBytes: Math.max(1, opts.maxUploadMb) * 1024 * 1024,
+      maxParticipants: opts.maxParticipants || 500,
+      rate: { create: [opts.newCodesPerHour || 30, 3600e3], ...(opts.rate || {}) },
     },
   });
+  const hops = opts.trustedProxies || 0;
 
   // ---- realtime hub ----
   const rooms = new Map(); // code → { sse:Set<res>, ws:Set<ws>, react:Map, timer }
@@ -163,7 +210,15 @@ export async function start(opts = readOptions()) {
   async function runCleanup() {
     try {
       for (const { code } of core.cleanup()) await fsp.rm(path.join(opts.data, 'uploads', code), { recursive: true, force: true });
+      for (const { code, name } of core.sweepOrphans()) await removeStored(code, [name]);
     } catch (e) { log('cleanup error', e.message); }
+  }
+  /** Deletes stored uploads by name (post removed, files replaced, orphans). Names were validated by the core. */
+  async function removeStored(code, names) {
+    for (const n of names || []) {
+      if (!/^[a-f0-9]{24}\.[a-z0-9]{2,4}$/.test(n)) continue;
+      await fsp.rm(path.join(opts.data, 'uploads', code, n), { force: true }).catch(() => {});
+    }
   }
   runCleanup();
 
@@ -180,10 +235,18 @@ export async function start(opts = readOptions()) {
     return h;
   }
   const originAllowed = (req) => allowAny || !req.headers.origin || opts.origins.includes(req.headers.origin);
-  const clientIp = (req) => {
-    if (opts.trustProxy) { const f = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim(); if (f) return f; }
-    return req.socket.remoteAddress || '';
+  const clientIp = (req) => clientIpOf(req, hops);
+  /** The origin this reader used (for absolute upload URLs in its own responses only). */
+  const reqOrigin = (req) => {
+    const host = String(req.headers.host || '');
+    if (!/^([a-z0-9.-]{1,253}|\[[0-9a-f:.]{2,45}\])(:\d{1,5})?$/i.test(host)) return null;
+    const xp = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    return (hops && (xp === 'https' || xp === 'http') ? xp : 'http') + '://' + host;
   };
+  // open SSE/WebSocket connections per client IP (a school NAT is one IP: generous, but bounded)
+  const sockets = new Map();
+  const takeSocket = (ip) => { const n = sockets.get(ip) || 0; if (n >= opts.maxSocketsPerIp) return false; sockets.set(ip, n + 1); return true; };
+  const freeSocket = (ip) => { const n = (sockets.get(ip) || 1) - 1; if (n > 0) sockets.set(ip, n); else sockets.delete(ip); };
   const headersOf = (req) => ({ get: (n) => { const v = req.headers[n.toLowerCase()]; return v == null ? null : Array.isArray(v) ? v[0] : v; } });
   function send(res, status, body, extra = {}) {
     const isText = typeof body === 'string';
@@ -219,7 +282,8 @@ export async function start(opts = readOptions()) {
       if (!f || typeof f === 'string') throw new HttpError(400, 'required', 'file 필드가 필요합니다.');
       bytes = Buffer.from(await f.arrayBuffer()); name = f.name;
     } else {
-      bytes = raw; name = decodeURIComponent(String(req.headers['x-lec-filename'] || 'file'));
+      bytes = raw;
+      try { name = decodeURIComponent(String(req.headers['x-lec-filename'] || 'file')); } catch { name = 'file'; }
     }
     const meta = core.checkUpload({ size: bytes.length, head: bytes.subarray(0, 32), name, maxBytes: auth.maxBytes });
     const dir = path.join(opts.data, 'uploads', auth.code);
@@ -237,7 +301,8 @@ export async function start(opts = readOptions()) {
     const file = path.join(opts.data, 'uploads', c, meta.name);
     let st; try { st = await fsp.stat(file); } catch { throw new HttpError(404, 'not_found', '파일이 없습니다.'); }
     const h = {
-      ...cors, 'Content-Type': meta.type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=31536000, immutable',
+      // short private cache: a hidden or removed post's files must stop being served quickly (no shared caches)
+      ...cors, 'Content-Type': meta.type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=300',
       'Cross-Origin-Resource-Policy': 'cross-origin', 'Accept-Ranges': 'bytes', 'Content-Disposition': 'inline',
     };
     if (meta.type !== 'application/pdf') h['Content-Security-Policy'] = "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox";
@@ -259,14 +324,17 @@ export async function start(opts = readOptions()) {
   // ---- SSE ----
   function openSse(req, res, code, cors) {
     const c = normCode(code);
+    const ip = clientIp(req);
     const r = room(c);
     if (r.sse.size + r.ws.size > 5000) throw new HttpError(503, 'too_many_connections', '접속이 너무 많습니다.');
+    if (!takeSocket(ip)) throw new HttpError(429, 'too_many_connections', '이 주소에서 연결이 너무 많습니다.', { retryAfter: 30 });
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(`retry: 3000\n:${' '.repeat(2048)}\n\n`); // padding defeats buffering proxies
     res.write(`data: ${JSON.stringify({ type: 'hello', now: Date.now(), mode: 'sse', protocol: PROTOCOL })}\n\n`);
     r.sse.add(res);
     req.socket.setKeepAlive(true, 30_000);
-    const done = () => { r.sse.delete(res); dropRoom(c); };
+    let freed = false;
+    const done = () => { r.sse.delete(res); dropRoom(c); if (!freed) { freed = true; freeSocket(ip); } };
     req.on('close', done); res.on('error', done);
   }
 
@@ -317,11 +385,12 @@ export async function start(opts = readOptions()) {
       if (a === 'upload' && parts.length === 2 && req.method === 'POST') return await handleUpload(req, res, code, cors);
       if (a === 'files' && b && parts.length === 3 && (req.method === 'GET' || req.method === 'HEAD')) return await serveFile(req, res, code, b, cors);
       const body = await readJson(req);
-      const out = await core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req) });
+      const out = await core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req), origin: reqOrigin(req) });
       const c = normCode(code);
       if (out.events) broadcast(c, out.events);
       if (out.reaction) addReaction(c, out.reaction);
       if (out.purgedFiles) await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true });
+      if (out.deleteFiles) await removeStored(c, out.deleteFiles);
       if (out.contentType) {
         res.writeHead(out.status, { ...cors, 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` });
         return res.end(out.body);
@@ -336,6 +405,7 @@ export async function start(opts = readOptions()) {
       return send(res, status, body, { ...cors, ...(retryAfter ? { 'Retry-After': String(retryAfter) } : {}) });
     }
   });
+  server.maxConnections = opts.maxConnections || 5000;
   server.headersTimeout = 30_000;
   server.requestTimeout = 120_000;
   server.keepAliveTimeout = 65_000;
@@ -347,22 +417,37 @@ export async function start(opts = readOptions()) {
     let code;
     try { code = m && normCode(decodeURIComponent(m[1])); } catch { code = null; }
     if (!code || !originAllowed(req)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+    const ip = clientIp(req);
     const r = room(code);
     if (r.sse.size + r.ws.size > 5000) { socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; }
+    if (!takeSocket(ip)) { socket.end('HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\nConnection: close\r\n\r\n'); return; }
+    let fails = 0; let freed = false;
     const ws = acceptWebSocket(req, socket, head, {
       onMessage: async (w, msg) => {
         if (msg === 'ping') return w.send('pong');
         let o; try { o = JSON.parse(msg); } catch { return; }
         if (o && o.type === 'auth' && typeof o.admin === 'string' && o.admin.length <= 200) {
-          const t = core.training(code);
-          const ok = core.isAdmin(t, { adminHash: await sha256hex(o.admin) });
-          w.attachment.admin = ok;
-          w.send(JSON.stringify({ type: 'auth', ok }));
+          // one check at a time per socket, in order
+          w.attachment.authQ = (w.attachment.authQ || Promise.resolve()).then(async () => {
+            if (!w.open) return;
+            try {
+              const ok = await core.wsAuth(code, o.admin, ip);
+              w.attachment.admin = ok;
+              w.send(JSON.stringify({ type: 'auth', ok }));
+              // three wrong keys on one socket: close it (the IP-wide throttle still applies to new sockets)
+              if (!ok && ++fails >= 3) w.close(1008, 'auth');
+            } catch (e) {
+              const { body, retryAfter } = errorBody(e);
+              w.attachment.admin = false;
+              w.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter }));
+              w.close(1008, 'auth');
+            }
+          });
         } else if (o && o.type === 'ping') w.send(JSON.stringify({ type: 'pong', now: Date.now() }));
       },
-      onClose: (w) => { r.ws.delete(w); dropRoom(code); },
+      onClose: (w) => { r.ws.delete(w); dropRoom(code); if (!freed) { freed = true; freeSocket(ip); } },
     });
-    if (!ws) return;
+    if (!ws) { if (!freed) { freed = true; freeSocket(ip); } return; }
     r.ws.add(ws);
     ws.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL }));
   });

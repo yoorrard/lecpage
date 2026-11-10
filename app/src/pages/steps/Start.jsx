@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { StepHead } from '../Project.jsx';
-import { Sheet, Notice, Progress, Field, Chips, Dialog } from '../../components/ui.jsx';
+import { Sheet, Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
-import { AiPanel } from '../../components/AiPanel.jsx';
+import { AiPanel, useAiResume } from '../../components/AiPanel.jsx';
 import { blobs } from '../../lib/db.js';
 import { fmtBytes, toast } from '../../lib/util.js';
 import { takePendingFiles } from '../../lib/project.js';
@@ -82,6 +82,7 @@ export function StepStart({ p, update, go }) {
   const titleRef = useRef();
   const [over, setOver] = useState(false);
   const [ai, setAi] = useState(false);
+  useAiResume(setAi);
   const [confirmRemake, setConfirmRemake] = useState(false);
   const [titleErr, setTitleErr] = useState(false);
   const { busy, pct, handle, removeFile } = useIngest(p, update);
@@ -99,27 +100,29 @@ export function StepStart({ p, update, go }) {
     const ing = await import('../../lib/ingest.js');
     const bp = makeDraft(p, ing);
     update({ blueprint: bp, aiMethod: 'draft' });
-    toast('사이트 초안을 만들었어요. 오른쪽 미리보기를 보며 고쳐 보세요.');
+    toast('초안을 만들었어요. 미리보기를 보며 고쳐 보세요.');
     go(2);
   }
-  function onAi(bp) { update({ blueprint: applyInfo(bp, p.info, p.material, p.blueprint), aiMethod: 'ai' }); setAi(false); toast('AI가 만든 초안으로 바꿨어요.'); go(2); }
+  function onAi(bp) { update({ blueprint: applyInfo(bp, p.info, p.material, p.blueprint), aiMethod: 'ai' }); setAi(false); toast('AI가 다듬은 초안을 만들었어요.'); go(2); }
   const mat = p.material; const d = mat?.detected || {};
+
+  const quick = FEATURES.filter((f) => f.quick);
+  const feats = info.features || [];
+  const toggleFeat = (v) => setInfo({ features: feats.includes(v) ? feats.filter((x) => x !== v) : [...feats, v] });
 
   return (
     <>
-      <StepHead title={p.blueprint ? '교재와 기본 정보' : '교재를 넣으면 초안이 바로 나와요'} desc="PPT·PDF·한글(HWPX)·워드 파일을 이 브라우저 안에서 읽어요. 교재는 어디에도 올라가지 않아요." />
-      {p.blueprint && (
-        <Notice kind="ok"><Mascot size={36} mood="happy" /><div class="spread" style={{ flex: 1 }}><span>사이트 초안이 이미 있어요. 아래 정보를 고치면 사이트에도 바로 반영돼요.</span><button class="btn btn-sm btn-ink" onClick={() => go(2)}>살펴보고 고치기 →</button></div></Notice>
-      )}
+      <StepHead title={p.blueprint ? '교재와 기본 정보' : '교재를 넣으면 초안이 바로 나와요'} desc="PPT·PDF·한글(HWPX)·워드 파일을 이 브라우저 안에서만 읽어요." />
+      {p.blueprint && <Notice kind="ok">초안이 있어요. 여기서 고친 정보는 사이트에 바로 반영돼요.</Notice>}
       <Sheet>
         <div class="stack">
           <div class={`drop${over ? ' over' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) handle(e.dataTransfer.files); }}>
-            <Mascot size={80} mood={busy ? 'think' : over ? 'wow' : 'idle'} look={!!busy} />
+            <Mascot size={72} mood={busy ? 'think' : over ? 'wow' : 'idle'} look={!!busy} />
             <b aria-live="polite">{busy || (p.files?.length ? '교재를 더 넣으려면 여기에 놓거나 누르세요' : '여기에 교재 파일을 놓거나 눌러서 고르세요')}</b>
-            <span class="small muted">여러 파일도 돼요. PDF를 넣으면 교재 넘겨 보기용 슬라이드 그림도 만들어요.</span>
+            <span class="small muted">여러 개도 돼요. PDF가 있으면 슬라이드 그림도 만들어요.</span>
             {busy && pct > 0 && <div style={{ width: 'min(320px,80%)' }}><Progress pct={pct} /></div>}
           </div>
           <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { handle(e.target.files); e.target.value = ''; }} />
@@ -136,43 +139,42 @@ export function StepStart({ p, update, go }) {
         </div>
       </Sheet>
 
-      <Sheet fold={false}>
-        <div class="stack">
-          <h2 class="h-sub">기본 정보 <span class="small muted">교재에서 찾은 값을 미리 채웠어요</span></h2>
-          <div class="form-grid">
-            <Field label="연수명(꼭 필요해요)" hint={titleErr && !info.title ? <span style={{ color: 'var(--bad)' }}>연수명을 적어 주세요.</span> : null}>
-              <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 수업에 바로 쓰는 생성형 AI" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
-            </Field>
-            <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
-            <div class="row" style={{ gap: '10px', alignItems: 'end' }}>
-              <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
-              <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
-            </div>
-            <Field label="장소 또는 접속 링크"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
+      <section class="block">
+        <h2 class="h-sub">기본 정보 {mat && <span class="small muted">교재에서 찾은 값을 채웠어요</span>}</h2>
+        <div class="form-grid">
+          <Field label="연수명 (필수)" hint={titleErr && !info.title ? <span style={{ color: 'var(--bad)' }}>연수명을 적어 주세요.</span> : null}>
+            <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 수업에 바로 쓰는 생성형 AI" aria-required="true" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
+          </Field>
+          <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
+          <div class="row" style={{ gap: '10px', alignItems: 'end', flexWrap: 'nowrap' }}>
+            <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
+            <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
           </div>
-          <div class="field"><span>참가 인원</span><Chips options={SIZE} value={info.size} onChange={set('size')} label="참가 인원" /></div>
-          <div class="field"><span>참여 기능(선택)</span>
-            <Chips multiple options={FEATURES.filter((f) => f.quick).map((f) => ({ value: f.value, label: f.label }))} value={info.features} onChange={(v) => setInfo({ features: [...v, ...(info.features || []).filter((x) => !FEATURES.find((f) => f.quick && f.value === x))] })} label="참여 기능" />
-            <small>켜면 연수 날 참가자 휴대폰과 강사 화면이 이어져요. 구글 계정으로 10분이면 연결해요(공유하기 단계에서 안내). 다른 기능은 다음 단계에서 더 켤 수 있어요.</small>
-          </div>
+          <Field label="장소 또는 접속 링크"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
+          <Field label="참가 인원"><select value={info.size} onChange={(e) => set('size')(+e.target.value)}>{SIZE.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>
         </div>
-      </Sheet>
+        <fieldset class="field plain-fieldset">
+          <legend>참여 기능 <span class="small muted">선택</span></legend>
+          <div class="inline-checks">{quick.map((f) => <label class="check"><input type="checkbox" checked={feats.includes(f.value)} onChange={() => toggleFeat(f.value)} /><span>{f.label}</span></label>)}</div>
+          <small>켜면 참가자 휴대폰과 강사 화면이 이어져요. 연결은 공유하기 단계에서 구글 계정으로 10분이면 돼요.</small>
+        </fieldset>
+      </section>
 
       <div class="make-bar">
         {p.blueprint
-          ? <><button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button><button class="btn" onClick={() => setConfirmRemake(true)}>교재로 처음부터 다시 만들기</button></>
+          ? <><button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button><button class="btn" onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button></>
           : <button class="btn btn-primary btn-lg" disabled={!!busy} onClick={make}>{busy ? '교재를 읽는 중…' : '사이트 만들기 →'}</button>}
-        <button class="btn btn-quiet" onClick={() => setAi(true)} disabled={!!busy}>AI로 더 다듬어 만들기(선택)</button>
-        {!p.blueprint && <span class="small muted">교재 없이도 연수명만 있으면 만들 수 있어요.</span>}
+        <button class="btn btn-quiet" onClick={() => setAi(true)} disabled={!!busy}>AI로 만들기(선택)</button>
+        {!p.blueprint && <span class="small muted">교재가 없어도 연수명만 있으면 돼요.</span>}
       </div>
 
       <Dialog open={confirmRemake} onClose={() => setConfirmRemake(false)} label="다시 만들기 확인">
         <h2 class="h-sub">처음부터 다시 만들까요?</h2>
-        <p>고친 문구와 섹션 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로 둬요.</p>
-        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); make(); }}>다시 만들기</button><button class="btn btn-quiet" onClick={() => setConfirmRemake(false)}>그만두기</button></div>
+        <p>고친 문구와 칸 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로예요.</p>
+        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); make(); }}>다시 만들기</button><button class="btn btn-quiet" onClick={() => setConfirmRemake(false)}>취소</button></div>
       </Dialog>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI로 만들기" wide>
-        {ai && <AiPanel p={p} onBlueprint={onAi} onClose={() => setAi(false)} />}
+        {ai && <AiPanel p={p} onBlueprint={onAi} />}
       </Dialog>
     </>
   );

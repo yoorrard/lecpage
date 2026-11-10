@@ -4,8 +4,13 @@ import * as E from '@engine/src/index.js';
 let runtimePromise = null;
 /** 실행 파일 묶음은 처음 빌드할 때 한 번만 불러옵니다. */
 export function loadRuntime() {
-  if (!runtimePromise) runtimePromise = import('./runtime-files.js').then((m) => m.runtime);
+  if (!runtimePromise) runtimePromise = import('./runtime-files.js').then((m) => { reviewJs = reviewScripts(m.runtime); return m.runtime; });
   return runtimePromise;
+}
+// 미리보기에만 넣는 '표시해서 수정 요청' 도구(배포 사이트 빌드에는 들어가지 않음)
+let reviewJs = '';
+function reviewScripts(rt) {
+  try { return ['review/vendor/modern-screenshot.js', 'review/vendor/perfect-freehand.js', 'review/annotate.js'].map((p) => rt.read(p)).join('\n;\n'); } catch { return ''; }
 }
 
 export { E };
@@ -44,7 +49,8 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6 } 
   html = html.replace('<body', '<body data-lp-preview="1"');
   // '고칠 곳 고르기': 앱이 켜면 칸에 마우스를 올려 고르고, 누르면 그 칸의 id만 앱으로 보냄(앱은 아는 id인지 다시 확인)
   const pick = `<script>(function(){var on=false;var st=document.createElement('style');st.textContent='html.lp-pick main [id]:not(main [id] [id]):hover{outline:3px dashed #5B49B0;outline-offset:-3px;cursor:pointer}';document.head.appendChild(st);addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type==='lp-pick'){on=!!d.on;document.documentElement.classList.toggle('lp-pick',on);}});document.addEventListener('click',function(e){if(!on)return;var m=document.querySelector('main');var s=e.target.closest&&e.target.closest('[id]');while(s&&s.parentElement&&s.parentElement.closest&&s.parentElement.closest('main [id]'))s=s.parentElement.closest('main [id]');if(!s||!m||!m.contains(s))return;e.preventDefault();e.stopPropagation();parent.postMessage({type:'lp-picked',id:String(s.id).slice(0,80)},'*');},true);})();<\/script>`;
-  html = html.includes('</body>') ? html.replace('</body>', pick + '</body>') : html + pick;
+  const review = reviewJs ? `<script>${escClose(reviewJs)}<\/script>` : '';
+  html = html.includes('</body>') ? html.replace('</body>', () => pick + review + '</body>') : html + pick + review;
   return html;
 }
 

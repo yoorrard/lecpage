@@ -11,11 +11,16 @@
 --    request header (PostgREST exposes it as request.headers). Knowing the code = being in the room.
 --    Column grants hide owner ids of questions; hidden content is moved to a private table.
 --  * Realtime: public Broadcast channel `lec:<CODE>` (and `lec:<CODE>:adm` for the console) carries only
---    small throttled "tick" messages {rev, r:{emoji:count}}; clients then fetch rows with rev > cursor through
---    RLS. Ticks are sent at most every flush_ms (default 2000 ms) per channel, so 200 listeners stay under the
---    Free plan's 100 messages/second even when 200 people press "done" at once. Payloads are never trusted.
---  * Uploads: Storage bucket `lec-uploads` (public read, 20 MB, images/pdf/mp3/mp4) — insert allowed only for a
---    path handed out by lec_upload_ticket().
+--    small throttled "tick" messages {rev, rx}; clients then fetch rows with rev > cursor through RLS and the
+--    latest reaction batch through lec_reactions(). Ticks are sent at most every flush_ms (default 2000 ms) per
+--    channel, so 200 listeners stay under the Free plan's 100 messages/second. Payloads are only hints: anyone
+--    with the publishable key can send to a public channel. (Private channels need Supabase Auth sessions, which
+--    this design avoids; clients therefore throttle resyncs and never render counts from a payload.)
+--  * Uploads: PRIVATE Storage bucket `lec-uploads` (20 MB, images/pdf/mp3/mp4). Insert only for a path handed out
+--    by lec_upload_ticket(); read (signed URLs, 1 h) only while a visible post uses the file. Removed, purged and
+--    expired files go to lec_private.file_trash; the instructor console deletes them from Storage.
+--  * Admin keys: at least 12 characters, no example values. Wrong keys are counted per (code, IP) and per IP; a
+--    wrong key returns its error without raising (PostgREST response.status), so the count survives.
 -- ============================================================================
 
 create schema if not exists lec_private;
@@ -87,6 +92,19 @@ create table if not exists lec_private.upload_tickets (
   expires_at timestamptz not null
 );
 create index if not exists lec_tickets_training on lec_private.upload_tickets (training_code);
+alter table lec_private.upload_tickets add column if not exists post uuid;      -- set when a post uses the file
+alter table lec_private.upload_tickets add column if not exists mime text;      -- declared type (checked again by Storage)
+alter table lec_private.upload_tickets add column if not exists max_bytes bigint;
+alter table lec_private.trainings add column if not exists react_seq bigint not null default 0;
+alter table lec_private.trainings add column if not exists react_last jsonb not null default '{}'::jsonb;
+
+-- Storage paths to delete (removed posts, purged or expired trainings, uploads never attached). Not tied to the
+-- training row: the entries must outlive it. The console deletes these objects through the Storage API.
+create table if not exists lec_private.file_trash (
+  path text primary key,
+  training_code text not null,
+  queued_at timestamptz not null default now()
+);
 
 -- ---------------------------------------------------------------- collection tables (public schema, RLS on)
 create table if not exists public.lec_participants (
@@ -277,7 +295,13 @@ returns text language sql stable set search_path = '' as $$
   select upper(nullif(coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json ->> 'x-lec-code', ''))
 $$;
 
+-- Client IP for soft per-IP limits: the right-most X-Forwarded-For entry (added by the proxy in front of the API;
+-- the left-most one is whatever the client wrote). Admin-key throttling also counts the left-most entry.
 create or replace function lec_private.req_ip()
+returns text language sql stable set search_path = '' as $$
+  select nullif(btrim(reverse(split_part(reverse(coalesce(coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json ->> 'x-forwarded-for', '')), ',', 1))), '')
+$$;
+create or replace function lec_private.req_ip_first()
 returns text language sql stable set search_path = '' as $$
   select nullif(btrim(split_part(coalesce(coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json ->> 'x-forwarded-for', ''), ',', 1)), '')
 $$;
@@ -405,6 +429,105 @@ begin
   if v > p_max then perform lec_private.fail(429, 'rate_limited', '잠시 후 다시 시도해 주세요.'); end if;
 end $$;
 
+-- fixed windows of p_secs seconds (admin-key failures: 600 s)
+create or replace function lec_private.win_start(p_secs int)
+returns timestamptz language sql stable set search_path = '' as $$
+  select to_timestamp(floor(extract(epoch from now()) / p_secs) * p_secs)
+$$;
+create or replace function lec_private.count_win(p_key text, p_bucket text, p_secs int)
+returns void language plpgsql set search_path = '' as $$
+declare w timestamptz := lec_private.win_start(p_secs);
+begin
+  insert into lec_private.rate as r (key, bucket, win, hits) values (p_key, p_bucket, w, 1)
+  on conflict (key, bucket) do update set hits = case when r.win = excluded.win then r.hits + 1 else 1 end, win = excluded.win;
+end $$;
+create or replace function lec_private.full_win(p_key text, p_bucket text, p_max int, p_secs int)
+returns boolean language sql stable set search_path = '' as $$
+  select exists (select 1 from lec_private.rate r where r.key = p_key and r.bucket = p_bucket and r.win = lec_private.win_start(p_secs) and r.hits >= p_max)
+$$;
+
+-- An error answer that does NOT raise: PostgREST sends `response.status` with this body, and the transaction commits
+-- (so a failure counter written just before survives). supabase-js reads it as { code, message, hint }.
+create or replace function lec_private.err(p_status int, p_code text, p_msg text)
+returns jsonb language plpgsql set search_path = '' as $$
+begin
+  perform set_config('response.status', p_status::text, true);
+  return jsonb_build_object('code', 'PT' || p_status::text, 'message', p_code, 'hint', p_msg, 'details', null);
+end $$;
+
+/* H4: admin key check for every admin RPC. null = ok; otherwise the error body to return.
+   Wrong keys are counted per (code, IP) — both ends of X-Forwarded-For — and per IP, in 10-minute windows.
+   While a counter is full every admin call answers 429, the right key too (no oracle). */
+create or replace function lec_private.admin_check(p_code text, p_key text)
+returns jsonb language plpgsql set search_path = '' as $$
+declare
+  t lec_private.trainings; a text := coalesce(lec_private.req_ip(), '?'); b text := coalesce(lec_private.req_ip_first(), '?');
+begin
+  if lec_private.full_win('af:' || p_code || '|' || a, 'authfail', 10, 600) or lec_private.full_win('af:' || p_code || '|' || b, 'authfail', 10, 600)
+     or lec_private.full_win('afip:' || b, 'authfail', 20, 600) then
+    perform lec_private.fail(429, 'rate_limited', '관리자 키가 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.');
+  end if;
+  t := lec_private.training(p_code);
+  if lec_private.is_admin(t, p_key) then return null; end if;
+  if p_key is null or p_key = '' then return lec_private.err(401, 'admin_required', '관리자 키가 필요합니다.'); end if;
+  perform lec_private.count_win('af:' || p_code || '|' || a, 'authfail', 600);
+  if b <> a then perform lec_private.count_win('af:' || p_code || '|' || b, 'authfail', 600); end if;
+  perform lec_private.count_win('afip:' || b, 'authfail', 600);
+  return lec_private.err(403, 'admin_required', '관리자 키가 필요합니다.');
+end $$;
+
+-- Example keys from our own docs and templates (never accepted as admin keys or setup tokens).
+create or replace function lec_private.weak_keys()
+returns text[] language sql immutable set search_path = '' as $$
+  select array['change-me', 'changeme', 'change-me-관리자키', 'change-me-admin-key', '관리자키', '관리자 키', '연수관리자키', '내관리자키',
+               '관리자키-8자-이상', '여기에-관리자-키-8자-이상', '여기에-관리자-키-12자-이상', 'admin', 'administrator', 'password', 'password1',
+               'password123', 'passw0rd', 'qwerty', 'qwerty123', '12345678', '123456789', '1234567890', '123456789012', 'lecpage',
+               'lecpage-admin', 'correct-horse-battery', 'secret', 'letmein']
+$$;
+create or replace function lec_private.key_problem(p_key text)
+returns text language plpgsql immutable set search_path = '' as $$
+declare k text := lower(btrim(normalize(coalesce(p_key, ''), NFC)));
+begin
+  if char_length(k) < 12 then return '관리자 키는 12자 이상이어야 합니다.'; end if;
+  if k = any (lec_private.weak_keys()) or k ~ '^change-?me' then return '예시로 쓰인 관리자 키는 쓸 수 없습니다. 새로 만들어 주세요.'; end if;
+  if (select count(distinct c) from regexp_split_to_table(k, '') c) < 4 then return '같은 글자가 반복된 키는 쓸 수 없습니다.'; end if;
+  return null;
+end $$;
+create or replace function lec_private.weak_hash(p_hash text)
+returns boolean language sql immutable set search_path = '' as $$
+  select exists (select 1 from unnest(lec_private.weak_keys()) k
+                  where lec_private.hash(k) = lower(p_hash) or lec_private.hash(upper(k)) = lower(p_hash) or lec_private.hash(initcap(k)) = lower(p_hash))
+$$;
+
+-- participant nicknames that would impersonate the instructor or the service
+create or replace function lec_private.reserved_nick(p text)
+returns boolean language sql immutable set search_path = '' as $$
+  select regexp_replace(lower(normalize(coalesce(p, ''), NFKC)), '[[:space:]._·*~!?()\[\]{}''"`:;,/\\|-]+', '', 'g')
+         = any (array['강사', '강사님', '운영자', '운영자님', 'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'])
+$$;
+
+-- board files allowed? init settings.uploads and the instructor's state.ui.uploads (admin only), both default on
+create or replace function lec_private.uploads_on(t lec_private.trainings)
+returns boolean language sql stable set search_path = '' as $$
+  select coalesce(t.settings ->> 'uploads', '') <> 'false'
+     and coalesce((select s.data -> 'ui' ->> 'uploads' from public.lec_state s where s.training_code = t.code), '') <> 'false'
+$$;
+create or replace function lec_private.moderated(t lec_private.trainings)
+returns boolean language sql stable set search_path = '' as $$
+  select coalesce(t.settings ->> 'moderation', '') = 'true'
+      or coalesce((select s.data -> 'ui' ->> 'moderation' from public.lec_state s where s.training_code = t.code), '') = 'true'
+$$;
+-- '<CODE>/<32hex>.<ext>' from a file entry: its `path`, or an old public/signed URL of this bucket
+create or replace function lec_private.file_path(f jsonb, p_code text)
+returns text language plpgsql immutable set search_path = '' as $$
+declare v text;
+begin
+  if jsonb_typeof(f) is distinct from 'object' then return null; end if;
+  v := coalesce(nullif(f ->> 'path', ''), substring(coalesce(f ->> 'url', '') from '/storage/v1/object/(?:public|sign|authenticated)/lec-uploads/([^?#]+)'));
+  if v is null or v !~ ('^' || p_code || '/[0-9a-f]{32}\.(png|jpg|gif|webp|pdf|mp3|mp4)$') then return null; end if;
+  return v;
+end $$;
+
 -- every write takes the training row lock here, so revisions are assigned in commit order (no gaps for readers)
 create or replace function lec_private.bump(p_code text, p_public boolean)
 returns bigint language plpgsql set search_path = '' as $$
@@ -428,23 +551,29 @@ exception when others then
 end $$;
 
 /* Throttled change notification ("tick"). Returns ms until a pending tick may be sent (0 = nothing pending).
-   The client that wrote calls lec_flush() after that delay, so the last change is never stuck. */
-create or replace function lec_private.poke(p_code text, p_fast boolean default false)
+   The client that wrote calls lec_flush() after that delay, so the last change is never stuck.
+   Reactions are flushed as a numbered batch (rx) that clients read with lec_reactions(); `r` stays in the payload
+   only for older clients. p_skip: give up instead of waiting when another transaction holds the row (lec_flush). */
+drop function if exists lec_private.poke(text, boolean);
+create or replace function lec_private.poke(p_code text, p_fast boolean default false, p_skip boolean default false)
 returns int language plpgsql set search_path = '' as $$
 declare
-  t lec_private.trainings; v_now timestamptz := clock_timestamp(); v_wait int := 0; v_r jsonb;
+  t lec_private.trainings; v_now timestamptz := clock_timestamp(); v_wait int := 0; v_r jsonb; v_rx bigint;
   v_gap double precision; v_min double precision; v_adm_min double precision;
 begin
-  select * into t from lec_private.trainings where code = p_code for update;
+  if p_skip then select * into t from lec_private.trainings where code = p_code for update skip locked;
+  else select * into t from lec_private.trainings where code = p_code for update; end if;
   if not found then return 0; end if;
   select coalesce(jsonb_object_agg(emoji, n), '{}'::jsonb) into v_r from lec_private.reactions where training_code = p_code and n > 0;
   v_min := case when p_fast then 0.3 else t.flush_ms / 1000.0 end;
   if t.pub_rev > t.pub_tick_rev or v_r <> '{}'::jsonb then
     v_gap := extract(epoch from v_now - t.pub_tick_at);
     if v_gap >= v_min then
-      perform lec_private.send(jsonb_build_object('rev', t.pub_rev, 'r', v_r), 'tick', 'lec:' || p_code);
+      v_rx := t.react_seq + case when v_r <> '{}'::jsonb then 1 else 0 end;
+      perform lec_private.send(jsonb_build_object('rev', t.pub_rev, 'rx', v_rx) || case when v_r <> '{}'::jsonb then jsonb_build_object('r', v_r) else '{}'::jsonb end, 'tick', 'lec:' || p_code);
       delete from lec_private.reactions where training_code = p_code;
-      update lec_private.trainings set pub_tick_rev = t.pub_rev, pub_tick_at = v_now where code = p_code;
+      update lec_private.trainings set pub_tick_rev = t.pub_rev, pub_tick_at = v_now,
+             react_seq = v_rx, react_last = case when v_r <> '{}'::jsonb then v_r else react_last end where code = p_code;
     else
       v_wait := greatest(v_wait, ceil((v_min - v_gap) * 1000)::int);
     end if;
@@ -482,22 +611,32 @@ returns jsonb language sql stable set search_path = '' as $$
          || coalesce((select s.data || jsonb_build_object('updatedAt', lec_private.ms(s.updated_at)) from public.lec_state s where s.training_code = p_code), '{}'::jsonb)
 $$;
 
-create or replace function lec_private.clean_files(v jsonb)
-returns jsonb language plpgsql immutable set search_path = '' as $$
-declare f jsonb; o jsonb := '[]'::jsonb; u text; ty text;
+/* M7: a post may only carry this training's own uploads, by the same participant: a fresh upload ticket of theirs
+   (not used by another post) or a file the post already has. Stored as { path, url:'', name, type, size };
+   clients get a short-lived signed URL for `path`. Never an outside URL (no tracking pixels, no hotlinking). */
+drop function if exists lec_private.clean_files(jsonb);
+create or replace function lec_private.clean_files(v jsonb, p_code text, p_by uuid, p_post uuid)
+returns jsonb language plpgsql stable set search_path = '' as $$
+declare f jsonb; o jsonb := '[]'::jsonb; ty text; v_path text; v_mime text; seen text[] := '{}';
 begin
   if v is null or jsonb_typeof(v) = 'null' then return o; end if;
   if jsonb_typeof(v) <> 'array' then perform lec_private.fail(400, 'invalid_type', 'files: 배열'); end if;
   if jsonb_array_length(v) > 5 then perform lec_private.fail(400, 'too_many', 'files: 5개까지'); end if;
   for f in select * from jsonb_array_elements(v) loop
     if jsonb_typeof(f) <> 'object' then perform lec_private.fail(400, 'invalid_type', 'files[]'); end if;
-    u := lec_private.jtxt(f, 'url', 500, true);
-    if u !~ '^https://[^\s<>"]+$' then perform lec_private.fail(400, 'invalid_value', 'files.url: https 주소'); end if;
     ty := f ->> 'type';
     if ty is null or not (ty = any (array['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'audio/mpeg', 'video/mp4'])) then
       perform lec_private.fail(415, 'unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.');
     end if;
-    o := o || jsonb_build_array(jsonb_build_object('url', u, 'name', lec_private.jtxt(f, 'name', 120), 'type', ty,
+    v_path := lec_private.file_path(f, p_code);
+    if v_path is null or v_path = any (seen) then perform lec_private.fail(400, 'invalid_value', 'files: 이 연수에 내가 올린 파일만 붙일 수 있어요.'); end if;
+    select t.mime into v_mime from lec_private.upload_tickets t
+     where t.path = v_path and t.training_code = p_code and t.by = p_by and (t.post is null or t.post = p_post);
+    if not found and not (p_post is not null and exists (select 1 from public.lec_posts x where x.id = p_post and x.by = p_by and strpos(x.files::text, v_path) > 0)) then
+      perform lec_private.fail(400, 'invalid_value', 'files: 이 연수에 내가 올린 파일만 붙일 수 있어요.');
+    end if;
+    seen := seen || v_path;
+    o := o || jsonb_build_array(jsonb_build_object('path', v_path, 'url', '', 'name', lec_private.jtxt(f, 'name', 120), 'type', coalesce(v_mime, ty),
       'size', case when jsonb_typeof(f -> 'size') = 'number' then greatest(0, least((f ->> 'size')::numeric, 1e10))::bigint else 0 end));
   end loop;
   return o;
@@ -657,6 +796,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text := lec_private.code(p_code); s jsonb := coalesce(p_settings, '{}'::jsonb); v_ret int; v_flush int;
 begin
   if p_admin_hash !~ '^[0-9a-f]{64}$' then perform lec_private.fail(400, 'invalid_value', 'admin hash: SHA-256 hex 64자'); end if;
+  if lec_private.weak_hash(p_admin_hash) then perform lec_private.fail(400, 'weak_key', '예시로 쓰인 관리자 키입니다. 새로 만든 키(12자 이상)를 쓰세요.'); end if;
   v_ret := least(greatest(coalesce((s ->> 'retentionDays')::int, 30), 1), 365);
   v_flush := least(greatest(coalesce((s ->> 'flushMs')::int, 2000), 500), 10000);
   insert into lec_private.trainings (code, admin_hash, settings, retention_days, flush_ms)
@@ -669,7 +809,7 @@ end $$;
 create or replace function lec_private.init_training(p_code text, p_admin_key text, p_settings jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
-  if char_length(coalesce(p_admin_key, '')) < 8 then perform lec_private.fail(400, 'weak_key', '관리자 키는 8자 이상으로 정해 주세요.'); end if;
+  if lec_private.key_problem(p_admin_key) is not null then perform lec_private.fail(400, 'weak_key', lec_private.key_problem(p_admin_key)); end if;
   return lec_private.init_training_hash(p_code, lec_private.hash(p_admin_key), p_settings);
 end $$;
 
@@ -677,6 +817,7 @@ create or replace function lec_private.set_setup_secret(p_secret text)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
   if p_secret is null or p_secret = '' then delete from lec_private.config where key = 'setup_hash'; return; end if;
+  if lec_private.key_problem(p_secret) is not null then perform lec_private.fail(400, 'weak_key', '설정 토큰: ' || lec_private.key_problem(p_secret)); end if;
   insert into lec_private.config (key, value) values ('setup_hash', lec_private.hash(p_secret))
   on conflict (key) do update set value = excluded.value;
 end $$;
@@ -686,10 +827,25 @@ create or replace function lec_private.cleanup()
 returns int language plpgsql security definer set search_path = '' as $$
 declare n int;
 begin
+  -- files of trainings past retention, and uploads never attached to a post within a day, go to the trash first
+  insert into lec_private.file_trash (path, training_code)
+    select k.path, k.training_code from lec_private.upload_tickets k join lec_private.trainings g on g.code = k.training_code
+     where g.last_at < now() - make_interval(days => g.retention_days) or (k.post is null and k.expires_at < now() - interval '1 day')
+  on conflict (path) do nothing;
+  begin
+    execute $q$insert into lec_private.file_trash (path, training_code)
+      select o.name, split_part(o.name, '/', 1) from storage.objects o join lec_private.trainings g on g.code = split_part(o.name, '/', 1)
+       where o.bucket_id = 'lec-uploads' and g.last_at < now() - make_interval(days => g.retention_days)
+      on conflict (path) do nothing$q$;
+    -- forget trash entries whose objects are already gone
+    execute $q$delete from lec_private.file_trash t where t.queued_at < now() - interval '10 minutes'
+      and not exists (select 1 from storage.objects o where o.bucket_id = 'lec-uploads' and o.name = t.path)$q$;
+  exception when others then null; -- no storage schema (plain Postgres)
+  end;
   with gone as (delete from lec_private.trainings t where t.last_at < now() - make_interval(days => t.retention_days) returning 1)
   select count(*) into n from gone;
   delete from lec_private.rate where win < now() - interval '1 hour';
-  delete from lec_private.upload_tickets where expires_at < now() - interval '1 day';
+  delete from lec_private.upload_tickets where post is null and expires_at < now() - interval '1 day';
   return n;
 end $$;
 
@@ -700,7 +856,14 @@ declare v_code text := lec_private.code(p_code); v_hash text;
 begin
   select value into v_hash from lec_private.config where key = 'setup_hash';
   if v_hash is null then perform lec_private.fail(403, 'init_disabled', '이 프로젝트는 API로 연수를 등록하지 않습니다(SQL Editor에서 init_training 사용).'); end if;
-  if lec_private.hash(p_setup) <> v_hash then perform lec_private.fail(403, 'setup_required', '설정 토큰이 맞지 않습니다.'); end if;
+  if lec_private.full_win('afip:' || coalesce(lec_private.req_ip_first(), '?'), 'authfail', 20, 600) or lec_private.full_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 20, 600) then
+    perform lec_private.fail(429, 'rate_limited', '설정 토큰이 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.');
+  end if;
+  if lec_private.hash(p_setup) <> v_hash then
+    perform lec_private.count_win('afip:' || coalesce(lec_private.req_ip_first(), '?'), 'authfail', 600);
+    if coalesce(lec_private.req_ip(), '?') <> coalesce(lec_private.req_ip_first(), '?') then perform lec_private.count_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 600); end if;
+    return lec_private.err(403, 'setup_required', '설정 토큰이 맞지 않습니다.');
+  end if;
   if exists (select 1 from lec_private.trainings where code = v_code) then perform lec_private.fail(409, 'already_initialized', '이미 등록된 코드입니다.'); end if;
   return lec_private.init_training_hash(v_code, lower(p_admin_key_hash), p_settings);
 end $$;
@@ -708,19 +871,23 @@ end $$;
 create or replace function public.lec_join(p_code text, p_nickname text default '', p_name text default null, p_school text default null, p_consent boolean default false)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
-  v_code text := lec_private.code(p_code); v_nick text; v_name text; v_school text; v_token text; v_id uuid; v_rev bigint; v_ip text := lec_private.req_ip();
+  v_code text := lec_private.code(p_code); t lec_private.trainings; v_nick text; v_name text; v_school text; v_token text; v_id uuid; v_rev bigint; v_ip text := lec_private.req_ip();
 begin
-  perform lec_private.training(v_code);
+  t := lec_private.training(v_code);
   v_nick := coalesce(nullif(lec_private.txt(p_nickname, 20, 'nickname'), ''), '참가자');
+  if lec_private.reserved_nick(v_nick) then perform lec_private.fail(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.'); end if;
   v_name := lec_private.txt(p_name, 40, 'name');
   v_school := lec_private.txt(p_school, 60, 'school');
   if (v_name <> '' or v_school <> '') and not coalesce(p_consent, false) then
     perform lec_private.fail(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
   end if;
   perform lec_private.hit('join:' || v_code, 'join', 600);           -- whole training, per minute
-  if v_ip is not null then perform lec_private.hit('ip:' || v_ip, 'join', 300); end if;  -- soft; a school NAT is one IP
+  if v_ip is not null then perform lec_private.hit('ip:' || v_ip, 'join', 600); end if;  -- soft; a school NAT is one IP
   v_token := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
   v_rev := lec_private.bump(v_code, false);
+  if (select count(*) from public.lec_participants x where x.training_code = v_code) >= least(greatest(coalesce((t.settings ->> 'maxParticipants')::int, 500), 1), 5000) then
+    perform lec_private.fail(403, 'room_full', '참가 인원이 가득 찼어요. 강사에게 알려 주세요.');
+  end if;
   insert into public.lec_participants (training_code, token_hash, nickname, name, school, consent_at, rev)
   values (v_code, lec_private.hash(v_token), v_nick, v_name, v_school, case when p_consent then now() end, v_rev)
   returning id into v_id;
@@ -731,7 +898,7 @@ create or replace function public.lec_add(p_code text, p_token text, p_col text,
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_code text := lec_private.code(p_code); t lec_private.trainings; p public.lec_participants; v_cid text; v_rev bigint;
-  j jsonb; v_text text; v_anon boolean; v_poll text;
+  j jsonb; v_text text; v_anon boolean; v_poll text; v_err jsonb; v_files jsonb; v_id uuid;
 begin
   if jsonb_typeof(p_doc) is distinct from 'object' then perform lec_private.fail(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.'); end if;
   if not (p_col = any (array['attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'])) then
@@ -739,7 +906,9 @@ begin
   end if;
   v_cid := nullif(lec_private.jtxt(p_doc, 'cid', 40), '');
   if p_col = 'polls' then
-    t := lec_private.require_admin(v_code, p_admin);
+    v_err := lec_private.admin_check(v_code, p_admin);
+    if v_err is not null then return v_err; end if;
+    t := lec_private.training(v_code);
     perform lec_private.hit('admin:' || v_code, 'admin', 600);
     v_rev := lec_private.bump(v_code, true);
     insert into public.lec_polls (training_code, question, kind, options, open, cid, rev)
@@ -786,12 +955,22 @@ begin
       returning lec_private.out('questions', to_jsonb(q.*)) into j;
     when 'posts' then
       v_text := lec_private.jtxt(p_doc, 'text', 1000, false, true);
+      v_files := lec_private.clean_files(p_doc -> 'files', v_code, p.id, null);
+      if v_text = '' and jsonb_array_length(v_files) = 0 then perform lec_private.fail(400, 'required', 'text 또는 files가 필요합니다.'); end if;
+      if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
       insert into public.lec_posts as o (training_code, by, kind, text, nickname, files, license, cid, rev)
-      values (v_code, p.id, coalesce(nullif(lec_private.jtxt(p_doc, 'kind', 32), ''), 'post'), v_text, p.nickname, lec_private.clean_files(p_doc -> 'files'), lec_private.jtxt(p_doc, 'license', 40), v_cid, v_rev)
-      returning lec_private.out('posts', to_jsonb(o.*)) into j;
-      if v_text = '' and jsonb_array_length(j -> 'files') = 0 then perform lec_private.fail(400, 'required', 'text 또는 files가 필요합니다.'); end if;
+      values (v_code, p.id, coalesce(nullif(lec_private.jtxt(p_doc, 'kind', 32), ''), 'post'), v_text, p.nickname, v_files, lec_private.jtxt(p_doc, 'license', 40), v_cid, v_rev)
+      returning o.id, lec_private.out('posts', to_jsonb(o.*)) into v_id, j;
+      update lec_private.upload_tickets k set post = v_id where k.training_code = v_code and k.path in (select e ->> 'path' from jsonb_array_elements(v_files) e);
+      -- board pre-moderation: the post waits hidden until the instructor shows it (init setting or state.ui.moderation)
+      if lec_private.moderated(t) then
+        perform lec_private.hide('posts', v_code, v_id, true);
+        update public.lec_posts x set hidden = true where x.id = v_id;
+        j := j || jsonb_build_object('hidden', true);
+      end if;
     when 'answers' then
       v_poll := lec_private.jtxt(p_doc, 'poll', 64, true);
+      -- (the same closed-poll rule applies to lec_update)
       if exists (select 1 from public.lec_polls where training_code = v_code and id::text = v_poll and open = false) then
         perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.');
       end if;
@@ -815,15 +994,20 @@ end $$;
 create or replace function public.lec_update(p_code text, p_token text, p_admin text, p_col text, p_id text, p_patch jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
-  v_code text := lec_private.code(p_code); t lec_private.trainings; v_admin boolean; p public.lec_participants; v_id uuid;
-  r jsonb; v_owner boolean := false; v_rev bigint; j jsonb; v_keys text[]; v_allowed text[]; v_hide boolean;
+  v_code text := lec_private.code(p_code); t lec_private.trainings; v_admin boolean := false; p public.lec_participants; v_id uuid;
+  r jsonb; v_owner boolean := false; v_rev bigint; j jsonb; v_keys text[]; v_allowed text[]; v_hide boolean; v_err jsonb; v_files jsonb; v_nick text;
 begin
   if jsonb_typeof(p_patch) is distinct from 'object' then perform lec_private.fail(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.'); end if;
   if not (p_col = any (array['participants', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'])) then
     perform lec_private.fail(404, 'unknown_collection', '없는 컬렉션입니다.');
   end if;
+  -- an admin key that is sent must be right (counted when wrong); participants send none
+  if p_admin is not null and p_admin <> '' then
+    v_err := lec_private.admin_check(v_code, p_admin);
+    if v_err is not null then return v_err; end if;
+    v_admin := true;
+  end if;
   t := lec_private.training(v_code);
-  v_admin := lec_private.is_admin(t, p_admin);
   v_id := lec_private.to_uuid(p_id);
   execute format('select to_jsonb(x) from public.%I x where x.training_code = $1 and x.id = $2 for update', 'lec_' || p_col) into r using v_code, v_id;
   if r is null then perform lec_private.fail(404, 'not_found', '없는 글입니다.'); end if;
@@ -851,10 +1035,26 @@ begin
   if 'text' = any (v_keys) and ((p_col = 'questions' and r ->> 'status' = 'hidden') or (p_col = 'posts' and (r ->> 'hidden')::boolean)) then
     perform lec_private.fail(409, 'hidden', '숨긴 글은 먼저 보이게 한 뒤 고쳐 주세요.');
   end if;
+  -- L1: an answer cannot change once its poll is closed (same rule as a new answer)
+  if not v_admin and p_col = 'answers' and exists (select 1 from public.lec_polls l where l.training_code = v_code and l.id::text = r ->> 'poll' and l.open = false) then
+    perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.');
+  end if;
+  if p_col = 'posts' and 'files' = any (v_keys) then
+    v_files := lec_private.clean_files(p_patch -> 'files', v_code, p.id, v_id);
+    if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
+    -- files dropped from the post go to the trash; new ones are linked to it
+    insert into lec_private.file_trash (path, training_code)
+      select lec_private.file_path(e, v_code), v_code from jsonb_array_elements(r -> 'files') e
+       where lec_private.file_path(e, v_code) is not null and strpos(v_files::text, lec_private.file_path(e, v_code)) = 0
+    on conflict (path) do nothing;
+    update lec_private.upload_tickets k set post = v_id where k.training_code = v_code and k.path in (select e ->> 'path' from jsonb_array_elements(v_files) e);
+  end if;
   v_rev := lec_private.bump(v_code, p_col not in ('participants', 'survey'));
   case p_col
     when 'participants' then
-      update public.lec_participants x set nickname = lec_private.jtxt(p_patch, 'nickname', 20, true), rev = v_rev, updated_at = now() where x.id = v_id;
+      v_nick := lec_private.jtxt(p_patch, 'nickname', 20, true);
+      if not v_admin and lec_private.reserved_nick(v_nick) then perform lec_private.fail(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.'); end if;
+      update public.lec_participants x set nickname = v_nick, rev = v_rev, updated_at = now() where x.id = v_id;
     when 'progress' then
       update public.lec_progress x set status = lec_private.jenum(p_patch, 'status', array['doing', 'done', 'stuck']), at = now(), rev = v_rev, updated_at = now() where x.id = v_id;
     when 'help' then
@@ -881,7 +1081,7 @@ begin
       update public.lec_posts x set
         kind = case when 'kind' = any (v_keys) then coalesce(nullif(lec_private.jtxt(p_patch, 'kind', 32), ''), 'post') else x.kind end,
         text = case when 'text' = any (v_keys) then lec_private.jtxt(p_patch, 'text', 1000, false, true) else x.text end,
-        files = case when 'files' = any (v_keys) then lec_private.clean_files(p_patch -> 'files') else x.files end,
+        files = case when 'files' = any (v_keys) then v_files else x.files end,
         license = case when 'license' = any (v_keys) then lec_private.jtxt(p_patch, 'license', 40) else x.license end,
         rev = v_rev, updated_at = now()
       where x.id = v_id;
@@ -913,14 +1113,24 @@ end $$;
 
 create or replace function public.lec_remove(p_code text, p_admin text, p_col text, p_id text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_code text := lec_private.code(p_code); v_id uuid; v_rev bigint; n int;
+declare v_code text := lec_private.code(p_code); v_id uuid; v_rev bigint; n int; v_err jsonb;
 begin
-  perform lec_private.require_admin(v_code, p_admin);
+  v_err := lec_private.admin_check(v_code, p_admin);
+  if v_err is not null then return v_err; end if;
   if not (p_col = any (array['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'])) then
     perform lec_private.fail(404, 'unknown_collection', '없는 컬렉션입니다.');
   end if;
   v_id := lec_private.to_uuid(p_id);
   v_rev := lec_private.bump(v_code, p_col in ('help', 'questions', 'posts', 'chat', 'progress', 'answers', 'polls'));
+  if p_col = 'posts' then
+    -- H3: the post's files go to the trash (unreadable at once; the console deletes them from Storage)
+    insert into lec_private.file_trash (path, training_code)
+      select distinct lec_private.file_path(e, v_code), v_code from (
+        select jsonb_array_elements(x.files) e from public.lec_posts x where x.training_code = v_code and x.id = v_id
+        union all select jsonb_array_elements(coalesce(h.files, '[]'::jsonb)) from lec_private.hidden h where h.id = v_id) s
+       where lec_private.file_path(e, v_code) is not null
+    on conflict (path) do nothing;
+  end if;
   execute format('delete from public.%I where training_code = $1 and id = $2', 'lec_' || p_col) using v_code, v_id;
   get diagnostics n = row_count;
   if n = 0 then perform lec_private.fail(404, 'not_found', '없는 글입니다.'); end if;
@@ -959,9 +1169,10 @@ begin return lec_private.vote(p_code, p_token, 'posts', p_id); end $$;
 
 create or replace function public.lec_set_state(p_code text, p_admin text, p_patch jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_code text := lec_private.code(p_code); v_clean jsonb; v_cur jsonb; v_next jsonb; v_rev bigint;
+declare v_code text := lec_private.code(p_code); v_clean jsonb; v_cur jsonb; v_next jsonb; v_rev bigint; v_err jsonb;
 begin
-  perform lec_private.require_admin(v_code, p_admin);
+  v_err := lec_private.admin_check(v_code, p_admin);
+  if v_err is not null then return v_err; end if;
   perform lec_private.hit('admin:' || v_code, 'admin', 600);
   v_clean := lec_private.clean_state(p_patch);
   v_cur := coalesce((select data from public.lec_state where training_code = v_code), '{}'::jsonb);
@@ -991,12 +1202,33 @@ begin
   return jsonb_build_object('ok', true, '_flush', lec_private.poke(v_code));
 end $$;
 
--- anyone with the code may nudge a pending tick out (cheap no-op when nothing is pending)
+-- anyone with the code may nudge a pending tick out. L12: a cheap look without locks first (nothing pending, or too
+-- early → no lock at all); then one flusher per training at a time, never waiting for a busy row.
 create or replace function public.lec_flush(p_code text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_code text := lec_private.code(p_code); t lec_private.trainings; v_wp int; v_wa int;
 begin
-  return jsonb_build_object('_flush', lec_private.poke(lec_private.code(p_code)));
+  select * into t from lec_private.trainings where code = v_code;
+  if not found then return jsonb_build_object('_flush', 0); end if;
+  if t.pub_rev > t.pub_tick_rev or exists (select 1 from lec_private.reactions x where x.training_code = v_code and x.n > 0) then
+    v_wp := greatest(0, ceil((t.flush_ms / 1000.0 - extract(epoch from clock_timestamp() - t.pub_tick_at)) * 1000)::int);
+  end if;
+  if t.rev > t.adm_tick_rev then
+    v_wa := greatest(0, ceil((least(1.0, t.flush_ms / 1000.0) - extract(epoch from clock_timestamp() - t.adm_tick_at)) * 1000)::int);
+  end if;
+  if v_wp is null and v_wa is null then return jsonb_build_object('_flush', 0); end if;
+  -- too early for every pending channel: tell the caller when to come back, without touching any lock
+  if coalesce(v_wp, 1) > 0 and coalesce(v_wa, 1) > 0 then return jsonb_build_object('_flush', least(coalesce(v_wp, v_wa), coalesce(v_wa, v_wp))); end if;
+  if not pg_try_advisory_xact_lock(hashtext('lecpage:flush:' || v_code)) then return jsonb_build_object('_flush', 0); end if;
+  return jsonb_build_object('_flush', lec_private.poke(v_code, false, true));
 end $$;
+
+-- the latest reaction batch (ticks only say "batch rx is ready"; clients never trust counts from a payload)
+create or replace function public.lec_reactions(p_code text)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce((select jsonb_build_object('rx', t.react_seq, 'r', t.react_last, 'at', lec_private.ms(t.pub_tick_at)) from lec_private.trainings t where t.code = lec_private.code(p_code)),
+                  jsonb_build_object('rx', 0, 'r', '{}'::jsonb, 'at', 0))
+$$;
 
 /* Public snapshot. SECURITY INVOKER: runs as anon, so RLS (header code) and column grants apply.
    The cursor (`now`) is read first, so rows committed meanwhile are fetched again next time, never lost. */
@@ -1008,6 +1240,13 @@ begin
     perform lec_private.fail(400, 'code_header', 'x-lec-code 헤더가 연수 코드와 같아야 합니다.');
   end if;
   v_rev := lec_private.cur_rev(v_code);
+  -- L12: nothing newer than the cursor (also the connect probe and unknown codes) → state only, no aggregates
+  if s >= v_rev then
+    return jsonb_build_object('now', v_rev, 'time', lec_private.ms(now()), 'since', s, 'full', s = 0,
+      'state', (select jsonb_build_object('step', null, 'slide', 0, 'follow', false, 'timer', null, 'notice', null, 'openPoll', null, 'ui', '{}'::jsonb, 'updatedAt', 0)
+                       || coalesce((select st.data || jsonb_build_object('updatedAt', lec_private.ms(st.updated_at)) from public.lec_state st where st.training_code = v_code), '{}'::jsonb)),
+      'questions', '[]'::jsonb, 'posts', '[]'::jsonb, 'help', '[]'::jsonb, 'progress', '[]'::jsonb, 'polls', '[]'::jsonb, 'answers', '[]'::jsonb, 'chat', '[]'::jsonb, 'removed', '[]'::jsonb);
+  end if;
   return jsonb_build_object(
     'now', v_rev, 'time', lec_private.ms(now()), 'since', s, 'full', s = 0,
     'state', (select jsonb_build_object('step', null, 'slide', 0, 'follow', false, 'timer', null, 'notice', null, 'openPoll', null, 'ui', '{}'::jsonb, 'updatedAt', 0)
@@ -1018,16 +1257,16 @@ begin
     'posts', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'by', o.by, 'kind', o.kind, 'text', o.text, 'nickname', o.nickname, 'files', o.files,
         'license', o.license, 'likes', o.likes, 'hidden', o.hidden, 'cid', o.cid, 'createdAt', lec_private.ms(o.created_at), 'updatedAt', lec_private.ms(o.updated_at)) order by o.created_at)
         from public.lec_posts o where o.training_code = v_code and o.rev > s), '[]'::jsonb),
-    'help', coalesce((select jsonb_agg(jsonb_build_object('id', h.id, 'by', h.by, 'nickname', h.nickname, 'station', h.station, 'seat', h.seat, 'message', h.message,
+    'help', coalesce((select jsonb_agg(jsonb_build_object('id', h.id, 'nickname', h.nickname, 'station', h.station, 'seat', h.seat, 'message', h.message,
         'status', h.status, 'assignee', h.assignee, 'cid', h.cid, 'createdAt', lec_private.ms(h.created_at), 'updatedAt', lec_private.ms(h.updated_at)) order by h.created_at)
         from public.lec_help h where h.training_code = v_code and h.rev > s), '[]'::jsonb),
-    'progress', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'by', g.by, 'station', g.station, 'status', g.status, 'at', lec_private.ms(g.at),
+    'progress', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'station', g.station, 'status', g.status, 'at', lec_private.ms(g.at),
         'createdAt', lec_private.ms(g.created_at), 'updatedAt', lec_private.ms(g.updated_at)) order by g.created_at)
         from public.lec_progress g where g.training_code = v_code and g.rev > s), '[]'::jsonb),
     'polls', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'question', l.question, 'kind', l.kind, 'options', l.options, 'open', l.open,
         'createdAt', lec_private.ms(l.created_at), 'updatedAt', lec_private.ms(l.updated_at)) order by l.created_at)
         from public.lec_polls l where l.training_code = v_code and l.rev > s), '[]'::jsonb),
-    'answers', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'poll', w.poll, 'by', w.by, 'value', w.value,
+    'answers', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'poll', w.poll, 'value', w.value,
         'createdAt', lec_private.ms(w.created_at), 'updatedAt', lec_private.ms(w.updated_at)) order by w.created_at)
         from public.lec_answers w where w.training_code = v_code and w.rev > s), '[]'::jsonb),
     'chat', coalesce((select jsonb_agg(c.d order by c.created_at) from (
@@ -1039,7 +1278,8 @@ begin
   );
 end $$;
 
--- the participant's own private docs (attendance, survey) so a reload restores them
+-- the participant's own docs: private ones (attendance, survey) so a reload restores them, and their own
+-- progress/answers/help with `by` (the public snapshot leaves `by` out: L3)
 create or replace function public.lec_mine(p_code text, p_token text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text := lec_private.code(p_code); p public.lec_participants;
@@ -1047,23 +1287,29 @@ begin
   p := lec_private.participant(v_code, p_token);
   return jsonb_build_object('me', jsonb_build_object('id', p.id, 'nickname', p.nickname),
     'attendance', coalesce((select jsonb_agg(lec_private.out('attendance', to_jsonb(a))) from public.lec_attendance a where a.training_code = v_code and a.by = p.id), '[]'::jsonb),
-    'survey', coalesce((select jsonb_agg(lec_private.out('survey', to_jsonb(s))) from public.lec_survey s where s.training_code = v_code and s.by = p.id), '[]'::jsonb));
+    'survey', coalesce((select jsonb_agg(lec_private.out('survey', to_jsonb(s))) from public.lec_survey s where s.training_code = v_code and s.by = p.id), '[]'::jsonb),
+    'progress', coalesce((select jsonb_agg(lec_private.out('progress', to_jsonb(g))) from public.lec_progress g where g.training_code = v_code and g.by = p.id), '[]'::jsonb),
+    'answers', coalesce((select jsonb_agg(lec_private.out('answers', to_jsonb(w))) from public.lec_answers w where w.training_code = v_code and w.by = p.id), '[]'::jsonb),
+    'help', coalesce((select jsonb_agg(lec_private.out('help', to_jsonb(h))) from public.lec_help h where h.training_code = v_code and h.by = p.id), '[]'::jsonb));
 end $$;
 
+-- true/false; a wrong key is counted like everywhere else (H4), and answers 429 while locked
 create or replace function public.lec_check_admin(p_code text, p_admin text)
 returns boolean language plpgsql security definer set search_path = '' as $$
-declare t lec_private.trainings;
 begin
-  t := lec_private.training(lec_private.code(p_code));
-  return lec_private.is_admin(t, p_admin);
+  if lec_private.admin_check(lec_private.code(p_code), p_admin) is null then return true; end if;
+  perform set_config('response.status', '200', true); -- "no" is a normal answer here
+  return false;
 end $$;
 
 -- admin snapshot: every collection (incl. participants/attendance/survey) with hidden content
 create or replace function public.lec_admin_snapshot(p_code text, p_admin text, p_since bigint default 0)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_code text := lec_private.code(p_code); t lec_private.trainings; s bigint := greatest(coalesce(p_since, 0), 0); o jsonb; c text;
+declare v_code text := lec_private.code(p_code); t lec_private.trainings; s bigint := greatest(coalesce(p_since, 0), 0); o jsonb; c text; v_err jsonb;
 begin
-  t := lec_private.require_admin(v_code, p_admin);
+  v_err := lec_private.admin_check(v_code, p_admin);
+  if v_err is not null then return v_err; end if;
+  t := lec_private.training(v_code);
   o := jsonb_build_object('now', t.rev, 'time', lec_private.ms(now()), 'since', s, 'full', s = 0, 'admin', true, 'state', lec_private.state_json(v_code),
     'removed', case when s = 0 then '[]'::jsonb else coalesce((select jsonb_agg(jsonb_build_object('col', tb.col, 'id', tb.id)) from public.lec_tombstones tb where tb.training_code = v_code and tb.rev > s), '[]'::jsonb) end);
   foreach c in array array['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'] loop
@@ -1075,19 +1321,26 @@ end $$;
 -- export: the admin snapshot (client builds the CSV with the same layout as the servers)
 create or replace function public.lec_export(p_code text, p_admin text, p_kind text default 'attendance')
 returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_err jsonb;
 begin
   if not (p_kind = any (array['attendance', 'progress', 'questions', 'survey', 'participants', 'posts', 'help', 'chat', 'answers'])) then
     perform lec_private.fail(400, 'bad_kind', 'kind');
   end if;
+  v_err := lec_private.admin_check(lec_private.code(p_code), p_admin);
+  if v_err is not null then return v_err; end if;
   return public.lec_admin_snapshot(p_code, p_admin, 0) || jsonb_build_object('kind', p_kind);
 end $$;
 
--- purge: every row of the training; storage files are deleted by the admin client during a 10-minute window
+-- purge: every row of the training. Its files go to the trash (unreadable at once); the console deletes them from
+-- Storage right away, and again whenever it connects, until none are left (lec_trash).
 create or replace function public.lec_purge(p_code text, p_admin text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_code text := lec_private.code(p_code); v_files jsonb := '[]'::jsonb; c text;
+declare v_code text := lec_private.code(p_code); v_files jsonb := '[]'::jsonb; c text; v_err jsonb;
 begin
-  perform lec_private.require_admin(v_code, p_admin);
+  v_err := lec_private.admin_check(v_code, p_admin);
+  if v_err is not null then return v_err; end if;
+  insert into lec_private.file_trash (path, training_code) select k.path, v_code from lec_private.upload_tickets k where k.training_code = v_code
+  on conflict (path) do nothing;
   foreach c in array array['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat', 'tombstones'] loop
     execute format('delete from public.%I where training_code = $1', 'lec_' || c) using v_code;
   end loop;
@@ -1097,10 +1350,11 @@ begin
   delete from lec_private.upload_tickets where training_code = v_code;
   update public.lec_state set data = '{}'::jsonb, updated_at = now() where training_code = v_code;
   begin
-    execute 'select coalesce(jsonb_agg(name), ''[]''::jsonb) from storage.objects where bucket_id = ''lec-uploads'' and name like $1'
-      into v_files using v_code || '/%';
-  exception when others then v_files := '[]'::jsonb;
+    execute 'insert into lec_private.file_trash (path, training_code) select name, $2 from storage.objects where bucket_id = ''lec-uploads'' and name like $1 on conflict (path) do nothing'
+      using v_code || '/%', v_code;
+  exception when others then null;
   end;
+  select coalesce(jsonb_agg(t.path), '[]'::jsonb) into v_files from lec_private.file_trash t where t.training_code = v_code;
   update lec_private.trainings set purge_until = now() + interval '10 minutes', rev = rev + 1, pub_rev = rev + 1, last_at = now() where code = v_code;
   perform lec_private.send(jsonb_build_object('reset', true), 'tick', 'lec:' || v_code);
   perform lec_private.send(jsonb_build_object('reset', true), 'tick', 'lec:' || v_code || ':adm');
@@ -1113,7 +1367,7 @@ declare v_code text := lec_private.code(p_code); t lec_private.trainings; p publ
 begin
   t := lec_private.training(v_code);
   p := lec_private.participant(v_code, p_token);
-  if (t.settings ->> 'uploads') = 'false' then perform lec_private.fail(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
+  if not lec_private.uploads_on(t) then perform lec_private.fail(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
   perform lec_private.hit(p.id::text, 'upload', 10);
   v_ext := case p_type when 'image/png' then 'png' when 'image/jpeg' then 'jpg' when 'image/gif' then 'gif' when 'image/webp' then 'webp'
                        when 'application/pdf' then 'pdf' when 'audio/mpeg' then 'mp3' when 'video/mp4' then 'mp4' end;
@@ -1121,19 +1375,61 @@ begin
   v_max := least(greatest(coalesce((t.settings ->> 'maxUploadMb')::int, 20), 1), 20)::bigint * 1048576;
   if p_size is null or p_size <= 0 then perform lec_private.fail(400, 'empty', '빈 파일입니다.'); end if;
   if p_size > v_max then perform lec_private.fail(413, 'too_large', '파일은 ' || (v_max / 1048576) || 'MB까지 올릴 수 있어요.'); end if;
+  -- L10: type and size are checked here and again by the Storage insert policy (bucket MIME list, metadata size/type when
+  -- Storage provides them). Magic bytes cannot be read from SQL: files are served only with their declared type,
+  -- only as images/PDF/audio/video, and only through signed URLs of visible posts.
   v_path := v_code || '/' || replace(gen_random_uuid()::text, '-', '') || '.' || v_ext;
-  insert into lec_private.upload_tickets (path, training_code, by, expires_at) values (v_path, v_code, p.id, now() + interval '10 minutes');
+  insert into lec_private.upload_tickets (path, training_code, by, expires_at, mime, max_bytes) values (v_path, v_code, p.id, now() + interval '10 minutes', p_type, least(v_max, greatest(p_size, 1)));
   return jsonb_build_object('bucket', 'lec-uploads', 'path', v_path, 'name', lec_private.txt(p_name, 120, 'name'), 'type', p_type, 'size', p_size);
+end $$;
+
+-- Storage paths the client should delete (the bucket's delete policy allows exactly these). With the admin key: this
+-- training's trash. Always also a few entries of trainings that no longer exist (retention clean-up).
+create or replace function public.lec_trash(p_code text, p_admin text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_code text := lec_private.code(p_code); v_own boolean := false; v_err jsonb; o jsonb;
+begin
+  if p_admin is not null and p_admin <> '' then
+    v_err := lec_private.admin_check(v_code, p_admin);
+    if v_err is not null then return v_err; end if;
+    v_own := true;
+  end if;
+  begin -- forget entries whose objects are already gone
+    execute 'delete from lec_private.file_trash t where (t.training_code = $1 or not exists (select 1 from lec_private.trainings g where g.code = t.training_code))
+               and not exists (select 1 from storage.objects o where o.bucket_id = ''lec-uploads'' and o.name = t.path)' using v_code;
+  exception when others then null;
+  end;
+  select coalesce(jsonb_agg(x.path), '[]'::jsonb) into o from (
+    select t.path from lec_private.file_trash t
+     where (v_own and t.training_code = v_code) or not exists (select 1 from lec_private.trainings g where g.code = t.training_code)
+     order by t.queued_at limit 1000) x;
+  return jsonb_build_object('paths', o);
 end $$;
 
 -- storage policy helpers (called as anon by Storage; definer reads the private tables)
 create or replace function lec_private.upload_allowed(p_name text)
 returns boolean language sql stable security definer set search_path = '' as $$
-  select exists (select 1 from lec_private.upload_tickets where path = p_name and expires_at > now())
+  select exists (select 1 from lec_private.upload_tickets where path = p_name and expires_at > now() and post is null)
+$$;
+-- insert: a live ticket, and (when Storage passes them) the size and type the ticket was issued for
+create or replace function lec_private.upload_ok(p_name text, p_meta jsonb)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from lec_private.upload_tickets k where k.path = p_name and k.expires_at > now() and k.post is null
+    and (p_meta is null or coalesce(p_meta ->> 'size', '') !~ '^[0-9]+$' or (p_meta ->> 'size')::bigint <= coalesce(k.max_bytes, 20971520))
+    and (p_meta is null or p_meta ->> 'mimetype' is null or k.mime is null or p_meta ->> 'mimetype' = k.mime))
+$$;
+-- read (signed URLs): only while a visible post of that training uses the file — hidden, removed or purged → no access
+create or replace function lec_private.file_readable(p_name text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.lec_posts x where x.training_code = split_part(p_name, '/', 1) and not x.hidden and strpos(x.files::text, p_name) > 0)
+$$;
+create or replace function lec_private.trashed(p_name text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from lec_private.file_trash where path = p_name)
 $$;
 create or replace function lec_private.delete_allowed(p_name text)
 returns boolean language sql stable security definer set search_path = '' as $$
-  select exists (select 1 from lec_private.trainings where code = split_part(p_name, '/', 1) and purge_until > now())
+  select lec_private.trashed(p_name)
 $$;
 
 -- ---------------------------------------------------------------- privileges
@@ -1144,10 +1440,12 @@ revoke all on public.lec_participants, public.lec_attendance, public.lec_progres
   from public, anon, authenticated;
 grant select (id, training_code, text, nickname, anonymous, votes, status, pinned, cid, rev, created_at, updated_at) on public.lec_questions to anon, authenticated;
 grant select (id, training_code, by, kind, text, nickname, files, license, likes, hidden, cid, rev, created_at, updated_at) on public.lec_posts to anon, authenticated;
-grant select (id, training_code, by, nickname, station, seat, message, status, assignee, cid, rev, created_at, updated_at) on public.lec_help to anon, authenticated;
-grant select (id, training_code, by, station, status, at, rev, created_at, updated_at) on public.lec_progress to anon, authenticated;
+-- L3: who asked for help, who is stuck and who answered what stays with the instructor (no `by` for anon)
+revoke select (by) on public.lec_help, public.lec_progress, public.lec_answers from anon, authenticated;
+grant select (id, training_code, nickname, station, seat, message, status, assignee, cid, rev, created_at, updated_at) on public.lec_help to anon, authenticated;
+grant select (id, training_code, station, status, at, rev, created_at, updated_at) on public.lec_progress to anon, authenticated;
 grant select (id, training_code, question, kind, options, open, rev, created_at, updated_at) on public.lec_polls to anon, authenticated;
-grant select (id, training_code, poll, by, value, rev, created_at, updated_at) on public.lec_answers to anon, authenticated;
+grant select (id, training_code, poll, value, rev, created_at, updated_at) on public.lec_answers to anon, authenticated;
 grant select (id, training_code, by, nickname, text, hidden, cid, rev, created_at, updated_at) on public.lec_chat to anon, authenticated;
 grant select (training_code, data, rev, updated_at) on public.lec_state to anon, authenticated;
 grant select (training_code, col, id, rev) on public.lec_tombstones to anon, authenticated;
@@ -1155,7 +1453,8 @@ grant select (training_code, col, id, rev) on public.lec_tombstones to anon, aut
 -- Functions: EXECUTE is granted to PUBLIC by default — take it away everywhere, then grant only the API.
 revoke execute on all functions in schema lec_private from public, anon, authenticated;
 grant execute on function lec_private.fail(int, text, text), lec_private.ms(timestamptz), lec_private.req_code(), lec_private.code(text),
-                          lec_private.cur_rev(text), lec_private.upload_allowed(text), lec_private.delete_allowed(text)
+                          lec_private.cur_rev(text), lec_private.upload_allowed(text), lec_private.delete_allowed(text),
+                          lec_private.upload_ok(text, jsonb), lec_private.file_readable(text), lec_private.trashed(text)
   to anon, authenticated;
 do $$
 declare f record;
@@ -1198,18 +1497,21 @@ begin
     raise notice 'storage schema not found — skipped bucket setup';
     return;
   end if;
+  -- PRIVATE bucket (H3): files are read through signed URLs only while a visible post uses them
   insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-  values ('lec-uploads', 'lec-uploads', true, 20971520, array['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'audio/mpeg', 'video/mp4'])
+  values ('lec-uploads', 'lec-uploads', false, 20971520, array['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'audio/mpeg', 'video/mp4'])
   on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
   drop policy if exists "lecpage upload with ticket" on storage.objects;
   create policy "lecpage upload with ticket" on storage.objects for insert to anon, authenticated
-    with check (bucket_id = 'lec-uploads' and lec_private.upload_allowed(name));
+    with check (bucket_id = 'lec-uploads' and lec_private.upload_ok(name, metadata));
   drop policy if exists "lecpage purge select" on storage.objects;
-  create policy "lecpage purge select" on storage.objects for select to anon, authenticated
-    using (bucket_id = 'lec-uploads' and lec_private.delete_allowed(name));
   drop policy if exists "lecpage purge delete" on storage.objects;
-  create policy "lecpage purge delete" on storage.objects for delete to anon, authenticated
-    using (bucket_id = 'lec-uploads' and lec_private.delete_allowed(name));
+  drop policy if exists "lecpage read visible" on storage.objects;
+  create policy "lecpage read visible" on storage.objects for select to anon, authenticated
+    using (bucket_id = 'lec-uploads' and (lec_private.file_readable(name) or lec_private.trashed(name)));
+  drop policy if exists "lecpage delete trash" on storage.objects;
+  create policy "lecpage delete trash" on storage.objects for delete to anon, authenticated
+    using (bucket_id = 'lec-uploads' and lec_private.trashed(name));
 end $$;
 
 -- ---------------------------------------------------------------- daily cleanup (pg_cron)
@@ -1224,4 +1526,4 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------- your training (edit and run)
--- select lec_private.init_training('AB12CD', '여기에-관리자-키-8자-이상', '{"retentionDays": 30}');
+-- select lec_private.init_training('AB12CD', '직접-만든-관리자-키(12자 이상)', '{"retentionDays": 30}');

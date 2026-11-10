@@ -14,20 +14,47 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   return `<section id="${esc(s.id)}" class="lp-sec lp-sec-${esc(s.type)}"${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
 }
 
-function liveOff(ctx, what) {
-  return ctx.live ? '' : `<p class="lp-note" data-live-off>${esc(what)}은(는) 실시간 연결이 켜진 사이트에서 쓸 수 있어요. 지금은 연결이 꺼져 있어요.</p>`;
+function liveOff(ctx) {
+  return ctx.live ? '' : '<p class="lp-note" data-live-off>실시간 연결을 켜면 여기서 쓸 수 있어요.</p>';
+}
+
+/** 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출" */
+export function completionLine(ctx) {
+  const a = ctx.bp.meta.admin || {};
+  if (a.kind !== 'official') return '';
+  const h = +a.hours || 0, hm = h % 1 ? `${Math.floor(h) ? `${Math.floor(h)}시간 ` : ''}${Math.round((h % 1) * 60)}분` : h ? `${h}시간` : '';
+  const survey = ctx.live && ctx.bp.sections.some((s) => s.type === 'survey' && s.questions?.length);
+  return [hm, a.completionRate ? `출석 ${a.completionRate}% 이상` : '', survey ? '설문 제출' : ''].filter(Boolean).join(' · ');
+}
+
+/** 온라인 회의 서비스 이름(입장 버튼·장소 표시용) */
+const JOIN_NAMES = [[/(^|\.)zoom\.us$/, 'Zoom'], [/^meet\.google\.com$/, 'Google Meet'], [/^teams\.(microsoft|live)\.com$/, 'Teams'], [/(^|\.)webex\.com$/, 'Webex']];
+export function joinName(url) { const h = host(url); for (const [re, n] of JOIN_NAMES) if (re.test(h)) return n; return ''; }
+function joinCta(ctx) {
+  const m = ctx.bp.meta;
+  return m.joinUrl && m.mode !== 'offline' ? { label: `${joinName(m.joinUrl) || '온라인'} 입장`, href: m.joinUrl, join: true } : null;
+}
+function placeText(m) {
+  const on = m.mode === 'offline' ? '' : `온라인${joinName(m.joinUrl) ? ` (${joinName(m.joinUrl)})` : ''}`;
+  return [m.venue, on].filter(Boolean).join(' · ');
 }
 
 // ── 첫 화면 ──────────────────────────────────────────────
 function hero(s, ctx) {
   const m = ctx.bp.meta;
   const ins = ctx.bp.instructors[0];
-  const meta = s.meta?.length ? s.meta : [
+  const meta = s.meta?.length ? s.meta.slice() : [
     m.date && { label: '일시', value: `${koDate(m.date)}${m.start ? ` ${m.start}${m.end ? `~${m.end}` : ''}` : ''}` },
-    m.venue && { label: '장소', value: m.venue },
+    placeText(m) && { label: '장소', value: placeText(m) },
     ins && { label: '강사', value: `${ins.name}${ins.org ? ` · ${ins.org}` : ''}` },
   ].filter(Boolean);
-  const ctas = s.ctas?.length ? s.ctas : defaultCtas(ctx);
+  // 이수 기준: 연수 목표 칸이 없을 때만 첫 화면에(같은 말을 두 번 하지 않게)
+  const done = completionLine(ctx);
+  if (done && !ctx.bp.sections.some((x) => x.type === 'goals') && !meta.some((x) => x.label === '이수')) meta.push({ label: '이수', value: done });
+  // 온라인·혼합 연수: 회의 입장 버튼을 맨 앞에(연수가 끝나면 숨김)
+  const join = joinCta(ctx);
+  const ctas0 = s.ctas?.length ? s.ctas : defaultCtas(ctx);
+  const ctas = (join && !ctas0.some((c) => c.href === join.href) ? [join, ...ctas0] : ctas0).slice(0, 3);
   const graphic = ctx.design.graphic ? `<div class="lp-hero-graphic" data-fx="${esc(ctx.design.graphic)}" aria-hidden="true"></div>` : '';
   const overlay = ctx.design.effects?.['hero.graphic.overlay'] ? `<div class="lp-hero-overlay" data-fx="${esc(ctx.design.effects['hero.graphic.overlay'])}" aria-hidden="true"></div>` : '';
   const title = s.title || m.title;
@@ -38,22 +65,32 @@ ${graphic}${overlay}
     ${s.eyebrow || m.organizer ? `<p class="lp-hero-eyebrow">${esc(s.eyebrow || m.organizer)}</p>` : ''}
     <h1 class="lp-h1" id="${esc(s.id)}-h"${fx(ctx, 'hero.title')}>${br(title)}</h1>
     ${s.subtitle || m.subtitle ? `<p class="lp-hero-sub">${br(s.subtitle || m.subtitle)}</p>` : ''}
-    ${ctas.length ? `<div class="lp-ctas">${ctas.map((c, i) => `<a class="lp-btn ${i ? 'lp-btn-ghost' : 'lp-btn-primary'}" ${href(c.href)}${i ? '' : fx(ctx, 'hero.cta')}><span>${esc(c.label)}</span>${icon(/^https?:/.test(c.href) ? 'external' : 'arrow')}</a>`).join('')}</div>` : ''}
+    ${ctas.length ? `<div class="lp-ctas">${ctas.map((c, i) => `<a class="lp-btn ${i ? 'lp-btn-ghost' : 'lp-btn-primary'}" ${href(c.href)}${i ? '' : fx(ctx, 'hero.cta')}${c.join || c.href === m.joinUrl ? ' data-phase-hide="after"' : ''}><span>${esc(c.label)}</span>${icon(/^https?:/.test(c.href) ? 'external' : 'arrow')}</a>`).join('')}</div>` : ''}
   </div>
-  ${meta.length ? `<dl class="lp-hero-meta">${meta.map((x) => `<div><dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd></div>`).join('')}</dl>` : ''}
+  ${meta.length ? `<dl class="lp-hero-meta">${meta.map((x) => `<div><dt>${esc(x.label)}</dt><dd>${x.url ? `<a ${href(x.url)}>${esc(x.value)}</a>` : esc(x.value)}</dd></div>`).join('')}</dl>` : ''}
 </div>
 </section>`;
 }
 function defaultCtas(ctx) {
   const order = ['stations', 'deck', 'outline', 'schedule', 'tools'];
   const out = [];
-  for (const t of order) { const sec = ctx.bp.sections.find((x) => x.type === t); if (sec) { out.push({ label: { stations: '실습 시작하기', deck: '교재 보기', outline: '오늘의 차례', schedule: '일정 보기', tools: '도구 바로 가기' }[t], href: '#' + sec.id }); if (out.length === 2) break; } }
+  for (const t of order) { const sec = ctx.bp.sections.find((x) => x.type === t); if (sec) { out.push({ label: { stations: '실습 시작하기', deck: '교재 보기', outline: '차례 보기', schedule: '일정 보기', tools: '도구 보기' }[t], href: '#' + sec.id }); if (out.length === 2) break; } }
   return out;
+}
+
+// ── 연수 목표: 마치면 할 수 있는 것, 대상, 이수 기준 ────────────
+function goals(s, ctx) {
+  const done = completionLine(ctx);
+  const rows = [s.who && ['대상', s.who], done && ['이수', done]].filter(Boolean);
+  return wrap(s, ctx, head(s, ctx, '연수 목표') + `<div class="lp-goals">
+<ol class="lp-steps lp-goal-list">${s.items.map((g) => `<li>${esc(g)}</li>`).join('')}</ol>
+${rows.length ? `<div class="lp-notice-box lp-goal-meta">${rows.map(([k, v]) => `<p><b>${k}</b> ${esc(v)}</p>`).join('')}</div>` : ''}
+</div>`);
 }
 
 // ── 요약·메시지 ───────────────────────────────────────────
 function glance(s, ctx) {
-  return wrap(s, ctx, head(s, ctx) + `<dl class="lp-glance-grid">${s.items.map((i) => `<div class="lp-card lp-glance-item"><dt>${esc(i.label)}</dt><dd><span class="lp-num"${fx(ctx, 'numbers')}>${esc(i.value)}</span>${i.note ? `<small>${esc(i.note)}</small>` : ''}</dd></div>`).join('')}</dl>`);
+  return wrap(s, ctx, head(s, ctx) + `<dl class="lp-glance-grid">${s.items.map((i) => `<div class="lp-glance-item"><dt>${esc(i.label)}</dt><dd><span class="lp-num"${fx(ctx, 'numbers')}>${esc(i.value)}</span>${i.note ? `<small>${esc(i.note)}</small>` : ''}</dd></div>`).join('')}</dl>`);
 }
 
 function message(s, ctx) {
@@ -72,23 +109,23 @@ function message(s, ctx) {
 }
 
 function steps5(s, ctx) {
-  return wrap(s, ctx, head(s, ctx) + `<ol class="lp-steps5">${s.items.map((i, n) => `<li class="lp-card"><span class="lp-idx">${pad2(n + 1)}</span><h3>${esc(i.word)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</li>`).join('')}</ol>${s.close ? `<p class="lp-close-line">${br(s.close)}</p>` : ''}`);
+  return wrap(s, ctx, head(s, ctx) + `<ol class="lp-steps5">${s.items.map((i, n) => `<li><span class="lp-idx">${pad2(n + 1)}</span><h3>${esc(i.word)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</li>`).join('')}</ol>${s.close ? `<p class="lp-close-line">${br(s.close)}</p>` : ''}`);
 }
 
 function outline(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '오늘의 차례') + `<ol class="lp-outline">${s.items.map((i, n) => {
     const target = i.target ? (i.target.startsWith('deck:') ? `#deck-p${i.target.slice(5)}` : '#' + i.target) : '';
-    return `<li class="lp-card lp-outline-item"${fx(ctx, 'cards')}><span class="lp-outline-no">${pad2(n + 1)}</span><div><p class="lp-outline-part">${esc(i.part)}</p><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}${i.tags.length ? `<ul class="lp-tags">${i.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : ''}</div></li>`;
+    return `<li class="lp-outline-item"${fx(ctx, 'cards')}><span class="lp-outline-no">${pad2(n + 1)}</span><div><p class="lp-outline-part">${esc(i.part)}</p><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}${i.tags.length ? `<ul class="lp-tags">${i.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : ''}</div></li>`;
   }).join('')}</ol>`);
 }
 
 function schedule(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '일정') + `<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${s.items.map((i) => `<li data-start="${esc(i.start)}" data-end="${esc(i.end)}"${i.date ? ` data-date="${esc(i.date)}"` : ''}><time>${esc(i.start)}${i.end ? `<span>~${esc(i.end)}</span>` : ''}</time><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div>${i.part ? `<span class="lp-chip">${esc(i.part)}</span>` : ''}</li>`).join('')}</ol>`);
+  return wrap(s, ctx, head(s, ctx, '일정') + `<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${s.items.map((i) => `<li data-start="${esc(i.start)}" data-end="${esc(i.end)}"${i.date ? ` data-date="${esc(i.date)}"` : ''}><time>${esc(i.start)}${i.end ? `<span>~${esc(i.end)}</span>` : ''}</time><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div>${i.part ? `<span class="lp-schedule-part">${esc(i.part)}</span>` : ''}</li>`).join('')}</ol>`);
 }
 
 // ── 준비 ─────────────────────────────────────────────────
 function readiness(s, ctx) {
-  const checks = s.checks.length ? `<div class="lp-diag" data-diag='${esc(JSON.stringify(s.checks))}'><div class="lp-diag-h"><h3>접속 진단</h3><button class="lp-btn lp-btn-ghost" type="button" data-diag-run>지금 확인하기</button></div><ul class="lp-diag-list">${s.checks.map((c) => `<li data-url="${esc(c.url)}"><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul><p class="lp-small">학교망에서 막힌 사이트가 있으면 결과 화면을 정보 담당 선생님께 보여 주세요.</p></div>` : '';
+  const checks = s.checks.length ? `<div class="lp-diag" data-diag='${esc(JSON.stringify(s.checks))}'><div class="lp-diag-h"><h3>접속 진단</h3><button class="lp-btn lp-btn-ghost" type="button" data-diag-run>확인하기</button></div><ul class="lp-diag-list">${s.checks.map((c) => `<li data-url="${esc(c.url)}"><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul><p class="lp-small">막힌 곳이 있으면 이 화면을 정보 담당 선생님께 보여 주세요.</p></div>` : '';
   return wrap(s, ctx, head(s, ctx, '시작 전에 준비해요') + `<ul class="lp-checklist" data-checklist="${esc(s.id)}">${s.items.map((i, n) => `<li><label><input type="checkbox" data-check="${n}"><span><b>${esc(i.label)}</b>${i.detail ? `<small>${br(i.detail)}</small>` : ''}</span></label>${i.url ? `<a class="lp-link" ${href(i.url)}>열기${icon('external')}</a>` : ''}</li>`).join('')}</ul>${checks}`);
 }
 
@@ -126,15 +163,15 @@ function stations(s, ctx) {
     const steps = st.steps.length ? `<ol class="lp-steps">${st.steps.map((x) => `<li>${br(x)}</li>`).join('')}</ol>` : '';
     const links = st.links.length ? `<div class="lp-st-links">${st.links.map((l) => `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(l.url)}>${esc(l.label || host(l.url))}${icon('external')}</a>`).join('')}</div>` : '';
     const imgs = st.images.length ? `<details class="lp-st-images"><summary>화면 안내 보기 · ${st.images.length}장</summary><div class="lp-st-gallery">${st.images.map((im, k) => `<figure><a href="${esc(im.src)}" target="_blank" rel="noopener"><img src="${esc(im.src)}" alt="${esc(im.caption || `${st.name} 화면 ${k + 1}`)}" loading="lazy"></a>${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div></details>` : '';
-    const prompts = st.prompts.length ? `<div class="lp-prompts"><h4>복사해서 바로 실습</h4>${st.prompts.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy${fx(ctx, 'celebrate') ? '' : ''}>${icon('copy')}<span>복사</span></button></span></div><textarea class="lp-prompt-text" data-prompt="${esc(st.id)}-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea></div>`).join('')}</div>` : '';
+    const prompts = st.prompts.length ? `<div class="lp-prompts"><h4>프롬프트</h4>${st.prompts.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy${fx(ctx, 'celebrate') ? '' : ''}>${icon('copy')}<span>복사</span></button></span></div><textarea class="lp-prompt-text" data-prompt="${esc(st.id)}-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea></div>`).join('')}</div>` : '';
     const src = st.source?.pages?.length ? `<p class="lp-src">교재 ${st.source.pages.map((p) => `<a href="#deck-p${p}">${p}쪽</a>`).join(', ')}</p>` : '';
     return `<article class="lp-st" id="st-${esc(st.id)}" data-st="${esc(st.id)}" aria-labelledby="st-${esc(st.id)}-h">
-<header class="lp-st-h"><span class="lp-st-big" aria-hidden="true">${pad2(i + 1)}</span><div>${st.tag ? `<span class="lp-chip">${esc(st.tag)}</span>` : ''}<h3 id="st-${esc(st.id)}-h">${esc(st.title)}</h3>${st.desc ? `<p>${br(st.desc)}</p>` : ''}${st.minutes ? `<small>${icon('clock')} 약 ${st.minutes}분</small>` : ''}</div></header>
+<header class="lp-st-h"><span class="lp-st-big" aria-hidden="true">${pad2(i + 1)}</span><div>${st.tag ? `<span class="lp-st-tag">${esc(st.tag)}</span>` : ''}<h3 id="st-${esc(st.id)}-h">${esc(st.title)}</h3>${st.desc ? `<p>${br(st.desc)}</p>` : ''}${st.minutes ? `<small>${icon('clock')} 약 ${st.minutes}분</small>` : ''}</div></header>
 ${links}${steps}${st.note ? `<p class="lp-note">${br(st.note)}</p>` : ''}${imgs}${prompts}${src}
 <div class="lp-st-done">
-  ${st.outcome ? `<p class="lp-outcome"><b>여기까지 해 봤나요?</b> ${br(st.outcome)}</p>` : ''}
+  ${st.outcome ? `<p class="lp-outcome"><b>여기까지 됐나요?</b> ${br(st.outcome)}</p>` : ''}
   <div class="lp-st-actions"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false"${fx(ctx, 'celebrate')}>${icon('check')}<span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden>${icon('hand')}<span>막혔어요</span></button></div>
-  <label class="lp-memo"><span>나의 적용 아이디어</span><textarea data-memo="${esc(st.id)}" rows="3" placeholder="내 수업이나 업무에 어떻게 써 볼까요?"></textarea></label>
+  <label class="lp-memo"><span>메모</span><textarea data-memo="${esc(st.id)}" rows="3" placeholder="내 수업이나 업무에 어떻게 쓸지 적어 두세요."></textarea></label>
 </div>
 <nav class="lp-st-pn" aria-label="실습 이동">${i > 0 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i - 1].id)}">${icon('left')}<span>이전 실습</span></a>` : '<span></span>'}${i < n - 1 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i + 1].id)}"><span>다음 실습</span>${icon('right')}</a>` : '<span></span>'}</nav>
 </article>`;
@@ -145,62 +182,62 @@ ${links}${steps}${st.note ? `<p class="lp-note">${br(st.note)}</p>` : ''}${imgs}
 // ── 도구·프롬프트 ─────────────────────────────────────────
 function tools(s, ctx) {
   const hasDeck = ctx.bp.sections.some((x) => x.type === 'deck');
-  return wrap(s, ctx, head(s, ctx, '함께 쓰는 도구') + `<ul class="lp-tools">${s.items.map((t) => `<li class="lp-card lp-tool"${fx(ctx, 'cards')}><div class="lp-tool-h"><span class="lp-tool-mark" aria-hidden="true">${esc([...t.name][0] || '·')}</span><div><h3>${esc(t.name)}</h3>${t.url ? `<small>${esc(host(t.url))}</small>` : ''}</div></div>${t.desc ? `<p>${esc(t.desc)}</p>` : ''}<div class="lp-tool-f">${t.pages.length ? `<span class="lp-pages">교재 ${t.pages.map((p) => hasDeck ? `<a href="#deck-p${p}">${p}</a>` : esc(p)).join(' ')}</span>` : '<span></span>'}${t.url ? `<a class="lp-icon-btn" ${href(t.url)} aria-label="${esc(t.name)} 열기">${icon('external')}</a>` : ''}</div></li>`).join('')}</ul>${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}`);
+  return wrap(s, ctx, head(s, ctx, '도구 모음') + `<ul class="lp-tools">${s.items.map((t) => `<li class="lp-tools-item"${fx(ctx, 'cards')}><h3>${t.url ? `<a ${href(t.url)}>${esc(t.name)}${icon('external')}</a>` : esc(t.name)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${t.pages.length ? `<span class="lp-pages">교재 ${t.pages.map((p) => hasDeck ? `<a href="#deck-p${p}">${p}</a>` : esc(p)).join('·')}쪽</span>` : ''}</li>`).join('')}</ul>${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}`);
 }
 
 function prompts(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => `<div class="lp-prompt lp-card"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<textarea class="lp-prompt-text" data-prompt="lib-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea></div>`).join('')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<textarea class="lp-prompt-text" data-prompt="lib-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea></div>`).join('')}</div>`);
 }
 
 // ── 실시간 참여 ───────────────────────────────────────────
 function qa(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '질문해 주세요') + `<div class="lp-qa" data-qa>
-<form class="lp-compose" data-qa-form><label class="lp-sr" for="${esc(s.id)}-q">질문</label><textarea id="${esc(s.id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 남겨 주세요${s.anonymous ? ' (이름은 보이지 않아요)' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
-<div class="lp-tabs" role="tablist" aria-label="정렬"><button role="tab" aria-selected="true" data-sort="votes">공감 많은 순</button><button role="tab" aria-selected="false" data-sort="new">최신 순</button></div>
-<ul class="lp-qa-list" data-qa-list aria-live="polite"><li class="lp-empty">첫 질문을 남겨 주세요. 다른 사람의 질문에 공감을 누를 수도 있어요.</li></ul>
-${liveOff(ctx, '실시간 질문')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '질문') + `<div class="lp-qa" data-qa>
+<form class="lp-compose" data-qa-form><label class="lp-sr" for="${esc(s.id)}-q">질문</label><textarea id="${esc(s.id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 적어 주세요.${s.anonymous ? ' 이름은 보이지 않아요.' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
+<div class="lp-tabs" role="tablist" aria-label="정렬"><button role="tab" aria-selected="true" data-sort="votes">공감순</button><button role="tab" aria-selected="false" data-sort="new">최신순</button></div>
+<ul class="lp-qa-list" data-qa-list aria-live="polite"><li class="lp-empty">아직 질문이 없어요. 첫 질문을 올려 주세요.</li></ul>
+${liveOff(ctx)}</div>`);
 }
 
 function board(s, ctx) {
   const cats = s.categories.length ? s.categories : [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }];
-  if (!ctx.live && s.externalUrl) return wrap(s, ctx, head(s, ctx, '함께 나누는 보드') + `<p><a class="lp-btn lp-btn-primary" ${href(s.externalUrl)}>보드 열기${icon('external')}</a></p>`);
-  return wrap(s, ctx, head(s, ctx, '함께 나누는 보드') + `<div class="lp-board" data-board data-max-files="${s.allowFiles ? s.maxFiles : 0}" data-moderation="${s.moderation ? 1 : 0}">
+  if (!ctx.live && s.externalUrl) return wrap(s, ctx, head(s, ctx, '참여 보드') + `<p><a class="lp-btn lp-btn-primary" ${href(s.externalUrl)}>보드 열기${icon('external')}</a></p>`);
+  return wrap(s, ctx, head(s, ctx, '참여 보드') + `<div class="lp-board" data-board data-max-files="${s.allowFiles ? s.maxFiles : 0}" data-moderation="${s.moderation ? 1 : 0}">
 <div class="lp-board-bar"><div class="lp-tabs" role="tablist" aria-label="보드 분류"><button role="tab" aria-selected="true" data-cat="">전체</button>${cats.map((c) => `<button role="tab" aria-selected="false" data-cat="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div><button class="lp-btn lp-btn-primary" type="button" data-board-write>${icon('sparkle')}<span>글 올리기</span></button></div>
 <form class="lp-compose lp-board-form" data-board-form hidden>
   <fieldset class="lp-seg"><legend class="lp-sr">분류</legend>${cats.map((c, i) => `<label><input type="radio" name="kind" value="${esc(c.id)}"${i ? '' : ' checked'}><span>${esc(c.label)}</span></label>`).join('')}</fieldset>
   <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
-  ${s.allowFiles ? `<label class="lp-file"><span>사진·PDF·음악·영상 (최대 ${s.maxFiles}개)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
+  ${s.allowFiles ? `<label class="lp-file"><span>파일 (사진·PDF·음악·영상, ${s.maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
   <label class="lp-inline"><span>이용 조건</span><select name="license"><option value="own">내가 만든 자료</option><option value="cc">CC 라이선스</option><option value="kogl">공공누리</option><option value="permitted">이용 허락 받음</option></select></label>
   <p class="lp-small">학생 얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
   <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>취소</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
 </form>
 <ul class="lp-board-grid" data-board-list aria-live="polite"><li class="lp-empty">아직 올라온 글이 없어요. 첫 글을 올려 주세요.</li></ul>
-${liveOff(ctx, '참여 보드')}${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}</div>`);
+${liveOff(ctx)}${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}</div>`);
 }
 
 function poll(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '함께 답해요') + `<div class="lp-poll" data-poll='${esc(JSON.stringify(s.items))}'><div class="lp-poll-live" data-poll-live><p class="lp-empty">강사가 투표를 열면 여기에 나타나요.</p></div>
-<details class="lp-poll-list"><summary>준비된 질문 ${s.items.length}개 보기</summary><ol>${s.items.map((p) => `<li>${esc(p.question)}${p.options.length ? ` <small>(${p.options.map(esc).join(' / ')})</small>` : ''}</li>`).join('')}</ol></details>${liveOff(ctx, '투표')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '투표') + `<div class="lp-poll" data-poll='${esc(JSON.stringify(s.items))}'><div class="lp-poll-live" data-poll-live><p class="lp-empty">강사가 투표를 열면 여기에 나타나요.</p></div>
+<details class="lp-poll-list"><summary>준비된 질문 ${s.items.length}개 보기</summary><ol>${s.items.map((p) => `<li>${esc(p.question)}${p.options.length ? ` <small>(${p.options.map(esc).join(' / ')})</small>` : ''}</li>`).join('')}</ol></details>${liveOff(ctx)}</div>`);
 }
 
 function quiz(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '복습 퀴즈') + `<ol class="lp-quiz" data-quiz>${s.items.map((q, n) => `<li class="lp-card"><fieldset><legend><span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}</legend>${q.options.map((o, k) => `<label><input type="radio" name="quiz-${esc(s.id)}-${n}" value="${k}" data-correct="${k === q.answer ? 1 : 0}"><span>${esc(o)}</span></label>`).join('')}</fieldset><p class="lp-quiz-fb" aria-live="polite" hidden data-explain="${esc(q.explain)}"></p></li>`).join('')}</ol>`);
+  return wrap(s, ctx, head(s, ctx, '복습 퀴즈') + `<ol class="lp-quiz" data-quiz>${s.items.map((q, n) => `<li><fieldset><legend><span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}</legend>${q.options.map((o, k) => `<label><input type="radio" name="quiz-${esc(s.id)}-${n}" value="${k}" data-correct="${k === q.answer ? 1 : 0}"><span>${esc(o)}</span></label>`).join('')}</fieldset><p class="lp-quiz-fb" aria-live="polite" hidden data-explain="${esc(q.explain)}"></p></li>`).join('')}</ol>`);
 }
 
 function attendance(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p>연수를 시작할 때와 마칠 때 한 번씩 눌러 주세요.</p><div class="lp-ctas"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx, '출석 확인')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p>연수를 시작할 때와 마칠 때 한 번씩 눌러 주세요.${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><div class="lp-ctas"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
 }
 
 // ── 자료·사람 ─────────────────────────────────────────────
 function materials(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '연수 자료') + `<ul class="lp-materials">${s.items.map((m) => `<li class="lp-card"><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
+  return wrap(s, ctx, head(s, ctx, '연수 자료') + `<ul class="lp-materials">${s.items.map((m) => `<li><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
 }
 
 function instructor(s, ctx) {
   const list = ctx.bp.instructors;
   if (!list.length) return '';
-  return wrap(s, ctx, head(s, ctx, list.length > 1 ? '강사 소개' : '강사 소개') + list.map((p) => `<div class="lp-person">
-<div class="lp-card lp-person-card"${fx(ctx, 'cards')}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3>${p.role || p.org ? `<p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>` : ''}${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${p.bio ? `<p class="lp-person-bio">${br(p.bio)}</p>` : ''}
+  return wrap(s, ctx, head(s, ctx, '강사 소개') + list.map((p) => `<div class="lp-person">
+<div class="lp-person-card"${fx(ctx, 'cards')}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3>${p.role || p.org ? `<p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>` : ''}${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${p.bio ? `<p class="lp-person-bio">${br(p.bio)}</p>` : ''}
 ${p.email && p.showEmail ? `<div class="lp-contact"><span class="lp-email">${esc(p.email)}</span><button class="lp-btn lp-btn-sm lp-btn-ghost" type="button" data-copy-text="${esc(p.email)}">${icon('copy')}<span>주소 복사</span></button></div>` : ''}
 ${p.links.length ? `<div class="lp-person-links">${p.links.map((l) => `<a class="lp-link" ${href(l.url)}>${esc(l.label || host(l.url))}${icon('external')}</a>`).join('')}</div>` : ''}</div>
 ${p.timeline.length ? `<div class="lp-timeline">${p.timeline.map((g) => `<div class="lp-tl-group"><h4>${esc(g.group)}</h4><ul>${g.items.map((it) => `<li><span>${it.url ? `<a ${href(it.url)}>${esc(it.text)}</a>` : esc(it.text)}</span>${it.year ? `<small>${esc(it.year)}</small>` : ''}</li>`).join('')}</ul></div>`).join('')}</div>` : ''}
@@ -208,12 +245,14 @@ ${p.timeline.length ? `<div class="lp-timeline">${p.timeline.map((g) => `<div cl
 }
 
 function speakers(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '연사') + `<ul class="lp-speakers">${s.items.map((p) => `<li class="lp-card"${fx(ctx, 'cards')}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3><p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>${p.talk ? `<p>${esc(p.talk)}</p>` : ''}${p.time ? `<small>${icon('clock')} ${esc(p.time)}</small>` : ''}</li>`).join('')}</ul>`);
+  return wrap(s, ctx, head(s, ctx, '연사') + `<ul class="lp-speakers">${s.items.map((p) => `<li${fx(ctx, 'cards')}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3><p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>${p.talk ? `<p>${esc(p.talk)}</p>` : ''}${p.time ? `<small>${icon('clock')} ${esc(p.time)}</small>` : ''}</li>`).join('')}</ul>`);
 }
 
 function sessions(s, ctx) {
   const label = { done: '마침', now: '진행 중', next: '다음' };
-  return wrap(s, ctx, head(s, ctx, '차시') + `<ol class="lp-sessions">${s.items.map((x) => `<li class="lp-card" data-status="${esc(x.status)}"><span class="lp-idx">${x.no}차시</span><div><h3>${esc(x.title)}</h3>${x.date ? `<small>${esc(koDate(x.date))}</small>` : ''}${x.desc ? `<p>${esc(x.desc)}</p>` : ''}${x.links.length ? `<div class="lp-st-links">${x.links.map((l) => `<a class="lp-link" ${href(l.url)}>${esc(l.label || '열기')}${icon('arrow')}</a>`).join('')}</div>` : ''}</div>${x.status ? `<span class="lp-chip">${label[x.status]}</span>` : ''}</li>`).join('')}</ol>`);
+  // 상태를 직접 적지 않았으면 날짜를 보고 참가자 화면이 마침·오늘·다음을 표시
+  const auto = !s.items.some((x) => x.status) && s.items.some((x) => x.date);
+  return wrap(s, ctx, head(s, ctx, '차시') + `<ol class="lp-sessions"${auto ? ' data-sessions-auto' : ''}>${s.items.map((x) => `<li id="${esc(s.id)}-${x.no}" data-status="${esc(x.status)}"${x.date ? ` data-date="${esc(x.date)}"` : ''}><span class="lp-idx">${x.no}차시</span><div><h3>${esc(x.title)}</h3>${x.date ? `<small>${esc(koDate(x.date))}</small>` : ''}${x.desc ? `<p>${esc(x.desc)}</p>` : ''}${x.links.length ? `<div class="lp-st-links">${x.links.map((l) => `<a class="lp-link" ${href(l.url)}>${esc(l.label || '열기')}${icon('arrow')}</a>`).join('')}</div>` : ''}</div><span class="lp-chip" data-session-chip${x.status ? '' : ' hidden'}>${x.status ? label[x.status] : ''}</span></li>`).join('')}</ol>`);
 }
 
 // 설문 항목 열쇠(결과 CSV의 열 이름): "1. 질문 앞부분"
@@ -225,26 +264,37 @@ function surveyForm(s) {
     const key = esc(surveyKey(q, n)); const name = `sv-${esc(s.id)}-${n}`;
     const qText = `<span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}`;
     const legend = `<legend>${qText}</legend>`;
-    if (q.kind === 'text') return `<li class="lp-card"><label class="lp-sv-text"><span class="lp-sv-q">${qText}</span><textarea name="${name}" rows="3" maxlength="1000" data-sv-key="${key}"></textarea></label></li>`;
+    if (q.kind === 'text') return `<li><label class="lp-sv-text"><span class="lp-sv-q">${qText}</span><textarea name="${name}" rows="3" maxlength="1000" data-sv-key="${key}"></textarea></label></li>`;
     const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
-    return `<li class="lp-card"><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b>` : ''}${esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
+    return `<li><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b>` : ''}${esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
   }).join('');
-  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state>제출한 뒤에도 다시 내면 고쳐져요. 이름 없이 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">설문 제출하기</button></div></form>`;
+  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state>다시 내면 고쳐져요. 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
 }
 
 function survey(s, ctx) {
   const url = s.url;
   const inner = s.questions.length && ctx.live;
-  const title = `<h2 class="lp-h2" id="${esc(s.id)}-h"${fx(ctx, 'section.title')}>${br(s.title || '만족도 조사에 참여해 주세요')}</h2>`;
-  const defLead = '오늘 연수에 대한 의견을 들려주세요. 다음 연수를 더 좋게 만드는 데 씁니다.';
+  const title = `<h2 class="lp-h2" id="${esc(s.id)}-h"${fx(ctx, 'section.title')}>${br(s.title || '만족도 조사')}</h2>`;
+  const defLead = '의견은 다음 연수를 준비하는 데 써요.';
   const lead = `<p class="lp-lead">${br(s.lead || defLead)}</p>`;
   if (inner) {
-    return wrap({ ...s, title: s.title || '만족도 조사' }, ctx, `${head({ ...s, title: s.title || '만족도 조사에 참여해 주세요', lead: s.lead || defLead }, ctx)}${surveyForm(s)}${url ? `<p class="lp-small">기관 설문도 있어요: <a class="lp-link" ${href(url)}>설문 열기${icon('external')}</a></p>` : ''}`);
+    return wrap({ ...s, title: s.title || '만족도 조사' }, ctx, `${head({ ...s, title: s.title || '만족도 조사', lead: s.lead || defLead }, ctx)}${completionLine(ctx) ? '<p class="lp-note">설문을 내야 이수가 확인돼요.</p>' : ''}${surveyForm(s)}${url ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" ${href(url)}>기관 설문 열기${icon('external')}</a></p>` : ''}`);
   }
-  return wrap(s, ctx, `<div class="lp-survey lp-card">
+  return wrap(s, ctx, `<div class="lp-survey">
 <div>${title}${lead}
-${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>바로 참여하기</span>${icon('external')}</a>` : '<p class="lp-note">설문 주소가 아직 없어요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
+${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note">설문 주소가 아직 없어요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
 ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label="설문 QR 코드"></div>` : ''}</div>`);
+}
+
+// ── 연수 후 안내: 다시 보기·소통방·이수 안내. 연수가 끝나면 참가자 화면이 이 칸을 첫 화면 바로 아래로 올림 ──
+const FOLLOWUP_KIND = { recording: '영상', community: '소통', next: '다음', read: '읽기', link: '링크' };
+function followup(s, ctx) {
+  const contact = ctx.bp.meta.contact;
+  return wrap(s, ctx, head(s, ctx, '연수 후 안내') + `${s.items.length ? `<ul class="lp-materials lp-followup">${s.items.map((i) => `<li><span class="lp-file-kind">${FOLLOWUP_KIND[i.kind] || '링크'}</span><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}</div>${i.url ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(i.url)}>${icon(/^https?:/.test(i.url) ? 'external' : 'arrow')}<span>열기</span></a>` : ''}</li>`).join('')}</ul>` : ''}${s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : ''}${contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : ''}`, ' data-followup');
+}
+/** 문의처: 이메일·전화번호는 눌러서 바로 연결 */
+export function contactHtml(c) {
+  return esc(c).replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (e) => `<a href="mailto:${e}">${e}</a>`).replace(/(?<![\d-])(0\d{1,2}-\d{3,4}-\d{4})(?![\d-])/g, (t) => `<a href="tel:${t.replace(/-/g, '')}">${t}</a>`);
 }
 
 function closing(s, ctx) {
@@ -253,13 +303,13 @@ function closing(s, ctx) {
 }
 
 function faq(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '자주 묻는 질문') + `<div class="lp-faq">${s.items.map((i) => `<details class="lp-card"><summary>${esc(i.q)}</summary><div>${md(i.a)}</div></details>`).join('')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '자주 묻는 질문') + `<div class="lp-faq">${s.items.map((i) => `<details><summary>${esc(i.q)}</summary><div>${md(i.a)}</div></details>`).join('')}</div>`);
 }
 function glossary(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '용어 풀이') + `<dl class="lp-glossary">${s.items.map((i) => `<div><dt>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl>`);
 }
 function video(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '영상') + `<ul class="lp-videos">${s.items.map((v) => `<li class="lp-card"><a ${href(v.url)} class="lp-video-link">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy">` : `<span class="lp-video-ph" aria-hidden="true">${icon('play')}</span>`}<span class="lp-video-t">${esc(v.title || host(v.url))}${v.length ? ` <small>${esc(v.length)}</small>` : ''}</span></a></li>`).join('')}</ul>`);
+  return wrap(s, ctx, head(s, ctx, '영상') + `<ul class="lp-videos">${s.items.map((v) => `<li><a ${href(v.url)} class="lp-video-link">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy">` : `<span class="lp-video-ph" aria-hidden="true">${icon('play')}</span>`}<span class="lp-video-t">${esc(v.title || host(v.url))}${v.length ? ` <small>${esc(v.length)}</small>` : ''}</span></a></li>`).join('')}</ul>`);
 }
 function gallery(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '사진') + `<ul class="lp-gallery"${fx(ctx, 'gallery')}>${s.items.map((g) => `<li><figure><a href="${esc(g.src)}" target="_blank" rel="noopener"><img src="${esc(g.src)}" alt="${esc(g.caption)}" loading="lazy"></a>${g.caption ? `<figcaption>${esc(g.caption)}</figcaption>` : ''}</figure></li>`).join('')}</ul>`);
@@ -270,7 +320,7 @@ function reflection(s, ctx) {
 }
 function text(s, ctx) { return wrap(s, ctx, head(s, ctx) + `<div class="lp-prose">${md(s.md)}</div>`); }
 
-export const RENDERERS = { hero, glance, message, steps5, outline, schedule, readiness, deck, stations, tools, prompts, qa, board, poll, quiz, materials, instructor, speakers, sessions, survey, closing, faq, glossary, video, gallery, reflection, attendance, text };
+export const RENDERERS = { hero, goals, glance, message, steps5, outline, schedule, readiness, deck, stations, tools, prompts, qa, board, poll, quiz, materials, instructor, speakers, sessions, survey, followup, closing, faq, glossary, video, gallery, reflection, attendance, text };
 
 export function renderSection(s, ctx) {
   const fn = RENDERERS[s.type];

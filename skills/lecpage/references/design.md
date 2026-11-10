@@ -18,18 +18,18 @@
 ## 3. 무드 프리셋 12종
 | id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문) | 모션 | 그래픽 | 시그니처 |
 |---|---|---|---|---|---|---|---|
-| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 바뀌는 톤 여정과 빛나는 그라데이션 제목. 메시지와 감동이 중심인 특강에. | emotional, warm, futuristic, bold | Pretendard / Pretendard | 화려 | perspective-grid | tone-journey |
+| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 바뀌는 톤 여정과 큰 제목. 메시지와 감동이 중심인 특강에. | emotional, warm, futuristic, bold | Pretendard / Pretendard | 화려 | perspective-grid | tone-journey |
 | `paper-workbook` | 종이 워크북 | 밝은 종이 위에 라임 형광펜. 따라 하기와 복사·완료 체크가 또렷한 실습형 워크숍에. | minimal, playful, handmade | Pretendard / Pretendard | 차분 | paper-stack | micro-copy |
-| `glass-lab` | 유리 실험실 | 은은한 오로라 위 유리 패널과 손전등 커서. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | Wanted Sans / Pretendard | 보통 | aurora | spotlight |
-| `playground` | 놀이터 | 굵은 테두리와 원색, 딱딱 눌리는 버튼. 놀이·게임·창의 연수와 초등 저학년 활동에. | playful, energetic, bold, retro | G마켓 산스 / Pretendard | 보통 | confetti-shapes | marquee |
+| `glass-lab` | 유리 실험실 | 은은한 오로라와 손전등 빛, 또렷한 글자. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | Wanted Sans / Pretendard | 보통 | aurora | spotlight |
+| `playground` | 놀이터 | 굵은 테두리와 원색, 딱딱 눌리는 버튼. 놀이·게임·창의 연수와 초등 저학년 활동에. | playful, energetic, bold, retro | G마켓 산스 / Pretendard | 보통 | confetti-shapes | confetti |
 | `calm-forest` | 숲의 숨 | 세이지 그린과 명조 제목, 느린 움직임과 종이 질감. 마음·상담·생활교육·학부모 연수에. | calm, natural, warm, handmade | 마루 부리 / Pretendard | 차분 | topo-lines | scroll-fill |
 | `official-brief` | 공식 브리핑 | 단정한 남색과 높은 가독성, 큰 숫자. 교육청 설명회·관리자 연수·대규모 행사에. | formal, minimal | Pretendard / Pretendard | 차분 | blueprint-grid | counter |
 | `editorial-ink` | 잉크 에디토리얼 | 큰 명조 제목과 울트라마린 잉크 한 색. 독서·인문·역사처럼 글이 주인공인 연수에. | editorial, minimal, calm | Noto Serif KR / Pretendard | 보통 | - | split-reveal |
-| `retro-pop` | 도파민 팝 | 형광 분홍·보라·민트가 터지는 레트로 무드. 음악·미술·영어·학생 대상 활동에. | playful, retro, energetic, bold | 검은고딕 / Pretendard | 보통 | blobs-morph | marquee |
+| `retro-pop` | 도파민 팝 | 형광 분홍·보라·민트가 터지는 레트로 무드. 음악·미술·영어·학생 대상 활동에. | playful, retro, energetic, bold | 검은고딕 / Pretendard | 보통 | blobs-morph | magnetic |
 | `chalkboard` | 칠판 교실 | 진녹색 칠판과 분필 노랑, 손글씨 낙서. 교실 실천·초등 교과 연수에 친근하게. | warm, handmade, playful | 주아 / Pretendard | 보통 | chalkboard | doodle-scribbles |
 | `blueprint-tech` | 설계도 | 청사진 격자와 고정폭 숫자, 그려지는 선. 코딩·메이커·과학·데이터 연수에. | tech, minimal, futuristic | IBM Plex Sans KR / IBM Plex Sans KR | 보통 | blueprint-grid | line-draw |
 | `riso-zine` | 리소 진 | 형광 분홍과 파랑 잉크가 겹치는 인쇄물 질감. 미술·독서 동아리·창작 연수에. | handmade, retro, playful, editorial | 도현 / Pretendard | 보통 | riso | highlight-sweep |
-| `sunrise-warm` | 새벽빛 | 복숭아빛에서 라일락으로 번지는 부드러운 그라데이션. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / Pretendard | 보통 | mesh-gradient | reveal-up |
+| `sunrise-warm` | 새벽빛 | 복숭아빛에서 라일락으로 번지는 부드러운 그라데이션. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / Pretendard | 보통 | mesh-gradient | mesh-gradient |
 
 ## 4. 효과 52가지
 | id | 이름 | 강도 | 슬롯 | 설명 |
@@ -37,7 +37,7 @@
 | `split-reveal` | 마스크 글자 등장 (Split reveal) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장, 핵심 문장 | 제목을 줄·낱말·글자로 나눠 보이지 않는 틀 안에서 아래에서 위로 밀어 올립니다. 수상작 포트폴리오의 대표 등장 방식입니다. |
 | `kinetic-weight` | 움직이는 글자 굵기 (Kinetic weight) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장 | 가변 글꼴의 굵기가 스크롤 위치(화면 가운데일수록 굵게)나 포인터 거리(가까운 글자만 굵게)에 따라 바뀝니다. |
 | `scroll-fill` | 스크롤 글 차오름 (Scroll fill) | 2 | 핵심 문장, 마무리 문장, 섹션 제목 | 긴 문장의 낱말이 흐린 색에서 제 색으로 스크롤에 맞춰 차오릅니다. 핵심 메시지를 천천히 읽게 만듭니다. |
-| `scramble` | 한글 해독 글자 (Hangul scramble) | 2 | 첫 화면 제목, 섹션 제목, 숫자 | 한글 음절·영문·숫자가 같은 종류의 무작위 글자로 섞였다가 왼쪽부터 제자리를 찾습니다(약 1초, 한 번). |
+| `scramble` | 왼쪽부터 또렷해지는 글자 (Decode reveal) | 2 | 첫 화면 제목, 섹션 제목, 숫자 | 글자가 왼쪽부터 차례로 또렷해집니다. 한글은 다른 음절로 바뀌지 않고, 영문·숫자만 잠깐 섞입니다(0.7초 안, 한 번). |
 | `gradient-text` | 흐르는 그라데이션 글자 (Gradient text) | 1 | 첫 화면 제목, 마무리 문장 | 큰 제목 글자 안에서 주 색·강조 색이 천천히 흐릅니다. 강도 1이면 멈춘 그라데이션. |
 | `marquee` | 흐르는 띠 (Marquee) | 2 | 구분 띠, 목록 | 키워드·도구 이름이 끊김 없이 가로로 흐르는 띠. 섹션 사이 구분선 역할. |
 | `counter` | 숫자 올라가기 (Count up) | 1 | 숫자 | 화면에 들어오면 숫자가 0부터 올라갑니다. 쉼표·소수점·단위(명, %, 시간)를 그대로 지킵니다. |
@@ -161,8 +161,20 @@
 | `pretendard` | Pretendard | sans | OFL-1.1 |
 | `suit` | SUIT | sans | OFL-1.1 |
 | `wanted` | Wanted Sans | sans | OFL-1.1 |
-| `gmarket` | G마켓 산스 | display | OFL-1.1 (G마켓 공식 배포) |
-| `maruburi` | 마루 부리 | serif | 네이버 글꼴 라이선스(상업 이용 가능) |
+| `gmarket` | G마켓 산스 | sans | OFL-1.1 (G마켓 공식 배포) |
+| `maruburi` | 마루 부리 | serif | OFL-1.1(네이버 마루 부리) |
+| `notoSans` | Noto Sans KR(본고딕) | sans | OFL-1.1 |
+| `nanumGothic` | 나눔고딕 | sans | OFL-1.1 |
+| `nanumMyeongjo` | 나눔명조 | serif | OFL-1.1 |
+| `nanumSquare` | 나눔스퀘어 | sans | OFL-1.1(네이버 나눔스퀘어) |
+| `nanumSquareRound` | 나눔스퀘어라운드 | rounded | OFL-1.1(네이버 나눔스퀘어라운드) |
+| `nanumSquareNeo` | 나눔스퀘어 네오 | sans | OFL-1.1(네이버 나눔스퀘어 네오) |
+| `nanumBarun` | 나눔바른고딕 | sans | OFL-1.1(네이버 나눔바른고딕) |
+| `nanumPen` | 나눔손글씨 펜 | hand | OFL-1.1 |
+| `nanumBrush` | 나눔손글씨 붓 | hand | OFL-1.1 |
+| `spoqa` | 스포카 한 산스 네오 | sans | OFL-1.1 |
+| `gothicA1` | 고딕 A1 | sans | OFL-1.1 |
+| `songMyung` | 송명 | serif | OFL-1.1 |
 | `notoSerif` | Noto Serif KR | serif | OFL-1.1 |
 | `hahmlet` | 함렛 | serif | OFL-1.1 |
 | `gowunBatang` | 고운바탕 | serif | OFL-1.1 |
