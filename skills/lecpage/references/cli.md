@@ -35,6 +35,7 @@
 | `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증 → 저장(직전 판 보관) → 마지막 빌드 위치에 다시 빌드 | 바뀐 점 한 줄씩 |
 | `options <blueprint.json> [--presets a,b,c] [-o 폴더]` | 추천 3안(또는 고른 안)을 따로 빌드하고 PC 첫 화면·PC 본문·휴대폰을 한 장(`work/options/contact-sheet.png`)에 모음 | 안마다 한 줄 |
 | `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |
+| `review <dist> [--port 4180] [--out 폴더]` | 사이트를 127.0.0.1에 띄우고 '수정 요청' 단추를 붙임. 강사가 펜·네모·화살표·글자로 표시하고 글을 쓰면 `work/feedback/NNN.png`·`NNN.json`(글·칸 id·시각)으로 저장 | 주소 한 줄 |
 | `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·문구 검사(`copy-lint.mjs`, 알림만)가 있으면 함께. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |

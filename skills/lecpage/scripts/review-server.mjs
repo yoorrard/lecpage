@@ -28,6 +28,7 @@ export function injectReview(html) {
 }
 
 const clean = (s, max) => String(typeof s === 'string' ? s : '').normalize('NFC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, max);
+const shown = (p) => { const r = relative(process.cwd(), p); return r && !r.startsWith('..') ? r : p; };
 const num = (v) => Math.max(0, Math.min(1e6, Math.round(+v || 0)));
 
 /** 받은 수정 요청을 검사해 저장할 모양으로(잘못되면 오류 메시지) */
@@ -104,7 +105,7 @@ export function startReviewServer(dist, { port = 4180, out, quiet = false } = {}
         if (r.error) return send(400, JSON.stringify({ error: r.error }));
         try {
           const id = saveFeedback(outDir, r.rec, r.png);
-          log(`수정 요청 ${id}: ${r.rec.text.slice(0, 80) || '(글 없음)'}${r.rec.sections.length ? ` · 칸 ${r.rec.sections.join(', ')}` : ''} → ${relative(process.cwd(), join(outDir, id + '.json')) || id + '.json'}`);
+          log(`수정 요청 ${id}: ${r.rec.text.slice(0, 80) || '(글 없음)'}${r.rec.sections.length ? ` · 칸 ${r.rec.sections.join(', ')}` : ''} → ${shown(join(outDir, id + '.json'))}`);
           send(200, JSON.stringify({ ok: true, id }));
         } catch (e) { send(500, JSON.stringify({ error: '저장하지 못했어요: ' + e.message })); }
       });
@@ -125,7 +126,7 @@ export function startReviewServer(dist, { port = 4180, out, quiet = false } = {}
     server.once('error', no);
     server.listen(port, '127.0.0.1', () => {
       const a = server.address();
-      log(`검토 페이지: http://127.0.0.1:${a.port}/  — 화면 왼쪽 아래 [수정 요청]을 눌러 표시하고 보내면 ${relative(process.cwd(), outDir) || outDir}/에 저장돼요. (끝내려면 Ctrl+C)`);
+      log(`검토 페이지: http://127.0.0.1:${a.port}/  — 화면 왼쪽 아래 [수정 요청]을 눌러 표시하고 보내면 ${shown(outDir)}/에 저장돼요. (끝내려면 Ctrl+C)`);
       ok(server);
     });
   });

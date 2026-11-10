@@ -10,6 +10,7 @@
 //        일부만 고치고 검증·다시 빌드(형식: references/cli.md)
 //   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
 //   doctor                                           환경 점검과 설치 방법
+//   review <dist> [--port 4180]                      사이트를 띄우고 강사의 '수정 요청'(펜·네모 표시+글)을 work/feedback/에 모음
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
 //   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
@@ -573,6 +574,8 @@ const commands = {
     say(lines, { ok: true, sheet, skipped, options: results.map(({ pc, pc2, phone, ...r }) => ({ ...r, shots: { pc, pc2, phone } })) });
   },
 
+  /** 만든 사이트를 띄우고 '수정 요청'(펜·네모로 표시 + 글)을 work/feedback/에 모음. AI는 그 파일을 읽고 patch로 고침 */
+  async review() { const { startReviewServer } = await import('./review-server.mjs'); await startReviewServer(resolve(args._[0] || 'dist'), { port: +args.port || 4180, out: args.out }); },
   async doctor() {
     const has = (bin) => spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8' }).status === 0;
     const os = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';

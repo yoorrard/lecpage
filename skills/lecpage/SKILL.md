@@ -38,7 +38,8 @@ $L doctor                                                  # 환경 점검
 7. **운영 방식**: 참여 기능을 쓰면 `decide-infra -i work/info.json`. 결과를 쉬운 말로 설명하고 확인받는다(`references/infra-decision.md`). 백엔드는 `backends/<종류>/README.md`. 강사가 준 주소·키는 `info.json`의 `live`에 넣고 `patch work/blueprint.json -i work/info.json`.
 8. **공개 범위**: 묻고 `info.json`의 `access`(`link` 기본·`public`)에 쓴다. 암호면 `--password '<암호>'`(낱말 서너 개로 길게, 파일에 남기지 않음). 참가자 QR은 주소 끝에 `#k=암호`. https에서만 열리므로 교실 LAN·ZIP에는 쓰지 않는다.
 9. **점검**: `make`·`patch --qa`가 휴대폰·PC × 밝게·어둡게를 점검하고 스크린샷 4장을 남긴다. 스크린샷을 직접 보고, `references/qa-checklist.md`의 사람 점검을 한다.
-10. **배포·전달**: `references/deploy/<대상>.md`. 올리는 것은 `dist/`뿐이다(`dist-강사용/`은 올리지 않음). ZIP은 `pack dist -o site.zip`. 강사에게 참가자 주소와 QR, 강사 화면 주소와 관리자 키 보관법, 전날 할 일(접속 진단·리허설), 끝난 뒤 할 일(기록 내려받기·삭제 날짜)을 짧게 알린다. 자세한 것은 `dist-강사용/운영안내.md`.
+10. **수정 요청 받기**: `review dist`로 사이트를 띄우면 강사가 고칠 곳을 펜·네모로 표시하고 글을 남긴다. `work/feedback/NNN.png`·`.json`을 읽고 `patch`로 고친 뒤 다시 보여 준다.
+11. **배포·전달**: `references/deploy/<대상>.md`. 올리는 것은 `dist/`뿐이다(`dist-강사용/`은 올리지 않음). ZIP은 `pack dist -o site.zip`. 강사에게 참가자 주소와 QR, 강사 화면 주소와 관리자 키 보관법, 전날 할 일(접속 진단·리허설), 끝난 뒤 할 일(기록 내려받기·삭제 날짜)을 짧게 알린다. 자세한 것은 `dist-강사용/운영안내.md`.
 
 ## 꼭 지킬 것
 - **지어내지 않는다**: 교재·강사에게 없는 날짜·장소·인원·도구는 빈칸으로 두고 묻는다. 프롬프트·실습 단계는 고쳐 쓰지 않는다.
