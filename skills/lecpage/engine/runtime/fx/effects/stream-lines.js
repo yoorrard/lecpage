@@ -71,7 +71,7 @@ LecFX.define('stream-lines', {
         if (still) continue;
         // 물살: 선을 따라 지나가는 짧고 진한 마디
         var len = m / 2, h = (T * 7 + n * 13.7) % (len + 26) - 6, h0 = Math.max(0, Math.floor(h)) * 2, h1 = Math.min(len - 1, Math.floor(h) + 6) * 2;
-        if (h1 > h0) { g.strokeStyle = rgba(n % 4 ? fg : pr, 0.95); g.lineWidth = bold ? 2.3 : 1.6; g.beginPath(); g.moveTo(P[h0], P[h0 + 1]); for (i = h0 + 2; i <= h1; i += 2) g.lineTo(P[i], P[i + 1]); g.stroke(); }
+        if (h1 > h0) { g.strokeStyle = rgba(fg, 0.9); g.lineWidth = bold ? 2.2 : 1.5; g.beginPath(); g.moveTo(P[h0], P[h0 + 1]); for (i = h0 + 2; i <= h1; i += 2) g.lineTo(P[i], P[i + 1]); g.stroke(); }
       }
       if (!on) { on = true; fig.classList.add('fx-stream-on'); } // 첫 장을 그린 뒤에 정지 그림을 감춤
     };
