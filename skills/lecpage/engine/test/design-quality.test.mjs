@@ -100,7 +100,7 @@ test('쇼케이스 그림: 같은 제목이면 같은 그림, 제목이 다르�
     assert.ok(lines.filter((l) => l.length > 8).length >= 36, `${t}: 물결 선 수`);
     // 선은 돌 안으로 들어가지 않음
     for (const l of lines) for (let i = 0; i < l.length; i += 2) for (const s of sc.st) assert.ok(Math.hypot(l[i] - s[0], l[i + 1] - s[1]) >= s[2], `${t}: 선이 돌을 지남`);
-    assert.ok(Buffer.byteLength(H.streamArt(t)) < 12000 && Buffer.byteLength(H.orbitArt(t, ['가', '나', '다'])) < 12000, `${t}: 정지 그림 크기`);
+    assert.ok(Buffer.byteLength(H.streamArt(t)) < 12000 && Buffer.byteLength(H.orbitArt(['가', '나', '다'])) < 12000, `${t}: 정지 그림 크기`);
   }
   // 입체 궤도: 관의 뼈대가 한 바퀴 뒤 이어지고(법선 단위 길이·접선에 직각), 낱말 3~5개는 꾸밈
   const { F, hol } = H.knotFrames(100);

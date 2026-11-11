@@ -9,6 +9,7 @@
 // fontAlts = 주제·분위기가 맞을 때만 고르는 대안 글꼴(decide/design.js chooseFonts).
 // signature = 대표 효과 하나. signatureIn:'hero'면 첫 화면 구성이 직접 씁니다(다른 칸에 따로 붙이지 않음).
 // effects에는 1단계를 넘는 효과를 첫 화면 칸(hero.*)에만 둡니다. 나머지 칸은 1단계 이하(대표 효과 하나만 예외).
+// showcase = 살아 있는 첫 화면(그림·움직임·반응이 첫 화면에 든 디자인). 앱 갤러리가 '움직이는 첫 화면'으로 따로 모아 보여 줌
 // variants.head = 섹션 머리 모양(runtime/lecpage.css '섹션 머리'): chapter(큰 번호) · index(고정폭 색인 줄) · kicker(잡지식 겹줄과 작은 번호) · sticker(딱지) · tab(문항 번호 칸)
 // variants.band = 핵심 메시지·마무리처럼 화면 폭을 채우는 띠의 바탕: invert(반대 테마 색) · tint(옅은 바탕) · accent(강조색 면) · glow(어두운 바탕 위 빛)
 
@@ -264,7 +265,7 @@ export const PRESETS = [
     dark: { bg: '#0f0e17', fg: '#f2f0f7', card: '#1a1826', muted: '#b3afc4', primary: '#9a90ff', primaryFg: '#0f0e17', accent: '#ff8a6b', accent2: '#ffd98a', accent3: '#7f9bff', heroFrom: '#221d4a', heroTo: '#3a1f1a' },
     shape: { radius: 14, radiusSm: 8, radiusLg: 22, borderW: 1, shadow: 'soft' },
     variants: { hero: 'collage', head: 'tab', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
-    graphic: 'slide-fan', closingGraphic: '', signature: '',
+    graphic: 'slide-fan', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'reveal-up', numbers: 'counter' },
   },
   {
@@ -278,7 +279,7 @@ export const PRESETS = [
     light: { bg: '#faf8ff', fg: '#1c1830', card: '#ffffff', muted: '#5a5474', primary: '#5541c4', primaryFg: '#ffffff', accent: '#e2553a', accent2: '#1f8fbf', accent3: '#c98a00', heroFrom: '#e4dcff', heroTo: '#faf8ff' },
     shape: { radius: 16, radiusSm: 10, radiusLg: 26, borderW: 1, shadow: 'glow' },
     variants: { hero: 'dial', head: 'index', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
-    graphic: 'schedule-dial', closingGraphic: '', signature: '',
+    graphic: 'schedule-dial', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
   },
   {
@@ -292,7 +293,7 @@ export const PRESETS = [
     light: { bg: '#f3f7f5', fg: '#0c1a17', card: '#ffffff', muted: '#4a5f59', primary: '#0a7453', primaryFg: '#ffffff', accent: '#6a4ce0', accent2: '#946200', accent3: '#0a6fae', heroFrom: '#c9efe0', heroTo: '#f3f7f5' },
     shape: { radius: 10, radiusSm: 6, radiusLg: 16, borderW: 1, shadow: 'glow' },
     variants: { hero: 'orbit', head: 'index', band: 'glow', card: 'outline', nav: 'bar', btn: 'pill', heading: 'display', tones: false },
-    graphic: 'orbit-3d', closingGraphic: '', signature: '',
+    graphic: 'orbit-3d', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
   },
   {
@@ -306,7 +307,7 @@ export const PRESETS = [
     dark: { bg: '#101a1b', fg: '#ecf1ec', card: '#172526', muted: '#a9b9b5', primary: '#7fd9cf', primaryFg: '#0b1a1a', accent: '#ff8d66', accent2: '#e8c765', accent3: '#4e7f79', heroFrom: '#1b3334', heroTo: '#101a1b' },
     shape: { radius: 3, radiusSm: 2, radiusLg: 6, borderW: 1, shadow: 'flat' },
     variants: { hero: 'stream', head: 'chapter', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
-    graphic: 'stream-lines', closingGraphic: '', signature: '',
+    graphic: 'stream-lines', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
   },
 ];

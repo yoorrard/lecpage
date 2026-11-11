@@ -385,7 +385,7 @@ C.dial = (M) => {
     const unit = T <= 120 ? 5 : T <= 300 ? 10 : 30, n = D.timed && T % unit === 0 ? T / unit : 0;
     const bezel = n ? `<circle class="lp-dial-bezel" cx="200" cy="200" r="172" pathLength="${n * 10}" stroke-dasharray=".3 9.7" stroke-dashoffset=".15"/>` : '';
     const dur = M.dur ? (M.dur.text ? `<b class="lp-dial-dt">${esc(M.dur.text)}</b>` : `<b>${M.dur.num}</b><span>${esc(M.dur.unit)}</span>`) : `<b>${D.rows.length}</b><span>${D.timed ? '순서' : '부'}</span>`;
-    art = `<div class="lp-dial"${artFx(M, 'schedule-dial')} data-date="${D.timed ? esc(M.m.date) : ''}" style="--n:${D.rows.length};--r:${Math.ceil(D.rows.length / 2)}"><div class="lp-dial-ring"><svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">${bezel}${segs.map((x) => x.seg).join('')}</g><g class="lp-dial-ticks">${segs.map((x) => x.tick).join('')}</g><line class="lp-dial-hand" x1="200" y1="200" x2="200" y2="22"/></svg><p class="lp-dial-center" data-dial-center aria-hidden="true">${dur}${M.time ? `<small>${esc(M.time)}</small>` : ''}</p></div>
+    art = `<div class="lp-dial"${artFx(M, 'schedule-dial')} data-date="${D.timed ? esc(M.m.date) : ''}" style="--n:${D.rows.length};--r:${Math.ceil(D.rows.length / 2)}"><div class="lp-dial-ring"><svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">${bezel}${segs.map((x) => x.seg).join('')}</g><g class="lp-dial-ticks">${segs.map((x) => x.tick).join('')}</g><line class="lp-dial-hand" x1="200" y1="68" x2="200" y2="22"/></svg><p class="lp-dial-center" data-dial-center aria-hidden="true">${dur}${M.time ? `<small>${esc(M.time)}</small>` : ''}</p></div>
 <ol class="lp-dial-list" aria-label="${D.timed ? '오늘의 일정' : '오늘의 차례'}">${D.rows.map((r, i) => `<li data-i="${i}"><a href="${esc(D.href)}">${r.start ? `<time>${esc(r.start)}</time>` : ''}<span>${esc(r.title)}</span>${D.timed ? `<small>${r.min}분</small>` : ''}</a></li>`).join('')}</ol></div>`;
   }
   return show(M, art);
@@ -418,7 +418,7 @@ export function knotFrames(M) {
   }
   return { F, hol };
 }
-export function orbitArt(seed, words = [], attr = '') {
+export function orbitArt(words = [], attr = '') {
   const { M: N, K, RHO, TW, D, S, SPIN, AX, RT, TILT } = KNOT, TAU = Math.PI * 2;
   const { F, hol } = knotFrames(N);
   const sz = Math.sin(SPIN), cz = Math.cos(SPIN), sx = Math.sin(AX), cx = Math.cos(AX);
@@ -438,9 +438,9 @@ export function orbitArt(seed, words = [], attr = '') {
   const ring = (a) => { const y0 = RT * Math.sin(a), z = y0 * Math.sin(TILT), k = (D / (D + z)) * S; return [200 + RT * Math.cos(a) * k, 200 + y0 * Math.cos(TILT) * k, z]; };
   let rp = ''; for (let i = 0; i < 60; i++) { const [x, y] = ring((i / 60) * TAU); rp += `${i ? 'L' : 'M'}${Math.round(x * 2)} ${Math.round(y * 2)}`; }
   const tags = words.length ? `<ul class="lp-orbit-tags">${words.map((w, i) => { const [x, y, z] = ring(0.62 + (i / words.length) * TAU); return `<li style="left:${(x / 4).toFixed(1)}%;top:${(y / 4).toFixed(1)}%;--x:${(x / 4).toFixed(1)};--z:${(0.5 - z / (2 * RT)).toFixed(2)}">${esc(w)}</li>`; }).join('')}</ul>` : '';
-  return `<div class="lp-orbit"${attr} data-seed="${esc(seed)}" aria-hidden="true"><svg viewBox="0 0 800 800" focusable="false"><path class="lp-orbit-ring" d="${rp}Z"/>${dots}</svg>${tags}</div>`;
+  return `<div class="lp-orbit"${attr} aria-hidden="true"><svg viewBox="0 0 800 800" focusable="false"><path class="lp-orbit-ring" d="${rp}Z"/>${dots}</svg>${tags}</div>`;
 }
-C.orbit = (M) => show(M, orbitArt(seedOf(M), orbitWords(M), artFx(M, 'orbit-3d')));
+C.orbit = (M) => show(M, orbitArt(orbitWords(M), artFx(M, 'orbit-3d')));
 
 /* 돌과 물결: 연수 제목에서 나온 그림. 돌 두세 개를 돌아 흐르는 물결 선(돌 둘레의 퍼텐셜 흐름) — 같은 제목이면 늘 같은 그림. 효과(stream-lines)가 실리면 선이 흐르고 포인터가 돌이 됨 */
 /** 그림의 씨앗 값: stream-lines.js와 같은 순서로 뽑음 */
@@ -482,7 +482,7 @@ export function streamArt(seed, attr = '') {
 C.stream = (M) => show(M, streamArt(seedOf(M), artFx(M, 'stream-lines')));
 
 /** 다른 첫 화면에 꾸밈으로 얹을 때도 정지 그림을 먼저 그려 둠(효과가 꺼져도 완성된 모습) */
-const DECOR_ART = { 'orbit-3d': (M) => orbitArt(seedOf(M)), 'stream-lines': (M) => streamArt(seedOf(M)) };
+const DECOR_ART = { 'orbit-3d': () => orbitArt(), 'stream-lines': (M) => streamArt(seedOf(M)) };
 
 /** 프리셋 구성 이름 → 렌더(옛 이름 stage·split·center·editorial도 받음) */
 const ALIAS = { stage: 'cinema', split: 'worksheet', center: 'quiet', editorial: 'masthead' };

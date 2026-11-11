@@ -64,7 +64,7 @@ export function Gallery() {
           <dl class="fx-facts">
             <div><dt>글꼴</dt><dd>{[...new Set([fontLabel(open.fonts?.display), fontLabel(open.fonts?.body)].filter(Boolean))].join(' · ')}</dd></div>
             <div><dt>페이지 연출</dt><dd>{MOTION[open.motion] || MOTION[1]}</dd></div>
-            <div><dt>대표 효과</dt><dd>{E.FX.find((f) => f.id === open.signature)?.name_ko || '없음'}</dd></div>
+            <div><dt>{open.showcase ? '첫 화면 그림' : '대표 효과'}</dt><dd>{E.FX.find((f) => f.id === (open.showcase ? open.graphic : open.signature))?.name_ko || '없음'}</dd></div>
           </dl>
           <p class="small muted">교재를 넣으면 주제와 분위기에 맞는 디자인을 먼저 골라 주고, '살펴보고 고치기'에서 바꿀 수 있어요.</p>
           <div class="btn-row"><a class="btn btn-primary" href="#/">교재 넣고 만들기</a><button class="btn btn-quiet" onClick={() => setOpen(null)}>닫기</button></div>

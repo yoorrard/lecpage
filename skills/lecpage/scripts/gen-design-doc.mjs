@@ -28,7 +28,9 @@ let md = `# 디자인: 프리셋·효과·연출·글꼴
 ## 3. 무드 프리셋 ${E.PRESETS.length}종
 | id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문/숫자) | 연출 | 첫 화면 | 대표 효과 |
 |---|---|---|---|---|---|---|---|
-${E.PRESETS.map((p) => `| \`${p.id}\` | ${p.name_ko} | ${p.desc_ko} | ${p.moods.join(', ')} | ${fonts(p)} | ${LV[p.motion]} | ${p.variants?.hero || '-'} | ${p.signature || '-'} |`).join('\n')}
+${E.PRESETS.map((p) => `| \`${p.id}\` | ${p.name_ko} | ${p.desc_ko} | ${p.moods.join(', ')} | ${fonts(p)} | ${LV[p.motion]} | ${p.variants?.hero || '-'} | ${p.signature || (p.showcase ? `${p.graphic}(첫 화면 그림)` : '-')} |`).join('\n')}
+
+살아 있는 첫 화면(쇼케이스) ${E.PRESETS.filter((p) => p.showcase).length}종(${E.PRESETS.filter((p) => p.showcase).map((p) => `\`${p.id}\``).join(' · ')}): 첫 화면에 그림이 들어 있다. 그림은 서버가 정지 모습(HTML·SVG)으로 먼저 그리고, 프리셋의 \`graphic\` 효과가 움직임과 반응을 더한다. 모션 1단계 이하·동작 줄이기·저사양에서는 정지 그림 그대로다. 이 그림 효과는 다른 프리셋의 첫 화면 그래픽(\`design.graphic\`)으로도 고를 수 있다.
 
 ## 4. 효과 ${E.FX.length}가지
 | id | 이름 | 강도 | 슬롯 | 설명 |

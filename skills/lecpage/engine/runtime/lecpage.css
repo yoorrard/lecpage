@@ -502,16 +502,18 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-show > .lp-hero-meta{grid-area:meta;align-self:start;grid-template-columns:repeat(auto-fit,minmax(150px,max-content));gap:var(--sp-3) var(--sp-7);padding-top:var(--sp-5);border-top:var(--rule)}
 .lp-show > :is(.lp-fan,.lp-dial,.lp-orbit,.lp-stream){grid-area:art}
 .lp-show .lp-h1{--fs-hero:clamp(2.6rem,5.6vw,5.5rem);line-height:1.1;letter-spacing:-.04em}
-/* 18 collage(펼친 교재): 교재 쪽 3D 부채. 장마다 제 색, 맨 위 장만 제목을 보이고 뒤 장은 쪽 번호만 */
+/* 18 collage(펼친 교재): 교재 쪽 3D 부채. 장마다 제 색, 맨 위 장만 제목을 보이고 뒤 장은 쪽 번호만.
+   목록 상자는 누름을 받지 않음(pointer-events:none): 3D 공간에서 목록 면이 뒤로 물러난 장들 앞에 있어 뒤 장을 누를 수 없게 되기 때문 */
 .lp-hero--collage{background:radial-gradient(60% 70% at 86% 40%,color-mix(in srgb,var(--hero-from) 70%,transparent),transparent 70%),radial-gradient(40% 50% at 70% 96%,color-mix(in srgb,var(--hero-to) 80%,transparent),transparent 70%),var(--background)}
 .lp-fan{position:relative;justify-self:center;width:min(100%,580px);aspect-ratio:1/.7;perspective:1400px}
-.lp-fan-list{list-style:none;position:absolute;inset:0;transform-style:preserve-3d;transform:translate3d(0,calc(var(--sy,0) * -28px),0) rotateX(calc(8deg - var(--ty,0) * 6deg)) rotateY(calc(-13deg + var(--tx,0) * 8deg));transition:transform .6s var(--ease-out)}
-.lp-fan-card{position:absolute;left:1%;top:25%;width:60%;aspect-ratio:16/10;z-index:calc(10 - var(--i));transform-origin:10% 100%;transform:translate3d(calc(var(--i) * (9.5% + var(--sy,0) * 1.5%)),calc(var(--i) * (-5% - var(--sy,0) * 2%)),calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg));transition:transform .7s var(--ease-out)}
+.lp-fan-list{list-style:none;position:absolute;inset:0;pointer-events:none;transform-style:preserve-3d;transform:translate3d(0,calc(var(--sy,0) * -28px),0) rotateX(calc(8deg - var(--ty,0) * 6deg)) rotateY(calc(-13deg + var(--tx,0) * 8deg));transition:transform .6s var(--ease-out)}
+.lp-fan-card{position:absolute;left:1%;top:25%;width:60%;aspect-ratio:16/10;pointer-events:auto;z-index:calc(10 - var(--i));transform-origin:10% 100%;transform:translate3d(calc(var(--i) * (9.5% + var(--sy,0) * 1.5%)),calc(var(--i) * (-5% - var(--sy,0) * 2%)),calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg));transition:transform .7s var(--ease-out)}
 .lp-fan-face{position:relative;display:grid;align-content:space-between;width:100%;height:100%;padding:6% 4.5% 6.5% 7.5%;overflow:hidden;background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:clamp(10px,1.2vw,16px);box-shadow:0 30px 54px -30px rgba(10,8,30,.5),-14px 6px 26px -18px rgba(10,8,30,.38);text-decoration:none}
 .lp-fan-face img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lp-fan-card:nth-child(5n+1) .lp-fan-face{background:var(--band-primary,var(--primary));color:var(--primary-foreground);border-color:transparent}
 .lp-fan-card:nth-child(5n+3) .lp-fan-face{background:var(--accent);color:var(--accent-foreground);border-color:transparent}
 .lp-fan-card:nth-child(5n) .lp-fan-face{background:var(--accent-2);color:var(--accent-2-foreground);border-color:transparent}
+.lp-fan-card .lp-fan-face:has(> img){background:var(--card);border-color:var(--rule-c)}
 .lp-fan-pg{justify-self:end;font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(.95rem,1.5vw,1.3rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .lp-fan-face b{max-width:11em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(1.05rem,2vw,1.75rem);line-height:1.25;letter-spacing:var(--display-tracking);text-wrap:balance;opacity:0;transition:opacity .35s}
 .lp-fan:not(.fx-fan) .lp-fan-card:first-child b,.lp-fan-card.is-top b{opacity:1}
@@ -531,7 +533,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-dial-seg.is-hot,.lp-dial-seg.is-now{stroke-width:30}
 .lp-dial-seg.is-done{opacity:.3}
 .lp-dial-ticks text{font-family:var(--font-mono);font-size:12px;fill:var(--muted-foreground);text-anchor:middle;font-variant-numeric:tabular-nums}
-.lp-dial-hand{stroke:var(--accent);stroke-width:3;stroke-linecap:round;opacity:0}
+.lp-dial-hand{stroke:var(--accent);stroke-width:4;stroke-linecap:round;opacity:0}
 .lp-dial.is-live .lp-dial-hand{opacity:1}
 .lp-dial-center{position:absolute;inset:27%;display:grid;place-content:center;justify-items:center;gap:2px;margin:0;text-align:center;pointer-events:none}
 .lp-dial-center b{font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(3rem,7vw,5.5rem);line-height:.9;letter-spacing:-.05em;font-variant-numeric:tabular-nums}

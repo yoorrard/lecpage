@@ -28,13 +28,17 @@ LecFX.define('slide-fan', {
     place();
     var btn = fan.querySelector('[data-fan-next]');
     if (btn) { btn.hidden = false; ctx.on(btn, 'click', next); }
-    // 뒤에 있는 장을 누르면 먼저 위로 올림(맨 위 장은 링크대로 이동)
+    // 뒤에 있는 장을 누르면 먼저 위로 올림(맨 위 장은 링크대로 이동). 누를 때 생기는 초점 이동은 건너뜀(누름 한 번에 올리고 바로 이동해 버리지 않게)
+    var down = false;
+    ctx.on(list, 'pointerdown', function () { down = true; });
+    ctx.on(d, 'keydown', function () { down = false; });
     ctx.on(list, 'click', function (e) {
+      down = false;
       var c = e.target.closest ? e.target.closest('.lp-fan-card') : null; if (!c) return;
       var k = cards.indexOf(c); if (k < 0 || order[k] === 0) return;
       e.preventDefault(); bringTop(k);
     });
-    ctx.on(list, 'focusin', function (e) { var c = e.target.closest ? e.target.closest('.lp-fan-card') : null; var k = cards.indexOf(c); if (k >= 0) bringTop(k); });
+    ctx.on(list, 'focusin', function (e) { if (down) return; var c = e.target.closest ? e.target.closest('.lp-fan-card') : null; var k = cards.indexOf(c); if (k >= 0) bringTop(k); });
     fan.classList.add('fx-fan');
     var clean = function () { fan.classList.remove('fx-fan'); if (made) made.remove(); cards.forEach(function (c, i) { c.style.setProperty('--i', i); c.classList.remove('is-top'); }); ['--tx', '--ty', '--sy'].forEach(function (k) { list.style.removeProperty(k); }); };
     if (ctx.reduced) return clean;

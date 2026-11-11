@@ -19,7 +19,7 @@ npx skills add yoorrard/lecpage
 
 | | 그냥 시키면 | lecpage |
 |---|---|---|
-| 디자인 | 비슷한 틀이 반복되고 검증이 없음 | 디자인 17종마다 첫 화면 구성·글꼴·섹션 배치가 다름. 정적인 페이지부터 스크롤 연출까지 고름. 대비·줄바꿈·넘침·'AI 티'를 자동 점검 |
+| 디자인 | 비슷한 틀이 반복되고 검증이 없음 | 디자인 21종마다 첫 화면 구성·글꼴·섹션 배치가 다름(그림이 움직이는 첫 화면 4종 포함). 정적인 페이지부터 스크롤 연출까지 고름. 대비·줄바꿈·넘침·'AI 티'를 자동 점검 |
 | 내용 | 그럴듯하게 지어낼 수 있음 | 교재 쪽을 근거로 구성하고 "교재 n쪽"으로 표시. 스키마 검증·자동 보정 |
 | 기능 | 정적 페이지 한 장 | 교재 보기·실습·프롬프트 복사·질문·투표·나눔 보드·강사 화면·발표 화면·QR 안내문·접속 확인 |
 | AI 비용 | HTML 전체를 쓰고, 고칠 때마다 다시 씀 | 설계도(JSON)와 작은 패치만. 같은 일에 읽는 글 약 1/12, 쓰는 글 약 1/170([조사](docs/research/skill-efficiency-2026-11.md)) |
@@ -70,15 +70,21 @@ npx skills add yoorrard/lecpage
 | 부드러운 파스텔 `soft-pastel` | 부드러운 도형과 날짜 | 나눔스퀘어라운드 · LINE Seed Sans KR · Outfit |
 | 움직이는 글자 `kinetic-type` | 아주 큰 글자와 메아리 띠 | 페이퍼로지 · 스포카 한 산스 네오 · Big Shoulders Display |
 | 따뜻한 미니멀 `warm-minimal` | 큰 날짜 숫자와 정보 표 | 나눔명조 · 아스타 산스 · Fraunces |
+| 펼친 교재 `deck-collage` | 교재 쪽을 부채처럼 펼친 3D 더미 | 페이퍼로지 · 아스타 산스 · Sora |
+| 하루 시계 `time-dial` | 하루 일정을 그린 둥근 시계 | 아스타 산스 · Red Hat Display |
+| 입체 궤도 `knot-orbit` | 점으로 짠 입체 매듭과 둘레를 도는 낱말 | G마켓 산스 · Noto Sans KR(본고딕) · Syne |
+| 돌과 물결 `stone-stream` | 연수 제목으로 그린 돌과 물결 그림 | 송명 · 고딕 A1 · Instrument Serif |
 
-색 조합 34 × 글꼴 58종(짝 25) × 효과 52가지를 자리 18곳에 골라 써요. 글꼴은 한글 제목·한글 본문·숫자와 영문용 라틴 제목·고정폭 네 벌로 짜요. **교재의 글꼴을 읽어 같은 글꼴(없으면 어울리는 무료 웹 글꼴)로** 만들어요.
+마지막 4가지(펼친 교재·하루 시계·입체 궤도·돌과 물결)는 첫 화면에 그림이 들어 있어요. 그림은 정지 모습으로 먼저 그려지고, 마우스에 반응하며 움직여요. 움직임을 줄인 기기와 가벼운 모드에서는 정지 그림 그대로 보여요.
+
+색 조합 34 × 글꼴 58종(짝 25) × 효과 56가지를 자리 18곳에 골라 써요. 글꼴은 한글 제목·한글 본문·숫자와 영문용 라틴 제목·고정폭 네 벌로 짜요. **교재의 글꼴을 읽어 같은 글꼴(없으면 어울리는 무료 웹 글꼴)로** 만들어요.
 
 | 종류 | 효과(영문 이름) |
 |---|---|
 | 글자 11 | 글자 드러내기(Split reveal) · 움직이는 글자 굵기(Kinetic weight) · 스크롤 글 차오름(Scroll fill) · 왼쪽부터 또렷해지는 글자(Decode reveal) · 흐르는 그라데이션 글자(Gradient text) · 흐르는 띠(Marquee) · 숫자 올라가기(Count up) · 자모 타자(Hangul typewriter) · 형광펜 긋기(Highlight sweep) · 낱말 바꾸기(Word rotate) · 밑줄 차오름 링크(Link underline) |
 | 스크롤 10 | 조용한 떠오르기(Reveal up) · 마스크 사진 열기(Clip reveal) · 은은한 시차(Soft parallax) · 선 그리기·일정 레일(Line draw) · 진행 막대·단계 표시(Guided progress) · 그림 고정 스크롤(Sticky scrollytelling) · 쌓이는 카드(Stacking cards) · 가로 넘김(Horizontal snap) · 톤 여정(밤→새벽→낮)(Tone journey) · 사진 확대 통과(Zoom through) |
 | 반응 9 | 자석 버튼(Magnetic button) · 3D 기울기 카드(Tilt card) · 포인터 조명(Spotlight) · 따라오는 커서 고리(Cursor follower) · 복사 버튼 반응(Copy feedback) · 완료 축하(Confetti) · 누름 물결(Ripple) · 화면 전환 잇기(View transition) · 테두리 빛줄기(Border beam) |
-| 배경·질감 19 | 오로라(Aurora) · 메시 그라데이션(Mesh gradient) · 필름 그레인(Grain) · 원근 바닥 격자(Perspective grid) · 별밤(Starfield) · 연결 점망(Particle network) · 물결 점 격자(Dot grid) · 등고선 지형(Topographic lines) · 겹 물결(Waves) · 숨 쉬는 덩어리(Morphing blobs) · 빛망울(Bokeh) · 활동지 묶음(Paper stack) · 손그림 낙서·주석(Doodles & annotations) · 도형 무늬(Memphis shapes) · 칠판(Chalkboard) · 흐르는 색(Shader gradient) · 빛나는 구(Glowing orb) · 인쇄 망점(Risograph) · 설계도 모눈(Blueprint grid) |
+| 배경·질감 23 | 오로라(Aurora) · 메시 그라데이션(Mesh gradient) · 필름 그레인(Grain) · 원근 바닥 격자(Perspective grid) · 별밤(Starfield) · 연결 점망(Particle network) · 물결 점 격자(Dot grid) · 등고선 지형(Topographic lines) · 겹 물결(Waves) · 숨 쉬는 덩어리(Morphing blobs) · 빛망울(Bokeh) · 활동지 묶음(Paper stack) · 손그림 낙서·주석(Doodles & annotations) · 도형 무늬(Memphis shapes) · 칠판(Chalkboard) · 흐르는 색(Shader gradient) · 빛나는 구(Glowing orb) · 인쇄 망점(Risograph) · 설계도 모눈(Blueprint grid) · 펼친 교재(Slide fan) · 하루 시계(Schedule dial) · 입체 궤도(Orbit knot) · 돌과 물결(Stone & stream) |
 | 라이브러리 3 | 부드러운 휠 스크롤(Smooth scroll (Lenis)) · 고정 장면 스크롤(GSAP ScrollTrigger scrub) · 점 구슬(Point-cloud sphere (OGL)) |
 <!-- design:end -->
 

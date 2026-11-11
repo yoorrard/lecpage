@@ -21,7 +21,7 @@ LecFX.define('schedule-dial', {
       made.innerHTML = '<div class="lp-dial-ring"><svg viewBox="0 0 400 400" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">' + rows.map(function (r, i) {
         var len = r.min / T * 1000, s = '<circle class="lp-dial-seg" style="--i:' + i + '" data-i="' + i + '" data-start="' + esc(r.start) + '" data-min="' + r.min + '" data-title="' + esc(r.title) + '" cx="200" cy="200" r="150" pathLength="1000" stroke-dasharray="' + Math.max(1, len - 3).toFixed(1) + ' 1000" stroke-dashoffset="' + (-(at + 1.5)).toFixed(1) + '"/>';
         at += len; return s;
-      }).join('') + '</g><line class="lp-dial-hand" x1="200" y1="200" x2="200" y2="34"/></svg><p class="lp-dial-center" data-dial-center><b>' + (T % 60 ? T : T / 60) + '</b><span>' + (T % 60 ? '분' : '시간') + '</span></p></div>';
+      }).join('') + '</g><line class="lp-dial-hand" x1="200" y1="68" x2="200" y2="22"/></svg><p class="lp-dial-center" data-dial-center><b>' + (T % 60 ? T : T / 60) + '</b><span>' + (T % 60 ? '분' : '시간') + '</span></p></div>';
       el.appendChild(made); dial = made;
     }
     var segs = Array.prototype.slice.call(dial.querySelectorAll('.lp-dial-seg')), items = Array.prototype.slice.call(dial.querySelectorAll('.lp-dial-list li'));

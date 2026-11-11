@@ -1,6 +1,6 @@
 ---
 name: lecpage
-description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 보기, 교재 글꼴을 따르는 디자인 17종(정적~스크롤 연출), 질문·도움 요청·진행 현황·투표·만족도 설문·이수자 명단, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
+description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 보기, 교재 글꼴을 따르는 디자인 21종(정적~스크롤 연출), 질문·도움 요청·진행 현황·투표·만족도 설문·이수자 명단, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
 license: Apache-2.0. 생성 사이트에 복사되는 engine/runtime·backends·templates와 엔진이 만든 사이트 파일은 MIT-0. 전문 LICENSE.txt, 고지 NOTICE
 compatibility: Node.js 22 이상. 선택 도구가 없으면 그 단계만 건너뜀 — Playwright(점검·디자인 비교), LibreOffice·pdftoppm(교재 쪽 그림), Python 3 + PyMuPDF(PDF 보조). `lecpage.mjs doctor`로 확인. 인터넷 없이도 빌드 가능
 ---
@@ -12,7 +12,7 @@ compatibility: Node.js 22 이상. 선택 도구가 없으면 그 단계만 건�
 ## 왜 lecpage인가
 AI에게 HTML을 바로 쓰게 하는 것과 비교해 강사에게 설명할 수 있는 차이:
 - **교재 그대로**: 실습 단계·프롬프트를 교재 문장 그대로 옮기고 쪽 번호로 이어 준다. 교재 보기로 넘겨 본다.
-- **검증된 디자인**: 프리셋 17종마다 첫 화면·섹션 배치·글꼴이 다르고, 모두 글자 대비 4.5:1 이상, 휴대폰·PC·어두운 화면·동작 줄이기까지 점검한다. 교재 글꼴을 따른다.
+- **검증된 디자인**: 프리셋 21종마다 첫 화면·섹션 배치·글꼴이 다르고, 모두 글자 대비 4.5:1 이상, 휴대폰·PC·어두운 화면·동작 줄이기까지 점검한다. 교재 글꼴을 따른다.
 - **연수 당일 기능**: 질문·도움 요청·진행 현황·투표·나눔 보드·설문·이수자 명단 CSV, 강사 화면·발표 화면·QR 안내문. 기록은 강사 계정에 쌓인다.
 - **안전 기본값**: 검색 제외, 암호 보호(AES-GCM), 강사용 파일 분리, 별명만 수집, CSP·SRI.
 - **빠르고 싸다**: 명령 하나로 1분 안에 사이트가 나온다. 고칠 때는 바뀐 곳만 보낸다.
