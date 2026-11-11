@@ -54,15 +54,17 @@ export async function loadKey(provider) {
 }
 export async function forgetKey(provider) {
   mem.delete(provider); await kv.del('ai:' + provider);
-  if (PROVIDERS[provider]) { const s = await prefs(); delete s.models[provider]; if (s.active === provider) s.active = ''; await kv.set('ai-prefs', s); }
+  if (PROVIDERS[provider]) { const s = await prefs(); delete s.models[provider]; delete s.picked[provider]; delete s.free[provider]; if (s.active === provider) s.active = ''; await kv.set('ai-prefs', s); }
 }
 
 // 고른 회사·모델(비밀 아님)
-async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {} }; }
-export async function setActive(provider, { model, freeTier } = {}) {
+async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {} }; }
+/** picked: 강사가 직접 고른 모델인지(true면 추천이 바뀌어도 그대로 둠) */
+export async function setActive(provider, { model, freeTier, picked } = {}) {
   const s = await prefs(); s.active = provider;
   if (model !== undefined) s.models[provider] = model;
   if (freeTier !== undefined) s.free[provider] = !!freeTier;
+  if (picked !== undefined) s.picked[provider] = !!picked;
   await kv.set('ai-prefs', s);
 }
 
@@ -92,6 +94,7 @@ function classify(status, msg, code) {
   if (status === 401 || /API_KEY_INVALID|API key not valid|invalid.?x-api-key|Incorrect API key|invalid_api_key|No auth credentials|User not found|authentication_error/i.test(m)) return 'bad-key';
   if (/location is not supported|unsupported_country|not available in your (country|region)|FAILED_PRECONDITION/i.test(m)) return 'region';
   if (status === 402 || /insufficient_quota|credit balance is too low|Insufficient credits|billing|payment/i.test(m)) return 'billing';
+  if (status === 429 && /limit:\s*0\b/.test(m)) return 'no-access'; // 무료 키로는 못 쓰는 모델(한도 0)
   if (status === 429 && /per.?day|free-models-per-day|PerDay|daily/i.test(m)) return 'quota-day';
   if (status === 429 || /RESOURCE_EXHAUSTED|rate.?limit/i.test(m)) return 'quota';
   if (status === 403) return 'forbidden';
@@ -130,6 +133,8 @@ export function explainError(err, provider) {
     'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 되고, 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', []],
+    'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
+    refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI를 연결해 다시 해 보세요.', ['connect']],
     'too-long': ['교재가 길어 한 번에 보내지 못했어요.', "'문구만 다듬기'로 하면 훨씬 짧게 보내요.", []],
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', []],
     network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망에서 AI 사이트가 막혀 있을 수 있어요. 그러면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
@@ -137,7 +142,10 @@ export function explainError(err, provider) {
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요. 무료 모델이면 다른 모델이 대신 답할 수 있어요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
   }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
-  if (err?.paidOption) return { kind: k, provider, title: '무료 한도를 다 썼어요.', body: `연결해 둔 ${err.paidOption.label}(유료)로 이어서 할 수 있어요.`, actions: ['pay', 'connect'], paidOption: err.paidOption, raw: err?.message || '' };
+  if (err?.paidOption || err?.lightOption) {
+    const ways = [err.paidOption && `연결해 둔 ${err.paidOption.label}(유료)`, err.lightOption && `가벼운 모델(${err.lightOption.label})`].filter(Boolean).join('이나 ');
+    return { kind: k, provider, title: '오늘 이 모델의 무료 한도를 다 썼어요.', body: `${ways}로 이어서 할 수 있어요.${err.lightOption ? ' 가벼운 모델은 구성과 문구가 단순해질 수 있어요.' : ''}`, actions: [err.paidOption && 'pay', err.lightOption && 'light', 'connect'].filter(Boolean), raw: err?.message || '' };
+  }
   return { kind: k, provider, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
 }
 
@@ -159,20 +167,76 @@ async function listRaw(provider, key, signal) {
   const j = await send(provider, 'https://openrouter.ai/api/v1/models', { signal });
   return (j.data || []).map((m) => ({ id: m.id, label: m.name || m.id, free: /:free$/.test(m.id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0) }));
 }
-const ver = (id) => { const m = /(\d+(?:\.\d+)?)/.exec(id); return m ? parseFloat(m[1]) : 0; };
-const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|search|instruct|codex|computer|robotics|nano|learnlm|gemma|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora/i;
-/** 목록을 '쓰기 좋은 순서'로 정렬(맨 앞이 자동으로 고르는 모델) */
-function rank(provider, list, freeTier) {
-  const score = (m) => {
+// ── 모델 등급과 추천 ──
+// 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Sol·Terra·Luna, Gemini 4 Carbon·Argon …). 이름으로 고르면 금방 틀리므로
+// 가격과 출시일을 OpenRouter 공개 목록에서 그때그때 읽어 등급을 매깁니다(키 없이 읽히고 운영자 서버를 거치지 않음). 못 읽으면 이름으로 어림.
+//   등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
+//   추천 = 고품질 등급에서 가장 새 모델(나온 지 2주가 안 된 것은 뒤로). 교재를 읽고 연수 흐름을 짜는 일은 가벼운 모델에서 결과가 눈에 띄게 단순해짐
+const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|translate|search|instruct|codex|computer|robotics|nano|banana|omni|learnlm|gemma|guard|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora/i;
+export const TIER_KO = ['가벼움', '표준', '고품질', '최상위'];
+const OR_PREFIX = { openai: 'openai/', gemini: 'google/', anthropic: 'anthropic/', openrouter: '' };
+const PREFER = { anthropic: /opus/, openrouter: /^anthropic\/claude-opus/ };
+const FRESH_MS = 14 * 86400000;
+const normId = (id) => String(id).toLowerCase().replace(/^models\//, '').replace(/\./g, '-').replace(/-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{3})$/, '');
+const tierByPrice = (out) => (out >= 30 ? 3 : out >= 8 ? 2 : out >= 3 ? 1 : 0);
+const tierByName = (id) => (/astra|fable|mythos|ultra|daybreak-red/.test(id) ? 3 : /opus|sonnet|(?:^|[-/])sol(?:-|$)|carbon|argon|(?:^|-)pro(?:-|$)|daybreak-blue/.test(id) ? 2 : /(?:^|[-/.])(?:haiku|luna|mini|lite|small)(?:[-.]|$)/.test(id) ? 0 : 1);
+/** 이름 속 판 번호(가격 목록을 못 읽었을 때 새 모델을 가리는 데 씀): claude-opus-5-5 → 5.05, gpt-6.1-sol → 6.01 */
+const verOf = (id) => { const m = /(?:^|[-/])(\d{1,2})(?:[.-](\d{1,2}))?(?=-|$)/.exec(normId(id)); return m ? +m[1] + (+m[2] || 0) / 100 : 0; };
+let catalogP = null;
+/** @returns {Promise<Map<string,{in:number,out:number,created:number,text:boolean}>>} 열쇠는 normId('회사/모델') */
+function catalog() {
+  if (!catalogP) {
+    catalogP = (async () => {
+      const m = new Map();
+      try {
+        const r = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(8000) });
+        for (const x of (await r.json()).data || []) {
+          if (/:[\w-]+$/.test(x.id)) continue; // :free·:batch 같은 변형
+          const mods = x.architecture?.output_modalities;
+          m.set(normId(x.id), { in: +x.pricing?.prompt * 1e6 || 0, out: +x.pricing?.completion * 1e6 || 0, created: (x.created || 0) * 1000, text: !Array.isArray(mods) || mods.every((t) => t === 'text') });
+        }
+      } catch { catalogP = null; } // 못 읽으면 이번에는 이름으로 어림하고, 다음에 다시 읽음
+      return m;
+    })();
+  }
+  return catalogP;
+}
+/**
+ * 목록에 등급·추천·어림 값을 붙이고 고르기 좋은 순서로(맨 앞이 추천).
+ * @returns {Promise<Array<{id,label,tier,rec,won,locked,free}>>} won: 사이트 한 번 만들 때 어림 값(원, 입력 1만·출력 1만 4천 토큰, 1달러 1,400원). 무료로 쓰는 연결은 0
+ */
+async function rank(provider, list, freeTier) {
+  const cat = await catalog(); const now = Date.now();
+  const rows = [];
+  list.forEach((m, i) => {
     const id = m.id.toLowerCase();
-    if (SKIP.test(id)) return -100;
-    if (provider === 'gemini') return id === 'gemini-flash-latest' ? 100 : /^gemini-[\d.]+-flash$/.test(id) ? 50 + ver(id) : /flash$/.test(id) && !/lite/.test(id) ? 30 + ver(id) : /flash/.test(id) ? 10 : 0;
-    if (provider === 'openai') return /^gpt-[\d.]+-mini$/.test(id) ? 60 + ver(id) : /^gpt-[\d.]+$/.test(id) ? 40 + ver(id) : /^gpt-4o-mini$/.test(id) ? 35 : /^gpt-/.test(id) ? 5 : -50;
-    if (provider === 'anthropic') return /sonnet/.test(id) ? 50 : /haiku/.test(id) ? 30 : 10; // 목록이 새것부터라 같은 점수면 앞이 최신
-    if (freeTier) return id === 'openrouter/free' ? 100 : m.free ? (/gemini|deepseek|qwen|llama|gpt-oss/.test(id) ? 40 : 20) : -100;
-    return /^google\/gemini-[\d.]+-flash$/.test(id) ? 60 + ver(id) : /^anthropic\/claude-sonnet/.test(id) ? 50 + ver(id) : /^openai\/gpt-[\d.]+-mini$/.test(id) ? 45 + ver(id) : 0;
-  };
-  return list.map((m, i) => ({ m, s: score(m), i })).filter((x) => x.s > -100).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.m);
+    if (provider === 'openrouter') {
+      if (freeTier ? !(m.free || id === 'openrouter/free') : !/^(anthropic|openai|google)\//.test(id)) return;
+    } else if (SKIP.test(id) || (provider === 'openai' && (!/^gpt-/.test(id) || /-pro$/.test(id)))) return;
+    if (provider === 'openrouter' && !freeTier && (SKIP.test(id) || /:[\w-]+$/.test(id))) return;
+    const c = cat.get(OR_PREFIX[provider] + normId(id));
+    if (c && !c.text) return;
+    const free = provider === 'openrouter' && !!freeTier;
+    const tier = free ? 0 : c && c.out > 0 ? tierByPrice(c.out) : tierByName(id);
+    const paidOnly = provider === 'gemini' && !!freeTier && tier >= 2; // 무료 키로는 못 쓰는 모델
+    const won = free || provider === 'gemini' || !c ? 0 : Math.max(10, Math.round(((10000 * c.in + 14000 * c.out) / 1e6) * 1400 / 10) * 10);
+    rows.push({ id: m.id, label: m.label || m.id, tier, rec: false, won, locked: paidOnly, free, created: c?.created || 0, i });
+  });
+  // 추천: 고품질 등급(없으면 그 아래에서 가장 높은 등급)에서 고름
+  const usable = rows.filter((r) => !r.locked && !r.free);
+  const top = Math.max(-1, ...usable.filter((r) => r.tier <= 2).map((r) => r.tier));
+  const pool = usable.filter((r) => r.tier === top);
+  const pref = PREFER[provider];
+  const score = (r) => [pref && pref.test(r.id.toLowerCase()) ? 0 : 1, r.created && now - r.created < FRESH_MS ? 1 : 0, -r.created, -verOf(r.id), r.id.length, r.i];
+  const cmp = (a, b) => { const x = score(a), y = score(b); for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return x[k] - y[k]; return 0; };
+  const rec = pool.sort(cmp)[0];
+  if (rec) rec.rec = true;
+  const order = { 2: 0, 3: 1, 1: 2, 0: 3 };
+  return rows.sort((a, b) => (b.rec - a.rec) || (a.locked - b.locked) || (order[a.tier] - order[b.tier]) || (b.created - a.created) || (verOf(b.id) - verOf(a.id)) || (a.i - b.i));
+}
+/** 고르는 칸에 보일 이름: '모델 · 추천 · 약 220원' */
+export function modelText(m) {
+  return `${m.label}${m.rec ? ' · 추천' : m.free ? ' · 무료' : ` · ${TIER_KO[m.tier]}`}${m.won ? ` · 약 ${m.won.toLocaleString('ko-KR')}원` : ''}${m.locked ? ' · 유료 키 필요' : ''}`;
 }
 
 /** OpenRouter 키 정보(무료 계정인지 등) */
@@ -183,7 +247,9 @@ async function openRouterKeyInfo(key, signal) {
 }
 
 export async function models(provider, key, { freeTier } = {}) {
-  return rank(provider, await listRaw(provider, key), freeTier);
+  const list = await rank(provider, await listRaw(provider, key), freeTier);
+  if (provider === 'openrouter' && freeTier && !list.some((m) => m.id === 'openrouter/free')) list.unshift({ id: 'openrouter/free', label: '무료 모델 자동 선택', tier: 0, rec: false, won: 0, locked: false, free: true });
+  return list;
 }
 
 /**
@@ -194,12 +260,53 @@ export async function checkKey(provider, key, { signal } = {}) {
   if (!key) throw new AiError('bad-key', 'empty', { provider });
   let freeTier = false;
   if (provider === 'openrouter') ({ freeTier } = await openRouterKeyInfo(key, signal));
+  const s = await prefs();
+  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때 알게 됨(generateAuto)
   const list = await models(provider, key, { freeTier });
-  if (provider === 'openrouter' && freeTier && !list.some((m) => m.id === 'openrouter/free')) list.unshift({ id: 'openrouter/free', label: '무료 모델 자동 선택' });
-  const model = list[0]?.id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
+  // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
+  const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
+  const model = (kept || list.find((m) => !m.locked) || {}).id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
   if (!model) throw new AiError('model', 'no model', { provider });
   await setActive(provider, { model, freeTier });
   return { models: list, model, freeTier };
+}
+
+// ── Anthropic(스트리밍) ──
+// 생각하는 토큰도 max_tokens에 들어가서 넉넉히 주고, 긴 요청이 중간에 끊기지 않게 스트리밍으로 받습니다.
+// Claude 5 계열은 안전 분류기가 요청을 거절할 수 있어(보안·생물 주제 교재 등) 서버가 다른 모델로 이어받게 fallbacks를 켭니다.
+// 이 값을 받지 않는 모델·환경이면(400이나 연결 실패) 기본 요청으로 한 번 더 보냅니다.
+async function anthropic(key, model, prompt, maxTokens, signal) {
+  const base = { model, max_tokens: Math.max(maxTokens, 32000), messages: [{ role: 'user', content: prompt }], stream: true };
+  const headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+  const extra = /claude-(opus|sonnet|fable)-5/.test(model);
+  const call = async (plus) => {
+    let r;
+    try {
+      r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal, headers: plus ? { ...headers, 'anthropic-beta': 'server-side-fallback-2026-07-01' } : headers, body: JSON.stringify(plus ? { ...base, fallbacks: 'default' } : base) });
+    } catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider: 'anthropic' }); }
+    if (!r.ok) await fail(r, 'anthropic');
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = '', text = '', stop = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let n;
+      while ((n = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, n).trim(); buf = buf.slice(n + 1);
+        if (!line.startsWith('data:')) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') text += ev.delta.text || '';
+        else if (ev.type === 'message_delta') stop = ev.delta?.stop_reason || stop;
+        else if (ev.type === 'error') throw new AiError(classify(ev.error?.type === 'overloaded_error' ? 529 : 0, ev.error?.message, ev.error?.type), ev.error?.message || 'stream error', { provider: 'anthropic' });
+      }
+    }
+    if (stop === 'refusal') throw new AiError('refusal', 'refusal', { provider: 'anthropic' });
+    return { text, cut: stop === 'max_tokens' };
+  };
+  if (!extra) return call(false);
+  try { return await call(true); }
+  catch (e) { if (e instanceof AiError && (e.status === 400 || e.kind === 'network')) return call(false); throw e; }
 }
 
 // ── 생성 ──
@@ -221,13 +328,7 @@ export async function generate({ provider, key, model, prompt, signal, maxTokens
     text = (c?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
     cut = c?.finishReason === 'MAX_TOKENS';
   } else if (provider === 'anthropic') {
-    const j = await send(provider, 'https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal,
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-    });
-    text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('');
-    cut = j.stop_reason === 'max_tokens';
+    ({ text, cut } = await anthropic(key, model, prompt, maxTokens, signal));
   } else {
     const openai = provider === 'openai';
     const j = await send(provider, openai ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions', {
@@ -262,33 +363,46 @@ const LIMIT_KINDS = ['quota', 'quota-day', 'busy', 'model', 'empty'];
 /**
  * generate + 한도·혼잡을 알아서 넘김(강사가 다시 누르지 않게). 순서:
  *  1) 분당 한도·서버 혼잡: 알려 준 시간(최대 60초)만큼 기다렸다 다시, 두 번까지
- *  2) 무료로 쓰는 연결(Gemini, OpenRouter 무료)이면 같은 키의 다음 모델로, 두 번까지(무료 등급은 모델마다 한도가 따로)
+ *  2) 무료로 쓰는 연결(Gemini, OpenRouter 무료)이면 같은 키의 다음 모델로(무료 등급은 모델마다 한도가 따로).
+ *     이 키로 못 쓰는 모델이면 아래 등급으로도 내려가고, 한도를 다 쓴 것이면 같은 등급 안에서만(더 가벼운 모델은 allowLight일 때만)
  *  3) 연결해 둔 다른 AI로. 돈이 드는 연결은 allowPaid일 때만(기본은 [설정]의 '무료 한도를 넘으면')
- * 끝까지 안 되면 처음 오류를 던지고, 건너뛴 유료 연결이 있으면 err.paidOption = { provider, label }을 붙임.
+ * 끝까지 안 되면 처음 오류를 던지고, 건너뛴 길이 있으면 err.paidOption = { provider, label }, err.lightOption = { provider, id, label }을 붙임.
  * onStatus({ wait: 초 } | { model } | { provider, label, paid })로 지금 하는 일을 알림. 돌려주는 값에 실제로 답한 provider·model이 들어 있음.
  */
-export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === 'pay' } = {}) {
+export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === 'pay', allowLight = false } = {}) {
   const s = await prefs();
+  let lightOption = null;
   const attempt = async (provider, key, model0, { swap }) => {
-    let model = model0, waits = 0, swaps = 0, list = null;
+    let model = model0, waits = 0, swaps = 0, list = null, noAccess = false;
     const tried = new Set();
     for (;;) {
-      try { return { ...(await generate({ ...o, provider, key, model })), provider, model }; }
-      catch (e) {
+      try {
+        const out = { ...(await generate({ ...o, provider, key, model })), provider, model };
+        // 무료 키로 못 쓰는 모델을 건너뛰고 됐으면 다음부터는 바로 그 모델로
+        if (noAccess && !s.picked[provider]) await setActive(provider, { model, ...(provider === 'gemini' ? { freeTier: true } : {}) }).catch(() => { });
+        return out;
+      } catch (e) {
         if (!(e instanceof AiError)) throw e;
         if ((e.kind === 'quota' || e.kind === 'busy') && waits < 2 && (e.retryAfter || 0) <= 60) {
           const sec = Math.max(4, e.retryAfter || (waits ? 20 : 8)); waits++;
           onStatus?.({ wait: sec }); await sleep(sec * 1000, o.signal); continue;
         }
-        if (!swap || !LIMIT_KINDS.includes(e.kind) || swaps >= 2) throw e;
+        const blocked = e.kind === 'no-access' || e.kind === 'model' || (e.kind === 'forbidden' && provider === 'gemini'); // 이 키로는 못 쓰는 모델
+        if (!swap || !(blocked || LIMIT_KINDS.includes(e.kind)) || swaps >= (blocked ? 5 : 2)) throw e;
         let next = null;
         try {
           if (!model) model = s.models[provider] || '';
           tried.add(model);
           list = list || await models(provider, key, { freeTier: !!s.free[provider] });
-          next = list.find((m) => !tried.has(m.id));
+          const cur = list.find((m) => m.id === model);
+          const rest = list.filter((m) => !tried.has(m.id) && !m.locked);
+          // 한도를 다 쓴 것이면 같은 등급 이상에서만 이어감. 더 가벼운 모델은 품질이 떨어지므로 강사에게 물어봄
+          // 못 쓰는 모델이면 같은 등급의 다른 모델도 대개 못 쓰므로(무료 키) 바로 아래 등급으로
+          next = blocked ? (cur && rest.find((m) => m.tier < cur.tier)) || rest[0] : allowLight || !cur ? rest[0] : rest.find((m) => m.tier >= cur.tier);
+          if (!next && rest[0]) lightOption = lightOption || { provider, id: rest[0].id, label: rest[0].label };
         } catch { /* 목록을 못 받으면 넘기지 않음 */ }
         if (!next) throw e;
+        if (blocked) noAccess = true;
         model = next.id; swaps++; waits = 0; onStatus?.({ model });
       }
     }
@@ -296,7 +410,7 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
   const paid0 = isPaidAI(o.provider, !!s.free[o.provider]);
   let first;
   try { return await attempt(o.provider, o.key, o.model, { swap: !paid0 }); }
-  catch (e) { if (!(e instanceof AiError) || !LIMIT_KINDS.includes(e.kind)) throw e; first = e; }
+  catch (e) { if (!(e instanceof AiError) || !(LIMIT_KINDS.includes(e.kind) || e.kind === 'no-access')) throw e; first = e; }
   // 연결해 둔 다른 AI(무료 먼저)
   let paidOption = null;
   const others = Object.keys(PROVIDERS).filter((x) => x !== o.provider).sort((a, b) => isPaidAI(a, !!s.free[a]) - isPaidAI(b, !!s.free[b]));
@@ -310,6 +424,7 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
     catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; }
   }
   if (paidOption) first.paidOption = paidOption;
+  if (lightOption) first.lightOption = lightOption;
   throw first;
 }
 

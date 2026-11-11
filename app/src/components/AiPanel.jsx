@@ -4,8 +4,8 @@ import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
 import { makePrompt, makeDraft, looksTruncated, keepFontFields } from '../lib/blueprint.js';
 import { polishTargets, makePolishPrompt, applyPolish, isPolishReply } from '../lib/polish.js';
-import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, setActive, explainError, takeAiResume, models as listModels } from '../lib/ai.js';
-import { AiConnect } from './AiConnect.jsx';
+import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, explainError, takeAiResume } from '../lib/ai.js';
+import { AiConnect, ModelPick } from './AiConnect.jsx';
 import { copy, toast } from '../lib/util.js';
 
 /** OpenRouter 로그인에서 돌아오면 AI 창을 다시 엶 */
@@ -83,12 +83,12 @@ export function AiPanel({ p, onBlueprint }) {
       )}
       {(how === 'paste' || !p.blueprint) && <Paste ready={!!ing} prompt={prompt} full={full} onApply={accept} />}
       {how === 'connect' && p.blueprint && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} swap={swap} pay={pay} />}
-      {err && <ErrorBox e={err} provider={ai?.provider} onPaste={() => { setHow('paste'); setErr(null); }} onConnect={p.blueprint ? () => { setHow('connect'); setSwap((n) => n + 1); setErr(null); } : null} onPay={() => { setErr(null); setPay((n) => n + 1); }} />}
+      {err && <ErrorBox e={err} provider={ai?.provider} onPaste={() => { setHow('paste'); setErr(null); }} onConnect={p.blueprint ? () => { setHow('connect'); setSwap((n) => n + 1); setErr(null); } : null} onPay={() => { setErr(null); setPay({ n: Date.now() }); }} onLight={() => { setErr(null); setPay({ n: Date.now(), light: true }); }} />}
     </div>
   );
 }
 
-function ErrorBox({ e, provider, onPaste, onConnect, onPay }) {
+function ErrorBox({ e, provider, onPaste, onConnect, onPay, onLight }) {
   const P = PROVIDERS[e.provider || provider] || {};
   return (
     <Notice kind="bad">
@@ -96,6 +96,7 @@ function ErrorBox({ e, provider, onPaste, onConnect, onPay }) {
         <b>{e.title}</b>{e.body && <span>{e.body}</span>}
         {e.actions?.length > 0 && <div class="btn-row">
           {e.actions.includes('pay') && onPay && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
+          {e.actions.includes('light') && onLight && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
           {e.actions.includes('connect') && onConnect && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
           {e.actions.includes('key') && P.keyUrl && <a class="btn btn-sm" href={P.keyUrl} target="_blank" rel="noopener">{P.short} 키 페이지 열기</a>}
           {e.actions.includes('billing') && P.billingUrl && <a class="btn btn-sm" href={P.billingUrl} target="_blank" rel="noopener">결제 페이지 열기</a>}
@@ -142,11 +143,10 @@ function Paste({ ready, prompt, full, onApply }) {
 function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }) {
   const [edit, setEdit] = useState(!ai);
   useEffect(() => { if (swap) setEdit(true); }, [swap]);
-  useEffect(() => { if (pay && ai) run(true); }, [pay]);
+  useEffect(() => { if (pay && ai) run(pay.light ? 'light' : true); }, [pay]);
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState(''); // 한도라 기다리는 중 · 다른 모델로
-  const [list, setList] = useState(null);
   const ctrl = useRef(null);
   useEffect(() => { if (ai) loadKey(ai.provider).then((r) => setRemember(r.remembered)); }, [ai?.provider]);
 
@@ -155,14 +155,12 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }
     try {
       const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
       const { text, cut } = await generateAuto({ provider: ai.provider, key: ai.key, model: ai.model, prompt: prompt(), signal: ctrl.current.signal, maxTokens: (full ? 16000 : 8000) * big },
-        { ...(allowPaid === true ? { allowPaid: true } : {}), onStatus: (st) => setNote(st.wait ? `무료 한도라 ${st.wait}초 기다렸다가 이어서 해요.` : st.provider ? `${st.label}로 이어서 하고 있어요.` : '다른 모델로 이어서 하고 있어요.') });
+        { ...(allowPaid === true ? { allowPaid: true } : allowPaid === 'light' ? { allowLight: true } : {}), onStatus: (st) => setNote(st.wait ? `무료 한도라 ${st.wait}초 기다렸다가 이어서 해요.` : st.provider ? `${st.label}로 이어서 하고 있어요.` : '다른 모델로 이어서 하고 있어요.') });
       if (cut && looksTruncated(text)) setErr(explainError({ kind: 'truncated' }, ai.provider)); else onResult(text);
     } catch (e) { if (e.name !== 'AbortError') setErr(explainError(e, ai.provider)); }
     setBusy(''); setNote('');
   }
-  async function disconnect() { await forgetKey(ai.provider); setAi(await getActiveAI()); setEdit(true); setList(null); toast('연결을 끊었어요.'); }
-  async function pickModel(m) { await setActive(ai.provider, { model: m }); setAi({ ...ai, model: m }); }
-  async function loadList() { if (list) return; try { setList(await listModels(ai.provider, ai.key, { freeTier: ai.freeTier })); } catch (e) { setErr(explainError(e, ai.provider)); } }
+  async function disconnect() { await forgetKey(ai.provider); setAi(await getActiveAI()); setEdit(true); toast('연결을 끊었어요.'); }
 
   if (ai && !edit) {
     return (
@@ -171,15 +169,15 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }
           <span class="dot-ok" aria-hidden="true" /><span><b>{ai.label}</b>에 연결됨<span class="small muted"> · {ai.model || '자동'}</span></span>
           <span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setEdit(true)}>다른 키 쓰기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 끊기</button></span>
         </div>
+        <ModelPick ai={ai} onChange={setAi} />
         <div class="btn-row">
           <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={() => run()}>{busy ? (full ? '다시 짜는 중… (1~2분)' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
           {busy && <button class="btn btn-quiet" onClick={() => ctrl.current?.abort()}>멈추기</button>}
         </div>
         {busy && <div class="row" role="status"><Mascot size={48} mood="think" look /><span class="muted">{note || (full ? '교재를 읽고 연수 흐름을 짜고 있어요.' : '문구를 읽고 다듬고 있어요.')}</span></div>}
-        <details onToggle={(e) => e.target.open && loadList()}>
-          <summary class="small">모델·저장 설정</summary>
+        <details>
+          <summary class="small">저장 설정</summary>
           <div class="stack" style={{ gap: '10px', marginTop: '10px' }}>
-            {list && list.length > 1 && <Field label="모델"><select value={ai.model} onChange={(e) => pickModel(e.target.value)}>{list.slice(0, 40).map((m) => <option value={m.id}>{m.label}</option>)}</select></Field>}
             <label class="check"><input type="checkbox" checked={remember} onChange={async (e) => { setRemember(e.target.checked); await saveKey(ai.provider, ai.key, e.target.checked); }} /><span>이 기기에서 기억하기 <span class="small muted">공용 PC에서는 끄세요.</span></span></label>
             <p class="small muted">{PROVIDERS[ai.provider].note}</p>
           </div>
@@ -187,5 +185,5 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }
       </div>
     );
   }
-  return <AiConnect onConnected={(a) => { setAi(a); setEdit(false); setList(null); setErr(null); }} onCancel={ai ? () => setEdit(false) : undefined} />;
+  return <AiConnect onConnected={(a) => { setAi(a); setEdit(false); setErr(null); }} onCancel={ai ? () => setEdit(false) : undefined} />;
 }

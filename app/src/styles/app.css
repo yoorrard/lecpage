@@ -608,3 +608,10 @@ details>summary{cursor:pointer}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* 모델 고르기 */
+.model-pick{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;margin-top:10px;font-size:.92rem}
+.model-pick>span{font-weight:700}
+.model-pick select{min-width:0;width:100%;max-width:440px}
+.model-pick small{grid-column:2;color:var(--muted)}
+@media (max-width:480px){.model-pick{grid-template-columns:minmax(0,1fr)}.model-pick small{grid-column:1}}

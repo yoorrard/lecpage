@@ -63,7 +63,7 @@ export function StepEdit({ p, update, go }) {
         </div>
       </StepHead>
       {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
-        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} />}
+        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
       <div class="workspace">
         <div class="ws-panel">
           <Tabs label="고칠 것" tabs={tabs} value={tab} onChange={setTab} />
@@ -90,7 +90,7 @@ export function StepEdit({ p, update, go }) {
 
 const PHASE = { read: '교재를 정리하고 있어요', ask: 'AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요', build: '사이트를 조립하고 있어요', wait: '무료 한도라 잠깐 기다렸다가 이어서 해요', swap: '다른 모델로 이어서 하고 있어요', other: '연결해 둔 다른 AI로 이어서 하고 있어요' };
 /** AI로 만들기 진행 띠: 초안을 먼저 보여 주고, 끝나면 AI가 짠 내용으로 바뀜 */
-function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay }) {
+function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight }) {
   if (job.status === 'running') {
     const sec = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
     return (
@@ -114,8 +114,9 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
   return (
     <div class="ai-job bad" role="alert">
       <span class="ai-job-t"><b>{e.title || 'AI로 만들지 못했어요.'}</b><small>{e.body || '기본 초안은 그대로 있어요.'}</small></span>
-      {e.kind === 'no-ai' || /연결되어 있지/.test(e.title || '') ? <button class="btn btn-sm" onClick={onConnect}>AI 연결하기</button> : !e.actions?.includes('pay') && <button class="btn btn-sm" onClick={onRetry}>다시 하기</button>}
+      {e.kind === 'no-ai' || /연결되어 있지/.test(e.title || '') ? <button class="btn btn-sm" onClick={onConnect}>AI 연결하기</button> : !e.actions?.some((a) => a === 'pay' || a === 'light') && <button class="btn btn-sm" onClick={onRetry}>다시 하기</button>}
       {e.actions?.includes('pay') && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
+      {e.actions?.includes('light') && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
       {e.actions?.includes('connect') && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
       {e.actions?.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 하기</button>}
       <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>

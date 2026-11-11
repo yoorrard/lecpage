@@ -3,7 +3,7 @@ import { StepHead } from '../Project.jsx';
 import { Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPanel } from '../../components/AiPanel.jsx';
-import { AiConnect } from '../../components/AiConnect.jsx';
+import { AiConnect, ModelPick } from '../../components/AiConnect.jsx';
 import { PROVIDERS, getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob } from '../../lib/ai-job.js';
 import { blobs } from '../../lib/db.js';
@@ -212,7 +212,8 @@ export function StepStart({ p, update, go }) {
 
       {!p.blueprint && <section class="ai-line" aria-label="AI 연결">
         {conn === undefined ? <p class="small muted">확인하는 중…</p>
-          : conn ? <div class="conn-row"><span class="dot-ok" aria-hidden="true" /><span><b>{conn.label}</b>에 연결됨</span><span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setConnect(true)}>바꾸기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>끊기</button></span></div>
+          : conn ? <><div class="conn-row"><span class="dot-ok" aria-hidden="true" /><span><b>{conn.label}</b>에 연결됨</span><span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setConnect(true)}>바꾸기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>끊기</button></span></div>
+            <ModelPick ai={conn} onChange={setConn} /></>
             : <p class="ai-off">AI가 교재를 읽고 연수 흐름과 문구를 짜요. 키를 한 번 연결하면 다음부터는 단추 하나예요. Gemini 키는 무료이고 1분이면 만들어요.</p>}
       </section>}
 

@@ -1,6 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Field, Notice, Seg } from './ui.jsx';
-import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, openRouterStart } from '../lib/ai.js';
+import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, openRouterStart, models, modelText, setActive } from '../lib/ai.js';
 import { KEY_GUIDES } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
 
@@ -76,5 +76,36 @@ export function AiConnect({ onConnected, onPaste, onCancel, onBeforeLogin }) {
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>취소</button>}
       </div>}
     </div>
+  );
+}
+
+/**
+ * 만들 때 쓸 모델 고르기. 목록은 그 회사에서 지금 쓸 수 있는 모델이고, 맨 앞이 추천(품질 기준, ai.js의 rank).
+ * 강사가 직접 고른 적이 없으면 추천 모델로 맞춰 둡니다. onChange(ai)로 바뀐 연결을 돌려줍니다.
+ */
+export function ModelPick({ ai, onChange, compact }) {
+  const [list, setList] = useState(null);
+  useEffect(() => {
+    let off = false; setList(null);
+    models(ai.provider, ai.key, { freeTier: ai.freeTier }).then(async (l) => {
+      if (off) return; setList(l);
+      const a = await getActiveAI(); // 연결 확인 때 고른 값과 다르면(추천이 바뀜) 맞춤
+      if (!off && a && a.provider === ai.provider && a.model !== ai.model) onChange?.(a);
+    }).catch(() => { if (!off) setList([]); });
+    return () => { off = true; };
+  }, [ai.provider, ai.key, ai.freeTier]);
+  if (!list) return <span class="small muted">모델 확인 중…</span>;
+  if (!list.length) return null;
+  const cur = list.find((m) => m.id === ai.model);
+  const pick = async (id) => { await setActive(ai.provider, { model: id, picked: true }); onChange?.({ ...ai, model: id }); };
+  return (
+    <label class={`model-pick${compact ? ' compact' : ''}`}>
+      <span>모델</span>
+      <select value={ai.model} onChange={(e) => pick(e.target.value)} aria-describedby="model-hint">
+        {!cur && ai.model && <option value={ai.model}>{ai.model}</option>}
+        {list.slice(0, 30).map((m) => <option value={m.id} disabled={m.locked}>{modelText(m)}</option>)}
+      </select>
+      <small id="model-hint">{cur && cur.tier < 2 && list.some((m) => m.rec && m.id !== cur.id) ? '가벼운 모델은 빠르지만 구성과 문구가 단순해져요.' : ai.provider === 'gemini' && ai.freeTier ? '무료 키로 쓸 수 있는 모델 중 가장 좋은 것이에요.' : cur?.free ? '무료 모델은 결과가 고르지 않아요. Gemini 키(무료)가 더 좋아요.' : '추천은 교재를 읽고 연수 흐름을 짜기에 품질이 좋은 최신 모델이에요.'}</small>
+    </label>
   );
 }
