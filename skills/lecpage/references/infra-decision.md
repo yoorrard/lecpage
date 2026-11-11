@@ -4,7 +4,7 @@
 > 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
 > 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
 > 올릴 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
-> lecpage 운영자는 **공용 실시간 중계를 운영하지 않습니다**(이유: `docs/operations.md`). 실시간은 언제나 강사 소유 백엔드입니다.
+> lecpage 운영자는 **공용 실시간 중계를 운영하지 않습니다**(이유: `docs/operations.md`). 실시간은 강사 소유 백엔드입니다. 앱의 '바로 공개'(운영자가 켠 경우만, §3.2 S15)는 skill이 쓰지 않습니다.
 
 ---
 
@@ -15,7 +15,7 @@
 | `participants` | 정수 | 참여 인원은 몇 명인가요? | blueprint `audience.size` |
 | `features` | `qa help progress poll reactions signal`(실시간) · `attendance board survey`(모으기) · `upload` | 연수 중에 질문 받기·도움 요청·진행 현황·투표·나눔 보드가 필요한가요? | blueprint `live.features` (+ `board.allowFiles`면 `upload`) |
 | `duration` | `single` · `multi`(1주 안에 여러 번) · `course`(1주 넘게 띄엄띄엄) | 한 번 하는 연수인가요, 여러 차시인가요? | `meta.sessions` 개수와 날짜 간격 |
-| `skill` | `click` · `basic` · `dev` | 회원가입·복사·붙여넣기까지 괜찮으세요? 터미널(명령어)을 써 보셨나요? | `click` |
+| `skill` | `click` · `basic` · `dev` | (묻지 않음) skill이 셸에서 직접 올리고 백엔드도 만들므로 `basic`(엔진 값 `set`). `click`은 앱, 또는 강사가 명령 없이 혼자 올려야 할 때만 | skill은 `basic`, 앱은 `click` |
 | `budget` | `zero` · `low`(월 1만 원 이하) · `org`(기관 예산·기관 계정) | 비용은 0원이어야 하나요? | `zero` |
 | `minor` | bool | 참여자가 학생(만 14세 미만 포함)인가요? | `audience.minor` |
 | `realName` | bool | 이름·학교를 받아야 하나요? (별명만으로 충분한가요?) | `privacy.collect`에 name/school 있으면 true |
@@ -135,7 +135,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 | 순서 | skill이 하는 일 |
 |---|---|
-| 1 | 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `info.json`의 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
+| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
 | 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
 | 4 | 한 줄 명령으로 올립니다(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
@@ -277,8 +277,8 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "none":        {"provider":"none"},
     "local":       {"provider":"local","note":"기기 안에만 저장(localStorage)"},
     "sheets":      {"provider":"sheets","code":"backends/apps-script/","origins":["https://script.google.com","https://script.googleusercontent.com"],"limits":"동시 실행 30/사용자, 실행당 6분, 7초 새로 읽기, 50명 안팎"},
-    "supabase":    {"provider":"supabase","code":"backends/supabase/","origins":["https://<ref>.supabase.co","wss://<ref>.supabase.co"],"limits":"동시 200, 초당 100메시지, 월 200만 메시지, DB 500MB, 파일 1GB, 7일 비활성 정지"},
-    "cf-relay":    {"provider":"http","code":"backends/cloudflare/","deploy":"Deploy to Cloudflare 버튼 또는 wrangler. 비밀 ADMIN_KEY, 변수 ALLOWED_ORIGINS","origins":["https://<name>.<sub>.workers.dev","wss://<name>.<sub>.workers.dev"],"limits":"요청 10만/일(정적 제외), DO 요청 10만/일·13,000GB-s/일, 들어오는 WS 메시지 20:1"},
+    "supabase":    {"provider":"supabase","code":"backends/supabase/","deploy":"skill이 Management API로 직접(README '명령으로 한 번에', SUPABASE_ACCESS_TOKEN) 또는 강사가 SQL Editor에 붙여 넣기. 사이트에는 publishable 키만","origins":["https://<ref>.supabase.co","wss://<ref>.supabase.co"],"limits":"활성 프로젝트 2개, 동시 200, 초당 100메시지, 월 200만 메시지, DB 500MB, 파일 1GB, 7일 비활성 정지"},
+    "cf-relay":    {"provider":"http","code":"backends/cloudflare/","deploy":"skill이 wrangler로 직접(README §2, CLOUDFLARE_API_TOKEN) 또는 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요). 비밀 ADMIN_KEY, 변수 ALLOWED_ORIGINS","origins":["https://<name>.<sub>.workers.dev","wss://<name>.<sub>.workers.dev"],"limits":"요청 10만/일(정적 제외), DO 요청 10만/일·13,000GB-s/일, 들어오는 WS 메시지 20:1"},
     "node-server": {"provider":"http","code":"backends/node-server/","guides":["deploy/own-server-nginx-caddy.md","deploy/local-lan-classroom.md","deploy/aws-lightsail-docker.md","deploy/paas-node-hosting.md"],"origins":["'self'"],"limits":"서버 성능만큼"}
   }
 }
@@ -290,13 +290,15 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 ### 5.1 정적 호스팅 (사이트 파일을 올리는 곳)
 
-| 선택지 | 무료 범위(2026-11-09 확인) | 상업 이용 | 내 도메인·HTTPS | 난이도 | 실패하는 경우 | 가이드 |
+표의 맨 위 다섯 줄이 주력이고 2026-11-11에 다시 확인했습니다. 그 아래는 2026-11-09 값입니다(Firebase·Azure·Render는 11-11에도 같음). 자세한 한도와 순서는 각 가이드에 있습니다.
+
+| 선택지 | 무료 범위 | 상업 이용 | 내 도메인·HTTPS | 난이도 | 실패하는 경우 | 가이드 |
 |---|---|---|---|---|---|---|
-| **Cloudflare Pages(끌어 놓기)** | 정적 요청 무료·무제한, 1,000파일/25MiB(끌어 놓기) | 가능 | ✓ / 자동 | ★ | 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 못 바꿈 | `deploy/cloudflare.md` |
-| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한, 2만 파일, Git 연결 빌드 월 3,000분 | 가능 | ✓ / 자동(도메인이 Cloudflare 영역이어야 함) | ★★(Git 연결 대시보드 또는 CLI) | Workers 무료 요청 한도는 실시간 중계에만 해당 | `deploy/cloudflare.md` |
-| **GitHub Pages** | 사이트 1GB, 월 100GB(권고), 시간당 10회 빌드(Actions는 예외) | 상업 SaaS·온라인 사업 금지 | ✓ / 자동 | ★★ | 무료 계정은 공개 저장소만, 헤더 설정 불가(CSP는 meta) | `deploy/github-pages.md` |
-| **Netlify(+Drop)** | 월 300크레딧(배포 1회 15, GB당 20). Drop은 계정 없이 올리지만 나누려면 claim(가입) | 가능 | ✓ / 자동 | ★ | 크레딧 소진 시 **계정의 모든 사이트 정지**, 새 프로젝트는 비공개로 시작, 익명 Drop은 IP당 3개 | `deploy/netlify.md` |
-| **Vercel Hobby(+Drop)** | 월 100GB 전송, CDN 요청 100만. Drop은 계정 없이 임시 주소 | **비상업 개인만** | ✓ / 자동 | ★★ | 한도 넘으면 30일 기다림, 강사료 연수는 회색지대 | `deploy/vercel.md` |
+| **Vercel Hobby** | 한 번에 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만 | **비상업 개인만** | ✓(프로젝트당 50) / 자동 | ★(앱에서 토큰) | 넘으면 대개 30일 대기, 팀 기본값에 따라 운영 주소에 로그인 창, 배포별 주소는 로그인 요구 | `deploy/vercel.md` |
+| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한, 2만 파일·파일당 25MiB(`--temporary`는 1,000파일·5MiB) | 가능 | ✓ / 자동(도메인이 Cloudflare 영역이어야 함) | ★(skill이 wrangler로) | `Range` 요청에 전체를 200으로 줌(Safari 영상), 임시 계정은 60분 안에 claim | `deploy/cloudflare.md` |
+| **Cloudflare Pages(끌어 놓기)** | 정적 요청 무료·무제한, ZIP 그대로, 1,000파일·파일당 25MiB | 가능 | ✓(하위 도메인은 CNAME만) / 자동 | ★ | 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 못 바꿈 | `deploy/cloudflare.md` |
+| **GitHub Pages** | 사이트 1GB, 파일 100MiB, 월 100GB(권고), 시간당 10빌드(권고) | 상업 SaaS·온라인 사업 금지 | ✓ / 자동 | ★★ | 공개 저장소만, 이메일 인증한 계정만 게시, 헤더 설정 불가(CSP는 meta), 그림이 많으면 API 제한 | `deploy/github-pages.md` |
+| **Netlify Free** | 월 300크레딧(배포 1회 15 → 한 달 20번, GB당 20) | 가능 | ✓ / 자동 | ★ | **새 팀은 비공개로 시작(Make public)**, 크레딧 소진 시 계정의 모든 사이트 정지, 배지 | `deploy/netlify.md` |
 | **Firebase Hosting(Spark)** | 저장 10GB, **전송 월 10GB** | 가능 | ✓ / 자동 | ★★★ | 넘으면 다음 달 1일까지 사이트가 꺼짐 | `deploy/firebase.md` |
 | **AWS S3+CloudFront** | CloudFront 종량제 상시 무료 월 1TB·요청 1천만 ⚠️(요청 수는 2차 출처) | 가능 | ✓ / ACM | ★★★ | 신규 계정 무료 플랜은 6개월 뒤 닫힘, 설정 실수로 과금 | `deploy/aws-s3-cloudfront.md` |
 | **AWS Amplify Hosting** | 신규 계정은 크레딧, 이후 GB당 $0.15 | 가능 | ✓ / 자동 | ★★ | 트래픽 많으면 S3+CF보다 비쌈 | `deploy/aws-s3-cloudfront.md` |
@@ -317,24 +319,25 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 ### 5.2 실시간 백엔드 (모두 강사 소유)
 
-| 선택지 | 누가 소유 | 무료 범위(2026-11-09 확인) | 잘 맞는 경우 | 실패하는 경우 → 대처 |
+| 선택지 | 누가 소유 | 무료 범위(2026-11-11 확인) | 잘 맞는 경우 | 실패하는 경우 → 대처 |
 |---|---|---|---|---|
 | **none** | — | — | 읽기 전용 연수 | — |
 | **local** | 참가자 기기 | — | 자기 진도 체크·기록 | 기기 바꾸면 사라짐 → 내려받기 버튼 |
 | **Google Sheets + Apps Script** | 강사 구글 계정 | 동시 실행 30/사용자, 실행당 6분, URL Fetch 2만/일 | **클릭만 하는 강사, 50명 안팎**, 질문·도움·진행·투표 | 학교 관리 계정은 "모든 사용자" 배포가 막힐 수 있음 ⚠️ → 개인 gmail 계정 / 파일 올리기는 드라이브에 남음 → 연수 뒤 직접 정리 |
-| **Supabase** | 강사 Supabase 계정(서울 리전 가능) | 활성 프로젝트 2개, DB 500MB, 파일 1GB, 전송 5GB, 실시간 동시 200·초당 100·월 200만 메시지 | 100명 이하 대부분의 기능 | 7일 비활성 정지 → 연수 전 열기 / 메시지 폭주 → 반응 묶기. lecpage는 익명 로그인을 쓰지 않아 학교 IP 하나로도 막히지 않음 |
-| **Cloudflare DO 중계(cf-relay)** | 강사 Cloudflare 계정(Deploy 버튼으로 생성 가능) | Workers 요청 10만/일(09:00 KST 초기화), DO 요청 10만/일·13,000GB-s/일·SQLite 5GB, 들어오는 WS 메시지 20개=요청 1개 | 큰 인원, 반응이 많은 연수, 여러 주 과정, WS 막힌 학교(SSE·새로 읽기) | 새로 읽기가 길게 돌면 요청 한도 → 간격 늘리기 / 한도 초과 시 오류 1027 → 다음 날 09시까지 |
+| **Supabase** | 강사 Supabase 계정(서울 리전 가능). skill이 Management API로 만들 수 있음 | 활성 프로젝트 2개, DB 500MB, 파일 1GB, 전송 5GB, 실시간 동시 200·초당 100·월 200만 메시지 | 100명 이하 대부분의 기능 | 7일 비활성 정지 → 연수 전 열기 / 메시지 폭주 → 반응 묶기. lecpage는 익명 로그인을 쓰지 않아 학교 IP 하나로도 막히지 않음. 키 이름은 publishable·secret(anon·service_role은 2026년 말 폐지 예고) |
+| **Cloudflare DO 중계(cf-relay)** | 강사 Cloudflare 계정. skill이 wrangler로 올리거나 Deploy 버튼(GitHub·GitLab 계정도 필요) | Workers 요청 10만/일(09:00 KST 초기화), DO 요청 10만/일·13,000GB-s/일·SQLite 5GB, 들어오는 WS 메시지 20개=요청 1개 | 큰 인원, 반응이 많은 연수, 여러 주 과정, WS 막힌 학교(SSE·새로 읽기) | 새로 읽기가 길게 돌면 요청 한도 → 간격 늘리기 / 한도 초과 시 오류 1027 → 다음 날 09시까지 |
 | **node-server(Docker)** | 강사·학교 서버 | 서버 성능만큼 | 학교 서버, NAS, VPS, 노트북 LAN, 국내 보관 | 서버 꺼지면 끝 → 연수 전 점검, 데이터 폴더 백업 |
 | Firebase(RTDB/Firestore) | 강사 구글 계정 | RTDB 동시 100, Firestore 읽기 5만/일; **Storage는 Blaze 필수** | (어댑터 없음) | lecpage 어댑터 미지원 → supabase 권장 |
 | PocketBase | 자체 서버 | 오픈소스(SQLite, 실시간 SSE) | 자체 서버 대안 | 1.0 전이라 호환성 보장 안 됨, 어댑터 없음 → node-server 권장 |
 | Appwrite Cloud / Convex | 각 서비스 계정 | Appwrite: 한도 넘으면 프로젝트 동결 / Convex: 함수 호출 100만/월 | (어댑터 없음) | 참고만 |
+| Vercel 함수 | — | WebSocket이 되지만 최대 실행 시간(Hobby 300초)에 끊기고 상태를 둘 곳이 없음 | (어댑터 없음) | 실시간 백엔드로 쓰지 않음. 올릴 곳이 Vercel이어도 실시간은 위에서 고름 |
 
-**lecpage 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다.
+**lecpage 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다.
 
 ### 5.3 조합할 때 지켜야 할 것
-- **주소(origin)** : 정적 호스팅 주소와 실시간 주소가 다르면 CSP `connect-src`에 실시간 주소를 넣습니다(§10). node-server를 같은 서버에 두면 `'self'`로 끝납니다.
+- **주소(origin)** : 엔진이 페이지마다 넣는 CSP `<meta>`는 `connect-src`에 `https:`·`wss:`를 허용하므로 실시간 주소를 따로 적을 일이 없습니다. §10의 CSP 헤더 템플릿을 따로 쓸 때만 `{{LIVE_ORIGIN}}`을 채웁니다.
 - **CORS** : Supabase·Apps Script는 기본 허용. node-server는 `LEC_ORIGINS`(비우면 모두 허용), cf-relay는 `ALLOWED_ORIGINS`(쉼표 구분, 비우면 모두 허용)에 사이트 주소를 넣습니다.
-- **비밀값** : 관리자 키는 사이트에 넣지 않습니다(서버엔 SHA-256만). cf-relay는 `ADMIN_KEY`를 secret으로. Supabase는 anon(publishable) 키만 사이트에. `service_role` 키는 절대 금지.
+- **비밀값** : 관리자 키는 사이트에 넣지 않습니다(서버엔 SHA-256만). cf-relay는 `ADMIN_KEY`를 secret으로. Supabase는 publishable 키(`sb_publishable_…`)만 사이트에. secret·`service_role` 키는 절대 금지.
 
 ---
 
@@ -343,14 +346,16 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | 계산 | 식 | 예: 40명, 사이트 30MB, 90분 |
 |---|---|---|
 | 정적 전송량(연수 1회) | `siteMB × 인원 × 3` | 30×40×3 = 3.6GB → Firebase Spark(월 10GB)는 한 달에 연수 2회까지, Render(월 5GB)는 1회, 나머지 ✓ |
-| Netlify 크레딧 | `전송GB×20 + 배포횟수×15 + 요청/1만×2` | 3.5×20 + 10×15 + 1 ≈ 221 / 300 → 아슬아슬 |
+| Vercel CDN 요청(월 100만) | `인원 × 파일 수 × 3` | 40×150×3 = 1.8만 ✓. 300명 × 900파일이면 81만 → 경고(G28) |
+| Vercel 업로드(하루 5,000개) | 처음에는 파일 수 전부, 다시 올릴 때는 바뀐 파일만 | 4,000개가 넘으면 하루에 한 번도 빠듯함 |
+| Netlify 크레딧 | `전송GB×20 + 배포횟수×15 + 요청/1만×2` | 3.5×20 + 10×15 + 1 ≈ 221 / 300 → 아슬아슬. 배포만 20번이면 300 |
 | Supabase 초당 메시지 | `초당 방송 수 × (인원+1)` | 반응을 그대로 보내면 1회 = 41메시지 → 초당 2번만 넘어도 위험. 2초 묶음이면 안전 |
 | Supabase 월 메시지 | `방송 수 × (받는 사람+1)` | 90분 동안 3초마다 상태 갱신 = 1,800 × 41 ≈ 7.4만 → 월 200만 한도의 4% |
 | Workers 요청(새로 읽기 시) | `인원 × 3600/간격초 × 시간` | 40×720×1.5 = 43,200 (5초) / WS면 연결 1회+보낸 메시지/20 |
 | Apps Script 동시 실행 | `인원 ÷ 간격초 × 평균 실행초` | 40÷7×0.7 ≈ 4 (한도 30) / 120명·5초면 ≈ 17 → 위험 |
 | DO 실행 시간 | `연결 유지 시간 × 0.125GB` (깨어 있는 동안) | 2시간 = 900GB-s (한도 13,000/일) |
 
-슬라이드가 많으면 엔진의 슬라이드 화질(WebP 품질·가로 폭)을 낮추는 것이 가장 효과가 큽니다(1장 150KB 안팎 권장).
+슬라이드가 많으면 엔진의 슬라이드 화질(WebP 품질·가로 폭)을 낮추는 것이 가장 효과가 큽니다(1장 150KB 안팎 권장). 자료실에 올린 파일(`assets/files/`의 PPTX·ZIP·영상 등)은 파일 하나의 크기 한도(Cloudflare 25MiB, `--temporary` 5MiB, GitHub Pages 100MiB)에 가장 먼저 걸립니다. 참가자가 처음 받는 무게는 `qa`가 "첫 화면 nKB"로 알려 줍니다(목표 200KB).
 
 ---
 
@@ -361,12 +366,15 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | 접속은 되는데 실시간이 안 됨 | 학교망 WebSocket 차단, TLS 검사 장비 | check.html로 사전 확인 | http 어댑터는 SSE→새로 읽기, Supabase 어댑터는 7초 새로 읽기로 자동 전환 |
 | "프로젝트가 일시 정지됨" | Supabase 무료 7일 비활성 | 연수 2~3일 전 대시보드 열기 + check.html | 대시보드 → Resume(몇 분 걸림) → 그동안 local 모드로 진행 |
 | 오후에 갑자기 실시간 중단(Cloudflare) | 무료 일일 한도(오류 1027), 새로 읽기 과다 | 간격 10초 이상, WS 우선 | 09:00 KST에 초기화. 급하면 Workers Paid($5/월) |
-| 사이트가 아예 안 열림 | 학교 필터가 `*.github.io`·`*.pages.dev` 등 차단 | 내 도메인 연결, IT에 허용 요청 | 휴대폰 데이터로 접속 안내 / ZIP 배포 |
+| 사이트가 아예 안 열림 | 학교 필터나 통신사 DNS가 `*.vercel.app`·`*.workers.dev`·`*.pages.dev`·`*.github.io` 등 차단 | **연수 전날 참가자가 쓸 망에서 주소 열어 보기**, 내 도메인 연결, IT에 허용 요청 | 휴대폰 데이터로 접속 안내 / 다른 곳에 다시 올리기 / ZIP 배포 |
+| 참가자에게 Vercel 로그인 창 | 배포별 주소를 나눠 줌, 또는 팀 기본값이 모든 배포 보호 | 운영 주소(`<프로젝트>.vercel.app`)만 안내, 로그아웃한 창에서 확인 | Settings → Deployment Protection에서 Vercel Authentication 끄기 |
+| 임시로 올린 Cloudflare 사이트가 사라짐 | `--temporary`·Drop을 60분 안에 claim하지 않음 | 올리자마자 claim 주소 건네기 | 가입 뒤 다시 올리고 주소 다시 안내 |
+| GitHub Pages에 올렸는데 게시되지 않음 | 이메일 인증을 안 마친 계정 | 올리기 전에 인증 확인 | 인증 뒤 다시 push |
 | 글꼴이 깨지거나 효과가 안 나옴 | jsDelivr·Google Fonts 차단 | 글꼴 자체 호스팅 | 시스템 글꼴로도 내용은 보임(설계 원칙) |
 | 사이트가 "Site not available"(Netlify) | 월 크레딧 소진 → 계정 전체 정지 | 배포 횟수 줄이기, 큰 사이트는 Cloudflare | 다른 호스팅에 즉시 재배포(5분) |
-| Netlify Drop 주소에 비밀번호 창 | claim 전이라 잠겨 있음 | 1시간 안에 가입·저장, 공개로 | 저장 후 공개. 늦었으면 다시 올리기 |
+| 참가자에게 권한 없음 화면(Netlify) | 2026-07-28 이후 만든 팀은 새 프로젝트가 비공개 | 올린 뒤 **Make public**, 로그아웃한 창에서 확인 | Make public. 계정 없이 올린 Drop이면 claim부터 |
 | 사이트가 꺼짐(Firebase) | 월 10GB 초과 → 다음 달 1일까지 비활성 | 큰 사이트는 Cloudflare | Blaze로 올리거나 다른 호스팅에 재배포 |
-| Vercel에서 한도 초과 | Hobby 한도, 30일 대기 | 큰 사이트는 Cloudflare | 다른 호스팅 |
+| Vercel에서 한도 초과(429) | 하루 100배포·업로드 5,000개, 월 한도는 대개 30일 대기 | 큰 사이트는 Cloudflare | 다른 호스팅 |
 | 노트북 서버에 아무도 못 붙음 | 와이파이 AP 격리, 방화벽 | 전용 공유기, 방화벽 허용 | 노트북을 핫스폿으로(10명 안팎) 또는 Quick Tunnel |
 | 질문이 늦게 뜸(Sheets) | 7초 새로 읽기, Apps Script 동시 실행 한도 | 50명 안팎까지 | 화면에 "몇 초 늦게 보여요" 안내 |
 | 암호 화면에서 안 열림 | http·file:// 주소, 오래된 브라우저 | https 호스팅에만 password | QR(`#k=암호`)로 다시 들어오기, 크롬·엣지·웨일 |
@@ -380,7 +388,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 - 만 14세 미만의 개인정보를 받으려면 법정대리인 동의가 필요합니다(개인정보 보호법). 학생 대상이면 **별명만 + 연수 뒤 즉시 삭제**. 학생 개인정보를 다루는 사이트는 교육부 '학습지원 소프트웨어' 기준과 학교운영위원회 심의 대상이 될 수 있습니다(교원 대상 연수는 해당 없음).
 - 해외 서버(Supabase 서울 외 리전, Cloudflare, Google)에 개인정보를 두면 개인정보 처리 안내(privacy.html)에 **처리 위탁·국외 이전** 사실(업체, 국가, 항목, 기간)을 적습니다. → blueprint `privacy.processors`.
 - 국내 보관이 필요하면: Supabase 서울(`ap-northeast-2`), AWS Lightsail 서울, 네이버 클라우드, 학교 서버·NAS·노트북.
-- 연수가 끝나면: CSV 내보내기 → `purge()`(콘솔의 "전부 삭제") → 프로젝트·서버 정리. Sheets·Supabase에 올라간 파일은 따로 지워야 할 수 있습니다. 각 가이드의 "연수가 끝난 뒤"를 따릅니다.
+- 연수가 끝나면: CSV 내보내기 → `purge()`(강사 화면의 "전부 삭제") → 프로젝트·서버 정리. Sheets·Supabase에 올라간 파일은 따로 지워야 할 수 있습니다. 각 가이드의 "연수가 끝난 뒤"를 따릅니다.
 
 ---
 
@@ -388,20 +396,20 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 짧게, 무엇을 하는지·돈·주의점 순서로 말합니다.
 
-**A. Cloudflare Pages 끌어 놓기 + 실시간 없음**
-> "연수 사이트를 Cloudflare라는 무료 서비스에 올릴게요. 회원가입하고, 만들어 드린 폴더를 끌어다 놓기만 하면 주소가 생깁니다. 비용은 없고, 참가자가 많아도 괜찮아요. 선생님 계정이라 나중에 지우는 것도 선생님이 직접 하실 수 있어요."
+**A. Cloudflare에 ZIP 끌어 놓기(강사가 직접 올릴 때)**
+> "드린 ZIP 파일을 Cloudflare라는 무료 서비스에 그대로 끌어다 놓으면 주소가 생겨요. 가입은 이메일만 있으면 되고, 참가자가 많아도 비용이 없어요. 강사료를 받는 연수에도 쓸 수 있고, 선생님 계정이라 나중에 직접 지우실 수 있어요."
 
-**B. GitHub Pages + 실시간 없음**
-> "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줍니다. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모와 설계도는 올라가지 않아요."
+**B. GitHub Pages**
+> "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줘요. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모와 설계도는 올라가지 않아요. GitHub 계정은 이메일 인증을 마친 상태여야 해요."
 
 **C. Google Sheets(Apps Script) 실시간**
 > "질문·도움 요청·진행 현황은 선생님 구글 시트에 쌓이게 할게요. 구글 계정만 있으면 화면 안내를 따라 10분이면 연결되고, 마지막에 '연결 확인'으로 바로 시험해 볼 수 있어요. 50명 안팎까지 잘 맞고, 화면은 7초마다 새로 읽어서 몇 초 늦게 보일 수 있어요. 끝나면 시트를 지우면 기록도 사라집니다."
 
 **D. Supabase 실시간**
-> "Supabase라는 무료 데이터베이스를 선생님 이름으로 하나 만들게요. 서울 서버를 고를 수 있어요. 질문·투표가 바로바로 뜹니다. 하나만 기억해 주세요. 일주일 넘게 안 쓰면 잠들어서 연수 2~3일 전에 한 번 열어 주셔야 해요. 제가 순서대로 안내해 드릴게요."
+> "Supabase라는 무료 데이터베이스를 선생님 계정에 제가 만들어 둘게요. 선생님은 가입하고 토큰 하나만 만들어 주시면 돼요. 서울 서버에 두고, 질문·투표가 바로바로 떠요. 하나만 기억해 주세요. 일주일 넘게 안 쓰면 잠들어서 연수 2~3일 전에 한 번 열어 주셔야 해요. 토큰은 설정이 끝나면 지우시면 됩니다."
 
 **E. Cloudflare 중계(DO) + Cloudflare 사이트**
-> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 올릴게요. 'Deploy to Cloudflare' 버튼을 누르고 관리자 키만 정하시면 명령어 없이 만들어집니다. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요."
+> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 제가 올릴게요. 로그인만 한 번 해 주시면 돼요. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요. 강사 화면에 들어갈 관리자 키는 파일로 따로 건네 드릴게요."
 
 **F. "lecpage 서버를 그냥 빌려 쓰면 안 되나요?"라고 물을 때**
 > "lecpage는 참가자 기록을 대신 맡아 주는 서버를 두지 않아요. 기록을 맡는 순간 그 기록의 책임이 운영자에게 넘어가고, 여러 연수가 한 서버를 나눠 쓰면 한 곳에 문제가 생길 때 모두가 멈추거든요. 대신 선생님 구글 계정이나 Cloudflare 계정에 10분 안에 만드는 방법을 안내해 드릴게요. 기록은 선생님만 보고, 선생님이 지울 수 있어요."
@@ -418,44 +426,58 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 **J. AWS(S3+CloudFront)**
 > "기관 AWS 계정에 사이트를 올리는 설정 파일과 명령어를 드릴게요. 한 달 1TB까지는 전송 비용이 무료라 보통 0원이고, 저장 비용은 몇십 원 수준입니다. 연수 뒤에 지우는 명령어도 같이 드릴게요."
 
-**K. Netlify Drop(빠른 미리 보기)**
-> "지금 바로 모양을 확인하려고 Netlify에 끌어다 놓을게요. 로그인 전엔 비밀번호로 잠겨 참가자가 못 보고, 1시간 안에 저장(claim)하지 않으면 정지돼요. 참가자와 나누려면 가입해서 '내 것으로' 저장하고 '공개'를 눌러 주세요."
+**K. Netlify(이미 쓰시는 분)**
+> "쓰시던 Netlify에 올릴게요. 올린 뒤에 Netlify 화면에서 'Make public'을 한 번 눌러 주셔야 참가자가 볼 수 있어요. 무료는 한 달에 20번쯤만 올릴 수 있어서, 고칠 것은 모아서 한 번에 올릴게요."
 
 **L. 공개 범위 고르기**
 > "기본은 '링크를 받은 사람만'이에요. 검색에는 안 나오지만 주소를 아는 사람은 들어올 수 있어요. 교재를 꼭 지켜야 하면 '암호'를 고르세요. 연수장 QR로 들어오면 저절로 열리고, 주소만 전달받은 사람은 암호를 물어봐요. 암호는 낱말 서너 개를 이어 길게 정해 주세요."
+
+**M. Vercel(앱의 기본)**
+> "Vercel이라는 무료 서비스에 올릴게요. 가입하고 토큰이라는 긴 글자를 한 번 만들어 붙여 넣으면, 다음부터는 버튼 한 번으로 같은 주소에 다시 올라가요. 참가자에게는 '이름.vercel.app' 주소만 알려 주세요. Vercel 무료는 비상업 개인 용도라서, 강사료를 받는 연수면 Cloudflare로 올릴게요."
+
+**N. Cloudflare(skill이 직접 올릴 때)**
+> "제가 Cloudflare에 바로 올려 둘게요. 무료이고 참가자가 많아도 괜찮아요. 아직 계정이 없으시면 임시 주소로 먼저 띄워 드릴 수 있는데, Cloudflare 약관에 동의하고 진행하는 거라 먼저 여쭤봐요. 올린 뒤 드리는 주소에서 60분 안에 가입하셔야 사이트가 남아요."
+
+**O. 연수 전날 확인**
+> "연수 전날, 참가자들이 쓸 와이파이에서 주소를 한 번 열어 봐 주세요. 학교나 통신사에 따라 이런 무료 주소가 막힌 적이 있어요. 안 열리면 바로 알려 주세요. 다른 곳에 다시 올리거나 선생님 도메인을 붙이면 돼요."
 
 ---
 
 ## 10. 템플릿 치환 규칙 (`templates/deploy/`)
 
+빌드 결과(`dist/`)에는 이미 페이지마다 CSP `<meta>`와 기본 응답 헤더 파일 `_headers`가 들어 있습니다. 주력 네 곳은 템플릿 없이 올라갑니다(Vercel만 `vercel/vercel.json`·`.vercelignore`를 `dist/`에 복사. `{{…}}` 없음, 그대로 씀). 아래 토큰은 CSP를 **응답 헤더로도** 걸거나 그 밖의 곳에 올릴 때만 씁니다. 쓰면 `{{…}}`를 모두 채워야 합니다. 비워 두면 실시간 연결이 막힙니다.
+
 | 토큰 | 값 | 예 |
 |---|---|---|
 | `{{LIVE_ORIGIN}}` | 실시간 백엔드 origin(https·wss) 공백 구분. none/local은 빈 문자열 | Supabase: `https://abcd.supabase.co wss://abcd.supabase.co` / Sheets: `https://script.google.com https://script.googleusercontent.com` / http: `https://relay.x.workers.dev wss://relay.x.workers.dev` |
 | `{{SCRIPT_HASHES}}` | 인라인 `<script>`의 `'sha256-…'` 목록. 없으면 빈 문자열 | `'sha256-AbC…='` |
-| `{{SITE_NAME}}` | 소문자·숫자·하이픈 | `lec-20261104` |
-| `{{COMPAT_DATE}}` | 빌드 날짜 | `2026-11-09` |
-| `{{SITE_ORIGIN}}` | 정적 사이트 주소 | `https://lec-20261104.pages.dev` |
+| `{{SITE_NAME}}` | 소문자·숫자·하이픈 | `lec-20261111` |
+| `{{COMPAT_DATE}}` | 빌드 날짜 | `2026-11-11` |
+| `{{SITE_ORIGIN}}` | 정적 사이트 주소 | `https://lec-20261111.pages.dev` |
 | `{{APP_NAME}}` · `{{FIREBASE_PROJECT_ID}}` | 서비스 이름 | |
 
-- 파일: `_headers`(Cloudflare·Netlify 공용), `csp-meta.html`(GitHub Pages 등 헤더 불가 호스팅), `vercel/vercel.json`(+`.vercelignore`), `netlify/netlify.toml`, `cloudflare/wrangler.jsonc`(+`.assetsignore`), `firebase/firebase.json`(+`.firebaserc`), `aws/deploy-s3.sh`·`aws/cloudformation-static-site.yaml`, `azure/staticwebapp.config.json`, `server/nginx.conf`·`server/Caddyfile`·`server/docker-compose.yml`·`server/.env.example`·`server/Dockerfile.node-server`, `fly/fly.toml`·`render/render.yaml`(가이드: `deploy/paas-node-hosting.md`), `github-pages/.github/workflows/deploy-pages.yml`.
-- CSP 기본: 스크립트는 자기 사이트와 `cdn.jsdelivr.net`만, 글꼴은 jsDelivr·Google Fonts·`hangeul.pstatic.net`(마루부리), 프레임은 YouTube·Vimeo만. 다른 외부 임베드를 쓰면 `frame-src`에 추가.
-- `file://`(ZIP)·LAN(http)에서는 CSP meta를 넣지 않거나 `upgrade-insecure-requests`를 뺍니다.
-- 같은 주소 WebSocket은 대부분 브라우저에서 `'self'`로 허용되지만, 오래된 Safari 대비로 `wss://<도메인>`을 함께 적는 것을 권장 ⚠️.
+- 토큰이 있는 파일: `_headers`·`csp-meta.html`(CSP 헤더판), `cloudflare/wrangler.jsonc`(GitHub 연결·내 도메인 때), `firebase/firebase.json`(+`.firebaserc`), `aws/deploy-s3.sh`·`aws/cloudformation-static-site.yaml`, `azure/staticwebapp.config.json`, `server/nginx.conf`·`server/Caddyfile`·`server/docker-compose.yml`·`server/.env.example`·`server/Dockerfile.node-server`, `fly/fly.toml`·`render/render.yaml`(가이드: `deploy/paas-node-hosting.md`).
+- 토큰이 없는 파일: `vercel/vercel.json`·`.vercelignore`, `cloudflare/.assetsignore`, `netlify/netlify.toml`, `github-pages/.github/workflows/deploy-pages.yml`.
+- CSP 헤더판 기본: 스크립트는 자기 사이트와 `cdn.jsdelivr.net`만, 글꼴은 jsDelivr·Google Fonts·`hangeul.pstatic.net`(마루부리), 프레임은 YouTube·Vimeo만. 엔진의 `<meta>`와 함께 걸리면 둘 다 지켜야 하므로 더 좁은 쪽이 적용됩니다.
+- `file://`(ZIP)·LAN(http)에서는 CSP 헤더판을 쓰지 않습니다.
 
 ---
 
-## 11. 출처 (2026-11-09 확인)
+## 11. 출처 (2026-11-11 확인. 그 밖의 줄은 2026-11-09)
 
-- GitHub Pages 한도: https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
-- Cloudflare Workers 요금·한도·정적 자산: https://developers.cloudflare.com/workers/platform/pricing/ · https://developers.cloudflare.com/workers/platform/limits/ · https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/
+조사 기록과 확인 못 한 것의 목록: `docs/research/hosting-2026-11.md`(§11).
+
+- Vercel 한도·약관·주소·보호·토큰·Drop: https://vercel.com/docs/limits · https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/deployments/generated-urls · https://vercel.com/docs/deployment-protection · https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication · https://vercel.com/kb/guide/how-do-i-use-a-vercel-api-access-token · https://vercel.com/docs/drop · https://vercel.com/docs/functions/websockets
+- Cloudflare Workers 정적 자산·한도·`workers.dev`·임시 계정: https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/ · https://developers.cloudflare.com/workers/platform/limits/ · https://developers.cloudflare.com/workers/platform/pricing/ · https://developers.cloudflare.com/workers/configuration/routing/workers-dev/ · https://developers.cloudflare.com/workers/wrangler/commands/workers/#deploy · https://developers.cloudflare.com/workers/platform/claim-deployments/ · https://developers.cloudflare.com/changelog/post/2026-07-08-cloudflare-drag-and-drop/
+- Cloudflare Pages 한도·끌어 놓기: https://developers.cloudflare.com/pages/platform/limits/ · https://developers.cloudflare.com/pages/get-started/direct-upload/
 - Cloudflare Workers Builds·Deploy 버튼: https://developers.cloudflare.com/workers/ci-cd/builds/ · https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/ · https://developers.cloudflare.com/workers/platform/deploy-buttons/
 - Durable Objects 한도·위치: https://developers.cloudflare.com/durable-objects/platform/limits/ · https://developers.cloudflare.com/durable-objects/platform/pricing/ · https://developers.cloudflare.com/durable-objects/reference/data-location/
-- Cloudflare Pages 한도·끌어 놓기: https://developers.cloudflare.com/pages/platform/limits/ · https://developers.cloudflare.com/pages/get-started/direct-upload/
 - Cloudflare Quick Tunnel: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
-- Supabase 요금·실시간·정지: https://supabase.com/pricing · https://supabase.com/docs/guides/realtime/limits · https://supabase.com/docs/guides/platform/manage-your-usage/realtime-messages · https://supabase.com/docs/guides/platform/project-pausing
+- GitHub Pages 한도·요금제·토큰 권한·API 제한: https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits · https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github · https://docs.github.com/en/get-started/learning-about-github/githubs-plans · https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens · https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+- Netlify 크레딧·공개 범위·배지·API: https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/ · https://docs.netlify.com/manage/projects/powered-by-netlify-badge/ · https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/
+- Supabase 요금·실시간·정지·키·Management API: https://supabase.com/pricing · https://supabase.com/docs/guides/realtime/limits · https://supabase.com/docs/guides/platform/manage-your-usage/realtime-messages · https://supabase.com/docs/guides/platform/project-pausing · https://supabase.com/docs/guides/api/api-keys · https://supabase.com/docs/reference/api/introduction
 - Apps Script 할당량: https://developers.google.com/apps-script/guides/services/quotas
-- Vercel Hobby·Drop·공정 사용: https://vercel.com/docs/plans/hobby · https://vercel.com/docs/drop · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/functions/websockets
-- Netlify 크레딧·Drop: https://www.netlify.com/pricing/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://www.netlify.com/blog/thirteen-years-of-netlify-drop
+- 국내 통신사 DNS의 `*.vercel.app` 차단 보고(커뮤니티 글, 공식 설명 없음 ⚠️): https://news.hada.io/topic?id=14759
 - Firebase 호스팅 사용량·요금·Storage 변경: https://firebase.google.com/docs/hosting/usage-quotas-pricing · https://firebase.google.com/pricing · https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024
 - Deno Deploy 종료 예정: https://deno.com/blog/cloudflare
 - AWS: https://aws.amazon.com/free/ · https://aws.amazon.com/cloudfront/pricing/ · https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/ · https://aws.amazon.com/amplify/pricing/ · https://aws.amazon.com/lightsail/pricing/ · https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html

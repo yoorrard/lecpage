@@ -31,7 +31,9 @@
   var conn, data = {}, state = {};
   COLS.forEach(function (c) { data[c] = {}; });
   var form = $('[data-admin-form]'), main = $('[data-console-main]');
-  var saved = ''; try { saved = sessionStorage.getItem('lp-admin:' + DATA.live.code) || ''; } catch (e) { }
+  // 키 이름에 사이트 경로를 넣음: 여러 사이트가 한 출처를 쓰는 서버(바로 공개)에서 다른 사이트의 화면이 이 키를 쓰지 못하게
+  var ADMIN_SLOT = 'lp-admin:' + location.pathname.replace(/[^/]*$/, '') + ':' + DATA.live.code;
+  var saved = ''; try { saved = sessionStorage.getItem(ADMIN_SLOT) || ''; } catch (e) { }
   form.addEventListener('submit', function (e) { e.preventDefault(); start(new FormData(form).get('key')); });
   if (saved) start(saved);
 
@@ -40,7 +42,7 @@
     conn.connect().then(function () {
       return conn.getState().then(function (s) { state = s || {}; });
     }).then(function () {
-      try { sessionStorage.setItem('lp-admin:' + DATA.live.code, key); } catch (e) { }
+      try { sessionStorage.setItem(ADMIN_SLOT, key); } catch (e) { }
       form.hidden = true; main.hidden = false; build(); loadAll(); conn.subscribe(onEvent);
       // 보드 '먼저 확인'(board.moderation): 서버가 새 글을 숨긴 채 받도록 상태에 적어 둠(관리자만 바꿀 수 있음)
       var mod = MODERATE || null, nof = NOFILES ? false : null, ui0 = state.ui || {}, pol = {};

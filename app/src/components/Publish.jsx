@@ -135,17 +135,19 @@ function Instant({ p, busy, start, done, info }) {
   const bp = p.blueprint;
   const liveOn = (bp.live?.features || []).length > 0;
   const autoLive = liveOn && !!info?.live?.url; // 참여 기능을 이 서버가 맡음
-  const run = () => start('lecpage', async (files, onProgress) => {
+  // newCode: 연수 코드가 다른 사이트와 겹쳤을 때 새로 정한 코드(사이트를 그 코드로 다시 만들어 올림)
+  const run = (newCode = '') => start('lecpage', async (files, onProgress) => {
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
-      live = { code: E.validate(bp).blueprint.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
+      live = { code: newCode || E.validate(bp).blueprint.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
     }
     const out = await deployInstant({ site: prev, title: p.title, files, live, onProgress });
     done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(autoLive ? { adminKey } : {}) } },
-      autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '' }, liveOk: true } : null);
+      autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true } : null);
     toast(prev?.id === out.id ? '새 내용을 같은 주소에 올렸어요.' : '공개했어요!');
-  }, null, autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '' }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
+  }, (e) => { if (e.code !== 'code_taken' || newCode) return false; setTimeout(() => run(E.randomCode()), 0); return true; },
+  autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
   async function remove() {
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
     catch (e) { toast('내리지 못했어요. ' + e.message); }
@@ -153,7 +155,7 @@ function Instant({ p, busy, start, done, info }) {
   return (
     <div class="stack">
       <p>가입이나 토큰 없이 바로 공개해요. 마지막으로 올린 날부터 {days}일 동안 열려 있어요.{autoLive ? ' 질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
-      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={run} />
+      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
       {alive && <p class="small muted">{day(prev.expiresAt)}까지 열려 있어요. 다시 올리면 그날부터 {days}일로 늘어나요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
       {alive && prev.adminKey && <p class="small">강사 화면 관리자 키 <b class="mono">{prev.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(prev.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>}
       <p class="small muted">사이트 파일{autoLive ? '과 참가자가 남긴 글·파일' : ''}이 lecpage 서버에 {days}일 동안 저장돼요. 남의 저작물이나 개인정보가 들어 있지 않은지 확인해 주세요. 오래 둘 사이트는 Vercel처럼 내 계정에 올리는 편이 좋아요.</p>

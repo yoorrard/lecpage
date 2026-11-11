@@ -186,7 +186,7 @@
   // ── 실시간 ──
   X = LecLive.util.ext;
   var U = LecLive.util;
-  var key = ''; try { key = sessionStorage.getItem('lp-admin:' + DATA.live.code) || ''; } catch (e) { }
+  var key = ''; try { key = sessionStorage.getItem('lp-admin:' + location.pathname.replace(/[^/]*$/, '') + ':' + DATA.live.code) || ''; } catch (e) { }
   try { conn = LecLive.create(Object.assign({}, DATA.live, key ? { adminKey: key } : {})); } catch (e) { return; }
   canWrite = DATA.live.provider === 'local' || !!key;
   var state = {}, qs = {}, answers = {}, tiv;

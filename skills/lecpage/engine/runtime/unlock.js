@@ -38,6 +38,8 @@
       return decrypt(key, blob).then(function (buf) {
         saveKey(P.salt, raw, remember);
         var html = new TextDecoder().decode(buf);
+        // 풀린 글은 서버가 살펴볼 수 없으므로 여기서 한 번 더 거름: 다른 곳으로 넘기는 meta refresh와 base는 뺌(스크립트는 CSP가 막음)
+        html = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
         doc.open(); doc.write(html); doc.close();
       });
     };

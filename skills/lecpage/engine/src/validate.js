@@ -122,7 +122,7 @@ export function validate(input) {
   const design = {
     preset: pick(d.preset, PRESET_IDS, PRESET_IDS[0]), mood: strArr(d.mood, 20).slice(0, 6), topics: strArr(d.topics, 20).slice(0, 6),
     theme: pick(d.theme, ['auto', 'light', 'dark', 'preset'], 'preset'), motion: d.motion === undefined ? undefined : num(d.motion, 2, 0, 3),
-    accent: isHex(d.accent) ? d.accent : '', fonts: d.fonts && typeof d.fonts === 'object' ? { display: str(d.fonts.display, 30), body: str(d.fonts.body, 30), mono: str(d.fonts.mono, 30) } : undefined,
+    accent: isHex(d.accent) ? d.accent : '', fonts: d.fonts && typeof d.fonts === 'object' ? { display: str(d.fonts.display, 30), body: str(d.fonts.body, 30), num: str(d.fonts.num, 30), mono: str(d.fonts.mono, 30) } : undefined,
     signature: str(d.signature, 40), graphic: d.graphic === undefined ? undefined : str(d.graphic, 40), closingGraphic: d.closingGraphic === undefined ? undefined : str(d.closingGraphic, 40),
     effects: (d.effects && typeof d.effects === 'object') ? Object.fromEntries(Object.entries(d.effects).slice(0, 40).map(([k, v]) => [str(k, 40), str(v, 40)])) : {},
     logo: safeUrl(d.logo), brandName: str(d.brandName, 40), seed: str(d.seed, 20),

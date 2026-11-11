@@ -1,5 +1,7 @@
 # 호스팅·실시간 백엔드 조사 노트
 
+> **더 새 조사가 있습니다: [`hosting-2026-11.md`](hosting-2026-11.md)(2026-11-11).** Netlify 비공개 기본값, Vercel 토큰 배포, Cloudflare Drop·`--temporary` 등 달라진 것은 그 문서가 우선합니다.
+
 > **2026-11-09 재검증: hosting-2026-11 요약**
 > - 앱 호스팅은 **Cloudflare Workers 정적 자산 + Workers Builds(Git 연결)**로 정했습니다. Cloudflare Pages 첫 화면이 "새 프로젝트는 Workers로 시작"을 권합니다(Pages 종료 일정은 없음). 설정 순서: `docs/operations.md`.
 > - Workers 정적 요청은 무료·무제한. 단 'Workers Caching'을 켜거나 `run_worker_first` 경로는 하루 10만 요청 한도에 들어갑니다. Workers 내 도메인은 도메인이 Cloudflare 영역(네임서버)이어야 합니다.

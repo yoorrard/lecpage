@@ -5,7 +5,7 @@
 ## 무엇을 고를까
 | 방법 | 비용 | 주소 예 | 장점 | 단점 |
 |---|---|---|---|---|
-| 호스팅 기본 주소 | 0원 | `lec-1104.pages.dev` | 바로 됨 | 길다, 학교가 `*.pages.dev`·`*.github.io` 등을 막는 경우 |
+| 호스팅 기본 주소 | 0원 | `lec-1104.workers.dev`, `lec-1104.vercel.app` | 바로 됨 | 길다. 학교망이나 통신사 DNS가 기본 주소를 통째로 막은 적이 있음(2024-05 `*.vercel.app`, 지금도 그런지는 모름 ⚠️) → 연수 전날 참가자 망에서 열어 보고, 막히면 내 도메인 |
 | **내 도메인 + 경로**(권장) | `.com` 연 약 1.6만 원(Cloudflare), `.kr` 연 약 2.2~2.3만 원(가비아 ⚠️) | `lec.example.kr/1104` | 짧고 오래감, 연수마다 경로만 추가 | 처음 한 번 설정 |
 | 학교·기관 도메인의 하위 주소 | 0원 | `lec.○○.hs.kr` | 학교망에서 신뢰 | 교육청·IT 승인 필요(어려운 경우 많음) |
 | 단축 URL 서비스 | 0원~ | `vo.la/abcd` | 즉석 | 만료·광고·차단 위험, 서비스 종료 위험 |
@@ -37,7 +37,7 @@
 | Cloudflare Workers | Worker → **Settings → Domains & Routes → Add → Custom domain**, 또는 `wrangler.jsonc`의 `routes`에 `{ "pattern": "lec.example.kr", "custom_domain": true }` | 자동(DNS·인증서). **도메인이 Cloudflare 영역(네임서버)에 있어야 함** |
 | GitHub Pages | 저장소 **Settings → Pages → Custom domain** 입력 → **Enforce HTTPS** | 하위 도메인: CNAME `lec → <아이디>.github.io` / 루트 도메인: A `185.199.108.153` `185.199.109.153` `185.199.110.153` `185.199.111.153` |
 | Netlify | **Domain management → Add a domain** | CNAME `lec → <이름>.netlify.app` |
-| Vercel | 프로젝트 **Settings → Domains** | 화면에 나오는 CNAME/A 값 |
+| Vercel | 프로젝트 **Settings → Domains**(프로젝트당 50개까지) | 화면에 나오는 CNAME/A 값 |
 | Firebase | **Hosting → 커스텀 도메인 추가** | 화면에 나오는 TXT·A 값 |
 | CloudFront | `aws-s3-cloudfront.md`의 "내 도메인" | CNAME `lec → dxxxx.cloudfront.net` (+ us-east-1 ACM 인증서) |
 | 내 서버(Caddy) | `.env`의 `LEC_SITE_ADDRESS=lec.example.kr` | A `lec → 서버 IP` (인증서 자동) |
@@ -72,7 +72,7 @@
 - 칠판·자료에 **주소 글자도 함께** 적습니다(QR을 못 찍는 기기 대비).
 
 ## 확인하기·되돌리기
-- 확인: 휴대폰 데이터와 학교 와이파이 둘 다에서 `https://<내 도메인>/check.html`, 주소창 자물쇠(HTTPS) 확인. `nslookup lec.example.kr`로 DNS 값 확인(개발자).
+- 확인: 휴대폰 데이터와 학교 와이파이 둘 다에서 `https://<내 도메인>/check.html`, 주소창 자물쇠(HTTPS) 확인. 연수 전날에는 참가자가 쓸 망에서 한 번 더. `nslookup lec.example.kr`로 DNS 값 확인(개발자).
 - 되돌리기: 호스팅에서 도메인 연결을 지우고 DNS 레코드를 삭제하면 기본 주소(`*.pages.dev` 등)로 돌아갑니다. 경로형 주소는 리다이렉트 규칙만 고치면 됩니다.
 
 ## 연수가 끝난 뒤

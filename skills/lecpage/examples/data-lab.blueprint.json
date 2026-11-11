@@ -31,7 +31,19 @@
     "primary": "lab",
     "mix": []
   },
-  "design": {"preset": "blueprint-tech", "mood": ["tech", "minimal"], "topics": ["data", "edutech"], "theme": "preset", "accent": "#8ea2ff"},
+  "design": {
+    "preset": "blueprint-tech",
+    "mood": [
+      "tech",
+      "minimal"
+    ],
+    "topics": [
+      "data",
+      "edutech"
+    ],
+    "theme": "preset",
+    "accent": "#8ea2ff"
+  },
   "instructors": [
     {
       "name": "유영재",
@@ -166,6 +178,66 @@
           "url": "https://gemini.google.com/"
         }
       ]
+    },
+    {
+      "id": "deck",
+      "type": "deck",
+      "nav": "교재",
+      "title": "교재에서 꼭 볼 쪽",
+      "lead": "실습에 쓰는 쪽만 옮겼어요. 실습 안내의 '교재 n쪽'을 누르면 그 쪽으로 가요.",
+      "slides": [
+        {
+          "page": 1,
+          "title": "데이터로 읽는 우리 반",
+          "text": "흩어진 학습 기록을 표로 모으고, 차트로 읽고, 다음 수업을 바꿉니다."
+        },
+        {
+          "page": 2,
+          "title": "오늘의 질문",
+          "text": "기록은 쌓였는데, 읽을 시간이 없다면?"
+        },
+        {
+          "page": 4,
+          "title": "PART 01 한 줄에 한 번의 기록",
+          "text": "날짜 · 번호 · 활동 · 점수 · 제출 여부. 이름 대신 번호를 씁니다."
+        },
+        {
+          "page": 8,
+          "title": "요약 함수 세 가지",
+          "text": "COUNTIF로 세고 · AVERAGEIF로 평균을 내고 · 피벗 테이블로 묶습니다.",
+          "tools": [
+            "Google Sheets"
+          ]
+        },
+        {
+          "page": 12,
+          "title": "PART 02 차트는 질문에서 시작한다",
+          "text": "변화는 꺾은선 · 비교는 막대 · 분포는 히스토그램",
+          "tools": [
+            "Google Sheets",
+            "Looker Studio"
+          ]
+        },
+        {
+          "page": 16,
+          "title": "AI에게 해석을 부탁할 때",
+          "text": "가명 처리한 표만 붙여 넣습니다. 숫자는 꼭 다시 확인합니다.",
+          "tools": [
+            "Gemini"
+          ]
+        },
+        {
+          "page": 20,
+          "title": "PART 03 다음 수업에서 바꿀 한 가지",
+          "text": "데이터에서 본 것 → 까닭 짐작 → 내일 해 볼 일"
+        },
+        {
+          "page": 24,
+          "title": "마무리",
+          "text": "읽을 수 있을 만큼만 모으고, 바꿀 수 있는 것부터 읽습니다."
+        }
+      ],
+      "notice": "예시 사이트라 교재의 글만 옮겼어요. PDF를 넣으면 쪽 그림이 그대로 보여요."
     },
     {
       "id": "stations",

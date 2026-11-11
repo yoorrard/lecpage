@@ -657,11 +657,18 @@ const commands = {
   decideInfra() {
     const info = args.i ? readJson(args.i) : { size: +args.size || 30, features: String(args.features || '').split(',').filter(Boolean), skill: args.skill || 'click', duration: args.duration || 'day', network: args.network || 'good', infra: String(args.infra || '').split(',').filter(Boolean), commercial: !!args.commercial, minor: !!args.minor };
     const r = E.decideInfra(info);
+    // 맨 앞 올릴 곳의 한 줄 명령·안내 파일과 백엔드 만드는 안내(skill 폴더 기준 경로)
+    const GUIDE = { vercel: 'vercel', cloudflare: 'cloudflare', 'github-pages': 'github-pages', netlify: 'netlify', firebase: 'firebase', s3: 'aws-s3-cloudfront', server: 'own-server-nginx-caddy', lan: 'local-lan-classroom', zip: 'zip-usb-offline' };
+    const BACKEND = { sheets: 'apps-script', supabase: 'supabase', cloudflare: 'cloudflare', server: 'node-server', lan: 'node-server' };
+    const top = r.hostInfo[0];
+    const how = top ? [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ') : '';
     say([
       `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
-      ...r.reasons.map((x) => '이유 ' + x), ...r.warnings.map((x) => '주의 ' + x),
+      ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
+      how ? `올리기 ${how}` : '',
+      ...r.warnings.map((x) => '주의 ' + x),
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
-      `설계도 live.provider=${r.liveProvider} (주소·키는 강사에게 받아 info.json의 live로)`,
+      `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
     ], r);
   },
 
