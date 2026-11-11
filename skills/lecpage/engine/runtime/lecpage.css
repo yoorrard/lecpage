@@ -504,9 +504,9 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-show .lp-h1{--fs-hero:clamp(2.6rem,5.6vw,5.5rem);line-height:1.1;letter-spacing:-.04em}
 /* 18 collage(펼친 교재): 교재 쪽 3D 부채. 장마다 제 색, 맨 위 장만 제목을 보이고 뒤 장은 쪽 번호만 */
 .lp-hero--collage{background:radial-gradient(60% 70% at 86% 40%,color-mix(in srgb,var(--hero-from) 70%,transparent),transparent 70%),radial-gradient(40% 50% at 70% 96%,color-mix(in srgb,var(--hero-to) 80%,transparent),transparent 70%),var(--background)}
-.lp-fan{position:relative;justify-self:center;width:min(100%,580px);aspect-ratio:1/.74;perspective:1400px}
+.lp-fan{position:relative;justify-self:center;width:min(100%,580px);aspect-ratio:1/.7;perspective:1400px}
 .lp-fan-list{list-style:none;position:absolute;inset:0;transform-style:preserve-3d;transform:translate3d(0,calc(var(--sy,0) * -28px),0) rotateX(calc(8deg - var(--ty,0) * 6deg)) rotateY(calc(-13deg + var(--tx,0) * 8deg));transition:transform .6s var(--ease-out)}
-.lp-fan-card{position:absolute;left:1%;top:30%;width:60%;aspect-ratio:16/10;z-index:calc(10 - var(--i));transform-origin:10% 100%;transform:translate3d(calc(var(--i) * (9.5% + var(--sy,0) * 1.5%)),calc(var(--i) * (-5% - var(--sy,0) * 2%)),calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg));transition:transform .7s var(--ease-out)}
+.lp-fan-card{position:absolute;left:1%;top:25%;width:60%;aspect-ratio:16/10;z-index:calc(10 - var(--i));transform-origin:10% 100%;transform:translate3d(calc(var(--i) * (9.5% + var(--sy,0) * 1.5%)),calc(var(--i) * (-5% - var(--sy,0) * 2%)),calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg));transition:transform .7s var(--ease-out)}
 .lp-fan-face{position:relative;display:grid;align-content:space-between;width:100%;height:100%;padding:6% 4.5% 6.5% 7.5%;overflow:hidden;background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:clamp(10px,1.2vw,16px);box-shadow:0 30px 54px -30px rgba(10,8,30,.5),-14px 6px 26px -18px rgba(10,8,30,.38);text-decoration:none}
 .lp-fan-face img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lp-fan-card:nth-child(5n+1) .lp-fan-face{background:var(--band-primary,var(--primary));color:var(--primary-foreground);border-color:transparent}
@@ -516,7 +516,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-fan-face b{max-width:11em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(1.05rem,2vw,1.75rem);line-height:1.25;letter-spacing:var(--display-tracking);text-wrap:balance;opacity:0;transition:opacity .35s}
 .lp-fan:not(.fx-fan) .lp-fan-card:first-child b,.lp-fan-card.is-top b{opacity:1}
 .lp-fan-face:focus-visible{outline:3px solid var(--ring);outline-offset:3px}
-.lp-fan-next{position:absolute;right:0;bottom:0;z-index:20;background:var(--card)}
+.lp-fan-next{position:absolute;left:1%;bottom:0;z-index:20;background:var(--card)}
 /* 19 dial(하루 시계): 일정 시계 + 목록 */
 .lp-hero--dial{background:radial-gradient(52% 60% at 78% 40%,color-mix(in srgb,var(--hero-from) 46%,transparent),transparent 72%),var(--background)}
 .lp-dial{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-6);justify-items:center;min-width:0}
@@ -551,7 +551,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-dial[data-fx-in] :is(.lp-dial-ticks,.lp-dial-center,.lp-dial-bezel){transition:opacity .6s ease .5s}
 /* 20 orbit(입체 궤도): 점으로 짠 입체 매듭 + 둘레를 도는 낱말 */
 .lp-hero--orbit{background:radial-gradient(44% 54% at 76% 46%,color-mix(in srgb,var(--hero-from) 62%,transparent),transparent 72%),var(--background)}
-.lp-hero--orbit .lp-h1{letter-spacing:-.02em}
+.lp-hero--orbit .lp-h1{--fs-hero:clamp(2.5rem,5vw,4.9rem);letter-spacing:-.03em}
 .lp-orbit{position:relative;justify-self:center;width:min(100%,600px);aspect-ratio:1}
 .lp-orbit svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .lp-orbit path{fill:none;stroke-linecap:round}
@@ -563,7 +563,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-orbit [data-z="1"]{stroke-width:4.2;opacity:.64}
 .lp-orbit [data-z="2"]{stroke-width:6;opacity:.97}
 .lp-orbit-tags{list-style:none;position:absolute;inset:0;z-index:1}
-.lp-orbit-tags li{position:absolute;display:flex;align-items:center;gap:.5em;transform:translate(-50%,-50%);font-size:var(--fs-xs);font-weight:600;white-space:nowrap;color:var(--foreground);opacity:calc(.42 + var(--z,.5) * .58);text-shadow:0 0 12px var(--background),0 0 4px var(--background)}
+.lp-orbit-tags li{position:absolute;display:flex;align-items:center;gap:.5em;transform:translate(calc(var(--x,50) * -1%),-50%);font-size:var(--fs-xs);font-weight:600;white-space:nowrap;color:var(--foreground);opacity:calc(.42 + var(--z,.5) * .58);text-shadow:0 0 12px var(--background),0 0 4px var(--background)}
 .lp-orbit-tags li::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:var(--primary)}
 /* 21 stream(돌과 물결): 연수 제목으로 그린 그림 한 장(액자) */
 .lp-hero--stream{background:radial-gradient(50% 60% at 80% 50%,color-mix(in srgb,var(--hero-from) 60%,transparent),transparent 74%),var(--background)}
@@ -581,18 +581,21 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero-graphic > .lp-fan{position:absolute;right:max(2vw,calc((100% - 1320px) / 2));top:50%;width:min(40vw,520px);margin-top:calc(min(40vw,520px) * -.42);opacity:.5}
 .lp-hero-graphic > .lp-dial{position:absolute;right:max(3vw,calc((100% - 1320px) / 2));top:50%;width:min(34vw,440px);margin-top:calc(min(34vw,440px) * -.5);opacity:.5}
 .lp-hero-graphic > .lp-orbit{position:absolute;right:max(1vw,calc((100% - 1360px) / 2));top:50%;width:min(42vw,560px);margin-top:calc(min(42vw,560px) * -.5);opacity:.6}
-.lp-hero-graphic > .lp-stream{position:absolute;right:max(3vw,calc((100% - 1320px) / 2));top:50%;width:min(30vw,400px);margin-top:calc(min(30vw,400px) * -.625);opacity:.55}
-.lp-hero-graphic > .lp-stream figcaption{display:none}
+.lp-hero-graphic > .lp-stream{position:absolute;right:max(1vw,calc((100% - 1360px) / 2));top:50%;width:min(40vw,520px);margin-top:calc(min(40vw,520px) * -.5);opacity:.5;-webkit-mask-image:radial-gradient(closest-side,#000 58%,transparent);mask-image:radial-gradient(closest-side,#000 58%,transparent)}
+.lp-hero-graphic .lp-stream-plate{aspect-ratio:1;background:none;border:0;box-shadow:none}
+.lp-hero-graphic .lp-stream figcaption{display:none}
 @media (max-width:760px){
   .lp-show{grid-template-columns:minmax(0,1fr);grid-template-areas:"copy" "art" "meta";row-gap:var(--sp-7)}
   .lp-show > .lp-hero-meta{grid-template-columns:minmax(0,1fr)}
-  .lp-fan{width:min(100%,400px);margin-block:var(--sp-2) 0}
+  .lp-fan{width:min(100%,400px);aspect-ratio:1/.76;margin-block:var(--sp-2) 0}
+  .lp-fan-card{top:22%}
   .lp-dial-ring{width:min(84%,300px)}
   .lp-dial-list{grid-auto-flow:row;grid-template-rows:none}
-  .lp-orbit{width:min(76%,320px)}
+  .lp-orbit{width:min(100%,360px)}
   .lp-stream{justify-self:stretch;width:100%}
-  .lp-stream-plate{aspect-ratio:16/10}
+  .lp-stream-plate{aspect-ratio:1}
 }
+@media (min-width:761px) and (max-width:1100px){.lp-dial-list{grid-auto-flow:row;grid-template-rows:none}}
 @media (max-width:900px){
   .lp-hero-graphic > :is(.lp-fan,.lp-dial,.lp-orbit,.lp-stream){display:none}
 }

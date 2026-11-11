@@ -6,12 +6,11 @@ export const KEY_GUIDES = {
     title: 'Google Gemini',
     tag: '무료',
     steps: [
-      <><A href="https://aistudio.google.com/api-keys">Google AI Studio</A>를 열고 개인 구글 계정으로 로그인해요. 처음이면 약관에 동의해요.</>,
-      <>오른쪽 위 <b>Create API key</b>를 눌러요.</>,
-      <>프로젝트를 고르고(없으면 <b>Create project</b>) <b>Create key</b>를 눌러요.</>,
-      <>만들어진 키(<span class="mono">AQ.</span> 또는 <span class="mono">AIza</span>로 시작)를 복사해 붙여 넣어요.</>,
+      <><A href="https://aistudio.google.com/apikey">Google AI Studio</A>를 열고 개인 구글 계정으로 로그인해요. 처음이면 약관에 동의해요.</>,
+      <>처음 쓰는 계정이면 키가 하나 만들어져 있어요. 없으면 <b>Create API key</b>를 눌러요.</>,
+      <>키(<span class="mono">AQ.</span> 또는 <span class="mono">AIza</span>로 시작)를 복사해 붙여 넣어요.</>,
     ],
-    notes: ['만 18세 이상 개인 계정만 돼요. 학교 계정은 관리자가 막아 둔 경우가 많아요.', '무료 등급은 하루 쓸 수 있는 횟수가 정해져 있고, 넣은 내용이 구글 제품 개선에 쓰일 수 있어요.'],
+    notes: ['만 18세 이상 개인 계정만 돼요. 학교 계정은 관리자가 막아 둔 경우가 많아요.', '무료 등급은 Gemini 3.8 Flash까지 쓸 수 있고(Gemini 4는 결제를 등록한 키만), 하루 횟수는 한국 시간 오후 5시쯤 다시 채워져요. 넣은 내용이 구글 제품 개선에 쓰일 수 있어요.'],
   },
   openrouter: {
     title: 'OpenRouter',

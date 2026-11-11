@@ -437,7 +437,7 @@ export function orbitArt(seed, words = [], attr = '') {
   // 낱말이 도는 고리(기울어진 원)와 낱말 자리
   const ring = (a) => { const y0 = RT * Math.sin(a), z = y0 * Math.sin(TILT), k = (D / (D + z)) * S; return [200 + RT * Math.cos(a) * k, 200 + y0 * Math.cos(TILT) * k, z]; };
   let rp = ''; for (let i = 0; i < 60; i++) { const [x, y] = ring((i / 60) * TAU); rp += `${i ? 'L' : 'M'}${Math.round(x * 2)} ${Math.round(y * 2)}`; }
-  const tags = words.length ? `<ul class="lp-orbit-tags">${words.map((w, i) => { const [x, y, z] = ring(0.62 + (i / words.length) * TAU); return `<li style="left:${(x / 4).toFixed(1)}%;top:${(y / 4).toFixed(1)}%;--z:${(0.5 - z / (2 * RT)).toFixed(2)}">${esc(w)}</li>`; }).join('')}</ul>` : '';
+  const tags = words.length ? `<ul class="lp-orbit-tags">${words.map((w, i) => { const [x, y, z] = ring(0.62 + (i / words.length) * TAU); return `<li style="left:${(x / 4).toFixed(1)}%;top:${(y / 4).toFixed(1)}%;--x:${(x / 4).toFixed(1)};--z:${(0.5 - z / (2 * RT)).toFixed(2)}">${esc(w)}</li>`; }).join('')}</ul>` : '';
   return `<div class="lp-orbit"${attr} data-seed="${esc(seed)}" aria-hidden="true"><svg viewBox="0 0 800 800" focusable="false"><path class="lp-orbit-ring" d="${rp}Z"/>${dots}</svg>${tags}</div>`;
 }
 C.orbit = (M) => show(M, orbitArt(seedOf(M), orbitWords(M), artFx(M, 'orbit-3d')));
@@ -448,8 +448,8 @@ export function streamScene(seed) {
   const r = seeded(hashStr(seed));
   const th = (r() - 0.5) * 0.7, A = 9 + r() * 9, kx = 0.008 + r() * 0.006, ky = 0.006 + r() * 0.006, p1 = r() * 6.283, p2 = r() * 6.283;
   const st = [[150 + r() * 110, 140 + r() * 90, 54 + r() * 18]];
-  const b = [84 + r() * 232, 372 + r() * 80, 26 + r() * 14]; st.push(b);
-  const c = [276 + r() * 84, 60 + r() * 380, 11 + r() * 8];
+  const b = [84 + r() * 232, 372 + r() * 28, 26 + r() * 14]; st.push(b);
+  const c = [276 + r() * 84, 84 + r() * 332, 11 + r() * 8];
   if (r() < 0.62 && st.every((s) => Math.hypot(s[0] - c[0], s[1] - c[1]) > s[2] + c[2] + 34)) st.push(c);
   return { th, A, kx, ky, p1, p2, st, off: r() * 11 };
 }

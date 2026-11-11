@@ -76,7 +76,8 @@ LecFX.define('orbit-3d', {
       }
       for (q = 0; q < tags.length; q++) {
         var ta = 0.62 + q / tags.length * TAU + T * 0.13; y = RT * Math.sin(ta); z = y * st; k = D / (D + z) * S;
-        tags[q].style.transform = 'translate3d(' + (cx + RT * Math.cos(ta) * k).toFixed(1) + 'px,' + (cy + y * ct * k).toFixed(1) + 'px,0) translate(-50%,-50%)';
+        x = cx + RT * Math.cos(ta) * k; // 왼쪽 끝에서는 낱말의 왼쪽 끝을, 오른쪽 끝에서는 오른쪽 끝을 고리에 맞춤(상자 밖으로 나가지 않음)
+        tags[q].style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + (cy + y * ct * k).toFixed(1) + 'px,0) translate(' + (-x / W * 100).toFixed(1) + '%,-50%)';
         tags[q].style.setProperty('--z', (0.5 - z / (2 * RT)).toFixed(2));
       }
       if (!on) { on = true; box.classList.add('fx-orbit-on'); } // 첫 장을 그린 뒤에 정지 그림을 감춤(깜빡임 없음)

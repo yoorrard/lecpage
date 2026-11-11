@@ -219,25 +219,27 @@
   .em-gsap { min-height: 100vh; }
   .em-orb-still { position: absolute; right: 6%; top: 50%; width: 62vmin; height: 62vmin; margin-top: -31vmin; z-index: -1; border-radius: 50%; background: radial-gradient(circle, var(--primary) 1px, transparent 1.6px) 0 0 / .62rem .62rem; -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%); mask-image: radial-gradient(circle, #000 30%, transparent 70%); opacity: .7; }
   .has-canvas .em-orb-still { display: none; }
-  /* 살아 있는 첫 화면 장면(펼친 교재·하루 시계): 사이트 스타일의 뼈대만 옮김(견본 쪽에는 lecpage.css가 없음) */
+  /* 살아 있는 첫 화면 장면(펼친 교재·하루 시계·입체 궤도·돌과 물결): 사이트 스타일의 뼈대만 옮김(견본 쪽에는 lecpage.css가 없음) */
   .em-art { justify-items: center; padding: .6rem; }
-  .em-art .lp-fan { position: relative; width: min(92vw, 150vh); aspect-ratio: 1 / .62; perspective: 1300px; }
-  .em-art .lp-fan-list { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateX(calc(9deg - var(--ty, 0) * 7deg)) rotateY(calc(-15deg + var(--tx, 0) * 9deg)); transition: transform .6s var(--ease-out); }
-  .em-art .lp-fan-card { position: absolute; left: 8%; top: 30%; width: 52%; aspect-ratio: 16 / 10; z-index: calc(10 - var(--i)); transform-origin: 20% 90%; transform: translate3d(calc(var(--i) * 10%), calc(var(--i) * -8%), calc(var(--i) * -60px)) rotateZ(calc(var(--i) * 5.5deg - 7deg)); transition: transform .7s var(--ease-out); }
-  .em-art .lp-fan-face { display: grid; align-content: space-between; justify-items: end; text-align: right; width: 100%; height: 100%; padding: 7% 8%; background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: .7rem; box-shadow: 0 1.6rem 2.6rem -1.4rem rgba(10, 8, 30, .5); text-decoration: none; }
-  .em-art .lp-fan-card.is-top .lp-fan-face { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
-  .em-art .lp-fan-pg { font: 800 1.9rem/1 var(--font-display); color: var(--primary); }
-  .em-art .is-top .lp-fan-pg { color: inherit; opacity: .8; }
-  .em-art .lp-fan-face b { font-size: 1.05rem; line-height: 1.3; }
-  .em-art .lp-fan-next { position: absolute; right: 2%; bottom: 2%; z-index: 20; }
-  .em-art .lp-dial-ring { position: relative; width: min(84vh, 60vw); aspect-ratio: 1; }
+  .em-art .lp-fan { position: relative; width: min(92vw, 150vh); aspect-ratio: 1 / .62; perspective: 1400px; }
+  .em-art .lp-fan-list { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateX(calc(8deg - var(--ty, 0) * 6deg)) rotateY(calc(-13deg + var(--tx, 0) * 8deg)); transition: transform .6s var(--ease-out); }
+  .em-art .lp-fan-card { position: absolute; left: 9%; top: 27%; width: 52%; aspect-ratio: 16 / 10; z-index: calc(10 - var(--i)); transform-origin: 10% 100%; transform: translate3d(calc(var(--i) * 9.5%), calc(var(--i) * -5%), calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg)); transition: transform .7s var(--ease-out); }
+  .em-art .lp-fan-face { display: grid; align-content: space-between; width: 100%; height: 100%; padding: 6% 4.5% 6.5% 7.5%; background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: .7rem; box-shadow: 0 1.6rem 2.6rem -1.5rem rgba(10, 8, 30, .5), -.7rem .3rem 1.3rem -.9rem rgba(10, 8, 30, .38); text-decoration: none; }
+  .em-art .lp-fan-card:nth-child(5n+1) .lp-fan-face { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+  .em-art .lp-fan-card:nth-child(5n+3) .lp-fan-face { background: var(--accent); color: var(--accent-foreground); border-color: transparent; }
+  .em-art .lp-fan-card:nth-child(5n) .lp-fan-face { background: var(--accent-2); color: var(--accent-2-foreground); border-color: transparent; }
+  .em-art .lp-fan-pg { justify-self: end; font: 800 1.05rem/1 var(--font-display); }
+  .em-art .lp-fan-face b { max-width: 11em; font-size: 1.1rem; line-height: 1.28; opacity: 0; transition: opacity .35s; }
+  .em-art .lp-fan:not(.fx-fan) .lp-fan-card:first-child b, .em-art .lp-fan-card.is-top b { opacity: 1; }
+  .em-art .lp-fan-next { position: absolute; left: 9%; bottom: 3%; z-index: 20; }
+  .em-art .lp-dial-ring { position: relative; width: min(80vh, 58vw); aspect-ratio: 1; }
   .em-art .lp-dial-ring svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .em-art .lp-dial-track { fill: none; stroke: var(--muted); stroke-width: 30; }
-  .em-art .lp-dial-seg { fill: none; stroke: var(--primary); stroke-width: 26; pointer-events: stroke; transition: stroke-width .2s, opacity .2s; }
-  .em-art .lp-dial-seg:nth-child(3n+2) { stroke: var(--accent-3); }
-  .em-art .lp-dial-seg:nth-child(3n) { stroke: var(--accent-2); }
+  .em-art .lp-dial-track { fill: none; stroke: var(--muted); stroke-width: 22; }
+  .em-art .lp-dial-bezel { fill: none; stroke: var(--muted-foreground); stroke-width: 8; opacity: .7; }
+  .em-art .lp-dial-seg { fill: none; stroke: var(--primary); stroke-width: 22; pointer-events: stroke; transition: stroke-width .2s, opacity .2s; }
+  .em-art .lp-dial-seg:nth-child(even) { stroke: var(--accent-3); }
   .em-art .lp-dial.has-hot .lp-dial-seg:not(.is-hot) { opacity: .35; }
-  .em-art .lp-dial-seg.is-hot { stroke-width: 36; }
+  .em-art .lp-dial-seg.is-hot { stroke-width: 30; }
   .em-art .lp-dial-hand { opacity: 0; }
   .em-art .lp-dial-center { position: absolute; inset: 24%; display: grid; place-content: center; justify-items: center; gap: .1rem; margin: 0; text-align: center; pointer-events: none; }
   .em-art .lp-dial-center b { font: 800 2.6rem/.9 var(--font-display); letter-spacing: -.04em; }
@@ -245,9 +247,15 @@
   .em-art .lp-dial-center small { font-size: .78rem; color: var(--muted-foreground); }
   .em-art .lp-dial-center em { font-style: normal; font-weight: 700; font-size: .95rem; line-height: 1.3; }
   .em-art .lp-dial[data-fx-pre] .lp-dial-seg { stroke-dasharray: 0 1000; }
-  .em-art .lp-dial[data-fx-pre] .lp-dial-center { opacity: 0; }
+  .em-art .lp-dial[data-fx-pre] :is(.lp-dial-center, .lp-dial-bezel) { opacity: 0; }
   .em-art .lp-dial[data-fx-in] .lp-dial-seg { transition: stroke-dasharray .9s var(--ease-out) calc(var(--i) * 110ms), stroke-width .2s, opacity .2s; }
-  .em-art .lp-dial[data-fx-in] .lp-dial-center { transition: opacity .6s ease .5s; }
+  .em-art .lp-dial[data-fx-in] :is(.lp-dial-center, .lp-dial-bezel) { transition: opacity .6s ease .5s; }
+  .em-art .lp-orbit { position: relative; width: min(96vh, 78vw); aspect-ratio: 1; }
+  .em-art .lp-orbit-tags { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; z-index: 1; }
+  .em-art .lp-orbit-tags li { position: absolute; display: flex; align-items: center; gap: .5em; font-size: .78rem; font-weight: 600; white-space: nowrap; opacity: calc(.42 + var(--z, .5) * .58); text-shadow: 0 0 .7rem var(--background), 0 0 .25rem var(--background); }
+  .em-art .lp-orbit-tags li::before { content: ""; flex: none; width: .3rem; height: .3rem; border-radius: 50%; background: var(--primary); }
+  .em-art .lp-stream { width: min(72vh, 46vw); }
+  .em-art .lp-stream-plate { position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: .2rem; box-shadow: 0 1.8rem 3rem -1.8rem rgba(10, 8, 30, .45); }
   .em-none { color: var(--muted-foreground); font-size: 1rem; gap: .4rem; }
   .em-none p { margin: 0; }
   .em-none code { font: 500 .78rem/1 var(--font-mono); }

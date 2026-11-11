@@ -15,8 +15,8 @@ LecFX.define('stream-lines', {
     // 씨앗 값: 서버(streamScene)와 같은 순서로 뽑음 — 기울기, 일렁임, 돌 두세 개
     var r = U.rand(U.hash(fig.getAttribute('data-seed') || el.getAttribute('data-seed') || d.title || 'lecpage'));
     var th = (r() - 0.5) * 0.7, A = 9 + r() * 9, kx = 0.008 + r() * 0.006, ky = 0.006 + r() * 0.006, p1 = r() * 6.283, p2 = r() * 6.283;
-    var st = [[150 + r() * 110, 140 + r() * 90, 54 + r() * 18], [84 + r() * 232, 372 + r() * 80, 26 + r() * 14]];
-    var c3 = [276 + r() * 84, 60 + r() * 380, 11 + r() * 8];
+    var st = [[150 + r() * 110, 140 + r() * 90, 54 + r() * 18], [84 + r() * 232, 372 + r() * 28, 26 + r() * 14]];
+    var c3 = [276 + r() * 84, 84 + r() * 332, 11 + r() * 8];
     if (r() < 0.62 && st.every(function (s) { return Math.sqrt((s[0] - c3[0]) * (s[0] - c3[0]) + (s[1] - c3[1]) * (s[1] - c3[1])) > s[2] + c3[2] + 34; })) st.push(c3);
     var off = r() * 11, sn = Math.sin(th), cs = Math.cos(th), ns = st.length;
     var ptr = [200, 250, 0], want = 0, mx = 200, my = 250, on = false, loop;

@@ -4,7 +4,7 @@
 import { kv } from './db.js';
 
 export const PROVIDERS = {
-  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/api-keys', billingUrl: 'https://aistudio.google.com/usage', note: '무료 등급은 넣은 내용이 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, prefix: 'AQ.… 또는 AIza…', images: true },
+  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/usage', note: '무료 등급은 넣은 내용이 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, prefix: 'AQ.… 또는 AIza…', images: true },
   openrouter: { name: 'OpenRouter', short: 'OpenRouter', free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, prefix: 'sk-or-v1-…', images: true },
   openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 크레딧에서 나가요. ChatGPT 구독과는 별개예요.', modelHint: /^gpt-/i, prefix: 'sk-proj-…', images: true },
   anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 크레딧에서 나가요. Claude 구독(Pro·Max)과는 별개예요.', modelHint: /sonnet/i, prefix: 'sk-ant-…', images: true },
@@ -54,11 +54,16 @@ export async function loadKey(provider) {
 }
 export async function forgetKey(provider) {
   mem.delete(provider); await kv.del('ai:' + provider);
-  if (PROVIDERS[provider]) { const s = await prefs(); delete s.models[provider]; delete s.picked[provider]; delete s.free[provider]; if (s.active === provider) s.active = ''; await kv.set('ai-prefs', s); }
+  if (PROVIDERS[provider]) { const s = await prefs(); delete s.models[provider]; delete s.picked[provider]; delete s.free[provider]; delete s.blocked[provider]; if (s.active === provider) s.active = ''; await kv.set('ai-prefs', s); }
 }
 
 // 고른 회사·모델(비밀 아님)
-async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {} }; }
+async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {}, blocked: s.blocked || {} }; }
+/** 이 키로는 못 쓰는 모델로 확인된 것(예: Gemini 무료 등급에서 Gemini 4). 고르는 칸에서 '유료 키 필요'로 보임 */
+async function markBlocked(provider, id) {
+  const s = await prefs(); const list = s.blocked[provider] || [];
+  if (!list.includes(id)) { s.blocked[provider] = [...list, id].slice(-20); await kv.set('ai-prefs', s); }
+}
 /** picked: 강사가 직접 고른 모델인지(true면 추천이 바뀌어도 그대로 둠) */
 export async function setActive(provider, { model, freeTier, picked } = {}) {
   const s = await prefs(); s.active = provider;
@@ -130,7 +135,7 @@ export function explainError(err, provider) {
     forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 AI Studio를 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
     region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     billing: ['크레딧이 없어요.', provider === 'openrouter' ? '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 Gemini 키(무료)를 연결해 주세요.' : `${P.short || ''} 결제 페이지에서 크레딧을 충전해야 해요(최소 5달러). 결제 없이 하려면 Gemini 키(무료)를 연결해 주세요.`, provider === 'openrouter' ? ['connect'] : ['billing', 'connect']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 되고, 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? '한국 시간 오후 5시쯤(태평양 시간 자정) 다시 채워지고' : '내일 다시 되고'}, 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', []],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
@@ -172,6 +177,8 @@ async function listRaw(provider, key, signal) {
 // 가격과 출시일을 OpenRouter 공개 목록에서 그때그때 읽어 등급을 매깁니다(키 없이 읽히고 운영자 서버를 거치지 않음). 못 읽으면 이름으로 어림.
 //   등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
 //   추천 = 고품질 등급에서 가장 새 모델(나온 지 2주가 안 된 것은 뒤로). 교재를 읽고 연수 흐름을 짜는 일은 가벼운 모델에서 결과가 눈에 띄게 단순해짐
+//   공식 문서와 맞춰 봄(2026-11-12): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5",
+//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 3.8 Flash는 됨 → 무료 키는 처음 한 번 실패한 뒤 쓸 수 있는 가장 좋은 모델을 기억
 const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|translate|search|instruct|codex|computer|robotics|nano|banana|omni|learnlm|gemma|guard|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora/i;
 export const TIER_KO = ['가벼움', '표준', '고품질', '최상위'];
 const OR_PREFIX = { openai: 'openai/', gemini: 'google/', anthropic: 'anthropic/', openrouter: '' };
@@ -207,6 +214,7 @@ function catalog() {
  */
 async function rank(provider, list, freeTier) {
   const cat = await catalog(); const now = Date.now();
+  const blockedIds = new Set((await prefs()).blocked[provider] || []);
   const rows = [];
   list.forEach((m, i) => {
     const id = m.id.toLowerCase();
@@ -218,13 +226,15 @@ async function rank(provider, list, freeTier) {
     if (c && !c.text) return;
     const free = provider === 'openrouter' && !!freeTier;
     const tier = free ? 0 : c && c.out > 0 ? tierByPrice(c.out) : tierByName(id);
-    const paidOnly = provider === 'gemini' && !!freeTier && tier >= 2; // 무료 키로는 못 쓰는 모델
+    const paidOnly = blockedIds.has(m.id); // 이 키로 못 쓴다고 확인된 모델
     const won = free || provider === 'gemini' || !c ? 0 : Math.max(10, Math.round(((10000 * c.in + 14000 * c.out) / 1e6) * 1400 / 10) * 10);
     rows.push({ id: m.id, label: m.label || m.id, tier, rec: false, won, locked: paidOnly, free, created: c?.created || 0, i });
   });
   // 추천: 고품질 등급(없으면 그 아래에서 가장 높은 등급)에서 고름
   const usable = rows.filter((r) => !r.locked && !r.free);
-  const top = Math.max(-1, ...usable.filter((r) => r.tier <= 2).map((r) => r.tier));
+  // Gemini 무료 키(처음 만들 때 알게 됨)는 표준 등급에서 고름: 고품질 등급은 대부분 결제를 등록한 키만 됨(되는 것도 있어 고를 수는 있음)
+  const cap = provider === 'gemini' && freeTier ? 1 : 2;
+  const top = Math.max(-1, ...usable.filter((r) => r.tier <= cap).map((r) => r.tier));
   const pool = usable.filter((r) => r.tier === top);
   const pref = PREFER[provider];
   const score = (r) => [pref && pref.test(r.id.toLowerCase()) ? 0 : 1, r.created && now - r.created < FRESH_MS ? 1 : 0, -r.created, -verOf(r.id), r.id.length, r.i];
@@ -387,7 +397,8 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
           const sec = Math.max(4, e.retryAfter || (waits ? 20 : 8)); waits++;
           onStatus?.({ wait: sec }); await sleep(sec * 1000, o.signal); continue;
         }
-        const blocked = e.kind === 'no-access' || e.kind === 'model' || (e.kind === 'forbidden' && provider === 'gemini'); // 이 키로는 못 쓰는 모델
+        // 이 키로는 못 쓰는 모델. Gemini 4는 무료 등급에서 안 됨(공식 가격표 2026-11). 그때 오는 오류 모양이 한 가지가 아니라 넓게 받음
+        const blocked = e.kind === 'no-access' || e.kind === 'model' || (provider === 'gemini' && ['forbidden', 'region', 'billing'].includes(e.kind));
         if (!swap || !(blocked || LIMIT_KINDS.includes(e.kind)) || swaps >= (blocked ? 5 : 2)) throw e;
         let next = null;
         try {
@@ -402,7 +413,7 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
           if (!next && rest[0]) lightOption = lightOption || { provider, id: rest[0].id, label: rest[0].label };
         } catch { /* 목록을 못 받으면 넘기지 않음 */ }
         if (!next) throw e;
-        if (blocked) noAccess = true;
+        if (blocked) { noAccess = true; await markBlocked(provider, model).catch(() => { }); }
         model = next.id; swaps++; waits = 0; onStatus?.({ model });
       }
     }

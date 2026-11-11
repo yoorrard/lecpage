@@ -1,7 +1,7 @@
 # 운영비와 "멈추지 않기" 점검 (2026-11)
 
 목표는 둘입니다. **사이트가 멈추지 않는 것**이 먼저이고, 그 안에서 운영비를 0에 가깝게 둡니다. 무료에 묶이지 않습니다.
-확인한 날: 2026-11-11. 호스팅 수치는 [`hosting-2026-11.md`](hosting-2026-11.md), AI 모델·가격은 OpenRouter 공개 목록과 codeitso(models.dev 2026-11-10)로 맞춰 봤습니다.
+확인한 날: 2026-11-12. 호스팅 수치는 [`hosting-2026-11.md`](hosting-2026-11.md). AI 모델·가격은 각 회사 공식 문서([OpenAI 가격](https://developers.openai.com/api/docs/pricing)·[모델](https://developers.openai.com/api/docs/models), [Google 가격](https://ai.google.dev/gemini-api/docs/pricing)·[한도](https://ai.google.dev/gemini-api/docs/rate-limits)·[키](https://ai.google.dev/gemini-api/docs/api-key), [Anthropic 모델](https://platform.claude.com/docs/en/about-claude/models/overview))를 읽고, OpenRouter 공개 목록과 codeitso(models.dev 2026-11-10)로 맞춰 봤습니다.
 
 ## 1. 누가 무엇을 내나
 
@@ -60,6 +60,11 @@ WebRTC(Trystero 등)로 강사 브라우저가 방 역할을 하면 서버가 0�
 - 등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
 - 추천: 고품질 등급에서 가장 새 모델. 나온 지 2주가 안 된 모델은 뒤로. Claude는 Opus
 - 지금 값으로는 OpenAI `gpt-6.1-sol`(약 220원), Claude `claude-opus-5-5`(약 450원), Gemini 유료 키 `gemini-4-argon`, Gemini 무료 키 `gemini-3.8-flash`
+- 공식 문서의 말과 맞습니다.
+  - OpenAI: "지능과 비용의 균형은 GPT-6.1 Sol, 가장 어려운 일은 GPT-6 Astra(값 5배), 대량·저비용은 GPT-6 Luna". GPT-6.1 Sol은 `v1/chat/completions`를 지원하고 무료 등급에서는 쓸 수 없습니다(크레딧 충전 필요).
+  - Anthropic: "어느 모델을 쓸지 모르겠으면 Claude Opus 5.5".
+  - Google: Gemini 4 Carbon·Argon은 **무료 등급에서 쓸 수 없고**, 3.8 Flash·3.6 Flash·3.5 Flash-Lite는 무료입니다. 그래서 무료 키는 처음 한 번 Gemini 4가 거절되면 3.8 Flash로 내려가 그 모델을 기억합니다. Gemini 4는 2026-12-01부터 $4 / $20으로 오릅니다(지금 $2 / $10). 값은 실시간으로 읽으므로 앱의 어림 값도 따라 바뀝니다.
+  - Google 한도는 키가 아니라 프로젝트 단위이고, 하루 한도는 태평양 시간 자정(한국 오후 5시쯤)에 다시 채워집니다. 새 계정은 약관에 동의하면 프로젝트와 키가 자동으로 만들어집니다(앱의 키 안내에 반영).
 - 가벼운 모델(Luna·Haiku·Flash-Lite)은 한 번에 10원쯤이지만 연수 흐름과 문구가 단순해져 추천하지 않습니다. 고를 수는 있습니다.
 
 codeitso MCP(`codeitso_find_models`)는 이 규칙을 점검할 때 썼습니다. 앱이 실행 중에 부르게 하지는 않았습니다. 모든 사용자의 요청이 운영자 Worker를 거치면 위 §1의 원칙(운영자 몫 없음)에 어긋나기 때문입니다.
@@ -67,4 +72,4 @@ codeitso MCP(`codeitso_find_models`)는 이 규칙을 점검할 때 썼습니다
 ## 6. 확인한 것과 못 한 것
 
 - 확인: 예산 60%에서 새 사이트만 멈추고 올라온 사이트는 열림, `PLAN=paid`에서는 막지 않음, 방문 시 기간 연장(로컬 workerd 통합 테스트). 앱에서 공개 → 참가자 질문 → 강사 화면 → 다시 올리기(무료·유료 설정 둘 다). AI 한도 넘김·유료 이어가기·모델 추천(가짜 응답, 실제 2026-11 모델 목록).
-- 못 함: 실제 Cloudflare 계정 배포와 과금, 실제 AI 키 호출(Claude의 `fallbacks` 값은 안 받는 환경이면 기본 요청으로 다시 보내게 해 둠). `developers.openai.com`, `ai.google.dev`는 이 작업 환경에서 열리지 않아 공식 문서 대신 위 두 목록으로 맞춰 봤습니다.
+- 못 함: 실제 Cloudflare 계정 배포와 과금, 실제 AI 키 호출(Claude의 `fallbacks` 값은 안 받는 환경이면 기본 요청으로 다시 보내게 해 둠). 공식 문서는 읽기만 했고 실제 키로 부른 것은 아닙니다.
