@@ -134,7 +134,7 @@ button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 .input:hover,.field input:hover,.field select:hover,.field textarea:hover{border-color:var(--line-strong)}
 .field input:focus,.field select:focus,.field textarea:focus,.input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .field textarea,textarea.input{min-height:120px;resize:vertical;line-height:1.6}
-.field textarea.ta-short{min-height:68px}
+.field textarea.ta-short,textarea.input.ta-short{min-height:68px}
 textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px;align-items:start}
 .check{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
@@ -455,6 +455,9 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .token-row{flex-wrap:nowrap;gap:8px}
 .token-row input{flex:1 1 auto;min-width:0}
 .token-row .btn{flex:none}
+.ai-nokey{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:var(--r-xs);background:var(--lav-soft);font-size:.9rem}
+.ai-nokey span{flex:1 1 260px;min-width:0}
+.ai-way{gap:12px}
 .conn-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0}
 .ok-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
 .open-state{display:inline-flex;align-items:center;gap:8px;font-size:.9rem;margin:0}

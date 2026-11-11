@@ -68,7 +68,7 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(d.days, 30);
   assert.equal(d.sitesPerHour, 6);
   assert.equal(d.sitesPerDay, 20);
-  assert.equal(d.dailySiteCap, 300);
+  assert.equal(d.dailySiteCap, 30);
   assert.equal(d.maxTotalBytes, 4 * 1024 * 1024 * 1024);
   assert.equal(d.adminKey, '');
   assert.equal(d.reportWebhook, '');

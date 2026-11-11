@@ -77,7 +77,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `MAX_BYTES` / `MAX_FILE_BYTES` / `MAX_FILES` | 40MB / 20MB / 600 | 사이트 하나, 파일 하나, 파일 수 |
 | `SITE_DAYS` | 30 | 공개 기간. 다시 올리면 그날부터 다시 셉니다 |
 | `SITES_PER_HOUR` / `SITES_PER_DAY` | 6 / 20 | 같은 IP에서 새 사이트(학교는 IP 하나를 같이 씁니다) |
-| `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | 300 / 300 | 하루에 새로 만드는 사이트, 실시간 방(전체) |
+| `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | 30 / 30 | 하루에 새로 만드는 사이트, 실시간 방(전체). 무료 요금제의 하루 요청 한도 안에 머물도록 낮게 잡은 값. 차면 API가 `rate_limited`(저장 공간이 차면 `full`)로 답하고 앱은 '내 계정에 올리기'로 안내함. Workers Paid로 옮기면 올려도 됨 |
 | `MAX_TOTAL_BYTES` | 4GB | 전체 저장량(사이트 + 실시간 방). 넘으면 새로 받지 않습니다(`full`) |
 | `DEPLOYS_PER_HOUR` | 30 | 사이트 하나를 다시 올리는 횟수 |
 | `REPORTS_PER_HOUR` / `DAILY_REPORT_CAP` / `REPORT_KEEP` / `REPORT_DAYS` | 5 / 200 / 500 / 90 | 신고: IP당, 하루 전체, 보관 수, 보관일 |

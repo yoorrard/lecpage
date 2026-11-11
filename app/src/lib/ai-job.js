@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { E } from './engine.js';
 import { makePrompt, makeDraft, looksTruncated, applyInfo, keepFontFields } from './blueprint.js';
-import { generate, getActiveAI, explainError } from './ai.js';
+import { generateAuto, getActiveAI, explainError, PROVIDERS } from './ai.js';
 import { pushUndoFor } from './undo.js';
 
 const jobs = new Map(); // pid → { status: 'running'|'done'|'error', phase, startedAt, error, ctrl }
@@ -30,7 +30,7 @@ export function useAiJob(pid) {
  * @param {object} o { getProject(): 지금 프로젝트, update(patch|fn): 저장 }
  * 끝나면 done(바뀐 섹션 수), 실패하면 error(쉬운 안내). 초안은 그대로 남습니다.
  */
-export async function startMakeJob({ getProject, update }) {
+export async function startMakeJob({ getProject, update, allowPaid }) {
   const p0 = getProject(); const pid = p0.id;
   if (jobs.get(pid)?.status === 'running') return;
   const ctrl = new AbortController();
@@ -42,7 +42,10 @@ export async function startMakeJob({ getProject, update }) {
     const prompt = makePrompt(p0, ing);
     set(pid, { phase: 'ask', provider: ai.provider, label: ai.label });
     const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
-    const { text, cut } = await generate({ provider: ai.provider, key: ai.key, model: ai.model, prompt, signal: ctrl.signal, maxTokens: 16000 * big });
+    // 무료 한도·혼잡은 알아서 기다렸다 다시 하거나 다음 모델·다른 연결로 넘김(유료 연결은 강사가 허락했을 때만)
+    const { text, cut, provider: used } = await generateAuto({ provider: ai.provider, key: ai.key, model: ai.model, prompt, signal: ctrl.signal, maxTokens: 16000 * big },
+      { ...(allowPaid ? { allowPaid: true } : {}), onStatus: (st) => set(pid, st.wait ? { phase: 'wait' } : st.provider ? { phase: 'other', via: st.label } : { phase: 'swap' }) });
+    if (used !== ai.provider) set(pid, { via: PROVIDERS[used]?.name || used }); else set(pid, { via: '' });
     if (cut && looksTruncated(text)) throw Object.assign(new Error('truncated'), { kind: 'truncated' });
     set(pid, { phase: 'build' });
     let bp;

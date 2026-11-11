@@ -62,7 +62,7 @@ test('방에 넘기는 환경: 운영자 열쇠는 넘어가지 않고, 코드�
   assert.equal(maxRetentionDays(config({ SITE_DAYS: '0.5' })), 1);
   const c = config({ LIVE_MAX_UPLOAD_MB: '3', LIVE_ROOM_MB: '50', LIVE_MAX_PARTICIPANTS: '40', LIVE_SOCKETS_PER_IP: '80', DAILY_ROOM_CAP: '7' });
   assert.deepEqual([c.liveMaxUploadMb, c.liveRoomBytes, c.liveMaxParticipants, c.liveSocketsPerIp, c.dailyRoomCap], [3, 50 * 1024 * 1024, 40, 80, 7]);
-  assert.equal(config({}).live, true); assert.equal(config({}).liveUploads, true); assert.equal(config({}).dailyRoomCap, 300);
+  assert.equal(config({}).live, true); assert.equal(config({}).liveUploads, true); assert.equal(config({}).dailyRoomCap, 30);
   for (const v of ['off', 'OFF', '0', 'false', 'no']) { assert.equal(config({ LIVE: v }).live, false, v); assert.equal(config({ LIVE: v }).liveUploads, false); }
 });
 

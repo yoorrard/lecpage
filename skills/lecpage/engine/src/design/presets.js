@@ -251,6 +251,35 @@ export const PRESETS = [
     graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
     effects: { 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
   },
+  // ── 2026-11 추가: 살아 있는 첫 화면(그림·움직임·반응이 첫 화면에 들어 있는 쇼케이스). 그림은 Canvas·SVG·CSS만, 정지 모습이 먼저 그려짐 ──
+  {
+    id: 'deck-collage', name_ko: '펼친 교재', name_en: 'Slide Collage',
+    desc_ko: '교재 쪽을 부채처럼 펼친 3D 더미가 첫 화면에. 마우스에 기울고, 누르면 다음 장이 올라와요. 교재가 주인공인 연수에.',
+    moods: ['editorial', 'handmade', 'bold'], topics: ['edutech', 'reading', 'art'],
+    archetypes: ['story', 'lab', 'course'], theme: 'light', motion: 2,
+    fonts: { display: 'paperlogy', body: 'astaSans', num: 'sora', mono: 'jetbrains', displayWeight: 800 },
+    fontAlts: [{ display: 'freesentation', body: 'astaSans', displayWeight: 800, topics: ['edutech'] }],
+    light: { bg: '#f6f4ef', fg: '#17151f', card: '#ffffff', muted: '#5b5866', primary: '#4a3dd6', primaryFg: '#ffffff', accent: '#ff6b4a', accent2: '#ffd166', accent3: '#9bb8ff', heroFrom: '#e6e2ff', heroTo: '#ffe9df' },
+    dark: { bg: '#0f0e17', fg: '#f2f0f7', card: '#1a1826', muted: '#b3afc4', primary: '#9a90ff', primaryFg: '#0f0e17', accent: '#ff8a6b', accent2: '#ffd98a', accent3: '#7f9bff', heroFrom: '#221d4a', heroTo: '#3a1f1a' },
+    shape: { radius: 14, radiusSm: 8, radiusLg: 22, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'collage', head: 'tab', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
+    graphic: 'slide-fan', closingGraphic: '', signature: '',
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter' },
+  },
+  {
+    id: 'time-dial', name_ko: '하루 시계', name_en: 'Schedule Dial',
+    desc_ko: '하루 일정이 둥근 시계로 그려지는 첫 화면. 순서마다 호가 그려지고, 연수 중에는 지금 바늘이 돌아요. 일정이 중요한 행사·종일 연수에.',
+    moods: ['futuristic', 'bold', 'tech'], topics: ['conference', 'admin', 'ai'],
+    archetypes: ['live', 'story', 'course'], theme: 'dark', motion: 2,
+    fonts: { display: 'astaSans', body: 'astaSans', num: 'redHat', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'paperlogy', body: 'astaSans', displayWeight: 800, topics: ['conference'] }],
+    dark: { bg: '#12101c', fg: '#f4f1fb', card: '#1c1930', muted: '#b4aecb', primary: '#b7a4ff', primaryFg: '#12101c', accent: '#ff9e7a', accent2: '#7ad7ff', accent3: '#ffd27a', heroFrom: '#3a2b8a', heroTo: '#12101c' },
+    light: { bg: '#faf8ff', fg: '#1c1830', card: '#ffffff', muted: '#5a5474', primary: '#5541c4', primaryFg: '#ffffff', accent: '#e2553a', accent2: '#1f8fbf', accent3: '#c98a00', heroFrom: '#e4dcff', heroTo: '#faf8ff' },
+    shape: { radius: 16, radiusSm: 10, radiusLg: 26, borderW: 1, shadow: 'glow' },
+    variants: { hero: 'dial', head: 'index', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
+    graphic: 'schedule-dial', closingGraphic: '', signature: '',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+  },
 ];
 
 export const PRESET_IDS = PRESETS.map((p) => p.id);

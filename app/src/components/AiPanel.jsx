@@ -4,8 +4,8 @@ import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
 import { makePrompt, makeDraft, looksTruncated, keepFontFields } from '../lib/blueprint.js';
 import { polishTargets, makePolishPrompt, applyPolish, isPolishReply } from '../lib/polish.js';
-import { PROVIDERS, loadKey, saveKey, forgetKey, generate, checkKey, getActiveAI, setActive, detectProvider, explainError, openRouterStart, takeAiResume, models as listModels } from '../lib/ai.js';
-import { KeyGuides } from '../lib/ai-guides.jsx';
+import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, setActive, explainError, takeAiResume, models as listModels } from '../lib/ai.js';
+import { AiConnect } from './AiConnect.jsx';
 import { copy, toast } from '../lib/util.js';
 
 /** OpenRouter 로그인에서 돌아오면 AI 창을 다시 엶 */
@@ -29,9 +29,11 @@ export function AiPanel({ p, onBlueprint }) {
   const [how, setHow] = useState('');
   const [full, setFull] = useState(!p.blueprint);
   const [err, setErr] = useState(null);
+  const [swap, setSwap] = useState(0); // 오류에서 [다른 AI 연결]을 누르면 연결 화면으로
+  const [pay, setPay] = useState(0); // 오류에서 [유료로 이어서 하기]를 누르면 이번 한 번만 유료 연결로
   useEffect(() => {
     import('../lib/ingest.js').then(setIng);
-    getActiveAI().then((a) => { setAi(a); setHow(a ? 'connect' : 'paste'); });
+    getActiveAI().then((a) => { setAi(a); setHow(p.blueprint ? 'connect' : 'paste'); });
   }, []);
   const base = useRef(null);
   if (ing && !base.current) base.current = p.blueprint || makeDraft(p, ing);
@@ -64,30 +66,40 @@ export function AiPanel({ p, onBlueprint }) {
 
   return (
     <div class="stack ai-panel">
-      <div class="stack" style={{ gap: '4px' }}>
-        <h2 class="h-sub">AI로 다듬기</h2>
-        <p class="small muted">참여 기능 연결과 공개 설정은 바뀌지 않아요. 마음에 안 들면 되돌릴 수 있어요.</p>
-      </div>
-      <label class="check"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); setErr(null); }} />
-        <span>섹션 구성과 순서까지 새로 짜기 <span class="small muted">끄면 제목과 안내 문장만 빠르게 다듬어요.</span></span></label>
-      {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'paste', label: '챗봇에 붙여넣기' }, { value: 'connect', label: ai ? `AI 연결됨 · ${PROVIDERS[ai.provider].short}` : 'AI 연결' }]} />}
-      {how === 'paste' && <Paste ready={!!ing} prompt={prompt} full={full} onApply={accept} />}
-      {how === 'connect' && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} />}
-      {err && <ErrorBox e={err} provider={ai?.provider} onPaste={() => { setHow('paste'); setErr(null); }} />}
+      {p.blueprint ? <>
+        <div class="stack" style={{ gap: '4px' }}>
+          <h2 class="h-sub">AI로 다듬기</h2>
+          <p class="small muted">참여 기능 연결과 공개 설정은 바뀌지 않아요. 마음에 안 들면 되돌릴 수 있어요.</p>
+        </div>
+        <label class="check"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); setErr(null); }} />
+          <span>섹션 구성과 순서까지 새로 짜기 <span class="small muted">끄면 제목과 안내 문장만 빠르게 다듬어요.</span></span></label>
+        {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'connect', label: ai ? `AI 연결됨 · ${PROVIDERS[ai.provider].short}` : 'AI 연결' }, { value: 'paste', label: '키 없이' }]} />}
+      </> : (
+        // 처음 만들 때(교재 넣기 단계): 고를 것 없이 세 걸음만
+        <div class="stack" style={{ gap: '4px' }}>
+          <h2 class="h-sub">키 없이 만들기</h2>
+          <p class="small muted">쓰던 ChatGPT·Claude·Gemini 창에 프롬프트를 붙여 넣고, 답을 복사해 돌아와요.</p>
+        </div>
+      )}
+      {(how === 'paste' || !p.blueprint) && <Paste ready={!!ing} prompt={prompt} full={full} onApply={accept} />}
+      {how === 'connect' && p.blueprint && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} swap={swap} pay={pay} />}
+      {err && <ErrorBox e={err} provider={ai?.provider} onPaste={() => { setHow('paste'); setErr(null); }} onConnect={p.blueprint ? () => { setHow('connect'); setSwap((n) => n + 1); setErr(null); } : null} onPay={() => { setErr(null); setPay((n) => n + 1); }} />}
     </div>
   );
 }
 
-function ErrorBox({ e, provider, onPaste }) {
+function ErrorBox({ e, provider, onPaste, onConnect, onPay }) {
   const P = PROVIDERS[e.provider || provider] || {};
   return (
     <Notice kind="bad">
       <div class="stack" style={{ gap: '6px' }}>
         <b>{e.title}</b>{e.body && <span>{e.body}</span>}
         {e.actions?.length > 0 && <div class="btn-row">
-          {e.actions.includes('paste') && <button class="btn btn-sm" onClick={onPaste}>챗봇에 붙여넣기로 하기</button>}
+          {e.actions.includes('pay') && onPay && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
+          {e.actions.includes('connect') && onConnect && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
           {e.actions.includes('key') && P.keyUrl && <a class="btn btn-sm" href={P.keyUrl} target="_blank" rel="noopener">{P.short} 키 페이지 열기</a>}
           {e.actions.includes('billing') && P.billingUrl && <a class="btn btn-sm" href={P.billingUrl} target="_blank" rel="noopener">결제 페이지 열기</a>}
+          {e.actions.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 하기</button>}
         </div>}
         {e.raw && e.raw !== e.body && <details><summary class="small">원래 오류 문구</summary><span class="small mono" style={{ wordBreak: 'break-all' }}>{e.raw}</span></details>}
       </div>
@@ -97,51 +109,56 @@ function ErrorBox({ e, provider, onPaste }) {
 
 function Paste({ ready, prompt, full, onApply }) {
   const [answer, setAnswer] = useState('');
+  const [sent, setSent] = useState('');
   const text = ready ? prompt() : '';
+  /** 프롬프트를 복사하고 그 챗봇을 새 창으로 엶(누르는 동작 한 번) */
+  async function send(name, url) {
+    try { await navigator.clipboard.writeText(text); } catch { copy(text); }
+    setSent(name); window.open(url, '_blank', 'noopener');
+  }
+  /** 챗봇 답을 클립보드에서 읽어 바로 적용 */
+  async function pasteAnswer() {
+    try { const v = (await navigator.clipboard.readText()).trim(); if (!v) { toast('복사한 답이 없어요. 챗봇 답 아래의 복사 단추를 눌러 주세요.'); return; } setAnswer(v); onApply(v); }
+    catch { toast('아래 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); }
+  }
   return (
     <div class="stack">
       <ol class="how">
-        <li><b>프롬프트를 복사해요.</b> <button class="btn btn-primary btn-sm" disabled={!ready} onClick={() => copy(text, '복사했어요. 챗봇에 붙여 넣으세요.')}>프롬프트 복사</button> <span class="small muted">{text.length.toLocaleString()}자</span>
+        <li><b>쓰던 챗봇을 골라요.</b> 프롬프트를 복사하고 새 창으로 열어요.
+          <div class="btn-row" style={{ marginTop: '6px' }}>{CHATBOTS.map(([n, u]) => <button type="button" class={`btn btn-sm${sent === n ? '' : ' btn-primary'}`} disabled={!ready} onClick={() => send(n, u)}>{n} 열기</button>)}
+            <button type="button" class="btn btn-sm btn-quiet" disabled={!ready} onClick={() => copy(text, '복사했어요. 챗봇에 붙여 넣으세요.')}>복사만</button></div>
           {full && text.length > 30000 && <p class="small muted">길어서 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 "계속"이라고 보내 주세요.</p>}</li>
-        <li><b>챗봇에 붙여 넣고 보내요.</b> <span class="links">{CHATBOTS.map(([n, u]) => <a href={u} target="_blank" rel="noopener">{n}</a>)}</span></li>
-        <li><b>답을 통째로 복사해 붙여 넣어요.</b> <span class="small muted">답 아래 복사 아이콘을 누르면 돼요.</span>
-          <textarea class="input" rows={5} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="챗봇 답을 여기에 붙여 넣으세요" aria-label="챗봇의 답" /></li>
+        <li><b>챗봇 입력 칸에 붙여 넣고(Ctrl+V) 보내요.</b> <span class="small muted">답이 다 나오면 답 아래의 복사 단추를 눌러요.</span></li>
+        <li><b>여기로 돌아와 답을 붙여 넣어요.</b>
+          <div class="btn-row" style={{ marginTop: '6px' }}><button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={pasteAnswer}>답 붙여넣기</button></div>
+          <textarea class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여 넣어요" aria-label="챗봇의 답" style={{ marginTop: '8px' }} /></li>
       </ol>
-      <div><button class="btn btn-primary" disabled={!answer.trim()} onClick={() => onApply(answer)}>이 답으로 바꾸기</button></div>
+      {answer.trim() && <div><button class="btn btn-primary" onClick={() => onApply(answer)}>이 답으로 바꾸기</button></div>}
+      <p class="small muted">키도 추가 비용도 필요 없어요. ChatGPT·Claude·Gemini 구독이나 무료 사용 그대로 써요.</p>
     </div>
   );
 }
 
-function Connect({ ai, setAi, full, ready, prompt, onResult, setErr }) {
+function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }) {
   const [edit, setEdit] = useState(!ai);
-  const [key, setKey] = useState('');
+  useEffect(() => { if (swap) setEdit(true); }, [swap]);
+  useEffect(() => { if (pay && ai) run(true); }, [pay]);
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState('');
+  const [note, setNote] = useState(''); // 한도라 기다리는 중 · 다른 모델로
   const [list, setList] = useState(null);
-  const [guide, setGuide] = useState('');
   const ctrl = useRef(null);
-  const prov = detectProvider(key);
   useEffect(() => { if (ai) loadKey(ai.provider).then((r) => setRemember(r.remembered)); }, [ai?.provider]);
 
-  async function connect() {
-    if (!prov) { setErr({ title: '어느 회사 키인지 알 수 없어요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요. 아래 만드는 법을 참고하세요.', actions: [] }); return; }
-    setErr(null); setBusy('check');
-    try {
-      const r = await checkKey(prov, key);
-      await saveKey(prov, key, remember);
-      const a = await getActiveAI(); setAi(a); setEdit(false); setKey(''); setList(r.models);
-      toast(`${PROVIDERS[prov].name}에 연결했어요.`);
-    } catch (e) { const x = explainError(e, prov); setErr(x); if (['bad-key', 'forbidden', 'region'].includes(x.kind)) setGuide(prov); }
-    setBusy('');
-  }
-  async function run() {
+  async function run(allowPaid) {
     setErr(null); setBusy('run'); ctrl.current = new AbortController();
     try {
       const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
-      const { text, cut } = await generate({ provider: ai.provider, key: ai.key, model: ai.model, prompt: prompt(), signal: ctrl.current.signal, maxTokens: (full ? 16000 : 8000) * big });
+      const { text, cut } = await generateAuto({ provider: ai.provider, key: ai.key, model: ai.model, prompt: prompt(), signal: ctrl.current.signal, maxTokens: (full ? 16000 : 8000) * big },
+        { ...(allowPaid === true ? { allowPaid: true } : {}), onStatus: (st) => setNote(st.wait ? `무료 한도라 ${st.wait}초 기다렸다가 이어서 해요.` : st.provider ? `${st.label}로 이어서 하고 있어요.` : '다른 모델로 이어서 하고 있어요.') });
       if (cut && looksTruncated(text)) setErr(explainError({ kind: 'truncated' }, ai.provider)); else onResult(text);
     } catch (e) { if (e.name !== 'AbortError') setErr(explainError(e, ai.provider)); }
-    setBusy('');
+    setBusy(''); setNote('');
   }
   async function disconnect() { await forgetKey(ai.provider); setAi(await getActiveAI()); setEdit(true); setList(null); toast('연결을 끊었어요.'); }
   async function pickModel(m) { await setActive(ai.provider, { model: m }); setAi({ ...ai, model: m }); }
@@ -155,10 +172,10 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr }) {
           <span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setEdit(true)}>다른 키 쓰기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 끊기</button></span>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={run}>{busy ? (full ? '다시 짜는 중… (1~2분)' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
+          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={() => run()}>{busy ? (full ? '다시 짜는 중… (1~2분)' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
           {busy && <button class="btn btn-quiet" onClick={() => ctrl.current?.abort()}>멈추기</button>}
         </div>
-        {busy && <div class="row"><Mascot size={48} mood="think" look /><span class="muted">{full ? '교재를 읽고 연수 흐름을 짜고 있어요.' : '문구를 읽고 다듬고 있어요.'}</span></div>}
+        {busy && <div class="row" role="status"><Mascot size={48} mood="think" look /><span class="muted">{note || (full ? '교재를 읽고 연수 흐름을 짜고 있어요.' : '문구를 읽고 다듬고 있어요.')}</span></div>}
         <details onToggle={(e) => e.target.open && loadList()}>
           <summary class="small">모델·저장 설정</summary>
           <div class="stack" style={{ gap: '10px', marginTop: '10px' }}>
@@ -170,26 +187,5 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr }) {
       </div>
     );
   }
-  return (
-    <div class="stack">
-      <div class="stack" style={{ gap: '6px' }}>
-        <div><button class="btn btn-primary" onClick={() => openRouterStart({ remember })}>OpenRouter로 로그인</button></div>
-        <p class="small muted">구글 계정으로 로그인하고 <b>Authorize</b>를 누르면 이 화면으로 돌아와요. 무료 모델은 하루 50번까지예요.</p>
-      </div>
-      <div class="or-line"><span>또는 API 키 붙여넣기</span></div>
-      <Field label="API 키" hint={key ? (prov ? `${PROVIDERS[prov].name} 키예요.` : '어느 회사 키인지 모르겠어요. 끝까지 복사했는지 확인해 주세요.') : 'Gemini·OpenAI·Claude·OpenRouter 키를 넣으면 알아서 구분해요.'}>
-        <input type="password" value={key} onInput={(e) => { setKey(e.target.value.trim()); setErr(null); }} onKeyDown={(e) => e.key === 'Enter' && key && connect()} autoComplete="off" spellcheck={false} placeholder="AQ.… / AIza… / sk-…" />
-      </Field>
-      <label class="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>이 기기에서 기억하기 <span class="small muted">공용 PC에서는 끄세요.</span></span></label>
-      <div class="btn-row">
-        <button class="btn" disabled={!key || !!busy} onClick={connect}>{busy === 'check' ? '확인하는 중…' : '연결 확인'}</button>
-        {ai && <button class="btn btn-quiet btn-sm" onClick={() => setEdit(false)}>취소</button>}
-      </div>
-      <details open={!!guide} onToggle={(e) => setGuide(e.target.open ? guide || prov || 'gemini' : '')}>
-        <summary class="small">API 키 만드는 법</summary>
-        <p class="small muted" style={{ margin: '8px 0' }}>결제 없이 쓰려면 Gemini(무료)가 가장 쉬워요.</p>
-        <KeyGuides open={guide || prov || 'gemini'} />
-      </details>
-    </div>
-  );
+  return <AiConnect onConnected={(a) => { setAi(a); setEdit(false); setList(null); setErr(null); }} onCancel={ai ? () => setEdit(false) : undefined} />;
 }

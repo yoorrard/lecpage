@@ -85,7 +85,7 @@ export async function getActiveAI() {
 
 // ── 오류: 상태 코드와 메시지로 종류를 가려 쉬운 안내로 바꿈 ──
 export class AiError extends Error {
-  constructor(kind, message, { status = 0, provider = '' } = {}) { super(message); this.kind = kind; this.status = status; this.provider = provider; }
+  constructor(kind, message, { status = 0, provider = '', retryAfter = 0 } = {}) { super(message); this.kind = kind; this.status = status; this.provider = provider; this.retryAfter = retryAfter; }
 }
 function classify(status, msg, code) {
   const m = `${code || ''} ${msg || ''}`;
@@ -105,7 +105,10 @@ async function fail(r, provider) {
   const e = j.error || j;
   const msg = (typeof e === 'string' ? e : e.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
   const code = e.status || e.code || e.type || '';
-  throw new AiError(classify(r.status, msg, code), msg, { status: r.status, provider });
+  // 얼마 뒤에 다시 하라는지: retry-after 헤더, Gemini의 RetryInfo("retryDelay":"34s")나 문구("retry in 34.2s")
+  const d = (Array.isArray(e.details) ? e.details : []).map((x) => x && x.retryDelay).find(Boolean);
+  const retryAfter = Math.ceil(+r.headers.get('retry-after') || parseFloat(d) || +(/retry in ([\d.]+)\s*s/i.exec(msg) || [])[1] || 0);
+  throw new AiError(classify(r.status, msg, code), msg, { status: r.status, provider, retryAfter });
 }
 async function send(provider, url, init) {
   let r;
@@ -115,25 +118,26 @@ async function send(provider, url, init) {
   return r.json();
 }
 
-/** 오류 → 강사에게 보여 줄 안내. actions: paste(붙여넣기로) · key(키 페이지) · billing(결제 페이지) · login(OpenRouter 다시 로그인) */
+/** 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지) · paste(키 없이, 마지막 수단) */
 export function explainError(err, provider) {
   const P = PROVIDERS[provider] || {};
   const k = err?.kind || (err?.name === 'TimeoutError' ? 'busy' : 'other');
   const T = {
     'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지운 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 붙여 넣어 주세요.`, ['key']],
-    forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 AI Studio를 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 붙여넣기로 해 주세요.', ['key', 'paste']],
-    region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 쓰고 있는 챗봇에 붙여넣기로 할 수 있어요.', ['paste']],
-    billing: ['크레딧이 없어요.', provider === 'openrouter' ? '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 시도해도 안 되면 붙여넣기로 해 주세요.' : `${P.short || ''} 결제 페이지에서 크레딧을 충전해야 해요(최소 5달러). 결제 없이 하려면 붙여넣기로 해 주세요.`, provider === 'openrouter' ? ['paste'] : ['billing', 'paste']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', '내일 다시 쓰거나, 지금은 쓰고 있는 챗봇에 붙여넣기로 해 주세요.', ['paste']],
-    quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '1분쯤 뒤에 다시 눌러 주세요. 계속 안 되면 붙여넣기로 해 주세요.', ['paste']],
+    forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 AI Studio를 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
+    region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    billing: ['크레딧이 없어요.', provider === 'openrouter' ? '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 Gemini 키(무료)를 연결해 주세요.' : `${P.short || ''} 결제 페이지에서 크레딧을 충전해야 해요(최소 5달러). 결제 없이 하려면 Gemini 키(무료)를 연결해 주세요.`, provider === 'openrouter' ? ['connect'] : ['billing', 'connect']],
+    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 되고, 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', []],
     'too-long': ['교재가 길어 한 번에 보내지 못했어요.', "'문구만 다듬기'로 하면 훨씬 짧게 보내요.", []],
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', []],
-    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망에서 AI 사이트가 막혀 있을 수 있어요. 그러면 휴대폰 핫스팟으로 바꾸거나 붙여넣기로 해 주세요.', ['paste']],
+    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망에서 AI 사이트가 막혀 있을 수 있어요. 그러면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
     truncated: ['답이 중간에 끊겼어요.', "'문구만 다듬기'로 하면 답이 짧아 끊기지 않아요.", []],
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요. 무료 모델이면 다른 모델이 대신 답할 수 있어요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
   }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
+  if (err?.paidOption) return { kind: k, provider, title: '무료 한도를 다 썼어요.', body: `연결해 둔 ${err.paidOption.label}(유료)로 이어서 할 수 있어요.`, actions: ['pay', 'connect'], paidOption: err.paidOption, raw: err?.message || '' };
   return { kind: k, provider, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
 }
 
@@ -241,6 +245,72 @@ export async function generate({ provider, key, model, prompt, signal, maxTokens
   }
   if (!text.trim()) throw new AiError(cut ? 'truncated' : 'empty', 'empty', { provider });
   return { text, cut };
+}
+
+const sleep = (ms, signal) => new Promise((res, rej) => {
+  if (signal?.aborted) return rej(new DOMException('aborted', 'AbortError'));
+  const t = setTimeout(res, ms);
+  signal?.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('aborted', 'AbortError')); }, { once: true });
+});
+// 무료 한도를 넘으면: 'stop'(무료 안에서만 이어감, 기본) | 'pay'(연결해 둔 유료 키·크레딧으로 이어감)
+export function getOnLimit() { try { return localStorage.getItem('lecpage:on-limit') === 'pay' ? 'pay' : 'stop'; } catch { return 'stop'; } }
+export function setOnLimit(v) { try { localStorage.setItem('lecpage:on-limit', v === 'pay' ? 'pay' : 'stop'); } catch { /* 저장 못 해도 이번에는 기본대로 */ } }
+/** 쓴 만큼 돈이 나가는 연결인지: OpenAI·Claude 키, 충전한 OpenRouter */
+export const isPaidAI = (provider, freeTier) => provider === 'openai' || provider === 'anthropic' || (provider === 'openrouter' && !freeTier);
+const LIMIT_KINDS = ['quota', 'quota-day', 'busy', 'model', 'empty'];
+
+/**
+ * generate + 한도·혼잡을 알아서 넘김(강사가 다시 누르지 않게). 순서:
+ *  1) 분당 한도·서버 혼잡: 알려 준 시간(최대 60초)만큼 기다렸다 다시, 두 번까지
+ *  2) 무료로 쓰는 연결(Gemini, OpenRouter 무료)이면 같은 키의 다음 모델로, 두 번까지(무료 등급은 모델마다 한도가 따로)
+ *  3) 연결해 둔 다른 AI로. 돈이 드는 연결은 allowPaid일 때만(기본은 [설정]의 '무료 한도를 넘으면')
+ * 끝까지 안 되면 처음 오류를 던지고, 건너뛴 유료 연결이 있으면 err.paidOption = { provider, label }을 붙임.
+ * onStatus({ wait: 초 } | { model } | { provider, label, paid })로 지금 하는 일을 알림. 돌려주는 값에 실제로 답한 provider·model이 들어 있음.
+ */
+export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === 'pay' } = {}) {
+  const s = await prefs();
+  const attempt = async (provider, key, model0, { swap }) => {
+    let model = model0, waits = 0, swaps = 0, list = null;
+    const tried = new Set();
+    for (;;) {
+      try { return { ...(await generate({ ...o, provider, key, model })), provider, model }; }
+      catch (e) {
+        if (!(e instanceof AiError)) throw e;
+        if ((e.kind === 'quota' || e.kind === 'busy') && waits < 2 && (e.retryAfter || 0) <= 60) {
+          const sec = Math.max(4, e.retryAfter || (waits ? 20 : 8)); waits++;
+          onStatus?.({ wait: sec }); await sleep(sec * 1000, o.signal); continue;
+        }
+        if (!swap || !LIMIT_KINDS.includes(e.kind) || swaps >= 2) throw e;
+        let next = null;
+        try {
+          if (!model) model = s.models[provider] || '';
+          tried.add(model);
+          list = list || await models(provider, key, { freeTier: !!s.free[provider] });
+          next = list.find((m) => !tried.has(m.id));
+        } catch { /* 목록을 못 받으면 넘기지 않음 */ }
+        if (!next) throw e;
+        model = next.id; swaps++; waits = 0; onStatus?.({ model });
+      }
+    }
+  };
+  const paid0 = isPaidAI(o.provider, !!s.free[o.provider]);
+  let first;
+  try { return await attempt(o.provider, o.key, o.model, { swap: !paid0 }); }
+  catch (e) { if (!(e instanceof AiError) || !LIMIT_KINDS.includes(e.kind)) throw e; first = e; }
+  // 연결해 둔 다른 AI(무료 먼저)
+  let paidOption = null;
+  const others = Object.keys(PROVIDERS).filter((x) => x !== o.provider).sort((a, b) => isPaidAI(a, !!s.free[a]) - isPaidAI(b, !!s.free[b]));
+  for (const provider of others) {
+    const { key } = await loadKey(provider);
+    if (!key) continue;
+    const paid = isPaidAI(provider, !!s.free[provider]);
+    if (paid && !allowPaid) { paidOption = paidOption || { provider, label: PROVIDERS[provider].name }; continue; }
+    onStatus?.({ provider, label: PROVIDERS[provider].name, paid });
+    try { return await attempt(provider, key, s.models[provider] || '', { swap: !paid }); }
+    catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; }
+  }
+  if (paidOption) first.paidOption = paidOption;
+  throw first;
 }
 
 // ── OpenRouter 로그인(OAuth PKCE): 버튼 한 번으로 사용자 소유 키 받기 ──

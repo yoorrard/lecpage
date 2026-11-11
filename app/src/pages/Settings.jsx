@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
-import { PROVIDERS, loadKey, forgetKey } from '../lib/ai.js';
+import { PROVIDERS, loadKey, forgetKey, getOnLimit, setOnLimit } from '../lib/ai.js';
 import { storageInfo, askPersist, projects } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
@@ -13,6 +13,7 @@ export function Settings() {
   const [st, setSt] = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [ai, setAi] = useState(false);
+  const [onLimit, setLimit] = useState(getOnLimit);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
   const [adv, setAdv] = useState(() => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } });
   const toggleAdv = (v) => { setAdv(v); try { localStorage.setItem('lecpage:advanced', v ? '1' : '0'); } catch { } toast(v ? '고급 기능을 켰어요.' : '고급 기능을 껐어요.'); };
@@ -49,6 +50,8 @@ export function Settings() {
           <li><span>{Object.values(keys).some((k) => k?.key) ? <span class="small muted">Gemini·OpenRouter·OpenAI·Claude를 쓸 수 있어요.</span> : <><b>AI</b> <span class="small muted">연결 안 됨 · Gemini는 무료예요</span></>}</span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{Object.values(keys).some((k) => k?.key) ? '다른 AI 연결하기' : '연결하기'}</button></li>
         </ul>
+        <Seg label="무료 한도를 넘으면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추기' }, { value: 'pay', label: '유료로 이어가기' }]} />
+        <p class="small muted">{onLimit === 'pay' ? '연결해 둔 유료 키나 크레딧으로 이어서 만들어요. 쓴 만큼 그 회사에서 결제돼요.' : '무료 안에서만 다른 모델로 이어가요. 돈이 드는 연결로는 넘어가지 않고, 그때 물어봐요.'}</p>
         <h3 class="h-label">공개할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         <p class="small muted">Cloudflare와 학교 서버는 토큰 없이 파일을 올려요. <a href="#/help/deploy">공개하는 법</a></p>

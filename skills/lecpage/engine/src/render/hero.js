@@ -3,6 +3,7 @@
 //   cinema(밤하늘 서사) · worksheet(종이 워크북) · bento(유리 실험실) · poster(놀이터) · quiet(숲의 숨) · brief(공식 브리핑)
 //   masthead(잉크 잡지) · sticker(도파민 팝) · board(칠판 교실) · spec(설계도) · zine(형광 인쇄) · invite(새벽빛)
 //   keynote(어두운 키노트) · panel(깔끔한 기업형) · soft(부드러운 파스텔) · ticker(움직이는 글자) · column(따뜻한 미니멀)
+//   살아 있는 첫 화면: collage(펼친 교재) · dial(하루 시계)
 // 규칙
 //  - 값이 있는 것만 보여 줍니다(빈 칸·가짜 숫자 없음). 꾸밈 글자(큰 날짜 등)는 실제 값의 되풀이이고 aria-hidden.
 //  - 모든 글은 JS 없이 읽히고, 움직임이 꺼져도 완성된 모습입니다.
@@ -332,6 +333,56 @@ C.column = (M) => `<div class="lp-wrap lp-hero-inner">
   <div class="lp-min-side">${M.dp ? `<p class="lp-min-date" aria-hidden="true">${M.dp.d}</p>` : ''}${metaDl(M.meta, 'lp-min-meta')}</div>
 </div>`;
 
+// ── 살아 있는 첫 화면(쇼케이스): 글은 그대로 HTML, 그림은 서버에서 정지 모습으로 그려 두고 효과(runtime/fx)가 움직임·반응을 더함 ──
+/** 구성이 직접 그리는 그림(효과 아이디). 디자인의 첫 화면 그래픽이 이것과 같으면 따로 그래픽 층을 두지 않음 */
+export const OWN_ART = { collage: 'slide-fan', dial: 'schedule-dial' };
+const artFx = (M, id) => (M.ctx.design.graphic === id ? ` data-fx="${id}"` : '');
+
+/* 펼친 교재: 교재 쪽을 부채처럼 펼친 3D 더미(쪽 그림이 있으면 그림, 없으면 글 카드). 교재가 없으면 실습·차례로. 누르면 그 쪽으로 감 */
+function fanCards(M) {
+  const strip = (t) => String(t || '').replace(/^\s*(?:PART|Part|파트)\s*\d{1,2}\s*[.:·\-–—]?\s*/, '').trim();
+  const sl = (M.deck?.slides || []).slice(0, 5).map((x) => ({ no: x.page, title: strip(x.title) || `${x.page}쪽`, src: x.src, href: `#deck-p${x.page}` }));
+  if (sl.length >= 2) return sl;
+  const st = (M.st?.items || []).map((x, i) => ({ no: i + 1, title: x.title || x.name, href: `#st-${x.id}` }));
+  return (st.length >= 2 ? st : (M.outline?.items || []).map((x, i) => ({ no: i + 1, title: x.title, href: `#${M.outline.id}` }))).slice(0, 5);
+}
+C.collage = (M) => {
+  const cards = fanCards(M);
+  const fan = cards.length >= 2 ? `<div class="lp-fan"${artFx(M, 'slide-fan')} style="--n:${cards.length}"><ol class="lp-fan-list" aria-label="${M.deck ? '교재 미리 보기' : '오늘의 차례'}">${cards.map((c, i) => `<li class="lp-fan-card" style="--i:${i}"><a class="lp-fan-face" href="${esc(c.href)}">${c.src ? `<img src="${esc(c.src)}" alt="${esc(`${c.no}쪽: ${c.title}`)}" loading="${i ? 'lazy' : 'eager'}" decoding="async">` : `<span class="lp-fan-pg" aria-hidden="true">${pad2(c.no)}</span><b>${esc(c.title)}</b>`}</a></li>`).join('')}</ol><button class="lp-btn lp-btn-ghost lp-btn-sm lp-fan-next" type="button" data-fan-next hidden><span>다음 장</span>${icon('right')}</button></div>` : '';
+  return `<div class="lp-wrap lp-hero-inner${fan ? '' : ' is-solo'}">
+  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
+  ${fan}
+</div>`;
+};
+
+/* 하루 시계: 일정을 둥근 시계로. 순서마다 길이에 비례한 호, 바깥에 시작 시각, 가운데에 전체 길이. 아래 목록이 같은 내용의 글(그림은 꾸밈) */
+function dialRows(M) {
+  const rows = (M.sched?.items || []).map((x, n, all) => { const a = toMin(x.start), b = toMin(x.end) ?? toMin(all[n + 1]?.start); return { start: x.start, title: x.title, min: a !== null && b !== null && b > a && b - a <= 600 ? b - a : 0 }; });
+  if (rows.length >= 2 && rows.length <= 12 && rows.every((r) => r.min) && !M.sched.items.some((x) => x.date)) return { rows, timed: true, href: '#' + M.sched.id };
+  const parts = (M.outline?.items || M.st?.items || []).slice(0, 8).map((x) => ({ start: x.part || '', title: x.title, min: 1 }));
+  return parts.length >= 2 ? { rows: parts, timed: false, href: '#' + (M.outline || M.st)?.id } : null;
+}
+C.dial = (M) => {
+  const D = dialRows(M);
+  let art = '';
+  if (D) {
+    const T = D.rows.reduce((s, r) => s + r.min, 0); let at = 0;
+    const segs = D.rows.map((r, i) => {
+      const len = (r.min / T) * 1000, th = (at / 1000) * 2 * Math.PI - Math.PI / 2;
+      const seg = `<circle class="lp-dial-seg" style="--i:${i}" data-i="${i}" data-start="${esc(r.start)}" data-min="${D.timed ? r.min : ''}" data-title="${esc(r.title)}" cx="200" cy="200" r="150" pathLength="1000" stroke-dasharray="${Math.max(1, len - 3).toFixed(1)} 1000" stroke-dashoffset="${(-(at + 1.5)).toFixed(1)}"/>`;
+      const tick = D.timed && (i === 0 || len >= 70) ? `<text x="${(200 + Math.cos(th) * 186).toFixed(1)}" y="${(204 + Math.sin(th) * 186).toFixed(1)}">${esc(r.start)}</text>` : '';
+      at += len; return { seg, tick };
+    });
+    const dur = M.dur ? (M.dur.text ? `<b class="lp-dial-dt">${esc(M.dur.text)}</b>` : `<b>${M.dur.num}</b><span>${esc(M.dur.unit)}</span>`) : `<b>${D.rows.length}</b><span>${D.timed ? '순서' : '부'}</span>`;
+    art = `<div class="lp-dial"${artFx(M, 'schedule-dial')} data-date="${D.timed ? esc(M.m.date) : ''}" style="--n:${D.rows.length}"><div class="lp-dial-ring"><svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">${segs.map((x) => x.seg).join('')}</g><g class="lp-dial-ticks">${segs.map((x) => x.tick).join('')}</g><line class="lp-dial-hand" x1="200" y1="200" x2="200" y2="34"/></svg><p class="lp-dial-center" data-dial-center aria-hidden="true">${dur}${M.time ? `<small>${esc(M.time)}</small>` : ''}</p></div>
+<ol class="lp-dial-list" aria-label="${D.timed ? '오늘의 일정' : '오늘의 차례'}">${D.rows.map((r, i) => `<li data-i="${i}"><a href="${esc(D.href)}">${r.start ? `<time>${esc(r.start)}</time>` : ''}<span>${esc(r.title)}</span>${D.timed ? `<small>${r.min}분</small>` : ''}</a></li>`).join('')}</ol></div>`;
+  }
+  return `<div class="lp-wrap lp-hero-inner${art ? '' : ' is-solo'}">
+  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
+  ${art}
+</div>`;
+};
+
 /** 프리셋 구성 이름 → 렌더(옛 이름 stage·split·center·editorial도 받음) */
 const ALIAS = { stage: 'cinema', split: 'worksheet', center: 'quiet', editorial: 'masthead' };
 export const HERO_COMPOSITIONS = Object.keys(C);
@@ -344,7 +395,7 @@ export function renderHero(s, ctx, helpers) {
   const comp = heroComposition(ctx);
   const M = model(s, ctx, helpers);
   // 칠판은 그래픽(분필 낙서)을 칠판 안에 그림
-  const graphic = ctx.design.graphic && comp !== 'board' ? `<div class="lp-hero-graphic" data-fx="${esc(ctx.design.graphic)}" aria-hidden="true"></div>` : '';
+  const graphic = ctx.design.graphic && comp !== 'board' && OWN_ART[comp] !== ctx.design.graphic ? `<div class="lp-hero-graphic" data-fx="${esc(ctx.design.graphic)}" aria-hidden="true"></div>` : '';
   const ov = ctx.design.effects?.['hero.graphic.overlay'];
   const overlay = ov ? `<div class="lp-hero-overlay" data-fx="${esc(ov)}" aria-hidden="true"></div>` : '';
   return `<section id="${M.id}" class="lp-sec lp-hero lp-hero--${comp}"${s.tone ? ` data-tone="${esc(s.tone)}"` : ''} aria-labelledby="${M.id}-h">

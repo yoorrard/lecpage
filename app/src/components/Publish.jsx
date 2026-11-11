@@ -89,9 +89,11 @@ const Go = ({ on, busy, again, onClick, disabled, name = '공개하기' }) => (
 export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
+  const [instantOff, setInstantOff] = useState(''); // 바로 공개를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
   useEffect(() => { connectedTargets().then(setConnected); instantInfo().then(setInstant); }, []);
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: p.deploy?.target, connected, instant: !!instant }), [p.info?.commercial, p.info?.network, p.deploy?.target, connected.join(), !!instant]);
-  const usable = TARGETS.filter((h) => (h !== 'lecpage' || instant) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
+  const live = instant && !instantOff ? instant : null;
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: !!live }), [p.info?.commercial, p.info?.network, p.deploy?.target, connected.join(), !!live]);
+  const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   const order = [...new Set([...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
   const [picked, setPicked] = useState('');
   const target = picked && order.includes(picked) ? picked : order[0];
@@ -117,7 +119,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
         ))}
       </div>
       <p class="small muted">{target === rec.pick ? rec.reasons[0] : E.HOSTS[target]?.note_ko}{rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}</p>
-      {target === 'lecpage' && <Instant {...ctx} info={instant} />}
+      {instantOff && <p class="small" role="status">{instantOff} 내 계정에 올리면 계속 쓸 수 있어요.</p>}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
       {target === 'netlify' && <Netlify {...ctx} />}
@@ -128,7 +131,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 }
 
 /** lecpage 바로 공개: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, info }) {
+function Instant({ p, busy, start, done, info, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   const days = info?.limits?.days || 30;
   const alive = prev?.expiresAt && prev.expiresAt > Date.now();
@@ -146,7 +149,15 @@ function Instant({ p, busy, start, done, info }) {
     done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(autoLive ? { adminKey } : {}) } },
       autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true } : null);
     toast(prev?.id === out.id ? '새 내용을 같은 주소에 올렸어요.' : '공개했어요!');
-  }, (e) => { if (e.code !== 'code_taken' || newCode) return false; setTimeout(() => run(E.randomCode()), 0); return true; },
+  }, (e) => {
+    if (e.code === 'code_taken' && !newCode) { setTimeout(() => run(E.randomCode()), 0); return true; }
+    // 자리가 찼거나(무료 한도 안에서만 받음) 서버에 닿지 않으면 내 계정에 올리는 길로 넘김
+    if (e.code === 'full' || e.code === 'rate_limited' || e.status === 0 || e.status >= 500) {
+      onUnavailable?.(e.code === 'full' || e.code === 'rate_limited' ? '오늘은 바로 공개 자리가 찼어요.' : '바로 공개 서버에 지금 닿지 않아요.');
+      return true;
+    }
+    return false;
+  },
   autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
   async function remove() {
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }

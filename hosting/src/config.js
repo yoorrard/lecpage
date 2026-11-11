@@ -8,7 +8,7 @@ export const DEFAULTS = {
   SITE_DAYS: 30, // 공개 기간(마지막으로 올린 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트
   SITES_PER_DAY: 20,
-  DAILY_SITE_CAP: 300, // 하루에 만들 수 있는 새 사이트(전체)
+  DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). 무료 요금제의 하루 요청 10만 건 안에 머물게 낮게 잡음(README §4). 차면 앱이 '내 계정에 올리기'로 안내
   MAX_TOTAL_BYTES: 4 * 1024 * MB, // 전체 저장량. 넘으면 새로 받지 않음(무료 한도 5GB보다 낮게)
   DEPLOYS_PER_HOUR: 30, // 사이트 하나를 다시 올리는 횟수
   REPORTS_PER_HOUR: 5, // 같은 IP의 신고
@@ -20,7 +20,7 @@ export const DEFAULTS = {
   LIVE_ROOM_MB: 200, // 방 하나에 올릴 수 있는 파일 합계(R2 없이 DO에 담을 때)
   LIVE_MAX_PARTICIPANTS: 300, // 방 하나의 참가자
   LIVE_SOCKETS_PER_IP: 500, // 한 IP(학교 공유기 하나)가 방 하나에 여는 실시간 연결
-  DAILY_ROOM_CAP: 300, // 하루에 새로 만들 수 있는 방(전체)
+  DAILY_ROOM_CAP: 30, // 하루에 새로 만들 수 있는 방(전체)
   ALLOWED_ORIGINS: 'https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
 };
 

@@ -338,6 +338,20 @@ export const FX = [
     use_ko: '코딩·메이커·과학 히어로에. opts: label("A-01"), crosshair:false.',
     a11y_ko: '정지 장식, 십자선은 포인터 반응만.' },
 
+  // ───────── 살아 있는 첫 화면(그림 + 움직임 + 반응). Canvas·SVG·CSS만, 바깥 파일 없음 ─────────
+  { id: 'slide-fan', name_ko: '펼친 교재', name_en: 'Slide fan', group: 'graphic',
+    slots: ['hero.graphic'], moods: ['editorial', 'handmade', 'bold'], topics: ['edutech', 'reading', 'art', 'general'],
+    level: 2, libs: [], license: MIT, trend: 'up', weightKB: 4.2,
+    desc_ko: '교재 쪽을 부채처럼 펼친 3D 더미. 마우스 쪽으로 기울고, 뒤 장을 누르면 위로 올라오고, 스크롤하면 살짝 떠올라요. 쪽 그림이 없으면 제목 카드로 만들어요.',
+    use_ko: '첫 화면 구성 \'펼친 교재\'가 직접 그리고, 다른 첫 화면에서는 오른쪽에 꾸밈으로 놓입니다(교재 칸의 앞 다섯 쪽).',
+    a11y_ko: '정지 모습이 완성 모습. 카드는 교재 쪽으로 가는 링크, \'다음 장\' 단추와 초점 이동으로도 넘깁니다. 꾸밈으로 놓일 때는 화면 낭독기에 숨깁니다.' },
+  { id: 'schedule-dial', name_ko: '하루 시계', name_en: 'Schedule dial', group: 'graphic',
+    slots: ['hero.graphic'], moods: ['futuristic', 'bold', 'tech', 'formal'], topics: ['conference', 'admin', 'general', 'ai'],
+    level: 2, libs: [], license: MIT, trend: 'up', weightKB: 5.0,
+    desc_ko: '하루 일정을 둥근 시계로 그려요. 순서마다 길이에 비례한 호가 차례로 그려지고, 마우스·초점을 두면 가운데에 그 순서가 뜨고, 연수 중에는 지금 바늘이 돌아요.',
+    use_ko: '첫 화면 구성 \'하루 시계\'가 직접 그리고, 다른 첫 화면에서는 일정 칸을 읽어 오른쪽에 꾸밈으로 놓입니다. 미리 보기: 주소 끝에 ?now=15:45.',
+    a11y_ko: '그림은 꾸밈이고 같은 내용이 아래 목록(글)에 있습니다. 움직임이 꺼지면 다 그려진 그림.' },
+
   // ───────── 라이브러리(강도 3, 지연 로드) ─────────
   { id: 'smooth-scroll', name_ko: '부드러운 휠 스크롤', name_en: 'Smooth scroll (Lenis)', group: 'lib',
     slots: ['scroll'], moods: ['editorial', 'futuristic', 'bold', 'emotional'], topics: ['art', 'ai', 'general'],

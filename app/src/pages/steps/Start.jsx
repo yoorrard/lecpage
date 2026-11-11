@@ -213,7 +213,7 @@ export function StepStart({ p, update, go }) {
       {!p.blueprint && <section class="ai-line" aria-label="AI 연결">
         {conn === undefined ? <p class="small muted">확인하는 중…</p>
           : conn ? <div class="conn-row"><span class="dot-ok" aria-hidden="true" /><span><b>{conn.label}</b>에 연결됨</span><span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setConnect(true)}>바꾸기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>끊기</button></span></div>
-            : <p class="ai-off">AI가 교재를 읽고 연수 흐름과 문구를 짜요. 처음 한 번만 연결하면 되고, 쓰던 구글 계정으로 1분이면 돼요.</p>}
+            : <p class="ai-off">AI가 교재를 읽고 연수 흐름과 문구를 짜요. 키를 한 번 연결하면 다음부터는 단추 하나예요. Gemini 키는 무료이고 1분이면 만들어요.</p>}
       </section>}
 
       <div class="make-bar">
@@ -224,7 +224,6 @@ export function StepStart({ p, update, go }) {
       </div>
       {!p.blueprint && <div class="make-alt">
         <button class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>
-        {!conn && <button class="btn btn-sm btn-quiet" disabled={!!busy} onClick={() => { if (!needTitle()) setPaste(true); }}>가입 없이: 챗봇에 붙여넣기</button>}
         <span class="small muted">교재가 없어도 연수명만 있으면 돼요.</span>
       </div>}
 
@@ -237,7 +236,7 @@ export function StepStart({ p, update, go }) {
         {connect && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">AI 연결</h2><p class="small muted">한 번 연결하면 다음부터는 단추 하나로 만들어요.</p></div>
           <AiConnect onConnected={onConnected} onBeforeLogin={() => { try { if (connect === 'make') sessionStorage.setItem(AFTER, p.id); } catch { } }} onPaste={() => { setConnect(false); if (!needTitle()) setPaste(true); }} /></div>}
       </Dialog>
-      <Dialog open={paste} onClose={() => setPaste(false)} label="챗봇에 붙여넣기로 만들기" wide>
+      <Dialog open={paste} onClose={() => setPaste(false)} label="키 없이 만들기" wide>
         {paste && <AiPanel p={p} onBlueprint={onAi} />}
       </Dialog>
     </>
