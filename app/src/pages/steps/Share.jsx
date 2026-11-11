@@ -52,6 +52,9 @@ export function StepShare({ p, update, go }) {
   async function buildFiles({ liveOff = false } = {}) {
     const assets = { ...(await projectAssets(p.id, true)) };
     let b = JSON.parse(JSON.stringify(bp));
+    // 자료실에서 뺀 파일은 올리지 않음(이 브라우저에서도 지움)
+    const used = new Set(b.sections.filter((x) => x.type === 'materials').flatMap((x) => (x.items || []).map((it) => String(it?.href || it?.url || ''))));
+    for (const k of Object.keys(assets)) if (k.startsWith('assets/files/') && !used.has(k)) { delete assets[k]; blobs.remove(p.id, k).catch(() => { }); }
     if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
     if (p.shareOriginals) {
       const all = await blobs.all(p.id); const hrefs = {};
@@ -88,12 +91,22 @@ export function StepShare({ p, update, go }) {
       toast('강사용 파일을 내려받았어요.');
     } catch (e) { toast(e.message); }
   }
+  /** 공개한 뒤 자료 더 넣기: 자료실이 없으면 마무리 앞에 만들고, 고치기 화면에서 그 섹션을 엶 */
+  function addMaterials() {
+    let id = (bp.sections.find((x) => x.type === 'materials') || {}).id;
+    if (!id) {
+      id = 'materials';
+      update((cur) => { const secs = cur.blueprint.sections.slice(); const at = secs.findIndex((x) => x.type === 'closing'); secs.splice(at < 0 ? secs.length : at, 0, { id, type: 'materials', nav: '자료', title: '연수 자료', items: [] }); return { blueprint: { ...cur.blueprint, sections: secs } }; });
+    }
+    try { sessionStorage.setItem('lecpage:focus', id); } catch { }
+    go(2);
+  }
   function done(url, patch) { update((cur) => ({ deploy: { ...(cur.deploy || {}), ...patch, lastUrl: url, at: Date.now() }, blueprint: { ...cur.blueprint, meta: { ...cur.blueprint.meta, siteUrl: url } } })); }
 
   return (
     <>
       <StepHead title="공개하기" desc="누가 볼지 정하고 [공개하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요." />
-      {p.deploy?.lastUrl && <Success p={p} />}
+      {p.deploy?.lastUrl && <Success p={p} onAddMaterials={addMaterials} />}
 
       <Sheet>
         <div class="stack">
@@ -165,7 +178,7 @@ function OpenState({ url, at }) {
   return <p class="open-state" aria-live="polite"><span class={`ok-dot${st === 'ok' ? '' : ' wait'}`} aria-hidden="true" />{st === 'ok' ? '지금 열려요.' : st === 'wait' ? '열리는지 확인하는 중이에요. 처음에는 1~2분 걸릴 수 있어요.' : '아직 열리지 않아요. 주소를 직접 열어 확인해 주세요.'}</p>;
 }
 
-function Success({ p }) {
+function Success({ p, onAddMaterials }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
   const pw = p.blueprint.access?.mode === 'password' ? p.sitePassword : '';
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
@@ -192,7 +205,7 @@ function Success({ p }) {
             {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener">강사 화면 열기</a>}
           </div>
           {liveOn && <p class="small muted">강사 화면에는 관리자 키로 들어가요.</p>}
-          <p class="small muted">고친 뒤 아래 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 새 내용이 올라가요.</p>
+          <p class="small muted">자료를 더 넣거나 내용을 고친 뒤 아래 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
         </div>
         <div class="qr-box"><QR text={shareUrl} size={180} label="참가자용 QR 코드" /></div>
       </div>

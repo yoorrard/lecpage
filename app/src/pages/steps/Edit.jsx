@@ -21,6 +21,8 @@ export function StepEdit({ p, update, go }) {
   const [tab, setTab] = useState('content');
   const [focusId, setFocusId] = useState(null);
   const onPick = (id) => { setTab('content'); setFocusId(id + ':' + Date.now()); };
+  // 다른 화면에서 '이 섹션을 열어 달라'고 남긴 표시(예: 공개 화면의 [자료 올리기])
+  useEffect(() => { try { const id = sessionStorage.getItem('lecpage:focus'); if (id) { sessionStorage.removeItem('lecpage:focus'); onPick(id); } } catch { } }, []);
   const [ai, setAi] = useState(false);
   useAiResume(setAi);
   // 수정 요청: 미리보기에 표시 → 대화창에 그림이 붙음

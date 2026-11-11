@@ -137,36 +137,36 @@
   #fx-doodle-scribbles .demo-stage { margin-top: 18px; }
   @media (max-width: 720px) { .demo-fx-head { grid-template-columns: 1fr; } .demo-meta { max-width: none; } }
   /* ── 효과 하나만 보기(?fx=<id>&embed=1): 화면 가득 한 장면. 글자 크기는 틀 크기를 따라감(embed.js) ── */
-  html.fx-embed { font-size: clamp(8px, 2.7vw + .5vh, 19px); scrollbar-width: none; scroll-behavior: auto; }
+  html.fx-embed { font-size: clamp(9.5px, 3.3vw + .7vh, 20px); scrollbar-width: none; scroll-behavior: auto; }
   html.fx-embed::-webkit-scrollbar, html.fx-embed body::-webkit-scrollbar { display: none; }
   html.fx-embed body { font-size: 1rem; line-height: 1.5; overflow-x: hidden; min-height: 100vh; }
   html.fx-embed .demo-top, html.fx-embed .demo-nav, html.fx-embed main, html.fx-embed body > [data-fx] { display: none; }
-  .em { position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-content: center; justify-items: start; gap: .7rem; padding: 1.3rem 1.8rem; overflow: hidden; }
+  .em { position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-content: center; justify-items: start; gap: .6rem; padding: 1.1rem 1.5rem; overflow: hidden; }
   .em-c { justify-items: center; text-align: center; }
   .em-full { padding-inline: 0; }
-  .em-pad { padding-inline: 1.8rem; }
+  .em-pad { padding-inline: 1.5rem; }
   .em-stage { isolation: isolate; }
   .em-copy { display: grid; gap: .5rem; max-width: 100%; }
-  .em-k { margin: 0; font-size: .76rem; font-weight: 600; color: var(--primary); }
-  .em-h { margin: 0; font: 800 2.35rem/1.14 var(--font-display); letter-spacing: -.03em; }
-  .em-h.sm { font-size: 1.7rem; line-height: 1.25; }
-  .em-s { margin: 0; font-size: .82rem; color: var(--muted-foreground); }
-  .em-lead { margin: 0; max-width: 21em; font-size: 1.4rem; line-height: 1.55; font-weight: 600; }
+  .em-k { margin: 0; font-size: .86rem; font-weight: 600; line-height: 1.3; color: var(--primary); }
+  .em-h { margin: 0; font: 800 2.2rem/1.16 var(--font-display); letter-spacing: -.03em; }
+  .em-h.sm { font-size: 1.6rem; line-height: 1.28; }
+  .em-s { margin: 0; font-size: .9rem; color: var(--muted-foreground); }
+  .em-lead { margin: 0; max-width: 21em; font-size: 1.32rem; line-height: 1.55; font-weight: 600; }
   .em-lead-sm { font-size: 1.15rem; }
-  .em-card { min-width: 0; background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: .8rem; padding: .9rem 1rem; box-shadow: var(--shadow); }
-  .em-card h4 { margin: 0 0 .25rem; font-size: 1rem; line-height: 1.3; }
-  .em-card p { margin: 0; font-size: .78rem; color: var(--muted-foreground); }
+  .em-card { min-width: 0; background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: .7rem; padding: .75rem .8rem; box-shadow: var(--shadow); }
+  .em-card h4 { margin: 0 0 .2rem; font-size: 1.08rem; line-height: 1.3; }
+  .em-card p { margin: 0; font-size: .88rem; line-height: 1.4; color: var(--muted-foreground); }
   .em-big { width: 100%; padding: 1.4rem 1.5rem; }
   .em-big h4 { font-size: 1.5rem; letter-spacing: -.02em; }
-  .em-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; width: 100%; }
+  .em-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; width: 100%; }
   .em-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .em-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; align-items: center; }
   .em-btn { display: inline-flex; align-items: center; gap: .4em; min-height: 2.7rem; padding: 0 1.3rem; font: 600 .95rem/1 var(--font-sans); color: var(--primary-foreground); background: var(--primary); border: 1px solid var(--primary); border-radius: 999px; text-decoration: none; cursor: pointer; }
   .em-btn.ghost { color: var(--foreground); background: transparent; border-color: var(--border); }
-  .em-btn.sm { min-height: 2.1rem; padding: 0 .9rem; font-size: .8rem; }
+  .em-btn.sm { min-height: 2.1rem; padding: 0 .9rem; font-size: .88rem; }
   .em-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem 1.2rem; width: 100%; }
   .em-nums strong { display: block; font: 800 2.5rem/1 var(--font-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-  .em-nums span { font-size: .76rem; color: var(--muted-foreground); }
+  .em-nums > div > span { font-size: .88rem; color: var(--muted-foreground); }
   .em-mq { list-style: none; margin: 0; padding: .25rem 0; width: 100%; font: 800 2rem/1.2 var(--font-display); letter-spacing: -.02em; white-space: nowrap; --fx-mq-gap: 1.6rem; }
   .em-mq li::after { content: ""; display: inline-block; width: .3em; height: .3em; margin-left: 1.6rem; border-radius: 50%; background: var(--accent); vertical-align: .22em; }
   .em-mq2 { font-size: 1.15rem; font-weight: 600; color: var(--muted-foreground); }
@@ -176,13 +176,13 @@
   .em-photo figure { position: relative; margin: 0; width: 100%; height: 100%; }
   .em-photo .ph { width: 100%; height: 100%; }
   .em-photo figcaption { position: absolute; left: 1.4rem; bottom: 1.1rem; font: 800 1.5rem/1.2 var(--font-display); color: #fff; text-shadow: 0 2px 16px rgba(0, 0, 0, .45); }
-  .em-tall { align-content: start; padding-block: 64vh 74vh; }
+  .em-tall { align-content: start; padding-block: 60vh 42vh; }
   .em-tall-sm { padding-block: 58vh 46vh; }
   .em-sched { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.15rem; width: 100%; }
-  .em-sched li { display: grid; grid-template-columns: 3.3rem 1fr; column-gap: .6rem; }
-  .em-sched time { grid-row: span 2; font: 600 .8rem/1.75 var(--font-mono); color: var(--muted-foreground); }
-  .em-sched b { font-size: 1rem; }
-  .em-sched span { font-size: .78rem; color: var(--muted-foreground); }
+  .em-sched li { display: grid; grid-template-columns: 3.6rem 1fr; column-gap: .5rem; }
+  .em-sched time { grid-row: span 2; font: 600 .86rem/1.7 var(--font-mono); color: var(--muted-foreground); }
+  .em-sched b { font-size: 1.05rem; }
+  .em-sched span { font-size: .88rem; color: var(--muted-foreground); }
   .em-par { min-height: 170vh; }
   .em-par .ph { position: absolute; border-radius: 50%; }
   .em-par-a { left: 8%; top: 22%; width: 34vmin; height: 34vmin; }
@@ -191,26 +191,35 @@
   .em-scrolly { padding: 0 1.4rem 30vh; }
   .em-steps { list-style: none; margin: 0; padding: 0; }
   .em-steps h4 { margin: 0 0 .3rem; font-size: 1.5rem; letter-spacing: -.02em; }
-  .em-steps p { margin: 0; font-size: .9rem; color: var(--muted-foreground); }
+  .em-steps p { margin: 0; font-size: .95rem; color: var(--muted-foreground); }
+  html.fx-embed .fx-scrolly > [data-scrolly-visual] { top: 0; height: 44vh; }
+  html.fx-embed .fx-scrolly-auto { height: 96%; }
+  html.fx-embed .fx-scrolly-num { font-size: 2.6rem; }
+  html.fx-embed .fx-scrolly-of, html.fx-embed .fx-scrolly-title { display: none; }
   .em-stackwrap { padding: 9vh 1.4rem 6vh; }
   .em-stack .em-card { min-height: 64vh; display: grid; align-content: center; gap: .3rem; }
   .em-hsnap { list-style: none; margin: 0; padding: 0 1.8rem; display: grid; grid-auto-flow: column; grid-auto-columns: 11rem; gap: .6rem; }
   .em-hsnap .em-card { min-height: 5.4rem; }
+  .em-zoom { position: relative; min-height: 100vh; display: grid; place-items: center; }
+  .em-zoom > .ph { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .em-zoom > .em-zoom-copy { position: relative; }
+  /* 동작 줄이기: 스크롤 장면도 한 화면에 완성된 모습으로 */
+  @media (prefers-reduced-motion: reduce) { .em-tall { padding-block: 1.1rem; align-content: center; } .em-par { min-height: 100vh; } }
   .em-zoom-copy { margin: 0; padding: 0 1rem; font: 800 1.9rem/1.2 var(--font-display); color: #fff; text-align: center; text-shadow: 0 2px 18px rgba(0, 0, 0, .45); }
   .em-dark { --background: #0c1020; --foreground: #edf0fb; --muted-foreground: #a6aec8; --primary: #8e9cff; --border: #283152; background: var(--background); color: var(--foreground); }
   .em-prompt { display: flex; gap: .7rem; align-items: flex-start; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: .8rem; padding: .9rem; }
-  .em-prompt p { flex: 1; margin: 0; font-size: .92rem; line-height: 1.55; }
+  .em-prompt p { flex: 1; margin: 0; font-size: .98rem; line-height: 1.5; }
   .em-tabs { width: 100%; display: grid; gap: .6rem; }
   .em-tabs [role=tablist] { display: flex; gap: .35rem; }
-  .em-tabs [role=tab] { font: 600 .82rem/1 var(--font-sans); padding: .55rem .9rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
+  .em-tabs [role=tab] { font: 600 .88rem/1 var(--font-sans); padding: .55rem .9rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
   .em-tabs [role=tab][aria-selected=true] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
   .em-panel { padding: 1rem 1.1rem; border-radius: .8rem; background: var(--card); border: 1px solid var(--border); }
   .em-panel h4 { margin: 0 0 .25rem; font-size: 1.15rem; }
-  .em-panel p { margin: 0; font-size: .82rem; color: var(--muted-foreground); }
+  .em-panel p { margin: 0; font-size: .9rem; color: var(--muted-foreground); }
   .em-gsap { min-height: 100vh; }
   .em-orb-still { position: absolute; right: 6%; top: 50%; width: 62vmin; height: 62vmin; margin-top: -31vmin; z-index: -1; border-radius: 50%; background: radial-gradient(circle, var(--primary) 1px, transparent 1.6px) 0 0 / .62rem .62rem; -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%); mask-image: radial-gradient(circle, #000 30%, transparent 70%); opacity: .7; }
   .has-canvas .em-orb-still { display: none; }
-  .em-none { color: var(--muted-foreground); font-size: .9rem; gap: .4rem; }
+  .em-none { color: var(--muted-foreground); font-size: 1rem; gap: .4rem; }
   .em-none p { margin: 0; }
   .em-none code { font: 500 .78rem/1 var(--font-mono); }
   .em-cur { position: fixed; left: 0; top: 0; z-index: 99; width: 1.15rem; height: 1.15rem; min-width: 14px; min-height: 14px; pointer-events: none; opacity: 0; transition: opacity .25s; will-change: transform; }
@@ -224,7 +233,7 @@
 <header class="demo-top">
   <h1>LecFX 효과 견본<small>52종</small></h1>
   <label>테마 <select id="demo-theme"><option value="light">라이트</option><option value="dark">다크</option></select></label>
-  <label>강도 <select id="demo-motion"><option value="0">0 정지</option><option value="1">1 차분</option><option value="2">2 보통</option><option value="3">3 화려</option></select></label>
+  <label>강도 <select id="demo-motion"><option value="0">0 정지</option><option value="1">1 차분</option><option value="2">2 보통</option><option value="3">3 스크롤 연출</option></select></label>
   <label>저사양 <select id="demo-low"><option value="">자동</option><option value="0">끔</option><option value="1">켬</option></select></label>
   <button type="button" data-fx-toggle><span class="fx-toggle-ico" aria-hidden="true"></span><span data-fx-toggle-label>움직임 멈춤</span></button>
 </header>

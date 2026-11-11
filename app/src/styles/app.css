@@ -226,6 +226,8 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .make-alt{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-top:-8px}
 .make-alt .btn{padding-left:10px;padding-right:10px}
 .make-note{margin:-6px 0 0}
+.mat-up{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:10px 12px;border:1px dashed var(--line-strong);border-radius:var(--r-xs);background:var(--card)}
+.mat-up .small{flex:1 1 220px;min-width:0}
 .drop-home{margin-top:24px;padding:22px 24px;justify-items:start;text-align:left}
 .drop-home b{font-size:1.06rem;font-weight:650}
 .files{list-style:none;margin:0;padding:0;display:grid}

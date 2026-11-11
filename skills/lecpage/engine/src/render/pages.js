@@ -145,6 +145,14 @@ function nowBar(ctx) {
 /** 가벼운 모드 아이콘(깃털): 움직임을 차분 단계로 낮추고 무거운 효과(WebGL·외부 라이브러리)를 끕니다 */
 const LITE_ICON = '<svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4c-7 0-12 4-12 10v2l-3 4M8 16h4c4 0 8-4 8-12M8 16l6-6"/></svg>';
 
+/** 반응 아이콘(선 그림). 실시간으로 주고받는 값은 그대로 이모지(프로토콜), 화면에는 사이트의 선 아이콘으로 보여 줌 */
+const svgIc = (p) => `<svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+export const REACTIONS = [
+  { v: '👏', label: '박수', ic: svgIc('<path d="M8.2 12.6 5.4 9.8a1.4 1.4 0 0 1 2-2l3.4 3.4M9 9 7.2 7.2a1.4 1.4 0 0 1 2-2L13.6 9.6M11.4 7.4l-.9-.9a1.4 1.4 0 0 1 2-2l4.9 4.9a6.2 6.2 0 0 1 0 8.8l-.2.2a6.2 6.2 0 0 1-8.8 0l-3.2-3.2a1.4 1.4 0 0 1 2-2l1.7 1.7"/><path d="M17.2 2.8v2.1M20.6 4.2l-1.4 1.4M21.4 7.6h-2.1"/>') },
+  { v: '💡', label: '좋은 생각', ic: svgIc('<path d="M9.2 18h5.6M10.2 21h3.6M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>') },
+  { v: '❤️', label: '좋아요', ic: icon('heart') },
+];
+
 function nav(ctx) {
   const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
   const brand = ctx.design.brandName || ctx.bp.meta.title;
@@ -215,7 +223,7 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
   ${ctx.bp.live.features.includes('signal') ? `<div class="lp-signal" role="group" aria-label="지금 이해 정도"><button type="button" data-signal="green" aria-pressed="false" title="이해했어요"><i aria-hidden="true">✓</i><span class="lp-sr">이해했어요</span></button><button type="button" data-signal="yellow" aria-pressed="false" title="조금 헷갈려요"><i aria-hidden="true">?</i><span class="lp-sr">조금 헷갈려요</span></button><button type="button" data-signal="red" aria-pressed="false" title="모르겠어요"><i aria-hidden="true">!</i><span class="lp-sr">모르겠어요</span></button></div>` : ''}
-  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-react" role="group" aria-label="반응 보내기"><button type="button" class="lp-react-toggle" data-react-toggle aria-expanded="false" aria-label="반응 고르기">👏</button><div class="lp-react-list" data-react-list><button type="button" data-react="👏" aria-label="박수">👏</button><button type="button" data-react="💡" aria-label="좋은 생각">💡</button><button type="button" data-react="❤️" aria-label="좋아요">❤️</button></div></div>` : ''}
+  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-react" role="group" aria-label="반응 보내기"><button type="button" class="lp-react-toggle" data-react-toggle aria-expanded="false" aria-label="반응 고르기">${REACTIONS[0].ic}</button><div class="lp-react-list" data-react-list>${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
 </aside><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
 ${tocSheet(ctx)}${helpSheet(ctx)}
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;

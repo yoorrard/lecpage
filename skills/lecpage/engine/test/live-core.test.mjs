@@ -237,3 +237,26 @@ test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudg
   assert.ok(calls.some(([n, a]) => n === 'lec_admin_snapshot' && a.p_admin === 'k'));
   c2.close();
 });
+
+test('자료 링크: 강사가 연수 중에 덧붙인 주소는 state.ui(m1…m8)에 담기고, https만 받으며 서버 상태 규칙을 통과한다', async () => {
+  const win = makeWindow(); const X = win.LecLive.util.ext;
+  let st = { ui: {} };
+  const add = (url, title) => { const p = X.materialAdd(st, url, title); if (!p.error) st = { ui: { ...st.ui, ...p.ui } }; return p; };
+  assert.ok(add('drive.google.com/file/d/abc/view', '활동지 PDF').ui.m1.startsWith('https://drive.google.com/file/d/abc/view 활동지'));
+  assert.match(add('javascript:alert(1)', '나쁜 주소').error, /https/);
+  assert.match(add('http://example.com/a', '암호화 안 됨').error, /https/);
+  assert.match(add('https://example.com/' + 'a'.repeat(200), '긴 주소').error, /길어요/);
+  add('https://youtu.be/xyz', '');
+  const list = X.materials(st);
+  assert.equal(list.length, 2); assert.equal(list[0].title, '활동지 PDF'); assert.equal(list[1].title, 'youtu.be/xyz');
+  // 값은 200자 안, 서버의 상태 규칙(cleanStatePatch)을 그대로 통과
+  const { cleanStatePatch } = await import(protoNode);
+  const cleaned = cleanStatePatch({ ui: st.ui });
+  assert.equal(cleaned.ui.m1, st.ui.m1);
+  for (let i = 0; i < 6; i++) add(`https://example.com/${i}`, `자료 ${i}`);
+  assert.match(add('https://example.com/9', '아홉째').error, /8개/);
+  st = { ui: { ...st.ui, ...X.materialRemove(1).ui } };
+  assert.equal(X.materials(st).length, 7);
+  // 서버가 바꿔 놓은 값(주소가 아닌 글)은 버림
+  assert.equal(X.materials({ ui: { m1: '<script>alert(1)</script>', m2: 'https://ok.example/x 좋아요' } }).length, 1);
+});

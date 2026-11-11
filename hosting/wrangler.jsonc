@@ -16,11 +16,16 @@
 
   "durable_objects": {
     "bindings": [
-      { "name": "SITE", "class_name": "Site" },
-      { "name": "GATE", "class_name": "Gate" }
+      { "name": "SITE", "class_name": "Site" }, // 사이트 하나마다 하나: 파일
+      { "name": "GATE", "class_name": "Gate" }, // 하나뿐: 횟수 제한·저장량·신고
+      { "name": "ROOM", "class_name": "Room" }, // 연수 코드마다 하나: 실시간 방(질문·보드·투표)
+      { "name": "GUARD", "class_name": "Guard" } // IP마다 하나: 틀린 강사 키 횟수
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Site", "Gate"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Site", "Gate", "Room", "Guard"] }],
+
+  // 보드 파일을 R2에 두려면(선택, 카드 등록 필요) 버킷을 만들고 아래 주석을 푸세요. 없으면 방의 SQLite에 담습니다.
+  // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "lecpage-sites-uploads" }],
 
   // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK)은 `npx wrangler secret put`으로 넣으세요.
   "vars": {
@@ -29,6 +34,8 @@
     // 바꿀 수 있는 한도(기본값): MAX_BYTES 41943040 · MAX_FILE_BYTES 20971520 · MAX_FILES 600 · SITE_DAYS 30
     // SITES_PER_HOUR 6 · SITES_PER_DAY 20 · DAILY_SITE_CAP 300 · MAX_TOTAL_BYTES 4294967296 · DEPLOYS_PER_HOUR 30
     // REPORTS_PER_HOUR 5 · DAILY_REPORT_CAP 200 · REPORT_KEEP 500 · REPORT_DAYS 90 · PUBLIC_ORIGIN(내 도메인을 붙였을 때 주소 고정)
+    // 실시간 방: LIVE "on"(끄려면 "off") · LIVE_UPLOADS "on" · LIVE_MAX_UPLOAD_MB 10 · LIVE_ROOM_MB 200
+    // LIVE_MAX_PARTICIPANTS 300 · LIVE_SOCKETS_PER_IP 500 · DAILY_ROOM_CAP 300
     // ALLOW_SUPABASE_SDK "1"(Supabase 실시간을 쓰는 사이트를 받을 때만. README의 '실시간 연결' 참고)
   }
 }

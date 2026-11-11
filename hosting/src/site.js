@@ -1,5 +1,5 @@
 // Site: 사이트 하나마다 Durable Object 하나(SQLite 저장).
-//  meta   사이트 정보 한 줄(열쇠 해시, 만든 때, 끝나는 때, 가림, 제목, 저장 크기, 지금 배포, 준비 중인 배포)
+//  meta   사이트 정보 한 줄(열쇠 해시, 만든 때, 끝나는 때, 가림, 제목, 저장 크기, 지금 배포, 준비 중인 배포, 묶인 실시간 방 코드)
 //  deploy 배포 목록(경로 → sha256·크기)을 JSON 한 줄로. 지금 것과 준비 중인 것만 남김
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
@@ -14,13 +14,14 @@ import { SUPABASE_SDK } from './runtime-allow.js';
 import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES } from './csp.js';
 import { rewriteHtml } from './rewrite.js';
 import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
+import { normCode } from './live/host.js';
 
 /** blob 한 줄의 크기(DO SQLite는 한 줄 2MB까지) */
 export const CHUNK = 1024 * 1024;
 const MANIFEST_MAX = 1024 * 1024;
 
 const SCHEMA = `
-CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT);
+CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT, live_code TEXT);
 CREATE TABLE IF NOT EXISTS deploy (id TEXT PRIMARY KEY, created INTEGER NOT NULL, bytes INTEGER NOT NULL, stored INTEGER NOT NULL, files TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS blob (sha TEXT NOT NULL, i INTEGER NOT NULL, total INTEGER, data BLOB NOT NULL, PRIMARY KEY (sha, i)) WITHOUT ROWID;
 `;
@@ -51,6 +52,8 @@ export class Site extends DurableObject {
         case 'DELETE site': return await this.remove(request, false);
         case 'DELETE admin-site': return await this.remove(request, true);
         case 'POST admin-block': return await this.block(request);
+        case 'POST live': return await this.bindLive(request);
+        case 'GET live-status': return this.liveStatus(url);
         default: throw new HttpError('not_found', '없는 주소예요.');
       }
     } catch (e) {
@@ -100,6 +103,13 @@ export class Site extends DurableObject {
     return meta;
   }
   url(request, meta) { return `${request.headers.get('x-lp-origin') || ''}/s/${meta.site}/`; }
+  /** 실시간 방(Room)에 호스트 안쪽 일을 시킴: bind·touch·wipe */
+  async room(code, op, body) {
+    const stub = this.env.ROOM.get(this.env.ROOM.idFromName(code));
+    const res = await stub.fetch(`http://room/host/${op}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw await errorFrom(res);
+    return res.json();
+  }
 
   // ── 만들기 ───────────────────────────────────────────────────
   async init(request) {
@@ -143,6 +153,38 @@ export class Site extends DurableObject {
       this.sweep();
       return json({ deploy: id, missing: missingBlobs(man.files, have) });
     });
+  }
+
+  // ── 실시간 방 묶기 ───────────────────────────────────────────
+  /** POST /api/sites/:id/live { code, adminKeyHash, settings? } → 이 사이트에 방을 묶음(이미 묶인 코드면 관리자 키 해시·설정만 바꿈) */
+  async bindLive(request) {
+    const first = await this.authed(request);
+    if (!this.cfg.live) throw new HttpError('not_found', '이 서버는 실시간 방을 쓰지 않아요.');
+    if (first.blocked) throw new HttpError('blocked');
+    const body = await readJson(request, 8192);
+    let code;
+    try { code = normCode(body.code); } catch { throw new HttpError('bad_request', '연수 코드는 영문·숫자 3~40자예요.'); }
+    const adminKeyHash = typeof body.adminKeyHash === 'string' ? body.adminKeyHash.toLowerCase() : '';
+    if (!SHA256_RE.test(adminKeyHash)) throw new HttpError('bad_request', 'adminKeyHash는 관리자 키의 SHA-256(16진수 64자)이어야 해요.');
+    return this.exclusive(async () => {
+      const meta = this.load();
+      if (!meta) throw new HttpError('not_found');
+      const old = meta.live_code && meta.live_code !== code ? meta.live_code : null;
+      if (meta.live_code !== code) await this.gate('POST', 'room', { id: meta.site }); // 새 방: 하루 개수·저장량 확인
+      const out = await this.room(code, 'bind', { site: meta.site, code, adminKeyHash, settings: body.settings, expires: meta.expires, blocked: !!meta.blocked });
+      this.sql.exec('UPDATE meta SET live_code = ? WHERE id = 1', code);
+      meta.live_code = code;
+      // 코드를 바꿨으면 예전 방은 비움
+      if (old) { try { await this.room(old, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); } }
+      try { await this.gate('POST', 'site', { id: meta.site, code }); } catch (e) { console.error('gate site update failed', e?.message); }
+      return json({ url: `${request.headers.get('x-lp-origin') || ''}/live`, code: out.code });
+    });
+  }
+  /** Room이 "이 사이트가 아직 살아 있고 이 코드를 쓰나?"를 물을 때 */
+  liveStatus(url) {
+    const meta = this.load();
+    const alive = !!meta && Date.now() < meta.expires && meta.live_code === url.searchParams.get('code');
+    return json({ alive, expires: alive ? meta.expires : 0, blocked: alive ? !!meta.blocked : false });
   }
 
   /** 지금 배포·준비 중인 배포·올리는 중인 것 말고는 지움 */
@@ -268,6 +310,8 @@ export class Site extends DurableObject {
       await this.ctx.storage.setAlarm(expires);
       this.sweep();
       try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires }); } catch (e) { console.error('gate site update failed', e?.message); }
+      // 공개 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
+      if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
       return json({ url: this.url(request, meta), expiresAt: expires });
     });
   }
@@ -278,7 +322,10 @@ export class Site extends DurableObject {
     return this.exclusive(async () => { if (this.load()) await this.wipe(); return noContent(); });
   }
   async wipe() {
-    const id = this.load()?.site;
+    const meta = this.load();
+    const id = meta?.site;
+    // 묶인 실시간 방(참가 기록·보드 파일)도 같이 지움. 실패해도 방이 기간 끝에 사이트를 확인하고 스스로 비움
+    if (meta?.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = [];
@@ -291,10 +338,12 @@ export class Site extends DurableObject {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
       const reason = body.blocked ? String(body.reason || '').slice(0, 500) : '';
+      // 방부터 가림: 여기서 실패하면 사이트 상태도 바꾸지 않고 오류를 돌려줌(다시 하면 됨)
+      if (meta.live_code) await this.room(meta.live_code, 'touch', { site: meta.site, blocked: body.blocked });
       this.sql.exec('UPDATE meta SET blocked = ?, block_reason = ? WHERE id = 1', body.blocked ? 1 : 0, reason);
       Object.assign(meta, { blocked: body.blocked ? 1 : 0, block_reason: reason });
       try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked }); } catch (e) { console.error('gate site update failed', e?.message); }
-      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires });
+      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null });
     });
   }
   /** 공개 기간이 끝나면 전부 지움 */

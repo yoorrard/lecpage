@@ -1,13 +1,33 @@
 # Cloudflare Workers 정적 자산(기본 주소)에서 적용되는 보안 헤더. GitHub Pages 미러는 이 파일을 무시하고 index.html의 meta CSP만 씁니다.
-# 아래 CSP는 meta CSP에 더해지는 것(둘 다 지켜야 함): 다른 사이트가 앱을 틀(iframe)에 넣지 못하게, 플러그인·base 바꾸기 금지.
+# 앱 화면(/, /index.html, /404.html)은 다른 사이트가 틀(iframe)에 넣지 못하게 하고, 앱이 틀로 보여 주는 효과 미리보기(/fx-demo)와
+# 예시(/examples)는 같은 출처에서만 틀에 넣을 수 있게 합니다. 이 CSP는 index.html의 meta CSP에 더해집니다(둘 다 지켜야 함).
 /*
-  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
-  X-Frame-Options: DENY
   Cross-Origin-Opener-Policy: same-origin
   Strict-Transport-Security: max-age=31536000
+
+/
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: DENY
+
+/index.html
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: DENY
+  Cache-Control: no-cache
+
+/404.html
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: DENY
+
+/fx-demo/*
+  Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: SAMEORIGIN
+
+/examples/*
+  Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: SAMEORIGIN
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
@@ -15,5 +35,3 @@
 /sw.js
   Cache-Control: no-cache
 
-/index.html
-  Cache-Control: no-cache

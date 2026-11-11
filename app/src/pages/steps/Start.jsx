@@ -185,6 +185,9 @@ export function StepStart({ p, update, go }) {
           </div>
           <Field label="장소" hint="온라인 연수는 다음 단계 '연수 정보'에서 접속 주소를 넣어요."><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
         </div>
+        <Field label="요청 사항 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 자유롭게 적어요. AI가 반영하고, 기본 초안에도 분위기와 색이 반영돼요.">
+          <textarea rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
+        </Field>
         <details class="more">
           <summary><b>더 정하기</b><span class="small muted">인원 {SIZE.find((o) => o.value === info.size)?.label || ''} · 형식 {(FORMATS.find((o) => o.value === info.format) || FORMATS[0]).label}{feats.length ? ` · 참여 기능 ${feats.length}개` : ''}</span></summary>
           <div class="stack more-body">

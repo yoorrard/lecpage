@@ -36,7 +36,8 @@
 | 분위기·움직임 | 교재 주제로 추론, 움직임 2(직무연수는 1). 6단계에서 3안 미리보기로 고른다(`mood`, `motion`) |
 | 운영 숙련도·서버 | 7단계에서 묻는다(`skill` click, `infra` []) |
 | 사이트 유지 기간 | 연수가 끝나면 사이트가 저절로 '연수 후' 보기로 바뀌므로 묻지 않는다(`duration` day) |
-| 형식 | 교재의 실습 비중으로 추론(`format` workshop) |
+| 형식 | 교재의 실습 비중으로 추론(`format` practice·lecture·conference·course) |
+| 요청 사항 | 강사가 따로 부탁한 말은 그대로 `request`에 적는다(구성·강조할 내용·분위기·색·대상). 초안은 여기서 분위기·색·밝기·움직임·형식을 읽고, 나머지는 네가 설계도를 다듬을 때 반영한다 |
 
 기본값(사용자가 "알아서"라고 할 때): admin school, size 30, features [qa, help, progress], devices [laptop], network good. 무엇을 가정했는지 한 줄로 알린다.
 
@@ -45,5 +46,6 @@
 info.json 예시
 ```json
 { "admin": "official", "size": 28, "features": ["qa", "help", "progress", "board"], "devices": ["laptop", "chromebook"],
-  "network": "restricted", "mode": "offline", "contact": "연수 담당 김하나 02-123-4567", "completionRate": 80 }
+  "network": "restricted", "mode": "offline", "contact": "연수 담당 김하나 02-123-4567", "completionRate": 80,
+  "request": "실습 위주로, 차분한 남색 계열로 해 주세요" }
 ```

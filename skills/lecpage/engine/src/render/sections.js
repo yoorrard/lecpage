@@ -126,7 +126,7 @@ function glance(s, ctx) {
   return wrap(s, ctx, head(s, ctx) + `<dl class="lp-glance-grid" style="--n:${s.items.length}">${s.items.map((i) => { const p = numParts(i.value); return `<div class="lp-glance-item"><dt>${esc(i.label)}</dt><dd><span class="lp-fig"><span class="lp-num"${fx(ctx, 'numbers')}>${esc(p.num)}</span>${p.unit ? `<span class="lp-unit">${esc(p.unit)}</span>` : ''}</span>${i.note ? `<small>${esc(i.note)}</small>` : ''}</dd></div>`; }).join('')}</dl>`);
 }
 
-/** 문장을 낱말 조각으로: 화려 단계에서 스크롤에 맞춰 낱말이 차례로 진해짐(CSS). 조각을 못 쓰는 환경에서도 같은 글 */
+/** 문장을 낱말 조각으로: 보통 단계부터 스크롤에 맞춰 낱말이 차례로 진해짐(CSS). 조각을 못 쓰는 환경에서도 같은 글 */
 function words(text) {
   let i = 0;
   const html = String(text || '').split('\n').map((line) => line.split(/(\s+)/).map((w) => (/^\s*$/.test(w) ? w : `<span class="lp-w" style="--i:${i++}">${esc(w)}</span>`)).join('')).join('<br>');
@@ -140,7 +140,8 @@ function words(text) {
  */
 function message(s, ctx) {
   let body, aside = '';
-  const mfx = fx(ctx, 'message');
+  // '스크롤 글 차오름'은 아직 차지 않은 낱말도 읽히는 진하기(0.45)에서 시작
+  const mfx = fx(ctx, 'message', ctx.design.effects?.message === 'scroll-fill' ? { min: 0.45 } : undefined);
   const filled = (t) => { if (mfx) return { attr: mfx, html: br(t) }; const w = words(t); return { attr: ` style="--n:${Math.max(1, w.n)}"`, html: w.html }; };
   if (s.style === 'formula' && s.parts?.length) {
     const sr = s.parts.join(' 곱하기 ') + (s.result ? ' 는 ' + s.result : '');
@@ -169,9 +170,12 @@ const itemFx = (ctx) => (cardsFx(ctx) && cardsFx(ctx) !== 'stack-cards' ? fx(ctx
 /** 차례: 큰 번호가 붙은 넓은 판. 보통 단계부터 넓은 화면에서 판이 차례로 겹쳐 쌓임(CSS sticky, 움직임이 꺼지면 그냥 목록) */
 function outline(s, ctx) {
   const stack = cardsFx(ctx) === 'stack-cards' ? ` data-fx="stack-cards" data-fx-opts='{"top":"104px"}'` : '';
+  // 교재 쪽 그림이 있으면 그 부가 시작하는 쪽을 작은 그림으로(교재가 원본)
+  const slides = ctx.bp.sections.find((x) => x.type === 'deck')?.slides || [];
+  const thumb = (t) => { const sl = t && t.startsWith('deck:') ? slides.find((x) => String(x.page) === t.slice(5)) : null; return sl?.src ? `<img class="lp-outline-thumb" src="${esc(sl.src)}" alt="" loading="lazy" decoding="async">` : ''; };
   return wrap(s, ctx, head(s, ctx, '오늘의 차례') + `<ol class="lp-outline" style="--n:${s.items.length}"${stack}>${s.items.map((i, n) => {
     const target = i.target ? (i.target.startsWith('deck:') ? `#deck-p${i.target.slice(5)}` : '#' + i.target) : '';
-    return `<li class="lp-outline-item" style="--i:${n}"${itemFx(ctx)}><span class="lp-outline-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-outline-body">${i.part ? `<p class="lp-outline-part">${esc(i.part)}</p>` : ''}<h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div><div class="lp-outline-side">${i.tags.length ? `<ul class="lp-tags">${i.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : ''}</div></li>`;
+    return `<li class="lp-outline-item" style="--i:${n}"${itemFx(ctx)}><span class="lp-outline-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-outline-body">${i.part ? `<p class="lp-outline-part">${esc(i.part)}</p>` : ''}<h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div><div class="lp-outline-side">${thumb(i.target)}${i.tags.length ? `<ul class="lp-tags">${i.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : ''}</div></li>`;
   }).join('')}</ol>`);
 }
 
@@ -434,7 +438,7 @@ function closingWords(ctx) {
 /**
  * 마무리: 화면 폭을 채우는 띠에 아주 큰 문장. 프리셋의 첫 화면 구성(heroComposition)에서 쓴 표식을 한 번 더 써서 끝을 맺음
  * (밤하늘의 큰 날짜 윤곽 · 초대장의 해 · 숲의 언덕 · 형광 인쇄의 망점 · 칠판 틀 · 설계도의 치수선 …).
- * 꾸밈 조각은 모두 aria-hidden. 화려 단계에서는 이 연수의 낱말이 아래 띠로 흐름(CSS, 가벼운 모드·동작 줄이기에서는 멈춘 목록)
+ * 꾸밈 조각은 모두 aria-hidden. 스크롤 연출 단계에서는 이 연수의 낱말이 아래 띠로 흐름(CSS, 가벼운 모드·동작 줄이기에서는 멈춘 목록)
  */
 function closing(s, ctx) {
   const graphic = ctx.design.closingGraphic ? `<div class="lp-closing-graphic" data-fx="${esc(ctx.design.closingGraphic)}" aria-hidden="true"></div>` : '';

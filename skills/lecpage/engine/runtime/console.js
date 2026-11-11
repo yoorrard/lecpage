@@ -267,8 +267,27 @@
     r5.appendChild(btn('멈춤', 'lp-danger', function () { setState({ timer: null }); }));
     b.appendChild(r5);
     b.appendChild(el('p', 'lp-small', '타이머 여러 개·이름 뽑기·모둠 만들기는 발표 화면의 도구에 있어요.'));
+    // 자료 링크: 연수 중에 덧붙이면 참가자 화면의 자료실에 바로 보임(파일은 드라이브 등에 올린 공유 주소로)
+    var r6 = el('div', 'lp-row'); var mt = el('input'); mt.placeholder = '자료 이름'; mt.maxLength = 40; mt.setAttribute('aria-label', '자료 이름'); mt.style.flex = '1 1 8em';
+    var mu = el('input'); mu.type = 'url'; mu.placeholder = '자료 주소(https://)'; mu.setAttribute('aria-label', '자료 주소'); mu.style.flex = '2 1 12em';
+    r6.appendChild(mt); r6.appendChild(mu);
+    r6.appendChild(btn('자료 추가', 'lp-btn-primary', function () {
+      var patch = X.materialAdd(state, mu.value, mt.value);
+      if (patch.error) { toast(patch.error); return; }
+      setState(patch, '자료를 추가했어요. 참가자 화면의 자료실에 보여요.'); mt.value = ''; mu.value = '';
+    }));
+    b.appendChild(r6);
+    C.mats = el('ul', 'lp-console-mats'); b.appendChild(C.mats);
   }
-  function syncControl() { if (C.follow) C.follow.checked = !!state.follow; if (C.step && doc.activeElement !== C.step) C.step.value = state.step || ''; if (C.slide && doc.activeElement !== C.slide && state.slide) C.slide.value = state.slide; }
+  function drawMats() {
+    if (!C.mats) return; C.mats.textContent = '';
+    X.materials(state).forEach(function (m) {
+      var li = el('li'); var a = el('a', '', m.title); a.href = m.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; li.appendChild(a);
+      li.appendChild(btn('지우기', '', function () { setState(X.materialRemove(m.slot), '자료를 지웠어요.'); }));
+      C.mats.appendChild(li);
+    });
+  }
+  function syncControl() { drawMats(); if (C.follow) C.follow.checked = !!state.follow; if (C.step && doc.activeElement !== C.step) C.step.value = state.step || ''; if (C.slide && doc.activeElement !== C.slide && state.slide) C.slide.value = state.slide; }
 
   var KINDS = [
     ['participants', '참여자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],

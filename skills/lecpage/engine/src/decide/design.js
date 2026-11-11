@@ -28,7 +28,10 @@ export function rankPresets({ moods = [], topics = [], archetype = 'story', admi
 export function motionCap(audience = {}, admin = 'school', requested) {
   let cap = 3; const why = [];
   const devices = audience.devices || [];
-  if (devices.includes('chromebook') || devices.includes('phone')) { cap = Math.min(cap, 2); why.push('크롬북·휴대폰 접속이 많아 화려 단계는 쓰지 않습니다.'); }
+  // 크롬북이 섞이면 스크롤 연출(3단계)은 쓰지 않음. 휴대폰만 섞였을 때는 기본은 2단계까지, 선생님이 3단계를 직접 고르면 허용(휴대폰·저사양 기기는 화면이 알아서 한 단계 낮춤)
+  if (devices.includes('chromebook')) { cap = Math.min(cap, 2); why.push('크롬북 접속이 많아 스크롤 연출 단계는 쓰지 않습니다.'); }
+  else if (devices.includes('phone') && requested !== 3) { cap = Math.min(cap, 2); why.push('휴대폰 접속이 많아 스크롤 연출 단계는 쓰지 않습니다.'); }
+  else if (devices.includes('phone')) why.push('스크롤 연출을 골랐습니다. 휴대폰과 저사양 기기에서는 화면이 알아서 한 단계 낮춰 보여 줍니다.');
   if (audience.network === 'slow' || audience.network === 'restricted') { cap = Math.min(cap, 2); why.push('네트워크가 느리거나 제한적이라 무거운 효과를 뺍니다.'); }
   if (admin === 'official') { cap = Math.min(cap, 1); why.push('교육청 승인 직무연수라 움직임은 차분 단계까지만 씁니다.'); }
   if (Number.isFinite(requested)) cap = Math.min(cap, requested);
@@ -105,7 +108,7 @@ const HERO_SLOTS = ['hero.title', 'hero.cta', 'hero.graphic', 'hero.graphic.over
 const CLOSING_SLOTS = ['closing.title', 'closing.graphic'];
 
 /**
- * 대표 효과 예산: 1단계(차분)를 넘는 효과는 첫 화면과 대표 효과 하나에만 둡니다(화려 단계면 마무리까지).
+ * 대표 효과 예산: 1단계(차분)를 넘는 효과는 첫 화면과 대표 효과 하나에만 둡니다(스크롤 연출 단계면 마무리까지).
  * 나머지 칸은 같은 칸에 쓸 수 있는 1단계 효과로 바꾸거나 뺍니다. 실습형(lab)은 첫 화면 밖 전부가 1단계 이하입니다.
  * @returns {{effects, closingGraphic, signature, notes}}
  */

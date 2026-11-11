@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Field } from '../../components/ui.jsx';
 import { ItemEditor, hasItemEditor, useUndoBurst } from '../../components/ItemEditor.jsx';
 import { E } from '../../lib/engine.js';
-import { toast } from '../../lib/util.js';
+import { toast, fmtBytes } from '../../lib/util.js';
+import { blobs } from '../../lib/db.js';
+import { USER_ASSET } from '@engine/src/build.js';
 
 // + 섹션 추가: 비어 있지만 바로 고칠 수 있는 시작 내용. 제목은 엔진 기본값(intake.js·렌더러)과 같게.
 // 빈 항목은 채우기 전까지 사이트에 나오지 않아요(엔진이 뺌). 지어낸 자리 글('질문'·'보기 1'·'https://')은 넣지 않음.
@@ -83,7 +85,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
                 </button>
                 <button class="icon-btn" onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 섹션 보이기` : `${def.label} 섹션 숨기기`} title={s.hidden ? '섹션 보이기' : '섹션 숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
               </div>
-              {isOpen && <SectionEditor s={s} set={(patch) => setSec(i, patch)} pushUndo={pushUndo} anchors={s.type === 'hero' ? anchors : undefined} onRemove={s.type === 'hero' ? null : () => remove(i)} />}
+              {isOpen && <SectionEditor pid={p.id} s={s} set={(patch) => setSec(i, patch)} pushUndo={pushUndo} anchors={s.type === 'hero' ? anchors : undefined} onRemove={s.type === 'hero' ? null : () => remove(i)} />}
             </li>
           );
         })}
@@ -102,7 +104,39 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
 
 const isTyping = (el) => /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName) && !/^(checkbox|radio)$/.test(el.type);
 
-function SectionEditor({ s, set, onRemove, pushUndo, anchors }) {
+const safeName = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
+
+/** 자료실: 내 컴퓨터의 파일을 올림. 파일은 이 브라우저에 두었다가 공개할 때 사이트와 함께 올라가고, 참가자가 내려받음 */
+function MaterialUpload({ pid, s, put }) {
+  const inp = useRef(); const [busy, setBusy] = useState(false);
+  async function add(files) {
+    setBusy(true);
+    const items = (s.items || []).filter((x) => x && (x.title || x.href || x.url || x.desc)); let n = 0;
+    try {
+      for (const f of files) {
+        if (f.size > 100e6) { toast(`${f.name}: 100MB가 넘어 올릴 수 없어요. 영상은 유튜브 링크로 넣어 주세요.`); continue; }
+        if (items.length >= 30) { toast('자료는 30개까지 넣을 수 있어요.'); break; }
+        let name = safeName(f.name);
+        if (!USER_ASSET.test('assets/files/' + name)) { toast(`${f.name}: 이 형식은 올릴 수 없어요. 문서·그림·소리·영상·ZIP 파일을 넣어 주세요.`); continue; } const used = new Set(items.map((x) => String(x.href || '')));
+        for (let k = 2; used.has('assets/files/' + name); k++) name = safeName(f.name).replace(/(\.[^.]+)?$/, `-${k}$1`);
+        await blobs.put(pid, 'assets/files/' + name, new Uint8Array(await f.arrayBuffer()));
+        items.push({ title: f.name.replace(/\.[^.]+$/, '').slice(0, 100), href: 'assets/files/' + name, desc: '', kind: (f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 12), size: fmtBytes(f.size) });
+        n++;
+      }
+      if (n) { put({ items }); toast(`자료 ${n}개를 넣었어요. 공개하면 참가자가 내려받을 수 있어요.`); }
+    } catch (e) { toast('파일을 넣지 못했어요. 저장 공간을 확인해 주세요.'); }
+    setBusy(false);
+  }
+  return (
+    <div class="mat-up">
+      <button type="button" class="btn btn-sm" disabled={busy} onClick={() => inp.current?.click()}>{busy ? '넣는 중…' : '＋ 파일 올리기'}</button>
+      <span class="small muted">PDF·한글·PPT·ZIP 등. 공개한 뒤에 더 넣어도 돼요. 넣고 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 반영돼요.</span>
+      <input ref={inp} type="file" multiple hidden onChange={(e) => { add([...e.target.files]); e.target.value = ''; }} />
+    </div>
+  );
+}
+
+function SectionEditor({ pid, s, set, onRemove, pushUndo, anchors }) {
   const def = E.SECTION_DEFS[s.type] || { label: s.type };
   // 되돌리기: 입력 칸에 들어와 처음 고칠 때 한 번만 저장(글자마다 쌓이지 않게)
   const u = useUndoBurst(pushUndo, def.label);
@@ -117,7 +151,7 @@ function SectionEditor({ s, set, onRemove, pushUndo, anchors }) {
   let body = null;
   if (s.type === 'hero') body = <><Field label="큰 제목"><textarea rows={2} value={s.title || ''} maxLength={160} onInput={(e) => put({ title: e.target.value })} /></Field><Field label="부제"><input value={s.subtitle || ''} maxLength={400} onInput={(e) => put({ subtitle: e.target.value })} /></Field><ItemEditor s={s} set={put} u={u} anchors={anchors} /></>;
   else if (s.type === 'survey') body = <SurveyEditor s={s} set={put} />;
-  else if (hasItemEditor(s.type)) body = <ItemEditor s={s} set={put} u={u} anchors={anchors} />;
+  else if (hasItemEditor(s.type)) body = <>{s.type === 'materials' && <MaterialUpload pid={pid} s={s} put={(patch) => { u.now?.(); put(patch); }} />}<ItemEditor s={s} set={put} u={u} anchors={anchors} /></>;
   else body = <Field label="안내 문장"><textarea rows={2} value={s.lead || ''} maxLength={300} onInput={(e) => put({ lead: e.target.value })} /></Field>;
   return (
     <div class="sec-body" onFocusCapture={(e) => { if (isTyping(e.target)) u.arm(); }}>

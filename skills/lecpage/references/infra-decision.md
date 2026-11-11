@@ -1,8 +1,9 @@
 # 인프라 결정 가이드 (어디에 올리고, 실시간은 무엇으로 할까)
 
-> skill이 "배포·실시간" 단계에서 읽는 문서입니다. 순서: **1. 입력 모으기 → 2. `decide-infra` 실행(§4 규칙과 같은 결과) → 3. 경고 확인(§4 guards) → 4. 교사에게 설명(§9) → 5. 해당 `deploy/*.md` 안내**.
-> 숫자는 2026-11-09에 공식 페이지에서 다시 확인했습니다(§11 출처). 확인 못 한 값은 ⚠️ 표시.
+> skill이 "배포·실시간" 단계에서 읽는 문서입니다. 순서: **1. 입력 모으기 → 2. `decide-infra` 실행(§4 규칙과 같은 결과) → 3. 경고 확인(§4 guards) → 4. 교사에게 설명(§9) → 5. 해당 `deploy/*.md`대로 올리기**.
+> 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
 > 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
+> 올릴 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
 > lecpage 운영자는 **공용 실시간 중계를 운영하지 않습니다**(이유: `docs/operations.md`). 실시간은 언제나 강사 소유 백엔드입니다.
 
 ---
@@ -23,9 +24,13 @@
 | `blocked` | 문자열 목록 | 학교에서 막힌 사이트를 아시나요? (check.html 결과로 채움) | `audience.blocked` |
 | `infra` | `github google cloudflare aws azure gcp docker-host school-server nas vps raspberry-pi laptop` | 이미 쓰는 계정·서버가 있나요?(GitHub, 구글, AWS, 학교 서버, NAS…) | `[]` |
 | `customDomain` | bool | 내 도메인(예: lec.school.kr)이 있나요? | false |
-| `paid` | bool | 강사료 등 대가를 받는 연수인가요? (일부 무료 요금제 약관에 영향) | false |
+| `paid` | bool | 강사료 등 대가를 받는 연수인가요? (Vercel 무료는 비상업만) | false |
+| `previous` | 올릴 곳 id | 지난번에 올린 곳이 있나요? (같은 주소를 이어 씀) | 없음 |
+| `connected` | 올릴 곳 id 목록 | 이미 쓰는 곳이 있나요? skill은 묻기 전에 셸에서 확인: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN` | `[]` |
+| `keep` | `long` | 연수 뒤에도 오래 둘 사이트인가요? | 없음 |
 | `access` | `link` · `public` · `password` | 사이트를 누가 볼 수 있나요? 주소·QR을 받은 사람만 / 누구나(검색 허용) / 암호를 아는 사람만 | `link` |
-| `siteMB` | 수 | (엔진이 계산) 빌드된 사이트 크기 | 빌드 결과 |
+| `siteMB` · `files` · `maxFileMB` | 수 | (빌드 결과) 사이트 크기, 파일 수, 가장 큰 파일. 앞의 둘은 빌드 요약 줄에, 큰 파일은 `find dist -type f -size +5M`로 | 빌드 결과 |
+| `instant` | bool | (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱인지. skill은 쓰지 않음 | false |
 
 파생 값
 - `realtime` = `features`에 `qa help progress poll reactions signal` 중 하나라도 있음.
@@ -41,21 +46,38 @@
 
 ## 2. 빠른 결론 표 (사람이 먼저 보는 표)
 
-| 상황 | 정적 호스팅 | 실시간 | 월 비용 | 가이드 |
-|---|---|---|---|---|
-| 실시간 없음, 클릭만 | GitHub Pages(앱에서 바로) 또는 Cloudflare Pages 끌어 놓기 | none | 0원 | `deploy/github-pages.md`, `deploy/cloudflare.md` |
-| 실시간 없음, GitHub 씀 | GitHub Pages | none | 0원 | `deploy/github-pages.md` |
-| 출석·제출만 모음, 40명 이하 | 위와 같음 | Google Sheets + Apps Script | 0원 | backends/apps-script |
-| **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | 위와 같음 | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
-| 100명 이하, 회원가입 가능 | Cloudflare / GitHub Pages | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
-| 100명 넘음, 또는 반응이 많음 | Cloudflare Workers 정적 자산 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
-| 서버·NAS·VPS·학교 서버가 있음 | 같은 서버(Caddy/nginx) | node-server(Docker) | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
-| 서버는 없지만 node-server를 쓰고 싶은 개발자 | Cloudflare | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
-| 인터넷이 없거나 심하게 막힘 | 강사 노트북(교실 LAN) | node-server(노트북) | 0원(+공유기) | `deploy/local-lan-classroom.md` |
-| 실시간 필요 없고 인터넷도 없음 | USB·ZIP | none/local | 0원 | `deploy/zip-usb-offline.md` |
-| 기관 AWS 계정 | S3 + CloudFront(콘솔만이면 Amplify) | Supabase 또는 Lightsail(서울) node-server | 0원~월 $5 | `deploy/aws-s3-cloudfront.md`, `deploy/aws-lightsail-docker.md` |
-| 기관 Azure | Azure Static Web Apps(무료) | Supabase / node-server | 0원 | `deploy/azure-static-web-apps.md` |
-| 학생(미성년) + 실명 | 학교 서버·NAS·노트북 | node-server(학교 안) 또는 local | 0원 | `deploy/local-lan-classroom.md` |
+올릴 곳과 실시간은 따로 고릅니다. 올릴 곳이 Vercel·GitHub Pages여도 실시간은 Sheets·Supabase·Cloudflare 중계 그대로입니다(Vercel 안에 두지 않음).
+
+### 2.1 올릴 곳 (모두 0원, 앞에 있을수록 추천)
+
+| 상황 | 올릴 곳 | 가이드 |
+|---|---|---|
+| **앱(클릭만)** | **Vercel**(토큰으로 앱에서 바로, 다시 올려도 같은 주소) · GitHub Pages · Cloudflare(ZIP 끌어 놓기) · Netlify(이미 쓰는 분) | `deploy/vercel.md` |
+| **skill(명령 가능)** | **Cloudflare Workers 정적 자산**(`wrangler deploy --assets`, 계정이 없으면 `--temporary`) · Vercel(`VERCEL_TOKEN`) · GitHub Pages(`gh`) · Netlify | `deploy/cloudflare.md` |
+| 강사료를 받는 연수 | Cloudflare · GitHub Pages (Vercel 무료는 비상업만이라 뺌) | `deploy/cloudflare.md` |
+| 사이트가 100MB를 넘음 | GitHub Pages (Vercel은 한 번에 100MB까지) | `deploy/github-pages.md` |
+| 25MB 넘는 파일이 있음, 파일이 1,000개를 넘음 | Cloudflare를 맨 뒤로. 추천이 Cloudflare였으면 GitHub Pages | `deploy/github-pages.md` |
+| 내 도메인을 붙일 계획, (skill) 학교망이 엄격함 | Cloudflare | `deploy/custom-domain-and-short-url.md` |
+| 지난번에 올린 곳, 이미 연결해 둔 곳이 있음 | 그곳 먼저(Netlify는 이때만 앞에 옴) | 해당 가이드 |
+| 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
+| 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
+| 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
+| (앱 전용) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 30일 뒤 지워짐) | 앱 화면 |
+
+### 2.2 실시간
+
+| 상황 | 실시간 | 월 비용 | 가이드 |
+|---|---|---|---|
+| 참여 기록이 필요 없음 | none | 0원 | — |
+| 출석·제출만 모음, 40명 이하 | Google Sheets + Apps Script | 0원 | backends/apps-script |
+| **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
+| 100명 이하, 회원가입 가능 | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
+| 100명 넘음, 또는 반응이 많음 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**. GitHub 계정도 필요) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
+| 서버·NAS·VPS·학교 서버가 있음 | node-server(Docker). 사이트도 같은 서버 | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
+| 서버는 없지만 node-server를 쓰고 싶은 개발자 | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
+| 인터넷이 없거나 심하게 막힘 | node-server(강사 노트북, 교실 LAN) | 0원(+공유기) | `deploy/local-lan-classroom.md` |
+| 기관 AWS 계정 | Supabase 또는 Lightsail(서울) node-server | 0원~월 $5 | `deploy/aws-lightsail-docker.md` |
+| 학생(미성년) + 실명 | node-server(학교 서버·NAS·노트북) 또는 local | 0원 | `deploy/local-lan-classroom.md` |
 
 ---
 

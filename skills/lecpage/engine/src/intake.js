@@ -59,9 +59,10 @@ export function draftInfo(info = {}, slidesMade = false) {
 
 /** 강사가 고른 연수 형식으로 사이트 유형(칸 순서)을 정함. format이 없으면 '' */
 export function archetypeFor(info = {}, material = null) {
-  if (!info.format) return '';
+  const format = info.format || (info.request ? requestHints(info.request).format : '');
+  if (!format) return '';
   const ev = material?.detected?.event || {};
-  return decideArchetype({ format: info.format, durationMin: minutesBetween(info.start || ev.start, info.end || ev.end) || undefined, size: info.size, practiceRatio: material?.detected?.practice?.ratio }).primary;
+  return decideArchetype({ format, durationMin: minutesBetween(info.start || ev.start, info.end || ev.end) || undefined, size: info.size, practiceRatio: material?.detected?.practice?.ratio }).primary;
 }
 
 const insertBefore = (bp, types, sec) => { const i = bp.sections.findIndex((s) => types.includes(s?.type)); bp.sections.splice(i < 0 ? bp.sections.length : i, 0, sec); };
@@ -97,12 +98,36 @@ export function applyFeatures(bp, info = {}) {
   return bp;
 }
 
-/** 강사 답의 디자인 값(있을 때만): 분위기 낱말·움직임·강조색·로고·프리셋 */
+const REQUEST_COLORS = [
+  [/남색|네이비|군청/, '#1E3A8A'], [/하늘색|스카이/, '#0284C7'], [/파란|파랑|블루|푸른/, '#2563EB'], [/청록|민트|틸/, '#0D9488'], [/초록|녹색|그린/, '#15803D'],
+  [/보라|퍼플|바이올렛/, '#6D28D9'], [/분홍|핑크/, '#DB2777'], [/빨간|빨강|레드|붉은/, '#DC2626'], [/주황|오렌지/, '#EA580C'], [/노란|노랑|옐로/, '#CA8A04'],
+  [/갈색|브라운|베이지/, '#92400E'], [/검정|검은|블랙|흑백|모노/, '#111827'],
+];
+/**
+ * 요청 사항(자유 글)에서 바로 반영할 수 있는 것만 뽑음: 분위기·강조색·밝기·움직임·형식.
+ * AI 없이 만든 기본 초안도 요청에 맞추려는 것이고, 나머지 내용은 AI 프롬프트(buildPrompt)로 갑니다.
+ */
+export function requestHints(text) {
+  const t = String(text || '').slice(0, 1000); const out = { mood: moodFromWords([t]) };
+  const c = REQUEST_COLORS.find(([re]) => re.test(t)); if (c) out.accent = c[1];
+  if (/어둡게|어두운|다크/.test(t)) out.theme = 'dark'; else if (/밝게|밝은 (?:화면|배경|바탕)|화이트|라이트/.test(t)) out.theme = 'light';
+  if (/(?:움직임|모션|효과|애니메이션)(?:은|이|을)? ?(?:없|빼|끄)|정적/.test(t)) out.motion = 0;
+  else if (/스크롤 ?(?:연출|텔링)|스크롤리텔링|패럴랙스|시차|인터랙티브|화려|역동|다이내믹/.test(t)) out.motion = 3;
+  else if (/차분|잔잔|조용|담백/.test(t)) out.motion = 1;
+  if (/실습 ?(?:위주|중심)|워크숍/.test(t)) out.format = 'practice'; else if (/강의 ?(?:위주|중심)|특강/.test(t)) out.format = 'lecture';
+  return out;
+}
+
+/** 강사 답의 디자인 값(있을 때만): 분위기 낱말·움직임·강조색·로고·프리셋. 따로 고르지 않은 것은 요청 사항에서 읽음 */
 function applyDesignAnswers(bp, info) {
   bp.design = bp.design || {};
-  if (info.mood) { const m = moodFromWords([].concat(info.mood)); if (m.length) { bp.design.mood = m; if (bp._presetAuto) delete bp.design.preset; } }
-  if (has(info, 'motion') && info.motion !== '') bp.design.motion = +info.motion;
+  const hint = info.request ? requestHints(info.request) : {};
+  const mood = info.mood ? moodFromWords([].concat(info.mood)) : hint.mood || [];
+  if (mood.length) { bp.design.mood = [...new Set([...mood, ...(info.mood ? [] : bp.design.mood || [])])].slice(0, 4); if (bp._presetAuto) delete bp.design.preset; }
+  if (has(info, 'motion') && info.motion !== '') bp.design.motion = +info.motion; else if (hint.motion !== undefined && bp.design.motion === undefined) bp.design.motion = hint.motion;
   if ('accent' in info) { if (info.accent) bp.design.accent = info.accent; else delete bp.design.accent; }
+  else if (hint.accent && bp._presetAuto) bp.design.accent = hint.accent;
+  if (hint.theme && (!bp.design.theme || bp.design.theme === 'preset') && bp._presetAuto) bp.design.theme = hint.theme;
   if (info.logo) bp.design.logo = info.logo;
   if (info.preset && PRESET_IDS.includes(info.preset)) { bp.design.preset = info.preset; delete bp._presetAuto; }
 }

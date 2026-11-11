@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, validate } from '../src/index.js';
+import { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, validate, requestHints, buildPrompt } from '../src/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EX = () => JSON.parse(readFileSync(join(HERE, '..', '..', 'examples', 'data-lab.blueprint.json'), 'utf8'));
@@ -100,4 +100,24 @@ test('draftInfo·archetypeFor: 앱 정보와 info.json 모두 초안 입력으�
   assert.equal(archetypeFor({ format: 'course' }), 'course');
   assert.equal(archetypeFor({ format: 'practice' }), 'lab');
   assert.equal(archetypeFor({}), '');
+});
+
+test('요청 사항: 분위기·색·밝기·움직임·형식을 읽어 초안에 반영하고, AI 프롬프트에는 따로 적음', () => {
+  const h = requestHints('실습 위주로, 차분한 남색 계열에 어둡게 해 주세요');
+  assert.deepEqual(h.mood, ['calm']); assert.equal(h.accent, '#1E3A8A'); assert.equal(h.theme, 'dark'); assert.equal(h.motion, 1); assert.equal(h.format, 'practice');
+  assert.equal(requestHints('스크롤 연출이 있는 화려한 페이지').motion, 3);
+  assert.equal(requestHints('움직임 없이 깔끔하게').motion, 0);
+  assert.deepEqual(requestHints(''), { mood: [] });
+  // 초안: 요청의 색·분위기가 들어가고, 강사가 따로 고른 값이 있으면 그 값이 먼저
+  const base = { _presetAuto: true, meta: { title: '연수' }, design: { mood: [], theme: 'preset' }, sections: [{ type: 'hero', title: '연수' }] };
+  const a = applyInfo(structuredClone(base), { title: '연수', request: '따뜻한 분홍 계열로' });
+  assert.equal(a.design.accent, '#DB2777'); assert.ok(a.design.mood.includes('warm'));
+  const b = applyInfo(structuredClone(base), { title: '연수', request: '따뜻한 분홍 계열로', accent: '#123456', mood: ['공식'] });
+  assert.equal(b.design.accent, '#123456'); assert.deepEqual(b.design.mood, ['formal']);
+  assert.equal(archetypeFor({ request: '실습 위주로 구성' }), 'lab');
+  // 프롬프트: 요청은 '강사의 요청 사항' 아래에만, 연수 정보 JSON에는 넣지 않음
+  const p = buildPrompt({ context: '교재', info: { title: '연수', request: '초등 저학년 담임 대상으로 쉽게' } });
+  assert.match(p, /## 강사의 요청 사항\n초등 저학년 담임 대상으로 쉽게/);
+  assert.ok(!/"request"/.test(p));
+  assert.ok(!/강사의 요청 사항\n/.test(buildPrompt({ context: '교재', info: { title: '연수' } })));
 });

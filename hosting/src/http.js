@@ -13,6 +13,7 @@ export const ERRORS = {
   full: [507, '바로 공개 저장 공간이 가득 찼어요. 다른 공개 방법을 써 주세요.'],
   blocked: [403, '신고가 들어와 가려 둔 사이트예요.'],
   missing_blobs: [409, '아직 올라오지 않은 파일이 있어요.'],
+  code_taken: [409, '이 연수 코드는 다른 사이트가 쓰고 있어요. 다른 코드로 해 주세요.'],
 };
 
 export class HttpError extends Error {

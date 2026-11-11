@@ -5,7 +5,7 @@
 // 필드
 //  id, name_ko, name_en, group(text|scroll|interaction|graphic|lib)
 //  slots[]  계약 슬롯   moods[] MOODS 어휘   topics[] TOPICS 어휘
-//  level    0 기능형(모션 0에서도 동작) · 1 차분 · 2 보통 · 3 화려
+//  level    0 기능형(모션 0에서도 동작) · 1 차분 · 2 보통 · 3 스크롤 연출
 //  loop     5초 넘게 스스로 움직임(멈춤 버튼 대상)
 //  libs[]   지연 로드하는 jsDelivr 버전 고정 URL   license  효과 코드·라이브러리 라이선스
 //  desc_ko  무엇인지   use_ko 언제·어떻게(마크업·옵션)   a11y_ko 접근성 메모
@@ -31,13 +31,13 @@ export const TOPIC_LABELS = {
   career: '진로', safety: '안전', policy: '정책 설명', admin: '행정·업무', parent: '학부모', general: '일반'
 };
 
-export const GROUPS = { text: '글자', scroll: '스크롤·배치', interaction: '상호작용', graphic: '그래픽 배경', lib: '라이브러리(강도 3)' };
+export const GROUPS = { text: '글자', scroll: '스크롤·배치', interaction: '상호작용', graphic: '그래픽 배경', lib: '라이브러리(스크롤 연출)' };
 
-const MIT = 'MIT(lecpage)';
+const MIT = 'MIT-0(lecpage)'; // lecpage 런타임 코드의 라이선스. 바깥 라이브러리는 제 라이선스를 따로 적음
 
 export const FX = [
   // ───────── 글자 ─────────
-  { id: 'split-reveal', name_ko: '마스크 글자 등장', name_en: 'Split reveal', group: 'text',
+  { id: 'split-reveal', name_ko: '글자 드러내기', name_en: 'Split reveal', group: 'text',
     slots: ['hero.title', 'section.title', 'closing.title', 'message'], moods: ['editorial', 'bold', 'minimal', 'formal', 'futuristic'], topics: ['general', 'policy', 'ai', 'history', 'career'],
     level: 2, libs: [], license: MIT, trend: 'up', weightKB: 1.4,
     desc_ko: '제목을 줄·낱말·글자로 나눠 보이지 않는 틀 안에서 아래에서 위로 밀어 올립니다. 수상작 포트폴리오의 대표 등장 방식입니다.',
@@ -135,7 +135,7 @@ export const FX = [
     desc_ko: '위쪽에 읽은 만큼 차는 막대, 넓은 화면 오른쪽에 섹션 단계 점(이름은 마우스·포커스에), 좁은 화면은 "3 / 7 실습" 칩.',
     use_ko: '빈 <div data-fx="guided-progress">를 body 맨 앞에. 섹션의 data-nav와 id를 읽습니다. opts: top("64px" 고정 머리 높이), steps(선택자), label.',
     a11y_ko: '단계는 실제 링크 목록(nav, aria-current="step"). 막대는 장식. 모션 0에서도 동작.' },
-  { id: 'sticky-scrolly', name_ko: '고정 그림 스크롤리텔링', name_en: 'Sticky scrollytelling', group: 'scroll',
+  { id: 'sticky-scrolly', name_ko: '그림 고정 스크롤', name_en: 'Sticky scrollytelling', group: 'scroll',
     slots: ['message', 'schedule', 'section.enter'], moods: ['editorial', 'calm', 'emotional', 'formal', 'tech'], topics: ['sel', 'policy', 'science', 'history', 'ai', 'general'],
     level: 2, libs: [], license: MIT, trend: 'up', weightKB: 2.8,
     desc_ko: '한쪽 그림은 고정되고, 옆 단계 글을 읽어 내려가면 그림이 단계에 맞게 바뀝니다. 그림이 없으면 큰 번호·제목·진행 고리를 만듭니다.',
@@ -213,7 +213,7 @@ export const FX = [
     slots: ['cards', 'list', 'gallery'], moods: ['minimal', 'tech', 'calm', 'formal', 'editorial'], topics: ['edutech', 'general', 'coding', 'admin'],
     level: 1, libs: [], license: MIT, trend: 'up', weightKB: 1.3,
     desc_ko: '탭·필터·펼치기로 바뀌는 화면을 View Transitions API로 부드럽게 잇습니다. 직접 쓰려면 LecFX.swap(fn).',
-    use_ko: '실습 정거장 탭·자료 필터 컨테이너에. opts.items(가로챌 클릭 대상 선택자).',
+    use_ko: '실습 실습 탭·자료 필터 컨테이너에. opts.items(가로챌 클릭 대상 선택자).',
     a11y_ko: '지원 안 하는 브라우저·동작 줄이기면 원래 동작 그대로. 포커스 이동은 원래 스크립트가 담당.' },
   { id: 'border-beam', name_ko: '테두리 빛줄기', name_en: 'Border beam', group: 'interaction', loop: true,
     slots: ['hero.cta', 'cards'], moods: ['futuristic', 'tech', 'bold'], topics: ['ai', 'edutech', 'coding'],
@@ -301,7 +301,7 @@ export const FX = [
     desc_ko: '자체 rough 알고리즘으로 손그림 선을 만듭니다. 글에는 밑줄·동그라미·상자·형광·취소선·괄호 주석, 섹션에는 모서리 낙서(별·소용돌이·화살표·하트).',
     use_ko: '글: opts.mode "underline"|"circle"|"box"|"highlight"|"strike"|"bracket", color. 섹션: mode:"decor", count, shapes.',
     a11y_ko: '모두 aria-hidden 장식. 동작 줄이기면 그려진 상태.' },
-  { id: 'confetti-shapes', name_ko: '멤피스 도형', name_en: 'Memphis shapes', group: 'graphic',
+  { id: 'confetti-shapes', name_ko: '도형 무늬', name_en: 'Memphis shapes', group: 'graphic',
     slots: ['hero.graphic', 'closing.graphic'], moods: ['playful', 'retro', 'bold', 'energetic'], topics: ['math', 'art', 'pe', 'english', 'parent', 'general'],
     level: 1, libs: [], license: MIT, trend: 'std', weightKB: 2.3,
     desc_ko: '세모·고리·물결·점 묶음·더하기·반원을 가장자리에 흩어 둡니다(정지 SVG). 강도 2 이상은 포인터에 살짝 시차.',
@@ -313,7 +313,7 @@ export const FX = [
     desc_ko: '칠판 질감(분필 가루·지운 자국)과 분필 낙서(바를 정 正, 화살표, 별, +, =, 체크)가 한 번 그려집니다. 영역을 어두운 칠판 색으로 바꿉니다.',
     use_ko: '교실 느낌 히어로에. opts: marks(["jeong","arrow","star","plus","eq","loop","check"]), count(6).',
     a11y_ko: '어두운 바탕에서 글자 대비를 계산해 맞춤. 동작 줄이기면 그려진 상태.' },
-  { id: 'shader-gradient', name_ko: '셰이더 그라데이션', name_en: 'Shader gradient', group: 'graphic', loop: true,
+  { id: 'shader-gradient', name_ko: '흐르는 색', name_en: 'Shader gradient', group: 'graphic', loop: true,
     slots: ['hero.graphic', 'closing.graphic'], moods: ['futuristic', 'tech', 'bold', 'emotional'], topics: ['ai', 'edutech', 'coding', 'science', 'art'],
     level: 3, libs: [], license: MIT, trend: 'up', weightKB: 3.8,
     desc_ko: 'WebGL 조각 셰이더로 만든 흐르는 잡음 그라데이션(도메인 워핑 + 그레인). three.js 없이 4KB.',
@@ -325,7 +325,7 @@ export const FX = [
     desc_ko: '원뿔 그라데이션이 겹쳐 천천히 도는 빛나는 구(AI 음성 비서 느낌). 숨 쉬듯 커졌다 작아지고 포인터 쪽으로 살짝 기웁니다.',
     use_ko: 'AI 연수 히어로 오른쪽에. opts: align("right"|"center"|"left"), size.',
     a11y_ko: '멈춤·화면 밖에서 멈춤. 저사양·동작 줄이기면 정지.' },
-  { id: 'riso', name_ko: '리소 인쇄 망점', name_en: 'Risograph', group: 'graphic',
+  { id: 'riso', name_ko: '인쇄 망점', name_en: 'Risograph', group: 'graphic',
     slots: ['hero.graphic', 'closing.graphic'], moods: ['retro', 'editorial', 'handmade', 'playful', 'bold'], topics: ['art', 'reading', 'history', 'korean', 'music'],
     level: 1, libs: [], license: MIT, trend: 'up', weightKB: 0.6,
     desc_ko: '두 잉크(주 색·강조 색)의 망점이 살짝 어긋나 겹치는 리소그래프 인쇄 질감(정지).',
@@ -345,15 +345,15 @@ export const FX = [
     desc_ko: 'Lenis로 휠 스크롤을 부드럽게 합니다. 수상작 사이트의 "무게감 있는 스크롤".',
     use_ko: '<body data-fx="smooth-scroll">. opts: lerp(0.11), wheel. gsap-scroll과 함께 쓰면 자동 연동.',
     a11y_ko: '터치·저사양·동작 줄이기·멈춤에서는 끔(기본 스크롤). 불러오기 실패해도 기본 스크롤.' },
-  { id: 'gsap-scroll', name_ko: '고정 섹션 스크럽', name_en: 'GSAP ScrollTrigger scrub', group: 'lib',
+  { id: 'gsap-scroll', name_ko: '고정 장면 스크롤', name_en: 'GSAP ScrollTrigger scrub', group: 'lib',
     slots: ['section.enter', 'message', 'schedule'], moods: ['bold', 'editorial', 'futuristic', 'energetic'], topics: ['ai', 'policy', 'history', 'general'],
     level: 3, libs: ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js', 'https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/ScrollTrigger.min.js'], license: 'GSAP Standard License(무료, 상업 사용 가능) · 효과 코드 MIT', trend: 'std', weightKB: 2.4,
     desc_ko: 'GSAP ScrollTrigger로 섹션을 잠깐 고정하고 안쪽 요소가 스크롤에 맞춰 차례로 떠오릅니다(scrub). 넓은 화면만 고정.',
     use_ko: '핵심 메시지 섹션 하나에. 요소에 [data-gsap-item](없으면 제목·문단·목록). opts: distance(110%), pin:false.',
     a11y_ko: 'gsap.matchMedia로 동작 줄이기 존중. 라이브러리가 안 와도 아무것도 숨기지 않음. 약 46KB(gzip) 추가.' },
-  { id: 'three-hero', name_ko: '점 구름 구체(WebGL)', name_en: 'Point-cloud sphere (OGL)', group: 'lib', loop: true,
+  { id: 'three-hero', name_ko: '점 구슬', name_en: 'Point-cloud sphere (OGL)', group: 'lib', loop: true,
     slots: ['hero.graphic'], moods: ['futuristic', 'tech', 'bold'], topics: ['ai', 'science', 'edutech', 'coding'],
-    level: 3, libs: ['https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm'], license: 'Unlicense(OGL) · 효과 코드 MIT', trend: 'up', weightKB: 4.4,
+    level: 3, libs: ['https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm'], license: 'Unlicense(OGL) · 효과 코드 MIT-0', trend: 'up', weightKB: 4.4,
     desc_ko: 'OGL(작은 WebGL 라이브러리)로 만든 2,400개 점의 구체가 천천히 돌고 표면이 숨 쉬며 포인터 쪽으로 기웁니다.',
     use_ko: 'AI·과학 연수 히어로에 하나. opts: align, count. 라이브러리 약 39KB(gzip) 지연 로드.',
     a11y_ko: '동작 줄이기·저사양·불러오기 실패면 점무늬 CSS 구(정지). 화면 밖·멈춤에서 정지.' }

@@ -99,7 +99,10 @@ export function baseTokens(preset, opts = {}) {
     '--font-sans': fontStack(f.body),
     '--font-display': fontStack(f.display),
     '--font-mono': fontStack(f.mono),
+    // 숫자·영문 제목: 라틴 글꼴을 앞에, 한글(단위·낱말)은 제목 글꼴로 이어 받음
+    '--font-num': f.num && FONTS[f.num] ? `'${FONTS[f.num].family}', ${fontStack(f.display)}` : fontStack(f.display),
     '--display-weight': String(f.displayWeight || 800),
+    '--num-weight': String(FONTS[f.num]?.numWeight || FONTS[f.display]?.displayWeight || f.displayWeight || 800), // 숫자 글꼴에 있는 굵기(가짜 굵게 방지)
     '--radius': s.radius + 'px', '--radius-sm': s.radiusSm + 'px', '--radius-lg': s.radiusLg + 'px',
     '--border-w': s.borderW + 'px',
     '--ease-out': 'cubic-bezier(.16,1,.3,1)', '--ease-in-out': 'cubic-bezier(.65,0,.35,1)',
@@ -123,15 +126,16 @@ export function themeCSS(design = {}) {
   const dw = FONTS[fonts.display]?.displayWeight || (changed ? design.fonts?.displayWeight || 700 : preset.fonts.displayWeight || 800);
   if (changed || FONTS[fonts.display]?.displayWeight) base['--display-weight'] = String(dw);
   // 글꼴 파일: 역할마다 실제 쓰는 굵기만(글꼴당 최대 2개)
-  let assets = fontAssets([fonts.display, fonts.body, fonts.mono], fontNeeds(fonts, dw));
+  let assets = fontAssets([fonts.display, fonts.body, fonts.num, fonts.mono], fontNeeds(fonts, dw));
   if (pair) {
     // 글꼴 짝: key가 있으면 글꼴 목록(FONTS)의 주소·굵기 파일을 쓰고, 없으면 짝에 적힌 스타일시트를 씀
     const side = (x) => (x.key && FONTS[x.key] ? { stack: fontStack(x.key), key: x.key } : { stack: x.stack || `'${x.family}', sans-serif`, css: x.css });
     const dsp = side(pair.display), bod = side(pair.body);
     base['--font-display'] = dsp.stack; base['--font-sans'] = bod.stack;
+    if (fonts.num && FONTS[fonts.num]) base['--font-num'] = `'${FONTS[fonts.num].family}', ${dsp.stack}`;
     const pw = pair.display.weight || FONTS[dsp.key]?.displayWeight || 700;
     base['--display-weight'] = String(pw);
-    const keyed = fontAssets([dsp.key, bod.key, fonts.mono], fontNeeds({ display: dsp.key, body: bod.key, mono: fonts.mono }, pw));
+    const keyed = fontAssets([dsp.key, bod.key, fonts.num, fonts.mono], fontNeeds({ display: dsp.key, body: bod.key, num: fonts.num, mono: fonts.mono }, pw));
     assets = { faceCss: keyed.faceCss, links: [...new Set([dsp.css, bod.css, ...keyed.links].filter(Boolean))] };
   }
   const css = [
@@ -156,7 +160,7 @@ export function themeCSS(design = {}) {
 
 function pickFontKeys(fonts) {
   const out = {};
-  for (const k of ['display', 'body', 'mono']) if (fonts[k] && FONTS[fonts[k]]) out[k] = fonts[k];
+  for (const k of ['display', 'body', 'num', 'mono']) if (fonts[k] && FONTS[fonts[k]]) out[k] = fonts[k];
   return out;
 }
 

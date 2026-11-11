@@ -333,8 +333,10 @@
   // ---------------------------------------------------------------- state extensions
   // Servers keep unknown top-level state keys out, so new instructor settings live in state.ui (scalars, ≤200 chars):
   //   ui.reveal = 'pollA|pollB'   ui.signalReset = ms   ui.hiddenWords = 'w1|w2'   ui.timers = '[[label,endsAt,remaining,running]…]'
+  //   ui.m1…m8 = '<https url> <title>' (자료 링크: 강사 화면에서 연수 중에 덧붙임)
   // Readers also accept the top-level forms (pollReveal{}, signalReset, hiddenWords[], timers[]) if a backend stores them.
   var UI_MAX = 200;
+  var MAT_MAX = 8, MAT_URL = /^https:\/\/[^\s<>"'`]+$/i;
   function splitList(s) { return typeof s === 'string' && s ? s.split('|').filter(Boolean) : []; }
   function joinList(list) {
     var a = list.filter(Boolean).map(function (x) { return String(x).replace(/\|/g, ' '); });
@@ -362,6 +364,32 @@
       var raw = uiOf(st).timers; if (!raw) return [];
       try { return JSON.parse(raw).map(function (t) { return { label: String(t[0] || ''), endsAt: +t[1] || 0, remaining: +t[2] || 0, running: !!t[3] }; }); } catch (e) { return []; }
     },
+    /** 강사가 연수 중에 덧붙인 자료 링크(ui.m1…m8 = '<https 주소> <이름>') → [{slot, url, title}] */
+    materials: function (st) {
+      var ui = uiOf(st), out = [];
+      for (var i = 1; i <= MAT_MAX; i++) {
+        var v = ui['m' + i]; if (typeof v !== 'string' || !v) continue;
+        var sp = v.indexOf(' '); var url = sp < 0 ? v : v.slice(0, sp);
+        if (!MAT_URL.test(url)) continue;
+        out.push({ slot: i, url: url, title: (sp < 0 ? '' : v.slice(sp + 1).trim()) || url.replace(/^https:\/\/(www\.)?/, '').slice(0, 40) });
+      }
+      return out;
+    },
+    /** 자료 링크 하나 넣기 → setState에 줄 patch. 넣을 수 없으면 { error: 까닭 } */
+    materialAdd: function (st, url, title) {
+      url = String(url || '').trim(); if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(url)) url = 'https://' + url; // drive.google.com/… 처럼 앞을 뺀 주소
+      var okUrl = MAT_URL.test(url);
+      if (okUrl) { try { var u = new URL(url); okUrl = u.protocol === 'https:' && u.hostname.indexOf('.') > 0; } catch (e) { okUrl = false; } }
+      if (!okUrl) return { error: 'https://로 시작하는 주소를 넣어 주세요.' };
+      if (url.length > UI_MAX - 30) return { error: '주소가 너무 길어요. 짧은 주소로 바꿔 넣어 주세요.' };
+      var ui = uiOf(st), slot = 0;
+      for (var i = 1; i <= MAT_MAX; i++) if (!ui['m' + i]) { slot = i; break; }
+      if (!slot) return { error: '자료 링크는 ' + MAT_MAX + '개까지 넣을 수 있어요.' };
+      var t = cps(String(title || '').replace(/\s+/g, ' ').trim()).slice(0, UI_MAX - url.length - 1).join('');
+      var patch = {}; patch['m' + slot] = t ? url + ' ' + t : url;
+      return { ui: patch };
+    },
+    materialRemove: function (slot) { var patch = {}; patch['m' + slot] = null; return { ui: patch }; },
     timersValue: function (list) {
       var out = (list || []).slice(0, 8).map(function (t) { return [cps(String(t.label || '')).slice(0, 12).join(''), t.endsAt || 0, t.remaining || 0, t.running ? 1 : 0]; });
       var s = JSON.stringify(out);

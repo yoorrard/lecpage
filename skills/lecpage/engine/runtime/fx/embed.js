@@ -221,8 +221,11 @@
     if (sc.replay) later(sc.replay, build);
   }
   var files = [id].concat(sc.also || []), left = files.length;
-  files.forEach(function (f) { load('effects/' + f + '.js', function () { if (--left === 0) build(); }); });
+  // 글꼴이 실린 뒤에 그림(글자 자리를 재는 효과가 어긋나지 않게). 글꼴이 막혀 있으면 1.2초 뒤 그냥 시작
+  var began = false, begin = function () { if (began || left) return; began = true; build(); };
+  var fontsReady = function () { var p = d.fonts && d.fonts.ready; if (p && p.then) { p.then(begin, begin); setTimeout(begin, 1200); } else begin(); };
+  files.forEach(function (f) { load('effects/' + f + '.js', function () { if (--left === 0) fontsReady(); }); });
   // 틀 크기가 바뀌면(작은 카드 → 크게 보기) 다시 그림
   var rw = VW(), rt = 0;
-  w.addEventListener('resize', function () { if (Math.abs(VW() - rw) < 24) return; rw = VW(); clearTimeout(rt); rt = setTimeout(function () { if (!left) build(); }, 200); });
+  w.addEventListener('resize', function () { if (Math.abs(VW() - rw) < 24) return; rw = VW(); clearTimeout(rt); rt = setTimeout(function () { if (began) build(); }, 200); });
 })();

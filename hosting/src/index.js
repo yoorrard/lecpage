@@ -1,15 +1,18 @@
 // lecpage 바로 공개 호스트 — Worker 입구.
 //   /api/*   JSON API(앱이 부름)            /s/<id>/…  올라온 사이트
+//   /live/api/<코드>/…  실시간 방(질문·보드·투표). 사이트 화면이 같은 출처에서 부름
 //   /, /report, /robots.txt 등은 public/ 의 정적 자산이라 이 코드를 거치지 않습니다.
 // Worker는 길만 정하고, 무거운 일(검사·저장·HTML 손보기)은 Durable Object가 합니다(무료 요금제의 요청당 CPU 10ms).
 import { config, expiryFrom } from './config.js';
 import { HttpError, json, readJson, errorFrom, corsHeaders, preflight, withHeaders } from './http.js';
 import { ID_RE, SHA256_RE, DEPLOY_RE, newId, newKey, sha256Hex, bearer, secretMatches } from './ids.js';
 import { notFoundPage, methodNotAllowed } from './pages.js';
+import { liveTarget, liveOriginOk, FILE_ALIAS, LIVE_PREFIX, LiveError } from './live/host.js';
 import { Site } from './site.js';
 import { Gate } from './gate.js';
+import { Room, Guard } from './room.js';
 
-export { Site, Gate };
+export { Site, Gate, Room, Guard };
 
 const siteStub = (env, id) => env.SITE.get(env.SITE.idFromName(id));
 const gateStub = (env) => env.GATE.get(env.GATE.idFromName('gate'));
@@ -22,6 +25,7 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
     if (p.startsWith('/s/')) return serveSite(request, env, url);
+    if (p === LIVE_PREFIX || p.startsWith(`${LIVE_PREFIX}/`) || FILE_ALIAS.test(p)) return live(request, env, url);
     if (p.startsWith('/api/')) return api(request, env, ctx, url);
     return notFoundPage(request.method === 'HEAD');
   },
@@ -37,6 +41,33 @@ function serveSite(request, env, url) {
   const headers = {};
   for (const k of ['if-none-match', 'if-range', 'range']) { const v = request.headers.get(k); if (v) headers[k] = v; }
   return siteStub(env, m[1]).fetch(`http://site/file?p=${encodeURIComponent(m[3])}`, { method: request.method, headers });
+}
+
+// ── 실시간 방 ───────────────────────────────────────────────────
+// 규칙(HTTP 프로토콜 v1)은 skills/lecpage/backends/cloudflare 그대로. 응답도 그 모양({ error, message })입니다.
+function liveJson(status, body, headers = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
+}
+function live(request, env, url) {
+  const cfg = config(env);
+  try {
+    if (!cfg.live) throw new LiveError(404, 'not_found', '이 서버는 실시간 방을 쓰지 않습니다.');
+    const t = liveTarget(url.pathname);
+    if (!t) throw new LiveError(404, 'not_found', '없는 주소입니다.');
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { allow: 'GET, HEAD, POST, PUT, PATCH, DELETE' } });
+    if (t.kind === 'health') return liveJson(200, { ok: true, protocol: 1, uploads: cfg.liveUploads, runtime: 'cloudflare' });
+    if (!liveOriginOk({ method: request.method, op: t.op, origin: request.headers.get('origin'), self: cfg.publicOrigin || url.origin })) {
+      throw new LiveError(403, 'origin_not_allowed', '허용되지 않은 사이트에서 온 요청입니다.');
+    }
+    // 방(Durable Object)에는 '/api/<코드>/…' 경로로 넘김. WebSocket 연결(101)도 그대로 돌려줌
+    const target = new URL(url);
+    target.pathname = t.path;
+    return env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request));
+  } catch (e) {
+    if (e instanceof LiveError) return liveJson(e.status, { error: e.code, message: e.message });
+    console.error('live error', e?.stack || e);
+    return liveJson(500, { error: 'server_error', message: '서버 오류가 났어요. 잠시 후 다시 시도해 주세요.' });
+  }
 }
 
 // ── API ─────────────────────────────────────────────────────────
@@ -65,7 +96,12 @@ async function route(request, env, ctx, url, cfg, self) {
   const [a, b, c, d, e] = parts;
 
   if (a === 'info' && parts.length === 1 && method === 'GET') {
-    return json({ ok: true, v: 1, limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days }, report: `${self}/report` });
+    return json({
+      ok: true, v: 1,
+      limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
+      report: `${self}/report`,
+      ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),
+    });
   }
 
   if (a === 'sites' && parts.length === 1 && method === 'POST') return createSite(request, env, cfg, self);
@@ -81,6 +117,7 @@ async function route(request, env, ctx, url, cfg, self) {
     const size = Number(request.headers.get('content-length') || 0);
     if (parts.length === 2 && method === 'DELETE') return forward('site');
     if (c === 'deploys' && parts.length === 3 && method === 'POST') return forward('deploys');
+    if (c === 'live' && parts.length === 3 && method === 'POST') return forward('live');
     if (c === 'deploys' && e === 'publish' && parts.length === 5 && method === 'POST') {
       if (!DEPLOY_RE.test(d)) throw new HttpError('not_found', '없는 배포예요. 목록(deploys)부터 다시 보내 주세요.');
       return forward(`publish/${d}`);

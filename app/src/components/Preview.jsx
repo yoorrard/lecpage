@@ -5,9 +5,12 @@ import { blobs } from '../lib/db.js';
 const assetCache = new Map();
 export async function projectAssets(pid, fresh = false) {
   if (!fresh && assetCache.has(pid)) return assetCache.get(pid);
-  const all = await blobs.all(pid);
-  const a = {}; for (const [k, v] of Object.entries(all)) if (k.startsWith('assets/')) a[k] = v; // 교재 원본(src/)은 사이트에 넣지 않음
-  assetCache.set(pid, a); return a;
+  // 교재 원본(src/)은 사이트에 넣지 않음. 내려받기용 자료(assets/files/)는 미리보기에 필요 없어 공개할 때(fresh)만 읽음
+  const keys = (await blobs.keys(pid)).filter((k) => k.startsWith('assets/') && (fresh || !k.startsWith('assets/files/')));
+  const a = {};
+  for (const k of keys) { const v = await blobs.get(pid, k); a[k] = v instanceof Blob ? new Uint8Array(await v.arrayBuffer()) : v; }
+  if (!fresh) assetCache.set(pid, a);
+  return a;
 }
 export function dropAssetCache(pid) { assetCache.delete(pid); }
 

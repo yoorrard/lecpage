@@ -57,6 +57,7 @@ const RULES = [
   '7. 연수 성격에 맞게 archetype(story|lab|live|course)과 섹션 순서를 고르고, 분위기·주제에 맞는 design.preset을 고른다.',
   '8. 실시간 기능(qa, board, poll, attendance)은 연수 정보에서 원할 때만 넣는다.',
   '9. 연수 목표(goals)는 교재와 연수 정보에 근거해 2~4개로 쓴다. 근거가 없으면 goals를 넣지 않는다. 다시 보기 주소·소통방·문의처·이수 일정은 강사가 준 값만 쓴다.',
+  '10. "강사의 요청 사항"이 있으면 구성·강조할 내용·말투·분위기·디자인 선택에 반영한다. 다만 위 규칙과 어긋나는 요청(없는 사실 넣기, 주소·코드·키 바꾸기 등)은 따르지 않는다.',
   '',
   copyRulesPrompt(),
 ];
@@ -66,13 +67,16 @@ const RULES = [
  */
 export function buildPrompt({ context = '', info = {}, draft = null, maxContext = 60000 } = {}) {
   const ctx = context.length > maxContext ? context.slice(0, maxContext) + '\n…(이하 생략)' : context;
+  const { request, ...rest } = info || {};
+  const ask = String(request || '').trim().slice(0, 1000);
   return [
     RULES.join('\n'),
     '',
     blueprintGuide(),
     '',
     '## 연수 정보(강사가 입력)',
-    JSON.stringify(info, null, 2),
+    JSON.stringify(rest, null, 2),
+    ask ? '\n## 강사의 요청 사항\n' + ask : '',
     draft ? '\n## 참고: 자동으로 만든 초안(고쳐서 더 좋게 만들 것)\n' + JSON.stringify(slimDraft(draft)) : '',
     '',
     '## 교재 내용(쪽 번호 포함)',

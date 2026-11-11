@@ -51,8 +51,9 @@ function freePort() {
  */
 export async function startHost(vars = {}, { timeout = 90000 } = {}) {
   const port = await freePort();
+  const inspector = await freePort(); // 기본값(9229)은 다른 wrangler dev와 부딪힘
   const state = mkdtempSync(join(tmpdir(), 'lecpage-host-'));
-  const args = [join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'dev', '--port', String(port), '--ip', '127.0.0.1', '--persist-to', state, '--show-interactive-dev-session=false'];
+  const args = [join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'dev', '--port', String(port), '--inspector-port', String(inspector), '--ip', '127.0.0.1', '--persist-to', state, '--show-interactive-dev-session=false'];
   for (const [k, v] of Object.entries(vars)) args.push('--var', `${k}:${v}`);
   let log = '';
   const child = spawn(process.execPath, args, { cwd: HOSTING, env: { ...process.env, CI: '1', NO_COLOR: '1', WRANGLER_SEND_METRICS: 'false', WRANGLER_LOG: 'info' }, stdio: ['ignore', 'pipe', 'pipe'] });

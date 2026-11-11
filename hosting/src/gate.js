@@ -1,6 +1,6 @@
 // Gate: 호스트 전체에 하나뿐인 Durable Object.
 //  - 새 사이트·신고 횟수 제한(IP별, 전체)
-//  - 사이트 목록과 저장량 합계(가득 차면 새로 받지 않음)
+//  - 사이트 목록과 저장량 합계(사이트 파일 + 실시간 방. 가득 차면 새로 받지 않음)
 //  - 신고 보관
 // Worker와 Site만 부릅니다(바깥에서 직접 닿을 수 없음).
 import { DurableObject } from 'cloudflare:workers';
@@ -15,7 +15,7 @@ export class Gate extends DurableObject {
     this.cfg = config(env);
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS rl (k TEXT PRIMARY KEY, n INTEGER NOT NULL, exp INTEGER NOT NULL) WITHOUT ROWID;
-      CREATE TABLE IF NOT EXISTS sites (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS sites (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, room_bytes INTEGER NOT NULL DEFAULT 0, code TEXT NOT NULL DEFAULT '') WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS reports (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, site TEXT NOT NULL, reason TEXT NOT NULL, contact TEXT NOT NULL DEFAULT '');
     `);
   }
@@ -28,10 +28,11 @@ export class Gate extends DurableObject {
         case 'POST reserve': return json(await this.reserve(body));
         case 'POST site': return json(this.siteUpdate(body));
         case 'POST forget': return json(this.forget(body));
+        case 'POST room': return json(this.room(body));
         case 'GET usage': return json(this.usage());
         case 'POST report': return json(await this.report(body));
         case 'GET reports': return json({ reports: this.sql.exec('SELECT n, at, site, reason, contact FROM reports ORDER BY n DESC').toArray() });
-        case 'GET sites': return json({ total: this.usage(), sites: this.sql.exec('SELECT id, bytes, created AS createdAt, expires AS expiresAt, blocked FROM sites ORDER BY created DESC LIMIT 1000').toArray().map((s) => ({ ...s, blocked: !!s.blocked })) });
+        case 'GET sites': return json({ total: this.usage(), sites: this.sql.exec('SELECT id, bytes, room_bytes AS roomBytes, code AS liveCode, created AS createdAt, expires AS expiresAt, blocked FROM sites ORDER BY created DESC LIMIT 1000').toArray().map((s) => ({ ...s, blocked: !!s.blocked })) });
         default: throw new HttpError('not_found', '없는 주소예요.');
       }
     } catch (e) {
@@ -74,18 +75,29 @@ export class Gate extends DurableObject {
     return { ok: true };
   }
 
-  /** Site가 올리기·가리기 뒤에 알려 줌 */
-  siteUpdate({ id, bytes, expires, blocked }) {
-    const row = this.sql.exec('SELECT bytes, expires, blocked FROM sites WHERE id = ?', id).toArray()[0];
-    if (!row) return { ok: false };
-    this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ? WHERE id = ?',
-      Number.isSafeInteger(bytes) ? bytes : row.bytes, Number.isSafeInteger(expires) ? expires : row.expires, blocked === undefined ? row.blocked : blocked ? 1 : 0, id);
-    return { ok: true };
+  /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈 */
+  siteUpdate({ id, bytes, expires, blocked, roomBytes, code }) {
+    const row = this.sql.exec('SELECT bytes, expires, blocked, room_bytes, code FROM sites WHERE id = ?', id).toArray()[0];
+    if (!row) return { ok: false, total: this.usage().bytes };
+    const int = (v, d) => (Number.isSafeInteger(v) && v >= 0 ? v : d);
+    this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ?, room_bytes = ?, code = ? WHERE id = ?',
+      int(bytes, row.bytes), int(expires, row.expires), blocked === undefined ? row.blocked : blocked ? 1 : 0, int(roomBytes, row.room_bytes), typeof code === 'string' ? code : row.code, id);
+    return { ok: true, total: this.usage().bytes };
   }
   forget({ id }) { this.sql.exec('DELETE FROM sites WHERE id = ?', id); return { ok: true }; }
+  /** bytes = 사이트 파일 + 실시간 방(참가 기록·보드 파일) */
   usage() {
-    const r = this.sql.exec('SELECT COUNT(*) AS sites, COALESCE(SUM(bytes), 0) AS bytes FROM sites').one();
+    const r = this.sql.exec('SELECT COUNT(*) AS sites, COALESCE(SUM(bytes + room_bytes), 0) AS bytes FROM sites').one();
     return { sites: r.sites, bytes: r.bytes };
+  }
+  /** 새 실시간 방 자리: 하루 전체 개수와 저장량을 봄 */
+  room() {
+    const now = Date.now(); const day = Math.floor(now / DAY_MS);
+    const k = `room:all:${day}`;
+    if (this.count(k) >= this.cfg.dailyRoomCap) throw new HttpError('rate_limited', '오늘은 실시간 방을 더 만들 수 없어요. 내일 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil(((day + 1) * DAY_MS - now) / 1000)) } });
+    if (this.usage().bytes > this.cfg.maxTotalBytes) throw new HttpError('full');
+    this.bump(k, (day + 1) * DAY_MS);
+    return { ok: true };
   }
 
   async report({ ip, site, reason, contact }) {

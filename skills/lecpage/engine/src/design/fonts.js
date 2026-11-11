@@ -102,11 +102,24 @@ export const FONTS = {
   gasoek: { family: 'Gasoek One', label: '가석', kind: 'display', license: 'OFL-1.1', css: GF('family=Gasoek+One'), fallback: "'Black Han Sans', sans-serif", displayWeight: 400 },
   orbit: { family: 'Orbit', label: '오르빗', kind: 'display', license: 'OFL-1.1', css: GF('family=Orbit'), fallback: "'Pretendard Variable', sans-serif", displayWeight: 400 },
   plexKr: { family: 'IBM Plex Sans KR', label: 'IBM Plex Sans KR', kind: 'sans', license: 'OFL-1.1', css: GF('family=IBM+Plex+Sans+KR:wght@400;500;600;700'), fallback: "'Pretendard Variable', sans-serif" },
-  plexMono: { family: 'IBM Plex Mono', label: 'IBM Plex Mono', kind: 'mono', license: 'OFL-1.1', css: GF('family=IBM+Plex+Mono:wght@400;500;600'), fallback: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-  jetbrains: { family: 'JetBrains Mono', label: 'JetBrains Mono', kind: 'mono', license: 'OFL-1.1', css: GF('family=JetBrains+Mono:wght@400;600'), fallback: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-  spaceGrotesk: { family: 'Space Grotesk', label: 'Space Grotesk', kind: 'latin', license: 'OFL-1.1', css: GF('family=Space+Grotesk:wght@400;500;700'), fallback: 'system-ui, sans-serif' },
-  fraunces: { family: 'Fraunces', label: 'Fraunces', kind: 'latin-serif', license: 'OFL-1.1', css: GF('family=Fraunces:opsz,wght@9..144,400..800'), fallback: 'Georgia, serif' },
-  bricolage: { family: 'Bricolage Grotesque', label: 'Bricolage Grotesque', kind: 'latin', license: 'OFL-1.1', css: GF('family=Bricolage+Grotesque:opsz,wght@12..96,400..800'), fallback: 'system-ui, sans-serif' },
+  plexMono: { numWeight: 600, family: 'IBM Plex Mono', label: 'IBM Plex Mono', kind: 'mono', license: 'OFL-1.1', css: GF('family=IBM+Plex+Mono:wght@400;500;600'), fallback: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  jetbrains: { numWeight: 600, family: 'JetBrains Mono', label: 'JetBrains Mono', kind: 'mono', license: 'OFL-1.1', css: GF('family=JetBrains+Mono:wght@400;600'), fallback: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  spaceGrotesk: { numWeight: 700, family: 'Space Grotesk', label: 'Space Grotesk', kind: 'latin', license: 'OFL-1.1', css: GF('family=Space+Grotesk:wght@400;500;700'), fallback: 'system-ui, sans-serif' },
+  fraunces: { numWeight: 700, family: 'Fraunces', label: 'Fraunces', kind: 'latin-serif', license: 'OFL-1.1', css: GF('family=Fraunces:opsz,wght@9..144,400..800'), fallback: 'Georgia, serif' },
+  bricolage: { numWeight: 800, family: 'Bricolage Grotesque', label: 'Bricolage Grotesque', kind: 'latin', license: 'OFL-1.1', css: GF('family=Bricolage+Grotesque:opsz,wght@12..96,400..800'), fallback: 'system-ui, sans-serif' },
+  // 숫자·영문용 라틴 제목 글꼴(fonts.num). 라틴 부분집합만 받아 가볍고, 큰 번호·날짜·통계에 씀(조사: docs/research/design-trends-2026-11.md §4)
+  barlowCond: { numWeight: 700, family: 'Barlow Condensed', label: 'Barlow Condensed', kind: 'latin', license: 'OFL-1.1', css: GF('family=Barlow+Condensed:wght@500;700'), fallback: 'system-ui, sans-serif' },
+  plexCond: { numWeight: 700, family: 'IBM Plex Sans Condensed', label: 'IBM Plex Sans Condensed', kind: 'latin', license: 'OFL-1.1', css: GF('family=IBM+Plex+Sans+Condensed:wght@500;700'), fallback: 'system-ui, sans-serif' },
+  unbounded: { numWeight: 800, family: 'Unbounded', label: 'Unbounded', kind: 'latin', license: 'OFL-1.1', css: GF('family=Unbounded:wght@500;800'), fallback: 'system-ui, sans-serif' },
+  caveat: { numWeight: 700, family: 'Caveat', label: 'Caveat', kind: 'latin', license: 'OFL-1.1', css: GF('family=Caveat:wght@600;700'), fallback: 'cursive' },
+  anton: { numWeight: 400, family: 'Anton', label: 'Anton', kind: 'latin', license: 'OFL-1.1', css: GF('family=Anton'), fallback: 'Impact, sans-serif' },
+  instrumentSerif: { numWeight: 400, family: 'Instrument Serif', label: 'Instrument Serif', kind: 'latin-serif', license: 'OFL-1.1', css: GF('family=Instrument+Serif:ital@0;1'), fallback: 'Georgia, serif' },
+  sora: { numWeight: 700, family: 'Sora', label: 'Sora', kind: 'latin', license: 'OFL-1.1', css: GF('family=Sora:wght@500;700'), fallback: 'system-ui, sans-serif' },
+  syne: { numWeight: 800, family: 'Syne', label: 'Syne', kind: 'latin', license: 'OFL-1.1', css: GF('family=Syne:wght@600;800'), fallback: 'system-ui, sans-serif' },
+  geist: { numWeight: 700, family: 'Geist', label: 'Geist', kind: 'latin', license: 'OFL-1.1', css: GF('family=Geist:wght@500;700'), fallback: 'system-ui, sans-serif' },
+  bigShoulders: { numWeight: 800, family: 'Big Shoulders Display', label: 'Big Shoulders Display', kind: 'latin', license: 'OFL-1.1', css: GF('family=Big+Shoulders+Display:wght@600;800'), fallback: 'Impact, sans-serif' },
+  redHat: { numWeight: 800, family: 'Red Hat Display', label: 'Red Hat Display', kind: 'latin', license: 'OFL-1.1', css: GF('family=Red+Hat+Display:wght@600;800'), fallback: 'system-ui, sans-serif' },
+  outfit: { numWeight: 700, family: 'Outfit', label: 'Outfit', kind: 'latin', license: 'OFL-1.1', css: GF('family=Outfit:wght@500;700'), fallback: 'system-ui, sans-serif' },
   // ── 2026-11 추가(조사: docs/research/fonts-2026-11.md) ─────────────────────
   paperlogy: {
     family: 'Paperlogy', label: '페이퍼로지', kind: 'sans', license: 'OFL-1.1',
@@ -241,6 +254,7 @@ export function fontNeeds(fonts = {}, displayWeight = 700) {
   add(fonts.display, [FONTS[fonts.display]?.displayWeight || displayWeight]);
   if (fonts.display && fonts.display === fonts.body) need[fonts.body] = [400, Math.max(700, FONTS[fonts.display]?.displayWeight || displayWeight)];
   add(fonts.mono, [400, 600]);
+  add(fonts.num, [700]);
   return need;
 }
 
