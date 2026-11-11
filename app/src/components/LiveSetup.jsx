@@ -5,6 +5,8 @@ import { copy, randomKey, sha256Hex, toast } from '../lib/util.js';
 
 const REPO = 'https://github.com/yoorrard/lecpage/tree/main/skills/lecpage';
 const CF_DEPLOY = 'https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare';
+// 운영자가 코드가 든 시트 틀을 공유해 두면(빌드 변수 VITE_SHEET_TEMPLATE, …/copy 주소) 코드 붙여넣기 단계가 사라짐
+const SHEET_TEMPLATE = /^https:\/\/docs\.google\.com\/spreadsheets\//.test(import.meta.env?.VITE_SHEET_TEMPLATE || '') ? import.meta.env.VITE_SHEET_TEMPLATE : '';
 const NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버·Cloudflare', local: '이 컴퓨터에서만(시험)' };
 const METHOD_OF = { sheets: 'sheets', supabase: 'supabase', cloudflare: 'http', server: 'http', lan: 'http', none: 'sheets', local: 'sheets' };
 
@@ -77,8 +79,11 @@ export function LiveSetup({ p, update }) {
         <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={[{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
         {method === 'sheets' && (
           <ol class="how">
-            <li><a class="btn btn-sm" href="https://sheets.new" target="_blank" rel="noopener">새 구글 시트 열기</a> 이름을 "○○ 연수 참여"처럼 바꿔요.</li>
-            <li>시트 메뉴 <b>확장 프로그램 → Apps Script</b>를 누르고, 편집기의 글을 모두 지운 뒤 <button class="btn btn-sm btn-primary" onClick={() => copyRaw('gs')}>lecpage 코드 복사</button>를 눌러 붙여 넣고 <b>저장(💾)</b>해요.</li>
+            {SHEET_TEMPLATE
+              ? <><li><a class="btn btn-sm btn-primary" href={SHEET_TEMPLATE} target="_blank" rel="noopener">시트 사본 만들기</a> 코드가 들어 있는 시트가 내 드라이브에 복사돼요.</li>
+                <li>복사된 시트의 메뉴 <b>확장 프로그램 → Apps Script</b>를 열어요.</li></>
+              : <><li><a class="btn btn-sm" href="https://sheets.new" target="_blank" rel="noopener">새 구글 시트 열기</a> 이름을 "○○ 연수 참여"처럼 바꿔요.</li>
+                <li>시트 메뉴 <b>확장 프로그램 → Apps Script</b>를 누르고, 편집기의 글을 모두 지운 뒤 <button class="btn btn-sm btn-primary" onClick={() => copyRaw('gs')}>lecpage 코드 복사</button>를 눌러 붙여 넣고 <b>저장(💾)</b>해요.</li></>}
             <li>위쪽 함수 목록에서 <b>setup</b>을 고르고 <b>실행</b>. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동 → 허용</b>. 내가 붙여 넣은 코드라 나오는 안내예요.</li>
             <li>시트로 돌아와 새로 고침 → 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에서 12자 이상으로 정하고 적어 두세요. <b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm btn-quiet" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</li>
             {settings.uploads && <li>보드에 사진·파일을 받으려면 메뉴 <b>lecpage → 파일 올리기 켜기/끄기</b>를 한 번 눌러 켜요.</li>}

@@ -16,6 +16,7 @@
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
 //   design <blueprint.json> · decide-infra -i info.json · presets · effects
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -159,12 +160,23 @@ function lintIssues(res) {
 }
 const addIssues = (L, list) => { for (const it of list) if (!L.issues.some((x) => x.message === it.message)) L.issues.push(it); };
 
+/** 참가자 첫 화면이 처음 받는 자기 파일(HTML + 연결된 CSS·JS)의 전송 크기(gzip). 목표 200KB */
+function firstLoad(dir) {
+  try {
+    const html = readFileSync(join(dir, 'index.html'));
+    const refs = [...String(html).matchAll(/<(?:link[^>]+rel="stylesheet"[^>]+href|script[^>]+src)="([^"#?]+)"/g)].map((m) => m[1]).filter((u) => !/^(https?:)?\/\//.test(u));
+    let bytes = gzipSync(html).length; const files = ['index.html'];
+    for (const u of new Set(refs)) { const f = join(dir, u); if (existsSync(f)) { bytes += gzipSync(readFileSync(f)).length; files.push(u); } }
+    return { kb: Math.round(bytes / 1024), files };
+  } catch { return null; }
+}
+
 async function runQa(dir, { outDir, password = '' } = {}) {
   dir = resolve(dir);
   if (!existsSync(join(dir, 'index.html'))) return { ok: false, error: `${rel(dir)}에 index.html이 없어요.` };
   outDir = resolve(outDir || join(dir, '..', 'qa'));
   const broken = brokenRefs(dir);
-  const res = { ok: true, dir, outDir, views: [], broken, lint: [], shots: [], skipped: '' };
+  const res = { ok: true, dir, outDir, views: [], broken, lint: [], shots: [], skipped: '', weight: firstLoad(dir) };
   const protectedSite = /lp-locked|unlock\.js/.test(readFileSync(join(dir, 'index.html'), 'utf8'));
   const unlock = protectedSite && password; // 암호를 알면 #k=로 열어 실제 내용을 점검
   const linters = protectedSite && !unlock ? [] : await loadLinters();
@@ -230,7 +242,8 @@ function qaLines(q) {
   const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
   const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'skipped' ? `${l.name} 검사 건너뜀(암호 페이지)` : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
   const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·태블릿·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
-  lines.push(head, ...problems);
+  lines.push(head + (q.weight ? ` · 첫 화면 ${q.weight.kb}KB` : ''), ...problems);
+  if (q.weight?.kb > 200) lines.push(`  첫 화면 파일이 ${q.weight.kb}KB예요(목표 200KB). 효과를 줄이거나 움직임을 낮춰 보세요.`);
   // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(교재 원문이 섞여 있어 참고용, qa/report.json)
   for (const l of q.lint) {
     const shown = l.issues.filter((it) => it.level === 'error' || l.blocking);

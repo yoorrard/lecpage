@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+# 엔진 런타임에서 자동으로 만드는 목록(npm test·npm run deploy·wrangler dev가 다시 만듦)
+src/runtime-allow.js

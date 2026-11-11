@@ -1,57 +1,56 @@
-# Netlify에 올리기 (Netlify Drop 포함)
+# Netlify에 올리기
 
-> 폴더를 끌어다 놓으면 바로 주소가 생깁니다. 무료는 **월 300크레딧**이고, 다 쓰면 **계정의 모든 사이트가 멈춥니다**.
+> 이미 Netlify를 쓰는 강사를 위한 선택지입니다. 새로 가입하는 강사에게는 권하지 않습니다. 2026-07-28 이후 만든 팀은 프로젝트가 **비공개로 시작**하고, 무료는 한 달에 20번쯤만 올릴 수 있고, 크레딧을 다 쓰면 **계정의 모든 사이트가 멈춥니다**.
+> 2026-11-11 확인(`docs/research/hosting-2026-11.md` §3.4).
 
 ## 언제 고르나요
-- 지금 당장 모양을 확인하는 **미리 보기**(Drop), 클릭만 하는 선생님의 작은 사이트.
-- 고르지 말 것: 슬라이드가 많은 큰 사이트를 여러 번 고쳐 올릴 때(배포 1회 15크레딧), 같은 계정에 중요한 다른 사이트가 있을 때(크레딧 소진 시 함께 멈춤).
+| 고릅니다 | 고르지 않습니다 → 대신 |
+|---|---|
+| 강사가 Netlify 계정·토큰을 이미 갖고 있음 | 새로 가입해야 함 → Vercel(앱), Cloudflare(skill) |
+| 지난번에도 여기에 올림(같은 주소 유지) | 여러 번 고쳐 올릴 사이트, 같은 계정에 중요한 다른 사이트가 있음 → Cloudflare |
 
-## 비용과 한도 (2026-11 확인, 2025-09-04 이후 가입 계정 기준)
-- Free: 월 300크레딧 **하드 한도**(추가 구매 불가).
-  - 운영 배포 1회 = 15크레딧, 전송 1GB = 20크레딧, 요청 1만 건 = 2크레딧, 폼 제출 무료.
-  - 예) 30MB 사이트 × 40명 × 3회 ≈ 3.5GB → 70크레딧 + 배포 10회 150크레딧 = 220크레딧.
-- 다 쓰면 모든 프로젝트가 "Site not available"이 되고 다음 달까지 배포도 안 됩니다.
-- 새 계정의 새 프로젝트는 **비공개로 시작**합니다 → 공개(publish)를 눌러야 참가자가 볼 수 있습니다.
-- **Netlify Drop(계정 없이 올리기)**:
-  - 올리는 데는 계정이 필요 없지만, **저장(claim)하기 전에는 비밀번호로 잠겨 있어 참가자가 볼 수 없습니다.** 나누려면 가입하고 저장해야 합니다.
-  - **1시간 안에** 저장하지 않으면 사이트가 정지되고, 1주 뒤 지워집니다.
-  - 익명으로 올릴 수 있는 사이트는 **IP 하나당 3개**. 학교는 건물 전체가 IP 하나라 사실상 학교당 3개입니다.
-  - 2026년 여름부터 Drop으로 만든 사이트도 다시 올리기·내 도메인 연결이 됩니다.
-- 출처(2026-11-09 확인): https://www.netlify.com/blog/thirteen-years-of-netlify-drop · https://www.netlify.com/pricing/ · https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://docs.netlify.com/deploy/create-deploys/
+## 비용과 한도 (Free, 월 300크레딧)
+- 크레딧은 **하드 한도**입니다: 운영 배포 1회 15, 전송 1GB당 20, 요청 1만 건당 2. 배포만 해도 한 달 20번이 끝입니다.
+- 다 쓰면 모든 프로젝트가 "Site not available"이 되고 다음 달까지 올릴 수도 없습니다.
+- API로 올리기는 분당 3회·하루 100회. ZIP은 파일 25,000개까지(크기 한도는 문서에 없음 ⚠️).
+- **2026-07-28 이후 만든 팀**: 새 프로젝트가 비공개로 시작합니다(API·Drop·CLI 모두). 비공개 프로젝트는 소유자만 보고, 다른 사람에게는 권한 없음 화면이 나옵니다. API로 공개로 바꾸는 방법은 문서에 없습니다 ⚠️. 강사가 화면에서 바꿉니다.
+- 2026-08-19 이후 무료 새 프로젝트에는 "Powered by Netlify" 배지가 붙습니다(설정에서 끌 수 있음).
+- 출처: https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/ · https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/ · https://docs.netlify.com/manage/projects/powered-by-netlify-badge/ · https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/
 
-## 준비물
-- 빌드 결과 폴더(`dist/`, 앱에서는 "사이트 파일"). 강사용 파일(`dist-강사용/`)은 올리지 않습니다. 필요하면 `netlify.toml`(`templates/deploy/netlify/`).
-- 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(내용 암호화). Netlify 자체 비밀번호 기능은 유료라, 잠가야 하면 lecpage의 **암호**를 쓰세요.
+## 토큰 (강사가 만듭니다)
+https://app.netlify.com/user/applications#personal-access-tokens → **New access token** → 이름 `lecpage` → **Expiration** → **Generate token**. skill은 환경 변수 `NETLIFY_AUTH_TOKEN`으로만 넘기고 파일에 적지 않습니다.
 
-## 따라 하기 — Netlify Drop (클릭만)
-1. https://app.netlify.com/drop 접속.
-2. 사이트 **폴더**를 점선 상자에 끌어다 놓기(ZIP이면 먼저 압축 풀기).
-3. 주소(예: `https://random-name-123.netlify.app`)가 생깁니다.
-4. **1시간 안에** 화면 안내에 따라 로그인/가입 → 프로젝트를 내 팀에 저장(claim). 저장 전에는 비밀번호로 잠겨 있어 참가자가 볼 수 없습니다.
-5. 프로젝트가 비공개로 표시되면 **Publish / Make public**(공개)을 누릅니다 ⚠️ 메뉴 이름은 바뀔 수 있음.
-6. **Project configuration → Change project name**으로 주소를 `lec-20261104.netlify.app`처럼 바꿉니다.
-7. 고칠 때: 프로젝트 **Deploys** 화면 아래 끌어 놓기 칸에 폴더를 다시 놓기.
-
-## 따라 하기 — CLI
+## skill: 명령으로 올리기
 ```bash
-cd site
-npx netlify-cli@latest login
-npx netlify-cli@latest deploy --dir . --prod      # 처음엔 새 프로젝트 만들기 선택
+NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name lec-20261111
+# 다음부터: --site-name 대신 --site <Project ID 또는 이름>
 ```
+- 대화 없이 돕니다(netlify-cli 27.17.0 `--help`로 플래그 확인). `--site-name`은 없는 이름이면 새로 만듭니다. 팀이 여럿이면 `--team <slug>`.
+- 올린 뒤 **강사에게 꼭 알립니다**: Netlify 프로젝트 화면에서 **Make public**을 눌러야 참가자가 봅니다(2026-07-28 이후 팀). 같은 설정은 **Project configuration → General → Visitor access → Project visibility**에 있습니다.
+- 응답 헤더는 `dist/_headers`를 그대로 읽습니다.
+
+## 명령어 없이
+- **앱**: 공개하기에서 Netlify를 고르고 토큰을 붙여 넣습니다. 올린 뒤 **Make public**.
+- **Netlify Drop**: 로그인한 채 https://app.netlify.com/drop 에 폴더를 놓습니다. 계정 없이 올리면 1시간 안에 claim해야 하고, claim 전에는 비밀번호로 잠겨 있으며, claim 뒤에도 새 팀은 비공개입니다. 익명 올리기는 하루 한도도 있습니다(학교는 공인 IP 하나를 같이 씀). 연수 주소로는 권하지 않습니다.
+- 고칠 때: 프로젝트 **Deploys** 화면 아래 끌어 놓기 칸에 폴더를 다시 놓습니다.
 
 ## 확인하기
-- `…/check.html` 초록 확인, 개발자 도구에서 CSP 오류 없음.
-- **Team → Usage & billing**에서 남은 크레딧 확인(연수 전날 꼭).
+1. **로그아웃한 창**에서 주소를 엽니다. 권한 없음 화면이면 아직 비공개입니다.
+2. `…/check.html`(접속 확인)이 모두 초록인지 봅니다. 연수 전날에는 참가자가 쓸 망에서 한 번 더(`school-network-checklist.md`).
+3. **Team → Usage & billing**에서 남은 크레딧을 봅니다(연수 전날 꼭).
 
 ## 되돌리기·정리
 - **Deploys** → 이전 배포 → **Publish deploy**.
-- 삭제: **Project configuration → Delete project**.
+- 삭제: **Project configuration → Delete project**. 토큰도 지웁니다.
 
 ## 연수가 끝난 뒤
-- 기록용으로 남기거나 삭제. 남길 때는 배포를 더 하지 않으면 크레딧이 거의 들지 않습니다.
-- 실시간 데이터는 백엔드에서 삭제.
+- 남겨 둘 때는 더 올리지 않으면 크레딧이 거의 들지 않습니다.
+- 참여 기록은 백엔드에서 내려받고 지웁니다.
 
 ## 자주 막히는 곳
-- 참가자가 "Not found/비공개"·비밀번호 창: 아직 저장(claim)하지 않았거나 프로젝트가 비공개. 저장한 뒤 공개로 바꿉니다.
-- Drop이 더 안 올라감: 학교 IP의 익명 사이트 3개를 다 씀 → 가입해서 올리기.
-- 갑자기 모든 사이트가 멈춤: 크레딧 소진. 다른 호스팅(Cloudflare)에 바로 다시 올리고 주소를 다시 안내.
+| 증상 | 원인 → 대처 |
+|---|---|
+| 참가자에게 권한 없음·로그인 화면 | 프로젝트가 비공개 → **Make public**. 앞으로 만들 프로젝트는 **Team settings → General → Visitor access → Default project visibility** |
+| 비밀번호 창 | 계정 없이 올린 Drop을 아직 claim하지 않음 → claim하고 **Make public** |
+| 모든 사이트가 "Site not available" | 크레딧 소진 → 다른 곳(Cloudflare)에 바로 올리고 주소를 다시 안내 |
+| 올리기가 거부됨(429) | 분당 3회·하루 100회 한도 → 잠시 뒤 다시 |

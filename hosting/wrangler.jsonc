@@ -1,0 +1,34 @@
+// lecpage 바로 공개 호스트(선택). 운영자가 직접 배포할 때만 켜집니다 → README.md
+// 앱(lecpage)과 반드시 다른 주소(출처)에 두세요. 앱은 사용자의 AI 키를 자기 출처에 보관합니다.
+// 무료 요금제로 돕니다: Worker + Durable Objects(SQLite 저장). R2·KV를 쓰지 않아 카드 등록이 필요 없습니다.
+{
+  "name": "lecpage-sites",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // 안내·신고 화면(public/)은 정적 자산이라 Worker 요청 수에 들지 않습니다. 그 밖의 주소(/api, /s)는 src/index.js로 갑니다.
+  "assets": { "directory": "./public" },
+
+  // 배포·개발 서버를 띄우기 전에 엔진 런타임 목록(src/runtime-allow.js)을 다시 만듭니다.
+  "build": { "command": "node scripts/gen-runtime.mjs" },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "SITE", "class_name": "Site" },
+      { "name": "GATE", "class_name": "Gate" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Site", "Gate"] }],
+
+  // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK)은 `npx wrangler secret put`으로 넣으세요.
+  "vars": {
+    // 바로 공개를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
+    "ALLOWED_ORIGINS": "https://yoorrard.github.io,http://localhost:5173,http://localhost:4173"
+    // 바꿀 수 있는 한도(기본값): MAX_BYTES 41943040 · MAX_FILE_BYTES 20971520 · MAX_FILES 600 · SITE_DAYS 30
+    // SITES_PER_HOUR 6 · SITES_PER_DAY 20 · DAILY_SITE_CAP 300 · MAX_TOTAL_BYTES 4294967296 · DEPLOYS_PER_HOUR 30
+    // REPORTS_PER_HOUR 5 · DAILY_REPORT_CAP 200 · REPORT_KEEP 500 · REPORT_DAYS 90 · PUBLIC_ORIGIN(내 도메인을 붙였을 때 주소 고정)
+    // ALLOW_SUPABASE_SDK "1"(Supabase 실시간을 쓰는 사이트를 받을 때만. README의 '실시간 연결' 참고)
+  }
+}

@@ -284,7 +284,29 @@ assets/slides/*.webp · assets/media/*
 ## 7. 작업 규칙
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").
 - 접근성: 키보드 조작, 포커스 표시, 대비 4.5:1, `prefers-reduced-motion`, 5초 넘게 움직이면 멈춤 버튼.
-- 성능: 참가자 첫 화면 JS·CSS 합계 200KB 안팎(라이브러리 지연 로드 제외).
+- 성능: 참가자 첫 화면이 처음 받는 자기 파일(HTML+CSS+JS, gzip) 200KB 안. `qa`가 '첫 화면 nKB'로 알려 줍니다(예시 2종 90KB 안팎). QR 코드(`qr.js`)는 공유 창을 열 때 받습니다.
 - 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`). CI(`.github/workflows/ci.yml`)는 `npm test` → `npm run examples`(예시 빌드) → 앱 빌드 → `npm audit`(앱 배포 묶음)를 돌립니다. 브라우저 테스트(`live-browser.test.mjs`)는 Playwright가 있을 때만, Supabase·Cloudflare 테스트는 PostgreSQL·`LEC_CF_URL`이 있을 때만 돌고 없으면 건너뜁니다. 앱 화면 자동 테스트는 아직 없습니다.
 - 앱 미리보기 기기 크기: 모니터 1920×1080, 노트북 1536×864, 태블릿 820×1180, 휴대폰 360×780, 맞춤. CLI `qa`도 휴대폰 360×780·태블릿 820×1180·PC 1280으로 봅니다.
 - 커밋·푸시는 통합 담당만 합니다. 병렬 작업자는 자기 디렉터리에만 씁니다.
+
+## 8. v1.1에서 더한 계약 (2026-11-11)
+
+### 8.1 올릴 곳 고르기 (`engine/src/decide/infra.js`)
+- `HOSTS[id]`: `{ name_ko, cost, app(앱에서 바로 올림), account, limit?: { siteMB, fileMB, files }, cli?, note_ko }`. id: `lecpage`(바로 공개) · `vercel` · `github-pages` · `cloudflare` · `netlify` · `firebase` · `s3` · `server` · `lan` · `zip`. 숫자 근거는 `docs/research/hosting-2026-11.md`.
+- `decideHost(input) → { hosts, pick, reasons, warnings }`. 입력: `skill`(`click` 앱 / `set`·`dev` skill), `commercial`, `network`, `infra[]`, `backend`, `previous`(지난번에 올린 곳), `connected[]`(연결해 둔 곳), `instant`(바로 공개를 쓸 수 있음), `keep`, `customDomain`, `siteMB`, `maxFileMB`, `files`. 규칙 순서: 인터넷 없음 → 자체 서버 → 기본(앱 Vercel, skill Cloudflare) → 강사료(Vercel 제외, Cloudflare 먼저) → 내 도메인 → 크기(100MB 초과면 Vercel 뒤로, 25MB 파일·1,000개 초과면 Cloudflare 뒤로) → 바로 공개 → 지난번에 올린 곳·연결해 둔 곳 먼저.
+- `checkHost(host, { bytes, files, maxFile, binaries }) → { ok, errors, warnings }`: 올리기 직전에 그곳의 한도를 확인합니다.
+
+### 8.2 앱의 공개하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
+- 흐름: 사이트 만들기(`buildFiles`) → `checkHost` → 올리기 → 주소 저장 → `probeSite`(사이트의 `assets/favicon.svg`를 그림으로 불러 실제로 열리는지 확인).
+- Vercel(`deployVercel`): `GET /v9/projects?limit=1`(토큰 확인) → 같은 이름 프로젝트가 있으면 중단 → 파일별 SHA-1로 `POST /v13/deployments` → `missing_files`면 그 파일만 `POST /v2/files`(`x-vercel-digest`) → 다시 요청 → `GET /v13/deployments/{id}`로 READY 대기 → 새 프로젝트에 `ssoProtection`이 걸려 있으면 `PATCH /v9/projects/{id} {ssoProtection:null}` → 프로젝트 주소(`<이름>.vercel.app`)를 돌려줌. `_headers`는 `vercel.json`의 `headers`로 옮깁니다. 배포별 주소는 쓰지 않습니다.
+- GitHub Pages(`deployGitHub`)·Netlify(`deployNetlify`)는 v1.0과 같습니다. 토큰은 올리기에 성공한 뒤에만 저장합니다(`deploy-<kind>` 키, '기억하기'를 켜면 WebCrypto로 암호화).
+- 바로 공개(`deployInstant`, 선택): 빌드 변수 `VITE_PUBLISH_API`가 있고 `GET /api/info`가 답할 때만 보입니다. API 계약은 `hosting/README.md`.
+- 프로젝트에 남는 값: `deploy = { target, lastUrl, at, vercel:{projectId,name,url}, github:{repo,url}, netlify:{siteId,url,name}, lecpage:{id,key,url,expiresAt}, cloudflare|zip:{url} }`. `.lecpage` 파일로 내보낼 때 `deploy`는 넣지 않습니다.
+
+### 8.3 AI로 사이트 만들기 (`app/src/lib/ai-job.js`)
+- `startMakeJob({ getProject, update })`: 기본 초안이 보이는 상태에서 읽기 → 묻기 → 만들기 단계로 돌고, 끝나면 되돌리기 지점("AI로 만들기 전")을 쌓은 뒤 설계도를 바꿉니다. `live.url`·`live.code`·`live.anonKey`·`meta.siteUrl` 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
+- 연결(`AiConnect`): OpenRouter PKCE 로그인 · 키 붙여넣기(회사 자동 인식, `checkKey`) · 챗봇 붙여넣기. 설정의 '연결'에서 미리 해 둘 수 있습니다.
+
+### 8.4 디자인 토큰 내보내기
+- `design/color.js` `ramp12(hex) → { light:[12], dark:[12] }`(OKLCH), `design/dtcg.js` `designTokens(design)` → 강사용 파일 `tokens.json`(DTCG 2025.10). 올리는 사이트에는 넣지 않습니다.
+- 디자인마다 첫 화면 구성이 다릅니다: `preset.variants.hero`(`cinema`·`worksheet`·`bento`·`poster`·`quiet`·`brief`·`masthead`·`sticker`·`board`·`spec`·`zine`·`invite`), 렌더러는 `render/hero.js`. 글꼴은 `preset.fonts`와 `preset.fontAlts`(주제·분위기에 따라 `chooseFonts`가 고름).

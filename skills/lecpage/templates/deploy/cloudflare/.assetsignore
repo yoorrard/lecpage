@@ -3,5 +3,7 @@
 *.md
 .env*
 data/
+.git/
+.wrangler/
 .DS_Store
 Thumbs.db
