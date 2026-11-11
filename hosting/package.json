@@ -5,7 +5,7 @@
   "description": "lecpage 바로 공개 호스트(선택). Cloudflare Worker + Durable Objects(SQLite)",
   "license": "Apache-2.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.15" },
   "scripts": {
     "gen": "node scripts/gen-runtime.mjs",
     "runtime:keep": "node scripts/gen-runtime.mjs --keep",

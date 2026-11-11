@@ -163,13 +163,16 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | `duration`: `single` · `multi` · `course` | `duration`: `day` · `month` · `long`(Supabase 정지 경고에만 씀) |
 | `infra`: `docker-host` `school-server` `nas` `vps` `raspberry-pi` `aws` | `infra`: `server` `school-server` `nas` `aws` |
 | `paid` | `commercial` |
+| `previous` · `connected` · `customDomain` · `keep` · `instant` · `siteMB` · `files` · `maxFileMB` | 같은 이름 |
 | live `none` · `sheets` · `supabase` · `cf-relay` · `node-server`(own/school) · `node-server`(lan) | backend `none` · `sheets` · `supabase` · `cloudflare` · `server` · `lan` |
 | static `aws-s3-cloudfront` · `cloudflare`/`cloudflare-pages-drop` · `server`/`nas` | hosts `s3` · `cloudflare` · `server` |
 
+`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 올릴 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다.
+
 ```json
 {
-  "schema": "lecpage.infra-rules/2",
-  "checked": "2026-11-09",
+  "schema": "lecpage.infra-rules/3",
+  "checked": "2026-11-11",
   "derive": {
     "realtime": "features ∩ {qa,help,progress,poll,reactions,signal} ≠ ∅",
     "store": "features ∩ {attendance,board,survey} ≠ ∅",
@@ -193,28 +196,40 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"L07","engine":true,"when":{"realtime":false,"participants":{"lte":40}},"pick":"sheets","note":"출석·제출처럼 모으기만"},
     {"id":"L08","engine":true,"when":{"skill":"click","participants":{"lte":50}},"pick":"sheets","alt":["supabase"],"note":"질문·도움 요청·진행 현황 포함. 7초 새로 읽기. 앱의 안내 + 연결 확인"},
     {"id":"L09","engine":true,"when":{"participants":{"lte":100}},"pick":"supabase","region":"ap-northeast-2","alt":["cf-relay","node-server"]},
-    {"id":"L10","engine":true,"when":{},"pick":"cf-relay","alt":["supabase","node-server"],"note":"강사 계정. Deploy to Cloudflare 버튼(가입 필요) 또는 wrangler"}
+    {"id":"L10","engine":true,"when":{},"pick":"cf-relay","alt":["supabase","node-server"],"note":"강사 계정. skill은 wrangler로 직접(backends/cloudflare/README.md §2), 앱은 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요)"}
   ],
-  "static": [
-    {"id":"S01","engine":true,"when":{"network":"offline","live":"node-server"},"pick":"lan"},
-    {"id":"S01b","when":{"network":"offline"},"pick":"zip"},
-    {"id":"S02","engine":true,"when":{"live":"node-server"},"pick":"server"},
-    {"id":"S03","engine":true,"when":{"live":"cf-relay"},"pick":"cloudflare"},
-    {"id":"S04","engine":true,"when":{"infra":{"any":["aws"]},"skill":["basic","dev"]},"pick":"aws-s3-cloudfront","alt":["aws-amplify"]},
-    {"id":"S05","when":{"infra":{"any":["azure"]},"skill":["basic","dev"]},"pick":"azure-swa"},
-    {"id":"S06","engine":true,"when":{"skill":"click"},"pick":"netlify","alt":["cloudflare-pages-drop","github-pages"],"note":"앱 없이 폴더만 있으면 cloudflare-pages-drop이 가장 쉬움"},
-    {"id":"S07","when":{"infra":{"any":["github"]}},"pick":"github-pages","alt":["cloudflare"]},
-    {"id":"S08","engine":true,"when":{},"pick":"cloudflare","alt":["github-pages","netlify"]}
-  ],
+  "static": {
+    "first": [
+      {"id":"S01","engine":true,"when":{"network":"offline"},"order":["lan","zip"]},
+      {"id":"S01b","when":{"network":"offline","liveNeeded":false},"order":["zip","lan"]},
+      {"id":"S02","engine":true,"when":{"live":"node-server"},"order":["server"]}
+    ],
+    "base": [
+      {"id":"S09","engine":true,"when":{"skill":"click"},"order":["vercel","github-pages","cloudflare","netlify"],"note":"cloudflare = ZIP 끌어 놓기(cloudflare-pages-drop)"},
+      {"id":"S08","engine":true,"when":{},"order":["cloudflare","vercel","github-pages","netlify"],"note":"cloudflare = Workers 정적 자산(wrangler deploy --assets)"}
+    ],
+    "adjust": [
+      {"id":"S10","engine":true,"when":{"paid":true},"drop":["vercel"],"front":["cloudflare"]},
+      {"id":"S03","engine":true,"when":{"live":"cf-relay","skill":["basic","dev"]},"front":["cloudflare"]},
+      {"id":"S11","engine":true,"when":{"$or":[{"customDomain":true},{"network":"restricted","skill":["basic","dev"]}]},"front":["cloudflare"]},
+      {"id":"S12","engine":true,"when":{"siteMB":{"gt":100}},"back":["vercel"]},
+      {"id":"S13","engine":true,"when":{"$or":[{"maxFileMB":{"gt":25}},{"files":{"gt":1000}}]},"back":["cloudflare"],"note":"추천이 cloudflare였으면 github-pages를 맨 앞으로. 로그인한 wrangler는 2만 개까지"},
+      {"id":"S04","engine":true,"when":{"infra":{"any":["aws"]},"skill":["basic","dev"]},"front":["aws-s3-cloudfront"],"alt":["aws-amplify"]},
+      {"id":"S05","when":{"infra":{"any":["azure"]},"skill":["basic","dev"]},"front":["azure-swa"]},
+      {"id":"S15","engine":true,"when":{"instant":true,"siteMB":{"lte":40},"maxFileMB":{"lte":20},"files":{"lte":600}},"front":["lecpage"],"note":"앱 전용. keep=long이거나 customDomain이면 둘째 자리"},
+      {"id":"S14","engine":true,"when":{"$or":[{"previous":"<올릴 곳>"},{"connected":{"any":["<올릴 곳>"]}}]},"front":["<그곳>"]}
+    ],
+    "tail": ["firebase","zip"]
+  },
   "guards": [
-    {"id":"G01","when":{"hostDomainBlocked":true},"level":"block","warn":"학교망이 호스팅 기본 주소(*.github.io, *.pages.dev 등)를 막음","fix":"customDomain 연결 또는 다른 호스팅 / IT 담당자에게 허용 요청(deploy/school-network-checklist.md)"},
+    {"id":"G01","when":{"hostDomainBlocked":true},"level":"block","warn":"학교망·통신사 DNS가 호스팅 기본 주소(*.vercel.app, *.workers.dev, *.pages.dev, *.github.io 등)를 막음","fix":"customDomain 연결 또는 다른 호스팅 / IT 담당자에게 허용 요청(deploy/school-network-checklist.md)"},
     {"id":"G02","when":{"static":"firebase","expr":"transferGB * sessionsPerMonth > 9"},"level":"block","warn":"Firebase Spark 호스팅 전송 월 10GB. 넘으면 다음 달 1일까지 사이트가 꺼짐","fix":"cloudflare 또는 github-pages"},
-    {"id":"G03","when":{"static":"vercel","paid":true},"level":"block","warn":"Vercel Hobby는 비상업 개인 용도만(강사료 받는 연수는 회색지대)","fix":"cloudflare 또는 github-pages"},
-    {"id":"G04","when":{"static":"netlify","expr":"transferGB*20 + deploys*15 > 250"},"level":"warn","warn":"Netlify 무료 300크레딧/월 근접. 다 쓰면 계정의 모든 사이트가 멈춤","fix":"배포 횟수 줄이기(1회=15크레딧) 또는 cloudflare"},
+    {"id":"G03","engine":true,"when":{"static":"vercel","paid":true},"level":"block","warn":"Vercel Hobby는 비상업 개인 용도만(강사료 받는 연수는 회색지대)","fix":"cloudflare 또는 github-pages"},
+    {"id":"G04","when":{"static":"netlify","expr":"transferGB*20 + deploys*15 > 250"},"level":"warn","warn":"Netlify 무료 300크레딧/월 근접(배포만으로 한 달 20번). 다 쓰면 계정의 모든 사이트가 멈춤","fix":"고칠 것을 모아 한 번에 올리기(1회=15크레딧) 또는 cloudflare"},
     {"id":"G05","when":{"static":"render","expr":"transferGB*sessionsPerMonth > 5"},"level":"warn","warn":"Render Hobby 대역폭 월 5GB 포함","fix":"cloudflare"},
     {"id":"G06","when":{"static":"azure-swa","siteMB":{"gt":240}},"level":"block","warn":"Azure SWA 무료: 환경당 250MB","fix":"슬라이드 화질 낮추기 또는 cloudflare"},
-    {"id":"G07","when":{"static":"github-pages","siteMB":{"gt":900}},"level":"block","warn":"GitHub Pages 사이트 1GB 한도","fix":"슬라이드 화질 낮추기 또는 cloudflare(파일당 25MiB, 2만 개)"},
-    {"id":"G08","when":{"static":"cloudflare-pages-drop","expr":"fileCount > 1000"},"level":"block","warn":"끌어 놓기 업로드는 1,000개 파일까지","fix":"GitHub 연결(Workers Builds)·wrangler(2만 개) 또는 ZIP 정리"},
+    {"id":"G07","engine":true,"when":{"static":"github-pages","$or":[{"siteMB":{"gt":900}},{"maxFileMB":{"gt":100}}]},"level":"block","warn":"GitHub Pages는 사이트 1GB, 파일 하나 100MiB까지","fix":"슬라이드 화질 낮추기, 영상은 유튜브 링크로. 파일이 작으면 cloudflare(파일당 25MiB, 2만 개)"},
+    {"id":"G08","engine":true,"when":{"static":"cloudflare-pages-drop","files":{"gt":1000}},"level":"block","warn":"끌어 놓기 업로드는 1,000개 파일까지","fix":"skill이 wrangler로 올리기(2만 개) 또는 github-pages"},
     {"id":"G09","when":{"live":"supabase","expr":"devices > 190"},"level":"block","warn":"Supabase 무료 실시간 동시 연결 200","fix":"cf-relay"},
     {"id":"G10","when":{"live":"supabase","expr":"broadcastsPerSec * (participants + 1) > 80"},"level":"warn","warn":"Supabase 무료 초당 100메시지(받는 사람마다 1개로 셈). 넘으면 연결이 끊김","fix":"반응(reactions) 2초 묶음 전송, 참가자 화면은 필요한 채널만 구독. heavy이면서 60명 넘으면 cf-relay"},
     {"id":"G12","when":{"live":"supabase","duration":["multi","course"]},"level":"warn","warn":"무료 프로젝트는 7일간 활동이 적으면 일시 정지","fix":"연수 2~3일 전 대시보드 열기 + check.html 실행. 정지되면 대시보드에서 Resume(1년 안). 오래 가는 과정이면 cf-relay"},
@@ -226,17 +241,28 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"G19","when":{"wsBlocked":true,"live":"supabase"},"level":"info","warn":"Supabase 실시간은 WebSocket이 필요. 막히면 어댑터가 7초 새로 읽기로 바뀜(반응이 늦어짐)","fix":"그대로 써도 됨. 빠른 반응이 필요하면 cf-relay/node-server(SSE)"},
     {"id":"G20","when":{"blocked":{"any":["cdn.jsdelivr.net","fonts.googleapis.com","fonts.gstatic.com"]}},"level":"warn","warn":"글꼴·라이브러리 CDN 차단","fix":"글꼴·라이브러리를 사이트 안에 포함(자체 호스팅). 시스템 글꼴로도 내용은 보임"},
     {"id":"G21","when":{"minor":true,"live":["sheets","supabase","cf-relay"]},"level":"warn","warn":"만 14세 미만 개인정보는 법정대리인 동의 필요","fix":"별명만 받기(realName=false), 파일 올리기 끄기, 보관 기간 짧게, 연수 뒤 즉시 삭제"},
-    {"id":"G22","when":{"static":["github-pages","cloudflare","netlify","vercel"],"expr":"repoOrUploadContains(adminKey|service_role)"},"level":"block","warn":"관리자 키·서비스 키가 공개 파일에 들어감","fix":"키는 사이트에 넣지 않음(서버엔 SHA-256만). Supabase는 anon/publishable 키만"},
-    {"id":"G23","when":{"skill":"click","live":["supabase","cf-relay"]},"level":"info","warn":"클릭만 하는 강사에게 회원가입이 필요한 방법이 나옴(50명 초과)","fix":"supabase는 단계별 안내, cf-relay는 Deploy to Cloudflare 버튼. 가입이 어렵다면 sheets로 줄이기(새로 읽기 10초, 반응 끄기)"},
+    {"id":"G22","when":{"static":["github-pages","cloudflare","netlify","vercel"],"expr":"repoOrUploadContains(adminKey|sb_secret|service_role)"},"level":"block","warn":"관리자 키·서비스 키가 공개 파일에 들어감","fix":"키는 사이트에 넣지 않음(서버엔 SHA-256만). Supabase는 publishable 키(sb_publishable_…)만. anon·service_role 이름은 2026년 말까지 없어질 예정"},
+    {"id":"G23","when":{"skill":"click","live":["supabase","cf-relay"]},"level":"info","warn":"클릭만 하는 강사에게 회원가입이 필요한 방법이 나옴(50명 초과)","fix":"supabase는 단계별 안내, cf-relay는 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요). 가입이 어렵다면 sheets로 줄이기(새로 읽기 10초, 반응 끄기)"},
     {"id":"G24","when":{"access":"password","static":["lan","zip"]},"level":"block","warn":"암호 보호는 https 주소에서만 열림(LAN http·file://에서는 내용이 안 보임)","fix":"access=link로 빌드. 인터넷에 올릴 때만 password"},
-    {"id":"G25","when":{"static":"github-pages","access":["link","public"]},"level":"info","warn":"무료 GitHub Pages는 공개 저장소라 사이트 파일(교재 그림·원본 포함)을 누구나 내려받을 수 있음","fix":"교재 원본은 빼거나 access=password(파일까지 암호화)"}
+    {"id":"G25","when":{"static":"github-pages","access":["link","public"]},"level":"info","warn":"무료 GitHub Pages는 공개 저장소라 사이트 파일(교재 그림·원본 포함)을 누구나 내려받을 수 있음","fix":"교재 원본은 빼거나 access=password(파일까지 암호화)"},
+    {"id":"G26","when":{"static":"netlify"},"level":"warn","warn":"2026-07-28 이후 만든 Netlify 팀은 새 프로젝트가 비공개로 시작해 참가자가 못 봄","fix":"올린 뒤 강사가 프로젝트 화면에서 Make public. 로그아웃한 창에서 열리는지 확인"},
+    {"id":"G27","engine":true,"when":{"static":"vercel","siteMB":{"gt":100}},"level":"block","warn":"Vercel Hobby는 한 번에 올리는 파일 합계 100MB까지","fix":"github-pages. 파일이 25MB 이하이면 cloudflare도 됨"},
+    {"id":"G28","engine":true,"when":{"static":"vercel","$or":[{"files":{"gt":4000}},{"expr":"participants * files * 3 > 800000"}]},"level":"warn","warn":"Vercel Hobby는 파일 업로드 하루 5,000개, CDN 요청 월 100만(엔진은 파일 수만 봄)","fix":"슬라이드 수·화질 줄이기 또는 cloudflare(요청 무제한)"},
+    {"id":"G29","engine":true,"when":{"static":["cloudflare","cloudflare-pages-drop"],"maxFileMB":{"gt":25}},"level":"block","warn":"Cloudflare는 파일 하나 25MiB까지","fix":"영상은 유튜브 링크로, 또는 github-pages(파일 100MiB)"},
+    {"id":"G30","when":{"static":"cloudflare","temporary":true,"$or":[{"files":{"gt":1000}},{"maxFileMB":{"gt":5}}]},"level":"block","warn":"wrangler --temporary와 Cloudflare Drop은 1,000개·파일당 5MiB까지","fix":"강사에게 npx wrangler@4 login을 부탁하거나, 가입 후 끌어 놓기"},
+    {"id":"G31","when":{"static":"cloudflare","temporary":true},"level":"warn","warn":"임시 계정은 60분 안에 claim하지 않으면 계정째 지워짐. 대화 없는 셸에서는 Cloudflare 약관에 동의한 것으로 처리됨","fix":"실행 전에 강사 동의 받기, 올리자마자 claim 주소 건네기"},
+    {"id":"G32","engine":true,"when":{"static":"github-pages","binaries":{"gt":450}},"level":"warn","warn":"앱에서 올릴 때 그림마다 API 요청을 하나씩 씀. GitHub의 콘텐츠 생성 제한(대체로 시간당 500)에 걸릴 수 있음","fix":"잠시 뒤 이어서 올리기, 또는 skill이 gh·git으로 올리기"},
+    {"id":"G33","when":{"static":"github-pages"},"level":"info","warn":"GitHub 이메일 인증을 마치지 않은 계정은 올려도 게시되지 않음","fix":"강사에게 이메일 인증 확인"},
+    {"id":"G34","when":{"static":"vercel"},"level":"warn","warn":"배포별 주소(<프로젝트>-<해시>-<팀>.vercel.app)는 Vercel 로그인을 요구할 수 있음. 팀 기본값에 따라 운영 주소에도 로그인 창이 뜸","fix":"참가자에게는 운영 주소(<프로젝트>.vercel.app)만. 로그인 창이 뜨면 Settings → Deployment Protection에서 Vercel Authentication 끄기(deploy/vercel.md)"},
+    {"id":"G35","when":{"static":["vercel","cloudflare","cloudflare-pages-drop","github-pages","netlify","firebase"]},"level":"info","warn":"호스팅 기본 주소가 국내 통신사 DNS에서 통째로 안 열린 적이 있음(2024-05 *.vercel.app). 학교망은 학교마다 다름","fix":"연수 전날 참가자가 쓸 망에서 주소 열어 보기. 막히면 customDomain(G01)"}
   ],
   "hosts": {
-    "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
-    "cloudflare":   {"target":"cloudflare","guide":"deploy/cloudflare.md","template":"templates/deploy/cloudflare/","headers":"_headers","cost":"0","limits":"2만 파일·25MiB/파일, 정적 요청 무료·무제한, Git 연결 빌드 월 3,000분","domain":"*.workers.dev / *.pages.dev"},
-    "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/","headers":"meta","cost":"0","limits":"사이트 1GB, 월 100GB(권고), 무료는 공개 저장소","domain":"*.github.io"},
-    "netlify":      {"target":"netlify","guide":"deploy/netlify.md","template":"templates/deploy/netlify/","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15, GB당 20, 1만 요청당 2). Drop: 익명은 IP당 3개, claim 전 비밀번호 잠금, 1시간 안에 claim","domain":"*.netlify.app"},
-    "vercel":       {"target":"vercel","guide":"deploy/vercel.md","template":"templates/deploy/vercel/","headers":"vercel.json","cost":"0","limits":"비상업만, 월 100GB·CDN 요청 100만. Drop: 계정 없이 임시, claim해야 유지","domain":"*.vercel.app"},
+    "vercel":       {"target":"vercel","guide":"deploy/vercel.md","template":"templates/deploy/vercel/","headers":"vercel.json","cost":"0","limits":"비상업만. 올리는 합계 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만","domain":"<프로젝트>.vercel.app(운영 주소만 안내)"},
+    "cloudflare":   {"target":"cloudflare","guide":"deploy/cloudflare.md","template":"templates/deploy/cloudflare/(GitHub 연결·내 도메인 때만)","headers":"_headers","cost":"0","limits":"2만 파일·25MiB/파일, 정적 요청 무료·무제한. --temporary는 1,000파일·5MiB/파일, 60분 안에 claim","domain":"*.workers.dev"},
+    "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
+    "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
+    "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작 → Make public","domain":"*.netlify.app"},
+    "lecpage":      {"target":"(앱 전용)","guide":"앱의 공개하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만. 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
     "aws-amplify":  {"target":"s3","guide":"deploy/aws-s3-cloudfront.md#amplify-끌어-놓기","headers":"amplify-console","cost":"GB당 $0.15 전송","domain":"*.amplifyapp.com"},
