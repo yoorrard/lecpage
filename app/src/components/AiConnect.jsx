@@ -101,7 +101,7 @@ export function ModelPick({ ai, onChange, compact }) {
   return (
     <label class={`model-pick${compact ? ' compact' : ''}`}>
       <span>모델</span>
-      <select value={ai.model} onChange={(e) => pick(e.target.value)} aria-describedby="model-hint">
+      <select class="input" value={ai.model} onChange={(e) => pick(e.target.value)} aria-describedby="model-hint">
         {!cur && ai.model && <option value={ai.model}>{ai.model}</option>}
         {list.slice(0, 30).map((m) => <option value={m.id} disabled={m.locked}>{modelText(m)}</option>)}
       </select>
