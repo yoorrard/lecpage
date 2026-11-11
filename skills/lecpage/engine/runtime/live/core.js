@@ -215,7 +215,7 @@
       return new Intl.DateTimeFormat('sv-SE', { timeZone: tz || 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(ms));
     } catch (e) { return new Date(ms).toISOString(); }
   }
-  var STATUS_KO = { doing: '하는 중', done: '완료', stuck: '막힘', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
+  var STATUS_KO = { doing: '하는 중', done: '완료', stuck: '도움 요청', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
   function uniq(a) { var s = {}; var o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }
   function exportTable(kind, data, tz, opts) {
     var t = function (ms) { return fmtTime(ms, tz); };

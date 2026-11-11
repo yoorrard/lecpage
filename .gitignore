@@ -10,3 +10,4 @@ skills/lecpage/backends/cloudflare/.wrangler/
 skills/lecpage/backends/node-server/data/
 .env
 .env.*
+!.env.example

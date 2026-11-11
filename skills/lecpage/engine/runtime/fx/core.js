@@ -42,9 +42,17 @@
   function osReduced() { return !!(mqR && mqR.matches); }
   function reduced() { return osReduced() && stored !== 'on'; }
   function isPaused() { return stored === 'off' || reduced(); }
-  function level() {
+  /* 따라 하며 쓰는 칸(실습·질문·교재·보드·투표·프롬프트): 집중을 깨지 않게 움직임은 1단계(차분)까지만 */
+  var CALM = '.lp-sec-stations,.lp-sec-qa,.lp-sec-deck,.lp-sec-board,.lp-sec-poll,.lp-sec-prompts,[data-calm]';
+  /* 모션 단계. el을 주면 그 요소가 놓인 자리의 단계.
+     - 저사양 기기(lowPower)는 한 단계 낮춤(1단계 아래로는 내리지 않음). 사용자가 '가벼운 모드'를 직접 끄면(data-fx-lowpower="0") 낮추지 않음
+     - 따라 하는 칸 안에서는 1단계까지만 */
+  function level(el) {
     var v = parseInt(html.getAttribute('data-motion'), 10);
-    return v >= 0 && v <= 3 ? v : 2;
+    v = v >= 0 && v <= 3 ? v : 2;
+    if (v > 1 && lowPower()) v -= 1;
+    if (v > 1 && el && el.closest && el.closest(CALM)) v = 1;
+    return v;
   }
   function lowPower() {
     var a = html.getAttribute('data-fx-lowpower');
@@ -334,7 +342,7 @@
     var ctx = {
       id: inst.id,
       reduced: reduced(),
-      level: level(),
+      level: level(el),
       lowPower: lp,
       fine: !!(mqF && mqF.matches),
       util: util,
@@ -508,7 +516,9 @@
     if (!spec) return;
     el.__lecfx = el.__lecfx || {};
     if (el.__lecfx[id]) return;
-    if ((spec.level == null ? 1 : spec.level) > level()) { el.__lecfx[id] = { skipped: true }; return; }
+    if ((spec.level == null ? 1 : spec.level) > level(el)) { el.__lecfx[id] = { skipped: true }; return; }
+    /* 가벼운 모드·저사양: WebGL·외부 라이브러리를 쓰는 효과는 시작하지 않음(쉬는 상태가 완성 상태라 글은 그대로 보임) */
+    if (spec.heavy && lowPower()) { el.__lecfx[id] = { skipped: true }; return; }
     var inst = { el: el, id: id, cleanups: [], dead: false };
     el.__lecfx[id] = inst;
     insts.push(inst);
@@ -554,6 +564,11 @@
         if (inst.el.__lecfx) delete inst.el.__lecfx[inst.id];
         rm(insts, inst);
       }
+    });
+    /* 단계에 걸려 건너뛴 표시도 지움: 단계를 바꾼 뒤 start()하면 다시 판단(가벼운 모드 켜고 끄기) */
+    Array.prototype.forEach.call((root.querySelectorAll ? root : d).querySelectorAll('[data-fx]'), function (el) {
+      var m = el.__lecfx; if (!m) return;
+      Object.keys(m).forEach(function (k) { if (m[k] && m[k].skipped) delete m[k]; });
     });
   }
 
@@ -622,6 +637,7 @@
     has: function (id) { return !!specs[id]; },
     list: function () { return Object.keys(specs); },
     state: function () { return { level: level(), reduced: reduced(), paused: isPaused(), lowPower: lowPower(), loops: loopCount }; },
+    level: level,
     util: util,
     /* 깜빡임 방지용 부트 스니펫: <head>에 인라인으로 넣으면 core가 시작할 때(또는 2.5초 뒤) 풀린다 */
     boot: "document.documentElement.classList.add('fx-boot');setTimeout(function(){document.documentElement.classList.remove('fx-boot')},2500)"

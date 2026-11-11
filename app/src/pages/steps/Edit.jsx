@@ -1,4 +1,4 @@
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { Preview } from '../../components/Preview.jsx';
@@ -8,14 +8,14 @@ import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyInfo } from '../../lib/blueprint.js';
 import { toast } from '../../lib/util.js';
+import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
+import { useAiJob, startMakeJob, stopJob, clearJob } from '../../lib/ai-job.js';
 import { SIZE } from './Start.jsx';
 
 const ADMIN = [{ value: 'school', label: '교내 자율연수' }, { value: 'official', label: '교육청 승인 직무연수' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'student', label: '학생 대상' }];
 const DEVICES = [{ value: 'laptop', label: '개인 노트북' }, { value: 'chromebook', label: '학교 크롬북' }, { value: 'tablet', label: '태블릿' }, { value: 'phone', label: '휴대폰' }];
 const NETWORK = [{ value: 'good', label: '잘 됨' }, { value: 'slow', label: '느림' }, { value: 'restricted', label: '학교망(막힌 곳 있음)' }, { value: 'offline', label: '인터넷 없음' }];
 
-// 되돌리기: 프로젝트마다 최근 20개(이 탭 안에서만)
-const undoStacks = new Map();
 
 export function StepEdit({ p, update, go }) {
   const [tab, setTab] = useState('content');
@@ -28,11 +28,14 @@ export function StepEdit({ p, update, go }) {
   const frameRef = useRef(null); const review = useRef(null);
   const onMark = (mode) => { setTab('review'); review.current?.start(mode); };
   const [, force] = useState(0);
-  const stack = undoStacks.get(p.id) || []; undoStacks.set(p.id, stack);
-  const pushUndo = (label) => { stack.push({ label, blueprint: JSON.parse(JSON.stringify(p.blueprint)), info: { ...p.info } }); if (stack.length > 20) stack.shift(); force((x) => x + 1); };
-  const undo = () => { const s = stack.pop(); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); force((x) => x + 1); };
+  useEffect(() => onUndoChange(() => force((x) => x + 1)), []);
+  const stack = undoStack(p.id);
+  const pushUndo = (label) => pushUndoFor(p.id, label, p);
+  const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };
+  const job = useAiJob(p.id);
+  const latest = useRef(p); latest.current = p;
   if (!p.blueprint) return <><StepHead title="살펴보고 고치기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
-  const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info) }; });
+  const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info, patch) }; });
   function onAi(bp, meta = {}) {
     pushUndo('AI로 다듬기');
     if (meta.polish) update({ blueprint: bp, aiMethod: 'ai' }); // 문구만 바뀜(설정·연결은 그대로)
@@ -51,11 +54,12 @@ export function StepEdit({ p, update, go }) {
     <>
       <StepHead title="살펴보고 고치기" desc="미리보기를 보며 고치세요. 고친 내용은 자동으로 저장돼요.">
         <div class="btn-row head-tools">
-          <button class="btn btn-sm" onClick={() => setAi(true)}>AI로 다듬기</button>
           <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label}` : '되돌릴 것이 없어요'}>되돌리기</button>
-          <button class="btn btn-primary" onClick={() => go(3)}>공유하기 →</button>
+          <button class="btn btn-primary" onClick={() => go(3)}>공개하기 →</button>
         </div>
       </StepHead>
+      {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
+        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => { clearJob(p.id); go(1); }} />}
       <div class="workspace">
         <div class="ws-panel">
           <Tabs label="고칠 것" tabs={tabs} value={tab} onChange={setTab} />
@@ -64,7 +68,7 @@ export function StepEdit({ p, update, go }) {
             {tab === 'design' && <DesignPanel p={p} update={update} />}
             {tab === 'live' && <FeaturesPanel p={p} update={update} setInfo={setInfo} />}
             {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} />}
-            <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} />
+            <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} onPolish={() => setAi(true)} />
           </div>
         </div>
         <Preview p={p} onPick={onPick} frameRef={frameRef} marking={marking} onMark={onMark} />
@@ -76,20 +80,60 @@ export function StepEdit({ p, update, go }) {
   );
 }
 
+const PHASE = { read: '교재를 정리하고 있어요', ask: 'AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요', build: '사이트를 조립하고 있어요' };
+/** AI로 만들기 진행 띠: 초안을 먼저 보여 주고, 끝나면 AI가 짠 내용으로 바뀜 */
+function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect }) {
+  if (job.status === 'running') {
+    const sec = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
+    return (
+      <div class="ai-job" role="status" aria-live="polite">
+        <span class="ai-job-dot" aria-hidden="true" />
+        <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>보통 1~2분 걸려요. 지금 보이는 것은 기본 초안이고, 끝나면 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
+        <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
+      </div>
+    );
+  }
+  if (job.status === 'done') {
+    return (
+      <div class="ai-job ok" role="status">
+        <span class="ai-job-t"><b>AI가 교재에 맞게 사이트를 짰어요.</b><small>미리보기를 보며 고치고, 마음에 들면 공개하세요.</small></span>
+        {canUndo && <button class="btn btn-sm btn-quiet" onClick={() => { onUndo(); onClose(); }}>기본 초안으로 되돌리기</button>}
+        <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
+      </div>
+    );
+  }
+  const e = job.error || {};
+  return (
+    <div class="ai-job bad" role="alert">
+      <span class="ai-job-t"><b>{e.title || 'AI로 만들지 못했어요.'}</b><small>{e.body || '기본 초안은 그대로 있어요.'}</small></span>
+      {e.kind === 'no-ai' || /연결되어 있지/.test(e.title || '') ? <button class="btn btn-sm" onClick={onConnect}>AI 연결하기</button> : <button class="btn btn-sm" onClick={onRetry}>다시 하기</button>}
+      <button class="btn btn-sm btn-quiet" onClick={onPaste}>챗봇에 붙여넣기로 하기</button>
+      <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
+    </div>
+  );
+}
+
 function FeaturesPanel({ p, update, setInfo }) {
   const info = p.info; const f = info.features || [];
   const pv = p.blueprint.privacy || {};
   const setPv = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, privacy: { ...(cur.blueprint.privacy || {}), ...patch } } }));
   const toggle = (v) => setInfo({ features: f.includes(v) ? f.filter((x) => x !== v) : [...f, v] });
   const anyLive = f.some((x) => LIVE_KEYS.includes(x));
+  const board = (p.blueprint.sections || []).find((s) => s.type === 'board');
+  const setBoard = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, sections: cur.blueprint.sections.map((s) => (s.type === 'board' ? { ...s, ...patch } : s)) } }));
+  const minor = !!p.blueprint.audience?.minor;
   return (
     <div class="stack">
-      <p class="small muted">켠 기능은 참가자 휴대폰과 강사 화면을 이어 줘요. 미리보기에서 바로 시험해 볼 수 있고, 실제 연결은 공유하기 단계에서 해요.</p>
+      <p class="small muted">켠 기능은 참가자 휴대폰과 강사 화면을 이어 줘요. 미리보기에서 바로 시험해 볼 수 있고, 실제 연결은 공개하기 단계에서 해요.</p>
       <ul class="feat-list">
         {FEATURES.map((x) => (
           <li><label class="feat"><input type="checkbox" checked={f.includes(x.value)} onChange={() => toggle(x.value)} /><span><b>{x.label}</b><small>{x.desc}</small></span></label></li>
         ))}
       </ul>
+      {board && <fieldset class="field plain-fieldset"><legend>결과물 나눔 보드</legend>
+        <label class="check"><input type="checkbox" checked={!!board.moderation} onChange={(e) => setBoard({ moderation: e.target.checked })} /><span>강사가 확인한 글만 보이기</span></label>
+        <label class="check"><input type="checkbox" checked={board.allowFiles !== false && !minor} disabled={minor} onChange={(e) => setBoard({ allowFiles: e.target.checked })} /><span>사진·파일 올리기{minor ? <small class="muted"> (만 14세 미만이 참여해 꺼 둬요)</small> : null}</span></label>
+      </fieldset>}
       {anyLive && <>
         <div class="field"><span>참가자에게 받을 정보</span>
           <Radios name="collect" value={(pv.collect || ['nickname']).includes('name') ? 'name' : 'nick'} onChange={(v) => setPv({ collect: v === 'name' ? ['nickname', 'name', 'school'] : ['nickname'] })} options={[{ value: 'nick', label: '별명만(권장)' }, { value: 'name', label: '이름·소속도(출석·이수용)' }]} label="받을 정보" />
@@ -118,7 +162,7 @@ function DetailsPanel({ p, setInfo }) {
         <Field label="문의처" hint="참가자가 연락할 곳(연수 담당자 전화·메일)"><input value={info.contact || ''} onInput={set('contact')} maxLength={120} /></Field>
       </div>
       <fieldset class="field plain-fieldset"><legend>진행 방식</legend>
-        <Radios name="mode" value={info.mode || 'offline'} onChange={(v) => setInfo({ mode: v })} options={[{ value: 'offline', label: '오프라인' }, { value: 'online', label: '온라인' }, { value: 'hybrid', label: '함께' }]} label="진행 방식" />
+        <Radios name="mode" value={info.mode || 'offline'} onChange={(v) => setInfo({ mode: v })} options={[{ value: 'offline', label: '오프라인' }, { value: 'online', label: '온라인' }, { value: 'hybrid', label: '병행' }]} label="진행 방식" />
       </fieldset>
       {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 단추로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
       <h3 class="h-sub">강사</h3>
@@ -134,12 +178,11 @@ function DetailsPanel({ p, setInfo }) {
         <Field label="연수 성격"><select value={info.admin} onChange={(e) => { const v = e.target.value; setInfo({ admin: v, minor: v === 'student' ? true : info.minor }); }}>{ADMIN.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>
         <Field label="연수 장소 인터넷"><select value={info.network} onChange={set('network')}>{NETWORK.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>
       </div>
-      {(info.admin === 'official' || (info.features || []).includes('attendance')) && <Field label="이수 기준(머문 시간 %)" hint="이수 확인표에서 이 비율 이상 머문 참가자를 '이수'로 표시해요."><input type="number" min="0" max="100" value={info.completionRate ?? 80} onInput={set('completionRate')} style={{ width: '120px' }} /></Field>}
+      {(info.admin === 'official' || (info.features || []).includes('attendance')) && <Field label="이수 기준(머문 시간 %)" hint="이수자 명단에서 이 비율 이상 머문 참가자를 '이수'로 표시해요."><input type="number" min="0" max="100" value={info.completionRate ?? 80} onInput={set('completionRate')} style={{ width: '120px' }} /></Field>}
       <fieldset class="field plain-fieldset"><legend>참가자 기기</legend>
         <div class="inline-checks">{DEVICES.map((o) => { const cur = info.devices || []; return <label class="check"><input type="checkbox" checked={cur.includes(o.value)} onChange={() => setInfo({ devices: cur.includes(o.value) ? cur.filter((x) => x !== o.value) : [...cur, o.value] })} /><span>{o.label}</span></label>; })}</div>
       </fieldset>
       <label class="check"><input type="checkbox" checked={!!info.minor} onChange={set('minor')} /><span>만 14세 미만 학생이 참여해요 <span class="small muted">(별명만 받고 사진 올리기를 꺼요)</span></span></label>
-      <label class="check"><input type="checkbox" checked={!!info.commercial} onChange={set('commercial')} /><span>강사료를 받는 연수예요 <span class="small muted">(상업적 이용을 막은 무료 서비스는 추천에서 빼요)</span></span></label>
     </div>
   );
 }

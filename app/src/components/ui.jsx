@@ -24,23 +24,6 @@ export function Field({ label, hint, children }) {
   return <label class="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
-/** 고르기 칩: multiple이면 배열 값 */
-export function Chips({ options, value, onChange, multiple = false, label }) {
-  const isOn = (v) => (multiple ? (value || []).includes(v) : value === v);
-  const toggle = (v) => {
-    if (!multiple) return onChange(v);
-    const cur = new Set(value || []); cur.has(v) ? cur.delete(v) : cur.add(v); onChange([...cur]);
-  };
-  return (
-    <div class="chips" role="group" aria-label={label}>
-      {options.map((o) => {
-        const v = typeof o === 'string' ? o : o.value; const t = typeof o === 'string' ? o : o.label;
-        return <button type="button" class="chip" aria-pressed={String(isOn(v))} onClick={() => toggle(v)}>{t}</button>;
-      })}
-    </div>
-  );
-}
-
 export function Seg({ options, value, onChange, label }) {
   return (
     <div class="seg" role="group" aria-label={label}>

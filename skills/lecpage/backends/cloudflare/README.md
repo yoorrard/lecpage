@@ -11,7 +11,7 @@
 
 1. 버튼을 누르고 Cloudflare 계정으로 로그인합니다(무료 가입 가능).
 2. GitHub(또는 GitLab) 연결을 허락하면 이 폴더만 담은 저장소가 내 계정에 복사됩니다.
-3. **ADMIN_KEY**(강사 콘솔 비밀번호) 칸에 **직접 만든 12자 이상**의 값을 넣습니다(예: `openssl rand -hex 12`). 짧거나 예시 값(`change-me…`)이면 서버가 모든 요청에 `503 weak_admin_key`로 답합니다. 혼자 쓰면 **SETUP_TOKEN**은 비워 둡니다.
+3. **ADMIN_KEY**(강사 화면 비밀번호) 칸에 **직접 만든 12자 이상**의 값을 넣습니다(예: `openssl rand -hex 12`). 짧거나 예시 값(`change-me…`)이면 서버가 모든 요청에 `503 weak_admin_key`로 답합니다. 혼자 쓰면 **SETUP_TOKEN**은 비워 둡니다.
 4. 배포가 끝나면 `https://lecpage-live.<내계정>.workers.dev` 주소가 나옵니다. 이 주소를 lecpage 설정의 실시간 서버 주소(`live.provider = "http"`, `live.url`)에 넣습니다.
 5. 확인: 브라우저로 `https://…workers.dev/api/health` → `{"ok":true,…}`
 
@@ -75,7 +75,7 @@ npx wrangler r2 bucket create lecpage-uploads
 
 무료 한도(하루, UTC 0시 초기화): Workers 요청 10만, Durable Object 요청 10만, Duration 13,000 GB-s, 저장 5GB.
 
-- **WebSocket(기본)**: 접속할 때 요청 1번. 받는 메시지는 20개당 1요청으로 계산되고 내보내는 메시지는 무료입니다. 40명이 2시간 동안 질문·진행 체크를 해도 수천 요청 수준입니다.
+- **WebSocket(기본)**: 접속할 때 요청 1번. 받는 메시지는 20개당 1요청으로 계산되고 내보내는 메시지는 무료입니다. 40명이 2시간 동안 질문·진행 현황를 해도 수천 요청 수준입니다.
 - **SSE(WebSocket 차단 시)**: 연결이 열려 있는 동안 객체가 깨어 있어 Duration이 듭니다(128MB × 2시간 ≈ 900 GB-s, 한도의 7%).
 - **폴링(둘 다 차단 시)**: 5초마다 1요청(변화가 없으면 10초, 숨긴 탭은 30초). 50명 × 2시간이면 약 4~7만 요청으로 하루 한도에 가깝습니다. 큰 연수(100명+)를 폴링만으로 해야 하는 학교망이라면 Node 서버나 유료 플랜(월 5달러)을 권합니다.
 

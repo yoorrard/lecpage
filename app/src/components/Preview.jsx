@@ -19,7 +19,7 @@ export const DEVICES = [
   { value: 'phone', label: '휴대폰', w: 360, h: 780, icon: 'phone', rotate: true }, // 국내에서 흔한 가장 좁은 갤럭시 폭
   { value: 'fit', label: '맞춤', icon: 'fit' },
 ];
-const PAGES = [{ value: 'index.html', label: '참가자 화면' }, { value: 'console.html', label: '강사 화면', live: true }, { value: 'screen.html', label: '발표 화면' }, { value: 'check.html', label: '와이파이 점검' }];
+const PAGES = [{ value: 'index.html', label: '참가자 화면' }, { value: 'console.html', label: '강사 화면', live: true }, { value: 'screen.html', label: '발표 화면' }, { value: 'poster.html', label: 'QR 안내문' }, { value: 'check.html', label: '접속 확인' }];
 
 const store = {
   get(k, d) { try { return localStorage.getItem('lp-preview-' + k) ?? d; } catch { return d; } },
@@ -113,7 +113,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
     <div class={`preview${full ? ' full' : ''}`} role={full ? 'dialog' : undefined} aria-modal={full ? 'true' : undefined} aria-label={full ? '크게 보기' : undefined}>
       <div class="pv-bar">
         <div class="pv-actions">
-          {onMark && <button class="btn btn-sm" disabled={!!marking} onClick={() => onMark('draw')} title="미리보기에 펜으로 표시해 AI에게 고쳐 달라고 해요">✎ 표시해서 요청</button>}
+          {onMark && <button class="btn btn-sm" disabled={!!marking} onClick={() => onMark('draw')} title="미리보기에 펜으로 표시해 AI에게 고쳐 달라고 해요">✎ 표시하기</button>}
           {onPick && page === 'index.html' && <button class={`btn btn-sm${picking ? ' btn-ink' : ' btn-quiet'}`} aria-pressed={String(picking)} onClick={() => setPicking(!picking)} title="미리보기에서 칸을 누르면 바로 고칠 수 있어요">{picking ? '고칠 칸을 누르세요' : '눌러서 고치기'}</button>}
         </div>
         <label class="pv-page"><span class="sr">미리볼 화면</span>
@@ -124,7 +124,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
         <div class="pv-tools">
           <div class="seg pv-devices" role="group" aria-label="화면 크기">
             {DEVICES.map((x) => (
-              <button type="button" aria-pressed={String(device === x.value)} onClick={() => setDevice(x.value)} title={x.w ? `${x.label} ${x.w}×${x.h}` : '미리보기 칸 크기 그대로'}>
+              <button type="button" aria-pressed={String(device === x.value)} onClick={() => setDevice(x.value)} title={x.w ? `${x.label} ${x.w}×${x.h}` : '미리보기 크기 그대로'}>
                 <Icon name={x.icon} /><span class="pv-label">{x.label}</span>
               </button>
             ))}

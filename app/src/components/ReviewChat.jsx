@@ -30,7 +30,7 @@ async function redraw(url, maxW, type = 'image/jpeg', q = 0.84) {
 const fileUrl = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(r.error); r.readAsDataURL(f); });
 const nums = (o, keys) => (o && typeof o === 'object' ? Object.fromEntries(keys.map((k) => [k, Math.max(0, Math.min(1e6, Math.round(+o[k] || 0)))])) : null);
 
-export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marking, setMarking, apiRef, onConnectAi, hidden }) {
+export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marking, setMarking, apiRef, onConnectAi, onPolish, hidden }) {
   const [msgs, setMsgs] = useState(null);
   const [draft, setDraft] = useState('');
   const [atts, setAtts] = useState([]);
@@ -104,7 +104,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
       const notes = (Array.isArray(d.notes) ? d.notes : []).filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 10);
       try { await attach(d.png, { sections, notes, viewport: nums(d.viewport, ['w', 'h']), scroll: nums(d.scroll, ['x', 'y']), source: d.mode === 'pick' ? 'pick' : 'mark' }); }
       catch { toast('표시한 그림을 받지 못했어요.'); return; }
-      setSay(d.mode === 'pick' ? `칸 '${sections.map(name).join(', ')}'을 붙였어요.` : '표시한 화면을 붙였어요. 고칠 내용을 적어 보내세요.');
+      setSay(d.mode === 'pick' ? `섹션 '${sections.map(name).join(', ')}'을 붙였어요.` : '표시한 화면을 붙였어요. 고칠 내용을 적어 보내세요.');
       setTimeout(() => ta.current?.focus(), 0);
     };
     addEventListener('message', onMsg); return () => removeEventListener('message', onMsg);
@@ -222,6 +222,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
         <button type="button" class="rc-grip" aria-expanded={String(!folded)} onClick={() => setFolded(!folded)}><span aria-hidden="true" />{folded ? '대화 펼치기' : '대화 접기'}</button>
         <h2 class="rc-title">수정 요청</h2>
         <span class="rc-ai small muted">{aiLabel}{target === null && onConnectAi && <> · <button type="button" class="rc-link" onClick={onConnectAi}>AI 연결</button></>}</span>
+        {onPolish && <button type="button" class="btn btn-sm rc-polish" onClick={onPolish} title="사이트 문구 전체를 AI가 한 번에 다듬어요(되돌리기 가능)">문구 전체 다듬기</button>}
         {!!msgs?.length && <button type="button" class="btn btn-sm btn-quiet rc-clear" onClick={clearAll}>{sure ? '한 번 더 누르면 지워요' : '대화 지우기'}</button>}
       </div>
       <div class="rc-thread" ref={thread} role="log" aria-live="polite" aria-label="수정 요청 대화" tabIndex={0}>
@@ -239,8 +240,8 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
           onInput={(e) => setDraft(e.target.value)} onPaste={onPaste} onFocus={refreshAi}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); } }} />
         <div class="rc-tools">
-          <button ref={startBtn} type="button" class="btn btn-sm rc-mark" onClick={() => start('draw')} disabled={!!marking} aria-describedby="rc-mark-d">✎ 표시해서 넣기</button>
-          <button type="button" class="btn btn-sm btn-quiet" onClick={() => start('pick')} disabled={!!marking}>칸 고르기</button>
+          <button ref={startBtn} type="button" class="btn btn-sm rc-mark" onClick={() => start('draw')} disabled={!!marking} aria-describedby="rc-mark-d">✎ 표시하기</button>
+          <button type="button" class="btn btn-sm btn-quiet" onClick={() => start('pick')} disabled={!!marking}>섹션 고르기</button>
           <label class="icon-btn rc-file" title="그림 파일 넣기"><input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} aria-label="그림 파일 넣기" /><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.3 3.3 0 014.7 4.7L10 18.4a1.7 1.7 0 01-2.4-2.4L15.5 8" /></svg></label>
           <span class="rc-grow" />
           <button type="button" class="btn btn-sm btn-primary" disabled={!canSend} onClick={send}>보내기</button>
@@ -259,7 +260,7 @@ function Intro() {
     <div class="rc-intro">
       <p><b>미리보기를 보며 고칠 곳을 알려 주세요.</b></p>
       <ol>
-        <li><b>✎ 표시해서 넣기</b>를 누르고 미리보기에 펜이나 네모로 표시한 뒤 <b>완료</b>를 누르면 그림이 붙어요.</li>
+        <li><b>✎ 표시하기</b>를 누르고 미리보기에 펜이나 네모로 표시한 뒤 <b>완료</b>를 누르면 그림이 붙어요.</li>
         <li>무엇을 바꿀지 적어 보내면 AI가 고칠 안을 보여 줘요.</li>
         <li><b>적용</b>하면 바로 바뀌고, 마음에 안 들면 <b>되돌리기</b>로 돌아가요.</li>
       </ol>
@@ -305,7 +306,7 @@ function AiMsg({ m, busy, onApply, onRevert, onAgain, onStop, onPaste, user, pro
   );
 }
 
-/** AI 키 없이: 그림 복사 → 지시문 복사 → 챗봇 답 붙여넣기 */
+/** AI 키 없이: 그림 복사 → 프롬프트 복사 → 챗봇 답 붙여넣기 */
 function Handoff({ m, user, promptFor, onPaste, onConnectAi, title }) {
   const [answer, setAnswer] = useState('');
   const imgs = (user?.images || []).filter((im) => !im.gone && (full.get(im.id) || im.url));
@@ -328,7 +329,7 @@ function Handoff({ m, user, promptFor, onPaste, onConnectAi, title }) {
       <p><b>쓰는 챗봇에 보내 주세요.</b> <span class="muted">AI 키가 연결되지 않아 직접 보내지 못했어요.</span></p>
       <ol>
         {!!imgs.length && <li><button type="button" class="btn btn-sm" onClick={copyImage}>그림 복사</button> 챗봇 입력창에 붙여 넣어요.</li>}
-        <li><button type="button" class="btn btn-sm" onClick={() => copy(promptFor(user, imgs.length > 0, m.again), '지시문을 복사했어요. 이어서 붙여 넣고 보내세요.')}>지시문 복사</button> 이어서 붙여 넣고 보내요. <span class="rc-bots"><a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a> · <a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a> · <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a></span></li>
+        <li><button type="button" class="btn btn-sm" onClick={() => copy(promptFor(user, imgs.length > 0, m.again), '프롬프트를 복사했어요. 이어서 붙여 넣고 보내세요.')}>프롬프트 복사</button> 이어서 붙여 넣고 보내요. <span class="rc-bots"><a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a> · <a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a> · <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a></span></li>
         <li>챗봇 답을 통째로 복사해 여기에 붙여 넣어요.
           <textarea class="input rc-answer" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} aria-label="챗봇의 답" placeholder="{ … } 로 된 답을 붙여 넣으세요" />
           <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" disabled={!answer.trim()} onClick={() => onPaste(m.id, answer)}>답 확인</button>{onConnectAi && <button type="button" class="btn btn-sm btn-quiet" onClick={onConnectAi}>AI 키 연결하기</button>}</div>

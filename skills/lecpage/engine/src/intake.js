@@ -8,17 +8,17 @@ import { PRESET_IDS } from './design/presets.js';
 import { DEFAULT_SURVEY } from './schema/sections.js';
 import { randomCode } from './validate.js';
 
-export const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'chat', 'signal'];
+export const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'signal'];
 
 /** 참여 기능(강사에게 보이는 이름·설명). quick=첫 화면에서 바로 고르는 세 가지 */
 export const FEATURES = [
   { value: 'qa', label: '질문 받기', desc: '이름 없이 질문하고 공감을 눌러요. 많이 궁금한 것부터 답해요.', quick: true },
-  { value: 'help', label: '막혔어요', desc: '실습하다 막히면 버튼 하나로 자리와 함께 알려요.', quick: true },
-  { value: 'progress', label: '진행 체크', desc: '실습마다 완료를 누르면 강사 화면에 진행 현황이 보여요.', quick: true },
-  { value: 'poll', label: '투표·낱말 구름', desc: '고르기 투표와 한 낱말 답을 모아 화면에 띄워요.' },
-  { value: 'board', label: '결과물 나눔 보드', desc: '완성한 결과물과 소감을 올리고 서로 봐요.' },
-  { value: 'signal', label: '신호등', desc: '이해했어요·헷갈려요·도와주세요를 색으로 알려요.' },
-  { value: 'attendance', label: '출석·이수 확인', desc: '입실·퇴실을 누르고, 이수 확인표(CSV)를 받아요.' },
+  { value: 'help', label: '도움 요청', desc: '실습하다 막히면 버튼 하나로 자리와 함께 알려요.', quick: true },
+  { value: 'progress', label: '진행 현황', desc: '실습마다 완료를 누르면 강사 화면에 진행 현황이 보여요.', quick: true },
+  { value: 'poll', label: '투표·워드클라우드', desc: '고르기 투표와 한 낱말 답을 모아 화면에 띄워요.' },
+  { value: 'board', label: '나눔 보드', desc: '완성한 결과물과 소감을 올리고 서로 봐요.' },
+  { value: 'signal', label: '신호등', desc: '이해했어요·헷갈려요·모르겠어요를 색으로 알려요.' },
+  { value: 'attendance', label: '출석·이수 확인', desc: '입실·퇴실을 누르고, 이수자 명단(CSV)을 받아요.' },
   { value: 'reactions', label: '박수·반응', desc: '박수와 하트가 발표 화면에 떠올라요.' },
 ];
 
@@ -73,12 +73,13 @@ export function applyFeatures(bp, info = {}) {
   bp.sections = Array.isArray(bp.sections) ? bp.sections : [];
   const f = info.features.flatMap((x) => String(x).split('+'));
   const on = (k) => f.includes(k);
+  const hadAttendance = hasType(bp, 'attendance');
   if (on('qa') && !hasType(bp, 'qa')) insertBefore(bp, ['board', 'materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'qa', type: 'qa', nav: '질문', title: '질문' });
-  if (on('board') && !hasType(bp, 'board')) insertBefore(bp, ['materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'board', type: 'board', nav: '보드', title: '참여 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }], allowFiles: !info.minor });
+  if (on('board') && !hasType(bp, 'board')) insertBefore(bp, ['materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'board', type: 'board', nav: '보드', title: '나눔 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }], allowFiles: !info.minor });
   if (on('attendance') && !hasType(bp, 'attendance')) insertBefore(bp, ['readiness', 'outline', 'stations'], { id: 'attendance', type: 'attendance', nav: '출석', title: '출석 확인' });
   if (on('poll') && !hasType(bp, 'poll')) insertBefore(bp, ['qa', 'board', 'materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'poll', type: 'poll', nav: '투표', title: '투표', items: [{ id: 'word', question: '오늘 연수를 한 낱말로 말하면?', kind: 'word', options: [] }] });
   // 끈 기능의 칸은 뺌(내용이 거의 없는 칸만)
-  const off = ['qa', 'board', 'attendance'].filter((t) => !on(t));
+  const off = ['qa', 'board', 'attendance', 'poll'].filter((t) => !on(t));
   bp.sections = bp.sections.filter((s) => !off.includes(s?.type));
   if (info.minor) bp.sections.forEach((s) => { if (s?.type === 'board') s.allowFiles = false; });
   const liveOn = f.some((x) => LIVE_KEYS.includes(x));
@@ -89,7 +90,10 @@ export function applyFeatures(bp, info = {}) {
   if (!liveOn) bp.sections = bp.sections.filter((s) => !(s?.type === 'survey' && !s.url && s.questions?.length));
   const prev = bp.live || {};
   bp.live = { ...prev, features: f.filter((x) => LIVE_KEYS.includes(x)), provider: liveOn ? (prev.provider && prev.provider !== 'none' ? prev.provider : 'local') : 'none', code: prev.code || randomCode() };
-  bp.privacy = { ...(bp.privacy || {}), collect: info.minor ? ['nickname'] : on('attendance') ? ['nickname', 'name', 'school'] : ['nickname'], retentionDays: bp.privacy?.retentionDays || 30 };
+  // 받을 정보: 미성년은 별명만. 출석을 새로 켤 때만 이름·소속으로 바꾸고, 그 밖에는 강사가 고른 값을 지킴
+  const cur = bp.privacy?.collect;
+  const collect = info.minor ? ['nickname'] : on('attendance') && !hadAttendance ? ['nickname', 'name', 'school'] : Array.isArray(cur) && cur.length ? cur : ['nickname'];
+  bp.privacy = { ...(bp.privacy || {}), collect, retentionDays: bp.privacy?.retentionDays || 30 };
   return bp;
 }
 
@@ -161,8 +165,12 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   return applyFeatures(bp, info);
 }
 
-/** 이미 만든 설계도에 바뀐 연수 정보를 반영(내용·디자인은 그대로). info에 있는 키만 바꿈 */
-export function syncInfo(bp0, info = {}) {
+/**
+ * 이미 만든 설계도에 바뀐 연수 정보를 반영(내용·디자인은 그대로). info에 있는 키만 바꿈.
+ * changed(바뀐 키 목록 또는 객체)를 주면 참여 기능은 features·minor·surveyUrl이 바뀌었을 때만 다시 반영합니다
+ * (연수명만 고쳤는데 강사가 뺀 칸이 되살아나지 않게).
+ */
+export function syncInfo(bp0, info = {}, changed = null) {
   const bp = clone(bp0);
   applyMeta(bp, info);
   applyDesignAnswers(bp, info);
@@ -172,6 +180,8 @@ export function syncInfo(bp0, info = {}) {
     bp.instructors = [{ ...cur, name: info.instructorName, org: info.instructorOrg, email: info.instructorEmail, showEmail: !!info.instructorEmail, bio: info.instructorBio }, ...(bp.instructors || []).slice(1)];
   }
   ensureInstructorSection(bp);
+  const keys = changed ? (Array.isArray(changed) ? changed : Object.keys(changed)) : null;
+  if (keys && !keys.some((k) => ['features', 'minor', 'surveyUrl'].includes(k))) return bp;
   return applyFeatures(bp, info);
 }
 

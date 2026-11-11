@@ -15,6 +15,9 @@
 //   meta.siteUrl·joinUrl·shortUrl, live.url·code·anonKey, access 는 지우고 주의를 남깁니다. 이 값은 강사에게 직접 받습니다.
 import { validate, str } from './validate.js';
 import { SECTION_DEFS, SECTION_TYPES } from './schema/sections.js';
+import { PRESETS } from './design/presets.js';
+import { FX } from './design/fx-catalog.js';
+import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
@@ -60,7 +63,7 @@ function stripProtected(patch, warnings) {
   return p;
 }
 
-const label = (s) => (s && (str(s.title, 40) || str(s.nav, 12) || SECTION_DEFS[s.type]?.label)) || '칸';
+const label = (s) => (s && (str(s.title, 40) || str(s.nav, 12) || SECTION_DEFS[s.type]?.label)) || '섹션';
 
 /**
  * 설계도에 패치를 적용하고 검증합니다. 예외를 던지지 않습니다.
@@ -97,19 +100,19 @@ export function applyBlueprintPatch(bp, patch) {
 
   // 칸 고치기·지우기(얕은 병합: 칸의 맨 위 키만 바꾸고, 배열·객체 값은 통째로 바꿈)
   if ('sections' in p) {
-    if (!isObj(p.sections)) warnings.push({ path: 'sections', message_ko: 'sections는 { "칸 id": {…} | null } 모양이어야 해요.' });
+    if (!isObj(p.sections)) warnings.push({ path: 'sections', message_ko: 'sections는 { "섹션 id": {…} | null } 모양이어야 해요.' });
     else for (const [id, change] of Object.entries(p.sections)) {
       const i = raw.sections.findIndex((s) => s?.id === id);
-      if (i < 0) { warnings.push({ path: `sections.${id}`, message_ko: `"${str(id, 40)}" 칸이 없어 건너뛰었어요. (있는 칸: ${raw.sections.map((s) => s?.id).filter(Boolean).join(', ')})` }); continue; }
+      if (i < 0) { warnings.push({ path: `sections.${id}`, message_ko: `"${str(id, 40)}" 섹션이 없어 건너뛰었어요. (있는 섹션: ${raw.sections.map((s) => s?.id).filter(Boolean).join(', ')})` }); continue; }
       if (change === null) { raw.sections.splice(i, 1); applied++; continue; }
-      if (!isObj(change)) { warnings.push({ path: `sections.${id}`, message_ko: '칸 변경은 객체나 null이어야 해요.' }); continue; }
+      if (!isObj(change)) { warnings.push({ path: `sections.${id}`, message_ko: '섹션 변경은 객체나 null이어야 해요.' }); continue; }
       const next = { ...raw.sections[i] };
       for (const [k, v] of Object.entries(change)) {
         if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-        if (k === 'id' && v !== id) { warnings.push({ path: `sections.${id}.id`, message_ko: '칸 id는 바꾸지 않았어요.' }); continue; }
+        if (k === 'id' && v !== id) { warnings.push({ path: `sections.${id}.id`, message_ko: '섹션 id는 바꾸지 않았어요.' }); continue; }
         if (v === null) delete next[k]; else next[k] = clone(v);
       }
-      if (!SECTION_TYPES.includes(next.type)) { warnings.push({ path: `sections.${id}.type`, message_ko: `알 수 없는 칸 종류 "${str(next.type, 20)}"라 바꾸지 않았어요.` }); continue; }
+      if (!SECTION_TYPES.includes(next.type)) { warnings.push({ path: `sections.${id}.type`, message_ko: `알 수 없는 섹션 종류 "${str(next.type, 20)}"라 바꾸지 않았어요.` }); continue; }
       raw.sections[i] = next; applied++;
     }
   }
@@ -117,10 +120,10 @@ export function applyBlueprintPatch(bp, patch) {
   // 칸 추가
   if ('add' in p) {
     const list = Array.isArray(p.add) ? p.add : isObj(p.add) ? [p.add] : [];
-    if (!list.length) warnings.push({ path: 'add', message_ko: 'add는 [{ "after": "칸 id", "section": {…} }] 모양이어야 해요.' });
+    if (!list.length) warnings.push({ path: 'add', message_ko: 'add는 [{ "after": "섹션 id", "section": {…} }] 모양이어야 해요.' });
     for (const [n, a] of list.entries()) {
       const sec = isObj(a?.section) ? clone(a.section) : null;
-      if (!sec || !SECTION_TYPES.includes(sec.type)) { warnings.push({ path: `add[${n}]`, message_ko: `추가할 칸의 종류(type)가 없거나 알 수 없어요: "${str(sec?.type, 20)}"` }); continue; }
+      if (!sec || !SECTION_TYPES.includes(sec.type)) { warnings.push({ path: `add[${n}]`, message_ko: `추가할 섹션의 종류(type)가 없거나 알 수 없어요: "${str(sec?.type, 20)}"` }); continue; }
       const ids = new Set(raw.sections.map((s) => s?.id));
       let id = slug(sec.id || sec.type, raw.sections.length + 1);
       for (let k = 2; ids.has(id); k++) id = `${slug(sec.id || sec.type, k)}-${k}`;
@@ -129,7 +132,7 @@ export function applyBlueprintPatch(bp, patch) {
       const after = a.after ?? null;
       if (after !== null) {
         const i = raw.sections.findIndex((s) => s?.id === after);
-        if (i < 0) warnings.push({ path: `add[${n}].after`, message_ko: `"${str(after, 40)}" 칸이 없어 맨 끝에 넣었어요.` });
+        if (i < 0) warnings.push({ path: `add[${n}].after`, message_ko: `"${str(after, 40)}" 섹션이 없어 맨 끝에 넣었어요.` });
         else at = i + 1;
       }
       raw.sections.splice(at, 0, sec); applied++;
@@ -138,12 +141,12 @@ export function applyBlueprintPatch(bp, patch) {
 
   // 순서
   if ('order' in p) {
-    if (!Array.isArray(p.order)) warnings.push({ path: 'order', message_ko: 'order는 칸 id 배열이어야 해요.' });
+    if (!Array.isArray(p.order)) warnings.push({ path: 'order', message_ko: 'order는 섹션 id 배열이어야 해요.' });
     else {
       const byId = new Map(raw.sections.map((s) => [s?.id, s]));
       const head = [];
       for (const id of p.order) {
-        if (!byId.has(id)) { warnings.push({ path: 'order', message_ko: `순서에 적은 "${str(id, 40)}" 칸이 없어요.` }); continue; }
+        if (!byId.has(id)) { warnings.push({ path: 'order', message_ko: `순서에 적은 "${str(id, 40)}" 섹션이 없어요.` }); continue; }
         if (!head.includes(byId.get(id))) head.push(byId.get(id));
       }
       raw.sections = [...head, ...raw.sections.filter((s) => !head.includes(s))]; applied++;
@@ -156,10 +159,25 @@ export function applyBlueprintPatch(bp, patch) {
 }
 
 const META_LABEL = { title: '연수명', subtitle: '부제', organizer: '주최', date: '날짜', start: '시작 시각', end: '끝 시각', venue: '장소', mode: '형태', description: '소개 글', siteUrl: '사이트 주소', joinUrl: '참여 주소', shortUrl: '짧은 주소' };
-const DESIGN_LABEL = { preset: '디자인', motion: '움직임', accent: '강조색', theme: '밝기', signature: '대표 효과', palette: '색 조합', fontPair: '글꼴 짝', font: '글꼴', mood: '분위기' };
+const DESIGN_LABEL = { preset: '디자인', motion: '움직임', accent: '강조색', theme: '밝기', signature: '대표 효과', palette: '색 조합', fontPair: '글꼴 조합', font: '글꼴', mood: '분위기' };
+// 디자인 값을 사람이 읽는 이름으로(효과 id·영문 키가 화면에 나오지 않게)
+const MOTION_KO = ['움직임 없음', '차분하게', '보통', '화려하게'];
+const THEME_KO = { light: '밝게', dark: '어둡게', auto: '기기 설정 따라', preset: '디자인대로' };
+const ACCESS_KO = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
+function designValue(k, v) {
+  if (v === undefined || v === '') return '';
+  if (k === 'preset') return PRESETS.find((p) => p.id === v)?.name_ko || v;
+  if (k === 'signature') return FX.find((f) => f.id === v)?.name_ko || v;
+  if (k === 'palette') return PALETTE_BY_ID[v]?.name_ko || v;
+  if (k === 'fontPair') return FONT_PAIR_BY_ID[v]?.name_ko || v;
+  if (k === 'motion') return MOTION_KO[+v] || String(v);
+  if (k === 'theme') return THEME_KO[v] || v;
+  if (k === 'mood') return [].concat(v).join('·');
+  return v;
+}
 const short = (v) => { const s = typeof v === 'string' ? v : JSON.stringify(v ?? ''); return s.length > 24 ? s.slice(0, 23) + '…' : s; };
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-const FIELD_LABEL = { name: '이름', steps: '단계', q: '물음', a: '답', title: '제목', lead: '안내 글', subtitle: '부제', text: '글', items: '항목', slides: '쪽', nav: '메뉴 이름', hidden: '숨기기', tone: '톤', questions: '문항', prompts: '프롬프트', md: '글', ctas: '버튼', url: '주소' };
+const FIELD_LABEL = { name: '이름', steps: '단계', q: '물음', a: '답', title: '제목', lead: '안내 글', subtitle: '부제', text: '글', items: '항목', slides: '쪽', nav: '메뉴 이름', hidden: '숨기기', tone: '배경', questions: '문항', prompts: '프롬프트', md: '글', ctas: '버튼', url: '주소' };
 
 /**
  * 두 설계도의 차이를 짧은 한국어 줄로. 예: "3번째 칸 '실습' 제목 바뀜"
@@ -175,22 +193,22 @@ export function diffSummary(before, after, max = 12) {
   }
   for (const [k, name] of Object.entries(DESIGN_LABEL)) {
     const x = a.design?.[k], y = b.design?.[k];
-    if (!same(x, y)) lines.push(`${name}: ${x !== undefined && x !== '' ? `${short(x)} → ` : ''}${y !== undefined && y !== '' ? short(y) : '기본값'}`);
+    if (!same(x, y)) { const xs = designValue(k, x), ys = designValue(k, y); lines.push(`${name}: ${xs ? `${short(xs)} → ` : ''}${ys ? short(ys) : '기본값'}`); }
   }
-  if (!same(a.access?.mode, b.access?.mode)) lines.push(`공개 범위: ${a.access?.mode || 'link'} → ${b.access?.mode || 'link'}`);
+  if (!same(a.access?.mode, b.access?.mode)) lines.push(`공개 범위: ${ACCESS_KO[a.access?.mode || 'link']} → ${ACCESS_KO[b.access?.mode || 'link']}`);
   for (const k of ['audience', 'archetype', 'privacy', 'instructors']) if (!same(a[k], b[k])) lines.push({ audience: '대상 정보 바뀜', archetype: '사이트 유형 바뀜', privacy: '개인정보 설정 바뀜', instructors: '강사 정보 바뀜' }[k]);
   if (!same({ ...a.live, url: 0, code: 0, anonKey: 0 }, { ...b.live, url: 0, code: 0, anonKey: 0 })) lines.push('참여 기능 설정 바뀜');
 
   const sa = withSectionIds(a.sections), sb = withSectionIds(b.sections);
   const ida = sa.map((s) => s?.id), idb = sb.map((s) => s?.id);
-  for (const s of sa) if (s && !idb.includes(s.id)) lines.push(`칸 삭제: '${label(s)}'`);
+  for (const s of sa) if (s && !idb.includes(s.id)) lines.push(`섹션 삭제: '${label(s)}'`);
   sb.forEach((s, i) => {
     if (!s) return;
     const old = sa.find((x) => x?.id === s.id);
-    if (!old) { lines.push(`칸 추가: ${i + 1}번째 '${label(s)}'(${s.type})`); return; }
+    if (!old) { { const kind = SECTION_DEFS[s.type]?.label; lines.push(`섹션 추가: ${i + 1}번째 '${label(s)}'${kind && kind !== label(s) ? `(${kind})` : ''}`); } return; }
     const keys = [...new Set([...Object.keys(old), ...Object.keys(s)])].filter((k) => k !== 'id' && !same(old[k], s[k]));
     if (!keys.length) return;
-    if (keys.length === 1 && keys[0] === 'hidden') { lines.push(`칸 ${s.hidden ? '숨김' : '다시 보임'}: '${label(old)}'`); return; }
+    if (keys.length === 1 && keys[0] === 'hidden') { lines.push(`섹션 ${s.hidden ? '숨김' : '다시 보임'}: '${label(old)}'`); return; }
     const parts = keys.slice(0, 3).map((k) => {
       const x = old[k], y = s[k];
       if (Array.isArray(x) && Array.isArray(y) && x.length !== y.length) return `${FIELD_LABEL[k] || k} ${x.length}→${y.length}개`;
@@ -202,9 +220,9 @@ export function diffSummary(before, after, max = 12) {
       }
       return `${FIELD_LABEL[k] || k}`;
     });
-    lines.push(`${i + 1}번째 칸 '${label(old)}' ${parts.join('·')}${keys.length > 3 ? ` 외 ${keys.length - 3}` : ''} 바뀜`);
+    lines.push(`${i + 1}번째 섹션 '${label(old)}' ${parts.join('·')}${keys.length > 3 ? ` 외 ${keys.length - 3}` : ''} 바뀜`);
   });
   const common = ida.filter((id) => idb.includes(id));
-  if (common.join() !== idb.filter((id) => ida.includes(id)).join()) lines.push('칸 순서 바뀜');
+  if (common.join() !== idb.filter((id) => ida.includes(id)).join()) lines.push('섹션 순서 바뀜');
   return lines.length > max ? [...lines.slice(0, max - 1), `외 ${lines.length - max + 1}건`] : lines;
 }

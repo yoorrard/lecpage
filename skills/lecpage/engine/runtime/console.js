@@ -1,5 +1,5 @@
-/* lecpage console — 강사 콘솔. 모든 화면 출력은 textContent로 만듭니다(HTML 주입 금지).
- * 켜진 기능과 섹션의 패널만 만듭니다. 맨 위 '지금' 띠: 참여자·도움 요청·도와주세요 신호·열린 투표. */
+/* lecpage console — 강사 화면. 모든 화면 출력은 textContent로 만듭니다(HTML 주입 금지).
+ * 켜진 기능과 섹션의 패널만 만듭니다. 맨 위 '지금' 띠: 참여자·도움 요청·모르겠어요 신호·열린 투표. */
 (function () {
   'use strict';
   // 다른 사이트가 강사 화면을 틀(iframe)에 넣어 관리자 키를 가로채지 못하게(헤더를 못 바꾸는 GitHub Pages 대비). 앱 미리보기는 예외
@@ -11,7 +11,7 @@
   function btn(text, cls, fn) { var b = el('button', 'lp-btn lp-btn-sm ' + (cls || 'lp-btn-ghost'), text); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; }
   var tt; function toast(m) { var t = $('[data-toast]'); if (!t) return; t.textContent = m; t.classList.add('is-on'); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('is-on'); }, 2400); }
   function save(name, text) { var u = URL.createObjectURL(new Blob([text.charAt(0) === '﻿' ? text : '﻿' + text], { type: 'text/csv;charset=utf-8' })); var a = el('a'); a.href = u; a.download = name; doc.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }
-  if (!DATA.live || !window.LecLive) { var m = $('[data-console-main]'); if (m) { m.hidden = false; m.appendChild(el('p', 'lp-note', '이 사이트는 실시간 기능이 꺼져 있어 콘솔을 쓸 수 없어요. 프로젝터 화면의 도구(이름 뽑기·모둠·타이머)는 그대로 쓸 수 있어요.')); } var f0 = $('[data-admin-form]'); if (f0) f0.hidden = true; return; }
+  if (!DATA.live || !window.LecLive) { var m = $('[data-console-main]'); if (m) { m.hidden = false; m.appendChild(el('p', 'lp-note', '이 사이트는 실시간 기능이 꺼져 있어 강사 화면을 쓸 수 없어요. 발표 화면의 도구(이름 뽑기·모둠·타이머)는 그대로 쓸 수 있어요.')); } var f0 = $('[data-admin-form]'); if (f0) f0.hidden = true; return; }
 
   var U = LecLive.util, X = U.ext;
   var feats = DATA.live.features || [], secs = BP.sections || [], stations = BP.stations || [];
@@ -81,7 +81,7 @@
     return c;
   }
   function pollAnswers(id) { return vals('answers').filter(function (a) { return a.poll === id; }); }
-  var SIG = [['green', 'g', '✓', '이해했어요'], ['yellow', 'y', '?', '조금 헷갈려요'], ['red', 'r', '!', '도와주세요']];
+  var SIG = [['green', 'g', '✓', '이해했어요'], ['yellow', 'y', '?', '조금 헷갈려요'], ['red', 'r', '!', '모르겠어요']];
   function signalView(c) {
     var box = el('div'); box.style.display = 'grid'; box.style.gap = '8px';
     var bar = el('div', 'lp-signal-bar'); bar.setAttribute('aria-hidden', 'true');
@@ -99,10 +99,10 @@
     panel('now', '지금', 'is-wide');
     if (ON.help) panel('help', '도움 요청');
     if (ON.progress) panel('heat', '실습 진행 현황');
-    panel('control', '진행 맞추기·공지·타이머');
+    panel('control', '따라 넘기기·공지·타이머');
     if (ON.poll) panel('poll', '투표');
     if (ON.qa) panel('qa', '질문 관리');
-    if (ON.signal) panel('signal', '이해 신호');
+    if (ON.signal) panel('signal', '신호등');
     if (ON.board) panel('board', '보드 관리');
     panel('data', '기록·정리');
     buildControl(); buildData();
@@ -120,7 +120,7 @@
     var row = el('div', 'lp-now-strip');
     kpi(row, parts.length, '참여자');
     if (ON.help) kpi(row, openHelp.length, '열린 도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '', openHelp.length > 0);
-    if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(row, rs + '%', '도와주세요 신호', sig.total + '명 중 ' + sig.red + '명', sig.total && rs >= 25); }
+    if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(row, rs + '%', '모르겠어요 신호', sig.total + '명 중 ' + sig.red + '명', sig.total && rs >= 25); }
     if (ON.poll) kpi(row, op ? pollAnswers(op.id).length + '명' : '없음', '지금 투표', op ? op.question : '열린 투표가 없어요');
     if (ON.survey) kpi(row, vals('survey').length, '설문 응답');
     if (ON.qa) kpi(row, qs.filter(function (q) { return q.status !== 'hidden'; }).length, '질문');
@@ -142,10 +142,10 @@
       var c = { done: 0, doing: 0, stuck: 0 }; prog.forEach(function (p) { if (p.station === s.id && c[p.status] !== undefined) c[p.status]++; });
       var r = el('div', 'lp-heat-row'); r.appendChild(el('span', '', s.name || s.title));
       var bar = el('div', 'lp-heat-bar'); bar.setAttribute('aria-hidden', 'true'); ['done', 'doing', 'stuck'].forEach(function (t) { var i = el('i', t); i.style.width = (c[t] / total * 100) + '%'; bar.appendChild(i); });
-      r.appendChild(bar); r.appendChild(el('small', '', '완료 ' + c.done + ' · 하는 중 ' + c.doing + (c.stuck ? ' · 막힘 ' + c.stuck : ''))); heat.appendChild(r);
+      r.appendChild(bar); r.appendChild(el('small', '', '완료 ' + c.done + ' · 하는 중 ' + c.doing + (c.stuck ? ' · 도움 요청 ' + c.stuck : ''))); heat.appendChild(r);
     });
     hb.appendChild(heat);
-    hb.appendChild(el('p', 'lp-small', '초록 완료 · 주황 하는 중 · 빨강 막힘. 참여자 ' + parts.length + '명 기준'));
+    hb.appendChild(el('p', 'lp-small', '초록 완료 · 주황 하는 중 · 빨강 도움 요청. 참여자 ' + parts.length + '명 기준'));
   }
   function renderHelp(open) {
     var hl = P.help.body; hl.textContent = ''; var ul = el('ul', 'lp-list');
@@ -158,7 +158,7 @@
       if (h.message) t.appendChild(el('p', '', h.message));
       t.appendChild(el('div', 'lp-small', (st ? st.name : (h.station || '위치 모름')) + ' · ' + ago(h.createdAt) + (h.status === 'claimed' ? ' · ' + (h.assignee || '') + ' 가는 중' : '')));
       var a = el('div', 'lp-row');
-      if (h.status !== 'claimed') a.appendChild(btn('맡기', '', function () { conn.update('help', h.id, { status: 'claimed', assignee: '강사' }).catch(err); }));
+      if (h.status !== 'claimed') a.appendChild(btn('갈게요', '', function () { conn.update('help', h.id, { status: 'claimed', assignee: '강사' }).catch(err); }));
       a.appendChild(btn('해결', 'lp-btn-primary', function () { conn.update('help', h.id, { status: 'done' }).catch(err); }));
       li.appendChild(t); li.appendChild(a); ul.appendChild(li);
     });
@@ -184,7 +184,7 @@
     else {
       sg.appendChild(signalView(c));
       var redShare = c.red / c.total;
-      if (redShare >= 0.25 && !render._sigAlert) { render._sigAlert = true; toast('도와주세요 신호가 ' + Math.round(redShare * 100) + '%예요. 잠시 멈추고 확인해 보세요.'); }
+      if (redShare >= 0.25 && !render._sigAlert) { render._sigAlert = true; toast('모르겠어요 신호가 ' + Math.round(redShare * 100) + '%예요. 잠시 멈추고 확인해 보세요.'); }
       if (redShare < 0.2) render._sigAlert = false;
     }
     var r = X.signalReset(state);
@@ -206,7 +206,7 @@
       var rv = btn(shown ? '결과 숨기기' : '결과 공개', '', function () { setState(X.revealPatch(state, p.id, !shown), shown ? '참가자 화면에서 결과를 숨겼어요.' : '참가자 화면에 결과를 공개했어요.'); });
       rv.setAttribute('aria-pressed', String(shown)); acts.appendChild(rv);
       top.appendChild(acts); box.appendChild(top);
-      box.appendChild(el('p', 'lp-small', shown ? '참가자에게 결과가 보여요.' : '참가자에게는 결과가 아직 숨겨져 있어요. 콘솔과 프로젝터에는 보여요.'));
+      box.appendChild(el('p', 'lp-small', shown ? '참가자에게 결과가 보여요.' : '참가자에게는 결과가 아직 숨겨져 있어요. 강사 화면과 발표 화면에는 보여요.'));
       if (p.kind === 'word') {
         var words = U.wordCloud(list, p.id, {});
         if (words.length) {
@@ -241,7 +241,7 @@
   var C = {};
   function buildControl() {
     var b = P.control.body;
-    var r1 = el('div', 'lp-row'); var fl = el('label', 'lp-row'); var cb = el('input'); cb.type = 'checkbox'; fl.appendChild(cb); fl.appendChild(el('span', '', '참가자 화면이 강사를 따라오게'));
+    var r1 = el('div', 'lp-row'); var fl = el('label', 'lp-row'); var cb = el('input'); cb.type = 'checkbox'; fl.appendChild(cb); fl.appendChild(el('span', '', '강사 따라 넘기기'));
     cb.addEventListener('change', function () { setState({ follow: cb.checked }); }); r1.appendChild(fl); b.appendChild(r1); C.follow = cb;
     if (stations.length) {
       var r2 = el('div', 'lp-row'); var sel = el('select'); sel.setAttribute('aria-label', '지금 실습');
@@ -266,12 +266,12 @@
     [3, 5, 10, 15, 20].forEach(function (m) { r5.appendChild(btn(m + '분', '', function () { setState({ timer: { endsAt: now() + m * 60000, label: '', running: true } }); })); });
     r5.appendChild(btn('멈춤', 'lp-danger', function () { setState({ timer: null }); }));
     b.appendChild(r5);
-    b.appendChild(el('p', 'lp-small', '타이머 여러 개·이름 뽑기·모둠 만들기는 프로젝터 화면의 도구에 있어요.'));
+    b.appendChild(el('p', 'lp-small', '타이머 여러 개·이름 뽑기·모둠 만들기는 발표 화면의 도구에 있어요.'));
   }
   function syncControl() { if (C.follow) C.follow.checked = !!state.follow; if (C.step && doc.activeElement !== C.step) C.step.value = state.step || ''; if (C.slide && doc.activeElement !== C.slide && state.slide) C.slide.value = state.slide; }
 
   var KINDS = [
-    ['participants', '참여자', true], ['attendance', '출석', true], ['completion', '이수 확인', true], ['progress', '실습 진행', ON.progress],
+    ['participants', '참여자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],
     ['questions', '질문', ON.qa], ['posts', '보드 글', ON.board], ['help', '도움 요청', ON.help], ['answers', '투표·신호 응답', ON.poll || ON.signal], ['survey', '설문 응답', ON.survey],
   ];
   function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
@@ -286,7 +286,7 @@
     });
     menu.appendChild(list);
     var rate = (DATA.admin || {}).completionRate; rate = rate == null ? 90 : rate;
-    menu.appendChild(el('p', 'lp-small', '이수 확인: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요. 이름·소속만 담고 개인 번호는 담지 않아요.'));
+    menu.appendChild(el('p', 'lp-small', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요. 이름·소속만 담고 개인 번호는 담지 않아요.'));
     b.appendChild(menu);
     b.appendChild(el('p', 'lp-small', '연수가 끝나고 ' + ((DATA.privacy || {}).retentionDays || 30) + '일이 지나면 아래 버튼으로 모든 기록을 지워 주세요.'));
     var del = btn('데이터 모두 지우기', 'lp-danger', function () {
@@ -301,7 +301,7 @@
     var j = el('div', 'lp-row'); j.style.marginTop = '8px'; var q = el('div', 'lp-qr'); q.style.width = '120px'; q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드');
     if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch (e) { } }
     else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
-    j.appendChild(q); var c = el('div'); c.appendChild(el('div', 'lp-small', '참여 주소')); c.appendChild(el('div', '', u || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.')); c.appendChild(el('div', 'lp-small', '참여 코드 ' + DATA.live.code));
+    j.appendChild(q); var c = el('div'); c.appendChild(el('div', 'lp-small', '참여 주소')); c.appendChild(el('div', '', u || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.')); c.appendChild(el('div', 'lp-small', '연수 코드 ' + DATA.live.code));
     var pl = el('a', 'lp-link', 'QR 안내문 인쇄'); pl.href = 'poster.html'; pl.target = '_blank'; c.appendChild(pl);
     j.appendChild(c); b.appendChild(j);
   }

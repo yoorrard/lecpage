@@ -1,4 +1,4 @@
-// AI 연결: 교재 요약 + 연수 정보 → 설계도(JSON)를 만들게 하는 프롬프트, 응답에서 JSON 꺼내기, 제공자 호출(BYOK)
+// AI 연결: 교재 요약 + 연수 정보 → 설계도(JSON)를 만들게 하는 프롬프트, 응답에서 JSON 꺼내기(제공자 호출은 앱 app/src/lib/ai.js)
 import { PRESETS } from '../design/presets.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { copyRulesPrompt } from './copy-rules.js';
@@ -99,61 +99,4 @@ export function extractJson(text) {
   try { return JSON.parse(s); } catch { /* 보정 시도 */ }
   const fixed = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/,\s*([}\]])/g, '$1').replace(/\/\/[^\n"]*\n/g, '\n');
   return JSON.parse(fixed);
-}
-
-/** 브라우저에서 사용자 키로 직접 호출. 키는 우리 서버로 보내지 않습니다. */
-export async function callProvider({ provider, apiKey, model, prompt, signal, maxTokens = 16000 }) {
-  if (!apiKey) throw new Error('API 키가 없습니다.');
-  if (provider === 'gemini') {
-    const m = model || 'gemini-flash-latest';
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
-      method: 'POST', signal, headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, temperature: 0.4 } }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error?.message || `Gemini 오류 ${r.status}`);
-    return (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
-  }
-  if (provider === 'anthropic') {
-    if (!model) throw new Error('모델을 골라 주세요.');
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal,
-      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error?.message || `Claude 오류 ${r.status}`);
-    return (j.content || []).map((c) => c.text || '').join('');
-  }
-  if (provider === 'openai' || provider === 'openrouter') {
-    if (!model) throw new Error('모델을 골라 주세요.');
-    const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
-    const r = await fetch(url, {
-      method: 'POST', signal,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}`, ...(provider === 'openrouter' ? { 'X-Title': 'lecpage' } : {}) },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, max_tokens: maxTokens }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error?.message || `${provider} 오류 ${r.status}`);
-    return j.choices?.[0]?.message?.content || '';
-  }
-  throw new Error('알 수 없는 AI 제공자입니다.');
-}
-
-/** 사용 가능한 모델 목록(브라우저에서 사용자 키로). 모델 이름을 코드에 박아 두지 않으려고 씁니다. */
-export async function listModels({ provider, apiKey, signal }) {
-  if (provider === 'gemini') {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { signal, headers: { 'x-goog-api-key': apiKey } });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || '모델 목록 오류');
-    return (j.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name }));
-  }
-  if (provider === 'anthropic') {
-    const r = await fetch('https://api.anthropic.com/v1/models?limit=100', { signal, headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || '모델 목록 오류');
-    return (j.data || []).map((m) => ({ id: m.id, label: m.display_name || m.id }));
-  }
-  const url = provider === 'openai' ? 'https://api.openai.com/v1/models' : 'https://openrouter.ai/api/v1/models';
-  const r = await fetch(url, { signal, headers: provider === 'openai' ? { authorization: `Bearer ${apiKey}` } : {} });
-  const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || '모델 목록 오류');
-  return (j.data || []).map((m) => ({ id: m.id, label: m.name || m.id }));
 }

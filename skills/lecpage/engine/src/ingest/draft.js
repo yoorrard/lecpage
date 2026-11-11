@@ -340,7 +340,7 @@ export function materialToDraft(material, info = {}) {
         meta.admin.kind === 'official' && '이수 처리 일정(언제 등록되는지)을 연수 후 안내에 적어 주세요.',
         dates.length >= 2 && !S.sessions && '차시별 제목을 넣어 주세요.',
         !info.surveyUrl && '만족도 조사 주소(설문 링크)를 넣어 주세요.',
-        hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 뷰어에 보여요.',
+        hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 보기에 보여요.',
       ].filter(Boolean),
     },
   };

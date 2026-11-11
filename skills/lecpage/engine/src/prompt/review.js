@@ -154,12 +154,12 @@ export function sanitizeReviewPatch(patch, { blueprint = {}, request = '' } = {}
   };
   for (const k of Object.keys(patch)) {
     if (['meta', 'design', 'sections', 'add', 'order', 'note'].includes(k)) continue;
-    drop(['instructors', 'audience', 'privacy'].includes(k) ? "강사·참가자 정보는 '더 자세히' 탭에서 고쳐 주세요." : '참여 기능 연결·공개 범위는 바꾸지 않았어요.', k);
+    drop(['instructors', 'audience', 'privacy'].includes(k) ? "강사·참가자 정보는 '연수 정보' 탭에서 고쳐 주세요." : '참여 기능 연결·공개 범위는 바꾸지 않았어요.', k);
   }
   if (isObj(patch.meta)) {
     const m = {};
     for (const [k, v] of Object.entries(patch.meta)) {
-      if (!META_OK.includes(k)) { drop(/url/i.test(k) ? '사이트 주소는 바꾸지 않았어요.' : "이 설정은 '더 자세히' 탭에서 고쳐 주세요.", `meta.${k}`); continue; }
+      if (!META_OK.includes(k)) { drop(/url/i.test(k) ? '사이트 주소는 바꾸지 않았어요.' : "이 설정은 '연수 정보' 탭에서 고쳐 주세요.", `meta.${k}`); continue; }
       m[k] = cleanUrls(v, `meta.${k}`);
     }
     if (Object.keys(m).length) out.meta = m;

@@ -15,7 +15,7 @@ jobs:
         with: { node-version: 22 }
       - name: 엔진 테스트
         run: npm test
-      - name: 견본 사이트 빌드
+      - name: 예시 사이트 빌드
         run: npm run examples
       - name: 앱 빌드
         run: npm --prefix app ci && npm --prefix app run build

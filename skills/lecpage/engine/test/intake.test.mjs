@@ -42,7 +42,7 @@ test('applyFeatures: 기본 제목(질문·참여 보드·투표·만족도 조�
   const base = { sections: [{ type: 'hero' }, { type: 'stations', items: [{ title: 'x' }] }, { type: 'closing' }], live: {} };
   const bp = applyFeatures(structuredClone(base), { features: ['qa', 'board', 'poll', 'attendance', 'help+progress'] });
   const t = Object.fromEntries(bp.sections.map((s) => [s.type, s.title]));
-  assert.equal(t.qa, '질문'); assert.equal(t.board, '참여 보드'); assert.equal(t.poll, '투표'); assert.equal(t.survey, '만족도 조사');
+  assert.equal(t.qa, '질문'); assert.equal(t.board, '나눔 보드'); assert.equal(t.poll, '투표'); assert.equal(t.survey, '만족도 조사');
   assert.deepEqual(types(bp).slice(-2), ['survey', 'closing']);
   assert.ok(types(bp).indexOf('attendance') < types(bp).indexOf('stations'));
   assert.equal(bp.live.provider, 'local');

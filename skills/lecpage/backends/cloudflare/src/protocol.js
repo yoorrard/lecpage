@@ -380,7 +380,7 @@ export function fmtTime(ms, timeZone = 'Asia/Seoul') {
     return new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(ms));
   } catch { return new Date(ms).toISOString(); }
 }
-const STATUS_KO = { doing: '하는 중', done: '완료', stuck: '막힘', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
+const STATUS_KO = { doing: '하는 중', done: '완료', stuck: '도움 요청', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
 
 /**
  * Builds export rows. `data` = { participants:[], attendance:[], progress:[], questions:[], survey:[], posts:[], help:[], chat:[], answers:[] } (full docs).

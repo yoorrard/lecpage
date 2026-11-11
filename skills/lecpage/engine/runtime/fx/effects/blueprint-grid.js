@@ -4,10 +4,9 @@ LecFX.define('blueprint-grid', {
   init: function (el, o, ctx) {
     var ly = ctx.layer(el);
     ly.innerHTML = '<i class="fx-bp-mark fx-bp-tl"></i><i class="fx-bp-mark fx-bp-tr"></i><i class="fx-bp-mark fx-bp-bl"></i><i class="fx-bp-mark fx-bp-br"></i><span class="fx-bp-dim"></span><span class="fx-bp-x"></span><span class="fx-bp-y"></span><span class="fx-bp-tag"></span>';
+    /* 모서리 글자는 내용이 있을 때만(opts.label). 영역 크기(662 × 1018 같은 숫자)는 보여 주지 않음: 내용과 상관없는 값이라 미완성처럼 보임 */
     var dim = ly.querySelector('.fx-bp-dim');
-    var size = function () { dim.textContent = (o.label ? o.label + '  ' : '') + Math.round(el.clientWidth) + ' × ' + Math.round(el.clientHeight); };
-    size();
-    if ('ResizeObserver' in window) { var ro = new ResizeObserver(size); ro.observe(el); ctx.cleanup(function () { ro.disconnect(); }); }
+    if (o.label) dim.textContent = o.label; else dim.remove();
     if (ctx.reduced || ctx.level < 2 || !ctx.fine || o.crosshair === false) return;
     var tag = ly.querySelector('.fx-bp-tag'), q = 0, ev = null;
     ctx.on(el, 'pointermove', function (e) {

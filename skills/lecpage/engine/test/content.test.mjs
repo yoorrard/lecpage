@@ -190,7 +190,7 @@ describe('문구 규칙', () => {
   });
   test('견본 설계도와 만든 사이트에 고칠 문구가 없음', async () => {
     const { lintBlueprint, lintHtml } = await import('../../scripts/copy-lint.mjs');
-    for (const id of ['forest-story', 'data-lab']) {
+    for (const id of ['sel-story', 'data-lab']) {
       assert.deepEqual(lintBlueprint(EX(id)).filter((f) => f.level === 'error'), [], id);
       const r = build(EX(id));
       for (const f of ['index.html', 'console.html', 'screen.html', 'check.html']) assert.deepEqual(lintHtml(r.files[f], f).filter((x) => x.level === 'error'), [], `${id}/${f}`);

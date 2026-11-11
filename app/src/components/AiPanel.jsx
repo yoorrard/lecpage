@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Notice, Field, Seg } from './ui.jsx';
 import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
-import { makePrompt, makeDraft, looksTruncated } from '../lib/blueprint.js';
+import { makePrompt, makeDraft, looksTruncated, keepFontFields } from '../lib/blueprint.js';
 import { polishTargets, makePolishPrompt, applyPolish, isPolishReply } from '../lib/polish.js';
 import { PROVIDERS, loadKey, saveKey, forgetKey, generate, checkKey, getActiveAI, setActive, detectProvider, explainError, openRouterStart, takeAiResume, models as listModels } from '../lib/ai.js';
 import { KeyGuides } from '../lib/ai-guides.jsx';
@@ -18,14 +18,9 @@ export function useAiResume(open) {
 }
 
 const CHATBOTS = [['ChatGPT', 'https://chatgpt.com/'], ['Gemini', 'https://gemini.google.com/app'], ['Claude', 'https://claude.ai/new']];
-/** AI가 다시 짠 설계도에도 교재 글꼴 정보를 이어 줌 */
-const keepFontFields = (bp, base) => {
-  const sf = base?.design?.sourceFonts; if (!bp || !sf || bp.design?.sourceFonts) return bp;
-  return { ...bp, design: { ...(bp.design || {}), sourceFonts: sf } };
-};
 
 /**
- * AI로 다듬기(선택). 기본은 '문구만 다듬기'(짧은 지시문·짧은 답). 방법: 쓰는 챗봇에 붙여넣기 / AI 연결(OpenRouter 로그인·API 키)
+ * AI로 다듬기(선택). 기본은 '문구만 다듬기'(짧은 프롬프트·짧은 답). 방법: 쓰는 챗봇에 붙여넣기 / AI 연결(OpenRouter 로그인·API 키)
  * onBlueprint(bp, { polish, count }) — polish면 문구만 바뀐 설계도(그대로 써도 됨), 아니면 AI가 짠 설계도(부르는 쪽이 applyInfo로 강사 값을 지킴)
  */
 export function AiPanel({ p, onBlueprint }) {
@@ -61,7 +56,7 @@ export function AiPanel({ p, onBlueprint }) {
         : { title: '답에서 사이트 내용을 찾지 못했어요.', body: '챗봇 답 아래의 복사 아이콘으로 답 전체를 복사해 붙여 넣어 주세요.', actions: [] });
       return;
     }
-    if (!bp || typeof bp !== 'object' || !Array.isArray(bp.sections)) { setErr({ title: '답의 형식이 달라요.', body: '지시문을 다시 복사해 새 대화에 붙여 넣어 주세요.', actions: [] }); return; }
+    if (!bp || typeof bp !== 'object' || !Array.isArray(bp.sections)) { setErr({ title: '답의 형식이 달라요.', body: '프롬프트를 다시 복사해 새 대화에 붙여 넣어 주세요.', actions: [] }); return; }
     const v = E.validate(bp);
     if (v.errors.length) { setErr({ title: '답에 고칠 점이 있어요.', body: v.errors.map((x) => x.message_ko).join(' '), actions: [] }); return; }
     onBlueprint(keepFontFields(bp, base.current), { polish: false });
@@ -74,7 +69,7 @@ export function AiPanel({ p, onBlueprint }) {
         <p class="small muted">참여 기능 연결과 공개 설정은 바뀌지 않아요. 마음에 안 들면 되돌릴 수 있어요.</p>
       </div>
       <label class="check"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); setErr(null); }} />
-        <span>칸 구성과 순서까지 새로 짜기 <span class="small muted">끄면 제목과 안내 문장만 빠르게 다듬어요.</span></span></label>
+        <span>섹션 구성과 순서까지 새로 짜기 <span class="small muted">끄면 제목과 안내 문장만 빠르게 다듬어요.</span></span></label>
       {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'paste', label: '챗봇에 붙여넣기' }, { value: 'connect', label: ai ? `AI 연결됨 · ${PROVIDERS[ai.provider].short}` : 'AI 연결' }]} />}
       {how === 'paste' && <Paste ready={!!ing} prompt={prompt} full={full} onApply={accept} />}
       {how === 'connect' && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} />}
@@ -106,7 +101,7 @@ function Paste({ ready, prompt, full, onApply }) {
   return (
     <div class="stack">
       <ol class="how">
-        <li><b>지시문을 복사해요.</b> <button class="btn btn-primary btn-sm" disabled={!ready} onClick={() => copy(text, '복사했어요. 챗봇에 붙여 넣으세요.')}>지시문 복사</button> <span class="small muted">{text.length.toLocaleString()}자</span>
+        <li><b>프롬프트를 복사해요.</b> <button class="btn btn-primary btn-sm" disabled={!ready} onClick={() => copy(text, '복사했어요. 챗봇에 붙여 넣으세요.')}>프롬프트 복사</button> <span class="small muted">{text.length.toLocaleString()}자</span>
           {full && text.length > 30000 && <p class="small muted">길어서 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 "계속"이라고 보내 주세요.</p>}</li>
         <li><b>챗봇에 붙여 넣고 보내요.</b> <span class="links">{CHATBOTS.map(([n, u]) => <a href={u} target="_blank" rel="noopener">{n}</a>)}</span></li>
         <li><b>답을 통째로 복사해 붙여 넣어요.</b> <span class="small muted">답 아래 복사 아이콘을 누르면 돼요.</span>

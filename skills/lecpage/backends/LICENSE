@@ -1,6 +1,10 @@
+SPDX-License-Identifier: MIT-0
+Applies to every file in this directory and below. Installed dependencies
+(node_modules/) keep their own licenses.
+
 MIT No Attribution
 
-Copyright 2026 yoorrard and lecpage contributors
+Copyright 2026 lecpage contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this
 software and associated documentation files (the "Software"), to deal in the Software

@@ -12,7 +12,7 @@
 | 키 | 값 | 묻는 말(교사용) | 기본값 |
 |---|---|---|---|
 | `participants` | 정수 | 참여 인원은 몇 명인가요? | blueprint `audience.size` |
-| `features` | `qa help progress poll chat reactions signal`(실시간) · `attendance board survey`(모으기) · `upload` | 연수 중에 질문 받기·도움 요청·진행 체크·투표·게시판이 필요한가요? | blueprint `live.features` (+ `board.allowFiles`면 `upload`) |
+| `features` | `qa help progress poll reactions signal`(실시간) · `attendance board survey`(모으기) · `upload` | 연수 중에 질문 받기·도움 요청·진행 현황·투표·나눔 보드가 필요한가요? | blueprint `live.features` (+ `board.allowFiles`면 `upload`) |
 | `duration` | `single` · `multi`(1주 안에 여러 번) · `course`(1주 넘게 띄엄띄엄) | 한 번 하는 연수인가요, 여러 차시인가요? | `meta.sessions` 개수와 날짜 간격 |
 | `skill` | `click` · `basic` · `dev` | 회원가입·복사·붙여넣기까지 괜찮으세요? 터미널(명령어)을 써 보셨나요? | `click` |
 | `budget` | `zero` · `low`(월 1만 원 이하) · `org`(기관 예산·기관 계정) | 비용은 0원이어야 하나요? | `zero` |
@@ -28,10 +28,10 @@
 | `siteMB` | 수 | (엔진이 계산) 빌드된 사이트 크기 | 빌드 결과 |
 
 파생 값
-- `realtime` = `features`에 `qa help progress poll chat reactions signal` 중 하나라도 있음.
+- `realtime` = `features`에 `qa help progress poll reactions signal` 중 하나라도 있음.
 - `store` = `features`에 `attendance board survey` 중 하나라도 있음(모으기만 하면 되는 기능).
 - `liveNeeded` = `realtime` 또는 `store`. (`quiz`, `reflection`처럼 자기 기기 안에서 끝나는 것은 실시간이 아님 → `local`)
-- `heavy` = `features`에 `chat`·`reactions`가 있거나, 참가자가 60명 넘게 동시에 실시간 갱신을 받음
+- `heavy` = `features`에 `reactions`가 있거나, 참가자가 60명 넘게 동시에 실시간 갱신을 받음
 - `transferGB` = `siteMB × participants × 3 ÷ 1024` (1인당 평균 3번 접속 가정, 연수 1회 기준)
 - `sessionsPerMonth` = 한 달에 이 사이트로 하는 연수 횟수(모르면 1)
 - `wsBlocked` = `blocked`에 `websocket` 포함(check.html 결과)
@@ -46,9 +46,9 @@
 | 실시간 없음, 클릭만 | GitHub Pages(앱에서 바로) 또는 Cloudflare Pages 끌어 놓기 | none | 0원 | `deploy/github-pages.md`, `deploy/cloudflare.md` |
 | 실시간 없음, GitHub 씀 | GitHub Pages | none | 0원 | `deploy/github-pages.md` |
 | 출석·제출만 모음, 40명 이하 | 위와 같음 | Google Sheets + Apps Script | 0원 | backends/apps-script |
-| **50명 이하, 질문·막혔어요·진행·투표, 클릭만** | 위와 같음 | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
+| **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | 위와 같음 | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
 | 100명 이하, 회원가입 가능 | Cloudflare / GitHub Pages | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
-| 100명 넘음, 또는 채팅·반응이 많음 | Cloudflare Workers 정적 자산 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
+| 100명 넘음, 또는 반응이 많음 | Cloudflare Workers 정적 자산 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
 | 서버·NAS·VPS·학교 서버가 있음 | 같은 서버(Caddy/nginx) | node-server(Docker) | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 서버는 없지만 node-server를 쓰고 싶은 개발자 | Cloudflare | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
 | 인터넷이 없거나 심하게 막힘 | 강사 노트북(교실 LAN) | node-server(노트북) | 0원(+공유기) | `deploy/local-lan-classroom.md` |
@@ -72,7 +72,7 @@
 5. ★ **L05** Docker가 도는 서버(NAS·VPS·학교 서버)나 기관 AWS가 있고 `skill`이 basic 이상 → `node-server`.
 6. **L06** WebSocket이 막힌 학교(`wsBlocked`) → `cf-relay`(SSE·새로 읽기 자동 전환). 클릭만 가능하면 `sheets`(일반 HTTPS만 씀).
 7. ★ **L07** 출석·제출처럼 **모으기만**(`realtime` 없음) + 40명 이하 → `sheets`.
-8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·막혔어요·진행 체크·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
+8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·도움 요청·진행 현황·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
 9. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
 10. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). 명령어 없이 **Deploy to Cloudflare 버튼**으로 만들 수 있습니다. 대안: `node-server`.
 
@@ -119,10 +119,10 @@
   "schema": "lecpage.infra-rules/2",
   "checked": "2026-11-09",
   "derive": {
-    "realtime": "features ∩ {qa,help,progress,poll,chat,reactions,signal} ≠ ∅",
+    "realtime": "features ∩ {qa,help,progress,poll,reactions,signal} ≠ ∅",
     "store": "features ∩ {attendance,board,survey} ≠ ∅",
     "liveNeeded": "realtime OR store",
-    "heavy": "features has chat|reactions OR participants > 60",
+    "heavy": "features has reactions OR participants > 60",
     "wsBlocked": "blocked has websocket",
     "transferGB": "siteMB * participants * 3 / 1024",
     "sessionsPerMonth": "한 달 연수 횟수(모르면 1)",
@@ -139,7 +139,7 @@
     {"id":"L06","when":{"wsBlocked":true,"skill":["basic","dev"]},"pick":"cf-relay","alt":["node-server"]},
     {"id":"L06b","when":{"wsBlocked":true},"pick":"sheets"},
     {"id":"L07","engine":true,"when":{"realtime":false,"participants":{"lte":40}},"pick":"sheets","note":"출석·제출처럼 모으기만"},
-    {"id":"L08","engine":true,"when":{"skill":"click","participants":{"lte":50}},"pick":"sheets","alt":["supabase"],"note":"질문·막혔어요·진행 체크 포함. 7초 새로 읽기. 앱의 안내 + 연결 확인"},
+    {"id":"L08","engine":true,"when":{"skill":"click","participants":{"lte":50}},"pick":"sheets","alt":["supabase"],"note":"질문·도움 요청·진행 현황 포함. 7초 새로 읽기. 앱의 안내 + 연결 확인"},
     {"id":"L09","engine":true,"when":{"participants":{"lte":100}},"pick":"supabase","region":"ap-northeast-2","alt":["cf-relay","node-server"]},
     {"id":"L10","engine":true,"when":{},"pick":"cf-relay","alt":["supabase","node-server"],"note":"강사 계정. Deploy to Cloudflare 버튼(가입 필요) 또는 wrangler"}
   ],
@@ -168,14 +168,14 @@
     {"id":"G12","when":{"live":"supabase","duration":["multi","course"]},"level":"warn","warn":"무료 프로젝트는 7일간 활동이 적으면 일시 정지","fix":"연수 2~3일 전 대시보드 열기 + check.html 실행. 정지되면 대시보드에서 Resume(1년 안). 오래 가는 과정이면 cf-relay"},
     {"id":"G13","when":{"live":"supabase"},"level":"info","warn":"무료 프로젝트는 계정당 2개까지(정지된 것 제외)","fix":"연수 끝나면 데이터 지우고 프로젝트 정지·삭제"},
     {"id":"G14","when":{"live":"cf-relay","expr":"participants * (3600/pollSec) * hours > 80000"},"level":"warn","warn":"WebSocket이 막혀 새로 읽기로 돌면 Workers 무료 10만 요청/일을 넘을 수 있음(09:00 KST 초기화)","fix":"새로 읽기 간격 10~15초, 또는 node-server"},
-    {"id":"G15","when":{"live":"sheets","participants":{"gt":40}},"level":"warn","warn":"Apps Script는 사용자당 동시 실행 30개. 많은 인원이 짧은 간격으로 부르면 늦어지거나 실패","fix":"새로 읽기 7~10초 유지, 반응·채팅 줄이기, 60명 넘으면 supabase"},
-    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 켜면 드라이브에 '링크가 있는 모든 사용자'로 저장되고 연수 데이터를 지워도 파일은 남음","fix":"게시판은 외부 링크(패들렛 등)로, 또는 연수 뒤 드라이브 'lecpage 업로드' 폴더를 직접 비우기. 14세 미만이면 끄기"},
+    {"id":"G15","when":{"live":"sheets","participants":{"gt":40}},"level":"warn","warn":"Apps Script는 사용자당 동시 실행 30개. 많은 인원이 짧은 간격으로 부르면 늦어지거나 실패","fix":"새로 읽기 7~10초 유지, 반응 줄이기, 60명 넘으면 supabase"},
+    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 그래서 생성 사이트도 live.uploads가 true일 때만 나눔 보드에 파일 칸을 보임. 켜면 보드에 보이는 동안 드라이브 '링크가 있는 모든 사용자'로 공유","fix":"시트 메뉴 '파일 올리기 켜기/끄기'로 켠 뒤 `patch … --set live.uploads=true`로 다시 빌드. 학교 계정은 외부 공유가 막힐 수 있음. 14세 미만이면 끄기"},
     {"id":"G17","when":{"live":"node-server","place":"lan"},"level":"warn","warn":"학교 와이파이는 기기끼리 통신을 막는 경우가 많음(AP 격리). 휴대폰 핫스폿은 동시 접속 수가 적음","fix":"전용 공유기 준비 또는 Quick Tunnel(deploy/local-lan-classroom.md)"},
     {"id":"G19","when":{"wsBlocked":true,"live":"supabase"},"level":"info","warn":"Supabase 실시간은 WebSocket이 필요. 막히면 어댑터가 7초 새로 읽기로 바뀜(반응이 늦어짐)","fix":"그대로 써도 됨. 빠른 반응이 필요하면 cf-relay/node-server(SSE)"},
     {"id":"G20","when":{"blocked":{"any":["cdn.jsdelivr.net","fonts.googleapis.com","fonts.gstatic.com"]}},"level":"warn","warn":"글꼴·라이브러리 CDN 차단","fix":"글꼴·라이브러리를 사이트 안에 포함(자체 호스팅). 시스템 글꼴로도 내용은 보임"},
     {"id":"G21","when":{"minor":true,"live":["sheets","supabase","cf-relay"]},"level":"warn","warn":"만 14세 미만 개인정보는 법정대리인 동의 필요","fix":"별명만 받기(realName=false), 파일 올리기 끄기, 보관 기간 짧게, 연수 뒤 즉시 삭제"},
     {"id":"G22","when":{"static":["github-pages","cloudflare","netlify","vercel"],"expr":"repoOrUploadContains(adminKey|service_role)"},"level":"block","warn":"관리자 키·서비스 키가 공개 파일에 들어감","fix":"키는 사이트에 넣지 않음(서버엔 SHA-256만). Supabase는 anon/publishable 키만"},
-    {"id":"G23","when":{"skill":"click","live":["supabase","cf-relay"]},"level":"info","warn":"클릭만 하는 강사에게 회원가입이 필요한 방법이 나옴(50명 초과)","fix":"supabase는 단계별 안내, cf-relay는 Deploy to Cloudflare 버튼. 가입이 어렵다면 sheets로 줄이기(새로 읽기 10초, 반응·채팅 끄기)"},
+    {"id":"G23","when":{"skill":"click","live":["supabase","cf-relay"]},"level":"info","warn":"클릭만 하는 강사에게 회원가입이 필요한 방법이 나옴(50명 초과)","fix":"supabase는 단계별 안내, cf-relay는 Deploy to Cloudflare 버튼. 가입이 어렵다면 sheets로 줄이기(새로 읽기 10초, 반응 끄기)"},
     {"id":"G24","when":{"access":"password","static":["lan","zip"]},"level":"block","warn":"암호 보호는 https 주소에서만 열림(LAN http·file://에서는 내용이 안 보임)","fix":"access=link로 빌드. 인터넷에 올릴 때만 password"},
     {"id":"G25","when":{"static":"github-pages","access":["link","public"]},"level":"info","warn":"무료 GitHub Pages는 공개 저장소라 사이트 파일(교재 그림·원본 포함)을 누구나 내려받을 수 있음","fix":"교재 원본은 빼거나 access=password(파일까지 암호화)"}
   ],
@@ -245,7 +245,7 @@
 | **local** | 참가자 기기 | — | 자기 진도 체크·기록 | 기기 바꾸면 사라짐 → 내려받기 버튼 |
 | **Google Sheets + Apps Script** | 강사 구글 계정 | 동시 실행 30/사용자, 실행당 6분, URL Fetch 2만/일 | **클릭만 하는 강사, 50명 안팎**, 질문·도움·진행·투표 | 학교 관리 계정은 "모든 사용자" 배포가 막힐 수 있음 ⚠️ → 개인 gmail 계정 / 파일 올리기는 드라이브에 남음 → 연수 뒤 직접 정리 |
 | **Supabase** | 강사 Supabase 계정(서울 리전 가능) | 활성 프로젝트 2개, DB 500MB, 파일 1GB, 전송 5GB, 실시간 동시 200·초당 100·월 200만 메시지 | 100명 이하 대부분의 기능 | 7일 비활성 정지 → 연수 전 열기 / 메시지 폭주 → 반응 묶기. lecpage는 익명 로그인을 쓰지 않아 학교 IP 하나로도 막히지 않음 |
-| **Cloudflare DO 중계(cf-relay)** | 강사 Cloudflare 계정(Deploy 버튼으로 생성 가능) | Workers 요청 10만/일(09:00 KST 초기화), DO 요청 10만/일·13,000GB-s/일·SQLite 5GB, 들어오는 WS 메시지 20개=요청 1개 | 큰 인원, 채팅·반응, 여러 주 과정, WS 막힌 학교(SSE·새로 읽기) | 새로 읽기가 길게 돌면 요청 한도 → 간격 늘리기 / 한도 초과 시 오류 1027 → 다음 날 09시까지 |
+| **Cloudflare DO 중계(cf-relay)** | 강사 Cloudflare 계정(Deploy 버튼으로 생성 가능) | Workers 요청 10만/일(09:00 KST 초기화), DO 요청 10만/일·13,000GB-s/일·SQLite 5GB, 들어오는 WS 메시지 20개=요청 1개 | 큰 인원, 반응이 많은 연수, 여러 주 과정, WS 막힌 학교(SSE·새로 읽기) | 새로 읽기가 길게 돌면 요청 한도 → 간격 늘리기 / 한도 초과 시 오류 1027 → 다음 날 09시까지 |
 | **node-server(Docker)** | 강사·학교 서버 | 서버 성능만큼 | 학교 서버, NAS, VPS, 노트북 LAN, 국내 보관 | 서버 꺼지면 끝 → 연수 전 점검, 데이터 폴더 백업 |
 | Firebase(RTDB/Firestore) | 강사 구글 계정 | RTDB 동시 100, Firestore 읽기 5만/일; **Storage는 Blaze 필수** | (어댑터 없음) | lecpage 어댑터 미지원 → supabase 권장 |
 | PocketBase | 자체 서버 | 오픈소스(SQLite, 실시간 SSE) | 자체 서버 대안 | 1.0 전이라 호환성 보장 안 됨, 어댑터 없음 → node-server 권장 |
@@ -317,13 +317,13 @@
 > "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줍니다. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모와 설계도는 올라가지 않아요."
 
 **C. Google Sheets(Apps Script) 실시간**
-> "질문·막혔어요·진행 체크는 선생님 구글 시트에 쌓이게 할게요. 구글 계정만 있으면 화면 안내를 따라 10분이면 연결되고, 마지막에 '연결 확인'으로 바로 시험해 볼 수 있어요. 50명 안팎까지 잘 맞고, 화면은 7초마다 새로 읽어서 몇 초 늦게 보일 수 있어요. 끝나면 시트를 지우면 기록도 사라집니다."
+> "질문·도움 요청·진행 현황은 선생님 구글 시트에 쌓이게 할게요. 구글 계정만 있으면 화면 안내를 따라 10분이면 연결되고, 마지막에 '연결 확인'으로 바로 시험해 볼 수 있어요. 50명 안팎까지 잘 맞고, 화면은 7초마다 새로 읽어서 몇 초 늦게 보일 수 있어요. 끝나면 시트를 지우면 기록도 사라집니다."
 
 **D. Supabase 실시간**
 > "Supabase라는 무료 데이터베이스를 선생님 이름으로 하나 만들게요. 서울 서버를 고를 수 있어요. 질문·투표가 바로바로 뜹니다. 하나만 기억해 주세요. 일주일 넘게 안 쓰면 잠들어서 연수 2~3일 전에 한 번 열어 주셔야 해요. 제가 순서대로 안내해 드릴게요."
 
 **E. Cloudflare 중계(DO) + Cloudflare 사이트**
-> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 올릴게요. 'Deploy to Cloudflare' 버튼을 누르고 관리자 키만 정하시면 명령어 없이 만들어집니다. 인원이 많거나 채팅·반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요."
+> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 올릴게요. 'Deploy to Cloudflare' 버튼을 누르고 관리자 키만 정하시면 명령어 없이 만들어집니다. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요."
 
 **F. "lecpage 서버를 그냥 빌려 쓰면 안 되나요?"라고 물을 때**
 > "lecpage는 참가자 기록을 대신 맡아 주는 서버를 두지 않아요. 기록을 맡는 순간 그 기록의 책임이 운영자에게 넘어가고, 여러 연수가 한 서버를 나눠 쓰면 한 곳에 문제가 생길 때 모두가 멈추거든요. 대신 선생님 구글 계정이나 Cloudflare 계정에 10분 안에 만드는 방법을 안내해 드릴게요. 기록은 선생님만 보고, 선생님이 지울 수 있어요."

@@ -1,0 +1,60 @@
+/* 항목 고치기(ItemEditor). app.css의 토큰만 씀: 가는 선 한 줄로 나누고 상자 안에 상자를 두지 않음.
+   좁은 폭(휴대폰 360px)에서도 옆으로 넘치지 않게 모든 열은 minmax(0,1fr) · min-width:0 */
+.ie{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+.ie .field{gap:5px;min-width:0}
+.ie-short{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,8rem),1fr));gap:8px;align-items:start;min-width:0}
+
+/* 글상자: 내용만큼 늘어남(Area), 앱 기본 120px 높이는 쓰지 않음 */
+.ie .field textarea,.ie textarea.input{min-height:0;resize:none;line-height:1.55;max-height:22rem;overflow-y:auto}
+.ie textarea.ie-one{min-height:40px;overflow:hidden;line-height:1.5}
+.ie .input[aria-invalid="true"]{border-color:var(--bad)}
+.ie .ie-err{color:var(--bad);font-size:.8rem}
+.ie-bare{display:grid;gap:4px;min-width:0}
+.ie-check{align-items:center}
+.ie-check input{margin-top:0}
+
+/* 목록 머리: 필드 이름과 같은 모양 */
+.ie-list{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0}
+.ie-list-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;font-weight:600;font-size:.9rem;color:var(--ink-2)}
+.ie-list-h small{font-weight:500;font-size:.8rem;color:var(--muted);text-align:right}
+.ie-empty{font-size:.85rem;color:var(--muted)}
+.ie-foot{display:flex;min-width:0}
+.ie-add{margin-left:calc(-1 * var(--px));color:var(--accent)}
+.ie-add:hover{color:var(--accent-hover)}
+.ie-add:disabled{color:var(--muted);background:none;cursor:default}
+
+/* 접었다 펴는 항목 줄 */
+.ie-items{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);border-top:1px solid var(--hair)}
+.ie-item{border-bottom:1px solid var(--hair);min-width:0}
+.ie-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px;min-width:0}
+.ie-sum{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:baseline;gap:10px;width:100%;min-width:0;min-height:40px;padding:8px 6px;border:0;border-radius:var(--r-xs);background:none;color:inherit;text-align:left;cursor:pointer}
+.ie-sum:hover{background:var(--sunk)}
+.ie-no{min-width:1.1rem;font-size:.78rem;font-weight:650;color:var(--muted);font-variant-numeric:tabular-nums}
+.ie-ttl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.92rem;font-weight:550}
+.ie-meta{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.ie-item[data-off] .ie-ttl{color:var(--muted)}
+.ie-item[data-open] .ie-ttl{font-weight:650}
+.ie-body{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0;padding:2px 6px 16px}
+.ie-body .field>span,.ie-body .ie-list-h{font-size:.8rem;color:var(--muted)}
+
+/* 바로 고치는 줄(글 한 줄 · 보기 · 링크) */
+.ie-lines{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.ie-sub .ie-lines{gap:8px}
+.ie-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;align-items:start;min-width:0}
+.ie-line.ie-q{grid-template-columns:auto minmax(0,1fr) auto}
+.ie-line-f{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0}
+.ie-pair{grid-template-columns:repeat(auto-fill,minmax(min(100%,9rem),1fr))}
+.ie-radio{width:18px;height:18px;margin:11px 2px 0 0;accent-color:var(--accent);cursor:pointer}
+.ie-line[data-answer] .input{border-color:var(--accent)}
+
+/* 위로·아래로·빼기 */
+.ie-acts{display:flex;align-items:center;flex:none}
+.ie-acts .icon-btn{width:30px;height:30px;font-size:.95rem;color:var(--muted)}
+.ie-acts .icon-btn:hover{color:var(--ink)}
+.ie-acts [data-act="del"]:hover{color:var(--bad)}
+.ie-acts .icon-btn:disabled{opacity:.3;background:none;cursor:default}
+.ie-line .ie-acts{min-height:40px}
+@media (pointer: coarse){
+  .ie-acts .icon-btn{width:44px;height:44px}
+  .ie-sum{min-height:44px}
+}

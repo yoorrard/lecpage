@@ -17,6 +17,12 @@ export function makePrompt(p, ing) {
   return E.buildPrompt({ context, info, draft });
 }
 
+/** AI가 다시 짠 설계도에도 교재 글꼴 정보를 이어 줌 */
+export function keepFontFields(bp, base) {
+  const sf = base?.design?.sourceFonts; if (!bp || !sf || bp.design?.sourceFonts) return bp;
+  return { ...bp, design: { ...(bp.design || {}), sourceFonts: sf } };
+}
+
 /** 챗봇 답이 중간에 끊겼는지(여는 괄호가 더 많음) */
 export function looksTruncated(text) {
   const s = String(text || ''); const i = s.indexOf('{'); if (i < 0) return false;

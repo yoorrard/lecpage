@@ -1,7 +1,7 @@
 // 설계도 검증·자동 보정. AI나 사람이 만든 설계도를 안전하고 일관된 모양으로 바꿉니다.
 // 원칙: 고칠 수 있으면 고치고(warnings), 진행할 수 없을 때만 errors.
 import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS } from './schema/sections.js';
-import { PRESET_IDS } from './design/presets.js';
+import { PRESET_IDS, getPreset } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
@@ -95,7 +95,7 @@ const SECTION_FIX = {
 export function validate(input) {
   const errors = [], warnings = [];
   const b = (input && typeof input === 'object') ? input : {};
-  if (!input || typeof input !== 'object') errors.push({ path: '', message_ko: '설계도가 JSON 객체가 아닙니다.' });
+  if (!input || typeof input !== 'object') errors.push({ path: '', message_ko: '설계도가 JSON 객체가 아니에요.' });
 
   const m = b.meta || {};
   const meta = {
@@ -106,7 +106,7 @@ export function validate(input) {
     admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 90, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
     sessions: arr(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
   };
-  if (!meta.title) { meta.title = '연수'; warnings.push({ path: 'meta.title', message_ko: '연수명이 없어 "연수"로 채웠습니다.' }); }
+  if (!meta.title) { meta.title = '연수'; warnings.push({ path: 'meta.title', message_ko: '연수명이 없어 "연수"로 채웠어요.' }); }
 
   const a = b.audience || {};
   const audience = {
@@ -134,7 +134,7 @@ export function validate(input) {
     if (!design.topics.length) design.topics = detectTopics([meta.title, meta.subtitle, ...arr(b.sections).map((s) => s?.title || '')].join(' '));
     const moods = design.mood.length ? design.mood : moodsForTopics(design.topics);
     design.preset = rankPresets({ moods, topics: design.topics, archetype: pick(b.archetype?.primary, ARCHETYPES, 'story'), admin: meta.admin.kind, minor: !!b.audience?.minor })[0].id;
-    if (d.preset) warnings.push({ path: 'design.preset', message_ko: `알 수 없는 프리셋 "${str(d.preset, 30)}" 대신 "${design.preset}"을 골랐습니다.` });
+    if (d.preset) warnings.push({ path: 'design.preset', message_ko: `"${str(d.preset, 30)}" 디자인을 찾지 못해 "${getPreset(design.preset).name_ko}" 디자인으로 골랐어요.` });
   }
 
   const instructors = arr(b.instructors || (b.instructor ? [b.instructor] : [])).slice(0, 12).map((p) => ({
@@ -149,12 +149,14 @@ export function validate(input) {
     provider: pick(lv.provider, LIVE_PROVIDERS, 'none'), url: safeUrl(lv.url), anonKey: str(lv.anonKey, 400),
     code: (str(lv.code, 12).toUpperCase().replace(/[^A-Z0-9]/g, '') || makeCode(meta.title + meta.date)),
     features: strArr(lv.features, 20).filter((f) => LIVE_FEATURES.includes(f)), anonymous: lv.anonymous !== false, pollMs: num(lv.pollMs, 7000, 3000, 60000),
+    // 서버가 보드 파일을 받는지. 없으면 구글 시트만 꺼짐(시트에서 '파일 올리기 켜기'를 눌렀으면 true)
+    ...(typeof lv.uploads === 'boolean' ? { uploads: lv.uploads } : {}),
   };
 
   const pv = b.privacy || {};
-  const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: arr(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
+  const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: arr(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
   if (!privacy.collect.length) privacy.collect = ['nickname'];
-  if (audience.minor) { privacy.collect = ['nickname']; warnings.push({ path: 'privacy.collect', message_ko: '만 14세 미만이 참여해 별명만 받도록 바꿨습니다.' }); }
+  if (audience.minor) { privacy.collect = ['nickname']; warnings.push({ path: 'privacy.collect', message_ko: '만 14세 미만이 참여해 별명만 받도록 바꿨어요.' }); }
 
   const dp = b.deploy || {};
   const deploy = { target: pick(dp.target, DEPLOY_TARGETS, 'zip'), base: str(dp.base, 120) || '/' };
@@ -168,21 +170,21 @@ export function validate(input) {
     if (!s || typeof s !== 'object') return;
     if (s.hidden === true) return; // 강사가 숨긴 칸(내용은 설계도에 남김)
     const type = s.type;
-    if (!SECTION_TYPES.includes(type)) { warnings.push({ path: `sections[${i}]`, message_ko: `알 수 없는 섹션 종류 "${str(type, 20)}"를 뺐습니다.` }); return; }
+    if (!SECTION_TYPES.includes(type)) { warnings.push({ path: `sections[${i}]`, message_ko: `알 수 없는 섹션 종류 "${str(type, 20)}"를 뺐어요.` }); return; }
     let id = slug(s.id || type, i + 1);
     while (seen.has(id)) id += '-' + (i + 1);
     seen.add(id);
     const def = SECTION_DEFS[type];
     const fixed = SECTION_FIX[type](s);
     const out = { id, type, title: str(s.title, LIMITS.title), nav: s.nav === undefined ? def.nav : str(s.nav, 12), tone: pick(s.tone, ['night', 'dawn', 'day', ''], ''), lead: fixed.lead ?? str(s.lead, 300), ...fixed, source: source(s.source) };
-    if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type) && !(type === 'followup' && out.completion)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐습니다.` }); return; }
-    if (def.live && live.provider === 'none' && type !== 'board') warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}"는 실시간 연결이 필요합니다. 연결 전에는 안내 문구만 보입니다.` });
+    if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type) && !(type === 'followup' && out.completion)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐어요.` }); return; }
+    if (def.live && live.provider === 'none' && type !== 'board') warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션은 참여 기능을 연결해야 동작해요. 연결 전에는 안내 문구만 보여요.` });
     sections.push(out);
   });
-  if (!sections.length) errors.push({ path: 'sections', message_ko: '섹션이 하나도 없습니다.' });
+  if (!sections.length) errors.push({ path: 'sections', message_ko: '섹션이 하나도 없어요.' });
   if (!sections.find((s) => s.type === 'hero')) {
     sections.unshift({ id: 'hero', type: 'hero', nav: '처음', title: '', tone: '', ...SECTION_FIX.hero({ title: meta.title, subtitle: meta.subtitle }) });
-    warnings.push({ path: 'sections', message_ko: '첫 화면(hero)이 없어 추가했습니다.' });
+    warnings.push({ path: 'sections', message_ko: '첫 화면이 없어 넣었어요.' });
   }
 
   return { blueprint: { version: 1, meta, audience, archetype, design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };

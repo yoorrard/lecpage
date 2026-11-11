@@ -42,7 +42,7 @@ test('패치: null로 칸 삭제, add로 칸 추가(after), order로 순서', ()
   assert.deepEqual(ids.slice(0, 3), ['hero', 'faq', 'stations']);
   assert.deepEqual(ids.slice(3), ids1.filter((id) => !['hero', 'faq', 'stations'].includes(id)), '나머지는 원래 순서');
   const d = diffSummary(bp, r.raw);
-  assert.ok(d.some((l) => /칸 삭제/.test(l)) && d.some((l) => /칸 추가/.test(l)) && d.some((l) => /순서/.test(l)), d.join('\n'));
+  assert.ok(d.some((l) => /섹션 삭제/.test(l)) && d.some((l) => /섹션 추가/.test(l)) && d.some((l) => /순서/.test(l)), d.join('\n'));
 });
 
 test('패치: 모르는 id·종류는 경고만, 예외 없음', () => {
@@ -95,7 +95,7 @@ test('diffSummary: 짧은 한국어 줄, 같은 개수 배열은 몇 번째 항�
   const r = applyBlueprintPatch(bp, { meta: { title: '새 연수명' }, sections: { stations: { items } } });
   const d = diffSummary(bp, r.raw);
   assert.ok(d.some((l) => l.startsWith('연수명:')), d.join('\n'));
-  assert.ok(d.some((l) => /칸 .*2번째 항목 제목 바뀜/.test(l)), d.join('\n'));
+  assert.ok(d.some((l) => /섹션 .*2번째 항목 제목 바뀜/.test(l)), d.join('\n'));
   assert.deepEqual(diffSummary(bp, bp), []);
   assert.ok(diffSummary({}, { meta: Object.fromEntries('title subtitle organizer date start end venue mode description'.split(' ').map((k) => [k, 'x'])), design: { preset: 'a', motion: 1, accent: '#000000', theme: 'dark' } }, 5).length === 5);
 });

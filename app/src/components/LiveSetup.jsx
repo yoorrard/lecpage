@@ -79,8 +79,9 @@ export function LiveSetup({ p, update }) {
           <ol class="how">
             <li><a class="btn btn-sm" href="https://sheets.new" target="_blank" rel="noopener">새 구글 시트 열기</a> 이름을 "○○ 연수 참여"처럼 바꿔요.</li>
             <li>시트 메뉴 <b>확장 프로그램 → Apps Script</b>를 누르고, 편집기의 글을 모두 지운 뒤 <button class="btn btn-sm btn-primary" onClick={() => copyRaw('gs')}>lecpage 코드 복사</button>를 눌러 붙여 넣고 <b>저장(💾)</b>해요.</li>
-            <li>위쪽 함수 칸에서 <b>setup</b>을 고르고 <b>실행</b>. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동 → 허용</b>. 내가 붙여 넣은 코드라 나오는 안내예요.</li>
-            <li>시트로 돌아와 새로 고침 → 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에서 8자 이상으로 정하고 적어 두세요. <b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm btn-quiet" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</li>
+            <li>위쪽 함수 목록에서 <b>setup</b>을 고르고 <b>실행</b>. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동 → 허용</b>. 내가 붙여 넣은 코드라 나오는 안내예요.</li>
+            <li>시트로 돌아와 새로 고침 → 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에서 12자 이상으로 정하고 적어 두세요. <b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm btn-quiet" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</li>
+            {settings.uploads && <li>보드에 사진·파일을 받으려면 메뉴 <b>lecpage → 파일 올리기 켜기/끄기</b>를 한 번 눌러 켜요.</li>}
             <li>Apps Script 오른쪽 위 <b>배포 → 새 배포 → 웹 앱</b>. 실행: <b>나</b>, 액세스: <b>모든 사용자</b> → 배포. 나온 <b>웹 앱 URL</b>을 아래에 붙여 넣어요.</li>
           </ol>
         )}

@@ -35,7 +35,7 @@ test('렌더: 내용 속 HTML은 이스케이프된다', () => {
   assert.ok(html.includes('<strong>굵게</strong>'));
 });
 
-for (const id of ['forest-story', 'data-lab']) {
+for (const id of ['sel-story', 'data-lab']) {
   test(`견본 빌드: ${id}`, () => {
     const r = E.build(EX(id), { runtime: nodeRuntime() });
     assert.deepEqual(r.errors, []);
@@ -147,10 +147,89 @@ test('암호 보호: 페이지·교재 그림을 잠그고 같은 암호로 풀�
 });
 
 test('보안: 사용자 자료가 엔진 파일을 덮어쓰지 못하고 스크립트·SVG는 빠진다', () => {
-  const r = E.build(EX('forest-story'), { runtime: nodeRuntime(), assets: { 'assets/console.js': 'evil()', 'assets/lecpage.js': 'evil()', 'assets/theme.css': 'x', 'assets/media/a.svg': '<svg onload=alert(1)>', 'assets/media/x.html': '<script>', 'assets/media/교재.pptx': new Uint8Array([1]), 'assets/slides/slide-001.webp': new Uint8Array([2]) } });
+  const r = E.build(EX('sel-story'), { runtime: nodeRuntime(), assets: { 'assets/console.js': 'evil()', 'assets/lecpage.js': 'evil()', 'assets/theme.css': 'x', 'assets/media/a.svg': '<svg onload=alert(1)>', 'assets/media/x.html': '<script>', 'assets/media/교재.pptx': new Uint8Array([1]), 'assets/slides/slide-001.webp': new Uint8Array([2]) } });
   assert.ok(!String(r.files['assets/lecpage.js']).includes('evil()'));
   assert.ok(!String(r.files['assets/console.js'] || '').includes('evil()'));
   assert.ok(!r.files['assets/media/a.svg'] && !r.files['assets/media/x.html']);
   assert.ok(r.files['assets/media/교재.pptx'] && r.files['assets/slides/slide-001.webp']);
   assert.ok(r.warnings.some((w) => /허용되지 않는 자료/.test(w.message_ko)));
+});
+
+const BOARD_BP = (live) => ({ meta: { title: 't' }, live: { features: ['board'], url: 'https://example.org/x', ...live }, sections: [{ type: 'hero' }, { type: 'board' }] });
+const fileInput = (r) => /<input type="file" name="files"/.test(r.files['index.html']);
+const consoleBoard = (r) => JSON.parse(/<script type="application\/json" id="lp-blueprint">([\s\S]*?)<\/script>/.exec(r.files['console.html'])[1]).sections.find((s) => s.type === 'board');
+
+test('보드 파일: 구글 시트는 live.uploads=true일 때만 파일 칸을 보이고, 강사 화면도 같은 값을 받음', () => {
+  const sheets = E.build(BOARD_BP({ provider: 'sheets' }), { runtime: nodeRuntime() });
+  assert.ok(!fileInput(sheets), '시트 기본(파일 올리기 꺼짐)에는 파일 칸이 없음');
+  assert.match(sheets.files['index.html'], /data-max-files="0"/);
+  assert.equal(consoleBoard(sheets).allowFiles, false, '강사 화면이 서버에 파일 끄기(ui.uploads=false)를 알림');
+  const on = E.build(BOARD_BP({ provider: 'sheets', uploads: true }), { runtime: nodeRuntime() });
+  assert.ok(fileInput(on) && consoleBoard(on).allowFiles === true, '시트에서 파일 올리기를 켰으면 보임');
+  for (const provider of ['supabase', 'http', 'local']) assert.ok(fileInput(E.build(BOARD_BP({ provider }), { runtime: nodeRuntime() })), provider);
+  assert.ok(!fileInput(E.build(BOARD_BP({ provider: 'http', uploads: false }), { runtime: nodeRuntime() })), '다른 서버도 uploads=false면 숨김');
+  const off = BOARD_BP({ provider: 'supabase' }); off.sections[1].allowFiles = false;
+  const r = E.build(off, { runtime: nodeRuntime() });
+  assert.ok(!fileInput(r) && consoleBoard(r).allowFiles === false, 'allowFiles:false는 그대로');
+});
+
+test('개인정보 안내: 실제로 모으는 기록(설문·투표·입실·퇴실)과 익명 질문의 한계를 밝힘', () => {
+  const bp = { meta: { title: 't' }, live: { provider: 'local', features: ['qa', 'help', 'progress', 'poll', 'attendance'] },
+    sections: [{ type: 'hero' }, { type: 'qa' }, { type: 'poll', items: [{ id: 'p', question: '?', kind: 'word' }] }, { type: 'attendance' }, { type: 'survey', questions: [{ q: '좋았나요?', kind: 'scale' }] }] };
+  const html = E.build(bp, { runtime: nodeRuntime() }).files['privacy.html'];
+  for (const w of ['질문', '도움 요청', '실습 진행 상태', '투표 응답', '설문 응답', '입실·퇴실 시각', '임의 번호']) assert.ok(html.includes(w), w);
+  assert.match(html, /익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다\. 다만 서버에는/);
+  const named = E.build({ ...bp, live: { ...bp.live, anonymous: false } }, { runtime: nodeRuntime() }).files['privacy.html'];
+  assert.ok(!named.includes('익명 질문'), '익명이 아니면 문장을 넣지 않음');
+  assert.ok(!html.includes('나눔 보드'), '보드가 없으면 보드 글을 적지 않음');
+});
+
+test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을 파일 목록에 넣음', () => {
+  const base = { meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'qa' }] };
+  const doc = (live, infra) => E.build({ ...base, live: { features: ['qa'], ...live } }, { runtime: nodeRuntime(), infra }).teacher['운영안내.md'];
+  const sheets = doc({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec' }, { size: 60, features: ['qa', 'progress'] });
+  assert.match(sheets, /실시간 방식: 구글 시트/);
+  assert.match(sheets, /## 운영 방식: 구글 시트/);
+  assert.match(sheets, /추천한 방식: Supabase/, '추천과 다르면 추천을 한 줄로');
+  assert.ok(!/실시간 방식: sheets/.test(sheets));
+  assert.ok(sheets.includes('`poster.html` QR 안내문 인쇄') && sheets.includes('`console.html` 강사 화면'));
+  const supa = doc({ provider: 'supabase', url: 'https://x.supabase.co', anonKey: 'k' }, { size: 60, features: ['qa'], duration: 'month' });
+  assert.match(supa, /## 운영 방식: Supabase/);
+  assert.ok(!supa.includes('추천한 방식') && supa.includes('주의'), '추천과 같으면 주의만');
+  assert.match(doc({ provider: 'http', url: 'https://live.example.org' }), /실시간 방식: 내 서버·Cloudflare/);
+  assert.match(doc({ provider: 'local' }), /실시간 방식: 이 컴퓨터에서만 시험[\s\S]*참가자 기기끼리는 이어지지 않습니다/);
+  const none = E.build({ meta: { title: 't' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() }).teacher['운영안내.md'];
+  assert.match(none, /실시간 방식: 없음/);
+  assert.ok(!none.includes('console.html') && none.includes('poster.html'), '강사 화면이 없으면 목록에서 뺌');
+});
+
+test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사료가 있으면 Vercel 제외, 연결·지난번에 올린 곳 먼저', () => {
+  assert.equal(E.decideHost({}).pick, 'vercel');
+  assert.equal(E.decideHost({ skill: 'dev' }).pick, 'cloudflare');
+  const paid = E.decideHost({ commercial: true });
+  assert.ok(!paid.hosts.includes('vercel')); assert.equal(paid.pick, 'cloudflare'); assert.equal(paid.hosts[1], 'github-pages'); assert.ok(paid.warnings.length);
+  assert.equal(E.decideHost({ previous: 'netlify' }).pick, 'netlify');
+  assert.equal(E.decideHost({ connected: ['github-pages'] }).pick, 'github-pages');
+  assert.equal(E.decideHost({ instant: true }).pick, 'lecpage');
+  const long = E.decideHost({ instant: true, keep: 'long' });
+  assert.equal(long.pick, 'vercel'); assert.equal(long.hosts[1], 'lecpage', '오래 둘 사이트는 본인 계정이 먼저');
+  assert.equal(E.decideHost({ instant: true, siteMB: 60 }).pick, 'vercel', '바로 공개 한도를 넘으면 빼요');
+  assert.deepEqual(E.decideHost({ network: 'offline' }).hosts, ['lan', 'zip']);
+  assert.equal(E.decideHost({ customDomain: true }).pick, 'cloudflare');
+  assert.ok(E.decideHost({ maxFileMB: 40 }).warnings.some((w) => /25MB/.test(w)));
+  const big = E.decideHost({ siteMB: 180 });
+  assert.equal(big.pick, 'github-pages'); assert.ok(big.warnings.some((w) => /100MB/.test(w)));
+  assert.equal(E.decideHost({ commercial: true, maxFileMB: 40 }).pick, 'github-pages');
+  assert.equal(E.decideHost({ skill: 'dev', files: 1500 }).pick, 'github-pages');
+  for (const h of E.decideHost({ instant: true }).hosts) assert.ok(E.HOSTS[h], h);
+});
+
+test('올릴 곳 한도: 크기·파일 수가 넘으면 올리기 전에 알려 줌', () => {
+  const MB = 1024 * 1024;
+  assert.ok(E.checkHost('vercel', { bytes: 20 * MB, files: 200, maxFile: 2 * MB }).ok);
+  assert.match(E.checkHost('vercel', { bytes: 120 * MB, files: 200 }).errors[0], /100MB/);
+  assert.match(E.checkHost('cloudflare', { bytes: 30 * MB, files: 1200, maxFile: MB }).errors[0], /1000개/);
+  assert.match(E.checkHost('cloudflare', { bytes: 30 * MB, files: 10, maxFile: 26 * MB }).errors[0], /25MB/);
+  assert.ok(E.checkHost('github-pages', { bytes: 30 * MB, files: 600, binaries: 500 }).warnings.length);
+  assert.ok(E.checkHost('zip', { bytes: 900 * MB }).ok, '한도가 없는 곳은 통과');
 });

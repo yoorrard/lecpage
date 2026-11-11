@@ -1,4 +1,4 @@
-/* lecpage screen — 프로젝터 화면: 참여 QR, 공지, 큰 타이머, 이해 신호, 인기 질문, 투표 결과, 반응.
+/* lecpage screen — 발표 화면: 참여 QR, 공지, 큰 타이머, 신호등, 인기 질문, 투표 결과, 반응.
  * '도구'(이름 뽑기·모둠 만들기·타이머 여러 개)는 실시간 연결 없이도 이 화면 안에서 동작합니다(기록은 이 기기에만). */
 (function () {
   'use strict';
@@ -90,7 +90,7 @@
       var nn = (a || []).map(function (p) { return p.nickname; }).filter(Boolean);
       if (!nn.length) return toast('아직 참여한 사람이 없어요.');
       namesTa.value = nn.join('\n'); store.set('names', namesTa.value); picked = []; store.set('picked', picked); pickStatus(); toast('참가자 별명 ' + nn.length + '명을 불러왔어요.');
-    }, function () { toast('참가자 별명은 강사 콘솔에서 연 프로젝터 화면에서만 불러올 수 있어요.'); });
+    }, function () { toast('참가자 별명은 강사 화면에서 연 발표 화면에서만 불러올 수 있어요.'); });
   }
 
   // 타이머 여러 개: [{id, label, dur, endsAt, remaining, running}]
@@ -191,7 +191,7 @@
   canWrite = DATA.live.provider === 'local' || !!key;
   var state = {}, qs = {}, answers = {}, tiv;
   var polls = []; (BP.sections || []).forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });
-  var SIG = [['green', 'g', '✓', '이해했어요'], ['yellow', 'y', '?', '조금 헷갈려요'], ['red', 'r', '!', '도와주세요']];
+  var SIG = [['green', 'g', '✓', '이해했어요'], ['yellow', 'y', '?', '조금 헷갈려요'], ['red', 'r', '!', '모르겠어요']];
   function drawSignal() {
     var box = $('[data-screen-signal]'); if (!box) return;
     var reset = X.signalReset(state), latest = {}, c = { green: 0, yellow: 0, red: 0 }, total = 0;

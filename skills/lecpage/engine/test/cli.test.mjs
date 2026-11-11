@@ -88,7 +88,7 @@ test('patch: --set과 패치 파일로 일부만 고치고 다시 빌드, 보호
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /장소: .* → 본관 4층 강당/);
   assert.match(r.out, /1번째 항목 제목 바뀜/);
-  assert.match(r.out, /칸 삭제/);
+  assert.match(r.out, /섹션 삭제/);
   assert.match(r.out, /live\.url 값은 패치로 바꾸지 않아요/);
   assert.match(r.out, /사이트 dist/);
   const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));

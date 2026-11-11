@@ -14,7 +14,7 @@
 
 | 경로 | 내용 | 올리나 |
 |---|---|---|
-| `dist/` | 참가자 사이트(index·강사 화면·발표 화면·접속 진단·자료) | 올림 |
+| `dist/` | 참가자 사이트(index·강사 화면·발표 화면·접속 확인·자료) | 올림 |
 | `dist-강사용/` | 운영안내.md · DESIGN.md · 설계도 사본 | **안 올림** |
 | `work/material.json` | 교재 해석 결과(형식: `material-format.md`) | 안 올림 |
 | `work/draft.json` | AI 없이 만든 설계도 초안 | 안 올림 |
@@ -53,7 +53,7 @@
   "meta":   { "venue": "본관 3층 시청각실" },
   "design": { "preset": "paper-workbook", "accent": "#12306b" },
   "sections": {
-    "stations": { "title": "다섯 정거장" },
+    "stations": { "title": "실습 다섯 가지" },
     "quiz": null
   },
   "add":   [ { "after": "deck", "section": { "type": "faq", "items": [ { "q": "…", "a": "…" } ] } } ],

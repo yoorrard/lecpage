@@ -56,7 +56,7 @@ const plural = (list, n = 4, sep = ' · ') => (list.length > n ? [...list.slice(
 const statePath = (work) => join(work, 'lecpage.state.json');
 const loadState = (work) => { try { return JSON.parse(readFileSync(statePath(work), 'utf8')); } catch { return {}; } };
 const saveState = (work, s) => writeJson(statePath(work), { ...loadState(work), ...s, updated: new Date().toISOString() });
-const ARCH_KO = { story: '이야기형', lab: '실습형', live: '라이브형', course: '과정형' };
+const ARCH_KO = { story: '강의형', lab: '실습형', live: '행사형', course: '과정형' };
 const ACCESS_KO = { link: '주소를 받은 사람만', public: '누구나(검색 허용)', password: '암호' };
 
 async function ingestCli() { return imp('src/ingest/cli.js'); }
@@ -190,7 +190,8 @@ async function runQa(dir, { outDir, password = '' } = {}) {
   const server = staticServer(dir);
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   const base = `http://127.0.0.1:${server.address().port}/`;
-  for (const [w, h, name] of [[1280, 860, 'desktop'], [390, 844, 'phone']]) {
+  // 앱 미리보기 기기와 같은 크기: PC 1280, 태블릿 820×1180, 휴대폰 360×780
+  for (const [w, h, name] of [[1280, 860, 'desktop'], [820, 1180, 'tablet'], [360, 780, 'phone']]) {
     for (const scheme of ['light', 'dark']) {
       const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme });
       const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
@@ -228,7 +229,7 @@ function qaLines(q) {
   const missing = q.lint.filter((l) => l.status === 'missing').map((l) => l.name);
   const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
   const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'skipped' ? `${l.name} 검사 건너뜀(암호 페이지)` : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
-  const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
+  const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·태블릿·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
   lines.push(head, ...problems);
   // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(교재 원문이 섞여 있어 참고용, qa/report.json)
   for (const l of q.lint) {
@@ -543,7 +544,7 @@ const commands = {
     if (browser) {
       for (const r of results.filter((x) => !x.error)) {
         const url = pathToFileURL(join(r.dir, 'index.html')).href;
-        for (const [w, h, name, scroll] of [[1280, 800, 'pc', false], [1280, 800, 'pc2', true], [390, 844, 'phone', false]]) {
+        for (const [w, h, name, scroll] of [[1280, 800, 'pc', false], [1280, 800, 'pc2', true], [360, 780, 'phone', false]]) {
           const page = await browser.newPage({ viewport: { width: w, height: h }, reducedMotion: 'reduce' });
           await page.goto(url, { waitUntil: 'load', timeout: 20000 }).catch(() => {});
           if (scroll) await page.evaluate(() => { const s = document.querySelectorAll('main > section, main section.lp-sec'); (s[2] || s[1])?.scrollIntoView(); });
@@ -589,7 +590,7 @@ const commands = {
     checks.push({ name: 'Playwright', ok: !!pw && chromium, info: pw ? (chromium ? 'chromium 있음' : 'chromium 없음') : '', use: '점검(qa)·디자인 비교(options)', fix: pw ? 'npx playwright install chromium' : 'npm i -D playwright && npx playwright install chromium' });
     const soffice = has('soffice') || has('libreoffice') || existsSync('/Applications/LibreOffice.app/Contents/MacOS/soffice');
     checks.push({ name: 'LibreOffice', ok: soffice, use: 'PPTX·HWPX·DOCX 쪽 그림(PDF를 함께 주면 없어도 됨)', fix: fix({ linux: 'sudo apt-get install -y libreoffice-impress', mac: 'brew install --cask libreoffice', win: 'winget install TheDocumentFoundation.LibreOffice' }) });
-    checks.push({ name: 'pdftoppm', ok: has('pdftoppm'), use: '쪽 그림(교재 뷰어)', fix: fix({ linux: 'sudo apt-get install -y poppler-utils', mac: 'brew install poppler', win: 'winget install oschwartz10612.Poppler' }) });
+    checks.push({ name: 'pdftoppm', ok: has('pdftoppm'), use: '쪽 그림(교재 보기)', fix: fix({ linux: 'sudo apt-get install -y poppler-utils', mac: 'brew install poppler', win: 'winget install oschwartz10612.Poppler' }) });
     checks.push({ name: 'cwebp', ok: has('cwebp'), use: '쪽 그림 용량 줄이기(없으면 PNG)', fix: fix({ linux: 'sudo apt-get install -y webp', mac: 'brew install webp', win: 'winget install Google.Libwebp' }) });
     const py = spawnSync('python3', ['-c', 'import pymupdf'], { encoding: 'utf8' }).status === 0 || spawnSync('python3', ['-c', 'import fitz'], { encoding: 'utf8' }).status === 0;
     let pdfjs = false; try { createRequire(import.meta.url).resolve('pdfjs-dist/package.json'); pdfjs = true; } catch { /* 없음 */ }

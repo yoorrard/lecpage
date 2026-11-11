@@ -15,16 +15,16 @@ lecpage/
 │  ├─ references/             ← skill이 필요할 때 읽는 문서(인터뷰, 모듈, 디자인, 운영, 배포…)
 │  ├─ engine/                 ← 단일 소스 엔진. Node와 브라우저(앱) 모두에서 import
 │  │  ├─ src/                 ← ESM. 의존성 없음(vendor/ 제외)
-│  │  │  ├─ schema/           ← blueprint.schema.json, 상수
+│  │  │  ├─ schema/           ← 섹션 정의·상수(sections.js)
 │  │  │  ├─ validate.js       ← 검증·자동 보정(normalize)
 │  │  │  ├─ decide/           ← 유형·운영·디자인·효과 결정 규칙
 │  │  │  ├─ design/           ← 프리셋, 토큰→CSS, 글꼴, fx-catalog.js
 │  │  │  ├─ render/           ← 문자열 템플릿 렌더러(모듈별)
 │  │  │  ├─ ingest/           ← PPTX·DOCX·HWPX·PDF 해석(브라우저+Node)
-│  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 제공자 호출
+│  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 수정 요청(review). AI 제공자 호출은 앱(app/src/lib/ai.js)
 │  │  │  └─ build.js          ← blueprint → 파일 묶음
 │  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
-│  │  │  ├─ lecpage.css · lecpage.js · console.js · screen.js
+│  │  │  ├─ lecpage.css · boot.js · lecpage.js · console.js · screen.js · unlock.js
 │  │  │  ├─ fx/               ← 효과 레지스트리(core.js, fx.css, effects/*.js)
 │  │  │  └─ live/             ← 실시간 어댑터(core.js, local.js, http.js, supabase.js, sheets.js)
 │  │  ├─ vendor/              ← 작은 MIT 라이브러리(예: fflate)
@@ -32,7 +32,7 @@ lecpage/
 │  ├─ scripts/                ← CLI(lecpage.mjs), 파이썬 보조(ingest.py), render_slides.sh
 │  ├─ backends/               ← supabase/, apps-script/, cloudflare/, node-server/
 │  ├─ templates/deploy/       ← 호스팅별 설정 파일
-│  └─ examples/               ← 견본 설계도(참고 사이트 A·B 등)
+│  └─ examples/               ← 예시 설계도(강의형 sel-story, 실습형 data-lab)
 ├─ app/                       ← lecpage 웹앱(Vite, 정적 배포). 엔진을 상대 경로로 import
 ├─ docs/                      ← 기획서, 아키텍처, 운영, 조사 자료
 └─ .github/workflows/         ← CI, Pages 배포
@@ -47,7 +47,7 @@ lecpage/
 
 ## 2. 연수 설계도(blueprint) v1
 
-전체 스키마: `skills/lecpage/engine/src/schema/blueprint.schema.json`. 요점만 적습니다.
+따로 JSON 스키마 파일은 없습니다. 기준은 `engine/src/validate.js`(검증·자동 보정)와 `engine/src/schema/sections.js`(섹션 정의)이고, 여기에는 요점만 적습니다.
 
 ```jsonc
 {
@@ -67,7 +67,8 @@ lecpage/
                      "tags": [], "links": [ { "label": "", "url": "" } ], "timeline": [ { "group": "", "items": [ { "text": "", "year": "" } ] } ] } ],
   "sections": [ { "id": "hero", "type": "hero", "nav": "처음", "...": "모듈별 필드" } ],
   "live": { "provider": "none|local|supabase|sheets|http", "url": "", "anonKey": "", "code": "AB12CD",
-            "features": ["qa","help","progress","board","poll","chat","attendance","reactions"], "anonymous": true },
+            "features": ["qa","help","progress","board","poll","attendance","reactions","signal"], "anonymous": true,
+            "uploads": true },  // uploads(선택): 서버가 보드 파일을 받는지. 없으면 sheets만 false(시트에서 파일 올리기를 켜야 함)
   "privacy": { "collect": ["nickname"], "retentionDays": 30, "consent": true, "processors": [] },
   "deploy": { "target": "github-pages|cloudflare|vercel|netlify|firebase|s3|server|zip", "base": "/" },
   "sources": [ { "id": "deck1", "name": "교재.pptx", "pages": 124 } ]
@@ -84,7 +85,7 @@ lecpage/
 | `steps5` | title, items[{word,desc}] (핵심 단계·키워드 나열) |
 | `outline` | title, items[{part,title,desc,tags[],target(섹션id 또는 deck:쪽)}] |
 | `schedule` | items[{start,end,title,desc,part}] |
-| `readiness` | items[{label,detail,url}], checks[{name,url}] (접속 진단) |
+| `readiness` | items[{label,detail,url}], checks[{name,url}] (접속 확인) |
 | `deck` | slides[{src,page,title,text,tools[]}], download{href,size,label}, notice |
 | `stations` | layout: sidebar\|tabs, items[{id,name,title,tag,desc,steps[],prompts[{title,text}],images[{src,caption}],links[{label,url}],outcome,note,source{pages[]}}] |
 | `tools` | items[{name,url,desc,pages[],icon}] |
@@ -101,7 +102,7 @@ lecpage/
 | `video` · `gallery` | items[{title,url,thumb}] · items[{src,caption}] |
 | `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시, status를 비우면 날짜로 마침·오늘·다음 자동) |
 | `followup` | items[{title,desc,url,kind: recording\|community\|next\|read\|link}], completion (연수 후 안내. 끝난 뒤 첫 화면 아래로) |
-| `speakers` | items[{name,role,org,photo,talk,time}] (라이브형) |
+| `speakers` | items[{name,role,org,photo,talk,time}] (행사형) |
 | `reflection` | prompts[] (나의 기록·다짐, 내려받기) |
 | `attendance` | (live 필요) 입실·퇴실 |
 | `text` | md (제한된 마크다운: 굵게, 기울임, 링크, 목록, 문단) |
@@ -261,16 +262,20 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 - **Apps Script**: `setup()`이 연수 코드를 고정하고 다른 코드는 거절. 파일은 게시물이 보일 때만 '링크 공유', 지우면 휴지통.
 
 ## 6. 빌드 결과(생성 사이트) 파일
+기준은 `engine/src/build.js`입니다.
 ```
 index.html        참가자 화면(내용이 JS 없이도 모두 보임)
-console.html      강사 콘솔(관리자 키 입력)
-screen.html       프로젝터 화면(큰 QR·질문·투표·타이머)
-check.html        접속 진단
+screen.html       발표 화면(큰 QR·질문·투표·타이머·도구)
+check.html        접속 확인
 poster.html       A4 QR 안내문(인쇄용) + 강사 카드
-privacy.html      개인정보 처리 안내(수집할 때만)
-_headers          Netlify·Cloudflare용 보안 헤더(강사 화면 틀 넣기 금지)
+console.html      강사 화면(관리자 키 입력). 참여 기능을 쓸 때만
+privacy.html      개인정보 처리 안내. 참여 기능을 쓸 때만
+_headers          Netlify·Cloudflare용 보안 헤더(강사 화면·발표 화면·안내문 틀 넣기 금지)
 robots.txt        access.mode가 public일 때만 Allow, 그 밖에는 Disallow
-assets/lecpage.css · theme.css · lecpage.js · fx.js · live.js · site.json
+assets/theme.css · lecpage.css · boot.js · lecpage.js · screen.js · qr.js · favicon.svg
+assets/console.js · live.js      참여 기능을 쓸 때만
+assets/fx.js · fx.css            효과를 쓸 때만
+assets/unlock.js                 암호 보호(access.mode password)일 때만
 assets/slides/*.webp · assets/media/*
 ```
 - 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
@@ -280,5 +285,6 @@ assets/slides/*.webp · assets/media/*
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").
 - 접근성: 키보드 조작, 포커스 표시, 대비 4.5:1, `prefers-reduced-motion`, 5초 넘게 움직이면 멈춤 버튼.
 - 성능: 참가자 첫 화면 JS·CSS 합계 200KB 안팎(라이브러리 지연 로드 제외).
-- 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`)와 Playwright 스모크 테스트.
+- 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`). CI(`.github/workflows/ci.yml`)는 `npm test` → `npm run examples`(예시 빌드) → 앱 빌드 → `npm audit`(앱 배포 묶음)를 돌립니다. 브라우저 테스트(`live-browser.test.mjs`)는 Playwright가 있을 때만, Supabase·Cloudflare 테스트는 PostgreSQL·`LEC_CF_URL`이 있을 때만 돌고 없으면 건너뜁니다. 앱 화면 자동 테스트는 아직 없습니다.
+- 앱 미리보기 기기 크기: 모니터 1920×1080, 노트북 1536×864, 태블릿 820×1180, 휴대폰 360×780, 맞춤. CLI `qa`도 휴대폰 360×780·태블릿 820×1180·PC 1280으로 봅니다.
 - 커밋·푸시는 통합 담당만 합니다. 병렬 작업자는 자기 디렉터리에만 씁니다.

@@ -54,4 +54,3 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6 } 
   return html;
 }
 
-export function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9가-힣]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'lecpage-site'; }

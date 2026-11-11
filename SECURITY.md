@@ -11,7 +11,7 @@
 - 강사가 이미 올린 연수 사이트는 자동으로 바뀌지 않아요. 중요한 수정은 README와 릴리스 노트에 "다시 만들어 올리기"로 안내합니다.
 
 ## 범위
-- 포함: 웹앱(`app/`), 엔진·Skill(`skills/lecpage/`), 실시간 서버(`skills/lecpage/backends/`), 배포 견본(`templates/`).
+- 포함: 웹앱(`app/`), 엔진·Skill(`skills/lecpage/`), 실시간 서버(`skills/lecpage/backends/`), 배포 설정 파일(`templates/`).
 - 제외: 강사가 직접 운영하는 계정·서버 설정(예: 약한 관리자 키, 공개 저장소 선택), 제3자 서비스(Netlify·GitHub·Google·Supabase·Cloudflare) 자체의 문제.
 
 ## 설계 원칙(요약)

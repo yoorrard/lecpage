@@ -59,7 +59,7 @@ function App() {
         <a class="brand" href="#/" aria-label="lecpage 처음으로"><Mascot size={34} /><Wordmark /></a>
         <nav aria-label="주 메뉴">
           <a href="#/" aria-current={cur('')}>만들기</a>
-          <a href="#/gallery" aria-current={cur('gallery')}>디자인 둘러보기</a>
+          <a href="#/gallery" aria-current={cur('gallery')}>디자인</a>
           <a href="#/help" aria-current={cur('help')}>도움말</a>
           <a href="#/settings" aria-current={cur('settings')}>설정</a>
         </nav>
@@ -67,10 +67,9 @@ function App() {
       <main class="page" id="main" tabIndex={-1}>{page}</main>
       <footer class="foot"><div class="foot-in">
         <span><b class="latin">lecpage</b> · 교재를 넣으면 연수 사이트가 나와요</span>
-        <span>회원가입 없음 · 교재는 이 브라우저에서만 읽어요</span>
-        <a href="#/help/privacy">개인정보 안내</a>
-        <a href="#/help/license">오픈소스·라이선스</a>
-        <a href="https://github.com/yoorrard/lecpage" target="_blank" rel="noopener">GitHub</a>
+        <span>회원가입 없음 · 교재는 이 브라우저에서 읽어요</span>
+        <span class="foot-links"><a href="#/help/privacy">개인정보 처리방침</a><a href="#/help/terms">이용약관</a><a href="#/help/license">오픈소스·라이선스</a><a href="https://github.com/yoorrard/lecpage" target="_blank" rel="noopener">GitHub</a></span>
+        <span class="foot-c">© 2026 lecpage 기여자 · Apache-2.0</span>
       </div></footer>
       <Toast />
     </>

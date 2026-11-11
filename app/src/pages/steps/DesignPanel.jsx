@@ -1,6 +1,9 @@
-import { useEffect, useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Field, Seg } from '../../components/ui.jsx';
 import { E } from '../../lib/engine.js';
+import { SiteThumb } from '../../components/SiteThumb.jsx';
+import { FxGallery } from '../../components/FxGallery.jsx';
+import { Dialog } from '../../components/ui.jsx';
 import { isAdvanced } from './Content.jsx';
 
 const MOTION = ['움직임 없음', '차분하게', '보통', '화려하게'];
@@ -15,22 +18,11 @@ function useFontCss(urls) {
   }, [urls.join('|')]);
 }
 
-/** 프리셋을 실제 색·글꼴로 그린 작은 첫 화면(강사의 연수명으로) */
-function Thumb({ preset, design, title, pressed, onPick, why }) {
-  const pr = E.presetWithOverrides({ ...design, preset: preset.id, palette: pressed ? design.palette : '' });
-  const theme = design.theme && design.theme !== 'preset' && design.theme !== 'auto' ? design.theme : pr.theme;
-  const t = E.themeTokens(pr, theme === 'dark' ? 'dark' : 'light', { accent: pressed ? design.accent : '' });
-  const font = E.FONTS[pr.fonts?.display]; const fpair = pressed ? E.FONT_PAIR_BY_ID[design.fontPair] : null;
-  const family = fpair ? fpair.display.stack || `'${fpair.display.family}', sans-serif` : font ? `'${font.family}', ${font.fallback || 'sans-serif'}` : 'inherit';
-  const style = { background: t['--background'], color: t['--foreground'], fontFamily: t['--font-sans'] };
+/** 디자인 고르기 카드: 실제 첫 화면 + 이름·어울리는 이유 */
+function Thumb({ preset, bp, pressed, onPick, why }) {
   return (
-    <button class="thumb" aria-pressed={String(pressed)} onClick={onPick} >
-      <div class="thumb-art" style={style}>
-        <span class="thumb-eyebrow" style={{ color: t['--muted-foreground'] }}>{preset.name_ko}</span>
-        <span class="thumb-title" style={{ fontFamily: family, fontWeight: 700 }}>{title || '연수 제목'}</span>
-        <span class="thumb-row"><i style={{ background: t['--primary'], color: t['--primary-foreground'] }}>시작하기</i><i style={{ background: t['--card'], border: `1px solid ${t['--border']}` }} /></span>
-        <span class="thumb-dots">{[t['--primary'], t['--accent'], t['--accent-2']].map((c) => <b style={{ background: c }} />)}</span>
-      </div>
+    <button class="thumb" aria-pressed={String(pressed)} onClick={onPick}>
+      <SiteThumb bp={bp} presetId={preset.id} pressed={pressed} />
       <span class="thumb-cap"><b>{preset.name_ko}</b><small>{why || preset.desc_ko}</small></span>
     </button>
   );
@@ -49,31 +41,30 @@ const whyKo = (x) => String(x).replace('사이트 유형', '연수 유형').repl
 export function DesignPanel({ p, update }) {
   const bp = p.blueprint;
   const d = bp.design || {};
-  const ranked = useMemo(() => E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, 3), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary]);
+  const ranked = useMemo(() => E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, 4), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary]);
   const setD = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } }));
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
   const others = E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id));
-  useFontCss([...ranked.map((r) => E.FONTS[E.getPreset(r.id).fonts?.display]?.css), E.FONT_PAIR_BY_ID[d.fontPair]?.display?.css].filter(Boolean));
   const graphics = E.FX.filter((f) => (f.slots || []).includes('hero.graphic'));
-  const signatures = E.FX.filter((f) => f.level >= 2);
   const adv = isAdvanced();
   const title = bp.meta?.title || '';
+  const [fxOpen, setFxOpen] = useState(false);
   const whyText = (r) => ((r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
-      <div class="field"><span>추천 디자인 3가지</span>
-        <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} design={d} title={title} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' })} />)}</div>
+      <div class="field"><span>추천 디자인</span>
+        <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' })} />)}</div>
       </div>
       <details>
-        <summary>다른 분위기 {others.length}가지 더 보기</summary>
-        <div class="thumbs" style={{ marginTop: '10px' }}>{others.map((pr) => <Thumb preset={pr} design={d} title={title} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
+        <summary>다른 디자인 {others.length}가지 더 보기</summary>
+        <div class="thumbs" style={{ marginTop: '10px' }}>{others.map((pr) => <Thumb preset={pr} bp={bp} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
       </details>
       <FontPicker d={d} resolved={resolved} setD={setD} title={title} />
       <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v })} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>
       <Field label={`움직임: ${MOTION[d.motion ?? resolved.motion]}`} hint={resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분하게 유지돼요. 참가자는 사이트에서 움직임을 끌 수 있어요.'}>
         <input class="range" type="range" min="0" max="3" step="1" value={d.motion ?? resolved.motion} onInput={(e) => setD({ motion: +e.target.value })} aria-valuetext={MOTION[d.motion ?? resolved.motion]} />
       </Field>
-      <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) })}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 움직임 조합만 바꿔요.</span></div>
+      <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) })}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 효과 조합만 바꿔요. <a href="#/gallery" target="_blank" rel="noopener">디자인·효과 둘러보기</a></span></div>
       <details>
         <summary>더 바꾸기: 색·기관 색·첫 화면 그래픽</summary>
         <div class="stack" style={{ marginTop: '12px' }}>
@@ -107,20 +98,24 @@ export function DesignPanel({ p, update }) {
               <option value="none">그래픽 없음</option>
             </select>
           </Field>
-          <Field label="눈에 띄는 움직임 하나" hint="사이트 전체에서 하나만 두드러지게 써요.">
-            <select value={d.signature || ''} onChange={(e) => setD({ signature: e.target.value })}>
-              <option value="">{`디자인 기본${resolved.signature ? `(${E.FX.find((f) => f.id === resolved.signature)?.name_ko || resolved.signature})` : ''}`}</option>
-              {signatures.map((g) => <option value={g.id}>{g.name_ko}</option>)}
-            </select>
-          </Field>
+          <div class="field"><span>대표 효과</span>
+            <div class="row"><b>{E.FX.find((f) => f.id === (d.signature || resolved.signature))?.name_ko || '없음'}</b>{!d.signature && <span class="small muted">디자인 기본</span>}
+              <button class="btn btn-sm" onClick={() => setFxOpen(true)}>움직이는 모습 보고 고르기</button>
+              {d.signature && <button class="btn btn-sm btn-quiet" onClick={() => setD({ signature: '' })}>디자인 기본으로</button>}</div>
+            <small>사이트 전체에서 하나만 두드러지게 써요.</small>
+          </div>
           {adv && <p class="small muted">적용된 효과(고급): {Object.entries(resolved.effects || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '없음'}</p>}
         </div>
       </details>
+      <Dialog open={fxOpen} onClose={() => setFxOpen(false)} label="대표 효과 고르기" wide>
+        {fxOpen && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">대표 효과 고르기</h2><p class="small muted">카드를 누르면 크게 보고 고를 수 있어요.</p></div>
+          <FxGallery only={(f) => f.level >= 2} picked={d.signature || resolved.signature} onUse={(f) => { setD({ signature: f.id }); setFxOpen(false); }} /></div>}
+      </Dialog>
     </div>
   );
 }
 
-/** 글꼴 짝 추천: 분위기가 맞는 순 */
+/** 글꼴 조합 추천: 분위기가 맞는 순 */
 function topFontPairs(d, preset, n = 5) {
   const moods = (d.mood && d.mood.length ? d.mood : preset.moods) || [];
   return E.FONT_PAIRS.map((f, i) => ({ f, i, s: (f.moods || []).filter((m) => moods.includes(m)).length }))
@@ -153,8 +148,8 @@ function FontPicker({ d, resolved, setD, title }) {
         {card('auto', autoName, { family: stackOf(auto.display), weight: E.FONTS[auto.display]?.displayWeight || auto.displayWeight }, { family: stackOf(auto.body) }, !d.fontPair, () => setD({ fontPair: '' }), [...new Set([label(auto.display), label(auto.body)])].join(' · '))}
         {list.map((f) => card(f.id, f.name_ko, { family: f.display.stack || `'${f.display.family}', sans-serif`, weight: f.display.weight }, { family: f.body.stack || `'${f.body.family}', sans-serif` }, d.fontPair === f.id, () => setD({ fontPair: f.id }), [...new Set([f.display.family, f.body.family])].join(' · ')))}
       </div>
-      <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value })} aria-label="모든 글꼴 짝">
-        <option value="">모든 글꼴 짝 {E.FONT_PAIRS.length}가지에서 고르기</option>
+      <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value })} aria-label="모든 글꼴 조합">
+        <option value="">모든 글꼴 조합 {E.FONT_PAIRS.length}가지에서 고르기</option>
         {E.FONT_PAIRS.map((f) => <option value={f.id}>{f.name_ko} — {f.note_ko}</option>)}
       </select>
     </div>

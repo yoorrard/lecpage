@@ -36,6 +36,19 @@
   window.LecPage = { toast: toast, store: store, data: DATA, copy: copyText };
 
   /* ── QR ─────────────────────────────── */
+  // qr.js(56KB)는 처음에 싣지 않습니다. 공유 대화상자를 열거나 QR 칸이 화면에 가까워지면 불러옵니다.
+  // 강사 화면·발표 화면·안내문처럼 QR이 바로 필요한 쪽은 <script>로 먼저 실려 있어 그대로 씁니다.
+  var qrLoading = null;
+  function needQR() {
+    if (window.qrcode) return Promise.resolve(true);
+    if (qrLoading) return qrLoading;
+    qrLoading = new Promise(function (res) {
+      var sc = doc.createElement('script'); sc.src = 'assets/qr.js'; sc.async = true;
+      sc.onload = function () { res(true); }; sc.onerror = function () { qrLoading = null; res(false); };
+      doc.head.appendChild(sc);
+    });
+    return qrLoading;
+  }
   function qrSvg(text) {
     if (!window.qrcode) return '';
     try {
@@ -44,7 +57,7 @@
       return q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
     } catch (e) { return ''; }
   }
-  window.LecPage.qr = qrSvg;
+  window.LecPage.qr = qrSvg; window.LecPage.needQR = needQR;
   // 주소: 파일로 열었거나(file:) 앱 미리보기(about:)면 진짜 주소가 없으니 안내 문구를 보여 줍니다(meta.siteUrl이 있으면 그 주소).
   var LOCAL_PAGE = /^(file|about|blob|data):$/.test(location.protocol);
   var URL_OFF = '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
@@ -65,11 +78,22 @@
     if (url) { n.innerHTML = qrSvg(url); return; }
     n.textContent = ''; n.appendChild(el('span', 'lp-qr-off', offText || URL_OFF));
   }
-  function drawQRs() {
+  function paintQRs() {
     $$('[data-qr]').forEach(function (n) { n.innerHTML = qrSvg(n.getAttribute('data-qr')); });
-    $$('[data-qr-self]').forEach(function (n) { fillQR(n, joinUrl()); });
-    $$('[data-url-self]').forEach(function (n) { var u = pageUrl(); n.textContent = u ? u.replace(/^https?:\/\//, '').replace(/\/$/, '') : URL_OFF; });
+    $$('[data-qr-self]').forEach(function (n) { if (!n.closest('dialog')) fillQR(n, joinUrl()); });
     $$('[data-qr-page]').forEach(function (n) { fillQR(n, siblingUrl(n.getAttribute('data-qr-page')), '인터넷에 올리면 QR이 나와요.'); });
+  }
+  function drawQRs() {
+    // 대화상자 밖에 QR 칸이 있으면(설문 QR·안내문): 이미 실려 있으면 바로, 아니면 화면에 가까워질 때 불러와 그림
+    var boxes = $$('[data-qr],[data-qr-page]').concat($$('[data-qr-self]').filter(function (n) { return !n.closest('dialog'); }));
+    if (boxes.length) {
+      if (window.qrcode) paintQRs();
+      else if ('IntersectionObserver' in window) {
+        var qio = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { qio.disconnect(); needQR().then(paintQRs); } }, { rootMargin: '600px 0px' });
+        boxes.forEach(function (n) { qio.observe(n); });
+      } else needQR().then(paintQRs);
+    }
+    $$('[data-url-self]').forEach(function (n) { var u = pageUrl(); n.textContent = u ? u.replace(/^https?:\/\//, '').replace(/\/$/, '') : URL_OFF; });
     $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '올린 사이트 주소 + ' + n.getAttribute('data-url-page'); });
   }
   window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, off: URL_OFF };
@@ -97,6 +121,28 @@
   }
 
   /* ── 테마·움직임 ───────────────────────── */
+  // 가벼운 모드 적용: <html data-motion>을 1로, data-fx-lowpower를 1로. 효과(LecFX)가 시작하기 전에 불러야 함
+  var MOTION0 = root.getAttribute('data-motion'), REST0 = root.getAttribute('data-rest');
+  function applyLite(on) {
+    root.classList.toggle('lp-lite', on); root.classList.toggle('lp-paused', on);
+    if (on) {
+      if (+MOTION0 > 1) root.setAttribute('data-motion', '1');
+      if (+REST0 > 1) root.setAttribute('data-rest', '1');
+      root.setAttribute('data-fx-lowpower', '1');
+    } else {
+      if (MOTION0 !== null) root.setAttribute('data-motion', MOTION0);
+      if (REST0 !== null) root.setAttribute('data-rest', REST0);
+      root.setAttribute('data-fx-lowpower', '0'); // 직접 껐으면 저사양 기기 자동 낮춤도 하지 않음(사용자 선택이 우선)
+    }
+  }
+  // 저장된 선택(또는 예전의 '움직임 멈춤')을 되살림: 이 스크립트는 효과(LecFX)가 시작하기 전에 실행됨.
+  // 선택한 적이 없으면 그대로 두고, 저사양 기기는 효과 쪽(LecFX)이 알아서 한 단계 낮춤
+  try {
+    var lite0 = localStorage.getItem('lp-lite');
+    if (lite0 === '1' || (lite0 === null && localStorage.getItem('lp-motion-paused') === '1')) { applyLite(true); if (window.LecFX) LecFX.pause(); }
+    else if (lite0 === '0') root.setAttribute('data-fx-lowpower', '0');
+  } catch (e) { }
+
   function initChrome() {
     var tb = $('[data-theme-toggle]');
     if (tb) tb.addEventListener('click', function () {
@@ -106,20 +152,25 @@
       root.setAttribute('data-theme', next);
       try { localStorage.setItem('lp-theme', next); } catch (e) { }
     });
-    var mb = $('[data-motion-toggle]');
-    function setPaused(p) {
-      root.classList.toggle('lp-paused', p);
-      if (mb) { mb.setAttribute('aria-pressed', String(p)); mb.setAttribute('aria-label', p ? '움직임 다시 켜기' : '움직임 멈추기'); }
-      if (window.LecFX) { try { p ? LecFX.pause() : LecFX.resume(); } catch (e) { } }
-      try { localStorage.setItem('lp-motion-paused', p ? '1' : '0'); } catch (e) { }
+    // 가벼운 모드: 움직임을 차분 단계(1)로 낮추고, 무거운 효과(WebGL·외부 라이브러리·끝없이 도는 그림)를 끈 뒤 효과를 다시 시작
+    var lb = $('[data-lite-toggle]');
+    function setLite(on) {
+      applyLite(on);
+      if (lb) lb.setAttribute('aria-pressed', String(on));
+      try { localStorage.setItem('lp-lite', on ? '1' : '0'); localStorage.setItem('lp-motion-paused', on ? '1' : '0'); } catch (e) { }
+      if (window.LecFX) { try { LecFX.stop(); if (on) LecFX.pause(); else LecFX.resume(); LecFX.start(); } catch (e) { } }
+      toast(on ? '가벼운 모드를 켰어요. 움직임을 줄였어요.' : '가벼운 모드를 껐어요.');
     }
-    if (mb) { mb.addEventListener('click', function () { setPaused(!root.classList.contains('lp-paused')); toast(root.classList.contains('lp-paused') ? '움직임을 멈췄어요.' : '움직임을 다시 켰어요.'); }); if (root.classList.contains('lp-paused')) setPaused(true); }
+    if (lb) {
+      lb.setAttribute('aria-pressed', String(root.classList.contains('lp-lite')));
+      lb.addEventListener('click', function () { setLite(!root.classList.contains('lp-lite')); });
+    }
 
     var share = $('[data-share]'), dlg = $('[data-share-dialog]');
     if (share && dlg) share.addEventListener('click', function () {
       var u = pageUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
       if (su) su.textContent = u; if (off) off.hidden = !!u; if (cb) cb.hidden = !u;
-      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !u; fillQR(n, joinUrl()); });
+      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !u; if (u) needQR().then(function () { fillQR(n, joinUrl()); }); });
       openDialog(dlg, share);
     });
     var cu = $('[data-copy-url]'); if (cu) cu.addEventListener('click', function () { copyText(joinUrl(), '주소를 복사했어요.'); });
@@ -186,17 +237,22 @@
   /* ── 일정: 지금 순서 ─────────────────────── */
   function initSchedule() {
     $$('.lp-schedule').forEach(function (ol) {
+      var segs = $$('.lp-sched-bar i', ol.parentNode); // 위의 시간 막대도 같은 표시(지금·지남)
       function upd() {
         var now = new Date(), today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         var mins = now.getHours() * 60 + now.getMinutes();
-        $$('li', ol).forEach(function (li) {
+        var q = /[?&]now=(\d{1,2}):(\d{2})\b/.exec(location.search); // 미리 보기: ?now=15:45 (연수 날 그 시각처럼 표시)
+        if (q) { mins = +q[1] * 60 + +q[2]; today = ol.getAttribute('data-date') || today; }
+        segs.forEach(function (x) { x.classList.remove('is-now', 'is-done'); });
+        $$('li', ol).forEach(function (li, i) {
           var d = li.getAttribute('data-date') || ol.getAttribute('data-date');
           li.classList.remove('is-now', 'is-done');
           if (d && d !== today) return;
           var s = toMin(li.getAttribute('data-start')), en = toMin(li.getAttribute('data-end'));
           if (s === null) return;
           if (en === null) { var nx = li.nextElementSibling; en = nx ? toMin(nx.getAttribute('data-start')) : s + 30; }
-          if (mins >= s && mins < en) li.classList.add('is-now'); else if (mins >= en) li.classList.add('is-done');
+          var st = mins >= s && mins < en ? 'is-now' : mins >= en ? 'is-done' : '';
+          if (st) { li.classList.add(st); if (segs[i]) segs[i].classList.add(st); }
         });
       }
       upd(); setInterval(upd, 30000);
@@ -223,14 +279,32 @@
     var now = new Date(), q = /[?&]phase=(before|during|after)\b/.exec(location.search);
     var phase = q ? q[1] : now > new Date(w.end) ? 'after' : now >= new Date(w.start) ? 'during' : 'before';
     root.setAttribute('data-phase', phase);
+    heroState(phase, w);
     if (phase !== 'after') return;
     $$('[data-phase-hide="after"]').forEach(function (n) { n.hidden = true; });
+    $$('[data-phase-show="after"]').forEach(function (n) { n.hidden = false; });
     var fu = $('[data-followup]'), hero = $('main > .lp-hero');
     if (fu && hero) { var at = hero.nextElementSibling; if (at && at.classList.contains('lp-divider')) at = at.nextElementSibling; if (at !== fu) hero.parentNode.insertBefore(fu, at); }
     var bar = $('[data-phase-bar]'); if (bar) { bar.hidden = false; fitScrollPad(); }
   }
 
-  /* ── 준비 점검·접속 진단 ──────────────────── */
+  // 첫 화면 한 줄: 연수 전 '시작까지 3일'(이틀 안쪽이면 시간·분), 연수 중 '지금 진행 중', 끝나면 '끝난 연수'
+  function heroState(phase, w) {
+    var box = $('[data-hero-state]'), out = box && $('[data-hero-state-text]', box); if (!out) return;
+    function left() {
+      var ms = new Date(w.start) - new Date();
+      if (ms <= 0) return '곧 시작해요';
+      var min = Math.ceil(ms / 60000);
+      if (min < 60) return '시작까지 ' + min + '분';
+      if (min < 48 * 60) return '시작까지 ' + Math.floor(min / 60) + '시간';
+      return '시작까지 ' + Math.floor(min / 1440) + '일';
+    }
+    if (phase === 'before') { out.textContent = left(); if (new Date(w.start) - new Date() < 48 * 3600000) setInterval(function () { out.textContent = left(); }, 30000); }
+    else out.textContent = phase === 'during' ? '지금 진행 중' : '끝난 연수';
+    box.hidden = false;
+  }
+
+  /* ── 준비 점검·접속 확인 ──────────────────── */
   function initReadiness() {
     $$('[data-checklist]').forEach(function (ul) {
       var k = 'check:' + ul.getAttribute('data-checklist'), st = store.get(k, {});
@@ -267,7 +341,7 @@
       if (cp) cp.addEventListener('click', function () {
         var lines = $$('li[data-url]', box).map(function (li) { return (li.getAttribute('data-state') === 'ok' ? '[열림] ' : li.getAttribute('data-state') === 'fail' ? '[막힘] ' : '[미확인] ') + li.querySelector('small').textContent; });
         var lv = $('[data-live-diag]', box);
-        copyText(['접속 진단 결과 (' + new Date().toLocaleString('ko-KR') + ')', location.href].concat(lines, lv ? [lv.textContent] : [], env ? [env.textContent] : []).join('\n'), '결과를 복사했어요.');
+        copyText(['접속 확인 결과 (' + new Date().toLocaleString('ko-KR') + ')', location.href].concat(lines, lv ? [lv.textContent] : [], env ? [env.textContent] : []).join('\n'), '결과를 복사했어요.');
       });
       var lvd = $('[data-live-diag]', box);
       if (lvd && DATA.live && window.LecLive) {
@@ -279,7 +353,7 @@
     });
   }
 
-  /* ── 교재 뷰어 ─────────────────────────── */
+  /* ── 교재 보기 ─────────────────────────── */
   var deckApi = null;
   function initDeck() {
     var deck = $('[data-deck]'); if (!deck) return;
@@ -291,7 +365,7 @@
       var b = el('button'); b.type = 'button';
       var img = s.querySelector('img');
       // 그림만 있는 단추는 쪽 번호를 이름으로, 글자가 보이는 단추는 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
-      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
+      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { go(i); });
       thumbs.appendChild(b);
     });
@@ -319,6 +393,13 @@
     if (!fromHash()) go(0, { quiet: true });
     deckApi = { go: function (page) { var i = slides.findIndex(function (s) { return +s.getAttribute('data-page') === +page; }); if (i >= 0) go(i); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
   }
+  // 글만 있는 쪽의 작은 미리보기: 쪽 번호 + 제목(표지·부 시작은 큰 슬라이드와 같은 바탕)
+  function thumbText(s) {
+    var t = el('span', 'lp-thumb-t'), st = s.querySelector('.lp-slide-text'), h = st && st.querySelector('h3');
+    if (st) t.setAttribute('data-kind', st.getAttribute('data-kind') || 'body');
+    t.appendChild(el('b', '', s.getAttribute('data-page'))); t.appendChild(el('i', '', (h && h.textContent) || s.getAttribute('data-title') || ''));
+    return t;
+  }
   function overview(slides, pick) {
     var ov = el('div', 'lp-overview'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', '전체 쪽 보기');
     var h = el('div', 'lp-overview-h'); var inp = el('input'); inp.type = 'search'; inp.placeholder = '제목·내용으로 찾기'; inp.setAttribute('aria-label', '쪽 찾기');
@@ -327,8 +408,8 @@
     var grid = el('div', 'lp-overview-grid'); ov.appendChild(grid);
     var btns = slides.map(function (s, i) {
       var b = el('button'); b.type = 'button'; var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); }
-      b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || '')));
+      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
+      else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { done(); pick(i); });
       b._q = ((s.getAttribute('data-title') || '') + ' ' + (s.getAttribute('data-text') || '')).toLowerCase();
       grid.appendChild(b); return b;
@@ -340,7 +421,7 @@
     doc.body.appendChild(ov); inp.focus();
   }
 
-  /* ── 실습 스테이션 ─────────────────────── */
+  /* ── 실습 ─────────────────────────────── */
   var stApi = null;
   function initStations() {
     var shell = $('[data-stations]'); if (!shell) return;
@@ -352,6 +433,8 @@
     function idOf(i) { return arts[i].getAttribute('data-st'); }
     function paint() {
       links.forEach(function (a) { a.classList.toggle('is-done', done.indexOf(a.getAttribute('data-st-link')) >= 0); });
+      // 첫 화면 실습지(종이 워크북)의 체크 칸도 함께
+      $$('[data-hero-st]').forEach(function (a) { a.classList.toggle('is-done', done.indexOf(a.getAttribute('data-hero-st')) >= 0); });
       $$('[data-done]', shell).forEach(function (b) {
         var id = b.closest('.lp-st').getAttribute('data-st'), on = done.indexOf(id) >= 0;
         b.setAttribute('aria-pressed', String(on)); b.querySelector('span').textContent = on ? '완료했어요' : '완료 체크';
@@ -375,7 +458,7 @@
       var b = e.target.closest('[data-done]');
       if (b) {
         var id = b.closest('.lp-st').getAttribute('data-st'), k = done.indexOf(id);
-        if (k >= 0) { done.splice(k, 1); toast('완료 체크를 풀었어요.'); } else { done.push(id); toast('완료했어요.'); celebrate(b); }
+        if (k >= 0) { done.splice(k, 1); toast('완료 체크를 풀었어요.'); } else { done.push(id); toast('완료했어요.'); } // 완료 반응은 체크가 그려지는 차분한 움직임(CSS)뿐: 실습 칸은 1단계까지만
         store.set('done', done); paint();
         if (live.ready) live.progress(id, k >= 0 ? 'doing' : 'done');
         return;
@@ -401,10 +484,6 @@
     });
     paint();
     stApi = { go: function (id) { var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === id; }); if (i >= 0 && i !== cur) { show(i, true); toast('강사가 보는 실습으로 이동했어요.'); } }, current: function () { return cur >= 0 ? idOf(cur) : null; }, done: function () { return done.slice(); } };
-  }
-  function celebrate(btn) {
-    if (RM || root.classList.contains('lp-paused')) return;
-    if (window.LecFX && typeof LecFX.fire === 'function') { try { LecFX.fire('confetti', btn); } catch (e) { } }
   }
 
   /* ── 퀴즈·기록 ─────────────────────────── */
@@ -441,7 +520,18 @@
     var dock = $('[data-dock]'), dot = $('[data-live-status]');
     var qs = {}, posts = {}, answers = {}, state = {}, voted = store.get('voted', {});
     var X = LecLive.util.ext, U = LecLive.util;
-    if (dock && root.getAttribute('data-phase') !== 'after') { dock.hidden = false; root.classList.add('lp-dock-on'); } // 끝난 연수에는 막혔어요·신호 도크를 띄우지 않음
+    if (dock && root.getAttribute('data-phase') !== 'after') { // 끝난 연수에는 도움 요청·신호 도크를 띄우지 않음
+      dock.hidden = false; root.classList.add('lp-dock-on');
+      // 첫 화면이 화면 아래쪽에 걸려 있는 동안은 도크를 감춤(첫 화면 오른쪽 아래를 가리지 않게). 지나가면 나타남
+      var hero0 = $('main > .lp-hero');
+      if (hero0 && 'IntersectionObserver' in window) {
+        new IntersectionObserver(function (es) {
+          var on = es[es.length - 1].isIntersecting;
+          if (on && dock.contains(doc.activeElement)) return; // 도크를 쓰는 중이면 그대로 둠
+          root.classList.toggle('lp-hero-in', on);
+        }, { rootMargin: '-78% 0px 0px 0px' }).observe(hero0);
+      }
+    }
     $$('[data-live-off]').forEach(function (n) { n.hidden = true; });
     if (feats.indexOf('help') >= 0) $$('[data-stuck]').forEach(function (b) { b.hidden = false; });
     if (deckApi) deckApi.showFollow();
@@ -474,6 +564,7 @@
       var arr = Object.keys(qs).map(function (k) { return qs[k]; }).filter(function (q) { return q.status !== 'hidden'; });
       arr.sort(function (a, b) { if (!!b.pinned - !!a.pinned) return !!b.pinned - !!a.pinned; return sortBy === 'votes' ? ((b.votes || 0) - (a.votes || 0) || (b.createdAt || 0) - (a.createdAt || 0)) : (b.createdAt || 0) - (a.createdAt || 0); });
       list.textContent = '';
+      var hl = $('[data-hero-live]'); if (hl) { hl.hidden = false; $('[data-hero-live-n]', hl).textContent = arr.length; } // 첫 화면 유리 칸: 지금 올라온 질문 수
       if (!arr.length) { list.appendChild(el('li', 'lp-empty', '아직 질문이 없어요. 첫 질문을 올려 주세요.')); return; }
       arr.forEach(function (q) {
         var li = el('li', 'lp-qa-item' + (q.pinned ? ' is-pinned' : '') + (q.status === 'answered' ? ' is-answered' : ''));
@@ -634,7 +725,7 @@
     $$('[data-signal]').forEach(function (b) {
       b.addEventListener('click', function () {
         var v = b.getAttribute('data-signal');
-        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '‘이해했어요’를 보냈어요.', yellow: '‘조금 헷갈려요’를 보냈어요.', red: '‘도와주세요’를 보냈어요. 곧 갈게요.' }[v]); }, function () { });
+        ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '‘이해했어요’를 보냈어요.', yellow: '‘조금 헷갈려요’를 보냈어요.', red: '‘모르겠어요’를 보냈어요. 곧 갈게요.' }[v]); }, function () { });
       });
     });
     // 반응: 휴대폰에서는 버튼 하나로 접어 둠

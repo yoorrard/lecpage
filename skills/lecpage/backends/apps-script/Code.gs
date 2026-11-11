@@ -81,7 +81,7 @@ function headerOf(name) {
 }
 function menuSetAdminKey() {
   var ui = SpreadsheetApp.getUi();
-  var r = ui.prompt('관리자 키 정하기', '강사 콘솔에 넣을 비밀번호를 12자 이상으로 정해 주세요. 시트에는 저장되지 않고, 해시(SHA-256)만 스크립트 속성에 남습니다.', ui.ButtonSet.OK_CANCEL);
+  var r = ui.prompt('관리자 키 정하기', '강사 화면에 넣을 비밀번호를 12자 이상으로 정해 주세요. 시트에는 저장되지 않고, 해시(SHA-256)만 스크립트 속성에 남습니다.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var key = r.getResponseText();
   var why = keyProblem(key);
@@ -700,7 +700,7 @@ function wipeAll() {
 
 // ---- CSV (same layout as backends/*/protocol.js exportTable) ----
 function fmtTime(ms) { return ms ? Utilities.formatDate(new Date(Number(ms)), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : ''; }
-var STATUS_KO = { doing: '하는 중', done: '완료', stuck: '막힘', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
+var STATUS_KO = { doing: '하는 중', done: '완료', stuck: '도움 요청', open: '대기', claimed: '가는 중', answered: '답변함', hidden: '숨김' };
 function uniq(a) { var s = {}; return a.filter(function (x) { if (s[x]) return false; s[x] = 1; return true; }); }
 function exportTable(kind, data) {
   var t = fmtTime; var P = data.participants || []; var people = {}; P.forEach(function (p) { people[p.id] = p; });

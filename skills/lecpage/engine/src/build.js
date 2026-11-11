@@ -5,6 +5,7 @@ import { resolveDesign } from './decide/design.js';
 import { decideInfra } from './decide/infra.js';
 import { themeCSS, themeTokens, presetWithOverrides } from './design/tokens.js';
 import { getPreset } from './design/presets.js';
+import { designTokens } from './design/dtcg.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, renderPoster, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
 
@@ -22,6 +23,12 @@ export function pruneFxCss(css, ids) {
     const list = m[1].trim().split(/[\s,]+/).filter(Boolean);
     return list.includes('*') || list.some((x) => used.has(x));
   }).join('');
+}
+
+/** 사이트를 만든 날(개인정보 처리 안내의 시행일). opts.today('YYYY-MM-DD')가 없으면 오늘 */
+function builtOn(today) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(today || new Date().toISOString());
+  return m ? `${+m[1]}. ${+m[2]}. ${+m[3]}.` : '';
 }
 
 export function collectEffects(design, bp) {
@@ -43,7 +50,7 @@ function favicon(design) {
  * @param {object} input 설계도(검증 전이어도 됨)
  * @param {object} opts { runtime: {read(path)}, assets: {path: Uint8Array|string}, infra: decideInfra 입력, include: { blueprint: true, teacherFiles: false } }
  * @returns {{ files: Object<string,string|Uint8Array>, teacher: Object<string,string>, blueprint, design, warnings, errors, infra, report }}
- * files = 올릴 사이트, teacher = 강사만 볼 파일(DESIGN.md·운영안내.md·설계도). include.teacherFiles=true면 files에도 넣음
+ * files = 올릴 사이트, teacher = 강사만 볼 파일(DESIGN.md·tokens.json·운영안내.md·설계도). include.teacherFiles=true면 files에도 넣음
  */
 export function build(input, opts = {}) {
   const { blueprint: bp, errors, warnings } = validate(input);
@@ -60,7 +67,7 @@ export function build(input, opts = {}) {
   const themeName = design.theme && design.theme !== 'preset' ? design.theme : preset.theme;
   const tok = themeTokens(preset, themeName === 'dark' ? 'dark' : 'light', { accent: design.accent });
   const effectIds = design.motion > 0 || design.graphic ? collectEffects(design, bp) : [];
-  const ctx = { bp, design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '' };
+  const ctx = { bp, design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
   files['index.html'] = renderIndex(ctx);
@@ -100,7 +107,7 @@ export function build(input, opts = {}) {
   // 검색 노출: 'public'일 때만 허용(기본은 주소·QR을 받은 사람만)
   files['robots.txt'] = bp.access.mode === 'public' ? 'User-agent: *\nAllow: /\n' : 'User-agent: *\nDisallow: /\n';
   // 강사용 파일은 올리는 사이트와 따로 돌려줌(설계도에는 강사 메일 등 공개하지 않을 값이 있을 수 있음)
-  const teacher = { 'DESIGN.md': designDoc(ctx), '운영안내.md': opsDoc(ctx, infra) };
+  const teacher = { 'DESIGN.md': designDoc(ctx), '운영안내.md': opsDoc(ctx, infra), 'tokens.json': JSON.stringify(designTokens(design), null, 2) };
   if (opts.include?.blueprint !== false) teacher['lecpage.blueprint.json'] = JSON.stringify(bp, null, 2);
   if (opts.include?.teacherFiles) Object.assign(files, teacher);
 

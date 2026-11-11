@@ -1,0 +1,24 @@
+lecpage (Agent Skill)
+Copyright 2026 lecpage contributors
+
+This skill is licensed under the Apache License, Version 2.0 (see LICENSE.txt).
+
+The following folders are licensed under MIT No Attribution
+(SPDX-License-Identifier: MIT-0) instead, so that files copied into generated
+sites and user servers carry no notice obligations. Each has its own LICENSE:
+  - engine/runtime/  (except vendor/ and review/vendor/)
+  - backends/
+  - templates/
+
+Additional permission for generated output: the copyright holders also grant
+the HTML, CSS, JavaScript and other files that lecpage writes into a generated
+site (including markup and text taken from the engine's templates) under MIT-0.
+Such sites need no lecpage license or notice. Materials a user puts into a site
+remain the user's own.
+
+Third-party files keep their own licenses and notices (engine/vendor/ and the
+vendor/ folders under engine/runtime/; see their file headers). Full list:
+https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOTICES.md
+
+The name "lecpage" and the lecpage mascot/logo are not licensed under these
+licenses: https://github.com/yoorrard/lecpage/blob/main/TRADEMARKS.md

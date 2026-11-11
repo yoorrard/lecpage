@@ -2,41 +2,93 @@
 
 # lecpage
 
-**교재를 넣으면 연수 사이트가 나와요.** 연수 교재(PPT·PDF·한글 HWPX·워드)를 놓으면, 그 연수에 맞는 디자인·실습 안내·교재 넘겨 보기·참여 기능(질문·막혔어요·진행 체크·투표·만족도 설문)을 갖춘 연수 사이트가 바로 나와요. 무료·오픈소스이고, 회원가입이 없어요.
+**교재를 넣으면 연수 사이트가 나와요.** 연수 교재(PPT·PDF·한글 HWPX·워드)를 놓으면 AI가 연수 흐름과 문구를 짜고, 주제에 맞는 디자인으로 사이트를 만들어요. 단추 하나로 공개하면 참가자에게 보낼 주소와 QR이 나와요. 무료·오픈소스이고 회원가입이 없어요.
 
-- **웹앱**: 브라우저에서 바로. 교재는 브라우저 안에서만 읽어요. → **https://yoorrard.github.io/lecpage/** (Cloudflare·자기 도메인으로 옮길 준비: [운영 안내](docs/operations.md))
-- **Agent Skill**: Claude Code·Codex·Cursor·Gemini CLI·Antigravity 등 내가 쓰는 AI 도구 안에서, 쓰던 구독 그대로.
+- **웹앱**: 브라우저에서 바로 → **https://yoorrard.github.io/lecpage/**
+- **Agent Skill**: Claude Code·Codex·Cursor·Gemini CLI 등 쓰던 AI 도구 안에서, 쓰던 구독 그대로
 
 ```bash
 npx skills add yoorrard/lecpage
 ```
 
-<p align="center"><img src="docs/images/app-home.webp" width="49%" alt="lecpage 첫 화면: 교재 파일을 놓으면 바로 시작"> <img src="docs/images/app-edit.webp" width="49%" alt="살펴보고 고치기: 내용·디자인·참여 기능 탭과 미리보기"></p>
-<p align="center"><img src="docs/images/app-review-mark.webp" width="49%" alt="수정 요청: 미리보기에 펜·네모로 표시하고 완료를 누르면 대화창에 바로 붙어요"> <img src="docs/images/app-review-chat.webp" width="49%" alt="AI가 고칠 안을 보여 주고 적용·되돌리기"></p>
-<p align="center"><img src="docs/images/presets.webp" width="98%" alt="같은 연수 내용을 12개 분위기 디자인으로 만든 첫 화면"></p>
-<p align="center"><img src="docs/images/example-data.webp" width="49%" alt="견본: 실습형 데이터로 읽는 우리 반"> <img src="docs/images/example-forest.webp" width="49%" alt="견본: 이야기형 숲이 교과서가 되는 날"></p>
+<p align="center"><img src="docs/images/app-home.webp" width="49%" alt="lecpage 첫 화면: 교재 파일을 놓으면 시작"> <img src="docs/images/app-edit.webp" width="49%" alt="살펴보고 고치기: 내용·디자인·참여 기능 탭과 기기별 미리보기"></p>
+<p align="center"><img src="docs/images/presets.webp" width="98%" alt="같은 연수 내용을 12개 디자인으로 만든 첫 화면"></p>
+<p align="center"><img src="docs/images/example-data.webp" width="49%" alt="예시: 디지털 연수 '데이터로 읽는 우리 반'(실습형)"> <img src="docs/images/example-sel.webp" width="49%" alt="예시: 사회정서학습 연수 '마음이 먼저 도착하는 교실'(강의형)"></p>
+
+## AI에게 그냥 시킬 때와 무엇이 다른가요
+
+| | 그냥 시키면 | lecpage |
+|---|---|---|
+| 디자인 | 비슷한 틀이 반복되고 검증이 없음 | 디자인 12종마다 첫 화면 구성·글꼴·섹션 리듬이 다름. 대비·줄바꿈·넘침·'AI 티'를 자동 점검 |
+| 내용 | 그럴듯하게 지어낼 수 있음 | 교재 쪽을 근거로 구성하고 "교재 n쪽"으로 표시. 스키마 검증·자동 보정 |
+| 기능 | 정적 페이지 한 장 | 교재 보기·실습·프롬프트 복사·질문·투표·나눔 보드·강사 화면·발표 화면·QR 안내문·접속 확인 |
+| AI 비용 | HTML 전체를 쓰고, 고칠 때마다 다시 씀 | 설계도(JSON)와 작은 패치만. 같은 일에 읽는 글 약 1/12, 쓰는 글 약 1/170([조사](docs/research/skill-efficiency-2026-11.md)) |
+| 공개 | 받은 파일을 직접 올림 | 올릴 곳을 추천하고 단추 하나로 공개, 주소가 열리는지까지 확인 |
+| 안전 | 직접 챙김 | CSP·이스케이프·암호 보호(AES-GCM), 개인정보 안내 자동 생성 |
 
 ## 세 단계면 끝나요
+
 | 단계 | 하는 일 |
 |---|---|
-| ① 교재 넣기 | 파일을 놓으면 연수명·날짜·장소를 찾아 미리 채우고, [사이트 만들기]를 누르면 초안이 바로 나와요(AI 없이도). |
-| ② 살펴보고 고치기 | 미리보기를 보며 내용·디자인·참여 기능을 고쳐요. 칸을 눌러 바로 고치고, **고칠 곳을 펜·네모로 표시해 AI에게 보내면** 고칠 안을 받아 한 번에 적용(되돌리기 가능). |
-| ③ 공유하기 | 누가 볼지(주소를 받은 사람만·암호·누구나) 고르고, 참여 기능을 연결하고(구글 시트 10분, 연결 확인 단추), 주소·QR·카톡 안내 문구를 받아요. |
+| ① 교재 넣기 | 파일을 놓으면 연수명·날짜·장소를 찾아 채워요. [AI로 사이트 만들기]를 누르면 기본 초안이 먼저 나오고, 1~2분 뒤 AI가 짠 내용으로 바뀌어요(되돌리기 가능). AI는 처음 한 번만 연결해요: OpenRouter 로그인, 또는 Gemini(무료)·OpenAI·Claude 키 붙여넣기. 가입 없이 쓰던 챗봇에 붙여넣는 길과 AI 없는 기본 초안도 있어요. |
+| ② 살펴보고 고치기 | 미리보기를 모니터·노트북·태블릿·휴대폰 크기로 바꿔 보며 내용·디자인·참여 기능을 고쳐요. **고칠 곳을 펜·네모로 표시해 AI에게 보내면** 고칠 안을 받아 한 번에 적용해요. |
+| ③ 공개하기 | 누가 볼지(주소를 받은 사람만·암호·누구나) 고르고 [공개하기]. 주소·QR·카톡 안내 문구가 나오고, 주소가 실제로 열리는지 확인해 줘요. 한 번 연결한 곳은 다음부터 단추 하나예요. |
 
 ## 무엇을 만들어 주나요
+
 | | |
 |---|---|
-| 사이트 유형 4가지 | 이야기형(특강) · 실습형(워크숍) · 라이브형(설명회·컨퍼런스) · 과정형(여러 차시 직무연수) |
-| 칸(섹션) 30종 | 첫 화면, 연수 목표·대상, 핵심 메시지, 오늘의 차례, 일정(지금 순서 강조), 준비 점검+접속 진단, 교재 넘겨 보기, 실습 정거장(단계·프롬프트 복사·완료 체크·메모), 도구 모음, 질문, 참여 보드, 투표·낱말 구름, 퀴즈, 자료실, 강사 소개, **사이트 안 만족도 설문**, 마무리, **연수 뒤 안내**(녹화·자료·이수 일정, 날짜가 지나면 저절로 앞으로) 등. 온라인 연수는 Zoom 입장 단추가 맨 앞에 |
-| 강사용 화면 | 강사 화면(진행 현황·막힌 사람·질문 관리·공지·타이머·따라가기·**이수 확인표 CSV**·일괄 삭제), 발표 화면(큰 QR·질문·투표 결과·이름 뽑기·모둠·타이머), QR 안내문 인쇄, 와이파이 점검 |
-| 공개 범위 | 기본은 검색 제외(주소를 받은 사람만). **암호 보호**는 페이지와 교재 그림까지 브라우저에서 암호화(AES-GCM)하고, 안내 QR로 들어오면 저절로 열려요. 교재 원본은 고를 때만 올려요 |
-| 디자인 | 분위기 디자인 12종 × 색 조합 34 × 글꼴 짝 25 × 효과 52가지. **교재 글꼴을 읽어 같은 글꼴(없으면 어울리는 무료 웹 글꼴)로** 만들어요. 알약 칩·겹친 상자·옆 색띠 같은 'AI 티'를 막는 [디자인 규칙](skills/lecpage/references/design-quality.md)과 자동 점검(design-lint) |
-| 참여 기능 연결 | 강사 계정에 직접: 구글 시트(50명 안팎, 앱 안 안내) · Supabase · Cloudflare(단추 하나) · 학교 서버·NAS(Docker) · 인터넷 없는 교실(강사 노트북). lecpage 운영자는 참가자 기록을 보지 않아요 |
-| AI 연결(선택) | AI 없이도 초안이 나와요. 다듬을 때는 쓰는 챗봇에 붙여넣기(무료) 또는 한 번 연결(OpenRouter 로그인·Gemini 키). 키 앞글자로 회사 자동 인식, 연결 확인, 단계별 발급 안내 |
-| 올리기 | Netlify(연결 코드 한 번, 다시 올려도 같은 주소) · GitHub Pages · ZIP(Cloudflare·Netlify 끌어 놓기, 학교 서버, USB). 안내서 15가지 |
+| 사이트 유형 4가지 | 강의형(특강) · 실습형(워크숍) · 행사형(설명회·컨퍼런스) · 과정형(여러 차시 직무연수) |
+| 섹션 30종 | 첫 화면, 연수 목표·대상, 핵심 메시지, 오늘의 차례, 일정(지금 순서 강조), 준비 점검+접속 확인, 교재 보기, 실습(단계·프롬프트 복사·완료 체크·메모), 도구 모음, 질문 받기, 나눔 보드, 투표·워드클라우드, 퀴즈, 자료실, 강사 소개, 사이트 안 만족도 설문, 마무리, 연수 뒤 안내 등. 온라인 연수는 Zoom 입장 단추가 맨 앞에 |
+| 강사용 화면 | 강사 화면(진행 현황·도움 요청·질문 관리·공지·타이머·강사 따라 넘기기·이수자 명단 CSV·일괄 삭제), 발표 화면(큰 QR·질문·투표 결과·이름 뽑기·모둠·타이머), QR 안내문 인쇄, 접속 확인 |
+| 공개 범위 | 기본은 검색 제외(주소를 받은 사람만). **암호 보호**는 페이지와 교재 그림까지 브라우저에서 암호화하고, 안내 QR로 들어오면 바로 열려요. 교재 원본은 고를 때만 올려요 |
+| 참여 기능 연결 | 강사 계정에 직접: 구글 시트(50명 안팎) · Supabase(100명 안팎) · Cloudflare(큰 행사) · 학교 서버·NAS(Docker) · 인터넷 없는 교실(강사 노트북). lecpage 운영자는 참가자 기록을 보지 않아요 |
+| 공개하는 곳 | 앱에서 바로: **Vercel**(토큰 한 번, 다시 올려도 같은 주소) · GitHub Pages · Netlify. ZIP으로: Cloudflare(끌어 놓기)·학교 서버·USB. 사이트 크기와 연결해 둔 곳을 보고 알맞은 곳을 먼저 권해요. [안내서 15가지](skills/lecpage/references/deploy) |
+
+## 디자인
+
+정하는 순서는 **디자인(분위기) → 디자인 토큰 → 첫 화면 구성과 부품 변형 → 움직임 단계(0~3) → 자리별 효과 → 대표 효과 하나**예요. 연수 주제·분위기·교재 글꼴로 디자인을 고르고, 기관 색과 교재의 대표 색으로 토큰을 맞춰요. 눈에 띄는 효과는 연수마다 하나만 두고 나머지는 조용하게 둬요. 앱의 [디자인 둘러보기](https://yoorrard.github.io/lecpage/#/gallery)에서 12개 디자인과 52가지 효과가 실제로 움직이는 것을 볼 수 있어요.
+
+<!-- design:start -->
+| 디자인 | 첫 화면 | 글꼴(제목 · 본문) |
+|---|---|---|
+| 밤하늘 서사 `night-story` | 영화 첫 장면: 큰 제목과 아래 요약 띠 | 페이퍼로지 · 아스타 산스 |
+| 종이 워크북 `paper-workbook` | 오늘의 실습지 카드 | 프리젠테이션 · Pretendard |
+| 유리 실험실 `glass-lab` | 벤토 요약(일시·장소·실습·교재) | 에이투지체 · Wanted Sans |
+| 놀이터 `playground` | 포스터: 기울인 제목 상자와 도구 띠 | 케리스 케듀체 · SUIT |
+| 숲의 숨 `calm-forest` | 여백 많은 명조 구성 | 마루 부리 · 나눔휴먼 |
+| 공식 브리핑 `official-brief` | 공문 머리띠와 정보 표, 숫자 | 나눔스퀘어 네오 · Pretendard GOV |
+| 잉크 잡지 `editorial-ink` | 잡지 제호와 두 단 리드 | 함렛 · Noto Serif KR |
+| 도파민 팝 `retro-pop` | 스티커와 큰 글자 | 베이글 팻 원 · 페이퍼로지 |
+| 칠판 교실 `chalkboard` | 칠판과 오늘의 차례 | 학교안심 둥근미소 · 나눔스퀘어라운드 |
+| 설계도 `blueprint-tech` | 설계 도면: 모눈과 치수선 | IBM Plex Sans KR |
+| 형광 인쇄 `riso-zine` | 망점 인쇄물 | 가석 · 고딕 A1 |
+| 새벽빛 `sunrise-warm` | 초대장: 큰 날짜와 명조 제목 | 고운바탕 · LINE Seed Sans KR |
+
+색 조합 34 × 글꼴 46종(짝 25) × 효과 52가지를 자리 18곳에 골라 써요. **교재의 글꼴을 읽어 같은 글꼴(없으면 어울리는 무료 웹 글꼴)로** 만들어요.
+
+| 종류 | 효과(영문 이름) |
+|---|---|
+| 글자 11 | 마스크 글자 등장(Split reveal) · 움직이는 글자 굵기(Kinetic weight) · 스크롤 글 차오름(Scroll fill) · 왼쪽부터 또렷해지는 글자(Decode reveal) · 흐르는 그라데이션 글자(Gradient text) · 흐르는 띠(Marquee) · 숫자 올라가기(Count up) · 자모 타자(Hangul typewriter) · 형광펜 긋기(Highlight sweep) · 낱말 바꾸기(Word rotate) · 밑줄 차오름 링크(Link underline) |
+| 스크롤 10 | 조용한 떠오르기(Reveal up) · 마스크 사진 열기(Clip reveal) · 은은한 시차(Soft parallax) · 선 그리기·일정 레일(Line draw) · 진행 막대·단계 표시(Guided progress) · 고정 그림 스크롤리텔링(Sticky scrollytelling) · 쌓이는 카드(Stacking cards) · 가로 넘김(Horizontal snap) · 톤 여정(밤→새벽→낮)(Tone journey) · 사진 확대 통과(Zoom through) |
+| 반응 9 | 자석 버튼(Magnetic button) · 3D 기울기 카드(Tilt card) · 포인터 조명(Spotlight) · 따라오는 커서 고리(Cursor follower) · 복사 버튼 반응(Copy feedback) · 완료 축하(Confetti) · 누름 물결(Ripple) · 화면 전환 잇기(View transition) · 테두리 빛줄기(Border beam) |
+| 배경·질감 19 | 오로라(Aurora) · 메시 그라데이션(Mesh gradient) · 필름 그레인(Grain) · 원근 바닥 격자(Perspective grid) · 별밤(Starfield) · 연결 점망(Particle network) · 물결 점 격자(Dot grid) · 등고선 지형(Topographic lines) · 겹 물결(Waves) · 숨 쉬는 덩어리(Morphing blobs) · 빛망울(Bokeh) · 활동지 묶음(Paper stack) · 손그림 낙서·주석(Doodles & annotations) · 멤피스 도형(Memphis shapes) · 칠판(Chalkboard) · 셰이더 그라데이션(Shader gradient) · 빛나는 구(Glowing orb) · 리소 인쇄 망점(Risograph) · 설계도 모눈(Blueprint grid) |
+| 라이브러리 3 | 부드러운 휠 스크롤(Smooth scroll (Lenis)) · 고정 섹션 스크럽(GSAP ScrollTrigger scrub) · 점 구름 구체(WebGL)(Point-cloud sphere (OGL)) |
+<!-- design:end -->
+
+| 쓰는 기술 | |
+|---|---|
+| 레이아웃 | CSS Grid(벤토·비대칭 격자), `position: sticky`(고정 그림·쌓이는 카드), `scroll-snap`(가로 넘김), 컨테이너 쿼리 |
+| 움직임 | 스크롤 구동 애니메이션(`animation-timeline: view()`), IntersectionObserver, View Transitions API, `@property`, SVG 선 그리기, 가변 글꼴 굵기 |
+| 그래픽 | Canvas 2D, WebGL(OGL), `clip-path`·`mask`, `backdrop-filter`, `mix-blend-mode`. 바깥 라이브러리는 셋(GSAP ScrollTrigger·Lenis·OGL)뿐이고, 학교망에서 막히면 그 효과만 저절로 빠져요 |
+| 색·토큰 | OKLCH 12단계 색 램프, 밝게·어둡게 WCAG AA 자동 검사, DTCG 2025.10 형식 `tokens.json`, 사이트마다 `DESIGN.md` |
+| 배려 | 기기의 '동작 줄이기'와 사이트의 **가벼운 모드**를 따름. 실습·질문·교재 화면은 늘 차분하게. 사양이 낮은 기기는 한 단계 낮춰 재생 |
+
+'AI 티'를 막는 [디자인 규칙](skills/lecpage/references/design-quality.md)(알약 칩·겹친 상자·보라 그라데이션·세 칸 카드·옆 색띠 금지 등)과 자동 점검(`design-lint`)이 빌드마다 돌아요.
 
 ## Skill로 쓰면
-AI가 HTML을 직접 쓰지 않고, 정해진 엔진과 짧은 명령으로 만듭니다. 같은 교재로 사이트를 만들고 두 번 고칠 때 AI가 읽는 글은 약 1/12, 쓰는 글은 약 1/170로 줄었어요([조사](docs/research/skill-efficiency-2026-11.md)).
+
+AI가 HTML을 직접 쓰지 않고, 정해진 엔진과 짧은 명령으로 만들어요.
 
 | 명령 | 하는 일 |
 |---|---|
@@ -44,38 +96,42 @@ AI가 HTML을 직접 쓰지 않고, 정해진 엔진과 짧은 명령으로 만�
 | `brief` · `patch` | 짧은 요약을 읽고, 바꿀 곳만 작은 패치로 고치기 |
 | `options` | 디자인 3안을 그림 한 장으로 비교 |
 | `review dist` | 강사가 사이트에 펜·네모로 표시한 수정 요청을 파일로 받기 |
-| `qa` · `doctor` | 휴대폰·PC × 밝게·어둡게 점검(디자인·문구 검사 포함) · 환경 점검 |
+| `infra` | 인원·기능·네트워크로 참여 기능 연결 방식과 올릴 곳 고르기 |
+| `qa` · `doctor` | 휴대폰·태블릿·PC × 밝게·어둡게 점검(디자인·문구 검사 포함) · 환경 점검 |
 
 ## 저장소 구조
 ```
 skills/lecpage/        Agent Skill (자체 완결: SKILL.md, references, engine, scripts, backends, templates, examples)
   engine/src/          설계도 검증·결정 규칙·디자인 토큰·렌더러·교재 해석·AI 프롬프트 (브라우저+Node 공용)
-  engine/runtime/      생성 사이트에 들어가는 런타임(효과 fx/, 실시간 live/, 콘솔·프로젝터)
+  engine/runtime/      생성 사이트에 들어가는 실행 파일(효과 fx/, 실시간 live/, 강사 화면·발표 화면)
   backends/            supabase · apps-script · cloudflare · node-server
 app/                   웹앱 (Vite + Preact, 정적 배포)
-docs/                  기획서, 아키텍처 계약, 운영 결정, 조사 자료
+docs/                  기획서, 아키텍처 계약, 운영 결정, 약관, 조사 자료
 ```
 
 ## 개발
 ```bash
 npm test                       # 엔진 테스트
-npm run examples               # 견본 사이트 2개 빌드(.out/)
+npm run examples               # 예시 사이트 2개 빌드(.out/)
 npm --prefix app install
 npm run app:dev                # 웹앱 개발 서버
-node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/forest-story.blueprint.json -o dist
+node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/sel-story.blueprint.json -o dist
 node skills/lecpage/scripts/lecpage.mjs qa dist
 ```
 
 ## 문서
 - [기획서](docs/plan.md) · [아키텍처와 계약](docs/architecture.md) · [웹앱 운영 안내(운영자용)](docs/operations.md) · [보안 정책](SECURITY.md)
-- 조사: [2026-11 점검 결정 기록](docs/research/2026-11-review.md) · [사이트 구성](docs/research/site-content-2026-11.md) · [AI 연결](docs/research/ai-connection-2026-11.md) · [수정 요청](docs/research/review-chat-2026-11.md) · [Skill 효율](docs/research/skill-efficiency-2026-11.md) · [앱 운영 방식](docs/research/app-operations.md) · [호스팅](docs/research/hosting.md) · [모션·그래픽](docs/research/motion-graphics.md) · [참여 플랫폼](docs/research/platforms.md)
+- [이용약관](docs/legal/terms.md) · [개인정보 처리방침](docs/legal/privacy.md) · [참가자 개인정보 안내 가이드(강사용)](docs/legal/participant-privacy-guide.md)
+- 조사: [호스팅 재조사 2026-11](docs/research/hosting-2026-11.md) · [글꼴](docs/research/fonts-2026-11.md) · [미리보기·반응형](docs/research/preview-responsive-2026-11.md) · [2026-11 점검 결정 기록](docs/research/2026-11-review.md) · [사이트 구성](docs/research/site-content-2026-11.md) · [AI 연결](docs/research/ai-connection-2026-11.md) · [수정 요청](docs/research/review-chat-2026-11.md) · [Skill 효율](docs/research/skill-efficiency-2026-11.md) · [앱 운영 방식](docs/research/app-operations.md) · [모션·그래픽](docs/research/motion-graphics.md) · [참여 플랫폼](docs/research/platforms.md)
 
 ## 라이선스
 | 무엇 | 라이선스 | 뜻 |
 |---|---|---|
 | 엔진·Skill·웹앱(기본) | **Apache-2.0** | 누구나 쓰고 고치고 배포할 수 있어요. 특허 사용 허락이 명시돼 있고, 이름·로고 권리는 넘기지 않아요 |
-| 만든 사이트에 복사되는 실행 파일(`engine/runtime`), 실시간 서버(`backends`), 배포 견본(`templates`) | **MIT-0** | 출처 표시 의무도 없어요. 만든 연수 사이트에 라이선스 문구를 넣지 않아도 돼요 |
+| 만든 사이트에 복사되는 실행 파일(`engine/runtime`), 실시간 서버(`backends`), 배포 설정 파일(`templates`) | **MIT-0** | 출처 표시 의무도 없어요. 만든 연수 사이트에 라이선스 문구를 넣지 않아도 돼요 |
 | lecpage로 만든 사이트·문서 | 만든 사람의 것 | lecpage 라이선스와 무관해요 |
 | 이름 "lecpage"와 마스코트 로고 | 상표 정책 | [TRADEMARKS.md](TRADEMARKS.md) |
 
-함께 쓰는 라이브러리·글꼴은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 보세요.
+함께 쓰는 라이브러리·글꼴은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를, 앱에 묶인 라이브러리의 라이선스 전문은 앱의 `licenses.txt`를 보세요.
+
+© 2026 lecpage 기여자

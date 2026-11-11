@@ -1,34 +1,51 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Field } from '../../components/ui.jsx';
+import { ItemEditor, hasItemEditor, useUndoBurst } from '../../components/ItemEditor.jsx';
 import { E } from '../../lib/engine.js';
 import { toast } from '../../lib/util.js';
 
+// + 섹션 추가: 비어 있지만 바로 고칠 수 있는 시작 내용. 제목은 엔진 기본값(intake.js·렌더러)과 같게.
+// 빈 항목은 채우기 전까지 사이트에 나오지 않아요(엔진이 뺌). 지어낸 자리 글('질문'·'보기 1'·'https://')은 넣지 않음.
 const TEMPLATES = {
-  message: { title: '', style: 'statement', text: '핵심 메시지를 한 문장으로 써 주세요.' },
-  schedule: { title: '일정', items: [{ start: '15:00', end: '15:20', title: '여는 이야기' }] },
-  readiness: { title: '시작 전에 준비해요', items: [{ label: '개인 구글 계정으로 로그인' }], checks: [] },
-  tools: { title: '함께 쓰는 도구', items: [{ name: 'Gemini', url: 'https://gemini.google.com/' }] },
-  prompts: { title: '프롬프트 모음', items: [{ title: '예시', text: '이 내용을 초등 5학년이 이해하도록 쉽게 설명해줘' }] },
-  qa: { title: '궁금한 점을 남겨 주세요' }, board: { title: '함께 나누는 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }] },
-  poll: { title: '함께 답해요', items: [{ id: 'q1', question: '오늘 연수에서 가장 해 보고 싶은 것은?', kind: 'word', options: [] }] },
-  quiz: { title: '복습 퀴즈', items: [{ q: '질문', options: ['보기 1', '보기 2'], answer: 0, explain: '' }] },
-  faq: { title: '자주 묻는 질문', items: [{ q: '질문', a: '답' }] }, glossary: { title: '용어 풀이', items: [{ term: '용어', desc: '설명' }] },
-  materials: { title: '연수 자료', items: [{ title: '자료 이름', href: 'https://' }] }, survey: { title: '만족도 조사에 참여해 주세요', url: '', qr: true },
-  closing: { text: '마지막 한 문장', thanks: '함께해 주셔서 감사합니다.' }, reflection: { title: '나의 기록', prompts: ['오늘 가장 기억에 남는 것'] },
-  attendance: { title: '출석 확인' }, text: { title: '', md: '자유롭게 써 주세요.' }, glance: { title: '한눈에 보기', items: [{ value: '3', label: '실습' }] },
-  video: { title: '영상', items: [{ title: '영상 제목', url: 'https://' }] }, instructor: { title: '강사 소개' },
-  goals: { title: '연수 목표', items: ['연수를 마치면 할 수 있는 것을 한 줄로 써 주세요'], who: '' },
-  followup: { title: '연수가 끝난 뒤', items: [{ title: '다시 보기', desc: '연수 자료와 영상을 다시 볼 수 있어요.', url: '', kind: 'recording' }], completion: '' },
+  message: () => ({ title: '', style: 'statement', text: '' }),
+  goals: () => ({ title: '연수 목표', items: [''], who: '' }),
+  glance: () => ({ title: '한눈에 보기', items: [{ value: '', label: '', note: '' }] }),
+  steps5: () => ({ title: '', items: [{ word: '', desc: '' }] }),
+  outline: () => ({ title: '오늘의 차례', items: [{ part: '', title: '', desc: '', tags: [] }] }),
+  schedule: () => ({ title: '일정', items: [{ start: '', end: '', title: '', desc: '' }] }),
+  readiness: () => ({ title: '시작 전에 준비해요', items: [{ label: '', detail: '', url: '' }], checks: [] }),
+  deck: () => ({ title: '연수 교재', slides: [] }),
+  stations: () => ({ title: '실습', items: [{ id: 'st-' + Math.random().toString(36).slice(2, 6), name: '', title: '', steps: [], prompts: [], outcome: '' }] }),
+  tools: () => ({ title: '도구 모음', items: [{ name: '', url: '', desc: '' }] }),
+  prompts: () => ({ title: '프롬프트 모음', items: [{ title: '', text: '', tags: [] }] }),
+  qa: () => ({ title: '질문' }),
+  board: () => ({ title: '나눔 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }] }),
+  poll: () => ({ title: '투표', items: [{ id: 'word', question: '오늘 연수를 한 낱말로 말하면?', kind: 'word', options: [] }] }),
+  quiz: () => ({ title: '복습 퀴즈', items: [{ q: '', options: ['', ''], answer: 0, explain: '' }] }),
+  materials: () => ({ title: '연수 자료', items: [{ title: '', href: '', desc: '' }] }),
+  instructor: () => ({ title: '강사 소개' }),
+  speakers: () => ({ title: '연사', items: [{ name: '', org: '', role: '', talk: '' }] }),
+  sessions: () => ({ title: '차시', items: [{ date: '', title: '', desc: '', links: [] }] }),
+  survey: () => ({ title: '만족도 조사', url: '', qr: true }),
+  followup: () => ({ title: '연수 후 안내', items: [{ title: '', url: '', desc: '' }], completion: '' }),
+  closing: () => ({ text: '', thanks: '함께해 주셔서 감사합니다.' }),
+  faq: () => ({ title: '자주 묻는 질문', items: [{ q: '', a: '' }] }),
+  glossary: () => ({ title: '용어 풀이', items: [{ term: '', desc: '' }] }),
+  video: () => ({ title: '영상', items: [{ title: '', url: '' }] }),
+  gallery: () => ({ title: '사진', items: [{ src: '', caption: '' }] }),
+  reflection: () => ({ title: '나의 기록', prompts: ['오늘 가장 기억에 남는 것', '다음 주 수업에서 해 볼 한 가지'] }),
+  attendance: () => ({ title: '출석 확인' }),
+  text: () => ({ title: '', md: '' }),
 };
 
 const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text'];
 export const isAdvanced = () => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } };
 
-/** 내용 탭: 사이트를 이루는 칸(섹션) 목록과 칸별 고치기 */
+/** 내용 탭: 사이트를 이루는 섹션 목록과 섹션별 고치기 */
 export function ContentPanel({ p, update, pushUndo, focusId }) {
   const bp = p.blueprint;
   const [open, setOpen] = useState(null);
-  // 미리보기에서 고른 칸을 열고 보이게
+  // 미리보기에서 고른 섹션을 열고 보이게
   useEffect(() => {
     if (!focusId) return; const id = focusId.split(':')[0]; setOpen(id);
     setTimeout(() => { const el = document.querySelector(`[data-sec-id="${CSS.escape(id)}"]`); el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); el?.querySelector('.sec-open')?.focus({ preventScroll: true }); }, 60);
@@ -36,22 +53,25 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
   const [addType, setAddType] = useState('');
   const sections = bp.sections || [];
   const setSections = (next) => update((cur) => ({ blueprint: { ...cur.blueprint, sections: next } }));
-  const setSec = (i, patch) => setSections(sections.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+  // 지금 값(cur)에 합침: 한 번에 두 번 고쳐도 앞의 것이 지워지지 않게
+  const setSec = (i, patch) => update((cur) => ({ blueprint: { ...cur.blueprint, sections: (cur.blueprint.sections || []).map((s, k) => (k === i ? { ...s, ...patch } : s)) } }));
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= sections.length) return; const n = sections.slice(); [n[i], n[j]] = [n[j], n[i]]; setSections(n); };
   const toggle = (i) => { setSec(i, { hidden: !sections[i].hidden }); };
-  const remove = (i) => { pushUndo?.('칸 빼기'); setSections(sections.filter((_, k) => k !== i)); toast('칸을 뺐어요. [되돌리기]로 되살릴 수 있어요.'); };
-  const add = (t) => { if (!t) return; const id = t + '-' + Math.random().toString(36).slice(2, 6); const def = E.SECTION_DEFS[t]; const n = sections.slice(); const closeIdx = n.findIndex((s) => s.type === 'closing'); n.splice(closeIdx < 0 ? n.length : closeIdx, 0, { id, type: t, nav: def.nav, ...JSON.parse(JSON.stringify(TEMPLATES[t] || {})) }); setSections(n); setOpen(id); setAddType(''); toast(`${def.label} 칸을 추가했어요.`); };
+  const remove = (i) => { pushUndo?.('섹션 빼기'); setSections(sections.filter((_, k) => k !== i)); toast('섹션을 뺐어요. [되돌리기]로 되살릴 수 있어요.'); };
+  const add = (t) => { if (!t) return; const id = t + '-' + Math.random().toString(36).slice(2, 6); const def = E.SECTION_DEFS[t]; const n = sections.slice(); const closeIdx = n.findIndex((s) => s.type === 'closing'); pushUndo?.('섹션 추가'); n.splice(closeIdx < 0 ? n.length : closeIdx, 0, { id, type: t, nav: def.nav, ...(TEMPLATES[t]?.() || {}) }); setSections(n); setOpen(id); setAddType(''); toast(`${def.label} 섹션을 추가했어요.`); };
   const meta = bp.meta || {};
   const v = E.validate(bp);
+  // 첫 화면 버튼이 갈 곳(섹션 이름으로 고르기)
+  const anchors = sections.filter((x) => x.type !== 'hero' && !x.hidden && x.id).map((x) => ({ value: '#' + x.id, label: x.title || E.SECTION_DEFS[x.type]?.label || x.type }));
   return (
     <div class="stack">
-      <p class="small muted">칸을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
+      <p class="small muted">섹션을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
       <ol class="sec-list">
         {sections.map((s, i) => {
           const def = E.SECTION_DEFS[s.type] || { label: s.type };
           const isOpen = open === s.id;
           return (
-            <li class="sec-item" data-sec-id={s.id} data-off={s.hidden ? 'true' : undefined} data-picked={open === s.id ? 'true' : undefined}>
+            <li key={s.id || i} class="sec-item" data-sec-id={s.id} data-off={s.hidden ? 'true' : undefined} data-picked={open === s.id ? 'true' : undefined}>
               <div class="sec-row">
                 <div class="row" style={{ gap: '2px' }}>
                   <button class="icon-btn" aria-label={`${def.label} 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
@@ -61,17 +81,17 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
                   <div class="type">{def.label}{s.nav ? ` · 메뉴 "${s.nav}"` : ''}{def.live ? ' · 참여 기능' : ''}{s.hidden ? ' · 숨김' : ''}</div>
                   <div class="ttl">{s.type === 'hero' ? (s.title || meta.title) : (s.title || s.text || def.label)}</div>
                 </button>
-                <button class="icon-btn" onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 보이기` : `${def.label} 숨기기`} title={s.hidden ? '보이기' : '숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
+                <button class="icon-btn" onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 섹션 보이기` : `${def.label} 섹션 숨기기`} title={s.hidden ? '섹션 보이기' : '섹션 숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
               </div>
-              {isOpen && <SectionEditor s={s} set={(patch) => setSec(i, patch)} onRemove={s.type === 'hero' ? null : () => remove(i)} />}
+              {isOpen && <SectionEditor s={s} set={(patch) => setSec(i, patch)} pushUndo={pushUndo} anchors={s.type === 'hero' ? anchors : undefined} onRemove={s.type === 'hero' ? null : () => remove(i)} />}
             </li>
           );
         })}
       </ol>
       <div class="row">
-        <select class="input" style={{ width: '100%' }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 칸 고르기">
-          <option value="">+ 칸 추가…</option>
-          <optgroup label="자주 쓰는 칸">{COMMON.map((t) => <option value={t}>{E.SECTION_DEFS[t].label} — {E.SECTION_DEFS[t].desc}</option>)}</optgroup>
+        <select class="input" style={{ width: '100%' }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 섹션 고르기">
+          <option value="">+ 섹션 추가…</option>
+          <optgroup label="자주 쓰는 섹션">{COMMON.map((t) => <option value={t}>{E.SECTION_DEFS[t].label} — {E.SECTION_DEFS[t].desc}</option>)}</optgroup>
           <optgroup label="더 보기">{Object.entries(E.SECTION_DEFS).filter(([t]) => t !== 'hero' && !COMMON.includes(t)).map(([t, d]) => <option value={t}>{d.label} — {d.desc}</option>)}</optgroup>
         </select>
       </div>
@@ -80,57 +100,37 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
   );
 }
 
-function SectionEditor({ s, set, onRemove }) {
+const isTyping = (el) => /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName) && !/^(checkbox|radio)$/.test(el.type);
+
+function SectionEditor({ s, set, onRemove, pushUndo, anchors }) {
+  const def = E.SECTION_DEFS[s.type] || { label: s.type };
+  // 되돌리기: 입력 칸에 들어와 처음 고칠 때 한 번만 저장(글자마다 쌓이지 않게)
+  const u = useUndoBurst(pushUndo, def.label);
+  const put = (patch) => { u.touch(); set(patch); };
   const [json, setJson] = useState(null);
   const common = (
     <div class="form-grid">
-      <Field label="제목"><input value={s.title || ''} onInput={(e) => set({ title: e.target.value })} /></Field>
-      <Field label="메뉴 이름" hint="비우면 메뉴에 안 보여요"><input value={s.nav || ''} maxLength={12} onInput={(e) => set({ nav: e.target.value })} /></Field>
+      <Field label="제목"><input value={s.title || ''} maxLength={160} onInput={(e) => put({ title: e.target.value })} /></Field>
+      <Field label="메뉴 이름" hint="비우면 메뉴에 안 보여요"><input value={s.nav || ''} maxLength={12} onInput={(e) => put({ nav: e.target.value })} /></Field>
     </div>
   );
   let body = null;
-  if (s.type === 'hero') body = <><Field label="큰 제목"><textarea rows={2} value={s.title || ''} onInput={(e) => set({ title: e.target.value })} /></Field><Field label="부제"><input value={s.subtitle || ''} onInput={(e) => set({ subtitle: e.target.value })} /></Field></>;
-  else if (s.type === 'message' || s.type === 'closing') body = <Field label="문장"><textarea rows={3} value={s.text || ''} onInput={(e) => set({ text: e.target.value })} /></Field>;
-  else if (s.type === 'survey') body = <SurveyEditor s={s} set={set} />;
-  else if (s.type === 'stations') body = <Stations s={s} set={set} />;
-  else if (s.lead !== undefined || ['qa', 'board', 'tools', 'materials', 'deck', 'outline', 'readiness'].includes(s.type)) body = <Field label="안내 문장"><textarea rows={2} value={s.lead || ''} onInput={(e) => set({ lead: e.target.value })} /></Field>;
+  if (s.type === 'hero') body = <><Field label="큰 제목"><textarea rows={2} value={s.title || ''} maxLength={160} onInput={(e) => put({ title: e.target.value })} /></Field><Field label="부제"><input value={s.subtitle || ''} maxLength={400} onInput={(e) => put({ subtitle: e.target.value })} /></Field><ItemEditor s={s} set={put} u={u} anchors={anchors} /></>;
+  else if (s.type === 'survey') body = <SurveyEditor s={s} set={put} />;
+  else if (hasItemEditor(s.type)) body = <ItemEditor s={s} set={put} u={u} anchors={anchors} />;
+  else body = <Field label="안내 문장"><textarea rows={2} value={s.lead || ''} maxLength={300} onInput={(e) => put({ lead: e.target.value })} /></Field>;
   return (
-    <div class="sec-body">
+    <div class="sec-body" onFocusCapture={(e) => { if (isTyping(e.target)) u.arm(); }}>
       {s.type !== 'hero' && s.type !== 'closing' && common}
       {body}
       {isAdvanced() && <details onToggle={(e) => { if (e.target.open) setJson(JSON.stringify(s, null, 2)); }}>
         <summary class="small">고급: 코드로 고치기(JSON)</summary>
         {json !== null && <div class="stack" style={{ marginTop: '8px' }}>
-          <textarea class="input code" rows={12} value={json} onInput={(e) => setJson(e.target.value)} aria-label="칸 내용 JSON" />
-          <div><button class="btn btn-sm" onClick={() => { try { const o = JSON.parse(json); set({ ...o, id: s.id, type: s.type }); toast('반영했어요.'); } catch { toast('JSON 형식이 맞지 않아요.'); } }}>반영</button></div>
+          <textarea class="input code" rows={12} value={json} onInput={(e) => setJson(e.target.value)} aria-label="섹션 내용 JSON" />
+          <div><button class="btn btn-sm" onClick={() => { try { const o = JSON.parse(json); u.now('JSON 반영'); set({ ...o, id: s.id, type: s.type }); toast('반영했어요.'); } catch { toast('JSON 형식이 맞지 않아요.'); } }}>반영</button></div>
         </div>}
       </details>}
-      {onRemove && <div><button class="btn btn-sm btn-danger" onClick={onRemove}>이 칸 빼기</button></div>}
-    </div>
-  );
-}
-
-function Stations({ s, set }) {
-  const items = s.items || [];
-  const setItem = (i, patch) => set({ items: items.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
-  return (
-    <div class="mini-list">
-      {items.map((it, i) => (
-        <details class="mini-item">
-          <summary><b>{String(i + 1).padStart(2, '0')} {it.name || it.title}</b> <span class="small muted">단계 {it.steps?.length || 0} · 프롬프트 {it.prompts?.length || 0}</span></summary>
-          <div class="stack" style={{ marginTop: '8px' }}>
-            <div class="form-grid">
-              <Field label="목차 이름"><input value={it.name || ''} maxLength={30} onInput={(e) => setItem(i, { name: e.target.value })} /></Field>
-              <Field label="제목"><input value={it.title || ''} onInput={(e) => setItem(i, { title: e.target.value })} /></Field>
-            </div>
-            <Field label="단계(한 줄에 하나)"><textarea rows={4} value={(it.steps || []).join('\n')} onInput={(e) => setItem(i, { steps: e.target.value.split('\n').filter((x) => x.trim()) })} /></Field>
-            {(it.prompts || []).map((pr, k) => (
-              <Field label={`프롬프트 ${k + 1}: ${pr.title || ''}`}><textarea class="code" rows={3} value={pr.text} onInput={(e) => setItem(i, { prompts: it.prompts.map((x, j) => (j === k ? { ...x, text: e.target.value } : x)) })} /></Field>
-            ))}
-            <Field label="확인 문장(여기까지 해 봤나요?)"><input value={it.outcome || ''} onInput={(e) => setItem(i, { outcome: e.target.value })} /></Field>
-          </div>
-        </details>
-      ))}
+      {onRemove && <div><button class="btn btn-sm btn-danger" onClick={onRemove}>이 섹션 빼기</button></div>}
     </div>
   );
 }

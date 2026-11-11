@@ -3,18 +3,17 @@ import { projects, blobs } from './db.js';
 import { uid } from './util.js';
 import { zipFiles } from '@engine/src/zip-write.js';
 
-// 견본 설계도는 필요할 때만 불러옵니다(첫 화면을 가볍게)
-export const EXAMPLE_IDS = ['data-lab', 'forest-story'];
+// 예시 설계도는 필요할 때만 불러옵니다(첫 화면을 가볍게)
 export async function loadExample(id) {
-  const m = id === 'forest-story'
-    ? await import('../../../skills/lecpage/examples/forest-story.blueprint.json')
+  const m = id === 'sel-story'
+    ? await import('../../../skills/lecpage/examples/sel-story.blueprint.json')
     : await import('../../../skills/lecpage/examples/data-lab.blueprint.json');
   return JSON.parse(JSON.stringify(m.default));
 }
 
 export const DEFAULT_INFO = {
   title: '', subtitle: '', organizer: '', date: '', start: '', end: '', venue: '', mode: 'offline',
-  size: 25, format: 'workshop', features: [], devices: ['laptop'], network: 'good',
+  size: 25, format: '', features: [], devices: ['laptop'], network: 'good',
   minor: false, admin: 'school', commercial: false, completionRate: 80,
   surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '', contact: '', joinUrl: '',
 };
@@ -24,7 +23,7 @@ const pending = new Map();
 export function setPendingFiles(id, files) { pending.set(id, Array.from(files || [])); }
 export function takePendingFiles(id) { const f = pending.get(id) || []; pending.delete(id); return f; }
 
-/** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·공유하기) */
+/** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·공개하기) */
 export const stageOf = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : 3);
 
 export async function newProject(kind = 'blank', exampleId = 'data-lab') {
@@ -57,7 +56,6 @@ export async function duplicateProject(p0) {
   return p;
 }
 
-export async function saveProject(p) { await projects.put(p); return p; }
 
 export async function exportProjectFile(p) {
   const assets = await blobs.all(p.id);

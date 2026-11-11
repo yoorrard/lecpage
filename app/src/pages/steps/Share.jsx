@@ -7,20 +7,18 @@ import { LiveSetup } from '../../components/LiveSetup.jsx';
 import { projectAssets } from '../../components/Preview.jsx';
 import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
-import { deployGitHub, deployNetlify, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL } from '../../lib/deploy.js';
-import { loadKey, saveKey, forgetKey } from '../../lib/ai.js';
-import { saveFile, safeName, toast, copy, randomKey } from '../../lib/util.js';
+import { Publish } from '../../components/Publish.jsx';
+import { probeSite } from '../../lib/deploy.js';
+import { saveFile, safeName, toast, copy } from '../../lib/util.js';
 
-const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 const LIVE_READY = (live, ok) => ['sheets', 'supabase', 'http'].includes(live?.provider) && live?.url && ok;
-const asciiSlug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 
 function checks(p) {
   const bp = p.blueprint; const v = E.validate(bp); const b = v.blueprint; const out = [];
   if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(첫 화면·일정에 보여요).', go: 1 });
   const deck = b.sections.find((s) => s.type === 'deck');
-  if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 넘겨 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
-  if (b.live.features.length && !LIVE_READY(b.live, p.liveOk)) out.push({ k: 'warn', t: '참여 기능이 아직 연결되지 않았어요. 아래에서 10분이면 연결돼요.' });
+  if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
+  if (b.live.features.length && !LIVE_READY(b.live, p.liveOk)) out.push({ k: 'warn', t: '참여 기능이 아직 연결되지 않았어요. 맨 아래에서 10분이면 연결돼요.' });
   if (b.access.mode === 'password' && !p.sitePassword) out.push({ k: 'bad', t: '암호를 정해 주세요(누가 볼 수 있나요?).' });
   for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
   if (!out.length) out.push({ k: 'ok', t: '확인할 문제가 없어요.' });
@@ -44,7 +42,8 @@ export function StepShare({ p, update, go }) {
   const [prog, setProg] = useState(null);
   const [ask, setAsk] = useState(null); // 참여 기능 미연결로 올릴 때 확인
   const [showPw, setShowPw] = useState(false);
-  if (!bp) return <><StepHead title="공유하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
+  const [liveOpen, setLiveOpen] = useState(false);
+  if (!bp) return <><StepHead title="공개하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
   const liveReady = LIVE_READY(bp.live, p.liveOk);
@@ -64,7 +63,7 @@ export function StepShare({ p, update, go }) {
     const r = await buildSite(b, assets, { ...p.info, skill: 'click' });
     if (r.errors.length) throw new Error(r.errors.map((e) => e.message_ko).join(' '));
     let files = r.files;
-    if (b.access.mode === 'password') {
+    if (b.access?.mode === 'password') {
       if (!p.sitePassword || [...p.sitePassword].length < 4) throw new Error('암호를 4자 이상 정해 주세요.');
       setProg({ step: '내용 잠그는 중', pct: 5 });
       files = await E.protectSite(files, p.sitePassword, { runtime: await loadRuntime(), title: b.meta.title });
@@ -79,15 +78,21 @@ export function StepShare({ p, update, go }) {
     catch (e) { toast(e.message); }
     setBusy(''); setProg(null);
   }
+  /** 강사용 파일 묶음: 운영 안내(HTML·MD), 디자인 규칙(DESIGN.md), 설계도(다시 고치거나 AI에게 줄 때). 사이트에는 넣지 않음 */
   async function teacherDoc() {
-    try { const r = await buildFiles(); saveFile(safeName(p.title) + '_운영안내.html', mdToHtml(r.teacher['운영안내.md'] || '', p.title), 'text/html'); }
-    catch (e) { toast(e.message); }
+    try {
+      const r = await buildFiles(); const t = r.teacher || {};
+      const files = { '운영안내.html': mdToHtml(t['운영안내.md'] || '', p.title) };
+      for (const [k, v] of Object.entries(t)) files[k] = v;
+      saveFile(safeName(p.title) + '_강사용.zip', E.zipFiles(files), 'application/zip');
+      toast('강사용 파일을 내려받았어요.');
+    } catch (e) { toast(e.message); }
   }
   function done(url, patch) { update((cur) => ({ deploy: { ...(cur.deploy || {}), ...patch, lastUrl: url, at: Date.now() }, blueprint: { ...cur.blueprint, meta: { ...cur.blueprint.meta, siteUrl: url } } })); }
 
   return (
     <>
-      <StepHead title="공유하기" desc="누가 볼지 정하고, 참가자에게 보낼 주소를 만들어요." />
+      <StepHead title="공개하기" desc="누가 볼지 정하고 [공개하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요." />
       {p.deploy?.lastUrl && <Success p={p} />}
 
       <Sheet>
@@ -110,36 +115,27 @@ export function StepShare({ p, update, go }) {
           )}
           <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
 
-          {liveOn && <><h2 class="h-sub sep" id="live-setup">참여 기능 연결 <span class="small muted">{bp.live.features.length}개 켜짐</span></h2><LiveSetup p={p} update={update} /></>}
-
-          <h2 class="h-sub sep">참가자에게 보낼 주소 만들기</h2>
+          <h2 class="h-sub sep">어디에 공개할까요?</h2>
           {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
-          <Netlify p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} />
-          <details>
-            <summary><b>GitHub Pages에 올리기</b> <span class="small muted">무료 · 저장소가 공개돼요</span></summary>
-            <GitHub p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} />
-          </details>
-          <details>
-            <summary><b>파일로 받기(ZIP)</b> <span class="small muted">학교 서버·USB에 올릴 때</span></summary>
-            <div class="stack" style={{ marginTop: '10px' }}>
-              <div><button class="btn" disabled={!!busy} onClick={() => guard(zip)}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button></div>
-              <ul class="small" style={{ display: 'grid', gap: '6px', margin: 0, paddingLeft: '1.2em' }}>
-                <li><a href={`${DOCS}/cloudflare.md`} target="_blank" rel="noopener">Cloudflare</a>: 압축 푼 폴더를 끌어다 놓아요. 큰 연수에 좋아요.</li>
-                <li><a href={`${DOCS}/netlify.md`} target="_blank" rel="noopener">Netlify Drop</a>: 계정 없이 끌어다 놓아요. 1시간 안에 계정을 연결해야 해요.</li>
-                <li><a href={`${DOCS}/own-server-nginx-caddy.md`} target="_blank" rel="noopener">학교·기관 서버</a> · <a href={`${DOCS}/nas-synology.md`} target="_blank" rel="noopener">NAS</a> · <a href={`${DOCS}/aws-s3-cloudfront.md`} target="_blank" rel="noopener">AWS</a> · <a href={`${DOCS}/local-lan-classroom.md`} target="_blank" rel="noopener">인터넷 없는 교실</a> · <a href={`${DOCS}/zip-usb-offline.md`} target="_blank" rel="noopener">USB</a></li>
-              </ul>
+          <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} />
+          <p class="small muted">공개하면 <a href="#/help/terms">이용약관</a>에 따라 올린 내용은 올린 분이 책임져요. 교재의 저작권과 개인정보를 확인해 주세요.</p>
+          <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 받기(ZIP)</button><span class="small muted">운영 안내·디자인 규칙·설계도. 사이트에는 올라가지 않아요.</span></div>
+          {liveOn && <details class="more" id="live-setup" open={liveOpen} onToggle={(e) => setLiveOpen(e.target.open)}>
+            <summary><b>참여 기능 연결</b><span class="small muted">{bp.live.features.length}개 켜짐 · {liveReady ? '연결됨' : '아직 연결 안 됨'}</span></summary>
+            <div class="stack more-body">
+              <p class="small muted">질문·투표 같은 참여 기능은 강사의 구글 시트나 Supabase에 연결해야 참가자끼리 이어져요. 연결하지 않아도 사이트는 공개할 수 있어요.</p>
+              <LiveSetup p={p} update={update} />
             </div>
-          </details>
-          <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={teacherDoc}>강사용 운영 안내 받기</button><span class="small muted">연수 전날 할 일과 강사 화면 쓰는 법. 사이트에는 올라가지 않아요.</span></div>
+          </details>}
         </div>
       </Sheet>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
 
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
         <h2 class="h-sub">참여 기능이 아직 연결되지 않았어요</h2>
-        <p>지금 올리면 질문·막혔어요 같은 기능이 이 컴퓨터 밖에서는 동작하지 않아요. 연결은 10분이면 돼요.</p>
+        <p>지금 올리면 질문·도움 요청 같은 기능이 이 컴퓨터 밖에서는 동작하지 않아요. 연결은 10분이면 돼요.</p>
         <div class="btn-row">
-          <button class="btn btn-primary" onClick={() => { setAsk(null); document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }}>먼저 연결할게요</button>
+          <button class="btn btn-primary" onClick={() => { setAsk(null); setLiveOpen(true); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); }}>먼저 연결할게요</button>
           <button class="btn" onClick={() => { const run = ask; setAsk(null); run({ liveOff: true }); }}>참여 기능 없이 올리기</button>
         </div>
       </Dialog>
@@ -153,69 +149,20 @@ function friendlyPassword() {
   return `${W[b[0] % W.length]}${W[b[1] % W.length]}${String(1000 + (b[2] % 9000))}`;
 }
 
-function useToken(kind) {
-  const [token, setToken] = useState('');
-  const [remember, setRemember] = useState(false);
-  useEffect(() => { loadKey('deploy-' + kind).then(({ key, remembered }) => { if (key) { setToken(key); setRemember(remembered); } }); }, []);
-  return { token, setToken, remember, setRemember, save: () => saveKey('deploy-' + kind, token, remember), forget: async () => { await forgetKey('deploy-' + kind); setToken(''); toast('토큰을 지웠어요.'); } };
-}
-
-function Netlify({ p, busy, setBusy, setProg, buildFiles, guard, done }) {
-  const t = useToken('netlify');
-  const again = !!p.deploy?.netlify?.siteId;
-  async function run(opts = {}) {
-    setBusy('nl'); setProg({ step: '사이트 만드는 중', pct: 2 });
-    try {
-      await t.save();
-      const r = await buildFiles(opts);
-      const out = await deployNetlify({ token: t.token, siteId: p.deploy?.netlify?.siteId, zip: E.zipFiles(r.files), onProgress: setProg });
-      done(out.url, { netlify: { siteId: out.siteId, url: out.url } });
-      toast(again ? '새 버전을 같은 주소에 올렸어요.' : '주소를 만들었어요!'); window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e) { toast('올리지 못했어요: ' + e.message); }
-    setBusy(''); setProg(null);
-  }
-  return (
-    <div class="stack">
-      <div class="spread"><b>Netlify로 주소 만들기 <span class="tag tag-lav">추천</span></b><span class="small muted">무료 · 다시 올려도 같은 주소</span></div>
-      {!t.token && <ol class="how small"><li><a href="https://app.netlify.com/signup" target="_blank" rel="noopener">Netlify</a>에 가입해요(구글 계정 가능).</li><li><a href={NETLIFY_TOKEN_URL} target="_blank" rel="noopener">토큰 페이지</a>에서 <b>New access token</b> → 이름 lecpage → <b>Generate token</b>을 누르고 토큰을 복사해요.</li><li>아래에 붙여 넣고 [주소 만들기]를 눌러요.</li></ol>}
-      <Field label="Netlify 토큰"><input type="password" autoComplete="off" value={t.token} onInput={(e) => t.setToken(e.target.value.trim())} placeholder="nfp_…" /></Field>
-      <label class="check"><input type="checkbox" checked={t.remember} onChange={(e) => t.setRemember(e.target.checked)} /><span>이 기기에서 기억하기 <span class="small muted">다음부터 [다시 올리기]만 누르면 돼요.</span></span></label>
-      <div class="btn-row"><button class="btn btn-primary btn-lg" disabled={!t.token || !!busy} onClick={() => guard(run)}>{busy === 'nl' ? '올리는 중…' : again ? '바뀐 내용 다시 올리기' : '주소 만들기'}</button>{t.token && <button class="btn btn-sm btn-quiet" onClick={t.forget}>토큰 지우기</button>}</div>
-    </div>
-  );
-}
-
-function GitHub({ p, busy, setBusy, setProg, buildFiles, guard, done }) {
-  const t = useToken('github');
-  const [repo, setRepo] = useState(p.deploy?.github?.repo || asciiSlug(p.info?.date));
-  const [confirm, setConfirm] = useState(false);
-  async function run(opts = {}, allowExisting = false) {
-    setBusy('gh'); setProg({ step: '준비', pct: 1 });
-    try {
-      await t.save();
-      const r = await buildFiles(opts);
-      const name = repo.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || asciiSlug();
-      const out = await deployGitHub({ token: t.token, repo: name, files: r.files, onProgress: setProg, allowExisting: allowExisting || p.deploy?.github?.repo === name });
-      done(out.url, { github: { repo: name, url: out.url } }); toast('GitHub Pages에 올렸어요. 처음에는 1~2분 뒤 열려요.');
-    } catch (e) { if (e.code === 'exists') setConfirm(() => (o) => run(o, true)); else toast('올리지 못했어요: ' + e.message); }
-    setBusy(''); setProg(null);
-  }
-  return (
-    <div class="stack" style={{ marginTop: '10px' }}>
-      <ol class="how small"><li><a href={GITHUB_TOKEN_URL} target="_blank" rel="noopener">토큰 만들기</a>를 열고 맨 아래 <b>Generate token</b>을 눌러요. 권한은 미리 채워져 있어요.</li><li>토큰을 붙여 넣고 올려요.</li></ol>
-      <div class="form-grid">
-        <Field label="GitHub 토큰"><input type="password" autoComplete="off" value={t.token} onInput={(e) => t.setToken(e.target.value.trim())} placeholder="github_pat_…" /></Field>
-        <Field label="저장소 이름" hint="영문 소문자·숫자·하이픈. 주소에 들어가요."><input value={repo} onInput={(e) => setRepo(e.target.value)} /></Field>
-      </div>
-      <label class="check"><input type="checkbox" checked={t.remember} onChange={(e) => t.setRemember(e.target.checked)} /><span>이 기기에서 기억하기</span></label>
-      <div><button class="btn btn-ink" disabled={!t.token || !!busy} onClick={() => guard(run)}>{busy === 'gh' ? '올리는 중…' : 'GitHub Pages에 올리기'}</button></div>
-      <Dialog open={!!confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
-        <h2 class="h-sub">이미 있는 저장소예요</h2>
-        <p>"{repo}" 저장소가 이미 있어요. 올리면 그 안의 파일이 연수 사이트로 모두 바뀌어요. 다른 이름을 쓰는 것이 안전해요.</p>
-        <div class="btn-row"><button class="btn" onClick={() => { setConfirm(false); setRepo(asciiSlug(p.info?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { const r = confirm; setConfirm(false); r({}); }}>그래도 바꾸기</button></div>
-      </Dialog>
-    </div>
-  );
+/** 올린 주소가 참가자에게 실제로 열리는지 확인(GitHub Pages는 1~2분, 로그인 창이 걸려 있으면 열리지 않음) */
+function OpenState({ url, at }) {
+  const [st, setSt] = useState('wait');
+  useEffect(() => {
+    if (!/^https:/.test(url)) { setSt('skip'); return undefined; }
+    let off = false, n = 0, timer = 0; setSt('wait');
+    (async function tick() {
+      const ok = await probeSite(url); if (off) return;
+      if (ok) setSt('ok'); else if (++n >= 18) setSt('no'); else timer = setTimeout(tick, 10000);
+    })();
+    return () => { off = true; clearTimeout(timer); };
+  }, [url, at]);
+  if (st === 'skip') return null;
+  return <p class="open-state" aria-live="polite"><span class={`ok-dot${st === 'ok' ? '' : ' wait'}`} aria-hidden="true" />{st === 'ok' ? '지금 열려요.' : st === 'wait' ? '열리는지 확인하는 중이에요. 처음에는 1~2분 걸릴 수 있어요.' : '아직 열리지 않아요. 주소를 직접 열어 확인해 주세요.'}</p>;
 }
 
 function Success({ p }) {
@@ -224,14 +171,15 @@ function Success({ p }) {
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
   const m = p.blueprint.meta || {};
   const when = [m.date, m.start && `${m.start}${m.end ? '~' + m.end : ''}`].filter(Boolean).join(' ');
-  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n👉 ${shareUrl}\n들어가서 '참여하기'를 눌러 주세요.`;
   const liveOn = (p.blueprint.live?.features || []).length > 0;
+  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n👉 ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
   return (
     <Sheet class="success">
       <div class="success-in">
         <div class="stack">
           <div class="row"><Mascot size={48} mood="happy" /><h2 class="h-sub">참가자에게 보낼 주소가 생겼어요</h2></div>
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
+          {p.deploy.target === 'lecpage' ? (p.deploy.lecpage?.expiresAt ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{new Date(p.deploy.lecpage.expiresAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}까지 열려 있어요.</p> : null) : <OpenState url={url} at={p.deploy.at} />}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           <div class="btn-row">
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
@@ -244,7 +192,7 @@ function Success({ p }) {
             {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener">강사 화면 열기</a>}
           </div>
           {liveOn && <p class="small muted">강사 화면에는 관리자 키로 들어가요.</p>}
-          <p class="small muted">고친 뒤 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 새 내용이 올라가요.</p>
+          <p class="small muted">고친 뒤 아래 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 새 내용이 올라가요.</p>
         </div>
         <div class="qr-box"><QR text={shareUrl} size={180} label="참가자용 QR 코드" /></div>
       </div>

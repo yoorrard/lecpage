@@ -10,7 +10,7 @@ import { StepShare } from './steps/Share.jsx';
 export const STEPS = [
   { n: 1, name: '교재 넣기', C: StepStart },
   { n: 2, name: '살펴보고 고치기', C: StepEdit },
-  { n: 3, name: '공유하기', C: StepShare },
+  { n: 3, name: '공개하기', C: StepShare },
 ];
 
 export function Project({ id, step }) {
@@ -58,12 +58,4 @@ export function Project({ id, step }) {
 
 export function StepHead({ title, desc, children }) {
   return <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>{title}</h1>{desc && <p>{desc}</p>}</div>{children}</div>;
-}
-export function StepFoot({ go, prev, next, nextLabel = '다음', disabled, onNext }) {
-  return (
-    <div class="step-foot">
-      {prev ? <button class="btn btn-quiet" onClick={() => go(prev)}>이전</button> : <span />}
-      {next && <button class="btn btn-primary btn-lg" aria-disabled={disabled ? 'true' : undefined} onClick={() => { if (onNext && onNext() === false) return; if (!disabled) go(next); }}>{nextLabel}</button>}
-    </div>
-  );
 }

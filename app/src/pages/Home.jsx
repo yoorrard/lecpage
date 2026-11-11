@@ -5,10 +5,10 @@ import { projects } from '../lib/db.js';
 import { newProject, importProjectFile, setPendingFiles, deleteProject, duplicateProject, stageOf } from '../lib/project.js';
 import { fmtDate, toast } from '../lib/util.js';
 
-const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공유하기'];
+const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공개하기'];
 const EXAMPLES = [
-  { id: 'data-lab', title: '데이터로 읽는 우리 반', kind: '실습형 · 3시간', desc: '실습 다섯 정거장, 막혔어요·진행 체크, 퀴즈, 만족도 설문', img: 'img/example-data-lab.webp' },
-  { id: 'forest-story', title: '숲이 교과서가 되는 날', kind: '이야기형 · 90분', desc: '핵심 메시지, 교재 넘겨 보기, 숲 관찰 도구, 나눔 보드', img: 'img/example-forest-story.webp' },
+  { id: 'data-lab', title: '데이터로 읽는 우리 반', kind: '디지털 연수 · 실습형 3시간', desc: '실습 5개, 도움 요청·진행 현황, 퀴즈, 만족도 설문', img: 'img/example-data-lab.webp' },
+  { id: 'sel-story', title: '마음이 먼저 도착하는 교실', kind: '사회정서학습 연수 · 강의형 90분', desc: '핵심 메시지, 다섯 역량, 교재 보기, 투표·나눔 보드', img: 'img/example-sel-story.webp' },
 ];
 
 export function Home() {
@@ -36,7 +36,7 @@ export function Home() {
       <section class="hero">
         <div>
           <h1>교재를 넣으면<br /><span class="hl">연수 사이트</span>가 나와요</h1>
-          <p class="lead">PPT·PDF·한글 교재를 놓으면 실습 안내, 프롬프트 복사, 교재 넘겨 보기를 갖춘 사이트 초안이 바로 나와요. 질문 받기·진행 체크·만족도 설문도 켤 수 있어요.</p>
+          <p class="lead">PPT·PDF·한글 교재를 놓으면 AI가 연수 흐름과 문구를 짜고, 주제에 맞는 디자인으로 사이트를 만들어요. 단추 하나로 공개하면 주소와 QR이 나와요.</p>
           <div class={`drop drop-home${over ? ' over' : ''}`} ref={dropRef} role="button" tabIndex={0} aria-label="교재 파일을 골라 새 연수 만들기"
             onClick={() => dropRef.current?.querySelector('input')?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && dropRef.current?.querySelector('input')?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -50,25 +50,34 @@ export function Home() {
             <button class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기(.lecpage)</button>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />
           </div>
-          <p class="small muted" style={{ marginTop: '10px' }}>회원가입 없이 무료. 교재는 이 브라우저 안에서만 읽어요.</p>
+          <p class="small muted" style={{ marginTop: '10px' }}>회원가입 없이 무료. 교재는 이 브라우저에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.</p>
         </div>
         <div class="hero-art" aria-hidden="true">
           <div class="shot shot-back"><i class="shot-bar"><b /><b /><b /></i><img src="img/example-data-lab.webp" alt="" width="640" height="400" /></div>
-          <div class="shot shot-front"><i class="shot-bar"><b /><b /><b /></i><img src="img/example-forest-story.webp" alt="" width="640" height="400" /></div>
+          <div class="shot shot-front"><i class="shot-bar"><b /><b /><b /></i><img src="img/example-sel-story.webp" alt="" width="640" height="400" /></div>
           <div class="shot-file"><Mascot size={64} /><span><b>연수교재.pptx</b><small>32쪽</small></span></div>
         </div>
       </section>
 
-      <div class="section-title"><h2>견본에서 시작하기</h2><p class="muted">마음에 들면 그대로 고쳐 쓰세요.</p></div>
+      <section class="why" aria-labelledby="why-h">
+        <h2 id="why-h" class="sr">lecpage의 강점</h2>
+        <dl class="why-list">
+          <div><dt>교재만 넣으면 공개 주소까지</dt><dd>AI가 교재를 읽어 구성과 문구를 짜고, 단추 하나로 공개해요. 주소·QR·카톡 안내 문구가 함께 나와요.</dd></div>
+          <div><dt>'AI가 만든 티'가 나지 않아요</dt><dd>디자인 12가지마다 첫 화면 구성과 글꼴이 달라요. 교재의 주제와 글꼴을 읽어 고르고, 흔한 AI 사이트의 버릇은 자동 점검으로 걸러요.</dd></div>
+          <div><dt>연수에 필요한 것이 이미 들어 있어요</dt><dd>실습 안내·프롬프트 복사·교재 보기, 질문·도움 요청·진행 현황, 발표 화면 QR과 이수자 명단까지. 일반 홈페이지 도구에는 없는 것들이에요.</dd></div>
+          <div><dt>무료이고 가벼워요</dt><dd>회원가입이 없고, AI는 바꿀 곳만 읽어 비용이 적게 들어요. 참가자 기록은 강사님 계정에만 쌓여요.</dd></div>
+        </dl>
+      </section>
+      <div class="section-title"><h2>예시로 시작하기</h2><p class="muted">마음에 들면 그대로 고쳐 쓰세요.</p></div>
       <div class="grid grid-fill">
         {EXAMPLES.map((x) => (
           <article class="ex-card">
-            <a class="ex-img" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener" aria-label={`${x.title} 견본 사이트 새 창으로 보기`}><img src={x.img} alt="" loading="lazy" width="640" height="400" onError={(e) => { e.currentTarget.style.display = 'none'; }} /></a>
+            <a class="ex-img" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener" aria-label={`${x.title} 예시 사이트 새 창으로 보기`}><img src={x.img} alt="" loading="lazy" width="640" height="400" onError={(e) => { e.currentTarget.style.display = 'none'; }} /></a>
             <div class="ex-body">
               <span class="tag tag-lav">{x.kind}</span>
               <h3>{x.title}</h3>
               <p class="small muted">{x.desc}</p>
-              <div class="btn-row"><button class="btn btn-sm btn-primary" onClick={() => fromExample(x.id)}>이 견본으로 시작</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">견본 보기</a></div>
+              <div class="btn-row"><button class="btn btn-sm btn-primary" onClick={() => fromExample(x.id)}>이 예시로 시작</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">예시 보기</a></div>
             </div>
           </article>
         ))}

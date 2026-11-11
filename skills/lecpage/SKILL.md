@@ -1,7 +1,7 @@
 ---
 name: lecpage
-description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 넘겨 보기, 교재 글꼴을 따르는 디자인 12종, 질문·막혔어요·진행 현황·투표·만족도 설문·이수 확인, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
-license: Apache-2.0 (생성 사이트에 복사되는 runtime·backends·templates는 MIT-0). 전문은 LICENSE.txt
+description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 보기, 교재 글꼴을 따르는 디자인 12종, 질문·도움 요청·진행 현황·투표·만족도 설문·이수자 명단, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
+license: Apache-2.0. 생성 사이트에 복사되는 engine/runtime·backends·templates와 엔진이 만든 사이트 파일은 MIT-0. 전문 LICENSE.txt, 고지 NOTICE
 compatibility: Node.js 22 이상. 선택 도구가 없으면 그 단계만 건너뜀 — Playwright(점검·디자인 비교), LibreOffice·pdftoppm(교재 쪽 그림), Python 3 + PyMuPDF(PDF 보조). `lecpage.mjs doctor`로 확인. 인터넷 없이도 빌드 가능
 ---
 
@@ -11,9 +11,9 @@ compatibility: Node.js 22 이상. 선택 도구가 없으면 그 단계만 건�
 
 ## 왜 lecpage인가
 AI에게 HTML을 바로 쓰게 하는 것과 비교해 강사에게 설명할 수 있는 차이:
-- **교재 그대로**: 실습 단계·프롬프트를 교재 문장 그대로 옮기고 쪽 번호로 이어 준다. 교재 뷰어로 넘겨 본다.
+- **교재 그대로**: 실습 단계·프롬프트를 교재 문장 그대로 옮기고 쪽 번호로 이어 준다. 교재 보기로 넘겨 본다.
 - **검증된 디자인**: 프리셋 12종 모두 글자 대비 4.5:1 이상, 휴대폰·PC·어두운 화면·동작 줄이기까지 점검한다. 교재 글꼴을 따른다.
-- **연수 당일 기능**: 질문·막혔어요·진행 현황·투표·보드·설문·이수 CSV, 강사 화면·발표 화면·QR 안내문. 기록은 강사 계정에 쌓인다.
+- **연수 당일 기능**: 질문·도움 요청·진행 현황·투표·나눔 보드·설문·이수자 명단 CSV, 강사 화면·발표 화면·QR 안내문. 기록은 강사 계정에 쌓인다.
 - **안전 기본값**: 검색 제외, 암호 보호(AES-GCM), 강사용 파일 분리, 별명만 수집, CSP·SRI.
 - **빠르고 싸다**: 명령 하나로 1분 안에 사이트가 나온다. 고칠 때는 바뀐 곳만 보낸다.
 
@@ -37,9 +37,9 @@ $L doctor                                                  # 환경 점검
 6. **디자인 고르기**: `options` → `work/options/contact-sheet.png`를 강사에게 보여 주고 고르게 한다. `patch … --set design.preset=<id>`. 기관 색은 `design.accent`. 사이트 글꼴은 기본으로 교재 글꼴을 따른다. 프리셋·효과 자세히: `references/design.md`.
 7. **운영 방식**: 참여 기능을 쓰면 `decide-infra -i work/info.json`. 결과를 쉬운 말로 설명하고 확인받는다(`references/infra-decision.md`). 백엔드는 `backends/<종류>/README.md`. 강사가 준 주소·키는 `info.json`의 `live`에 넣고 `patch work/blueprint.json -i work/info.json`.
 8. **공개 범위**: 묻고 `info.json`의 `access`(`link` 기본·`public`)에 쓴다. 암호면 `--password '<암호>'`(낱말 서너 개로 길게, 파일에 남기지 않음). 참가자 QR은 주소 끝에 `#k=암호`. https에서만 열리므로 교실 LAN·ZIP에는 쓰지 않는다.
-9. **점검**: `make`·`patch --qa`가 휴대폰·PC × 밝게·어둡게를 점검하고 스크린샷 4장을 남긴다. 스크린샷을 직접 보고, `references/qa-checklist.md`의 사람 점검을 한다.
+9. **점검**: `make`·`patch --qa`가 휴대폰(360)·태블릿(820)·PC(1280) × 밝게·어둡게를 점검하고 스크린샷 6장을 남긴다. 스크린샷을 직접 보고, `references/qa-checklist.md`의 사람 점검을 한다.
 10. **수정 요청 받기**: `review dist`로 사이트를 띄우면 강사가 고칠 곳을 펜·네모로 표시하고 글을 남긴다. `work/feedback/NNN.png`·`.json`을 읽고 `patch`로 고친 뒤 다시 보여 준다.
-11. **배포·전달**: `references/deploy/<대상>.md`. 올리는 것은 `dist/`뿐이다(`dist-강사용/`은 올리지 않음). ZIP은 `pack dist -o site.zip`. 강사에게 참가자 주소와 QR, 강사 화면 주소와 관리자 키 보관법, 전날 할 일(접속 진단·리허설), 끝난 뒤 할 일(기록 내려받기·삭제 날짜)을 짧게 알린다. 자세한 것은 `dist-강사용/운영안내.md`.
+11. **배포·전달**: `references/deploy/<대상>.md`. 올리는 것은 `dist/`뿐이다(`dist-강사용/`은 올리지 않음). ZIP은 `pack dist -o site.zip`. 강사에게 참가자 주소와 QR, 강사 화면 주소와 관리자 키 보관법, 전날 할 일(접속 확인·리허설), 끝난 뒤 할 일(기록 내려받기·삭제 날짜)을 짧게 알린다. 자세한 것은 `dist-강사용/운영안내.md`.
 
 ## 꼭 지킬 것
 - **지어내지 않는다**: 교재·강사에게 없는 날짜·장소·인원·도구는 빈칸으로 두고 묻는다. 프롬프트·실습 단계는 고쳐 쓰지 않는다.
@@ -59,9 +59,10 @@ $L doctor                                                  # 환경 점검
 | references/modules.md | 사이트 유형별 칸 구성, 기능과 운영 조건 |
 | references/copywriting.md | 사이트 문구 규칙 |
 | references/design.md | 프리셋·효과·움직임·글꼴 |
+| references/design-quality.md | 'AI 티' 없는 디자인 규칙, 디자인 검사(`scripts/design-lint.mjs`) 항목 |
 | references/infra-decision.md | 호스팅 × 실시간 백엔드 결정 |
 | references/deploy/*.md | 배포 대상별 안내 |
 | references/privacy-admin.md | 개인정보·연수 행정 |
 | references/qa-checklist.md | 자동 점검 항목과 사람 점검 |
 | references/material-format.md | 교재 해석 결과(material.json) 형식 |
-| examples/*.blueprint.json | 완성 설계도 견본(이야기형 `forest-story`, 실습형 `data-lab`) |
+| examples/*.blueprint.json | 완성 설계도 예시(강의형 `sel-story`, 실습형 `data-lab`) |
