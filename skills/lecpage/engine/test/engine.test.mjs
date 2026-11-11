@@ -216,11 +216,17 @@ test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사�
   assert.equal(E.decideHost({ instant: true, siteMB: 60 }).pick, 'vercel', '바로 공개 한도를 넘으면 빼요');
   assert.deepEqual(E.decideHost({ network: 'offline' }).hosts, ['lan', 'zip']);
   assert.equal(E.decideHost({ customDomain: true }).pick, 'cloudflare');
-  assert.ok(E.decideHost({ maxFileMB: 40 }).warnings.some((w) => /25MB/.test(w)));
+  const bigFile = E.decideHost({ maxFileMB: 40 });
+  assert.equal(bigFile.pick, 'github-pages', '25MB가 넘는 파일은 GitHub Pages(파일 100MB까지)'); assert.ok(bigFile.warnings.some((w) => /25MB/.test(w)));
   const big = E.decideHost({ siteMB: 180 });
-  assert.equal(big.pick, 'github-pages'); assert.ok(big.warnings.some((w) => /100MB/.test(w)));
+  assert.equal(big.pick, 'cloudflare', '100MB가 넘는 사이트는 Cloudflare 먼저'); assert.ok(big.warnings.some((w) => /100MB/.test(w)));
+  assert.equal(big.hosts.at(-3), 'vercel', 'Vercel은 맨 뒤(뒤에 firebase·zip)');
   assert.equal(E.decideHost({ commercial: true, maxFileMB: 40 }).pick, 'github-pages');
-  assert.equal(E.decideHost({ skill: 'dev', files: 1500 }).pick, 'github-pages');
+  assert.equal(E.decideHost({ skill: 'dev', files: 1500 }).pick, 'cloudflare', '명령으로 올리면 20,000개까지');
+  assert.equal(E.decideHost({ skill: 'dev', files: 25000 }).pick, 'github-pages');
+  assert.equal(E.decideHost({ files: 1500 }).pick, 'github-pages', '앱(끌어 놓기)은 1,000개까지');
+  assert.ok(E.decideHost({ network: 'restricted' }).warnings.some((w) => /전날/.test(w)));
+  assert.match(E.HOSTS.cloudflare.cli, /mktemp -d/);
   for (const h of E.decideHost({ instant: true }).hosts) assert.ok(E.HOSTS[h], h);
 });
 

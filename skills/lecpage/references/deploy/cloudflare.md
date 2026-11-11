@@ -42,16 +42,20 @@
 
 ## skill: wrangler로 올리기
 ```bash
-# 작업 폴더(dist/의 위)에서 실행합니다. 이름은 소문자·숫자·하이픈
-npx wrangler@4 deploy --assets ./dist --name lec-20261111 --compatibility-date 2026-11-11
+# 작업 폴더(dist/의 위)에서. 이름은 소문자·숫자·하이픈
+D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name lec-20261111 --compatibility-date 2026-11-11)
 # → https://lec-20261111.<계정>.workers.dev
 ```
-설정 파일 없이, 대화 없이 돕니다(4.160.0에서 `--dry-run`으로 확인). 인증은 위에서부터 맞는 것 하나:
+설정 파일 없이, 대화 없이 돕니다(4.160.0에서 `--dry-run`으로 확인).
+
+**빈 임시 폴더에서 돌리는 까닭**: wrangler는 실행한 폴더와 그 위쪽 폴더에서 `wrangler.json`·`wrangler.jsonc`·`wrangler.toml`을 찾아 읽습니다. 하나라도 있으면 그 프로젝트의 코드와 변수가 이 이름으로 함께 올라갑니다(dry-run으로 확인. lecpage 저장소 맨 위에도 `wrangler.jsonc`가 있음). `decide-infra`가 내는 한 줄(`--assets ./dist`)은 위쪽에 그런 파일이 없을 때만 그대로 씁니다. 아래 wrangler 명령도 같은 식으로 돌립니다.
+
+인증은 위에서부터 맞는 것 하나:
 
 | 상태 | 하는 일 |
 |---|---|
 | `npx wrangler@4 whoami`가 계정을 보여 줌 | 위 명령 그대로 |
-| 강사가 API 토큰을 줌(**Edit Cloudflare Workers** 템플릿) | 명령 앞에 `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…` |
+| 강사가 API 토큰을 환경 변수로 넣어 줌(**Edit Cloudflare Workers** 템플릿) | `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID`가 있으면 위 명령 그대로 |
 | 계정은 있는데 로그인 전 | 강사에게 `npx wrangler@4 login`을 부탁(브라우저에서 승인. 브라우저가 안 열리는 환경은 `--device`) |
 | 계정이 없음 | 명령 끝에 `--temporary` |
 
@@ -64,15 +68,16 @@ npx wrangler@4 deploy --assets ./dist --name lec-20261111 --compatibility-date 2
 - claim한 뒤 고칠 때는 `npx wrangler@4 login` 다음 `--temporary` 없이 같은 명령.
 
 알아 둘 것
-- wrangler는 실행한 폴더에 `.wrangler/`를 만들고, `dist/` 안의 숨은 폴더도 그대로 올립니다. `dist/` 안에서 실행하지 않습니다. `dist/.git`이 있으면(GitHub Pages에 올린 적이 있으면) `<skill 폴더>/templates/deploy/cloudflare/.assetsignore`를 `dist/`에 복사합니다.
+- wrangler는 `dist/` 안의 숨은 폴더도 그대로 올립니다(로컬에서 확인). `dist/.git`이 있으면(GitHub Pages에 올린 적이 있으면) `<skill 폴더>/templates/deploy/cloudflare/.assetsignore`를 `dist/`에 복사합니다.
 - `/console.html`은 `/console`로 307 이동해 열립니다. 링크는 그대로 동작합니다.
 - 다시 올리기: 같은 `--name`으로 같은 명령. 주소는 그대로입니다.
 - 이전 판으로: `npx wrangler@4 deployments list --name <이름>` → `npx wrangler@4 rollback <버전ID> --name <이름>`.
 
 `pages.dev` 주소로 올릴 때(내 도메인을 CNAME만으로 붙이려 할 때 등):
 ```bash
+D="$PWD/dist"; cd "$(mktemp -d)"
 npx wrangler@4 pages project create lec-20261111 --production-branch main   # 처음 한 번
-npx wrangler@4 pages deploy ./dist --project-name lec-20261111 --branch main
+npx wrangler@4 pages deploy "$D" --project-name lec-20261111 --branch main
 ```
 
 ## GitHub 연결(Workers Builds)

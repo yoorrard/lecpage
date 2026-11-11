@@ -29,7 +29,8 @@ export const HOSTS = {
     cli: 'gh repo create <이름> --public --source=. --push && gh api -X POST "repos/{owner}/{repo}/pages" -f "source[branch]=main" -f "source[path]=/"',
     note_ko: '공개 저장소에 올려요. 저장소의 사이트 파일은 누구나 볼 수 있어요.' },
   cloudflare: { name_ko: 'Cloudflare', cost: '0원', app: false, account: true, limit: { fileMB: 25, files: 1000 },
-    cli: 'npx wrangler@4 deploy --assets ./dist --name <이름> --compatibility-date <오늘>',
+    // 빈 임시 폴더에서 돌림: wrangler는 실행한 폴더와 위쪽 폴더의 wrangler 설정을 읽어 그 프로젝트를 올릴 수 있음
+    cli: 'D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name <이름> --compatibility-date <오늘>)',
     note_ko: '정적 파일 요청이 무료·무제한이고 강사료를 받는 연수에도 쓸 수 있어요. 앱에서는 ZIP을 끌어다 놓아요.' },
   netlify: { name_ko: 'Netlify', cost: '0원(월 300크레딧)', app: true, account: true, limit: { files: 25000 },
     cli: 'NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name <이름>',
@@ -93,18 +94,21 @@ export function decideHost(input = {}) {
       hosts = first('cloudflare', hosts);
       why(input.customDomain ? '내 도메인을 붙일 계획이면 도메인과 호스팅을 한곳에서 다루는 Cloudflare가 편해요.' : '학교망이 기본 주소를 막으면 내 도메인을 붙여야 해요. Cloudflare가 도메인 연결이 가장 쉬워요.');
     }
-    // 크기: Vercel은 합계 100MB, Cloudflare는 파일 하나 25MB·끌어 놓기 1,000개, GitHub Pages는 사이트 1GB·파일 100MB
-    if (Number(input.siteMB) > 100 && hosts.includes('vercel')) {
-      hosts = last('vercel', hosts); if (hosts[0] === 'vercel') hosts = first('github-pages', hosts);
-      if (reasons[0]?.startsWith('Vercel')) why('사이트가 100MB를 넘어 Vercel 대신 GitHub Pages를 권해요.');
-      warnings.push('Vercel 무료는 한 번에 올리는 파일 합계가 100MB까지예요.');
+    // 크기(조사 §8.1): Vercel은 합계 100MB, Cloudflare는 파일 하나 25MB·끌어 놓기 1,000개(명령으로 올리면 20,000개), GitHub Pages는 사이트 1GB·파일 100MB
+    const cfFiles = skill === 'click' ? 1000 : 20000;
+    const bigFile = Number(input.maxFileMB) > 25, manyFiles = Number(input.files) > cfFiles, bigSite = Number(input.siteMB) > 100;
+    if (bigFile || manyFiles) {
+      // Cloudflare에 못 올림 → GitHub Pages(파일 100MB까지)를 먼저. Vercel은 파일 하나의 한도가 문서에 없어 뒤로
+      hosts = first('github-pages', last('cloudflare', hosts));
+      why(bigFile ? '25MB가 넘는 파일이 있어 GitHub Pages를 권해요.' : `파일이 ${cfFiles.toLocaleString('en-US')}개를 넘어 GitHub Pages를 권해요.`);
+      warnings.push(bigFile ? '25MB가 넘는 파일은 Cloudflare에 올릴 수 없어요. 영상은 유튜브 링크로 바꾸는 것이 좋아요.' : `Cloudflare는 파일 ${cfFiles.toLocaleString('en-US')}개까지예요.`);
+    } else if (bigSite) {
+      // 큰 사이트는 요청·크기 한도가 넉넉한 Cloudflare를 먼저(앱에서는 ZIP 끌어 놓기)
+      hosts = first('cloudflare', hosts);
+      why('사이트가 100MB를 넘어 Cloudflare를 권해요.');
     }
-    if (Number(input.maxFileMB) > 25 || Number(input.files) > 1000) {
-      const was = hosts[0]; hosts = last('cloudflare', hosts);
-      if (was === 'cloudflare') why(Number(input.maxFileMB) > 25 ? '25MB가 넘는 파일이 있어 GitHub Pages를 권해요.' : '파일이 1,000개를 넘어 GitHub Pages를 권해요.');
-      if (was === 'cloudflare') hosts = first('github-pages', hosts);
-      warnings.push(Number(input.maxFileMB) > 25 ? '25MB가 넘는 파일은 Cloudflare에 올릴 수 없어요. 영상은 유튜브 링크로 바꾸는 것이 좋아요.' : 'Cloudflare 끌어 놓기는 파일 1,000개까지예요.');
-    }
+    if (bigSite && hosts.includes('vercel')) { hosts = last('vercel', hosts); warnings.push('Vercel 무료는 한 번에 올리는 파일 합계가 100MB까지예요.'); }
+    if (input.network === 'restricted') warnings.push('학교망에서 기본 주소가 막힐 수 있어요. 연수 전날 참가자 망에서 주소를 열어 보고, 막히면 내 도메인을 붙이세요.');
     if (infra.includes('aws') && skill !== 'click') hosts.unshift('s3');
     const fitsInstant = !(Number(input.siteMB) > HOSTS.lecpage.limit.siteMB) && !(Number(input.maxFileMB) > HOSTS.lecpage.limit.fileMB) && !(Number(input.files) > HOSTS.lecpage.limit.files);
     if (input.instant && fitsInstant) {

@@ -26,8 +26,8 @@ cd <skill 폴더>/backends/cloudflare
 npm install                                              # wrangler(고정 버전)
 # 인증: 강사가 npx wrangler login 을 해 두었거나, 환경 변수 CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
 ADMIN=$(openssl rand -hex 12)
-printf '%s' "$ADMIN" | npx wrangler secret put ADMIN_KEY  # 값은 stdin으로 넣음
-npx wrangler deploy                                      # → https://lecpage-live.<계정>.workers.dev
+printf '%s' "$ADMIN" | npx wrangler secret put ADMIN_KEY -c wrangler.toml   # 값은 stdin으로 넣음
+npx wrangler deploy -c wrangler.toml                     # → https://lecpage-live.<계정>.workers.dev
 (umask 077; printf '%s\n' "$ADMIN" > <작업 폴더>/dist-강사용/관리자-키.txt); unset ADMIN
 curl -fsS https://lecpage-live.<계정>.workers.dev/api/health   # {"ok":true,…}
 ```
@@ -35,9 +35,10 @@ curl -fsS https://lecpage-live.<계정>.workers.dev/api/health   # {"ok":true,�
 - 토큰은 강사가 **Edit Cloudflare Workers** 템플릿으로 만들어 환경 변수로 넣어 줍니다. 대화나 파일에 적지 않습니다.
 - **관리자 키**는 skill이 만들어 `dist-강사용/관리자-키.txt`(본인만 읽기)에 한 번 적어 건네고, 대화에는 적지 않습니다. 강사는 비밀번호 관리 앱에 옮긴 뒤 파일을 지웁니다.
 - 지난 연수 때 올린 `lecpage-live`가 이미 있으면 `ADMIN=`·`secret put`·키 파일 줄을 건너뜁니다. 관리자 키를 바꾸면 예전 연수의 강사 화면에 들어갈 수 없습니다.
+- `-c wrangler.toml`을 꼭 붙입니다. 빼면 wrangler가 위쪽 폴더의 `wrangler.json`·`wrangler.jsonc`를 먼저 찾아 읽습니다(lecpage 저장소 맨 위에 앱용 `wrangler.jsonc`가 있어, 저장소 안에서 돌리면 앱이 올라갑니다. dry-run으로 확인).
 - 대화 없는 셸에서 `secret put`은 Worker가 아직 없으면 빈 Worker를 먼저 만들고 비밀을 넣습니다. 그다음 `deploy`가 코드를 올립니다(wrangler 4.151.3 소스에서 확인. 실제 계정으로 돌려 보지는 않았습니다 ⚠️).
 - 새 계정이라 `workers.dev` 주소가 없으면 `deploy`가 멈춥니다. 오류에 나온 `https://dash.cloudflare.com/<계정 ID>/workers/onboarding`을 강사가 한 번 열어 이름을 정한 뒤 다시 돌립니다.
-- 배포 주소를 `info.json`의 `live`(`provider: "http"`, `url`)에 넣고 `patch work/blueprint.json -i work/info.json`으로 다시 빌드합니다. 사이트 주소가 정해지면 `npx wrangler deploy --var ALLOWED_ORIGINS:https://<사이트 주소>`로 그 사이트만 받게 할 수 있습니다(다시 배포할 때마다 붙임).
+- 배포 주소를 `info.json`의 `live`(`provider: "http"`, `url`)에 넣고 `patch work/blueprint.json -i work/info.json`으로 다시 빌드합니다. 사이트 주소가 정해지면 `npx wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:https://<사이트 주소>`로 그 사이트만 받게 할 수 있습니다(다시 배포할 때마다 붙임).
 
 설정 값(`wrangler.toml`의 `[vars]`):
 

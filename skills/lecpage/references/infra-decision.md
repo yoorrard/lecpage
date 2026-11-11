@@ -55,8 +55,8 @@
 | **앱(클릭만)** | **Vercel**(토큰으로 앱에서 바로, 다시 올려도 같은 주소) · GitHub Pages · Cloudflare(ZIP 끌어 놓기) · Netlify(이미 쓰는 분) | `deploy/vercel.md` |
 | **skill(명령 가능)** | **Cloudflare Workers 정적 자산**(`wrangler deploy --assets`, 계정이 없으면 `--temporary`) · Vercel(`VERCEL_TOKEN`) · GitHub Pages(`gh`) · Netlify | `deploy/cloudflare.md` |
 | 강사료를 받는 연수 | Cloudflare · GitHub Pages (Vercel 무료는 비상업만이라 뺌) | `deploy/cloudflare.md` |
-| 사이트가 100MB를 넘음 | GitHub Pages (Vercel은 한 번에 100MB까지) | `deploy/github-pages.md` |
-| 25MB 넘는 파일이 있음, 파일이 1,000개를 넘음 | Cloudflare를 맨 뒤로. 추천이 Cloudflare였으면 GitHub Pages | `deploy/github-pages.md` |
+| 25MB 넘는 파일이 있음, 또는 파일이 Cloudflare 한도(끌어 놓기 1,000개 · 명령으로 올리면 20,000개)를 넘음 | GitHub Pages (파일 하나 100MB까지). Cloudflare는 맨 뒤 | `deploy/github-pages.md` |
+| 사이트가 100MB를 넘음(위에 해당하지 않을 때) | Cloudflare (Vercel은 한 번에 100MB까지라 맨 뒤) | `deploy/cloudflare.md` |
 | 내 도메인을 붙일 계획, (skill) 학교망이 엄격함 | Cloudflare | `deploy/custom-domain-and-short-url.md` |
 | 지난번에 올린 곳, 이미 연결해 둔 곳이 있음 | 그곳 먼저(Netlify는 이때만 앞에 옴) | 해당 가이드 |
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
@@ -115,8 +115,8 @@
 5. ★ **S10** 강사료를 받는 연수(`paid`) → `vercel`을 빼고 `cloudflare`를 맨 앞으로. 다음은 `github-pages`.
 6. ★ **S03** live가 `cf-relay`이고 skill이 basic 이상 → `cloudflare`를 맨 앞으로(같은 계정에서 관리).
 7. ★ **S11** 내 도메인을 붙일 계획(`customDomain`), 또는 학교망이 엄격하고(`restricted`) skill이 basic 이상 → `cloudflare`를 맨 앞으로(도메인 연결이 가장 쉬움).
-8. ★ **S12** 사이트 > 100MB → `vercel`을 맨 뒤로. 앱이면 추천이 `github-pages`가 됩니다.
-9. ★ **S13** 파일 하나 > 25MB, 또는 파일 > 1,000개 → `cloudflare`를 맨 뒤로. 추천이 `cloudflare`였으면 `github-pages`를 맨 앞으로. 1,000개는 끌어 놓기와 `--temporary`의 한도입니다. 로그인한 wrangler는 20,000개까지 올리므로, skill은 파일 수만 넘은 경우 Cloudflare를 그대로 써도 됩니다.
+8. ★ **S13** 파일 하나 > 25MB, 또는 파일 수가 Cloudflare 한도를 넘음(앱의 끌어 놓기 1,000개, skill이 wrangler로 올리면 20,000개) → `github-pages`를 맨 앞으로, `cloudflare`를 맨 뒤로. `--temporary`는 1,000개·파일당 5MiB까지입니다(G30).
+9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
 12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 마지막으로 올린 날부터 30일). 오래 둘 사이트(`keep: long`)나 내 도메인이면 둘째 자리. skill은 쓰지 않습니다.
@@ -167,7 +167,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | live `none` · `sheets` · `supabase` · `cf-relay` · `node-server`(own/school) · `node-server`(lan) | backend `none` · `sheets` · `supabase` · `cloudflare` · `server` · `lan` |
 | static `aws-s3-cloudfront` · `cloudflare`/`cloudflare-pages-drop` · `server`/`nas` | hosts `s3` · `cloudflare` · `server` |
 
-`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 올릴 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다.
+`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 올릴 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다. Cloudflare 한 줄은 `deploy/cloudflare.md`에 적힌 대로 빈 임시 폴더에서 돌립니다(위쪽 폴더의 wrangler 설정을 읽지 않게).
 
 ```json
 {
@@ -236,7 +236,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"G13","when":{"live":"supabase"},"level":"info","warn":"무료 프로젝트는 계정당 2개까지(정지된 것 제외)","fix":"연수 끝나면 데이터 지우고 프로젝트 정지·삭제"},
     {"id":"G14","when":{"live":"cf-relay","expr":"participants * (3600/pollSec) * hours > 80000"},"level":"warn","warn":"WebSocket이 막혀 새로 읽기로 돌면 Workers 무료 10만 요청/일을 넘을 수 있음(09:00 KST 초기화)","fix":"새로 읽기 간격 10~15초, 또는 node-server"},
     {"id":"G15","when":{"live":"sheets","participants":{"gt":40}},"level":"warn","warn":"Apps Script는 사용자당 동시 실행 30개. 많은 인원이 짧은 간격으로 부르면 늦어지거나 실패","fix":"새로 읽기 7~10초 유지, 반응 줄이기, 60명 넘으면 supabase"},
-    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 그래서 생성 사이트도 live.uploads가 true일 때만 나눔 보드에 파일 칸을 보임. 켜면 보드에 보이는 동안 드라이브 '링크가 있는 모든 사용자'로 공유","fix":"시트 메뉴 '파일 올리기 켜기/끄기'로 켠 뒤 `patch … --set live.uploads=true`로 다시 빌드. 학교 계정은 외부 공유가 막힐 수 있음. 14세 미만이면 끄기"},
+    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 그래서 생성 사이트도 live.uploads가 true일 때만 나눔 보드에 파일 올리기를 보임. 켜면 보드에 보이는 동안 드라이브 '링크가 있는 모든 사용자'로 공유","fix":"시트 메뉴 '파일 올리기 켜기/끄기'로 켠 뒤 `patch … --set live.uploads=true`로 다시 빌드. 학교 계정은 외부 공유가 막힐 수 있음. 14세 미만이면 끄기"},
     {"id":"G17","when":{"live":"node-server","place":"lan"},"level":"warn","warn":"학교 와이파이는 기기끼리 통신을 막는 경우가 많음(AP 격리). 휴대폰 핫스폿은 동시 접속 수가 적음","fix":"전용 공유기 준비 또는 Quick Tunnel(deploy/local-lan-classroom.md)"},
     {"id":"G19","when":{"wsBlocked":true,"live":"supabase"},"level":"info","warn":"Supabase 실시간은 WebSocket이 필요. 막히면 어댑터가 7초 새로 읽기로 바뀜(반응이 늦어짐)","fix":"그대로 써도 됨. 빠른 반응이 필요하면 cf-relay/node-server(SSE)"},
     {"id":"G20","when":{"blocked":{"any":["cdn.jsdelivr.net","fonts.googleapis.com","fonts.gstatic.com"]}},"level":"warn","warn":"글꼴·라이브러리 CDN 차단","fix":"글꼴·라이브러리를 사이트 안에 포함(자체 호스팅). 시스템 글꼴로도 내용은 보임"},

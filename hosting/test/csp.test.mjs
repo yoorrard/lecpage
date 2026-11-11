@@ -59,7 +59,7 @@ test('엔진이 쓰는 글꼴 호스트가 CSP에 다 있음(엔진이 바뀌면
   }
   // 엔진의 _headers가 틀에 못 넣게 하는 화면과 같음
   const build = readFileSync(join(ENGINE, 'src', 'build.js'), 'utf8');
-  const m = /\['\/console\.html', '\/screen\.html', '\/poster\.html'\]/.exec(build);
+  const m = /\['\/console', '\/screen', '\/poster'\]\.flatMap\(\(p\) => \[p \+ '\.html', p\]\)/.exec(build); // 엔진은 .html과 확장자 없는 주소 둘 다에 적음
   assert.ok(m, 'build.js의 _headers 대상이 바뀌었으면 NO_FRAME_PAGES를 맞춰 주세요');
   assert.deepEqual([...NO_FRAME_PAGES].sort(), ['console.html', 'poster.html', 'screen.html']);
 });

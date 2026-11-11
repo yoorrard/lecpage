@@ -1510,10 +1510,10 @@ html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-lite) :is(.lp-outline-it
 [data-preset="editorial-ink"] .lp-tools-item:not(:first-child){min-height:0;padding-inline:0;background:none;border-width:1px 0 0}
 [data-preset="editorial-ink"] .lp-close-line{padding-block:var(--sp-4);border-block:3px double var(--foreground);font-family:var(--font-display);font-weight:var(--display-weight)}
 [data-preset="editorial-ink"] .lp-close-line::before{content:none}
-[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-message-note,.lp-prose > p:first-child)::first-letter{float:left;margin:.04em .1em 0 0;font-family:var(--font-display);font-weight:var(--display-weight);font-size:2.9em;line-height:.86;color:var(--primary)}
-[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-message-note,.lp-prose > p:first-child){overflow:hidden}
+[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-prose > p:first-child)::first-letter{float:left;margin:.04em .1em 0 0;font-family:var(--font-display);font-weight:var(--display-weight);font-size:2.9em;line-height:.86;color:var(--primary)}
+[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-prose > p:first-child){overflow:hidden}
 [data-preset="editorial-ink"] .lp-goal-list p,[data-preset="editorial-ink"] .lp-schedule h3{font-family:var(--font-display)}
-@media (max-width:600px){.lp-standfirst::first-letter,[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-message-note,.lp-prose > p:first-child)::first-letter{float:none;margin:0;font-size:1.5em;line-height:1}}
+@media (max-width:600px){.lp-standfirst::first-letter,[data-preset="editorial-ink"] :is(.lp-person-bio,.lp-prose > p:first-child)::first-letter{float:none;margin:0;font-size:1.5em;line-height:1}}
 
 /* 놀이터: ① 원색 면 카드와 딱딱한 그림자 ② 섹션 가장자리에 걸친 딱지 도형 ③ 번호 딱지 */
 [data-preset="playground"] .lp-outline-item:nth-child(3n+1),[data-preset="playground"] .lp-tools-item:nth-child(4n+2){--card-foreground:var(--accent-2-foreground);--muted-foreground:var(--accent-2-foreground);--primary:var(--accent-2-foreground);background:var(--accent-2);color:var(--accent-2-foreground)}
