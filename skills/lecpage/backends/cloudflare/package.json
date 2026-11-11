@@ -11,7 +11,7 @@
     "tail": "wrangler tail"
   },
   "devDependencies": {
-    "wrangler": "4.151.3"
+    "wrangler": "4.157.0"
   },
   "cloudflare": {
     "bindings": {
