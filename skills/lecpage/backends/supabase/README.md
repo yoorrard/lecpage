@@ -27,6 +27,39 @@
 
 > 2026년 10월부터 새 표는 Data API에 자동으로 열리지 않습니다. `schema.sql`이 필요한 권한(GRANT)만 직접 주므로 따로 할 일은 없습니다.
 
+## 명령으로 한 번에 (skill이 직접)
+
+셸이 있는 에이전트(skill)는 위 1~4번을 Supabase Management API로 직접 합니다. 강사가 할 일은 가입과 토큰 하나입니다.
+
+- **토큰**: 강사가 https://supabase.com/dashboard/account/tokens 에서 만들어, 에이전트를 띄우는 터미널에 `export SUPABASE_ACCESS_TOKEN=…`으로 넣어 둡니다. 대화나 파일에 적지 않습니다. 계정 전체 권한이므로 설정이 끝나면 같은 화면에서 지웁니다.
+- **무료 요금제는 활성 프로젝트 2개까지**입니다. lecpage용 프로젝트가 이미 있으면(`GET /v1/projects`) 그 `ref`를 `REF`에 넣고 프로젝트 만들기 줄을 건너뜁니다. 자리가 없으면 강사에게 안 쓰는 프로젝트를 정지하거나 지워 달라고 합니다. skill이 지우지 않습니다.
+- **확인한 범위**: 주소와 필드 이름은 공식 문서와 OpenAPI(2026-11-11)에 맞췄고, 가짜 응답으로 셸 문법만 돌려 봤습니다. **실제 계정으로 끝까지 돌려 보지는 않았습니다 ⚠️.** SQL을 돌리는 `database/query`는 문서에 실험(Beta) 단계로 적혀 있습니다. 막히면 위 "설치(10분)"대로 합니다.
+
+```bash
+set -euo pipefail          # 작업 폴더에서 실행. SKILL=<skill 폴더>
+API=https://api.supabase.com/v1; H="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"; J='Content-Type: application/json'
+j() { node -p "JSON.parse(require('fs').readFileSync(0,'utf8'))$1"; }        # JSON에서 값 꺼내기
+CODE=$(node -p "require('./work/blueprint.json').live.code")                # 연수 코드(빌드가 만들어 둠)
+ORG=$(curl -fsS -H "$H" $API/organizations | j '[0].slug')                  # 조직이 여럿이면 강사에게 묻기
+REF=$(curl -fsS -H "$H" -H "$J" $API/projects -d "{\"name\":\"lecpage-$CODE\",\"organization_slug\":\"$ORG\",\"db_pass\":\"$(openssl rand -hex 24)\",\"region_selection\":{\"type\":\"specific\",\"code\":\"ap-northeast-2\"}}" | j '.ref')
+until curl -fsS -H "$H" "$API/projects/$REF/health?services=db,rest,realtime,storage" | j '.every(s=>s.status==="ACTIVE_HEALTHY")' | grep -q true; do sleep 10; done
+node -e 'process.stdout.write(JSON.stringify({query:require("fs").readFileSync(process.argv[1],"utf8")}))' "$SKILL/backends/supabase/schema.sql" \
+  | curl -fsS -H "$H" -H "$J" "$API/projects/$REF/database/query" --data-binary @- >/dev/null
+ADMIN=$(openssl rand -hex 12); HASH=$(printf '%s' "$ADMIN" | openssl dgst -sha256 -r | cut -d' ' -f1)
+curl -fsS -H "$H" -H "$J" "$API/projects/$REF/database/query" -d "{\"query\":\"select lec_private.init_training_hash('$CODE','$HASH')\"}" >/dev/null
+KEY=$(curl -fsS -H "$H" "$API/projects/$REF/api-keys?reveal=true" | j '.find(k=>k.type==="publishable")?.api_key ?? ""')
+[ -n "$KEY" ] || KEY=$(curl -fsS -H "$H" -H "$J" "$API/projects/$REF/api-keys?reveal=true" -d '{"type":"publishable","name":"default"}' | j '.api_key')
+(umask 077; printf '%s\n' "$ADMIN" > dist-강사용/관리자-키.txt); unset ADMIN       # 화면에 찍지 않음
+node -e 'const f="work/info.json",fs=require("fs"),i=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};i.live={...i.live,provider:"supabase",url:`https://${process.argv[1]}.supabase.co`,anonKey:process.argv[2]};fs.writeFileSync(f,JSON.stringify(i,null,2))' "$REF" "$KEY"
+```
+
+- 그다음 `patch work/blueprint.json -i work/info.json`으로 다시 빌드하고, 사이트의 `check.html`(접속 확인)에서 실시간 연결을 봅니다.
+- **관리자 키**는 skill이 만들어 `dist-강사용/관리자-키.txt`(본인만 읽기)에 한 번 적고, 서버에는 SHA-256 해시만 보냅니다. 강사에게 파일 위치를 알리고, 비밀번호 관리 앱에 옮긴 뒤 파일을 지우게 합니다. 대화에는 키를 적지 않습니다.
+- `organization_slug`·`region_selection`을 씁니다(`organization_id`·`region`은 문서에 폐지 예정으로 적혀 있음). `db_pass`는 그 자리에서 만들어 쓰고 보관하지 않습니다. lecpage는 데이터베이스에 직접 붙지 않으며, 필요하면 대시보드에서 다시 정합니다.
+- 같은 프로젝트에 다음 연수를 더할 때는 `REF`를 넣고 `ADMIN=` 줄부터 돌립니다. `schema.sql` 줄은 다시 돌려도 안전합니다.
+- 중간에 멈추면 `-fsS`를 `-sS`로 바꿔 응답 본문을 봅니다. 프로젝트가 이미 만들어졌으면 다시 만들지 말고 `REF`만 넣고 이어 갑니다.
+- 출처: https://supabase.com/docs/reference/api/introduction · https://supabase.com/docs/guides/integrations/supabase-for-platforms · https://supabase.com/docs/guides/platform/personal-access-tokens · https://api.supabase.com/api/v1-json
+
 ## 파일 올리기
 
 `schema.sql`이 **비공개** 버킷 `lec-uploads`(20MB, PNG·JPG·GIF·WEBP·PDF·MP3·MP4만)를 만듭니다.

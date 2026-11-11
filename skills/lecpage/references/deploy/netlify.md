@@ -32,9 +32,10 @@ NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --sit
 ## 명령어 없이
 - **앱**: 공개하기에서 Netlify를 고르고 토큰을 붙여 넣습니다. 올린 뒤 **Make public**.
 - **Netlify Drop**: 로그인한 채 https://app.netlify.com/drop 에 폴더를 놓습니다. 계정 없이 올리면 1시간 안에 claim해야 하고, claim 전에는 비밀번호로 잠겨 있으며, claim 뒤에도 새 팀은 비공개입니다. 익명 올리기는 하루 한도도 있습니다(학교는 공인 IP 하나를 같이 씀). 연수 주소로는 권하지 않습니다.
-- 고칠 때: 프로젝트 **Deploys** 화면 아래 끌어 놓기 칸에 폴더를 다시 놓습니다.
+- 고칠 때: 프로젝트 **Deploys** 화면 아래 끌어 놓는 자리에 폴더를 다시 놓습니다.
 
 ## 확인하기
+skill은 `curl -sI <주소>/ | head -1`로 먼저 봅니다. 비공개 프로젝트가 어떤 응답을 주는지는 확인하지 못했으니 ⚠️ `200`이어도 강사에게 아래 1번을 부탁합니다.
 1. **로그아웃한 창**에서 주소를 엽니다. 권한 없음 화면이면 아직 비공개입니다.
 2. `…/check.html`(접속 확인)이 모두 초록인지 봅니다. 연수 전날에는 참가자가 쓸 망에서 한 번 더(`school-network-checklist.md`).
 3. **Team → Usage & billing**에서 남은 크레딧을 봅니다(연수 전날 꼭).

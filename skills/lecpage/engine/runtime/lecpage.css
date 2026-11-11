@@ -1462,7 +1462,7 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 [data-preset="sunrise-warm"] .lp-head-k::before{content:"";flex:none;width:1.15em;height:.58em;border-radius:1.15em 1.15em 0 0;background:var(--primary)}
 [data-preset="sunrise-warm"] .lp-tinted{overflow:clip}
 [data-preset="sunrise-warm"] .lp-tinted::before{content:"";position:absolute;left:0;right:0;top:0;z-index:-1;height:clamp(120px,17vw,250px);transform:translateY(-50%);border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--hero-from) 46%,transparent),transparent)}
-[data-preset="sunrise-warm"] .lp-tinted::after,[data-preset="calm-forest"] .lp-tinted::after,[data-preset="warm-minimal"] .lp-tinted::after,[data-preset="soft-pastel"] .lp-tinted::after{content:"";position:absolute;inset:0;z-index:-1;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");opacity:.22;mix-blend-mode:multiply;pointer-events:none}
+[data-preset="sunrise-warm"] .lp-tinted::after,[data-preset="calm-forest"] .lp-tinted::after,[data-preset="warm-minimal"] .lp-tinted::after,[data-preset="soft-pastel"] .lp-tinted::after{content:"";position:absolute;inset:0;z-index:-1;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");opacity:.1;mix-blend-mode:multiply;pointer-events:none}
 [data-preset="sunrise-warm"] :is(.lp-outline-item,.lp-tools-item:not(:first-child),.lp-panel-card){box-shadow:inset 0 0 0 7px var(--card),inset 0 0 0 8px color-mix(in srgb,var(--primary) 26%,transparent)}
 [data-preset="sunrise-warm"] .lp-tools-item:first-child{box-shadow:inset 0 0 0 7px var(--band-primary,var(--primary)),inset 0 0 0 8px color-mix(in srgb,var(--primary-foreground) 44%,transparent)}
 [data-preset="sunrise-warm"] .lp-goal-list,[data-preset="sunrise-warm"] .lp-glossary,[data-preset="sunrise-warm"] .lp-timeline{border-top:1px solid color-mix(in srgb,var(--foreground) 46%,transparent)}
@@ -1482,7 +1482,7 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 /* 어두운 키노트: ① 섹션마다 아주 큰 윤곽 번호 ② 위에서 빛이 떨어지는 판 ③ 옅은 바탕 띠의 무대 조명과 지평선 불빛 */
 [data-preset="keynote-dark"] .lp-head-no{font-size:var(--fs-figure);line-height:.8;-webkit-text-stroke:1px color-mix(in srgb,var(--primary) 78%,transparent)}
 [data-preset="keynote-dark"] .lp-sec[data-frame="split"] .lp-head-no{font-size:var(--fs-num)}
-[data-preset="keynote-dark"] :is(.lp-outline-item,.lp-tools-item,.lp-poll-live,.lp-diag),[data-preset="keynote-dark"] .lp-slide-text[data-kind="body"]{background:radial-gradient(120% 90% at 50% -40%,color-mix(in srgb,var(--primary) 26%,transparent),transparent 62%),color-mix(in srgb,var(--card) 86%,transparent);border-color:color-mix(in srgb,var(--foreground) 12%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 16%,transparent)}
+[data-preset="keynote-dark"] :is(.lp-outline-item,.lp-tools-item:not(:first-child),.lp-poll-live,.lp-diag),[data-preset="keynote-dark"] .lp-slide-text[data-kind="body"]{background:radial-gradient(120% 90% at 50% -40%,color-mix(in srgb,var(--primary) 26%,transparent),transparent 62%),color-mix(in srgb,var(--card) 86%,transparent);border-color:color-mix(in srgb,var(--foreground) 12%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 16%,transparent)}
 [data-preset="keynote-dark"] .lp-tinted{background:radial-gradient(64% 54% at 50% 0,color-mix(in srgb,var(--primary) 17%,transparent),transparent 72%),var(--surface-2)}
 [data-preset="keynote-dark"] .lp-tinted::after{content:"";position:absolute;inset:auto 0 0 0;height:1px;z-index:-1;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--primary) 70%,var(--foreground)) 50%,transparent);box-shadow:0 0 70px 18px color-mix(in srgb,var(--primary) 22%,transparent)}
 [data-preset="keynote-dark"] .lp-goal-no,[data-preset="keynote-dark"] .lp-outline-no{color:transparent;-webkit-text-stroke:1.5px var(--primary)}
@@ -1499,7 +1499,7 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 /* 유리 실험실: ① 섹션 뒤의 빛 그물(mesh) ② 유리판(안쪽 반사광, 여유 있는 기기에서는 뒤가 비침) ③ 머리 번호 앞 상태 점 */
 [data-preset="glass-lab"] .lp-sec:not(.lp-hero):not(.lp-bleed):nth-of-type(odd){background:radial-gradient(40% 60% at 8% 18%,color-mix(in srgb,var(--accent-3) 13%,transparent),transparent 70%),radial-gradient(38% 54% at 94% 78%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 70%),var(--background)}
 [data-preset="glass-lab"] .lp-sec:not(.lp-hero):not(.lp-bleed):nth-of-type(even){background:radial-gradient(42% 58% at 92% 14%,color-mix(in srgb,var(--accent-2) 14%,transparent),transparent 70%),radial-gradient(36% 50% at 6% 86%,color-mix(in srgb,var(--hero-from) 16%,transparent),transparent 70%),var(--background)}
-[data-preset="glass-lab"] :is(.lp-outline-item,.lp-tools-item,.lp-poll-live,.lp-diag),[data-preset="glass-lab"] .lp-tools-item:not(:first-child){background:linear-gradient(160deg,color-mix(in srgb,var(--foreground) 9%,transparent),color-mix(in srgb,var(--foreground) 3%,transparent) 46%),color-mix(in srgb,var(--card) 58%,transparent);border-color:color-mix(in srgb,var(--foreground) 15%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 14%,transparent),0 24px 44px -28px rgba(0,0,0,.55)}
+[data-preset="glass-lab"] :is(.lp-outline-item,.lp-tools-item:not(:first-child),.lp-poll-live,.lp-diag){background:linear-gradient(160deg,color-mix(in srgb,var(--foreground) 9%,transparent),color-mix(in srgb,var(--foreground) 3%,transparent) 46%),color-mix(in srgb,var(--card) 58%,transparent);border-color:color-mix(in srgb,var(--foreground) 15%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 14%,transparent),0 24px 44px -28px rgba(0,0,0,.55)}
 html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-lite) :is(.lp-outline-item,.lp-tools-item:not(:first-child)){-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3)}
 [data-preset="glass-lab"] .lp-head-k::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 24%,transparent)}
 
@@ -1527,6 +1527,86 @@ html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-lite) :is(.lp-outline-it
 [data-preset="playground"] .lp-goal-list li:nth-child(even) .lp-goal-no{background:var(--accent);color:var(--accent-foreground);transform:rotate(3deg)}
 [data-preset="playground"] :is(.lp-poll-live,.lp-diag){border:2.5px solid var(--border);box-shadow:5px 5px 0 var(--border);background:var(--card)}
 
+
+/* 밤하늘 서사: ① 옅은 바탕 띠의 별 ② 아래에서 번지는 새벽빛 ③ 판 위쪽 가장자리의 따뜻한 빛 */
+[data-preset="night-story"] .lp-tinted{background:radial-gradient(1.2px 1.2px at 12% 22%,color-mix(in srgb,var(--foreground) 70%,transparent) 50%,transparent 51%) 0 0/190px 170px,radial-gradient(1px 1px at 64% 58%,color-mix(in srgb,var(--foreground) 56%,transparent) 50%,transparent 51%) 40px 30px/260px 210px,radial-gradient(1.4px 1.4px at 82% 12%,color-mix(in srgb,var(--accent-2) 80%,transparent) 50%,transparent 51%) 90px 60px/340px 280px,radial-gradient(80% 60% at 50% 118%,color-mix(in srgb,var(--hero-from) 26%,transparent),transparent 70%),var(--surface-2)}
+[data-preset="night-story"] :is(.lp-outline-item,.lp-tools-item:not(:first-child),.lp-poll-live,.lp-diag){background:radial-gradient(110% 80% at 50% -36%,color-mix(in srgb,var(--hero-from) 20%,transparent),transparent 60%),color-mix(in srgb,var(--card) 88%,transparent);border-color:color-mix(in srgb,var(--foreground) 12%,transparent)}
+[data-preset="night-story"] .lp-goal-no{color:transparent;-webkit-text-stroke:1.5px var(--primary)}
+
+/* 종이 워크북: ① 제목에 그은 형광펜 ② 옅은 바탕 띠의 점 모눈 ③ 구멍 뚫린 실습지 판 */
+[data-preset="paper-workbook"]{--mk:62%}
+[data-preset="paper-workbook"][data-theme="dark"]{--mk:88%}
+[data-preset="paper-workbook"] .lp-head .lp-h2{justify-self:start;padding-inline:.06em;background:linear-gradient(transparent var(--mk),var(--accent) var(--mk) 94%,transparent 94%)}
+[data-preset="paper-workbook"] .lp-tinted{background-image:radial-gradient(color-mix(in srgb,var(--foreground) 12%,transparent) 1px,transparent 1.5px);background-size:22px 22px}
+[data-preset="paper-workbook"] .lp-outline-item{padding-left:calc(clamp(20px,3vw,44px) + 22px);background-image:radial-gradient(circle,var(--surface-2) 5.5px,transparent 6px);background-size:14px 33.33%;background-position:14px 0;background-repeat:repeat-y;border:1.5px solid var(--foreground);border-radius:8px;box-shadow:5px 5px 0 -1.5px var(--card),5px 5px 0 0 var(--foreground)}
+[data-preset="paper-workbook"] .lp-goal-no{font-size:var(--fs-h2s)}
+[data-preset="paper-workbook"] .lp-goal-no::before{content:"";display:inline-block;width:.62em;height:.62em;margin-right:.3em;border:1.5px solid currentColor;border-radius:3px;vertical-align:.02em}
+
+/* 숲의 숨: ① 머리의 잎 표식 ② 옅은 바탕 띠 아래의 언덕과 종이 결 ③ 잎처럼 한쪽이 접힌 판 */
+[data-preset="calm-forest"] .lp-head-k::before{content:"";flex:none;width:.72em;height:.72em;border-radius:0 70% 0 70%;background:var(--primary);transform:rotate(-10deg)}
+[data-preset="calm-forest"] .lp-tinted{overflow:clip}
+[data-preset="calm-forest"] .lp-tinted::before{content:"";position:absolute;inset:auto 0 0 0;z-index:-1;height:clamp(70px,11vw,160px);background:radial-gradient(62% 100% at 18% 100%,color-mix(in srgb,var(--primary) 12%,transparent) 99.4%,transparent 100%),radial-gradient(52% 70% at 84% 100%,color-mix(in srgb,var(--primary) 8%,transparent) 99.4%,transparent 100%)}
+[data-preset="calm-forest"] :is(.lp-outline-item,.lp-tools-item){border-radius:var(--radius-lg) var(--radius-lg) var(--radius-lg) 6px}
+
+/* 공식 브리핑: ① 옅은 바탕 띠 위의 세 칸 색 막대 ② 표처럼 번갈아 깔린 줄과 굵은 머리 선 ③ 남색 번호 칸 */
+[data-preset="official-brief"] .lp-tinted::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:linear-gradient(90deg,var(--primary) 0 30%,var(--accent) 30% 62%,color-mix(in srgb,var(--accent) 42%,var(--background)) 62%)}
+[data-preset="official-brief"] :is(.lp-goal-list,.lp-glossary,.lp-timeline,.lp-checklist){border-top:3px solid var(--primary)}
+[data-preset="official-brief"] .lp-goal-list li:nth-child(even),[data-preset="official-brief"] .lp-glossary div:nth-child(even){background:var(--card)}
+[data-preset="official-brief"] .lp-goal-list li,[data-preset="official-brief"] .lp-glossary div{padding-inline:clamp(12px,2vw,24px)}
+@media (min-width:601px){
+  [data-preset="official-brief"] .lp-outline-item{background:linear-gradient(90deg,var(--band-primary,var(--primary)) 0 calc(clamp(4.5rem,13vw,12rem) + clamp(20px,3vw,44px) + clamp(8px,1.5vw,24px)),var(--card) 0)}
+  [data-preset="official-brief"] .lp-outline-no{color:var(--primary-foreground)}
+}
+
+/* 도파민 팝: ① 동그란 번호 스티커 ② 옅은 바탕 띠의 점무늬와 큰 원 ③ 파스텔 면 카드와 겹친 그림자 */
+[data-preset="retro-pop"] .lp-outline-no{display:grid;place-items:center;width:1.5em;aspect-ratio:1;font-size:clamp(2.5rem,6vw,5rem);background:var(--accent-3);color:var(--accent-3-foreground);border:var(--border-w) solid var(--foreground);border-radius:50%;box-shadow:4px 5px 0 var(--foreground);transform:rotate(-8deg)}
+[data-preset="retro-pop"] .lp-tinted{overflow:clip;background-image:radial-gradient(circle,color-mix(in srgb,var(--foreground) 12%,transparent) 1.2px,transparent 1.7px);background-size:20px 20px}
+[data-preset="retro-pop"] .lp-tinted::before{content:"";position:absolute;right:-8vw;top:-12vw;z-index:-1;width:34vw;aspect-ratio:1;border-radius:50%;background:color-mix(in srgb,var(--accent) 30%,transparent)}
+[data-preset="retro-pop"] .lp-outline-item,[data-preset="retro-pop"] .lp-tools-item{border:var(--border-w) solid var(--foreground);box-shadow:6px 6px 0 color-mix(in srgb,var(--primary) 34%,transparent)}
+[data-preset="retro-pop"] .lp-tools-item:nth-child(3n+2){background:color-mix(in srgb,var(--accent-3) 46%,var(--card))}
+[data-preset="retro-pop"] .lp-tools-item:nth-child(3n){background:color-mix(in srgb,var(--accent) 20%,var(--card))}
+[data-preset="retro-pop"] .lp-goal-no{text-shadow:.05em .055em 0 var(--accent)}
+
+/* 칠판 교실: ① 제목 아래 분필 밑줄 ② 분필로 그린 점선 판 ③ 옅은 바탕 띠의 분필 별 */
+[data-preset="chalkboard"] .lp-head .lp-h2::after{content:"";display:block;width:min(100%,8.5em);height:11px;margin-top:.18em;background:var(--primary);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 14' preserveAspectRatio='none'%3E%3Cpath d='M3 9c40-6 78-6 118-2s82 6 120 0 50-5 76-3' fill='none' stroke='%23000' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 14' preserveAspectRatio='none'%3E%3Cpath d='M3 9c40-6 78-6 118-2s82 6 120 0 50-5 76-3' fill='none' stroke='%23000' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
+[data-preset="chalkboard"] :is(.lp-outline-item,.lp-tools-item:not(:first-child),.lp-poll-live,.lp-diag){background:color-mix(in srgb,var(--card) 55%,transparent);border:1.5px dashed color-mix(in srgb,var(--foreground) 48%,transparent)}
+[data-preset="chalkboard"] .lp-tinted::before{content:"";position:absolute;right:clamp(16px,7vw,110px);top:clamp(20px,3vw,44px);z-index:-1;width:clamp(44px,6vw,84px);aspect-ratio:1;background:var(--accent);opacity:.8;transform:rotate(12deg);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l7 18 19 1-15 12 5 19-16-11-16 11 5-19L6 25l19-1z' fill='none' stroke='%23000' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6l7 18 19 1-15 12 5 19-16-11-16 11 5-19L6 25l19-1z' fill='none' stroke='%23000' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
+[data-preset="chalkboard"] .lp-goal-list{border-top:2px dashed color-mix(in srgb,var(--foreground) 55%,transparent)}
+
+/* 형광 인쇄: ① 번호·제목의 어긋난 판 ② 옅은 바탕 띠 구석의 망점 ③ 강조색으로 밀려 찍힌 판 그림자 */
+[data-preset="riso-zine"] :is(.lp-goal-no,.lp-outline-no,.lp-num,.lp-st-big),[data-preset="riso-zine"] .lp-head .lp-h2{text-shadow:-.04em .035em 0 color-mix(in srgb,var(--accent) 84%,transparent)}
+[data-preset="riso-zine"] .lp-tinted{overflow:clip}
+[data-preset="riso-zine"] .lp-tinted::before{content:"";position:absolute;right:-6vw;top:-10vw;z-index:-1;width:min(40vw,520px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,var(--accent) 33%,transparent 35%) 0 0/14px 14px,radial-gradient(circle,var(--accent-3) 26%,transparent 28%) 6px 5px/14px 14px;-webkit-mask-image:radial-gradient(circle,#000 30%,transparent 70%);mask-image:radial-gradient(circle,#000 30%,transparent 70%);opacity:.5}
+[data-preset="riso-zine"] :is(.lp-outline-item,.lp-tools-item:not(:first-child)){border:var(--border-w) solid var(--foreground);box-shadow:5px 5px 0 var(--accent)}
+[data-preset="riso-zine"] :is(.lp-outline-part,.lp-schedule-part,.lp-file-kind){font-family:var(--font-mono)}
+
+/* 부드러운 파스텔: ① 옅은 바탕 띠에 걸친 둥근 도형 ② 파스텔 면의 아주 둥근 판 ③ 동그란 번호 */
+[data-preset="soft-pastel"] .lp-tinted{overflow:clip}
+[data-preset="soft-pastel"] .lp-tinted::before{content:"";position:absolute;right:clamp(-40px,2vw,60px);top:-70px;z-index:-1;width:clamp(140px,18vw,260px);aspect-ratio:1;border-radius:50%;background:var(--accent-2);box-shadow:calc(clamp(140px,18vw,260px) * -.7) calc(clamp(140px,18vw,260px) * .2) 0 calc(clamp(140px,18vw,260px) * -.3) var(--accent-3);opacity:.7}
+[data-preset="soft-pastel"] .lp-outline-item{border-radius:36px}
+[data-preset="soft-pastel"] .lp-outline-item:nth-child(3n+1){background:color-mix(in srgb,var(--accent) 34%,var(--card))}
+[data-preset="soft-pastel"] .lp-outline-item:nth-child(3n+2){background:color-mix(in srgb,var(--accent-2) 40%,var(--card))}
+[data-preset="soft-pastel"] .lp-outline-item:nth-child(3n){background:color-mix(in srgb,var(--accent-3) 46%,var(--card))}
+[data-preset="soft-pastel"] .lp-goal-no{display:inline-grid;place-items:center;width:1.7em;aspect-ratio:1;font-size:var(--fs-h2s);border-radius:50%;background:color-mix(in srgb,var(--accent) 60%,var(--background));color:var(--foreground)}
+[data-preset="soft-pastel"] .lp-goal-list li:nth-child(3n+2) .lp-goal-no{background:color-mix(in srgb,var(--accent-2) 70%,var(--background))}
+[data-preset="soft-pastel"] .lp-goal-list li:nth-child(3n) .lp-goal-no{background:color-mix(in srgb,var(--accent-3) 80%,var(--background))}
+
+/* 움직이는 글자: ① 섹션마다 제목이 윤곽선으로 크게 메아리침(data-echo) ② 섹션 사이 굵은 선 ③ 굵은 선의 판 */
+[data-preset="kinetic-type"] .lp-sec[data-echo]{overflow:clip;border-top:max(3px,var(--border-w)) solid var(--foreground)}
+[data-preset="kinetic-type"] .lp-sec[data-echo]::before{content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo);content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo) / "";position:absolute;left:-.04em;top:-.12em;z-index:-1;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(3.5rem,11vw,10rem);line-height:1;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1px color-mix(in srgb,var(--foreground) 13%,transparent);pointer-events:none;-webkit-user-select:none;user-select:none}
+[data-preset="kinetic-type"] .lp-sec[data-echo] > .lp-wrap{padding-top:clamp(28px,5vw,80px)}
+[data-preset="kinetic-type"] :is(.lp-outline-item,.lp-tools-item:not(:first-child)){border-width:max(3px,var(--border-w)) 0 0;border-color:var(--foreground);background:none;padding-inline:0}
+[data-preset="kinetic-type"] .lp-goal-list p{font-family:var(--font-display);font-weight:var(--display-weight);letter-spacing:-.03em}
+@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
+  html[data-preset="kinetic-type"]:is([data-rest="2"],[data-rest="3"]):not(.lp-paused):not(.fx-paused):not(.lp-lowpower) .lp-sec[data-echo]::before{animation:lp-kin-run linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+}}
+
+/* 따뜻한 미니멀: ① 가는 큰 번호 ② 점선으로 이은 줄 ③ 옅은 바탕 띠의 종이 결과 여백 선 */
+[data-preset="warm-minimal"] .lp-head-k{font-size:var(--fs-h2s);font-weight:400;color:var(--primary)}
+[data-preset="warm-minimal"] :is(.lp-goal-list li,.lp-glossary div,.lp-tl-group,.lp-checklist li + li){border-bottom-style:dotted;border-top-style:dotted;border-color:color-mix(in srgb,var(--foreground) 40%,transparent)}
+[data-preset="warm-minimal"] :is(.lp-outline-item,.lp-tools-item:not(:first-child)){background:none;border-width:1px 0 0;border-style:dotted;border-color:color-mix(in srgb,var(--foreground) 46%,transparent);padding-inline:0}
+[data-preset="warm-minimal"] .lp-outline-no,[data-preset="warm-minimal"] .lp-goal-no{font-weight:400}
+[data-preset="warm-minimal"] .lp-tinted::before{content:"";position:absolute;top:0;bottom:0;left:max(8px,calc((100% - 1160px) / 2 - 28px));z-index:-1;width:1px;background:color-mix(in srgb,var(--primary) 38%,transparent)}
 
 /* 움직임 줄이기·멈춤 */
 @media (prefers-reduced-motion: reduce){

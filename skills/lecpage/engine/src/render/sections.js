@@ -68,7 +68,9 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   const enter = enterId && !calm ? ` data-fx="${esc(enterId)}"` : '';
   const frame = frameOf(s, ctx);
   const cls = `lp-sec lp-sec-${esc(s.type)}${frame === 'band' ? bandClass(ctx) : ''}${TINTED.includes(s.type) ? ' lp-tinted' : ''}`;
-  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${LAYOUTS[s.type] || 'prose'}" data-frame="${frame}"${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
+  // '움직이는 글자' 프리셋: 섹션 제목이 뒤에서 윤곽선으로 크게 메아리침(CSS가 data-echo를 읽음). 따라 하는 칸에는 두지 않음
+  const echo = !calm && s.title && frame !== 'band' && getPreset(ctx.design.preset).variants.hero === 'ticker' ? ` data-echo="${esc(String(s.title).replace(/\n/g, ' ').slice(0, 40))}"` : '';
+  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${LAYOUTS[s.type] || 'prose'}" data-frame="${frame}"${echo}${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
 }
 
 function liveOff(ctx) {

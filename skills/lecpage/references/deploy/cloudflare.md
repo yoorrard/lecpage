@@ -85,22 +85,15 @@ npx wrangler@4 pages deploy ./dist --project-name lec-20261111 --branch main
 ## 실시간 중계(cf-relay)
 코드: `skills/lecpage/backends/cloudflare/`(최종 기준은 그 폴더의 README). 강사 본인 계정에 올립니다. lecpage 운영자가 대신 운영하는 공용 중계는 없습니다.
 
-**버튼으로(명령어 없음)**
+**skill이 직접**: README §2의 명령을 그대로 돌립니다. 강사는 `npx wrangler login`으로 로그인하거나 토큰을 환경 변수로 넣어 주기만 하고, 관리자 키는 skill이 만들어 파일로 건넵니다.
+
+**버튼으로(강사가 명령어 없이)**
 1. 백엔드 README의 **Deploy to Cloudflare** 버튼을 누릅니다(https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare).
 2. Cloudflare에 로그인하고 GitHub(또는 GitLab) 연결을 허락합니다. 이 폴더만 담은 저장소가 **강사의 GitHub 계정에 복사**되므로 GitHub 계정도 있어야 합니다. 자동 배포(Workers Builds)가 붙습니다.
 3. 값 넣기:
    - **`ADMIN_KEY`**: 강사 화면 비밀번호. 16자 넘게 길고 짐작하기 어렵게. 예시 값(`change-me-…`)을 그대로 두지 않습니다.
    - `SETUP_TOKEN`: 비워 둡니다(여러 강사가 함께 쓰는 서버에만 씀).
 4. 배포가 끝나면 `https://lecpage-live.<계정>.workers.dev`가 나옵니다. 확인: 주소 뒤에 `/api/health` → `{"ok":true,…}`.
-
-**명령줄로**
-```bash
-cd skills/lecpage/backends/cloudflare
-npm install                          # wrangler 4.151.3 고정
-npx wrangler login
-npx wrangler secret put ADMIN_KEY    # 한 강사 전용 서버. 공유 서버만 SETUP_TOKEN
-npx wrangler deploy
-```
 
 **사이트와 잇기**
 - 중계 주소를 `info.json`의 `live`(`provider: "http"`, `url`)에 넣고 `patch work/blueprint.json -i work/info.json`으로 다시 빌드합니다.
@@ -135,6 +128,7 @@ npx wrangler deploy
 | 임시로 올린 사이트가 사라짐 | 60분 안에 claim하지 않음 → 가입한 뒤 다시 올리고 주소를 다시 안내 |
 | "Could not authenticate … non-interactive" | 로그인·토큰이 없음 → 위 인증 표 |
 | "already authenticated … `--temporary` can't be used" | `--temporary`를 빼고 실행 |
+| "register a workers.dev subdomain" 오류로 멈춤 | 새 계정이라 `workers.dev` 주소가 아직 없음. 대화 없는 셸에서는 wrangler가 만들어 주지 않음 → 오류에 나온 `https://dash.cloudflare.com/<계정 ID>/workers/onboarding`을 강사가 한 번 열어 이름을 정한 뒤 다시 실행 |
 | 끌어 놓기가 거부됨 | 파일 1,000개 또는 파일당 25MiB를 넘음 → wrangler(20,000개), 큰 파일은 GitHub Pages나 유튜브 링크 |
 | 학교·통신사에서 `*.pages.dev`·`*.workers.dev`가 안 열림 | 내 도메인 연결(`custom-domain-and-short-url.md`) |
 | 한국에서 첫 접속이 느림 | 통신사에 따라 해외 데이터센터로 연결되기도 함(커뮤니티 보고, 공식 확인 없음 ⚠️). `https://<주소>/cdn-cgi/trace`의 `colo=`가 `ICN`이면 서울. 느리면 슬라이드 화질을 낮춤 |
