@@ -666,6 +666,8 @@ const commands = {
       `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
       ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
       how ? `올리기 ${how}` : '',
+      // 무료 한도를 넘으면 어떻게 되는지(멈추는지, 유료로 이어지는지). 강사에게 한 줄로 전하고 고르게 함
+      [top?.atLimit_ko && `${top.name_ko}: ${top.atLimit_ko}`, r.backendInfo.atLimit_ko && `${r.backendInfo.name_ko}: ${r.backendInfo.atLimit_ko}`].filter(Boolean).map((x) => '한도 ' + x).join('\n'),
       ...r.warnings.map((x) => '주의 ' + x),
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
       `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
