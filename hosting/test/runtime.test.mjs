@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { matchRuntime, isRuntimeJs, prepare, JOIN, MAX_JS_BYTES } from '../src/runtime.js';
 import { RUNTIME_SEGMENTS } from '../src/runtime-allow.js';
 import { segment, currentSegments } from '../scripts/gen-runtime.mjs';
@@ -101,4 +103,27 @@ test('조각 나누기: 짧은 조각이 긴 조각의 앞부분이어도 되돌
   assert.deepEqual(await matchRuntime(te.encode('/* 한글 😀 주석 */\nvar a=1;\n;\nvar b="끝";'), k), ['K', 'L']);
   assert.equal(await matchRuntime(te.encode('/* 한글 😀 주석 */\nvar a=2;\n;\nvar b="끝";'), k), null);
   assert.equal(td.decode(te.encode('😀')).length, 2);
+});
+
+test('이전 판 기억하기(--keep): 적어 둔 예전 런타임 조각도 받음', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lecpage-rt-'));
+  try {
+    const env = { ...process.env, LECPAGE_RUNTIME_OUT: join(dir, 'allow.js'), LECPAGE_RUNTIME_HISTORY: join(dir, 'history.json') };
+    const run = (...args) => execFileSync(process.execPath, [join(HOSTING, 'scripts', 'gen-runtime.mjs'), ...args], { env, stdio: 'pipe' }).toString();
+    // 예전 판에 있던 조각 하나를 기록에 넣어 둠
+    const old = segment('lecpage.js', '/* 예전 lecpage.js */\nvar old = 1;');
+    writeFileSync(env.LECPAGE_RUNTIME_HISTORY, JSON.stringify({ segments: [{ ...old, kept: '2026-10-01' }] }));
+    assert.match(run('--keep'), /runtime-history\.json: \d+개 추가/);
+    const hist = JSON.parse(readFileSync(env.LECPAGE_RUNTIME_HISTORY, 'utf8')).segments;
+    assert.ok(hist.length > 40 && hist.some((s) => s.sha256 === old.sha256));
+    assert.match(run('--keep'), /0개 추가/, '같은 판을 두 번 적지 않음');
+    const mod = await import(pathToFileURL(env.LECPAGE_RUNTIME_OUT).href);
+    const allow = prepare(mod.RUNTIME_SEGMENTS);
+    assert.equal(mod.RUNTIME_SEGMENTS.length, currentSegments().length + 1, '지금 판 + 예전 조각 하나');
+    assert.deepEqual(await matchRuntime('/* 예전 lecpage.js */\nvar old = 1;', allow), ['lecpage.js@2026-10-01']);
+    assert.ok(await matchRuntime(rt('lecpage.js'), allow), '지금 판도 그대로 받음');
+    assert.equal(await matchRuntime('/* 예전 lecpage.js */\nvar old = 2;', allow), null);
+    assert.equal(await matchRuntime('/* 예전 lecpage.js */\nvar old = 1;'), null, '기록이 없는 기본 목록은 받지 않음');
+    run('--check');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

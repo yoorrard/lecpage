@@ -34,6 +34,55 @@ test('참가자 화면: 상자(lp-card)·알약 꼬리표 없이 줄·글자로 
   assert.doesNotMatch(css, /background-clip:\s*text/, '그라데이션 글자');
 });
 
+test('첫 화면 뼈대: 프리셋마다 구조가 다르다(같은 뼈대에 색만 바꾼 첫 화면이 없음)', async () => {
+  const { heroSkeleton } = await import('../../scripts/design-lint.mjs');
+  for (const id of ['sel-story', 'data-lab']) {
+    const seen = new Map();
+    for (const p of E.PRESETS) {
+      const bp = EX(id); bp.design = { preset: p.id };
+      const sk = heroSkeleton(E.build(bp, { runtime: nodeRuntime() }).files['index.html']);
+      assert.ok(sk.length > 40, `${p.id}: 첫 화면 뼈대를 읽지 못함`);
+      assert.ok(!seen.has(sk), `${id}: ${p.id}와 ${seen.get(sk)}의 첫 화면 구조가 같음`);
+      seen.set(sk, p.id);
+    }
+    assert.equal(seen.size, E.PRESETS.length);
+  }
+  assert.equal(new Set(E.PRESETS.map((p) => p.variants.hero)).size, E.PRESETS.length, '두 프리셋이 같은 첫 화면 구성을 쓰지 않음');
+});
+
+test('섹션 배치: 같은 배치가 셋 넘게 줄지어 나오지 않고, 줄 목록이 이어지면 틀이 번갈아 바뀐다', async () => {
+  const { layoutRuns } = await import('../../scripts/design-lint.mjs');
+  for (const id of ['sel-story', 'data-lab']) {
+    const r = layoutRuns(E.build(EX(id), { runtime: nodeRuntime() }).files['index.html']);
+    assert.ok(r.seq.length >= 10, id);
+    assert.ok(r.max < 3, `${id}: ${r.at} 배치가 ${r.max}번 이어짐`);
+    assert.ok(new Set(r.seq).size >= 8, `${id}: 배치 가짓수 ${new Set(r.seq).size}`);
+  }
+  // FAQ·자료·연수 후가 이어져도 틀이 split → wide → split으로 바뀜
+  const bp = EX('sel-story');
+  bp.sections = [bp.sections[0], { type: 'faq', title: '질문', items: [{ q: 'a', a: 'b' }] }, { type: 'materials', title: '자료', items: [{ title: 'x' }] }, { type: 'schedule', title: '일정', items: [{ start: '09:00', title: 'a' }, { start: '10:00', title: 'b' }] }];
+  const r = layoutRuns(E.build(bp, { runtime: nodeRuntime() }).files['index.html']);
+  assert.deepEqual(r.seq, ['split/rows', 'wide/rows', 'split/rows']);
+  assert.ok(r.max < 3);
+});
+
+test('움직임 예산: 실습형은 첫 화면 밖 1단계, 공식 연수는 1단계, 스크롤 연출(3단계)은 직접 골랐을 때만 휴대폰 대상에 허용', () => {
+  const lab = E.build(EX('data-lab'), { runtime: nodeRuntime() });
+  assert.equal(lab.design.motion, 1); assert.equal(lab.design.rest, 1);
+  assert.match(lab.files['index.html'], /data-motion="1"[^>]*data-rest="1"/);
+  const free = EX('data-lab'); free.meta.admin = { kind: 'school' }; free.design = { preset: 'night-story', motion: 3 };
+  const r = E.build(free, { runtime: nodeRuntime() });
+  assert.equal(r.design.motion, 3); assert.equal(r.design.rest, 1, '실습형은 첫 화면 밖이 차분 단계');
+  for (const [slot, fx] of Object.entries(r.design.effects)) if (!slot.startsWith('hero.')) assert.ok((E.FX.find((f) => f.id === fx)?.level ?? 0) <= 1, `${slot}=${fx}`);
+  const story = EX('sel-story');
+  assert.equal(E.build(story, { runtime: nodeRuntime() }).design.motion, 3, '예시는 스크롤 연출을 직접 고름');
+  story.design = { preset: 'night-story' };
+  assert.equal(E.build(story, { runtime: nodeRuntime() }).design.motion, 2, '휴대폰 대상이면 기본은 2단계까지');
+  // 따라 하는 칸(실습·질문·교재·보드·투표·프롬프트)에는 효과 속성을 붙이지 않음
+  const html = E.build(EX('sel-story'), { runtime: nodeRuntime() }).files['index.html'];
+  for (const m of html.matchAll(/<section[^>]*data-calm[^>]*>/g)) assert.ok(!/data-fx=/.test(m[0]), m[0].slice(0, 80));
+});
+
 test('OKLCH 12단계 색띠: 9단계가 고른 색, 글자 단계는 바탕 위에서 읽힘, 범위 밖 색도 sRGB 안으로', () => {
   for (const hex of ['#5B49B0', '#c7364f', '#0b5cad', '#d7f75b', '#111111', '#ffffff']) {
     const r = E.ramp12(hex);

@@ -25,12 +25,39 @@ export const RULES = {
   'heading-ratio': { level: 'warn', ko: '제목과 본문의 크기 차이가 작아요. 섹션 제목은 본문의 1.6배 넘게 키우세요.' },
   'font-sizes': { level: 'warn', ko: '글자 크기 가짓수가 너무 많아요. 정해 둔 크기 단계만 쓰세요.' },
   'long-label': { level: 'warn', ko: '단추·메뉴·라벨 글이 길거나 어색해요. 짧은 동사형으로 줄이세요(예: "자료 받기").' },
+  'layout-repeat': { level: 'error', ko: '같은 배치의 섹션이 셋 넘게 줄지어 나와요(머리 왼쪽·줄 목록 오른쪽 등). 사이에 다른 배치를 두거나 섹션 순서를 바꾸세요.' },
 };
+
+// ── 쪽을 열지 않고 하는 검사(HTML 문자열) ─────────────────────────────
+/** 줄 목록 계열은 한 가족으로 봄(일정·FAQ·자료·연수 후·차시는 모두 '머리 + 줄 목록') */
+const FAMILY = { timeline: 'rows', accordion: 'rows', files: 'rows', course: 'rows' };
+/**
+ * 첫 화면 뼈대: <section class="… lp-hero …"> 안의 태그·클래스 나무만 남긴 문자열(글자·속성 값·구성 이름 클래스는 뺌).
+ * 두 프리셋의 뼈대가 같으면 '옷만 갈아입힌 같은 첫 화면'입니다 → 엔진 테스트가 프리셋끼리 서로 다른지 확인합니다.
+ */
+export function heroSkeleton(html) {
+  const m = /<section[^>]*class="[^"]*\blp-hero\b[^"]*"[^>]*>([\s\S]*?)<\/section>/.exec(String(html || ''));
+  if (!m) return '';
+  return (m[1].match(/<\/?[a-zA-Z][^>]*>/g) || []).map((t) => {
+    if (t[1] === '/') return t.toLowerCase();
+    const tag = /^<([a-zA-Z0-9]+)/.exec(t)[1].toLowerCase();
+    if (['br', 'em', 'i', 'b', 'svg', 'path', 'time', 'a', 'span'].includes(tag)) return '';
+    const cls = (/class="([^"]*)"/.exec(t)?.[1] || '').split(/\s+/).filter((c) => c && !/^lp-hero--/.test(c) && !/^(is-|fx-)/.test(c)).sort().join('.');
+    return `<${tag}${cls ? '.' + cls : ''}>`;
+  }).filter((t) => t && !/^<\/(br|em|i|b|svg|path|time|a|span)>$/.test(t)).join('');
+}
+/** 섹션 배치 줄: main 안 섹션의 '틀/배치 가족' 목록과, 같은 것이 가장 길게 이어진 횟수 */
+export function layoutRuns(html) {
+  const seq = [...String(html || '').matchAll(/<section[^>]*\bdata-layout="([^"]+)"[^>]*\bdata-frame="([^"]+)"/g)].map((m) => `${m[2]}/${FAMILY[m[1]] || m[1]}`);
+  let max = 0, run = 0, at = '';
+  seq.forEach((x, i) => { run = i && x === seq[i - 1] ? run + 1 : 1; if (run > max) { max = run; at = x; } });
+  return { seq, max, at };
+}
 
 /** 쪽 안에서 도는 검사(직렬화되어 브라우저에서 실행됨) */
 function inPage() {
   const vis = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; const s = getComputedStyle(e); return s.visibility !== 'hidden' && s.display !== 'none' && (+s.opacity !== 0 || !!e.closest('[data-fx-pre]')); };
-  const skip = (e) => !!e.closest('[aria-hidden="true"],.lp-hero-graphic,.lp-closing-graphic,.fx-layer,dialog:not([open]),[hidden],script,style,noscript,svg');
+  const skip = (e) => !!e.closest('[aria-hidden="true"],.lp-hero-graphic,.lp-closing-graphic,.fx-layer,.lp-sr,.fx-sr,dialog:not([open]),[hidden],script,style,noscript,svg');
   const ownText = (e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
   const label = (e) => { const t = (e.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 40); const c = (typeof e.className === 'string' && e.className.trim()) ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''; return `${e.tagName.toLowerCase()}${c}${t ? ` "${t}"` : ''}`; };
   const all = [...document.querySelectorAll('body *')].filter((e) => !skip(e) && vis(e));
@@ -121,7 +148,7 @@ function inPage() {
   // 한 줄 길이: 글자 평균 폭으로 한 줄에 들어가는 글자 수를 셈(한국어 40자, 그 밖 80자)
   const cv = document.createElement('canvas').getContext('2d');
   let maxCpl = 0;
-  for (const e of all.filter((x) => x.matches('p,li,dd,blockquote') && !x.querySelector('p,div,h1,h2,h3,h4,ul,ol,dl,fieldset') && !x.closest('nav,button,.lp-btn,.lp-qr,figcaption,.lp-slide'))) {
+  for (const e of all.filter((x) => x.matches('p,li,dd,blockquote') && !x.querySelector('p,div,h1,h2,h3,h4,ul,ol,dl,fieldset') && !x.closest('nav,button,.lp-btn,.lp-qr,figcaption,.lp-slide,.lp-formula'))) {
     const t = (e.innerText || '').trim(); if (t.length < 60) continue;
     const s = getComputedStyle(e); const w = e.clientWidth - px(s.paddingLeft) - px(s.paddingRight); if (w < 200) continue;
     if (e.getBoundingClientRect().height < px(s.lineHeight) * 1.8) continue; // 한 줄짜리는 길이와 상관없음
@@ -140,6 +167,16 @@ function inPage() {
     const len = [...t].length;
     if ((isAction && len > 16) || (!isAction && len > 40) || /\((을|를|이|가|은|는|와|과)\)/.test(t) || /하시기 바랍니다|해 주시기 바랍니다|클릭하세요/.test(t)) add('long-label', e, `${label(e)} (${len}자)`);
   }
+
+  // 같은 배치가 셋 넘게 줄지어: 틀(data-frame) + 배치 가족(data-layout)이 같고, 머리가 실제로 같은 자리(왼쪽/위)에 놓인 섹션
+  const FAM = { timeline: 'rows', accordion: 'rows', files: 'rows', course: 'rows' };
+  const secs = [...document.querySelectorAll('main > section[data-layout]')].filter((e) => vis(e));
+  const sig = secs.map((sec) => {
+    const hd = sec.querySelector(':scope > .lp-wrap > .lp-head'); const body = hd && hd.nextElementSibling;
+    const side = hd && body && hd.getBoundingClientRect().right <= body.getBoundingClientRect().left + 1 ? 'L' : 'T';
+    return `${sec.getAttribute('data-frame')}/${FAM[sec.getAttribute('data-layout')] || sec.getAttribute('data-layout')}/${side}`;
+  });
+  for (let i = 2; i < sig.length; i++) if (sig[i] === sig[i - 1] && sig[i] === sig[i - 2]) add('layout-repeat', secs[i], `#${secs[i].id} (${sig[i]} ×3)`);
 
   const pills = (out['pill-chip'] || []).length;
   return { out, metrics: { cards: cards.size, pills, stripes: (out['side-stripe'] || []).length, gradientText: (out['gradient-text'] || []).length, bodyPx: body, h1Px: h1, h2Px: h2, h2Ratio: h2 ? +(h2 / body).toFixed(2) : 0, fontSizes: sizes.size, maxCpl } };

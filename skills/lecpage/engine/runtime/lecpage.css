@@ -410,6 +410,89 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero--invite .lp-h1{--fs-hero:clamp(2.5rem,5.7vw,5.5rem);line-height:1.22;letter-spacing:-.018em}
 .lp-hero--invite .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(180px,max-content));gap:var(--sp-3) var(--sp-8);width:100%;padding-top:var(--sp-4);border-top:1px solid var(--rule-c)}
 
+/* 13 keynote(어두운 키노트): 위에서 떨어지는 무대 조명, 화면 가득한 제목(둘째 줄은 한 톤 낮게), 지평선 불빛과 정보 레일 */
+.lp-hero--keynote{min-height:calc(100svh - 58px);align-content:stretch;padding-block:clamp(24px,3vw,40px) clamp(28px,3.4vw,48px);background:radial-gradient(64% 50% at 50% -8%,color-mix(in srgb,var(--primary) 36%,transparent),transparent 72%),var(--background)}
+.lp-key-light{position:absolute;inset:auto 0 0 0;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--primary) 80%,var(--foreground)) 50%,transparent);box-shadow:0 0 90px 26px color-mix(in srgb,var(--primary) 28%,transparent)}
+.lp-hero--keynote .lp-hero-inner{grid-template-rows:auto minmax(0,1fr) auto;gap:clamp(20px,3vw,40px)}
+.lp-key-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:var(--sp-2) var(--sp-5)}
+.lp-key-title{display:grid;gap:var(--sp-5);justify-items:start;align-content:center;min-width:0}
+.lp-hero--keynote .lp-h1{--fs-hero:clamp(3rem,8.6vw,8.75rem);line-height:1.05;letter-spacing:-.04em;max-width:11em}
+.lp-hero--keynote .lp-accent{color:color-mix(in srgb,var(--foreground) 50%,var(--background))}
+.lp-key-rail{grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0;padding-top:var(--sp-5);border-top:1px solid var(--rule-c)}
+.lp-key-rail > div{padding-right:var(--sp-5)}
+.lp-key-rail > div + div{padding-left:var(--sp-5);border-left:1px solid var(--rule-c)}
+.lp-key-rail .lp-num{font-size:var(--fs-h2s)}
+/* 14 panel(깔끔한 기업형): 제목 옆에 겹쳐 놓인 오늘의 일정 카드 */
+.lp-hero--panel{background:linear-gradient(180deg,color-mix(in srgb,var(--hero-from) 60%,var(--background)),var(--background) 72%)}
+.lp-hero--panel .lp-hero-inner{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(32px,5vw,88px);align-items:center}
+.lp-hero--panel .lp-hero-inner.is-solo{grid-template-columns:minmax(0,1fr)}
+.lp-hero--panel .lp-h1{--fs-hero:clamp(2.5rem,5.4vw,5.25rem);line-height:1.14;letter-spacing:-.04em}
+.lp-hero--panel .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));width:100%;padding-top:var(--sp-4);border-top:var(--rule)}
+.lp-panel-card{position:relative;justify-self:end;width:min(100%,440px);padding:clamp(20px,2.2vw,30px);background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:var(--radius-lg);box-shadow:0 1px 2px rgba(10,37,64,.06),0 28px 56px -24px rgba(10,37,64,.32)}
+.lp-panel-card::before{content:"";position:absolute;inset:20px -16px -16px 20px;z-index:-1;border-radius:inherit;background:color-mix(in srgb,var(--primary) 16%,var(--background))}
+.lp-panel-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:var(--sp-3);border-bottom:1px solid var(--rule-c)}
+.lp-panel-h b{font-size:var(--fs-md)}
+.lp-panel-h time{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+.lp-panel-card ol{list-style:none;display:grid}
+.lp-panel-card li{display:grid;grid-template-columns:3.7em minmax(0,1fr);gap:var(--sp-3);align-items:baseline;padding:var(--sp-3) 0;font-weight:600;line-height:1.45}
+.lp-panel-card li + li{border-top:1px solid var(--rule-c)}
+.lp-panel-t{font-family:var(--font-num);font-weight:var(--num-weight);color:var(--primary);font-variant-numeric:tabular-nums}
+.lp-panel-more{padding-top:var(--sp-3);border-top:1px solid var(--rule-c);font-size:var(--fs-sm);color:var(--muted-foreground)}
+/* 15 soft(부드러운 파스텔): 아치·원·알약 도형, 아치 안의 날짜 */
+.lp-hero--soft{background:linear-gradient(180deg,color-mix(in srgb,var(--hero-from) 46%,var(--background)),var(--background) 64%)}
+.lp-hero--soft .lp-hero-inner{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(24px,4vw,64px);align-items:center}
+.lp-hero--soft .lp-h1{--fs-hero:clamp(2.5rem,5.6vw,5.4rem);line-height:1.18;letter-spacing:-.03em}
+.lp-hero--soft .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(170px,max-content));gap:var(--sp-3) var(--sp-7)}
+.lp-soft-art{position:relative;justify-self:end;width:min(100%,440px);aspect-ratio:1}
+.lp-soft-art i{position:absolute;display:block}
+.lp-soft-art i:nth-child(1){inset:0 18% 22% 0;border-radius:999px 999px 28px 28px;background:var(--accent)}
+.lp-soft-art i:nth-child(2){right:0;top:8%;width:44%;aspect-ratio:1;border-radius:50%;background:var(--accent-2)}
+.lp-soft-art i:nth-child(3){left:10%;right:0;bottom:0;height:26%;border-radius:999px;background:var(--accent-3)}
+.lp-soft-date{position:absolute;left:0;right:18%;top:27%;margin:0;text-align:center;color:var(--accent-foreground)}
+.lp-soft-date time{display:grid;gap:6px}
+.lp-soft-date b{font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(3rem,6vw,5.6rem);line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.lp-soft-date span{font-size:var(--fs-sm);font-weight:700}
+/* 16 ticker(움직이는 글자): 넘치는 제목과 윤곽선 메아리 줄, 굵은 선의 정보 칸 */
+.lp-hero--ticker{min-height:0;align-content:start;padding-block:clamp(20px,2.6vw,36px) clamp(40px,5vw,72px)}
+.lp-hero--ticker .lp-hero-inner{gap:0}
+.lp-hero--ticker .lp-hero-top{padding-bottom:var(--sp-3);border-bottom:max(3px,var(--border-w)) solid var(--foreground)}
+.lp-hero--ticker .lp-h1{--fs-hero:clamp(3.25rem,11vw,11.25rem);line-height:1;letter-spacing:-.04em;padding-top:clamp(16px,2.4vw,36px)}
+.lp-kin-echo{margin:clamp(4px,1vw,14px) 0 clamp(20px,3vw,44px);overflow:hidden;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(2rem,5.6vw,5.5rem);line-height:1.12;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1.5px var(--foreground);-webkit-user-select:none;user-select:none}
+.lp-kin-echo span{display:inline-block;padding-left:max(20px,env(safe-area-inset-left,0px))}
+.lp-kin-foot{position:relative;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--sp-5) var(--sp-8);align-items:start}
+.lp-kin-foot > .lp-hero-sub,.lp-kin-foot > .lp-ctas{grid-column:1}
+.lp-kin-meta{grid-column:2;grid-row:1 / span 2;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--sp-6)}
+.lp-kin-meta > div{padding:var(--sp-3) 0 var(--sp-4);border-top:max(3px,var(--border-w)) solid var(--foreground)}
+/* 17 column(따뜻한 미니멀): 넓은 여백, 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보 */
+.lp-hero--column{min-height:min(88svh,880px);align-content:stretch;padding-block:clamp(20px,2.6vw,36px) clamp(40px,5vw,72px)}
+.lp-hero--column .lp-hero-inner{grid-template-columns:minmax(0,7fr) minmax(0,5fr);grid-template-rows:auto minmax(0,1fr);gap:clamp(28px,4vw,56px) clamp(32px,6vw,104px)}
+.lp-min-rule{grid-column:1 / -1;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:var(--sp-2) var(--sp-5);padding-bottom:var(--sp-3);border-bottom:1px solid var(--foreground)}
+.lp-hero--column .lp-hero-copy{align-content:end;gap:var(--sp-6)}
+.lp-hero--column .lp-h1{--fs-hero:clamp(2.4rem,4.8vw,4.6rem);line-height:1.26;letter-spacing:-.02em}
+.lp-min-side{display:grid;align-content:space-between;gap:var(--sp-6);min-width:0}
+.lp-min-date{margin:0;justify-self:end;font-family:var(--font-num);font-weight:400;font-size:clamp(7rem,17vw,16rem);line-height:.8;letter-spacing:-.05em;color:var(--primary);font-variant-numeric:lining-nums}
+.lp-min-meta{grid-template-columns:minmax(0,1fr);gap:0}
+.lp-min-meta > div{grid-template-columns:4em minmax(0,1fr);gap:var(--sp-3);align-items:baseline;padding:var(--sp-3) 0;border-top:1px dotted color-mix(in srgb,var(--foreground) 42%,transparent)}
+[data-preset="corporate-clean"] .lp-head-no{font-size:var(--fs-h2s);color:var(--primary);-webkit-text-stroke:0}
+@media (max-width:900px){
+  .lp-hero--panel .lp-hero-inner,.lp-hero--soft .lp-hero-inner,.lp-hero--column .lp-hero-inner,.lp-kin-foot{grid-template-columns:minmax(0,1fr)}
+  .lp-kin-meta{grid-column:1;grid-row:auto}
+  .lp-panel-card,.lp-soft-art{justify-self:start}
+  .lp-soft-art{width:min(100%,340px)}
+  .lp-key-rail{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-4) var(--sp-5)}
+  .lp-key-rail > div,.lp-key-rail > div + div{padding:0;border-left:0}
+  .lp-min-date{justify-self:start;font-size:clamp(5rem,26vw,8rem)}
+}
+@media (max-width:600px){
+  .lp-hero--keynote{min-height:calc(100svh - 62px)}
+  .lp-hero--column{min-height:0}
+  .lp-panel-card::before{inset:12px -8px -8px 12px}
+}
+@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
+  html:is([data-motion="2"],[data-motion="3"]):not(.lp-paused):not(.fx-paused) .lp-kin-echo span{animation:lp-kin-run linear both;animation-timeline:scroll(root);animation-range:0 130vh}
+}}
+@keyframes lp-kin-run{to{transform:translate3d(-24%,0,0)}}
+
 /* 어두운 테마에서 달라지는 첫 화면 조각 */
 :root[data-theme="dark"] .lp-hero--worksheet{--mk:86%}
 :root[data-theme="dark"] .lp-halftone{opacity:.55}

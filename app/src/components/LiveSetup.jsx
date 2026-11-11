@@ -36,9 +36,13 @@ export async function pingLive(live, code) {
 }
 
 /** Supabase 연수 등록 SQL: 보관 기간·파일 올리기·사전 검토를 서버에도 똑같이 걸어 둠 */
-function initSql(code, hash, bp) {
+/** 서버에 걸어 둘 연수 설정: 보관 기간·파일 올리기·사전 검토 */
+export function liveSettings(bp) {
   const board = (bp.sections || []).find((x) => x.type === 'board');
-  const settings = { retentionDays: bp.privacy?.retentionDays || 30, uploads: !!board && board.allowFiles !== false && !bp.audience?.minor, moderation: !!board?.moderation };
+  return { retentionDays: bp.privacy?.retentionDays || 30, uploads: !!board && board.allowFiles !== false && !bp.audience?.minor, moderation: !!board?.moderation };
+}
+function initSql(code, hash, bp) {
+  const settings = liveSettings(bp);
   return `select lec_private.init_training_hash('${code}', '${hash}', '${JSON.stringify(settings)}');`;
 }
 

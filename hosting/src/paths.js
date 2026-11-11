@@ -20,16 +20,26 @@ export const TYPES = {
   png: T('image/png'), jpg: T('image/jpeg'), jpeg: T('image/jpeg'), webp: T('image/webp'), avif: T('image/avif'), gif: T('image/gif'), ico: T('image/x-icon'),
   woff2: T('font/woff2'),
   pdf: T('application/pdf'),
-  // 엔진이 사이트에 넣어 주는 소리·영상(USER_ASSET)
+  // 엔진이 사이트에 넣어 주는 소리·영상(engine/src/build.js의 USER_ASSET)
   mp3: T('audio/mpeg'), m4a: T('audio/mp4'), mp4: T('video/mp4'), webm: T('video/webm'),
-  // 원본 자료: 브라우저에서 열지 않고 내려받기만
+  // 원본·내려받기 자료(assets/media, assets/files): 브라우저에서 열지 않고 내려받기만
+  ppt: T('application/vnd.ms-powerpoint', { download: true }),
   pptx: T('application/vnd.openxmlformats-officedocument.presentationml.presentation', { download: true }),
   ppsx: T('application/vnd.openxmlformats-officedocument.presentationml.slideshow', { download: true }),
-  ppt: T('application/vnd.ms-powerpoint', { download: true }),
+  doc: T('application/msword', { download: true }),
   docx: T('application/vnd.openxmlformats-officedocument.wordprocessingml.document', { download: true }),
+  xls: T('application/vnd.ms-excel', { download: true }),
   xlsx: T('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', { download: true }),
-  hwpx: T('application/hwp+zip', { download: true }),
   hwp: T('application/x-hwp', { download: true }),
+  hwpx: T('application/hwp+zip', { download: true }),
+  key: T('application/vnd.apple.keynote', { download: true }),
+  pages: T('application/vnd.apple.pages', { download: true }),
+  numbers: T('application/vnd.apple.numbers', { download: true }),
+  odt: T('application/vnd.oasis.opendocument.text', { download: true }),
+  odp: T('application/vnd.oasis.opendocument.presentation', { download: true }),
+  ods: T('application/vnd.oasis.opendocument.spreadsheet', { download: true }),
+  csv: T('text/csv; charset=utf-8', { download: true }),
+  md: T('text/markdown; charset=utf-8', { download: true }),
   zip: T('application/zip', { download: true }),
   // 암호로 잠근 사이트의 교재 그림·자료(engine/src/protect.js). unlock.js가 받아서 풂
   enc: T('application/octet-stream'),

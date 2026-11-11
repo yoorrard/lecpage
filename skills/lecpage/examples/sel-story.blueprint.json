@@ -34,20 +34,7 @@
     "network": "good",
     "projector": true
   },
-  "design": {
-    "preset": "sunrise-warm",
-    "palette": "dawn-letter",
-    "mood": [
-      "warm",
-      "emotional",
-      "calm"
-    ],
-    "topics": [
-      "sel",
-      "counseling"
-    ],
-    "theme": "preset"
-  },
+  "design": {"preset": "sunrise-warm", "palette": "dawn-letter", "mood": ["warm", "emotional", "calm"], "topics": ["sel", "counseling"], "theme": "preset", "motion": 3, "signature": "stack-cards"},
   "live": {
     "provider": "local",
     "features": [

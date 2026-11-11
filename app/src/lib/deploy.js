@@ -218,10 +218,11 @@ async function ip(method, path, { key, json, raw } = {}) {
   return j;
 }
 /**
- * @param {object} o { site: {id, key}(다시 올릴 때), title, files, onProgress }
- * @returns {Promise<{url, id, key, expiresAt}>}
+ * @param {object} o { site: {id, key}(다시 올릴 때), title, files, onProgress,
+ *   live?: { code, adminKeyHash, settings } 참여 기능 방을 이 사이트에 묶어 만듦(서버가 지원할 때) }
+ * @returns {Promise<{url, id, key, expiresAt, liveUrl?}>}
  */
-export async function deployInstant({ site, title, files, onProgress = () => { } }) {
+export async function deployInstant({ site, title, files, live = null, onProgress = () => { } }) {
   onProgress({ step: '준비', pct: 2 });
   let s = site?.id && site?.key ? site : null;
   if (!s) s = await ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120) } });
@@ -244,10 +245,12 @@ export async function deployInstant({ site, title, files, onProgress = () => { }
     await ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) });
     done++; onProgress({ step: `파일 올리기 ${done}/${need.length}`, pct: 8 + Math.round(done / need.length * 80) });
   });
-  onProgress({ step: '공개하는 중', pct: 92 });
+  let liveUrl = '';
+  if (live) { onProgress({ step: '참여 기능 준비', pct: 90 }); liveUrl = (await ip('POST', `/api/sites/${s.id}/live`, { key: s.key, json: live })).url || ''; }
+  onProgress({ step: '공개하는 중', pct: 94 });
   const out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key });
   onProgress({ step: '완료', pct: 100 });
-  return { url: out.url || s.url, id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0 };
+  return { url: out.url || s.url, id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
 }
 /** 바로 공개한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });

@@ -25,7 +25,8 @@ test('오류 코드', () => {
     [{ files: { ...base, '/x.html': f('b') } }, 'bad_path/400'],
     [{ files: { ...base, 'a/.env': f('b') } }, 'bad_path/400'],
     [{ files: { ...base, 'x.php': f('b') } }, 'bad_type/415'],
-    [{ files: { ...base, 'DESIGN.md': f('b') } }, 'bad_type/415'],
+    [{ files: { ...base, 'notes.rtf': f('b') } }, 'bad_type/415'],
+    [{ files: { ...base, 'assets/x.mjs': f('b') } }, 'bad_type/415'],
     [{ files: { ...base, noext: f('b') } }, 'bad_type/415'],
     [{ files: { ...base, 'a.png': { sha256: 'ABC', size: 1 } } }, 'bad_request/400'],
     [{ files: { ...base, 'a.png': { sha256: sha('A'), size: 1 } } }, 'bad_request/400'], // 대문자 16진수

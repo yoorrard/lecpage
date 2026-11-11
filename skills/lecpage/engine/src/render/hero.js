@@ -2,6 +2,7 @@
 // 구성 이름은 프리셋 variants.hero → <html data-hero>와 .lp-hero--<이름>. 모양은 runtime/lecpage.css '첫 화면' 묶음.
 //   cinema(밤하늘 서사) · worksheet(종이 워크북) · bento(유리 실험실) · poster(놀이터) · quiet(숲의 숨) · brief(공식 브리핑)
 //   masthead(잉크 잡지) · sticker(도파민 팝) · board(칠판 교실) · spec(설계도) · zine(형광 인쇄) · invite(새벽빛)
+//   keynote(어두운 키노트) · panel(깔끔한 기업형) · soft(부드러운 파스텔) · ticker(움직이는 글자) · column(따뜻한 미니멀)
 // 규칙
 //  - 값이 있는 것만 보여 줍니다(빈 칸·가짜 숫자 없음). 꾸밈 글자(큰 날짜 등)는 실제 값의 되풀이이고 aria-hidden.
 //  - 모든 글은 JS 없이 읽히고, 움직임이 꺼져도 완성된 모습입니다.
@@ -283,6 +284,52 @@ C.invite = (M) => `<div class="lp-sun" aria-hidden="true"><i></i></div>
 <div class="lp-wrap lp-hero-inner${M.dp ? '' : ' is-solo'}">
   ${M.dp ? `<p class="lp-invite-date"><time datetime="${isoDate(M)}"><span class="lp-invite-m">${M.dp.m}월</span><b>${M.dp.d}</b><span class="lp-invite-w">${M.dp.w}요일</span>${M.time ? `<span class="lp-invite-t">${esc(M.time)}</span>` : ''}</time></p>` : ''}
   <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(metaNoWhen(M))}</div>
+</div>`;
+
+/* 어두운 키노트: 무대 조명 아래 아주 큰 제목(둘째 줄은 한 톤 낮게), 아래 지평선 불빛과 한 줄 정보 레일 */
+C.keynote = (M) => {
+  const rail = [...M.meta, ...pick(M, 'dur', 'st', 'deck', 'parts')].slice(0, 5);
+  return `<div class="lp-key-light" aria-hidden="true"></div>
+<div class="lp-wrap lp-hero-inner">
+  <div class="lp-key-top">${org(M)}${state(M)}</div>
+  <div class="lp-key-title">${h1(M)}${sub(M)}${ctas(M)}</div>
+  ${rail.length ? `<dl class="lp-hero-meta lp-key-rail">${rail.map((x) => (x.value !== undefined ? cell(x) : numCell(M, x))).join('')}</dl>` : ''}
+</div>`;
+};
+
+/* 깔끔한 기업형: 왼쪽 제목과 버튼, 오른쪽에 겹쳐 놓인 '오늘의 일정' 카드(실제 일정·차례) */
+C.panel = (M) => {
+  const ag = M.agenda.slice(0, 4); const label = M.sched ? '오늘의 일정' : '오늘의 차례';
+  const card = ag.length ? `<aside class="lp-panel-card" aria-label="${label}"><p class="lp-panel-h"><b>${label}</b>${M.dp ? `<time datetime="${isoDate(M)}">${shortDate(M)} ${M.dp.w}</time>` : ''}</p><ol>${ag.map((a) => `<li>${a.t ? `<span class="lp-panel-t">${esc(a.t)}</span>` : ''}<span>${esc(a.title)}</span></li>`).join('')}</ol>${M.agenda.length > ag.length ? `<p class="lp-panel-more">그리고 ${M.agenda.length - ag.length}가지 더</p>` : ''}</aside>` : '';
+  return `<div class="lp-wrap lp-hero-inner${card ? '' : ' is-solo'}">
+  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
+  ${card}
+</div>`;
+};
+
+/* 부드러운 파스텔: 아치·원·알약 도형을 겹쳐 놓고 아치 안에 날짜. 왼쪽에 둥근 제목 */
+C.soft = (M) => `<div class="lp-wrap lp-hero-inner">
+  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(metaNoWhen(M))}</div>
+  <div class="lp-soft-art"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>${M.dp && !M.custom ? `<p class="lp-soft-date"><time datetime="${isoDate(M)}"><b>${M.dp.m}.${M.dp.d}</b><span>${M.dp.w}요일${M.time ? ` · ${esc(M.time)}` : ''}</span></time></p>` : ''}</div>
+</div>`;
+
+/* 움직이는 글자: 화면을 넘치는 제목, 그 아래 윤곽선 메아리 줄(스크롤에 따라 옆으로 흐름), 굵은 선으로 나눈 정보 칸 */
+C.ticker = (M) => {
+  const echo = esc(String(M.title).replace(/\n/g, ' '));
+  const cells = [...M.meta, ...pick(M, 'dur', 'st', 'deck')].slice(0, 4);
+  return `<div class="lp-wrap lp-hero-inner">
+  <div class="lp-hero-top">${org(M)}${state(M)}</div>
+  ${h1(M)}
+</div>
+<p class="lp-kin-echo" aria-hidden="true"><span>${echo} · ${echo} · ${echo} · ${echo}</span></p>
+<div class="lp-wrap lp-kin-foot">${sub(M)}${ctas(M)}${cells.length ? `<dl class="lp-hero-meta lp-kin-meta">${cells.map((x) => (x.value !== undefined ? cell(x) : numCell(M, x))).join('')}</dl>` : ''}</div>`;
+};
+
+/* 따뜻한 미니멀: 넓은 여백. 위에 가는 선, 왼쪽 단에 명조 제목, 오른쪽에 가는 큰 날짜 하나와 점선으로 이은 정보 */
+C.column = (M) => `<div class="lp-wrap lp-hero-inner">
+  <div class="lp-min-rule">${org(M)}${state(M)}</div>
+  <div class="lp-hero-copy">${h1(M)}${sub(M)}${ctas(M)}</div>
+  <div class="lp-min-side">${M.dp ? `<p class="lp-min-date" aria-hidden="true">${M.dp.d}</p>` : ''}${metaDl(M.meta, 'lp-min-meta')}</div>
 </div>`;
 
 /** 프리셋 구성 이름 → 렌더(옛 이름 stage·split·center·editorial도 받음) */

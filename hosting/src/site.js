@@ -36,6 +36,7 @@ export class Site extends DurableObject {
     this.uploading = new Map(); // sha256 → 올리는 중인 작업
     this.jsOk = new Set(); // 런타임으로 확인한 sha256
     this.deployTimes = [];
+    this.liveTimes = [];
     this.queue = Promise.resolve();
   }
 
@@ -161,6 +162,12 @@ export class Site extends DurableObject {
     const first = await this.authed(request);
     if (!this.cfg.live) throw new HttpError('not_found', '이 서버는 실시간 방을 쓰지 않아요.');
     if (first.blocked) throw new HttpError('blocked');
+    const now = Date.now();
+    this.liveTimes = this.liveTimes.filter((t) => t > now - HOUR_MS);
+    if (this.liveTimes.length >= this.cfg.deploysPerHour) {
+      throw new HttpError('rate_limited', '실시간 방을 너무 자주 바꿨어요. 잠시 뒤에 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil((this.liveTimes[0] + HOUR_MS - now) / 1000)) } });
+    }
+    this.liveTimes.push(now);
     const body = await readJson(request, 8192);
     let code;
     try { code = normCode(body.code); } catch { throw new HttpError('bad_request', '연수 코드는 영문·숫자 3~40자예요.'); }
@@ -169,13 +176,21 @@ export class Site extends DurableObject {
     return this.exclusive(async () => {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
-      const old = meta.live_code && meta.live_code !== code ? meta.live_code : null;
-      if (meta.live_code !== code) await this.gate('POST', 'room', { id: meta.site }); // 새 방: 하루 개수·저장량 확인
-      const out = await this.room(code, 'bind', { site: meta.site, code, adminKeyHash, settings: body.settings, expires: meta.expires, blocked: !!meta.blocked });
-      this.sql.exec('UPDATE meta SET live_code = ? WHERE id = 1', code);
-      meta.live_code = code;
+      const prev = meta.live_code || null;
+      // 이 사이트의 첫 방일 때만 하루 개수에 셈(코드를 바꾸는 것은 방 하나를 갈아 끼우는 것)
+      if (!prev) await this.gate('POST', 'room', { id: meta.site });
+      // 사이트에 먼저 적고 방을 묶음: 중간에 끊겨도 "사이트가 모르는 방"이 남지 않음(방은 기간 끝에 사이트에 물어보고 스스로 비움)
+      const setCode = (c) => { this.sql.exec('UPDATE meta SET live_code = ? WHERE id = 1', c); meta.live_code = c; };
+      if (prev !== code) setCode(code);
+      let out;
+      try {
+        out = await this.room(code, 'bind', { site: meta.site, code, adminKeyHash, settings: body.settings, expires: meta.expires, blocked: !!meta.blocked });
+      } catch (e) {
+        if (prev !== code) setCode(prev);
+        throw e;
+      }
       // 코드를 바꿨으면 예전 방은 비움
-      if (old) { try { await this.room(old, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); } }
+      if (prev && prev !== code) { try { await this.room(prev, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); } }
       try { await this.gate('POST', 'site', { id: meta.site, code }); } catch (e) { console.error('gate site update failed', e?.message); }
       return json({ url: `${request.headers.get('x-lp-origin') || ''}/live`, code: out.code });
     });

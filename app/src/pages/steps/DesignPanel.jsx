@@ -6,7 +6,8 @@ import { FxGallery } from '../../components/FxGallery.jsx';
 import { Dialog } from '../../components/ui.jsx';
 import { isAdvanced } from './Content.jsx';
 
-const MOTION = ['움직임 없음', '차분하게', '보통', '화려하게'];
+const MOTION = ['정적', '차분하게', '보통', '스크롤 연출'];
+const MOTION_DESC = ['움직임 없이 깔끔하게 보여 줘요.', '섹션이 나타날 때만 살짝 움직여요.', '제목·숫자·배경이 은은하게 움직여요.', '스크롤에 맞춰 장면이 바뀌어요(스크롤텔링·패럴랙스·고정 장면).'];
 const loadedFonts = new Set();
 function useFontCss(urls) {
   useEffect(() => {
@@ -61,8 +62,8 @@ export function DesignPanel({ p, update }) {
       </details>
       <FontPicker d={d} resolved={resolved} setD={setD} title={title} />
       <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v })} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>
-      <Field label={`움직임: ${MOTION[d.motion ?? resolved.motion]}`} hint={resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분하게 유지돼요. 참가자는 사이트에서 움직임을 끌 수 있어요.'}>
-        <input class="range" type="range" min="0" max="3" step="1" value={d.motion ?? resolved.motion} onInput={(e) => setD({ motion: +e.target.value })} aria-valuetext={MOTION[d.motion ?? resolved.motion]} />
+      <Field label="페이지 연출" hint={`${MOTION_DESC[d.motion ?? resolved.motion]} ${resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분하게 유지돼요.'}`}>
+        <Seg label="페이지 연출" value={String(d.motion ?? resolved.motion)} onChange={(v) => setD({ motion: +v })} options={MOTION.map((label, i) => ({ value: String(i), label }))} />
       </Field>
       <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) })}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 효과 조합만 바꿔요. <a href="#/gallery" target="_blank" rel="noopener">디자인·효과 둘러보기</a></span></div>
       <details>

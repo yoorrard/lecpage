@@ -3,7 +3,7 @@
 // tokens.js가 계약(§3)의 전체 CSS 변수로 펼칩니다.
 //
 // variants.hero = 첫 화면 구성(render/hero.js). 프리셋마다 뼈대가 다릅니다(같은 구성을 두 프리셋이 쓰지 않음):
-//   cinema · worksheet · bento · poster · quiet · brief · masthead · sticker · board · spec · zine · invite
+//   cinema · worksheet · bento · poster · quiet · brief · masthead · sticker · board · spec · zine · invite · keynote · panel · soft · ticker · column
 // fonts = 제목(display)·본문(body)·숫자와 영문 제목(num, 라틴)·고정폭(mono) 글꼴(design/fonts.js 키). 한글 2종 + 라틴. 본문 Pretendard 계열은 종이 워크북·공식 브리핑 두 곳뿐.
 // fontAlts = 주제·분위기가 맞을 때만 고르는 대안 글꼴(decide/design.js chooseFonts).
 // signature = 대표 효과 하나. signatureIn:'hero'면 첫 화면 구성이 직접 씁니다(다른 칸에 따로 붙이지 않음).
@@ -179,6 +179,77 @@ export const PRESETS = [
     variants: { hero: 'invite', head: 'kicker', band: 'tint', card: 'soft', nav: 'pill', btn: 'pill', heading: 'serif', tones: false },
     graphic: '', closingGraphic: '', signature: 'scroll-fill',
     effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
+  },
+  // ── 2026-11 추가: 비어 있던 취향(조사: docs/research/design-trends-2026-11.md §5) ─────────────
+  {
+    id: 'keynote-dark', name_ko: '어두운 키노트', name_en: 'Dark Keynote',
+    desc_ko: '검은 무대 위 아주 큰 제목과 지평선 불빛, 한 줄 정보 레일. 기조 강연·발표회·미래교육 특강에. 스크롤 연출이 기본.',
+    moods: ['futuristic', 'bold', 'minimal'], topics: ['ai', 'conference', 'career'],
+    archetypes: ['story', 'live'], theme: 'dark', motion: 3,
+    fonts: { display: 'wanted', body: 'wanted', num: 'geist', mono: 'jetbrains', displayWeight: 800 },
+    fontAlts: [{ display: 'paperlogy', body: 'wanted', displayWeight: 800, topics: ['conference'] }],
+    dark: { bg: '#08080b', fg: '#f5f5f7', card: '#131318', muted: '#a1a1aa', primary: '#9b8cff', primaryFg: '#0b0920', accent: '#ff8a5c', accent2: '#5ad1ff', accent3: '#c9a7ff', heroFrom: '#6f5cff', heroTo: '#ff8a5c' },
+    light: { bg: '#fbfbfd', fg: '#1d1d1f', card: '#ffffff', muted: '#5c5c66', primary: '#4a3fd0', primaryFg: '#ffffff', accent: '#d9541e', accent2: '#0a77b8', accent3: '#7a4fd0', heroFrom: '#6f5cff', heroTo: '#ff8a5c' },
+    shape: { radius: 18, radiusSm: 10, radiusLg: 28, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'keynote', head: 'chapter', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
+    graphic: '', closingGraphic: '', signature: 'scroll-fill',
+    effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', numbers: 'counter', 'closing.title': 'split-reveal' },
+  },
+  {
+    id: 'corporate-clean', name_ko: '깔끔한 기업형', name_en: 'Corporate Clean',
+    desc_ko: '흰 바탕에 또렷한 제목, 오른쪽에 겹쳐 놓인 오늘의 일정 카드. 기관 설명회·업무 연수·에듀테크 소개에.',
+    moods: ['formal', 'minimal', 'calm'], topics: ['admin', 'edutech', 'conference'],
+    archetypes: ['live', 'course', 'lab'], theme: 'light', motion: 1,
+    fonts: { display: 'suit', body: 'suit', num: 'sora', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'paperlogy', body: 'suit', displayWeight: 700, topics: ['edutech'] }],
+    light: { bg: '#ffffff', fg: '#0a2540', card: '#ffffff', muted: '#4f6076', primary: '#4353d9', primaryFg: '#ffffff', accent: '#ff7a59', accent2: '#8fa5ff', accent3: '#ffc247', heroFrom: '#e9edff', heroTo: '#ffffff' },
+    dark: { bg: '#0a1626', fg: '#eaf0f8', card: '#11203a', muted: '#a6b4c8', primary: '#93a0ff', primaryFg: '#0a1626', accent: '#ff9a80', accent2: '#6c82ff', accent3: '#ffd166', heroFrom: '#14274a', heroTo: '#0a1626' },
+    shape: { radius: 12, radiusSm: 8, radiusLg: 20, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'panel', head: 'chapter', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
+    graphic: '', closingGraphic: '', signature: 'counter',
+    effects: { numbers: 'counter' },
+  },
+  {
+    id: 'soft-pastel', name_ko: '부드러운 파스텔', name_en: 'Soft Pastel',
+    desc_ko: '아치·원·알약 도형 위의 날짜와 둥근 제목. 연보라·분홍·하늘빛의 포근한 화면. 학부모·저학년·마음 돌봄 연수에.',
+    moods: ['warm', 'calm', 'playful'], topics: ['parent', 'elementary', 'sel'],
+    archetypes: ['story', 'course'], theme: 'light', motion: 2,
+    fonts: { display: 'nanumSquareRound', body: 'lineSeed', num: 'outfit', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'hakgyoMiso', body: 'lineSeed', displayWeight: 700, topics: ['elementary'] }],
+    light: { bg: '#f8f6ff', fg: '#2b2540', card: '#ffffff', muted: '#5f5878', primary: '#6648d6', primaryFg: '#ffffff', accent: '#ffc2d4', accent2: '#bfe3ff', accent3: '#ffe3a8', heroFrom: '#e6dcff', heroTo: '#ffe3ee' },
+    dark: { bg: '#191526', fg: '#f3effd', card: '#231d36', muted: '#bdb4d6', primary: '#baa7ff', primaryFg: '#191526', accent: '#ff9dbb', accent2: '#8ecbff', accent3: '#ffd98a', heroFrom: '#2d2450', heroTo: '#3a1f33' },
+    shape: { radius: 24, radiusSm: 14, radiusLg: 36, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'soft', head: 'sticker', band: 'accent', card: 'soft', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
+    graphic: '', closingGraphic: '', signature: 'stack-cards',
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+  },
+  {
+    id: 'kinetic-type', name_ko: '움직이는 글자', name_en: 'Kinetic Type',
+    desc_ko: '화면을 넘치는 굵은 제목과 윤곽선 메아리 줄, 굵은 선으로 나눈 정보. 예술·동아리·학생 활동처럼 힘 있는 자리에. 스크롤 연출이 기본.',
+    moods: ['bold', 'energetic', 'editorial'], topics: ['art', 'music', 'student', 'club'],
+    archetypes: ['story', 'live'], theme: 'light', motion: 3,
+    fonts: { display: 'paperlogy', body: 'spoqa', num: 'bigShoulders', mono: 'jetbrains', displayWeight: 900 },
+    fontAlts: [{ display: 'blackHan', body: 'spoqa', displayWeight: 400, topics: ['club', 'student'] }],
+    light: { bg: '#f2f0e9', fg: '#0f0f0f', card: '#ffffff', muted: '#4a4841', primary: '#d93a0b', primaryFg: '#ffffff', accent: '#1f3dff', accent2: '#0f0f0f', accent3: '#ffd400', border: '#0f0f0f', heroFrom: '#ff4f1a', heroTo: '#1f3dff' },
+    dark: { bg: '#0c0c0c', fg: '#f2f0e9', card: '#181818', muted: '#b9b6ab', primary: '#ff6a3d', primaryFg: '#0c0c0c', accent: '#7f93ff', accent2: '#f2f0e9', accent3: '#ffd400', border: '#f2f0e9', heroFrom: '#ff4f1a', heroTo: '#1f3dff' },
+    shape: { radius: 0, radiusSm: 0, radiusLg: 0, borderW: 3, shadow: 'flat' },
+    variants: { hero: 'ticker', head: 'index', band: 'invert', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
+    graphic: '', closingGraphic: '', signature: 'marquee',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
+  },
+  {
+    id: 'warm-minimal', name_ko: '따뜻한 미니멀', name_en: 'Warm Minimal',
+    desc_ko: '넓은 여백과 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보. 독서·인문·상담처럼 조용히 읽히는 자리에.',
+    moods: ['minimal', 'calm', 'natural'], topics: ['humanities', 'reading', 'counseling'],
+    archetypes: ['story', 'course'], theme: 'light', motion: 1,
+    fonts: { display: 'nanumMyeongjo', body: 'astaSans', num: 'fraunces', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'maruburi', body: 'astaSans', displayWeight: 700, topics: ['reading'] }],
+    light: { bg: '#f6f1ea', fg: '#2a2622', card: '#fbf8f3', muted: '#5f574e', primary: '#9a4b2f', primaryFg: '#ffffff', accent: '#c9a37b', accent2: '#7a6a8f', accent3: '#e7d3bd', heroFrom: '#efe4d6', heroTo: '#f6f1ea' },
+    dark: { bg: '#1b1815', fg: '#efe7dc', card: '#25211c', muted: '#b9ad9d', primary: '#e39a78', primaryFg: '#1b1815', accent: '#d8b48c', accent2: '#a999c2', accent3: '#4a3f33', heroFrom: '#2a241e', heroTo: '#1b1815' },
+    shape: { radius: 2, radiusSm: 2, radiusLg: 4, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'column', head: 'kicker', band: 'tint', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
+    graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
+    effects: { 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
   },
 ];
 

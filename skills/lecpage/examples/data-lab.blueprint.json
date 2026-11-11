@@ -31,18 +31,7 @@
     "primary": "lab",
     "mix": []
   },
-  "design": {
-    "preset": "blueprint-tech",
-    "mood": [
-      "tech",
-      "minimal"
-    ],
-    "topics": [
-      "data",
-      "edutech"
-    ],
-    "theme": "preset"
-  },
+  "design": {"preset": "blueprint-tech", "mood": ["tech", "minimal"], "topics": ["data", "edutech"], "theme": "preset", "accent": "#8ea2ff"},
   "instructors": [
     {
       "name": "유영재",

@@ -15,13 +15,20 @@ export function AiConnect({ onConnected, onPaste, onCancel, onBeforeLogin }) {
   const [err, setErr] = useState(null);
   const [guide, setGuide] = useState('');
   const prov = detectProvider(key);
+  /** 붙여 넣은 글이 키로 보이면 바로 연결(단추를 한 번 덜 누르게) */
+  function take(text) { const k = String(text || '').trim(); if (!k) return; setKey(k); setErr(null); if (detectProvider(k)) connect(k); }
+  async function pasteKey() {
+    try { take(await navigator.clipboard.readText()); }
+    catch { setErr({ title: '붙여넣기 권한이 없어요.', body: '입력 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.' }); }
+  }
 
-  async function connect() {
+  async function connect(k = key) {
+    const prov = detectProvider(k);
     if (!prov) { setErr({ title: '어느 회사 키인지 알 수 없어요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요.' }); setGuide('gemini'); return; }
     setErr(null); setBusy(true);
     try {
-      await checkKey(prov, key);
-      await saveKey(prov, key, remember);
+      await checkKey(prov, k);
+      await saveKey(prov, k, remember);
       const a = await getActiveAI();
       setKey(''); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
       onConnected?.(a);
@@ -34,16 +41,20 @@ export function AiConnect({ onConnected, onPaste, onCancel, onBeforeLogin }) {
       <ol class="ai-ways">
         <li>
           <div class="ai-way-h"><b>OpenRouter로 로그인</b><span class="tag tag-lav">가장 쉬워요</span></div>
-          <p class="small muted">구글 계정으로 로그인하고 <b>Authorize</b>를 누르면 돌아와요. 키를 복사할 필요가 없고, 무료 모델은 하루 50번까지예요.</p>
+          <p class="small muted">처음이면 이 방법이 편해요. 구글 계정으로 로그인하고 <b>Authorize</b>를 누르면 돌아와요. 키를 복사할 필요가 없고, 무료 모델은 하루 50번까지예요.</p>
           <div><button class="btn btn-primary" onClick={() => { onBeforeLogin?.(); openRouterStart({ remember }); }}>OpenRouter로 로그인</button></div>
         </li>
         <li>
           <div class="ai-way-h"><b>API 키 붙여넣기</b><span class="small muted">Gemini는 무료</span></div>
-          <p class="small muted"><a href={PROVIDERS.gemini.keyUrl} target="_blank" rel="noopener">Gemini 키 만들기</a>에서 <b>API 키 만들기</b>를 누르고 복사해 붙여 넣어요. OpenAI·Claude 키도 돼요.</p>
-          <Field label="API 키" hint={key ? (prov ? `${PROVIDERS[prov].name} 키예요.` : '어느 회사 키인지 모르겠어요. 끝까지 복사했는지 확인해 주세요.') : null}>
-            <input type="password" value={key} onInput={(e) => { setKey(e.target.value.trim()); setErr(null); }} onKeyDown={(e) => e.key === 'Enter' && key && connect()} autoComplete="off" spellcheck={false} placeholder="AQ.… / AIza… / sk-…" />
+          <ol class="how small">
+            <li><a class="btn btn-sm" href={PROVIDERS.gemini.keyUrl} target="_blank" rel="noopener">Gemini 키 만들기 열기</a> 구글 계정으로 로그인해요.</li>
+            <li><b>API 키 만들기</b>(Create API key)를 누르고, 나온 키를 <b>복사</b>해요.</li>
+            <li>여기로 돌아와 <button type="button" class="btn btn-sm btn-primary" disabled={busy} onClick={pasteKey}>{busy ? '확인하는 중…' : '붙여넣기'}</button>를 누르면 바로 연결돼요.</li>
+          </ol>
+          <Field label="API 키" hint={key ? (prov ? `${PROVIDERS[prov].name} 키예요.` : '어느 회사 키인지 모르겠어요. 끝까지 복사했는지 확인해 주세요.') : 'OpenAI·Claude 키도 돼요. ChatGPT·Gemini 앱 구독과는 따로예요.'}>
+            <input type="password" value={key} onInput={(e) => { setKey(e.target.value.trim()); setErr(null); }} onPaste={(e) => { const t = e.clipboardData?.getData('text'); if (t && detectProvider(t.trim())) { e.preventDefault(); take(t); } }} onKeyDown={(e) => e.key === 'Enter' && key && connect()} autoComplete="off" spellcheck={false} placeholder="AQ.… / AIza… / sk-…" />
           </Field>
-          <div class="btn-row"><button class="btn" disabled={!key || busy} onClick={connect}>{busy ? '확인하는 중…' : '연결'}</button></div>
+          {key && !busy && <div class="btn-row"><button class="btn" onClick={() => connect()}>연결</button></div>}
           <details open={!!guide} onToggle={(e) => setGuide(e.target.open ? guide || prov || 'gemini' : '')}>
             <summary class="small">키 만드는 법 자세히</summary>
             <KeyGuides open={guide || prov || 'gemini'} />

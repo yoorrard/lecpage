@@ -5,7 +5,7 @@ import { FxGallery } from '../components/FxGallery.jsx';
 import { E, buildSite, previewHtml } from '../lib/engine.js';
 import { loadExample } from '../lib/project.js';
 
-const MOTION = ['움직임 없음', '차분하게', '보통', '화려하게'];
+const MOTION = ['정적', '차분하게', '보통', '스크롤 연출'];
 const SAMPLES = [{ value: 'sel-story', label: '사회정서학습 연수' }, { value: 'data-lab', label: '디지털 연수' }];
 const fontLabel = (k) => E.FONTS[k]?.label || '';
 
@@ -60,7 +60,7 @@ export function Gallery() {
           <p>{open.desc_ko}</p>
           <dl class="fx-facts">
             <div><dt>글꼴</dt><dd>{[...new Set([fontLabel(open.fonts?.display), fontLabel(open.fonts?.body)].filter(Boolean))].join(' · ')}</dd></div>
-            <div><dt>움직임</dt><dd>{MOTION[open.motion] || MOTION[1]}</dd></div>
+            <div><dt>페이지 연출</dt><dd>{MOTION[open.motion] || MOTION[1]}</dd></div>
             <div><dt>대표 효과</dt><dd>{E.FX.find((f) => f.id === open.signature)?.name_ko || '없음'}</dd></div>
           </dl>
           <p class="small muted">교재를 넣으면 주제와 분위기에 맞는 디자인을 먼저 골라 주고, '살펴보고 고치기'에서 바꿀 수 있어요.</p>

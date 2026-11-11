@@ -310,3 +310,9 @@ assets/slides/*.webp · assets/media/*
 ### 8.4 디자인 토큰 내보내기
 - `design/color.js` `ramp12(hex) → { light:[12], dark:[12] }`(OKLCH), `design/dtcg.js` `designTokens(design)` → 강사용 파일 `tokens.json`(DTCG 2025.10). 올리는 사이트에는 넣지 않습니다.
 - 디자인마다 첫 화면 구성이 다릅니다: `preset.variants.hero`(`cinema`·`worksheet`·`bento`·`poster`·`quiet`·`brief`·`masthead`·`sticker`·`board`·`spec`·`zine`·`invite`), 렌더러는 `render/hero.js`. 글꼴은 `preset.fonts`와 `preset.fontAlts`(주제·분위기에 따라 `chooseFonts`가 고름).
+
+### 8.5 요청 사항·자료 올리기 (2026-11-11)
+- 요청 사항: `info.request`(자유 글, 600자). `buildPrompt`가 연수 정보 JSON에서 빼서 "## 강사의 요청 사항" 아래에 따로 적고(규칙 10), `requestHints(text) → { mood[], accent?, theme?, motion?, format? }`가 AI 없는 기본 초안에도 분위기·색·밝기·움직임·형식을 반영합니다. 강사가 따로 고른 값(`info.mood`·`accent`·`motion`·`format`)이 언제나 먼저입니다.
+- 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 공개할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 공개 때 빠집니다.
+- 연수 중 자료 링크: 강사 화면에서 `setState({ ui: { m1…m8: '<https 주소> <이름>' } })`. 서버가 원래 받는 `state.ui`(글 200자, 키 20개)에 담아 백엔드를 바꾸지 않고 다섯 가지 연결 방식에서 모두 동작합니다. 읽기·쓰기는 `LecLive.util.ext.materials / materialAdd / materialRemove`, 참가자 화면은 자료실 아래(없으면 마무리 앞)에 보여 줍니다. https 주소만 받습니다.
+- 바로 공개 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 공개할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 설계도의 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.

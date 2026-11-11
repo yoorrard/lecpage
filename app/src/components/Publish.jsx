@@ -3,7 +3,8 @@ import { Field, Dialog } from './ui.jsx';
 import { E } from '../lib/engine.js';
 import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, openVercel, checkToken, siteStat, vercelName, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
-import { toast } from '../lib/util.js';
+import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
+import { liveSettings } from './LiveSetup.jsx';
 
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 공개)는 운영자가 켜 둔 앱에서만 보임
@@ -59,8 +60,15 @@ export const HOST_GUIDE = {
 
 function TokenRow({ t, kind }) {
   const g = HOST_GUIDE[kind];
+  async function paste() {
+    try { const v = (await navigator.clipboard.readText()).trim(); if (v) t.setToken(v); else toast('복사한 토큰이 없어요.'); }
+    catch { toast('입력 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); }
+  }
   return <>
-    <Field label={g.label}><input type="password" autoComplete="off" spellcheck={false} value={t.token} onInput={(e) => t.setToken(e.target.value.trim())} placeholder={g.placeholder} /></Field>
+    <Field label={g.label}>
+      <div class="row token-row"><input type="password" autoComplete="off" spellcheck={false} value={t.token} onInput={(e) => t.setToken(e.target.value.trim())} placeholder={g.placeholder} />
+        <button type="button" class="btn btn-sm" onClick={paste}>붙여넣기</button></div>
+    </Field>
     <label class="check"><input type="checkbox" checked={t.remember} onChange={(e) => t.setRemember(e.target.checked)} /><span>이 기기에서 기억하기 <span class="small muted">다음부터 단추 하나로 올려요. 공용 PC에서는 끄세요.</span></span></label>
   </>;
 }
@@ -88,18 +96,18 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const [picked, setPicked] = useState('');
   const target = picked && order.includes(picked) ? picked : order[0];
   /** 한 곳에 올리기: 사이트 만들기 → 그곳의 한도 확인 → 올리기. up(files)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음 */
-  const start = (id, up, onFail) => guard(async (opts = {}) => {
+  const start = (id, up, onFail, auto = null) => guard(async (opts = {}) => {
     setBusy(id); setProg({ step: '사이트 만드는 중', pct: 1 });
     try {
-      const r = await buildFiles(opts);
+      const r = await buildFiles({ ...opts, ...(auto || {}) });
       const chk = E.checkHost(id, siteStat(r.files));
       if (!chk.ok) throw new Error(chk.errors[0]);
       await up(r.files, setProg);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { if (!onFail?.(e)) toast('올리지 못했어요. ' + e.message); }
     setBusy(''); setProg(null);
-  });
-  const ctx = { p, busy, start, done: (url, patch) => { done(url, { ...patch, target }); connectedTargets().then(setConnected); } };
+  }, !!auto?.live);
+  const ctx = { p, busy, start, done: (url, patch, more) => { done(url, { ...patch, target }, more); connectedTargets().then(setConnected); } };
   return (
     <div class="stack publish">
       <div class="pub-pick" role="radiogroup" aria-label="올릴 곳">
@@ -119,26 +127,36 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   );
 }
 
-/** lecpage 바로 공개: 가입·토큰 없이. 운영자가 켜 둔 앱에서만 */
+/** lecpage 바로 공개: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
 function Instant({ p, busy, start, done, info }) {
   const prev = p.deploy?.lecpage;
   const days = info?.limits?.days || 30;
   const alive = prev?.expiresAt && prev.expiresAt > Date.now();
+  const bp = p.blueprint;
+  const liveOn = (bp.live?.features || []).length > 0;
+  const autoLive = liveOn && !!info?.live?.url; // 참여 기능을 이 서버가 맡음
   const run = () => start('lecpage', async (files, onProgress) => {
-    const out = await deployInstant({ site: prev, title: p.title, files, onProgress });
-    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt } });
+    let live = null, adminKey = prev?.adminKey || '';
+    if (autoLive) {
+      if (!adminKey) adminKey = randomKey(20);
+      live = { code: E.validate(bp).blueprint.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
+    }
+    const out = await deployInstant({ site: prev, title: p.title, files, live, onProgress });
+    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(autoLive ? { adminKey } : {}) } },
+      autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '' }, liveOk: true } : null);
     toast(prev?.id === out.id ? '새 내용을 같은 주소에 올렸어요.' : '공개했어요!');
-  });
+  }, null, autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '' }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
   async function remove() {
-    try { await deleteInstant(prev); done('', { lecpage: null }); toast('사이트를 내렸어요.'); }
+    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
     catch (e) { toast('내리지 못했어요. ' + e.message); }
   }
   return (
     <div class="stack">
-      <p>가입이나 토큰 없이 바로 공개해요. 마지막으로 올린 날부터 {days}일 동안 열려 있어요.</p>
+      <p>가입이나 토큰 없이 바로 공개해요. 마지막으로 올린 날부터 {days}일 동안 열려 있어요.{autoLive ? ' 질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={run} />
       {alive && <p class="small muted">{day(prev.expiresAt)}까지 열려 있어요. 다시 올리면 그날부터 {days}일로 늘어나요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
-      <p class="small muted">사이트 파일이 lecpage 서버에 저장돼요. 남의 저작물이나 개인정보가 들어 있지 않은지 확인해 주세요. 오래 둘 사이트는 Vercel처럼 내 계정에 올리는 편이 좋아요.</p>
+      {alive && prev.adminKey && <p class="small">강사 화면 관리자 키 <b class="mono">{prev.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(prev.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>}
+      <p class="small muted">사이트 파일{autoLive ? '과 참가자가 남긴 글·파일' : ''}이 lecpage 서버에 {days}일 동안 저장돼요. 남의 저작물이나 개인정보가 들어 있지 않은지 확인해 주세요. 오래 둘 사이트는 Vercel처럼 내 계정에 올리는 편이 좋아요.</p>
     </div>
   );
 }

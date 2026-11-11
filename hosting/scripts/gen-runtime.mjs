@@ -15,8 +15,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const HOSTING = join(HERE, '..');
 const ENGINE = join(HOSTING, '..', 'skills', 'lecpage', 'engine');
 const RUNTIME = join(ENGINE, 'runtime');
-const OUT = join(HOSTING, 'src', 'runtime-allow.js');
-const HISTORY = join(HOSTING, 'runtime-history.json');
+// 시험할 때만 다른 곳에 쓰게 바꿈
+const OUT = process.env.LECPAGE_RUNTIME_OUT || join(HOSTING, 'src', 'runtime-allow.js');
+const HISTORY = process.env.LECPAGE_RUNTIME_HISTORY || join(HOSTING, 'runtime-history.json');
 export const HEAD_LEN = 32;
 /** 사이트에 들어가지 않는 런타임(앱 미리보기의 검토 도구)은 받지 않음 */
 const SKIP_DIRS = new Set(['review']);

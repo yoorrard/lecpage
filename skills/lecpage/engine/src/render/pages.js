@@ -425,7 +425,7 @@ export function designDoc(ctx) {
 
 - 프리셋: **${p.name_ko}** (\`${p.id}\`) — ${p.desc_ko}
 - 테마: ${ctx.design.theme && ctx.design.theme !== 'preset' ? ctx.design.theme : p.theme} · 모션 단계: ${ctx.design.motion} (0 정지 · 1 차분 · 2 보통 · 3 화려)
-- 시그니처 효과: ${ctx.design.signature || '없음'} · 첫 화면 그래픽: ${ctx.design.graphic || '없음'} · 마무리 그래픽: ${ctx.design.closingGraphic || '없음'}
+- 대표 효과: ${ctx.design.signature || '없음'} · 첫 화면 그래픽: ${ctx.design.graphic || '없음'} · 마무리 그래픽: ${ctx.design.closingGraphic || '없음'}
 - 글꼴: 제목 ${p.fonts.display}, 본문 ${p.fonts.body}, 숫자·코드 ${p.fonts.mono}
 ${ctx.design.accent ? `- 기관 강조색: ${ctx.design.accent}\n` : ''}
 ## 색과 모양
