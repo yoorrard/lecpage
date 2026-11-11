@@ -3,7 +3,7 @@
 //   cinema(밤하늘 서사) · worksheet(종이 워크북) · bento(유리 실험실) · poster(놀이터) · quiet(숲의 숨) · brief(공식 브리핑)
 //   masthead(잉크 잡지) · sticker(도파민 팝) · board(칠판 교실) · spec(설계도) · zine(형광 인쇄) · invite(새벽빛)
 //   keynote(어두운 키노트) · panel(깔끔한 기업형) · soft(부드러운 파스텔) · ticker(움직이는 글자) · column(따뜻한 미니멀)
-//   살아 있는 첫 화면: collage(펼친 교재) · dial(하루 시계)
+//   살아 있는 첫 화면: collage(펼친 교재) · dial(하루 시계) · orbit(입체 궤도) · stream(돌과 물결)
 // 규칙
 //  - 값이 있는 것만 보여 줍니다(빈 칸·가짜 숫자 없음). 꾸밈 글자(큰 날짜 등)는 실제 값의 되풀이이고 aria-hidden.
 //  - 모든 글은 JS 없이 읽히고, 움직임이 꺼져도 완성된 모습입니다.
@@ -335,8 +335,18 @@ C.column = (M) => `<div class="lp-wrap lp-hero-inner">
 
 // ── 살아 있는 첫 화면(쇼케이스): 글은 그대로 HTML, 그림은 서버에서 정지 모습으로 그려 두고 효과(runtime/fx)가 움직임·반응을 더함 ──
 /** 구성이 직접 그리는 그림(효과 아이디). 디자인의 첫 화면 그래픽이 이것과 같으면 따로 그래픽 층을 두지 않음 */
-export const OWN_ART = { collage: 'slide-fan', dial: 'schedule-dial' };
+export const OWN_ART = { collage: 'slide-fan', dial: 'schedule-dial', orbit: 'orbit-3d', stream: 'stream-lines' };
 const artFx = (M, id) => (M.ctx.design.graphic === id ? ` data-fx="${id}"` : '');
+/** 쇼케이스 공통 뼈대: 글 | 그림 | 정보. 넓은 화면은 글·정보 왼쪽에 그림 오른쪽, 좁은 화면은 글 → 그림 → 정보 */
+const show = (M, art) => `<div class="lp-wrap lp-hero-inner lp-show${art ? '' : ' is-solo'}">
+  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}</div>
+  ${art}
+  ${metaDl(M.meta)}
+</div>`;
+// 같은 제목이면 같은 그림: runtime/fx/core.js의 hash·rand와 같은 셈(FNV-1a, mulberry32)
+const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const seeded = (seed) => { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+const seedOf = (M) => String(M.m.title || M.title || 'lecpage').replace(/\s+/g, ' ').trim();
 
 /* 펼친 교재: 교재 쪽을 부채처럼 펼친 3D 더미(쪽 그림이 있으면 그림, 없으면 글 카드). 교재가 없으면 실습·차례로. 누르면 그 쪽으로 감 */
 function fanCards(M) {
@@ -349,13 +359,11 @@ function fanCards(M) {
 C.collage = (M) => {
   const cards = fanCards(M);
   const fan = cards.length >= 2 ? `<div class="lp-fan"${artFx(M, 'slide-fan')} style="--n:${cards.length}"><ol class="lp-fan-list" aria-label="${M.deck ? '교재 미리 보기' : '오늘의 차례'}">${cards.map((c, i) => `<li class="lp-fan-card" style="--i:${i}"><a class="lp-fan-face" href="${esc(c.href)}">${c.src ? `<img src="${esc(c.src)}" alt="${esc(`${c.no}쪽: ${c.title}`)}" loading="${i ? 'lazy' : 'eager'}" decoding="async">` : `<span class="lp-fan-pg" aria-hidden="true">${pad2(c.no)}</span><b>${esc(c.title)}</b>`}</a></li>`).join('')}</ol><button class="lp-btn lp-btn-ghost lp-btn-sm lp-fan-next" type="button" data-fan-next hidden><span>다음 장</span>${icon('right')}</button></div>` : '';
-  return `<div class="lp-wrap lp-hero-inner${fan ? '' : ' is-solo'}">
-  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
-  ${fan}
-</div>`;
+  return show(M, fan);
 };
 
-/* 하루 시계: 일정을 둥근 시계로. 순서마다 길이에 비례한 호, 바깥에 시작 시각, 가운데에 전체 길이. 아래 목록이 같은 내용의 글(그림은 꾸밈) */
+/* 하루 시계: 일정을 둥근 시계로. 순서마다 길이에 비례한 호, 바깥에 눈금과 시작 시각, 가운데에 전체 길이. 아래 목록이 같은 내용의 글(그림은 꾸밈) */
+const REST = /쉬는|휴식|점심|식사|break|lunch/i;
 function dialRows(M) {
   const rows = (M.sched?.items || []).map((x, n, all) => { const a = toMin(x.start), b = toMin(x.end) ?? toMin(all[n + 1]?.start); return { start: x.start, title: x.title, min: a !== null && b !== null && b > a && b - a <= 600 ? b - a : 0 }; });
   if (rows.length >= 2 && rows.length <= 12 && rows.every((r) => r.min) && !M.sched.items.some((x) => x.date)) return { rows, timed: true, href: '#' + M.sched.id };
@@ -369,19 +377,112 @@ C.dial = (M) => {
     const T = D.rows.reduce((s, r) => s + r.min, 0); let at = 0;
     const segs = D.rows.map((r, i) => {
       const len = (r.min / T) * 1000, th = (at / 1000) * 2 * Math.PI - Math.PI / 2;
-      const seg = `<circle class="lp-dial-seg" style="--i:${i}" data-i="${i}" data-start="${esc(r.start)}" data-min="${D.timed ? r.min : ''}" data-title="${esc(r.title)}" cx="200" cy="200" r="150" pathLength="1000" stroke-dasharray="${Math.max(1, len - 3).toFixed(1)} 1000" stroke-dashoffset="${(-(at + 1.5)).toFixed(1)}"/>`;
-      const tick = D.timed && (i === 0 || len >= 70) ? `<text x="${(200 + Math.cos(th) * 186).toFixed(1)}" y="${(204 + Math.sin(th) * 186).toFixed(1)}">${esc(r.start)}</text>` : '';
+      const seg = `<circle class="lp-dial-seg${D.timed && REST.test(r.title) ? ' is-rest' : ''}" style="--i:${i}" data-i="${i}" data-start="${esc(r.start)}" data-min="${D.timed ? r.min : ''}" data-title="${esc(r.title)}" cx="200" cy="200" r="150" pathLength="1000" stroke-dasharray="${Math.max(1, len - 4).toFixed(1)} 1000" stroke-dashoffset="${(-(at + 2)).toFixed(1)}"/>`;
+      const cth = Math.cos(th), tick = D.timed && (i === 0 || len >= 70) ? `<text x="${(200 + cth * 187).toFixed(1)}" y="${(204 + Math.sin(th) * 190).toFixed(1)}"${Math.abs(cth) > 0.3 ? ` text-anchor="${cth > 0 ? 'start' : 'end'}"` : ''}>${esc(r.start)}</text>` : '';
       at += len; return { seg, tick };
     });
+    // 바깥 눈금: 두 시간까지는 5분, 다섯 시간까지는 10분, 그 위로는 30분마다 한 칸
+    const unit = T <= 120 ? 5 : T <= 300 ? 10 : 30, n = D.timed && T % unit === 0 ? T / unit : 0;
+    const bezel = n ? `<circle class="lp-dial-bezel" cx="200" cy="200" r="172" pathLength="${n * 10}" stroke-dasharray=".3 9.7" stroke-dashoffset=".15"/>` : '';
     const dur = M.dur ? (M.dur.text ? `<b class="lp-dial-dt">${esc(M.dur.text)}</b>` : `<b>${M.dur.num}</b><span>${esc(M.dur.unit)}</span>`) : `<b>${D.rows.length}</b><span>${D.timed ? '순서' : '부'}</span>`;
-    art = `<div class="lp-dial"${artFx(M, 'schedule-dial')} data-date="${D.timed ? esc(M.m.date) : ''}" style="--n:${D.rows.length}"><div class="lp-dial-ring"><svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">${segs.map((x) => x.seg).join('')}</g><g class="lp-dial-ticks">${segs.map((x) => x.tick).join('')}</g><line class="lp-dial-hand" x1="200" y1="200" x2="200" y2="34"/></svg><p class="lp-dial-center" data-dial-center aria-hidden="true">${dur}${M.time ? `<small>${esc(M.time)}</small>` : ''}</p></div>
+    art = `<div class="lp-dial"${artFx(M, 'schedule-dial')} data-date="${D.timed ? esc(M.m.date) : ''}" style="--n:${D.rows.length};--r:${Math.ceil(D.rows.length / 2)}"><div class="lp-dial-ring"><svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-dial-track" cx="200" cy="200" r="150"/><g transform="rotate(-90 200 200)">${bezel}${segs.map((x) => x.seg).join('')}</g><g class="lp-dial-ticks">${segs.map((x) => x.tick).join('')}</g><line class="lp-dial-hand" x1="200" y1="200" x2="200" y2="22"/></svg><p class="lp-dial-center" data-dial-center aria-hidden="true">${dur}${M.time ? `<small>${esc(M.time)}</small>` : ''}</p></div>
 <ol class="lp-dial-list" aria-label="${D.timed ? '오늘의 일정' : '오늘의 차례'}">${D.rows.map((r, i) => `<li data-i="${i}"><a href="${esc(D.href)}">${r.start ? `<time>${esc(r.start)}</time>` : ''}<span>${esc(r.title)}</span>${D.timed ? `<small>${r.min}분</small>` : ''}</a></li>`).join('')}</ol></div>`;
   }
-  return `<div class="lp-wrap lp-hero-inner${art ? '' : ' is-solo'}">
-  <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
-  ${art}
-</div>`;
+  return show(M, art);
 };
+
+/* 입체 궤도: 점으로 짠 입체 매듭(토러스 매듭 관)과 그 둘레를 도는 이 연수의 낱말. 정지 그림은 효과(orbit-3d)가 시작하는 각도 그대로라 움직임이 실려도 튀지 않음 */
+/** 둘레에 띄울 낱말 3~5개: 차례의 꼬리표 → 실습 이름 → 도구 이름 → 차례·일정 제목(짧은 것만) */
+function orbitWords(M) {
+  const strip = (t) => String(t || '').replace(/^\s*(?:PART|Part|파트)\s*\d{1,2}\s*[.:·\-–—]?\s*/, '').replace(/^\s*(?:실습|활동|이야기)\s*[\d·,~\-]+\s*/, '').trim();
+  const short = (t) => { const x = strip(t).split(/[,:(·]| - /)[0].trim(); return x && [...x].length <= 9 ? x : ''; };
+  const oi = M.outline?.items || [];
+  const tags = []; for (let k = 0; k < 3; k++) for (const x of oi) if (x.tags?.[k]) tags.push(x.tags[k]);
+  const pool = [...tags, ...(M.st?.items || []).map((x) => x.name || x.title), ...(M.tools?.items || []).map((x) => x.name), ...oi.map((x) => x.title), ...(M.sched?.items || []).map((x) => x.title)];
+  const out = [];
+  for (const t of pool) { const w = short(t); if (w && !out.includes(w) && !REST.test(w)) out.push(w); if (out.length === 5) break; }
+  return out.length >= 3 ? out : [];
+}
+// orbit-3d.js와 같은 값·같은 식. 세잎 매듭(trefoil) 관을 단면 M개 × 둘레 K줄의 점으로 짬. TW = 관을 한 바퀴 도는 동안 점 줄이 감기는 횟수
+const KNOT = { M: 100, K: 8, RHO: 0.5, TW: 11, D: 9, S: 42, SPIN: 0.3, AX: 0.55, RT: 4.3, TILT: 1.2 };
+/** 관의 뼈대: 단면마다 [중심, 법선, 종법선]. 법선은 비틀림 없이 옮겨 가고(평행 이동), 한 바퀴 뒤 어긋난 각(hol)을 돌려줌 */
+export function knotFrames(M) {
+  const at = (t) => [Math.sin(t) + 2 * Math.sin(2 * t), Math.cos(t) - 2 * Math.cos(2 * t), -Math.sin(3 * t)];
+  const F = []; let n = [0, 0, 1], hol = 0;
+  for (let i = 0; i <= M; i++) {
+    const t = (i / M) * Math.PI * 2, a = at(t - 0.001), b = at(t + 0.001), c = at(t);
+    let T = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]; const tl = Math.hypot(...T); T = T.map((v) => v / tl);
+    const dt = n[0] * T[0] + n[1] * T[1] + n[2] * T[2]; n = [n[0] - dt * T[0], n[1] - dt * T[1], n[2] - dt * T[2]]; const nl = Math.hypot(...n); n = n.map((v) => v / nl);
+    const B = [T[1] * n[2] - T[2] * n[1], T[2] * n[0] - T[0] * n[2], T[0] * n[1] - T[1] * n[0]];
+    if (i < M) F.push([c, n, B]); else hol = Math.atan2(n[0] * F[0][2][0] + n[1] * F[0][2][1] + n[2] * F[0][2][2], n[0] * F[0][1][0] + n[1] * F[0][1][1] + n[2] * F[0][1][2]);
+  }
+  return { F, hol };
+}
+export function orbitArt(seed, words = [], attr = '') {
+  const { M: N, K, RHO, TW, D, S, SPIN, AX, RT, TILT } = KNOT, TAU = Math.PI * 2;
+  const { F, hol } = knotFrames(N);
+  const sz = Math.sin(SPIN), cz = Math.cos(SPIN), sx = Math.sin(AX), cx = Math.cos(AX);
+  // 점: 색(주색·글자색·강조색) × 깊이 세 단계로 묶어 path 하나씩(점마다 요소를 두지 않음). 좌표는 800 격자의 정수
+  const groups = {};
+  for (let i = 0; i < N; i++) {
+    const [c, n, B] = F[i];
+    for (let j = 0; j < K; j++) {
+      const f = (j / K) * TAU + (i / N) * (TW * TAU - hol), co = Math.cos(f) * RHO, si = Math.sin(f) * RHO;
+      const x = c[0] + co * n[0] + si * B[0], y = c[1] + co * n[1] + si * B[1], z = c[2] + co * n[2] + si * B[2];
+      const x1 = x * cz - y * sz, y0 = x * sz + y * cz, y1 = y0 * cx - z * sx, z2 = y0 * sx + z * cx, k = (D / (D + z2)) * S;
+      (groups[(j === 0 ? 'a' : j === 4 ? 'f' : 'p') + (z2 < -0.9 ? 2 : z2 < 0.9 ? 1 : 0)] ||= []).push([Math.round((200 + x1 * k) * 2), Math.round((200 + y1 * k) * 2)]);
+    }
+  }
+  const dots = Object.entries(groups).map(([g, list]) => { let px = 0, py = 0; return `<path class="lp-orbit-${g[0]}" data-z="${g[1]}" d="${list.map(([x, y], n) => { const q = `m${x - px} ${y - py}h${n % 2 ? '-' : ''}.01`; px = x; py = y; return q; }).join('').replace(/ -/g, '-')}"/>`; }).join(''); // 점 = 길이 .01짜리 선(둥근 끝). 오른쪽·왼쪽으로 번갈아 그어 자리가 밀리지 않음
+  // 낱말이 도는 고리(기울어진 원)와 낱말 자리
+  const ring = (a) => { const y0 = RT * Math.sin(a), z = y0 * Math.sin(TILT), k = (D / (D + z)) * S; return [200 + RT * Math.cos(a) * k, 200 + y0 * Math.cos(TILT) * k, z]; };
+  let rp = ''; for (let i = 0; i < 60; i++) { const [x, y] = ring((i / 60) * TAU); rp += `${i ? 'L' : 'M'}${Math.round(x * 2)} ${Math.round(y * 2)}`; }
+  const tags = words.length ? `<ul class="lp-orbit-tags">${words.map((w, i) => { const [x, y, z] = ring(0.62 + (i / words.length) * TAU); return `<li style="left:${(x / 4).toFixed(1)}%;top:${(y / 4).toFixed(1)}%;--z:${(0.5 - z / (2 * RT)).toFixed(2)}">${esc(w)}</li>`; }).join('')}</ul>` : '';
+  return `<div class="lp-orbit"${attr} data-seed="${esc(seed)}" aria-hidden="true"><svg viewBox="0 0 800 800" focusable="false"><path class="lp-orbit-ring" d="${rp}Z"/>${dots}</svg>${tags}</div>`;
+}
+C.orbit = (M) => show(M, orbitArt(seedOf(M), orbitWords(M), artFx(M, 'orbit-3d')));
+
+/* 돌과 물결: 연수 제목에서 나온 그림. 돌 두세 개를 돌아 흐르는 물결 선(돌 둘레의 퍼텐셜 흐름) — 같은 제목이면 늘 같은 그림. 효과(stream-lines)가 실리면 선이 흐르고 포인터가 돌이 됨 */
+/** 그림의 씨앗 값: stream-lines.js와 같은 순서로 뽑음 */
+export function streamScene(seed) {
+  const r = seeded(hashStr(seed));
+  const th = (r() - 0.5) * 0.7, A = 9 + r() * 9, kx = 0.008 + r() * 0.006, ky = 0.006 + r() * 0.006, p1 = r() * 6.283, p2 = r() * 6.283;
+  const st = [[150 + r() * 110, 140 + r() * 90, 54 + r() * 18]];
+  const b = [84 + r() * 232, 372 + r() * 80, 26 + r() * 14]; st.push(b);
+  const c = [276 + r() * 84, 60 + r() * 380, 11 + r() * 8];
+  if (r() < 0.62 && st.every((s) => Math.hypot(s[0] - c[0], s[1] - c[1]) > s[2] + c[2] + 34)) st.push(c);
+  return { th, A, kx, ky, p1, p2, st, off: r() * 11 };
+}
+/** 물결 선들: 흐름에 직각인 줄에서 11 간격으로 떠나 흐름을 따라감(선은 서로 만나지 않음) */
+export function streamLines(sc, t = 0, extra = null) {
+  const sn = Math.sin(sc.th), cs = Math.cos(sc.th), st = extra ? sc.st.concat([extra]) : sc.st, lines = [];
+  const vel = (x, y) => {
+    const a = sc.kx * x + sc.p1 + t, b = sc.ky * y + sc.p2;
+    let px = -sn + sc.A * sc.kx * Math.cos(a) * Math.cos(b), py = cs - sc.A * sc.ky * Math.sin(a) * Math.sin(b);
+    for (const s of st) { const dx = x - s[0], dy = y - s[1], d2 = dx * dx + dy * dy || 1, L = -dx * sn + dy * cs, q = (s[2] * s[2]) / (d2 * d2); px -= q * (-sn * d2 - 2 * L * dx); py -= q * (cs * d2 - 2 * L * dy); }
+    const l = Math.hypot(px, py) || 1; return [py / l, -px / l];
+  };
+  const out = (p) => { for (const s of st) { const dx = p[0] - s[0], dy = p[1] - s[1], d = Math.hypot(dx, dy) || 1, m = s[2] + 2.5; if (d < m) { p[0] = s[0] + (dx / d) * m; p[1] = s[1] + (dy / d) * m; } } return p; };
+  for (let s = -330 + sc.off; s < 330; s += 11) {
+    let p = [200 - cs * 330 - sn * s, 250 - sn * 330 + cs * s]; const pts = [];
+    for (let i = 0; i < 72; i++) {
+      if (p[0] > -14 && p[0] < 414 && p[1] > -14 && p[1] < 514) pts.push(p[0], p[1]); else if (pts.length) break;
+      const v = vel(p[0], p[1]), w = vel(p[0] + v[0] * 5, p[1] + v[1] * 5);
+      p = out([p[0] + w[0] * 10, p[1] + w[1] * 10]);
+    }
+    lines.push(pts);
+  }
+  return lines;
+}
+export function streamArt(seed, attr = '') {
+  const sc = streamScene(seed), lines = streamLines(sc);
+  const d = (keep) => lines.filter((pts, i) => pts.length > 8 && keep(i)).map((pts) => { let x = Math.round(pts[0]), y = Math.round(pts[1]), s = `M${x} ${y}l`; for (let i = 2; i < pts.length; i += 2) { const nx = Math.round(pts[i]), ny = Math.round(pts[i + 1]); s += `${i > 2 ? ' ' : ''}${nx - x} ${ny - y}`; x = nx; y = ny; } return s; }).join('').replace(/ -/g, '-');
+  return `<figure class="lp-stream"${attr} data-seed="${esc(seed)}" aria-hidden="true"><div class="lp-stream-plate"><svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" focusable="false">${sc.st.map((s, i) => `<circle class="lp-stream-s${i}" cx="${s[0].toFixed(1)}" cy="${s[1].toFixed(1)}" r="${s[2].toFixed(1)}"/>`).join('')}<path class="lp-stream-l" d="${d((i) => i % 6 !== 2)}"/><path class="lp-stream-l lp-stream-b" d="${d((i) => i % 6 === 2)}"/></svg></div><figcaption>연수 제목으로 그린 그림</figcaption></figure>`;
+}
+C.stream = (M) => show(M, streamArt(seedOf(M), artFx(M, 'stream-lines')));
+
+/** 다른 첫 화면에 꾸밈으로 얹을 때도 정지 그림을 먼저 그려 둠(효과가 꺼져도 완성된 모습) */
+const DECOR_ART = { 'orbit-3d': (M) => orbitArt(seedOf(M)), 'stream-lines': (M) => streamArt(seedOf(M)) };
 
 /** 프리셋 구성 이름 → 렌더(옛 이름 stage·split·center·editorial도 받음) */
 const ALIAS = { stage: 'cinema', split: 'worksheet', center: 'quiet', editorial: 'masthead' };
@@ -395,7 +496,7 @@ export function renderHero(s, ctx, helpers) {
   const comp = heroComposition(ctx);
   const M = model(s, ctx, helpers);
   // 칠판은 그래픽(분필 낙서)을 칠판 안에 그림
-  const graphic = ctx.design.graphic && comp !== 'board' && OWN_ART[comp] !== ctx.design.graphic ? `<div class="lp-hero-graphic" data-fx="${esc(ctx.design.graphic)}" aria-hidden="true"></div>` : '';
+  const graphic = ctx.design.graphic && comp !== 'board' && OWN_ART[comp] !== ctx.design.graphic ? `<div class="lp-hero-graphic" data-fx="${esc(ctx.design.graphic)}" aria-hidden="true">${DECOR_ART[ctx.design.graphic]?.(M) || ''}</div>` : '';
   const ov = ctx.design.effects?.['hero.graphic.overlay'];
   const overlay = ov ? `<div class="lp-hero-overlay" data-fx="${esc(ov)}" aria-hidden="true"></div>` : '';
   return `<section id="${M.id}" class="lp-sec lp-hero lp-hero--${comp}"${s.tone ? ` data-tone="${esc(s.tone)}"` : ''} aria-labelledby="${M.id}-h">

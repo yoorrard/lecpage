@@ -418,6 +418,14 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 .fx-blueprint-grid.is-aim .fx-bp-x, .fx-blueprint-grid.is-aim .fx-bp-y { opacity: .35; }
 .fx-blueprint-grid.is-aim .fx-bp-tag { opacity: 1; }
 
+/*@fx:orbit-3d*/
+/* 캔버스가 첫 장을 그린 뒤 서버가 그린 정지 그림을 감춤. 낱말은 캔버스 위에서 transform으로 움직임 */
+.fx-orbit-on > svg { visibility: hidden; }
+.fx-orbit-on .lp-orbit-tags li { left: 0 !important; top: 0 !important; will-change: transform; }
+
+/*@fx:stream-lines*/
+.fx-stream-on svg { visibility: hidden; }
+
 /*@fx:smooth-scroll*/
 /* Lenis 1.3.27 권장 스타일(MIT) */
 html.lenis, html.lenis body { height: auto; }

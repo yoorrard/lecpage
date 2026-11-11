@@ -351,6 +351,18 @@ export const FX = [
     desc_ko: '하루 일정을 둥근 시계로 그려요. 순서마다 길이에 비례한 호가 차례로 그려지고, 마우스·초점을 두면 가운데에 그 순서가 뜨고, 연수 중에는 지금 바늘이 돌아요.',
     use_ko: '첫 화면 구성 \'하루 시계\'가 직접 그리고, 다른 첫 화면에서는 일정 칸을 읽어 오른쪽에 꾸밈으로 놓입니다. 미리 보기: 주소 끝에 ?now=15:45.',
     a11y_ko: '그림은 꾸밈이고 같은 내용이 아래 목록(글)에 있습니다. 움직임이 꺼지면 다 그려진 그림.' },
+  { id: 'orbit-3d', name_ko: '입체 궤도', name_en: 'Orbit knot', group: 'graphic', loop: true,
+    slots: ['hero.graphic'], moods: ['futuristic', 'tech', 'bold'], topics: ['ai', 'coding', 'science', 'edutech', 'maker'],
+    level: 2, libs: [], license: MIT, trend: 'up', weightKB: 6.2,
+    desc_ko: '점으로 짠 입체 매듭이 천천히 돌아요. 점들이 관을 따라 감기고, 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레 고리를 돌아요. WebGL 없이 Canvas만 써요.',
+    use_ko: '첫 화면 구성 \'입체 궤도\'가 직접 그리고, 다른 첫 화면에서는 오른쪽에 꾸밈으로 놓입니다. 낱말은 차례의 꼬리표·실습 이름에서 3~5개.',
+    a11y_ko: '서버가 그린 정지 그림과 같은 각도에서 이어받습니다. 동작 줄이기·저사양은 정지 그림 그대로, 화면 밖·멈춤에서는 쉽니다. 낱말은 본문에 있는 말이라 화면 낭독기에 숨깁니다.' },
+  { id: 'stream-lines', name_ko: '돌과 물결', name_en: 'Stone & stream', group: 'graphic', loop: true,
+    slots: ['hero.graphic'], moods: ['editorial', 'natural', 'calm', 'minimal'], topics: ['art', 'reading', 'environment', 'sel', 'history', 'general'],
+    level: 2, libs: [], license: MIT, trend: 'up', weightKB: 5.6,
+    desc_ko: '연수 제목으로 그린 그림 한 장. 돌 두세 개를 돌아 흐르는 물결 선이 천천히 일렁이고, 마우스를 올리면 그 자리가 돌이 되어 물결이 비켜 흘러요. 같은 제목이면 늘 같은 그림이에요.',
+    use_ko: '첫 화면 구성 \'돌과 물결\'이 액자로 그리고, 다른 첫 화면에서는 오른쪽에 꾸밈으로 놓입니다. 색은 디자인의 글자색·주색·강조색.',
+    a11y_ko: '서버가 그린 정지 그림 위에 같은 그림을 얹습니다. 동작 줄이기·저사양은 정지 그림 그대로, 화면 밖·멈춤에서는 쉽니다. 꾸밈이라 화면 낭독기에 숨깁니다.' },
 
   // ───────── 라이브러리(강도 3, 지연 로드) ─────────
   { id: 'smooth-scroll', name_ko: '부드러운 휠 스크롤', name_en: 'Smooth scroll (Lenis)', group: 'lib',

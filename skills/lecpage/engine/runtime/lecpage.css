@@ -494,42 +494,41 @@ input,textarea,select{font-size:max(16px,1em)}
 @keyframes lp-kin-run{to{transform:translate3d(-24%,0,0)}}
 
 /* ── 살아 있는 첫 화면(쇼케이스) ───────────────────────────────────────
-   글은 HTML 그대로, 그림은 서버가 정지 모습으로 먼저 그려 둡니다. 효과(runtime/fx)가 실리면 기울기·넘기기·그려지기·지금 바늘이 더해집니다. */
-/* 18 collage(펼친 교재): 교재 쪽 3D 부채 */
+   글은 HTML 그대로, 그림은 서버가 정지 모습으로 먼저 그려 둡니다. 효과(runtime/fx)가 실리면 기울기·넘기기·그려지기·지금 바늘·회전·물살이 더해집니다.
+   공통 뼈대(.lp-show): 넓은 화면은 글·정보 왼쪽에 그림 오른쪽, 좁은 화면은 글 → 그림 → 정보(그림이 제목·버튼을 덮지 않음) */
+.lp-show{grid-template-columns:minmax(0,6fr) minmax(0,6fr);grid-template-areas:"copy art" "meta art";gap:var(--sp-6) clamp(24px,4vw,72px);align-items:center}
+.lp-show.is-solo{grid-template-columns:minmax(0,1fr);grid-template-areas:"copy" "meta"}
+.lp-show > .lp-hero-copy{grid-area:copy;align-self:end}
+.lp-show > .lp-hero-meta{grid-area:meta;align-self:start;grid-template-columns:repeat(auto-fit,minmax(150px,max-content));gap:var(--sp-3) var(--sp-7);padding-top:var(--sp-5);border-top:var(--rule)}
+.lp-show > :is(.lp-fan,.lp-dial,.lp-orbit,.lp-stream){grid-area:art}
+.lp-show .lp-h1{--fs-hero:clamp(2.6rem,5.6vw,5.5rem);line-height:1.1;letter-spacing:-.04em}
+/* 18 collage(펼친 교재): 교재 쪽 3D 부채. 장마다 제 색, 맨 위 장만 제목을 보이고 뒤 장은 쪽 번호만 */
 .lp-hero--collage{background:radial-gradient(60% 70% at 86% 40%,color-mix(in srgb,var(--hero-from) 70%,transparent),transparent 70%),radial-gradient(40% 50% at 70% 96%,color-mix(in srgb,var(--hero-to) 80%,transparent),transparent 70%),var(--background)}
-.lp-hero--collage .lp-hero-inner{grid-template-columns:minmax(0,6fr) minmax(0,6fr);gap:clamp(24px,4vw,72px);align-items:center}
-.lp-hero--collage .lp-hero-inner.is-solo{grid-template-columns:minmax(0,1fr)}
-.lp-hero--collage .lp-h1{--fs-hero:clamp(2.6rem,5.6vw,5.5rem);line-height:1.1;letter-spacing:-.04em}
-.lp-hero--collage .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));width:100%;padding-top:var(--sp-4);border-top:var(--rule)}
-.lp-fan{position:relative;justify-self:center;width:min(100%,600px);aspect-ratio:1/.8;perspective:1300px}
-.lp-fan-list{list-style:none;position:absolute;inset:0;transform-style:preserve-3d;transform:translate3d(0,calc(var(--sy,0) * -34px),0) rotateX(calc(9deg - var(--ty,0) * 7deg)) rotateY(calc(-15deg + var(--tx,0) * 9deg));transition:transform .6s var(--ease-out)}
-.lp-fan-card{position:absolute;left:0;top:30%;width:66%;aspect-ratio:16/10;z-index:calc(10 - var(--i));transform-origin:20% 90%;transform:translate3d(calc(var(--i) * (10% + var(--sy,0) * 2%)),calc(var(--i) * (-8% - var(--sy,0) * 2.5%)),calc(var(--i) * -60px)) rotateZ(calc(var(--i) * 5.5deg - 7deg));transition:transform .7s var(--ease-out),filter .4s;filter:brightness(calc(1 - var(--i) * .035))}
-.lp-fan-face{position:relative;display:grid;align-content:space-between;justify-items:end;text-align:right;width:100%;height:100%;padding:7% 8%;overflow:hidden;background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:clamp(10px,1.2vw,16px);box-shadow:0 34px 60px -30px rgba(10,8,30,.5),0 2px 0 rgba(255,255,255,.5) inset;text-decoration:none}
+.lp-fan{position:relative;justify-self:center;width:min(100%,580px);aspect-ratio:1/.74;perspective:1400px}
+.lp-fan-list{list-style:none;position:absolute;inset:0;transform-style:preserve-3d;transform:translate3d(0,calc(var(--sy,0) * -28px),0) rotateX(calc(8deg - var(--ty,0) * 6deg)) rotateY(calc(-13deg + var(--tx,0) * 8deg));transition:transform .6s var(--ease-out)}
+.lp-fan-card{position:absolute;left:1%;top:30%;width:60%;aspect-ratio:16/10;z-index:calc(10 - var(--i));transform-origin:10% 100%;transform:translate3d(calc(var(--i) * (9.5% + var(--sy,0) * 1.5%)),calc(var(--i) * (-5% - var(--sy,0) * 2%)),calc(var(--i) * -46px)) rotateZ(calc(var(--i) * 6deg - 7deg));transition:transform .7s var(--ease-out)}
+.lp-fan-face{position:relative;display:grid;align-content:space-between;width:100%;height:100%;padding:6% 4.5% 6.5% 7.5%;overflow:hidden;background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:clamp(10px,1.2vw,16px);box-shadow:0 30px 54px -30px rgba(10,8,30,.5),-14px 6px 26px -18px rgba(10,8,30,.38);text-decoration:none}
 .lp-fan-face img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.lp-fan-card:first-child .lp-fan-face{background:var(--band-primary,var(--primary));color:var(--primary-foreground);border-color:transparent}
-.lp-fan-pg{font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(1.75rem,3.6vw,3.25rem);line-height:1;letter-spacing:-.04em;color:var(--primary);font-variant-numeric:tabular-nums}
-.lp-fan-card:first-child .lp-fan-pg{color:inherit;opacity:.8}
-.lp-fan-face b{max-width:13em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(.95rem,1.7vw,1.5rem);line-height:1.28;letter-spacing:var(--display-tracking);text-wrap:balance}
+.lp-fan-card:nth-child(5n+1) .lp-fan-face{background:var(--band-primary,var(--primary));color:var(--primary-foreground);border-color:transparent}
+.lp-fan-card:nth-child(5n+3) .lp-fan-face{background:var(--accent);color:var(--accent-foreground);border-color:transparent}
+.lp-fan-card:nth-child(5n) .lp-fan-face{background:var(--accent-2);color:var(--accent-2-foreground);border-color:transparent}
+.lp-fan-pg{justify-self:end;font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(.95rem,1.5vw,1.3rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.lp-fan-face b{max-width:11em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(1.05rem,2vw,1.75rem);line-height:1.25;letter-spacing:var(--display-tracking);text-wrap:balance;opacity:0;transition:opacity .35s}
+.lp-fan:not(.fx-fan) .lp-fan-card:first-child b,.lp-fan-card.is-top b{opacity:1}
 .lp-fan-face:focus-visible{outline:3px solid var(--ring);outline-offset:3px}
-.lp-fan-next{position:absolute;right:2%;bottom:0;z-index:20;background:var(--card)}
-/* 다른 첫 화면에 꾸밈으로 놓일 때 */
-.lp-hero-graphic > .lp-fan{position:absolute;right:max(2vw,calc((100% - 1320px) / 2));top:50%;width:min(40vw,520px);margin-top:calc(min(40vw,520px) * -.42);opacity:.5}
-.lp-hero-graphic > .lp-dial{position:absolute;right:max(3vw,calc((100% - 1320px) / 2));top:50%;width:min(34vw,440px);margin-top:calc(min(34vw,440px) * -.5);opacity:.5}
+.lp-fan-next{position:absolute;right:0;bottom:0;z-index:20;background:var(--card)}
 /* 19 dial(하루 시계): 일정 시계 + 목록 */
-.lp-hero--dial{background:radial-gradient(52% 60% at 78% 44%,color-mix(in srgb,var(--hero-from) 46%,transparent),transparent 72%),var(--background)}
-.lp-hero--dial .lp-hero-inner{grid-template-columns:minmax(0,6fr) minmax(0,6fr);gap:clamp(24px,4vw,72px);align-items:center}
-.lp-hero--dial .lp-hero-inner.is-solo{grid-template-columns:minmax(0,1fr)}
-.lp-hero--dial .lp-h1{--fs-hero:clamp(2.6rem,5.6vw,5.5rem);line-height:1.1;letter-spacing:-.04em}
-.lp-hero--dial .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(170px,max-content));gap:var(--sp-3) var(--sp-7)}
-.lp-dial{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-5);justify-items:center;min-width:0}
-.lp-dial-ring{position:relative;width:min(100%,430px);aspect-ratio:1}
+.lp-hero--dial{background:radial-gradient(52% 60% at 78% 40%,color-mix(in srgb,var(--hero-from) 46%,transparent),transparent 72%),var(--background)}
+.lp-dial{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-6);justify-items:center;min-width:0}
+.lp-dial-ring{position:relative;width:min(100%,410px);aspect-ratio:1}
 .lp-dial-ring svg{display:block;width:100%;height:100%;overflow:visible}
-.lp-dial-track{fill:none;stroke:color-mix(in srgb,var(--foreground) 9%,transparent);stroke-width:30}
-.lp-dial-seg{fill:none;stroke:var(--primary);stroke-width:26;stroke-linecap:butt;cursor:pointer;pointer-events:stroke;transition:stroke-width var(--dur-2),opacity var(--dur-2)}
-.lp-dial-seg:nth-child(3n+2){stroke:color-mix(in srgb,var(--primary) 62%,var(--accent-2))}
-.lp-dial-seg:nth-child(3n){stroke:color-mix(in srgb,var(--primary) 38%,var(--background))}
+.lp-dial-track{fill:none;stroke:color-mix(in srgb,var(--foreground) 8%,transparent);stroke-width:22}
+.lp-dial-bezel{fill:none;stroke:color-mix(in srgb,var(--foreground) 50%,transparent);stroke-width:8}
+.lp-dial-seg{fill:none;stroke:var(--primary);stroke-width:22;stroke-linecap:butt;cursor:pointer;pointer-events:stroke;transition:stroke-width var(--dur-2),opacity var(--dur-2)}
+.lp-dial-seg:nth-child(even){stroke:color-mix(in srgb,var(--primary) 52%,var(--accent-2))}
+.lp-dial-seg.is-rest{stroke:color-mix(in srgb,var(--foreground) 26%,transparent)}
 .lp-dial.has-hot .lp-dial-seg:not(.is-hot){opacity:.35}
-.lp-dial-seg.is-hot,.lp-dial-seg.is-now{stroke-width:34}
+.lp-dial-seg.is-hot,.lp-dial-seg.is-now{stroke-width:30}
 .lp-dial-seg.is-done{opacity:.3}
 .lp-dial-ticks text{font-family:var(--font-mono);font-size:12px;fill:var(--muted-foreground);text-anchor:middle;font-variant-numeric:tabular-nums}
 .lp-dial-hand{stroke:var(--accent);stroke-width:3;stroke-linecap:round;opacity:0}
@@ -540,21 +539,62 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-dial-center span{font-size:var(--fs-md);font-weight:700}
 .lp-dial-center small{margin-top:6px;font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--muted-foreground);font-variant-numeric:tabular-nums}
 .lp-dial-center em{font-style:normal;font-weight:700;font-size:var(--fs-md);line-height:1.35;text-wrap:balance}
-.lp-dial-list{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:0 var(--sp-6);width:100%}
-.lp-dial-list a{display:grid;grid-template-columns:3.4em minmax(0,1fr) auto;gap:var(--sp-3);align-items:baseline;min-height:40px;padding:8px 0;border-top:1px solid var(--rule-c);color:inherit;text-decoration:none;font-size:var(--fs-sm);font-weight:600;line-height:1.4}
+.lp-dial-list{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--r,3),auto);grid-auto-columns:minmax(0,1fr);gap:0 var(--sp-6);width:100%;border-bottom:1px solid var(--rule-c)}
+.lp-dial-list a{display:grid;grid-template-columns:3.4em minmax(0,1fr) auto;gap:var(--sp-3);align-items:baseline;height:100%;min-height:40px;padding:8px 0;border-top:1px solid var(--rule-c);color:inherit;text-decoration:none;font-size:var(--fs-sm);font-weight:600;line-height:1.4}
 .lp-dial-list time{font-family:var(--font-mono);font-weight:500;color:var(--primary);font-variant-numeric:tabular-nums}
 .lp-dial-list small{font-size:var(--fs-xs);font-weight:500;color:var(--muted-foreground);font-variant-numeric:tabular-nums}
 .lp-dial-list li.is-hot a,.lp-dial-list a:hover{color:var(--primary)}
 /* 효과가 실리면: 화면에 들어올 때 호가 차례로 그려짐 */
 .lp-dial[data-fx-pre] .lp-dial-seg{stroke-dasharray:0 1000}
-.lp-dial[data-fx-pre] .lp-dial-ticks,.lp-dial[data-fx-pre] .lp-dial-center{opacity:0}
+.lp-dial[data-fx-pre] :is(.lp-dial-ticks,.lp-dial-center,.lp-dial-bezel){opacity:0}
 .lp-dial[data-fx-in] .lp-dial-seg{transition:stroke-dasharray .9s var(--ease-out) calc(var(--i) * 110ms),stroke-width var(--dur-2),opacity var(--dur-2)}
-.lp-dial[data-fx-in] :is(.lp-dial-ticks,.lp-dial-center){transition:opacity .6s ease .5s}
+.lp-dial[data-fx-in] :is(.lp-dial-ticks,.lp-dial-center,.lp-dial-bezel){transition:opacity .6s ease .5s}
+/* 20 orbit(입체 궤도): 점으로 짠 입체 매듭 + 둘레를 도는 낱말 */
+.lp-hero--orbit{background:radial-gradient(44% 54% at 76% 46%,color-mix(in srgb,var(--hero-from) 62%,transparent),transparent 72%),var(--background)}
+.lp-hero--orbit .lp-h1{letter-spacing:-.02em}
+.lp-orbit{position:relative;justify-self:center;width:min(100%,600px);aspect-ratio:1}
+.lp-orbit svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lp-orbit path{fill:none;stroke-linecap:round}
+.lp-orbit-ring{stroke:var(--foreground);stroke-width:2.2;stroke-dasharray:.1 14;opacity:.4}
+.lp-orbit-p{stroke:var(--primary)}
+.lp-orbit-f{stroke:var(--foreground)}
+.lp-orbit-a{stroke:var(--accent)}
+.lp-orbit [data-z="0"]{stroke-width:2.6;opacity:.3}
+.lp-orbit [data-z="1"]{stroke-width:4.2;opacity:.64}
+.lp-orbit [data-z="2"]{stroke-width:6;opacity:.97}
+.lp-orbit-tags{list-style:none;position:absolute;inset:0;z-index:1}
+.lp-orbit-tags li{position:absolute;display:flex;align-items:center;gap:.5em;transform:translate(-50%,-50%);font-size:var(--fs-xs);font-weight:600;white-space:nowrap;color:var(--foreground);opacity:calc(.42 + var(--z,.5) * .58);text-shadow:0 0 12px var(--background),0 0 4px var(--background)}
+.lp-orbit-tags li::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:var(--primary)}
+/* 21 stream(돌과 물결): 연수 제목으로 그린 그림 한 장(액자) */
+.lp-hero--stream{background:radial-gradient(50% 60% at 80% 50%,color-mix(in srgb,var(--hero-from) 60%,transparent),transparent 74%),var(--background)}
+.lp-hero--stream .lp-h1{line-height:1.18;letter-spacing:-.02em}
+.lp-stream{position:relative;justify-self:end;display:grid;gap:var(--sp-3);width:min(100%,440px);margin:0}
+.lp-stream-plate{position:relative;aspect-ratio:4/5;overflow:hidden;background:var(--card);border:1px solid var(--rule-c);border-radius:var(--radius-sm);box-shadow:0 1px 2px rgba(20,20,30,.06),0 34px 64px -36px color-mix(in srgb,var(--foreground) 55%,transparent)}
+.lp-stream svg{position:absolute;inset:0;width:100%;height:100%}
+.lp-stream-l{fill:none;stroke:var(--foreground);stroke-width:.9;stroke-linecap:round;stroke-linejoin:round;opacity:.6}
+.lp-stream-b{stroke-width:1.7;opacity:.82}
+.lp-stream-s0{fill:var(--accent)}
+.lp-stream-s1{fill:var(--primary)}
+.lp-stream-s2{fill:var(--foreground)}
+.lp-stream figcaption{font-size:var(--fs-xs);color:var(--muted-foreground)}
+/* 다른 첫 화면에 꾸밈으로 놓일 때 */
+.lp-hero-graphic > .lp-fan{position:absolute;right:max(2vw,calc((100% - 1320px) / 2));top:50%;width:min(40vw,520px);margin-top:calc(min(40vw,520px) * -.42);opacity:.5}
+.lp-hero-graphic > .lp-dial{position:absolute;right:max(3vw,calc((100% - 1320px) / 2));top:50%;width:min(34vw,440px);margin-top:calc(min(34vw,440px) * -.5);opacity:.5}
+.lp-hero-graphic > .lp-orbit{position:absolute;right:max(1vw,calc((100% - 1360px) / 2));top:50%;width:min(42vw,560px);margin-top:calc(min(42vw,560px) * -.5);opacity:.6}
+.lp-hero-graphic > .lp-stream{position:absolute;right:max(3vw,calc((100% - 1320px) / 2));top:50%;width:min(30vw,400px);margin-top:calc(min(30vw,400px) * -.625);opacity:.55}
+.lp-hero-graphic > .lp-stream figcaption{display:none}
+@media (max-width:760px){
+  .lp-show{grid-template-columns:minmax(0,1fr);grid-template-areas:"copy" "art" "meta";row-gap:var(--sp-7)}
+  .lp-show > .lp-hero-meta{grid-template-columns:minmax(0,1fr)}
+  .lp-fan{width:min(100%,400px);margin-block:var(--sp-2) 0}
+  .lp-dial-ring{width:min(84%,300px)}
+  .lp-dial-list{grid-auto-flow:row;grid-template-rows:none}
+  .lp-orbit{width:min(76%,320px)}
+  .lp-stream{justify-self:stretch;width:100%}
+  .lp-stream-plate{aspect-ratio:16/10}
+}
 @media (max-width:900px){
-  .lp-hero--collage .lp-hero-inner,.lp-hero--dial .lp-hero-inner{grid-template-columns:minmax(0,1fr)}
-  .lp-fan{width:min(100%,440px);margin-block:var(--sp-4) var(--sp-2)}
-  .lp-dial-ring{width:min(100%,340px)}
-  .lp-hero-graphic > :is(.lp-fan,.lp-dial){display:none}
+  .lp-hero-graphic > :is(.lp-fan,.lp-dial,.lp-orbit,.lp-stream){display:none}
 }
 
 /* 어두운 테마에서 달라지는 첫 화면 조각 */

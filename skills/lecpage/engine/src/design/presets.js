@@ -4,6 +4,7 @@
 //
 // variants.hero = 첫 화면 구성(render/hero.js). 프리셋마다 뼈대가 다릅니다(같은 구성을 두 프리셋이 쓰지 않음):
 //   cinema · worksheet · bento · poster · quiet · brief · masthead · sticker · board · spec · zine · invite · keynote · panel · soft · ticker · column
+//   살아 있는 첫 화면(쇼케이스): collage · dial · orbit · stream — 그림은 서버가 정지 모습으로 그리고, graphic에 적은 효과가 움직임·반응을 더함
 // fonts = 제목(display)·본문(body)·숫자와 영문 제목(num, 라틴)·고정폭(mono) 글꼴(design/fonts.js 키). 한글 2종 + 라틴. 본문 Pretendard 계열은 종이 워크북·공식 브리핑 두 곳뿐.
 // fontAlts = 주제·분위기가 맞을 때만 고르는 대안 글꼴(decide/design.js chooseFonts).
 // signature = 대표 효과 하나. signatureIn:'hero'면 첫 화면 구성이 직접 씁니다(다른 칸에 따로 붙이지 않음).
@@ -279,6 +280,34 @@ export const PRESETS = [
     variants: { hero: 'dial', head: 'index', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
     graphic: 'schedule-dial', closingGraphic: '', signature: '',
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+  },
+  {
+    id: 'knot-orbit', name_ko: '입체 궤도', name_en: 'Orbit Knot',
+    desc_ko: '점으로 짠 입체 매듭이 천천히 도는 첫 화면. 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레를 돌아요. AI·코딩·과학처럼 기술이 주제인 연수에.',
+    moods: ['futuristic', 'tech', 'bold'], topics: ['ai', 'coding', 'science', 'maker'],
+    archetypes: ['story', 'lab', 'live'], theme: 'dark', motion: 2,
+    fonts: { display: 'gmarket', body: 'notoSans', num: 'syne', mono: 'jetbrains', displayWeight: 700 },
+    fontAlts: [{ display: 'elice', body: 'notoSans', displayWeight: 700, topics: ['coding', 'maker'] }],
+    dark: { bg: '#070b0d', fg: '#eef6f3', card: '#10181a', muted: '#a3b5b0', primary: '#5cf2b6', primaryFg: '#04130e', accent: '#b79cff', accent2: '#ffd166', accent3: '#5cc8ff', heroFrom: '#0f4a3a', heroTo: '#070b0d' },
+    light: { bg: '#f3f7f5', fg: '#0c1a17', card: '#ffffff', muted: '#4a5f59', primary: '#0a7453', primaryFg: '#ffffff', accent: '#6a4ce0', accent2: '#946200', accent3: '#0a6fae', heroFrom: '#c9efe0', heroTo: '#f3f7f5' },
+    shape: { radius: 10, radiusSm: 6, radiusLg: 16, borderW: 1, shadow: 'glow' },
+    variants: { hero: 'orbit', head: 'index', band: 'glow', card: 'outline', nav: 'bar', btn: 'pill', heading: 'display', tones: false },
+    graphic: 'orbit-3d', closingGraphic: '', signature: '',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+  },
+  {
+    id: 'stone-stream', name_ko: '돌과 물결', name_en: 'Stone & Stream',
+    desc_ko: '연수 제목으로 그린 그림 한 장이 첫 화면에. 돌을 돌아 흐르는 물결 선이 일렁이고, 마우스를 올리면 물결이 비켜 흘러요. 미술·독서·생태·마음 연수에.',
+    moods: ['editorial', 'natural', 'calm'], topics: ['art', 'reading', 'environment', 'humanities', 'sel'],
+    archetypes: ['story', 'course'], theme: 'light', motion: 2,
+    fonts: { display: 'songMyung', body: 'gothicA1', num: 'instrumentSerif', mono: 'plexMono', displayWeight: 400 },
+    fontAlts: [{ display: 'ridibatang', body: 'gothicA1', displayWeight: 400, topics: ['reading', 'humanities'] }],
+    light: { bg: '#f3f1ea', fg: '#16201f', card: '#fbfaf5', muted: '#566361', primary: '#0c5f5c', primaryFg: '#ffffff', accent: '#f0683f', accent2: '#d9b23c', accent3: '#9dbfb8', heroFrom: '#e2ebe3', heroTo: '#f3f1ea' },
+    dark: { bg: '#101a1b', fg: '#ecf1ec', card: '#172526', muted: '#a9b9b5', primary: '#7fd9cf', primaryFg: '#0b1a1a', accent: '#ff8d66', accent2: '#e8c765', accent3: '#4e7f79', heroFrom: '#1b3334', heroTo: '#101a1b' },
+    shape: { radius: 3, radiusSm: 2, radiusLg: 6, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'stream', head: 'chapter', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
+    graphic: 'stream-lines', closingGraphic: '', signature: '',
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
   },
 ];
 
