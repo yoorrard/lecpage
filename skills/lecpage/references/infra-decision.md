@@ -4,7 +4,7 @@
 > 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
 > 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
 > 올릴 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
-> lecpage 운영자는 **공용 실시간 중계를 운영하지 않습니다**(이유: `docs/operations.md`). 실시간은 강사 소유 백엔드입니다. 앱의 '바로 공개'(운영자가 켠 경우만, §3.2 S15)는 skill이 쓰지 않습니다.
+> skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 공개'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **앱 전용이고 skill은 쓰지 않습니다**.
 
 ---
 
@@ -62,7 +62,7 @@
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
-| (앱 전용) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 30일 뒤 지워짐) | 앱 화면 |
+| (앱 전용, skill은 쓰지 않음) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 30일 뒤 지워짐) | 앱 화면 |
 
 ### 2.2 실시간
 
@@ -262,7 +262,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
     "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작 → Make public","domain":"*.netlify.app"},
-    "lecpage":      {"target":"(앱 전용)","guide":"앱의 공개하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만. 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일","domain":"<앱 주소>/s/<id>/"},
+    "lecpage":      {"target":"(앱 전용)","guide":"앱의 공개하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 쓰지 않음). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
     "aws-amplify":  {"target":"s3","guide":"deploy/aws-s3-cloudfront.md#amplify-끌어-놓기","headers":"amplify-console","cost":"GB당 $0.15 전송","domain":"*.amplifyapp.com"},
@@ -332,7 +332,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | Appwrite Cloud / Convex | 각 서비스 계정 | Appwrite: 한도 넘으면 프로젝트 동결 / Convex: 함수 호출 100만/월 | (어댑터 없음) | 참고만 |
 | Vercel 함수 | — | WebSocket이 되지만 최대 실행 시간(Hobby 300초)에 끊기고 상태를 둘 곳이 없음 | (어댑터 없음) | 실시간 백엔드로 쓰지 않음. 올릴 곳이 Vercel이어도 실시간은 위에서 고름 |
 
-**lecpage 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다.
+**아무 연수나 받는 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다. '바로 공개'로 올린 사이트에 딸린 방만 운영자 서버가 맡습니다(앱 전용, skill은 쓰지 않음).
 
 ### 5.3 조합할 때 지켜야 할 것
 - **주소(origin)** : 엔진이 페이지마다 넣는 CSP `<meta>`는 `connect-src`에 `https:`·`wss:`를 허용하므로 실시간 주소를 따로 적을 일이 없습니다. §10의 CSP 헤더 템플릿을 따로 쓸 때만 `{{LIVE_ORIGIN}}`을 채웁니다.
@@ -412,7 +412,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 > "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 제가 올릴게요. 로그인만 한 번 해 주시면 돼요. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요. 강사 화면에 들어갈 관리자 키는 파일로 따로 건네 드릴게요."
 
 **F. "lecpage 서버를 그냥 빌려 쓰면 안 되나요?"라고 물을 때**
-> "lecpage는 참가자 기록을 대신 맡아 주는 서버를 두지 않아요. 기록을 맡는 순간 그 기록의 책임이 운영자에게 넘어가고, 여러 연수가 한 서버를 나눠 쓰면 한 곳에 문제가 생길 때 모두가 멈추거든요. 대신 선생님 구글 계정이나 Cloudflare 계정에 10분 안에 만드는 방법을 안내해 드릴게요. 기록은 선생님만 보고, 선생님이 지울 수 있어요."
+> "제가 만들어 드리는 사이트는 참가자 기록을 lecpage 쪽 서버에 맡기지 않아요. 기록을 맡는 순간 그 기록의 책임이 운영자에게 넘어가고, 여러 연수가 한 서버를 나눠 쓰면 한 곳에 문제가 생길 때 모두가 멈추거든요. 대신 선생님 계정(Supabase·Cloudflare·구글)에 제가 만들어 드릴게요. 기록은 선생님만 보고, 선생님이 지울 수 있어요."
 
 **G. 학교 서버·NAS·VPS(node-server + Caddy)**
 > "선생님(학교) 서버에 사이트와 실시간 서버를 한 번에 띄우는 설정 파일을 드릴게요. 기록이 학교 안 서버에만 남아서 개인정보 면에서 가장 안전합니다. 서버 담당자께 '도커 컴포즈 파일 하나 실행'이라고 전하시면 됩니다."

@@ -10,6 +10,10 @@ updates:
     directory: /skills/lecpage/backends/cloudflare
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+  - package-ecosystem: npm
+    directory: /hosting
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directory: /skills/lecpage/backends/node-server
     schedule: { interval: weekly }

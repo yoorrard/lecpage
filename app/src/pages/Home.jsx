@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { E } from '../lib/engine.js';
 import { Mascot } from '../components/Mascot.jsx';
 import { Dialog } from '../components/ui.jsx';
 import { projects } from '../lib/db.js';
@@ -63,7 +64,7 @@ export function Home() {
         <h2 id="why-h" class="sr">lecpage의 강점</h2>
         <dl class="why-list">
           <div><dt>교재만 넣으면 공개 주소까지</dt><dd>AI가 교재를 읽어 구성과 문구를 짜고, 단추 하나로 공개해요. 주소·QR·카톡 안내 문구가 함께 나와요.</dd></div>
-          <div><dt>'AI가 만든 티'가 나지 않아요</dt><dd>디자인 12가지마다 첫 화면 구성과 글꼴이 달라요. 교재의 주제와 글꼴을 읽어 고르고, 흔한 AI 사이트의 버릇은 자동 점검으로 걸러요.</dd></div>
+          <div><dt>'AI가 만든 티'가 나지 않아요</dt><dd>디자인 {E.PRESETS.length}가지마다 첫 화면 구성과 글꼴이 다르고, 정적인 페이지부터 스크롤 연출까지 골라요. 교재의 주제와 글꼴을 읽어 고르고, 흔한 AI 사이트의 버릇은 자동 점검으로 걸러요.</dd></div>
           <div><dt>연수에 필요한 것이 이미 들어 있어요</dt><dd>실습 안내·프롬프트 복사·교재 보기, 질문·도움 요청·진행 현황, 발표 화면 QR과 이수자 명단까지. 일반 홈페이지 도구에는 없는 것들이에요.</dd></div>
           <div><dt>무료이고 가벼워요</dt><dd>회원가입이 없고, AI는 바꿀 곳만 읽어 비용이 적게 들어요. 참가자 기록은 강사님 계정에만 쌓여요.</dd></div>
         </dl>

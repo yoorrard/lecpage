@@ -1,40 +1,46 @@
-# 디자인: 프리셋·효과·모션·글꼴
+# 디자인: 프리셋·효과·연출·글꼴
 
 > 이 파일은 `scripts/gen-design-doc.mjs`가 엔진 카탈로그에서 자동으로 만듭니다. 직접 고치지 말고 카탈로그를 고친 뒤 다시 만드세요.
 
 ## 1. 정하는 순서
 1. **프리셋**: 분위기(mood)·주제(topic)·유형으로 점수를 매겨 3안을 제안한다(`lecpage.mjs design`). 강사가 고른다.
 2. **토큰**: 프리셋의 색·글꼴·모양. 기관 색이 있으면 `design.accent`(대비 자동 보정).
-3. **모션 단계**: 0 정지 · 1 차분 · 2 보통 · 3 화려. 크롬북·휴대폰·느린 네트워크면 2까지, 공식 행사는 2까지. 학교망 제한(`audience.network: restricted`)이면 외부 라이브러리 효과를 쓰지 않는다.
+3. **페이지 연출(모션 단계)**: 0 정적 · 1 차분 · 2 보통 · 3 스크롤 연출(시차·덮기·쌓임·고정 장면. 넓은 화면에서만 움직이고, 저사양·휴대폰·동작 줄이기에서는 완성된 정지 모습). 크롬북이 있으면 2까지, 휴대폰뿐이면 기본 2(강사가 3을 고르면 허용), 공식 연수는 1. 실습형은 첫 화면만. 학교망 제한(`audience.network: restricted`)이면 외부 라이브러리 효과를 쓰지 않는다.
 4. **슬롯별 효과**: 프리셋 기본값에서 출발해 상한·환경에 맞게 바꾸고, 제목·카드 효과는 연수마다 조금씩 변주한다(`design.seed`를 바꾸면 다른 조합). 직접 정하려면 `design.effects`에 `{"슬롯":"효과id"}`.
-5. **시그니처**: 사이트 전체에서 두드러지는 효과는 하나(`design.signature`).
+5. **대표 효과**: 사이트 전체에서 두드러지는 효과는 하나(`design.signature`).
+6. **글꼴 네 벌**: 한글 제목(`display`) · 한글 본문(`body`) · 숫자·영문용 라틴 제목(`num`: 큰 번호·날짜·통계·시각) · 고정폭(`mono`). 기본은 교재 글꼴을 따르고, 없으면 프리셋 글꼴. 직접 정하려면 `design.fonts`.
 
 ## 2. 지킬 것
 - 실습·질문·교재 화면은 모션 1단계를 넘지 않는다. 화려함은 첫 화면·섹션 시작·마무리에만.
 - 쉬는 상태가 완성 상태: 효과가 실패해도 글은 보인다. 동작 줄이기·'움직임 멈춤'을 늘 존중.
-- 피할 기본값: 보라→파랑 그라데이션 첫 화면, 똑같은 카드 3장, 흔한 AI 이미지, 섹션마다 다른 화려한 효과, 스크롤 납치.
+- 피할 기본값: 보라→파랑 그라데이션 첫 화면, 똑같은 카드 3장, 흔한 AI 이미지, 섹션마다 다른 화려한 효과, 스크롤 납치, 같은 배치의 섹션을 세 번 넘게 잇기(디자인 검사 `layout-repeat`).
 - 한글: word-break: keep-all, 본문 행간 1.6~1.8, 제목 text-wrap: balance. 글꼴은 아래 목록(상업 이용 가능)만.
 
-## 3. 무드 프리셋 12종
-| id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문) | 모션 | 그래픽 | 시그니처 |
+## 3. 무드 프리셋 17종
+| id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문/숫자) | 연출 | 첫 화면 | 대표 효과 |
 |---|---|---|---|---|---|---|---|
-| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 바뀌는 톤 여정과 큰 제목. 메시지와 감동이 중심인 특강에. | emotional, warm, futuristic, bold | Pretendard / Pretendard | 화려 | perspective-grid | tone-journey |
-| `paper-workbook` | 종이 워크북 | 밝은 종이 위에 라임 형광펜. 따라 하기와 복사·완료 체크가 또렷한 실습형 워크숍에. | minimal, playful, handmade | Pretendard / Pretendard | 차분 | paper-stack | micro-copy |
-| `glass-lab` | 유리 실험실 | 은은한 오로라와 손전등 빛, 또렷한 글자. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | Wanted Sans / Pretendard | 보통 | aurora | spotlight |
-| `playground` | 놀이터 | 굵은 테두리와 원색, 딱딱 눌리는 버튼. 놀이·게임·창의 연수와 초등 저학년 활동에. | playful, energetic, bold, retro | G마켓 산스 / Pretendard | 보통 | confetti-shapes | confetti |
-| `calm-forest` | 숲의 숨 | 세이지 그린과 명조 제목, 느린 움직임과 종이 질감. 마음·상담·생활교육·학부모 연수에. | calm, natural, warm, handmade | 마루 부리 / Pretendard | 차분 | topo-lines | scroll-fill |
-| `official-brief` | 공식 브리핑 | 단정한 남색과 높은 가독성, 큰 숫자. 교육청 설명회·관리자 연수·대규모 행사에. | formal, minimal | Pretendard / Pretendard | 차분 | blueprint-grid | counter |
-| `editorial-ink` | 잉크 에디토리얼 | 큰 명조 제목과 울트라마린 잉크 한 색. 독서·인문·역사처럼 글이 주인공인 연수에. | editorial, minimal, calm | Noto Serif KR / Pretendard | 보통 | - | split-reveal |
-| `retro-pop` | 도파민 팝 | 형광 분홍·보라·민트가 터지는 레트로 무드. 음악·미술·영어·학생 대상 활동에. | playful, retro, energetic, bold | 검은고딕 / Pretendard | 보통 | blobs-morph | magnetic |
-| `chalkboard` | 칠판 교실 | 진녹색 칠판과 분필 노랑, 손글씨 낙서. 교실 실천·초등 교과 연수에 친근하게. | warm, handmade, playful | 주아 / Pretendard | 보통 | chalkboard | doodle-scribbles |
-| `blueprint-tech` | 설계도 | 청사진 격자와 고정폭 숫자, 그려지는 선. 코딩·메이커·과학·데이터 연수에. | tech, minimal, futuristic | IBM Plex Sans KR / IBM Plex Sans KR | 보통 | blueprint-grid | line-draw |
-| `riso-zine` | 리소 진 | 형광 분홍과 파랑 잉크가 겹치는 인쇄물 질감. 미술·독서 동아리·창작 연수에. | handmade, retro, playful, editorial | 도현 / Pretendard | 보통 | riso | highlight-sweep |
-| `sunrise-warm` | 새벽빛 | 복숭아빛에서 라일락으로 번지는 부드러운 그라데이션. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / Pretendard | 보통 | mesh-gradient | mesh-gradient |
+| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 넘어가는 영화 첫 장면. 아주 큰 제목과 '한눈에 보기' 띠. 메시지가 중심인 특강에. | emotional, warm, futuristic, bold | 페이퍼로지 / 아스타 산스 / Bricolage Grotesque | 스크롤 연출 | cinema | tone-journey |
+| `paper-workbook` | 종이 워크북 | 밝은 종이 위에 라임 실습지 한 장. 실습 목록과 완료 체크가 첫 화면부터 보이는 실습형 워크숍에. | minimal, playful, handmade | 프리젠테이션 / Pretendard / Barlow Condensed | 차분 | worksheet | micro-copy |
+| `glass-lab` | 유리 실험실 | 어두운 바탕에 유리 칸으로 짠 요약판. 일시·장소·실습 수가 한 화면에. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | 에이투지체 / Wanted Sans / Space Grotesk | 보통 | bento | spotlight |
+| `playground` | 놀이터 | 기울어진 흰 제목 상자와 원색 블록, 도구 이름이 흐르는 띠. 놀이·게임·창의 연수와 초등 활동에. | playful, energetic, bold, retro | 케리스 케듀체 / SUIT / Bricolage Grotesque | 보통 | poster | marquee |
+| `calm-forest` | 숲의 숨 | 세이지 그린과 부리 글꼴 제목, 넓은 여백과 종이 질감. 마음·상담·생활교육·학부모 연수에. | calm, natural, warm, handmade | 마루 부리 / 나눔휴먼 / Fraunces | 차분 | quiet | grain |
+| `official-brief` | 공식 브리핑 | 남색 머리띠와 정보 표, 큰 숫자. 일시·장소·대상·이수 기준이 표로 보이는 설명회·직무연수에. | formal, minimal | 나눔스퀘어 네오 / Pretendard GOV / IBM Plex Sans Condensed | 차분 | brief | counter |
+| `editorial-ink` | 잉크 잡지 | 표제 띠와 아주 큰 명조 제목, 세 단 머리글. 독서·인문·역사처럼 글이 주인공인 연수에. | editorial, minimal, calm | 함렛 / Noto Serif KR / Fraunces | 보통 | masthead | scroll-fill |
+| `retro-pop` | 도파민 팝 | 통통한 제목과 동그란 날짜 스티커. 형광 분홍·보라가 터지는 음악·미술·영어·학생 활동에. | playful, retro, energetic, bold | 베이글 팻 원 / 페이퍼로지 / Unbounded | 보통 | sticker | magnetic |
+| `chalkboard` | 칠판 교실 | 칠판에 분필로 쓴 제목과 오늘의 차례, 분필 받침에 놓인 안내. 교실 실천·초등 교과 연수에. | warm, handmade, playful | 학교안심 둥근미소 / 나눔스퀘어라운드 / Caveat | 보통 | board | doodle-scribbles |
+| `blueprint-tech` | 설계도 | 도면 표제란처럼 짠 사양서. 고정폭 이름표와 모눈, 그려지는 선. 코딩·메이커·과학·데이터 연수에. | tech, minimal, futuristic | IBM Plex Sans KR / IBM Plex Sans KR / IBM Plex Mono | 보통 | spec | line-draw |
+| `riso-zine` | 형광 인쇄 | 판이 어긋난 굵은 제목과 망점, 비스듬한 도장. 두 색 잉크로 찍은 인쇄물 같은 미술·독서 동아리·창작 연수에. | handmade, retro, playful, editorial | 가석 / 고딕 A1 / Anton | 보통 | zine | highlight-sweep |
+| `sunrise-warm` | 새벽빛 | 날짜가 먼저 보이는 초대장. 바탕 글꼴 제목과 떠오르는 해. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / LINE Seed Sans KR / Instrument Serif | 보통 | invite | scroll-fill |
+| `keynote-dark` | 어두운 키노트 | 검은 무대 위 아주 큰 제목과 지평선 불빛, 한 줄 정보 레일. 기조 강연·발표회·미래교육 특강에. 스크롤 연출이 기본. | futuristic, bold, minimal | Wanted Sans / Wanted Sans / Geist | 스크롤 연출 | keynote | scroll-fill |
+| `corporate-clean` | 깔끔한 기업형 | 흰 바탕에 또렷한 제목, 오른쪽에 겹쳐 놓인 오늘의 일정 카드. 기관 설명회·업무 연수·에듀테크 소개에. | formal, minimal, calm | SUIT / SUIT / Sora | 차분 | panel | counter |
+| `soft-pastel` | 부드러운 파스텔 | 아치·원·알약 도형 위의 날짜와 둥근 제목. 연보라·분홍·하늘빛의 포근한 화면. 학부모·저학년·마음 돌봄 연수에. | warm, calm, playful | 나눔스퀘어라운드 / LINE Seed Sans KR / Outfit | 보통 | soft | stack-cards |
+| `kinetic-type` | 움직이는 글자 | 화면을 넘치는 굵은 제목과 윤곽선 메아리 줄, 굵은 선으로 나눈 정보. 예술·동아리·학생 활동처럼 힘 있는 자리에. 스크롤 연출이 기본. | bold, energetic, editorial | 페이퍼로지 / 스포카 한 산스 네오 / Big Shoulders Display | 스크롤 연출 | ticker | marquee |
+| `warm-minimal` | 따뜻한 미니멀 | 넓은 여백과 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보. 독서·인문·상담처럼 조용히 읽히는 자리에. | minimal, calm, natural | 나눔명조 / 아스타 산스 / Fraunces | 차분 | column | highlight-sweep |
 
 ## 4. 효과 52가지
 | id | 이름 | 강도 | 슬롯 | 설명 |
 |---|---|---|---|---|
-| `split-reveal` | 마스크 글자 등장 (Split reveal) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장, 핵심 문장 | 제목을 줄·낱말·글자로 나눠 보이지 않는 틀 안에서 아래에서 위로 밀어 올립니다. 수상작 포트폴리오의 대표 등장 방식입니다. |
+| `split-reveal` | 글자 드러내기 (Split reveal) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장, 핵심 문장 | 제목을 줄·낱말·글자로 나눠 보이지 않는 틀 안에서 아래에서 위로 밀어 올립니다. 수상작 포트폴리오의 대표 등장 방식입니다. |
 | `kinetic-weight` | 움직이는 글자 굵기 (Kinetic weight) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장 | 가변 글꼴의 굵기가 스크롤 위치(화면 가운데일수록 굵게)나 포인터 거리(가까운 글자만 굵게)에 따라 바뀝니다. |
 | `scroll-fill` | 스크롤 글 차오름 (Scroll fill) | 2 | 핵심 문장, 마무리 문장, 섹션 제목 | 긴 문장의 낱말이 흐린 색에서 제 색으로 스크롤에 맞춰 차오릅니다. 핵심 메시지를 천천히 읽게 만듭니다. |
 | `scramble` | 왼쪽부터 또렷해지는 글자 (Decode reveal) | 2 | 첫 화면 제목, 섹션 제목, 숫자 | 글자가 왼쪽부터 차례로 또렷해집니다. 한글은 다른 음절로 바뀌지 않고, 영문·숫자만 잠깐 섞입니다(0.7초 안, 한 번). |
@@ -50,7 +56,7 @@
 | `parallax-soft` | 은은한 시차 (Soft parallax) | 2 | 사진, 첫 화면 그래픽, 스크롤 | 스크롤 속도와 최대 10%만 다르게 움직이는 시차. 멀미 없이 깊이만 줍니다. |
 | `line-draw` | 선 그리기·일정 레일 (Line draw) | 2 | 일정, 구분 띠, 목록 | SVG 선이 스크롤에 맞춰 그려집니다. SVG가 없는 일정표 목록에는 세로 레일과 시각 점을 만들어 지난 항목을 채웁니다. |
 | `guided-progress` | 진행 막대·단계 표시 (Guided progress) | 0 | 진행 표시, 스크롤 | 위쪽에 읽은 만큼 차는 막대, 넓은 화면 오른쪽에 섹션 단계 점(이름은 마우스·포커스에), 좁은 화면은 "3 / 7 실습" 칩. |
-| `sticky-scrolly` | 고정 그림 스크롤리텔링 (Sticky scrollytelling) | 2 | 핵심 문장, 일정, 섹션 등장 | 한쪽 그림은 고정되고, 옆 단계 글을 읽어 내려가면 그림이 단계에 맞게 바뀝니다. 그림이 없으면 큰 번호·제목·진행 고리를 만듭니다. |
+| `sticky-scrolly` | 그림 고정 스크롤 (Sticky scrollytelling) | 2 | 핵심 문장, 일정, 섹션 등장 | 한쪽 그림은 고정되고, 옆 단계 글을 읽어 내려가면 그림이 단계에 맞게 바뀝니다. 그림이 없으면 큰 번호·제목·진행 고리를 만듭니다. |
 | `stack-cards` | 쌓이는 카드 (Stacking cards) | 2 | 카드 | 카드가 차례로 위에 붙어 쌓이고, 덮인 카드는 살짝 작아집니다(sticky + scale). |
 | `horizontal-snap` | 가로 넘김 (Horizontal snap) | 1 | 사진, 카드, 목록 | 목록을 가로 스냅 넘김으로 바꿉니다. 이전/다음 버튼, 키보드, 마우스 끌기, 진행 막대. 세로 스크롤은 뺏지 않습니다. |
 | `tone-journey` | 톤 여정(밤→새벽→낮) (Tone journey) | 2 | 스크롤 | 섹션의 data-tone(night·dawn·day)을 따라 페이지 바탕과 글자색이 스크롤에 맞춰 이어집니다. 밤→새벽→밤 같은 이야기 흐름. |
@@ -77,15 +83,15 @@
 | `bokeh` | 빛망울 (Bokeh) | 2 | 첫 화면 그래픽, 마무리 그래픽 | 초점 밖 빛망울이 천천히 떠다니며 숨 쉽니다(CSS만). |
 | `paper-stack` | 활동지 묶음 (Paper stack) | 1 | 첫 화면 그래픽 | 비스듬히 겹친 활동지(줄 친 종이·여백선·펀치 구멍·포스트잇·클립) 그림. 강도 2 이상이면 스크롤에 살짝 펼쳐집니다. |
 | `doodle-scribbles` | 손그림 낙서·주석 (Doodles & annotations) | 2 | 섹션 제목, 첫 화면 제목, 핵심 문장, 첫 화면 그래픽, 마무리 그래픽 | 자체 rough 알고리즘으로 손그림 선을 만듭니다. 글에는 밑줄·동그라미·상자·형광·취소선·괄호 주석, 섹션에는 모서리 낙서(별·소용돌이·화살표·하트). |
-| `confetti-shapes` | 멤피스 도형 (Memphis shapes) | 1 | 첫 화면 그래픽, 마무리 그래픽 | 세모·고리·물결·점 묶음·더하기·반원을 가장자리에 흩어 둡니다(정지 SVG). 강도 2 이상은 포인터에 살짝 시차. |
+| `confetti-shapes` | 도형 무늬 (Memphis shapes) | 1 | 첫 화면 그래픽, 마무리 그래픽 | 세모·고리·물결·점 묶음·더하기·반원을 가장자리에 흩어 둡니다(정지 SVG). 강도 2 이상은 포인터에 살짝 시차. |
 | `chalkboard` | 칠판 (Chalkboard) | 2 | 첫 화면 그래픽, 마무리 그래픽 | 칠판 질감(분필 가루·지운 자국)과 분필 낙서(바를 정 正, 화살표, 별, +, =, 체크)가 한 번 그려집니다. 영역을 어두운 칠판 색으로 바꿉니다. |
-| `shader-gradient` | 셰이더 그라데이션 (Shader gradient) | 3 | 첫 화면 그래픽, 마무리 그래픽 | WebGL 조각 셰이더로 만든 흐르는 잡음 그라데이션(도메인 워핑 + 그레인). three.js 없이 4KB. |
+| `shader-gradient` | 흐르는 색 (Shader gradient) | 3 | 첫 화면 그래픽, 마무리 그래픽 | WebGL 조각 셰이더로 만든 흐르는 잡음 그라데이션(도메인 워핑 + 그레인). three.js 없이 4KB. |
 | `noise-orb` | 빛나는 구 (Glowing orb) | 2 | 첫 화면 그래픽 | 원뿔 그라데이션이 겹쳐 천천히 도는 빛나는 구(AI 음성 비서 느낌). 숨 쉬듯 커졌다 작아지고 포인터 쪽으로 살짝 기웁니다. |
-| `riso` | 리소 인쇄 망점 (Risograph) | 1 | 첫 화면 그래픽, 마무리 그래픽 | 두 잉크(주 색·강조 색)의 망점이 살짝 어긋나 겹치는 리소그래프 인쇄 질감(정지). |
+| `riso` | 인쇄 망점 (Risograph) | 1 | 첫 화면 그래픽, 마무리 그래픽 | 두 잉크(주 색·강조 색)의 망점이 살짝 어긋나 겹치는 리소그래프 인쇄 질감(정지). |
 | `blueprint-grid` | 설계도 모눈 (Blueprint grid) | 1 | 첫 화면 그래픽, 마무리 그래픽 | 설계도 모눈(작은 칸·큰 칸), 모서리 맞춤 표시, 실제 영역 치수. 강도 2 이상·정밀 포인터면 좌표 십자선이 따라옵니다. |
 | `smooth-scroll` | 부드러운 휠 스크롤 (Smooth scroll (Lenis)) | 3 | 스크롤 | Lenis로 휠 스크롤을 부드럽게 합니다. 수상작 사이트의 "무게감 있는 스크롤". · 외부 라이브러리 |
-| `gsap-scroll` | 고정 섹션 스크럽 (GSAP ScrollTrigger scrub) | 3 | 섹션 등장, 핵심 문장, 일정 | GSAP ScrollTrigger로 섹션을 잠깐 고정하고 안쪽 요소가 스크롤에 맞춰 차례로 떠오릅니다(scrub). 넓은 화면만 고정. · 외부 라이브러리 |
-| `three-hero` | 점 구름 구체(WebGL) (Point-cloud sphere (OGL)) | 3 | 첫 화면 그래픽 | OGL(작은 WebGL 라이브러리)로 만든 2,400개 점의 구체가 천천히 돌고 표면이 숨 쉬며 포인터 쪽으로 기웁니다. · 외부 라이브러리 |
+| `gsap-scroll` | 고정 장면 스크롤 (GSAP ScrollTrigger scrub) | 3 | 섹션 등장, 핵심 문장, 일정 | GSAP ScrollTrigger로 섹션을 잠깐 고정하고 안쪽 요소가 스크롤에 맞춰 차례로 떠오릅니다(scrub). 넓은 화면만 고정. · 외부 라이브러리 |
+| `three-hero` | 점 구슬 (Point-cloud sphere (OGL)) | 3 | 첫 화면 그래픽 | OGL(작은 WebGL 라이브러리)로 만든 2,400개 점의 구체가 천천히 돌고 표면이 숨 쉬며 포인터 쪽으로 기웁니다. · 외부 라이브러리 |
 
 ## 5. 색 조합 34가지(`design.palette`)
 프리셋의 모양·효과는 그대로 두고 색만 바꾼다. 모두 라이트·다크에서 글자 대비 4.5:1 이상.
@@ -191,5 +197,30 @@
 | `spaceGrotesk` | Space Grotesk | latin | OFL-1.1 |
 | `fraunces` | Fraunces | latin-serif | OFL-1.1 |
 | `bricolage` | Bricolage Grotesque | latin | OFL-1.1 |
+| `barlowCond` | Barlow Condensed | latin | OFL-1.1 |
+| `plexCond` | IBM Plex Sans Condensed | latin | OFL-1.1 |
+| `unbounded` | Unbounded | latin | OFL-1.1 |
+| `caveat` | Caveat | latin | OFL-1.1 |
+| `anton` | Anton | latin | OFL-1.1 |
+| `instrumentSerif` | Instrument Serif | latin-serif | OFL-1.1 |
+| `sora` | Sora | latin | OFL-1.1 |
+| `syne` | Syne | latin | OFL-1.1 |
+| `geist` | Geist | latin | OFL-1.1 |
+| `bigShoulders` | Big Shoulders Display | latin | OFL-1.1 |
+| `redHat` | Red Hat Display | latin | OFL-1.1 |
+| `outfit` | Outfit | latin | OFL-1.1 |
+| `paperlogy` | 페이퍼로지 | sans | OFL-1.1 |
+| `freesentation` | 프리젠테이션 | sans | OFL-1.1 |
+| `a2z` | 에이투지체 | sans | OFL-1.1 |
+| `astaSans` | 아스타 산스 | sans | OFL-1.1 |
+| `lineSeed` | LINE Seed Sans KR | sans | OFL-1.1(LY Corp) |
+| `ridibatang` | 리디바탕 | serif | OFL-1.1(리디) |
+| `nanumHuman` | 나눔휴먼 | sans | OFL-1.1(네이버 나눔휴먼) |
+| `pretendardGov` | Pretendard GOV | sans | OFL-1.1 |
+| `kedu` | 케리스 케듀체 | display | OFL-1.1(KERIS) |
+| `hakgyoMiso` | 학교안심 둥근미소 | rounded | OFL-1.1(교육부·KERIS 학교안심) |
+| `hakgyoAllim` | 학교안심 알림장 | display | OFL-1.1(교육부·KERIS 학교안심) |
+| `elice` | 엘리스 디지털배움체 | sans | OFL-1.1(엘리스) |
+| `bagel` | 베이글 팻 원 | display | OFL-1.1 |
 
 글꼴을 바꾸려면 `design.fonts`에 `{"display":"키","body":"키"}`. 학교망에서 CDN이 막히면 글꼴 파일을 `assets/fonts/`에 내려받아 쓰도록 안내한다.

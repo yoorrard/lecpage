@@ -1,6 +1,7 @@
 # Cloudflare Workers 정적 자산으로 올리지 않을 파일 (사이트 폴더 안에 둡니다)
 # 문법은 .gitignore 와 같습니다.
-*.md
+# 맨 위의 .md만 뺍니다. 자료실 파일(assets/files/*.md)은 올라가야 합니다.
+/*.md
 .env*
 data/
 .git/

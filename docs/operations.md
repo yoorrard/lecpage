@@ -12,7 +12,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 도메인 대안 | lecpage.kr(가비아 연 약 ₩22,000~23,000 ⚠️) + 네임서버를 Cloudflare로 | 한국 주소가 더 중요할 때. Cloudflare Registrar는 `.kr`을 팔지 않음. `.kr` 네임서버 변경은 본인 인증이 필요할 수 있음 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
-| 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·GitHub·Netlify)은 사용자 토큰을 그 자리에서만 씀 |
+| 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |
 | 저장 | IndexedDB(프로젝트·이미지) + `.lecpage` 파일 내보내기/열기 + 저장 공간 보호(persist) | 다른 PC로 옮기기, 공용 PC 정리 |
 | AI | 사용자 키(BYOK) · 챗봇에 복사·붙여넣기 · Agent Skill · AI 없는 초안 | 운영자 AI 비용 0. 구독 로그인 재사용은 약관 위반이라 구현하지 않음 |
 | 실시간 | **기본은 운영자 공용 중계 없음**(바로 공개를 켠 경우만 그 사이트에 딸린 방을 맡음, §10). 강사 소유 백엔드를 쉽게: 클릭만 하는 50명 이하 연수는 Google Sheets(앱 안 안내 + 연결 확인), 가입 가능한 강사는 Deploy to Cloudflare 버튼 | 아래 §2 |
@@ -38,7 +38,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 비용이 사용자 수에 비례 | 쓰는 사람이 늘면 유료 플랜이 필요해집니다. 결제 수단 없는 운영 원칙과 맞지 않습니다. |
 
 대신 하는 것
-- 엔진 규칙: **클릭만 하는 강사 + 50명 이하 → Google Sheets**(질문·막혔어요·진행 체크 포함).
+- 엔진 규칙: **클릭만 하는 강사 + 50명 이하 → Google Sheets**(질문·도움 요청·진행 현황 포함).
 - 앱 안 **구글 시트 연결 안내**와 **연결 확인**(`?a=ping`).
 - 가입할 수 있는 강사에게는 **Deploy to Cloudflare** 버튼(`skills/lecpage/backends/cloudflare/README.md`).
 - 다시 검토할 때의 최소 통제 목록은 [결정 기록](research/2026-11-review.md) §5.3에 있습니다.
@@ -156,3 +156,12 @@ Worker → **Settings → Build → Build watch paths**
 - 무엇이 달라지나: §1의 "서버 없음·데이터를 맡지 않음"이 이 호스트에 한해 바뀝니다. 신고 창구를 지키고(정보통신망법 임시조치, 저작권법 제102·103조), 맡은 자료를 기간 안에서만 보관해야 합니다.
 - 어디에 두나: 앱과 **다른 등록 도메인**. Cloudflare 무료 요금제(카드 없이)로 시작하고, 한도에 닿으면 과금 대신 오류가 납니다.
 - 설정·신고 처리·한도·끄는 방법: [`hosting/README.md`](../hosting/README.md).
+
+## 11. 구글 시트 틀 미리 만들어 두기 (선택)
+
+강사가 구글 시트로 참여 기능을 연결할 때 코드를 붙여 넣는 단계를 없애 줍니다.
+1. 운영용 구글 계정으로 새 시트를 만들고 **확장 프로그램 → Apps Script**에 `skills/lecpage/backends/apps-script/Code.gs`를 붙여 넣어 저장합니다(배포는 하지 않습니다).
+2. 시트를 **링크가 있는 모든 사용자 · 뷰어**로 공유하고, 주소 끝의 `/edit…`을 `/copy`로 바꾼 주소를 준비합니다.
+3. 앱을 빌드할 때 `VITE_SHEET_TEMPLATE`에 그 주소를 넣습니다(GitHub Pages 미러는 저장소 변수 `LECPAGE_SHEET_TEMPLATE`).
+- 그러면 앱의 안내가 "시트 사본 만들기 → 웹 앱으로 배포 → 주소 붙여넣기"로 줄어듭니다. `Code.gs`가 바뀌면 틀도 새로 만들어 주소를 바꿉니다.
+- 틀에는 자료를 넣지 않습니다. 사본은 강사 계정에 만들어지고 운영자는 볼 수 없습니다.

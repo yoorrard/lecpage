@@ -4,6 +4,7 @@ import { renderSection, contactHtml, boardFiles } from './sections.js';
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { getPreset } from '../design/presets.js';
+import { FONTS } from '../design/fonts.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { fxInfo } from '../decide/design.js';
 
@@ -418,15 +419,19 @@ function defaultProcessors(bp) {
 // ── 문서 ─────────────────────────────────────────────────
 export function designDoc(ctx) {
   const p = getPreset(ctx.design.preset);
-  const fx = Object.entries(ctx.design.effects || {}).map(([k, v]) => `| ${k} | ${v} |`).join('\n');
+  const fxName = (id) => { const f = id && fxInfo(id); return f?.name_ko ? `${f.name_ko}(\`${id}\`)` : id || '없음'; };
+  const fx = Object.entries(ctx.design.effects || {}).map(([k, v]) => `| ${k} | ${fxName(v)} |`).join('\n');
+  const fk = { ...p.fonts, ...(ctx.design.fonts || {}) }; // 실제로 쓰인 글꼴(교재 글꼴·직접 고른 글꼴이 프리셋보다 먼저)
+  const fl = (k) => (k ? `${FONTS[k]?.label || k}(\`${k}\`)` : '프리셋 기본');
   return `# DESIGN.md — ${ctx.bp.meta.title}
 
 이 파일은 이 연수 사이트의 디자인 규칙입니다. 어떤 AI나 사람이 고치더라도 이 규칙을 지키면 일관성이 유지됩니다.
 
 - 프리셋: **${p.name_ko}** (\`${p.id}\`) — ${p.desc_ko}
-- 테마: ${ctx.design.theme && ctx.design.theme !== 'preset' ? ctx.design.theme : p.theme} · 모션 단계: ${ctx.design.motion} (0 정지 · 1 차분 · 2 보통 · 3 화려)
-- 대표 효과: ${ctx.design.signature || '없음'} · 첫 화면 그래픽: ${ctx.design.graphic || '없음'} · 마무리 그래픽: ${ctx.design.closingGraphic || '없음'}
-- 글꼴: 제목 ${p.fonts.display}, 본문 ${p.fonts.body}, 숫자·코드 ${p.fonts.mono}
+- 테마: ${ctx.design.theme && ctx.design.theme !== 'preset' ? ctx.design.theme : p.theme} · 페이지 연출: ${ctx.design.motion}단계 (0 정적 · 1 차분 · 2 보통 · 3 스크롤 연출)
+- 대표 효과: ${fxName(ctx.design.signature)} · 첫 화면 그래픽: ${fxName(ctx.design.graphic)} · 마무리 그래픽: ${fxName(ctx.design.closingGraphic)}
+- 글꼴: 제목 ${fl(fk.display)}, 본문 ${fl(fk.body)}, 숫자·영문 ${fl(fk.num)}, 고정폭 ${fl(fk.mono)}
+- 토큰: 색·글꼴·모양 값은 함께 받은 \`tokens.json\`(DTCG 형식)에 있습니다. 다른 도구로 옮길 때 그 파일을 씁니다.
 ${ctx.design.accent ? `- 기관 강조색: ${ctx.design.accent}\n` : ''}
 ## 색과 모양
 색은 \`assets/theme.css\`의 CSS 변수만 씁니다(--background, --foreground, --primary, --accent …). 새 색을 직접 쓰지 않습니다.
@@ -439,7 +444,7 @@ ${fx || '| - | - |'}
 
 ## 지킬 것
 - 실습·질문·교재 화면은 모션 1단계를 넘지 않습니다.
-- 화려한 효과는 첫 화면·섹션 시작·마무리에만, 시그니처는 하나만.
+- 눈에 띄는 효과는 첫 화면·섹션 시작·마무리에만, 대표 효과는 하나만. 같은 배치의 섹션을 세 번 넘게 잇지 않습니다.
 - 동작 줄이기 설정과 '움직임 멈춤' 버튼을 항상 존중합니다.
 - 글자 대비 4.5:1 이상, 한글 줄바꿈은 낱말 단위(word-break: keep-all).
 - 보라→파랑 그라데이션 첫 화면, 똑같은 카드 3장 나열, 흔한 AI 이미지를 피합니다.

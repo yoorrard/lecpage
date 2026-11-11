@@ -316,3 +316,10 @@ assets/slides/*.webp · assets/media/*
 - 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 공개할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 공개 때 빠집니다.
 - 연수 중 자료 링크: 강사 화면에서 `setState({ ui: { m1…m8: '<https 주소> <이름>' } })`. 서버가 원래 받는 `state.ui`(글 200자, 키 20개)에 담아 백엔드를 바꾸지 않고 다섯 가지 연결 방식에서 모두 동작합니다. 읽기·쓰기는 `LecLive.util.ext.materials / materialAdd / materialRemove`, 참가자 화면은 자료실 아래(없으면 마무리 앞)에 보여 줍니다. https 주소만 받습니다.
 - 바로 공개 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 공개할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 설계도의 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.
+
+### 8.6 바로 공개 서버 (`hosting/`, 선택)
+운영자가 배포했을 때만 쓰이는 Cloudflare Worker입니다(Durable Objects SQLite, R2·KV 없음). 운영 안내와 전체 계약은 `hosting/README.md`.
+- 사이트: `POST /api/sites` → `{id, key, url, expiresAt}` · `POST /api/sites/:id/deploys {files:{경로:{sha256,size}}}` → `{deploy, missing[]}` · `PUT /api/sites/:id/blobs/:sha256` · `POST /api/sites/:id/deploys/:deploy/publish` · `DELETE /api/sites/:id`. 수정 키는 한 번만 내려 주고 해시로 보관합니다.
+- 참여 기능: `POST /api/sites/:id/live {code, adminKeyHash, settings}` → `{url, code}`. 방은 `skills/lecpage/backends/cloudflare`의 Room을 그대로 불러 `/live` 아래에 붙였고, 사이트에 묶인 코드만 살아 있습니다. 코드가 다른 사이트와 겹치면 `409 code_taken`(앱이 새 코드로 다시 올림). 사이트가 지워지거나 공개 기간이 끝나면 방과 올린 파일도 지워집니다.
+- 안전: 올린 `.js`는 엔진 런타임 파일(또는 그 묶음)과 내용이 같을 때만 받고(`runtime_mismatch`), 모든 응답에 서버가 정한 CSP(`script-src 'self'`)를 붙입니다. HTML의 `meta refresh`·`base`·바깥 스크립트는 빼고 보냅니다. 받는 파일 형식은 엔진의 `USER_ASSET`과 같습니다(테스트가 어긋남을 잡음).
+- 한도(기본): 사이트 40MB·파일 20MB·600개, 공개 기간 30일, 방 올리기 10MB·방마다 200MB, IP당 새 사이트 시간당 6개.
