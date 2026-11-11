@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Field, Seg } from '../../components/ui.jsx';
+import { TASTES, inTaste } from '../../lib/tastes.js';
 import { E } from '../../lib/engine.js';
 import { SiteThumb } from '../../components/SiteThumb.jsx';
 import { FxGallery } from '../../components/FxGallery.jsx';
@@ -50,6 +51,7 @@ export function DesignPanel({ p, update }) {
   const adv = isAdvanced();
   const title = bp.meta?.title || '';
   const [fxOpen, setFxOpen] = useState(false);
+  const [taste, setTaste] = useState('all');
   const whyText = (r) => ((r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
@@ -58,7 +60,8 @@ export function DesignPanel({ p, update }) {
       </div>
       <details>
         <summary>다른 디자인 {others.length}가지 더 보기</summary>
-        <div class="thumbs" style={{ marginTop: '10px' }}>{others.map((pr) => <Thumb preset={pr} bp={bp} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
+        <div style={{ marginTop: '10px' }}><Seg label="분위기" value={taste} onChange={setTaste} options={TASTES} /></div>
+        <div class="thumbs" style={{ marginTop: '10px' }}>{others.filter((pr) => inTaste(pr, taste)).map((pr) => <Thumb preset={pr} bp={bp} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
       </details>
       <FontPicker d={d} resolved={resolved} setD={setD} title={title} />
       <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v })} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>

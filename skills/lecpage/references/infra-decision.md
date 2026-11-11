@@ -83,8 +83,8 @@
 
 ## 3. 결정 규칙 (사람이 읽는 순서)
 
-실시간(live)을 먼저 정하고, 그 결과에 맞춰 정적 호스팅(static)을 고릅니다. 각 목록은 **위에서부터 처음 맞는 규칙 하나**만 씁니다. 그다음 §4의 경고(guards)를 모두 검사합니다.
-★ 표시는 엔진 `decideInfra()`(`decide-infra` 명령)가 그대로 구현한 규칙입니다. ★ 없는 규칙은 엔진 입력에 없는 값(실명·국내 보관·WS 차단·Azure·GitHub)으로만 걸리므로, 그 값이 없으면 결과가 엔진과 같습니다.
+실시간(live)을 먼저 정하고, 그 결과에 맞춰 올릴 곳(static)을 고릅니다. 실시간은 **위에서부터 처음 맞는 규칙 하나**, 올릴 곳은 §3.2의 순서(기본 순서 → 조정)로 정합니다. 그다음 §4의 경고(guards)를 모두 검사합니다.
+★ 표시는 엔진 `decideInfra()`·`decideHost()`(`decide-infra` 명령)가 그대로 구현한 규칙입니다. ★ 없는 규칙은 엔진 입력에 없는 값(실명·국내 보관·WS 차단·Azure)으로만 걸리므로, 그 값이 없으면 결과가 엔진과 같습니다.
 
 ### 3.1 실시간(live)
 1. ★ **L01** 실시간·모으기 기능이 없다 → `none` (자기 기기 안 퀴즈·기록만 있으면 `local`).
@@ -96,23 +96,51 @@
 7. ★ **L07** 출석·제출처럼 **모으기만**(`realtime` 없음) + 40명 이하 → `sheets`.
 8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·도움 요청·진행 현황·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
 9. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
-10. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). 명령어 없이 **Deploy to Cloudflare 버튼**으로 만들 수 있습니다. 대안: `node-server`.
+10. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
 
-### 3.2 정적 호스팅(static)
-1. ★ **S01** `offline` → live가 `node-server`면 `lan`(노트북이 사이트도 같이 제공). 실시간이 없으면 `zip`(엔진은 `lan`만 보여 줌).
+실시간 백엔드도 skill이 직접 만듭니다. 강사는 로그인하거나 토큰을 환경 변수로 넣어 주기만 합니다: Supabase는 `backends/supabase/README.md`의 "명령으로 한 번에", Cloudflare 중계는 `backends/cloudflare/README.md` §2. Sheets만 강사가 구글 계정에서 직접 붙여 넣습니다.
+
+### 3.2 올릴 곳(static)
+엔진 `decideHost()`와 같은 순서입니다. **먼저 맞으면 끝**(S01·S02) → **기본 순서**(S09·S08) → **조정**(맞는 것을 위에서부터 모두 적용). 맨 앞이 추천이고 나머지는 대안입니다. 끝에는 언제나 `firebase`, `zip`이 붙습니다.
+
+먼저 맞으면 끝
+1. ★ **S01** `offline` → `lan`(강사 노트북이 사이트도 같이 제공), 다음 `zip`. 실시간이 없으면 `zip`을 먼저 권합니다(S01b, 엔진은 `lan`을 앞에 둠).
 2. ★ **S02** live가 `node-server` → 같은 서버(`server`: Caddy/nginx, `/api`를 같은 주소로).
-3. ★ **S03** live가 `cf-relay` → `cloudflare`(Workers 정적 자산, 같은 계정에서 관리).
-4. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront` (콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
-5. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
-6. ★ **S06** 클릭만 가능 → `netlify`(앱의 '주소 만들기': 연결 코드 한 번, 다시 올려도 같은 주소, 원본 비공개). 대안: `cloudflare-pages-drop`(끌어 놓기), `github-pages`(공개 저장소). 앱 없이 skill로 폴더만 받았다면 Cloudflare 끌어 놓기가 가장 쉽습니다.
-7. **S07** GitHub를 쓴다 → `github-pages`.
-8. ★ **S08** 그 밖 → `cloudflare`(대안 `github-pages`, `netlify`).
+
+기본 순서
+3. ★ **S09** 앱(`skill: click`) → `vercel` · `github-pages` · `cloudflare` · `netlify`. Vercel은 토큰 하나로 앱에서 바로 올리고, 새 계정도 바로 열리고, 다시 올려도 주소가 그대로입니다. 여기서 `cloudflare`는 ZIP 끌어 놓기(Pages)입니다.
+4. ★ **S08** skill(`basic`·`dev`) → `cloudflare` · `vercel` · `github-pages` · `netlify`. 여기서 `cloudflare`는 Workers 정적 자산(`wrangler deploy --assets`)입니다. 상업 이용 가능, 정적 요청 무제한, `_headers` 그대로, 계정이 없어도 `--temporary`로 먼저 띄울 수 있습니다.
+
+조정(순서대로 모두)
+5. ★ **S10** 강사료를 받는 연수(`paid`) → `vercel`을 빼고 `cloudflare`를 맨 앞으로. 다음은 `github-pages`.
+6. ★ **S03** live가 `cf-relay`이고 skill이 basic 이상 → `cloudflare`를 맨 앞으로(같은 계정에서 관리).
+7. ★ **S11** 내 도메인을 붙일 계획(`customDomain`), 또는 학교망이 엄격하고(`restricted`) skill이 basic 이상 → `cloudflare`를 맨 앞으로(도메인 연결이 가장 쉬움).
+8. ★ **S12** 사이트 > 100MB → `vercel`을 맨 뒤로. 앱이면 추천이 `github-pages`가 됩니다.
+9. ★ **S13** 파일 하나 > 25MB, 또는 파일 > 1,000개 → `cloudflare`를 맨 뒤로. 추천이 `cloudflare`였으면 `github-pages`를 맨 앞으로. 1,000개는 끌어 놓기와 `--temporary`의 한도입니다. 로그인한 wrangler는 20,000개까지 올리므로, skill은 파일 수만 넘은 경우 Cloudflare를 그대로 써도 됩니다.
+10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
+11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
+12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 마지막으로 올린 날부터 30일). 오래 둘 사이트(`keep: long`)나 내 도메인이면 둘째 자리. skill은 쓰지 않습니다.
+13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로. Netlify는 이 규칙으로만 앞에 옵니다.
+
+S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
 
 ### 3.3 공개 범위(access)
 - `link`(기본): 모든 페이지에 `noindex`, `robots.txt`는 `Disallow: /`. 주소·QR을 받은 사람만 들어옵니다. 접근 제어는 아닙니다.
 - `public`: 검색 허용(`robots.txt` `Allow: /`).
 - `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다. QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
 - 강사용 파일(DESIGN.md·운영안내.md·lecpage.blueprint.json)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `<out>-강사용/`, 앱은 따로 내려받기).
+
+### 3.4 skill이 올릴 때 (강사가 할 일을 가장 적게)
+skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다. 강사에게는 로그인이나 토큰만 부탁합니다. 토큰은 환경 변수로 받고 대화나 파일에 적지 않습니다.
+
+| 순서 | skill이 하는 일 |
+|---|---|
+| 1 | 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `info.json`의 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
+| 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
+| 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
+| 4 | 한 줄 명령으로 올립니다(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
+| 5 | `curl -sI <주소>/ \| head -1`이 `200`인지, `<주소>/check.html`(접속 확인)이 열리는지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
+| 6 | 건넵니다: 참가자 주소와 QR(`poster.html`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일 |
 
 ---
 
@@ -121,7 +149,9 @@
 엔진(`engine/src/decide/infra.js`)은 아래에서 `"engine": true`인 규칙을 같은 순서로 구현합니다. 나머지는 skill이 대화에서 덧붙이는 규칙입니다. 해석 규칙:
 - `when`의 각 키는 **모두** 맞아야 합니다(AND). `$or`는 배열 중 하나라도 맞으면 참.
 - 값 비교: 스칼라 = 같음, 배열 = 그중 하나, `{"gt":n}` `{"gte":n}` `{"lt":n}` `{"lte":n}`, 목록 입력에는 `{"any":[..]}` `{"all":[..]}` `{"none":[..]}`, 불리언 파생값은 `true/false`.
-- `live` 목록 → 처음 맞는 규칙의 `pick`. 그다음 `static` 목록(키 `live`로 앞 결과 참조). 마지막에 `guards`는 **맞는 것 전부** 경고로 보여 줍니다(`level`: `block`이면 그 조합을 쓰면 안 됨 → `fix`의 대안으로 교체).
+- `live` 목록 → 처음 맞는 규칙의 `pick`.
+- `static`(키 `live`로 앞 결과 참조) → `first`에서 처음 맞는 규칙이 있으면 그 `order`로 끝. 없으면 `base`에서 처음 맞는 `order`로 시작해 `adjust`를 위에서부터 **모두** 적용합니다(`drop` 빼기, `front` 맨 앞으로, `back` 맨 뒤로). 끝에 `tail`을 붙이고, 맨 앞이 추천입니다.
+- `guards`는 **맞는 것 전부** 경고로 보여 줍니다(`level`: `block`이면 그 조합을 쓰면 안 됨 → `fix`의 대안으로 교체). `"engine": true`인 guard는 엔진이 `decideHost()` 경고나 `checkHost(host, {bytes, files, maxFile, binaries})`(올리기 직전 한도 검사)로 같은 내용을 냅니다.
 - `expr` 문자열은 사람이 읽는 계산식입니다.
 
 엔진 입력·결과와 이 문서의 이름 대응

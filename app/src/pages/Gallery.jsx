@@ -4,6 +4,7 @@ import { SiteThumb } from '../components/SiteThumb.jsx';
 import { FxGallery } from '../components/FxGallery.jsx';
 import { E, buildSite, previewHtml } from '../lib/engine.js';
 import { loadExample } from '../lib/project.js';
+import { TASTES, inTaste } from '../lib/tastes.js';
 
 const MOTION = ['정적', '차분하게', '보통', '스크롤 연출'];
 const SAMPLES = [{ value: 'sel-story', label: '사회정서학습 연수' }, { value: 'data-lab', label: '디지털 연수' }];
@@ -33,6 +34,7 @@ export function Gallery() {
   const [sample, setSample] = useState('sel-story');
   const [bp, setBp] = useState(null);
   const [open, setOpen] = useState(null);
+  const [taste, setTaste] = useState('all');
   useEffect(() => { let off = false; loadExample(sample).then((b) => { if (!off) setBp(E.validate(b).blueprint); }); return () => { off = true; }; }, [sample]);
   return (
     <div class="stack gallery">
@@ -40,8 +42,9 @@ export function Gallery() {
 
       <div class="section-title gallery-title"><div><h2>디자인 {E.PRESETS.length}가지</h2><p>같은 내용을 디자인만 바꿔 만든 실제 첫 화면이에요.</p></div>
         <Seg label="예시 내용" value={sample} onChange={setSample} options={SAMPLES} /></div>
+      <Seg label="분위기" value={taste} onChange={setTaste} options={TASTES.map((t) => ({ value: t.value, label: t.value === 'all' ? `전체 ${E.PRESETS.length}` : t.label }))} />
       <div class="thumbs gallery-presets">
-        {bp ? E.PRESETS.map((p) => (
+        {bp ? E.PRESETS.filter((p) => inTaste(p, taste)).map((p) => (
           <button type="button" class="thumb" key={`${sample}-${p.id}`} onClick={() => setOpen(p)}>
             <SiteThumb bp={bp} presetId={p.id} />
             <span class="thumb-cap"><b>{p.name_ko}</b><small>{p.desc_ko}</small></span>
