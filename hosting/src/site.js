@@ -4,7 +4,7 @@
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
 import { DurableObject } from 'cloudflare:workers';
-import { config, expiryFrom, HOUR_MS } from './config.js';
+import { config, expiryFrom, HOUR_MS, DAY_MS } from './config.js';
 import { HttpError, json, noContent, readJson, errorFrom } from './http.js';
 import { bearer, keyMatches, newDeployId, hex, SHA256_RE, DEPLOY_RE } from './ids.js';
 import { checkManifest, missingBlobs, scriptBlobs } from './manifest.js';
@@ -361,6 +361,23 @@ export class Site extends DurableObject {
       return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null });
     });
   }
+  /**
+   * 쓰이는 사이트는 지우지 않음: 화면을 여는 방문이 있고 남은 기간이 절반 아래면 공개 기간을 다시 채움(사이트마다 보름에 한 번쯤만 씀).
+   * 처음 만든 날부터 MAX_SITE_DAYS가 지나면 더 늘리지 않음. 가린 사이트는 늘리지 않음.
+   */
+  keepAlive(meta) {
+    const c = this.cfg; const now = Date.now();
+    if (!c.keepAlive || meta.blocked || meta.expires - now > (c.days * DAY_MS) / 2 || now - meta.created > c.maxSiteDays * DAY_MS) return;
+    const expires = expiryFrom(now, c.days);
+    this.sql.exec('UPDATE meta SET expires = ? WHERE id = 1', expires);
+    meta.expires = expires;
+    this.ctx.waitUntil((async () => {
+      await this.ctx.storage.setAlarm(expires);
+      try { await this.gate('POST', 'site', { id: meta.site, expires }); } catch (e) { console.error('gate site update failed', e?.message); }
+      if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
+    })());
+  }
+
   /** 공개 기간이 끝나면 전부 지움 */
   async alarm() {
     const meta = this.load();
@@ -392,6 +409,7 @@ export class Site extends DurableObject {
       return new Response(null, { status: 304, headers });
     }
     if (type.kind === 'html') {
+      if (status === 200) this.keepAlive(meta);
       if (head) return new Response(null, { status, headers });
       return rewriteHtml(new Response(this.stream(sha, 0, size - 1), { status, headers }), meta.site, { reportLink: !NO_FRAME_PAGES.has(name) });
     }

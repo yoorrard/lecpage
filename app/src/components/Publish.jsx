@@ -91,8 +91,9 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(''); // 바로 공개를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
   useEffect(() => { connectedTargets().then(setConnected); instantInfo().then(setInstant); }, []);
-  const live = instant && !instantOff ? instant : null;
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: !!live }), [p.info?.commercial, p.info?.network, p.deploy?.target, connected.join(), !!live]);
+  const live = instant && instant.accepting !== false && !instantOff ? instant : null;
+  const full = instantOff || (instant && instant.accepting === false ? '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.' : '');
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   const order = [...new Set([...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
   const [picked, setPicked] = useState('');
@@ -109,6 +110,9 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
     } catch (e) { if (!onFail?.(e)) toast('올리지 못했어요. ' + e.message); }
     setBusy(''); setProg(null);
   }, !!auto?.live);
+  // 무료 한도를 넘으면 어떻게 되는지(고른 곳마다 한 줄)
+  const H = E.HOSTS[target] || {};
+  const limitLine = target === 'lecpage' ? (live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
   const ctx = { p, busy, start, done: (url, patch, more) => { done(url, { ...patch, target }, more); connectedTargets().then(setConnected); } };
   return (
     <div class="stack publish">
@@ -119,7 +123,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
         ))}
       </div>
       <p class="small muted">{target === rec.pick ? rec.reasons[0] : E.HOSTS[target]?.note_ko}{rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}</p>
-      {instantOff && <p class="small" role="status">{instantOff} 내 계정에 올리면 계속 쓸 수 있어요.</p>}
+      {limitLine && <p class="small muted pub-limit">{limitLine}</p>}
+      {full && <p class="small" role="status">{full} 내 계정에 올리면 바로 돼요.</p>}
       {target === 'lecpage' && <Instant {...ctx} info={instant} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
@@ -134,7 +139,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 function Instant({ p, busy, start, done, info, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   const days = info?.limits?.days || 30;
-  const alive = prev?.expiresAt && prev.expiresAt > Date.now();
+  // 방문이 있으면 서버가 공개 기간을 늘리므로, 저장해 둔 날짜가 지났어도 올린 적이 있으면 '있는 사이트'로 봄(지워졌으면 올릴 때 새 주소로 만듦)
+  const alive = !!(prev?.id && prev.expiresAt);
   const bp = p.blueprint;
   const liveOn = (bp.live?.features || []).length > 0;
   const autoLive = liveOn && !!info?.live?.url; // 참여 기능을 이 서버가 맡음
@@ -165,11 +171,11 @@ function Instant({ p, busy, start, done, info, onUnavailable }) {
   }
   return (
     <div class="stack">
-      <p>가입이나 토큰 없이 바로 공개해요. 마지막으로 올린 날부터 {days}일 동안 열려 있어요.{autoLive ? ' 질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
+      <p>가입이나 토큰 없이 바로 공개해요. 방문이 있는 동안은 계속 열려 있고, {days}일 동안 아무도 오지 않으면 지워져요.{autoLive ? ' 질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
-      {alive && <p class="small muted">{day(prev.expiresAt)}까지 열려 있어요. 다시 올리면 그날부터 {days}일로 늘어나요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
+      {alive && <p class="small muted">올려 둔 사이트가 있어요. 다시 올려도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
       {alive && prev.adminKey && <p class="small">강사 화면 관리자 키 <b class="mono">{prev.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(prev.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>}
-      <p class="small muted">사이트 파일{autoLive ? '과 참가자가 남긴 글·파일' : ''}이 lecpage 서버에 {days}일 동안 저장돼요. 남의 저작물이나 개인정보가 들어 있지 않은지 확인해 주세요. 오래 둘 사이트는 Vercel처럼 내 계정에 올리는 편이 좋아요.</p>
+      <p class="small muted">사이트 파일{autoLive ? '과 참가자가 남긴 글·파일' : ''}이 lecpage 서버에 저장되고, 마지막 방문 뒤 {days}일이 지나면 지워져요. 남의 저작물이나 개인정보가 들어 있지 않은지 확인해 주세요.</p>
     </div>
   );
 }

@@ -322,4 +322,4 @@ assets/slides/*.webp · assets/media/*
 - 사이트: `POST /api/sites` → `{id, key, url, expiresAt}` · `POST /api/sites/:id/deploys {files:{경로:{sha256,size}}}` → `{deploy, missing[]}` · `PUT /api/sites/:id/blobs/:sha256` · `POST /api/sites/:id/deploys/:deploy/publish` · `DELETE /api/sites/:id`. 수정 키는 한 번만 내려 주고 해시로 보관합니다.
 - 참여 기능: `POST /api/sites/:id/live {code, adminKeyHash, settings}` → `{url, code}`. 방은 `skills/lecpage/backends/cloudflare`의 Room을 그대로 불러 `/live` 아래에 붙였고, 사이트에 묶인 코드만 살아 있습니다. 코드가 다른 사이트와 겹치면 `409 code_taken`(앱이 새 코드로 다시 올림). 사이트가 지워지거나 공개 기간이 끝나면 방과 올린 파일도 지워집니다.
 - 안전: 올린 `.js`는 엔진 런타임 파일(또는 그 묶음)과 내용이 같을 때만 받고(`runtime_mismatch`), 모든 응답에 서버가 정한 CSP(`script-src 'self'`)를 붙입니다. HTML의 `meta refresh`·`base`·바깥 스크립트는 빼고 보냅니다. 받는 파일 형식은 엔진의 `USER_ASSET`과 같습니다(테스트가 어긋남을 잡음).
-- 한도(기본): 사이트 40MB·파일 20MB·600개, 공개 기간 30일, 방 올리기 10MB·방마다 200MB, IP당 새 사이트 시간당 6개.
+- 한도(기본): 사이트 40MB·파일 20MB·600개, 공개 기간 30일(방문이 있으면 늘어남, 처음 만든 날부터 1년까지), 방 올리기 10MB·방마다 200MB, IP당 새 사이트 시간당 6개.

@@ -239,3 +239,21 @@ test('올릴 곳 한도: 크기·파일 수가 넘으면 올리기 전에 알려
   assert.ok(E.checkHost('github-pages', { bytes: 30 * MB, files: 600, binaries: 500 }).warnings.length);
   assert.ok(E.checkHost('zip', { bytes: 900 * MB }).ok, '한도가 없는 곳은 통과');
 });
+
+test('올릴 곳: 멈추지 않는 것이 먼저(한도 안내, 참가자가 많은 큰 사이트, 무료로 도는 바로 공개)', () => {
+  // 고른 곳마다 무료 한도를 넘으면 어떻게 되는지 한 줄
+  for (const h of ['vercel', 'github-pages', 'cloudflare', 'netlify', 'lecpage']) assert.ok(/[가-힣]/.test(E.HOSTS[h].atLimit_ko), h);
+  assert.equal(E.HOSTS.cloudflare.stops, false); assert.equal(E.HOSTS.vercel.stops, true);
+  // 보통 연수(5MB, 40명)는 그대로 Vercel
+  assert.equal(E.decideHost({ skill: 'click', siteMB: 5, size: 40 }).pick, 'vercel');
+  // 30MB 사이트에 500명: 한 달 약 88GB → 전송량 한도에서 멈추는 곳(Vercel·Netlify)을 뒤로
+  const big = E.decideHost({ skill: 'click', siteMB: 30, size: 500 });
+  assert.ok(!['vercel', 'netlify'].includes(big.pick), big.pick);
+  assert.ok(big.hosts.indexOf('vercel') > big.hosts.indexOf('cloudflare') && big.hosts.indexOf('netlify') > big.hosts.indexOf('github-pages'));
+  assert.match(big.reasons[0], /GB/); assert.ok(big.warnings.some((w) => /멈춰요/.test(w)));
+  // 바로 공개: 운영자가 유료로 돌리면 첫째, 무료로 돌리면(하루 한도에서 멈출 수 있음) 둘째
+  assert.equal(E.decideHost({ skill: 'click', instant: 'stable' }).pick, 'lecpage');
+  assert.equal(E.decideHost({ skill: 'click', instant: true }).pick, 'lecpage');
+  const lim = E.decideHost({ skill: 'click', instant: 'limited' });
+  assert.equal(lim.pick, 'vercel'); assert.equal(lim.hosts[1], 'lecpage');
+});

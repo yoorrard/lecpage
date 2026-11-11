@@ -69,6 +69,14 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(d.sitesPerHour, 6);
   assert.equal(d.sitesPerDay, 20);
   assert.equal(d.dailySiteCap, 30);
+  // 요금제: 기본은 무료(하루 요청 예산으로 새 사이트를 조절). paid면 상한을 풀고 예산을 끔. 직접 적은 값이 먼저
+  assert.deepEqual([d.plan, d.dailyRequestBudget, d.keepAlive, d.maxSiteDays], ['free', 100000, true, 365]);
+  const paid = config({ PLAN: 'Paid' });
+  assert.deepEqual([paid.plan, paid.dailySiteCap, paid.dailyRoomCap, paid.dailyRequestBudget], ['paid', 300, 300, 0]);
+  assert.deepEqual([config({ PLAN: 'paid', DAILY_SITE_CAP: '50', DAILY_REQUEST_BUDGET: '300000' }).dailySiteCap, config({ PLAN: 'paid', DAILY_REQUEST_BUDGET: '300000' }).dailyRequestBudget], [50, 300000]);
+  assert.equal(config({ PLAN: 'enterprise' }).plan, 'free', '모르는 값은 무료로');
+  assert.equal(config({ DAILY_REQUEST_BUDGET: '0' }).dailyRequestBudget, 0, '0이면 예산을 끔');
+  assert.equal(config({ KEEP_ALIVE: 'off' }).keepAlive, false);
   assert.equal(d.maxTotalBytes, 4 * 1024 * 1024 * 1024);
   assert.equal(d.adminKey, '');
   assert.equal(d.reportWebhook, '');

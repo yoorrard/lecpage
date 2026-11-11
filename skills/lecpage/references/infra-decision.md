@@ -62,7 +62,7 @@
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
-| (앱 전용, skill은 쓰지 않음) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 30일 뒤 지워짐) | 앱 화면 |
+| (앱 전용, skill은 쓰지 않음) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 30일 동안 방문이 없으면 지워짐) | 앱 화면 |
 
 ### 2.2 실시간
 
@@ -119,7 +119,7 @@
 9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
-12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 마지막으로 올린 날부터 30일). 오래 둘 사이트(`keep: long`)나 내 도메인이면 둘째 자리. skill은 쓰지 않습니다.
+12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 방문이 있는 동안 열려 있음). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
 13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로. Netlify는 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.

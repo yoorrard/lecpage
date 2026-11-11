@@ -20,10 +20,24 @@ const post = (body) => ({ method: 'POST', headers: { 'content-type': 'applicatio
 /** DO 응답이 오류면 HttpError로 바꿔 던짐 */
 async function ok(res) { if (!res.ok) throw await errorFrom(res); return res; }
 
+// 하루 요청 예산(무료 요금제에서만 켜짐): 요청마다 Gate를 부르면 그것도 요청이라, 50건이나 30초마다 묶어서 알림
+let cfgCache = null;
+const cfgOf = (env) => (cfgCache && cfgCache.env === env ? cfgCache.cfg : (cfgCache = { env, cfg: config(env) }).cfg);
+let seen = 0; let flushedAt = 0;
+function tally(env, ctx) {
+  if (!cfgOf(env).dailyRequestBudget) return;
+  seen++;
+  const now = Date.now();
+  if (seen < 50 && now - flushedAt < 30000) return;
+  const n = seen; seen = 0; flushedAt = now;
+  ctx.waitUntil(gateStub(env).fetch('http://gate/tick', post({ n })).catch(() => { }));
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
+    tally(env, ctx);
     if (p.startsWith('/s/')) return serveSite(request, env, url);
     if (p === LIVE_PREFIX || p.startsWith(`${LIVE_PREFIX}/`) || FILE_ALIAS.test(p)) return live(request, env, url);
     if (p.startsWith('/api/')) return api(request, env, ctx, url);
@@ -96,8 +110,11 @@ async function route(request, env, ctx, url, cfg, self) {
   const [a, b, c, d, e] = parts;
 
   if (a === 'info' && parts.length === 1 && method === 'GET') {
+    // accepting: 지금 새 사이트를 받는지(무료 요금제에서 하루 요청 예산을 많이 썼으면 false). 못 물어보면 받는 것으로
+    let accepting = true;
+    if (cfg.dailyRequestBudget) { try { accepting = (await (await gateStub(env).fetch('http://gate/status')).json()).accepting !== false; } catch { /* 그대로 */ } }
     return json({
-      ok: true, v: 1,
+      ok: true, v: 1, plan: cfg.plan, accepting,
       limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
       report: `${self}/report`,
       ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),

@@ -9,10 +9,13 @@ export const STORE_FEATURES = ['attendance', 'board', 'survey'];
 export const BACKENDS = {
   none: { name_ko: '서버 없음', cost: '0원', note_ko: '완료 체크·메모는 참가자 각자의 브라우저에 저장해요.' },
   local: { name_ko: '이 컴퓨터에서만 시험', cost: '0원', note_ko: '한 브라우저 안에서만 이어져요. 리허설·시연용이에요.' },
-  sheets: { name_ko: '구글 시트', cost: '0원', note_ko: '기록이 강사의 구글 시트에 쌓여요. 5~10초마다 새로 읽어요.' },
-  supabase: { name_ko: 'Supabase', cost: '0원', note_ko: '강사의 무료 Supabase 프로젝트에 기록·파일을 함께 저장해요. 100명 안팎까지 알맞아요.' },
+  sheets: { name_ko: '구글 시트', cost: '0원', note_ko: '기록이 강사의 구글 시트에 쌓여요. 5~10초마다 새로 읽어요.',
+    atLimit_ko: '무료이고 멈추지 않아요. 한꺼번에 30명 넘게 보내면 조금 늦어져요.' },
+  supabase: { name_ko: 'Supabase', cost: '0원', note_ko: '강사의 무료 Supabase 프로젝트에 기록·파일을 함께 저장해요. 100명 안팎까지 알맞아요.',
+    atLimit_ko: '무료는 7일 동안 안 쓰면 멈춰요. 연수 전날 한 번 열어 깨우면 되고, Pro로 바꾸면 멈추지 않아요.' },
   // 아래 셋은 앱의 '내 서버·Cloudflare' 탭(live.provider http)으로 연결합니다.
-  cloudflare: { name_ko: '내 서버·Cloudflare', cost: '0원~월 $5', note_ko: '강사의 Cloudflare 계정에서 돌려요. 대기 중 연결에 요금이 없어 큰 행사에 알맞아요.' },
+  cloudflare: { name_ko: '내 서버·Cloudflare', cost: '0원~월 $5', note_ko: '강사의 Cloudflare 계정에서 돌려요. 대기 중 연결에 요금이 없어 큰 행사에 알맞아요.',
+    atLimit_ko: '무료는 하루 10만 요청까지예요. 넘으면 그날은 멈추고, 유료(월 $5)로 바꾸면 이어져요.' },
   server: { name_ko: '내 서버·Cloudflare', cost: '보유 서버 비용', note_ko: 'AWS·학교 서버·NAS·VPS 어디서든 컨테이너 하나로 돌려요.' },
   lan: { name_ko: '내 서버·Cloudflare', cost: '0원', note_ko: '강사 노트북을 서버로 써요. 인터넷 없이 같은 와이파이·핫스폿에서 접속해요.' },
 };
@@ -21,20 +24,25 @@ export const BACKENDS = {
 // 숫자·약관 근거: docs/research/hosting-2026-11.md (2026-11-11 확인). limit: siteMB(사이트 합계)·fileMB(파일 하나)·files(파일 수)
 export const HOSTS = {
   lecpage: { name_ko: 'lecpage 주소', cost: '0원', app: true, account: false, limit: { siteMB: 40, fileMB: 20, files: 600 },
-    note_ko: '가입 없이 바로 공개해요. 마지막으로 올린 날부터 30일 뒤 지워져요.' },
+    note_ko: '가입 없이 바로 공개해요. 30일 동안 방문이 없으면 지워져요.',
+    atLimit_ko: '방문이 있는 동안은 계속 열려 있어요.', atLimitFree_ko: '무료로 운영되는 서버라 방문이 몰리는 날은 멈출 수 있어요. 본 연수는 내 계정에 올리는 편이 안전해요.' },
   vercel: { name_ko: 'Vercel', cost: '0원', app: true, account: true, limit: { siteMB: 100, files: 15000 }, commercial: false,
     cli: 'VERCEL_TOKEN=… npx vercel@latest deploy ./dist --prod --yes --project <이름> --create-if-missing',
-    note_ko: '토큰 하나로 바로 올리고, 다시 올려도 같은 주소예요. 무료 요금제는 비상업용이에요.' },
+    note_ko: '토큰 하나로 바로 올리고, 다시 올려도 같은 주소예요. 무료 요금제는 비상업용이에요.',
+    transferGB: 100, stops: true, atLimit_ko: '무료는 월 100GB까지예요. 넘으면 멈추고, Pro로 바꾸면 이어져요.' },
   'github-pages': { name_ko: 'GitHub Pages', cost: '0원', app: true, account: true, limit: { siteMB: 900, fileMB: 100 },
     cli: 'gh repo create <이름> --public --source=. --push && gh api -X POST "repos/{owner}/{repo}/pages" -f "source[branch]=main" -f "source[path]=/"',
-    note_ko: '공개 저장소에 올려요. 저장소의 사이트 파일은 누구나 볼 수 있어요.' },
+    note_ko: '공개 저장소에 올려요. 저장소의 사이트 파일은 누구나 볼 수 있어요.',
+    transferGB: 100, stops: false, atLimit_ko: '월 100GB는 권고라서 넘어도 바로 멈추지 않아요.' },
   cloudflare: { name_ko: 'Cloudflare', cost: '0원', app: false, account: true, limit: { fileMB: 25, files: 1000 },
     // 빈 임시 폴더에서 돌림: wrangler는 실행한 폴더와 위쪽 폴더의 wrangler 설정을 읽어 그 프로젝트를 올릴 수 있음
     cli: 'D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name <이름> --compatibility-date <오늘>)',
-    note_ko: '정적 파일 요청이 무료·무제한이고 강사료를 받는 연수에도 쓸 수 있어요. 앱에서는 ZIP을 끌어다 놓아요.' },
+    note_ko: '정적 파일 요청이 무료·무제한이고 강사료를 받는 연수에도 쓸 수 있어요. 앱에서는 ZIP을 끌어다 놓아요.',
+    stops: false, atLimit_ko: '방문이 많아도 멈추지 않아요.' },
   netlify: { name_ko: 'Netlify', cost: '0원(월 300크레딧)', app: true, account: true, limit: { files: 25000 },
     cli: 'NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name <이름>',
-    note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 뒤에 가입했다면 올린 뒤 Make public을 눌러야 열려요.' },
+    note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 뒤에 가입했다면 올린 뒤 Make public을 눌러야 열려요.',
+    transferGB: 12, stops: true, atLimit_ko: '월 300크레딧을 다 쓰면 그달은 멈춰요. 충전하면 이어져요.' },
   firebase: { name_ko: 'Firebase Hosting', cost: '0원', app: false, account: true, note_ko: '구글 계정으로 시작. 무료 전송량은 월 10GB이고, 넘으면 그달 사이트가 멈춰요.' },
   s3: { name_ko: 'AWS S3 + CloudFront', cost: '소액', app: false, account: true, note_ko: 'AWS 계정이 있을 때. 1년 무료 이후 사용량 과금.' },
   server: { name_ko: '보유 서버(nginx·Caddy)', cost: '보유 비용', app: false, account: false, note_ko: '학교·기관 서버, NAS, VPS.' },
@@ -110,11 +118,20 @@ export function decideHost(input = {}) {
     if (bigSite && hosts.includes('vercel')) { hosts = last('vercel', hosts); warnings.push('Vercel 무료는 한 번에 올리는 파일 합계가 100MB까지예요.'); }
     if (input.network === 'restricted') warnings.push('학교망에서 기본 주소가 막힐 수 있어요. 연수 전날 참가자 망에서 주소를 열어 보고, 막히면 내 도메인을 붙이세요.');
     if (infra.includes('aws') && skill !== 'click') hosts.unshift('s3');
+    // 멈추지 않는 것이 먼저: 참가자가 많고 사이트가 크면 한 달 전송량(사이트 크기 × 인원 × 6번)이 무료 한도에 닿는 곳을 뒤로
+    const monthGB = (Number(input.siteMB) || 0) * (Number(input.size) || 0) * 6 / 1024;
+    const tight = hosts.filter((h) => HOSTS[h].stops && HOSTS[h].transferGB && monthGB > HOSTS[h].transferGB / 2);
+    if (tight.length) {
+      for (const h of tight) hosts = last(h, hosts);
+      why(`참가자가 많고 사이트가 커서(한 달 약 ${Math.round(monthGB)}GB) 방문 한도가 없는 ${HOSTS[hosts[0]].name_ko}를 권해요.`);
+      warnings.push(`${tight.map((h) => HOSTS[h].name_ko).join('·')} 무료는 전송량 한도를 넘으면 사이트가 멈춰요.`);
+    }
     const fitsInstant = !(Number(input.siteMB) > HOSTS.lecpage.limit.siteMB) && !(Number(input.maxFileMB) > HOSTS.lecpage.limit.fileMB) && !(Number(input.files) > HOSTS.lecpage.limit.files);
     if (input.instant && fitsInstant) {
-      // 운영자가 '바로 공개'를 켜 둔 앱: 가입이 필요 없어 가장 빠름. 오래 둘 사이트·내 도메인은 본인 계정이 먼저
-      if (input.keep === 'long' || input.customDomain) hosts.splice(1, 0, 'lecpage');
-      else { hosts.unshift('lecpage'); why('가입이나 토큰 없이 바로 공개해요. 마지막으로 올린 날부터 30일 뒤 지워져요.'); }
+      // 운영자가 '바로 공개'를 켜 둔 앱: 가입이 필요 없어 가장 빠름. 오래 둘 사이트·내 도메인은 본인 계정이 먼저.
+      // 운영자가 무료 요금제로 돌리면(instant: 'limited') 하루 한도에 닿는 날 멈출 수 있어 첫째로 권하지 않음
+      if (input.instant === 'limited' || input.keep === 'long' || input.customDomain) hosts.splice(1, 0, 'lecpage');
+      else { hosts.unshift('lecpage'); why('가입이나 토큰 없이 바로 공개해요. 방문이 있는 동안은 계속 열려 있어요.'); }
     }
     const mine = [input.previous, ...[].concat(input.connected || [])].filter((h) => h && hosts.includes(h));
     if (mine.length) { hosts = [...new Set([...mine, ...hosts])]; why(input.previous && mine[0] === input.previous ? '지난번에 올린 곳에 다시 올리면 주소가 그대로예요.' : '이미 연결해 둔 곳이라 바로 올릴 수 있어요.'); }
@@ -158,13 +175,15 @@ export function decideInfra(input = {}) {
     backend = 'supabase'; tier = 3;
     reasons.push(realtime ? '질문·진행 현황처럼 화면이 바로 바뀌는 기능이 있어 실시간 연결이 필요해요.' : '인원이 많아 구글 시트보다 Supabase가 안정적이에요.');
     reasons.push('참가자는 로그인 없이 들어와서, 한 학교 와이파이(공인 IP 하나)에서 모두 접속해도 막히지 않아요.');
-    if (duration !== 'day') warnings.push('Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전 접속 확인(check.html)으로 깨어 있는지 보세요.');
+    warnings.push('Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 전날 접속 확인(check.html)을 열어 깨워 두세요.');
   } else {
     backend = 'cloudflare'; tier = 4;
     reasons.push('100명이 넘으면 Supabase 무료의 초당 메시지 한도(100건)에 금방 닿아요. Cloudflare는 대기 중 연결에 요금을 받지 않아요.');
     if (size > 300) warnings.push('300명이 넘는 행사는 Cloudflare Workers 유료($5/월)를 켜 두세요. 한도를 넘어도 오류 대신 소액만 과금돼요.');
     if (realtime) warnings.push('질문·투표만 실시간으로 두고, 교재·실습 화면은 정적으로 둬요.');
   }
+  // 웹소켓이 막힌 망에서는 5초마다 묻는 방식이라 요청이 크게 늘어남(100명 2시간이면 14만 건쯤)
+  if (backend === 'cloudflare' && network === 'restricted' && size > 60) warnings.push('웹소켓이 막힌 망에서 60명이 넘으면 Cloudflare 무료의 하루 한도에 닿을 수 있어요. 그날만이라도 유료(월 $5)를 켜 두세요.');
 
   if (network === 'restricted') warnings.push('학교망이 엄격하면 웹소켓이나 일부 도메인이 막힐 수 있어요. check.html로 미리 확인하세요. 막히면 저절로 새로 읽기 방식으로 바뀌어요.');
   if (input.minor) warnings.push('만 14세 미만이 참여해 별명만 받고, 보드 파일 올리기를 막아요.');

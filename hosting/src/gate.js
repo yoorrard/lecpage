@@ -4,7 +4,7 @@
 //  - 신고 보관
 // Worker와 Site만 부릅니다(바깥에서 직접 닿을 수 없음).
 import { DurableObject } from 'cloudflare:workers';
-import { config, DAY_MS, HOUR_MS } from './config.js';
+import { config, DAY_MS, HOUR_MS, NEW_WORK_SHARE } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { sha256Hex, ipBucket } from './ids.js';
 
@@ -30,6 +30,8 @@ export class Gate extends DurableObject {
         case 'POST forget': return json(this.forget(body));
         case 'POST room': return json(this.room(body));
         case 'GET usage': return json(this.usage());
+        case 'POST tick': return json(this.tick(body));
+        case 'GET status': return json(this.status());
         case 'POST report': return json(await this.report(body));
         case 'GET reports': return json({ reports: this.sql.exec('SELECT n, at, site, reason, contact FROM reports ORDER BY n DESC').toArray() });
         case 'GET sites': return json({ total: this.usage(), sites: this.sql.exec('SELECT id, bytes, room_bytes AS roomBytes, code AS liveCode, created AS createdAt, expires AS expiresAt, blocked FROM sites ORDER BY created DESC LIMIT 1000').toArray().map((s) => ({ ...s, blocked: !!s.blocked })) });
@@ -43,6 +45,23 @@ export class Gate extends DurableObject {
 
   count(k) { return this.sql.exec('SELECT n FROM rl WHERE k = ?', k).toArray()[0]?.n || 0; }
   bump(k, exp) { this.sql.exec('INSERT INTO rl (k, n, exp) VALUES (?, 1, ?) ON CONFLICT (k) DO UPDATE SET n = n + 1', k, exp); }
+
+  // ── 하루 요청 예산(무료 요금제): Worker가 본 요청 수를 묶어서 알려 줌 ──
+  reqKey(now = Date.now()) { return `req:all:${Math.floor(now / DAY_MS)}`; }
+  tick({ n }) {
+    const add = Number.isSafeInteger(n) && n > 0 ? Math.min(n, 100000) : 0;
+    if (add) { const now = Date.now(); this.sql.exec('INSERT INTO rl (k, n, exp) VALUES (?, ?, ?) ON CONFLICT (k) DO UPDATE SET n = n + ?', this.reqKey(now), add, (Math.floor(now / DAY_MS) + 1) * DAY_MS, add); }
+    return { ok: true };
+  }
+  /** 새 사이트·새 방을 받는지. 예산의 60%를 넘으면 받지 않아, 남은 몫을 이미 올라온 사이트의 방문에 씀 */
+  accepting(now = Date.now()) {
+    const b = this.cfg.dailyRequestBudget;
+    return !b || this.count(this.reqKey(now)) < b * NEW_WORK_SHARE;
+  }
+  status() { const now = Date.now(); return { accepting: this.accepting(now), requests: this.count(this.reqKey(now)), budget: this.cfg.dailyRequestBudget }; }
+  busy(now) {
+    return new HttpError('rate_limited', '오늘은 방문이 많아 새로 받지 않아요. 이미 올린 사이트는 그대로 열려요. 내일 다시 하거나 내 계정에 올려 주세요.', { headers: { 'retry-after': String(Math.max(1, Math.ceil(((Math.floor(now / DAY_MS) + 1) * DAY_MS - now) / 1000))) } });
+  }
 
   /** 횟수 제한 열쇠. IP는 그대로 두지 않고 시간 구간과 함께 해시해 둠(구간이 지나면 지움) */
   async windows(kind, ip, now) {
@@ -62,6 +81,7 @@ export class Gate extends DurableObject {
   async reserve({ ip, id, created, expires }) {
     const now = Date.now(); const c = this.cfg;
     const w = await this.windows('site', ip, now);
+    if (!this.accepting(now)) throw this.busy(now);
     if (this.count(w.hour.k) >= c.sitesPerHour) throw this.limited(w.hour, now);
     if (this.count(w.day.k) >= c.sitesPerDay) throw this.limited(w.day, now);
     if (this.count(w.all.k) >= c.dailySiteCap) throw new HttpError('rate_limited', '오늘은 바로 공개로 새 사이트를 더 만들 수 없어요. 내일 다시 하거나 다른 공개 방법을 써 주세요.', { headers: { 'retry-after': String(Math.ceil((w.all.exp - now) / 1000)) } });
@@ -94,6 +114,7 @@ export class Gate extends DurableObject {
   room() {
     const now = Date.now(); const day = Math.floor(now / DAY_MS);
     const k = `room:all:${day}`;
+    if (!this.accepting(now)) throw this.busy(now);
     if (this.count(k) >= this.cfg.dailyRoomCap) throw new HttpError('rate_limited', '오늘은 실시간 방을 더 만들 수 없어요. 내일 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil(((day + 1) * DAY_MS - now) / 1000)) } });
     if (this.usage().bytes > this.cfg.maxTotalBytes) throw new HttpError('full');
     this.bump(k, (day + 1) * DAY_MS);

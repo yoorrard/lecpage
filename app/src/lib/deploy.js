@@ -197,10 +197,11 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
 /** 이미 올린 Vercel 프로젝트에 로그인 창이 뜰 때: 참가자가 열 수 있게 보호(Vercel Authentication)를 끔 */
 export const openVercel = (token, projectId) => vc(token, 'PATCH', `/v9/projects/${encodeURIComponent(projectId)}`, { ssoProtection: null });
 
-// ── lecpage 바로 공개: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 올리고, 30일 뒤 지워짐 ──
+// ── lecpage 바로 공개: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 올림. 방문이 있으면 계속 열려 있고 30일 동안 방문이 없으면 지워짐 ──
 export const PUBLISH_API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
 let infoP = null;
-/** 바로 공개를 쓸 수 있으면 { limits: {maxBytes, maxFileBytes, maxFiles, days}, report }, 아니면 null */
+/** 바로 공개를 쓸 수 있으면 { plan: 'free'|'paid', accepting, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
+ * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음), accepting이 false면 오늘은 새 사이트를 받지 않음 */
 export function instantInfo() {
   if (!PUBLISH_API) return Promise.resolve(null);
   return (infoP ||= fetch(`${PUBLISH_API}/api/info`).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null));

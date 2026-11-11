@@ -34,7 +34,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
   await t.test('안내: /api/info, 정적 화면, CORS', async () => {
     const info = await call(base, 'GET', '/api/info');
     assert.equal(info.status, 200);
-    assert.deepEqual(info.body, { ok: true, v: 1, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
+    assert.deepEqual(info.body, { ok: true, v: 1, plan: 'free', accepting: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
     const home = await text(`${base}/`);
     assert.equal(home.status, 200); assert.ok(home.text.includes('바로 공개') && home.text.includes('href="/report"'));
     assert.ok(home.headers.get('content-security-policy').includes("default-src 'none'"));
@@ -507,7 +507,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
 
 test('횟수 제한·공개 기간 끝(짧게 줄여서)·관리자 열쇠가 없을 때', async (t) => {
   // 공개 기간 12초, 같은 IP에서 한 시간에 사이트 2개
-  const h = await host({ SITES_PER_HOUR: 2, SITE_DAYS: 12 / 86400 });
+  const h = await host({ SITES_PER_HOUR: 2, SITE_DAYS: 12 / 86400, KEEP_ALIVE: 'off' }); // 방문으로 기간이 늘지 않게 끄고 봄(늘어나는 것은 아래에서 따로)
   if (!h) return t.skip(skip);
   const base = h.url;
   const CODE = 'EXP' + randomBytes(3).toString('hex').toUpperCase();
@@ -568,4 +568,55 @@ test('실시간을 끈 서버(LIVE=off)', async (t) => {
   const r = await call(base, 'POST', `/api/sites/${s.id}/live`, { key: s.key, json: { code: 'AB12CD', adminKeyHash: sha256('some-teacher-key-01') } });
   assert.equal(r.status, 404); assert.equal(code(r), 'not_found');
   assert.equal((await deploy(base, s, await buildSite('data-lab'))).status, 200, '사이트 올리기는 그대로');
+});
+
+test('하루 요청 예산(무료 요금제): 많이 쓰면 새 사이트·새 방만 멈추고 올라온 사이트는 계속 열림', async (t) => {
+  const h = await host({ DAILY_REQUEST_BUDGET: 200 });
+  if (!h) return t.skip(skip);
+  const base = h.url;
+  const first = await call(base, 'GET', '/api/info');
+  assert.deepEqual([first.body.plan, first.body.accepting], ['free', true]);
+  const s = await newSite(base);
+  assert.equal((await deploy(base, s, await buildSite('data-lab'))).status, 200);
+  // 예산의 60%(120건)를 넘김. 묶어서 세므로(50건마다) 넉넉히 보냄
+  for (let i = 0; i < 6; i++) await Promise.all(Array.from({ length: 30 }, () => fetch(`${base}/s/${s.id}/`).then((r) => r.arrayBuffer())));
+  let info;
+  for (let i = 0; i < 20; i++) { info = await call(base, 'GET', '/api/info'); if (info.body.accepting === false) break; await new Promise((r) => setTimeout(r, 250)); }
+  assert.equal(info.body.accepting, false, '예산을 많이 쓰면 받지 않는다고 알림');
+  const more = await call(base, 'POST', '/api/sites', { json: { title: 'x' } });
+  assert.equal(more.status, 429); assert.equal(code(more), 'rate_limited'); assert.ok(Number(more.headers.get('retry-after')) > 0);
+  assert.match(more.body.error.message_ko, /이미 올린 사이트는 그대로/);
+  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200, '올라온 사이트는 그대로 열림');
+  assert.equal((await deploy(base, s, await buildSite('data-lab'))).status, 200, '이미 있는 사이트는 다시 올릴 수 있음');
+  const room = await call(base, 'POST', `/api/sites/${s.id}/live`, { key: s.key, json: { code: 'QK7MZA', adminKeyHash: sha256('budget-teacher-key-01') } });
+  assert.equal(room.status, 429, '새 방도 받지 않음');
+});
+
+test('유료 요금제(PLAN=paid): 예산으로 막지 않음', async (t) => {
+  const h = await host({ PLAN: 'paid' });
+  if (!h) return t.skip(skip);
+  const base = h.url;
+  const info = await call(base, 'GET', '/api/info');
+  assert.deepEqual([info.body.plan, info.body.accepting], ['paid', true]);
+  for (let i = 0; i < 3; i++) await Promise.all(Array.from({ length: 40 }, () => fetch(`${base}/s/nope/`).then((r) => r.arrayBuffer())));
+  assert.equal((await call(base, 'POST', '/api/sites', { json: { title: 'x' } })).status, 201);
+});
+
+test('방문이 이어지는 사이트는 공개 기간이 늘어남(짧게 줄여서)', async (t) => {
+  // 공개 기간 16초. 남은 기간이 절반(8초) 아래일 때 화면을 열면 다시 16초
+  const h = await host({ SITE_DAYS: 16 / 86400 });
+  if (!h) return t.skip(skip);
+  const base = h.url;
+  const s = await newSite(base);
+  const d = await deploy(base, s, await buildSite('data-lab'));
+  assert.equal(d.status, 200);
+  const exp0 = d.body.expiresAt;
+  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200); // 아직 절반 이상 남음 → 그대로
+  await new Promise((r) => setTimeout(r, 10000));
+  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200, '방문 → 기간이 다시 참');
+  await new Promise((r) => setTimeout(r, 9000)); // 처음 기간(16초)은 지남
+  assert.ok(Date.now() > exp0, '처음 정한 기간은 지났음');
+  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200, '방문이 있었으니 아직 열려 있음');
+  const again = await deploy(base, s, await buildSite('data-lab'));
+  assert.equal(again.status, 200); assert.ok(again.body.expiresAt > exp0);
 });

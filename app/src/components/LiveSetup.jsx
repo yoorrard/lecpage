@@ -81,6 +81,7 @@ export function LiveSetup({ p, update }) {
       {connected && state.msg && !state.ok && <Notice kind="bad">{state.msg}</Notice>}
       {!connected && <>
         <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={[{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
+        {E.BACKENDS[method === 'http' ? 'cloudflare' : method]?.atLimit_ko && <p class="small muted">{E.BACKENDS[method === 'http' ? 'cloudflare' : method].atLimit_ko}</p>}
         {method === 'sheets' && (
           <ol class="how">
             {SHEET_TEMPLATE
