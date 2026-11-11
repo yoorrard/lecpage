@@ -50,6 +50,73 @@ test('첫 화면 뼈대: 프리셋마다 구조가 다르다(같은 뼈대에 �
   assert.equal(new Set(E.PRESETS.map((p) => p.variants.hero)).size, E.PRESETS.length, '두 프리셋이 같은 첫 화면 구성을 쓰지 않음');
 });
 
+// 살아 있는 첫 화면(쇼케이스) 네 가지: 프리셋 → [첫 화면 구성, 그림 효과, 서버가 그려 둔 정지 그림]
+const SHOWCASE = {
+  'deck-collage': ['collage', 'slide-fan', /<div class="lp-fan"[^>]*><ol class="lp-fan-list"/],
+  'time-dial': ['dial', 'schedule-dial', /<div class="lp-dial"[^>]*>[\s\S]*?<circle class="lp-dial-seg/],
+  'knot-orbit': ['orbit', 'orbit-3d', /<div class="lp-orbit"[^>]*aria-hidden="true"><svg[^>]*><path class="lp-orbit-ring"/],
+  'stone-stream': ['stream', 'stream-lines', /<figure class="lp-stream"[^>]*aria-hidden="true"><div class="lp-stream-plate"><svg[^>]*><circle class="lp-stream-s0"/],
+};
+const heroOf = (html) => /<section[^>]*class="[^"]*\blp-hero\b[^"]*"[^>]*>[\s\S]*?<\/section>/.exec(html)[0];
+
+test('쇼케이스 첫 화면: 그림은 서버가 정지 모습으로 그려 두고(JS·움직임 없이도 완성), 효과는 보통 단계부터 실린다', () => {
+  for (const [preset, [hero, fx, art]] of Object.entries(SHOWCASE)) {
+    const p = E.getPreset(preset);
+    assert.equal(p.id, preset); assert.equal(p.variants.hero, hero); assert.equal(p.graphic, fx);
+    const info = E.FX.find((f) => f.id === fx);
+    assert.ok(info?.slots.includes('hero.graphic') && info.level === 2 && !info.libs.length, `${fx}: 카탈로그`);
+    const src = nodeRuntime().read(`fx/effects/${fx}.js`);
+    assert.ok(src.includes(`LecFX.define('${fx}'`), `${fx}: 효과 파일`);
+    assert.ok(Buffer.byteLength(src) < 7500, `${fx}: 효과 파일이 너무 큼`);
+    assert.doesNotMatch(src, /https?:\/\//, `${fx}: 바깥 파일을 부르지 않음`);
+    // 학교 연수(보통 단계): 정지 그림 + 효과
+    const a = EX('sel-story'); a.design = { preset };
+    const ra = E.build(a, { runtime: nodeRuntime() }), ha = heroOf(ra.files['index.html']);
+    assert.equal(ra.design.motion, 2, preset);
+    assert.match(ha, art, `${preset}: 정지 그림`);
+    assert.ok(ha.includes(`data-fx="${fx}"`), `${preset}: 효과 자리`);
+    assert.ok(!ha.includes('lp-hero-graphic'), `${preset}: 그림을 두 번 그리지 않음`);
+    assert.ok(ra.files['assets/fx.js'].includes(`LecFX.define('${fx}'`), `${preset}: 효과가 묶음에 들어감`);
+    assert.equal((ha.match(/<h1/g) || []).length, 1);
+    assert.ok(ha.indexOf('lp-ctas') < ha.search(/class="lp-(fan|dial|orbit|stream)"/), `${preset}: 글·버튼이 그림보다 먼저`);
+    // 교육청 직무연수(차분 단계): 효과는 빠지고 정지 그림은 그대로
+    const b = EX('data-lab'); b.design = { preset };
+    const rb = E.build(b, { runtime: nodeRuntime() }), hb = heroOf(rb.files['index.html']);
+    assert.equal(rb.design.motion, 1, preset);
+    assert.match(hb, art, `${preset}: 차분 단계에서도 정지 그림`);
+    assert.ok(!hb.includes(`data-fx="${fx}"`) && !(rb.files['assets/fx.js'] || '').includes(`LecFX.define('${fx}'`), `${preset}: 차분 단계에서는 효과 없음`);
+  }
+});
+
+test('쇼케이스 그림: 같은 제목이면 같은 그림, 제목이 다르면 다른 그림. 다른 첫 화면에 꾸밈으로 골라도 정지 그림이 먼저 들어간다', async () => {
+  const H = await import('../src/render/hero.js');
+  assert.equal(H.streamArt('데이터로 읽는 우리 반'), H.streamArt('데이터로 읽는 우리 반'));
+  assert.notEqual(H.streamArt('데이터로 읽는 우리 반'), H.streamArt('마음이 먼저 도착하는 교실'));
+  for (const t of ['a', '데이터로 읽는 우리 반', '마음이 먼저 도착하는 교실', '2026 미래교육 한마당', '숲에서 배우는 한 학기']) {
+    const sc = H.streamScene(t), lines = H.streamLines(sc);
+    assert.ok(sc.st.length >= 2 && sc.st.length <= 3, t);
+    // 돌끼리 겹치지 않고, 돌은 정사각형으로 잘라도(휴대폰) 다 보이는 자리에 있음
+    sc.st.forEach((s, i) => { assert.ok(s[1] - s[2] >= 50 && s[1] + s[2] <= 450 && s[0] - s[2] >= 0 && s[0] + s[2] <= 400, `${t}: 돌 ${i} 자리`); sc.st.slice(i + 1).forEach((q) => assert.ok(Math.hypot(s[0] - q[0], s[1] - q[1]) > s[2] + q[2] + 20, `${t}: 돌이 겹침`)); });
+    assert.ok(lines.filter((l) => l.length > 8).length >= 36, `${t}: 물결 선 수`);
+    // 선은 돌 안으로 들어가지 않음
+    for (const l of lines) for (let i = 0; i < l.length; i += 2) for (const s of sc.st) assert.ok(Math.hypot(l[i] - s[0], l[i + 1] - s[1]) >= s[2], `${t}: 선이 돌을 지남`);
+    assert.ok(Buffer.byteLength(H.streamArt(t)) < 12000 && Buffer.byteLength(H.orbitArt(t, ['가', '나', '다'])) < 12000, `${t}: 정지 그림 크기`);
+  }
+  // 입체 궤도: 관의 뼈대가 한 바퀴 뒤 이어지고(법선 단위 길이·접선에 직각), 낱말 3~5개는 꾸밈
+  const { F, hol } = H.knotFrames(100);
+  assert.equal(F.length, 100); assert.ok(Number.isFinite(hol));
+  for (const [, n, B] of F) { assert.ok(Math.abs(Math.hypot(...n) - 1) < 1e-6 && Math.abs(Math.hypot(...B) - 1) < 1e-6); assert.ok(Math.abs(n[0] * B[0] + n[1] * B[1] + n[2] * B[2]) < 1e-6); }
+  const bp = EX('sel-story'); bp.design = { preset: 'knot-orbit' };
+  const tags = [...heroOf(E.build(bp, { runtime: nodeRuntime() }).files['index.html']).matchAll(/<li style="left:[\d.]+%;top:[\d.]+%;[^"]*">([^<]+)<\/li>/g)].map((m) => m[1]);
+  assert.ok(tags.length >= 3 && tags.length <= 5 && tags.every((w) => [...w].length <= 9), tags.join());
+  // 다른 프리셋에 꾸밈으로: 그래픽 층 안에 정지 그림
+  for (const [preset, graphic, art] of [['keynote-dark', 'orbit-3d', '<div class="lp-orbit"'], ['editorial-ink', 'stream-lines', '<figure class="lp-stream"']]) {
+    const d = EX('sel-story'); d.design = { preset, graphic };
+    const h = heroOf(E.build(d, { runtime: nodeRuntime() }).files['index.html']);
+    assert.ok(h.includes(`<div class="lp-hero-graphic" data-fx="${graphic}" aria-hidden="true">${art}`), `${preset} + ${graphic}`);
+  }
+});
+
 test('섹션 배치: 같은 배치가 셋 넘게 줄지어 나오지 않고, 줄 목록이 이어지면 틀이 번갈아 바뀐다', async () => {
   const { layoutRuns } = await import('../../scripts/design-lint.mjs');
   for (const id of ['sel-story', 'data-lab']) {
