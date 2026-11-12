@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync, existsSync } from 'node:fs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -110,10 +110,28 @@ Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOT
   };
 }
 
+// 첫 화면(랜딩)이 쓰는 엔진의 사실(디자인·효과 수, 쇼케이스 디자인 이름)을 빌드 때 계산해 작은 모듈로 냅니다.
+// 첫 화면이 엔진 전체(약 370KB)를 받지 않게 하려는 것. 쓰는 곳: src/landing/facts.js (import facts from 'virtual:lp-facts')
+function landingFacts() {
+  const id = 'virtual:lp-facts', rid = '\0' + id;
+  return {
+    name: 'lecpage-landing-facts',
+    resolveId: (s) => (s === id ? rid : null),
+    async load(s) {
+      if (s !== rid) return null;
+      const E = await import(pathToFileURL(here('../skills/lecpage/engine/src/index.js')).href);
+      let show = [];
+      try { show = JSON.parse(read('src/landing/shots/shots.json')).showcase || []; } catch { /* 그림이 아직 없음 */ }
+      const designs = Object.fromEntries(show.map((k) => E.getPreset(k)).filter(Boolean).map((p) => [p.id, { name: p.name_ko, desc: p.desc_ko }]));
+      return `export default ${JSON.stringify({ presets: E.PRESETS.length, fx: E.FX.length, designs })};`;
+    },
+  };
+}
+
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt()],
+  plugins: [preact(), licensesTxt(), landingFacts()],
   resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },
