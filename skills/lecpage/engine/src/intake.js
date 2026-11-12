@@ -3,7 +3,7 @@
 // 강사가 정한 값(prev 설계도, info)만 씁니다.
 import { decideArchetype } from './decide/archetype.js';
 import { decideStructure, structureFor, linkConcept, cleanStructure, FLOW_INFO } from './decide/structure.js';
-import { findLeftovers } from './ingest/compose.js';
+import { findLeftovers, keepUrlText } from './ingest/compose.js';
 import { syncHeroMeta } from './hero-meta.js';
 import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
@@ -203,6 +203,40 @@ function ensureInstructorSection(bp) {
  * @param bp0 새 설계도(초안·AI 답·가져온 것)  @param info 연수 정보  @param material 교재 해석(유형·주제 추정)
  * @param prev 지금 프로젝트의 설계도(강사가 연결한 실시간 설정·고른 디자인을 지키려고)
  */
+/** 교재에서 찾았지만 강사가 아직 확인하지 않은 회의·중계·설문 주소 */
+function pendingUrls(material, info = {}, prev = null) {
+  const a = material?.detected?.addresses || {};
+  const ok = new Set([info.joinUrl, info.surveyUrl, prev?.meta?.joinUrl].filter(Boolean));
+  return [...(a.join || []), ...(a.survey || [])].map((x) => x?.url).filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !ok.has(u));
+}
+/**
+ * 확인 전 주소는 누를 수 없게(보안 검토 2026-11b L5). AI 답이 단추·링크(href·url)로 넣었으면 그 항목을 빼고(섹션은 주소만 비움),
+ * 글 칸(md)·FAQ 답(a)·표 칸(rows·head)에서는 글자로만 남김(keepUrlText). 강사가 1단계에서 확인하면 info.joinUrl·surveyUrl로 실림
+ */
+function dropPendingUrls(bp, urls) {
+  if (!urls.length) return;
+  const hit = (v) => typeof v === 'string' && urls.some((u) => v === u || v.startsWith(u));
+  const walk = (n, key) => {
+    if (Array.isArray(n)) {
+      for (let i = n.length - 1; i >= 0; i--) {
+        const x = n[i];
+        if (typeof x === 'string') { if (key === 'rows' || key === 'head') n[i] = keepUrlText(x, urls); continue; }
+        if (x && typeof x === 'object' && !x.type && (hit(x.href) || hit(x.url))) { n.splice(i, 1); continue; }
+        walk(x, key);
+      }
+      return;
+    }
+    if (!n || typeof n !== 'object') return;
+    for (const [k, v] of Object.entries(n)) {
+      if (typeof v === 'string') {
+        if ((k === 'href' || k === 'url') && hit(v)) n[k] = '';
+        else if ((k === 'md' || k === 'a') && v.includes('http')) n[k] = keepUrlText(v, urls);
+      } else walk(v, k);
+    }
+  };
+  for (const k of Object.keys(bp)) if (!['meta', 'live', 'privacy', 'access', 'design'].includes(k)) walk(bp[k], k);
+}
+
 export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const bp = clone(bp0);
   bp.version = 1;
@@ -225,6 +259,8 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   if (srcFonts) bp.design.sourceFonts = clone(srcFonts);
   applyDesignAnswers(bp, info);
   // 컨셉 먼저: 선생님이 고친 컨셉이 있으면 그것을, 아니면 AI 답·가져온 설계도의 컨셉을, 그것도 없으면 주제에서 규칙으로 세움
+  // '선생님이 고친 컨셉' 표시는 강사 값(prev)에서만. AI 답·가져온 설계도가 스스로 teacher라고 적으면 ai로
+  if (bp.concept?.source === 'teacher' && prev?.concept?.source !== 'teacher') bp.concept = { ...bp.concept, source: 'ai' };
   bp.concept = cleanConcept(prev?.concept?.source === 'teacher' ? prev.concept : bp.concept)
     || deriveConcept({ title: info.title || bp.meta.title, subtitle: info.subtitle || bp.meta.subtitle, topics: bp.design.topics?.length ? bp.design.topics : topics, archetype: bp.archetype.primary, admin: info.admin || bp.meta.admin?.kind });
   if (!keepDesign && (!bp.design.preset || !PRESET_IDS.includes(bp.design.preset) || bp._presetAuto)) {
@@ -240,6 +276,10 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const pl = prev?.live || {};
   bp.live = { provider: pl.provider || 'none', url: pl.url || '', anonKey: pl.anonKey || '', code: pl.code || randomCode(), anonymous: true, features: pl.features || [] };
   bp.access = prev?.access || { mode: 'link' };
+  // 개인정보(받을 정보·보관 기간·동의·처리 위탁)도 강사가 정한 값만. AI 답·교재가 이름·소속 수집, 동의 생략, 가짜 처리자 목록
+  // (바로 공개 때 운영자 서버가 처리자로 적히지 않게 됨)을 넣지 못하게 함. 출석을 켜면 applyFeatures가 이름·소속으로 바꿈
+  bp.privacy = prev?.privacy && typeof prev.privacy === 'object' ? clone(prev.privacy) : { collect: ['nickname'], retentionDays: 30, consent: true, processors: [] };
+  dropPendingUrls(bp, pendingUrls(material, info, prev));
   const done = applyFeatures(bp, info);
   // 구성 결과: 초안이 정한 흐름·이유는 그대로, AI 답이면 AI가 적은 흐름·이유(없으면 교재 신호로 정한 것)에 엔진의 '권하는 기능'과
   // '교재에 있는데 싣지 못한 것'을 붙임. 컨셉의 섹션·기능(concept.sections·features)이 비었으면 실제 구성으로 채움
@@ -281,6 +321,9 @@ export function sanitizeImported(bp0) {
   for (const k of UNTRUSTED_META) delete bp.meta[k];
   const f = bp.live?.features || [];
   bp.live = { provider: f.length ? 'local' : 'none', url: '', anonKey: '', code: randomCode(), features: f, anonymous: true };
+  // 개인정보: 앱에서 강사가 보고 고치는 값(받을 정보·보관 기간)만 받음. 동의 생략·처리자 목록·문의처는 파일에서 받지 않음
+  const pv = bp.privacy && typeof bp.privacy === 'object' ? bp.privacy : {};
+  bp.privacy = { collect: Array.isArray(pv.collect) && pv.collect.length ? pv.collect : ['nickname'], retentionDays: pv.retentionDays || 30, consent: true, processors: [] };
   return bp;
 }
 

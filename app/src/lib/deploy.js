@@ -373,6 +373,8 @@ export function checkShortUrl(input, siteUrl = '') {
   const host = u.hostname;
   if (u.protocol !== 'https:' || u.username || u.password || u.port || !/^[^.]+(\.[^.]+)+$/.test(host) || /^[\d.]+$/.test(host) || host.startsWith('[')) return { error: '주소 모양이 아니에요. 예: joo.is/우리연수' };
   u.hash = '';
+  let shown = u.pathname + u.search; try { shown = decodeURIComponent(shown); } catch { /* 그대로 */ }
+  if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\u00AD\uFEFF]/.test(s + shown)) return { error: '보이지 않는 글자가 들어 있어요. 주소를 직접 다시 쳐 주세요.' };
   if (u.href.length > 200) return { error: '너무 길어요. 짧은 주소를 넣어 주세요.' };
   if (SHORT_HOME.test(host) && u.pathname === '/' && !u.search) return { error: '만든 짧은 주소를 끝까지 넣어 주세요. 예: joo.is/우리연수' };
   if (siteUrl && bareUrl(u.href) === bareUrl(siteUrl)) return { error: '사이트 주소와 같아요. 줄인 주소를 넣어 주세요.' };

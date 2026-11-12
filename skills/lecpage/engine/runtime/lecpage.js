@@ -62,11 +62,14 @@
   // 주소: 파일로 열었거나(file:) 앱 미리보기(about:)면 진짜 주소가 없으니 안내 문구를 보여 줍니다(meta.siteUrl이 있으면 그 주소).
   var LOCAL_PAGE = /^(file|about|blob|data):$/.test(location.protocol);
   var URL_OFF = '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
-  function pageUrl() {
+  // 원래 주소(QR·복사): 강사가 준 사이트 주소, 없으면 지금 페이지 주소. 파일로 열었으면 모름('')
+  function siteUrl() {
     if (DATA.siteUrl) return DATA.siteUrl;
-    if (LOCAL_PAGE) return DATA.shortUrl || '';
+    if (LOCAL_PAGE) return '';
     return location.href.split('#')[0].replace(/(check|console|screen|privacy|poster)\.html$/, '');
   }
+  // 보여 줄 주소: 원래 주소를 모르면(파일로 연 안내문) 강사가 넣은 짧은 주소라도 글자로 보여 줌. QR·복사에는 쓰지 않음
+  function pageUrl() { return siteUrl() || (LOCAL_PAGE ? DATA.shortUrl || '' : ''); }
   // 손으로 칠 주소: 강사가 넣은 짧은 주소가 있으면 그것을 크게 보여 주고 원래 주소는 그 아래 작게.
   // QR과 [주소 복사]는 언제나 원래 주소라서 짧은 주소 서비스가 멈추거나 막혀도 들어올 수 있습니다.
   // 한글이 든 주소(joo.is/우리연수)는 %EC… 대신 한글로 보여 줌
@@ -79,7 +82,8 @@
   }
   // 방 안에 있는 사람용 주소(QR·복사): 암호 보호 사이트면 #k=…를 붙여 바로 열리게(보이는 글자에는 붙이지 않음)
   function unlockFrag() { var m = $('meta[name="lp-unlock"]'); return m && m.getAttribute('content') ? '#' + m.getAttribute('content') : ''; }
-  function joinUrl() { var u = pageUrl(); return u ? u.split('#')[0] + unlockFrag() : ''; }
+  // 짧은 주소는 QR·복사에 넣지 않음: 짧은 주소 서비스가 멈추면 못 들어오고, 중간 화면이 있는 서비스에는 #k=(암호)가 보임
+  function joinUrl() { var u = siteUrl(); return u ? u.split('#')[0] + unlockFrag() : ''; }
   function siblingUrl(page) {
     if (!LOCAL_PAGE) return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '') + page;
     var b = (DATA.base || '').split('#')[0].split('?')[0]; if (!b) return '';
@@ -91,7 +95,7 @@
   }
   function paintQRs() {
     $$('[data-qr]').forEach(function (n) { n.innerHTML = qrSvg(n.getAttribute('data-qr')); });
-    $$('[data-qr-self]').forEach(function (n) { if (!n.closest('dialog')) fillQR(n, joinUrl()); });
+    $$('[data-qr-self]').forEach(function (n) { if (!n.closest('dialog')) fillQR(n, joinUrl(), pageUrl() ? '인터넷에 올리면 QR이 나와요.' : ''); });
     $$('[data-qr-page]').forEach(function (n) { fillQR(n, siblingUrl(n.getAttribute('data-qr-page')), '인터넷에 올리면 QR이 나와요.'); });
   }
   function drawQRs() {
@@ -193,9 +197,9 @@
 
     var share = $('[data-share]'), dlg = $('[data-share-dialog]');
     if (share && dlg) share.addEventListener('click', function () {
-      var u = pageUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
-      if (su) su.textContent = shortShown() || u; if (off) off.hidden = !!u; if (cb) cb.hidden = !u;
-      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !u; if (u) needQR().then(function () { fillQR(n, joinUrl()); }); });
+      var u = pageUrl(), j = joinUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
+      if (su) su.textContent = shortShown() || u; if (off) off.hidden = !!u; if (cb) cb.hidden = !j;
+      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !j; if (j) needQR().then(function () { fillQR(n, j); }); });
       openDialog(dlg, share);
     });
     var cu = $('[data-copy-url]'); if (cu) cu.addEventListener('click', function () { copyText(joinUrl(), '주소를 복사했어요.'); });

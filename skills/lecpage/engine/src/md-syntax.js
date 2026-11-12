@@ -11,7 +11,15 @@ export const CALLOUTS = { note: '참고', tip: '도움말', important: '중요',
 const CALLOUT_ALIAS = { note: 'note', info: 'note', 참고: 'note', 안내: 'note', tip: 'tip', 도움말: 'tip', 팁: 'tip', important: 'important', 중요: 'important', 핵심: 'important', warning: 'warning', caution: 'warning', 주의: 'warning', 유의: 'warning', example: 'example', 예시: 'example', 예시문: 'example', 서식: 'example', 예: 'example' };
 
 const FENCE = /^\s*(```|~~~)/;
-const HEADING = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
+const HEADING = /^\s{0,3}(#{1,6})[^\S\n]+(.*)$/; // 끝의 # 떼기는 headingText에서(정규식으로 하면 빈칸이 길 때 느려짐)
+/** 소제목 글: 끝 빈칸과, 빈칸 뒤에 붙은 닫는 #을 뗀다("C#"의 #은 그대로) */
+function headingText(s) {
+  const t = s.trimEnd();
+  let j = t.length;
+  while (j > 0 && t[j - 1] === '#') j--;
+  const cut = j < t.length && (j === 0 || /\s/.test(t[j - 1])) ? t.slice(0, j).trimEnd() : t;
+  return cut || t;
+}
 const HR = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 const LIST = /^(\s*)(?:([-*+•·▪◦])|(\d{1,3})[.)])\s+(.*)$/;
@@ -51,7 +59,8 @@ export function parseBlocks(src) {
       continue;
     }
     const h = HEADING.exec(line);
-    if (h) { flush(); out.push({ type: 'h', level: h[1].length, text: h[2] }); continue; }
+    const ht = h && headingText(h[2]);
+    if (ht) { flush(); out.push({ type: 'h', level: h[1].length, text: ht }); continue; }
     if (isTableStart(lines, i)) {
       flush();
       const rows = []; let sepAt = -1;

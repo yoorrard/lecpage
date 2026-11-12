@@ -207,7 +207,7 @@ function OpenState({ url, at }) {
  * 짧은 주소: 손으로 칠 때 쓰는 주소. [짧은 주소 만들기] 한 번이면 is.gd에서 만들고, 다른 서비스(joo.is·bit.ly 등)에서 만든 주소를 붙여 넣을 수도 있음.
  * QR과 [주소 복사]는 언제나 원래 주소라서 짧은 주소 서비스가 막히거나 없어져도 사이트는 열림. 근거: docs/research/share-links-2026-11.md
  */
-function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy }) {
+function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, linkOnly }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false); // 다른 방법·바꾸기
@@ -251,6 +251,7 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy }) {
       {short
         ? <p class="small">참가자가 직접 칠 때 알려 주세요. QR과 [주소 복사]는 원래 주소라서 짧은 주소가 막힌 곳에서도 열려요.</p>
         : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
+      {short && linkOnly && <p class="small">짧은 주소는 누구나 짐작해 넣어 볼 수 있어요. 참가자만 봐야 하면 [누가 볼 수 있나요?]에서 암호를 거세요.</p>}
       {stale && <p class="small short-stale"><span>안내문과 발표 화면에는 다시 올려야 {short ? '나와요' : '빠져요'}.</span> <button type="button" class="btn btn-sm" disabled={!!pubBusy} onClick={onRepublish}>다시 올리기</button></p>}
       {err && <p class="small err" role="alert">{err}</p>}
       {open && <div class="short-more">
@@ -319,7 +320,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
-          {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} />}
+          {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={p.blueprint.access?.mode !== 'password' && p.blueprint.access?.mode !== 'public'} />}
           <div class="btn-row">
             <a class="btn btn-sm" href={url + 'poster.html'} target="_blank" rel="noopener">QR 안내문 인쇄(A4)</a>
             <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면 열기</a>

@@ -14,12 +14,12 @@ export function inlineMd(s) {
   let out = esc(String(s ?? '').replace(/\u0000/g, '').replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')); // 그림은 대체 글만
   out = out.replace(/&lt;br\s*\/?&gt;/gi, '\n');
   out = out.replace(/`([^`\n]+)`/g, (m, c) => hold(`<code>${c}</code>`));
-  out = out.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
+  out = out.replace(/\[([^\]\n\u0000]+)\]\(([^)\s\u0000]+)\)/g, (m, t, u) => {
     const ok = safeUrl(u.replace(/&amp;/g, '&'));
     return ok ? hold(`<a ${linkAttrs(ok)}>`) + t + hold('</a>') : t;
   });
   // 주소만 적은 곳도 누를 수 있게(문장 끝 마침표·괄호는 빼고)
-  out = out.replace(/(^|[\s(（])(https?:\/\/[^\s<>"'）)]+[^\s<>"'）).,!?:;])/g, (m, pre, u) => {
+  out = out.replace(/(^|[\s(（])(https?:\/\/[^\s<>"'）)\u0000]+[^\s<>"'）).,!?:;\u0000])/g, (m, pre, u) => {
     const ok = safeUrl(u.replace(/&amp;/g, '&'));
     return ok ? pre + hold(`<a ${linkAttrs(ok)}>${u}</a>`) : m;
   });
