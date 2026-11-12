@@ -317,8 +317,10 @@
     b.appendChild(del);
     // 참여 QR: 파일로 열었거나 미리보기면 주소 대신 안내(meta.siteUrl이 있으면 그 주소). 암호 보호면 #k=를 QR에만 붙임
     var local = /^(file|about|blob|data):$/.test(location.protocol);
-    var u = DATA.siteUrl || (local ? DATA.shortUrl || '' : location.href.split('#')[0].replace(/console\.html.*$/, ''));
-    var ul = $('meta[name="lp-unlock"]'), qu = u ? u.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+    // QR에는 원래 주소만(짧은 주소는 글자로만 — 중간 화면이 있는 서비스에는 #k=가 보임). 파일로 열어 원래 주소를 모르면 짧은 주소를 글자로 보여 줌
+    var site = DATA.siteUrl || (local ? '' : location.href.split('#')[0].replace(/console\.html.*$/, ''));
+    var u = site || (local ? DATA.shortUrl || '' : '');
+    var ul = $('meta[name="lp-unlock"]'), qu = site ? site.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
     var j = el('div', 'lp-row'); j.style.marginTop = '8px'; var q = el('div', 'lp-qr'); q.style.width = '120px'; q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드');
     if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
     else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));

@@ -21,8 +21,10 @@
   // ── 참여 QR·주소(파일로 열었거나 미리보기면 안내 문구, 암호 보호면 #k=는 QR에만) ──
   // 손으로 칠 주소는 강사가 넣은 짧은 주소가 있으면 그것을 크게, 원래 주소는 그 아래 작게. QR은 언제나 원래 주소(짧은 주소 서비스가 멈춰도 열림).
   var LOCAL = /^(file|about|blob|data):$/.test(location.protocol);
-  var joinUrl = DATA.siteUrl || (LOCAL ? DATA.shortUrl || '' : location.href.split('#')[0].replace(/screen\.html.*$/, ''));
-  var ul = $('meta[name="lp-unlock"]'), qrUrl = joinUrl ? joinUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+  // 원래 주소(QR): 파일로 열었으면 모름. 그때 보여 줄 글자만 짧은 주소로(짧은 주소는 QR에 넣지 않음 — 중간 화면이 있는 서비스에는 #k=가 보임)
+  var siteUrl = DATA.siteUrl || (LOCAL ? '' : location.href.split('#')[0].replace(/screen\.html.*$/, ''));
+  var joinUrl = siteUrl || (LOCAL ? DATA.shortUrl || '' : '');
+  var ul = $('meta[name="lp-unlock"]'), qrUrl = siteUrl ? siteUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
   function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
   var fullUrl = bare(joinUrl), shortUrl = bare(DATA.shortUrl); if (!fullUrl || shortUrl === fullUrl) shortUrl = '';
   var qrMarkup = '';
