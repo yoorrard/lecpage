@@ -24,7 +24,7 @@ const ORDER = {
 };
 const LEAD = /^(?:[-•·▪◦●○■□▶▷►➢➤→⇒✓✔☞]\s*|\d{1,2}\s*[.)]\s+|[①-⑳]\s*)/;
 // 연수 목표가 적힌 쪽(제목이 '연수 목표'·'학습 목표'·'이 연수를 마치면' 등)
-const GOAL_TITLE = /^(?:\d{1,2}\s*[.)]\s*)?(?:오늘의\s*|이\s*연수의\s*)?(?:연수|학습|교육|수업)?\s*(?:목표|목적)(?:\s*및\s*내용)?$|^(?:이런\s*(?:것|걸)을?\s*배워요|오늘\s*배울\s*(?:것|내용)|이\s*연수를\s*마치면.*|기대\s*효과)$/;
+const GOAL_TITLE = /^(?:(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]|[가-하])\s*[.)]\s*)?(?:오늘의\s*|이\s*연수의\s*)?(?:연수|학습|교육|수업)?\s*(?:목표|목적)(?:\s*및\s*내용)?$|^(?:이런\s*(?:것|걸)을?\s*배워요|오늘\s*배울\s*(?:것|내용)|이\s*연수를\s*마치면.*|기대\s*효과)$/;
 const GOAL_LINE = /^(?:연수|학습|교육)\s*(?:목표|목적)\s*[:：]\s*(.{6,160})$/;
 const WHO_LINE = /^(?:연수\s*|참가\s*|교육\s*)?대상\s*[:：]\s*(.{2,100})$/;
 const CONTACT_LINE = /^(?:문의|문의처|연락처|담당자?)\s*[:：]\s*(.{4,110})$/;
@@ -33,17 +33,33 @@ const MORE_TITLE = /(참고\s*(?:자료|문헌|사이트|링크)|더\s*(?:알아
 const paraLines = (p) => (p.paragraphs || []).map((x) => normLine(x.text)).filter(Boolean);
 
 /** 교재에 적힌 연수 목표(지어내지 않음): 목표 쪽의 항목, 없으면 "연수 목표: …" 한 줄 */
+const HEAD_LINE = /^(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s*\S/;
+const KO_LEAD = /^[가-하]\s*[.)]\s+/;
 function findGoals(pages, promptKeys) {
   for (const p of pages.slice(0, 12)) {
     if (!GOAL_TITLE.test(normLine(p.title || ''))) continue;
-    const items = paraLines(p).map((t) => t.replace(LEAD, '').trim()).filter((t) => t.length >= 6 && t.length <= 110 && !promptKeys.has(textKey(t)) && !/https?:\/\//.test(t));
+    const items = paraLines(p).map((t) => t.replace(LEAD, '').replace(KO_LEAD, '').trim()).filter((t) => t.length >= 6 && t.length <= 110 && !promptKeys.has(textKey(t)) && !/https?:\/\//.test(t) && !WHO_LINE.test(t));
     if (items.length) return items.slice(0, 5);
   }
-  for (const p of pages.slice(0, 6)) for (const t of paraLines(p)) { const m = GOAL_LINE.exec(t); if (m) return m[1].split(/\s*[;／]\s*/).map((x) => x.trim()).filter((x) => x.length >= 4).slice(0, 5); }
+  // 쪽 안의 소제목("2. 연수 목표") 아래 항목: PDF처럼 제목으로 쪽이 나뉘지 않는 자료
+  for (const p of pages.slice(0, 6)) {
+    const lines = paraLines(p);
+    const i = lines.findIndex((t) => t.length <= 30 && GOAL_TITLE.test(t));
+    if (i < 0) continue;
+    const items = [];
+    for (const t of lines.slice(i + 1)) {
+      if (HEAD_LINE.test(t) && t.length <= 40 && !/[다요]\.?$/.test(t)) break;
+      const x = t.replace(LEAD, '').replace(KO_LEAD, '').trim();
+      if (x.length >= 6 && x.length <= 110 && !promptKeys.has(textKey(x)) && !/https?:\/\//.test(x) && !WHO_LINE.test(x)) items.push(x);
+      if (items.length >= 5) break;
+    }
+    if (items.length) return items;
+  }
+  for (const p of pages.slice(0, 6)) for (const t of paraLines(p)) { const m = GOAL_LINE.exec(t.replace(LEAD, '')); if (m) return m[1].split(/\s*[;／]\s*/).map((x) => x.trim()).filter((x) => x.length >= 4).slice(0, 5); }
   return [];
 }
 function findLine(pages, re) {
-  for (const p of pages) for (const t of [p.title || '', ...paraLines(p)]) { const m = re.exec(normLine(t)); if (m) return truncate(m[1].trim(), 110); }
+  for (const p of pages) for (const t of [p.title || '', ...paraLines(p)]) { const m = re.exec(normLine(t).replace(LEAD, '')); if (m) return truncate(m[1].trim(), 110); }
   return '';
 }
 
@@ -166,7 +182,7 @@ export function materialToDraft(material, info = {}) {
       .map((im) => ({ src: imgSrc(im), caption: im.alt || '' })).filter((im) => im.src).slice(0, 8);
     const title = normLine(g.title) || `실습 ${i + 1}`;
     return {
-      id: `st${i + 1}`, name: truncate(title.replace(/^(실습|활동|미션)\s*\d*\s*[.:)\-–]?\s*/, '') || title, 30), title: truncate(title, 100),
+      id: `st${i + 1}`, name: truncate(title.replace(/^(?:실습|활동|미션)(?:\s*\d+\s*[.:)\-–]?\s*|\s*[.:)\-–]\s*|\s+(?=\S))/, '') || title, 30), title: truncate(title, 100),
       tag: g.section ? truncate(g.section.label || '', 16) : '', desc: truncate(desc, 300),
       steps, prompts: prompts.map((x, k) => ({ title: x.title || (prompts.length > 1 ? `프롬프트 ${k + 1}` : '프롬프트'), text: x.text })),
       images, links, outcome: '', note: truncate(note, 400), minutes: 0, source: { file, pages: nums },
@@ -215,6 +231,12 @@ export function materialToDraft(material, info = {}) {
     meta.sessions = dates.map((date, i) => ({ no: i + 1, date, start: '', end: '', title: '' }));
     const titles = (d.sections || []).length === dates.length ? d.sections.map((x) => x.title) : (d.agenda?.items || []).length === dates.length ? d.agenda.items.map((x) => x.text) : [];
     if (titles.length) S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: dates.map((date, i) => ({ no: i + 1, date, title: titles[i], desc: '', links: [] })) };
+  }
+
+  // 교재의 차시표("1차시 1. 11.(월) 주제"): 날짜가 없어도 번호·주제는 그대로
+  if (!S.sessions && (d.sessions || []).length >= 2) {
+    S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: d.sessions.map((x) => ({ no: x.no, date: x.date || '', title: x.title, desc: x.desc || '', links: [] })), source: { file: d.sessions[0].file, pages: [...new Set(d.sessions.map((x) => x.page))] } };
+    if (d.sessions.every((x) => x.date)) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
   }
 
   // 일정(교재에 시간이 적혀 있을 때만)
@@ -312,7 +334,7 @@ export function materialToDraft(material, info = {}) {
   const sections = order.map((k) => S[k]).filter(Boolean).map((s) => { if (s.source === undefined) delete s.source; return s; });
 
   const audience = {
-    type: info.audience?.type || 'teachers', size: info.size || info.audience?.size || 30, level: info.level || info.audience?.level || 'beginner',
+    type: info.audience?.type || 'teachers', size: info.size || info.audience?.size || ev.size || 30, level: info.level || info.audience?.level || 'beginner',
     devices: info.audience?.devices || ['laptop'], network: info.audience?.network || 'good', blocked: info.audience?.blocked || [],
     projector: info.audience?.projector ?? true, minor: !!info.audience?.minor,
   };

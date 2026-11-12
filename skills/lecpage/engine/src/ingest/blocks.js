@@ -17,7 +17,29 @@ function pseudoLevel(b) {
   return null;
 }
 
-export function blocksToPages(blocks, { fileId, unit = 'section', maxPages = 1000, chunk = 25 } = {}) {
+/**
+ * 한 칸짜리 표는 표가 아니라 '상자에 넣은 글'이다(한글 문서의 제목 상자·강조 상자).
+ * 문서 맨 앞의 짧은 한 줄이면 문서 제목(heading 0), 그 밖에는 보통 문단으로 바꾼다.
+ */
+function unboxSingleCellTables(blocks) {
+  let seenText = false;
+  const out = [];
+  for (const b of blocks) {
+    if (b.type === 'table' && b.rows?.length === 1 && b.rows[0].length === 1 && b.rows[0][0]) {
+      const lines = String(b.rows[0][0]).split('\n').map((t) => normLine(t)).filter(Boolean);
+      if (!seenText && lines.length === 1 && lines[0].length <= 80) out.push({ type: 'p', text: lines[0], level: 0, heading: 0, links: [], images: [], boxed: true });
+      else for (const text of lines) out.push({ type: 'p', text, level: 0, heading: null, role: 'text', links: [], images: [], boxed: true });
+      seenText = true;
+      continue;
+    }
+    if (b.type === 'p' && b.text) seenText = true;
+    out.push(b);
+  }
+  return out;
+}
+
+export function blocksToPages(blocks0, { fileId, unit = 'section', maxPages = 1000, chunk = 25 } = {}) {
+  const blocks = unboxSingleCellTables(blocks0);
   const ps = blocks.filter((b) => b.type === 'p' && b.text);
   const heads = ps.filter((b) => b.heading !== null && b.heading !== undefined);
   const h1 = heads.filter((b) => b.heading <= 1).length;

@@ -21,6 +21,7 @@ export function parseDocx(zip, ctx) {
   const tally = new StyleTally();
   const fontRoles = new FontRoles();
   const c = { ...ctx, zip, rels, styles, numbering, tally, theme, fontRoles, imgSeq: 0, counters: new Map(), unsupportedExt: new Set() };
+  c.notes = { footnote: readNotes(zip.xml(relTarget(rels, 'footnotes', 'word/footnotes.xml')), 'footnote'), endnote: readNotes(zip.xml(relTarget(rels, 'endnotes', 'word/endnotes.xml')), 'endnote') };
 
   const blocks = [];
   walkBody(body, c, blocks);
@@ -189,6 +190,13 @@ function readRun(r, c, st) {
         break;
       }
       case 'instrText': if (st.field) st.field.instr += textOf(n); break;
+      case 'footnoteReference': case 'endnoteReference': {
+        // 각주·미주: 본문 문단 바로 뒤에 "(각주) …" 문단으로
+        const kind = n.local === 'footnoteReference' ? 'footnote' : 'endnote';
+        const text = c.notes?.[kind]?.get(attr(n, 'id'));
+        if (text) st.extra.push({ type: 'p', text: `(${kind === 'footnote' ? '각주' : '미주'}) ${text}`, level: 0, heading: null, role: 'text', links: [], images: [] });
+        break;
+      }
       case 'drawing': case 'pict': case 'object': readDrawing(n, c, st); break;
       case 'AlternateContent': {
         const ch = kid(n, 'Choice') || kid(n, 'Fallback');
@@ -233,6 +241,19 @@ function addImg(c, st, relId, alt) {
   if (alt) im.alt = alt;
   if (!WEB_IMAGE.has(ext)) im.web = false;
   st.images.push(im);
+}
+
+/** word/footnotes.xml·endnotes.xml → id별 글(구분선 각주는 뺌) */
+function readNotes(doc, local) {
+  const map = new Map();
+  if (!doc) return map;
+  for (const fn of all(doc, local)) {
+    const type = attr(fn, 'type');
+    if (type && type !== 'normal') continue; // separator, continuationSeparator
+    const text = normText(all(fn, 'p').map((p) => all(p, 't').map((t) => textOf(t)).join('')).filter(Boolean).join(' '));
+    if (text) map.set(attr(fn, 'id'), text);
+  }
+  return map;
 }
 
 function readStyles(doc) {
