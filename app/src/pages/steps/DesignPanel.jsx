@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Field, Seg } from '../../components/ui.jsx';
 import { TASTES, inTaste, mixOrder, recommend } from '../../lib/tastes.js';
 import { E } from '../../lib/engine.js';
@@ -6,8 +6,14 @@ import { SiteThumb } from '../../components/SiteThumb.jsx';
 import { FxGallery } from '../../components/FxGallery.jsx';
 import { Dialog } from '../../components/ui.jsx';
 import { isAdvanced } from './Content.jsx';
+import { pushUndoFor, popUndo, undoStack } from '../../lib/undo.js';
+import { toast } from '../../lib/util.js';
+import { SayFix, changesLine } from '../../design-words/SayFix.jsx';
+import { applyWords, variantOptions, currentVariant, hasVariants, typeKo, LEAD_KO, MOTION_KO } from '../../design-words/words.js';
+import { useBus, setTry, setLabels, focusSection } from '../../design-words/bus.js';
+import { useBasket } from '../../design-words/basket.js';
 
-const MOTION = ['정적', '차분하게', '보통', '스크롤 연출'];
+const MOTION = MOTION_KO;
 const MOTION_DESC = ['움직임 없이 깔끔하게 보여 줘요.', '섹션이 나타날 때만 살짝 움직여요.', '제목·숫자·배경이 은은하게 움직여요.', '스크롤에 맞춰 장면이 바뀌어요(스크롤텔링·패럴랙스·고정 장면).'];
 const loadedFonts = new Set();
 function useFontCss(urls) {
@@ -45,7 +51,32 @@ export function DesignPanel({ p, update }) {
   const d = bp.design || {};
   const concept = bp.concept || E.deriveConcept({ title: bp.meta?.title, subtitle: bp.meta?.subtitle, topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind });
   const ranked = useMemo(() => recommend(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), (id) => !!E.getPreset(id).showcase, 4, concept.preset), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary, concept.preset]);
-  const setD = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } }));
+  const latest = useRef(p); latest.current = p;
+  /** 되돌리기에 남기고 바꿈(고르는 것은 모두 [되돌리기]로 돌아갈 수 있게) */
+  const remember = (label) => pushUndoFor(p.id, label, latest.current);
+  const setD = (patch, label) => { if (label) remember(label); update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } })); };
+  // 말로 고치기: 적용 · 되돌리기 · 크게 비교
+  const [applied, setApplied] = useState('');
+  const bus = useBus(p.id);
+  useEffect(() => () => { setTry(p.id, null); setLabels(p.id, false); }, [p.id]);
+  const applyFix = (f) => {
+    remember(`말로 고치기: ${f.title}`);
+    update((cur) => ({ blueprint: applyWords(cur.blueprint, f.ids) }));
+    setApplied(f.key); setTry(p.id, null);
+    if (f.focus) focusSection(p.id, f.focus);
+  };
+  const undoFix = () => {
+    const st = undoStack(p.id); const top = st[st.length - 1];
+    if (!top || !/^말로 고치기: /.test(top.label)) { toast('위쪽의 [되돌리기]를 눌러 주세요.'); return; }
+    const v = popUndo(p.id); update({ blueprint: v.blueprint, info: v.info }); setApplied(''); toast(`되돌렸어요: ${v.label.replace(/^말로 고치기: /, '')}`);
+  };
+  const tryFix = (f) => {
+    if (!f) { setTry(p.id, null); return; }
+    setTry(p.id, { key: f.key, bp: applyWords(latest.current.blueprint, f.ids), label: f.title, focus: f.focus, apply: () => applyFix(f) });
+    // 미리보기가 위에 있는 좁은 화면: 비교 화면이 보이게 올림
+    const pv = document.querySelector('.workspace .preview');
+    if (pv && pv.getBoundingClientRect().bottom < 80) pv.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
   const others = mixOrder(E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id)));
   const graphics = E.FX.filter((f) => (f.slots || []).includes('hero.graphic'));
@@ -56,35 +87,38 @@ export function DesignPanel({ p, update }) {
   const whyText = (r) => (r.concept ? `컨셉 '${concept.motif || concept.idea}'에 맞춘 디자인` : (r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
+      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="찾는 것이 없으면 [수정 요청] 탭에 적어 AI에게 맡겨요." />
+      <BasketNote update={update} remember={remember} />
       <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
       <div class="field"><span>추천 디자인</span>
-        <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' })} />)}</div>
+        <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' }, `디자인 ${E.getPreset(r.id).name_ko}`)} />)}</div>
       </div>
       <details>
         <summary>다른 디자인 {others.length}가지 더 보기</summary>
         <div style={{ marginTop: '10px' }}><Seg label="분위기" value={taste} onChange={setTaste} options={TASTES} /></div>
-        <div class="thumbs" style={{ marginTop: '10px' }}>{others.filter((pr) => inTaste(pr, taste)).map((pr) => <Thumb preset={pr} bp={bp} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' })} />)}</div>
+        <div class="thumbs" style={{ marginTop: '10px' }}>{others.filter((pr) => inTaste(pr, taste)).map((pr) => <Thumb preset={pr} bp={bp} pressed={d.preset === pr.id} onPick={() => setD({ preset: pr.id, seed: '' }, `디자인 ${pr.name_ko}`)} />)}</div>
       </details>
+      <BodyWords p={p} update={update} remember={remember} labels={bus.labels} />
       <FontPicker d={d} resolved={resolved} setD={setD} title={title} />
-      <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v })} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>
-      <Field label="페이지 연출" hint={`${MOTION_DESC[d.motion ?? resolved.motion]} ${resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분하게 유지돼요.'}`}>
-        <Seg label="페이지 연출" value={String(d.motion ?? resolved.motion)} onChange={(v) => setD({ motion: +v })} options={MOTION.map((label, i) => ({ value: String(i), label }))} />
+      <Field label="밝기"><Seg label="밝기" value={d.theme || 'preset'} onChange={(v) => setD({ theme: v }, '밝기')} options={[{ value: 'preset', label: '디자인대로' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }, { value: 'auto', label: '기기 설정 따라' }]} /></Field>
+      <Field label="움직임" hint={`${MOTION_DESC[d.motion ?? resolved.motion]} ${resolved._notes?.find((n) => /크롬북|네트워크|공식/.test(n)) || '실습·질문 화면은 늘 차분해요.'}`}>
+        <Seg label="움직임" value={String(d.motion ?? resolved.motion)} onChange={(v) => setD({ motion: +v }, `움직임 ${MOTION[+v]}`)} options={MOTION.map((label, i) => ({ value: String(i), label }))} />
       </Field>
-      <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) })}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 효과 조합만 바꿔요. <a href="#/gallery" target="_blank" rel="noopener">디자인·효과 둘러보기</a></span></div>
+      <div class="btn-row"><button class="btn btn-sm" onClick={() => setD({ seed: Math.random().toString(36).slice(2, 7) }, '다시 뽑기')}>다른 느낌으로 다시 뽑기</button><span class="small muted">내용은 그대로, 효과 조합만 바꿔요. <a href="#/gallery" target="_blank" rel="noopener">디자인 낱말 사전</a></span></div>
       <details>
         <summary>더 바꾸기: 색·기관 색·첫 화면 그래픽</summary>
         <div class="stack" style={{ marginTop: '12px' }}>
           <Field label="색 조합" hint="모양과 움직임은 그대로, 색만 바꿔요. 모두 글자가 잘 보이는 조합이에요.">
             <div class="stack" style={{ gap: '8px' }}>
               <div class="chips">
-                <button class="chip" aria-pressed={String(!d.palette)} onClick={() => setD({ palette: '' })}>디자인 기본 색</button>
+                <button class="chip" aria-pressed={String(!d.palette)} onClick={() => setD({ palette: '' }, '색 조합')}>디자인 기본 색</button>
                 {topPalettes(d).map((s) => (
-                  <button class="chip" aria-pressed={String(d.palette === s.id)} onClick={() => setD({ palette: s.id })}>
+                  <button class="chip" aria-pressed={String(d.palette === s.id)} onClick={() => setD({ palette: s.id }, `색 조합 ${s.name_ko}`)}>
                     <span aria-hidden="true" class="dots">{[s.light.background, s.light.primary, s.light.accent].map((c) => <i style={{ background: c }} />)}</span>{s.name_ko}
                   </button>
                 ))}
               </div>
-              <select value={d.palette || ''} onChange={(e) => setD({ palette: e.target.value })} aria-label="모든 색 조합">
+              <select value={d.palette || ''} onChange={(e) => setD({ palette: e.target.value }, '색 조합')} aria-label="모든 색 조합">
                 <option value="">모든 색 조합 {E.PALETTE_SEEDS.length}가지에서 고르기</option>
                 {E.PALETTE_SEEDS.map((s) => <option value={s.id}>{s.name_ko}</option>)}
               </select>
@@ -98,7 +132,7 @@ export function DesignPanel({ p, update }) {
             <small>글자가 잘 보이게 밝기를 자동으로 맞춰요.</small>
           </div>
           <Field label="첫 화면 그래픽">
-            <select value={d.graphic === undefined ? '' : d.graphic === '' ? 'none' : d.graphic} onChange={(e) => setD({ graphic: e.target.value === '' ? undefined : e.target.value === 'none' ? '' : e.target.value })}>
+            <select value={d.graphic === undefined ? '' : d.graphic === '' ? 'none' : d.graphic} onChange={(e) => setD({ graphic: e.target.value === '' ? undefined : e.target.value === 'none' ? '' : e.target.value }, '첫 화면 그래픽')}>
               <option value="">{`디자인 기본${resolved.graphic ? `(${E.FX.find((f) => f.id === resolved.graphic)?.name_ko || resolved.graphic})` : ''}`}</option>
               {graphics.map((g) => <option value={g.id}>{g.name_ko}{g.level >= 3 ? ' (화려)' : ''}</option>)}
               <option value="none">그래픽 없음</option>
@@ -115,7 +149,7 @@ export function DesignPanel({ p, update }) {
       </details>
       <Dialog open={fxOpen} onClose={() => setFxOpen(false)} label="대표 효과 고르기" wide>
         {fxOpen && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">대표 효과 고르기</h2><p class="small muted">카드를 누르면 크게 보고 고를 수 있어요.</p></div>
-          <FxGallery only={(f) => f.level >= 2} picked={d.signature || resolved.signature} onUse={(f) => { setD({ signature: f.id }); setFxOpen(false); }} /></div>}
+          <FxGallery only={(f) => f.level >= 2} picked={d.signature || resolved.signature} onUse={(f) => { setD({ signature: f.id }, `대표 효과 ${f.name_ko}`); setFxOpen(false); }} /></div>}
       </Dialog>
     </div>
   );
@@ -136,7 +170,7 @@ function ConceptCard({ bp, concept, update, setD }) {
       <p class="concept-why">{concept.motif && <b>모티프: {concept.motif}</b>}{concept.motif && concept.why ? ' · ' : ''}{concept.why}</p>
       <div class="btn-row">
         <button type="button" class="btn btn-sm" aria-expanded={String(edit)} onClick={() => setEdit(!edit)}>컨셉 고치기</button>
-        {lead && <button type="button" class="btn btn-sm" onClick={() => setD({ preset: lead.id, seed: '' })}>컨셉에 맞춘 디자인 쓰기: {lead.name_ko}</button>}
+        {lead && <button type="button" class="btn btn-sm" onClick={() => setD({ preset: lead.id, seed: '' }, `디자인 ${lead.name_ko}`)}>{lead.name_ko} 쓰기</button>}
         {concept.source !== 'auto' && <button type="button" class="btn btn-sm btn-quiet" onClick={reset}>주제에서 다시 세우기</button>}
       </div>
       {edit && <div class="stack" style={{ gap: '10px' }}>
@@ -167,7 +201,7 @@ function FontPicker({ d, resolved, setD, title }) {
   const card = (key, name, disp, body, pressed, onPick, note) => (
     <button type="button" class="font-card" aria-pressed={String(pressed)} onClick={onPick} key={key}>
       <span class="fc-title" style={{ fontFamily: disp.family, fontWeight: disp.weight || 700 }}>{sample}</span>
-      <span class="fc-body" style={{ fontFamily: body.family }}>오늘 배운 것을 내일 수업에 바로 씁니다.</span>
+      <span class="fc-body" style={{ fontFamily: body.family }}>오늘 배운 것을 내일 수업에 바로 써요.</span>
       <span class="fc-cap"><b>{name}</b>{note && <small>{note}</small>}</span>
     </button>
   );
@@ -177,10 +211,10 @@ function FontPicker({ d, resolved, setD, title }) {
     <div class="field"><span>글꼴</span>
       <SourceFonts d={d} resolved={resolved} setD={setD} />
       <div class="font-cards" role="group" aria-label="글꼴 고르기">
-        {card('auto', autoName, { family: stackOf(auto.display), weight: E.FONTS[auto.display]?.displayWeight || auto.displayWeight }, { family: stackOf(auto.body) }, !d.fontPair, () => setD({ fontPair: '' }), [...new Set([label(auto.display), label(auto.body)])].join(' · '))}
-        {list.map((f) => card(f.id, f.name_ko, { family: f.display.stack || `'${f.display.family}', sans-serif`, weight: f.display.weight }, { family: f.body.stack || `'${f.body.family}', sans-serif` }, d.fontPair === f.id, () => setD({ fontPair: f.id }), [...new Set([f.display.family, f.body.family])].join(' · ')))}
+        {card('auto', autoName, { family: stackOf(auto.display), weight: E.FONTS[auto.display]?.displayWeight || auto.displayWeight }, { family: stackOf(auto.body) }, !d.fontPair, () => setD({ fontPair: '' }, '글꼴'), [...new Set([label(auto.display), label(auto.body)])].join(' · '))}
+        {list.map((f) => card(f.id, f.name_ko, { family: f.display.stack || `'${f.display.family}', sans-serif`, weight: f.display.weight }, { family: f.body.stack || `'${f.body.family}', sans-serif` }, d.fontPair === f.id, () => setD({ fontPair: f.id }, `글꼴 ${f.name_ko}`), [...new Set([f.display.family, f.body.family])].join(' · ')))}
       </div>
-      <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value })} aria-label="모든 글꼴 조합">
+      <select value={d.fontPair || ''} onChange={(e) => setD({ fontPair: e.target.value }, '글꼴')} aria-label="모든 글꼴 조합">
         <option value="">모든 글꼴 조합 {E.FONT_PAIRS.length}가지에서 고르기</option>
         {E.FONT_PAIRS.map((f) => <option value={f.id}>{f.name_ko} — {f.note_ko}</option>)}
       </select>
@@ -207,5 +241,60 @@ function SourceFonts({ d, resolved, setD }) {
       {usable ? <Seg label="교재 글꼴" value={mode === 'pair' ? '' : mode} onChange={(v) => setD({ fontFrom: v, fontPair: '' })} options={[{ value: 'material', label: '교재 글꼴 따르기' }, { value: 'preset', label: '디자인 글꼴' }]} />
         : mode !== 'pair' && <small class="muted">교재가 프로그램 기본 글꼴(맑은 고딕 등)이라 디자인에 맞춘 글꼴을 써요.</small>}
     </div>
+  );
+}
+
+/** 갤러리(낱말 사전)에서 담아 둔 낱말: 이 연수에 한 번에 적용 */
+function BasketNote({ update, remember }) {
+  const [ids, setIds] = useBasket();
+  if (!ids.length) return null;
+  const apply = () => { remember('담은 낱말 적용'); update((cur) => ({ blueprint: applyWords(cur.blueprint, ids) })); setIds([]); toast('담은 낱말을 적용했어요. 마음에 안 들면 [되돌리기]를 누르세요.'); };
+  return (
+    <div class="word-note" role="region" aria-label="담아 둔 낱말">
+      <p><b>디자인 둘러보기에서 담은 낱말</b><br />{changesLine(ids)}</p>
+      <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={apply}>모두 적용하기</button><button type="button" class="btn btn-sm btn-quiet" onClick={() => setIds([])}>비우기</button></div>
+    </div>
+  );
+}
+
+/** 본문 배치: 섹션마다 지금 배치와 쓸 수 있는 다른 배치. 바꾸면 미리보기가 그 섹션으로 옮겨 가요 */
+function BodyWords({ p, update, remember, labels }) {
+  const bp = p.blueprint;
+  const v = useMemo(() => E.validate(bp).blueprint, [bp]);
+  const rows = useMemo(() => (v.sections || []).filter((s) => hasVariants(s.type)).map((s) => {
+    const cur = currentVariant(v, s); const opts = variantOptions(v, s);
+    return { s, cur, opts, plan: opts.find((o) => o.plan) };
+  }).filter((r) => r.opts.length > 1), [v]);
+  if (!rows.length) return null;
+  const set = (s, val, name) => {
+    remember(`${typeKo(s.type)} 배치`);
+    update((cur) => ({ blueprint: { ...cur.blueprint, sections: cur.blueprint.sections.map((x) => (x.id === s.id ? { ...x, layout: val || undefined } : x)) } }));
+    focusSection(p.id, s.id);
+    if (name) toast(`${typeKo(s.type)}: ${name}`);
+  };
+  return (
+    <details class="body-words">
+      <summary>본문 배치 <span class="small muted">섹션 {rows.length}곳</span></summary>
+      <p class="small muted" style={{ marginTop: '8px' }}>섹션마다 그리는 모양을 바꿔요. 내용에 맞는 배치만 보여요.</p>
+      <label class="check" style={{ marginTop: '6px' }}><input type="checkbox" checked={labels} onChange={(e) => setLabels(p.id, e.currentTarget.checked)} /><span>미리보기에 배치 이름 보기</span></label>
+      <ul class="bw-list">
+        {rows.map(({ s, cur, opts, plan }) => {
+          const own = typeof s.layout === 'string' && opts.some((o) => o.v === s.layout.split('@')[0]) ? s.layout.split('@')[0] : '';
+          const now = opts.find((o) => o.v === (own || cur.variant));
+          const label = `${typeKo(s.type)}${s.title ? ` · ${String(s.title).slice(0, 14)}` : ''}`;
+          return (
+            <li>
+              <span class="bw-sec">{typeKo(s.type)}</span>
+              <select aria-label={`${label} 배치`} value={own} onChange={(e) => { const val = e.currentTarget.value; set(s, val, val ? opts.find((o) => o.v === val)?.name : ''); }}>
+                <option value="">디자인 기본{plan ? `: ${plan.name}` : ''}</option>
+                {opts.map((o) => <option value={o.v}>{o.name} · {LEAD_KO[o.lead]}</option>)}
+              </select>
+              <button type="button" class="btn btn-sm btn-quiet" onClick={() => focusSection(p.id, s.id)} aria-label={`${label} 미리보기에서 보기`}>보기</button>
+              {now && <small>{now.when}</small>}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
