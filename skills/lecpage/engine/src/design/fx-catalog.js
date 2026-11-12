@@ -363,6 +363,18 @@ export const FX = [
     desc_ko: '연수 제목으로 그린 그림 한 장. 돌 두세 개를 돌아 흐르는 물결 선이 천천히 일렁이고, 마우스를 올리면 그 자리가 돌이 되어 물결이 비켜 흘러요. 같은 제목이면 늘 같은 그림이에요.',
     use_ko: '첫 화면 구성 \'돌과 물결\'이 액자로 그리고, 다른 첫 화면에서는 오른쪽에 꾸밈으로 놓입니다. 색은 디자인의 글자색·주색·강조색.',
     a11y_ko: '서버가 그린 정지 그림 위에 같은 그림을 얹습니다. 동작 줄이기·저사양은 정지 그림 그대로, 화면 밖·멈춤에서는 쉽니다. 꾸밈이라 화면 낭독기에 숨깁니다.' },
+  { id: 'arc-ripple', name_ko: '번지는 파문', name_en: 'Arc ripple', group: 'graphic', loop: true,
+    slots: ['hero.graphic', 'closing.graphic'], moods: ['emotional', 'calm', 'warm', 'natural'], topics: ['sel', 'counseling', 'parent', 'environment', 'general'],
+    level: 2, libs: [], license: MIT, trend: 'up', weightKB: 3.6,
+    desc_ko: '물결 고리 세 벌이 제 자리에서 번지며 서로 겹쳐요. 마우스 쪽으로 가운데 물결이 살짝 끌리고, 누른 자리에서 새 물결이 한 번 번져요. 물결 자리는 연수 제목에서 나와 같은 제목이면 늘 같아요.',
+    use_ko: '첫 화면 구성 \'번지는 파문\'이 화면 가득 그립니다(글은 가운데 축). 색은 디자인의 주색·강조색.',
+    a11y_ko: '서버가 그린 정지 그림의 고리를 그대로 움직입니다. 동작 줄이기·저사양은 정지 그림 그대로, 화면 밖·멈춤에서는 쉽니다. 꾸밈이라 화면 낭독기에 숨깁니다.' },
+  { id: 'minute-map', name_ko: '시간 점묘', name_en: 'Minute map', group: 'graphic',
+    slots: ['hero.graphic'], moods: ['tech', 'minimal', 'formal', 'editorial'], topics: ['data', 'edutech', 'admin', 'science', 'conference'],
+    level: 1, libs: [], license: MIT, trend: 'up', weightKB: 3.1,
+    desc_ko: '연수의 1분이 점 하나. 화면에 들어오면 점이 시간 순서대로 켜지고, 일정 줄이나 점을 가리키면 그 순서의 점만 또렷해져요. 연수 날 그 시간에는 지금 분의 점에 테가 생겨요.',
+    use_ko: '첫 화면 구성 \'시간 점묘\'가 일정으로 그립니다(일정이 없으면 차례·실습을 한 줄씩). 움직임은 켜질 때 한 번뿐이라 공식 연수(차분 단계)에서도 씁니다.',
+    a11y_ko: '점은 꾸밈이고 옆 목록이 같은 내용의 글입니다. 가리킴은 포인터와 키보드 초점 모두에 반응합니다. 동작 줄이기에서는 켜지는 움직임 없이 완성된 모습.' },
 
   // ───────── 라이브러리(강도 3, 지연 로드) ─────────
   { id: 'smooth-scroll', name_ko: '부드러운 휠 스크롤', name_en: 'Smooth scroll (Lenis)', group: 'lib',

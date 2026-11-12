@@ -174,5 +174,7 @@ export function htmlAttrs(design = {}) {
     'data-motion': String(design.motion ?? preset.motion),
     'data-hero': v.hero, 'data-card': v.card, 'data-nav': v.nav, 'data-btn': v.btn, 'data-heading': v.heading,
     'data-head': v.head || 'chapter', 'data-band': v.band || 'tint',
+    // 본문 정렬 문법(왼쪽이 기본이라 왼쪽이면 속성을 두지 않음)
+    ...(v.align && v.align !== 'left' ? { 'data-align': v.align } : {}),
   };
 }

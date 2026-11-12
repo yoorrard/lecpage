@@ -5,6 +5,9 @@
 // variants.hero = 첫 화면 구성(render/hero.js). 프리셋마다 뼈대가 다릅니다(같은 구성을 두 프리셋이 쓰지 않음):
 //   cinema · worksheet · bento · poster · quiet · brief · masthead · sticker · board · spec · zine · invite · keynote · panel · soft · ticker · column
 //   살아 있는 첫 화면(쇼케이스): collage · dial · orbit · stream — 그림은 서버가 정지 모습으로 그리고, graphic에 적은 효과가 움직임·반응을 더함
+//   배치가 다른 첫 화면(render/hero-graphic.js): ripple(가운데) · minutes(자료 그림) · mosaic(반반 화면) · cover(그림 가득) · vertical(세로쓰기·오른쪽) · offset(어긋난 격자)
+// layout = 글 배치 문법(왼쪽 left가 기본): center · right · offset · split · cover · data. 앱 갤러리가 첫 줄부터 여러 배치가 보이게 섞는 데 씀
+// variants.align = 본문 정렬 문법(<html data-align>, runtime/lecpage.css '본문 정렬 문법'): left(기본) · center · right · offset · split · ledger
 // fonts = 제목(display)·본문(body)·숫자와 영문 제목(num, 라틴)·고정폭(mono) 글꼴(design/fonts.js 키). 한글 2종 + 라틴. 본문 Pretendard 계열은 종이 워크북·공식 브리핑 두 곳뿐.
 // fontAlts = 주제·분위기가 맞을 때만 고르는 대안 글꼴(decide/design.js chooseFonts).
 // signature = 대표 효과 하나. signatureIn:'hero'면 첫 화면 구성이 직접 씁니다(다른 칸에 따로 붙이지 않음).
@@ -309,6 +312,91 @@ export const PRESETS = [
     variants: { hero: 'stream', head: 'chapter', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: 'stream-lines', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+  },
+  // ── 2026-11 추가: 배치가 다른 디자인(왼쪽 정렬이 아닌 문법). 첫 화면뿐 아니라 본문의 정렬·구분선·번호·그림 다루기까지 같은 문법(variants.align) ──
+  {
+    id: 'ripple-center', name_ko: '번지는 파문', name_en: 'Ripple Center',
+    desc_ko: '모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에.',
+    moods: ['emotional', 'calm', 'warm'], topics: ['sel', 'counseling', 'parent', 'environment', 'general'],
+    archetypes: ['story', 'live', 'course'], theme: 'light', motion: 2, layout: 'center',
+    fonts: { display: 'gowunDodum', body: 'nanumBarun', num: 'fraunces', mono: 'plexMono', displayWeight: 400 },
+    fontAlts: [{ display: 'maruburi', body: 'nanumBarun', displayWeight: 700, topics: ['counseling', 'parent'] }],
+    light: { bg: '#f1f5f4', fg: '#12262b', card: '#ffffff', muted: '#4d6168', primary: '#0f6a73', primaryFg: '#ffffff', accent: '#e8734a', accent2: '#6f8fd6', accent3: '#b9d9d3', heroFrom: '#d3e9e5', heroTo: '#f1f5f4' },
+    dark: { bg: '#0c1a1e', fg: '#e9f2f0', card: '#132830', muted: '#a3b8b8', primary: '#7fd6cf', primaryFg: '#06201f', accent: '#ff9a76', accent2: '#9db5ff', accent3: '#2d5a5c', heroFrom: '#14393d', heroTo: '#0c1a1e' },
+    shape: { radius: 20, radiusSm: 12, radiusLg: 28, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'ripple', head: 'kicker', band: 'tint', card: 'soft', nav: 'pill', btn: 'pill', heading: 'display', tones: false, align: 'center' },
+    graphic: 'arc-ripple', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+  },
+  {
+    id: 'minute-map', name_ko: '시간 점묘', name_en: 'Minute Map',
+    desc_ko: '연수의 1분이 점 하나. 순서마다 제 색으로 찍힌 점 지도가 첫 화면에. 일정에 마우스를 올리면 그 시간의 점만 또렷해져요. 본문은 왼쪽에 고정폭 이름표를 둔 장부 격자. 데이터·평가·연구 연수에.',
+    moods: ['tech', 'minimal', 'formal'], topics: ['data', 'edutech', 'admin', 'science', 'conference'],
+    archetypes: ['lab', 'course', 'live'], theme: 'light', motion: 1, layout: 'data',
+    fonts: { display: 'nanumSquare', body: 'spoqa', num: 'jetbrains', mono: 'jetbrains', displayWeight: 800 },
+    fontAlts: [{ display: 'elice', body: 'spoqa', displayWeight: 700, topics: ['coding'] }],
+    light: { bg: '#f6f5f1', fg: '#16181d', card: '#ffffff', muted: '#575b66', primary: '#16181d', primaryFg: '#ffffff', accent: '#2f54eb', accent2: '#e4572e', accent3: '#f0b429', heroFrom: '#e6e9f8', heroTo: '#f6f5f1' },
+    dark: { bg: '#0f1116', fg: '#eef0f5', card: '#181b23', muted: '#a9aebb', primary: '#eef0f5', primaryFg: '#0f1116', accent: '#8aa2ff', accent2: '#ff8a65', accent3: '#ffd166', heroFrom: '#1a2040', heroTo: '#0f1116' },
+    shape: { radius: 4, radiusSm: 2, radiusLg: 8, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'minutes', head: 'index', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'ledger' },
+    graphic: 'minute-map', closingGraphic: '', signature: '', showcase: true,
+    effects: { numbers: 'counter', progress: 'guided-progress' },
+  },
+  {
+    id: 'mosaic-split', name_ko: '도형 모자이크', name_en: 'Mosaic Split',
+    desc_ko: '화면을 반으로 나눠 한쪽은 제목에서 나온 도형 타일 그림, 한쪽은 글. 타일은 저마다 돌고, 마우스를 올리면 돌아가요. 본문도 머리 왼쪽·내용 오른쪽의 두 단. 미술·수학·메이커·창의 연수에.',
+    moods: ['playful', 'bold', 'editorial'], topics: ['art', 'math', 'maker', 'elementary', 'club', 'play'],
+    archetypes: ['story', 'lab', 'course'], theme: 'light', motion: 2, layout: 'split',
+    fonts: { display: 'doHyeon', body: 'nanumGothic', num: 'outfit', mono: 'spaceGrotesk', displayWeight: 400 },
+    fontAlts: [{ display: 'jua', body: 'nanumGothic', displayWeight: 400, topics: ['elementary', 'play'] }],
+    light: { bg: '#f6f2ea', fg: '#1d1a26', card: '#fffdf8', muted: '#5a5566', primary: '#5b34c9', primaryFg: '#ffffff', accent: '#f0624a', accent2: '#f4bf2a', accent3: '#2fb390', heroFrom: '#e7defb', heroTo: '#f6f2ea' },
+    dark: { bg: '#15121d', fg: '#f3effa', card: '#1f1b2b', muted: '#b6aeca', primary: '#b39cff', primaryFg: '#170d33', accent: '#ff8a73', accent2: '#ffd257', accent3: '#5fd9b7', heroFrom: '#2a1f55', heroTo: '#15121d' },
+    shape: { radius: 0, radiusSm: 0, radiusLg: 0, borderW: 2, shadow: 'flat' },
+    variants: { hero: 'mosaic', head: 'tab', band: 'accent', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'split' },
+    graphic: '', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+  },
+  {
+    id: 'cover-sheet', name_ko: '표지 한 장', name_en: 'Cover Sheet',
+    desc_ko: '그림이 화면 위쪽을 가득 채우고 제목 판이 그림에 걸쳐요. 교재 첫 쪽 그림이 있으면 그 그림, 없으면 제목 첫 글자를 크게 자른 포스터. 본문 섹션마다 큰 첫 글자가 뒤에 깔려요. 교재·발표 자료가 얼굴인 연수에.',
+    moods: ['bold', 'editorial', 'minimal'], topics: ['general', 'korean', 'history', 'career', 'edutech', 'reading'],
+    archetypes: ['story', 'course', 'live'], theme: 'light', motion: 2, layout: 'cover',
+    fonts: { display: 'gmarket', body: 'gowunDodum', num: 'bricolage', mono: 'jetbrains', displayWeight: 700 },
+    fontAlts: [{ display: 'blackHan', body: 'gowunDodum', displayWeight: 400, topics: ['history', 'korean'] }],
+    light: { bg: '#f4efe6', fg: '#1b1a17', card: '#fffaf2', muted: '#5a554c', primary: '#b3421a', primaryFg: '#ffffff', accent: '#1c2a4a', accent2: '#f0c36a', accent3: '#d9cdb8', heroFrom: '#f3d9c5', heroTo: '#f4efe6' },
+    dark: { bg: '#15130f', fg: '#f4efe6', card: '#201d17', muted: '#b9b1a2', primary: '#ff9b6b', primaryFg: '#24100a', accent: '#9db4ff', accent2: '#f0c36a', accent3: '#4a4234', heroFrom: '#3a2114', heroTo: '#15130f' },
+    shape: { radius: 6, radiusSm: 4, radiusLg: 10, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'cover', head: 'chapter', band: 'invert', card: 'paper', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'left' },
+    graphic: '', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', 'closing.title': 'split-reveal' },
+  },
+  {
+    id: 'vertical-type', name_ko: '세로쓰기', name_en: 'Vertical Type',
+    desc_ko: '제목을 세로로 쓰고 큰 원 하나와 날짜 도장을 곁들인 책 표지. 글과 버튼은 오른쪽 맞춤, 본문 머리도 오른쪽에 서요. 국어·독서·역사·인문처럼 글과 여백이 주인공인 연수에.',
+    moods: ['editorial', 'calm', 'natural'], topics: ['korean', 'reading', 'history', 'humanities', 'ceremony'],
+    archetypes: ['story', 'course'], theme: 'light', motion: 1, layout: 'right',
+    fonts: { display: 'nanumMyeongjo', body: 'ridibatang', num: 'instrumentSerif', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'songMyung', body: 'ridibatang', displayWeight: 400, topics: ['history'] }],
+    light: { bg: '#f3efe6', fg: '#1c1a17', card: '#faf7f0', muted: '#5b564d', primary: '#a3271f', primaryFg: '#ffffff', accent: '#2f4a3c', accent2: '#b08d57', accent3: '#ddd3c0', heroFrom: '#e4dccb', heroTo: '#f3efe6' },
+    dark: { bg: '#161412', fg: '#efe9dc', card: '#201d1a', muted: '#b5ad9e', primary: '#ff8f7f', primaryFg: '#2a0d0a', accent: '#9cc5ae', accent2: '#d9b98a', accent3: '#3d372e', heroFrom: '#2b2620', heroTo: '#161412' },
+    shape: { radius: 2, radiusSm: 2, radiusLg: 4, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'vertical', head: 'kicker', band: 'tint', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false, align: 'right' },
+    graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
+    effects: { 'hero.title': 'reveal-up', 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
+  },
+  {
+    id: 'swiss-offset', name_ko: '어긋난 격자', name_en: 'Swiss Offset',
+    desc_ko: '열두 칸 격자 위에 계단처럼 어긋난 큰 제목이 색면에 걸치고, 가장자리에 날짜를 세워 썼어요. 본문은 섹션마다 머리와 내용의 자리가 좌우로 엇갈려요. 정책·설명회·수학·기관 연수에.',
+    moods: ['minimal', 'bold', 'formal'], topics: ['policy', 'conference', 'math', 'admin', 'general', 'edutech'],
+    archetypes: ['live', 'course', 'story'], theme: 'light', motion: 2, layout: 'offset',
+    fonts: { display: 'spoqa', body: 'nanumGothic', num: 'barlowCond', mono: 'plexMono', displayWeight: 700 },
+    fontAlts: [{ display: 'nanumSquareNeo', body: 'nanumGothic', displayWeight: 800, topics: ['policy', 'admin'] }],
+    light: { bg: '#f4f4f1', fg: '#101010', card: '#ffffff', muted: '#55554f', primary: '#1238d6', primaryFg: '#ffffff', accent: '#e0301e', accent2: '#101010', accent3: '#f2c230', border: '#101010', heroFrom: '#dfe5fb', heroTo: '#f4f4f1' },
+    dark: { bg: '#0e0e0e', fg: '#f4f4f1', card: '#191919', muted: '#b5b5ad', primary: '#8fa5ff', primaryFg: '#0a1030', accent: '#ff6b5a', accent2: '#f4f4f1', accent3: '#ffd84a', border: '#f4f4f1', heroFrom: '#1a2350', heroTo: '#0e0e0e' },
+    shape: { radius: 0, radiusSm: 0, radiusLg: 0, borderW: 2, shadow: 'flat' },
+    variants: { hero: 'offset', head: 'index', band: 'invert', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'offset' },
+    graphic: '', closingGraphic: '', signature: 'scroll-fill',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
   },
 ];
 
