@@ -86,7 +86,9 @@ function siteData(ctx) {
   const bp = ctx.bp;
   const st = bp.sections.find((s) => s.type === 'stations');
   return {
-    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || bp.meta.shortUrl || '',
+    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '',
+    // 짧은 주소(강사가 직접 넣은 것)는 손으로 칠 글자에만 씀. QR·복사는 언제나 원래 주소라 짧은 주소 서비스가 멈춰도 열림
+    shortUrl: bp.meta.shortUrl || '',
     key: 'lp-' + bp.live.code,
     live: ctx.live ? { provider: bp.live.provider, url: bp.live.url, anonKey: bp.live.anonKey, code: bp.live.code, features: bp.live.features, anonymous: bp.live.anonymous, pollMs: bp.live.pollMs } : null,
     privacy: { collect: bp.privacy.collect, consent: bp.privacy.consent, retentionDays: bp.privacy.retentionDays },
@@ -210,7 +212,7 @@ function dialogs(ctx) {
   const needSchool = pv.collect.includes('school');
   return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
-<p class="lp-share-url" data-share-url></p><p class="lp-small lp-share-off" data-url-off hidden>인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
+<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
 <h2 id="lp-join-h">참여하기</h2><p class="lp-small">질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
@@ -289,7 +291,7 @@ export function renderConsole(ctx) {
 export function renderScreen(ctx) {
   const signal = ctx.live && ctx.bp.live.features.includes('signal');
   const inner = `<div class="lp-screen" data-screen>
-<header class="lp-screen-h"><h1>${esc(ctx.bp.meta.title)}</h1><div class="lp-screen-join"><div class="lp-qr" data-qr-join role="img" aria-label="참여 QR 코드"></div><div><p class="lp-small">휴대폰 카메라로 찍거나 주소로 들어오세요</p><p class="lp-screen-url" data-join-url></p>${ctx.live ? `<p class="lp-screen-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}</div></div>
+<header class="lp-screen-h"><h1>${esc(ctx.bp.meta.title)}</h1><div class="lp-screen-join"><button class="lp-qr-zoom" type="button" data-join-zoom aria-haspopup="dialog" aria-label="참여 QR 코드 크게 보기"><span class="lp-qr" data-qr-join></span><span class="lp-qr-zoom-t">${icon('expand')}크게 보기</span></button><div><p class="lp-small">휴대폰 카메라로 찍거나 주소로 들어오세요</p><p class="lp-screen-url" data-join-url></p><p class="lp-small lp-screen-full" data-join-full hidden></p>${ctx.live ? `<p class="lp-screen-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}</div></div>
 <button class="lp-btn lp-btn-ghost lp-tools-btn" type="button" data-tools-open aria-expanded="false" aria-controls="lp-tools">${icon('tools')}<span>도구</span></button></header>
 <main class="lp-screen-body">
 <div class="lp-screen-notice" data-notice hidden role="status"></div>
@@ -302,6 +304,10 @@ ${signal ? '<div class="lp-screen-signal" data-screen-signal hidden role="region
 <aside class="lp-drawer" id="lp-tools" data-tools hidden aria-labelledby="lp-tools-h"><div class="lp-drawer-h"><h2 id="lp-tools-h" tabindex="-1">도구</h2><button class="lp-icon-btn" type="button" data-tools-close aria-label="도구 닫기">${icon('close')}</button></div><div data-tools-body></div>
 <p class="lp-drawer-links"><a class="lp-link" href="poster.html" target="_blank">${icon('print')}QR 안내문 인쇄</a>${ctx.live ? `<a class="lp-link" href="console.html" target="_blank">${icon('external')}강사 화면</a>` : ''}</p></aside>
 <div class="lp-reactions" data-reactions aria-hidden="true"></div></div>
+<dialog class="lp-joinbig" data-joinbig aria-labelledby="lp-joinbig-h"><form method="dialog" class="lp-joinbig-in">
+<div class="lp-qr" data-qr-big role="img" aria-label="참여 QR 코드"></div>
+<div class="lp-joinbig-t"><h2 id="lp-joinbig-h">휴대폰 카메라로 QR을 찍어 주세요</h2><p class="lp-joinbig-url" data-join-url></p><p class="lp-joinbig-full" data-join-full hidden></p>${ctx.live ? `<p class="lp-screen-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}</div>
+<button class="lp-btn lp-btn-ghost lp-joinbig-x" value="close">${icon('close')}<span>닫기</span></button></form></dialog>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
   return appShell(ctx, `발표 화면 · ${ctx.bp.meta.title}`, 'lp-body-screen', inner, ['assets/qr.js', ctx.live && 'assets/live.js', 'assets/screen.js'].filter(Boolean));
 }
@@ -319,6 +325,7 @@ ${when || m.venue ? `<dl class="lp-poster-meta">${when ? `<div><dt>일시</dt><d
 <div class="lp-poster-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드"></div>
 <p class="lp-poster-cta">휴대폰 카메라로 QR을 찍어 들어오세요</p>
 <p class="lp-poster-url" data-url-self></p>
+<p class="lp-poster-full" data-url-full hidden></p>
 ${code ? `<p class="lp-poster-code">연수 코드 <b>${esc(code)}</b></p>` : ''}
 <div class="lp-poster-wifi"><b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>
 </section>
@@ -483,7 +490,7 @@ ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.
 - ${files.join(' · ')}
 
 ## 연수 전
-1. 사이트를 배포하고 주소를 단축 주소·QR로 만듭니다. 현장에 붙일 안내문은 \`poster.html\`을 인쇄합니다.
+1. 사이트를 배포하면 주소와 QR이 나옵니다. 현장에 붙일 안내문은 \`poster.html\`을 인쇄합니다. 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가서, 짧은 주소 서비스가 멈춰도 QR은 열립니다.
 2. 연수 장소의 와이파이로 \`check.html\`을 열어 막힌 사이트가 없는지 확인합니다.
 ${live ? `3. 관리자 키로 강사 화면(\`console.html\`)에 들어가 참가자 화면과 함께 리허설합니다(두 기기로 질문·도움 요청을 보내 보세요).\n${before ? `4. ${before}\n` : ''}` : ''}
 ## 연수 중

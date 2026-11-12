@@ -54,7 +54,8 @@
     try {
       if (qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
       var q = qrcode(0, 'M'); q.addData(text); q.make();
-      return q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      // 둘레 여백 4칸(QR 규격의 quiet zone): 어두운 바탕·사진 위에서도 읽히게 그림 안에 넣음
+      return q.createSvgTag({ cellSize: 6, margin: 24, scalable: true });
     } catch (e) { return ''; }
   }
   window.LecPage.qr = qrSvg; window.LecPage.needQR = needQR;
@@ -63,8 +64,17 @@
   var URL_OFF = '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
   function pageUrl() {
     if (DATA.siteUrl) return DATA.siteUrl;
-    if (LOCAL_PAGE) return '';
+    if (LOCAL_PAGE) return DATA.shortUrl || '';
     return location.href.split('#')[0].replace(/(check|console|screen|privacy|poster)\.html$/, '');
+  }
+  // 손으로 칠 주소: 강사가 넣은 짧은 주소가 있으면 그것을 크게 보여 주고 원래 주소는 그 아래 작게.
+  // QR과 [주소 복사]는 언제나 원래 주소라서 짧은 주소 서비스가 멈추거나 막혀도 들어올 수 있습니다.
+  function bare(u) { return String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); }
+  function shortShown() { var s = bare(DATA.shortUrl), u = bare(pageUrl()); return s && u && s !== u ? s : ''; }
+  function fillUrls() {
+    var u = pageUrl(), s = shortShown();
+    $$('[data-url-self]').forEach(function (n) { n.textContent = s || (u ? bare(u) : URL_OFF); });
+    $$('[data-url-full]').forEach(function (n) { n.hidden = !s; n.textContent = s ? bare(u) : ''; });
   }
   // 방 안에 있는 사람용 주소(QR·복사): 암호 보호 사이트면 #k=…를 붙여 바로 열리게(보이는 글자에는 붙이지 않음)
   function unlockFrag() { var m = $('meta[name="lp-unlock"]'); return m && m.getAttribute('content') ? '#' + m.getAttribute('content') : ''; }
@@ -93,10 +103,10 @@
         boxes.forEach(function (n) { qio.observe(n); });
       } else needQR().then(paintQRs);
     }
-    $$('[data-url-self]').forEach(function (n) { var u = pageUrl(); n.textContent = u ? u.replace(/^https?:\/\//, '').replace(/\/$/, '') : URL_OFF; });
+    fillUrls();
     $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '올린 사이트 주소 + ' + n.getAttribute('data-url-page'); });
   }
-  window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, off: URL_OFF };
+  window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, short: shortShown, off: URL_OFF };
 
   /* ── 대화상자: 열 때 누른 버튼을 기억했다가 닫으면 그 버튼으로 초점을 돌려줍니다 ── */
   function closeDialog(d) { if (d.close && d.open) d.close(); else d.removeAttribute('open'); }
@@ -183,7 +193,7 @@
     var share = $('[data-share]'), dlg = $('[data-share-dialog]');
     if (share && dlg) share.addEventListener('click', function () {
       var u = pageUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
-      if (su) su.textContent = u; if (off) off.hidden = !!u; if (cb) cb.hidden = !u;
+      if (su) su.textContent = shortShown() || u; if (off) off.hidden = !!u; if (cb) cb.hidden = !u;
       $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !u; if (u) needQR().then(function () { fillQR(n, joinUrl()); }); });
       openDialog(dlg, share);
     });

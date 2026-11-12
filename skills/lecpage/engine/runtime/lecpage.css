@@ -1113,7 +1113,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-sv-scale label b{font-family:var(--font-mono);font-size:var(--fs-md);font-variant-numeric:tabular-nums}
 .lp-sv-scale label i{font-style:normal;font-size:var(--fs-xs)}
 @media (max-width:600px){.lp-sv-scale .lp-sv-opts{grid-template-columns:minmax(0,1fr)}.lp-sv-scale label{justify-content:flex-start;min-height:48px;padding:8px 14px;text-align:left}.lp-sv-scale label + label{margin:-1px 0 0}.lp-sv-scale label:first-child{border-radius:var(--radius-sm) var(--radius-sm) 0 0}.lp-sv-scale label:last-child{border-radius:0 0 var(--radius-sm) var(--radius-sm)}.lp-sv-scale label span{display:flex;gap:10px;align-items:baseline}.lp-sv-scale label i{font-size:var(--fs-sm)}}
-.lp-qr{width:200px;aspect-ratio:1;background:#fff;border-radius:8px;padding:12px;display:grid;place-items:center}
+/* QR: 둘레 여백 4칸은 그림(SVG) 안에 들어 있음. 어떤 테마에서도 흰 바탕에 검은 점 */
+.lp-qr{width:200px;aspect-ratio:1;background:#fff;border-radius:8px;padding:4px;display:grid;place-items:center}
 .lp-qr svg,.lp-qr img{width:100%;height:auto;display:block}
 .lp-qr-lg{width:min(280px,70vw);margin:0 auto}
 .lp-qr-off{font-size:.86rem;line-height:1.45;color:#333;text-align:center;padding:8px;word-break:keep-all}
@@ -1235,6 +1236,8 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 .lp-dialog label{display:grid;gap:4px;font-size:var(--fs-sm);font-weight:600}
 .lp-consent{grid-template-columns:auto 1fr!important;align-items:start;font-weight:400!important;font-size:.84rem!important;color:var(--muted-foreground)}
 .lp-share-url{font-family:var(--font-mono);font-size:.84rem;word-break:break-all;text-align:center;color:var(--muted-foreground)}
+.lp-share-full{font-family:var(--font-mono);font-size:.76rem;word-break:break-all;text-align:center;color:var(--muted-foreground);margin-top:-8px}
+.lp-share-full:not([hidden])~.lp-share-off{display:none}
 .lp-share-code{text-align:center}
 .lp-share-code b{font-family:var(--font-mono);font-size:1.4rem;letter-spacing:.12em}
 .lp-toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:90;background:var(--foreground);color:var(--background);padding:10px 18px;border-radius:var(--radius-sm);font-weight:600;font-size:var(--fs-sm);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-3) var(--ease-out);max-width:calc(100% - 32px);text-align:center}
@@ -1316,8 +1319,26 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 .lp-screen-h h1{font-size:clamp(1.8rem,3.6vw,3.2rem)}
 .lp-screen-join{display:flex;gap:18px;align-items:center;flex-wrap:wrap;min-width:0}
 .lp-screen-join>div{min-width:0}
-.lp-screen-join .lp-qr{width:clamp(140px,14vw,220px)}
+.lp-screen-join .lp-qr{width:clamp(150px,15vw,240px)}
 .lp-screen-url{font-family:var(--font-mono);font-size:clamp(1rem,1.6vw,1.4rem);font-weight:600;overflow-wrap:anywhere}
+.lp-screen-full{font-family:var(--font-mono);overflow-wrap:anywhere}
+/* QR을 누르면 화면 가득(뒷자리에서도 찍히게) */
+.lp-qr-zoom{display:grid;justify-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:zoom-in;border-radius:10px}
+.lp-qr-zoom:disabled{cursor:default}
+.lp-qr-zoom:focus-visible{outline:3px solid var(--ring,var(--primary));outline-offset:4px}
+.lp-qr-zoom-t{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs,.8rem);font-weight:600;color:var(--muted-foreground)}
+.lp-qr-zoom-t svg{width:14px;height:14px}
+.lp-qr-zoom:hover .lp-qr-zoom-t{color:var(--foreground)}
+.lp-joinbig{border:0;padding:0;margin:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;background:var(--background);color:var(--foreground)}
+.lp-joinbig::backdrop{background:var(--background)}
+.lp-joinbig-in{position:relative;height:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(20px,5vw,72px);align-items:center;justify-content:center;padding:clamp(16px,4vw,56px)}
+.lp-joinbig .lp-qr{width:min(78vh,52vw);border-radius:12px}
+.lp-joinbig-t{display:grid;gap:clamp(8px,1.6vw,20px);min-width:0}
+.lp-joinbig h2{font-family:var(--font-sans);font-size:clamp(1.3rem,2.8vw,2.6rem);font-weight:700;letter-spacing:-.02em;line-height:1.25;word-break:keep-all}
+.lp-joinbig-url{font-family:var(--font-mono);font-size:clamp(1.4rem,3.6vw,3.6rem);font-weight:700;line-height:1.2;overflow-wrap:anywhere}
+.lp-joinbig-full{font-family:var(--font-mono);font-size:clamp(.9rem,1.5vw,1.3rem);color:var(--muted-foreground);overflow-wrap:anywhere}
+.lp-joinbig-x{position:absolute;top:clamp(12px,2vw,24px);right:clamp(12px,2vw,24px)}
+@media (max-aspect-ratio:1/1){.lp-joinbig-in{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;align-content:center}.lp-joinbig .lp-qr{width:min(86vw,56vh)}}
 .lp-screen-code b{font-family:var(--font-mono);font-size:clamp(1.6rem,3vw,2.6rem);letter-spacing:.14em}
 .lp-screen-notice{font-size:clamp(1.4rem,3vw,2.4rem);font-weight:800;padding:18px 24px;border-radius:var(--radius);background:var(--foreground);color:var(--background)}
 .lp-screen-timer{font-family:var(--font-mono);font-size:clamp(4rem,14vw,12rem);font-weight:700;text-align:center;line-height:1;font-variant-numeric:tabular-nums}
@@ -1396,9 +1417,10 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 .lp-poster-meta{display:grid;gap:2px;font-size:clamp(1rem,2.6vw,15pt)}
 .lp-poster-meta div{display:flex;gap:10px;justify-content:center}
 .lp-poster-meta dt{font-weight:800}.lp-poster-meta dd{margin:0}
-.lp-poster-qr{width:min(105mm,62%);padding:0;border-radius:0}
+.lp-poster-qr{width:min(120mm,70%);padding:0;border-radius:0}
 .lp-poster-cta{font-weight:700;font-size:clamp(1rem,2.6vw,15pt)}
 .lp-poster-url{font-family:var(--font-mono);font-weight:700;font-size:clamp(1.1rem,3.6vw,20pt);word-break:break-all;overflow-wrap:anywhere;line-height:1.3}
+.lp-poster-full{font-family:var(--font-mono);font-size:clamp(.8rem,2vw,11pt);color:#444;word-break:break-all;overflow-wrap:anywhere;margin-top:-1mm}
 .lp-poster-code b{font-family:var(--font-mono);font-size:clamp(1.4rem,4vw,24pt);letter-spacing:.14em}
 .lp-poster-wifi{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:end;width:100%;max-width:150mm;margin-top:auto;font-size:clamp(.9rem,2.2vw,13pt)}
 .lp-poster-wifi i{display:block;border-bottom:1.5px solid #555;height:1.4em}
