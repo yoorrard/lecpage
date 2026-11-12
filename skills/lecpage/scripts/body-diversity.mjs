@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 본문 다양성 진단: 모든 프리셋 × 예시 설계도로 사이트를 만들어 섹션마다 '구성 지문'을 뽑고, 프리셋 쌍마다 지문이 같은 섹션 수를 셉니다.
-//   구성 지문 = DOM 뼈대 · 격자 열 수 · 머리 자리 · 정렬 · 주인공(글 text / 숫자 number / 그림 figure / 도식 diagram)
+//   구성 지문 = DOM 뼈대 · 격자 열 수 · 머리 자리 · 정렬 · 주인공(글 text / 숫자 number / 그림 figure / 도식 diagram / 조작 tool)
 //   함께 냄: 글만 있는 섹션 비율 · 그래픽이 주인공인 섹션 수 · 왼쪽 정렬이 아닌 섹션 수 · 첫 화면 밖에서 움직임이 있는 섹션 수
 // 쓰는 법: node scripts/body-diversity.mjs [--presets a,b] [--examples sel-story,data-lab,body-all] [--width 1440] [--out 폴더]
 //   Playwright가 있어야 합니다(없으면 HTML만 읽는 정적 지문으로 셈: --static)
@@ -74,12 +74,14 @@ export function pageFingerprints() {
       const a = Math.min(area(r), cArea); gfx += a; if (g.closest('[data-diagram]') || g.matches('[data-diagram]')) diagram += a;
     }
     for (const n of sec.querySelectorAll('span,b,p,dd,dt,time,i,li')) {
-      if (n.children.length || n.closest('.lp-head,svg')) continue;
+      if (n.children.length || n.closest('.lp-head,svg,[aria-hidden="true"]')) continue; // 순번(꾸밈 숫자)은 세지 않음: 실제 값만
       const t = n.textContent.trim(); if (!t || t.length > 6 || !/\d/.test(t)) continue;
       const f = parseFloat(cs(n).fontSize); if (f < 40) continue;
       bigNum += area(n.getBoundingClientRect());
     }
-    const prot = gfx / cArea >= 0.2 ? (diagram >= gfx * 0.5 ? 'diagram' : 'figure') : bigNum / cArea >= 0.05 ? 'number' : 'text';
+    // 조작(tool): 따라 하는 칸(data-calm)이거나 쓰고 고르는 입력칸이 주인 칸 — 글만 있는 섹션으로 세지 않음
+    const tool = sec.hasAttribute('data-calm') || sec.querySelectorAll('input:not([type=hidden]),textarea,select').length >= 2;
+    const prot = gfx / cArea >= 0.2 ? (diagram >= gfx * 0.5 ? 'diagram' : 'figure') : bigNum / cArea >= 0.05 ? 'number' : tool ? 'tool' : 'text';
     // 움직임: 등장(enter) · 스크롤 연동(scroll: 스크롤이 직접 움직이는 CSS·효과) · 반응(react: 가리킴·누름에 답하는 카드·탭·아코디언·넘김)
     const all = [sec, ...sec.querySelectorAll('*')];
     const fxIds = all.map((e) => e.getAttribute('data-fx')).filter(Boolean);
@@ -104,7 +106,7 @@ export function summarize(byPreset) {
   }
   const per = ids.map((id) => {
     const s = byPreset[id], n = s.length || 1;
-    return { id, sections: s.length, textOnly: s.filter((x) => x.prot === 'text').length, graphic: s.filter((x) => x.prot === 'figure' || x.prot === 'diagram').length, number: s.filter((x) => x.prot === 'number').length, nonLeft: s.filter((x) => /c|r/.test(x.align) || x.headSide === 'right').length, moving: s.filter((x) => x.moving).length, scroll: s.filter((x) => x.scroll && !x.calm).length, react: s.filter((x) => x.react && !x.calm).length, enterKinds: new Set(s.map((x) => x.enterMode).filter(Boolean)).size, textRatio: +(s.filter((x) => x.prot === 'text').length / n).toFixed(2) };
+    return { id, sections: s.length, textOnly: s.filter((x) => x.prot === 'text').length, graphic: s.filter((x) => (x.prot === 'figure' || x.prot === 'diagram') && !/^(deck|gallery)$/.test(x.type)).length, number: s.filter((x) => x.prot === 'number').length, tool: s.filter((x) => x.prot === 'tool').length, nonLeft: s.filter((x) => /c|r/.test(x.align) || x.headSide === 'right').length, moving: s.filter((x) => x.moving).length, scroll: s.filter((x) => x.scroll && !x.calm).length, react: s.filter((x) => x.react && !x.calm).length, enterKinds: new Set(s.map((x) => x.enterMode).filter(Boolean)).size, textRatio: +(s.filter((x) => x.prot === 'text').length / n).toFixed(2) };
   });
   const types = {}; for (const id of ids) for (const x of byPreset[id]) (types[x.type] ||= new Set()).add(`${x.skeleton}|${x.prot}`);
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);

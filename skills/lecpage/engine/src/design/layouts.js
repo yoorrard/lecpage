@@ -50,7 +50,7 @@ export const BODY_VARIANTS = {
   tools: {
     bento: V('벤토 칸', 'text', '', '.lp-tools-item', undefined, '도구 2~6개를 크기가 다른 칸으로(기본)', '', 'scale', 'playful tech'),
     rows: V('줄 색인', 'text', '', '.lp-trw > li', undefined, '도구가 많거나 설명이 길 때', '', 'wipe', 'formal editorial calm'),
-    tiles: V('둥근 딱지 타일', 'text', 'full', '.lp-tt > li', undefined, '도구 이름이 짧고 3~8개일 때', '', 'drop', 'playful warm'),
+    tiles: V('표 타일(떼는 쪽에 주소)', 'text', 'full', '.lp-tt > li', undefined, '도구 이름이 짧고 3~8개일 때', '', 'drop', 'playful warm'),
   },
   materials: {
     files: V('줄 목록', 'text', '', '.lp-materials > li, .lp-wrap > .lp-note', undefined, '자료가 많을 때(기본)', '', '', 'formal calm'),

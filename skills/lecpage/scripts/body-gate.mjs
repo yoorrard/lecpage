@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 본문 겹침·꼬임 게이트: 모든 프리셋 × 설계도(예시 2종 + 모든 본문 칸 + 극단 입력) × 폭 360·390·768·1280·1440 × 밝게·어둡게 × 움직임 0~3 × 동작 줄이기 × 인쇄.
 // 자리마다(0·25·50·75·100% + 처음으로 돌아옴) 움직이는 도중과 멈춘 뒤를 검사(overlap-lint.mjs scanPage) + 콘솔 오류. 배치 변형은 설계도 layout으로 하나하나 강제해서도 훑음.
-//   node scripts/body-gate.mjs [--presets a,b] [--quick] [--out 결과.json] [--conc 6]
+//   node scripts/body-gate.mjs [--presets a,b] [--quick] [--only all-print,sel,force] [--out 결과.json] [--conc 6]
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -45,7 +45,9 @@ const PLAN = quick ? [['all', 'all', [1440, 390], 'light', '', false, false, nul
   ['all-rm', 'all', [1440], 'light', '', true, false, null], ['all-print', 'all', [1280], 'light', '', false, true, null],
   ['xmax', 'xmax', [360, 1440], 'light', '', false, false, null], ['xmin', 'xmin', [360, 1440], 'light', '', false, false, null],
 ];
-const FORCE = quick ? [] : [0, 1, 2, 3, 4].flatMap((k) => [['all', k], ['sel', k], ['lab', k]]);
+const only = arg('only', '') ? arg('only').split(',') : null; // --only all-print,sel: 이 조건만
+if (only) PLAN.splice(0, PLAN.length, ...PLAN.filter((x) => only.includes(x[0])));
+const FORCE = quick || (only && !only.includes('force')) ? [] : [0, 1, 2, 3, 4].flatMap((k) => [['all', k], ['sel', k], ['lab', k]]);
 const tmp = mkdtempSync(join(tmpdir(), 'lpbgate-')), jobs = [];
 const loadBp = (key) => key === 'xmax' || key === 'xmin' ? extreme(JSON.parse(readFileSync(SRC.all, 'utf8')), key.slice(1)) : JSON.parse(readFileSync(SRC[key], 'utf8'));
 function put(key, bp) { const r = E.build(bp, { runtime: nodeRuntime() }); if (r.errors?.length) { console.log('빌드 오류', key, JSON.stringify(r.errors).slice(0, 200)); return false; } for (const [f, c] of Object.entries(r.files)) { const p = join(tmp, key, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, c); } return r; }
@@ -87,7 +89,7 @@ await Promise.all(Array.from({ length: conc }, async () => {
         await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 700) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 40)); } scrollTo(0, 0); });
         await page.emulateMedia({ media: 'print' }); await page.waitForTimeout(400);
         const o = await page.evaluate(pageCheck, false);
-        const hidden = await page.evaluate(() => [...document.querySelectorAll('main :is(h2,h3,p,li,dt,dd)')].filter((e) => e.textContent.trim() && !e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide]') && (getComputedStyle(e).visibility === 'hidden' || +getComputedStyle(e).opacity < 0.2 || e.getClientRects().length === 0)).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
+        const hidden = await page.evaluate(() => [...document.querySelectorAll('main :is(h2,h3,p,li,dt,dd)')].filter((e) => e.textContent.trim() && !e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide]') && getComputedStyle(e).display !== 'contents' && (getComputedStyle(e).visibility === 'hidden' || +getComputedStyle(e).opacity < 0.2 || e.getClientRects().length === 0)).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
         if (hidden.length) o['print-hidden'] = hidden;
         findings = Object.entries(o).map(([rule, samples]) => ({ rule, count: samples.length, samples }));
       } else ({ findings } = await scanPage(page));

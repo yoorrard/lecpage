@@ -97,7 +97,7 @@ export function bodyVariants(H) {
   VB.tools = {
     /* 줄 색인: 번호 | 큰 이름 | 설명 | 주소 */
     rows: (s, ctx) => `<ol class="lp-trw"${fx(ctx, 'list')}>${s.items.map((t, n) => `<li><span class="lp-trw-no" aria-hidden="true">${pad2(n + 1)}</span><h3>${toolName(t)}</h3><div class="lp-trw-d">${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${toolPages(t, ctx)}</div>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}</li>`).join('')}</ol>${notice(s)}`,
-    /* 둥근 딱지 타일: 이름 첫 글자를 큰 원 딱지로 */
+    /* 표 타일: 이름이 크게 적힌 표 한 장, 점선 아래 떼는 쪽에 주소(이름 첫 글자 딱지 같은 가짜 로고는 쓰지 않음) */
     tiles: (s, ctx) => `<ol class="lp-tt" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((t, n) => `<li class="c${n % 3}"${itemFx(ctx)}><h3>${toolName(t)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${toolPages(t, ctx)}</li>`).join('')}</ol>${notice(s)}`,
   };
 
