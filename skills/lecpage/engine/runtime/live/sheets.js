@@ -65,7 +65,7 @@
     a.subscribe = function (h) { handlers.push(h); return function () { handlers = handlers.filter(function (x) { return x !== h; }); }; };
     a.connect = function () {
       closed = false;
-      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url) && !config.allowAnyUrl) return Promise.reject(L.error('config', 'Apps Script 웹 앱 주소(https://script.google.com/…/exec)가 필요합니다.', { status: 400, retryable: false }));
+      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url) && !config.allowAnyUrl) return Promise.reject(L.error('config', 'Apps Script 웹 앱 주소(https://script.google.com/…/exec)가 필요해요.', { status: 400, retryable: false }));
       setStatus('connecting');
       return get({ a: 'ping' }).then(function () {
         if (root.document && !a._hooked) { a._hooked = true; root.document.addEventListener('visibilitychange', onVisible); }

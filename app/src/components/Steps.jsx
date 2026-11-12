@@ -1,7 +1,7 @@
 /**
  * 한 번에 한 단계만 펼쳐 보이는 순서(올릴 곳 연결·참여 기능 연결에 씀).
  * 지난 단계는 ✓, 다음 단계는 제목만. 제목을 누르면 그 단계로 가요.
- * steps: [{ t: '짧은 제목', body: 내용, next?: false(다음 단추 숨김) | '단추 글' }]
+ * steps: [{ t: '짧은 제목', body: 내용, next?: false(다음 버튼 숨김) | '버튼 글' }]
  */
 export function Steps({ steps, at, onAt, label }) {
   return (
@@ -24,8 +24,8 @@ export function Steps({ steps, at, onAt, label }) {
 }
 
 /**
- * 어디를 누르는지 보여 주는 작은 그림: 그 사이트 화면의 칸과 단추 모양만 흉내 낸 것(글은 화면에 나오는 영문 그대로).
- * rows: [[칸 이름, 넣을 값]], btn: 마지막에 누를 단추, pre: 그 전에 차례로 누를 단추(하나 또는 여럿)
+ * 어디를 누르는지 보여 주는 작은 그림: 그 사이트 화면의 칸과 버튼 모양만 흉내 낸 것(글은 화면에 나오는 영문 그대로).
+ * rows: [[칸 이름, 넣을 값]], btn: 마지막에 누를 버튼, pre: 그 전에 차례로 누를 버튼(하나 또는 여럿)
  */
 export function ClickShot({ rows = [], btn, pre }) {
   return (

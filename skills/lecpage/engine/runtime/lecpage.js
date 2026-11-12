@@ -296,7 +296,7 @@
   /* ── 본문 배치 변형의 움직임과 조작(runtime/body.css) ──
      · 스크롤 연동 단계(data-rest 2·3)이고 브라우저가 스크롤 연동 애니메이션을 지원하면 html.lp-sdt(동작 줄이기·저사양이면 붙이지 않음)
      · 넘김([data-pager]): 낱말 링크를 누르면 그 판으로 부드럽게, 넘기면 지금 낱말 표시. 링크·스크롤은 JS 없이도 동작
-     · 필름 띠([data-film]): 이전·다음 단추와 지금 장면 번호. 방향키는 띠에 초점이 있을 때 브라우저가 처리
+     · 필름 띠([data-film]): 이전·다음 버튼과 지금 장면 번호. 방향키는 띠에 초점이 있을 때 브라우저가 처리
      · 도식 잇기([data-linked]): 목록 줄을 가리키거나 초점이 오면 그림의 같은 번호([data-seg]·[data-node])가 켜짐
      · 질문 색인([data-spy]): 읽고 있는 답의 질문이 색인에서 켜짐 */
   function initBody() {
@@ -446,7 +446,7 @@
     slides.forEach(function (s, i) {
       var b = el('button'); b.type = 'button';
       var img = s.querySelector('img');
-      // 그림만 있는 단추는 쪽 번호를 이름으로, 글자가 보이는 단추는 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
+      // 그림만 있는 버튼은 쪽 번호를 이름으로, 글자가 보이는 버튼은 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
       if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { go(i); });
       thumbs.appendChild(b);
@@ -593,7 +593,7 @@
   }
 
   /* ── 실시간 ─────────────────────────────── */
-  var live = { ready: false, progress: function () { }, help: function () { toast('실시간 연결이 꺼져 있어요. 손을 들어 강사에게 알려 주세요.'); } };
+  var live = { ready: false, progress: function () { }, help: function () { toast('참여 기능이 꺼져 있어요. 손을 들어 강사에게 알려 주세요.'); } };
   function initLive() {
     if (!DATA.live || !window.LecLive || !$('[data-dock]') && !$('[data-qa]') && !$('[data-board]') && !$('[data-survey]')) return;
     var conn;

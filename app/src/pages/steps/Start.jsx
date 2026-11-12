@@ -83,7 +83,7 @@ function useIngest(p, update) {
       update({ info, autoFilled: {} });
       if (again.length) await ingestAll(again, { replace: true });
       else update({ material: null, files: [], slidesMade: 0, summary: '' });
-      toast(`${f.name}을(를) 뺐어요.`);
+      toast(`뺐어요: ${f.name}`);
     } catch (e) { toast('다시 읽지 못했어요: ' + e.message); }
     setBusy(''); setPct(0);
   }
@@ -234,7 +234,7 @@ export function StepStart({ p, update, go }) {
       <Dialog open={confirmRemake} onClose={() => setConfirmRemake(false)} label="다시 만들기 확인">
         <h2 class="h-sub">처음부터 다시 만들까요?</h2>
         <p>고친 문구와 섹션 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로예요.</p>
-        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" onClick={() => setConfirmRemake(false)}>취소</button></div>
+        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
       </Dialog>
       <Dialog open={!!connect} onClose={() => setConnect(false)} label="AI 연결" wide>
         {connect && <div class="stack"><h2 class="h-sub">AI 연결 <span class="small muted">처음 한 번만</span></h2>

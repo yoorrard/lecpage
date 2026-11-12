@@ -154,7 +154,7 @@ function FeaturesPanel({ p, update, setInfo }) {
           {p.blueprint.audience?.minor && <small>만 14세 미만이 참여해 별명만 받아요.</small>}
         </div>
         <Field label="참여 기록 보관 기간(일)" hint="개인정보 안내에 적혀요. 기간이 지나면 강사 화면에서 지워 주세요."><input type="number" min="1" max="365" value={pv.retentionDays || 30} onInput={(e) => setPv({ retentionDays: +e.target.value || 30 })} style={{ width: '120px' }} /></Field>
-        <p class="small muted">만족도 설문 5문항이 기본으로 들어가요. 문항은 '내용' 탭에서 고쳐요.</p>
+        <p class="small muted">만족도 조사에는 설문 5문항이 기본으로 들어가요. 문항은 '내용' 탭에서 고쳐요.</p>
       </>}
     </div>
   );
@@ -178,7 +178,7 @@ function DetailsPanel({ p, setInfo }) {
       <fieldset class="field plain-fieldset"><legend>진행 방식</legend>
         <Radios name="mode" value={info.mode || 'offline'} onChange={(v) => setInfo({ mode: v })} options={[{ value: 'offline', label: '오프라인' }, { value: 'online', label: '온라인' }, { value: 'hybrid', label: '병행' }]} label="진행 방식" />
       </fieldset>
-      {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 단추로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
+      {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 버튼으로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
       <h3 class="h-sub">강사</h3>
       <div class="form-grid">
         <Field label="이름"><input value={info.instructorName} onInput={set('instructorName')} maxLength={40} /></Field>

@@ -6,11 +6,11 @@ import { toast } from '../lib/util.js';
 
 /** 키처럼 생긴 글인지(한 덩어리, 20자 이상). 처음 보는 모양의 키도 고른 회사 키로 확인해 볼 수 있게 */
 const looksLikeKey = (s) => /^[\w.-]{20,300}$/.test(s);
-const NO_COPY = '키 옆의 복사 단추를 누르고 돌아와 다시 눌러 주세요.';
+const NO_COPY = '키 옆의 복사 버튼을 누르고 돌아와 다시 눌러 주세요.';
 
 /**
  * AI 연결(처음 한 번). 한 번에 한 걸음만 보입니다: (유료면 크레딧 충전 →) 키 페이지 열기 → 돌아와서 [붙여넣기].
- * 페이지를 열고 돌아오면 다음 걸음으로 넘어가고 [붙여넣기]를 눈에 띄게 합니다. 클립보드는 단추를 눌렀을 때만 읽습니다.
+ * 페이지를 열고 돌아오면 다음 걸음으로 넘어가고 [붙여넣기]를 눈에 띄게 합니다. 클립보드는 버튼을 눌렀을 때만 읽습니다.
  * 어느 걸음에서든 키를 붙여 넣으면(Ctrl+V) 회사를 알아보고 바로 연결합니다.
  * 키는 이 브라우저에서 AI 회사로만 갑니다. onConnected(ai)로 연결된 정보를 돌려줍니다.
  */
@@ -37,10 +37,10 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
     addEventListener('focus', f); document.addEventListener('visibilitychange', f);
     return () => { removeEventListener('focus', f); document.removeEventListener('visibilitychange', f); };
   }, [opened, last]);
-  // 붙여넣기 걸음으로 넘어오면 그 단추에 초점(돌아와서 Enter만 눌러도 되게)
+  // 붙여넣기 걸음으로 넘어오면 그 버튼에 초점(돌아와서 Enter만 눌러도 되게)
   useEffect(() => { if (step === last && back) pasteRef.current?.focus({ preventScroll: true }); }, [step, back, last]);
 
-  /** 붙여 넣은 글이 키로 보이면 바로 연결(단추를 한 번 덜 누르게). 키가 아닌 글은 칸에 남기지 않음 */
+  /** 붙여 넣은 글이 키로 보이면 바로 연결(버튼을 한 번 덜 누르게). 키가 아닌 글은 칸에 남기지 않음 */
   function take(text) {
     const k = String(text || '').trim();
     if (!k) { setErr({ title: '복사한 것이 없어요.', body: NO_COPY }); return; }
@@ -127,7 +127,7 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
       {<div class="btn-row">
         {GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
         {onPaste && <button type="button" class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 만들기</button>}
-        {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>취소</button>}
+        {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>
   );

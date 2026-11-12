@@ -284,7 +284,7 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
   return (
     <dialog ref={ref} class="join-big" aria-label="QR 크게 보기" onClose={onClose} onCancel={onClose}>
       {open && <div class="join-big-in">
-        <div class="join-big-qr"><QR text={qr} size={720} label="참가자용 QR 코드" /></div>
+        <div class="join-big-qr"><QR text={qr} size={720} alt="참가자용 QR 코드" /></div>
         <div class="join-big-t">
           <p class="join-big-h">{title}</p>
           <p class="join-big-cta">휴대폰 카메라로 QR을 찍어 주세요</p>
@@ -307,7 +307,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
   const [big, setBig] = useState(false);
   const when = [m.date, m.start && `${m.start}${m.end ? '~' + m.end : ''}`].filter(Boolean).join(' ');
   const liveOn = (p.blueprint.live?.features || []).length > 0;
-  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n👉 ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
+  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
   return (
     <Sheet class="success">
       <div class="success-in">
@@ -332,7 +332,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
           <p class="small">내용을 고치거나 자료를 더 넣은 뒤 다시 올리면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
         </div>
         <div class="qr-side">
-          <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} label="" /><span class="qr-zoom-t">크게 보기</span></button>
+          <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} alt="" /><span class="qr-zoom-t">크게 보기</span></button>
           <div class="btn-row">
             <button class="btn btn-sm" onClick={async () => saveFile(safeName(m.title) + '_QR.png', await qrPng(shareUrl), 'image/png')}>QR 저장</button>
             <button class="btn btn-sm" onClick={async () => toast(await copyQr(shareUrl) ? 'QR 그림을 복사했어요. 발표 자료에 붙여 넣으세요.' : '이 브라우저에서는 그림 복사가 안 돼요. [QR 저장]을 눌러 주세요.')}>QR 복사</button>

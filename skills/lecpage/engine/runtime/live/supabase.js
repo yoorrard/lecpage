@@ -188,7 +188,7 @@
     a.connect = function () {
       closed = false;
       setStatus('connecting');
-      if (!config.url || !config.anonKey) return Promise.reject(L.error('config', 'Supabase 주소와 anon 키가 필요합니다.', { status: 400, retryable: false }));
+      if (!config.url || !config.anonKey) return Promise.reject(L.error('config', 'Supabase 주소와 anon 키가 필요해요.', { status: 400, retryable: false }));
       return U.loadScript(LIB, 15000, { integrity: LIB_SRI }).then(function (ok) {
         if (!ok || !root.supabase || !root.supabase.createClient) throw L.error('lib_failed', 'Supabase 라이브러리를 불러오지 못했어요(cdn.jsdelivr.net이 막혔는지 확인).', { status: 0 });
         if (!sb) {

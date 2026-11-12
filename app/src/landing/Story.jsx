@@ -56,6 +56,7 @@ export function Story() {
             <div class="ld-sheet ld-page">
               <small>교재 4쪽</small>
               <b><mark>PART 01 한 줄에 한 번의 기록</mark></b>
+              {/* copy-ok: 교재 쪽 그림 속 원문(교재 인용) */}
               <span>날짜 · 번호 · 활동 · 점수 · 제출 여부. 이름 대신 번호를 씁니다.</span>
               <i class="ld-page-table">{['날짜', '번호', '활동', '점수', '제출'].map((x) => <u>{x}</u>)}{Array.from({ length: 10 }, () => <u />)}</i>
               <i class="ld-page-prompt"><u>프롬프트</u> 중학교 2학년 한 반(30명)의 4주 학습 기록 예시를 표로 만들어 줘.</i>

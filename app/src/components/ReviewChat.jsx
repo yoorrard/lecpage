@@ -18,7 +18,7 @@ const full = new Map(); // 붙인 그림 원본(이 탭 메모리에만): 보낼
 const applied = new Map(); // 메시지 id → 적용 직전 상태(되돌리기용)
 const store = (pid) => `review:${pid}`;
 
-function loadImg(url) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('그림을 읽지 못했어요.')); i.src = url; }); }
+function loadImg(url) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('그림을 읽지 못했어요. PNG나 JPG로 다시 넣어 주세요.')); i.src = url; }); }
 /** 그림을 다시 그려 크기·형식을 맞춤(받은 데이터를 그대로 쓰지 않음) */
 async function redraw(url, maxW, type = 'image/jpeg', q = 0.84) {
   const img = await loadImg(url);
@@ -98,12 +98,12 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
       if (d.type === 'lp-review-ready') { if (marking) setMarking(false); return; }
       if (d.type !== 'lp-annotated') return;
       setMarking(false);
-      if (typeof d.png !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(d.png.slice(0, 64) + 'A') || d.png.length > 12e6) { toast('표시한 그림을 받지 못했어요.'); return; }
+      if (typeof d.png !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(d.png.slice(0, 64) + 'A') || d.png.length > 12e6) { toast('표시한 그림을 받지 못했어요. [표시하기]로 다시 표시해 주세요.'); return; }
       const valid = new Set(E.withSectionIds(pRef.current.blueprint?.sections || []).map((s) => s.id));
       const sections = (Array.isArray(d.sections) ? d.sections : []).filter((x) => typeof x === 'string' && valid.has(x)).slice(0, 6);
       const notes = (Array.isArray(d.notes) ? d.notes : []).filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 10);
       try { await attach(d.png, { sections, notes, viewport: nums(d.viewport, ['w', 'h']), scroll: nums(d.scroll, ['x', 'y']), source: d.mode === 'pick' ? 'pick' : 'mark' }); }
-      catch { toast('표시한 그림을 받지 못했어요.'); return; }
+      catch { toast('표시한 그림을 받지 못했어요. [표시하기]로 다시 표시해 주세요.'); return; }
       setSay(d.mode === 'pick' ? `섹션 '${sections.map(name).join(', ')}'을 붙였어요.` : '표시한 화면을 붙였어요. 고칠 내용을 적어 보내세요.');
       setTimeout(() => ta.current?.focus(), 0);
     };
@@ -124,7 +124,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   async function addFiles(list) {
     const files = [...(list || [])].filter((f) => /^image\/(png|jpeg|webp|gif)$/.test(f.type) && f.size < 15e6).slice(0, 4);
     if (!files.length) { if (list?.length) toast('PNG·JPG 그림만 넣을 수 있어요.'); return; }
-    for (const f of files) { try { await attach(await fileUrl(f), { sections: [], notes: [], source: 'file' }); } catch { toast('그림을 읽지 못했어요.'); } }
+    for (const f of files) { try { await attach(await fileUrl(f), { sections: [], notes: [], source: 'file' }); } catch { toast('그림을 읽지 못했어요. PNG나 JPG로 다시 넣어 주세요.'); } }
     setSay('그림을 붙였어요.');
   }
   const onPaste = (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.some((f) => f.type.startsWith('image/'))) { e.preventDefault(); addFiles(files); } };
@@ -198,7 +198,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   function revert(m) {
     const a = applied.get(m.id);
     if (a && undoTop() === a.entry) undo();
-    else if (a) { pushUndo('수정 요청 되돌리기'); update({ blueprint: a.blueprint, info: a.info }); toast('되돌렸어요. 그 뒤에 고친 내용도 함께 돌아갔어요. 위 [되돌리기]로 다시 살릴 수 있어요.'); }
+    else if (a) { pushUndo('수정 요청 되돌리기'); update({ blueprint: a.blueprint, info: a.info }); toast('되돌렸어요. 그 뒤에 고친 것도 함께요. 위 [되돌리기]로 다시 살려요.'); }
     else { toast('새로 고친 뒤라 여기서는 되돌릴 수 없어요. 위의 [되돌리기]를 눌러 주세요.'); return; }
     patchMsg(m.id, { status: 'undone' });
   }

@@ -61,7 +61,7 @@
   function cards(list) { return list.map(function (c) { return '<article class="em-card"><h4>' + c[0] + '</h4><p>' + c[1] + '</p></article>'; }).join(''); }
   var ST3 = [['실습 1', '감정 낱말 카드 만들기'], ['실습 2', '마음 날씨 나누기'], ['실습 3', '멈추고·말하고·고르기']];
   var SCHED = '<li><time>15:30</time><b>마음 날씨로 시작하기</b><span>지금 마음을 한 낱말로</span></li><li><time>15:40</time><b>왜 마음이 먼저인가</b><span>감정과 배움의 관계</span></li><li><time>16:05</time><b>짝 활동</b><span>멈추고·말하고·고르기</span></li><li><time>16:35</time><b>나눔과 질문</b><span>우리 반에 옮기기</span></li><li><time>16:50</time><b>마무리</b><span>내일 해 볼 한 가지</span></li>';
-  var PARTS = [['1부', '왜 마음이 먼저인가', '감정이 흔들리면 배움도 멈추는 까닭'], ['2부', '하루를 여는 감정 체크인', '아침 5분, 마음 날씨와 감정 낱말'], ['3부', '갈등을 배움으로 바꾸는 대화', '멈추고, 말하고, 함께 고르기'], ['마무리', '내일 해 볼 한 가지', '아침 인사에 한마디 더하기']];
+  var PARTS = [['1부', '왜 마음이 먼저인가', '감정이 흔들리면 배움도 멈추는 까닭'], ['2부', '하루를 여는 감정 체크인', '아침 5분, 마음 날씨와 감정 낱말'], ['3부', '갈등을 배움으로 바꾸는 대화', '멈추고, 말하고, 함께 고르기'], ['마무리', '내일 해 볼 한 가지', '아침 인사에 한마디 덧붙이기']];
   function sections(attr) { return PARTS.map(function (p, i) { return '<section class="em em-sec" id="em-s' + (i + 1) + '"' + attr(p, i) + '><p class="em-k">' + p[0] + '</p><h2 class="em-h sm">' + p[1] + '</h2><p class="em-s">' + p[2] + '</p></section>'; }).join(''); }
 
   /* 장면 목록: html(그릴 것) · replay(다시 시작 간격 ms) · scroll(자동 스크롤) · run(포인터·누름 흉내) · also(함께 불러올 효과) */
@@ -69,13 +69,13 @@
     // 글자
     'split-reveal': { html: '<div class="em"><p class="em-k">사회정서학습 연수</p><h2 class="em-h" data-fx="split-reveal">마음을 여는 첫 질문,<br>함께 시작해요</h2></div>', replay: 2500 },
     'kinetic-weight': { html: function () { return '<div class="em"><p class="em-k">마우스가 지나가는 글자가 굵어져요</p><p class="em-h" data-fx="kinetic-weight"' + opts({ mode: 'pointer', radius: Math.round(VW() * 0.26) }) + '>생각이 자라는 교실</p></div>'; }, run: function (P) { P.path(function () { var r = P.rect('.em-h'); var y = r.top + r.height / 2; return [[r.left - 20, y + 10], [r.right + 20, y - 4], [r.left - 20, y + 6]]; }, 4200, 500); } },
-    'scroll-fill': { html: '<div class="em em-tall"><p class="em-lead" data-fx="scroll-fill">아이들의 감정은 고쳐야 할 문제가 아니라 함께 읽어야 할 신호입니다. 오늘은 그 신호를 알아차리고, 이름 붙이고, 다정하게 답하는 연습을 합니다.</p></div>', scroll: { down: 4600, hold: 900, up: 900, rest: 500 }, fade: true },
+    'scroll-fill': { html: '<div class="em em-tall"><p class="em-lead" data-fx="scroll-fill">아이들의 감정은 고쳐야 할 문제가 아니라 함께 읽어야 할 신호예요. 오늘은 그 신호를 알아차리고, 이름 붙이고, 다정하게 답하는 연습을 해요.</p></div>', scroll: { down: 4600, hold: 900, up: 900, rest: 500 }, fade: true },
     'scramble': { html: '<div class="em"><p class="em-k">디지털 역량 연수</p><h2 class="em-h" data-fx="scramble">데이터로 읽는 우리 반</h2></div>', replay: 2600 },
     'gradient-text': { html: '<div class="em"><p class="em-k">수업 설계 연수</p><h2 class="em-h" data-fx="gradient-text">미래 교실 실험실</h2></div>' },
     'marquee': { html: '<div class="em em-full"><ul class="em-mq" data-fx="marquee"><li>공감</li><li>경청</li><li>질문</li><li>기록</li><li>회복</li><li>연결</li></ul><ul class="em-mq em-mq2" data-fx="marquee"' + opts({ reverse: true, speed: 30 }) + '><li>Padlet</li><li>Mentimeter</li><li>CASEL</li><li>구글 시트</li><li>Gemini</li></ul></div>' },
     'counter': { html: '<div class="em"><div class="em-nums"><div><strong data-fx="counter">28명</strong><span>참가 선생님</span></div><div><strong data-fx="counter">90분</strong><span>연수 시간</span></div><div><strong data-fx="counter">5개</strong><span>실습</span></div></div></div>', replay: 2600 },
     'typewriter': { html: '<div class="em"><p class="em-k">오늘의 질문</p><h2 class="em-h sm" data-fx="typewriter">오늘 아침, 가장 먼저 표정이 보인 아이는 누구였나요?</h2></div>', replay: 5000 },
-    'highlight-sweep': { html: '<div class="em"><p class="em-lead" data-fx="highlight-sweep">좋은 피드백은 <mark>구체적인 행동</mark>을 짚고, <mark>다음 한 걸음</mark>을 함께 정합니다.</p></div>', replay: 2500 },
+    'highlight-sweep': { html: '<div class="em"><p class="em-lead" data-fx="highlight-sweep">좋은 피드백은 <mark>구체적인 행동</mark>을 짚고, <mark>다음 한 걸음</mark>을 함께 정해요.</p></div>', replay: 2500 },
     'word-rotate': { html: '<div class="em"><p class="em-k">교원 연수</p><h2 class="em-h"><span data-fx="word-rotate"' + opts({ words: ['함께', '깊이', '서로'], interval: 1500 }) + '>함께</span> 배우는 연수</h2></div>' },
     'link-underline': { html: '<div class="em"><ul class="em-links" data-fx="link-underline"><li><a href="#em-root">연수 자료 내려받기</a></li><li><a href="#em-root">사전 설문 참여하기</a></li><li><a href="#em-root">강사 소개 보기</a></li></ul></div>', run: function (P) { var i = 0; P.every(1300, function () { var a = P.all('.em-links a'); a.forEach(function (x) { x.classList.remove('em-hover'); }); var t = a[i++ % a.length]; var r = t.getBoundingClientRect(); P.glide(r.left + r.width * 0.6, r.top + r.height * 0.6, 420, function () { t.classList.add('em-hover'); }); }); } },
     // 스크롤·배치
@@ -92,7 +92,7 @@
     // 상호작용
     'magnetic': { html: '<div class="em em-c"><p class="em-k">마우스가 가까이 오면 끌려와요</p><div class="em-row em-row-wide"><a class="em-btn" href="#em-root" data-fx="magnetic"' + opts({ strength: 0.22, max: 7 }) + '>첫 실습 시작하기</a><a class="em-btn ghost" href="#em-root" data-fx="magnetic"' + opts({ strength: 0.22, max: 7 }) + '>교재 보기</a></div></div>', run: function (P) { P.path(function () { var r = P.rect('.em-btn'), cx = r.left + r.width / 2, cy = r.top + r.height / 2, a = r.width * 0.5, b = r.height * 0.9; var pts = [[cx - a * 2.2, cy + b * 2.4]]; for (var i = 0; i <= 8; i++) { var t = Math.PI + i * Math.PI / 4; pts.push([cx + Math.cos(t) * a, cy + Math.sin(t) * b]); } pts.push([cx + a * 2.4, cy + b * 2.2]); return pts; }, 4600, 700); } },
     'tilt': { html: '<div class="em"><div class="em-grid two" data-fx="tilt">' + cards([['감정 카드', '스물네 가지 감정 낱말'], ['마음 날씨', '오늘 내 마음은 어떤 날씨']]) + '</div></div>', run: function (P) { P.path(function () { var c = P.all('.em-card').map(function (x) { return x.getBoundingClientRect(); }); var pts = []; c.forEach(function (r) { pts.push([r.left + r.width * 0.12, r.top + r.height * 0.18], [r.left + r.width * 0.86, r.top + r.height * 0.3], [r.left + r.width * 0.2, r.top + r.height * 0.84], [r.left + r.width * 0.8, r.top + r.height * 0.8]); }); return pts; }, 6000, 500); } },
-    'spotlight': { html: '<div class="em em-dark em-spot" data-fx="spotlight"><p class="em-k">실시간 참여</p><h2 class="em-h sm">질문 · 손들기 · 진행 현황 · 보드 · 타이머 · 교재 · 출석</h2></div>', run: function (P) { P.liss(0.36, 0.3, 5200); } },
+    'spotlight': { html: '<div class="em em-dark em-spot" data-fx="spotlight"><p class="em-k">실시간 참여</p><h2 class="em-h sm">질문·손들기·진행 현황·보드·타이머·교재·출석</h2></div>', run: function (P) { P.liss(0.36, 0.3, 5200); } },
     'cursor-follower': { html: '<div data-fx="cursor-follower"></div><div class="em"><p class="em-k">링크 위에서 고리가 커져요</p><ul class="em-links"><li><a href="#em-root">연수 자료 내려받기</a></li><li><a href="#em-root">사전 설문 참여하기</a></li><li><a href="#em-root">강사 소개 보기</a></li></ul></div>', run: function (P) { P.path(function () { var pts = [[VW() * 0.82, VH() * 0.2]]; P.all('.em-links a').forEach(function (a) { var r = a.getBoundingClientRect(); pts.push([r.left + r.width * 0.3, r.top + r.height / 2], [r.left + r.width * 0.8, r.top + r.height / 2]); }); pts.push([VW() * 0.8, VH() * 0.82]); return pts; }, 5600, 400); } },
     'micro-copy': { html: '<div class="em"><div class="em-prompt" data-fx="micro-copy"><p id="em-pr">초등 4학년 국어 시간에 쓸 감정 낱말 활동을 20분 분량으로 설계해 줘.</p><button class="em-btn sm" type="button" data-copy-target="#em-pr">복사</button></div></div>', run: function (P) { P.every(2400, function () { var b = P.one('.em-btn'); P.press(b, function () { if (FX.copied) FX.copied(b); }); }, 500); } },
     'confetti': { also: ['ripple'], html: '<div class="em em-c"><p class="em-k">실습 3 · 멈추고·말하고·고르기</p><button class="em-btn" type="button" data-fx="confetti ripple">완료 체크</button></div>', run: function (P) { P.every(2800, function () { var b = P.one('.em-btn'); P.press(b, function () { FX.celebrate({ el: b }); }); }, 600); } },
@@ -179,7 +179,7 @@
       var x0 = px < 0 ? x + VW() * 0.2 : px, y0 = py < 0 ? y + VH() * 0.2 : py, t0 = 0;
       raf(function (t) { if (!t0) t0 = t; var k = Math.min(1, (t - t0) / ms); moveTo(x0 + (x - x0) * ease(k), y0 + (y - y0) * ease(k)); if (k >= 1) { if (done) done(); return false; } });
     },
-    /* 단추로 가서 누름: pointerdown·up을 보내고(물결 등) 이어서 할 일을 부름 */
+    /* 버튼으로 가서 누름: pointerdown·up을 보내고(물결 등) 이어서 할 일을 부름 */
     press: function (el, then) {
       if (!el) return;
       var r = el.getBoundingClientRect(), x = r.left + r.width * 0.55, y = r.top + r.height * 0.55;

@@ -3,7 +3,7 @@
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
 
-// 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 단추로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소는 각 회사 공식 문서와 맞춰 봄(2026-11-12, 근거는 ai-guides.jsx 머리말).
+// 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 버튼으로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소는 각 회사 공식 문서와 맞춰 봄(2026-11-12, 근거는 ai-guides.jsx 머리말).
 // OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
 export const PROVIDERS = {
   gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/billing', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, images: true },

@@ -11,7 +11,7 @@
   function btn(text, cls, fn) { var b = el('button', 'lp-btn lp-btn-sm ' + (cls || 'lp-btn-ghost'), text); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; }
   var tt; function toast(m) { var t = $('[data-toast]'); if (!t) return; t.textContent = m; t.classList.add('is-on'); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('is-on'); }, 2400); }
   function save(name, text) { var u = URL.createObjectURL(new Blob([text.charAt(0) === '﻿' ? text : '﻿' + text], { type: 'text/csv;charset=utf-8' })); var a = el('a'); a.href = u; a.download = name; doc.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1500); }
-  if (!DATA.live || !window.LecLive) { var m = $('[data-console-main]'); if (m) { m.hidden = false; m.appendChild(el('p', 'lp-note', '이 사이트는 실시간 기능이 꺼져 있어 강사 화면을 쓸 수 없어요. 발표 화면의 도구(이름 뽑기·모둠·타이머)는 그대로 쓸 수 있어요.')); } var f0 = $('[data-admin-form]'); if (f0) f0.hidden = true; return; }
+  if (!DATA.live || !window.LecLive) { var m = $('[data-console-main]'); if (m) { m.hidden = false; m.appendChild(el('p', 'lp-note', '이 사이트는 참여 기능이 꺼져 있어 강사 화면을 쓸 수 없어요. 발표 화면의 도구(이름 뽑기·모둠·타이머)는 그대로 쓸 수 있어요.')); } var f0 = $('[data-admin-form]'); if (f0) f0.hidden = true; return; }
 
   var U = LecLive.util, X = U.ext;
   var feats = DATA.live.features || [], secs = BP.sections || [], stations = BP.stations || [];
@@ -120,7 +120,7 @@
     var op = polls.filter(function (p) { return p.id === state.openPoll; })[0];
     // 지금 띠
     var row = el('div', 'lp-now-strip');
-    kpi(row, parts.length, '참여자');
+    kpi(row, parts.length, '참가자');
     if (ON.help) kpi(row, openHelp.length, '열린 도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '', openHelp.length > 0);
     if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(row, rs + '%', '모르겠어요 신호', sig.total + '명 중 ' + sig.red + '명', sig.total && rs >= 25); }
     if (ON.poll) kpi(row, op ? pollAnswers(op.id).length + '명' : '없음', '지금 투표', op ? op.question : '열린 투표가 없어요');
@@ -147,7 +147,7 @@
       r.appendChild(bar); r.appendChild(el('small', '', '완료 ' + c.done + ' · 하는 중 ' + c.doing + (c.stuck ? ' · 도움 요청 ' + c.stuck : ''))); heat.appendChild(r);
     });
     hb.appendChild(heat);
-    hb.appendChild(el('p', 'lp-small', '초록 완료 · 주황 하는 중 · 빨강 도움 요청. 참여자 ' + parts.length + '명 기준'));
+    hb.appendChild(el('p', 'lp-small', '초록 완료 · 주황 하는 중 · 빨강 도움 요청. 참가자 ' + parts.length + '명 기준'));
   }
   function renderHelp(open) {
     var hl = P.help.body; hl.textContent = ''; var ul = el('ul', 'lp-list');
@@ -292,7 +292,7 @@
   function syncControl() { drawMats(); if (C.follow) C.follow.checked = !!state.follow; if (C.step && doc.activeElement !== C.step) C.step.value = state.step || ''; if (C.slide && doc.activeElement !== C.slide && state.slide) C.slide.value = state.slide; }
 
   var KINDS = [
-    ['participants', '참여자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],
+    ['participants', '참가자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],
     ['questions', '질문', ON.qa], ['posts', '보드 글', ON.board], ['help', '도움 요청', ON.help], ['answers', '투표·신호 응답', ON.poll || ON.signal], ['survey', '설문 응답', ON.survey],
   ];
   function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
@@ -311,7 +311,7 @@
     b.appendChild(menu);
     b.appendChild(el('p', 'lp-small', '연수가 끝나고 ' + ((DATA.privacy || {}).retentionDays || 30) + '일이 지나면 아래 버튼으로 모든 기록을 지워 주세요.'));
     var del = btn('데이터 모두 지우기', 'lp-danger', function () {
-      if (del.getAttribute('data-armed') !== '1') { del.setAttribute('data-armed', '1'); del.textContent = '정말 지울까요? 한 번 더 누르면 지워져요'; setTimeout(function () { del.removeAttribute('data-armed'); del.textContent = '데이터 모두 지우기'; }, 5000); return; }
+      if (del.getAttribute('data-armed') !== '1') { del.setAttribute('data-armed', '1'); del.textContent = '한 번 더 눌러 지우기'; setTimeout(function () { del.removeAttribute('data-armed'); del.textContent = '데이터 모두 지우기'; }, 5000); return; }
       conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); render(); toast('모든 기록을 지웠어요.'); }, err);
     });
     b.appendChild(del);
@@ -321,7 +321,7 @@
     var site = DATA.siteUrl || (local ? '' : location.href.split('#')[0].replace(/console\.html.*$/, ''));
     var u = site || (local ? DATA.shortUrl || '' : '');
     var ul = $('meta[name="lp-unlock"]'), qu = site ? site.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
-    var j = el('div', 'lp-row'); j.style.marginTop = '8px'; var q = el('div', 'lp-qr'); q.style.width = '120px'; q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드');
+    var j = el('div', 'lp-row'); j.style.marginTop = '8px'; var q = el('div', 'lp-qr'); q.style.width = '120px'; q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드'); // copy-ok: 화면 읽기 이름표는 'QR 코드'도 됨(writing.md 4절)
     if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
     else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
     // 강사가 넣은 짧은 주소가 있으면 함께 보여 줌(QR은 언제나 원래 주소)

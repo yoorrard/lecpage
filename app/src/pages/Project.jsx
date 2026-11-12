@@ -36,7 +36,7 @@ export function Project({ id, step }) {
   const cur = STEPS.find((x) => x.n === s) || STEPS[0];
   const go = (n) => { location.hash = `#/p/${id}/${n}`; };
   const done = (n) => (n === 1 ? !!p.blueprint : n === 2 ? !!p.visited?.[3] : !!p.deploy?.lastUrl);
-  async function saveProjectFile() { const z = await exportProjectFile(p); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip'); toast('프로젝트 파일을 저장했어요. 다른 컴퓨터의 lecpage에서 열 수 있어요.'); }
+  async function saveProjectFile() { const z = await exportProjectFile(p); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip'); toast('연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.'); }
   return (
     <div class={`wiz stage-${s}`}>
       <header class="wiz-head">

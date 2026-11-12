@@ -362,7 +362,7 @@ function fanCards(M) {
 }
 C.collage = (M) => {
   const cards = fanCards(M);
-  const fan = cards.length >= 2 ? `<div class="lp-fan"${artFx(M, 'slide-fan')} style="--n:${cards.length}"><ol class="lp-fan-list" aria-label="${M.deck ? '교재 미리 보기' : '오늘의 차례'}">${cards.map((c, i) => `<li class="lp-fan-card" style="--i:${i}"><a class="lp-fan-face" href="${esc(c.href)}">${c.src ? `<img src="${esc(c.src)}" alt="${esc(`${c.no}쪽: ${c.title}`)}" loading="${i ? 'lazy' : 'eager'}" decoding="async">` : `<span class="lp-fan-pg" aria-hidden="true">${pad2(c.no)}</span><b>${esc(c.title)}</b>`}</a></li>`).join('')}</ol><button class="lp-btn lp-btn-ghost lp-btn-sm lp-fan-next" type="button" data-fan-next hidden><span>다음 장</span>${icon('right')}</button></div>` : '';
+  const fan = cards.length >= 2 ? `<div class="lp-fan"${artFx(M, 'slide-fan')} style="--n:${cards.length}"><ol class="lp-fan-list" aria-label="${M.deck ? '교재 미리보기' : '오늘의 차례'}">${cards.map((c, i) => `<li class="lp-fan-card" style="--i:${i}"><a class="lp-fan-face" href="${esc(c.href)}">${c.src ? `<img src="${esc(c.src)}" alt="${esc(`${c.no}쪽: ${c.title}`)}" loading="${i ? 'lazy' : 'eager'}" decoding="async">` : `<span class="lp-fan-pg" aria-hidden="true">${pad2(c.no)}</span><b>${esc(c.title)}</b>`}</a></li>`).join('')}</ol><button class="lp-btn lp-btn-ghost lp-btn-sm lp-fan-next" type="button" data-fan-next hidden><span>다음 장</span>${icon('right')}</button></div>` : '';
   return show(M, fan);
 };
 

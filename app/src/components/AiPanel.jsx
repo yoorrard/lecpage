@@ -131,7 +131,7 @@ function Paste({ ready, prompt, full, first, onApply }) {
   }
   /** 챗봇 답을 클립보드에서 읽어 바로 적용 */
   async function pasteAnswer() {
-    try { const v = (await navigator.clipboard.readText()).trim(); if (!v) { toast('복사한 답이 없어요. 챗봇 답 아래의 복사 단추를 눌러 주세요.'); return; } setAnswer(v); onApply(v); }
+    try { const v = (await navigator.clipboard.readText()).trim(); if (!v) { toast('복사한 답이 없어요. 챗봇 답 아래의 복사 버튼을 눌러 주세요.'); return; } setAnswer(v); onApply(v); }
     catch { toast('아래 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); }
   }
   return (
@@ -150,7 +150,7 @@ function Paste({ ready, prompt, full, first, onApply }) {
       ) : (
         <div class="key-now key-now-paste"><div class="key-now-b">
           <h3 class="key-now-h">답 붙여넣기</h3>
-          <p>답이 다 나오면 답 아래의 복사 단추를 누르고 돌아와요.</p>
+          <p>답이 다 나오면 답 아래의 복사 버튼을 누르고 돌아와요.</p>
           <div class="key-now-go"><button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !answer ? ' nudge' : ''}`} disabled={!ready} onClick={pasteAnswer}>답 붙여넣기</button></div>
           <textarea class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여넣기" aria-label="챗봇의 답" />
           {answer.trim() && <div><button type="button" class="btn btn-primary" onClick={() => onApply(answer)}>{first ? '이 답으로 만들기' : '이 답으로 바꾸기'}</button></div>}
@@ -190,10 +190,10 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }
           <p class="small muted">{PROVIDERS[ai.provider].note}</p>
         </AiStatus>
         <div class="btn-row">
-          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={() => run()}>{busy ? (full ? '다시 짜는 중… (1~2분)' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
+          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={() => run()}>{busy ? (full ? '다시 짜는 중…' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
           {busy && <button class="btn btn-quiet" onClick={() => ctrl.current?.abort()}>멈추기</button>}
         </div>
-        {busy && <div class="row" role="status"><Mascot size={48} mood="think" look /><span class="muted">{note || (full ? '교재를 읽고 연수 흐름을 짜고 있어요.' : '문구를 읽고 다듬고 있어요.')}</span></div>}
+        {busy && <div class="row" role="status"><Mascot size={48} mood="think" look /><span class="muted">{note || (full ? '교재를 읽고 연수 흐름을 짜고 있어요. 1~2분 걸려요.' : '문구를 읽고 다듬고 있어요.')}</span></div>}
       </div>
     );
   }
