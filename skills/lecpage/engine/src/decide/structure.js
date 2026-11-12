@@ -77,7 +77,8 @@ export function decideStructure(info = {}, material = null, concept = null) {
   const sg = d.signals || {};
   const ar = d.archetype || {};
   const practice = d.practice || { count: 0, ratio: 0 };
-  const size = Number(info.size) || d.event?.size || 0;
+  // 앱의 인원은 구간 값(30명 이하=25 …)이 기본으로 들어 있어 교재에 적힌 참석 인원("300명")이 더 크면 그것을 씀
+  const size = Math.max(Number(info.size) || 0, d.event?.size || 0);
   const reasons = [];
   const hint = conceptHint(concept);
   let flow = '';

@@ -12,6 +12,7 @@ import { toast } from '../../lib/util.js';
 import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
 import { useAiJob, startMakeJob, stopJob, clearJob } from '../../lib/ai-job.js';
 import { SIZE } from './Start.jsx';
+import { StructureNote } from '../../components/Structure.jsx';
 
 const ADMIN = [{ value: 'school', label: '교내 자율연수' }, { value: 'official', label: '교육청 승인 직무연수' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'student', label: '학생 대상' }];
 const DEVICES = [{ value: 'laptop', label: '개인 노트북' }, { value: 'chromebook', label: '학교 크롬북' }, { value: 'tablet', label: '태블릿' }, { value: 'phone', label: '휴대폰' }];
@@ -64,6 +65,7 @@ export function StepEdit({ p, update, go }) {
       </StepHead>
       {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
         onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
+      {job?.status !== 'running' && <StructureNote p={p} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
       <div class="workspace">
         <div class="ws-panel">
           <Tabs label="고칠 것" tabs={tabs} value={tab} onChange={setTab} />

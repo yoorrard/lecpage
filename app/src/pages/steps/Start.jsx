@@ -12,6 +12,7 @@ import { takePendingFiles } from '../../lib/project.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
 import { FEATURES, makeDraft, syncInfo, applyInfo } from '../../lib/blueprint.js';
+import { FoundSummary } from '../../components/Structure.jsx';
 
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
 const FORMATS = [{ value: '', label: '교재 보고 정하기' }, { value: 'lecture', label: '강의·특강' }, { value: 'practice', label: '실습·워크숍' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'course', label: '여러 차시 과정' }];
@@ -53,6 +54,9 @@ function useIngest(p, update) {
     fill('title', det.title); fill('subtitle', det.subtitle);
     if (det.event) for (const k of ['date', 'start', 'end', 'venue', 'organizer']) fill(k, det.event[k]);
     if (det.archetype?.format) info.format = det.archetype.format;
+    // 교재에 적힌 참석 인원("300명") → 인원 구간(강사가 인원을 고르지 않았을 때만)
+    const n = det.event?.size;
+    if (n && (!info.size || info.size === p.autoFilled?.size || (!p.infoTouched && info.size === SIZE[0].value))) { info.size = n <= 30 ? 25 : n <= 100 ? 60 : n <= 300 ? 200 : 500; auto.size = info.size; }
     dropAssetCache(p.id); // 새 쪽 그림을 미리보기가 바로 쓰게
     update({ material: merged, files: metas, info, autoFilled: auto, slidesMade, summary: merged ? ing.summarizeMaterial(merged) : '' });
     const bad = fileObjs.length - ok;
@@ -177,7 +181,7 @@ export function StepStart({ p, update, go }) {
               ))}
             </ul>
           )}
-          {mat && <p class="small muted">교재에서 찾은 것: 실습 {d.steps?.length || 0}개 · 프롬프트 {d.prompts?.length || 0}개 · 도구 {d.tools?.length || 0}개 · 링크 {d.links?.length || 0}개</p>}
+          {mat && !busy && <FoundSummary p={p} setInfo={setInfo} />}
       </section>
 
       <section class="block">

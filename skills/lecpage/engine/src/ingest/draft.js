@@ -367,7 +367,7 @@ export function materialToDraft(material, info = {}) {
   // 한눈에 보기: 흐름에 맞는 값만(행사: 참석·발표·시간 / 과정: 연수 시간·차시·출석 기준 / 문서: 교재의 수치 문장)
   const glance = [];
   if (flow === 'event') {
-    const size = info.size || ev.size;
+    const size = ev.size || info.size; // 교재에 적힌 참석 인원이 먼저(앱의 인원은 구간 값)
     if (size) glance.push({ value: `${size}명`, label: '참석', note: '' });
     if (speakers.length) glance.push({ value: `${speakers.length}개`, label: '발표', note: '' });
     if (durationMin) glance.push({ value: hoursLabel(durationMin), label: '진행 시간', note: '' });
