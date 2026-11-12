@@ -2,7 +2,7 @@
 // 교재 요약(글)과 연수 정보만 고른 AI 회사로 보냅니다. 강사 메일·실시간 연결 값·키는 보내지 않습니다.
 import { useEffect, useState } from 'preact/hooks';
 import { E } from './engine.js';
-import { makePrompt, makeDraft, looksTruncated, applyInfo, keepFontFields } from './blueprint.js';
+import { makePrompt, looksTruncated, applyInfo, keepFontFields } from './blueprint.js';
 import { generateAuto, getActiveAI, explainError, PROVIDERS } from './ai.js';
 import { pushUndoFor } from './undo.js';
 
@@ -55,7 +55,8 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     if (v.errors.length) throw Object.assign(new Error(v.errors.map((x) => x.message_ko).join(' ')), { kind: 'invalid' });
     const cur = getProject();
     pushUndoFor(pid, 'AI로 만들기 전', cur);
-    update((c) => ({ blueprint: applyInfo(keepFontFields(bp, c.blueprint || makeDraft(c, ing)), c.info, c.material, c.blueprint), aiMethod: 'ai' }));
+    // 교재 보기의 쪽 그림·쪽 글·쪽별 도구는 AI 답이 아니라 교재에서(keepDraftParts)
+    update((c) => ({ blueprint: applyInfo(keepFontFields(bp, c.blueprint, c, ing), c.info, c.material, c.blueprint), aiMethod: 'ai' }));
     set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null });
   } catch (e) {
     if (e.name === 'AbortError') { clearJob(pid); return; }

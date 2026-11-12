@@ -3,7 +3,7 @@
 //   {
 //     "meta":     { …부분 병합… },            // 객체는 깊게 병합, 배열은 통째로 바꿈, null은 그 키를 지움
 //     "design":   { …부분 병합… },
-//     "audience" | "archetype" | "privacy" | "live": { …부분 병합… }   // live는 provider·features 등만(주소·키·코드 제외)
+//     "audience" | "archetype" | "privacy" | "live" | "concept": { …부분 병합… }   // live는 provider·features 등만(주소·키·코드 제외)
 //     "instructors": [ … ],                     // 배열은 통째로 바꿈
 //     "sections": { "<칸 id>": { …얕은 병합… } | null },   // null이면 칸 삭제
 //     "add":      [ { "after": "<칸 id>"|null, "section": { "type": "...", … } } ],  // after가 없거나 null이면 맨 끝
@@ -17,6 +17,7 @@ import { validate, str } from './validate.js';
 import { SECTION_DEFS, SECTION_TYPES } from './schema/sections.js';
 import { PRESETS } from './design/presets.js';
 import { FX } from './design/fx-catalog.js';
+import { syncHeroMeta } from './hero-meta.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -24,7 +25,7 @@ const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)
 // validate.js의 칸 id 규칙과 같게(브리프·검증 결과에 보이는 id로 칸을 찾음)
 const slug = (s, i) => (str(s, 40).toLowerCase().replace(/[^a-z0-9가-힣]+/g, '-').replace(/^-|-$/g, '') || `s${i}`);
 
-const MERGE_KEYS = ['meta', 'design', 'audience', 'archetype', 'privacy', 'live', 'deploy'];
+const MERGE_KEYS = ['meta', 'design', 'audience', 'archetype', 'privacy', 'live', 'deploy', 'concept'];
 const REPLACE_KEYS = ['instructors', 'sources'];
 const KNOWN = new Set([...MERGE_KEYS, ...REPLACE_KEYS, 'sections', 'add', 'order', 'note']);
 /** 패치로 바꿀 수 없는 값(강사에게 직접 받는 값) */
@@ -92,11 +93,16 @@ export function applyBlueprintPatch(bp, patch) {
     raw[k] = mergeDeep(raw[k], p[k]); applied++;
   }
   if (isObj(p.design) && p.design.preset) delete raw._presetAuto; // 직접 고른 디자인(자동 추천 아님)
+  // 컨셉을 고치면 선생님이 세운 컨셉으로 표시(다시 만들 때 지킴). source를 직접 적었으면 그 값
+  if (isObj(p.concept) && isObj(raw.concept) && !('source' in p.concept)) raw.concept.source = 'teacher';
   for (const k of REPLACE_KEYS) {
     if (!(k in p)) continue;
     if (!Array.isArray(p[k])) { warnings.push({ path: k, message_ko: `${k}는 배열이어야 해요.` }); continue; }
     raw[k] = clone(p[k]); applied++;
   }
+
+  // 일시·장소·강사가 바뀌면 첫 화면에 따로 적힌 그 줄도 함께 바꿈(초안이 만든 글자 그대로일 때만)
+  if (('meta' in p || 'instructors' in p) && isObj(bp)) syncHeroMeta(bp, raw);
 
   // 칸 고치기·지우기(얕은 병합: 칸의 맨 위 키만 바꾸고, 배열·객체 값은 통째로 바꿈)
   if ('sections' in p) {
@@ -195,6 +201,8 @@ export function diffSummary(before, after, max = 12) {
     const x = a.design?.[k], y = b.design?.[k];
     if (!same(x, y)) { const xs = designValue(k, x), ys = designValue(k, y); lines.push(`${name}: ${xs ? `${short(xs)} → ` : ''}${ys ? short(ys) : '기본값'}`); }
   }
+  if (!same(a.concept?.idea, b.concept?.idea)) lines.push(b.concept?.idea ? `컨셉: ${a.concept?.idea ? `${short(a.concept.idea)} → ` : ''}${short(b.concept.idea)}` : '컨셉 지움');
+  else if (!same({ ...a.concept, source: 0 }, { ...b.concept, source: 0 })) lines.push('컨셉의 모티프·근거·섹션·기능 바뀜');
   if (!same(a.access?.mode, b.access?.mode)) lines.push(`공개 범위: ${ACCESS_KO[a.access?.mode || 'link']} → ${ACCESS_KO[b.access?.mode || 'link']}`);
   for (const k of ['audience', 'archetype', 'privacy', 'instructors']) if (!same(a[k], b[k])) lines.push({ audience: '대상 정보 바뀜', archetype: '사이트 유형 바뀜', privacy: '개인정보 설정 바뀜', instructors: '강사 정보 바뀜' }[k]);
   if (!same({ ...a.live, url: 0, code: 0, anonKey: 0 }, { ...b.live, url: 0, code: 0, anonKey: 0 })) lines.push('참여 기능 설정 바뀜');

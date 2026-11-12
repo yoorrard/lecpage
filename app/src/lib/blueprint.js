@@ -1,7 +1,7 @@
 // 연수 정보(강사가 고른 값) ↔ 설계도 연결. 규칙은 엔진(engine/src/intake.js)에 있고 skill CLI와 함께 씁니다.
 // 강사 입력이 언제나 우선이고, 실시간 주소·키·코드와 QR·접속 주소는 AI 답·가져온 파일에서 받지 않습니다.
 import { E } from './engine.js';
-import { draftInfo, applyInfo } from '@engine/src/intake.js';
+import { draftInfo, applyInfo, keepDraftParts } from '@engine/src/intake.js';
 
 export { LIVE_KEYS, FEATURES, minutesBetween, draftInfo, applyInfo, syncInfo, sanitizeImported } from '@engine/src/intake.js';
 
@@ -14,13 +14,16 @@ export function makePrompt(p, ing) {
   const context = p.material ? ing.materialToAIContext(p.material, { maxChars: 50000 }) : '';
   const info = { ...p.info }; delete info.instructorEmail;
   const draft = p.material ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : null;
-  return E.buildPrompt({ context, info, draft });
+  return E.buildPrompt({ context, info, draft, material: p.material });
 }
 
-/** AI가 다시 짠 설계도에도 교재 글꼴 정보를 이어 줌 */
-export function keepFontFields(bp, base) {
-  const sf = base?.design?.sourceFonts; if (!bp || !sf || bp.design?.sourceFonts) return bp;
-  return { ...bp, design: { ...(bp.design || {}), sourceFonts: sf } };
+/**
+ * AI가 다시 짠 설계도에 AI에게 맡기지 않는 것을 이어 줌(엔진 keepDraftParts): 교재 보기의 쪽 그림·쪽 글·쪽별 도구,
+ * 실습의 교재 그림, 교재 글꼴·기관 색. 기준은 지금 교재로 새로 만든 초안(강사가 지운 칸도 쪽 그림은 교재에서 다시 옴)
+ */
+export function keepFontFields(bp, base, p = null, ing = null) {
+  const draft = p?.material && ing ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : base;
+  return keepDraftParts(bp, draft || base);
 }
 
 /** 챗봇 답이 중간에 끊겼는지(여는 괄호가 더 많음) */

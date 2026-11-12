@@ -70,7 +70,7 @@ test('brief: 교재·설계도 요약은 수백 토큰 안', () => {
   const m = run('brief', 'work/material.json');
   assert.equal(m.code, 0, m.out);
   assert.ok(m.out.length < 1200, `${m.out.length}자`);
-  for (const k of ['교재 workshop.pptx', '프롬프트 4', '유형 실습형', '빈칸']) assert.ok(m.out.includes(k), `${k} 없음\n${m.out}`);
+  for (const k of ['교재 workshop.pptx', '프롬프트 4', '구성 따라 하기(follow)', '찾은 것 실습', '빈칸']) assert.ok(m.out.includes(k), `${k} 없음\n${m.out}`);
   const b = run('brief', 'work');
   assert.ok(b.out.length < 1200, `${b.out.length}자`);
   assert.match(b.out, /칸 \d+: hero/);
@@ -80,6 +80,22 @@ test('brief: 교재·설계도 요약은 수백 토큰 안', () => {
   assert.equal(j.data.sections.find((s) => s.id === 'stations').count, 3);
   const full = readFileSync(join(dir, 'work/material.json'), 'utf8').length + readFileSync(join(dir, 'work/blueprint.json'), 'utf8').length;
   assert.ok((m.out.length + b.out.length) * 10 < full, '요약이 원본 JSON의 1/10보다 작아야 함');
+});
+
+test('structure: 흐름·이유·칸 순서·권하는 기능, 싣지 못한 것을 교재 순서 자리에 넣는 패치', () => {
+  const r = run('structure', 'work');
+  assert.equal(r.code, 0, r.out);
+  for (const k of ['흐름 따라 하기(follow)', '이유 ', '칸 순서 hero', '권하는 기능', '싣지 못한 것']) assert.ok(r.out.includes(k), `${k} 없음\n${r.out}`);
+  // AI 답처럼 실습 칸을 뺀 설계도 → 싣지 못한 것이 생기고, 패치로 넣으면 0
+  const w = join(dir, 'work2'); mkdirSync(w, { recursive: true });
+  writeFileSync(join(w, 'material.json'), readFileSync(join(dir, 'work/material.json')));
+  const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));
+  bp.sections = bp.sections.filter((s) => !['stations', 'deck', 'prompts'].includes(s.type)); delete bp.structure;
+  writeFileSync(join(w, 'blueprint.json'), JSON.stringify(bp));
+  const j = json('structure', 'work2', '--add-leftovers');
+  assert.ok(j.data.leftovers.count > 0 && j.data.patch, JSON.stringify(j.data).slice(0, 300));
+  assert.equal(run('patch', 'work2/blueprint.json', 'work2/leftovers.patch.json', '--no-build').code, 0);
+  assert.equal(json('structure', 'work2').data.leftovers.count, 0);
 });
 
 test('patch: --set과 패치 파일로 일부만 고치고 다시 빌드, 보호 값은 막음, --undo', () => {

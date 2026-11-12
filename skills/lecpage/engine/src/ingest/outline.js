@@ -25,7 +25,8 @@ export function materialToAIContext(material, { maxChars = 24000, notes = true, 
   const files = material.files || [];
   const multi = files.length > 1;
   const renderOnly = new Set(files.filter((f) => f.renderOf).map((f) => f.id));
-  const pages = (material.pages || []).filter((p) => !p.error && !renderOnly.has(p.file));
+  // 숨긴 쪽은 보내지 않음(사이트에 싣지 않는 쪽)
+  const pages = (material.pages || []).filter((p) => !p.error && !p.hidden && !renderOnly.has(p.file));
   const promptKeys = new Set((d.prompts || []).map((x) => textKey(x.text)));
   const keep = new Set(promptKeys);
   for (const s of d.steps || []) for (const it of s.items) keep.add(textKey(it.split('\n')[0]));

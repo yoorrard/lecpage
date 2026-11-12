@@ -61,7 +61,7 @@ export function AiPanel({ p, onBlueprint }) {
     if (!bp || typeof bp !== 'object' || !Array.isArray(bp.sections)) { setErr({ title: '답의 형식이 달라요.', body: '프롬프트를 다시 복사해 새 대화에 붙여 넣어 주세요.', actions: [] }); return; }
     const v = E.validate(bp);
     if (v.errors.length) { setErr({ title: '답에 고칠 점이 있어요.', body: v.errors.map((x) => x.message_ko).join(' '), actions: [] }); return; }
-    onBlueprint(keepFontFields(bp, base.current), { polish: false });
+    onBlueprint(keepFontFields(bp, base.current, p, ing), { polish: false }); // 교재 보기의 쪽 그림·쪽 글은 교재에서
   }
 
   return (

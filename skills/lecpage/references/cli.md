@@ -21,7 +21,7 @@
 | `work/blueprint.json` | 지금 설계도. `patch`가 고치는 파일 | 안 올림 |
 | `work/blueprint.prev.json` | 직전 판(`patch --undo`) | 안 올림 |
 | `work/assets/` | 쪽 그림(`slides/`)·교재 속 그림(`media/`) | 빌드가 `dist/assets/`로 복사 |
-| `work/lecpage.state.json` | 마지막 빌드 위치·교재 해석 캐시 키 | 안 올림 |
+| `work/lecpage.state.json` | 마지막 빌드 위치(work 기준 상대 경로)·교재 해석 캐시 키 | 안 올림 |
 | `qa/` | 점검 스크린샷 4장과 report.json | 안 올림 |
 
 `--work 폴더`로 작업 폴더를 바꿀 수 있습니다.
@@ -31,7 +31,8 @@
 | 명령 | 하는 일 | 출력 |
 |---|---|---|
 | `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, 빌드, 점검 |
-| `brief [work\|blueprint.json\|material.json]` | 큰 JSON 대신 읽는 요약. 칸 id·항목 수, 실습별 단계·프롬프트 수와 쪽, 빈칸, 주의, 글꼴 | 10줄 안팎(수백 토큰) |
+| `brief [work\|blueprint.json\|material.json]` | 큰 JSON 대신 읽는 요약. 칸 id·항목 수, 구성(흐름·권하는 기능), 실습별 단계·프롬프트 수와 쪽, 빈칸, **싣지 못한 것 n개**, 주의, 글꼴. 교재 요약에는 찾은 것과 교재에서 찾은 주소(강사 확인 뒤 `info.json`) | 10줄 안팎(수백 토큰) |
+| `structure [work\|blueprint.json] [-i info.json] [--add-leftovers]` | 구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것. `--add-leftovers`는 그것을 교재 순서 자리에 글 칸으로 넣는 `work/leftovers.patch.json`을 씀 → `patch`로 반영 | 6줄 안팎 |
 | `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증 → 저장(직전 판 보관) → 마지막 빌드 위치에 다시 빌드 | 바뀐 점 한 줄씩 |
 | `options <blueprint.json> [--presets a,b,c] [-o 폴더]` | 추천 3안(또는 고른 안)을 따로 빌드하고 PC 첫 화면·PC 본문·휴대폰을 한 장(`work/options/contact-sheet.png`)에 모음 | 안마다 한 줄 |
 | `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |

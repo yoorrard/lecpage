@@ -2,6 +2,9 @@
 // 원칙: 강사가 준 값이 언제나 우선. 실시간 서버 주소·키·코드와 QR·접속 대상 주소는 AI 답·가져온 파일·교재에서 받지 않고
 // 강사가 정한 값(prev 설계도, info)만 씁니다.
 import { decideArchetype } from './decide/archetype.js';
+import { decideStructure, structureFor, linkConcept, cleanStructure, FLOW_INFO } from './decide/structure.js';
+import { findLeftovers } from './ingest/compose.js';
+import { syncHeroMeta } from './hero-meta.js';
 import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, deriveConcept } from './decide/concept.js';
@@ -47,6 +50,9 @@ export function draftInfo(info = {}, slidesMade = false) {
     title: info.title, subtitle: info.subtitle, organizer: info.organizer, date: info.date, start: info.start, end: info.end, venue: info.venue,
     mode: info.mode, joinUrl: info.joinUrl || '', contact: info.contact, size: info.size, adminKind: info.admin, surveyUrl: info.surveyUrl,
     goals: info.goals, who: info.who, dates: info.dates, archetype: info.archetype, today: info.today,
+    // 구성 정하기(decide/structure.js)가 읽는 값: 강사가 고른 형식(요청 사항의 "실습 위주"도), 켠 참여 기능, 연수 성격, 컨셉
+    format: info.format || (info.request ? requestHints(info.request).format : '') || undefined,
+    features: info.features, admin: info.admin, concept: info.concept,
     audience: {
       ...(info.audience || {}),
       ...(has(info, 'devices') ? { devices: [].concat(info.devices) } : {}),
@@ -58,12 +64,47 @@ export function draftInfo(info = {}, slidesMade = false) {
   };
 }
 
-/** 강사가 고른 연수 형식으로 사이트 유형(칸 순서)을 정함. format이 없으면 '' */
+/** 강사가 고른 연수 형식으로 사이트 유형을 정함. format이 없으면 ''. 교재가 있으면 구성 정하기(흐름)에서 따라 나온 유형 */
 export function archetypeFor(info = {}, material = null) {
   const format = info.format || (info.request ? requestHints(info.request).format : '');
   if (!format) return '';
+  if (material?.detected?.signals) return decideStructure({ ...info, format }, material, info.concept || null).archetype.primary;
   const ev = material?.detected?.event || {};
   return decideArchetype({ format, durationMin: minutesBetween(info.start || ev.start, info.end || ev.end) || undefined, size: info.size, practiceRatio: material?.detected?.practice?.ratio }).primary;
+}
+
+/**
+ * AI가 다시 짠 설계도에 초안의 것을 이어 줌(AI에게 맡기지 않는 것):
+ *  - 교재 보기(deck)의 쪽: 쪽 그림·쪽 글·쪽별 도구·내려받기는 초안 것 그대로. AI 답에서는 제목·메뉴 이름·안내 글(lead)·주의 글(notice)만 받음.
+ *    AI 답에 교재 보기가 없으면 초안의 교재 보기를 본문 뒤에 넣음
+ *  - 실습의 교재 그림: 같은 쪽에서 나온 실습이면 초안의 그림을 이어 줌
+ *  - 교재 글꼴(design.sourceFonts), 교재 파일 목록(sources)
+ * @param bp AI 답(설계도)  @param draft 같은 교재로 만든 초안(materialToDraft)
+ */
+export function keepDraftParts(bp, draft) {
+  if (!bp || typeof bp !== 'object' || !draft || typeof draft !== 'object') return bp;
+  const out = { ...bp, sections: Array.isArray(bp.sections) ? bp.sections.slice() : [] };
+  const secs = Array.isArray(draft.sections) ? draft.sections : [];
+  const dDeck = secs.find((s) => s?.type === 'deck' && s.slides?.length);
+  if (dDeck) {
+    const i = out.sections.findIndex((s) => s?.type === 'deck');
+    if (i >= 0) { const a = out.sections[i]; out.sections[i] = { ...dDeck, id: a.id || dDeck.id, title: a.title ?? dDeck.title, nav: a.nav ?? dDeck.nav, lead: a.lead || dDeck.lead || '', notice: a.notice || dDeck.notice || '', ...(a.hidden ? { hidden: true } : {}) }; }
+    else { const at = out.sections.findIndex((s) => ['quiz', 'glossary', 'faq', 'materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'].includes(s?.type)); out.sections.splice(at < 0 ? out.sections.length : at, 0, clone(dDeck)); }
+  }
+  const dStations = secs.filter((s) => s?.type === 'stations').flatMap((s) => s.items || []).filter((x) => x?.images?.length && x.source?.pages?.length);
+  if (dStations.length) {
+    out.sections = out.sections.map((s) => (s?.type !== 'stations' || !Array.isArray(s.items) ? s : { ...s, items: s.items.map((it) => {
+      if (!it || it.images?.length || !it.source?.pages?.length) return it;
+      const from = dStations.find((x) => x.source.pages.some((n) => it.source.pages.includes(n)));
+      return from ? { ...it, images: clone(from.images) } : it;
+    }) }));
+  }
+  const sf = draft.design?.sourceFonts;
+  if (sf && !out.design?.sourceFonts) out.design = { ...(out.design || {}), sourceFonts: clone(sf) };
+  // 교재 테마에서 찾은 기관 색(프롬프트에는 보내지 않음): AI가 강조색을 따로 정하지 않았으면 이어 줌
+  if (draft.design?.accent && !out.design?.accent) out.design = { ...(out.design || {}), accent: draft.design.accent };
+  if (!out.sources?.length && draft.sources?.length) out.sources = clone(draft.sources);
+  return out;
 }
 
 const insertBefore = (bp, types, sec) => { const i = bp.sections.findIndex((s) => types.includes(s?.type)); bp.sections.splice(i < 0 ? bp.sections.length : i, 0, sec); };
@@ -169,7 +210,13 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   for (const k of UNTRUSTED_META) delete bp.meta[k];
   applyMeta(bp, info, true);
   if (!has(info, 'admin') && !bp.meta.admin?.kind) bp.meta.admin = { ...(bp.meta.admin || {}), kind: 'school' };
-  if (!bp.archetype?.primary) bp.archetype = decideArchetype({ format: info.format, durationMin: minutesBetween(info.start, info.end), size: info.size, practiceRatio: material?.detected?.practice?.ratio });
+  // 유형이 비었으면: 설계도에 적힌 흐름 → 교재 신호로 정한 흐름 → 형식·인원 순으로 정함
+  if (!bp.archetype?.primary) {
+    const flow = cleanStructure(bp.structure)?.flow;
+    bp.archetype = flow ? { primary: FLOW_INFO[flow].archetype, mix: [] }
+      : material?.detected?.signals ? decideStructure(info, material, bp.concept || null).archetype
+        : decideArchetype({ format: info.format, durationMin: minutesBetween(info.start, info.end), size: info.size, practiceRatio: material?.detected?.practice?.ratio });
+  }
   const topics = detectTopics([info.title || bp.meta.title, info.subtitle || bp.meta.subtitle, (material?.pages || []).slice(0, 30).map((p) => p.title || '').join(' ')].join(' '));
   const keepDesign = prev?.design && !prev._presetAuto ? prev.design : null;
   bp.design = keepDesign ? clone(keepDesign) : { ...(bp.design || {}), mood: bp.design?.mood?.length ? bp.design.mood : moodsForTopics(topics), topics: bp.design?.topics?.length ? bp.design.topics : topics };
@@ -193,7 +240,16 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const pl = prev?.live || {};
   bp.live = { provider: pl.provider || 'none', url: pl.url || '', anonKey: pl.anonKey || '', code: pl.code || randomCode(), anonymous: true, features: pl.features || [] };
   bp.access = prev?.access || { mode: 'link' };
-  return applyFeatures(bp, info);
+  const done = applyFeatures(bp, info);
+  // 구성 결과: 초안이 정한 흐름·이유는 그대로, AI 답이면 AI가 적은 흐름·이유(없으면 교재 신호로 정한 것)에 엔진의 '권하는 기능'과
+  // '교재에 있는데 싣지 못한 것'을 붙임. 컨셉의 섹션·기능(concept.sections·features)이 비었으면 실제 구성으로 채움
+  const fromDraft = bp0?._draft?.generator === 'heuristic';
+  if (!fromDraft && cleanStructure(done.structure)?.reasons.length) done.structure = { ...done.structure, source: 'ai' };
+  if (fromDraft || material?.detected || done.structure) {
+    done.structure = structureFor(done, info, material, material?.pages?.length ? findLeftovers(material, done, { max: 12 }) : null);
+    done.concept = linkConcept(done.concept, done.structure, done.sections);
+  }
+  return done;
 }
 
 /**
@@ -211,6 +267,7 @@ export function syncInfo(bp0, info = {}, changed = null) {
     bp.instructors = [{ ...cur, name: info.instructorName, org: info.instructorOrg, email: info.instructorEmail, showEmail: !!info.instructorEmail, bio: info.instructorBio }, ...(bp.instructors || []).slice(1)];
   }
   ensureInstructorSection(bp);
+  syncHeroMeta(bp0, bp); // 첫 화면에 따로 적힌 일시·장소·강사 줄도 함께(초안이 만든 글자 그대로일 때만)
   const keys = changed ? (Array.isArray(changed) ? changed : Object.keys(changed)) : null;
   if (keys && !keys.some((k) => ['features', 'minor', 'surveyUrl'].includes(k))) return bp;
   return applyFeatures(bp, info);

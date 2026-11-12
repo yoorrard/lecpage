@@ -4,6 +4,7 @@ import { normText, normLine, textKey, findUrls, urlKey, hostOf, pageText, trunca
 import { matchToolsInText, toolForUrl, getTool, CATEGORIES } from './tools-db.js';
 import { detectFonts } from './fonts.js';
 
+import { detectSignals } from './signals.js';
 const WD = '일월화수목금토';
 
 // ── 날짜·시간 ─────────────────────────────────────────
@@ -839,6 +840,8 @@ function detectMessages(pages, promptKeys, special, stepPages) {
       while ((m = QUOTE_RE.exec(x.text))) if (!isRequestLine(m[1]) && m[1].length >= 10 && m[1].length <= 80) add(m[1], p, paras.length > 2 ? 1.5 : 2);
     }
     if (CLOSING_TITLE.test(p.title || '')) { closingPages.add(`${p.file}:${p.page}`); for (const x of paras.slice(0, 3)) if (x.text.length <= 80) add(x.text, p, 2); }
+    // 문서의 글상자에 따로 적은 짧은 한 문장("쉬는 것도 수업 준비입니다.")은 강조한 말
+    if (p.kind === 'section') for (const x of paras) if (x.role === 'text' && x.text.length >= 8 && x.text.length <= 40 && /[다요]\.$/.test(x.text) && !/^[\[(（]|[:：]/.test(x.text) && paras.filter((y) => y.role === 'text').length === 1) add(x.text, p, 2);
   });
   for (const m of out) if (closingPages.has(`${m.file}:${m.page}`)) m.closing = true;
   return out.sort((a, b) => b.score - a.score || a.page - b.page).slice(0, 8);
@@ -916,8 +919,26 @@ function detectSessions(pages, refYear) {
       const cells = rest.split(' | ').map((c) => c.trim()).filter((c) => c && !parseKoreanDates(c, refYear).length && !parseTimeRange(c));
       const title = cells.find((c) => /[가-힣A-Za-z]{2,}/.test(c));
       if (title && !e.title) { e.title = truncate(title, 80); e.desc = truncate(cells.filter((c) => c !== title).join(' · '), 160); }
-    } else if (!dates.length && rest.length >= 2 && rest.length <= 60 && !e.title) e.title = rest;
+    } else if (!dates.length && rest.length >= 2 && rest.length <= 60 && !e.title) { e.title = rest; e.at = { p, x }; }
     map.set(no, e);
+  }
+  // 차시 제목 줄 아래에 이어지는 줄(내용·준비물·과제)은 그 차시의 설명으로(다음 차시·다음 절 제목 전까지)
+  for (const e of map.values()) {
+    if (!e.at || e.desc) { delete e.at; continue; }
+    const list = e.at.p.paragraphs || []; const i = list.indexOf(e.at.x); const more = [];
+    for (let k = i + 1; i >= 0 && k < list.length && more.length < 6; k++) {
+      const raw = normLine(list[k].text);
+      const t = raw.replace(LEAD_MARK, '');
+      // 다음 차시 줄이나 다음 절 제목("5. 과제와 이수 처리")에서 멈춤. 절 제목은 번호를 떼기 전의 줄로 보고,
+      // 글자 크기를 알면 앞줄보다 클 때만, 모르면 번호가 2 이상일 때만 제목으로 봄(차시 안의 "1. …" 목록과 가르려고)
+      const hm = /^(\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s*\S/.exec(raw);
+      const bigger = list[k].size && list[k - 1]?.size ? list[k].size > list[k - 1].size : null;
+      const head = !!hm && raw.length <= 34 && !list[k].num && !/(?:니다|세요|어요|해요|한다|있다)\.?$/.test(raw) && (bigger === null ? !(+hm[1] < 2) : bigger);
+      if (SESSION_HEAD.test(t) || head) break;
+      if (t) more.push(t);
+    }
+    e.desc = truncate(more.join(' · '), 300);
+    delete e.at;
   }
   const list = [...map.values()].sort((a, b) => a.no - b.no).filter((e) => e.title);
   // 1차시부터 이어지는 번호가 둘 이상일 때만(본문에 '3차시'가 한 번 나온 것은 차시표가 아님)
@@ -984,8 +1005,12 @@ export function detect(material, opts = {}) {
   if (size) event.size = size;
   const archetype = archetypeHint(material, pages, practice, event, instructor ? 1 : 0, title, size);
 
+  const base = { title, subtitle, event, instructor, agenda, sections, sessions, prompts, steps, links, tools, quiz, faq, glossary, messages, practice, archetype };
+  // 구성 신호(수치 문장·발표자 여럿·연수 행정·교재에서 찾은 주소, 묶음별 쓰임 요약). 실패해도 나머지 감지는 그대로
+  let extra = {};
+  try { extra = detectSignals(material, pages, base, { parseKoreanDates, parseTimeRange }); } catch { extra = {}; }
   return {
-    title, subtitle, event, instructor, agenda, sections, sessions, prompts, steps, links, tools, quiz, faq, glossary, messages, practice, archetype,
+    ...base, ...extra,
     fonts: detectFonts(material),
     stats: {
       pages: (material.pages || []).length,
