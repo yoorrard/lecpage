@@ -26,7 +26,7 @@ const ENOUGH = '5달러면 사이트를 열 개 넘게 만들어요.';
 export const KEY_GUIDES = {
   gemini: {
     title: 'Google Gemini', label: 'Gemini', tag: '무료',
-    what: '무료로 쓸 수 있어요. 구글의 Flash 모델로 만들어요. 계정에 따라 휴대폰 확인을 요청해요.',
+    what: '무료예요. 대신 Flash 모델이라 유료 모델보다 구성과 문구가 단순할 수 있고, 하루에 쓸 수 있는 횟수가 정해져 있어요.',
     steps: [
       { id: 'key', title: '키 복사하기', url: P.gemini.keyUrl, open: '구글 AI Studio 열기', skip: '이미 복사했어요',
         text: <>개인 구글 계정으로 로그인하고 약관에 동의하면 키가 만들어져 있어요. 키 옆의 <b>복사 단추</b>를 눌러요.</>,
@@ -39,7 +39,7 @@ export const KEY_GUIDES = {
       <>그래도 결제를 요구하면 구글 클라우드를 쓴 적 없는 개인 구글 계정으로 해 보세요.</>,
       <>학교 계정은 막혀 있는 경우가 많아요. 만 18세 이상 개인 계정으로 해 주세요.</>,
     ],
-    more: ['무료 키는 Gemini 3.8 Flash까지 써요. Gemini 4는 결제를 연결한 키만 돼요.', '하루에 쓸 수 있는 횟수가 정해져 있고, 넣은 내용이 구글 제품 개선에 쓰일 수 있어요.'],
+    more: ['무료 키는 Gemini 3.8 Flash까지 써요. Gemini 4는 결제를 연결한 키만 돼요.', '무료 횟수는 구글 사정에 따라 달라질 수 있어요. 다 쓰면 앱이 기다렸다가 이어가고, 한국 시간 오후 4~5시쯤 다시 채워져요.', '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.'],
   },
   openai: {
     title: 'ChatGPT (OpenAI)', label: 'ChatGPT', tag: '유료',
