@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { buildSite } from '../lib/engine.js';
 
 /**
@@ -9,9 +9,17 @@ import { buildSite } from '../lib/engine.js';
  */
 const cache = new Map(); // key → html (최근 40개)
 const remember = (k, v) => { cache.delete(k); cache.set(k, v); if (cache.size > 40) cache.delete(cache.keys().next().value); };
-let line = Promise.resolve();
-const idle = (f) => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 400 }) : setTimeout(f, 30));
-function queue(job) { const p = line.then(() => new Promise((r) => idle(() => job().then(r, r)))); line = p.catch(() => { }); return p; }
+// 만들기 줄: 한 번에 하나, 사이사이 화면에 양보. 먼저 볼 것(말로 고치기의 안·크게 보기)은 줄 앞에 섬
+const jobs = []; let busy = false;
+const yieldNow = () => new Promise((r) => setTimeout(r, 0));
+async function pump() {
+  if (busy) return; busy = true;
+  while (jobs.length) { const job = jobs.shift(); try { await job(); } catch { /* 한 장이 실패해도 나머지는 그림 */ } await yieldNow(); }
+  busy = false;
+}
+function queue(job, first = false) { if (first) jobs.unshift(job); else jobs.push(job); pump(); }
+/** 짧은 지문(FNV-1a): 설계도 전체가 같으면 같은 그림 */
+function hash(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36) + s.length.toString(36); }
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
 function dataUrl(path, data) {
@@ -43,12 +51,12 @@ export function staticHtml(files, focus = '', { maxImageBytes = 1.5e6 } = {}) {
 export function stillBp(bp) {
   return { ...bp, design: { ...(bp.design || {}), motion: 0 }, live: { ...(bp.live || {}), provider: 'none', features: [] } };
 }
-const keyOf = (bp, focus) => { try { return focus + '|' + JSON.stringify([bp.design, bp.meta?.title, bp.meta?.subtitle, bp.meta?.date, (bp.sections || []).map((s) => [s.id, s.type, s.layout, s.title])]); } catch { return ''; } };
+const keyOf = (bp, focus) => { try { return focus + '|' + hash(JSON.stringify(bp)); } catch { return ''; } };
 
-/** html을 만들어 돌려줌(같은 것은 다시 만들지 않음) */
-export function useStatic(bp, focus, on, assets) {
+/** html을 만들어 돌려줌(같은 것은 다시 만들지 않음). first면 줄 앞에 섬 */
+export function useStatic(bp, focus, on, assets, first = false) {
   const [html, setHtml] = useState('');
-  const key = bp ? keyOf(bp, focus) : '';
+  const key = useMemo(() => (bp ? keyOf(bp, focus) : ''), [bp, focus]);
   useEffect(() => {
     if (!on || !bp || !key) return;
     if (cache.has(key)) { setHtml(cache.get(key)); return; }
@@ -58,7 +66,7 @@ export function useStatic(bp, focus, on, assets) {
       const r = await buildSite(stillBp(bp), assets || {});
       if (r.errors?.length) return;
       const h = staticHtml(r.files, focus); remember(key, h); if (!off) setHtml(h);
-    });
+    }, first);
     return () => { off = true; };
   }, [key, on]);
   return html;
@@ -67,21 +75,26 @@ export function useStatic(bp, focus, on, assets) {
 /**
  * @param bp 그릴 설계도(바꾼 뒤 모습이면 바꾼 설계도를 그대로)
  * @param focus 섹션 id(그 섹션만) · vw 그릴 폭(px) · ratio 가로:세로
+ * @param tour 카드에 포인터·초점이 오면 틀을 본문 다섯 화면 분량으로 늘리고 천천히 내려가며 본문을 보여 줌(동작 줄이기면 하지 않음)
  */
-export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager = false, class: cls = '' }) {
-  const box = useRef(); const [near, setNear] = useState(eager); const [s, setS] = useState(0.2);
+const PAGE = 4000;
+export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager = false, first = false, tour = false, class: cls = '' }) {
+  const box = useRef(); const [near, setNear] = useState(eager); const [s, setS] = useState(0.2); const [touring, setTouring] = useState(false);
   useEffect(() => {
     const el = box.current; if (!el) return;
     const ro = new ResizeObserver(([e]) => setS(e.contentRect.width / vw)); ro.observe(el);
     const io = eager ? null : new IntersectionObserver(([e]) => setNear(e.isIntersecting), { rootMargin: '300px' });
     io?.observe(el);
-    return () => { ro.disconnect(); io?.disconnect(); };
-  }, [vw, eager]);
-  const html = useStatic(bp, focus, near, assets);
+    const card = tour ? el.closest('.word-card, .dict-now, .thumb') : null;
+    const on = () => setTouring(true), off = () => setTouring(false);
+    if (card) { card.addEventListener('pointerenter', on); card.addEventListener('pointerleave', off); card.addEventListener('focusin', on); card.addEventListener('focusout', off); }
+    return () => { ro.disconnect(); io?.disconnect(); if (card) { card.removeEventListener('pointerenter', on); card.removeEventListener('pointerleave', off); card.removeEventListener('focusin', on); card.removeEventListener('focusout', off); } };
+  }, [vw, eager, tour]);
+  const html = useStatic(bp, focus, near, assets, first || eager);
   const vh = Math.round(vw / ratio);
   return (
-    <div class={`mini-site ${cls}`} ref={box} style={{ '--s': s, aspectRatio: String(ratio) }}>
-      {html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: vh + 'px' }} /> : <span class="thumb-wait" />}
+    <div class={`mini-site ${cls}${touring ? ' is-tour' : ''}`} ref={box} style={{ '--s': s, '--pan': `${-(PAGE - vh)}px`, aspectRatio: String(ratio) }}>
+      {html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: (touring ? PAGE : vh) + 'px' }} /> : <span class="thumb-wait" />}
     </div>
   );
 }

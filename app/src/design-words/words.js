@@ -48,6 +48,8 @@ const SLOT_KO = { 'hero.title': '첫 화면 제목', 'hero.graphic': '첫 화면
 export const slotsKo = (f) => [...new Set((f.slots || []).map((s) => SLOT_KO[s] || s))].join(' · ');
 const RENDERED = ['divider', 'message', 'hero.title', 'closing.title', 'section.title', 'cards', 'numbers', 'schedule', 'gallery', 'hero.cta', 'progress', 'celebrate', 'cursor'];
 
+/** 배치의 '고르는 기준' 글(끝의 '(기본)'과 '기본'만 있는 것은 뺌) */
+export const useText = (u) => { const t = String(u || '').replace(/\(기본\)$/, ''); return t === '기본' ? '' : t; };
 /** 섹션 종류 이름(연수 후 안내는 자료와 같은 배치) */
 export const typeKo = (t) => E.SECTION_DEFS[t]?.label || t;
 const NO_VARIANT = new Set(['hero', 'stations', 'text', 'video', 'prompts', 'attendance']);
@@ -82,7 +84,7 @@ export function allWords() {
   for (const [type, vs] of Object.entries(E.BODY_VARIANTS)) {
     const def = E.defaultVariant(type);
     for (const [v, m] of Object.entries(vs)) {
-      out.push({ id: `body:${type}.${v}`, kind: 'body', key: v, type, name: m.ko, section: typeKo(type), lead: m.lead, look: '', when: m.use.replace(/\(기본\)$/, ''), isDefault: v === def, tags: m.tags, presets: usersOf(type, v) });
+      out.push({ id: `body:${type}.${v}`, kind: 'body', key: v, type, name: m.ko, section: typeKo(type), lead: m.lead, look: '', when: useText(m.use), isDefault: v === def, tags: m.tags, presets: usersOf(type, v) });
     }
   }
   for (const f of E.FX) {
@@ -250,7 +252,7 @@ export function variantOptions(bp, s) {
   const t = vtype(s.type); const all = E.BODY_VARIANTS[t]; if (!all) return [];
   const pid = presetOf(bp);
   const plan = E.variantOf({ ...s, layout: undefined }, pid, { sections: (bp.sections || []).map((x) => (x === s ? { ...s, layout: undefined } : x)), flow: flowOf(bp) }).variant;
-  return Object.keys(all).filter((v) => fits(bp, s, v, pid)).map((v) => ({ v, id: `body:${t}.${v}`, name: all[v].ko, lead: all[v].lead, when: all[v].use.replace(/\(기본\)$/, ''), plan: v === plan }));
+  return Object.keys(all).filter((v) => fits(bp, s, v, pid)).map((v) => ({ v, id: `body:${t}.${v}`, name: all[v].ko, lead: all[v].lead, when: useText(all[v].use), plan: v === plan }));
 }
 
 /**

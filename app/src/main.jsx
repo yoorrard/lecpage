@@ -49,7 +49,7 @@ function App() {
   // key: 화면이 바뀔 때 이전 화면 컴포넌트가 새 화면의 값을 받지 않게
   if (route === 'p' && a) page = <Lazy key="project" name="project" id={a} step={Number(b) || 0} />;
   else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
-  else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" />;
+  else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" tab={a} />;
   else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
   else if (route === 'demo') page = <Lazy key="demo" name="demo" />;
   else page = <Home />;

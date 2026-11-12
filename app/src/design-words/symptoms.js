@@ -1,10 +1,10 @@
 // 말로 고치기: "좀 답답해 보여요" 같은 말을 디자인 낱말로 옮겨 고칠 안 2~3가지를 냅니다(AI 없이 규칙으로).
 // 안마다 바꿀 낱말(words.js)과 까닭 한 줄, 미리 볼 섹션(focus)이 있습니다. 지금 사이트와 같은 안은 내지 않습니다.
 import * as E from '../../../skills/lecpage/engine/src/index.js';
-import { allWords, wordById, changes, fits, currentVariant, hasVariants, typeKo, MOTION_KO } from './words.js';
+import { allWords, wordById, changes, fits, currentVariant, hasVariants, typeKo, MOTION_KO, useText } from './words.js';
 
-/** 입력칸 아래 예시(누르면 바로 찾음) */
-export const SAYINGS = ['좀 답답해 보여요', '글씨가 잘 안 읽혀요', '너무 심심해요', '움직임이 정신없어요', '학교 느낌이 나면 좋겠어요', '더 공식적으로 보이면 좋겠어요', '일정이 한눈에 안 들어와요', '흔한 사이트 같아요'];
+/** 입력칸 아래 예시(누르면 바로 찾음). 좁은 칸에는 앞의 여섯 개 */
+export const SAYINGS = ['좀 답답해 보여요', '글씨가 잘 안 읽혀요', '너무 심심해요', '움직임이 정신없어요', '학교 느낌이 나면 좋겠어요', '일정이 한눈에 안 들어와요', '더 공식적으로 보이면 좋겠어요', '흔한 사이트 같아요'];
 
 function context(bp0) {
   const bp = E.validate(bp0).blueprint;
@@ -26,7 +26,7 @@ function presets(c, pred, n = 1, order = c.ranked) {
 /** 분위기 낱말로 다시 매긴 순위 */
 const rankMoods = (c, moods) => E.rankPresets({ moods, topics: [], archetype: '-', admin: c.bp.meta?.admin?.kind }, E.PRESETS.length).map((x) => x.id);
 /** 배치의 '고르는 기준' 글 → 한 문장("…때 좋아요." / "…에 맞아요.") */
-export const useLine = (use) => { const u = String(use || '').replace(/\(기본\)$/, ''); return /때$/.test(u) ? `${u} 좋아요.` : `${u}에 맞아요.`; };
+export const useLine = (use) => { const u = useText(use); return !u ? '디자인이 기본으로 쓰는 모양이에요.' : /때$/.test(u) ? `${u} 좋아요.` : `${u}에 맞아요.`; };
 const whenLine = (p) => { const w = wordById(`preset:${p.id}`).when; return w ? `${w}에 어울려요.` : p.desc_ko; };
 const presetFix = (p, why) => fix(`preset:${p.id}`, p.name_ko, why || whenLine(p), [`preset:${p.id}`]);
 /** 본문 칸 중에서 pick(지금 배치, 후보 배치)이 참인 첫 후보들 */
@@ -39,7 +39,7 @@ function bodyAlts(c, pick, types = null, n = 2) {
     const cur = currentVariant(c.bp, s, c.preset.id);
     const t = cur.type; const all = E.BODY_VARIANTS[t] || {};
     const v = Object.keys(all).find((k) => k !== cur.variant && pick(all[cur.variant] || {}, all[k], k) && fits(c.bp, s, k, c.preset.id));
-    if (v) { out.push({ s, id: `body:${t}.${v}`, name: all[v].ko, use: all[v].use.replace(/\(기본\)$/, '') }); seen.add(s.type); }
+    if (v) { out.push({ s, id: `body:${t}.${v}`, name: all[v].ko, use: useText(all[v].use) }); seen.add(s.type); }
   }
   return out;
 }
