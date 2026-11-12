@@ -3,7 +3,7 @@ import { StepHead } from '../Project.jsx';
 import { Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPanel } from '../../components/AiPanel.jsx';
-import { AiConnect, ModelPick } from '../../components/AiConnect.jsx';
+import { AiConnect, AiStatus } from '../../components/AiConnect.jsx';
 import { PROVIDERS, getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob } from '../../lib/ai-job.js';
 import { blobs } from '../../lib/db.js';
@@ -15,7 +15,7 @@ import { FEATURES, makeDraft, syncInfo, applyInfo } from '../../lib/blueprint.js
 
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
 const FORMATS = [{ value: '', label: '교재 보고 정하기' }, { value: 'lecture', label: '강의·특강' }, { value: 'practice', label: '실습·워크숍' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'course', label: '여러 차시 과정' }];
-const AFTER = 'lecpage:after-connect'; // 로그인하러 나갔다 돌아오면 이어서 만들 프로젝트
+const AFTER = 'lecpage:after-connect'; // (예전 OpenRouter 로그인) 로그인하러 나갔다 돌아오면 이어서 만들 프로젝트
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc';
 const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 
@@ -189,9 +189,9 @@ export function StepStart({ p, update, go }) {
             <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
             <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
           </div>
-          <Field label="장소" hint="온라인 연수는 다음 단계 '연수 정보'에서 접속 주소를 넣어요."><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
+          <Field label="장소" hint="온라인이면 다음 단계의 '연수 정보'에서 접속 주소를 넣어요."><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
         </div>
-        <Field label="요청 사항 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 자유롭게 적어요. AI가 반영하고, 기본 초안에도 분위기와 색이 반영돼요.">
+        <Field label="요청 사항 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 적으면 AI가 반영해요.">
           <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
         </Field>
         <details class="more">
@@ -212,9 +212,9 @@ export function StepStart({ p, update, go }) {
 
       {!p.blueprint && <section class="ai-line" aria-label="AI 연결">
         {conn === undefined ? <p class="small muted">확인하는 중…</p>
-          : conn ? <><div class="conn-row"><span class="dot-ok" aria-hidden="true" /><span><b>{conn.label}</b>에 연결됨</span><span class="conn-tools"><button class="btn btn-sm btn-quiet" onClick={() => setConnect(true)}>바꾸기</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>끊기</button></span></div>
-            <ModelPick ai={conn} onChange={setConn} /></>
-            : <p class="ai-off">AI가 교재를 읽고 연수 흐름과 문구를 짜요. 키를 한 번 연결하면 다음부터는 단추 하나예요. Gemini 키는 무료이고 1분이면 만들어요.</p>}
+          : conn ? <AiStatus ai={conn} onChange={setConn} onSwap={() => setConnect(true)} onDisconnect={disconnect} />
+            : <p class="ai-off">AI가 교재를 읽고 연수 흐름과 문구를 짜요. 처음 한 번만 연결하면 되고, Gemini 키는 무료예요.</p>}
+        {conn !== undefined && <p class="small muted ai-priv">만들 때 교재의 글이 {conn ? conn.label : 'AI 회사'}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>}
       </section>}
 
       <div class="make-bar">
@@ -234,8 +234,8 @@ export function StepStart({ p, update, go }) {
         <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" onClick={() => setConfirmRemake(false)}>취소</button></div>
       </Dialog>
       <Dialog open={!!connect} onClose={() => setConnect(false)} label="AI 연결" wide>
-        {connect && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">AI 연결</h2><p class="small muted">한 번 연결하면 다음부터는 단추 하나로 만들어요.</p></div>
-          <AiConnect onConnected={onConnected} onBeforeLogin={() => { try { if (connect === 'make') sessionStorage.setItem(AFTER, p.id); } catch { } }} onPaste={() => { setConnect(false); if (!needTitle()) setPaste(true); }} /></div>}
+        {connect && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">AI 연결</h2><p class="small muted">한 번만 연결하면 다음부터는 단추 하나로 만들어요.</p></div>
+          <AiConnect onConnected={onConnected} onPaste={() => { setConnect(false); if (!needTitle()) setPaste(true); }} /></div>}
       </Dialog>
       <Dialog open={paste} onClose={() => setPaste(false)} label="키 없이 만들기" wide>
         {paste && <AiPanel p={p} onBlueprint={onAi} />}

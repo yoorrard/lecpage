@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
-import { PROVIDERS, loadKey, forgetKey, getOnLimit, setOnLimit } from '../lib/ai.js';
+import { PROVIDERS, loadKey, forgetKey, getOnLimit, setOnLimit, isPaidAI } from '../lib/ai.js';
 import { storageInfo, askPersist, projects } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
@@ -15,6 +15,7 @@ export function Settings() {
   const [ai, setAi] = useState(false);
   const [onLimit, setLimit] = useState(getOnLimit);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
+  const anyPaid = Object.keys(keys).some((id) => keys[id]?.key && isPaidAI(id)); // '무료 한도를 다 쓰면'은 유료 키가 있을 때만 뜻이 있음
   const [adv, setAdv] = useState(() => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } });
   const toggleAdv = (v) => { setAdv(v); try { localStorage.setItem('lecpage:advanced', v ? '1' : '0'); } catch { } toast(v ? '고급 기능을 켰어요.' : '고급 기능을 껐어요.'); };
   useEffect(() => { (async () => { await reloadKeys(); setSt(await storageInfo()); })(); window.addEventListener('lecpage:ai-connected', reloadKeys); return () => window.removeEventListener('lecpage:ai-connected', reloadKeys); }, []);
@@ -40,24 +41,27 @@ export function Settings() {
       </section>
       <section>
         <h2 class="h-sub">연결</h2>
-        <p class="small muted">한 번 연결해 두면 다음부터는 단추 하나로 만들고 공개해요. 키와 토큰은 이 브라우저에서 그 회사로만 가요. '기억하기'를 켠 것만 암호화해 이 기기에 저장해요.</p>
+        <p class="small muted">한 번 연결해 두면 단추 하나로 만들고 공개해요. 키와 토큰은 이 브라우저에서 그 회사로만 가요.</p>
         <h3 class="h-label">AI</h3>
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
             <li><span><b>{v.name}</b> <span class="small muted">{keys[id].remembered ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만'}</span></span>
               <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 끊었어요.'); }}>연결 끊기</button></li>
           ))}
-          <li><span>{Object.values(keys).some((k) => k?.key) ? <span class="small muted">Gemini·OpenRouter·OpenAI·Claude를 쓸 수 있어요.</span> : <><b>AI</b> <span class="small muted">연결 안 됨 · Gemini는 무료예요</span></>}</span>
+          <li><span>{Object.values(keys).some((k) => k?.key) ? <span class="small muted">Gemini(무료)·ChatGPT·Claude 키를 더 연결할 수 있어요.</span> : <><b>AI</b> <span class="small muted">연결 안 됨 · Gemini 키는 무료예요</span></>}</span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{Object.values(keys).some((k) => k?.key) ? '다른 AI 연결하기' : '연결하기'}</button></li>
         </ul>
-        <Seg label="무료 한도를 넘으면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추기' }, { value: 'pay', label: '유료로 이어가기' }]} />
-        <p class="small muted">{onLimit === 'pay' ? '연결해 둔 유료 키나 크레딧으로 이어서 만들어요. 쓴 만큼 그 회사에서 결제돼요.' : '무료 안에서만 다른 모델로 이어가요. 돈이 드는 연결로는 넘어가지 않고, 그때 물어봐요.'}</p>
+        {anyPaid && <div class="field">
+          <span>무료 한도를 다 쓰면</span>
+          <Seg label="무료 한도를 다 쓰면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추고 물어보기' }, { value: 'pay', label: '유료로 이어가기' }]} />
+          <small>{onLimit === 'pay' ? '연결해 둔 유료 키로 이어서 만들어요. 쓴 만큼 그 회사에서 결제돼요.' : '무료로 되는 다른 모델까지만 이어가요. 유료 키를 쓰기 전에 물어봐요.'}</small>
+        </div>}
         <h3 class="h-label">공개할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         <p class="small muted">Cloudflare와 학교 서버는 토큰 없이 파일을 올려요. <a href="#/help/deploy">공개하는 법</a></p>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>
-        <div class="stack"><h2 class="h-sub">AI 연결</h2><AiConnect onConnected={async () => { setAi(false); await reloadKeys(); }} onCancel={() => setAi(false)} /></div>
+        <div class="stack"><h2 class="h-sub">AI 연결</h2>{ai && <AiConnect onConnected={async () => { setAi(false); await reloadKeys(); }} />}</div>
       </Dialog>
       <section>
         <h2 class="h-sub">저장 공간</h2>
