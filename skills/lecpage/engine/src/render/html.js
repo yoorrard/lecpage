@@ -19,28 +19,8 @@ export function href(u) {
 
 export function host(u) { try { return new URL(u).host.replace(/^www\./, ''); } catch { return ''; } }
 
-/** 제한된 마크다운: 문단, 목록, **굵게**, *기울임*, [링크](url), `코드` */
-export function md(src) {
-  const blocks = String(src || '').replace(/\r/g, '').split(/\n{2,}/);
-  return blocks.map((b) => {
-    const lines = b.split('\n');
-    if (lines.every((l) => /^\s*[-*]\s+/.test(l))) return `<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*]\s+/, ''))}</li>`).join('')}</ul>`;
-    if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) return `<ol>${lines.map((l) => `<li>${inline(l.replace(/^\s*\d+[.)]\s+/, ''))}</li>`).join('')}</ol>`;
-    if (/^#{1,3}\s/.test(b)) return `<h3>${inline(b.replace(/^#{1,3}\s/, ''))}</h3>`;
-    return `<p>${lines.map(inline).join('<br>')}</p>`;
-  }).join('\n');
-}
-function inline(s) {
-  let out = esc(s);
-  out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
-    const s2 = safeUrl(u.replace(/&amp;/g, '&'));
-    return s2 ? `<a ${href(s2)}>${t}</a>` : t;
-  });
-  return out;
-}
+/** 제한된 마크다운(문단·목록·표·인용·강조 상자): render/markdown.js */
+export { md, inlineMd, tableHtml } from './markdown.js';
 
 /** 슬롯에 효과가 정해져 있으면 data-fx 속성 */
 export function fx(ctx, slot, opts) {

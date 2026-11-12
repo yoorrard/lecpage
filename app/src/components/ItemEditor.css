@@ -58,3 +58,6 @@
   .ie-acts .icon-btn{width:44px;height:44px}
   .ie-sum{min-height:44px}
 }
+
+/* 표 칸: 한 줄이 표의 한 줄이라 줄바꿈하지 않음 */
+.ie textarea.ie-grid{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875rem;line-height:1.6;white-space:pre;overflow-x:auto}

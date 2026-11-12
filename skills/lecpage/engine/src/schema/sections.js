@@ -29,13 +29,22 @@ export const SECTION_DEFS = {
   gallery:    { nav: '사진', live: false, label: '사진', desc: '사진 모음', list: 'items' },
   reflection: { nav: '기록', live: false, label: '나의 기록', desc: '메모와 다짐 내려받기' },
   attendance: { nav: '출석', live: true, label: '출석 확인', desc: '입실·퇴실 체크' },
-  text:       { nav: '', live: false, label: '글', desc: '자유 글(제한된 마크다운)' },
+  text:       { nav: '', live: false, label: '글', desc: '문단·목록·표·인용·강조 상자(제한된 마크다운)' },
+  // 본문 칸: 실습형이 아닌 교재(절차·규정, 사례·토론, 안내)의 내용을 담음
+  procedure:  { nav: '절차', live: false, label: '절차', desc: '번호 단계, 단계마다 시간·담당', list: 'items' },
+  cases:      { nav: '사례', live: false, label: '사례', desc: '제목·본문·인용', list: 'items' },
+  discuss:    { nav: '나눌 질문', live: false, label: '함께 나눌 질문', desc: '질문 목록과 진행 규칙', list: 'items' },
+  table:      { nav: '', live: false, label: '표', desc: '머리글과 줄, 휴대폰에서는 줄마다 카드', list: 'rows' },
 };
 
 export const SECTION_TYPES = Object.keys(SECTION_DEFS);
 export const LIVE_FEATURES = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'signal'];
 export const LIVE_PROVIDERS = ['none', 'local', 'supabase', 'sheets', 'http'];
 export const ARCHETYPES = ['story', 'lab', 'live', 'course'];
+/** 구성 흐름(decide/structure.js): 교재의 신호로 고르는 '무슨 칸을 어떤 순서로'. archetype은 흐름에서 따라 나옴 */
+export const FLOWS = ['follow', 'procedure', 'discussion', 'course', 'event', 'talk', 'source'];
+/** 순서 가드레일에서 '본문 뒤'에 오는 칸(자료·연수 후·강사·설문·마무리) */
+export const TAIL_TYPES = ['materials', 'followup', 'instructor', 'survey', 'closing'];
 export const DEPLOY_TARGETS = ['github-pages', 'cloudflare', 'vercel', 'netlify', 'firebase', 's3', 'server', 'lan', 'zip'];
 
 // 기본 만족도 설문(교원 연수 만족도에서 흔히 묻는 다섯 문항). 실시간 기능이 켜져 있으면 사이트 안에서 바로 모읍니다.

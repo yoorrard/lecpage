@@ -2073,3 +2073,91 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 
 /* 읽기 우선: 아주 굵은 포스터 글꼴을 쓰는 디자인은 큰 제목에만 그 글꼴을 쓰고, 카드·단계·교재 쪽의 작은 제목은 본문 글꼴 굵게 */
 :is([data-preset="riso-zine"],[data-preset="retro-pop"],[data-preset="playground"],[data-preset="kinetic-type"]) :is(.lp-outline-item h3,.lp-steps5 h3,.lp-tools h3,.lp-slide-text h3,.lp-sheet-t){font-family:var(--font-body);font-weight:800;letter-spacing:-.02em}
+
+/* ═══ 본문 칸: 절차(procedure) · 사례(cases) · 함께 나눌 질문(discuss) · 표(table) · 글 칸의 표·인용·강조 상자 ═══
+   렌더러: src/render/content.js, src/render/markdown.js. 색은 theme.css 변수만 쓰고, 상자 대신 가는 선·여백·글자 크기로 나눕니다.
+   프리셋별 변형([data-preset]·[data-card])은 이 묶음 아래에 덧붙이면 됩니다. */
+/* 절차: 번호 | 단계 이름·설명 | 시간·담당 */
+.lp-proc{list-style:none;display:grid;max-width:54rem;border-bottom:var(--rule)}
+.lp-proc > li{display:grid;grid-template-columns:3.2rem minmax(0,1fr) auto;column-gap:var(--sp-4);row-gap:4px;align-items:baseline;padding:var(--sp-5) 0;border-top:var(--rule)}
+.lp-proc-no{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-lg);line-height:1.2;color:var(--primary);font-variant-numeric:tabular-nums}
+.lp-proc-b{display:grid;gap:4px;min-width:0}
+.lp-proc h3{font-family:var(--font-sans);font-size:var(--fs-md);font-weight:700;line-height:1.45}
+.lp-proc-b p{max-width:var(--measure);color:var(--muted-foreground)}
+.lp-proc-meta{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:0 .7em;font-size:var(--fs-sm);font-weight:600;white-space:nowrap}
+.lp-proc-meta > span + span::before{content:"·";margin-right:.7em;color:var(--muted-foreground)}
+/* 사례: 큰 번호 | 제목·본문·인용 */
+.lp-cases{display:grid;border-bottom:var(--rule)}
+.lp-case{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,10fr);column-gap:clamp(20px,4vw,64px);align-items:start;padding:var(--sp-6) 0;border-top:var(--rule)}
+.lp-case:not(:has(> .lp-case-k)){grid-template-columns:minmax(0,1fr)}
+.lp-case-k{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-h2s);line-height:1;color:var(--primary);font-variant-numeric:tabular-nums}
+.lp-case-b{display:grid;gap:var(--sp-3);max-width:44rem;min-width:0}
+.lp-case h3{font-size:var(--fs-lg);line-height:1.35}
+/* 인용(사례·글 칸): 큰 따옴표 하나 + 굵은 문장. 한쪽 색 띠는 쓰지 않음 */
+.lp-bq{position:relative;margin:0;display:grid;gap:var(--sp-2);padding-left:1.7em}
+.lp-bq::before{content:"“";position:absolute;left:0;top:-.06em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:2.3em;line-height:1;color:var(--primary)}
+.lp-bq p{font-size:var(--fs-md);font-weight:600;line-height:1.6}
+.lp-bq cite{font-style:normal;font-size:var(--fs-sm);color:var(--muted-foreground)}
+/* 함께 나눌 질문: 큰 번호 질문 | 진행 규칙 */
+.lp-discuss{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);column-gap:clamp(32px,5vw,88px);row-gap:var(--sp-6);align-items:start}
+.lp-discuss.is-solo{grid-template-columns:minmax(0,1fr)}
+.lp-discuss-q{list-style:none;display:grid;border-bottom:var(--rule)}
+.lp-discuss-q > li{display:grid;grid-template-columns:2.8rem minmax(0,1fr);column-gap:var(--sp-3);align-items:baseline;padding:var(--sp-5) 0;border-top:var(--rule)}
+.lp-discuss-no{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-h2s);line-height:1;color:var(--primary);font-variant-numeric:tabular-nums}
+.lp-discuss-q p{max-width:26em;font-size:var(--fs-lg);font-weight:600;line-height:1.45;text-wrap:balance}
+.lp-discuss-rules{position:sticky;top:96px;display:grid;gap:var(--sp-3);padding-top:var(--sp-5);border-top:max(2px,var(--border-w)) solid var(--foreground)}
+.lp-discuss-rules h3{font-family:var(--font-sans);font-size:var(--fs-sm);font-weight:700;color:var(--muted-foreground)}
+.lp-discuss-rules ul{list-style:none;display:grid;gap:var(--sp-3);font-size:var(--fs-sm);line-height:1.65}
+.lp-discuss-rules li{position:relative;padding-left:1.1em}
+.lp-discuss-rules li::before{content:"";position:absolute;left:0;top:.68em;width:.38em;height:.38em;border-radius:50%;background:var(--primary)}
+/* 표: 머리글 아래 굵은 선, 줄마다 가는 선. 휴대폰에서 칸 4개 이하는 줄마다 카드, 5개 이상은 가로로 밂 */
+.lp-tbl-wrap{max-width:100%;min-width:0}
+.lp-tbl-wrap[data-mode="scroll"]{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.lp-tbl{width:100%;border-collapse:collapse;font-size:var(--fs-sm);line-height:1.6}
+.lp-sec-table .lp-tbl{font-size:var(--fs-base)}
+.lp-tbl th,.lp-tbl td{text-align:left;vertical-align:top;padding:var(--sp-3) var(--sp-4) var(--sp-3) 0;border-top:var(--rule)}
+.lp-tbl thead th{border-top:0;border-bottom:max(2px,var(--border-w)) solid var(--foreground);font-size:var(--fs-xs);font-weight:700;color:var(--muted-foreground);white-space:nowrap}
+.lp-tbl thead + tbody tr:first-child > *{border-top:0}
+.lp-tbl tbody tr:last-child > *{border-bottom:var(--rule)}
+.lp-tbl tbody th{min-width:5em;font-weight:700}
+.lp-tbl-k{display:none}
+.lp-tbl-wrap[data-mode="scroll"] .lp-tbl{min-width:calc(var(--cols,5) * 8.5rem)}
+@media (max-width:640px){
+  .lp-proc > li{grid-template-columns:2.4rem minmax(0,1fr)}
+  .lp-proc-meta{grid-column:2;justify-content:flex-start;white-space:normal}
+  .lp-case{grid-template-columns:minmax(0,1fr);row-gap:var(--sp-2);padding:var(--sp-5) 0}
+  .lp-case-k{font-size:var(--fs-lg)}
+  .lp-discuss-q > li{grid-template-columns:2rem minmax(0,1fr)}
+  .lp-discuss-no{font-size:var(--fs-lg)}
+  .lp-discuss-q p{font-size:var(--fs-md)}
+  .lp-tbl-wrap[data-mode="cards"] :is(.lp-tbl,tbody,tr,td,tbody th){display:block}
+  .lp-tbl-wrap[data-mode="cards"] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .lp-tbl-wrap[data-mode="cards"] :is(td,tbody th){padding:0;border:0!important}
+  .lp-tbl-wrap[data-mode="cards"] tr{padding:var(--sp-4) 0;border-top:var(--rule)}
+  .lp-tbl-wrap[data-mode="cards"] tr:last-child{border-bottom:var(--rule)}
+  .lp-tbl-wrap[data-mode="cards"] tbody th{margin-bottom:var(--sp-2);font-size:var(--fs-md)}
+  .lp-tbl-wrap[data-mode="cards"] td + td{margin-top:var(--sp-2)}
+  .lp-tbl-wrap[data-mode="cards"] td[data-empty]{display:none}
+  .lp-tbl-wrap[data-mode="cards"] .lp-tbl-k{display:block;font-size:var(--fs-xs);font-weight:600;line-height:1.5;color:var(--muted-foreground)}
+}
+@media (max-width:900px){
+  .lp-discuss{grid-template-columns:minmax(0,1fr)}
+  .lp-discuss-rules{position:static}
+}
+/* 글 칸: 소제목·가로줄·코드·강조 상자 */
+.lp-prose h4{font-family:var(--font-sans);font-size:var(--fs-base);font-weight:700}
+.lp-prose hr{width:100%;margin:var(--sp-2) 0;border:0;border-top:var(--rule)}
+.lp-prose li + li,.lp-prose li > ul{margin-top:4px}
+.lp-prose > .lp-tbl-wrap,.lp-prose > .lp-pre{min-width:0}
+.lp-pre{margin:0;padding:var(--sp-4);border-radius:var(--radius-sm);background:var(--tint);font-family:var(--font-mono);font-size:var(--fs-sm);line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.lp-callout{display:grid;gap:var(--sp-2);padding:var(--sp-4) var(--sp-5);border-radius:var(--radius-sm);background:var(--tint)}
+.lp-callout-h{display:flex;flex-wrap:wrap;align-items:center;gap:.2em .6em;font-size:var(--fs-sm);line-height:1.5}
+.lp-callout-h b{color:var(--primary)}
+.lp-callout-h > span{font-weight:700}
+.lp-callout-copy{margin-left:auto}
+.lp-callout-b{display:grid;gap:var(--sp-3);min-width:0;font-size:var(--fs-sm);line-height:1.7}
+@media print{
+  .lp-callout-copy{display:none!important}
+  .lp-discuss-rules{position:static}
+  .lp-proc > li,.lp-case,.lp-discuss-q > li,.lp-tbl tr{break-inside:avoid}
+}

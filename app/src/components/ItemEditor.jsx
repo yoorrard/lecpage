@@ -16,6 +16,7 @@ const choose = (key, label, options, o) => ({ key, label, kind: 'select', option
 const tags = (key, label, each, limit, o) => ({ key, label, kind: 'tags', each, limit, ph: '쉼표로 나눠 써요', ...o });
 const lines = (key, label, each, limit, o) => ({ key, label, kind: 'lines', each, limit, rows: 3, ...o });
 const list = (key, label, o) => ({ key, label, kind: 'list', ...o });
+const grid = (key, label, o) => ({ key, label, kind: 'grid', ...o }); // 표: 첫 줄은 머리글, 칸은 | 로 나눔
 
 const txt = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
 const has = (v) => !!txt(v).trim();
@@ -177,7 +178,29 @@ export const SPEC = {
     list('prompts', '질문', { of: 'text', each: 200, limit: 8, ph: '예: 오늘 가장 기억에 남는 것', empty: '비워 두면 기본 질문이 나와요.' }),
   ],
   attendance: [LEAD],
-  text: [area('md', '본문', 6000, { rows: 8, ph: '여기에 글을 써요.', hint: '**굵게** · - 목록 · [링크](https://…)' })],
+  text: [area('md', '본문', 6000, { rows: 8, ph: '여기에 글을 써요.', hint: '**굵게** · - 목록 · | 표 | · > 인용 · > [!참고] 상자 · [링크](https://…)' })],
+  procedure: [
+    LEAD,
+    list('items', '단계', { limit: 20, norm: (x) => (typeof x === 'string' ? { title: x } : x), item: [text('title', '단계', 160, { ph: '예: 보호자에게 연락하기' }), area('desc', '설명', 500), text('time', '시간', 24, { short: true, ph: '예: 10분 이내' }), text('who', '담당', 40, { short: true, ph: '예: 담임' })],
+      make: () => ({ title: '', desc: '', time: '', who: '' }), sum: (x) => x.title, meta: (x) => [x.time, x.who].filter(has).join(' · '), ok: (x) => has(x.title) }),
+    area('close', '맺는 말', 300),
+  ],
+  cases: [
+    LEAD_IF,
+    list('items', '사례', { limit: 12, norm: (x) => (typeof x === 'string' ? { body: x } : x), item: [text('title', '제목', 100), area('body', '본문', 1200, { rows: 3 }), area('quote', '인용', 300, { ph: '사례 속 사람의 말' }), text('cite', '말한 사람', 60, { short: true })],
+      make: () => ({ title: '', body: '', quote: '', cite: '' }), sum: (x) => x.title || firstLine(x.body), ok: (x) => has(x.title) || has(x.body) || has(x.quote) }),
+  ],
+  discuss: [
+    LEAD,
+    list('items', '질문', { of: 'text', each: 240, limit: 12, ph: '예: 가장 기억에 남는 순간은 언제였나요?' }),
+    list('rules', '진행 규칙', { of: 'text', each: 200, limit: 8, ph: '예: 4명씩 한 모둠으로 앉아요', empty: '비워 두면 질문만 보여요.' }),
+    area('note', '참고', 300),
+  ],
+  table: [
+    LEAD_IF,
+    grid('rows', '표 내용', { hint: '첫 줄은 머리글이에요. 칸은 | 로 나누고, 한 줄에 한 줄씩 써요.' }),
+    area('note', '설명', 400),
+  ],
 };
 
 export const hasItemEditor = (type) => !!SPEC[type];
@@ -233,6 +256,7 @@ function Control({ f, obj, patch, ctx, depth, idx, bare }) {
   const ph = typeof f.ph === 'function' ? f.ph(idx, obj) : f.ph;
   const a = { class: 'input', placeholder: ph, 'aria-label': bare ? f.label : undefined };
   if (f.kind === 'list') return <List f={f} value={v} parent={obj} onChange={put} ctx={ctx} depth={depth} />;
+  if (f.kind === 'grid') return <GridField f={f} obj={obj} onChange={(p) => { u.touch(); patch(p); }} />;
   if (f.kind === 'url') return <UrlField f={f} value={txt(v)} onChange={put} ctx={ctx} bare={bare} a={a} />;
   if (f.kind === 'boolean') {
     const on = f.def ? v !== false : !!v;
@@ -272,6 +296,25 @@ function Draft({ value, parse, onChange, area, ...rest }) {
   useEffect(() => { if (!typing.current) setDraft(value); }, [value]);
   const El = area ? Area : 'input';
   return <El {...rest} value={draft} onFocus={() => { typing.current = true; }} onBlur={() => { typing.current = false; setDraft(value); }} onInput={(e) => { const t = e.currentTarget.value; setDraft(t); onChange(parse(t)); }} />;
+}
+
+const cellsOf = (line) => { let t = line.trim(); if (t.startsWith('|')) t = t.slice(1); if (t.endsWith('|')) t = t.slice(0, -1); return t.split('|').map((c) => c.trim().slice(0, 400)).slice(0, 8); };
+const rowText = (r) => (Array.isArray(r) ? r : []).map((c) => txt(c).replace(/\n/g, '<br>')).join(' | ');
+/** 표(머리글 + 줄): 글상자 하나로 고침. 첫 줄이 머리글(head), 나머지가 줄(rows). 칸 안 줄바꿈은 <br> */
+function GridField({ f, obj, onChange }) {
+  const value = [rowText(obj?.head), ...(Array.isArray(obj?.rows) ? obj.rows : []).map(rowText)].join('\n');
+  const parse = (t) => { const ls = t.split('\n'); return { head: cellsOf(ls[0] || '').map((c) => c.slice(0, 60)), rows: ls.slice(1).filter((l) => l.trim()).slice(0, 60).map(cellsOf) }; };
+  const [draft, setDraft] = useState(value);
+  const typing = useRef(false);
+  useEffect(() => { if (!typing.current) setDraft(value); }, [value]);
+  return (
+    <label class="field ie-f"><span>{f.label}</span>
+      <Area class="input ie-grid" rows={5} value={draft} placeholder={'구분 | 기준 | 조치\n경미 | 보건실 처치 | 보건일지 기록'} spellcheck={false}
+        onFocus={() => { typing.current = true; }} onBlur={() => { typing.current = false; setDraft(value); }}
+        onInput={(e) => { const t = e.currentTarget.value; setDraft(t); onChange(parse(t)); }} />
+      {f.hint && <small>{f.hint}</small>}
+    </label>
+  );
 }
 
 const blankUrl = (t) => !t || /^https?:\/\/$/i.test(t);
@@ -359,7 +402,7 @@ function List({ f, value, parent, onChange, ctx, depth }) {
     if (depth === 0 && !empty && !quiet) toast('항목을 뺐어요. [되돌리기]로 되살릴 수 있어요.');
   };
   const putItem = (i, v) => commit(items.map((x, k) => (k === i ? v : x)));
-  const patchItem = (i) => (p) => commit(items.map((x, k) => (k === i ? { ...x, ...p } : x)));
+  const patchItem = (i) => (p) => commit(items.map((x, k) => (k === i ? { ...(f.norm ? f.norm(x) : x), ...p } : x)));
   const acts = (i, moveToo) => (
     <span class="ie-acts">
       {moveToo && <>
@@ -370,7 +413,8 @@ function List({ f, value, parent, onChange, ctx, depth }) {
     </span>
   );
 
-  const rows = items.map((x, i) => {
+  const rows = items.map((x0, i) => {
+    const x = f.norm ? f.norm(x0) : x0;
     if (fold) {
       const isOpen = open === i;
       const ok = f.ok ? f.ok(x) : true;
