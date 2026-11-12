@@ -271,7 +271,7 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .thumb-site{position:relative;aspect-ratio:16/10;overflow:hidden;background:var(--sunk);border-bottom:1px solid var(--hair);pointer-events:none}
 .thumb-site iframe{position:absolute;left:0;top:0;border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff;transition:transform .6s ease-out}
 /* 카드에 올리거나 초점이 오면 본문까지 천천히 내려가며 보여 줌(첫 화면만 보고 고르지 않게). 동작 줄이기에서는 그대로 */
-@media (prefers-reduced-motion:no-preference){.thumb:is(:hover,:focus-visible) .thumb-site iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}}
+@media (prefers-reduced-motion:no-preference){.thumb-site.is-tour iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}}
 .concept{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
 .concept-k{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:.82rem;font-weight:700;color:var(--muted)}
 .concept-k small{font-weight:500}
