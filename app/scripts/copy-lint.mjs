@@ -69,10 +69,10 @@ const SKIP_METHODS = new Set(['includes', 'startsWith', 'endsWith', 'indexOf', '
 const SKIP_CALLS = new Set(['RegExp', 'require', 'import', 'Symbol', 'CustomEvent', 'Event']);
 const SKIP_ATTRS = new Set(['class', 'className', 'id', 'key', 'style', 'href', 'src', 'type', 'name', 'for', 'htmlFor', 'role', 'value', 'data-kind', 'accept', 'target', 'rel', 'lang', 'd', 'viewBox']);
 const ATTR_KIND = { 'aria-label': 'aria', title: 'aria', alt: 'aria', 'aria-description': 'aria', 'aria-roledescription': 'aria', placeholder: 'placeholder', label: 'label', hint: 'text', 'data-tip': 'aria' };
-const PROP_KIND = { label: 'label', title: 'title', t: 'title', name: 'title', heading: 'title', placeholder: 'placeholder', cta: 'button', btn: 'button', button: 'button', next: 'button' };
+const PROP_KIND = { label: 'label', title: 'title', t: 'text', name: 'title', heading: 'title', placeholder: 'placeholder', cta: 'button', btn: 'button', button: 'button', next: 'button' };
 const CALL_KIND = { toast: 'toast', Error: 'error', AiError: 'error', TypeError: 'error', RangeError: 'error', confirm: 'confirm', alert: 'confirm', prompt: 'confirm', fail: 'error' };
 // 화면 글이 아닌 것: 개인정보 안내·운영 안내·디자인 규칙 같은 문서(합니다체 그대로, 말투는 보지 않음)와 AI에게 주는 지시문(보지 않음)
-const DOC_FN = /^(renderPrivacy|designDoc|opsDoc|conceptBlock|privacy\w*|terms\w*|license\w*)$/i;
+const DOC_FN = /^(renderPrivacy|defaultProcessors|activityItems|designDoc|opsDoc|conceptBlock|privacy\w*|terms\w*|license\w*)$/i;
 const PROMPT_FN = /^(make\w*Prompt|promptFor|build\w*Prompt)$/;
 const PROMPT_VAR = /^(RULES|PROMPT|SYSTEM|INSTR)/;
 const DOC_VAR = /^PROVIDER_WHY$/; // 운영 안내(opsDoc)에만 들어가는 설명
@@ -205,7 +205,8 @@ export function extract(source, file = 'x.jsx') {
         const name = calleeName(n.callee); const obj = n.callee.type === 'MemberExpression' ? nameOf(n.callee.object) : '';
         visit(n.callee, n, ctx);
         const skip = ctx.skip || SKIP_METHODS.has(name) || SKIP_CALLS.has(name) || obj === 'console' || obj === 'localStorage' || obj === 'sessionStorage';
-        const kind = CALL_KIND[name] || (/^set(Busy|Status|Msg|Note|Err|Error|Phase)$/.test(name) ? 'status' : ctx.kind);
+        const elBtn = (name === 'el' || name === 'h') && n.arguments[0]?.type === 'StringLiteral' && n.arguments[0].value === 'button';
+        const kind = elBtn ? 'button' : CALL_KIND[name] || (/^set(Busy|Status|Msg|Note|Err|Error|Phase)$/.test(name) ? 'status' : ctx.kind);
         visit(n.arguments, n, { ...ctx, skip, kind, where: CALL_KIND[name] ? name : ctx.where });
         return;
       }
@@ -355,7 +356,7 @@ export function report({ units, findings }, { top = 30 } = {}) {
   const nu = (g) => units.filter((u) => u.group === g).length;
   L.push(`문구 ${units.length}개(앱 ${nu('app')} · 강의 페이지 ${nu('page')}, 그중 문서 ${units.filter((u) => u.kind === 'doc').length}개는 말투를 보지 않음) · 고침 ${e}건 · 살핌 ${findings.length - e}건`, '');
   L.push('### 규칙별 건수', '', '| 규칙 | 수준 | 앱 | 강의 페이지 | 예 |', '|---|---|---:|---:|---|');
-  for (const r of byRule(findings)) L.push(`| ${RULE_NAME[r.rule] || r.rule}${r.whys.size ? ` (${[...r.whys].slice(0, 3).join(' · ')})` : ''} | ${r.level === 'error' ? '고침' : '살핌'} | ${r.app} | ${r.page} | \`${r.ex.file.replace(/^.*\//, '')}:${r.ex.line}\` ${one(r.ex.text, 36)} |`);
+  for (const r of byRule(findings)) { const name = RULE_NAME[r.rule] || r.rule; const w = [...r.whys].filter((x) => x !== name); L.push(`| ${name}${w.length ? ` (${w.slice(0, 3).join(' · ')})` : ''} | ${r.level === 'error' ? '고침' : '살핌'} | ${r.app} | ${r.page} | \`${r.ex.file.replace(/^.*\//, '')}:${r.ex.line}\` ${one(r.ex.text, 36)} |`); }
   L.push('', `### 심한 것 ${top}개`, '', '| # | 곳 | 칸 | 문구 | 걸린 규칙 | 고친 안(기계로 고친 것) 또는 고칠 방향 |', '|---:|---|---|---|---|---|');
   worst(findings, top).forEach((w, i) => L.push(`| ${i + 1} | \`${short(w.file)}:${w.line}\` | ${w.kind} | ${one(w.text, 56)} | ${[...new Set(w.all.map((f) => (RULE_NAME[f.rule] || f.rule) + (f.rule === 'term' ? `(${f.hit}→${f.why.replace(/^용어: /, '')})` : '')))].join(', ')} | ${w.fixed ? one(w.fixed, 56) : one(w.all[0].fix, 44)} |`));
   L.push('', '### 용어 불일치', '', '| 통일할 말 | 건수 | 쓰인 꼴(건수) | 기준 | 예 |', '|---|---:|---|---|---|');
