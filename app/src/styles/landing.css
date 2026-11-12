@@ -2,7 +2,7 @@
    생각: 로고의 '접힌 모서리 종이 한 장'이 이야기를 끌고 가요. 교재 한 장 → 읽힘 → 컨셉 → 사이트로 펼침 → 휴대폰 → 연수 당일 → 연수 뒤.
    규칙: 한 화면에 큰 움직임 하나 · transform·opacity 위주 · 화면 밖에서는 멈춤(is-on) · 동작 줄이기면 완성된 정지 모습 · 글은 움직이지 않음. */
 
-@property --k { syntax: '<number>'; inherits: true; initial-value: .16; }
+@property --ld-k { syntax: '<number>'; inherits: true; initial-value: .16; }
 
 .ld{--ld-gap:clamp(96px,13vw,176px);--ld-r:18px;overflow-x:clip;margin-top:-8px}
 .ld h2{font-size:clamp(1.85rem,1.15rem + 2.7vw,3.1rem);line-height:1.18;letter-spacing:-.03em;font-weight:760}
@@ -53,26 +53,28 @@
 .ld-later{min-height:100vh}
 
 /* 첫 화면 그림: 교재 표지의 모서리가 접히며 사이트가 드러남 */
-.ld-hero-vis{position:relative;min-width:0;width:100%;max-width:640px;justify-self:center;--h:340px;--d:calc(var(--k) * var(--h));transition:--k 1.15s cubic-bezier(.22,1,.36,1)}
+.ld-hero-vis{position:relative;min-width:0;width:100%;max-width:640px;justify-self:center;transition:--ld-k 1.15s cubic-bezier(.22,1,.36,1)}
 .ld-fold{position:relative;aspect-ratio:16/10;container-type:inline-size}
 .ld-fold-site{position:absolute;inset:0;overflow:hidden;border-radius:14px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-lg)}
 .ld-fold-site img{display:block;width:100%;height:calc(100% - 26px);object-fit:cover;object-position:top left}
 .ld-sheet{position:absolute;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
 .ld-cover{inset:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:2cqi;padding:6cqi 7cqi 7cqi;border-radius:14px;
-  clip-path:polygon(0 0,calc(100% - var(--d)) 0,100% var(--d),100% 100%,0 100%);
+  /* 접는 선: 높이의 k만큼(16:10이라 폭으로는 62.5%×k) */
+  clip-path:polygon(0 0,calc(100% - var(--ld-k) * 62.5%) 0,100% calc(var(--ld-k) * 100%),100% 100%,0 100%);
   background:radial-gradient(120% 90% at 0 100%,color-mix(in srgb,var(--sunk) 80%,transparent),transparent 60%),var(--paper)}
 /* 글은 왼쪽 아래 62% 안에만: 모서리가 가장 많이 접혀도(높이의 94%) 글을 가리지 않게 */
 .ld-cover>*{max-width:62%}
 .ld-cover small{position:absolute;top:6cqi;left:7cqi}
 .ld-cover small{font-size:.7rem;font-size:max(9px,1.7cqi);font-weight:650;color:var(--muted);letter-spacing:.02em}
 .ld-cover b{margin-top:2cqi;font-size:2rem;font-size:6.6cqi;line-height:1.12;letter-spacing:-.04em;font-weight:800}
-.ld-cover span{max-width:62%;font-size:.86rem;font-size:max(10px,2.25cqi);line-height:1.6;color:var(--ink-2)}
+.ld-cover b>span{display:block;white-space:nowrap}
+.ld-cover>span{max-width:62%;min-height:calc(1.6em * 3);font-size:.86rem;font-size:max(10px,2.25cqi);line-height:1.6;color:var(--ink-2)}
 .ld-cover-rule{display:block;width:12cqi;height:3px;margin-top:2cqi;border-radius:2px;background:var(--accent)}
 .ld-cover em{font-style:normal;font-size:max(9px,1.9cqi);font-weight:600;color:var(--ink-2)}
 .ld-cover-dots{display:block;margin-top:1cqi;width:62%;height:1.6cqi;min-height:7px;
   background:radial-gradient(circle at center,var(--accent) 34%,transparent 38%) 0 0/3.2cqi 100% repeat-x;opacity:.55}
 .ld-flap-wrap{position:absolute;inset:0;pointer-events:none;filter:drop-shadow(-5px 7px 7px rgb(28 26 25 / .2))}
-.ld-flap{position:absolute;top:0;right:0;width:var(--h);height:var(--h);transform:scale(var(--k));transform-origin:100% 0;clip-path:polygon(0 0,100% 100%,0 100%);
+.ld-flap{position:absolute;top:0;right:0;width:62.5%;aspect-ratio:1;transform:scale(var(--ld-k));transform-origin:100% 0;clip-path:polygon(0 0,100% 100%,0 100%);
   background:linear-gradient(to top right,color-mix(in srgb,var(--lav-fold) 86%,var(--ink) 8%) 0%,var(--lav-fold) 45%,var(--lav) 100%)}
 .ld-hero-cap{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:.82rem;font-weight:650;color:var(--muted)}
 .ld-hero-cap i{flex:1;max-width:120px;height:1px;background:linear-gradient(90deg,var(--line-strong),var(--accent))}

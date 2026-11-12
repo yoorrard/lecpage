@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "첫 화면 'AI에게 그냥 맡길 때와 다른 점' 아래 '재어 본 값'. items가 비어 있으면 그 구간이 나오지 않아요. 형식: docs/research/landing-2026-11.md#비교-수치benchmarkjson",
+  "about": "첫 화면 'AI에게 그냥 맡길 때와 다른 점' 아래 '재어 본 값'. items가 비어 있으면 그 구간이 나오지 않아요. 형식: docs/research/landing-2026-11.md 5장 비교 수치",
   "baseline": "AI에게 그냥 맡길 때",
   "items": []
 }

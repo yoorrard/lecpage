@@ -31,28 +31,3 @@ export function useInView(ref, { margin = '0px', once = false } = {}) {
   }, []);
   return on;
 }
-
-/**
- * 스크롤이 요소를 지나가는 정도(0~1)를 CSS 변수 --p로 씁니다. 화면 안에 있을 때만 스크롤을 듣습니다.
- * from: 요소 윗변이 화면 윗변에 닿을 때 0, 요소 아랫변이 화면 윗변에 닿을 때 1(첫 화면처럼 위에서 시작하는 요소용)
- */
-export function useScrollVar(ref, { onChange } = {}) {
-  useEffect(() => {
-    const el = ref.current; if (!el || isReduced()) return;
-    let raf = 0, last = -1, live = false;
-    const tick = () => {
-      raf = 0;
-      const r = el.getBoundingClientRect();
-      const p = Math.min(1, Math.max(0, -r.top / Math.max(1, r.height)));
-      if (Math.abs(p - last) < 0.002) return;
-      last = p; el.style.setProperty('--p', p.toFixed(3)); onChange?.(p);
-    };
-    const on = () => { if (!raf) raf = requestAnimationFrame(tick); };
-    const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !live) { live = true; addEventListener('scroll', on, { passive: true }); on(); }
-      else if (!e.isIntersecting && live) { live = false; removeEventListener('scroll', on); }
-    }) : null;
-    if (io) io.observe(el); else { addEventListener('scroll', on, { passive: true }); on(); }
-    return () => { io?.disconnect(); removeEventListener('scroll', on); cancelAnimationFrame(raf); };
-  }, []);
-}
