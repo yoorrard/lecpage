@@ -29,3 +29,14 @@ test('글 칸·FAQ 답: 소제목 줄의 긴 빈칸이 빌드를 멈추지 않�
   assert.equal(mdStr('```\n    code\n```\n본문   여러 칸\n# 소제목    둘', 6000), '```\n    code\n```\n본문   여러 칸\n# 소제목 둘');
   assert.equal(mdStr('문단\r\n\r\n#  a  #', 100), '문단\n\n# a #');
 });
+
+test('교재 읽기: 띄어쓰기 없는 아주 긴 낱말에서 멈추지 않음(주최 줄·이메일 찾기)', () => {
+  for (const ch of ['가', 'a', 'a1', '.']) {
+    const s = ch.repeat(Math.ceil(60000 / ch.length));
+    const t = ms(() => ingestText(`${s}\n\n${s}`, { today: '2026-11-12' }));
+    assert.ok(t < 4000, `${ch}: ${Math.round(t)}ms`); // 고치기 전에는 '가' 10초·'a1' 1분 넘게
+  }
+  // 찾는 결과는 그대로
+  const m = ingestText('# AI 수업 연수\n\n서울특별시교육청\n\n강사 소개\n\n홍길동\n\n가온초등학교 교사\n\n메일: gil.dong+lec@gaon.example.kr', { today: '2026-11-12' });
+  assert.equal(m.detected.event.organizer, '서울특별시교육청');
+});

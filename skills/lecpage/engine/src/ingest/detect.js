@@ -486,7 +486,8 @@ function detectSections(pages, agenda, special) {
 const PROFILE_TITLE = /(강사|발표자|연사|진행자|강연자|소개|프로필|profile|about\s*me|who\s*am\s*i|자기\s*소개|약력|저는|인사드립니다|만든\s*사람)/i;
 const ROLE_WORD = /(교사|선생님|교수|연구사|장학사|장학관|교감|교장|수석교사|강사|대표|팀장|연구원|박사|석사|교육전문직|선도교사|연구회장|회장|위원|크리에이터|작가|교육청|연구소)/;
 const CAREER = /^\s*(?:\(?\s*(?:현|전|前|現)\s*\)?\s*[)\].:]?\s+|[-•·]\s*(?:현|전)\s+|(?:현|전)\)\s*)/;
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+// 낱말 첫머리에서만 시작(찾는 결과는 같음). 앞 경계가 없으면 '@' 없는 긴 낱말에서 길이의 제곱으로 느려짐(보안 검토 2026-11b)
+const EMAIL = /(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
 const NAME_STOP = new Set(['소개', '약력', '경력', '강사', '발표자', '프로필', '연락처', '이메일', '저서', '학력', '활동', '수상', '감사', '안녕', '오늘', '연수', '실습', '선생님', '교사', '교수', '선생']);
 
 function detectInstructor(pages, profilePages = []) {
@@ -651,7 +652,8 @@ function detectEvent(pages, refYear) {
     for (const t of linesOf(p, { withTitle: true }).map((x) => x.text)) {
       const m = ORG_LABEL.exec(t);
       if (m) { ev.organizer = normLine(m[1]); break; }
-      if (!ev.organizer && ORG_LINE.test(normLine(t))) ev.organizer = normLine(t);
+      // 기관 이름 줄은 짧음. 긴 줄은 보지 않음(ORG_LINE은 띄어쓰기 없는 긴 한글 줄에서 길이의 제곱으로 느려짐 — 보안 검토 2026-11b)
+      if (!ev.organizer && t.length <= 80 && ORG_LINE.test(normLine(t))) ev.organizer = normLine(t);
     }
     if (ev.organizer) break;
   }
