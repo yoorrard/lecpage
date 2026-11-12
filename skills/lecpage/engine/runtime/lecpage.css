@@ -1417,7 +1417,7 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 .lp-poster-meta{display:grid;gap:2px;font-size:clamp(1rem,2.6vw,15pt)}
 .lp-poster-meta div{display:flex;gap:10px;justify-content:center}
 .lp-poster-meta dt{font-weight:800}.lp-poster-meta dd{margin:0}
-.lp-poster-qr{width:min(120mm,70%);padding:0;border-radius:0}
+.lp-poster-qr{width:min(105mm,62%);padding:0;border-radius:0}
 .lp-poster-cta{font-weight:700;font-size:clamp(1rem,2.6vw,15pt)}
 .lp-poster-url{font-family:var(--font-mono);font-weight:700;font-size:clamp(1.1rem,3.6vw,20pt);word-break:break-all;overflow-wrap:anywhere;line-height:1.3}
 .lp-poster-full{font-family:var(--font-mono);font-size:clamp(.8rem,2vw,11pt);color:#444;word-break:break-all;overflow-wrap:anywhere;margin-top:-1mm}
@@ -1758,6 +1758,9 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
   .lp-poster{display:block;padding:0}
   .lp-poster-page,.lp-poster-card{page:lp-poster;margin:0 auto;box-shadow:none;border-radius:0}
   .lp-poster-page{width:190mm;height:275mm;aspect-ratio:auto;padding:12mm 14mm;break-after:page;overflow:hidden}
+  /* 내용이 많아도(긴 제목·짧은 주소·연수 코드) 한 장에 들어가게 QR만 줄어듦: 높이를 먼저 정하고 너비는 그 높이를 따라감 */
+  .lp-poster-page .lp-poster-qr{flex:0 1 105mm;width:auto;min-height:55mm;max-width:100%}
+  .lp-poster-page .lp-poster-qr svg{width:100%;height:100%}
   .lp-poster-card{width:190mm;height:128mm;border:0;border-bottom:1px dashed #888;padding:10mm 12mm;break-inside:avoid;overflow:hidden}
   .lp-card-off .lp-poster-card{display:none}
   .lp-card-off .lp-poster-page{break-after:auto}

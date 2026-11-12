@@ -80,7 +80,7 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { },
   catch (e) { if (e.status !== 409 && e.status !== 422) throw e; }
   let url = `https://${owner}.github.io/${repo}/`;
   try { const pg = await gh(token, 'GET', `/repos/${owner}/${repo}/pages`); if (pg.html_url) url = pg.html_url; } catch { }
-  onProgress({ step: '완료(첫 배포는 1~2분 뒤 열려요)', pct: 100 });
+  onProgress({ step: '완료(처음에는 1~2분, 길면 10분 뒤 열려요)', pct: 100 });
   return { url, repoUrl: `https://github.com/${owner}/${repo}` };
 }
 

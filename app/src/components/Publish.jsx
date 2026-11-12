@@ -30,7 +30,7 @@ export function useToken(kind) {
   const [remember, setRemember] = useState(true);
   const [saved, setSaved] = useState(false);
   useEffect(() => { loadKey('deploy-' + kind).then(({ key, remembered }) => { if (key) { setToken(key); setRemember(remembered); setSaved(true); } }); }, [kind]);
-  return { token, setToken, remember, setRemember, saved, save: async (tok = token) => { await saveKey('deploy-' + kind, tok, remember); setToken(tok); setSaved(true); }, forget: async () => { await forgetKey('deploy-' + kind); setToken(''); setSaved(false); toast('연결을 끊었어요.'); } };
+  return { token, setToken, remember, setRemember, saved, save: async (tok = token) => { await saveKey('deploy-' + kind, tok, remember); setToken(tok); setSaved(true); }, forget: async (quiet) => { await forgetKey('deploy-' + kind); setToken(''); setSaved(false); if (quiet !== true) toast('연결을 끊었어요.'); } };
 }
 
 /** 이미 연결해 둔 곳(토큰이 있는 곳) */
@@ -72,7 +72,7 @@ export const HOST_GUIDE = {
  * 연결: 가입 → 토큰 만들기 → 붙여넣기를 한 단계씩. [붙여넣기]를 누르면 토큰이 맞는지 바로 확인하고 연결해요.
  * 연결 뒤에는 한 줄만 보여요.
  */
-function Connect({ t, kind, onConnected }) {
+function Connect({ t, kind, onConnected, onChange }) {
   const g = HOST_GUIDE[kind];
   const [at, setAt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -83,11 +83,14 @@ function Connect({ t, kind, onConnected }) {
     const f = () => { if (went.current) { went.current = false; setBack(true); } };
     window.addEventListener('focus', f); return () => window.removeEventListener('focus', f);
   }, []);
+  // 연결이 끊기면(직접 끊음·토큰 기한이 지남) 계정은 이미 있으니 '토큰 만들기'부터 보여 줌
+  const was = useRef(false);
+  useEffect(() => { if (was.current && !t.saved) { setAt(1); setErr(''); } was.current = t.saved; }, [t.saved]);
   async function take(text) {
     const v = String(text || '').trim(); t.setToken(v); setBack(false);
     const bad = tokenLooksWrong(v); if (bad) { setErr(bad); return; }
     setErr(''); setBusy(true);
-    try { await checkToken(kind, v); await t.save(v); toast(`${g.name}에 연결했어요.`); onConnected?.(); }
+    try { await checkToken(kind, v); await t.save(v); toast(`${g.name}에 연결했어요.`); onConnected?.(); onChange?.(); }
     catch (e) { setErr(e.message || '토큰을 확인하지 못했어요.'); }
     setBusy(false);
   }
@@ -97,7 +100,7 @@ function Connect({ t, kind, onConnected }) {
     catch { setErr('입력 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); return; }
     take(text);
   }
-  if (t.saved) return <p class="small conn-line"><span class="ok-dot" aria-hidden="true" />{g.name}에 연결돼 있어요. <button type="button" class="btn btn-sm btn-quiet" onClick={t.forget}>연결 끊기</button></p>;
+  if (t.saved) return <p class="small conn-line"><span class="ok-dot" aria-hidden="true" />{g.name}에 연결돼 있어요. <button type="button" class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 끊기</button></p>;
   const steps = [
     { t: `${g.site} 가입하기`, next: '이미 가입했어요',
       body: <p><a class="btn btn-sm" href={g.signup} target="_blank" rel="noopener" onClick={() => setAt(1)}>가입 페이지 열기</a> {g.join}</p> },
@@ -124,6 +127,12 @@ function Connect({ t, kind, onConnected }) {
       </> },
   ];
   return <Steps steps={steps} at={at} onAt={(i) => { setAt(i); setErr(''); }} label={`${g.name} 연결 순서`} />;
+}
+
+/** 올리다가 토큰이 틀렸거나 기한이 지난 것을 알면: 저장한 토큰을 지워 연결 순서(토큰 만들기)가 다시 보이게 함. true면 알림을 띄웠음 */
+function tokenGone(e, t, refresh) {
+  if (e.status !== 401 && !/토큰이 맞지 않거나|토큰에 권한이 모자라요/.test(e.message || '')) return false;
+  t.forget(true).then(() => refresh?.()); toast('올리지 못했어요. ' + e.message); return true;
 }
 
 /** 주소 이름: 앞뒤 글자를 붙여 완성된 주소 모양으로 보여 줌 */
@@ -174,12 +183,15 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   }, !!auto?.live);
   // 무료 한도를 넘으면 어떻게 되는지(고른 곳마다 한 줄)
   const H = E.HOSTS[target] || {};
-  const limitLine = target === 'lecpage' ? (live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
+  const lead = `${target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko}${rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}`;
+  const limit = target === 'lecpage' ? (live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
+  const limitLine = limit && !lead.includes(limit) ? limit : ''; // 소개 줄에 이미 나온 말은 되풀이하지 않음
   const days = instant?.limits?.days || 30;
   const care = target === 'lecpage' ? `${days}일 동안 아무도 오지 않으면 지워져요. 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
   if (again) again.current = null;
   const ctx = {
     p, busy, start, done: (url, patch, more) => { done(url, { ...patch, target }, more); connectedTargets().then(setConnected); },
+    refresh: () => connectedTargets().then(setConnected), // 연결하거나 끊은 뒤 '연결됨' 표시를 맞춤
     bind: (fn) => { if (again) again.current = fn && target === p.deploy?.target ? fn : null; },
   };
   return (
@@ -191,7 +203,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
         ))}
       </div>
       <div class="pub-about">
-        <p>{target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko}{rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}</p>
+        <p>{lead}</p>
         {(limitLine || care) && <dl class="pub-facts small">
           {limitLine && <div class="pub-limit"><dt>무료 한도</dt><dd>{limitLine}</dd></div>}
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
@@ -252,7 +264,7 @@ function Instant({ p, busy, start, done, bind, info, onUnavailable }) {
   );
 }
 
-function Vercel({ p, busy, start, done, bind }) {
+function Vercel({ p, busy, start, done, bind, refresh }) {
   const t = useToken('vercel');
   const prev = p.deploy?.vercel;
   const [name, setName] = useState(prev?.name || '');
@@ -261,7 +273,7 @@ function Vercel({ p, busy, start, done, bind }) {
     const out = await deployVercel({ token: t.token, name: clean || slug(p.info?.date), projectId: prev?.projectId, files, onProgress });
     done(out.url, { vercel: { projectId: out.projectId, name: out.name, url: out.url } });
     toast(prev ? '새 내용을 같은 주소에 올렸어요.' : out.opened ? '공개했어요! 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '공개했어요!');
-  });
+  }, (e) => tokenGone(e, t, refresh));
   bind(t.saved ? run : null);
   async function unlock() {
     try { await openVercel(t.token, prev.projectId); toast('이제 로그인 없이 열려요.'); }
@@ -269,7 +281,7 @@ function Vercel({ p, busy, start, done, bind }) {
   }
   return (
     <div class="stack">
-      <Connect t={t} kind="vercel" />
+      <Connect t={t} kind="vercel" onChange={refresh} />
       {t.saved && <>
         {!prev && <AddrName optional pre="https://" post=".vercel.app" value={name} onInput={(v) => setName(cleanName(v))} placeholder={nameHint(p)} hint="영문 소문자·숫자·하이픈. 짧을수록 치기 쉬워요. 비워 두면 자동으로 정해요." />}
         <Go on={busy === 'vercel'} busy={busy} again={!!prev} onClick={run} />
@@ -279,7 +291,7 @@ function Vercel({ p, busy, start, done, bind }) {
   );
 }
 
-function GitHub({ p, busy, start, done, bind }) {
+function GitHub({ p, busy, start, done, bind, refresh }) {
   const t = useToken('github');
   const prev = p.deploy?.github;
   const [repo, setRepo] = useState(prev?.repo || slug(p.info?.date));
@@ -288,11 +300,11 @@ function GitHub({ p, busy, start, done, bind }) {
     const name = repo.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || slug();
     const out = await deployGitHub({ token: t.token, repo: name, files, onProgress, allowExisting: allowExisting || prev?.repo === name });
     done(out.url, { github: { repo: name, url: out.url } }); toast('GitHub Pages에 올렸어요. 처음에는 1~2분, 길면 10분 뒤에 열려요.');
-  }, (e) => { if (e.code !== 'exists') return false; setConfirm(true); return true; });
+  }, (e) => { if (e.code !== 'exists') return tokenGone(e, t, refresh); setConfirm(true); return true; });
   bind(t.saved ? () => run() : null);
   return (
     <div class="stack">
-      <Connect t={t} kind="github" />
+      <Connect t={t} kind="github" onChange={refresh} />
       {t.saved && <>
         <AddrName label="저장소 이름" pre="내계정.github.io/" value={repo} onInput={setRepo} hint="영문 소문자·숫자·하이픈. 주소에 들어가요." max={80} />
         <Go on={busy === 'github-pages'} busy={busy} again={!!prev} onClick={() => run()} />
@@ -306,7 +318,7 @@ function GitHub({ p, busy, start, done, bind }) {
   );
 }
 
-function Netlify({ p, busy, start, done, bind }) {
+function Netlify({ p, busy, start, done, bind, refresh }) {
   const t = useToken('netlify');
   const prev = p.deploy?.netlify;
   const [name, setName] = useState(prev?.name || '');
@@ -315,11 +327,11 @@ function Netlify({ p, busy, start, done, bind }) {
     const out = await deployNetlify({ token: t.token, siteId: prev?.siteId, name: prev ? '' : name, zip: E.zipFiles(files), onProgress });
     done(out.url, { netlify: { siteId: out.siteId, url: out.url, name } });
     toast(prev ? '새 내용을 같은 주소에 올렸어요.' : '올렸어요. 주소가 열리지 않으면 Netlify에서 Make public을 눌러 주세요.');
-  }, (e) => { if (!/must be unique|already/i.test(e.message)) return false; toast('이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.'); return true; });
+  }, (e) => { if (!/must be unique|already/i.test(e.message)) return tokenGone(e, t, refresh); toast('이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.'); return true; });
   bind(t.saved && nameOk ? run : null);
   return (
     <div class="stack">
-      <Connect t={t} kind="netlify" />
+      <Connect t={t} kind="netlify" onChange={refresh} />
       {t.saved && <>
         {!prev && <AddrName optional pre="https://" post=".netlify.app" value={name} onInput={(v) => setName(cleanName(v))} placeholder={nameHint(p)} invalid={!nameOk} max={63}
           hint={nameOk ? '영문 소문자·숫자·하이픈. 짧을수록 치기 쉬워요. 비워 두면 자동으로 정해요.' : '영문 소문자·숫자로 시작하고 끝나야 해요.'} />}
@@ -337,7 +349,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
   const cf = kind === 'cloudflare';
   const get = { t: '사이트 파일 받기', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => { guard(zip); setAt(1); }}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
   const save = { t: prev ? '올린 주소 확인하기' : '올린 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '올린 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
@@ -382,7 +394,7 @@ export function HostConnect({ kind, onChange }) {
       <Dialog open={open} onClose={() => setOpen(false)} label={`${g.name} 연결`}>
         <div class="stack">
           <h2 class="h-sub">{g.name} 연결</h2>
-          {open && !t.saved && <Connect t={t} kind={kind} onConnected={() => { setOpen(false); onChange?.(); }} />}
+          {open && !t.saved && <Connect t={t} kind={kind} onConnected={() => setOpen(false)} onChange={onChange} />}
         </div>
       </Dialog>
     </li>

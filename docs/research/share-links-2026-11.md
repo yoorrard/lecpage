@@ -49,10 +49,20 @@
 
 - 오류 정정 **M**(15%, DENSO WAVE가 "표준"으로 드는 값). 로고를 넣지 않으므로 H는 필요 없고, 낮을수록 점이 커져 멀리서 잘 읽힙니다.
 - **둘레 여백 4칸**(규격의 quiet zone)을 그림 안에 넣었습니다. 앱·사이트·저장한 PNG 어디서나 같고, 어두운 화면·붙여 넣은 문서에서도 읽힙니다. 언제나 흰 바탕에 검은 점(반전 없음).
-- **크기**: QR 한 변은 찍는 거리의 1/10쯤이 필요합니다(2차, 여러 안내의 경험칙). 10m 뒤에서 찍으려면 화면에서 1m → 발표 화면과 앱에 **[크게 보기]**(화면 가득)를 넣었습니다. A4 안내문의 QR은 한 변 120mm로 키웠습니다.
+- **크기**: QR 한 변은 찍는 거리의 1/10쯤이 필요합니다(2차, 여러 안내의 경험칙). 10m 뒤에서 찍으려면 화면에서 1m → 발표 화면과 앱에 **[크게 보기]**(화면 가득)를 넣었습니다. A4 안내문의 QR은 한 변 약 105mm(1m 거리에서 넉넉함)이고, 긴 제목·짧은 주소로 내용이 많으면 한 장에 들어가게 QR만 저절로 줄어듭니다.
 - **내보내기**: [QR 저장]은 PNG 1024px(300dpi로 8.6cm), [QR 복사]는 그림을 클립보드로(발표 자료·한글 문서에 바로 붙여넣기). 크게 인쇄할 때는 안내문 페이지가 벡터(SVG)로 인쇄됩니다. SVG 내려받기 단추는 쓰는 사람이 드물어 넣지 않았습니다.
 
-## 6. 확인 못 한 것
+## 6. 공개하기 화면 문구 다시 확인 (2026-11-12, 공식 문서)
+
+숫자·순서는 `hosting-2026-11.md`와 같았고, 화면 문구만 아래처럼 맞췄습니다.
+
+- **Vercel 토큰**: Account Tokens → 이름 → **Scope**(Full Account·팀·프로젝트) → **Expiration** → **Create**, `vcp_`로 시작, 한 번만 보임. 화면의 "Scope는 내 계정"을 "Scope는 Full Account"로 고침. Hobby: Fast Data Transfer 100GB, 넘으면 대개 30일 대기, 비상업 개인 용도. ([access tokens](https://vercel.com/kb/guide/how-do-i-use-a-vercel-api-access-token) · [Hobby](https://vercel.com/docs/plans/hobby))
+- **GitHub**: fine-grained 토큰 주소 미리 채우기(`name`·`description`·`expires_in`·권한)는 그대로. Pages는 "게시까지 최대 10분" → "처음에는 1~2분, 길면 10분"으로 고치고, 열림 확인도 10분까지 기다림. ([토큰](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) · [Pages 만들기](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site) · [한도](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits))
+- **Netlify**: 비공개 기본값은 "2026-07-28부터 만든 팀" → "7월 뒤"를 "7월 28일 뒤"로 고침. 300크레딧·배포 15크레딧, 토큰 순서(New access token → 이름 → Expiration → Generate token)는 그대로. ([visibility](https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/) · [credits](https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/) · [API](https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/))
+- **Cloudflare**: Workers & Pages → Create application → Get started → Drag and drop your files → 이름 → Deploy site, 다시 올릴 때 Create a new deployment, 끌어 놓기 1,000개·25MiB, Drop은 60분 안에 Claim. 그대로. ([direct upload](https://developers.cloudflare.com/pages/get-started/direct-upload/) · [claim](https://developers.cloudflare.com/workers/platform/claim-deployments/))
+- **참여 기능**: Supabase 무료는 1주일 안 쓰면 멈춤, 키는 Settings → API Keys의 publishable 키. Apps Script는 사용자당 동시 실행 30개, 배포 → 새 배포 → 웹 앱. 승인 화면은 권한을 하나씩 고르는 방식이 생겨 "허용"을 "권한을 모두 골라 계속(또는 허용)"으로 고침(한국어 화면 글자는 직접 보지 못함 ⚠️). Cloudflare Workers 무료 하루 10만 요청·유료 월 $5. 그대로. ([Supabase 요금](https://supabase.com/pricing) · [API keys](https://supabase.com/docs/guides/api/api-keys) · [Apps Script 할당량](https://developers.google.com/apps-script/guides/services/quotas) · [승인](https://developers.google.com/apps-script/guides/services/authorization) · [Workers 요금](https://developers.cloudflare.com/workers/platform/pricing/))
+
+## 7. 확인 못 한 것
 
 - 한국 시도교육청 망에서 is.gd·joo.is·bit.ly가 실제로 열리는지.
 - joo.is 무료 링크에 광고가 붙는지, TinyURL·vo.la 무료 링크의 중간 화면.
@@ -60,7 +70,7 @@
 - Slido·Kahoot·Padlet의 현재 참여 화면(이번에는 Mentimeter 도움말만 읽음).
 - is.gd의 실제 가동률(공식 수치 없음). 닿지 않으면 앱이 쉬운 말로 알리고 다른 방법을 펼칩니다.
 
-## 7. 출처
+## 8. 출처
 
 - is.gd: [API](https://is.gd/apishorteningreference.php) · [한도](https://is.gd/usagelimits.php) · [FAQ](https://is.gd/faq.php) · [약관](https://is.gd/terms.php) · [개인정보](https://is.gd/privacy.php)
 - joo.is: [첫 화면](https://joo.is/) · 요금제·URL 단축 안내(사이트 안 페이지)
