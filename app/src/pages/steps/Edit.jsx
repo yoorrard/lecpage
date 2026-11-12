@@ -117,6 +117,7 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
       {e.kind === 'no-ai' || /연결되어 있지/.test(e.title || '') ? <button class="btn btn-sm" onClick={onConnect}>AI 연결하기</button> : !e.actions?.some((a) => a === 'pay' || a === 'light') && <button class="btn btn-sm" onClick={onRetry}>다시 하기</button>}
       {e.actions?.includes('pay') && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
       {e.actions?.includes('light') && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
+      {e.actions?.includes('link') && e.link && <a class="btn btn-sm" href={e.link.href} target="_blank" rel="noopener">{e.link.label}</a>}
       {e.actions?.includes('connect') && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
       {e.actions?.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>쓰던 챗봇으로 하기</button>}
       <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>

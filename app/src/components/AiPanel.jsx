@@ -78,7 +78,7 @@ export function AiPanel({ p, onBlueprint }) {
         // 처음 만들 때(교재 넣기 단계): 고를 것 없이 세 걸음만
         <div class="stack" style={{ gap: '4px' }}>
           <h2 class="h-sub">키 없이 만들기</h2>
-          <p class="small muted">쓰던 ChatGPT·Gemini·Claude에 물어보고, 답을 복사해 돌아와요. 무료로 쓰던 그대로 돼요.</p>
+          <p class="small muted">쓰던 챗봇에 물어보고 답을 복사해 와요. 무료 챗봇도 돼요.</p>
         </div>
       )}
       {(how === 'paste' || !p.blueprint) && <Paste ready={!!ing} prompt={prompt} full={full} first={!p.blueprint} onApply={accept} />}
@@ -99,6 +99,7 @@ function ErrorBox({ e, provider, onPaste, onConnect, onPay, onLight }) {
           {e.actions.includes('light') && onLight && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
           {e.actions.includes('connect') && onConnect && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
           {e.actions.includes('key') && P.keyUrl && <a class="btn btn-sm" href={P.keyUrl} target="_blank" rel="noopener">{P.short} 키 페이지 열기</a>}
+          {e.actions.includes('link') && e.link && <a class="btn btn-sm" href={e.link.href} target="_blank" rel="noopener">{e.link.label}</a>}
           {e.actions.includes('billing') && P.billingUrl && <a class="btn btn-sm" href={P.billingUrl} target="_blank" rel="noopener">결제 페이지 열기</a>}
           {e.actions.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>쓰던 챗봇으로 하기</button>}
         </div>}
@@ -108,23 +109,25 @@ function ErrorBox({ e, provider, onPaste, onConnect, onPay, onLight }) {
   );
 }
 
-/** 키 없이: ① 챗봇 열기(프롬프트가 복사됨) → ② 돌아와서 답 붙여넣기. 챗봇에서 돌아오면 [답 붙여넣기]를 눈에 띄게 함 */
+/** 키 없이: ① 챗봇 열기(프롬프트가 복사됨) → ② 돌아와서 답 붙여넣기. 한 번에 한 걸음만 보이고, 챗봇에서 돌아오면 ②로 넘어가 [답 붙여넣기]를 눈에 띄게 함 */
 function Paste({ ready, prompt, full, first, onApply }) {
   const [answer, setAnswer] = useState('');
-  const [sent, setSent] = useState('');
+  const [step, setStep] = useState(0);
+  const [sent, setSent] = useState(false);
   const [back, setBack] = useState(false);
   const pasteRef = useRef();
   const text = ready ? prompt() : '';
   useEffect(() => {
     if (!sent) return;
-    const f = () => { if (document.visibilityState === 'visible' && document.hasFocus()) { setBack(true); pasteRef.current?.focus({ preventScroll: true }); } };
+    const f = () => { if (document.visibilityState === 'visible' && document.hasFocus()) { setStep(1); setBack(true); setSent(false); } };
     addEventListener('focus', f); document.addEventListener('visibilitychange', f);
     return () => { removeEventListener('focus', f); document.removeEventListener('visibilitychange', f); };
   }, [sent]);
+  useEffect(() => { if (step === 1 && back) pasteRef.current?.focus({ preventScroll: true }); }, [step, back]);
   /** 프롬프트를 복사하고 그 챗봇을 새 창으로 엶(누르는 동작 한 번) */
-  async function send(name, url) {
+  async function send(url) {
     try { await navigator.clipboard.writeText(text); } catch { copy(text); }
-    setSent(name); setBack(false); window.open(url, '_blank', 'noopener');
+    setSent(true); setBack(false); window.open(url, '_blank', 'noopener');
   }
   /** 챗봇 답을 클립보드에서 읽어 바로 적용 */
   async function pasteAnswer() {
@@ -132,28 +135,28 @@ function Paste({ ready, prompt, full, first, onApply }) {
     catch { toast('아래 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); }
   }
   return (
-    <ol class="key-steps">
-      <li class={sent ? 'done' : 'on'}>
-        <span class="n" aria-hidden="true">{sent ? '✓' : '1'}</span>
-        <div class="key-step-b">
-          <b>쓰던 챗봇 열기</b>
-          <p class="small">누르면 프롬프트가 복사돼요. 챗봇 입력 칸에 붙여 넣고(Ctrl+V) 보내세요.</p>
-          <div class="btn-row">{CHATBOTS.map(([n, u]) => <button type="button" class="btn btn-sm" disabled={!ready} onClick={() => send(n, u)}>{n} 열기</button>)}
-            <button type="button" class="btn btn-sm btn-quiet" disabled={!ready} onClick={() => { copy(text, '복사했어요. 챗봇에 붙여 넣으세요.'); setSent('copy'); }}>복사만</button></div>
+    <section class="key-card" aria-label="키 없이 만드는 순서">
+      <ol class="key-dots" aria-label="순서">
+        {['챗봇에 물어보기', '답 붙여넣기'].map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
+      </ol>
+      {step === 0 ? (
+        <div class="key-now"><div class="key-now-b">
+          <h3 class="key-now-h">챗봇에 물어보기</h3>
+          <p>누르면 프롬프트가 복사돼요. 열린 챗봇의 입력 칸에 붙여 넣고(Ctrl+V) 보내세요.</p>
+          <div class="btn-row">{CHATBOTS.map(([n, u]) => <button type="button" class="btn" disabled={!ready} onClick={() => send(u)}>{n} 열기</button>)}</div>
+          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { copy(text, '복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
           {full && text.length > 30000 && <p class="small muted">교재가 길어 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 "계속"이라고 보내 주세요.</p>}
-        </div>
-      </li>
-      <li class={sent ? 'on' : ''}>
-        <span class="n" aria-hidden="true">2</span>
-        <div class="key-step-b">
-          <b>돌아와서 답 붙여넣기</b>
-          <p class="small">답이 다 나오면 답 아래의 복사 단추를 누르고 돌아와요.</p>
-          <div><button ref={pasteRef} type="button" class={`btn${sent ? ' btn-primary' : ''}${back && !answer ? ' nudge' : ''}`} disabled={!ready} onClick={pasteAnswer}>답 붙여넣기</button></div>
-          <textarea class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="여기에 직접 붙여 넣어도 돼요" aria-label="챗봇의 답" />
+        </div></div>
+      ) : (
+        <div class="key-now key-now-paste"><div class="key-now-b">
+          <h3 class="key-now-h">답 붙여넣기</h3>
+          <p>답이 다 나오면 답 아래의 복사 단추를 누르고 돌아와요.</p>
+          <div class="key-now-go"><button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !answer ? ' nudge' : ''}`} disabled={!ready} onClick={pasteAnswer}>답 붙여넣기</button></div>
+          <textarea class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여넣기" aria-label="챗봇의 답" />
           {answer.trim() && <div><button type="button" class="btn btn-primary" onClick={() => onApply(answer)}>{first ? '이 답으로 만들기' : '이 답으로 바꾸기'}</button></div>}
-        </div>
-      </li>
-    </ol>
+        </div></div>
+      )}
+    </section>
   );
 }
 

@@ -3,13 +3,16 @@
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
 
+// 화면에 보이는 순서: Gemini(무료 등급) · ChatGPT(OpenAI) · Claude. 값·주소는 각 회사 공식 문서와 맞춰 봄(2026-11-12, 근거는 ai-guides.jsx 머리말).
 // OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
 export const PROVIDERS = {
-  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/usage', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, prefix: 'AQ.… 또는 AIza…', images: true },
-  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, prefix: 'sk-or-v1-…', images: true },
-  openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 크레딧에서 나가요. ChatGPT 구독과는 별개예요.', modelHint: /^gpt-/i, prefix: 'sk-proj-…', images: true },
-  anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 크레딧에서 나가요. Claude 구독(Pro·Max)과는 별개예요.', modelHint: /sonnet/i, prefix: 'sk-ant-…', images: true },
+  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/billing', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, images: true },
+  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, images: true },
+  openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 충전한 크레딧에서 나가요.', modelHint: /^gpt-/i, images: true },
+  anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 충전한 크레딧에서 나가요.', modelHint: /sonnet/i, images: true },
 };
+/** 고르는 화면에 보이는 회사(이 순서대로) */
+export const VISIBLE = Object.keys(PROVIDERS).filter((id) => !PROVIDERS[id].hidden);
 
 /** 붙여 넣은 키의 앞부분으로 어느 회사 키인지 알아냄 */
 export function detectProvider(key) {
@@ -97,6 +100,10 @@ export class AiError extends Error {
 }
 function classify(status, msg, code) {
   const m = `${code || ''} ${msg || ''}`;
+  if (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(m)) return 'verify'; // Gemini 무료 등급: 휴대폰 확인이 필요한 프로젝트(403)
+  if (/CORS requests are not allowed/i.test(m)) return 'no-browser'; // Claude: 브라우저에서 바로 부르지 못하게 막아 둔 조직(401)
+  if (/anthropic-workspace-id|workspace ID|specify (a|the) workspace/i.test(m)) return 'workspace'; // Claude: Workspace를 고르지 않고 만든 키
+  if (status === 429 && /API usage limits|monthly API usage/i.test(m)) return 'cap'; // Claude: 이번 달 쓸 수 있는 금액을 다 씀
   if (status === 401 || /API_KEY_INVALID|API key not valid|invalid.?x-api-key|Incorrect API key|invalid_api_key|No auth credentials|User not found|authentication_error/i.test(m)) return 'bad-key';
   if (/location is not supported|unsupported_country|not available in your (country|region)|FAILED_PRECONDITION/i.test(m)) return 'region';
   if (status === 402 || /insufficient_quota|credit balance is too low|Insufficient credits|billing|payment/i.test(m)) return 'billing';
@@ -127,17 +134,24 @@ async function send(provider, url, init) {
   return r.json();
 }
 
-/** 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지) · paste(쓰던 챗봇으로, 마지막 수단) */
+/** 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지) · link(돌려준 link.href 열기) · paste(쓰던 챗봇으로, 마지막 수단) */
 export function explainError(err, provider) {
   const P = PROVIDERS[provider] || {};
   const k = err?.kind || (err?.name === 'TimeoutError' ? 'busy' : 'other');
+  const paid = provider === 'openai' || provider === 'anthropic';
   const T = {
-    'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지운 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 붙여 넣어 주세요.`, ['key']],
+    'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지웠거나 오래된 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 주세요.`, ['key']],
+    verify: ['구글이 휴대폰 확인을 요청했어요.', '확인 페이지에서 휴대폰 카메라로 QR을 찍으면 무료로 쓸 수 있어요. 어려우면 다른 AI를 연결해 주세요.', ['link', 'connect']],
     forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
+    'no-browser': ['이 계정은 브라우저에서 바로 쓸 수 없어요.', '조직 설정이 막아 두었어요. 개인 계정으로 만든 키를 쓰거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    workspace: ['Workspace를 고르지 않고 만든 키예요.', 'Claude 키 페이지에서 키를 새로 만들 때 Workspace를 골라 주세요.', ['key']],
     region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    billing: ['크레딧이 없어요.', provider === 'openrouter' ? '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 Gemini 키(무료)를 연결해 주세요.' : `${P.short || ''} 결제 페이지에서 크레딧을 충전해야 해요(최소 5달러). 결제 없이 하려면 Gemini 키(무료)를 연결해 주세요.`, provider === 'openrouter' ? ['connect'] : ['billing', 'connect']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? '한국 시간 오후 5시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
-    quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    billing: provider === 'gemini' ? ['결제가 연결된 프로젝트의 키예요.', '구글 AI Studio에서 크레딧을 충전해야 써져요. 결제를 연결하지 않은 프로젝트에서 키를 새로 만들면 무료로 쓸 수 있어요.', ['billing', 'key', 'connect']]
+      : provider === 'openrouter' ? ['크레딧이 없어요.', '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 다른 AI를 연결해 주세요.', ['connect']]
+        : ['크레딧이 없어요.', `${P.short || ''} 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['billing', 'connect']],
+    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? `한국 시간 ${geminiResetKo()}쯤 다시 채워져요.` : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달 1일에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', []],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
     refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI를 연결해 다시 해 보세요.', ['connect']],
@@ -145,14 +159,43 @@ export function explainError(err, provider) {
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', []],
     network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망이 AI 사이트를 막았다면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
     truncated: ['답이 중간에 끊겼어요.', "'문구만 다듬기'로 하면 답이 짧아 끊기지 않아요.", []],
-    empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요. 무료 모델이면 다른 모델이 대신 답할 수 있어요.', []],
+    empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
   }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
+  // 휴대폰 확인: 구글이 오류 문구에 넣어 준 확인 주소만 씀(다른 주소는 열지 않음)
+  const link = k === 'verify' ? { href: (/https:\/\/aistudio\.google\.com\/verify\?project=\d+/.exec(err?.message || '') || ['https://aistudio.google.com/projects'])[0], label: '확인 페이지 열기' } : null;
   if (err?.paidOption || err?.lightOption) {
     const ways = [err.paidOption && `연결해 둔 ${err.paidOption.label}(유료)`, err.lightOption && `가벼운 모델(${err.lightOption.label})`].filter(Boolean).join('이나 ');
-    return { kind: k, provider, title: '오늘 이 모델의 무료 한도를 다 썼어요.', body: `${ways}로 이어서 할 수 있어요.${err.lightOption ? ' 가벼운 모델은 구성과 문구가 단순해질 수 있어요.' : ''}`, actions: [err.paidOption && 'pay', err.lightOption && 'light', 'connect'].filter(Boolean), raw: err?.message || '' };
+    return { kind: k, provider, link, title: k === 'verify' || k === 'cap' ? T[0] : '오늘 이 모델의 무료 한도를 다 썼어요.', body: `${ways}로 이어서 할 수 있어요.${err.lightOption ? ' 가벼운 모델은 구성과 문구가 단순해질 수 있어요.' : ''}`, actions: [err.paidOption && 'pay', err.lightOption && 'light', 'connect'].filter(Boolean), raw: err?.message || '' };
   }
-  return { kind: k, provider, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
+  return { kind: k, provider, link, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
+}
+/** Gemini 무료 횟수는 미국 태평양 시간 자정에 다시 채워짐(공식 문서) → 한국 시간으로 여름 '오후 4시', 겨울 '오후 5시' */
+export function geminiResetKo(now = new Date()) {
+  let h = 5;
+  try { if (/PDT|GMT-7/.test(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).format(now))) h = 4; } catch { /* 시간대를 모르면 겨울 기준 */ }
+  return `오후 ${h}시`;
+}
+
+// ── Claude: Workspace를 고르지 않고 만든 키 ──
+// 그런 키는 요청마다 anthropic-workspace-id 머리말이 있어야 합니다(공식 문서 Authentication > Select a workspace, 2026-11).
+// 강사가 그 값을 찾아 넣을 일은 없게, 그 오류가 오면 조직의 Workspace 목록에서 Default를 찾아 한 번만 다시 보냅니다(이 탭에서만 기억).
+const wsOf = new Map(); // 키 → workspace id
+export const antHeaders = (key) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', ...(wsOf.get(key) ? { 'anthropic-workspace-id': wsOf.get(key) } : {}) });
+export async function withWorkspace(key, signal, fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (!(e instanceof AiError) || e.kind !== 'workspace' || wsOf.has(key)) throw e;
+    let w = null;
+    try {
+      const j = await send('anthropic', 'https://api.anthropic.com/v1/organizations/workspaces?include_default=true&limit=100', { signal, headers: antHeaders(key) });
+      const list = (j.data || []).filter((x) => x && x.id && !x.archived_at);
+      w = list.find((x) => x.name === 'Default') || list[0];
+    } catch { /* 목록을 못 읽으면 처음 오류 그대로 */ }
+    if (!w) throw e;
+    wsOf.set(key, w.id);
+    return fn();
+  }
 }
 
 // ── 모델 목록·고르기(모델 이름을 코드에 박지 않고, 그때그때 목록에서 고름) ──
@@ -163,7 +206,7 @@ async function listRaw(provider, key, signal) {
     return (j.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name }));
   }
   if (provider === 'anthropic') {
-    const j = await send(provider, 'https://api.anthropic.com/v1/models?limit=100', { signal, headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } });
+    const j = await withWorkspace(key, signal, () => send(provider, 'https://api.anthropic.com/v1/models?limit=100', { signal, headers: antHeaders(key) }));
     return (j.data || []).map((m) => ({ id: m.id, label: m.display_name || m.id }));
   }
   if (provider === 'openai') {
@@ -288,12 +331,12 @@ export async function checkKey(provider, key, { signal } = {}) {
 // 이 값을 받지 않는 모델·환경이면(400이나 연결 실패) 기본 요청으로 한 번 더 보냅니다.
 async function anthropic(key, model, prompt, maxTokens, signal) {
   const base = { model, max_tokens: Math.max(maxTokens, 32000), messages: [{ role: 'user', content: prompt }], stream: true };
-  const headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+  const headers = () => ({ 'content-type': 'application/json', ...antHeaders(key) });
   const extra = /claude-(opus|sonnet|fable)-5/.test(model);
   const call = async (plus) => {
     let r;
     try {
-      r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal, headers: plus ? { ...headers, 'anthropic-beta': 'server-side-fallback-2026-07-01' } : headers, body: JSON.stringify(plus ? { ...base, fallbacks: 'default' } : base) });
+      r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal, headers: plus ? { ...headers(), 'anthropic-beta': 'server-side-fallback-2026-07-01' } : headers(), body: JSON.stringify(plus ? { ...base, fallbacks: 'default' } : base) });
     } catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider: 'anthropic' }); }
     if (!r.ok) await fail(r, 'anthropic');
     const reader = r.body.getReader(); const dec = new TextDecoder();
@@ -315,9 +358,11 @@ async function anthropic(key, model, prompt, maxTokens, signal) {
     if (stop === 'refusal') throw new AiError('refusal', 'refusal', { provider: 'anthropic' });
     return { text, cut: stop === 'max_tokens' };
   };
-  if (!extra) return call(false);
-  try { return await call(true); }
-  catch (e) { if (e instanceof AiError && (e.status === 400 || e.kind === 'network')) return call(false); throw e; }
+  return withWorkspace(key, signal, async () => {
+    if (!extra) return call(false);
+    try { return await call(true); }
+    catch (e) { if (e instanceof AiError && e.kind !== 'workspace' && (e.status === 400 || e.kind === 'network')) return call(false); throw e; }
+  });
 }
 
 // ── 생성 ──
@@ -422,7 +467,7 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
   const paid0 = isPaidAI(o.provider, !!s.free[o.provider]);
   let first;
   try { return await attempt(o.provider, o.key, o.model, { swap: !paid0 }); }
-  catch (e) { if (!(e instanceof AiError) || !(LIMIT_KINDS.includes(e.kind) || e.kind === 'no-access')) throw e; first = e; }
+  catch (e) { if (!(e instanceof AiError) || !(LIMIT_KINDS.includes(e.kind) || ['no-access', 'verify', 'cap'].includes(e.kind))) throw e; first = e; }
   // 연결해 둔 다른 AI(무료 먼저)
   let paidOption = null;
   const others = Object.keys(PROVIDERS).filter((x) => x !== o.provider).sort((a, b) => isPaidAI(a, !!s.free[a]) - isPaidAI(b, !!s.free[b]));

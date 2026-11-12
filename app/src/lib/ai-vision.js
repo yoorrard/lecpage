@@ -1,8 +1,8 @@
 // 수정 요청용 AI 호출: 글 + 그림(PNG·JPEG)을 함께 보냅니다. 키는 lib/ai.js가 보관한 것을 그대로 쓰고, 브라우저에서 AI 회사로 바로 갑니다.
-import { getActiveAI, models, AiError, PROVIDERS } from './ai.js';
+import { getActiveAI, models, AiError, PROVIDERS, antHeaders, withWorkspace } from './ai.js';
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
-const kindOf = (status, msg) => (status === 401 ? 'bad-key' : status === 402 ? 'billing' : status === 403 ? 'forbidden' : status === 404 ? 'model'
+const kindOf = (status, msg) => (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(msg) ? 'verify' : /anthropic-workspace-id|workspace ID|specify (a|the) workspace/i.test(msg) ? 'workspace' : status === 401 ? 'bad-key' : status === 402 ? 'billing' : status === 403 ? 'forbidden' : status === 404 ? 'model'
   : status === 413 || /too long|context length|too large/i.test(msg) ? 'too-long' : status === 429 ? (/day|daily/i.test(msg) ? 'quota-day' : 'quota') : status >= 500 ? 'busy' : 'other');
 
 async function send(provider, url, init) {
@@ -55,11 +55,11 @@ export async function askVision(ai, { prompt, images = [], signal, maxTokens = 8
     cut = c?.finishReason === 'MAX_TOKENS';
   } else if (provider === 'anthropic') {
     const content = [...pics.map((p) => ({ type: 'image', source: { type: 'base64', media_type: p.mime, data: p.data } })), { type: 'text', text: prompt }];
-    const j = await send(provider, 'https://api.anthropic.com/v1/messages', {
+    const j = await withWorkspace(key, signal, () => send(provider, 'https://api.anthropic.com/v1/messages', {
       method: 'POST', signal,
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      headers: { 'content-type': 'application/json', ...antHeaders(key) },
       body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content }] }),
-    });
+    }));
     text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('');
     cut = j.stop_reason === 'max_tokens';
   } else {
