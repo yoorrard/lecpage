@@ -77,8 +77,9 @@ export const KEY_GUIDES = {
     more: [],
   },
 };
-// 보이는 순서: 사람들이 흔히 쓰는 순(ChatGPT · Claude · Gemini). 무료·유료는 꼬리표로 알림
-export const GUIDE_ORDER = ['openai', 'anthropic', 'gemini'];
+// 먼저 보이는 것: ChatGPT · Claude(결과 품질 기준). Gemini 무료 키는 Flash 모델까지만 되고 한도가 있어 아래 작은 단추로 둠
+export const GUIDE_ORDER = ['openai', 'anthropic'];
+export const GUIDE_MORE = ['gemini'];
 
 /**
  * 열린 페이지에서 누를 곳을 보여 주는 작은 그림(주소 · 제목 · 단추 · 키나 잔액 한 줄). 동그라미가 누를 곳입니다.
@@ -129,7 +130,7 @@ export function KeyGuide({ id }) {
 export function KeyGuides({ open = '' }) {
   return (
     <div class="guides">
-      {GUIDE_ORDER.map((id) => (
+      {[...GUIDE_ORDER, ...GUIDE_MORE].map((id) => (
         <details open={open === id}>
           <summary><b>{KEY_GUIDES[id].title}</b> <span class="small muted">{KEY_GUIDES[id].tag}</span></summary>
           <KeyGuide id={id} />

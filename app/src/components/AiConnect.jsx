@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Notice } from './ui.jsx';
 import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI } from '../lib/ai.js';
-import { KEY_GUIDES, GUIDE_ORDER, KeyPic } from '../lib/ai-guides.jsx';
+import { KEY_GUIDES, GUIDE_ORDER, GUIDE_MORE, KeyPic } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
 
 /** 키처럼 생긴 글인지(한 덩어리, 20자 이상). 처음 보는 모양의 키도 고른 회사 키로 확인해 볼 수 있게 */
@@ -83,7 +83,7 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
       <div class="seg ai-tabs" role="group" aria-label="쓰는 AI">
         {GUIDE_ORDER.map((id) => <button type="button" aria-pressed={String(tab === id)} data-free={KEY_GUIDES[id].tag === '무료' ? '' : undefined} onClick={() => pick(id)}><b>{KEY_GUIDES[id].label}</b><small>{KEY_GUIDES[id].tag}</small></button>)}
       </div>
-      <p class="ai-what">{g.what}</p>
+      <p class="ai-what">{GUIDE_MORE.includes(tab) && <b>{g.label} · </b>}{g.what}</p>
       <section class="key-card" aria-label={`${g.label} 연결 순서`}>
         <ol class="key-dots" aria-label="순서">
           {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} onClick={() => go(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
@@ -124,7 +124,8 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
         <ul class="small">{g.tips.map((t) => <li>{t}</li>)}</ul>
       </details>
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
-      {(onPaste || onCancel) && <div class="btn-row">
+      {<div class="btn-row">
+        {GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
         {onPaste && <button type="button" class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 만들기</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>취소</button>}
       </div>}
