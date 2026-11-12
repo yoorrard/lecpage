@@ -1,17 +1,38 @@
 # 사이트 유형과 기능 모듈
 
-## 1. 유형 고르기
-| 유형 | 언제 | 기본 섹션 순서 |
+## 1. 구성 정하기: 흐름과 신호
+유형 하나를 골라 정해진 칸만 쓰지 않는다. 컨셉 → **흐름** 하나 → 교재의 **신호마다 칸을 더한다**. 엔진 `decide/structure.js`가 정하고(`structure` 명령이 큰 줄기까지 보여 줌), AI 프롬프트도 같은 표를 쓴다.
+
+| 흐름(id) · 유형 | 언제 |
+|---|---|
+| 따라 하기 follow · lab | 번호 단계 + 도구·프롬프트가 있는 실습 |
+| 절차·기준 procedure · story | 번호 단계만 있는 절차·규정 |
+| 사례·토론 discussion · story | 사례·함께 나눌 질문·성찰 질문 |
+| 과정 course · course | 차시 둘 이상, 직무연수 |
+| 행사 event · live | 참석 100명 이상이거나 발표자 여럿 |
+| 강의 talk · story | 메시지·설명 중심 발표 자료 |
+| 교재 순서대로 source · story | 위 신호가 없는 한글·워드 문서 |
+
+강사가 고른 형식이 먼저다. 컨셉은 신호가 약할 때(강의·교재 순서대로)만, 교재에 그 재료가 있을 때 흐름을 바꾼다. 문서 교재의 본문은 교재의 절 순서를 따른다.
+
+| 교재에서 보이는 신호 | 칸 | 자리·권하는 기능 |
 |---|---|---|
-| 강의형 story | 특강·강의 60~120분, 메시지·사례 전달 | hero → message → goals → steps5 → outline → schedule → deck → tools → stations → qa → board → materials → followup → instructor → survey → closing |
-| 실습형 lab | 워크숍 2~4시간, 따라 하기 | hero → goals → readiness → outline → stations → prompts → tools → qa → board → reflection → materials → followup → instructor → survey → closing |
-| 행사형 live | 설명회·컨퍼런스 100~1000명 | hero → glance → goals → schedule → speakers → qa → poll → deck → materials → faq → followup → survey → closing |
-| 과정형 course | 15·30시간 직무연수, 여러 차시 | hero → goals → glance → sessions → readiness → stations → board → materials → attendance → faq → followup → instructor → survey |
+| 번호 단계 + 도구 주소·프롬프트 | stations(prompts·tools·readiness) | 실습 앞쪽. 진행 현황·도움 요청 |
+| 번호 단계만, 제목이 절차·대응·방법 | procedure | 수치 → 절차 → 기준표 |
+| 머리글 줄이 있는 표(기준·역할·적용 일정) | table | 그 내용 바로 뒤 |
+| "n분 이내", "%", "n회에서 n회로" | glance | 첫 화면 바로 아래 |
+| "사례 1·2·3", 따옴표 인용 | cases | 본문 맨 앞 |
+| 물음표 목록 3개 이상, 토론·나눔 제목 | discuss(+ rules) | 사례 뒤. 나눔 보드 |
+| "~적어 보세요", 성찰·일지 제목 | reflection | 마무리 앞 |
+| "n차시 + 날짜" | sessions | 차시. 출석 |
+| 이수 기준·출석 %·과제·제출 기한 | meta.admin, followup | 연수 후. 출석 |
+| 시각 + 이름, 발표자 소개 | schedule + speakers | 강사 칸 대신 발표자 칸 |
+| 참석 100명 이상·설명회 | glance·schedule·speakers | 실습·준비 점검 빼기. 질문 받기·투표 |
+| 서식·양식·글상자 예시문 | text의 `> [!예시]` | 뒤쪽 |
+| 노트의 "막히면·안 되면·주의" | stations[].note | 그 실습 안 |
+| 어디에도 맞지 않는 문단·표 | text | 교재 순서 그 자리(버리지 않음) |
 
-순서 원칙: **첫 화면 → 무엇을 얻나(goals) → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리.** 설문은 마무리 앞에 둔다(마무리 문장에서 사람들이 멈춤). goals는 메뉴에 넣지 않고 첫 화면 바로 아래에 둔다.
-
-규칙(엔진 `decideArchetype`과 같음): 차시 3회 이상 → 과정형 / 150명 이상·컨퍼런스 → 행사형 / 실습 비중 45% 이상·실습 중심 → 실습형 / 그 외 강의형.
-혼합: 실습형인데 90분 이상이면 앞에 강의형 도입(message·outline), 강의형인데 실습 20% 이상이면 stations를 넣는다.
+**가드레일**(검증이 알리기만 하고 옮기지 않음): 첫 화면 → 무엇을 얻나(goals) → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리. 설문은 마무리 앞(마무리 문장에서 사람들이 멈춤). goals는 메뉴에 넣지 않고 첫 화면 바로 아래. 실시간 기능은 권하기만 하고 강사가 고를 때만 켠다. 그래도 칸에 못 실은 교재 글은 `structure.leftovers`("싣지 못한 것 n개") → `structure --add-leftovers`.
 
 ## 2. 기능 34개와 섹션·실시간 기능
 표의 기능 34개 중 참가 확인서 하나는 다음 판이다. 강사가 켜고 끄는 참여 기능은 8개다(엔진 `FEATURES`: 질문 받기·도움 요청·진행 현황·투표·나눔 보드·신호등·출석·반응).

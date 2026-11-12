@@ -865,3 +865,25 @@ details>summary{cursor:pointer}
   .flow li:nth-child(3)::before,.flow li:nth-child(3)::after{display:none}
 }
 @media (prefers-reduced-motion:reduce){.key-now,.btn.nudge{animation:none}}
+
+/* 교재에 맞춘 구성: 1단계 찾은 것·교재에서 찾은 주소, 2단계 이렇게 구성했어요·권하는 기능·싣지 못한 것(components/Structure.jsx) */
+.found{display:grid;gap:6px}
+.found p{margin:0}
+.found-more summary{cursor:pointer;color:var(--muted);width:fit-content}
+.found-more p{margin:4px 0 0}
+.found-tip{padding:6px 10px;border-radius:var(--r-xs);background:var(--lav-soft);color:var(--lav-ink)}
+.found-addr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 10px;border:1px dashed var(--line);border-radius:var(--r-xs)}
+.found-addr .mono{word-break:break-all}
+.structure-note{display:grid;gap:8px;padding:10px 14px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
+.structure-note summary{cursor:pointer;line-height:1.5}
+.structure-note summary span{color:var(--ink-2)}
+.structure-note ul{margin:6px 0 0;padding-left:1.2em}
+.structure-acts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 18px}
+.structure-acts .chips{align-items:center}
+.structure-left summary{color:var(--ink-2)}
+.structure-left .btn{margin-top:6px}
+@media (min-width: 1101px){
+  .stage-2 .wiz-main:has(> .structure-note){grid-template-rows:auto auto minmax(0,1fr)}
+  .stage-2 .wiz-main:has(> .ai-job):has(> .structure-note){grid-template-rows:auto auto auto minmax(0,1fr)}
+  .stage-2 .structure-note{padding:8px 14px}
+}

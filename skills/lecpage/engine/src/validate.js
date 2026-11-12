@@ -1,6 +1,7 @@
 // 설계도 검증·자동 보정. AI나 사람이 만든 설계도를 안전하고 일관된 모양으로 바꿉니다.
 // 원칙: 고칠 수 있으면 고치고(warnings), 진행할 수 없을 때만 errors.
-import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS, FLOWS } from './schema/sections.js';
+import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS } from './schema/sections.js';
+import { cleanStructure, checkOrder } from './decide/structure.js';
 import { mdIssues } from './md-syntax.js';
 import { PRESET_IDS, getPreset } from './design/presets.js';
 import { isHex } from './design/color.js';
@@ -215,8 +216,12 @@ export function validate(input) {
     sections.unshift({ id: 'hero', type: 'hero', nav: '처음', title: '', tone: '', ...SECTION_FIX.hero({ title: meta.title, subtitle: meta.subtitle }) });
     warnings.push({ path: 'sections', message_ko: '첫 화면이 없어 넣었어요.' });
   }
+  // 순서 가드레일(첫 화면 → 목표 → 본문 → 자료·연수 후 → 설문 → 마무리): 알리기만 하고 옮기지 않음
+  warnings.push(...checkOrder(sections));
+  // 구성 결과(흐름·이유·권하는 기능·싣지 못한 것): 있으면 정리해 남김
+  const structure = cleanStructure(b.structure);
 
-  return { blueprint: { version: 1, meta, audience, archetype, ...(concept ? { concept } : {}), design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
+  return { blueprint: { version: 1, meta, audience, archetype, ...(concept ? { concept } : {}), ...(structure ? { structure } : {}), design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
 }
 
 /** 무작위 연수 코드(헷갈리는 글자 제외, 기본 10자 ≈ 50비트). 같은 서버를 여러 연수가 함께 써도 남이 짐작할 수 없게 */

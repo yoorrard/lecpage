@@ -125,7 +125,8 @@ HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를,
 | 키 | 모양 | 찾는 방법(요약) |
 |---|---|---|
 | `title`, `subtitle` | 문자열 | 첫 쪽 제목·부제 → 문서 속성 → 파일 이름 |
-| `event` | `{date:"2026-11-04", dateText, weekday:"수", start:"15:10", end:"16:40", venue, organizer, mode:"offline|online|hybrid", joinUrl, dates?[], file, page}` | "2026. 11. 4.(수)", "2026년 11월 4일", "11월 4일(수)"(요일로 연도 추정), "15:10~16:40", "오후 3시 10분 ~ 4시 40분", "장소:", "주최·주관:", 온라인 낱말·줌/미트 링크 |
+| `event` | `{date:"2026-11-04", dateText, weekday:"수", start:"15:10", end:"16:40", venue, organizer, mode:"offline|online|hybrid", joinUrl, dates?[], size?, file, page}` | "2026. 11. 4.(수)", "2026년 11월 4일", "11월 4일(수)"(요일로 연도 추정), "15:10~16:40", "오후 3시 10분 ~ 4시 40분", "장소:", "주최·주관:", 온라인 낱말·줌/미트 링크. `size`: "참석 300명"·"대상: … 48명" |
+| `sessions` | `[{no, date?, title, desc, file, page}]` | 차시표의 줄·표("1차시 1. 11.(월) 주제"), 1차시부터 이어질 때만. 차시 줄 아래 내용·준비물·과제는 `desc` |
 | `instructor` | `{name, role, org, bio[], email, links[], photo(그림 id), file, page}` 또는 `null` | "강사 소개·프로필·약력" 제목, "현)·전)" 줄, 이메일, 사진 |
 | `agenda` | `{file, page, title, items:[{text, part?, no?, start?, end?}]}` 또는 `null` | "목차·차례·오늘의 흐름·진행 순서·시간표" 쪽의 목록 |
 | `sections` | `[{no, label:"PART 1", title, desc, file, page, pages[], start?, end?}]` | "Part/PART n", "1부", "제1장", "첫째 마당", 로마 숫자, 간지·표지 레이아웃, 차례 항목과 같은 제목 |
@@ -138,7 +139,12 @@ HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를,
 | `glossary` | `[{term, desc, file, page}]` | "용어: 설명", "할루시네이션(Hallucination)은 …현상", 용어 표 |
 | `messages` | `[{text, file, page, score, closing?}]` | 글이 적은 강조 쪽, "핵심·기억하세요", 따옴표 문장, 마무리 쪽 |
 | `practice` | `{pages:[{file,page}], count, ratio}` | 실습 낱말·단계·프롬프트·링크·동작 낱말 점수 3점 이상인 쪽. 비율 = 실습 쪽 ÷ 내용 쪽(표지·차례·강사·간지·마무리 제외) |
-| `archetype` | `{primary:"story|lab|live|course", mix[], format, reason_ko, sessions}` | 차시 3개 이상 → course, 행사+여러 연사 → live, 실습 비율 45% 이상(또는 실습 4쪽+30%) → lab, 그 밖 → story |
+| `archetype` | `{primary:"story|lab|live|course", mix[], format, reason_ko, sessions}` | 차시 3개 이상 → course, 행사+여러 연사 → live, 실습 비율 45% 이상(또는 실습 4쪽+30%) → lab, 그 밖 → story. 구성은 `signals`로 다시 정함 |
+| `signals` | `{doc, blocks, procedure, tables, cases, questions, reflection, figures, keypoints, speakers, sessions, official, qaTime}` | 구성 신호 개수(`ingest/signals.js`): 교재를 절·쪽 묶음으로 나눠 쓰임(절차·사례·질문·성찰·표·수치·글…)을 정함. `decide/structure.js`가 읽음 |
+| `figures` | `[{value, label, note, score, file, page}]` | 문서의 수치 문장("1시간 이내", "68%", "3회에서 1회로"), 4개까지 |
+| `speakers` | `[{name, role, org, note, talk, time, file, page}]` | 발표자 소개 쪽(이름 줄 + 소속·직함), 일정표의 "이름 직함" 칸. 둘 이상일 때만 |
+| `admin` | `{official, completionRate, hours, hoursText, rateText, completion[], assignment[]}` 또는 `null` | "직무연수", "출석 80%", "연수 시간: 15시간", "과제:·제출 기한:", "나이스에 등록" |
+| `addresses` | `{join:[{url,label,page,file,why}], survey:[…]}` | 중계·회의 주소, 설문 주소. **싣지 않고** 강사 확인 후보로만(앱 1단계 "교재에서 찾은 주소", CLI `brief`) |
 | `stats` | `{pages, hidden, chars, images, tables, notes}` | |
 
 ## 7. 오류 코드(`errors[].code`)

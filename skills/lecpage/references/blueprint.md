@@ -6,9 +6,9 @@
 ## 1. 순서
 1. `meta`: 연수명(교재 표지), 부제(핵심 메시지 한 줄), 주최·주관, 날짜(YYYY-MM-DD), 시작·끝(HH:MM), 장소, 형태(`mode`), 온라인 회의 주소(`joinUrl`), 문의처(`contact`, 한 줄: "연수 담당 김하나 02-123-4567"), 연수 성격(`admin.kind`·`hours`·`completionRate`).
    - 날짜·끝 시각이 있으면 연수가 끝난 뒤 사이트가 저절로 '연수 후' 보기로 바뀐다(`references/modules.md` §3). 그래서 날짜는 꼭 확인한다.
-2. `audience`, `archetype`: 인터뷰 답으로 채운다(`references/modules.md`의 유형 규칙).
+2. `audience`, `archetype`: 인터뷰 답으로 채운다. `archetype`은 흐름에서 따라 나온다.
 3. `instructors`: 교재의 강사 소개 쪽에서. 이메일은 `showEmail`로 공개 여부를 묻고 정한다.
-4. `sections`: 유형별 기본 순서에서 시작해, 교재에 근거가 있는 섹션만 남긴다. 빈 섹션은 넣지 않는다.
+4. `structure`·`sections`: 흐름과 신호 표(`references/modules.md` §1)로 칸을 정한다. `structure: { flow, reasons[], suggested[{feature,label,reason}], leftovers{count,items[]}, source }` — `flow`와 왜 그렇게 구성했는지(`reasons`, 한 줄씩)는 정하는 쪽이 쓰고, `suggested`·`leftovers`는 엔진이 채운다. 빈 섹션은 넣지 않는다.
 5. `design`은 6단계, `live`·`privacy`는 7단계, `access`는 8단계에서 채운다(`SKILL.md` 작업 흐름). `access.mode`는 `link`(기본, 검색 제외)·`public`·`password`(빌드할 때 `--password`로 암호를 주면 페이지와 교재 그림까지 잠금). 암호 자체는 설계도에 쓰지 않는다.
 
 ## 2. 섹션별 요령
@@ -19,7 +19,8 @@
 - **outline**: 1부·2부·3부. `target`은 해당 섹션 id나 `deck:쪽번호`.
 - **schedule**: 시간표가 교재·정보에 있을 때만. 시간 형식 HH:MM.
 - **readiness**: 계정 가입·로그인·기기 준비. `checks`에 실습 도구 주소를 넣으면 접속 확인(`check.html`)이 자동으로 확인한다.
-- **deck**: 모든 쪽을 넣는다(`page`, `title`, `text` 요약 200자 안팎, `tools`=그 쪽에 나오는 도구 이름). 쪽 이미지가 있으면 `src`.
+- **deck**: 쪽(`slides`: 그림·쪽 글·쪽별 도구)은 엔진이 교재에서 채운다. 고칠 것은 `lead`·`notice`뿐.
+- **본문 칸**(실습형이 아닌 교재): **procedure** `items[{title,desc,time,who}]`·`close`(번호 단계, 개수 제한 없음), **cases** `items[{title,body,quote,cite}]`, **discuss** `items[]`(질문 문장)·`rules[]`(진행 규칙)·`note`, **table** `head[]`·`rows[[…]]`·`note`(표 하나에 칸 하나), **text** `md`(문단·목록·`###`·표·`>` 인용·`> [!참고|중요|주의|도움말|예시] 제목` 상자·`**굵게**`·`[글자](https://…)`. HTML·그림·각주·체크 상자는 그리지 않음). 교재 글은 고쳐 쓰지 않고 옮긴다.
 - **stations**: 실습 하나 = 스테이션 하나. `name`(목차용 8자 안팎), `title`(행동이 드러나는 문장), `tag`(짧은 우리말 꼬리표: 준비·따라 하기·만들기·나누기 또는 도구 이름. 번호와 겹치는 STEP 1 같은 영어 라벨은 쓰지 않음), `steps`(교재 순서·문장 그대로), `prompts`(교재 프롬프트 원문 — 절대 바꾸지 않음), `links`(도구 열기), `outcome`("여기까지 됐나요?" 뒤에 붙는 확인 문장. 실습마다 다르게: "필터가 걸린 표 한 장"), `note`(자주 막히는 곳과 해결법 한두 줄. 교재의 "※", "주의:", "안 되면" 줄은 초안이 자동으로 넣음), `minutes`, `source.pages`.
 - **tools**: 교재에 나온 도구. `pages`에 나온 쪽 번호(교재 보기로 연결됨).
 - **prompts**: 스테이션 밖에서 따로 모아 두고 싶은 프롬프트.
@@ -27,7 +28,7 @@
 - **quiz**: 교재 내용으로 3~5문항, 정답 근거가 교재에 있는 것만.
 - **materials**: 내려받을 파일. 학생 사진 등 주의 자료가 있으면 `notice`.
 - **sessions**(과정형): 차시마다 `date`를 넣으면 '마침·오늘·다음'이 자동으로 붙는다(`status`는 비워 둠). 차시별 자료·과제 제출은 `links`. 교재에 날짜가 여럿이면 초안이 차시 날짜를 채운다.
-- **followup**(연수 후 안내): 연수가 끝나면 첫 화면 아래로 올라오는 칸. `items[{title, desc, url}]`: 다시 보기 영상, 소통방(카카오톡 오픈채팅·밴드·패들렛), 다음 연수, 더 읽을거리. 종류는 주소로 자동(직접 `kind`: recording·community·next·read·link). 주소가 아직 없으면 `desc`로 언제 올리는지 적는다("연수가 끝나고 일주일 안에 올려요"). `completion`은 이수 처리 일정("연수원이 2주 안에 나이스에 등록해요"). 강사가 준 값만 쓴다.
+- **followup**(연수 후 안내): 연수가 끝나면 첫 화면 아래로 올라오는 칸. `items[{title, desc, url}]`: 다시 보기 영상, 소통방(카카오톡 오픈채팅·밴드·패들렛), 다음 연수, 더 읽을거리. 종류는 주소로 자동(직접 `kind`: recording·community·next·read·link). 주소가 아직 없으면 `desc`로 언제 올리는지 적는다("연수가 끝나고 일주일 안에 올려요"). `completion`은 이수 처리 일정("연수원이 2주 안에 나이스에 등록해요"). 교재나 강사가 준 값만 쓴다.
 - **survey**: 실시간 기능을 쓰면 `questions`(`{q, kind: scale|choice|text, options}`)로 사이트 안에서 바로 받고 강사 화면에서 CSV로 내려받는다(기본 문항: 엔진의 `DEFAULT_SURVEY`). 기관 설문이 따로 있으면 `url`도 함께.
 - **숨기기**: 섹션에 `"hidden": true`를 두면 내용은 설계도에 남기고 사이트에서만 뺀다.
 - **closing**: 교재 마지막 메시지. 짧을수록 크게 보인다. 설문(survey)은 closing 앞에 둔다.
