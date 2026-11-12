@@ -19,8 +19,18 @@ const BPS = { 'sel-story': join(HERE, '..', 'examples/sel-story.blueprint.json')
 const secs = Object.fromEntries(Object.entries(BPS).map(([k, p]) => [k, validate(JSON.parse(readFileSync(p, 'utf8'))).blueprint.sections.filter((s) => s.type !== 'hero')]));
 const lists = Object.fromEntries(Object.entries(secs).map(([k, list]) => [k, list.map((s) => L.variantType(s.type))]));
 const TYPES = [...new Set(Object.values(lists).flat())].filter((t) => L.variantIds(t).length > 1);
-// 내용이 배치에 맞지 않으면 기본 배치로 그려지므로(layouts.js FITS) 설계도마다 '실제로 그려지는 배치'로 셈
-const EFF = Object.fromEntries(Object.entries(secs).map(([k, list]) => [k, Object.fromEntries(TYPES.map((t) => { const s = list.find((x) => L.variantType(x.type) === t); return [t, Object.fromEntries(L.variantIds(t).map((v) => [v, s ? L.variantOf({ ...s, layout: v }, '').variant : v]))]; }))]));
+// 내용이 배치에 맞지 않으면 기본 배치로 그려지고(layouts.js FITS), 같은 종류가 두 번째로 나오면 앞 칸과 다른 배치가 되므로(variantOf)
+// 설계도의 자리마다 '실제로 그려지는 배치'를 미리 셈: EFF[설계도][자리] = { 계획의 변형 → 그려지는 변형 }
+const fits = (s, v) => L.variantOf({ ...s, layout: v }, '').variant === v;
+const EFF = Object.fromEntries(Object.entries(secs).map(([k, list]) => [k, list.map((s, pos) => {
+  const t = L.variantType(s.type); if (!TYPES.includes(t)) return null;
+  const first = list.findIndex((x) => L.variantType(x.type) === t), ids = L.variantIds(t), def = L.defaultVariant(t);
+  return Object.fromEntries(ids.map((v) => {
+    if (first === pos) return [v, fits(s, v) ? v : def];
+    const before = fits(list[first], v) ? v : def, order = ids.slice(ids.indexOf(v)).concat(ids.slice(0, ids.indexOf(v)));
+    return [v, order.find((w) => fits(s, w) && w !== before) || (fits(s, v) ? v : def)];
+  }));
+})]));
 const lead = (t, v) => L.BODY_VARIANTS[t]?.[v]?.lead || (/^(stations|attendance|prompts)$/.test(t) ? 'tool' : 'text');
 export const GRAPHIC = (t, v) => !['deck', 'gallery'].includes(t) && /^(figure|diagram)$/.test(lead(t, v));
 export const TEXT = (t, v) => lead(t, v) === 'text';
@@ -36,14 +46,15 @@ const plan = P.map((x) => Object.fromEntries(TYPES.map((t) => [t, L.variantIds(t
 
 // 빠른 셈: 프리셋 쌍마다 같은 배치 수(설계도별), 프리셋마다 그래픽·글만 수를 들고 다니며 바꾼 자리만 고침
 const LK = Object.keys(lists), half = Object.fromEntries(LK.map((k) => [k, Math.floor(lists[k].length / 2)]));
-const occ = Object.fromEntries(LK.map((k) => [k, Object.fromEntries(TYPES.map((t) => [t, lists[k].filter((x) => x === t).length]))]));
-const ev = (k, t, v) => (EFF[k][t] ? EFF[k][t][v] : 'x');
-const vt = (k, i, t) => ev(k, t, plan[i]?.[t]);
+const POS = Object.fromEntries(LK.map((k) => [k, Object.fromEntries(TYPES.map((t) => [t, lists[k].map((x, n) => (x === t ? n : -1)).filter((n) => n >= 0)]))]));
+const ev = (k, pos, v) => (EFF[k][pos] ? EFF[k][pos][v] : 'x');
+const vt = (k, i, pos) => ev(k, pos, plan[i]?.[lists[k][pos]]);
 const same = {}, gr = {}, tx = {};
 for (const k of LK) {
-  same[k] = P.map((_, i) => P.map((__, j) => (i === j ? 0 : lists[k].filter((t) => vt(k, i, t) === vt(k, j, t)).length)));
-  gr[k] = P.map((_, i) => lists[k].filter((t) => GRAPHIC(t, vt(k, i, t))).length);
-  tx[k] = P.map((_, i) => lists[k].filter((t) => TEXT(t, vt(k, i, t))).length);
+  const ps = lists[k].map((_, n) => n);
+  same[k] = P.map((_, i) => P.map((__, j) => (i === j ? 0 : ps.filter((n) => vt(k, i, n) === vt(k, j, n)).length)));
+  gr[k] = P.map((_, i) => ps.filter((n) => GRAPHIC(lists[k][n], vt(k, i, n))).length);
+  tx[k] = P.map((_, i) => ps.filter((n) => TEXT(lists[k][n], vt(k, i, n))).length);
 }
 const pen = { pair: (k, n) => Math.max(0, n - half[k]) * 2, g: (n) => Math.max(0, 2 - n) * 3, t: (k, n) => Math.max(0, n - half[k]) * 3 };
 function total() { let bad = 0, pref = 0; for (let i = 0; i < P.length; i++) for (const t of TYPES) pref += fit(P[i].tags, t, plan[i][t]); for (const k of LK) for (let i = 0; i < P.length; i++) { bad += pen.g(gr[k][i]) + pen.t(k, tx[k][i]); for (let j = i + 1; j < P.length; j++) bad += pen.pair(k, same[k][i][j]); } return { bad, pref }; }
@@ -52,16 +63,19 @@ function delta(i, t, nv, apply) {
   const old = plan[i][t]; let db = 0;
   const dp = fit(P[i].tags, t, nv) - fit(P[i].tags, t, old);
   for (const k of LK) {
-    const c = occ[k][t]; if (!c) continue;
-    const eo = ev(k, t, old), en = ev(k, t, nv); if (eo === en) continue;
-    const dg = c * ((GRAPHIC(t, en) ? 1 : 0) - (GRAPHIC(t, eo) ? 1 : 0)), dt = c * ((TEXT(t, en) ? 1 : 0) - (TEXT(t, eo) ? 1 : 0));
+    // 같은 종류가 여러 자리에 있으면(자료·연수 후) 자리마다의 변화를 모아 한 번에 셈
+    let dg = 0, dt = 0; const ds = new Array(P.length).fill(0);
+    for (const pos of POS[k][t]) {
+      const eo = ev(k, pos, old), en = ev(k, pos, nv); if (eo === en) continue;
+      dg += (GRAPHIC(t, en) ? 1 : 0) - (GRAPHIC(t, eo) ? 1 : 0); dt += (TEXT(t, en) ? 1 : 0) - (TEXT(t, eo) ? 1 : 0);
+      for (let j = 0; j < P.length; j++) { if (j === i) continue; const ej = vt(k, j, pos); ds[j] += (ej === en ? 1 : 0) - (ej === eo ? 1 : 0); }
+    }
     db += pen.g(gr[k][i] + dg) - pen.g(gr[k][i]) + pen.t(k, tx[k][i] + dt) - pen.t(k, tx[k][i]);
     if (apply) { gr[k][i] += dg; tx[k][i] += dt; }
     for (let j = 0; j < P.length; j++) {
-      if (j === i) continue;
-      const ej = vt(k, j, t), ds = c * ((ej === en ? 1 : 0) - (ej === eo ? 1 : 0)); if (!ds) continue;
-      db += pen.pair(k, same[k][i][j] + ds) - pen.pair(k, same[k][i][j]);
-      if (apply) { same[k][i][j] += ds; same[k][j][i] += ds; }
+      if (!ds[j]) continue;
+      db += pen.pair(k, same[k][i][j] + ds[j]) - pen.pair(k, same[k][i][j]);
+      if (apply) { same[k][i][j] += ds[j]; same[k][j][i] += ds[j]; }
     }
   }
   if (apply) plan[i][t] = nv;
@@ -99,6 +113,7 @@ const lines = P.map((x, i) => {
 });
 const FAM = { 'night-story': 'stars', 'paper-workbook': 'grid', 'glass-lab': 'dots', playground: 'tiles', 'calm-forest': 'waves', 'official-brief': 'blocks', 'editorial-ink': 'glyph', 'retro-pop': 'rings', chalkboard: 'waves', 'blueprint-tech': 'grid', 'riso-zine': 'dots', 'sunrise-warm': 'arcs', 'keynote-dark': 'stars', 'corporate-clean': 'blocks', 'soft-pastel': 'tiles', 'kinetic-type': 'glyph', 'warm-minimal': 'waves', 'deck-collage': 'blocks', 'time-dial': 'arcs', 'knot-orbit': 'rings', 'stone-stream': 'waves', 'ripple-center': 'rings', 'minute-map': 'dots', 'mosaic-split': 'tiles', 'cover-sheet': 'glyph', 'vertical-type': 'glyph', 'swiss-offset': 'blocks' };
 const out = lines.map(([id, spec]) => `  '${id}': ['${L.PRESET_BODY[id]?.[0] || FAM[id] || 'rings'}', '${spec}'],`).join('\n');
+cur = total(); // 들고 다닌 값과 다시 센 값이 같은지
 console.error(`위반 ${cur.bad} · 어울림 ${cur.pref.toFixed(1)} · 종류 ${TYPES.length}개`);
 if (process.argv.includes('--write')) {
   const f = join(ENGINE, 'src/design/layouts.js'), src = readFileSync(f, 'utf8');

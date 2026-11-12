@@ -49,10 +49,10 @@ function enterFx(s, ctx, head) {
   let mode = plan[s.type] || plan.default;
   if (head) return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: mode === 'rise' || mode === 'side' ? mode : 'fade', each: true }))}'`;
   const layout = LAYOUTS[s.type] || 'prose', fxs = ctx.design.effects || {};
-  // 배치 변형: 그 배치의 낱개와 어울리는 방식(프리셋이 그 섹션 종류에 떠오르기가 아닌 방식을 따로 정했으면 그것)
+  // 배치 변형: 그 배치의 낱개와 어울리는 방식(배치가 정한 방식이 없으면 프리셋의 계획)
   const v = vOf(s, ctx);
   if (v.meta && !v.isDefault) {
-    const m = (plan[s.type] && plan[s.type] !== 'rise' ? plan[s.type] : '') || v.meta.mode || plan.default;
+    const m = v.meta.mode || plan[s.type] || plan.default; // 배치에 어울리는 방식이 먼저(섹션마다 다른 등장), 없으면 프리셋 계획
     const own = rest >= 2 ? v.meta.enter2 : v.meta.enter;
     const items = [fxs['section.title'] ? '.lp-head > :not(.lp-h2)' : '.lp-head > *', own].filter(Boolean).join(', ');
     return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: m, items }))}'`;

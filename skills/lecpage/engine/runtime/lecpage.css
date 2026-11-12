@@ -2161,6 +2161,7 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 .lp-callout-h > span{font-weight:700}
 .lp-callout-copy{margin-left:auto}
 .lp-callout-b{display:grid;gap:var(--sp-3);min-width:0;font-size:var(--fs-sm);line-height:1.7}
+.lp-callout-b > :is(p,ul,ol){max-width:29em} /* 작은 글자라 한 줄이 40자 안팎을 넘지 않게(영문이 섞여도) */
 @media print{
   .lp-callout-copy{display:none!important}
   .lp-discuss-rules{position:static}

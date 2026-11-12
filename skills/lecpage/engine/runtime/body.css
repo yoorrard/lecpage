@@ -239,7 +239,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-gb-ck{transition:transform .4s var
 .lp-tinted .lp-ol-art{background:color-mix(in srgb,var(--primary) 9%,var(--background))}
 .lp-ol-art img,.lp-ol-art .lp-motif{position:absolute;inset:-8% 0;width:100%;height:116%;object-fit:cover}
 .lp-ol-art.has-img img{inset:0;height:100%}
-.lp-ol-no{position:absolute;left:clamp(14px,2vw,24px);bottom:clamp(8px,1.4vw,16px);font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(3rem,2rem + 4vw,6rem);line-height:.9;color:var(--background);text-shadow:0 2px 24px color-mix(in srgb,var(--foreground) 40%,transparent)}
+.lp-ol-no{position:absolute;left:clamp(14px,2vw,24px);bottom:clamp(8px,1.4vw,16px);font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(3rem,2rem + 4vw,6rem);line-height:.9;color:var(--primary)}
 .lp-ol-art.has-img .lp-ol-no{color:#fff}
 .lp-zz-body{display:grid;gap:var(--sp-3);align-content:center;max-width:34rem}
 .lp-zz-body h3{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-h2s);line-height:1.22;letter-spacing:var(--display-tracking)}

@@ -381,7 +381,7 @@
         /* A: 윗변이 화면 (at) 선을 넘으면 — 키 큰 요소도 확실히 잡힌다
            B: 작게라도 60% 이상 보이면 — 페이지 맨 끝의 작은 요소용 */
         var ios2 = [], done = function () { ios2.forEach(function (x) { x.disconnect(); }); go(); };
-        var cut = Math.round((1 - (o.at || 0.88)) * 100);
+        var cut = Math.round((1 - (o.at || 0.95)) * 100); /* 화면 아래 끝에 머리가 걸린 채 멈춰도 숨은 채 남지 않게(0.88이면 아래 12%에 걸린 제목이 비어 보였음) */
         ios2.push(new IntersectionObserver(function (ens) { if (ens[ens.length - 1].isIntersecting) done(); }, { rootMargin: '0px 0px -' + cut + '% 0px', threshold: 0 }));
         ios2.push(new IntersectionObserver(function (ens) { if (ens[ens.length - 1].intersectionRatio >= 0.6) done(); }, { threshold: 0.6 }));
         ios2.forEach(function (x) { x.observe(t); });
