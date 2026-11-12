@@ -265,15 +265,18 @@
 
   /* ── 일정: 지금 순서 ─────────────────────── */
   function initSchedule() {
-    $$('.lp-schedule').forEach(function (ol) {
-      var segs = $$('.lp-sched-bar i', ol.parentNode); // 위의 시간 막대도 같은 표시(지금·지남)
+    // 기본 시간 레일(.lp-schedule)과 배치 변형(가로 트랙·시계판·시간표·블록: [data-sched])이 같은 표시. 시간 도식의 조각([data-seg])도 함께
+    $$('.lp-schedule, [data-sched]').forEach(function (ol) {
+      var dg = ol.closest('[data-diagram]');
+      var segs = ol.classList.contains('lp-schedule') ? $$('.lp-sched-bar i', ol.parentNode) : dg && dg !== ol ? $$('[data-seg]', dg) : []; // 위의 시간 막대도 같은 표시(지금·지남)
+      var rows = ol.tagName === 'TABLE' ? $$('tbody > tr', ol) : $$(':scope > li', ol);
       function upd() {
         var now = new Date(), today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         var mins = now.getHours() * 60 + now.getMinutes();
         var q = /[?&]now=(\d{1,2}):(\d{2})\b/.exec(location.search); // 미리 보기: ?now=15:45 (연수 날 그 시각처럼 표시)
         if (q) { mins = +q[1] * 60 + +q[2]; today = ol.getAttribute('data-date') || today; }
         segs.forEach(function (x) { x.classList.remove('is-now', 'is-done'); });
-        $$('li', ol).forEach(function (li, i) {
+        rows.forEach(function (li, i) {
           var d = li.getAttribute('data-date') || ol.getAttribute('data-date');
           li.classList.remove('is-now', 'is-done');
           if (d && d !== today) return;
@@ -289,6 +292,56 @@
   }
   function toMin(t) { var m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
   function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  /* ── 본문 배치 변형의 움직임과 조작(runtime/body.css) ──
+     · 스크롤 연동 단계(data-rest 2·3)이고 브라우저가 스크롤 연동 애니메이션을 지원하면 html.lp-sdt(동작 줄이기·저사양이면 붙이지 않음)
+     · 넘김([data-pager]): 낱말 링크를 누르면 그 판으로 부드럽게, 넘기면 지금 낱말 표시. 링크·스크롤은 JS 없이도 동작
+     · 필름 띠([data-film]): 이전·다음 단추와 지금 장면 번호. 방향키는 띠에 초점이 있을 때 브라우저가 처리
+     · 도식 잇기([data-linked]): 목록 줄을 가리키거나 초점이 오면 그림의 같은 번호([data-seg]·[data-node])가 켜짐
+     · 질문 색인([data-spy]): 읽고 있는 답의 질문이 색인에서 켜짐 */
+  function initBody() {
+    var rest = +(root.getAttribute('data-rest') || 0), sup = window.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
+    if (rest >= 2 && sup && !RM && !root.classList.contains('lp-lowpower')) root.classList.add('lp-sdt');
+    var smooth = RM ? 'auto' : 'smooth';
+    function current(links, i) { links.forEach(function (a, k) { if (k === i) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); }); }
+    function nearest(track, kids) { var x = track.scrollLeft, best = 0, d = 1e9; kids.forEach(function (c, i) { var e = Math.abs(c.offsetLeft - track.firstElementChild.offsetLeft - x); if (e < d) { d = e; best = i; } }); return best; }
+    $$('[data-pager]').forEach(function (pg) {
+      var track = $('.lp-tb-panels', pg), panels = $$('.lp-tb-panel', pg), links = $$('.lp-tb-list a', pg);
+      if (!track || !panels.length) return;
+      links.forEach(function (a, i) {
+        a.addEventListener('click', function (e) { e.preventDefault(); track.scrollTo({ left: panels[i].offsetLeft - panels[0].offsetLeft, behavior: smooth }); current(links, i); });
+        a.addEventListener('keydown', function (e) { var k = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!k) return; e.preventDefault(); var j = (i + k + links.length) % links.length; links[j].focus(); links[j].click(); });
+      });
+      var q = 0; track.addEventListener('scroll', function () { if (q) return; q = requestAnimationFrame(function () { q = 0; current(links, nearest(track, panels)); }); }, { passive: true });
+    });
+    $$('[data-film]').forEach(function (fm) {
+      var track = $('.lp-film-track', fm), cards = $$('.lp-film-card', fm), cur = $('[data-film-cur]', fm), nav = $('.lp-film-nav', fm);
+      if (!track || !cards.length) return;
+      if (nav) nav.hidden = false;
+      function go(d) { var i = Math.max(0, Math.min(cards.length - 1, nearest(track, cards) + d)); track.scrollTo({ left: cards[i].offsetLeft - cards[0].offsetLeft, behavior: smooth }); }
+      var p = $('[data-film-prev]', fm), n = $('[data-film-next]', fm);
+      if (p) p.addEventListener('click', function () { go(-1); });
+      if (n) n.addEventListener('click', function () { go(1); });
+      var q = 0; track.addEventListener('scroll', function () { if (q) return; q = requestAnimationFrame(function () { q = 0; var i = nearest(track, cards); if (cur) cur.textContent = String(i + 1); if (p) p.disabled = track.scrollLeft < 4; if (n) n.disabled = track.scrollLeft > track.scrollWidth - track.clientWidth - 4; }); }, { passive: true });
+      if (p) p.disabled = true;
+    });
+    $$('[data-linked]').forEach(function (box) {
+      var items = $$('ol > li, ul > li, dl > div', box).filter(function (x) { return !x.closest('[aria-hidden="true"]') && x.parentNode.closest('[data-linked]') === box; });
+      var segs = $$('[data-seg]', box), nodes = $$('[data-node]', box);
+      function hot(i) { [segs, nodes, items].forEach(function (list) { list.forEach(function (x, k) { x.classList.toggle('is-hot', k === i); }); }); }
+      items.forEach(function (it, i) {
+        it.addEventListener('pointerenter', function () { hot(i); });
+        it.addEventListener('focusin', function () { hot(i); });
+      });
+      box.addEventListener('pointerleave', function () { hot(-1); });
+      box.addEventListener('focusout', function (e) { if (!box.contains(e.relatedTarget)) hot(-1); });
+    });
+    if ('IntersectionObserver' in window) $$('[data-spy]').forEach(function (sp) {
+      var links = $$('nav a', sp), items = links.map(function (a) { return doc.getElementById(decodeURIComponent(a.getAttribute('href').slice(1))); });
+      var io = new IntersectionObserver(function (ens) { ens.forEach(function (en) { if (en.isIntersecting) current(links, items.indexOf(en.target)); }); }, { rootMargin: '-30% 0px -60% 0px' });
+      items.forEach(function (x) { if (x) io.observe(x); });
+    });
+  }
 
   /* ── 차시: 날짜로 마침·오늘·다음 표시(상태를 직접 적지 않은 경우) ── */
   function initSessions() {
@@ -937,7 +990,7 @@
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
     $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
-    drawQRs(); initChrome(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
+    drawQRs(); initChrome(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

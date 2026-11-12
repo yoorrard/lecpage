@@ -127,7 +127,7 @@ test('섹션 배치: 같은 배치가 셋 넘게 줄지어 나오지 않고, 줄
   }
   // FAQ·자료·연수 후가 이어져도 틀이 split → wide → split으로 바뀜
   const bp = EX('sel-story');
-  bp.sections = [bp.sections[0], { type: 'faq', title: '질문', items: [{ q: 'a', a: 'b' }] }, { type: 'materials', title: '자료', items: [{ title: 'x' }] }, { type: 'schedule', title: '일정', items: [{ start: '09:00', title: 'a' }, { start: '10:00', title: 'b' }] }];
+  bp.sections = [bp.sections[0], { type: 'faq', layout: 'accordion', title: '질문', items: [{ q: 'a', a: 'b' }] }, { type: 'materials', layout: 'files', title: '자료', items: [{ title: 'x' }] }, { type: 'schedule', layout: 'timeline', title: '일정', items: [{ start: '09:00', title: 'a' }, { start: '10:00', title: 'b' }] }];
   const r = layoutRuns(E.build(bp, { runtime: nodeRuntime() }).files['index.html']);
   assert.deepEqual(r.seq, ['split/rows', 'wide/rows', 'split/rows']);
   assert.ok(r.max < 3);

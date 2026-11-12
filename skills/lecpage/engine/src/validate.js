@@ -9,6 +9,7 @@ import { rankPresets } from './decide/design.js';
 import { cleanConcept, conceptDesign } from './decide/concept.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 import { detectTopics, moodsForTopics } from './decide/topic.js';
+import { cleanLayout } from './design/layouts.js';
 
 const LIMITS = { short: 80, title: 160, text: 1200, long: 6000, items: 200 };
 
@@ -220,6 +221,7 @@ export function validate(input) {
       for (const it of mdIssues(text)) warnings.push({ path: `sections[${i}].${where}`, kind: 'md', message_ko: `"${out.title || def.label}": ${it.message_ko}` });
     }
     if (type === 'text' && !out.md) { warnings.push({ path: `sections[${i}]`, message_ko: `"${out.title || def.label}" 섹션에 내용이 없어 뺐어요.` }); return; }
+    const lay = cleanLayout(type, s.layout); if (lay) out.layout = lay; // 본문 배치 변형을 섹션에서 직접 고름(design/layouts.js). 실습의 layout은 따로
     sections.push(out);
   });
   if (!sections.length) errors.push({ path: 'sections', message_ko: '섹션이 하나도 없어요.' });
