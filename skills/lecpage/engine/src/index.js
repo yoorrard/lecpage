@@ -15,7 +15,7 @@ export { rankPresets, chooseEffects, chooseFonts, resolveDesign, motionCap, fxIn
 export { decideInfra, BACKENDS, HOSTS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
 export { decideArchetype } from './decide/archetype.js';
 export { decideStructure, structureFor, cleanStructure, checkOrder, linkConcept, flowGuide, FLOW_INFO, SIGNAL_TABLE, FEATURE_LABEL } from './decide/structure.js';
-export { findLeftovers, leftoversToSections } from './ingest/compose.js';
+export { findLeftovers, leftoversToSections, leftoverAdds } from './ingest/compose.js';
 export { foundSummary } from './ingest/signals.js';
 export { syncHeroMeta } from './hero-meta.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';

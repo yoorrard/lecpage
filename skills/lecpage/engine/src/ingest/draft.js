@@ -297,7 +297,8 @@ export function materialToDraft(material, info = {}) {
   if (tools.length) {
     S.tools = {
       id: 'tools', type: 'tools', nav: '도구',
-      items: tools.slice(0, 24).map((t) => ({ name: t.name, url: ownUrl(t) || t.url || '', desc: [t.categoryLabel, t.accountNeeded ? accountShort(t.account) : '로그인 없이'].filter(Boolean).join(' · '), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
+      items: tools.slice(0, 24).map((t) => ({ name: t.name, url: ownUrl(t), // 링크는 교재에 적힌 그 도구의 주소만(일반 주소를 지어 붙이지 않음. 접속 확인만 대표 주소를 씀)
+      desc: [t.categoryLabel, t.accountNeeded ? accountShort(t.account) : '로그인 없이'].filter(Boolean).join(' · '), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
       notice: tools.some((t) => /연령|만 1[348]세|보호자/.test(t.minors || '')) ? '학생과 함께 쓸 때는 도구별 연령 기준과 학교·교육청 지침을 먼저 확인해 주세요.' : '',
     };
   }

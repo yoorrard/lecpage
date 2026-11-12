@@ -5,7 +5,8 @@
 //   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh]
 //        교재 → 해석 → 초안 → 검증 → 빌드 → 점검을 한 번에(작업 파일은 dist 옆 work/)
 //        다시 부르면 교재 해석은 재사용, 고친 설계도는 유지(--fresh: 설계도를 새 초안으로)
-//   brief [blueprint.json|material.json|work]        짧은 요약: 칸 id·개수·빈칸·주의·글꼴
+//   brief [blueprint.json|material.json|work]        짧은 요약: 칸 id·개수·구성·빈칸·싣지 못한 것·주의·글꼴
+//   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
 //        일부만 고치고 검증·다시 빌드(형식: references/cli.md)
 //   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
@@ -32,7 +33,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -59,6 +60,7 @@ const statePath = (work) => join(work, 'lecpage.state.json');
 const loadState = (work) => { try { return JSON.parse(readFileSync(statePath(work), 'utf8')); } catch { return {}; } };
 const saveState = (work, s) => writeJson(statePath(work), { ...loadState(work), ...s, updated: new Date().toISOString() });
 const ARCH_KO = { story: '강의형', lab: '실습형', live: '행사형', course: '과정형' };
+const FLOW_PATH = (f) => E.FLOW_INFO[f]?.path || '';
 const ACCESS_KO = { link: '주소를 받은 사람만', public: '누구나(검색 허용)', password: '암호' };
 
 async function ingestCli() { return imp('src/ingest/cli.js'); }
@@ -298,7 +300,9 @@ function briefMaterial(m) {
     `실습 ${d.practice ? `${d.practice.count}쪽(${Math.round(d.practice.ratio * 100)}%)` : '0'} · 단계 ${d.steps?.length || 0}묶음 ${pg((d.steps || []).map((s) => s.page))} · 프롬프트 ${d.prompts?.length || 0} ${pg((d.prompts || []).flatMap(pagesOf))} · 링크 ${d.links?.length || 0}`,
     d.tools?.length ? `도구 ${plural(d.tools.map((t) => `${t.name}${pagesOf(t).length ? `(${pg(pagesOf(t))})` : ''}`), 6)}` : '',
     `그 밖 퀴즈 ${d.quiz?.length || 0} · 질문답 ${d.faq?.length || 0} · 용어 ${d.glossary?.length || 0} · 핵심 문장 ${d.messages?.length || 0}`,
-    d.archetype ? `유형 ${ARCH_KO[d.archetype.primary] || d.archetype.primary}(${d.archetype.primary}) — ${cut(d.archetype.reason_ko, 60)}` : '',
+    E.foundSummary(d, 8).length ? `찾은 것 ${E.foundSummary(d, 8).join(' · ')}` : '',
+    [...(d.addresses?.join || []), ...(d.addresses?.survey || [])].length ? `교재에서 찾은 주소(강사 확인 뒤 info.json에) ${[...(d.addresses.join || []).map((a) => `${a.why} ${a.url} → joinUrl`), ...(d.addresses.survey || []).map((a) => `${a.why} ${a.url} → surveyUrl`)].join(' · ')}` : '',
+    d.signals ? (() => { const st = E.decideStructure({}, m); return `구성 ${st.label}(${st.flow}) — ${cut(st.reasons[0] || "", 60)}${st.suggested.length ? ` · 권하는 기능 ${st.suggested.map((x) => x.feature).join(",")}` : ""}`; })() : d.archetype ? `유형 ${ARCH_KO[d.archetype.primary] || d.archetype.primary}(${d.archetype.primary}) — ${cut(d.archetype.reason_ko, 60)}` : "",
     fontLine(d.fonts || (m.design?.fontsUsed?.[0] ? { body: { name: m.design.fontsUsed[0].name } } : null)),
     missing.length ? `빈칸 ${missing.join(', ')} → 강사에게 묻기` : '빈칸 없음',
     ...(m.errors || []).map((e) => `오류 ${e.file ? e.file + ': ' : ''}${cut(e.message_ko, 90)}`),
@@ -340,17 +344,21 @@ function briefBlueprint(raw) {
   const m = bp.meta;
   const gaps = blueprintGaps(bp, raw);
   const rd = E.resolveDesign(bp);
+  const sr = bp.structure;
+  const lo = sr?.leftovers?.count || 0;
   const lines = [
     `설계도 「${cut(m.title, 40)}」 · ${ARCH_KO[bp.archetype.primary]}(${bp.archetype.primary}) · 디자인 ${rd.preset} · 움직임 ${rd.motion} · 공개 ${bp.access.mode} · 참여 ${bp.live.provider}${bp.live.features.length ? `(${bp.live.features.join(',')})` : ''}`,
     `일시 ${[m.date, m.start && `${m.start}~${m.end}`].filter(Boolean).join(' ') || '?'} · 장소 ${cut(m.venue || '?', 30)} · 강사 ${bp.instructors.map((p) => p.name).join(', ') || '?'}`,
+    sr ? `구성 ${sr.label}(${sr.flow}) — ${cut(sr.reasons[0] || '', 70)}${sr.suggested.length ? ` · 권하는 기능 ${sr.suggested.map((x) => x.feature).join(',')}` : ''}` : '',
     `칸 ${bp.sections.length}: ${secs.join(' · ')}${hidden.length ? ` | 숨김: ${hidden.join(', ')}` : ''}`,
+    lo ? `싣지 못한 것 ${lo}개(교재에 있는데 어느 칸에도 없음): ${plural(sr.leftovers.items.map((x) => `p${x.page} ${cut(x.text, 24)}`), 3, ' / ')} → structure --add-leftovers` : '',
     st ? `실습 ${st.items.map((it, i) => `[${i}]${cut(it.name || it.title, 14)}(단계 ${it.steps.length}·프롬프트 ${it.prompts.length}${it.source?.pages?.length ? '·' + pg(it.source.pages) : ''})`).join(' ')}` : '',
     fontLine(raw.design?.sourceFonts || (raw._draft?.detectedFonts?.[0] ? { body: { name: raw._draft.detectedFonts[0] } } : null), raw.design),
     gaps.length ? `빈칸 ${gaps.join(', ')}` : '빈칸 없음',
     ...errors.map((e) => `오류 ${e.path}: ${cut(e.message_ko, 80)}`),
     warnings.length ? `주의 ${warnings.length}: ${plural(warnings.map((w) => cut(w.message_ko, 60)), 3, ' / ')}` : '',
   ];
-  return { lines, json: { kind: 'blueprint', title: m.title, archetype: bp.archetype.primary, preset: bp.design.preset, access: bp.access.mode, live: bp.live.provider, sections: bp.sections.map((s) => { const list = def[s.type]?.list; return { id: s.id, type: s.type, title: s.title, count: list ? s[list]?.length ?? 0 : undefined }; }), hidden, gaps, errors, warnings } };
+  return { lines, json: { kind: 'blueprint', title: m.title, archetype: bp.archetype.primary, structure: sr ? { flow: sr.flow, reasons: sr.reasons, suggested: sr.suggested.map((x) => x.feature), leftovers: lo } : null, preset: bp.design.preset, access: bp.access.mode, live: bp.live.provider, sections: bp.sections.map((s) => { const list = def[s.type]?.list; return { id: s.id, type: s.type, title: s.title, count: list ? s[list]?.length ?? 0 : undefined }; }), hidden, gaps, errors, warnings } };
 }
 
 function briefAny(p) {
@@ -453,7 +461,8 @@ const commands = {
     if (v.errors.length) fail('설계도 검증 실패: ' + v.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '));
     const b = await buildSite(raw, { out, assets, info: Object.keys(info).length ? info : null, password: args.password });
     if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
-    saveState(work, { out, assets, info: args.i ? resolve(args.i) : '', blueprint: bpPath, inputs });
+    // 경로는 work 기준 상대 경로로(work 폴더를 복사해 patch해도 원래 폴더의 dist를 덮어쓰지 않게)
+    saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs });
 
     // 4) 점검
     const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '' });
@@ -477,6 +486,39 @@ const commands = {
   },
 
   brief() { const r = briefAny(args._[0]); say(r.lines, r.json); },
+
+  /** 구성 정하기: 교재 신호(+ info.json 형식·컨셉) → 흐름·칸 순서·이유·권하는 기능·싣지 못한 것. --add-leftovers면 그것을 글 칸으로 넣는 패치를 씀 */
+  async structure() {
+    let p = resolve(args._[0] || 'work');
+    const dir = existsSync(p) && statSync(p).isDirectory() ? p : dirname(p);
+    const bpPath = existsSync(p) && !statSync(p).isDirectory() && !/material\.json$/.test(p) ? p : join(dir, 'blueprint.json');
+    const matPath = /material\.json$/.test(p) ? p : join(dir, 'material.json');
+    if (!existsSync(matPath)) fail(`${rel(matPath)}가 없어요. make로 교재를 먼저 읽어 주세요.`);
+    const m = readJson(matPath);
+    const info = args.i ? readJson(args.i) : {};
+    const raw = existsSync(bpPath) ? readJson(bpPath) : null;
+    const api = await ingestApi();
+    const bp = raw ? E.validate(raw).blueprint : E.validate(api.materialToDraft(m, E.draftInfo({ ...info, today: args.today || undefined }, false))).blueprint;
+    const st = E.structureFor(bp, info, m, E.findLeftovers(m, bp, { max: 40 }));
+    const kept = raw && bp.structure ? bp.structure : null;
+    const order = bp.sections.filter((s) => !s.hidden).map((s) => s.type);
+    const lines = [
+      `흐름 ${st.label}(${st.flow})${kept && kept.flow !== st.flow ? ` · 설계도에는 ${kept.label}(${kept.flow})` : ''} — ${FLOW_PATH(st.flow)}`,
+      ...st.reasons.map((r) => '이유 ' + r),
+      `찾은 것 ${E.foundSummary(m.detected || {}, 10).join(' · ') || '없음'}`,
+      `칸 순서 ${order.join(' > ')}`,
+      st.suggested.length ? `권하는 기능(강사가 고르면 켬: info.json features) ${st.suggested.map((x) => `${x.feature} ${x.label} — ${cut(x.reason, 50)}`).join(' / ')}` : '권하는 기능 없음',
+      st.leftovers.count ? `싣지 못한 것 ${st.leftovers.count}개: ${plural(st.leftovers.items.map((x) => `p${x.page} ${cut(x.text, 30)}`), 5, ' / ')}` : '싣지 못한 것 없음',
+    ];
+    let patchFile = '';
+    if (args['add-leftovers'] && st.leftovers.count) {
+      const add = E.leftoverAdds(bp, st.leftovers); // 교재 순서 자리(그 쪽 앞의 마지막 본문 칸 뒤)
+      patchFile = join(dir, 'leftovers.patch.json');
+      writeJson(patchFile, { note: '교재에 있는데 싣지 못한 것을 글 칸으로', add });
+      lines.push(`패치 → ${rel(patchFile)} (글 칸 ${add.length}개). 넣으려면 patch ${rel(bpPath)} ${rel(patchFile)}`);
+    }
+    say(lines, { ok: true, ...st, order, found: E.foundSummary(m.detected || {}, 10), patch: patchFile || undefined });
+  },
 
   async patch() {
     const bpPath = resolve(args._[0] || 'work/blueprint.json');
@@ -504,13 +546,13 @@ const commands = {
     if (final.errors.length) fail('검증 실패로 저장하지 않았어요: ' + final.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '), { warnings: pw });
     const changes = E.diffSummary(undoFrom || before, r.raw);
     if (!args.undo && changes.length) { writeFileSync(prev, readFileSync(bpPath)); writeJson(bpPath, r.raw); }
-    const out = args.o ? resolve(args.o) : state.out;
+    const out = args.o ? resolve(args.o) : state.out ? resolve(work, state.out) : '';
     let b = null, q = null, skip = '';
     if (!changes.length) skip = '바뀐 것이 없어 다시 빌드하지 않았어요.';
     else if (args['no-build']) skip = '빌드 건너뜀(--no-build)';
     else if (!out) skip = '빌드할 곳을 모름: -o dist 를 붙이면 다시 빌드해요.';
     else {
-      b = await buildSite(r.raw, { out, assets: state.assets || join(work, 'assets'), info: state.info && existsSync(state.info) ? readJson(state.info) : null, password: args.password });
+      b = await buildSite(r.raw, { out, assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: state.info && existsSync(resolve(work, state.info)) ? readJson(resolve(work, state.info)) : null, password: args.password });
       if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; }
       else if (args.qa) q = await runQa(out, { password: args.password || process.env.LECPAGE_PASSWORD || '' });
     }
@@ -537,7 +579,7 @@ const commands = {
     const ids = args.presets ? String(args.presets).split(',').map((s) => s.trim()).filter((id) => E.PRESET_IDS.includes(id)) : ranked.slice(0, 3).map((r) => r.id);
     if (!ids.length) fail(`프리셋 이름을 확인해 주세요: ${E.PRESET_IDS.join(', ')}`);
     const outDir = resolve(args.o || join(work, 'options'));
-    const assets = args.assets || state.assets || join(work, 'assets');
+    const assets = args.assets || (state.assets ? resolve(work, state.assets) : join(work, 'assets'));
     const results = [];
     for (const id of ids) {
       const v = structuredClone(raw);

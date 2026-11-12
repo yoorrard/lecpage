@@ -124,7 +124,29 @@ export function findLeftovers(material, bp, { max = 20 } = {}) {
   return { count, items };
 }
 
-/** 싣지 못한 것 → 글 칸(쪽마다 하나). 강사가 '본문 칸으로 넣기'를 누르면 마무리 앞에 들어감 */
+const TAIL = ['materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'];
+/**
+ * 싣지 못한 것을 넣을 자리(교재 순서): 같은 교재 파일에서 그 쪽보다 앞 쪽을 담은 마지막 본문 칸 바로 뒤, 없으면 자료·연수 후·마무리 앞.
+ * @returns {Array<{after:string|null, section:object}>} 패치의 add 모양(applyBlueprintPatch)
+ */
+export function leftoverAdds(bp, leftovers) {
+  const secs = (bp?.sections || []).filter((s) => s && !s.hidden);
+  const tailAt = secs.findIndex((s) => TAIL.includes(s.type));
+  const body = tailAt < 0 ? secs : secs.slice(0, tailAt);
+  const fallback = body[body.length - 1]?.id || null;
+  const lastAfter = new Map();
+  return leftoversToSections(leftovers).map((section) => {
+    const page = section.source.pages[0];
+    // AI 답의 칸은 source.file 없이 쪽 번호만 적기도 함
+    const anchor = body.filter((s) => s.type !== 'hero' && s.source?.pages?.length && (!s.source.file || s.source.file === section.source.file) && s.source.pages.some((n) => n <= page)).pop();
+    const key = anchor?.id || fallback;
+    const after = lastAfter.get(key) || key; // 같은 자리에 여럿이면 앞에 넣은 것 뒤로(교재 순서 유지)
+    lastAfter.set(key, section.id);
+    return { after, section };
+  });
+}
+
+/** 싣지 못한 것 → 글 칸(쪽마다 하나). 강사가 '본문 칸으로 넣기'를 누르면 교재 순서 자리에(leftoverAdds) */
 export function leftoversToSections(leftovers) {
   const groups = new Map();
   for (const it of leftovers?.items || []) { const k = `${it.file}:${it.page}`; if (!groups.has(k)) groups.set(k, { title: it.title, page: it.page, file: it.file, lines: [] }); groups.get(k).lines.push(it); }
