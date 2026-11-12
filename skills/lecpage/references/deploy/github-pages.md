@@ -23,7 +23,7 @@
 cd dist && git init -b main && git add -A && git commit -m site \
   && gh repo create lec-20261111 --public --source=. --push \
   && gh api -X POST "repos/{owner}/{repo}/pages" -f 'source[branch]=main' -f 'source[path]=/'
-# → https://<계정>.github.io/lec-20261111/  (처음에는 1~2분 뒤)
+# → https://<계정>.github.io/lec-20261111/  (처음에는 1~2분, 길면 10분 뒤)
 ```
 - 대화 없이 돕니다(gh 2.89.0 `--help`로 플래그 확인). 인증은 `gh auth status`가 로그인 상태이거나 `GH_TOKEN`.
 - 다시 올리기: 다시 빌드한 뒤 `cd dist && git add -A && git commit -m update && git push`. 주소는 그대로이고, 빌드는 `dist/.git`을 지우지 않습니다.
@@ -37,7 +37,7 @@ cd dist && git init -b main && git add -A && git commit -m site \
 1. https://github.com 로그인 → 오른쪽 위 **+** → **New repository** → 이름(예: `lec-20261111`) → **Public** → **Create repository**.
 2. **uploading an existing file**(또는 **Add file → Upload files**) → `dist/` **안의 내용물**을 끌어다 놓기 → **Commit changes**. 한 번에 100개·파일당 25MiB라 많으면 나눠 올립니다.
 3. **Settings → Pages** → Source **Deploy from a branch** → Branch `main`, `/ (root)` → **Save**.
-4. 1~2분 뒤 같은 화면 위쪽에 주소가 나옵니다. 고칠 때는 바뀐 파일을 같은 방법으로 덮어씁니다.
+4. 1~2분(길면 10분) 뒤 같은 화면 위쪽에 주소가 나옵니다. 고칠 때는 바뀐 파일을 같은 방법으로 덮어씁니다.
 
 > 메뉴 이름은 GitHub 화면 개편으로 바뀔 수 있습니다 ⚠️.
 
@@ -46,7 +46,7 @@ cd dist && git init -b main && git add -A && git commit -m site \
 - 엔진은 상대 경로를 쓰므로 하위 경로(`/<저장소>/`)에서도 그대로 동작합니다.
 
 ## 확인하기
-skill은 `curl -sI https://<계정>.github.io/<저장소>/ | head -1`이 `200`이 될 때까지 기다린 뒤(처음에는 1~2분) 주소를 건넵니다.
+skill은 `curl -sI https://<계정>.github.io/<저장소>/ | head -1`이 `200`이 될 때까지 기다린 뒤(처음에는 1~2분, 길면 10분) 주소를 건넵니다.
 1. 주소를 휴대폰(데이터)과 학교 PC 두 곳에서 엽니다. 연수 전날에는 참가자가 쓸 망에서 한 번 더(`school-network-checklist.md`).
 2. `…/check.html`(접속 확인)이 모두 초록인지 봅니다.
 3. `…/console.html`에서 관리자 키를 넣고 연결 상태를 봅니다.

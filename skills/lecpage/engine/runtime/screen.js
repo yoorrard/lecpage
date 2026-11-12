@@ -19,15 +19,31 @@
   function mmss(ms) { var s = Math.round(ms / 1000), a = Math.abs(s); return (s < 0 ? '-' : '') + Math.floor(a / 60) + ':' + String(a % 60).padStart(2, '0'); }
 
   // ── 참여 QR·주소(파일로 열었거나 미리보기면 안내 문구, 암호 보호면 #k=는 QR에만) ──
+  // 손으로 칠 주소는 강사가 넣은 짧은 주소가 있으면 그것을 크게, 원래 주소는 그 아래 작게. QR은 언제나 원래 주소(짧은 주소 서비스가 멈춰도 열림).
   var LOCAL = /^(file|about|blob|data):$/.test(location.protocol);
-  var joinUrl = DATA.siteUrl || (LOCAL ? '' : location.href.split('#')[0].replace(/screen\.html.*$/, ''));
+  var joinUrl = DATA.siteUrl || (LOCAL ? DATA.shortUrl || '' : location.href.split('#')[0].replace(/screen\.html.*$/, ''));
   var ul = $('meta[name="lp-unlock"]'), qrUrl = joinUrl ? joinUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+  function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
+  var fullUrl = bare(joinUrl), shortUrl = bare(DATA.shortUrl); if (!fullUrl || shortUrl === fullUrl) shortUrl = '';
+  var qrMarkup = '';
+  // 둘레 여백 4칸(QR 규격의 quiet zone)을 그림 안에 넣음
+  if (qrUrl && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qrUrl); qq.make(); qrMarkup = qq.createSvgTag({ cellSize: 6, margin: 24, scalable: true }); } catch (e) { } }
   var q = $('[data-qr-join]');
   if (q) {
-    if (qrUrl && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qrUrl); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); } catch (e) { } }
+    if (qrMarkup) q.innerHTML = qrMarkup;
     else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
   }
-  var ju = $('[data-join-url]'); if (ju) ju.textContent = joinUrl ? joinUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') : '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
+  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) { n.textContent = shortUrl || fullUrl || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.'; });
+  [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
+  // QR 크게 보기: 뒷자리에서도 찍히게 화면 가득(QR 한 변은 찍는 거리의 1/10쯤이 필요)
+  var zoom = $('[data-join-zoom]'), big = $('[data-joinbig]');
+  if (zoom && big) {
+    if (!qrMarkup || !big.showModal) { zoom.disabled = true; var zt = $('.lp-qr-zoom-t', zoom); if (zt) zt.hidden = true; }
+    else {
+      zoom.addEventListener('click', function () { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; big.showModal(); });
+      big.addEventListener('click', function (e) { if (e.target === big) big.close(); });
+    }
+  }
 
   // ── 무대: 뽑힌 이름·모둠을 크게 ──
   var stage = $('[data-tool-stage]');

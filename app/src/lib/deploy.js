@@ -7,10 +7,24 @@ export const GITHUB_TOKEN_URL = 'https://github.com/settings/personal-access-tok
 export const VERCEL_TOKEN_URL = 'https://vercel.com/account/tokens';
 export const NETLIFY_TOKEN_URL = 'https://app.netlify.com/user/applications#personal-access-tokens';
 
+/** 인터넷에 닿지 못한 오류(fetch가 던지는 TypeError)를 쉬운 말로 */
+const OFFLINE = '인터넷에 닿지 못했어요. 연결을 확인하고 다시 해 주세요. 학교망이 막았다면 휴대폰 핫스팟으로 바꿔 보세요.';
+async function net(url, init) {
+  try { return await fetch(url, init); }
+  catch (e0) { const e = new Error(OFFLINE); e.status = 0; e.cause = e0; throw e; }
+}
+// GitHub가 영어로 주는 오류를 강사가 고칠 수 있는 말로
+function ghError(status, msg) {
+  if (status === 401) return 'GitHub 토큰이 맞지 않거나 기한이 지났어요. 토큰을 다시 만들어 주세요.';
+  if (status === 403 && /rate limit|abuse|secondary/i.test(msg)) return 'GitHub에 요청이 너무 많았어요. 몇 분 뒤 다시 해 주세요.';
+  if (status === 403 || /not accessible by personal access token/i.test(msg)) return 'GitHub 토큰에 권한이 모자라요. 토큰을 만들 때 Repository access를 All repositories로 골랐는지 확인해 주세요.';
+  if (status === 422 && /verif/i.test(msg)) return 'GitHub 메일 인증을 먼저 마쳐 주세요.';
+  return msg || `GitHub 오류 ${status}`;
+}
 async function gh(token, method, path, body) {
-  const r = await fetch(GH + path, { method, headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const r = await net(GH + path, { method, headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(j.message || `GitHub 오류 ${r.status}`); e.status = r.status; throw e; }
+  if (!r.ok) { const e = new Error(r.status === 404 ? j.message || 'GitHub 오류 404' : ghError(r.status, j.message || '')); e.status = r.status; throw e; }
   return j;
 }
 function b64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
@@ -66,17 +80,22 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { },
   catch (e) { if (e.status !== 409 && e.status !== 422) throw e; }
   let url = `https://${owner}.github.io/${repo}/`;
   try { const pg = await gh(token, 'GET', `/repos/${owner}/${repo}/pages`); if (pg.html_url) url = pg.html_url; } catch { }
-  onProgress({ step: '완료(첫 배포는 1~2분 뒤 열려요)', pct: 100 });
+  onProgress({ step: '완료(처음에는 1~2분, 길면 10분 뒤 열려요)', pct: 100 });
   return { url, repoUrl: `https://github.com/${owner}/${repo}` };
 }
 
+const NF_ERR = {
+  401: 'Netlify 토큰이 맞지 않거나 기한이 지났어요. 토큰을 다시 만들어 주세요.',
+  403: 'Netlify 토큰이 맞지 않거나 기한이 지났어요. 토큰을 다시 만들어 주세요.',
+  429: 'Netlify에 요청이 너무 많았어요. 잠시 뒤 다시 해 주세요.',
+};
 /** Netlify: 사이트 만들기와 배포를 zip 한 번으로 */
 export async function deployNetlify({ token, siteId, zip, name, onProgress = () => { } }) {
   onProgress({ step: siteId ? '새 버전 올리기' : '사이트 만들기', pct: 10 });
   const url = siteId ? `https://api.netlify.com/api/v1/sites/${siteId}/deploys` : `https://api.netlify.com/api/v1/sites${name ? `?name=${encodeURIComponent(name)}` : ''}`;
-  const r = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/zip' }, body: zip });
+  const r = await net(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/zip' }, body: zip });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.message || `Netlify 오류 ${r.status}`);
+  if (!r.ok) { const e = new Error(/must be unique|already/i.test(j.message || '') ? j.message : NF_ERR[r.status] || j.message || `Netlify 오류 ${r.status}`); e.status = r.status; throw e; }
   onProgress({ step: '처리 중', pct: 70 });
   const site = siteId || j.site_id || j.id;
   const deployId = j.deploy_id || j.id;
@@ -84,7 +103,7 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
     await sleep(2000);
     const s = await fetch(`https://api.netlify.com/api/v1/sites/${site}/deploys/${deployId}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json()).catch(() => ({}));
     if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site }; }
-    if (s.state === 'error') throw new Error(s.error_message || 'Netlify 배포 실패');
+    if (s.state === 'error') throw new Error(s.error_message || 'Netlify에서 사이트를 만들지 못했어요. 잠시 뒤 다시 해 주세요.');
   }
   return { url: j.ssl_url || j.url, siteId: site };
 }
@@ -101,7 +120,7 @@ const VC_ERR = {
 };
 async function vc(token, method, path, body, headers = {}) {
   const raw = body instanceof Uint8Array;
-  const r = await fetch(VC + path, { method, headers: { authorization: `Bearer ${token}`, ...(body && !raw ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? (raw ? body : JSON.stringify(body)) : undefined });
+  const r = await net(VC + path, { method, headers: { authorization: `Bearer ${token}`, ...(body && !raw ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? (raw ? body : JSON.stringify(body)) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const code = j.error?.code || '';
@@ -268,13 +287,96 @@ export function probeSite(url, timeout = 8000) {
   });
 }
 
-/** 미리 연결할 때: 토큰이 맞는지 확인 */
+/** 붙여 넣은 글이 토큰처럼 생겼는지(주소·문장·빈칸을 붙여 넣은 실수를 먼저 거름). 맞으면 '' */
+export function tokenLooksWrong(token) {
+  const t = String(token || '');
+  if (!t) return '복사한 토큰이 없어요. 토큰 페이지에서 토큰을 복사해 주세요.';
+  if (/\s/.test(t) || /^https?:/i.test(t) || t.length < 16) return '토큰이 아닌 글이 붙었어요. 토큰 페이지에서 만든 토큰을 복사해 주세요.';
+  return '';
+}
+
+/** 연결할 때: 토큰이 맞는지 확인 */
 export async function checkToken(kind, token) {
   if (kind === 'vercel') return checkVercel(token);
-  if (kind === 'github') { try { return await gh(token, 'GET', '/user'); } catch (e) { throw new Error(e.status === 401 ? 'GitHub 토큰이 맞지 않거나 기한이 지났어요.' : e.message); } }
-  const r = await fetch('https://api.netlify.com/api/v1/user', { headers: { authorization: `Bearer ${token}` } });
-  if (!r.ok) throw new Error(r.status === 401 ? 'Netlify 토큰이 맞지 않거나 기한이 지났어요.' : `Netlify 오류 ${r.status}`);
+  if (kind === 'github') return gh(token, 'GET', '/user');
+  const r = await net('https://api.netlify.com/api/v1/user', { headers: { authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(NF_ERR[r.status] || `Netlify 오류 ${r.status}`);
   return r.json();
+}
+
+// ── 짧은 주소 ──
+// 근거: docs/research/share-links-2026-11.md. is.gd는 가입·키 없이 브라우저에서 바로 부를 수 있고(access-control-allow-origin: *),
+// 광고·중간 화면 없이 바로 넘어가며 주소가 지워지지 않습니다. QR과 [주소 복사]는 언제나 원래 주소라서 짧은 주소가 막혀도 사이트는 열립니다.
+const ISGD = 'https://is.gd/create.php';
+const bareUrl = (u) => String(u || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+/** 보여 줄 때: https://와 끝의 /를 떼고 한글 주소는 한글로 */
+export function showUrl(u) { const s = bareUrl(u); try { return decodeURI(s); } catch { return s; } }
+
+/** 치기 쉬운 이름: 영문 소문자만, 자음·모음을 번갈아(대문자·숫자가 섞인 이름은 휴대폰에서 치기 어려움). 7자면 is.gd에서 거의 겹치지 않음(6자는 열에 넷이 이미 쓰임, 2026-11 확인) */
+function easyName(len = 7) {
+  const C = 'bdgjklmnprstvz', V = 'aeiou', BAD = /sex|sek|fuk|fak|dik|kum|jot|sib|sip|nom|nig|tit|pis|pup|pus|kak|kok|bum|dum|nud|por|pen|vag|rap|kil|ded|die|gay|lez|jiz|ped|naz|sat|dam|god|jap|bit|but|pot|git/;
+  for (;;) {
+    const r = crypto.getRandomValues(new Uint8Array(len)); let s = '';
+    for (let i = 0; i < len; i++) s += i % 2 ? V[r[i] % V.length] : C[r[i] % C.length];
+    if (!BAD.test(s)) return s;
+  }
+}
+/** 강사가 적은 이름을 is.gd가 받는 모양으로(영문·숫자·_ 5~30자) */
+export const shortName = (v) => String(v || '').toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30);
+
+async function isgd(target, alias) {
+  let r;
+  try { r = await fetch(`${ISGD}?format=json&url=${encodeURIComponent(target)}${alias ? `&shorturl=${encodeURIComponent(alias)}` : ''}`, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }); }
+  catch { const e = new Error('is.gd에 닿지 못했어요. 학교망이 막았을 수 있어요. 다른 서비스로 만들어 붙여 넣어 주세요.'); e.code = 'network'; throw e; }
+  const j = await r.json().catch(() => ({}));
+  if (/^https:\/\/is\.gd\/\w{3,40}$/.test(String(j.shorturl || ''))) return j.shorturl;
+  const e = new Error({ 1: 'is.gd가 이 주소를 받지 않아요. 다른 서비스로 만들어 붙여 넣어 주세요.', 3: '지금은 요청이 많아요. 잠시 뒤 다시 해 주세요.' }[j.errorcode] || 'is.gd가 잠시 쉬고 있어요. 잠시 뒤 다시 하거나 다른 서비스로 만들어 주세요.');
+  e.code = j.errorcode === 2 ? 'name' : 'service'; throw e;
+}
+/**
+ * 짧은 주소 만들기(is.gd). name을 주면 그 이름으로, 없으면 치기 쉬운 이름을 지어 봄(겹치면 몇 번 다시).
+ * 암호 보호 사이트의 #k=…는 보내지 않습니다.
+ * @returns {Promise<string>} https://is.gd/…
+ */
+export async function shortenUrl(url, name = '') {
+  const target = String(url || '').split('#')[0];
+  if (!/^https:\/\/[^\s/]+\.[^\s]+$/.test(target)) throw new Error('인터넷에 올린 주소(https://)만 줄일 수 있어요.');
+  if (name) {
+    if (!/^[a-z0-9_]{5,30}$/.test(name)) { const e = new Error('이름은 영문·숫자 5~30자로 적어 주세요.'); e.code = 'name'; throw e; }
+    try { return await isgd(target, name); }
+    catch (e) { if (e.code === 'name') e.message = '이미 쓰는 이름이에요. 다른 이름을 적어 주세요.'; throw e; }
+  }
+  for (let i = 0; i < 4; i++) {
+    try { return await isgd(target, easyName(i < 3 ? 7 : 8)); }
+    catch (e) { if (e.code !== 'name') throw e; }
+  }
+  return isgd(target, ''); // 이름이 계속 겹치면 is.gd가 지어 주는 이름으로
+}
+
+/** 다른 곳에서 만들어 올 때 여는 서비스(누르면 사이트 주소를 복사하고 새 탭으로 엶) */
+export const SHORTENERS = [
+  { id: 'joo', name: 'joo.is', url: 'https://joo.is/', note: '한글 주소도 돼요(로그인 필요).' },
+  { id: 'bitly', name: 'bit.ly', url: 'https://bitly.com/', note: '무료는 광고 화면이 먼저 나와요.' },
+];
+const SHORT_HOME = /^(joo\.is|bit\.ly|bitly\.com|is\.gd|v\.gd|vo\.la|han\.gl|buly\.kr|me2\.do|naver\.me|url\.kr|tinyurl\.com|lrl\.kr)$/i;
+/**
+ * 붙여 넣은 짧은 주소 확인. https만, 계정·포트·스크립트 주소는 받지 않음.
+ * @returns {{ url?: string, error?: string }} url은 https://… 로 맞춘 값
+ */
+export function checkShortUrl(input, siteUrl = '') {
+  let s = String(input || '').trim();
+  if (!s) return { error: '짧은 주소를 넣어 주세요.' };
+  if (/\s/.test(s)) return { error: '주소만 넣어 주세요(빈칸이 들어 있어요).' };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s) && !/^https?:\/\//i.test(s)) return { error: 'https://로 시작하는 주소만 쓸 수 있어요.' };
+  s = /^https?:\/\//i.test(s) ? s.replace(/^http:/i, 'https:') : 'https://' + s;
+  let u; try { u = new URL(s); } catch { return { error: '주소 모양이 아니에요. 예: joo.is/우리연수' }; }
+  const host = u.hostname;
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || !/^[^.]+(\.[^.]+)+$/.test(host) || /^[\d.]+$/.test(host) || host.startsWith('[')) return { error: '주소 모양이 아니에요. 예: joo.is/우리연수' };
+  u.hash = '';
+  if (u.href.length > 200) return { error: '너무 길어요. 짧은 주소를 넣어 주세요.' };
+  if (SHORT_HOME.test(host) && u.pathname === '/' && !u.search) return { error: '만든 짧은 주소를 끝까지 넣어 주세요. 예: joo.is/우리연수' };
+  if (siteUrl && bareUrl(u.href) === bareUrl(siteUrl)) return { error: '사이트 주소와 같아요. 줄인 주소를 넣어 주세요.' };
+  return { url: u.href };
 }
 
 /** 사이트 파일의 크기 정보(올릴 곳 한도 확인용) */

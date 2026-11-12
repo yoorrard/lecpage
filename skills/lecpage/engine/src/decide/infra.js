@@ -41,7 +41,7 @@ export const HOSTS = {
     stops: false, atLimit_ko: '방문이 많아도 멈추지 않아요.' },
   netlify: { name_ko: 'Netlify', cost: '0원(월 300크레딧)', app: true, account: true, limit: { files: 25000 },
     cli: 'NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name <이름>',
-    note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 뒤에 가입했다면 올린 뒤 Make public을 눌러야 열려요.',
+    note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 28일 뒤에 만든 계정이라면 올린 뒤 Make public을 눌러야 열려요.',
     transferGB: 12, stops: true, atLimit_ko: '월 300크레딧을 다 쓰면 그달은 멈춰요. 충전하면 이어져요.' },
   firebase: { name_ko: 'Firebase Hosting', cost: '0원', app: false, account: true, note_ko: '구글 계정으로 시작. 무료 전송량은 월 10GB이고, 넘으면 그달 사이트가 멈춰요.' },
   s3: { name_ko: 'AWS S3 + CloudFront', cost: '소액', app: false, account: true, note_ko: 'AWS 계정이 있을 때. 1년 무료 이후 사용량 과금.' },

@@ -203,6 +203,25 @@ test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을
   assert.ok(!none.includes('console.html') && none.includes('poster.html'), '강사 화면이 없으면 목록에서 뺌');
 });
 
+test('짧은 주소: 사이트 주소와 따로 넘기고(QR·복사는 원래 주소), 안내문·발표 화면·공유 창에 원래 주소 자리를 둠', () => {
+  const data = (html) => JSON.parse(/<script type="application\/json" id="lp-data">([\s\S]*?)<\/script>/.exec(html)[1].replace(/\\u003c/g, '<'));
+  const bp = (meta) => ({ meta: { title: 't', ...meta }, sections: [{ type: 'hero' }, { type: 'qa' }], live: { provider: 'local', features: ['qa'] } });
+  const r = E.build(bp({ siteUrl: 'https://maum.vercel.app/', shortUrl: 'https://joo.is/우리연수' }), { runtime: nodeRuntime() });
+  const d = data(r.files['index.html']);
+  assert.equal(d.siteUrl, 'https://maum.vercel.app/', 'QR에 들어갈 주소는 사이트 주소');
+  assert.equal(decodeURI(d.shortUrl), 'https://joo.is/우리연수');
+  assert.equal(data(r.files['screen.html']).shortUrl, d.shortUrl);
+  // 짧은 주소만 받았을 때(skill에서 사이트 주소를 모를 때)도 siteUrl에 섞지 않음: 올린 뒤에는 그 페이지의 주소가 QR에 들어감
+  const only = data(E.build(bp({ shortUrl: 'https://is.gd/tomika' }), { runtime: nodeRuntime() }).files['index.html']);
+  assert.equal(only.siteUrl, ''); assert.equal(only.shortUrl, 'https://is.gd/tomika');
+  assert.equal(data(E.build(bp({ shortUrl: 'javascript:alert(1)' }), { runtime: nodeRuntime() }).files['index.html']).shortUrl, '', '주소가 아닌 값은 버림');
+  for (const [f, attr] of [['poster.html', 'data-url-full'], ['screen.html', 'data-join-full'], ['index.html', 'data-url-full']]) assert.ok(r.files[f].includes(attr), `${f}에 원래 주소 자리`);
+  assert.ok(r.files['screen.html'].includes('data-join-zoom') && r.files['screen.html'].includes('data-joinbig'), '발표 화면에 QR 크게 보기');
+  // 런타임: QR 둘레 여백 4칸(cellSize의 4배)을 그림 안에 넣음
+  assert.match(r.files['assets/lecpage.js'], /createSvgTag\(\{ cellSize: 6, margin: 24/);
+  assert.match(r.files['assets/screen.js'], /createSvgTag\(\{ cellSize: 6, margin: 24/);
+});
+
 test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사료가 있으면 Vercel 제외, 연결·지난번에 올린 곳 먼저', () => {
   assert.equal(E.decideHost({}).pick, 'vercel');
   assert.equal(E.decideHost({ skill: 'dev' }).pick, 'cloudflare');

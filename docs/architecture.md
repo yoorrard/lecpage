@@ -299,7 +299,7 @@ assets/slides/*.webp · assets/media/*
 ### 8.2 앱의 공개하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
 - 흐름: 사이트 만들기(`buildFiles`) → `checkHost` → 올리기 → 주소 저장 → `probeSite`(사이트의 `assets/favicon.svg`를 그림으로 불러 실제로 열리는지 확인).
 - Vercel(`deployVercel`): `GET /v9/projects?limit=1`(토큰 확인) → 같은 이름 프로젝트가 있으면 중단 → 파일별 SHA-1로 `POST /v13/deployments` → `missing_files`면 그 파일만 `POST /v2/files`(`x-vercel-digest`) → 다시 요청 → `GET /v13/deployments/{id}`로 READY 대기 → 새 프로젝트에 `ssoProtection`이 걸려 있으면 `PATCH /v9/projects/{id} {ssoProtection:null}` → 프로젝트 주소(`<이름>.vercel.app`)를 돌려줌. `_headers`는 `vercel.json`의 `headers`로 옮깁니다. 배포별 주소는 쓰지 않습니다.
-- GitHub Pages(`deployGitHub`)·Netlify(`deployNetlify`)는 v1.0과 같습니다. 토큰은 올리기에 성공한 뒤에만 저장합니다(`deploy-<kind>` 키, '기억하기'를 켜면 WebCrypto로 암호화).
+- GitHub Pages(`deployGitHub`)·Netlify(`deployNetlify`)는 v1.0과 같습니다. 토큰은 연결할 때 확인한 뒤 저장합니다(`deploy-<kind>` 키, '기억하기'를 켜면 WebCrypto로 암호화).
 - 바로 공개(`deployInstant`, 선택): 빌드 변수 `VITE_PUBLISH_API`가 있고 `GET /api/info`가 답할 때만 보입니다. API 계약은 `hosting/README.md`.
 - 프로젝트에 남는 값: `deploy = { target, lastUrl, at, vercel:{projectId,name,url}, github:{repo,url}, netlify:{siteId,url,name}, lecpage:{id,key,url,expiresAt}, cloudflare|zip:{url} }`. `.lecpage` 파일로 내보낼 때 `deploy`는 넣지 않습니다.
 

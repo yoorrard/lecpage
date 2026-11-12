@@ -271,7 +271,7 @@ Vercel에는 `dist/` 맨 위에 `vercel.json`을, Cloudflare·Netlify에는 `_he
 | Netlify 2단계 "New access token → 이름 lecpage → Generate token" | Expiration 선택이 빠짐 | "**New access token** → 이름 lecpage → **Expiration** 고르기 → **Generate token**" |
 | "무료 · 다시 올려도 같은 주소" (Netlify) | 맞지만 횟수 제한이 있음 | "무료(한 달 20번쯤) · 다시 올려도 같은 주소" |
 | GitHub "맨 아래 Generate token을 눌러요. 권한은 미리 채워져 있어요." | Repository access는 주소로 못 채움 ⚠️ | "**Repository access**를 **All repositories**로 고르고 맨 아래 **Generate token**을 눌러요. 권한은 미리 채워져 있어요." |
-| GitHub "처음에는 1~2분 뒤 열려요" | 이메일 인증 전이면 게시되지 않음 | 뒤에 "GitHub 이메일 인증을 마친 계정이어야 해요." |
+| GitHub "처음에는 1~2분(길면 10분) 뒤 열려요" | 이메일 인증 전이면 게시되지 않음 | 뒤에 "GitHub 이메일 인증을 마친 계정이어야 해요." |
 | ZIP 목록 "Cloudflare: 압축 푼 폴더를 끌어다 놓아요." | ZIP도 됨, 경로가 바뀜 | "Cloudflare: ZIP을 그대로 끌어다 놓아요(파일 1,000개까지)." |
 | ZIP 목록 "Netlify Drop: 계정 없이 끌어다 놓아요. 1시간 안에 계정을 연결해야 해요." | 연결 전에는 비밀번호로 잠겨 있고, 새 계정은 연결 뒤에도 비공개 | "Netlify Drop: 1시간 안에 계정을 연결하고 **Make public**을 눌러야 참가자가 봐요." |
 

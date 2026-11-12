@@ -317,12 +317,16 @@
     b.appendChild(del);
     // 참여 QR: 파일로 열었거나 미리보기면 주소 대신 안내(meta.siteUrl이 있으면 그 주소). 암호 보호면 #k=를 QR에만 붙임
     var local = /^(file|about|blob|data):$/.test(location.protocol);
-    var u = DATA.siteUrl || (local ? '' : location.href.split('#')[0].replace(/console\.html.*$/, ''));
+    var u = DATA.siteUrl || (local ? DATA.shortUrl || '' : location.href.split('#')[0].replace(/console\.html.*$/, ''));
     var ul = $('meta[name="lp-unlock"]'), qu = u ? u.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
     var j = el('div', 'lp-row'); j.style.marginTop = '8px'; var q = el('div', 'lp-qr'); q.style.width = '120px'; q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드');
-    if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch (e) { } }
+    if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
     else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
-    j.appendChild(q); var c = el('div'); c.appendChild(el('div', 'lp-small', '참여 주소')); c.appendChild(el('div', '', u || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.')); c.appendChild(el('div', 'lp-small', '연수 코드 ' + DATA.live.code));
+    // 강사가 넣은 짧은 주소가 있으면 함께 보여 줌(QR은 언제나 원래 주소)
+    var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
+    j.appendChild(q); var c = el('div'); c.appendChild(el('div', 'lp-small', '참여 주소')); c.appendChild(el('div', '', u || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.'));
+    if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } c.appendChild(el('div', 'lp-small', '짧은 주소')); c.appendChild(el('div', '', su)); }
+    c.appendChild(el('div', 'lp-small', '연수 코드 ' + DATA.live.code));
     var pl = el('a', 'lp-link', 'QR 안내문 인쇄'); pl.href = 'poster.html'; pl.target = '_blank'; c.appendChild(pl);
     j.appendChild(c); b.appendChild(j);
   }
