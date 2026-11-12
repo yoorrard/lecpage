@@ -79,7 +79,7 @@ export function StepEdit({ p, update, go }) {
       </div>
       <Dialog open={connectAi} onClose={() => setConnectAi(false)} label="AI 연결" wide>
         {connectAi && <div class="stack"><h2 class="h-sub">AI 연결</h2>
-          <AiConnect onCancel={() => setConnectAi(false)} onConnected={() => { setConnectAi(false); clearJob(p.id); startMakeJob({ getProject: () => latest.current, update }); }} /></div>}
+          <AiConnect onConnected={() => { setConnectAi(false); clearJob(p.id); startMakeJob({ getProject: () => latest.current, update }); }} /></div>}
       </Dialog>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI로 다듬기" wide>
         {ai && <AiPanel p={p} onBlueprint={onAi} />}
@@ -96,7 +96,7 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
     return (
       <div class="ai-job" role="status" aria-live="polite">
         <span class="ai-job-dot" aria-hidden="true" />
-        <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>보통 1~2분 걸려요. 지금 보이는 것은 기본 초안이고, 끝나면 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
+        <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>지금 보이는 것은 기본 초안이에요. 1~2분 뒤 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
         <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
       </div>
     );
@@ -117,8 +117,9 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
       {e.kind === 'no-ai' || /연결되어 있지/.test(e.title || '') ? <button class="btn btn-sm" onClick={onConnect}>AI 연결하기</button> : !e.actions?.some((a) => a === 'pay' || a === 'light') && <button class="btn btn-sm" onClick={onRetry}>다시 하기</button>}
       {e.actions?.includes('pay') && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
       {e.actions?.includes('light') && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
+      {e.actions?.includes('link') && e.link && <a class="btn btn-sm" href={e.link.href} target="_blank" rel="noopener">{e.link.label}</a>}
       {e.actions?.includes('connect') && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
-      {e.actions?.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 하기</button>}
+      {e.actions?.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>쓰던 챗봇으로 하기</button>}
       <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
     </div>
   );

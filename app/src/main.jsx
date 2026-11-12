@@ -12,6 +12,7 @@ const LOADERS = {
   settings: () => import('./pages/Settings.jsx').then((m) => m.Settings),
   gallery: () => import('./pages/Gallery.jsx').then((m) => m.Gallery),
   help: () => import('./pages/Help.jsx').then((m) => m.Help),
+  demo: () => import('./pages/Demo.jsx').then((m) => m.Demo),
 };
 const loaded = {};
 function Lazy({ name, ...props }) {
@@ -50,6 +51,7 @@ function App() {
   else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
   else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" />;
   else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
+  else if (route === 'demo') page = <Lazy key="demo" name="demo" />;
   else page = <Home />;
   const cur = (r) => (route === r || (!route && r === '') ? 'page' : undefined);
   return (
