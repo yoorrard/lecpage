@@ -2,7 +2,7 @@
 // 본문 다양성 진단: 모든 프리셋 × 예시 설계도로 사이트를 만들어 섹션마다 '구성 지문'을 뽑고, 프리셋 쌍마다 지문이 같은 섹션 수를 셉니다.
 //   구성 지문 = DOM 뼈대 · 격자 열 수 · 머리 자리 · 정렬 · 주인공(글 text / 숫자 number / 그림 figure / 도식 diagram)
 //   함께 냄: 글만 있는 섹션 비율 · 그래픽이 주인공인 섹션 수 · 왼쪽 정렬이 아닌 섹션 수 · 첫 화면 밖에서 움직임이 있는 섹션 수
-// 쓰는 법: node scripts/body-diversity.mjs [--presets a,b] [--examples sel-story,data-lab] [--width 1440] [--out 폴더] [--md]
+// 쓰는 법: node scripts/body-diversity.mjs [--presets a,b] [--examples sel-story,data-lab,body-all] [--width 1440] [--out 폴더]
 //   Playwright가 있어야 합니다(없으면 HTML만 읽는 정적 지문으로 셈: --static)
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
@@ -42,7 +42,9 @@ export function pageFingerprints() {
     const parts = []; for (const k of kids) { const s = `${k.tagName.toLowerCase()}${typeof k.className === 'string' && k.className ? '.' + k.className.trim().split(/\s+/)[0] : ''}${sig(k, d + 1)}`; if (parts[parts.length - 1] !== s) parts.push(s); }
     return parts.length ? `(${parts.join(',')})` : '';
   };
-  const anims = document.getAnimations ? document.getAnimations() : [];
+  // 가리킴·초점에 반응하는 규칙(:hover·:focus-within)의 대상: 링크·단추 같은 공통 부품은 뺌
+  const hoverSel = [];
+  for (const sh of document.styleSheets) { let rules; try { rules = sh.cssRules; } catch { continue; } const walk = (list) => { for (const r of list) { if (r.cssRules && !r.selectorText) walk(r.cssRules); else if (r.selectorText && /:hover|:focus-within/.test(r.selectorText) && /transform|translate|rotate|scale|box-shadow|border-color|background/.test(r.style.cssText)) for (const part of r.selectorText.split(',')) { if (!/:hover|:focus-within/.test(part)) continue; const q = part.replace(/:(hover|focus-within|focus-visible|active)/g, '').replace(/\s*>\s*$/, '').trim(); const last = q.split(/\s+|>/).pop() || ''; if (!q || /lp-btn|lp-link|lp-nav|lp-icon-btn|lp-dock|lp-react|lp-signal|lp-textbtn|^a$|button|summary|input|label|fx-|lp-hero|lp-sheet|lp-toc|\bsvg\b/.test(last)) continue; hoverSel.push(q); } } }; walk(rules); }
   const out = [];
   for (const sec of document.querySelectorAll('main > section')) {
     if (sec.classList.contains('lp-hero')) continue;
@@ -78,9 +80,15 @@ export function pageFingerprints() {
       bigNum += area(n.getBoundingClientRect());
     }
     const prot = gfx / cArea >= 0.2 ? (diagram >= gfx * 0.5 ? 'diagram' : 'figure') : bigNum / cArea >= 0.05 ? 'number' : 'text';
-    const moving = sec.hasAttribute('data-fx') || !!sec.querySelector('[data-fx]') || anims.some((a) => a.effect && a.effect.target && sec.contains(a.effect.target));
+    // 움직임: 등장(enter) · 스크롤 연동(scroll: 스크롤이 직접 움직이는 CSS·효과) · 반응(react: 가리킴·누름에 답하는 카드·탭·아코디언·넘김)
+    const all = [sec, ...sec.querySelectorAll('*')];
+    const fxIds = all.map((e) => e.getAttribute('data-fx')).filter(Boolean);
+    const enterMode = (() => { try { return JSON.parse(sec.getAttribute('data-fx-opts') || '{}').mode || (sec.getAttribute('data-fx') === 'reveal-up' ? 'rise' : sec.getAttribute('data-fx') || ''); } catch { return ''; } })();
+    const scroll = fxIds.some((x) => /^(line-draw|scroll-fill|stack-cards|sticky-scrolly|parallax-soft|counter)$/.test(x)) || all.some((e) => { const s = cs(e); return (s.animationTimeline && !/^(auto|none)?$/.test(s.animationTimeline)) || (s.position === 'sticky' && e !== head && !e.closest('.lp-head')); });
+    const react = !!sec.querySelector('[data-tabs],[data-film],[data-linked],details,[data-fx="spotlight"],[data-fx="tilt"],[data-flip]') || all.some((e) => !/^(A|BUTTON|SUMMARY|INPUT|TEXTAREA|LABEL)$/.test(e.tagName) && !e.closest('.lp-head') && hoverSel.some((q) => { try { return e.matches(q); } catch { return false; } }));
+    const moving = !sec.hasAttribute('data-calm') && (scroll || react);
     const sk = hash(content.map((c) => `${c.tagName.toLowerCase()}${typeof c.className === 'string' && c.className ? '.' + c.className.trim().split(/\s+/)[0] : ''}${sig(c, 1)}`).join('|'));
-    out.push({ id: sec.id, type, variant: sec.getAttribute('data-variant') || '', skeleton: sk, cols, headSide, align, prot, moving, fp: `${sk}|${cols}|${headSide}|${align}|${prot}`, gfx: +(gfx / cArea).toFixed(2), num: +(bigNum / cArea).toFixed(2) });
+    out.push({ id: sec.id, type, variant: sec.getAttribute('data-variant') || '', skeleton: sk, cols, headSide, align, prot, moving, scroll, react, enterMode, calm: sec.hasAttribute('data-calm'), fp: `${sk}|${cols}|${headSide}|${align}|${prot}`, gfx: +(gfx / cArea).toFixed(2), num: +(bigNum / cArea).toFixed(2) });
   }
   return out;
 }
@@ -90,39 +98,46 @@ export function summarize(byPreset) {
   const ids = Object.keys(byPreset), pairs = [];
   for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
     const a = byPreset[ids[i]], b = byPreset[ids[j]], n = Math.min(a.length, b.length);
-    let same = 0; for (let k = 0; k < n; k++) if (a[k].type === b[k].type && a[k].fp === b[k].fp) same++;
-    pairs.push({ a: ids[i], b: ids[j], same, n, ratio: n ? same / n : 0 });
+    // same: 지문 전체(뼈대·열·머리 자리·정렬·주인공)가 같음 · sameS: 구조만(뼈대·주인공) 같음 — 정렬만 바꾼 것은 다르다고 세지 않음
+    let same = 0, sameS = 0; for (let k = 0; k < n; k++) { if (a[k].type !== b[k].type) continue; if (a[k].fp === b[k].fp) same++; if (a[k].skeleton === b[k].skeleton && a[k].prot === b[k].prot) sameS++; }
+    pairs.push({ a: ids[i], b: ids[j], same, sameS, n, ratio: n ? same / n : 0, sratio: n ? sameS / n : 0 });
   }
   const per = ids.map((id) => {
     const s = byPreset[id], n = s.length || 1;
-    return { id, sections: s.length, textOnly: s.filter((x) => x.prot === 'text').length, graphic: s.filter((x) => x.prot === 'figure' || x.prot === 'diagram').length, number: s.filter((x) => x.prot === 'number').length, nonLeft: s.filter((x) => /c|r/.test(x.align) || x.headSide === 'right').length, moving: s.filter((x) => x.moving).length, textRatio: +(s.filter((x) => x.prot === 'text').length / n).toFixed(2) };
+    return { id, sections: s.length, textOnly: s.filter((x) => x.prot === 'text').length, graphic: s.filter((x) => x.prot === 'figure' || x.prot === 'diagram').length, number: s.filter((x) => x.prot === 'number').length, nonLeft: s.filter((x) => /c|r/.test(x.align) || x.headSide === 'right').length, moving: s.filter((x) => x.moving).length, scroll: s.filter((x) => x.scroll && !x.calm).length, react: s.filter((x) => x.react && !x.calm).length, enterKinds: new Set(s.map((x) => x.enterMode).filter(Boolean)).size, textRatio: +(s.filter((x) => x.prot === 'text').length / n).toFixed(2) };
   });
-  const types = {}; for (const id of ids) for (const x of byPreset[id]) (types[x.type] ||= new Set()).add(x.fp);
+  const types = {}; for (const id of ids) for (const x of byPreset[id]) (types[x.type] ||= new Set()).add(`${x.skeleton}|${x.prot}`);
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   return {
     presets: ids.length, pairs: pairs.length,
     over50: pairs.filter((p) => p.ratio > 0.5).length, maxRatio: +Math.max(0, ...pairs.map((p) => p.ratio)).toFixed(2), meanRatio: +mean(pairs.map((p) => p.ratio)).toFixed(2),
-    worst: pairs.slice().sort((x, y) => y.ratio - x.ratio).slice(0, 5).map((p) => `${p.a}×${p.b} ${p.same}/${p.n}`),
+    sOver50: pairs.filter((p) => p.sratio > 0.5).length, sMaxRatio: +Math.max(0, ...pairs.map((p) => p.sratio)).toFixed(2), sMeanRatio: +mean(pairs.map((p) => p.sratio)).toFixed(2),
+    worst: pairs.slice().sort((x, y) => y.sratio - x.sratio || y.ratio - x.ratio).slice(0, 5).map((p) => `${p.a}×${p.b} 구조 ${p.sameS}/${p.n}`),
     meanTextRatio: +mean(per.map((p) => p.textRatio)).toFixed(2), meanGraphic: +mean(per.map((p) => p.graphic)).toFixed(1), minGraphic: Math.min(...per.map((p) => p.graphic)),
-    meanNonLeft: +mean(per.map((p) => p.nonLeft)).toFixed(1), minNonLeft: Math.min(...per.map((p) => p.nonLeft)), meanMoving: +mean(per.map((p) => p.moving)).toFixed(1), meanSections: +mean(per.map((p) => p.sections)).toFixed(1),
+    meanNonLeft: +mean(per.map((p) => p.nonLeft)).toFixed(1), minNonLeft: Math.min(...per.map((p) => p.nonLeft)), meanMoving: +mean(per.map((p) => p.moving)).toFixed(1), meanScroll: +mean(per.map((p) => p.scroll)).toFixed(1), meanReact: +mean(per.map((p) => p.react)).toFixed(1), meanEnterKinds: +mean(per.map((p) => p.enterKinds)).toFixed(1), meanSections: +mean(per.map((p) => p.sections)).toFixed(1),
+    maxTextRatio: Math.max(...per.map((p) => p.textRatio)),
     distinctByType: Object.fromEntries(Object.entries(types).map(([t, s]) => [t, s.size])), per, pairsAll: pairs,
   };
 }
 
 export function markdown(name, S) {
-  const L = [`### ${name}`, '', `- 프리셋 ${S.presets}개 · 쌍 ${S.pairs}개 · 본문 섹션 평균 ${S.meanSections}개`, `- 지문이 절반 넘게 같은 쌍: **${S.over50}** · 가장 비슷한 쌍의 같은 비율: **${Math.round(S.maxRatio * 100)}%** · 평균 ${Math.round(S.meanRatio * 100)}%`, `- 가장 비슷한 쌍: ${S.worst.join(' · ')}`, `- 글만 있는 섹션 비율(평균): **${Math.round(S.meanTextRatio * 100)}%** · 그래픽이 주인공인 섹션(평균/최소): **${S.meanGraphic} / ${S.minGraphic}** · 왼쪽 정렬이 아닌 섹션(평균/최소): **${S.meanNonLeft} / ${S.minNonLeft}** · 첫 화면 밖에서 움직임이 있는 섹션(평균): **${S.meanMoving}**`, `- 섹션 종류별 서로 다른 지문 수(프리셋 ${S.presets}개 가운데): ${Object.entries(S.distinctByType).map(([t, n]) => `${t} ${n}`).join(' · ')}`, '', '| 프리셋 | 섹션 | 글만 | 숫자 | 그래픽 | 왼쪽 아님 | 움직임 |', '|---|--:|--:|--:|--:|--:|--:|'];
-  for (const p of S.per) L.push(`| ${p.id} | ${p.sections} | ${p.textOnly} | ${p.number} | ${p.graphic} | ${p.nonLeft} | ${p.moving} |`);
+  const L = [`### ${name}`, '', `- 프리셋 ${S.presets}개 · 쌍 ${S.pairs}개 · 본문 섹션 평균 ${S.meanSections}개`, `- 구조 지문(뼈대·주인공, 정렬은 뺌)이 절반 넘게 같은 쌍: **${S.sOver50}** · 가장 비슷한 쌍: **${Math.round(S.sMaxRatio * 100)}%** · 평균 **${Math.round(S.sMeanRatio * 100)}%**`, `- 전체 지문(정렬·머리 자리·열 수 포함)이 절반 넘게 같은 쌍: ${S.over50} · 가장 비슷한 쌍 ${Math.round(S.maxRatio * 100)}% · 평균 ${Math.round(S.meanRatio * 100)}%`, `- 가장 비슷한 쌍: ${S.worst.join(' · ')}`, `- 글만 있는 섹션 비율(평균/최대): **${Math.round(S.meanTextRatio * 100)}% / ${Math.round(S.maxTextRatio * 100)}%** · 그래픽이 주인공인 섹션(평균/최소): **${S.meanGraphic} / ${S.minGraphic}** · 왼쪽 정렬이 아닌 섹션(평균/최소): **${S.meanNonLeft} / ${S.minNonLeft}**`,
+    `- 첫 화면 밖 움직임·반응 섹션(평균): **${S.meanMoving}** (스크롤 연동 ${S.meanScroll} · 가리킴·누름 반응 ${S.meanReact}) · 등장 방식 종류(평균): ${S.meanEnterKinds}`, `- 섹션 종류별 서로 다른 구조 지문 수(프리셋 ${S.presets}개 가운데): ${Object.entries(S.distinctByType).map(([t, n]) => `${t} ${n}`).join(' · ')}`, '', '| 프리셋 | 섹션 | 글만 | 숫자 | 그래픽 | 왼쪽 아님 | 움직임·반응 | 스크롤 | 반응 | 등장 종류 |', '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|'];
+  for (const p of S.per) L.push(`| ${p.id} | ${p.sections} | ${p.textOnly} | ${p.number} | ${p.graphic} | ${p.nonLeft} | ${p.moving} | ${p.scroll} | ${p.react} | ${p.enterKinds} |`);
   return L.join('\n');
 }
 
 async function main(argv) {
   const arg = (k, d) => { const i = argv.indexOf('--' + k); return i > 0 ? argv[i + 1] : d; };
+  // --from 결과.json: 브라우저 없이 저장해 둔 지문으로 표만 다시 냄
+  if (arg('from', '')) { const { width, result } = JSON.parse(readFileSync(arg('from'), 'utf8')); const md = Object.entries(result).map(([ex, byPreset]) => markdown(`${ex} · 폭 ${width}px`, summarize(byPreset))); console.log(md.join('\n\n')); return; }
   const E = await import(pathToFileURL(join(ROOT, 'engine/src/index.js')).href);
   const { nodeRuntime } = await import(pathToFileURL(join(ROOT, 'engine/node.js')).href);
   const presets = (arg('presets', '') || E.PRESET_IDS.join(',')).split(',');
-  const examples = arg('examples', 'sel-story,data-lab').split(',');
+  const examples = arg('examples', 'sel-story,data-lab,body-all').split(',');
   const width = +arg('width', 1440), out = arg('out', ''), isStatic = argv.includes('--static');
-  const load = (ex) => JSON.parse(readFileSync(ex.endsWith('.json') ? ex : join(ROOT, 'examples', `${ex}.blueprint.json`), 'utf8'));
+  // body-all = 모든 본문 칸을 담은 시험 설계도(engine/test/fixtures)
+  const load = (ex) => JSON.parse(readFileSync(ex.endsWith('.json') ? ex : ex === 'body-all' ? join(ROOT, 'engine/test/fixtures/body-all.blueprint.json') : join(ROOT, 'examples', `${ex}.blueprint.json`), 'utf8'));
   let chromium = null;
   if (!isStatic) { try { ({ chromium } = await import('playwright')); } catch { try { ({ chromium } = createRequire(import.meta.url)('playwright')); } catch { try { ({ chromium } = createRequire('/opt/node-tools/')('playwright')); } catch { /* 정적 지문으로 */ } } } }
   const tmp = mkdtempSync(join(tmpdir(), 'lpdiv-')), jobs = [];
