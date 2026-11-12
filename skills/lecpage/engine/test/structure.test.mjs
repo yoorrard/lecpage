@@ -69,7 +69,7 @@ const EVENT = `# 2027 교육과정 설명회
 대상: 초등 교원 300명
 
 ## 진행 순서
-14:00~14:10 여는 말
+14:00~14:10 여는 말 교육지원과장
 14:10~14:50 바뀌는 점 윤가온 장학사
 14:50~15:30 학교 적용 한빛나 수석교사
 15:30~16:00 질의응답
@@ -140,6 +140,7 @@ describe('구성 정하기: 신호 → 흐름', () => {
     assert.ok(before(t, 'schedule', 'speakers'), t.join('>'));
     assert.ok(!t.includes('text'), t.join('>'));
     assert.deepEqual(d.sections.find((s) => s.type === 'speakers').items.map((x) => x.name), ['윤가온', '한빛나']);
+    assert.deepEqual(d.sections.find((s) => s.type === 'schedule').items.slice(0, 2).map((x) => [x.title, x.desc]), [['여는 말', '교육지원과장'], ['바뀌는 점', '윤가온 장학사']], '일정표의 담당은 설명으로');
     assert.ok(!t.includes('instructor'), '발표자가 여럿이면 강사 칸 대신 발표자 칸');
     assert.deepEqual(d.structure.suggested.map((x) => x.feature), ['qa', 'poll']);
     assert.match(d.structure.suggested[0].reason, /질의응답/);

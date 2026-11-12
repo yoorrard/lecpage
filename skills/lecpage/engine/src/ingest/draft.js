@@ -255,7 +255,9 @@ export function materialToDraft(material, info = {}) {
   }
 
   // 일정(교재에 시간이 적혀 있을 때만). 발표자 이름이 제목 끝에 붙어 있으면 설명으로 내림
-  const whoTail = (text) => speakers.map((p) => `${p.name} ${p.role}`.trim()).find((w) => w && text.endsWith(w)) || '';
+  // 일정표의 담당 칸이 제목 끝에 붙은 것("개회 및 인사 교육지원과장", "질의응답 발표자 전원")도 설명으로
+  const ROLE_TAIL = /\s([가-힣]*(?:과장|국장|장학사|장학관|수석교사|교감|교장|연구사|연구관)|발표자\s*전원)$/;
+  const whoTail = (text) => speakers.map((p) => `${p.name} ${p.role}`.trim()).find((w) => w && text.endsWith(w)) || (ROLE_TAIL.exec(text)?.index >= 2 ? ROLE_TAIL.exec(text)[1] : '');
   if (timed.length >= 2) {
     S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: timed.map((it) => { const w = whoTail(it.text); return { start: it.start, end: it.end || '', title: w ? it.text.slice(0, -w.length).trim() : it.text, desc: w, part: it.part || '' }; }) };
     slotPage.schedule = d.agenda.page;
