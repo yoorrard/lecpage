@@ -25,22 +25,33 @@ const FIXED_RE = new RegExp(FIXED_TERMS.slice().sort((a, b) => b.length - a.leng
 /** 정해진 용어를 한 덩어리(□)로 가림 */
 export const maskFixed = (s) => s.replace(FIXED_RE, '□');
 
+/** 받침이 있는 한글 글자인가(조사·어미 고르기) */
+const hasBatchim = (ch) => { const c = ch.charCodeAt(0) - 0xac00; return c >= 0 && c <= 11171 && c % 28 !== 0; };
+
 /** 받침이 ㅂ인 글자 뒤의 "니다·니까"(~습니다, ~합니다, ~됩니다, ~입니까) */
 function formalHit(s) {
+  if (/^안녕하세요/.test(s)) return ''; // 강사 자기소개("안녕하세요, ○○입니다")
   for (const m of s.matchAll(/([가-힣]+)니(다|까)(?![가-힣])/g)) {
     const last = m[1][m[1].length - 1];
     if ((last.charCodeAt(0) - 0xac00) % 28 !== 17) continue;
-    if (/(감사합|고맙습|환영합|축하합|반갑습|수고하셨습)$/.test(m[1])) continue; // 굳은 인사말
+    if (/(감사합|고맙습|환영합|축하합|반갑습|수고하셨습|동의합)$/.test(m[1])) continue; // 굳은 인사말, 참가자가 직접 하는 동의 문장
     return m[0].slice(-6);
   }
   const m = /[가-힣]십시오|[가-힣]하시오(?![가-힣])/.exec(s);
   return m ? m[0] : '';
 }
-/** "설정 변경 완료"처럼 풀이말 없이 명사로 끝난 문장 */
-function nounStackHit(s) {
-  for (const part of maskFixed(s).split(/(?<=[.?!])\s+|\n|\s[·|]\s/)) {
-    const m = /^(?:[^\s.!?:]+\s+){1,4}(완료|실패|불가|요망|성공|필요)[.!]?$/.exec(part.trim());
-    if (m) return part.trim().replace(/□/g, '…');
+/**
+ * "설정 변경 완료"처럼 풀이말 없이 명사로 끝난 문장. 알림·오류는 늘, 화면 글은 마침표로 끝낸 문장일 때만 봄
+ * ("답변 완료" 같은 상태 표시·범례는 명사로 써도 됨)
+ */
+function nounStackHit(s, kind) {
+  const SPLIT = /(?<=[.?!])\s+|\n|\s[·|]\s/;
+  const raw = s.split(SPLIT);
+  const masked = maskFixed(s).split(SPLIT); // 정해진 용어는 한 낱말로 셈
+  for (const [i, part] of masked.entries()) {
+    const p = part.trim();
+    if (kind === 'text' && !/[.!]$/.test(p)) continue;
+    if (/^(?:[^\s.!?:]+\s+){1,4}(완료|실패|불가|요망|성공|필요)[.!]?$/.test(p)) return (raw[i] || p).trim();
   }
   return '';
 }
@@ -57,7 +68,7 @@ function errorHit(s, kind) {
 export const COPY_RULES = [
   // ── 고침: AI 특유의 말투·장식 ──
   { id: 'trans', re: /[을를]\s*통해(서)?/, level: 'error', why: '번역투', fix: '"~로", "~에서", "~하며"로 바꾸거나 뺍니다' },
-  { id: 'formal', re: /수\s*있습니다/, level: 'error', why: '참가자 화면은 해요체', fix: '"~할 수 있어요" 또는 그냥 "~해요"' },
+  { id: 'formal', re: /수\s*있습니다/, level: 'error', why: '참가자 화면은 해요체', fix: '"~할 수 있어요" 또는 그냥 "~해요"', not: ['doc'] },
   { id: 'ai', re: /(해|봐|가|와|만들어|알아|살펴|나눠|나누어)\s*보아요/, level: 'error', why: '어색한 권유', fix: '"~해 보세요" 또는 "~해요"' },
   { id: 'ai', re: /함께\s*(해요|해\s*봐요|해\s*보아요|나눠요|만들어요|가요)\s*[!.]?$/, level: 'error', why: '빈 권유 문장', fix: '무엇을 하는지 동사로 바로 씁니다' },
   { id: 'ai', re: /알아보(겠습니다|도록\s*하겠습니다|아요|기로\s*해요|ㄹ까요|볼까요)|알아볼까요/, level: 'error', why: '예고만 하는 문장', fix: '알려 줄 내용을 바로 씁니다' },
@@ -92,31 +103,45 @@ export const COPY_RULES = [
   { id: 'mark', re: /\.{3}/, level: 'warn', why: '마침표 세 개', fix: '줄임표 "…" 한 글자로' },
   { id: 'mark', re: /[가-힣○)]\s?(을\(를\)|를\(을\)|은\(는\)|는\(은\)|이\(가\)|가\(이\)|와\(과\)|과\(와\)|\(으\)로|\(이\)나)/, level: 'warn', why: '조사 병기', fix: '받침에 맞는 조사를 고르거나 조사가 필요 없게 문장을 바꿉니다("○ 뺐어요" → "뺐어요: ○")' },
   { id: 'cta', re: /^(확인|예|네|아니오|아니요|OK|Ok|ok|제출|진행|Yes|No)$/, level: 'warn', why: '뜻이 흐린 단추 이름', fix: '누르면 일어나는 일을 동사로("지우기", "보내기", "닫기")', only: ['button', 'cta'] },
+  { id: 'cta', re: /^취소$/, level: 'warn', why: '"취소"는 하던 일을 멈출 때만', fix: '창만 닫는 단추는 "닫기"(진행 중인 작업을 멈추면 "멈추기"·"취소")', only: ['button', 'cta'] },
 ];
 
 /**
  * 용어 통일: 같은 것을 두 이름으로 부르지 않습니다(docs/writing.md 4절의 표).
- * page: true면 AI가 쓰는 참가자 화면 글에도 적용. unless: 이 말이 함께 있으면 통과(남의 화면 이름 등)
+ * page: true면 AI가 쓰는 참가자 화면 글에도 적용 · unless: 이 말이 함께 있으면 통과(다른 서비스의 화면 이름 등)
+ * only: 'app'이면 앱 화면 글에만 · not: 이 칸에서는 보지 않음 · to: 바꿀 말(고친 안을 만들 때)
  */
 export const TERM_RULES = [
-  { re: /참여자|수강생|연수생/, why: '참가자', fix: '"참가자"', page: true },
-  { re: /(입장|참여|접속)\s?코드/, why: '연수 코드', fix: '"연수 코드"', page: true },
-  { re: /버튼/, why: '단추', fix: '"단추"' },
-  { re: /미리\s보기/, why: '미리보기', fix: '"미리보기"(붙여 씀)' },
-  { re: /QR\s?코드|큐알/, why: 'QR', fix: '"QR"' },
-  { re: /만족도\s?설문/, why: '만족도 조사', fix: '섹션 이름은 "만족도 조사", 문항·응답은 "설문"' },
-  { re: /(파일|ZIP\)?|자료|그림)[을를로]?\s*(파일로\s*)?받(기|았|아요|으세요)|다운로드/, unless: /내려받/, why: '내려받기', fix: '"내려받기", "내려받았어요"' },
+  { re: /참여자|수강생|연수생/, why: '참가자', fix: '"참가자"', to: '참가자', page: true },
+  { re: /(입장|참여|접속)\s?코드/, why: '연수 코드', fix: '"연수 코드"', to: '연수 코드', page: true },
+  { re: /실시간\s?(기능|연결(?![됨돼되]))(?!\s?방식)/, why: '참여 기능', fix: '질문·도움 요청·진행 현황을 묶어 "참여 기능"(서버는 "실시간 서버")', to: '참여 기능', page: true },
+  { re: /클릭/, why: '누르기', fix: '"누르세요", "눌러"(휴대폰에서도 맞는 말)', page: true },
+  { re: /버튼/, why: '단추', fix: '"단추"', to: '단추' },
+  { re: /미리\s보기/, why: '미리보기', fix: '"미리보기"(붙여 씀)', to: '미리보기' },
+  { re: /QR\s?코드|큐알/, why: 'QR', fix: '"QR"(화면 읽기 프로그램용 이름표는 "QR 코드"도 됨)', to: 'QR', not: ['aria'] },
+  { re: /만족도\s?설문/, why: '만족도 조사', fix: '섹션 이름은 "만족도 조사", 문항·응답은 "설문"', to: '만족도 조사' },
+  { re: /다운로드|다운\s?받/, why: '내려받기', fix: '단추는 "받기"·"내려받기", 문장은 "내려받아요"' },
   { re: /삭제/, why: '지우기', fix: '"지우기", "지웠어요"(개인정보 안내의 법률 용어는 그대로)' },
-  { re: /프로젝트/, unless: /Vercel|Supabase|Cloudflare|구글|Google|GitHub|Netlify|그\s프로젝트|프로젝트\s?(URL|이름|만들기)|새\s프로젝트|결제/, why: '연수(만든 것) · 연수 파일(저장한 것)', fix: '"연수", "연수 파일"(다른 서비스의 프로젝트는 그대로)', only: 'app' },
-  { re: /배포/, unless: /Apps\s?Script|웹\s앱|새\s배포|배포\s관리|배포\s보호|배포할\s때|배포를\s누|배포\s→|ADMIN_KEY/, why: '공개·올리기', fix: '"공개", "올리기"(다른 서비스 화면의 "배포"는 그대로)', only: 'app' },
-  { re: /(?<![이가-힣])메일/, why: '이메일', fix: '"이메일"' },
-  { re: /이미지/, why: '그림', fix: '"그림"(찍은 것은 "사진")' },
-  { re: /더하(면|고|기|세요)|더할\s/, why: '추가', fix: '"추가"(교재·파일은 "넣기")' },
-  { re: /에러|재시도|다시\s시도/, why: '오류 · 다시 하기', fix: '"오류", "다시 하기"' },
-  { re: /스마트폰|핸드폰|모바일(?!\s?(앱|웹))/, why: '휴대폰', fix: '"휴대폰"' },
-  { re: /새로고침/, why: '새로 고침', fix: '"새로 고침"(띄어 씀)' },
-  { re: /닉네임/, why: '별명', fix: '"별명"' },
+  { re: /프로젝트/, unless: /Vercel|Supabase|Cloudflare|구글|Google|GitHub|Netlify|그\s프로젝트|프로젝트\s?(URL|이름|만들기)|새\s프로젝트|결제/, why: '연수 · 저장한 파일', fix: '만든 것은 "연수", .lecpage는 "저장한 파일"(단추 "파일로 저장"·"저장한 파일 열기"와 같게). 다른 서비스의 프로젝트는 그대로', only: 'app' },
+  { re: /배포/, unless: /Apps\s?Script|웹\s앱|새\s배포|배포\s관리|배포\s보호|배포할\s때|배포를\s누|배포\s→|ADMIN_KEY/, why: '공개 · 올리기', fix: '"공개", "올리기"(다른 서비스 화면의 "배포"는 그대로)', only: 'app' },
+  { re: /이미지/, why: '그림', fix: '"그림"(찍은 것은 "사진")', to: '그림' },
+  { re: /(?<![가-힣])더하기$/, why: '추가', fix: '단추는 "추가"(교재·파일은 "넣기"). 문장 속 "더하다"는 그대로', to: '추가' },
+  { re: /에러|재시도|다시\s시도/, why: '오류 · 다시 하기', fix: '"오류", "다시 해 주세요"' },
+  { re: /스마트폰|핸드폰|모바일(?!\s?(앱|웹))/, why: '휴대폰', fix: '"휴대폰"', to: '휴대폰' },
+  { re: /새로고침/, why: '새로 고침', fix: '"새로 고침"(띄어 씀)', to: '새로 고침' },
+  { re: /닉네임/, why: '별명', fix: '"별명"', to: '별명' },
 ];
+
+/** 용어 점검. group: 'app' | 'page' · pageOnly: 참가자 화면에도 쓰는 용어만 */
+function termHits(s, kind, group, pageOnly) {
+  const out = [];
+  for (const t of TERM_RULES) {
+    if ((pageOnly && !t.page) || (t.only && t.only !== group) || (t.not && t.not.includes(kind))) continue;
+    const m = t.re.exec(s);
+    if (m && !(t.unless && t.unless.test(s))) out.push({ id: 'term', level: 'warn', why: `용어: ${t.why}`, fix: t.fix, hit: m[0] });
+  }
+  return out;
+}
 
 /** 대문자 영어 낱말 중 장식이 아닌 것 */
 const CAPS_OK = new Set(['QR', 'URL', 'CSV', 'PDF', 'PPT', 'PPTX', 'HWP', 'HWPX', 'DOCX', 'AI', 'FAQ', 'OX', 'PART', 'ID', 'SNS', 'API', 'USB', 'LAN', 'PC', 'HTML', 'CC', 'KOGL', 'NEIS', 'SEL', 'MP3', 'MP4', 'TXT', 'LINK', 'FILE', 'ZIP', 'GPT', 'IT', 'STEAM', 'UDL', 'PBL', 'KST', 'NAS', 'SQL', 'JSON', 'PNG', 'JPG', 'MIT', 'ADMIN_KEY']);
@@ -127,9 +152,10 @@ export const LENGTH_LIMITS = { nav: 5, cta: 14, button: 14, title: 34, label: 20
 /**
  * 문구 하나 점검.
  * kind: nav·cta·button·title·text(강의 페이지) + label·toast·error·aria·placeholder(앱 화면) + doc(개인정보 안내·약관·문서: 말투는 보지 않음)
+ * opts.terms: 'page'(기본: 참가자 화면에도 쓰는 용어만) | 'all'(앱 화면 글까지) | 'none' · opts.group: 'app' | 'page'
  * @returns {{id:string, level:string, why:string, fix:string, hit:string}[]}
  */
-export function lintText(text, kind = 'text') {
+export function lintText(text, kind = 'text', opts = {}) {
   const s = String(text || '').trim();
   if (!s) return [];
   const out = [];
@@ -139,9 +165,10 @@ export function lintText(text, kind = 'text') {
     const hit = r.find ? r.find(src, kind) : (r.re.exec(src) || [''])[0];
     if (hit) out.push({ id: r.id, level: r.level, why: r.why, fix: r.fix, hit });
   }
+  const terms = opts.terms || 'page';
   if (kind !== 'doc') {
     const e = errorHit(s, kind); if (e) out.push({ id: 'error', level: 'warn', ...e });
-    for (const t of TERM_RULES) { if (!t.page) continue; const m = t.re.exec(s); if (m && !(t.unless && t.unless.test(s))) out.push({ id: 'term', level: 'warn', why: `용어: ${t.why}`, fix: t.fix, hit: m[0] }); }
+    if (terms !== 'none') out.push(...termHits(s, kind, opts.group || 'page', terms !== 'all'));
   }
   // 영어 대문자 장식(DATE, SPEAKER, TODAY'S WORKSHOP): 글의 절반 넘게가 대문자 낱말일 때만. "COUNTIFS로 세세요" 같은 함수 이름은 통과
   const caps = (s.match(/\b[A-Z][A-Z'’]{2,}\b/g) || []).filter((w) => !CAPS_OK.has(w.replace(/['’].*/, '')));
@@ -151,6 +178,44 @@ export function lintText(text, kind = 'text') {
   if (lim && len > lim) out.push({ id: 'len', level: 'warn', why: `${kind} ${lim}자 넘음(${len}자)`, fix: '짧은 낱말·동사로', hit: s.slice(0, 20) });
   if (kind === 'text' || kind === 'error') { const long = s.split(/(?<=[.?!요다])\s+|\n/).find((x) => [...x].length > LENGTH_LIMITS.sentence); if (long) out.push({ id: 'len', level: 'warn', why: `문장이 ${LENGTH_LIMITS.sentence}자 넘음`, fix: '둘로 나눕니다', hit: long.slice(0, 24) + '…' }); }
   return out;
+}
+
+/** 기계적으로 바꿔도 뜻이 같은 것만 고친 안(어미·피동·문장부호·용어). 바꿀 게 없으면 '' */
+const jong = (ch) => (ch.charCodeAt(0) - 0xac00) % 28;
+const pick = (c, a, b) => (hasBatchim(c) ? a : b);
+const VERB_I = new Set([...'쌓놓보쓰모붙줄늘높먹속섞묶덮닫끓녹죽꺾깎들벌']);
+// 합니다체 → 해요체: ㅆ 받침(했·었·겠·있…)과 없·않·합·됩·입만. 규칙 활용이라 틀리지 않음(받·듣·고르 같은 것은 사람이 고침)
+const FORMAL_FIX = [
+  [/([가-힣])습니다(?=[.?!\s]|$)/g, (m, c) => (c === '않' ? '않아요' : c === '없' || jong(c) === 20 ? c + '어요' : m)],
+  [/([가-힣])습니까\?/g, (m, c) => (c === '않' || c === '없' || jong(c) === 20 ? c + '나요?' : m)],
+  [/합니다(?=[.?!\s]|$)/g, '해요'], [/됩니다(?=[.?!\s]|$)/g, '돼요'], [/십시오/g, '세요'],
+  // "○○입니다"(이다)만. "쌓입니다·보입니다"처럼 한 글자 줄기에 -이-가 붙은 움직씨는 그대로 둠
+  [/(^|[^가-힣])?([가-힣]+)입니다(?=[.?!\s]|$)/g, (m, pre = '', w) => (w.length === 1 && VERB_I.has(w) ? m : pre + w + pick(w[w.length - 1], '이에요', '예요'))],
+];
+const OTHER_FIX = [
+  [/되어요/g, '돼요'],
+  [/(완료|저장|변경|설정|등록|삭제|전송|적용|복사|생성|추가|연결|처리|반영|수정|제출|발송|공개|업로드|게시)(?:이|가)?\s?(?:되었|됐)(?:습니다|어요)/g, '$1했어요'],
+  [/([가-힣])(을\(를\)|를\(을\))/g, (_, c) => c + pick(c, '을', '를')], [/([가-힣])(은\(는\)|는\(은\))/g, (_, c) => c + pick(c, '은', '는')],
+  [/([가-힣])(이\(가\)|가\(이\))/g, (_, c) => c + pick(c, '이', '가')],
+  [/\.{3}/g, '…'], [/([요다])\s?!+/g, '$1.'],
+];
+const PARTICLE = { 을: ['을', '를'], 를: ['을', '를'], 이: ['이', '가'], 가: ['이', '가'], 은: ['은', '는'], 는: ['은', '는'], 과: ['과', '와'], 와: ['과', '와'] };
+/**
+ * 기계적으로 바꿔도 뜻이 같은 것만 고친 안: 합니다체 어미·피동·조사 병기·문장부호·용어(뒤 조사까지 맞춤).
+ * opts.terms: 'page'(기본) | 'all' | 'none'. 바꿀 게 없으면 ''
+ */
+export function suggestFix(text, kind = 'text', opts = {}) {
+  const src = String(text || ''); let s = src;
+  if (kind === 'doc') return '';
+  if (formalHit(s) || /수\s*있습니다/.test(s)) for (const [re, to] of FORMAL_FIX) s = s.replace(re, to);
+  for (const [re, to] of OTHER_FIX) s = s.replace(re, to);
+  const terms = opts.terms || 'page';
+  if (terms !== 'none') for (const t of TERM_RULES) {
+    if (!t.to || (terms !== 'all' && !t.page) || (t.not && t.not.includes(kind)) || (t.unless && t.unless.test(s))) continue;
+    const last = t.to[t.to.length - 1];
+    s = s.replace(new RegExp(`(?:${t.re.source})(?<pp>을|를|이|가|은|는|과|와)?(?![가-힣])`, 'g'), (...a) => { const p = a[a.length - 1].pp; return t.to + (p ? pick(last, ...PARTICLE[p]) : ''); });
+  }
+  return s !== src ? s : '';
 }
 
 /** AI 프롬프트에 넣을 짧은 규칙 문단 */

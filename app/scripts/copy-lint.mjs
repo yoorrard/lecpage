@@ -20,7 +20,7 @@ import { createRequire } from 'node:module';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const ENGINE = join(ROOT, 'skills', 'lecpage', 'engine');
-const { lintText, TERM_RULES } = await import(pathToFileURL(join(ENGINE, 'src', 'prompt', 'copy-rules.js')).href);
+const { lintText, suggestFix } = await import(pathToFileURL(join(ENGINE, 'src', 'prompt', 'copy-rules.js')).href);
 
 const HANGUL = /[가-힣]/;
 const rel = (p) => relative(ROOT, p).split(sep).join('/');
@@ -71,6 +71,11 @@ const SKIP_ATTRS = new Set(['class', 'className', 'id', 'key', 'style', 'href', 
 const ATTR_KIND = { 'aria-label': 'aria', title: 'aria', alt: 'aria', 'aria-description': 'aria', 'aria-roledescription': 'aria', placeholder: 'placeholder', label: 'label', hint: 'text', 'data-tip': 'aria' };
 const PROP_KIND = { label: 'label', title: 'title', t: 'title', name: 'title', heading: 'title', placeholder: 'placeholder', cta: 'button', btn: 'button', button: 'button', next: 'button' };
 const CALL_KIND = { toast: 'toast', Error: 'error', AiError: 'error', TypeError: 'error', RangeError: 'error', confirm: 'confirm', alert: 'confirm', prompt: 'confirm', fail: 'error' };
+// 화면 글이 아닌 것: 개인정보 안내·운영 안내·디자인 규칙 같은 문서(합니다체 그대로, 말투는 보지 않음)와 AI에게 주는 지시문(보지 않음)
+const DOC_FN = /^(renderPrivacy|designDoc|opsDoc|conceptBlock|privacy\w*|terms\w*|license\w*)$/i;
+const PROMPT_FN = /^(make\w*Prompt|promptFor|build\w*Prompt)$/;
+const PROMPT_VAR = /^(RULES|PROMPT|SYSTEM|INSTR)/;
+const DOC_VAR = /^PROVIDER_WHY$/; // 운영 안내(opsDoc)에만 들어가는 설명
 
 const nameOf = (n) => !n ? '' : n.type === 'JSXIdentifier' || n.type === 'Identifier' ? n.name : n.type === 'JSXMemberExpression' ? `${nameOf(n.object)}.${nameOf(n.property)}` : n.type === 'StringLiteral' ? n.value : '';
 const calleeName = (c) => !c ? '' : c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' || c.type === 'OptionalMemberExpression' ? nameOf(c.property) : '';
@@ -106,11 +111,11 @@ function htmlPieces(val, baseKind) {
   const out = []; const { text } = val;
   const re = /<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/g;
   let last = 0; let kind = baseKind; let m; const stack = [];
-  const push = (seg, at, k) => { const t = squash(seg.replace(/&nbsp;/g, ' ').replace(/&middot;/g, '·').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')); if (HANGUL.test(t)) out.push({ text: t, kind: k, line: lineAt(val, at + (seg.length - seg.trimStart().length)) }); };
+  const push = (seg, at, k) => { const t = squash(seg.replace(/&nbsp;/g, ' ').replace(/&middot;/g, '·').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')); if (HANGUL.test(t)) out.push({ text: t, kind: baseKind === 'doc' && k !== 'skip' ? 'doc' : k, line: lineAt(val, at + (seg.length - seg.trimStart().length)) }); };
   while ((m = re.exec(text))) {
     push(text.slice(last, m.index), last, kind); last = re.lastIndex;
     const tag = m[2].toLowerCase(); const attrs = m[3] || '';
-    for (const a of attrs.matchAll(/\b(aria-label|placeholder|title|alt|data-tip)\s*=\s*"([^"]*)"/g)) if (HANGUL.test(a[2])) out.push({ text: squash(a[2]), kind: ATTR_KIND[a[1]] || 'aria', line: lineAt(val, m.index + a.index) });
+    for (const a of attrs.matchAll(/\b(aria-label|placeholder|title|alt|data-tip)\s*=\s*"([^"]*)"/g)) if (HANGUL.test(a[2]) && !/\$\{/.test(a[2])) out.push({ text: squash(a[2]), kind: baseKind === 'doc' ? 'doc' : ATTR_KIND[a[1]] || 'aria', line: lineAt(val, m.index + a.index) });
     if (m[1]) { stack.pop(); kind = stack[stack.length - 1] || baseKind; continue; }
     if (/^(br|hr|img|input|meta|link|wbr)$/.test(tag) || /\/\s*$/.test(attrs)) continue;
     if (INLINE.has(tag) && !/class="[^"]*\b(btn|lp-btn|button)\b/.test(attrs)) { stack.push(kind); continue; }
@@ -151,7 +156,9 @@ export function extract(source, file = 'x.jsx') {
   };
   const isInlineEl = (el) => INLINE.has(nameOf(el.openingElement.name)) && elKind(el) !== 'button';
 
-  /** 식 안을 걸으며 JSX와 문자열을 찾음. ctx: { kind, where, skip } */
+  /** 함수 안으로 들어갈 때: 문서 함수면 doc, AI 지시문 함수면 건너뜀 */
+  const fnCtx = (ctx, fn) => (!fn ? ctx : PROMPT_FN.test(fn) ? { ...ctx, skip: true } : DOC_FN.test(fn) ? { ...ctx, doc: true } : ctx);
+  /** 식 안을 걸으며 JSX와 문자열을 찾음. ctx: { kind, where, skip, doc } */
   function visit(n, parent, ctx) {
     if (!n || typeof n !== 'object') return;
     if (Array.isArray(n)) { for (const x of n) visit(x, parent, ctx); return; }
@@ -160,9 +167,13 @@ export function extract(source, file = 'x.jsx') {
       case 'JSXElement': scope(n, ctx); return;
       case 'JSXFragment': children(n.children, "text", n.loc.start.line); return;
       case 'ImportDeclaration': case 'ExportAllDeclaration': case 'TSTypeAnnotation': case 'RegExpLiteral': case 'Directive': return;
+      case 'FunctionDeclaration': case 'ObjectMethod': case 'ClassMethod': {
+        const fn = nameOf(n.id || n.key);
+        visit(n.body, n, fnCtx(ctx, fn)); return;
+      }
       case 'StringLiteral': case 'TemplateLiteral': {
         if (n.type === 'TemplateLiteral') for (const e of n.expressions) visit(e, n, ctx);
-        if (!ctx.skip) addStr(n, ctx.kind || 'text', ctx.where);
+        if (!ctx.skip) addStr(n, ctx.doc ? 'doc' : ctx.kind || 'text', ctx.where);
         return;
       }
       case 'TaggedTemplateExpression': visit(n.quasi.expressions, n, ctx); return;
@@ -172,8 +183,11 @@ export function extract(source, file = 'x.jsx') {
           // 'A' + x + 'B' → 한 문구 "A{…}B"
           const leaves = []; (function flat(x) { if (x.type === 'BinaryExpression' && x.operator === '+') { flat(x.left); flat(x.right); } else leaves.push(x); })(n);
           if (leaves.some((x) => isStr(x) && HANGUL.test(strValue(x).text))) {
-            const text = leaves.map((x) => (x.type === 'StringLiteral' ? x.value : x.type === 'TemplateLiteral' ? flatTemplate(x).text : '{…}')).join('');
-            if (!ctx.skip) { if (/<[a-zA-Z][^>]*>/.test(text)) { for (const x of leaves) if (isStr(x)) addStr(x, ctx.kind || 'text', ctx.where); } else add(text, ctx.kind || 'text', n.loc.start.line, ctx.where); }
+            // 이어 붙인 조각을 한 글로(조각마다 시작 줄을 기억). HTML이면 태그 단위로 다시 나눔
+            let text = ''; const marks = [];
+            for (const x of leaves) { const v = isStr(x) ? strValue(x) : { text: '{…}', marks: [[0, x.loc.start.line]] }; for (const [at, ln] of v.marks) marks.push([text.length + at, ln]); text += v.text; }
+            const kind0 = ctx.doc ? 'doc' : ctx.kind || 'text';
+            if (!ctx.skip) { if (/<[a-zA-Z][^>]*>/.test(text)) { for (const p of htmlPieces({ text, marks }, kind0)) add(p.text, p.kind, p.line, ctx.where || 'html'); } else add(text, kind0, n.loc.start.line, ctx.where); }
             for (const x of leaves) { if (x.type === 'TemplateLiteral') visit(x.expressions, x, ctx); else if (!isStr(x)) visit(x, n, ctx); }
             return;
           }
@@ -198,7 +212,8 @@ export function extract(source, file = 'x.jsx') {
       case 'ThrowStatement': visit(n.argument, n, { ...ctx, kind: 'error', where: 'throw' }); return;
       case 'VariableDeclarator': {
         const id = nameOf(n.id);
-        visit(n.init, n, /^(RE|RX|PAT|KEYWORDS?|STOP|ALIASES?)_?|_(RE|RX)$/.test(id) ? { ...ctx, skip: true } : ctx);
+        const fnInit = n.init && /Function/.test(n.init.type);
+        visit(n.init, n, /^(RE|RX|PAT|KEYWORDS?|STOP|ALIASES?)_?|_(RE|RX)$/.test(id) || PROMPT_VAR.test(id) ? { ...ctx, skip: true } : DOC_VAR.test(id) ? { ...ctx, doc: true } : fnInit ? fnCtx(ctx, id) : ctx);
         return;
       }
       default:
@@ -260,17 +275,15 @@ export function extract(source, file = 'x.jsx') {
 }
 
 // ── 점검 ──
-const LINT_KIND = { button: 'button', title: 'title', label: 'label', toast: 'toast', error: 'error', confirm: 'text', status: 'text', aria: 'aria', placeholder: 'placeholder', text: 'text' };
+const LINT_KIND = { button: 'button', title: 'title', label: 'label', toast: 'toast', error: 'error', confirm: 'text', status: 'text', aria: 'aria', placeholder: 'placeholder', text: 'text', doc: 'doc' };
 export function lintUnits(units) {
   const out = [];
   for (const u of units) {
     const text = u.text.replace(/\{…\}/g, '○');
-    for (const f of lintText(text, LINT_KIND[u.kind] || 'text')) out.push({ file: u.file, line: u.line, kind: u.kind, text: u.text, rule: f.id || f.why, why: f.why, level: f.level, hit: f.hit, fix: f.fix, group: u.group });
-    for (const t of TERM_RULES || []) {
-      if (t.only && t.only !== u.group) continue;
-      const m = t.re.exec(text); if (!m || (t.unless && t.unless.test(text))) continue;
-      out.push({ file: u.file, line: u.line, kind: u.kind, text: u.text, rule: 'term', why: `용어: ${t.why}`, level: t.level || 'warn', hit: m[0], fix: t.fix, group: u.group });
-    }
+    const kind = LINT_KIND[u.kind] || 'text'; const opts = { terms: 'all', group: u.group };
+    const found = lintText(text, kind, opts);
+    const fixed = found.length ? suggestFix(text, kind, opts).replace(/○/g, '{…}') : '';
+    for (const f of found) out.push({ file: u.file, line: u.line, kind: u.kind, text: u.text, rule: f.id, why: f.why, level: f.level, hit: f.hit, fix: f.fix, fixed, group: u.group });
   }
   return out;
 }
@@ -285,30 +298,70 @@ export function run(paths = [], only = '') {
 }
 
 // ── 보고 ──
+const RULE_NAME = { ai: 'AI 티·상투·과장', deco: '장식(이모지·영어 대문자)', plain: '흔한 용어 풀어쓰기', formal: '합니다체 섞임', honor: '과한 높임', passive: '수동 표현', noun: '명사 나열', trans: '번역투·공문투', error: '오류문에 다음 할 일 없음', mark: '문장부호', cta: '뜻이 흐린 단추 이름', len: '길이', term: '용어 통일' };
+// 심한 정도: 읽고 헷갈리거나 막히는 것부터. 고침 > 오류문 > 말투 > 모양 > 길이·용어. 알림·오류·단추는 더 무겁게, 화면 읽기 전용 이름표는 가볍게
+const WEIGHT = { error: 60, honor: 40, formal: 38, trans: 35, cta: 35, noun: 30, mark: 28, ai: 25, passive: 25, deco: 20, plain: 20, len: 12, term: 10 };
+const KIND_BONUS = { toast: 10, error: 10, button: 6, title: 4, label: 2, aria: -10 };
+const SCREEN = {
+  'app/src/pages/Help.jsx': '도움말', 'app/src/pages/Home.jsx': '첫 화면', 'app/src/pages/Demo.jsx': '체험하기', 'app/src/pages/Settings.jsx': '설정', 'app/src/pages/Gallery.jsx': '디자인 갤러리',
+  'app/src/pages/steps/Start.jsx': '1단계 교재 넣기', 'app/src/pages/steps/Edit.jsx': '2단계 살펴보고 고치기', 'app/src/pages/steps/Content.jsx': '2단계 › 내용', 'app/src/pages/steps/DesignPanel.jsx': '2단계 › 디자인',
+  'app/src/pages/steps/Share.jsx': '3단계 공개하기', 'app/src/components/Publish.jsx': '3단계 › 올릴 곳 연결', 'app/src/components/LiveSetup.jsx': '참여 기능 연결', 'app/src/components/ItemEditor.jsx': '2단계 › 칸 고치기',
+  'app/src/components/ReviewChat.jsx': '2단계 › 수정 요청', 'app/src/components/AiPanel.jsx': 'AI로 만들기·다듬기', 'app/src/components/AiConnect.jsx': 'AI 연결', 'app/src/lib/ai-guides.jsx': 'AI 키 만드는 법',
+  'app/src/lib/ai.js': 'AI 오류 문구', 'app/src/lib/deploy.js': '공개 진행·오류 문구',
+  'skills/lecpage/engine/src/render/pages.js': '강의 페이지 틀(머리·바닥·발표·포스터·점검)', 'skills/lecpage/engine/src/render/sections.js': '강의 페이지 섹션', 'skills/lecpage/engine/src/render/hero.js': '강의 페이지 첫 화면',
+  'skills/lecpage/engine/runtime/console.js': '강사 화면', 'skills/lecpage/engine/runtime/screen.js': '발표 화면', 'skills/lecpage/engine/runtime/lecpage.js': '참가자 화면 동작', 'skills/lecpage/engine/runtime/live/core.js': '참여 기능(실시간)',
+  'skills/lecpage/engine/runtime/fx/embed.js': '효과 견본(갤러리)', 'skills/lecpage/engine/runtime/review/annotate.js': '수정 요청 표시 도구',
+};
+export const screenOf = (file) => SCREEN[file] || file.replace(/^.*\//, '');
 const chars = (s) => [...s.replace(/\{…\}/g, '').replace(/\s+/g, '')].length;
+const one = (s, n = 48) => { const t = s.replace(/\n/g, ' ').replace(/\|/g, '/'); return [...t].length > n ? [...t].slice(0, n).join('') + '…' : t; };
+const short = (f) => f.replace(/^(app\/src|skills\/lecpage\/engine)\//, '');
+
+/** 문구 하나의 심한 정도(가장 센 것 + 나머지의 30%) */
+export function severity(fs) {
+  const sc = fs.map((f) => (f.level === 'error' ? 100 : WEIGHT[f.rule] || 10) + (KIND_BONUS[f.kind] || 0) + (f.group === 'page' ? 5 : 0)).sort((a, b) => b - a);
+  return sc.length ? sc[0] + Math.round(sc.slice(1).reduce((a, b) => a + b, 0) * 0.3) : 0;
+}
+export function worst(findings, n = 30) {
+  const m = new Map();
+  for (const f of findings) { const k = `${f.file}:${f.line}|${f.text}`; const v = m.get(k) || { ...f, all: [] }; v.all.push(f); m.set(k, v); }
+  return [...m.values()].map((v) => ({ ...v, score: severity(v.all) })).sort((a, b) => b.score - a.score).slice(0, n);
+}
 function byRule(findings) {
   const m = new Map();
-  for (const f of findings) { const k = `${f.level}|${f.why.replace(/\(\d+자\)/, '').replace(/^용어: .*/, '용어 통일')}`; const v = m.get(k) || { level: f.level, why: k.split('|')[1], app: 0, page: 0, ex: f }; v[f.group === 'app' ? 'app' : 'page']++; m.set(k, v); }
+  for (const f of findings) {
+    const k = `${f.level}|${f.rule}`; const v = m.get(k) || { level: f.level, rule: f.rule, whys: new Set(), app: 0, page: 0, ex: f };
+    if (f.rule !== 'term') v.whys.add(f.why.replace(/\(\d+자\)$/, ''));
+    v[f.group === 'app' ? 'app' : 'page']++; m.set(k, v);
+  }
   return [...m.values()].sort((a, b) => (a.level === b.level ? b.app + b.page - a.app - a.page : a.level === 'error' ? -1 : 1));
 }
-function byFile(units) {
+function byScreen(units) {
   const m = new Map();
-  for (const u of units) { if (u.kind === 'aria') continue; const v = m.get(u.file) || { file: u.file, n: 0, chars: 0, long: 0 }; v.n++; v.chars += chars(u.text); if (chars(u.text) > 70) v.long++; m.set(u.file, v); }
+  for (const u of units) { if (u.kind === 'aria' || u.kind === 'doc') continue; const v = m.get(u.file) || { file: u.file, n: 0, chars: 0, long: 0 }; v.n++; v.chars += chars(u.text); if (chars(u.text) > 70) v.long++; m.set(u.file, v); }
   return [...m.values()].sort((a, b) => b.chars - a.chars);
 }
-function report({ units, findings }) {
+export function termTable(findings) {
+  const tm = new Map();
+  for (const f of findings.filter((x) => x.rule === 'term')) {
+    const v = tm.get(f.why) || { to: f.why.replace(/^용어: /, ''), fix: f.fix, n: 0, hits: new Map(), where: [] };
+    v.n++; v.hits.set(f.hit, (v.hits.get(f.hit) || 0) + 1); if (v.where.length < 3) v.where.push(`${f.file.replace(/^.*\//, '')}:${f.line}`); tm.set(f.why, v);
+  }
+  return [...tm.values()].sort((a, b) => b.n - a.n);
+}
+export function report({ units, findings }, { top = 30 } = {}) {
   const L = [];
   const e = findings.filter((f) => f.level === 'error').length;
-  L.push(`문구 ${units.length}개(앱 ${units.filter((u) => u.group === 'app').length} · 강의 페이지 ${units.filter((u) => u.group === 'page').length}), 고침 ${e}건 · 살핌 ${findings.length - e}건`, '');
-  L.push('| 규칙 | 수준 | 앱 | 강의 페이지 | 예 |', '|---|---|---:|---:|---|');
-  for (const r of byRule(findings)) L.push(`| ${r.why} | ${r.level === 'error' ? '고침' : '살핌'} | ${r.app} | ${r.page} | \`${r.ex.file}:${r.ex.line}\` ${r.ex.text.slice(0, 44).replace(/\|/g, '/').replace(/\n/g, ' ')}${r.ex.text.length > 44 ? '…' : ''} |`);
-  L.push('', '| 파일 | 문구 수 | 글자 수 | 70자 넘는 문구 |', '|---|---:|---:|---:|');
-  for (const f of byFile(units).slice(0, 25)) L.push(`| \`${f.file}\` | ${f.n} | ${f.chars.toLocaleString('en-US')} | ${f.long} |`);
-  const terms = findings.filter((f) => f.rule === 'term');
-  const tm = new Map();
-  for (const f of terms) { const v = tm.get(f.why) || { why: f.why, fix: f.fix, n: 0, hits: new Set(), where: [] }; v.n++; v.hits.add(f.hit); if (v.where.length < 3) v.where.push(`${f.file}:${f.line}`); tm.set(f.why, v); }
-  L.push('', '| 용어 | 건수 | 쓰인 꼴 | 통일 | 예 |', '|---|---:|---|---|---|');
-  for (const t of [...tm.values()].sort((a, b) => b.n - a.n)) L.push(`| ${t.why.replace(/^용어: /, '')} | ${t.n} | ${[...t.hits].slice(0, 5).join(', ')} | ${t.fix} | ${t.where.map((w) => `\`${w}\``).join(' ')} |`);
+  const nu = (g) => units.filter((u) => u.group === g).length;
+  L.push(`문구 ${units.length}개(앱 ${nu('app')} · 강의 페이지 ${nu('page')}, 그중 문서 ${units.filter((u) => u.kind === 'doc').length}개는 말투를 보지 않음) · 고침 ${e}건 · 살핌 ${findings.length - e}건`, '');
+  L.push('### 규칙별 건수', '', '| 규칙 | 수준 | 앱 | 강의 페이지 | 예 |', '|---|---|---:|---:|---|');
+  for (const r of byRule(findings)) L.push(`| ${RULE_NAME[r.rule] || r.rule}${r.whys.size ? ` (${[...r.whys].slice(0, 3).join(' · ')})` : ''} | ${r.level === 'error' ? '고침' : '살핌'} | ${r.app} | ${r.page} | \`${r.ex.file.replace(/^.*\//, '')}:${r.ex.line}\` ${one(r.ex.text, 36)} |`);
+  L.push('', `### 심한 것 ${top}개`, '', '| # | 곳 | 칸 | 문구 | 걸린 규칙 | 고친 안(기계로 고친 것) 또는 고칠 방향 |', '|---:|---|---|---|---|---|');
+  worst(findings, top).forEach((w, i) => L.push(`| ${i + 1} | \`${short(w.file)}:${w.line}\` | ${w.kind} | ${one(w.text, 56)} | ${[...new Set(w.all.map((f) => (RULE_NAME[f.rule] || f.rule) + (f.rule === 'term' ? `(${f.hit}→${f.why.replace(/^용어: /, '')})` : '')))].join(', ')} | ${w.fixed ? one(w.fixed, 56) : one(w.all[0].fix, 44)} |`));
+  L.push('', '### 용어 불일치', '', '| 통일할 말 | 건수 | 쓰인 꼴(건수) | 기준 | 예 |', '|---|---:|---|---|---|');
+  for (const t of termTable(findings)) L.push(`| ${t.to} | ${t.n} | ${[...t.hits].map(([h, c]) => `${h}(${c})`).slice(0, 5).join(', ')} | ${t.fix} | ${t.where.map((w) => `\`${w}\``).join(' ')} |`);
+  L.push('', '### 글이 많은 화면', '', '| # | 화면 | 파일 | 문구 수 | 글자 수(공백 뺌) | 70자 넘는 문구 |', '|---:|---|---|---:|---:|---:|');
+  byScreen(units).slice(0, 15).forEach((f, i) => L.push(`| ${i + 1} | ${screenOf(f.file)} | \`${f.file.replace(/^.*\//, '')}\` | ${f.n} | ${f.chars.toLocaleString('en-US')} | ${f.long} |`));
   return L.join('\n');
 }
 
@@ -322,7 +375,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   if (has('json')) console.log(JSON.stringify(res.findings.map(({ group, ...f }) => f), null, 2));
   else if (has('report')) console.log(report(res));
   else {
-    for (const f of res.findings) console.log(`${f.level === 'error' ? '고침' : '살핌'}  ${f.file}:${f.line}  [${f.kind}] "${f.text.slice(0, 60).replace(/\n/g, ' ')}${f.text.length > 60 ? '…' : ''}"  ${f.why}("${f.hit}") → ${f.fix}`);
+    for (const f of res.findings) console.log(`${f.level === 'error' ? '고침' : '살핌'}  ${f.file}:${f.line}  [${f.kind}] "${one(f.text, 60)}"  ${f.why}("${f.hit}") → ${f.fixed ? `"${one(f.fixed, 60)}"` : f.fix}`);
     const e = res.findings.filter((f) => f.level === 'error').length;
     console.log(`\n문구 ${res.units.length}개 · 고칠 곳 ${e}개 · 살필 곳 ${res.findings.length - e}개`);
   }
