@@ -69,7 +69,8 @@
   }
   // 손으로 칠 주소: 강사가 넣은 짧은 주소가 있으면 그것을 크게 보여 주고 원래 주소는 그 아래 작게.
   // QR과 [주소 복사]는 언제나 원래 주소라서 짧은 주소 서비스가 멈추거나 막혀도 들어올 수 있습니다.
-  function bare(u) { return String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); }
+  // 한글이 든 주소(joo.is/우리연수)는 %EC… 대신 한글로 보여 줌
+  function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
   function shortShown() { var s = bare(DATA.shortUrl), u = bare(pageUrl()); return s && u && s !== u ? s : ''; }
   function fillUrls() {
     var u = pageUrl(), s = shortShown();

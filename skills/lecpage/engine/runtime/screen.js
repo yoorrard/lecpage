@@ -23,7 +23,7 @@
   var LOCAL = /^(file|about|blob|data):$/.test(location.protocol);
   var joinUrl = DATA.siteUrl || (LOCAL ? DATA.shortUrl || '' : location.href.split('#')[0].replace(/screen\.html.*$/, ''));
   var ul = $('meta[name="lp-unlock"]'), qrUrl = joinUrl ? joinUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
-  function bare(u) { return String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); }
+  function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
   var fullUrl = bare(joinUrl), shortUrl = bare(DATA.shortUrl); if (!fullUrl || shortUrl === fullUrl) shortUrl = '';
   var qrMarkup = '';
   // 둘레 여백 4칸(QR 규격의 quiet zone)을 그림 안에 넣음

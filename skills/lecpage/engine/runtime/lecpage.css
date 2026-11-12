@@ -1320,7 +1320,7 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
 .lp-screen-join{display:flex;gap:18px;align-items:center;flex-wrap:wrap;min-width:0}
 .lp-screen-join>div{min-width:0}
 .lp-screen-join .lp-qr{width:clamp(150px,15vw,240px)}
-.lp-screen-url{font-family:var(--font-mono);font-size:clamp(1rem,1.6vw,1.4rem);font-weight:600;overflow-wrap:anywhere}
+.lp-screen-url{font-family:var(--font-mono);font-size:clamp(1.05rem,2.2vw,2rem);font-weight:700;line-height:1.25;overflow-wrap:anywhere}
 .lp-screen-full{font-family:var(--font-mono);overflow-wrap:anywhere}
 /* QR을 누르면 화면 가득(뒷자리에서도 찍히게) */
 .lp-qr-zoom{display:grid;justify-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:zoom-in;border-radius:10px}

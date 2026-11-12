@@ -325,7 +325,7 @@
     // 강사가 넣은 짧은 주소가 있으면 함께 보여 줌(QR은 언제나 원래 주소)
     var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
     j.appendChild(q); var c = el('div'); c.appendChild(el('div', 'lp-small', '참여 주소')); c.appendChild(el('div', '', u || '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.'));
-    if (su) { c.appendChild(el('div', 'lp-small', '짧은 주소')); c.appendChild(el('div', '', su.replace(/^https?:\/\//, '').replace(/\/$/, ''))); }
+    if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } c.appendChild(el('div', 'lp-small', '짧은 주소')); c.appendChild(el('div', '', su)); }
     c.appendChild(el('div', 'lp-small', '연수 코드 ' + DATA.live.code));
     var pl = el('a', 'lp-link', 'QR 안내문 인쇄'); pl.href = 'poster.html'; pl.target = '_blank'; c.appendChild(pl);
     j.appendChild(c); b.appendChild(j);
