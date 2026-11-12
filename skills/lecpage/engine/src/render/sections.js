@@ -303,7 +303,7 @@ function schedule(s, ctx) {
 
 // ── 준비 ─────────────────────────────────────────────────
 function readiness(s, ctx) {
-  const checks = s.checks.length ? `<div class="lp-diag" data-diag='${esc(JSON.stringify(s.checks))}'><div class="lp-diag-h"><h3>접속 확인</h3><button class="lp-btn lp-btn-ghost" type="button" data-diag-run>확인하기</button></div><ul class="lp-diag-list">${s.checks.map((c) => `<li data-url="${esc(c.url)}"><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul><p class="lp-small">막힌 곳이 있으면 이 화면을 정보 담당 선생님께 보여 주세요.</p></div>` : '';
+  const checks = s.checks.length ? `<div class="lp-diag" data-diag='${esc(JSON.stringify(s.checks))}'><div class="lp-diag-h"><h3>접속 확인</h3><button class="lp-btn lp-btn-ghost" type="button" data-diag-run>확인하기</button></div><ul class="lp-diag-list">${s.checks.map((c) => `<li data-url="${esc(c.url)}"><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul><p class="lp-small">막힌 곳이 있으면 강사에게 알려 주세요.</p></div>` : '';
   return wrap(s, ctx, head(s, ctx, '시작 전에 준비해요') + `<div class="lp-ready${checks ? '' : ' is-solo'}"><ul class="lp-checklist" data-checklist="${esc(s.id)}">${s.items.map((i, n) => `<li><label><input type="checkbox" data-check="${n}"><span><b>${esc(i.label)}</b>${i.detail ? `<small>${br(i.detail)}</small>` : ''}</span></label>${i.url ? `<a class="lp-link" ${href(i.url)}>열기${icon('external')}</a>` : ''}</li>`).join('')}</ul>${checks}</div>`);
 }
 
@@ -506,10 +506,10 @@ function survey(s, ctx) {
   const url = s.url;
   const inner = s.questions.length && ctx.live;
   const title = `<h2 class="lp-h2" id="${esc(s.id)}-h"${fx(ctx, 'section.title')}>${br(s.title || '만족도 조사')}</h2>`;
-  const defLead = '의견은 다음 연수를 준비하는 데 써요.';
-  const lead = `<p class="lp-lead">${br(s.lead || defLead)}</p>`;
+  // 안내 문장은 강사가 적었을 때만(설문을 어디에 쓰는지 같은 말은 교재·강사만 알 수 있음)
+  const lead = s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : '';
   if (inner) {
-    return wrap({ ...s, title: s.title || '만족도 조사' }, ctx, `${head({ ...s, title: s.title || '만족도 조사', lead: s.lead || defLead }, ctx)}${completionLine(ctx) ? '<p class="lp-note">설문을 내야 이수가 확인돼요.</p>' : ''}${surveyForm(s)}${url ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" ${href(url)}>기관 설문 열기${icon('external')}</a></p>` : ''}`);
+    return wrap({ ...s, title: s.title || '만족도 조사' }, ctx, `${head({ ...s, title: s.title || '만족도 조사', lead: s.lead || '' }, ctx)}${completionLine(ctx) ? '<p class="lp-note">설문을 내야 이수가 확인돼요.</p>' : ''}${surveyForm(s)}${url ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" ${href(url)}>기관 설문 열기${icon('external')}</a></p>` : ''}`);
   }
   return wrap(s, ctx, `<div class="lp-survey">
 <div>${title}${lead}
