@@ -141,7 +141,9 @@ function ratioName(w, h) {
 const BULLET = /^[•·▪▫◦●○■□◆◇▶▷►➢➤✓✔☞※\-–]\s*/;
 /** 글 조각 사이 틈 때문에 생긴 문장부호 앞뒤 공백 정리 */
 function tidy(t) {
-  return normLine(t).replace(/\s+([.,!?)\]}:;·%])/g, '$1').replace(/([(\[{])\s+/g, '$1');
+  return normLine(t).replace(/\s+([.,!?)\]}:;·%])/g, '$1').replace(/([(\[{])\s+/g, '$1')
+    // 숫자와 한글 단위가 다른 글꼴 조각이라 생긴 틈("15 시간", "3 개를", "201 호") 붙이기. 단위 뒤에 낱말이 이어지면("2 주차장") 그대로 둠
+    .replace(/(\d)\s+(시간|분|초|일|주|개월|년|학년도|학년|차시|회|명|개|쪽|권|대|호|층|교시|번|원|점|인|조)(?![가-힣]{2})/g, '$1$2');
 }
 
 /** pdf.js 텍스트 항목 → 줄 → 문단 + 제목 */
@@ -202,7 +204,8 @@ export function buildPage(lib, items, anns, vp, no, ctx) {
     } else if (kept[0].text.length <= 50 && (kept[0].bold || kept[0].size > median) && kept[0].y <= vp.height * 0.3) {
       titleLines.push(kept[0]); titleGuessed = true;
     }
-    title = normLine(titleLines.map((l) => l.text).join(' '));
+    // 여러 줄 제목: 줄이 바뀌며 낱말이 잘린 곳("…안" + "내")은 띄우지 않고 이음
+    title = normLine(titleLines.reduce((acc, l) => (!acc ? l.text : acc + (/(?:^|\s)[가-힣]$/.test(acc) && /^[가-힣]{1,2}$/.test(l.text) ? '' : ' ') + l.text), ''));
   }
   const body = kept.filter((l) => !titleLines.includes(l));
 

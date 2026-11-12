@@ -204,7 +204,9 @@ describe('초안(draft)·AI 요약(outline)', () => {
     const ids = draft.sections.map((s) => s.id);
     assert.equal(new Set(ids).size, ids.length, 'id 중복 없음');
     const types = draft.sections.map((s) => s.type);
-    for (const t of ['hero', 'readiness', 'outline', 'stations', 'prompts', 'tools', 'deck', 'quiz', 'materials', 'instructor', 'survey', 'closing']) assert.ok(types.includes(t), t);
+    for (const t of ['hero', 'readiness', 'outline', 'stations', 'prompts', 'tools', 'deck', 'quiz', 'instructor', 'survey', 'closing']) assert.ok(types.includes(t), t);
+    assert.ok(!types.includes('materials'), '받을 주소가 없는 교재 파일 이름은 자료실에 보이지 않음');
+    assert.ok(materialToDraft(m, { deckHref: 'assets/media/workshop.pptx' }).sections.some((s) => s.type === 'materials' && s.items[0].href === 'assets/media/workshop.pptx'));
     assert.equal(draft.instructors[0].name, '김하늘');
     assert.equal(draft.instructors[0].showEmail, false, '이메일은 기본으로 숨김');
     assert.deepEqual(draft.sources, [{ id: 'deck1', name: 'workshop.pptx', pages: 13 }]);

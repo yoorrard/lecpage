@@ -71,7 +71,7 @@ describe('한글 문서(HWPX) 구조', () => {
 });
 
 describe('워드 문서(DOCX) 구조', () => {
-  test('각주·미주를 본문 뒤에, 숫자 제목 문서도 차례가 생김', async () => {
+  test('각주·미주를 본문 뒤에, 숫자 제목 문서는 절마다 본문 칸이 됨', async () => {
     const body = [
       wp('교사 마음 돌봄 연수'), wp('일시: 2026년 12월 17일(목) 15:40~17:10'),
       wp('1. 왜 필요한가', 'Heading1'),
@@ -89,7 +89,10 @@ describe('워드 문서(DOCX) 구조', () => {
     assert.deepEqual(p.paragraphs.map((x) => x.text), ['가상의 설문에서 68%가 소진을 겪었습니다.', '(각주) 2026년 10월 조사, 응답 312명.']);
     assert.deepEqual(m.detected.sections.map((s) => [s.label, s.title]), [['1', '왜 필요한가'], ['2', '세 가지 사례'], ['3', '함께 나눌 질문'], ['4', '읽을거리']]);
     const d = materialToDraft(m, { today: TODAY });
-    assert.equal(d.sections.find((s) => s.type === 'outline')?.items.length, 4);
+    // 문서 교재는 차례 칸을 따로 두지 않고, 본문 칸이 교재의 절 순서를 그대로 따름
+    assert.ok(!d.sections.some((s) => s.type === 'outline'));
+    assert.deepEqual(d.sections.filter((s) => s.type === 'text').map((s) => s.title), ['왜 필요한가', '세 가지 사례', '함께 나눌 질문', '읽을거리']);
+    assert.match(d.sections.find((s) => s.title === '왜 필요한가').md, /68%가 소진을 겪었습니다\.\n\n※ 2026년 10월 조사/);
   });
   test('맨 앞 한 칸짜리 표는 문서 제목', async () => {
     const tbl = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>신규 교사 연수 계획</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
