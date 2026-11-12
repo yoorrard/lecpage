@@ -273,6 +273,9 @@
   .em-min .lp-min-legend span { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .em-min .lp-min-legend li.is-on a { border-bottom-color: var(--foreground); }
   .em-min .lp-min-key { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 아주 느린 배경(빛띠·빛망울)은 작은 미리보기에서 움직임이 보이게 네 배쯤 빠르게(사이트에서는 제 속도) */
+  html.fx-embed .fx-aurora i { animation-duration: 7s; }
+  html.fx-embed .fx-bokeh i { animation-duration: 5s !important; }
   .em-wipe { position: absolute; inset: 0; z-index: -1; background: var(--background); border-left: 2px solid var(--primary); transform: translateX(101%); animation: em-wipe 5.2s cubic-bezier(.65, 0, .35, 1) infinite; }
   @keyframes em-wipe { 0%, 14% { transform: translateX(101%); } 48%, 62% { transform: translateX(42%); } 96%, 100% { transform: translateX(101%); } }
   @media (prefers-reduced-motion: reduce) { .em-wipe { display: none; } }

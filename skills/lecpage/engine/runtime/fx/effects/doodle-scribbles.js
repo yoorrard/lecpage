@@ -43,6 +43,7 @@
   };
   U.doodle = SHAPES;
   var draw = function (svg, ctx, delay) {
+    svg.setAttribute('data-fx-snap', ''); // 대기 상태(선을 감춤)로는 곧바로 들어감(없으면 그려지는 모습이 보이지 않음)
     Array.prototype.forEach.call(svg.querySelectorAll('path'), function (p, i) {
       var L = 0;
       try { L = p.getTotalLength(); } catch (e) { L = 0; }
@@ -52,6 +53,7 @@
       p.style.setProperty('--fx-d', (delay + i * 120) + 'ms');
     });
     svg.setAttribute('data-fx-pre', '');
+    void svg.getBoundingClientRect(); svg.removeAttribute('data-fx-snap');
     return function () { void svg.getBoundingClientRect(); svg.removeAttribute('data-fx-pre'); Array.prototype.forEach.call(svg.querySelectorAll('path'), function (p) { p.style.strokeDashoffset = 0; }); };
   };
   LecFX.define('doodle-scribbles', {
@@ -117,7 +119,8 @@
       };
       var start = function () { render(); };
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(start); else start();
-      if ('ResizeObserver' in window) { var lw = 0, ro = new ResizeObserver(function () { var w = el.clientWidth; if (Math.abs(w - lw) > 2) { lw = w; if (!first) render(); } }); ro.observe(el); ctx.cleanup(function () { ro.disconnect(); }); }
+      // 크기가 바뀌면 다시 그림. 처음 불릴 때(크기 변화 없음)는 다시 그리지 않음: 다시 그리면 그려지는 움직임이 끊김
+      if ('ResizeObserver' in window) { var lw = el.clientWidth, ro = new ResizeObserver(function () { var w = el.clientWidth; if (Math.abs(w - lw) > 2) { lw = w; if (!first) render(); } }); ro.observe(el); ctx.cleanup(function () { ro.disconnect(); }); }
       return function () { svg.remove(); el.classList.remove('fx-annot-host'); };
     }
   });

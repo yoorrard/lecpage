@@ -3,7 +3,8 @@ import { esc, br, href, icon, koDate, host } from './html.js';
 import { renderSection, contactHtml, boardFiles } from './sections.js';
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
-import { getPreset } from '../design/presets.js';
+import { deriveConcept } from '../decide/concept.js';
+import { getPreset, presetPlan } from '../design/presets.js';
 import { FONTS } from '../design/fonts.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { fxInfo } from '../decide/design.js';
@@ -417,6 +418,26 @@ function defaultProcessors(bp) {
 }
 
 // ── 문서 ─────────────────────────────────────────────────
+/** DESIGN.md의 컨셉 단락: 한 줄 컨셉(참가자가 겪는 경험)·모티프·근거. 설계도에 없으면 주제에서 규칙으로 세운 것을 적음 */
+function conceptBlock(ctx, p) {
+  const bp = ctx.bp;
+  const c = bp.concept || deriveConcept({ title: bp.meta.title, subtitle: bp.meta.subtitle, topics: bp.design?.topics || [], archetype: bp.archetype?.primary, admin: bp.meta.admin?.kind });
+  const by = { ai: 'AI가 교재를 읽고 세움', teacher: '선생님이 정함', auto: '주제에서 자동으로 세움' }[c.source] || '';
+  const plan = presetPlan(p);
+  const KO = { rise: '떠오름', fade: '번짐', side: '옆에서', wipe: '왼쪽부터 펼침', clip: '위에서 펼침', scale: '살짝 커짐', drop: '내려앉음', flip: '넘어옴' };
+  const enter = Object.entries(plan.enter).map(([k, v]) => `${k === 'default' ? '기본' : SECTION_DEFS[k]?.label || k} ${KO[v] || v}`).join(' · ');
+  return `## 컨셉
+- 한 줄 컨셉: **${c.idea}**${by ? ` (${by})` : ''}
+- 모티프: ${c.motif || '없음'}${c.keywords?.length ? ` · 핵심 낱말: ${c.keywords.join(', ')}` : ''}
+${c.why ? `- 근거: ${c.why}\n` : ''}${c.preset && c.preset !== p.id ? `- 컨셉이 권한 디자인은 ${getPreset(c.preset).name_ko}(\`${c.preset}\`)이고, 지금은 ${p.name_ko}을(를) 쓰고 있습니다.\n` : ''}- 화면의 모든 선택(색·글꼴·그림·움직임·섹션)은 이 컨셉에 맞는지로 판단합니다. 컨셉과 어긋나는 꾸밈은 넣지 않습니다.
+
+## 페이지 연출 계획(첫 화면 밖)
+- 섹션이 들어올 때: ${enter}
+- 글은 들어온 뒤 멈추고, 한 화면에 큰 움직임은 하나만. 0단계 정적 · 1단계 등장과 가리킴 반응 · 2단계 스크롤 연동 · 3단계 장면 연출.
+
+`;
+}
+
 export function designDoc(ctx) {
   const p = getPreset(ctx.design.preset);
   const fxName = (id) => { const f = id && fxInfo(id); return f?.name_ko ? `${f.name_ko}(\`${id}\`)` : id || '없음'; };
@@ -427,7 +448,7 @@ export function designDoc(ctx) {
 
 이 파일은 이 연수 사이트의 디자인 규칙입니다. 어떤 AI나 사람이 고치더라도 이 규칙을 지키면 일관성이 유지됩니다.
 
-- 프리셋: **${p.name_ko}** (\`${p.id}\`) — ${p.desc_ko}
+${conceptBlock(ctx, p)}- 프리셋: **${p.name_ko}** (\`${p.id}\`) — ${p.desc_ko}
 - 테마: ${ctx.design.theme && ctx.design.theme !== 'preset' ? ctx.design.theme : p.theme} · 페이지 연출: ${ctx.design.motion}단계 (0 정적 · 1 차분 · 2 보통 · 3 스크롤 연출)
 - 대표 효과: ${fxName(ctx.design.signature)} · 첫 화면 그래픽: ${fxName(ctx.design.graphic)} · 마무리 그래픽: ${fxName(ctx.design.closingGraphic)}
 - 글꼴: 제목 ${fl(fk.display)}, 본문 ${fl(fk.body)}, 숫자·영문 ${fl(fk.num)}, 고정폭 ${fl(fk.mono)}

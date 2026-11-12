@@ -89,7 +89,7 @@ export function graphicHeroes(P) {
       const T = D.rows.reduce((s, r) => s + r.min, 0), unit = !D.timed ? 1 : T <= 240 ? 1 : 5;
       const cells = []; // [색 번호(쉬는 시간은 r), 순서 번호]
       D.rows.forEach((r, i) => { const n = D.timed ? Math.max(1, Math.round(r.min / unit)) : 8; for (let k = 0; k < n; k++) cells.push(`<i class="${D.timed && REST.test(r.title) ? 'r' : 'c' + (i % 4)} g${i}"></i>`); });
-      const per = !D.timed ? 8 : (unit === 1 ? [10, 15, 20, 30, 60] : [6, 12, 24]).find((c) => Math.ceil(cells.length / c) <= 6) || (unit === 1 ? 60 : 24);
+      const per = !D.timed ? 8 : (unit === 1 ? [15, 20, 30, 60] : [12, 24]).find((c) => Math.ceil(cells.length / c) <= 6) || (unit === 1 ? 60 : 24);
       const toMin = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 0; }, hhmm = (n) => `${pad2(Math.floor(n / 60) % 24)}:${pad2(n % 60)}`;
       let rows = '';
       for (let a = 0, n = 0; a < cells.length; a += per, n++) rows += `<div class="lp-min-row">${D.timed ? `<time>${hhmm(toMin(D.rows[0].start) + a * unit)}</time>` : `<time>${pad2(n + 1)}</time>`}<span class="lp-min-dots" style="--c:${per}">${cells.slice(a, a + per).join('')}</span></div>`;
@@ -122,7 +122,7 @@ export function graphicHeroes(P) {
     const img = (M.deck?.slides || []).find((x) => x.src);
     const t = String(M.m.title || M.title || '').replace(/\s+/g, ' ').trim(), lat = /^[A-Za-z0-9]{2,}/.exec(t);
     const glyph = lat ? lat[0].slice(0, 2) : ([...t].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '');
-    const vars = `--gx:${Math.round(4 + r() * 16)}%;--dx:${Math.round(58 + r() * 26)}%;--dy:${Math.round(18 + r() * 34)}%;--ds:${Math.round(22 + r() * 14)};--ba:${Math.round(-18 + r() * 36)}deg`;
+    const vars = `--gx:${Math.round(40 + r() * 14)}%;--dx:${Math.round(10 + r() * 22)}%;--dy:${Math.round(22 + r() * 22)}%;--ds:${Math.round(22 + r() * 14)};--ba:${Math.round(-18 + r() * 36)}deg`;
     const fig = img ? `<figure class="lp-cover-fig has-img" aria-hidden="true"><img src="${esc(img.src)}" alt="" decoding="async"></figure>`
       : `<figure class="lp-cover-fig" style="${vars}" aria-hidden="true"><i class="lp-cover-bars"></i><i class="lp-cover-disc"></i><span class="lp-cover-glyph">${esc(glyph)}</span></figure>`;
     return `${fig}

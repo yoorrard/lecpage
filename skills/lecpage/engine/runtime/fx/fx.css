@@ -11,6 +11,7 @@
 .fx-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 :where(.fx-host) { position: relative; isolation: isolate; }
 .fx-layer { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; contain: strict; }
+[data-fx-snap], [data-fx-snap] *, [data-fx-snap]::before, [data-fx-snap]::after, [data-fx-snap] *::before, [data-fx-snap] *::after { transition: none !important; }
 .fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .fx-surface-dark { background-color: var(--background); color: var(--foreground); }
 .fx-still, .fx-still *, .fx-still *::before, .fx-still *::after, .fx-off, .fx-off *, .fx-off *::before, .fx-off *::after,

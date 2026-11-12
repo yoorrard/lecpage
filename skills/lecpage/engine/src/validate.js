@@ -4,6 +4,7 @@ import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES,
 import { PRESET_IDS, getPreset } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
+import { cleanConcept, conceptDesign } from './decide/concept.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 import { detectTopics, moodsForTopics } from './decide/topic.js';
 
@@ -119,6 +120,9 @@ export function validate(input) {
   const archetype = { primary: pick(ar.primary, ARCHETYPES, 'story'), mix: strArr(ar.mix, 10).filter((x) => ARCHETYPES.includes(x)) };
 
   const d = b.design || {};
+  // 컨셉(최상위): 한 줄 컨셉·모티프·근거. 디자인을 직접 고르지 않았으면 컨셉이 권하는 디자인·분위기·움직임을 씀(decide/concept.js)
+  const concept = cleanConcept(b.concept);
+  const lead = conceptDesign(concept);
   const design = {
     preset: pick(d.preset, PRESET_IDS, PRESET_IDS[0]), mood: strArr(d.mood, 20).slice(0, 6), topics: strArr(d.topics, 20).slice(0, 6),
     theme: pick(d.theme, ['auto', 'light', 'dark', 'preset'], 'preset'), motion: d.motion === undefined ? undefined : num(d.motion, 2, 0, 3),
@@ -129,8 +133,13 @@ export function validate(input) {
     palette: PALETTE_BY_ID[d.palette] ? d.palette : '', fontPair: FONT_PAIR_BY_ID[d.fontPair] ? d.fontPair : '',
     sourceFonts: sourceFonts(d.sourceFonts), fontFrom: pick(d.fontFrom, ['material', 'preset'], 'material'),
   };
-  if (!d.preset || !PRESET_IDS.includes(d.preset)) {
-    // 프리셋이 없으면 주제·분위기·유형으로 1순위를 고른다
+  if (!design.mood.length && lead.mood) design.mood = lead.mood.slice();
+  if (d.motion === undefined && lead.motion !== undefined) design.motion = lead.motion;
+  if ((!d.preset || !PRESET_IDS.includes(d.preset)) && lead.preset) {
+    // 디자인을 고르지 않았고 컨셉이 권하는 디자인이 있으면 그것을
+    design.preset = lead.preset;
+  } else if (!d.preset || !PRESET_IDS.includes(d.preset)) {
+    // 프리셋도 컨셉도 없으면 주제·분위기·유형으로 1순위를 고른다
     if (!design.topics.length) design.topics = detectTopics([meta.title, meta.subtitle, ...arr(b.sections).map((s) => s?.title || '')].join(' '));
     const moods = design.mood.length ? design.mood : moodsForTopics(design.topics);
     design.preset = rankPresets({ moods, topics: design.topics, archetype: pick(b.archetype?.primary, ARCHETYPES, 'story'), admin: meta.admin.kind, minor: !!b.audience?.minor })[0].id;
@@ -187,7 +196,7 @@ export function validate(input) {
     warnings.push({ path: 'sections', message_ko: '첫 화면이 없어 넣었어요.' });
   }
 
-  return { blueprint: { version: 1, meta, audience, archetype, design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
+  return { blueprint: { version: 1, meta, audience, archetype, ...(concept ? { concept } : {}), design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
 }
 
 /** 무작위 연수 코드(헷갈리는 글자 제외, 기본 10자 ≈ 50비트). 같은 서버를 여러 연수가 함께 써도 남이 짐작할 수 없게 */

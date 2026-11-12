@@ -1,5 +1,5 @@
 // 디자인 결정: 분위기·주제·유형·대상·환경 → 프리셋 순위, 슬롯별 효과, 그래픽, 모션 상한
-import { PRESETS, getPreset } from '../design/presets.js';
+import { PRESETS, getPreset, presetPlan } from '../design/presets.js';
 import { FX } from '../design/fx-catalog.js';
 import { fontsFromSource, FONTS } from '../design/fonts.js';
 
@@ -162,6 +162,14 @@ export function resolveDesign(bp) {
   const budget = applyBudget({ effects: pool, closingGraphic: d.closingGraphic !== undefined ? '' : chosen.closingGraphic, signature: sigFits ? signature : '', motion, archetype, moods: d.mood || preset.moods, topics: d.topics || preset.topics, noLibs, keep: inHero || d.signature ? ['signature'] : [] });
   effects = { ...budget.effects, ...Object.fromEntries(Object.entries(effects).filter(([k]) => mine.includes(k))) };
   signature = budget.signature;
+  // 페이지 연출 계획(프리셋 plan): 본문 칸(카드·일정·사진·목록·섹션 제목)의 효과를 본문 단계(rest)가 허락하는 만큼 채움.
+  // 이미 정해진 칸과 선생님이 직접 고르거나 비운 칸은 그대로. 실습형은 본문이 차분 단계라 1단계 효과만 들어감
+  const rest = archetype === 'lab' ? Math.min(1, motion) : motion;
+  for (const [slot, list] of Object.entries(presetPlan(preset).slots)) {
+    if (slot in effects || (d.effects && slot in d.effects)) continue;
+    const id = list.find((x) => fits(byId.get(x), { cap: rest, noLibs }));
+    if (id) effects[slot] = id;
+  }
   // 교재 글꼴: 선생님이 글꼴 짝이나 글꼴을 따로 고르지 않았으면 교재와 같은 글꼴(없으면 결이 비슷한 무료 글꼴)을 씀
   let fonts = d.fonts, fontMatch;
   const fontNotes = [];
@@ -183,7 +191,7 @@ export function resolveDesign(bp) {
   return {
     ...d, preset: preset.id, motion, fonts, fontMatch,
     // 첫 화면 밖(본문)의 움직임 단계: 실습형은 차분(1)까지. 참가자 화면의 <html data-rest>가 됨(본문의 스크롤 연동 꾸밈은 이 값이 2 이상일 때만)
-    rest: archetype === 'lab' ? Math.min(1, motion) : motion,
+    rest,
     graphic: d.graphic !== undefined ? (fits(byId.get(d.graphic), { cap: motion, noLibs }) ? d.graphic : '') : chosen.graphic,
     closingGraphic: d.closingGraphic !== undefined ? d.closingGraphic : budget.closingGraphic,
     signature,

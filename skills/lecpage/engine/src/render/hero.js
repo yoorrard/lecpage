@@ -348,6 +348,8 @@ const show = (M, art) => `<div class="lp-wrap lp-hero-inner lp-show${art ? '' : 
 // 같은 제목이면 같은 그림: runtime/fx/core.js의 hash·rand와 같은 셈(FNV-1a, mulberry32)
 const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const seeded = (seed) => { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+/** 연수 제목에서 나오는 난수(같은 제목이면 같은 값). 마무리의 그림 조각도 이것으로 그림 */
+export const titleRandom = (title) => seeded(hashStr(String(title || 'lecpage').replace(/\s+/g, ' ').trim()));
 const seedOf = (M) => String(M.m.title || M.title || 'lecpage').replace(/\s+/g, ' ').trim();
 
 /* 펼친 교재: 교재 쪽을 부채처럼 펼친 3D 더미(쪽 그림이 있으면 그림, 없으면 글 카드). 교재가 없으면 실습·차례로. 누르면 그 쪽으로 감 */

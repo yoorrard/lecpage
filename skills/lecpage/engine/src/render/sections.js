@@ -1,7 +1,8 @@
 // 섹션 렌더러: 섹션 객체 → HTML 문자열. 모든 섹션은 JS 없이도 내용이 다 보여야 합니다.
 import { esc, br, href, host, md, fx, pad2, icon, koDate } from './html.js';
-import { renderHero, heroComposition, dateParts } from './hero.js';
-import { getPreset } from '../design/presets.js';
+import { renderHero, heroComposition, dateParts, titleRandom } from './hero.js';
+import { mosaicSvg } from './hero-graphic.js';
+import { getPreset, presetPlan } from '../design/presets.js';
 
 /** 실습·질문·교재처럼 따라 하며 쓰는 칸: 움직임은 차분 단계(1)까지만 */
 export const CALM_TYPES = ['stations', 'qa', 'deck', 'board', 'poll', 'prompts'];
@@ -24,6 +25,34 @@ function secNo(s, ctx) {
 }
 
 /**
+ * 섹션이 화면에 들어올 때의 움직임(프리셋의 페이지 연출 계획 plan.enter): 프리셋마다 기본 방식이 다르고 섹션 종류에 따라 바뀜.
+ * 모두 reveal-up 효과의 방식(mode)이라 차분 단계(1)부터 실리고, 글은 들어온 뒤 멈춤. 정적 단계(0)에는 붙이지 않음.
+ * 따라 하는 칸(head = true)은 머리만 조용히(fade·rise). 그 밖의 칸은 머리의 줄과 내용의 낱개(목록 줄·카드)가 짧게 차례로.
+ * 같은 요소를 두 가지가 움직이지 않게 뺌: 스크롤에 맞춰 겹쳐 쌓이는 차례(보통 단계부터), 스크롤에 맞춰 켜지는 계단(스크롤 연출),
+ * 선이 그려지는 일정 줄, 제 효과가 있는 섹션 제목.
+ */
+const ENTER_ITEMS = {
+  ledger: '.lp-goal-list > li, .lp-goal-meta', figures: '.lp-glance-item', steps: '.lp-steps5 > li, .lp-close-line', stack: '.lp-outline-item',
+  timeline: '.lp-sched-bar, .lp-schedule > li', checklist: '.lp-ready > *', bento: '.lp-tools-item', files: '.lp-materials > li, .lp-wrap > .lp-note',
+  accordion: '.lp-faq > details', profile: '.lp-person-card, .lp-tl-group', people: '.lp-speakers > li', course: '.lp-sessions > li', index: '.lp-glossary > div',
+  media: '.lp-gallery > li, .lp-videos > li', form: '.lp-sv-list > li',
+};
+function enterFx(s, ctx, head) {
+  const rest = ctx.design.rest ?? ctx.design.motion ?? 1;
+  if (rest < 1) return '';
+  const plan = presetPlan(getPreset(ctx.design.preset)).enter;
+  let mode = plan[s.type] || plan.default;
+  if (head) return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: mode === 'rise' || mode === 'side' ? mode : 'fade', each: true }))}'`;
+  const layout = LAYOUTS[s.type] || 'prose', fxs = ctx.design.effects || {};
+  let body = ENTER_ITEMS[layout] || '.lp-wrap > :not(.lp-head)';
+  if (layout === 'stack' && (rest >= 2 || fxs.cards === 'stack-cards')) body = '';
+  if (layout === 'steps' && rest >= 3) body = '.lp-close-line';
+  if (layout === 'timeline' && fxs.schedule) body = '.lp-sched-bar';
+  const items = [fxs['section.title'] ? '.lp-head > :not(.lp-h2)' : '.lp-head > *', body].filter(Boolean).join(', ');
+  return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode, items }))}'`;
+}
+
+/**
  * 섹션 머리: 번호(+메뉴 이름) · 제목 · 설명 · 원본 쪽. 모양은 프리셋마다 다름(<html data-head>, runtime/lecpage.css '섹션 머리').
  * 번호 줄은 메뉴와 같은 정보라 화면 낭독기에는 숨김
  */
@@ -35,7 +64,7 @@ function head(s, ctx, fallbackTitle) {
   const tfx = CALM_TYPES.includes(s.type) ? '' : fx(ctx, 'section.title');
   const label = s.nav && s.nav !== title ? s.nav : '';
   const k = no > 0 && title ? `<p class="lp-head-k" aria-hidden="true"><span class="lp-head-no">${pad2(no)}</span>${label ? `<span class="lp-head-label">${esc(label)}</span>` : ''}</p>` : '';
-  return `<header class="lp-head">${k}${title ? `<h2 class="lp-h2" id="${esc(s.id)}-h"${tfx}>${br(title)}</h2>` : ''}${s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : ''}${sourceLine(s.source, ctx)}</header>`;
+  return `<header class="lp-head"${CALM_TYPES.includes(s.type) ? enterFx(s, ctx, true) : ''}>${k}${title ? `<h2 class="lp-h2" id="${esc(s.id)}-h"${tfx}>${br(title)}</h2>` : ''}${s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : ''}${sourceLine(s.source, ctx)}</header>`;
 }
 
 /**
@@ -65,12 +94,17 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   const labelled = s.title ? ` aria-labelledby="${esc(s.id)}-h"` : '';
   const enterId = ctx.design.effects?.['section.enter'];
   const calm = CALM_TYPES.includes(s.type);
-  const enter = enterId && !calm ? ` data-fx="${esc(enterId)}"` : '';
   const frame = frameOf(s, ctx);
+  // 선생님이 섹션 등장 효과를 직접 골랐으면 그것을, 아니면 프리셋의 페이지 연출 계획대로(화면 폭 띠는 제 움직임이 따로 있음)
+  const enter = calm || frame === 'band' ? '' : enterId ? ` data-fx="${esc(enterId)}"` : enterFx(s, ctx, false);
+  const preset = getPreset(ctx.design.preset);
   const cls = `lp-sec lp-sec-${esc(s.type)}${frame === 'band' ? bandClass(ctx) : ''}${TINTED.includes(s.type) ? ' lp-tinted' : ''}`;
   // '움직이는 글자' 프리셋: 섹션 제목이 뒤에서 윤곽선으로 크게 메아리침(CSS가 data-echo를 읽음). 따라 하는 칸에는 두지 않음
-  const echo = !calm && s.title && frame !== 'band' && getPreset(ctx.design.preset).variants.hero === 'ticker' ? ` data-echo="${esc(String(s.title).replace(/\n/g, ' ').slice(0, 40))}"` : '';
-  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${LAYOUTS[s.type] || 'prose'}" data-frame="${frame}"${echo}${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
+  const echo = !calm && s.title && frame !== 'band' && preset.variants.hero === 'ticker' ? ` data-echo="${esc(String(s.title).replace(/\n/g, ' ').slice(0, 40))}"` : '';
+  // '표지 한 장' 프리셋: 섹션 제목의 첫 글자가 뒤에 크게 깔림(첫 화면 포스터의 되풀이). '시간 점묘': 섹션 위 점 줄에 지나온 섹션만큼 색 점(--no)
+  const glyph = !calm && s.title && frame !== 'band' && preset.variants.hero === 'cover' ? ` data-glyph="${esc([...String(s.title).trim()].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '')}"` : '';
+  const no = preset.variants.align === 'ledger' && frame !== 'band' ? ` style="--no:${secNo(s, ctx)}"` : '';
+  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${LAYOUTS[s.type] || 'prose'}" data-frame="${frame}"${echo}${glyph}${no}${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
 }
 
 function liveOff(ctx) {
@@ -168,14 +202,16 @@ function steps5(s, ctx) {
 
 /** 카드 칸 효과: '쌓이는 카드'는 목록 전체에(차례에서만), 그 밖의 효과는 항목마다 */
 const cardsFx = (ctx) => ctx.design.effects?.cards || '';
-const itemFx = (ctx) => (cardsFx(ctx) && cardsFx(ctx) !== 'stack-cards' ? fx(ctx, 'cards') : '');
+const itemFx = (ctx) => (cardsFx(ctx) && cardsFx(ctx) !== 'stack-cards' && cardsFx(ctx) !== 'spotlight' ? fx(ctx, 'cards') : '');
+/** 카드 조명(spotlight)은 목록 전체에 한 번: 포인터 가까운 카드의 테두리가 빛남 */
+const groupFx = (ctx) => (cardsFx(ctx) === 'spotlight' ? ` data-fx="spotlight" data-fx-opts='{"mode":"cards"}'` : '');
 /** 차례: 큰 번호가 붙은 넓은 판. 보통 단계부터 넓은 화면에서 판이 차례로 겹쳐 쌓임(CSS sticky, 움직임이 꺼지면 그냥 목록) */
 function outline(s, ctx) {
   const stack = cardsFx(ctx) === 'stack-cards' ? ` data-fx="stack-cards" data-fx-opts='{"top":"104px"}'` : '';
   // 교재 쪽 그림이 있으면 그 부가 시작하는 쪽을 작은 그림으로(교재가 원본)
   const slides = ctx.bp.sections.find((x) => x.type === 'deck')?.slides || [];
   const thumb = (t) => { const sl = t && t.startsWith('deck:') ? slides.find((x) => String(x.page) === t.slice(5)) : null; return sl?.src ? `<img class="lp-outline-thumb" src="${esc(sl.src)}" alt="" loading="lazy" decoding="async">` : ''; };
-  return wrap(s, ctx, head(s, ctx, '오늘의 차례') + `<ol class="lp-outline" style="--n:${s.items.length}"${stack}>${s.items.map((i, n) => {
+  return wrap(s, ctx, head(s, ctx, '오늘의 차례') + `<ol class="lp-outline" style="--n:${s.items.length}"${stack || groupFx(ctx)}>${s.items.map((i, n) => {
     const target = i.target ? (i.target.startsWith('deck:') ? `#deck-p${i.target.slice(5)}` : '#' + i.target) : '';
     return `<li class="lp-outline-item" style="--i:${n}"${itemFx(ctx)}><span class="lp-outline-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-outline-body">${i.part ? `<p class="lp-outline-part">${esc(i.part)}</p>` : ''}<h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div><div class="lp-outline-side">${thumb(i.target)}${i.tags.length ? `<ul class="lp-tags">${i.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : ''}</div></li>`;
   }).join('')}</ol>`);
@@ -300,7 +336,7 @@ export function bentoSpans(n) {
 function tools(s, ctx) {
   const deck = hasDeck(ctx);
   const spans = bentoSpans(s.items.length);
-  return wrap(s, ctx, head(s, ctx, '도구 모음') + `<ol class="lp-tools" style="--n:${s.items.length}">${s.items.map((t, n) => `<li class="lp-tools-item" data-w="${spans[n]}"${itemFx(ctx)}><span class="lp-tools-no" aria-hidden="true">${pad2(n + 1)}</span><h3>${t.url ? `<a ${href(t.url)}>${esc(t.name)}${icon('external')}</a>` : esc(t.name)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${t.pages.length ? `<span class="lp-pages">교재 ${t.pages.map((p) => deck ? `<a href="#deck-p${p}">${p}</a>` : esc(p)).join('·')}쪽</span>` : ''}<span class="lp-tools-mark" aria-hidden="true">${esc([...t.name.trim()][0] || '')}</span></li>`).join('')}</ol>${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}`);
+  return wrap(s, ctx, head(s, ctx, '도구 모음') + `<ol class="lp-tools" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((t, n) => `<li class="lp-tools-item" data-w="${spans[n]}"${itemFx(ctx)}><span class="lp-tools-no" aria-hidden="true">${pad2(n + 1)}</span><h3>${t.url ? `<a ${href(t.url)}>${esc(t.name)}${icon('external')}</a>` : esc(t.name)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${t.pages.length ? `<span class="lp-pages">교재 ${t.pages.map((p) => deck ? `<a href="#deck-p${p}">${p}</a>` : esc(p)).join('·')}쪽</span>` : ''}<span class="lp-tools-mark" aria-hidden="true">${esc([...t.name.trim()][0] || '')}</span></li>`).join('')}</ol>${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}`);
 }
 
 function prompts(s, ctx) {
@@ -359,7 +395,7 @@ function attendance(s, ctx) {
 
 // ── 자료·사람 ─────────────────────────────────────────────
 function materials(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '연수 자료') + `<ul class="lp-materials">${s.items.map((m) => `<li><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
+  return wrap(s, ctx, head(s, ctx, '연수 자료') + `<ul class="lp-materials"${fx(ctx, 'list')}>${s.items.map((m) => `<li><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
 }
 
 function instructor(s, ctx) {
@@ -374,7 +410,7 @@ ${p.timeline.length ? `<div class="lp-timeline">${p.timeline.map((g) => `<div cl
 }
 
 function speakers(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '연사') + `<ul class="lp-speakers">${s.items.map((p) => `<li${itemFx(ctx)}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3><p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>${p.talk ? `<p>${esc(p.talk)}</p>` : ''}${p.time ? `<small>${icon('clock')} ${esc(p.time)}</small>` : ''}</li>`).join('')}</ul>`);
+  return wrap(s, ctx, head(s, ctx, '연사') + `<ul class="lp-speakers"${groupFx(ctx)}>${s.items.map((p) => `<li${itemFx(ctx)}>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<h3>${esc(p.name)}</h3><p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>${p.talk ? `<p>${esc(p.talk)}</p>` : ''}${p.time ? `<small>${icon('clock')} ${esc(p.time)}</small>` : ''}</li>`).join('')}</ul>`);
 }
 
 function sessions(s, ctx) {
@@ -419,7 +455,7 @@ ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label=
 const FOLLOWUP_KIND = { recording: '영상', community: '소통', next: '다음', read: '읽기', link: '링크' };
 function followup(s, ctx) {
   const contact = ctx.bp.meta.contact;
-  return wrap(s, ctx, head(s, ctx, '연수 후 안내') + `${s.items.length ? `<ul class="lp-materials lp-followup">${s.items.map((i) => `<li><span class="lp-file-kind">${FOLLOWUP_KIND[i.kind] || '링크'}</span><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}</div>${i.url ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(i.url)}>${icon(/^https?:/.test(i.url) ? 'external' : 'arrow')}<span>열기</span></a>` : ''}</li>`).join('')}</ul>` : ''}${s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : ''}${contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : ''}`, ' data-followup');
+  return wrap(s, ctx, head(s, ctx, '연수 후 안내') + `${s.items.length ? `<ul class="lp-materials lp-followup"${fx(ctx, 'list')}>${s.items.map((i) => `<li><span class="lp-file-kind">${FOLLOWUP_KIND[i.kind] || '링크'}</span><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}</div>${i.url ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(i.url)}>${icon(/^https?:/.test(i.url) ? 'external' : 'arrow')}<span>열기</span></a>` : ''}</li>`).join('')}</ul>` : ''}${s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : ''}${contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : ''}`, ' data-followup');
 }
 /** 문의처: 이메일·전화번호는 눌러서 바로 연결 */
 export function contactHtml(c) {
@@ -458,6 +494,11 @@ function closing(s, ctx) {
     board: '<div class="lp-chalk-tray" aria-hidden="true"><i></i><i></i><i></i><b></b></div>',
     sticker: dp ? `<p class="lp-closing-stk" aria-hidden="true"><b>${dp.m}. ${dp.d}.</b><span>${dp.w}요일</span></p>` : '',
     worksheet: '<span class="lp-closing-check" aria-hidden="true"></span>',
+    mosaic: `<div class="lp-closing-tiles" aria-hidden="true">${mosaicSvg(titleRandom(m.title), 14, 1)}</div>`,
+    vertical: '<i class="lp-vt-moon" aria-hidden="true"></i>',
+    offset: '<i class="lp-off-block" aria-hidden="true"></i>',
+    cover: `<span class="lp-closing-glyph" aria-hidden="true">${esc([...String(text).trim()].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '')}</span>`,
+    minutes: '<div class="lp-closing-dots" aria-hidden="true"></div>',
   }[comp] || '';
   const wordsList = ctx.design.motion >= 3 ? closingWords(ctx) : [];
   const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
