@@ -101,6 +101,8 @@ export function keepDraftParts(bp, draft) {
   }
   const sf = draft.design?.sourceFonts;
   if (sf && !out.design?.sourceFonts) out.design = { ...(out.design || {}), sourceFonts: clone(sf) };
+  // 교재 테마에서 찾은 기관 색(프롬프트에는 보내지 않음): AI가 강조색을 따로 정하지 않았으면 이어 줌
+  if (draft.design?.accent && !out.design?.accent) out.design = { ...(out.design || {}), accent: draft.design.accent };
   if (!out.sources?.length && draft.sources?.length) out.sources = clone(draft.sources);
   return out;
 }

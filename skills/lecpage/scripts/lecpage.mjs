@@ -641,7 +641,7 @@ const commands = {
     const material = args._[0] ? readJson(args._[0]) : null; const info = args.i ? readJson(args.i) : {};
     const context = material ? api.materialToAIContext(material, { maxChars: 60000 }) : '';
     const draft = material ? api.materialToDraft(material, info) : null;
-    const text = E.buildPrompt({ context, info, draft });
+    const text = E.buildPrompt({ context, info, draft, material });
     if (!args.o) return console.log(text);
     writeFileSync(args.o, text); say([`프롬프트 → ${args.o} (${text.length}자)`], { ok: true, file: resolve(args.o), chars: text.length });
   },

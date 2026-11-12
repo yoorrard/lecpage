@@ -279,3 +279,25 @@ describe('한 곳 고치기 뒤 첫 화면(P1-7)', () => {
     assert.ok(!html.includes('다울교육청 대강당'), '옛 장소가 남지 않음');
   });
 });
+
+describe('AI 프롬프트: 컨셉 → 흐름 → 칸 구성', () => {
+  test('흐름·신호 표·새 칸·글 칸 문법이 들어가고, 초안의 군살(엔진 메모·실시간·메일·교재 쪽)은 빠짐', () => {
+    const m = mat(DISCUSS);
+    const draft = materialToDraft(m, { today: TODAY, instructor: { name: '나도담', email: 'dodam@example.com' } });
+    const p = E.buildPrompt({ context: '[쪽 1] 교재', info: { title: '연수' }, draft, material: m });
+    for (const s of ['### 구성 정하기(컨셉 → 흐름 → 칸)', '사례·토론(discussion)', '"structure":{flow:', '- procedure (절차):', '- cases (사례):', '- discuss (함께 나눌 질문):', '- table (표):', '### 글 칸 문법(text.md)', '[!예시]', '찾은 것: 사례 3개 · 질문 3개 · 성찰 질문 2개', '흐름: 사례·토론(discussion)']) assert.ok(p.includes(s), s);
+    assert.ok(p.indexOf('### 컨셉 먼저(concept)') < p.indexOf('### 구성 정하기') && p.indexOf('### 구성 정하기') < p.indexOf('### 섹션 타입과 필드'), '컨셉 → 흐름 → 칸 순서');
+    const dj = p.slice(p.indexOf('## 참고: 자동으로 만든 초안'), p.indexOf('## 교재 내용'));
+    for (const s of ['"_draft"', '"live"', '"privacy"', 'dodam@example.com', '"leftovers"', '"slides"']) assert.ok(!dj.includes(s), s);
+    assert.ok(!p.includes('joinUrl(온라인'), '회의 주소는 강사가 확인한 값만');
+    assert.match(p, /이 교재에 맞는 6종/);
+    assert.match(p, /교재나 연수 정보에 적힌 값을 쓰고, 둘 다에 없으면 비운다/);
+  });
+  test('숨긴 쪽은 AI에 보내지 않음', async () => {
+    const { materialToAIContext } = await import('../src/ingest/index.js');
+    const m = mat('# 연수\n## 보이는 쪽\n보이는 글\n## 숨길 쪽\n숨길 글');
+    m.pages[m.pages.length - 1].hidden = true;
+    const ctx = materialToAIContext(m);
+    assert.ok(ctx.includes('보이는 글') && !ctx.includes('숨길 글'));
+  });
+});
