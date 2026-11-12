@@ -34,7 +34,49 @@
     "network": "good",
     "projector": true
   },
-  "design": {"preset": "sunrise-warm", "palette": "dawn-letter", "mood": ["warm", "emotional", "calm"], "topics": ["sel", "counseling"], "theme": "preset", "motion": 3, "signature": "stack-cards"},
+  "concept": {
+    "idea": "한 사람의 마음이 물결처럼 번져 교실 전체에 닿는 것을 함께 겪는 시간",
+    "why": "교재의 마음 날씨와 아침 감정 체크인에서 나왔어요. 한 아이가 꺼낸 한마디가 반 전체의 하루를 바꾼다는 이야기라, 한 점에서 번지는 물결을 화면의 그림으로 삼았어요.",
+    "motif": "번지는 물결",
+    "keywords": [
+      "마음 날씨",
+      "감정 체크인",
+      "멈추고·말하고·고르기"
+    ],
+    "moods": [
+      "emotional",
+      "calm",
+      "warm"
+    ],
+    "preset": "ripple-center",
+    "motion": 3,
+    "sections": [
+      "message",
+      "steps5",
+      "poll",
+      "board"
+    ],
+    "features": [
+      "board",
+      "poll",
+      "reactions"
+    ],
+    "source": "teacher"
+  },
+  "design": {
+    "preset": "ripple-center",
+    "mood": [
+      "emotional",
+      "calm",
+      "warm"
+    ],
+    "topics": [
+      "sel",
+      "counseling"
+    ],
+    "theme": "preset",
+    "motion": 3
+  },
   "live": {
     "provider": "local",
     "features": [

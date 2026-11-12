@@ -5,10 +5,16 @@
 // variants.hero = 첫 화면 구성(render/hero.js). 프리셋마다 뼈대가 다릅니다(같은 구성을 두 프리셋이 쓰지 않음):
 //   cinema · worksheet · bento · poster · quiet · brief · masthead · sticker · board · spec · zine · invite · keynote · panel · soft · ticker · column
 //   살아 있는 첫 화면(쇼케이스): collage · dial · orbit · stream — 그림은 서버가 정지 모습으로 그리고, graphic에 적은 효과가 움직임·반응을 더함
+//   배치가 다른 첫 화면(render/hero-graphic.js): ripple(가운데) · minutes(자료 그림) · mosaic(반반 화면) · cover(그림 가득) · vertical(세로쓰기·오른쪽) · offset(어긋난 격자)
+// layout = 글 배치 문법(왼쪽 left가 기본): center · right · offset · split · cover · data. 앱 갤러리가 첫 줄부터 여러 배치가 보이게 섞는 데 씀
+// variants.align = 본문 정렬 문법(<html data-align>, runtime/lecpage.css '본문 정렬 문법'): left(기본) · center · right · offset · split · ledger
 // fonts = 제목(display)·본문(body)·숫자와 영문 제목(num, 라틴)·고정폭(mono) 글꼴(design/fonts.js 키). 한글 2종 + 라틴. 본문 Pretendard 계열은 종이 워크북·공식 브리핑 두 곳뿐.
 // fontAlts = 주제·분위기가 맞을 때만 고르는 대안 글꼴(decide/design.js chooseFonts).
 // signature = 대표 효과 하나. signatureIn:'hero'면 첫 화면 구성이 직접 씁니다(다른 칸에 따로 붙이지 않음).
 // effects에는 1단계를 넘는 효과를 첫 화면 칸(hero.*)에만 둡니다. 나머지 칸은 1단계 이하(대표 효과 하나만 예외).
+// plan = 페이지 연출 계획(첫 화면 밖 전 구간): [등장 방식, 칸별 효과]. 프리셋마다 다르게 짬(모두 같은 떠오르기를 쓰지 않음)
+//   등장 방식 '기본 종류:방식 …' = 섹션이 화면에 들어올 때(reveal-up의 mode: rise 떠오름 · fade 번짐 · side 옆에서 · wipe 왼쪽부터 펼침 · clip 위에서 펼침 · scale 살짝 커짐 · drop 내려앉음 · flip 넘어옴). 차분 단계(1)부터, 글은 들어온 뒤 멈춤
+//   칸별 효과 = 카드·일정·사진·목록·섹션 제목 칸에 본문 단계(design.rest)가 허락할 때 싣는 효과. 'a|b'는 a가 단계에 걸리면 b(decide/design.js resolveDesign)
 // showcase = 살아 있는 첫 화면(그림·움직임·반응이 첫 화면에 든 디자인). 앱 갤러리가 '움직이는 첫 화면'으로 따로 모아 보여 줌
 // variants.head = 섹션 머리 모양(runtime/lecpage.css '섹션 머리'): chapter(큰 번호) · index(고정폭 색인 줄) · kicker(잡지식 겹줄과 작은 번호) · sticker(딱지) · tab(문항 번호 칸)
 // variants.band = 핵심 메시지·마무리처럼 화면 폭을 채우는 띠의 바탕: invert(반대 테마 색) · tint(옅은 바탕) · accent(강조색 면) · glow(어두운 바탕 위 빛)
@@ -27,6 +33,7 @@ export const PRESETS = [
     variants: { hero: 'cinema', head: 'chapter', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: true },
     graphic: 'starfield', closingGraphic: 'starfield', signature: 'tone-journey',
     effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['fade goals:rise outline:clip schedule:side tools:rise instructor:side faq:wipe', { cards: 'spotlight|link-underline', schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
   },
   {
     id: 'paper-workbook', name_ko: '종이 워크북', name_en: 'Paper Workbook',
@@ -41,6 +48,7 @@ export const PRESETS = [
     variants: { hero: 'worksheet', head: 'tab', band: 'accent', card: 'paper', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'micro-copy',
     effects: { 'hero.title': 'reveal-up', progress: 'guided-progress', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['rise goals:wipe schedule:wipe readiness:flip tools:flip materials:wipe faq:wipe glossary:wipe', { cards: 'link-underline', list: 'link-underline' }],
   },
   {
     id: 'glass-lab', name_ko: '유리 실험실', name_en: 'Glass Lab',
@@ -55,6 +63,7 @@ export const PRESETS = [
     variants: { hero: 'bento', head: 'index', band: 'tint', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
     graphic: 'aurora', closingGraphic: '', signature: 'spotlight', signatureIn: 'hero',
     effects: { 'hero.title': 'scramble', numbers: 'counter', message: 'highlight-sweep', 'closing.title': 'split-reveal' },
+    plan: ['scale goals:rise outline:clip schedule:side faq:fade glossary:rise instructor:side', { cards: 'spotlight|link-underline', schedule: 'line-draw', list: 'link-underline' }],
   },
   {
     id: 'playground', name_ko: '놀이터', name_en: 'Neo-brutal Playground',
@@ -69,6 +78,7 @@ export const PRESETS = [
     variants: { hero: 'poster', head: 'sticker', band: 'accent', card: 'brutal', nav: 'bar', btn: 'brutal', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: 'confetti-shapes', signature: 'marquee', signatureIn: 'hero',
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+    plan: ['drop goals:drop outline:flip schedule:side tools:drop faq:rise instructor:rise', { cards: 'link-underline', schedule: 'line-draw', gallery: 'reveal-up' }],
   },
   {
     id: 'calm-forest', name_ko: '숲의 숨', name_en: 'Calm Forest',
@@ -83,6 +93,7 @@ export const PRESETS = [
     variants: { hero: 'quiet', head: 'kicker', band: 'tint', card: 'soft', nav: 'bar', btn: 'pill', heading: 'serif', tones: false },
     graphic: '', closingGraphic: 'grain', signature: 'grain',
     effects: { 'hero.title': 'reveal-up', 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['fade goals:rise outline:fade schedule:side instructor:fade faq:rise', { schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
   },
   {
     id: 'official-brief', name_ko: '공식 브리핑', name_en: 'Official Brief',
@@ -97,6 +108,7 @@ export const PRESETS = [
     variants: { hero: 'brief', head: 'chapter', band: 'invert', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'counter',
     effects: { numbers: 'counter' },
+    plan: ['fade goals:wipe schedule:wipe readiness:rise materials:wipe faq:fade glossary:wipe instructor:rise', { schedule: 'line-draw', message: 'highlight-sweep', list: 'link-underline' }],
   },
   {
     id: 'editorial-ink', name_ko: '잉크 잡지', name_en: 'Editorial Ink',
@@ -111,6 +123,7 @@ export const PRESETS = [
     variants: { hero: 'masthead', head: 'kicker', band: 'invert', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: '', closingGraphic: '', signature: 'scroll-fill',
     effects: { 'hero.title': 'split-reveal', gallery: 'reveal-up', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['wipe goals:rise outline:clip schedule:wipe instructor:side glossary:wipe faq:fade', { schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
   },
   {
     id: 'retro-pop', name_ko: '도파민 팝', name_en: 'Retro Pop',
@@ -125,6 +138,7 @@ export const PRESETS = [
     variants: { hero: 'sticker', head: 'sticker', band: 'accent', card: 'soft', nav: 'pill', btn: 'pill', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'magnetic',
     effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', numbers: 'counter' },
+    plan: ['drop goals:scale outline:drop schedule:side tools:scale faq:rise', { cards: 'link-underline', schedule: 'line-draw', gallery: 'reveal-up' }],
   },
   {
     id: 'chalkboard', name_ko: '칠판 교실', name_en: 'Chalkboard',
@@ -139,6 +153,7 @@ export const PRESETS = [
     variants: { hero: 'board', head: 'tab', band: 'tint', card: 'outline', nav: 'bar', btn: 'pill', heading: 'display', tones: false },
     graphic: 'chalkboard', closingGraphic: '', signature: 'doodle-scribbles',
     effects: { 'hero.title': 'reveal-up', message: 'highlight-sweep', numbers: 'counter' },
+    plan: ['wipe goals:wipe outline:rise schedule:side tools:rise faq:rise', { schedule: 'line-draw', list: 'link-underline' }],
   },
   {
     id: 'blueprint-tech', name_ko: '설계도', name_en: 'Blueprint Tech',
@@ -153,6 +168,7 @@ export const PRESETS = [
     variants: { hero: 'spec', head: 'index', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: 'blueprint-grid', closingGraphic: 'blueprint-grid', signature: 'line-draw',
     effects: { 'hero.title': 'scramble', numbers: 'counter', progress: 'guided-progress' },
+    plan: ['wipe goals:wipe schedule:side tools:scale glossary:wipe faq:fade', { cards: 'spotlight|link-underline', list: 'link-underline' }],
   },
   {
     id: 'riso-zine', name_ko: '형광 인쇄', name_en: 'Riso Zine',
@@ -167,6 +183,7 @@ export const PRESETS = [
     variants: { hero: 'zine', head: 'sticker', band: 'accent', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: 'riso', signature: 'highlight-sweep',
     effects: { 'hero.title': 'split-reveal', message: 'highlight-sweep', numbers: 'counter' },
+    plan: ['drop goals:side outline:flip schedule:side tools:drop faq:wipe', { cards: 'link-underline', gallery: 'clip-reveal|reveal-up' }],
   },
   {
     id: 'sunrise-warm', name_ko: '새벽빛', name_en: 'Sunrise Warm',
@@ -178,9 +195,10 @@ export const PRESETS = [
     light: { bg: '#fff7f2', fg: '#2b1d2a', card: '#ffffff', muted: '#5e4a57', primary: '#c7364f', primaryFg: '#ffffff', accent: '#8a6cff', accent2: '#b85f00', accent3: '#2f8f83', heroFrom: '#ffd3b8', heroTo: '#d9ccff' },
     dark: { bg: '#1b1220', fg: '#fbeef3', card: '#26192c', muted: '#cdb9c6', primary: '#ff7d94', primaryFg: '#1b1220', accent: '#b4a1ff', accent2: '#ffb36b', accent3: '#6fd3c5', heroFrom: '#3a1e2e', heroTo: '#221a3d' },
     shape: { radius: 20, radiusSm: 12, radiusLg: 30, borderW: 1, shadow: 'soft' },
-    variants: { hero: 'invite', head: 'kicker', band: 'tint', card: 'soft', nav: 'pill', btn: 'pill', heading: 'serif', tones: false },
+    variants: { hero: 'invite', head: 'kicker', band: 'tint', card: 'soft', nav: 'pill', btn: 'pill', heading: 'serif', tones: false, align: 'center' },
     graphic: '', closingGraphic: '', signature: 'scroll-fill',
     effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['rise goals:fade outline:rise schedule:side instructor:fade faq:fade', { schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
   },
   // ── 2026-11 추가: 비어 있던 취향(조사: docs/research/design-trends-2026-11.md §5) ─────────────
   {
@@ -193,9 +211,10 @@ export const PRESETS = [
     dark: { bg: '#08080b', fg: '#f5f5f7', card: '#131318', muted: '#a1a1aa', primary: '#9b8cff', primaryFg: '#0b0920', accent: '#ff8a5c', accent2: '#5ad1ff', accent3: '#c9a7ff', heroFrom: '#6f5cff', heroTo: '#ff8a5c' },
     light: { bg: '#fbfbfd', fg: '#1d1d1f', card: '#ffffff', muted: '#5c5c66', primary: '#4a3fd0', primaryFg: '#ffffff', accent: '#d9541e', accent2: '#0a77b8', accent3: '#7a4fd0', heroFrom: '#6f5cff', heroTo: '#ff8a5c' },
     shape: { radius: 18, radiusSm: 10, radiusLg: 28, borderW: 1, shadow: 'soft' },
-    variants: { hero: 'keynote', head: 'chapter', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
+    variants: { hero: 'keynote', head: 'chapter', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false, align: 'center' },
     graphic: '', closingGraphic: '', signature: 'scroll-fill',
     effects: { 'hero.title': 'split-reveal', 'hero.cta': 'magnetic', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['scale goals:rise outline:clip schedule:side tools:scale faq:fade', { cards: 'spotlight|link-underline', schedule: 'line-draw', 'section.title': 'split-reveal' }],
   },
   {
     id: 'corporate-clean', name_ko: '깔끔한 기업형', name_en: 'Corporate Clean',
@@ -210,6 +229,7 @@ export const PRESETS = [
     variants: { hero: 'panel', head: 'chapter', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'counter',
     effects: { numbers: 'counter' },
+    plan: ['rise goals:side schedule:wipe tools:rise materials:wipe faq:fade', { cards: 'link-underline', schedule: 'line-draw', list: 'link-underline' }],
   },
   {
     id: 'soft-pastel', name_ko: '부드러운 파스텔', name_en: 'Soft Pastel',
@@ -221,9 +241,10 @@ export const PRESETS = [
     light: { bg: '#f8f6ff', fg: '#2b2540', card: '#ffffff', muted: '#5f5878', primary: '#6648d6', primaryFg: '#ffffff', accent: '#ffc2d4', accent2: '#bfe3ff', accent3: '#ffe3a8', heroFrom: '#e6dcff', heroTo: '#ffe3ee' },
     dark: { bg: '#191526', fg: '#f3effd', card: '#231d36', muted: '#bdb4d6', primary: '#baa7ff', primaryFg: '#191526', accent: '#ff9dbb', accent2: '#8ecbff', accent3: '#ffd98a', heroFrom: '#2d2450', heroTo: '#3a1f33' },
     shape: { radius: 24, radiusSm: 14, radiusLg: 36, borderW: 1, shadow: 'soft' },
-    variants: { hero: 'soft', head: 'sticker', band: 'accent', card: 'soft', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
+    variants: { hero: 'soft', head: 'sticker', band: 'accent', card: 'soft', nav: 'pill', btn: 'pill', heading: 'display', tones: false, align: 'center' },
     graphic: '', closingGraphic: '', signature: 'stack-cards',
     effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['scale goals:rise outline:scale schedule:side tools:scale faq:rise instructor:fade', { cards: 'link-underline', schedule: 'line-draw', gallery: 'reveal-up' }],
   },
   {
     id: 'kinetic-type', name_ko: '움직이는 글자', name_en: 'Kinetic Type',
@@ -238,6 +259,7 @@ export const PRESETS = [
     variants: { hero: 'ticker', head: 'index', band: 'invert', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'marquee',
     effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['side goals:side outline:clip schedule:side tools:rise faq:wipe', { schedule: 'line-draw', 'section.title': 'split-reveal', list: 'link-underline' }],
   },
   {
     id: 'warm-minimal', name_ko: '따뜻한 미니멀', name_en: 'Warm Minimal',
@@ -252,6 +274,7 @@ export const PRESETS = [
     variants: { hero: 'column', head: 'kicker', band: 'tint', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
     effects: { 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['fade goals:fade outline:rise schedule:wipe glossary:wipe instructor:rise', { schedule: 'line-draw', list: 'link-underline' }],
   },
   // ── 2026-11 추가: 살아 있는 첫 화면(그림·움직임·반응이 첫 화면에 들어 있는 쇼케이스). 그림은 Canvas·SVG·CSS만, 정지 모습이 먼저 그려짐 ──
   {
@@ -267,6 +290,7 @@ export const PRESETS = [
     variants: { hero: 'collage', head: 'tab', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
     graphic: 'slide-fan', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'reveal-up', numbers: 'counter' },
+    plan: ['flip goals:rise outline:flip schedule:side tools:flip materials:rise', { cards: 'spotlight|link-underline', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
   },
   {
     id: 'time-dial', name_ko: '하루 시계', name_en: 'Schedule Dial',
@@ -281,6 +305,7 @@ export const PRESETS = [
     variants: { hero: 'dial', head: 'index', band: 'glow', card: 'glass', nav: 'pill', btn: 'pill', heading: 'display', tones: false },
     graphic: 'schedule-dial', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+    plan: ['side goals:rise outline:scale schedule:side tools:scale faq:fade', { cards: 'spotlight|link-underline', schedule: 'line-draw' }],
   },
   {
     id: 'knot-orbit', name_ko: '입체 궤도', name_en: 'Orbit Knot',
@@ -295,6 +320,7 @@ export const PRESETS = [
     variants: { hero: 'orbit', head: 'index', band: 'glow', card: 'outline', nav: 'bar', btn: 'pill', heading: 'display', tones: false },
     graphic: 'orbit-3d', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+    plan: ['scale goals:wipe outline:clip schedule:side tools:scale glossary:wipe', { cards: 'spotlight|link-underline', schedule: 'line-draw', list: 'link-underline' }],
   },
   {
     id: 'stone-stream', name_ko: '돌과 물결', name_en: 'Stone & Stream',
@@ -309,8 +335,108 @@ export const PRESETS = [
     variants: { hero: 'stream', head: 'chapter', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: 'stream-lines', closingGraphic: '', signature: '', showcase: true,
     effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['fade goals:rise outline:wipe schedule:rise instructor:fade faq:wipe', { schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
+  },
+  // ── 2026-11 추가: 배치가 다른 디자인(왼쪽 정렬이 아닌 문법). 첫 화면뿐 아니라 본문의 정렬·구분선·번호·그림 다루기까지 같은 문법(variants.align) ──
+  {
+    id: 'ripple-center', name_ko: '번지는 파문', name_en: 'Ripple Center',
+    desc_ko: '모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에.',
+    moods: ['emotional', 'calm', 'warm'], topics: ['sel', 'counseling', 'parent', 'environment', 'general'],
+    archetypes: ['story', 'live', 'course'], theme: 'light', motion: 2, layout: 'center',
+    fonts: { display: 'gowunDodum', body: 'nanumBarun', num: 'fraunces', mono: 'plexMono', displayWeight: 400 },
+    fontAlts: [{ display: 'maruburi', body: 'nanumBarun', displayWeight: 700, topics: ['counseling', 'parent'] }],
+    light: { bg: '#f1f5f4', fg: '#12262b', card: '#ffffff', muted: '#4d6168', primary: '#0f6a73', primaryFg: '#ffffff', accent: '#e8734a', accent2: '#6f8fd6', accent3: '#b9d9d3', heroFrom: '#d3e9e5', heroTo: '#f1f5f4' },
+    dark: { bg: '#0c1a1e', fg: '#e9f2f0', card: '#132830', muted: '#a3b8b8', primary: '#7fd6cf', primaryFg: '#06201f', accent: '#ff9a76', accent2: '#9db5ff', accent3: '#2d5a5c', heroFrom: '#14393d', heroTo: '#0c1a1e' },
+    shape: { radius: 20, radiusSm: 12, radiusLg: 28, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'ripple', head: 'kicker', band: 'tint', card: 'soft', nav: 'pill', btn: 'pill', heading: 'display', tones: false, align: 'center' },
+    graphic: 'arc-ripple', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['scale goals:fade outline:scale schedule:rise tools:scale faq:fade instructor:fade', { cards: 'link-underline', schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', list: 'link-underline' }],
+  },
+  {
+    id: 'minute-map', name_ko: '시간 점묘', name_en: 'Minute Map',
+    desc_ko: '연수의 1분이 점 하나. 순서마다 제 색으로 찍힌 점 지도가 첫 화면에. 일정에 마우스를 올리면 그 시간의 점만 또렷해져요. 본문은 왼쪽에 고정폭 이름표를 둔 장부 격자. 데이터·평가·연구 연수에.',
+    moods: ['tech', 'minimal', 'formal'], topics: ['data', 'edutech', 'admin', 'science', 'conference'],
+    archetypes: ['lab', 'course', 'live'], theme: 'light', motion: 1, layout: 'data',
+    fonts: { display: 'nanumSquare', body: 'spoqa', num: 'jetbrains', mono: 'jetbrains', displayWeight: 800 },
+    fontAlts: [{ display: 'elice', body: 'spoqa', displayWeight: 700, topics: ['coding'] }],
+    light: { bg: '#f6f5f1', fg: '#16181d', card: '#ffffff', muted: '#575b66', primary: '#16181d', primaryFg: '#ffffff', accent: '#2f54eb', accent2: '#e4572e', accent3: '#f0b429', heroFrom: '#e6e9f8', heroTo: '#f6f5f1' },
+    dark: { bg: '#0f1116', fg: '#eef0f5', card: '#181b23', muted: '#a9aebb', primary: '#eef0f5', primaryFg: '#0f1116', accent: '#8aa2ff', accent2: '#ff8a65', accent3: '#ffd166', heroFrom: '#1a2040', heroTo: '#0f1116' },
+    shape: { radius: 4, radiusSm: 2, radiusLg: 8, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'minutes', head: 'index', band: 'tint', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'ledger' },
+    graphic: 'minute-map', closingGraphic: '', signature: '', showcase: true,
+    effects: { numbers: 'counter', progress: 'guided-progress' },
+    plan: ['wipe goals:wipe schedule:side tools:rise glossary:wipe faq:fade materials:wipe', { cards: 'link-underline', schedule: 'line-draw', list: 'link-underline' }],
+  },
+  {
+    id: 'mosaic-split', name_ko: '도형 모자이크', name_en: 'Mosaic Split',
+    desc_ko: '화면을 반으로 나눠 한쪽은 제목에서 나온 도형 타일 그림, 한쪽은 글. 타일은 저마다 돌고, 마우스를 올리면 돌아가요. 본문도 머리 왼쪽·내용 오른쪽의 두 단. 미술·수학·메이커·창의 연수에.',
+    moods: ['playful', 'bold', 'editorial'], topics: ['art', 'math', 'maker', 'elementary', 'club', 'play'],
+    archetypes: ['story', 'lab', 'course'], theme: 'light', motion: 2, layout: 'split',
+    fonts: { display: 'doHyeon', body: 'nanumGothic', num: 'outfit', mono: 'spaceGrotesk', displayWeight: 400 },
+    fontAlts: [{ display: 'jua', body: 'nanumGothic', displayWeight: 400, topics: ['elementary', 'play'] }],
+    light: { bg: '#f6f2ea', fg: '#1d1a26', card: '#fffdf8', muted: '#5a5566', primary: '#5b34c9', primaryFg: '#ffffff', accent: '#f0624a', accent2: '#f4bf2a', accent3: '#2fb390', heroFrom: '#e7defb', heroTo: '#f6f2ea' },
+    dark: { bg: '#15121d', fg: '#f3effa', card: '#1f1b2b', muted: '#b6aeca', primary: '#b39cff', primaryFg: '#170d33', accent: '#ff8a73', accent2: '#ffd257', accent3: '#5fd9b7', heroFrom: '#2a1f55', heroTo: '#15121d' },
+    shape: { radius: 0, radiusSm: 0, radiusLg: 0, borderW: 2, shadow: 'flat' },
+    variants: { hero: 'mosaic', head: 'tab', band: 'accent', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'split' },
+    graphic: '', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter' },
+    plan: ['flip goals:side outline:flip schedule:side tools:drop faq:rise', { cards: 'link-underline', schedule: 'line-draw', gallery: 'clip-reveal|reveal-up' }],
+  },
+  {
+    id: 'cover-sheet', name_ko: '표지 한 장', name_en: 'Cover Sheet',
+    desc_ko: '그림이 화면 위쪽을 가득 채우고 제목 판이 그림에 걸쳐요. 교재 첫 쪽 그림이 있으면 그 그림, 없으면 제목 첫 글자를 크게 자른 포스터. 본문 섹션마다 큰 첫 글자가 뒤에 깔려요. 교재·발표 자료가 얼굴인 연수에.',
+    moods: ['bold', 'editorial', 'minimal'], topics: ['general', 'korean', 'history', 'career', 'edutech', 'reading'],
+    archetypes: ['story', 'course', 'live'], theme: 'light', motion: 2, layout: 'cover',
+    fonts: { display: 'gmarket', body: 'gowunDodum', num: 'bricolage', mono: 'jetbrains', displayWeight: 700 },
+    fontAlts: [{ display: 'blackHan', body: 'gowunDodum', displayWeight: 400, topics: ['history', 'korean'] }],
+    light: { bg: '#f4efe6', fg: '#1b1a17', card: '#fffaf2', muted: '#5a554c', primary: '#b3421a', primaryFg: '#ffffff', accent: '#1c2a4a', accent2: '#f0c36a', accent3: '#d9cdb8', heroFrom: '#f3d9c5', heroTo: '#f4efe6' },
+    dark: { bg: '#15130f', fg: '#f4efe6', card: '#201d17', muted: '#b9b1a2', primary: '#ff9b6b', primaryFg: '#24100a', accent: '#9db4ff', accent2: '#f0c36a', accent3: '#4a4234', heroFrom: '#3a2114', heroTo: '#15130f' },
+    shape: { radius: 6, radiusSm: 4, radiusLg: 10, borderW: 1, shadow: 'soft' },
+    variants: { hero: 'cover', head: 'chapter', band: 'invert', card: 'paper', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'left' },
+    graphic: '', closingGraphic: '', signature: '', showcase: true,
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['clip goals:rise outline:clip schedule:side tools:rise instructor:side faq:fade', { schedule: 'line-draw', gallery: 'clip-reveal|reveal-up', 'section.title': 'split-reveal', list: 'link-underline' }],
+  },
+  {
+    id: 'vertical-type', name_ko: '세로쓰기', name_en: 'Vertical Type',
+    desc_ko: '제목을 세로로 쓰고 큰 원 하나와 날짜 도장을 곁들인 책 표지. 글과 버튼은 오른쪽 맞춤, 본문 머리도 오른쪽에 서요. 국어·독서·역사·인문처럼 글과 여백이 주인공인 연수에.',
+    moods: ['editorial', 'calm', 'natural'], topics: ['korean', 'reading', 'history', 'humanities', 'ceremony'],
+    archetypes: ['story', 'course'], theme: 'light', motion: 1, layout: 'right',
+    fonts: { display: 'nanumMyeongjo', body: 'ridibatang', num: 'instrumentSerif', mono: 'plexMono', displayWeight: 800 },
+    fontAlts: [{ display: 'songMyung', body: 'ridibatang', displayWeight: 400, topics: ['history'] }],
+    light: { bg: '#f3efe6', fg: '#1c1a17', card: '#faf7f0', muted: '#5b564d', primary: '#a3271f', primaryFg: '#ffffff', accent: '#2f4a3c', accent2: '#b08d57', accent3: '#ddd3c0', heroFrom: '#e4dccb', heroTo: '#f3efe6' },
+    dark: { bg: '#161412', fg: '#efe9dc', card: '#201d1a', muted: '#b5ad9e', primary: '#ff8f7f', primaryFg: '#2a0d0a', accent: '#9cc5ae', accent2: '#d9b98a', accent3: '#3d372e', heroFrom: '#2b2620', heroTo: '#161412' },
+    shape: { radius: 2, radiusSm: 2, radiusLg: 4, borderW: 1, shadow: 'flat' },
+    variants: { hero: 'vertical', head: 'kicker', band: 'tint', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false, align: 'right' },
+    graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
+    effects: { 'hero.title': 'reveal-up', 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
+    plan: ['fade goals:side outline:fade schedule:wipe glossary:side instructor:fade faq:wipe', { schedule: 'line-draw', list: 'link-underline' }],
+  },
+  {
+    id: 'swiss-offset', name_ko: '어긋난 격자', name_en: 'Swiss Offset',
+    desc_ko: '열두 칸 격자 위에 계단처럼 어긋난 큰 제목이 색면에 걸치고, 가장자리에 날짜를 세워 썼어요. 본문은 섹션마다 머리와 내용의 자리가 좌우로 엇갈려요. 정책·설명회·수학·기관 연수에.',
+    moods: ['minimal', 'bold', 'formal'], topics: ['policy', 'conference', 'math', 'admin', 'general', 'edutech'],
+    archetypes: ['live', 'course', 'story'], theme: 'light', motion: 2, layout: 'offset',
+    fonts: { display: 'spoqa', body: 'nanumGothic', num: 'barlowCond', mono: 'plexMono', displayWeight: 700 },
+    fontAlts: [{ display: 'nanumSquareNeo', body: 'nanumGothic', displayWeight: 800, topics: ['policy', 'admin'] }],
+    light: { bg: '#f4f4f1', fg: '#101010', card: '#ffffff', muted: '#55554f', primary: '#1238d6', primaryFg: '#ffffff', accent: '#e0301e', accent2: '#101010', accent3: '#f2c230', border: '#101010', heroFrom: '#dfe5fb', heroTo: '#f4f4f1' },
+    dark: { bg: '#0e0e0e', fg: '#f4f4f1', card: '#191919', muted: '#b5b5ad', primary: '#8fa5ff', primaryFg: '#0a1030', accent: '#ff6b5a', accent2: '#f4f4f1', accent3: '#ffd84a', border: '#f4f4f1', heroFrom: '#1a2350', heroTo: '#0e0e0e' },
+    shape: { radius: 0, radiusSm: 0, radiusLg: 0, borderW: 2, shadow: 'flat' },
+    variants: { hero: 'offset', head: 'index', band: 'invert', card: 'flat', nav: 'bar', btn: 'square', heading: 'heavy', tones: false, align: 'offset' },
+    graphic: '', closingGraphic: '', signature: 'scroll-fill',
+    effects: { 'hero.title': 'split-reveal', numbers: 'counter', 'closing.title': 'split-reveal' },
+    plan: ['side goals:wipe outline:side schedule:wipe tools:clip faq:wipe instructor:clip', { schedule: 'line-draw', 'section.title': 'split-reveal', list: 'link-underline' }],
   },
 ];
 
 export const PRESET_IDS = PRESETS.map((p) => p.id);
+export const ENTER_MODES = ['rise', 'fade', 'side', 'wipe', 'clip', 'scale', 'drop', 'flip'];
+/** 프리셋의 페이지 연출 계획을 풀어 줌: { enter: { default, 섹션종류: 방식 }, slots: { 칸: [효과 후보…] } } */
+export function presetPlan(preset) {
+  const [spec = 'rise', slots = {}] = preset.plan || [];
+  const enter = { default: 'rise' };
+  for (const w of String(spec).split(/\s+/).filter(Boolean)) { const [k, v] = w.includes(':') ? w.split(':') : ['default', w]; if (ENTER_MODES.includes(v)) enter[k] = v; }
+  return { enter, slots: Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, String(v).split('|').filter(Boolean)])) };
+}
 export function getPreset(id) { return PRESETS.find((p) => p.id === id) || PRESETS[0]; }

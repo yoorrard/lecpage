@@ -43,7 +43,8 @@ const whyKo = (x) => String(x).replace('사이트 유형', '연수 유형').repl
 export function DesignPanel({ p, update }) {
   const bp = p.blueprint;
   const d = bp.design || {};
-  const ranked = useMemo(() => recommend(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), (id) => !!E.getPreset(id).showcase, 4), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary]);
+  const concept = bp.concept || E.deriveConcept({ title: bp.meta?.title, subtitle: bp.meta?.subtitle, topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind });
+  const ranked = useMemo(() => recommend(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), (id) => !!E.getPreset(id).showcase, 4, concept.preset), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary, concept.preset]);
   const setD = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } }));
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
   const others = mixOrder(E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id)));
@@ -52,9 +53,10 @@ export function DesignPanel({ p, update }) {
   const title = bp.meta?.title || '';
   const [fxOpen, setFxOpen] = useState(false);
   const [taste, setTaste] = useState('all');
-  const whyText = (r) => ((r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
+  const whyText = (r) => (r.concept ? `컨셉 '${concept.motif || concept.idea}'에 맞춘 디자인` : (r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
+      <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
       <div class="field"><span>추천 디자인</span>
         <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' })} />)}</div>
       </div>
@@ -115,6 +117,32 @@ export function DesignPanel({ p, update }) {
         {fxOpen && <div class="stack"><div class="stack" style={{ gap: '4px' }}><h2 class="h-sub">대표 효과 고르기</h2><p class="small muted">카드를 누르면 크게 보고 고를 수 있어요.</p></div>
           <FxGallery only={(f) => f.level >= 2} picked={d.signature || resolved.signature} onUse={(f) => { setD({ signature: f.id }); setFxOpen(false); }} /></div>}
       </Dialog>
+    </div>
+  );
+}
+
+/** 디자인 컨셉: 이 연수가 참가자에게 주는 경험 한 줄과 화면에 되풀이되는 그림. 디자인·움직임·구성이 여기서 출발함. 선생님이 고칠 수 있음 */
+function ConceptCard({ bp, concept, update, setD }) {
+  const [edit, setEdit] = useState(false);
+  const d = bp.design || {};
+  const by = { ai: 'AI가 교재를 읽고 세웠어요', teacher: '직접 정한 컨셉이에요', auto: '주제에서 자동으로 세웠어요' }[concept.source] || '';
+  const setC = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, concept: { ...concept, ...patch, source: 'teacher' } } }));
+  const reset = () => update((cur) => ({ blueprint: { ...cur.blueprint, concept: E.deriveConcept({ title: cur.blueprint.meta?.title, subtitle: cur.blueprint.meta?.subtitle, topics: cur.blueprint.design?.topics || [], archetype: cur.blueprint.archetype?.primary, admin: cur.blueprint.meta?.admin?.kind }) } }));
+  const lead = concept.preset && concept.preset !== d.preset ? E.getPreset(concept.preset) : null;
+  return (
+    <div class="concept">
+      <p class="concept-k"><span>디자인 컨셉</span>{by && <small>{by}</small>}</p>
+      <p class="concept-idea">{concept.idea}</p>
+      <p class="concept-why">{concept.motif && <b>모티프: {concept.motif}</b>}{concept.motif && concept.why ? ' · ' : ''}{concept.why}</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm" aria-expanded={String(edit)} onClick={() => setEdit(!edit)}>컨셉 고치기</button>
+        {lead && <button type="button" class="btn btn-sm" onClick={() => setD({ preset: lead.id, seed: '' })}>컨셉에 맞춘 디자인 쓰기: {lead.name_ko}</button>}
+        {concept.source !== 'auto' && <button type="button" class="btn btn-sm btn-quiet" onClick={reset}>주제에서 다시 세우기</button>}
+      </div>
+      {edit && <div class="stack" style={{ gap: '10px' }}>
+        <Field label="한 줄 컨셉" hint="이 연수에서 참가자가 겪을 경험을 한 문장으로 적어요."><input type="text" maxLength={90} value={concept.idea} onInput={(e) => setC({ idea: e.target.value })} /></Field>
+        <Field label="모티프" hint="화면에 되풀이할 그림이나 은유(예: 번지는 물결, 펼친 교재)."><input type="text" maxLength={30} value={concept.motif || ''} onInput={(e) => setC({ motif: e.target.value })} /></Field>
+      </div>}
     </div>
   );
 }

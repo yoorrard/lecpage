@@ -364,7 +364,12 @@
       /* 진입: 대기 상태(data-fx-pre)를 붙였다가 화면에 들어오면 걷어 낸다 */
       enter: function (t, cb, o) {
         o = o || {};
+        /* 대기 상태로는 곧바로 들어감(data-fx-snap이 붙은 동안 전환 없음). 이것이 없으면 대기 상태로 '천천히' 가다가 바로 되돌아와,
+           이미 화면에 보이는 요소(첫 화면 제목·작은 미리보기)는 움직임이 거의 보이지 않음 */
+        t.setAttribute('data-fx-snap', '');
         t.setAttribute('data-fx-pre', '');
+        void t.offsetWidth;
+        t.removeAttribute('data-fx-snap');
         var go = function () {
           if (!t.hasAttribute('data-fx-pre')) return;
           void t.offsetWidth;

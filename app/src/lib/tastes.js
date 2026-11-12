@@ -2,29 +2,45 @@
 export const TASTES = [
   { value: 'all', label: '전체' },
   { value: 'live', label: '그래픽·모션', showcase: true }, // 그림·움직임·반응이 화면에 든 디자인(프리셋의 showcase)
+  { value: 'layout', label: '색다른 배치', layout: true }, // 가운데·오른쪽·세로쓰기·어긋난 격자·반반 화면·그림 가득(프리셋의 layout)
   { value: 'calm', label: '차분·미니멀', moods: ['calm', 'minimal', 'natural'] },
   { value: 'warm', label: '따뜻·감성', moods: ['warm', 'emotional', 'handmade'] },
   { value: 'pro', label: '전문·공식', moods: ['formal', 'editorial', 'tech'] },
   { value: 'play', label: '발랄·경쾌', moods: ['playful', 'retro', 'energetic'] },
   { value: 'bold', label: '강렬·실험', moods: ['bold', 'futuristic'] },
 ];
+/** 왼쪽 정렬이 아닌 글 배치인지 */
+export const offLeft = (p) => !!p.layout && p.layout !== 'left';
 export function inTaste(preset, value) {
   const t = TASTES.find((x) => x.value === value);
   if (t && t.showcase) return !!preset.showcase;
+  if (t && t.layout) return offLeft(preset);
   if (!t || !t.moods) return true;
   return (preset.moods || []).slice(0, 2).some((m) => t.moods.includes(m));
 }
 
-/** 보여 주는 순서: 그래픽·모션 디자인을 앞에서부터 하나 걸러 하나씩 섞음(첫 줄부터 여러 모양이 보이게). 엔진의 프리셋 순서와 추천 점수는 그대로 둠 */
+/**
+ * 보여 주는 순서: 그림이 이끌거나 배치가 색다른 디자인과 글 중심 디자인을 하나 걸러 하나씩 섞음(첫 줄부터 여러 모양이 보이게).
+ * 앞쪽 묶음은 배치가 겹치지 않게 돌아가며 뽑음(가운데 → 자료 그림 → 반반 → 그림 가득 → 세로쓰기 → 어긋난 격자 → 왼쪽 그림 …).
+ * 엔진의 프리셋 순서와 추천 점수는 그대로 둠
+ */
 export function mixOrder(presets) {
-  const a = presets.filter((p) => p.showcase), b = presets.filter((p) => !p.showcase), out = [];
-  while (a.length || b.length) { if (a.length) out.push(a.shift()); if (b.length) out.push(b.shift()); }
+  const lead = presets.filter((p) => p.showcase || offLeft(p)), rest = presets.filter((p) => !p.showcase && !offLeft(p));
+  const buckets = new Map();
+  for (const p of lead) { const k = p.layout || 'left'; if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(p); }
+  const order = ['center', 'data', 'split', 'left', 'cover', 'right', 'offset'].filter((k) => buckets.has(k)).concat([...buckets.keys()].filter((k) => !['center', 'data', 'split', 'left', 'cover', 'right', 'offset'].includes(k)));
+  const a = [];
+  while (a.length < lead.length) for (const k of order) { const x = buckets.get(k).shift(); if (x) a.push(x); }
+  const out = [];
+  while (a.length || rest.length) { if (a.length) out.push(a.shift()); if (rest.length) out.push(rest.shift()); }
   return out;
 }
-/** 추천 n개: 주제·분위기 점수 순 그대로. 그 안에 그래픽·모션 디자인이 없으면 마지막 한 자리만 점수가 가장 높은 그래픽·모션 디자인으로 바꿈 */
-export function recommend(ranked, isShowcase, n = 4) {
-  const top = ranked.slice(0, n);
+/** 추천 n개: 주제·분위기 점수 순 그대로. 그 안에 그래픽·모션 디자인이 없으면 마지막 한 자리만 점수가 가장 높은 그래픽·모션 디자인으로 바꿈. first(컨셉이 권한 디자인)가 있으면 맨 앞에 둠 */
+export function recommend(ranked, isShowcase, n = 4, first = '') {
+  let list = ranked;
+  if (first && ranked.some((r) => r.id === first)) list = [{ ...ranked.find((r) => r.id === first), concept: true }, ...ranked.filter((r) => r.id !== first)];
+  const top = list.slice(0, n);
   if (top.some((r) => isShowcase(r.id))) return top;
-  const s = ranked.find((r) => isShowcase(r.id) && r.score > 0);
+  const s = list.find((r) => isShowcase(r.id) && r.score > 0);
   return s ? [...top.slice(0, n - 1), s] : top;
 }

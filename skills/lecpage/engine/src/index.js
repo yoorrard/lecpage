@@ -4,7 +4,7 @@ export { build, collectEffects } from './build.js';
 export { protectSite, unlockUrl, PROTECTED_PAGES } from './protect.js';
 export { zipFiles } from './zip-write.js';
 export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, DEFAULT_SURVEY } from './schema/sections.js';
-export { PRESETS, PRESET_IDS, getPreset } from './design/presets.js';
+export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES } from './design/presets.js';
 export { FONTS, fontAssets, fontStack, matchFont, fontsFromSource, fontFamilyName } from './design/fonts.js';
 export { themeCSS, themeTokens, htmlAttrs, presetWithOverrides } from './design/tokens.js';
 export { PALETTE_SEEDS, FONT_PAIRS, PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
@@ -15,7 +15,8 @@ export { rankPresets, chooseEffects, chooseFonts, resolveDesign, motionCap, fxIn
 export { decideInfra, BACKENDS, HOSTS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
 export { decideArchetype } from './decide/archetype.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
-export { buildPrompt, extractJson, blueprintGuide } from './prompt/bridge.js';
+export { deriveConcept, cleanConcept, conceptDesign, conceptLine, conceptKeywords, TOPIC_CONCEPTS } from './decide/concept.js';
+export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO } from './prompt/bridge.js';
 export { applyBlueprintPatch, diffSummary, withSectionIds, PROTECTED_PATHS } from './patch.js';
 export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';
 export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';

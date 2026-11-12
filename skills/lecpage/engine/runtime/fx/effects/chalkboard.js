@@ -24,6 +24,7 @@ LecFX.define('chalkboard', {
     ly.innerHTML = html;
     if (ctx.reduced) return;
     var paths = Array.prototype.slice.call(ly.querySelectorAll('.fx-chalk-mark path'));
+    ly.setAttribute('data-fx-snap', ''); // 대기 상태(선을 감춤)로는 곧바로 들어감. 없으면 감추는 쪽으로 천천히 가다 되돌아와 그려지는 모습이 보이지 않음
     paths.forEach(function (p, i) {
       var L = 0;
       try { L = p.getTotalLength(); } catch (e) { L = 0; }
@@ -31,6 +32,7 @@ LecFX.define('chalkboard', {
       p.style.strokeDasharray = L + ' ' + L; p.style.strokeDashoffset = L; p.style.setProperty('--fx-d', (i * 260) + 'ms');
     });
     ly.setAttribute('data-fx-pre', '');
+    void ly.offsetWidth; ly.removeAttribute('data-fx-snap');
     ctx.visible(ly, function () { void ly.offsetWidth; ly.removeAttribute('data-fx-pre'); paths.forEach(function (p) { p.style.strokeDashoffset = 0; }); }, { once: true, rootMargin: '0px 0px -10% 0px' });
   }
 });

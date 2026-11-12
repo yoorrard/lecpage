@@ -11,6 +11,7 @@
 .fx-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 :where(.fx-host) { position: relative; isolation: isolate; }
 .fx-layer { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; contain: strict; }
+[data-fx-snap], [data-fx-snap] *, [data-fx-snap]::before, [data-fx-snap]::after, [data-fx-snap] *::before, [data-fx-snap] *::after { transition: none !important; }
 .fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .fx-surface-dark { background-color: var(--background); color: var(--foreground); }
 .fx-still, .fx-still *, .fx-still *::before, .fx-still *::after, .fx-off, .fx-off *, .fx-off *::before, .fx-off *::after,
@@ -98,6 +99,18 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 /*@fx:reveal-up*/
 .fx-reveal:not(.fx-reveal--group), .fx-reveal-item { transition: opacity var(--dur-4, 520ms) var(--ease-out, cubic-bezier(.16, 1, .3, 1)) var(--fx-d, 0ms), transform var(--dur-5, 800ms) var(--ease-out, cubic-bezier(.16, 1, .3, 1)) var(--fx-d, 0ms); }
 .fx-reveal[data-fx-pre]:not(.fx-reveal--group), .fx-reveal--group[data-fx-pre] .fx-reveal-item { opacity: 0; transform: translate3d(0, calc(18px * var(--motion-scale, 1)), 0); }
+/* 방식(opts.mode): 프리셋의 페이지 연출 계획이 섹션 종류마다 고름. 대기 상태만 다르고, 나타난 뒤에는 모두 같은 완성 모습 */
+/* 옆에서 들어오거나 기울어 내려앉는 동안 조각이 화면 폭을 넘지 않게(가로 스크롤이 잠깐 생기는 것을 막음). clip은 붙박이(sticky)를 막지 않음 */
+.fx-rv-side, .fx-rv-drop, .fx-rv-flip, .fx-rv-scale { overflow-x: clip; }
+.fx-rv-fade[data-fx-pre]:not(.fx-reveal--group), .fx-rv-fade.fx-reveal--group[data-fx-pre] .fx-reveal-item { transform: none; }
+.fx-rv-side[data-fx-pre]:not(.fx-reveal--group), .fx-rv-side.fx-reveal--group[data-fx-pre] .fx-reveal-item { transform: translate3d(calc(-30px * var(--motion-scale, 1) * var(--fx-rv-dir, 1)), 0, 0); }
+.fx-rv-scale[data-fx-pre]:not(.fx-reveal--group), .fx-rv-scale.fx-reveal--group[data-fx-pre] .fx-reveal-item { transform: scale(.94); }
+.fx-rv-drop[data-fx-pre]:not(.fx-reveal--group), .fx-rv-drop.fx-reveal--group[data-fx-pre] .fx-reveal-item { transform: translate3d(0, calc(-22px * var(--motion-scale, 1)), 0) rotate(-1.6deg); }
+.fx-rv-flip[data-fx-pre]:not(.fx-reveal--group), .fx-rv-flip.fx-reveal--group[data-fx-pre] .fx-reveal-item { transform: perspective(900px) rotateX(-22deg); transform-origin: 50% 0; }
+.fx-rv-flip:not(.fx-reveal--group), .fx-rv-flip .fx-reveal-item { transform-origin: 50% 0; }
+.fx-rv-wipe:not(.fx-reveal--group), .fx-rv-wipe .fx-reveal-item, .fx-rv-clip:not(.fx-reveal--group), .fx-rv-clip .fx-reveal-item { clip-path: inset(-12px -12px -12px -12px); transition: clip-path var(--dur-5, 800ms) var(--ease-out, cubic-bezier(.16, 1, .3, 1)) var(--fx-d, 0ms), opacity 200ms linear var(--fx-d, 0ms); }
+.fx-rv-wipe[data-fx-pre]:not(.fx-reveal--group), .fx-rv-wipe.fx-reveal--group[data-fx-pre] .fx-reveal-item { opacity: 0; transform: none; clip-path: inset(-12px 100% -12px -12px); }
+.fx-rv-clip[data-fx-pre]:not(.fx-reveal--group), .fx-rv-clip.fx-reveal--group[data-fx-pre] .fx-reveal-item { opacity: 0; transform: none; clip-path: inset(-12px -12px 100% -12px); }
 
 /*@fx:clip-reveal*/
 .fx-clip { transition: clip-path calc(var(--dur-5, 800ms) * 1.25) var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) var(--fx-d, 0ms); }
@@ -446,7 +459,7 @@ html.lenis, html.lenis body { height: auto; }
   .fx-link-underline a, .fx-hl { transition: none !important; }
 }
 @media print {
-  [data-fx-pre] { opacity: 1 !important; transform: none !important; clip-path: none !important; visibility: visible !important; }
+  [data-fx-pre], [data-fx-pre] .fx-reveal-item { opacity: 1 !important; transform: none !important; clip-path: none !important; visibility: visible !important; }
   .fx-layer, .fx-toggle, .fx-cursor, .fx-gp, .fx-confetti, .fx-hsnap-bar { display: none !important; }
   .fx-zoom { height: auto !important; }
   .fx-zoom-sticky { position: static !important; height: auto !important; }

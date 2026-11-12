@@ -4,6 +4,7 @@
 import { decideArchetype } from './decide/archetype.js';
 import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
+import { cleanConcept, deriveConcept } from './decide/concept.js';
 import { PRESET_IDS } from './design/presets.js';
 import { DEFAULT_SURVEY } from './schema/sections.js';
 import { randomCode } from './validate.js';
@@ -176,8 +177,13 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const srcFonts = bp0?.design?.sourceFonts || prev?.design?.sourceFonts;
   if (srcFonts) bp.design.sourceFonts = clone(srcFonts);
   applyDesignAnswers(bp, info);
+  // 컨셉 먼저: 선생님이 고친 컨셉이 있으면 그것을, 아니면 AI 답·가져온 설계도의 컨셉을, 그것도 없으면 주제에서 규칙으로 세움
+  bp.concept = cleanConcept(prev?.concept?.source === 'teacher' ? prev.concept : bp.concept)
+    || deriveConcept({ title: info.title || bp.meta.title, subtitle: info.subtitle || bp.meta.subtitle, topics: bp.design.topics?.length ? bp.design.topics : topics, archetype: bp.archetype.primary, admin: info.admin || bp.meta.admin?.kind });
   if (!keepDesign && (!bp.design.preset || !PRESET_IDS.includes(bp.design.preset) || bp._presetAuto)) {
-    bp.design.preset = rankPresets({ moods: bp.design.mood, topics: bp.design.topics, archetype: bp.archetype.primary, admin: info.admin, minor: info.minor })[0].id;
+    // 디자인을 자동으로 고를 때: 선생님이 분위기를 따로 말했으면 분위기·주제 순위로, 아니면 컨셉이 권하는 디자인으로(없으면 순위로)
+    const ranked = rankPresets({ moods: bp.design.mood, topics: bp.design.topics, archetype: bp.archetype.primary, admin: info.admin, minor: info.minor })[0].id;
+    bp.design.preset = !info.mood && !requestHints(info.request).mood?.length && bp.concept.preset ? bp.concept.preset : ranked;
     bp._presetAuto = true;
   }
   if ((!bp.instructors || !bp.instructors.length) && info.instructorName) bp.instructors = [{ name: info.instructorName, org: info.instructorOrg, email: info.instructorEmail, showEmail: !!info.instructorEmail, bio: info.instructorBio }];

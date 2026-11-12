@@ -31,18 +31,48 @@
     "primary": "lab",
     "mix": []
   },
+  "concept": {
+    "idea": "흩어진 기록이 점 하나하나로 모여 무늬가 되는 것을 보는 시간",
+    "why": "교재가 학습 기록을 표로 모으고 차트로 읽는 순서로 짜여 있어요. 연수 3시간의 1분 1분을 점으로 찍어, 기록이 모이면 무늬가 보인다는 것을 첫 화면에서 먼저 보여 줘요.",
+    "motif": "1분을 점 하나로 찍은 시간 지도",
+    "keywords": [
+      "학습 기록",
+      "표",
+      "차트"
+    ],
+    "moods": [
+      "tech",
+      "minimal",
+      "formal"
+    ],
+    "preset": "minute-map",
+    "motion": 1,
+    "sections": [
+      "goals",
+      "readiness",
+      "stations",
+      "glossary",
+      "quiz"
+    ],
+    "features": [
+      "progress",
+      "help",
+      "poll"
+    ],
+    "source": "teacher"
+  },
   "design": {
-    "preset": "blueprint-tech",
+    "preset": "minute-map",
     "mood": [
       "tech",
-      "minimal"
+      "minimal",
+      "formal"
     ],
     "topics": [
       "data",
       "edutech"
     ],
-    "theme": "preset",
-    "accent": "#8ea2ff"
+    "theme": "preset"
   },
   "instructors": [
     {

@@ -22,6 +22,8 @@ const TOPIC_RULES = [
   ['admin', /업무|행정|나이스|NEIS|에듀파인|공문|학교 ?회계|업무 ?경감/gi],
   ['parent', /학부모|가정|보호자|부모/gi],
   ['elementary', /초등|저학년|고학년|1학년|2학년/gi],
+  ['data', /데이터|스프레드시트|대시보드|차트|시각화|학습 ?분석|통계 ?자료/gi],
+  ['conference', /컨퍼런스|콘퍼런스|포럼|심포지엄|한마당|박람회|발표회|성과 ?나눔/gi],
 ];
 
 const TOPIC_MOOD = {
@@ -30,7 +32,7 @@ const TOPIC_MOOD = {
   reading: ['editorial', 'calm'], korean: ['editorial'], art: ['handmade', 'retro', 'playful'], music: ['energetic', 'retro'],
   pe: ['energetic', 'playful'], english: ['playful'], history: ['editorial', 'calm'], environment: ['natural', 'calm'],
   career: ['warm', 'futuristic'], safety: ['formal'], policy: ['formal', 'minimal'], admin: ['formal', 'minimal'],
-  parent: ['warm', 'calm'], elementary: ['playful', 'warm'],
+  parent: ['warm', 'calm'], elementary: ['playful', 'warm'], data: ['tech', 'minimal'], conference: ['futuristic', 'bold'],
 };
 
 export function detectTopics(text, max = 3) {
@@ -42,6 +44,12 @@ export function detectTopics(text, max = 3) {
   }
   scores.sort((a, b) => b[1] - a[1]);
   return scores.slice(0, max).map(([id]) => id);
+}
+
+/** 글에서 그 주제를 알아본 낱말들(겹치지 않게 n개). 컨셉의 근거 문장에 씀 */
+export function topicWords(text, topic, n = 3) {
+  const re = TOPIC_RULES.find(([id]) => id === topic)?.[1];
+  return re ? [...new Set(String(text || '').match(re) || [])].slice(0, n) : [];
 }
 
 export function moodsForTopics(topics) {

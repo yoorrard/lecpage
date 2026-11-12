@@ -4,6 +4,7 @@
 //   masthead(잉크 잡지) · sticker(도파민 팝) · board(칠판 교실) · spec(설계도) · zine(형광 인쇄) · invite(새벽빛)
 //   keynote(어두운 키노트) · panel(깔끔한 기업형) · soft(부드러운 파스텔) · ticker(움직이는 글자) · column(따뜻한 미니멀)
 //   살아 있는 첫 화면: collage(펼친 교재) · dial(하루 시계) · orbit(입체 궤도) · stream(돌과 물결)
+//   배치가 다른 첫 화면(render/hero-graphic.js): ripple(번지는 파문·가운데) · minutes(시간 점묘·자료 그림) · mosaic(도형 모자이크·반반) · cover(표지 한 장·그림 가득) · vertical(세로쓰기·오른쪽) · offset(어긋난 격자)
 // 규칙
 //  - 값이 있는 것만 보여 줍니다(빈 칸·가짜 숫자 없음). 꾸밈 글자(큰 날짜 등)는 실제 값의 되풀이이고 aria-hidden.
 //  - 모든 글은 JS 없이 읽히고, 움직임이 꺼져도 완성된 모습입니다.
@@ -11,6 +12,7 @@
 //  - 두 구성이 같은 뼈대를 쓰지 않습니다(scripts/design-lint.mjs의 hero-skeleton 검사).
 import { esc, br, href, fx, pad2, icon, koDate } from './html.js';
 import { getPreset } from '../design/presets.js';
+import { graphicHeroes } from './hero-graphic.js';
 
 const WEEK = '일월화수목금토';
 export function dateParts(d) {
@@ -335,7 +337,7 @@ C.column = (M) => `<div class="lp-wrap lp-hero-inner">
 
 // ── 살아 있는 첫 화면(쇼케이스): 글은 그대로 HTML, 그림은 서버에서 정지 모습으로 그려 두고 효과(runtime/fx)가 움직임·반응을 더함 ──
 /** 구성이 직접 그리는 그림(효과 아이디). 디자인의 첫 화면 그래픽이 이것과 같으면 따로 그래픽 층을 두지 않음 */
-export const OWN_ART = { collage: 'slide-fan', dial: 'schedule-dial', orbit: 'orbit-3d', stream: 'stream-lines' };
+export const OWN_ART = { collage: 'slide-fan', dial: 'schedule-dial', orbit: 'orbit-3d', stream: 'stream-lines', ripple: 'arc-ripple', minutes: 'minute-map' };
 const artFx = (M, id) => (M.ctx.design.graphic === id ? ` data-fx="${id}"` : '');
 /** 쇼케이스 공통 뼈대: 글 | 그림 | 정보. 넓은 화면은 글·정보 왼쪽에 그림 오른쪽, 좁은 화면은 글 → 그림 → 정보 */
 const show = (M, art) => `<div class="lp-wrap lp-hero-inner lp-show${art ? '' : ' is-solo'}">
@@ -346,6 +348,8 @@ const show = (M, art) => `<div class="lp-wrap lp-hero-inner lp-show${art ? '' : 
 // 같은 제목이면 같은 그림: runtime/fx/core.js의 hash·rand와 같은 셈(FNV-1a, mulberry32)
 const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const seeded = (seed) => { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+/** 연수 제목에서 나오는 난수(같은 제목이면 같은 값). 마무리의 그림 조각도 이것으로 그림 */
+export const titleRandom = (title) => seeded(hashStr(String(title || 'lecpage').replace(/\s+/g, ' ').trim()));
 const seedOf = (M) => String(M.m.title || M.title || 'lecpage').replace(/\s+/g, ' ').trim();
 
 /* 펼친 교재: 교재 쪽을 부채처럼 펼친 3D 더미(쪽 그림이 있으면 그림, 없으면 글 카드). 교재가 없으면 실습·차례로. 누르면 그 쪽으로 감 */
@@ -480,6 +484,9 @@ export function streamArt(seed, attr = '') {
   return `<figure class="lp-stream"${attr} data-seed="${esc(seed)}" aria-hidden="true"><div class="lp-stream-plate"><svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" focusable="false">${sc.st.map((s, i) => `<circle class="lp-stream-s${i}" cx="${s[0].toFixed(1)}" cy="${s[1].toFixed(1)}" r="${s[2].toFixed(1)}"/>`).join('')}<path class="lp-stream-l" d="${d((i) => i % 6 !== 2)}"/><path class="lp-stream-l lp-stream-b" d="${d((i) => i % 6 === 2)}"/></svg></div><figcaption>연수 제목으로 그린 그림</figcaption></figure>`;
 }
 C.stream = (M) => show(M, streamArt(seedOf(M), artFx(M, 'stream-lines')));
+
+// ── 배치가 다른 첫 화면 여섯 가지(가운데·오른쪽·세로쓰기·어긋난 격자·반반 화면·그림 가득) ──
+Object.assign(C, graphicHeroes({ org, state, h1, sub, ctas, metaDl, cell, numCell, pick, seeded, hashStr, seedOf, longDate, shortDate, isoDate, dialRows, artFx, fx, REST }));
 
 /** 다른 첫 화면에 꾸밈으로 얹을 때도 정지 그림을 먼저 그려 둠(효과가 꺼져도 완성된 모습) */
 const DECOR_ART = { 'orbit-3d': () => orbitArt(), 'stream-lines': (M) => streamArt(seedOf(M)) };

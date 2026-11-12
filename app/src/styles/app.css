@@ -269,7 +269,14 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .thumb:hover{border-color:var(--line-strong);box-shadow:var(--shadow)}
 .thumb[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .thumb-site{position:relative;aspect-ratio:16/10;overflow:hidden;background:var(--sunk);border-bottom:1px solid var(--hair);pointer-events:none}
-.thumb-site iframe{position:absolute;left:0;top:0;border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff}
+.thumb-site iframe{position:absolute;left:0;top:0;border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff;transition:transform .6s ease-out}
+/* 카드에 올리거나 초점이 오면 본문까지 천천히 내려가며 보여 줌(첫 화면만 보고 고르지 않게). 동작 줄이기에서는 그대로 */
+@media (prefers-reduced-motion:no-preference){.thumb-site.is-tour iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}}
+.concept{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
+.concept-k{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:.82rem;font-weight:700;color:var(--muted)}
+.concept-k small{font-weight:500}
+.concept-idea{font-size:1.08rem;font-weight:700;line-height:1.5;letter-spacing:-.015em;color:var(--ink)}
+.concept-why{font-size:.875rem;line-height:1.6;color:var(--ink-2)}
 .thumb-wait{position:absolute;inset:0;background:linear-gradient(100deg,var(--sunk) 30%,var(--canvas) 50%,var(--sunk) 70%);background-size:300% 100%;animation:thumb-wait 1.4s linear infinite}
 @keyframes thumb-wait{to{background-position:-150% 0}}
 .thumb-art{display:grid;gap:6px;padding:14px;min-height:118px;align-content:start}
@@ -394,6 +401,8 @@ dialog.dlg.dlg-wide{width:min(760px,calc(100% - 24px));max-height:calc(100vh - 3
 .gallery-presets{grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:14px}
 .preset-live{position:relative;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--sunk)}
 .preset-live iframe{position:absolute;left:0;top:0;border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff}
+.preset-live{position:relative}
+.preset-live-tour{position:absolute;right:10px;bottom:10px;z-index:2;opacity:.92}
 dialog.dlg.dlg-wide:has(.preset-live),dialog.dlg.dlg-wide:has(.fx-live.big){width:min(920px,calc(100% - 24px))}
 .foot{border-top:1px solid var(--hair);margin-top:64px;padding:24px 0 calc(24px + env(safe-area-inset-bottom,0px));color:var(--muted);font-size:.86rem}
 .foot-in{max-width:1240px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));display:flex;gap:10px 24px;flex-wrap:wrap;align-items:center}
