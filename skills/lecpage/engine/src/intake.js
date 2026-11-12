@@ -240,6 +240,9 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const pl = prev?.live || {};
   bp.live = { provider: pl.provider || 'none', url: pl.url || '', anonKey: pl.anonKey || '', code: pl.code || randomCode(), anonymous: true, features: pl.features || [] };
   bp.access = prev?.access || { mode: 'link' };
+  // 개인정보(받을 정보·보관 기간·동의·처리 위탁)도 강사가 정한 값만. AI 답·교재가 이름·소속 수집, 동의 생략, 가짜 처리자 목록
+  // (바로 공개 때 운영자 서버가 처리자로 적히지 않게 됨)을 넣지 못하게 함. 출석을 켜면 applyFeatures가 이름·소속으로 바꿈
+  bp.privacy = prev?.privacy && typeof prev.privacy === 'object' ? clone(prev.privacy) : { collect: ['nickname'], retentionDays: 30, consent: true, processors: [] };
   const done = applyFeatures(bp, info);
   // 구성 결과: 초안이 정한 흐름·이유는 그대로, AI 답이면 AI가 적은 흐름·이유(없으면 교재 신호로 정한 것)에 엔진의 '권하는 기능'과
   // '교재에 있는데 싣지 못한 것'을 붙임. 컨셉의 섹션·기능(concept.sections·features)이 비었으면 실제 구성으로 채움
@@ -281,6 +284,9 @@ export function sanitizeImported(bp0) {
   for (const k of UNTRUSTED_META) delete bp.meta[k];
   const f = bp.live?.features || [];
   bp.live = { provider: f.length ? 'local' : 'none', url: '', anonKey: '', code: randomCode(), features: f, anonymous: true };
+  // 개인정보: 앱에서 강사가 보고 고치는 값(받을 정보·보관 기간)만 받음. 동의 생략·처리자 목록·문의처는 파일에서 받지 않음
+  const pv = bp.privacy && typeof bp.privacy === 'object' ? bp.privacy : {};
+  bp.privacy = { collect: Array.isArray(pv.collect) && pv.collect.length ? pv.collect : ['nickname'], retentionDays: pv.retentionDays || 30, consent: true, processors: [] };
   return bp;
 }
 

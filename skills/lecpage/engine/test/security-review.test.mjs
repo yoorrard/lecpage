@@ -74,6 +74,27 @@ test('교재에서 찾은 회의·설문 주소: 강사가 확인하기 전에�
   assert.equal(keepUrlText('주소 없음', skip), '주소 없음');
 });
 
+test('개인정보 설정: AI 답·가져온 파일이 받을 정보·동의·처리자 목록을 바꾸지 못함(강사가 정한 값만)', () => {
+  const ai = { meta: { title: 'AI' }, sections: [{ type: 'hero' }, { type: 'qa' }],
+    privacy: { collect: ['nickname', 'name', 'school', 'email'], retentionDays: 365, consent: false, processors: [{ name: '가짜 처리자', country: '어딘가' }], contact: 'evil@example.com' } };
+  // 처음 만들 때: 기본값(별명만·30일·동의 받음·처리자 없음)
+  let bp = E.applyInfo(structuredClone(ai), { title: '연수', features: ['qa'] }, null, null);
+  assert.deepEqual(bp.privacy, { collect: ['nickname'], retentionDays: 30, consent: true, processors: [] });
+  // 다시 만들 때: 강사가 고른 값(이름·소속, 60일)을 지킴
+  const prev = { privacy: { collect: ['nickname', 'name', 'school'], retentionDays: 60, consent: true, processors: [] }, live: { features: ['qa'] } };
+  bp = E.applyInfo(structuredClone(ai), { title: '연수', features: ['qa'] }, null, prev);
+  assert.deepEqual(bp.privacy, prev.privacy);
+  // 출석을 켜면 이름·소속(동의 상자와 함께)
+  bp = E.applyInfo(structuredClone(ai), { title: '연수', features: ['attendance'] }, null, null);
+  assert.deepEqual([bp.privacy.collect, bp.privacy.consent], [['nickname', 'name', 'school'], true]);
+  // 가져온 파일: 받을 정보·보관 기간은 받고(앱에서 보임), 동의 생략·처리자·문의처는 버림
+  const imp = E.sanitizeImported(structuredClone(ai));
+  assert.deepEqual(imp.privacy, { collect: ['nickname', 'name', 'school', 'email'], retentionDays: 365, consent: true, processors: [] });
+  const html = E.build({ ...imp, live: { provider: 'local', features: ['qa'] } }, { runtime: nodeRuntime() }).files['privacy.html'];
+  assert.match(html, /365일/);
+  assert.ok(!html.includes('가짜 처리자') && !html.includes('evil@example.com'));
+});
+
 // 런타임: 짧은 주소는 손으로 칠 글자에만. 파일로 연 안내문에서도 QR·복사에 짧은 주소를 넣지 않음(브라우저가 있을 때만)
 const require = createRequire(import.meta.url);
 let chromium = null;
