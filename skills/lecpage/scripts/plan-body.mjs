@@ -44,8 +44,10 @@ const R = rng(20261112);
 const P = PRESETS.map((p) => ({ id: p.id, tags: tagsOf(p), p }));
 // 고정: 예시 두 벌의 프리셋은 연수의 성격에 맞춰 직접 정함(마음 연수는 선언문·무대·질문 색인·그래픽 마무리, 데이터 연수는 차분한 줄·시간 축·낱말 그물·서명 카드)
 const PIN = {
-  'ripple-center': { goals: 'manifesto', message: 'stage', steps5: 'wheel', faq: 'index', instructor: 'portrait', closing: 'poster' },
-  'minute-map': { goals: 'ledger', schedule: 'track', glossary: 'web', quiz: 'cards', closing: 'card' },
+  'ripple-center': { goals: 'manifesto', message: 'stage', steps5: 'wheel', schedule: 'clock', faq: 'index', materials: 'pile', instructor: 'portrait', closing: 'poster' },
+  'minute-map': { goals: 'ledger', schedule: 'track', glossary: 'web', quiz: 'cards', materials: 'files', closing: 'card' },
+  // 배치가 다른 디자인 여섯(나란히 견주어 보는 일이 많음): 목표만큼은 서로 다른 구조로
+  'mosaic-split': { goals: 'bento' }, 'cover-sheet': { goals: 'columns' }, 'vertical-type': { goals: 'journey' }, 'swiss-offset': { goals: 'ledger' },
 };
 const plan = P.map((x) => Object.fromEntries(TYPES.map((t) => [t, PIN[x.id]?.[t] || L.variantIds(t).slice().sort((a, b) => fit(x.tags, t, b) - fit(x.tags, t, a))[0]]))); // 처음: 분위기에 가장 맞는 변형
 
@@ -62,11 +64,16 @@ for (const k of LK) {
   tx[k] = P.map((_, i) => ps.filter((n) => TEXT(lists[k][n], vt(k, i, n))).length);
 }
 const pen = { pair: (k, n) => Math.max(0, n - half[k]) * 2, g: (n) => Math.max(0, 2 - n) * 3, t: (k, n) => Math.max(0, n - half[k]) * 3 };
-function total() { let bad = 0, pref = 0; for (let i = 0; i < P.length; i++) for (const t of TYPES) pref += fit(P[i].tags, t, plan[i][t]); for (const k of LK) for (let i = 0; i < P.length; i++) { bad += pen.g(gr[k][i]) + pen.t(k, tx[k][i]); for (let j = i + 1; j < P.length; j++) bad += pen.pair(k, same[k][i][j]); } return { bad, pref }; }
+// 고르게 쓰기(부드러운 값): 한 변형을 너무 많은 프리셋이 쓰면 깎음(그림 배치가 몇 가지에 몰리지 않게). 한도 = 프리셋 수 ÷ 변형 수 + 2
+const use = Object.fromEntries(TYPES.map((t) => [t, Object.fromEntries(L.variantIds(t).map((v) => [v, plan.filter((x) => x[t] === v).length]))]));
+const cap = (t) => Math.ceil(P.length / L.variantIds(t).length) + 2, LAMBDA = 1.2;
+const over = (t, n) => Math.max(0, n - cap(t)) ** 2 * LAMBDA;
+function total() { let bad = 0, pref = 0; for (let i = 0; i < P.length; i++) for (const t of TYPES) pref += fit(P[i].tags, t, plan[i][t]); for (const t of TYPES) for (const n of Object.values(use[t])) pref -= over(t, n); for (const k of LK) for (let i = 0; i < P.length; i++) { bad += pen.g(gr[k][i]) + pen.t(k, tx[k][i]); for (let j = i + 1; j < P.length; j++) bad += pen.pair(k, same[k][i][j]); } return { bad, pref }; }
 /** (i, t)를 nv로 바꿨을 때 위반·어울림의 변화(apply면 실제로 바꿈) */
 function delta(i, t, nv, apply) {
   const old = plan[i][t]; let db = 0;
-  const dp = fit(P[i].tags, t, nv) - fit(P[i].tags, t, old);
+  const dp = fit(P[i].tags, t, nv) - fit(P[i].tags, t, old) - (over(t, use[t][nv] + 1) - over(t, use[t][nv])) - (over(t, use[t][old] - 1) - over(t, use[t][old]));
+  if (apply) { use[t][nv]++; use[t][old]--; }
   for (const k of LK) {
     // 같은 종류가 여러 자리에 있으면(자료·연수 후) 자리마다의 변화를 모아 한 번에 셈
     let dg = 0, dt = 0; const ds = new Array(P.length).fill(0);
