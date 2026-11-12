@@ -55,7 +55,7 @@ const MARK = {
   'message.stage': /<div class="lp-stage-art" aria-hidden="true"><svg class="lp-motif/,
   'steps5.wheel': /<div class="lp-wh" data-diagram data-linked[\s\S]*?<g class="lp-wh-node" data-seg/, 'steps5.flow': /<ol class="lp-fl" data-diagram/, 'steps5.tabs': /<div class="lp-tb lp-tb--words" data-pager><nav class="lp-tb-list"[^>]*><a href="#steps-p0" aria-current="true">/,
   'outline.zigzag': /<ol class="lp-zz"[\s\S]*?<div class="lp-ol-art" aria-hidden="true"><svg class="lp-motif/, 'outline.bento': /<ol class="lp-ob"/, 'outline.toc': /<ol class="lp-toc"/, 'outline.filmstrip': /<div class="lp-film" data-film><ol class="lp-film-track" tabindex="0"/,
-  'schedule.track': /<div class="lp-trk" data-diagram data-linked><div class="lp-trk-bar" aria-hidden="true"><i data-seg class="c0" style="--min:20;--k:0">/, 'schedule.clock': /<div class="lp-clk" data-diagram data-linked>[\s\S]*?class="lp-clk-seg c0" data-seg/, 'schedule.table': /<table class="lp-tbl lp-stbl" data-sched/, 'schedule.blocks': /<ol class="lp-blk" data-sched data-diagram/,
+  'schedule.track': /<div class="lp-trk" data-diagram data-linked><div class="lp-trk-bar" data-art aria-hidden="true"><i data-seg class="c0" style="--min:20;--k:0">/, 'schedule.clock': /<div class="lp-clk" data-diagram data-linked>[\s\S]*?class="lp-clk-seg c0" data-seg/, 'schedule.table': /<table class="lp-tbl lp-stbl" data-sched/, 'schedule.blocks': /<ol class="lp-blk" data-sched data-diagram/,
   'procedure.flow': /<ol class="lp-pf" data-diagram/, 'procedure.cards': /<ol class="lp-pc"/,
   'table.rowcards': /<div class="lp-rc" role="list"/, 'table.compare': /<div class="lp-cmp" role="list"[^>]*style="--n:2;--rows:3"/,
   'cases.quote': /<div class="lp-cqs"/, 'cases.notes': /<div class="lp-cns"/,

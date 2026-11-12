@@ -68,10 +68,12 @@
 .lp-jr > li:last-child .lp-jr-pin{width:56px;height:56px;margin:-28px 0 0 -28px;background:var(--foreground);color:var(--background)}
 .lp-jr p{grid-column:2;padding:var(--sp-4) 0 var(--sp-4) var(--sp-5);max-width:24em;font-size:var(--fs-goal);font-weight:650;line-height:1.42;letter-spacing:-.02em;text-wrap:balance}
 @media (min-width:900px){
-  .lp-jr > li{grid-template-columns:minmax(0,1fr) 140px minmax(0,1fr)}
-  .lp-jr-road{left:calc(50% - 70px);width:140px}
-  .lp-jr-pin{left:calc(50% - 70px + 140px * .78)}
-  .lp-jr > li:nth-child(even) .lp-jr-pin{left:calc(50% - 70px + 140px * .22)}
+  .lp-jr > li{grid-template-columns:minmax(0,1fr) 200px minmax(0,1fr);min-height:clamp(150px,14vw,190px)}
+  .lp-jr-road{left:calc(50% - 100px);width:200px}
+  .lp-jr-bed{stroke-width:30}
+  .lp-jr-pin{left:calc(50% - 100px + 200px * .78);width:56px;height:56px;margin:-28px 0 0 -28px;font-size:var(--fs-lg)}
+  .lp-jr > li:nth-child(even) .lp-jr-pin{left:calc(50% - 100px + 200px * .22)}
+  .lp-jr > li:last-child .lp-jr-pin{width:68px;height:68px;margin:-34px 0 0 -34px}
   .lp-jr > li:nth-child(odd) p{grid-column:3;padding-left:var(--sp-6)}
   .lp-jr > li:nth-child(even) p{grid-column:1;grid-row:1;justify-self:end;padding:var(--sp-4) var(--sp-6) var(--sp-4) 0;text-align:right}
 }
@@ -687,7 +689,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 /*@v:discuss.bigq*/
 /* 함께 나눌 질문 · 큰 물음표: 물음표 하나가 크게 서고(그림), 질문이 큰 글자로. 물음표는 스크롤에 맞춰 살짝 기울어짐(꾸밈) */
 .lp-bq2{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-5) clamp(28px,5vw,80px);align-items:center;max-width:64rem;margin-inline:auto}
-.lp-bq2-mark{display:block;justify-self:center;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(8rem,5rem + 16vw,20rem);line-height:.82;color:var(--primary);transform-origin:50% 80%}
+.lp-bq2-mark{display:grid;place-items:center;justify-self:center;width:clamp(10rem,6rem + 18vw,22rem);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--primary) 14%,transparent) 0 62%,transparent 62.5%),repeating-radial-gradient(circle,transparent 0 13px,color-mix(in srgb,var(--primary) 22%,transparent) 13px 14px);font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(6.5rem,4rem + 11vw,14rem);line-height:1;color:var(--primary);transform-origin:50% 60%}
 .lp-bq2-list{list-style:none;display:grid;gap:var(--sp-5)}
 .lp-bq2-list > li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--sp-3);align-items:baseline}
 .lp-bq2-no{font-family:var(--font-mono);font-size:var(--fs-sm);font-weight:700;color:var(--primary)}

@@ -74,7 +74,7 @@ export function pageFingerprints() {
       const a = Math.min(area(r), cArea); gfx += a; if (g.closest('[data-diagram]') || g.matches('[data-diagram]')) diagram += a;
     }
     for (const n of sec.querySelectorAll('span,b,p,dd,dt,time,i,li')) {
-      if (n.children.length || n.closest('.lp-head,svg,[aria-hidden="true"]')) continue; // 순번(꾸밈 숫자)은 세지 않음: 실제 값만
+      if (n.children.length || n.closest('.lp-head,svg') || (n.closest('[aria-hidden="true"]') && !n.closest('.fx-counter'))) continue; // 순번(꾸밈 숫자)은 세지 않음: 실제 값만(숫자 세기가 화면용으로 감싼 값은 셈)
       const t = n.textContent.trim(); if (!t || t.length > 6 || !/\d/.test(t)) continue;
       const f = parseFloat(cs(n).fontSize); if (f < 40) continue;
       bigNum += area(n.getBoundingClientRect());
@@ -101,19 +101,21 @@ export function summarize(byPreset) {
   for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
     const a = byPreset[ids[i]], b = byPreset[ids[j]], n = Math.min(a.length, b.length);
     // same: 지문 전체(뼈대·열·머리 자리·정렬·주인공)가 같음 · sameS: 구조만(뼈대·주인공) 같음 — 정렬만 바꾼 것은 다르다고 세지 않음
-    let same = 0, sameS = 0; for (let k = 0; k < n; k++) { if (a[k].type !== b[k].type) continue; if (a[k].fp === b[k].fp) same++; if (a[k].skeleton === b[k].skeleton && a[k].prot === b[k].prot) sameS++; }
-    pairs.push({ a: ids[i], b: ids[j], same, sameS, n, ratio: n ? same / n : 0, sratio: n ? sameS / n : 0 });
+    // 구조가 같음 = 뼈대·열 수·주인공이 같음(정렬·머리 자리는 뺌). 읽는 칸 = 따라 하는 칸(조작)을 뺀 섹션
+    let same = 0, sameS = 0, sameR = 0, nR = 0; for (let k = 0; k < n; k++) { if (a[k].type !== b[k].type) continue; const st = a[k].skeleton === b[k].skeleton && a[k].prot === b[k].prot && a[k].cols === b[k].cols; if (a[k].fp === b[k].fp) same++; if (st) sameS++; if (a[k].prot !== 'tool' && b[k].prot !== 'tool') { nR++; if (st) sameR++; } }
+    pairs.push({ a: ids[i], b: ids[j], same, sameS, sameR, n, nR, ratio: n ? same / n : 0, sratio: n ? sameS / n : 0, rratio: nR ? sameR / nR : 0 });
   }
   const per = ids.map((id) => {
     const s = byPreset[id], n = s.length || 1;
     return { id, sections: s.length, textOnly: s.filter((x) => x.prot === 'text').length, graphic: s.filter((x) => (x.prot === 'figure' || x.prot === 'diagram') && !/^(deck|gallery)$/.test(x.type)).length, number: s.filter((x) => x.prot === 'number').length, tool: s.filter((x) => x.prot === 'tool').length, nonLeft: s.filter((x) => /c|r/.test(x.align) || x.headSide === 'right').length, moving: s.filter((x) => x.moving).length, scroll: s.filter((x) => x.scroll && !x.calm).length, react: s.filter((x) => x.react && !x.calm).length, enterKinds: new Set(s.map((x) => x.enterMode).filter(Boolean)).size, textRatio: +(s.filter((x) => x.prot === 'text').length / n).toFixed(2) };
   });
-  const types = {}; for (const id of ids) for (const x of byPreset[id]) (types[x.type] ||= new Set()).add(`${x.skeleton}|${x.prot}`);
+  const types = {}; for (const id of ids) for (const x of byPreset[id]) (types[x.type] ||= new Set()).add(`${x.skeleton}|${x.prot}|${x.cols}`);
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   return {
     presets: ids.length, pairs: pairs.length,
     over50: pairs.filter((p) => p.ratio > 0.5).length, maxRatio: +Math.max(0, ...pairs.map((p) => p.ratio)).toFixed(2), meanRatio: +mean(pairs.map((p) => p.ratio)).toFixed(2),
     sOver50: pairs.filter((p) => p.sratio > 0.5).length, sMaxRatio: +Math.max(0, ...pairs.map((p) => p.sratio)).toFixed(2), sMeanRatio: +mean(pairs.map((p) => p.sratio)).toFixed(2),
+    rOver50: pairs.filter((p) => p.rratio > 0.5).length, rMaxRatio: +Math.max(0, ...pairs.map((p) => p.rratio)).toFixed(2), rMeanRatio: +mean(pairs.map((p) => p.rratio)).toFixed(2),
     worst: pairs.slice().sort((x, y) => y.sratio - x.sratio || y.ratio - x.ratio).slice(0, 5).map((p) => `${p.a}×${p.b} 구조 ${p.sameS}/${p.n}`),
     meanTextRatio: +mean(per.map((p) => p.textRatio)).toFixed(2), meanGraphic: +mean(per.map((p) => p.graphic)).toFixed(1), minGraphic: Math.min(...per.map((p) => p.graphic)),
     meanNonLeft: +mean(per.map((p) => p.nonLeft)).toFixed(1), minNonLeft: Math.min(...per.map((p) => p.nonLeft)), meanMoving: +mean(per.map((p) => p.moving)).toFixed(1), meanScroll: +mean(per.map((p) => p.scroll)).toFixed(1), meanReact: +mean(per.map((p) => p.react)).toFixed(1), meanEnterKinds: +mean(per.map((p) => p.enterKinds)).toFixed(1), meanSections: +mean(per.map((p) => p.sections)).toFixed(1),
@@ -123,7 +125,7 @@ export function summarize(byPreset) {
 }
 
 export function markdown(name, S) {
-  const L = [`### ${name}`, '', `- 프리셋 ${S.presets}개 · 쌍 ${S.pairs}개 · 본문 섹션 평균 ${S.meanSections}개`, `- 구조 지문(뼈대·주인공, 정렬은 뺌)이 절반 넘게 같은 쌍: **${S.sOver50}** · 가장 비슷한 쌍: **${Math.round(S.sMaxRatio * 100)}%** · 평균 **${Math.round(S.sMeanRatio * 100)}%**`, `- 전체 지문(정렬·머리 자리·열 수 포함)이 절반 넘게 같은 쌍: ${S.over50} · 가장 비슷한 쌍 ${Math.round(S.maxRatio * 100)}% · 평균 ${Math.round(S.meanRatio * 100)}%`, `- 가장 비슷한 쌍: ${S.worst.join(' · ')}`, `- 글만 있는 섹션 비율(평균/최대): **${Math.round(S.meanTextRatio * 100)}% / ${Math.round(S.maxTextRatio * 100)}%** · 그래픽이 주인공인 섹션(평균/최소): **${S.meanGraphic} / ${S.minGraphic}** · 왼쪽 정렬이 아닌 섹션(평균/최소): **${S.meanNonLeft} / ${S.minNonLeft}**`,
+  const L = [`### ${name}`, '', `- 프리셋 ${S.presets}개 · 쌍 ${S.pairs}개 · 본문 섹션 평균 ${S.meanSections}개`, `- 구조 지문(뼈대·열 수·주인공, 정렬은 뺌)이 절반 넘게 같은 쌍: **${S.sOver50}** · 가장 비슷한 쌍: **${Math.round(S.sMaxRatio * 100)}%** · 평균 **${Math.round(S.sMeanRatio * 100)}%**`, `- 읽는 칸만(따라 하는 칸 제외) 구조가 절반 넘게 같은 쌍: **${S.rOver50}** · 가장 비슷한 쌍: **${Math.round(S.rMaxRatio * 100)}%** · 평균 **${Math.round(S.rMeanRatio * 100)}%**`, `- 전체 지문(정렬·머리 자리·열 수 포함)이 절반 넘게 같은 쌍: ${S.over50} · 가장 비슷한 쌍 ${Math.round(S.maxRatio * 100)}% · 평균 ${Math.round(S.meanRatio * 100)}%`, `- 가장 비슷한 쌍: ${S.worst.join(' · ')}`, `- 글만 있는 섹션 비율(평균/최대): **${Math.round(S.meanTextRatio * 100)}% / ${Math.round(S.maxTextRatio * 100)}%** · 그래픽이 주인공인 섹션(평균/최소): **${S.meanGraphic} / ${S.minGraphic}** · 왼쪽 정렬이 아닌 섹션(평균/최소): **${S.meanNonLeft} / ${S.minNonLeft}**`,
     `- 첫 화면 밖 움직임·반응 섹션(평균): **${S.meanMoving}** (스크롤 연동 ${S.meanScroll} · 가리킴·누름 반응 ${S.meanReact}) · 등장 방식 종류(평균): ${S.meanEnterKinds}`, `- 섹션 종류별 서로 다른 구조 지문 수(프리셋 ${S.presets}개 가운데): ${Object.entries(S.distinctByType).map(([t, n]) => `${t} ${n}`).join(' · ')}`, '', '| 프리셋 | 섹션 | 글만 | 숫자 | 그래픽 | 왼쪽 아님 | 움직임·반응 | 스크롤 | 반응 | 등장 종류 |', '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|'];
   for (const p of S.per) L.push(`| ${p.id} | ${p.sections} | ${p.textOnly} | ${p.number} | ${p.graphic} | ${p.nonLeft} | ${p.moving} | ${p.scroll} | ${p.react} | ${p.enterKinds} |`);
   return L.join('\n');
@@ -162,7 +164,12 @@ async function main(argv) {
     await Promise.all(Array.from({ length: 6 }, async () => {
       for (let j; (j = queue.shift());) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
-        try { await page.goto(`http://127.0.0.1:${srv.address().port}/${j.key}/index.html`, { waitUntil: 'load', timeout: 30000 }); await page.waitForTimeout(700); (result[j.ex] ||= {})[j.id] = await page.evaluate(pageFingerprints); } catch (e) { console.error('검사 실패', j.id, j.ex, String(e.message).slice(0, 80)); }
+        try {
+          await page.goto(`http://127.0.0.1:${srv.address().port}/${j.key}/index.html`, { waitUntil: 'load', timeout: 30000 });
+          // 사람이 읽듯 끝까지 내렸다가 처음으로: 들어올 때 한 번 움직이는 그림이 제자리에 온 모습을 잼
+          await page.evaluate(async () => { document.documentElement.style.scrollBehavior = 'auto'; for (let y = 0; y < document.body.scrollHeight; y += 500) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 40)); } scrollTo(0, 0); });
+          await page.waitForTimeout(1200); (result[j.ex] ||= {})[j.id] = await page.evaluate(pageFingerprints);
+        } catch (e) { console.error('검사 실패', j.id, j.ex, String(e.message).slice(0, 80)); }
         await page.close();
       }
     }));
