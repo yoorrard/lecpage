@@ -198,19 +198,43 @@ const FITS = {
   'materials.shelf': (s) => n(s) >= 1 && n(s) <= 10, 'deck.rail': (s) => n(s, 'slides') >= 3, 'cases.notes': (s) => n(s) <= 8,
 };
 /**
- * 이 섹션의 배치: 설계도에 적은 layout → 프리셋의 본문 계획 → 섹션 종류의 기본. 내용이 배치에 맞지 않으면 기본으로.
+ * 교재 구성의 흐름(설계도 structure.flow, decide/structure.js)이 주인공으로 삼는 칸: 프리셋 계획이 그 칸에 기본(글) 배치를 골랐을 때만
+ * 그림·도식 배치로 바꿈(이미 다른 배치를 고른 프리셋은 그대로 — 프리셋끼리의 차이를 지킴)
+ */
+const FLOW_LEAD = {
+  procedure: { procedure: 'flow', steps5: 'flow' }, discussion: { discuss: 'bigq', cases: 'quote' }, course: { sessions: 'map' },
+  event: { schedule: 'track', glance: 'tally' }, talk: { message: 'stage', speakers: 'lineup' },
+};
+const fitsV = (t, v, s) => !FITS[`${t}.${v}`] || FITS[`${t}.${v}`](s);
+/**
+ * 이 섹션의 배치: 설계도에 적은 layout → (흐름의 주인공 칸) → 프리셋의 본문 계획 → 섹션 종류의 기본. 내용이 배치에 맞지 않으면 기본으로.
+ * 같은 종류의 칸이 앞에 또 있으면(한눈에 보기 둘 등) 앞 칸과 다른 배치를 계획 순서대로 골라 같은 모양이 되풀이되지 않게 함.
+ * @param site 사이트의 섹션 목록 또는 { sections, flow } — 없으면 이 섹션만 보고 정함
  * @returns {{ type, variant, stance, meta, own, isDefault }} own = 설계도에서 직접 고름
  */
-export function variantOf(s, presetId) {
+export function variantOf(s, presetId, site) {
   const t = variantType(s.type), all = BODY_VARIANTS[t];
   if (!all) return { type: t, variant: '', stance: '', meta: null, own: false, isDefault: true };
+  const list = Array.isArray(site) ? site : site?.sections || null, flow = Array.isArray(site) ? '' : site?.flow || '';
   const own = typeof s.layout === 'string' && s.type !== 'stations' ? s.layout.split('@') : [];
-  const plan = presetBody(presetId)[t];
-  let variant = all[own[0]] ? own[0] : plan?.variant || defaultVariant(t);
-  if (FITS[`${t}.${variant}`] && !FITS[`${t}.${variant}`](s)) variant = defaultVariant(t);
+  const plan = presetBody(presetId)[t], def = defaultVariant(t);
+  let variant;
+  if (all[own[0]]) variant = fitsV(t, own[0], s) ? own[0] : def;
+  else {
+    let base = plan?.variant || def;
+    const lead = FLOW_LEAD[flow]?.[t];
+    if (lead && base === def && fitsV(t, lead, s)) base = lead;
+    const prev = list ? list.slice(0, Math.max(0, list.indexOf(s))).filter((x) => variantType(x.type) === t) : [];
+    if (!prev.length) variant = fitsV(t, base, s) ? base : def;
+    else {
+      const used = new Set(prev.map((x) => variantOf(x, presetId, site).variant)), ids = variantIds(t), k = ids.indexOf(base);
+      const order = ids.slice(k).concat(ids.slice(0, k));
+      variant = order.find((v) => fitsV(t, v, s) && !used.has(v)) || (fitsV(t, base, s) ? base : def);
+    }
+  }
   const meta = all[variant];
-  const stance = all[own[0]] ? (STANCES[own[1]] || (own[1] === 'l' ? '' : STANCES[meta.stance] || '')) : plan?.stance || STANCES[meta.stance] || '';
-  return { type: t, variant, stance, meta, own: !!all[own[0]], isDefault: variant === defaultVariant(t) };
+  const stance = all[own[0]] ? (STANCES[own[1]] || (own[1] === 'l' ? '' : STANCES[meta.stance] || '')) : (variant === plan?.variant ? plan?.stance : '') || STANCES[meta.stance] || '';
+  return { type: t, variant, stance, meta, own: !!all[own[0]], isDefault: variant === def };
 }
 /** 설계도 검증용: 섹션 종류에 맞는 layout 값이면 그대로('변형' 또는 '변형@c|r|l'), 아니면 '' */
 export function cleanLayout(type, v) {
@@ -219,14 +243,15 @@ export function cleanLayout(type, v) {
   return BODY_VARIANTS[variantType(type)]?.[id] ? id + (/^[crl]$/.test(st) ? '@' + st : '') : '';
 }
 /** 이 사이트에 쓰인 배치 이름들('종류.변형'): 런타임 CSS(runtime/body.css)에서 쓰는 묶음만 남길 때 */
-export function usedVariants(sections, presetId) {
-  const out = new Set();
-  for (const s of sections) { const v = variantOf(s, presetId); if (v.variant) out.add(`${v.type}.${v.variant}`); }
+export function usedVariants(sections, presetId, flow = '') {
+  const out = new Set(), site = { sections, flow };
+  for (const s of sections) { const v = variantOf(s, presetId, site); if (v.variant) out.add(`${v.type}.${v.variant}`); }
   return [...out];
 }
 /** 제 그림이 움직이는 배치(runtime/body.css): 스크롤 연동 단계에서는 스크롤에 맞춰, 차분 단계에서는 들어올 때 한 번. 연출 검사가 효과처럼 셈 */
 export const MOTION_VARIANTS = ['goals.manifesto', 'goals.journey', 'glance.tally', 'message.stage', 'steps5.wheel', 'steps5.flow', 'outline.zigzag', 'outline.filmstrip', 'schedule.track', 'schedule.clock', 'materials.shelf', 'sessions.map', 'glossary.web', 'procedure.flow', 'discuss.bigq', 'closing.poster'];
 /** 정적 지문(테스트·문서): 섹션마다 '종류:변형'(자세는 뺌 — 정렬만 다른 것은 같은 구조로 셈) */
-export function bodyFingerprint(sections, presetId) {
-  return sections.filter((s) => s.type !== 'hero').map((s) => { const v = variantOf(s, presetId); return `${s.type}:${v.variant || '-'}`; });
+export function bodyFingerprint(sections, presetId, flow = '') {
+  const site = { sections, flow };
+  return sections.filter((s) => s.type !== 'hero').map((s) => { const v = variantOf(s, presetId, site); return `${s.type}:${v.variant || '-'}`; });
 }

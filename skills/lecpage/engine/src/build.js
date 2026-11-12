@@ -82,7 +82,7 @@ export function build(input, opts = {}) {
 
   files['assets/theme.css'] = theme.css;
   // 본문 배치 변형의 CSS는 이 사이트에 쓰인 배치만 붙임(runtime/body.css, 표지 @v:종류.변형)
-  files['assets/lecpage.css'] = read('lecpage.css') + pruneMarked(read('body.css'), usedVariants(bp.sections, design.preset), 'v');
+  files['assets/lecpage.css'] = read('lecpage.css') + pruneMarked(read('body.css'), usedVariants(bp.sections, design.preset, bp.structure?.flow), 'v');
   files['assets/boot.js'] = read('boot.js');
   files['assets/lecpage.js'] = read('lecpage.js');
   files['assets/screen.js'] = read('screen.js');

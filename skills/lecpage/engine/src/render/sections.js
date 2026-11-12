@@ -50,7 +50,7 @@ function enterFx(s, ctx, head) {
   if (head) return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: mode === 'rise' || mode === 'side' ? mode : 'fade', each: true }))}'`;
   const layout = LAYOUTS[s.type] || 'prose', fxs = ctx.design.effects || {};
   // 배치 변형: 그 배치의 낱개와 어울리는 방식(프리셋이 그 섹션 종류에 떠오르기가 아닌 방식을 따로 정했으면 그것)
-  const v = variantOf(s, ctx.design.preset);
+  const v = vOf(s, ctx);
   if (v.meta && !v.isDefault) {
     const m = (plan[s.type] && plan[s.type] !== 'rise' ? plan[s.type] : '') || v.meta.mode || plan.default;
     const own = rest >= 2 ? v.meta.enter2 : v.meta.enter;
@@ -106,6 +106,8 @@ function bandClass(ctx) { return getPreset(ctx.design.preset).variants.band === 
 
 /** 컨셉 모티프의 그림 가족: 컨셉의 motif 글 → 프리셋 */
 export const famOf = (ctx) => motifFamily(ctx.bp, ctx.design.preset);
+/** 이 섹션의 배치(사이트의 섹션 목록과 교재 구성 흐름까지 보고 정함) */
+export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow });
 /**
  * 모티프 되풀이(꾸밈, aria-hidden): 바탕이 같은 두 섹션 사이에는 모티프 한 줄을 구분 장식으로, 옅은 바탕 칸의 구석에는 모티프 그림을 옅게.
  * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만
@@ -124,7 +126,7 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   const labelled = s.title ? ` aria-labelledby="${esc(s.id)}-h"` : '';
   const enterId = ctx.design.effects?.['section.enter'];
   const calm = CALM_TYPES.includes(s.type);
-  const v = variantOf(s, ctx.design.preset);
+  const v = vOf(s, ctx);
   const frame0 = frameOf(s, ctx), frame = v.meta?.frame === 'full' && frame0 !== 'band' ? 'full' : frame0;
   // 선생님이 섹션 등장 효과를 직접 골랐으면 그것을, 아니면 프리셋의 페이지 연출 계획대로(화면 폭 띠는 제 움직임이 따로 있음)
   const enter = calm || frame === 'band' ? '' : enterId ? ` data-fx="${esc(enterId)}"` : enterFx(s, ctx, false);
@@ -150,7 +152,7 @@ function schedMins(s) {
   return s.items.map((i, n) => { const a = toMin(i.start), b = toMin(i.end) ?? toMin(s.items[n + 1]?.start); return a !== null && b !== null && b > a && b - a <= 600 ? b - a : 0; });
 }
 function variantSection(s, ctx) {
-  const v = variantOf(s, ctx.design.preset);
+  const v = vOf(s, ctx);
   if (!v.meta || v.isDefault || ['deck', 'message', 'closing'].includes(s.type)) return null;
   const fn = VB().VB[v.type]?.[v.variant];
   if (!fn) return null; // 모양만 바뀌는 배치(따라 하는 칸·교재·메시지·마무리)는 원래 함수가 data-variant를 달고 그림
@@ -256,7 +258,7 @@ function message(s, ctx) {
   if (s.note) aside += `<p class="lp-message-note">${br(s.note)}</p>`;
   const src = s.title ? '' : sourceLine(s.source, ctx);
   // 가운데 무대: 문장 뒤에 이 연수의 모티프 그림이 크게 깔림(꾸밈). 문장은 그림이 비켜 준 가운데 판 위
-  const stage = variantOf(s, ctx.design.preset).variant === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
+  const stage = vOf(s, ctx).variant === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
   return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`, ` data-style="${esc(s.style || 'statement')}"`);
 }
 
@@ -361,7 +363,7 @@ function deck(s, ctx) {
   </div>
   ${dl ? `<div class="lp-deck-dl">${dl}</div>` : ''}
   ${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}
-</div>${variantOf(s, ctx.design.preset).variant === 'rail' ? VB().VB.deck.rail(s) : ''}`);
+</div>${vOf(s, ctx).variant === 'rail' ? VB().VB.deck.rail(s) : ''}`);
 }
 
 // ── 실습 ─────────────────────────────────────────────────
@@ -567,7 +569,7 @@ function closing(s, ctx) {
   const wordsList = ctx.design.motion >= 3 ? closingWords(ctx) : [];
   const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
   // 배치 변형: finale 큰 문장(기본, 첫 화면 표식의 되풀이) · poster 이 연수의 모티프 그림이 띠를 채우고 문장은 그 위 판에 · card 가운데 서명 카드
-  const v = variantOf(s, ctx.design.preset), vid = v.variant || 'finale';
+  const v = vOf(s, ctx), vid = v.variant || 'finale';
   const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : deco;
   const inner = `${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
   const stance = v.stance ? ` data-stance="${v.stance}"` : '';
