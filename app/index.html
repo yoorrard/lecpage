@@ -15,6 +15,8 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- 넓은 화면 첫 화면 그림(가장 큰 그림이라 일찍 받음). 좁은 화면에서는 글 아래에 있어 미리 받지 않음 -->
+<link rel="preload" as="image" href="/src/landing/shots/hero-data-lab.webp" type="image/webp" media="(min-width: 980px)" fetchpriority="high">
 </head>
 <body>
 <div id="app"></div>
