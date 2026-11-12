@@ -4,6 +4,10 @@ import { renderHero, heroComposition, dateParts, titleRandom } from './hero.js';
 import { mosaicSvg } from './hero-graphic.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { contentRenderers, CONTENT_LAYOUTS } from './content.js'; // 본문 칸(절차·사례·질문·표·글)
+import { variantOf, motifFamily } from '../design/layouts.js'; // 본문 배치 변형(섹션 종류마다 구조가 다른 배치)
+import { bodyVariants, firstGlyph } from './body-variants.js';
+import { motifSvg, motifRule } from './body-graphic.js';
+import { inlineMd } from './markdown.js';
 
 /** 실습·질문·교재처럼 따라 하며 쓰는 칸: 움직임은 차분 단계(1)까지만 */
 export const CALM_TYPES = ['stations', 'qa', 'deck', 'board', 'poll', 'prompts'];
@@ -45,6 +49,14 @@ function enterFx(s, ctx, head) {
   let mode = plan[s.type] || plan.default;
   if (head) return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: mode === 'rise' || mode === 'side' ? mode : 'fade', each: true }))}'`;
   const layout = LAYOUTS[s.type] || 'prose', fxs = ctx.design.effects || {};
+  // 배치 변형: 그 배치의 낱개와 어울리는 방식(프리셋이 그 섹션 종류에 떠오르기가 아닌 방식을 따로 정했으면 그것)
+  const v = variantOf(s, ctx.design.preset);
+  if (v.meta && !v.isDefault) {
+    const m = (plan[s.type] && plan[s.type] !== 'rise' ? plan[s.type] : '') || v.meta.mode || plan.default;
+    const own = rest >= 2 ? v.meta.enter2 : v.meta.enter;
+    const items = [fxs['section.title'] ? '.lp-head > :not(.lp-h2)' : '.lp-head > *', own].filter(Boolean).join(', ');
+    return ` data-fx="reveal-up" data-fx-opts='${esc(JSON.stringify({ mode: m, items }))}'`;
+  }
   let body = ENTER_ITEMS[layout] || '.lp-wrap > :not(.lp-head)';
   if (layout === 'stack' && (rest >= 2 || fxs.cards === 'stack-cards')) body = '';
   if (layout === 'steps' && rest >= 3) body = '.lp-close-line';
@@ -92,11 +104,28 @@ export function frameOf(s, ctx) {
 /** 화면 폭을 채우는 띠(핵심 메시지·마무리)의 바탕: 프리셋 variants.band. invert면 그 자리만 반대 테마 색(theme.css .lp-invert) */
 function bandClass(ctx) { return getPreset(ctx.design.preset).variants.band === 'invert' ? ' lp-bleed lp-invert' : ' lp-bleed'; }
 
+/** 컨셉 모티프의 그림 가족: 컨셉의 motif 글 → 프리셋 */
+export const famOf = (ctx) => motifFamily(ctx.bp, ctx.design.preset);
+/**
+ * 모티프 되풀이(꾸밈, aria-hidden): 바탕이 같은 두 섹션 사이에는 모티프 한 줄을 구분 장식으로, 옅은 바탕 칸의 구석에는 모티프 그림을 옅게.
+ * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만
+ */
+function motifDeco(s, ctx, frame, calm) {
+  if (calm || frame === 'band' || ctx.design.motion === 0 && ctx.design.rest === 0) return '';
+  const list = ctx.bp.sections, i = list.indexOf(s), prev = list[i - 1], fam = famOf(ctx);
+  const plain = (x) => x && x.type !== 'hero' && !TINTED.includes(x.type) && !['message', 'closing'].includes(x.type) && !CALM_TYPES.includes(x.type);
+  let out = '';
+  if (plain(s) && plain(prev) && secNo(s, ctx) % 2 === 1) out += `<div class="lp-mrule-w" aria-hidden="true">${motifRule(fam, s.id)}</div>`;
+  if (TINTED.includes(s.type) && list.filter((x) => TINTED.includes(x.type) && !CALM_TYPES.includes(x.type)).indexOf(s) < 2) out += `<div class="lp-mbg" aria-hidden="true">${motifSvg(fam, `${ctx.bp.meta.title}|bg|${s.id}`, { w: 480, h: 320, glyph: firstGlyph(s.title || ctx.bp.meta.title), lite: true })}</div>`;
+  return out;
+}
+
 function wrap(s, ctx, inner, extraAttrs = '') {
   const labelled = s.title ? ` aria-labelledby="${esc(s.id)}-h"` : '';
   const enterId = ctx.design.effects?.['section.enter'];
   const calm = CALM_TYPES.includes(s.type);
-  const frame = frameOf(s, ctx);
+  const v = variantOf(s, ctx.design.preset);
+  const frame0 = frameOf(s, ctx), frame = v.meta?.frame === 'full' && frame0 !== 'band' ? 'full' : frame0;
   // 선생님이 섹션 등장 효과를 직접 골랐으면 그것을, 아니면 프리셋의 페이지 연출 계획대로(화면 폭 띠는 제 움직임이 따로 있음)
   const enter = calm || frame === 'band' ? '' : enterId ? ` data-fx="${esc(enterId)}"` : enterFx(s, ctx, false);
   const preset = getPreset(ctx.design.preset);
@@ -106,7 +135,38 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   // '표지 한 장' 프리셋: 섹션 제목의 첫 글자가 뒤에 크게 깔림(첫 화면 포스터의 되풀이). '시간 점묘': 섹션 위 점 줄에 지나온 섹션만큼 색 점(--no)
   const glyph = !calm && s.title && frame !== 'band' && preset.variants.hero === 'cover' ? ` data-glyph="${esc([...String(s.title).trim()].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '')}"` : '';
   const no = preset.variants.align === 'ledger' && frame !== 'band' ? ` style="--no:${secNo(s, ctx)}"` : '';
-  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${LAYOUTS[s.type] || 'prose'}" data-frame="${frame}"${echo}${glyph}${no}${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n<div class="lp-wrap">${inner}</div>\n</section>`;
+  // 배치 변형: data-variant(구조) · data-lead(주인공: 글·숫자·그림·도식·조작) · data-stance(이 섹션만 가운데·오른쪽)
+  const vat = v.meta ? ` data-variant="${esc(v.variant)}" data-lead="${v.meta.lead}"${v.stance ? ` data-stance="${v.stance}"` : ''}` : '';
+  const layout = v.meta && !v.isDefault ? v.variant : LAYOUTS[s.type] || 'prose';
+  return `<section id="${esc(s.id)}" class="${cls}" data-layout="${esc(layout)}" data-frame="${frame}"${vat}${echo}${glyph}${no}${calm ? ' data-calm' : ''}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}${labelled}${enter}${extraAttrs}>\n${motifDeco(s, ctx, frame, calm)}<div class="lp-wrap">${inner}</div>\n</section>`;
+}
+
+// ── 배치 변형으로 그리기(기본 배치가 아닐 때). 기본 배치는 아래 섹션별 함수가 그대로 그림 ──
+let VBC = null;
+const VB = () => VBC || (VBC = bodyVariants({ esc, br, pad2, icon, href, host, koDate, fx, md, sourceLine, itemFx, groupFx, completionLine, bentoSpans, hasDeck, famOf }));
+const FALLBACK = { goals: '연수 목표', outline: '오늘의 차례', schedule: '일정', tools: '도구 모음', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개', speakers: '연사', sessions: '차시', faq: '자주 묻는 질문', glossary: '용어 풀이', procedure: '절차', cases: '사례', discuss: '함께 나눌 질문' };
+/** 일정 순서마다 걸리는 분(끝 시각이 없으면 다음 순서의 시작까지). 알 수 없으면 0 */
+function schedMins(s) {
+  return s.items.map((i, n) => { const a = toMin(i.start), b = toMin(i.end) ?? toMin(s.items[n + 1]?.start); return a !== null && b !== null && b > a && b - a <= 600 ? b - a : 0; });
+}
+function variantSection(s, ctx) {
+  const v = variantOf(s, ctx.design.preset);
+  if (!v.meta || v.isDefault || ['deck', 'message', 'closing'].includes(s.type)) return null;
+  const fn = VB().VB[v.type]?.[v.variant];
+  if (!fn) return null; // 모양만 바뀌는 배치(따라 하는 칸·교재·메시지·마무리)는 원래 함수가 data-variant를 달고 그림
+  let body = '';
+  if (s.type === 'schedule') body = fn(s, ctx, { mins: schedMins(s) }); // 시간 도식은 모든 길이를 알 때만 고름(layouts.js knownDay)
+  else if (s.type === 'glance') body = fn(s, ctx, { numParts });
+  else if (s.type === 'materials') body = fn(s, ctx, { rows: s.items.map((m) => ({ kind: m.kind || 'FILE', title: m.title, desc: m.desc, size: m.size, url: m.href, download: !!m.href && !/^https?:/.test(m.href) })) }) + (s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : '');
+  else if (s.type === 'followup') {
+    const contact = ctx.bp.meta.contact;
+    body = (s.items.length ? fn(s, ctx, { rows: s.items.map((i) => ({ kind: FOLLOWUP_KIND[i.kind] || '링크', title: i.title, desc: i.desc, url: i.url })) }) : '') + (s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : '') + (contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : '');
+    return wrap(s, ctx, head(s, ctx, FALLBACK.followup) + body, ' data-followup');
+  } else if (s.type === 'sessions') body = fn(s, ctx, { auto: !s.items.some((x) => x.status) && s.items.some((x) => x.date) });
+  else if (s.type === 'instructor') { if (!ctx.bp.instructors.length) return ''; body = fn(s, ctx); }
+  else if (s.type === 'table') body = fn(s, ctx) + (s.note ? `<p class="lp-note">${inlineMd(s.note)}</p>` : '');
+  else body = fn(s, ctx);
+  return wrap(s, ctx, head(s, ctx, FALLBACK[s.type]) + body);
 }
 
 function liveOff(ctx) {
@@ -195,7 +255,9 @@ function message(s, ctx) {
   }
   if (s.note) aside += `<p class="lp-message-note">${br(s.note)}</p>`;
   const src = s.title ? '' : sourceLine(s.source, ctx);
-  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`, ` data-style="${esc(s.style || 'statement')}"`);
+  // 가운데 무대: 문장 뒤에 이 연수의 모티프 그림이 크게 깔림(꾸밈). 문장은 그림이 비켜 준 가운데 판 위
+  const stage = variantOf(s, ctx.design.preset).variant === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
+  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`, ` data-style="${esc(s.style || 'statement')}"`);
 }
 
 function steps5(s, ctx) {
@@ -299,7 +361,7 @@ function deck(s, ctx) {
   </div>
   ${dl ? `<div class="lp-deck-dl">${dl}</div>` : ''}
   ${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}
-</div>`);
+</div>${variantOf(s, ctx.design.preset).variant === 'rail' ? VB().VB.deck.rail(s) : ''}`);
 }
 
 // ── 실습 ─────────────────────────────────────────────────
@@ -504,7 +566,12 @@ function closing(s, ctx) {
   }[comp] || '';
   const wordsList = ctx.design.motion >= 3 ? closingWords(ctx) : [];
   const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
-  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="finale" data-frame="band"${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${graphic}${deco}<div class="lp-wrap">${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}</div>${band}</section>`;
+  // 배치 변형: finale 큰 문장(기본, 첫 화면 표식의 되풀이) · poster 이 연수의 모티프 그림이 띠를 채우고 문장은 그 위 판에 · card 가운데 서명 카드
+  const v = variantOf(s, ctx.design.preset), vid = v.variant || 'finale';
+  const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : deco;
+  const inner = `${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
+  const stance = v.stance ? ` data-stance="${v.stance}"` : '';
+  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="${vid === 'finale' ? 'finale' : vid}" data-frame="band" data-variant="${vid}" data-lead="${v.meta?.lead || 'text'}"${stance}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${vid === 'poster' ? '' : graphic}${art}<div class="lp-wrap">${vid === 'card' ? `<div class="lp-closing-card">${inner}</div>` : inner}</div>${band}</section>`;
 }
 
 function faq(s, ctx) {
@@ -529,5 +596,6 @@ export const RENDERERS = { hero, goals, glance, message, steps5, outline, schedu
 
 export function renderSection(s, ctx) {
   const fn = RENDERERS[s.type];
-  return fn ? fn(s, ctx) : '';
+  if (!fn) return '';
+  return variantSection(s, ctx) ?? fn(s, ctx);
 }

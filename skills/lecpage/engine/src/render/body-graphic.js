@@ -57,10 +57,16 @@ const MOTIF = {
   },
 };
 export const MOTIF_FAMILIES = Object.keys(MOTIF);
-/** 컨셉 모티프 그림 한 장. 같은 씨앗이면 같은 그림 */
-export function motifSvg(family, seed, { w = 400, h = 300, cls = '', glyph = '' } = {}) {
+/** 컨셉 모티프 그림 한 장. 같은 씨앗이면 같은 그림. lite = 바탕에 옅게 까는 작은 판(점·타일 수를 줄여 크기를 아낌) */
+export function motifSvg(family, seed, { w = 400, h = 300, cls = '', glyph = '', lite = false } = {}) {
   const f = MOTIF[family] ? family : 'rings';
-  return `<svg class="lp-motif lp-motif--${f}${cls ? ' ' + cls : ''}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">${MOTIF[f](seeded(hashStr(String(seed))), w, h, { glyph })}</svg>`;
+  const [W, H] = lite && /^(dots|tiles|stars)$/.test(f) ? [Math.round(w * 0.6), Math.round(h * 0.6)] : [w, h];
+  return `<svg class="lp-motif lp-motif--${f}${cls ? ' ' + cls : ''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">${MOTIF[f](seeded(hashStr(String(seed))), W, H, { glyph })}</svg>`;
+}
+/** 낱말 그물: 가운데 고리와 둘레 n개 자리로 가는 살(낱말 글자는 HTML이 얹음). 자리는 render/body-variants.js와 같은 각도 */
+export function webSvg(n) {
+  const pts = Array.from({ length: n }, (_, i) => { const a = (i / n) * 2 * Math.PI - Math.PI / 2; return [R(200 + Math.cos(a) * 152), R(200 + Math.sin(a) * 152)]; });
+  return `<svg class="lp-gw-svg" viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-gw-ring" cx="200" cy="200" r="152"/><circle class="lp-gw-core" cx="200" cy="200" r="62"/>${pts.map((p, i) => `<path class="lp-gw-spoke" data-seg style="--i:${i}" d="M${R(200 + (p[0] - 200) * 0.41)} ${R(200 + (p[1] - 200) * 0.41)}L${p[0]} ${p[1]}"/>`).join('')}</svg>`;
 }
 /** 구분 장식(인쇄소의 꽃 장식처럼 짧게): 모티프 가족의 한 줄 */
 export function motifRule(family, seed) {
@@ -96,7 +102,7 @@ export function clockSvg(rows, rest) {
 /** 둥근 고리: 요소 n개가 고리 위에 고르게 놓이고 서로 이어짐(다각형). 번호는 옆 목록의 번호와 같음 */
 export function wheelSvg(n) {
   const pts = Array.from({ length: n }, (_, i) => { const a = (i / n) * 2 * Math.PI - Math.PI / 2; return [R(200 + Math.cos(a) * 150), R(200 + Math.sin(a) * 150)]; });
-  return `<svg class="lp-wh-ring" viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-wh-track" cx="200" cy="200" r="150"/>${n > 2 ? `<polygon class="lp-wh-web" points="${pts.map((p) => p.join(',')).join(' ')}"/>` : ''}${pts.map((p, i) => `<g class="lp-wh-node" style="--i:${i}"><circle cx="${p[0]}" cy="${p[1]}" r="27"/><text x="${p[0]}" y="${p[1] + 8}" text-anchor="middle">${pad2(i + 1)}</text></g>`).join('')}<text class="lp-wh-n" x="200" y="226" text-anchor="middle">${n}</text></svg>`;
+  return `<svg class="lp-wh-ring" viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-wh-track" cx="200" cy="200" r="150"/>${n > 2 ? `<polygon class="lp-wh-web" points="${pts.map((p) => p.join(',')).join(' ')}"/>` : ''}${pts.map((p, i) => `<g class="lp-wh-node" data-seg style="--i:${i}"><circle cx="${p[0]}" cy="${p[1]}" r="27"/><text x="${p[0]}" y="${p[1] + 8}" text-anchor="middle">${pad2(i + 1)}</text></g>`).join('')}<text class="lp-wh-n" x="200" y="226" text-anchor="middle">${n}</text></svg>`;
 }
 
 /** 그림 숫자: 퍼센트는 도넛, 분·시간은 시계 고리(한 바퀴 = 60분), 40 이하의 개수는 점 묶음. 그릴 수 없는 값은 '' */

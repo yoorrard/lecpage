@@ -106,8 +106,10 @@ test('첫 화면 밖 전 구간 연출: 단계마다(0 정적 · 1 등장과 가
     // 2단계: 첫 화면 밖에서 효과가 있는 섹션 종류가 셋 넘게, 효과 가짓수도 셋 넘게
     const r2 = build('sel-story', { preset: p.id, motion: 2 }, school), s2 = sections(r2.files['index.html']).filter((s) => s.type !== 'hero');
     assert.equal(r2.design.rest, 2);
-    const kinds = s2.filter((s) => /data-fx=/.test(s.tag + s.body)).map((s) => s.type);
-    const fxs = new Set(s2.flatMap((s) => [...(s.tag + s.body).matchAll(/data-fx="([a-z0-9-]+)"/g)].map((m) => m[1])));
+    // 배치 변형 중 제 그림이 움직이는 것(design/layouts.js MOTION_VARIANTS: 스크롤에 맞춰 그려지는 길·축·고리 등)도 본문 연출로 셈
+    const mv = (s) => { const v = /data-variant="([a-z0-9]+)"/.exec(s.tag)?.[1]; return v && E.MOTION_VARIANTS.includes(`${s.type === 'followup' ? 'materials' : s.type}.${v}`) ? `variant:${v}` : ''; };
+    const kinds = s2.filter((s) => /data-fx=/.test(s.tag + s.body) || mv(s)).map((s) => s.type);
+    const fxs = new Set(s2.flatMap((s) => [...(s.tag + s.body).matchAll(/data-fx="([a-z0-9-]+)"/g)].map((m) => m[1]).concat(mv(s) || [])));
     assert.ok(new Set(kinds).size >= 3, `${p.id}: 연출이 있는 섹션 종류 ${new Set(kinds).size}`);
     assert.ok(fxs.size >= 3, `${p.id}: 본문 효과 가짓수 ${[...fxs].join()}`);
     // 겹침 방지: 스크롤에 맞춰 겹쳐 쌓이는 차례의 판, 선이 그려지는 일정 줄은 등장 대상에서 빠짐

@@ -8,6 +8,7 @@ import { getPreset } from './design/presets.js';
 import { designTokens } from './design/dtcg.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, renderPoster, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
+import { usedVariants } from './design/layouts.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
 // 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음
@@ -16,10 +17,12 @@ export const USER_ASSET = /^(?:assets\/)?(?:slides|media|files)\/[\w가-힣ㄱ-�
 const LIVE_FILES = { local: 'live/local.js', http: 'live/http.js', supabase: 'live/supabase.js', sheets: 'live/sheets.js' };
 
 // fx.css에서 쓰는 효과 묶음만 남김(표지: 줄 맨 앞의 @fx:id 주석, 아이디가 별표면 공통)
-export function pruneFxCss(css, ids) {
+export function pruneFxCss(css, ids) { return pruneMarked(css, ids, 'fx'); }
+/** 표지(줄 맨 앞의 @태그:id 주석)로 나눈 CSS에서 쓰는 묶음만 남김. 별표면 늘 남김 */
+export function pruneMarked(css, ids, tag) {
   const used = new Set(ids);
-  return String(css || '').split(/^(?=\/\*@fx:)/m).filter((chunk, i) => {
-    const m = /^\/\*@fx:(.*?)\*\//.exec(chunk);
+  return String(css || '').split(new RegExp(`^(?=\\/\\*@${tag}:)`, 'm')).filter((chunk, i) => {
+    const m = new RegExp(`^\\/\\*@${tag}:(.*?)\\*\\/`).exec(chunk);
     if (!m) return i === 0;
     const list = m[1].trim().split(/[\s,]+/).filter(Boolean);
     return list.includes('*') || list.some((x) => used.has(x));
@@ -78,7 +81,8 @@ export function build(input, opts = {}) {
   if (live) { files['console.html'] = renderConsole(ctx); files['privacy.html'] = renderPrivacy(ctx); }
 
   files['assets/theme.css'] = theme.css;
-  files['assets/lecpage.css'] = read('lecpage.css');
+  // 본문 배치 변형의 CSS는 이 사이트에 쓰인 배치만 붙임(runtime/body.css, 표지 @v:종류.변형)
+  files['assets/lecpage.css'] = read('lecpage.css') + pruneMarked(read('body.css'), usedVariants(bp.sections, design.preset), 'v');
   files['assets/boot.js'] = read('boot.js');
   files['assets/lecpage.js'] = read('lecpage.js');
   files['assets/screen.js'] = read('screen.js');

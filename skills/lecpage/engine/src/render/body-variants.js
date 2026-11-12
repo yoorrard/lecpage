@@ -1,8 +1,7 @@
 // 본문 배치 변형의 렌더러: 섹션 종류마다 구조가 다른 배치(design/layouts.js BODY_VARIANTS).
 // 기본 변형(목록의 첫째)은 sections.js·content.js의 원래 렌더러가 그리고, 여기에는 그 밖의 변형만 둡니다.
 // 규칙: 내용은 그대로(지어내지 않음) · 그림은 꾸밈(aria-hidden) · JS 없이도 내용이 다 보임 · 인쇄에서 다 펼쳐짐.
-import { motifSvg, roadSvg, clockSvg, wheelSvg, tallySvg } from './body-graphic.js';
-import { presetMotif } from '../design/layouts.js';
+import { motifSvg, roadSvg, clockSvg, wheelSvg, tallySvg, webSvg } from './body-graphic.js';
 import { inlineMd } from './markdown.js';
 
 const REST = /쉬는|휴식|점심|식사|break|lunch/i;
@@ -10,13 +9,17 @@ const REST = /쉬는|휴식|점심|식사|break|lunch/i;
 export const firstGlyph = (t) => { const s = String(t || '').trim(), lat = /^[A-Za-z0-9]{2,}/.exec(s); return lat ? lat[0].slice(0, 2) : ([...s].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || ''); };
 
 export function bodyVariants(H) {
-  const { esc, br, pad2, icon, href, host, koDate, fx, md, sourceLine, itemFx, groupFx, completionLine, bentoSpans, hasDeck } = H;
-  /** 이 연수의 모티프 그림(프리셋의 모티프 가족 × 연수 제목). key마다 다른 그림 */
-  const motif = (ctx, key, o = {}) => motifSvg(presetMotif(ctx.design.preset), `${ctx.bp.meta.title}|${key}`, { glyph: firstGlyph(ctx.bp.meta.title), ...o });
+  const { esc, br, pad2, icon, href, host, koDate, fx, md, sourceLine, itemFx, groupFx, completionLine, bentoSpans, hasDeck, famOf } = H;
+  /** 이 연수의 모티프 그림(컨셉 모티프 가족 × 연수 제목). key마다 다른 그림 */
+  const motif = (ctx, key, o = {}) => motifSvg(famOf(ctx), `${ctx.bp.meta.title}|${key}`, { glyph: firstGlyph(ctx.bp.meta.title), ...o });
   const slidesOf = (ctx) => ctx.bp.sections.find((x) => x.type === 'deck')?.slides || [];
   const goalMeta = (s, ctx) => { const done = completionLine(ctx), rows = [s.who && ['대상', s.who], done && ['이수', done]].filter(Boolean); return rows.length ? `<div class="lp-goal-meta">${rows.map(([k, v]) => `<p><b>${k}</b> ${esc(v)}</p>`).join('')}</div>` : ''; };
-  /** 탭(낱말 탭·질문 색인): 탭 줄 + 판. JS가 없으면 탭 줄은 숨고 판이 모두 펼쳐짐 */
-  const tabs = (sid, label, items, cls = '') => `<div class="lp-tb${cls}" data-tabs><div class="lp-tb-list" role="tablist" aria-label="${esc(label)}">${items.map((x, i) => `<button type="button" role="tab" id="${esc(sid)}-t${i}" aria-controls="${esc(sid)}-p${i}" aria-selected="${i ? 'false' : 'true'}"${i ? ' tabindex="-1"' : ''}><span class="lp-tb-n" aria-hidden="true">${pad2(i + 1)}</span><span>${esc(x.tab)}</span></button>`).join('')}</div><div class="lp-tb-panels">${items.map((x, i) => `<div class="lp-tb-panel${i ? '' : ' is-on'}" role="tabpanel" id="${esc(sid)}-p${i}" aria-labelledby="${esc(sid)}-t${i}">${x.panel}</div>`).join('')}</div></div>`;
+  /**
+   * 넘김(낱말 넘김): 위에 낱말 줄(같은 쪽 안 링크), 아래에 판이 옆으로 늘어선 띠(가로 스크롤 스냅).
+   * 아무것도 숨기지 않음: JS가 없으면 링크가 그 판으로 데려가고 띠는 손으로 밀어 넘김. JS는 부드럽게 넘기고 지금 판을 표시만 함.
+   * 판이 모두 한 줄에 같은 높이로 서 있어 넘겨도 아래 내용이 밀리지 않음(CLS 0). 인쇄에서는 세로로 다 펼쳐짐
+   */
+  const pager = (sid, label, items, cls = '') => `<div class="lp-tb${cls}" data-pager><nav class="lp-tb-list" aria-label="${esc(label)}">${items.map((x, i) => `<a href="#${esc(sid)}-p${i}"${i ? '' : ' aria-current="true"'}><span class="lp-tb-n" aria-hidden="true">${pad2(i + 1)}</span><span>${esc(x.tab)}</span></a>`).join('')}</nav><div class="lp-tb-panels" tabindex="0" role="group" aria-label="${esc(label)}, 옆으로 넘겨 보기">${items.map((x, i) => `<article class="lp-tb-panel" id="${esc(sid)}-p${i}">${x.panel}</article>`).join('')}</div></div>`;
   const tags = (list) => (list?.length ? `<ul class="lp-tags">${list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '');
 
   const VB = {};
@@ -50,8 +53,8 @@ export function bodyVariants(H) {
     wheel: (s) => `<div class="lp-wh" data-diagram data-linked style="--n:${s.items.length}">${wheelSvg(s.items.length)}<ol class="lp-wh-list">${s.items.map(stepLi).join('')}</ol></div>${closeLine(s)}`,
     /* 화살표 흐름도: 앞 단계가 다음 단계를 가리킴 */
     flow: (s) => `<ol class="lp-fl" data-diagram data-art style="--n:${s.items.length}">${s.items.map(stepLi).join('')}</ol>${closeLine(s)}`,
-    /* 낱말 탭: 낱말을 누르면 그 풀이가 크게 */
-    tabs: (s) => tabs(s.id, s.title || '핵심 단계', s.items.map((i, n) => ({ tab: i.word, panel: `<span class="lp-idx" aria-hidden="true">${pad2(n + 1)} / ${pad2(s.items.length)}</span><h3>${esc(i.word)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}` })), ' lp-tb--words') + closeLine(s),
+    /* 낱말 넘김: 낱말을 누르면 그 풀이가 크게 */
+    tabs: (s) => pager(s.id, s.title || '핵심 단계', s.items.map((i, n) => ({ tab: i.word, panel: `<span class="lp-idx" aria-hidden="true">${pad2(n + 1)} / ${pad2(s.items.length)}</span><h3>${esc(i.word)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}` })), ' lp-tb--words') + closeLine(s),
   };
 
   // ── 차례 ─────────────────────────────────────────────────
@@ -68,7 +71,7 @@ export function bodyVariants(H) {
     /* 벤토 격자: 크기가 다른 칸에 번호·제목·설명 */
     bento: (s, ctx) => { const sp = bentoSpans(s.items.length); return `<ol class="lp-ob" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((i, n) => `<li data-w="${sp[n]}"${itemFx(ctx)}><span class="lp-ob-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-ob-b">${outlineBody(i, outlineBits(i, ctx))}</div></li>`).join('')}</ol>`; },
     /* 책 차례: 번호 · 제목 ····· 쪽 */
-    toc: (s, ctx) => `<ol class="lp-toc">${s.items.map((i, n) => { const b = outlineBits(i, ctx); return `<li><span class="lp-toc-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-toc-b"><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}${tags(i.tags)}</div><span class="lp-toc-dots" aria-hidden="true"></span><span class="lp-toc-pg">${b.target ? `<a href="${esc(b.target)}">${b.page ? `교재 ${esc(b.page)}쪽` : '바로 가기'}</a>` : esc(i.part || '')}</span></li>`; }).join('')}</ol>`,
+    toc: (s, ctx) => `<ol class="lp-toc"${fx(ctx, 'list')}>${s.items.map((i, n) => { const b = outlineBits(i, ctx); return `<li><span class="lp-toc-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-toc-b"><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}${tags(i.tags)}</div><span class="lp-toc-dots" aria-hidden="true"></span><span class="lp-toc-pg">${b.target ? `<a href="${esc(b.target)}">${b.page ? `교재 ${esc(b.page)}쪽` : '바로 가기'}</a>` : esc(i.part || '')}</span></li>`; }).join('')}</ol>`,
     /* 필름 띠: 가로로 넘겨 보는 장면들(키보드 방향키·터치 밀기·단추) */
     filmstrip: (s, ctx) => `<div class="lp-film" data-film><ol class="lp-film-track" tabindex="0" aria-label="${esc(s.title || '오늘의 차례')}, 가로로 넘겨 보기" style="--n:${s.items.length}">${s.items.map((i, n) => { const b = outlineBits(i, ctx); return `<li class="lp-film-card" style="--i:${n}">${outlineArt(i, n, b, ctx, s)}<div class="lp-film-b">${outlineBody(i, b)}</div></li>`; }).join('')}</ol><div class="lp-film-nav" hidden><button class="lp-icon-btn" type="button" data-film-prev aria-label="이전 장면">${icon('left')}</button><span class="lp-film-count" aria-hidden="true"><b data-film-cur>1</b> / ${s.items.length}</span><button class="lp-icon-btn" type="button" data-film-next aria-label="다음 장면">${icon('right')}</button></div></div>`,
   };
@@ -78,7 +81,7 @@ export function bodyVariants(H) {
   const whenText = (i) => `${esc(i.start)}${i.end ? `<span>~${esc(i.end)}</span>` : ''}`;
   VB.schedule = {
     /* 가로 트랙: 길이에 비례한 시간 축 + 그 아래 번호가 같은 순서 카드. 카드를 가리키면 축의 그 구간이 켜짐 */
-    track: (s, ctx, { mins }) => `<div class="lp-trk" data-diagram data-linked><div class="lp-trk-bar" aria-hidden="true">${s.items.map((i, n) => `<i data-seg class="${REST.test(i.title) ? 'is-rest' : `c${n % 2}`}" style="--min:${mins[n]}"><b>${n + 1}</b><em>${esc(i.start)}</em></i>`).join('')}<span class="lp-trk-end">${esc(s.items[s.items.length - 1].end || '')}</span></div><ol class="lp-trk-list" data-sched data-date="${esc(ctx.bp.meta.date)}" tabindex="0" aria-label="${esc(s.title || '일정')}">${s.items.map((i, n) => `<li${schedAttr(i, mins[n])}><span class="lp-trk-no" aria-hidden="true">${n + 1}</span><time>${whenText(i)}</time><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}<span class="lp-trk-min">${[i.part ? esc(i.part) : '', `${mins[n]}분`].filter(Boolean).join(' · ')}</span></li>`).join('')}</ol></div>`,
+    track: (s, ctx, { mins }) => `<div class="lp-trk" data-diagram data-linked><div class="lp-trk-bar" aria-hidden="true">${s.items.map((i, n) => `<i data-seg class="${REST.test(i.title) ? 'is-rest' : `c${n % 2}`}" style="--min:${mins[n]};--k:${n}"><b>${n + 1}</b><em>${esc(i.start)}</em></i>`).join('')}<span class="lp-trk-end">${esc(s.items[s.items.length - 1].end || '')}</span></div><ol class="lp-trk-list" data-sched data-date="${esc(ctx.bp.meta.date)}" tabindex="0" aria-label="${esc(s.title || '일정')}">${s.items.map((i, n) => `<li${schedAttr(i, mins[n])}><span class="lp-trk-no" aria-hidden="true">${n + 1}</span><time>${whenText(i)}</time><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}<span class="lp-trk-min">${[i.part ? esc(i.part) : '', `${mins[n]}분`].filter(Boolean).join(' · ')}</span></li>`).join('')}</ol></div>`,
     /* 시계판: 한 바퀴가 연수 전체. 순서마다 길이만큼의 호 */
     clock: (s, ctx, { mins }) => { const T = mins.reduce((a, b) => a + b, 0), h = Math.floor(T / 60), m = T % 60; return `<div class="lp-clk" data-diagram data-linked><div class="lp-clk-face" aria-hidden="true">${clockSvg(s.items.map((i, n) => ({ start: i.start, title: i.title, min: mins[n] })), (r) => REST.test(r.title))}<p class="lp-clk-center">${h ? `<b>${h}</b><span>시간</span>` : ''}${m ? `<b>${m}</b><span>분</span>` : ''}</p></div><ol class="lp-clk-list" data-sched data-date="${esc(ctx.bp.meta.date)}">${s.items.map((i, n) => `<li${schedAttr(i, mins[n])}><i class="lp-clk-key ${REST.test(i.title) ? 'is-rest' : `c${n % 4}`}" aria-hidden="true"></i><time>${whenText(i)}</time><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div><span class="lp-clk-min">${mins[n]}분</span></li>`).join('')}</ol></div>`; },
     /* 시간표: 시간 | 순서 | 내용 | 길이. 좁은 화면에서는 줄마다 카드 */
@@ -95,7 +98,7 @@ export function bodyVariants(H) {
     /* 줄 색인: 번호 | 큰 이름 | 설명 | 주소 */
     rows: (s, ctx) => `<ol class="lp-trw"${fx(ctx, 'list')}>${s.items.map((t, n) => `<li><span class="lp-trw-no" aria-hidden="true">${pad2(n + 1)}</span><h3>${toolName(t)}</h3><div class="lp-trw-d">${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${toolPages(t, ctx)}</div>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}</li>`).join('')}</ol>${notice(s)}`,
     /* 둥근 딱지 타일: 이름 첫 글자를 큰 원 딱지로 */
-    tiles: (s, ctx) => `<ol class="lp-tt" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((t, n) => `<li class="c${n % 3}"${itemFx(ctx)}><span class="lp-tt-mark" aria-hidden="true">${esc([...t.name.trim()][0] || '')}</span><h3>${toolName(t)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${toolPages(t, ctx)}</li>`).join('')}</ol>${notice(s)}`,
+    tiles: (s, ctx) => `<ol class="lp-tt" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((t, n) => `<li class="c${n % 3}"${itemFx(ctx)}><h3>${toolName(t)}</h3>${t.url ? `<span class="lp-tools-host">${esc(host(t.url))}</span>` : ''}${t.desc ? `<p>${esc(t.desc)}</p>` : ''}${toolPages(t, ctx)}</li>`).join('')}</ol>${notice(s)}`,
   };
 
   // ── 자료·연수 후 안내(같은 배치): rows = [{ kind, title, desc, size, url, download }] ──
@@ -103,9 +106,9 @@ export function bodyVariants(H) {
   const fileRow = (m, cls = '') => `<li${cls}><span class="lp-file-kind">${esc(m.kind)}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${br(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${fileBtn(m)}</li>`;
   VB.materials = {
     /* 책장: 자료 제목이 책등으로 꽂힌 그림(꾸밈) + 그 아래 두 단 목록 */
-    shelf: (s, ctx, { rows }) => `<div class="lp-shelf" data-art aria-hidden="true">${rows.map((m, n) => `<span class="lp-book c${n % 4}" style="--h:${62 + ((n * 37 + m.title.length * 11) % 38)};--w:${[1, 1.35, 0.8, 1.15, 0.95][(n + m.title.length) % 5]}"><b>${esc(m.title)}</b><i>${esc(m.kind)}</i></span>`).join('')}</div><ul class="lp-shelf-list"${fx(ctx, 'list')}>${rows.map((m) => fileRow(m)).join('')}</ul>`,
+    shelf: (s, ctx, { rows }) => `<div class="lp-shelfw" data-linked><div class="lp-shelf" data-art aria-hidden="true">${rows.map((m, n) => `<span class="lp-book c${n % 4}" data-seg style="--i:${n};--h:${62 + ((n * 37 + m.title.length * 11) % 38)};--w:${[1, 1.35, 0.8, 1.15, 0.95][(n + m.title.length) % 5]}"><b>${esc(m.title)}</b><i>${esc(m.kind)}</i></span>`).join('')}</div><ul class="lp-shelf-list"${fx(ctx, 'list')}>${rows.map((m) => fileRow(m)).join('')}</ul></div>`,
     /* 파일 더미: 종이가 겹친 카드(뒤에 두 장이 비스듬히). 가리키면 반듯해짐 */
-    pile: (s, ctx, { rows }) => `<ul class="lp-pile" style="--n:${rows.length}">${rows.map((m, n) => fileRow(m, ` style="--i:${n}"`)).join('')}</ul>`,
+    pile: (s, ctx, { rows }) => `<ul class="lp-pile" style="--n:${rows.length}"${fx(ctx, 'list')}>${rows.map((m, n) => fileRow(m, ` style="--i:${n}"`)).join('')}</ul>`,
   };
 
   // ── 강사 ─────────────────────────────────────────────────
@@ -144,8 +147,8 @@ export function bodyVariants(H) {
   VB.faq = {
     /* 두 단 펼침: 질문과 답을 모두 펼쳐 두 단으로 */
     twocol: (s) => `<dl class="lp-fq2">${s.items.map((i, n) => `<div><dt><span class="lp-fq2-q" aria-hidden="true">Q${n + 1}</span>${esc(i.q)}</dt><dd>${md(i.a)}</dd></div>`).join('')}</dl>`,
-    /* 질문 색인: 왼쪽에서 질문을 고르면 오른쪽에 답 */
-    index: (s) => tabs(s.id, s.title || '자주 묻는 질문', s.items.map((i) => ({ tab: i.q, panel: `<h3>${esc(i.q)}</h3><div class="lp-tb-a">${md(i.a)}</div>` })), ' lp-tb--faq'),
+    /* 질문 색인: 왼쪽에 붙박이 질문 색인(누르면 그 답으로), 오른쪽에 질문과 답이 모두 펼쳐짐. 읽는 자리의 질문이 색인에서 켜짐 */
+    index: (s) => `<div class="lp-fqi" data-spy><nav class="lp-fqi-nav" aria-label="${esc(s.title || '자주 묻는 질문')} 색인"><ol>${s.items.map((i, n) => `<li><a href="#${esc(s.id)}-q${n}"><span class="lp-fqi-n" aria-hidden="true">Q${n + 1}</span><span>${esc(i.q)}</span></a></li>`).join('')}</ol></nav><div class="lp-fqi-list">${s.items.map((i, n) => `<div class="lp-fqi-item" id="${esc(s.id)}-q${n}"><h3><span class="lp-fqi-n" aria-hidden="true">Q${n + 1}</span>${esc(i.q)}</h3><div class="lp-fqi-a">${md(i.a)}</div></div>`).join('')}</div></div>`,
   };
 
   // ── 용어 ─────────────────────────────────────────────────
@@ -154,6 +157,8 @@ export function bodyVariants(H) {
     cards: (s, ctx) => `<dl class="lp-gcards"${groupFx(ctx)}>${s.items.map((i, n) => `<div class="c${n % 3}"${itemFx(ctx)}><span class="lp-gl-mark" aria-hidden="true">${esc([...i.term.trim()][0] || '')}</span><dt>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl>`,
     /* 사전 두 단: 낱말 굵게, 풀이는 들여쓰기 */
     dict: (s) => `<dl class="lp-dict">${s.items.map((i) => `<div><dt>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl>`,
+    /* 낱말 그물: 연수 제목(첫 줄)을 가운데 두고 낱말이 둘레에 놓인 도식(꾸밈) + 옆에 낱말과 풀이. 도식의 번호와 목록 번호가 같음 */
+    web: (s, ctx) => { const c = String(ctx.bp.meta.title || '').split('\n')[0].replace(/[,.·:]+$/, '').trim(); return `<div class="lp-gw" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-gw-art" aria-hidden="true">${webSvg(s.items.length)}<span class="lp-gw-c">${esc([...c].length <= 12 ? c : firstGlyph(c))}</span>${s.items.map((i, n) => { const a = (n / s.items.length) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-gw-n" data-node style="--x:${(50 + Math.cos(a) * 38).toFixed(1)}%;--y:${(50 + Math.sin(a) * 38).toFixed(1)}%"><b>${n + 1}</b>${esc([...i.term].length > 9 ? [...i.term].slice(0, 8).join('') + '…' : i.term)}</span>`; }).join('')}</div><dl class="lp-gw-list">${s.items.map((i, n) => `<div><dt><span class="lp-gw-k" aria-hidden="true">${n + 1}</span>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl></div>`; },
   };
 
   // ── 절차 ─────────────────────────────────────────────────
@@ -191,7 +196,7 @@ export function bodyVariants(H) {
     /* 줄 카드: 한 줄이 카드 한 장(첫 칸이 제목, 나머지는 이름표 + 값) */
     rowcards: (s) => `<div class="lp-rc" role="list" aria-label="${esc(s.title || '표')}">${s.rows.map((r) => `<div role="listitem"><h3>${inlineMd(r[0] ?? '')}</h3><dl>${r.slice(1).map((c, k) => (String(c ?? '').trim() ? `<div>${s.head[k + 1] ? `<dt>${inlineMd(s.head[k + 1])}</dt>` : ''}<dd>${inlineMd(c)}</dd></div>` : '')).join('')}</dl></div>`).join('')}</div>`,
     /* 비교 열: 견주는 것마다 한 단(머리글이 단 제목, 첫 칸이 기준) */
-    compare: (s) => `<div class="lp-cmp" role="list" aria-label="${esc(s.title || '표')}" style="--n:${s.head.length - 1}">${s.head.slice(1).map((h, k) => `<div role="listitem" class="c${k % 3}"><h3>${inlineMd(h)}</h3><dl>${s.rows.map((r) => `<div><dt>${inlineMd(r[0] ?? '')}</dt><dd${String(r[k + 1] ?? '').trim() ? '' : ' data-empty'}>${inlineMd(r[k + 1] ?? '') || '–'}</dd></div>`).join('')}</dl></div>`).join('')}</div>`,
+    compare: (s) => `<div class="lp-cmp" role="list" aria-label="${esc(s.title || '표')}" style="--n:${s.head.length - 1};--rows:${s.rows.length}">${s.head.slice(1).map((h, k) => `<div role="listitem" class="c${k % 3}"><h3>${inlineMd(h)}</h3><dl>${s.rows.map((r) => `<div><dt>${inlineMd(r[0] ?? '')}</dt><dd${String(r[k + 1] ?? '').trim() ? '' : ' data-empty'}>${inlineMd(r[k + 1] ?? '') || '–'}</dd></div>`).join('')}</dl></div>`).join('')}</div>`,
   };
 
   // ── 교재: 쪽 색인(쪽 제목으로 찾아 들어감). 무대 옆에 놓임 ──

@@ -5,6 +5,7 @@ export { protectSite, unlockUrl, PROTECTED_PAGES } from './protect.js';
 export { zipFiles } from './zip-write.js';
 export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, DEFAULT_SURVEY } from './schema/sections.js';
 export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES } from './design/presets.js';
+export { BODY_VARIANTS, PRESET_BODY, MOTION_VARIANTS, variantOf, variantIds, defaultVariant, cleanLayout, bodyFingerprint, usedVariants, motifFamily } from './design/layouts.js';
 export { FONTS, fontAssets, fontStack, matchFont, fontsFromSource, fontFamilyName } from './design/fonts.js';
 export { themeCSS, themeTokens, htmlAttrs, presetWithOverrides } from './design/tokens.js';
 export { PALETTE_SEEDS, FONT_PAIRS, PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
