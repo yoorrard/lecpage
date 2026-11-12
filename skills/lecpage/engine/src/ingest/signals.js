@@ -155,6 +155,11 @@ export function classifyUnit(u, d, prev) {
   if (onPage(d.quiz) && (d.quiz || []).some((q) => q.answer >= 0)) return { kind: 'quiz', slot: 'quiz' };
   const sessN = lines.filter((t) => SESSION_HEAD.test(t)).length + (u.tables || []).reduce((n, t) => n + t.rows.filter((r) => SESSION_HEAD.test(String(r[0] || ''))).length, 0);
   if (sessN >= 2 && (d.sessions || []).length >= 2) return { kind: 'sessions', slot: 'sessions' };
+  // 문서의 진행 순서 절(시각 줄이 대부분)과 발표자 소개 절: 일정·발표자 칸이 그 자리에 섬(같은 글을 글 칸으로 되풀이하지 않음)
+  const onUnit = (x) => !!x && x.file === u.file && (u.pages || [u.page]).includes(x.page);
+  const timed = (d.agenda?.items || []).filter((it) => it.start).length;
+  if (u.doc && onUnit(d.agenda) && timed >= 2 && timed >= lines.length * 0.6) return { kind: 'schedule', slot: 'schedule' };
+  if (u.doc && PROFILE_MULTI.test(title) && (d.speakers || []).filter(onUnit).length >= 2) return { kind: 'speakers', slot: 'speakers' };
   if (!u.doc && PREP_TITLE.test(title) && lines.length) return { kind: 'prep', items: lines.slice(0, 8).map((t) => truncate(t, 120)) };
   if (MORE_TITLE.test(title) && (u.links || []).length) return { kind: 'more', slot: 'followup' };
 
@@ -369,7 +374,8 @@ export function noteTips(notes) {
  * @param h { parseKoreanDates, parseTimeRange }
  */
 export function detectSignals(material, pages, d, h = {}) {
-  const units = classifyUnits(material, d);
+  const speakers = detectSpeakers(pages, d);
+  const units = classifyUnits(material, { ...d, speakers });
   const kinds = (k) => units.filter((u) => u.kind === k);
   const firstKey = pages[0] ? key(pages[0].file, pages[0].page) : '';
   const promptKeys = new Set((d.prompts || []).map((x) => textKey(x.text)));
@@ -392,7 +398,6 @@ export function detectSignals(material, pages, d, h = {}) {
     }
   }
   const top = figures.slice().sort((a, b) => b.score - a.score).slice(0, 4);
-  const speakers = detectSpeakers(pages, d);
   const admin = detectAdmin(pages, d.title);
   const addresses = detectAddresses(pages, d);
   const qaTime = (d.agenda?.items || []).some((it) => /질의\s*응답|Q\s*&\s*A|질문\s*(?:시간|과\s*답)/i.test(it.text || ''));

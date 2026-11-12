@@ -22,5 +22,6 @@ export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 export { deriveConcept, cleanConcept, conceptDesign, conceptLine, conceptKeywords, TOPIC_CONCEPTS } from './decide/concept.js';
 export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO } from './prompt/bridge.js';
 export { applyBlueprintPatch, diffSummary, withSectionIds, PROTECTED_PATHS } from './patch.js';
-export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
+export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';
+export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
 export const VERSION = '1.0.0';
