@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Field, Seg } from '../../components/ui.jsx';
-import { TASTES, inTaste } from '../../lib/tastes.js';
+import { TASTES, inTaste, mixOrder, recommend } from '../../lib/tastes.js';
 import { E } from '../../lib/engine.js';
 import { SiteThumb } from '../../components/SiteThumb.jsx';
 import { FxGallery } from '../../components/FxGallery.jsx';
@@ -43,10 +43,10 @@ const whyKo = (x) => String(x).replace('사이트 유형', '연수 유형').repl
 export function DesignPanel({ p, update }) {
   const bp = p.blueprint;
   const d = bp.design || {};
-  const ranked = useMemo(() => E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, 4), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary]);
+  const ranked = useMemo(() => recommend(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), (id) => !!E.getPreset(id).showcase, 4), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary]);
   const setD = (patch) => update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } }));
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
-  const others = E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id));
+  const others = mixOrder(E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id)));
   const graphics = E.FX.filter((f) => (f.slots || []).includes('hero.graphic'));
   const adv = isAdvanced();
   const title = bp.meta?.title || '';

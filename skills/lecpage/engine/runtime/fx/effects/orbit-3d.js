@@ -46,7 +46,7 @@ LecFX.define('orbit-3d', {
       ctx.on(host, 'pointerleave', function () { gx = gy = 0; });
     }
     var draw = function (T) {
-      var W = cv.w, H = cv.h, m = Math.min(W, H), S = m * 0.105, u = m / 400, cx = W / 2, cy = H / 2, k, q, x, y, z;
+      var W = cv.w, H = cv.h, m = Math.min(W, H), S = m * 0.105, u = Math.max(m / 400, 0.62), cx = W / 2, cy = H / 2, k, q, x, y, z;
       px += (gx - px) * 0.06; py += (gy - py) * 0.06;
       // 제자리 돌기(z) → 좌우 흔들림(y) → 앞으로 기울임(x)
       var az = 0.3 + T * 0.16, ay = Math.sin(T * 0.21) * 0.3 + px * 0.6, ax = 0.55 + py * 0.3;

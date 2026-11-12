@@ -17,6 +17,7 @@ LecFX.define('blueprint-grid', {
         ly.style.setProperty('--fx-cx', x + 'px'); ly.style.setProperty('--fx-cy', y + 'px');
         tag.textContent = 'x ' + x + '  y ' + y;
         ly.classList.add('is-aim');
+        ly.classList.toggle('is-flip', x > r.width - 120); // 오른쪽 끝에서는 좌표 글자를 왼쪽으로(틀 밖으로 잘리지 않게)
       });
     });
     ctx.on(el, 'pointerleave', function () { ly.classList.remove('is-aim'); });

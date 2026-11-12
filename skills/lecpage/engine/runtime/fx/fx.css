@@ -187,8 +187,9 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 .fx-hsnap.is-drag { scroll-snap-type: none; cursor: grabbing; user-select: none; }
 .fx-hsnap:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 .fx-hsnap-wrap:not(.at-end):not(.is-static) .fx-hsnap { -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent); mask-image: linear-gradient(90deg, #000 86%, transparent); }
-.fx-hsnap-wrap:not(.at-start):not(.at-end) .fx-hsnap { -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 86%, transparent); }
-.fx-hsnap-wrap.at-end:not(.at-start) .fx-hsnap { -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%); mask-image: linear-gradient(90deg, transparent, #000 10%); }
+/* 왼쪽 흐림은 좁게(12px): 맞춰 선 카드의 첫 글자가 흐려지지 않게 */
+.fx-hsnap-wrap:not(.at-start):not(.at-end) .fx-hsnap { -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 86%, transparent); }
+.fx-hsnap-wrap.at-end:not(.at-start) .fx-hsnap { -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px); mask-image: linear-gradient(90deg, transparent, #000 12px); }
 .fx-hsnap-bar { display: flex; align-items: center; gap: .75rem; margin-top: .6rem; }
 .fx-hsnap-wrap.is-static .fx-hsnap-bar { display: none; }
 .fx-hsnap-btn { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; font: 400 1.5rem/1 var(--font-sans); color: var(--card-foreground); background: var(--card); border: var(--border-w, 1px) solid var(--border); border-radius: 999px; cursor: pointer; transition: background-color var(--dur-2, 200ms), opacity var(--dur-2, 200ms); }
@@ -417,6 +418,7 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 .fx-bp-tag { left: var(--fx-cx, 0); top: var(--fx-cy, 0); transform: translate(10px, 10px); color: var(--primary); }
 .fx-blueprint-grid.is-aim .fx-bp-x, .fx-blueprint-grid.is-aim .fx-bp-y { opacity: .35; }
 .fx-blueprint-grid.is-aim .fx-bp-tag { opacity: 1; }
+.fx-blueprint-grid.is-flip .fx-bp-tag { transform: translate(calc(-100% - 10px), 10px); }
 
 /*@fx:orbit-3d*/
 /* 캔버스가 첫 장을 그린 뒤 서버가 그린 정지 그림을 감춤. 낱말은 캔버스 위에서 transform으로 움직임 */

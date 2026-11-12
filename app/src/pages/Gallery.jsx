@@ -4,7 +4,7 @@ import { SiteThumb } from '../components/SiteThumb.jsx';
 import { FxGallery } from '../components/FxGallery.jsx';
 import { E, buildSite, previewHtml } from '../lib/engine.js';
 import { loadExample } from '../lib/project.js';
-import { TASTES, inTaste } from '../lib/tastes.js';
+import { TASTES, inTaste, mixOrder } from '../lib/tastes.js';
 
 const MOTION = ['정적', '차분하게', '보통', '스크롤 연출'];
 const SAMPLES = [{ value: 'sel-story', label: '사회정서학습 연수' }, { value: 'data-lab', label: '디지털 연수' }];
@@ -44,7 +44,7 @@ export function Gallery() {
         <Seg label="예시 내용" value={sample} onChange={setSample} options={SAMPLES} /></div>
       <Seg label="분위기" value={taste} onChange={setTaste} options={TASTES.map((t) => ({ value: t.value, label: t.value === 'all' ? `전체 ${E.PRESETS.length}` : t.label }))} />
       <div class="thumbs gallery-presets">
-        {bp ? E.PRESETS.filter((p) => inTaste(p, taste)).map((p) => (
+        {bp ? mixOrder(E.PRESETS).filter((p) => inTaste(p, taste)).map((p) => (
           <button type="button" class="thumb" key={`${sample}-${p.id}`} onClick={() => setOpen(p)}>
             <SiteThumb bp={bp} presetId={p.id} />
             <span class="thumb-cap"><b>{p.name_ko}</b><small>{p.desc_ko}</small></span>

@@ -9,7 +9,7 @@ LecFX.define('particles-network', {
     var colors = function () { C.p = ctx.rgb('primary', el); C.f = ctx.rgb('foreground', el); C.a = ctx.rgb('accent', el); };
     var seed = function () {
       P = [];
-      var n = Math.round(Math.min(o.count || 90, cv.w * cv.h / 12000));
+      var n = Math.round(Math.min(o.count || 90, cv.w * cv.h / (o.density || 12000)));
       for (var i = 0; i < n; i++) P.push({ x: rnd() * cv.w, y: rnd() * cv.h, vx: (rnd() - 0.5) * 16, vy: (rnd() - 0.5) * 16, r: 1.2 + rnd() * 1.8, c: rnd() < 0.2 ? 'a' : 'p' });
     };
     colors(); seed();

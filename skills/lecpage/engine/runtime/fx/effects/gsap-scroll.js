@@ -1,5 +1,5 @@
 /* gsap-scroll — GSAP ScrollTrigger로 섹션을 잠깐 고정하고, 안쪽 요소가 스크롤에 맞춰 차례로 떠오른다(scrub)
-   넓은 화면만 고정. 좁은 화면은 가벼운 등장. 라이브러리가 안 오면 아무것도 숨기지 않는다
+   넓은 화면만 고정(opts.pin:"always"면 좁아도 고정 — 작은 미리보기용). 좁은 화면은 가벼운 등장. 라이브러리가 안 오면 아무것도 숨기지 않는다
    GSAP은 GreenSock Standard License(상업 사용 무료, 웹플로 인수 후 모든 플러그인 무료) */
 LecFX.define('gsap-scroll', {
   level: 3,
@@ -16,9 +16,10 @@ LecFX.define('gsap-scroll', {
       if (!items.length) items = Array.prototype.slice.call(el.querySelectorAll('h2, h3, p, li, figure, blockquote')).filter(function (n) { return !n.closest('li li'); }).slice(0, 12);
       if (!items.length) return;
       mm = gsap.matchMedia();
-      mm.add({ wide: '(min-width: 900px)', reduce: '(prefers-reduced-motion: reduce)' }, function (c) {
+      // any: 늘 맞는 조건. 이것이 없으면 좁은 화면에서는 아래 함수가 아예 불리지 않아 '가벼운 등장'도 돌지 않음
+      mm.add({ wide: '(min-width: 900px)', reduce: '(prefers-reduced-motion: reduce)', any: 'all' }, function (c) {
         if (c.conditions.reduce) return;
-        if (c.conditions.wide && o.pin !== false) {
+        if ((c.conditions.wide || o.pin === 'always') && o.pin !== false) {
           var tl = gsap.timeline({ scrollTrigger: { trigger: el, start: 'top top', end: '+=' + (o.distance || 110) + '%', pin: true, scrub: 0.6, anticipatePin: 1 } });
           tl.fromTo(items, { y: 46, autoAlpha: 0.12 }, { y: 0, autoAlpha: 1, stagger: 0.14, ease: 'none', duration: 1 });
           var media = el.querySelector('[data-gsap-media], img, video');
