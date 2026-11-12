@@ -1,0 +1,63 @@
+{
+ "show-night-story": {
+  "w": 1280,
+  "h": 800,
+  "kb": 31
+ },
+ "show-paper-workbook": {
+  "w": 1280,
+  "h": 800,
+  "kb": 41
+ },
+ "show-editorial-ink": {
+  "w": 1280,
+  "h": 800,
+  "kb": 29
+ },
+ "show-ripple-center": {
+  "w": 1280,
+  "h": 800,
+  "kb": 40
+ },
+ "show-chalkboard": {
+  "w": 1280,
+  "h": 800,
+  "kb": 32
+ },
+ "show-deck-collage": {
+  "w": 1280,
+  "h": 800,
+  "kb": 28
+ },
+ "show-vertical-type": {
+  "w": 1280,
+  "h": 800,
+  "kb": 30
+ },
+ "show-retro-pop": {
+  "w": 1280,
+  "h": 800,
+  "kb": 44
+ },
+ "site-data-lab": {
+  "w": 1120,
+  "h": 700,
+  "kb": 43
+ },
+ "phone-data-lab": {
+  "w": 585,
+  "h": 3600,
+  "kb": 90
+ },
+ "showcase": [
+  "night-story",
+  "paper-workbook",
+  "editorial-ink",
+  "ripple-center",
+  "chalkboard",
+  "deck-collage",
+  "vertical-type",
+  "retro-pop"
+ ],
+ "made": "2026-11-12"
+}
