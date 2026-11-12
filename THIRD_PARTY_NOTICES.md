@@ -42,3 +42,12 @@ GSAP 조건(2025-04-30 시행, 2025-05-30 수정본 기준): 웹사이트에서 
 
 ## 만든 사이트에 함께 넣는 사용자 자료
 교재·사진·글은 사용자의 것입니다. 저작권(그림책 표지, 학생 작품 등) 확인은 사용자 몫이며, lecpage는 이 자료를 운영자 서버로 보내지 않습니다.
+
+## 참고만 한 자료(코드·문장을 옮기지 않음)
+문구 기준(`docs/writing.md`)을 세울 때 아래 공개 저장소를 읽고 원리만 lecpage 기준으로 다시 썼습니다. 저장소에 들어 있지 않고, 설치하지도 않습니다.
+
+| 자료 | 라이선스 | 참고한 것 |
+|---|---|---|
+| [claudianus/toss-ux-writing-skill](https://github.com/claudianus/toss-ux-writing-skill) | MIT | 예외 판단 틀, 화면 자리별 패턴 |
+| [Ksanbal/toss-ux-writing-skill](https://github.com/Ksanbal/toss-ux-writing-skill) | MIT | 다크 패턴 점검표 |
+| [NariP/toss-ux-writing-skills](https://github.com/NariP/toss-ux-writing-skills) | MIT | 해요체·능동 예시 |
