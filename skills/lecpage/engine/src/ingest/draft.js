@@ -212,7 +212,8 @@ export function materialToDraft(material, info = {}) {
   if (goalItems.length) S.goals = { id: 'goals', type: 'goals', title: '연수 목표', items: goalItems.map((t) => truncate(t.replace(/(수\s*있)다\.?$/, '$1어요').replace(/(이해|파악|활용|설명|적용)한다\.?$/, '$1해요'), 120)), who };
 
   const msgs = d.messages || [];
-  if (msgs.length) S.message = { id: 'message', type: 'message', text: msgs[0].text, note: '', style: 'statement', source: { file: msgs[0].file, pages: [msgs[0].page] } };
+  const lead = msgs.find((m) => (m.score ?? 2) >= 2); // 사례 속 인용 같은 약한 후보는 첫 화면 메시지로 올리지 않음
+  if (lead) S.message = { id: 'message', type: 'message', text: lead.text, note: '', style: 'statement', source: { file: lead.file, pages: [lead.page] } };
 
   // 차례
   const outlineItems = (d.sections || []).slice(0, 8).map((s) => ({
@@ -318,7 +319,7 @@ export function materialToDraft(material, info = {}) {
 
   if (instructors.length) S.instructor = { id: 'instructor', type: 'instructor', nav: '강사', source: d.instructor ? { file: d.instructor.file, pages: [d.instructor.page] } : undefined };
   S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl || '', qr: true, questions: DEFAULT_SURVEY.map((q) => ({ ...q })) };
-  const closingMsg = msgs.find((m) => m.closing) || msgs.find((m) => m !== msgs[0] && m.file === (hasDeckFile && hasDeckFile.id)) || null;
+  const closingMsg = msgs.find((m) => m.closing) || msgs.find((m) => m !== lead && (m.score ?? 2) >= 2 && m.file === (hasDeckFile && hasDeckFile.id)) || null;
   S.closing = { id: 'closing', type: 'closing', lead: '함께해 주셔서 고맙습니다', text: closingMsg ? closingMsg.text : meta.title, thanks: instructors[0] ? `${instructors[0].name} 드림` : '' };
 
   const glance = [];

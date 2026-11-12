@@ -829,12 +829,14 @@ function detectMessages(pages, promptKeys, special, stepPages) {
     if (p.kind !== 'section' && paras.length >= 1 && paras.length <= 2 && total <= 90 && !(p.tables || []).length && p.layout !== 'section') {
       for (const x of paras) add(x.text, p, 2 + (/[!！]$/.test(x.text) ? 1 : 0));
     }
-    if (!paras.length && p.title && p.title.length >= 12 && p.layout !== 'section' && !SECTION_MARK.test(p.title)) add(p.title, p, (p.titleGuessed ? 3 : 1.5) + (/[!！]$/.test(p.title) ? 1 : 0));
+    // 글 없이 제목만 있는 슬라이드의 제목. 문서(HWPX·DOCX)의 소제목은 핵심 문장이 아님(표만 있는 절의 제목 등)
+    if (!paras.length && p.kind !== 'section' && p.title && p.title.length >= 12 && p.layout !== 'section' && !SECTION_MARK.test(p.title)) add(p.title, p, (p.titleGuessed ? 3 : 1.5) + (/[!！]$/.test(p.title) ? 1 : 0));
     for (const x of paras) {
       if (MSG_CUE.test(x.text)) add(x.text.replace(/^(핵심|한\s*줄\s*(요약|정리)|오늘의\s*메시지)\s*[:：]\s*/, ''), p, 3);
       QUOTE_RE.lastIndex = 0;
       let m;
-      while ((m = QUOTE_RE.exec(x.text))) if (!isRequestLine(m[1]) && m[1].length >= 10 && m[1].length <= 80) add(m[1], p, 2);
+      // 따옴표 문장: 글이 많은 쪽(사례·이야기 속 인용)은 약한 후보(1.5)로만 — 초안의 핵심 메시지 칸에는 2점 이상만 씀
+      while ((m = QUOTE_RE.exec(x.text))) if (!isRequestLine(m[1]) && m[1].length >= 10 && m[1].length <= 80) add(m[1], p, paras.length > 2 ? 1.5 : 2);
     }
     if (CLOSING_TITLE.test(p.title || '')) { closingPages.add(`${p.file}:${p.page}`); for (const x of paras.slice(0, 3)) if (x.text.length <= 80) add(x.text, p, 2); }
   });
