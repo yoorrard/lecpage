@@ -159,11 +159,15 @@ describe('초안(draft): 교재에서 채우기', () => {
     assert.ok(!st.desc.startsWith('※'));
     assert.deepEqual(sec('followup').items.map((i) => [i.title, i.kind]), [['다시 보기 영상', 'recording'], ['안내서', 'link']]);
   });
-  test('설문은 기본 5문항, 마무리 앞', () => {
-    assert.equal(sec('survey').questions.length, DEFAULT_SURVEY.length);
-    const types = d.sections.map((s) => s.type);
-    assert.ok(types.indexOf('survey') < types.indexOf('closing'));
+  test('설문은 주소가 있을 때만(기본 5문항, 마무리 앞). 없으면 빈 칸을 만들지 않고 할 일에 남김', () => {
+    assert.equal(sec('survey'), undefined, '주소가 없으면 참가자에게 "설문 주소가 아직 없어요"가 보이지 않게');
+    assert.ok(d._draft.todo.some((t) => /만족도 조사/.test(t)));
     assert.deepEqual(validate(d).warnings, []);
+    const d3 = materialToDraft(ingestText(MD, { name: 'notes.md' }), { today: '2026-11-01', surveyUrl: 'https://forms.gle/abcdEFGH123' });
+    const sv = d3.sections.find((s) => s.type === 'survey');
+    assert.equal(sv.questions.length, DEFAULT_SURVEY.length);
+    const types = d3.sections.map((s) => s.type);
+    assert.ok(types.indexOf('survey') < types.indexOf('closing'));
   });
   test('목표가 없으면 지어내지 않고 할 일에 남김', () => {
     const d2 = materialToDraft(ingestText('# 연수\n그냥 메모'), { title: '연수' });
@@ -220,7 +224,8 @@ describe('교재 읽기 보강: 기관 색·강사 줄', () => {
     assert.equal(parseInstructorLine('실습 → 나눔'), null);
     const d = materialToDraft(ingestText('# 생성형 AI 수업\n일시: 2026. 11. 20.(금) 15:00~17:00\n강사: 홍길동(○○초)\n'), { today: '2026-11-01' });
     assert.equal(d.instructors[0].name, '홍길동');
-    assert.deepEqual(d.sections[0].meta.find((x) => x.label === '강사'), { label: '강사', value: '홍길동 · ○○초' });
+    assert.equal(d.instructors[0].org, '○○초');
+    assert.deepEqual(d.sections[0].meta, [], '일시·장소·강사 줄은 연수 정보에서 그려지므로 첫 화면에 따로 적지 않음(정보를 고치면 함께 바뀜)');
     const d2 = materialToDraft(ingestText('# 연수\n발표: 유영재 · 안산양지초등학교 교사\n'));
     assert.equal(d2.meta.venue, '', '강사 줄의 학교 이름은 장소가 아님');
   });

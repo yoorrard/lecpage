@@ -5,6 +5,10 @@ import { DEFAULT_SURVEY } from '../schema/sections.js';
 import { detect } from './detect.js';
 import { normLine, normText, truncate, textKey, sizeLabel, hostOf, extOf } from './util.js';
 import { getTool } from './tools-db.js';
+import { composeBody, findLeftovers } from './compose.js';
+import { noteTips } from './signals.js';
+import { decideStructure } from '../decide/structure.js';
+import { whenText, placeText, whoText } from '../hero-meta.js';
 
 const pad3 = (n) => String(n).padStart(3, '0');
 const ACCOUNT_LABEL = {
@@ -15,13 +19,9 @@ const ACCOUNT_LABEL = {
   teacher: { label: '교사용 계정 준비(참여자는 코드로 입장)', url: '' },
   school: { label: '학교·교육청 발급 계정 준비', url: '' },
 };
-// 유형별 섹션 순서. 원칙: 첫 화면(이야기형은 핵심 메시지까지) → 무엇을 얻나(목표) → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리(설문을 마무리 뒤에 두면 놓치기 쉬움)
-const ORDER = {
-  lab: ['hero', 'goals', 'readiness', 'outline', 'schedule', 'stations', 'prompts', 'tools', 'deck', 'quiz', 'glossary', 'faq', 'materials', 'followup', 'instructor', 'survey', 'closing'],
-  story: ['hero', 'message', 'goals', 'outline', 'schedule', 'deck', 'tools', 'stations', 'prompts', 'quiz', 'glossary', 'faq', 'materials', 'followup', 'instructor', 'survey', 'closing'],
-  live: ['hero', 'glance', 'goals', 'schedule', 'outline', 'deck', 'tools', 'prompts', 'materials', 'faq', 'followup', 'instructor', 'survey', 'closing'],
-  course: ['hero', 'goals', 'glance', 'sessions', 'outline', 'schedule', 'readiness', 'stations', 'prompts', 'tools', 'deck', 'materials', 'faq', 'glossary', 'followup', 'instructor', 'survey'],
-};
+// 칸 순서는 decide/structure.js의 흐름(FLOW_INFO)이 정함. 원칙: 첫 화면 → 무엇을 얻나(목표) → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리
+// 로그인 주소는 교재에 없는 주소라 넣지 않음(이름만)
+const ACCOUNT_WORD = { google: 'Google 계정', microsoft: 'Microsoft 계정', naver: '네이버 계정' };
 const LEAD = /^(?:[-•·▪◦●○■□▶▷►➢➤→⇒✓✔☞]\s*|\d{1,2}\s*[.)]\s+|[①-⑳]\s*)/;
 // 연수 목표가 적힌 쪽(제목이 '연수 목표'·'학습 목표'·'이 연수를 마치면' 등)
 const GOAL_TITLE = /^(?:(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]|[가-하])\s*[.)]\s*)?(?:오늘의\s*|이\s*연수의\s*)?(?:연수|학습|교육|수업)?\s*(?:목표|목적)(?:\s*및\s*내용)?$|^(?:이런\s*(?:것|걸)을?\s*배워요|오늘\s*배울\s*(?:것|내용)|이\s*연수를\s*마치면.*|기대\s*효과)$/;
@@ -69,12 +69,6 @@ function minutesBetween(a, b) {
   const d = (+m2[1] * 60 + +m2[2]) - (+m1[1] * 60 + +m1[2]);
   return d > 0 ? d : 0;
 }
-function koDateText(date, start, end) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
-  if (!m) return [start, end].filter(Boolean).join('~');
-  const w = '일월화수목금토'[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
-  return `${m[1]}. ${+m[2]}. ${+m[3]}.(${w})${start ? ` ${start}${end ? `~${end}` : ''}` : ''}`;
-}
 function hoursLabel(min) {
   if (!min) return '';
   const h = Math.floor(min / 60), m = min % 60;
@@ -84,18 +78,25 @@ function hoursLabel(min) {
 /**
  * @param {object} material ingest 결과(detected가 없으면 여기서 감지)
  * @param {object} [info] 사용자가 직접 준 정보(감지보다 우선)
- *   title, subtitle, organizer, date, start, end, venue, mode, joinUrl, size, audience{}, level, archetype,
+ *   title, subtitle, organizer, date, start, end, venue, mode, joinUrl, size, audience{}, level, archetype, format,
  *   instructor{name,role,org,email,bio}, surveyUrl, slidesBase('assets/slides/'), imageBase('assets/media/'),
- *   deckHref, materials{ [fileId]: href }, today, goals[], who, contact, dates[](차시 날짜)
+ *   deckHref, materials{ [fileId]: href }, today, goals[], who, contact, dates[](차시 날짜), concept(컨셉: 있으면 구성 이유에 반영)
  */
 export function materialToDraft(material, info = {}) {
-  const d = material.detected || detect(material, info);
+  const d = material.detected?.signals ? material.detected : detect(material, info);
   const ev = d.event || {};
   const files = material.files || [];
   const renderOnly = new Set(files.filter((f) => f.renderOf).map((f) => f.id));
   const pages = (material.pages || []).filter((p) => !p.hidden && !p.error && !renderOnly.has(p.file));
   const pageKey = (f, n) => `${f}:${n}`;
   const pageMap = new Map(pages.map((p) => [pageKey(p.file, p.page), p]));
+  const admin = d.admin || null;
+  const speakers = info.instructor ? [] : (d.speakers || []);
+
+  // ── 구성: 신호 → 흐름 → 칸 순서(decide/structure.js) ─────────
+  const st = decideStructure({ ...info, archetype: info.archetype }, { ...material, detected: d }, info.concept || null);
+  const flow = st.flow;
+  const sourceBody = st.body === 'source';
 
   // ── meta ────────────────────────────────
   const meta = {
@@ -107,10 +108,11 @@ export function materialToDraft(material, info = {}) {
     end: info.end || ev.end || '',
     venue: info.venue || ev.venue || '',
     mode: info.mode || ev.mode || 'offline',
-    joinUrl: info.joinUrl || ev.joinUrl || '',
+    joinUrl: info.joinUrl || '', // 온라인 접속 주소는 강사가 준 값만(교재에서 찾은 주소는 detected.addresses에 후보로)
     contact: info.contact || findLine([...pages.slice(0, 3), ...pages.slice(-3)], CONTACT_LINE),
     lang: 'ko',
-    admin: { kind: info.adminKind || 'school', completionRate: +info.completionRate || 90, hours: Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
+    // 직무연수·이수 기준·연수 시간은 교재에 적혀 있으면 그 값으로(강사가 고른 값이 우선)
+    admin: { kind: info.adminKind || (admin?.official ? 'official' : 'school'), completionRate: +info.completionRate || admin?.completionRate || 90, hours: admin?.hours || Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
     sessions: [],
   };
   if (meta.subtitle === meta.title) meta.subtitle = '';
@@ -118,7 +120,7 @@ export function materialToDraft(material, info = {}) {
 
   // ── 강사 ─────────────────────────────────
   const instructors = [];
-  const di = info.instructor || (d.instructor && d.instructor.name ? d.instructor : null);
+  const di = info.instructor || (!speakers.length && d.instructor && d.instructor.name ? d.instructor : null);
   if (di && di.name) {
     const now = (di.bio || []).filter((t) => /^\s*\(?\s*(현|現)/.test(t)).map((t) => t.replace(/^\s*\(?\s*(현|現)\s*\)?\s*[)\].:]?\s*/, ''));
     const past = (di.bio || []).filter((t) => /^\s*\(?\s*(전|前)/.test(t)).map((t) => t.replace(/^\s*\(?\s*(전|前)\s*\)?\s*[)\].:]?\s*/, ''));
@@ -133,13 +135,14 @@ export function materialToDraft(material, info = {}) {
     });
   }
 
-  // ── 유형 ─────────────────────────────────
-  const arche = d.archetype || { primary: 'story', mix: [] };
-  const archetype = { primary: info.archetype || arche.primary, mix: info.archetype ? [] : (arche.mix || []) };
+  const archetype = info.archetype ? { primary: info.archetype, mix: [] } : st.archetype;
 
   const refsOf = (x) => x.refs || (x.pages || [x.page]).map((page) => ({ file: x.file, page }));
   const onPages = (x, file, list) => refsOf(x).some((r) => r.file === file && list.includes(r.page));
   const toolNamesOn = (file, pagesList) => (d.tools || []).filter((t) => onPages(t, file, pagesList)).map((t) => t.name);
+  // 강사 확인이 필요한 주소(중계·회의·설문)는 어느 칸에도 저절로 싣지 않음
+  const heldUrls = new Set([...(d.addresses?.join || []), ...(d.addresses?.survey || [])].map((a) => a.url));
+  const timed = (d.agenda?.items || []).filter((it) => it.start);
 
   // ── 실습 스테이션 ─────────────────────────
   const sectionOf = (file, page) => (d.sections || []).find((s) => s.file === file && s.pages.includes(page));
@@ -155,6 +158,7 @@ export function materialToDraft(material, info = {}) {
     else groups.push({ title: p.title || '', pages: [p], section: sec });
   }
   const usedPrompts = new Set();
+  let noteCount = 0;
   const stations = groups.slice(0, 40).map((g, i) => {
     const file = g.pages[0].file;
     const nums = g.pages.map((p) => p.page);
@@ -164,7 +168,7 @@ export function materialToDraft(material, info = {}) {
     prompts.forEach((x) => usedPrompts.add(x));
     const stepKeys = new Set(steps.map(textKey));
     const promptKeys = prompts.map((x) => textKey(x.text));
-    const links = (d.links || []).filter((l) => onPages(l, file, nums) && l.kind !== 'meeting').slice(0, 8).map((l) => ({ label: l.label, url: l.url }));
+    const links = (d.links || []).filter((l) => onPages(l, file, nums) && l.kind !== 'meeting' && !heldUrls.has(l.url)).slice(0, 8).map((l) => ({ label: l.label, url: l.url }));
     const linkLabels = new Set(links.map((l) => textKey(l.label)));
     const desc = g.pages.flatMap((p) => p.paragraphs || []).map((x) => x.text)
       .find((t) => {
@@ -173,36 +177,32 @@ export function materialToDraft(material, info = {}) {
         if (stepKeys.has(k) || linkLabels.has(k) || promptKeys.some((pk) => pk && (k.includes(pk) || pk.includes(k)))) return false;
         return !NOTE_LINE.test(t) && !/^(\d{1,2}[.)]|[①-⑳]|step\s*\d)/i.test(t) && !/https?:\/\/|[a-z0-9-]+\.(com|net|org|io|ai|kr)\b/i.test(t) && !/^[^:：]{1,10}[:：]/.test(t);
       }) || '';
+    // 막히기 쉬운 곳: 쪽의 "※ …", "주의: …", "안 되면: …" 줄과 발표자 노트의 '막히면·안 되면·주의' 문장(진행 메모는 싣지 않음)
+    const marked = g.pages.flatMap(paraLines).map((t) => NOTE_LINE.exec(t)).filter(Boolean).map((m) => (m[1] || m[2]).trim());
+    const tips = g.pages.flatMap((p) => noteTips(p.notes));
+    noteCount += tips.length;
+    const note = [...marked, ...tips].filter((t, k, all) => !stepKeys.has(textKey(t)) && !promptKeys.some((pk) => pk && textKey(t).includes(pk)) && all.findIndex((x) => textKey(x) === textKey(t)) === k).slice(0, 3).join('\n');
     // 그림 주소: info.imageBase가 있으면 그 아래 <id>.<확장자>, 없으면 CLI가 쓴 상대 경로(assets/… · media/…)
-    // 막히기 쉬운 곳: "※ …", "주의: …", "안 되면: …" 줄을 실습 안 메모(note)로
-    const note = g.pages.flatMap(paraLines).map((t) => NOTE_LINE.exec(t)).filter(Boolean).map((m) => (m[1] || m[2]).trim())
-      .filter((t) => !stepKeys.has(textKey(t)) && !promptKeys.some((pk) => pk && textKey(t).includes(pk))).slice(0, 2).join('\n');
     const imgSrc = (im) => (info.imageBase ? info.imageBase + imageName(im) : (/^(assets|media|slides)\//.test(im.src || '') ? im.src : ''));
     const images = g.pages.flatMap((p) => (p.images || []).filter((im) => !im.repeated && im.web !== false && (im.share || 0.3) >= 0.08))
       .map((im) => ({ src: imgSrc(im), caption: im.alt || '' })).filter((im) => im.src).slice(0, 8);
     const title = normLine(g.title) || `실습 ${i + 1}`;
+    // 걸리는 시간: 일정표에 같은 번호의 실습("실습 1 14:20~15:00")이 있을 때만(지어내지 않음)
+    const no = /(?:실습|활동|미션)\s*(\d{1,2})/.exec(title)?.[1];
+    const slot = no ? timed.find((it) => new RegExp(`(?:실습|활동|미션)\\s*${no}(?!\\d)`).test(it.text || '') && it.end) : null;
+    const minutes = slot ? minutesBetween(slot.start, slot.end) : 0;
     return {
       id: `st${i + 1}`, name: truncate(title.replace(/^(?:실습|활동|미션)(?:\s*\d+\s*[.:)\-–]?\s*|\s*[.:)\-–]\s*|\s+(?=\S))/, '') || title, 30), title: truncate(title, 100),
       tag: g.section ? truncate(g.section.label || '', 16) : '', desc: truncate(desc, 300),
       steps, prompts: prompts.map((x, k) => ({ title: x.title || (prompts.length > 1 ? `프롬프트 ${k + 1}` : '프롬프트'), text: x.text })),
-      images, links, outcome: '', note: truncate(note, 400), minutes: 0, source: { file, pages: nums },
+      images, links, outcome: '', note: truncate(note, 400), minutes: minutes > 0 && minutes <= 240 ? minutes : 0, source: { file, pages: nums },
     };
   }).filter((s) => s.steps.length || s.prompts.length || s.links.length || s.desc);
 
   // ── 섹션 만들기 ───────────────────────────
   const S = {};
+  const slotPage = {}; // 그 칸의 재료가 교재 몇 쪽에 있는지(본문 칸을 교재 순서로 끼울 때 씀)
   const hasDeckFile = files.find((f) => (f.type === 'pptx' || f.type === 'pdf') && !f.renderOf);
-  const dateText = koDateText(meta.date, meta.start, meta.end);
-  const heroMeta = [];
-  if (dateText) heroMeta.push({ label: '일시', value: dateText });
-  const place = [meta.venue, meta.mode === 'online' || meta.mode === 'hybrid' ? '온라인' : ''].filter(Boolean).join(' · ');
-  if (place) heroMeta.push({ label: '장소', value: place });
-  if (instructors[0]) heroMeta.push({ label: '강사', value: [instructors[0].name, [instructors[0].org, instructors[0].role].filter(Boolean).join(' ')].filter(Boolean).join(' · ') });
-  const ctas = [];
-  if (stations.length) ctas.push({ label: '실습 시작', href: '#stations' });
-  if (hasDeckFile) ctas.push({ label: '교재 보기', href: '#deck' });
-  if (!ctas.length && (d.sections || []).length) ctas.push({ label: '차례 보기', href: '#outline' });
-  S.hero = { id: 'hero', type: 'hero', nav: '처음', eyebrow: meta.organizer || '', title: meta.title, subtitle: meta.subtitle, ctas, meta: heroMeta };
 
   // 연수 목표·대상: 교재에 적힌 것만
   const promptKeySet = new Set((d.prompts || []).map((x) => textKey(x.text)));
@@ -215,49 +215,77 @@ export function materialToDraft(material, info = {}) {
   const lead = msgs.find((m) => (m.score ?? 2) >= 2); // 사례 속 인용 같은 약한 후보는 첫 화면 메시지로 올리지 않음
   if (lead) S.message = { id: 'message', type: 'message', text: lead.text, note: '', style: 'statement', source: { file: lead.file, pages: [lead.page] } };
 
-  // 차례
-  const outlineItems = (d.sections || []).slice(0, 8).map((s) => ({
-    part: s.label, title: s.title, desc: s.desc || '',
-    tags: toolNamesOn(s.file, s.pages).slice(0, 3),
-    target: hasDeckFile && s.file === hasDeckFile.id ? `deck:${s.page}` : (stations.some((st) => st.source.file === s.file && st.source.pages.some((pg) => s.pages.includes(pg))) ? 'stations' : ''),
-  }));
+  // 차례: 슬라이드 교재만(문서 교재는 본문 칸이 절 순서 그대로라 차례를 따로 두지 않음)
+  const bodyLines = (file, page) => { const p = pageMap.get(pageKey(file, page)); return p ? paraLines(p).filter((t) => t.length <= 120 && !/https?:\/\//.test(t)) : []; };
+  const outlineItems = (d.sections || []).slice(0, 8).map((s) => {
+    const pg = pageMap.get(pageKey(s.file, s.page));
+    // 차례 표에서 온 제목에 발표자 이름이 붙어 있으면 그 쪽의 제목을 씀
+    const title = pg?.title && textKey(s.title).startsWith(textKey(pg.title)) && textKey(pg.title).length >= 4 ? pg.title : s.title;
+    return {
+      part: s.label, title, desc: s.desc || truncate(bodyLines(s.file, s.page).slice(0, 4).join(' · '), 200),
+      tags: toolNamesOn(s.file, s.pages).slice(0, 3),
+      target: hasDeckFile && s.file === hasDeckFile.id ? `deck:${s.page}` : (stations.some((x) => x.source.file === s.file && x.source.pages.some((n) => s.pages.includes(n))) ? 'stations' : ''),
+    };
+  });
   if (!outlineItems.length && d.agenda?.items?.length >= 2) {
     d.agenda.items.slice(0, 8).forEach((it, i) => outlineItems.push({ part: it.part || `PART ${i + 1}`, title: it.text, desc: '', tags: [], target: '' }));
   }
-  if (outlineItems.length >= 2) S.outline = { id: 'outline', type: 'outline', nav: '차례', title: '오늘의 차례', items: outlineItems };
+  const multiDay = (ev.dates || []).length >= 2 || (d.sessions || []).length >= 2;
+  if (outlineItems.length >= 2 && !sourceBody) {
+    S.outline = { id: 'outline', type: 'outline', nav: '차례', title: flow === 'course' ? '과정 차례' : flow === 'event' || multiDay ? '차례' : '오늘의 차례', items: outlineItems, source: { file: d.sections?.[0]?.file || '', pages: (d.sections || []).map((s) => s.page) } };
+    slotPage.outline = d.sections?.[0]?.page;
+  }
 
   // 차시(날짜가 둘 이상): 제목은 교재 차례와 개수가 맞을 때만 가져옴(지어내지 않음)
   const dates = info.dates?.length ? info.dates : (ev.dates || []);
-  if (dates.length >= 2) {
+  if (dates.length >= 2 && !(d.sessions || []).length) {
     meta.sessions = dates.map((date, i) => ({ no: i + 1, date, start: '', end: '', title: '' }));
     const titles = (d.sections || []).length === dates.length ? d.sections.map((x) => x.title) : (d.agenda?.items || []).length === dates.length ? d.agenda.items.map((x) => x.text) : [];
     if (titles.length) S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: dates.map((date, i) => ({ no: i + 1, date, title: titles[i], desc: '', links: [] })) };
   }
-
-  // 교재의 차시표("1차시 1. 11.(월) 주제"): 날짜가 없어도 번호·주제는 그대로
+  // 교재의 차시표("1차시 1. 11.(월) 주제"): 날짜가 없어도 번호·주제는 그대로. 차시 줄 아래의 내용·준비물·과제는 설명에
   if (!S.sessions && (d.sessions || []).length >= 2) {
     S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: d.sessions.map((x) => ({ no: x.no, date: x.date || '', title: x.title, desc: x.desc || '', links: [] })), source: { file: d.sessions[0].file, pages: [...new Set(d.sessions.map((x) => x.page))] } };
     if (d.sessions.every((x) => x.date)) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
+    slotPage.sessions = d.sessions[0].page;
   }
 
-  // 일정(교재에 시간이 적혀 있을 때만)
-  const timed = (d.agenda?.items || []).filter((it) => it.start);
-  if (timed.length >= 2) S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: timed.map((it) => ({ start: it.start, end: it.end || '', title: it.text, desc: '', part: it.part || '' })) };
-  else if ((d.sections || []).filter((s) => s.start).length >= 2) S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: d.sections.filter((s) => s.start).map((s) => ({ start: s.start, end: s.end || '', title: s.title, desc: '', part: s.label })) };
+  // 일정(교재에 시간이 적혀 있을 때만). 발표자 이름이 제목 끝에 붙어 있으면 설명으로 내림
+  const whoTail = (text) => speakers.map((p) => `${p.name} ${p.role}`.trim()).find((w) => w && text.endsWith(w)) || '';
+  if (timed.length >= 2) {
+    S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: timed.map((it) => { const w = whoTail(it.text); return { start: it.start, end: it.end || '', title: w ? it.text.slice(0, -w.length).trim() : it.text, desc: w, part: it.part || '' }; }) };
+    slotPage.schedule = d.agenda.page;
+  } else if ((d.sections || []).filter((s) => s.start).length >= 2) S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: d.sections.filter((s) => s.start).map((s) => ({ start: s.start, end: s.end || '', title: s.title, desc: '', part: s.label })) };
 
-  // 준비 점검
-  const tools = d.tools || [];
-  const accounts = new Map();
+  // 발표자 여럿: 강사 소개 대신 발표자 칸
+  if (speakers.length >= 2) {
+    S.speakers = { id: 'speakers', type: 'speakers', nav: '발표자', title: '발표자', items: speakers.map((p) => ({ name: p.name, org: p.org, role: [p.role, p.note].filter(Boolean).join(' · '), talk: p.talk, time: p.time })), source: { file: speakers[0].file, pages: [...new Set(speakers.map((p) => p.page))] } };
+    slotPage.speakers = Math.min(...speakers.map((p) => p.page));
+  }
+
+  // 본문 칸(교재 묶음 → 절차·사례·질문·표·글…)과 교재의 준비물
+  const composed = composeBody({ ...material, detected: d }, d, { skipUrls: heldUrls });
+
+  // 도구: 실습 쪽에서 쓰는 것만(없으면 두 번 넘게 나온 것). 영상·설문·회의 서비스는 실습에 쓰일 때만 도구로 봄.
+  // 주소는 교재에 적힌 그 도구의 주소가 있으면 그것을(연수 보드처럼), 없으면 도구의 대표 주소
   const practiceRefs = (d.practice?.pages || []);
-  const usedInPractice = tools.filter((t) => refsOf(t).some((r) => practiceRefs.some((pr) => pr.file === r.file && pr.page === r.page)));
+  const inPractice = (t) => refsOf(t).some((r) => practiceRefs.some((pr) => pr.file === r.file && pr.page === r.page));
+  const tools = (d.tools || []).filter((t) => !['video', 'survey', 'meeting'].includes(t.category) || inPractice(t));
+  const ownUrl = (t) => (d.links || []).find((l) => l.toolId === t.id && !heldUrls.has(l.url) && l.kind !== 'meeting')?.url || '';
+  const accounts = new Map();
+  const usedInPractice = tools.filter(inPractice);
   const readyTools = usedInPractice.length ? usedInPractice : tools.filter((t) => t.count >= 2);
   for (const t of readyTools) if (t.accountNeeded && ACCOUNT_LABEL[t.account]) { if (!accounts.has(t.account)) accounts.set(t.account, []); accounts.get(t.account).push(t.name); }
-  const readyItems = [...accounts.entries()].map(([k, names]) => ({ label: ACCOUNT_LABEL[k].label, detail: `필요한 도구: ${names.slice(0, 6).join(', ')}`, url: ACCOUNT_LABEL[k].url }));
-  if (tools.length || stations.length) readyItems.push({ label: '노트북·크롬북에서 최신 브라우저(크롬·엣지·웨일) 열기', detail: '휴대폰보다 큰 화면이 실습하기 편해요.', url: '' });
-  const checks = (readyTools.length ? readyTools : tools).filter((t) => t.url).slice(0, 10).map((t) => ({ name: t.name, url: t.url }));
-  if (readyItems.length && (stations.length || archetype.primary === 'lab' || archetype.primary === 'course')) S.readiness = { id: 'readiness', type: 'readiness', nav: '준비', items: readyItems, checks };
+  // 준비 점검: 교재의 준비물 쪽이 먼저. 로그인 주소 같은 교재에 없는 주소는 넣지 않음
+  const prepItems = composed.prep.map((label) => ({ label, detail: '', url: '' }));
+  const prepText = textKey(composed.prep.join(' '));
+  const readyItems = [...prepItems, ...[...accounts.entries()].filter(([k]) => !prepText.includes(textKey(ACCOUNT_WORD[k] || '\u0000')))
+    .map(([k, names]) => ({ label: ACCOUNT_LABEL[k].label, detail: `필요한 도구: ${names.slice(0, 6).join(', ')}`, url: '' }))];
+  if ((tools.length || stations.length) && !/브라우저|크롬|엣지|웨일/.test(composed.prep.join(' '))) readyItems.push({ label: '노트북·크롬북에서 최신 브라우저(크롬·엣지·웨일) 열기', detail: '휴대폰보다 큰 화면이 실습하기 편해요.', url: '' });
+  const checks = (readyTools.length ? readyTools : tools).map((t) => ({ name: t.name, url: ownUrl(t) || t.url })).filter((t) => t.url).slice(0, 10);
+  if (readyItems.length && (stations.length || composed.prep.length || archetype.primary === 'lab' || archetype.primary === 'course')) S.readiness = { id: 'readiness', type: 'readiness', nav: '준비', items: readyItems.slice(0, 12), checks };
 
-  if (stations.length) S.stations = { id: 'stations', type: 'stations', nav: '실습', layout: stations.length > 8 ? 'tabs' : 'sidebar', items: stations };
+  if (stations.length) { S.stations = { id: 'stations', type: 'stations', nav: '실습', layout: stations.length > 8 ? 'tabs' : 'sidebar', items: stations }; slotPage.stations = stations[0].source.pages[0]; }
 
   // 프롬프트 모음(스테이션에 없는 것 포함 전체)
   const allPrompts = (d.prompts || []).slice(0, 40);
@@ -265,11 +293,10 @@ export function materialToDraft(material, info = {}) {
     S.prompts = { id: 'prompts', type: 'prompts', nav: '프롬프트', items: allPrompts.map((x, k) => ({ title: x.title || pageMap.get(pageKey(x.file, x.page))?.title || `프롬프트 ${k + 1}`, text: x.text, tags: [...new Set(refsOf(x).flatMap((r) => toolNamesOn(r.file, [r.page])))].slice(0, 3) })) };
   }
 
-  // 도구
   if (tools.length) {
     S.tools = {
       id: 'tools', type: 'tools', nav: '도구',
-      items: tools.slice(0, 24).map((t) => ({ name: t.name, url: t.url || '', desc: [t.categoryLabel, t.accountNeeded ? accountShort(t.account) : '로그인 없이'].filter(Boolean).join(' · '), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
+      items: tools.slice(0, 24).map((t) => ({ name: t.name, url: ownUrl(t) || t.url || '', desc: [t.categoryLabel, t.accountNeeded ? accountShort(t.account) : '로그인 없이'].filter(Boolean).join(' · '), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
       notice: tools.some((t) => /연령|만 1[348]세|보호자/.test(t.minors || '')) ? '학생과 함께 쓸 때는 도구별 연령 기준과 학교·교육청 지침을 먼저 확인해 주세요.' : '',
     };
   }
@@ -293,46 +320,125 @@ export function materialToDraft(material, info = {}) {
   }
 
   const quizItems = (d.quiz || []).filter((q) => q.answer >= 0).slice(0, 20).map((q) => ({ q: q.q, options: q.options, answer: q.answer, explain: q.explain || '' }));
-  if (quizItems.length) S.quiz = { id: 'quiz', type: 'quiz', nav: '퀴즈', items: quizItems };
-  if ((d.glossary || []).length >= 2) S.glossary = { id: 'glossary', type: 'glossary', nav: '용어', items: d.glossary.slice(0, 40).map((g) => ({ term: g.term, desc: g.desc })) };
-  if ((d.faq || []).length) S.faq = { id: 'faq', type: 'faq', nav: 'FAQ', items: d.faq.slice(0, 20).map((f) => ({ q: f.q, a: f.a })) };
+  if (quizItems.length) { S.quiz = { id: 'quiz', type: 'quiz', nav: '퀴즈', items: quizItems }; slotPage.quiz = d.quiz[0].page; }
+  if ((d.glossary || []).length >= 2) { S.glossary = { id: 'glossary', type: 'glossary', nav: '용어', items: d.glossary.slice(0, 40).map((g) => ({ term: g.term, desc: g.desc })) }; slotPage.glossary = d.glossary[0].page; }
+  if ((d.faq || []).length) { S.faq = { id: 'faq', type: 'faq', nav: 'FAQ', items: d.faq.slice(0, 20).map((f) => ({ q: f.q, a: f.a })) }; slotPage.faq = d.faq[0].page; }
 
+  // 자료실: 참가자가 받을 수 있는 것만(주소가 있는 파일, 교재의 '자료·내려받기' 링크). 받을 수 없는 파일 이름은 보이지 않게
   const matItems = files.filter((f) => f.type !== 'link').map((f) => ({
     title: f.name, desc: f.pages ? `${f.pages}${f.unit === 'slide' ? '장' : f.unit === 'page' ? '쪽' : '개 부분'}` : '',
     href: info.materials?.[f.id] || (hasDeckFile && f.id === hasDeckFile.id ? info.deckHref || '' : ''), kind: (f.type || extOf(f.name) || 'file').toUpperCase(), size: sizeLabel(f.size),
-  }));
+  })).filter((x) => x.href);
   for (const f of files.filter((x) => x.type === 'link')) matItems.push({ title: f.name, desc: hostOf(f.url), href: f.url, kind: 'LINK', size: '' });
-  if (matItems.length) S.materials = { id: 'materials', type: 'materials', nav: '자료', items: matItems, notice: '연수 목적으로만 써 주세요. 다른 곳에 올릴 때는 강사에게 먼저 물어봐 주세요.' };
+  const lineOf = (l) => { const r = refsOf(l)[0]; return r ? bodyLines(r.file, r.page).find((t) => (l.label && t.includes(l.label)) || t.includes(l.url)) || '' : ''; };
+  for (const l of (d.links || [])) {
+    if (heldUrls.has(l.url) || l.kind === 'meeting' || l.kind === 'form' || matItems.some((x) => x.href === l.url)) continue;
+    const line = lineOf(l); const lab = /^(.{2,20}?)\s*[:：]/.exec(line.replace(LEAD, ''));
+    if (/자료|내려받기|다운로드|양식|서식/.test(`${lab?.[1] || ''} ${l.label || ''}`) && !/영상|녹화|다시\s*보기/.test(line)) matItems.push({ title: truncate(lab ? lab[1] : l.label || hostOf(l.url), 100), desc: lab && l.label && !/^https?:/.test(l.label) && l.label !== lab[1] ? l.label : hostOf(l.url), href: l.url, kind: 'LINK', size: '' });
+  }
+  if (matItems.length) S.materials = { id: 'materials', type: 'materials', nav: '자료', items: matItems.slice(0, 30), notice: '연수 목적으로만 써 주세요. 다른 곳에 올릴 때는 강사에게 먼저 물어봐 주세요.' };
 
-  // 연수 후 안내: '참고 자료'·'더 알아보기' 쪽의 링크와 끝부분의 영상·소통방 링크
+  // 연수 후 안내: '참고 자료'·'더 알아보기' 쪽의 링크와 끝부분의 영상·소통방 링크, 교재에 적힌 과제·이수 처리
   const morePages = pages.filter((p) => MORE_TITLE.test(p.title || ''));
   const tail = pages.slice(-3);
-  const seenUrl = new Set([...(S.materials?.items || []).map((x) => x.href), ...stations.flatMap((st) => st.links.map((l) => l.url))]);
+  const seenUrl = new Set([...(S.materials?.items || []).map((x) => x.href), ...stations.flatMap((x) => x.links.map((l) => l.url))]);
   const fu = [];
   for (const l of (d.links || [])) {
-    if (fu.length >= 8 || seenUrl.has(l.url) || l.kind === 'meeting') continue;
+    if (fu.length >= 8 || seenUrl.has(l.url) || l.kind === 'meeting' || l.kind === 'form') continue;
     const onMore = morePages.some((p) => onPages(l, p.file, [p.page]));
     const k = followupKind(l.url);
     if (onMore || (k !== 'link' && tail.some((p) => onPages(l, p.file, [p.page])))) { seenUrl.add(l.url); fu.push({ title: truncate(l.label || hostOf(l.url), 80), url: l.url, kind: k, desc: '' }); }
   }
-  if (fu.length) S.followup = { id: 'followup', type: 'followup', nav: '연수 후', items: fu };
+  if (admin?.assignment?.length) fu.unshift({ title: '과제', url: '', kind: 'next', desc: truncate(admin.assignment.map((t) => t.replace(/^과제\s*[:：]\s*/, '')).join(' · '), 200) });
+  const completion = truncate((admin?.completion || []).join(' '), 300);
+  if (fu.length || completion) S.followup = { id: 'followup', type: 'followup', nav: '연수 후', items: fu, completion };
 
   if (instructors.length) S.instructor = { id: 'instructor', type: 'instructor', nav: '강사', source: d.instructor ? { file: d.instructor.file, pages: [d.instructor.page] } : undefined };
-  S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl || '', qr: true, questions: DEFAULT_SURVEY.map((q) => ({ ...q })) };
+  // 만족도 조사: 강사가 준 주소가 있을 때만. 주소가 없으면 참여 기능을 켤 때 사이트 안 설문이 들어감(intake.js applyFeatures)
+  if (info.surveyUrl) S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl, qr: true, questions: DEFAULT_SURVEY.map((q) => ({ ...q })) };
+  // 마무리: 교재의 맺는 문장이 있으면 그 문장, 없으면 인사말만(연수 제목을 되풀이하지 않음)
   const closingMsg = msgs.find((m) => m.closing) || msgs.find((m) => m !== lead && (m.score ?? 2) >= 2 && m.file === (hasDeckFile && hasDeckFile.id)) || null;
-  S.closing = { id: 'closing', type: 'closing', lead: '함께해 주셔서 고맙습니다', text: closingMsg ? closingMsg.text : meta.title, thanks: instructors[0] ? `${instructors[0].name} 드림` : '' };
+  if (flow !== 'course') S.closing = closingMsg
+    ? { id: 'closing', type: 'closing', lead: '함께해 주셔서 고맙습니다', text: closingMsg.text, thanks: instructors[0] ? `${instructors[0].name} 드림` : '' }
+    : { id: 'closing', type: 'closing', lead: '', text: '함께해 주셔서 고맙습니다', thanks: instructors[0] ? `${instructors[0].name} 드림` : '' };
 
+  // 한눈에 보기: 흐름에 맞는 값만(행사: 참석·발표·시간 / 과정: 연수 시간·차시·출석 기준 / 문서: 교재의 수치 문장)
   const glance = [];
-  if (stations.length) glance.push({ value: String(stations.length), label: '실습', note: '' });
-  if (tools.length) glance.push({ value: String(tools.length), label: '도구', note: '' });
-  if (durationMin) glance.push({ value: hoursLabel(durationMin), label: '연수 시간', note: '' });
-  if (hasDeckFile) glance.push({ value: String(hasDeckFile.pages), label: '교재 쪽', note: '' });
-  if (glance.length >= 2) S.glance = { id: 'glance', type: 'glance', items: glance };
+  if (flow === 'event') {
+    const size = info.size || ev.size;
+    if (size) glance.push({ value: `${size}명`, label: '참석', note: '' });
+    if (speakers.length) glance.push({ value: `${speakers.length}개`, label: '발표', note: '' });
+    if (durationMin) glance.push({ value: hoursLabel(durationMin), label: '진행 시간', note: '' });
+  } else if (flow === 'course') {
+    const n = S.sessions?.items.length || 0;
+    if (meta.admin.hours) glance.push({ value: `${meta.admin.hours}시간`, label: '연수 시간', note: truncate(admin?.hoursText || '', 80) });
+    if (n) glance.push({ value: `${n}차시`, label: '차시', note: '' });
+    if (admin?.completionRate) glance.push({ value: `${admin.completionRate}%`, label: '출석 기준', note: truncate(admin.rateText || '', 80) });
+  } else if (sourceBody) {
+    for (const f of d.figures || []) glance.push({ value: f.value, label: f.label, note: f.note });
+  }
+  if (glance.length >= 2) S.glance = { id: 'glance', type: 'glance', items: glance.slice(0, 4) };
 
-  if (S.outline) S.outline.source = { file: d.sections?.[0]?.file || '', pages: (d.sections || []).map((s) => s.page) };
+  // 첫 화면: 일시·장소·강사는 연수 정보에서 그려지므로 따로 적지 않음(정보를 고치면 함께 바뀜).
+  // 여러 날 과정·발표자 여럿·목표 칸이 없는 대상처럼 덧붙일 줄이 있을 때만 적음
+  const ctas = [];
+  const firstBody = composed.entries.map((e) => e.section).find((x) => x && ['procedure', 'cases', 'discuss'].includes(x.type));
+  if (stations.length) ctas.push({ label: '실습 시작', href: '#stations' });
+  else if (S.sessions && flow === 'course') ctas.push({ label: '차시 보기', href: '#sessions' });
+  else if (S.schedule && flow === 'event') ctas.push({ label: '일정 보기', href: '#schedule' });
+  else if (sourceBody && firstBody) ctas.push({ label: { procedure: '절차 보기', cases: '사례 보기', discuss: '질문 보기' }[firstBody.type], href: `#${firstBody.type}` });
+  if (hasDeckFile) ctas.push({ label: '교재 보기', href: '#deck' });
+  if (!ctas.length && S.outline) ctas.push({ label: '차례 보기', href: '#outline' });
+  const heroMeta = [];
+  const extraRows = [speakers.length >= 2 && { label: '발표', value: truncate(speakers.map((p) => p.name).join(' · '), 80) }, !S.goals && who && { label: '대상', value: truncate(who, 80) }].filter(Boolean);
+  if (extraRows.length || meta.sessions.filter((x) => x.date).length >= 2) {
+    const base = [['일시', whenText(meta)], ['장소', placeText(meta)], ['강사', whoText(instructors[0])]].filter(([, v]) => v).map(([label, value]) => ({ label, value }));
+    heroMeta.push(...base, ...extraRows);
+  }
+  S.hero = { id: 'hero', type: 'hero', nav: '처음', eyebrow: meta.organizer || '', title: meta.title, subtitle: meta.subtitle, ctas: ctas.slice(0, 2), meta: heroMeta };
 
-  const order = ORDER[archetype.primary] || ORDER.story;
-  const sections = order.map((k) => S[k]).filter(Boolean).map((s) => { if (s.source === undefined) delete s.source; return s; });
+  // ── 칸 놓기: 흐름의 순서에 본문 칸을 교재 순서로 끼움 ─────────────
+  // 이름표 줄 묶음(과정 개요 등): 첫 화면·목표·한눈에 보기에 이미 실린 줄이 대부분이면 되풀이하지 않음
+  const headHay = textKey(JSON.stringify([meta, S.hero, S.goals, S.glance, instructors, whenText(meta)]));
+  const shown = (v) => { const w = normLine(v).split(/[\s|·,/()~+]+/).map(textKey).filter((x) => x.length >= 2); return w.length ? w.filter((x) => headHay.includes(x)).length / w.length >= 0.6 : true; };
+  const entries = composed.entries.filter((e) => !(e.section?._facts && e.section.rows.filter((r) => shown(r[1])).length >= e.section.rows.length * 0.7));
+  const used = new Map();
+  const bodyId = (type) => { const n = (used.get(type) || 0) + 1; used.set(type, n); return n === 1 ? type : `${type}-${n}`; };
+  const finish = (sec) => {
+    const s = { ...sec }; delete s._facts; delete s._use;
+    s.id = bodyId(s.type === 'glance' ? 'figures' : s.type);
+    if (s.type === 'table' || s.type === 'text' || s.type === 'glance') s.nav = s.title && [...s.title].length <= 8 ? s.title : '';
+    return s;
+  };
+  // 흐름 순서에 자리 이름이 있는 칸(핵심 단계 등)은 그 자리로, 나머지는 본문 칸
+  const body = [];
+  for (const e of entries) {
+    if (e.slot) { body.push(e); continue; }
+    const t = e.section.type;
+    if (st.order.includes(t) && !S[t] && t !== 'glance') { S[t] = { ...finish(e.section), id: t }; slotPage[t] = e.page; continue; }
+    body.push({ ...e, section: finish(e.section) });
+  }
+  const HEAD = ['hero', 'message', 'goals', 'glance'];
+  const bodySlots = new Set(body.filter((e) => e.slot && !HEAD.includes(e.slot)).map((e) => e.slot));
+  const sections = [];
+  const placed = new Set();
+  const put = (k) => { if (S[k] && !placed.has(k)) { placed.add(k); sections.push(S[k]); } };
+  if (sourceBody) {
+    for (const k of st.order) {
+      if (k === '*') { for (const e of body) { if (e.slot) put(e.slot); else sections.push(e.section); } } else if (!bodySlots.has(k)) put(k);
+    }
+  } else {
+    // 슬라이드 교재: 본문 칸을 '그 쪽보다 앞에 재료가 있는 마지막 칸' 뒤에 끼움. 앞선 칸이 없으면 본문 자리(*)에
+    const star = []; const after = new Map();
+    for (const e of body.filter((x) => x.section)) {
+      const anchor = st.order.filter((k) => k !== '*' && S[k] && !HEAD.includes(k) && slotPage[k] !== undefined && slotPage[k] <= e.page).pop();
+      if (anchor) after.set(anchor, [...(after.get(anchor) || []), e.section]); else star.push(e.section);
+    }
+    for (const k of st.order) {
+      if (k === '*') sections.push(...star); else { put(k); if (after.has(k)) sections.push(...after.get(k)); }
+    }
+  }
+  for (const s of sections) if (s.source === undefined) delete s.source;
 
   const audience = {
     type: info.audience?.type || 'teachers', size: info.size || info.audience?.size || ev.size || 30, level: info.level || info.audience?.level || 'beginner',
@@ -344,29 +450,36 @@ export function materialToDraft(material, info = {}) {
   if (accent) design.accent = accent;
   if (d.fonts) design.sourceFonts = { display: d.fonts.display, body: d.fonts.body }; // 교재 글꼴 → 사이트 글꼴(resolveDesign)
 
-  return {
+  const draft = {
     version: 1, meta, audience, archetype, design, instructors, sections,
     live: { provider: 'none', features: [], anonymous: true, code: randomCode() },
     privacy: { collect: ['nickname'], retentionDays: 30, consent: true, processors: [] },
     deploy: { target: 'zip', base: '/' },
     sources: files.map((f) => ({ id: f.id, name: f.name, pages: f.pages || 0 })),
-    _draft: {
-      generator: 'heuristic', archetypeReason: arche.reason_ko || '', format: arche.format || '',
-      detectedFonts: material.design?.fontsUsed?.map((f) => f.name) || [], themeColors: material.design?.colors || {},
-      todo: [
-        !meta.date && '연수 날짜를 확인해 주세요.',
-        !meta.venue && meta.mode !== 'online' && '장소를 확인해 주세요.',
-        !instructors.length && '강사 정보를 넣어 주세요.',
-        !S.goals && '연수 목표(마치면 할 수 있는 것)를 2~4개 적어 주세요.',
-        meta.mode !== 'offline' && !meta.joinUrl && '온라인 접속 주소(Zoom·Meet)를 넣어 주세요.',
-        !meta.contact && '문의처(연수 담당자 연락처)를 넣어 주세요.',
-        meta.admin.kind === 'official' && '이수 처리 일정(언제 등록되는지)을 연수 후 안내에 적어 주세요.',
-        dates.length >= 2 && !S.sessions && '차시별 제목을 넣어 주세요.',
-        !info.surveyUrl && '만족도 조사 주소(설문 링크)를 넣어 주세요.',
-        hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 보기에 보여요.',
-      ].filter(Boolean),
-    },
   };
+  // 구성 결과: 흐름·이유·권하는 기능·교재에 있는데 싣지 못한 것
+  draft.structure = { flow, label: st.label, reasons: st.reasons, suggested: st.suggested, leftovers: findLeftovers(material, draft, { max: 12 }) };
+  const found = d.addresses || {};
+  draft._draft = {
+    generator: 'heuristic', archetypeReason: st.reasons[0] || '', format: d.archetype?.format || '',
+    detectedFonts: material.design?.fontsUsed?.map((f) => f.name) || [], themeColors: material.design?.colors || {},
+    todo: [
+      !meta.date && '연수 날짜를 확인해 주세요.',
+      !meta.venue && meta.mode !== 'online' && '장소를 확인해 주세요.',
+      !instructors.length && !S.speakers && '강사 정보를 넣어 주세요.',
+      !S.goals && '연수 목표(마치면 할 수 있는 것)를 2~4개 적어 주세요.',
+      meta.mode !== 'offline' && !meta.joinUrl && (found.join?.length ? `온라인 접속 주소: 교재에서 찾은 주소(${hostOf(found.join[0].url)})가 맞는지 확인해 주세요.` : '온라인 접속 주소(Zoom·Meet)를 넣어 주세요.'),
+      !meta.contact && '문의처(연수 담당자 연락처)를 넣어 주세요.',
+      meta.admin.kind === 'official' && !completion && '이수 처리 일정(언제 등록되는지)을 연수 후 안내에 적어 주세요.',
+      dates.length >= 2 && !S.sessions && '차시별 제목을 넣어 주세요.',
+      !info.surveyUrl && (found.survey?.length ? `만족도 조사: 교재에서 찾은 설문 주소(${hostOf(found.survey[0].url)})를 쓸지 확인해 주세요.` : '만족도 조사 주소(설문 링크)를 넣어 주세요.'),
+      hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 보기에 보여요.',
+      !S.materials && '참가자가 받을 자료가 있으면 자료실에 올려 주세요.',
+      stations.some((x) => !x.outcome) && '실습마다 "여기까지 됐나요?" 확인 문장을 적어 주세요.',
+      noteCount > 0 && `발표자 노트에서 막히는 곳 ${noteCount}건을 실습 메모로 옮겼어요. 참가자에게 보여도 되는지 확인해 주세요.`,
+    ].filter(Boolean),
+  };
+  return draft;
 }
 
 // 오피스·구글 슬라이드·키노트·리브레오피스의 기본 테마 색과 표준 색은 기관 색이 아님(강조색으로 쓰지 않음)
