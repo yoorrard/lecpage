@@ -77,7 +77,7 @@ try {
 
     // 1. 교재 넣기: 예시 교재(엔진 시험용 파일)를 넣은 모습
     await page.goto(base + '#/', { waitUntil: 'load' });
-    await page.setInputFiles('.drop-home input[type=file]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pptx'), join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
+    await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pptx'), join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
     await page.waitForSelector('.files li', { timeout: 60000 });
     await page.waitForFunction(() => !document.querySelector('.drop b')?.textContent.includes('중'), null, { timeout: 90000 });
     await page.locator('.field:has-text("연수명") input').first().fill('수업에 바로 쓰는 생성형 AI');
