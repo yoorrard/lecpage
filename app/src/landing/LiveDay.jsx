@@ -27,7 +27,7 @@ export function LiveDay() {
           <p class="ld-kicker">연수 당일</p>
           <h2 id="ld-live-h">휴대폰으로 묻고,<br />화면으로 함께 봐요</h2>
         </header>
-        <p class="ld-sub">참가자는 휴대폰으로 질문을 남기고 투표해요. 강사는 강사 화면에서 질문을 고르고, 발표 화면에 결과를 띄워요. 참여 기능은 강사님 계정(구글 시트·Supabase·Cloudflare 등)에 바로 연결해, lecpage 운영자는 참가자 기록을 보지 않아요.</p>
+        <p class="ld-sub">참가자는 휴대폰으로 질문을 남기고 투표해요. 강사는 강사 화면에서 질문을 고르고, 발표 화면에 결과를 띄워요. 참여 기능은 강사님 계정(구글 시트·Supabase·Cloudflare 등)에 바로 연결해요. lecpage 운영자는 참가자 기록을 보지 않아요.</p>
         <dl class="ld-feat">{FEATURES.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
       </div>
       <div class={`ld-live-vis${on ? ' is-on' : ''}`} ref={box} aria-hidden="true">

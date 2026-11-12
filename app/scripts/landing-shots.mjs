@@ -101,7 +101,11 @@ try {
   if (want('site') || want('phone')) {
     const dl = example('data-lab');
     const dir = buildTo('data-lab', { ...dl, live: { ...(dl.live || {}), provider: 'none', features: [] } });
-    if (want('site')) await save('site-data-lab', await shoot(dir), { q: 0.76, w: 1120 });
+    if (want('site')) {
+      const png = await shoot(dir);
+      await save('site-data-lab', png, { q: 0.76, w: 1120 }); // 이야기 '펼쳐요' 장면
+      await save('hero-data-lab', png, { q: 0.62, w: 760 }); // 첫 화면: 교재 표지 밑에 깔려 모서리만 보이므로 작게(첫 화면을 빨리)
+    }
     if (want('phone')) await save('phone-data-lab', await shoot(dir, { width: 390, height: 844, dpr: 1.5, full: 2400 }), { q: 0.7 });
   }
   manifest.showcase = SHOWCASE.filter((id) => manifest[`show-${id}`]);

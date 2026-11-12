@@ -25,7 +25,7 @@ export function Bench() {
         <thead><tr><th scope="col">항목</th><th scope="col">{base}</th><th scope="col">lecpage</th><th scope="col">잰 날짜·조건</th></tr></thead>
         <tbody>
           {items.map((x) => {
-            const max = Math.max(x.baseline, x.lecpage) || 1, u = x.unit ? ` ${x.unit}` : '', href = link(x.method);
+            const max = Math.max(x.baseline, x.lecpage) || 1, u = !x.unit ? '' : x.unit === '%' ? '%' : ` ${x.unit}`, href = link(x.method);
             return (
               <tr>
                 <th scope="row">{x.name}{x.better && <small>{x.better === 'higher' ? '높을수록 좋음' : '낮을수록 좋음'}</small>}</th>

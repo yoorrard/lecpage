@@ -54,11 +54,20 @@ function Days() {
 
 export function Home() {
   const [list, setList] = useState(null);
+  const [more, setMore] = useState(false);
   const [drag, setDrag] = useState(false);
   const [del, setDel] = useState(null);
   const fileRef = useRef(); const pickRef = useRef();
   const reload = () => projects.all().then(setList, () => setList([]));
   useEffect(() => { reload(); }, []);
+  // 첫 화면을 먼저 그리고(첫 그림이 빨리 뜨게), 그 아래 이야기는 다음 틈에. 만든 연수 목록과 함께 한 번에 넣어 위쪽이 밀리지 않게
+  useEffect(() => {
+    if (more) return;
+    // 목록이 오래 걸리면(저장소가 막힘) 기다리지 않음
+    if (list === null) { const t = setTimeout(() => setMore(true), 1500); return () => clearTimeout(t); }
+    let t; const id = requestAnimationFrame(() => { t = setTimeout(() => setMore(true), 0); });
+    return () => { cancelAnimationFrame(id); clearTimeout(t); };
+  }, [list]);
   async function startWith(fileList) {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
     const p = await newProject('blank');
@@ -88,9 +97,9 @@ export function Home() {
     <div class="ld">
       <section class="ld-hero" aria-labelledby="ld-h1">
         <div class="ld-hero-t">
-          <p class="ld-kicker">교사 연수 사이트 만들기 · 무료 · 회원가입 없음</p>
-          <h1 id="ld-h1">교재를 넣으면<br /><span class="ld-hl">연수 사이트</span>가 나와요</h1>
-          <p class="ld-lead">PPT·PDF·한글·워드 교재를 놓으면 AI가 교재를 읽고 연수 흐름과 문구를 짜요. 주제에 맞는 디자인으로 사이트를 만들고, 단추 하나로 공개하면 참가자에게 보낼 주소와 QR이 나와요.</p>
+          <p class="ld-kicker">교사 연수용 · 무료 · 회원가입 없음</p>
+          <h1 id="ld-h1"><span>교재를 넣으면</span> <span><span class="ld-hl">연수 사이트</span>가 나와요</span></h1>
+          <p class="ld-lead">PPT·PDF·한글·워드 교재를 놓으면 AI가 읽고 연수 흐름과 문구를 짜요. 주제에 맞는 디자인으로 사이트를 만들고, 공개하면 참가자에게 보낼 주소와 QR이 나와요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWPX)·워드</span></span>
@@ -107,7 +116,8 @@ export function Home() {
         <HeroFold />
       </section>
 
-      {list?.length > 0 && (
+      {!more && <div class="ld-later" aria-hidden="true" />}
+      {more && list?.length > 0 && (
         <section class="ld-mine" aria-labelledby="ld-mine-h">
           <div class="section-title"><h2 id="ld-mine-h">내 연수</h2><p class="muted">이 브라우저에 저장돼 있어요. 눌러서 이어서 만들어요.</p></div>
           <div class="grid grid-3">
@@ -128,6 +138,7 @@ export function Home() {
         </section>
       )}
 
+      {more && <>
       <Story />
       <Showcase />
       <Reach />
@@ -154,7 +165,7 @@ export function Home() {
         <dl class="ld-cost-list">
           <div><dt>lecpage</dt><dd><b>0원</b><span>회원가입이 없어요. 교재 읽기부터 사이트 조립까지 이 브라우저 안에서 해요.</span></dd></div>
           <div><dt>AI</dt><dd><b>사이트 하나에 몇백 원쯤</b><span>ChatGPT(OpenAI)나 Claude의 API 키를 한 번 붙여 넣어요. 쓴 만큼 그 회사에 직접 내요. Gemini 무료 키도 되지만 Flash 모델이라 구성과 문구가 단순할 수 있어요. AI 없이 기본 초안만 만들 수도 있어요.</span></dd></div>
-          <div><dt>공개·참여 기능</dt><dd><b>강사님 계정의 무료 한도 안에서</b><span>사이트는 Vercel·GitHub Pages 같은 강사님 계정에 올리고, 참여 기능은 구글 시트·Supabase 같은 강사님 계정에 연결해요. 올릴 곳마다 무료 한도를 넘으면 어떻게 되는지 한 줄로 알려 줘요.</span></dd></div>
+          <div><dt>공개·참여 기능</dt><dd><b>강사님 계정의 무료 한도 안에서</b><span>사이트는 Vercel·GitHub Pages 같은 강사님 계정에 올려요. 참여 기능은 구글 시트·Supabase 같은 강사님 계정에 연결해요. 올릴 곳마다 무료 한도를 넘으면 어떻게 되는지 한 줄로 알려 줘요.</span></dd></div>
         </dl>
       </section>
 
@@ -162,11 +173,11 @@ export function Home() {
         <div>
           <p class="ld-kicker">Agent Skill</p>
           <h2 id="ld-skill-h">쓰던 AI 도구에서도 만들어요</h2>
-          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 도구에 넣으면, 쓰던 구독 그대로 같은 엔진으로 사이트를 만들어요. AI가 HTML을 직접 쓰지 않고 설계도와 짧은 명령으로 만들어요.</p>
+          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 도구에 넣어 써요. 쓰던 구독 그대로, 같은 엔진으로 만들어요. AI가 HTML을 직접 쓰지 않고 설계도와 짧은 명령으로 만들어요.</p>
         </div>
         <div class="ld-cmd">
           <code>{SKILL_CMD}</code>
-          <button type="button" class="btn btn-sm" onClick={() => copy(SKILL_CMD, '명령을 복사했어요.')}>복사</button>
+          <button type="button" class="btn btn-sm" aria-label="설치 명령 복사" onClick={() => copy(SKILL_CMD, '명령을 복사했어요.')}>복사</button>
           <a class="ld-cmd-help" href="#/help/skill">AI 도구에서 쓰는 법</a>
         </div>
       </section>
@@ -197,6 +208,7 @@ export function Home() {
           <a class="btn btn-quiet" href="#/help/start">도움말</a>
         </div>
       </section>
+      </>}
 
       {drag && <div class="ld-dropall" aria-hidden="true"><p><Mascot size={64} mood="wow" />놓으면 이 교재로 시작해요</p></div>}
       <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
