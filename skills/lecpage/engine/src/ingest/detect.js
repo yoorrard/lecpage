@@ -927,8 +927,14 @@ function detectSessions(pages, refYear) {
     if (!e.at || e.desc) { delete e.at; continue; }
     const list = e.at.p.paragraphs || []; const i = list.indexOf(e.at.x); const more = [];
     for (let k = i + 1; i >= 0 && k < list.length && more.length < 6; k++) {
-      const t = normLine(list[k].text).replace(LEAD_MARK, '');
-      if (SESSION_HEAD.test(t) || (/^\d{1,2}\s*[.)]\s*\S/.test(t) && t.length <= 34 && !/(?:니다|세요|어요|해요|한다|있다)\.?$/.test(t))) break;
+      const raw = normLine(list[k].text);
+      const t = raw.replace(LEAD_MARK, '');
+      // 다음 차시 줄이나 다음 절 제목("5. 과제와 이수 처리")에서 멈춤. 절 제목은 번호를 떼기 전의 줄로 보고,
+      // 글자 크기를 알면 앞줄보다 클 때만, 모르면 번호가 2 이상일 때만 제목으로 봄(차시 안의 "1. …" 목록과 가르려고)
+      const hm = /^(\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s*\S/.exec(raw);
+      const bigger = list[k].size && list[k - 1]?.size ? list[k].size > list[k - 1].size : null;
+      const head = !!hm && raw.length <= 34 && !list[k].num && !/(?:니다|세요|어요|해요|한다|있다)\.?$/.test(raw) && (bigger === null ? !(+hm[1] < 2) : bigger);
+      if (SESSION_HEAD.test(t) || head) break;
       if (t) more.push(t);
     }
     e.desc = truncate(more.join(' · '), 300);

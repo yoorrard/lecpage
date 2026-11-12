@@ -331,6 +331,33 @@ function detectAddresses(pages, d) {
   return { join: join.slice(0, 3), survey: survey.slice(0, 3) };
 }
 
+/**
+ * 교재에서 찾은 것을 교재의 성격에 맞게 짧은 낱말들로(앱 1단계·CLI 요약). 있는 것만, 많아야 n개.
+ * 예: ['절차 5단계', '표 2개', '수치 4개'] · ['사례 3개', '질문 6개', '성찰 질문 3개'] · ['차시 5개', '질문과 답 3개']
+ * @param {object} d material.detected
+ */
+export function foundSummary(d = {}, n = 6) {
+  const sg = d.signals || {};
+  const out = [];
+  const add = (count, text) => { if (count > 0) out.push(text); };
+  add(d.practice?.count, `실습 ${d.practice?.count}쪽`);
+  add((d.prompts || []).length, `프롬프트 ${(d.prompts || []).length}개`);
+  add(sg.sessions, `차시 ${sg.sessions}개`);
+  add(sg.speakers, `발표자 ${sg.speakers}명`);
+  add((d.agenda?.items || []).filter((x) => x.start).length >= 2 ? 1 : 0, `일정 ${(d.agenda?.items || []).filter((x) => x.start).length}줄`);
+  add(sg.procedure, `절차 ${sg.procedure}단계`);
+  add(sg.cases, `사례 ${sg.cases}개`);
+  add(sg.questions, `질문 ${sg.questions}개`);
+  add(sg.reflection, `성찰 질문 ${sg.reflection}개`);
+  add(sg.tables, `표 ${sg.tables}개`);
+  add(sg.figures, `수치 ${sg.figures}개`);
+  add((d.faq || []).length, `질문과 답 ${(d.faq || []).length}개`);
+  add((d.glossary || []).length >= 2 ? d.glossary.length : 0, `용어 ${(d.glossary || []).length}개`);
+  add((d.quiz || []).filter((q) => q.answer >= 0).length, `퀴즈 ${(d.quiz || []).filter((q) => q.answer >= 0).length}개`);
+  add((d.tools || []).length, `도구 ${(d.tools || []).length}개`);
+  return out.slice(0, n);
+}
+
 /** 발표자 노트에서 '막히는 곳' 문장만(진행 메모는 싣지 않음) */
 export function noteTips(notes) {
   return sentences(normLine(notes || '').replace(/^(?:막히면|막힐\s*때|안\s*되면|주의|tip|팁)\s*[:：]\s*/i, '막히면: '))

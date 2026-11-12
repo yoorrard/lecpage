@@ -139,7 +139,11 @@ export function materialToDraft(material, info = {}) {
 
   const refsOf = (x) => x.refs || (x.pages || [x.page]).map((page) => ({ file: x.file, page }));
   const onPages = (x, file, list) => refsOf(x).some((r) => r.file === file && list.includes(r.page));
-  const toolNamesOn = (file, pagesList) => (d.tools || []).filter((t) => onPages(t, file, pagesList)).map((t) => t.name);
+  // 도구: 영상·설문·회의 서비스는 실습 쪽에서 쓰일 때만 도구로 봄(중계 주소·설문 주소가 '도구'로 올라가지 않게)
+  const practiceRefs = (d.practice?.pages || []);
+  const inPractice = (t) => refsOf(t).some((r) => practiceRefs.some((pr) => pr.file === r.file && pr.page === r.page));
+  const tools = (d.tools || []).filter((t) => !['video', 'survey', 'meeting'].includes(t.category) || inPractice(t));
+  const toolNamesOn = (file, pagesList) => tools.filter((t) => onPages(t, file, pagesList)).map((t) => t.name);
   // 강사 확인이 필요한 주소(중계·회의·설문)는 어느 칸에도 저절로 싣지 않음
   const heldUrls = new Set([...(d.addresses?.join || []), ...(d.addresses?.survey || [])].map((a) => a.url));
   const timed = (d.agenda?.items || []).filter((it) => it.start);
@@ -266,11 +270,8 @@ export function materialToDraft(material, info = {}) {
   // 본문 칸(교재 묶음 → 절차·사례·질문·표·글…)과 교재의 준비물
   const composed = composeBody({ ...material, detected: d }, d, { skipUrls: heldUrls });
 
-  // 도구: 실습 쪽에서 쓰는 것만(없으면 두 번 넘게 나온 것). 영상·설문·회의 서비스는 실습에 쓰일 때만 도구로 봄.
+  // 준비 점검의 도구: 실습 쪽에서 쓰는 것만(없으면 두 번 넘게 나온 것).
   // 주소는 교재에 적힌 그 도구의 주소가 있으면 그것을(연수 보드처럼), 없으면 도구의 대표 주소
-  const practiceRefs = (d.practice?.pages || []);
-  const inPractice = (t) => refsOf(t).some((r) => practiceRefs.some((pr) => pr.file === r.file && pr.page === r.page));
-  const tools = (d.tools || []).filter((t) => !['video', 'survey', 'meeting'].includes(t.category) || inPractice(t));
   const ownUrl = (t) => (d.links || []).find((l) => l.toolId === t.id && !heldUrls.has(l.url) && l.kind !== 'meeting')?.url || '';
   const accounts = new Map();
   const usedInPractice = tools.filter(inPractice);
@@ -344,7 +345,7 @@ export function materialToDraft(material, info = {}) {
   const seenUrl = new Set([...(S.materials?.items || []).map((x) => x.href), ...stations.flatMap((x) => x.links.map((l) => l.url))]);
   const fu = [];
   for (const l of (d.links || [])) {
-    if (fu.length >= 8 || seenUrl.has(l.url) || l.kind === 'meeting' || l.kind === 'form') continue;
+    if (fu.length >= 8 || seenUrl.has(l.url) || heldUrls.has(l.url) || l.kind === 'meeting' || l.kind === 'form') continue;
     const onMore = morePages.some((p) => onPages(l, p.file, [p.page]));
     const k = followupKind(l.url);
     if (onMore || (k !== 'link' && tail.some((p) => onPages(l, p.file, [p.page])))) { seenUrl.add(l.url); fu.push({ title: truncate(l.label || hostOf(l.url), 80), url: l.url, kind: k, desc: '' }); }
@@ -438,6 +439,18 @@ export function materialToDraft(material, info = {}) {
       if (k === '*') sections.push(...star); else { put(k); if (after.has(k)) sections.push(...after.get(k)); }
     }
   }
+  // 흐름 순서에 자리가 없는 칸도 버리지 않음: 머리 칸·차시·준비는 첫 화면 쪽에, 나머지는 자료·연수 후 앞에.
+  // 핵심 메시지만 예외: 마무리에 같은 문장이 실렸거나, 슬라이드 교재의 따라 하기·과정·행사 흐름이면 넣지 않음(교재 보기에 있음)
+  const FRONT = ['message', 'goals', 'glance', 'sessions', 'readiness'];
+  const ENDS = ['materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'];
+  for (const k of Object.keys(S)) {
+    if (placed.has(k)) continue;
+    if (k === 'message' && ((closingMsg && closingMsg === lead) || (!sourceBody && ['follow', 'course', 'event'].includes(flow)))) continue;
+    placed.add(k);
+    const front = FRONT.indexOf(k);
+    const at = front >= 0 ? sections.findIndex((s, i) => i > 0 && (FRONT.indexOf(s.type) > front || !FRONT.includes(s.type))) : sections.findIndex((s) => ENDS.includes(s.type));
+    sections.splice(at < 0 ? sections.length : at, 0, S[k]);
+  }
   for (const s of sections) if (s.source === undefined) delete s.source;
 
   const audience = {
@@ -458,7 +471,7 @@ export function materialToDraft(material, info = {}) {
     sources: files.map((f) => ({ id: f.id, name: f.name, pages: f.pages || 0 })),
   };
   // 구성 결과: 흐름·이유·권하는 기능·교재에 있는데 싣지 못한 것
-  draft.structure = { flow, label: st.label, reasons: st.reasons, suggested: st.suggested, leftovers: findLeftovers(material, draft, { max: 12 }) };
+  draft.structure = { flow, label: st.label, reasons: st.reasons, suggested: st.suggested, leftovers: findLeftovers(material, draft, { max: 12 }), source: 'auto' };
   const found = d.addresses || {};
   draft._draft = {
     generator: 'heuristic', archetypeReason: st.reasons[0] || '', format: d.archetype?.format || '',
