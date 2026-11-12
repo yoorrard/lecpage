@@ -3,47 +3,58 @@
 > 이 파일은 `scripts/gen-design-doc.mjs`가 엔진 카탈로그에서 자동으로 만듭니다. 직접 고치지 말고 카탈로그를 고친 뒤 다시 만드세요.
 
 ## 1. 정하는 순서
+0. **컨셉**: 디자인보다 먼저. 이 연수가 참가자에게 주는 경험 한 줄(`concept.idea`)과 화면에 되풀이할 그림(`concept.motif`)을 세운다. 프리셋은 그 모티프와 가장 가까운 것을 고른다(`references/concept.md`).
 1. **프리셋**: 분위기(mood)·주제(topic)·유형으로 점수를 매겨 3안을 제안한다(`lecpage.mjs design`). 강사가 고른다.
 2. **토큰**: 프리셋의 색·글꼴·모양. 기관 색이 있으면 `design.accent`(대비 자동 보정).
 3. **페이지 연출(모션 단계)**: 0 정적 · 1 차분 · 2 보통 · 3 스크롤 연출(시차·덮기·쌓임·고정 장면. 넓은 화면에서만 움직이고, 저사양·휴대폰·동작 줄이기에서는 완성된 정지 모습). 크롬북이 있으면 2까지, 휴대폰뿐이면 기본 2(강사가 3을 고르면 허용), 공식 연수는 1. 실습형은 첫 화면만. 학교망 제한(`audience.network: restricted`)이면 외부 라이브러리 효과를 쓰지 않는다.
 4. **슬롯별 효과**: 프리셋 기본값에서 출발해 상한·환경에 맞게 바꾸고, 제목·카드 효과는 연수마다 조금씩 변주한다(`design.seed`를 바꾸면 다른 조합). 직접 정하려면 `design.effects`에 `{"슬롯":"효과id"}`.
 5. **대표 효과**: 사이트 전체에서 두드러지는 효과는 하나(`design.signature`).
+5-1. **페이지 연출 계획**: 프리셋마다 첫 화면 밖 전 구간의 연출이 정해져 있다(아래 표의 '본문 연출'). 섹션이 들어오는 방식은 섹션 종류마다 다르고(모두 같은 떠오르기를 쓰지 않음), 일정 선·카드·사진·목록·섹션 제목 칸은 본문 단계가 허락하는 만큼 채운다. 0단계 정적 · 1단계 등장과 가리킴 반응 · 2단계 스크롤 연동 · 3단계 장면 연출. 칸을 비우려면 `design.effects`에 `{"칸":""}`.
 6. **글꼴 네 벌**: 한글 제목(`display`) · 한글 본문(`body`) · 숫자·영문용 라틴 제목(`num`: 큰 번호·날짜·통계·시각) · 고정폭(`mono`). 기본은 교재 글꼴을 따르고, 없으면 프리셋 글꼴. 직접 정하려면 `design.fonts`.
 
 ## 2. 지킬 것
-- 실습·질문·교재 화면은 모션 1단계를 넘지 않는다. 화려함은 첫 화면·섹션 시작·마무리에만.
+- 실습·질문·교재 화면은 모션 1단계를 넘지 않는다(머리만 조용히 등장). 화려함은 첫 화면·마무리에, 본문은 섹션마다 한 번 등장하고 멈춘다. 한 화면에 큰 움직임은 하나.
+- 같은 요소를 두 효과가 움직이지 않는다(등장 + 시차 + 붙박이 겹침 금지). `scripts/overlap-lint.mjs`가 스크롤 자리마다 겹침·잘림·덮임·숨은 채 남은 내용·효과 꼬임을 검사한다(`qa`에 포함).
 - 쉬는 상태가 완성 상태: 효과가 실패해도 글은 보인다. 동작 줄이기·'움직임 멈춤'을 늘 존중.
 - 피할 기본값: 보라→파랑 그라데이션 첫 화면, 똑같은 카드 3장, 흔한 AI 이미지, 섹션마다 다른 화려한 효과, 스크롤 납치, 같은 배치의 섹션을 세 번 넘게 잇기(디자인 검사 `layout-repeat`).
 - 한글: word-break: keep-all, 본문 행간 1.6~1.8, 제목 text-wrap: balance. 글꼴은 아래 목록(상업 이용 가능)만.
 
-## 3. 무드 프리셋 21종
-| id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문/숫자) | 연출 | 첫 화면 | 대표 효과 |
-|---|---|---|---|---|---|---|---|
-| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 넘어가는 영화 첫 장면. 아주 큰 제목과 '한눈에 보기' 띠. 메시지가 중심인 특강에. | emotional, warm, futuristic, bold | 페이퍼로지 / 아스타 산스 / Bricolage Grotesque | 스크롤 연출 | cinema | tone-journey |
-| `paper-workbook` | 종이 워크북 | 밝은 종이 위에 라임 실습지 한 장. 실습 목록과 완료 체크가 첫 화면부터 보이는 실습형 워크숍에. | minimal, playful, handmade | 프리젠테이션 / Pretendard / Barlow Condensed | 차분 | worksheet | micro-copy |
-| `glass-lab` | 유리 실험실 | 어두운 바탕에 유리 칸으로 짠 요약판. 일시·장소·실습 수가 한 화면에. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | 에이투지체 / Wanted Sans / Space Grotesk | 보통 | bento | spotlight |
-| `playground` | 놀이터 | 기울어진 흰 제목 상자와 원색 블록, 도구 이름이 흐르는 띠. 놀이·게임·창의 연수와 초등 활동에. | playful, energetic, bold, retro | 케리스 케듀체 / SUIT / Bricolage Grotesque | 보통 | poster | marquee |
-| `calm-forest` | 숲의 숨 | 세이지 그린과 부리 글꼴 제목, 넓은 여백과 종이 질감. 마음·상담·생활교육·학부모 연수에. | calm, natural, warm, handmade | 마루 부리 / 나눔휴먼 / Fraunces | 차분 | quiet | grain |
-| `official-brief` | 공식 브리핑 | 남색 머리띠와 정보 표, 큰 숫자. 일시·장소·대상·이수 기준이 표로 보이는 설명회·직무연수에. | formal, minimal | 나눔스퀘어 네오 / Pretendard GOV / IBM Plex Sans Condensed | 차분 | brief | counter |
-| `editorial-ink` | 잉크 잡지 | 표제 띠와 아주 큰 명조 제목, 세 단 머리글. 독서·인문·역사처럼 글이 주인공인 연수에. | editorial, minimal, calm | 함렛 / Noto Serif KR / Fraunces | 보통 | masthead | scroll-fill |
-| `retro-pop` | 도파민 팝 | 통통한 제목과 동그란 날짜 스티커. 형광 분홍·보라가 터지는 음악·미술·영어·학생 활동에. | playful, retro, energetic, bold | 베이글 팻 원 / 페이퍼로지 / Unbounded | 보통 | sticker | magnetic |
-| `chalkboard` | 칠판 교실 | 칠판에 분필로 쓴 제목과 오늘의 차례, 분필 받침에 놓인 안내. 교실 실천·초등 교과 연수에. | warm, handmade, playful | 학교안심 둥근미소 / 나눔스퀘어라운드 / Caveat | 보통 | board | doodle-scribbles |
-| `blueprint-tech` | 설계도 | 도면 표제란처럼 짠 사양서. 고정폭 이름표와 모눈, 그려지는 선. 코딩·메이커·과학·데이터 연수에. | tech, minimal, futuristic | IBM Plex Sans KR / IBM Plex Sans KR / IBM Plex Mono | 보통 | spec | line-draw |
-| `riso-zine` | 형광 인쇄 | 판이 어긋난 굵은 제목과 망점, 비스듬한 도장. 두 색 잉크로 찍은 인쇄물 같은 미술·독서 동아리·창작 연수에. | handmade, retro, playful, editorial | 가석 / 고딕 A1 / Anton | 보통 | zine | highlight-sweep |
-| `sunrise-warm` | 새벽빛 | 날짜가 먼저 보이는 초대장. 바탕 글꼴 제목과 떠오르는 해. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / LINE Seed Sans KR / Instrument Serif | 보통 | invite | scroll-fill |
-| `keynote-dark` | 어두운 키노트 | 검은 무대 위 아주 큰 제목과 지평선 불빛, 한 줄 정보 레일. 기조 강연·발표회·미래교육 특강에. 스크롤 연출이 기본. | futuristic, bold, minimal | Wanted Sans / Wanted Sans / Geist | 스크롤 연출 | keynote | scroll-fill |
-| `corporate-clean` | 깔끔한 기업형 | 흰 바탕에 또렷한 제목, 오른쪽에 겹쳐 놓인 오늘의 일정 카드. 기관 설명회·업무 연수·에듀테크 소개에. | formal, minimal, calm | SUIT / SUIT / Sora | 차분 | panel | counter |
-| `soft-pastel` | 부드러운 파스텔 | 아치·원·알약 도형 위의 날짜와 둥근 제목. 연보라·분홍·하늘빛의 포근한 화면. 학부모·저학년·마음 돌봄 연수에. | warm, calm, playful | 나눔스퀘어라운드 / LINE Seed Sans KR / Outfit | 보통 | soft | stack-cards |
-| `kinetic-type` | 움직이는 글자 | 화면을 넘치는 굵은 제목과 윤곽선 메아리 줄, 굵은 선으로 나눈 정보. 예술·동아리·학생 활동처럼 힘 있는 자리에. 스크롤 연출이 기본. | bold, energetic, editorial | 페이퍼로지 / 스포카 한 산스 네오 / Big Shoulders Display | 스크롤 연출 | ticker | marquee |
-| `warm-minimal` | 따뜻한 미니멀 | 넓은 여백과 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보. 독서·인문·상담처럼 조용히 읽히는 자리에. | minimal, calm, natural | 나눔명조 / 아스타 산스 / Fraunces | 차분 | column | highlight-sweep |
-| `deck-collage` | 펼친 교재 | 교재 쪽을 부채처럼 펼친 3D 더미가 첫 화면에. 마우스에 기울고, 누르면 다음 장이 올라와요. 교재가 주인공인 연수에. | editorial, handmade, bold | 페이퍼로지 / 아스타 산스 / Sora | 보통 | collage | slide-fan(첫 화면 그림) |
-| `time-dial` | 하루 시계 | 하루 일정이 둥근 시계로 그려지는 첫 화면. 순서마다 호가 그려지고, 연수 중에는 지금 바늘이 돌아요. 일정이 중요한 행사·종일 연수에. | futuristic, bold, tech | 아스타 산스 / 아스타 산스 / Red Hat Display | 보통 | dial | schedule-dial(첫 화면 그림) |
-| `knot-orbit` | 입체 궤도 | 점으로 짠 입체 매듭이 천천히 도는 첫 화면. 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레를 돌아요. AI·코딩·과학처럼 기술이 주제인 연수에. | futuristic, tech, bold | G마켓 산스 / Noto Sans KR(본고딕) / Syne | 보통 | orbit | orbit-3d(첫 화면 그림) |
-| `stone-stream` | 돌과 물결 | 연수 제목으로 그린 그림 한 장이 첫 화면에. 돌을 돌아 흐르는 물결 선이 일렁이고, 마우스를 올리면 물결이 비켜 흘러요. 미술·독서·생태·마음 연수에. | editorial, natural, calm | 송명 / 고딕 A1 / Instrument Serif | 보통 | stream | stream-lines(첫 화면 그림) |
+## 3. 무드 프리셋 27종
+| id | 이름 | 어울리는 연수 | 분위기 | 글꼴(제목/본문/숫자) | 연출 | 첫 화면 | 글 배치 | 본문 연출(등장 + 칸별 효과) | 대표 효과 |
+|---|---|---|---|---|---|---|---|---|---|
+| `night-story` | 밤하늘 서사 | 밤에서 새벽으로 넘어가는 영화 첫 장면. 아주 큰 제목과 '한눈에 보기' 띠. 메시지가 중심인 특강에. | emotional, warm, futuristic, bold | 페이퍼로지 / 아스타 산스 / Bricolage Grotesque | 스크롤 연출 | cinema | 왼쪽 정렬 | 번짐·떠오름·위에서 펼침·옆에서·왼쪽부터 펼침 + spotlight, line-draw, clip-reveal, link-underline | tone-journey |
+| `paper-workbook` | 종이 워크북 | 밝은 종이 위에 라임 실습지 한 장. 실습 목록과 완료 체크가 첫 화면부터 보이는 실습형 워크숍에. | minimal, playful, handmade | 프리젠테이션 / Pretendard / Barlow Condensed | 차분 | worksheet | 왼쪽 정렬 | 떠오름·왼쪽부터 펼침·넘어옴 + link-underline | micro-copy |
+| `glass-lab` | 유리 실험실 | 어두운 바탕에 유리 칸으로 짠 요약판. 일시·장소·실습 수가 한 화면에. AI·에듀테크·미래교육 연수에. | tech, futuristic, minimal | 에이투지체 / Wanted Sans / Space Grotesk | 보통 | bento | 왼쪽 정렬 | 살짝 커짐·떠오름·위에서 펼침·옆에서·번짐 + spotlight, line-draw, link-underline | spotlight |
+| `playground` | 놀이터 | 기울어진 흰 제목 상자와 원색 블록, 도구 이름이 흐르는 띠. 놀이·게임·창의 연수와 초등 활동에. | playful, energetic, bold, retro | 케리스 케듀체 / SUIT / Bricolage Grotesque | 보통 | poster | 왼쪽 정렬 | 내려앉음·넘어옴·옆에서·떠오름 + link-underline, line-draw, reveal-up | marquee |
+| `calm-forest` | 숲의 숨 | 세이지 그린과 부리 글꼴 제목, 넓은 여백과 종이 질감. 마음·상담·생활교육·학부모 연수에. | calm, natural, warm, handmade | 마루 부리 / 나눔휴먼 / Fraunces | 차분 | quiet | 왼쪽 정렬 | 번짐·떠오름·옆에서 + line-draw, clip-reveal, link-underline | grain |
+| `official-brief` | 공식 브리핑 | 남색 머리띠와 정보 표, 큰 숫자. 일시·장소·대상·이수 기준이 표로 보이는 설명회·직무연수에. | formal, minimal | 나눔스퀘어 네오 / Pretendard GOV / IBM Plex Sans Condensed | 차분 | brief | 왼쪽 정렬 | 번짐·왼쪽부터 펼침·떠오름 + line-draw, highlight-sweep, link-underline | counter |
+| `editorial-ink` | 잉크 잡지 | 표제 띠와 아주 큰 명조 제목, 세 단 머리글. 독서·인문·역사처럼 글이 주인공인 연수에. | editorial, minimal, calm | 함렛 / Noto Serif KR / Fraunces | 보통 | masthead | 왼쪽 정렬 | 왼쪽부터 펼침·떠오름·위에서 펼침·옆에서·번짐 + line-draw, clip-reveal, link-underline | scroll-fill |
+| `retro-pop` | 도파민 팝 | 통통한 제목과 동그란 날짜 스티커. 형광 분홍·보라가 터지는 음악·미술·영어·학생 활동에. | playful, retro, energetic, bold | 베이글 팻 원 / 페이퍼로지 / Unbounded | 보통 | sticker | 왼쪽 정렬 | 내려앉음·살짝 커짐·옆에서·떠오름 + link-underline, line-draw, reveal-up | magnetic |
+| `chalkboard` | 칠판 교실 | 칠판에 분필로 쓴 제목과 오늘의 차례, 분필 받침에 놓인 안내. 교실 실천·초등 교과 연수에. | warm, handmade, playful | 학교안심 둥근미소 / 나눔스퀘어라운드 / Caveat | 보통 | board | 왼쪽 정렬 | 왼쪽부터 펼침·떠오름·옆에서 + line-draw, link-underline | doodle-scribbles |
+| `blueprint-tech` | 설계도 | 도면 표제란처럼 짠 사양서. 고정폭 이름표와 모눈, 그려지는 선. 코딩·메이커·과학·데이터 연수에. | tech, minimal, futuristic | IBM Plex Sans KR / IBM Plex Sans KR / IBM Plex Mono | 보통 | spec | 왼쪽 정렬 | 왼쪽부터 펼침·옆에서·살짝 커짐·번짐 + spotlight, link-underline | line-draw |
+| `riso-zine` | 형광 인쇄 | 판이 어긋난 굵은 제목과 망점, 비스듬한 도장. 두 색 잉크로 찍은 인쇄물 같은 미술·독서 동아리·창작 연수에. | handmade, retro, playful, editorial | 가석 / 고딕 A1 / Anton | 보통 | zine | 왼쪽 정렬 | 내려앉음·옆에서·넘어옴·왼쪽부터 펼침 + link-underline, clip-reveal | highlight-sweep |
+| `sunrise-warm` | 새벽빛 | 날짜가 먼저 보이는 초대장. 바탕 글꼴 제목과 떠오르는 해. 학부모·진로·감사의 자리에. | warm, emotional, calm | 고운바탕 / LINE Seed Sans KR / Instrument Serif | 보통 | invite | 왼쪽 정렬(본문 center) | 떠오름·번짐·옆에서 + line-draw, clip-reveal, link-underline | scroll-fill |
+| `keynote-dark` | 어두운 키노트 | 검은 무대 위 아주 큰 제목과 지평선 불빛, 한 줄 정보 레일. 기조 강연·발표회·미래교육 특강에. 스크롤 연출이 기본. | futuristic, bold, minimal | Wanted Sans / Wanted Sans / Geist | 스크롤 연출 | keynote | 왼쪽 정렬(본문 center) | 살짝 커짐·떠오름·위에서 펼침·옆에서·번짐 + spotlight, line-draw, split-reveal | scroll-fill |
+| `corporate-clean` | 깔끔한 기업형 | 흰 바탕에 또렷한 제목, 오른쪽에 겹쳐 놓인 오늘의 일정 카드. 기관 설명회·업무 연수·에듀테크 소개에. | formal, minimal, calm | SUIT / SUIT / Sora | 차분 | panel | 왼쪽 정렬 | 떠오름·옆에서·왼쪽부터 펼침·번짐 + link-underline, line-draw | counter |
+| `soft-pastel` | 부드러운 파스텔 | 아치·원·알약 도형 위의 날짜와 둥근 제목. 연보라·분홍·하늘빛의 포근한 화면. 학부모·저학년·마음 돌봄 연수에. | warm, calm, playful | 나눔스퀘어라운드 / LINE Seed Sans KR / Outfit | 보통 | soft | 왼쪽 정렬(본문 center) | 살짝 커짐·떠오름·옆에서·번짐 + link-underline, line-draw, reveal-up | stack-cards |
+| `kinetic-type` | 움직이는 글자 | 화면을 넘치는 굵은 제목과 윤곽선 메아리 줄, 굵은 선으로 나눈 정보. 예술·동아리·학생 활동처럼 힘 있는 자리에. 스크롤 연출이 기본. | bold, energetic, editorial | 페이퍼로지 / 스포카 한 산스 네오 / Big Shoulders Display | 스크롤 연출 | ticker | 왼쪽 정렬 | 옆에서·위에서 펼침·떠오름·왼쪽부터 펼침 + line-draw, split-reveal, link-underline | marquee |
+| `warm-minimal` | 따뜻한 미니멀 | 넓은 여백과 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보. 독서·인문·상담처럼 조용히 읽히는 자리에. | minimal, calm, natural | 나눔명조 / 아스타 산스 / Fraunces | 차분 | column | 왼쪽 정렬 | 번짐·떠오름·왼쪽부터 펼침 + line-draw, link-underline | highlight-sweep |
+| `deck-collage` | 펼친 교재 | 교재 쪽을 부채처럼 펼친 3D 더미가 첫 화면에. 마우스에 기울고, 누르면 다음 장이 올라와요. 교재가 주인공인 연수에. | editorial, handmade, bold | 페이퍼로지 / 아스타 산스 / Sora | 보통 | collage | 왼쪽 정렬 | 넘어옴·떠오름·옆에서 + spotlight, clip-reveal, link-underline | slide-fan(첫 화면 그림) |
+| `time-dial` | 하루 시계 | 하루 일정이 둥근 시계로 그려지는 첫 화면. 순서마다 호가 그려지고, 연수 중에는 지금 바늘이 돌아요. 일정이 중요한 행사·종일 연수에. | futuristic, bold, tech | 아스타 산스 / 아스타 산스 / Red Hat Display | 보통 | dial | 왼쪽 정렬 | 옆에서·떠오름·살짝 커짐·번짐 + spotlight, line-draw | schedule-dial(첫 화면 그림) |
+| `knot-orbit` | 입체 궤도 | 점으로 짠 입체 매듭이 천천히 도는 첫 화면. 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레를 돌아요. AI·코딩·과학처럼 기술이 주제인 연수에. | futuristic, tech, bold | G마켓 산스 / Noto Sans KR(본고딕) / Syne | 보통 | orbit | 왼쪽 정렬 | 살짝 커짐·왼쪽부터 펼침·위에서 펼침·옆에서 + spotlight, line-draw, link-underline | orbit-3d(첫 화면 그림) |
+| `stone-stream` | 돌과 물결 | 연수 제목으로 그린 그림 한 장이 첫 화면에. 돌을 돌아 흐르는 물결 선이 일렁이고, 마우스를 올리면 물결이 비켜 흘러요. 미술·독서·생태·마음 연수에. | editorial, natural, calm | 송명 / 고딕 A1 / Instrument Serif | 보통 | stream | 왼쪽 정렬 | 번짐·떠오름·왼쪽부터 펼침 + line-draw, clip-reveal, link-underline | stream-lines(첫 화면 그림) |
+| `ripple-center` | 번지는 파문 | 모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에. | emotional, calm, warm | 고운돋움 / 나눔바른고딕 / Fraunces | 보통 | ripple | 가운데 정렬 | 살짝 커짐·번짐·떠오름 + link-underline, line-draw, clip-reveal | arc-ripple(첫 화면 그림) |
+| `minute-map` | 시간 점묘 | 연수의 1분이 점 하나. 순서마다 제 색으로 찍힌 점 지도가 첫 화면에. 일정에 마우스를 올리면 그 시간의 점만 또렷해져요. 본문은 왼쪽에 고정폭 이름표를 둔 장부 격자. 데이터·평가·연구 연수에. | tech, minimal, formal | 나눔스퀘어 / 스포카 한 산스 네오 / JetBrains Mono | 차분 | minutes | 자료 그림(본문 ledger) | 왼쪽부터 펼침·옆에서·떠오름·번짐 + link-underline, line-draw | minute-map(첫 화면 그림) |
+| `mosaic-split` | 도형 모자이크 | 화면을 반으로 나눠 한쪽은 제목에서 나온 도형 타일 그림, 한쪽은 글. 타일은 저마다 돌고, 마우스를 올리면 돌아가요. 본문도 머리 왼쪽·내용 오른쪽의 두 단. 미술·수학·메이커·창의 연수에. | playful, bold, editorial | 도현 / 나눔고딕 / Outfit | 보통 | mosaic | 반반 화면 | 넘어옴·옆에서·내려앉음·떠오름 + link-underline, line-draw, clip-reveal | 제목에서 나온 그림(첫 화면 그림) |
+| `cover-sheet` | 표지 한 장 | 그림이 화면 위쪽을 가득 채우고 제목 판이 그림에 걸쳐요. 교재 첫 쪽 그림이 있으면 그 그림, 없으면 제목 첫 글자를 크게 자른 포스터. 본문 섹션마다 큰 첫 글자가 뒤에 깔려요. 교재·발표 자료가 얼굴인 연수에. | bold, editorial, minimal | G마켓 산스 / 고운돋움 / Bricolage Grotesque | 보통 | cover | 그림 가득 | 위에서 펼침·떠오름·옆에서·번짐 + line-draw, clip-reveal, split-reveal, link-underline | 제목에서 나온 그림(첫 화면 그림) |
+| `vertical-type` | 세로쓰기 | 제목을 세로로 쓰고 큰 원 하나와 날짜 도장을 곁들인 책 표지. 글과 버튼은 오른쪽 맞춤, 본문 머리도 오른쪽에 서요. 국어·독서·역사·인문처럼 글과 여백이 주인공인 연수에. | editorial, calm, natural | 나눔명조 / 리디바탕 / Instrument Serif | 차분 | vertical | 오른쪽 정렬·세로쓰기 | 번짐·옆에서·왼쪽부터 펼침 + line-draw, link-underline | highlight-sweep |
+| `swiss-offset` | 어긋난 격자 | 열두 칸 격자 위에 계단처럼 어긋난 큰 제목이 색면에 걸치고, 가장자리에 날짜를 세워 썼어요. 본문은 섹션마다 머리와 내용의 자리가 좌우로 엇갈려요. 정책·설명회·수학·기관 연수에. | minimal, bold, formal | 스포카 한 산스 네오 / 나눔고딕 / Barlow Condensed | 보통 | offset | 어긋난 격자 | 옆에서·왼쪽부터 펼침·위에서 펼침 + line-draw, split-reveal, link-underline | scroll-fill |
 
-살아 있는 첫 화면(쇼케이스) 4종(`deck-collage` · `time-dial` · `knot-orbit` · `stone-stream`): 첫 화면에 그림이 들어 있다. 그림은 서버가 정지 모습(HTML·SVG)으로 먼저 그리고, 프리셋의 `graphic` 효과가 움직임과 반응을 더한다. 모션 1단계 이하·동작 줄이기·저사양에서는 정지 그림 그대로다. 이 그림 효과는 다른 프리셋의 첫 화면 그래픽(`design.graphic`)으로도 고를 수 있다.
+살아 있는 첫 화면(쇼케이스) 8종(`deck-collage` · `time-dial` · `knot-orbit` · `stone-stream` · `ripple-center` · `minute-map` · `mosaic-split` · `cover-sheet`): 첫 화면에 그림이 들어 있다. 그림은 서버가 정지 모습(HTML·SVG)으로 먼저 그리고, 프리셋의 `graphic` 효과가 움직임과 반응을 더한다. 모션 1단계 이하·동작 줄이기·저사양에서는 정지 그림 그대로다. 이 그림 효과는 다른 프리셋의 첫 화면 그래픽(`design.graphic`)으로도 고를 수 있다.
 
-## 4. 효과 56가지
+글 배치 문법(`layout`, 본문은 `variants.align`): 왼쪽 정렬이 기본이고, 가운데(새벽빛·어두운 키노트·부드러운 파스텔·번지는 파문) · 오른쪽·세로쓰기(세로쓰기) · 어긋난 격자(어긋난 격자) · 반반 화면(도형 모자이크) · 장부 격자(시간 점묘) · 그림 가득(표지 한 장)이 있다. 본문의 섹션 머리·구분선·번호·그림 다루기까지 같은 문법을 따른다. 좁은 화면에서는 모두 한 단이 된다.
+
+## 4. 효과 58가지
 | id | 이름 | 강도 | 슬롯 | 설명 |
 |---|---|---|---|---|
 | `split-reveal` | 글자 드러내기 (Split reveal) | 2 | 첫 화면 제목, 섹션 제목, 마무리 문장, 핵심 문장 | 제목을 줄·낱말·글자로 나눠 보이지 않는 틀 안에서 아래에서 위로 밀어 올립니다. 수상작 포트폴리오의 대표 등장 방식입니다. |
@@ -99,6 +110,8 @@
 | `schedule-dial` | 하루 시계 (Schedule dial) | 2 | 첫 화면 그래픽 | 하루 일정을 둥근 시계로 그려요. 순서마다 길이에 비례한 호가 차례로 그려지고, 마우스·초점을 두면 가운데에 그 순서가 뜨고, 연수 중에는 지금 바늘이 돌아요. |
 | `orbit-3d` | 입체 궤도 (Orbit knot) | 2 | 첫 화면 그래픽 | 점으로 짠 입체 매듭이 천천히 돌아요. 점들이 관을 따라 감기고, 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레 고리를 돌아요. WebGL 없이 Canvas만 써요. |
 | `stream-lines` | 돌과 물결 (Stone & stream) | 2 | 첫 화면 그래픽 | 연수 제목으로 그린 그림 한 장. 돌 두세 개를 돌아 흐르는 물결 선이 천천히 일렁이고, 마우스를 올리면 그 자리가 돌이 되어 물결이 비켜 흘러요. 같은 제목이면 늘 같은 그림이에요. |
+| `arc-ripple` | 번지는 파문 (Arc ripple) | 2 | 첫 화면 그래픽, 마무리 그래픽 | 물결 고리 세 벌이 제 자리에서 번지며 서로 겹쳐요. 마우스 쪽으로 가운데 물결이 살짝 끌리고, 누른 자리에서 새 물결이 한 번 번져요. 물결 자리는 연수 제목에서 나와 같은 제목이면 늘 같아요. |
+| `minute-map` | 시간 점묘 (Minute map) | 1 | 첫 화면 그래픽 | 연수의 1분이 점 하나. 화면에 들어오면 점이 시간 순서대로 켜지고, 일정 줄이나 점을 가리키면 그 순서의 점만 또렷해져요. 연수 날 그 시간에는 지금 분의 점에 테가 생겨요. |
 | `smooth-scroll` | 부드러운 휠 스크롤 (Smooth scroll (Lenis)) | 3 | 스크롤 | Lenis로 휠 스크롤을 부드럽게 합니다. 수상작 사이트의 "무게감 있는 스크롤". · 외부 라이브러리 |
 | `gsap-scroll` | 고정 장면 스크롤 (GSAP ScrollTrigger scrub) | 3 | 섹션 등장, 핵심 문장, 일정 | GSAP ScrollTrigger로 섹션을 잠깐 고정하고 안쪽 요소가 스크롤에 맞춰 차례로 떠오릅니다(scrub). 넓은 화면만 고정. · 외부 라이브러리 |
 | `three-hero` | 점 구슬 (Point-cloud sphere (OGL)) | 3 | 첫 화면 그래픽 | OGL(작은 WebGL 라이브러리)로 만든 2,400개 점의 구체가 천천히 돌고 표면이 숨 쉬며 포인터 쪽으로 기웁니다. · 외부 라이브러리 |

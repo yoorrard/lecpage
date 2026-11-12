@@ -121,7 +121,7 @@
     'minute-map': { html: function () { var rows = [['15:30', 10, '마음 날씨로 시작하기'], ['15:40', 25, '왜 마음인가'], ['16:05', 30, '짝 활동'], ['16:35', 15, '나눔과 질문'], ['16:50', 10, '마무리']], cells = [], out = ''; rows.forEach(function (r, i) { for (var k = 0; k < r[1]; k++) cells.push('<i class="c' + (i % 4) + ' g' + i + '"></i>'); }); for (var a = 0, n = 0; a < cells.length; a += 30, n++) out += '<div class="lp-min-row"><time>' + ['15:30', '16:00', '16:30'][n] + '</time><span class="lp-min-dots" style="--c:30">' + cells.slice(a, a + 30).join('') + '</span></div>'; return '<div class="em em-min"><div class="lp-minmap" data-fx="minute-map" data-date="" data-start="15:30" data-unit="1"><div class="lp-min-field" aria-hidden="true">' + out + '</div><div class="lp-min-side"><ol class="lp-min-legend">' + rows.map(function (r, i) { return '<li data-g="' + i + '"><a href="#em-root"><i class="c' + (i % 4) + '"></i><time>' + r[0] + '</time><span>' + r[2] + '</span><small>' + r[1] + '분</small></a></li>'; }).join('') + '</ol><p class="lp-min-key" data-min-key>점 하나 = 1분 · 한 줄 = 30분</p></div></div></div>'; }, replay: 9000, run: function (P) { var i = 0; P.every(1300, function () { var li = P.all('.lp-min-legend li'); if (!li.length) return; var r = li[i++ % li.length].getBoundingClientRect(); P.glide(r.left + r.width * 0.5, r.top + r.height * 0.5, 420); }, 1500); } },
     // 라이브러리(막히면 멈춘 그림)
     'smooth-scroll': { html: '<div data-fx="smooth-scroll"></div>' + sections(function () { return ''; }), run: function (P) { P.wheel(); } },
-    'gsap-scroll': { html: '<div class="em em-gsap" data-fx="gsap-scroll"' + opts({ pin: 'always', distance: 160 }) + '><h4 class="em-h sm">핵심 메시지</h4><p class="em-lead em-lead-sm" data-gsap-item>아침 5분</p><p class="em-lead em-lead-sm" data-gsap-item>감정 낱말 하나</p><p class="em-lead em-lead-sm" data-gsap-item>들어 주는 한 사람</p></div><section class="em em-sec"><p class="em-k">다음</p><h2 class="em-h sm">배울 준비가 된 교실</h2></section>', scroll: { down: 3400, hold: 1500, up: 800, rest: 300 } },
+    'gsap-scroll': { html: function () { return '<div class="em em-gsap" data-fx="gsap-scroll"' + opts({ pin: 'always', distance: 160 }) + '><h4 class="em-h sm">핵심 메시지</h4><p class="em-lead em-lead-sm" data-gsap-item>아침 5분</p><p class="em-lead em-lead-sm" data-gsap-item>감정 낱말 하나</p>' + (VH() >= 260 ? '<p class="em-lead em-lead-sm" data-gsap-item>들어 주는 한 사람</p>' : '') + '</div><section class="em em-sec"><p class="em-k">다음</p><h2 class="em-h sm">배울 준비가 된 교실</h2></section>'; }, scroll: { down: 3400, hold: 1500, up: 800, rest: 300 } },
     'three-hero': { html: '<div class="em em-stage em-orb" data-fx="three-hero"' + opts({}) + '><i class="em-orb-still" aria-hidden="true"></i>' + copy('three-hero') + '</div>', run: function (P) { P.liss(0.26, 0.22, 7000, true); P.after(3200, function () { if (root.querySelector('canvas')) root.classList.add('has-canvas'); }); } }
   };
 
@@ -213,14 +213,14 @@
   function stepScroll(o) {
     var i = 0;
     var go = function () {
-      if (hands()) { later(3200, go); return; }
+      if (hands()) { later(2200, go); return; }
       var m = Math.max(0, h.scrollHeight - VH());
       var stops = $$(o.sel, root).map(function (e) { return Math.min(m, Math.round(e.getBoundingClientRect().top + w.pageYOffset)); });
       if (stops.length < 2) return;
       i = (i + 1) % stops.length;
       var y0 = w.pageYOffset, y1 = stops[i], dur = i === 0 ? 800 : (o.move || 900), t0 = 0;
       raf(function (t) {
-        if (hands()) { later(3200, go); return false; }
+        if (hands()) { later(2200, go); return false; }
         if (!t0) t0 = t;
         var k = Math.min(1, (t - t0) / dur); w.scrollTo(0, y0 + (y1 - y0) * ease(k));
         if (k >= 1) { later(o.dwell || 1000, go); return false; }
@@ -228,9 +228,15 @@
     };
     later(o.first == null ? 800 : o.first, go);
   }
-  // 실제로 마우스·휠·손가락을 쓰면 3초 동안 흉내를 쉼
+  // 실제로 마우스·휠·손가락을 쓰면 2초 동안 흉내를 쉼. 가만히 있는 포인터 아래에서 화면이 바뀌어 생기는 이벤트(자리가 그대로인 pointermove)는 손이 아니므로 넘김
+  // — 크게 보기를 누른 직후 포인터가 미리보기 위에 놓여 있기만 해도 흉내가 멈춰 '효과가 안 보이던' 문제
+  var lastX = null, lastY = null;
   ['pointermove', 'pointerdown', 'wheel', 'touchstart', 'keydown'].forEach(function (type) {
-    w.addEventListener(type, function (e) { if (e.isTrusted) { userUntil = now() + 3000; cur.classList.remove('is-on'); } }, { passive: true, capture: true });
+    w.addEventListener(type, function (e) {
+      if (!e.isTrusted) return;
+      if (type === 'pointermove') { var same = lastX === null || (Math.abs(e.clientX - lastX) < 3 && Math.abs(e.clientY - lastY) < 3); lastX = e.clientX; lastY = e.clientY; if (same) return; }
+      userUntil = now() + 2000; cur.classList.remove('is-on');
+    }, { passive: true, capture: true });
   });
 
   /* ── 그리기·되풀이 ───────────────────────────── */

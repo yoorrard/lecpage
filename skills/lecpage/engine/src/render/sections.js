@@ -33,7 +33,7 @@ function secNo(s, ctx) {
  */
 const ENTER_ITEMS = {
   ledger: '.lp-goal-list > li, .lp-goal-meta', figures: '.lp-glance-item', steps: '.lp-steps5 > li, .lp-close-line', stack: '.lp-outline-item',
-  timeline: '.lp-sched-bar, .lp-schedule > li', checklist: '.lp-ready > *', bento: '.lp-tools-item', files: '.lp-materials > li, .lp-wrap > .lp-note',
+  timeline: '.lp-sched-bar, .lp-schedule > li', checklist: '.lp-checklist > li', bento: '.lp-tools-item', files: '.lp-materials > li, .lp-wrap > .lp-note',
   accordion: '.lp-faq > details', profile: '.lp-person-card, .lp-tl-group', people: '.lp-speakers > li', course: '.lp-sessions > li', index: '.lp-glossary > div',
   media: '.lp-gallery > li, .lp-videos > li', form: '.lp-sv-list > li',
 };

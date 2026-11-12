@@ -134,7 +134,8 @@ export function validate(input) {
     sourceFonts: sourceFonts(d.sourceFonts), fontFrom: pick(d.fontFrom, ['material', 'preset'], 'material'),
   };
   if (!design.mood.length && lead.mood) design.mood = lead.mood.slice();
-  if (d.motion === undefined && lead.motion !== undefined) design.motion = lead.motion;
+  // 컨셉이 바라는 움직임은 보통 단계(2)까지만 받아들임: 스크롤 연출(3)은 선생님이 design.motion으로 직접 골랐을 때만
+  if (d.motion === undefined && lead.motion !== undefined) design.motion = Math.min(lead.motion, 2);
   if ((!d.preset || !PRESET_IDS.includes(d.preset)) && lead.preset) {
     // 디자인을 고르지 않았고 컨셉이 권하는 디자인이 있으면 그것을
     design.preset = lead.preset;

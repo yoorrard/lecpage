@@ -46,6 +46,12 @@ export function detectTopics(text, max = 3) {
   return scores.slice(0, max).map(([id]) => id);
 }
 
+/** 글에서 그 주제를 알아본 낱말들(겹치지 않게 n개). 컨셉의 근거 문장에 씀 */
+export function topicWords(text, topic, n = 3) {
+  const re = TOPIC_RULES.find(([id]) => id === topic)?.[1];
+  return re ? [...new Set(String(text || '').match(re) || [])].slice(0, n) : [];
+}
+
 export function moodsForTopics(topics) {
   const out = [];
   for (const t of topics) for (const m of TOPIC_MOOD[t] || []) if (!out.includes(m)) out.push(m);

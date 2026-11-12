@@ -739,7 +739,7 @@ input,textarea,select{font-size:max(16px,1em)}
   .lp-hero--cover .lp-hero-inner{grid-template-columns:minmax(0,1fr)}
   .lp-cover-card{margin:0 0 0 -20px;padding:var(--sp-5) var(--sp-5) 0 20px;border-radius:0 var(--radius-lg) 0 0}
   .lp-cover-rail{margin-top:0}
-  .lp-off-block{width:56%;height:40%}
+  .lp-off-block{width:46%;height:clamp(200px,30svh,250px)}
   .lp-off-row > .lp-hero-meta,.lp-off-copy,.lp-off-nums{grid-column:1 / -1}
   .lp-off-row{row-gap:var(--sp-5)}
   .lp-off-nums{display:flex;gap:var(--sp-6);justify-items:start;text-align:left}
@@ -1976,7 +1976,7 @@ html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-lite) :is(.lp-outline-it
 [data-preset="vertical-type"] .lp-head-no::after{display:none}
 [data-preset="vertical-type"] :is(.lp-goal-list,.lp-glossary){border-top:3px double color-mix(in srgb,var(--foreground) 60%,transparent)}
 @media (min-width:1360px){
-  [data-preset="vertical-type"] .lp-head-label{position:absolute;right:calc((100% - 1160px) / 2 - 34px);top:clamp(48px,5.8vw,92px);writing-mode:vertical-rl;letter-spacing:.3em;font-family:var(--font-display);font-size:var(--fs-sm);color:var(--muted-foreground)}
+  [data-preset="vertical-type"] .lp-sec:not([data-frame="split"]) .lp-head-label{position:absolute;right:calc((100% - 1160px) / 2 - 34px);top:clamp(48px,5.8vw,92px);writing-mode:vertical-rl;letter-spacing:.3em;font-family:var(--font-display);font-size:var(--fs-sm);color:var(--muted-foreground)}
 }
 /* 어긋난 격자: ① 섹션마다 굵은 윗선과 붉은 네모 ② 큰 고정폭 번호 ③ 선으로만 나눈 판 */
 [data-preset="swiss-offset"] .lp-sec:not(.lp-hero):not(.lp-bleed) > .lp-wrap{padding-top:var(--sp-5);background:linear-gradient(var(--foreground),var(--foreground)) 50% 0 / calc(100% - 40px) max(2px,var(--border-w)) no-repeat}

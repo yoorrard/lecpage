@@ -14,7 +14,8 @@
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
 //   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
-//   design <blueprint.json> · decide-infra -i info.json · presets · effects
+//   design <blueprint.json>                          컨셉(한 줄·모티프·권하는 디자인)과 디자인 순위·적용된 효과
+//   decide-infra -i info.json · presets · effects
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -137,7 +138,7 @@ function brokenRefs(dir) {
  */
 async function loadLinters() {
   const list = [];
-  for (const [name, file, blocking] of [['디자인', 'design-lint.mjs', true], ['문구', 'copy-lint.mjs', false]]) {
+  for (const [name, file, blocking] of [['디자인', 'design-lint.mjs', true], ['겹침', 'overlap-lint.mjs', true], ['문구', 'copy-lint.mjs', false]]) {
     const p = join(HERE, file);
     if (!existsSync(p)) { list.push({ name, status: 'missing', issues: [] }); continue; }
     try {
@@ -620,8 +621,8 @@ const commands = {
   },
 
   presets() {
-    if (JSON_OUT) return say([], E.PRESETS.map((p) => ({ id: p.id, name: p.name_ko, desc: p.desc_ko, moods: p.moods, topics: p.topics, motion: p.motion })));
-    for (const p of E.PRESETS) console.log(`${p.id.padEnd(15)} ${p.name_ko} — ${p.desc_ko} [${p.moods.join(',')} · ${p.topics.join(',')} · 움직임 ${p.motion}]`);
+    if (JSON_OUT) return say([], E.PRESETS.map((p) => ({ id: p.id, name: p.name_ko, desc: p.desc_ko, moods: p.moods, topics: p.topics, motion: p.motion, layout: p.layout || 'left', showcase: !!p.showcase })));
+    for (const p of E.PRESETS) console.log(`${p.id.padEnd(15)} ${p.name_ko} — ${p.desc_ko} [${E.LAYOUT_KO[p.layout] || '왼쪽 정렬'} · ${p.moods.join(',')} · ${p.topics.join(',')} · 움직임 ${p.motion}]`);
   },
   effects() {
     if (JSON_OUT) return say([], E.FX.map((f) => ({ id: f.id, level: f.level, name: f.name_ko, slots: f.slots, libs: f.libs })));
@@ -678,9 +679,12 @@ const commands = {
     const { blueprint: bp } = E.validate(readJson(args._[0]));
     const ranked = E.rankPresets({ moods: bp.design.mood, topics: bp.design.topics.length ? bp.design.topics : E.detectTopics(bp.meta.title + ' ' + bp.meta.subtitle), archetype: bp.archetype.primary, admin: bp.meta.admin.kind, minor: bp.audience.minor });
     const d = E.resolveDesign(bp);
-    say([...ranked.map((r, i) => `${i + 1} ${r.id} ${r.name_ko} — ${r.why.join('·') || '기본'}`),
+    // 컨셉 먼저: 설계도에 concept가 있으면 그것을, 없으면 주제에서 규칙으로 세운 것을 보여 줌(고치려면 patch --set concept.idea=… 등)
+    const concept = bp.concept || E.deriveConcept({ title: bp.meta.title, subtitle: bp.meta.subtitle, topics: bp.design.topics, archetype: bp.archetype.primary, admin: bp.meta.admin.kind });
+    say([`컨셉${bp.concept ? '' : '(설계도에 없어 주제에서 세움)'} ${concept.idea}`, `  모티프 ${concept.motif || '없음'} · 권하는 디자인 ${concept.preset || '없음'}${concept.sections?.length ? ` · 어울리는 칸 ${concept.sections.join(',')}` : ''}${concept.features?.length ? ` · 참여 기능 ${concept.features.join(',')}` : ''}`, concept.why ? `  근거 ${concept.why}` : '',
+      ...ranked.map((r, i) => `${i + 1} ${r.id} ${r.name_ko} — ${r.why.join('·') || '기본'}`),
       `적용 ${d.preset} · 움직임 ${d.motion}${d.signature ? ` · 대표 효과 ${d.signature}` : ''} · 효과 ${Object.entries(d.effects).map(([k, v]) => `${k}=${v}`).join(', ')}`,
-      ...d._notes.map((n) => '메모 ' + n)], { ranked, resolved: d });
+      ...d._notes.map((n) => '메모 ' + n)], { concept, ranked, resolved: d });
   },
 
   async build() {

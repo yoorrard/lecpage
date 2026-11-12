@@ -149,7 +149,8 @@ test('컨셉 먼저: 주제에서 컨셉을 세우고(같은 입력이면 같은
   // 설계도: 최상위 concept는 정리되어 남고, 디자인을 고르지 않았으면 컨셉이 권한 디자인·분위기·움직임을 씀
   const v = E.validate({ meta: { title: '그림책으로 여는 감정 수업' }, concept: { idea: '한 줄씩 천천히 읽는 <b>시간</b>', motif: '세로로 쓴 책 표지', preset: 'vertical-type', moods: ['calm', '없는값'], motion: 9, sections: ['reflection', 'nope'], features: ['board', 'x'], source: 'ai', extra: 1 }, sections: [{ type: 'hero' }] });
   assert.deepEqual(v.blueprint.concept, { idea: '한 줄씩 천천히 읽는 b시간/b', why: '', motif: '세로로 쓴 책 표지', keywords: [], moods: ['calm'], preset: 'vertical-type', motion: 3, sections: ['reflection'], features: ['board'], source: 'ai' });
-  assert.equal(v.blueprint.design.preset, 'vertical-type'); assert.deepEqual(v.blueprint.design.mood, ['calm']); assert.equal(v.blueprint.design.motion, 3);
+  assert.equal(v.blueprint.design.preset, 'vertical-type'); assert.deepEqual(v.blueprint.design.mood, ['calm']);
+  assert.equal(v.blueprint.design.motion, 2, '컨셉이 바라는 움직임은 보통 단계까지만(스크롤 연출은 직접 골랐을 때만)');
   // 선생님이 디자인을 골랐으면 그대로
   assert.equal(E.validate({ meta: { title: 'x' }, concept: { idea: '가', preset: 'vertical-type' }, design: { preset: 'glass-lab' }, sections: [{ type: 'hero' }] }).blueprint.design.preset, 'glass-lab');
   // 컨셉이 없으면 설계도에 concept를 지어 넣지 않음(예전 설계도 그대로)

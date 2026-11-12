@@ -15,7 +15,7 @@
 import { PRESET_IDS, getPreset } from '../design/presets.js';
 import { TOPIC_LABELS } from '../design/fx-catalog.js';
 import { SECTION_TYPES, LIVE_FEATURES } from '../schema/sections.js';
-import { detectTopics } from './topic.js';
+import { detectTopics, topicWords } from './topic.js';
 
 /** 주제별 컨셉: [한 줄 컨셉(경험), 모티프, 디자인, 분위기, 움직임, 어울리는 섹션, 어울리는 참여 기능] */
 const T = (idea, motif, preset, moods, motion, sections, features) => ({ idea, motif, preset, moods, motion, sections, features });
@@ -71,7 +71,8 @@ export function deriveConcept({ title = '', subtitle = '', text = '', topics = [
   const c = TOPIC_CONCEPTS[topic];
   const keywords = conceptKeywords(`${title} ${subtitle}`);
   const label = TOPIC_LABELS[topic] || (topic === 'data' ? '데이터' : topic === 'conference' ? '행사·발표' : topic === 'elementary' ? '초등' : '일반');
-  const why = `${keywords.length ? `제목의 "${keywords.slice(0, 3).join('", "')}"에서 ` : ''}${label} 주제를 읽었고, ${ARCH_KO[archetype] || ARCH_KO.story} 연수라 '${c.motif}'을(를) 화면의 그림으로 삼았어요.`;
+  const seen = topicWords(`${title} ${subtitle} ${text}`, topic);
+  const why = `${seen.length ? `제목과 교재의 "${seen.join('", "')}"에서 ` : ''}${label} 주제를 읽었어요. ${ARCH_KO[archetype] || ARCH_KO.story} 연수에 맞춰 화면에 되풀이할 그림으로 고른 것: ${c.motif}.`;
   return { idea: c.idea, why, motif: c.motif, keywords, moods: c.moods.slice(), preset: c.preset, motion: admin === 'official' ? Math.min(1, c.motion) : c.motion, sections: c.sections.slice(), features: c.features.slice(), source: 'auto' };
 }
 

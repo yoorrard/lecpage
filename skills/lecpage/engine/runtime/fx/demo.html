@@ -276,6 +276,10 @@
   /* 아주 느린 배경(빛띠·빛망울)은 작은 미리보기에서 움직임이 보이게 네 배쯤 빠르게(사이트에서는 제 속도) */
   html.fx-embed .fx-aurora i { animation-duration: 7s; }
   html.fx-embed .fx-bokeh i { animation-duration: 5s !important; }
+  /* 종이 더미는 멈춘 그림이라, 미리보기에서만 살짝 떠 있게(사이트에서는 그대로 멈춤) */
+  html.fx-embed .fx-paper-stack { animation: em-float 3.4s ease-in-out infinite alternate; }
+  @keyframes em-float { to { transform: translate3d(0, -7px, 0); } }
+  @media (prefers-reduced-motion: reduce) { html.fx-embed .fx-paper-stack { animation: none; } }
   .em-wipe { position: absolute; inset: 0; z-index: -1; background: var(--background); border-left: 2px solid var(--primary); transform: translateX(101%); animation: em-wipe 5.2s cubic-bezier(.65, 0, .35, 1) infinite; }
   @keyframes em-wipe { 0%, 14% { transform: translateX(101%); } 48%, 62% { transform: translateX(42%); } 96%, 100% { transform: translateX(101%); } }
   @media (prefers-reduced-motion: reduce) { .em-wipe { display: none; } }
