@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const { lintText } = await import(join(HERE, '..', 'engine', 'src', 'prompt', 'copy-rules.js'));
 
-// 교재 원문을 그대로 옮기는 칸(프롬프트·교재 쪽 글·강사 약력)은 점검하지 않음
-const SKIP = /(^|\.)(slides|instructors|sources|design|live|privacy|deploy|access|audience|archetype|_draft)(\.|\[|$)|prompts\[\d+\]\.text$|\.prompts\[\d+\]$|\.(id|url|href|src|kind|type|tone|layout|photo|email|target|date|start|end|thumb|icon|status|style|value|code|joinUrl|siteUrl|shortUrl)$/;
+// 교재 원문을 그대로 옮기는 칸(프롬프트·교재 쪽 글·강사 약력·강사 메모)은 점검하지 않음
+const SKIP = /(^|\.)(slides|instructors|sources|design|live|privacy|deploy|access|audience|archetype|_draft)(\.|\[|$)|prompts\[\d+\]\.text$|\.teacherNote$|\.prompts\[\d+\]$|\.(id|url|href|src|kind|type|tone|layout|photo|email|target|date|start|end|thumb|icon|status|style|value|code|joinUrl|siteUrl|shortUrl)$/;
 function kindOf(path) {
   if (/\.nav$/.test(path)) return 'nav';
   if (/ctas\[\d+\]\.label$|links\[\d+\]\.label$/.test(path)) return 'cta';

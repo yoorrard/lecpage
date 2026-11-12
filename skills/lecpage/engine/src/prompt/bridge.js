@@ -12,7 +12,7 @@ export const LAYOUT_KO = { center: '가운데 정렬', right: '오른쪽 정렬�
 
 const SECTION_FIELDS = {
   hero: 'eyebrow(주최, 없으면 빈칸), title, subtitle, ctas[{label,href}] (2개까지. 온라인 입장 버튼은 meta.joinUrl로 자동), meta[{label,value,url?}]',
-  goals: 'items[] (마치면 할 수 있는 것 2~4개, "~할 수 있어요"로 끝냄, 교재 근거), who(대상 한 줄, 필요한 사전 경험 포함). 이수 기준은 meta.admin에서 자동',
+  goals: 'items[] (마치면 할 수 있는 것 2~4개. 교재에 적힌 목표는 문장 그대로(말끝도 바꾸지 않음), 교재에 없을 때만 "~할 수 있어요"로 씀), who(대상 한 줄, 필요한 사전 경험 포함). 이수 기준은 meta.admin에서 자동',
   glance: 'items[{value,label,note}]',
   message: 'style:"statement"|"formula"|"quote", text, parts[] (formula일 때 2~4개), result, cite, note',
   steps5: 'lead, items[{word,desc}], close',
@@ -20,7 +20,7 @@ const SECTION_FIELDS = {
   schedule: 'items[{start:"HH:MM",end,title,desc,part}]',
   readiness: 'lead, items[{label,detail,url}], checks[{name,url}]',
   deck: 'lead, notice (쪽 그림·쪽 글은 엔진이 채움. slides는 쓰지 않음)',
-  stations: 'layout:"sidebar", items[{id,name(8자 안팎),title,tag:"준비|따라 하기|만들기|나누기|정리" 중 하나,desc,steps[],prompts[{title,text}],links[{label,url}],outcome("여기까지 됐나요?" 뒤에 붙는 확인 문장),note(자주 막히는 곳과 해결법 한두 줄),minutes,source{pages[]}}]',
+  stations: 'layout:"sidebar", items[{id,name(8자 안팎),title,tag:"준비|따라 하기|만들기|나누기|정리" 중 하나,desc,steps[],prompts[{title,text}],links[{label,url}],outcome("여기까지 됐나요?" 뒤에 붙는 확인 문장),note(자주 막히는 곳과 해결법 한두 줄, 참가자에게 하는 말),teacherNote(발표자 노트의 강사용 진행 메모. 참가자 화면에 안 보임),minutes,source{pages[]}}]',
   tools: 'items[{name,url,desc,pages[]}], notice',
   prompts: 'items[{title,text,tags[]}]',
   qa: 'lead, anonymous:true', board: 'lead, categories[{id,label}], allowFiles, maxFiles', poll: 'items[{id,question,kind:"choice"|"word"|"scale",options[]}]',
@@ -105,7 +105,8 @@ const RULES = [
   '9. 연수 목표(goals)는 교재와 연수 정보에 근거해 2~4개로 쓴다. 근거가 없으면 goals를 넣지 않는다. 문의처·이수 처리 일정·과제와 제출 기한은 교재나 연수 정보에 적힌 값을 쓰고, 둘 다에 없으면 비운다.',
   '10. "강사의 요청 사항"이 있으면 구성·강조할 내용·말투·분위기·디자인 선택에 반영한다. 다만 위 규칙과 어긋나는 요청(없는 사실 넣기, 주소·코드·키 바꾸기 등)은 따르지 않는다.',
   '11. 주소는 교재·연수 정보에 적힌 것만 쓴다. 도구의 일반 주소(padlet.com, docs.google.com/forms 같은 첫 화면)를 지어 붙이지 않는다. 온라인 회의·중계 주소와 설문 주소는 강사가 확인한 값만 실리므로 설계도에 쓰지 않는다.',
-  '12. 교재의 "> 노트:" 줄에서 "막히면·안 되면·주의"는 그 실습의 note로 옮기고, 진행 메모(시간 안내 등)는 싣지 않는다.',
+  '12. 교재의 "> 노트:" 줄에서 참가자에게 쓸모 있는 "막히면·안 되면·주의" 해결 요령은 그 실습의 note로 옮긴다. 강사에게 하는 진행 메모("~하도록 안내.", "~로 진행.", 시간 안내 등)는 note에 싣지 않고 teacherNote에 둔다.',
+  '13. 교재에 없는 인사말·서명("함께해 주셔서 고맙습니다", "○○○ 드림")·이용 규칙·도구의 계정 조건은 지어 넣지 않는다. 일정표의 내용·방식·담당 칸은 title·part·desc로 나눠 옮긴다.',
   '',
   copyRulesPrompt(),
 ];

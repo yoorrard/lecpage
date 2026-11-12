@@ -6,7 +6,7 @@ import { detect } from './detect.js';
 import { normLine, normText, truncate, textKey, sizeLabel, hostOf, extOf } from './util.js';
 import { getTool } from './tools-db.js';
 import { composeBody, findLeftovers } from './compose.js';
-import { noteTips } from './signals.js';
+import { splitNotes } from './signals.js';
 import { decideStructure } from '../decide/structure.js';
 import { whenText, placeText, whoText } from '../hero-meta.js';
 
@@ -125,9 +125,11 @@ export function materialToDraft(material, info = {}) {
     const now = (di.bio || []).filter((t) => /^\s*\(?\s*(현|現)/.test(t)).map((t) => t.replace(/^\s*\(?\s*(현|現)\s*\)?\s*[)\].:]?\s*/, ''));
     const past = (di.bio || []).filter((t) => /^\s*\(?\s*(전|前)/.test(t)).map((t) => t.replace(/^\s*\(?\s*(전|前)\s*\)?\s*[)\].:]?\s*/, ''));
     const other = (di.bio || []).filter((t) => !/^\s*\(?\s*(현|現|전|前)/.test(t));
+    // 묶음 이름도 교재의 표시 그대로(현·전)
+    const mark = (re, def) => ((di.bio || []).map((t) => re.exec(t)?.[1]).find(Boolean) || def);
     const timeline = [];
-    if (now.length) timeline.push({ group: '지금', items: now.map((text) => ({ text })) });
-    if (past.length) timeline.push({ group: '지난 활동', items: past.map((text) => ({ text })) });
+    if (now.length) timeline.push({ group: mark(/^\s*\(?\s*(현|現)/, '현'), items: now.map((text) => ({ text })) });
+    if (past.length) timeline.push({ group: mark(/^\s*\(?\s*(전|前)/, '전'), items: past.map((text) => ({ text })) });
     if (other.length) timeline.push({ group: '활동', items: other.map((text) => ({ text })) });
     instructors.push({
       name: di.name, role: di.role || '', org: di.org || '', photo: info.instructor?.photo || '', bio: typeof di.bio === 'string' ? di.bio : '',
@@ -152,17 +154,32 @@ export function materialToDraft(material, info = {}) {
   const sectionOf = (file, page) => (d.sections || []).find((s) => s.file === file && s.pages.includes(page));
   const practice = (d.practice?.pages || []).map((r) => pageMap.get(pageKey(r.file, r.page))).filter(Boolean);
   const groups = [];
+  const PRACTICE_NO = /^(?:실습|활동|미션|과제)\s*\d{1,2}(?!\d)/;
+  // 단계 없이 프롬프트만 있는 쪽("활동지 프롬프트 모음")은 바로 앞 실습에 딸린 쪽: 교재의 실습 번호(실습 1·2·3…)대로 묶음
+  const promptOnly = (p) => !PRACTICE_NO.test(normLine(p.title || '')) && !(d.steps || []).some((s) => s.file === p.file && s.page === p.page)
+    && (d.prompts || []).some((x) => onPages(x, p.file, [p.page]));
   for (const p of practice) {
     const last = groups[groups.length - 1];
     const sec = sectionOf(p.file, p.page);
     const lastP = last?.pages[last.pages.length - 1];
     const cont = last && lastP.file === p.file && p.page === lastP.page + 1 && last.section === sec
-      && (textKey(p.title) === textKey(last.title) || /\(계속\)|계속$|cont/i.test(p.title || '') || !p.title || textKey(p.title).startsWith(textKey(last.title).slice(0, 6)) && textKey(last.title).length >= 6);
+      && (textKey(p.title) === textKey(last.title) || /\(계속\)|계속$|cont/i.test(p.title || '') || !p.title || promptOnly(p) || textKey(p.title).startsWith(textKey(last.title).slice(0, 6)) && textKey(last.title).length >= 6);
     if (cont) last.pages.push(p);
     else groups.push({ title: p.title || '', pages: [p], section: sec });
   }
   const usedPrompts = new Set();
-  let noteCount = 0;
+  let noteCount = 0, memoCount = 0;
+  // 실습 안 프롬프트 이름: 교재의 이름표("프롬프트 1")가 먼저, 없으면 차례 번호. 딸린 쪽의 프롬프트는 그 쪽 제목을 앞에("활동지 프롬프트 모음 · 프롬프트 1")
+  const promptTitles = (list, g, nums) => {
+    const untitled = list.filter((x) => !x.title).length;
+    let n = 0;
+    return list.map((x) => {
+      const t = x.title || (untitled > 1 ? `프롬프트 ${++n}` : '프롬프트');
+      const at = refsOf(x).find((r) => r.file === g.pages[0].file && nums.includes(r.page))?.page ?? x.page;
+      const pt = normLine(pageMap.get(pageKey(g.pages[0].file, at))?.title || '');
+      return at !== nums[0] && pt && !/계속|cont/i.test(pt) && textKey(pt) !== textKey(g.title) && !textKey(t).includes(textKey(pt)) ? `${pt} · ${t}` : t;
+    });
+  };
   const stations = groups.slice(0, 40).map((g, i) => {
     const file = g.pages[0].file;
     const nums = g.pages.map((p) => p.page);
@@ -181,10 +198,13 @@ export function materialToDraft(material, info = {}) {
         if (stepKeys.has(k) || linkLabels.has(k) || promptKeys.some((pk) => pk && (k.includes(pk) || pk.includes(k)))) return false;
         return !NOTE_LINE.test(t) && !/^(\d{1,2}[.)]|[①-⑳]|step\s*\d)/i.test(t) && !/https?:\/\/|[a-z0-9-]+\.(com|net|org|io|ai|kr)\b/i.test(t) && !/^[^:：]{1,10}[:：]/.test(t);
       }) || '';
-    // 막히기 쉬운 곳: 쪽의 "※ …", "주의: …", "안 되면: …" 줄과 발표자 노트의 '막히면·안 되면·주의' 문장(진행 메모는 싣지 않음)
+    // 막히기 쉬운 곳: 쪽의 "※ …", "주의: …", "안 되면: …" 줄과 발표자 노트의 '막히면·안 되면·주의' 문장.
+    // 강사에게 하는 진행 메모("~하도록 안내.")는 참가자 화면에 싣지 않고 teacherNote(강사용 운영안내)로
     const marked = g.pages.flatMap(paraLines).map((t) => NOTE_LINE.exec(t)).filter(Boolean).map((m) => (m[1] || m[2]).trim());
-    const tips = g.pages.flatMap((p) => noteTips(p.notes));
-    noteCount += tips.length;
+    const split = g.pages.map((p) => splitNotes(p.notes));
+    const tips = split.flatMap((x) => x.tips);
+    const memos = split.flatMap((x) => x.memos);
+    noteCount += tips.length; memoCount += memos.length;
     const note = [...marked, ...tips].filter((t, k, all) => !stepKeys.has(textKey(t)) && !promptKeys.some((pk) => pk && textKey(t).includes(pk)) && all.findIndex((x) => textKey(x) === textKey(t)) === k).slice(0, 3).join('\n');
     // 그림 주소: info.imageBase가 있으면 그 아래 <id>.<확장자>, 없으면 CLI가 쓴 상대 경로(assets/… · media/…)
     const imgSrc = (im) => (info.imageBase ? info.imageBase + imageName(im) : (/^(assets|media|slides)\//.test(im.src || '') ? im.src : ''));
@@ -198,8 +218,9 @@ export function materialToDraft(material, info = {}) {
     return {
       id: `st${i + 1}`, name: truncate(title.replace(/^(?:실습|활동|미션)(?:\s*\d+\s*[.:)\-–]?\s*|\s*[.:)\-–]\s*|\s+(?=\S))/, '') || title, 30), title: truncate(title, 100),
       tag: g.section ? truncate(g.section.label || '', 16) : '', desc: truncate(desc, 300),
-      steps, prompts: prompts.map((x, k) => ({ title: x.title || (prompts.length > 1 ? `프롬프트 ${k + 1}` : '프롬프트'), text: x.text })),
+      steps, prompts: promptTitles(prompts, g, nums).map((t, k) => ({ title: t, text: prompts[k].text })),
       images, links, outcome: '', note: truncate(note, 400), minutes: minutes > 0 && minutes <= 240 ? minutes : 0, source: { file, pages: nums },
+      ...(memos.length ? { teacherNote: truncate(memos.join('\n'), 600) } : {}),
     };
   }).filter((s) => s.steps.length || s.prompts.length || s.links.length || s.desc);
 
@@ -212,8 +233,8 @@ export function materialToDraft(material, info = {}) {
   const promptKeySet = new Set((d.prompts || []).map((x) => textKey(x.text)));
   const goalItems = info.goals?.length ? info.goals : findGoals(pages, promptKeySet);
   const who = info.who || findLine(pages.slice(0, 3), WHO_LINE);
-  // 계획서 말투(~할 수 있다)는 참가자에게 하는 말(~할 수 있어요)로
-  if (goalItems.length) S.goals = { id: 'goals', type: 'goals', title: '연수 목표', items: goalItems.map((t) => truncate(t.replace(/(수\s*있)다\.?$/, '$1어요').replace(/(이해|파악|활용|설명|적용)한다\.?$/, '$1해요'), 120)), who };
+  // 교재에 적힌 목표 문장 그대로(말끝 "~할 수 있다."도 바꾸지 않음)
+  if (goalItems.length) S.goals = { id: 'goals', type: 'goals', title: '연수 목표', items: goalItems.map((t) => truncate(t, 120)), who };
 
   const msgs = d.messages || [];
   const lead = msgs.find((m) => (m.score ?? 2) >= 2); // 사례 속 인용 같은 약한 후보는 첫 화면 메시지로 올리지 않음
@@ -259,7 +280,8 @@ export function materialToDraft(material, info = {}) {
   const ROLE_TAIL = /\s([가-힣]*(?:과장|국장|장학사|장학관|수석교사|교감|교장|연구사|연구관)|발표자\s*전원)$/;
   const whoTail = (text) => speakers.map((p) => `${p.name} ${p.role}`.trim()).find((w) => w && text.endsWith(w)) || (ROLE_TAIL.exec(text)?.index >= 2 ? ROLE_TAIL.exec(text)[1] : '');
   if (timed.length >= 2) {
-    S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: timed.map((it) => { const w = whoTail(it.text); return { start: it.start, end: it.end || '', title: w ? it.text.slice(0, -w.length).trim() : it.text, desc: w, part: it.part || '' }; }) };
+    // 일정표의 칸(내용·방식·담당)은 detect가 나눠 둔 그대로: 방식 → part, 담당·비고 → desc
+    S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: timed.map((it) => { const w = it.desc ? '' : whoTail(it.text); return { start: it.start, end: it.end || '', title: w ? it.text.slice(0, -w.length).trim() : it.text, desc: w || it.desc || '', part: it.part || '' }; }) };
     slotPage.schedule = d.agenda.page;
   } else if ((d.sections || []).filter((s) => s.start).length >= 2) S.schedule = { id: 'schedule', type: 'schedule', nav: '일정', items: d.sections.filter((s) => s.start).map((s) => ({ start: s.start, end: s.end || '', title: s.title, desc: '', part: s.label })) };
 
@@ -279,12 +301,20 @@ export function materialToDraft(material, info = {}) {
   const usedInPractice = tools.filter(inPractice);
   const readyTools = usedInPractice.length ? usedInPractice : tools.filter((t) => t.count >= 2);
   for (const t of readyTools) if (t.accountNeeded && ACCOUNT_LABEL[t.account]) { if (!accounts.has(t.account)) accounts.set(t.account, []); accounts.get(t.account).push(t.name); }
-  // 준비 점검: 교재의 준비물 쪽이 먼저. 로그인 주소 같은 교재에 없는 주소는 넣지 않음
-  const prepItems = composed.prep.map((label) => ({ label, detail: '', url: '' }));
+  // 준비 점검: 교재의 준비물이 먼저. 계정은 교재가 그 계정을 말할 때만(설명은 그 교재 문장 그대로).
+  // 도구 목록에서만 아는 계정·브라우저 안내(교재에 없는 사실)는 강사가 고를 수 있게 할 일(todo)로 남김
+  const readyItems = composed.prep.map((label) => ({ label, detail: '', url: '' }));
   const prepText = textKey(composed.prep.join(' '));
-  const readyItems = [...prepItems, ...[...accounts.entries()].filter(([k]) => !prepText.includes(textKey(ACCOUNT_WORD[k] || '\u0000')))
-    .map(([k, names]) => ({ label: ACCOUNT_LABEL[k].label, detail: `필요한 도구: ${names.slice(0, 6).join(', ')}`, url: '' }))];
-  if ((tools.length || stations.length) && !/브라우저|크롬|엣지|웨일/.test(composed.prep.join(' '))) readyItems.push({ label: '노트북·크롬북에서 최신 브라우저(크롬·엣지·웨일) 열기', detail: '휴대폰보다 큰 화면이 실습하기 편해요.', url: '' });
+  const ACCOUNT_SAID = { google: /(?:구글|google)\s*계정/i, microsoft: /(?:마이크로소프트|microsoft|ms)\s*계정/i, naver: /네이버\s*(?:계정|아이디)/i };
+  const allLines = [...stations.flatMap((x) => x.steps), ...pages.flatMap(paraLines)];
+  const readyHints = [];
+  for (const [k, names] of accounts.entries()) {
+    if (prepText.includes(textKey(ACCOUNT_WORD[k] || '\u0000'))) continue;
+    const said = ACCOUNT_SAID[k] && allLines.find((t) => ACCOUNT_SAID[k].test(t));
+    if (said) readyItems.push({ label: ACCOUNT_WORD[k], detail: truncate(said, 200), url: '' });
+    else readyHints.push(`${ACCOUNT_LABEL[k].label}(${names.slice(0, 6).join(', ')})`);
+  }
+  if ((tools.length || stations.length) && !/브라우저|크롬|엣지|웨일/.test(composed.prep.join(' '))) readyHints.push('노트북·크롬북에서 최신 브라우저 열기');
   const checks = (readyTools.length ? readyTools : tools).map((t) => ({ name: t.name, url: ownUrl(t) || t.url })).filter((t) => t.url).slice(0, 10);
   if (readyItems.length && (stations.length || composed.prep.length || archetype.primary === 'lab' || archetype.primary === 'course')) S.readiness = { id: 'readiness', type: 'readiness', nav: '준비', items: readyItems.slice(0, 12), checks };
 
@@ -296,11 +326,16 @@ export function materialToDraft(material, info = {}) {
     S.prompts = { id: 'prompts', type: 'prompts', nav: '프롬프트', items: allPrompts.map((x, k) => ({ title: x.title || pageMap.get(pageKey(x.file, x.page))?.title || `프롬프트 ${k + 1}`, text: x.text, tags: [...new Set(refsOf(x).flatMap((r) => toolNamesOn(r.file, [r.page])))].slice(0, 3) })) };
   }
 
+  // 도구 설명: 교재에서 그 도구를 쓰는 실습 제목(교재 글자 그대로). 계정·로그인 여부 같은 도구 목록 지식은 교재에 없으면 싣지 않음
+  const fileNo = new Map(files.map((f, i) => [f.id, i]));
+  const firstAt = (t) => Math.min(...refsOf(t).map((r) => (fileNo.get(r.file) ?? 99) * 10000 + r.page), 1e9);
+  const stationsOf = (t) => stations.filter((x) => refsOf(t).some((r) => r.file === x.source.file && x.source.pages.includes(r.page))).map((x) => x.title);
   if (tools.length) {
     S.tools = {
       id: 'tools', type: 'tools', nav: '도구',
-      items: tools.slice(0, 24).map((t) => ({ name: t.name, url: ownUrl(t), // 링크는 교재에 적힌 그 도구의 주소만(일반 주소를 지어 붙이지 않음. 접속 확인만 대표 주소를 씀)
-      desc: [t.categoryLabel, t.accountNeeded ? accountShort(t.account) : '로그인 없이'].filter(Boolean).join(' · '), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
+      // 교재에 처음 나오는 차례대로
+      items: tools.slice(0, 24).sort((a, b) => firstAt(a) - firstAt(b)).map((t) => ({ name: t.name, url: ownUrl(t), // 링크는 교재에 적힌 그 도구의 주소만(일반 주소를 지어 붙이지 않음. 접속 확인만 대표 주소를 씀)
+      desc: truncate(stationsOf(t).slice(0, 3).join(' · '), 200), pages: hasDeckFile ? refsOf(t).filter((r) => r.file === hasDeckFile.id).map((r) => r.page).slice(0, 12) : [], icon: t.icon || '' })),
       notice: tools.some((t) => /연령|만 1[348]세|보호자/.test(t.minors || '')) ? '학생과 함께 쓸 때는 도구별 연령 기준과 학교·교육청 지침을 먼저 확인해 주세요.' : '',
     };
   }
@@ -317,7 +352,7 @@ export function materialToDraft(material, info = {}) {
         tools: toolNamesOn(p.file, [p.page]).slice(0, 4),
       })),
       download: info.deckHref ? { href: info.deckHref, size: sizeLabel(hasDeckFile.size), label: '교재 내려받기' } : undefined,
-      notice: '교재는 연수 학습용으로만 써 주세요.',
+      // 이용 안내(notice)는 교재에 없으므로 비워 둠(강사가 적으면 보임)
       source: { file: hasDeckFile.id, pages: [] },
     };
     if (!S.deck.download) delete S.deck.download;
@@ -340,7 +375,8 @@ export function materialToDraft(material, info = {}) {
     const line = lineOf(l); const lab = /^(.{2,20}?)\s*[:：]/.exec(line.replace(LEAD, ''));
     if (/자료|내려받기|다운로드|양식|서식/.test(`${lab?.[1] || ''} ${l.label || ''}`) && !/영상|녹화|다시\s*보기/.test(line)) matItems.push({ title: truncate(lab ? lab[1] : l.label || hostOf(l.url), 100), desc: lab && l.label && !/^https?:/.test(l.label) && l.label !== lab[1] ? l.label : hostOf(l.url), href: l.url, kind: 'LINK', size: '' });
   }
-  if (matItems.length) S.materials = { id: 'materials', type: 'materials', nav: '자료', items: matItems.slice(0, 30), notice: '연수 목적으로만 써 주세요. 다른 곳에 올릴 때는 강사에게 먼저 물어봐 주세요.' };
+  // 자료 이용 규칙(notice)은 교재에 없으므로 지어 넣지 않음(강사가 적으면 보임)
+  if (matItems.length) S.materials = { id: 'materials', type: 'materials', nav: '자료', items: matItems.slice(0, 30) };
 
   // 연수 후 안내: '참고 자료'·'더 알아보기' 쪽의 링크와 끝부분의 영상·소통방 링크, 교재에 적힌 과제·이수 처리
   const morePages = pages.filter((p) => MORE_TITLE.test(p.title || ''));
@@ -360,11 +396,10 @@ export function materialToDraft(material, info = {}) {
   if (instructors.length) S.instructor = { id: 'instructor', type: 'instructor', nav: '강사', source: d.instructor ? { file: d.instructor.file, pages: [d.instructor.page] } : undefined };
   // 만족도 조사: 강사가 준 주소가 있을 때만. 주소가 없으면 참여 기능을 켤 때 사이트 안 설문이 들어감(intake.js applyFeatures)
   if (info.surveyUrl) S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl, qr: true, questions: DEFAULT_SURVEY.map((q) => ({ ...q })) };
-  // 마무리: 교재의 맺는 문장이 있으면 그 문장, 없으면 인사말만(연수 제목을 되풀이하지 않음)
+  // 마무리: 교재의 맺는 문장이 있으면 그 문장(이름표 "핵심:"은 머리말로). 인사말·서명("함께해 주셔서 고맙습니다", "○○○ 드림")은
+  // 교재에 없으므로 지어 넣지 않음. 문장이 없으면 비워 두고, 화면에는 연수 제목·날짜·주최가 나옴
   const closingMsg = msgs.find((m) => m.closing) || msgs.find((m) => m !== lead && (m.score ?? 2) >= 2 && m.file === (hasDeckFile && hasDeckFile.id)) || null;
-  if (flow !== 'course') S.closing = closingMsg
-    ? { id: 'closing', type: 'closing', lead: '함께해 주셔서 고맙습니다', text: closingMsg.text, thanks: instructors[0] ? `${instructors[0].name} 드림` : '' }
-    : { id: 'closing', type: 'closing', lead: '', text: '함께해 주셔서 고맙습니다', thanks: instructors[0] ? `${instructors[0].name} 드림` : '' };
+  if (flow !== 'course') S.closing = { id: 'closing', type: 'closing', lead: closingMsg?.label || '', text: closingMsg ? closingMsg.text : '', thanks: '' };
 
   // 한눈에 보기: 흐름에 맞는 값만(행사: 참석·발표·시간 / 과정: 연수 시간·차시·출석 기준 / 문서: 교재의 수치 문장)
   const glance = [];
@@ -492,7 +527,9 @@ export function materialToDraft(material, info = {}) {
       hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 보기에 보여요.',
       !S.materials && '참가자가 받을 자료가 있으면 자료실에 올려 주세요.',
       stations.some((x) => !x.outcome) && '실습마다 "여기까지 됐나요?" 확인 문장을 적어 주세요.',
+      readyHints.length && `준비물에 넣을지 골라 주세요(교재에는 없음): ${readyHints.join(' · ')}.`,
       noteCount > 0 && `발표자 노트에서 막히는 곳 ${noteCount}건을 실습 메모로 옮겼어요. 참가자에게 보여도 되는지 확인해 주세요.`,
+      memoCount > 0 && `발표자 노트의 강사 메모 ${memoCount}건은 참가자 화면에 싣지 않고 강사용 운영안내에 담았어요(stations[].teacherNote). 참가자도 알아야 할 내용이면 실습 메모(note)에 참가자에게 하는 말로 적어 주세요.`,
     ].filter(Boolean),
   };
   return draft;
@@ -527,9 +564,6 @@ export function brandAccent(colors = {}) {
   return '';
 }
 
-function accountShort(a) {
-  return { google: 'Google 계정', microsoft: 'Microsoft 계정', naver: '네이버 계정', email: '가입 필요', teacher: '교사 계정', school: '학교 계정', none: '' }[a] || '';
-}
 function imageName(im) {
   const ext = (extOf(im.name || im.path || '') || 'png').replace('jpeg', 'jpg');
   return `${im.id}.${ext}`;

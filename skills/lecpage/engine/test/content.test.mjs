@@ -147,8 +147,8 @@ describe('초안(draft): 교재에서 채우기', () => {
 `;
   const d = materialToDraft(ingestText(MD, { name: 'notes.md' }), { today: '2026-11-01' });
   const sec = (t) => d.sections.find((s) => s.type === t);
-  test('연수 목표·대상: 목표 쪽에서 가져오고 해요체로', () => {
-    assert.deepEqual(sec('goals').items, ['흩어진 학습 기록을 표 하나로 모을 수 있어요', '차트로 우리 반의 흐름을 읽을 수 있어요']);
+  test('연수 목표·대상: 목표 쪽에서 교재 문장 그대로(말끝을 바꾸지 않음)', () => {
+    assert.deepEqual(sec('goals').items, ['흩어진 학습 기록을 표 하나로 모을 수 있다', '차트로 우리 반의 흐름을 읽을 수 있다']);
     assert.equal(sec('goals').who, '스프레드시트를 써 본 중등 교사');
     assert.ok(!sec('goals').items.some((x) => x.includes('단원명')), '프롬프트 속 "목표:"는 연수 목표가 아님');
   });

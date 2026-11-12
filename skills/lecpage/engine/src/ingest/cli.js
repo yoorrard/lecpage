@@ -1,6 +1,6 @@
 // Node 전용(Agent Skill CLI): 파일 경로로 교재 해석 → material.json 쓰기 → (선택) 설계도 초안·AI 요약·쪽 그림.
 // 브라우저 번들에 node: 모듈이 끌려 들어가지 않도록 모두 동적 import(변수 지정자)로 불러옵니다.
-import { DEFAULT_LIMITS, makeError, extOf, baseName, sizeLabel } from './util.js';
+import { DEFAULT_LIMITS, makeError, extOf, baseName, sizeLabel, pagesForImages } from './util.js';
 
 const nodeImport = (spec) => import(/* @vite-ignore */ spec);
 async function node() {
@@ -137,8 +137,7 @@ export async function attachSlides(m, slidesDir, outPath) {
     if (!r.ok) { m.warnings.push({ code: 'render-failed', message_ko: `쪽 그림을 만들지 못했어요(LibreOffice·pdftoppm 확인): ${r.message || ''}`.trim(), file: f.name }); continue; }
     const rel = (img) => path.relative(outDir, img).split(path.sep).join('/');
     if (f.unit === 'section') { f.pageImages = r.files.map(rel); f.rendered = r.files.length; continue; } // 문서형: 실제 쪽 ≠ 절
-    let pages = m.pages.filter((p) => p.file === f.id);
-    if (srcFile && srcFile.skipsHidden) pages = pages.filter((p) => !p.hidden);
+    const pages = pagesForImages(m.pages.filter((p) => p.file === f.id), r.files.length, !!(srcFile && srcFile.skipsHidden));
     pages.forEach((p, i) => { const img = r.files[i]; if (img) p.image = rel(img); });
     if (srcFile) m.pages.filter((p) => p.file === srcFile.id).forEach((p, i) => { const img = r.files[i]; if (img) p.image = rel(img); });
     f.rendered = r.files.length;
