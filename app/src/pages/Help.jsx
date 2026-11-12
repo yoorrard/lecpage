@@ -94,8 +94,8 @@ const BODY = {
     <p>AI가 교재를 읽고 연수 흐름과 문구를 짜요. 처음 한 번만 연결하면 돼요.</p>
     <KeyMap />
     <h2>어떤 AI를 고를까요?</h2>
-    <ul><li><b>Gemini · 무료</b>: 결제 등록 없이 써요. 구글의 Flash 모델로 만들고, 하루에 쓸 수 있는 횟수가 정해져 있어요.</li>
-      <li><b>ChatGPT·Claude · 유료</b>: 구성과 문구가 더 꼼꼼해요. 크레딧을 충전해 쓰고, 사이트 하나에 몇백 원쯤 들어요.</li></ul>
+    <ul><li><b>ChatGPT·Claude · 유료</b>: 구성과 문구가 더 꼼꼼해요. 크레딧을 충전해 쓰고, 사이트 하나에 몇백 원쯤 들어요.</li>
+      <li><b>Gemini · 무료</b>: 구글의 Flash 모델로 만들고, 하루에 쓸 수 있는 횟수가 정해져 있어요. 계정에 따라 휴대폰 확인을 요청해요.</li></ul>
     <Task n="1" title="키 페이지 열기" shot="connect" alt="AI 연결 창: 쓸 AI를 고르고 키 페이지를 여는 단추, 누를 곳을 보여 주는 그림" w={760} h={530}>
       <p>교재 넣기 화면에서 [AI 연결하고 만들기]를 누르고 쓸 AI를 골라요.</p>
       <p>단추를 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
@@ -119,7 +119,7 @@ const BODY = {
       <details><summary>키가 뭐예요? 안전한가요?</summary><p>API 키는 AI 회사가 내 계정에 만들어 주는 긴 암호예요. 키와 교재의 글은 이 브라우저에서 고른 AI 회사로만 가고, lecpage 운영자는 볼 수 없어요. '이 기기에서 기억하기'를 켜면 암호화해 이 기기에만 저장해요. 공용 PC에서는 꺼 주세요.</p></details>
       <details><summary>학생 정보가 든 교재를 넣어도 되나요?</summary><p>학생 이름·사진 같은 개인정보는 지우고 넣어 주세요. 교재의 글이 AI 회사로 가고, Gemini 무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요.</p></details>
       <details><summary>모델은 어떻게 고르나요?</summary><p>고르지 않아도 돼요. 그 키로 쓸 수 있는 모델 중 품질과 값의 균형이 좋은 것을 앱이 골라 둬요. 바꾸려면 교재 넣기 화면의 '연결됨' 줄을 눌러요.</p></details>
-      <details><summary>키 없이도 할 수 있나요?</summary><p>네. AI 연결 창의 [키 없이 만들기]를 누르면 쓰던 ChatGPT·Gemini·Claude에 물어보고 답을 붙여 넣어 만들어요. [AI 없이 기본 초안만]으로 시작해 직접 고쳐도 돼요.</p></details>
+      <details><summary>키 없이도 할 수 있나요?</summary><p>네. AI 연결 창의 [키 없이 만들기]를 누르면 쓰던 ChatGPT·Claude·Gemini에 물어보고 답을 붙여 넣어 만들어요. [AI 없이 기본 초안만]으로 시작해 직접 고쳐도 돼요.</p></details>
       <details><summary>ChatGPT·Claude 구독이 있는데 키가 또 필요한가요?</summary><p>구독으로 이 앱에 바로 로그인할 수는 없어요. ChatGPT Pro·Business, Claude Max·Ultra·Team 구독에는 API 크레딧이 들어 있어 그 회사 사이트에서 받아 쓸 수 있어요. 그 밖의 구독이면 [키 없이 만들기]로 쓰던 챗봇을 그대로 쓰세요.</p></details>
     </div>
   </>,

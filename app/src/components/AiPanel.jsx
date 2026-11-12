@@ -17,7 +17,7 @@ export function useAiResume(open) {
   }, []);
 }
 
-const CHATBOTS = [['ChatGPT', 'https://chatgpt.com/'], ['Gemini', 'https://gemini.google.com/app'], ['Claude', 'https://claude.ai/new']];
+const CHATBOTS = [['ChatGPT', 'https://chatgpt.com/'], ['Claude', 'https://claude.ai/new'], ['Gemini', 'https://gemini.google.com/app']];
 
 /**
  * AI로 다듬기(선택). 기본은 '문구만 다듬기'(짧은 프롬프트·짧은 답). 방법: 연결한 AI로 바로 / 쓰던 챗봇에 붙여넣기(키 없이)

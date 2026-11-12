@@ -36,7 +36,7 @@ AI에게 그냥 시킬 때와 다른 점
 | 디자인 | 프리셋 6종·효과 25종 | **프리셋 12종 × 효과 52종 × 슬롯 18개**, 주제·분위기·기기·네트워크로 자동 선택 + 변주(seed) | 같은 프리셋이라도 연수마다 다르게, 학교 기기에서도 안전하게 |
 | 실시간 | Supabase 중심 | **어댑터 5종**(브라우저 미리보기·Supabase·Sheets·Cloudflare·자체 서버) + 공통 HTTP 프로토콜 | 인원·인프라·인터넷 없는 교실까지 대응 |
 | 참가자 로그인 | 익명 로그인 | **로그인 없음, 참여 토큰** | Supabase 익명 로그인은 IP당 시간당 30회라 한 학교(공인 IP 하나)에서 31번째부터 막힘 |
-| AI 연결 | BYOK + 계정 연결 | BYOK(기본: Gemini 무료 키 · OpenAI · Claude) · 복사·붙여넣기 · AI 없는 초안 · skill | 구독 계정 로그인을 앱이 빌려 쓰지 않음. 모델 이름은 사용자 키로 목록을 불러와 고름 |
+| AI 연결 | BYOK + 계정 연결 | BYOK(기본: OpenAI · Claude · Gemini 무료 키) · 복사·붙여넣기 · AI 없는 초안 · skill | 구독 계정 로그인을 앱이 빌려 쓰지 않음. 모델 이름은 사용자 키로 목록을 불러와 고름 |
 | 웹앱 운영 | 미정 | **로컬 우선 정적 PWA**, 로그인·운영자 DB 없음, **Cloudflare Workers 정적 자산(Workers Builds) + lecpage.com**, GitHub Pages는 미러 | 운영비 0원(도메인 값만), 개인정보 책임 최소. diagrams.net·Excalidraw 방식. 순서: `docs/operations.md` |
 
 ## 3. 구성

@@ -26,17 +26,17 @@ const ENOUGH = '5달러면 사이트를 열 개 넘게 만들어요.';
 export const KEY_GUIDES = {
   gemini: {
     title: 'Google Gemini', label: 'Gemini', tag: '무료',
-    what: '결제 등록 없이 무료로 써요. 구글의 Flash 모델로 만들어요.',
+    what: '무료로 쓸 수 있어요. 구글의 Flash 모델로 만들어요. 계정에 따라 휴대폰 확인을 요청해요.',
     steps: [
       { id: 'key', title: '키 복사하기', url: P.gemini.keyUrl, open: '구글 AI Studio 열기', skip: '이미 복사했어요',
         text: <>개인 구글 계정으로 로그인하고 약관에 동의하면 키가 만들어져 있어요. 키 옆의 <b>복사 단추</b>를 눌러요.</>,
         pic: { host: 'aistudio.google.com', head: 'API keys', button: 'Create API key', row: 'key', ring: 'copy', tip: '복사 단추' } },
     ],
     tips: [
-      <>키가 안 보이면 <b>Create API key</b>를 눌러요.</>,
-      <><b>Set up billing</b>(결제 등록)은 누르지 않아도 돼요.</>,
-      <>휴대폰 확인을 요청하면 휴대폰 카메라로 QR을 찍어요.</>,
-      <>구글 클라우드를 쓰던 계정은 결제를 요구할 수 있어요. 다른 개인 구글 계정으로 하면 무료로 돼요.</>,
+      <>키가 안 보이면 <b>Create API key</b>를 눌러요. 구글 클라우드를 쓰던 계정은 키가 저절로 생기지 않아요.</>,
+      <><b>Set up billing</b>(결제 등록)은 누르지 않아도 돼요. 결제를 연결한 프로젝트의 키는 크레딧을 충전해야 써져요.</>,
+      <><b>Verification needed</b>(휴대폰 확인)가 뜨면 휴대폰 카메라로 QR을 찍어요. 전화번호는 묻지 않아요.</>,
+      <>그래도 결제를 요구하면 구글 클라우드를 쓴 적 없는 개인 구글 계정으로 해 보세요.</>,
       <>학교 계정은 막혀 있는 경우가 많아요. 만 18세 이상 개인 계정으로 해 주세요.</>,
     ],
     more: ['무료 키는 Gemini 3.8 Flash까지 써요. Gemini 4는 결제를 연결한 키만 돼요.', '하루에 쓸 수 있는 횟수가 정해져 있고, 넣은 내용이 구글 제품 개선에 쓰일 수 있어요.'],
@@ -77,7 +77,8 @@ export const KEY_GUIDES = {
     more: [],
   },
 };
-export const GUIDE_ORDER = ['gemini', 'openai', 'anthropic'];
+// 보이는 순서: 사람들이 흔히 쓰는 순(ChatGPT · Claude · Gemini). 무료·유료는 꼬리표로 알림
+export const GUIDE_ORDER = ['openai', 'anthropic', 'gemini'];
 
 /**
  * 열린 페이지에서 누를 곳을 보여 주는 작은 그림(주소 · 제목 · 단추 · 키나 잔액 한 줄). 동그라미가 누를 곳입니다.
