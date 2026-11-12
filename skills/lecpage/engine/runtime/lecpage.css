@@ -326,7 +326,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-stk dt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lp-stk dd{margin:0;display:grid;justify-items:center}
 .lp-stk-date{width:clamp(8.5rem,15.5vw,14rem);aspect-ratio:1;border-radius:50%;background:var(--primary);color:var(--primary-foreground);transform:rotate(9deg);outline:2px dashed color-mix(in srgb,var(--primary-foreground) 62%,transparent);outline-offset:-11px}
-.lp-stk-date .lp-date{font-size:clamp(2.25rem,4.6vw,4.25rem)}
+.lp-stk-date .lp-date{font-size:clamp(2.1rem,3.9vw,3.9rem)} /* 기운 동그라미 안에 날짜가 다 들어가게(1280에서 화면 끝을 넘던 것) */
 .lp-stk-date .lp-date-sub{color:inherit;line-height:1.35}
 .lp-stk-num{position:absolute;right:clamp(7rem,13vw,12rem);top:clamp(6.5rem,11.5vw,10.5rem);width:clamp(6rem,9.6vw,8.75rem);aspect-ratio:1;border-radius:30%;background:var(--accent-3);color:var(--accent-3-foreground);transform:rotate(-10deg)}
 .lp-stk-num dd{grid-auto-flow:column;align-items:baseline;gap:.15em}
@@ -388,6 +388,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-stamp{justify-self:end;display:flex;gap:var(--sp-5);margin:clamp(-64px,-5vw,-20px) clamp(0px,3vw,48px) 0 0;padding:12px 20px 14px;border:3px double var(--accent);border-radius:8px;transform:rotate(-6deg);background:color-mix(in srgb,var(--background) 70%,transparent)}
 .lp-stamp .lp-gl + .lp-gl{padding-left:var(--sp-5);border-left:1px solid var(--accent)}
 .lp-stamp .lp-num{font-size:var(--fs-num);color:var(--primary)}
+.lp-stamp .lp-gl{gap:6px}
+.lp-stamp .lp-num.lp-num-t{font-size:var(--fs-h2s);line-height:1.2} /* 글이 섞인 값(2시간 30분)은 한 단계 작게, 위 이름표와 겹치지 않게 */
 .lp-zine-row{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--sp-5) var(--sp-8);align-items:end;padding-top:var(--sp-5);border-top:var(--border-w) solid var(--foreground)}
 .lp-zine-copy{display:grid;gap:var(--sp-5);justify-items:start}
 .lp-hero--zine .lp-hero-meta{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
@@ -994,7 +996,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-slide-pg{position:absolute;right:3.4cqw;bottom:.6cqw;font-family:var(--font-num);font-weight:var(--num-weight);font-size:17cqw;line-height:.8;letter-spacing:-.05em;color:transparent;-webkit-text-stroke:1px color-mix(in srgb,var(--foreground) 15%,transparent);font-variant-numeric:tabular-nums lining-nums;pointer-events:none;-webkit-user-select:none;user-select:none}
 .lp-slide-text[data-kind="cover"]{--muted-foreground:var(--primary-foreground);background:var(--band-primary,var(--primary));color:var(--primary-foreground);border-color:transparent}
 .lp-slide-text[data-kind="cover"] h3{font-size:max(22px,6.3cqw);line-height:1.14}
-.lp-slide-text[data-kind="cover"] :is(.lp-slide-top,.lp-slide-lead){opacity:.84}
+.lp-slide-text[data-kind="cover"] :is(.lp-slide-top,.lp-slide-lead){opacity:.92} /* 4.5:1 이상(표지 한 장 #b3421a 위에서도) */
 .lp-slide-text[data-kind="cover"] .lp-slide-pg{-webkit-text-stroke-color:color-mix(in srgb,var(--primary-foreground) 30%,transparent)}
 .lp-slide-text[data-kind="part"]{background:color-mix(in srgb,var(--primary) 9%,var(--card))}
 .lp-slide-text[data-kind="part"] h3{font-size:max(20px,5.4cqw)}
@@ -1710,8 +1712,13 @@ html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transf
   .lp-schedule li{grid-template-columns:var(--tw) minmax(0,1fr);column-gap:28px}
   .lp-schedule time{font-size:var(--fs-base)}
   .lp-schedule .lp-chip,.lp-schedule-part{grid-column:2;justify-self:start;padding-top:2px}
-  .lp-outline-item{grid-template-columns:minmax(0,1fr);gap:var(--sp-3)}
-  .lp-outline-side{grid-column:1}
+  /* 차례: 휴대폰에서는 번호를 왼쪽 작은 단으로, 교재 쪽 그림은 작게(한 항목이 화면 높이의 1/3을 넘지 않게) */
+  .lp-outline-item{grid-template-columns:auto minmax(0,1fr);gap:var(--sp-2) var(--sp-3);padding:var(--sp-4)}
+  .lp-outline-no{font-size:var(--fs-num)}
+  .lp-outline-item h3{font-size:var(--fs-lg)}
+  .lp-outline-body > p:not(.lp-outline-part){font-size:var(--fs-sm);line-height:1.6}
+  .lp-outline-thumb{width:6.5rem}
+  .lp-outline-side{grid-column:2;padding-top:var(--sp-2)}
   .lp-goal-list li{grid-template-columns:minmax(0,1fr);gap:var(--sp-2)}
   .lp-tl-group{grid-template-columns:minmax(0,1fr);gap:0}
   .lp-closing{min-height:0}
@@ -1998,6 +2005,8 @@ html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-lite) :is(.lp-outline-it
 [data-preset="vertical-type"] .lp-head-no::after{display:none}
 [data-preset="vertical-type"] :is(.lp-goal-list,.lp-glossary){border-top:3px double color-mix(in srgb,var(--foreground) 60%,transparent)}
 @media (min-width:1360px){
+  /* 머리가 등장하는 동안(움직이는 줄이 기준 틀이 됨) 쪽표제가 화면 밖으로 밀려 가로 스크롤을 만들지 않게 섹션 밖은 잘라 둠 */
+  [data-preset="vertical-type"] .lp-sec:not([data-frame="split"]){overflow-x:clip}
   [data-preset="vertical-type"] .lp-sec:not([data-frame="split"]) .lp-head-label{position:absolute;right:calc((100% - 1160px) / 2 - 34px);top:clamp(48px,5.8vw,92px);writing-mode:vertical-rl;letter-spacing:.3em;font-family:var(--font-display);font-size:var(--fs-sm);color:var(--muted-foreground)}
 }
 /* 어긋난 격자: ① 섹션마다 굵은 윗선과 붉은 네모 ② 큰 고정폭 번호 ③ 선으로만 나눈 판 */
@@ -2156,6 +2165,7 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 .lp-callout-h > span{font-weight:700}
 .lp-callout-copy{margin-left:auto}
 .lp-callout-b{display:grid;gap:var(--sp-3);min-width:0;font-size:var(--fs-sm);line-height:1.7}
+.lp-callout-b > :is(p,ul,ol){max-width:29em} /* 작은 글자라 한 줄이 40자 안팎을 넘지 않게(영문이 섞여도) */
 @media print{
   .lp-callout-copy{display:none!important}
   .lp-discuss-rules{position:static}

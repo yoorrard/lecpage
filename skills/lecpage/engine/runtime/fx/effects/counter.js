@@ -1,4 +1,5 @@
-/* counter — 화면에 들어오면 숫자가 0부터 올라간다. 원래 표기(쉼표·소수·단위)를 지키고, 폭이 흔들리지 않게 고정 */
+/* counter — 화면에 들어오면 숫자가 0부터 올라간다. 원래 표기(쉼표·소수·단위)를 지키고, 폭이 흔들리지 않게 고정.
+   들어오기 전·처음부터 보이던 숫자·효과가 멈춘 화면에서는 실제 값 그대로(0이 남아 있지 않게) */
 LecFX.define('counter', {
   level: 1,
   init: function (el, o, ctx) {
@@ -26,9 +27,12 @@ LecFX.define('counter', {
     el.classList.add('fx-counter');
     num.style.minWidth = num.getBoundingClientRect().width + 'px';
     var from = o.from || 0, dur = o.duration || 1500, raf = 0;
-    num.textContent = fmt(from);
+    /* 불러온 직후에도 실제 값이 보임: 세기 전까지는 원래 숫자 그대로. 처음부터 화면에 보이던 숫자는 세지 않음 */
+    var r0 = el.getBoundingClientRect();
+    if (r0.top < (window.innerHeight || 0) && r0.bottom > 0) return function () { el.innerHTML = orig; el.classList.remove('fx-counter'); };
     ctx.visible(el, function () {
       var t0 = 0;
+      num.textContent = fmt(from);
       var f = function (now) {
         if (!t0) t0 = now;
         var t = Math.min(1, (now - t0) / dur);

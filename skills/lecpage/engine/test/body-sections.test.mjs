@@ -17,10 +17,10 @@ const visible = (html) => String(html).replace(/<script[\s\S]*?<\/script>/g, ' '
 const RAW = /^\s*\|.*\|\s*$|\|\s*:?-{2,}|^\s*>\s?\S|\*\*|^#{1,6}\s|```|^\s*[-*]\s+\S|^\s*\d+[.)]\s+\S/m;
 const section = (bp, id) => new RegExp(`<section id="${id}"[\\s\\S]*?</section>`).exec(build(bp).files['index.html'])?.[0] || '';
 const BODY = [
-  { id: 'proc', type: 'procedure', title: '대응 절차', lead: '발견한 사람이 1단계부터 시작해요.', items: [{ title: '현장 안전 확보', desc: '2차 사고를 막는다.' }, { title: '보호자 연락', desc: '담임이 전화한다.', time: '10분 이내', who: '담임' }, '기록과 보고'], close: '끝나면 교감에게 알려요.' },
-  { id: 'crit', type: 'table', title: '판단 기준', head: ['구분', '기준', '조치'], rows: [['경미', '보건실 처치로 끝남', '보건일지 기록'], ['중대', '3주 이상 입원', '119 이송\n현장 보존']], note: '**가상** 기준이에요.' },
-  { id: 'cases', type: 'cases', title: '세 가지 사례', items: [{ title: '민원 전화 뒤의 오후', body: '6년 차 ㄱ 교사는 30분 동안 전화를 받았습니다.', quote: '“제가 뭘 잘못했는지 계속 찾게 되더라고요.”', cite: 'ㄱ 교사' }, { title: '혼자 남은 학년 회의', body: '3년 차 ㄴ 교사는 행사를 혼자 맡았습니다.' }] },
-  { id: 'disc', type: 'discuss', title: '함께 나눌 질문', items: ['가장 지쳤던 순간은 언제였나요?', { q: '나를 버티게 한 것은 무엇이었나요?' }], rules: ['4명씩 한 모둠으로 앉습니다.', '조언보다 질문을 먼저 합니다.'] },
+  { id: 'proc', type: 'procedure', layout: 'rail', title: '대응 절차', lead: '발견한 사람이 1단계부터 시작해요.', items: [{ title: '현장 안전 확보', desc: '2차 사고를 막는다.' }, { title: '보호자 연락', desc: '담임이 전화한다.', time: '10분 이내', who: '담임' }, '기록과 보고'], close: '끝나면 교감에게 알려요.' },
+  { id: 'crit', type: 'table', layout: 'table', title: '판단 기준', head: ['구분', '기준', '조치'], rows: [['경미', '보건실 처치로 끝남', '보건일지 기록'], ['중대', '3주 이상 입원', '119 이송\n현장 보존']], note: '**가상** 기준이에요.' },
+  { id: 'cases', type: 'cases', layout: 'rows', title: '세 가지 사례', items: [{ title: '민원 전화 뒤의 오후', body: '6년 차 ㄱ 교사는 30분 동안 전화를 받았습니다.', quote: '“제가 뭘 잘못했는지 계속 찾게 되더라고요.”', cite: 'ㄱ 교사' }, { title: '혼자 남은 학년 회의', body: '3년 차 ㄴ 교사는 행사를 혼자 맡았습니다.' }] },
+  { id: 'disc', type: 'discuss', layout: 'list', title: '함께 나눌 질문', items: ['가장 지쳤던 순간은 언제였나요?', { q: '나를 버티게 한 것은 무엇이었나요?' }], rules: ['4명씩 한 모둠으로 앉습니다.', '조언보다 질문을 먼저 합니다.'] },
   { id: 'txt', type: 'text', title: '서식과 문의', md: '붙임 서식은 두 가지예요.\n\n- 붙임 1. 사고 경위서\n- 붙임 2. 보호자 통지문\n\n| 구분 | 기한 |\n|---|---|\n| 전화 | 10분 이내 |\n| 문자 | 30분 이내 |\n\n> 쉬는 것도 수업 준비입니다.\n> — 한도담\n\n> [!예시] 보호자 통지문\n> ○○ 학생이 발목을 다쳐 병원으로 옮겼습니다.' },
 ];
 const bpWith = (sections, design = {}) => ({ meta: { title: '본문 칸 시험' }, design, sections: [{ type: 'hero' }, ...sections, { type: 'closing', text: '끝' }] });
@@ -133,7 +133,7 @@ describe('본문 칸 그리기', () => {
   test('함께 나눌 질문: 질문 목록과 진행 규칙', () => {
     const html = section(bpWith(BODY), 'disc');
     assert.match(html, /<ol class="lp-discuss-q"/); assert.match(html, /<h3>진행 규칙<\/h3><ul><li>4명씩 한 모둠으로 앉습니다\.<\/li>/);
-    assert.match(section(bpWith([{ id: 'd2', type: 'discuss', items: ['하나?'] }]), 'd2'), /class="lp-discuss is-solo"/);
+    assert.match(section(bpWith([{ id: 'd2', type: 'discuss', layout: 'list', items: ['하나?'] }]), 'd2'), /class="lp-discuss is-solo"/);
   });
   test('표 칸: 제목이 표 이름, 설명은 아래', () => {
     const html = section(bpWith(BODY), 'crit');

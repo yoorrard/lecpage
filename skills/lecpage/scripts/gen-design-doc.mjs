@@ -39,6 +39,19 @@ ${E.PRESETS.map((p) => `| \`${p.id}\` | ${p.name_ko} | ${p.desc_ko} | ${p.moods.
 
 글 배치 문법(\`layout\`, 본문은 \`variants.align\`): 왼쪽 정렬이 기본이고, 가운데(${E.PRESETS.filter((p) => p.variants.align === 'center').map((p) => p.name_ko).join('·')}) · 오른쪽·세로쓰기(${E.PRESETS.filter((p) => p.variants.align === 'right').map((p) => p.name_ko).join('·')}) · 어긋난 격자(${E.PRESETS.filter((p) => p.variants.align === 'offset').map((p) => p.name_ko).join('·')}) · 반반 화면(${E.PRESETS.filter((p) => p.variants.align === 'split').map((p) => p.name_ko).join('·')}) · 장부 격자(${E.PRESETS.filter((p) => p.variants.align === 'ledger').map((p) => p.name_ko).join('·')}) · 그림 가득(${E.PRESETS.filter((p) => p.layout === 'cover').map((p) => p.name_ko).join('·')})이 있다. 본문의 섹션 머리·구분선·번호·그림 다루기까지 같은 문법을 따른다. 좁은 화면에서는 모두 한 단이 된다.
 
+## 3-1. 본문 배치 변형 ${Object.values(E.BODY_VARIANTS).reduce((n, v) => n + Object.keys(v).length, 0)}가지(섹션 \`layout\`)
+섹션 종류마다 **구조가 다른** 배치(정렬만 다른 것은 세지 않음). 고르는 순서: 섹션에 적은 \`layout\`("변형" 또는 "변형@c·@r·@l" — 그 칸만 가운데·오른쪽·왼쪽) → 교재 구성 흐름(\`structure.flow\`)이 주인공으로 삼는 칸(절차 흐름도·큰 물음표·진행 지도·가로 트랙·무대, 프리셋이 기본 배치를 골랐을 때만) → 프리셋의 본문 계획 → 종류의 기본(첫째).
+내용이 배치에 맞지 않으면 기본으로(길이를 모르거나 여러 날인 일정은 시간 도식을 쓰지 않음, 낱말이 셋 미만이면 그물 없음 등). 같은 종류 칸이 둘이면 두 번째는 다른 배치.
+주인공: 글 · 숫자(실제 값) · **그림**(이 연수의 모티프 그림·교재 쪽 그림) · **도식**(교재의 값으로 그린 그림) · 조작(따라 하는 칸, 모양만 바뀜). 그림은 모두 서버가 그린 SVG·CSS이고 꾸밈(화면 낭독기에서 빠짐).
+프리셋 계획은 \`scripts/plan-body.mjs\`가 짠다: 분위기에 맞는 변형 중에서, 어느 두 프리셋도 같은 설계도에서 본문 배치가 절반 넘게 같지 않게, 프리셋마다 그래픽 주인공 2개 이상·글만 있는 섹션 절반 이하·왼쪽 정렬이 아닌 섹션 2개 이상(\`test/body-layouts.test.mjs\`).
+
+| 섹션 | 변형(첫째가 기본) — 주인공 · 고르는 기준 |
+|---|---|
+${Object.entries(E.BODY_VARIANTS).map(([t, vs]) => `| \`${t}\`${t === 'materials' ? '·`followup`' : ''} | ${Object.entries(vs).map(([id, v]) => `\`${id}\` ${v.ko}(${{ text: '글', number: '숫자', figure: '그림', diagram: '도식', tool: '조작' }[v.lead]}) — ${v.use}`).join('<br>')} |`).join('\n')}
+
+움직임: 차분 단계(1)는 섹션이 들어올 때 한 번(배치마다 어울리는 방식, 그림은 길·축·고리가 제자리로), 보통·스크롤 연출(2·3)은 스크롤에 맞춰 그려짐(여정의 길·트랙 채움·시계판·고리 회전·선언문 문장·필름 띠 가운데 장면·마무리 그림 미끄러짐). 반응: 도식과 목록 잇기(가리키거나 초점이 오면 같은 번호가 켜짐)·낱말 넘김·필름 띠·질문 색인·카드 들림. 동작 줄이기·가벼운 모드·JS가 없으면 완성된 정지 모습이고 아무것도 숨지 않는다.
+모티프(\`concept.motif\` → 그림 가족: 고리·점·도형 타일·물결·호·색면·별·큰 글자·모눈): 바탕이 같은 두 섹션 사이의 구분 장식, 옅은 바탕 칸 구석의 그림, 무대·좌우 번갈아·큰 얼굴·마무리 그림으로 되풀이한다.
+
 ## 4. 효과 ${E.FX.length}가지
 | id | 이름 | 강도 | 슬롯 | 설명 |
 |---|---|---|---|---|
