@@ -197,6 +197,14 @@ function readRun(run, c, st, inCell) {
         } else if (x.local === 'fieldEnd') {
           if (st.field && st.field.type === 'HYPERLINK') addLink(st, st.field.url, st.field.label);
           st.field = null;
+        } else if (x.local === 'footNote' || x.local === 'endNote') {
+          // 각주·미주: 본문 문단 바로 뒤에 "(각주) …" 문단으로(머리말·꼬리말은 쪽마다 되풀이되는 글이라 읽지 않음)
+          const inner = [];
+          const keep = { counters: [...c.counters], gap: c.gap, lastText: c.lastText, pendingBreak: c.pendingBreak }; // 본문의 번호·문단 간격 상태는 그대로
+          for (const p of kids(kid(x, 'subList') || x, 'p')) readPara(p, c, inner, inCell);
+          Object.assign(c, keep);
+          const text = normText(inner.filter((b) => b.type === 'p').map((b) => b.text).filter(Boolean).join(' '));
+          if (text) st.extra.push({ type: 'p', text: `(${x.local === 'footNote' ? '각주' : '미주'}) ${text}`, level: 0, heading: null, role: 'text', links: inner.flatMap((b) => b.links || []), images: [] });
         }
       }
     } else readObject(n, c, st, inCell);

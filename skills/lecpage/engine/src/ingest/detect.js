@@ -109,6 +109,7 @@ function addRef(e, file, page) {
 }
 
 // ── 프롬프트 ──────────────────────────────────────────
+const GLOSS_TITLE = /(용어|개념|키워드|낱말|glossary|terms|알아\s*둘)/i;
 const END = '[\\s.!?~"”’\'」』)]*$';
 const REQ_STRONG = new RegExp(`(?:해\\s?줘|해\\s?줄래|줘|줄래|줘요|해\\s?봐|해\\s?볼래|해\\s?주라|하라|해라|써\\s?줘|알려\\s?줘|만들어\\s?줘|그려\\s?줘|짜\\s?줘|골라\\s?줘|바꿔\\s?줘|찾아\\s?줘|해\\s?줄\\s?수\\s?있어\\??)${END}`);
 const REQ_POLITE = new RegExp(`(?:주세요|주십시오|주실래요|주시겠어요|줄\\s?수\\s?있나요|해\\s?주실\\s?수\\s?있나요)${END}`);
@@ -120,6 +121,8 @@ const EXAM = /(고르(?:세요|시오)|답하(?:세요|시오)|쓰시오|물음�
 const INSTRUCT = /(접속|클릭|로그인|선택하|누르|입력하|입력해|복사|붙여|다운로드|업로드|들어가|열어|저장하|확인하|공유하|참여하|따라|제출|설치|설정하|올려)/;
 const LABEL = /^\s*[\[【<(「]?\s*(?:예시\s*|추천\s*|실습\s*)?(?:프롬프트|prompt|명령어|명령문|질문\s*예시|입력\s*(?:문장|예시|내용|창에)|요청\s*(?:문장|예시)|지시문|이렇게\s*입력|이렇게\s*물어)\s*(?:예시|예|\d{1,2}|[①-⑳])?\s*[\]】>)」]?\s*(?:[:：\-–—▶→]\s*|$)(.*)$/i;
 const TEMPLATE_LINE = /^(?:#{1,3}\s*\S|[\[【]?\s*(?:역할|목표|목적|조건|형식|출력\s*형식|출력|맥락|상황|배경|지시|지시\s*사항|규칙|제약|제약\s*조건|대상|독자|톤|어조|분량|예시|참고|입력|role|task|context|format|constraints?|goal|audience|tone|output|instructions?)\s*[\]】]?\s*[:：])/i;
+// 프롬프트에서만 쓰는 이름표(역할·조건·형식…). '대상:'·'목표:'·'예시:' 같은 말은 연수 안내·목표 쪽에도 흔해서 약한 단서
+const TEMPLATE_STRONG = /^[\[【]?\s*(?:역할|조건|형식|출력\s*형식|출력|맥락|지시|지시\s*사항|규칙|제약|제약\s*조건|톤|어조|role|task|context|format|constraints?|tone|output|instructions?)\s*[\]】]?\s*[:：]/i;
 const PLACEHOLDER = /\[[^\]\n]{1,20}\]|\{[^}\n]{1,20}\}|<[^>\n]{1,20}>|○○|OO(?![A-Za-z])/;
 const QUOTE_RE = /[“"「『‘]([^“”"「」『』‘’\n]{6,400}?)[”"」』’]/g;
 const EN_PROMPT = /^(?:act as|you are|write|summarize|create|generate|make|explain|translate|list|give me|please|draft|design|suggest)\b/i;
@@ -155,9 +158,13 @@ function detectPrompts(pages) {
     for (const x of paras) { if (!blocks.has(x.block)) blocks.set(x.block, []); blocks.get(x.block).push(x); }
     const used = new Set();
     // 1) 이름표: "프롬프트: …" / "프롬프트 예시" 다음 줄들
+    // "낱말: 뜻" 줄이 둘 이상인 쪽(용어 풀이)에서는 "프롬프트: AI에게 시키는 글"도 낱말 풀이
+    const defLines = paras.filter((y) => /^[^:：\n]{1,14}[:：]\s*\S/.test(y.text.replace(LEAD_MARK, '')) && !LABEL.test(y.text) && !isRequestLine(y.text)).length;
+    const glossPage = GLOSS_TITLE.test(p.title || '') || defLines >= 2;
     paras.forEach((x, i) => {
       const m = LABEL.exec(x.text);
       if (!m) return;
+      if (glossPage && m[1] && !isRequestLine(m[1]) && !PLACEHOLDER.test(m[1]) && !/[“"「『]/.test(m[1])) return;
       const label = normLine(x.text.slice(0, x.text.length - (m[1] || '').length)).replace(/[:：\-–—▶→\s]+$/, '');
       let body = normText(m[1] || '');
       used.add(x);
@@ -183,6 +190,8 @@ function detectPrompts(pages) {
       const tmpl = free.filter((y) => TEMPLATE_LINE.test(y.text)).length;
       const ph = free.filter((y) => PLACEHOLDER.test(y.text)).length;
       const req = free.some((y) => isRequestLine(y.text) || AI_CUE.test(y.text));
+      const strong = free.some((y) => TEMPLATE_STRONG.test(y.text) || /^#{1,3}\s*\S/.test(y.text) || isRequestLine(y.text));
+      if (!strong && !ph) continue; // "대상: …", "목표: …"만 있는 안내·목표 묶음은 프롬프트가 아님
       if (tmpl >= 2 || (tmpl >= 1 && (ph >= 1 || req)) || (ph >= 1 && free.some((y) => isRequestLine(y.text)))) {
         free.forEach((y) => used.add(y));
         add(p, free.map((y) => y.text).join('\n'), 'template', 4);
@@ -451,6 +460,17 @@ function detectSections(pages, agenda, special) {
     }
     if (alt.length >= 2) { starts.length = 0; starts.push(...alt.sort((a, b) => a.idx - b.idx)); }
   }
+  // 문서(HWPX·DOCX·MD)는 부(Part) 표시가 없어도 제목으로 나눈 부분이 곧 차례("1. …", "가. …")
+  if (starts.length < 2) {
+    const docs = pages.map((p, idx) => ({ p, idx })).filter(({ p }) => p.kind === 'section' && p.title && !p.titleGuessed && !special.has(p));
+    if (docs.length >= 3 && docs.length <= 20) {
+      starts.length = 0;
+      for (const { p, idx } of docs) {
+        const m = /^(\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]|[가-하])\s*[.)]\s*(\S.*)$/.exec(p.title);
+        starts.push({ idx, no: 0, label: m ? m[1] : '', title: truncate(m ? m[2] : p.title, 80), desc: '', ...ref(p) });
+      }
+    }
+  }
   starts.sort((a, b) => a.idx - b.idx);
   return starts.map((s, i) => {
     const endIdx = i + 1 < starts.length ? starts[i + 1].idx - 1 : pages.length - 1;
@@ -516,7 +536,7 @@ function detectInstructor(pages, profilePages = []) {
 }
 
 // 표지·끝 쪽의 "강사: 홍길동(○○초)", "발표 · 유영재 · 안산양지초등학교 교사" 같은 한 줄(md·txt·docx·hwpx도 같은 길)
-const LABEL_LINE = /^\s*(?:강\s*사|발\s*표\s*자?|연\s*사|진\s*행\s*자?|강\s*연\s*자?|speaker|presenter)\s*(?:[:：|·]\s*|\s+(?=[가-힣]{2,4}(?:\s|$|[(（])))(.{2,80})$/i;
+const LABEL_LINE = /^\s*(?:[-•·▪◦●○■□▶▷►➢➤※*]\s*)?(?:강\s*사|발\s*표\s*자?|연\s*사|진\s*행\s*자?|강\s*연\s*자?|speaker|presenter)\s*(?:[:：|·]\s*|\s+(?=[가-힣]{2,4}(?:\s|$|[(（])))(.{2,80})$/i;
 const SCHOOL_SHORT = /([가-힣○◯OＯ]{1,12}(?:초등학교|중학교|고등학교|학교|교육청|교육지원청|연수원|교육원|대학교|연구소|연구회|초|중|고))(?![가-힣])/;
 const TITLE_WORD = /^(?:선생님|교사|강사|교수|연구사|장학사|장학관|박사|수석교사|교감|교장)$/;
 export function parseInstructorLine(value) {
@@ -727,17 +747,16 @@ function containsPrompt(s, promptKeys) {
   for (const pk of promptKeys) if (pk.length >= 6 && k.includes(pk)) return true;
   return false;
 }
-const GLOSS_TITLE = /(용어|개념|키워드|낱말|glossary|terms|알아\s*둘)/i;
 const GLOSS_STOP = /^(장소|일시|일자|날짜|대상|강사|발표자|프롬프트|주제|준비물|시간|링크|주소|예시|정답|해설|풀이|질문|답|답변|참고|출처|목표|목적|역할|조건|형식|출력|맥락|상황|지시|규칙|톤|분량|입력|결과|방법|준비|q|a|tip|팁|note|주의|안내|문의|연락처|이메일|전화|step|단계|\d+)$/i;
 const DEF_END = /(이다|입니다|말합니다|뜻합니다|의미합니다|말한다|뜻한다|의미한다|기술|방법|모델|도구|서비스|현상|능력|과정|것|프로그램|플랫폼|시스템|체계)\.?$/;
 
 function detectGlossary(pages, promptKeys) {
   const out = [];
   const seen = new Set();
-  const add = (term, desc, p) => {
+  const add = (term, desc, p, gPage = false) => {
     const t = normLine(term).replace(/^[-•·*\s]+/, '');
     const d = normLine(desc);
-    if (!t || !d || t.length > 30 || d.length < 6 || GLOSS_STOP.test(t) || /https?:\/\//.test(d)) return;
+    if (!t || !d || t.length > 30 || d.length < 6 || (GLOSS_STOP.test(t) && !(gPage && /^프롬프트$/.test(t))) || /https?:\/\//.test(d)) return;
     const k = textKey(t);
     if (seen.has(k)) return;
     seen.add(k);
@@ -752,11 +771,11 @@ function detectGlossary(pages, promptKeys) {
     }
     for (const x of p.paragraphs || []) {
       const s = x.text;
-      if (!s || s.length > 260 || STEP_RE.test(s) || containsPrompt(s, promptKeys)) continue;
+      if (!s || s.length > 260 || STEP_RE.test(s) || (containsPrompt(s, promptKeys) && !(gPage && /^프롬프트\s*[:：]/.test(s)))) continue;
       let m = /^([^:：\n]{1,24}?)\s*(\([^)]{1,40}\))?\s*[:：]\s*(.{6,240})$/.exec(s);
       if (m && !/\s{2,}/.test(m[1]) && m[1].split(' ').length <= 3) {
         const strong = gPage || !!m[2] || /[A-Za-z]{2,}/.test(m[1]) || DEF_END.test(m[3]);
-        if (strong && !TEMPLATE_LINE.test(s)) { add(m[1] + (m[2] ? ' ' + m[2] : ''), m[3], p); continue; }
+        if (strong && !TEMPLATE_LINE.test(s)) { add(m[1] + (m[2] ? ' ' + m[2] : ''), m[3], p, gPage); continue; }
       }
       m = /^([^,.\n]{1,24}?)(?:\(([^)]{1,40})\))?\s*(?:이란|란|이라는\s*것은|라는\s*것은)\s+(.{6,200})$/.exec(s);
       if (m && DEF_END.test(m[3])) { add(m[1] + (m[2] ? ` (${m[2]})` : ''), m[3], p); continue; }
@@ -810,12 +829,14 @@ function detectMessages(pages, promptKeys, special, stepPages) {
     if (p.kind !== 'section' && paras.length >= 1 && paras.length <= 2 && total <= 90 && !(p.tables || []).length && p.layout !== 'section') {
       for (const x of paras) add(x.text, p, 2 + (/[!！]$/.test(x.text) ? 1 : 0));
     }
-    if (!paras.length && p.title && p.title.length >= 12 && p.layout !== 'section' && !SECTION_MARK.test(p.title)) add(p.title, p, (p.titleGuessed ? 3 : 1.5) + (/[!！]$/.test(p.title) ? 1 : 0));
+    // 글 없이 제목만 있는 슬라이드의 제목. 문서(HWPX·DOCX)의 소제목은 핵심 문장이 아님(표만 있는 절의 제목 등)
+    if (!paras.length && p.kind !== 'section' && p.title && p.title.length >= 12 && p.layout !== 'section' && !SECTION_MARK.test(p.title)) add(p.title, p, (p.titleGuessed ? 3 : 1.5) + (/[!！]$/.test(p.title) ? 1 : 0));
     for (const x of paras) {
       if (MSG_CUE.test(x.text)) add(x.text.replace(/^(핵심|한\s*줄\s*(요약|정리)|오늘의\s*메시지)\s*[:：]\s*/, ''), p, 3);
       QUOTE_RE.lastIndex = 0;
       let m;
-      while ((m = QUOTE_RE.exec(x.text))) if (!isRequestLine(m[1]) && m[1].length >= 10 && m[1].length <= 80) add(m[1], p, 2);
+      // 따옴표 문장: 글이 많은 쪽(사례·이야기 속 인용)은 약한 후보(1.5)로만 — 초안의 핵심 메시지 칸에는 2점 이상만 씀
+      while ((m = QUOTE_RE.exec(x.text))) if (!isRequestLine(m[1]) && m[1].length >= 10 && m[1].length <= 80) add(m[1], p, paras.length > 2 ? 1.5 : 2);
     }
     if (CLOSING_TITLE.test(p.title || '')) { closingPages.add(`${p.file}:${p.page}`); for (const x of paras.slice(0, 3)) if (x.text.length <= 80) add(x.text, p, 2); }
   });
@@ -843,10 +864,19 @@ function detectTitle(material, pages) {
 }
 
 // ── 유형 힌트 ─────────────────────────────────────────
-const LIVE_WORD = /(컨퍼런스|콘퍼런스|포럼|박람회|페스티벌|심포지엄|축제|발표회|성과\s*공유회|에듀테크\s*데이|summit|conference|forum)/i;
+const LIVE_WORD = /(컨퍼런스|콘퍼런스|포럼|박람회|페스티벌|심포지엄|축제|발표회|설명회|공청회|연찬회|성과\s*공유회|에듀테크\s*데이|summit|conference|forum)/i;
+// 참석 인원: 표지·안내 쪽의 "참석: … 300명", "대상: 전 교직원 48명"
+const SIZE_LINE = /(?:참석|참가|대상|인원|정원|규모)\s*(?:자|인원)?\s*[:：]?[^\n]{0,40}?(\d{1,2},\d{3}|\d{2,4})\s*(?:여\s*)?명/;
+function detectSize(pages) {
+  for (const p of pages.slice(0, 3)) for (const x of linesOf(p, { withTitle: false })) {
+    const m = SIZE_LINE.exec(x.text.replace(LEAD_MARK, ''));
+    if (m) { const n = +m[1].replace(',', ''); if (n >= 5 && n <= 5000) return n; }
+  }
+  return 0;
+}
 const SESSION_WORD = /(\d{1,2})\s*(?:차시|주차|회차)/g;
 
-function archetypeHint(material, pages, practice, event, instructors, title) {
+function archetypeHint(material, pages, practice, event, instructors, title, size = 0) {
   const textAll = pages.map((p) => p.title || '').join('\n') + '\n' + title;
   const sessions = new Set();
   let m;
@@ -857,7 +887,8 @@ function archetypeHint(material, pages, practice, event, instructors, title) {
   let primary = 'story', format = 'lecture';
   const ratio = practice.ratio;
   if (sessions.size >= 3 || dates >= 3) { primary = 'course'; format = 'course'; reasons.push(`여러 차시(${Math.max(sessions.size, dates)}회)로 이어지는 자료라 과정형으로 봤어요.`); }
-  else if (LIVE_WORD.test(title) && instructors >= 2) { primary = 'live'; format = 'conference'; reasons.push('여러 연사가 나오는 행사 자료라 라이브형으로 봤어요.'); }
+  else if (LIVE_WORD.test(title) && (instructors >= 2 || size >= 100)) { primary = 'live'; format = 'conference'; reasons.push(size >= 100 ? `${size}명이 모이는 행사 자료라 행사형으로 봤어요.` : '여러 연사가 나오는 행사 자료라 라이브형으로 봤어요.'); }
+  else if (size >= 150) { primary = 'live'; format = 'conference'; reasons.push(`${size}명이 모이는 자료라 행사형으로 봤어요.`); }
   else if (ratio >= 0.45 || (practice.count >= 4 && ratio >= 0.3)) { primary = 'lab'; format = ratio >= 0.6 ? 'practice' : 'workshop'; reasons.push(`실습 쪽이 ${practice.count}개(비율 ${Math.round(ratio * 100)}%)라 실습형으로 봤어요.`); }
   else { reasons.push(`실습 쪽 비율이 ${Math.round(ratio * 100)}%라 강의(스토리)형으로 봤어요.`); }
   const mix = [];
@@ -865,6 +896,34 @@ function archetypeHint(material, pages, practice, event, instructors, title) {
   if (primary === 'story' && ratio >= 0.2) mix.push('lab');
   if (primary === 'course' && ratio >= 0.3) mix.push('lab');
   return { primary, mix, format, reason_ko: reasons.join(' '), sessions: Math.max(sessions.size, dates) || 1 };
+}
+
+// ── 차시(과정형) ──────────────────────────────────────
+const SESSION_HEAD = /^\s*(?:제\s*)?(\d{1,2})\s*(?:차시|회차|주차|일차)(?![가-힣])\s*[.:)\-–|]?\s*(.*)$/;
+function detectSessions(pages, refYear) {
+  const map = new Map();
+  for (const p of pages) for (const x of linesOf(p, { withTitle: true })) {
+    const m = SESSION_HEAD.exec(String(x.text || '').replace(LEAD_MARK, ''));
+    if (!m) continue;
+    const no = +m[1];
+    if (no < 1 || no > 40) continue;
+    const e = map.get(no) || { no, date: '', title: '', desc: '', ...ref(p) };
+    const rest = normLine(m[2]);
+    const dates = parseKoreanDates(rest, refYear);
+    if (dates.length && !e.date) e.date = dates[0].date;
+    if (x.role === 'table') {
+      // 표의 한 줄: 날짜 칸을 뺀 첫 글 칸이 주제, 나머지(강사·방식)는 설명
+      const cells = rest.split(' | ').map((c) => c.trim()).filter((c) => c && !parseKoreanDates(c, refYear).length && !parseTimeRange(c));
+      const title = cells.find((c) => /[가-힣A-Za-z]{2,}/.test(c));
+      if (title && !e.title) { e.title = truncate(title, 80); e.desc = truncate(cells.filter((c) => c !== title).join(' · '), 160); }
+    } else if (!dates.length && rest.length >= 2 && rest.length <= 60 && !e.title) e.title = rest;
+    map.set(no, e);
+  }
+  const list = [...map.values()].sort((a, b) => a.no - b.no).filter((e) => e.title);
+  // 1차시부터 이어지는 번호가 둘 이상일 때만(본문에 '3차시'가 한 번 나온 것은 차시표가 아님)
+  const run = [];
+  for (const e of list) { if (e.no === run.length + 1) run.push(e); else break; }
+  return run.length >= 2 ? run : [];
 }
 
 // ── 전체 ─────────────────────────────────────────────
@@ -905,6 +964,7 @@ export function detect(material, opts = {}) {
   const glossary = detectGlossary(pages, promptKeys);
   const stepPages = new Set(steps.map((x) => `${x.file}:${x.page}`));
   const messages = detectMessages(pages, promptKeys, special, stepPages);
+  const sessions = detectSessions(pages, refYear);
 
   const keyOf = (x) => `${x.file}:${x.page}`;
   const stepsByPage = new Set(steps.map(keyOf));
@@ -912,17 +972,20 @@ export function detect(material, opts = {}) {
   const linksByPage = new Set(links.flatMap((l) => l.pages.map((pg) => `${l.file}:${pg}`)));
   const sectionStarts = new Set(sections.map(keyOf));
   const closing = new Set(pages.slice(-2).filter((p) => CLOSING_TITLE.test(p.title || '')));
-  const content = pages.filter((p) => !special.has(p) && !sectionStarts.has(keyOf(p)) && !closing.has(p));
+  // 간지(글이 거의 없는 부 시작 슬라이드)만 본문에서 뺌. 문서는 제목 아래가 곧 본문이라 빼지 않음
+  const content = pages.filter((p) => !special.has(p) && !(sectionStarts.has(keyOf(p)) && p.kind !== 'section' && sparse(p)) && !closing.has(p));
   const practicePages = content.filter((p) => practiceScore(p, stepsByPage, promptsByPage, linksByPage) >= 3);
   const practice = {
     pages: practicePages.map(ref),
     count: practicePages.length,
     ratio: content.length ? Math.round((practicePages.length / content.length) * 100) / 100 : 0,
   };
-  const archetype = archetypeHint(material, pages, practice, event, instructor ? 1 : 0, title);
+  const size = detectSize(pages);
+  if (size) event.size = size;
+  const archetype = archetypeHint(material, pages, practice, event, instructor ? 1 : 0, title, size);
 
   return {
-    title, subtitle, event, instructor, agenda, sections, prompts, steps, links, tools, quiz, faq, glossary, messages, practice, archetype,
+    title, subtitle, event, instructor, agenda, sections, sessions, prompts, steps, links, tools, quiz, faq, glossary, messages, practice, archetype,
     fonts: detectFonts(material),
     stats: {
       pages: (material.pages || []).length,
