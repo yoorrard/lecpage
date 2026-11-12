@@ -19,6 +19,15 @@ export function str(v, max = LIMITS.text) {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
+/**
+ * 글 칸·FAQ 답의 마크다운. 소제목 줄(# …) 안의 긴 빈칸은 한 칸으로 줄임.
+ * 렌더러의 소제목 문법(md-syntax.js HEADING)이 빈칸이 길게 이어진 줄에서 길이의 세제곱으로 느려져
+ * AI 답·가져온 파일 하나로 앱 탭과 빌드가 몇 분씩 멈춤(보안 검토 2026-11b). 보이는 글자는 그대로임(HTML은 빈칸을 하나로 보임)
+ */
+export function mdStr(v, max = LIMITS.text) {
+  return str(v, max).replace(/\r\n?/g, '\n').replace(/^[^\S\n]{0,3}#[^\n]*$/gm, (line) => line.replace(/[^\S\n]{2,}/g, ' '));
+}
+
 /** 링크 허용 목록: http(s), mailto, 같은 문서 안 앵커(#...), 상대 경로(assets/...) */
 export function safeUrl(v) {
   const s = str(v, 2048);
@@ -86,13 +95,13 @@ const SECTION_FIX = {
   followup: (s) => ({ lead: str(s.lead, 300), completion: str(s.completion, 300),
     items: arr(s.items).slice(0, 12).map((i) => { const url = safeUrl(i?.url ?? i?.href); return { title: str(i?.title ?? i?.label, 80), desc: str(i?.desc, 200), url, kind: pick(i?.kind, FOLLOWUP_KINDS, followupKind(url)) }; }).filter((i) => i.title && (i.url || i.desc)) }),
   closing: (s) => ({ lead: str(s.lead, 200), text: str(s.text, 200), thanks: str(s.thanks, 200) }),
-  faq: (s) => ({ items: arr(s.items).map((i) => ({ q: str(i.q, 200), a: str(i.a, 1200) })).filter((i) => i.q && i.a) }),
+  faq: (s) => ({ items: arr(s.items).map((i) => ({ q: str(i.q, 200), a: mdStr(i.a, 1200) })).filter((i) => i.q && i.a) }),
   glossary: (s) => ({ items: arr(s.items).map((i) => ({ term: str(i.term, 60), desc: str(i.desc, 400) })).filter((i) => i.term) }),
   video: (s) => ({ items: arr(s.items).map((i) => ({ title: str(i.title, 120), url: safeUrl(i.url), thumb: safeUrl(i.thumb), length: str(i.length, 12) })).filter((i) => i.url) }),
   gallery: (s) => ({ items: arr(s.items).map((i) => ({ src: safeUrl(i.src), caption: str(i.caption, 160) })).filter((i) => i.src) }),
   reflection: (s) => ({ lead: str(s.lead, 300), prompts: strArr(s.prompts, 200).slice(0, 8) }),
   attendance: (s) => ({ lead: str(s.lead, 300) }),
-  text: (s) => ({ md: str(s.md, LIMITS.long) }),
+  text: (s) => ({ md: mdStr(s.md, LIMITS.long) }),
   // 본문 칸. 항목을 글자만 적어도 받음(절차 ["단계", …], 사례 본문만 등)
   procedure: (s) => ({ lead: str(s.lead, 300), close: str(s.close, 300), items: arr(s.items).slice(0, 20).map((i) => (i && typeof i === 'object'
     ? { title: str(i.title ?? i.step ?? i.word ?? i.name, 160), desc: str(i.desc ?? i.text ?? i.detail, 500), time: str(i.time ?? i.when, 24), who: str(i.who ?? i.owner, 40) }
