@@ -42,7 +42,12 @@ const nonLeftAll = (p) => ['center', 'right'].includes(p.variants.align); // 가
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const R = rng(20261112);
 const P = PRESETS.map((p) => ({ id: p.id, tags: tagsOf(p), p }));
-const plan = P.map((x) => Object.fromEntries(TYPES.map((t) => [t, L.variantIds(t).slice().sort((a, b) => fit(x.tags, t, b) - fit(x.tags, t, a))[0]]))); // 처음: 분위기에 가장 맞는 변형
+// 고정: 예시 두 벌의 프리셋은 연수의 성격에 맞춰 직접 정함(마음 연수는 선언문·무대·질문 색인·그래픽 마무리, 데이터 연수는 차분한 줄·시간 축·낱말 그물·서명 카드)
+const PIN = {
+  'ripple-center': { goals: 'manifesto', message: 'stage', steps5: 'wheel', faq: 'index', instructor: 'portrait', closing: 'poster' },
+  'minute-map': { goals: 'ledger', schedule: 'track', glossary: 'web', quiz: 'cards', closing: 'card' },
+};
+const plan = P.map((x) => Object.fromEntries(TYPES.map((t) => [t, PIN[x.id]?.[t] || L.variantIds(t).slice().sort((a, b) => fit(x.tags, t, b) - fit(x.tags, t, a))[0]]))); // 처음: 분위기에 가장 맞는 변형
 
 // 빠른 셈: 프리셋 쌍마다 같은 배치 수(설계도별), 프리셋마다 그래픽·글만 수를 들고 다니며 바꾼 자리만 고침
 const LK = Object.keys(lists), half = Object.fromEntries(LK.map((k) => [k, Math.floor(lists[k].length / 2)]));
@@ -84,7 +89,7 @@ function delta(i, t, nv, apply) {
 let cur = total(), T = 3;
 for (let it = 0; it < 3000000 && (cur.bad > 0 || it < 600000); it++) {
   const i = Math.floor(R() * P.length), t = TYPES[Math.floor(R() * TYPES.length)], ids = L.variantIds(t), nv = ids[Math.floor(R() * ids.length)];
-  if (nv === plan[i][t]) continue;
+  if (nv === plan[i][t] || PIN[P[i].id]?.[t]) continue;
   const { db, dp } = delta(i, t, nv, false), d = db * 40 - dp;
   if (d <= 0 || R() < Math.exp(-d / T)) { delta(i, t, nv, true); cur = { bad: cur.bad + db, pref: cur.pref + dp }; }
   T = Math.max(0.05, T * 0.99998);
@@ -93,7 +98,7 @@ for (let it = 0; it < 3000000 && (cur.bad > 0 || it < 600000); it++) {
 // 다듬기: 위반이 없는 채로 어울림만 올림(위반을 늘리는 수는 받지 않음)
 for (let it = 0, T2 = 1.5; it < 800000 && cur.bad === 0; it++) {
   const i = Math.floor(R() * P.length), t = TYPES[Math.floor(R() * TYPES.length)], ids = L.variantIds(t), nv = ids[Math.floor(R() * ids.length)];
-  if (nv === plan[i][t]) continue;
+  if (nv === plan[i][t] || PIN[P[i].id]?.[t]) continue;
   const { db, dp } = delta(i, t, nv, false);
   if (db > 0) continue;
   if (dp >= 0 || R() < Math.exp(dp / T2)) { delta(i, t, nv, true); cur = { bad: cur.bad + db, pref: cur.pref + dp }; }
