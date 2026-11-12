@@ -1,6 +1,7 @@
 // 설계도 검증·자동 보정. AI나 사람이 만든 설계도를 안전하고 일관된 모양으로 바꿉니다.
 // 원칙: 고칠 수 있으면 고치고(warnings), 진행할 수 없을 때만 errors.
-import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS } from './schema/sections.js';
+import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS, FLOWS } from './schema/sections.js';
+import { mdIssues } from './md-syntax.js';
 import { PRESET_IDS, getPreset } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
@@ -90,6 +91,19 @@ const SECTION_FIX = {
   reflection: (s) => ({ lead: str(s.lead, 300), prompts: strArr(s.prompts, 200).slice(0, 8) }),
   attendance: (s) => ({ lead: str(s.lead, 300) }),
   text: (s) => ({ md: str(s.md, LIMITS.long) }),
+  // 본문 칸. 항목을 글자만 적어도 받음(절차 ["단계", …], 사례 본문만 등)
+  procedure: (s) => ({ lead: str(s.lead, 300), close: str(s.close, 300), items: arr(s.items).slice(0, 20).map((i) => (i && typeof i === 'object'
+    ? { title: str(i.title ?? i.step ?? i.word ?? i.name, 160), desc: str(i.desc ?? i.text ?? i.detail, 500), time: str(i.time ?? i.when, 24), who: str(i.who ?? i.owner, 40) }
+    : { title: str(i, 160), desc: '', time: '', who: '' })).filter((i) => i.title) }),
+  cases: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).slice(0, 12).map((i) => (i && typeof i === 'object'
+    ? { title: str(i.title ?? i.name, 100), body: str(i.body ?? i.text ?? i.desc, 1200), quote: str(i.quote, 300), cite: str(i.cite ?? i.by, 60) }
+    : { title: '', body: str(i, 1200), quote: '', cite: '' })).filter((i) => i.title || i.body || i.quote) }),
+  discuss: (s) => ({ lead: str(s.lead, 300), items: arr(s.items ?? s.questions).map((x) => str(x && typeof x === 'object' ? (x.q ?? x.question ?? x.text ?? x.title) : x, 240)).filter(Boolean).slice(0, 12), rules: strArr(s.rules, 200).slice(0, 8), note: str(s.note, 300) }),
+  table: (s) => {
+    const row = (r) => arr(Array.isArray(r) ? r : r && typeof r === 'object' ? Object.values(r) : [r]).slice(0, 8).map((c) => str(c, 400));
+    const rows = arr(s.rows).slice(0, 60).map(row).filter((r) => r.some(Boolean));
+    return { lead: str(s.lead, 300), head: arr(s.head ?? s.columns).slice(0, 8).map((c) => str(c, 60)), rows, note: str(s.note ?? s.caption, 400) };
+  },
 };
 
 export function validate(input) {
@@ -179,6 +193,11 @@ export function validate(input) {
     const out = { id, type, title: str(s.title, LIMITS.title), nav: s.nav === undefined ? def.nav : str(s.nav, 12), tone: pick(s.tone, ['night', 'dawn', 'day', ''], ''), lead: fixed.lead ?? str(s.lead, 300), ...fixed, source: source(s.source) };
     if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type) && !(type === 'followup' && out.completion)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐어요.` }); return; }
     if (def.live && live.provider === 'none' && type !== 'board') warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션은 참여 기능을 연결해야 동작해요. 연결 전에는 안내 문구만 보여요.` });
+    // 글 칸·FAQ 답: 그리지 못하는 문법은 알림(글자는 그대로 보임)
+    for (const [text, where] of type === 'text' ? [[out.md, 'md']] : type === 'faq' ? out.items.map((x, k) => [x.a, `items[${k}].a`]) : []) {
+      for (const it of mdIssues(text)) warnings.push({ path: `sections[${i}].${where}`, kind: 'md', message_ko: `"${out.title || def.label}": ${it.message_ko}` });
+    }
+    if (type === 'text' && !out.md) { warnings.push({ path: `sections[${i}]`, message_ko: `"${out.title || def.label}" 섹션에 내용이 없어 뺐어요.` }); return; }
     sections.push(out);
   });
   if (!sections.length) errors.push({ path: 'sections', message_ko: '섹션이 하나도 없어요.' });

@@ -38,9 +38,13 @@ const TEMPLATES = {
   reflection: () => ({ title: '나의 기록', prompts: ['오늘 가장 기억에 남는 것', '다음 주 수업에서 해 볼 한 가지'] }),
   attendance: () => ({ title: '출석 확인' }),
   text: () => ({ title: '', md: '' }),
+  procedure: () => ({ title: '절차', items: [{ title: '', desc: '', time: '', who: '' }] }),
+  cases: () => ({ title: '사례', items: [{ title: '', body: '', quote: '', cite: '' }] }),
+  discuss: () => ({ title: '함께 나눌 질문', items: [''], rules: [] }),
+  table: () => ({ title: '', head: ['', ''], rows: [['', '']] }),
 };
 
-const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text'];
+const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text', 'procedure', 'table', 'cases', 'discuss'];
 export const isAdvanced = () => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } };
 
 /** 내용 탭: 사이트를 이루는 섹션 목록과 섹션별 고치기 */

@@ -2,6 +2,7 @@
 import { esc, br, href, host, md, fx, pad2, icon, koDate } from './html.js';
 import { renderHero, heroComposition, dateParts } from './hero.js';
 import { getPreset } from '../design/presets.js';
+import { contentRenderers, CONTENT_LAYOUTS } from './content.js'; // 본문 칸(절차·사례·질문·표·글)
 
 /** 실습·질문·교재처럼 따라 하며 쓰는 칸: 움직임은 차분 단계(1)까지만 */
 export const CALM_TYPES = ['stations', 'qa', 'deck', 'board', 'poll', 'prompts'];
@@ -48,6 +49,7 @@ export const LAYOUTS = {
   materials: 'files', instructor: 'profile', speakers: 'people', sessions: 'course', survey: 'form', followup: 'files', closing: 'finale',
   faq: 'accordion', glossary: 'index', video: 'media', gallery: 'media', reflection: 'journal', text: 'prose',
 };
+Object.assign(LAYOUTS, CONTENT_LAYOUTS);
 const ROWS = ['schedule', 'faq', 'materials', 'followup', 'sessions'];
 /** 옅은 바탕을 까는 칸(색 흐름): 차례·교재·실습·강사·용어·연사 */
 const TINTED = ['outline', 'deck', 'stations', 'instructor', 'glossary', 'speakers'];
@@ -482,7 +484,7 @@ function reflection(s, ctx) {
 }
 function text(s, ctx) { return wrap(s, ctx, head(s, ctx) + `<div class="lp-prose">${md(s.md)}</div>`); }
 
-export const RENDERERS = { hero, goals, glance, message, steps5, outline, schedule, readiness, deck, stations, tools, prompts, qa, board, poll, quiz, materials, instructor, speakers, sessions, survey, followup, closing, faq, glossary, video, gallery, reflection, attendance, text };
+export const RENDERERS = { hero, goals, glance, message, steps5, outline, schedule, readiness, deck, stations, tools, prompts, qa, board, poll, quiz, materials, instructor, speakers, sessions, survey, followup, closing, faq, glossary, video, gallery, reflection, attendance, text, ...contentRenderers({ wrap, head }) };
 
 export function renderSection(s, ctx) {
   const fn = RENDERERS[s.type];
