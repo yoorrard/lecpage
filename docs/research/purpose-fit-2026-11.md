@@ -505,4 +505,25 @@ AI를 쓰는 사람이라면 직군과 상관없이 체감하는 것을 앞에 �
 - **AI 프롬프트** `prompt/bridge.js`: 같은 흐름·신호 표를 "컨셉 → 흐름 → 칸" 순서로, 새 칸 필드와 글 칸 문법, 교재 보기는 엔진이 채움, 규칙 9·11·12, 초안 군살 빼기, 프리셋 6종.
 - **P0-3**: AI 답 뒤에 교재 보기의 쪽 그림·쪽 글·쪽별 도구·교재 글꼴·기관 색을 새 초안에서 이어 줌(`intake.js keepDraftParts`, 앱 `ai-job.js`·`AiPanel.jsx`).
 - **P1-7**: 패치·정보 고치기 뒤 첫 화면의 일시·장소·강사 줄도 함께 바뀜(`hero-meta.js`). 초안은 첫 화면에 그 줄을 따로 적지 않음.
-- 남은 것: 아래 12.2에 이어 적어요.
+- CLI `structure`(흐름·이유·칸 순서·권하는 기능·싣지 못한 것, `--add-leftovers`), `brief`의 구성·싣지 못한 것·교재에서 찾은 주소. 앱 1단계 "교재에서 찾은 것"·찾은 주소 확인·PPT 쪽 그림 안내, 2단계 "이렇게 구성했어요"·권하는 기능 칩·싣지 못한 것 넣기.
+- P1-1(초안이 빈 설문·받을 수 없는 자료·제목 되풀이 마무리를 만들지 않음), P1-2, P1-3(도구 링크는 교재 주소만), P1-4, P1-5, P1-9, P1-10, P2-1·3·5·8·9·10·11.
+
+### 12.2 잰 값 — 2026-11-12
+
+교재 5종을 지금 코드로 다시 읽고(앱과 같은 pdf.js 길) 만들었어요. "전"은 main `e7274b6`(본문 칸만 있고 구성은 4유형 고정). 재는 법은 §3과 같아요(`scripts/coverage.mjs`, 교재 보기 제외 "칸에 있음").
+
+| 교재 | AI 없이 전 → 후 | AI 경로 전(옛 프롬프트, §3.1) → 후(새 프롬프트) | 흐름 | 칸 순서(AI 없이, 후) |
+|---|---|---|---|---|
+| m1 실습 | 84% → **98%** | 97% → 98% | 따라 하기 | hero>goals>readiness>steps5>outline>schedule>stations>table>prompts>tools>deck>quiz>glossary>faq>materials>followup>instructor>closing |
+| m2 절차 | 50% → **100%** | 91% → 100% | 절차·기준 | hero>goals>glance>procedure>table>table>faq>text>instructor>closing |
+| m3 성찰 | 23% → **100%** | 97% → 100% | 사례·토론 | hero>message>text>cases>table>discuss>reflection>materials>followup>instructor>closing |
+| m4 과정 | 55% → **95%** | 95% → 97% | 과정 | hero>goals>glance>sessions>faq>deck>materials>followup |
+| m5 설명회 | 51% → **95%** | 89% → 97% | 행사 | hero>glance>schedule>speakers>glance>table>outline>faq>text>deck>materials>closing |
+
+- 남은 빠짐: m1 설문 주소, m5 중계 주소(둘 다 강사 확인 뒤 싣는 값 → 앱 1단계에서 한 번 눌러 실음), m4 차시별 강사·날짜 글자(PDF 표가 풀려 교재 보기에만, P1-6), m5 발표자 노트 "배부 자료 3쪽"(진행 메모로 봄).
+- AI 경로는 새 프롬프트만 보고 제가 답을 썼어요(초안을 출발점으로 고쳐 쓰라는 프롬프트대로, 실제 AI 호출 없음). 답을 앱과 같은 순서(`extractJson` → `keepDraftParts` → `applyInfo`)로 받으니 교재 보기 쪽 그림·쪽 글이 모두 남았어요(m1 20쪽, m5 11쪽).
+- 프롬프트(앱 `makePrompt`와 같은 길, 어림 토큰): m1 10.1천 → 9.8천, m2 6.6천 → 7.1천, m3 6.4천 → 7.1천, m4 6.4천 → 6.8천, m5 7.0천 → 7.4천. 고정 부분은 4.0천 → 4.3~4.4천(흐름·신호 표·새 칸·글 칸 문법을 더하고 프리셋을 21종 → 6종으로 줄임). 초안 JSON 비중은 45·27·26·28·33% → 36·21·21·21·24%(문서 교재는 초안에 본문이 실려 늘었는데도 비중은 줄어듦).
+- `site-score.mjs`(AI 없이·AI 경로 10곳): 휴대폰 360 가로 넘침 0, 스크립트 오류 0. axe는 9곳 0, m4 AI 없이 1곳(color-contrast 2노드: `cover-sheet` 프리셋의 교재 보기 표지 카드 윗줄 #f3e1da/#b3421a 4.47:1 — main에도 있음, 디자인 쪽 `runtime/lecpage.css`의 `.lp-slide-text[data-kind="cover"]`).
+- `npm test` 263개 중 260 통과·3 건너뜀(원래 건너뛰던 것). `npm run examples`·앱 빌드 통과. 앱 흐름(Playwright, m2·m3·m4·m5): 1단계 찾은 것·주소 확인, 2단계 구성 알림·칩 켜기·싣지 못한 것 넣기, 새 칸 4종 편집기, 가로 넘침 0·스크립트 오류 0.
+
+남은 것: P1-6(PDF 표 복원, PyMuPDF 띄어쓰기), P2-2·P2-4(디자인 쪽), P2-6·P2-7, CLI로 손으로 만든 설계도의 빈 설문 칸 숨기기(렌더 쪽), 같은 교재로 AI를 여러 번 돌렸을 때의 차이(실제 호출이 필요).
