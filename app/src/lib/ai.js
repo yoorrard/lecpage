@@ -3,9 +3,10 @@
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
 
+// OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
 export const PROVIDERS = {
-  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/usage', note: '무료 등급은 넣은 내용이 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, prefix: 'AQ.… 또는 AIza…', images: true },
-  openrouter: { name: 'OpenRouter', short: 'OpenRouter', free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, prefix: 'sk-or-v1-…', images: true },
+  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/usage', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, prefix: 'AQ.… 또는 AIza…', images: true },
+  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, prefix: 'sk-or-v1-…', images: true },
   openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 크레딧에서 나가요. ChatGPT 구독과는 별개예요.', modelHint: /^gpt-/i, prefix: 'sk-proj-…', images: true },
   anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 크레딧에서 나가요. Claude 구독(Pro·Max)과는 별개예요.', modelHint: /sonnet/i, prefix: 'sk-ant-…', images: true },
 };
@@ -126,23 +127,23 @@ async function send(provider, url, init) {
   return r.json();
 }
 
-/** 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지) · paste(키 없이, 마지막 수단) */
+/** 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지) · paste(쓰던 챗봇으로, 마지막 수단) */
 export function explainError(err, provider) {
   const P = PROVIDERS[provider] || {};
   const k = err?.kind || (err?.name === 'TimeoutError' ? 'busy' : 'other');
   const T = {
     'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지운 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 붙여 넣어 주세요.`, ['key']],
-    forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 AI Studio를 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
+    forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
     region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     billing: ['크레딧이 없어요.', provider === 'openrouter' ? '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 Gemini 키(무료)를 연결해 주세요.' : `${P.short || ''} 결제 페이지에서 크레딧을 충전해야 해요(최소 5달러). 결제 없이 하려면 Gemini 키(무료)를 연결해 주세요.`, provider === 'openrouter' ? ['connect'] : ['billing', 'connect']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? '한국 시간 오후 5시쯤(태평양 시간 자정) 다시 채워지고' : '내일 다시 되고'}, 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? '한국 시간 오후 5시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     quota: ['요청이 너무 많거나 무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', []],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
     refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI를 연결해 다시 해 보세요.', ['connect']],
     'too-long': ['교재가 길어 한 번에 보내지 못했어요.', "'문구만 다듬기'로 하면 훨씬 짧게 보내요.", []],
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', []],
-    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망에서 AI 사이트가 막혀 있을 수 있어요. 그러면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
+    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망이 AI 사이트를 막았다면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
     truncated: ['답이 중간에 끊겼어요.', "'문구만 다듬기'로 하면 답이 짧아 끊기지 않아요.", []],
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요. 무료 모델이면 다른 모델이 대신 답할 수 있어요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
