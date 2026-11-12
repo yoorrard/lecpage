@@ -14,9 +14,27 @@ export function tableMd(head, rows) {
 
 const BOX_TITLE = /^\[([^\]]{2,30})\]\s*(.*)$/;
 const NUM_MARK = /^\(?\d{1,2}\s*[.)]\s+|^[①-⑳]\s*/;
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * 강사 확인이 필요한 주소(skip: 교재에서 찾은 회의·중계·설문 주소)를 글자로만 남김.
+ * 글 칸·표 칸은 글 속 https:// 주소를 눌러 가는 링크로 그리므로(render/markdown.js) `…`(코드)로 감싸 링크가 되지 않게 함.
+ * 강사가 1단계에서 확인하면 그 주소는 입장 단추·설문 칸으로 실림(보안 검토 2026-11b)
+ */
+export function keepUrlText(text, skip) {
+  const urls = [...(skip || [])].filter((x) => typeof x === 'string' && /^https?:\/\//i.test(x)).sort((a, b) => b.length - a.length);
+  if (!urls.length || !text) return text;
+  const s = String(text);
+  if (!urls.some((x) => s.includes(x))) return s;
+  // 그 주소로 시작하는 글자 덩어리를 통째로(뒤의 문장부호는 밖에 둠)
+  return s.replace(new RegExp(`(${urls.map(reEsc).join('|')})([^\\s<>"'）)\`]*)`, 'g'), (m, url, rest) => {
+    let end = rest.length;
+    while (end > 0 && '.,!?:;'.includes(rest[end - 1])) end--;
+    return `\`${url}${rest.slice(0, end)}\`${rest.slice(end)}`;
+  });
+}
 /**
  * 절의 문단·표 → 글 칸의 마크다운. 번호·머리표 문단은 목록, 글상자는 강조 상자(예시문은 복사 버튼), 각주는 ※ 줄.
- * 링크는 표시 글자를 눌러 가게 바꿈. skip에 든 주소(강사 확인이 필요한 중계·설문 주소)는 글자만 둠
+ * 링크는 표시 글자를 눌러 가게 바꿈. skip에 든 주소(강사 확인이 필요한 중계·설문 주소)는 글자만 둠(keepUrlText)
  */
 export function unitToMd(u, { skip = new Set(), only = null } = {}) {
   const links = (u.links || []).filter((l) => l.url && l.label && l.label.length >= 2 && !skip.has(l.url) && !/^https?:/i.test(l.label));
@@ -50,7 +68,7 @@ export function unitToMd(u, { skip = new Set(), only = null } = {}) {
     out.push(linkify(t.replace(/ \| /g, ' · ')).replace(/^[#>|]+\s*/, '')); // 줄 머리의 #, >, | 는 문법으로 읽히지 않게 뗌
   }
   flushBox(); flushList();
-  return out.join('\n\n').trim();
+  return keepUrlText(out.join('\n\n').trim(), skip);
 }
 
 /**
@@ -61,6 +79,7 @@ export function composeBody(material, d, { skipUrls = new Set() } = {}) {
   const units = classifyUnits(material, d);
   const entries = []; const seenSlot = new Set(); let prep = []; let lastDiscuss = null;
   const msgKeys = new Set((d.messages || []).map((m) => textKey(m.text)));
+  const cells = (rows) => rows.map((r) => r.map((x) => keepUrlText(x, skipUrls))); // 표 칸도 글 칸처럼 주소를 링크로 그림
   const push = (c, section) => entries.push({ section: { ...section, source: { file: c.unit.file, pages: c.unit.pages } }, page: c.unit.page, file: c.unit.file, doc: !!c.unit.doc });
   for (const c of units) {
     const u = c.unit;
@@ -77,15 +96,15 @@ export function composeBody(material, d, { skipUrls = new Set() } = {}) {
       push(c, { type: 'procedure', title: c.title || '절차', items: c.items, close: close.length <= 300 ? close : '' });
       if (close.length > 300) push(c, { type: 'text', title: '', md: unitToMd(u, { skip: skipUrls, only: (x) => !x.num && !/^\(?\d{1,2}\s*[.)]\s+/.test(normLine(x.text)) }) });
     } else if (c.kind === 'figures') push(c, { type: 'glance', title: c.title, items: c.items.map((f) => ({ value: f.value, label: f.label, note: f.note })) });
-    else if (c.kind === 'facts') push(c, { type: 'table', title: c.title, head: [], rows: c.rows, _facts: true });
+    else if (c.kind === 'facts') push(c, { type: 'table', title: c.title, head: [], rows: cells(c.rows), _facts: true });
     else if (c.kind === 'table') {
       const lines = (c.lines || []).filter(Boolean);
       if (lines.length > 1) push(c, { type: 'text', title: c.title, md: unitToMd(u, { skip: skipUrls }) });
-      c.tables.forEach((t, i) => push(c, { type: 'table', title: i === 0 && lines.length <= 1 ? c.title : '', lead: i === 0 && lines.length === 1 ? truncate(lines[0], 300) : '', head: t.head, rows: t.rows, _use: t.use }));
+      c.tables.forEach((t, i) => push(c, { type: 'table', title: i === 0 && lines.length <= 1 ? c.title : '', lead: i === 0 && lines.length === 1 ? truncate(lines[0], 300) : '', head: t.head, rows: cells(t.rows), _use: t.use }));
     } else if (c.kind === 'keypoints') push(c, { type: 'steps5', title: c.title, items: c.items.map((i) => ({ word: truncate(i.word, 20), desc: truncate(i.desc, 120) })), close: c.close || '' });
     else if (c.kind === 'text') { const md = unitToMd(u, { skip: skipUrls }); if (md) push(c, { type: 'text', title: c.title, md: truncate(md, 6000) }); }
     // 절차·사례·질문 절에 함께 있던 표도 버리지 않고 바로 뒤에 표 칸으로
-    if (c.kind !== 'table') for (const t of (u.tables || []).map(tableData).filter(Boolean)) push(c, { type: 'table', title: '', head: t.head, rows: t.rows, _use: t.use });
+    if (c.kind !== 'table') for (const t of (u.tables || []).map(tableData).filter(Boolean)) push(c, { type: 'table', title: '', head: t.head, rows: cells(t.rows), _use: t.use });
   }
   return { entries, prep };
 }

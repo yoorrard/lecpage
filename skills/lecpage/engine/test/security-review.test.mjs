@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import { zipSync, strToU8 } from '../vendor/fflate.js';
 import * as E from '../src/index.js';
 import { mdStr } from '../src/validate.js';
+import { keepUrlText } from '../src/ingest/compose.js';
 import { ingestFile, ingestText, materialToDraft } from '../src/ingest/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
 
@@ -39,4 +40,36 @@ test('교재 읽기: 띄어쓰기 없는 아주 긴 낱말에서 멈추지 않�
   // 찾는 결과는 그대로
   const m = ingestText('# AI 수업 연수\n\n서울특별시교육청\n\n강사 소개\n\n홍길동\n\n가온초등학교 교사\n\n메일: gil.dong+lec@gaon.example.kr', { today: '2026-11-12' });
   assert.equal(m.detected.event.organizer, '서울특별시교육청');
+});
+
+const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+const wp = (t, style = '') => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}<w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+const docx = (paras, extra = {}) => zipSync({
+  '[Content_Types].xml': strToU8('<Types/>'),
+  'word/document.xml': strToU8(`<w:document ${W}><w:body>${paras.join('')}</w:body></w:document>`),
+  'word/styles.xml': strToU8(`<w:styles ${W}><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style></w:styles>`),
+  ...extra,
+});
+
+test('교재에서 찾은 회의·설문 주소: 강사가 확인하기 전에는 초안 사이트에서 링크가 되지 않음(글자는 남음)', async () => {
+  const ZOOM = 'https://zoom.us/j/9876543210?pwd=abc', FORM = 'https://forms.gle/AbCdEfGhIjKlMn';
+  const m = await ingestFile('a.docx', docx([
+    wp('학교폭력 사안 처리 연수', 'Heading1'), wp('일시: 2026. 12. 10.(목) 15:30~17:00'),
+    wp('1. 연수 안내', 'Heading1'), wp('온라인으로 함께하실 분은 아래 주소로 들어오세요.'), wp(`줌 입장: ${ZOOM}.`), wp(`만족도 조사: ${FORM}`),
+    wp('2. 처리 절차', 'Heading1'), wp('사안을 알게 되면 바로 보고합니다. 서식은 https://example.org/form 에 있습니다.'),
+    wp('3. 문의', 'Heading1'), wp('문의는 교무실로 합니다.'),
+  ]), { today: '2026-11-12' });
+  assert.deepEqual([m.detected.addresses.join[0]?.url, m.detected.addresses.survey[0]?.url], [ZOOM, FORM]);
+  const draft = materialToDraft(m, E.draftInfo({ title: '연수', today: '2026-11-12' }, false));
+  assert.equal(draft.meta.joinUrl, '');
+  const html = E.build(draft, { runtime: nodeRuntime() }).files['index.html'];
+  for (const host of ['zoom.us', 'forms.gle']) {
+    assert.ok(html.includes(host), `${host} 글자는 남음`);
+    assert.ok(!new RegExp(`href="[^"]*${host.replace('.', '\\.')}`).test(html), `${host}로 가는 링크 없음`);
+  }
+  assert.match(html, /href="https:\/\/example\.org\/form"/, '그 밖의 교재 주소는 그대로 링크');
+  // 단위: 주소로 시작하는 덩어리를 감싸고 문장부호는 밖에 둠, 다른 주소는 그대로
+  const skip = new Set([ZOOM]);
+  assert.equal(keepUrlText(`입장: ${ZOOM}. 또는 ${ZOOM}&x=1 / https://a.example`, skip), `입장: \`${ZOOM}\`. 또는 \`${ZOOM}&x=1\` / https://a.example`);
+  assert.equal(keepUrlText('주소 없음', skip), '주소 없음');
 });
