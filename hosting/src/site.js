@@ -24,7 +24,7 @@ import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
 import { normCode } from './live/host.js';
 import { PagesClient, deploySite } from './pages-api.js';
 import { pagesHash, base64Parts } from './blake3.js';
-import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, NOTICE_HEADERS, contentTypeOf, rawExt } from './pages-site.js';
+import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, NOTICE_HEADERS, contentTypeOf, rawExt, fontHashed, fontsHashed } from './pages-site.js';
 
 /** blob 한 줄의 크기(DO SQLite는 한 줄 2MB까지) */
 export const CHUNK = 1024 * 1024;
@@ -525,7 +525,7 @@ export class Site extends DurableObject {
     const te = new TextEncoder();
     add('robots.txt', te.encode(ROBOTS));
     if (!man.files.has('404.html')) add('404.html', te.encode(noFileHtml()));
-    const headers = headersFile(paths, { scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
+    const headers = headersFile(paths, { scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [], fontsHashed: fontsHashed(man.list) });
     const redirects = redirectsFile(media, `${self}/s/${id}/`);
     const pc = this.pc();
     const { deployment, lost } = await this.pagesCall(() => deploySite(pc, { branch: branchOf(id), manifest, extra, headers, redirects, message: `lecpage ${id}` }));
@@ -744,7 +744,7 @@ export class Site extends DurableObject {
     }
     const tag = type.kind === 'html' ? `${String(meta.current).slice(0, 8)}${notices.length ? `.${notices.map((n) => n.id).join('.')}` : ''}` : '';
     const v = url.searchParams.get('v') || '';
-    const headers = fileHeaders(name, type, sha, { tag, immutable: status === 200 && v.length >= 8 && sha.startsWith(v), scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
+    const headers = fileHeaders(name, type, sha, { tag, immutable: status === 200 && ((v.length >= 8 && sha.startsWith(v)) || fontHashed(name, sha)), scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
     if (status === 200 && etagMatches(request.headers.get('if-none-match'), headers.etag)) {
       delete headers['content-type'];
       return new Response(null, { status: 304, headers });

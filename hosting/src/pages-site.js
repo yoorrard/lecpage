@@ -4,7 +4,7 @@
 //  - 응답 머리글은 서버가 만든 _headers로만(올라온 _headers는 쓰지 않음), 형식은 확장자 표(paths.js)로만
 //  - 영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고 Worker가 내보냄: Pages는 Range 요청에 206을 주지 않아 iPhone Safari에서 영상이 안 열릴 수 있음
 //    → _redirects로 Worker 주소(/s/<id>/…)로 넘김
-import { htmlCsp, SVG_CSP, NO_FRAME_PAGES, BASE_HEADERS } from './csp.js';
+import { htmlCsp, SVG_CSP, NO_FRAME_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
 import { TYPES, extOf } from './paths.js';
 import { pageHtml } from './pages.js';
 
@@ -51,9 +51,9 @@ Disallow: /
 /**
  * 사이트의 _headers. 사이트에 실제로 있는 확장자(대소문자 그대로)마다 규칙을 만듦(100개 한도 안).
  * @param {string[]} paths 사이트 안 경로(Pages에 올리는 것)
- * @param {{ scripts?: string[] }} [o] htmlCsp에 더할 스크립트 주소
+ * @param {{ scripts?: string[], fontsHashed?: boolean }} [o] htmlCsp에 더할 스크립트 주소, fontsHashed: assets/fonts/의 파일 이름이 모두 내용 해시(fontsHashed())
  */
-export function headersFile(paths, { scripts = [] } = {}) {
+export function headersFile(paths, { scripts = [], fontsHashed = false } = {}) {
   const lines = [];
   const rule = (pattern, hs) => { lines.push(pattern); for (const h of hs) lines.push(`  ${h}`); };
   rule('/*', [
@@ -75,6 +75,8 @@ export function headersFile(paths, { scripts = [] } = {}) {
     if (t.download) hs.push('Content-Disposition: attachment');
     if (hs.length && /^[A-Za-z0-9]+$/.test(e)) rule(`/*.${e}`, hs);
   }
+  // 엔진이 담은 글꼴은 이름이 내용 해시(SHA-256 앞 16자리)라 1년 캐시. 이름과 내용이 맞을 때만(site.js가 확인)
+  if (fontsHashed) rule('/assets/fonts/*', [`Cache-Control: ${IMMUTABLE}`]);
   // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
   for (const f of [...NO_FRAME_PAGES].sort()) {
     const bare = f.replace(/\.html$/, '');
@@ -82,6 +84,11 @@ export function headersFile(paths, { scripts = [] } = {}) {
   }
   return `${lines.join('\n')}\n`;
 }
+
+/** 엔진이 담은 글꼴 파일(assets/fonts/<내용 SHA-256 앞 16자리>.woff2 등)이고 이름의 해시가 실제 내용의 SHA-256과 맞는지 */
+export const fontHashed = (path, sha) => { const m = /^assets\/fonts\/([0-9a-f]{16})\.(woff2|woff|ttf|otf)$/.exec(path); return !!m && String(sha).startsWith(m[1]); };
+/** [경로, sha256][] 가운데 글꼴 파일이 있고 모두 이름이 내용 해시면 true */
+export const fontsHashed = (list) => { const fs = list.filter(([p]) => p.startsWith('assets/fonts/')); return fs.length > 0 && fs.every(([p, sha]) => fontHashed(p, sha)); };
 
 /** 경로를 주소 모양으로(빗금은 그대로, 나머지는 퍼센트 인코딩) */
 const encPath = (p) => p.split('/').map(encodeURIComponent).join('/');

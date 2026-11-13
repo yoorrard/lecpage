@@ -4,10 +4,12 @@ const GF = (q) => `https://fonts.googleapis.com/css2?${q}&display=swap`;
 const NV = 'https://hangeul.pstatic.net/hangeul_static/webfont';
 const NN = 'https://cdn.jsdelivr.net/gh/projectnoonnu';                         // 눈누 사본(태그 고정)
 const A2Z = `${NN}/2601-6@1.0/%EC%97%90%EC%9D%B4%ED%88%AC%EC%A7%80%EC%B2%B4`;  // '에이투지체'
+const KF = 'https://cdn.jsdelivr.net/npm/@kfonts/nanum-square@0.2.0';            // 나눔스퀘어 woff2(버전 고정)
 const KO_SANS = "'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif";
 // 원칙(2026-11 글꼴 조사, docs/research/fonts-2026-11.md): 한글 2종(제목·본문) + 라틴 1종, 필요한 글자만.
 //  - css: 글자 묶음을 나눠 받는(unicode-range) 스타일시트를 먼저 고릅니다. 쓰인 글자·굵기만 내려받습니다.
 //  - face: 나눠 받기가 없는 글꼴. fontAssets()가 역할에 맞는 굵기만(글꼴당 최대 2개) @font-face로 만듭니다.
+//    alt: 같은 글꼴(윤곽·너비가 같음을 확인)의 woff. 쪽에는 쓰지 않고, 글꼴 함께 담기가 brotli를 못 푸는 곳(앱)에서 글자를 줄일 때만 읽음
 //  - variable: 굵기가 이어지는 가변 글꼴(움직이는 글자 굵기 효과에 씀)
 
 export const FONTS = {
@@ -40,9 +42,9 @@ export const FONTS = {
   maruburi: {
     family: 'MaruBuri', label: '마루 부리', kind: 'serif', license: 'OFL-1.1(네이버 마루 부리)',
     face: [
-      { weight: 400, url: `${NV}/MaruBuri/MaruBuri-Regular.woff2` },
-      { weight: 600, url: `${NV}/MaruBuri/MaruBuri-SemiBold.woff2` },
-      { weight: 700, url: `${NV}/MaruBuri/MaruBuri-Bold.woff2` },
+      { weight: 400, url: `${NV}/MaruBuri/MaruBuri-Regular.woff2`, alt: `${NV}/MaruBuri/MaruBuri-Regular.woff` },
+      { weight: 600, url: `${NV}/MaruBuri/MaruBuri-SemiBold.woff2`, alt: `${NV}/MaruBuri/MaruBuri-SemiBold.woff` },
+      { weight: 700, url: `${NV}/MaruBuri/MaruBuri-Bold.woff2`, alt: `${NV}/MaruBuri/MaruBuri-Bold.woff` },
     ],
     fallback: "'Noto Serif KR', 'AppleMyungjo', 'Batang', serif",
   },
@@ -51,30 +53,30 @@ export const FONTS = {
   nanumMyeongjo: { family: 'Nanum Myeongjo', label: '나눔명조', kind: 'serif', license: 'OFL-1.1', css: GF('family=Nanum+Myeongjo:wght@400;700;800'), fallback: "'Noto Serif KR', 'AppleMyungjo', serif" },
   nanumSquare: {
     family: 'NanumSquare', label: '나눔스퀘어', kind: 'sans', license: 'OFL-1.1(네이버 나눔스퀘어)',
-    face: [
-      { weight: 400, url: `${NV}/NanumSquare/NanumSquareR.woff` },
-      { weight: 700, url: `${NV}/NanumSquare/NanumSquareB.woff` },
-      { weight: 800, url: `${NV}/NanumSquare/NanumSquareEB.woff` },
+    face: [ // 네이버는 woff만 → 같은 글꼴의 woff2 사본(@kfonts, 윤곽·너비가 네이버 woff와 같음을 확인)
+      { weight: 400, url: `${KF}/NanumSquareR.woff2`, alt: `${NV}/NanumSquare/NanumSquareR.woff` },
+      { weight: 700, url: `${KF}/NanumSquareB.woff2`, alt: `${NV}/NanumSquare/NanumSquareB.woff` },
+      { weight: 800, url: `${KF}/NanumSquareEB.woff2`, alt: `${NV}/NanumSquare/NanumSquareEB.woff` },
     ],
     fallback: "'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif",
   },
   nanumSquareRound: {
     family: 'NanumSquareRound', label: '나눔스퀘어라운드', kind: 'rounded', license: 'OFL-1.1(네이버 나눔스퀘어라운드)',
     face: [
-      { weight: 400, url: `${NV}/NanumSquareRound/NanumSquareRoundR.woff2` },
-      { weight: 700, url: `${NV}/NanumSquareRound/NanumSquareRoundB.woff2` },
-      { weight: 800, url: `${NV}/NanumSquareRound/NanumSquareRoundEB.woff2` },
+      { weight: 400, url: `${NV}/NanumSquareRound/NanumSquareRoundR.woff2`, alt: `${NV}/NanumSquareRound/NanumSquareRoundR.woff` },
+      { weight: 700, url: `${NV}/NanumSquareRound/NanumSquareRoundB.woff2`, alt: `${NV}/NanumSquareRound/NanumSquareRoundB.woff` },
+      { weight: 800, url: `${NV}/NanumSquareRound/NanumSquareRoundEB.woff2`, alt: `${NV}/NanumSquareRound/NanumSquareRoundEB.woff` },
     ],
     fallback: "'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif",
   },
   nanumSquareNeo: {
     family: 'NanumSquareNeo', label: '나눔스퀘어 네오', kind: 'sans', license: 'OFL-1.1(네이버 나눔스퀘어 네오)',
     face: [ // 네이버 CSS는 가변 woff 3.0MB만 가리킴 → 정적 woff2(굵기당 339~388KB)
-      { weight: 300, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-aLt.woff2` },
-      { weight: 400, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-bRg.woff2` },
-      { weight: 700, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-cBd.woff2` },
-      { weight: 800, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-dEb.woff2` },
-      { weight: 900, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-eHv.woff2` },
+      { weight: 300, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-aLt.woff2`, alt: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-aLt.woff` },
+      { weight: 400, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-bRg.woff2`, alt: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-bRg.woff` },
+      { weight: 700, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-cBd.woff2`, alt: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-cBd.woff` },
+      { weight: 800, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-dEb.woff2`, alt: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-dEb.woff` },
+      { weight: 900, url: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-eHv.woff2`, alt: `${NV}/NanumSquareNeo/NanumSquareNeoTTF-eHv.woff` },
     ],
     fallback: KO_SANS,
   },

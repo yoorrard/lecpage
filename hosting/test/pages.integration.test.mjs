@@ -38,6 +38,8 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
   assert.equal(info.body.limits.days, 60, '기본 보관 기간 60일(마지막으로 배포한 날부터)');
 
   const files = await buildSite('sel-story', { assets: { 'assets/media/사진 (1).png': PNG, 'assets/media/수업 영상.mp4': MP4, 'assets/files/명단.csv': te.encode('이름\n') } });
+  // 엔진이 담은 글꼴(글꼴 함께 담기): 이름 = 내용 SHA-256 앞 16자리
+  const font = te.encode('wOF2 시험 글꼴'); files[`assets/fonts/${sha256(font).slice(0, 16)}.woff2`] = font;
   const made = await call(base, 'POST', '/api/sites', { json: { title: 'Pages 시험' } });
   assert.equal(made.status, 201);
   const site = made.body;
@@ -67,6 +69,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.match(first.headers, /^\/\*\n {2}! Access-Control-Allow-Origin\n {2}Content-Security-Policy: default-src 'none'; script-src 'self';/);
     assert.match(first.headers, /\/\*\.csv\n {2}Content-Disposition: attachment/);
     assert.match(first.headers, /\/console\n {2}X-Frame-Options: DENY/);
+    assert.match(first.headers, /\/assets\/fonts\/\*\n {2}Cache-Control: public, max-age=31536000, immutable\n/, '이름이 내용 해시인 글꼴은 1년 캐시');
     assert.ok(first.redirects.includes(`/assets/media/%EC%88%98%EC%97%85%20%EC%98%81%EC%83%81.mp4 ${base}/s/${site.id}/assets/media/%EC%88%98%EC%97%85%20%EC%98%81%EC%83%81.mp4 302`), first.redirects);
     // 보기(Pages)
     const page = await get(site.url);

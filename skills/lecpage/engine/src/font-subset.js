@@ -212,6 +212,7 @@ function writeCmap(map) {
   for (const c of cps) { const g = map.get(c), r = runs[runs.length - 1]; if (r && c === r[1] + 1 && g === r[2] + (c - r[0])) r[1] = c; else runs.push([c, c, g]); }
   const bmp = runs.filter((r) => r[0] <= 0xffff).map((r) => [r[0], Math.min(r[1], 0xfffe), r[2]]);
   const segs = [...bmp, [0xffff, 0xffff, 1]], sc = segs.length;
+  if (sc > 8000) return null; // 형식 4 길이(16비트)를 넘김
   const f4 = new W(16 + sc * 8);
   const es = 2 ** Math.floor(Math.log2(sc));
   f4.u16(4); f4.u16(16 + sc * 8); f4.u16(0); f4.u16(sc * 2); f4.u16(es * 2); f4.u16(Math.log2(es)); f4.u16(sc * 2 - es * 2);
@@ -585,7 +586,8 @@ export async function subsetFont(bytes, keep, o = {}) {
   if (T.has('hhea') && T.has('hmtx')) T.set('hmtx', zeroBearings(T.get('hmtx'), u16(T.get('hhea'), 34), num, gids));
   if (T.has('vhea') && T.has('vmtx')) T.set('vmtx', zeroBearings(T.get('vmtx'), u16(T.get('vhea'), 34), num, gids));
   const map = new Map(); for (const c of kept) map.set(c, cmap.get(c));
-  T.set('cmap', writeCmap(map));
+  const cm = writeCmap(map); if (!cm) return null;
+  T.set('cmap', cm);
   if (T.has('post')) { const p = new Uint8Array(32); p.set(T.get('post').subarray(0, 32)); p[0] = 0; p[1] = 3; p[2] = 0; p[3] = 0; T.set('post', p); }
   const h = T.get('head').slice(); h[8] = h[9] = h[10] = h[11] = 0; T.set('head', h);
   for (const x of DROP) T.delete(x);
