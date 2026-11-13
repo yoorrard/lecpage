@@ -101,7 +101,7 @@ try {
     await page.click('dialog[open] .key-now button:has-text("연결")');
     await page.waitForSelector('.ai-job.ok', { timeout: 60000 });
     await page.waitForSelector('.pv-device iframe', { timeout: 30000 });
-    // 결과 띠는 닫음(750px 높이에서는 띠·구성 안내가 미리보기 자리를 줄여 미리보기가 아주 작게 찍힘)
+    // 결과 띠는 닫음(그림의 왼쪽 칸에 띠 대신 고칠 목록이 보이게)
     await page.locator('.ai-job.ok button[aria-label="닫기"]').click().catch(() => {});
     await settle(1800);
     if (want('edit')) await shot('edit');

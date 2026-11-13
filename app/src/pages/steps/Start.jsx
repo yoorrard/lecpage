@@ -285,7 +285,7 @@ export function StepStart({ p, update, go }) {
 
       {p.blueprint && <div class="make-bar">
         <button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button>
-        <button class="btn" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button>
+        <button class="btn btn-lg" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button>
       </div>}
 
       <Dialog open={confirmRemake} onClose={() => setConfirmRemake(false)} label="다시 만들기 확인">
