@@ -317,3 +317,71 @@ Vercel에는 `dist/` 맨 위에 `vercel.json`을, Cloudflare·Netlify에는 `_he
 8. 법: 조문은 국가법령정보센터 화면이 스크립트로 그려져 2차 출처로 대조했습니다(저작권법 시행 2026-10-29, 정보통신망법 시행 2026-10-02 판). 부가통신사업 신고, 청소년 보호책임자 같은 다른 의무는 보지 않았습니다.
 9. Supabase 옛 키 폐지의 정확한 날짜("2026년 말"로만 적혀 있음).
 10. here.now·tiiny.host·Stack Overflow 2025 수치는 2차 출처입니다.
+
+## 12. 2026-11-13 추가 조사: Onpod과 "로그인 한 번" 배포
+
+- 조사일 **2026-11-13**. 운영자가 예로 든 Onpod(https://onpod.ai/)과, 가입·토큰 복사 없이 올릴 수 있는 곳을 다시 봤습니다. 공식 문서·약관·OpenAPI를 내려받아 읽고, API는 CORS preflight(`OPTIONS`)와 공개 메타데이터(`/.well-known/*`)만 불렀습니다. **계정·OAuth 클라이언트 등록·실제 배포는 하지 않았습니다.** Onpod CLI 바이너리는 실행하지 않고 공개된 해시만 대조했습니다.
+- 앱 측정에서 공개에 강사가 앱 밖에서 하는 일은 6번(Vercel 가입·토큰 만들기·복사)입니다. 이 숫자를 줄이는 곳이 있는지가 기준입니다.
+
+### 12.1 Onpod 사실 (출처 끝)
+
+| 항목 | 확인한 것 |
+|---|---|
+| 회사 | 주식회사 AI3(서울 강남, 사업자 604-81-42515). 약관·개인정보 처리방침 시행 2026-05-14, 콘솔 첫 화면에 "2026.05.21"(출범 약 6개월). 요금표 2026-11-03 개정. npm `onpod` 0.7.157(2026-11-11), API 버전 문자열 `0.1.0-day1`. 젊은 서비스라 무료 범위가 바뀔 수 있음 |
+| 올리는 길 | ① CLI `onpod static deploy <폴더> --name <이름>`(`--spa`/`--no-spa`/`--no-verify`) ② 로컬 MCP `onpod mcp`(CLI와 같은 토큰·기능) ③ **원격 MCP 커넥터** `https://api.onpod.ai/mcp`(도구 `deploy_site`·`list_sites`·`delete_site`·`whoami`·`manual`, 파일을 도구 호출 안에 넣음·그림은 base64) ④ REST `POST /v1/static/sites` → `POST /v1/static/sites/{slug}/deployments`(업로드 URL) → `POST /v1/static/deployments/{id}/finalize`(원자적 교체). 웹 화면에서 끌어 놓기는 없음 |
+| 인증 | CLI·REST는 토큰만: `op_u_`(전권) 또는 `opk_`(범위 키, `static:write:<이름>`처럼 사이트 하나로 좁히고 만료를 둘 수 있음). 콘솔 › API 키에서 발급. **CLI에 브라우저 로그인 없음**(`onpod login --token`, 환경 변수 `ONPOD_TOKEN`). 원격 MCP만 OAuth 2.1: 동적 클라이언트 등록(`/oauth/register`), PKCE S256, 비밀 없는 공개 클라이언트(`token_endpoint_auth_methods_supported: none`), 범위 `mcp`, 30일 토큰 자동 갱신, 권한은 "웹사이트 읽기+쓰기 + 고른 프로젝트 읽기"(콘솔 API 키 화면에서 회수) |
+| CORS(2026-11-13) | REST `api.onpod.ai/v1/*`는 `https://console.onpod.ai`에만 허용 헤더를 줌. 다른 출처는 preflight가 200이지만 허용 헤더가 없어 **브라우저에서 막힘**. `/mcp`·`/oauth/register`·`/oauth/token`·`/.well-known/oauth-*`는 `access-control-allow-origin: *` |
+| 무료(정적) | 계정당 **10개**(11번째부터 결제가 켜진 계정은 사이트당 월 약 5,000원), 사이트 100MB, 파일 50MB, 한 번에 5,000개, **월 100GB**. 넘으면 "그 달은 잠깐 멈췄다가 다음 달 1일에 자동으로 다시 열림". 자동 유료 전환·카드 청구 없음, 가입에 카드 없음 |
+| 멈춤·삭제 | 정적 사이트를 쉬었다고 지운다는 규정은 문서에 없음 ⚠️. 잠자기(30분 쉬면 잠들고 방문 때 몇 초 안에 깨어남)는 서버 앱 무료 요금제 이야기 |
+| 주소 | `https://{이름}.onpod.ai`(Onpod 전체에서 하나뿐), HTTPS 자동, 같은 이름으로 다시 올리면 무중단 교체. 그림·글꼴을 같은 파일 이름으로 바꾸면 최대 1시간 옛것. 내 도메인(apex 포함) 무료, `_onpod-verify` TXT로 소유 확인 |
+| 사이트 처리 | 깔끔한 주소(`/about.html` → `/about` 301), 여러 쪽이면 진짜 404, `_redirects`·`onpod.json` rewrites(다른 https로 경로 프록시). `.git`·`node_modules`·점으로 시작하는 파일은 빼고 올림(`.well-known`은 남김). **`_headers`는 문서에 없음** ⚠️ → 응답 헤더를 못 정함(GitHub Pages처럼 meta CSP만) |
+| AI-Ready(기본 켜짐) | 사이트에 없으면 `/llms.txt`·`/sitemap.xml`·`/robots.txt`를 채우고 첫 화면 `<head>`에 JSON-LD(Organization·WebSite·WebApplication)를 넣음. 사이트가 가진 파일·`ld+json`은 덮어쓰지 않음. 끄는 명령은 서버 앱용(`--no-ai-ready`, `onpod app ai-ready <이름> off`)만 문서에 있음 ⚠️ |
+| 실시간 | 서버 앱(무료 절전형)에 WebSocket 가능. 기본 주소는 약 100초 무통신이면 끊김(20~30초 하트비트 또는 `{이름}.direct.onpod.ai`). 무료 서버 앱은 데이터 디스크가 없어 다시 올리면 파일이 사라짐(무료 Postgres 1개 10GB를 붙여야 함) |
+| 개인정보·위치 | 앱·데이터센터는 국내(서울·인천·광주). DNS·정적 CDN은 Cloudflare(국외 이전 표에 IP·요청 메타데이터), 구글 로그인 정보는 미국. 접속 기록 3개월 |
+| 약관 | 가입은 이메일·구글. "실명이 아닌 명의" 가입은 거절할 수 있음. 금지: 법령·공서양속 위반 콘텐츠, 타인의 개인정보·저작권·초상권 무단 처리, 스팸·피싱·악성코드. 교육·상업 이용을 막는 문구 없음. 약관이 GPU 임대 중심이라 정적 사이트 규정·권리 침해 신고(게시 중단) 절차는 따로 없음 ⚠️. 회사 책임은 직전 3개월 요금 한도(무료면 0) |
+| 학교망 | `*.onpod.ai` 응답이 Cloudflare를 거침(`server: cloudflare`), 정적은 "Cloudflare 서울 엣지 캐시"라고 적음. 학교망 차단 자료는 없음 ⚠️ |
+| 교육용 기능 | 진행자가 프로젝트를 만들고 참가자 이메일(CSV 최대 500)을 초대하면 참가자 사이트가 그 프로젝트에 모임(커넥터 연결 시 프로젝트 고름, 빼면 연결 끊김). 바이브코딩 실습 연수에 쓸 만함 |
+
+출처(2026-11-13 내려받음): [llms.txt](https://onpod.ai/llms.txt) · [에이전트 빠른 안내](https://api.onpod.ai/v1/manual?brief=1) · [전체 안내](https://api.onpod.ai/v1/manual) · [OpenAPI](https://api.onpod.ai/v1/openapi.json) · [웹사이트 무료로 올리기](https://console.onpod.ai/docs/website) · [커넥터](https://console.onpod.ai/docs/connector) · [앱 올리기](https://console.onpod.ai/docs/app) · [CLI·MCP](https://onpod.ai/mcp) · [약관](https://console.onpod.ai/terms) · [개인정보](https://console.onpod.ai/privacy) · OAuth 메타데이터 `https://api.onpod.ai/.well-known/oauth-authorization-server` · npm [onpod](https://www.npmjs.com/package/onpod)
+
+### 12.2 곳별 비교 (교사가 앱·에이전트 밖에서 처음 할 일)
+
+| 곳 · 길 | 교사 할 일(처음) | 무료 한도 | 멈춤·삭제 위험 | 운영자 서버 없이 브라우저 앱에서 | 약관·한국 |
+|---|---|---|---|---|---|
+| 지금 앱 기본: Vercel 토큰 | 가입 + 토큰 만들기·복사 ≈ 6(측정) | 100MB, 월 100GB | 넘으면 멈춤 | ✓(토큰) | **비상업만**, `*.vercel.app` 통신사 차단 보고(2024) |
+| 지금 skill 기본: Cloudflare(wrangler) | 가입 + 로그인 승인 = **2** | 정적 요청 무제한, 파일 25MiB·20,000개 | 안 멈춤 | ✗(API CORS 없음, 앱은 ZIP 끌어 놓기) | 상업 가능 |
+| **Onpod CLI(skill)** | 구글 가입 1 + API 키 만들기·복사 2 + 에이전트에 건네기 1 ≈ **4**(토큰이 있으면 0) | 10개, 100MB, 파일 50MB, 5,000개, 월 100GB | 넘으면 그달 멈춤·다음 달 1일 재개, 삭제 규정 없음 | — | 국내 회사·한국어·국내 리전, 상업 제한 없음, 신고 절차 없음 ⚠️ |
+| **Onpod 원격 MCP(OAuth)** | 구글 로그인(첫 회 가입) 1 + 프로젝트 고르고 허용 1 ≈ **2** | 위와 같음 | 위와 같음 | CORS·동적 등록·PKCE는 ✓. 그러나 `deploy_site`의 입력 형식·크기 한도가 공개 문서에 없음(로그인해야 `tools/list`) ⚠️ | 위와 같음 |
+| Surge(`surge login --browser`) | 구글·GitHub 로그인 1 + 코드 승인 1 = 2(새 계정은 이메일 인증 전 90분만 열림 ⚠️) | 사이트 무제한, 450MB·10,100개, 전송 과금 없음 | 한도는 올리기만 멈추고 사이트는 계속 | ✗(API CORS 없음) | `surge.sh` 하위 주소는 "시험·학습·개발용", 무료(hobby)는 "예고 없이 내릴 수 있음". 도쿄 노드 있음 |
+| Netlify OAuth(암시적 승인) | 가입 1 + 허용 1 + Make public 1 = 3 | 300크레딧(다시 올리기 1회 15) | 다 쓰면 모든 사이트 멈춤 | ✓(운영자가 OAuth 앱 등록) | 공개 전환 API는 여전히 문서에 없음 |
+| Vercel 로그인(PKCE) | 2 | — | — | 배포 권한이 **여전히 비공개 베타**(2026-11-13 문서) | — |
+| Neocities | 가입 + API 키 복사 | 1GB·월 200GB, 무료는 사이트 1개·파일 형식 제한·엄격한 CSP | 안 멈춤 | ✗(API CORS 없음) | 개인 사이트 문화, 내 도메인 유료 |
+| Firebase Hosting | 구글 로그인 + Firebase 프로젝트 만들기(여러 번) | 저장 10GB, 전송 하루 360MB | 넘으면 멈춤 | REST CORS는 ✓, 운영자 구글 OAuth 클라이언트·민감 범위 심사 필요 | — |
+| Static.app | 가입 | 무료는 **7일 체험**(사이트 1개 50MB) | 체험 끝나면 유료 | API CORS ✓ | 운영비 0 원칙에 안 맞음 |
+| Render·Deno Deploy | Git 연결 또는 CLI·토큰 | Render 정적 무료(Git 필수) | — | ✗(API CORS 없음) | — |
+| tiiny.host | — | 공식 요금 화면이 스크립트로만 그려져 확인 못 함(이전 2차: 무료 3MB·1개) ⚠️ | — | API 유료(이전 조사) | — |
+| GitHub Pages·Cloudflare Pages·Drop | §3·§7 그대로 | | | | |
+
+CORS 확인(2026-11-13, `Origin: https://lecpage.example`): `api.onpod.ai/v1/static/sites` 허용 헤더 없음 · `api.onpod.ai/mcp`·`/oauth/*` `*` · `neocities.org/api/*` 404 · `api.deno.com` 401 · `api.render.com` 허용 헤더 없음 · `surge.surge.sh` 404 · `firebasehosting.googleapis.com` 출처 그대로 허용 · `api.static.app` `*`.
+출처: [Surge 요금](https://surge.sh/pricing) · [Surge 문서 전체](https://surge.sh/llms-full.txt) · [Surge 약관](https://surge.sh/terms) · [Neocities API](https://neocities.org/api) · [Neocities 요금](https://neocities.org/supporter) · [Static.app 요금](https://static.app/pricing) · [Firebase 요금](https://firebase.google.com/pricing) · [Render 정적](https://render.com/docs/static-sites) · [Sign in with Vercel 범위](https://vercel.com/docs/sign-in-with-vercel/scopes-and-permissions) · [Netlify 공개 범위](https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/)
+
+### 12.3 판단
+
+1. **skill: Onpod을 올릴 곳으로 연결합니다(기본은 Cloudflare 그대로).** 처음 할 일은 Cloudflare(2번)보다 많지만(토큰을 콘솔에서 만들어 건네야 함, 약 4번) 이미 Onpod을 쓰거나 토큰이 있으면 0번이고, 한국어 화면·국내 회사, 상업 제한 없음, 한도를 넘어도 지우지 않고 다음 달에 다시 열림, 내 도메인 무료입니다. `publish work --host onpod`, `references/deploy/onpod.md`, 엔진 `HOSTS.onpod`·`HOST_STEPS`.
+2. **앱: 연결하지 않습니다.** REST가 다른 출처를 막아 토큰 방식 어댑터를 만들 수 없습니다. 원격 MCP OAuth는 브라우저에서 부를 수 있고 할 일이 2번이라 지금 앱(6번)보다 크게 줄 수 있지만, `deploy_site`의 입력 형식·한 번에 보낼 수 있는 크기가 공개 문서에 없고(그림 수십 MB를 base64로 한 요청에 담아야 함), 채팅용 커넥터를 다른 웹앱이 쓰는 것을 Onpod이 받아들이는지도 모릅니다. 다음 단계: 운영자가 계정 하나로 `tools/list`와 크기 한도를 확인하거나, Onpod에 REST CORS(lecpage 출처) 또는 파트너 API를 묻기.
+3. **Surge는 연결하지 않습니다.** 할 일이 Cloudflare와 같고(2번), `surge.sh` 하위 주소가 "시험·학습용, 예고 없이 내릴 수 있음"이라 연수 당일까지 남는다고 말하기 어렵습니다.
+4. 그 밖에 할 일을 줄이는 곳은 없습니다. 계정 없이 연수 날까지 남는 곳은 여전히 없습니다(§7.2).
+
+### 12.4 lecpage에 가져온 것
+
+- **공개 연수일 때만 구조화 데이터**: `access.mode`가 `public`이면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. 기본(주소를 받은 사람만)과 암호 사이트에는 넣지 않습니다.
+- **Onpod의 자동 파일과 검색 제외**: Onpod에 올릴 때 비공개 사이트에는 짧은 `llms.txt`와 빈 `sitemap.xml`을 함께 올려 Onpod이 쪽 목록(강사 화면 포함)을 자동으로 내놓지 않게 합니다. `robots.txt`는 lecpage 것이 이깁니다. 공개 사이트에는 주소를 미리 알 수 있으므로(`https://이름.onpod.ai/`) 첫 화면만 담은 `sitemap.xml`과 `robots.txt`의 `Sitemap:` 줄을 넣습니다. 첫 화면 JSON-LD 자동 삽입은 막을 수 없지만 비공개 사이트는 `noindex`·`Disallow`라 검색에 영향이 없습니다.
+- **한 마디로 다시 올리기**: `publish work`가 지난번 올린 곳·이름을 기억해 `--host` 없이도 같은 곳·같은 주소로 다시 올립니다.
+- 넣지 않은 것: `llms.txt` 자동 생성(공개 사이트도 첫 화면 글이 곧 설명이라 따로 둘 까닭이 적음), Onpod 프로젝트 초대(연수 사이트가 아니라 실습용 기능).
+
+### 12.5 확인 못 한 것
+
+1. Onpod `deploy_site`의 입력 형식·크기 한도, 원격 커넥터 토큰으로 REST를 부를 수 있는지, 정적 사이트에서 AI-Ready를 끄는 방법, `_headers` 지원 여부, `onpod static deploy`의 기계용 출력 형식(그래서 skill은 출력에서 `https://이름.onpod.ai`를 찾고, 없으면 이름으로 주소를 만듦).
+2. Onpod 무료 정적 사이트의 장기 보관 정책(쉬는 사이트 정리 여부), 권리 침해 신고 창구, 11번째 사이트에서 결제가 꺼진 계정은 막히는지.
+3. Surge: 구글로 가입한 계정도 이메일 인증이 따로 필요한지, `login --browser`가 터미널 없이(에이전트에서) 도는지.
+4. tiiny.host 무료 범위(공식 화면을 글로 받지 못함).
