@@ -128,7 +128,7 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   const calm = CALM_TYPES.includes(s.type);
   const v = vOf(s, ctx);
   const frame0 = frameOf(s, ctx), frame = v.meta?.frame === 'full' && frame0 !== 'band' ? 'full' : frame0;
-  // 선생님이 섹션 등장 효과를 직접 골랐으면 그것을, 아니면 프리셋의 페이지 연출 계획대로(화면 폭 띠는 제 움직임이 따로 있음)
+  // 강사가 섹션 등장 효과를 직접 골랐으면 그것을, 아니면 프리셋의 페이지 연출 계획대로(화면 폭 띠는 제 움직임이 따로 있음)
   const enter = calm || frame === 'band' ? '' : enterId ? ` data-fx="${esc(enterId)}"` : enterFx(s, ctx, false);
   const preset = getPreset(ctx.design.preset);
   const cls = `lp-sec lp-sec-${esc(s.type)}${frame === 'band' ? bandClass(ctx) : ''}${TINTED.includes(s.type) ? ' lp-tinted' : ''}`;
@@ -443,6 +443,7 @@ ${liveOff(ctx)}</div>`);
  */
 export function boardFiles(s, bp) {
   if (!s?.allowFiles || !(s.maxFiles > 0)) return false;
+  if (bp?.audience?.minor) return false; // 만 14세 미만 연수는 파일을 받지 않음(설계도가 allowFiles를 켜 두었어도)
   const up = bp?.live?.uploads;
   return typeof up === 'boolean' ? up : bp?.live?.provider !== 'sheets';
 }

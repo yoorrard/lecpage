@@ -325,6 +325,33 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.ok(adm.answers.every((d) => d.by), 'the admin sees who answered');
   });
 
+  test(`${name}: instructor locks (lockQa·lockBoard), invisible characters, formula cells with leading blanks, admin check on a new code`, async () => {
+    const c = fresh('L'); const a = api(c.base, c.code);
+    // 아직 없는 연수: 틀린 키로 비공개 모음을 읽으면 '빈 명단'이 아니라 거절(강사 화면이 틀린 키로 열리지 않게)
+    const n0 = api(c.base, 'N' + uniq());
+    assert.equal((await n0.call('GET', '/participants?since=9000000000000', { admin: '틀린-관리자-키-0000' })).status, 403);
+    assert.equal((await n0.call('GET', '/participants?since=9000000000000')).status, 401);
+    const p = await joinAs(a, '하나');
+    // 보이지 않는 글자·방향 바꿈·한글 채움·쌓인 결합 부호
+    const inv = String.fromCharCode(0x202e, 0x200b, 0x2066, 0x3164, 0xad);
+    const zal = 'Z' + String.fromCharCode(0x301, 0x302, 0x303, 0x304, 0x305, 0x306);
+    const q1 = await a.call('POST', '/questions', { token: p.token, body: { text: `가${inv}나 ${zal}` } });
+    assert.equal(q1.status, 201); assert.equal(q1.body.text, '가나 ' + 'Ź' + String.fromCharCode(0x302, 0x303));
+    assert.equal((await a.call('POST', '/join', { body: { nickname: '강' + String.fromCharCode(0x3164) + '사' } })).body.error, 'reserved_nickname', '채움 문자로 강사 흉내 금지');
+    // 잠그기: 관리자만 걸고, 참가자의 새 질문·새 보드 글을 409 locked
+    assert.equal((await a.call('PUT', '/state', { token: p.token, body: { ui: { lockQa: true } } })).status, 401);
+    assert.equal((await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { lockQa: true, lockBoard: true } } })).status, 200);
+    const lq = await a.call('POST', '/questions', { token: p.token, body: { text: '잠긴 뒤' } });
+    assert.equal(lq.status, 409); assert.equal(lq.body.error, 'locked');
+    const lb = await a.call('POST', '/posts', { token: p.token, body: { text: '잠긴 뒤' } });
+    assert.equal(lb.status, 409); assert.equal(lb.body.error, 'locked');
+    assert.equal((await a.call('POST', '/help', { token: p.token, body: { message: '도움 요청은 잠그지 않음' } })).status, 201);
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { lockQa: null, lockBoard: null } } });
+    assert.equal((await a.call('POST', '/questions', { token: p.token, body: { text: ' =1+1' } })).status, 201);
+    const csv = await (await a.call('GET', '/export.csv?kind=questions', { admin: c.adminKey, raw: true })).text();
+    assert.match(csv, /,'=1\+1,|,"' =1\+1"|,' =1\+1,/, '앞 빈칸 뒤 = 도 막음');
+  });
+
   test(`${name}: reserved nicknames (강사·운영자·admin·lecpage) are refused for participants`, async () => {
     const c = fresh('V'); const a = api(c.base, c.code);
     for (const n of ['강사', ' 운영자 ', 'Admin', 'LECPAGE', '강사님', '강 사']) {

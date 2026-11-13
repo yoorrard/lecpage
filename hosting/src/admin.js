@@ -27,7 +27,8 @@ const deny = (api, status = 403, message = 'Cloudflare Access로 로그인한 �
  * @param {object} env
  * @param {URL} url
  * @param {ReturnType<import('./config.js').config>} cfg
- * @param {{ gate: () => any, site: (id: string) => any, onNoticeChange: () => void }} d
+ * @param {{ gate: () => any, site: (id: string) => any, onNoticeChange: () => void, verify?: (request: Request) => Promise<{ email: string }>, asset?: (path: string, method: string) => Response | null }} d
+ *   verify: 들어온 사람 확인을 바꿈(관리 Worker: ctx.access). 없으면 Access JWT. asset: 화면 파일을 정적 자산 대신 이것으로(관리 Worker)
  * @param {{ getKey?: Function }} [testing]
  */
 export async function admin(request, env, url, cfg, d, testing = {}) {
@@ -36,7 +37,7 @@ export async function admin(request, env, url, cfg, d, testing = {}) {
   const api = url.pathname.startsWith('/admin/api/');
   let me;
   try {
-    me = await verifyAccessJwt(request.headers.get('cf-access-jwt-assertion') || '', { ...cfg.access, getKey: testing.getKey || getKey });
+    me = d.verify ? await d.verify(request) : await verifyAccessJwt(request.headers.get('cf-access-jwt-assertion') || '', { ...cfg.access, getKey: testing.getKey || getKey });
   } catch (e) {
     if (!(e instanceof AccessError)) throw e;
     console.warn('admin access denied:', e.reason); // 까닭만 남기고 토큰·이메일은 남기지 않음
@@ -56,10 +57,10 @@ export async function admin(request, env, url, cfg, d, testing = {}) {
     }
   }
   const file = FILES[url.pathname];
-  if (!file || !env.ASSETS) return notFoundPage(head);
+  if (!file || (!env.ASSETS && !d.asset)) return notFoundPage(head);
   if (request.method !== 'GET' && !head) return withAdminHeaders(new Response('GET만 받아요.\n', { status: 405, headers: { allow: 'GET, HEAD' } }));
-  const res = await env.ASSETS.fetch(new Request(new URL(file, url), { method: request.method }));
-  return withAdminHeaders(res);
+  const res = d.asset ? d.asset(file, request.method) : await env.ASSETS.fetch(new Request(new URL(file, url), { method: request.method }));
+  return withAdminHeaders(res || notFoundPage(head));
 }
 
 const post = (body) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });

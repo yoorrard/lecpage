@@ -25,7 +25,7 @@ lecpage/
 │  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 수정 요청(review). AI 제공자 호출은 앱(app/src/lib/ai.js)
 │  │  │  └─ build.js          ← blueprint → 파일 묶음
 │  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
-│  │  │  ├─ lecpage.css · boot.js · lecpage.js · console.js · screen.js · unlock.js
+│  │  │  ├─ lecpage.css · aux.css · boot.js · lecpage.js · console.js · screen.js · check.js · unlock.js
 │  │  │  ├─ fx/               ← 효과 레지스트리(core.js, fx.css, effects/*.js)
 │  │  │  └─ live/             ← 실시간 어댑터(core.js, local.js, http.js, supabase.js, sheets.js)
 │  │  ├─ vendor/              ← 작은 MIT 라이브러리(예: fflate)
@@ -206,6 +206,8 @@ status                    'connecting'|'live'|'polling'|'offline'
 - **어댑터 factory는 `factory(config, ctx)`** 입니다. `ctx = {token(), me(), adminKey(), cursor(), emit(evt), storage, util, error}`. 어댑터는 `subscribe(handler)`로 받은 handler(=`ctx.emit`)에 위 이벤트 외에 `{type:'status', status, mode}`, `{type:'resync', full?}`(클라이언트가 커서 이후를 다시 읽음, 결과 Promise `{changes, error}`), `{type:'hello', now}`, `{type:'reset'}`(모두 지움 → 전체 다시 읽기)를 보낼 수 있습니다. 클라이언트가 핸들러에 넘기는 이벤트 종류에도 `'reset'`이 더해집니다.
 - 선택 메서드: `snapshot({since, admin}) → {state, <col>[]…, removed:[{col,id}], now, time?, full}` (있으면 한 번에 동기화, 없으면 `list`를 컬렉션마다 부름) · `like(id)` · `checkAdmin()` · `setAdmin(key)` · `close()`.
 - **커서(`since`/`now`)는 불투명한 값**입니다. http·local·sheets는 서버의 단조 증가 ms 도장, supabase는 정수 `rev`. 모든 문서에 `updatedAt`이 있고 커서는 `updatedAt`(또는 rev) 기준이며, 지운 문서는 `removed`(tombstone)로 알립니다.
+- 강사 화면의 관리자 키 확인은 `useAdminKey(key) → true/false`: 공개 연결을 연 뒤 서버에 한 번만 묻고(틀린 키가 한 번만 세어짐), 맞으면 그 연결에만 씁니다(`setAdminKey`와 달리 저장소에 두지 않음). 키 저장은 강사 화면이 맡음: 이 탭(sessionStorage `lp-admin:<경로>:<코드>`), [이 기기에서 기억하기]를 고르면 localStorage에도, [나가기]가 둘 다 지움. 참가자 화면은 이 키를 읽지 않음.
+- 클라이언트가 지키는 규칙(서버 넷도 같은 규칙으로 거절): 한 기기 보내기 속도 `CLIENT_RATE`(넘으면 `rate_limited`, 설정 `throttle:false`면 끔 — 시험·도구용), 강사가 잠근 칸(`ui.lockQa` 새 질문·`ui.lockBoard` 새 보드 글 → `locked` 409, 읽기·쓰기 도우미 `ext.locked`·`ext.lockPatch`), 닫힌 투표(`polls` 문서 `open:false` → `poll_closed`)는 보내기 전에 거절. 대기열에 넣었던 쓰기가 나중에 거절되면 `error` 이벤트(`(err, op)`)와 함께 서버 값으로 다시 맞춤. 받은 문서도 `_maskDoc`이 보이지 않는 글자·방향 바꿈·쌓인 결합 부호를 빼고 길이를 자름. 도우미 `util.hasLink`·`util.linkless`(발표 화면이 주소를 가림)·`util.csvGuard`(받은 CSV를 칸마다 다시 수식 막기).
 - 공개 범위: 공개 컬렉션 = questions·posts·help·progress·polls·answers·chat(+state). 비공개 = participants·attendance·survey(관리자만, 참가자 토큰은 **자기 것만**). questions는 누구에게도 `by`를 주지 않습니다(익명 보장; 내 질문은 클라이언트가 id로 기억). 숨긴 글(questions `status:'hidden'`, posts·chat `hidden:true`)은 비관리자에게 `text:''`(posts는 `files:[]`)로 내려갑니다.
 - 덮어쓰기 키: progress(by+station), answers(poll+by), survey(by), attendance(by+kind). answers의 `value`는 글자·숫자 또는 그 배열(최대 5개, 워드클라우드). 서버에 같은 id의 `polls` 문서가 있고 `open:false`면 409 `poll_closed`(설계도에만 있는 투표 id도 받음).
 - 문서에 `cid`(클라이언트 작업 id, 40자 이하)를 넣으면 같은 참가자·같은 cid의 재전송은 같은 문서를 돌려줍니다.
@@ -262,6 +264,7 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 - **별명**: '강사'·'운영자'·'admin'·'lecpage'는 참가자가 쓸 수 없습니다.
 - **Supabase**: 파일 버킷은 비공개, 1시간짜리 서명 주소로 제공. 지운 파일은 휴지통 표에 모았다가 콘솔이 연결될 때 Storage API로 지웁니다. 공개 Broadcast 내용(반응 수·다시 읽기 신호)은 믿지 않고 다시 읽습니다(비공개 채널은 로그인 사용자가 필요해 쓰지 않음).
 - **Apps Script**: `setup()`이 연수 코드를 고정하고 다른 코드는 거절. 파일은 게시물이 보일 때만 '링크 공유', 지우면 휴지통.
+- **글 거르기·잠그기(2026-11c, 넷 모두)**: 제어·폭 없는 공백·방향 바꿈·한글 채움(U+3164 등)·태그 문자를 빼고 결합 부호는 한 글자에 둘까지. `state.ui.lockQa`·`lockBoard`가 `true`면 참가자의 새 질문·보드 글을 409 `locked`. CSV 수식 막기는 앞 빈칸·전각 기호(＝＋－＠)도. 아직 없는 연수 코드라도 비공개 모음(명단·출석·설문)은 관리자만(틀린 키가 '빈 명단'으로 통과하지 않게).
 
 ## 6. 빌드 결과(생성 사이트) 파일
 기준은 `engine/src/build.js`입니다.
@@ -275,11 +278,14 @@ privacy.html      개인정보 처리 안내. 참여 기능을 쓸 때만
 _headers          Netlify·Cloudflare용 보안 헤더(강사 화면·발표 화면·안내문 틀 넣기 금지)
 robots.txt        access.mode가 public일 때만 Allow, 그 밖에는 Disallow
 assets/theme.css · lecpage.css · boot.js · lecpage.js · screen.js · qr.js · favicon.svg
+assets/aux.css · check.js       보조 화면(강사·발표·안내문·접속 확인·개인정보)의 배치 · 접속 확인 결과
 assets/console.js · live.js      참여 기능을 쓸 때만
 assets/fx.js · fx.css            효과를 쓸 때만
 assets/unlock.js                 암호 보호(access.mode password)일 때만
 assets/slides/*.webp · assets/media/*
 ```
+- 쪽 머리·CSP는 `render/shell.js`(참가자 화면 `pages.js`와 보조 화면 `aux.js`가 같이 씀). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 공개=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사 화면은 COOP.
+- 보조 화면은 같은 프리셋(theme.css·lecpage.css의 `data-*`)을 이어받고 `assets/aux.css`만 더 싣습니다(참가자 화면은 싣지 않음). 안내문은 A4 한 장 + 자리 카드 8장(고를 때) + 강사 카드, 쪽(`.lp-pst-page`)을 크기 기준(container)으로 cqw 단위라 미리보기와 인쇄가 같은 비율.
 - 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
 - `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
 

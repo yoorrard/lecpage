@@ -217,3 +217,18 @@ test('apps-script (H4): wrong admin keys are counted; after 20 the sheet answers
   for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
   assert.equal((await call({ a: 'setState', code, admin: ADMIN, patch: { slide: 1 } })).ok, true);
 });
+
+test('apps-script (2026-11c): instructor locks refuse new questions/posts; invisible characters and stacked marks are removed', async () => {
+  const code = 'SHEET1';
+  for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
+  const a = (await call({ a: 'join', code, nickname: '잠금시험' })).data;
+  const inv = String.fromCharCode(0x202e, 0x200b, 0x2066, 0x3164, 0xad);
+  const zal = 'Z' + String.fromCharCode(0x301, 0x302, 0x303, 0x304, 0x305, 0x306);
+  const q1 = await call({ a: 'add', code, token: a.token, col: 'questions', doc: { text: `가${inv}나 ${zal}` } });
+  assert.equal(q1.data.text, '가나 ' + 'Ź' + String.fromCharCode(0x302, 0x303));
+  assert.equal((await call({ a: 'join', code, nickname: '강' + String.fromCharCode(0x3164) + '사' })).error, 'reserved_nickname');
+  assert.equal((await call({ a: 'setState', code, admin: ADMIN, patch: { ui: { lockQa: true, lockBoard: true } } })).ok, true);
+  for (const col of ['questions', 'posts']) { const r = await call({ a: 'add', code, token: a.token, col, doc: { text: '잠긴 뒤' } }); assert.equal(r.status, 409, col); assert.equal(r.error, 'locked', col); }
+  await call({ a: 'setState', code, admin: ADMIN, patch: { ui: { lockQa: null, lockBoard: null } } });
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'questions', doc: { text: '다시 열림' } })).ok, true);
+});

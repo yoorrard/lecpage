@@ -38,8 +38,9 @@ test('더 허용하는 스크립트는 파일 하나를 가리키는 https 주�
 });
 
 test('엔진이 쓰는 글꼴 호스트가 CSP에 다 있음(엔진이 바뀌면 여기서 알림)', () => {
-  const pages = readFileSync(join(ENGINE, 'src', 'render', 'pages.js'), 'utf8');
-  const body = pages.slice(pages.indexOf('function cspMeta'), pages.indexOf('function headTags'));
+  // 쪽 머리·CSP는 render/shell.js(참가자 화면과 보조 화면이 같이 씀)
+  const pages = readFileSync(join(ENGINE, 'src', 'render', 'shell.js'), 'utf8');
+  const body = pages.slice(pages.indexOf('export function cspPolicy'), pages.indexOf('export function headTags'));
   assert.ok(body.includes('style-src') && body.includes('font-src'), 'cspMeta를 찾지 못함');
   const fontsLine = /const fonts = '([^']+)'/.exec(body);
   assert.ok(fontsLine, 'cspMeta의 fonts 줄');

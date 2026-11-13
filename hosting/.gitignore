@@ -5,3 +5,4 @@ node_modules/
 src/runtime-allow.js
 # 런타임 정적 사본(scripts/gen-runtime.mjs가 배포·시험·개발 때마다 만듦)
 public/rt/
+src/admin-ui.js

@@ -61,7 +61,7 @@ export function Settings() {
         </div>}
         <h3 class="h-label">공개할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
-        <p class="small muted">Cloudflare와 학교 서버는 토큰 없이 파일을 올려요. <a href="#/help/deploy">공개하는 법</a></p>
+        <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 올려요. <a href="#/help/deploy">공개하는 법</a></p>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>
         <div class="stack"><h2 class="h-sub">AI 연결</h2>{ai && <AiConnect onConnected={async () => { setAi(false); await reloadKeys(); }} />}</div>
@@ -74,7 +74,7 @@ export function Settings() {
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
           <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 지우기' : '모든 데이터 지우기'}</button>
         </div>
-        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요. 학교 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
     </div>

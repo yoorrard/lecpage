@@ -62,8 +62,8 @@ export const SPEC = {
   ],
   goals: [
     LEAD,
-    list('items', '목표', { of: 'text', each: 120, limit: 6, ph: '예: 수업에 바로 쓸 활동을 하나 고를 수 있어요' }),
-    text('who', '대상', 160, { ph: '예: 처음 해 보는 초등 교사' }),
+    list('items', '목표', { of: 'text', each: 120, limit: 6, ph: '예: 내일 바로 쓸 활동을 하나 고를 수 있어요' }),
+    text('who', '대상', 160, { ph: '예: AI를 처음 써 보는 실무자' }),
   ],
   glance: [
     LEAD_IF,
@@ -114,7 +114,7 @@ export const SPEC = {
   ],
   prompts: [
     LEAD,
-    list('items', '프롬프트', { item: [text('title', '제목', 80, { ph: '예: 수업 아이디어 얻기' }), area('text', '프롬프트', 4000, { rows: 4 }), tags('tags', '태그', 20, 6)], make: () => ({ title: '', text: '', tags: [] }), sum: (x) => x.title || firstLine(x.text), ok: (x) => has(x.text) }),
+    list('items', '프롬프트', { item: [text('title', '제목', 80, { ph: '예: 아이디어 얻기' }), area('text', '프롬프트', 4000, { rows: 4 }), tags('tags', '태그', 20, 6)], make: () => ({ title: '', text: '', tags: [] }), sum: (x) => x.title || firstLine(x.text), ok: (x) => has(x.text) }),
   ],
   qa: [LEAD],
   board: [
@@ -181,7 +181,7 @@ export const SPEC = {
   text: [area('md', '본문', 6000, { rows: 8, ph: '여기에 글을 써요.', hint: '**굵게** · - 목록 · | 표 | · > 인용 · > [!참고] 상자 · [링크](https://…)' })],
   procedure: [
     LEAD,
-    list('items', '단계', { limit: 20, norm: (x) => (typeof x === 'string' ? { title: x } : x), item: [text('title', '단계', 160, { ph: '예: 보호자에게 연락하기' }), area('desc', '설명', 500), text('time', '시간', 24, { short: true, ph: '예: 10분 이내' }), text('who', '담당', 40, { short: true, ph: '예: 담임' })],
+    list('items', '단계', { limit: 20, norm: (x) => (typeof x === 'string' ? { title: x } : x), item: [text('title', '단계', 160, { ph: '예: 담당자에게 연락하기' }), area('desc', '설명', 500), text('time', '시간', 24, { short: true, ph: '예: 10분 이내' }), text('who', '담당', 40, { short: true, ph: '예: 담임' })],
       make: () => ({ title: '', desc: '', time: '', who: '' }), sum: (x) => x.title, meta: (x) => [x.time, x.who].filter(has).join(' · '), ok: (x) => has(x.title) }),
     area('close', '맺는 말', 300),
   ],

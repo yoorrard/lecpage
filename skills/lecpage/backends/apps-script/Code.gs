@@ -243,14 +243,16 @@ function rateHit(bucket, who, max) {
   cache.put(k, String(n), 120);
   if (n > max) throw httpErr(429, 'rate_limited', '잠시 후 다시 시도해 주세요.', { retryAfter: 60 - Math.floor((Date.now() / 1000) % 60) });
 }
-var CTRL_ML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​‌‎‏‪-‮⁦-⁩﻿]/g;
-var CTRL_SL = /[\u0000-\u001F\u007F​‌‎‏‪-‮⁦-⁩﻿]/g;
+// 보이지 않는 글자(제어·폭 없는 공백·방향 바꿈·한글 채움·태그)는 빼고, 한 줄 글의 줄바꿈·탭은 빈칸으로. 결합 부호는 둘까지
+var CTRL_ML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDDEF]/g;
+var CTRL_SL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB\u0009\u000A\u000D]|\uDB40[\uDC00-\uDDEF]/g;
+var COMB = /([\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]{2})[\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]+/g;
 function cleanText(v, max, field, opt) {
   opt = opt || {};
   if (v == null) v = '';
   if (typeof v !== 'string' && typeof v !== 'number') throw httpErr(400, 'invalid_type', field + ': 글자여야 합니다.');
   var s = String(v).replace(/\r\n?/g, '\n').normalize('NFC');
-  s = s.replace(opt.multiline ? CTRL_ML : CTRL_SL, opt.multiline ? '' : ' ').trim();
+  s = s.replace(opt.multiline ? CTRL_ML : CTRL_SL, function (m) { return /[\t\n\r]/.test(m) ? ' ' : ''; }).replace(COMB, '$1').trim();
   s = opt.multiline ? s.replace(/\n{4,}/g, '\n\n\n') : s.replace(/\s{2,}/g, ' ');
   if (opt.required && !s) throw httpErr(400, 'required', field + ': 비어 있습니다.');
   if (Array.from(s).length > max) throw httpErr(400, 'too_long', field + ': ' + max + '자 이하로 써 주세요.');
@@ -468,6 +470,8 @@ function add(b) {
   var me = null;
   if (col === 'polls') { requireAdmin(b.admin); normCode(code, true); }
   else { me = participant(code, b.token); rateHit('write', me.id, RATE.write); if (RATE[col]) rateHit(col, me.id, RATE[col]); }
+  // 강사가 잠근 칸(ui.lockQa·ui.lockBoard)은 새 글을 받지 않음
+  if (me && ((col === 'questions' && (getState(code).ui || {}).lockQa === true) || (col === 'posts' && (getState(code).ui || {}).lockBoard === true))) throw httpErr(409, 'locked', col === 'questions' ? '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.' : '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.');
   var cid = doc.cid == null ? '' : cleanText(doc.cid, LIMITS.cid, 'cid');
   var by = me ? me.id : '';
   if (cid) { var dup = rows(col).filter(function (r) { return r.code === code && r.by === by && r.cid === cid; })[0]; if (dup) return out(col, dup, true); }
@@ -732,7 +736,7 @@ function toCsv(columns, rowsList) {
   var cell = function (v) {
     if (v == null) return '';
     var s = Array.isArray(v) ? v.join(' / ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (/^[\s\u00A0\u3000]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/.test(s)) s = "'" + s; // 수식 주입 막기(앞 빈칸·전각 기호 포함)
     if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };

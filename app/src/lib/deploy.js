@@ -222,7 +222,8 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
 /** 이미 올린 Vercel 프로젝트에 로그인 창이 뜰 때: 참가자가 열 수 있게 보호(Vercel Authentication)를 끔 */
 export const openVercel = (token, projectId) => vc(token, 'PATCH', `/v9/projects/${encodeURIComponent(projectId)}`, { ssoProtection: null });
 
-// ── lecpage 바로 공개: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 올림. 방문이 있으면 계속 열려 있고 30일 동안 방문이 없으면 지워짐 ──
+// ── lecpage 바로 공개: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 올림.
+// 서버의 보기가 worker면 방문이 있는 동안 열려 있고(30일), pages면 사이트마다 다른 주소(s-<id>.….pages.dev)로 마지막으로 올린 날부터 정해진 날까지(info.keepAlive=false) ──
 export const PUBLISH_API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
 let infoP = null;
 /** 바로 공개를 쓸 수 있으면 { plan: 'free'|'paid', accepting, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
@@ -239,19 +240,27 @@ async function ip(method, path, { key, json, raw } = {}) {
   if (!r.ok) {
     const code = j.error?.code || '';
     const e = new Error(code === 'runtime_mismatch' ? '앱이 새 버전으로 바뀌는 중이에요. 화면을 새로 고친 뒤 다시 해 주세요.' : j.error?.message_ko || `바로 공개 오류 ${r.status}`);
-    e.status = r.status; e.code = code; throw e;
+    e.status = r.status; e.code = code; e.reason = j.error?.reason || ''; e.missing = j.error?.missing || []; throw e;
   }
   return j;
 }
+/** 오늘·그날(date: 'YYYY-MM-DD') 바로 공개에 남은 몫과 사이트 상태(site: id). 못 물어보면 null */
+export function instantStatus({ date = '', site = '' } = {}) {
+  if (!PUBLISH_API) return Promise.resolve(null);
+  const q = new URLSearchParams(); if (date) q.set('date', date); if (site) q.set('site', site);
+  return fetch(`${PUBLISH_API}/api/status?${q}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+}
 /**
  * @param {object} o { site: {id, key}(다시 올릴 때), title, files, onProgress,
- *   live?: { code, adminKeyHash, settings } 참여 기능 방을 이 사이트에 묶어 만듦(서버가 지원할 때) }
- * @returns {Promise<{url, id, key, expiresAt, liveUrl?}>}
+ *   live?: { code, adminKeyHash, settings } 참여 기능 방을 이 사이트에 묶어 만듦(서버가 지원할 때),
+ *   booking?: { date, start, end, people, network, live } 연수 날짜·인원(서버가 그날 몫을 미리 셈. 차면 만들 때 알려 줌) }
+ * @returns {Promise<{url, altUrl?, view?, id, key, expiresAt, liveUrl?}>} altUrl: 학교망에서 첫 주소가 막힐 때 쓸 두 번째 주소
  */
-export async function deployInstant({ site, title, files, live = null, onProgress = () => { } }) {
+export async function deployInstant({ site, title, files, live = null, booking = null, onProgress = () => { } }) {
   onProgress({ step: '준비', pct: 2 });
   let s = site?.id && site?.key ? site : null;
-  if (!s) s = await ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120) } });
+  const newSite = () => ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120), ...(booking ? { booking } : {}) } });
+  if (!s) s = await newSite();
   const blobs = new Map(); const manifest = {};
   for (const [path, v] of Object.entries(files)) {
     if (path === '_headers') continue; // 응답 헤더는 서버가 정함
@@ -259,25 +268,37 @@ export async function deployInstant({ site, title, files, live = null, onProgres
   }
   onProgress({ step: '바뀐 파일 확인', pct: 6 });
   let dp;
-  try { dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: { files: manifest } }); }
+  const body = { files: manifest, ...(booking ? { booking } : {}) };
+  try { dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body }); }
   catch (e) {
     // 공개 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
     if (!(site && (e.status === 404 || e.status === 401))) throw e;
-    s = await ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120) } });
-    dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: { files: manifest } });
+    s = await newSite();
+    dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body });
   }
-  const need = (dp.missing || []).filter((h) => blobs.has(h)); let done = 0;
-  await pool(need, 4, async (h) => {
-    await ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) });
-    done++; onProgress({ step: `파일 올리기 ${done}/${need.length}`, pct: 8 + Math.round(done / need.length * 80) });
-  });
+  const upload = async (list) => {
+    const need = list.filter((h) => blobs.has(h)); let done = 0;
+    await pool(need, 4, async (h) => {
+      await ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) });
+      done++; onProgress({ step: `파일 올리기 ${done}/${need.length}`, pct: 8 + Math.round(done / need.length * 80) });
+    });
+  };
+  await upload(dp.missing || []);
   let liveUrl = '';
   if (live) { onProgress({ step: '참여 기능 준비', pct: 90 }); liveUrl = (await ip('POST', `/api/sites/${s.id}/live`, { key: s.key, json: live })).url || ''; }
   onProgress({ step: '공개하는 중', pct: 94 });
-  const out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key });
+  let out;
+  for (let t = 0; ; t++) {
+    try { out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key }); break; }
+    catch (e) {
+      // 서버가 맡긴 곳(Pages)에서 파일이 사라졌으면 그 파일만 다시 올리고 한 번 더
+      if (e.code !== 'missing_blobs' || !e.missing?.length || t >= 2) throw e;
+      await upload(e.missing);
+    }
+  }
   onProgress({ step: '완료', pct: 100 });
   track('publish', 'instant');
-  return { url: out.url || s.url, id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
+  return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
 }
 /** 바로 공개한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });

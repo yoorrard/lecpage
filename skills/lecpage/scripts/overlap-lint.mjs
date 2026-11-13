@@ -3,7 +3,7 @@
 //   글이 다른 글·단추와 겹침 · 글이 틀에서 잘리거나 화면 밖으로 나감 · 가로 넘침 · 첫 화면 그림이 제목·단추를 덮음
 //   움직임이 끝난 뒤에도 숨은 채 남은 내용 · 한 요소를 두 움직임이 함께 움직임(등장 + 시차 + 붙박이 겹침) · 꾸밈 층이 메뉴 위로 올라옴
 // 쓰는 곳: scripts/lecpage.mjs qa(휴대폰·태블릿·PC 밝은 화면에서 한 번씩) · 모든 프리셋을 도는 점검 스크립트(scanPage를 직접 부름)
-//   node scripts/overlap-lint.mjs <dist 폴더> [--width 1280,390] [--json]
+//   node scripts/overlap-lint.mjs <dist 폴더> [--width 1280,390] [--pages index,console,screen,poster,check] [--json]  (강사 화면은 리허설이면 아무 키로 들어감)
 import { pathToFileURL } from 'node:url';
 
 export const RULES = {
@@ -112,11 +112,13 @@ export function pageCheck(mid) {
   for (const t of targets) {
     const r = t.getBoundingClientRect(); if (r.width < 8 || r.height < 8) continue;
     const x = r.left + r.width / 2, y = r.top + r.height / 2; if (x < 1 || y < 1 || x > vw - 1 || y > vh - 1) continue;
+    // 스크롤 칸(강사 화면의 질문 목록 등) 밖으로 밀려 가려진 단추는 덮인 게 아님
+    const sb = scrollBox(t); if (sb) { const q = sb.getBoundingClientRect(); if (x < q.left || x > q.right || y < q.top || y > q.bottom) continue; }
     const real = document.elementFromPoint(x, y);
-    if (real && !related(real, t) && !real.closest('.lp-nav,.lp-dock,.lp-toast,dialog,.lp-menu,.lp-now') && !t.closest('.lp-outline-item,.fx-stack')) { add('covered', `${sec(t)}${name(t)} ← ${name(real)}(누를 수 없음)`); continue; }
+    if (real && !related(real, t) && !real.closest('.lp-nav,.lp-dock,.lp-toast,dialog,.lp-menu,.lp-now,.lp-con-bar,.lp-ax-bar,.lp-pst-bar') && !t.closest('.lp-outline-item,.fx-stack')) { add('covered', `${sec(t)}${name(t)} ← ${name(real)}(누를 수 없음)`); continue; }
     document.head.appendChild(st);
     const top = document.elementFromPoint(x, y); st.remove();
-    if (top && !related(top, t) && !top.closest('.lp-nav,.lp-dock,.lp-toast,dialog,.lp-menu,.lp-now') && opacity(top) > 0.3 && (opaque(top) || /^(IMG|CANVAS|VIDEO)$/.test(top.tagName)) && !t.closest('.lp-outline-item,.fx-stack')) add('covered', `${sec(t)}${name(t)} ← ${name(top)}`);
+    if (top && !related(top, t) && !top.closest('.lp-nav,.lp-dock,.lp-toast,dialog,.lp-menu,.lp-now,.lp-con-bar,.lp-ax-bar,.lp-pst-bar') && opacity(top) > 0.3 && (opaque(top) || /^(IMG|CANVAS|VIDEO)$/.test(top.tagName)) && !t.closest('.lp-outline-item,.fx-stack')) add('covered', `${sec(t)}${name(t)} ← ${name(top)}`);
   }
   // 숨은 채 남음: 화면 안에 있는데 등장 대기 상태가 풀리지 않았거나, 본문 글이 거의 보이지 않음
   const inView = (el) => { const b = el.getBoundingClientRect(); return b.height > 0 && b.width > 0 && Math.min(b.bottom, vh) - Math.max(b.top, 0) > Math.min(b.height * 0.6, vh * 0.3); };
@@ -163,17 +165,20 @@ async function main(argv) {
   const srv = createServer(async (q, r) => { try { const p = resolve(join(base, decodeURIComponent(q.url.split('?')[0]).replace(/\/$/, '/index.html'))); if (p !== base && !p.startsWith(base + sep)) throw 0; const b = await readFile(p); r.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } });
   await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
   const widths = (args[args.indexOf('--width') + 1] && args.includes('--width') ? args[args.indexOf('--width') + 1] : '1280,390').split(',').map(Number);
+  const pages = (args.includes('--pages') ? args[args.indexOf('--pages') + 1] : 'index').split(',').map((p) => p.replace(/\.html$/, '') + '.html');
   const browser = await chromium.launch(), report = [];
   try {
-    for (const w of widths) {
+    for (const pg of pages) for (const w of widths) {
       const page = await browser.newPage({ viewport: { width: w, height: w < 700 ? 780 : 860 } });
-      await page.goto(`http://127.0.0.1:${srv.address().port}/index.html`, { waitUntil: 'load' }); await page.waitForTimeout(800);
-      report.push({ width: w, ...(await scanPage(page)) }); await page.close();
+      await page.goto(`http://127.0.0.1:${srv.address().port}/${pg}`, { waitUntil: 'load' });
+      if (pg === 'console.html' && await page.$('[data-admin-form]:not([hidden]) #lp-key') && /"provider":"local"/.test(await page.content())) { await page.fill('#lp-key', 'lint'); await page.click('[data-key-go]'); }
+      await page.waitForTimeout(pg === 'check.html' ? 2500 : 800);
+      report.push({ width: w, page: pg, ...(await scanPage(page)) }); await page.close();
     }
   } finally { await browser.close(); srv.close(); }
   const errors = report.reduce((n, r) => n + r.findings.reduce((m, f) => m + f.count, 0), 0);
   if (args.includes('--json')) console.log(JSON.stringify({ errors, report }, null, 1));
-  else { for (const r of report) { console.log(`\n■ 폭 ${r.width}px · 스크롤 자리 ${r.stops}곳`); if (!r.findings.length) console.log('  겹침·꼬임 없음'); for (const f of r.findings) console.log(`  ✗ ${f.rule} ×${f.count} — ${f.message_ko}\n      ${f.samples.slice(0, 4).join('\n      ')}`); } console.log(`\n문제 ${errors}개`); }
+  else { for (const r of report) { console.log(`\n■ ${r.page} 폭 ${r.width}px · 스크롤 자리 ${r.stops}곳`); if (!r.findings.length) console.log('  겹침·꼬임 없음'); for (const f of r.findings) console.log(`  ✗ ${f.rule} ×${f.count} — ${f.message_ko}\n      ${f.samples.slice(0, 4).join('\n      ')}`); } console.log(`\n문제 ${errors}개`); }
   process.exitCode = errors ? 1 : 0;
 }
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) main(process.argv);

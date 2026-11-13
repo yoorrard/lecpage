@@ -16,11 +16,12 @@ function b64(u8) {
   return btoa(s);
 }
 
-function lockPage({ title, page, payload }) {
+function lockPage({ title, page, payload, csp = '' }) {
   return `<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+${csp}
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
@@ -104,11 +105,35 @@ export async function protectSite(files, password, opts = {}) {
     const tag = `<script src="assets/unlock.js" data-lp-assets="${meta.salt}"></script>`;
     html = html.includes('</body>') ? html.replace('</body>', tag + '\n</body>') : html + tag;
     const blob = await enc(te.encode(html));
-    out[page] = lockPage({ title: opts.title || '연수 사이트', page, payload: { ...meta, data: b64(blob) } });
+    // 잠금 화면도 원래 쪽과 같은 보안 정책(CSP): 풀린 글이 같은 문서에 쓰이므로 정책이 이어짐
+    const csp = (/<meta http-equiv="Content-Security-Policy"[^>]*>/i.exec(files[page]) || [''])[0];
+    out[page] = lockPage({ title: opts.title || '연수 사이트', page, payload: { ...meta, data: b64(blob) }, csp });
   }
   out['assets/unlock.js'] = unlockJs;
   out['robots.txt'] = 'User-agent: *\nDisallow: /\n';
   return out;
+}
+
+/**
+ * 사이트 암호가 얼마나 버티는지 어림합니다. 잠근 파일은 누구나 내려받아 집에서 암호를 맞춰 볼 수 있어서
+ * (PBKDF2 60만 회라도 그래픽 카드 한 장이 초당 1만 번 넘게 시도) 짧은 숫자·흔한 말은 금방 풀립니다.
+ * → { level: 'weak'|'fair'|'good', message } (message는 화면에 그대로 씀)
+ */
+const COMMON_PW = ['1234', '12345', '123456', '1234567', '12345678', '123456789', '0000', '1111', 'password', 'qwerty', 'abcd1234', 'lecpage', '연수', '연수1234', '암호', '비밀번호', '선생님', '학교'];
+export function passwordAdvice(password) {
+  const s = String(password || '').normalize('NFC').trim(), n = [...s].length, low = s.toLowerCase();
+  const kinds = [/[0-9]/, /[a-z]/, /[A-Z]/, /[가-힣]/, /[^0-9a-zA-Z가-힣]/].filter((re) => re.test(s)).length;
+  if (!n) return { level: 'weak', message: '암호를 정해 주세요.' };
+  if (n < 6 || new Set(s).size <= 2 || COMMON_PW.includes(low) || (/^\d+$/.test(s) && n < 10) || /^(.)\1+$|^(?:0123|1234|2345|abcd|qwer)/i.test(s)) {
+    return { level: 'weak', message: '쉽게 풀리는 암호예요. 잠근 파일은 누구나 내려받아 맞춰 볼 수 있으니, [새로 만들기]로 바꾸거나 10자 이상으로 길게 해 주세요.' };
+  }
+  if (n < 10 || kinds < 2) return { level: 'fair', message: '조금 더 길게(10자 이상, 글자와 숫자를 섞어) 하면 더 안전해요. 참가자는 QR로 들어와 따로 칠 일이 드물어요.' };
+  return { level: 'good', message: '' };
+}
+/** 사람이 읽고 칠 수 있는 암호: 낱말 셋 + 숫자 넷(64낱말 → 약 24억 가지). 생성기가 공개돼 있어도 금방 맞추기 어렵게 */
+const PW_WORDS = ['숲속', '바다', '햇살', '별빛', '구름', '나무', '노을', '새싹', '바람', '물결', '연필', '공책', '하늘', '들꽃', '시냇물', '봄비', '여름', '가을', '겨울', '아침', '저녁', '달빛', '은하', '파도', '모래', '조약돌', '등대', '나침반', '지도', '책장', '종이', '물감', '도토리', '솔방울', '오솔길', '언덕', '호수', '섬마을', '무지개', '안개', '이슬', '서리', '눈꽃', '단풍', '새벽', '노래', '피리', '북소리', '징검다리', '울타리', '창문', '마당', '골목', '정원', '꽃밭', '열매', '씨앗', '뿌리', '줄기', '나뭇잎', '돌담', '풍선', '연날리기', '종소리'];
+export function friendlyPassword(rand = (n) => { const a = new Uint32Array(1); globalThis.crypto.getRandomValues(a); return a[0] % n; }) {
+  return `${PW_WORDS[rand(PW_WORDS.length)]}${PW_WORDS[rand(PW_WORDS.length)]}${PW_WORDS[rand(PW_WORDS.length)]}${String(1000 + rand(9000))}`;
 }
 
 /** QR·링크에 붙이면 저절로 열리는 주소(#k=암호). 암호를 아는 사람에게만 나눠 주세요. */

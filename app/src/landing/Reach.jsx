@@ -25,9 +25,9 @@ export function Reach() {
         </header>
         <p class="ld-sub">올릴 곳을 권하고, [공개하기]를 누르면 주소·QR·카톡 안내 문구가 함께 나와요. 주소가 실제로 열리는지도 확인해 줘요. 참가자는 회원가입 없이 QR로 들어와요.</p>
         <dl class="ld-facts">
-          <div><dt>올릴 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로, 학교 서버·USB는 ZIP으로</dd></div>
+          <div><dt>올릴 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로, 기관 서버·USB는 ZIP으로</dd></div>
           <div><dt>공개 범위</dt><dd>주소를 받은 사람만(기본) · 암호 · 누구나</dd></div>
-          <div><dt>다시 올리기</dt><dd>고친 뒤 다시 올려도 같은 주소예요</dd></div>
+          <div><dt>다시 올리기</dt><dd>고친 뒤 [바뀐 내용 다시 올리기] 한 번, 주소는 그대로예요</dd></div>
         </dl>
       </div>
       <div class="ld-reach-vis">

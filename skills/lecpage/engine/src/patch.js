@@ -93,7 +93,7 @@ export function applyBlueprintPatch(bp, patch) {
     raw[k] = mergeDeep(raw[k], p[k]); applied++;
   }
   if (isObj(p.design) && p.design.preset) delete raw._presetAuto; // 직접 고른 디자인(자동 추천 아님)
-  // 컨셉을 고치면 선생님이 세운 컨셉으로 표시(다시 만들 때 지킴). source를 직접 적었으면 그 값
+  // 컨셉을 고치면 강사가 세운 컨셉으로 표시(다시 만들 때 지킴). source를 직접 적었으면 그 값
   if (isObj(p.concept) && isObj(raw.concept) && !('source' in p.concept)) raw.concept.source = 'teacher';
   for (const k of REPLACE_KEYS) {
     if (!(k in p)) continue;
