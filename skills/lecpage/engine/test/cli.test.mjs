@@ -153,3 +153,32 @@ test('보안: 교재 속 숨은 지시(마크다운 주석)의 주소는 설계�
   for (const bad of ['collect.example.net', 'lecpage-login.example.com']) { assert.ok(!bp.includes(bad), `설계도에 ${bad}`); assert.ok(!html.includes(bad), `사이트에 ${bad}`); }
   assert.ok(html.includes('padlet.com'), '보이는 링크(패들렛)는 그대로');
 });
+
+test('app: 작업 폴더 → 앱이 여는 .lecpage(비밀 값 없이) → 다시 작업 폴더로 풀어 이어서 patch', async () => {
+  const P = await import('../src/project-file.js');
+  const r = json('app', 'work', '-o', 'out/연수.lecpage');
+  assert.equal(r.code, 0, JSON.stringify(r.data));
+  const files = P.readStoredZip(readFileSync(join(dir, 'out/연수.lecpage')));
+  const text = new TextDecoder().decode(files['project.json']);
+  const proj = JSON.parse(text).project;
+  assert.equal(proj.origin, 'skill');
+  for (const k of Object.keys(files)) assert.ok(k === 'project.json' || P.isAllowedAsset(k), `앱이 받지 않는 자료: ${k}`);
+  assert.ok(!text.includes('teacher.example') && !text.includes(dir), '사이트 주소·내 컴퓨터 경로가 들어가면 안 됨');
+  assert.equal(proj.blueprint.live.url, ''); assert.equal(proj.blueprint.live.anonKey, '');
+  assert.equal(proj.info.title, proj.blueprint.meta.title);
+  assert.equal(proj.info.venue, proj.blueprint.meta.venue || '');
+  const srcs = (proj.blueprint.sections.find((s) => s.type === 'deck')?.slides || []).map((s) => s.src).filter(Boolean);
+  for (const s of srcs) assert.ok(files[s], `쪽 그림이 파일에 없음: ${s}`);
+  assert.ok(proj.files.some((f) => f.key && files[f.key]), '교재 원본');
+  // 앱에서 저장한 파일처럼 다시 풀기
+  const back = run('app', 'out/연수.lecpage', '-o', 'back/work');
+  assert.equal(back.code, 0, back.out);
+  assert.match(back.out, /받지 않은 것/);
+  assert.equal(run('app', 'out/연수.lecpage', '-o', 'back/work').code, 1, '이미 있으면 덮어쓰지 않음');
+  const bp = JSON.parse(readFileSync(join(dir, 'back/work/blueprint.json'), 'utf8'));
+  assert.deepEqual(bp.sections.map((s) => s.id), proj.blueprint.sections.map((s) => s.id));
+  assert.ok(!JSON.parse(readFileSync(join(dir, 'back/work/info.json'), 'utf8')).joinUrl, '접속 주소는 강사에게 다시 받음');
+  const p = run('patch', 'back/work/blueprint.json', '--set', 'meta.venue=별관 2층');
+  assert.equal(p.code, 0, p.out);
+  assert.ok(readFileSync(join(dir, 'back/dist/index.html'), 'utf8').includes('별관 2층'), '풀어 둔 곳 옆 dist로 다시 빌드');
+});

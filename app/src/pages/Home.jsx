@@ -18,7 +18,11 @@ import '../styles/landing.css';
 // 첫 화면은 엔진을 받지 않아요(숫자는 빌드 때 계산, 그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md
 const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공개하기'];
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc';
-const SKILL_CMD = 'npx skills add yoorrard/lecpage';
+// 설치 명령: Claude Code는 플러그인 한 줄(code.claude.com/docs/en/plugins/install), 그 밖의 도구는 skills CLI(github.com/vercel-labs/skills)
+const SKILL_CMDS = [
+  { for: 'Claude Code', cmd: '/plugin install lecpage --marketplace yoorrard/lecpage' },
+  { for: 'Codex·Cursor·Gemini CLI 등', cmd: 'npx skills add yoorrard/lecpage' },
+];
 const EXAMPLES = [
   { id: 'data-lab', title: '데이터로 읽는 우리 반', kind: '디지털 연수 · 실습형 3시간', desc: '실습 5개, 도움 요청·진행 현황, 퀴즈, 만족도 조사', img: 'img/example-data-lab.webp' },
   { id: 'sel-story', title: '마음이 먼저 도착하는 교실', kind: '사회정서학습 연수 · 강의형 90분', desc: '핵심 메시지, 다섯 역량, 교재 보기, 투표·나눔 보드', img: 'img/example-sel-story.webp' },
@@ -104,7 +108,7 @@ export function Home() {
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function onImport(e) {
     const f = e.target.files?.[0]; if (!f) return;
-    try { const p = await importProjectFile(f); toast('저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
+    try { const p = await importProjectFile(f); toast(p.origin === 'skill' ? '에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
     catch (err) { toast(err.friendly ? err.message : '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
     e.target.value = '';
   }
@@ -188,11 +192,16 @@ export function Home() {
         <div>
           <p class="ld-kicker">Agent Skill</p>
           <h2 id="ld-skill-h">쓰던 AI 도구에서도 만들어요</h2>
-          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 도구에 넣어 써요. 쓰던 구독 그대로, 같은 엔진으로 만들어요. AI가 HTML을 직접 쓰지 않고 설계도와 짧은 명령으로 만들어요.</p>
+          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 도구에 넣어 써요. 쓰던 구독 그대로, 같은 엔진으로 만들어요. AI가 HTML을 직접 쓰지 않고 설계도와 짧은 명령으로 만들어요. 만든 연수는 파일 하나로 여기 앱에 넘겨 화면에서 다듬고 공개해요.</p>
         </div>
-        <div class="ld-cmd">
-          <code>{SKILL_CMD}</code>
-          <button type="button" class="btn btn-sm" aria-label="설치 명령 복사" onClick={() => copy(SKILL_CMD, '명령을 복사했어요.')}>복사</button>
+        <div class="ld-cmds">
+          {SKILL_CMDS.map((c) => (
+            <div class="ld-cmd">
+              <span class="ld-cmd-for">{c.for}</span>
+              <code>{c.cmd.split(' ').map((t, i) => <>{i ? ' ' : ''}<span>{t}</span></>)}</code>
+              <button type="button" class="btn btn-sm" aria-label={`${c.for} 설치 명령 복사`} onClick={() => copy(c.cmd, '명령을 복사했어요.')}>복사</button>
+            </div>
+          ))}
           <a class="ld-cmd-help" href="#/help/skill">AI 도구에서 쓰는 법</a>
         </div>
       </section>

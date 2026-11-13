@@ -20,7 +20,9 @@ const NETWORK = [{ value: 'good', label: '잘 됨' }, { value: 'slow', label: '�
 
 
 export function StepEdit({ p, update, go }) {
-  const [tab, setTab] = useState('content');
+  // 에이전트(skill `app` 명령)에서 만든 연수를 처음 열면: 내용은 에이전트가 짰으니 디자인부터 보여 주고 다음 할 일을 알림
+  const fromSkill = p.origin === 'skill' && !p.originSeen && !p.visited?.[3];
+  const [tab, setTab] = useState(fromSkill ? 'design' : 'content');
   const [focusId, setFocusId] = useState(null);
   const onPick = (id) => { setTab('content'); setFocusId(id + ':' + Date.now()); };
   // 다른 화면에서 '이 섹션을 열어 달라'고 남긴 표시(예: 공개 화면의 [자료 올리기])
@@ -65,6 +67,11 @@ export function StepEdit({ p, update, go }) {
       </StepHead>
       {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
         onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
+      {fromSkill && <div class="ai-job ok" role="status">
+        <span class="ai-job-t"><b>에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·공개를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
+        <button class="btn btn-sm" onClick={() => setTab('live')}>참여 기능 보기</button>
+        <button class="icon-btn" onClick={() => update({ originSeen: true })} aria-label="안내 닫기">✕</button>
+      </div>}
       {job?.status !== 'running' && <StructureNote p={p} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
       <div class="workspace">
         <div class="ws-panel">
