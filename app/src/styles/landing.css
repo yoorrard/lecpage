@@ -57,6 +57,7 @@
 .ld-hero-vis{position:relative;min-width:0;width:100%;max-width:640px;justify-self:center;transition:--ld-k 1.15s cubic-bezier(.22,1,.36,1)}
 .ld-fold{position:relative;aspect-ratio:16/10;container-type:inline-size}
 .ld-fold-site{position:absolute;inset:0;overflow:hidden;border-radius:14px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-lg)}
+.ld-fold-site picture{display:contents}
 .ld-fold-site img{display:block;width:100%;height:calc(100% - 26px);object-fit:cover;object-position:top left}
 .ld-sheet{position:absolute;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
 .ld-cover{inset:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:2cqi;padding:6cqi 7cqi 7cqi;border-radius:14px;

@@ -41,12 +41,14 @@ export function HeroFold() {
     };
   }, []);
   const src = shot('hero-data-lab'), sz = shotSize('hero-data-lab');
+  // 좁은 화면은 가벼운 그림(표지 밑에 깔려 모서리만 보이고, 글 아래에 조금 걸침). index.html이 화면 폭에 맞는 쪽만 미리 받음
+  const small = shot('hero-data-lab-s'), ssz = shotSize('hero-data-lab-s');
   return (
     <div class="ld-hero-vis" ref={box} aria-hidden="true">
       <div class="ld-fold">
         <div class="ld-fold-site">
           <i class="ld-bar"><b /><b /><b /><span>예시 연수 사이트</span></i>
-          {src && <img src={src} alt="" width={sz.w} height={sz.h} decoding="async" />}
+          {src && <picture>{small && <source media="(max-width: 979.98px)" srcset={small} width={ssz.w} height={ssz.h} />}<img src={src} alt="" width={sz.w} height={sz.h} decoding="async" /></picture>}
         </div>
         <div class="ld-sheet ld-cover">
           <small>연수 교재 · 1쪽</small>

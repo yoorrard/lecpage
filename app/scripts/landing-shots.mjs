@@ -105,6 +105,7 @@ try {
       const png = await shoot(dir);
       await save('site-data-lab', png, { q: 0.76, w: 1120 }); // 이야기 '펼쳐요' 장면
       await save('hero-data-lab', png, { q: 0.62, w: 760 }); // 첫 화면: 교재 표지 밑에 깔려 모서리만 보이므로 작게(첫 화면을 빨리)
+      await save('hero-data-lab-s', png, { q: 0.5, w: 520 }); // 좁은 화면 첫 화면(글 아래에 조금 걸침): 더 가볍게, 미리 받아도 첫 그림을 늦추지 않게
     }
     if (want('phone')) await save('phone-data-lab', await shoot(dir, { width: 390, height: 844, dpr: 1.5, full: 2400 }), { q: 0.7 });
   }
