@@ -23,7 +23,7 @@ export function polishTargets(bp) {
 }
 
 const RULES = [
-  '너는 한국 교사 연수 사이트의 문구를 다듬는 편집자다.',
+  '너는 한국 강의·연수 사이트의 문구를 다듬는 편집자다.',
   '아래 [번호] 문구들을 짧고 자연스러운 한국어로 고친다.',
   '- 뜻과 사실(이름, 날짜, 숫자, 도구 이름)은 바꾸지 않는다. 교재에 없는 내용을 더하지 않는다.',
   '- 원래보다 길게 쓰지 않는다. 제목은 짧게, 설명은 한두 문장으로.',
@@ -39,7 +39,7 @@ const RULES = [
 /** 문구 다듬기 지시문(짧음) */
 export function makePolishPrompt(bp, targets = polishTargets(bp)) {
   const m = bp.meta || {}; const a = bp.audience || {};
-  const about = [m.title && `연수명: ${m.title}`, m.subtitle && `핵심 메시지: ${m.subtitle}`, a.size && `인원: 약 ${a.size}명`, a.minor ? '참가자: 학생' : '참가자: 교사'].filter(Boolean).join(' · ');
+  const about = [m.title && `연수명: ${m.title}`, m.subtitle && `핵심 메시지: ${m.subtitle}`, a.size && `인원: 약 ${a.size}명`, a.minor ? '참가자: 학생' : '참가자: 성인'].filter(Boolean).join(' · ');
   const list = targets.map((t) => `[${t.k}] ${t.text.replace(/\s*\n\s*/g, ' ')}`).join('\n');
   return [...RULES, '', `## 연수: ${about}`, '', '## 문구', list, '', '이제 JSON만 답한다.'].join('\n');
 }

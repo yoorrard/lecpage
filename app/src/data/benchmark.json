@@ -1,6 +1,58 @@
 {
   "version": 1,
-  "about": "첫 화면 'AI에게 그냥 맡길 때와 다른 점' 아래 '재어 본 값'. items가 비어 있으면 그 구간이 나오지 않아요. 형식: docs/research/landing-2026-11.md 5장 비교 수치",
-  "baseline": "AI에게 그냥 맡길 때",
-  "items": []
+  "about": "첫 화면 '그냥 AI에게 맡길 때와 다른 점' 아래 '재어 본 값'. items가 비어 있으면 그 구간이 나오지 않아요. 형식: docs/research/landing-2026-11.md 5장 비교 수치, 재는 방법: docs/research/benchmark-2026-11.md",
+  "baseline": "AI 에이전트에 그냥 맡길 때",
+  "items": [
+    {
+      "id": "input-tokens",
+      "name": "AI가 읽은 글(입력 토큰)",
+      "unit": "토큰",
+      "better": "lower",
+      "baseline": 26300000,
+      "lecpage": 6643,
+      "compact": true,
+      "approx": ["baseline"],
+      "measured": "2026-11-13",
+      "conditions": "같은 교재(실습형 PPT 21장)·같은 요청으로 만들기부터 연수 뒤 CSV까지",
+      "method": "docs/research/benchmark-2026-11.md#tokens"
+    },
+    {
+      "id": "output-tokens",
+      "name": "AI가 쓴 글(출력 토큰)",
+      "unit": "토큰",
+      "better": "lower",
+      "baseline": 219941,
+      "lecpage": 6000,
+      "compact": true,
+      "approx": ["baseline", "lecpage"],
+      "measured": "2026-11-13",
+      "conditions": "같은 교재·같은 요청, 같은 과정",
+      "method": "docs/research/benchmark-2026-11.md#tokens"
+    },
+    {
+      "id": "cost",
+      "name": "AI 비용(lecpage를 1로)",
+      "unit": "",
+      "better": "lower",
+      "baseline": 127,
+      "lecpage": 1,
+      "digits": 0,
+      "approx": ["baseline"],
+      "measured": "2026-11-13",
+      "conditions": "토큰 단가로 환산(출력 5배·캐시 읽기 0.1배)",
+      "method": "docs/research/benchmark-2026-11.md#cost"
+    },
+    {
+      "id": "setup",
+      "name": "공개·질문·투표 준비로 강사가 할 일",
+      "unit": "가지",
+      "better": "lower",
+      "baseline": 12,
+      "lecpage": 0,
+      "digits": 0,
+      "measured": "2026-11-13",
+      "conditions": "lecpage는 같은 기기에서 두 번째 연수부터",
+      "method": "docs/research/benchmark-2026-11.md#setup"
+    }
+  ]
 }

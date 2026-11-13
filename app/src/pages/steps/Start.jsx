@@ -176,7 +176,7 @@ export function StepStart({ p, update, go }) {
   const waiting = !!p.chatWait;
   const request = !waiting && (
     <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 적으면 AI가 반영해요.">
-      <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
+      <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 처음 배우는 신입 직원 대상이에요." />
     </Field>
   );
   const makeHead = <div class="stack make-head"><h2 class="h-sub" id="make-h" tabIndex={-1}>AI로 만들기</h2>
@@ -219,7 +219,7 @@ export function StepStart({ p, update, go }) {
         <h2 class="h-sub">연수 정보 {mat && <span class="small muted">교재에서 찾은 값을 채웠어요</span>}</h2>
         <div class="form-grid">
           <Field label="연수명 (필수)" hint={titleErr && !info.title ? <span style={{ color: 'var(--bad)' }}>연수명을 적어 주세요.</span> : null}>
-            <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 수업에 바로 쓰는 생성형 AI" aria-required="true" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
+            <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 업무에 바로 쓰는 생성형 AI" aria-required="true" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
           </Field>
           <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
           <div class="pair">
@@ -229,7 +229,7 @@ export function StepStart({ p, update, go }) {
           <Field label="장소"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
         </div>
         {!showMake && <Field label="AI에게 바라는 점 (선택)" hint="AI로 다시 만들 때 반영해요.">
-          <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
+          <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 처음 배우는 신입 직원 대상이에요." />
         </Field>}
         <details class="more">
           <summary><b>더 정하기</b><span class="small muted">인원 {SIZE.find((o) => o.value === info.size)?.label || ''} · 형식 {(FORMATS.find((o) => o.value === info.format) || FORMATS[0]).label}{feats.length ? ` · 참여 기능 ${feats.length}개` : ''}</span></summary>

@@ -12,6 +12,7 @@ export const shotSize = (name) => meta[name] || { w: 1280, h: 800 };
 export const SHOWCASE = (meta.showcase || []).map((id) => ({ id, ...(facts.designs[id] || { name: id, desc: '' }), src: shot(`show-${id}`) })).filter((d) => d.src);
 export const PRESET_COUNT = facts.presets;
 export const FX_COUNT = facts.fx;
+export const LAYOUT_COUNT = facts.layouts;
 
 // 예시 연수 '데이터로 읽는 우리 반'(skills/lecpage/examples/data-lab.blueprint.json)에서 옮긴 값
 export const EX = {
