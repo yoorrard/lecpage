@@ -15,9 +15,9 @@ export const KIND = { vercel: 'vercel', 'github-pages': 'github', netlify: 'netl
 // 고른 곳마다 한 줄 소개(lead)와 알아 둘 점(care). 숫자·약관 근거: docs/research/hosting-2026-11.md, 2026-11-12에 공식 문서로 다시 확인
 const ABOUT = {
   lecpage: { lead: '가입이나 토큰 없이 바로 공개해요.' },
-  vercel: { lead: '토큰 하나로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '무료는 비상업 개인 용도예요. 강사료를 받는 연수는 Cloudflare나 GitHub Pages에 올리세요.' },
+  vercel: { lead: '토큰 하나로 바로 올리고, 다시 올려도 주소가 그대로예요.' },
   'github-pages': { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '저장소가 공개돼서 사이트 파일을 누구나 볼 수 있어요.' },
-  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 강사료를 받는 연수에도 쓸 수 있어요.' },
+  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.' },
   netlify: { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '2026년 7월 28일 뒤에 가입했다면 올린 뒤 Netlify에서 Make public을 눌러야 열려요. 무료는 한 달에 20번쯤 올릴 수 있어요.' },
   zip: { lead: '학교 서버·NAS·USB로 나눌 때 써요.' },
 };
@@ -163,7 +163,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const [instantOff, setInstantOff] = useState(''); // 바로 공개를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
   useEffect(() => { connectedTargets().then(setConnected); instantInfo().then(setInstant); }, []);
   const live = instant && instant.accepting !== false && !instantOff ? instant : null;
-  const full = instantOff || (instant && instant.accepting === false ? '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.' : '');
+  // 운영자가 새 업로드를 잠시 멈췄으면(paused) 그대로, 아니면 하루 한도 때문에 멈춘 것
+  const full = instantOff || (instant && instant.accepting === false ? (instant.paused ? '바로 공개가 잠시 새 사이트를 받지 않아요. 다른 곳에 올려 주세요.' : '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.') : '');
   const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 공개가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 올린 적이 있으면 그곳이 먼저(주소가 그대로)

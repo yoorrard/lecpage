@@ -90,7 +90,6 @@ test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 500, features: ['qa', 'poll'] }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa'], network: 'offline' }).backend, 'lan');
   assert.equal(E.decideInfra({ size: 80, features: ['qa'], infra: ['nas'], skill: 'set' }).backend, 'server');
-  assert.ok(!E.decideInfra({ size: 30, features: ['qa'], commercial: true }).hosts.includes('vercel'));
 });
 
 test('유형 결정', () => {
@@ -231,11 +230,10 @@ test('짧은 주소: 사이트 주소와 따로 넘기고(QR·복사는 원래 �
   assert.match(r.files['assets/screen.js'], /createSvgTag\(\{ cellSize: 6, margin: 24/);
 });
 
-test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사료가 있으면 Vercel 제외, 연결·지난번에 올린 곳 먼저', () => {
+test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 연결·지난번에 올린 곳 먼저', () => {
   assert.equal(E.decideHost({}).pick, 'vercel');
   assert.equal(E.decideHost({ skill: 'dev' }).pick, 'cloudflare');
-  const paid = E.decideHost({ commercial: true });
-  assert.ok(!paid.hosts.includes('vercel')); assert.equal(paid.pick, 'cloudflare'); assert.equal(paid.hosts[1], 'github-pages'); assert.ok(paid.warnings.length);
+  assert.ok(E.decideHost({}).hosts.includes('vercel'), '강사료를 받는 강의여도 올릴 곳을 빼지 않음');
   assert.equal(E.decideHost({ previous: 'netlify' }).pick, 'netlify');
   assert.equal(E.decideHost({ connected: ['github-pages'] }).pick, 'github-pages');
   assert.equal(E.decideHost({ instant: true }).pick, 'lecpage');
@@ -249,13 +247,46 @@ test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사�
   const big = E.decideHost({ siteMB: 180 });
   assert.equal(big.pick, 'cloudflare', '100MB가 넘는 사이트는 Cloudflare 먼저'); assert.ok(big.warnings.some((w) => /100MB/.test(w)));
   assert.equal(big.hosts.at(-3), 'vercel', 'Vercel은 맨 뒤(뒤에 firebase·zip)');
-  assert.equal(E.decideHost({ commercial: true, maxFileMB: 40 }).pick, 'github-pages');
   assert.equal(E.decideHost({ skill: 'dev', files: 1500 }).pick, 'cloudflare', '명령으로 올리면 20,000개까지');
   assert.equal(E.decideHost({ skill: 'dev', files: 25000 }).pick, 'github-pages');
   assert.equal(E.decideHost({ files: 1500 }).pick, 'github-pages', '앱(끌어 놓기)은 1,000개까지');
   assert.ok(E.decideHost({ network: 'restricted' }).warnings.some((w) => /전날/.test(w)));
   assert.match(E.HOSTS.cloudflare.cli, /mktemp -d/);
   for (const h of E.decideHost({ instant: true }).hosts) assert.ok(E.HOSTS[h], h);
+});
+
+test('올릴 곳 Onpod: 명령(skill)에서만, Cloudflare 뒤. 이미 쓰면 먼저이고 할 일 0번, 한도 밖이면 뒤로', () => {
+  assert.ok(!E.decideHost({}).hosts.includes('onpod'), '앱에서는 못 올림(REST CORS 없음)');
+  const dev = E.decideHost({ skill: 'dev' });
+  assert.ok(dev.hosts.indexOf('onpod') > dev.hosts.indexOf('cloudflare'));
+  assert.equal(dev.steps, 2, 'Cloudflare: 가입·로그인 승인');
+  const mine = E.decideHost({ skill: 'dev', connected: ['onpod'] });
+  assert.equal(mine.pick, 'onpod'); assert.equal(mine.steps, 0);
+  assert.ok(E.decideHost({ skill: 'dev' }).hosts.includes('onpod'));
+  const big = E.decideHost({ skill: 'dev', siteMB: 150 }).hosts;
+  assert.equal(big.indexOf('onpod'), big.indexOf('firebase') - 1, '사이트 100MB를 넘으면 맨 뒤(firebase·zip 앞)');
+  assert.equal(E.HOST_STEPS.onpod.skill, 4); assert.equal(E.HOST_STEPS.onpod.app, null);
+  assert.equal(E.decideInfra({ size: 30, skill: 'set' }).hostSteps, 2);
+  assert.equal(E.decideInfra({ size: 30 }).hostSteps, 6, '앱 기본(Vercel 가입·토큰) 측정값');
+  const MB = 1024 * 1024;
+  assert.ok(E.checkHost('onpod', { bytes: 90 * MB, files: 4000, maxFile: 40 * MB }).ok);
+  assert.equal(E.checkHost('onpod', { bytes: 120 * MB, files: 6000, maxFile: 60 * MB }).errors.length, 3);
+  assert.match(E.HOSTS.onpod.cli, /onpod@latest static deploy .* --no-spa/);
+});
+
+test('구조화 데이터: 공개 연수의 첫 화면에만 Event JSON-LD(비공개·다른 쪽에는 없음)', () => {
+  const bp = EX('data-lab');
+  const pub = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, venue: '연수원 3층', start: '14:00', end: '17:00' } }, { runtime: nodeRuntime() });
+  const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(pub.files['index.html'])[1]);
+  assert.equal(ld['@type'], 'Event'); assert.equal(ld.startDate, `${bp.meta.date}T14:00:00+09:00`); assert.equal(ld.endDate, `${bp.meta.date}T17:00:00+09:00`);
+  assert.equal(ld.location.name, '연수원 3층');
+  assert.ok(!/ld\+json/.test(pub.files['check.html']) && !/ld\+json/.test(pub.files['poster.html']));
+  for (const mode of ['link', 'password']) assert.ok(!/ld\+json/.test(E.build({ ...bp, access: { mode } }, { runtime: nodeRuntime() }).files['index.html']), mode);
+  const noTime = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, start: '', end: '' } }, { runtime: nodeRuntime() });
+  const ld2 = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(noTime.files['index.html'])[1]);
+  assert.equal(ld2.startDate, bp.meta.date); assert.ok(!('endDate' in ld2), '끝 시각을 지어내지 않음');
+  const evil = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, title: '</script><script>alert(1)</script>' } }, { runtime: nodeRuntime() });
+  assert.ok(!/<\/script><script>alert/.test(evil.files['index.html']), '제목 속 </script>가 블록을 닫지 못함');
 });
 
 test('올릴 곳 한도: 크기·파일 수가 넘으면 올리기 전에 알려 줌', () => {

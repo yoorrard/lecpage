@@ -36,7 +36,11 @@ export const SVG_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 /** 호스트가 직접 만드는 안내 화면(404·기간 끝·가림) */
 export const NOTICE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 /** HTML을 고쳐서 내보내는 방식이 바뀌면 올려서 브라우저가 새로 받게 함 */
-export const HTML_REV = 'r1';
+export const HTML_REV = 'r2';
+/** 주소에 내용 지문(?v=)이 붙은 파일: 내용이 바뀌면 주소가 바뀌므로 브라우저가 1년 둠 */
+export const IMMUTABLE = 'public, max-age=31536000, immutable';
+/** 지문 없는 파일: 10분 둔 뒤 다시 물어봄(304) */
+export const SHORT = 'public, max-age=600';
 
 export const BASE_HEADERS = {
   'x-content-type-options': 'nosniff',
@@ -45,8 +49,12 @@ export const BASE_HEADERS = {
   'x-robots-tag': 'noindex, nofollow',
 };
 
-export function etagOf(sha, type) {
-  return type.kind === 'html' ? `"${sha}-${HTML_REV}"` : `"${sha}"`;
+/**
+ * HTML은 내보낼 때 다른 파일의 지문(?v=)·공지를 넣으므로 배포·공지가 바뀌면 etag도 바뀌어야 함 → tag에 담음
+ * @param {string} [tag] HTML일 때 덧붙일 글자(배포 id 앞부분 등)
+ */
+export function etagOf(sha, type, tag = '') {
+  return type.kind === 'html' ? `"${sha}${tag ? `-${tag}` : ''}-${HTML_REV}"` : `"${sha}"`;
 }
 
 /** If-None-Match 값에 이 etag가 있는지(약한 비교) */
@@ -59,18 +67,18 @@ export function etagMatches(header, etag) {
  * @param {string} path 사이트 안 경로
  * @param {{type:string, kind:string, download?:boolean, sameOrigin:boolean}} type typeOf(path)
  * @param {string} sha
- * @param {{ scripts?: string[] }} [opts] htmlCsp에 넘길 값
+ * @param {{ scripts?: string[], tag?: string, immutable?: boolean }} [opts] scripts: htmlCsp에 넘길 값, tag: HTML etag에 덧붙일 글자, immutable: 주소의 지문이 맞음
  * @returns {Record<string,string>}
  */
 export function fileHeaders(path, type, sha, opts = {}) {
-  const h = { ...BASE_HEADERS, 'content-type': type.type, etag: etagOf(sha, type) };
+  const h = { ...BASE_HEADERS, 'content-type': type.type, etag: etagOf(sha, type, opts.tag) };
   if (type.kind === 'html') {
     const noFrame = NO_FRAME_PAGES.has(path);
     h['content-security-policy'] = htmlCsp({ noFrame, scripts: opts.scripts });
     if (noFrame) h['x-frame-options'] = 'DENY';
     h['cache-control'] = 'no-cache';
   } else {
-    h['cache-control'] = 'public, max-age=600';
+    h['cache-control'] = opts.immutable ? IMMUTABLE : SHORT;
     h['accept-ranges'] = 'bytes';
     if (type.kind === 'svg') h['content-security-policy'] = SVG_CSP;
     if (type.sameOrigin) h['cross-origin-resource-policy'] = 'same-origin';

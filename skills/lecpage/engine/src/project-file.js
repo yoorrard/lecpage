@@ -12,7 +12,7 @@ export const APP_URL = 'https://yoorrard.github.io/lecpage/';
 export const DEFAULT_INFO = {
   title: '', subtitle: '', organizer: '', date: '', start: '', end: '', venue: '', mode: 'offline',
   size: 25, format: '', features: [], devices: ['laptop'], network: 'good',
-  minor: false, admin: 'school', commercial: false, completionRate: 80,
+  minor: false, admin: 'school', completionRate: 80,
   surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '', contact: '', joinUrl: '',
 };
 
@@ -71,7 +71,6 @@ export function appInfoFrom(bp = {}, info = {}) {
     admin: m.admin?.kind || DEFAULT_INFO.admin, completionRate: +m.admin?.completionRate || DEFAULT_INFO.completionRate,
     features: Array.isArray(bp.live?.features) ? bp.live.features.slice() : [],
     format: APP_FORMATS.includes(info.format) ? info.format : '',
-    commercial: !!info.commercial,
     instructorName: str(ins.name), instructorOrg: str(ins.org), instructorBio: str(ins.bio), instructorEmail: str(ins.email),
     ...(str(info.request) ? { request: info.request.slice(0, 600) } : {}),
     joinUrl: '', surveyUrl: '',

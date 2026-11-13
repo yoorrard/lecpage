@@ -16,7 +16,7 @@ export { contrast, mix, readableOn, toOklch, fromOklch, ramp12 } from './design/
 export { designTokens } from './design/dtcg.js';
 export { FX, TOPICS, TOPIC_LABELS } from './design/fx-catalog.js';
 export { rankPresets, chooseEffects, chooseFonts, resolveDesign, motionCap, fxInfo } from './decide/design.js';
-export { decideInfra, BACKENDS, HOSTS, TEACHER_STEPS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
+export { decideInfra, BACKENDS, HOSTS, HOST_STEPS, TEACHER_STEPS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
 export { decideArchetype } from './decide/archetype.js';
 export { decideStructure, structureFor, cleanStructure, checkOrder, linkConcept, flowGuide, FLOW_INFO, SIGNAL_TABLE, FEATURE_LABEL } from './decide/structure.js';
 export { findLeftovers, materialCoverage, leftoversToSections, leftoverAdds } from './ingest/compose.js';

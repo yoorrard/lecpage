@@ -9,6 +9,10 @@
 //   인증은 강사가 해 둔 `npx wrangler@4 login` 또는 환경 변수 CLOUDFLARE_API_TOKEN(+CLOUDFLARE_ACCOUNT_ID)만 씁니다.
 //   시험용: LECPAGE_WRANGLER=<가짜 wrangler 명령>이면 그 명령을 씀(실제 계정에 닿지 않게).
 //
+// publish [work] --host onpod [--name 이름] [--dry-run]
+//   Onpod(한국 서비스)에 사이트만 올립니다(`onpod static deploy`, 인증 ONPOD_TOKEN). 아래 publishOnpod 참고.
+//   --host를 빼면 지난번에 올린 곳에 같은 이름으로 다시 올립니다(처음이면 Cloudflare).
+//
 // handouts <주소|사이트 폴더> [-o 저장 폴더] [--password 암호]
 //   QR-안내문.pdf(참가자용 A4 한 장) · 강사-카드.pdf · 발표화면.png · 발표화면-QR-크게.png. Playwright가 없으면 건너뜀
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, copyFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
@@ -41,7 +45,7 @@ function wrangler(argv, { cwd, input } = {}) {
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, out: redact(out), raw: out };
 }
-const redact = (s) => String(s).replace(/(CLOUDFLARE_API_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***');
+const redact = (s) => String(s).replace(/(CLOUDFLARE_API_TOKEN|ONPOD_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***').replace(/\b(op_u_|opk_|op_p_)[A-Za-z0-9_-]{6,}/g, '$1***');
 /** 출력에서 주소 찾기: https://<이름>.<계정>.workers.dev (시험용으로 http://127.0.0.1:포트도) */
 function findUrl(out, name) {
   const esc = name.replace(/[-]/g, '\\-');
@@ -89,13 +93,15 @@ export async function publishCmd(h) {
   const dist = resolve(work, state.out || '../dist');
   const tdir = dist + '-강사용';
   if (!existsSync(join(dist, 'index.html'))) fail(`${rel(dist)}에 사이트가 없어요. make나 patch로 먼저 빌드해 주세요.`);
-  const host = String(args.host || 'cloudflare');
-  if (host !== 'cloudflare') {
+  // --host가 없으면 지난번에 올린 곳(같은 주소로 다시). 처음이면 Cloudflare
+  const host = String(args.host || state.deploy?.host || 'cloudflare');
+  if (host !== 'cloudflare' && host !== 'onpod') {
     const H = E.HOSTS[host];
-    fail(`publish는 지금 Cloudflare만 대신 올려요(사이트·참여 기능을 한 계정에). ${H?.cli ? `${H.name_ko}는 한 줄 명령으로: ${H.cli}` : ''} 안내: references/deploy/${host}.md`);
+    fail(`publish는 지금 Cloudflare(사이트·참여 기능을 한 계정에)와 Onpod(사이트만)에 대신 올려요. ${H?.cli ? `${H.name_ko}는 한 줄 명령으로: ${H.cli}` : ''} 안내: references/deploy/${host}.md`);
   }
   const raw = readJson(bpPath);
   const bp = E.validate(raw).blueprint;
+  if (host === 'onpod') return publishOnpod(h, { work, state, dist, tdir, bp, dry });
   const infoPath = state.info ? resolve(work, state.info) : join(work, 'info.json');
   const info = existsSync(infoPath) ? readJson(infoPath) : {};
   const live = !!args.live;
@@ -213,6 +219,119 @@ export async function publishCmd(h) {
     live ? `건넬 것: 관리자 키 파일 ${rel(keyFile)} — 비밀번호 관리 앱에 옮긴 뒤 파일 지우기. 키를 대화에 적지 않아요` : '',
     `다시 올리기: 같은 명령(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 올리지 않아요`,
   ], { ok: true, host, url: siteBase, name, relay: live ? { name: relayName, url: relayUrl } : null, claim, handouts: ho?.files || [] });
+}
+
+// ── Onpod(한국 서비스): 사이트만 올림. 참여 기능 중계는 Cloudflare(publish --host cloudflare --live)·Supabase·시트 ──
+// 근거: docs/research/hosting-2026-11.md §12(2026-11-13). `onpod static deploy <폴더> --name <이름>`, 인증은 ONPOD_TOKEN 또는 `onpod login --token`.
+// Onpod은 점으로 시작하는 파일을 빼고 올리고 _headers를 읽지 않음(문서에 없음) → 올리는 사본에서 _headers를 빼고, 보안은 쪽마다 있는 meta CSP가 맡음.
+// AI-Ready(기본 켜짐): 사이트에 없으면 Onpod이 llms.txt·sitemap.xml을 채움. 검색 제외 사이트는 짧은 llms.txt와 빈 sitemap.xml을 함께 올려
+// 쪽 목록(강사 화면 포함)이 나가지 않게 하고, 공개 사이트는 첫 화면만 담은 sitemap.xml과 robots.txt의 Sitemap 줄을 올림. dist는 그대로 둠.
+// 시험용: LECPAGE_ONPOD=<가짜 onpod 명령>이면 그 명령을 씀(실제 계정에 닿지 않게)
+const ONPOD_LIMIT = { files: 5000, fileMB: 50, siteMB: 100 };
+let onpodBin = null;
+function onpodRun(argv, { cwd } = {}) {
+  const fake = process.env.LECPAGE_ONPOD;
+  // 이미 깔린 onpod이 있으면 그것, 없으면 npx. CDN이 최신 바이너리만 주므로 버전을 고정하지 않음(고정하면 해시가 안 맞아 설치가 멈춤)
+  if (!fake && onpodBin === null) onpodBin = spawnSync('onpod', ['--version'], { encoding: 'utf8', timeout: 20e3 }).status === 0;
+  const [cmd, pre] = fake ? [process.execPath, [fake]] : onpodBin ? ['onpod', []] : [process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'onpod@latest']];
+  const r = spawnSync(cmd, [...pre, ...argv], { cwd, encoding: 'utf8', env: process.env, maxBuffer: 32 * MiB, timeout: 10 * 60e3 });
+  const out = `${r.stdout || ''}\n${r.stderr || ''}`;
+  return { ok: r.status === 0, out: redact(out), raw: out };
+}
+const LLMS_PRIVATE = '# 연수 참가자용 사이트\n\n> 주소를 받은 참가자만 보는 연수 사이트예요. 검색·AI 수집 대상이 아니에요(robots.txt).\n';
+const sitemapXml = (urls) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${u}</loc></url>`).join('')}</urlset>\n`;
+/** 올릴 사본: _headers·점 파일을 빼고(.well-known은 남김), 공개 범위에 맞는 llms.txt·sitemap.xml·robots.txt를 더함 */
+export function onpodStage(dist, { publicSite, url }) {
+  const stage = mkdtempSync(join(tmpdir(), 'lecpage-onpod-'));
+  cpSync(dist, stage, { recursive: true, filter: (src) => { if (src === dist) return true; const b = basename(src); return !(b.startsWith('.') && b !== '.well-known') && !(b === '_headers' && dirname(src) === dist); } });
+  const added = [];
+  const put = (f, text) => { if (!existsSync(join(stage, f))) { writeFileSync(join(stage, f), text); added.push(f); } };
+  if (publicSite) {
+    put('sitemap.xml', sitemapXml([url]));
+    const rb = join(stage, 'robots.txt');
+    const r = existsSync(rb) ? readFileSync(rb, 'utf8') : 'User-agent: *\nAllow: /\n';
+    if (!/^sitemap:/im.test(r)) { writeFileSync(rb, r.replace(/\n*$/, '\n') + `Sitemap: ${url}sitemap.xml\n`); added.push('robots.txt의 Sitemap 줄'); }
+  } else {
+    put('llms.txt', LLMS_PRIVATE);
+    put('sitemap.xml', sitemapXml([]));
+  }
+  return { stage, added };
+}
+
+async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
+  const { args, rel, fail, say, saveState } = h;
+  if (args.live) fail('Onpod에는 사이트만 올려요. 참여 기능 중계는 publish work --host cloudflare --live로 올리거나, Supabase·구글 시트를 연결한 뒤 --live 없이 다시 해 주세요.');
+  if (args.temporary) fail('Onpod에는 가입 없이 올리는 임시 주소가 없어요. 계정 없이 먼저 보려면 --host cloudflare --temporary를 써 주세요.');
+  // 이름: --name, 지난번 Onpod 이름, 없으면 lec-<날짜>-<코드>(다른 곳에 올린 이름은 Onpod에서 이미 쓰일 수 있어 이어 쓰지 않음)
+  const name = siteName(h, bp, state.deploy?.host === 'onpod' ? state : { ...state, deploy: null });
+  if (!NAME_RE.test(name)) fail(`사이트 이름은 소문자·숫자·하이픈으로 63자까지예요: ${name} (--name으로 바꿔 주세요)`);
+  const siteBase = `https://${name}.onpod.ai/`;
+  const publicSite = bp.access?.mode === 'public';
+  const { stage, added } = onpodStage(dist, { publicSite, url: siteBase });
+  const cleanup = () => rmSync(stage, { recursive: true, force: true });
+  const st = siteStat(stage);
+  if (st.files > ONPOD_LIMIT.files || st.max > ONPOD_LIMIT.fileMB * MiB || st.bytes > ONPOD_LIMIT.siteMB * 1e6) {
+    cleanup();
+    fail(`Onpod 무료 한도를 넘어요: 파일 ${st.files}개(한도 ${ONPOD_LIMIT.files}) · 가장 큰 파일 ${Math.ceil(st.max / MiB)}MB(한도 ${ONPOD_LIMIT.fileMB}MB, ${basename(st.maxName)}) · 합계 ${Math.ceil(st.bytes / 1e6)}MB(한도 ${ONPOD_LIMIT.siteMB}MB). 영상은 유튜브 링크로 바꾸거나 --host cloudflare로 올려 주세요.`);
+  }
+  const auth = process.env.ONPOD_TOKEN ? 'token' : '';
+  // 참여 기능 중계(Cloudflare)가 지난 사이트 주소만 받게 돼 있으면 새 주소도 받게 고쳐야 질문·투표가 이어짐
+  const relayDir = join(work, 'live-relay');
+  const relay = state.deploy?.relay?.name && existsSync(join(relayDir, 'wrangler.toml')) ? state.deploy.relay : null;
+  const allow = (u) => [...new Set([state.deploy?.url, u].filter(Boolean).map((x) => x.replace(/\/$/, '')))].join(',');
+  const verify = !args['no-verify'];
+  if (dry) {
+    cleanup();
+    say([
+      `올리기 계획(--dry-run, 아무것도 바꾸지 않음) · Onpod · 사이트 ${name} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
+      `인증 ${auth ? 'ONPOD_TOKEN 있음' : '환경 변수 없음 → 실제로 올릴 때 onpod whoami로 로그인을 확인해요'}`,
+      `1 올릴 사본(빈 임시 폴더): _headers·점 파일 빼기${added.length ? ` · 더하기 ${added.join(', ')}` : ''}(${publicSite ? '공개 연수: 첫 화면만 담은 sitemap' : '검색 제외: Onpod이 쪽 목록을 자동으로 내지 않게'})`,
+      `2 onpod static deploy <사본> --name ${name} --no-spa → ${siteBase}`,
+      relay ? `3 참여 기능 중계 ${relay.name}가 새 주소도 받게: wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:${allow(siteBase)}` : '',
+      `${relay ? 4 : 3} 주소 확인(사이트·check) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·강사-카드.pdf·발표화면.png`,
+      '강사가 할 일:',
+      auth ? '  없음(키가 있어요). 명령에서 --dry-run을 빼고 다시 실행해요' : '  1. https://console.onpod.ai/signup 에서 구글 계정으로 가입(카드 없음)\n  2. 콘솔의 API 키 화면에서 키를 만들어 복사\n  3. 이 컴퓨터의 환경 변수 ONPOD_TOKEN에 넣기(대화에 붙여 넣지 않기). 또는 터미널에서 onpod login --token <키>',
+      '알아 둘 점: 무료는 계정당 사이트 10개·사이트 100MB·월 100GB(넘으면 그달 멈췄다가 다음 달 1일에 다시 열림). 주소 이름은 Onpod 전체에서 하나뿐이에요.',
+    ], { ok: true, dryRun: true, host: 'onpod', name, url: siteBase, files: st.files, added, auth: auth || 'unknown' });
+    return;
+  }
+  if (!auth) {
+    const who = onpodRun(['whoami']);
+    if (!who.ok) { cleanup(); fail('Onpod 로그인이 필요해요. 강사에게 https://console.onpod.ai/signup 가입(구글) → 콘솔 API 키 화면에서 키 만들기를 부탁하고, 그 키를 환경 변수 ONPOD_TOKEN으로 받아 다시 실행해 주세요(대화에 붙여 넣지 않기).\n' + lastLines(who.out, 3).join('\n')); }
+  }
+  const dep = onpodRun(['static', 'deploy', stage, '--name', name, '--no-spa', ...(verify ? [] : ['--no-verify'])], { cwd: stage });
+  cleanup();
+  if (!dep.ok) {
+    const t = dep.raw;
+    const why = /already|taken|exists|conflict|409|이미|다른 사람/i.test(t) ? `이 주소 이름(${name})은 이미 다른 사람이 써요. Onpod 주소는 전체에서 하나뿐이라 --name 다른-이름 으로 다시 해 주세요.`
+      : /401|unauthori|invalid.*(token|key)|토큰|키가/i.test(t) ? 'Onpod 키가 맞지 않거나 기한이 지났어요. 콘솔 API 키 화면에서 새 키를 만들어 ONPOD_TOKEN에 넣어 주세요.'
+      : /402|limit|quota|한도/i.test(t) ? '무료 한도(사이트 10개 등)에 닿았어요. onpod static ls로 안 쓰는 사이트를 보고 onpod static rm <이름> --yes로 지우거나, --host cloudflare로 올려 주세요.'
+      : '사이트를 올리지 못했어요.';
+    fail(why + '\n' + lastLines(dep.out).join('\n'));
+  }
+  const found = dep.raw.match(new RegExp(`https://${name.replace(/-/g, '\\-')}\\.onpod\\.ai`)) || dep.raw.match(/https:\/\/[a-z0-9-]+\.onpod\.ai/);
+  const url = (found ? found[0] : siteBase).replace(/\/?$/, '/');
+  const lines = [];
+  if (added.length) lines.push(`함께 올림 ${added.join(', ')}(${publicSite ? '공개 연수' : '검색 제외 그대로'})`);
+  if (relay) {
+    const lo = wrangler(['deploy', '-c', 'wrangler.toml', '--var', `ALLOWED_ORIGINS:${allow(url)}`], { cwd: relayDir });
+    lines.push(lo.ok ? `참여 기능 중계 ${relay.name}가 새 주소도 받아요` : '△ 참여 기능 중계가 아직 지난 주소만 받아요. Cloudflare에 로그인한 뒤 publish work --host cloudflare --live로 다시 맞춰 주세요');
+  }
+  if (verify) {
+    const a = await check(url), c = await check(url + 'check.html');
+    lines.push(`사이트 ${a.ok && c.ok ? '✓' : '△'} ${url} (첫 화면 ${a.status} · 접속 확인 ${c.status})${a.ok ? '' : ' — 잠시 뒤 다시 확인해 주세요'}`);
+  } else lines.push(`사이트 ${url} (확인 건너뜀)`);
+  saveState(work, { deploy: { host: 'onpod', name, url, relay: state.deploy?.relay || null, at: new Date().toISOString() } });
+  let ho = null;
+  if (!args['no-handouts']) ho = await handoutsCmd(h, { url, out: tdir, quiet: true });
+  say([
+    `올렸어요 ✓ ${url}`,
+    ...lines,
+    `참가자 ${url} · QR 안내문 ${url}poster.html · 발표 화면 ${url}screen.html${bp.live.provider !== 'none' ? ` · 강사 화면 ${url}console.html` : ''} · 접속 확인 ${url}check.html`,
+    ...(ho ? ho.lines : []),
+    '무료 한도: 계정당 사이트 10개·월 100GB(넘으면 그달 멈췄다가 다음 달 1일에 다시 열림). 그림을 같은 파일 이름으로 바꿔 올리면 최대 1시간 옛것이 보여요',
+    `다시 올리기: publish work(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 올리지 않아요`,
+  ], { ok: true, host: 'onpod', url, name, added, handouts: ho?.files || [] });
 }
 
 export async function handoutsCmd(h, o = {}) {

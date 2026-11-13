@@ -24,7 +24,6 @@
 | `blocked` | 문자열 목록 | 학교에서 막힌 사이트를 아시나요? (check.html 결과로 채움) | `audience.blocked` |
 | `infra` | `github google cloudflare aws azure gcp docker-host school-server nas vps raspberry-pi laptop` | 이미 쓰는 계정·서버가 있나요?(GitHub, 구글, AWS, 학교 서버, NAS…) | `[]` |
 | `customDomain` | bool | 내 도메인(예: lec.school.kr)이 있나요? | false |
-| `paid` | bool | 강사료 등 대가를 받는 연수인가요? (Vercel 무료는 비상업만) | false |
 | `previous` | 올릴 곳 id | 지난번에 올린 곳이 있나요? (같은 주소를 이어 씀) | 없음 |
 | `connected` | 올릴 곳 id 목록 | 이미 쓰는 곳이 있나요? skill은 묻기 전에 셸에서 확인: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN` | `[]` |
 | `keep` | `long` | 연수 뒤에도 오래 둘 사이트인가요? | 없음 |
@@ -54,7 +53,6 @@
 |---|---|---|
 | **앱(클릭만)** | **Vercel**(토큰으로 앱에서 바로, 다시 올려도 같은 주소) · GitHub Pages · Cloudflare(ZIP 끌어 놓기) · Netlify(이미 쓰는 분) | `deploy/vercel.md` |
 | **skill(명령 가능)** | **Cloudflare Workers 정적 자산**(`wrangler deploy --assets`, 계정이 없으면 `--temporary`) · Vercel(`VERCEL_TOKEN`) · GitHub Pages(`gh`) · Netlify | `deploy/cloudflare.md` |
-| 강사료를 받는 연수 | Cloudflare · GitHub Pages (Vercel 무료는 비상업만이라 뺌) | `deploy/cloudflare.md` |
 | 25MB 넘는 파일이 있음, 또는 파일이 Cloudflare 한도(끌어 놓기 1,000개 · 명령으로 올리면 20,000개)를 넘음 | GitHub Pages (파일 하나 100MB까지). Cloudflare는 맨 뒤 | `deploy/github-pages.md` |
 | 사이트가 100MB를 넘음(위에 해당하지 않을 때) | Cloudflare (Vercel은 한 번에 100MB까지라 맨 뒤) | `deploy/cloudflare.md` |
 | 내 도메인을 붙일 계획, (skill) 학교망이 엄격함 | Cloudflare | `deploy/custom-domain-and-short-url.md` |
@@ -127,24 +125,23 @@
 
 기본 순서
 3. ★ **S09** 앱(`skill: click`) → `vercel` · `github-pages` · `cloudflare` · `netlify`. Vercel은 토큰 하나로 앱에서 바로 올리고, 새 계정도 바로 열리고, 다시 올려도 주소가 그대로입니다. 여기서 `cloudflare`는 ZIP 끌어 놓기(Pages)입니다.
-4. ★ **S08** skill(`basic`·`dev`) → `cloudflare` · `vercel` · `github-pages` · `netlify`. 여기서 `cloudflare`는 Workers 정적 자산(`wrangler deploy --assets`)입니다. 상업 이용 가능, 정적 요청 무제한, `_headers` 그대로, 계정이 없어도 `--temporary`로 먼저 띄울 수 있습니다.
+4. ★ **S08** skill(`basic`·`dev`) → `cloudflare` · `vercel` · `github-pages` · `onpod` · `netlify`. 여기서 `cloudflare`는 Workers 정적 자산(`wrangler deploy --assets`)입니다. 정적 요청 무제한, `_headers` 그대로, 계정이 없어도 `--temporary`로 먼저 띄울 수 있습니다. `onpod`(한국 서비스, `publish work --host onpod`)은 콘솔에서 API 키를 만들어 건네야 해서(강사 할 일 약 4번, 엔진 `HOST_STEPS`) Cloudflare(2번) 뒤에 둡니다. 앱에서는 못 올립니다(REST가 다른 출처를 막음).
 
 조정(순서대로 모두)
-5. ★ **S10** 강사료를 받는 연수(`paid`) → `vercel`을 빼고 `cloudflare`를 맨 앞으로. 다음은 `github-pages`.
 6. ★ **S03** live가 `cf-relay`이고 skill이 basic 이상 → `cloudflare`를 맨 앞으로(같은 계정에서 관리).
 7. ★ **S11** 내 도메인을 붙일 계획(`customDomain`), 또는 학교망이 엄격하고(`restricted`) skill이 basic 이상 → `cloudflare`를 맨 앞으로(도메인 연결이 가장 쉬움).
 8. ★ **S13** 파일 하나 > 25MB, 또는 파일 수가 Cloudflare 한도를 넘음(앱의 끌어 놓기 1,000개, skill이 wrangler로 올리면 20,000개) → `github-pages`를 맨 앞으로, `cloudflare`를 맨 뒤로. `--temporary`는 1,000개·파일당 5MiB까지입니다(G30).
-9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로.
+9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로. `onpod`은 사이트 > 100MB·파일 > 50MB·5,000개 넘음이면 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
 12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 방문이 있는 동안 열려 있음). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
-13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로. Netlify는 이 규칙으로만 앞에 옵니다.
+13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로(강사 할 일 0번). Netlify·Onpod은 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
 
 ### 3.3 공개 범위(access)
 - `link`(기본): 모든 페이지에 `noindex`, `robots.txt`는 `Disallow: /`. 주소·QR을 받은 사람만 들어옵니다. 접근 제어는 아닙니다.
-- `public`: 검색 허용(`robots.txt` `Allow: /`).
+- `public`: 검색 허용(`robots.txt` `Allow: /`). 연수 날짜가 있으면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. `link`·`password`에는 넣지 않습니다.
 - `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다. QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
 - 강사용 파일(DESIGN.md·운영안내.md·lecpage.blueprint.json)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `<out>-강사용/`, 앱은 따로 내려받기).
 
@@ -153,10 +150,10 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 | 순서 | skill이 하는 일 |
 |---|---|
-| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
+| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`·`ONPOD_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
 | 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
-| 4 | Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
+| 4 | Onpod이면 `publish work --host onpod`(사이트만, 참여 기능 중계는 Cloudflare·Supabase·시트). Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
 | 5 | `publish`가 `<주소>/`·`check.html`·중계 `/api/health`를 확인합니다. 손으로 올렸으면 `curl -sI <주소>/ \| head -1`이 `200`인지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
 | 6 | 건넵니다: 참가자 주소와 `<out>-강사용/`의 `QR-안내문.pdf`·`강사-카드.pdf`·`발표화면.png`(손으로 올렸으면 `handouts <주소>`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일(강사 화면의 도움말에 있음) |
 
@@ -243,7 +240,6 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
   "guards": [
     {"id":"G01","when":{"hostDomainBlocked":true},"level":"block","warn":"학교망·통신사 DNS가 호스팅 기본 주소(*.vercel.app, *.workers.dev, *.pages.dev, *.github.io 등)를 막음","fix":"customDomain 연결 또는 다른 호스팅 / IT 담당자에게 허용 요청(deploy/school-network-checklist.md)"},
     {"id":"G02","when":{"static":"firebase","expr":"transferGB * sessionsPerMonth > 9"},"level":"block","warn":"Firebase Spark 호스팅 전송 월 10GB. 넘으면 다음 달 1일까지 사이트가 꺼짐","fix":"cloudflare 또는 github-pages"},
-    {"id":"G03","engine":true,"when":{"static":"vercel","paid":true},"level":"block","warn":"Vercel Hobby는 비상업 개인 용도만(강사료 받는 연수는 회색지대)","fix":"cloudflare 또는 github-pages"},
     {"id":"G04","when":{"static":"netlify","expr":"transferGB*20 + deploys*15 > 250"},"level":"warn","warn":"Netlify 무료 300크레딧/월 근접(배포만으로 한 달 20번). 다 쓰면 계정의 모든 사이트가 멈춤","fix":"고칠 것을 모아 한 번에 올리기(1회=15크레딧) 또는 cloudflare"},
     {"id":"G05","when":{"static":"render","expr":"transferGB*sessionsPerMonth > 5"},"level":"warn","warn":"Render Hobby 대역폭 월 5GB 포함","fix":"cloudflare"},
     {"id":"G06","when":{"static":"azure-swa","siteMB":{"gt":240}},"level":"block","warn":"Azure SWA 무료: 환경당 250MB","fix":"슬라이드 화질 낮추기 또는 cloudflare"},
@@ -276,7 +272,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"G35","when":{"static":["vercel","cloudflare","cloudflare-pages-drop","github-pages","netlify","firebase"]},"level":"info","warn":"호스팅 기본 주소가 국내 통신사 DNS에서 통째로 안 열린 적이 있음(2024-05 *.vercel.app). 학교망은 학교마다 다름","fix":"연수 전날 참가자가 쓸 망에서 주소 열어 보기. 막히면 customDomain(G01)"}
   ],
   "hosts": {
-    "vercel":       {"target":"vercel","guide":"deploy/vercel.md","template":"templates/deploy/vercel/","headers":"vercel.json","cost":"0","limits":"비상업만. 올리는 합계 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만","domain":"<프로젝트>.vercel.app(운영 주소만 안내)"},
+    "vercel":       {"target":"vercel","guide":"deploy/vercel.md","template":"templates/deploy/vercel/","headers":"vercel.json","cost":"0","limits":"올리는 합계 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만","domain":"<프로젝트>.vercel.app(운영 주소만 안내)"},
     "cloudflare":   {"target":"cloudflare","guide":"deploy/cloudflare.md","template":"templates/deploy/cloudflare/(GitHub 연결·내 도메인 때만)","headers":"_headers","cost":"0","limits":"2만 파일·25MiB/파일, 정적 요청 무료·무제한. --temporary는 1,000파일·5MiB/파일, 60분 안에 claim","domain":"*.workers.dev"},
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
@@ -311,30 +307,30 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 표의 맨 위 다섯 줄이 주력이고 2026-11-11에 다시 확인했습니다. 그 아래는 2026-11-09 값입니다(Firebase·Azure·Render는 11-11에도 같음). 자세한 한도와 순서는 각 가이드에 있습니다.
 
-| 선택지 | 무료 범위 | 상업 이용 | 내 도메인·HTTPS | 난이도 | 실패하는 경우 | 가이드 |
-|---|---|---|---|---|---|---|
-| **Vercel Hobby** | 한 번에 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만 | **비상업 개인만** | ✓(프로젝트당 50) / 자동 | ★(앱에서 토큰) | 넘으면 대개 30일 대기, 팀 기본값에 따라 운영 주소에 로그인 창, 배포별 주소는 로그인 요구 | `deploy/vercel.md` |
-| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한, 2만 파일·파일당 25MiB(`--temporary`는 1,000파일·5MiB) | 가능 | ✓ / 자동(도메인이 Cloudflare 영역이어야 함) | ★(skill이 wrangler로) | `Range` 요청에 전체를 200으로 줌(Safari 영상), 임시 계정은 60분 안에 claim | `deploy/cloudflare.md` |
-| **Cloudflare Pages(끌어 놓기)** | 정적 요청 무료·무제한, ZIP 그대로, 1,000파일·파일당 25MiB | 가능 | ✓(하위 도메인은 CNAME만) / 자동 | ★ | 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 못 바꿈 | `deploy/cloudflare.md` |
-| **GitHub Pages** | 사이트 1GB, 파일 100MiB, 월 100GB(권고), 시간당 10빌드(권고) | 상업 SaaS·온라인 사업 금지 | ✓ / 자동 | ★★ | 공개 저장소만, 이메일 인증한 계정만 게시, 헤더 설정 불가(CSP는 meta), 그림이 많으면 API 제한 | `deploy/github-pages.md` |
-| **Netlify Free** | 월 300크레딧(배포 1회 15 → 한 달 20번, GB당 20) | 가능 | ✓ / 자동 | ★ | **새 팀은 비공개로 시작(Make public)**, 크레딧 소진 시 계정의 모든 사이트 정지, 배지 | `deploy/netlify.md` |
-| **Firebase Hosting(Spark)** | 저장 10GB, **전송 월 10GB** | 가능 | ✓ / 자동 | ★★★ | 넘으면 다음 달 1일까지 사이트가 꺼짐 | `deploy/firebase.md` |
-| **AWS S3+CloudFront** | CloudFront 종량제 상시 무료 월 1TB·요청 1천만 ⚠️(요청 수는 2차 출처) | 가능 | ✓ / ACM | ★★★ | 신규 계정 무료 플랜은 6개월 뒤 닫힘, 설정 실수로 과금 | `deploy/aws-s3-cloudfront.md` |
-| **AWS Amplify Hosting** | 신규 계정은 크레딧, 이후 GB당 $0.15 | 가능 | ✓ / 자동 | ★★ | 트래픽 많으면 S3+CF보다 비쌈 | `deploy/aws-s3-cloudfront.md` |
-| **Azure Static Web Apps(Free)** | 월 100GB, 환경당 250MB, 도메인 2개 | 가능 | ✓ / 자동 | ★★ | 사이트 250MB 초과 불가 | `deploy/azure-static-web-apps.md` |
-| **Render(정적)** | Hobby 월 5GB 대역폭 | 가능 | ✓ / 자동 | ★★ | 대역폭 작음 | `deploy/paas-node-hosting.md` |
-| **Surge** | 무료, 내 도메인·인증서 포함, 프로젝트 450MB/10,100파일 | 가능 | ✓ / 자동 | ★★(CLI) | 헤더 설정 불가(Pro만 라우터) | (research 참고) |
-| **Tiiny 류 드롭 호스팅** | 무료 1개·3MB(2차 출처) | 유료 플랜 유도 | 유료 | ★ | 슬라이드 사이트는 용량 초과 | 비권장 |
-| **Deno Deploy** | — | — | — | — | 2026-10 Cloudflare 합류, 약 6개월 뒤(2027-04 무렵) 종료 예정 | 비권장 |
-| **Google Cloud Run** | 요청 200만/월 등(컨테이너) | 가능 | ✓ | ★★★★ | 결제 계정 필수, 정적만이면 과함 | (research 참고) |
-| **네이버 클라우드 Object Storage** | 무료 없음(종량) | 가능 | Global Edge 연동 시 HTTPS | ★★★ | 웹사이트 엔드포인트는 HTTP만 | (research 참고) |
-| **카페24·가비아 웹호스팅** | ⚠️ 월 수백~수천 원대(가격 미확인) | 가능 | 상품별 | ★★(FTP) | 오래된 PHP 호스팅, WebSocket 불가 | (research 참고) |
-| **학교·교육청 서버** | 기관 | 기관 규정 | 기관 | IT 담당자 | 업로드 권한 없음이 보통 | `deploy/own-server-nginx-caddy.md` |
-| **개인 서버·VPS** | 서버 비용 | 가능 | Caddy 자동 | ★★★ | 서버 관리 책임 | `deploy/own-server-nginx-caddy.md` |
-| **NAS(Synology)** | 기존 장비 | 가능 | DDNS+Let's Encrypt | ★★★ | 공유기 포트 열기·집 회선 속도 | `deploy/nas-synology.md` |
-| **라즈베리 파이** | 기존 장비 | 가능 | LAN이면 불필요 | ★★★ | SD카드 고장 → 백업 필수 | `deploy/local-lan-classroom.md` |
-| **강사 노트북(교실 LAN)** | 0원 | — | http(내부망). 잠깐 외부 공개는 Quick Tunnel | ★★ | AP 격리, 노트북 절전 | `deploy/local-lan-classroom.md` |
-| **USB·ZIP** | 0원 | — | 없음(file://) | ★ | 실시간 불가, 아이패드에서 열기 어려움, 암호 보호 불가 | `deploy/zip-usb-offline.md` |
+| 선택지 | 무료 범위 | 내 도메인·HTTPS | 난이도 | 실패하는 경우 | 가이드 |
+|---|---|---|---|---|---|
+| **Vercel Hobby** | 한 번에 100MB·15,000파일, 배포 100/일·업로드 5,000/일, 월 100GB·CDN 요청 100만 | ✓(프로젝트당 50) / 자동 | ★(앱에서 토큰) | 넘으면 대개 30일 대기, 팀 기본값에 따라 운영 주소에 로그인 창, 배포별 주소는 로그인 요구 | `deploy/vercel.md` |
+| **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한, 2만 파일·파일당 25MiB(`--temporary`는 1,000파일·5MiB) | ✓ / 자동(도메인이 Cloudflare 영역이어야 함) | ★(skill이 wrangler로) | `Range` 요청에 전체를 200으로 줌(Safari 영상), 임시 계정은 60분 안에 claim | `deploy/cloudflare.md` |
+| **Cloudflare Pages(끌어 놓기)** | 정적 요청 무료·무제한, ZIP 그대로, 1,000파일·파일당 25MiB | ✓(하위 도메인은 CNAME만) / 자동 | ★ | 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 못 바꿈 | `deploy/cloudflare.md` |
+| **GitHub Pages** | 사이트 1GB, 파일 100MiB, 월 100GB(권고), 시간당 10빌드(권고) | ✓ / 자동 | ★★ | 공개 저장소만, 이메일 인증한 계정만 게시, 헤더 설정 불가(CSP는 meta), 그림이 많으면 API 제한 | `deploy/github-pages.md` |
+| **Netlify Free** | 월 300크레딧(배포 1회 15 → 한 달 20번, GB당 20) | ✓ / 자동 | ★ | **새 팀은 비공개로 시작(Make public)**, 크레딧 소진 시 계정의 모든 사이트 정지, 배지 | `deploy/netlify.md` |
+| **Firebase Hosting(Spark)** | 저장 10GB, **전송 월 10GB** | ✓ / 자동 | ★★★ | 넘으면 다음 달 1일까지 사이트가 꺼짐 | `deploy/firebase.md` |
+| **AWS S3+CloudFront** | CloudFront 종량제 상시 무료 월 1TB·요청 1천만 ⚠️(요청 수는 2차 출처) | ✓ / ACM | ★★★ | 신규 계정 무료 플랜은 6개월 뒤 닫힘, 설정 실수로 과금 | `deploy/aws-s3-cloudfront.md` |
+| **AWS Amplify Hosting** | 신규 계정은 크레딧, 이후 GB당 $0.15 | ✓ / 자동 | ★★ | 트래픽 많으면 S3+CF보다 비쌈 | `deploy/aws-s3-cloudfront.md` |
+| **Azure Static Web Apps(Free)** | 월 100GB, 환경당 250MB, 도메인 2개 | ✓ / 자동 | ★★ | 사이트 250MB 초과 불가 | `deploy/azure-static-web-apps.md` |
+| **Render(정적)** | Hobby 월 5GB 대역폭 | ✓ / 자동 | ★★ | 대역폭 작음 | `deploy/paas-node-hosting.md` |
+| **Surge** | 무료, 내 도메인·인증서 포함, 프로젝트 450MB/10,100파일 | ✓ / 자동 | ★★(CLI) | 헤더 설정 불가(Pro만 라우터) | (research 참고) |
+| **Tiiny 류 드롭 호스팅** | 무료 1개·3MB(2차 출처) | 유료 | ★ | 슬라이드 사이트는 용량 초과 | 비권장 |
+| **Deno Deploy** | — | — | — | 2026-10 Cloudflare 합류, 약 6개월 뒤(2027-04 무렵) 종료 예정 | 비권장 |
+| **Google Cloud Run** | 요청 200만/월 등(컨테이너) | ✓ | ★★★★ | 결제 계정 필수, 정적만이면 과함 | (research 참고) |
+| **네이버 클라우드 Object Storage** | 무료 없음(종량) | Global Edge 연동 시 HTTPS | ★★★ | 웹사이트 엔드포인트는 HTTP만 | (research 참고) |
+| **카페24·가비아 웹호스팅** | ⚠️ 월 수백~수천 원대(가격 미확인) | 상품별 | ★★(FTP) | 오래된 PHP 호스팅, WebSocket 불가 | (research 참고) |
+| **학교·교육청 서버** | 기관 | 기관 | IT 담당자 | 업로드 권한 없음이 보통 | `deploy/own-server-nginx-caddy.md` |
+| **개인 서버·VPS** | 서버 비용 | Caddy 자동 | ★★★ | 서버 관리 책임 | `deploy/own-server-nginx-caddy.md` |
+| **NAS(Synology)** | 기존 장비 | DDNS+Let's Encrypt | ★★★ | 공유기 포트 열기·집 회선 속도 | `deploy/nas-synology.md` |
+| **라즈베리 파이** | 기존 장비 | LAN이면 불필요 | ★★★ | SD카드 고장 → 백업 필수 | `deploy/local-lan-classroom.md` |
+| **강사 노트북(교실 LAN)** | 0원 | http(내부망). 잠깐 외부 공개는 Quick Tunnel | ★★ | AP 격리, 노트북 절전 | `deploy/local-lan-classroom.md` |
+| **USB·ZIP** | 0원 | 없음(file://) | ★ | 실시간 불가, 아이패드에서 열기 어려움, 암호 보호 불가 | `deploy/zip-usb-offline.md` |
 
 ### 5.2 실시간 백엔드 (모두 강사 소유)
 
@@ -416,7 +412,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 짧게, 무엇을 하는지·돈·주의점 순서로 말합니다.
 
 **A. Cloudflare에 ZIP 끌어 놓기(강사가 직접 올릴 때)**
-> "드린 ZIP 파일을 Cloudflare라는 무료 서비스에 그대로 끌어다 놓으면 주소가 생겨요. 가입은 이메일만 있으면 되고, 참가자가 많아도 비용이 없어요. 강사료를 받는 연수에도 쓸 수 있고, 선생님 계정이라 나중에 직접 지우실 수 있어요."
+> "드린 ZIP 파일을 Cloudflare라는 무료 서비스에 그대로 끌어다 놓으면 주소가 생겨요. 가입은 이메일만 있으면 되고, 참가자가 많아도 비용이 없어요. 선생님 계정이라 나중에 직접 지우실 수 있어요."
 
 **B. GitHub Pages**
 > "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줘요. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모와 설계도는 올라가지 않아요. GitHub 계정은 이메일 인증을 마친 상태여야 해요."

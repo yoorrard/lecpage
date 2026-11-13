@@ -3,3 +3,5 @@ node_modules/
 .dev.vars
 # 엔진 런타임에서 자동으로 만드는 목록(npm test·npm run deploy·wrangler dev가 다시 만듦)
 src/runtime-allow.js
+# 런타임 정적 사본(scripts/gen-runtime.mjs가 배포·시험·개발 때마다 만듦)
+public/rt/

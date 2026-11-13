@@ -1,6 +1,6 @@
 // 페이지 조립: index(참가자). 보조 화면(console·screen·poster·check·privacy)은 aux.js, 같이 쓰는 머리·CSP는 shell.js
 export { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
-export { phaseWindow, LIB_SCRIPT_SOURCES, cspPolicy } from './shell.js';
+export { phaseWindow, LIB_SCRIPT_SOURCES, cspPolicy, eventJsonLd } from './shell.js';
 import { esc, br, href, icon, koDate, host } from './html.js';
 import { renderSection, contactHtml, boardFiles } from './sections.js';
 import { heroHasBand } from './hero.js';
