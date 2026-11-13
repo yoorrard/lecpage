@@ -77,6 +77,9 @@ export const REACTIONS = [
   { v: '❤️', label: '좋아요', ic: icon('heart') },
 ];
 
+/** 이해 정도 신호: 도크에는 단추 하나(지금 보낸 신호), 누르면 글이 붙은 세 가지가 펼쳐짐 */
+const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
+
 function nav(ctx) {
   const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
   const brand = ctx.design.brandName || ctx.bp.meta.title;
@@ -156,8 +159,8 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
   ${quickAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend hidden>${icon('check')}<span>출석</span></button>` : ''}
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
-  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-signal" role="group" aria-label="지금 이해 정도"><button type="button" data-signal="green" aria-pressed="false" title="이해했어요"><i aria-hidden="true">✓</i><span class="lp-sr">이해했어요</span></button><button type="button" data-signal="yellow" aria-pressed="false" title="조금 헷갈려요"><i aria-hidden="true">?</i><span class="lp-sr">조금 헷갈려요</span></button><button type="button" data-signal="red" aria-pressed="false" title="모르겠어요"><i aria-hidden="true">!</i><span class="lp-sr">모르겠어요</span></button></div>` : ''}
-  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-react" role="group" aria-label="반응 보내기"><button type="button" class="lp-react-toggle" data-react-toggle aria-expanded="false" aria-label="반응 고르기">${REACTIONS[0].ic}</button><div class="lp-react-list" data-react-list>${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
+  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-fold lp-signal"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="지금 이해 정도 보내기" title="이해 정도"><i data-signal-now aria-hidden="true"></i></button><div class="lp-fold-list" role="group" aria-label="지금 이해 정도">${SIGNALS.map((x) => `<button type="button" data-signal="${x.v}" aria-pressed="false"><i aria-hidden="true">${x.g}</i><span>${x.label}</span></button>`).join('')}</div></div>` : ''}
+  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-fold lp-react"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="반응 보내기" title="반응">${REACTIONS[0].ic}</button><div class="lp-fold-list" role="group" aria-label="반응 보내기">${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
 </aside><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
 ${tocSheet(ctx)}${helpSheet(ctx)}
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;

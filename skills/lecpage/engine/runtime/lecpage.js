@@ -871,7 +871,12 @@
     // 신호등: 참가자당 하나(answers, poll='signal')를 덮어씀
     var mySignal = store.get('signal', null);
     if (typeof mySignal === 'string') mySignal = mySignal ? { v: mySignal, at: 0 } : null;
-    function paintSignal() { $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(!!mySignal && b.getAttribute('data-signal') === mySignal.v)); }); }
+    var SIG_G = { green: '✓', yellow: '?', red: '!' };
+    function paintSignal() {
+      $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(!!mySignal && b.getAttribute('data-signal') === mySignal.v)); });
+      // 도크의 접은 단추에는 지금 보낸 신호(없으면 신호등 세 점)
+      $$('[data-signal-now]').forEach(function (n) { if (mySignal && SIG_G[mySignal.v]) { n.setAttribute('data-v', mySignal.v); n.textContent = SIG_G[mySignal.v]; } else { n.removeAttribute('data-v'); n.textContent = ''; } });
+    }
     function checkSignalReset() {
       var r = X.signalReset(state);
       if (mySignal && r && r > (mySignal.at || 0)) { mySignal = null; store.del('signal'); paintSignal(); if ($('[data-signal]')) toast('강사가 신호를 새로 받아요. 지금 상태를 다시 눌러 주세요.'); }
@@ -879,19 +884,24 @@
     paintSignal();
     $$('[data-signal]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var v = b.getAttribute('data-signal');
+        var v = b.getAttribute('data-signal'); closeFolds();
         ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '‘이해했어요’를 보냈어요.', yellow: '‘조금 헷갈려요’를 보냈어요.', red: '‘모르겠어요’를 보냈어요. 곧 갈게요.' }[v]); }, function () { });
       });
     });
-    // 반응: 휴대폰에서는 버튼 하나로 접어 둠
-    var rt = $('[data-react-toggle]'), rbox = rt && rt.parentNode;
-    function setReact(open) { if (!rbox) return; rbox.classList.toggle('is-open', open); rt.setAttribute('aria-expanded', String(open)); }
-    if (rt) {
-      rt.addEventListener('click', function () { setReact(!rbox.classList.contains('is-open')); });
-      doc.addEventListener('click', function (e) { if (rbox.classList.contains('is-open') && !rbox.contains(e.target)) setReact(false); });
-      rbox.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rbox.classList.contains('is-open')) { setReact(false); rt.focus(); } });
-    }
-    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); setReact(false); if (conn.react) conn.react(e).catch(function () { }); }); });
+    // 도크의 접는 단추(이해 정도·반응): 단추 하나를 누르면 위로 펼침. 바깥을 누르거나 Esc면 닫힘
+    var folds = $$('.lp-fold');
+    function setFold(box, open) { box.classList.toggle('is-open', open); $('[data-fold-toggle]', box).setAttribute('aria-expanded', String(open)); }
+    function closeFolds() { folds.forEach(function (x) { setFold(x, false); }); }
+    folds.forEach(function (box) {
+      var t = $('[data-fold-toggle]', box);
+      t.addEventListener('click', function () {
+        var open = !box.classList.contains('is-open'); closeFolds(); setFold(box, open);
+        if (open) { var f = $('[aria-pressed="true"]', box) || $('.lp-fold-list button', box); if (f) f.focus(); }
+      });
+      box.addEventListener('keydown', function (e) { if (e.key === 'Escape' && box.classList.contains('is-open')) { setFold(box, false); t.focus(); } });
+    });
+    if (folds.length) doc.addEventListener('click', function (e) { folds.forEach(function (x) { if (x.classList.contains('is-open') && !x.contains(e.target)) setFold(x, false); }); });
+    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); closeFolds(); if (conn.react) conn.react(e).catch(function () { }); }); });
 
     // 만족도 설문(참가자당 하나, 다시 내면 덮어씀)
     $$('[data-survey]').forEach(function (f) {

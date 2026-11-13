@@ -160,13 +160,7 @@ html.fx-boot .lp-hero :is([data-fx~="schedule-dial"], [data-fx~="minute-map"], [
 .fx-gp-steps a[aria-current] .fx-gp-dot { background: currentColor; transform: scale(1.45); }
 .fx-gp-label { position: absolute; right: calc(100% + 4px); top: 50%; margin-top: -1em; padding: 4px 9px; white-space: nowrap; color: var(--foreground); background: var(--background); border: var(--border-w, 1px) solid var(--border); border-radius: var(--radius-sm, 6px); box-shadow: var(--shadow); opacity: 0; transform: translateX(6px); transition: opacity var(--dur-2, 200ms), transform var(--dur-3, 320ms) var(--ease-out, cubic-bezier(.16, 1, .3, 1)); pointer-events: none; }
 .fx-gp-steps:hover .fx-gp-label, .fx-gp-steps a:focus-visible .fx-gp-label { opacity: 1; transform: none; }
-.fx-gp-chip { display: none; }
-@media (max-width: 1099px) {
-  .fx-gp-steps { display: none; }
-  .fx-gp-chip:not(:empty) { display: block; position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); padding: 6px 12px; font: 500 12px/1.2 var(--font-sans); color: var(--foreground); background: var(--background); border: var(--border-w, 1px) solid var(--border); border-radius: 999px; box-shadow: var(--shadow); white-space: pre; font-variant-numeric: tabular-nums; opacity: 0; transform: translateY(6px); transition: opacity var(--dur-3, 320ms), transform var(--dur-3, 320ms) var(--ease-out, cubic-bezier(.16, 1, .3, 1)); }
-  .fx-gp-chip.is-show { opacity: 1; transform: none; }
-  html.lp-dock-on .fx-gp-chip:not(:empty) { bottom: calc(var(--lp-dock-h, 58px) + 20px + env(safe-area-inset-bottom, 0px)); } /* 아래 참여 도크 위로 */
-}
+@media (max-width: 1099px) { .fx-gp-steps { display: none; } }
 
 /*@fx:sticky-scrolly*/
 .fx-scrolly { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(1.5rem, 5vw, 5rem); align-items: start; }
@@ -464,7 +458,7 @@ html.lenis, html.lenis body { height: auto; }
 }
 @media print {
   [data-fx-pre], [data-fx-pre] .fx-reveal-item { opacity: 1 !important; transform: none !important; clip-path: none !important; visibility: visible !important; }
-  .fx-layer, .fx-toggle, .fx-cursor, .fx-gp, .fx-gp-steps, .fx-gp-chip, .fx-confetti, .fx-hsnap-bar { display: none !important; }
+  .fx-layer, .fx-toggle, .fx-cursor, .fx-gp, .fx-gp-steps, .fx-confetti, .fx-hsnap-bar { display: none !important; }
   .fx-zoom { height: auto !important; }
   .fx-zoom-sticky { position: static !important; height: auto !important; }
   .fx-stack-card { position: static !important; transform: none !important; }

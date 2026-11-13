@@ -148,18 +148,18 @@ ${cells.length ? `<div class="lp-hero-strip"><div class="lp-wrap"><p class="lp-s
 C.worksheet = (M) => {
   let sheet = '';
   const items = M.st?.items || [];
-  const date = M.dp ? `<p class="lp-sheet-d">${shortDate(M)}(${M.dp.w})</p>` : '';
+  const date = M.dp ? `<p class="lp-wsheet-d">${shortDate(M)}(${M.dp.w})</p>` : '';
   if (items.length) {
     const shown = items.slice(0, 5), total = items.reduce((a, x) => a + (x.minutes || 0), 0);
     const foot = [`실습 ${items.length}개`, total ? `약 ${minText(total)}` : '', items.length > shown.length ? `나머지 ${items.length - shown.length}개는 실습 칸에` : ''].filter(Boolean).join(' · ');
-    sheet = `<aside class="lp-sheet" aria-label="오늘의 실습지"><div class="lp-sheet-h"><p class="lp-sheet-t">오늘의 실습지</p>${date}</div>
-<ol class="lp-sheet-list">${shown.map((x, i) => `<li><a href="#st-${esc(x.id)}" data-hero-st="${esc(x.id)}"><i class="lp-sheet-box" aria-hidden="true"></i><span class="lp-sheet-n">${pad2(i + 1)}</span><span class="lp-sheet-name">${esc(x.name || x.title)}</span>${x.minutes ? `<span class="lp-sheet-min">${x.minutes}분</span>` : ''}</a></li>`).join('')}</ol>
-<p class="lp-sheet-f">${esc(foot)}</p></aside>`;
+    sheet = `<aside class="lp-wsheet" aria-label="오늘의 실습지"><div class="lp-wsheet-h"><p class="lp-wsheet-t">오늘의 실습지</p>${date}</div>
+<ol class="lp-wsheet-list">${shown.map((x, i) => `<li><a href="#st-${esc(x.id)}" data-hero-st="${esc(x.id)}"><i class="lp-wsheet-box" aria-hidden="true"></i><span class="lp-wsheet-n">${pad2(i + 1)}</span><span class="lp-wsheet-name">${esc(x.name || x.title)}</span>${x.minutes ? `<span class="lp-wsheet-min">${x.minutes}분</span>` : ''}</a></li>`).join('')}</ol>
+<p class="lp-wsheet-f">${esc(foot)}</p></aside>`;
   } else if (M.goals?.items.length || M.agenda.length) {
     const label = M.goals?.items.length ? '오늘의 목표' : '오늘의 차례';
     const list = M.goals?.items.length ? M.goals.items : M.agenda.map((a) => a.title);
-    sheet = `<aside class="lp-sheet" aria-label="${label}"><div class="lp-sheet-h"><p class="lp-sheet-t">${label}</p>${date}</div>
-<ol class="lp-sheet-list">${list.slice(0, 5).map((g, i) => `<li><span class="lp-sheet-row"><i class="lp-sheet-box" aria-hidden="true"></i><span class="lp-sheet-n">${pad2(i + 1)}</span><span class="lp-sheet-name">${esc(g)}</span></span></li>`).join('')}</ol>${list.length > 5 ? `<p class="lp-sheet-f">그리고 ${list.length - 5}가지 더</p>` : ''}</aside>`;
+    sheet = `<aside class="lp-wsheet" aria-label="${label}"><div class="lp-wsheet-h"><p class="lp-wsheet-t">${label}</p>${date}</div>
+<ol class="lp-wsheet-list">${list.slice(0, 5).map((g, i) => `<li><span class="lp-wsheet-row"><i class="lp-wsheet-box" aria-hidden="true"></i><span class="lp-wsheet-n">${pad2(i + 1)}</span><span class="lp-wsheet-name">${esc(g)}</span></span></li>`).join('')}</ol>${list.length > 5 ? `<p class="lp-wsheet-f">그리고 ${list.length - 5}가지 더</p>` : ''}</aside>`;
   }
   return `<div class="lp-wrap lp-hero-inner${sheet ? '' : ' is-solo'}">
   <div class="lp-hero-copy">${org(M)}${state(M)}${h1(M)}${sub(M)}${ctas(M)}${metaDl(M.meta)}</div>
