@@ -73,7 +73,7 @@
     if (!PREVIEW && !LOCALPAGE && window.PresentationRequest && navigator.presentation) {
       presReq = new PresentationRequest([SCREEN]);
       presReq.getAvailability().then(function (a) {
-        var sync = function () { presAvail = !!a.value; var w = $('[data-screen-window]'); if (w) w.closest('li').hidden = !presAvail; };
+        var sync = function () { presAvail = !!a.value; var w = $('[data-screen-window]'); if (w) w.closest('li').hidden = !presAvail; if (presAvail) root.setAttribute('data-pres', ''); else root.removeAttribute('data-pres'); };
         sync(); a.onchange = sync;
       }, function () { presAvail = false; });
     }

@@ -7,7 +7,7 @@ import { copy, fmtDate, toast } from '../lib/util.js';
 const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공개하기'];
 
 /**
- * 공개한 연수 카드의 연수 당일 바로 가기: 발표 화면·강사 화면(참여 기능이 있을 때)·주소와 QR.
+ * 공개한 연수 카드의 연수 당일 바로 가기: 강사 화면(참여 기능이 있을 때, 다른 화면은 모두 여기서)·발표 화면·주소와 QR.
  * 강사 화면을 누르면 이 기기에 기억한 관리자 키를 먼저 복사해 둠(새 탭이 열리기 전에, 붙여 넣기만 하게)
  */
 function DayLinks({ p, adminKey }) {
@@ -15,8 +15,8 @@ function DayLinks({ p, adminKey }) {
   const live = (p.blueprint?.live?.features || []).length > 0;
   return (
     <div class="proj-day" role="group" aria-label={`${p.title || '연수'} 연수 당일`}>
-      <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면</a>
       {live && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener" onClick={() => adminKey && copy(adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면</a>}
+      <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면</a>
       <a class="btn btn-sm btn-quiet" href={`#/p/${p.id}/3`}>주소·QR</a>
     </div>
   );

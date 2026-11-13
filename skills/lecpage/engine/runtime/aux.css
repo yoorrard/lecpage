@@ -223,7 +223,10 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 @media (max-width:640px){
   .lp-con-bar{position:static}
   .lp-con-go{order:3;width:100%}
-  .lp-con-go .lp-btn{flex:1 1 auto}
+  .lp-con-go .lp-btn,.lp-con-more{flex:1 1 auto}
+  .lp-con-more > .lp-btn{width:100%}
+  /* 휴대폰(리모컨으로 쓸 때)에서는 발표 화면을 이 기기에 띄울 일이 없음. 무선으로 띄울 화면(크롬캐스트 등)이 있을 때만 */
+  :root:not([data-pres]) .lp-con-go [data-screen-open]{display:none}
   .lp-con-kpi{padding:12px 14px}
   .lp-con-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
   .lp-con-item{grid-template-columns:2.8rem minmax(0,1fr)}
