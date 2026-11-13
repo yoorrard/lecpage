@@ -2193,7 +2193,8 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 /* 터치 화면: 누르는 곳 44px(docs/interaction.md 7절). 보이는 모양이 작은 링크는 안쪽 여백을 주고 같은 만큼 바깥 여백을 빼서
    누르는 영역만 넓힘(줄 간격·배치는 그대로). 입력칸은 16px(iOS가 확대하지 않게) */
 @media (pointer:coarse){
-  .lp-brand,.lp-totop,.lp-follow,.lp-textbtn,.lp-btn,.lp-btn-sm{min-height:44px}
+  .lp-brand,.lp-totop,.lp-follow,.lp-textbtn,.lp-btn,.lp-btn-sm,.lp-link{min-height:44px}
+  :is(.lp-tt,.lp-trw,.lp-tools-item) h3 a{display:inline-flex;align-items:center;gap:.3em;min-height:44px}
   .lp-icon-btn,.lp-nav-act .lp-icon-btn{min-width:44px;min-height:44px}
   .lp-signal button{width:44px}
   .lp-tabs button{min-width:44px}
