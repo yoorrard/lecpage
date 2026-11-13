@@ -788,6 +788,8 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-closing-card .lp-closing-lead{color:var(--muted-foreground)}
 .lp-closing-card .lp-closing-foot{justify-content:center;margin-top:var(--sp-3);border-top:1px dashed var(--rule-c)}
 .lp-closing-card .lp-closing-sign{justify-content:center}
+/* 강조색 띠(data-band=accent)는 띠 안 글자 색을 흰색 쪽으로 바꾸므로, 카드 안에서는 카드 글자 색으로 되돌림(흰 카드에 흰 글씨가 되지 않게) */
+[data-band="accent"] .lp-closing-card{--muted-foreground:var(--card-foreground);--rule-c:color-mix(in srgb,var(--card-foreground) 20%,transparent);--primary:var(--band-primary)}
 
 /*@v:closing.recap*/
 /* 마무리 · 지나온 길: 오늘의 차례가 한 줄 길 위의 정류장으로(번호와 이름), 그 아래 마지막 문장. 좁은 화면에서는 세로 길 */
@@ -859,11 +861,11 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 
 /*@v:deck.stage*/
 .lp-sec-deck[data-variant="stage"]{background:color-mix(in srgb,var(--foreground) 94%,var(--background));--rule-c:color-mix(in srgb,var(--background) 22%,transparent)}
-.lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head{color:var(--background)}
+.lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head{color:var(--background);--primary:color-mix(in srgb,var(--background) 76%,transparent)}
 .lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head :is(.lp-lead,.lp-src,.lp-head-k){color:color-mix(in srgb,var(--background) 76%,transparent)}
-.lp-sec-deck[data-variant="stage"] :is(.lp-deck-bar,.lp-deck-count,.lp-deck-dl,.lp-deck > .lp-note){color:var(--background)}
+.lp-sec-deck[data-variant="stage"] :is(.lp-deck-bar,.lp-deck-count,.lp-deck-dl,.lp-deck > .lp-note,.lp-follow){color:var(--background)}
 .lp-sec-deck[data-variant="stage"] .lp-deck-bar :is(.lp-btn-ghost,.lp-icon-btn){color:var(--background);border-color:color-mix(in srgb,var(--background) 40%,transparent);background:transparent}
-.lp-sec-deck[data-variant="stage"] .lp-slide figcaption{color:color-mix(in srgb,var(--background) 80%,transparent)}
+.lp-sec-deck[data-variant="stage"] .lp-slide :is(figcaption,.lp-slide-no){color:color-mix(in srgb,var(--background) 80%,transparent)}
 
 /*@v:qa.split*/
 @media (min-width:1024px){.lp-sec-qa[data-variant="split"] .lp-qa{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);column-gap:clamp(32px,5vw,72px);align-items:start}.lp-sec-qa[data-variant="split"] .lp-compose{grid-row:1 / span 3;position:sticky;top:96px}.lp-sec-qa[data-variant="split"] .lp-qa > :not(.lp-compose){grid-column:2}}
