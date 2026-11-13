@@ -10,6 +10,8 @@ export const shot = (name) => files[`./shots/${name}.webp`] || '';
 export const shotSize = (name) => meta[name] || { w: 1280, h: 800 };
 /** 같은 내용을 디자인만 바꿔 찍은 것: [{id, name, desc, src}] */
 export const SHOWCASE = (meta.showcase || []).map((id) => ({ id, ...(facts.designs[id] || { name: id, desc: '' }), src: shot(`show-${id}`) })).filter((d) => d.src);
+/** 말로 고치기 체험: 예시 연수에 그 말을 넣었을 때 앱이 낸 첫 안을 적용해 찍은 것 [{text, title, why, src}] */
+export const SAYS = (meta.say || []).map((x) => ({ ...x, src: shot(x.shot) })).filter((x) => x.src);
 export const PRESET_COUNT = facts.presets;
 export const FX_COUNT = facts.fx;
 export const LAYOUT_COUNT = facts.layouts;
