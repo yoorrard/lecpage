@@ -119,6 +119,10 @@
         if (L.cols.indexOf(col) < 0 || col === 'participants') throw err('unknown_collection', '없는 컬렉션이에요.', 404);
         var p = col === 'polls' ? null : me();
         var by = p ? p.id : null;
+        // 리허설도 실제 서버와 같은 규칙: 강사가 잠근 칸, 닫힌 투표
+        var ui = adapter._state().ui || {};
+        if ((col === 'questions' && ui.lockQa === true) || (col === 'posts' && ui.lockBoard === true)) throw err('locked', col === 'questions' ? '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.' : '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.', 409);
+        if (col === 'answers') { var pl = ls.get(key('polls', doc.poll)); if (pl && pl.open === false) throw err('poll_closed', '투표가 닫혔어요.', 409); }
         if (doc.cid) {
           var dup = readCol(col).filter(function (d) { return d.cid === doc.cid && d.by === by; })[0];
           if (dup) return outDoc(col, dup);

@@ -17,7 +17,7 @@
   var LIMITS = {
     nickname: 20, name: 40, school: 60, question: 500, post: 1000, chat: 300, help: 300, seat: 20, id: 64, kind: 32,
     pollQuestion: 200, option: 100, answer: 200, notice: 300, timerLabel: 40, fileName: 120, files: 5, license: 40,
-    assignee: 20, uploadMb: 20,
+    assignee: 20, uploadMb: 20, options: 20, answerItems: 5,
   };
   // col → field → [limit, multiline, mask]
   var FIELDS = {
@@ -30,6 +30,8 @@
     answers: { value: [LIMITS.answer, 0, 1], poll: [LIMITS.id, 0, 0] },
     progress: { station: [LIMITS.id, 0, 0] },
   };
+  // 한 기기에서 보내는 빠르기: [창 안 최대 개수, 창(ms), 다음 것까지 최소 간격(ms)]. 서버 한도(protocol.js RATE)보다 조금 낮게
+  var CLIENT_RATE = { questions: [6, 60e3, 3000], posts: [10, 60e3, 2500], help: [4, 60e3, 5000], chat: [20, 60e3, 800], answers: [40, 60e3, 300] };
   var UPLOAD_TYPES = { 'image/png': 1, 'image/jpeg': 1, 'image/gif': 1, 'image/webp': 1, 'application/pdf': 1, 'audio/mpeg': 1, 'video/mp4': 1 };
   var EMOJIS = ['👍', '❤️', '👏', '🎉', '😂', '😮', '🤔', '🙏', '🔥', '💯', '🙌', '😢', '✅', '❓', '💡'];
 
@@ -153,19 +155,26 @@
   }
 
   // ---------------------------------------------------------------- text cleanup & profanity masking
-  var CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​‌‎‏‪-‮⁦-⁩﻿]/g;
+  // 글자로 보이지 않는 문자: 제어 문자, 폭 없는 공백, 방향 바꿈(가짜 글 순서), 한글 채움 문자(빈 별명), 태그 문자.
+  // 줄바꿈·탭·ZWJ(이모지 잇기)·이모지 모양 선택자(FE0F)는 남김. 결합 부호는 한 글자에 둘까지(위아래로 쌓아 화면을 덮는 글 막기)
+  var CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDDEF]/g;
+  var COMB = /([\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]{2})[\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]+/g;
   function cleanText(v, max, multiline) {
     if (v == null) return '';
     var s = String(v).replace(/\r\n?/g, '\n');
     if (s.normalize) s = s.normalize('NFC');
-    s = s.replace(CTRL, '');
+    s = s.replace(CTRL, '').replace(COMB, '$1');
     if (!multiline) s = s.replace(/\s+/g, ' ');
-    else s = s.replace(/\n{4,}/g, '\n\n\n');
+    else s = s.replace(/[^\S\n]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n');
     s = s.trim();
     var c = cps(s);
     if (max && c.length > max) s = c.slice(0, max).join('').trim();
     return s;
   }
+  // 글 속 주소(링크처럼 보이는 것). 발표 화면은 가려서 보여 줌: 참가자가 올린 주소가 프로젝터에서 '공식 안내'처럼 보이지 않게
+  var LINKISH = /(?:\b(?:https?|ftp):\/\/|\bwww\.)[^\s<>"']+|\b[a-z0-9][a-z0-9-]{0,62}(?:\.[a-z0-9-]{1,63}){0,4}\.(?:com|net|org|kr|io|ly|gl|gd|me|co|app|dev|xyz|site|link|info|biz|to|be|cc|tk|top|shop|club|online|live|page|ai)\b(?:\/[^\s<>"']*)?/gi;
+  function hasLink(s) { var r = new RegExp(LINKISH.source, 'i').test(String(s || '')); return r; }
+  function linkless(s, label) { return String(s || '').replace(LINKISH, label || '(링크)'); }
   var DEFAULT_WORDS = [
     '씨발', '씨바', '씨빨', '씨팔', '시발', '시바', '시팔', 'ㅅㅂ', 'ㅆㅂ', 'ㅆㅃ', 'ㅄ', '병신', '븅신', '빙신', 'ㅂㅅ', '개새끼', '개새기', '개색기', '개색끼', '개쉐이',
     '좆', '좇같', '존나', 'ㅈㄴ', '지랄', 'ㅈㄹ', '미친놈', '미친년', '미친새끼', '닥쳐', '꺼져', '썅', '엿먹어', '느금마', '니애미', '니애비', '애미뒤', '염병', '찐따',
@@ -199,12 +208,31 @@
   }
 
   // ---------------------------------------------------------------- CSV & export tables (same layout as the servers)
+  // 수식 주입 막기: 엑셀·구글 시트·리브레오피스가 수식으로 읽는 첫 글자(앞 빈칸·전각 기호 포함)면 앞에 ' 를 붙임
+  var FORMULA = /^[\s\u00A0\u3000]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/;
   function csvCell(v) {
     if (v == null) return '';
     var s = Array.isArray(v) ? v.join(' / ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (FORMULA.test(s)) s = "'" + s;
     if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
+  }
+  /** 받은 CSV를 칸마다 다시 읽어 수식 막기를 한 번 더 씌움(예전 서버가 만든 파일도 안전하게 내려받게). 첫 줄(머리글)은 그대로 */
+  function csvGuard(text) {
+    var src = String(text || '').replace(/^\uFEFF/, ''), rows = [], row = [], cell = '', q = false, i = 0, quoted = false;
+    for (; i < src.length; i++) {
+      var ch = src.charAt(i);
+      if (q) { if (ch === '"') { if (src.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+      if (ch === '"' && cell === '') { q = true; quoted = true; }
+      else if (ch === ',') { row.push(cell); cell = ''; quoted = false; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && src.charAt(i + 1) === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; quoted = false; }
+      else cell += ch;
+    }
+    if (cell !== '' || quoted || row.length) { row.push(cell); rows.push(row); }
+    return '\uFEFF' + rows.map(function (r, n) {
+      // 이미 ' 가 붙은 칸은 첫 글자가 ' 라 그대로(두 번 붙지 않음)
+      return r.map(function (c) { return n ? csvCell(c) : /[",\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',');
+    }).join('\r\n') + '\r\n';
   }
   function toCsv(columns, rows) {
     return '﻿' + [columns].concat(rows).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n';
@@ -390,6 +418,9 @@
       return { ui: patch };
     },
     materialRemove: function (slot) { var patch = {}; patch['m' + slot] = null; return { ui: patch }; },
+    /** 강사가 잠근 칸: 'qa'(새 질문) · 'board'(새 보드 글). 서버도 ui.lockQa·ui.lockBoard를 보고 거절 */
+    locked: function (st, which) { var ui = uiOf(st); return which === 'qa' ? ui.lockQa === true : which === 'board' ? ui.lockBoard === true : false; },
+    lockPatch: function (which, on) { var patch = {}; patch[which === 'qa' ? 'lockQa' : 'lockBoard'] = on ? true : null; return { ui: patch }; },
     timersValue: function (list) {
       var out = (list || []).slice(0, 8).map(function (t) { return [cps(String(t.label || '')).slice(0, 12).join(''), t.endsAt || 0, t.remaining || 0, t.running ? 1 : 0]; });
       var s = JSON.stringify(out);
@@ -435,7 +466,7 @@
     this._mine = local.get(this._ns + ':mine') || {};
     this._mask = makeMasker(config.profanity);
     this._syncing = null; this._syncAgain = false;
-    this._reactAt = [];
+    this._reactAt = []; this._hits = {};
     this._closed = false;
     var ctx = {
       config: config,
@@ -504,11 +535,29 @@
   C.voted = function (id) { return !!this._voted[id]; };
   C.mine = function (col) { return this.store(col, { mine: true }); };
 
+  /** 받은 글을 화면에 쓰기 전에: 보이지 않는 문자·방향 바꿈·쌓인 결합 부호를 빼고 길이를 자르고 욕설을 가림.
+   *  서버가 이미 거르지만, 예전 서버나 직접 넣은 기록도 강사·발표 화면을 깨뜨리지 못하게 여기서 한 번 더 */
   C._maskDoc = function (col, doc) {
     var f = FIELDS[col]; if (!f || !doc) return doc;
-    for (var k in f) if (f[k][2] && typeof doc[k] === 'string') doc[k] = this._mask(doc[k]);
-    if (col !== 'participants' && typeof doc.nickname === 'string') doc.nickname = this._mask(doc.nickname);
+    for (var k in f) {
+      if (typeof doc[k] === 'string') { doc[k] = cleanText(doc[k], f[k][0], !!f[k][1]); if (f[k][2]) doc[k] = this._mask(doc[k]); }
+      else if (Array.isArray(doc[k]) && f[k][0]) doc[k] = doc[k].slice(0, LIMITS.answerItems).map(function (x) { return typeof x === 'string' ? cleanText(x, f[k][0], false) : x; });
+    }
+    if (typeof doc.nickname === 'string') { doc.nickname = cleanText(doc.nickname, LIMITS.nickname, false); if (col !== 'participants') doc.nickname = this._mask(doc.nickname); }
+    if (col === 'polls' && Array.isArray(doc.options)) doc.options = doc.options.slice(0, LIMITS.options).map(function (o) { return cleanText(o, LIMITS.option, false); }).filter(Boolean);
+    if (col === 'posts' && Array.isArray(doc.files)) doc.files.forEach(function (x) { if (x && typeof x.name === 'string') x.name = cleanText(x.name, LIMITS.fileName, false); });
     return doc;
+  };
+  /** 한 기기에서 너무 빨리 보내는 것(도배)을 먼저 막음. 서버도 따로 셈(같은 학교가 한 IP여서 서버 쪽은 넉넉함) */
+  C._throttle = function (col) {
+    var r = this.config.throttle === false ? null : CLIENT_RATE[col]; if (!r) return null;
+    var now = Date.now(), hits = (this._hits[col] || []).filter(function (t) { return now - t < r[1]; });
+    var last = hits[hits.length - 1] || 0, wait = 0;
+    if (hits.length >= r[0]) wait = hits[0] + r[1] - now;
+    if (r[2] && now - last < r[2]) wait = Math.max(wait, last + r[2] - now);
+    if (wait > 0) return LiveError('rate_limited', '조금 천천히 보내 주세요. ' + Math.max(1, Math.ceil(wait / 1000)) + '초 뒤에 다시 보낼 수 있어요.', { status: 429, retryable: false, retryAfter: Math.ceil(wait / 1000) });
+    hits.push(now); this._hits[col] = hits;
+    return null;
   };
   C._merge = function (col, doc, type) {
     if (!doc || doc.id == null || !this._docs[col]) return false;
@@ -862,6 +911,8 @@
         if (err && err.retryable !== false && !err.status) { self._scheduleFlush(10000); return; }
         self._queue.shift(); self._persistQueue();
         if (op.op === 'add') self._drop(op.col, 'tmp_' + op.cid);
+        // 덮어쓰는 기록(투표 답·진행·설문·출석)과 고치기는 미리 바꿔 둔 화면을 서버 값으로 되돌림(닫힌 투표에 늦게 낸 답 등)
+        if (op.op === 'update' || op.op === 'vote' || (op.op === 'add' && /^(answers|progress|survey|attendance)$/.test(op.col))) self.sync(true);
         self._bus.emit('error', err, op);
         return next();
       });
@@ -875,6 +926,14 @@
     var cid = d.cid || uid(16); delete d.cid;
     var op = { op: 'add', col: col, doc: d, cid: cid, at: Date.now(), admin: col === 'polls' };
     if (col === 'polls') return this._exec(op);
+    if (!this._adminKey) {
+      // 강사가 잠근 칸·닫은 투표는 보내기 전에 알려 줌(연결이 끊겨 대기열에 넣었다가 나중에 조용히 버려지지 않게). 서버도 같은 규칙으로 거절
+      var lock = col === 'questions' ? 'qa' : col === 'posts' ? 'board' : '';
+      if (lock && ext.locked(this._state, lock)) return Promise.reject(LiveError('locked', lock === 'qa' ? '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.' : '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.', { status: 409, retryable: false }));
+      var poll = col === 'answers' && d.poll ? this.get('polls', d.poll) : null;
+      if (poll && poll.open === false) return Promise.reject(LiveError('poll_closed', '투표가 닫혔어요.', { status: 409, retryable: false }));
+      var slow = this._throttle(col); if (slow) return Promise.reject(slow);
+    }
     return this._write(op);
   };
   C.update = function (col, id, patch) {
@@ -987,7 +1046,7 @@
     error: LiveError,
     util: {
       uid: uid, sleep: sleep, jitter: jitter, backoff: backoff, assign: assign, clone: clone, sha256: sha256, sha256sync: function (s) { return sha256js(utf8(String(s))); },
-      loadScript: loadScript, cleanText: cleanText, toCsv: toCsv, exportTable: exportTable, fmtTime: fmtTime, Emitter: Emitter,
+      loadScript: loadScript, cleanText: cleanText, toCsv: toCsv, csvGuard: csvGuard, hasLink: hasLink, linkless: linkless, exportTable: exportTable, fmtTime: fmtTime, Emitter: Emitter,
       storage: { local: local, session: session }, isHidden: isHidden, normCode: normCode, defaultState: defaultState, hashStr: hashStr,
       fields: FIELDS, normWord: normWord, wordCloud: wordCloud, banned: makeBanned, zonedMs: zonedMs, completionColumns: COMPLETION_COLS.slice(), ext: ext,
     },

@@ -131,15 +131,17 @@ export function normCode(code) {
   return c;
 }
 const len = (s) => [...s].length;
-// control chars (keep \n \t for multiline), zero-width & bidi overrides (spoofing)
-const CTRL_ML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​‌‎‏‪-‮⁦-⁩﻿]/g;
-const CTRL_SL = /[\u0000-\u001F\u007F​‌‎‏‪-‮⁦-⁩﻿]/g;
+// invisible characters: controls, zero-width, bidi overrides (spoofing), Hangul fillers (blank nicknames), tag characters.
+// Single-line text also turns \n \t into spaces. Combining marks: at most two in a row (stacked "zalgo" text covers the screen).
+const CTRL_ML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDDEF]/g;
+const CTRL_SL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB\u0009\u000A\u000D]|\uDB40[\uDC00-\uDDEF]/g;
+const COMB = /([\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]{2})[\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]+/g;
 
 export function cleanText(v, max, field, { required = false, multiline = false } = {}) {
   if (v == null) v = '';
   if (typeof v !== 'string' && typeof v !== 'number') throw bad('invalid_type', `${field}: 글자여야 합니다.`);
   let s = String(v).replace(/\r\n?/g, '\n').normalize('NFC');
-  s = s.replace(multiline ? CTRL_ML : CTRL_SL, multiline ? '' : ' ').trim();
+  s = s.replace(multiline ? CTRL_ML : CTRL_SL, (m) => (/[\t\n\r]/.test(m) ? ' ' : '')).replace(COMB, '$1').trim();
   if (multiline) s = s.replace(/\n{4,}/g, '\n\n\n');
   else s = s.replace(/\s{2,}/g, ' ');
   if (required && !s) throw bad('required', `${field}: 비어 있습니다.`);
@@ -364,10 +366,11 @@ export function safeFileName(name, type) {
 }
 
 // ---------- CSV ----------
+export const FORMULA = /^[\s\u00A0\u3000]*[=+\-@\uFF1D\uFF0B\uFF0D\uFF20]|^[\t\r\n]/;
 function csvCell(v) {
   if (v == null) return '';
   let s = Array.isArray(v) ? v.join(' / ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // formula injection guard (Excel, Sheets)
+  if (FORMULA.test(s)) s = "'" + s; // formula injection guard (Excel, Sheets, LibreOffice): leading blanks and full-width signs too
   if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
@@ -925,6 +928,9 @@ export class LiveCore {
       this.limit('write', me.id, ip);
       if (this.rate[col]) this.limit(col, me.id, null);
     } else throw new HttpError(404, 'unknown_collection', '없는 컬렉션입니다.');
+    if (!admin && ((col === 'questions' && this.state(code, t).ui?.lockQa === true) || (col === 'posts' && this.state(code, t).ui?.lockBoard === true))) {
+      throw new HttpError(409, 'locked', col === 'questions' ? '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.' : '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.');
+    }
     const { data } = cleanAdd(col, body);
     const cid = body.cid == null ? null : cleanText(body.cid, LIMITS.cid, 'cid') || null;
     const by = me ? me.id : null;
