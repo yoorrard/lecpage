@@ -30,7 +30,7 @@ if (args.includes('--json')) {
 }
 
 const a = out.assumptions;
-console.log(`가정: 강사 한 명이 한 달에 연수 ${a.perUser}회, 그중 바로 배포 ${a.instantShare * 100}%, 참가자 ${a.people}명, ${a.minutes}분, 참여 기능 ${a.liveShare * 100}%, 그중 학교망(실시간 연결 막힘) ${a.schoolShare * 100}%, 가장 바쁜 날 = 평일 평균 × ${a.peakFactor}, 사이트 공개 ${a.siteDays}일, 다시 배포 ${a.republishes}번\n`);
+console.log(`가정: 강사 한 명이 한 달에 연수 ${a.perUser}회, 그중 바로 배포 ${a.instantShare * 100}%, 참가자 ${a.people}명, ${a.minutes}분, 참여 기능 ${a.liveShare * 100}%, 그중 학교망(실시간 연결 막힘) ${a.schoolShare * 100}%, 가장 바쁜 날 = 평일 평균 × ${a.peakFactor}, 사이트 보관 ${a.siteDays}일, 다시 배포 ${a.republishes}번\n`);
 
 console.log('### 연수 한 번이 드는 몫(Pages 보기)\n');
 console.log('| 연수 | Worker 요청 | DO 요청 | DO duration(GB-s) | DO 행 쓰기 | Pages API | 유료면(넘는 몫) |');
