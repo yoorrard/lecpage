@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { buildSite } from '../lib/engine.js';
+import { buildSite, previewHtml } from '../lib/engine.js';
 
 /**
  * 작은 실제 화면: 설계도를 엔진으로 그려 스크립트 없이(sandbox="") 보여 줘요. 모형이 아니라 실제 결과예요.
@@ -47,6 +47,53 @@ export function staticHtml(files, focus = '', { maxImageBytes = 1.5e6 } = {}) {
   return html.replace('</head>', () => `<style>${hide}{display:none!important}html,body{overflow:hidden!important;scroll-behavior:auto!important}${crop}</style></head>`);
 }
 
+/** 움직이는 카드에 덧붙이는 CSS: 도크·멈춤 단추를 숨기고, 스크롤 막대 없이 */
+const LIVE_CSS = '.lp-dock,[data-dock],.fx-toggle{display:none!important}html,body{overflow:hidden!important;scroll-behavior:auto!important}';
+/** 움직이는 카드의 '본문 둘러보기': 앱이 {type:'lp-tour', on}을 보내면 잠깐 첫 화면을 보여 준 뒤 사이트 안에서 천천히 내려가고(등장·스크롤 연동 효과가 실제로 돎), 끄면 맨 위로. 동작 줄이기에서는 하지 않음 */
+const TOUR_JS = `<script>(function(){var on=0,t0=0,raf=0,tm=0;if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;document.documentElement.style.scrollBehavior='auto';function step(t){if(!on)return;if(!t0)t0=t;var m=document.documentElement.scrollHeight-innerHeight,y=Math.min(m,(t-t0)*0.38);scrollTo(0,y);if(y<m)raf=requestAnimationFrame(step);}addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type!=='lp-tour')return;cancelAnimationFrame(raf);clearTimeout(tm);on=d.on?1:0;t0=0;if(on)tm=setTimeout(function(){raf=requestAnimationFrame(step);},900);else scrollTo(0,0);});})();<\/script>`;
+/**
+ * 빌드 결과 → 움직임을 살린 한 파일 HTML(사이트 스크립트 포함). 디자인을 보여 주는 카드에서 첫 화면 그림·등장 효과가 실제로 돌게 함.
+ * sandbox="allow-scripts"(같은 출처 권한 없음)에서만 씀: 앱의 저장소·쿠키에 닿지 못함. 캔버스 해상도는 1배(작게 줄여 보여 주므로)
+ */
+export function liveHtml(files) {
+  const h = previewHtml(files, 'index.html', { lean: true, extraCss: LIVE_CSS, dpr: 1 });
+  return h.includes('</body>') ? h.replace('</body>', () => TOUR_JS + '</body>') : h + TOUR_JS;
+}
+const liveCache = new Map();
+/** 움직이는 html(같은 설계도는 다시 만들지 않음, 최근 12개). on일 때만 만듦 */
+export function useLive(bp, on, assets) {
+  const [html, setHtml] = useState('');
+  const key = useMemo(() => (bp ? keyOf(bp, 'live') : ''), [bp]);
+  useEffect(() => {
+    if (!on || !bp || !key) { setHtml(''); return; }
+    if (liveCache.has(key)) { setHtml(liveCache.get(key)); return; }
+    let off = false;
+    queue(async () => {
+      if (off) return;
+      const r = await buildSite({ ...bp, live: { ...(bp.live || {}), provider: 'none', features: [] } }, assets || {});
+      if (r.errors?.length) return;
+      const h = liveHtml(r.files); liveCache.delete(key); liveCache.set(key, h); if (liveCache.size > 12) liveCache.delete(liveCache.keys().next().value);
+      if (!off) setHtml(h);
+    }, true);
+    return () => { off = true; };
+  }, [key, on]);
+  return html;
+}
+/**
+ * 정지 그림 위에 움직이는 화면을 겹침. 움직이는 화면은 첫 화면 등장(제목이 떠오름 등)이 끝난 뒤에 서서히 드러남:
+ * 정지 그림과 같은 모습에서 바뀌므로 글이 두 겹으로 비치거나, 다 보이던 제목이 사라졌다 다시 들어오며 튀지 않음.
+ * tour면 사이트 안에서 본문까지 천천히 내려감(정지 그림처럼 틀을 길게 늘려 미는 대신 실제 스크롤이라 효과가 제대로 돎)
+ */
+const SETTLE = 1300;
+export function LiveLayer({ html, title = '', style, tour = false }) {
+  const [shown, setShown] = useState(false); const ref = useRef(); const timer = useRef(0);
+  const post = (on) => { try { ref.current?.contentWindow?.postMessage({ type: 'lp-tour', on }, '*'); } catch { } };
+  useEffect(() => { setShown(false); return () => clearTimeout(timer.current); }, [html]);
+  useEffect(() => { if (shown) post(tour); }, [tour, shown]);
+  const loaded = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setShown(true), SETTLE); };
+  return html ? <iframe ref={ref} class={`is-live${shown ? ' is-on' : ''}`} sandbox="allow-scripts" srcdoc={html} tabIndex={-1} aria-hidden="true" title={title} onLoad={loaded} style={style} /> : null;
+}
+
 /** 설계도 → 작은 화면용 설계도(움직임 0, 참여 기능 없음: 처음 모습 그대로 보이게) */
 export function stillBp(bp) {
   return { ...bp, design: { ...(bp.design || {}), motion: 0 }, live: { ...(bp.live || {}), provider: 'none', features: [] } };
@@ -75,10 +122,12 @@ export function useStatic(bp, focus, on, assets, first = false) {
 /**
  * @param bp 그릴 설계도(바꾼 뒤 모습이면 바꾼 설계도를 그대로)
  * @param focus 섹션 id(그 섹션만) · vw 그릴 폭(px) · ratio 가로:세로
- * @param tour 카드에 포인터·초점이 오면 틀을 본문 다섯 화면 분량으로 늘리고 천천히 내려가며 본문을 보여 줌(동작 줄이기면 하지 않음)
+ * @param tour 카드에 포인터·초점이 오면 사이트 스크립트를 돌린 화면을 겹쳐 첫 화면 그림·등장 효과가 실제로 움직이고,
+ *   잠깐 뒤 그 안에서 본문까지 천천히 내려감(첫 화면 전체를 보여 줄 때만. 동작 줄이기면 내려가지 않음)
+ * @param live 늘 움직이는 화면으로(한 화면에 한두 장만: 지금 고른 디자인·크게 보기)
  */
 const PAGE = 4000;
-export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager = false, first = false, tour = false, class: cls = '' }) {
+export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager = false, first = false, tour = false, live = false, class: cls = '' }) {
   const box = useRef(); const [near, setNear] = useState(eager); const [s, setS] = useState(0.2); const [touring, setTouring] = useState(false);
   useEffect(() => {
     const el = box.current; if (!el) return;
@@ -91,10 +140,14 @@ export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager
     return () => { ro.disconnect(); io?.disconnect(); if (card) { card.removeEventListener('pointerenter', on); card.removeEventListener('pointerleave', off); card.removeEventListener('focusin', on); card.removeEventListener('focusout', off); } };
   }, [vw, eager, tour]);
   const html = useStatic(bp, focus, near, assets, first || eager);
+  const lh = useLive(bp, near && !focus && (live || touring), assets);
   const vh = Math.round(vw / ratio);
+  // 움직이는 화면이 있으면 둘러보기도 그 안에서(실제 스크롤). 없을 때만 정지 그림의 틀을 늘려 밂
+  const pan = touring && !lh;
   return (
-    <div class={`mini-site ${cls}${touring ? ' is-tour' : ''}`} ref={box} style={{ '--s': s, '--pan': `${-(PAGE - vh)}px`, aspectRatio: String(ratio) }}>
-      {html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: (touring ? PAGE : vh) + 'px' }} /> : <span class="thumb-wait" />}
+    <div class={`mini-site ${cls}${pan ? ' is-tour' : ''}`} ref={box} style={{ '--s': s, '--pan': `${-(PAGE - vh)}px`, aspectRatio: String(ratio) }}>
+      {html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: (pan ? PAGE : vh) + 'px' }} /> : <span class="thumb-wait" />}
+      {html && near && <LiveLayer html={lh} tour={touring} style={{ width: vw + 'px', height: vh + 'px' }} />}
     </div>
   );
 }

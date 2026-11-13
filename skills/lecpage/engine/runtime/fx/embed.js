@@ -73,7 +73,7 @@
     'scramble': { html: '<div class="em"><p class="em-k">디지털 역량 연수</p><h2 class="em-h" data-fx="scramble">데이터로 읽는 우리 반</h2></div>', replay: 2600 },
     'gradient-text': { html: '<div class="em"><p class="em-k">수업 설계 연수</p><h2 class="em-h" data-fx="gradient-text">미래 교실 실험실</h2></div>' },
     'marquee': { html: '<div class="em em-full"><ul class="em-mq" data-fx="marquee"><li>공감</li><li>경청</li><li>질문</li><li>기록</li><li>회복</li><li>연결</li></ul><ul class="em-mq em-mq2" data-fx="marquee"' + opts({ reverse: true, speed: 30 }) + '><li>Padlet</li><li>Mentimeter</li><li>CASEL</li><li>구글 시트</li><li>Gemini</li></ul></div>' },
-    'counter': { html: '<div class="em"><div class="em-nums"><div><strong data-fx="counter">28명</strong><span>참가 선생님</span></div><div><strong data-fx="counter">90분</strong><span>연수 시간</span></div><div><strong data-fx="counter">5개</strong><span>실습</span></div></div></div>', replay: 2600 },
+    'counter': { html: '<div class="em"><div class="em-nums"><div><strong data-fx="counter">28명</strong><span>참가자</span></div><div><strong data-fx="counter">90분</strong><span>연수 시간</span></div><div><strong data-fx="counter">5개</strong><span>실습</span></div></div></div>', replay: 2600 },
     'typewriter': { html: '<div class="em"><p class="em-k">오늘의 질문</p><h2 class="em-h sm" data-fx="typewriter">오늘 아침, 가장 먼저 표정이 보인 아이는 누구였나요?</h2></div>', replay: 5000 },
     'highlight-sweep': { html: '<div class="em"><p class="em-lead" data-fx="highlight-sweep">좋은 피드백은 <mark>구체적인 행동</mark>을 짚고, <mark>다음 한 걸음</mark>을 함께 정해요.</p></div>', replay: 2500 },
     'word-rotate': { html: '<div class="em"><p class="em-k">교원 연수</p><h2 class="em-h"><span data-fx="word-rotate"' + opts({ words: ['함께', '깊이', '서로'], interval: 1500 }) + '>함께</span> 배우는 연수</h2></div>' },
@@ -246,6 +246,8 @@
     try { FX.stop(root); } catch (e) { /* 무시 */ }
     root.innerHTML = typeof sc.html === 'function' ? sc.html() : sc.html;
     w.scrollTo(0, 0);
+    /* 방금 넣은 장면은 아직 그려진 적이 없음: 처음부터 보이는 숫자도 0부터 세게(counter는 html.fx-boot일 때만 셈, core가 start에서 걷어 냄) */
+    if (!RM) h.classList.add('fx-boot');
     FX.start(root);
     if (RM) return; // 동작 줄이기: 완성된 모습 그대로
     // 멈춘 무늬(그물 그라데이션·종이 결·망점): 가림막이 오가며 '있을 때·없을 때'를 견줘 보여 줌

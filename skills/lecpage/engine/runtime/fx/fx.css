@@ -18,8 +18,10 @@
 html.fx-paused .fx-layer, html.fx-paused .fx-layer *, html.fx-paused .fx-layer *::before, html.fx-paused .fx-layer *::after,
 html.fx-paused .fx-gradient-text, html.fx-paused .fx-marquee-track, html.fx-paused .fx-beam-ring { animation-play-state: paused !important; }
 
-/* 깜빡임 방지(선택): <head>에 LecFX.boot 스니펫을 넣으면 core가 시작할 때까지 진입 효과 대상만 잠깐 숨긴다 */
-html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], html.fx-boot [data-fx~="typewriter"], html.fx-boot [data-fx~="clip-reveal"] { opacity: 0; }
+/* 깜빡임 방지: html.fx-boot(lecpage의 assets/boot.js, 또는 <head>에 LecFX.boot 스니펫)가 붙은 동안 진입 효과 대상과
+   첫 화면에서 그려지며 들어오는 그림(하루 시계·시간 점묘·펼친 교재)만 잠깐 숨긴다. core가 시작하면(최대 3초) 걷힘 */
+html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], html.fx-boot [data-fx~="typewriter"], html.fx-boot [data-fx~="clip-reveal"],
+html.fx-boot .lp-hero :is([data-fx~="schedule-dial"], [data-fx~="minute-map"], [data-fx~="slide-fan"], [data-fx~="scramble"], [data-fx~="counter"]) { opacity: 0; }
 
 /* 움직임 멈춤/재생 버튼(자동으로 붙는 것). 직접 만들려면 아무 버튼에 data-fx-toggle */
 .fx-toggle { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: inline-flex; align-items: center; gap: .5em; min-height: 36px; padding: .4em .9em .4em .75em; font: 500 13px/1.2 var(--font-sans); color: var(--foreground); background: var(--background); border: var(--border-w, 1px) solid var(--border); border-radius: 999px; box-shadow: var(--shadow); cursor: pointer; opacity: .88; transition: opacity var(--dur-2, 200ms); }
@@ -283,10 +285,10 @@ html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], htm
 /* ---------- 그래픽(배경 층) ---------- */
 /*@fx:aurora*/
 .fx-aurora i { position: absolute; display: block; border-radius: 50%; opacity: var(--fx-au-o, .5); will-change: transform; }
-.fx-au-a { left: -18%; top: -14%; width: 95%; height: 46%; background: radial-gradient(closest-side, var(--primary), transparent); transform: rotate(-12deg); animation: fx-au-a 28s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
-.fx-au-b { right: -22%; top: 4%; width: 80%; height: 42%; background: radial-gradient(closest-side, var(--accent), transparent); transform: rotate(14deg); animation: fx-au-b 34s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
-.fx-au-c { left: 6%; bottom: -26%; width: 88%; height: 52%; background: radial-gradient(closest-side, var(--accent-2), transparent); animation: fx-au-c 40s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
-.fx-au-d { right: 4%; bottom: 6%; width: 42%; height: 38%; background: radial-gradient(closest-side, var(--accent-3), transparent); opacity: calc(var(--fx-au-o, .5) * .8); animation: fx-au-d 31s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
+.fx-au-a { left: -18%; top: -14%; width: 95%; height: 46%; background: radial-gradient(closest-side, var(--primary), transparent); transform: rotate(-12deg); animation: fx-au-a 17s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
+.fx-au-b { right: -22%; top: 4%; width: 80%; height: 42%; background: radial-gradient(closest-side, var(--accent), transparent); transform: rotate(14deg); animation: fx-au-b 21s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
+.fx-au-c { left: 6%; bottom: -26%; width: 88%; height: 52%; background: radial-gradient(closest-side, var(--accent-2), transparent); animation: fx-au-c 24s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
+.fx-au-d { right: 4%; bottom: 6%; width: 42%; height: 38%; background: radial-gradient(closest-side, var(--accent-3), transparent); opacity: calc(var(--fx-au-o, .5) * .8); animation: fx-au-d 19s var(--ease-in-out, cubic-bezier(.65, 0, .35, 1)) infinite alternate; }
 @keyframes fx-au-a { to { transform: translate3d(16%, 10%, 0) rotate(4deg) scale(1.12); } }
 @keyframes fx-au-b { to { transform: translate3d(-18%, 14%, 0) rotate(-6deg) scale(.92); } }
 @keyframes fx-au-c { to { transform: translate3d(10%, -16%, 0) rotate(10deg) scale(1.1); } }

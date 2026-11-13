@@ -57,7 +57,7 @@ function put(key, bp) { const r = E.build(bp, { runtime: nodeRuntime() }); if (r
 for (const id of presets) {
   for (const [name, src, widths, theme, motion, rm, print] of PLAN) {
     const bp = loadBp(src); bp.design = { preset: id, theme, ...(motion === '' ? {} : { motion }) };
-    if (motion !== '') bp.audience = { ...(bp.audience || {}), devices: ['laptop'] }; // 휴대폰 대상이면 3단계가 2로 낮아지므로
+    if (motion !== '') { bp.audience = { ...(bp.audience || {}), devices: ['laptop'] }; if (bp.meta?.admin?.kind === 'official') bp.meta.admin = { ...bp.meta.admin, kind: 'school' }; } // 휴대폰 대상(3→2)·교육청 직무연수(→1) 상한이 정한 단계를 덮지 않게
     const key = `${id}__${name}`, r = put(key, bp); if (!r) continue;
     const pages = src === 'aux' ? (print ? ['poster.html'] : AUX) : ['index.html'];
     for (const pg of pages) for (const w of widths) for (const h of pg === 'screen.html' && w >= 1280 ? [720, 1080] : [0]) jobs.push({ id, name, theme, motion: motion === '' ? `기본(${r.design.motion})` : String(r.design.motion), rm, print, w, key, page: pg, h });
