@@ -283,6 +283,7 @@
 @media (max-width:899px){
   .ld-tags li:nth-child(n+5),.ld-toc li:nth-child(n+4){display:none}
   .ld-tags{gap:2cqi}
+  .ld-toc{left:36%}
   .ld-stage>*{font-size:max(10px,2.5cqi)}
 }
 
@@ -387,8 +388,8 @@
 .ld-feat dt{font-weight:700;font-size:.96rem}
 .ld-feat dd{margin:0;font-size:.88rem;line-height:1.55;color:var(--n-muted)}
 .ld-live-vis{position:relative;min-width:0;display:grid;grid-template-columns:minmax(0,27%) minmax(0,1fr);align-items:end;container-type:inline-size}
-/* 발표 화면(밝은 종이 바탕, 위 막대 · 왼쪽 큰 질문과 막대 · 오른쪽 QR) */
-.ld-screen{grid-column:2;grid-row:1;display:grid;grid-template-columns:minmax(0,1fr) 27%;grid-template-rows:auto minmax(0,1fr);aspect-ratio:16/10;overflow:hidden;border-radius:14px;background:#F5F4F0;color:#1B1A19;font-size:max(9px,1.45cqi);box-shadow:0 0 0 1px var(--n-line),0 30px 60px -30px rgb(0 0 0 / .6)}
+/* 발표 화면(밝은 종이 바탕, 위 막대 · 왼쪽 큰 질문과 막대 · 오른쪽 QR). 16:10이 기본이고, 좁아서 글이 넘치면 그만큼 키가 늘어남(잘리지 않게) */
+.ld-screen{grid-column:2;grid-row:1;display:grid;grid-template-columns:minmax(0,1fr) 27%;grid-template-rows:auto 1fr;aspect-ratio:16/10;overflow:clip;border-radius:14px;background:#F5F4F0;color:#1B1A19;font-size:max(9px,1.45cqi);box-shadow:0 0 0 1px var(--n-line),0 30px 60px -30px rgb(0 0 0 / .6)}
 .ld-scr-top{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:2cqi;padding:1.5cqi 2.4cqi;border-bottom:1px solid #DAD6CF}
 .ld-scr-top b{display:flex;align-items:center;gap:.6em;min-width:0;font-size:1.2em;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ld-scr-top b::before{content:"";flex:none;width:.55em;height:.55em;border-radius:2px;background:#1B1A19}
@@ -413,13 +414,14 @@
 /* 휴대폰에 가리는 만큼 발표 화면 글을 오른쪽에서 시작 */
 .ld-scr-top,.ld-scr-main{padding-left:calc(9cqi + 2.2cqi)}
 .ld-phone-live .ld-phone-notch{top:12px;height:12px}
-.ld-qa{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:8px;padding:34px 11px 12px;border-radius:26px;background:#F7F6F2;color:#1C1A19;font-size:11px}
+.ld-qa{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);align-content:start;gap:8px;padding:34px 11px 12px;border-radius:26px;background:#F7F6F2;color:#1C1A19;font-size:11px}
 .ld-qa-h{font-size:1.14em;letter-spacing:-.02em}
 .ld-qa-lead{color:#5F5A55}
 .ld-qa-input{display:flex;align-items:center;gap:6px;min-height:34px;padding:6px 6px 6px 9px;border:1.5px solid #5541C4;border-radius:9px;background:#fff}
-.ld-typing{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:clip;color:#1C1A19}
+/* 휴대폰이 좁으면 질문이 여러 줄로(입력칸이 늘어남): 잘리지 않게 */
+.ld-typing{flex:1;min-width:0;line-height:1.4;color:#1C1A19}
 .ld-send{flex:none;padding:4px 7px;border-radius:6px;background:#5541C4;color:#fff;font-style:normal;font-weight:700;font-size:.9em}
-.ld-qa-list{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.ld-qa-list{margin:4px 0 0;padding:0;list-style:none;display:grid;align-content:start;gap:6px}
 .ld-qa-list li{display:grid;gap:3px;padding:8px 9px;border-radius:9px;background:#fff;box-shadow:0 1px 2px rgb(0 0 0 / .08);line-height:1.4}
 .ld-qa-list small{color:#5F5A55}
 .ld-qa-list .ld-qa-new{box-shadow:inset 0 0 0 1.5px #5541C4}

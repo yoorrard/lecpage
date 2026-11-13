@@ -781,7 +781,6 @@ details>summary{cursor:pointer}
 /* 휴대폰: 만들기 버튼을 아래에 붙여 둠 */
 @media (max-width: 760px){
   .make-bar{position:sticky;bottom:0;z-index:5;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
-  .make-bar [data-coach]::after{top:auto;bottom:calc(100% - 12px)} /* 화면 아래에 붙은 줄: 코치 꼬리표를 단추 위 가장자리에(아래로 두면 화면 밖) */
 }
 @media (max-width: 560px){
   .top-in{gap:8px}
@@ -992,7 +991,12 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 /* 체험의 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 말풍선. 말로 하는 안내는 위의 안내 줄이 함 */
 [data-coach]{position:relative;outline:3px solid var(--accent);outline-offset:3px;z-index:2}
 [data-coach]::after{content:'여기를 눌러요';position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);white-space:nowrap;padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:.78rem;font-weight:700;line-height:1.5;pointer-events:none;z-index:3;animation:coach-in .25s var(--ease)}
-@keyframes coach-in{from{opacity:0;transform:translate(-50%,-4px)}to{opacity:1;transform:translate(-50%,0)}}
+/* 자리는 Demo.jsx가 대상과 둘레의 단추·글을 덮지 않는 쪽으로 정함 */
+[data-coach="above"]::after{top:auto;bottom:calc(100% + 10px)}
+[data-coach="right"]::after{left:calc(100% + 10px);top:50%;transform:translateY(-50%)}
+[data-coach="left"]::after{left:auto;right:calc(100% + 10px);top:50%;transform:translateY(-50%)}
+[data-coach-room]{margin-bottom:calc(.78rem * 1.5 + 6px + 12px)} /* 빈자리가 없을 때 대상 아래를 꼬리표(높이+간격)만큼 벌림 */
+@keyframes coach-in{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){[data-coach]::after{animation:none}}
 .demo-bar .btn[aria-pressed="true"]{background:color-mix(in srgb,var(--butter-ink) 10%,transparent)}
 .demo-tip{display:flex;gap:10px;align-items:baseline;margin:0;padding:10px 14px;border-radius:var(--r-sm);background:var(--lav-soft);color:var(--lav-ink);font-weight:600}

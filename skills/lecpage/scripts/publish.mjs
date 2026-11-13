@@ -14,7 +14,7 @@
 //   --host를 빼면 지난번에 올린 곳에 같은 이름으로 다시 올립니다(처음이면 Cloudflare).
 //
 // handouts <주소|사이트 폴더> [-o 저장 폴더] [--password 암호]
-//   QR-안내문.pdf(참가자용 A4 한 장) · 강사-카드.pdf · 발표화면.png · 발표화면-QR-크게.png. Playwright가 없으면 건너뜀
+//   QR-안내문.pdf(참가자용 A4 한 장) · 발표화면.png · 발표화면-QR-크게.png. Playwright가 없으면 건너뜀
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, copyFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -141,7 +141,7 @@ export async function publishCmd(h) {
       ] : []),
       `${live ? 5 : 1} 빈 임시 폴더에서 ${W} deploy --assets ${rel(dist)} --name ${name} --compatibility-date ${today}${args.temporary ? ' --temporary' : ''} → https://${name}.<계정>.workers.dev`,
       live ? `6 ${W} deploy -c wrangler.toml --var ALLOWED_ORIGINS:<사이트 주소> (중계가 이 사이트만 받게)` : '',
-      `${live ? 7 : 2} 주소 확인(사이트·check.html${live ? '·중계' : ''}) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·강사-카드.pdf·발표화면.png`,
+      `${live ? 7 : 2} 주소 확인(사이트·check.html${live ? '·중계' : ''}) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·발표화면.png`,
       ...warn.map((w) => '주의 ' + w),
       '강사가 할 일:',
       auth === 'token' ? '  없음(토큰이 있어요). 명령에서 --dry-run을 빼고 다시 실행해요' : '  1. Cloudflare 가입(https://dash.cloudflare.com/sign-up, 이메일만, 결제 정보 없음)\n  2. 이 컴퓨터에서 npx wrangler@4 login을 실행하고 브라우저에서 [Allow] — 또는 Edit Cloudflare Workers 템플릿으로 만든 API 토큰을 CLOUDFLARE_API_TOKEN 환경 변수로 넣기(대화에 붙여 넣지 않기)',
@@ -288,7 +288,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
       `1 올릴 사본(빈 임시 폴더): _headers·점 파일 빼기${added.length ? ` · 더하기 ${added.join(', ')}` : ''}(${publicSite ? '공개 연수: 첫 화면만 담은 sitemap' : '검색 제외: Onpod이 쪽 목록을 자동으로 내지 않게'})`,
       `2 onpod static deploy <사본> --name ${name} --no-spa → ${siteBase}`,
       relay ? `3 참여 기능 중계 ${relay.name}가 새 주소도 받게: wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:${allow(siteBase)}` : '',
-      `${relay ? 4 : 3} 주소 확인(사이트·check) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·강사-카드.pdf·발표화면.png`,
+      `${relay ? 4 : 3} 주소 확인(사이트·check) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·발표화면.png`,
       '강사가 할 일:',
       auth ? '  없음(키가 있어요). 명령에서 --dry-run을 빼고 다시 실행해요' : '  1. https://console.onpod.ai/signup 에서 구글 계정으로 가입(카드 없음)\n  2. 콘솔의 API 키 화면에서 키를 만들어 복사\n  3. 이 컴퓨터의 환경 변수 ONPOD_TOKEN에 넣기(대화에 붙여 넣지 않기). 또는 터미널에서 onpod login --token <키>',
       '알아 둘 점: 무료는 계정당 사이트 10개·사이트 100MB·월 100GB(넘으면 그달 멈췄다가 다음 달 1일에 다시 열림). 주소 이름은 Onpod 전체에서 하나뿐이에요.',

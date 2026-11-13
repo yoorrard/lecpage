@@ -284,7 +284,7 @@ assets/fx.js · fx.css            효과를 쓸 때만
 assets/unlock.js                 암호 보호(access.mode password)일 때만
 assets/slides/*.webp · assets/media/*
 ```
-- 쪽 머리·CSP는 `render/shell.js`(참가자 화면 `pages.js`와 보조 화면 `aux.js`가 같이 씀). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 공개=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사·발표 화면은 COOP(강사 화면이 연 발표 창을 다시 찾을 수 있게 같은 값).
+- 쪽 머리·CSP는 `render/shell.js`(참가자 화면 `pages.js`와 보조 화면 `aux.js`가 같이 씀). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 배포=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사·발표 화면은 COOP(강사 화면이 연 발표 창을 다시 찾을 수 있게 같은 값).
 - 보조 화면은 같은 프리셋(theme.css·lecpage.css의 `data-*`)을 이어받고 `assets/aux.css`만 더 싣습니다(참가자 화면은 싣지 않음). 안내문은 A4 한 장 + 자리 카드 8장(고를 때), 강사 화면 주소·QR은 싣지 않음(참가자 손에 가는 종이). 쪽(`.lp-pst-page`)을 크기 기준(container)으로 cqw 단위라 미리보기와 인쇄가 같은 비율.
 - 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
 - `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
@@ -300,23 +300,23 @@ assets/slides/*.webp · assets/media/*
 ## 8. v1.1에서 더한 계약 (2026-11-11)
 
 ### 8.1 올릴 곳 고르기 (`engine/src/decide/infra.js`)
-- `HOSTS[id]`: `{ name_ko, cost, app(앱에서 바로 올림), account, limit?: { siteMB, fileMB, files }, cli?, note_ko }`. id: `lecpage`(바로 공개) · `vercel` · `github-pages` · `cloudflare` · `netlify` · `firebase` · `s3` · `server` · `lan` · `zip`. 숫자 근거는 `docs/research/hosting-2026-11.md`.
-- `decideHost(input) → { hosts, pick, reasons, warnings }`. 입력: `skill`(`click` 앱 / `set`·`dev` skill), `commercial`, `network`, `infra[]`, `backend`, `previous`(지난번에 올린 곳), `connected[]`(연결해 둔 곳), `instant`(바로 공개를 쓸 수 있음), `keep`, `customDomain`, `siteMB`, `maxFileMB`, `files`. 규칙 순서: 인터넷 없음 → 자체 서버 → 기본(앱 Vercel, skill Cloudflare) → 강사료(Vercel 제외, Cloudflare 먼저) → 내 도메인 → 크기(25MB 넘는 파일이나 파일 수 초과(끌어 놓기 1,000개·명령 20,000개)면 GitHub Pages 먼저, 100MB 넘는 사이트는 Cloudflare 먼저·Vercel 맨 뒤) → 바로 공개 → 지난번에 올린 곳·연결해 둔 곳 먼저.
+- `HOSTS[id]`: `{ name_ko, cost, app(앱에서 바로 올림), account, limit?: { siteMB, fileMB, files }, cli?, note_ko }`. id: `lecpage`(바로 배포) · `vercel` · `github-pages` · `cloudflare` · `netlify` · `firebase` · `s3` · `server` · `lan` · `zip`. 숫자 근거는 `docs/research/hosting-2026-11.md`.
+- `decideHost(input) → { hosts, pick, reasons, warnings }`. 입력: `skill`(`click` 앱 / `set`·`dev` skill), `commercial`, `network`, `infra[]`, `backend`, `previous`(지난번에 올린 곳), `connected[]`(연결해 둔 곳), `instant`(바로 배포를 쓸 수 있음), `keep`, `customDomain`, `siteMB`, `maxFileMB`, `files`. 규칙 순서: 인터넷 없음 → 자체 서버 → 기본(앱 Vercel, skill Cloudflare) → 강사료(Vercel 제외, Cloudflare 먼저) → 내 도메인 → 크기(25MB 넘는 파일이나 파일 수 초과(끌어 놓기 1,000개·명령 20,000개)면 GitHub Pages 먼저, 100MB 넘는 사이트는 Cloudflare 먼저·Vercel 맨 뒤) → 바로 배포 → 지난번에 올린 곳·연결해 둔 곳 먼저.
 - `checkHost(host, { bytes, files, maxFile, binaries }) → { ok, errors, warnings }`: 올리기 직전에 그곳의 한도를 확인합니다.
 - `TEACHER_STEPS[backend] = { app, skill }`: 참여 기능마다 강사가 직접 할 일 수(어림, 근거는 파일 주석). `decideInfra`는 skill(`set`·`dev`)에서 시트·Supabase가 나오면 이 수로 다시 견줘 가장 적은 곳(보통 Cloudflare 중계, 연결해 둔 곳은 0)을 고르고, 결과에 `teacherSteps`를 담습니다. 앱(`click`)은 같은 함수를 쓰고 순서는 L08·L09 그대로입니다.
 - CLI `publish work [--live]`(`skills/lecpage/scripts/publish.mjs`): Cloudflare에 사이트와 중계를 함께 올림. 중계는 `work/live-relay`(백엔드 복사, `ALLOWED_CODES`=연수 코드), 관리자 키는 `<out>-강사용/관리자-키.txt`만, 사이트는 `info.json` `live`로 다시 빌드, 마지막에 `ALLOWED_ORIGINS`=사이트 주소. `handouts <주소>`는 `poster.html`·`screen.html`을 PDF·PNG로.
 
-### 8.2 앱의 공개하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
+### 8.2 앱의 배포하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
 - 흐름: 사이트 만들기(`buildFiles`) → `checkHost` → 올리기 → 주소 저장 → `probeSite`(사이트의 `assets/favicon.svg`를 그림으로 불러 실제로 열리는지 확인).
 - Vercel(`deployVercel`): `GET /v9/projects?limit=1`(토큰 확인) → 같은 이름 프로젝트가 있으면 중단 → 파일별 SHA-1로 `POST /v13/deployments` → `missing_files`면 그 파일만 `POST /v2/files`(`x-vercel-digest`) → 다시 요청 → `GET /v13/deployments/{id}`로 READY 대기 → 새 프로젝트에 `ssoProtection`이 걸려 있으면 `PATCH /v9/projects/{id} {ssoProtection:null}` → 프로젝트 주소(`<이름>.vercel.app`)를 돌려줌. `_headers`는 `vercel.json`의 `headers`로 옮깁니다. 배포별 주소는 쓰지 않습니다.
 - GitHub Pages(`deployGitHub`)·Netlify(`deployNetlify`)는 v1.0과 같습니다. 토큰은 연결할 때 확인한 뒤 저장합니다(`deploy-<kind>` 키, '기억하기'를 켜면 WebCrypto로 암호화).
-- 바로 공개(`deployInstant`, 선택): 빌드 변수 `VITE_PUBLISH_API`가 있고 `GET /api/info`가 답할 때만 보입니다. API 계약은 `hosting/README.md`.
+- 바로 배포(`deployInstant`, 선택): 빌드 변수 `VITE_PUBLISH_API`가 있고 `GET /api/info`가 답할 때만 보입니다. 배포 화면을 열 때 `instantGate`가 `info.capacity`(붐빔 단계)로 바로 배포를 쓸지 정하고, 붐비거나 찼으면 같은 파일 그대로 강사 계정에 배포하는 길로 넘깁니다. `deployInstant`는 기기 표(`device`)와 `caps: ['split']`을 보내고, 그날 참여 기능 방이 찼다는 답(`live.ok === false`)이면 참여 기능을 뺀 파일로 다시 빌드해 사이트만 바로 배포하고 참여 기능은 강사 계정(Cloudflare·Supabase)으로 연결하게 합니다. API 계약은 `hosting/README.md`.
 - 프로젝트에 남는 값: `deploy = { target, lastUrl, at, vercel:{projectId,name,url}, github:{repo,url}, netlify:{siteId,url,name}, lecpage:{id,key,url,expiresAt}, cloudflare|zip:{url} }`. `.lecpage` 파일로 내보낼 때 `deploy`는 넣지 않습니다.
 - `.lecpage` 파일(무압축 ZIP: `project.json` + 자료)의 규칙은 `engine/src/project-file.js` 하나를 앱(`importProjectFile`·`exportProjectFile`)과 skill(`lecpage.mjs app`)이 함께 씁니다. 받는 자료는 `assets/slides|media`(그림·문서)·`assets/files`(자료실, `USER_ASSET`과 같은 규칙)·`src/`(교재 원본)뿐이고, 여는 쪽이 `sanitizeImported`로 실시간 연결·QR 주소를 다시 비웁니다. skill이 만든 파일은 비밀 값(관리자 키·참여 기능 키·사이트 암호)·접속 주소·내 컴퓨터 경로를 담지 않고, `project.origin: 'skill'`로 앱이 첫 안내를 보입니다.
 
 ### 8.3 AI로 사이트 만들기 (`app/src/lib/ai-job.js`)
 - `startMakeJob({ getProject, update })`: 기본 초안이 보이는 상태에서 읽기 → 묻기 → 만들기 단계로 돌고, 끝나면 되돌리기 지점("AI로 만들기 전")을 쌓은 뒤 설계도를 바꿉니다. `live.url`·`live.code`·`live.anonKey`·`meta.siteUrl` 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
-- 연결(`AiConnect`): 키 붙여넣기(OpenAI·Claude가 먼저, Gemini 무료 키는 작은 단추로. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) · 챗봇 붙여넣기. OpenRouter는 고르는 화면에서 뺐고 저장해 둔 연결만 그대로 동작합니다. 설정의 '연결'에서 미리 해 둘 수 있습니다.
+- 연결(`AiConnect`): 키 붙여넣기(OpenAI·Claude가 먼저, Gemini 무료 키는 작은 단추로. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) · 쓰던 AI에 복사·붙여넣기. OpenRouter는 고르는 화면에서 뺐고 저장해 둔 연결만 그대로 동작합니다. 설정의 '연결'에서 미리 해 둘 수 있습니다.
 
 ### 8.4 디자인 토큰 내보내기
 - `design/color.js` `ramp12(hex) → { light:[12], dark:[12] }`(OKLCH), `design/dtcg.js` `designTokens(design)` → 강사용 파일 `tokens.json`(DTCG 2025.10). 올리는 사이트에는 넣지 않습니다.
@@ -324,13 +324,14 @@ assets/slides/*.webp · assets/media/*
 
 ### 8.5 요청 사항·자료 올리기 (2026-11-11)
 - 요청 사항: `info.request`(자유 글, 600자). `buildPrompt`가 연수 정보 JSON에서 빼서 "## 강사의 요청 사항" 아래에 따로 적고(규칙 10), `requestHints(text) → { mood[], accent?, theme?, motion?, format? }`가 AI 없는 기본 초안에도 분위기·색·밝기·움직임·형식을 반영합니다. 강사가 따로 고른 값(`info.mood`·`accent`·`motion`·`format`)이 언제나 먼저입니다.
-- 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 공개할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 공개 때 빠집니다.
+- 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 배포할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 배포 때 빠집니다.
 - 연수 중 자료 링크: 강사 화면에서 `setState({ ui: { m1…m8: '<https 주소> <이름>' } })`. 서버가 원래 받는 `state.ui`(글 200자, 키 20개)에 담아 백엔드를 바꾸지 않고 다섯 가지 연결 방식에서 모두 동작합니다. 읽기·쓰기는 `LecLive.util.ext.materials / materialAdd / materialRemove`, 참가자 화면은 자료실 아래(없으면 마무리 앞)에 보여 줍니다. https 주소만 받습니다.
-- 바로 공개 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 공개할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 설계도의 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.
+- 바로 배포 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 배포할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 설계도의 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.
 
-### 8.6 바로 공개 서버 (`hosting/`, 선택)
+### 8.6 바로 배포 서버 (`hosting/`, 선택)
 운영자가 배포했을 때만 쓰이는 Cloudflare Worker입니다(Durable Objects SQLite, R2·KV 없음). 운영 안내와 전체 계약은 `hosting/README.md`.
 - 사이트: `POST /api/sites` → `{id, key, url, expiresAt}` · `POST /api/sites/:id/deploys {files:{경로:{sha256,size}}}` → `{deploy, missing[]}` · `PUT /api/sites/:id/blobs/:sha256` · `POST /api/sites/:id/deploys/:deploy/publish` · `DELETE /api/sites/:id`. 수정 키는 한 번만 내려 주고 해시로 보관합니다.
-- 참여 기능: `POST /api/sites/:id/live {code, adminKeyHash, settings}` → `{url, code}`. 방은 `skills/lecpage/backends/cloudflare`의 Room을 그대로 불러 `/live` 아래에 붙였고, 사이트에 묶인 코드만 살아 있습니다. 코드가 다른 사이트와 겹치면 `409 code_taken`(앱이 새 코드로 다시 올림). 사이트가 지워지거나 공개 기간이 끝나면 방과 올린 파일도 지워집니다.
+- 참여 기능: `POST /api/sites/:id/live {code, adminKeyHash, settings}` → `{url, code}`. 방은 `skills/lecpage/backends/cloudflare`의 Room을 그대로 불러 `/live` 아래에 붙였고, 사이트에 묶인 코드만 살아 있습니다. 코드가 다른 사이트와 겹치면 `409 code_taken`(앱이 새 코드로 다시 올림). 사이트가 지워지거나 보관 기간이 끝나면 방과 올린 파일도 지워집니다.
 - 안전: 올린 `.js`는 엔진 런타임 파일(또는 그 묶음)과 내용이 같을 때만 받고(`runtime_mismatch`), 모든 응답에 서버가 정한 CSP(`script-src 'self'`)를 붙입니다. HTML의 `meta refresh`·`base`·바깥 스크립트는 빼고 보냅니다. 받는 파일 형식은 엔진의 `USER_ASSET`과 같습니다(테스트가 어긋남을 잡음).
-- 한도(기본): 사이트 40MB·파일 20MB·600개, 공개 기간 30일(방문이 있으면 늘어남, 처음 만든 날부터 1년까지), 방 올리기 10MB·방마다 200MB, IP당 새 사이트 시간당 6개.
+- 한도(기본): 사이트 40MB·파일 20MB·600개, 보관 기간은 마지막으로 배포한 날부터 30일(Pages 보기 60일. worker 보기는 방문이 있으면 늘어남, 처음 만든 날부터 1년까지), 방 올리기 10MB·방마다 200MB, 새 사이트는 기기 표마다 하루 5개(유료 10. 기기 표가 없으면 IP당 시간 6·하루 20).
+- 붐빌 때(`src/fair.js`): 단계 `open`·`tight`(연수 날짜가 14일 안인 것만)·`full`(새 사이트·새 방은 같은 파일 그대로 강사 계정으로, `next`·`liveNext`)·`paused`. 앱이 `caps: ['split']`을 보내면 그날 참여 기능 방이 차도 사이트는 받고 참여 기능만 넘깁니다(`live.ok: false`). 오늘 연수·이미 배포한 사이트·다시 배포는 단계와 상관없이 됩니다(`paused`만 다시 배포를 멈춤).

@@ -21,6 +21,38 @@ const TIP = [
   '[배포하기]를 누르면 주소와 QR이 나와요.',
 ];
 const exampleUrl = () => new URL(`examples/${EXAMPLE}/index.html`, location.href.split('#')[0]).href;
+/**
+ * 코치 꼬리표('여기를 눌러요') 자리: 아래 → 위 → 오른쪽 → 왼쪽 가운데 화면 안에 들고 다른 단추·글을 덮지 않는 첫 자리.
+ * 빈자리가 없으면(좁은 화면의 칩 사이) 대상 아래를 꼬리표만큼 벌려 그 자리에 둠. 화면에 붙은 줄(sticky) 안이면 그 줄 안의 것만 피하고 화면 밖으로는 안 나가게.
+ * keep: 지금 자리가 아직 비어 있으면 그대로 둠(둘레가 바뀌어 덮게 될 때만 옮겨서 꼬리표가 출렁이지 않게)
+ */
+function placeCoach(el, keep = false) {
+  if (keep && el.hasAttribute('data-coach-room')) return;
+  const cur = el.getAttribute('data-coach');
+  if (!cur) el.setAttribute('data-coach', 'below');
+  const st = getComputedStyle(el, '::after'), n = (v) => parseFloat(v) || 0, bb = st.boxSizing === 'border-box';
+  const w = n(st.width) + (bb ? 0 : n(st.paddingLeft) + n(st.paddingRight)) || 110, h = n(st.height) + (bb ? 0 : n(st.paddingTop) + n(st.paddingBottom)) || 24;
+  const r = el.getBoundingClientRect(), G = 10, cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const at = { below: [cx - w / 2, r.bottom + G], above: [cx - w / 2, r.top - G - h], right: [r.right + G, cy - h / 2], left: [r.left - G - w, cy - h / 2] };
+  let pin = null;
+  for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) if (/sticky|fixed/.test(getComputedStyle(e).position)) { pin = e; break; }
+  const others = [...document.querySelectorAll('button,.btn,.chip,a,input,textarea,select,p,label,h1,h2,h3,li')]
+    .filter((o) => o !== el && !el.contains(o) && !o.contains(el) && (!pin || pin.contains(o)) && !o.querySelector('button,.btn,.chip,p,li'))
+    .map((o) => o.getBoundingClientRect()).filter((q) => q.width > 1 && q.height > 1);
+  const hits = (side) => {
+    const [x, y] = at[side];
+    if (x < 0 || x + w > document.documentElement.clientWidth || y + scrollY < 0 || (pin && (y < 0 || y + h > innerHeight))) return Infinity;
+    let hit = 0;
+    for (const q of others) { const ix = Math.min(x + w, q.right) - Math.max(x, q.left), iy = Math.min(y + h, q.bottom) - Math.max(y, q.top); if (ix > 1 && iy > 1) hit += ix * iy; }
+    return hit;
+  };
+  if (keep && cur && at[cur] && !hits(cur)) return;
+  let best = 'below', least = Infinity;
+  for (const side of Object.keys(at)) { const hit = hits(side); if (hit < least) { least = hit; best = side; } if (!hit) break; }
+  el.removeAttribute('data-coach-room');
+  if (least && !pin) { best = 'below'; el.setAttribute('data-coach-room', ''); }
+  el.setAttribute('data-coach', best);
+}
 
 export function Demo() {
   const [bp, setBp] = useState(null);
@@ -35,27 +67,29 @@ export function Demo() {
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
   useEffect(() => { loadExample(EXAMPLE).then((b) => setBp(sanitizeImported(b))); return () => timers.current.forEach(clearTimeout); }, []);
   useEffect(() => { document.querySelector('.demo h1')?.focus({ preventScroll: true }); window.scrollTo(0, 0); }, [step]);
-  // 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 '여기를 눌러요'. 말로 하는 안내는 위의 안내 줄(role=status)이 함.
+  // 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 '여기를 눌러요'. 말로 하는 안내는 위의 안내 줄(role=status)이 함(2단계는 안내 줄이 말하는 [너무 심심해요] 칩).
   // 따로 라이브러리를 쓰지 않음(Driver.js는 MIT·약 5KB지만 체험 한 화면에는 이것으로 충분, Shepherd는 AGPL·상용 이중 라이선스라 뺌)
   const [coach, setCoach] = useState(() => { try { return localStorage.getItem('lecpage:coach') !== 'off'; } catch { return true; } });
   const toggleCoach = () => { const v = !coach; setCoach(v); try { localStorage.setItem('lecpage:coach', v ? 'on' : 'off'); } catch { } };
   useEffect(() => {
-    const clear = () => document.querySelectorAll('[data-coach]').forEach((e) => e.removeAttribute('data-coach'));
+    const clear = () => document.querySelectorAll('[data-coach]').forEach((e) => { e.removeAttribute('data-coach'); e.removeAttribute('data-coach-room'); });
     if (!coach) { clear(); return undefined; }
     let last = null;
     const target = () => {
       const q = (sel) => document.querySelector(sel);
       if (step === 1) return q('.demo .make-bar .btn-primary');
-      if (step === 2) return making ? null : q('.demo .fix-card.is-done') ? q('.demo .head-tools .btn-primary') : q('.demo .fix-card .btn-primary') || q('.demo .sayfix .chip');
+      if (step === 2) return making ? null : q('.demo .fix-card.is-done') ? q('.demo .head-tools .btn-primary') : q('.demo .fix-card .btn-primary') || [...document.querySelectorAll('.demo .sayfix .chip')].find((c) => c.textContent === '너무 심심해요') || q('.demo .sayfix .chip');
       return pub === 'done' ? q('.demo .demo-done a.btn-primary') : pub ? null : q('.demo .demo-pub .btn-primary');
     };
     const tick = () => {
-      const el = target(); if (el === last) return;
+      const el = target(); if (el === last) { if (el) placeCoach(el, true); return; }
       clear(); last = el;
-      if (el) { el.setAttribute('data-coach', ''); const r = el.getBoundingClientRect(); if (r.bottom > innerHeight || r.top < 0) el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+      if (el) { placeCoach(el); const r = el.getBoundingClientRect(); if (r.bottom > innerHeight || r.top < 0) el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
     };
-    tick(); const t = setInterval(tick, 400);
-    return () => { clearInterval(t); clear(); };
+    let rt = 0;
+    const onResize = () => { clearTimeout(rt); rt = setTimeout(() => last?.isConnected && placeCoach(last), 150); };
+    tick(); const t = setInterval(tick, 400); addEventListener('resize', onResize);
+    return () => { clearInterval(t); clearTimeout(rt); removeEventListener('resize', onResize); clear(); };
   }, [coach, step, making, pub]);
   const p = useMemo(() => ({ id: 'demo', blueprint: bp }), [bp]);
   const meta = bp?.meta || {};
