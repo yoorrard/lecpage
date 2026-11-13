@@ -157,6 +157,7 @@ Worker → **Settings → Build → Build watch paths**
 - 어디에 두나: 앱과 **다른 등록 도메인**.
 - 요금제: 변수 `PLAN`으로 고릅니다. `free`(기본)는 Cloudflare 무료 요금제 안에서만 돌고, 하루 요청 한도에 닿으면 그날 올라온 사이트까지 멈춥니다. 그래서 예산의 60%를 쓰면 새 사이트를 받지 않고, 앱은 바로 공개를 첫째로 권하지 않습니다. `paid`는 Workers Paid(월 $5 정액, 월 1,000만 요청 포함)라 하루 한도가 없습니다. **여러 강사에게 열어 둘 거라면 `paid`를 권합니다.** 비용 구조 전체는 [`docs/research/zero-cost-2026-11.md`](research/zero-cost-2026-11.md).
 - 설정·신고 처리·한도·끄는 방법: [`hosting/README.md`](../hosting/README.md).
+- 무료 요금제로 다시 열 때: README §10 체크리스트(배포 한 번·도메인·Cloudflare Access 정책·WAF 속도 제한 규칙 1개·알림 웹훅)와 §11 관리 화면(`/admin`: 이용량·30일 추이·유료 전환 판단 한 줄·신고·팝업 공지·새 업로드 멈춤·감사 기록). 근거·보안 검토: [`docs/research/admin-2026-11.md`](research/admin-2026-11.md).
 
 ## 11. 구글 시트 틀 미리 만들어 두기 (선택)
 
