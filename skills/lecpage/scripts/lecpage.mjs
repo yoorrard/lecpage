@@ -235,7 +235,7 @@ async function runQa(dir, { outDir, password = '' } = {}) {
 }
 
 function qaLines(q) {
-  if (q.error) return [`점검 ✗ ${q.error}`];
+  if (q.error) return [`점검 ✕ ${q.error}`];
   const lines = [];
   const problems = [];
   for (const v of q.views) {
@@ -246,7 +246,7 @@ function qaLines(q) {
   const missing = q.lint.filter((l) => l.status === 'missing').map((l) => l.name);
   const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
   const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'skipped' ? `${l.name} 검사 건너뜀(암호 페이지)` : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
-  const head = q.skipped ? `점검 ${q.broken.length ? '✗' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✗ 문제 있음'} · ${q.views.length}화면(휴대폰·태블릿·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
+  const head = q.skipped ? `점검 ${q.broken.length ? '✕' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✕ 문제 있음'} · ${q.views.length}화면(휴대폰·태블릿·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
   lines.push(head + (q.weight ? ` · 첫 화면 ${q.weight.kb}KB` : ''), ...problems);
   if (q.weight?.kb > 200) lines.push(`  첫 화면 파일이 ${q.weight.kb}KB예요(목표 200KB). 효과를 줄이거나 움직임을 낮춰 보세요.`);
   // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(교재 원문이 섞여 있어 참고용, qa/report.json)
@@ -693,7 +693,7 @@ const commands = {
     const fl = fontLine(raw.design?.sourceFonts, raw.design);
     const lines = [
       `디자인 ${results.length}안${sheet ? ` → ${rel(sheet)} (한 장에 PC·본문·휴대폰)` : ` (비교 그림 건너뜀: ${skipped})`}`,
-      ...results.map((r, i) => (r.error ? `${i + 1} ${r.id} ✗ ${r.error}` : `${i + 1} ${r.id} ${r.name} — ${cut(r.desc, 34)} · ${r.why.length ? r.why.join('·') : '기본 추천'} · 움직임 ${r.motion}${r.signature ? ` · 대표 효과 ${r.signature}` : ''}`)),
+      ...results.map((r, i) => (r.error ? `${i + 1} ${r.id} ✕ ${r.error}` : `${i + 1} ${r.id} ${r.name} — ${cut(r.desc, 34)} · ${r.why.length ? r.why.join('·') : '기본 추천'} · 움직임 ${r.motion}${r.signature ? ` · 대표 효과 ${r.signature}` : ''}`)),
       fl && fl.startsWith('글꼴 교재') ? `${fl.replace('글꼴 교재', '글꼴 세 안 모두 교재를 따름:')} (끄기: --set design.fontFrom=preset)` : fl,
       `고르면 patch ${rel(bpPath)} --set design.preset=<id> · 각 안 미리보기 ${rel(outDir)}/<id>/index.html`,
     ];
@@ -732,9 +732,9 @@ const commands = {
       const ko = spawnSync('fc-list', [':lang=ko', 'family'], { encoding: 'utf8' }).stdout?.trim().split('\n').filter(Boolean).length || 0;
       checks.push({ name: '한글 글꼴', ok: ko > 0, info: ko ? `${ko}종` : '', use: '쪽 그림의 한글이 깨지지 않게', fix: fix({ linux: 'sudo apt-get install -y fonts-noto-cjk fonts-nanum', mac: '기본 포함' }) });
     }
-    const lines = checks.map((c) => `${c.ok ? '✓' : c.need ? '✗' : '–'} ${c.name}${c.info ? ` ${c.info}` : ''}${c.ok ? '' : ` — ${c.use}: ${c.fix}`}`);
+    const lines = checks.map((c) => `${c.ok ? '✓' : c.need ? '✕' : '–'} ${c.name}${c.info ? ` ${c.info}` : ''}${c.ok ? '' : ` — ${c.use}: ${c.fix}`}`);
     const missing = checks.filter((c) => !c.ok);
-    lines.push(missing.some((c) => c.need) ? '필수 도구가 없어요. 위 명령으로 설치해 주세요.' : missing.length ? '만들기는 돼요. – 표시는 그 기능만 건너뜁니다.' : '모두 준비됐어요.');
+    lines.push(missing.some((c) => c.need) ? '필수 도구가 없어요. 위 명령으로 설치해 주세요.' : missing.length ? '만들기는 돼요. – 표시는 그 기능만 건너뛰어요.' : '모두 준비됐어요.');
     say(lines, { ok: !missing.some((c) => c.need), checks });
     process.exitCode = missing.some((c) => c.need) ? 1 : 0;
   },
@@ -768,7 +768,7 @@ const commands = {
   validate() {
     const r = E.validate(readJson(args._[0]));
     if (args.o) writeJson(args.o, r.blueprint);
-    const lines = [r.errors.length ? `검증 ✗ 오류 ${r.errors.length}` : `검증 ✓ 칸 ${r.blueprint.sections.length}${r.warnings.length ? ` · 주의 ${r.warnings.length}` : ''}`,
+    const lines = [r.errors.length ? `검증 ✕ 오류 ${r.errors.length}` : `검증 ✓ 칸 ${r.blueprint.sections.length}${r.warnings.length ? ` · 주의 ${r.warnings.length}` : ''}`,
       ...r.errors.map((e) => `오류 ${e.path}: ${e.message_ko}`), ...r.warnings.slice(0, 8).map((w) => `주의 ${w.path}: ${w.message_ko}`), r.warnings.length > 8 ? `주의 외 ${r.warnings.length - 8}건(--json)` : ''];
     say(lines, { ok: !r.errors.length, errors: r.errors, warnings: r.warnings, sections: r.blueprint.sections.length });
     process.exit(r.errors.length ? 1 : 0);

@@ -104,7 +104,7 @@ export function Home() {
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function onImport(e) {
     const f = e.target.files?.[0]; if (!f) return;
-    try { const p = await importProjectFile(f); toast('저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
+    try { const p = await importProjectFile(f); toast(p.origin === 'skill' ? '에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
     catch (err) { toast(err.friendly ? err.message : '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
     e.target.value = '';
   }
