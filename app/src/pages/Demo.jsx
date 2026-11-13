@@ -134,7 +134,7 @@ export function Demo() {
               <div class="demo-wait" role="status"><Mascot size={84} mood="think" look /><b>AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요</b><span class="small muted">체험이라 실제로 보내지는 않아요.</span></div>
             ) : (
               <>
-                <div class="ai-job ok" role="status"><span class="ai-job-t"><b>AI가 교재에 맞게 사이트를 짰어요.</b><small>섹션 {bp.sections.length}개가 만들어졌어요. 실제 화면에서는 내용·디자인·참여 기능을 모두 고칠 수 있어요.</small></span></div>
+                <div class="ai-job ok" role="status"><span class="ai-job-t"><b>AI가 교재에 맞게 사이트를 짰어요.</b><small>섹션 {bp.sections.length}개를 만들었어요. 실제 화면에서는 내용·디자인·참여 기능을 모두 고칠 수 있어요.</small></span></div>
                 <div class="workspace">
                   <div class="ws-panel">
                     <div class="stack demo-edit">

@@ -32,7 +32,7 @@ test('publish --dry-run: 순서와 강사가 할 일만 보여 주고 아무 파
   const before = readFileSync(join(dir, 'work', 'info.json'), 'utf8');
   const r = run(['publish', 'work', '--live', '--features', 'qa,poll', '--dry-run', '--name', 'lec-test']);
   assert.equal(r.code, 0, r.out);
-  for (const k of ['올리기 계획', '중계', 'secret put ADMIN_KEY', 'ALLOWED_ORIGINS', '강사가 할 일', 'wrangler@4 login']) assert.ok(r.out.includes(k), `${k} 없음\n${r.out}`);
+  for (const k of ['배포 계획', '중계', 'secret put ADMIN_KEY', 'ALLOWED_ORIGINS', '강사가 할 일', 'wrangler@4 login']) assert.ok(r.out.includes(k), `${k} 없음\n${r.out}`);
   assert.equal(readFileSync(join(dir, 'work', 'info.json'), 'utf8'), before);
   assert.ok(!existsSync(join(dir, 'work', 'live-relay')));
   assert.ok(!existsSync(logFile), '가짜 wrangler도 부르지 않음');

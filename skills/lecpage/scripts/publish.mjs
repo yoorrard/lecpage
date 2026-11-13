@@ -131,8 +131,8 @@ export async function publishCmd(h) {
   if (dry) {
     const W = `npx wrangler@${WRANGLER_VER}`;
     say([
-      `올리기 계획(--dry-run, 아무것도 바꾸지 않음) · Cloudflare · 사이트 ${name}${live ? ` · 중계 ${relayName}` : ''} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
-      `인증 ${auth === 'token' ? 'CLOUDFLARE_API_TOKEN 있음' : '환경 변수 없음 → 실제로 올릴 때 wrangler 로그인을 확인해요'}`,
+      `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Cloudflare · 사이트 ${name}${live ? ` · 중계 ${relayName}` : ''} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
+      `인증 ${auth === 'token' ? 'CLOUDFLARE_API_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 wrangler 로그인을 확인해요'}`,
       ...(live ? [
         `1 중계 폴더 ${rel(relayDir)} ← backends/cloudflare (이름 ${relayName}, 받을 연수 코드 ${code})`,
         `2 관리자 키를 만들어 중계 비밀로(${W} secret put ADMIN_KEY, 값은 표준 입력) → ${rel(keyFile)}에만 적음(이미 있으면 그대로)`,
@@ -145,7 +145,7 @@ export async function publishCmd(h) {
       ...warn.map((w) => '주의 ' + w),
       '강사가 할 일:',
       auth === 'token' ? '  없음(토큰이 있어요). 명령에서 --dry-run을 빼고 다시 실행해요' : '  1. Cloudflare 가입(https://dash.cloudflare.com/sign-up, 이메일만, 결제 정보 없음)\n  2. 이 컴퓨터에서 npx wrangler@4 login을 실행하고 브라우저에서 [Allow] — 또는 Edit Cloudflare Workers 템플릿으로 만든 API 토큰을 CLOUDFLARE_API_TOKEN 환경 변수로 넣기(대화에 붙여 넣지 않기)',
-      live ? '  3. 올린 뒤 관리자 키 파일을 비밀번호 관리 앱에 옮기고 파일 지우기' : '',
+      live ? '  3. 배포한 뒤 관리자 키 파일을 비밀번호 관리 앱에 옮기고 파일 지우기' : '',
     ], { ok: true, dryRun: true, host, name, relay: live ? relayName : '', files: st.files, auth: auth || 'unknown' });
     return;
   }
@@ -190,7 +190,7 @@ export async function publishCmd(h) {
   const sd = wrangler(['deploy', '--assets', dist, '--name', name, '--compatibility-date', today, ...(args.temporary ? ['--temporary'] : [])], { cwd: tmp });
   rmSync(tmp, { recursive: true, force: true });
   const site = findUrl(sd.raw, name);
-  if (!sd.ok || !site) fail('사이트를 올리지 못했어요.\n' + lastLines(sd.out).join('\n'));
+  if (!sd.ok || !site) fail('사이트를 배포하지 못했어요.\n' + lastLines(sd.out).join('\n'));
   const claim = args.temporary ? (sd.raw.match(/https:\/\/[^\s]*claim[^\s]*/i) || [''])[0] : '';
   const siteBase = site.replace(/\/?$/, '/');
 
@@ -217,7 +217,7 @@ export async function publishCmd(h) {
     `참가자 ${siteBase} · QR 안내문 ${siteBase}poster.html · 발표 화면 ${siteBase}screen.html${live || bp.live.provider !== 'none' ? ` · 강사 화면 ${siteBase}console.html(도움말 칸에 연수 후 할 일)` : ''} · 접속 확인 ${siteBase}check.html`,
     ...(ho ? ho.lines : []),
     live ? `건넬 것: 관리자 키 파일 ${rel(keyFile)} — 비밀번호 관리 앱에 옮긴 뒤 파일 지우기. 키를 대화에 적지 않아요` : '',
-    `다시 올리기: 같은 명령(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 올리지 않아요`,
+    `다시 배포: 같은 명령(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 배포하지 않아요`,
   ], { ok: true, host, url: siteBase, name, relay: live ? { name: relayName, url: relayUrl } : null, claim, handouts: ho?.files || [] });
 }
 
@@ -283,8 +283,8 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
   if (dry) {
     cleanup();
     say([
-      `올리기 계획(--dry-run, 아무것도 바꾸지 않음) · Onpod · 사이트 ${name} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
-      `인증 ${auth ? 'ONPOD_TOKEN 있음' : '환경 변수 없음 → 실제로 올릴 때 onpod whoami로 로그인을 확인해요'}`,
+      `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Onpod · 사이트 ${name} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
+      `인증 ${auth ? 'ONPOD_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 onpod whoami로 로그인을 확인해요'}`,
       `1 올릴 사본(빈 임시 폴더): _headers·점 파일 빼기${added.length ? ` · 더하기 ${added.join(', ')}` : ''}(${publicSite ? '공개 연수: 첫 화면만 담은 sitemap' : '검색 제외: Onpod이 쪽 목록을 자동으로 내지 않게'})`,
       `2 onpod static deploy <사본> --name ${name} --no-spa → ${siteBase}`,
       relay ? `3 참여 기능 중계 ${relay.name}가 새 주소도 받게: wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:${allow(siteBase)}` : '',
@@ -306,7 +306,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
     const why = /already|taken|exists|conflict|409|이미|다른 사람/i.test(t) ? `이 주소 이름(${name})은 이미 다른 사람이 써요. Onpod 주소는 전체에서 하나뿐이라 --name 다른-이름 으로 다시 해 주세요.`
       : /401|unauthori|invalid.*(token|key)|토큰|키가/i.test(t) ? 'Onpod 키가 맞지 않거나 기한이 지났어요. 콘솔 API 키 화면에서 새 키를 만들어 ONPOD_TOKEN에 넣어 주세요.'
       : /402|limit|quota|한도/i.test(t) ? '무료 한도(사이트 10개 등)에 닿았어요. onpod static ls로 안 쓰는 사이트를 보고 onpod static rm <이름> --yes로 지우거나, --host cloudflare로 올려 주세요.'
-      : '사이트를 올리지 못했어요.';
+      : '사이트를 배포하지 못했어요.';
     fail(why + '\n' + lastLines(dep.out).join('\n'));
   }
   const found = dep.raw.match(new RegExp(`https://${name.replace(/-/g, '\\-')}\\.onpod\\.ai`)) || dep.raw.match(/https:\/\/[a-z0-9-]+\.onpod\.ai/);
@@ -330,14 +330,14 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
     `참가자 ${url} · QR 안내문 ${url}poster.html · 발표 화면 ${url}screen.html${bp.live.provider !== 'none' ? ` · 강사 화면 ${url}console.html` : ''} · 접속 확인 ${url}check.html`,
     ...(ho ? ho.lines : []),
     '무료 한도: 계정당 사이트 10개·월 100GB(넘으면 그달 멈췄다가 다음 달 1일에 다시 열림). 그림을 같은 파일 이름으로 바꿔 올리면 최대 1시간 옛것이 보여요',
-    `다시 올리기: publish work(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 올리지 않아요`,
+    `다시 배포: publish work(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 배포하지 않아요`,
   ], { ok: true, host: 'onpod', url, name, added, handouts: ho?.files || [] });
 }
 
 export async function handoutsCmd(h, o = {}) {
   const { args, rel, fail, say, loadPlaywright, staticServer } = h;
   let target = o.url || args._[0];
-  if (!target) fail('올린 주소(https://…)나 사이트 폴더를 주세요. 예: handouts https://lec-20261203.example.workers.dev');
+  if (!target) fail('배포한 주소(https://…)나 사이트 폴더를 주세요. 예: handouts https://lec-20261203.example.workers.dev');
   let out = resolve(o.out || args.o || '');
   let server = null, local = false;
   if (!/^https?:\/\//i.test(target)) {
@@ -391,7 +391,7 @@ export async function handoutsCmd(h, o = {}) {
     await browser.close();
     return finish([
       `안내물 ${errs.length ? '△' : '✓'} ${rel(out)}/ ${files.join(' · ')}${shown ? ` (QR 주소 ${shown.trim().slice(0, 60)})` : ''}`,
-      local ? '  주의: 로컬 주소라 QR이 다른 기기에서 열리지 않아요. 올린 뒤 handouts <올린 주소>로 다시 만드세요' : '',
+      local ? '  주의: 로컬 주소라 QR이 다른 기기에서 열리지 않아요. 배포한 뒤 handouts <배포한 주소>로 다시 만드세요' : '',
       '  QR-안내문.pdf는 참가자용 A4 한 장, 강사-카드.pdf는 나눠 주지 않아요(강사 화면 주소가 있어요). 발표화면.png는 슬라이드에 넣어도 돼요',
       ...errs.slice(0, 3).map((e) => '  오류 ' + e.slice(0, 120)),
     ], files);
