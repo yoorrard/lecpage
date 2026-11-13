@@ -1,0 +1,23 @@
+// 운영자 관리 화면 Worker(lecpage-admin). 바로 공개 Worker(lecpage-sites, wrangler.jsonc)를 먼저 배포한 뒤에 배포합니다.
+//   npx wrangler deploy -c wrangler.admin.jsonc      (보통은 npm run setup이 대신 함)
+// 도메인 없이 https://lecpage-admin.<계정>.workers.dev 전체를 Cloudflare Access(Worker 단위)가 지키고, Worker가 한 번 더 확인합니다.
+// 비밀 값(설정 스크립트가 넣음): ACCESS_AUD(Access 앱의 AUD), ACCESS_EMAILS(운영자 이메일), (있으면) ACCESS_TEAM_DOMAIN
+// 값이 없으면 모든 주소가 404입니다.
+{
+  "name": "lecpage-admin",
+  "main": "src/admin-worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  // 화면 파일(public/admin/)을 글자 모듈로(정적 자산을 쓰면 ctx.access가 Worker에 오지 않음)
+  "build": { "command": "node scripts/gen-admin.mjs" },
+  // 같은 계정의 lecpage-sites가 가진 Durable Object를 그대로 씀(새로 만들지 않음, migrations 없음)
+  "durable_objects": {
+    "bindings": [
+      { "name": "GATE", "class_name": "Gate", "script_name": "lecpage-sites" },
+      { "name": "SITE", "class_name": "Site", "script_name": "lecpage-sites" }
+    ]
+  },
+  // 관리 화면 숫자(하루 예산 등)를 바로 공개 Worker와 같게 셈: 거기서 바꾼 값(PLAN·DAILY_REQUEST_BUDGET 등)이 있으면 여기도 같이
+  "vars": {}
+}

@@ -60,7 +60,7 @@ export class MinuteLimiter {
 }
 
 /** 최근 days일 중 하루 예산의 share를 넘은 날 수 → 유료 전환을 권할지 한 줄 */
-export function paidAdvice(days, budget, { share = 0.5, window = 7, need = 2 } = {}) {
+export function paidAdvice(days, budget, { share = 0.5, window = 7, need = 2, view = 'worker' } = {}) {
   const recent = days.slice(-window);
   if (!budget) return { over: 0, of: recent.length, recommend: false, text: '유료 요금제(PLAN=paid)로 돌고 있어요. 하루 한도로 멈추지 않아요.' };
   const over = recent.filter((d) => (d.req || 0) >= budget * share).length;
@@ -70,7 +70,9 @@ export function paidAdvice(days, budget, { share = 0.5, window = 7, need = 2 } =
   return {
     over, of: recent.length, peakPct: pct, recommend,
     text: recommend
-      ? `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. Workers Paid(월 $5)로 올리면 사이트가 멈출 걱정이 없어요.`
+      ? (view === 'pages'
+        ? `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. 사이트는 Pages라 한도와 상관없이 열리지만 참여 기능·새로 올리기가 멈출 수 있어요. Workers Paid(월 $5)를 권해요.`
+        : `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. Workers Paid(월 $5)로 올리면 사이트가 멈출 걱정이 없어요.`)
       : `최근 ${recent.length}일 중 하루 예산의 ${Math.round(share * 100)}%를 넘은 날은 ${over}일이에요(가장 많은 날 ${pct}%). 아직 무료로 충분해요.`,
   };
 }

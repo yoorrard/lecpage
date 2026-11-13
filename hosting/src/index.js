@@ -12,6 +12,7 @@ import { liveTarget, liveOriginOk, FILE_ALIAS, LIVE_PREFIX, LiveError } from './
 import { Tally, MinuteLimiter, appStatKey } from './tally.js';
 import { admin } from './admin.js';
 import { extOf } from './paths.js';
+import { siteUrlOf, siteOriginRe } from './pages-site.js';
 import { Site } from './site.js';
 import { Gate } from './gate.js';
 import { Room, Guard } from './room.js';
@@ -25,7 +26,14 @@ const post = (body) => ({ method: 'POST', headers: { 'content-type': 'applicatio
 async function ok(res) { if (!res.ok) throw await errorFrom(res); return res; }
 
 let cfgCache = null;
-const cfgOf = (env) => (cfgCache && cfgCache.env === env ? cfgCache.cfg : (cfgCache = { env, cfg: config(env) }).cfg);
+const cfgOf = (env) => {
+  if (cfgCache && cfgCache.env === env) return cfgCache.cfg;
+  const cfg = config(env);
+  // VIEW=pages 사이트의 출처(https://s-<id>.<프로젝트>.pages.dev): 실시간 방 CORS
+  cfg.siteOriginRe = cfg.pagesCfg ? siteOriginRe(cfg.pagesCfg.siteUrl) : null;
+  cfgCache = { env, cfg };
+  return cfg;
+};
 
 // ── 하루 숫자 세기(isolate마다 모아서 Gate에 한 번에) ─────────────────
 const T = new Tally();
@@ -119,7 +127,9 @@ async function serveSite(request, env, ctx, url, cfg) {
     const list = await noticesFor(env, 'teacher').catch(() => []);
     if (list.length) headers['x-lp-notice'] = encodeURIComponent(JSON.stringify(list));
   }
-  const res = await siteStub(env, id).fetch(`http://site/file?p=${encodeURIComponent(path)}${v ? `&v=${encodeURIComponent(v)}` : ''}`, { method: request.method, headers });
+  let res = await siteStub(env, id).fetch(`http://site/file?p=${encodeURIComponent(path)}${v ? `&v=${encodeURIComponent(v)}` : ''}`, { method: request.method, headers });
+  const proxy = res.headers.get('x-lp-proxy');
+  if (proxy) res = await fromPages(request, proxy, id, path);
   if (res.headers.get('x-lp-state') === 'gone') {
     if (goneMem.size > 5000) goneMem.clear();
     goneMem.set(id, Date.now() + GONE_MS);
@@ -132,6 +142,27 @@ async function serveSite(request, env, ctx, url, cfg) {
     ctx.waitUntil(cache.put(key, copy).catch(() => { }));
   }
   return res;
+}
+/**
+ * VIEW=pages 사이트를 이 호스트 주소(/s/<id>/…)로 열 때: Pages에서 가져와 내보냄. 학교망이 pages.dev를 막았을 때 쓰는 두 번째 주소.
+ * Pages의 머리글(CSP 등 우리가 만든 _headers)을 그대로 쓰고, 이 호스트 주소로 넘기는 것만 고침.
+ */
+async function fromPages(request, base, id, path) {
+  const target = new URL(path || '', base);
+  if (!target.href.startsWith(base)) return notFoundPage(request.method === 'HEAD');
+  const h = new Headers();
+  for (const k of ['if-none-match', 'accept', 'accept-language', 'user-agent']) { const x = request.headers.get(k); if (x) h.set(k, x); }
+  let r;
+  try { r = await fetch(target.href, { method: request.method === 'HEAD' ? 'HEAD' : 'GET', headers: h, redirect: 'manual' }); }
+  catch { return new Response('사이트를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.\n', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } }); }
+  const out = new Response(r.body, r);
+  for (const k of ['access-control-allow-origin', 'set-cookie', 'report-to', 'nel', 'server-timing']) out.headers.delete(k);
+  const loc = r.headers.get('location');
+  if (loc) {
+    // Pages가 /x.html → /x로 넘김: 이 호스트의 /s/<id>/x로. 다른 곳(영상·소리 → 이 호스트)은 그대로
+    try { const u = new URL(loc, target); if (u.href.startsWith(base)) out.headers.set('location', `/s/${id}/${u.href.slice(base.length)}`); } catch { /* 그대로 */ }
+  }
+  return out;
 }
 /** 캐시에서 꺼낸 응답 → 브라우저에 줄 모양(원래 Cache-Control, 304) */
 function fromEdge(hit, request) {
@@ -159,24 +190,39 @@ async function noticesFor(env, target) {
 function liveJson(status, body, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
 }
-function live(request, env, url, cfg) {
+/** 묻기 간격 권고(밀리초). 무료 요금제에서 하루 예산 50%를 넘으면 10초, 80%를 넘으면 20초 */
+function pollHint(cfg, pct = budgetPct) {
+  if (!cfg.dailyRequestBudget) return 5000;
+  return pct >= 80 ? 20000 : pct >= 50 ? 10000 : 5000;
+}
+/** VIEW=pages 사이트(다른 출처)가 방을 부를 때 붙이는 CORS 머리글. 그 밖의 출처에는 붙이지 않음 */
+const LIVE_CORS_BASE = { 'access-control-allow-methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Filename', 'access-control-max-age': '86400', vary: 'Origin' };
+function liveCors(origin, cfg) {
+  return origin && cfg.siteOriginRe && cfg.siteOriginRe.test(origin) ? { ...LIVE_CORS_BASE, 'access-control-allow-origin': origin } : null;
+}
+async function live(request, env, url, cfg) {
+  const cors = liveCors(request.headers.get('origin'), cfg);
+  const done = (res) => (cors && res.status !== 101 && !res.webSocket ? withHeaders(res, cors) : res);
   try {
     if (!cfg.live) throw new LiveError(404, 'not_found', '이 서버는 실시간 방을 쓰지 않습니다.');
     const t = liveTarget(url.pathname);
     if (!t) throw new LiveError(404, 'not_found', '없는 주소입니다.');
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { allow: 'GET, HEAD, POST, PUT, PATCH, DELETE' } });
-    if (t.kind === 'health') return liveJson(200, { ok: true, protocol: 1, uploads: cfg.liveUploads, runtime: 'cloudflare' });
-    if (!liveOriginOk({ method: request.method, op: t.op, origin: request.headers.get('origin'), self: cfg.publicOrigin || url.origin })) {
+    if (request.method === 'OPTIONS') return done(new Response(null, { status: 204, headers: { allow: 'GET, HEAD, POST, PUT, PATCH, DELETE' } }));
+    if (t.kind === 'health') return done(liveJson(200, { ok: true, protocol: 1, uploads: cfg.liveUploads, runtime: 'cloudflare' }));
+    if (!liveOriginOk({ method: request.method, op: t.op, origin: request.headers.get('origin'), self: cfg.publicOrigin || url.origin, sites: cfg.siteOriginRe })) {
       throw new LiveError(403, 'origin_not_allowed', '허용되지 않은 사이트에서 온 요청입니다.');
     }
     // 방(Durable Object)에는 '/api/<코드>/…' 경로로 넘김. WebSocket 연결(101)도 그대로 돌려줌
     const target = new URL(url);
     target.pathname = t.path;
-    return env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request));
+    const res = await env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request));
+    // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
+    if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
+    return done(res);
   } catch (e) {
-    if (e instanceof LiveError) return liveJson(e.status, { error: e.code, message: e.message });
+    if (e instanceof LiveError) return done(liveJson(e.status, { error: e.code, message: e.message }));
     console.error('live error', e?.stack || e);
-    return liveJson(500, { error: 'server_error', message: '서버 오류가 났어요. 잠시 후 다시 시도해 주세요.' });
+    return done(liveJson(500, { error: 'server_error', message: '서버 오류가 났어요. 잠시 후 다시 시도해 주세요.' }));
   }
 }
 
@@ -212,6 +258,8 @@ async function route(request, env, ctx, url, cfg, self) {
     try { const s = await (await gateStub(env).fetch('http://gate/status')).json(); accepting = s.accepting !== false; paused = !!s.paused; } catch { /* 그대로 */ }
     return json({
       ok: true, v: 1, plan: cfg.plan, accepting, ...(paused ? { paused } : {}),
+      // view: 사이트를 내보내는 곳(pages: 사이트마다 다른 주소, 방문이 하루 한도에 들지 않음). keepAlive: 방문이 있으면 공개 기간을 다시 채우는지
+      view: cfg.view, keepAlive: cfg.keepAlive,
       limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
       report: `${self}/report`,
       ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),
@@ -234,6 +282,9 @@ async function route(request, env, ctx, url, cfg, self) {
     if (key && statLimit.ok(request.headers.get('cf-connecting-ip') || '')) T.stat(key);
     return quiet;
   }
+
+  // 상태: 앱의 '공개 전 점검'·'연수 전날 점검'. 오늘·그날(date) 남은 몫, 사이트·참여 기능 방 상태. 1분 캐시(브라우저·이 isolate)
+  if (a === 'status' && parts.length === 1 && method === 'GET') return status(env, url, cfg);
 
   if (a === 'sites' && parts.length === 1 && method === 'POST') return createSite(request, env, cfg, self);
 
@@ -296,6 +347,22 @@ async function route(request, env, ctx, url, cfg, self) {
   throw new HttpError('not_found', '없는 주소예요.');
 }
 
+const statusMem = new Map(); // 쿼리 → { at, body }
+async function status(env, url, cfg) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date') || '') ? url.searchParams.get('date') : '';
+  const site = ID_RE.test(url.searchParams.get('site') || '') ? url.searchParams.get('site') : '';
+  const k = `${date}|${site}`;
+  const hit = statusMem.get(k);
+  let body = hit && Date.now() - hit.at < 30000 ? hit.body : null;
+  if (!body) {
+    const g = await (await ok(await gateStub(env).fetch(`http://gate/day?date=${date}&site=${site}`))).json();
+    body = { ok: true, view: cfg.view, plan: cfg.plan, live: cfg.live, ...g };
+    if (statusMem.size > 500) statusMem.clear();
+    statusMem.set(k, { at: Date.now(), body });
+  }
+  return json(body, 200, { 'cache-control': 'public, max-age=60' });
+}
+
 /** 본문을 max바이트까지만 글자로(넘으면 '') */
 async function smallText(request, max) {
   if (Number(request.headers.get('content-length') || 0) > max || !request.body) return '';
@@ -314,6 +381,7 @@ async function smallText(request, max) {
 
 async function createSite(request, env, cfg, self) {
   const body = await readJson(request, 4096, { optional: true });
+  const booking = body.booking && typeof body.booking === 'object' ? body.booking : null;
   const title = typeof body.title === 'string' ? body.title.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 120) : '';
   const now = Date.now();
   const expires = expiryFrom(now, cfg.days);
@@ -321,16 +389,17 @@ async function createSite(request, env, cfg, self) {
   const gate = gateStub(env);
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = newId(); const key = newKey();
-    const reserved = await gate.fetch('http://gate/reserve', post({ ip, id, created: now, expires, title }));
+    const url = cfg.pages ? siteUrlOf(cfg.pages, id) : `${self}/s/${id}/`;
+    const reserved = await gate.fetch('http://gate/reserve', post({ ip, id, created: now, expires, title, url, booking }));
     if (reserved.status === 409) continue; // 같은 주소가 이미 있음(거의 없는 일) → 다시 뽑음
     await ok(reserved);
-    const made = await siteStub(env, id).fetch('http://site/init', post({ id, keyHash: await sha256Hex(key), title, created: now, expires }));
+    const made = await siteStub(env, id).fetch('http://site/init', post({ id, keyHash: await sha256Hex(key), title, created: now, expires, view: cfg.pages ? 'pages' : 'worker' }));
     if (!made.ok) {
       await gate.fetch('http://gate/forget', post({ id }));
       if (made.status === 409) continue;
       throw await errorFrom(made);
     }
-    return json({ id, key, url: `${self}/s/${id}/`, expiresAt: expires }, 201);
+    return json({ id, key, url, expiresAt: expires, ...(cfg.pages ? { altUrl: `${self}/s/${id}/`, view: 'pages' } : {}) }, 201);
   }
   throw new HttpError('bad_request', '주소를 만들지 못했어요. 다시 해 주세요.', { status: 503 });
 }
@@ -338,7 +407,8 @@ async function createSite(request, env, cfg, self) {
 async function report(request, env, ctx, cfg, self) {
   const body = await readJson(request, 16 * 1024);
   const raw = typeof body.site === 'string' ? body.site.trim() : '';
-  const id = ID_RE.test(raw) ? raw : (/\/s\/([0-9a-hjkmnp-tv-z]{10})(?:[/?#]|$)/.exec(raw) || [])[1];
+  // 사이트 id, 이 호스트의 /s/<id>/ 주소, VIEW=pages 주소(s-<id>.…)를 받음
+  const id = ID_RE.test(raw) ? raw : (/\/s\/([0-9a-hjkmnp-tv-z]{10})(?:[/?#]|$)/.exec(raw) || /(?:^|[/.])s-([0-9a-hjkmnp-tv-z]{10})(?:[./]|$)/.exec(raw) || [])[1];
   if (!id) throw new HttpError('bad_request', '신고할 사이트 주소를 확인해 주세요.');
   const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
   if (!reason) throw new HttpError('bad_request', '신고하는 까닭을 적어 주세요.');
@@ -348,7 +418,7 @@ async function report(request, env, ctx, cfg, self) {
   const ip = request.headers.get('cf-connecting-ip') || '';
   const saved = await (await ok(await gateStub(env).fetch('http://gate/report', post({ ip, site: id, reason, contact })))).json();
   if (cfg.reportWebhook) {
-    const link = `${self}/s/${id}/`;
+    const link = cfg.pagesCfg && raw.includes(`s-${id}.`) ? siteUrlOf(cfg.pagesCfg, id) : `${self}/s/${id}/`;
     const text = `[lecpage 바로 공개 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}\n처리: ${self}/admin/`.slice(0, 1800);
     // text는 Slack, content는 Discord 웹훅이 읽는 이름
     ctx.waitUntil(fetch(cfg.reportWebhook, post({ text, content: text, n: saved.n, site: id, url: link, reason, contact, at: saved.at })).catch((e) => console.error('report webhook failed', e?.message)));

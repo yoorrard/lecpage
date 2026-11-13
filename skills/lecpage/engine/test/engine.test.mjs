@@ -315,4 +315,7 @@ test('올릴 곳: 멈추지 않는 것이 먼저(한도 안내, 참가자가 많
   assert.equal(E.decideHost({ skill: 'click', instant: true }).pick, 'lecpage');
   const lim = E.decideHost({ skill: 'click', instant: 'limited' });
   assert.equal(lim.pick, 'vercel'); assert.equal(lim.hosts[1], 'lecpage');
+  // 사이트를 Pages로 내보내는 서버: 무료여도 사이트는 멈추지 않아 첫째, 공개 기간 문구는 방문 기준이 아님
+  const pg = E.decideHost({ skill: 'click', instant: 'pages' });
+  assert.equal(pg.pick, 'lecpage'); assert.match(pg.reasons[0], /멈추지 않아요/); assert.doesNotMatch(pg.reasons[0], /방문이 있는 동안/);
 });

@@ -10,11 +10,13 @@
     "gen": "node scripts/gen-runtime.mjs",
     "runtime:keep": "node scripts/gen-runtime.mjs --keep",
     "dev": "wrangler dev",
-    "pretest": "node scripts/gen-runtime.mjs",
+    "pretest": "node scripts/gen-runtime.mjs && node scripts/gen-admin.mjs",
     "test": "node --test \"test/*.test.mjs\"",
+    "setup": "node scripts/setup.mjs",
     "predeploy": "node scripts/gen-runtime.mjs",
     "deploy": "wrangler deploy",
-    "check": "wrangler deploy --dry-run --outdir .wrangler/dry-run"
+    "deploy:admin": "wrangler deploy -c wrangler.admin.jsonc",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/dry-run && wrangler deploy -c wrangler.admin.jsonc --dry-run --outdir .wrangler/dry-run-admin"
   },
   "devDependencies": {
     "wrangler": "4.158.0"

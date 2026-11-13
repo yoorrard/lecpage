@@ -31,9 +31,12 @@ export function liveTarget(pathname) {
   return { kind: 'room', code, path, op };
 }
 
-/** 브라우저가 보낸 요청이면 이 호스트의 사이트에서 온 것만(읽기 전용 GET은 규칙대로 그냥 받음: 다른 출처는 어차피 응답을 못 읽음) */
-export function liveOriginOk({ method, op, origin, self }) {
-  if (!origin || origin === self) return true;
+/**
+ * 브라우저가 보낸 요청이면 이 호스트의 사이트에서 온 것만(읽기 전용 GET은 규칙대로 그냥 받음: 다른 출처는 어차피 응답을 못 읽음).
+ * sites: VIEW=pages 사이트 출처(https://s-<id>.<프로젝트>.pages.dev)를 받는 정규식
+ */
+export function liveOriginOk({ method, op, origin, self, sites = null }) {
+  if (!origin || origin === self || (sites && sites.test(origin))) return true;
   return (method === 'GET' || method === 'HEAD') && op !== 'ws';
 }
 

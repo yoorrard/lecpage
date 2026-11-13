@@ -54,11 +54,12 @@ export function isDataScript(type) {
   return t === 'application/json' || t === 'application/ld+json';
 }
 
-export function reportLinkHtml(siteId, { inFooter }) {
-  const a = `<a href="/report?site=${encodeURIComponent(siteId)}" rel="nofollow noopener" target="_blank" data-host-report>신고</a>`;
+export function reportLinkHtml(siteId, { inFooter, reportUrl = '/report' }) {
+  const href = escAttr(`${reportUrl}?site=${encodeURIComponent(siteId)}`);
+  const a = `<a href="${href}" rel="nofollow noopener" target="_blank" data-host-report>신고</a>`;
   if (inFooter) return a;
   // 바닥글이 없는 화면(접속 확인·개인정보 안내·암호 화면 등): 인쇄할 때는 숨김
-  return `<p data-host-report style="margin:0;padding:10px 16px;text-align:center;font:12px/1.4 system-ui,sans-serif;opacity:.55"><style>@media print{[data-host-report]{display:none}}</style><a href="/report?site=${encodeURIComponent(siteId)}" rel="nofollow noopener" target="_blank" style="color:inherit">신고</a></p>`;
+  return `<p data-host-report style="margin:0;padding:10px 16px;text-align:center;font:12px/1.4 system-ui,sans-serif;opacity:.55"><style>@media print{[data-host-report]{display:none}}</style><a href="${href}" rel="nofollow noopener" target="_blank" style="color:inherit">신고</a></p>`;
 }
 
 /**
@@ -67,6 +68,8 @@ export function reportLinkHtml(siteId, { inFooter }) {
  * @param {{ reportLink?: boolean, path?: string, files?: Map, rt?: Set<string>, origin?: string, ogImage?: string, notices?: object[] }} [opts]
  *   reportLink=false면 신고 링크를 붙이지 않음(화면 전체를 쓰는 강사용 화면). path: 사이트 안 HTML 경로. origin: 이 호스트 주소(미리보기 카드).
  *   ogImage: og:image가 없을 때 쓸 사이트 안 그림 경로. notices: 맨 위에 붙일 운영자 공지(강사 화면)
+ *   siteBase: 사이트 첫 화면의 전체 주소(VIEW=pages: https://s-<id>.<프로젝트>.pages.dev/). 없으면 origin + /s/<id>/
+ *   reportUrl: 신고 화면 주소(VIEW=pages: 바로 공개 호스트의 전체 주소). 없으면 같은 출처의 /report
  */
 export function rewriteHtml(res, siteId, opts = {}) {
   const remove = { element(el) { el.remove(); } };
@@ -74,7 +77,8 @@ export function rewriteHtml(res, siteId, opts = {}) {
   const path = opts.path || 'index.html';
   const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
   const files = opts.files || null; const rt = opts.rt || null;
-  const siteBase = opts.origin ? `${opts.origin}/s/${siteId}/` : '';
+  const siteBase = opts.siteBase || (opts.origin ? `${opts.origin}/s/${siteId}/` : '');
+  const reportUrl = opts.reportUrl || '/report';
   const pageUrl = siteBase ? siteBase + (path === 'index.html' ? '' : encodeURI(path)) : '';
   const abs = (src) => { try { return siteBase && isLocalSrc(src) ? new URL(src, siteBase + encodeURI(dir)).href : ''; } catch { return ''; } };
   const ver = (el, attr) => { const v = el.getAttribute(attr); if (v != null) { const n = versioned(v, dir, files, rt); if (n !== v) el.setAttribute(attr, n); } };
@@ -118,11 +122,11 @@ export function rewriteHtml(res, siteId, opts = {}) {
       },
     })
     // 엔진이 만든 바닥글의 링크 줄. 여기에 붙이면 사이트 글꼴·색을 그대로 따름
-    .on('footer .lp-foot-meta', { element(el) { if (!linked) { linked = true; el.append(reportLinkHtml(siteId, { inFooter: true }), { html: true }); } } })
+    .on('footer .lp-foot-meta', { element(el) { if (!linked) { linked = true; el.append(reportLinkHtml(siteId, { inFooter: true, reportUrl }), { html: true }); } } })
     .on('body', {
       element(el) {
         if (opts.notices?.length) el.prepend(noticeBandHtml(opts.notices), { html: true });
-        el.onEndTag((end) => { if (!linked) { linked = true; end.before(reportLinkHtml(siteId, { inFooter: false }), { html: true }); } });
+        el.onEndTag((end) => { if (!linked) { linked = true; end.before(reportLinkHtml(siteId, { inFooter: false, reportUrl }), { html: true }); } });
       },
     });
   return rw.transform(res);

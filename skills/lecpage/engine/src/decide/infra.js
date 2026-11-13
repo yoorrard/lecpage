@@ -104,7 +104,7 @@ export function checkHost(host, stat = {}) {
  * 올릴 곳 고르기. 앞에 있을수록 추천.
  * @param {object} input
  *   skill 'click'(앱·초보) | 'set' | 'dev'(skill·명령 가능), network, infra[], backend(실시간 방식),
- *   previous(지난번에 올린 곳), connected[](이미 연결해 둔 곳), instant(운영자의 '바로 공개'를 쓸 수 있음),
+ *   previous(지난번에 올린 곳), connected[](이미 연결해 둔 곳), instant(운영자의 '바로 공개'를 쓸 수 있음: 'stable'|'limited'|'pages'),
  *   keep('long'이면 연수 뒤에도 오래 둘 사이트), customDomain(내 도메인을 붙일 계획),
  *   maxFileMB(가장 큰 파일), siteMB(사이트 합계), files(파일 수)
  * @returns {{ hosts: string[], pick: string, reasons: string[], warnings: string[] }}
@@ -158,9 +158,10 @@ export function decideHost(input = {}) {
     const fitsInstant = !(Number(input.siteMB) > HOSTS.lecpage.limit.siteMB) && !(Number(input.maxFileMB) > HOSTS.lecpage.limit.fileMB) && !(Number(input.files) > HOSTS.lecpage.limit.files);
     if (input.instant && fitsInstant) {
       // 운영자가 '바로 공개'를 켜 둔 앱: 가입이 필요 없어 가장 빠름. 오래 둘 사이트·내 도메인은 본인 계정이 먼저.
-      // 운영자가 무료 요금제로 돌리면(instant: 'limited') 하루 한도에 닿는 날 멈출 수 있어 첫째로 권하지 않음
+      // 운영자가 무료 요금제로 돌리면(instant: 'limited') 하루 한도에 닿는 날 멈출 수 있어 첫째로 권하지 않음.
+      // 'pages': 사이트를 Cloudflare Pages로 내보내는 서버(방문이 하루 한도에 들지 않아 무료여도 사이트는 멈추지 않음)
       if (input.instant === 'limited' || input.keep === 'long' || input.customDomain) hosts.splice(1, 0, 'lecpage');
-      else { hosts.unshift('lecpage'); why('가입이나 토큰 없이 바로 공개해요. 방문이 있는 동안은 계속 열려 있어요.'); }
+      else { hosts.unshift('lecpage'); why(input.instant === 'pages' ? '가입이나 토큰 없이 바로 공개해요. 방문이 많아도 사이트는 멈추지 않아요.' : '가입이나 토큰 없이 바로 공개해요. 방문이 있는 동안은 계속 열려 있어요.'); }
     }
     const mine = [input.previous, ...[].concat(input.connected || [])].filter((h) => h && hosts.includes(h));
     if (mine.length) { hosts = [...new Set([...mine, ...hosts])]; why(input.previous && mine[0] === input.previous ? '지난번에 올린 곳에 다시 올리면 주소가 그대로예요.' : '이미 연결해 둔 곳이라 바로 올릴 수 있어요.'); }
