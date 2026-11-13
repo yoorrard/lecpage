@@ -40,8 +40,11 @@ export function lintHtml(html, file = 'index.html') {
   let s = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<textarea[\s\S]*?<\/textarea>/gi, '').replace(/<aside class="lp-dock"[\s\S]*?<\/aside>/gi, '').replace(/<figure class="lp-slide"[\s\S]*?<\/figure>/gi, '').replace(/<svg[\s\S]*?<\/svg>/gi, '');
   const ent = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  // 버튼·링크 이름은 짧아야 함
+  // 버튼·링크 이름은 짧아야 함. 단 색인·차례·일정 목록의 링크(<li> 하나를 통째로 채운 같은 쪽 링크)는 버튼이 아니라
+  // 그 자리의 질문·제목을 옮겨 적은 것이라 길이를 보지 않음(질문·제목 글 자체는 아래 본문 점검에서 봄)
   for (const m of s.matchAll(/<(a|button)\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
+    if (m[1].toLowerCase() === 'a' && /\bhref="#[^"]*"/i.test(m[0].slice(0, m[0].indexOf('>') + 1))
+      && /<li\b[^>]*>\s*$/i.test(s.slice(Math.max(0, m.index - 120), m.index)) && /^\s*<\/li>/i.test(s.slice(m.index + m[0].length, m.index + m[0].length + 12))) continue;
     const t = ent(m[2].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
     if (t && !/@|https?:|\.[a-z]{2,}\//i.test(t)) for (const f of lintText(t, 'cta')) if (f.why.includes('넘음')) out.push({ where: `${file} <${m[1]}>`, ...f });
   }

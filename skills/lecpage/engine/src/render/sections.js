@@ -172,7 +172,7 @@ function variantSection(s, ctx) {
 }
 
 function liveOff(ctx) {
-  return ctx.live ? '' : '<p class="lp-note" data-live-off>실시간 연결을 켜면 여기서 쓸 수 있어요.</p>';
+  return ctx.live ? '' : '<p class="lp-note" data-live-off>참여 기능을 켜면 여기서 쓸 수 있어요.</p>';
 }
 
 /** 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출" */
@@ -437,10 +437,10 @@ function board(s, ctx) {
 <form class="lp-compose lp-board-form" data-board-form hidden>
   <fieldset class="lp-seg"><legend class="lp-sr">분류</legend>${cats.map((c, i) => `<label><input type="radio" name="kind" value="${esc(c.id)}"${i ? '' : ' checked'}><span>${esc(c.label)}</span></label>`).join('')}</fieldset>
   <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
-  ${files ? `<label class="lp-file"><span>파일 (사진·PDF·음악·영상, ${s.maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
+  ${files ? `<label class="lp-file"><span>사진·PDF·음악·영상 (${s.maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
   <label class="lp-inline"><span>이용 조건</span><select name="license"><option value="own">내가 만든 자료</option><option value="cc">CC 라이선스</option><option value="kogl">공공누리</option><option value="permitted">이용 허락 받음</option></select></label>
   <p class="lp-small">학생 얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
-  <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>취소</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
+  <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>닫기</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
 </form>
 <ul class="lp-board-grid" data-board-list aria-live="polite"><li class="lp-empty">아직 올라온 글이 없어요. 첫 글을 올려 주세요.</li></ul>
 ${liveOff(ctx)}${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}</div>`);

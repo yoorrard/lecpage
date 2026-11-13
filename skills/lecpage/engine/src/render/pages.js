@@ -204,7 +204,7 @@ function helpSheet(ctx) {
 <p class="lp-small">강사가 자리로 갈게요. 자리는 이 기기에 저장돼요.</p>
 <label><span>자리</span><input name="seat" maxlength="20" autocomplete="off" placeholder="예: 3모둠, 창가 두 번째"></label>
 <label><span>무엇이 막혔나요? (선택)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>취소</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
 }
 
 function dialogs(ctx) {

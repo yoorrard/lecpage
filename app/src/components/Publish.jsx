@@ -24,7 +24,7 @@ const ABOUT = {
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');
 
-/** 올릴 곳의 토큰(이 탭 또는 '기억하기'를 켠 기기에만). 한 번 연결해 두면 다음부터는 단추 하나 */
+/** 올릴 곳의 토큰(이 탭 또는 '기억하기'를 켠 기기에만). 한 번 연결해 두면 다음부터는 버튼 하나 */
 export function useToken(kind) {
   const [token, setToken] = useState('');
   const [remember, setRemember] = useState(true);
@@ -41,7 +41,7 @@ export async function connectedTargets() {
 }
 
 /**
- * 토큰 만드는 순서(공개하기 화면과 설정의 '연결'이 같이 씀). 단추·칸 이름은 그 사이트 화면에 나오는 영문 그대로.
+ * 토큰 만드는 순서(공개하기 화면과 설정의 '연결'이 같이 씀). 버튼·칸 이름은 그 사이트 화면에 나오는 영문 그대로.
  * 2026-11-12 공식 문서 확인: Vercel(vercel.com/kb/guide/how-do-i-use-a-vercel-api-access-token), GitHub(fine-grained 토큰 주소 미리 채우기), Netlify(API 시작하기)
  */
 export const HOST_GUIDE = {
@@ -118,7 +118,7 @@ function Connect({ t, kind, onConnected, onChange }) {
             onInput={(e) => { t.setToken(e.target.value.trim()); setErr(''); }}
             onPaste={(e) => { const x = e.clipboardData?.getData('text'); if (x) { e.preventDefault(); take(x); } }}
             onKeyDown={(e) => e.key === 'Enter' && t.token && take(t.token)} />
-          <button type="button" class={`btn btn-sm btn-primary${back ? ' attn' : ''}`} disabled={busy} onClick={paste}>{busy ? '확인하는 중…' : '붙여넣기'}</button>
+          <button type="button" class={`btn btn-sm btn-primary${back ? ' attn' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={paste}>{busy ? '확인하는 중…' : '붙여넣기'}</button>
         </div>
         {t.token && !busy && <div><button type="button" class="btn btn-sm" onClick={() => take(t.token)}>연결</button></div>}
         {err && <p class="small err" role="alert">{err}</p>}
@@ -149,11 +149,11 @@ function AddrName({ label = '주소 이름', optional, pre, post, value, onInput
 const cleanName = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+/, '');
 
 const Go = ({ on, busy, again, onClick, disabled, name = '공개하기' }) => (
-  <div class="btn-row"><button class="btn btn-primary btn-lg" disabled={disabled || !!busy} onClick={onClick}>{on ? '올리는 중…' : again ? '바뀐 내용 다시 올리기' : name}</button></div>
+  <div class="btn-row"><button class="btn btn-primary btn-lg" disabled={disabled || !!busy} aria-busy={on ? 'true' : undefined} onClick={onClick}>{on ? '올리는 중…' : again ? '바뀐 내용 다시 올리기' : name}</button></div>
 );
 
 /**
- * 공개하기: 올릴 곳을 추천해 고르고, 단추 하나로 올립니다.
+ * 공개하기: 올릴 곳을 추천해 고르고, 버튼 하나로 올립니다.
  * buildFiles(opts) → { files }, guard(run): 참여 기능 연결 전이면 먼저 물어봄, done(url, patch): 주소 저장.
  * again: { current } 지난번에 올린 곳에 바로 다시 올리는 함수를 여기에 걸어 둠(성공 카드의 [다시 올리기]가 부름). 못 하면 null
  */
@@ -238,7 +238,7 @@ function Instant({ p, busy, start, done, bind, info, onUnavailable }) {
     const out = await deployInstant({ site: prev, title: p.title, files, live, onProgress });
     done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(autoLive ? { adminKey } : {}) } },
       autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true } : null);
-    toast(prev?.id === out.id ? '새 내용을 같은 주소에 올렸어요.' : '공개했어요!');
+    toast(prev?.id === out.id ? '새 내용을 같은 주소에 올렸어요.' : '공개했어요.');
   }, (e) => {
     if (e.code === 'code_taken' && !newCode) { setTimeout(() => run(E.randomCode()), 0); return true; }
     // 자리가 찼거나(무료 한도 안에서만 받음) 서버에 닿지 않으면 내 계정에 올리는 길로 넘김
@@ -248,7 +248,7 @@ function Instant({ p, busy, start, done, bind, info, onUnavailable }) {
     }
     return false;
   },
-  autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
+  autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 공개 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형·'삭제' 그대로) */ purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
   bind(() => run());
   async function remove() {
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
@@ -272,7 +272,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
   const run = () => start('vercel', async (files, onProgress) => {
     const out = await deployVercel({ token: t.token, name: clean || slug(p.info?.date), projectId: prev?.projectId, files, onProgress });
     done(out.url, { vercel: { projectId: out.projectId, name: out.name, url: out.url } });
-    toast(prev ? '새 내용을 같은 주소에 올렸어요.' : out.opened ? '공개했어요! 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '공개했어요!');
+    toast(prev ? '새 내용을 같은 주소에 올렸어요.' : out.opened ? '공개했어요. 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '공개했어요.');
   }, (e) => tokenGone(e, t, refresh));
   bind(t.saved ? run : null);
   async function unlock() {
@@ -312,7 +312,7 @@ function GitHub({ p, busy, start, done, bind, refresh }) {
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
         <h2 class="h-sub">이미 있는 저장소예요</h2>
         <p>"{repo}" 저장소가 이미 있어요. 올리면 그 안의 파일이 연수 사이트로 모두 바뀌어요. 다른 이름을 쓰는 것이 안전해요.</p>
-        <div class="btn-row"><button class="btn" onClick={() => { setConfirm(false); setRepo(slug(p.info?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
+        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(p.info?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
       </Dialog>
     </div>
   );
@@ -349,7 +349,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
   const cf = kind === 'cloudflare';
   const get = { t: '사이트 파일 받기', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
   const save = { t: prev ? '올린 주소 확인하기' : '올린 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '올린 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
@@ -365,9 +365,9 @@ function Manual({ p, busy, guard, done, zip, kind }) {
       : [get,
         { t: 'Cloudflare에서 올릴 화면 열기', next: false,
           body: <>
-            <p>처음이면 <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">Cloudflare에 가입</a>해요. 그다음 아래 단추로 들어가 차례로 눌러요.</p>
+            <p>처음이면 <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">Cloudflare에 가입</a>해요. 그다음 아래 버튼으로 들어가 차례로 눌러요.</p>
             <ClickShot pre={['Create application', 'Get started']} btn="Drag and drop your files" />
-            <div><a class="btn btn-sm btn-primary" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/create" target="_blank" rel="noopener" onClick={() => setAt(2)}>Workers &amp; Pages 열기</a></div>
+            <div>{/* copy-ok: Cloudflare 메뉴 이름 그대로(번역하면 화면에서 못 찾음) */}<a class="btn btn-sm btn-primary" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/create" target="_blank" rel="noopener" onClick={() => setAt(2)}>Workers &amp; Pages 열기</a></div>
           </> },
         { t: 'ZIP 끌어다 놓기',
           body: <>

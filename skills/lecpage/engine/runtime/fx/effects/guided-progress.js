@@ -31,8 +31,10 @@ LecFX.define('guided-progress', {
       chip = document.createElement('span');
       chip.className = 'fx-gp-chip';
       chip.setAttribute('aria-hidden', 'true');
-      el.appendChild(nav);
-      el.appendChild(chip);
+      // 단계 목록·칩은 body에 붙임: 막대를 둔 자리(머리의 backdrop-filter, 진행 막대의 transform) 안에서는
+      // position:fixed가 그 자리를 기준으로 그려져 0 너비로 눌리고, 보이지 않는 링크에 Tab 초점만 감
+      document.body.appendChild(nav);
+      document.body.appendChild(chip);
     }
     var cur = -1, lastP = -1;
     ctx.onScroll(function (y, vh) {

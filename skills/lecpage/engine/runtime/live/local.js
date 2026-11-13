@@ -81,7 +81,7 @@
     adapter.join = function (p) {
       var now = stamp(); var id = 'p' + U.uid(12); var token = U.uid(16) + U.uid(16);
       var doc = { id: id, nickname: p.nickname || '참가자', name: p.name || '', school: p.school || '', consentAt: p.consent ? now : null, createdAt: now, updatedAt: now };
-      if ((doc.name || doc.school) && !p.consent) return Promise.reject(err('consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.'));
+      if ((doc.name || doc.school) && !p.consent) return Promise.reject(err('consent_required', '이름·소속을 남기려면 개인정보 수집·이용에 동의해 주세요.'));
       ls.set(P + 't:' + token, id);
       save('participants', doc, 'add');
       return Promise.resolve({ id: id, token: token, nickname: doc.nickname });
@@ -116,7 +116,7 @@
     };
     adapter.add = function (col, doc) {
       return Promise.resolve().then(function () {
-        if (L.cols.indexOf(col) < 0 || col === 'participants') throw err('unknown_collection', '없는 컬렉션입니다.', 404);
+        if (L.cols.indexOf(col) < 0 || col === 'participants') throw err('unknown_collection', '없는 컬렉션이에요.', 404);
         var p = col === 'polls' ? null : me();
         var by = p ? p.id : null;
         if (doc.cid) {
@@ -145,7 +145,7 @@
     adapter.update = function (col, id, patch) {
       return Promise.resolve().then(function () {
         var cur = ls.get(key(col, id));
-        if (!cur) throw err('not_found', '없는 글입니다.', 404);
+        if (!cur) throw err('not_found', '지워진 글이에요. 새로 고침해 주세요.', 404);
         var next = U.assign({}, cur, patch || {}, { id: id, updatedAt: stamp() });
         return save(col, next, 'update');
       });
@@ -161,7 +161,7 @@
       return Promise.resolve().then(function () {
         var p = me();
         var cur = ls.get(key(col, id));
-        if (!cur) throw err('not_found', '없는 글입니다.', 404);
+        if (!cur) throw err('not_found', '지워진 글이에요. 새로 고침해 주세요.', 404);
         var vk = P + 'v:' + col + ':' + id + ':' + p.id;
         if (ls.get(vk)) { var r0 = {}; r0[field] = cur[field] || 0; r0.already = true; return r0; }
         ls.set(vk, 1);

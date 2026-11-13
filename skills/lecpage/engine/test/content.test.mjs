@@ -200,6 +200,13 @@ describe('문구 규칙', () => {
       for (const f of ['index.html', 'console.html', 'screen.html', 'check.html']) assert.deepEqual(lintHtml(r.files[f], f).filter((x) => x.level === 'error'), [], `${id}/${f}`);
     }
   });
+  test('만든 사이트 점검: 색인·차례 목록의 링크는 버튼 길이로 보지 않음', async () => {
+    const { lintHtml } = await import('../../scripts/copy-lint.mjs');
+    const long = (h) => lintHtml(h).filter((f) => f.why.includes('넘음'));
+    assert.deepEqual(long('<nav aria-label="질문 색인"><ol><li><a href="#faq-q0"><span>Q1</span><span>속상한 일을 털어놓은 아이는 어떻게 하나요?</span></a></li></ol></nav>'), [], '질문 색인');
+    assert.ok(long('<p><a class="lp-btn" href="#x">속상한 일을 털어놓은 아이에게 답하기</a></p>').length, '버튼처럼 쓴 링크는 그대로 봄');
+    assert.ok(long('<ul><li><a href="https://example.org/">속상한 일을 털어놓은 아이에게 답하는 법</a></li></ul>').length, '다른 곳으로 가는 링크는 그대로 봄');
+  });
   test('AI 프롬프트에 문구 규칙과 새 칸 안내가 들어감', () => {
     const p = buildPrompt({ context: 'x' });
     assert.ok(p.includes('여정') && p.includes('를 통해') && p.includes('goals') && p.includes('followup'));

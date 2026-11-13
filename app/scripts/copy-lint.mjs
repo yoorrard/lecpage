@@ -119,7 +119,9 @@ function htmlPieces(val, baseKind) {
     if (m[1]) { stack.pop(); kind = stack[stack.length - 1] || baseKind; continue; }
     if (/^(br|hr|img|input|meta|link|wbr)$/.test(tag) || /\/\s*$/.test(attrs)) continue;
     if (INLINE.has(tag) && !/class="[^"]*\b(btn|lp-btn|button)\b/.test(attrs)) { stack.push(kind); continue; }
-    kind = tag === 'button' || /class="[^"]*\b(btn|lp-btn|button)\b/.test(attrs) ? 'button' : TITLE_TAGS.has(tag) ? 'title' : tag === 'label' ? 'label' : tag === 'script' || tag === 'style' ? 'skip' : 'text';
+    // 체크 칸·라디오를 감싼 label은 이름표가 아니라 문장(동의 문장 등)이라 길이 한도를 두지 않음
+    const checkLabel = tag === 'label' && /^\s*<input\b[^>]*\btype="(checkbox|radio)"/.test(text.slice(re.lastIndex, re.lastIndex + 200));
+    kind = tag === 'button' || /class="[^"]*\b(btn|lp-btn|button)\b/.test(attrs) ? 'button' : TITLE_TAGS.has(tag) ? 'title' : tag === 'label' && !checkLabel ? 'label' : tag === 'script' || tag === 'style' ? 'skip' : 'text';
     stack.push(kind);
   }
   push(text.slice(last), last, kind);

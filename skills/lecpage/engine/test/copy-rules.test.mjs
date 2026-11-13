@@ -144,7 +144,8 @@ test('앱 문구 검사: JSX 글·속성·알림·오류·HTML 조각을 뽑고 
         <input placeholder="예: 3모둠" aria-label="자리" /><button class="btn">확인</button></div>;
     }
     function renderPrivacy() { return '<p>개인정보를 처리합니다. 쓸 수 있습니다.</p>'; }
-    const html = '<div><button class="lp-btn">' + label + '</button><p>참여자 ' + n + '명이 들어왔습니다.</p></div>';`;
+    const html = '<div><button class="lp-btn">' + label + '</button><p>참여자 ' + n + '명이 들어왔습니다.</p></div>';
+    const form = '<label><span>소속(학교)</span><input name="school"></label><label class="lp-consent"><input type="checkbox" name="consent"><span>이름·소속을 출석 확인에만 쓰는 데 동의합니다.</span></label>';`;
   const units = extract(src, 'x.jsx');
   const get = (t) => units.find((u) => u.text.includes(t));
   assert.equal(get('저장되었습니다').kind, 'toast');
@@ -156,6 +157,8 @@ test('앱 문구 검사: JSX 글·속성·알림·오류·HTML 조각을 뽑고 
   assert.equal(get('개인정보를').kind, 'doc');
   assert.ok(!get('번역투'), 'AI 지시문은 뽑지 않음');
   assert.equal(get('명이 들어왔습니다').text, '참여자 {…}명이 들어왔습니다.', '이어 붙인 HTML도 태그 단위로');
+  assert.equal(get('소속(학교)').kind, 'label');
+  assert.equal(get('출석 확인에만').kind, 'text', '체크 칸을 감싼 label은 문장(동의 문장)');
   const f = lintUnits(units.map((u) => ({ ...u, group: 'page' })));
   const rules = (t) => f.filter((x) => x.text.includes(t)).map((x) => x.rule);
   assert.ok(rules('저장되었습니다').includes('passive') && rules('저장되었습니다').includes('mark'));

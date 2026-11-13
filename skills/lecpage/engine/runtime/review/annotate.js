@@ -7,7 +7,7 @@
  *   보내는 것 {type:'lp-review-ready'} · {type:'lp-annotate-state', on}
  *            {type:'lp-annotated', png, sections:[칸 id], viewport:{w,h}, scroll:{x,y}, notes:[글], mode}
  * 부모가 보내는 값은 믿지 않아요: 정해 둔 type·mode만 받고, 글·코드는 받지 않아요(화면 글은 모두 여기서 만듦).
- * 혼자 쓰기(검토 서버): <script src=… data-lp-review="/__lecpage/feedback"> → 왼쪽 아래 [수정 요청] 단추, 완료 후 글을 적어 서버로 보냄
+ * 혼자 쓰기(검토 서버): <script src=… data-lp-review="/__lecpage/feedback"> → 왼쪽 아래 [수정 요청] 버튼, 완료 후 글을 적어 서버로 보냄
  */
 (function () {
   'use strict';
@@ -237,7 +237,7 @@
     var root = host.attachShadow({ mode: 'open' });
     var st = el('style'); st.textContent = CSS; root.appendChild(st);
     var ov = el('div', { class: 'ov' + (mode === 'pick' ? ' pick' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': mode === 'pick' ? '고칠 칸 고르기' : '고칠 곳 표시하기' });
-    var stage = el('div', { class: 'stage', tabindex: '0', role: 'application', 'aria-label': mode === 'pick' ? '고칠 칸을 누르세요. 화살표 키로 칸을 옮기고 Enter로 고릅니다. Esc는 취소.' : '고칠 곳에 끌어서 표시하세요. Enter는 완료, Esc는 취소.' });
+    var stage = el('div', { class: 'stage', tabindex: '0', role: 'application', 'aria-label': mode === 'pick' ? '고칠 칸을 누르세요. 화살표 키로 칸을 옮기고 Enter로 골라요. Esc를 누르면 닫혀요.' : '고칠 곳에 끌어서 표시하세요. Enter를 누르면 끝나고, Esc를 누르면 닫혀요.' });
     var cv = el('canvas', { 'aria-hidden': 'true' });
     var hint = el('div', { class: 'hint', 'aria-hidden': 'true' });
     hint.textContent = mode === 'pick' ? '고칠 칸을 누르세요' : '고칠 곳에 표시하고 [완료]를 누르세요';

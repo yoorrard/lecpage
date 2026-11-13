@@ -32,9 +32,14 @@ export function Seg({ options, value, onChange, label }) {
   );
 }
 
+/** 대화상자. 열면 안쪽 [data-autofocus](확인 창의 [닫기] 같은 안전한 쪽)에 초점 — 위험한 버튼에 초점이 가면 Enter 두 번으로 실행돼요 */
 export function Dialog({ open, onClose, children, label, wide }) {
   const ref = useRef();
-  useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal?.(); if (!open && d.open) d.close(); }, [open]);
+  useEffect(() => {
+    const d = ref.current; if (!d) return;
+    if (open && !d.open) { d.showModal?.(); d.querySelector('[data-autofocus]')?.focus(); }
+    if (!open && d.open) d.close();
+  }, [open]);
   return <dialog ref={ref} class={`dlg${wide ? ' dlg-wide' : ''}`} aria-label={label} onClose={onClose} onCancel={onClose}><div class="dlg-in">{children}<button class="icon-btn dlg-x" onClick={onClose} aria-label="닫기">✕</button></div></dialog>;
 }
 

@@ -68,11 +68,26 @@ export function Home() {
     let t; const id = requestAnimationFrame(() => { t = setTimeout(() => setMore(true), 0); });
     return () => { cancelAnimationFrame(id); clearTimeout(t); };
   }, [list]);
-  async function startWith(fileList) {
+  // 두 번 눌러도 한 번만(interaction.md 1절): 누르는 순간 막고, 0.3초 넘게 걸리면 누른 버튼에 '만드는 중…'
+  const running = useRef(false);
+  const [busy, setBusy] = useState('');
+  async function once(key, fn, { stay = false, fail = '연수를 만들지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.' } = {}) {
+    if (running.current) return;
+    running.current = true;
+    const t = setTimeout(() => setBusy(key), 300);
+    let ok = false;
+    try { await fn(); ok = true; } catch (e) { console.error(e); toast(fail); }
+    clearTimeout(t); setBusy('');
+    if (!ok || stay) running.current = false; // 다른 화면으로 넘어가면 이 화면은 닫히니 그대로 막아 둠
+  }
+  const busyProps = (key, label = '만드는 중…') => ({ 'aria-busy': busy === key ? 'true' : undefined, 'data-busy': label });
+  function startWith(fileList) {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
-    const p = await newProject('blank');
-    if (files.length) setPendingFiles(p.id, files);
-    location.hash = `#/p/${p.id}/1`;
+    return once('blank', async () => {
+      const p = await newProject('blank');
+      if (files.length) setPendingFiles(p.id, files);
+      location.hash = `#/p/${p.id}/1`;
+    });
   }
   // 교재 파일을 첫 화면 어디에 놓아도 시작(놓을 자리를 찾지 않게)
   useEffect(() => {
@@ -86,11 +101,11 @@ export function Home() {
     return () => { removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); };
   }, []);
   const pick = () => pickRef.current?.click();
-  async function fromExample(id) { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; }
+  const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function onImport(e) {
     const f = e.target.files?.[0]; if (!f) return;
     try { const p = await importProjectFile(f); toast('저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
-    catch (err) { toast(err.message || '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
+    catch (err) { toast(err.friendly ? err.message : '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
     e.target.value = '';
   }
   return (
@@ -107,8 +122,8 @@ export function Home() {
           <input ref={pickRef} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { startWith(e.target.files); e.target.value = ''; }} />
           <div class="ld-hero-more">
             <a class="btn ld-try" href="#/demo">먼저 체험해 보기<span aria-hidden="true"> →</span></a>
-            <button type="button" class="btn btn-quiet" onClick={() => startWith([])}>교재 없이 시작하기</button>
-            <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기(.lecpage)</button>
+            <button type="button" class="btn btn-quiet" {...busyProps('blank')} onClick={() => startWith([])}>교재 없이 시작하기</button>
+            <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />
           </div>
           <p class="ld-note">교재는 이 브라우저에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.</p>
@@ -128,7 +143,7 @@ export function Home() {
                   <a class="proj-link" href={`#/p/${p.id}/${st}`}><h3>{p.title || '이름 없는 연수'}</h3></a>
                   <div class="meta"><span class="tag tag-lav">{STAGE[st]}</span>{p.deploy?.lastUrl && <span class="tag tag-mint">공유 중</span>}<span>{fmtDate(p.updatedAt)}</span></div>
                   <div class="proj-actions">
-                    <button class="btn btn-sm btn-quiet" onClick={async () => { await duplicateProject(p); toast('복제했어요.'); reload(); }}>복제</button>
+                    <button class="btn btn-sm btn-quiet" {...busyProps(`dup-${p.id}`, '복제 중…')} onClick={() => once(`dup-${p.id}`, async () => { await duplicateProject(p); toast('복제했어요.'); reload(); }, { stay: true, fail: '복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.' })}>복제</button>
                     <button class="btn btn-sm btn-quiet" onClick={() => setDel(p)}>지우기</button>
                   </div>
                 </div>
@@ -192,7 +207,7 @@ export function Home() {
                 <span class="tag tag-lav">{x.kind}</span>
                 <h3>{x.title}</h3>
                 <p class="small muted">{x.desc}</p>
-                <div class="btn-row"><button class="btn btn-sm btn-primary" onClick={() => fromExample(x.id)}>이 예시로 시작</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">예시 보기</a></div>
+                <div class="btn-row"><button class="btn btn-sm btn-primary" {...busyProps(`ex-${x.id}`)} onClick={() => fromExample(x.id)}>이 예시로 시작</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">예시 보기</a></div>
               </div>
             </article>
           ))}
@@ -214,7 +229,7 @@ export function Home() {
       <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
         <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
         <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 올린 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>
-        <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" onClick={() => setDel(null)}>닫기</button></div>
+        <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button></div>
       </Dialog>
     </div>
   );

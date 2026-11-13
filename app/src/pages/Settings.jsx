@@ -24,7 +24,7 @@ export function Settings() {
   async function exportAll() {
     const list = await projects.all();
     for (const p of list) saveFile(safeName(p.title) + '.lecpage', await exportProjectFile(p), 'application/zip');
-    toast(`프로젝트 ${list.length}개를 저장했어요.`);
+    toast(`연수 ${list.length}개를 파일로 저장했어요.`);
   }
   async function wipe() {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
@@ -42,7 +42,7 @@ export function Settings() {
       </section>
       <section>
         <h2 class="h-sub">연결</h2>
-        <p class="small muted">한 번 연결해 두면 단추 하나로 만들고 공개해요.</p>
+        <p class="small muted">한 번 연결해 두면 버튼 하나로 만들고 공개해요.</p>
         <h3 class="h-label">AI</h3>
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
@@ -69,10 +69,10 @@ export function Settings() {
         {st && <p>사용 {fmtBytes(st.usage)}{st.quota ? ` / 약 ${fmtBytes(st.quota)}` : ''} · {st.persisted ? '브라우저가 지우지 않도록 보호 중' : '보호 안 됨(공간이 부족하면 브라우저가 지울 수 있어요)'}</p>}
         <div class="btn-row">
           {st && !st.persisted && <button class="btn btn-sm" onClick={async () => { const ok = await askPersist(); setSt(await storageInfo()); toast(ok ? '저장 공간을 보호했어요.' : '브라우저가 허락하지 않았어요.'); }}>저장 공간 보호하기</button>}
-          <button class="btn btn-sm" onClick={exportAll}>모든 프로젝트 파일로 저장</button>
-          <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '정말 지울까요? 한 번 더 누르세요' : '이 브라우저의 데이터 모두 지우기'}</button>
+          <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
+          <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 지우기' : '모든 데이터 지우기'}</button>
         </div>
-        <p class="small muted">학교 공용 PC라면 끝난 뒤 프로젝트를 파일로 저장하고 데이터를 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요. 학교 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
     </div>
   );

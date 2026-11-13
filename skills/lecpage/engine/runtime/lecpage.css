@@ -154,6 +154,10 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-nav-act{display:flex;gap:2px;margin-left:auto}
 .lp-nav-act .lp-icon-btn{width:40px;height:40px}
 .lp-scrollbar{position:absolute;left:0;bottom:-1px;height:2px;width:100%;transform-origin:0 50%;transform:scaleX(var(--p,0));background:var(--primary);pointer-events:none}
+/* 진행 막대 효과(guided-progress)를 단 막대: 막대 자체는 줄이지 않고(안의 .fx-gp-fill이 채워짐) 머리 아래에 둠 */
+.lp-nav .lp-scrollbar.fx-gp{position:absolute;top:auto;bottom:-1px;height:3px;transform:none;background:none}
+/* 옆 단계 점(body에 붙음)은 본문(첫 화면 최대 1320px) 오른쪽에 자리가 남을 때만. 좁으면 숨겨 본문 글자에 겹치지 않게(숨기면 Tab도 가지 않음) */
+@media (max-width:1379px){.fx-gp-steps{display:none}}
 
 /* 첫 화면: 공통 조각. 구성(.lp-hero--이름)마다 뼈대·격자·글자 다루기가 다릅니다(render/hero.js) */
 .lp-hero{min-height:min(92svh,940px);display:grid;align-content:center;overflow:hidden;overflow:clip;padding-block:clamp(72px,9vw,128px) clamp(48px,6vw,88px)}
@@ -973,6 +977,7 @@ input,textarea,select{font-size:max(16px,1em)}
 /* 교재 뷰어 */
 .lp-deck{display:grid;gap:var(--sp-3);grid-template-columns:minmax(0,1fr)}
 .lp-deck-stage{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:var(--sp-5);outline:none}
+.lp-deck-stage:focus-visible{outline:2px solid var(--ring);outline-offset:4px;border-radius:min(var(--radius),12px)}
 .lp-slide{margin:0;display:grid;gap:var(--sp-2);scroll-margin-top:90px}
 .lp-slide img{width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--card);border-radius:min(var(--radius),12px);border:1px solid var(--rule-c)}
 /* 그림이 없는 쪽: 16:9 슬라이드 한 장. 글자 크기는 슬라이드 폭에 맞춰 커지고 줄어듦(cqw). 표지(cover)·부 시작(part)·본문(body) */
@@ -1130,7 +1135,7 @@ input,textarea,select{font-size:max(16px,1em)}
 [data-card="paper"] .lp-tools-item{box-shadow:var(--shadow)}
 @media (min-width:700px){.lp-tools-item[data-w="7"]{grid-column:span 7}.lp-tools-item[data-w="5"]{grid-column:span 5}.lp-tools-item[data-w="12"]{min-height:0}}
 .lp-pages{font-size:var(--fs-xs);color:var(--muted-foreground);display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}
-.lp-pages a{font-family:var(--font-mono);color:var(--foreground);text-decoration:underline;text-decoration-color:var(--rule-c)}
+.lp-pages a{font-family:var(--font-mono);color:var(--foreground);text-decoration:underline;text-decoration-color:var(--rule-c);padding:1px 8px;margin:-1px -8px} /* 쪽 번호 한 글자도 누르는 곳은 24px(여백만큼 바깥 여백을 빼 배치는 그대로) */
 
 /* 자료: 한 줄씩(형식 · 제목 · 크기 · 받기) */
 .lp-materials{list-style:none;display:grid;border-bottom:var(--rule)}
@@ -1389,6 +1394,8 @@ input,textarea,select{font-size:max(16px,1em)}
 /* 첫 화면이 화면 아래쪽에 걸려 있는 동안은 도크를 숨김(첫 화면을 가리지 않게). 키보드로 들어오면 바로 보임 */
 .lp-dock{transition:opacity var(--dur-3),transform var(--dur-3) var(--ease-out)}
 html.lp-hero-in .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transform:translateY(16px)}
+/* 아래 떠 있는 도크가 Tab으로 옮긴 칸을 가리지 않게(--lp-dock-h는 lecpage.js가 도크 높이로 넣음) */
+html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 30px + env(safe-area-inset-bottom,0px))}
 .lp-react button:hover{background:var(--tint)}
 .lp-react-toggle{display:none!important}
 .lp-signal{display:flex;gap:2px;padding:0 4px;border-left:1px solid var(--rule-c);border-right:1px solid var(--rule-c)}
@@ -2170,4 +2177,20 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
   .lp-callout-copy{display:none!important}
   .lp-discuss-rules{position:static}
   .lp-proc > li,.lp-case,.lp-discuss-q > li,.lp-tbl tr{break-inside:avoid}
+}
+
+/* 터치 화면: 누르는 곳 44px(docs/interaction.md 7절). 보이는 모양이 작은 링크는 안쪽 여백을 주고 같은 만큼 바깥 여백을 빼서
+   누르는 영역만 넓힘(줄 간격·배치는 그대로). 입력칸은 16px(iOS가 확대하지 않게) */
+@media (pointer:coarse){
+  .lp-brand,.lp-totop,.lp-follow,.lp-textbtn,.lp-btn,.lp-btn-sm{min-height:44px}
+  .lp-icon-btn,.lp-nav-act .lp-icon-btn{min-width:44px;min-height:44px}
+  .lp-signal button{width:44px}
+  .lp-tabs button{min-width:44px}
+  .lp-min-legend a{min-height:44px}
+  .lp-poll-list > summary{padding-block:9px}
+  .lp-foot-links,.lp-foot-meta{row-gap:0}
+  .lp-foot-links a,.lp-foot-meta a{display:inline-flex;align-items:center;min-width:44px;min-height:44px}
+  .lp-toc-pg a{padding-block:13px}
+  .lp-pages a{display:inline-grid;place-items:center;min-width:44px;min-height:44px;margin:-10.5px -18px}
+  .lp-prompt-text{font-size:1rem}
 }

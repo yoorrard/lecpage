@@ -186,7 +186,7 @@
     var s3 = section('타이머');
     var tf = el('form', 'lp-row'); var tl = el('input'); tl.placeholder = '이름(예: 1모둠)'; tl.maxLength = 12; tl.setAttribute('aria-label', '타이머 이름');
     var tm = el('input'); tm.type = 'number'; tm.min = 1; tm.max = 180; tm.value = 5; tm.style.maxWidth = '5.5em'; tm.setAttribute('aria-label', '분');
-    var add = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '더하기'); add.type = 'submit';
+    var add = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '추가'); add.type = 'submit';
     tf.appendChild(tl); tf.appendChild(tm); tf.appendChild(el('span', '', '분')); tf.appendChild(add); s3.appendChild(tf);
     tf.addEventListener('submit', function (e) {
       e.preventDefault();
