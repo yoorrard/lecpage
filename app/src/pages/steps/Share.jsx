@@ -365,7 +365,8 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
         <div class="stack">
           <div class="row"><Mascot size={48} mood="happy" /><h2 class="h-sub">참가자에게 보낼 주소가 생겼어요</h2></div>
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
-          {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />방문이 있는 동안은 계속 열려 있어요. 30일 동안 아무도 오지 않으면 지워져요.</p> : <OpenState url={url} at={p.deploy.at} />}
+          {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{p.deploy.lecpage?.view === 'pages' && p.deploy.lecpage.expiresAt ? `${new Date(p.deploy.lecpage.expiresAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}까지 열려 있어요. 다시 올리면 늘어나요.` : '방문이 있는 동안은 계속 열려 있어요. 30일 동안 아무도 오지 않으면 지워져요.'}</p> : <OpenState url={url} at={p.deploy.at} />}
+          {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">학교망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           <div class="btn-row">
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
