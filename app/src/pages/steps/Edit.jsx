@@ -22,12 +22,12 @@ const NETWORK = [{ value: 'good', label: '잘 됨' }, { value: 'slow', label: '�
 
 
 export function StepEdit({ p, update, go }) {
-  // 에이전트(skill `app` 명령)에서 만든 연수를 처음 열면: 내용은 에이전트가 짰으니 디자인부터 보여 주고 다음 할 일을 알림
+  // AI 에이전트(skill `app` 명령)에서 만든 연수를 처음 열면: 내용은 에이전트가 짰으니 디자인부터 보여 주고 다음 할 일을 알림
   const fromSkill = p.origin === 'skill' && !p.originSeen && !p.visited?.[3];
   const [tab, setTab] = useState(fromSkill ? 'design' : 'content');
   const [focusId, setFocusId] = useState(null);
   const onPick = (id) => { setTab('content'); setFocusId(id + ':' + Date.now()); };
-  // 다른 화면에서 '이 섹션을 열어 달라'고 남긴 표시(예: 공개 화면의 [자료 올리기])
+  // 다른 화면에서 '이 섹션을 열어 달라'고 남긴 표시(예: 배포 화면의 [자료 올리기])
   useEffect(() => { try { const id = sessionStorage.getItem('lecpage:focus'); if (id) { sessionStorage.removeItem('lecpage:focus'); onPick(id); } } catch { } }, []);
   const [ai, setAi] = useState(false); // AI로 다듬기 창. 객체면 그 길로 열기({ how, full, bot })
   const [connectAi, setConnectAi] = useState(false); // 한도에 걸렸을 때 다른 AI로 이어서
@@ -43,11 +43,11 @@ export function StepEdit({ p, update, go }) {
   const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
-  // AI 회사 API가 이 망에서 막혔으면(만들기 전에 확인) 오류 띠 대신 바로 쓰던 챗봇 창 길을 엶
+  // AI 회사 API가 이 망에서 막혔으면(만들기 전에 확인) 오류 띠 대신 바로 쓰던 AI 창 길을 엶
   useEffect(() => {
     if (job?.status !== 'error' || job.error?.kind !== 'blocked') return;
     const prov = job.error.provider; clearJob(p.id); setWay('chat');
-    toast(`이 망에서 ${PROVIDERS[prov]?.short || 'AI'} API에 닿지 않아 쓰던 챗봇 창으로 바꿨어요.`);
+    toast(`이 망에서 ${PROVIDERS[prov]?.short || 'AI'} API에 닿지 않아 쓰던 AI 창으로 바꿨어요.`);
     setAi({ how: 'paste', full: true, bot: chatbotFor(prov) });
   }, [job?.status, job?.error?.kind]);
   if (!p.blueprint) return <><StepHead title="살펴보고 고치기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
@@ -62,7 +62,7 @@ export function StepEdit({ p, update, go }) {
   /** 교재대로 되돌린 곳 하나를 AI 답으로(그곳만, 강사가 고친 다른 곳은 그대로) */
   function undoGuard(r) { update((cur) => ({ blueprint: E.undoRestore(cur.blueprint, r) })); markUndone(p.id, r.id); toast(`AI 답으로 되돌렸어요: ${r.where}`); }
   const liveCount = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f)).length;
-  // 공개한 뒤 고쳤으면 머리 버튼이 [바뀐 내용 다시 올리기](공개하기 화면에서 지난번 곳에 바로 올림)
+  // 배포한 뒤 고쳤으면 머리 버튼이 [다시 배포하기](배포하기 화면에서 지난번 곳에 바로 배포함)
   const published = !!p.deploy?.lastUrl;
   const changed = published && (p.editedAt || 0) > (p.deploy.at || 0);
   const tabs = [
@@ -77,15 +77,15 @@ export function StepEdit({ p, update, go }) {
       <StepHead title="살펴보고 고치기" desc="미리보기를 보며 고치세요. 고친 내용은 자동으로 저장돼요.">
         <div class="btn-row head-tools">
           <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label}` : '되돌릴 것이 없어요'}>되돌리기</button>
-          {!published ? <button class="btn btn-primary" onClick={() => go(3)}>공개하기 →</button>
-            : changed ? <button class="btn btn-primary" onClick={() => { try { sessionStorage.setItem('lecpage:republish', p.id); } catch { } go(3); }}>바뀐 내용 다시 올리기</button>
+          {!published ? <button class="btn btn-primary" onClick={() => go(3)}>배포하기 →</button>
+            : changed ? <button class="btn btn-primary" onClick={() => { try { sessionStorage.setItem('lecpage:republish', p.id); } catch { } go(3); }}>다시 배포하기</button>
               : <button class="btn" onClick={() => go(3)}>주소·QR 보기 →</button>}
         </div>
       </StepHead>
       {job && <AiJobBar job={job} found={p.material ? E.foundSummary(p.material.detected || {}, 3).join(' · ') : ''} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
         onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onUndoGuard={undoGuard} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
       {fromSkill && <div class="ai-job ok" role="status">
-        <span class="ai-job-t"><b>에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·공개를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
+        <span class="ai-job-t"><b>AI 에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·배포를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
         <button class="btn btn-sm" onClick={() => setTab('live')}>참여 기능 보기</button>
         <button class="icon-btn" onClick={() => update({ originSeen: true })} aria-label="안내 닫기">✕</button>
       </div>}
@@ -130,7 +130,7 @@ function AiJobBar({ job, found, onStop, onClose, onUndo, canUndo, onRetry, onPas
   if (job.status === 'done') {
     return (
       <div class="ai-job ok" role="status">
-        <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b><small>미리보기를 보며 고치고, 마음에 들면 공개하세요.</small></span>
+        <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b><small>미리보기를 보며 고치고, 마음에 들면 배포하세요.</small></span>
         {canUndo && <button class="btn btn-sm btn-quiet" onClick={() => { onUndo(); onClose(); }}>기본 초안으로 되돌리기</button>}
         <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
         <GuardNote restored={job.restored} undone={job.undone} onUndo={onUndoGuard} />
@@ -164,7 +164,7 @@ function FeaturesPanel({ p, update, setInfo }) {
   const minor = !!p.blueprint.audience?.minor;
   return (
     <div class="stack">
-      <p class="small muted">켠 기능은 참가자 휴대폰과 강사 화면을 이어 줘요. 미리보기에서 바로 시험해 볼 수 있고, 실제 연결은 공개하기 단계에서 해요.</p>
+      <p class="small muted">켠 기능은 참가자 휴대폰과 강사 화면을 이어 줘요. 미리보기에서 바로 시험해 볼 수 있고, 실제 연결은 배포하기 단계에서 해요.</p>
       <ul class="feat-list">
         {FEATURES.map((x) => (
           <li><label class="feat"><input type="checkbox" checked={f.includes(x.value)} onChange={() => toggle(x.value)} /><span><b>{x.label}</b><small>{x.desc}</small></span></label></li>

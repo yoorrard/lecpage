@@ -79,7 +79,7 @@ export function kitHtml({ title, siteUrl, shareUrl = '', altUrl = '', second = '
 <div class="qr">${qrFig(main, '사이트')}${alt ? qrFig(alt, '두 번째 주소') : ''}${siteUrl ? qrFig(checkUrlOf(siteUrl), '접속 확인') : ''}</div>
 <p>사이트: <span class="url">${esc(bare(siteUrl))}</span></p>
 <h2>1. 주소가 안 열리면</h2>
-<ol>${alt ? `<li>두 번째 주소로 열어 보세요: <span class="url">${esc(bare(alt))}</span> (학교망이 첫 주소만 막은 경우)</li>` : '<li>두 번째 주소가 없어요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 올려 두면 여기에 적을 수 있어요.</li>'}
+<ol>${alt ? `<li>두 번째 주소로 열어 보세요: <span class="url">${esc(bare(alt))}</span> (학교망이 첫 주소만 막은 경우)</li>` : '<li>두 번째 주소가 없어요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 배포해 두면 여기에 적을 수 있어요.</li>'}
 <li>짧은 주소가 안 열리면 위 QR(원래 주소)로 안내하세요.</li>
 <li>참가자에게 Wi-Fi를 끄고 휴대폰 데이터(LTE·5G)로 QR을 찍게 안내하세요. 학교 Wi-Fi 필터와 상관없이 열려요.</li>
 <li>강사 PC는 휴대폰 핫스팟에 이어 발표 화면을 여세요.</li>
@@ -90,7 +90,7 @@ export function kitHtml({ title, siteUrl, shareUrl = '', altUrl = '', second = '
 ${live ? `<h2>3. 참여 기능(질문·투표)만 안 되면</h2>
 <ul><li>교재·실습은 그대로예요. 참가자 화면에 '서버에 닿지 않아요' 한 줄이 떠요.</li>
 <li>질문은 손을 들어 받고, 투표는 손 들기로 바꿔요. 설문은 나중에 주소를 다시 보내도 돼요.</li>
-<li>강사 화면 맨 위에 묻기 방식과 할 일이 나와요. 연결이 돌아오면 쌓인 글이 들어와요.</li></ul>` : ''}
+<li>강사 화면 맨 위에 지금 연결 상태와 할 일이 나와요. 연결이 돌아오면 쌓인 글이 들어와요.</li></ul>` : ''}
 <p class="tip">가장 확실한 대비: 연수 전날 연수 장소의 Wi-Fi로 접속 확인을 한 번 열어 보세요.</p>`;
   return page(`혹시 안 열리면 · ${title}`, body);
 }

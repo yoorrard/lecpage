@@ -62,7 +62,7 @@
 ## 4. 막혔을 때 대안 (우선순위)
 1. **내 도메인 연결** → 필터 예외를 한 주소만 받으면 됨.
 2. **실시간을 SSE·폴링이 되는 쪽으로**: cf-relay 또는 node-server(자동 전환). Sheets는 일반 HTTPS만 써서 잘 통과하는 편.
-3. **글꼴·라이브러리 자체 포함**(CDN 차단 시) → 앱은 바로 공개(Pages)·Vercel·Netlify·Cloudflare·ZIP에 올릴 때 글꼴을 사이트 안에 담는 것이 기본, CLI는 `--bundle-fonts`. Supabase 라이브러리(`cdn.jsdelivr.net`)가 막히면 실시간 없이 묻기로 이어 감.
+3. **글꼴·라이브러리 자체 포함**(CDN 차단 시) → 앱은 바로 배포(Pages)·Vercel·Netlify·Cloudflare·ZIP에 올릴 때 글꼴을 사이트 안에 담는 것이 기본, CLI는 `--bundle-fonts`. Supabase 라이브러리(`cdn.jsdelivr.net`)가 막히면 실시간 없이 묻기로 이어 감.
 4. **교실 LAN**(`local-lan-classroom.md`): 학교망을 아예 쓰지 않음.
 5. **휴대폰 데이터로 접속** 안내(참가자 동의 하에, 데이터 소모 안내).
 6. **ZIP 배포**(`zip-usb-offline.md`): 실시간 없이 자료만.

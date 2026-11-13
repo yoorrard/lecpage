@@ -3,7 +3,7 @@ import { useInView } from './motion.js';
 import { shot, shotSize } from './facts.js';
 
 /**
- * 공개하면 주소와 QR: 진짜로 찍히는 QR(이 앱에 들어 있는 예시 사이트로 감)과, 휴대폰 안에서 천천히 내려가는 참가자 화면(실제 예시 사이트를 찍은 그림).
+ * 배포하면 주소와 QR: 진짜로 찍히는 QR(이 앱에 들어 있는 예시 사이트로 감)과, 휴대폰 안에서 천천히 내려가는 참가자 화면(실제 예시 사이트를 찍은 그림).
  * QR 그리는 코드는 이 구간에 가까워질 때 받아요(첫 화면을 가볍게). 휴대폰 화면은 이 구간이 보일 때만 움직여요.
  */
 export function Reach() {
@@ -21,13 +21,13 @@ export function Reach() {
     <section class="ld-reach" ref={box} aria-labelledby="ld-reach-h">
       <div class="ld-reach-t">
         <header class="ld-head">
-          <h2 id="ld-reach-h">공개하면 바로<br />주소와 QR이 나와요</h2>
+          <h2 id="ld-reach-h">배포하면 바로<br />주소와 QR이 나와요</h2>
         </header>
-        <p class="ld-sub">올릴 곳은 lecpage가 골라 줘요. [공개하기]를 누르면 카톡 안내 문구도 함께 나오고, 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
+        <p class="ld-sub">배포할 곳은 lecpage가 골라 줘요. [배포하기]를 누르면 카톡 안내 문구도 함께 나오고, 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
         <dl class="ld-facts">
-          <div><dt>올릴 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로 올리고, 기관 서버·USB에는 ZIP으로 옮겨요.</dd></div>
+          <div><dt>배포할 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로 배포하고, 기관 서버·USB에는 ZIP으로 옮겨요.</dd></div>
           <div><dt>공개 범위</dt><dd>주소를 받은 사람만(기본) · 암호를 아는 사람만 · 누구나</dd></div>
-          <div><dt>다시 올리기</dt><dd>고친 뒤 [바뀐 내용 다시 올리기]를 한 번 눌러요. 주소는 그대로예요.</dd></div>
+          <div><dt>다시 배포</dt><dd>고친 뒤 [다시 배포하기]를 한 번 눌러요. 주소는 그대로예요.</dd></div>
         </dl>
       </div>
       <div class="ld-reach-vis">

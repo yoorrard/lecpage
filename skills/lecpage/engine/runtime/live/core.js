@@ -457,7 +457,7 @@
     config.code = normCode(config.code || 'DEMO');
     if (config.provider === 'none') throw LiveError('no_provider', '참여 기능이 꺼져 있어요. 강사에게 알려 주세요.');
     var factory = registry[config.provider];
-    if (!factory) throw LiveError('unknown_provider', '실시간 어댑터 "' + config.provider + '"를 불러오지 못했어요. 새로 고침해 주세요.');
+    if (!factory) throw LiveError('unknown_provider', '참여 기능(' + config.provider + ')을 불러오지 못했어요. 새로 고침해 주세요.');
     this.config = config;
     this.provider = config.provider;
     this.code = config.code;
@@ -492,7 +492,7 @@
       error: LiveError,
     };
     this._adapter = factory(assign({}, config, { adminKey: undefined }), ctx);
-    if (!this._adapter) throw LiveError('bad_adapter', '실시간 어댑터를 만들지 못했어요. 새로 고침해 주세요.');
+    if (!this._adapter) throw LiveError('bad_adapter', '참여 기능을 준비하지 못했어요. 새로 고침해 주세요.');
     if (typeof this._adapter.subscribe === 'function') this._unsubAdapter = this._adapter.subscribe(function (evt) { return self._onEvent(evt); });
     this._onOnline = function () {
       if (self._closed) return;

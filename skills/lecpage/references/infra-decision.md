@@ -3,8 +3,8 @@
 > skill이 "배포·실시간" 단계에서 읽는 문서입니다. 순서: **1. 입력 모으기 → 2. `decide-infra` 실행(§4 규칙과 같은 결과) → 3. 경고 확인(§4 guards) → 4. 강사에게 설명(§9) → 5. 해당 `deploy/*.md`대로 올리기**.
 > 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
 > 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
-> 올릴 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
-> skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 공개'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **앱 전용이고 skill은 쓰지 않습니다**.
+> 배포할 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
+> skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 배포'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **앱 전용이고 skill은 쓰지 않습니다**.
 
 ---
 
@@ -24,12 +24,12 @@
 | `blocked` | 문자열 목록 | 학교에서 막힌 사이트를 아시나요? (check.html 결과로 채움) | `audience.blocked` |
 | `infra` | `github google cloudflare aws azure gcp docker-host school-server nas vps raspberry-pi laptop` | 이미 쓰는 계정·서버가 있나요?(GitHub, 구글, AWS, 학교 서버, NAS…) | `[]` |
 | `customDomain` | bool | 내 도메인(예: lec.school.kr)이 있나요? | false |
-| `previous` | 올릴 곳 id | 지난번에 올린 곳이 있나요? (같은 주소를 이어 씀) | 없음 |
-| `connected` | 올릴 곳 id 목록 | 이미 쓰는 곳이 있나요? skill은 묻기 전에 셸에서 확인: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN` | `[]` |
+| `previous` | 배포할 곳 id | 지난번에 올린 곳이 있나요? (같은 주소를 이어 씀) | 없음 |
+| `connected` | 배포할 곳 id 목록 | 이미 쓰는 곳이 있나요? skill은 묻기 전에 셸에서 확인: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN` | `[]` |
 | `keep` | `long` | 연수 뒤에도 오래 둘 사이트인가요? | 없음 |
 | `access` | `link` · `public` · `password` | 사이트를 누가 볼 수 있나요? 주소·QR을 받은 사람만 / 누구나(검색 허용) / 암호를 아는 사람만 | `link` |
 | `siteMB` · `files` · `maxFileMB` | 수 | (빌드 결과) 사이트 크기, 파일 수, 가장 큰 파일. 앞의 둘은 빌드 요약 줄에, 큰 파일은 `find dist -type f -size +5M`로 | 빌드 결과 |
-| `instant` | bool | (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱인지. skill은 쓰지 않음 | false |
+| `instant` | bool | (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱인지. skill은 쓰지 않음 | false |
 
 파생 값
 - `realtime` = `features`에 `qa help progress poll reactions signal` 중 하나라도 있음.
@@ -45,11 +45,11 @@
 
 ## 2. 빠른 결론 표 (사람이 먼저 보는 표)
 
-올릴 곳과 실시간은 따로 고릅니다. 올릴 곳이 Vercel·GitHub Pages여도 실시간은 Sheets·Supabase·Cloudflare 중계 그대로입니다(Vercel 안에 두지 않음).
+배포할 곳과 실시간은 따로 고릅니다. 배포할 곳이 Vercel·GitHub Pages여도 실시간은 Sheets·Supabase·Cloudflare 중계 그대로입니다(Vercel 안에 두지 않음).
 
-### 2.1 올릴 곳 (모두 0원, 앞에 있을수록 추천)
+### 2.1 배포할 곳 (모두 0원, 앞에 있을수록 추천)
 
-| 상황 | 올릴 곳 | 가이드 |
+| 상황 | 배포할 곳 | 가이드 |
 |---|---|---|
 | **앱(클릭만)** | **Vercel**(토큰으로 앱에서 바로, 다시 올려도 같은 주소) · GitHub Pages · Cloudflare(ZIP 끌어 놓기) · Netlify(이미 쓰는 분) | `deploy/vercel.md` |
 | **skill(명령 가능)** | **Cloudflare Workers 정적 자산**(`wrangler deploy --assets`, 계정이 없으면 `--temporary`) · Vercel(`VERCEL_TOKEN`) · GitHub Pages(`gh`) · Netlify | `deploy/cloudflare.md` |
@@ -60,7 +60,7 @@
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
-| (앱 전용, skill은 쓰지 않음) '바로 공개'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 30일 동안 방문이 없으면 지워짐) | 앱 화면 |
+| (앱 전용, skill은 쓰지 않음) '바로 배포'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 30일 동안 방문이 없으면 지워짐) | 앱 화면 |
 
 ### 2.2 실시간
 
@@ -98,7 +98,7 @@
 
 ## 3. 결정 규칙 (사람이 읽는 순서)
 
-실시간(live)을 먼저 정하고, 그 결과에 맞춰 올릴 곳(static)을 고릅니다. 실시간은 **위에서부터 처음 맞는 규칙 하나**, 올릴 곳은 §3.2의 순서(기본 순서 → 조정)로 정합니다. 그다음 §4의 경고(guards)를 모두 검사합니다.
+실시간(live)을 먼저 정하고, 그 결과에 맞춰 배포할 곳(static)을 고릅니다. 실시간은 **위에서부터 처음 맞는 규칙 하나**, 배포할 곳은 §3.2의 순서(기본 순서 → 조정)로 정합니다. 그다음 §4의 경고(guards)를 모두 검사합니다.
 ★ 표시는 엔진 `decideInfra()`·`decideHost()`(`decide-infra` 명령)가 그대로 구현한 규칙입니다. ★ 없는 규칙은 엔진 입력에 없는 값(실명·국내 보관·WS 차단·Azure)으로만 걸리므로, 그 값이 없으면 결과가 엔진과 같습니다.
 
 ### 3.1 실시간(live)
@@ -116,7 +116,7 @@
 
 실시간 백엔드도 skill이 직접 만듭니다. 강사는 로그인하거나 토큰을 환경 변수로 넣어 주기만 합니다: Cloudflare 중계는 `publish work --live`(사이트와 함께, 손으로 하려면 `backends/cloudflare/README.md` §2), Supabase는 `backends/supabase/README.md`의 "명령으로 한 번에". Sheets만 강사가 구글 계정에서 직접 붙여 넣습니다.
 
-### 3.2 올릴 곳(static)
+### 3.2 배포할 곳(static)
 엔진 `decideHost()`와 같은 순서입니다. **먼저 맞으면 끝**(S01·S02) → **기본 순서**(S09·S08) → **조정**(맞는 것을 위에서부터 모두 적용). 맨 앞이 추천이고 나머지는 대안입니다. 끝에는 언제나 `firebase`, `zip`이 붙습니다.
 
 먼저 맞으면 끝
@@ -134,7 +134,7 @@
 9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로. `onpod`은 사이트 > 100MB·파일 > 50MB·5,000개 넘음이면 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
-12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 방문이 있는 동안 열려 있음). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
+12. ★ **S15** (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 방문이 있는 동안 열려 있음). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
 13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로(강사 할 일 0번). Netlify·Onpod은 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
@@ -151,7 +151,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | 순서 | skill이 하는 일 |
 |---|---|
 | 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`·`ONPOD_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
-| 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
+| 2 | `decide-infra -i work/info.json` → 배포할 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
 | 4 | Onpod이면 `publish work --host onpod`(사이트만, 참여 기능 중계는 Cloudflare·Supabase·시트). Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
 | 5 | `publish`가 `<주소>/`·`check.html`·중계 `/api/health`를 확인합니다. 손으로 올렸으면 `curl -sI <주소>/ \| head -1`이 `200`인지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
@@ -182,7 +182,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | live `none` · `sheets` · `supabase` · `cf-relay` · `node-server`(own/school) · `node-server`(lan) | backend `none` · `sheets` · `supabase` · `cloudflare` · `server` · `lan` |
 | static `aws-s3-cloudfront` · `cloudflare`/`cloudflare-pages-drop` · `server`/`nas` | hosts `s3` · `cloudflare` · `server` |
 
-`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 올릴 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다. Cloudflare 한 줄은 `deploy/cloudflare.md`에 적힌 대로 빈 임시 폴더에서 돌립니다(위쪽 폴더의 wrangler 설정을 읽지 않게).
+`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 배포할 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다. Cloudflare 한 줄은 `deploy/cloudflare.md`에 적힌 대로 빈 임시 폴더에서 돌립니다(위쪽 폴더의 wrangler 설정을 읽지 않게).
 
 ```json
 {
@@ -233,7 +233,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
       {"id":"S04","engine":true,"when":{"infra":{"any":["aws"]},"skill":["basic","dev"]},"front":["aws-s3-cloudfront"],"alt":["aws-amplify"]},
       {"id":"S05","when":{"infra":{"any":["azure"]},"skill":["basic","dev"]},"front":["azure-swa"]},
       {"id":"S15","engine":true,"when":{"instant":true,"siteMB":{"lte":40},"maxFileMB":{"lte":20},"files":{"lte":600}},"front":["lecpage"],"note":"앱 전용. keep=long이거나 customDomain이면 둘째 자리"},
-      {"id":"S14","engine":true,"when":{"$or":[{"previous":"<올릴 곳>"},{"connected":{"any":["<올릴 곳>"]}}]},"front":["<그곳>"]}
+      {"id":"S14","engine":true,"when":{"$or":[{"previous":"<배포할 곳>"},{"connected":{"any":["<배포할 곳>"]}}]},"front":["<그곳>"]}
     ],
     "tail": ["firebase","zip"]
   },
@@ -277,7 +277,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
     "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작 → Make public","domain":"*.netlify.app"},
-    "lecpage":      {"target":"(앱 전용)","guide":"앱의 공개하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 쓰지 않음). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
+    "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 쓰지 않음). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
     "aws-amplify":  {"target":"s3","guide":"deploy/aws-s3-cloudfront.md#amplify-끌어-놓기","headers":"amplify-console","cost":"GB당 $0.15 전송","domain":"*.amplifyapp.com"},
@@ -345,9 +345,9 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | Firebase(RTDB/Firestore) | 강사 구글 계정 | RTDB 동시 100, Firestore 읽기 5만/일; **Storage는 Blaze 필수** | (어댑터 없음) | lecpage 어댑터 미지원 → supabase 권장 |
 | PocketBase | 자체 서버 | 오픈소스(SQLite, 실시간 SSE) | 자체 서버 대안 | 1.0 전이라 호환성 보장 안 됨, 어댑터 없음 → node-server 권장 |
 | Appwrite Cloud / Convex | 각 서비스 계정 | Appwrite: 한도 넘으면 프로젝트 동결 / Convex: 함수 호출 100만/월 | (어댑터 없음) | 참고만 |
-| Vercel 함수 | — | WebSocket이 되지만 최대 실행 시간(Hobby 300초)에 끊기고 상태를 둘 곳이 없음 | (어댑터 없음) | 실시간 백엔드로 쓰지 않음. 올릴 곳이 Vercel이어도 실시간은 위에서 고름 |
+| Vercel 함수 | — | WebSocket이 되지만 최대 실행 시간(Hobby 300초)에 끊기고 상태를 둘 곳이 없음 | (어댑터 없음) | 실시간 백엔드로 쓰지 않음. 배포할 곳이 Vercel이어도 실시간은 위에서 고름 |
 
-**아무 연수나 받는 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다. '바로 공개'로 올린 사이트에 딸린 방만 운영자 서버가 맡습니다(앱 전용, skill은 쓰지 않음).
+**아무 연수나 받는 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다. '바로 배포'로 올린 사이트에 딸린 방만 운영자 서버가 맡습니다(앱 전용, skill은 쓰지 않음).
 
 ### 5.3 조합할 때 지켜야 할 것
 - **주소(origin)** : 엔진이 페이지마다 넣는 CSP `<meta>`는 `connect-src`에 `https:`·`wss:`를 허용하므로 실시간 주소를 따로 적을 일이 없습니다. §10의 CSP 헤더 템플릿을 따로 쓸 때만 `{{LIVE_ORIGIN}}`을 채웁니다.
@@ -381,7 +381,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | 접속은 되는데 실시간이 안 됨 | 학교망 WebSocket 차단, TLS 검사 장비 | check.html로 사전 확인 | http 어댑터는 SSE→새로 읽기, Supabase 어댑터는 7초 새로 읽기로 자동 전환 |
 | "프로젝트가 일시 정지됨" | Supabase 무료 7일 비활성 | 연수 2~3일 전 대시보드 열기 + check.html | 대시보드 → Resume(몇 분 걸림) → 그동안 local 모드로 진행 |
 | 오후에 갑자기 실시간 중단(Cloudflare) | 무료 일일 한도(오류 1027), 새로 읽기 과다 | 간격 10초 이상, WS 우선 | 09:00 KST에 초기화. 급하면 Workers Paid($5/월) |
-| 사이트가 아예 안 열림 | 학교 필터나 통신사 DNS가 `*.vercel.app`·`*.workers.dev`·`*.pages.dev`·`*.github.io` 등 차단 | **연수 전날 참가자가 쓸 망에서 주소 열어 보기**, 내 도메인 연결, IT에 허용 요청 | 휴대폰 데이터로 접속 안내 / 다른 곳에 다시 올리기 / ZIP 배포 |
+| 사이트가 아예 안 열림 | 학교 필터나 통신사 DNS가 `*.vercel.app`·`*.workers.dev`·`*.pages.dev`·`*.github.io` 등 차단 | **연수 전날 참가자가 쓸 망에서 주소 열어 보기**, 내 도메인 연결, IT에 허용 요청 | 휴대폰 데이터로 접속 안내 / 다른 곳에 다시 배포 / ZIP 배포 |
 | 참가자에게 Vercel 로그인 창 | 배포별 주소를 나눠 줌, 또는 팀 기본값이 모든 배포 보호 | 운영 주소(`<프로젝트>.vercel.app`)만 안내, 로그아웃한 창에서 확인 | Settings → Deployment Protection에서 Vercel Authentication 끄기 |
 | 임시로 올린 Cloudflare 사이트가 사라짐 | `--temporary`·Drop을 60분 안에 claim하지 않음 | 올리자마자 claim 주소 건네기 | 가입 뒤 다시 올리고 주소 다시 안내 |
 | GitHub Pages에 올렸는데 게시되지 않음 | 이메일 인증을 안 마친 계정 | 올리기 전에 인증 확인 | 인증 뒤 다시 push |

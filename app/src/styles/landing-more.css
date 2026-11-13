@@ -330,7 +330,7 @@
 ::view-transition-new(ld-shot){animation:ld-unfold .75s var(--ease) both;mix-blend-mode:normal}
 @keyframes ld-unfold{from{clip-path:circle(0% at 100% 0)}to{clip-path:circle(150% at 100% 0)}}
 
-/* ── 6. 공개하면 QR ── */
+/* ── 6. 배포하면 QR ── */
 .ld-reach{display:grid;gap:40px;align-items:center}
 .ld-reach-t{display:grid;gap:18px}
 .ld-facts{display:grid;gap:0;margin:6px 0 0;border-top:1px solid var(--hair)}

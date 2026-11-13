@@ -1,6 +1,6 @@
 # Vercel에 올리기
 
-> 토큰 하나로 `https://<프로젝트>.vercel.app`에 올립니다. 앱(브라우저만)의 기본 올릴 곳입니다.
+> 토큰 하나로 `https://<프로젝트>.vercel.app`에 올립니다. 앱(브라우저만)의 기본 배포할 곳입니다.
 > 2026-11-11 확인. 근거와 API 순서는 `docs/research/hosting-2026-11.md` §3.1·§10. 실제 배포로 끝까지 시험하지는 않았습니다 ⚠️.
 
 ## 언제 고르나요
@@ -44,10 +44,10 @@ VERCEL_TOKEN=… npx vercel@latest deploy ./dist --prod --yes --project lec-2026
 - 계정 없이 미리 보기만: `npx vercel@latest deploy ./dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
 
 ## 명령어 없이
-- **앱**: 공개하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
+- **앱**: 배포하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
 - **Vercel Drop**: https://vercel.com/drop 에 폴더나 ZIP을 놓고, 로그인해 팀과 프로젝트 이름을 고른 다음 **Deploy**. 헤더를 붙이려면 폴더 맨 위에 `vercel.json`을 넣어 둡니다. 계정 없이 올리면 임시 주소입니다(파일당 100MB·합계 1GB, **Claim Project**를 눌러야 남음).
 
-## 다시 올리기
+## 다시 배포
 - skill·앱: 같은 프로젝트 이름으로 다시 올립니다. 운영 주소가 새 배포로 옮겨 가고 주소는 그대로입니다.
 - Drop으로 만든 프로젝트(Git 연결 없음): 대시보드의 그 프로젝트 위에 폴더를 놓으면 새 운영 배포가 됩니다.
 

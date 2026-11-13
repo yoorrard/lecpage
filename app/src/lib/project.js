@@ -20,7 +20,7 @@ const pending = new Map();
 export function setPendingFiles(id, files) { pending.set(id, Array.from(files || [])); }
 export function takePendingFiles(id) { const f = pending.get(id) || []; pending.delete(id); return f; }
 
-/** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·공개하기) */
+/** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·배포하기) */
 export const stageOf = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : 3);
 
 export async function newProject(kind = 'blank', exampleId = 'data-lab') {
@@ -56,7 +56,7 @@ export async function duplicateProject(p0) {
 
 export async function exportProjectFile(p) {
   const assets = await blobs.all(p.id);
-  // 사이트 암호는 담지 않음(파일을 남에게 건네면 암호가 새어 나감). 연 뒤 공개 단계에서 다시 정하라고 알려 줌
+  // 사이트 암호는 담지 않음(파일을 남에게 건네면 암호가 새어 나감). 연 뒤 배포 단계에서 다시 정하라고 알려 줌
   const files = { 'project.json': JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project: { ...p, deploy: undefined, sitePassword: undefined } }, null, 2) };
   for (const [k, v] of Object.entries(assets)) files[k] = v;
   return zipFiles(files);
@@ -64,6 +64,17 @@ export async function exportProjectFile(p) {
 
 /** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
 const bad = (m) => Object.assign(new Error(m), { friendly: true });
+
+/** 저장한 연수 파일(.lecpage)인지. 교재 자리(첫 화면·교재 넣기)에 놓아도 교재가 아니라 연수로 엶 */
+export const isSavedFile = (f) => /\.lecpage$/i.test(f?.name || '');
+
+/** 저장한 연수 파일을 새 연수로 넣고 그 연수로 감. 알릴 한 줄을 돌려줌(실패하면 오류. err.friendly면 그 글을 그대로 보여 줌) */
+export async function openSavedFile(file) {
+  const p = await importProjectFile(file);
+  location.hash = `#/p/${p.id}/${p.stage || 1}`;
+  return p.origin === 'skill' ? 'AI 에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능과 배포할 곳은 다시 연결해 주세요.';
+}
+export const OPEN_FAIL = '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.';
 
 export async function importProjectFile(file) {
   const buf = await file.arrayBuffer();

@@ -270,7 +270,7 @@ function BasketNote({ p, update, remember }) {
   const apply = () => { remember('담은 낱말 적용'); update((cur) => ({ blueprint: applyWords(cur.blueprint, ids), ...(basket.length ? {} : { designWords: [] }) })); if (basket.length) setBasket([]); toast('담은 낱말을 적용했어요. 마음에 안 들면 [되돌리기]를 누르세요.'); };
   return (
     <div class="word-note" role="region" aria-label="담아 둔 낱말">
-      <p><b>{basket.length ? '디자인 둘러보기에서 담은 낱말' : '만들 때 고른 낱말 가운데 아직 다른 것'}</b><br />{changesLine(ids)}</p>
+      <p><b>{basket.length ? '디자인 둘러보기에서 담은 낱말' : '만들 때 고른 낱말 중 아직 반영되지 않은 것'}</b><br />{changesLine(ids)}</p>
       <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={apply}>모두 적용하기</button><button type="button" class="btn btn-sm btn-quiet" onClick={clear}>{basket.length ? '비우기' : '그대로 두기'}</button></div>
     </div>
   );

@@ -43,7 +43,7 @@ export function Settings() {
       </section>
       <section>
         <h2 class="h-sub">연결</h2>
-        <p class="small muted">한 번 연결해 두면 버튼 하나로 만들고 공개해요.</p>
+        <p class="small muted">한 번 연결해 두면 버튼 하나로 만들고 배포해요.</p>
         <h3 class="h-label">AI</h3>
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
@@ -53,15 +53,15 @@ export function Settings() {
           <li><span>{anyAi ? <span class="small muted">다른 AI</span> : <><b>AI</b> <span class="small muted">연결 안 됨</span></>}</span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '더 연결하기' : '연결하기'}</button></li>
         </ul>
-        <p class="small muted">쓰던 챗봇 창(ChatGPT·Claude·Gemini)으로 만들 때는 연결하지 않아도 돼요.</p>
+        <p class="small muted">쓰던 AI 창(ChatGPT·Claude·Gemini)으로 만들 때는 연결하지 않아도 돼요.</p>
         {anyPaid && <div class="field">
           <span>무료 한도를 다 쓰면</span>
           <Seg label="무료 한도를 다 쓰면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추고 물어보기' }, { value: 'pay', label: '유료로 이어가기' }]} />
           <small>{onLimit === 'pay' ? '연결해 둔 유료 키로 이어서 만들어요. 쓴 만큼 크레딧에서 나가요.' : '유료 키를 쓰기 전에 물어봐요.'}</small>
         </div>}
-        <h3 class="h-label">공개할 곳</h3>
+        <h3 class="h-label">배포할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
-        <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 올려요. <a href="#/help/deploy">공개하는 법</a></p>
+        <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 옮겨요. <a href="#/help/deploy">배포하는 법</a></p>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>
         <div class="stack"><h2 class="h-sub">AI 연결</h2>{ai && <AiConnect onConnected={async () => { setAi(false); await reloadKeys(); }} />}</div>
@@ -74,7 +74,7 @@ export function Settings() {
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
           <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 지우기' : '모든 데이터 지우기'}</button>
         </div>
-        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
     </div>

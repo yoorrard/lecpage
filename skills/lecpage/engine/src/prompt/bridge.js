@@ -291,7 +291,7 @@ function prune(v, noFalse = false) {
 }
 
 // ── AI 답 읽기 ──
-// 쓰던 챗봇 창에서 복사한 답은 모양이 제각각입니다: 코드 블록, 앞뒤 설명, 대화 전체(프롬프트 + 답), 중간에 끊긴 답, JSON 대신 질문.
+// 쓰던 AI 창에서 복사한 답은 모양이 제각각입니다: 코드 블록, 앞뒤 설명, 대화 전체(프롬프트 + 답), 중간에 끊긴 답, JSON 대신 질문.
 // 프롬프트 끝 줄 뒤만 답으로 보고, 짝이 맞는 { … } 덩어리를 모두 찾아 설계도처럼 생긴 것을 고릅니다.
 const PROMPT_ENDS = [PROMPT_END, '이제 JSON만 답한다.', '이제 패치 JSON만 출력한다.'];
 // 붙여 넣은 글이 답이 아니라 우리 지시문인지 알아보는 첫 줄(예전 지시문의 첫 줄도 함께)
@@ -359,7 +359,7 @@ export function readAnswer(text) {
 /** 답이 중간에 끊겼는지 */
 export const isCutAnswer = (text) => readAnswer(text).kind === 'cut';
 
-/** 챗봇에 보낼 짧은 글: 끊긴 답 이어 쓰기, JSON 대신 질문·설명을 했을 때 다시 요청 */
+/** AI 창에 보낼 짧은 글: 끊긴 답 이어 쓰기, JSON 대신 질문·설명을 했을 때 다시 요청 */
 export const CONTINUE_ASK = '답이 중간에 끊겼어요. 끊긴 곳 바로 다음 글자부터 이어서 써 주세요. 이미 쓴 부분과 설명은 빼고요.';
 export const JSON_ONLY_ASK = '질문이나 설명 없이, 모르는 것은 빈칸으로 두고 위 규칙대로 JSON 하나만 바로 써 주세요.';
 

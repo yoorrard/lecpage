@@ -8,7 +8,7 @@ import { loadKey, saveKey } from '../lib/ai.js';
 /**
  * 한 번 연결하면 다음 연수부터 저절로: 내 서버(Cloudflare·학교 서버)는 연수 코드마다 따로 저장해 여러 연수를 한 서버가 맡으므로,
  * 연결한 주소를 이 기기에 기억해 두고 새 연수에 그대로 씀(구글 시트는 시트 하나가 연수 하나라 기억하지 않음).
- * 관리자 키는 앱이 만들어 복사해 주고(강사가 짓지 않게), 연결한 주소별로 이 기기에 기억해 연수 당일 공개 완료 화면에 보여 줌.
+ * 관리자 키는 앱이 만들어 복사해 주고(강사가 짓지 않게), 연결한 주소별로 이 기기에 기억해 연수 당일 배포 완료 화면에 보여 줌.
  */
 export const rememberedServer = () => loadKey('live-server').then((r) => (r.key && /^https:\/\//.test(r.key) ? r.key : ''), () => '');
 export const adminKeyFor = (url) => (url ? loadKey('live-admin:' + String(url).replace(/\/+$/, '')).then((r) => r.key || '', () => '') : Promise.resolve(''));
@@ -138,7 +138,7 @@ export function LiveSetup({ p, update }) {
       { t: 'setup 실행하기', body: <p>위쪽 함수 목록에서 <b>setup</b>을 고르고 <b>실행</b>을 눌러요. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동</b>을 눌러요. 권한을 모두 골라 <b>계속</b>(또는 <b>허용</b>)을 눌러요. 내가 붙여 넣은 코드라서 나오는 안내예요.</p> },
       { t: '관리자 키와 연수 코드 넣기',
         body: <>
-          <p>시트로 돌아와 새로 고쳐요. 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에 앱이 만든 키를 붙여 넣어요. <button class="btn btn-sm" onClick={() => copyKey('관리자 키를 복사했어요. 시트 칸에 붙여 넣으세요.')}>관리자 키 복사</button> <span class="small muted">이 기기에 기억해 두고 공개한 뒤 보여 드려요.</span></p>
+          <p>시트 탭으로 돌아와 새로 고침해요. 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에 앱이 만든 키를 붙여 넣어요. <button class="btn btn-sm" onClick={() => copyKey('관리자 키를 복사했어요. 시트 칸에 붙여 넣으세요.')}>관리자 키 복사</button> <span class="small muted">이 기기에 기억해 두었다가 배포 완료 화면에도 보여 줘요.</span></p>
           <p><b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</p>
           {settings.uploads && <p>보드에 사진·파일을 받으려면 <b>lecpage → 파일 올리기 켜기/끄기</b>를 한 번 눌러 켜요.</p>}
         </> },
