@@ -246,6 +246,8 @@
     try { FX.stop(root); } catch (e) { /* 무시 */ }
     root.innerHTML = typeof sc.html === 'function' ? sc.html() : sc.html;
     w.scrollTo(0, 0);
+    /* 방금 넣은 장면은 아직 그려진 적이 없음: 처음부터 보이는 숫자도 0부터 세게(counter는 html.fx-boot일 때만 셈, core가 start에서 걷어 냄) */
+    if (!RM) h.classList.add('fx-boot');
     FX.start(root);
     if (RM) return; // 동작 줄이기: 완성된 모습 그대로
     // 멈춘 무늬(그물 그라데이션·종이 결·망점): 가림막이 오가며 '있을 때·없을 때'를 견줘 보여 줌
