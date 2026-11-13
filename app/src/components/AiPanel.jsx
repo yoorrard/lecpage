@@ -167,7 +167,12 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   useEffect(() => { if (want) setBot(want); }, [want]);
   const fresh = useRef(waiting && !!wait.fresh); // 보낼 때 클립보드를 프롬프트로 덮었음 → 그 뒤 클립보드의 답은 이번 답
   const pasteRef = useRef(); const taRef = useRef();
-  const text = useMemo(() => (ready ? prompt() : ''), [ready, full, dep[0], dep[1], dep[2]]);
+  // 프롬프트는 무거워서(교재 요약+초안) 글자 칠 때마다 만들지 않음: 멈추면 0.25초 뒤 만들어 링크(Claude 채움 주소)에 쓰고, 누를 때는 늘 지금 값으로
+  const now = [ready, full, dep[0], dep[1], dep[2]];
+  const cache = useRef({ deps: null, v: '' });
+  const textNow = () => { const c = cache.current; if (!c.deps || c.deps.some((x, i) => x !== now[i])) cache.current = { deps: now, v: ready ? prompt() : '' }; return cache.current.v; };
+  const [text, setText] = useState('');
+  useEffect(() => { const t = setTimeout(() => setText(textNow()), 250); return () => clearTimeout(t); }, now);
   const bots = [...CHATBOTS].sort((a, b) => (b.id === bot) - (a.id === bot));
   useEffect(() => { if (partial) { setStep(1); setAnswer(''); } }, [partial]);
   useEffect(() => { if (err) setStep(1); }, [err]); // 받을 수 없는 답이면 그 안내가 보이는 걸음으로
@@ -204,16 +209,18 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
 
   const mark = (id, ok) => { fresh.current = ok; setSent(id); setBack(false); onWait?.({ bot: id, at: Date.now(), fresh: ok }); };
   /** 챗봇 열기(링크): 누르는 순간 프롬프트를 복사. 넓은 화면은 앱 옆에 창을 띄워 두 화면을 함께 보게, 그 밖에는 새 탭(휴대폰은 챗봇 앱) */
-  function send(e, b, prefilled) {
+  function send(e, b) {
     if (!ready || (guard && !guard())) { e.preventDefault(); return; }
-    const ok = copyNow(text);
+    const t = textNow(); const pre = b.prefill?.(t) || '';
+    if (pre) e.currentTarget.href = pre; // 마지막 글자까지 담은 채움 주소로
+    const ok = copyNow(t);
     setChatbot(b.id); setBot(b.id); mark(b.id, ok);
     if (sideBySide()) {
       const w = Math.round(Math.min(820, screen.availWidth / 2)); const left = (screen.availLeft || 0) + screen.availWidth - w;
       const win = window.open(e.currentTarget.href, 'lecpage-chatbot', `popup,width=${w},height=${screen.availHeight},left=${left},top=${screen.availTop || 0}`);
       if (win) { e.preventDefault(); win.focus?.(); }
     }
-    toast(prefilled ? 'Claude 입력 칸에 채웠어요. 비어 있으면 붙여 넣으세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
+    toast(pre ? 'Claude 입력 칸에 채웠어요. 비어 있으면 붙여 넣으세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
   }
   /** 챗봇 답을 클립보드에서 읽어 바로 적용(누를 때만 읽음) */
   async function pasteAnswer() {
@@ -239,10 +246,10 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
             {bots.map((b, i) => {
               const pre = b.prefill?.(text) || '';
               return <a class={`btn${i === 0 ? ' btn-primary btn-lg' : ' btn-sm'}`} href={pre || b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined}
-                onClick={(e) => send(e, b, !!pre)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
+                onClick={(e) => send(e, b)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
             })}
           </div>
-          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(text)); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
+          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(textNow())); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
           {full && text.length > 30000 && <p class="small muted">교재가 길어 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어 받아요.</p>}
           <p class="small muted">교재의 글이 고른 챗봇 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
         </div></div>

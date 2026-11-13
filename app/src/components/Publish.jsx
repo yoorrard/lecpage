@@ -191,7 +191,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const lead = `${target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko}${rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}`;
   const limit = target === 'lecpage' ? (live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
   const limitLine = limit && !lead.includes(limit) ? limit : ''; // 소개 줄에 이미 나온 말은 되풀이하지 않음
-  const showLimit = more || target === 'lecpage'; // 무료 한도는 고를 때(목록을 펼쳤을 때)만. 바로 공개는 운영자 한도라 늘
+  const showLimit = true; // 무료 한도를 넘으면 어떻게 되는지는 늘 미리(writing.md 비용 규칙)
   const days = instant?.limits?.days || 30;
   const care = target === 'lecpage' ? `${days}일 동안 아무도 오지 않으면 지워져요. 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
   if (again) again.current = null;

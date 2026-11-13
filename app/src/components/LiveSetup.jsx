@@ -62,7 +62,11 @@ export function LiveSetup({ p, update }) {
   const code = E.validate(bp).blueprint.live.code;
   const reco = E.decideInfra({ size: info.size, features: info.features, skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
-  const [method, setMethod] = useState(connected ? live.provider : METHOD_OF[reco.backend] || 'sheets');
+  // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).
+  // 엔진의 클릭용 규칙(시트)은 skill 초안의 기본값이라 그대로 두고, 앱 화면에서만 내 서버(Cloudflare)를 첫째로
+  const appFirst = ['sheets', 'supabase'].includes(reco.backend);
+  const recoMethod = appFirst ? 'http' : METHOD_OF[reco.backend] || 'sheets';
+  const [method, setMethod] = useState(connected ? live.provider : recoMethod);
   const [newKey] = useState(() => randomKey(20)); // ADMIN_KEY 칸·시트 메뉴에 넣을 관리자 키(앱이 만듦)
   const usedKey = useRef(false); // 이번에 만든 키를 복사해 바깥에 넣었음 → 연결되면 그 주소의 관리자 키로 기억
   const [remembered, setRemembered] = useState(''); // 이 기기에 기억한 내 서버 주소
@@ -170,11 +174,13 @@ export function LiveSetup({ p, update }) {
       {connected ? (
         <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
       ) : (
-        <Notice kind="lav"><span><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</span></Notice>
+        <Notice kind="lav"><span>{appFirst
+          ? <><b>추천: 내 서버(Cloudflare)</b> · 할 일이 가장 적어요. 처음 한 번만 만들면 다음 연수부터는 저절로 연결돼요.</>
+          : <><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</>}</span></Notice>
       )}
       {connected && state.msg && !state.ok && <Notice kind="bad">{state.msg}</Notice>}
       {!connected && <>
-        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={[{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
+        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={recoMethod === 'http' ? [{ value: 'http', label: '내 서버·Cloudflare' }, { value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }] : [{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
         {B?.atLimit_ko && <p class="small muted">{B.atLimit_ko}</p>}
         <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
         <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={useLocal}>이 컴퓨터에서만 시험하기</button></div>

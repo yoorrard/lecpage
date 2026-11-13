@@ -75,7 +75,7 @@ export function StepEdit({ p, update, go }) {
               : <button class="btn" onClick={() => go(3)}>주소·QR 보기 →</button>}
         </div>
       </StepHead>
-      {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
+      {job && <AiJobBar job={job} found={p.material ? E.foundSummary(p.material.detected || {}, 3).join(' · ') : ''} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
         onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onUndoGuard={undoGuard} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
       {fromSkill && <div class="ai-job ok" role="status">
         <span class="ai-job-t"><b>에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·공개를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
@@ -109,13 +109,13 @@ export function StepEdit({ p, update, go }) {
 
 const PHASE = { read: '교재를 정리하고 있어요', ask: 'AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요', build: '사이트를 조립하고 있어요', wait: '무료 한도라 잠깐 기다렸다가 이어서 해요', swap: '다른 모델로 이어서 하고 있어요', other: '연결해 둔 다른 AI로 이어서 하고 있어요' };
 /** AI로 만들기 진행 띠: 초안을 먼저 보여 주고, 끝나면 AI가 짠 내용으로 바뀜 */
-function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight, onUndoGuard }) {
+function AiJobBar({ job, found, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight, onUndoGuard }) {
   if (job.status === 'running') {
     const sec = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
     return (
       <div class="ai-job" role="status" aria-live="polite">
         <span class="ai-job-dot" aria-hidden="true" />
-        <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>지금 보이는 것은 기본 초안이에요. 1~2분 뒤 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
+        <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>{found ? `교재에서 찾은 것(${found})은 그대로 실어요. ` : ''}지금 보이는 것은 기본 초안이고, 1~2분 뒤 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
         <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
       </div>
     );
