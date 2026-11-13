@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { HOSTING, buildSite, manifestOf, sha256, startHost, call, deploy } from './helpers.mjs';
+import { STATIC_RUNTIME } from '../src/runtime-allow.js';
 
 const ADMIN = 'it-admin-' + randomBytes(12).toString('hex');
 const te = new TextEncoder();
@@ -41,7 +42,9 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     const report = await text(`${base}/report?site=abcdefghjk`);
     assert.equal(report.status, 200); assert.ok(report.text.includes('신고') && report.text.includes('src="/report.js"') && !/<script(?![^>]*src=)/.test(report.text), '신고 화면에 인라인 스크립트 없음');
     assert.equal((await text(`${base}/report.js`)).status, 200);
-    assert.equal((await text(`${base}/robots.txt`)).text, 'User-agent: *\nDisallow: /\n');
+    const rb = (await text(`${base}/robots.txt`)).text;
+    assert.ok(rb.includes('User-agent: *\nDisallow: /\n'), '검색 로봇은 막음');
+    assert.ok(/User-agent: kakaotalk-scrap[\s\S]*Allow: \/s\//.test(rb) && /User-agent: facebookexternalhit/.test(rb) && /User-agent: Twitterbot/.test(rb), '링크 미리보기 카드는 /s/를 읽게');
     assert.equal((await text(`${base}/없는-주소`)).status, 404);
     // CORS: 허용한 앱 주소만
     const pre = await fetch(`${base}/api/sites`, { method: 'OPTIONS', headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization,content-type' } });
@@ -142,9 +145,25 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal(idx.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
     assert.equal(idx.headers.get('x-robots-tag'), 'noindex, nofollow');
     assert.equal(idx.headers.get('cache-control'), 'no-cache');
-    assert.equal(idx.headers.get('etag'), `"${sha256(files['index.html'])}-r1"`);
+    assert.match(idx.headers.get('etag'), new RegExp(`^"${sha256(files['index.html'])}-[0-9a-z]{8}-r2"$`), 'HTML etag = 내용 + 배포');
     assert.ok(idx.text.includes('<script type="application/json" id="lp-data">'), '자료 블록은 그대로');
-    assert.ok(idx.text.includes('<script src="assets/lecpage.js" defer></script>'));
+    // 엔진 런타임 그대로인 스크립트는 정적 사본(/rt/)으로, 그 밖의 사이트 파일은 내용 지문(?v=)을 붙임
+    const rtLecpage = sha256(files['assets/lecpage.js']);
+    assert.ok(STATIC_RUNTIME.includes(rtLecpage), 'lecpage.js는 정적 사본이 있음');
+    assert.ok(idx.text.includes(`<script src="/rt/${rtLecpage}.js" defer></script>`), '런타임은 /rt/로');
+    assert.ok(idx.text.includes(`<script src="/rt/${sha256(files['assets/live.js'])}.js" defer></script>`), 'live.js(core + http)도 /rt/로');
+    assert.ok(idx.text.includes(`<script src="assets/fx.js?v=${sha256(files['assets/fx.js']).slice(0, 12)}" defer></script>`), '효과 묶음은 지문');
+    assert.ok(idx.text.includes(`<link rel="stylesheet" href="assets/theme.css?v=${sha256(files['assets/theme.css']).slice(0, 12)}">`), 'CSS도 지문');
+    // 링크 미리보기 카드: og:url을 붙임
+    assert.ok(idx.text.includes(`<meta property="og:url" content="${site.url}">`), 'og:url');
+    const rt = await bin(`${base}/rt/${rtLecpage}.js`);
+    assert.equal(rt.status, 200); assert.deepEqual(rt.bytes, files['assets/lecpage.js']);
+    assert.equal(rt.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    const css1 = await fetch(`${site.url}assets/theme.css?v=${sha256(files['assets/theme.css']).slice(0, 12)}`);
+    assert.equal(css1.status, 200); assert.equal(css1.headers.get('cache-control'), 'public, max-age=31536000, immutable', '지문이 맞으면 1년');
+    await css1.arrayBuffer();
+    const css2 = await fetch(`${site.url}assets/theme.css?v=000000000000`);
+    assert.equal(css2.headers.get('cache-control'), 'public, max-age=600', '지문이 틀리면(예전 HTML) 10분'); await css2.arrayBuffer();
     assert.ok(idx.text.includes(`<a href="/report?site=${site.id}" rel="nofollow noopener" target="_blank" data-host-report>신고</a></div>`), '바닥글에 신고 링크');
     assert.equal((await text(`${site.url}index.html`)).text, idx.text);
     // 304
@@ -222,11 +241,11 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.ok(r.body.expiresAt >= firstExpiry);
     const idx = await text(site.url);
     assert.ok(idx.text.includes('id="v2"'));
-    assert.equal(idx.headers.get('etag'), `"${sha256(v2['index.html'])}-r1"`);
+    assert.match(idx.headers.get('etag'), new RegExp(`^"${sha256(v2['index.html'])}-[0-9a-z]{8}-r2"$`));
     const x = await text(`${site.url}extra.html`);
     assert.equal(x.status, 200);
     for (const gone of ['refresh', 'Refresh', '<base', 'evil.example/a.js', 'evil.example/b.js', '/report.js', 'evil.example/c.js', 'data:text/javascript', '<object', '<embed', '안쪽']) assert.ok(!x.text.includes(gone), `빠져야 함: ${gone}`);
-    for (const kept of ['<meta name="keep" content="1">', '<script src="assets/boot.js"></script>', '<script type="application/json" id="d">{"a":"</b>"}</script>', '<p id="keep">본문</p>', 'data-host-report']) assert.ok(x.text.includes(kept), `남아야 함: ${kept}`);
+    for (const kept of ['<meta name="keep" content="1">', `<script src="/rt/${sha256(files['assets/boot.js'])}.js"></script>`, '<script type="application/json" id="d">{"a":"</b>"}</script>', '<p id="keep">본문</p>', 'data-host-report']) assert.ok(x.text.includes(kept), `남아야 함: ${kept}`);
     assert.ok(x.headers.get('content-security-policy').includes("script-src 'self';"), '인라인 스크립트·form은 CSP가 막음');
     const nf = await text(`${site.url}nothing-here`);
     assert.equal(nf.status, 404); assert.ok(nf.text.includes('이 사이트의 404'), '사이트의 404.html');
@@ -317,7 +336,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     const r = await deploy(base, s, locked);
     assert.equal(r.status, 200, JSON.stringify(r.body));
     const page = await text(s.url);
-    assert.ok(page.text.includes('id="lp-locked"') && page.text.includes('<script src="assets/unlock.js"></script>') && page.text.includes('data-host-report'));
+    assert.ok(page.text.includes('id="lp-locked"') && page.text.includes(`<script src="/rt/${sha256(locked['assets/unlock.js'])}.js"></script>`) && page.text.includes('data-host-report'));
     const enc = await bin(s.url + encodeURI('assets/media/사진 (1).png.enc'));
     assert.equal(enc.status, 200); assert.equal(enc.headers.get('content-type'), 'application/octet-stream'); assert.deepEqual(enc.bytes, locked['assets/media/사진 (1).png.enc']);
     assert.deepEqual((await bin(`${s.url}assets/unlock.js`)).bytes, locked['assets/unlock.js']);
@@ -350,7 +369,8 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal(b.status, 200); assert.equal(b.body.blocked, true);
     const page = await text(site.url);
     assert.equal(page.status, 451); assert.ok(page.text.includes('잠시 가려 둔 사이트') && page.text.includes(`/report?site=${site.id}`));
-    assert.equal((await text(`${site.url}assets/lecpage.js`)).status, 451);
+    // 데이터센터 캐시(Cache API)에 이미 든 파일은 10분까지 남을 수 있어 캐시를 거치지 않는 HEAD로 확인
+    assert.equal((await fetch(`${site.url}assets/lecpage.js`, { method: 'HEAD' })).status, 451);
     const d = await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifestOf(v2) } });
     assert.equal(d.status, 403); assert.equal(code(d), 'blocked');
     assert.equal((await call(base, 'GET', '/api/admin/sites', { key: ADMIN })).body.sites.find((s) => s.id === site.id).blocked, true);
