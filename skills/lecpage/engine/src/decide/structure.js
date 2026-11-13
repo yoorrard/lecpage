@@ -131,7 +131,7 @@ function pickBySignals(sg, ar, practice, size, reasons) {
   return '';
 }
 
-/** 권하는 기능: 신호에서 이유를 찾을 수 있는 것 먼저, 그다음 컨셉(AI·선생님이 세운 것)이 고른 기능. 이미 켠 기능은 뺌 */
+/** 권하는 기능: 신호에서 이유를 찾을 수 있는 것 먼저, 그다음 컨셉(AI·강사가 세운 것)이 고른 기능. 이미 켠 기능은 뺌 */
 function suggestFeatures(flow, sg, d, size, info, hint = { features: [], text: '' }) {
   const on = new Set((Array.isArray(info.features) ? info.features : []).flatMap((x) => String(x).split('+')));
   const out = [];
@@ -194,7 +194,7 @@ export function checkOrder(sections = []) {
 const CONCEPT_SKIP = new Set(['hero', 'closing', 'instructor', 'survey', 'materials', 'followup', 'text', 'qa', 'board', 'poll', 'attendance']);
 /**
  * 컨셉과 구성을 이음: concept.sections·features가 비었거나 규칙으로 세운 컨셉이면 실제로 고른 칸·권한 기능으로 채움.
- * AI·선생님이 적은 값은 그대로 둠.
+ * AI·강사가 적은 값은 그대로 둠.
  */
 export function linkConcept(concept, structure, sections = []) {
   if (!concept || typeof concept !== 'object') return concept;

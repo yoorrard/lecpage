@@ -28,7 +28,7 @@ export function rankPresets({ moods = [], topics = [], archetype = 'story', admi
 export function motionCap(audience = {}, admin = 'school', requested) {
   let cap = 3; const why = [];
   const devices = audience.devices || [];
-  // 크롬북이 섞이면 스크롤 연출(3단계)은 쓰지 않음. 휴대폰만 섞였을 때는 기본은 2단계까지, 선생님이 3단계를 직접 고르면 허용(휴대폰·저사양 기기는 화면이 알아서 한 단계 낮춤)
+  // 크롬북이 섞이면 스크롤 연출(3단계)은 쓰지 않음. 휴대폰만 섞였을 때는 기본은 2단계까지, 강사가 3단계를 직접 고르면 허용(휴대폰·저사양 기기는 화면이 알아서 한 단계 낮춤)
   if (devices.includes('chromebook')) { cap = Math.min(cap, 2); why.push('크롬북 접속이 많아 스크롤 연출 단계는 쓰지 않습니다.'); }
   else if (devices.includes('phone') && requested !== 3) { cap = Math.min(cap, 2); why.push('휴대폰 접속이 많아 스크롤 연출 단계는 쓰지 않습니다.'); }
   else if (devices.includes('phone')) why.push('스크롤 연출을 골랐습니다. 휴대폰과 저사양 기기에서는 화면이 알아서 한 단계 낮춰 보여 줍니다.');
@@ -156,21 +156,21 @@ export function resolveDesign(bp) {
     const slot = (sig.slots || []).find((x) => RENDERED.includes(x));
     if (slot) effects[slot] = signature;
   }
-  // 선생님이 직접 고른 효과(design.effects)와 직접 고른 마무리 그래픽은 예산에서 빼고 그대로 둠
+  // 강사가 직접 고른 효과(design.effects)와 직접 고른 마무리 그래픽은 예산에서 빼고 그대로 둠
   const mine = Object.keys(d.effects || {}).filter((k) => d.effects[k]);
   const pool = Object.fromEntries(Object.entries(effects).filter(([k]) => !mine.includes(k)));
   const budget = applyBudget({ effects: pool, closingGraphic: d.closingGraphic !== undefined ? '' : chosen.closingGraphic, signature: sigFits ? signature : '', motion, archetype, moods: d.mood || preset.moods, topics: d.topics || preset.topics, noLibs, keep: inHero || d.signature ? ['signature'] : [] });
   effects = { ...budget.effects, ...Object.fromEntries(Object.entries(effects).filter(([k]) => mine.includes(k))) };
   signature = budget.signature;
   // 페이지 연출 계획(프리셋 plan): 본문 칸(카드·일정·사진·목록·섹션 제목)의 효과를 본문 단계(rest)가 허락하는 만큼 채움.
-  // 이미 정해진 칸과 선생님이 직접 고르거나 비운 칸은 그대로. 실습형은 본문이 차분 단계라 1단계 효과만 들어감
+  // 이미 정해진 칸과 강사가 직접 고르거나 비운 칸은 그대로. 실습형은 본문이 차분 단계라 1단계 효과만 들어감
   const rest = archetype === 'lab' ? Math.min(1, motion) : motion;
   for (const [slot, list] of Object.entries(presetPlan(preset).slots)) {
     if (slot in effects || (d.effects && slot in d.effects)) continue;
     const id = list.find((x) => fits(byId.get(x), { cap: rest, noLibs }));
     if (id) effects[slot] = id;
   }
-  // 교재 글꼴: 선생님이 글꼴 짝이나 글꼴을 따로 고르지 않았으면 교재와 같은 글꼴(없으면 결이 비슷한 무료 글꼴)을 씀
+  // 교재 글꼴: 강사가 글꼴 짝이나 글꼴을 따로 고르지 않았으면 교재와 같은 글꼴(없으면 결이 비슷한 무료 글꼴)을 씀
   let fonts = d.fonts, fontMatch;
   const fontNotes = [];
   if (d.sourceFonts && d.fontFrom !== 'preset' && !d.fontPair) {

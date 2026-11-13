@@ -6,10 +6,10 @@
 //   motif     화면에 되풀이되는 은유·그림(첫 화면 그림 → 본문 구분선 → 마무리)
 //   keywords  핵심 낱말 3~5개(제목·교재에서)
 //   moods     분위기(내부 값). design.mood가 비었을 때 씀
-//   preset    컨셉에 맞는 디자인 id. 선생님이 디자인을 직접 고르지 않았을 때 디자인이 이것을 씀(validate.js, intake.js)
+//   preset    컨셉에 맞는 디자인 id. 강사가 디자인을 직접 고르지 않았을 때 디자인이 이것을 씀(validate.js, intake.js)
 //   motion    컨셉이 바라는 페이지 연출 단계 0~3(환경 상한이 먼저 — decide/design.js motionCap)
 //   sections  컨셉에 어울리는 섹션 종류 / features  어울리는 참여 기능 — 구성 쪽이 근거로 읽음(디자인은 읽지 않음)
-//   source    'ai'(AI가 세움) · 'auto'(아래 규칙으로 세움) · 'teacher'(선생님이 고침)
+//   source    'ai'(AI가 세움) · 'auto'(아래 규칙으로 세움) · 'teacher'(강사가 고침)
 //
 // AI가 있으면 프롬프트(prompt/bridge.js)가 컨셉을 먼저 세우게 하고, 없으면 deriveConcept가 주제 표로 세웁니다(같은 입력이면 늘 같은 결과).
 import { PRESET_IDS, getPreset } from '../design/presets.js';
@@ -79,7 +79,7 @@ export function deriveConcept({ title = '', subtitle = '', text = '', topics = [
 const str = (v, n) => (typeof v === 'string' ? v.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, n) : '');
 const list = (v, n, len, ok) => (Array.isArray(v) ? [...new Set(v.map((x) => str(x, len)).filter((x) => x && (!ok || ok(x))))].slice(0, n) : []);
 const MOOD_IDS = ['emotional', 'warm', 'futuristic', 'bold', 'minimal', 'playful', 'handmade', 'tech', 'energetic', 'retro', 'calm', 'natural', 'formal', 'editorial'];
-/** 설계도의 concept를 안전한 값으로(없거나 한 줄 컨셉이 비면 null). AI 답·가져온 설계도·선생님이 고친 값 모두 여기를 지남 */
+/** 설계도의 concept를 안전한 값으로(없거나 한 줄 컨셉이 비면 null). AI 답·가져온 설계도·강사가 고친 값 모두 여기를 지남 */
 export function cleanConcept(c) {
   if (!c || typeof c !== 'object') return null;
   const idea = str(c.idea, 90);
@@ -94,14 +94,14 @@ export function cleanConcept(c) {
   };
 }
 
-/** 컨셉이 이끄는 디자인 값: 선생님이 직접 고르지 않은 것만 채울 때 씀 */
+/** 컨셉이 이끄는 디자인 값: 강사가 직접 고르지 않은 것만 채울 때 씀 */
 export function conceptDesign(concept) {
   if (!concept) return {};
   const moods = concept.moods?.length ? concept.moods : concept.preset ? getPreset(concept.preset).moods.slice(0, 3) : [];
   return { ...(concept.preset ? { preset: concept.preset } : {}), ...(moods.length ? { mood: moods } : {}), ...(concept.motion !== undefined ? { motion: concept.motion } : {}) };
 }
 
-/** 선생님·문서에 보여 줄 한 줄: "컨셉 — 모티프" */
+/** 강사·문서에 보여 줄 한 줄: "컨셉 — 모티프" */
 export function conceptLine(concept) {
   if (!concept?.idea) return '';
   return `${concept.idea}${concept.motif ? ` — 모티프: ${concept.motif}` : ''}`;

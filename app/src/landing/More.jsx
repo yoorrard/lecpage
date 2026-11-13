@@ -59,7 +59,7 @@ export function More({ pick, busyProps, fromExample }) {
         <dl class="ld-cost-list">
           <div><dt>lecpage</dt><dd><b>0원</b><span>회원가입이 없어요. 교재 읽기부터 사이트 조립까지 이 브라우저 안에서 해요.</span></dd></div>
           <div><dt>AI</dt><dd><b>쓰던 챗봇이면 0원</b><span>쓰던 ChatGPT·Claude·Gemini 창으로 만들면 추가 비용이 없어요. API 키를 연결하면 버튼 한 번으로 만들고, 사이트 하나에 몇백 원쯤 그 회사에 직접 내요. AI는 내용을 짤 때 한 번만 쓰고, 디자인·공개·참여 기능에는 쓰지 않아요.</span></dd></div>
-          <div><dt>공개·참여 기능</dt><dd><b>강사님 계정의 무료 한도 안에서</b><span>사이트는 Vercel·GitHub Pages 같은 강사님 계정에 올리고, 참여 기능은 Cloudflare·구글 시트 같은 강사님 계정에 연결해요. 올릴 곳과 내 서버(Cloudflare)는 한 번 연결하면 같은 기기의 다음 연수부터 저절로 이어져요.</span></dd></div>
+          <div><dt>공개·참여 기능</dt><dd><b>강사님 계정의 무료 한도 안에서</b><span>사이트는 Vercel·GitHub Pages 같은 강사님 계정에 올려요. 참여 기능도 Cloudflare·구글 시트 같은 강사님 계정에 연결해요. 올릴 곳과 내 서버(Cloudflare)는 한 번 연결하면 같은 기기의 다음 연수부터 저절로 이어져요.</span></dd></div>
         </dl>
       </section>
 
@@ -67,7 +67,7 @@ export function More({ pick, busyProps, fromExample }) {
         <div>
           <p class="ld-kicker">Agent Skill</p>
           <h2 id="ld-skill-h">AI 에이전트에서 만들고, 앱에서 이어서</h2>
-          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 AI 에이전트에 lecpage 스킬을 한 줄로 넣으면, 쓰던 구독 그대로 같은 엔진으로 만들어요. 만든 연수는 .lecpage 파일 하나로 이 앱에서 열어 다듬고 공개해요.</p>
+          <p class="ld-sub">Claude Code·Codex·Cursor·Gemini CLI 같은 AI 에이전트에 lecpage 스킬을 한 줄로 넣어요. 쓰던 구독 그대로, 앱과 같은 엔진으로 만들어요. 만든 연수는 .lecpage 파일 하나로 이 앱에서 열어 다듬고 공개해요.</p>
         </div>
         <div class="ld-cmds">
           {SKILL_CMDS.map((c) => (

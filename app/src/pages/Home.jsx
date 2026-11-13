@@ -92,7 +92,7 @@ export function Home() {
         <div class="ld-hero-t">
           <p class="ld-kicker">강의·연수용 · 무료 · 회원가입 없음</p>
           <h1 id="ld-h1"><span>교재를 넣으면</span> <span><span class="ld-hl">연수 사이트</span>가 나와요</span></h1>
-          <p class="ld-lead">교재(PPT·PDF·한글·워드)를 놓으면 쓰던 AI가 내용을 짜고, lecpage가 주제에 맞는 디자인·공개·QR·질문과 투표까지 이어서 만들어요.</p>
+          <p class="ld-lead">교재(PPT·PDF·한글·워드)를 놓으면 쓰던 AI가 내용을 짜요. lecpage가 주제에 맞는 디자인·공개·QR·질문과 투표까지 이어서 만들어요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>
