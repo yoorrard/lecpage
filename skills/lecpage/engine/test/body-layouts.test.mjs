@@ -256,10 +256,13 @@ describe('움직임: 본문 전 구간, 꺼지면 다 보임', () => {
     assert.doesNotMatch(css, /border-left:\s*[2-9]px\s+solid\s+var\(--(primary|accent)/); assert.doesNotMatch(css, /border-radius:\s*999/); assert.doesNotMatch(css, /background-clip:\s*text/);
     assert.doesNotMatch(build({ ...load('body-all'), design: { preset: 'playground' } }).files['index.html'], /lp-tt-mark/);
   });
-  test('숫자 세기: 세기 전·처음부터 보이던 숫자는 실제 값 그대로', () => {
+  test('숫자 세기: 세기 전·처음부터 보이던 숫자는 실제 값 그대로(효과가 올 때까지 숨어 있던 첫 화면 숫자만 0부터)', () => {
     const c = nodeRuntime().read('fx/effects/counter.js');
-    assert.ok(c.indexOf('num.textContent = fmt(from)') > c.indexOf('ctx.visible(el'), '0으로 바꾸는 것은 화면에 들어온 뒤');
+    const at = c.indexOf('ctx.visible(el'), early = c.slice(0, at), zero = early.indexOf('num.textContent = fmt(from)');
+    // 0으로 바꾸는 것은 화면에 들어온 뒤. 들어오기 전에 바꾸는 곳은 boot.js가 숨겨 둔(html.fx-boot) 처음 보이는 숫자뿐
+    assert.ok(zero < 0 || early.lastIndexOf("contains('fx-boot')", zero) > -1, '0으로 바꾸는 것은 화면에 들어온 뒤(또는 숨겨 둔 첫 화면 숫자)');
     assert.match(c, /r0\.top < \(window\.innerHeight/);
+    assert.match(nodeRuntime().read('fx/fx.css'), /html\.fx-boot[^{]*\[data-fx~="counter"\]/, '첫 화면 숫자는 효과가 올 때까지 숨김');
   });
 });
 

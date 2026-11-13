@@ -176,7 +176,7 @@ export function Gallery({ tab: tab0 }) {
         </div>
         <section class="dict-now" aria-labelledby="dnow-h">
           <div class="spread"><h2 id="dnow-h" class="h-sub">{ids.length ? `담은 낱말로 본 예시` : '예시 연수'}</h2><Seg label="예시 내용" value={sampleId} onChange={setSampleId} options={SAMPLES} /></div>
-          {composed ? <MiniSite bp={composed} eager tour /> : <span class="mini-site" style={{ aspectRatio: '1.6', display: 'block' }} />}
+          {composed ? <MiniSite bp={composed} eager tour live /> : <span class="mini-site" style={{ aspectRatio: '1.6', display: 'block' }} />}
           <div class="spread"><p class="small muted">{ids.length ? changesLine(ids) : '낱말을 담으면 이 화면이 바로 바뀌어요.'}</p><button type="button" class="btn btn-sm" disabled={!composed} onClick={() => setBig(true)}>움직이는 모습 보기</button></div>
         </section>
       </div>

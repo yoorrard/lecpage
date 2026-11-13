@@ -159,11 +159,14 @@
     else if (lite0 === '0') root.setAttribute('data-fx-lowpower', '0');
   } catch (e) { }
 
-  // 스크롤 연출(움직임 3단계) 준비: 저사양 기기·휴대폰은 CSS 연출을 쉬게 하고(lp-lowpower), 넓은 화면에서는 첫 화면이 포인터에 살짝 반응(--px·--py)
+  // 스크롤 연출(움직임 3단계) 준비: 정말 약한 기기(코어 2개·메모리 2GB 이하)·데이터 절약 모드는 CSS 연출을 쉬게 하고(lp-lowpower),
+  // 휴대폰(굵은 포인터·좁은 화면)은 무거운 흐림(backdrop-filter)만 뺌(lp-handheld). 스크롤에 묶인 CSS 움직임은 transform·opacity라 휴대폰에서도 가벼움.
+  // 넓은 화면에서는 첫 화면이 포인터에 살짝 반응(--px·--py)
   function initScrollShow() {
     var n = navigator, c = n.connection || {}, mm = window.matchMedia ? function (q) { return matchMedia(q).matches; } : function () { return false; };
-    var low = (n.hardwareConcurrency && n.hardwareConcurrency <= 4) || (n.deviceMemory && n.deviceMemory <= 4) || c.saveData || (mm('(pointer: coarse)') && innerWidth < 700);
+    var low = (n.hardwareConcurrency && n.hardwareConcurrency <= 2) || (n.deviceMemory && n.deviceMemory <= 2) || c.saveData;
     if (low && root.getAttribute('data-fx-lowpower') !== '0') root.classList.add('lp-lowpower');
+    if (mm('(pointer: coarse)') && innerWidth < 700) root.classList.add('lp-handheld');
     var hero = $('main > .lp-hero');
     if (!hero || RM || +MOTION0 < 3 || !mm('(hover: hover) and (pointer: fine)')) return;
     var q = 0, ex = 0, ey = 0;

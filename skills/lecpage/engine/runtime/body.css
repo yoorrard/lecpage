@@ -168,9 +168,9 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-gb-ck{transition:transform .4s var
 .lp-sec-message[data-variant="stage"] :is(.lp-statement,.lp-quote p){max-width:15em;margin-inline:auto}
 .lp-sec-message[data-variant="stage"] .lp-message-side{justify-items:center;max-width:32rem}
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
-  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-stage-art .lp-motif{animation:lp-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-stage-art .lp-motif{animation:lp-motif-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
 }}
-@keyframes lp-drift{from{transform:translate3d(0,-7%,0)}to{transform:translate3d(0,7%,0)}}
+@keyframes lp-motif-drift{from{transform:translate3d(0,-7%,0)}to{transform:translate3d(0,7%,0)}}
 
 /*@v:steps5.wheel*/
 /* 핵심 단계 · 둥근 고리: 요소가 고리 위에 고르게(서로 이은 그물), 옆에 목록. 목록 줄을 가리키면 고리의 같은 번호가 켜짐 */
@@ -263,7 +263,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-gb-ck{transition:transform .4s var
   .lp-zz-item:nth-child(even) .lp-ol-art{order:2}
 }
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
-  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-ol-art:not(.has-img) .lp-motif,html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-ol-art:not(.has-img) img{animation:lp-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-ol-art:not(.has-img) .lp-motif,html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-ol-art:not(.has-img) img{animation:lp-motif-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
 }}
 
 /*@v:outline.bento*/
@@ -777,7 +777,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-poster-art{position:absolute;inset:0 0 auto 0;height:clamp(200px,28vw,420px);z-index:-1;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 58%,transparent);mask-image:linear-gradient(180deg,#000 58%,transparent)}
 .lp-poster-art .lp-motif{position:absolute;inset:-10% 0;height:120%}
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
-  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-poster-art .lp-motif{animation:lp-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-poster-art .lp-motif{animation:lp-motif-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
 }}
 
 /*@v:closing.card*/
@@ -930,7 +930,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-msplit :is(.lp-statement,.lp-quote p){max-width:16em}
 @media (min-width:900px){.lp-msplit{grid-template-columns:minmax(0,4fr) minmax(0,7fr)}.lp-msplit-art{height:auto;aspect-ratio:4/5;max-height:520px}}
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
-  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-msplit-art .lp-motif{animation:lp-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  html.lp-sdt:not(.lp-paused):not(.fx-paused) .lp-msplit-art .lp-motif{animation:lp-motif-drift linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
 }}
 
 /*@v:procedure.lanes*/
