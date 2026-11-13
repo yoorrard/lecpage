@@ -108,6 +108,13 @@ export class Site extends DurableObject {
     if (!this.pagesClient) this.pagesClient = new PagesClient({ api: p.api, accountId: p.accountId, project: p.project, token: p.token });
     return this.pagesClient;
   }
+  /** 지난번 알린 뒤 Pages API를 부른 횟수와 방(Room)을 부른 횟수(Gate가 하루 숫자 pc·pz·rc에 더함) */
+  pagesDelta() {
+    const p = this.pagesClient || { calls: 0, limited: 0 };
+    const d = { pc: p.calls - (this.pcSent || 0), pz: p.limited - (this.pzSent || 0), rc: (this.roomCalls || 0) - (this.rcSent || 0) };
+    this.pcSent = p.calls; this.pzSent = p.limited; this.rcSent = this.roomCalls || 0;
+    return d;
+  }
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */
   keepsHere(meta, path) { return !this.isPages(meta) || typeOf(path)?.kind === 'html' || isMedia(path); }
   passet(sha, ext) { return this.sql.exec('SELECT phash FROM passet WHERE sha = ? AND ext = ?', sha, ext).toArray()[0]?.phash || ''; }
@@ -164,6 +171,7 @@ export class Site extends DurableObject {
   url(request, meta) { return `${request.headers.get('x-lp-origin') || ''}/s/${meta.site}/`; }
   /** 실시간 방(Room)에 호스트 안쪽 일을 시킴: bind·touch·wipe */
   async room(code, op, body) {
+    this.roomCalls = (this.roomCalls || 0) + 1;
     const stub = this.env.ROOM.get(this.env.ROOM.idFromName(code));
     const res = await stub.fetch(`http://room/host/${op}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) throw await errorFrom(res);
@@ -255,7 +263,7 @@ export class Site extends DurableObject {
       }
       // 코드를 바꿨으면 예전 방은 비움
       if (prev && prev !== code) { try { await this.room(prev, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); } }
-      try { await this.gate('POST', 'site', { id: meta.site, code }); } catch (e) { console.error('gate site update failed', e?.message); }
+      try { await this.gate('POST', 'site', { id: meta.site, code, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
       return json({ url: `${request.headers.get('x-lp-origin') || ''}/live`, code: out.code });
     });
   }
@@ -428,7 +436,7 @@ export class Site extends DurableObject {
       if (prev && prev !== deployId) this.manifests.delete(prev);
       await this.ctx.storage.setAlarm(expires);
       this.sweep();
-      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true }); } catch (e) { console.error('gate site update failed', e?.message); }
+      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
       // 공개 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
       if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
       return json({ url: this.url(request, meta), expiresAt: expires });
@@ -498,7 +506,7 @@ export class Site extends DurableObject {
     // 지난 배포(각자 고유 주소가 있음)는 지움. 못 지운 것은 다음 공개·지우기 때 다시
     const left = await this.dropDeployments(old.filter((d) => d !== deployment.id));
     if (left.length) { const s2 = this.ps(meta); s2.hold = left; this.savePs(meta, s2); }
-    try { await this.gate('POST', 'site', { id, bytes: kept, expires, published: true }); } catch (e) { console.error('gate site update failed', e?.message); }
+    try { await this.gate('POST', 'site', { id, bytes: kept, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
     if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: id, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
     return json(this.published(request, meta));
   }
@@ -541,7 +549,7 @@ export class Site extends DurableObject {
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = [];
-    if (id) { try { await this.gate('POST', 'forget', { id }); } catch (e) { console.error('gate forget failed', e?.message); } }
+    if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
   }
   /**
    * Pages에 있는 이 사이트의 배포를 모두 지움. 가장 최근 배포를 못 지우면(별칭) 안내 화면을 올린 뒤 나머지를 지움.
@@ -572,7 +580,7 @@ export class Site extends DurableObject {
       if (this.isPages(meta) && !!meta.blocked !== body.blocked) restored = body.blocked ? await this.holdPages(meta) : await this.releasePages(meta);
       this.sql.exec('UPDATE meta SET blocked = ?, block_reason = ? WHERE id = 1', body.blocked ? 1 : 0, reason);
       Object.assign(meta, { blocked: body.blocked ? 1 : 0, block_reason: reason });
-      try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked }); } catch (e) { console.error('gate site update failed', e?.message); }
+      try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
       return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null, ...(restored === false ? { restored: false, note: 'Pages에서 지난 파일을 찾지 못해 다시 열지 못했어요. 강사가 다시 올리면 열려요.' } : {}) });
     });
   }

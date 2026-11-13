@@ -19,8 +19,11 @@ import { Room, Guard } from './room.js';
 
 export { Site, Gate, Room, Guard };
 
-const siteStub = (env, id) => env.SITE.get(env.SITE.idFromName(id));
-const gateStub = (env) => env.GATE.get(env.GATE.idFromName('gate'));
+/** Durable Object 요청을 셈(DO 하루 한도 어림): Site ds, Room dr, Gate dg */
+const counted = (stub, k) => ({ fetch: (...a) => { T.mark(k); return stub.fetch(...a); } });
+const siteStub = (env, id) => counted(env.SITE.get(env.SITE.idFromName(id)), 'ds');
+const gateStub = (env) => counted(env.GATE.get(env.GATE.idFromName('gate')), 'dg');
+const roomStub = (env, code) => counted(env.ROOM.get(env.ROOM.idFromName(code)), 'dr');
 const post = (body) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 /** DO 응답이 오류면 HttpError로 바꿔 던짐 */
 async function ok(res) { if (!res.ok) throw await errorFrom(res); return res; }
@@ -43,7 +46,7 @@ let budgetPct = 0;
 function flush(env, ctx, force = false) {
   const batch = T.take(Date.now(), force);
   if (!batch) return;
-  ctx.waitUntil(gateStub(env).fetch('http://gate/tick', post(batch))
+  ctx.waitUntil(env.GATE.get(env.GATE.idFromName('gate')).fetch('http://gate/tick', post(batch)) // 세는 일 자체는 Gate가 gt로 셈
     .then((r) => (r.ok ? r.json() : null)).then((j) => { if (j && Number.isFinite(j.pct)) budgetPct = j.pct; })
     .catch(() => { }));
 }
@@ -215,7 +218,7 @@ async function live(request, env, url, cfg) {
     // 방(Durable Object)에는 '/api/<코드>/…' 경로로 넘김. WebSocket 연결(101)도 그대로 돌려줌
     const target = new URL(url);
     target.pathname = t.path;
-    const res = await env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request));
+    const res = await roomStub(env, t.code).fetch(new Request(target, request));
     // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
     if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
     return done(res);

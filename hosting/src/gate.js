@@ -56,6 +56,8 @@ export class Gate extends DurableObject {
     try {
       const url = new URL(request.url);
       const op = url.pathname.slice(1);
+      // 이 Gate가 받은 요청(하루 숫자 g, 숫자 모으기 tick은 gt). 다음 tick에 더함
+      if (op === 'tick') this.ticks = (this.ticks || 0) + 1; else this.hits = (this.hits || 0) + 1;
       const body = request.method === 'POST' ? await readJson(request, 64 * 1024) : {};
       switch (`${request.method} ${op}`) {
         case 'POST reserve': return json(await this.reserve(body));
@@ -110,7 +112,8 @@ export class Gate extends DurableObject {
   /** { n: 요청 수, c: { site, api, live, … }, s: { 'a:open': 2, … } } → 쓴 비율(%)을 돌려줌(Worker가 덜 급한 일을 미룰 때 씀) */
   tick({ n, c, s }) {
     const clamp = (v, max = 100000) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, max) : 0);
-    const patch = { req: clamp(n) };
+    const patch = { req: clamp(n), g: this.hits || 0, gt: this.ticks || 0 };
+    this.hits = 0; this.ticks = 0;
     if (c && typeof c === 'object') for (const k of WORKER_KEYS) patch[k] = clamp(c[k]);
     const now = Date.now();
     const cap = this.cfg.statsDailyCap;
@@ -286,14 +289,16 @@ export class Gate extends DurableObject {
   }
 
   /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '공개' 수를 셈 */
-  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published }) {
+  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc }) {
+    const calls = (v) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, 10000) : 0);
+    const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0 };
+    if (day.pc || day.pz || day.rc || day.pub) this.addDay(day); // 하루 줄 한 번만 씀
     const row = this.sql.exec('SELECT bytes, expires, blocked, room_bytes, code FROM sites WHERE id = ?', id).toArray()[0];
     if (!row) return { ok: false, total: this.usage().bytes };
     const int = (v, d) => (Number.isSafeInteger(v) && v >= 0 ? v : d);
     this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ?, room_bytes = ?, code = ? WHERE id = ?',
       int(bytes, row.bytes), int(expires, row.expires), blocked === undefined ? row.blocked : blocked ? 1 : 0, int(roomBytes, row.room_bytes), typeof code === 'string' ? code : row.code, id);
     const total = this.usage().bytes;
-    if (published) this.addDay({ pub: 1 });
     if (bytes !== undefined || roomBytes !== undefined) this.storageAlert(total);
     return { ok: true, total };
   }
@@ -306,7 +311,11 @@ export class Gate extends DurableObject {
     this.addDay({ sa: 1 }, now);
     this.send(`[lecpage 바로 공개] 저장량이 상한의 ${Math.round((total / cap) * 100)}%예요(${(total / 1048576).toFixed(0)}MB / ${(cap / 1048576).toFixed(0)}MB). 다 차면 새 사이트를 받지 않아요. 관리 화면 /admin`);
   }
-  forget({ id }) { this.sql.exec('DELETE FROM sites WHERE id = ?', id); this.sql.exec('DELETE FROM bookings WHERE site = ?', id); return { ok: true }; }
+  forget({ id, pc, pz, rc }) {
+    if (pc || pz || rc) this.siteUpdate({ id: '', pc, pz, rc });
+    this.sql.exec('DELETE FROM sites WHERE id = ?', id); this.sql.exec('DELETE FROM bookings WHERE site = ?', id);
+    return { ok: true };
+  }
   /** bytes = 사이트 파일 + 실시간 방(참가 기록·보드 파일) */
   usage() {
     const r = this.sql.exec('SELECT COUNT(*) AS sites, COALESCE(SUM(bytes + room_bytes), 0) AS bytes FROM sites').one();

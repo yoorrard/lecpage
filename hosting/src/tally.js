@@ -3,10 +3,11 @@
 // 그래서 숫자는 어림입니다(isolate가 사라지면 보내지 못한 몇십 건이 빠질 수 있음).
 // 개인을 알아볼 수 있는 것(IP·식별자·주소·내용)은 세지도 저장하지도 않습니다.
 
-/** Worker가 세는 것. req(전체)는 따로 */
-export const WORKER_KEYS = ['site', 'api', 'live', 'admin', 'err', 'lim', 'edge', 'bot'];
-/** Gate가 스스로 세는 것 */
-export const GATE_KEYS = ['new', 'room', 'pub', 'rep'];
+/** Worker가 세는 것. req(전체)는 따로. ds·dr·dg = Worker가 부른 Durable Object(Site·Room·Gate) 요청 수(DO 하루 한도 어림) */
+export const WORKER_KEYS = ['site', 'api', 'live', 'admin', 'err', 'lim', 'edge', 'bot', 'ds', 'dr', 'dg'];
+/** Gate가 스스로 세는 것. g = Gate가 받은 요청(Site·Room이 부른 것 포함, 숫자 모으기 빼고), gt = 숫자 모으기(tick), rc = Site가 부른 Room,
+ * pc = Pages API 호출 수, pz = 그중 429 */
+export const GATE_KEYS = ['new', 'room', 'pub', 'rep', 'g', 'gt', 'rc', 'pc', 'pz'];
 
 /** 앱이 보내는 익명 이용 합계: { e, k } → 저장 열쇠. 이 표에 없는 것은 버림 */
 export const APP_EVENTS = {

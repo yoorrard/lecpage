@@ -29,16 +29,20 @@ export class PagesClient {
     this.api = String(api).replace(/\/+$/, ''); this.accountId = accountId; this.project = project; this.token = token;
     this.f = f || ((...a) => fetch(...a)); this.now = now; this.wait = wait;
     this.jwt = ''; this.jwtUntil = 0;
+    /** 부른 횟수(Cloudflare API 속도 제한 어림: 토큰마다 5분에 1,200번)와 그중 429 */
+    this.calls = 0; this.limited = 0;
   }
   get base() { return `${this.api}/accounts/${encodeURIComponent(this.accountId)}/pages/projects/${encodeURIComponent(this.project)}`; }
 
   async call(step, url, init = {}, bearer = this.token) {
+    this.calls++;
     let res;
     try { res = await this.f(url, { ...init, headers: { authorization: `Bearer ${bearer}`, ...(init.headers || {}) } }); }
     catch (e) { throw new PagesError(`Cloudflare API에 닿지 못했어요(${step}).`, { step }); }
     let j = null;
     try { j = await res.json(); } catch { /* 빈 응답 */ }
     if (!res.ok || (j && j.success === false)) {
+      if (res.status === 429) this.limited++;
       const err = j?.errors?.[0] || {};
       throw new PagesError(`Cloudflare Pages ${step} 실패(${res.status}${err.code ? ` · ${err.code}` : ''}): ${String(err.message || '').slice(0, 200)}`, { status: res.status, code: err.code || 0, step });
     }
