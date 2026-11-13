@@ -27,7 +27,7 @@ const text = async (url, init) => { const r = await fetch(url, { redirect: 'manu
 const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
 const newSite = async (base, title = '통합 시험') => { const r = await call(base, 'POST', '/api/sites', { json: { title } }); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body; };
 
-test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 → 지우기', async (t) => {
+test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 → 지우기', async (t) => {
   const h = await host({ ADMIN_KEY: ADMIN, SITES_PER_HOUR: 100, SITES_PER_DAY: 1000, MAX_FILE_BYTES: 3000000, MAX_BYTES: 8000000, MAX_FILES: 60, REPORTS_PER_HOUR: 3 });
   if (!h) return t.skip(skip);
   const base = h.url;
@@ -37,9 +37,14 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
   await t.test('안내: /api/info, 정적 화면, CORS', async () => {
     const info = await call(base, 'GET', '/api/info');
     assert.equal(info.status, 200);
-    assert.deepEqual(info.body, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
+    const { capacity, ...rest } = info.body;
+    assert.deepEqual(rest, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
+    // 넘침 신호: 단계·넘길 곳(앱이 배포 화면을 열 때 처음부터 알맞은 길을 고름)
+    assert.equal(capacity.state, 'open'); assert.equal(capacity.newSites, true); assert.equal(capacity.reason, null);
+    assert.deepEqual(capacity.next, ['cloudflare', 'vercel', 'github', 'netlify']); assert.deepEqual(capacity.liveNext, ['cloudflare', 'supabase']);
+    assert.ok(capacity.resetAt > Date.now()); assert.equal(info.headers.get('cache-control'), 'public, max-age=30');
     const home = await text(`${base}/`);
-    assert.equal(home.status, 200); assert.ok(home.text.includes('바로 공개') && home.text.includes('href="/report"'));
+    assert.equal(home.status, 200); assert.ok(home.text.includes('바로 배포') && home.text.includes('href="/report"'));
     // Cloudflare Access를 켜지 않았으면 관리 화면은 없음(정적 파일도 Worker를 거쳐 404)
     for (const p of ['/admin', '/admin/', '/admin/app.js', '/admin/app.css', '/admin/index.html', '/admin/api/overview']) assert.equal((await text(base + p, { headers: { 'cf-access-jwt-assertion': 'x.y.z', 'x-lecpage-admin': '1' } })).status, 404, p);
     assert.ok(home.headers.get('content-security-policy').includes("default-src 'none'"));
@@ -61,12 +66,12 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal(okOrigin.headers.get('access-control-allow-origin'), 'https://yoorrard.github.io');
     const evil = await call(base, 'POST', '/api/sites', { json: {}, headers: { origin: 'https://evil.example' } });
     assert.equal(evil.status, 403); assert.equal(evil.headers.get('access-control-allow-origin'), null);
-    // 올라온 사이트(같은 출처)의 화면이 API를 부르는 것도 막음
+    // 배포한 사이트(같은 출처)의 화면이 API를 부르는 것도 막음
     const same = await call(base, 'POST', '/api/sites', { json: {}, headers: { origin: base } });
     assert.equal(same.status, 403);
   });
 
-  await t.test('사이트 만들기: 주소·열쇠·공개 기간', async () => {
+  await t.test('사이트 만들기: 주소·열쇠·보관 기간', async () => {
     const before = Date.now();
     site = await newSite(base, '마음이 먼저 도착하는 교실');
     assert.match(site.id, /^[0-9a-hjkmnp-tv-z]{10}$/);
@@ -88,7 +93,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
       const r = await call(base, 'POST', `/api/sites/${id}/deploys`, { key: site.key, json: m });
       assert.equal(r.status, 404); assert.equal(code(r), 'not_found');
       const page = await text(`${base}/s/${id}/`);
-      assert.equal(page.status, 404); assert.ok(page.text.includes('이 사이트는 공개 기간이 끝났어요'));
+      assert.equal(page.status, 404); assert.ok(page.text.includes('이 사이트는 보관 기간이 끝났어요'));
     }
     assert.equal((await call(base, 'POST', '/api/sites/NOT-AN-ID/deploys', { key: site.key, json: m })).status, 404);
     assert.equal((await text(`${base}/s/NOT-AN-ID/`)).status, 404);
@@ -325,7 +330,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal(bad.status, 416); assert.equal(bad.headers.get('content-range'), `bytes */${big.length}`);
     const head = await fetch(url, { method: 'HEAD' });
     assert.equal(head.headers.get('content-length'), String(big.length));
-    // 다시 올리면 안 쓰는 파일은 지워짐(전체 저장량에 반영)
+    // 다시 배포하면 안 쓰는 파일은 지워짐(전체 저장량에 반영)
     const before = (await call(base, 'GET', '/api/admin/sites', { key: ADMIN })).body.sites.find((s) => s.id === site.id).bytes;
     await deploy(base, site, v2);
     const after2 = (await call(base, 'GET', '/api/admin/sites', { key: ADMIN })).body.sites.find((s) => s.id === site.id).bytes;
@@ -388,7 +393,7 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal((await text(site.url)).status, 200);
     assert.equal((await call(base, 'DELETE', `/api/sites/${site.id}`, { key: site.key })).status, 204);
     const gone = await text(site.url);
-    assert.equal(gone.status, 404); assert.ok(gone.text.includes('이 사이트는 공개 기간이 끝났어요'));
+    assert.equal(gone.status, 404); assert.ok(gone.text.includes('이 사이트는 보관 기간이 끝났어요'));
     assert.equal((await text(`${site.url}assets/lecpage.js`)).status, 404);
     const d = await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifestOf(v2) } });
     assert.equal(d.status, 404); assert.equal(code(d), 'not_found');
@@ -529,8 +534,8 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
   });
 });
 
-test('횟수 제한·공개 기간 끝(짧게 줄여서)·관리자 열쇠가 없을 때', async (t) => {
-  // 공개 기간 12초, 같은 IP에서 한 시간에 사이트 2개
+test('횟수 제한·보관 기간 끝(짧게 줄여서)·관리자 열쇠가 없을 때', async (t) => {
+  // 보관 기간 12초, 같은 IP에서 한 시간에 사이트 2개
   const h = await host({ SITES_PER_HOUR: 2, SITE_DAYS: 12 / 86400, KEEP_ALIVE: 'off' }); // 방문으로 기간이 늘지 않게 끄고 봄(늘어나는 것은 아래에서 따로)
   if (!h) return t.skip(skip);
   const base = h.url;
@@ -561,7 +566,7 @@ test('횟수 제한·공개 기간 끝(짧게 줄여서)·관리자 열쇠가 �
     assert.ok(/[가-힣]/.test(third.body.error.message_ko));
   });
 
-  await t.test('공개 기간이 끝나면 사이트·파일·방이 지워짐', async () => {
+  await t.test('보관 기간이 끝나면 사이트·파일·방이 지워짐', async () => {
     const until = Date.now() + 45000; let page;
     for (;;) {
       page = await text(s.url);
@@ -569,7 +574,7 @@ test('횟수 제한·공개 기간 끝(짧게 줄여서)·관리자 열쇠가 �
       await new Promise((res) => setTimeout(res, 1000));
     }
     assert.equal(page.status, 404, '기간이 끝났는데 열림');
-    assert.ok(page.text.includes('이 사이트는 공개 기간이 끝났어요'));
+    assert.ok(page.text.includes('이 사이트는 보관 기간이 끝났어요'));
     assert.equal((await text(`${s.url}assets/lecpage.js`)).status, 404);
     const d = await call(base, 'POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: { files: manifestOf(files) } });
     assert.equal(d.status, 404); assert.equal(code(d), 'not_found');
@@ -594,7 +599,7 @@ test('실시간을 끈 서버(LIVE=off)', async (t) => {
   assert.equal((await deploy(base, s, await buildSite('data-lab'))).status, 200, '사이트 올리기는 그대로');
 });
 
-test('하루 요청 예산(무료 요금제): 많이 쓰면 새 사이트·새 방만 멈추고 올라온 사이트는 계속 열림', async (t) => {
+test('하루 요청 예산(무료 요금제): 많이 쓰면 새 사이트·새 방만 멈추고 배포한 사이트는 계속 열림', async (t) => {
   const h = await host({ DAILY_REQUEST_BUDGET: 200 });
   if (!h) return t.skip(skip);
   const base = h.url;
@@ -609,8 +614,8 @@ test('하루 요청 예산(무료 요금제): 많이 쓰면 새 사이트·새 �
   assert.equal(info.body.accepting, false, '예산을 많이 쓰면 받지 않는다고 알림');
   const more = await call(base, 'POST', '/api/sites', { json: { title: 'x' } });
   assert.equal(more.status, 429); assert.equal(code(more), 'rate_limited'); assert.ok(Number(more.headers.get('retry-after')) > 0);
-  assert.match(more.body.error.message_ko, /이미 올린 사이트는 그대로/);
-  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200, '올라온 사이트는 그대로 열림');
+  assert.match(more.body.error.message_ko, /이미 배포한 사이트는 그대로/);
+  assert.equal((await fetch(`${base}/s/${s.id}/`)).status, 200, '배포한 사이트는 그대로 열림');
   assert.equal((await deploy(base, s, await buildSite('data-lab'))).status, 200, '이미 있는 사이트는 다시 올릴 수 있음');
   const room = await call(base, 'POST', `/api/sites/${s.id}/live`, { key: s.key, json: { code: 'QK7MZA', adminKeyHash: sha256('budget-teacher-key-01') } });
   assert.equal(room.status, 429, '새 방도 받지 않음');
@@ -626,8 +631,8 @@ test('유료 요금제(PLAN=paid): 예산으로 막지 않음', async (t) => {
   assert.equal((await call(base, 'POST', '/api/sites', { json: { title: 'x' } })).status, 201);
 });
 
-test('방문이 이어지는 사이트는 공개 기간이 늘어남(짧게 줄여서)', async (t) => {
-  // 공개 기간 16초. 남은 기간이 절반(8초) 아래일 때 화면을 열면 다시 16초
+test('방문이 이어지는 사이트는 보관 기간이 늘어남(짧게 줄여서)', async (t) => {
+  // 보관 기간 16초. 남은 기간이 절반(8초) 아래일 때 화면을 열면 다시 16초
   const h = await host({ SITE_DAYS: 16 / 86400 });
   if (!h) return t.skip(skip);
   const base = h.url;
@@ -645,7 +650,7 @@ test('방문이 이어지는 사이트는 공개 기간이 늘어남(짧게 줄�
   assert.equal(again.status, 200); assert.ok(again.body.expiresAt > exp0);
 });
 
-test('관리 화면: Access 토큰 확인·CSRF·공지·새 업로드 멈춤·하루 숫자·감사 기록', async (t) => {
+test('관리 화면: Access 토큰 확인·CSRF·공지·새 배포 멈춤·하루 숫자·감사 기록', async (t) => {
   const AUD = 'f'.repeat(64);
   const iss = await makeIssuer(); const fake = await makeIssuer();
   const jwks = await startJwks(iss);
@@ -702,14 +707,14 @@ test('관리 화면: Access 토큰 확인·CSRF·공지·새 업로드 멈춤·�
   await t.test('공지: 만들면 앱(/api/notice)과 강사 화면에 글자로만', async () => {
     const bad = await adm('POST', 'notices', { title: '피싱', body: 'x', link: 'http://evil.example/login', targets: ['app'] });
     assert.equal(bad.status, 400); assert.match(bad.body.error.message_ko, /https/);
-    const a = await adm('POST', 'notices', { title: '11월 20일 점검', body: '밤 10시부터 10분 동안\n새로 올리기가 멈춰요.', link: 'https://github.com/yoorrard/lecpage', linkLabel: '자세히', targets: ['app'] });
+    const a = await adm('POST', 'notices', { title: '11월 20일 점검', body: '밤 10시부터 10분 동안\n새 배포가 멈춰요.', link: 'https://github.com/yoorrard/lecpage', linkLabel: '자세히', targets: ['app'] });
     assert.equal(a.status, 200, JSON.stringify(a.body));
     const b = await adm('POST', 'notices', { title: '<script>alert(1)</script> 강사님께', body: '<img src=x onerror=alert(2)>', targets: ['teacher'] });
     assert.equal(b.status, 200);
     const pub = await call(base, 'GET', '/api/notice?for=app', { headers: { origin: 'http://localhost:5173' } });
     assert.equal(pub.status, 200); assert.equal(pub.headers.get('access-control-allow-origin'), 'http://localhost:5173');
     assert.equal(pub.headers.get('cache-control'), 'public, max-age=60');
-    assert.deepEqual(pub.body.notices.map((n) => [n.title, n.body, n.link, n.linkHost]), [['11월 20일 점검', '밤 10시부터 10분 동안\n새로 올리기가 멈춰요.', 'https://github.com/yoorrard/lecpage', 'github.com']]);
+    assert.deepEqual(pub.body.notices.map((n) => [n.title, n.body, n.link, n.linkHost]), [['11월 20일 점검', '밤 10시부터 10분 동안\n새 배포가 멈춰요.', 'https://github.com/yoorrard/lecpage', 'github.com']]);
     assert.equal((await call(base, 'GET', '/api/notice?for=app', { headers: { origin: 'https://evil.example' } })).status, 403, '허용한 앱 주소에서만(브라우저)');
     // 강사 화면에 공지 띠
     site = await newSite(base, '공지 시험');
@@ -735,7 +740,7 @@ test('관리 화면: Access 토큰 확인·CSRF·공지·새 업로드 멈춤·�
     assert.ok(idx.text.includes(`<meta property="og:image" content="${site.url}assets/media/hero.png">`) && idx.text.includes('<meta name="twitter:card" content="summary_large_image">'), 'og:image');
   });
 
-  await t.test('새 업로드 멈춤: 새 사이트·다시 올리기·새 방은 503 rate_limited, 올라온 사이트는 열림', async () => {
+  await t.test('새 배포 멈춤: 새 사이트·다시 배포·새 방은 503 rate_limited, 배포한 사이트는 열림', async () => {
     const p = await adm('POST', 'uploads', { paused: true, reason: '점검' });
     assert.equal(p.status, 200);
     const info = await call(base, 'GET', '/api/info');
@@ -744,7 +749,7 @@ test('관리 화면: Access 토큰 확인·CSRF·공지·새 업로드 멈춤·�
     assert.equal(n.status, 503); assert.equal(code(n), 'rate_limited');
     const again = await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifestOf(files) } });
     assert.equal(again.status, 503); assert.equal(code(again), 'rate_limited');
-    assert.equal((await text(site.url)).status, 200, '올라온 사이트는 그대로');
+    assert.equal((await text(site.url)).status, 200, '배포한 사이트는 그대로');
     assert.equal((await call(base, 'POST', `/api/sites/${site.id}/live`, { key: site.key, json: { code: 'PZ7QKA', adminKeyHash: sha256('pause-teacher-key') } })).status, 503);
     assert.equal((await adm('POST', 'uploads', { paused: false })).status, 200);
     assert.equal((await call(base, 'POST', '/api/sites', { json: {} })).status, 201);

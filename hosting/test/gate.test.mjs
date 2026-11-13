@@ -1,4 +1,4 @@
-// Gate(호스트 전체에 하나뿐인 Durable Object)의 하루 숫자·예산 알림·새 업로드 멈춤·공지·신고 처리·감사 기록.
+// Gate(호스트 전체에 하나뿐인 Durable Object)의 하루 숫자·예산 알림·새 배포 멈춤·공지·신고 처리·감사 기록.
 // Durable Object는 흉내(test/fake-do.mjs)로 돌립니다. 실제 workerd에서는 integration.test.mjs가 확인합니다.
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,16 +48,17 @@ test('앱 이용 합계를 끄면(STATS=off) 받지 않음', async () => {
   assert.equal(o.today['a:open'], undefined); assert.equal(o.stats, false);
 });
 
-test('하루 예산 알림: 50·60·80·95%를 처음 넘을 때 한 번씩 웹훅', async () => {
+test('하루 예산 알림: 넘침 단계와 같게 45·60·80·95%를 처음 넘을 때 한 번씩 웹훅', async () => {
   const { call } = gate();
-  await call('POST', 'tick', { n: 499 });
+  await call('POST', 'tick', { n: 449 });
   assert.equal(sent.length, 0);
   await call('POST', 'tick', { n: 1 });
   assert.equal(sent.length, 1); assert.equal(sent[0].url, 'https://hooks.example/alert');
-  assert.match(sent[0].body.text, /50%를 넘었어요\(500 \/ 1,000\)/); assert.equal(sent[0].body.content, sent[0].body.text, 'Slack(text)·Discord(content)');
+  assert.match(sent[0].body.text, /45%를 넘었어요\(450 \/ 1,000\)/); assert.equal(sent[0].body.content, sent[0].body.text, 'Slack(text)·Discord(content)');
+  assert.match(sent[0].body.text, /붐빔: 연수 날짜가 14일 안인 사이트·방만/);
   await call('POST', 'tick', { n: 50 });
   assert.equal(sent.length, 1, '같은 단계는 다시 안 보냄');
-  await call('POST', 'tick', { n: 400 }); // 950 → 80%를 건너 95%까지 한 번에
+  await call('POST', 'tick', { n: 450 }); // 950 → 60·80%를 건너 95%까지 한 번에
   assert.equal(sent.length, 2); assert.match(sent[1].body.text, /95%/); assert.match(sent[1].body.text, /오류 1027/);
   assert.equal((await call('GET', 'status')).body.accepting, false, '60%를 넘었으니 새 사이트는 받지 않음');
   // 웹훅이 없거나 유료면 보내지 않음
@@ -73,7 +74,7 @@ test('하루 예산 알림: 50·60·80·95%를 처음 넘을 때 한 번씩 웹�
   assert.equal(sent.at(-1).url, 'https://hooks.example/report'); assert.match(sent.at(-1).body.text, /60%.*새 사이트·새 방은 받지 않고/);
 });
 
-test('새 업로드 멈춤: 새 사이트·새 방을 막고(rate_limited, 503), 풀면 다시 받음. 감사 기록', async () => {
+test('새 배포 멈춤: 새 사이트·새 방을 막고(rate_limited, 503), 풀면 다시 받음. 감사 기록', async () => {
   const { call } = gate();
   assert.equal((await reserve(call, 'aaaaaaaaaa')).status, 200);
   assert.equal((await call('POST', 'uploads', { paused: 'yes' })).status, 400);
@@ -81,9 +82,9 @@ test('새 업로드 멈춤: 새 사이트·새 방을 막고(rate_limited, 503),
   assert.equal(p.status, 200); assert.equal(p.body.reason, '스팸이 몰림 점검');
   const st = (await call('GET', 'status')).body;
   assert.deepEqual([st.accepting, st.paused], [false, true]);
-  assert.equal((await call('GET', 'usage')).body.paused, true, '사이트 다시 올리기도 이것을 보고 막음');
+  assert.equal((await call('GET', 'usage')).body.paused, true, '사이트 다시 배포도 이것을 보고 막음');
   const r = await reserve(call, 'bbbbbbbbbb');
-  assert.equal(r.status, 503); assert.equal(r.body.error.code, 'rate_limited'); assert.match(r.body.error.message_ko, /운영자가 잠시 새 업로드를 멈췄어요/);
+  assert.equal(r.status, 503); assert.equal(r.body.error.code, 'rate_limited'); assert.match(r.body.error.message_ko, /운영자가 잠시 새 배포를 멈췄어요/);
   const room = await call('POST', 'room', { id: 'aaaaaaaaaa' });
   assert.equal(room.status, 503);
   await call('POST', 'uploads', { paused: false, who: 'op@example.com' });

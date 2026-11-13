@@ -9,8 +9,8 @@ const meta = Object.values(import.meta.glob('./shots/shots.json', { eager: true,
 export const shot = (name) => files[`./shots/${name}.webp`] || '';
 /** 그림 크기(자리를 미리 잡아 화면이 밀리지 않게) */
 export const shotSize = (name) => meta[name] || { w: 1280, h: 800 };
-/** 같은 내용을 디자인만 바꿔 찍은 것: [{id, name, desc, src}] */
-export const SHOWCASE = (meta.showcase || []).map((id) => ({ id, ...(facts.designs[id] || { name: id, desc: '' }), src: shot(`show-${id}`) })).filter((d) => d.src);
+/** 같은 내용을 디자인만 바꿔 찍은 것: [{id, name, desc, src, srcM}]. srcM은 휴대폰 크기로 찍은 판(없으면 '') */
+export const SHOWCASE = (meta.showcase || []).map((id) => ({ id, ...(facts.designs[id] || { name: id, desc: '' }), src: shot(`show-${id}`), srcM: shot(`show-${id}-m`) })).filter((d) => d.src);
 /** 말로 고치기 체험: 예시 연수에 그 말을 넣었을 때 앱이 낸 첫 안을 적용해 찍은 것 [{text, title, why, src}] */
 export const SAYS = (meta.say || []).map((x) => ({ ...x, src: shot(x.shot) })).filter((x) => x.src);
 export const PRESET_COUNT = facts.presets;

@@ -109,7 +109,7 @@ export const noFileHtml = () => pageHtml('이 사이트에 없는 페이지예�
 /** 신고로 가려 둔 동안 이 브랜치에 올리는 화면 */
 export const blockedHtml = (id, reportUrl) => pageHtml('잠시 가려 둔 사이트예요', ['신고가 들어와서 확인하는 동안 열리지 않게 해 두었어요.', '이 사이트를 올린 분이고 사정을 알리고 싶다면 아래 화면에서 알려 주세요.'], reportA(reportUrl, id));
 /** 지운 뒤(가장 최근 배포를 지우지 못할 때) 남기는 화면. 프로젝트의 본 배포(없는 주소)도 같은 화면 */
-export const goneHtml = (home = '') => pageHtml('이 사이트는 공개 기간이 끝났어요', ['공개 기간이 지나면 사이트와 파일이 지워져요. 주소가 맞는지도 한 번 확인해 주세요.', '다시 보려면 사이트를 만든 강사에게 새 주소를 물어봐 주세요.'], home ? `<a href="${esc(home)}">이곳은 어떤 곳인가요?</a>` : '');
+export const goneHtml = (home = '') => pageHtml('이 사이트는 보관 기간이 끝났어요', ['보관 기간이 지나면 사이트와 파일이 지워져요. 주소가 맞는지도 한 번 확인해 주세요.', '다시 보려면 사이트를 만든 강사에게 새 주소를 물어봐 주세요.'], home ? `<a href="${esc(home)}">이곳은 어떤 곳인가요?</a>` : '');
 /** 안내 화면만 있는 배포의 _headers */
 export const NOTICE_HEADERS = `/*\n  ! Access-Control-Allow-Origin\n  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  X-Robots-Tag: noindex, nofollow\n  Cache-Control: no-store\n`;
 

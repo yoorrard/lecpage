@@ -115,6 +115,6 @@ async function adminApi(request, url, cfg, d, me) {
     else if (/^\d{1,9}$/.test(b || '') && c === 'off' && parts.length === 3) res = await gate.fetch('http://gate/notice-off', post({ id: Number(b), who }));
     if (res) { await ok(res); d.onNoticeChange(); return res; }
   }
-  if (a === 'uploads' && parts.length === 1) return ok(await gate.fetch('http://gate/uploads', post({ paused: body.paused, reason: body.reason, who })));
+  if (a === 'uploads' && parts.length === 1) { const res = await ok(await gate.fetch('http://gate/uploads', post({ paused: body.paused, reason: body.reason, who }))); d.onUploadsChange?.(); return res; }
   throw new HttpError('not_found', '없는 주소예요.');
 }

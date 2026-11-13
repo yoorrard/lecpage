@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// lecpage 바로 공개 서버를 명령 한 번으로 켭니다(처음이든 다시든 같은 명령. 이미 된 것은 건너뜀).
+// lecpage 바로 배포 서버를 명령 한 번으로 켭니다(처음이든 다시든 같은 명령. 이미 된 것은 건너뜀).
 //
 //   cd hosting && npm run setup                     묻는 것: 토큰(없을 때), 운영자 이메일, 알림 웹훅(선택)
 //   CLOUDFLARE_API_TOKEN=… LECPAGE_EMAIL=… npm run setup -- --yes      묻지 않고
 //   npm run setup -- --dry-run                     Cloudflare에 아무것도 바꾸지 않고 할 일만 보여 줌
 //
-// 하는 일: ① 로그인 확인 ② workers.dev 하위 도메인 ③ 보기(Pages 프로젝트·올리기 전용 토큰) ④ 바로 공개 Worker 배포
+// 하는 일: ① 로그인 확인 ② workers.dev 하위 도메인 ③ 보기(Pages 프로젝트·올리기 전용 토큰) ④ 바로 배포 Worker 배포
 //          ⑤ 비밀 값(ADMIN_KEY는 만들어 파일에만, 화면에 찍지 않음) ⑥ 관리 Worker 배포 + Access(도메인 없이 workers.dev, 운영자 이메일만)
 //          ⑦ (선택) 내 도메인·WAF 규칙 1개 ⑧ 확인 ⑨ 앱 빌드 변수 VITE_PUBLISH_API 안내
 // 이메일·토큰·열쇠는 저장소와 로그에 쓰지 않습니다. 이메일은 Cloudflare(Access 정책·관리 Worker 비밀 값)에만, ADMIN_KEY는 ~/.lecpage/<계정>/admin-key(0600)에만.
@@ -44,7 +44,7 @@ const WAF_RULE = 'lecpage 폭주 막기';
 export const TOKEN_HELP = `Cloudflare API 토큰 만들기(한 번):
   대시보드 → 오른쪽 위 사람 모양 → 내 프로필 → API 토큰 → 토큰 만들기 → 사용자 지정 토큰
   권한(Permissions)에 아래를 넣고, 계정 리소스는 운영 계정 하나만 고릅니다.
-    Account · Workers Scripts · Edit                         바로 공개·관리 Worker 배포, 비밀 값
+    Account · Workers Scripts · Edit                         바로 배포·관리 Worker 배포, 비밀 값
     Account · Cloudflare Pages · Edit                        사이트 보기(Pages) 프로젝트
     Account · Account API Tokens · Edit                      Worker가 쓸 'Pages 올리기 전용' 토큰 만들기
     Account · Access: Apps and Policies · Edit               관리 화면 Access
@@ -233,7 +233,7 @@ export async function setup(argv = process.argv.slice(2), { env = process.env, i
   });
 
   // ④ 배포
-  step('바로 공개 Worker 배포', async () => {
+  step('바로 배포 Worker 배포', async () => {
     if (!write) { await wrangler(['deploy', '--dry-run', '--outdir', '.wrangler/dry-run']); st.did.push('(dry-run) wrangler deploy'); }
     else { await wrangler(['deploy']); st.did.push(`Worker ${SITES} 배포`); }
     st.sitesUrl = st.sub ? `https://${SITES}.${st.sub}.workers.dev` : '';

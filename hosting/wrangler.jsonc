@@ -1,4 +1,4 @@
-// lecpage 바로 공개 호스트(선택). 운영자가 직접 배포할 때만 켜집니다 → README.md
+// lecpage 바로 배포 호스트(선택). 운영자가 직접 배포할 때만 켜집니다 → README.md
 // 앱(lecpage)과 반드시 다른 주소(출처)에 두세요. 앱은 사용자의 AI 키를 자기 출처에 보관합니다.
 // 무료 요금제로도 돕니다: Worker + Durable Objects(SQLite 저장). R2·KV를 쓰지 않아 카드 등록이 필요 없습니다.
 // 처음 켤 때는 npm run setup(README §2): 배포·비밀 값·사이트 보기(VIEW=pages, Cloudflare Pages)·관리 Worker(wrangler.admin.jsonc)까지.
@@ -34,18 +34,20 @@
   // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK, ALERT_WEBHOOK, ACCESS_EMAILS)과
   // 사이트 보기 설정(VIEW, CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_HOST, PAGES_TOKEN, APP_ORIGINS)은 npm run setup이 비밀 값으로 넣습니다(다시 배포해도 남음).
   "vars": {
-    // 바로 공개를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
+    // 바로 배포를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
     "ALLOWED_ORIGINS": "https://yoorrard.github.io,http://localhost:5173,http://localhost:4173"
-    // 요금제: PLAN "free"(기본. 무료 요금제 안에서만, 하루 예산의 60%를 쓰면 새 사이트를 받지 않음) | "paid"(Workers Paid로 올린 뒤. 하루 한도 없음)
-    // DAILY_REQUEST_BUDGET 100000(paid는 0) · KEEP_ALIVE "on"(방문이 있으면 공개 기간을 다시 채움) · MAX_SITE_DAYS 365
+    // 요금제: PLAN "free"(기본. 무료 요금제 안에서만: 하루 예산의 45%부터 예약한 연수만, 60%부터 새 사이트·새 방은 강사 계정으로) | "paid"(Workers Paid로 올린 뒤. 하루 한도 없음)
+    // 수용량·비용 표: node scripts/capacity-model.mjs, README §4
+    // DAILY_REQUEST_BUDGET 100000(paid는 0) · KEEP_ALIVE "on"(방문이 있으면 보관 기간을 다시 채움) · MAX_SITE_DAYS 365
     // 바꿀 수 있는 한도(기본값): MAX_BYTES 41943040 · MAX_FILE_BYTES 20971520 · MAX_FILES 600 · SITE_DAYS 30
-    // SITES_PER_HOUR 6 · SITES_PER_DAY 20 · DAILY_SITE_CAP 30 · MAX_TOTAL_BYTES 4294967296 · DEPLOYS_PER_HOUR 30
+    // SITES_PER_HOUR 6 · SITES_PER_DAY 20(기기 표가 없을 때 IP마다) · SITES_PER_DEVICE 5(paid 10) · SITES_PER_HOUR_SHARED 30 · SITES_PER_DAY_SHARED 60
+    // DAILY_SITE_CAP pages 보기 200(paid 1000), worker 보기 30(paid 300) · MAX_TOTAL_BYTES 4294967296 · DEPLOYS_PER_HOUR 30 · PAGES_API_BUDGET 900(5분)
     // REPORTS_PER_HOUR 5 · DAILY_REPORT_CAP 200 · REPORT_KEEP 500 · REPORT_DAYS 90 · PUBLIC_ORIGIN(내 도메인을 붙였을 때 주소 고정)
     // 실시간 방: LIVE "on"(끄려면 "off") · LIVE_UPLOADS "on" · LIVE_MAX_UPLOAD_MB 10 · LIVE_ROOM_MB 200
-    // LIVE_MAX_PARTICIPANTS 300 · LIVE_SOCKETS_PER_IP 500 · DAILY_ROOM_CAP 30
+    // LIVE_MAX_PARTICIPANTS 300 · LIVE_SOCKETS_PER_IP 500 · DAILY_ROOM_CAP pages 보기 100(paid 1000), worker 보기 30(paid 300)
     // ALLOW_SUPABASE_SDK "1"(Supabase 실시간을 쓰는 사이트를 받을 때만. README의 '실시간 연결' 참고)
     // 관리 화면(README §11, 내 도메인 경로 Access일 때만): ACCESS_TEAM_DOMAIN "<팀>.cloudflareaccess.com" · ACCESS_AUD "<Access 애플리케이션의 AUD 태그>"(둘 다 있어야 /admin이 열림)
-    // 보기(README §4): VIEW "pages"|"worker" · SITE_DAYS(pages 기본 60) · POLL_LONG "on"(기본. 예약 어림이 긴 대기 묻기 기준, 끄려면 "off")
-    // 알림: ALERT_AT "50,60,80,95"(하루 예산의 %) · 공지 링크 제한: NOTICE_LINK_HOSTS "github.com,내도메인" · 앱 익명 이용 합계: STATS "on"(끄려면 "off")
+    // 보기(README §4): VIEW "pages"|"worker" · SITE_DAYS(pages 기본 60) · POLL_LONG "on"(기본. 예약 어림이 긴 대기 묻기 기준, 끄려면 "off") · POLL_RELAY "auto"(유료면 Worker가 대신 기다림)
+    // 알림: ALERT_AT "45,60,80,95"(하루 예산의 %, 넘침 단계와 같게) · 공지 링크 제한: NOTICE_LINK_HOSTS "github.com,내도메인" · 앱 익명 이용 합계: STATS "on"(끄려면 "off")
   }
 }

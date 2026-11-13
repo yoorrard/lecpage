@@ -72,6 +72,7 @@ Paid에서는 DO 요청 포함분(월 100만)이 먼저 차서 학교망 연수 
 ## 7. 런타임(engine/runtime) 쪽에서 이어서 고칠 것
 
 > 2026-11-13 반영: 1·2·3은 [school-network-2026-11](school-network-2026-11.md) §6·§10(긴 대기·권고·`POLL_LONG` 기본 on, 측정으로 어림 1분 3.4). 4는 강사 화면 맨 위 '묻기 방식'·할 일·접속 확인 결과로(상태 API는 다른 출처라 강사 화면 대신 앱의 '연수 장소 확인'이 부름). 5는 남은 일.
+> 2026-11-13 갱신: 1의 긴 대기는 서버가 무료에서는 방 안에서(오늘 duration이 50%를 넘으면 Worker가 대신), 유료에서는 늘 Worker가 대신 기다림(`POLL_RELAY=auto`, 방이 잠들어 duration ≈ 0). 응답 모양은 같아 런타임이 따로 할 일은 없음. 효과·비용은 [`scale-2026-11.md`](scale-2026-11.md) §4·§11.
 
 1. `live/http.js` 묻기: `kind === 'poll'`일 때 `snapshot?since=…&wait=20`을 붙이고 그 요청의 제한 시간을 `wait + 10초`로(지금 12초). 긴 대기를 쓰면 `emptyPolls` 배로 늘리기는 끔.
 2. snapshot 응답의 `X-Lec-Poll-Ms`를 읽어 다음 간격의 아래 한도로 씀(다른 출처에서도 읽히게 서버가 `Access-Control-Expose-Headers`를 붙임).

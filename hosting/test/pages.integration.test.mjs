@@ -17,7 +17,7 @@ const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 const MP4 = new Uint8Array(3000).map((_, i) => i % 251);
 const get = async (url, init) => { const r = await fetch(url, { redirect: 'manual', ...init }); return { status: r.status, headers: r.headers, text: await r.text() }; };
 
-test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 올리기 → 사라진 자산 → 가리기·풀기 → 지우기', async (t) => {
+test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 배포 → 사라진 자산 → 가리기·풀기 → 지우기', async (t) => {
   if (!existsSync(join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'))) return t.skip('wrangler가 설치되지 않았어요');
   const cf = await startFakeCf();
   closers.push(cf.stop);
@@ -35,7 +35,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
   const info = await call(base, 'GET', '/api/info');
   assert.equal(info.body.view, 'pages');
   assert.equal(info.body.keepAlive, false, 'Pages 보기는 방문으로 기간을 늘리지 않음');
-  assert.equal(info.body.limits.days, 60, '기본 공개 기간 60일(마지막으로 올린 날부터)');
+  assert.equal(info.body.limits.days, 60, '기본 보관 기간 60일(마지막으로 배포한 날부터)');
 
   const files = await buildSite('sel-story', { assets: { 'assets/media/사진 (1).png': PNG, 'assets/media/수업 영상.mp4': MP4, 'assets/files/명단.csv': te.encode('이름\n') } });
   const made = await call(base, 'POST', '/api/sites', { json: { title: 'Pages 시험' } });
@@ -93,7 +93,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(con.status, 200); assert.equal(con.headers.get('x-frame-options'), 'DENY');
   });
 
-  await t.test('다시 올리기: 바뀐 파일만 받고 지난 배포는 지움', async () => {
+  await t.test('다시 배포: 바뀐 파일만 받고 지난 배포는 지움', async () => {
     const changed = { ...files, 'index.html': te.encode(new TextDecoder().decode(files['index.html']).replace('</body>', '<p>고침</p></body>')) };
     const r = await deploy(base, site, changed);
     assert.equal(r.status, 200, JSON.stringify(r.body));
@@ -148,7 +148,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(del.status, 204);
     const left = cf.deploymentsOf(`s-${site.id}`);
     assert.equal(left.length, 1, '가장 최근 배포를 못 지우면 안내 화면 하나만 남김');
-    assert.ok((await get(site.url)).text.includes('공개 기간이 끝났어요'));
+    assert.ok((await get(site.url)).text.includes('보관 기간이 끝났어요'));
     assert.equal((await get(site.altUrl)).status, 404);
     cf.state.failDeleteLatest = false;
   });

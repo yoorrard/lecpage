@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView, useReduced } from './motion.js';
+import { useMedia } from './motion-more.js';
 import { SHOWCASE, PRESET_COUNT } from './facts.js';
 
 /**
  * 같은 연수 내용을 디자인만 바꿔 엔진으로 만든 실제 첫 화면. 이름을 누르면 그 디자인으로 바뀌어요(View Transitions로 접히듯 넘어감).
  * 화면 안에 있을 때만 몇 초마다 다음 디자인으로 넘어가고, 멈춤 버튼이 있어요. 마우스를 올리거나 버튼에 초점이 있으면 멈춰요.
  * 동작 줄이기: 저절로 넘어가지 않고, 바뀔 때도 움직임 없이 바로 바뀌어요.
+ * 휴대폰 너비: PC 화면을 줄여 보이면 실제 휴대폰 모습과 달라서, 같은 사이트를 휴대폰 크기로 찍은 판(-m)을 보여 주고 디자인 이름은 옆에 세로로.
  */
 const EVERY = 4200;
 export function Showcase() {
@@ -14,12 +16,15 @@ export function Showcase() {
   const [auto, setAuto] = useState(true);
   const [hold, setHold] = useState(false);
   const reduced = useReduced();
+  const narrow = useMedia('(max-width: 599.98px)');
   const on = useInView(box, { margin: '-15% 0px' });
   const near = useInView(box, { margin: '600px 0px', once: true });
   const list = SHOWCASE;
   const cur = list[i] || list[0];
+  const srcOf = (d) => (narrow && d.srcM) || d.src;
+  const isM = narrow && !!cur?.srcM;
   // 다음 그림을 미리 받아 둠(바뀔 때 비어 보이지 않게)
-  useEffect(() => { if (near && list.length) { const n = new Image(); n.src = list[(i + 1) % list.length].src; } }, [near, i]);
+  useEffect(() => { if (near && list.length) { const n = new Image(); n.src = srcOf(list[(i + 1) % list.length]); } }, [near, i, narrow]);
   // View Transitions 없이 바뀔 때: 새 그림을 살짝 겹쳐 드러냄(불투명도만)
   useEffect(() => {
     const el = img.current; if (!el || reduced || viaVT.current) { viaVT.current = false; return; }
@@ -38,7 +43,7 @@ export function Showcase() {
     if (byHand && el && document.startViewTransition && !reduced) {
       viaVT.current = true;
       el.style.viewTransitionName = 'ld-shot'; // 이 그림만 넘김(다른 그림은 가만히)
-      const vt = document.startViewTransition(async () => { el.src = list[n].src; try { await el.decode(); } catch { } setI(n); });
+      const vt = document.startViewTransition(async () => { el.src = srcOf(list[n]); try { await el.decode(); } catch { } setI(n); });
       vt.finished?.finally(() => { el.style.viewTransitionName = ''; }).catch(() => { });
     } else setI(n);
   }
@@ -53,7 +58,7 @@ export function Showcase() {
       <div class="ld-show-stage" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)} onFocusCapture={() => setHold(true)} onBlurCapture={() => setHold(false)}>
         <figure class="ld-frame">
           <i class="ld-bar"><b /><b /><b /><span>마음이 먼저 도착하는 교실</span></i>
-          <img ref={img} class="ld-show-img" src={near ? cur.src : undefined} alt={`'${cur.name}' 디자인으로 만든 첫 화면`} width="1280" height="800" decoding="async" />
+          <img ref={img} class={`ld-show-img${isM ? ' is-m' : ''}`} src={near ? srcOf(cur) : undefined} alt={`'${cur.name}' 디자인으로 만든 첫 화면`} width={isM ? 400 : 1280} height={isM ? 718 : 800} decoding="async" />
           <figcaption class="ld-show-cap"><b>{cur.name}</b><span>{cur.desc}</span></figcaption>
         </figure>
         <div class="ld-show-pick">
