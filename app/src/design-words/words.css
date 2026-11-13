@@ -55,7 +55,7 @@
 @media (min-width:980px){.dict-intro{grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start}}
 .dict-say{padding:18px;border:1px solid var(--line);border-radius:var(--r);background:var(--paper);box-shadow:var(--shadow-sm)}
 .dict-tabs{position:sticky;top:57px;z-index:6;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:10px 0;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--hair)}
-.dict-tabs .seg{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;max-width:100%}
+.dict-tabs .seg{max-width:100%}
 .dict-sub{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
 .dict-sub label{display:inline-flex;gap:8px;align-items:center;font-size:.9rem;color:var(--ink-2)}
 .dict-sub select{min-height:36px;border-radius:var(--r-xs);border:1px solid var(--line);background:var(--card);padding:4px 8px;font-size:.9rem;max-width:100%}

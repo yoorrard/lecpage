@@ -75,7 +75,7 @@ export function DesignPanel({ p, update }) {
     setTry(p.id, { key: f.key, bp: applyWords(latest.current.blueprint, f.ids), label: f.title, focus: f.focus, apply: () => applyFix(f) });
     // 미리보기가 위에 있는 좁은 화면: 비교 화면이 보이게 올림
     const pv = document.querySelector('.workspace .preview');
-    if (pv && pv.getBoundingClientRect().bottom < 80) pv.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (pv && pv.getBoundingClientRect().top < 0) pv.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
   const others = mixOrder(E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id)));
@@ -87,7 +87,7 @@ export function DesignPanel({ p, update }) {
   const whyText = (r) => (r.concept ? `컨셉 '${concept.motif || concept.idea}'에 맞춘 디자인` : (r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
-      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="찾는 것이 없으면 [수정 요청] 탭에 적어 AI에게 맡겨요." />
+      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="아래에서 직접 고르거나, AI를 연결했다면 [수정 요청]에 적어요." />
       <BasketNote update={update} remember={remember} />
       <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
       <div class="field"><span>추천 디자인</span>

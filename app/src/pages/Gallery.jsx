@@ -158,7 +158,7 @@ export function Gallery({ tab: tab0 }) {
   const sentence = sentenceOf(ids);
   return (
     <div class="stack gallery">
-      <div class="step-head"><div class="step-head-t"><h1>디자인 둘러보기</h1><p>lecpage가 쓰는 디자인 낱말 {words.length}개를 실제 화면으로 봐요. 담은 낱말은 내 연수에 바로 적용하거나 요청 문장으로 써요.</p></div></div>
+      <div class="step-head"><div class="step-head-t"><h1>디자인 둘러보기</h1><p>lecpage가 쓰는 디자인 낱말 {words.length}개를 실제 화면으로 봐요. 담은 낱말은 AI 없이 내 연수에 바로 적용돼요.</p></div></div>
 
       <div class="dict-intro">
         <div class="dict-say">
@@ -208,7 +208,7 @@ export function Gallery({ tab: tab0 }) {
         {showSentence && <>
           <div class="basket-list" role="group" aria-label="담은 낱말 빼기">{ids.map((id) => <button type="button" class="chip" onClick={() => setIds(ids.filter((x) => x !== id))} aria-label={`${wordById(id)?.name} 빼기`}>{wordById(id)?.name}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>)}</div>
           <pre class="basket-sentence" aria-label="요청 문장">{sentence}</pre>
-          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">AI 도구의 lecpage나 [AI로 사이트 만들기]의 요청 사항에 붙여 넣어요.</span></div>
+          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">AI 도구(lecpage 스킬)나 AI 요청 사항에 붙여 넣을 때 써요.</span></div>
         </>}
       </aside>}
 

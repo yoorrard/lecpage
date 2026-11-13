@@ -887,3 +887,9 @@ details>summary{cursor:pointer}
   .stage-2 .wiz-main:has(> .ai-job):has(> .structure-note){grid-template-rows:auto auto auto minmax(0,1fr)}
   .stage-2 .structure-note{padding:8px 14px}
 }
+
+/* 도움말: 눌러 보는 예(말로 고치기). 누르기 전에는 버튼만, 누르면 예시 연수와 고칠 안(design-words/words.css) */
+.help-task-wide>.help-cta{align-self:stretch;display:grid;place-content:center;justify-items:center;gap:8px;min-height:180px;padding:20px;border:1px dashed var(--line-strong);border-radius:var(--r-sm);background:var(--sunk);text-align:center}
+.help-try{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.help-try-now{order:-1;margin:0;display:grid;gap:6px}
+.help-try-now figcaption{display:flex;flex-wrap:wrap;align-items:center;gap:4px}

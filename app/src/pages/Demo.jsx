@@ -3,10 +3,12 @@ import { Field, Progress } from '../components/ui.jsx';
 import { Mascot } from '../components/Mascot.jsx';
 import { Preview } from '../components/Preview.jsx';
 import { QR } from '../components/QR.jsx';
-import { E } from '../lib/engine.js';
 import { loadExample, newProject } from '../lib/project.js';
 import { sanitizeImported } from '../lib/blueprint.js';
 import { copy } from '../lib/util.js';
+import { SayFix } from '../design-words/SayFix.jsx';
+import { applyWords } from '../design-words/words.js';
+import { setTry, useBus } from '../design-words/bus.js';
 
 // 체험하기: 예시 교재로 '교재 넣기 → 살펴보고 고치기 → 공개하기'를 그대로 따라 해 봅니다.
 // AI 답과 공개는 흉내만 냅니다. 키가 필요 없고, 어디로도 보내지 않으며, 프로젝트로 저장하지 않습니다(이 화면의 메모리에만 있음).
@@ -14,7 +16,7 @@ const EXAMPLE = 'data-lab';
 const STEPS = ['교재 넣기', '살펴보고 고치기', '공개하기'];
 const TIP = [
   '예시 교재와 연수 정보가 들어 있어요. [AI로 사이트 만들기]를 눌러 보세요.',
-  '왼쪽에서 고치면 미리보기가 바로 바뀌어요. 다 봤으면 [공개하기 →]를 눌러요.',
+  '[너무 심심해요]처럼 보이는 느낌을 눌러 보세요. 바꾼 모습을 보고 [적용하기]를 누르면 미리보기가 바뀌어요.',
   '[공개하기]를 누르면 주소와 QR이 나와요.',
 ];
 const exampleUrl = () => new URL(`examples/${EXAMPLE}/index.html`, location.href.split('#')[0]).href;
@@ -25,6 +27,9 @@ export function Demo() {
   const [making, setMaking] = useState(false); // AI가 만드는 중(흉내)
   const [pub, setPub] = useState(''); // '' | 'busy' | 'done'
   const [pct, setPct] = useState(0);
+  const [hist, setHist] = useState([]); // 말로 고치기 되돌리기(이 화면 안에서만)
+  const [applied, setApplied] = useState('');
+  const bus = useBus('demo');
   const timers = useRef([]);
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
   useEffect(() => { loadExample(EXAMPLE).then((b) => setBp(sanitizeImported(b))); return () => timers.current.forEach(clearTimeout); }, []);
@@ -34,13 +39,9 @@ export function Demo() {
   const hero = bp?.sections.find((s) => s.type === 'hero') || {};
   const setMeta = (patch) => setBp((b) => ({ ...b, meta: { ...b.meta, ...patch } }));
   const setHero = (patch) => setBp((b) => ({ ...b, sections: b.sections.map((s) => (s.type === 'hero' ? { ...s, ...patch } : s)) }));
-  const presets = useMemo(() => {
-    if (!bp) return [];
-    const d = bp.design || {};
-    const ids = [d.preset, ...E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary }, 6).map((r) => r.id)];
-    return ids.filter((id, i) => id && ids.indexOf(id) === i).slice(0, 4).map((id) => E.getPreset(id)).filter(Boolean);
-  }, [!!bp]);
-  const preset = bp?.design?.preset;
+  const applyFix = (f) => { setHist((h) => [...h, bp]); setBp((b) => applyWords(b, f.ids)); setApplied(f.key); setTry('demo', null); };
+  const undoFix = () => { const last = hist[hist.length - 1]; if (!last) return; setBp(last); setHist(hist.slice(0, -1)); setApplied(''); };
+  const tryFix = (f) => setTry('demo', f ? { key: f.key, bp: applyWords(bp, f.ids), label: f.title, focus: f.focus, apply: () => applyFix(f) } : null);
 
   function make() { setMaking(true); setStep(2); later(() => setMaking(false), 2600); }
   function publish() {
@@ -101,9 +102,7 @@ export function Demo() {
                       <h2 class="h-sub">고쳐 보기</h2>
                       <Field label="연수명"><input value={meta.title} onInput={(e) => setMeta({ title: e.target.value })} maxLength={160} /></Field>
                       <Field label="첫 화면 제목"><textarea class="ta-short" rows={2} value={hero.title || ''} onInput={(e) => setHero({ title: e.target.value })} maxLength={120} /></Field>
-                      <fieldset class="field plain-fieldset"><legend>디자인</legend>
-                        <div class="demo-presets">{presets.map((x) => <button type="button" class="btn btn-sm" aria-pressed={String(preset === x.id)} onClick={() => setBp((b) => ({ ...b, _presetAuto: false, design: { ...b.design, preset: x.id, seed: '' } }))}>{x.name_ko}</button>)}</div>
-                      </fieldset>
+                      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} title="디자인 말로 고치기" desc="예시를 눌러 보세요. 실제 앱에서도 AI 없이 이렇게 바로 바뀌어요." idp="demosay" />
                     </div>
                   </div>
                   <Preview p={p} />
@@ -122,7 +121,7 @@ export function Demo() {
             ) : (
               <section class="demo-done">
                 <div class="demo-done-main">
-                  <div class="qr-box"><QR text={url} size={168} label="예시 사이트 QR 코드" /></div>
+                  <div class="qr-box"><QR text={url} size={168} label="예시 사이트 QR" /></div>
                   <div class="stack">
                     <h2 class="h-sub">주소와 QR이 나왔어요</h2>
                     <p class="demo-url"><a href={url} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, '')}</a></p>
@@ -132,7 +131,7 @@ export function Demo() {
                 </div>
                 <pre class="prompt-box demo-invite" aria-label="카톡 안내 문구">{invite}</pre>
                 <div class="demo-next">
-                  <b>이제 내 교재로 해 볼까요?</b>
+                  <b>이제 내 교재로 해 보세요.</b>
                   <div class="btn-row"><button class="btn btn-primary btn-lg" onClick={() => startReal('blank')}>내 교재로 시작하기</button><button class="btn" onClick={() => startReal('example')}>이 예시를 고쳐 쓰기</button><button class="btn btn-quiet" onClick={() => { setPub(''); setStep(1); }}>처음부터 다시 체험</button></div>
                 </div>
               </section>
