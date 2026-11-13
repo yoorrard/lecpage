@@ -1,5 +1,6 @@
 // 브라우저에서 바로 배포(사용자 토큰). 토큰은 이 브라우저에서 배포할 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
 import { track } from './stats.js';
+import { koTime } from './util.js';
 
 const GH = 'https://api.github.com';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -224,13 +225,80 @@ export const openVercel = (token, projectId) => vc(token, 'PATCH', `/v9/projects
 
 // ── lecpage 바로 배포: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 배포.
 // 서버의 보기가 worker면 방문이 있는 동안 열려 있고(30일), pages면 사이트마다 다른 주소(s-<id>.….pages.dev)로 마지막으로 올린 날부터 정해진 날까지(info.keepAlive=false) ──
+// 붐빌 때(넘침 처리, hosting/src/fair.js): 서버가 단계(info.capacity)·까닭(reason)·누구 몫인지(scope)·넘길 곳(next)을 알려 주고,
+// 앱은 같은 파일 그대로 강사 계정에 배포하는 길로 넘김. 평소(open)에는 화면에 아무것도 더하지 않음
 export const PUBLISH_API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
-let infoP = null;
-/** 바로 배포를 쓸 수 있으면 { plan: 'free'|'paid', accepting, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
- * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음), accepting이 false면 오늘은 새 사이트를 받지 않음 */
+let infoP = null; let infoAt = 0;
+/** 바로 배포를 쓸 수 있으면 { plan: 'free'|'paid', accepting, capacity?, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
+ * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음). capacity(붐빔 단계)는 instantGate가 읽음.
+ * 배포 화면을 열 때 단계가 맞게 1분만 기억(서버·브라우저도 30초 기억) */
 export function instantInfo() {
   if (!PUBLISH_API) return Promise.resolve(null);
-  return (infoP ||= fetch(`${PUBLISH_API}/api/info`).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null));
+  if (!infoP || Date.now() - infoAt > 60000) {
+    infoAt = Date.now();
+    infoP = fetch(`${PUBLISH_API}/api/info`).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null);
+  }
+  return infoP;
+}
+/** 앱이 알아듣는 것: 'split' = 그날 참여 기능 방이 차면 사이트는 받고 참여 기능만 강사 계정으로 넘기기 */
+const CAPS = ['split'];
+const DAY = 864e5;
+/** 서버의 하루 몫이 다시 차는 때(00:00 UTC = 한국 시간 오전 9시) */
+const nextReset = (now = Date.now()) => (Math.floor(now / DAY) + 1) * DAY;
+/**
+ * 기기 표: 계정이 없는 바로 배포가 기기마다 하루 몫을 세는 무작위 22자. 이 브라우저에만 두고 새 사이트를 만들 때만 보냄.
+ * 이름·계정·다른 값과 묶지 않음(서버는 날짜와 함께 해시해 그날만 셈). 저장이 막힌 브라우저면 이번 탭 동안만
+ */
+/** 기기 표는 개인정보 처리방침에 알린 뒤 7일이 지난 날부터 보냄(그전에는 서버가 인터넷 주소로 셈). 근거: docs/legal/privacy.md 12 */
+const DEVICE_FROM = Date.parse('2026-11-20T00:00:00+09:00');
+let deviceMem = '';
+export function deviceId() {
+  if (deviceMem) return deviceMem;
+  try { const v = localStorage.getItem('lecpage:device') || ''; if (/^[A-Za-z0-9_-]{22}$/.test(v)) return (deviceMem = v); } catch { /* 저장 막힘 */ }
+  const a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  deviceMem = Array.from(crypto.getRandomValues(new Uint8Array(22)), (x) => a[x & 63]).join('');
+  try { localStorage.setItem('lecpage:device', deviceMem); } catch { /* 이번 탭 동안만 */ }
+  return deviceMem;
+}
+/** 이 기기의 오늘 남은 새 사이트 몫(서버가 새 사이트를 만들 때 알려 줌). { left, scope: 'device'|'ip' } 또는 null(모름·하루가 바뀜) */
+export function instantShare(now = Date.now()) {
+  try { const s = JSON.parse(localStorage.getItem('lecpage:instant-share') || 'null'); return s && s.until > now && Number.isFinite(s.left) ? s : null; } catch { return null; }
+}
+function keepShare(left, scope, until = nextReset()) {
+  try { localStorage.setItem('lecpage:instant-share', JSON.stringify({ left, scope, until })); } catch { /* 몰라도 배포는 됨 */ }
+}
+/** 'YYYY-MM-DD' + 'HH:MM'(한국 시간) → 그 시각. 시각이 없으면 오전 10시(서버와 같게) */
+function kstAt(date, time = '') {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || '')); if (!m) return NaN;
+  const t = /^(\d{1,2}):(\d{2})$/.exec(String(time || '')) || [0, '10', '00'];
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], Math.min(23, +t[1]) - 9, Math.min(59, +t[2]));
+}
+const MINE = '내 계정에 배포하면 같은 파일 그대로예요.';
+/**
+ * 배포 화면을 열 때: 서버의 붐빔 단계(info.capacity)로 바로 배포를 쓸 수 있는지(ok)와 한 줄(note).
+ * note는 ok면 바로 배포 카드에, 아니면 내 계정으로 넘기는 자리에. hint는 작게(남은 몫이 1개일 때만).
+ * 이미 배포한 사이트(hasSite)는 붐벼도 다시 배포가 됨(운영자가 멈춘 때만 빼고). 평소에는 { ok: true, note: '', hint: '' }
+ * @param {object|null} info instantInfo()
+ * @param {{ hasSite?: boolean, date?: string, start?: string, share?: { left: number, scope: string }|null, now?: number }} o
+ */
+export function instantGate(info, { hasSite = false, date = '', start = '', share = null, now = Date.now() } = {}) {
+  const out = (ok, note = '', hint = '') => ({ ok, note, hint });
+  if (!info) return out(false);
+  const c = info.capacity; const reason = c?.reason || '';
+  if (c?.state === 'paused' || info.paused) return out(false, `운영자가 잠시 새 배포를 멈췄어요. 이미 배포한 사이트는 그대로 열려요. ${MINE}`);
+  if (reason === 'pages_api') return out(true, `배포하는 사람이 많아 잠깐 줄을 서고 있어요. 지금 누르면 ${koTime(c.retryAt || now + 60000, { now, day: false })}쯤 이어서 배포해요.`);
+  if (hasSite) return out(true);
+  if (c ? c.state === 'full' : info.accepting === false) {
+    return out(false, reason === 'storage' ? `바로 배포 저장 공간이 가득 찼어요. ${MINE}` : `오늘은 바로 배포 자리가 다 찼어요. ${c?.resetAt ? `${koTime(c.resetAt, { now })}에 다시 받아요. ` : ''}${MINE}`);
+  }
+  if (share?.left === 0) return out(false, `${share.scope === 'ip' ? '이 인터넷(학교·기관 공유기)' : '이 기기'}에서 오늘 만들 수 있는 새 사이트를 다 썼어요. ${MINE}`);
+  if (c?.state === 'tight') {
+    const busy = '오늘은 바로 배포가 붐벼서 연수 날짜가 2주 안인 사이트부터 받아요.';
+    if (!date) return out(true, `${busy} 연수 날짜를 넣으면 먼저 받아요.`);
+    const at = kstAt(date, start);
+    if (!(at >= now - 12 * 3600e3 && at - now < 14 * DAY)) return out(false, `${busy} ${MINE}`);
+  }
+  return out(true, '', share?.left === 1 ? `${share.scope === 'ip' ? '이 인터넷' : '이 기기'}에서 오늘 바로 배포로 새 사이트를 1개 더 만들 수 있어요.` : '');
 }
 async function ip(method, path, { key, json, raw } = {}) {
   let r;
@@ -238,11 +306,35 @@ async function ip(method, path, { key, json, raw } = {}) {
   catch { const e = new Error('바로 배포 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 주세요.'); e.status = 0; throw e; }
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
   if (!r.ok) {
-    const code = j.error?.code || '';
-    const e = new Error(code === 'runtime_mismatch' ? '앱이 새 버전으로 바뀌는 중이에요. 화면을 새로 고친 뒤 다시 해 주세요.' : j.error?.message_ko || `바로 배포 오류 ${r.status}`);
-    e.status = r.status; e.code = code; e.reason = j.error?.reason || ''; e.missing = j.error?.missing || []; throw e;
+    const x = j.error || {}; const code = x.code || '';
+    const e = new Error(code === 'runtime_mismatch' ? '앱이 새 버전으로 바뀌는 중이에요. 화면을 새로 고친 뒤 다시 해 주세요.' : x.message_ko || `바로 배포 오류 ${r.status}`);
+    // 붐빔이면 까닭(reason)·누구 몫(scope: you 이 기기·이 인터넷만 | everyone 오늘 모두)·넘길 곳(next·liveNext)·다시 될 때(retryAt)·그날(day)
+    Object.assign(e, { status: r.status, code, reason: x.reason || '', missing: x.missing || [], scope: x.scope || '', next: x.next || [], liveNext: x.liveNext || null, retryAt: Number(x.retryAt) || 0, day: x.day || '' });
+    throw e;
   }
   return j;
+}
+/**
+ * 줄 서기: Pages API 5분 창이 차면(reason 'pages_api') 서버가 알려 준 때까지 기다렸다가 저절로 다시 함.
+ * 나란히 올리는 파일들은 같은 줄을 기다림. 세 번까지, 한 번에 6분까지
+ */
+function inLine(progress) {
+  let tries = 0; let wait = null;
+  return async (fn) => {
+    for (;;) {
+      if (wait) await wait;
+      try { return await fn(); }
+      catch (e) {
+        if (e.reason !== 'pages_api') throw e;
+        if (!wait) {
+          if (++tries > 3) throw e;
+          const now = Date.now(); const at = Math.min(now + 360e3, Math.max(now + 5000, e.retryAt || now + 60000));
+          progress(`배포하는 사람이 많아 잠깐 줄을 서고 있어요. ${koTime(at, { now, day: false })}쯤 다시 해 볼게요.`);
+          wait = sleep(at - now).then(() => { wait = null; });
+        }
+      }
+    }
+  };
 }
 /** 오늘·그날(date: 'YYYY-MM-DD') 바로 배포에 남은 몫과 사이트 상태(site: id). 못 물어보면 null */
 export function instantStatus({ date = '', site = '' } = {}) {
@@ -253,52 +345,92 @@ export function instantStatus({ date = '', site = '' } = {}) {
 /**
  * @param {object} o { site: {id, key}(다시 올릴 때), title, files, onProgress,
  *   live?: { code, adminKeyHash, settings } 참여 기능 방을 이 사이트에 묶어 만듦(서버가 지원할 때),
- *   booking?: { date, start, end, people, network, live } 연수 날짜·인원(서버가 그날 몫을 미리 셈. 차면 만들 때 알려 줌) }
- * @returns {Promise<{url, altUrl?, view?, id, key, expiresAt, liveUrl?}>} altUrl: 학교망에서 첫 주소가 막힐 때 쓸 두 번째 주소
+ *   booking?: { date, start, end, people, network, live } 연수 날짜·인원(서버가 그날 몫을 미리 셈. 차면 만들 때 알려 줌),
+ *   onLiveOff?: (liveOff) => Promise<files> 그날 참여 기능 방이 차서 서버가 참여 기능만 넘기라고 하면, 이 서버의 참여 기능을 뺀 파일을 다시 만듦 }
+ * @returns {Promise<{url, altUrl?, view?, id, key, expiresAt, liveUrl?, liveOff?, advice?}>} altUrl: 학교망에서 첫 주소가 막힐 때 쓸 두 번째 주소,
+ *   liveOff: { reason, day, next } 사이트는 바로 배포, 참여 기능은 강사 계정(next 순서), advice: 오래 쓸 사이트면 내 계정을 권함(새로 만들 때)
  */
-export async function deployInstant({ site, title, files, live = null, booking = null, onProgress = () => { } }) {
-  onProgress({ step: '준비', pct: 2 });
+export async function deployInstant({ site, title, files, live = null, booking = null, onLiveOff = null, onProgress = () => { } }) {
+  let pct = 2;
+  const progress = (step, at = pct) => { pct = at; onProgress({ step, pct }); };
+  const queued = inLine(progress);
+  progress('준비');
   let s = site?.id && site?.key ? site : null;
-  const newSite = () => ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120), ...(booking ? { booking } : {}) } });
+  let liveOff = null; let advice = null;
+  const off = (x) => { liveOff = { reason: x.reason || 'booked', day: x.day || booking?.date || '', next: x.next || x.liveNext || ['cloudflare', 'supabase'] }; };
+  const newSite = async () => {
+    try {
+      const r = await queued(() => ip('POST', '/api/sites', { json: { title: String(title || '').slice(0, 120), ...(Date.now() >= DEVICE_FROM ? { device: deviceId() } : {}), caps: CAPS, ...(booking ? { booking } : {}) } }));
+      if (r.share && Number.isFinite(r.share.left)) keepShare(r.share.left, r.share.scope);
+      if (live && onLiveOff && r.live?.ok === false) off(r.live);
+      if (r.advice?.code === 'long_term') advice = r.advice;
+      return r;
+    } catch (e) {
+      // 이 기기·이 인터넷의 오늘 몫을 다 씀: 다른 연수의 배포 화면도 처음부터 내 계정으로
+      if (e.scope === 'you' && (e.reason === 'device' || e.reason === 'ip')) keepShare(0, e.reason, e.retryAt || nextReset());
+      throw e;
+    }
+  };
   if (!s) s = await newSite();
-  const blobs = new Map(); const manifest = {};
-  for (const [path, v] of Object.entries(files)) {
-    if (path === '_headers') continue; // 응답 헤더는 서버가 정함
-    const bytes = toBytes(v); const sha256 = await hex('SHA-256', bytes); blobs.set(sha256, bytes); manifest[path] = { sha256, size: bytes.length };
-  }
-  onProgress({ step: '바뀐 파일 확인', pct: 6 });
+  let blobs; let manifest;
+  /** 올릴 파일 목록(sha256). 참여 기능을 넘겨야 하면 이 서버의 참여 기능을 뺀 파일로 먼저 다시 만듦 */
+  const prepare = async () => {
+    if (live && liveOff) { files = await onLiveOff(liveOff); live = null; }
+    blobs = new Map(); manifest = {};
+    for (const [path, v] of Object.entries(files)) {
+      if (path === '_headers') continue; // 응답 헤더는 서버가 정함
+      const bytes = toBytes(v); const sha256 = await hex('SHA-256', bytes); blobs.set(sha256, bytes); manifest[path] = { sha256, size: bytes.length };
+    }
+  };
+  const deploys = async () => {
+    const dp = await queued(() => ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: { files: manifest, caps: CAPS, ...(booking ? { booking } : {}) } }));
+    // 다시 배포할 때 그날 방이 찼다고 하면: 참여 기능을 뺀 파일로 목록을 다시
+    if (live && onLiveOff && dp.live?.ok === false) { off(dp.live); await prepare(); return deploys(); }
+    return dp;
+  };
+  await prepare();
+  progress('바뀐 파일 확인', 6);
   let dp;
-  const body = { files: manifest, ...(booking ? { booking } : {}) };
-  try { dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body }); }
+  try { dp = await deploys(); }
   catch (e) {
     // 보관 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
     if (!(site && (e.status === 404 || e.status === 401))) throw e;
     s = await newSite();
-    dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body });
+    await prepare();
+    dp = await deploys();
   }
   const upload = async (list) => {
     const need = list.filter((h) => blobs.has(h)); let done = 0;
     await pool(need, 4, async (h) => {
-      await ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) });
-      done++; onProgress({ step: `파일 올리기 ${done}/${need.length}`, pct: 8 + Math.round(done / need.length * 80) });
+      await queued(() => ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) }));
+      done++; progress(`파일 올리기 ${done}/${need.length}`, 8 + Math.round(done / need.length * 80));
     });
   };
   await upload(dp.missing || []);
   let liveUrl = '';
-  if (live) { onProgress({ step: '참여 기능 준비', pct: 90 }); liveUrl = (await ip('POST', `/api/sites/${s.id}/live`, { key: s.key, json: live })).url || ''; }
-  onProgress({ step: '배포하는 중', pct: 94 });
+  if (live) {
+    progress('참여 기능 준비', 90);
+    try { liveUrl = (await ip('POST', `/api/sites/${s.id}/live`, { key: s.key, json: live })).url || ''; }
+    catch (e) {
+      // 방 자리가 없음(붐빔·오늘 방 상한·그날 방이 참): 사이트는 그대로 배포하고 참여 기능만 강사 계정으로
+      if (!e.liveNext || !onLiveOff) throw e;
+      off({ reason: e.reason, day: e.day, next: e.liveNext });
+      await prepare(); dp = await deploys(); await upload(dp.missing || []);
+    }
+  }
+  progress('배포하는 중', 94);
   let out;
   for (let t = 0; ; t++) {
-    try { out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key }); break; }
+    try { out = await queued(() => ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key })); break; }
     catch (e) {
       // 서버가 맡긴 곳(Pages)에서 파일이 사라졌으면 그 파일만 다시 올리고 한 번 더
       if (e.code !== 'missing_blobs' || !e.missing?.length || t >= 2) throw e;
       await upload(e.missing);
     }
   }
-  onProgress({ step: '완료', pct: 100 });
+  progress('완료', 100);
   track('publish', 'instant');
-  return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
+  return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl, ...(liveOff ? { liveOff } : {}), ...(advice ? { advice } : {}) };
 }
 /** 바로 배포한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });

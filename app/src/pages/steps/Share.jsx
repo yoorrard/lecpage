@@ -7,7 +7,7 @@ import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
 import { projectAssets } from '../../components/Preview.jsx';
 import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
-import { Publish } from '../../components/Publish.jsx';
+import { Publish, lecLiveOff } from '../../components/Publish.jsx';
 import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
@@ -175,7 +175,9 @@ export function StepShare({ p, update, go }) {
   // 배포 준비 체크리스트: 참여 기능 → 공개 범위 → 확인할 곳 → 배포할 곳(+배포하기). 끝난 줄은 한 줄로 접히고 [바꾸기]로 펼침
   const names = feats.map((f) => FEATURES.find((x) => x.value === f)?.label || f);
   const featLine = names.length > 3 ? `${names.slice(0, 3).join('·')} 외 ${names.length - 3}개` : names.join('·');
-  const autoHere = autoLive && target === 'lecpage';
+  // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있으면 참여 기능은 강사 계정으로 연결(서버가 준 순서: Cloudflare → Supabase)
+  const liveOffHere = lecLiveOff(p);
+  const autoHere = autoLive && target === 'lecpage' && !liveOffHere;
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : 'todo';
   const liveLine = { off: '꺼져 있어요. 쓸 기능을 누르면 켜져요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
   const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
@@ -190,8 +192,8 @@ export function StepShare({ p, update, go }) {
       <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
         {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
       </div>
-      {liveOn && !autoHere && <LiveSetup p={p} update={update} />}
-      {liveOn && autoLive && !autoHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
+      {liveOn && !autoHere && <LiveSetup p={p} update={update} prefer={liveOffHere?.next} />}
+      {liveOn && autoLive && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
       {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 빼고 배포하기</button></div>}
     </> });
   rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 내려받기' : ''}`,
@@ -393,7 +395,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
   // 강사 화면 관리자 키: 바로 배포는 배포할 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
   const [adminKey, setAdminKey] = useState('');
   const liveUrl = p.blueprint.live?.url || '';
-  useEffect(() => { if (p.deploy.target === 'lecpage') setAdminKey(p.deploy.lecpage?.adminKey || ''); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn]);
+  useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
   const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
   return (
     <Sheet class="success">
