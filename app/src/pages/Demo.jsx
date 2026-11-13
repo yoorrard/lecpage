@@ -5,7 +5,8 @@ import { Preview } from '../components/Preview.jsx';
 import { QR } from '../components/QR.jsx';
 import { loadExample, newProject } from '../lib/project.js';
 import { sanitizeImported } from '../lib/blueprint.js';
-import { copy } from '../lib/util.js';
+import { copy, toast } from '../lib/util.js';
+import { buildSite, previewHtml } from '../lib/engine.js';
 import { SayFix } from '../design-words/SayFix.jsx';
 import { applyWords } from '../design-words/words.js';
 import { setTry, useBus } from '../design-words/bus.js';
@@ -34,6 +35,28 @@ export function Demo() {
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
   useEffect(() => { loadExample(EXAMPLE).then((b) => setBp(sanitizeImported(b))); return () => timers.current.forEach(clearTimeout); }, []);
   useEffect(() => { document.querySelector('.demo h1')?.focus({ preventScroll: true }); window.scrollTo(0, 0); }, [step]);
+  // 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 '여기를 눌러요'. 말로 하는 안내는 위의 안내 줄(role=status)이 함.
+  // 따로 라이브러리를 쓰지 않음(Driver.js는 MIT·약 5KB지만 체험 한 화면에는 이것으로 충분, Shepherd는 AGPL·상용 이중 라이선스라 뺌)
+  const [coach, setCoach] = useState(() => { try { return localStorage.getItem('lecpage:coach') !== 'off'; } catch { return true; } });
+  const toggleCoach = () => { const v = !coach; setCoach(v); try { localStorage.setItem('lecpage:coach', v ? 'on' : 'off'); } catch { } };
+  useEffect(() => {
+    const clear = () => document.querySelectorAll('[data-coach]').forEach((e) => e.removeAttribute('data-coach'));
+    if (!coach) { clear(); return undefined; }
+    let last = null;
+    const target = () => {
+      const q = (sel) => document.querySelector(sel);
+      if (step === 1) return q('.demo .make-bar .btn-primary');
+      if (step === 2) return making ? null : q('.demo .fix-card.is-done') ? q('.demo .head-tools .btn-primary') : q('.demo .fix-card .btn-primary') || q('.demo .sayfix .chip');
+      return pub === 'done' ? q('.demo .demo-done a.btn-primary') : pub ? null : q('.demo .demo-pub .btn-primary');
+    };
+    const tick = () => {
+      const el = target(); if (el === last) return;
+      clear(); last = el;
+      if (el) { el.setAttribute('data-coach', ''); const r = el.getBoundingClientRect(); if (r.bottom > innerHeight || r.top < 0) el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+    };
+    tick(); const t = setInterval(tick, 400);
+    return () => { clearInterval(t); clear(); };
+  }, [coach, step, making, pub]);
   const p = useMemo(() => ({ id: 'demo', blueprint: bp }), [bp]);
   const meta = bp?.meta || {};
   const hero = bp?.sections.find((s) => s.type === 'hero') || {};
@@ -48,6 +71,21 @@ export function Demo() {
     setPub('busy'); setPct(12);
     later(() => setPct(55), 500); later(() => setPct(90), 1100); later(() => { setPct(100); setPub('done'); }, 1700);
   }
+  /**
+   * 사이트 열어 보기: 방금 고친 체험 사이트를 실제 공개본과 같은 파일로 만들어 새 탭에 엶(한 파일로 묶어 blob 주소로).
+   * 새 탭은 누르는 순간 열어 두고(팝업 막힘 방지) 다 만들면 채움. 만들지 못하면 미리 만들어 둔 예시 사이트로
+   */
+  async function openSite(e) {
+    e.preventDefault();
+    const w = window.open('', '_blank');
+    try {
+      const r = await buildSite({ ...bp, live: { ...(bp.live || {}), provider: 'local' } }, {});
+      if (r.errors?.length) throw new Error('build');
+      const blob = URL.createObjectURL(new Blob([previewHtml(r.files, 'index.html')], { type: 'text/html' }));
+      if (w) w.location.href = blob; else window.open(blob, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blob), 60000);
+    } catch { if (w) w.location.href = url; else window.open(url, '_blank', 'noopener'); toast('예시 사이트를 열었어요.'); }
+  }
   async function startReal(kind) { const np = await newProject(kind, EXAMPLE); location.hash = `#/p/${np.id}/${kind === 'example' ? 2 : 1}`; }
 
   const url = exampleUrl();
@@ -60,6 +98,7 @@ export function Demo() {
       <aside class="demo-bar" aria-label="체험 안내">
         <span class="demo-tag">체험</span>
         <span class="demo-bar-t"><b>예시 자료로 해 보는 연습이에요.</b> 어디로도 보내지 않고, 저장하지 않아요.</span>
+        <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(coach)} onClick={toggleCoach}>누를 곳 안내</button>
         <a class="btn btn-sm" href="#/">체험 끝내기</a>
       </aside>
       <header class="wiz-head">
@@ -125,8 +164,8 @@ export function Demo() {
                   <div class="stack">
                     <h2 class="h-sub">주소와 QR이 나왔어요</h2>
                     <p class="demo-url"><a href={url} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, '')}</a></p>
-                    <p class="small muted">체험이라 방금 고친 사이트를 올리지는 않았어요. 이 주소와 QR은 미리 만들어 둔 예시 사이트로 이어져요.</p>
-                    <div class="btn-row"><a class="btn btn-sm" href={url} target="_blank" rel="noopener">사이트 열어 보기</a><button class="btn btn-sm" onClick={() => copy(invite, '안내 문구를 복사했어요.')}>카톡 안내 문구 복사</button></div>
+                    <p class="small muted">[사이트 열어 보기]는 방금 고친 그대로 보여 줘요. 체험이라 인터넷에 올리지는 않았고, 주소와 QR은 미리 만든 예시 사이트로 이어져요.</p>
+                    <div class="btn-row"><a class="btn btn-sm btn-primary" href={url} target="_blank" rel="noopener" onClick={openSite}>사이트 열어 보기</a><button class="btn btn-sm" onClick={() => copy(invite, '안내 문구를 복사했어요.')}>카톡 안내 문구 복사</button></div>
                   </div>
                 </div>
                 <pre class="prompt-box demo-invite" aria-label="카톡 안내 문구">{invite}</pre>

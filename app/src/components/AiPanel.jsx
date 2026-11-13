@@ -213,7 +213,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
       const win = window.open(e.currentTarget.href, 'lecpage-chatbot', `popup,width=${w},height=${screen.availHeight},left=${left},top=${screen.availTop || 0}`);
       if (win) { e.preventDefault(); win.focus?.(); }
     }
-    toast(prefilled ? 'Claude 입력 칸에 프롬프트를 채웠어요. 보내기를 누르세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
+    toast(prefilled ? 'Claude 입력 칸에 채웠어요. 비어 있으면 붙여 넣으세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
   }
   /** 챗봇 답을 클립보드에서 읽어 바로 적용(누를 때만 읽음) */
   async function pasteAnswer() {
@@ -242,7 +242,6 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
                 onClick={(e) => send(e, b, !!pre)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
             })}
           </div>
-          {CHATBOTS.find((b) => b.id === 'claude').prefill(text) && <p class="small muted">Claude는 입력 칸에 프롬프트가 채워진 채로 열려요. 비어 있으면 붙여 넣으세요.</p>}
           <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(text)); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
           {full && text.length > 30000 && <p class="small muted">교재가 길어 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어 받아요.</p>}
           <p class="small muted">교재의 글이 고른 챗봇 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>

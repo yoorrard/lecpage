@@ -99,16 +99,20 @@ export function Home() {
       location.hash = `#/p/${p.id}/1`;
     });
   }
-  // 교재 파일을 첫 화면 어디에 놓아도 시작(놓을 자리를 찾지 않게)
+  // 교재 파일을 첫 화면 어디에 놓아도 시작(놓을 자리를 찾지 않게). 놓았을 때만 시작하고, 끌어 오는 중에 화면 밖으로 빼거나 Esc를 누르면 취소.
+  // 브라우저마다 dragleave가 빠지기도 해서(창 밖으로 빼기·Esc) 세는 대신 '끌어 오는 중' 신호(dragover)가 끊기면 안내를 닫음
   useEffect(() => {
-    let n = 0;
+    let on = false, cancelled = false, last = 0, timer = 0;
     const files = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
-    const enter = (e) => { if (!files(e)) return; n++; setDrag(true); };
-    const leave = (e) => { if (!files(e)) return; n = Math.max(0, n - 1); if (!n) setDrag(false); };
-    const over = (e) => { if (files(e)) e.preventDefault(); };
-    const drop = (e) => { if (!files(e)) return; e.preventDefault(); n = 0; setDrag(false); if (e.dataTransfer.files?.length) startWith(e.dataTransfer.files); };
-    addEventListener('dragenter', enter); addEventListener('dragleave', leave); addEventListener('dragover', over); addEventListener('drop', drop);
-    return () => { removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); };
+    const show = (v) => { if (on !== v) { on = v; setDrag(v); } if (!v) clearInterval(timer); };
+    const watch = () => { clearInterval(timer); timer = setInterval(() => { if (Date.now() - last > 400) show(false); }, 150); };
+    const enter = (e) => { if (!files(e)) return; if (!on) cancelled = false; last = Date.now(); if (!cancelled) { show(true); watch(); } };
+    const over = (e) => { if (!files(e)) return; e.preventDefault(); last = Date.now(); if (cancelled) { e.dataTransfer.dropEffect = 'none'; return; } e.dataTransfer.dropEffect = 'copy'; if (!on) { show(true); watch(); } };
+    const leave = (e) => { if (!files(e)) return; if (!e.relatedTarget || e.clientX <= 0 || e.clientY <= 0 || e.clientX >= innerWidth || e.clientY >= innerHeight) show(false); };
+    const key = (e) => { if (e.key === 'Escape' && on) { cancelled = true; show(false); } };
+    const drop = (e) => { if (!files(e)) return; e.preventDefault(); const go = on && !cancelled; show(false); cancelled = false; if (go && e.dataTransfer.files?.length) startWith(e.dataTransfer.files); };
+    addEventListener('dragenter', enter); addEventListener('dragleave', leave); addEventListener('dragover', over); addEventListener('drop', drop); addEventListener('keydown', key);
+    return () => { clearInterval(timer); removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); removeEventListener('keydown', key); };
   }, []);
   const pick = () => pickRef.current?.click();
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
@@ -224,7 +228,7 @@ export function Home() {
       </section>
       </>}
 
-      {drag && <div class="ld-dropall" aria-hidden="true"><p><Mascot size={64} mood="wow" />놓으면 이 교재로 시작해요</p></div>}
+      {drag && <div class="ld-dropall" aria-hidden="true"><p><Mascot size={64} mood="wow" />놓으면 이 교재로 시작해요<small>그만두려면 화면 밖으로 빼거나 Esc를 눌러요</small></p></div>}
       <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
         <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
         <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 올린 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>

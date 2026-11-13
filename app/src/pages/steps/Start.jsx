@@ -100,7 +100,7 @@ export function StepStart({ p, update, go }) {
   const titleRef = useRef();
   const [over, setOver] = useState(false);
   // AI로 만들기: 쓰던 챗봇 창 길은 이 화면 안 카드(AiPanel)에서 바로. API 키 길은 작은 링크 → 연결 창(연결하면 바로 만들기)
-  const [keyOpen, setKeyOpen] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(''); // '' | 'key'(API 키) | 'gemini'(무료 키)
   const [remake, setRemake] = useState(false); // 사이트가 있는데 키 없이 AI로 다시 만들 때: 챗봇 카드를 다시 보여 줌
   const makeAfter = useRef(false); // [API 키로 만들기]로 연 창이면 키를 연결한 뒤 바로 만듦
   const [conn, setConn] = useState(undefined); // 연결된 AI(undefined: 확인 중 · null: 없음)
@@ -110,7 +110,7 @@ export function StepStart({ p, update, go }) {
     // OpenRouter 로그인에서 돌아왔고 '연결하고 만들기' 중이었으면 이어서 만듦
     const load = () => getActiveAI().then((a) => {
       setConn(a);
-      if (a && takeAiResume()) { setKeyOpen(false); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
+      if (a && takeAiResume()) { setKeyOpen(''); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
     });
     load(); addEventListener('lecpage:ai-connected', load); return () => removeEventListener('lecpage:ai-connected', load);
   }, []);
@@ -157,7 +157,7 @@ export function StepStart({ p, update, go }) {
     go(2);
   }
   makeWithAiRef.current = makeWithAi;
-  function onConnected(a) { setConn(a); setKeyOpen(false); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
+  function onConnected(a) { setConn(a); setKeyOpen(''); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
   async function disconnect() { await forgetKey(conn.provider); setConn(await getActiveAI()); toast('AI 연결을 끊었어요.'); }
   /** 쓰던 챗봇 창의 답(교재 지킴이를 거친 설계도) → 사이트. 교재대로 되돌린 곳은 다음 화면 띠에서 알림 */
   function onAi(bp, meta = {}) {
@@ -250,14 +250,20 @@ export function StepStart({ p, update, go }) {
         {conn ? <div class="stack">
           {makeHead}
           {request}
-          <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setKeyOpen(true); }} onDisconnect={disconnect} />
+          <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setKeyOpen('key'); }} onDisconnect={disconnect} />
           <button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : 'AI로 사이트 만들기 →'}</button>
           <p class="small muted">만들 때 교재의 글이 {conn.label}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
         </div>
           : conn === null ? <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} head={makeHead} wait={p.chatWait} onWait={(v) => update({ chatWait: v }, { now: true })} guard={() => !needTitle()} busy={!!busy}>{request}</AiPanel>
             : <p class="muted small" aria-live="polite">불러오는 중…</p>}
+        {conn === null && <div class="make-ways" role="group" aria-labelledby="make-ways-h">
+          <p class="small make-ways-h" id="make-ways-h">다른 방법</p>
+          <div class="make-way"><span><b>API 키</b> 버튼 한 번으로 만들어요. 처음에 결제 등록이 필요하고, 사이트 하나에 몇백 원쯤 들어요.</span>
+            <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('key'); }}>API 키로 만들기</button></div>
+          <div class="make-way"><span><b>Gemini 무료 키</b> 돈 없이 버튼 한 번. Flash 모델이라 구성·문구가 단순할 수 있고, 하루 횟수가 정해져 있어요.</span>
+            <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('gemini'); }}>무료 키로 만들기</button></div>
+        </div>}
         <div class="make-alt">
-          {conn === null && <button type="button" class="btn-link" onClick={() => { makeAfter.current = true; setKeyOpen(true); }}>API 키로 만들기</button>}
           {!p.blueprint && <button type="button" class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>}
           {remake && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setRemake(false); update({ chatWait: null }); }}>닫기</button>}
         </div>
@@ -274,9 +280,9 @@ export function StepStart({ p, update, go }) {
         <p>고친 문구와 섹션 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로예요.</p>
         <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>AI로 다시 만들기</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
       </Dialog>
-      <Dialog open={keyOpen} onClose={() => { setKeyOpen(false); makeAfter.current = false; }} label="API 키 연결" wide>
-        {keyOpen && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>API 키 연결 <span class="small muted">처음 한 번만</span></h2>
-          <AiConnect onConnected={onConnected} onChat={() => { setKeyOpen(false); makeAfter.current = false; }} /></div>}
+      <Dialog open={!!keyOpen} onClose={() => { setKeyOpen(''); makeAfter.current = false; }} label={keyOpen === 'gemini' ? 'Gemini 무료 키 연결' : 'API 키 연결'} wide>
+        {keyOpen && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{keyOpen === 'gemini' ? 'Gemini 무료 키 연결' : 'API 키 연결'} <span class="small muted">처음 한 번만</span></h2>
+          <AiConnect initial={keyOpen === 'gemini' ? 'gemini' : ''} onConnected={onConnected} onChat={() => { setKeyOpen(''); makeAfter.current = false; }} /></div>}
       </Dialog>
     </>
   );

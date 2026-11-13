@@ -225,10 +225,18 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .make-head{gap:4px}
 .make-head h2:focus{outline:none}
 .make-card .make-alt{margin:0;justify-content:space-between}
+/* 다른 방법(API 키 · Gemini 무료 키): 무엇이 되고 무엇이 드는지 한 줄 + 버튼 */
+.make-ways{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--hair)}
+.make-ways-h{margin:0;font-weight:700;color:var(--ink-2)}
+.make-way{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;font-size:.9rem;line-height:1.5;color:var(--ink-2)}
+.make-way>span{flex:1 1 15em;min-width:0}
+.make-way b{color:var(--ink);margin-right:4px}
+.make-way .btn{flex:none}
+.ai-more{margin:-4px 0 0;padding-left:1.2em;display:grid;gap:2px;color:var(--ink-2)}
 /* 카드 안 챗봇 길: 순서 점(1 챗봇에 보내기 — 2 답 넣기)과 같은 말인 소제목은 화면 읽기 프로그램에만 */
 .make-card .chat-card .key-now-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (min-width:1100px){
-  .start-grid.has-make{grid-template-columns:minmax(0,1fr) minmax(360px,430px);grid-template-areas:"files make" "info make";column-gap:28px}
+  .start-grid.has-make{grid-template-columns:minmax(0,1fr) minmax(360px,430px);grid-template-rows:auto 1fr;grid-template-areas:"files make" "info make";column-gap:28px}
   .start-grid.has-make>.start-files{grid-area:files}
   .start-grid.has-make>.make-card{grid-area:make;position:sticky;top:16px}
   .start-grid.has-make>.start-info{grid-area:info}
@@ -934,6 +942,12 @@ details>summary{cursor:pointer}
 .demo-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-radius:var(--r-sm);background:var(--butter);color:var(--butter-ink);border:1px solid color-mix(in srgb,var(--butter-ink) 16%,transparent);font-size:.94rem}
 .demo-bar-t{flex:1 1 240px;min-width:0}
 .demo-tag{font-weight:700;font-size:.8rem;padding:2px 9px;border-radius:999px;background:var(--butter-ink);color:var(--butter)}
+/* 체험의 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 말풍선. 말로 하는 안내는 위의 안내 줄이 함 */
+[data-coach]{position:relative;outline:3px solid var(--accent);outline-offset:3px;z-index:2}
+[data-coach]::after{content:'여기를 눌러요';position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);white-space:nowrap;padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:.78rem;font-weight:700;line-height:1.5;pointer-events:none;z-index:3;animation:coach-in .25s var(--ease)}
+@keyframes coach-in{from{opacity:0;transform:translate(-50%,-4px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){[data-coach]::after{animation:none}}
+.demo-bar .btn[aria-pressed="true"]{background:color-mix(in srgb,var(--butter-ink) 10%,transparent)}
 .demo-tip{display:flex;gap:10px;align-items:baseline;margin:0;padding:10px 14px;border-radius:var(--r-sm);background:var(--lav-soft);color:var(--lav-ink);font-weight:600}
 .demo-tip-n{font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;flex:none}
 .demo .stepper a[aria-disabled="true"]{cursor:default}
