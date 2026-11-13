@@ -40,7 +40,7 @@
       c.connect().then(function (r) {
         var ms = Date.now() - t0, mode = r && r.mode;
         if (mode === 'local') return end({ name: name, host: '리허설', state: 'ok', need: 'must', note: '리허설 설정이라 이 브라우저 안에서만 돌고, 참가자 휴대폰과 이어지지 않아요.', fix: '실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.', todo: true, warn: true });
-        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 천천히 묻기', state: 'ok', need: 'must', way: '천천히 묻기', note: '이 망이 실시간 연결(웹소켓)을 막아 천천히 물어요. 질문·투표가 몇 초 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
+        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 천천히 묻기', state: 'ok', need: 'must', way: '천천히 묻기', note: '이 망이 웹소켓을 막아 천천히 물어요. 질문·투표가 몇 초 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
         end({ name: name, host: liveInfo.name + ' · 실시간 · ' + (ms / 1000).toFixed(1) + '초', state: 'ok', need: 'must', way: '실시간' });
       }, function (e) {
         end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.' + (e && e.message ? ' (' + e.message + ')' : ''), fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' });

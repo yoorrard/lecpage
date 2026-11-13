@@ -410,6 +410,10 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={p.blueprint.access?.mode !== 'password' && p.blueprint.access?.mode !== 'public'} />}
+          <div class="day-kit" role="group" aria-labelledby="venue-h">
+            <b class="small" id="venue-h">연수 전날 점검</b>
+            <VenueBody p={p} url={url} instantOn={p.deploy.target === 'lecpage' && instantOn} />
+          </div>
           <div class="day-kit" role="group" aria-labelledby="day-kit-h">
             <b class="small" id="day-kit-h">연수 당일</b>
             <div class="btn-row">
@@ -420,10 +424,6 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
             {liveOn && (adminKey
               ? <p class="small">강사 화면 관리자 키 <b class="mono">{adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(adminKey, '관리자 키를 복사했어요.')}>복사</button></p>
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
-          </div>
-          <div class="day-kit" role="group" aria-labelledby="venue-h">
-            <b class="small" id="venue-h">연수 전날 점검</b>
-            <VenueBody p={p} url={url} instantOn={p.deploy.target === 'lecpage' && instantOn} />
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
           <p class="small">내용을 고치거나 자료를 더 넣은 뒤 다시 올리면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
