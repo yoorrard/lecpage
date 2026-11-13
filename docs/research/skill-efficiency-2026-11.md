@@ -88,6 +88,14 @@ lecpage에 옮긴 것: 디자인 상투를 엔진 프리셋·디자인 검사로
 - 마크다운 교재의 강사 줄("강사: 이름(소속)") 감지.
 - 켜짐 평가를 실제로 돌려 description을 다듬기(세 번씩, 해당/비해당 나눠).
 
+## 10. 전 과정 비교 뒤 고친 것 (2026-11-13)
+같은 교재로 6단계(디자인 3안 → 고르기·초록 → 공개 준비 → 질문·투표 → 안내물 → 연수 후 CSV)를 시켰을 때, 스킬은 출력 토큰이 절반이었지만 4·5·6단계에서 이미 있는 기능 위에 올리기 스크립트·안내물 PDF 스크립트·잠근 강사 안내 쪽을 새로 짜서 비용이 그냥 에이전트보다 11% 컸고, 만들기 단계에서도 교재와 사이트를 손으로 대조했습니다(도구 63번).
+- 손 대조 대신: `make`·`patch` 요약에 `교재 반영` 한 줄(프롬프트·실습 단계·링크·질문답·교재 줄, 교재 보기는 빼고 셈, `materialCoverage`).
+- 새로 짜던 것을 명령·화면으로: `publish work --live --features qa,poll`(중계·관리자 키·다시 빌드·올리기·허용 주소·확인·안내물), `handouts <주소>`(QR-안내문.pdf·강사-카드.pdf·발표화면.png), 강사 화면 도움말 칸(운영안내.md와 같은 글), 즉석 투표, 참가자 화면 [출석] 한 번, `options --mood`.
+- 참여 기능 결정에 강사가 할 일 수(`TEACHER_STEPS`): skill은 Cloudflare 중계(가입·로그인 2번)가 Supabase(3번)·시트(약 20번)보다 앞.
+- SKILL.md 11.3KB → 9.3KB, '이미 있는 것' 표와 '언제 무엇을 읽나' 표.
+- 같은 교재·같은 요청으로 다시 돌린 어림(작업자 한 번, 토큰은 재지 않음): 만들기 2~3번(info.json·make), 1단계 2번(options·비교 그림 보기), 2단계 1~2번(patch --qa), 3단계 1~2번(decide-infra·publish --dry-run), 4단계 1~2번(publish --live --dry-run), 5단계 1~2번(handouts), 6단계 0~1번(이미 있음) → 약 10~14번. 지난 측정은 스킬 175번(만들기 63·고치기 7·6단계 105), 그냥 에이전트 117번.
+
 ## 출처
 - Anthropic, Skill authoring best practices: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
 - Anthropic, Equipping agents for the real world with Agent Skills: https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills

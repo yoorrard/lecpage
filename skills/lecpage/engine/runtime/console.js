@@ -26,7 +26,15 @@
     progress: stations.length > 0 && has('progress'), help: has('help'), qa: hasSec('qa') || has('qa'), signal: has('signal'),
     poll: polls.length > 0, board: hasSec('board') || has('board'), survey: (DATA.survey || 0) > 0,
   };
-  var COLS = ['participants'].concat(ON.progress ? ['progress'] : [], ON.help ? ['help'] : [], ON.qa ? ['questions'] : [], ON.board ? ['posts'] : [], ON.poll || ON.signal ? ['answers'] : [], ON.survey ? ['survey'] : []);
+  // 투표 패널은 늘 둠: 미리 넣은 문항이 없어도 즉석 투표(polls 모음)를 바로 띄울 수 있게
+  var COLS = ['participants', 'polls', 'answers'].concat(ON.progress ? ['progress'] : [], ON.help ? ['help'] : [], ON.qa ? ['questions'] : [], ON.board ? ['posts'] : [], ON.survey ? ['survey'] : []);
+  /** 즉석 투표: 강사 화면에서 만든 문항(질문 한 줄 + 보기 2~5개) */
+  function quickPolls() {
+    return vals('polls').filter(function (q) { return q.question && Array.isArray(q.options) && q.options.length; })
+      .sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); })
+      .map(function (q) { return { id: q.id, question: q.question, kind: 'choice', options: q.options, quick: true, open: q.open !== false }; });
+  }
+  function allPolls() { return polls.concat(quickPolls()); }
 
   var conn, data = {}, state = {};
   COLS.forEach(function (c) { data[c] = {}; });
@@ -102,12 +110,12 @@
     if (ON.help) panel('help', '도움 요청');
     if (ON.progress) panel('heat', '실습 진행 현황');
     panel('control', '따라 넘기기·공지·타이머');
-    if (ON.poll) panel('poll', '투표');
+    panel('poll', '투표');
     if (ON.qa) panel('qa', '질문 관리');
     if (ON.signal) panel('signal', '신호등');
     if (ON.board) panel('board', '보드 관리');
     panel('data', '기록·정리');
-    buildControl(); buildData();
+    buildControl(); buildQuick(); buildData();
   }
   function kpi(row, value, label, sub, alert) {
     var d = el('div', 'lp-kpi' + (alert ? ' is-alert' : '')); d.appendChild(el('b', '', String(value))); d.appendChild(el('span', '', label)); if (sub) d.appendChild(el('small', '', sub)); row.appendChild(d);
@@ -117,13 +125,13 @@
     var parts = vals('participants'), help = vals('help'), qs = vals('questions');
     var openHelp = help.filter(function (h) { return h.status !== 'done'; });
     var sig = ON.signal ? signalCounts() : null;
-    var op = polls.filter(function (p) { return p.id === state.openPoll; })[0];
+    var op = allPolls().filter(function (p) { return p.id === state.openPoll; })[0];
     // 지금 띠
     var row = el('div', 'lp-now-strip');
     kpi(row, parts.length, '참가자');
     if (ON.help) kpi(row, openHelp.length, '열린 도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '', openHelp.length > 0);
     if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(row, rs + '%', '모르겠어요 신호', sig.total + '명 중 ' + sig.red + '명', sig.total && rs >= 25); }
-    if (ON.poll) kpi(row, op ? pollAnswers(op.id).length + '명' : '없음', '지금 투표', op ? op.question : '열린 투표가 없어요');
+    kpi(row, op ? pollAnswers(op.id).length + '명' : '없음', '지금 투표', op ? op.question : '열린 투표가 없어요');
     if (ON.survey) kpi(row, vals('survey').length, '설문 응답');
     if (ON.qa) kpi(row, qs.filter(function (q) { return q.status !== 'hidden'; }).length, '질문');
     P.now.body.textContent = ''; P.now.body.appendChild(row);
@@ -131,7 +139,7 @@
     if (ON.help) renderHelp(openHelp);
     if (ON.qa) renderQA(qs);
     if (ON.signal) renderSignal(sig);
-    if (ON.poll) renderPolls();
+    renderPolls();
     if (ON.board) renderBoard();
     syncControl();
   }
@@ -195,16 +203,49 @@
     if (r) row.appendChild(el('span', 'lp-small', '마지막 초기화 ' + new Date(r).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })));
     sg.appendChild(row);
   }
+  /** 즉석 투표 만들기: 질문 한 줄 + 보기 2~5개 → polls 모음에 넣고 바로 엶(참가자 화면·발표 화면에 나옴) */
+  function buildQuick() {
+    var b = P.poll.body;
+    var f = el('form', 'lp-quick-poll'); f.setAttribute('aria-label', '즉석 투표 만들기');
+    f.appendChild(el('p', 'lp-small', '즉석 투표: 질문 한 줄과 보기를 2~5개 적고 바로 띄워요.'));
+    var q = el('input'); q.maxLength = 120; q.placeholder = '질문(예: 지금 몇 번 실습을 하고 있나요?)'; q.setAttribute('aria-label', '즉석 투표 질문'); q.style.width = '100%';
+    f.appendChild(q);
+    var row = el('div', 'lp-row'); row.style.marginTop = '6px'; var opts = [];
+    for (var i = 0; i < 5; i++) { var o = el('input'); o.maxLength = 40; o.placeholder = '보기 ' + (i + 1) + (i < 2 ? '' : '(선택)'); o.setAttribute('aria-label', '보기 ' + (i + 1)); o.style.flex = '1 1 7em'; opts.push(o); row.appendChild(o); }
+    f.appendChild(row);
+    var go = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '바로 띄우기'); go.type = 'submit'; go.style.marginTop = '6px'; f.appendChild(go);
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var question = q.value.trim(), list = [];
+      opts.forEach(function (o) { var v = o.value.trim(); if (v && list.indexOf(v) < 0) list.push(v); });
+      if (!question) { toast('질문을 적어 주세요.'); q.focus(); return; }
+      if (list.length < 2) { toast('보기를 두 개 이상 적어 주세요.'); opts[list.length].focus(); return; }
+      go.disabled = true;
+      conn.add('polls', { question: question, kind: 'choice', options: list, open: true }).then(function (d) {
+        if (!d || !d.id) throw new Error('투표를 만들지 못했어요.');
+        data.polls[d.id] = d; q.value = ''; opts.forEach(function (o) { o.value = ''; });
+        return setState({ openPoll: d.id }, '투표를 띄웠어요. 참가자 화면과 발표 화면에 나와요.');
+      }).catch(err).then(function () { go.disabled = false; });
+    });
+    b.appendChild(f);
+    C.pollList = el('div'); b.appendChild(C.pollList);
+  }
+  /** 열기·닫기. 즉석 투표는 닫으면 서버에서도 닫아 늦은 답을 받지 않음 */
+  function togglePoll(p, openNow) {
+    setState({ openPoll: openNow ? '' : p.id });
+    if (p.quick && p.open === openNow) conn.update('polls', p.id, { open: !openNow }).catch(function () { });
+  }
   function renderPolls() {
-    var pl = P.poll.body; pl.textContent = '';
-    var hidden = X.hiddenWords(state);
-    polls.forEach(function (p) {
+    var pl = C.pollList || P.poll.body; pl.textContent = '';
+    var hidden = X.hiddenWords(state), all = allPolls();
+    if (!all.length) pl.appendChild(el('p', 'lp-small', '띄운 투표가 여기에 쌓여요. 다시 열거나 결과를 공개할 수 있어요.'));
+    all.forEach(function (p) {
       var openNow = state.openPoll === p.id, shown = X.revealed(state, p.id), list = pollAnswers(p.id);
       var box = el('div', 'lp-poll-row');
       var top = el('div', 'lp-row'); top.style.justifyContent = 'space-between';
-      top.appendChild(el('b', '', p.question + ' · ' + list.length + '명'));
+      top.appendChild(el('b', '', (p.quick ? '즉석 · ' : '') + p.question + ' · ' + list.length + '명'));
       var acts = el('div', 'lp-row');
-      acts.appendChild(btn(openNow ? '닫기' : '열기', openNow ? 'lp-btn-primary' : '', function () { setState({ openPoll: openNow ? '' : p.id }); }));
+      acts.appendChild(btn(openNow ? '닫기' : '열기', openNow ? 'lp-btn-primary' : '', function () { togglePoll(p, openNow); }));
       var rv = btn(shown ? '결과 숨기기' : '결과 공개', '', function () { setState(X.revealPatch(state, p.id, !shown), shown ? '참가자 화면에서 결과를 숨겼어요.' : '참가자 화면에 결과를 공개했어요.'); });
       rv.setAttribute('aria-pressed', String(shown)); acts.appendChild(rv);
       top.appendChild(acts); box.appendChild(top);
@@ -293,8 +334,18 @@
 
   var KINDS = [
     ['participants', '참가자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],
-    ['questions', '질문', ON.qa], ['posts', '보드 글', ON.board], ['help', '도움 요청', ON.help], ['answers', '투표·신호 응답', ON.poll || ON.signal], ['survey', '설문 응답', ON.survey],
+    ['questions', '질문', ON.qa], ['posts', '보드 글', ON.board], ['help', '도움 요청', ON.help], ['answers', '투표·신호 응답', true], ['survey', '설문 응답', ON.survey],
   ];
+  /** 투표 응답 CSV의 첫 열(투표 id)을 질문 글로 바꿈: 즉석 투표 id는 알아보기 어려움 */
+  function pollNames(csv) {
+    var names = { signal: '신호등' }; allPolls().forEach(function (p) { names[p.id] = p.question; });
+    return String(csv || '').split('\n').map(function (line, i) {
+      var c = line.indexOf(','); if (!i || c < 1) return line;
+      var n = names[line.slice(0, c)]; if (!n) return line;
+      if (/^[=+\-@\t\r]/.test(n)) n = "'" + n;
+      return '"' + n.replace(/"/g, '""') + '"' + line.slice(c);
+    }).join('\n');
+  }
   function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
   function buildData() {
     var b = P.data.body;
@@ -302,7 +353,7 @@
     var list = el('div', 'lp-menu-list');
     KINDS.filter(function (k) { return k[2]; }).forEach(function (x) {
       list.appendChild(btn(x[1], '', function () {
-        conn.exportCsv(x[0], x[0] === 'completion' ? completionOpts() : undefined).then(function (csv) { save((DATA.title || 'lecpage').replace(/[\\/:*?"<>|]/g, '') + '_' + x[1].replace(/[·\s]/g, '') + '.csv', csv || ''); toast(x[1] + ' 기록을 내려받았어요.'); }, err);
+        conn.exportCsv(x[0], x[0] === 'completion' ? completionOpts() : undefined).then(function (csv) { if (x[0] === 'answers') csv = pollNames(csv); save((DATA.title || 'lecpage').replace(/[\\/:*?"<>|]/g, '') + '_' + x[1].replace(/[·\s]/g, '') + '.csv', csv || ''); toast(x[1] + ' 기록을 내려받았어요.'); }, err);
       }));
     });
     menu.appendChild(list);

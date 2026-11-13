@@ -135,6 +135,36 @@ test('node + http adapter (no browser): checkAdmin is not fooled by a participan
   c.close();
 });
 
+test('node + http adapter: 즉석 투표(polls 모음)와 출석 한 번 누르기 — 강사가 만들고, 참가자가 읽고 답하고, 명단에 남음', async () => {
+  const { default: vm } = await import('node:vm');
+  const { liveDir } = await import('./live-helpers.mjs');
+  const mk = () => {
+    const win = { console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, URL, TextEncoder, Intl, JSON, Math, Date, fetch, crypto: globalThis.crypto, Uint8Array, Array, Object, String, Number, RegExp, Error };
+    win.window = win; vm.createContext(win);
+    for (const f of ['core.js', 'http.js']) vm.runInContext(fs.readFileSync(path.join(liveDir, f), 'utf8'), win);
+    return win;
+  };
+  // connect()는 실시간 연결을 열어 두므로 부르지 않음(요청마다 서버에 바로 묻는 방식으로 시험)
+  const admin = mk().LecLive.create({ provider: 'http', url: srv.url, code: 'QUICK1', identity: 'session' });
+  await admin.setAdminKey(ADMIN);
+  const poll = await admin.add('polls', { question: '지금 몇 번 실습?', kind: 'choice', options: ['1번', '2번', '3번'], open: true });
+  assert.ok(poll.id);
+  await admin.setState({ openPoll: poll.id });
+  const p = mk().LecLive.create({ provider: 'http', url: srv.url, code: 'QUICK1', identity: 'session' });
+  const polls = await p.list('polls', {});
+  assert.equal(JSON.stringify(polls.map((x) => [x.question, x.options.length])), JSON.stringify([['지금 몇 번 실습?', 3]]));
+  assert.equal((await p.getState()).openPoll, poll.id);
+  await p.join({ nickname: '출석만한사람' });
+  await p.add('attendance', { kind: 'in' });
+  await p.add('answers', { poll: poll.id, value: '2번' });
+  const csv = await admin.exportCsv('participants');
+  assert.ok(csv.includes('출석만한사람'));
+  assert.ok((await admin.exportCsv('attendance')).includes('출석만한사람'));
+  // 닫은 투표에 늦은 답을 받지 않는 규칙은 protocolSuite의 closed polls 시험이 봄
+  await admin.update('polls', poll.id, { open: false });
+  admin.close(); p.close();
+});
+
 // ---------------------------------------------------------------- security regressions (2026-11 review)
 const ip = (n) => ({ 'x-forwarded-for': n });
 

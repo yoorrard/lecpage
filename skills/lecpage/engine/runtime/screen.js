@@ -207,8 +207,14 @@
   var key = ''; try { key = sessionStorage.getItem('lp-admin:' + location.pathname.replace(/[^/]*$/, '') + ':' + DATA.live.code) || ''; } catch (e) { }
   try { conn = LecLive.create(Object.assign({}, DATA.live, key ? { adminKey: key } : {})); } catch (e) { return; }
   canWrite = DATA.live.provider === 'local' || !!key;
-  var state = {}, qs = {}, answers = {}, tiv;
+  var state = {}, qs = {}, answers = {}, quick = {}, tiv;
   var polls = []; (BP.sections || []).forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });
+  // 열린 투표: 설계도 문항, 없으면 강사 화면에서 바로 띄운 즉석 투표(polls 모음)
+  function openPoll() {
+    var p = polls.filter(function (x) { return x.id === state.openPoll; })[0]; if (p) return p;
+    var q = state.openPoll && quick[state.openPoll];
+    return q && q.question && Array.isArray(q.options) && q.options.length ? { id: q.id, question: q.question, kind: 'choice', options: q.options } : null;
+  }
   var SIG = [['green', 'g', '✓', '이해했어요'], ['yellow', 'y', '?', '조금 헷갈려요'], ['red', 'r', '!', '모르겠어요']];
   function drawSignal() {
     var box = $('[data-screen-signal]'); if (!box) return;
@@ -228,7 +234,7 @@
     if (state.timer && state.timer.running && state.timer.endsAt) { t.hidden = false; var tk = function () { var l = state.timer.endsAt - tNow(); t.textContent = mmss(l); t.style.color = l <= 0 ? 'var(--danger)' : ''; }; tk(); tiv = setInterval(tk, 1000); } else t.hidden = true;
     drawSignal();
     var main = $('[data-screen-main]'); main.textContent = '';
-    var p = polls.filter(function (x) { return x.id === state.openPoll; })[0];
+    var p = openPoll();
     if (p) {
       main.appendChild(el('h2', 'lp-h2', p.question));
       var list = Object.keys(answers).map(function (k) { return answers[k]; }).filter(function (a) { return a.poll === p.id; }), total = list.length;
@@ -256,9 +262,9 @@
       if (ev.type === 'state') { state = ev.doc || ev.state || {}; adoptTimers(state); return draw(); }
       if (ev.type === 'reaction') return react((ev.doc && ev.doc.emoji) || ev.emoji);
       if (ev.type === 'reset') { qs = {}; answers = {}; return draw(); }
-      var bag = ev.col === 'questions' ? qs : ev.col === 'answers' ? answers : null; if (!bag || !ev.doc) return;
+      var bag = ev.col === 'questions' ? qs : ev.col === 'answers' ? answers : ev.col === 'polls' ? quick : null; if (!bag || !ev.doc) return;
       if (ev.type === 'remove') delete bag[ev.doc.id]; else bag[ev.doc.id] = Object.assign(bag[ev.doc.id] || {}, ev.doc); draw();
     });
-    return Promise.all([conn.getState().then(function (s) { state = s || {}; adoptTimers(state); }), conn.list('questions', {}).then(function (a) { (a || []).forEach(function (d) { qs[d.id] = d; }); }), conn.list('answers', {}).then(function (a) { (a || []).forEach(function (d) { answers[d.id] = d; }); })].map(function (p) { return p.catch(function () { }); }));
+    return Promise.all([conn.getState().then(function (s) { state = s || {}; adoptTimers(state); }), conn.list('questions', {}).then(function (a) { (a || []).forEach(function (d) { qs[d.id] = d; }); }), conn.list('answers', {}).then(function (a) { (a || []).forEach(function (d) { answers[d.id] = d; }); }), conn.list('polls', {}).then(function (a) { (a || []).forEach(function (d) { quick[d.id] = d; }); })].map(function (p) { return p.catch(function () { }); }));
   }).then(draw, draw);
 })();

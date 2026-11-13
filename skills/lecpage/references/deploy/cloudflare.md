@@ -40,7 +40,16 @@
 - 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 바꿀 수 없습니다.
 - 가입 전에 먼저 보려면 https://www.cloudflare.com/drop/ 에 ZIP을 놓습니다. `workers.dev` 주소가 바로 생기고, **60분 안에 Claim**(가입·이메일 인증)하지 않으면 지워집니다. claim한 뒤 브라우저로 같은 주소에 다시 올리는 방법은 문서에 없습니다 ⚠️. 연수 주소는 위 순서로 만듭니다.
 
-## skill: wrangler로 올리기
+## skill: 명령 하나로(publish)
+```bash
+L="node <skill 폴더>/scripts/lecpage.mjs"
+$L publish work --dry-run                          # 순서와 강사가 할 일만(아무것도 바꾸지 않음)
+$L publish work                                    # 사이트만
+$L publish work --live --features qa,poll          # 사이트 + 참여 기능(실시간 중계)을 같은 계정에
+```
+`--live`는 아래 "실시간 중계"의 skill 순서(중계 → 관리자 키 → 사이트를 중계에 이어 다시 빌드 → 사이트 → `ALLOWED_ORIGINS` → 확인)와 인쇄용 안내물(`handouts`)까지 한 번에 합니다. 관리자 키는 `dist-강사용/관리자-키.txt`에만 적고 화면에 찍지 않습니다. 인증·`--temporary`·빈 임시 폴더에서 돌리는 까닭은 아래와 같습니다. 손으로 할 때만 아래 명령을 씁니다.
+
+## skill: wrangler로 올리기(손으로)
 ```bash
 # 작업 폴더(dist/의 위)에서. 이름은 소문자·숫자·하이픈
 D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name lec-20261111 --compatibility-date 2026-11-11)
@@ -90,7 +99,7 @@ npx wrangler@4 pages deploy "$D" --project-name lec-20261111 --branch main
 ## 실시간 중계(cf-relay)
 코드: `skills/lecpage/backends/cloudflare/`(최종 기준은 그 폴더의 README). 강사 본인 계정에 올립니다. lecpage 운영자가 대신 운영하는 공용 중계는 없습니다.
 
-**skill이 직접**: README §2의 명령을 그대로 돌립니다. 강사는 `npx wrangler login`으로 로그인하거나 토큰을 환경 변수로 넣어 주기만 하고, 관리자 키는 skill이 만들어 파일로 건넵니다.
+**skill이 직접**: `publish work --live`(위). 손으로 하려면 README §2의 명령을 그대로 돌립니다. 강사는 `npx wrangler login`으로 로그인하거나 토큰을 환경 변수로 넣어 주기만 하고, 관리자 키는 skill이 만들어 파일로 건넵니다.
 
 **버튼으로(강사가 명령어 없이)**
 1. 백엔드 README의 **Deploy to Cloudflare** 버튼을 누릅니다(https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare).

@@ -9,7 +9,7 @@
 //   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
 //        일부만 고치고 검증·다시 빌드(형식: references/cli.md)
-//   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
+//   options <blueprint.json> [--presets a,b,c] [--mood calm,bold]   디자인 3안 빌드 → 비교 그림 한 장(분위기: calm·warm·bold·minimal·playful·formal·tech…)
 //   doctor                                           환경 점검과 설치 방법
 //   review <dist> [--port 4180]                      사이트를 띄우고 강사의 '수정 요청'(펜·네모 표시+글)을 work/feedback/에 모음
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
@@ -20,6 +20,9 @@
 //   decide-infra -i info.json · presets · effects
 //   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
 //   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
+//   publish [work] [--host cloudflare] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
+//        강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
+//   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·강사-카드.pdf·발표화면.png(Playwright 필요)
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -36,7 +39,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -375,6 +378,25 @@ function briefAny(p) {
   return data?.kind === 'lecpage-material' ? briefMaterial(data) : briefBlueprint(data);
 }
 
+/**
+ * 교재 반영 점검 한 줄(+빠진 것 3개까지): 교재의 프롬프트·실습 단계·링크·질문답·줄이 설계도의 보이는 칸에 있는지.
+ * 엔진이 대조하므로 에이전트는 교재와 사이트를 손으로 맞춰 보지 않습니다.
+ */
+function coverageLines(work, raw) {
+  const mp = join(work, 'material.json');
+  if (!existsSync(mp)) return [];
+  let c; try { c = E.materialCoverage(JSON.parse(readFileSync(mp, 'utf8')), E.validate(raw).blueprint); } catch { return []; }
+  const part = (label, x) => (x.total ? `${label} ${x.total - x.miss.length}/${x.total}` : '');
+  const head = [part('프롬프트', c.prompts), part('실습 단계', c.steps), part('링크', c.links), part('질문답', c.faq), c.lines.total ? `교재 줄 ${c.lines.total - c.lines.missing}/${c.lines.total}` : ''].filter(Boolean).join(' · ');
+  const miss = [...c.prompts.miss.map((x) => ['프롬프트', x]), ...c.steps.miss.map((x) => ['단계', x]), ...c.links.miss.map((x) => ['링크', x]), ...c.faq.miss.map((x) => ['질문답', x]), ...c.lines.items.map((x) => ['줄', x])];
+  return [
+    `교재 반영 ${c.missing ? '△' : '✓'} ${head} · ${c.missing ? `빠진 것 ${c.missing}` : '빠진 것 없음(손으로 대조하지 않아도 돼요)'}`,
+    ...miss.slice(0, 3).map(([k, x]) => `  빠짐 ${k}${x.page ? ` p${x.page}` : ''} ${x.text}`),
+    c.lines.missing ? `  교재 줄 ${c.lines.missing}개는 structure --add-leftovers로 글 칸에 넣을 수 있어요` : '',
+    c.held?.length ? `  교재의 접속·설문 주소 ${c.held.length}개는 강사 확인 뒤 info.json(joinUrl·surveyUrl)에: ${plural(c.held.map((u) => cut(u, 40)), 2, ', ')}` : '',
+  ];
+}
+
 // ── 패치 ─────────────────────────────────────────
 /** --set 경로=값 → 패치. 경로: meta.venue, design.preset, sections.<칸 id>.title, sections.stations.items.0.title */
 function setToPatch(raw, expr) {
@@ -488,6 +510,7 @@ async function fromAppFile(P, file) {
 }
 
 // ── 명령 ─────────────────────────────────────────
+const helpers = () => ({ args, E, N, rel, fail, say, readJson, writeJson, loadState, saveState, loadPlaywright, staticServer });
 const commands = {
   async make() {
     const t0 = Date.now();
@@ -546,7 +569,8 @@ const commands = {
       ...steps,
       bm.lines[0], bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
-      ...bb.lines,
+      ...bb.lines.filter((l) => !l.startsWith('싣지 못한 것')),
+      ...coverageLines(work, raw),
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
@@ -632,6 +656,7 @@ const commands = {
       ...pw.map((w) => `주의 ${w.message_ko}`),
       `검증 ✓${final.warnings.length ? ` (주의 ${final.warnings.length}: ${plural(final.warnings.map((w) => cut(w.message_ko, 50)), 2, ' / ')})` : ''}`,
       b ? buildLine(b) : skip,
+      ...(changes.length ? coverageLines(work, r.raw) : []),
       ...(q ? qaLines(q) : []),
     ];
     say(lines, { ok: true, blueprint: bpPath, changes, note: r.note, patchWarnings: pw, warnings: final.warnings, build: b && { dir: b.dir, sizeKB: b.sizeKB, ...b.report }, skipped: skip, qa: q });
@@ -644,7 +669,8 @@ const commands = {
     const state = loadState(work);
     const { blueprint: bp } = E.validate(raw);
     const topics = bp.design.topics.length ? bp.design.topics : E.detectTopics(bp.meta.title + ' ' + bp.meta.subtitle);
-    const moods = bp.design.mood.length ? bp.design.mood : E.moodsForTopics(topics);
+    // --mood calm,bold: 강사가 말한 느낌으로 순위를 바로 매김(설계도를 먼저 고치지 않아도 됨)
+    const moods = args.mood ? String(args.mood).split(',').map((s) => s.trim()).filter(Boolean) : bp.design.mood.length ? bp.design.mood : E.moodsForTopics(topics);
     const ranked = E.rankPresets({ moods, topics, archetype: bp.archetype.primary, admin: bp.meta.admin.kind, minor: bp.audience.minor }, E.PRESETS.length);
     const ids = args.presets ? String(args.presets).split(',').map((s) => s.trim()).filter((id) => E.PRESET_IDS.includes(id)) : ranked.slice(0, 3).map((r) => r.id);
     if (!ids.length) fail(`프리셋 이름을 확인해 주세요: ${E.PRESET_IDS.join(', ')}`);
@@ -798,16 +824,16 @@ const commands = {
     const GUIDE = { vercel: 'vercel', cloudflare: 'cloudflare', 'github-pages': 'github-pages', netlify: 'netlify', firebase: 'firebase', s3: 'aws-s3-cloudfront', server: 'own-server-nginx-caddy', lan: 'local-lan-classroom', zip: 'zip-usb-offline' };
     const BACKEND = { sheets: 'apps-script', supabase: 'supabase', cloudflare: 'cloudflare', server: 'node-server', lan: 'node-server' };
     const top = r.hostInfo[0];
-    const how = top ? [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ') : '';
+    const how = top ? (top.id === 'cloudflare' ? 'publish work (먼저 --dry-run) · references/deploy/cloudflare.md' : [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ')) : '';
     say([
-      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
+      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
       ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
       how ? `올리기 ${how}` : '',
       // 무료 한도를 넘으면 어떻게 되는지(멈추는지, 유료로 이어지는지). 강사에게 한 줄로 전하고 고르게 함
       [top?.atLimit_ko && `${top.name_ko}: ${top.atLimit_ko}`, r.backendInfo.atLimit_ko && `${r.backendInfo.name_ko}: ${r.backendInfo.atLimit_ko}`].filter(Boolean).map((x) => '한도 ' + x).join('\n'),
       ...r.warnings.map((x) => '주의 ' + x),
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
-      `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
+      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live --features ${(info.features || []).join(',') || 'qa,poll'} (먼저 --dry-run)` : `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
     ], r);
   },
 
@@ -842,6 +868,11 @@ const commands = {
     const port = +args.port || 4173;
     staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
+
+  /** 올리기: Cloudflare 계정 하나에 사이트(+ --live면 참여 기능 중계)를 올리고 주소 확인·안내물까지(scripts/publish.mjs) */
+  async publish() { const { publishCmd } = await import('./publish.mjs'); await publishCmd(helpers()); },
+  /** 올린 주소 → 강사용 폴더에 QR-안내문.pdf·강사-카드.pdf·발표화면.png */
+  async handouts() { const { handoutsCmd } = await import('./publish.mjs'); await handoutsCmd(helpers()); },
 
   pack() {
     const dir = resolve(args._[0] || 'dist');
