@@ -1,8 +1,18 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Field, Notice, Seg } from './ui.jsx';
 import { Steps } from './Steps.jsx';
 import { E } from '../lib/engine.js';
 import { copy, randomKey, sha256Hex, toast } from '../lib/util.js';
+import { loadKey, saveKey } from '../lib/ai.js';
+
+/**
+ * 한 번 연결하면 다음 연수부터 저절로: 내 서버(Cloudflare·학교 서버)는 연수 코드마다 따로 저장해 여러 연수를 한 서버가 맡으므로,
+ * 연결한 주소를 이 기기에 기억해 두고 새 연수에 그대로 씀(구글 시트는 시트 하나가 연수 하나라 기억하지 않음).
+ * 관리자 키는 앱이 만들어 복사해 주고(강사가 짓지 않게), 연결한 주소별로 이 기기에 기억해 연수 당일 공개 완료 화면에 보여 줌.
+ */
+export const rememberedServer = () => loadKey('live-server').then((r) => (r.key && /^https:\/\//.test(r.key) ? r.key : ''), () => '');
+export const adminKeyFor = (url) => (url ? loadKey('live-admin:' + String(url).replace(/\/+$/, '')).then((r) => r.key || '', () => '') : Promise.resolve(''));
+const keepAdminKey = (url, key) => saveKey('live-admin:' + String(url).replace(/\/+$/, ''), key, true).catch(() => { });
 
 const REPO = 'https://github.com/yoorrard/lecpage/tree/main/skills/lecpage';
 const CF_DEPLOY = 'https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare';
@@ -52,23 +62,39 @@ export function LiveSetup({ p, update }) {
   const code = E.validate(bp).blueprint.live.code;
   const reco = E.decideInfra({ size: info.size, features: info.features, skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
-  const [method, setMethod] = useState(connected ? live.provider : METHOD_OF[reco.backend] || 'sheets');
+  // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).
+  // 엔진의 클릭용 규칙(시트)은 skill 초안의 기본값이라 그대로 두고, 앱 화면에서만 내 서버(Cloudflare)를 첫째로
+  const appFirst = ['sheets', 'supabase'].includes(reco.backend);
+  const recoMethod = appFirst ? 'http' : METHOD_OF[reco.backend] || 'sheets';
+  const [method, setMethod] = useState(connected ? live.provider : recoMethod);
+  const [newKey] = useState(() => randomKey(20)); // ADMIN_KEY 칸·시트 메뉴에 넣을 관리자 키(앱이 만듦)
+  const usedKey = useRef(false); // 이번에 만든 키를 복사해 바깥에 넣었음 → 연결되면 그 주소의 관리자 키로 기억
+  const [remembered, setRemembered] = useState(''); // 이 기기에 기억한 내 서버 주소
+  // 지난번에 연결한 내 서버가 있으면 확인만 하고 바로 씀(다음 연수부터 할 일 0)
+  useEffect(() => {
+    if (connected) return;
+    rememberedServer().then((url) => { if (!url) return; setRemembered(url); setMethod('http'); test(false, url, 'http', true); });
+  }, []);
+  const copyKey = (msg) => { usedKey.current = true; copy(newKey, msg); };
   const [draft, setDraft] = useState({ url: live.provider === method ? live.url || '' : '', anonKey: live.anonKey || '' });
   const [state, setState] = useState({ busy: false, msg: '', ok: false });
   const [adm, setAdm] = useState(null);
   const [at, setAt] = useState(0); // 지금 보고 있는 단계
-  async function test(again, url = draft.url) {
+  async function test(again, url = draft.url, prov = method, quiet = false) {
     setState({ busy: true, msg: '확인하는 중…', ok: false });
-    const next = again ? { ...live } : { ...live, provider: method, url: url.trim(), anonKey: method === 'supabase' ? draft.anonKey.trim() : '' };
+    const next = again ? { ...live } : { ...live, provider: prov, url: url.trim().replace(/\/+$/, ''), anonKey: prov === 'supabase' ? draft.anonKey.trim() : '' };
     try {
       const msg = await pingLive(next, code);
       update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, ...next } }, liveOk: true }));
-      setState({ busy: false, msg, ok: true }); toast(msg);
-    } catch (e) { if (again) update({ liveOk: false }); setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }
+      if (!again && next.provider === 'http') saveKey('live-server', next.url, true).catch(() => { });
+      if (!again && usedKey.current) keepAdminKey(next.url, next.provider === 'supabase' && adm ? adm.key : newKey);
+      const done = quiet ? '지난번에 연결한 내 서버에 연결했어요.' : msg;
+      setState({ busy: false, msg: done, ok: true }); toast(done);
+    } catch (e) { if (again) update({ liveOk: false }); if (quiet) { setState({ busy: false, msg: '', ok: false }); return; } setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }
   }
   function useLocal() { update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, provider: 'local', url: '', anonKey: '' } }, liveOk: false })); toast('이 컴퓨터에서만 시험하는 방식으로 바꿨어요.'); }
   function disconnect() { update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, provider: 'local', url: '', anonKey: '' } }, liveOk: false })); setState({ busy: false, msg: '', ok: false }); }
-  async function makeAdmin() { const k = randomKey(20); setAdm({ key: k, hash: await sha256Hex(k) }); }
+  async function makeAdmin() { const k = randomKey(20); usedKey.current = true; setAdm({ key: k, hash: await sha256Hex(k) }); }
   async function copyRaw(kind) {
     const m = kind === 'gs' ? await import('../../../skills/lecpage/backends/apps-script/Code.gs?raw') : await import('../../../skills/lecpage/backends/supabase/schema.sql?raw');
     copy(m.default, kind === 'gs' ? '코드를 복사했어요. Apps Script 편집기에 붙여 넣으세요.' : 'SQL을 복사했어요. SQL Editor에 붙여 넣으세요.');
@@ -112,7 +138,7 @@ export function LiveSetup({ p, update }) {
       { t: 'setup 실행하기', body: <p>위쪽 함수 목록에서 <b>setup</b>을 고르고 <b>실행</b>을 눌러요. "승인 필요"가 뜨면 <b>권한 검토 → 내 계정 → 고급 → (안전하지 않음)으로 이동</b>을 눌러요. 권한을 모두 골라 <b>계속</b>(또는 <b>허용</b>)을 눌러요. 내가 붙여 넣은 코드라서 나오는 안내예요.</p> },
       { t: '관리자 키와 연수 코드 넣기',
         body: <>
-          <p>시트로 돌아와 새로 고쳐요. 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에서 12자 이상으로 정하고 적어 두세요.</p>
+          <p>시트로 돌아와 새로 고쳐요. 메뉴 <b>lecpage → 2. 관리자 키 정하기</b>에 앱이 만든 키를 붙여 넣어요. <button class="btn btn-sm" onClick={() => copyKey('관리자 키를 복사했어요. 시트 칸에 붙여 넣으세요.')}>관리자 키 복사</button> <span class="small muted">이 기기에 기억해 두고 공개한 뒤 보여 드려요.</span></p>
           <p><b>lecpage → 연수 코드 고정하기</b>에는 <span class="mono">{code}</span> <button class="btn btn-sm" onClick={() => copy(code, '연수 코드를 복사했어요.')}>복사</button>를 넣어요.</p>
           {settings.uploads && <p>보드에 사진·파일을 받으려면 <b>lecpage → 파일 올리기 켜기/끄기</b>를 한 번 눌러 켜요.</p>}
         </> },
@@ -134,8 +160,9 @@ export function LiveSetup({ p, update }) {
     ],
     http: [
       { t: '내 서버 만들기', body: <>
-        <p><a class="btn btn-sm btn-primary" href={CF_DEPLOY} target="_blank" rel="noopener" onClick={() => setAt(1)}>Cloudflare 열기</a> Cloudflare 무료 계정으로 버튼 하나면 서버가 생겨요. 배포할 때 넣는 <b>ADMIN_KEY</b>가 관리자 키예요.</p>
-        <p class="small muted">학교 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
+        <p><a class="btn btn-sm btn-primary" href={CF_DEPLOY} target="_blank" rel="noopener" onClick={() => { copyKey('관리자 키를 복사했어요. ADMIN_KEY 칸에 붙여 넣으세요.'); setAt(1); }}>Cloudflare 열기</a> 누르면 관리자 키가 복사돼요.</p>
+        <p>Cloudflare에 로그인(무료 가입)하고 <b>GitHub 연결을 허락</b>해요. <b>ADMIN_KEY</b> 칸에 붙여 넣고 <b>Deploy</b>를 눌러요. 나온 주소(…workers.dev)를 복사해 돌아와요.</p>
+        <p class="small muted">한 번 만들면 다음 연수부터는 이 기기에서 저절로 연결돼요. 학교 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
       </> },
       { t: '서버 URL 붙여넣기', body: finish },
     ],
@@ -147,11 +174,13 @@ export function LiveSetup({ p, update }) {
       {connected ? (
         <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
       ) : (
-        <Notice kind="lav"><span><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</span></Notice>
+        <Notice kind="lav"><span>{appFirst
+          ? <><b>추천: 내 서버(Cloudflare)</b> · 할 일이 가장 적어요. 처음 한 번만 만들면 다음 연수부터는 저절로 연결돼요.</>
+          : <><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</>}</span></Notice>
       )}
       {connected && state.msg && !state.ok && <Notice kind="bad">{state.msg}</Notice>}
       {!connected && <>
-        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={[{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
+        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={recoMethod === 'http' ? [{ value: 'http', label: '내 서버·Cloudflare' }, { value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }] : [{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
         {B?.atLimit_ko && <p class="small muted">{B.atLimit_ko}</p>}
         <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
         <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={useLocal}>이 컴퓨터에서만 시험하기</button></div>

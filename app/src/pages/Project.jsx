@@ -33,10 +33,14 @@ export function Project({ id, step }) {
   useEffect(() => { if (p) setTimeout(() => document.querySelector('.wiz-main h1')?.focus({ preventScroll: true }), 30); }, [s, !!p]);
   // 고치기 단계는 미리보기 자리를 넓게(화면 폭 가득)
   useEffect(() => { const h = document.documentElement; h.classList.toggle('is-wide', s === 2); return () => h.classList.remove('is-wide'); }, [s]);
-  function update(patch) {
+  /** opt.now: 모아 쓰지 않고 바로 저장(다른 앱·창으로 나가기 직전처럼 잃으면 안 될 때) */
+  function update(patch, opt) {
     const next = { ...ref.current, ...(typeof patch === 'function' ? patch(ref.current) : patch) };
     if (next.blueprint?.meta?.title) next.title = next.blueprint.meta.title; else if (next.info?.title) next.title = next.info.title;
+    // 공개한 뒤 바뀌었는지(다시 올리기 알림). 올리면서 주소를 적는 것(deploy와 함께 바뀜)은 고친 것이 아님
+    if (next.blueprint && next.blueprint !== ref.current.blueprint && next.deploy === ref.current.deploy) next.editedAt = Date.now();
     ref.current = next; setP(next); save(next);
+    if (opt?.now) save.flush();
   }
   if (missing) return <div class="empty"><Mascot size={84} mood="oops" /><p>이 연수를 찾지 못했어요. 다른 브라우저에서 만들었다면 그 브라우저에서 '파일로 저장'한 뒤 여기서 열어 주세요.</p><a class="btn" href="#/">처음으로</a></div>;
   if (!p) return <p class="muted">불러오는 중…</p>;

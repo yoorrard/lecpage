@@ -382,6 +382,7 @@
 /* 첫 화면 어디에나 파일을 끌어 오면 */
 .ld-dropall{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;pointer-events:none;background:color-mix(in srgb,var(--lav-soft) 88%,transparent);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);box-shadow:inset 0 0 0 4px var(--accent)}
 .ld-dropall p{display:grid;justify-items:center;gap:12px;font-size:clamp(1.3rem,1rem + 1.5vw,2rem);font-weight:750;color:var(--lav-ink)}
+.ld-dropall small{font-size:1rem;font-weight:600;color:var(--ink-2)}
 
 @media (prefers-reduced-motion:reduce){
   .ld-hero-vis{transition:none}

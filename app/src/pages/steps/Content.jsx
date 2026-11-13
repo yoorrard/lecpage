@@ -57,6 +57,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
     setTimeout(() => { const el = document.querySelector(`[data-sec-id="${CSS.escape(id)}"]`); el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); el?.querySelector('.sec-open')?.focus({ preventScroll: true }); }, 60);
   }, [focusId]);
   const [addType, setAddType] = useState('');
+  const [reorder, setReorder] = useState(false); // 위·아래 버튼은 [순서 바꾸기]를 눌렀을 때만(평소에는 섹션 이름과 숨기기만)
   const sections = bp.sections || [];
   const setSections = (next) => update((cur) => ({ blueprint: { ...cur.blueprint, sections: next } }));
   // 지금 값(cur)에 합침: 한 번에 두 번 고쳐도 앞의 것이 지워지지 않게
@@ -71,18 +72,19 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
   const anchors = sections.filter((x) => x.type !== 'hero' && !x.hidden && x.id).map((x) => ({ value: '#' + x.id, label: x.title || E.SECTION_DEFS[x.type]?.label || x.type }));
   return (
     <div class="stack">
-      <p class="small muted">섹션을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
-      <ol class="sec-list">
+      <div class="sec-tools"><p class="small muted">섹션을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
+        <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(reorder)} onClick={() => setReorder(!reorder)}>순서 바꾸기</button></div>
+      <ol class={`sec-list${reorder ? ' is-reorder' : ''}`}>
         {sections.map((s, i) => {
           const def = E.SECTION_DEFS[s.type] || { label: s.type };
           const isOpen = open === s.id;
           return (
             <li key={s.id || i} class="sec-item" data-sec-id={s.id} data-off={s.hidden ? 'true' : undefined} data-picked={open === s.id ? 'true' : undefined}>
               <div class="sec-row">
-                <div class="row" style={{ gap: '2px' }}>
+                {reorder ? <div class="row" style={{ gap: '2px' }}>
                   <button class="icon-btn" aria-label={`${def.label} 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
                   <button class="icon-btn" aria-label={`${def.label} 아래로`} onClick={() => move(i, 1)} disabled={i === sections.length - 1}>↓</button>
-                </div>
+                </div> : <span aria-hidden="true" />}
                 <button class="sec-open" onClick={() => setOpen(isOpen ? null : s.id)} aria-expanded={String(isOpen)}>
                   <div class="type">{def.label}{s.nav ? ` · 메뉴 "${s.nav}"` : ''}{def.live ? ' · 참여 기능' : ''}{s.hidden ? ' · 숨김' : ''}</div>
                   <div class="ttl">{s.type === 'hero' ? (s.title || meta.title) : (s.title || s.text || def.label)}</div>
