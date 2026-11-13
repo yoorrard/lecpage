@@ -10,36 +10,54 @@ import { motifRule } from './body-graphic.js';
 const PROVIDER_KO = { local: '리허설(이 브라우저 안에서만)', http: '참여 기능 서버', supabase: 'Supabase', sheets: '구글 시트' };
 const themeBtn = () => `<button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>`;
 
-/** 확인·안내 쪽(접속 확인·개인정보) 머리: 연수 사이트로 가는 이름 + 이 쪽 이름 + 밝게·어둡게 */
+/** 보조 화면 머리의 왼쪽(강사 화면과 같은 꼴): 무슨 화면인지(작게) + 연수 제목 */
+const auxId = (ctx, label) => `<p class="lp-ax-id"><span class="lp-brand-dot" aria-hidden="true"></span><span><small>${esc(label)}</small><b>${esc(ctx.bp.meta.title)}</b></span></p>`;
+const backBtn = () => `<a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로</a>`;
+/** 확인·안내 쪽(접속 확인·개인정보) 머리: 무슨 화면인지 + [참가자 화면으로] + 밝게·어둡게 */
 function auxBar(ctx, label) {
   return `<header class="lp-ax-bar"><div class="lp-ax-in">
-<a class="lp-ax-brand" href="index.html"><span class="lp-brand-dot" aria-hidden="true"></span><span>${esc(ctx.bp.meta.title)}</span></a>
-<span class="lp-ax-page">${esc(label)}</span>
-<div class="lp-ax-act">${themeBtn()}</div>
+${auxId(ctx, label)}
+<div class="lp-ax-act">${backBtn()}${themeBtn()}</div>
 </div></header>`;
 }
 const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), seed);
 
 // ── 강사 화면 ─────────────────────────────────────────────
+/**
+ * 강사 화면 = 강사의 출발점. 들어가기 전에는 '강사용 화면이에요 → [참가자 화면으로]'와 열쇠 칸만 보이고,
+ * 들어간 뒤에 위 띠에 [발표 화면 띄우기]와 [더보기](참가자 화면·QR 안내문·접속 확인·휴대폰에서 열기·도움말)가 나옴.
+ */
 export function renderConsole(ctx) {
   const bp = ctx.bp, m = bp.meta, prov = bp.live.provider;
+  const item = (href, name, sub, ic) => `<li><a href="${href}" target="_blank" rel="noopener">${icon(ic)}<span><b>${name}</b><small>${sub}</small></span></a></li>`;
+  const act = (attr, name, sub, ic, hidden) => `<li${hidden ? ' hidden' : ''}><button type="button" ${attr}>${icon(ic)}<span><b>${name}</b><small>${sub}</small></span></button></li>`;
   const inner = `<a class="lp-skip" href="#lp-con-main">본문 바로 가기</a>
 <div class="lp-con" data-console data-provider="${esc(prov)}">
 <header class="lp-con-bar"><div class="lp-con-bar-in">
 <div class="lp-con-id"><span class="lp-brand-dot" aria-hidden="true"></span><h1><small>강사 화면</small><span>${esc(m.title)}</span></h1></div>
-<p class="lp-con-conn" data-conn data-state="idle" role="status"><i aria-hidden="true"></i><span data-conn-text>들어가기 전</span></p>
-<nav class="lp-con-go" aria-label="다른 화면 열기">
-<a class="lp-btn lp-btn-primary lp-btn-sm" href="screen.html" target="_blank" rel="opener">${icon('expand')}<span>발표 화면</span></a>
-<a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html" target="_blank" rel="noopener">${icon('external')}<span>참가자 화면</span></a>
-<a class="lp-btn lp-btn-ghost lp-btn-sm" href="poster.html" target="_blank" rel="noopener">${icon('print')}<span>QR 안내문</span></a>
+<p class="lp-con-conn" data-conn data-state="idle" role="status" hidden><i aria-hidden="true"></i><span data-conn-text>연결하는 중…</span></p>
+<nav class="lp-con-go" aria-label="다른 화면" data-after-login hidden>
+<button class="lp-btn lp-btn-primary lp-btn-sm" type="button" data-screen-open>${icon('monitor')}<span>발표 화면 띄우기</span></button>
+<div class="lp-con-more" data-more>
+<button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-more-btn aria-expanded="false" aria-controls="lp-con-menu">${icon('menu')}<span>더보기</span></button>
+<ul class="lp-con-menu" id="lp-con-menu" data-more-menu hidden>
+${act('data-screen-window', '발표 화면 새 창', '이 노트북에서 창으로 열어요', 'expand', true)}
+${item('index.html', '참가자 화면', '참가자가 보는 사이트', 'external')}
+${item('poster.html', 'QR 안내문', 'A4로 인쇄해 붙여요', 'print')}
+${item('check.html', '접속 확인', '전날, 연수 장소 Wi-Fi로', 'wifi')}
+${ctx.live ? act('data-phone-open', '휴대폰에서 열기', '교실을 돌며 이 화면을 써요', 'phone') : ''}
+${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
+</ul>
+</div>
 </nav>
 <div class="lp-con-me">${themeBtn()}<button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-logout hidden>${icon('logout')}<span>나가기</span></button></div>
 </div></header>
 <section class="lp-con-login" data-admin-box aria-labelledby="lp-login-h">
 <form class="lp-card lp-con-login-card" data-admin-form novalidate>
+<p class="lp-con-for"><span>강사용 화면이에요. 참가자라면</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></p>
 <div class="lp-con-login-mark" aria-hidden="true">${motif(ctx, 'login')}</div>
 <h2 id="lp-login-h">관리자 키</h2>
-<p class="lp-con-login-lead">공개할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
+<p class="lp-con-login-lead">배포할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
 <label class="lp-con-field" for="lp-key">관리자 키</label>
 <div class="lp-con-keyrow"><input id="lp-key" type="password" name="key" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="200" required aria-describedby="lp-key-msg lp-key-hint"><button class="lp-icon-btn" type="button" data-key-show aria-pressed="false" aria-label="키 보이기">${icon('eye')}</button></div>
 <label class="lp-con-check"><input type="checkbox" name="remember" data-remember><span>이 기기에서 기억하기</span></label>
@@ -50,7 +68,17 @@ ${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 �
 </form>
 </section>
 <main id="lp-con-main" class="lp-con-main" data-console-main hidden tabindex="-1" aria-label="연수 진행"></main>
-<details class="lp-con-help" data-console-help><summary>도움말 · 연수 전·중·후에 할 일</summary><div class="lp-prose">${md(opsGuide(ctx))}</div></details>
+<details class="lp-con-help" id="lp-con-help" data-console-help data-after-login hidden><summary>도움말 · 연수 전·중·후에 할 일</summary><div class="lp-prose">${md(opsGuide(ctx))}</div></details>
+${ctx.live ? `<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialog aria-labelledby="lp-phone-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-phone-h">휴대폰에서 열기</h2>
+<p data-phone-lead>휴대폰 카메라로 QR을 찍으면 관리자 키를 넣지 않아도 강사 화면이 열려요. 교실을 돌며 질문·투표·타이머를 다뤄요.</p>
+<div class="lp-con-phone-box" data-phone-box>
+<div class="lp-qr" data-phone-qr role="img" aria-label="휴대폰용 강사 화면 QR 코드" hidden></div>
+<div class="lp-con-phone-cover" data-phone-cover>${icon('lock')}<p>관리자 키가 든 QR이에요. 프로젝터나 화면 공유에 이 창이 비치지 않을 때 보이세요.</p><button type="button" class="lp-btn lp-btn-primary lp-btn-sm" data-phone-show>${icon('eye')}<span>QR 보이기</span></button></div>
+</div>
+<p class="lp-con-sub" data-phone-left></p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="close">닫기</button></div>
+</form></dialog>` : ''}
 <dialog class="lp-dialog lp-con-dlg" data-purge-dialog aria-labelledby="lp-purge-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-purge-h">모든 기록을 지울까요?</h2>
 <p>참가자 명단·출석·질문·투표 응답·보드 글과 올린 파일·도움 요청·설문 응답이 서버에서 지워져요. 지운 뒤에는 되돌릴 수 없어요.</p>
@@ -68,7 +96,8 @@ export function renderScreen(ctx) {
   const bp = ctx.bp, m = bp.meta, live = ctx.live;
   const signal = live && bp.live.features.includes('signal');
   const code = live ? `<p class="lp-scr-code">연수 코드 <b>${esc(bp.live.code)}</b></p>` : '';
-  const inner = `<div class="lp-scr" data-screen${live ? '' : ' data-offline'}>
+  const inner = `<p class="lp-scr-for"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></p>
+<div class="lp-scr" data-screen${live ? '' : ' data-offline'}>
 <header class="lp-scr-top">
 <h1 class="lp-scr-title"><span class="lp-brand-dot" aria-hidden="true"></span><span>${esc(m.title)}</span></h1>
 ${live ? '<p class="lp-scr-conn" data-conn data-state="idle"><i aria-hidden="true"></i><span data-conn-text>연결하는 중…</span></p>' : ''}
@@ -97,18 +126,26 @@ ${code}
 ${signal ? '<div class="lp-scr-signal" data-screen-signal hidden role="region" aria-label="이해 신호"></div>' : ''}
 </aside>
 <aside class="lp-drawer" id="lp-tools" data-tools hidden aria-labelledby="lp-tools-h"><div class="lp-drawer-h"><h2 id="lp-tools-h" tabindex="-1">도구</h2><button class="lp-icon-btn" type="button" data-tools-close aria-label="도구 닫기">${icon('close')}</button></div><div data-tools-body></div>
-<p class="lp-drawer-links"><a class="lp-link" href="poster.html" target="_blank" rel="noopener">${icon('print')}QR 안내문 인쇄</a>${live ? `<a class="lp-link" href="console.html" target="_blank" rel="opener">${icon('external')}강사 화면</a>` : ''}</p></aside>
+<p class="lp-drawer-links"><a class="lp-link" href="poster.html" target="_blank" rel="noopener">${icon('print')}QR 안내문 인쇄</a>${live ? `<a class="lp-link" href="console.html" target="_blank" rel="noopener">${icon('external')}강사 화면 열기</a>` : ''}</p></aside>
 <div class="lp-reactions" data-reactions aria-hidden="true"></div></div>
 <dialog class="lp-joinbig" data-joinbig aria-labelledby="lp-joinbig-h"><form method="dialog" class="lp-joinbig-in">
 <div class="lp-qr" data-qr-big role="img" aria-label="참여 QR 코드"></div>
 <div class="lp-joinbig-t"><h2 id="lp-joinbig-h">휴대폰 카메라로 QR을 찍어 주세요</h2><p class="lp-joinbig-url" data-join-url></p><p class="lp-joinbig-full" data-join-full hidden></p>${code}</div>
 <button class="lp-btn lp-btn-ghost lp-joinbig-x" value="close">${icon('close')}<span>닫기</span></button></form></dialog>
+<dialog class="lp-dialog lp-scr-go" data-fs-dialog aria-labelledby="lp-fs-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-fs-h">프로젝터에 띄워요</h2>
+<p>이 창을 프로젝터 화면으로 끌어다 놓고 [전체 화면]을 누르세요. 노트북 화면이 프로젝터에 그대로 비치면 바로 누르면 돼요.</p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="close">창으로 보기</button><button class="lp-btn lp-btn-primary" type="button" data-fs-go autofocus>${icon('expand')}<span>전체 화면</span></button></div>
+</form></dialog>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
   return appShell(ctx, { title: `발표 화면 · ${m.title}`, page: 'screen', bodyClass: 'lp-body-scr', inner, scripts: ['assets/qr.js', live && 'assets/live.js', 'assets/screen.js'].filter(Boolean), blueprint: true });
 }
 
 // ── QR 안내문(인쇄) ────────────────────────────────────────
-/** A4 안내문 한 장 + 잘라 쓰는 자리 카드 8장(선택) + 강사 카드(선택). 참가자 주소·QR은 lecpage.js가 그립니다. */
+/**
+ * A4 안내문 한 장 + 잘라 쓰는 자리 카드 8장(선택). 참가자 주소·QR은 lecpage.js가 그립니다.
+ * 참가자 손에 가는 종이라 강사 화면 주소·QR은 싣지 않음(휴대폰으로 강사 화면을 여는 QR은 강사 화면 안에만)
+ */
 export function renderPoster(ctx) {
   const bp = ctx.bp, m = bp.meta;
   const when = m.date ? `${koDate(m.date)}${m.start ? ` ${m.start}${m.end ? `~${m.end}` : ''}` : ''}` : '';
@@ -117,13 +154,13 @@ export function renderPoster(ctx) {
   const meta = when || m.venue ? `<dl class="lp-pst-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : '';
   const mini = (i) => `<div class="lp-pst-mini"><p class="lp-pst-mini-t">${esc(m.title)}</p><div class="lp-pst-mini-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드 ${i + 1}"></div><p class="lp-pst-mini-u" data-url-self></p>${code ? `<p class="lp-pst-mini-c">연수 코드 ${esc(code)}</p>` : ''}</div>`;
   const inner = `<header class="lp-pst-bar"><div class="lp-pst-bar-in">
-<p class="lp-pst-bar-t"><b>QR 안내문</b><span>A4로 인쇄해요. 흑백으로 인쇄해도 QR이 잘 찍혀요.</span></p>
+${auxId(ctx, 'QR 안내문')}
+<p class="lp-pst-bar-t">A4 한 장이에요. 흑백으로 인쇄해도 QR이 잘 찍혀요.</p>
 <fieldset class="lp-pst-opts"><legend class="lp-sr">함께 인쇄할 것</legend>
 <label class="lp-con-check"><input type="checkbox" data-part-print="cards"><span>자리 카드 8장(잘라 쓰기)</span></label>
-<label class="lp-con-check"><input type="checkbox" data-card-print checked><span>강사 카드</span></label>
 </fieldset>
 <button class="lp-btn lp-btn-primary" type="button" data-print>${icon('print')}<span>인쇄하기</span></button>
-<a class="lp-link" href="index.html">연수 사이트로</a>
+${backBtn()}
 </div></header>
 <main class="lp-pst" data-poster>
 <div class="lp-pst-page"><section class="lp-pst-sheet lp-pst-a4" data-len="${tlen <= 12 ? 's' : tlen <= 26 ? 'm' : 'l'}" aria-labelledby="lp-poster-h">
@@ -145,13 +182,6 @@ ${code ? `<p class="lp-pst-code">연수 코드 <b>${esc(code)}</b></p>` : ''}
 <div class="lp-pst-page" data-part="cards"><section class="lp-pst-sheet lp-pst-cards" aria-label="자리 카드(잘라 쓰기)">
 <p class="lp-pst-cut">${icon('scissors')}<span>점선을 따라 잘라 자리마다 놓아 주세요.</span></p>
 <div class="lp-pst-grid">${Array.from({ length: 8 }, (_, i) => mini(i)).join('')}</div>
-</section></div>
-<div class="lp-pst-page" data-part="teacher"><section class="lp-pst-sheet lp-pst-teacher" data-teacher-card aria-labelledby="lp-card-h">
-<p class="lp-pst-only">강사만</p><h2 id="lp-card-h">강사 카드 · ${esc(m.title)}</h2>
-<p class="lp-pst-warn">이 카드는 강사만 보세요. 벽에 붙이지 말고, 관리자 키는 적지 마세요.</p>
-<div class="lp-pst-tgrid">${ctx.live ? `<div class="lp-qr" data-qr-page="console.html" role="img" aria-label="강사 화면 QR 코드"></div>` : ''}<dl>
-${ctx.live ? `<div><dt>강사 화면</dt><dd data-url-page="console.html"></dd></div>` : ''}<div><dt>발표 화면</dt><dd data-url-page="screen.html"></dd></div><div><dt>접속 확인</dt><dd data-url-page="check.html"></dd></div>${code ? `<div><dt>연수 코드</dt><dd>${esc(code)}</dd></div>` : ''}</dl></div>
-<ol class="lp-pst-steps"><li>연수 전날 장소의 Wi-Fi로 접속 확인을 열어요.</li><li>프로젝터에 발표 화면을 띄워요.</li>${ctx.live ? '<li>노트북에서 강사 화면에 들어가요.</li>' : ''}</ol>
 </section></div>
 </main><div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
   return appShell(ctx, { title: `QR 안내문 · ${m.title}`, page: 'poster', bodyClass: 'lp-body-pst lp-cards-off', inner, scripts: ['assets/qr.js', 'assets/lecpage.js'] });
@@ -291,21 +321,24 @@ export function opsGuide(ctx) {
   const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
   const svIn = live && sv?.questions?.length;
   const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
-  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 접속 확인(`check.html`)으로 확인하세요.', http: '참여 기능 서버가 켜져 있는지 접속 확인(`check.html`)으로 확인하세요.', local: '지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.' }[prov];
+  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 접속 확인(`check.html`)으로 확인하세요.', http: '참여 기능 서버가 켜져 있는지 접속 확인(`check.html`)으로 확인하세요.', local: '지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.' }[prov];
   const before = [
-    '사이트를 올리면 주소와 QR이 나와요. 현장에 붙일 안내문은 `poster.html`을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
-    '연수 장소의 Wi-Fi로 `check.html`을 열어 막힌 곳이 없는지 확인하세요.',
-    live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요.',
+    '사이트를 배포하면 주소와 QR이 나와요. 현장에 붙일 안내문은 QR 안내문(`poster.html`)을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
+    '연수 장소의 Wi-Fi로 접속 확인(`check.html`)을 열어 막힌 곳이 없는지 확인하세요.',
+    live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요. 강사 화면 위 [더보기]에 참가자 화면·QR 안내문·접속 확인이 모여 있어요.',
     live && wake,
   ].filter(Boolean);
   const during = live ? [
-    '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 질문과 투표 결과가 크게 보이고, QR을 누르면 화면 가득 커져요.',
+    '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 강사 화면 위 [발표 화면 띄우기]를 누르면 크롬·엣지는 프로젝터를 고르는 창이 떠요. 그 창이 없으면 새 창이 열리니 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르세요.',
+    '발표 화면에는 질문과 투표 결과가 크게 보여요. 강사 화면의 [참여 QR 크게]를 켜면 발표 화면에 QR이 화면 가득 떠요.',
+    '교실을 돌며 쓰려면 [더보기] → [휴대폰에서 열기]의 QR을 휴대폰으로 찍어요. 그 QR에는 관리자 키가 들어 있으니 프로젝터에 비치지 않을 때만 보이세요.',
+    '교탁 컴퓨터만 있으면 짧은 주소로 들어가 위 메뉴의 QR 버튼 → [발표 화면]을 누르고, 강사 화면은 휴대폰으로 열어요.',
     '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
     '타이머·공지를 보내면 참가자 화면과 발표 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 지금 실습·쪽으로 참가자 화면이 움직여요.',
     '질문이나 보드 글이 지나치게 몰리면 [질문 받기]·[새 글 받기]를 꺼서 잠시 잠그고, 맞지 않는 글은 [숨기기]로 가려요.',
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
     attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요.' : '연수를 시작할 때 참가자 화면 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
-  ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요.'];
+  ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
   const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [기록 내려받기] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
   const after = live ? [
     `참가자 명단(별명): 강사 화면의 [기록 내려받기] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
@@ -315,5 +348,5 @@ export function opsGuide(ctx) {
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
   const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
-  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 빌드하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
+  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 배포하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
 }

@@ -3,6 +3,16 @@
  * 관리자 키: 이 탭(sessionStorage)에만 두고, '이 기기에서 기억하기'를 고르면 이 기기(localStorage)에도. 주소·화면·기록에는 남기지 않음. */
 (function () {
   'use strict';
+  // 휴대폰에서 열기 QR(#key=…): 읽자마자 주소에서 지움(주소창·화면 공유·방문 기록에 남지 않게). 키는 이 탭에만 둠
+  var qrKey = '';
+  try {
+    var hk = /(?:^#|&)key=([^&]+)/.exec(location.hash || '');
+    if (hk) {
+      qrKey = decodeURIComponent(hk[1]);
+      var rest = location.hash.replace(/(^#|&)key=[^&]*/, '$1').replace(/^#&/, '#');
+      history.replaceState(null, '', location.pathname + location.search + (rest === '#' ? '' : rest));
+    }
+  } catch (e) { }
   // 다른 사이트가 강사 화면을 틀(iframe)에 넣어 관리자 키를 가로채지 못하게(헤더를 못 바꾸는 GitHub Pages 대비). 앱 미리보기는 예외
   try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.</p></body>'; return; } } catch (e) { return; }
   var doc = document, root = doc.documentElement, $ = function (s, r) { return (r || doc).querySelector(s); };
@@ -23,9 +33,92 @@
   });
 
   var form = $('[data-admin-form]'), main = $('[data-console-main]'), box = $('[data-admin-box]');
+  var PREVIEW = doc.body.hasAttribute('data-lp-preview'), LOCALPAGE = /^(file|about|blob|data):$/.test(location.protocol);
+  /** 이 사이트의 폴더 주소(…/). /console.html이든 /console(확장자 없는 주소)이든 같음. 파일로 열었거나 미리보기면 '' */
+  function siteDir() { return LOCALPAGE ? '' : location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, ''); }
+  /** 들어간 뒤에만 보이는 것(위 띠의 다른 화면·도움말): 강사용 화면에 잘못 온 참가자에게는 열쇠 칸과 [참가자 화면으로]만 */
+  function showAfterLogin() { [].forEach.call(doc.querySelectorAll('[data-after-login]'), function (n) { n.hidden = false; }); }
+
+  // ── 더보기(참가자 화면·QR 안내문·접속 확인·휴대폰에서 열기·도움말) ──
+  var moreBox = $('[data-more]'), moreBtn = $('[data-more-btn]'), moreMenu = $('[data-more-menu]');
+  function menuItems() { return [].slice.call(moreMenu.querySelectorAll('li:not([hidden]) a, li:not([hidden]) button')); }
+  function setMenu(open, focusFirst) {
+    if (!moreMenu) return;
+    moreMenu.hidden = !open; moreBtn.setAttribute('aria-expanded', String(open));
+    // 열린 동안 아래 칸은 잠시 누를 수 없게(메뉴 밖을 누르면 닫히기만 하고, 메뉴에 반쯤 가린 단추를 잘못 누르지 않게)
+    [main, $('[data-console-help]')].forEach(function (n) { if (n) n.inert = open; });
+    if (open && focusFirst) { var f = menuItems()[0]; if (f) f.focus(); }
+  }
+  if (moreBtn && moreMenu) {
+    moreBtn.addEventListener('click', function (e) { setMenu(moreMenu.hidden, e.detail === 0); });
+    moreMenu.addEventListener('click', function (e) { if (e.target.closest('a,button')) setMenu(false); });
+    moreMenu.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      var its = menuItems(), i = its.indexOf(doc.activeElement); e.preventDefault();
+      var n = its[(i + (e.key === 'ArrowDown' ? 1 : -1) + its.length) % its.length]; if (n) n.focus();
+    });
+    moreBox.addEventListener('focusout', function (e) { if (!moreMenu.hidden && e.relatedTarget && !moreBox.contains(e.relatedTarget)) setMenu(false); });
+    doc.addEventListener('click', function (e) { if (!moreMenu.hidden && !moreBox.contains(e.target)) setMenu(false); });
+    doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !moreMenu.hidden) { setMenu(false); moreBtn.focus(); } });
+  }
+  var helpBtn = $('[data-help-open]'), help = $('[data-console-help]');
+  if (helpBtn && help) helpBtn.addEventListener('click', function () { help.open = true; var sm = $('summary', help); help.scrollIntoView({ block: 'start' }); if (sm) sm.focus({ preventScroll: true }); });
+
+  // ── 발표 화면 띄우기 ──
+  // 1) 크롬·엣지에 프로젝터(두 번째 화면)가 이어져 있으면 Presentation API로 그 화면에 바로 전체 화면(고르는 창이 한 번 뜸).
+  //    받는 쪽은 저장소가 따로라 관리자 키를 받지 않음(발표 화면은 보기만 하면 됨)
+  // 2) 아니면 새 창(탭이 아니라 창이라 프로젝터 쪽으로 끌기 쉬움). 발표 화면이 '전체 화면' 안내를 띄움.
+  //    이미 연 창이 있으면 다시 불러오지 않고 앞으로만
+  var SCREEN = 'screen.html', scrWin = null, pres = null, presReq = null, presAvail = false, hintT = 0;
+  function say2(t) { if (C.stageHint) { C.stageHint.textContent = t || ''; C.stageHint.hidden = !t; clearTimeout(hintT); if (t) hintT = setTimeout(function () { say2(''); }, 30000); } else if (t) toast(t); }
+  try {
+    if (!PREVIEW && !LOCALPAGE && window.PresentationRequest && navigator.presentation) {
+      presReq = new PresentationRequest([SCREEN]);
+      presReq.getAvailability().then(function (a) {
+        var sync = function () { presAvail = !!a.value; var w = $('[data-screen-window]'); if (w) w.closest('li').hidden = !presAvail; if (presAvail) root.setAttribute('data-pres', ''); else root.removeAttribute('data-pres'); };
+        sync(); a.onchange = sync;
+      }, function () { presAvail = false; });
+    }
+  } catch (e) { presReq = null; }
+  function setPres(c) {
+    pres = c; paintStage();
+    var off = function () { if (pres === c) { pres = null; paintStage(); } };
+    c.addEventListener('close', off); c.addEventListener('terminate', off);
+  }
+  function openWindow() {
+    if (scrWin && !scrWin.closed) { try { scrWin.focus(); } catch (e) { } say2('발표 화면 창은 이미 열려 있어요. 앞으로 가져왔어요.'); return; }
+    if (PREVIEW) { say2('미리보기에서는 새 창을 열지 않아요. 미리볼 화면에서 [발표 화면]을 고르세요.'); return; }
+    var w = null;
+    try {
+      // 이름이 같은 창이 이미 있으면(강사 화면을 새로 고친 뒤) 다시 불러오지 않고 그 창을 씀.
+      // 파일로 열었으면(USB) 빈 창 주소를 읽을 수 없으니 바로 그 주소로
+      w = window.open('', 'lp-screen', 'popup,width=1280,height=720');
+      if (w) { var fresh = true; try { fresh = w.location.href === 'about:blank' || !/screen(\.html)?$/.test(w.location.pathname); } catch (x) { } if (fresh) w.location.replace(new URL(SCREEN, location.href).href); }
+    } catch (e) { }
+    if (!w) { say2('브라우저가 새 창을 막았어요. 주소창 오른쪽의 팝업 표시를 눌러 허용한 뒤 다시 눌러 주세요.'); return; }
+    scrWin = w; try { w.focus(); } catch (e) { }
+    say2('새 창으로 열었어요. 창을 프로젝터 화면으로 끌어다 놓고 그 창의 [전체 화면]을 누르세요.');
+  }
+  function openScreen(windowOnly) {
+    if (pres && pres.state === 'connected') { say2('발표 화면이 프로젝터에 떠 있어요. 끄려면 [발표 화면 끄기]를 누르세요.'); return; }
+    if (!windowOnly && presReq && presAvail) {
+      presReq.start().then(function (c) { setPres(c); say2('프로젝터에 발표 화면을 띄웠어요. 이 화면에서 누르는 것이 바로 보여요.'); }, function (err) {
+        if (err && err.name === 'NotFoundError') openWindow();
+        else say2('프로젝터를 고르지 않았어요. 창으로 열려면 [더보기] → [발표 화면 새 창]을 누르세요.');
+      });
+      return;
+    }
+    openWindow();
+  }
+  var scrBtn = $('[data-screen-open]'), scrWinBtn = $('[data-screen-window]');
+  if (scrBtn) scrBtn.addEventListener('click', function () { openScreen(false); });
+  if (scrWinBtn) scrWinBtn.addEventListener('click', function () { openScreen(true); });
+
+  var C = {};
   if (!DATA.live || !window.LecLive) {
     if (box) box.hidden = true;
-    if (main) { main.hidden = false; main.appendChild(el('p', 'lp-con-empty', '이 사이트는 참여 기능이 꺼져 있어 강사 화면을 쓸 수 없어요. 발표 화면의 도구(이름 뽑기·모둠·타이머)는 그대로 쓸 수 있어요.')); }
+    showAfterLogin();
+    if (main) { main.hidden = false; main.appendChild(el('p', 'lp-con-empty', '이 사이트는 참여 기능이 꺼져 있어 강사 화면을 쓸 수 없어요. [발표 화면 띄우기]로 QR과 도구(이름 뽑기·모둠·타이머)를 띄울 수 있어요.')); }
     return;
   }
 
@@ -44,13 +137,13 @@
   };
   // 투표 패널은 늘 둠: 미리 넣은 문항이 없어도 즉석 투표(polls 모음)를 바로 띄울 수 있게
   var COLS = ['participants', 'polls', 'answers'].concat(ON.progress ? ['progress'] : [], ON.help ? ['help'] : [], ON.qa ? ['questions'] : [], ON.board ? ['posts'] : [], ON.survey ? ['survey'] : []);
-  var conn = null, data = {}, state = {}, P = {}, C = {};
+  var conn = null, data = {}, state = {}, P = {};
   COLS.forEach(function (c) { data[c] = {}; });
   function vals(c) { var b = data[c] || {}; return Object.keys(b).map(function (k) { return b[k]; }); }
   function now() { return conn && conn.now ? conn.now() : Date.now(); }
 
   // ── 관리자 키 ──
-  // 키 이름에 사이트 경로를 넣음: 여러 사이트가 한 출처를 쓰는 서버(바로 공개)에서 다른 사이트의 화면이 이 키를 쓰지 못하게
+  // 키 이름에 사이트 경로를 넣음: 여러 사이트가 한 출처를 쓰는 서버(바로 배포)에서 다른 사이트의 화면이 이 키를 쓰지 못하게
   var ADMIN_SLOT = 'lp-admin:' + location.pathname.replace(/[^/]*$/, '') + ':' + DATA.live.code;
   function store(kind) { try { return window[kind]; } catch (e) { return null; } }
   function savedKey() { var s = store('sessionStorage'), l = store('localStorage'); try { return (s && s.getItem(ADMIN_SLOT)) || (l && l.getItem(ADMIN_SLOT)) || ''; } catch (e) { return ''; } }
@@ -84,13 +177,17 @@
     var k = String(keyIn.value || '').trim();
     if (!k) { say('관리자 키를 넣어 주세요.'); keyIn.focus(); return; }
     if (Date.now() < waitUntil) return;
-    start(k, !!(rem && rem.checked), false);
+    start(k, !!(rem && rem.checked), '');
   });
-  var saved = savedKey();
-  if (saved) start(saved, !!(store('localStorage') && (function () { try { return store('localStorage').getItem(ADMIN_SLOT); } catch (e) { return ''; } })()), true);
+  var saved = savedKey(), ADMIN_KEY = '';
+  // 휴대폰에서 열기 QR로 왔으면 그 키로(이 탭에만). 아니면 이 탭·이 기기에 둔 키
+  if (qrKey) start(qrKey, false, 'qr');
+  else if (saved) start(saved, !!(store('localStorage') && (function () { try { return store('localStorage').getItem(ADMIN_SLOT); } catch (e) { return ''; } })()), 'saved');
   else if (keyIn) setTimeout(function () { keyIn.focus(); }, 0);
 
-  function start(key, remember, auto) {
+  /** from: ''(직접 넣음) · 'saved'(기억해 둔 키) · 'qr'(휴대폰에서 열기 QR) */
+  function start(key, remember, from) {
+    var auto = from === 'saved';
     if (busy) return; busy = true; say(''); go.disabled = true; go.textContent = '확인하는 중…';
     setConn('connecting');
     var c;
@@ -100,7 +197,7 @@
       if (!ok) throw LecLive.error('admin_required', '관리자 키가 맞지 않아요.', { status: 403 });
       return c.getState().then(function (s) { state = s || {}; });
     }).then(function () {
-      busy = false; fails = 0; conn = c; keepKey(key, remember); if (keyIn) keyIn.value = '';
+      busy = false; fails = 0; conn = c; ADMIN_KEY = key; keepKey(key, remember); if (keyIn) keyIn.value = '';
       enter();
     }, function (err) {
       busy = false; try { c.close(); } catch (e) { }
@@ -110,10 +207,11 @@
       if (st === 429) { holdFor(Math.min(900, Math.max(10, +err.retryAfter || 60)), '키가 여러 번 틀려 서버가 잠시 막았어요. 기다린 뒤 다시 넣어 주세요.'); if (auto) forgetKey(); return; }
       if (st === 401 || st === 403 || (err && err.code === 'admin_required')) {
         if (auto) { forgetKey(); say('기억해 둔 관리자 키가 맞지 않아 지웠어요. 다시 넣어 주세요.'); return; }
+        if (from === 'qr') { say('QR에 든 관리자 키가 맞지 않아요. 노트북의 강사 화면에서 QR을 다시 보이거나 키를 넣어 주세요.'); if (keyIn) keyIn.focus(); return; }
         fails++;
         // 틀린 키를 계속 넣으면 이 화면에서도 조금씩 늦춤(서버도 따로 셈)
-        if (fails >= 3) holdFor(Math.min(60, Math.pow(2, fails - 2) * 5), '관리자 키가 맞지 않아요. 공개할 때 받은 키를 다시 확인해 주세요.');
-        else say('관리자 키가 맞지 않아요. 공개할 때 받은 키를 다시 확인해 주세요.');
+        if (fails >= 3) holdFor(Math.min(60, Math.pow(2, fails - 2) * 5), '관리자 키가 맞지 않아요. 배포할 때 받은 키를 다시 확인해 주세요.');
+        else say('관리자 키가 맞지 않아요. 배포할 때 받은 키를 다시 확인해 주세요.');
         if (keyIn) { keyIn.select(); keyIn.focus(); }
         return;
       }
@@ -139,7 +237,7 @@
   function sec(ms) { return Math.max(1, Math.round((ms || 0) / 1000)) + '초'; }
   function netWords(st, ni) {
     var t = ni.transport, hint = ni.hint >= 10000 ? ' 오늘 서버가 붐벼 ' + sec(ni.hint) + ' 간격으로 늘렸어요.' : '';
-    if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.'];
+    if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.'];
     if (st === 'offline') return ['연결이 끊겼어요 · 다시 잇는 중', '참가자 화면의 교재·실습·프롬프트는 그대로 열려요. 질문은 구두로 받고, 설문은 QR로 다른 설문지를 띄워도 돼요. 연결되면 쌓인 글이 들어와요.'];
     if (t === 'ws' || t === 'realtime') return ['연결됨 · 바로 받음(웹소켓)', ''];
     if (t === 'sse') return ['연결됨 · 바로 받음(SSE)', ''];
@@ -153,7 +251,7 @@
     if (!C.net) return;
     var st = conn ? conn.status : 'offline', ni = conn && conn.netInfo ? conn.netInfo() : {};
     var w = netWords(st, ni), ck = lastCheck();
-    C.net.setAttribute('data-state', LOCAL ? 'local' : st === 'offline' ? 'offline' : ni.transport === 'long' || ni.transport === 'poll' ? 'polling' : 'live');
+    C.box.setAttribute('data-state', LOCAL ? 'local' : st === 'offline' ? 'offline' : ni.transport === 'long' || ni.transport === 'poll' ? 'polling' : 'live');
     C.netWay.textContent = w[0]; C.netDo.textContent = w[1]; C.netDo.hidden = !w[1];
     C.netCk.textContent = '';
     if (ck) {
@@ -162,16 +260,58 @@
     } else C.netCk.appendChild(doc.createTextNode('연수 장소에서 접속 확인을 아직 하지 않았어요. 전날 그곳 Wi-Fi로 열어 보세요. '));
     var a = el('a', '', ck ? '다시 확인' : '접속 확인 열기'); a.href = 'check.html'; a.target = '_blank'; a.rel = 'noopener'; C.netCk.appendChild(a);
   }
+  /** 맨 위 상자: 발표 화면(지금 크게 보이는 것·참여 QR 크게·끄기) · 묻기 방식(연결·접속 확인) · 연수가 끝났으면 기록 정리로 */
   function buildNet() {
-    C.net = el('div', 'lp-con-net'); C.net.setAttribute('role', 'status'); C.net.setAttribute('aria-label', '연결 상태');
+    C.box = el('div', 'lp-con-net');
+    var r1 = el('div', 'lp-con-net-r lp-con-stage'); r1.setAttribute('role', 'group'); r1.setAttribute('aria-labelledby', 'lp-stage-l');
+    var h1 = el('p', 'lp-con-net-h'), b1 = el('b', '', '발표 화면'); b1.id = 'lp-stage-l'; h1.appendChild(b1); C.stageNow = el('span'); h1.appendChild(C.stageNow); r1.appendChild(h1);
+    var act = el('div', 'lp-con-net-act');
+    C.qrSw = el('button', 'lp-switch'); C.qrSw.type = 'button'; C.qrSw.setAttribute('role', 'switch'); C.qrSw.setAttribute('data-k', 'qrbig');
+    C.qrSw.appendChild(el('i')); C.qrSw.appendChild(el('span', '', '참여 QR 크게')); C.qrSwS = el('small'); C.qrSw.appendChild(C.qrSwS);
+    C.qrSw.addEventListener('click', function () { var on = !qrBig(); setState({ ui: { qrBig: on ? true : null } }, on ? '발표 화면에 참여 QR을 크게 띄웠어요.' : '발표 화면의 큰 QR을 내렸어요.'); });
+    act.appendChild(C.qrSw);
+    C.presOff = btn('발표 화면 끄기', '', function () { try { if (pres) pres.terminate(); } catch (e) { } say2('프로젝터의 발표 화면을 껐어요.'); }, 'presoff'); C.presOff.hidden = true; act.appendChild(C.presOff);
+    r1.appendChild(act);
+    C.stageHint = el('p', 'lp-con-net-do'); C.stageHint.setAttribute('role', 'status'); C.stageHint.hidden = true; r1.appendChild(C.stageHint);
+    C.box.appendChild(r1);
+    C.net = el('div', 'lp-con-net-r'); C.net.setAttribute('role', 'status'); C.net.setAttribute('aria-label', '연결 상태');
     var h = el('p', 'lp-con-net-h'); h.appendChild(el('b', '', '묻기 방식')); C.netWay = el('span'); h.appendChild(C.netWay); C.net.appendChild(h);
     C.netDo = el('p', 'lp-con-net-do'); C.net.appendChild(C.netDo);
     C.netCk = el('p', 'lp-con-net-ck'); C.net.appendChild(C.netCk);
-    return C.net;
+    C.box.appendChild(C.net);
+    if (ended()) {
+      var r3 = el('div', 'lp-con-net-r lp-con-after'), h3 = el('p', 'lp-con-net-h');
+      h3.appendChild(el('b', '', '연수 뒤')); h3.appendChild(el('span', '', '연수가 끝났어요. 명단·결과를 CSV로 받은 뒤 지워 주세요.')); r3.appendChild(h3);
+      var go3 = el('a', 'lp-btn lp-btn-primary lp-btn-sm', '기록·정리로'); go3.href = '#lp-p-data';
+      go3.addEventListener('click', function (e) { var t = $('#lp-p-data'); if (!t) return; e.preventDefault(); t.scrollIntoView({ block: 'start' }); var f = t.querySelector('button'); if (f) f.focus({ preventScroll: true }); });
+      r3.appendChild(go3); C.box.appendChild(r3);
+    }
+    return C.box;
+  }
+  /** 연수 날짜·시간이 지났나(참가자 화면의 '끝난 연수'와 같은 기준). 주소 끝 ?phase=after로 미리보기 */
+  function ended() { if (/[?&]phase=after\b/.test(location.search)) return true; var e = DATA.phase && Date.parse(DATA.phase.end); return !!e && Date.now() > e; }
+  function qrBig() { return (state.ui || {}).qrBig === true; }
+  function clip(t, n) { var c = Array.from ? Array.from(String(t || '')) : String(t || '').split(''); return c.length > n ? c.slice(0, n).join('') + '…' : c.join(''); }
+  /** 발표 화면에 지금 크게 보이는 것(발표 화면과 같은 규칙: 열린 투표 > 질문 > 기다리는 화면) */
+  function stageWords() {
+    var op = allPolls().filter(function (p) { return p.id === state.openPoll; })[0], out = [];
+    if (op) out.push('투표 「' + clip(op.question, 24) + '」 · ' + (X.revealed(state, op.id) ? '결과 공개' : '응답 수만'));
+    else if (ON.qa) { var n = vals('questions').filter(function (q) { return q.status === 'open' || (q.pinned && q.status !== 'hidden'); }).length; out.push(n ? '질문 ' + n + '개(공감순)' : '질문을 기다리는 화면'); }
+    else out.push('참여 안내');
+    if (state.notice && state.notice.text) out.push('공지');
+    if (state.timer && state.timer.running && state.timer.endsAt > now()) out.push('타이머');
+    if (qrBig()) out.push('QR 크게');
+    return out.join(' · ');
+  }
+  function paintStage() {
+    if (!C.stageNow) return;
+    C.stageNow.textContent = stageWords();
+    var on = qrBig(); C.qrSw.setAttribute('aria-checked', String(on)); C.qrSwS.textContent = on ? '켜짐' : '꺼짐';
+    C.presOff.hidden = !(pres && pres.state === 'connected');
   }
 
   function enter() {
-    if (box) box.hidden = true; main.hidden = false; if (logout) logout.hidden = false;
+    if (box) box.hidden = true; main.hidden = false; if (logout) logout.hidden = false; showAfterLogin(); if (connEl) connEl.hidden = false;
     conn.on('status', setConn); setConn(conn.status === 'polling' ? 'polling' : conn.status === 'offline' ? 'offline' : 'live');
     conn.on('status', function () { paintNet(); }); conn.on('net', function () { paintNet(); });
     addEventListener('storage', function (e) { if (e.key && e.key.indexOf('lp-check:') === 0) paintNet(); }); // 다른 탭에서 접속 확인을 마치면
@@ -255,6 +395,7 @@
     syncRun();
     if (ON.signal) renderSignal(sig);
     if (ON.progress) renderHeat(parts);
+    paintStage();
   }
   function kpi(value, label, sub, href, alert) {
     var d = el(href ? 'a' : 'div', 'lp-con-kpi'); if (href) { d.href = href; d.setAttribute('data-k', 'kpi' + label); }
@@ -631,19 +772,50 @@
     // 참여 QR: 파일로 열었거나 미리보기면 주소 대신 안내(meta.siteUrl이 있으면 그 주소). 암호 보호면 #k=를 QR에만 붙임
     var local = /^(file|about|blob|data):$/.test(location.protocol);
     // QR에는 원래 주소만(짧은 주소는 글자로만 — 중간 화면이 있는 서비스에는 #k=가 보임). 파일로 열어 원래 주소를 모르면 짧은 주소를 글자로
-    var site = DATA.siteUrl || (local ? '' : location.href.split('#')[0].split('?')[0].replace(/console\.html.*$/, ''));
+    var site = DATA.siteUrl || siteDir();
     var u = site || (local ? DATA.shortUrl || '' : '');
     var ul = $('meta[name="lp-unlock"]'), qu = site ? site.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
     var s3 = el('div', 'lp-con-sec'); s3.appendChild(el('h3', '', '참여 주소'));
     var j = el('div', 'lp-con-join'); var q = el('div', 'lp-qr'); q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드'); // copy-ok: 화면 읽기 이름표는 'QR 코드'도 됨(writing.md 4절)
     if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
-    else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
+    else q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
     var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
     var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
-    add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '인터넷에 올리면 여기에 나와요.');
+    add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '배포하면 여기에 나와요.');
     if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
     add('연수 코드', DATA.live.code);
     j.appendChild(q); j.appendChild(dl); s3.appendChild(j); b.appendChild(s3);
   }
   function purge() { conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); queue(); toast('모든 기록을 지웠어요.'); }, err); }
+
+  // ── 휴대폰에서 열기: 관리자 키가 든 QR(주소 뒤 #key=, 서버로 가지 않음) ──
+  // 누를 때만 보이고 60초 뒤·창을 떠나면·대화상자를 닫으면 가림. 프로젝터에 비칠 수 있어 [QR 보이기]를 한 번 더 누르게 함
+  var phone = $('[data-phone-dialog]'), phoneBtn = $('[data-phone-open]'), phoneT = 0;
+  function phoneHide() {
+    if (!phone) return; clearInterval(phoneT);
+    var q = $('[data-phone-qr]', phone); q.hidden = true; q.textContent = '';
+    $('[data-phone-cover]', phone).hidden = false; $('[data-phone-left]', phone).textContent = '';
+  }
+  function phoneUrl() {
+    var dir = siteDir(); if (!dir || !ADMIN_KEY) return '';
+    var ul = $('meta[name="lp-unlock"]'), k = ul && ul.getAttribute('content');
+    return dir + 'console.html#' + (k ? k + '&' : '') + 'key=' + encodeURIComponent(ADMIN_KEY);
+  }
+  function phoneShow() {
+    var u = phoneUrl(), q = $('[data-phone-qr]', phone); if (!u || !window.qrcode) return;
+    try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(u); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { return; }
+    q.hidden = false; $('[data-phone-cover]', phone).hidden = true;
+    var left = 60, lt = $('[data-phone-left]', phone), tick = function () { lt.textContent = left + '초 뒤에 가려요.'; if (left-- <= 0) phoneHide(); };
+    clearInterval(phoneT); tick(); phoneT = setInterval(tick, 1000);
+    var cl = $('button[value="close"]', phone); if (cl) cl.focus();
+  }
+  if (phone && phoneBtn) {
+    var why = LOCAL ? '리허설 설정이라 휴대폰과 이어지지 않아요. 참여 기능 서버를 연결해 다시 배포하면 쓸 수 있어요.' : !siteDir() ? '배포하면 쓸 수 있어요.' : '';
+    if (why) { $('[data-phone-lead]', phone).textContent = why; $('[data-phone-box]', phone).hidden = true; }
+    phoneBtn.addEventListener('click', function () { phoneHide(); if (phone.showModal) phone.showModal(); });
+    $('[data-phone-show]', phone).addEventListener('click', phoneShow);
+    phone.addEventListener('close', function () { phoneHide(); if (moreBtn) moreBtn.focus(); });
+    phone.addEventListener('click', function (e) { if (e.target === phone) phone.close(); });
+    addEventListener('blur', phoneHide); doc.addEventListener('visibilitychange', function () { if (doc.hidden) phoneHide(); });
+  }
 })();

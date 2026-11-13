@@ -416,9 +416,11 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
           </div>
           <div class="day-kit" role="group" aria-labelledby="day-kit-h">
             <b class="small" id="day-kit-h">연수 당일</b>
+            {liveOn && <p class="small muted">강사 화면에서 발표 화면 띄우기·QR 안내문·접속 확인·휴대폰 연결을 모두 해요.</p>}
             <div class="btn-row">
+              {/* 강사 화면이 출발점: 누르면 관리자 키를 먼저 복사해 두어 붙여 넣기만 하게 */}
+              {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener" onClick={() => adminKey && copy(adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
               <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면 열기</a>
-              {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener">강사 화면 열기</a>}
               <a class="btn btn-sm" href={url + 'poster.html'} target="_blank" rel="noopener">QR 안내문 인쇄(A4)</a>
             </div>
             {liveOn && (adminKey

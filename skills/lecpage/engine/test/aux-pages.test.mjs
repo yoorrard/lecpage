@@ -182,7 +182,7 @@ test('접속 확인: 참여 기능 서버에 실제로 연결해 결과를 세 �
   } finally { await ctx.close(); }
 });
 
-test('리허설(local): 아무 키로 들어가고 네 화면이 오류 없이 열림, 안내문은 A4 한 장 + 강사 카드', { skip }, async () => {
+test('리허설(local): 아무 키로 들어가고 네 화면이 오류 없이 열림, 안내문은 A4 한 장(강사 화면 주소·QR 없음)', { skip }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-aux-local-'));
   const r = E.build(blueprint({ provider: 'local', code: 'AUXLOCAL' }), { runtime: nodeRuntime() });
   writeFiles(dir, r.files);
@@ -199,9 +199,10 @@ test('리허설(local): 아무 키로 들어가고 네 화면이 오류 없이 �
     await s.waitForSelector('[data-notice]:not([hidden])', { timeout: 10000 });
     assert.match(await s.textContent('[data-notice]'), /5분 뒤 다시 모여요/);
     const po = await go('poster.html');
-    assert.equal(await po.locator('.lp-pst-page:visible').count(), 2, '안내문 + 강사 카드(자리 카드는 고를 때만)');
+    assert.equal(await po.locator('.lp-pst-page:visible').count(), 1, '안내문 한 장(자리 카드는 고를 때만)');
+    assert.equal(await po.locator('[href*="console"],[data-qr-page],[data-url-page]').count(), 0, '참가자 손에 가는 안내문에는 강사 화면 주소·QR이 없음');
     await po.check('[data-part-print="cards"]');
-    assert.equal(await po.locator('.lp-pst-page:visible').count(), 3);
+    assert.equal(await po.locator('.lp-pst-page:visible').count(), 2);
     const k = await go('check.html');
     await k.waitForFunction(() => document.querySelector('[data-verdict]').getAttribute('data-state') !== 'wait', null, { timeout: 30000 });
     assert.match(await k.textContent('[data-list="todo"]'), /참여 기능 서버를 연결/);
