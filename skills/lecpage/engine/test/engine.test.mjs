@@ -74,9 +74,11 @@ test('디자인 결정: 네트워크 제한이면 외부 라이브러리 효과�
 
 test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 25, features: [] }).backend, 'none');
-  assert.equal(E.decideInfra({ size: 25, features: ['attendance'] }).backend, 'sheets');
-  assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'] }).backend, 'supabase');
-  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'] }).backend, 'sheets', '클릭만 하는 30명 실습은 구글 시트');
+  assert.equal(E.decideInfra({ size: 25, features: ['attendance'] }).backend, 'cloudflare', '강사 할 일이 가장 적은 곳(시트 약 23번 → Cloudflare 약 7번)');
+  assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'] }).backend, 'cloudflare', '60명 실시간도 할 일이 가장 적은 Cloudflare');
+  assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'], connected: ['supabase'] }).backend, 'supabase', '이미 연결한 Supabase는 그대로');
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'] }).backend, 'cloudflare', '클릭만 하는 30명 실습도 할 일이 가장 적은 Cloudflare');
+  assert.equal(E.decideInfra({ size: 30, features: ['qa'], connected: ['sheets'] }).backend, 'sheets', '이미 연결해 둔 시트는 그대로');
   // skill이 Cloudflare에 올리면 참여 기능도 같은 계정(가입 하나, 7일 멈춤 없음). 이미 Vercel에 연결해 두었으면 Supabase
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'], skill: 'set' }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 25, features: ['attendance'], skill: 'set' }).backend, 'cloudflare');
@@ -84,7 +86,7 @@ test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set', connected: ['vercel'] }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set', connected: ['supabase'] }).backend, 'supabase');
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set' }).teacherSteps, 2);
-  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'] }).teacherSteps, 23, '앱(클릭만)은 그대로 구글 시트: 앱 안내와 함께 바꿀 일');
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'] }).teacherSteps, 7, '앱(클릭만)도 할 일이 가장 적은 Cloudflare(앱 화면 추천과 같음)');
   assert.equal(E.decideInfra({ size: 500, features: ['qa', 'poll'] }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa'], network: 'offline' }).backend, 'lan');
   assert.equal(E.decideInfra({ size: 80, features: ['qa'], infra: ['nas'], skill: 'set' }).backend, 'server');
@@ -197,7 +199,7 @@ test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을
   const sheets = doc({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec' }, { size: 60, features: ['qa', 'progress'] });
   assert.match(sheets, /실시간 방식: 구글 시트/);
   assert.match(sheets, /## 운영 방식: 구글 시트/);
-  assert.match(sheets, /추천한 방식: Supabase/, '추천과 다르면 추천을 한 줄로');
+  assert.match(sheets, /추천한 방식: 내 서버·Cloudflare/, '추천과 다르면 추천을 한 줄로');
   assert.ok(!/실시간 방식: sheets/.test(sheets));
   assert.ok(sheets.includes('`poster.html` QR 안내문 인쇄') && sheets.includes('`console.html` 강사 화면'));
   const supa = doc({ provider: 'supabase', url: 'https://x.supabase.co', anonKey: 'k' }, { size: 60, features: ['qa'], duration: 'month' });

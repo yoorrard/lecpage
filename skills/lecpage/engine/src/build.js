@@ -113,7 +113,9 @@ export function build(input, opts = {}) {
     files['assets/lecpage.css'] = pruneUnusedCss(files['assets/lecpage.css'], used);
   }
 
-  const infra = opts.infra ? decideInfra(opts.infra) : null;
+  // 이미 연결한 참여 기능 방식은 '할 일 0번'으로 셈(같으면 추천을 따로 적지 않음)
+  const linked = { sheets: 'sheets', supabase: 'supabase', http: 'cloudflare' }[bp.live?.provider];
+  const infra = opts.infra ? decideInfra(linked ? { ...opts.infra, connected: [...new Set([].concat(opts.infra.connected || [], linked))] } : opts.infra) : null;
   // Netlify·Cloudflare가 읽는 응답 헤더(GitHub Pages는 무시): 강사 화면을 다른 사이트 틀(iframe)에 못 넣게.
   // Cloudflare는 /console.html을 /console로 넘기므로 두 주소 모두에 적음
   files['_headers'] = ['/*', '  X-Content-Type-Options: nosniff', '  Referrer-Policy: strict-origin-when-cross-origin', '  Permissions-Policy: camera=(), microphone=(), geolocation=()', '',

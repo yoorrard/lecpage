@@ -44,3 +44,25 @@ export function recommend(ranked, isShowcase, n = 4, first = '') {
   const s = list.find((r) => isShowcase(r.id) && r.score > 0);
   return s ? [...top.slice(0, n - 1), s] : top;
 }
+
+/** 프리셋의 대표 느낌 묶음(앞 두 분위기 가운데 먼저 맞는 것) */
+export function feelOf(preset) {
+  for (const m of (preset.moods || []).slice(0, 2)) { const t = TASTES.find((x) => x.moods?.includes(m)); if (t) return t; }
+  return null;
+}
+/**
+ * 느낌이 확실히 다른 세 안: 점수 순(컨셉이 권한 디자인이 맨 앞)으로 보되, 대표 느낌 묶음(차분·따뜻·전문·발랄·강렬)과 첫 화면 배치가 겹치지 않게 하나씩.
+ * 묶음이 셋이 안 되면 배치만 다르게, 그래도 모자라면 점수 순으로 채움. ranked: rankPresets 결과(전체), get: getPreset
+ */
+export function threeFeelings(ranked, get, first = '') {
+  const list = first && ranked.some((r) => r.id === first) ? [{ ...ranked.find((r) => r.id === first), concept: true }, ...ranked.filter((r) => r.id !== first)] : ranked;
+  const out = [];
+  const feel = (r) => feelOf(get(r.id))?.value || 'other';
+  const lay = (r) => get(r.id).layout || 'left';
+  const pass = (ok) => { for (const r of list) { if (out.length >= 3) return; if (!out.includes(r) && ok(r)) out.push(r); } };
+  pass((r) => !out.some((o) => feel(o) === feel(r) || lay(o) === lay(r)));
+  pass((r) => !out.some((o) => feel(o) === feel(r)));
+  pass((r) => !out.some((o) => lay(o) === lay(r)));
+  pass(() => true);
+  return out.map((r) => ({ ...r, feel: feelOf(get(r.id))?.label || '' }));
+}

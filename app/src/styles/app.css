@@ -215,6 +215,32 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .step-head p{color:var(--muted)}
 .step-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 0}
 .make-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:8px 0 0}
+/* 교재 넣기: 넓은 화면은 왼쪽에 교재·연수 정보, 오른쪽에 "AI로 만들기" 카드(따라 내려옴). 좁으면 교재 → 연수 정보 → 만들기(읽는 순서·Tab 순서 그대로) */
+.start-grid{display:grid;gap:20px;align-items:start;grid-template-columns:minmax(0,1fr)}
+.start-grid>.start-info{margin:0}
+.make-card{display:grid;gap:12px;padding:18px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--shadow-sm);scroll-margin-top:16px}
+.make-card .ai-panel{gap:12px}
+.make-card .chat-card{border-radius:var(--r-sm);box-shadow:none}
+.make-card .key-now{padding:14px}
+.make-head{gap:4px}
+.make-head h2:focus{outline:none}
+.make-card .make-alt{margin:0;justify-content:space-between}
+/* 다른 방법(API 키 · Gemini 무료 키): 무엇이 되고 무엇이 드는지 한 줄 + 버튼 */
+.make-ways{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--hair)}
+.make-ways-h{margin:0;font-weight:700;color:var(--ink-2)}
+.make-way{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;font-size:.9rem;line-height:1.5;color:var(--ink-2)}
+.make-way>span{flex:1 1 15em;min-width:0}
+.make-way b{color:var(--ink);margin-right:4px}
+.make-way .btn{flex:none}
+.ai-more{margin:-4px 0 0;padding-left:1.2em;display:grid;gap:2px;color:var(--ink-2)}
+/* 카드 안 챗봇 길: 순서 점(1 챗봇에 보내기 — 2 답 넣기)과 같은 말인 소제목은 화면 읽기 프로그램에만 */
+.make-card .chat-card .key-now-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (min-width:1100px){
+  .start-grid.has-make{grid-template-columns:minmax(0,1fr) minmax(360px,430px);grid-template-rows:auto 1fr;grid-template-areas:"files make" "info make";column-gap:28px}
+  .start-grid.has-make>.start-files{grid-area:files}
+  .start-grid.has-make>.make-card{grid-area:make;position:sticky;top:16px}
+  .start-grid.has-make>.start-info{grid-area:info}
+}
 /* 도움말: 왼쪽 목차 + 본문 */
 .help-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:clamp(16px,3vw,40px);align-items:start}
 .help-layout>aside{position:sticky;top:80px}
@@ -257,6 +283,9 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 
 /* ── 개요 편집 ── */
 .sec-list{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--hair)}
+.sec-tools{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap}
+.sec-tools p{margin:0}
+.sec-tools .btn[aria-pressed="true"]{background:var(--lav-soft);color:var(--lav-ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .sec-item{border-bottom:1px solid var(--hair)}
 .sec-item[data-off="true"] .sec-open{opacity:.5}
 .sec-item[data-picked="true"]{background:color-mix(in srgb,var(--lav-soft) 70%,transparent);box-shadow:inset 2px 0 0 var(--accent)}
@@ -286,6 +315,21 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .thumb-wait{position:absolute;inset:0;background:linear-gradient(100deg,var(--sunk) 30%,var(--canvas) 50%,var(--sunk) 70%);background-size:300% 100%;animation:thumb-wait 1.4s linear infinite}
 @keyframes thumb-wait{to{background-position:-150% 0}}
 .thumb-cap{display:grid;gap:2px;padding:8px 10px;border-top:1px solid var(--hair)}
+/* 느낌이 다른 세 안: 패널에서는 한 줄 셋, [크게 비교]는 넓은 창에 셋을 나란히 */
+.trio{display:grid;gap:10px}
+.trio-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.trio-head .h-sub{margin:0}
+.thumbs.trio-thumbs{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.trio-thumbs .thumb-cap{padding:6px 8px}
+.trio-thumbs .thumb-cap b{font-size:.84rem}
+.trio-big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.trio-card{margin:0;display:grid;gap:8px;align-content:start}
+.trio-card .thumb-site{border:1px solid var(--hair);border-radius:var(--r-sm)}
+.trio-card figcaption{display:grid;gap:2px}
+.trio-card figcaption small{color:var(--muted);font-size:.8rem}
+.trio-card .btn{justify-self:start}
+dialog.dlg.dlg-wide:has(.trio-big){width:min(1180px,calc(100% - 24px))}
+@media (max-width:760px){.trio-big{grid-template-columns:minmax(0,1fr)}}
 .thumb-cap b{font-size:.9rem;font-weight:650}
 .thumb-cap small{color:var(--muted);font-size:.76rem;line-height:1.4}
 .dots{display:inline-flex;gap:2px}
@@ -478,6 +522,29 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .pub-facts dt{font-weight:600;color:var(--muted)}
 .pub-facts dd{margin:0}
 .err{color:var(--bad);margin:0}
+/* 지금 올릴 곳 한 줄(다른 곳은 [다른 곳에 올리기]로 펼침) */
+.pub-now{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.pub-now-t{display:inline-flex;align-items:baseline;gap:8px;font-size:1.02rem}
+.pub-now-t b{font-weight:700}
+.pub-now-t em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--lav-deep)}
+.pub-now-t i{font-style:normal;font-size:.76rem;font-weight:600;color:var(--ok)}
+
+/* 공개 준비 체크리스트: 줄마다 번호(끝나면 ✓)·이름·지금 상태 한 줄·[바꾸기]. 할 일이 남은 줄만 펼쳐 둠 */
+.ready{list-style:none;margin:0;padding:0;display:grid}
+.ready-i{display:grid;gap:12px;padding:16px 0;border-top:1px solid var(--hair);scroll-margin-top:16px}
+.ready-i:first-child{border-top:0;padding-top:4px}
+.ready-h{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;min-height:32px}
+.ready-n{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-weight:700;font-size:.8rem;font-variant-numeric:tabular-nums;flex:none}
+.ready-i.is-done .ready-n{background:var(--mint);border-color:transparent;color:var(--mint-ink)}
+.ready-i.is-todo .ready-n,.ready-i.is-go .ready-n{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.ready-t{font-weight:700;min-width:4.5em}
+.ready-s{color:var(--ink-2);flex:1 1 14em;min-width:0}
+.ready-b{display:grid;gap:12px;padding-left:38px;min-width:0}
+.feat-chips{gap:6px}
+/* 공개 완료: 연수 당일 묶음 */
+.day-kit{display:grid;gap:6px;padding-top:10px;border-top:1px solid color-mix(in srgb,currentColor 14%,transparent)}
+.day-kit .btn-row{margin:0}
+@media (max-width:560px){.ready-b{padding-left:0}}
 
 /* 한 번에 한 단계만 펼쳐 보이는 순서(올릴 곳 연결·참여 기능 연결) */
 .walk{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);overflow:hidden}
@@ -572,6 +639,7 @@ dialog.join-big::backdrop{background:var(--bg)}
 .proj-link{color:inherit;text-decoration:none}
 .proj-link::after{content:"";position:absolute;inset:0;z-index:0}
 .proj-actions{display:flex;gap:4px;position:relative;z-index:1;margin-top:2px}
+.proj-day{display:flex;flex-wrap:wrap;gap:6px;position:relative;z-index:1;margin-top:4px}
 
 /* ── 판 나누기: 상자를 겹치지 않고 가는 선으로 ── */
 .block{display:grid;gap:14px;padding-top:28px;border-top:1px solid var(--hair)}
@@ -620,6 +688,8 @@ dialog.join-big::backdrop{background:var(--bg)}
 .guide-steps{margin:0;padding-left:1.4em;display:grid;gap:6px}
 .guide-steps li::marker{font-weight:700;color:var(--accent)}
 details>summary{cursor:pointer}
+/* 터치 화면: 펼치기 줄도 44px 높이로 누르게 */
+@media (pointer: coarse){details>summary{padding-block:10px}.more>summary{align-items:center}.proj-link{display:flex;align-items:center;min-height:44px}}
 .more{border-top:1px solid var(--hair);margin-top:12px;padding-top:16px}
 .more>summary{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;list-style:none;font-size:1.06rem;letter-spacing:-.018em}
 .more>summary::-webkit-details-marker{display:none}
@@ -872,6 +942,12 @@ details>summary{cursor:pointer}
 .demo-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-radius:var(--r-sm);background:var(--butter);color:var(--butter-ink);border:1px solid color-mix(in srgb,var(--butter-ink) 16%,transparent);font-size:.94rem}
 .demo-bar-t{flex:1 1 240px;min-width:0}
 .demo-tag{font-weight:700;font-size:.8rem;padding:2px 9px;border-radius:999px;background:var(--butter-ink);color:var(--butter)}
+/* 체험의 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 말풍선. 말로 하는 안내는 위의 안내 줄이 함 */
+[data-coach]{position:relative;outline:3px solid var(--accent);outline-offset:3px;z-index:2}
+[data-coach]::after{content:'여기를 눌러요';position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);white-space:nowrap;padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:.78rem;font-weight:700;line-height:1.5;pointer-events:none;z-index:3;animation:coach-in .25s var(--ease)}
+@keyframes coach-in{from{opacity:0;transform:translate(-50%,-4px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){[data-coach]::after{animation:none}}
+.demo-bar .btn[aria-pressed="true"]{background:color-mix(in srgb,var(--butter-ink) 10%,transparent)}
 .demo-tip{display:flex;gap:10px;align-items:baseline;margin:0;padding:10px 14px;border-radius:var(--r-sm);background:var(--lav-soft);color:var(--lav-ink);font-weight:600}
 .demo-tip-n{font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;flex:none}
 .demo .stepper a[aria-disabled="true"]{cursor:default}
