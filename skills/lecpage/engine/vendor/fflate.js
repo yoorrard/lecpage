@@ -3,7 +3,7 @@
  * Source: https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js (unmodified below this header)
  * Repository: https://github.com/101arrowz/fflate
  * SHA-256 of the original file: 8cc1f687e0159e977addb6b85e274dbd11e622cf151f4fcb7b85d49622ea43e7
- * lecpage uses: unzipSync (ingest), zipSync/strToU8 (zip export). Pure ESM, works in browsers and Node ≥ 18.
+ * lecpage uses: unzipSync and Inflate (ingest: zip, HWP streams), zipSync/strToU8 (zip export), deflateSync (HWP test fixtures). Pure ESM, works in browsers and Node ≥ 18.
  *
  * MIT License
  *

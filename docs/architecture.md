@@ -21,7 +21,7 @@ lecpage/
 │  │  │  ├─ decide/           ← 유형·운영·디자인·효과 결정 규칙
 │  │  │  ├─ design/           ← 프리셋, 토큰→CSS, 글꼴, fx-catalog.js
 │  │  │  ├─ render/           ← 문자열 템플릿 렌더러(모듈별)
-│  │  │  ├─ ingest/           ← PPTX·DOCX·HWPX·PDF 해석(브라우저+Node)
+│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF 해석(브라우저+Node)
 │  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 수정 요청(review). AI 제공자 호출은 앱(app/src/lib/ai.js)
 │  │  │  └─ build.js          ← blueprint → 파일 묶음
 │  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)

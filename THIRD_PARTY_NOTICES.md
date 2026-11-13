@@ -7,7 +7,7 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | 구성 요소 | 버전 | 라이선스 | 어디에 |
 |---|---|---|---|
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (Kazuhiko Arase) | 1.4.4 | MIT | 만든 사이트의 `assets/qr.js`(원본 `skills/lecpage/engine/runtime/vendor/qrcode.js`, 머리말 고지 유지), 웹앱 QR |
-| [fflate](https://github.com/101arrowz/fflate) (Arjun Barrett) | 0.8.2 | MIT | 교재 해석(zip 읽기)·ZIP 쓰기, `skills/lecpage/engine/vendor/fflate.js` |
+| [fflate](https://github.com/101arrowz/fflate) (Arjun Barrett) | 0.8.2 | MIT | 교재 해석(zip 읽기, 한글 HWP 압축 풀기)·ZIP 쓰기, `skills/lecpage/engine/vendor/fflate.js` |
 | [Preact](https://github.com/preactjs/preact) | 10.26.4 | MIT | 웹앱 |
 | [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) (Mozilla Foundation) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석. NOTICE 파일은 없음 |
 | [OpenJPEG](https://github.com/uclouvain/openjpeg) | PDF.js에 포함 | BSD-2-Clause | PDF.js 워커 안의 JPEG 2000 해석기 |
@@ -18,6 +18,11 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 - 벤더 파일은 저작권 표시와 라이선스 고지를 파일 머리말에 둡니다.
 - 웹앱 배포본은 압축 과정에서 머리말이 빠지는 것까지 포함해, 위 구성 요소의 저작권 표시와 라이선스 전문(MIT·Apache-2.0·BSD-2-Clause·OFL 1.1)을 `licenses.txt`에 모아 함께 배포합니다(`app/vite.config.js`가 빌드할 때 만듦).
 - 만든 사이트에 들어가는 제3자 파일은 `assets/qr.js` 하나입니다. 머리말을 지우지 않으면 따로 할 일이 없습니다.
+
+## 참고한 공개 형식 문서
+
+- **한글 문서 파일 형식 5.0**(한글과컴퓨터): 예전 한글 파일(.hwp)을 읽는 `skills/lecpage/engine/src/ingest/hwp.js`·`cfb.js`와 시험용 파일을 만드는 `skills/lecpage/engine/test/fixtures/make_hwp.mjs`는 외부 라이브러리 없이 이 공개 문서를 보고 직접 썼습니다. 공개 문서의 조건에 따라 밝힙니다: **본 제품은 한글과컴퓨터의 한/글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.**
+- **[MS-CFB] Compound File Binary File Format**(Microsoft Open Specifications): .hwp를 담는 OLE 복합 문서 그릇을 읽는 데 참고했습니다.
 
 ## 만든 사이트가 실행 중에 불러오는 것(CDN)
 
