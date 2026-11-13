@@ -10,12 +10,14 @@ import { motifRule } from './body-graphic.js';
 const PROVIDER_KO = { local: '리허설(이 브라우저 안에서만)', http: '참여 기능 서버', supabase: 'Supabase', sheets: '구글 시트' };
 const themeBtn = () => `<button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>`;
 
-/** 확인·안내 쪽(접속 확인·개인정보) 머리: 연수 사이트로 가는 이름 + 이 쪽 이름 + 밝게·어둡게 */
+/** 보조 화면 머리의 왼쪽(강사 화면과 같은 꼴): 무슨 화면인지(작게) + 연수 제목 */
+const auxId = (ctx, label) => `<p class="lp-ax-id"><span class="lp-brand-dot" aria-hidden="true"></span><span><small>${esc(label)}</small><b>${esc(ctx.bp.meta.title)}</b></span></p>`;
+const backBtn = () => `<a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로</a>`;
+/** 확인·안내 쪽(접속 확인·개인정보) 머리: 무슨 화면인지 + [참가자 화면으로] + 밝게·어둡게 */
 function auxBar(ctx, label) {
   return `<header class="lp-ax-bar"><div class="lp-ax-in">
-<a class="lp-ax-brand" href="index.html"><span class="lp-brand-dot" aria-hidden="true"></span><span>${esc(ctx.bp.meta.title)}</span></a>
-<span class="lp-ax-page">${esc(label)}</span>
-<div class="lp-ax-act">${themeBtn()}</div>
+${auxId(ctx, label)}
+<div class="lp-ax-act">${backBtn()}${themeBtn()}</div>
 </div></header>`;
 }
 const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), seed);
@@ -152,12 +154,13 @@ export function renderPoster(ctx) {
   const meta = when || m.venue ? `<dl class="lp-pst-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : '';
   const mini = (i) => `<div class="lp-pst-mini"><p class="lp-pst-mini-t">${esc(m.title)}</p><div class="lp-pst-mini-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드 ${i + 1}"></div><p class="lp-pst-mini-u" data-url-self></p>${code ? `<p class="lp-pst-mini-c">연수 코드 ${esc(code)}</p>` : ''}</div>`;
   const inner = `<header class="lp-pst-bar"><div class="lp-pst-bar-in">
-<p class="lp-pst-bar-t"><b>QR 안내문</b><span>A4로 인쇄해요. 흑백으로 인쇄해도 QR이 잘 찍혀요.</span></p>
+${auxId(ctx, 'QR 안내문')}
+<p class="lp-pst-bar-t">A4 한 장이에요. 흑백으로 인쇄해도 QR이 잘 찍혀요.</p>
 <fieldset class="lp-pst-opts"><legend class="lp-sr">함께 인쇄할 것</legend>
 <label class="lp-con-check"><input type="checkbox" data-part-print="cards"><span>자리 카드 8장(잘라 쓰기)</span></label>
 </fieldset>
 <button class="lp-btn lp-btn-primary" type="button" data-print>${icon('print')}<span>인쇄하기</span></button>
-<a class="lp-link" href="index.html">연수 사이트로</a>
+${backBtn()}
 </div></header>
 <main class="lp-pst" data-poster>
 <div class="lp-pst-page"><section class="lp-pst-sheet lp-pst-a4" data-len="${tlen <= 12 ? 's' : tlen <= 26 ? 'm' : 'l'}" aria-labelledby="lp-poster-h">
