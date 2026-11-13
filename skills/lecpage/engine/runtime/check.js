@@ -39,7 +39,7 @@
       try { c = LecLive.create(Object.assign({}, DATA.live, { identity: 'session' })); } catch (e) { return end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '참여 기능을 불러오지 못했어요.', fix: '새로 고침한 뒤 다시 확인해 주세요.' }); }
       c.connect().then(function (r) {
         var ms = Date.now() - t0, mode = r && r.mode;
-        if (mode === 'local') return end({ name: name, host: '리허설', state: 'ok', need: 'must', note: '리허설 설정이라 이 브라우저 안에서만 돌고, 참가자 휴대폰과 이어지지 않아요.', fix: '실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.', todo: true, warn: true });
+        if (mode === 'local') return end({ name: name, host: '리허설', state: 'ok', need: 'must', note: '리허설 설정이라 이 브라우저 안에서만 돌고, 참가자 휴대폰과 이어지지 않아요.', fix: '실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.', todo: true, warn: true });
         if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 천천히 묻기', state: 'ok', need: 'must', way: '천천히 묻기', note: '이 망이 웹소켓을 막아 천천히 물어요. 질문·투표가 몇 초 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
         end({ name: name, host: liveInfo.name + ' · 실시간 · ' + (ms / 1000).toFixed(1) + '초', state: 'ok', need: 'must', way: '실시간' });
       }, function (e) {
