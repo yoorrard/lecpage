@@ -1,4 +1,4 @@
-/* 바로 공개 호스트의 안내·신고 화면 */
+/* 바로 배포 호스트의 안내·신고 화면 */
 :root { color-scheme: light dark; --bg: #f6f5f2; --fg: #1f1d1a; --muted: #55514a; --line: #d9d5cc; --card: #fff; --accent: #2f5d50; --danger: #b42318; }
 @media (prefers-color-scheme: dark) { :root { --bg: #171614; --fg: #f1efe9; --muted: #b9b4aa; --line: #3a3832; --card: #201f1c; --accent: #8fc7b5; --danger: #ff9b8f; } }
 * { box-sizing: border-box; }

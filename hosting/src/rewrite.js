@@ -69,7 +69,7 @@ export function reportLinkHtml(siteId, { inFooter, reportUrl = '/report' }) {
  *   reportLink=false면 신고 링크를 붙이지 않음(화면 전체를 쓰는 강사용 화면). path: 사이트 안 HTML 경로. origin: 이 호스트 주소(미리보기 카드).
  *   ogImage: og:image가 없을 때 쓸 사이트 안 그림 경로. notices: 맨 위에 붙일 운영자 공지(강사 화면)
  *   siteBase: 사이트 첫 화면의 전체 주소(VIEW=pages: https://s-<id>.<프로젝트>.pages.dev/). 없으면 origin + /s/<id>/
- *   reportUrl: 신고 화면 주소(VIEW=pages: 바로 공개 호스트의 전체 주소). 없으면 같은 출처의 /report
+ *   reportUrl: 신고 화면 주소(VIEW=pages: 바로 배포 호스트의 전체 주소). 없으면 같은 출처의 /report
  */
 export function rewriteHtml(res, siteId, opts = {}) {
   const remove = { element(el) { el.remove(); } };

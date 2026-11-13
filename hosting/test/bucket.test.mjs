@@ -85,7 +85,7 @@ test('지우기·목록(prefix, 이어 보기)', async () => {
   assert.equal((await b.list()).objects.length, 3);
 });
 
-test('한도: 파일 하나, 방 전체. 같은 이름으로 다시 올리면 바꿔 셈', async () => {
+test('한도: 파일 하나, 방 전체. 같은 이름으로 다시 배포하면 바꿔 셈', async () => {
   const { b } = make({ maxObjectBytes: 2 * CHUNK, maxTotalBytes: 5 * CHUNK });
   await assert.rejects(() => b.put('L/big', bytes(2 * CHUNK + 1)), (e) => e.status === 413 && e.code === 'too_large');
   await b.put('L/a', bytes(2 * CHUNK)); await b.put('L/b', bytes(2 * CHUNK));

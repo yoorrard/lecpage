@@ -122,7 +122,7 @@ test('실패하면 어디서 멈췄는지와 다음 할 일', async () => {
   const o = io();
   const r = await setup(['--yes', '--webhook', 'none'], { env: ENV({ CLOUDFLARE_API_TOKEN: TOKEN, FAKE_WRANGLER_FAIL: 'deploy' }), io: o });
   assert.equal(r.ok, false);
-  assert.match(o.text(), /✗ 멈춘 곳: 4\/8 바로 공개 Worker 배포/);
+  assert.match(o.text(), /✗ 멈춘 곳: 4\/8 바로 배포 Worker 배포/);
   assert.match(o.text(), /다음에 할 일: 위에 찍힌 wrangler 오류를 보세요/);
   // 권한이 모자란 토큰
   cf.state.tokenOk = false;

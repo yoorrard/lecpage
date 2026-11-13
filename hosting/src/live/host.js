@@ -27,7 +27,7 @@ export function liveTarget(pathname) {
   const [raw, op = ''] = path.slice(5).split('/');
   let code;
   try { code = normCode(decodeURIComponent(raw)); } catch (e) { throw e instanceof LiveError ? e : new LiveError(400, 'bad_code', '연수 코드가 올바르지 않습니다.'); }
-  if (CLOSED_OPS.has(op)) throw new LiveError(404, 'not_found', '이 서버에서는 사이트를 공개할 때 연수가 등록됩니다.');
+  if (CLOSED_OPS.has(op)) throw new LiveError(404, 'not_found', '이 서버에서는 사이트를 배포할 때 연수가 등록됩니다.');
   return { kind: 'room', code, path, op };
 }
 
@@ -57,7 +57,7 @@ export function roomEnv(env, cfg, { uploads, setupToken }) {
     MAX_SOCKETS_PER_IP: String(cfg.liveSocketsPerIp),
   };
 }
-/** 방 자료를 두는 날 수는 사이트 공개 기간을 넘지 않음 */
+/** 방 자료를 두는 날 수는 사이트 보관 기간을 넘지 않음 */
 export const maxRetentionDays = (cfg) => Math.max(1, Math.ceil(cfg.days));
 
 // ── 방 ↔ 사이트 묶음 ─────────────────────────────────────────────

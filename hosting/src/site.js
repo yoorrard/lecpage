@@ -3,6 +3,7 @@
 //  deploy 배포 목록(경로 → sha256·크기)을 JSON 한 줄로. 지금 것과 준비 중인 것만 남김
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
 //  passet (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠. 내용은 두지 않음
+//         (작은 파일은 받을 때 메모리에만 두었다가 공개할 때 한 번에 올리고 그때 적음 → deferred)
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
 //
 // 보기(view)는 사이트를 만들 때 정해져 바뀌지 않습니다.
@@ -16,7 +17,7 @@ import { bearer, keyMatches, newDeployId, hex, SHA256_RE, DEPLOY_RE } from './id
 import { checkManifest, missingBlobs, scriptBlobs } from './manifest.js';
 import { typeOf, extOf, requestPath } from './paths.js';
 import { isRuntimeJs } from './runtime.js';
-import { SUPABASE_SDK, STATIC_RUNTIME } from './runtime-allow.js';
+import { SUPABASE_SDK, STATIC_RUNTIME, PAGES_RUNTIME } from './runtime-allow.js';
 import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES } from './csp.js';
 import { rewriteHtml } from './rewrite.js';
 import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
@@ -29,6 +30,18 @@ import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFil
 export const CHUNK = 1024 * 1024;
 /** 정적 사본(/rt/)이 있는 런타임 파일 */
 const RT = new Set(STATIC_RUNTIME || []);
+/**
+ * Pages 보기: 이 크기 아래의 파일(CSS·작은 그림·글꼴 등)은 받을 때 바로 Pages에 올리지 않고 메모리에 잠깐 두었다가 공개할 때 HTML과 한 번에 올림.
+ * 파일마다 Pages API를 1~2번 부르던 것이 공개 한 번에 1번으로 줄어 Cloudflare API 한도(5분에 1,200번)에 덜 닿고, 저장소에 쓰지 않아 행 쓰기(무료 하루 10만)도 늘지 않음.
+ * 그사이 이 객체가 내려가 메모리가 비면 공개할 때 missing_blobs로 그 파일만 다시 받음(앱이 알아서 다시 보냄)
+ */
+export const DEFER_MAX = 512 * 1024;
+/** 사이트 하나가 메모리에 잠깐 두는 파일 합계(넘으면 받을 때 바로 Pages에 올림) */
+const DEFER_TOTAL = 16 * 1024 * 1024;
+/** Pages 보기에서 올려받지 않는 파일(호스트 정책으로 바꿔 넣음) */
+const PAGES_SKIP = new Set(['robots.txt']);
+/** 공개 한 번에 드는 Pages API 어림(토큰·확인·올리기·열쇠 적기·배포·준비 확인·지난 배포 지우기) */
+const PUBLISH_CALLS = 7;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
@@ -53,6 +66,8 @@ export class Site extends DurableObject {
     this.liveTimes = [];
     this.queue = Promise.resolve();
     this.ogCache = new Map(); // 배포 id → 미리보기 카드 그림 경로('' = 없음)
+    this.deferred = new Map(); // (Pages 보기) 공개할 때 한 번에 올릴 작은 파일: sha256 → { bytes, items: [{ ext, hash, parts, contentType }] }
+    this.deferredBytes = 0;
   }
 
   async fetch(request) {
@@ -108,15 +123,39 @@ export class Site extends DurableObject {
     if (!this.pagesClient) this.pagesClient = new PagesClient({ api: p.api, accountId: p.accountId, project: p.project, token: p.token });
     return this.pagesClient;
   }
+  /** 지난번 알린 뒤 Pages API를 부른 횟수와 방(Room)을 부른 횟수(Gate가 하루 숫자 pc·pz·rc에 더함) */
+  pagesDelta() {
+    const p = this.pagesClient || { calls: 0, limited: 0 };
+    const d = { pc: p.calls - (this.pcSent || 0), pz: p.limited - (this.pzSent || 0), rc: (this.roomCalls || 0) - (this.rcSent || 0) };
+    this.pcSent = p.calls; this.pzSent = p.limited; this.rcSent = this.roomCalls || 0;
+    return d;
+  }
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */
   keepsHere(meta, path) { return !this.isPages(meta) || typeOf(path)?.kind === 'html' || isMedia(path); }
   passet(sha, ext) { return this.sql.exec('SELECT phash FROM passet WHERE sha = ? AND ext = ?', sha, ext).toArray()[0]?.phash || ''; }
+  deferredItem(sha, ext) { return this.deferred.get(sha)?.items.find((x) => x.ext === ext) || null; }
+  /** Pages 보기: 엔진 런타임 그대로인 .js는 모든 사이트가 같아 Pages 열쇠를 미리 앎(scripts/gen-runtime.mjs) → 올려받지 않음 */
+  knownRuntime(files) {
+    for (const [path, sha, size] of files) {
+      const ph = PAGES_RUNTIME?.[sha];
+      if (!ph || rawExt(path) !== 'js' || this.passet(sha, 'js')) continue;
+      this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, 'js', ph, size);
+      this.jsOk.add(sha);
+    }
+  }
+  /** 이번 배포에 드는 Pages API 어림(Gate의 5분 창): 공개 한 번 + 큰 파일마다 확인·올리기 */
+  pagesEstimate(meta, files, missing) {
+    const want = new Set(missing); let big = 0;
+    for (const [path, sha, size] of files) if (want.has(sha) && !this.keepsHere(meta, path) && size > DEFER_MAX) { big++; want.delete(sha); }
+    return PUBLISH_CALLS + 2 * big;
+  }
   /** 목록에서 아직 받지 않은 sha256(겹치지 않게, 목록 순서대로). Pages 보기는 Pages에 올린 기록도 봄 */
   missingFor(meta, files, have = this.blobSizes()) {
     if (!this.isPages(meta)) return missingBlobs(files, have);
     const out = []; const seen = new Set();
     for (const [path, sha] of files) {
-      const ok = this.keepsHere(meta, path) ? have.has(sha) : !!this.passet(sha, rawExt(path));
+      if (PAGES_SKIP.has(path)) continue;
+      const ok = this.keepsHere(meta, path) ? have.has(sha) : !!this.passet(sha, rawExt(path)) || !!this.deferredItem(sha, rawExt(path));
       if (!ok && !seen.has(sha)) { seen.add(sha); out.push(sha); }
     }
     return out;
@@ -164,6 +203,7 @@ export class Site extends DurableObject {
   url(request, meta) { return `${request.headers.get('x-lp-origin') || ''}/s/${meta.site}/`; }
   /** 실시간 방(Room)에 호스트 안쪽 일을 시킴: bind·touch·wipe */
   async room(code, op, body) {
+    this.roomCalls = (this.roomCalls || 0) + 1;
     const stub = this.env.ROOM.get(this.env.ROOM.idFromName(code));
     const res = await stub.fetch(`http://room/host/${op}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) throw await errorFrom(res);
@@ -196,15 +236,17 @@ export class Site extends DurableObject {
     return this.exclusive(async () => {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
-      const usage = await this.gate('GET', 'usage');
-      // 연수 날짜·인원(앱이 보냄): 그날이 찼으면 올리기 전에 알림. 다시 올리며 날짜가 바뀌면 예약도 바뀜
-      if (body.booking && typeof body.booking === 'object') await this.gate('POST', 'book', { site: meta.site, booking: body.booking });
-      // 운영자가 새 업로드를 멈췄으면 다시 올리기도 받지 않음(이미 공개한 판은 그대로 열림)
-      if (usage.paused) throw new HttpError('rate_limited', '운영자가 잠시 새 업로드를 멈췄어요. 이미 올린 사이트는 그대로 열려요. 나중에 다시 하거나 내 계정에 올려 주세요.', { status: 503, headers: { 'retry-after': '3600' } });
-      const keep = this.keptBytes(meta, man.files);
-      if (usage.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) throw new HttpError('full');
+      if (this.isPages(meta)) this.knownRuntime(man.files);
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
+      const missing = this.missingFor(meta, man.files, have);
+      // Gate에 한 번만 물음: 운영자 멈춤(다시 배포도 받지 않음, 이미 공개한 판은 그대로 열림) · Pages API 5분 창 · 연수 날짜·인원(그날이 찼으면 올리기 전에 알림, 바뀌면 갈아 끼움) · 저장량
+      const chk = await this.gate('POST', 'deploy-check', {
+        site: meta.site, booking: body.booking && typeof body.booking === 'object' ? body.booking : null,
+        pages: this.isPages(meta) ? this.pagesEstimate(meta, man.files, missing) : 0, split: Array.isArray(body.caps) && body.caps.includes('split'),
+      });
+      const keep = this.keptBytes(meta, man.files);
+      if (chk.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) throw new HttpError('full');
       const id = newDeployId();
       const old = meta.pending && meta.pending !== meta.current ? meta.pending : null;
       this.ctx.storage.transactionSync(() => {
@@ -216,7 +258,7 @@ export class Site extends DurableObject {
       meta.pending = id;
       this.deployTimes.push(now);
       this.sweep();
-      return json({ deploy: id, missing: this.missingFor(meta, man.files, have) });
+      return json({ deploy: id, missing, ...(chk.live ? { live: chk.live } : {}) });
     });
   }
 
@@ -241,8 +283,8 @@ export class Site extends DurableObject {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
       const prev = meta.live_code || null;
-      // 이 사이트의 첫 방일 때만 하루 개수에 셈(코드를 바꾸는 것은 방 하나를 갈아 끼우는 것)
-      if (!prev) await this.gate('POST', 'room', { id: meta.site });
+      // 이 사이트의 첫 방일 때만 하루 개수에 셈(코드를 바꾸는 것은 방 하나를 갈아 끼우는 것). Gate가 이때 코드도 적음(따로 부르지 않음)
+      if (!prev) await this.gate('POST', 'room', { id: meta.site, code });
       // 사이트에 먼저 적고 방을 묶음: 중간에 끊겨도 "사이트가 모르는 방"이 남지 않음(방은 기간 끝에 사이트에 물어보고 스스로 비움)
       const setCode = (c) => { this.sql.exec('UPDATE meta SET live_code = ? WHERE id = 1', c); meta.live_code = c; };
       if (prev !== code) setCode(code);
@@ -251,11 +293,14 @@ export class Site extends DurableObject {
         out = await this.room(code, 'bind', { site: meta.site, code, adminKeyHash, settings: body.settings, expires: meta.expires, blocked: !!meta.blocked });
       } catch (e) {
         if (prev !== code) setCode(prev);
+        if (!prev) { try { await this.gate('POST', 'site', { id: meta.site, code: '' }); } catch { /* 관리 화면 숫자만 어긋남 */ } }
         throw e;
       }
-      // 코드를 바꿨으면 예전 방은 비움
-      if (prev && prev !== code) { try { await this.room(prev, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); } }
-      try { await this.gate('POST', 'site', { id: meta.site, code }); } catch (e) { console.error('gate site update failed', e?.message); }
+      // 코드를 바꿨으면 예전 방은 비우고 Gate에 새 코드를 적음
+      if (prev && prev !== code) {
+        try { await this.room(prev, 'wipe', { site: meta.site }); } catch (e) { console.error('old room wipe failed', e?.message); }
+        try { await this.gate('POST', 'site', { id: meta.site, code, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
+      }
       return json({ url: `${request.headers.get('x-lp-origin') || ''}/live`, code: out.code });
     });
   }
@@ -279,6 +324,7 @@ export class Site extends DurableObject {
       if (!keep.has(sha)) { this.sql.exec('DELETE FROM blob WHERE sha = ?', sha); this.jsOk.delete(sha); }
     }
     if (this.isPages(meta)) for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM passet').toArray()) if (!keep.has(sha)) this.sql.exec('DELETE FROM passet WHERE sha = ?', sha);
+    for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.bytes.length; }
   }
 
   // ── 파일 받기 ────────────────────────────────────────────────
@@ -368,15 +414,19 @@ export class Site extends DurableObject {
    * 큰 파일을 여럿 한꺼번에 들고 있지 않게 한 번에 하나씩(Durable Object 메모리 128MB).
    */
   async uploadPages(request, meta, man, sha, size) {
-    const paths = man.list.filter(([, s]) => s === sha).map(([p]) => p);
-    const needBlob = paths.some((p) => this.keepsHere(meta, p)) && !this.hasBlob(sha);
+    const paths = man.list.filter(([p, s]) => s === sha && !PAGES_SKIP.has(p)).map(([p]) => p);
     const exts = [...new Set(paths.filter((p) => !this.keepsHere(meta, p)).map(rawExt))].filter((e) => !this.passet(sha, e));
+    // 작은 파일은 메모리에 두었다가 공개할 때 한 번에 올림
+    const defer = exts.length > 0 && size <= DEFER_MAX && this.deferredBytes + size <= DEFER_TOTAL;
+    const needBlob = paths.some((p) => this.keepsHere(meta, p)) && !this.hasBlob(sha);
     if (!needBlob && !exts.length) { request.body?.cancel().catch(() => { }); return noContent(); }
     const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => {
       const bytes = await readAll(request, size);
       if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== sha) throw new HttpError('bad_request', '파일 내용이 sha256과 달라요.');
       if (man.js.has(sha) && !(await this.scriptOk(sha, bytes))) throw new HttpError('runtime_mismatch');
       if (!this.load()) throw new HttpError('not_found'); // 받는 사이에 사이트가 지워짐
+      const parts = exts.length ? base64Parts(bytes) : null;
+      const items = exts.map((e) => ({ ext: e, hash: pagesHash(bytes, e, parts), parts, contentType: contentTypeOf(paths.find((p) => rawExt(p) === e)) }));
       if (needBlob && !this.hasBlob(sha)) {
         // 0번 줄을 맨 나중에(= 다 들어옴)
         this.ctx.storage.transactionSync(() => {
@@ -384,17 +434,17 @@ export class Site extends DurableObject {
           this.sql.exec('INSERT OR REPLACE INTO blob (sha, i, total, data) VALUES (?, 0, ?, ?)', sha, size, bytes.slice(0, CHUNK));
         });
       }
-      if (exts.length) {
-        const parts = base64Parts(bytes);
+      if (defer && !this.deferred.has(sha)) { this.deferred.set(sha, { bytes, items }); this.deferredBytes += bytes.length; }
+      else if (defer) { const d = this.deferred.get(sha); for (const x of items) if (!d.items.some((y) => y.ext === x.ext)) d.items.push(x); }
+      if (exts.length && !defer) {
         const pc = this.pc();
-        const items = exts.map((e) => ({ ext: e, hash: pagesHash(bytes, e, parts), parts, contentType: contentTypeOf(paths.find((p) => rawExt(p) === e)) }));
         const missing = new Set(await pc.checkMissing(items.map((x) => x.hash)));
         const up = items.filter((x) => missing.has(x.hash));
         if (up.length) await pc.upload(up);
         for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
       }
     });
-    try { await run; } catch (e) { if (e?.step) throw new HttpError('bad_request', `파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요. (${e.step})`, { status: 502 }); throw e; }
+    try { await run; } catch (e) { throw await this.pagesFail(e, `파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요. (${e?.step || ''})`); }
     return noContent();
   }
 
@@ -428,8 +478,8 @@ export class Site extends DurableObject {
       if (prev && prev !== deployId) this.manifests.delete(prev);
       await this.ctx.storage.setAlarm(expires);
       this.sweep();
-      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true }); } catch (e) { console.error('gate site update failed', e?.message); }
-      // 공개 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
+      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
+      // 보관 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
       if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
       return json({ url: this.url(request, meta), expiresAt: expires });
     });
@@ -446,7 +496,7 @@ export class Site extends DurableObject {
   async publishPages(request, meta, deployId, man) {
     const self = request.headers.get('x-lp-origin') || '';
     const id = meta.site; const url = this.siteUrl(meta);
-    const manifest = {}; const extra = []; const media = []; const paths = [];
+    const manifest = {}; const extra = []; const media = []; const paths = []; const deferred = new Map(); const lostHere = new Set(); // deferred: Pages 열쇠 → 메모리에서 올린 파일
     const add = (path, bytes) => {
       const parts = base64Parts(bytes); const hash = pagesHash(bytes, rawExt(path), parts);
       manifest[`/${path}`] = hash; extra.push({ hash, parts, contentType: contentTypeOf(path) }); paths.push(path);
@@ -464,9 +514,14 @@ export class Site extends DurableObject {
         continue;
       }
       const ph = this.passet(sha, rawExt(path));
-      if (!ph) throw new HttpError('missing_blobs', undefined, { missing: [sha] });
-      manifest[`/${path}`] = ph; paths.push(path);
+      if (ph) { manifest[`/${path}`] = ph; paths.push(path); continue; }
+      // 받을 때 메모리에 둔 작은 파일: 이번에 HTML과 같이 올림. 메모리가 비었으면(객체가 내려감) 그 파일만 다시 받음
+      const d = this.deferredItem(sha, rawExt(path));
+      if (!d) { lostHere.add(sha); continue; }
+      manifest[`/${path}`] = d.hash; paths.push(path);
+      if (!deferred.has(d.hash)) { deferred.set(d.hash, { sha, ext: d.ext, size: this.deferred.get(sha).bytes.length }); extra.push(d); }
     }
+    if (lostHere.size) throw new HttpError('missing_blobs', undefined, { missing: [...lostHere] });
     const te = new TextEncoder();
     add('robots.txt', te.encode(ROBOTS));
     if (!man.files.has('404.html')) add('404.html', te.encode(noFileHtml()));
@@ -490,7 +545,10 @@ export class Site extends DurableObject {
       this.sql.exec('UPDATE meta SET current = ?, pending = NULL, bytes = ?, expires = ? WHERE id = 1', deployId, kept, expires);
       if (prev && prev !== deployId) this.sql.exec('DELETE FROM deploy WHERE id = ?', prev);
       this.savePs(meta, st);
+      // 같이 올린 작은 파일: 이제 Pages에 있으니 열쇠를 적고 메모리에서 뺌
+      for (const [hash, x] of deferred) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', x.sha, x.ext, hash, x.size);
     });
+    for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.bytes.length; } }
     Object.assign(meta, { current: deployId, pending: null, bytes: kept, expires });
     if (prev && prev !== deployId) this.manifests.delete(prev);
     await this.ctx.storage.setAlarm(expires);
@@ -498,17 +556,26 @@ export class Site extends DurableObject {
     // 지난 배포(각자 고유 주소가 있음)는 지움. 못 지운 것은 다음 공개·지우기 때 다시
     const left = await this.dropDeployments(old.filter((d) => d !== deployment.id));
     if (left.length) { const s2 = this.ps(meta); s2.hold = left; this.savePs(meta, s2); }
-    try { await this.gate('POST', 'site', { id, bytes: kept, expires, published: true }); } catch (e) { console.error('gate site update failed', e?.message); }
+    try { await this.gate('POST', 'site', { id, bytes: kept, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
     if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: id, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
     return json(this.published(request, meta));
   }
   /** Pages API 오류를 앱이 알아듣는 오류로 */
   async pagesCall(fn) {
-    try { return await fn(); } catch (e) {
-      if (e instanceof HttpError) throw e;
-      if (e?.step) { console.error('pages error', e.step, e.status, e.code); throw new HttpError('bad_request', 'Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요.', { status: 502 }); }
-      throw e;
+    try { return await fn(); } catch (e) { throw await this.pagesFail(e, 'Cloudflare Pages에 배포하지 못했어요. 잠시 뒤 다시 해 주세요.'); }
+  }
+  /**
+   * Pages API 실패 → 오류. 429(그 계정의 API가 5분 막힘)면 Gate에 바로 알려 5분 동안 새 배포를 줄 세우고(다른 강사가 같은 벽에 부딪히지 않게),
+   * 앱에는 rate_limited + reason 'pages_api' + retry-after로(앱의 [다시 배포]로 이어짐)
+   */
+  async pagesFail(e, message) {
+    if (e instanceof HttpError || !e?.step) return e;
+    console.error('pages error', e.step, e.status, e.code);
+    if (e.status === 429) {
+      try { await this.gate('POST', 'site', { id: this.load()?.site || '', ...this.pagesDelta() }); } catch { /* 다음 알림 때 */ }
+      return new HttpError('rate_limited', '배포하는 사람이 한꺼번에 많아 Cloudflare가 잠시 쉬게 했어요. 2~5분 뒤 다시 배포해 주세요. 이미 배포한 사이트는 그대로 열려요.', { reason: 'pages_api', scope: 'everyone', retryAt: Date.now() + 300e3, headers: { 'retry-after': '300' } });
     }
+    return new HttpError('bad_request', message, { status: 502 });
   }
   /** 배포들을 지움(별칭이 걸린 것도). 못 지운 id를 돌려줌 */
   async dropDeployments(ids) {
@@ -540,8 +607,8 @@ export class Site extends DurableObject {
     if (this.isPages(meta)) await this.wipePages(meta);
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
-    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = [];
-    if (id) { try { await this.gate('POST', 'forget', { id }); } catch (e) { console.error('gate forget failed', e?.message); } }
+    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
+    if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
   }
   /**
    * Pages에 있는 이 사이트의 배포를 모두 지움. 가장 최근 배포를 못 지우면(별칭) 안내 화면을 올린 뒤 나머지를 지움.
@@ -572,8 +639,8 @@ export class Site extends DurableObject {
       if (this.isPages(meta) && !!meta.blocked !== body.blocked) restored = body.blocked ? await this.holdPages(meta) : await this.releasePages(meta);
       this.sql.exec('UPDATE meta SET blocked = ?, block_reason = ? WHERE id = 1', body.blocked ? 1 : 0, reason);
       Object.assign(meta, { blocked: body.blocked ? 1 : 0, block_reason: reason });
-      try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked }); } catch (e) { console.error('gate site update failed', e?.message); }
-      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null, ...(restored === false ? { restored: false, note: 'Pages에서 지난 파일을 찾지 못해 다시 열지 못했어요. 강사가 다시 올리면 열려요.' } : {}) });
+      try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
+      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null, ...(restored === false ? { restored: false, note: 'Pages에서 지난 파일을 찾지 못해 다시 열지 못했어요. 강사가 다시 배포하면 열려요.' } : {}) });
     });
   }
   async holdPages(meta) {
@@ -595,7 +662,7 @@ export class Site extends DurableObject {
   }
 
   /**
-   * 쓰이는 사이트는 지우지 않음: 화면을 여는 방문이 있고 남은 기간이 절반 아래면 공개 기간을 다시 채움(사이트마다 보름에 한 번쯤만 씀).
+   * 쓰이는 사이트는 지우지 않음: 화면을 여는 방문이 있고 남은 기간이 절반 아래면 보관 기간을 다시 채움(사이트마다 보름에 한 번쯤만 씀).
    * 처음 만든 날부터 MAX_SITE_DAYS가 지나면 더 늘리지 않음. 가린 사이트는 늘리지 않음.
    */
   keepAlive(meta) {
@@ -611,7 +678,7 @@ export class Site extends DurableObject {
     })());
   }
 
-  /** 공개 기간이 끝나면 전부 지움 */
+  /** 보관 기간이 끝나면 전부 지움 */
   async alarm() {
     const meta = this.load();
     if (!meta) return;

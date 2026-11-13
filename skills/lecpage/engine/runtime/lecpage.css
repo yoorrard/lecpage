@@ -1424,6 +1424,8 @@ html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 30px + env(sa
 .lp-share-full:not([hidden])~.lp-share-off{display:none}
 .lp-share-code{text-align:center}
 .lp-share-code b{font-family:var(--font-mono);font-size:1.4rem;letter-spacing:.12em}
+.lp-share-scr{text-align:center;color:var(--muted-foreground)}
+.lp-share-scr a{font-weight:700;color:var(--foreground);text-decoration:underline;text-underline-offset:2px}
 .lp-toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:90;background:var(--foreground);color:var(--background);padding:10px 18px;border-radius:var(--radius-sm);font-weight:600;font-size:var(--fs-sm);opacity:0;pointer-events:none;transition:opacity var(--dur-2),transform var(--dur-3) var(--ease-out);max-width:calc(100% - 32px);text-align:center}
 .lp-toast.is-on{opacity:1;transform:translate(-50%,0)}
 .lp-reactions{position:fixed;right:24px;bottom:90px;width:60px;height:60vh;pointer-events:none;z-index:44}

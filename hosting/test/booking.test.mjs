@@ -51,7 +51,7 @@ test('예약: 그날 어림이 예산의 70%를 넘으면 만들 때 알림(다�
   assert.equal(st.trainings, 1); assert.equal(st.people, 60); assert.ok(st.est > 39000 && st.est < 40000); assert.equal(st.ok, true);
   const no = await reserve(call, 'bbbbbbbbbb', big);
   assert.equal(no.status, 429); assert.equal(no.body.error.reason, 'booked'); assert.equal(no.body.error.day, day(7));
-  assert.match(no.body.error.message_ko, /^\d+월 \d+일은 바로 공개에 예약된 연수가 많아\(1개\)/);
+  assert.match(no.body.error.message_ko, /^\d+월 \d+일은 바로 배포에 예약된 연수가 많아\(1개\)/);
   assert.equal((await call('GET', 'sites')).body.sites.length, 1, '거절되면 사이트도 만들지 않음');
   assert.equal((await reserve(call, 'cccccccccc', { ...big, date: day(8) })).status, 200, '다른 날은 됨');
   assert.equal((await reserve(call, 'dddddddddd', { ...big, live: false })).status, 200, '참여 기능이 없는 연수는 작음');
@@ -60,7 +60,8 @@ test('예약: 그날 어림이 예산의 70%를 넘으면 만들 때 알림(다�
   assert.ok((await call('GET', `day?date=${day(7)}`)).body.day.est < 25000);
   // 앞으로 7일 표
   const up = (await call('GET', 'overview')).body.upcoming;
-  assert.equal(up.length, 7); assert.equal(up[0].date, day(0));
+  // 첫 줄은 Cloudflare 하루(00:00 UTC = 한국 오전 9시에 바뀜)의 날짜: 한국 시간 0~9시에는 한국 날짜보다 하루 앞
+  assert.equal(up.length, 7); assert.equal(up[0].date, new Date(Math.floor(Date.now() / 864e5) * 864e5).toISOString().slice(0, 10));
   assert.equal(up.find((u) => u.date === day(7)), undefined, '7일 뒤는 표 밖(오늘~6일 뒤)');
   // 지우면 예약도
   await call('POST', 'forget', { id: 'cccccccccc' });
@@ -89,7 +90,7 @@ test('그날 상태: 사이트 상태(가림·없음)와 예약', async () => {
   const s = (await call('GET', `day?date=${day(3)}&site=ffffffffff`)).body;
   assert.equal(s.site.state, 'open'); assert.equal(s.site.booking.people, 20); assert.equal(s.site.booking.date, day(3));
   assert.equal((await call('GET', 'day?site=gggggggggg')).body.site.state, 'gone');
-  assert.equal(s.today.date, kstDate(Date.now()));
+  assert.equal(s.today.date, new Date(Math.floor(Date.now() / 864e5) * 864e5).toISOString().slice(0, 10), '오늘 = Cloudflare 하루(한국 오전 9시부터)의 이름'); assert.equal(s.today.until, (Math.floor(Date.now() / 864e5) + 1) * 864e5);
 });
 
 test('긴 대기 어림이 기본(POLL_LONG 없으면 on, "off"면 예전 5초 묻기 어림)', async () => {
@@ -109,6 +110,31 @@ test('유료 요금제(예산 0)는 예약으로 막지 않음', async () => {
   const big = { date: day(5), people: 500, live: true, network: 'restricted', minutes: 600 };
   assert.equal((await call('POST', 'book', { site: 'hhhhhhhhhh', booking: big })).status, 200);
   assert.equal((await call('POST', 'book', { site: 'jjjjjjjjjj', booking: big })).status, 200);
+});
+
+test('날짜 경계: 한국 시각 자정~오전 9시(UTC 15~24시)에 예약해도 그날 몫·오늘 남은 몫·7일 표가 맞음', async () => {
+  // Cloudflare 무료 하루 = 00:00 UTC(한국 오전 9시)에 바뀜. 예약은 '연수 시작 시각이 든 그 하루'에 쌓여야 그날 한도와 맞음
+  const realNow = Date.now;
+  const now = Date.UTC(2026, 10, 13, 18, 30); // 한국 11월 14일 03:30, Cloudflare 하루는 아직 11월 13일(오전 9시까지)
+  Date.now = () => now;
+  try {
+    const { g, call } = gate({ POLL_LONG: 'off' });
+    const school = { people: 40, live: true, network: 'restricted', minutes: 120 };
+    // 한국 '오늘' 오전 10시 연수 → 다음 Cloudflare 하루(11월 14일)에 쌓임: 지금 하루(오전 9시에 끝남)의 남은 몫에는 들지 않음
+    assert.equal((await reserve(call, 'aaaaaaaaaa', { ...school, date: '2026-11-14', start: '10:00' })).status, 200);
+    // 한국 '오늘' 오전 7시 연수 → 지금 하루(11월 13일 09시 ~ 14일 09시) 안: 지금 하루의 남은 몫에 듦
+    assert.equal((await reserve(call, 'bbbbbbbbbb', { ...school, date: '2026-11-14', start: '07:00' })).status, 200);
+    const rows = g.sql.exec('SELECT site, day FROM bookings ORDER BY site').toArray();
+    assert.deepEqual(rows.map((r) => [r.site, new Date(r.day * 864e5).toISOString().slice(0, 10)]), [['aaaaaaaaaa', '2026-11-14'], ['bbbbbbbbbb', '2026-11-13']]);
+    assert.equal(g.reservedLeft(now), estimate({ ...school, view: g.cfg.view }), '지금 하루에 남은 몫 = 오전 7시 연수 하나');
+    // 상태 API의 그날(한국 날짜 11월 14일 = 그날 낮 연수가 쓰는 하루)
+    assert.equal((await call('GET', 'day?date=2026-11-14')).body.day.trainings, 1, '11월 14일 낮 연수(10시)만');
+    // 7일 표: 첫 줄 = 지금 하루(11월 13일 오전 9시부터), 둘째 줄 = 11월 14일
+    const up = (await call('GET', 'overview')).body.upcoming;
+    assert.deepEqual(up.slice(0, 2).map((u) => [u.date, u.trainings]), [['2026-11-13', 1], ['2026-11-14', 1]]);
+    // 지난 연수(한국 11월 13일 10시 = 17시간 전)는 받지 않음
+    assert.equal((await call('POST', 'book', { site: 'cccccccccc', booking: { ...school, date: '2026-11-13', start: '10:00' } })).body.booked, false);
+  } finally { Date.now = realNow; }
 });
 
 test('긴 대기: 바뀐 것이 없을 때만 기다림', () => {

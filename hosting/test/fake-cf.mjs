@@ -1,4 +1,4 @@
-// 흉내 Cloudflare API(시험용). 실제 계정 없이 바로 공개 서버(VIEW=pages)와 설정 스크립트를 시험합니다.
+// 흉내 Cloudflare API(시험용). 실제 계정 없이 바로 배포 서버(VIEW=pages)와 설정 스크립트를 시험합니다.
 //  - Pages 직접 올리기: upload-token(JWT) · assets check-missing/upload/upsert-hashes · deployments 만들기/보기/지우기 · 프로젝트
 //    배포를 만들 때 manifest의 열쇠가 실제 내용의 blake3(base64 + 확장자)와 맞는지 확인합니다(wrangler와 같은 계산인지).
 //  - 보기: http://<브랜치>.localhost:<포트>/… 또는 http://127.0.0.1:<포트>/__view/<브랜치>/… 로 그 브랜치의 마지막 배포를 내보냄
