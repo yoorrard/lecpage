@@ -2,7 +2,7 @@
 
 시행일: 2026-11-11
 
-lecpage 운영자(이하 '운영자')가 lecpage 웹앱(https://yoorrard.github.io/lecpage/)에 적용하는 방침이에요. 웹앱은 회원가입이 없어요. 교재와 프로젝트는 쓰는 분의 브라우저 안에서만 처리되고 운영자 서버로 보내지 않아요. Agent Skill은 쓰는 분의 컴퓨터와 AI 도구 안에서 돌아가고 운영자에게 아무것도 보내지 않아요.
+lecpage 운영자 유영재(이하 '운영자')가 lecpage 웹앱(https://yoorrard.github.io/lecpage/)에 적용하는 방침이에요. 웹앱은 회원가입이 없어요. 교재와 프로젝트는 쓰는 분의 브라우저 안에서만 처리되고 운영자 서버로 보내지 않아요. Agent Skill은 쓰는 분의 컴퓨터와 AI 도구 안에서 돌아가고 운영자에게 아무것도 보내지 않아요.
 
 | | |
 |---|---|
@@ -140,7 +140,7 @@ lecpage 운영자(이하 '운영자')가 lecpage 웹앱(https://yoorrard.github.
 
 ## 11. 개인정보 보호책임자와 문의
 
-- 개인정보 보호책임자: lecpage 운영자
+- 개인정보 보호책임자: 유영재(lecpage 운영자)
 - 개인정보 관련 문의·요청: yyj19962004@gmail.com
 - 일반 문의·버그: https://github.com/yoorrard/lecpage/issues (공개 게시판이니 개인정보를 적지 마세요)
 
