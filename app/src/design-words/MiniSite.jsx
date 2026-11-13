@@ -80,15 +80,18 @@ export function useLive(bp, on, assets) {
   return html;
 }
 /**
- * 정지 그림 위에 움직이는 화면을 겹침: 불러오면 서서히 드러나 바뀌는 틈이 보이지 않음.
+ * 정지 그림 위에 움직이는 화면을 겹침. 움직이는 화면은 첫 화면 등장(제목이 떠오름 등)이 끝난 뒤에 서서히 드러남:
+ * 정지 그림과 같은 모습에서 바뀌므로 글이 두 겹으로 비치거나, 다 보이던 제목이 사라졌다 다시 들어오며 튀지 않음.
  * tour면 사이트 안에서 본문까지 천천히 내려감(정지 그림처럼 틀을 길게 늘려 미는 대신 실제 스크롤이라 효과가 제대로 돎)
  */
+const SETTLE = 1300;
 export function LiveLayer({ html, title = '', style, tour = false }) {
-  const [shown, setShown] = useState(false); const ref = useRef();
+  const [shown, setShown] = useState(false); const ref = useRef(); const timer = useRef(0);
   const post = (on) => { try { ref.current?.contentWindow?.postMessage({ type: 'lp-tour', on }, '*'); } catch { } };
-  useEffect(() => { setShown(false); }, [html]);
+  useEffect(() => { setShown(false); return () => clearTimeout(timer.current); }, [html]);
   useEffect(() => { if (shown) post(tour); }, [tour, shown]);
-  return html ? <iframe ref={ref} class={`is-live${shown ? ' is-on' : ''}`} sandbox="allow-scripts" srcdoc={html} tabIndex={-1} aria-hidden="true" title={title} onLoad={() => setTimeout(() => setShown(true), 60)} style={style} /> : null;
+  const loaded = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setShown(true), SETTLE); };
+  return html ? <iframe ref={ref} class={`is-live${shown ? ' is-on' : ''}`} sandbox="allow-scripts" srcdoc={html} tabIndex={-1} aria-hidden="true" title={title} onLoad={loaded} style={style} /> : null;
 }
 
 /** 설계도 → 작은 화면용 설계도(움직임 0, 참여 기능 없음: 처음 모습 그대로 보이게) */

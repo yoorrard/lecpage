@@ -58,27 +58,30 @@ async function fxIn(frameEl) {
   const f = await frameEl.contentFrame(); if (!f) return null;
   return f.evaluate(() => (window.LecFX ? { ...window.LecFX.state(), on: [...document.querySelectorAll('.lp-hero [data-fx]')].map((e) => e.getAttribute('data-fx') + ':' + (e.__lecfx ? Object.values(e.__lecfx).map((v) => (v.skipped ? 'skip' : v.dead ? 'dead' : 'on')).join('') : '-')) } : { noFx: true })).catch((e) => ({ err: e.message.slice(0, 60) }));
 }
-/** 움직이는 화면(iframe.is-live)이 붙으면 곧바로 몇 장: 끝없이 도는 그림이면 계속 바뀌어야 하고, 아니면 등장하며 한 번이라도 바뀌어야 함 */
-async function judge(where, box, frameSel, wantLoop) {
-  const fr = box.locator(frameSel).first();
-  await fr.waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
-  if (!(await fr.count())) { put(where, false, '움직이는 화면이 없음'); return; }
-  const d = await frames(box, where.replace(/[^\w가-힣]+/g, '-'), wantLoop ? 5 : 6, wantLoop ? 800 : 380);
+/**
+ * 움직이는 화면(iframe.is-live)이 드러나면(.is-on: 첫 화면 등장이 끝난 뒤 정지 그림과 바뀜) 몇 장 찍음.
+ * want: 'loop' 끝없이 도는 그림이 계속 바뀌어야 함 · 'tour' 마우스를 올린 카드가 안에서 본문으로 내려가야 함 · 'fx' 효과가 켜져 돌았으면 됨(차분 단계는 등장 뒤 멈춤이 맞음)
+ */
+async function judge(where, box, want) {
+  const fr = box.locator('iframe.is-live.is-on').first();
+  await fr.waitFor({ state: 'attached', timeout: 25000 }).catch(() => {});
+  if (!(await fr.count())) { put(where, false, '움직이는 화면이 드러나지 않음'); return; }
+  const d = await frames(box, where.replace(/[^\w가-힣]+/g, '-'), want === 'fx' ? 2 : 5, 800);
   const st = await fxIn(await fr.elementHandle());
   const fxOn = !!st && !st.noFx && !st.err && st.on.some((x) => /:on/.test(x));
-  const moving = wantLoop ? d.slice(-2).every((x) => x > 0.0004) : d.some((x) => x > 0.0015);
+  const moving = want === 'loop' ? d.slice(-2).every((x) => x > 0.0004) : want === 'tour' ? d.some((x) => x > 0.0015) : true;
   put(where, moving && fxOn, `[${d.join(' ')}] ${JSON.stringify(st)}`);
 }
 
 // 1) 디자인 둘러보기: 담은 낱말 예시(늘 움직임)
 await page.goto(base + '#/gallery');
 await page.waitForSelector('.dict-now .mini-site iframe', { timeout: 30000 });
-await judge('둘러보기 · 담은 낱말 예시(번지는 파문)', page.locator('.dict-now .mini-site'), 'iframe.is-live', true);
+await judge('둘러보기 · 담은 낱말 예시(번지는 파문)', page.locator('.dict-now .mini-site'), 'loop');
 // 디자인 카드: '돌과 물결' 카드에 마우스
 const card = page.locator('.word-card').filter({ hasText: '돌과 물결' }).first();
 await card.scrollIntoViewIfNeeded(); await page.waitForTimeout(1500);
 await card.hover();
-await judge('둘러보기 · 디자인 카드(돌과 물결)에 마우스', card.locator('.mini-site'), 'iframe.is-live', true);
+await judge('둘러보기 · 디자인 카드(돌과 물결)에 마우스', card.locator('.mini-site'), 'loop');
 await page.mouse.move(5, 5);
 
 // 2) 예시로 시작 → 디자인 탭
@@ -91,17 +94,17 @@ await page.waitForSelector('.trio-thumbs .thumb', { timeout: 30000 });
 // 지금 고른 디자인이 세 안에 없으면 첫 카드를 골라 둠
 if (!(await page.locator('.trio-thumbs .thumb[aria-pressed="true"]').count())) await page.locator('.trio-thumbs .thumb').first().click();
 await page.waitForTimeout(800);
-await judge('디자인 탭 · 지금 고른 디자인 카드', page.locator('.trio-thumbs .thumb[aria-pressed="true"] .thumb-site'), 'iframe.is-live', false);
+await judge('디자인 탭 · 지금 고른 디자인 카드', page.locator('.trio-thumbs .thumb[aria-pressed="true"] .thumb-site'), 'fx');
 const other = page.locator('.trio-thumbs .thumb[aria-pressed="false"]').first();
 await other.hover();
-await judge('디자인 탭 · 다른 카드에 마우스', other.locator('.thumb-site'), 'iframe.is-live', false);
+await judge('디자인 탭 · 다른 카드에 마우스(본문 둘러보기)', other.locator('.thumb-site'), 'tour');
 await page.mouse.move(5, 5);
 const big = page.getByRole('button', { name: /크게 비교/ });
 if (await big.count()) {
   await big.first().click();
   await page.waitForSelector('.trio-big .thumb-site', { timeout: 20000 });
   // 세 안이 한꺼번에 들어오므로 셋을 한 장에 담아 잼
-  await judge('크게 비교 · 세 안', page.locator('.trio-big'), 'iframe.is-live', false);
+  await judge('크게 비교 · 세 안', page.locator('.trio-big'), 'fx');
   const lives = page.locator('.trio-big iframe.is-live');
   for (let i = 0; i < await lives.count(); i++) { const st = await fxIn(await lives.nth(i).elementHandle()); put(`크게 비교 · ${i + 1}번째 안 효과`, !!st && !st.noFx && st.on.some((x) => /:on/.test(x)), JSON.stringify(st)); }
   await page.keyboard.press('Escape');
