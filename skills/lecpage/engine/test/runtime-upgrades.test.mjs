@@ -184,7 +184,8 @@ test('pages: robots meta, poster, nav split, console and screen controls', () =>
   // poster
   const ctx = { bp: r.blueprint, design: r.design, live: true, fontLinks: themeCSS(r.design).fontLinks, themeColor: '#fff', hasFx: false, ogImage: '' };
   const poster = renderPoster(ctx);
-  assert.match(poster, /noindex, nofollow/); assert.match(poster, /data-qr-self/); assert.match(poster, /강사만/); assert.match(poster, /data-qr-page="console.html"/);
+  assert.match(poster, /noindex, nofollow/); assert.match(poster, /data-qr-self/);
+  assert.ok(!/console\.html|강사만|data-qr-page/.test(poster), '참가자 손에 가는 안내문에는 강사 화면 주소·QR이 없음');
   assert.match(poster, new RegExp(r.blueprint.live.code)); assert.match(poster, /Wi-Fi/); assert.match(poster, /assets\/lecpage\.js/);
   assert.ok(!/\son[a-z]+="/i.test(poster));
   const offline = renderPoster({ ...ctx, live: false });
