@@ -114,7 +114,7 @@ export function Demo() {
             <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>공개하기</h1><p>실제로는 처음 한 번만 올릴 곳을 연결해요. 고친 뒤 다시 올려도 주소는 그대로예요.</p></div></div>
             {pub !== 'done' ? (
               <section class="demo-pub">
-                <p><b>누가 볼 수 있나요?</b> 주소를 받은 사람만 <span class="small muted">기본값이에요. 암호를 걸거나 누구나 보게 할 수도 있어요.</span></p>
+                <p><b>공개 범위</b> 주소를 받은 사람만 <span class="small muted">기본값이에요. 암호를 걸거나 누구나 보게 할 수도 있어요.</span></p>
                 <div class="make-bar"><button class={`btn btn-primary btn-lg${pub ? '' : ' nudge'}`} disabled={!!pub} onClick={publish}>{pub ? '올리는 중…' : '공개하기'}</button></div>
                 {pub === 'busy' && <div class="demo-progress" role="status"><Progress pct={pct} /><span class="small muted">사이트를 올리는 흉내를 내고 있어요.</span></div>}
               </section>

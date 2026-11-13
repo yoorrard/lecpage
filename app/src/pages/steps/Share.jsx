@@ -298,7 +298,7 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
       {short
         ? <p class="small">참가자가 직접 칠 때 알려 주세요. QR과 [주소 복사]는 원래 주소라서 짧은 주소가 막힌 곳에서도 열려요.</p>
         : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
-      {short && linkOnly && <p class="small">짧은 주소는 누구나 짐작해 넣어 볼 수 있어요. 참가자만 봐야 하면 [누가 볼 수 있나요?]에서 암호를 거세요.</p>}
+      {short && linkOnly && <p class="small">짧은 주소는 누구나 짐작해 넣어 볼 수 있어요. 참가자만 봐야 하면 [공개 범위]에서 암호를 거세요.</p>}
       {stale && <p class="small short-stale"><span>안내문과 발표 화면에는 다시 올려야 {short ? '나와요' : '빠져요'}.</span> <button type="button" class="btn btn-sm" disabled={!!pubBusy} onClick={onRepublish}>다시 올리기</button></p>}
       {err && <p class="small err" role="alert">{err}</p>}
       {open && <div class="short-more">
