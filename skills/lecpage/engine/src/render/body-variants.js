@@ -6,6 +6,19 @@ import { inlineMd } from './markdown.js';
 
 const REST = /쉬는|휴식|점심|식사|break|lunch/i;
 /** 제목의 첫 글자(모티프 '큰 글자' 가족이 씀) */
+/**
+ * 도식 가운데 동그라미에 넣을 짧은 줄들: 낱말을 한 줄 6글자 안팎으로 묶어 3줄까지(첫 글자 하나만 남기지 않음).
+ * 넘치면 셋째 줄 끝에 …(제목 전체는 섹션 제목·첫 화면에 그대로 있음)
+ */
+export function centerLines(t, per = 6, max = 3) {
+  const lines = [];
+  for (const w of String(t || '').trim().split(/\s+/).filter(Boolean)) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && [...last.replace(/\s/g, '')].length + [...w].length <= per) lines[lines.length - 1] = `${last} ${w}`; else lines.push(w);
+  }
+  if (lines.length > max) { lines.length = max; lines[max - 1] += '…'; }
+  return lines;
+}
 export const firstGlyph = (t) => { const s = String(t || '').trim(), lat = /^[A-Za-z0-9]{2,}/.exec(s); return lat ? lat[0].slice(0, 2) : ([...s].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || ''); };
 
 export function bodyVariants(H) {
@@ -158,7 +171,7 @@ export function bodyVariants(H) {
     /* 사전 두 단: 낱말 굵게, 풀이는 들여쓰기 */
     dict: (s) => `<dl class="lp-dict">${s.items.map((i) => `<div><dt>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl>`,
     /* 낱말 그물: 연수 제목(첫 줄)을 가운데 두고 낱말이 둘레에 놓인 도식(꾸밈) + 옆에 낱말과 풀이. 도식의 번호와 목록 번호가 같음 */
-    web: (s, ctx) => { const c = String(ctx.bp.meta.title || '').split(/\n|[,·:]\s/)[0].replace(/[,.·:]+$/, '').trim(); /* 제목의 앞 토막(줄바꿈·쉼표 앞) */ return `<div class="lp-gw" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-gw-art" aria-hidden="true">${webSvg(s.items.length)}<span class="lp-gw-c">${esc([...c].length <= 12 ? c : firstGlyph(c))}</span>${s.items.map((i, n) => { const a = (n / s.items.length) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-gw-n" data-node style="--x:${(50 + Math.cos(a) * 38).toFixed(1)}%;--y:${(50 + Math.sin(a) * 38).toFixed(1)}%"><b>${n + 1}</b>${esc([...i.term].length > 9 ? [...i.term].slice(0, 8).join('') + '…' : i.term)}</span>`; }).join('')}</div><dl class="lp-gw-list">${s.items.map((i, n) => `<div><dt><span class="lp-gw-k" aria-hidden="true">${n + 1}</span>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl></div>`; },
+    web: (s, ctx) => { const c = String(ctx.bp.meta.title || '').split(/\n|[,·:]\s/)[0].replace(/[,.·:]+$/, '').trim(); /* 제목의 앞 토막(줄바꿈·쉼표 앞) */ return `<div class="lp-gw" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-gw-art" aria-hidden="true">${webSvg(s.items.length)}<span class="lp-gw-c">${centerLines(c).map(esc).join('<br>')}</span>${s.items.map((i, n) => { const a = (n / s.items.length) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-gw-n" data-node style="--x:${(50 + Math.cos(a) * 38).toFixed(1)}%;--y:${(50 + Math.sin(a) * 38).toFixed(1)}%"><b>${n + 1}</b>${esc([...i.term].length > 9 ? [...i.term].slice(0, 8).join('') + '…' : i.term)}</span>`; }).join('')}</div><dl class="lp-gw-list">${s.items.map((i, n) => `<div><dt><span class="lp-gw-k" aria-hidden="true">${n + 1}</span>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl></div>`; },
   };
 
   // ── 절차 ─────────────────────────────────────────────────

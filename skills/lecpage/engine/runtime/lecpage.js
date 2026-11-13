@@ -244,12 +244,17 @@
 
   /* ── 복사·프롬프트 ─────────────────────── */
   function initPrompts() {
+    // 글 상자는 글이 다 보이는 높이: CSS field-sizing을 모르는 브라우저는 폭이 바뀔 때(처음 보일 때 포함)만 글 높이에 맞춤
+    var sized = window.CSS && CSS.supports && CSS.supports('field-sizing', 'content');
+    var fit = function (ta) { if (sized || !ta.offsetWidth) return; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    var ro = !sized && window.ResizeObserver ? new ResizeObserver(function (es) { es.forEach(function (e) { var w = Math.round(e.contentRect.width); if (w && w !== e.target._lpw) { e.target._lpw = w; fit(e.target); } }); }) : null;
     $$('[data-prompt]').forEach(function (ta) {
       var k = 'prompt:' + ta.getAttribute('data-prompt'), orig = ta.value, saved = store.get(k, null);
       var restore = ta.parentNode.querySelector('[data-restore]');
       if (saved !== null && saved !== orig) { ta.value = saved; if (restore) restore.hidden = false; }
-      ta.addEventListener('input', function () { store.set(k, ta.value); if (restore) restore.hidden = ta.value === orig; });
-      if (restore) restore.addEventListener('click', function () { ta.value = orig; store.del(k); restore.hidden = true; toast('원문으로 되돌렸어요.'); });
+      if (ro) ro.observe(ta);
+      ta.addEventListener('input', function () { store.set(k, ta.value); if (restore) restore.hidden = ta.value === orig; fit(ta); });
+      if (restore) restore.addEventListener('click', function () { ta.value = orig; store.del(k); restore.hidden = true; fit(ta); toast('원문으로 되돌렸어요.'); });
     });
     doc.addEventListener('click', function (e) {
       var b = e.target.closest && e.target.closest('[data-copy]');

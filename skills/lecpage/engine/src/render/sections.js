@@ -367,6 +367,18 @@ function deck(s, ctx) {
 }
 
 // ── 실습 ─────────────────────────────────────────────────
+/**
+ * 프롬프트 한 상자: 이름 · 복사 · 고쳐 쓰는 글 상자. 글 상자는 처음부터 글이 다 보이는 높이(줄 수는 휴대폰 폭으로 어림하고,
+ * 지원하는 브라우저는 CSS field-sizing으로 글만큼, 그 밖은 lecpage.js가 맞춤). 잘린 프롬프트를 따라 쓰지 않게
+ */
+export function promptRows(text) {
+  return Math.min(16, Math.max(2, String(text || '').split('\n').reduce((a, l) => a + Math.max(1, Math.ceil([...l].length / 21)), 0)));
+}
+function promptBox(p, key, k, ctx, extra = '') {
+  return `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${extra}<textarea class="lp-prompt-text" data-prompt="${esc(key)}" rows="${promptRows(p.text)}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`;
+}
+/** 실습의 '막히면·주의' 메모: 따라 하다 막힌 사람이 바로 찾게 옅은 바탕 상자로(한쪽 색 띠는 쓰지 않음) */
+const helpNote = (t) => `<div class="lp-st-help" role="note"><b>${icon('hand')}<span>도움말</span></b><p>${br(t)}</p></div>`;
 function stations(s, ctx) {
   const n = s.items.length;
   const side = `<aside class="lp-st-side"><nav aria-label="실습 목차"><ol>${s.items.map((st, i) => `<li><a href="#st-${esc(st.id)}" data-st-link="${esc(st.id)}"><span class="lp-st-n">${pad2(i + 1)}</span><span class="lp-st-name">${esc(st.name)}</span><span class="lp-st-ck" aria-hidden="true"></span></a></li>`).join('')}</ol></nav>
@@ -375,11 +387,12 @@ function stations(s, ctx) {
     const steps = st.steps.length ? `<ol class="lp-steps">${st.steps.map((x) => `<li>${br(x)}</li>`).join('')}</ol>` : '';
     const links = st.links.length ? `<div class="lp-st-links">${st.links.map((l) => `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(l.url)}>${esc(l.label || host(l.url))}${icon('external')}</a>`).join('')}</div>` : '';
     const imgs = st.images.length ? `<details class="lp-st-images"><summary>화면 안내 보기 · ${st.images.length}장</summary><div class="lp-st-gallery">${st.images.map((im, k) => `<figure><a href="${esc(im.src)}" target="_blank" rel="noopener"><img src="${esc(im.src)}" alt="${esc(im.caption || `${st.name} 화면 ${k + 1}`)}" loading="lazy"></a>${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div></details>` : '';
-    const prompts = st.prompts.length ? `<div class="lp-prompts"><h4>프롬프트</h4>${st.prompts.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div><textarea class="lp-prompt-text" data-prompt="${esc(st.id)}-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`).join('')}</div>` : '';
+    // 프롬프트가 하나이고 이름이 따로 없으면 '프롬프트' 머리를 두 번 쓰지 않음
+    const prompts = st.prompts.length ? `<div class="lp-prompts">${st.prompts.length > 1 || (st.prompts[0].title && st.prompts[0].title !== '프롬프트') ? '<h4>프롬프트</h4>' : ''}${st.prompts.map((p, k) => promptBox(p, `${st.id}-${k}`, k, ctx)).join('')}</div>` : '';
     const src = sourceLine(st.source, ctx);
     return `<article class="lp-st" id="st-${esc(st.id)}" data-st="${esc(st.id)}" aria-labelledby="st-${esc(st.id)}-h">
 <header class="lp-st-h"><span class="lp-st-big" aria-hidden="true">${pad2(i + 1)}</span><div>${st.tag ? `<span class="lp-st-tag">${esc(st.tag)}</span>` : ''}<h3 id="st-${esc(st.id)}-h">${esc(st.title)}</h3>${st.desc ? `<p>${br(st.desc)}</p>` : ''}${st.minutes ? `<small>${icon('clock')} 약 ${st.minutes}분</small>` : ''}</div></header>
-${links}${steps}${st.note ? `<p class="lp-note">${br(st.note)}</p>` : ''}${imgs}${prompts}${src}
+${links}${steps}${st.note ? helpNote(st.note) : ''}${imgs}${prompts}${src}
 <div class="lp-st-done">
   ${st.outcome ? `<p class="lp-outcome"><b>여기까지 됐나요?</b> ${br(st.outcome)}</p>` : ''}
   <div class="lp-st-actions"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false">${icon('check', 'lp-check-draw')}<span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden>${icon('hand')}<span>도움 요청</span></button></div>
@@ -406,7 +419,7 @@ function tools(s, ctx) {
 }
 
 function prompts(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<textarea class="lp-prompt-text" data-prompt="lib-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`).join('')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => promptBox(p, `lib-${k}`, k, ctx, p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '')).join('')}</div>`);
 }
 
 // ── 실시간 참여 ───────────────────────────────────────────
@@ -513,7 +526,7 @@ function survey(s, ctx) {
   }
   return wrap(s, ctx, `<div class="lp-survey">
 <div>${title}${lead}
-${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note">설문 주소가 아직 없어요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
+${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면 설문 열기 단추와 QR이 생겨요. 참가자 화면에는 이 칸이 보이지 않아요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
 ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label="설문 QR 코드"></div>` : ''}</div>`);
 }
 

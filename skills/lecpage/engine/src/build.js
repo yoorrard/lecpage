@@ -72,7 +72,11 @@ export function build(input, opts = {}) {
   const themeName = design.theme && design.theme !== 'preset' ? design.theme : preset.theme;
   const tok = themeTokens(preset, themeName === 'dark' ? 'dark' : 'light', { accent: design.accent });
   const effectIds = design.motion > 0 || design.graphic ? collectEffects(design, bp) : [];
-  const ctx = { bp, design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
+  // 빈 설문 칸(주소도, 사이트 안에서 받을 문항도 없음)은 참가자 화면에 싣지 않음(차례·바닥글 메뉴에서도 빠짐).
+  // 강사 미리보기(opts.preview)에서는 '채울 곳'으로 남겨 무엇을 넣으면 되는지 보임
+  const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
+  const view = opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) };
+  const ctx = { bp: view, design, live, preview: !!opts.preview, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
   files['index.html'] = renderIndex(ctx);

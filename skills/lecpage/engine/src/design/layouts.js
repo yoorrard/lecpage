@@ -195,7 +195,7 @@ const FITS = {
   'sessions.map': (s) => n(s) >= 2 && n(s) <= 10, 'faq.index': (s) => n(s) >= 2, 'faq.twocol': (s) => n(s) <= 10,
   'glossary.web': (s) => n(s) >= 3 && n(s) <= 8, 'procedure.flow': (s) => n(s) >= 2 && n(s) <= 8, 'discuss.bigq': (s) => n(s) <= 6,
   'table.compare': (s) => n(s, 'head') >= 3 && n(s, 'head') <= 5 && n(s, 'rows') <= 10, 'table.rowcards': (s) => n(s, 'head') >= 2 && n(s, 'head') <= 6,
-  'materials.shelf': (s) => n(s) >= 1 && n(s) <= 10, 'deck.rail': (s) => n(s, 'slides') >= 3, 'cases.notes': (s) => n(s) <= 8,
+  'materials.shelf': (s) => n(s) >= 2 && n(s) <= 10, 'materials.pile': (s) => n(s) >= 2 && n(s) <= 8, // 한 장뿐이면 더미·책장이 아니라 빈 화면 'deck.rail': (s) => n(s, 'slides') >= 3, 'cases.notes': (s) => n(s) <= 8,
 };
 /**
  * 교재 구성의 흐름(설계도 structure.flow, decide/structure.js)이 주인공으로 삼는 칸: 프리셋 계획이 그 칸에 기본(글) 배치를 골랐을 때만

@@ -573,6 +573,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-fqi-item h3 .lp-fqi-n{font-size:var(--fs-sm)}
 .lp-fqi-a{display:grid;gap:var(--sp-3);max-width:var(--measure);color:var(--muted-foreground)}
 @media (min-width:900px){.lp-fqi{grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:clamp(32px,6vw,96px)}.lp-fqi-nav{position:sticky;top:96px}}
+@media (max-width:899.98px){.lp-fqi-nav{display:none}} /* 한 단에서는 바로 아래에 같은 질문이 다 펼쳐지므로 색인을 되풀이하지 않음(휴대폰 길이) */
 
 /*@v:glossary.cards*/
 /* 용어 · 낱말 카드: 큰 첫 글자가 뒤에 깔린 카드 */

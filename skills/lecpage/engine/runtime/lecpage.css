@@ -971,7 +971,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-diag-list li[data-state="ok"] .lp-diag-dot{background:var(--success)}
 .lp-diag-list li[data-state="fail"] .lp-diag-dot{background:var(--danger)}
 .lp-diag-list li[data-state="wait"] .lp-diag-dot{background:var(--warning);animation:lp-blink 1s infinite}
-.lp-diag-state{font-size:var(--fs-xs)}
+.lp-diag-state{font-size:var(--fs-xs);white-space:nowrap}
+@media (max-width:480px){.lp-diag-list li{grid-template-columns:auto minmax(0,1fr) auto;row-gap:0}.lp-diag-list small{grid-column:2;grid-row:2}.lp-diag-state{grid-column:3;grid-row:1}}
 @keyframes lp-blink{50%{opacity:.3}}
 
 /* 교재 뷰어 */
@@ -1093,7 +1094,11 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-prompt-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .lp-prompt-h b{font-weight:650}
 .lp-prompt-h span{display:inline-flex;gap:8px;align-items:center}
-.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);padding:14px 16px;font-family:var(--font-mono);font-size:.9375rem;line-height:1.7}
+.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);color:var(--foreground);padding:14px 16px;font-family:var(--font-sans);font-size:1rem;line-height:1.7;field-sizing:content;min-height:calc(2lh + 30px)}
+.lp-st-help{display:grid;gap:6px;max-width:var(--measure);padding:var(--sp-4) var(--sp-5);border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);font-size:var(--fs-sm)}
+.lp-st-help b{display:inline-flex;gap:6px;align-items:center;color:var(--primary);font-weight:700;white-space:nowrap}
+.lp-st-help p{color:var(--foreground)}
+.lp-todo{padding:var(--sp-3) var(--sp-4);border:1.5px dashed var(--rule-c);border-radius:var(--radius-sm)}
 .lp-prompt-text:focus{border-color:var(--ring);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
 .lp-prompt-lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:var(--sp-7) var(--sp-6)}
 .lp-prompt-lib .lp-tags{margin-top:-4px}
@@ -1697,6 +1702,8 @@ html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 30px + env(sa
   .lp-brand{min-width:0;flex:1;max-width:none}
   .lp-brand span{overflow:hidden;text-overflow:ellipsis}
   .lp-nav-act .lp-icon-btn{width:44px;height:44px}
+  .lp-lite-btn{width:44px;padding:0} /* 휴대폰: 그림 단추로(글은 화면 낭독기에만) → 연수 이름이 덜 잘림 */
+  .lp-lite-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lp-sheet{width:100%;max-width:100%;margin:auto 0 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:88vh;padding-bottom:env(safe-area-inset-bottom,0px)}
   .lp-sheet[open]{animation:lp-sheet-up var(--dur-3) var(--ease-out)}
   .lp-now-in{gap:8px}
