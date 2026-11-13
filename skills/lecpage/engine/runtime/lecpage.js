@@ -439,8 +439,8 @@
       if (lvd && DATA.live && window.LecLive) {
         try {
           var lv = LecLive.create(DATA.live);
-          lv.connect().then(function (r) { lvd.textContent = '실시간 연결 방식: ' + ({ realtime: '실시간(웹소켓)', polling: '새로 읽기(5~10초)', local: '이 기기 안에서만' }[r && r.mode] || (r && r.mode) || '알 수 없음'); }, function (e) { lvd.textContent = '실시간 서버에 연결하지 못했어요: ' + (e && e.message || e); });
-        } catch (e) { lvd.textContent = '실시간 서버에 연결하지 못했어요.'; }
+          lv.connect().then(function (r) { lvd.textContent = '참여 기능 연결 방식: ' + ({ realtime: '실시간', polling: '천천히 묻기(이 망이 웹소켓을 막음)', local: '이 기기 안에서만' }[r && r.mode] || (r && r.mode) || '알 수 없음'); }, function (e) { lvd.textContent = '참여 기능 서버에 연결하지 못했어요: ' + (e && e.message || e); });
+        } catch (e) { lvd.textContent = '참여 기능 서버에 연결하지 못했어요.'; }
       }
     });
   }
@@ -635,9 +635,30 @@
     function liveErr(err, dflt) { return err && /^(locked|poll_closed|rate_limited|too_long|hidden|reserved_nickname|uploads_disabled)$/.test(err.code) && err.message ? err.message : dflt; }
     // 연결이 끊긴 동안 쌓아 둔 글이 나중에 거절되면(잠금·닫힌 투표 등) 조용히 사라지지 않게 알림
     if (conn.on) conn.on('error', function (err, op) { if (op && err && err.status && err.status < 500) toast(liveErr(err, '보내지 못한 기록이 있어요. 다시 해 주세요.')); });
-    function setStatus(s) { if (dot) { dot.setAttribute('data-state', s); dot.title = { live: '실시간 연결됨', polling: '새로 읽는 중(느린 연결)', offline: '연결 끊김', connecting: '연결 중', local: '이 기기 안에서만' }[s] || s; } }
+    function setStatus(s) {
+      if (dot) { dot.setAttribute('data-state', s); dot.title = { live: '참여 기능 연결됨', polling: '연결됨(조금 늦게 보여요)', offline: '연결 끊김', connecting: '연결 중', local: '이 기기 안에서만' }[s] || s; }
+      // 참여 기능 서버에 닿지 않으면(처음부터 못 이었거나 20초 넘게 끊김) 참여 칸마다 차분한 한 줄. 교재·실습·프롬프트 복사는 그대로
+      clearTimeout(downT);
+      if (s === 'offline') downT = setTimeout(function () { setDown(true); }, live.ready ? 20000 : 0);
+      else if (s === 'live' || s === 'polling' || s === 'local') setDown(false);
+    }
+    var down = false, downT = 0;
+    var DOWN = '참여 기능 서버에 지금 닿지 않아요. 교재·실습·프롬프트는 그대로 쓸 수 있어요. 질문은 손을 들어 해 주세요.';
+    function setDown(on) {
+      if (on === down) return; down = on;
+      root.classList.toggle('lp-live-down', on);
+      $$('[data-live-down]').forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+      if (!on) return;
+      [$('[data-qa]'), $('[data-board]'), $('[data-poll]')].concat($$('[data-survey]')).forEach(function (box) {
+        if (!box || !box.parentNode) return;
+        var n = el('p', 'lp-note lp-live-down', DOWN); n.setAttribute('data-live-down', ''); n.setAttribute('role', 'status');
+        box.parentNode.insertBefore(n, box);
+      });
+    }
     setStatus('connecting');
     function ensureJoin() {
+      // 서버에 닿지 않는 동안 처음 참여하려 하면 빈 창을 띄우지 않고 그 사실만(이미 참여했으면 보낼 글은 연결되면 보냄)
+      if (down && !(me && me.token)) { toast('참여 기능 서버에 지금 닿지 않아요. 교재와 실습은 그대로 쓸 수 있어요.'); return Promise.reject(new Error('cancel')); }
       if (me && me.token) return Promise.resolve(me);
       var dlg = $('[data-join-dialog]');
       return new Promise(function (resolve, reject) {
@@ -824,7 +845,7 @@
     var hd = $('[data-help-dialog]'), hf = hd && $('[data-help-form]', hd);
     function sendHelp(station, seat, message) {
       store.set('seat', seat);
-      return conn.add('help', { station: station, seat: seat.slice(0, 20), nickname: me.nickname, message: message }).then(function () { toast('도움을 요청했어요. 곧 갈게요.'); if (live.ready && station) live.progress(station, 'stuck'); }, function (err) { toast('보내지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
+      return conn.add('help', { station: station, seat: seat.slice(0, 20), nickname: me.nickname, message: message }).then(function () { toast(down ? '연결되면 도움 요청을 보내요. 급하면 손을 들어 알려 주세요.' : '도움을 요청했어요. 곧 갈게요.'); if (live.ready && station) live.progress(station, 'stuck'); }, function (err) { toast('보내지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
     }
     live.help = function (stationId) {
       var opener = doc.activeElement;
@@ -1027,10 +1048,17 @@
     conn.connect().then(function (r) {
       live.ready = true; setStatus(r && r.mode === 'polling' ? 'polling' : r && r.mode === 'local' ? 'local' : 'live');
       conn.subscribe(onEvent);
-      if (LecLive.on) LecLive.on('status', function (s) { setStatus(s === 'connecting' ? 'connecting' : s); });
+      if (conn.on) conn.on('status', function (s) { setStatus(s); });
       loadAll();
       if (stApi && me) live.progress(stApi.current(), stApi.done().indexOf(stApi.current()) >= 0 ? 'done' : 'doing');
-    }, function () { setStatus('offline'); toast('실시간 서버에 연결하지 못했어요. 페이지는 그대로 쓸 수 있어요.'); });
+    }, function () {
+      setStatus('offline');
+      // 서버가 되살아나면 core가 차츰 길게 다시 이어 봄: 이어지면 한 줄을 거두고 참여 칸을 채움
+      if (conn.on) conn.on('status', function (s) {
+        setStatus(s);
+        if ((s === 'live' || s === 'polling') && !live.ready) { live.ready = true; conn.subscribe(onEvent); loadAll(); }
+      });
+    });
   }
 
   /* ── 인쇄용 QR 안내문 ─────────────────── */

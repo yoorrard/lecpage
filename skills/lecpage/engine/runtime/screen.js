@@ -275,7 +275,7 @@
   var polls = []; (BP.sections || []).forEach(function (s) { if (s.type === 'poll' && s.items) polls = polls.concat(s.items); });
   // 연결 상태
   var connEl = $('[data-conn]'), connTx = $('[data-conn-text]');
-  function setConn(s) { if (!connEl) return; var lc = DATA.live.provider === 'local'; connEl.setAttribute('data-state', lc && s === 'live' ? 'local' : s); connTx.textContent = { connecting: '연결하는 중…', live: lc ? '리허설' : '연결됨', polling: '연결됨(느린 연결)', offline: '연결이 끊겼어요' }[s] || s; }
+  function setConn(s) { if (!connEl) return; var lc = DATA.live.provider === 'local'; connEl.setAttribute('data-state', lc && s === 'live' ? 'local' : s); connTx.textContent = { connecting: '연결하는 중…', live: lc ? '리허설' : '연결됨', polling: '연결됨(천천히 묻는 중)', offline: '연결이 끊겼어요 · 다시 잇는 중' }[s] || s; }
   conn.on('status', setConn);
   // 열린 투표: 설계도 문항, 없으면 강사 화면에서 바로 띄운 즉석 투표(polls 모음)
   function openPoll() {

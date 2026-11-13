@@ -10,6 +10,8 @@
  *  - files: the bucket is private; posts carry a Storage path and the client asks for 1-hour signed URLs (re-signed
  *    by a full resync every 45 minutes). The console deletes trashed files (removed posts, purge, retention).
  *  - fallback: polling the snapshot every pollMs (default 7 s) when the realtime socket cannot connect.
+ *  - 라이브러리 주소(cdn.jsdelivr.net)가 막힌 망: supabase-js 없이 같은 RPC·Storage REST를 fetch로 부르는 작은 클라이언트(lite)로
+ *    묻기만 함(실시간 없음). 참여 기능은 그대로 됨.
  * config: { url: 'https://<ref>.supabase.co', anonKey, code, pollMs? }
  */
 (function (root) {
@@ -22,6 +24,41 @@
   var LIB_SRI = 'sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK';
   var BUCKET = 'lec-uploads';
 
+  /** supabase-js를 불러오지 못했을 때: rpc·파일(서명 주소·올리기·지우기)만 REST로. 머리글은 supabase-js와 같게(apikey·Authorization·x-lec-code) */
+  function lite(url, key, code) {
+    var base = String(url || '').replace(/\/+$/, '');
+    function hdr(extra) { return U.assign({ apikey: key, Authorization: 'Bearer ' + key, 'x-lec-code': code }, extra || {}); }
+    function call(path, init) {
+      return fetch(base + path, U.assign({ cache: 'no-store', credentials: 'omit', mode: 'cors' }, init)).then(function (res) {
+        return res.text().then(function (t) {
+          var d = null; try { d = t ? JSON.parse(t) : null; } catch (e) { d = t; }
+          if (res.ok) return { data: d, error: null, status: res.status };
+          return { data: null, error: d && typeof d === 'object' ? U.assign({ statusCode: res.status }, d) : { message: String(d || res.status), statusCode: res.status }, status: res.status };
+        });
+      });
+    }
+    var enc = function (p) { return String(p).split('/').map(encodeURIComponent).join('/'); };
+    return {
+      lite: true,
+      rpc: function (name, args) { return call('/rest/v1/rpc/' + name, { method: 'POST', headers: hdr({ 'Content-Type': 'application/json', Accept: 'application/json' }), body: JSON.stringify(args || {}) }); },
+      storage: {
+        from: function (bucket) {
+          return {
+            createSignedUrls: function (paths, exp) {
+              return call('/storage/v1/object/sign/' + bucket, { method: 'POST', headers: hdr({ 'Content-Type': 'application/json' }), body: JSON.stringify({ expiresIn: exp, paths: paths }) }).then(function (r) {
+                if (r.error) return r;
+                return { data: (r.data || []).map(function (x) { return x && U.assign({}, x, { signedUrl: x.signedURL ? base + '/storage/v1' + x.signedURL : null }); }), error: null };
+              });
+            },
+            upload: function (path, file, o) { return call('/storage/v1/object/' + bucket + '/' + enc(path), { method: 'POST', headers: hdr({ 'Content-Type': (o && o.contentType) || 'application/octet-stream', 'cache-control': 'max-age=' + ((o && o.cacheControl) || 300), 'x-upsert': 'false' }), body: file }); },
+            remove: function (paths) { return call('/storage/v1/object/' + bucket, { method: 'DELETE', headers: hdr({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefixes: paths }) }); },
+          };
+        },
+      },
+      removeChannel: function () { }, removeAllChannels: function () { },
+    };
+  }
+
   L.register('supabase', function (config, ctx) {
     var code = U.normCode(config.code);
     var pollMs = Math.min(60000, Math.max(3000, Number(config.pollMs) || 7000));
@@ -29,7 +66,7 @@
     var a = { status: 'offline' };
     var sb = null, chan = null, admChan = null;
     var timers = {};
-    var realtimeOk = false, closed = true, pollErr = 0, emptyPolls = 0;
+    var realtimeOk = false, closed = true, pollErr = 0, emptyPolls = 0, every = pollMs;
     var reactBuf = {};
     var hint = { gap: 1500, last: 0, full: false }; // resync hints from ticks: min gap, doubled while they bring nothing
     var rx = null, rxAt = 0;                        // last reaction batch seen (lec_reactions)
@@ -102,6 +139,7 @@
       if (typeof p.rev === 'number' && p.rev > (Number(ctx.cursor()) || 0)) hintResync(false);
     }
     function join(topic, onLost) {
+      if (!sb || typeof sb.channel !== 'function') return Promise.resolve(null); // REST만(lite): 실시간 없이 묻기
       return new Promise(function (resolve) {
         var c = sb.channel(topic, { config: { broadcast: { self: false, ack: false }, private: false } });
         c.on('broadcast', { event: 'tick' }, function (m) { onTick(m && m.payload); });
@@ -177,7 +215,8 @@
         if (closed || realtimeOk) return;
         if (r && r.error) { pollErr++; if (pollErr >= 3) setStatus('offline'); }
         else { if (pollErr) setStatus('polling', 'polling'); pollErr = 0; emptyPolls = r && r.changes ? 0 : emptyPolls + 1; }
-        var ms = pollErr ? Math.min(60000, pollMs * Math.pow(2, pollErr)) : U.isHidden() ? Math.max(30000, pollMs * 3) : emptyPolls > 6 ? Math.min(pollMs * 2, 20000) : pollMs;
+        var ms = U.pollDelay ? U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, admin: !!ctx.adminKey() }) : pollErr ? Math.min(60000, pollMs * Math.pow(2, pollErr)) : U.isHidden() ? Math.max(30000, pollMs * 3) : emptyPolls > 6 ? Math.min(pollMs * 2, 20000) : pollMs;
+        every = ms;
         schedulePoll(U.jitter(ms, 0.15));
       });
     }
@@ -189,9 +228,10 @@
       closed = false;
       setStatus('connecting');
       if (!config.url || !config.anonKey) return Promise.reject(L.error('config', 'Supabase 주소와 anon 키가 필요해요.', { status: 400, retryable: false }));
-      return U.loadScript(LIB, 15000, { integrity: LIB_SRI }).then(function (ok) {
-        if (!ok || !root.supabase || !root.supabase.createClient) throw L.error('lib_failed', 'Supabase 라이브러리를 불러오지 못했어요(cdn.jsdelivr.net이 막혔는지 확인).', { status: 0 });
-        if (!sb) {
+      return U.loadScript(LIB, 10000, { integrity: LIB_SRI }).then(function (ok) {
+        // 라이브러리가 막히면(학교·회사 망의 CDN 차단) 실시간 없이 REST로 묻기. Supabase 주소 자체가 막혔으면 아래 첫 rpc가 가림
+        if (!ok || !root.supabase || !root.supabase.createClient) { if (!sb) sb = lite(config.url, config.anonKey, code); }
+        else if (!sb || sb.lite) {
           sb = root.supabase.createClient(config.url, config.anonKey, {
             auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
             global: { headers: { 'x-lec-code': code } },
@@ -220,6 +260,7 @@
       chan = admChan = null;
       setStatus('offline');
     };
+    a.netInfo = function () { return { transport: realtimeOk ? 'realtime' : 'poll', every: realtimeOk ? 0 : every, lib: sb && sb.lite ? 'rest' : 'sdk' }; };
     a.setAdmin = function (key) {
       if (!key && admChan) { try { sb.removeChannel(admChan); } catch (e) { /* ignore */ } admChan = null; }
       if (key) sweep();

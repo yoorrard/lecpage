@@ -117,7 +117,7 @@
         if (keyIn) { keyIn.select(); keyIn.focus(); }
         return;
       }
-      say('참여 기능 서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요. 계속 안 되면 접속 확인(check.html)을 열어 보세요.');
+      say('참여 기능 서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 해 주세요. 참가자 화면의 교재·실습은 그대로 열리니, 질문은 구두로 받아 주세요. 계속 안 되면 접속 확인(check.html)을 열어 보세요.');
     });
   }
   var logout = $('[data-logout]');
@@ -130,13 +130,51 @@
   var connEl = $('[data-conn]'), connTx = $('[data-conn-text]');
   function setConn(s) {
     if (!connEl) return;
-    var t = { idle: '들어가기 전', connecting: '연결하는 중…', live: LOCAL ? '리허설 · 이 브라우저에서만' : '연결됨 · 실시간', polling: '연결됨 · 5~10초마다 새로 읽기', offline: '연결이 끊겼어요 · 다시 잇는 중' }[s] || s;
+    var t = { idle: '들어가기 전', connecting: '연결하는 중…', live: LOCAL ? '리허설 · 이 브라우저에서만' : '연결됨 · 실시간', polling: '연결됨 · 천천히 묻는 중', offline: '연결이 끊겼어요 · 다시 잇는 중' }[s] || s;
     connEl.setAttribute('data-state', LOCAL && s === 'live' ? 'local' : s); if (connTx) connTx.textContent = t;
+  }
+
+  // ── 묻기 방식·할 일·전날 점검(맨 위 한 줄) ──
+  // 학교망에서 실시간 연결이 막히면 참가자 화면은 '긴 대기 묻기'(바뀌면 바로, 없으면 20초마다)나 간격 묻기로 바뀜. 강사가 무엇을 할지 한 줄로
+  function sec(ms) { return Math.max(1, Math.round((ms || 0) / 1000)) + '초'; }
+  function netWords(st, ni) {
+    var t = ni.transport, hint = ni.hint >= 10000 ? ' 오늘 서버가 붐벼 ' + sec(ni.hint) + ' 간격으로 늘렸어요.' : '';
+    if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.'];
+    if (st === 'offline') return ['연결이 끊겼어요 · 다시 잇는 중', '참가자 화면의 교재·실습·프롬프트는 그대로 열려요. 질문은 구두로 받고, 설문은 QR로 다른 설문지를 띄워도 돼요. 연결되면 쌓인 글이 들어와요.'];
+    if (t === 'ws' || t === 'realtime') return ['실시간 연결', ''];
+    if (t === 'sse') return ['실시간 연결(한쪽 방향)', ''];
+    if (t === 'long') return ['긴 대기 묻기 · 바뀌면 바로, 없으면 ' + (ni.wait || 20) + '초마다', '이 망이 실시간 연결을 막아 천천히 묻는 중이에요. 질문·투표가 몇 초 늦게 보여요. 그대로 써도 돼요.' + hint];
+    if (t === 'poll') return [(ni.every ? sec(ni.every) + '마다 묻기' : '간격 묻기'), '이 망이 실시간 연결을 막아 정해진 간격으로 물어요. 질문·투표가 조금 늦게 보여요. 그대로 써도 돼요.' + hint];
+    return ['연결됨', ''];
+  }
+  /** 접속 확인(check.html)이 이 기기에 남긴 마지막 결과 */
+  function lastCheck() { try { var v = JSON.parse(localStorage.getItem('lp-check:' + location.pathname.replace(/[^/]*$/, '')) || 'null'); return v && v.at ? v : null; } catch (e) { return null; } }
+  function paintNet() {
+    if (!C.net) return;
+    var st = conn ? conn.status : 'offline', ni = conn && conn.netInfo ? conn.netInfo() : {};
+    var w = netWords(st, ni), ck = lastCheck();
+    C.net.setAttribute('data-state', LOCAL ? 'local' : st === 'offline' ? 'offline' : ni.transport === 'long' || ni.transport === 'poll' ? 'polling' : 'live');
+    C.netWay.textContent = w[0]; C.netDo.textContent = w[1]; C.netDo.hidden = !w[1];
+    C.netCk.textContent = '';
+    if (ck) {
+      var d = new Date(ck.at), when = (d.getMonth() + 1) + '. ' + d.getDate() + '. ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      C.netCk.appendChild(doc.createTextNode('접속 확인 ' + when + ' · ' + (ck.verdict || '') + (ck.live ? ' · 참여 기능 ' + ck.live : '') + ' '));
+    } else C.netCk.appendChild(doc.createTextNode('연수 장소에서 접속 확인을 아직 하지 않았어요. 전날 그곳 Wi-Fi로 열어 보세요. '));
+    var a = el('a', '', ck ? '다시 확인' : '접속 확인 열기'); a.href = 'check.html'; a.target = '_blank'; a.rel = 'noopener'; C.netCk.appendChild(a);
+  }
+  function buildNet() {
+    C.net = el('div', 'lp-con-net'); C.net.setAttribute('role', 'status'); C.net.setAttribute('aria-label', '연결 상태');
+    var h = el('p', 'lp-con-net-h'); h.appendChild(el('b', '', '묻기 방식')); C.netWay = el('span'); h.appendChild(C.netWay); C.net.appendChild(h);
+    C.netDo = el('p', 'lp-con-net-do'); C.net.appendChild(C.netDo);
+    C.netCk = el('p', 'lp-con-net-ck'); C.net.appendChild(C.netCk);
+    return C.net;
   }
 
   function enter() {
     if (box) box.hidden = true; main.hidden = false; if (logout) logout.hidden = false;
     conn.on('status', setConn); setConn(conn.status === 'polling' ? 'polling' : conn.status === 'offline' ? 'offline' : 'live');
+    conn.on('status', function () { paintNet(); }); conn.on('net', function () { paintNet(); });
+    addEventListener('storage', function (e) { if (e.key && e.key.indexOf('lp-check:') === 0) paintNet(); }); // 다른 탭에서 접속 확인을 마치면
     build(); loadAll(); conn.subscribe(onEvent);
     // 보드 '먼저 확인'(board.moderation)·파일 끄기: 서버가 새 글을 숨긴 채·파일 없이 받도록 상태에 적어 둠(관리자만 바꿀 수 있음)
     var mod = MODERATE || null, nof = NOFILES ? false : null, ui0 = state.ui || {}, pol = {};
@@ -144,7 +182,7 @@
     if ((ui0.uploads === false ? false : null) !== nof) pol.uploads = nof;
     if (Object.keys(pol).length) conn.setState({ ui: pol }).catch(function () { });
     try { main.focus({ preventScroll: true }); } catch (e) { main.focus(); }
-    setInterval(function () { if (!doc.hidden) queue(); }, 30000); // '몇 분 전'을 새로
+    setInterval(function () { if (!doc.hidden) { queue(); paintNet(); } }, 30000); // '몇 분 전'·묻기 간격을 새로
   }
   function loadAll() {
     COLS.forEach(function (c) { conn.list(c, {}).then(function (a) { (a || []).forEach(function (d) { data[c][d.id] = d; }); queue(); }, function () { }); });
@@ -179,6 +217,7 @@
   function count(id, n) { var x = P[id]; if (!x) return; x.h.textContent = x.title; if (n != null) { var s = el('small', '', String(n)); x.h.appendChild(s); } }
   function build() {
     main.textContent = '';
+    main.appendChild(buildNet()); paintNet();
     C.strip = el('div', 'lp-con-strip'); C.strip.setAttribute('role', 'region'); C.strip.setAttribute('aria-label', '지금 상황'); main.appendChild(C.strip);
     var a = el('div', 'lp-con-col'), b = el('div', 'lp-con-col'); main.appendChild(a); main.appendChild(b);
     if (ON.qa) { panel('qa', '질문', 'qa', a); buildQA(); }
