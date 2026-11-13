@@ -70,8 +70,8 @@
 | 출석·제출만 모음, 40명 이하 | Google Sheets + Apps Script | 0원 | backends/apps-script |
 | **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
 | **skill(명령 가능)**, 인원과 상관없이 | **Cloudflare DO 중계**(강사가 할 일 2번: 가입·로그인 승인, 7일 멈춤 없음). `publish work --live`가 사이트와 함께 올림 | 0원(무료 한도 안) | `deploy/cloudflare.md` |
-| 100명 이하, 회원가입 가능(앱, 또는 Supabase를 이미 연결해 둔 skill) | Supabase(강사 소유, 서울 리전, 강사가 할 일 앱 약 12번·skill 3번) | 0원 | backends/supabase |
-| 100명 넘음, 또는 반응이 많음 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**. GitHub 계정도 필요) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
+| 80명 이하, 회원가입 가능(앱, 또는 Supabase를 이미 연결해 둔 skill) | Supabase(강사 소유, 서울 리전, 강사가 할 일 앱 약 12번·skill 3번) | 0원 | backends/supabase |
+| 80명 넘음, 또는 반응이 많음 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**. GitHub 계정도 필요) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
 | 서버·NAS·VPS·학교 서버가 있음 | node-server(Docker). 사이트도 같은 서버 | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 서버는 없지만 node-server를 쓰고 싶은 개발자 | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
 | 인터넷이 없거나 심하게 막힘 | node-server(강사 노트북, 교실 LAN) | 0원(+공유기) | `deploy/local-lan-classroom.md` |
@@ -111,8 +111,8 @@
 7. ★ **L07** 출석·제출처럼 **모으기만**(`realtime` 없음) + 40명 이하 → `sheets`.
 8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·도움 요청·진행 현황·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
 9. ★ **L08b** skill(basic 이상)인데 L07·L08·L09가 `sheets`·`supabase`를 낸다 → **강사가 할 일 수**(엔진 `TEACHER_STEPS`)로 다시 견줌: `cf-relay` 2번(가입·`wrangler login` 승인, 나머지는 `publish work --live`), Supabase 3번(가입·토큰·환경 변수), 시트 약 20번(Apps Script 붙여 넣기는 강사가). 이미 연결해 둔 곳은 0번. 같으면 7일 멈춤이 없는 `cf-relay`. 그래서 skill은 Supabase를 이미 연결해 둔 때만 L09로 갑니다. 앱(클릭만)은 L08·L09 그대로입니다(측정: 앱 밖 일 시트 약 23 · Supabase 약 12 · Cloudflare 버튼 6+GitHub 연결 허락 1. 앱 안내와 함께 바꿀 일).
-10. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
-11. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
+10. ★ **L09** 80명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
+11. ★ **L10** 그 밖(80명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
 
 실시간 백엔드도 skill이 직접 만듭니다. 강사는 로그인하거나 토큰을 환경 변수로 넣어 주기만 합니다: Cloudflare 중계는 `publish work --live`(사이트와 함께, 손으로 하려면 `backends/cloudflare/README.md` §2), Supabase는 `backends/supabase/README.md`의 "명령으로 한 번에". Sheets만 강사가 구글 계정에서 직접 붙여 넣습니다.
 
@@ -142,7 +142,7 @@ S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴�
 ### 3.3 공개 범위(access)
 - `link`(기본): 모든 페이지에 `noindex`, `robots.txt`는 `Disallow: /`. 주소·QR을 받은 사람만 들어옵니다. 접근 제어는 아닙니다.
 - `public`: 검색 허용(`robots.txt` `Allow: /`). 연수 날짜가 있으면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. `link`·`password`에는 넣지 않습니다.
-- `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다. QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
+- `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다(그 두 쪽에는 참여 기능 서버 주소·연수 코드·키를 싣지 않고, 접속 확인은 서버가 닿는지만 봄). QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
 - 강사용 파일(DESIGN.md·운영안내.md·lecpage.blueprint.json)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `<out>-강사용/`, 앱은 따로 내려받기).
 
 ### 3.4 skill이 올릴 때 (강사가 할 일을 가장 적게)
@@ -339,7 +339,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | **none** | — | — | 읽기 전용 연수 | — |
 | **local** | 참가자 기기 | — | 자기 진도 체크·기록 | 기기 바꾸면 사라짐 → 내려받기 버튼 |
 | **Google Sheets + Apps Script** | 강사 구글 계정 | 동시 실행 30/사용자, 실행당 6분, URL Fetch 2만/일 | **클릭만 하는 강사, 50명 안팎**, 질문·도움·진행·투표 | 학교 관리 계정은 "모든 사용자" 배포가 막힐 수 있음 ⚠️ → 개인 gmail 계정 / 파일 올리기는 드라이브에 남음 → 연수 뒤 직접 정리 |
-| **Supabase** | 강사 Supabase 계정(서울 리전 가능). skill이 Management API로 만들 수 있음 | 활성 프로젝트 2개, DB 500MB, 파일 1GB, 전송 5GB, 실시간 동시 200·초당 100·월 200만 메시지 | 100명 이하 대부분의 기능 | 7일 비활성 정지 → 연수 전 열기 / 메시지 폭주 → 반응 묶기. lecpage는 익명 로그인을 쓰지 않아 학교 IP 하나로도 막히지 않음. 키 이름은 publishable·secret(anon·service_role은 2026년 말 폐지 예고) |
+| **Supabase** | 강사 Supabase 계정(서울 리전 가능). skill이 Management API로 만들 수 있음 | 활성 프로젝트 2개, DB 500MB, 파일 1GB, 전송 5GB, 실시간 동시 200·초당 100·월 200만 메시지 | 80명 이하 대부분의 기능(글 하나에 받는 사람 수만큼 메시지가 나가 100명이면 초당 100건을 넘음. 틱 간격은 인원×25ms, 2~10초) | 7일 비활성 정지 → 연수 전 열기 / 메시지 폭주 → 반응 묶기. lecpage는 익명 로그인을 쓰지 않아 학교 IP 하나로도 막히지 않음. 키 이름은 publishable·secret(anon·service_role은 2026년 말 폐지 예고) |
 | **Cloudflare DO 중계(cf-relay)** | 강사 Cloudflare 계정. skill이 wrangler로 올리거나 Deploy 버튼(GitHub·GitLab 계정도 필요) | Workers 요청 10만/일(09:00 KST 초기화), DO 요청 10만/일·13,000GB-s/일·SQLite 5GB, 들어오는 WS 메시지 20개=요청 1개 | 큰 인원, 반응이 많은 연수, 여러 주 과정, WS 막힌 학교(SSE·새로 읽기) | 새로 읽기가 길게 돌면 요청 한도 → 간격 늘리기 / 한도 초과 시 오류 1027 → 다음 날 09시까지 |
 | **node-server(Docker)** | 강사·학교 서버 | 서버 성능만큼 | 학교 서버, NAS, VPS, 노트북 LAN, 국내 보관 | 서버 꺼지면 끝 → 연수 전 점검, 데이터 폴더 백업 |
 | Firebase(RTDB/Firestore) | 강사 구글 계정 | RTDB 동시 100, Firestore 읽기 5만/일; **Storage는 Blaze 필수** | (어댑터 없음) | lecpage 어댑터 미지원 → supabase 권장 |

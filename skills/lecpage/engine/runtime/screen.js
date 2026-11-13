@@ -367,7 +367,7 @@
         if (!words.length) cl.appendChild(el('p', 'lp-scr-pmeta', '아직 보여 줄 낱말이 없어요.'));
         mainBox.appendChild(cl);
       } else {
-        var tally = {}; list.forEach(function (a) { [].concat(a.value).forEach(function (v) { tally[v] = (tally[v] || 0) + 1; }); });
+        var tally = X.tally(list); // 응답자당 한 표(강사·참가자 화면과 같은 수)
         var opts = (p.options.length ? p.options : Object.keys(tally)).slice(0, 8), best = 0; opts.forEach(function (o) { best = Math.max(best, tally[o] || 0); });
         var bars = el('ol', 'lp-scr-bars');
         opts.forEach(function (o) {

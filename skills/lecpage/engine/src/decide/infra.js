@@ -37,7 +37,7 @@ export const BACKENDS = {
   local: { name_ko: '이 컴퓨터에서만 시험', cost: '0원', note_ko: '한 브라우저 안에서만 이어져요. 리허설·시연용이에요.' },
   sheets: { name_ko: '구글 시트', cost: '0원', note_ko: '기록이 강사의 구글 시트에 쌓여요. 5~10초마다 새로 읽어요.',
     atLimit_ko: '무료이고 멈추지 않아요. 한꺼번에 30명 넘게 보내면 조금 늦어져요.' },
-  supabase: { name_ko: 'Supabase', cost: '0원', note_ko: '강사의 무료 Supabase 프로젝트에 기록·파일을 함께 저장해요. 100명 안팎까지 알맞아요.',
+  supabase: { name_ko: 'Supabase', cost: '0원', note_ko: '강사의 무료 Supabase 프로젝트에 기록·파일을 함께 저장해요. 80명까지 알맞아요.',
     atLimit_ko: '무료는 7일 동안 안 쓰면 멈춰요. 연수 전날 한 번 열어 깨우면 되고, Pro로 바꾸면 멈추지 않아요.' },
   // 아래 셋은 앱의 '내 서버·Cloudflare' 탭(live.provider http)으로 연결합니다.
   cloudflare: { name_ko: '내 서버·Cloudflare', cost: '0원~월 $5', note_ko: '강사의 Cloudflare 계정에서 돌려요. 대기 중 연결에 요금이 없어 큰 행사에 알맞아요.',
@@ -202,14 +202,15 @@ export function decideInfra(input = {}) {
     reasons.push('구글 계정만 있으면 10분 안에 직접 연결할 수 있어요. 질문·도움 요청·진행 현황이 5~10초마다 새로 읽혀요(50명 안팎까지).');
     if (size > 30) warnings.push('Apps Script는 계정당 동시 실행이 30개라 한꺼번에 몰리면 조금 늦어질 수 있어요.');
     if (features.includes('reactions')) warnings.push('박수·좋아요 같은 반응은 시트 방식에서 몇 초 늦게 보여요.');
-  } else if (size <= 100) {
+  } else if (size <= 80) {
+    // 80명까지: 글 하나에 '틱' 메시지가 받는 사람 수만큼(80+강사 화면) 나가서 초당 100건 한도 안. 100명이면 한 번에 103건으로 넘음
     backend = 'supabase'; tier = 3;
     reasons.push(realtime ? '질문·진행 현황처럼 화면이 바로 바뀌는 기능이 있어 실시간 연결이 필요해요.' : '인원이 많아 구글 시트보다 Supabase가 안정적이에요.');
     reasons.push('참가자는 로그인 없이 들어와서, 한 학교 와이파이(공인 IP 하나)에서 모두 접속해도 막히지 않아요.');
     warnings.push('Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 전날 접속 확인(check.html)을 열어 깨워 두세요.');
   } else {
     backend = 'cloudflare'; tier = 4;
-    reasons.push('100명이 넘으면 Supabase 무료의 초당 메시지 한도(100건)에 금방 닿아요. Cloudflare는 대기 중 연결에 요금을 받지 않아요.');
+    reasons.push('80명이 넘으면 Supabase 무료의 초당 메시지 한도(100건)에 금방 닿아요. Cloudflare는 대기 중 연결에 요금을 받지 않아요.');
     if (size > 300) warnings.push('300명이 넘는 행사는 Cloudflare Workers 유료($5/월)를 켜 두세요. 한도를 넘어도 오류 대신 소액만 과금돼요.');
     if (realtime) warnings.push('질문·투표만 실시간으로 두고, 교재·실습 화면은 정적으로 둬요.');
   }

@@ -287,7 +287,7 @@ assets/slides/*.webp · assets/media/*
 - 쪽 머리·CSP는 `render/shell.js`(참가자 화면 `pages.js`와 보조 화면 `aux.js`가 같이 씀). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 배포=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사·발표 화면은 COOP(강사 화면이 연 발표 창을 다시 찾을 수 있게 같은 값).
 - 보조 화면은 같은 프리셋(theme.css·lecpage.css의 `data-*`)을 이어받고 `assets/aux.css`만 더 싣습니다(참가자 화면은 싣지 않음). 안내문은 A4 한 장 + 자리 카드 8장(고를 때), 강사 화면 주소·QR은 싣지 않음(참가자 손에 가는 종이). 쪽(`.lp-pst-page`)을 크기 기준(container)으로 cqw 단위라 미리보기와 인쇄가 같은 비율.
 - 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
-- `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
+- `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 대신 그 두 쪽의 사이트 정보(`lp-data`)에서는 참여 기능 서버 주소·연수 코드·Supabase 키를 빼고(`publicSiteData`), 접속 확인은 서버가 닿는지(`/api/health`)만 봅니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
 
 ## 7. 작업 규칙
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").

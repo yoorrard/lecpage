@@ -19,8 +19,11 @@
 --  * Uploads: PRIVATE Storage bucket `lec-uploads` (20 MB, images/pdf/mp3/mp4). Insert only for a path handed out
 --    by lec_upload_ticket(); read (signed URLs, 1 h) only while a visible post uses the file. Removed, purged and
 --    expired files go to lec_private.file_trash; the instructor console deletes them from Storage.
---  * Admin keys: at least 12 characters, no example values. Wrong keys are counted per (code, IP) and per IP; a
---    wrong key returns its error without raising (PostgREST response.status), so the count survives.
+--  * Admin keys: at least 12 characters, no example values. Wrong keys are counted per (code, IP) and per IP (the
+--    right-most X-Forwarded-For entry); a wrong key returns its error without raising (PostgREST response.status), so
+--    the count survives. After one accepted key the console gets a session token (lec_admin_session, 12 hours, only
+--    its SHA-256 is kept) and sends it instead of the key: the lockout applies to key attempts only, so a participant
+--    on the same school IP cannot lock out a console that is already open.
 -- ============================================================================
 
 create schema if not exists lec_private;
@@ -84,6 +87,14 @@ create table if not exists lec_private.rate (
   primary key (key, bucket)
 );
 create index if not exists lec_rate_win on lec_private.rate (win);
+
+create table if not exists lec_private.admin_sessions (
+  training_code text not null references lec_private.trainings (code) on delete cascade,
+  hash text not null,                     -- SHA-256 of the session token
+  akh text not null,                      -- the admin key hash it was issued for (a new key ends it)
+  exp timestamptz not null,
+  primary key (training_code, hash)
+);
 
 create table if not exists lec_private.upload_tickets (
   path text primary key,
@@ -296,7 +307,7 @@ returns text language sql stable set search_path = '' as $$
 $$;
 
 -- Client IP for soft per-IP limits: the right-most X-Forwarded-For entry (added by the proxy in front of the API;
--- the left-most one is whatever the client wrote). Admin-key throttling also counts the left-most entry.
+-- the left-most one is whatever the client wrote, so it is never counted: a forged entry could lock someone else out).
 create or replace function lec_private.req_ip()
 returns text language sql stable set search_path = '' as $$
   select nullif(btrim(reverse(split_part(reverse(coalesce(coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json ->> 'x-forwarded-for', '')), ',', 1))), '')
@@ -458,27 +469,32 @@ begin
 end $$;
 
 /* H4: admin key check for every admin RPC. null = ok; otherwise the error body to return.
-   Wrong keys are counted per (code, IP) — both ends of X-Forwarded-For — and per IP, in 10-minute windows.
-   While a counter is full every admin call answers 429, the right key too (no oracle). */
+   A session token (lps1.…) is checked first and never throttled or counted (unknown/expired → 401 session_expired).
+   Wrong keys are counted per (code, IP) and per IP (right-most X-Forwarded-For entry), in 10-minute windows.
+   While a counter is full every key attempt answers 429, the right key too (no oracle). */
 create or replace function lec_private.admin_check(p_code text, p_key text)
 returns jsonb language plpgsql set search_path = '' as $$
 declare
-  t lec_private.trainings; a text := coalesce(lec_private.req_ip(), '?'); b text := coalesce(lec_private.req_ip_first(), '?');
+  t lec_private.trainings; a text := coalesce(lec_private.req_ip(), '?');
 begin
-  if lec_private.full_win('af:' || p_code || '|' || a, 'authfail', 10, 600) or lec_private.full_win('af:' || p_code || '|' || b, 'authfail', 10, 600)
-     or lec_private.full_win('afip:' || b, 'authfail', 20, 600) then
+  if p_key ~ '^lps1\.[A-Za-z0-9_-]{43}$' then
+    t := lec_private.training(p_code);
+    if exists (select 1 from lec_private.admin_sessions x where x.training_code = t.code and x.hash = lec_private.hash(p_key) and x.exp > now() and x.akh = t.admin_hash) then
+      return null;
+    end if;
+    return lec_private.err(401, 'session_expired', '강사 화면을 다시 열어 관리자 키를 넣어 주세요.');
+  end if;
+  if lec_private.full_win('af:' || p_code || '|' || a, 'authfail', 10, 600) or lec_private.full_win('afip:' || a, 'authfail', 20, 600) then
     perform lec_private.fail(429, 'rate_limited', '관리자 키가 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.');
   end if;
   t := lec_private.training(p_code);
   if lec_private.is_admin(t, p_key) then return null; end if;
   if p_key is null or p_key = '' then return lec_private.err(401, 'admin_required', '관리자 키가 필요합니다.'); end if;
   perform lec_private.count_win('af:' || p_code || '|' || a, 'authfail', 600);
-  if b <> a then perform lec_private.count_win('af:' || p_code || '|' || b, 'authfail', 600); end if;
-  perform lec_private.count_win('afip:' || b, 'authfail', 600);
+  perform lec_private.count_win('afip:' || a, 'authfail', 600);
   return lec_private.err(403, 'admin_required', '관리자 키가 필요합니다.');
 end $$;
 
--- Example keys from our own docs and templates (never accepted as admin keys or setup tokens).
 create or replace function lec_private.weak_keys()
 returns text[] language sql immutable set search_path = '' as $$
   select array['change-me', 'changeme', 'change-me-관리자키', 'change-me-admin-key', '관리자키', '관리자 키', '연수관리자키', '내관리자키',
@@ -501,11 +517,12 @@ returns boolean language sql immutable set search_path = '' as $$
                   where lec_private.hash(k) = lower(p_hash) or lec_private.hash(upper(k)) = lower(p_hash) or lec_private.hash(initcap(k)) = lower(p_hash))
 $$;
 
--- participant nicknames that would impersonate the instructor or the service
+-- participant nicknames that would impersonate the instructor or the service (Cyrillic look-alikes of 'admin' only)
 create or replace function lec_private.reserved_nick(p text)
 returns boolean language sql immutable set search_path = '' as $$
-  select regexp_replace(lower(normalize(coalesce(p, ''), NFKC)), '[[:space:]._·*~!?()\[\]{}''"`:;,/\\|-]+', '', 'g')
-         = any (array['강사', '강사님', '운영자', '운영자님', 'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'])
+  select translate(regexp_replace(lower(normalize(coalesce(p, ''), NFKC)), '[[:space:]._·*~!?()\[\]{}''"`:;,/\\|-]+', '', 'g'), 'аіԁ', 'aid')
+         = any (array['강사', '강사님', '운영자', '운영자님', '관리자', '관리자님', '선생님', '선생님님', '운영진', '운영진님',
+                      'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'])
 $$;
 
 -- board files allowed? init settings.uploads and the instructor's state.ui.uploads (admin only), both default on
@@ -656,6 +673,19 @@ begin
   if jsonb_typeof(v) <> 'array' or jsonb_array_length(v) > 20 then perform lec_private.fail(400, 'invalid_value', 'options: 20개까지'); end if;
   return (select coalesce(jsonb_agg(to_jsonb(lec_private.txt(e #>> '{}', 100, 'options', true)) order by i), '[]'::jsonb)
             from jsonb_array_elements(v) with ordinality as a(e, i));
+end $$;
+
+-- ② a choice/scale answer is exactly one of the poll's options (scale without options: 1~5); 'word' stays free
+create or replace function lec_private.poll_value(p_kind text, p_options jsonb, v jsonb)
+returns jsonb language plpgsql immutable set search_path = '' as $$
+declare one jsonb := v; s text; opts jsonb := coalesce(p_options, '[]'::jsonb);
+begin
+  if p_kind = 'word' then return v; end if;
+  if jsonb_typeof(v) = 'array' then one := case when jsonb_array_length(v) = 1 then v -> 0 end; end if;
+  if one is not null and jsonb_typeof(one) in ('string', 'number') then s := one #>> '{}'; end if;
+  if jsonb_typeof(opts) <> 'array' or jsonb_array_length(opts) = 0 then opts := case when p_kind = 'scale' then '["1","2","3","4","5"]'::jsonb else '[]'::jsonb end; end if;
+  if s is null or not (opts ? s) then perform lec_private.fail(400, 'invalid_value', '보기에 있는 답 하나만 낼 수 있어요.'); end if;
+  return to_jsonb(s);
 end $$;
 
 create or replace function lec_private.clean_value(v jsonb)
@@ -852,6 +882,7 @@ begin
   with gone as (delete from lec_private.trainings t where t.last_at < now() - make_interval(days => t.retention_days) returning 1)
   select count(*) into n from gone;
   delete from lec_private.rate where win < now() - interval '1 hour';
+  delete from lec_private.admin_sessions where exp < now();
   delete from lec_private.upload_tickets where post is null and expires_at < now() - interval '1 day';
   return n;
 end $$;
@@ -863,12 +894,11 @@ declare v_code text := lec_private.code(p_code); v_hash text;
 begin
   select value into v_hash from lec_private.config where key = 'setup_hash';
   if v_hash is null then perform lec_private.fail(403, 'init_disabled', '이 프로젝트는 API로 연수를 등록하지 않습니다(SQL Editor에서 init_training 사용).'); end if;
-  if lec_private.full_win('afip:' || coalesce(lec_private.req_ip_first(), '?'), 'authfail', 20, 600) or lec_private.full_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 20, 600) then
+  if lec_private.full_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 20, 600) then
     perform lec_private.fail(429, 'rate_limited', '설정 토큰이 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.');
   end if;
   if lec_private.hash(p_setup) <> v_hash then
-    perform lec_private.count_win('afip:' || coalesce(lec_private.req_ip_first(), '?'), 'authfail', 600);
-    if coalesce(lec_private.req_ip(), '?') <> coalesce(lec_private.req_ip_first(), '?') then perform lec_private.count_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 600); end if;
+    perform lec_private.count_win('afip:' || coalesce(lec_private.req_ip(), '?'), 'authfail', 600);
     return lec_private.err(403, 'setup_required', '설정 토큰이 맞지 않습니다.');
   end if;
   if exists (select 1 from lec_private.trainings where code = v_code) then perform lec_private.fail(409, 'already_initialized', '이미 등록된 코드입니다.'); end if;
@@ -888,6 +918,10 @@ begin
   if (v_name <> '' or v_school <> '') and not coalesce(p_consent, false) then
     perform lec_private.fail(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
   end if;
+  -- the instructor closed joining (state.ui.lockJoin): devices that already joined keep working
+  if coalesce((select x.data -> 'ui' ->> 'lockJoin' from public.lec_state x where x.training_code = v_code), '') = 'true' then
+    perform lec_private.fail(409, 'locked', '지금은 새로 참여할 수 없어요. 강사에게 알려 주세요.');
+  end if;
   perform lec_private.hit('join:' || v_code, 'join', 600);           -- whole training, per minute
   if v_ip is not null then perform lec_private.hit('ip:' || v_ip, 'join', 600); end if;  -- soft; a school NAT is one IP
   v_token := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
@@ -905,7 +939,7 @@ create or replace function public.lec_add(p_code text, p_token text, p_col text,
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_code text := lec_private.code(p_code); t lec_private.trainings; p public.lec_participants; v_cid text; v_rev bigint;
-  j jsonb; v_text text; v_anon boolean; v_poll text; v_err jsonb; v_files jsonb; v_id uuid;
+  j jsonb; v_text text; v_anon boolean; v_poll text; v_err jsonb; v_files jsonb; v_id uuid; l public.lec_polls; v_val jsonb;
 begin
   if jsonb_typeof(p_doc) is distinct from 'object' then perform lec_private.fail(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.'); end if;
   if not (p_col = any (array['attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'])) then
@@ -917,6 +951,11 @@ begin
     if v_err is not null then return v_err; end if;
     t := lec_private.training(v_code);
     perform lec_private.hit('admin:' || v_code, 'admin', 600);
+    -- idempotent: the console registers a blueprint poll with cid 'bp:<poll id>' each time it opens it
+    if v_cid is not null then
+      select lec_private.out('polls', to_jsonb(x)) into j from public.lec_polls x where x.training_code = v_code and x.cid = v_cid order by x.created_at limit 1;
+      if j is not null then return j; end if;
+    end if;
     v_rev := lec_private.bump(v_code, true);
     insert into public.lec_polls (training_code, question, kind, options, open, cid, rev)
     values (v_code, lec_private.jtxt(p_doc, 'question', 200, true), lec_private.jenum(p_doc, 'kind', array['choice', 'word', 'scale'], 'choice'),
@@ -941,9 +980,11 @@ begin
   v_rev := lec_private.bump(v_code, p_col in ('help', 'questions', 'posts', 'chat', 'progress', 'answers'));
   case p_col
     when 'attendance' then
+      -- (8) a second tap keeps the first check-in and the last check-out
       insert into public.lec_attendance as a (training_code, by, kind, at, cid, rev)
       values (v_code, p.id, lec_private.jenum(p_doc, 'kind', array['in', 'out']), now(), v_cid, v_rev)
-      on conflict (training_code, by, kind) do update set at = now(), cid = excluded.cid, rev = excluded.rev, updated_at = now()
+      on conflict (training_code, by, kind) do update set at = case when a.kind = 'in' then least(a.at, now()) else greatest(a.at, now()) end,
+        cid = excluded.cid, rev = excluded.rev, updated_at = now()
       returning lec_private.out('attendance', to_jsonb(a.*)) into j;
     when 'progress' then
       insert into public.lec_progress as g (training_code, by, station, status, at, cid, rev)
@@ -979,12 +1020,21 @@ begin
       end if;
     when 'answers' then
       v_poll := lec_private.jtxt(p_doc, 'poll', 64, true);
-      -- (the same closed-poll rule applies to lec_update)
-      if exists (select 1 from public.lec_polls where training_code = v_code and id::text = v_poll and open = false) then
-        perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.');
+      v_val := lec_private.clean_value(p_doc -> 'value');
+      -- (2) a known poll only (its id, or a registered blueprint poll 'bp:<id>'); choice/scale = one of its options.
+      -- An unknown id is refused unless it is the open poll (older consoles). The 'signal' light stays free.
+      -- (the same rules apply to lec_update)
+      if v_poll <> 'signal' then
+        select * into l from public.lec_polls x where x.training_code = v_code and (x.id::text = v_poll or x.cid = 'bp:' || v_poll) order by x.created_at limit 1;
+        if found then
+          if not l.open then perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.'); end if;
+          v_val := lec_private.poll_value(l.kind, l.options, v_val);
+        elsif coalesce((select x.data ->> 'openPoll' from public.lec_state x where x.training_code = v_code), '') <> v_poll then
+          perform lec_private.fail(404, 'unknown_poll', '없는 투표예요. 새로 고침해 주세요.');
+        end if;
       end if;
       insert into public.lec_answers as w (training_code, poll, by, value, cid, rev)
-      values (v_code, v_poll, p.id, lec_private.clean_value(p_doc -> 'value'), v_cid, v_rev)
+      values (v_code, v_poll, p.id, v_val, v_cid, v_rev)
       on conflict (training_code, poll, by) do update set value = excluded.value, cid = excluded.cid, rev = excluded.rev, updated_at = now()
       returning lec_private.out('answers', to_jsonb(w.*)) into j;
     when 'survey' then
@@ -1005,6 +1055,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_code text := lec_private.code(p_code); t lec_private.trainings; v_admin boolean := false; p public.lec_participants; v_id uuid;
   r jsonb; v_owner boolean := false; v_rev bigint; j jsonb; v_keys text[]; v_allowed text[]; v_hide boolean; v_err jsonb; v_files jsonb; v_nick text;
+  l public.lec_polls; v_val jsonb; v_consent boolean;
 begin
   if jsonb_typeof(p_patch) is distinct from 'object' then perform lec_private.fail(400, 'invalid_body', '본문이 JSON 객체가 아닙니다.'); end if;
   if not (p_col = any (array['participants', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'])) then
@@ -1032,7 +1083,8 @@ begin
     v_owner := case when p_col = 'participants' then v_id = p.id else (r ->> 'by')::uuid = p.id end;
     if not v_owner then perform lec_private.fail(403, 'forbidden', '내 글만 고칠 수 있어요.'); end if;
     v_allowed := case p_col
-      when 'participants' then array['nickname'] when 'progress' then array['status'] when 'help' then array['station', 'seat', 'message', 'status']
+      -- name/school are asked at check-in only (with consent)
+      when 'participants' then array['nickname', 'name', 'school', 'consent'] when 'progress' then array['status'] when 'help' then array['station', 'seat', 'message', 'status']
       when 'questions' then array['text'] when 'posts' then array['kind', 'text', 'files', 'license'] when 'answers' then array['value']
       when 'survey' then array['answers'] else array[]::text[] end;
     if (p_col = 'questions' and r ->> 'status' = 'hidden') or (p_col in ('posts', 'chat') and (r ->> 'hidden')::boolean) then
@@ -1044,9 +1096,15 @@ begin
   if 'text' = any (v_keys) and ((p_col = 'questions' and r ->> 'status' = 'hidden') or (p_col = 'posts' and (r ->> 'hidden')::boolean)) then
     perform lec_private.fail(409, 'hidden', '숨긴 글은 먼저 보이게 한 뒤 고쳐 주세요.');
   end if;
-  -- L1: an answer cannot change once its poll is closed (same rule as a new answer)
-  if not v_admin and p_col = 'answers' and exists (select 1 from public.lec_polls l where l.training_code = v_code and l.id::text = r ->> 'poll' and l.open = false) then
-    perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.');
+  if v_keys = array['consent'] then perform lec_private.fail(400, 'nothing_to_update', '바꿀 수 있는 항목이 없습니다.'); end if;
+  -- L1: an answer cannot change once its poll is closed (same rule as a new answer), and keeps to the options
+  if not v_admin and p_col = 'answers' then
+    v_val := lec_private.clean_value(p_patch -> 'value');
+    select * into l from public.lec_polls x where x.training_code = v_code and r ->> 'poll' <> 'signal' and (x.id::text = r ->> 'poll' or x.cid = 'bp:' || (r ->> 'poll')) order by x.created_at limit 1;
+    if found then
+      if not l.open then perform lec_private.fail(409, 'poll_closed', '투표가 닫혔어요.'); end if;
+      v_val := lec_private.poll_value(l.kind, l.options, v_val);
+    end if;
   end if;
   if p_col = 'posts' and 'files' = any (v_keys) then
     v_files := lec_private.clean_files(p_patch -> 'files', v_code, p.id, v_id);
@@ -1061,9 +1119,21 @@ begin
   v_rev := lec_private.bump(v_code, p_col not in ('participants', 'survey'));
   case p_col
     when 'participants' then
-      v_nick := lec_private.jtxt(p_patch, 'nickname', 20, true);
-      if not v_admin and lec_private.reserved_nick(v_nick) then perform lec_private.fail(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.'); end if;
-      update public.lec_participants x set nickname = v_nick, rev = v_rev, updated_at = now() where x.id = v_id;
+      if 'nickname' = any (v_keys) then
+        v_nick := lec_private.jtxt(p_patch, 'nickname', 20, true);
+        if not v_admin and lec_private.reserved_nick(v_nick) then perform lec_private.fail(400, 'reserved_nickname', '이 별명은 쓸 수 없어요(강사·운영자용). 다른 별명을 골라 주세요.'); end if;
+      end if;
+      v_consent := lec_private.jbool(p_patch, 'consent', false);
+      if (lec_private.jtxt(p_patch, 'name', 40) <> '' or lec_private.jtxt(p_patch, 'school', 60) <> '') and not v_consent and r ->> 'consent_at' is null then
+        perform lec_private.fail(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
+      end if;
+      update public.lec_participants x set
+        nickname = case when 'nickname' = any (v_keys) then v_nick else x.nickname end,
+        name = case when 'name' = any (v_keys) then lec_private.jtxt(p_patch, 'name', 40) else x.name end,
+        school = case when 'school' = any (v_keys) then lec_private.jtxt(p_patch, 'school', 60) else x.school end,
+        consent_at = case when x.consent_at is null and v_consent and ('name' = any (v_keys) or 'school' = any (v_keys)) then now() else x.consent_at end,
+        rev = v_rev, updated_at = now()
+      where x.id = v_id;
     when 'progress' then
       update public.lec_progress x set status = lec_private.jenum(p_patch, 'status', array['doing', 'done', 'stuck']), at = now(), rev = v_rev, updated_at = now() where x.id = v_id;
     when 'help' then
@@ -1108,7 +1178,7 @@ begin
         rev = v_rev, updated_at = now()
       where x.id = v_id;
     when 'answers' then
-      update public.lec_answers x set value = lec_private.clean_value(p_patch -> 'value'), rev = v_rev, updated_at = now() where x.id = v_id;
+      update public.lec_answers x set value = coalesce(v_val, lec_private.clean_value(p_patch -> 'value')), rev = v_rev, updated_at = now() where x.id = v_id;
     when 'survey' then
       update public.lec_survey x set answers = lec_private.clean_survey(p_patch -> 'answers'), rev = v_rev, updated_at = now() where x.id = v_id;
     when 'chat' then
@@ -1305,13 +1375,36 @@ end $$;
 -- true/false; a wrong key is counted like everywhere else (H4), and answers 429 while locked
 create or replace function public.lec_check_admin(p_code text, p_admin text)
 returns boolean language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
 begin
-  if lec_private.admin_check(lec_private.code(p_code), p_admin) is null then return true; end if;
+  v := lec_private.admin_check(lec_private.code(p_code), p_admin);
+  if v is null then return true; end if;
+  -- an expired session is not a wrong key: the console sends the key again
+  if v ->> 'message' = 'session_expired' then perform lec_private.fail(401, 'session_expired', '강사 화면을 다시 열어 관리자 키를 넣어 주세요.'); end if;
   perform set_config('response.status', '200', true); -- "no" is a normal answer here
   return false;
 end $$;
 
 -- admin snapshot: every collection (incl. participants/attendance/survey) with hidden content
+-- (1) instructor session: one accepted admin key -> a random token for 12 hours (only its SHA-256 is kept).
+-- The console sends it instead of the key; it is never throttled, so a lockout from wrong keys on the same IP
+-- does not reach a console that is already open. Calling it with a live session renews it.
+create or replace function public.lec_admin_session(p_code text, p_admin text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_code text := lec_private.code(p_code); v_err jsonb; t lec_private.trainings; v_tok text; v_exp timestamptz := now() + interval '12 hours';
+begin
+  v_err := lec_private.admin_check(v_code, p_admin);
+  if v_err is not null then return v_err; end if;
+  t := lec_private.training(v_code);
+  perform lec_private.hit('admin:' || v_code, 'admin', 600);
+  v_tok := 'lps1.' || substr(replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''), 1, 43);
+  delete from lec_private.admin_sessions x where x.training_code = v_code and (x.exp < now() or x.akh <> t.admin_hash);
+  insert into lec_private.admin_sessions (training_code, hash, akh, exp) values (v_code, lec_private.hash(v_tok), t.admin_hash, v_exp);
+  delete from lec_private.admin_sessions x where x.training_code = v_code and x.hash not in
+    (select y.hash from lec_private.admin_sessions y where y.training_code = v_code order by y.exp desc limit 50);
+  return jsonb_build_object('session', v_tok, 'expiresAt', lec_private.ms(v_exp));
+end $$;
+
 create or replace function public.lec_admin_snapshot(p_code text, p_admin text, p_since bigint default 0)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_code text := lec_private.code(p_code); t lec_private.trainings; s bigint := greatest(coalesce(p_since, 0), 0); o jsonb; c text; v_err jsonb;
@@ -1453,7 +1546,7 @@ grant select (id, training_code, by, kind, text, nickname, files, license, likes
 revoke select (by) on public.lec_help, public.lec_progress, public.lec_answers from anon, authenticated;
 grant select (id, training_code, nickname, station, seat, message, status, assignee, cid, rev, created_at, updated_at) on public.lec_help to anon, authenticated;
 grant select (id, training_code, station, status, at, rev, created_at, updated_at) on public.lec_progress to anon, authenticated;
-grant select (id, training_code, question, kind, options, open, rev, created_at, updated_at) on public.lec_polls to anon, authenticated;
+grant select (id, training_code, question, kind, options, open, cid, rev, created_at, updated_at) on public.lec_polls to anon, authenticated;
 grant select (id, training_code, poll, value, rev, created_at, updated_at) on public.lec_answers to anon, authenticated;
 grant select (id, training_code, by, nickname, text, hidden, cid, rev, created_at, updated_at) on public.lec_chat to anon, authenticated;
 grant select (training_code, data, rev, updated_at) on public.lec_state to anon, authenticated;

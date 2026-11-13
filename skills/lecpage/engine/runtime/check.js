@@ -31,8 +31,16 @@
   }
   /** 참여 기능: 실제로 연결해 보고 방식(실시간·새로 읽기)과 걸린 시간을 적음 */
   function liveCheck() {
-    if (!liveInfo || !DATA.live || !window.LecLive) return Promise.resolve(null);
+    if (!liveInfo || !DATA.live) return Promise.resolve(null);
     var t0 = Date.now(), name = '참여 기능(질문·투표)';
+    // 암호로 잠근 사이트: 이 쪽은 누구나 열 수 있어 서버 주소·연수 코드를 싣지 않음 → 서버가 닿는지만 봄(실시간 방식은 강사 화면이 보여 줌)
+    if (DATA.live.health) {
+      return probe(DATA.live.health).then(function (st) {
+        if (st === 'ok') return { name: name, host: liveInfo.name + ' · 서버에 닿아요', state: 'ok', need: 'must', note: '암호로 잠근 사이트라 여기서는 서버에 닿는지만 봐요. 실시간으로 받는지는 강사 화면 맨 위에 나와요.' };
+        return { name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' };
+      });
+    }
+    if (!window.LecLive || !DATA.live.code) return Promise.resolve(null);
     return new Promise(function (res) {
       var c, done = false, end = function (r) { if (done) return; done = true; try { c && c.close(); } catch (e) { } res(r); };
       setTimeout(function () { end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' }); }, 15000);
