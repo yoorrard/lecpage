@@ -129,7 +129,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `ALLOWED_ORIGINS` | Pages 미러, localhost | 이 서버를 부를 수 있는 앱 주소 |
 | `PUBLIC_ORIGIN` | (요청 주소) | 내 도메인을 붙였을 때 돌려줄 주소 |
 | `ALLOW_SUPABASE_SDK` | (꺼짐) | §6 참고 |
-| `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | (없음) | 관리 화면(§11). 둘 다 있어야 `/admin`이 열림. 저장소에 적지 말고 `wrangler secret put`이나 대시보드 변수로 |
+| `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | (없음) | 관리 화면(§11). 관리 Worker에는 설정 스크립트가 넣음. 바로 공개 Worker에 넣으면 그 안의 `/admin`(경로 Access, 예전 방식)이 열림. 저장소에 적지 말고 비밀 값으로 |
 | `ALERT_AT` | `50,60,80,95` | 하루 예산의 몇 %에서 알림을 보낼지 |
 | `STATS` / `STATS_DAILY_CAP` | on / 20000 | 앱 익명 이용 합계를 받을지, 항목 하나의 하루 상한 |
 | `NOTICE_LINK_HOSTS` | (없음) | 공지 링크가 갈 수 있는 호스트(쉼표). 비우면 https 주소면 됨 |
@@ -263,69 +263,73 @@ npm run dev               # http://localhost:8787
 node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, 보기 http://s-<id>.localhost:8790/
 ```
 
-## 10. 운영자 체크리스트: 무료 요금제로 안전하게 다시 열기
+## 10. 운영자 체크리스트: 무료 요금제로 안전하게 열기
 
-무료 요금제의 약점은 하나입니다. **하루 Worker 요청 10만 건(한국 시간 오전 9시 초기화)을 다 쓰면 그날 남은 시간 동안 올라온 사이트까지 열리지 않습니다.** 아래 장치는 그 전에 새 일을 멈추고, 요청을 줄이고, 운영자에게 알립니다. 사이트가 절대 멈추면 안 되는 날이 오면 Workers Paid(월 $5)로 올리는 것이 유일한 확실한 방법입니다(아래 '유료 전환 판단').
+무료 요금제의 약점은 하루 Worker 요청 10만 건(한국 시간 오전 9시 초기화)입니다. `worker` 보기는 다 쓰면 그날 올라온 사이트까지 열리지 않고, `pages` 보기는 사이트는 열리지만 참여 기능 방과 새로 올리기가 멈춥니다. 아래 장치는 그 전에 새 일을 멈추고, 요청을 줄이고, 운영자에게 알립니다. `npm run setup`이 대부분을 켭니다.
 
 | 장치 | 무엇을 막나 | 켜는 법 |
 |---|---|---|
-| 하루 예산 60%에서 새 사이트·새 방만 멈춤(다시 올리기와 방문은 그대로) | 남은 40%를 이미 올라온 사이트 방문에 씀 | 기본(PLAN=free) |
-| 런타임 정적 사본·지문 주소·1년 캐시 | 방문 한 번에 드는 요청 수(첫 방문 약 ⅓↓, 다시 방문은 HTML 1건) | 기본 |
+| `pages` 보기 | 하루 한도에 닿아도 사이트는 열림(방문이 요청 수에 안 듦) | 설정 스크립트 기본 |
+| 연수 예약(그날 70%) | 그날 참여 기능이 멈출 연수를 '만들 때' 내 계정으로 안내 | 기본(앱이 날짜·인원을 보냄) |
+| 하루 예산 60%(+ 오늘 예약 연수의 남은 몫)에서 새 사이트·새 방만 멈춤 | 남은 몫을 이미 올라온 연수에 씀 | 기본(PLAN=free) |
+| 긴 대기·묻기 간격 권고 | 학교망 묻기 요청(§7) | 서버 기본, 런타임 반영 필요 |
+| 런타임 정적 사본·지문 주소·1년 캐시 | `worker` 보기 방문 한 번에 드는 요청 수 | 기본 |
 | 예산 85%부터 앱 이용 합계는 Gate를 부르지 않고 버림 | 덜 급한 일이 몫을 쓰는 것 | 기본 |
 | 없는 주소 1분 기억, 주소 모양 먼저 검사 | 주소 두드리기로 저장소를 깨우는 것 | 기본 |
-| 알림(50·60·80·95%, 저장량 80%) | 모르고 지나가는 것 | `ALERT_WEBHOOK`(없으면 `REPORT_WEBHOOK`) |
+| 알림(50·60·80·95%, 저장량 80%) | 모르고 지나가는 것 | 설정 스크립트가 묻는 웹훅(`REPORT_WEBHOOK`, 따로 `ALERT_WEBHOOK`) |
 | 새 업로드 멈춤 스위치 | 스팸·이상한 몰림 | 관리 화면 [새 업로드 멈추기] 또는 `POST /api/admin/uploads` |
-| WAF 속도 제한 규칙(무료 1개) | 한 IP의 폭주(Worker에 닿기 전에 막아 요청 수에도 안 듦) | 아래 4번 |
-| 데이터센터 캐시 | Durable Object 요청(무료 하루 한도가 따로 있음)·느린 응답 | 내 도메인을 붙이면 저절로 |
+| WAF 속도 제한 규칙(무료 1개) | 한 IP의 폭주(Worker에 닿기 전에 막아 요청 수에도 안 듦) | 내 도메인이 있을 때 `npm run setup -- --domain …`(1개까지 자동) |
+| 두 번째 주소 `/s/<id>/` | 학교망이 pages.dev를 막은 경우(§12) | 기본(내 도메인이면 그 도메인 주소) |
 
-**운영자가 할 일**(한 번):
+**운영자가 할 일**: ① 토큰 만들기 ② `npm run setup` ③ (처음이면) Zero Trust 가입 후 다시 돌리기 ④ 앱 빌드 변수(§2). 확인: 스크립트 끝의 `/api/info`, 관리 화면의 오늘 요청 수·앞으로 7일 예약표, 알림 웹훅에 시험 글(`ALERT_AT`을 잠깐 `1`로).
 
-1. **배포 한 번**: §2대로 `npm run deploy`, `ADMIN_KEY`·`ALERT_WEBHOOK` 넣기. 앱 빌드 변수 `VITE_PUBLISH_API`에 호스트 주소. 앱 주소가 `ALLOWED_ORIGINS`에 있는지 확인.
-2. **도메인**: 앱과 **다른 등록 도메인**(예: `lecpage-sites.example`)을 Cloudflare에 넣고 Worker → Settings → Domains & Routes → Custom domain. `PUBLIC_ORIGIN`에 그 주소. 도메인이 있어야 관리 화면(Access 경로 보호)·WAF 규칙·데이터센터 캐시가 됩니다(도메인 값만 듭니다. 연 1~2만 원). 도메인 없이 workers.dev로 열면 관리 화면은 404이고 curl(§3)로만 관리합니다.
-3. **Cloudflare Access 정책**(관리 화면, §11).
-4. **WAF 속도 제한 규칙 1개**: 대시보드 → 도메인 → Security → WAF → Rate limiting rules → Create rule
-   - 이름 `lecpage 폭주 막기`, 조건(Edit expression): `starts_with(http.request.uri.path, "/s/") or starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/live/")`
-   - 같은 IP 기준, 10초에 **400**건 넘으면 Block, 10초 동안(무료 요금제에서 고를 수 있는 값). 학교 한 곳(IP 하나)에 40명이 동시에 처음 열어도 300건 안쪽이라 막히지 않습니다. 강당 큰 연수가 막히면 600으로 올립니다.
-   - Security → Bots의 **Block AI bots**는 켜도 됩니다. **Bot Fight Mode는 끄세요**(카카오톡 미리보기 봇과 앱의 API 요청이 막힐 수 있음).
-5. **확인**: `curl https://<도메인>/api/info` → `accepting: true`. 관리 화면에서 오늘 요청 수가 올라가는지, 알림 웹훅에 시험 글이 오는지(`ALERT_AT`을 잠깐 `1`로 두고 배포).
+**내 도메인(선택)**: 앱과 **다른 등록 도메인**(예: `lecpage-sites.example`)을 Cloudflare에 넣고 `npm run setup -- --domain sites.lecpage-sites.example`. Worker 도메인·`PUBLIC_ORIGIN`·WAF 규칙을 넣습니다. 규칙: 이름 `lecpage 폭주 막기`, 조건 `starts_with(http.request.uri.path, "/s/") or starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/live/")`, 같은 IP 10초에 **400**건 넘으면 Block 10초(무료 요금제에서 고를 수 있는 값). 학교 한 곳(IP 하나)에 40명이 동시에 처음 열어도 300건 안쪽입니다. 강당 큰 연수가 막히면 대시보드에서 600으로 올립니다. Security → Bots의 **Block AI bots**는 켜도 되고, **Bot Fight Mode는 끄세요**(카카오톡 미리보기 봇과 앱의 API 요청이 막힐 수 있음). 도메인이 있으면 `worker` 보기 사이트 파일을 데이터센터 캐시에 10분 둡니다.
 
-**유료 전환 판단 기준**(관리 화면 맨 위 한 줄이 이것을 계산합니다)
-- 최근 7일 중 **2일 이상** 하루 예산의 50%를 넘었으면 → Workers Paid(월 $5)로 올리고 `PLAN=paid`. 월 1,000만 요청 포함이라 지금 쓰는 양의 수십 배까지 추가 비용이 없습니다.
+**유료 전환 판단 기준**(관리 화면 맨 위 한 줄이 계산)
+- 최근 7일 중 **2일 이상** 하루 예산의 50%를 넘었으면 → Workers Paid(월 $5)로 올리고 `PLAN=paid`. `worker` 보기는 사이트가 멈추기 전에, `pages` 보기는 참여 기능·새로 올리기가 멈추기 전에.
+- 앞으로 7일 예약표에 '꽉 참'인 날이 한 달에 두 번 넘게 나오면 → 같은 판단(그날 연수가 강사 계정으로 밀려나고 있음).
 - 60% 알림(새 사이트를 받지 않음)이 한 달에 두 번 넘게 오면 → 같은 판단.
-- 95% 알림이 한 번이라도 오면 → 그날 바로 올리는 것을 권합니다(이미 올라온 사이트가 멈추기 직전).
+- 95% 알림이 한 번이라도 오면 → `worker` 보기는 그날 바로 올리기를 권합니다(올라온 사이트가 멈추기 직전). `pages` 보기는 그날 참여 기능이 곧 멈춥니다.
 - 폭주가 한 IP에서 오면 WAF 문턱을 낮추고, 여러 곳에서 오면 [새 업로드 멈추기] 뒤 유료 전환을 검토합니다.
-- 유료로 올린 뒤에는 관리 화면의 30일 합계로 월 요청 수를 봅니다(1,000만을 넘으면 100만 건당 $0.30).
+- 유료로 올린 뒤에는 관리 화면의 30일 합계로 월 요청 수를 봅니다(Workers 1,000만을 넘으면 100만 건당 $0.30, DO 요청 100만을 넘으면 100만 건당 $0.15).
 
-## 11. 관리 화면(/admin)
+## 11. 관리 화면(관리 Worker `lecpage-admin`)
 
-운영자만 들어오는 화면입니다. 앱 번들에는 들어가지 않고 이 호스트가 직접 내보냅니다(`public/admin/`, Worker를 먼저 거침).
+운영자만 들어오는 화면입니다. 앱 번들에는 들어가지 않고, 바로 공개 Worker와 따로 배포하는 작은 Worker([`wrangler.admin.jsonc`](wrangler.admin.jsonc), [`src/admin-worker.js`](src/admin-worker.js))가 내보냅니다. 같은 계정의 `lecpage-sites`가 가진 Durable Object(Gate·Site)에 `script_name`으로 묶여 같은 자료를 봅니다.
 
-**켜는 법**(이메일은 저장소에 적지 않고 Cloudflare 대시보드의 정책에만 넣습니다)
-1. Cloudflare 대시보드 → Zero Trust(처음이면 팀 이름을 정함. 팀 도메인이 `<팀>.cloudflareaccess.com`. 무료 요금제 50명까지).
-2. Access → Applications → Add an application → **Self-hosted**
-   - Application domain: 호스트 도메인, **Path: `admin`**(`/admin`과 그 아래 전부. 사이트 `/s/`는 보호하지 않음)
-   - Session duration: 24시간 이하
-   - Policy: Action **Allow**, Include → **Emails** → 운영자 이메일(한 개). 그 밖의 규칙은 넣지 않음
-   - Login methods: One-time PIN(메일로 받는 일회용 번호) 또는 쓰는 계정(GitHub 등, 2단계 인증 켠 것)
-   - Settings(고급) → Cookie: **SameSite Strict**, HTTP Only 켬, Binding cookie 켬
-3. 만든 애플리케이션의 **Application Audience (AUD) Tag**를 복사해 넣기:
-   ```bash
-   npx wrangler secret put ACCESS_TEAM_DOMAIN   # <팀>.cloudflareaccess.com
-   npx wrangler secret put ACCESS_AUD           # AUD 태그(64자)
-   # (선택) Worker가 이메일을 한 번 더 확인: 정책과 같은 운영자 이메일
-   npx wrangler secret put ACCESS_EMAILS
-   ```
-4. `https://<도메인>/admin/` → Access 로그인 → 관리 화면.
+**켜는 법**: `npm run setup`(§2)이 합니다. 손으로 하려면
+1. `npm run deploy:admin`
+2. 대시보드 → Workers & Pages → `lecpage-admin` → **Access** → Protect this Worker behind Access → All traffic → 운영자 이메일만(Zero Trust가 처음이면 가입부터. 결제 수단 입력, 청구 없음)
+3. `lecpage-admin`에 비밀 값 `ACCESS_AUD`(그 Access 앱의 AUD), `ACCESS_EMAILS`(운영자 이메일), (선택) `ACCESS_TEAM_DOMAIN`(`<팀>.cloudflareaccess.com`)
+4. `https://lecpage-admin.<계정>.workers.dev/` → Access 로그인 → 관리 화면
 
 **들어오는 길과 막는 길**
-- Access가 정책에 맞는 사람에게만 토큰(JWT)을 붙여 보내고, Worker가 그 토큰의 서명(팀의 공개 열쇠, 1시간 캐시)·발급자·AUD·만료를 다시 확인합니다. 둘 중 하나라도 아니면 403. `ACCESS_*`가 없으면 `/admin` 전체가 404.
-- curl용 `ADMIN_KEY`는 그대로(`/api/admin/…`). 관리 화면 API(`/admin/api/…`)는 ADMIN_KEY로 열리지 않고, Access 토큰으로 curl 주소가 열리지도 않습니다.
+- Access(Worker 단위 앱)가 이 Worker의 workers.dev 주소 **전체**를 지킵니다(도메인 없이). 정책은 운영자 이메일 하나, 세션 24시간. 로그인은 One-time PIN(메일로 받는 일회용 번호)이나 Cloudflare 계정.
+- Worker가 한 번 더 확인합니다. `ACCESS_TEAM_DOMAIN`이 있으면 Access 토큰(JWT)의 서명(팀의 공개 열쇠, 1시간 캐시)·발급자·AUD·만료를 확인하고 `ctx.access`의 이메일과도 맞춰 봅니다. 없으면 `ctx.access`(Access가 인증한 요청에만 있음)의 AUD와 이메일을 `ACCESS_EMAILS`와 맞춥니다. 어느 쪽이든 아니면 403, 설정이 없으면 모든 주소가 404입니다.
+- 관리 Worker는 정적 자산을 쓰지 않습니다(쓰면 `ctx.access`가 Worker에 오지 않음, 공식 문서). 화면 파일(`public/admin/`)은 배포할 때 `scripts/gen-admin.mjs`가 글자 모듈로 넣습니다.
+- curl용 `ADMIN_KEY`는 바로 공개 Worker의 `/api/admin/…`에 그대로(§3). 관리 화면 API(`/admin/api/…`)는 ADMIN_KEY로 열리지 않고, Access 토큰으로 curl 주소가 열리지도 않습니다.
+- 내 도메인 + 경로(`/admin`) Access로 바로 공개 Worker 안의 `/admin`을 쓰던 예전 방식도 그대로 됩니다(`ACCESS_TEAM_DOMAIN`·`ACCESS_AUD`를 바로 공개 Worker에 넣었을 때만).
 - 상태를 바꾸는 요청은 같은 출처(Origin)·전용 머리글(`x-lecpage-admin`)·JSON만 받습니다. CORS를 열지 않으므로 다른 사이트는 보낼 수 없습니다.
 - 화면은 인라인 스크립트 없이(`script-src 'self'`, Trusted Types), 모든 글을 글자(textContent)로만 그립니다. 사이트 제목·신고 내용처럼 남이 쓴 글이 화면에 나와도 실행되지 않습니다.
 - 가리기·풀기·지우기·신고 처리·공지·새 업로드 멈춤은 **감사 기록**(누가·언제·무엇을, 최근 2,000개)에 남습니다. curl로 한 일도 'ADMIN_KEY(curl)'로 남습니다.
 
-**보이는 것**: 오늘·30일 요청 수와 하루 예산 대비 %(사이트 파일·참여 기능·API로 나눠, 데이터센터 캐시 적중 수), 새 사이트·공개 수, 살아 있는 사이트·가린 사이트·참여 기능 방 수, 저장량/상한, 신고 대기, 오류(5xx)·429 수, 유료 전환 한 줄(최근 7일 중 50% 넘은 날 수), 앱 익명 이용 합계(앱 열기·만들기 길·올릴 곳 종류, 오늘·7일·30일).
+**보이는 것**: 오늘·30일 요청 수와 하루 예산 대비 %(사이트 파일·참여 기능·API로 나눠, 데이터센터 캐시 적중 수), **앞으로 7일 연수 예약표**(날짜별 연수·참가자·참여 기능 수·요청 어림·예산 %·꽉 참), 새 사이트·공개 수, 살아 있는 사이트·가린 사이트·참여 기능 방 수, 저장량/상한, 신고 대기, 오류(5xx)·429 수, 유료 전환 한 줄(최근 7일 중 50% 넘은 날 수), 앱 익명 이용 합계(앱 열기·만들기 길·올릴 곳 종류, 오늘·7일·30일).
 
 **할 수 있는 것**: 팝업 공지 만들기·고치기·끄기(제목 60자·본문 400자 글자만, 링크는 https 하나, 대상: 앱/공개 사이트 강사 화면, 기간 90일까지), 새 업로드 멈춤·다시 받기, 신고 처리(가리기·풀기·지우기·처리함), 사이트 찾기·가리기·지우기(지울 때 주소 10자를 한 번 더 적음).
 
-숫자는 Worker 안에서 세어 Gate(Durable Object)의 하루 한 줄에 더합니다(바깥 분석 API·토큰 없음). isolate마다 50건씩 묶어 보내므로 어림이고, 정적 자산(첫 화면·신고 화면·`/rt/`)은 세지 않습니다. 하루 숫자는 400일 둡니다.
+사이트 주소는 보기에 맞게(`pages`면 `s-<id>.….pages.dev`) 링크합니다. 공지 대상 '공개 사이트 강사 화면'은 `worker` 보기 사이트에만 붙습니다.
+
+숫자는 바로 공개 Worker 안에서 세어 Gate(Durable Object)의 하루 한 줄에 더합니다(바깥 분석 API·토큰 없음). isolate마다 50건씩 묶어 보내므로 어림이고, 정적 자산(첫 화면·신고 화면·`/rt/`)과 Pages 방문은 세지 않습니다. 하루 숫자는 400일 둡니다.
+
+## 12. 학교망 대비
+
+학교 연수가 많고, 무료에서도 학교망 조건 때문에 사이트를 못 만들거나 연수 당일 접속이 막히는 일을 줄이려는 장치입니다.
+
+- **연수 날짜를 아는 수용량**(§4): 그날 참여 기능이 멈출 만큼 예약이 차면 강사가 사이트를 **만들 때** 그 날짜와 함께 알리고 앱이 '내 계정에 올리기'로 안내합니다. 예약된 연수가 있는 날은 새 일을 일찍 멈춰 그 몫을 지킵니다.
+- **상태 API** `GET /api/status?date=&site=`(§8): 앱의 '공개 전 점검'·'연수 전날 점검'이 오늘·그날 남은 몫과 사이트·참여 기능 방 상태를 1분 캐시로 묻습니다(앱에는 `instantStatus()`가 있고, 화면에 붙이는 일은 이어서).
+- **웹소켓이 막힌 학교망**: 긴 대기·묻기 간격 권고(§7). 런타임 반영 전에는 40명 2시간에 약 2.6만 요청(무료 하루 3~4회), 반영 뒤 약 1.3만(하루 7회)입니다.
+- **pages.dev·workers.dev가 학교 필터에 걸릴 가능성**: 한국 교육청·학교의 유해정보 차단이 `*.pages.dev`·`*.workers.dev`를 어떻게 분류하는지 공개 자료는 찾지 못했습니다(2026-11-13 검색). 보안 업체·통신사 차단은 대개 피싱으로 신고된 **하위 도메인 하나**를 막고(Malwarebytes의 pages.dev 탐지, 통신사 보안 기능 사례), 나라 단위로 `*.pages.dev` 전체를 막은 사례가 있습니다. 두 도메인 모두 피싱에 많이 쓰인다는 보안 업체 보고가 있어 '평판 낮음·새 사이트'로 막는 필터도 있을 수 있습니다. 그래서
+  - `pages` 보기는 사이트마다 하위 도메인이라, 한 사이트가 신고로 막혀도 다른 사이트는 그대로입니다(`worker` 보기는 한 주소를 같이 써서 한꺼번에 막힘).
+  - **두 번째 주소**: 공개 화면에 `https://<호스트>/s/<id>/`를 한 줄 보여 줍니다. 운영자 도메인(`--domain`)을 붙이면 이 주소가 그 도메인이 되어, pages.dev·workers.dev를 둘 다 막은 학교에서도 열립니다(이 주소로 연 방문은 Worker 요청에 듦).
+  - 사이트마다 운영자 도메인의 하위 도메인을 주는 것은 하지 않았습니다: Pages는 와일드카드 사용자 도메인을 못 붙이고(프로젝트당 100개), 다른 길은 인증서·호스트 관리가 유료입니다.
+  - 가장 확실한 것은 강사가 연수 전날 그 학교망에서 주소를 한 번 열어 보는 것입니다(앱의 '연수 전날 점검'에 이어서 붙일 일).
