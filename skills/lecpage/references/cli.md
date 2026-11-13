@@ -38,7 +38,7 @@
 | `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |
 | `review <dist> [--port 4180] [--out 폴더]` | 사이트를 127.0.0.1에 띄우고 '수정 요청' 단추를 붙임. 강사가 펜·네모·화살표·글자로 표시하고 글을 쓰면 `work/feedback/NNN.png`·`NNN.json`(글·칸 id·시각)으로 저장 | 주소 한 줄 |
 | `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·문구 검사(`copy-lint.mjs`, 알림만)가 있으면 함께. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
-| `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호]` | 빌드만 | 한 줄 |
+| `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호] [--bundle-fonts]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://yoorrard.github.io/lecpage/` | 5줄 안팎 |
@@ -85,6 +85,8 @@ $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stati
   "live": { "provider": "sheets", "url": "https://script.google.com/…", "anonKey": "", "features": ["qa", "help", "progress"] } }
 ```
 암호는 파일에 쓰지 않습니다: `--password '<암호>'` 또는 `LECPAGE_PASSWORD`. `--password`를 주면 `access`는 저절로 `password`.
+
+글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(예시 한 벌 약 1.3MB 더해짐, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
 
 ## 5. 문제가 생기면
 | 증상 | 할 일 |

@@ -2,9 +2,10 @@
 // lecpage CLI — Node 22 이상. qa·options만 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
 // 기본 출력은 짧은 요약, --json을 붙이면 기계용 JSON.
 //
-//   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh]
+//   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts]
 //        교재 → 해석 → 초안 → 검증 → 빌드 → 점검을 한 번에(작업 파일은 dist 옆 work/)
 //        다시 부르면 교재 해석은 재사용, 고친 설계도는 유지(--fresh: 설계도를 새 초안으로)
+//        --bundle-fonts: 글꼴 CDN이 막힌 학교망용. 쓰인 글자가 든 글꼴 조각을 사이트 안에 담음(쪽을 열 때 외부 요청 0, 다시 만들 때도 이어짐)
 //   brief [blueprint.json|material.json|work]        짧은 요약: 칸 id·개수·구성·빈칸·싣지 못한 것·주의·글꼴
 //   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
@@ -12,7 +13,7 @@
 //   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
 //   doctor                                           환경 점검과 설치 방법
 //   review <dist> [--port 4180]                      사이트를 띄우고 강사의 '수정 요청'(펜·네모 표시+글)을 work/feedback/에 모음
-//   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
+//   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호] [--bundle-fonts]
 //   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
 //   guard <AI 답.json|txt> <material.json> [-i info.json] [-o blueprint.json]   AI 답의 교재 글(프롬프트·단계·일정·FAQ·목표·주소)을 교재대로
@@ -36,7 +37,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'bundle-fonts']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -84,13 +85,20 @@ function assetFiles(dir) {
 }
 
 /** 빌드해 쓰기. 예전 빌드가 남긴 엔진 파일(꺼진 기능의 화면 등)은 지움(CNAME 같은 남의 파일은 그대로) */
-async function buildSite(bp, { out, assets = '', info = null, password = '' }) {
+async function buildSite(bp, { out, assets = '', info = null, password = '', fonts = !!args['bundle-fonts'] }) {
   const r = E.build(bp, { runtime: N.nodeRuntime(), assets: assets && existsSync(assets) ? assetFiles(assets) : {}, infra: info && (info.size || info.features) ? info : null });
   if (r.errors.length) return { ok: false, errors: r.errors, warnings: r.warnings };
   const dir = resolve(out);
   password = password || process.env.LECPAGE_PASSWORD || '';
   if (r.blueprint.access.mode === 'password' && !password) return { ok: false, errors: [{ path: 'access', message_ko: '암호 보호 설계도예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.' }], warnings: r.warnings };
   let files = r.files;
+  // 글꼴 함께 담기(--bundle-fonts): 글꼴 CDN이 막힌 학교망용. 쓰인 글자가 든 글꼴 조각만 assets/fonts/로(쪽을 열 때 외부 요청 0)
+  if (fonts) {
+    const fb = await E.bundleFonts(files);
+    files = fb.files;
+    r.warnings.push({ path: 'fonts', message_ko: fb.report.ok ? `글꼴 함께 담기: 외부 글꼴 ${fb.report.external}곳 → 사이트 안 파일 ${fb.report.bundled}개(${Math.round(fb.report.bytes / 1024)}KB)` : `글꼴을 받지 못해 CDN 주소 그대로 뒀어요(${fb.report.skipped.join(', ')})${(process.env.HTTPS_PROXY || process.env.https_proxy) && !process.env.NODE_USE_ENV_PROXY ? ' — 프록시를 거치는 곳이면 NODE_USE_ENV_PROXY=1 을 붙여 다시 실행하세요' : ''}` });
+    if (fb.report.ok) r.report.sizeKB += Math.round(fb.report.bytes / 1024);
+  }
   if (password) {
     const { webcrypto } = await import('node:crypto');
     files = await E.protectSite(files, password, { runtime: N.nodeRuntime(), title: r.blueprint.meta.title, crypto: webcrypto });
@@ -529,10 +537,11 @@ const commands = {
     // 3) 검증·빌드
     const v = E.validate(raw);
     if (v.errors.length) fail('설계도 검증 실패: ' + v.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '));
-    const b = await buildSite(raw, { out, assets, info: Object.keys(info).length ? info : null, password: args.password });
+    const fonts = !!args["bundle-fonts"] || !!loadState(work).bundleFonts;
+    const b = await buildSite(raw, { out, assets, info: Object.keys(info).length ? info : null, password: args.password, fonts });
     if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
-    // 경로는 work 기준 상대 경로로(work 폴더를 복사해 patch해도 원래 폴더의 dist를 덮어쓰지 않게)
-    saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs });
+    // 경로는 work 기준 상대 경로로(work 폴더를 복사해 patch해도 원래 폴더의 dist를 덮어쓰지 않게). 글꼴 함께 담기는 다시 만들 때도 이어짐
+    saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs, ...(fonts ? { bundleFonts: true } : {}) });
 
     // 4) 점검
     const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '' });
@@ -622,7 +631,7 @@ const commands = {
     else if (args['no-build']) skip = '빌드 건너뜀(--no-build)';
     else if (!out) skip = '빌드할 곳을 모름: -o dist 를 붙이면 다시 빌드해요.';
     else {
-      b = await buildSite(r.raw, { out, assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: state.info && existsSync(resolve(work, state.info)) ? readJson(resolve(work, state.info)) : null, password: args.password });
+      b = await buildSite(r.raw, { out, assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: state.info && existsSync(resolve(work, state.info)) ? readJson(resolve(work, state.info)) : null, password: args.password, fonts: !!args['bundle-fonts'] || !!state.bundleFonts });
       if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; }
       else if (args.qa) q = await runQa(out, { password: args.password || process.env.LECPAGE_PASSWORD || '' });
     }
