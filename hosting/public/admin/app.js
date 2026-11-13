@@ -165,7 +165,8 @@
       hit.addEventListener('mousemove', function (e) { tip.textContent = label; tip.hidden = false; tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; bar.classList.add('on'); });
       hit.addEventListener('mouseleave', function () { tip.hidden = true; bar.classList.remove('on'); });
       svg.appendChild(hit); svg.appendChild(bar);
-      if (i % (W < 560 ? 7 : 5) === 0 || i === days.length - 1) svg.appendChild(s('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: d.date.slice(5).replace('-', '/') }));
+      var step = W < 560 ? 7 : 5; var last = days.length - 1;
+      if ((i % step === 0 && last - i >= step / 2) || i === last) svg.appendChild(s('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: d.date.slice(5).replace('-', '/') }));
     });
     if (o.budget) {
       [[0.5, '50%', ''], [o.newWorkShare || 0.6, Math.round((o.newWorkShare || 0.6) * 100) + '% 새 업로드 멈춤', 'stop']].forEach(function (ref) {
