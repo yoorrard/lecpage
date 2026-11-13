@@ -108,6 +108,8 @@ export function build(input, opts = {}) {
   files['assets/boot.js'] = read('boot.js');
   files['assets/lecpage.js'] = read('lecpage.js');
   files['assets/screen.js'] = read('screen.js');
+  files['assets/check.js'] = read('check.js'); // 접속 확인 결과 그리기(+ 보조 쪽의 밝게·어둡게)
+  files['assets/aux.css'] = read('aux.css');   // 보조 화면(강사·발표·안내문·접속 확인·개인정보)만 싣는 배치
   files['assets/qr.js'] = read('vendor/qrcode.js');
   files['assets/favicon.svg'] = favicon(design);
   if (live) {
@@ -132,6 +134,7 @@ export function build(input, opts = {}) {
   if (!opts.keepAllCss) {
     const used = Object.entries(files).filter(([p, v]) => typeof v === 'string' && /\.(html|js)$/.test(p)).map(([, v]) => v).join('\n');
     files['assets/lecpage.css'] = pruneUnusedCss(files['assets/lecpage.css'], used);
+    files['assets/aux.css'] = pruneUnusedCss(files['assets/aux.css'], used);
   }
 
   // 이미 연결한 참여 기능 방식은 '할 일 0번'으로 셈(같으면 추천을 따로 적지 않음)

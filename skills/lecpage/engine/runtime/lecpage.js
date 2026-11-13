@@ -1042,6 +1042,13 @@
       var upd = function () { doc.body.classList.toggle('lp-card-off', !cb.checked); };
       upd(); cb.addEventListener('change', function () { store.set('card-print', cb.checked); upd(); });
     }
+    // 자리 카드 8장(잘라 쓰기): 고를 때만 인쇄·미리보기에 나옴
+    var cc = $('input[data-part-print="cards"]');
+    if (cc) {
+      cc.checked = store.get('cards-print', false) === true;
+      var upc = function () { doc.body.classList.toggle('lp-cards-off', !cc.checked); };
+      upc(); cc.addEventListener('change', function () { store.set('cards-print', cc.checked); upc(); });
+    }
   }
 
   function start() {
