@@ -157,7 +157,7 @@ function brokenRefs(dir) {
  */
 async function loadLinters() {
   const list = [];
-  for (const [name, file, blocking] of [['디자인', 'design-lint.mjs', true], ['겹침', 'overlap-lint.mjs', true], ['문구', 'copy-lint.mjs', false]]) {
+  for (const [name, file, blocking] of [['디자인', 'design-lint.mjs', true], ['겹침', 'overlap-lint.mjs', true], ['움직임', 'motion-check.mjs', false], ['문구', 'copy-lint.mjs', false]]) {
     const p = join(HERE, file);
     if (!existsSync(p)) { list.push({ name, status: 'missing', issues: [] }); continue; }
     try {

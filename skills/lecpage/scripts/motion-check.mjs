@@ -6,7 +6,7 @@
 //         CSS 스크롤 타임라인이 스크롤에 따라 값이 바뀌는지('scroll-dead'), 화면 밖으로 나간 꾸밈 층('offscreen-art')
 //   동작 줄이기(--rm): 첫 화면 그림이 비거나(빈 캔버스·숨은 정지 그림) 제목·단추가 숨은 채인지('rm-incomplete')
 //   효과 하나씩(--effects): 효과 견본 장면을 띄워 도는 효과는 계속, 나머지는 한 번이라도 움직이는지
-// 쓰는 곳: 손으로(모든 프리셋을 훑음) · scripts/lecpage.mjs qa에서 만든 사이트 하나(--dir)
+// 쓰는 곳: 손으로(모든 프리셋을 훑음) · scripts/lecpage.mjs qa(PC 화면에서 lintPage, 막지 않는 '움직임' 검사) · 만든 사이트 하나(--dir)
 //   node scripts/motion-check.mjs --effects [--fx a,b] [--rm]   효과 견본 하나씩(58가지)
 //   node scripts/motion-check.mjs [--presets a,b] [--ex sel-story,data-lab,body-all] [--widths 1440,390] [--themes light,dark]
 //        [--motion d,1,2,3] [--rm] [--device auto|fast|slow] [--layouts 0,1,2,3,4,5] [--dir 만든 사이트 폴더] [--shots 폴더] [--out 결과.json] [--conc 4] [--root 견줄 엔진 폴더]
@@ -127,7 +127,8 @@ export const LOOP_FX = new Set(['arc-ripple', 'aurora', 'blobs-morph', 'bokeh', 
 export async function checkPage(page, { shots = '', tag = 'page', rm = false, frames = [120, 450, 900, 1600, 2600, 4000, 5600], step = 0.8, settle = 650 } = {}) {
   const res = { tag, hero: null, fx: [], findings: [] };
   const add = (rule, sample) => res.findings.push({ rule, sample: String(sample).slice(0, 140) });
-  const helper = await page.context().newPage();
+  // 화면 비교용 빈 쪽: browser.newPage()로 연 쪽(qa)은 그 맥락에 쪽을 더 열 수 없어 브라우저에서 따로 엶
+  const helper = await page.context().newPage().catch(() => page.context().browser().newPage());
   await helper.goto('about:blank');
   // 첫 화면: 가만히 둔 채 몇 장
   const vh = page.viewportSize().height, vw = page.viewportSize().width;
@@ -187,6 +188,26 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
   for (const p of dims) add('dim-in-view', p);
   for (const p of offs) add('offscreen-art', p);
   return res;
+}
+
+export const RULES = {
+  'hero-still': '첫 화면 그림이 도는 효과인데 멈춰 있어요.',
+  'hero-no-motion': '움직임 단계인데 첫 화면이 처음부터 그대로예요.',
+  'fx-failed': '효과가 실패해 건너뛰었어요.',
+  'fx-skipped': '효과가 그 자리 단계보다 높아 건너뛰었어요.',
+  'fx-unloaded': '효과 파일이 실리지 않았어요.',
+  'stuck-pre': '끝까지 내려가도 등장 전 모습(숨김)으로 남았어요.',
+  'dim-in-view': '화면 가운데 들어온 글이 흐리거나 숨은 채예요.',
+  'scroll-dead': '스크롤 연동 움직임이 스크롤해도 그대로예요.',
+  'offscreen-art': '꾸밈 층이 화면 밖으로 나갔어요.',
+  'rm-incomplete': '동작 줄이기에서 첫 화면 그림·글이 비어 보여요.',
+};
+/** scripts/lecpage.mjs qa가 부르는 검사(PC 화면에서 한 번): 페이지를 다시 열어 처음부터 잼. 실패·숨은 채 남음은 고칠 곳, 나머지는 살필 곳 */
+export async function lintPage(page, { view } = {}) {
+  if (view && view !== 'desktop') return [];
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const r = await checkPage(page, { tag: view || 'page', step: 1, settle: 450 });
+  return r.findings.map((f) => ({ level: f.rule === 'fx-failed' || f.rule === 'stuck-pre' ? 'error' : 'warn', rule: f.rule, message: `${RULES[f.rule] || f.rule} ${f.sample}` }));
 }
 
 // ── 단독 실행: 프리셋 × 예시를 빌드해 훑음 ──
