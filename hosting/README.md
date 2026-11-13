@@ -116,10 +116,14 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `CF_ACCOUNT_ID` / `PAGES_PROJECT` / `PAGES_TOKEN` / `PAGES_HOST` | (설정 스크립트가 비밀 값으로) | `pages` 보기. 토큰은 계정 소유 'Pages Write'만. `PAGES_HOST`는 프로젝트의 `<이름>.pages.dev`(이름이 겹치면 Cloudflare가 뒤에 글자를 붙임) |
 | `SITE_DAYS` / `KEEP_ALIVE` / `MAX_SITE_DAYS` | 30(`pages`: 60) / on / 365 | 공개 기간. 다시 올리면 그날부터 다시 셉니다. `worker` 보기만: 화면을 여는 방문이 있으면(남은 기간이 절반 아래일 때) 다시 채우고, 처음 만든 날부터 365일이 지나면 방문으로는 늘지 않습니다 |
 | `POLL_LONG` | off | 참여 기능 런타임이 긴 대기(`?wait=`)를 쓰게 되면 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈 |
+| `POLL_RELAY` | auto(유료면 on) | 긴 대기를 Worker가 대신 기다림: 방이 잠들어 DO duration이 거의 들지 않고 대신 DO 요청이 1~2개. 유료는 이쪽이 싸고(1만 명 기준 월 $99 → $31), 무료는 요청이 먼저 차서 방 안에서 기다리는 편이 두 배 받음(§7) |
 | `APP_ORIGINS` | (없음) | `ALLOWED_ORIGINS`에 더할 앱 주소(설정 스크립트 `--app-origin`이 비밀 값으로) |
-| `DAILY_REQUEST_BUDGET` | 100000 | 하루 요청 예산(무료 요금제 한도). 60%를 쓰면 새 사이트·새 방을 받지 않고(`rate_limited`), 남은 몫은 이미 올라온 사이트의 방문에 씁니다. `/api/info`의 `accepting`이 false가 되고 앱은 '내 계정에 올리기'로 안내합니다. 0이면 끔 |
-| `SITES_PER_HOUR` / `SITES_PER_DAY` | 6 / 20 | 같은 IP에서 새 사이트(학교는 IP 하나를 같이 씁니다) |
-| `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | 30 / 30 (`paid`: 300 / 300) | 하루에 새로 만드는 사이트, 실시간 방(전체). 차면 API가 `rate_limited`(저장 공간이 차면 `full`)로 답하고 앱은 '내 계정에 올리기'로 안내합니다 |
+| `DAILY_REQUEST_BUDGET` | 100000 | 하루 요청 예산(무료 요금제 한도). 넘침 단계(§4 넘침 처리): 45%부터 연수 날짜가 14일 안인 사이트·방만, 60%부터 새 사이트·새 방을 받지 않고(`rate_limited`) 남은 몫은 이미 올라온 사이트·진행 중인 연수에 씁니다. `/api/info`의 `capacity`가 단계·까닭·넘길 곳을 알려 앱이 '내 계정에 올리기'로 안내합니다. 0이면 끔 |
+| `SITES_PER_HOUR` / `SITES_PER_DAY` | 6 / 20 | 같은 IP에서 새 사이트(앱이 기기 표를 보내지 않을 때. 학교는 IP 하나를 같이 씁니다) |
+| `SITES_PER_DEVICE` | 5 (`paid`: 10) | 앱이 기기 표(`device`)를 보내면 기기 하나가 하루에 만드는 새 사이트(다시 올리기는 세지 않음) |
+| `SITES_PER_HOUR_SHARED` / `SITES_PER_DAY_SHARED` | 30 / 60 | 기기 표가 있을 때 같은 IP의 상한(강사 연수에서 여럿이 공유기 하나를 써도 막히지 않게, 기기 표를 바꿔 가며 쓰는 것은 묶음) |
+| `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | `pages` 보기 200 / 100 (`paid`: 1000 / 1000), `worker` 보기 30 / 30 (`paid`: 300 / 300) | 하루에 새로 만드는 사이트, 실시간 방(전체). 차면 API가 `rate_limited`(`reason: 'daily_cap'`·`'room_cap'`, 저장 공간이 차면 `full`)로 답하고 앱은 '내 계정에 올리기'로 안내합니다. `pages` 보기는 새 사이트 하나가 Worker 요청 약 17·저장 약 0.2MB라 크게 둠(오래 가는 한도는 저장: 200개 × 60일 ≈ 2.4GB) |
+| `PAGES_API_BUDGET` | 900 | Pages API를 5분에 이만큼까지(Cloudflare API 한도 토큰마다 5분 1,200번의 75%). 넘칠 공개는 `rate_limited` + `reason: 'pages_api'` + `retry-after`로 줄을 세움. 넘으면 그 토큰의 모든 API가 5분 막히기 때문 |
 | `MAX_TOTAL_BYTES` | 4GB | 전체 저장량(사이트 + 실시간 방). 넘으면 새로 받지 않습니다(`full`) |
 | `DEPLOYS_PER_HOUR` | 30 | 사이트 하나를 다시 올리는 횟수 |
 | `REPORTS_PER_HOUR` / `DAILY_REPORT_CAP` / `REPORT_KEEP` / `REPORT_DAYS` | 5 / 200 / 500 / 90 | 신고: IP당, 하루 전체, 보관 수, 보관일 |
@@ -130,42 +134,58 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `PUBLIC_ORIGIN` | (요청 주소) | 내 도메인을 붙였을 때 돌려줄 주소 |
 | `ALLOW_SUPABASE_SDK` | (꺼짐) | §6 참고 |
 | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | (없음) | 관리 화면(§11). 관리 Worker에는 설정 스크립트가 넣음. 바로 공개 Worker에 넣으면 그 안의 `/admin`(경로 Access, 예전 방식)이 열림. 저장소에 적지 말고 비밀 값으로 |
-| `ALERT_AT` | `50,60,80,95` | 하루 예산의 몇 %에서 알림을 보낼지 |
+| `ALERT_AT` | `45,60,80,95` | 하루 예산의 몇 %에서 알림을 보낼지(넘침 단계와 같게: 예약한 연수만 → 새 일 멈춤 → 묻기 20초 → 곧 한도) |
 | `STATS` / `STATS_DAILY_CAP` | on / 20000 | 앱 익명 이용 합계를 받을지, 항목 하나의 하루 상한 |
 | `NOTICE_LINK_HOSTS` | (없음) | 공지 링크가 갈 수 있는 호스트(쉼표). 비우면 https 주소면 됨 |
 | 비밀 `ADMIN_KEY`, `REPORT_WEBHOOK`, `ALERT_WEBHOOK`, `ACCESS_EMAILS` | | curl용 관리자 열쇠, 신고 알림, 예산·저장량 알림, (선택) 관리 화면에 들어올 이메일을 Worker가 한 번 더 확인 |
 
-**수용량**(공식 한도 × 측정값. 어림식은 [`src/capacity.js`](src/capacity.js), 2026-11-13 기준)
+**수용량과 비용**(공식 한도·요금 × 측정한 단위 비용. 모형 [`src/capacity.js`](src/capacity.js), 표 `node scripts/capacity-model.mjs`, 근거·범위·시험은 [`docs/research/scale-2026-11.md`](../docs/research/scale-2026-11.md), 2026-11-13 기준)
 
-- 공식 한도: Workers Free 요청 10만/일(한국 시간 오전 9시 초기화, 넘으면 오류 1027). Durable Objects Free 요청 10만/일·duration 13,000 GB-s/일·행 쓰기 10만/일·읽기 500만/일·저장 5GB(넘으면 그 종류 작업만 실패). 정적 자산과 Pages 정적 요청은 무료·무제한(Functions만 셈). Workers Paid 월 $5: Workers 요청 월 1,000만(+100만당 $0.30), DO 요청 월 100만(+100만당 $0.15), DO duration 월 40만 GB-s 포함.
-- 측정: 첫 화면 열기 = Worker 요청 6(참가자)·5(강사), 다시 열기 1([admin-2026-11](../docs/research/admin-2026-11.md) §2). 예전 어림 '40명 연수 2천~1만 2천'에서 페이지 몫이 3분의 1~9분의 1로 줄어 **참가자 한 명 25요청**으로 잡음. 웹소켓이 막힌 학교망의 묻기(5초, 빈 응답이 이어지면 10초)는 '50명 2시간 4~7만' → **1분에 5요청**. 긴 대기를 런타임이 쓰면 **1분에 2.4요청**(20초 기다림 + 5초).
+- 공식 한도(무료, 한국 시간 오전 9시에 다시): Workers 요청 10만/일(넘으면 오류 1027), DO 요청 10만/일·duration 13,000 GB-s/일·행 쓰기 10만/일·읽기 500만/일·저장 5GB(넘으면 그 종류 작업 실패), Cloudflare API 토큰마다 5분 1,200번. 정적 자산(앱·이 서버의 안내 화면·`/rt/`)과 Pages 정적 요청(사이트 보기)은 무료·무제한.
+- Workers Paid(월 $5): Workers 요청 월 1,000만(+100만당 $0.30)·CPU 3,000만 ms(+$0.02), DO 요청 100만(+$0.15)·duration 40만 GB-s(+$12.50)·행 쓰기 5,000만(+$1)·저장 5GB(+GB당 $0.20).
+- 측정(`pages` 보기, 예시 사이트 21파일 + 참여 기능 방): **새 사이트 하나 Worker 요청 17·DO 요청 22·Pages API 5**(줄이기 전 25·32·20), 다시 올리기 3·6·5, 참가자 한 자리 웹소켓 약 15, 학교망 묻기 1분 5(긴 대기면 2.4).
 
-40명(강사 화면 2자리 더해 42) 2시간 연수 한 번이 그날 쓰는 Worker 요청:
+연수 한 번(참가자 40명 + 강사 화면 2자리, 2시간):
 
-| | 참여 기능 없음 | 참여 기능, 실시간 연결 됨(묻기 20%) | 참여 기능, 학교망(모두 묻기) | 학교망 + 긴 대기(런타임 반영 뒤) |
+| | Worker 요청 | DO 요청 | DO duration | 유료면(넘는 몫) |
 |---|---|---|---|---|
-| `worker` 보기 | 1,050 | 6,720 | 26,880 | 13,780 |
-| `pages` 보기 | **0** | 5,670 | 25,830 | 12,730 |
+| 참여 기능 없음 | 23 | 29 | 0 | 0.01센트 |
+| 참여 기능, 실시간 연결 됨 | 5,693 | 5,699 | 4 GB-s | 0.4센트 |
+| 참여 기능, 학교망(묻기 5초) | 2.6만 | 2.6만 | 16 GB-s | 1센트 |
+| 학교망 + 긴 대기(런타임 반영 뒤, 유료 = Worker가 대신) | 1.3만 | 2.5만 | 8 GB-s | 0.9센트 |
 
-무료로 감당하는 연수(하루 = 10만 ÷ 위 값, 한 달 = ×30, 참가자 = ×40):
+사용자 수별(월 활성 강사, 한 명이 한 달 연수 2회·그중 바로 공개 70%·참여 기능 50%·그중 학교망 40%, 가장 바쁜 날 = 평일 평균 × 2):
 
-| | 하루 연수(참가자) | 한 달 연수 | 하루 한도에 닿으면 |
-|---|---|---|---|
-| `worker`, 참여 기능 없음 | 약 95(3,800명) | 약 2,850 | **올라온 사이트까지 모두 멈춤** |
-| `worker`, 실시간 연결 됨 | 약 14(560명) | 약 420 | 모두 멈춤 |
-| `worker`, 학교망 참여 기능 | 약 3(150명) | 약 110 | 모두 멈춤 |
-| `pages`, 참여 기능 없음 | **방문 제한 없음**(새 사이트만 하루 `DAILY_SITE_CAP` 30개) | 새 사이트 900 | 사이트는 열림 |
-| `pages`, 실시간 연결 됨 | 약 17(700명) | 약 530 | 사이트는 열림, 참여 기능·새로 올리기만 멈춤 |
-| `pages`, 학교망 참여 기능 | 약 3~4(150명), 예약은 2개까지 | 약 115 | 사이트는 열림, 참여 기능만 멈춤 |
-| `pages`, 학교망 + 긴 대기 | 약 7(300명), 예약은 5개까지 | 약 235 | 같음. DO duration(긴 대기 방 2시간 ≈ 900 GB-s)으로는 하루 14개라 요청 수가 먼저 참 |
-| Workers Paid(`PLAN=paid`) | 하루 한도 없음 | 월 $5 안: 학교망 참여 기능 약 38회(DO 요청 100만이 먼저), 실시간 연결 약 175회, `pages` 참여 기능 없음은 무제한 | 넘는 만큼 학교망 연수 1회 약 1.2센트 |
+| 월 활성 강사 | 무료(참여 기능까지) | 무료(참여 기능은 강사 계정으로, 사이트만) | Workers Paid 월(지금 / 긴 대기 반영 뒤 / 사이트만) | 먼저 차는 것 |
+|---|---|---|---|---|
+| 1,000 | 안 됨(가장 바쁜 날 요청 965%) | **됨** | $6.30 / $6.24 / $5.00 | 요청 수(사이트만이면 저장) |
+| 10,000 | 안 됨 | 빠듯(저장·행 쓰기 100% 안팎) | $47 / $31 / $5.09 | 같음 |
+| 100,000 | 안 됨 | 안 됨 | $504 / $343 / $15 | 같음 + Pages API 속도 제한 |
 
-- **예약형 수용량**: 앱이 공개할 때 보낸 날짜·시간·인원·네트워크로 그날 어림을 쌓아 두고, 그날 어림이 하루 예산의 70%(`BOOK_SHARE`)를 넘으면 **그날이 아니라 만들 때** `rate_limited`(`reason: 'booked'`)로 알려 앱이 그 까닭과 함께 '내 계정에 올리기'로 안내합니다. 오늘 아직 끝나지 않은 예약 연수의 남은 몫만큼 새 일(새 사이트·새 방)을 일찍 멈춰 그 몫을 지킵니다. 관리 화면에 앞으로 7일 예약표.
-- DO 행 쓰기는 참가자 글 하나에 4~6줄이라 40명 연수 한 번 1천 줄 안팎이고, 저장은 `pages` 보기에서 HTML 원본·영상·소리만 Durable Object에 둬 거의 차지 않습니다. `worker` 보기는 사이트 파일도 둡니다(기본 상한 4GB = 40MB 사이트 100개).
+- 무료로 버티는 크기(모든 한도 60% 아래): 참여 기능까지 **약 60명**(긴 대기 반영 뒤 약 120명), 사이트만 **약 5,500명**. 참가자 수·연수 횟수에 따라 낮음(1회·20명) 236명 / 1만 1천 명, 높음(4회·100명) 12명 / 2,700명.
+- 거의 모든 비용은 **참여 기능 방, 특히 웹소켓이 막힌 학교망의 묻기**입니다. 그래서 그날 몫 안에서만 맡고 넘치면 강사 계정(Cloudflare·Supabase, 강사마다 무료 한도가 따로)으로 넘깁니다(아래 넘침 처리). 사이트는 Pages라 넘길 일이 거의 없습니다.
+- 유료로 올려도 남는 벽: Cloudflare API 속도 제한(토큰마다 5분 1,200번). 공개 한 번에 Pages API 약 5번이라 월 활성 1.5만~2만 명의 바쁜 날에 닿습니다. 서버가 `PAGES_API_BUDGET`으로 줄을 세우고, 그 너머는 Cloudflare에 한도 상향 문의나 Workers for Platforms(월 $25~)가 필요합니다.
 - 한도에 닿으면 과금되지 않고 그날 남은 시간 동안 그 종류가 실패합니다. `pages` 보기에서는 Worker 한도에 닿아도 **이미 올라온 사이트는 열립니다**. `worker` 보기는 사이트도 열리지 않습니다(오류 1027).
 - 누군가 일부러 두드리면 한도가 먼저 소진됩니다. 내 도메인을 붙였다면 WAF 속도 제한 규칙(무료 1개)을 겁니다(`npm run setup -- --domain …`이 1개까지 자동, §10).
-- 요청을 줄이는 장치(`worker` 보기, §6 '빠르고 덜 부르게'): 엔진 런타임 스크립트는 정적 사본(`/rt/`)으로 나가 요청 수에 들지 않고, 그 밖의 파일은 주소에 내용 지문(`?v=`)을 붙여 브라우저가 1년 둡니다.
-- **유료 전환(Workers Paid 월 $5)**: `worker` 보기는 하루 한도에 닿으면 사이트까지 멈추므로 여러 강사에게 열어 둘 서버면 처음부터 권합니다. `pages` 보기는 사이트가 멈추지 않으므로 참여 기능(특히 학교망 연수)이 많은 날이 이어질 때 권합니다(관리 화면 맨 위 한 줄, §10). 올리면 `PLAN=paid`, `MAX_TOTAL_BYTES`도 그때 올립니다.
+
+**넘침 처리**(품질을 지키며 새로 만드는 사람부터 강사 계정으로, [`src/fair.js`](src/fair.js)): 오늘 진행 중인 연수와 이미 올라온 사이트는 어떤 단계에서도 그대로 열리고, 다시 올리기도 됩니다(운영자가 멈춘 때만 빼고).
+
+| 단계(`capacity.state`) | 조건(무료: 오늘 요청 + 오늘 남은 예약 연수 어림) | 새 사이트·새 방 |
+|---|---|---|
+| `open` | 하루 예산의 45% 아래 | 받음 |
+| `tight` | 45~60% | 연수 날짜가 14일 안인(예약한) 것만. 나머지는 `reason: 'tight'`으로 강사 계정 |
+| `full` | 60% 이상, 하루 상한, 저장 공간, Pages API 줄 서기 | 강사 계정으로(`reason`: `budget`·`daily_cap`·`storage`·`pages_api`) |
+| `paused` | 운영자 [새 업로드 멈추기] | 강사 계정으로 |
+
+- **공정 몫**: 계정이 없으므로 앱이 보내는 기기 표(`device`)로 기기마다 하루 5개, 같은 IP는 넉넉히(시간 30·하루 60). 기기 표가 없는 예전 앱은 IP마다 시간 6·하루 20. 거절 오류에 `scope: 'you'`(이 기기·주소만 막힘)와 `'everyone'`(오늘 모두)을 나눠 줍니다.
+- **예약형 수용량**: 앱이 공개할 때 보낸 날짜·시간·인원·네트워크로 그날 어림을 쌓아 두고, 그날 어림이 하루 예산의 70%(`BOOK_SHARE`)를 넘으면 **그날이 아니라 만들 때** 알립니다(`reason: 'booked'`). 앱이 `caps: ['split']`을 보내면 사이트는 받고 **참여 기능 방만** 강사 계정으로 넘기라고 알리고(`live: { ok: false, next: ['cloudflare','supabase'] }`), 예전 앱에는 예전처럼 사이트까지 거절해 처음부터 내 계정으로 안내하게 합니다.
+- **오래 쓸 사이트**: 예약 없이 만든 사이트에는 `advice: { code: 'long_term' }`("내 계정에 올리면 기간 제한이 없어요")를 같이 줍니다(막지는 않음. 바로 공개는 체험·단기 연수에 가장 좋음).
+- **Pages API 줄 서기**: 5분 창이 차면 `reason: 'pages_api'`와 `retry-after`(1~5분). 그래도 Cloudflare가 429를 주면 5분 동안 새 올리기를 줄 세우고 운영자에게 알립니다.
+- 넘길 곳(`next`): `cloudflare`·`vercel`·`github`·`netlify`(앱이 사이트 크기·인원으로 순서를 다시 정함), 참여 기능(`liveNext`): `cloudflare`·`supabase`. 같은 사이트 파일 그대로라 품질이 같습니다.
+
+**요청을 줄이는 장치**: `pages` 보기는 엔진 런타임 `.js`의 Pages 열쇠를 배포 때 미리 계산해 사이트마다 다시 받지 않고, 512KB 아래 파일은 공개 때 HTML과 한 번에 Pages에 올립니다. Gate는 목록·방 묶기 확인을 한 번에 받고 저장량 합계를 메모리로 셉니다(사이트 표를 매번 훑지 않음). `/api/info`는 isolate 20초·브라우저 30초 기억. `worker` 보기는 런타임 정적 사본(`/rt/`)·내용 지문(`?v=`)·1년 캐시(§6).
+
+**유료 전환(Workers Paid 월 $5)**: 관리 화면 맨 위 한 줄이 권합니다(§10). `worker` 보기는 하루 한도에 닿으면 사이트까지 멈추므로 여러 강사에게 열어 둘 서버면 처음부터. `pages` 보기는 사이트가 멈추지 않으므로 참여 기능(특히 학교망 연수)이 많은 날이 이어질 때. 올리면 `PLAN=paid`(하루 상한 1,000·긴 대기를 Worker가 대신), `MAX_TOTAL_BYTES`도 그때 올립니다.
 
 ## 5. 끄기
 
@@ -222,21 +242,23 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 - 방이 쓰는 저장량도 `MAX_TOTAL_BYTES`에 들어갑니다.
 - 보드 파일의 주소는 규칙상 `/api/<코드>/files/<이름>`이라, 이 주소만 `/live` 없이도 받습니다.
 - `pages` 보기의 사이트는 다른 출처에서 방을 부릅니다. Pages 사이트 출처(`https://s-<id>.<PAGES_HOST>`)에만 CORS·WebSocket을 열고, 그 밖의 출처는 예전처럼 막습니다.
-- **긴 대기(long-poll)**: `GET …/snapshot?since=<커서>&wait=<초>`면 바뀐 것이 없을 때 바뀔 때까지(최대 25초) 기다렸다 답합니다(글이 올라오면 바로). 웹소켓이 막힌 학교망의 묻기를 5초마다 → 바뀔 때나 25초마다로 줄입니다. 대신 기다리는 동안 방(Durable Object)이 깨어 있어 duration을 씁니다(2시간 내내 기다리면 방 하나 약 900 GB-s, 무료 하루 13,000 GB-s). 그래도 무료에서는 요청 수가 먼저 찹니다(§4 표). 런타임이 `wait`를 붙여야 효과가 납니다.
+- **긴 대기(long-poll)**: `GET …/snapshot?since=<커서>&wait=<초>`면 바뀐 것이 없을 때 바뀔 때까지(최대 25초) 기다렸다 답합니다(글이 올라오면 바로). 웹소켓이 막힌 학교망의 묻기를 5초마다 → 바뀔 때나 25초마다로 줄입니다. 런타임이 `wait`를 붙여야 효과가 납니다.
+  - 무료(`POLL_RELAY` 꺼짐): 방(Durable Object) 안에서 기다립니다. 그동안 방이 깨어 있어 duration을 씁니다(2시간 내내면 방 하나 약 900 GB-s, 무료 하루 13,000 GB-s). 무료에서는 요청 수가 먼저 차므로 이쪽이 더 많이 받습니다.
+  - 유료(`POLL_RELAY` 켜짐, `PLAN=paid` 기본): **Worker가 대신 기다립니다.** 방은 잠들 수 있는 웹소켓 하나(태그 `wait`)를 Worker에 열어 지금 snapshot을 보낸 뒤 바로 잠들고, 글이 올라오면 `c`를 보내고 닫습니다 → Worker가 한 번 더 물어 바뀐 것을 답합니다. 방 duration이 거의 들지 않아 1만 명 기준 월 $99 → $31(§4). 응답 모양은 같습니다.
 - **묻기 간격 권고**: snapshot 응답에 `X-Lec-Poll-Ms`(무료 요금제에서 하루 예산 50%를 넘으면 10초, 80%를 넘으면 20초). 런타임이 따르면 붐비는 날 요청이 줄어듭니다.
 - 304(바뀐 것 없음)는 쓰지 않았습니다: 지금 런타임은 2xx가 아니면 오류로 보고 물러나서, 요청 수는 그대로이고 화면만 '연결 끊김'이 됩니다.
 
 ## 8. API
 
-오류는 언제나 `{ "error": { "code", "message_ko" } }`. 코드: `bad_request` `unauthorized` `not_found` `too_large` `too_many_files` `bad_path` `bad_type` `runtime_mismatch` `rate_limited` `full` `blocked` `missing_blobs` `code_taken`.
+오류는 언제나 `{ "error": { "code", "message_ko" } }`. 넘침 때문이면 `reason`(`paused`·`budget`·`tight`·`daily_cap`·`room_cap`·`storage`·`pages_api`·`booked`·`device`·`ip`·`ip_hour`)·`scope`(`you` 이 기기·주소만 / `everyone` 오늘 모두)·`next`(강사 계정 공개 순서)·`liveNext`(참여 기능)·`retryAt`(밀리초)이 붙습니다. 코드: `bad_request` `unauthorized` `not_found` `too_large` `too_many_files` `bad_path` `bad_type` `runtime_mismatch` `rate_limited` `full` `blocked` `missing_blobs` `code_taken`.
 CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보낸 요청은 403입니다.
 
 | 요청 | 답 |
 |---|---|
-| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, view: 'pages'\|'worker', keepAlive, limits: { maxBytes, maxFileBytes, maxFiles, days }, report, live?: { url, uploads, maxUploadMb } }` |
-| `GET /api/status?date=YYYY-MM-DD&site=<id>` | `{ ok, view, plan, live, accepting, paused, budget, today: { date, used, reserved, pct }, day?: { date, trainings, people, est, live, budget, pct, room, ok }, site?: { id, state: 'open'\|'blocked'\|'gone', url, expiresAt, live: { code, state }, booking } }` · 공개 전·연수 전날 점검용, 1분 캐시 |
-| `POST /api/sites` `{ title?, booking? }` | `201 { id, key, url, expiresAt, altUrl?, view? }` · `expiresAt`은 밀리초 숫자 · `key`는 이때 한 번만 · `booking: { date, start?, end?, people, network: 'good'\|'slow'\|'restricted', live }`(한국 시간). 그날이 차면 `429 rate_limited` + `reason: 'booked'`, `day` |
-| `POST /api/sites/:id/deploys` `{ files: { "<경로>": { sha256, size } }, booking? }` | `{ deploy, missing: [sha256…] }` |
+| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, capacity, view: 'pages'\|'worker', keepAlive, limits: { maxBytes, maxFileBytes, maxFiles, days }, report, live?: { url, uploads, maxUploadMb } }` · `capacity: { state: 'open'\|'tight'\|'full'\|'paused', reason, newSites, newRooms, onlyBooked, pct, resetAt, retryAt?, message_ko?, next, liveNext, siteDays }`(§4 넘침 처리) · 30초 캐시 |
+| `GET /api/status?date=YYYY-MM-DD&site=<id>` | `{ ok, view, plan, live, accepting, paused, capacity, budget, today: { date, used, reserved, pct }, day?: { date, trainings, people, est, live, budget, pct, room, ok }, site?: { id, state: 'open'\|'blocked'\|'gone', url, expiresAt, live: { code, state }, booking: { …, liveDenied?, liveNext? } } }` · 공개 전·연수 전날 점검용, 1분 캐시 |
+| `POST /api/sites` `{ title?, booking?, device?, caps? }` | `201 { id, key, url, expiresAt, altUrl?, view?, share: { scope: 'device'\|'ip', left }, live?, advice? }` · `expiresAt`은 밀리초 숫자 · `key`는 이때 한 번만 · `booking: { date, start?, end?, people, network: 'good'\|'slow'\|'restricted', live }`(한국 시간) · `device`: 앱이 기기에 둔 무작위 값(영문·숫자·`_-` 16~64자, 공정 몫) · `caps: ['split']`: 그날 방이 차면 사이트는 받고 `live: { ok: false, reason: 'booked', next }`로 참여 기능만 넘김(없으면 `429` + `reason: 'booked'`, `day`) · `advice: { code: 'long_term' }`: 예약 없는 사이트 |
+| `POST /api/sites/:id/deploys` `{ files: { "<경로>": { sha256, size } }, booking?, caps? }` | `{ deploy, missing: [sha256…], live? }` · Pages API 5분 창이 차면 `429` + `reason: 'pages_api'` |
 | `PUT /api/sites/:id/blobs/:sha256` (본문 = 파일) | `204` · `pages` 보기는 받으면서 검사한 뒤 Pages에 올림 |
 | `POST /api/sites/:id/deploys/:deploy/publish` | `{ url, expiresAt, altUrl?, view? }` · 덜 올렸으면(또는 `pages` 보기에서 Pages가 지운 파일이 있으면) `409 missing_blobs`(+`missing`) → 그 파일만 다시 올리고 한 번 더 |
 | `POST /api/sites/:id/live` `{ code, adminKeyHash, settings?: { retentionDays?, uploads?, moderation? } }` | `{ url: "<호스트>/live", code }` |
@@ -271,12 +293,13 @@ node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, �
 |---|---|---|
 | `pages` 보기 | 하루 한도에 닿아도 사이트는 열림(방문이 요청 수에 안 듦) | 설정 스크립트 기본 |
 | 연수 예약(그날 70%) | 그날 참여 기능이 멈출 연수를 '만들 때' 내 계정으로 안내 | 기본(앱이 날짜·인원을 보냄) |
-| 하루 예산 60%(+ 오늘 예약 연수의 남은 몫)에서 새 사이트·새 방만 멈춤 | 남은 몫을 이미 올라온 연수에 씀 | 기본(PLAN=free) |
+| 넘침 단계: 45%부터 예약한 연수만, 60%(+ 오늘 예약 연수의 남은 몫)에서 새 사이트·새 방만 멈춤 | 남은 몫을 이미 올라온 연수에 쓰고, 새로 만드는 사람은 같은 파일 그대로 강사 계정으로 | 기본(PLAN=free) |
+| 공정 몫(기기 표·IP)·Pages API 5분 창 | 한 사람이 몫을 다 쓰는 것, 공개가 몰려 Cloudflare API가 5분 막히는 것 | 기본(기기 표는 앱이 보낼 때) |
 | 긴 대기·묻기 간격 권고 | 학교망 묻기 요청(§7) | 서버 기본, 런타임 반영 필요 |
 | 런타임 정적 사본·지문 주소·1년 캐시 | `worker` 보기 방문 한 번에 드는 요청 수 | 기본 |
 | 예산 85%부터 앱 이용 합계는 Gate를 부르지 않고 버림 | 덜 급한 일이 몫을 쓰는 것 | 기본 |
 | 없는 주소 1분 기억, 주소 모양 먼저 검사 | 주소 두드리기로 저장소를 깨우는 것 | 기본 |
-| 알림(50·60·80·95%, 저장량 80%) | 모르고 지나가는 것 | 설정 스크립트가 묻는 웹훅(`REPORT_WEBHOOK`, 따로 `ALERT_WEBHOOK`) |
+| 알림(45·60·80·95%, 새 사이트 상한 80%, 저장량 80%, Pages API 429, 주간 유료 전환 권함) | 모르고 지나가는 것 | 설정 스크립트가 묻는 웹훅(`REPORT_WEBHOOK`, 따로 `ALERT_WEBHOOK`) |
 | 새 업로드 멈춤 스위치 | 스팸·이상한 몰림 | 관리 화면 [새 업로드 멈추기] 또는 `POST /api/admin/uploads` |
 | WAF 속도 제한 규칙(무료 1개) | 한 IP의 폭주(Worker에 닿기 전에 막아 요청 수에도 안 듦) | 내 도메인이 있을 때 `npm run setup -- --domain …`(1개까지 자동) |
 | 두 번째 주소 `/s/<id>/` | 학교망이 pages.dev를 막은 경우(§12) | 기본(내 도메인이면 그 도메인 주소) |
@@ -285,13 +308,15 @@ node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, �
 
 **내 도메인(선택)**: 앱과 **다른 등록 도메인**(예: `lecpage-sites.example`)을 Cloudflare에 넣고 `npm run setup -- --domain sites.lecpage-sites.example`. Worker 도메인·`PUBLIC_ORIGIN`·WAF 규칙을 넣습니다. 규칙: 이름 `lecpage 폭주 막기`, 조건 `starts_with(http.request.uri.path, "/s/") or starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/live/")`, 같은 IP 10초에 **400**건 넘으면 Block 10초(무료 요금제에서 고를 수 있는 값). 학교 한 곳(IP 하나)에 40명이 동시에 처음 열어도 300건 안쪽입니다. 강당 큰 연수가 막히면 대시보드에서 600으로 올립니다. Security → Bots의 **Block AI bots**는 켜도 되고, **Bot Fight Mode는 끄세요**(카카오톡 미리보기 봇과 앱의 API 요청이 막힐 수 있음). 도메인이 있으면 `worker` 보기 사이트 파일을 데이터센터 캐시에 10분 둡니다.
 
-**유료 전환 판단 기준**(관리 화면 맨 위 한 줄이 계산)
-- 최근 7일 중 **2일 이상** 하루 예산의 50%를 넘었으면 → Workers Paid(월 $5)로 올리고 `PLAN=paid`. `worker` 보기는 사이트가 멈추기 전에, `pages` 보기는 참여 기능·새로 올리기가 멈추기 전에.
-- 앞으로 7일 예약표에 '꽉 참'인 날이 한 달에 두 번 넘게 나오면 → 같은 판단(그날 연수가 강사 계정으로 밀려나고 있음).
-- 60% 알림(새 사이트를 받지 않음)이 한 달에 두 번 넘게 오면 → 같은 판단.
-- 95% 알림이 한 번이라도 오면 → `worker` 보기는 그날 바로 올리기를 권합니다(올라온 사이트가 멈추기 직전). `pages` 보기는 그날 참여 기능이 곧 멈춥니다.
+**권하는 행동**(관리 화면 맨 위 한 줄이 지난 7일·28일 숫자로 계산, [`src/capacity.js`](src/capacity.js) `forecast`)
+- **유료 전환을 권해요**(월 약 $N을 같이 보여 줌): 무료이고 최근 7일 중 **2일 이상** 하루 한도(Worker·DO 요청 중 큰 쪽)의 50%를 넘었거나, 28일 추세로 **7일 안에** 60%(새 사이트를 받지 못하는 선)에 닿을 때. 이때 웹훅으로도 일주일에 한 번 알립니다.
+- **하루 상한을 올려도 돼요**: 요청은 넉넉한데(가장 많은 날 30% 아래) 최근 7일 중 2일 이상 하루 새 사이트 상한에 닿았을 때 → `DAILY_SITE_CAP`.
+- **새 업로드 멈추기를 검토하세요**: 오늘 새 사이트가 20개를 넘고 평소의 3배를 넘을 때(스팸·이상한 몰림). 큰 연수가 아니면 [새 업로드 멈추기] 뒤 사이트 목록·신고 확인.
+- 그 밖은 '지금은 할 일 없음'과 '이 추세면 약 N일 뒤 빠듯해져요'.
+- 타일: 지금 단계, 오늘 DO 요청(어림), Pages API 5분 창, 이번 달 추세(30일 어림), 무료가 빠듯해지는 날(45%·60%), 유료로 올리면 월(항목별, 공식 요금).
+- 알림(웹훅): 하루 예산 45·60·80·95%(넘침 단계와 같게), 새 사이트가 하루 상한의 80%, 저장 80%, Pages API 429, 주간 유료 전환 권함.
 - 폭주가 한 IP에서 오면 WAF 문턱을 낮추고, 여러 곳에서 오면 [새 업로드 멈추기] 뒤 유료 전환을 검토합니다.
-- 유료로 올린 뒤에는 관리 화면의 30일 합계로 월 요청 수를 봅니다(Workers 1,000만을 넘으면 100만 건당 $0.30, DO 요청 100만을 넘으면 100만 건당 $0.15).
+- 유료로 올린 뒤에는 관리 화면의 '유료로 올리면 월'이 이번 달 어림입니다(Workers 1,000만을 넘으면 100만 건당 $0.30, DO 요청 100만을 넘으면 100만 건당 $0.15).
 
 ## 11. 관리 화면(관리 Worker `lecpage-admin`)
 
