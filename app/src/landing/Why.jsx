@@ -31,7 +31,7 @@ function Compare() {
     const ease = (x) => 0.5 - Math.cos(Math.PI * x) / 2;
     const step = (now) => {
       if (touched.current) return;
-      const t = now - t0; const k = keys.findIndex(([at]) => at > t);
+      const t = Math.max(0, now - t0); const k = keys.findIndex(([at]) => at > t); // rAF 시각이 t0보다 이를 수 있어 0 아래는 0으로
       if (k < 0) { setV(50); return; }
       const [a, va] = keys[k - 1], [b, vb] = keys[k];
       setV(Math.round((va + (vb - va) * ease((t - a) / (b - a))) * 10) / 10);
@@ -62,7 +62,7 @@ function Compare() {
         <span class={`ld-vs-tag is-b${v > 82 ? ' is-off' : ''}`} aria-hidden="true">lecpage</span>
         <i class="ld-vs-handle" aria-hidden="true"><b /></i>
       </div>
-      <p class="ld-vs-note">2026-11-13 측정 · 왼쪽은 AI 에이전트(코딩 도구)에 lecpage 없이 맡긴 결과, 오른쪽은 lecpage 설계도를 지금 엔진으로 그린 것</p>
+      <p class="ld-vs-note">2026-11-13 측정. 왼쪽은 AI 에이전트에 그냥 맡겨 만든 사이트, 오른쪽은 lecpage 설계도를 지금 엔진으로 그린 사이트예요.</p>
     </div>
   );
 }
