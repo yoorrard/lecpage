@@ -12,6 +12,7 @@
 //
 // 옵션(환경 변수도 같음):
 //   --yes(LECPAGE_YES=1)            묻지 않음. 이메일이 없으면 관리 화면 Access만 건너뜀
+//   --skip-deploy(LECPAGE_SKIP_DEPLOY=1) 바로 배포 Worker는 배포하지 않음(Cloudflare Workers Builds가 GitHub에서 배포할 때). 나머지 설정만
 //   --dry-run                       읽기만(GET)과 wrangler --dry-run
 //   --login                         API 토큰 대신 wrangler login(브라우저 승인). Access·Pages 보기는 대시보드 안내로
 //   --email <주소>(LECPAGE_EMAIL)  관리 화면에 들어올 운영자 이메일
@@ -87,7 +88,7 @@ function defaultIo() {
 
 function parseArgs(argv, env) {
   const o = {
-    yes: /^(1|true|yes)$/i.test(env.LECPAGE_YES || ''), dryRun: false, login: false,
+    yes: /^(1|true|yes)$/i.test(env.LECPAGE_YES || ''), dryRun: false, login: false, skipDeploy: /^(1|true|yes)$/i.test(env.LECPAGE_SKIP_DEPLOY || ''),
     email: env.LECPAGE_EMAIL || '', webhook: env.LECPAGE_WEBHOOK || '', view: env.LECPAGE_VIEW || '', project: env.LECPAGE_PAGES_PROJECT || 'lecpage-view',
     domain: env.LECPAGE_DOMAIN || '', appOrigin: env.LECPAGE_APP_ORIGIN || '', subdomain: env.LECPAGE_SUBDOMAIN || '', account: env.CLOUDFLARE_ACCOUNT_ID || '',
   };
@@ -97,6 +98,7 @@ function parseArgs(argv, env) {
     if (a === '--yes' || a === '-y') o.yes = true;
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--login') o.login = true;
+    else if (a === '--skip-deploy') o.skipDeploy = true;
     else if (a.includes('=') && map[a.split('=')[0]]) o[map[a.split('=')[0]]] = a.slice(a.indexOf('=') + 1);
     else if (map[a]) o[map[a]] = argv[++i] || '';
     else if (a === '--help' || a === '-h') o.help = true;
@@ -227,13 +229,27 @@ export async function setup(argv = process.argv.slice(2), { env = process.env, i
     if (write && !pr.result?.canonical_deployment && !pr.result?.latest_deployment) {
       const pc = new PagesClient({ api: base, accountId: st.account, project: o.project, token, fetch: io.fetch });
       const bytes = new TextEncoder().encode(goneHtml()); const parts = base64Parts(bytes); const hash = pagesHash(bytes, 'html', parts);
-      await deploySite(pc, { branch: 'main', manifest: { '/index.html': hash, '/404.html': hash }, extra: [{ hash, parts, contentType: 'text/html; charset=utf-8' }], headers: NOTICE_HEADERS, message: 'lecpage 안내 화면' });
-      st.did.push('Pages 본 배포(없는 주소 안내 화면)');
+      // 프로젝트 첫 주소(…pages.dev)에만 보이는 안내라 실패해도 바로 배포는 됨 → 멈추지 않고 남은 일로
+      // (프록시가 Authorization 머리글을 바꿔 끼우는 환경에서는 올리기용 JWT가 막혀 실패함)
+      try {
+        await deploySite(pc, { branch: 'main', manifest: { '/index.html': hash, '/404.html': hash }, extra: [{ hash, parts, contentType: 'text/html; charset=utf-8' }], headers: NOTICE_HEADERS, message: 'lecpage 안내 화면' });
+        st.did.push('Pages 본 배포(없는 주소 안내 화면)');
+      } catch (e) {
+        st.todo.push(`Pages 첫 주소(${host})의 안내 화면을 못 올렸어요(${String(e.message || e).slice(0, 80)}). 사이트 배포와는 상관없어요. 다른 컴퓨터에서 npm run setup을 다시 돌리면 채워져요.`);
+      }
     }
   });
 
   // ④ 배포
   step('바로 배포 Worker 배포', async () => {
+    if (o.skipDeploy) {
+      // Workers Builds(GitHub 연결)가 배포를 맡음: 이미 있는지만 확인
+      const w = api ? await api('GET', `/accounts/${st.account}/workers/scripts/${SITES}/settings`, null, { allow: [404] }) : { status: 200 };
+      if (w.status === 404) throw new StepError(`${SITES} Worker가 아직 없어요.`, 'Cloudflare 대시보드에서 GitHub 저장소를 연결해 먼저 배포한 뒤(hosting/README.md) 다시 돌려 주세요.');
+      st.skipped.push(`Worker ${SITES} 배포(Workers Builds가 맡음)`);
+      st.sitesUrl = st.sub ? `https://${SITES}.${st.sub}.workers.dev` : '';
+      return;
+    }
     if (!write) { await wrangler(['deploy', '--dry-run', '--outdir', '.wrangler/dry-run']); st.did.push('(dry-run) wrangler deploy'); }
     else { await wrangler(['deploy']); st.did.push(`Worker ${SITES} 배포`); }
     st.sitesUrl = st.sub ? `https://${SITES}.${st.sub}.workers.dev` : '';
@@ -307,7 +323,9 @@ export async function setup(argv = process.argv.slice(2), { env = process.env, i
     if (!api) { st.todo.push(`관리 화면: 대시보드 → Workers & Pages → ${ADMIN} → Access → Protect this Worker behind Access → 운영자 이메일만. 그 뒤 ${ADMIN}에 비밀 값 ACCESS_AUD(앱의 AUD)·ACCESS_EMAILS(이메일)를 넣으면 열려요.`); return; }
     const org = await api('GET', `/accounts/${st.account}/access/organizations`, null, { allow: [404, 400, 403] });
     if (org.status !== 200 || !org.result?.auth_domain) {
-      if (org.status === 403) st.todo.push('토큰에 Access: Organizations, Identity Providers, and Groups · Read 권한이 없어 Zero Trust가 켜졌는지 몰라요. 권한을 더하고 다시 돌리세요.');
+      // Zero Trust를 아직 안 켠 계정도 403(access.api.error.not_enabled)을 줌 → 권한 문제와 구분
+      const notOn = (org.errors || []).some((e) => /not_enabled/.test(String(e.message || '')));
+      if (org.status === 403 && !notOn) st.todo.push('토큰에 Access: Organizations, Identity Providers, and Groups · Read 권한이 없어 Zero Trust가 켜졌는지 몰라요. 권한을 더하고 다시 돌리세요.');
       else st.todo.push(ZT_HELP);
       return;
     }

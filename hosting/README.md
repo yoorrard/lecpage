@@ -43,6 +43,12 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 # 그 밖:            --domain sites.example.kr · --app-origin https://앱주소 · --view worker · --help
 ```
 
+**GitHub에서 저절로 다시 배포(권장)**: 바로 배포 Worker를 Cloudflare **Workers Builds**에 연결해 두면, main에 push할 때마다 Cloudflare가 저장소를 받아 다시 배포합니다. 런타임이 바뀔 때마다 손으로 다시 배포하지 않아도 되고, 토큰을 GitHub에 둘 필요도 없습니다. 클라우드 작업 환경처럼 Cloudflare API 머리글을 프록시가 바꿔 끼우는 곳에서는 Worker 파일 올리기가 막히므로 이 길이 유일한 방법이기도 합니다.
+
+1. 대시보드 **Workers & Pages → Create application → GitHub** → 저장소 `lecpage` 선택
+2. Worker 이름 **`lecpage-sites`**(wrangler.jsonc의 `name`과 같아야 함) · Root directory **`hosting`** · Build command **`npm ci && node scripts/gen-runtime.mjs`**(Workers Builds는 wrangler.jsonc의 `build`를 읽지 않음) · Deploy command **`npx wrangler deploy`** → **Save and Deploy**
+3. 나머지 설정은 `npm run setup -- --skip-deploy`(Worker는 건너뛰고 비밀 값·Pages 토큰·관리 화면·Access만)
+
 **만들 토큰**(대시보드 → 내 프로필 → API 토큰 → 토큰 만들기 → 사용자 지정 토큰. 계정 리소스는 운영 계정 하나, 만료일은 며칠 뒤로)
 
 | 권한 | 쓰는 곳 |
