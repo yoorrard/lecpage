@@ -165,7 +165,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const live = instant && instant.accepting !== false && !instantOff ? instant : null;
   // 운영자가 새 업로드를 잠시 멈췄으면(paused) 그대로, 아니면 하루 한도 때문에 멈춘 것
   const full = instantOff || (instant && instant.accepting === false ? (instant.paused ? '바로 공개가 잠시 새 사이트를 받지 않아요. 다른 곳에 올려 주세요.' : '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.') : '');
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.plan === 'paid' || live.view === 'pages' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view]);
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 공개가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 올린 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
