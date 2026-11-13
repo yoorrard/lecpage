@@ -9,7 +9,7 @@
 //   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
 //        일부만 고치고 검증·다시 빌드(형식: references/cli.md)
-//   options <blueprint.json> [--presets a,b,c]       디자인 3안 빌드 → 비교 그림 한 장
+//   options <blueprint.json> [--presets a,b,c] [--mood calm,bold]   디자인 3안 빌드 → 비교 그림 한 장(분위기: calm·warm·bold·minimal·playful·formal·tech…)
 //   doctor                                           환경 점검과 설치 방법
 //   review <dist> [--port 4180]                      사이트를 띄우고 강사의 '수정 요청'(펜·네모 표시+글)을 work/feedback/에 모음
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
@@ -665,7 +665,8 @@ const commands = {
     const state = loadState(work);
     const { blueprint: bp } = E.validate(raw);
     const topics = bp.design.topics.length ? bp.design.topics : E.detectTopics(bp.meta.title + ' ' + bp.meta.subtitle);
-    const moods = bp.design.mood.length ? bp.design.mood : E.moodsForTopics(topics);
+    // --mood calm,bold: 강사가 말한 느낌으로 순위를 바로 매김(설계도를 먼저 고치지 않아도 됨)
+    const moods = args.mood ? String(args.mood).split(',').map((s) => s.trim()).filter(Boolean) : bp.design.mood.length ? bp.design.mood : E.moodsForTopics(topics);
     const ranked = E.rankPresets({ moods, topics, archetype: bp.archetype.primary, admin: bp.meta.admin.kind, minor: bp.audience.minor }, E.PRESETS.length);
     const ids = args.presets ? String(args.presets).split(',').map((s) => s.trim()).filter((id) => E.PRESET_IDS.includes(id)) : ranked.slice(0, 3).map((r) => r.id);
     if (!ids.length) fail(`프리셋 이름을 확인해 주세요: ${E.PRESET_IDS.join(', ')}`);

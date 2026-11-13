@@ -8,6 +8,7 @@ import { getPreset, presetPlan } from '../design/presets.js';
 import { FONTS } from '../design/fonts.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { fxInfo } from '../decide/design.js';
+import { md } from './markdown.js';
 
 /** 구분 띠: 첫 화면 아래에 흐르는 띠(marquee)나 선·물결 장식 */
 function dividerBand(ctx) {
@@ -207,6 +208,14 @@ function helpSheet(ctx) {
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
 }
 
+/**
+ * 도크의 '출석' 한 번 누르기: 질문·투표를 하지 않은 사람도 참가자 명단(별명)에 남게 함.
+ * 출석 칸(입실·퇴실)이 있으면 그 칸이 맡고, 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
+ */
+export function quickAttend(bp) {
+  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
+}
+
 function dialogs(ctx) {
   const pv = ctx.bp.privacy;
   const needName = pv.collect.includes('name');
@@ -224,6 +233,7 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
+  ${quickAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend hidden>${icon('check')}<span>출석</span></button>` : ''}
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
   ${ctx.bp.live.features.includes('signal') ? `<div class="lp-signal" role="group" aria-label="지금 이해 정도"><button type="button" data-signal="green" aria-pressed="false" title="이해했어요"><i aria-hidden="true">✓</i><span class="lp-sr">이해했어요</span></button><button type="button" data-signal="yellow" aria-pressed="false" title="조금 헷갈려요"><i aria-hidden="true">?</i><span class="lp-sr">조금 헷갈려요</span></button><button type="button" data-signal="red" aria-pressed="false" title="모르겠어요"><i aria-hidden="true">!</i><span class="lp-sr">모르겠어요</span></button></div>` : ''}
@@ -285,6 +295,7 @@ export function renderConsole(ctx) {
 <header class="lp-app-h"><div><p class="lp-small">강사 화면</p><h1>${esc(ctx.bp.meta.title)}</h1></div><div class="lp-app-h-act"><a class="lp-btn lp-btn-ghost lp-btn-sm" href="screen.html" target="_blank" rel="opener">${icon('expand')}<span>발표 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html" target="_blank">${icon('external')}<span>참가자 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="poster.html" target="_blank">${icon('print')}<span>QR 안내문 인쇄</span></a></div></header>
 <form class="lp-card lp-login" data-admin-form><h2>관리자 키</h2><p class="lp-small">배포할 때 만든 관리자 키를 넣어 주세요. 키는 이 탭에만 남아요.</p><label><span class="lp-sr">관리자 키</span><input type="password" name="key" autocomplete="current-password" required></label><button class="lp-btn lp-btn-primary" type="submit">들어가기</button>${ctx.bp.live.provider === 'local' ? '<p class="lp-small">미리보기에서는 아무 키나 넣어도 돼요.</p>' : ''}</form>
 <main class="lp-console" data-console-main hidden></main>
+<details class="lp-card lp-console-help" data-console-help><summary>도움말 · 연수 전·중·후에 할 일</summary><div class="lp-prose">${md(opsGuide(ctx))}</div></details>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div></div>`;
   return appShell(ctx, `강사 화면 · ${ctx.bp.meta.title}`, 'lp-body-app', inner, ['assets/qr.js', 'assets/live.js', 'assets/console.js']);
 }
@@ -409,10 +420,11 @@ function activityItems(bp) {
     boards.length && (boards.some((s) => boardFiles(s, bp)) ? '나눔 보드에 올린 글·파일' : '나눔 보드에 올린 글'),
     on('help') && '도움 요청과 자리 번호',
     on('progress') && '실습 진행 상태',
-    (has('poll') || on('poll')) && '투표 응답',
+    (has('poll') || on('poll') || bp.live.features.length) && '투표 응답', // 강사 화면의 즉석 투표는 어느 참여 기능 사이트에서나 띄울 수 있음
     on('signal') && '신호등 응답',
     bp.sections.some((s) => s.type === 'survey' && s.questions?.length) && '설문 응답',
     (has('attendance') || on('attendance')) && '입실·퇴실 시각',
+    quickAttend(bp) && '출석을 누른 시각',
   ].filter(Boolean);
 }
 function defaultProcessors(bp) {
@@ -491,7 +503,44 @@ const PROVIDER_WHY = {
 };
 
 /**
- * 운영안내.md. 운영 방식은 실제로 연결한 live.provider를 따릅니다.
+ * 강사 안내(연수 전·중·후). 운영안내.md와 강사 화면의 '도움말'이 같은 글을 씁니다.
+ * 강사 화면(console.html)은 누구나 열 수 있는 파일이라, 강사 메모처럼 강사만 볼 내용은 넣지 않습니다(운영안내.md에만).
+ */
+export function opsGuide(ctx) {
+  const bp = ctx.bp;
+  const live = ctx.live;
+  const prov = live ? bp.live.provider : 'none';
+  const days = bp.privacy.retentionDays;
+  const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
+  const svIn = live && sv?.questions?.length;
+  const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
+  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 확인하세요.', http: '실시간 서버가 켜져 있는지 접속 확인(`check.html`)으로 보세요.', local: '지금은 한 브라우저 안에서만 이어지는 시험용이에요. 연수 전에 실시간 서버를 연결하고 다시 만드세요.' }[prov];
+  const before = [
+    '사이트를 올리면 주소와 QR이 나와요. 현장에 붙일 안내문은 `poster.html`을 인쇄하세요(인쇄 창에서 PDF로 저장할 수도 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
+    '연수 장소의 와이파이로 `check.html`을 열어 막힌 곳이 없는지 확인하세요.',
+    live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요.',
+    live && wake,
+  ].filter(Boolean);
+  const during = live ? [
+    '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 질문과 투표 결과가 크게 보여요.',
+    '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
+    '타이머·공지를 보내면 참가자 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 지금 실습·쪽으로 참가자 화면이 움직여요.',
+    bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
+    attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요.' : '연수를 시작할 때 참가자 화면 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 참가자 명단에 남아요.',
+  ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요.'];
+  const survey = sv ? (svIn ? '설문 결과: [기록 내려받기 (CSV)] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
+  const after = live ? [
+    `참가자 명단(별명): 강사 화면의 [기록 내려받기 (CSV)] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
+    survey,
+    '질문·투표 결과도 같은 메뉴에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
+    `다 받은 뒤, 늦어도 연수가 끝나고 ${days}일 안에 강사 화면 맨 아래 [데이터 모두 지우기]를 두 번 눌러 지우세요. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+  ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
+  const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
+  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 빌드하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
+}
+
+/**
+ * 운영안내.md(강사용 폴더, 올리지 않음). 운영 방식은 실제로 연결한 live.provider를 따릅니다.
  * infra(decideInfra 결과)는 추천이 연결한 방식과 같으면 주의만, 다르면 추천한 방식을 한 줄로 덧붙입니다.
  */
 export function opsDoc(ctx, infra) {
@@ -501,12 +550,11 @@ export function opsDoc(ctx, infra) {
   const name = PROVIDER_KO[prov] || prov;
   const same = !!infra && infra.liveProvider === prov;
   const rec = infra && !same ? infra.backendInfo?.name_ko : '';
-  const files = ['`index.html` 참가자 화면', live && '`console.html` 강사 화면', '`screen.html` 발표 화면', '`check.html` 접속 확인', '`poster.html` QR 안내문 인쇄', live && '`privacy.html` 개인정보 처리 안내'].filter(Boolean);
-  // 발표자 노트의 진행 메모(참가자 화면에는 싣지 않음): 실습별로 강사만 보는 이 문서에
+  const files = ['`index.html` 참가자 화면', live && '`console.html` 강사 화면(도움말에 이 안내가 함께 있어요)', '`screen.html` 발표 화면', '`check.html` 접속 확인', '`poster.html` QR 안내문 인쇄', live && '`privacy.html` 개인정보 처리 안내'].filter(Boolean);
+  // 발표자 노트의 진행 메모(참가자 화면·강사 화면에는 싣지 않음): 실습별로 강사만 보는 이 문서에
   const memos = (bp.sections.find((s) => s.type === 'stations')?.items || []).filter((x) => x.teacherNote)
     .map((x) => `- **${x.title}**${x.source?.pages?.length ? ` (${x.source.pages.join('·')}쪽)` : ''}\n${x.teacherNote.split('\n').map((t) => `  - ${t}`).join('\n')}`);
-  const memoDoc = memos.length ? `\n## 실습별 강사 메모(발표자 노트)\n참가자 화면에는 보이지 않아요.\n${memos.join('\n')}\n` : '';
-  const before = { supabase:'Supabase 무료 프로젝트는 7일 동안 사용이 없으면 멈춥니다. 연수 하루 전 접속 확인(`check.html`)으로 깨어 있는지 봅니다.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 확인합니다.', http: '서버가 켜져 있는지 확인합니다.', local: '실시간 서버를 연결했는지 확인합니다. 지금은 참가자 기기끼리 이어지지 않습니다.' }[prov];
+  const memoDoc = memos.length ? `\n## 실습별 강사 메모(발표자 노트)\n참가자 화면과 강사 화면에는 보이지 않아요.\n${memos.join('\n')}\n` : '';
   return `# 운영 안내 — ${bp.meta.title}
 
 ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.meta.end ? '~' + bp.meta.end : ''}\n` : ''}연수 코드: **${bp.live.code}** · 실시간 방식: ${live ? name : '없음'}
@@ -514,16 +562,7 @@ ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.
 ## 파일
 - ${files.join(' · ')}
 
-## 연수 전
-1. 사이트를 배포하면 주소와 QR이 나옵니다. 현장에 붙일 안내문은 \`poster.html\`을 인쇄합니다. 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가서, 짧은 주소 서비스가 멈춰도 QR은 열립니다.
-2. 연수 장소의 와이파이로 \`check.html\`을 열어 막힌 사이트가 없는지 확인합니다.
-${live ? `3. 관리자 키로 강사 화면(\`console.html\`)에 들어가 참가자 화면과 함께 리허설합니다(두 기기로 질문·도움 요청을 보내 보세요).\n${before ? `4. ${before}\n` : ''}` : ''}
-## 연수 중
-${live ? '- 강사 화면에서 진행 현황(누가 어디까지 했는지)과 도움 요청한 사람을 봅니다. 도움 요청은 "맡기" → "해결"로 처리합니다.\n- 타이머·공지를 보내면 참가자 화면 위에 나타납니다. "강사 따라가기"를 켜면 지금 단계·쪽으로 참가자 화면이 움직입니다.\n- 프로젝터에는 발표 화면(`screen.html`)을 띄웁니다.\n' : '- 프로젝터에 첫 화면의 QR(공유 버튼)을 띄워 접속을 안내합니다.\n'}${memoDoc}
-## 연수 후
-- 만족도 조사 응답을 확인합니다.
-${live ? `- 강사 화면에서 출석·진행·질문 기록을 CSV로 내려받습니다.\n- 보유 기간(${bp.privacy.retentionDays}일)이 지나면 강사 화면의 "데이터 모두 지우기"를 누릅니다.\n- 계속 공개할 사이트라면 실시간 기능을 끄고 다시 만들어 정적 아카이브로 바꿉니다.\n` : '- 사이트는 그대로 두면 자료 아카이브로 쓸 수 있습니다.\n'}- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 뜨고, \`연수 후 안내\` 칸이 첫 화면 바로 아래로 올라옵니다. 다시 보기 영상·소통방·이수 처리 일정을 그 칸에 넣어 다시 빌드하세요(미리 보기: 주소 끝에 \`?phase=after\`).
-
+${opsGuide(ctx)}${memoDoc}
 ## 운영 방식: ${name}
 - ${PROVIDER_WHY[prov] || ''}
 ${rec ? `- 연수 정보(인원·기능)로 추천한 방식: ${rec}\n` : ''}${same && infra.warnings.length ? `\n주의\n${infra.warnings.map((w) => `- ${w}`).join('\n')}\n` : ''}`;
