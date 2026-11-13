@@ -17,8 +17,9 @@ jobs:
       - run: npm --prefix app ci
       - run: npm --prefix app run build
         env:
-          # '바로 배포' 서버 주소(hosting/README.md). 저장소 변수 LECPAGE_PUBLISH_API가 비어 있으면 그 기능은 보이지 않음
-          VITE_PUBLISH_API: ${{ vars.LECPAGE_PUBLISH_API }}
+          # '바로 배포' 서버 주소(hosting/README.md). 저장소 변수 LECPAGE_PUBLISH_API가 있으면 그 값,
+          # 없으면 운영자 저장소에서만 운영 서버 주소(포크는 비어 있어 그 기능이 보이지 않음. 서버도 운영자 앱 주소만 받음)
+          VITE_PUBLISH_API: ${{ vars.LECPAGE_PUBLISH_API || (github.repository == 'yoorrard/lecpage' && 'https://lecpage-sites.lecpage.workers.dev' || '') }}
           # 코드가 든 구글 시트 틀의 '사본 만들기' 주소(docs/operations.md). 비어 있으면 코드 붙여넣기 안내가 나옴
           VITE_SHEET_TEMPLATE: ${{ vars.LECPAGE_SHEET_TEMPLATE }}
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
