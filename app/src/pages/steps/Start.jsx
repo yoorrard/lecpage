@@ -173,7 +173,7 @@ export function StepStart({ p, update, go }) {
 
   return (
     <>
-      <StepHead title={p.blueprint ? '교재와 연수 정보' : '교재를 넣으면 AI가 사이트를 만들어요'} desc="PPT·PDF·한글(HWPX)·워드 파일을 이 브라우저 안에서 읽어요.">
+      <StepHead title={p.blueprint ? '교재와 연수 정보' : '교재를 넣으면 AI가 사이트를 만들어요'} desc="PPT·PDF·한글(HWP·HWPX)·워드 파일을 이 브라우저 안에서 읽어요.">
         {!p.blueprint && !p.files?.length && <a class="btn btn-sm" href="#/demo">먼저 체험해 보기</a>}
       </StepHead>
       {p.blueprint && <Notice kind="ok">사이트가 있어요. 여기서 고친 정보는 바로 반영돼요.</Notice>}

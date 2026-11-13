@@ -121,7 +121,7 @@ export function Home() {
           <p class="ld-lead">PPT·PDF·한글·워드 교재를 놓으면 AI가 읽고 연수 흐름과 문구를 짜요. 주제에 맞는 디자인으로 사이트를 만들고, 공개하면 참가자에게 보낼 주소와 QR이 나와요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
-            <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWPX)·워드</span></span>
+            <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>
           </button>
           <input ref={pickRef} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { startWith(e.target.files); e.target.value = ''; }} />
           <div class="ld-hero-more">

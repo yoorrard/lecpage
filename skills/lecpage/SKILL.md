@@ -1,6 +1,6 @@
 ---
 name: lecpage
-description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 보기, 교재 글꼴을 따르는 디자인 21종(정적~스크롤 연출), 질문·도움 요청·진행 현황·투표·만족도 설문·이수자 명단, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
+description: 연수·강의·워크숍·설명회·직무연수용 웹사이트를 교재(PPT·PDF·한글 HWP·HWPX·워드)와 연수 정보로 만든다. 교재 원문 그대로의 실습 안내와 프롬프트 복사, 교재 보기, 교재 글꼴을 따르는 디자인 21종(정적~스크롤 연출), 질문·도움 요청·진행 현황·투표·만족도 설문·이수자 명단, 강사 화면과 발표 화면, 암호 보호, 배포 안내까지 갖춘 사이트를 명령 하나로 빌드하고 점검한다. Use this skill whenever the user wants a website, landing page, QR handout page or participant page for a training, workshop, lecture, seminar, conference or course, especially from slides or documents — e.g. "연수 사이트 만들어 줘", "이 PPT로 강의 페이지", "실습 안내 웹페이지", "교원 연수 QR로 나눠 줄 사이트", "워크숍 참가자용 페이지", "연수 교재를 웹으로", "turn my slides into a workshop site" — even if they never say "lecpage". Also use it to edit, redesign, connect live features to, or deploy a site it built (work/blueprint.json, dist-강사용).
 license: Apache-2.0. 생성 사이트에 복사되는 engine/runtime·backends·templates와 엔진이 만든 사이트 파일은 MIT-0. 전문 LICENSE.txt, 고지 NOTICE
 compatibility: Node.js 22 이상. 선택 도구가 없으면 그 단계만 건너뜀 — Playwright(점검·디자인 비교), LibreOffice·pdftoppm(교재 쪽 그림), Python 3 + PyMuPDF(PDF 보조). `lecpage.mjs doctor`로 확인. 인터넷 없이도 빌드 가능
 ---
@@ -28,7 +28,7 @@ $L doctor                                                  # 환경 점검
 출력은 짧은 요약이다. `work/material.json`·`blueprint.json`을 통째로 열지 않는다. 필요한 칸만 `brief`로 보거나 `grep`·`jq`로 찾는다. 명령·패치 형식·폴더 구조는 `references/cli.md`.
 
 ## 작업 흐름
-1. **자료 받기**: PPTX·PDF·HWPX·DOCX·TXT·MD. 구형 HWP·PPT·DOC는 "PDF나 HWPX·PPTX로 저장해 주세요"라고 안내한다. PPTX와 그 PDF를 함께 받으면 쪽 그림이 원본 글꼴 그대로 나온다.
+1. **자료 받기**: PPTX·PDF·HWP(한글 2002 이후)·HWPX·DOCX·TXT·MD. 구형 PPT·DOC와 암호·배포용 HWP는 "PDF나 PPTX·HWPX로 저장해 주세요"라고 안내한다. PPTX와 그 PDF를 함께 받으면 쪽 그림이 원본 글꼴 그대로 나온다.
 2. **바로 만들기**: `make 교재 -o dist`. 요약의 칸 목록·빈칸·점검 결과를 읽는다.
 3. **빈칸 인터뷰**: 요약의 "빈칸"과 `references/intake.md`에서 교재로 알 수 없는 것만 고르기형으로 묻는다(기본 4문항, 많아야 7개). 디자인·운영 방식은 여기서 묻지 않고 6·7단계에서 정한다. 첫 메시지에 교재에서 알아낸 것을 한 줄로 알린다. "알아서"라고 하면 기본값을 쓰고 무엇을 가정했는지 한 줄로 말한다. 답은 `work/info.json`.
 4. **답 반영**: `make 교재 -i work/info.json -o dist --fresh`. 교재 해석은 재사용되고 설계도만 새 초안으로 바뀐다.
