@@ -447,7 +447,7 @@
       var b = el('button'); b.type = 'button';
       var img = s.querySelector('img');
       // 그림만 있는 단추는 쪽 번호를 이름으로, 글자가 보이는 단추는 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
-      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
+      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { go(i); });
       thumbs.appendChild(b);
     });
@@ -490,7 +490,7 @@
     var grid = el('div', 'lp-overview-grid'); ov.appendChild(grid);
     var btns = slides.map(function (s, i) {
       var b = el('button'); b.type = 'button'; var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.src = img.src; t.alt = ''; t.loading = 'lazy'; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
+      if (img) { var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
       else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { done(); pick(i); });
       b._q = ((s.getAttribute('data-title') || '') + ' ' + (s.getAttribute('data-text') || '')).toLowerCase();
