@@ -7,7 +7,7 @@ export const NOTICE_LIMITS = { title: 60, body: 400, lines: 8, link: 300, linkLa
 /** 제어 문자·보이지 않는 글자·방향 바꿈 글자(주소·글을 거꾸로 보이게 하는 데 씀)를 뺌. 줄바꿈은 lines가 참일 때만 둠 */
 export function cleanText(v, { lines = false } = {}) {
   let s = String(v ?? '').normalize('NFC');
-  s = s.replace(/[​-‏‪-‮⁠-⁩­﻿]/g, '');
+  s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\u00AD\uFEFF]/g, '');
   s = lines ? s.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ') : s.replace(/[\u0000-\u001F\u007F]/g, ' ');
   return lines ? s.split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim() : s.replace(/\s+/g, ' ').trim();
 }
@@ -18,7 +18,7 @@ export function cleanText(v, { lines = false } = {}) {
  */
 export function safeLink(v, allowHosts = []) {
   const raw = String(v ?? '').trim();
-  if (!raw || raw.length > NOTICE_LIMITS.link || /[\s\u0000-\u001F\u007F­​-‏‪-‮⁠-⁩﻿\\]/.test(raw)) return '';
+  if (!raw || raw.length > NOTICE_LIMITS.link || /[\s\u0000-\u001F\u007F\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\\]/.test(raw)) return '';
   let u;
   try { u = new URL(raw); } catch { return ''; }
   if (u.protocol !== 'https:' || u.username || u.password || u.port) return '';

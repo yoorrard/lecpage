@@ -5,6 +5,7 @@ import { E } from './engine.js';
 import { makePrompt, looksTruncated, applyInfo, guardAnswer } from './blueprint.js';
 import { generateAuto, getActiveAI, explainError, PROVIDERS } from './ai.js';
 import { pushUndoFor } from './undo.js';
+import { track } from './stats.js';
 
 const jobs = new Map(); // pid → { status: 'running'|'done'|'error', phase, startedAt, error, ctrl }
 const subs = new Set();
@@ -18,6 +19,7 @@ export function clearJob(pid) { jobs.delete(pid); emit(); }
  * @param {{ restored?: object[], via?: string, polish?: boolean }} o
  */
 export function noteAiResult(pid, { restored = [], via = '', polish = false } = {}) {
+  if (!polish) track('make', 'chat'); // 익명 이용 합계(바로 공개 서버가 있을 때만, 끌 수 있음)
   set(pid, { status: 'done', phase: 'done', startedAt: Date.now(), error: null, ctrl: null, via, restored, polish, undone: [] });
 }
 /** 되돌린 곳 하나를 AI 답으로 되돌렸다고 적음(띠의 목록에서 그 줄을 '되돌림'으로) */
@@ -68,6 +70,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     const g = guardAnswer(bp, cur, ing, cur.blueprint);
     update((c) => ({ blueprint: applyInfo(g.blueprint, c.info, c.material, c.blueprint), aiMethod: 'ai' }));
     set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null, restored: g.restored, undone: [] });
+    track('make', 'key');
   } catch (e) {
     if (e.name === 'AbortError') { clearJob(pid); return; }
     const kind = e.kind;

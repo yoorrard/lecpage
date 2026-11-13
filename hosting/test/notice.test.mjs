@@ -8,7 +8,7 @@ const NOW = Date.UTC(2026, 10, 13, 3);
 const base = { title: '점검 안내', body: '11월 20일 밤 10시에 잠깐 멈춰요.', targets: ['app'] };
 
 test('공지: 글자만 받고 다듬음', () => {
-  const { value } = checkNotice({ ...base, title: '  <b>점검</b>‮ 안내​ ', body: 'a\r\n\r\n\r\n\r\nb\u0000c\n  d  ' }, { now: NOW });
+  const { value } = checkNotice({ ...base, title: '  <b>점검</b>\u202E 안내\u200B ', body: 'a\r\n\r\n\r\n\r\nb\u0000c\n  d  ' }, { now: NOW });
   assert.equal(value.title, '<b>점검</b> 안내', '꺾쇠는 글자 그대로(그릴 때 글자로), 방향 바꿈·보이지 않는 글자는 뺌');
   assert.equal(value.body, 'a\n\nb c\nd', '줄바꿈은 두 줄까지, 제어 문자는 빈칸');
   assert.deepEqual(value.targets, ['app']);
@@ -35,7 +35,7 @@ test('공지: 틀린 값은 까닭과 함께 거절', () => {
 test('공지 링크: https만, 피싱에 쓰이는 모양은 거절', () => {
   assert.equal(safeLink('https://github.com/yoorrard/lecpage/discussions'), 'https://github.com/yoorrard/lecpage/discussions');
   assert.match(safeLink('https://예시.한국/안내'), /^https:\/\/xn--[a-z0-9-]+\.xn--3e0b707e\/%EC%95%88%EB%82%B4$/, '한글 도메인은 퓨니코드로');
-  for (const bad of ['http://example.com', 'javascript:alert(1)', 'data:text/html,<script>', 'https://user:pw@example.com', 'https://example.com:8443/', 'https://127.0.0.1/', 'https://[::1]/', 'https://localhost/', 'https://intranet/', 'https://a.local/', ' https://example.com/a b', 'https://exa‮mple.com', 'https://example.com/​', 'https:\\\\example.com', `https://example.com/${'a'.repeat(300)}`, '//example.com', 'example.com']) {
+  for (const bad of ['http://example.com', 'javascript:alert(1)', 'data:text/html,<script>', 'https://user:pw@example.com', 'https://example.com:8443/', 'https://127.0.0.1/', 'https://[::1]/', 'https://localhost/', 'https://intranet/', 'https://a.local/', ' https://example.com/a b', 'https://exa\u202Emple.com', 'https://example.com/\u200B', 'https:\\\\example.com', `https://example.com/${'a'.repeat(300)}`, '//example.com', 'example.com']) {
     assert.equal(safeLink(bad), '', bad);
   }
   // 허용 호스트를 정하면 그곳(과 하위 도메인)만

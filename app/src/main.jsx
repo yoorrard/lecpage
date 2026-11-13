@@ -80,6 +80,12 @@ function App() {
 
 render(<App />, document.getElementById('app'));
 
+// 운영자 공지·익명 이용 합계: 첫 화면이 뜬 뒤 한가할 때 따로 받음(첫 화면 JS를 늘리지 않음) → lib/after-load.js
+addEventListener('load', () => {
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+  idle(() => { import('./lib/after-load.js').then((m) => m.afterLoad()).catch(() => { }); }, { timeout: 4000 });
+});
+
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => { });
