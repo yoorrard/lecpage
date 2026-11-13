@@ -829,7 +829,7 @@ input,textarea,select{font-size:max(16px,1em)}
 [data-band="accent"] .lp-result{justify-self:start;background:linear-gradient(transparent 62%,color-mix(in srgb,var(--accent-foreground) 22%,transparent) 62% 94%,transparent 94%)}
 .lp-message-side{display:grid;gap:var(--sp-3);align-content:end;max-width:27rem}
 .lp-message-note{font-size:var(--fs-md);line-height:1.7;color:var(--muted-foreground)}
-[data-band="accent"] .lp-message-note,[data-band="accent"] .lp-sec-message .lp-src{opacity:.86}
+[data-band="accent"] .lp-sec-message .lp-src{opacity:.92} /* 메시지 덧말은 띠 색 위에서 4.5:1이 되게 흐리지 않음 */
 @media (min-width:1024px){.lp-message:has(> .lp-message-side){grid-template-columns:minmax(0,8fr) minmax(0,4fr);column-gap:clamp(32px,5vw,88px);align-items:end}}
 /* 보통 단계부터: 스크롤에 맞춰 낱말(공식은 줄)이 차례로 진해짐. 브라우저가 지원하고 움직임이 켜져 있을 때만 — 아니면 처음부터 다 보임 */
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){

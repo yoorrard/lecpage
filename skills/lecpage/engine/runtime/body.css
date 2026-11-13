@@ -150,6 +150,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-gb-ck{transition:transform .4s var
 /*@v:glance.spec*/
 /* 한눈에 · 점선 사양표: 이름 ······ 값 */
 .lp-spec{display:grid;grid-template-columns:minmax(0,1fr);margin:0;max-width:52rem;border-top:max(2px,var(--border-w)) solid var(--foreground)}
+.lp-sec-glance .lp-spec{gap:0;background:none;border-left:0} /* 첫 화면 '설계도' 구성의 같은 이름 규칙(바탕색 칸)이 새어 들지 않게 — 그 바탕 위 숫자가 2.6:1이었음 */
 .lp-spec > div{display:grid;grid-template-columns:auto minmax(2rem,1fr) auto;align-items:end;gap:var(--sp-3);padding:var(--sp-4) 0;border-bottom:var(--rule)}
 .lp-spec > div::before{content:"";grid-column:2;grid-row:1;align-self:end;margin-bottom:.55em;border-bottom:2px dotted color-mix(in srgb,var(--foreground) 34%,transparent)}
 .lp-spec dt{grid-column:1;grid-row:1;display:grid;gap:2px;font-size:var(--fs-md);font-weight:700}
@@ -452,7 +453,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-tt > li:has(h3 a:focus-visible){tr
 .lp-book{position:relative;flex:var(--w) 1 0;min-width:26px;max-width:84px;height:calc(var(--h) * 1%);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:10px 0 8px;border-radius:3px 3px 0 0;background:var(--primary);color:var(--primary-foreground);overflow:hidden;transform-origin:50% 100%;transition:transform .35s var(--ease-out)}
 .lp-book.c1{background:var(--accent);color:var(--accent-foreground)}
 .lp-book.c2{background:var(--foreground);color:var(--background)}
-.lp-book.c3{background:var(--accent-2);color:var(--accent-2-foreground)}
+.lp-book.c3{background:var(--card);color:var(--card-foreground);box-shadow:inset 0 0 0 1px var(--rule-c)} /* 강조2 색은 글자 대비가 경계값에 걸리는 프리셋이 있어 카드 색으로 */
 .lp-book b{writing-mode:vertical-rl;font-size:var(--fs-sm);font-weight:700;line-height:1.1;max-height:calc(100% - 2.4em);overflow:hidden;white-space:nowrap}
 .lp-book i{font-style:normal;font-family:var(--font-mono);font-size:10px}
 .lp-book.is-hot{transform:translate3d(0,-14px,0)}
