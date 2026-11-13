@@ -18,6 +18,8 @@ export function useAiResume(open) {
 }
 
 const touch = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
+/** 앱 옆에 챗봇 창을 나란히 띄울 만큼 넓은 마우스 화면인지(좁거나 터치면 새 탭·챗봇 앱) */
+const sideBySide = () => { try { return !touch() && screen.availWidth >= 1280 && innerWidth >= 900; } catch { return false; } };
 
 /**
  * 누르는 그 순간(사용자 동작 안에서) 글을 복사. 새 창이 열리면 이 창이 초점을 잃어 비동기 복사가 막히는 브라우저가 있어,
@@ -41,8 +43,10 @@ function copyNow(text) {
  * start: { how: 'paste'|'connect', full, bot, make } — 오류에서 넘어올 때 고를 길·전체 다시 짜기·먼저 내세울 챗봇. make: 사이트가 있어도 '처음 만들기' 화면(교재 넣기 단계의 다시 만들기)
  * onBlueprint(bp, { polish, count, restored }) — polish면 문구만 바뀐 설계도, 아니면 AI가 짠 설계도(부르는 쪽이 applyInfo로 강사 값을 지킴).
  * 구성까지 새로 짠 답은 교재 지킴이(guardAnswer)를 거친 뒤이고, restored는 교재대로 되돌린 곳
+ * 교재 넣기 화면 안에 둘 때: head(제목 대신 그릴 것) · wait/onWait(챗봇에 보낸 사실을 연수에 저장해, 새로 고쳐도 [답 넣기] 자리로)
+ * · guard()(보내기 전에 확인, false면 멈춤) · busy(교재를 읽는 중이면 보내지 않음) · children(챗봇 버튼 위에 넣을 것: 요청 사항)
  */
-export function AiPanel({ p, onBlueprint, start = null, onKey = null }) {
+export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = null, wait = null, onWait = null, guard = null, busy = false, children }) {
   const [ing, setIng] = useState(null);
   const [ai, setAi] = useState(undefined); // undefined: 확인 중 · null: 연결 없음
   const first = !p.blueprint || !!start?.make; // 처음 만들기(쓰던 챗봇 창 길만) · 아니면 다듬기(키·챗봇 고르기, 문구만 다듬기 선택)
@@ -77,6 +81,7 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null }) {
     if (r.kind === 'question') { setErr({ title: '챗봇이 답 대신 질문을 했어요.', body: '[다시 요청 글 복사]를 눌러 챗봇에 보내면 바로 써 줘요. 모르는 것은 빈칸으로 두라고 적혀 있어요.', actions: ['jsononly'] }); return; }
     if (r.kind === 'talk') { setErr({ title: '챗봇이 설명만 하고 사이트 내용을 쓰지 않았어요.', body: '[다시 요청 글 복사]를 눌러 챗봇에 보내 주세요.', actions: ['jsononly'] }); return; }
     setPartial('');
+    onWait?.(null); // 답을 받았으니 '챗봇에 보냄' 표시는 지움(받을 수 없는 답이면 남겨 둬서 다시 넣을 수 있게)
     const json = r.json;
     if (Array.isArray(json.changes) || (!full && !Array.isArray(json.sections))) {
       const pr = applyPolish(base.current, targets, json);
@@ -103,14 +108,15 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null }) {
         <label class="check"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); setErr(null); setPartial(''); }} />
           <span>섹션 구성과 순서까지 새로 짜기 <span class="small muted">끄면 문구만 빠르게 다듬어요.</span></span></label>
         {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'connect', label: ai ? `${PROVIDERS[ai.provider].short}로 바로` : 'API 키로' }, { value: 'paste', label: '쓰던 챗봇 창으로' }]} />}
-      </> : (
+      </> : head || (
         // 처음 만들 때(교재 넣기 단계): 고를 것 없이 두 걸음만
         <div class="stack" style={{ gap: '4px' }}>
           <h2 class="h-sub" tabIndex={-1} data-autofocus>쓰던 챗봇 창으로 만들기</h2>
           <p class="small muted">준비할 것 없어요. 챗봇에 프롬프트를 붙여 넣고, 답을 복사해 와요. 무료 챗봇도 돼요.</p>
         </div>
       )}
-      {(how === 'paste' || first) && <Paste ready={!!ing} prompt={prompt} full={full} first={first} bot={bot} partial={partial} onApply={accept} onRestart={() => { setPartial(''); setErr(null); }} err={err} />}
+      {children}
+      {(how === 'paste' || first) && <Paste ready={!!ing && !busy} prompt={prompt} dep={[p.material, p.info, p.blueprint]} full={full} first={first} bot={bot} partial={partial} onApply={accept} onRestart={() => { setPartial(''); setErr(null); }} err={err} wait={wait} onWait={onWait} guard={guard} />}
       {how === 'connect' && !first && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} swap={swap} pay={pay} onChat={toPaste} />}
       {err && how === 'connect' && !first && <ErrorBox e={err} provider={ai?.provider} onPaste={() => toPaste(err.provider || ai?.provider)} onConnect={() => { setHow('connect'); setSwap((n) => n + 1); setErr(null); }} onPay={() => { setErr(null); setPay({ n: Date.now() }); }} onLight={() => { setErr(null); setPay({ n: Date.now(), light: true }); }} />}
       {first && onKey && <div class="btn-row ai-other"><button type="button" class="btn btn-sm btn-quiet" onClick={onKey}>API 키 연결로 바꾸기</button></div>}
@@ -144,34 +150,69 @@ export function ErrorBox({ e, provider, onPaste, onConnect, onPay, onLight }) {
 }
 
 /**
- * 쓰던 챗봇 창: ① [ChatGPT 열기] 한 번에 프롬프트가 복사되고 새 창이 열림(Claude는 프롬프트가 짧으면 입력 칸까지 채움)
- * → ② 돌아오면 [답 넣기]에 초점, 누르면 클립보드의 답을 읽어 바로 적용(창 어디서든 Ctrl+V도 됨).
- * 답이 끊겼으면 이어 쓰기 요청 글을 복사해 주고, 이어진 답을 넣으면 앞의 답 뒤에 붙임. 클립보드는 누를 때만 읽음
+ * 쓰던 챗봇 창: ① [ChatGPT 열기] 한 번에 프롬프트가 복사되고 챗봇이 열림(넓은 화면은 앱 옆에 나란히, Claude는 프롬프트가 짧으면 입력 칸까지 채움)
+ * → ② 돌아오면 [답 넣기]에 초점, 누르면 클립보드의 답을 읽어 바로 적용(화면 어디서든 Ctrl+V도 됨).
+ * 클립보드 읽기를 이미 허락한 브라우저면 돌아오는 순간 답을 저절로 넣음(보낼 때 프롬프트로 클립보드를 덮었을 때만 → 예전 답을 잘못 넣지 않게).
+ * 보낸 사실(wait)은 연수에 저장: 휴대폰에서 챗봇 앱에 다녀오며 탭이 새로 고쳐져도 [답 넣기] 자리로 돌아옴.
+ * 답이 끊겼으면 이어 쓰기 요청 글을 복사해 주고, 이어진 답을 넣으면 앞의 답 뒤에 붙임
  */
-function Paste({ ready, prompt, full, first, bot: want, partial, onApply, onRestart, err }) {
+const WAIT_MS = 3 * 60 * 60 * 1000; // 세 시간 넘게 지난 '보냄' 표시는 잊음
+function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApply, onRestart, err, wait, onWait, guard }) {
+  const waiting = !!wait && Date.now() - (wait.at || 0) < WAIT_MS;
   const [answer, setAnswer] = useState('');
-  const [step, setStep] = useState(0);
-  const [sent, setSent] = useState('');
-  const [back, setBack] = useState(false);
-  const [bot, setBot] = useState(want || getChatbot());
+  const [step, setStep] = useState(waiting ? 1 : 0);
+  const [sent, setSent] = useState(waiting ? wait.bot || 'chat' : ''); // 돌아오면(창 초점·보임) [답 넣기]로
+  const [back, setBack] = useState(waiting);
+  const [bot, setBot] = useState(want || (waiting && wait.bot) || getChatbot());
   useEffect(() => { if (want) setBot(want); }, [want]);
+  const fresh = useRef(waiting && !!wait.fresh); // 보낼 때 클립보드를 프롬프트로 덮었음 → 그 뒤 클립보드의 답은 이번 답
   const pasteRef = useRef(); const taRef = useRef();
-  const text = useMemo(() => (ready ? prompt() : ''), [ready, full]);
+  const text = useMemo(() => (ready ? prompt() : ''), [ready, full, dep[0], dep[1], dep[2]]);
   const bots = [...CHATBOTS].sort((a, b) => (b.id === bot) - (a.id === bot));
   useEffect(() => { if (partial) { setStep(1); setAnswer(''); } }, [partial]);
   useEffect(() => { if (err) setStep(1); }, [err]); // 받을 수 없는 답이면 그 안내가 보이는 걸음으로
+  /** 허락받은 클립보드면 돌아오는 순간 답을 읽어 넣음. 답이 아니면(프롬프트 그대로 등) 아무것도 하지 않고 [답 넣기]에 초점만 */
+  async function tryAuto() {
+    if (!fresh.current || partial || !ready || !navigator.permissions?.query || !navigator.clipboard?.readText) return;
+    try { if ((await navigator.permissions.query({ name: 'clipboard-read' })).state !== 'granted') return; } catch { return; }
+    let v = ''; try { v = (await navigator.clipboard.readText()).trim(); } catch { return; }
+    if (E.readAnswer(v).kind !== 'ok') return;
+    fresh.current = false; toast('복사해 온 답을 넣었어요.'); onApply(v);
+  }
+  const autoRef = useRef(tryAuto); autoRef.current = tryAuto; // 돌아옴 알림이 늘 지금 값(ready·partial)으로 읽게
+  useEffect(() => { if (waiting && ready) tryAuto(); }, [ready]); // 새로 고친 뒤 돌아온 경우
   useEffect(() => {
     if (!sent) return;
-    const f = () => { if (document.visibilityState === 'visible' && document.hasFocus()) { setStep(1); setBack(true); setSent(''); } };
+    const f = () => { if (document.visibilityState === 'visible' && document.hasFocus()) { setStep(1); setBack(true); setSent(''); autoRef.current(); } };
     addEventListener('focus', f); document.addEventListener('visibilitychange', f);
     return () => { removeEventListener('focus', f); document.removeEventListener('visibilitychange', f); };
   }, [sent]);
   useEffect(() => { if (step === 1 && back) pasteRef.current?.focus({ preventScroll: true }); }, [step, back]);
+  useEffect(() => { if (waiting) setTimeout(() => pasteRef.current?.scrollIntoView({ block: 'center' }), 50); }, []); // 새로 고친 뒤: [답 넣기]가 보이게
+  // 화면 어디서든(입력 칸 밖) 붙여 넣은 글이 챗봇 답이면 바로 넣음. 보내기 전에는 답 모양일 때만(다른 글 붙여넣기를 막지 않게)
+  useEffect(() => {
+    const f = (e) => {
+      if (!ready || e.defaultPrevented) return;
+      const t = e.target;
+      if (t === taRef.current || t?.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]')) return;
+      const v = e.clipboardData?.getData('text'); if (!v?.trim()) return;
+      if (step === 0 && !partial && !['ok', 'cut'].includes(E.readAnswer(v).kind)) return;
+      e.preventDefault(); onApply(v);
+    };
+    document.addEventListener('paste', f); return () => document.removeEventListener('paste', f);
+  }, [ready, step, partial]);
 
-  /** 챗봇 열기(링크): 누르는 순간 프롬프트를 복사하고, 링크가 새 창을 엶 */
-  function send(b, prefilled) {
-    copyNow(text);
-    setChatbot(b.id); setBot(b.id); setSent(b.id); setBack(false);
+  const mark = (id, ok) => { fresh.current = ok; setSent(id); setBack(false); onWait?.({ bot: id, at: Date.now(), fresh: ok }); };
+  /** 챗봇 열기(링크): 누르는 순간 프롬프트를 복사. 넓은 화면은 앱 옆에 창을 띄워 두 화면을 함께 보게, 그 밖에는 새 탭(휴대폰은 챗봇 앱) */
+  function send(e, b, prefilled) {
+    if (!ready || (guard && !guard())) { e.preventDefault(); return; }
+    const ok = copyNow(text);
+    setChatbot(b.id); setBot(b.id); mark(b.id, ok);
+    if (sideBySide()) {
+      const w = Math.round(Math.min(820, screen.availWidth / 2)); const left = (screen.availLeft || 0) + screen.availWidth - w;
+      const win = window.open(e.currentTarget.href, 'lecpage-chatbot', `popup,width=${w},height=${screen.availHeight},left=${left},top=${screen.availTop || 0}`);
+      if (win) { e.preventDefault(); win.focus?.(); }
+    }
     toast(prefilled ? 'Claude 입력 칸에 프롬프트를 채웠어요. 보내기를 누르세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
   }
   /** 챗봇 답을 클립보드에서 읽어 바로 적용(누를 때만 읽음) */
@@ -182,17 +223,11 @@ function Paste({ ready, prompt, full, first, bot: want, partial, onApply, onRest
     if (!v) { toast('복사한 답이 없어요. 챗봇 답 아래의 복사 버튼을 눌러 주세요.'); return; }
     setAnswer(''); onApply(v);
   }
-  /** 창 어디서든 Ctrl+V로 답을 넣으면 바로 적용(글 칸은 제 처리대로) */
-  function onAnyPaste(e) {
-    if (e.target === taRef.current || !ready) return;
-    const v = e.clipboardData?.getData('text'); if (!v?.trim()) return;
-    e.preventDefault(); onApply(v);
-  }
   /** 챗봇에 보낼 짧은 글(이어 쓰기·다시 요청)을 복사. 챗봇에서 돌아오면 [답 넣기]에 다시 초점 */
   const askCopy = (t, msg) => { copy(t, msg); setSent('ask'); setBack(false); };
   const names = ['챗봇에 보내기', partial ? '이어진 답 넣기' : '답 넣기'];
   return (
-    <section class="key-card chat-card" aria-label="쓰던 챗봇 창으로 만드는 순서" onPaste={onAnyPaste}>
+    <section class="key-card chat-card" aria-label="쓰던 챗봇 창으로 만드는 순서">
       <ol class="key-dots" aria-label="순서">
         {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
       </ol>
@@ -203,12 +238,12 @@ function Paste({ ready, prompt, full, first, bot: want, partial, onApply, onRest
           <div class="btn-row chat-bots">
             {bots.map((b, i) => {
               const pre = b.prefill?.(text) || '';
-              return <a class={`btn${i === 0 ? ' btn-primary btn-lg' : ''}`} href={pre || b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined}
-                onClick={(e) => { if (!ready) { e.preventDefault(); return; } send(b, !!pre); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
+              return <a class={`btn${i === 0 ? ' btn-primary btn-lg' : ' btn-sm'}`} href={pre || b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined}
+                onClick={(e) => send(e, b, !!pre)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
             })}
           </div>
           {CHATBOTS.find((b) => b.id === 'claude').prefill(text) && <p class="small muted">Claude는 입력 칸에 프롬프트가 채워진 채로 열려요. 비어 있으면 붙여 넣으세요.</p>}
-          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { copyNow(text); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
+          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(text)); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
           {full && text.length > 30000 && <p class="small muted">교재가 길어 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어 받아요.</p>}
           <p class="small muted">교재의 글이 고른 챗봇 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
         </div></div>

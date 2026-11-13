@@ -215,6 +215,24 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .step-head p{color:var(--muted)}
 .step-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 0}
 .make-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:8px 0 0}
+/* 교재 넣기: 넓은 화면은 왼쪽에 교재·연수 정보, 오른쪽에 "AI로 만들기" 카드(따라 내려옴). 좁으면 교재 → 만들기 → 연수 정보 순서 */
+.start-grid{display:grid;gap:20px;align-items:start;grid-template-columns:minmax(0,1fr)}
+.start-grid>.start-info{margin:0}
+.make-card{display:grid;gap:12px;padding:18px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--shadow-sm);scroll-margin-top:16px}
+.make-card .ai-panel{gap:12px}
+.make-card .chat-card{border-radius:var(--r-sm);box-shadow:none}
+.make-card .key-now{padding:14px}
+.make-head{gap:4px}
+.make-head h2:focus{outline:none}
+.make-card .make-alt{margin:0;justify-content:space-between}
+/* 카드 안 챗봇 길: 순서 점(1 챗봇에 보내기 — 2 답 넣기)과 같은 말인 소제목은 화면 읽기 프로그램에만 */
+.make-card .chat-card .key-now-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (min-width:1100px){
+  .start-grid.has-make{grid-template-columns:minmax(0,1fr) minmax(360px,430px);grid-template-areas:"files make" "info make";column-gap:28px}
+  .start-grid.has-make>.start-files{grid-area:files}
+  .start-grid.has-make>.make-card{grid-area:make;position:sticky;top:16px}
+  .start-grid.has-make>.start-info{grid-area:info}
+}
 /* 도움말: 왼쪽 목차 + 본문 */
 .help-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:clamp(16px,3vw,40px);align-items:start}
 .help-layout>aside{position:sticky;top:80px}

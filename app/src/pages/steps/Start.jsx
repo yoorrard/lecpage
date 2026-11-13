@@ -3,8 +3,8 @@ import { StepHead } from '../Project.jsx';
 import { Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPanel } from '../../components/AiPanel.jsx';
-import { AiConnect, AiStatus, AiChoose, AiWayLine } from '../../components/AiConnect.jsx';
-import { getActiveAI, forgetKey, takeAiResume, getWay, setWay } from '../../lib/ai.js';
+import { AiConnect, AiStatus } from '../../components/AiConnect.jsx';
+import { getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
 import { pushUndoFor } from '../../lib/undo.js';
 import { blobs } from '../../lib/db.js';
@@ -48,18 +48,22 @@ function useIngest(p, update) {
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
     const det = merged?.detected || {};
-    const info = { ...p.info };
-    // 교재에서 찾은 값은 빈칸에만(강사가 쓴 값이 우선). 어디서 왔는지 기억해 교재를 지우면 함께 지움
-    const auto = { ...(p.autoFilled || {}) };
-    const fill = (k, v) => { if (v && !info[k]) { info[k] = v; auto[k] = v; } };
-    fill('title', det.title); fill('subtitle', det.subtitle);
-    if (det.event) for (const k of ['date', 'start', 'end', 'venue', 'organizer']) fill(k, det.event[k]);
-    if (det.archetype?.format) info.format = det.archetype.format;
-    // 교재에 적힌 참석 인원("300명") → 인원 구간(강사가 인원을 고르지 않았을 때만)
-    const n = det.event?.size;
-    if (n && (!info.size || info.size === p.autoFilled?.size || (!p.infoTouched && info.size === SIZE[0].value))) { info.size = n <= 30 ? 25 : n <= 100 ? 60 : n <= 300 ? 200 : 500; auto.size = info.size; }
+    const summary = merged ? ing.summarizeMaterial(merged) : '';
     dropAssetCache(p.id); // 새 쪽 그림을 미리보기가 바로 쓰게
-    update({ material: merged, files: metas, info, autoFilled: auto, slidesMade, summary: merged ? ing.summarizeMaterial(merged) : '' });
+    // 지금 값(cur)에 합침: 읽는 동안 바뀐 연수 정보(바로 공개 서버가 켠 참여 기능 등)를 예전 값으로 덮지 않게
+    update((cur) => {
+      const info = { ...cur.info };
+      // 교재에서 찾은 값은 빈칸에만(강사가 쓴 값이 우선). 어디서 왔는지 기억해 교재를 지우면 함께 지움
+      const auto = { ...(cur.autoFilled || {}) };
+      const fill = (k, v) => { if (v && !info[k]) { info[k] = v; auto[k] = v; } };
+      fill('title', det.title); fill('subtitle', det.subtitle);
+      if (det.event) for (const k of ['date', 'start', 'end', 'venue', 'organizer']) fill(k, det.event[k]);
+      if (det.archetype?.format) info.format = det.archetype.format;
+      // 교재에 적힌 참석 인원("300명") → 인원 구간(강사가 인원을 고르지 않았을 때만)
+      const n = det.event?.size;
+      if (n && (!info.size || info.size === cur.autoFilled?.size || (!cur.infoTouched && info.size === SIZE[0].value))) { info.size = n <= 30 ? 25 : n <= 100 ? 60 : n <= 300 ? 200 : 500; auto.size = info.size; }
+      return { material: merged, files: metas, info, autoFilled: auto, slidesMade, summary };
+    });
     const bad = fileObjs.length - ok;
     toast(!fileObjs.length ? '' : bad === 0 ? `교재 ${ok}개를 읽었어요.` : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
@@ -95,13 +99,10 @@ export function StepStart({ p, update, go }) {
   const inp = useRef();
   const titleRef = useRef();
   const [over, setOver] = useState(false);
-  // AI로 만들기 창: 'choose'(길 고르기) · 'key'(키 연결, 연결하면 바로 만들기) · 'chat'(쓰던 챗봇 창). 고른 길은 기억(ai.js getWay)
-  const [aiView, setAiView] = useState('');
-  const makeAfter = useRef(false); // [AI로 사이트 만들기]로 연 창이면 키를 연결한 뒤 바로 만듦
-  // 창 안에서 길을 바꾸면(고르기 → 챗봇·키) 새 화면 제목으로 초점
-  useEffect(() => { if (aiView) setTimeout(() => document.querySelector('dialog[open] [data-autofocus]')?.focus({ preventScroll: true }), 0); }, [aiView]);
-  const [way, setWayState] = useState(getWay);
-  const pickWay = (v) => { setWay(v); setWayState(v); };
+  // AI로 만들기: 쓰던 챗봇 창 길은 이 화면 안 카드(AiPanel)에서 바로. API 키 길은 작은 링크 → 연결 창(연결하면 바로 만들기)
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [remake, setRemake] = useState(false); // 사이트가 있는데 키 없이 AI로 다시 만들 때: 챗봇 카드를 다시 보여 줌
+  const makeAfter = useRef(false); // [API 키로 만들기]로 연 창이면 키를 연결한 뒤 바로 만듦
   const [conn, setConn] = useState(undefined); // 연결된 AI(undefined: 확인 중 · null: 없음)
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
@@ -109,7 +110,7 @@ export function StepStart({ p, update, go }) {
     // OpenRouter 로그인에서 돌아왔고 '연결하고 만들기' 중이었으면 이어서 만듦
     const load = () => getActiveAI().then((a) => {
       setConn(a);
-      if (a && takeAiResume()) { setAiView(''); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
+      if (a && takeAiResume()) { setKeyOpen(false); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
     });
     load(); addEventListener('lecpage:ai-connected', load); return () => removeEventListener('lecpage:ai-connected', load);
   }, []);
@@ -131,7 +132,7 @@ export function StepStart({ p, update, go }) {
   });
   const set = (k) => (e) => setInfo({ [k]: e?.target ? e.target.value : e });
 
-  const needTitle = () => { if (info.title?.trim()) return false; setTitleErr(true); titleRef.current?.focus(); titleRef.current?.scrollIntoView({ block: 'center' }); return true; };
+  const needTitle = () => { if (latest.current.info.title?.trim()) return false; setTitleErr(true); titleRef.current?.focus(); titleRef.current?.scrollIntoView({ block: 'center' }); return true; };
   /** AI 없이: 교재에서 찾은 내용으로 기본 초안만. 두 번 눌러도 한 번만(교재 모듈을 받는 동안 다시 누를 수 있어서) */
   const making = useRef(false);
   async function make() {
@@ -139,37 +140,47 @@ export function StepStart({ p, update, go }) {
     making.current = true;
     let ing;
     try { ing = await import('../../lib/ingest.js'); } catch { making.current = false; toast('초안 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); return; }
-    update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '' });
+    update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '', chatWait: null });
     toast('기본 초안을 만들었어요. 미리보기를 보며 고쳐 보세요.');
     go(2);
   }
   /**
-   * AI로: 키가 연결돼 있으면 기본 초안을 먼저 보여 주고 AI가 교재를 읽어 다시 짬(끝나면 바뀌고, 되돌릴 수 있음).
-   * 키가 없으면 고른 길로(쓰던 챗봇 창 · 키 연결), 고른 적이 없으면 길 고르기부터
+   * AI로(키가 연결돼 있을 때): 기본 초안을 먼저 보여 주고 AI가 교재를 읽어 다시 짬(끝나면 바뀌고, 되돌릴 수 있음).
+   * 키가 없으면 이 화면의 챗봇 카드로(사이트가 있으면 카드를 다시 펼침)
    */
   async function makeWithAi(ai = conn) {
     if (needTitle()) return;
-    if (!ai) { const w = getWay(); makeAfter.current = true; setAiView(w === 'chat' ? 'chat' : w === 'key' ? 'key' : 'choose'); return; }
+    if (!ai) { setRemake(true); setTimeout(() => document.getElementById('make-h')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 30); return; }
     const ing = await import('../../lib/ingest.js');
     if (!latest.current.blueprint) update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '' });
     startMakeJob({ getProject: () => latest.current, update });
     go(2);
   }
   makeWithAiRef.current = makeWithAi;
-  function onConnected(a) { setConn(a); pickWay('key'); setAiView(''); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
+  function onConnected(a) { setConn(a); setKeyOpen(false); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
   async function disconnect() { await forgetKey(conn.provider); setConn(await getActiveAI()); toast('AI 연결을 끊었어요.'); }
   /** 쓰던 챗봇 창의 답(교재 지킴이를 거친 설계도) → 사이트. 교재대로 되돌린 곳은 다음 화면 띠에서 알림 */
   function onAi(bp, meta = {}) {
-    if (p.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', p);
-    update({ blueprint: applyInfo(bp, p.info, p.material, p.blueprint), aiMethod: 'ai' });
-    setAiView(''); noteAiResult(p.id, { restored: meta.restored || [], via: '' });
+    const cur = latest.current;
+    if (cur.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', cur);
+    update({ blueprint: applyInfo(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai', chatWait: null });
+    setRemake(false); noteAiResult(p.id, { restored: meta.restored || [], via: '' });
     toast('AI가 짠 내용으로 만들었어요.'); go(2);
   }
-  const mat = p.material; const d = mat?.detected || {};
+  const mat = p.material;
 
   const quick = FEATURES.filter((f) => f.quick);
   const feats = info.features || [];
   const toggleFeat = (v) => setInfo({ features: feats.includes(v) ? feats.filter((x) => x !== v) : [...feats, v] });
+  const showMake = !p.blueprint || remake;
+  const waiting = !!p.chatWait;
+  const request = !waiting && (
+    <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 적으면 AI가 반영해요.">
+      <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
+    </Field>
+  );
+  const makeHead = <div class="stack make-head"><h2 class="h-sub" id="make-h" tabIndex={-1}>AI로 만들기</h2>
+    <p class="small muted">{conn ? `버튼 한 번이면 ${conn.label}가 교재를 읽고 연수 흐름과 문구를 짜요.` : '쓰던 ChatGPT·Claude·Gemini 창에 보내고 답을 가져와요. 키·추가 비용 없이 돼요.'}</p></div>;
 
   return (
     <>
@@ -177,7 +188,8 @@ export function StepStart({ p, update, go }) {
         {!p.blueprint && !p.files?.length && <a class="btn btn-sm" href="#/demo">먼저 체험해 보기</a>}
       </StepHead>
       {p.blueprint && <Notice kind="ok">사이트가 있어요. 여기서 고친 정보는 바로 반영돼요.</Notice>}
-      <section class="stack" aria-label="교재 파일">
+      <div class={`start-grid${showMake ? ' has-make' : ''}`}>
+      <section class="stack start-files" aria-label="교재 파일">
           <div class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -202,7 +214,24 @@ export function StepStart({ p, update, go }) {
           {mat && !busy && <FoundSummary p={p} setInfo={setInfo} />}
       </section>
 
-      <section class="block">
+      {showMake && <section class="make-card" aria-labelledby="make-h">
+        {conn ? <div class="stack">
+          {makeHead}
+          {request}
+          <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setKeyOpen(true); }} onDisconnect={disconnect} />
+          <button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : 'AI로 사이트 만들기 →'}</button>
+          <p class="small muted">만들 때 교재의 글이 {conn.label}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
+        </div>
+          : conn === null ? <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} head={makeHead} wait={p.chatWait} onWait={(v) => update({ chatWait: v }, { now: true })} guard={() => !needTitle()} busy={!!busy}>{request}</AiPanel>
+            : <p class="muted small" aria-live="polite">불러오는 중…</p>}
+        <div class="make-alt">
+          {conn === null && <button type="button" class="btn-link" onClick={() => { makeAfter.current = true; setKeyOpen(true); }}>API 키로 버튼 한 번에 만들기</button>}
+          {!p.blueprint && <button type="button" class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>}
+          {remake && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setRemake(false); update({ chatWait: null }); }}>닫기</button>}
+        </div>
+      </section>}
+
+      <section class="block start-info">
         <h2 class="h-sub">연수 정보 {mat && <span class="small muted">교재에서 찾은 값을 채웠어요</span>}</h2>
         <div class="form-grid">
           <Field label="연수명 (필수)" hint={titleErr && !info.title ? <span style={{ color: 'var(--bad)' }}>연수명을 적어 주세요.</span> : null}>
@@ -215,9 +244,9 @@ export function StepStart({ p, update, go }) {
           </div>
           <Field label="장소"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
         </div>
-        <Field label="요청 사항 (선택)" hint="구성·분위기·색·대상처럼 바라는 점을 적으면 AI가 반영해요.">
+        {!showMake && <Field label="AI에게 바라는 점 (선택)" hint="AI로 다시 만들 때 반영해요.">
           <textarea class="ta-short" rows={2} value={info.request || ''} onInput={set('request')} maxLength={600} placeholder="예: 실습 위주로 짜 주세요. 차분한 남색 계열, 초등 저학년 담임 선생님 대상이에요." />
-        </Field>
+        </Field>}
         <details class="more">
           <summary><b>더 정하기</b><span class="small muted">인원 {SIZE.find((o) => o.value === info.size)?.label || ''} · 형식 {(FORMATS.find((o) => o.value === info.format) || FORMATS[0]).label}{feats.length ? ` · 참여 기능 ${feats.length}개` : ''}</span></summary>
           <div class="stack more-body">
@@ -233,36 +262,21 @@ export function StepStart({ p, update, go }) {
           </div>
         </details>
       </section>
-
-      {!p.blueprint && conn && <section class="ai-line" aria-label="AI 연결">
-        <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setAiView('key'); }} onDisconnect={disconnect} />
-      </section>}
-      {!p.blueprint && conn === null && way === 'chat' && <section class="ai-line" aria-label="만드는 방법">
-        <AiWayLine onSwap={() => { makeAfter.current = false; pickWay('key'); setAiView('key'); }} />
-      </section>}
-
-      <div class="make-bar">
-        {p.blueprint
-          ? <><button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button><button class="btn" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button></>
-          : <><button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : conn || way === 'chat' ? 'AI로 사이트 만들기 →' : 'AI 연결하고 만들기 →'}</button>
-</>}
       </div>
-      {!p.blueprint && conn !== undefined && <p class="small muted ai-priv">{conn ? `만들 때 교재의 글이 ${conn.label}로 가요.` : way === 'chat' ? '만들 때 교재의 글을 고른 챗봇(ChatGPT·Claude·Gemini)에 붙여 넣어요.' : '만드는 방법은 처음 한 번만 골라요. 만들 때 교재의 글이 고른 AI 회사로 가요.'} 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>}
-      {!p.blueprint && <div class="make-alt">
-        <button class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>
+
+      {p.blueprint && <div class="make-bar">
+        <button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button>
+        <button class="btn" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button>
       </div>}
 
       <Dialog open={confirmRemake} onClose={() => setConfirmRemake(false)} label="다시 만들기 확인">
         <h2 class="h-sub">처음부터 다시 만들까요?</h2>
         <p>고친 문구와 섹션 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로예요.</p>
-        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn || way === 'chat' ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
+        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>AI로 다시 만들기</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
       </Dialog>
-      <Dialog open={!!aiView} onClose={() => setAiView('')} label={aiView === 'chat' ? '쓰던 챗봇 창으로 만들기' : aiView === 'key' ? 'API 키 연결' : 'AI 연결'} wide>
-        {aiView === 'choose' && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>AI 연결</h2>
-          <AiChoose onChat={() => { setWayState('chat'); setAiView('chat'); }} onKey={() => { setWayState('key'); setAiView('key'); }} /></div>}
-        {aiView === 'key' && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>API 키 연결 <span class="small muted">처음 한 번만</span></h2>
-          <AiConnect onConnected={onConnected} onChat={() => { pickWay('chat'); setAiView('chat'); }} /></div>}
-        {aiView === 'chat' && <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} onKey={() => { pickWay('key'); setAiView('key'); }} />}
+      <Dialog open={keyOpen} onClose={() => { setKeyOpen(false); makeAfter.current = false; }} label="API 키 연결" wide>
+        {keyOpen && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>API 키 연결 <span class="small muted">처음 한 번만</span></h2>
+          <AiConnect onConnected={onConnected} onChat={() => { setKeyOpen(false); makeAfter.current = false; }} /></div>}
       </Dialog>
     </>
   );
