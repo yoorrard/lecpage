@@ -2,7 +2,7 @@
  "show-night-story": {
   "w": 1280,
   "h": 800,
-  "kb": 31
+  "kb": 32
  },
  "show-paper-workbook": {
   "w": 1280,
@@ -17,7 +17,7 @@
  "show-ripple-center": {
   "w": 1280,
   "h": 800,
-  "kb": 40
+  "kb": 39
  },
  "show-chalkboard": {
   "w": 1280,
@@ -47,7 +47,7 @@
  "phone-data-lab": {
   "w": 585,
   "h": 3600,
-  "kb": 90
+  "kb": 91
  },
  "showcase": [
   "night-story",
@@ -59,7 +59,7 @@
   "vertical-type",
   "retro-pop"
  ],
- "made": "2026-11-12",
+ "made": "2026-11-13",
  "hero-data-lab": {
   "w": 760,
   "h": 475,
