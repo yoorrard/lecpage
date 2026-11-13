@@ -45,6 +45,8 @@
   function setMenu(open, focusFirst) {
     if (!moreMenu) return;
     moreMenu.hidden = !open; moreBtn.setAttribute('aria-expanded', String(open));
+    // 열린 동안 아래 칸은 잠시 누를 수 없게(메뉴 밖을 누르면 닫히기만 하고, 메뉴에 반쯤 가린 단추를 잘못 누르지 않게)
+    [main, $('[data-console-help]')].forEach(function (n) { if (n) n.inert = open; });
     if (open && focusFirst) { var f = menuItems()[0]; if (f) f.focus(); }
   }
   if (moreBtn && moreMenu) {

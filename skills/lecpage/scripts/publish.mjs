@@ -369,15 +369,8 @@ export async function handoutsCmd(h, o = {}) {
     await p.waitForSelector('[data-qr-self] svg, [data-qr-self] img, [data-qr-self] canvas', { timeout: 15000 }).catch(() => errs.push('QR이 그려지지 않았어요'));
     await p.waitForTimeout(300);
     const shown = (await p.locator('[data-url-self]').first().textContent().catch(() => '')) || '';
-    // '강사 카드도 인쇄' 칸을 켜고 끄며 두 파일로(pdf는 언제나 인쇄 모양으로 그림)
-    const setCard = (on) => p.evaluate((v) => { const c = document.querySelector('input[data-card-print]'); if (!c) return false; c.checked = v; c.dispatchEvent(new Event('change', { bubbles: true })); return true; }, on);
-    const pdf = { format: 'A4', printBackground: true, preferCSSPageSize: true };
-    if (await setCard(true)) {
-      try { await p.pdf({ ...pdf, path: join(out, '강사-카드.pdf'), pageRanges: '2' }); files.push('강사-카드.pdf'); } catch { /* 카드가 한 쪽에 같이 들어가면 건너뜀 */ }
-      await setCard(false);
-    }
-    await p.pdf({ ...pdf, path: join(out, 'QR-안내문.pdf') }); files.push('QR-안내문.pdf');
-    await setCard(true); // 강사가 브라우저로 열 때를 위해 처음대로
+    // 참가자용 A4 한 장(pdf는 언제나 인쇄 모양으로 그림). 강사 화면 주소·QR은 안내문에 싣지 않음(휴대폰으로 여는 QR은 강사 화면 안에만)
+    await p.pdf({ format: 'A4', printBackground: true, preferCSSPageSize: true, path: join(out, 'QR-안내문.pdf') }); files.push('QR-안내문.pdf');
     await p.close();
     const s = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     s.on('pageerror', (e) => errs.push('screen: ' + e.message));
@@ -392,7 +385,7 @@ export async function handoutsCmd(h, o = {}) {
     return finish([
       `안내물 ${errs.length ? '△' : '✓'} ${rel(out)}/ ${files.join(' · ')}${shown ? ` (QR 주소 ${shown.trim().slice(0, 60)})` : ''}`,
       local ? '  주의: 로컬 주소라 QR이 다른 기기에서 열리지 않아요. 올린 뒤 handouts <올린 주소>로 다시 만드세요' : '',
-      '  QR-안내문.pdf는 참가자용 A4 한 장, 강사-카드.pdf는 나눠 주지 않아요(강사 화면 주소가 있어요). 발표화면.png는 슬라이드에 넣어도 돼요',
+      '  QR-안내문.pdf는 참가자용 A4 한 장이에요. 발표화면.png는 슬라이드에 넣어도 돼요. 휴대폰으로 강사 화면을 열려면 강사 화면의 [더보기] → [휴대폰에서 열기]',
       ...errs.slice(0, 3).map((e) => '  오류 ' + e.slice(0, 120)),
     ], files);
   } catch (e) {
