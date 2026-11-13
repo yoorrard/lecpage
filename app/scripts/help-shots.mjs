@@ -46,7 +46,7 @@ const route = async (r) => {
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] }] });
   if (u.includes(':generateContent')) return json(r, { candidates: [{ content: { parts: [{ text: JSON.stringify(EXAMPLE) }] }, finishReason: 'STOP' }] });
-  return r.abort();
+  return r.fulfill({ status: 204, headers: CORS }); // 그 밖의 바깥 요청은 빈 응답(막으면 접속 확인이 '이 망에서 막힘'으로 보여 화면이 달라짐)
 };
 
 /** PNG → WebP(브라우저의 캔버스로 바꿈: 따로 그림 도구를 깔지 않아도 되게) */
@@ -88,7 +88,9 @@ try {
     if (want('start')) await shot('start');
 
     // 2. AI 연결 창: 키 페이지 열기 → 붙여넣기
-    await page.click('.make-bar .btn-primary');
+    // 키가 없으면 교재 넣기 화면의 AI 카드 '다른 방법'에서 [API 키로 만들기]
+    if (await page.locator('.make-card').count()) await page.click('.make-card button:has-text("API 키로 만들기")');
+    else await page.click('.make-bar .btn-primary');
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');
     await page.click('dialog[open] .key-dots li:last-child button');
@@ -99,6 +101,8 @@ try {
     await page.click('dialog[open] .key-now button:has-text("연결")');
     await page.waitForSelector('.ai-job.ok', { timeout: 60000 });
     await page.waitForSelector('.pv-device iframe', { timeout: 30000 });
+    // 결과 띠는 닫음(750px 높이에서는 띠·구성 안내가 미리보기 자리를 줄여 미리보기가 아주 작게 찍힘)
+    await page.locator('.ai-job.ok button[aria-label="닫기"]').click().catch(() => {});
     await settle(1800);
     if (want('edit')) await shot('edit');
     // 좁은 화면에서는 미리보기 아래에 고치는 칸이 있어 그쪽으로 내려서 찍음
