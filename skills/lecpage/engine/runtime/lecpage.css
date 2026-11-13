@@ -1094,7 +1094,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-prompt-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .lp-prompt-h b{font-weight:650}
 .lp-prompt-h span{display:inline-flex;gap:8px;align-items:center}
-.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);color:var(--foreground);padding:14px 16px;font-family:var(--font-sans);font-size:1rem;line-height:1.7;field-sizing:content;min-height:calc(2lh + 30px)}
+.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid color-mix(in srgb,var(--primary) 30%,var(--rule-c));background:color-mix(in srgb,var(--primary) 6%,var(--background));color:var(--foreground);padding:14px 16px;font-family:var(--font-sans);font-size:1rem;line-height:1.7;field-sizing:content;min-height:calc(2lh + 30px)}
 .lp-st-help{display:grid;gap:6px;max-width:var(--measure);padding:var(--sp-4) var(--sp-5);border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);font-size:var(--fs-sm)}
 .lp-st-help b{display:inline-flex;gap:6px;align-items:center;color:var(--primary);font-weight:700;white-space:nowrap}
 .lp-st-help p{color:var(--foreground)}
