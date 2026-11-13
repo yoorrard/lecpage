@@ -2,7 +2,7 @@
 // 교재 요약(글)과 연수 정보만 고른 AI 회사로 보냅니다. 강사 메일·실시간 연결 값·키는 보내지 않습니다.
 import { useEffect, useState } from 'preact/hooks';
 import { E } from './engine.js';
-import { makePrompt, looksTruncated, applyInfo, keepFontFields } from './blueprint.js';
+import { makePrompt, looksTruncated, applyInfo, guardAnswer } from './blueprint.js';
 import { generateAuto, getActiveAI, explainError, PROVIDERS } from './ai.js';
 import { pushUndoFor } from './undo.js';
 
@@ -13,6 +13,15 @@ const set = (pid, patch) => { jobs.set(pid, { ...(jobs.get(pid) || {}), ...patch
 
 export const getJob = (pid) => jobs.get(pid) || null;
 export function clearJob(pid) { jobs.delete(pid); emit(); }
+/**
+ * 쓰던 챗봇·문구 다듬기로 받은 답도 키 연결과 같은 '끝남' 띠로 알림(교재대로 되돌린 곳 한 줄 + [보기])
+ * @param {{ restored?: object[], via?: string, polish?: boolean }} o
+ */
+export function noteAiResult(pid, { restored = [], via = '', polish = false } = {}) {
+  set(pid, { status: 'done', phase: 'done', startedAt: Date.now(), error: null, ctrl: null, via, restored, polish, undone: [] });
+}
+/** 되돌린 곳 하나를 AI 답으로 되돌렸다고 적음(띠의 목록에서 그 줄을 '되돌림'으로) */
+export function markUndone(pid, id) { const j = jobs.get(pid); if (j) set(pid, { undone: [...(j.undone || []), id] }); }
 export function stopJob(pid) { jobs.get(pid)?.ctrl?.abort(); }
 
 /** 지금 프로젝트의 AI 작업 상태(없으면 null). 1초마다 다시 그려 걸린 시간을 보여 줌 */
@@ -34,7 +43,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
   const p0 = getProject(); const pid = p0.id;
   if (jobs.get(pid)?.status === 'running') return;
   const ctrl = new AbortController();
-  set(pid, { status: 'running', phase: 'read', startedAt: Date.now(), error: null, ctrl });
+  set(pid, { status: 'running', phase: 'read', startedAt: Date.now(), error: null, ctrl, restored: [], undone: [], via: '', polish: false });
   try {
     const ai = await getActiveAI();
     if (!ai) throw Object.assign(new Error('no-ai'), { kind: 'no-ai' });
@@ -55,9 +64,10 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     if (v.errors.length) throw Object.assign(new Error(v.errors.map((x) => x.message_ko).join(' ')), { kind: 'invalid' });
     const cur = getProject();
     pushUndoFor(pid, 'AI로 만들기 전', cur);
-    // 교재 보기의 쪽 그림·쪽 글·쪽별 도구는 AI 답이 아니라 교재에서(keepDraftParts)
-    update((c) => ({ blueprint: applyInfo(keepFontFields(bp, c.blueprint, c, ing), c.info, c.material, c.blueprint), aiMethod: 'ai' }));
-    set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null });
+    // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서(guardAnswer)
+    const g = guardAnswer(bp, cur, ing, cur.blueprint);
+    update((c) => ({ blueprint: applyInfo(g.blueprint, c.info, c.material, c.blueprint), aiMethod: 'ai' }));
+    set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null, restored: g.restored, undone: [] });
   } catch (e) {
     if (e.name === 'AbortError') { clearJob(pid); return; }
     const kind = e.kind;

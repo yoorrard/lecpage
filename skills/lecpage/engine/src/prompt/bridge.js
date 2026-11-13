@@ -336,7 +336,7 @@ export function extractJson(text) {
     return found[0].j;
   }
   const a = s.indexOf('{'), b = s.lastIndexOf('}');
-  if (a < 0 || b < a) throw new Error('응답에서 JSON을 찾지 못했습니다.');
+  if (a < 0 || b < a) throw new Error('응답에서 JSON을 찾지 못했어요.');
   return parseLoose(s.slice(a, b + 1));
 }
 

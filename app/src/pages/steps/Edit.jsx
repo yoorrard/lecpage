@@ -3,14 +3,16 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { Preview } from '../../components/Preview.jsx';
-import { AiPanel, useAiResume } from '../../components/AiPanel.jsx';
+import { AiPanel, useAiResume, GuardNote } from '../../components/AiPanel.jsx';
 import { ReviewChat } from '../../components/ReviewChat.jsx';
 import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyInfo } from '../../lib/blueprint.js';
 import { toast } from '../../lib/util.js';
 import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
-import { useAiJob, startMakeJob, stopJob, clearJob } from '../../lib/ai-job.js';
+import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone } from '../../lib/ai-job.js';
+import { E } from '../../lib/engine.js';
+import { PROVIDERS, chatLabel, chatbotFor, setWay } from '../../lib/ai.js';
 import { SIZE } from './Start.jsx';
 import { StructureNote } from '../../components/Structure.jsx';
 
@@ -25,7 +27,7 @@ export function StepEdit({ p, update, go }) {
   const onPick = (id) => { setTab('content'); setFocusId(id + ':' + Date.now()); };
   // 다른 화면에서 '이 섹션을 열어 달라'고 남긴 표시(예: 공개 화면의 [자료 올리기])
   useEffect(() => { try { const id = sessionStorage.getItem('lecpage:focus'); if (id) { sessionStorage.removeItem('lecpage:focus'); onPick(id); } } catch { } }, []);
-  const [ai, setAi] = useState(false);
+  const [ai, setAi] = useState(false); // AI로 다듬기 창. 객체면 그 길로 열기({ how, full, bot })
   const [connectAi, setConnectAi] = useState(false); // 한도에 걸렸을 때 다른 AI로 이어서
   useAiResume(setAi);
   // 수정 요청: 미리보기에 표시 → 대화창에 그림이 붙음
@@ -46,7 +48,10 @@ export function StepEdit({ p, update, go }) {
     if (meta.polish) update({ blueprint: bp, aiMethod: 'ai' }); // 문구만 바뀜(설정·연결은 그대로)
     else update((cur) => ({ blueprint: applyInfo(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai' }));
     setAi(false); toast(meta.polish ? `문구 ${meta.count}곳을 다듬었어요. 마음에 안 들면 [되돌리기]를 누르세요.` : 'AI가 다시 짠 내용으로 바꿨어요. 마음에 안 들면 [되돌리기]를 누르세요.');
+    if (E.restoredCount(meta.restored)) noteAiResult(p.id, { restored: meta.restored, polish: !!meta.polish });
   }
+  /** 교재대로 되돌린 곳 하나를 AI 답으로(그곳만, 강사가 고친 다른 곳은 그대로) */
+  function undoGuard(r) { update((cur) => ({ blueprint: E.undoRestore(cur.blueprint, r) })); markUndone(p.id, r.id); toast(`AI 답으로 되돌렸어요: ${r.where}`); }
   const liveCount = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f)).length;
   const tabs = [
     { value: 'content', label: '내용' },
@@ -64,7 +69,7 @@ export function StepEdit({ p, update, go }) {
         </div>
       </StepHead>
       {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
-        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={() => { clearJob(p.id); setAi(true); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
+        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onUndoGuard={undoGuard} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
       {job?.status !== 'running' && <StructureNote p={p} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
       <div class="workspace">
         <div class="ws-panel">
@@ -81,10 +86,10 @@ export function StepEdit({ p, update, go }) {
       </div>
       <Dialog open={connectAi} onClose={() => setConnectAi(false)} label="AI 연결" wide>
         {connectAi && <div class="stack"><h2 class="h-sub">AI 연결</h2>
-          <AiConnect onConnected={() => { setConnectAi(false); clearJob(p.id); startMakeJob({ getProject: () => latest.current, update }); }} /></div>}
+          <AiConnect onConnected={() => { setConnectAi(false); clearJob(p.id); startMakeJob({ getProject: () => latest.current, update }); }} onChat={(prov) => { setConnectAi(false); clearJob(p.id); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} /></div>}
       </Dialog>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI로 다듬기" wide>
-        {ai && <AiPanel p={p} onBlueprint={onAi} />}
+        {ai && <AiPanel p={p} onBlueprint={onAi} start={typeof ai === 'object' ? ai : null} />}
       </Dialog>
     </>
   );
@@ -92,7 +97,7 @@ export function StepEdit({ p, update, go }) {
 
 const PHASE = { read: '교재를 정리하고 있어요', ask: 'AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요', build: '사이트를 조립하고 있어요', wait: '무료 한도라 잠깐 기다렸다가 이어서 해요', swap: '다른 모델로 이어서 하고 있어요', other: '연결해 둔 다른 AI로 이어서 하고 있어요' };
 /** AI로 만들기 진행 띠: 초안을 먼저 보여 주고, 끝나면 AI가 짠 내용으로 바뀜 */
-function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight }) {
+function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight, onUndoGuard }) {
   if (job.status === 'running') {
     const sec = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
     return (
@@ -106,9 +111,10 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
   if (job.status === 'done') {
     return (
       <div class="ai-job ok" role="status">
-        <span class="ai-job-t"><b>{job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b><small>미리보기를 보며 고치고, 마음에 들면 공개하세요.</small></span>
+        <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b><small>미리보기를 보며 고치고, 마음에 들면 공개하세요.</small></span>
         {canUndo && <button class="btn btn-sm btn-quiet" onClick={() => { onUndo(); onClose(); }}>기본 초안으로 되돌리기</button>}
         <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
+        <GuardNote restored={job.restored} undone={job.undone} onUndo={onUndoGuard} />
       </div>
     );
   }
@@ -120,8 +126,9 @@ function AiJobBar({ job, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onC
       {e.actions?.includes('pay') && <button class="btn btn-sm btn-primary" onClick={onPay}>유료로 이어서 하기</button>}
       {e.actions?.includes('light') && <button class="btn btn-sm" onClick={onLight}>가벼운 모델로 이어서</button>}
       {e.actions?.includes('link') && e.link && <a class="btn btn-sm" href={e.link.href} target="_blank" rel="noopener">{e.link.label}</a>}
+      {e.actions?.includes('billing') && PROVIDERS[e.provider]?.billingUrl && <a class="btn btn-sm" href={PROVIDERS[e.provider].billingUrl} target="_blank" rel="noopener">{PROVIDERS[e.provider].short} 결제 페이지 열기</a>}
       {e.actions?.includes('connect') && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
-      {e.actions?.includes('paste') && <button class="btn btn-sm btn-quiet" onClick={onPaste}>쓰던 챗봇으로 하기</button>}
+      {e.actions?.includes('paste') && <button class={`btn btn-sm${e.actions[0] === 'paste' ? ' btn-primary' : ' btn-quiet'}`} onClick={() => onPaste(e.provider)}>{chatLabel(e.provider)}</button>}
       <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
     </div>
   );
