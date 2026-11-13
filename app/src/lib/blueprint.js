@@ -31,7 +31,7 @@ const urlsIn = (v) => JSON.stringify(v || '').match(/https?:\/\/[^\s"'<>\\]+/g) 
 
 /**
  * AI 답을 받은 뒤 한 번에: 교재 지킴이(엔진 guardMaterial — 프롬프트 원문·단계·일정·FAQ·목표·교재 주소를 교재대로) → keepDraftParts.
- * 키 연결·쓰던 챗봇·문구 다듬기 모두 이 함수를 거칩니다. restored: 교재대로 되돌린 곳(앱이 한 줄로 알리고 [보기]에서 하나씩 AI 답으로 되돌림)
+ * 키 연결·쓰던 챗봇 모두 구성까지 짠 답은 이 함수를 거칩니다(문구만 다듬기는 교재 글을 보내지 않아 거치지 않음). restored: 교재대로 되돌린 곳(앱이 한 줄로 알리고 [보기]에서 하나씩 AI 답으로 되돌림)
  * @returns {{ blueprint, restored }}
  */
 export function guardAnswer(bp, p, ing, base = null) {
