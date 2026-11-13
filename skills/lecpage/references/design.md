@@ -93,6 +93,35 @@
 움직임: 차분 단계(1)는 섹션이 들어올 때 한 번(배치마다 어울리는 방식, 그림은 길·축·고리가 제자리로), 보통·스크롤 연출(2·3)은 스크롤에 맞춰 그려짐(여정의 길·트랙 채움·시계판·고리 회전·선언문 문장·필름 띠 가운데 장면·마무리 그림 미끄러짐). 반응: 도식과 목록 잇기(가리키거나 초점이 오면 같은 번호가 켜짐)·낱말 넘김·필름 띠·질문 색인·카드 들림. 동작 줄이기·가벼운 모드·JS가 없으면 완성된 정지 모습이고 아무것도 숨지 않는다.
 모티프(`concept.motif` → 그림 가족: 고리·점·도형 타일·물결·호·색면·별·큰 글자·모눈): 바탕이 같은 두 섹션 사이의 구분 장식, 옅은 바탕 칸 구석의 그림, 무대·좌우 번갈아·큰 얼굴·마무리 그림으로 되풀이한다.
 
+## 3-2. 말로 고치기(디자인 낱말)
+강사가 디자인을 느낌으로 말하면("좀 답답해 보여요") 아래 표로 고칠 곳 2~3가지를 골라 **지금과 바꾼 모습**을 보여 주고(`options`·스크린숏), 고른 것만 `patch`로 적용한다. 지금 설정과 같은 안은 내지 않는다. 앱의 [디자인] 탭·디자인 둘러보기가 같은 규칙을 쓴다(`app/src/design-words/symptoms.js`).
+
+| 이런 말 | 고칠 곳(위에서부터) |
+|---|---|
+| 답답해요·빽빽해요 | 여백이 넓은 프리셋(`calm-forest`·`warm-minimal`·`editorial-ink`·`ripple-center`·`vertical-type`·`sunrise-warm`·`corporate-clean`) · 어두우면 `theme=light` · 움직임 2 이상이면 1 · 칸이 많은 배치(벤토·타일·쪽지)를 줄 목록으로 |
+| 글씨가 잘 안 읽혀요 | 어두우면 `theme=light` · 본문이 명조면 고딕 글꼴 짝(`pretendard-solo` 등) · 장식이 적은 프리셋(`official-brief`·`corporate-clean`) · 움직임 1 |
+| 심심해요·밋밋해요 | 글만 있는 칸을 도식·그림 배치로(일정 `track`·`clock`, 목표 `journey`, 단계 `wheel` 등 내용에 맞는 것) · 그림 첫 화면 프리셋(showcase) · 움직임 한 단계 위 |
+| 움직임이 정신없어요 | 움직임 1 → 0 · 첫 화면 그래픽 빼기(`design.graphic=''`) |
+| 학교 느낌 | `chalkboard`·`paper-workbook`·`playground`·`soft-pastel` |
+| 공식적으로 | `official-brief`·`swiss-offset`·`corporate-clean` · 움직임 1 |
+| 흔한 사이트 같아요 | 왼쪽 정렬이 아닌 프리셋(가운데·세로쓰기·반반·그림 가득·어긋난 격자·자료 그림) · 도식 배치 두 곳 |
+| 일정이 한눈에 안 들어와요(섹션 이름을 말함) | 그 섹션에 맞는 다른 배치(`variantOf`로 맞는지 확인한 것만) |
+| 따뜻하게·세련되게·깔끔하게·발랄하게 | 그 분위기 낱말로 다시 매긴 프리셋 순위 위의 둘·셋 |
+| 너무 어두워요 / 눈부셔요 | `theme=light` / `theme=dark` |
+| 색이 촌스러워요(색 이름을 말함) | 말한 색을 `design.accent`로 · 분위기가 맞는 색 조합(`design.palette`) |
+| 휴대폰에서 길어요 | 가로로 넘기거나 접는 배치(`outline:filmstrip`·`steps5:tabs`·`faq:accordion`) |
+
+디자인 둘러보기에서 낱말을 담으면 이런 요청 문장이 나온다. 괄호 속 이름이 설계도 값이다.
+```
+디자인은 '숲의 숨'(calm-forest)으로 해 주세요.          → design.preset
+첫 화면은 '가운데 정렬'(center)로 놓아 주세요.          → 그 글 배치(layout)를 쓰는 프리셋 가운데 주제·분위기에 가장 맞는 것
+색 조합은 '숲길'(forest-walk)로 해 주세요.              → design.palette   · 화면은 어둡게 → design.theme=dark
+글꼴은 '잡지 명조'(serif-editorial) 짝으로 해 주세요.   → design.fontPair
+움직임은 '차분하게'(1단계)로 해 주세요.                 → design.motion=1
+효과는 '형광펜 긋기'(highlight-sweep)를 써 주세요.      → 2단계 이상이면 design.signature, 첫 화면 바탕이면 design.graphic, 아니면 design.effects[칸]
+본문은 일정표를 '가로 트랙(시간 축)'(schedule:track) 배치로 그려 주세요. → 그 종류 섹션의 layout(내용이 맞을 때만)
+```
+
 ## 4. 효과 58가지
 | id | 이름 | 강도 | 슬롯 | 설명 |
 |---|---|---|---|---|
