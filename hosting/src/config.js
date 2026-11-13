@@ -114,8 +114,8 @@ export function config(env = {}) {
     // 알림: 하루 예산의 ALERT_AT %를 넘을 때, 저장량이 80%를 넘을 때. 비밀 ALERT_WEBHOOK(없으면 REPORT_WEBHOOK)으로 보냄
     alertWebhook: [env.ALERT_WEBHOOK, env.REPORT_WEBHOOK].map((v) => (typeof v === 'string' ? v.trim() : '')).find((v) => /^https:\/\//.test(v)) || '',
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),
-    // 실시간 방 런타임이 긴 대기(?wait=)를 쓰면 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈(capacity.js)
-    longPoll: /^(1|true|yes|on)$/i.test(String(env.POLL_LONG ?? '').trim()),
+    // 긴 대기(?wait=)를 쓰는 런타임(2026-11 학교망 대비 뒤)이 기본이라 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈(capacity.js). 끄려면 POLL_LONG "off"
+    longPoll: !/^(0|false|no|off)$/i.test(String(env.POLL_LONG ?? '').trim()),
     // 긴 대기를 Worker가 대신 기다릴지(방이 잠들어 DO 시간 과금이 없음, 대신 한 번에 DO 요청 1~2개). auto: 유료면 켬.
     // 무료는 DO 요청(하루 10만)이 먼저 차고 시간(13,000 GB-s)은 남으므로 방 안에서 기다리는 편이 더 많이 받음 → docs/research/scale-2026-11.md
     pollRelay: ((v) => (v === 'on' ? true : v === 'off' ? false : plan === 'paid'))(String(env.POLL_RELAY ?? 'auto').trim().toLowerCase()),

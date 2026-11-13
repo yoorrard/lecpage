@@ -40,8 +40,8 @@
       c.connect().then(function (r) {
         var ms = Date.now() - t0, mode = r && r.mode;
         if (mode === 'local') return end({ name: name, host: '리허설', state: 'ok', need: 'must', note: '리허설 설정이라 이 브라우저 안에서만 돌고, 참가자 휴대폰과 이어지지 않아요.', fix: '실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.', todo: true, warn: true });
-        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 새로 읽기', state: 'ok', need: 'must', note: '웹소켓이 막혀 5~10초마다 새로 읽어요. 질문·투표가 조금 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
-        end({ name: name, host: liveInfo.name + ' · 실시간 · ' + (ms / 1000).toFixed(1) + '초', state: 'ok', need: 'must' });
+        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 천천히 묻기', state: 'ok', need: 'must', way: '천천히 묻기', note: '이 망이 웹소켓을 막아 천천히 물어요. 질문·투표가 몇 초 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
+        end({ name: name, host: liveInfo.name + ' · 실시간 · ' + (ms / 1000).toFixed(1) + '초', state: 'ok', need: 'must', way: '실시간' });
       }, function (e) {
         end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.' + (e && e.message ? ' (' + e.message + ')' : ''), fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' });
       });
@@ -86,6 +86,9 @@
     verdict.setAttribute('data-state', state);
     big.textContent = state === 'ok' ? '모두 열려요' : state === 'warn' ? (warnOk.length && !fail.length ? '참여 기능은 리허설 설정이에요' : '연수는 할 수 있어요') : '꼭 필요한 곳 ' + must.length + '곳이 막혔어요';
     sub.textContent = state === 'ok' ? '이 기기와 이 네트워크에서 연수에 쓰는 곳이 모두 열려요.' : state === 'warn' ? (fail.length ? '없어도 되는 곳 ' + fail.length + '곳이 막혔어요. ' : '') + (warnOk.length ? warnOk[0].note + ' ' : '') + '아래 할 일을 확인해 주세요.' : '아래 할 일을 연수 전에 해 주세요. 결과를 복사해 보낼 수 있어요.';
+    // 강사 화면(같은 사이트)이 '전날 점검' 결과로 보여 줌: 이 기기에만 남기고 어디로도 보내지 않음
+    var lv = results.filter(function (r) { return r.way || (r.name || '').indexOf('참여 기능') === 0; })[0];
+    try { localStorage.setItem('lp-check:' + location.pathname.replace(/[^/]*$/, ''), JSON.stringify({ at: Date.now(), state: state, verdict: big.textContent, live: lv ? (lv.state === 'ok' ? lv.way || '열림' : '막힘') : '' })); } catch (e) { }
   }
   function go() {
     if (running) return; running = true; results = [];

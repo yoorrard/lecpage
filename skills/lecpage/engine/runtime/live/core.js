@@ -68,6 +68,18 @@
   function hashStr(s) { var h = 5381; s = String(s || ''); for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
   function normCode(c) { return String(c || '').trim().toUpperCase(); }
   function isHidden() { try { return root.document && root.document.visibilityState === 'hidden'; } catch (e) { return false; } }
+  /** 간격 묻기의 다음 간격(밀리초). 모든 어댑터가 같이 씀(학교망에서 요청 수를 줄이는 규칙 한 곳):
+   *  오류면 두 배씩(1분까지) · 화면이 숨겨졌으면 1분(강사 화면은 30초, 다시 보이면 어댑터가 바로 물음)
+   *  · 바뀐 것 없는 묻기가 이어지면 1.5배·2배·3배로(20초까지, 서버 권고가 더 길면 그만큼) · 서버 권고(hint)는 아래 한도 */
+  function pollDelay(base, o) {
+    o = o || {};
+    var b = Math.max(base || 5000, o.hint || 0);
+    if (o.err) return Math.min(60000, b * Math.pow(2, o.err));
+    if (isHidden()) return Math.max(o.admin ? 30000 : 60000, b);
+    var e = o.empty || 0;
+    if (e > 6) b = Math.min(Math.max(20000, o.hint || 0), b * (e > 24 ? 3 : e > 12 ? 2 : 1.5));
+    return Math.round(b);
+  }
 
   /** Emitter with error isolation. */
   function Emitter() { this._l = {}; }
@@ -532,6 +544,13 @@
   C.now = function () { return Date.now() + this._skew; };
   C.me = function () { return this._me ? { id: this._me.id, nickname: this._me.nickname } : null; };
   C.isAdmin = function () { return !!this._adminKey; };
+  /** 지금 묻기 방식: { provider, status, transport: 'ws'|'sse'|'long'|'poll'|'realtime'|'local'|null, every(ms, 묻기 간격), wait(s, 긴 대기), hint(ms, 서버 권고) } */
+  C.netInfo = function () {
+    var a = this._adapter, i = {};
+    try { i = (a && typeof a.netInfo === 'function' ? a.netInfo() : null) || {}; } catch (e) { i = {}; }
+    if (!i.transport) i.transport = this.provider === 'local' ? 'local' : this.mode === 'polling' ? 'poll' : this.status === 'live' ? 'realtime' : null;
+    return assign({ provider: this.provider, status: this.status }, i);
+  };
   C.voted = function (id) { return !!this._voted[id]; };
   C.mine = function (col) { return this.store(col, { mine: true }); };
 
@@ -637,6 +656,10 @@
       case 'status': this._setStatus(evt.status); if (evt.mode) this.mode = evt.mode; break;
       case 'resync': return this.sync(!!evt.full);
       case 'hello': if (evt.now) this._skew = evt.now - Date.now(); break;
+      // 어댑터가 따로 받은 묻기 결과(긴 대기): 동기화 차례(_syncing)를 붙잡지 않고 바로 합침 → { changes }
+      case 'snapshot': return { changes: this._applySnapshot(evt.doc, false) };
+      // 묻기 방식이 바뀜(실시간 ↔ 긴 대기 ↔ 간격 묻기, 간격 권고): 강사 화면이 '묻기 방식'을 다시 그림
+      case 'net': this._bus.emit('net', this.netInfo()); break;
       case 'error': this.lastError = evt.error; this._bus.emit('error', evt.error); break;
       default: break;
     }
@@ -1058,7 +1081,7 @@
     util: {
       uid: uid, sleep: sleep, jitter: jitter, backoff: backoff, assign: assign, clone: clone, sha256: sha256, sha256sync: function (s) { return sha256js(utf8(String(s))); },
       loadScript: loadScript, cleanText: cleanText, toCsv: toCsv, csvGuard: csvGuard, hasLink: hasLink, linkless: linkless, exportTable: exportTable, fmtTime: fmtTime, Emitter: Emitter,
-      storage: { local: local, session: session }, isHidden: isHidden, normCode: normCode, defaultState: defaultState, hashStr: hashStr,
+      storage: { local: local, session: session }, isHidden: isHidden, pollDelay: pollDelay, normCode: normCode, defaultState: defaultState, hashStr: hashStr,
       fields: FIELDS, normWord: normWord, wordCloud: wordCloud, banned: makeBanned, zonedMs: zonedMs, completionColumns: COMPLETION_COLS.slice(), ext: ext,
     },
   };

@@ -68,7 +68,8 @@
 - ctx(계약 §4): `reduced` · `level` · `lowPower` · `load(url)` · `visible(el, cb, {once, threshold, rootMargin})` · `token(name)` · `onPause(cb)` 에 더해 `esm`, `rgb/color/light`(토큰→캔버스 색), `onTheme`, `onScroll(read→write 두 단계, 화면 근처에서만)`, `enter`(진입 대기·해제), `layer`(꾸밈 층 aria-hidden), `canvas`(DPR≤2·ResizeObserver), `loop`(보일 때·탭 보일 때·멈춤 아님·동작 줄이기 아님·저사양 아님에서만 rAF, 아니면 정지 화면 한 장), `surface('dark')`(밝은 테마에서도 영역만 어두운 토큰으로, 글자·주 색 대비 4.5 이상 계산), `fail`.
 - 강도: `<html data-motion="0..3">`(기본 2). 효과 level이 크면 init을 부르지 않습니다. **level 0 = 기능형**(guided-progress, micro-copy)이라 모션 0 사이트에서도 동작합니다.
 - 멈춤: `localStorage['lecfx-motion']` = `off`(멈춤) · `on`(OS 동작 줄이기보다 사용자의 재생 선택 우선) · 없음(OS 따름). `[data-fx-toggle]` 버튼을 자동 연결하고, 반복 효과가 있는데 버튼이 없으면 왼쪽 아래에 "움직임 멈춤" 버튼을 붙입니다(`<html data-fx-toggle="off">`로 끔).
-- 저사양: `hardwareConcurrency ≤ 4 || deviceMemory ≤ 4 || saveData`. `<html data-fx-lowpower="0|1">`로 강제 가능.
+- 저사양: `hardwareConcurrency ≤ 2 || deviceMemory ≤ 2 || saveData`만 미리 판정(2026-11 고침: 예전 '4 이하'는 요즘 휴대폰·아이패드·노트북 대부분이라 그래픽이 거의 어디서나 정지 화면이었음). 코어·메모리 4 이하는 `ctx.modest`(도는 그림 초당 30장·캔버스 해상도 1.5배까지). 도는 그림이 있을 때 프레임 간격을 재서, 시작 1.5초 뒤 3초 동안 70% 넘는 프레임이 50ms를 넘기면 그 기기에서는 정지 화면으로 내림(`html.fx-slow`). `<html data-fx-lowpower="0|1">`로 강제, `data-fx-dpr`로 캔버스 해상도 상한(앱 디자인 카드는 1).
+- 깜빡임 방지: `assets/boot.js`가 움직임이 켜진 참가자 화면에 `html.fx-boot`를 붙여 효과가 시작할 때까지(최대 3초) 등장 효과 대상을 숨김. 등장(`ctx.enter`)·글자 효과(`ctx.fonts`)는 웹 글꼴을 최대 1초 기다림.
 - 안전망: init 예외 → 정리 함수 실행, `data-fx-pre` 해제, `data-fx-error` 표시, `console.warn`만. 인쇄 직전 모든 대기 해제. fx.css에 동작 줄이기·인쇄 시 `[data-fx-pre]`를 강제로 보이게 하는 규칙.
 - 한국어 글자 나누기(`util.split`): 낱말(공백 사이)을 줄바꿈되지 않는 덩어리(`.fx-w` nowrap, 글자 모드는 `.fx-wc` inline-block)로 감싸고 공백은 텍스트로 남깁니다 → `word-break: keep-all`과 같은 줄바꿈. 원문은 `.fx-sr` 숨김 글로 낭독기에 주고 나눈 조각은 `aria-hidden`. 링크·버튼이 든 요소는 구조를 지키며 나눕니다.
 
@@ -181,6 +182,6 @@
 - `doodle-scribbles` 주석은 인라인 요소를 inline-block으로 바꿉니다(긴 문장 전체보다 짧은 구절에).
 - `tone-journey`는 `--background` 등 8개 토큰을 컨테이너에 덮어씁니다. 캔버스 그래픽은 톤이 바뀐 뒤 0.18초에 색을 다시 읽습니다.
 - `view-transition`은 클릭만 감쌉니다(화살표 키로 탭을 바꾸는 경우는 원래 동작).
-- 저사양 판정(코어 4개 이하)은 일부 아이패드도 해당되어 캔버스 그래픽이 정지 화면이 됩니다. 사이트별로 `data-fx-lowpower="0"`로 풀 수 있습니다.
+- 저사양 판정은 코어·메모리 2 이하와 데이터 절약 모드만이고, 그 밖의 기기는 실제 프레임이 계속 밀릴 때만 정지 화면으로 내립니다. 사이트별로 `data-fx-lowpower="0"`로 풀 수 있습니다. 움직임 점검: `scripts/motion-check.mjs`(사이트), `app/scripts/motion-check.mjs`(앱의 디자인 카드·미리보기).
 - `perspective-grid`의 먼 격자선은 지평선 근처에서 약간의 모아레가 생겨 마스크로 흐리게 처리했습니다.
 - 실제 iPad Safari·삼성 인터넷 기기 시험은 하지 못했습니다(Chromium 에뮬레이션만). 사용한 API는 모두 Safari 15.4+/삼성 인터넷 20+ 지원 범위(IntersectionObserver, ResizeObserver, CSS mask, color-mix는 @supports 대체, @property 미지원 시 정지).

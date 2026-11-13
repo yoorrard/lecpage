@@ -10,6 +10,9 @@ import { blobs } from '../../lib/db.js';
 import { Publish } from '../../components/Publish.jsx';
 import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy } from '../../lib/util.js';
+import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
+import { kitHtml, printHtml } from '../../lib/venue.js';
+import { reach } from '../../lib/netcheck.js';
 import { FEATURES, LIVE_KEYS, syncInfo } from '../../lib/blueprint.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -24,6 +27,22 @@ function checks(p) {
   if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
   for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
   return out;
+}
+
+/**
+ * 글꼴 함께 담기 기본값(docs/research/school-network-2026-11.md §6): 학교·기관 망이 글꼴 CDN을 막으면 첫 화면이 늦게 뜨거나 글꼴이 바뀜
+ * → 쓰인 글자가 든 조각·쓰는 굵기·woff2만 사이트 안에 담음(외부 요청 0). 빼는 곳: 바로 공개의 Worker 보기(글꼴 파일 요청도 하루 한도에 듦),
+ * 그림·파일이 40개를 넘게 되는 GitHub Pages(파일마다 천천히 올림)
+ */
+const FONT_HOSTS = ['lecpage', 'vercel', 'netlify', 'cloudflare', 'zip', 'github-pages'];
+const bins = (files) => Object.keys(files).filter((k) => !/\.(html|css|js|json|md|svg|txt|webmanifest)$/i.test(k)).length;
+async function withFonts(files, { target, view }) {
+  if (!FONT_HOSTS.includes(target) || (target === 'lecpage' && view !== 'pages')) return { files, note: '' };
+  const get = (u) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000); return fetch(u, { mode: 'cors', credentials: 'omit', signal: c.signal }).finally(() => clearTimeout(t)); };
+  const fb = await E.bundleFonts(files, { fetch: get });
+  if (!fb.report.ok) return { files, note: '글꼴 서버에 닿지 않아 글꼴을 사이트에 담지 못했어요. 연수 장소에서 글꼴이 늦게 뜨거나 바뀌어 보일 수 있어요.' };
+  if (target === 'github-pages' && bins(fb.files) > 40) return { files, note: '' };
+  return { files: fb.files, note: '' };
 }
 
 /** 운영안내.md → 간단한 HTML(강사가 바로 열어 볼 수 있게) */
@@ -47,6 +66,7 @@ export function StepShare({ p, update, go }) {
   const [target, setTarget] = useState(''); // 지금 고른 올릴 곳(Publish가 알려 줌)
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 올리기
   const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
+  const [fontNote, setFontNote] = useState(''); // 글꼴을 사이트에 담지 못했을 때 한 줄
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const built = useRef(''); const again = useRef(null);
   useEffect(() => { instantInfo().then((i) => setAutoLive(!!i?.live?.url)); }, []);
@@ -57,13 +77,16 @@ export function StepShare({ p, update, go }) {
     let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 30) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
     return () => clearInterval(t);
   }, []);
+  // 연수 장소 확인(공개 전): 바로 공개면 그날 몫을 미리(상태 API 한 번). 공개 뒤에는 공개 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
+  const instantHere = target === 'lecpage' || (!target && autoLive);
+  const [daySt] = useDayStatus({ on: !!bp && instantHere && !p.deploy?.lastUrl, date: bp?.meta?.date || '', site: '' });
   if (!bp) return <><StepHead title="공개하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
   const liveReady = LIVE_READY(bp.live, p.liveOk);
   const setAccess = (mode) => update((cur) => ({ blueprint: { ...cur.blueprint, access: { mode } }, sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
 
-  async function buildFiles({ liveOff = false, live = null, processor = null, dry = false } = {}) {
+  async function buildFiles({ liveOff = false, live = null, processor = null, dry = false, target: to = '', view = '' } = {}) {
     const assets = { ...(await projectAssets(p.id, true)) };
     let b = JSON.parse(JSON.stringify(bp));
     if (!dry) built.current = b.meta?.shortUrl || ''; // 이번에 만든 사이트에 들어간 짧은 주소(올린 뒤 달라지면 다시 올리라고 알림)
@@ -85,6 +108,7 @@ export function StepShare({ p, update, go }) {
     const r = await buildSite(b, assets, { ...p.info, skill: 'click' });
     if (r.errors.length) throw new Error(r.errors.map((e) => e.message_ko).join(' '));
     let files = r.files;
+    if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
     if (b.access?.mode === 'password') {
       if (!p.sitePassword || [...p.sitePassword].length < 4) throw new Error('암호를 4자 이상 정해 주세요.');
       setProg({ step: '내용 잠그는 중', pct: 5 });
@@ -100,7 +124,7 @@ export function StepShare({ p, update, go }) {
   const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); };
   async function zip(opts = {}) {
     setBusy('zip');
-    try { const r = await buildFiles(opts); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 내려받았어요.'); }
+    try { const r = await buildFiles({ target: 'zip', ...opts }); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 내려받았어요.'); }
     catch (e) { toast(e.message); }
     setBusy(''); setProg(null);
   }
@@ -110,6 +134,13 @@ export function StepShare({ p, update, go }) {
       const r = await buildFiles({ dry: true }); const t = r.teacher || {};
       const files = { '운영안내.html': mdToHtml(t['운영안내.md'] || '', p.title) };
       for (const [k, v] of Object.entries(t)) files[k] = v;
+      // 연수 당일 대비: 인터넷이 안 될 때 나눠 줄 인쇄본, 공개했으면 '혹시 안 열리면' 한 장(두 번째 주소·휴대폰 데이터·USB)
+      files['실습프롬프트모음.html'] = printHtml(bp);
+      const url = p.deploy?.lastUrl;
+      if (url) {
+        const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
+        files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live: (bp.live?.features || []).length > 0, zipName: safeName(p.title) + '.zip' });
+      }
       saveFile(safeName(p.title) + '_강사용.zip', E.zipFiles(files), 'application/zip');
       toast('강사용 파일을 내려받았어요.');
     } catch (e) { toast(e.message); }
@@ -151,6 +182,7 @@ export function StepShare({ p, update, go }) {
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
   const notes = checks(p);
+  const day = dayLine(daySt, bp.meta?.date);
   const rows = [];
   rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' ? 'todo' : 'done', line: liveLine,
     btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['되돌리기', () => setSkipLive(false)] : [open.live ? '접기' : '바꾸기', () => toggle('live')],
@@ -183,6 +215,9 @@ export function StepShare({ p, update, go }) {
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: 'note', line: `${notes.length}곳. 그대로 올려도 돼요.`,
     btn: [open.notes === false ? '보기' : '접기', () => setOpen((o) => ({ ...o, notes: o.notes === false }))],
     body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul> });
+  if (!p.deploy?.lastUrl) rows.push({ k: 'venue', title: '연수 장소 확인', state: day?.k === 'full' ? 'todo' : 'note', line: day && day.k !== 'ok' ? '' : '공개한 뒤 연수 전날, 그곳 Wi-Fi로 열리는지 확인해요.',
+    btn: day && day.k !== 'ok' ? null : [open.venue ? '접기' : '보기', () => toggle('venue')],
+    body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
   rows.push({ k: 'host', title: '올릴 곳', state: 'go', line: '',
     body: <>
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
@@ -192,7 +227,7 @@ export function StepShare({ p, update, go }) {
   return (
     <>
       <StepHead title="공개하기" desc={p.deploy?.lastUrl ? '고친 내용은 [바뀐 내용 다시 올리기]로 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [공개하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'} />
-      {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} />}
+      {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} />}
 
       <Sheet>
         <div class="stack">
@@ -259,6 +294,8 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [back, setBack] = useState(false); // 다른 서비스에 다녀옴 → [붙여넣기]를 눈에 띄게
+  const [isgdBad, setIsgdBad] = useState(false); // 이 망에서 is.gd에 닿지 않음(아직 짧은 주소가 없을 때 한 번 확인)
+  useEffect(() => { if (short) return undefined; let off = false; reach('short:isgd').then((s) => { if (!off) setIsgdBad(s === 'blocked'); }); return () => { off = true; }; }, [!!short]);
   const went = useRef(false);
   useEffect(() => {
     const f = () => { if (went.current) { went.current = false; setBack(true); } };
@@ -295,7 +332,8 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
       </div>
       {short
         ? <p class="small">참가자가 직접 칠 때 알려 주세요. QR과 [주소 복사]는 원래 주소라서 짧은 주소가 막힌 곳에서도 열려요.</p>
-        : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
+        : isgdBad ? <p class="small" role="status">이 망에서 is.gd에 닿지 않아요. QR과 [주소 복사]는 원래 주소라 그대로 쓰면 돼요. 짧은 주소가 꼭 필요하면 [다른 방법]으로 만들어 넣어요.</p>
+          : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
       {short && linkOnly && <p class="small">짧은 주소는 누구나 짐작해 넣어 볼 수 있어요. 참가자만 봐야 하면 [공개 범위]에서 암호를 거세요.</p>}
       {stale && <p class="small short-stale"><span>안내문과 발표 화면에는 다시 올려야 {short ? '나와요' : '빠져요'}.</span> <button type="button" class="btn btn-sm" disabled={!!pubBusy} onClick={onRepublish}>다시 올리기</button></p>}
       {err && <p class="small err" role="alert">{err}</p>}
@@ -342,7 +380,7 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
   );
 }
 
-function Success({ p, update, onAddMaterials, onRepublish, busy }) {
+function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantOn, fontNote }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
   const pw = p.blueprint.access?.mode === 'password' ? p.sitePassword : '';
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
@@ -366,11 +404,16 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
           {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{p.deploy.lecpage?.view === 'pages' && p.deploy.lecpage.expiresAt ? `${new Date(p.deploy.lecpage.expiresAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}까지 열려 있어요. 다시 올리면 늘어나요.` : '방문이 있는 동안은 계속 열려 있어요. 30일 동안 아무도 오지 않으면 지워져요.'}</p> : <OpenState url={url} at={p.deploy.at} />}
           {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">학교망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
+          {fontNote && <p class="small" role="status">{fontNote}</p>}
           <div class="btn-row">
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={p.blueprint.access?.mode !== 'password' && p.blueprint.access?.mode !== 'public'} />}
+          <div class="day-kit" role="group" aria-labelledby="venue-h">
+            <b class="small" id="venue-h">연수 전날 점검</b>
+            <VenueBody p={p} url={url} instantOn={p.deploy.target === 'lecpage' && instantOn} />
+          </div>
           <div class="day-kit" role="group" aria-labelledby="day-kit-h">
             <b class="small" id="day-kit-h">연수 당일</b>
             <div class="btn-row">
@@ -382,6 +425,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
               ? <p class="small">강사 화면 관리자 키 <b class="mono">{adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(adminKey, '관리자 키를 복사했어요.')}>복사</button></p>
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
+          <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
           <p class="small">내용을 고치거나 자료를 더 넣은 뒤 다시 올리면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
         </div>
         <div class="qr-side">

@@ -13,7 +13,7 @@ test('유료 월 비용: 포함분 안이면 $5, 넘는 만큼 공식 요금', (
   assert.equal(PAID.workerReq.perM, 0.3); assert.equal(FREE.doGbs, 13000);
 });
 
-test('연수 한 번: 학교망 묻기가 가장 큼, 긴 대기는 요청을 절반으로(방 안이면 duration, Worker가 대신이면 DO 요청)', () => {
+test('연수 한 번: 학교망 묻기가 가장 큼, 긴 대기는 요청이 적고(방 안이면 duration, Worker가 대신이면 DO 요청)', () => {
   const site = trainingCost({ live: false });
   const good = trainingCost({ live: true, network: 'good' });
   const school = trainingCost({ live: true, network: 'restricted' });
@@ -21,7 +21,7 @@ test('연수 한 번: 학교망 묻기가 가장 큼, 긴 대기는 요청을 �
   const longRelay = trainingCost({ live: true, network: 'restricted', longPoll: true, relay: true });
   assert.ok(site.workerReq < 50, '참여 기능 없는 Pages 사이트는 올리기만');
   assert.ok(good.workerReq < school.workerReq / 4);
-  assert.ok(longIn.workerReq < school.workerReq * 0.55);
+  assert.ok(longIn.workerReq < school.workerReq * 0.75, '긴 대기(측정 1분 3.4)는 묻기 5초보다 적음');
   assert.ok(longIn.doGbs > 800, '방 안 긴 대기는 연수 내내 깨어 있음(2시간 ≈ 900 GB-s)');
   assert.ok(longRelay.doGbs < 20 && longRelay.doReq > longIn.doReq, 'Worker가 대신 기다리면 duration 대신 DO 요청');
 });

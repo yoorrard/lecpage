@@ -27,6 +27,70 @@ export function siteCodepoints(files) {
   return set;
 }
 const needed = (range, cps) => { if (!range.length) return true; for (const c of cps) for (const [a, b] of range) if (c >= a && c <= b) return true; return false; };
+
+/**
+ * 바깥 글꼴 스타일시트가 첫 화면을 붙잡지 않게: media="print"로 받아 두고, 다 받으면 boot.js가 'all'로 바꿈.
+ * 학교·기관 망이 글꼴 CDN을 응답 없이 버리면(패킷 버림) 머리의 스타일시트를 기다리느라 쪽이 하얗게 멈췄음(8초 뒤에도 첫 화면 없음, school-network-2026-11 §7).
+ * 이제는 기본 글꼴로 바로 뜨고 글꼴이 오면 바뀜. 스크립트가 꺼진 브라우저는 기본 글꼴 그대로(인쇄에는 글꼴이 씀)
+ */
+export function deferFontLinks(files) {
+  for (const p of Object.keys(files)) {
+    if (!p.endsWith('.html') || typeof files[p] !== 'string') continue;
+    files[p] = files[p].replace(/<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin>/g, (all, u) => (FONT_HOSTS.test(u.replace(/&amp;/g, '&')) ? `<link rel="stylesheet" href="${u}" crossorigin media="print" data-lp-font>` : all));
+  }
+  return files;
+}
+
+/** 사이트 CSS·쪽이 쓰는 굵기(font-weight·--…weight 변수·font 줄임 속성). 400·700(보통·굵게)은 늘 */
+export function usedWeights(files) {
+  const set = new Set([400, 700]);
+  for (const [p, v] of Object.entries(files)) {
+    if (typeof v !== 'string' || !/\.(css|html)$/.test(p) || p === 'assets/fonts.css') continue;
+    const t = p.endsWith('.html') ? v.replace(/@font-face\s*\{[^}]*\}/g, '') : v.replace(/@font-face\s*\{[^}]*\}/g, '');
+    for (const m of t.matchAll(/weight\s*:\s*(\d{3})\b/gi)) set.add(Number(m[1]));
+    for (const m of t.matchAll(/\bfont\s*:\s*(?:(?:italic|oblique|normal|small-caps)\s+)*(\d{3})\s/gi)) set.add(Number(m[1]));
+    if (/weight\s*:\s*(bold|bolder)\b/i.test(t)) set.add(700);
+  }
+  return [...set].filter((w) => w >= 1 && w <= 1000);
+}
+/** CSS 글꼴 고르기 규칙(굵기만): 바라는 굵기 d에 대해 브라우저가 고를 굵기 */
+function pickWeight(d, ws) {
+  if (ws.includes(d)) return d;
+  const asc = ws.filter((w) => w > d).sort((a, b) => a - b), desc = ws.filter((w) => w < d).sort((a, b) => b - a);
+  if (d >= 400 && d <= 500) { const mid = asc.filter((w) => w <= 500); return mid.length ? mid[0] : desc.length ? desc[0] : asc[0]; }
+  if (d < 400) return desc.length ? desc[0] : asc[0];
+  return asc.length ? asc[0] : desc[0];
+}
+const faceFamily = (b) => ((/font-family\s*:\s*([^;}]+)/.exec(b) || [])[1] || '').trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+const faceStyle = (b) => (/font-style\s*:\s*(italic|oblique)/i.test(b) ? 'i' : 'n');
+/** font-weight: 700 → [700,700], 100 900(가변) → [100,900], 없으면 [400,400] */
+function faceWeight(b) { const m = /font-weight\s*:\s*(\d{3})(?:\s+(\d{3}))?/.exec(b); return m ? [Number(m[1]), Number(m[2] || m[1])] : /font-weight\s*:\s*bold/i.test(b) ? [700, 700] : [400, 400]; }
+/**
+ * 한 스타일시트의 @font-face 가운데 사이트가 쓰는 굵기로 브라우저가 고를 것만 남김(같은 글꼴·같은 기울기 안에서).
+ * 가변 굵기(100 900) 덩어리와 굵기가 하나뿐인 글꼴은 그대로. 돌려주는 값: 남길 덩어리(Set)
+ */
+function keepByWeight(list, weights) {
+  const groups = new Map();
+  for (const f of list) { const k = faceFamily(f.block) + '|' + faceStyle(f.block); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+  const keep = new Set();
+  for (const g of groups.values()) {
+    const statics = g.filter((f) => { const [a, b] = faceWeight(f.block); return a === b; });
+    const ws = [...new Set(statics.map((f) => faceWeight(f.block)[0]))];
+    if (ws.length <= 1) { g.forEach((f) => keep.add(f)); continue; }
+    const want = new Set(weights.map((d) => pickWeight(d, ws)));
+    for (const f of g) { const [a, b] = faceWeight(f.block); if (a !== b || want.has(a)) keep.add(f); }
+  }
+  return keep;
+}
+/** src에 woff2가 있으면 woff2(와 local)만 남김: 요즘 브라우저는 모두 woff2를 읽음(같은 글꼴의 woff·ttf를 함께 담으면 서너 배로 커짐) */
+function woff2Only(block) {
+  const m = /src\s*:\s*([^;}]+)/.exec(block); if (!m) return block;
+  const parts = [...m[1].matchAll(/(local\([^)]*\)|url\([^)]*\))(\s*format\([^)]*\))?/g)].map((x) => x[0].trim());
+  const w2 = parts.filter((x) => /^url\(/.test(x) && (/format\(\s*['"]?woff2/i.test(x) || /\.woff2(?:[?#][^'")]*)?['"]?\s*\)/i.test(x)));
+  const others = parts.filter((x) => /^url\(/.test(x) && !w2.includes(x));
+  if (!w2.length || !others.length) return block;
+  return block.replace(m[0], 'src: ' + parts.filter((x) => /^local\(/.test(x)).concat(w2).join(', '));
+}
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 
 /** @font-face 덩어리마다 { block, urls[], range[] } */
@@ -49,12 +113,12 @@ export async function bundleFonts(files, o = {}) {
   const out = { ...files }, report = { ok: false, external: 0, bundled: 0, bytes: 0, skipped: [] };
   if (typeof get !== 'function') { report.skipped.push('fetch 없음'); return { files: out, report }; }
   const htmls = Object.keys(out).filter((p) => p.endsWith('.html') && typeof out[p] === 'string');
-  const linkRe = /<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin>\n?/g;
+  const linkRe = /<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin(?: media="print" data-lp-font)?>\n?/g;
   const sheets = [...new Set(htmls.flatMap((p) => [...out[p].matchAll(linkRe)].map((m) => m[1].replace(/&amp;/g, '&')).filter((u) => FONT_HOSTS.test(u))))];
   const theme = typeof out['assets/theme.css'] === 'string' ? out['assets/theme.css'] : '';
   report.external = sheets.length + faces(theme).filter((f) => f.urls.some((u) => FONT_HOSTS.test(u))).length;
   if (!report.external) { report.ok = true; return { files: out, report }; }
-  const cps = siteCodepoints(out), saved = new Map();
+  const cps = siteCodepoints(out), saved = new Map(), weights = usedWeights(out);
   const grab = async (url) => {
     if (saved.has(url)) return saved.get(url);
     const r = await get(url, { headers: { 'user-agent': UA } });
@@ -68,8 +132,11 @@ export async function bundleFonts(files, o = {}) {
   // 한 덩어리: 쓰는 글자가 든 조각만 받아 주소를 사이트 안으로 바꿈(경로는 assets/fonts.css·theme.css 기준이라 fonts/…)
   const localize = async (css, base) => {
     let res = '';
-    for (const f of faces(css)) {
-      if (!needed(f.range, cps)) continue;
+    const list = faces(css), keep = keepByWeight(list, weights);
+    for (const f0 of list) {
+      if (!needed(f0.range, cps) || !keep.has(f0)) { report.dropped = (report.dropped || 0) + 1; continue; }
+      const f = { ...f0, block: woff2Only(f0.block) };
+      f.urls = f.block === f0.block ? f0.urls : [...f.block.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g)].map((u) => u[2]);
       let block = f.block;
       for (const u of f.urls) {
         const abs = new URL(u, base).href;

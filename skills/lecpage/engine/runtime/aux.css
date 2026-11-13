@@ -77,6 +77,15 @@
   .lp-con-panel[data-area="help"]{order:1}.lp-con-panel[data-area="run"]{order:2}.lp-con-panel[data-area="qa"]{order:3}.lp-con-panel[data-area="poll"]{order:4}
   .lp-con-panel[data-area="signal"]{order:5}.lp-con-panel[data-area="heat"]{order:6}.lp-con-panel[data-area="board"]{order:7}.lp-con-panel[data-area="data"]{order:8}
 }
+/* 묻기 방식·할 일·접속 확인(맨 위 한 줄, console.js) */
+.lp-con-net{grid-column:1 / -1;display:grid;gap:4px;min-width:0;padding:10px 16px;border-radius:var(--radius-sm);border:var(--border-w) solid var(--rule-c);background:var(--card);color:var(--card-foreground);font-size:var(--fs-sm);line-height:1.6}
+.lp-con-net-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;font-weight:600}
+.lp-con-net-h b{font-size:var(--fs-xs);font-weight:700;color:var(--muted-foreground)}
+.lp-con-net-do[hidden]{display:none}
+.lp-con-net-ck{font-size:var(--fs-xs);color:var(--muted-foreground)}
+.lp-con-net-ck a{color:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.lp-con-net[data-state="polling"]{border-color:color-mix(in srgb,var(--warning) 55%,var(--rule-c))}
+.lp-con-net[data-state="offline"]{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,var(--card))}
 /* 지금 띠: 숫자 여섯 개를 가는 선으로 나눈 한 줄(누르면 그 칸으로) */
 .lp-con-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;overflow:hidden;border-radius:var(--radius);border:var(--border-w) solid var(--border);background:var(--rule-c)}
 .lp-con-kpi{display:grid;gap:2px;align-content:start;min-width:0;padding:14px 18px 16px;background:var(--card);color:var(--card-foreground);text-decoration:none}

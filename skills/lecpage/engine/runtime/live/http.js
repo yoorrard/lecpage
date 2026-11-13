@@ -1,8 +1,11 @@
 /*! lecpage live — provider 'http': HTTP protocol v1 (Cloudflare Worker or the Node server).
  * Transport: WebSocket → SSE → polling (snapshot?since). Each realtime try gets 4 s to say hello.
  * Heartbeats, reconnect with jittered backoff, resync on every reconnect, slower polling in hidden tabs,
- * and periodic upgrade attempts while polling. A transport that keeps failing is skipped for 10 minutes.
- * config: { url, code, pollMs?, transports?: ['ws','sse','poll'] }
+ * and upgrade attempts while polling (3 → 6 → 12 → 30 min apart, none while hidden). A transport that keeps failing is skipped for 10 minutes.
+ * Polling (학교망: 웹소켓·SSE가 막힘) is a long-poll when the server holds `snapshot?since=&wait=20` until something changes
+ * (lecpage 바로 공개 서버). A server that answers at once is detected after two quick empty answers and polled on an interval instead.
+ * The server's `X-Lec-Poll-Ms` is the lower bound of the gap between polls (busy free-plan days ask for 10–20 s).
+ * config: { url, code, pollMs?, transports?: ['ws','sse','poll'], longPoll?: false, waitS?: 20 }
  */
 (function (root) {
   'use strict';
@@ -10,6 +13,7 @@
   if (!L || !L.register) return;
   var U = L.util;
   var CONNECT_TIMEOUT = 4000;
+  var WAIT_S = 20; // 긴 대기: 서버가 바뀔 때까지 붙잡는 최대 초(서버 상한 25초 안)
 
   L.register('http', function (config, ctx) {
     var code = U.normCode(config.code);
@@ -21,12 +25,15 @@
     var order = (config.transports || ['ws', 'sse', 'poll']).filter(function (t) { return t === 'ws' || t === 'sse' || t === 'poll'; });
     if (order.indexOf('poll') < 0) order.push('poll');
     var pollMs = Math.min(60000, Math.max(2000, Number(config.pollMs) || 5000));
+    var WAIT = Math.min(25, Math.max(1, Number(config.waitS) || WAIT_S));
     var ss = U.storage.session; var skipKey = ctx.storage.ns + ':skip';
     var handlers = [];
     var a = { status: 'offline' };
     var kind = null, ws = null, es = null;
     var timers = {};
     var lastMsg = 0, openedAt = 0, attempt = 0, closed = true, pollErr = 0, emptyPolls = 0;
+    // 긴 대기: null 아직 모름 · true 서버가 붙잡아 줌 · false 바로 답하는 서버(간격 묻기). quick: 붙잡지 않은 빈 답이 이어진 수
+    var longOk = config.longPoll === false ? false : null, quick = 0, lpFail = 0, hintMs = 0, every = 0, upgradeN = 0, lpCtl = null;
     var authBad = false; // the server refused the admin key on the socket: stop resending it until setAdmin()
 
     function emit(evt) { var r; handlers.forEach(function (h, i) { try { var x = h(evt); if (i === 0) r = x; } catch (e) { /* isolate */ } }); return r; }
@@ -49,10 +56,12 @@
       if (opts.form) body = opts.form;
       else if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.body); }
       var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      if (opts.ctl) opts.ctl(ctl);
       var to = setTimeout(function () { if (ctl) ctl.abort(); }, opts.timeout || 12000);
       return fetch(prefix + path, { method: method, headers: headers, body: body, signal: ctl ? ctl.signal : undefined, cache: 'no-store', credentials: 'omit', mode: 'cors' })
         .then(function (res) {
           clearTimeout(to);
+          readHint(res);
           if (opts.text && res.ok) return res.text();
           return res.text().then(function (txt) {
             var data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
@@ -66,6 +75,11 @@
           clearTimeout(to);
           throw L.error(e && e.name === 'AbortError' ? 'timeout' : 'network', '서버에 연결하지 못했어요.', { status: 0, retryable: true });
         });
+    }
+    /** 서버의 묻기 간격 권고(X-Lec-Poll-Ms): 붐비는 날 길게. 2~60초만 받음 */
+    function readHint(res) {
+      var h = 0; try { h = Number(res.headers.get('X-Lec-Poll-Ms')) || 0; } catch (e) { h = 0; }
+      if (h >= 2000 && h <= 60000 && h !== hintMs) { hintMs = h; if (kind === 'poll') emit({ type: 'net' }); }
     }
     function absUrl(u) { return u && u.charAt(0) === '/' ? origin + u : u; }
     // Servers store board files as '/api/<code>/files/<name>' (their own uploads only); show them from this server.
@@ -193,20 +207,48 @@
     // ---------------------------------------------------------------- polling
     function startPolling() {
       stopRealtime();
-      kind = 'poll'; pollErr = 0; emptyPolls = 0;
+      kind = 'poll'; pollErr = 0; emptyPolls = 0; quick = 0; lpFail = 0; upgradeN = 0;
       setStatus('polling', 'polling');
+      emit({ type: 'net' });
       schedulePoll(pollMs);
-      clear('upgrade');
-      if (order[0] !== 'poll') timers.upgrade = setInterval(function () {
-        if (kind !== 'poll' || closed || U.isHidden()) return;
-        openBest(true).then(function () { clear('upgrade'); ctx.emit({ type: 'resync' }); }, function () { /* stay polling */ });
-      }, 3 * 60000);
+      scheduleUpgrade();
     }
-    function stopPolling() { clear('poll'); clear('upgrade'); }
-    function schedulePoll(ms) { clear('poll'); timers.poll = setTimeout(pollOnce, ms); }
+    /** 실시간으로 다시 올라가 보기: 3분 → 6분 → 12분 → 30분 간격(시도마다 서버 요청 1~2개라 학교망에서는 드물게), 숨겨진 화면에서는 하지 않음 */
+    function scheduleUpgrade() {
+      clear('upgrade');
+      if (order[0] === 'poll' || closed) return;
+      timers.upgrade = setTimeout(function () {
+        if (kind !== 'poll' || closed) return;
+        if (U.isHidden()) return scheduleUpgrade();
+        upgradeN++;
+        openBest(true).then(function () { clear('upgrade'); ctx.emit({ type: 'resync' }); }, function () { if (kind === 'poll') scheduleUpgrade(); });
+      }, Math.min(30, 3 * Math.pow(2, upgradeN)) * 60000);
+    }
+    function stopPolling() { clear('poll'); clear('upgrade'); var c = lpCtl; lpCtl = null; if (c) { try { c.abort(); } catch (e) { /* ignore */ } } }
+    function schedulePoll(ms) { clear('poll'); every = ms; timers.poll = setTimeout(pollOnce, ms); }
+    /** 긴 대기 한 번: 바뀐 것이 있으면 바로, 없으면 WAIT초 뒤에 답이 옴. 결과는 동기화 차례를 붙잡지 않게 'snapshot' 사건으로 넘김 */
+    function longPoll() {
+      var t0 = Date.now();
+      return request('GET', '/snapshot?since=' + encodeURIComponent(ctx.cursor() || 0) + '&wait=' + WAIT, { timeout: (WAIT + 10) * 1000, ctl: function (c) { lpCtl = c; } })
+        .then(function (snap) {
+          lpCtl = null; lpFail = 0;
+          if (snap) { snap.time = snap.now; fixList(snap.posts); }
+          var r = ctx.emit({ type: 'snapshot', doc: snap }) || { changes: 0 };
+          var held = Date.now() - t0 >= Math.max(WAIT * 700, WAIT * 1000 - 3000); // 서버가 실제로 붙잡았는지
+          if (!r.changes && !held) { if (++quick >= 2 && longOk !== false) { longOk = false; emit({ type: 'net' }); } }
+          else { quick = 0; if (held && longOk !== true) { longOk = true; emit({ type: 'net' }); } }
+          return r;
+        }, function (e) {
+          lpCtl = null;
+          // 오래 붙잡은 요청을 망(프록시)이 끊으면 간격 묻기로. 서버가 아예 닿지 않는 것은 그다음 묻기가 가림
+          if (kind === 'poll' && !closed && e && (e.code === 'timeout' || e.code === 'network') && ++lpFail >= 2 && longOk !== false) { longOk = false; emit({ type: 'net' }); }
+          return { changes: 0, error: e };
+        });
+    }
     function pollOnce() {
       if (closed || kind !== 'poll') return;
-      Promise.resolve(ctx.emit({ type: 'resync' })).then(function (r) {
+      var useLong = longOk !== false && !U.isHidden() && (ctx.cursor() || 0) > 0;
+      Promise.resolve(useLong ? longPoll() : ctx.emit({ type: 'resync' })).then(function (r) {
         if (closed || kind !== 'poll') return;
         if (r && r.error) {
           pollErr++;
@@ -216,16 +258,14 @@
           pollErr = 0;
           emptyPolls = r && r.changes ? 0 : emptyPolls + 1;
         }
-        var ms = pollMs;
-        if (pollErr) ms = Math.min(60000, pollMs * Math.pow(2, pollErr));
-        else if (U.isHidden()) ms = Math.max(30000, pollMs * 3);
-        else if (emptyPolls > 6) ms = Math.min(pollMs * 2, 15000);
+        // 긴 대기는 쉬는 틈만(바뀐 것이 오면 그 틈 동안 모아 다음 대기에서 받음). 간격 묻기는 바뀐 것 없이 이어지면 늘림
+        var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
         schedulePoll(U.jitter(ms, 0.15));
       });
     }
     function onVisible() {
       if (closed || U.isHidden()) return;
-      if (kind === 'poll') schedulePoll(50);
+      if (kind === 'poll') { if (!lpCtl) schedulePoll(50); }
       else if (kind && Date.now() - lastMsg > 60000) lost(kind);
     }
     function onOnline() { if (!closed && a.status === 'offline') { clear('reconnect'); attempt = 0; reconnect(); } }
@@ -254,6 +294,11 @@
       setStatus('offline');
     };
     a.transport = function () { return kind; };
+    /** 강사 화면의 '묻기 방식' 한 줄: transport 'ws'|'sse'|'long'|'poll', every 다음 묻기까지(ms), hint 서버 권고(ms) */
+    a.netInfo = function () {
+      var t = kind === 'poll' ? (longOk === false || U.isHidden() ? 'poll' : 'long') : kind;
+      return { transport: t, every: kind === 'poll' ? every : 0, wait: t === 'long' ? WAIT : 0, hint: hintMs, longOk: longOk };
+    };
     a.setAdmin = function (key) { authBad = false; if (ws && ws.readyState === 1 && key) ws.send(JSON.stringify({ type: 'auth', admin: key })); };
     a.join = function (p) { return request('POST', '/join', { body: p }); };
     a.snapshot = function (o) {

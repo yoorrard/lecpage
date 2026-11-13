@@ -107,7 +107,7 @@ export const PRESETS = [
     shape: { radius: 8, radiusSm: 6, radiusLg: 12, borderW: 1, shadow: 'flat' },
     variants: { hero: 'brief', head: 'chapter', band: 'invert', card: 'outline', nav: 'bar', btn: 'square', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'counter',
-    effects: { numbers: 'counter' },
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter' },
     plan: ['fade goals:wipe schedule:wipe readiness:rise materials:wipe faq:fade glossary:wipe instructor:rise', { schedule: 'line-draw', message: 'highlight-sweep', list: 'link-underline' }],
   },
   {
@@ -228,7 +228,7 @@ export const PRESETS = [
     shape: { radius: 12, radiusSm: 8, radiusLg: 20, borderW: 1, shadow: 'soft' },
     variants: { hero: 'panel', head: 'chapter', band: 'tint', card: 'paper', nav: 'bar', btn: 'pill', heading: 'heavy', tones: false },
     graphic: '', closingGraphic: '', signature: 'counter',
-    effects: { numbers: 'counter' },
+    effects: { 'hero.title': 'reveal-up', numbers: 'counter' },
     plan: ['rise goals:side schedule:wipe tools:rise materials:wipe faq:fade', { cards: 'link-underline', schedule: 'line-draw', list: 'link-underline' }],
   },
   {
@@ -273,7 +273,7 @@ export const PRESETS = [
     shape: { radius: 2, radiusSm: 2, radiusLg: 4, borderW: 1, shadow: 'flat' },
     variants: { hero: 'column', head: 'kicker', band: 'tint', card: 'flat', nav: 'bar', btn: 'square', heading: 'serif', tones: false },
     graphic: '', closingGraphic: 'grain', signature: 'highlight-sweep',
-    effects: { 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
+    effects: { 'hero.title': 'reveal-up', 'hero.graphic.overlay': 'grain', numbers: 'counter', message: 'highlight-sweep' },
     plan: ['fade goals:fade outline:rise schedule:wipe glossary:wipe instructor:rise', { schedule: 'line-draw', list: 'link-underline' }],
   },
   // ── 2026-11 추가: 살아 있는 첫 화면(그림·움직임·반응이 첫 화면에 들어 있는 쇼케이스). 그림은 Canvas·SVG·CSS만, 정지 모습이 먼저 그려짐 ──

@@ -3,6 +3,7 @@ import { Notice } from './ui.jsx';
 import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI, setWay, chatLabel } from '../lib/ai.js';
 import { KEY_GUIDES, GUIDE_ORDER, GUIDE_MORE, KeyPic } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
+import { reach } from '../lib/netcheck.js';
 
 /** 키처럼 생긴 글인지(한 덩어리, 20자 이상). 처음 보는 모양의 키도 고른 회사 키로 확인해 볼 수 있게 */
 const looksLikeKey = (s) => /^[\w.-]{20,300}$/.test(s);
@@ -69,6 +70,9 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
   const [opened, setOpened] = useState(-1); // 새 창으로 연 걸음 → 돌아오면 그다음 걸음으로
   const [back, setBack] = useState(false); // 키 페이지에서 돌아옴 → [붙여넣기]를 눈에 띄게
   const inputRef = useRef(); const pasteRef = useRef();
+  // 고른 회사의 API가 이 망에서 열리는지(요청 한 번, 잠깐 기억). 막혔으면 키를 만들기 전에 알려 챗봇 창 길로
+  const [netBad, setNetBad] = useState('');
+  useEffect(() => { let off = false; setNetBad(''); reach('ai:' + tab).then((s) => { if (!off && s === 'blocked') setNetBad(tab); }); return () => { off = true; }; }, [tab]);
   const g = KEY_GUIDES[tab]; const last = g.steps.length; const cur = g.steps[step];
   const go = (n) => { setStep(Math.max(0, Math.min(last, n))); setErr(null); };
   const pick = (id) => { if (!KEY_GUIDES[id] || id === tab) return; setTab(id); setStep(0); setOpened(-1); setBack(false); setErr(null); };
@@ -130,6 +134,11 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
       </div>}
       <p class="ai-what">{GUIDE_MORE.includes(tab) && !only && <b>{g.label} · </b>}{g.what}</p>
       {g.more?.length > 0 && <ul class="ai-more small" aria-label="무료로 쓸 때 알아 둘 점">{g.more.map((t) => <li>{t}</li>)}</ul>}
+      {netBad === tab && <div role="status"><Notice kind="bad"><div class="stack" style={{ gap: '4px' }}>
+        <b>이 망에서 {g.label} API에 닿지 않아요.</b>
+        <span>학교·기관 망이 막은 것 같아요. 여기서는 키로 만들 수 없어요. 쓰던 챗봇 창으로 만들거나, 휴대폰 핫스팟으로 바꾼 뒤 다시 열어 주세요.</span>
+        {onChat && <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => { setWay('chat'); onChat(tab); }}>{chatLabel(tab)}</button></div>}
+      </div></Notice></div>}
       <section class="key-card" aria-label={`${g.label} 연결 순서`}>
         <ol class="key-dots" aria-label="순서">
           {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} aria-label={`${i + 1}. ${n}`} onClick={() => go(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}

@@ -295,3 +295,28 @@ test('core (M2): with lazySchema, reads of an unknown code create no tables; the
   const r = await auto.handle({ method: 'POST', code: 'LAZY1', rest: ['join'], query: new URLSearchParams(), headers: H(), body: { nickname: 'x' }, ip: '1.2.3.4' });
   assert.equal(r.status, 201); assert.ok(tables() > 0); assert.equal(created, 1);
 });
+
+test('node (학교망): 긴 대기 snapshot?since=&wait= 는 바뀔 때까지 붙잡고, 글이 올라오면 바로, 없으면 wait초 뒤 빈 답', async () => {
+  const code = 'LPOLL' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const { call } = api(srv.url, code);
+  await call('POST', '/init', { admin: ADMIN, body: {} });
+  const j = await call('POST', '/join', { body: { nickname: '대기' } });
+  assert.ok(j.status < 300, JSON.stringify(j.body));
+  const s0 = await call('GET', '/snapshot?since=0');
+  // 바뀐 것 없음 → 1초 붙잡았다 빈 답
+  let t = Date.now();
+  const idle = await call('GET', `/snapshot?since=${s0.body.now}&wait=1`);
+  assert.equal(idle.status, 200); assert.ok(Date.now() - t >= 900, '붙잡음 ' + (Date.now() - t));
+  assert.equal(idle.body.questions.length, 0);
+  // 기다리는 중에 질문이 올라오면 바로 답
+  t = Date.now();
+  const held = call('GET', `/snapshot?since=${idle.body.now}&wait=5`);
+  await new Promise((r) => setTimeout(r, 200));
+  const q = await call('POST', '/questions', { token: j.body.token, body: { text: '긴 대기 중에 올린 질문' } });
+  assert.ok(q.status < 300, JSON.stringify(q.body));
+  const got = await held;
+  assert.ok(Date.now() - t < 2500, '바로 답 ' + (Date.now() - t));
+  assert.ok(got.body.questions.some((x) => x.text === '긴 대기 중에 올린 질문'));
+  // since=0(처음 읽기)은 붙잡지 않음
+  t = Date.now(); await call('GET', '/snapshot?since=0&wait=5'); assert.ok(Date.now() - t < 1000);
+});

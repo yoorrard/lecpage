@@ -13,11 +13,12 @@ const NAMES = { workerReq: 'Worker 요청', doReq: 'DO 요청', doGbs: 'DO durat
 const fmt = (n) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}백만` : Math.abs(n) >= 1e4 ? `${(n / 1e4).toFixed(n >= 1e5 ? 0 : 1)}만` : Math.round(n).toLocaleString('en-US'));
 const usd = (n) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
 
+// 2026-11-13 학교망 대비 뒤 런타임은 긴 대기(?wait=20, 측정 1분 3.4요청)가 기본. 서버는 무료면 방 안에서, 유료면 Worker가 대신 기다림(POLL_RELAY auto)
 const variants = [
-  ['지금(묻기 5초)', {}],
-  ['런타임 긴 대기 반영', { longPoll: true }],
-  ['긴 대기 + Worker가 대신(유료)', { longPoll: true, relay: true }],
-  ['참여 기능 없음', { liveShare: 0 }],
+  ['지금 런타임(긴 대기), 무료 기본: 방 안에서 기다림', { longPoll: true }],
+  ['지금 런타임(긴 대기), 유료 기본: Worker가 대신 기다림', { longPoll: true, relay: true }],
+  ['예전 런타임(묻기 5초)', {}],
+  ['참여 기능은 강사 계정으로(사이트만)', { liveShare: 0 }],
 ];
 const out = { assumptions: { perUser: 2, instantShare: 0.7, people: 40, liveShare: 0.5, schoolShare: 0.4, minutes: 120, peakFactor: 2, workdays: 20, siteDays: 60, republishes: 1, ...base }, rows: [] };
 
@@ -35,8 +36,12 @@ console.log('### 연수 한 번이 드는 몫(Pages 보기)\n');
 console.log('| 연수 | Worker 요청 | DO 요청 | DO duration(GB-s) | DO 행 쓰기 | Pages API | 유료면(넘는 몫) |');
 console.log('|---|---|---|---|---|---|---|');
 const kinds = [
-  ['참여 기능 없음', { live: false }], ['참여 기능, 실시간 연결 됨', { live: true, network: 'good' }], ['참여 기능, 학교망(묻기 5초)', { live: true, network: 'restricted' }],
-  ['학교망 + 긴 대기(방 안)', { live: true, network: 'restricted', longPoll: true }], ['학교망 + 긴 대기(Worker가 대신)', { live: true, network: 'restricted', longPoll: true, relay: true }],
+  ['참여 기능 없음', { live: false }],
+  ['참여 기능, 실시간 연결 됨(20%는 긴 대기, 방 안)', { live: true, network: 'good', longPoll: true }],
+  ['참여 기능, 실시간 연결 됨(20%는 긴 대기, Worker가 대신)', { live: true, network: 'good', longPoll: true, relay: true }],
+  ['학교망(모두 긴 대기, 방 안)', { live: true, network: 'restricted', longPoll: true }],
+  ['학교망(모두 긴 대기, Worker가 대신)', { live: true, network: 'restricted', longPoll: true, relay: true }],
+  ['학교망(예전 런타임 묻기 5초)', { live: true, network: 'restricted' }],
 ];
 for (const [name, o] of kinds) {
   const c = trainingCost({ people: a.people, minutes: a.minutes, republishes: a.republishes, ...o });
@@ -57,13 +62,11 @@ for (const [vname, v] of variants) {
 }
 
 console.log('\n### 비용 곡선(지금 가정, Workers Paid 월 비용)\n');
-console.log('| 월 활성 강사 | 지금(묻기 5초) | 긴 대기 반영 | 긴 대기 + Worker가 대신 | 참여 기능 없음 | 참여 기능은 강사 계정으로(사이트만) |');
-console.log('|---|---|---|---|---|---|');
+console.log('| 월 활성 강사 | 긴 대기, 방 안에서 | 긴 대기, Worker가 대신(유료 기본) | 예전 런타임(묻기 5초) | 사이트만(참여 기능은 강사 계정) |');
+console.log('|---|---|---|---|---|');
 for (const users of [500, 1000, 3000, 10000, 30000, 100000]) {
   const cells = variants.map(([, v]) => usd(scenario({ ...base, ...v, users }).paid.total));
-  // 참여 기능 방을 강사 계정(Cloudflare·Supabase)으로 넘기면 운영자 몫은 사이트만
-  cells.push(usd(scenario({ ...base, liveShare: 0, users }).paid.total));
   console.log(`| ${users.toLocaleString('en-US')} | ${cells.join(' | ')} |`);
 }
-const big = scenario({ ...base, users: 100000 });
-console.log(`\n10만 명(지금) 항목별: ${Object.entries(big.paid.items).map(([k, v]) => `${k} ${usd(v)}`).join(' · ')} → ${usd(costOf(big.month).total)}`);
+const big = scenario({ ...base, longPoll: true, relay: true, users: 100000 });
+console.log(`\n10만 명(유료 기본) 항목별: ${Object.entries(big.paid.items).map(([k, v]) => `${k} ${usd(v)}`).join(' · ')} → ${usd(costOf(big.month).total)}`);

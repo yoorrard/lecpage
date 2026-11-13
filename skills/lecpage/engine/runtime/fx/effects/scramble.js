@@ -34,7 +34,10 @@ LecFX.define('scramble', {
       raf = requestAnimationFrame(frame);
     };
     var trig = o.trigger || 'enter';
-    if (trig !== 'hover') ctx.visible(el, run, { once: true, rootMargin: '0px 0px -12% 0px' });
+    /* 처음부터 화면에 있는 글(첫 화면 제목)은 바로 기다리는 모습으로: 다 보였다가 흐려진 뒤 다시 드러나며 튀지 않게(글꼴을 기다리는 동안 포함) */
+    var r0 = el.getBoundingClientRect();
+    if (trig !== 'hover' && r0.top < (window.innerHeight || 0) && r0.bottom > 0) items.forEach(function (it) { if (it.ch.trim()) it.el.classList.add('fx-wait'); });
+    if (trig !== 'hover') ctx.visible(el, function () { ctx.fonts(run); }, { once: true, rootMargin: '0px 0px -12% 0px' });
     if (trig !== 'enter' && ctx.fine) ctx.on(el, 'pointerenter', run);
     ctx.onPause(function (p) { if (p && raf) { cancelAnimationFrame(raf); finish(); } });
     return function () { if (raf) cancelAnimationFrame(raf); s.revert(); el.classList.remove('fx-scramble'); };

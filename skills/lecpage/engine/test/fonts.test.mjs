@@ -109,3 +109,37 @@ test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각만 �
   assert.equal(bad.report.ok, false); assert.equal(bad.files, r.files);
   assert.deepEqual(E.parseRange('U+AC00-D7A3, U+0041, U+4??'), [[0xac00, 0xd7a3], [0x41, 0x41], [0x400, 0x4ff]]);
 });
+
+test('바깥 글꼴 스타일시트는 첫 화면을 붙잡지 않음(media="print" → 받은 뒤 boot.js가 all로): 글꼴 CDN이 응답 없이 막힌 망에서도 쪽이 뜸', () => {
+  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  for (const page of Object.keys(r.files).filter((k) => k.endsWith('.html'))) {
+    const links = r.files[page].match(/<link rel="stylesheet" href="https:[^>]+>/g) || [];
+    assert.ok(links.length, page);
+    for (const l of links) assert.match(l, / media="print" data-lp-font>$/, page + ': ' + l);
+    assert.ok(r.files[page].indexOf('data-lp-font') < r.files[page].indexOf('assets/boot.js'), 'boot.js가 글꼴 링크 뒤에 있어야 찾음');
+  }
+  assert.match(r.files['assets/boot.js'], /link\[data-lp-font\][\s\S]*media = 'all'/);
+});
+
+test('글꼴 함께 담기(학교망 기본값): woff2만 담고, 사이트가 쓰는 굵기로 브라우저가 고를 굵기만 남긴다(가변 굵기는 그대로)', async () => {
+  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  const w = E.usedWeights(r.files);
+  assert.ok(w.includes(400) && w.includes(700));
+  const asked = [];
+  const face = (wt, n) => `@font-face{font-family:'S';font-weight:${wt};src:local('S'),url(./s${n}.woff2) format('woff2'),url(./s${n}.woff) format('woff'),url(./s${n}.ttf) format('truetype')}`;
+  const fakeFetch = async (url) => {
+    asked.push(url);
+    if (/\.(woff2?|ttf)$/.test(url)) return { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer };
+    return { ok: true, text: async () => [face(100, 1), face(300, 3), face(400, 4), face(700, 7), "@font-face{font-family:'V';font-weight:100 900;src:url(./v.woff2) format('woff2')}"].join('\n') };
+  };
+  // 사이트가 100·300을 쓰지 않으면(보통 400·700, 600은 700으로) 그 굵기 파일은 받지 않음
+  const only = { ...r.files, 'assets/x.css': '.a{font-weight:600}' };
+  for (const k of Object.keys(only)) if (typeof only[k] === 'string' && /\.(css|html)$/.test(k)) only[k] = only[k].replace(/weight\s*:\s*(100|200|300)\b/g, 'weight:400');
+  const { files, report } = await E.bundleFonts(only, { fetch: fakeFetch });
+  assert.ok(report.ok, report.skipped.join());
+  assert.ok(!asked.some((u) => /\/s\d\.(woff|ttf)$/.test(u)), 'woff2가 있으면 woff·ttf는 받지 않음: ' + asked.join());
+  assert.ok(!asked.some((u) => /s1\.woff2|s3\.woff2/.test(u)), '쓰지 않는 굵기는 받지 않음');
+  assert.ok(asked.some((u) => /s4\.woff2/.test(u)) && asked.some((u) => /s7\.woff2/.test(u)) && asked.some((u) => /v\.woff2/.test(u)));
+  assert.doesNotMatch(files['assets/fonts.css'], /format\('woff'\)|truetype/);
+  assert.match(files['assets/fonts.css'], /local\('S'\)/, 'local()은 남김');
+});
