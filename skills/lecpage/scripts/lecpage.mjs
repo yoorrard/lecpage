@@ -20,6 +20,9 @@
 //   decide-infra -i info.json · presets · effects
 //   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
 //   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
+//   publish [work] [--host cloudflare] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
+//        강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
+//   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·강사-카드.pdf·발표화면.png(Playwright 필요)
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -36,7 +39,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -507,6 +510,7 @@ async function fromAppFile(P, file) {
 }
 
 // ── 명령 ─────────────────────────────────────────
+const helpers = () => ({ args, E, N, rel, fail, say, readJson, writeJson, loadState, saveState, loadPlaywright, staticServer });
 const commands = {
   async make() {
     const t0 = Date.now();
@@ -864,6 +868,11 @@ const commands = {
     const port = +args.port || 4173;
     staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
+
+  /** 올리기: Cloudflare 계정 하나에 사이트(+ --live면 참여 기능 중계)를 올리고 주소 확인·안내물까지(scripts/publish.mjs) */
+  async publish() { const { publishCmd } = await import('./publish.mjs'); await publishCmd(helpers()); },
+  /** 올린 주소 → 강사용 폴더에 QR-안내문.pdf·강사-카드.pdf·발표화면.png */
+  async handouts() { const { handoutsCmd } = await import('./publish.mjs'); await handoutsCmd(helpers()); },
 
   pack() {
     const dir = resolve(args._[0] || 'dist');
