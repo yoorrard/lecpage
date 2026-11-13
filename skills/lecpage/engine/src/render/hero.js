@@ -89,7 +89,10 @@ function ctas(M, extra = []) {
   const { s, ctx, h, m } = M;
   const join = h.joinCta(ctx);
   const c0 = s.ctas?.length ? s.ctas : h.defaultCtas(ctx);
-  const list = [...(join && !c0.some((c) => c.href === join.href) ? [join, ...c0] : c0), ...extra.filter((e) => !c0.some((c) => c.href === e.href))].slice(0, 3);
+  // 온라인 입장은 맨 앞에. 현장과 온라인을 함께 하는 연수는 현장 참가자가 먼저 누를 단추를 앞에 두고 입장은 둘째로
+  const j = join && !c0.some((c) => c.href === join.href) ? join : null;
+  const lead = !j ? c0 : m.mode === 'hybrid' && c0.length ? [c0[0], j, ...c0.slice(1)] : [j, ...c0];
+  const list = [...lead, ...extra.filter((e) => !c0.some((c) => c.href === e.href))].slice(0, 3);
   // 연수가 끝나면: 입장 버튼 대신 '연수 후 안내'(있을 때)
   const fu = ctx.bp.sections.find((x) => x.type === 'followup');
   const after = fu ? `<a class="lp-btn lp-btn-primary" href="#${esc(fu.id)}" data-phase-show="after" hidden><span>연수 후 안내</span>${icon('arrow')}</a>` : '';

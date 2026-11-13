@@ -519,7 +519,7 @@ function surveyForm(s) {
     const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
     return `<li><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b><i>${esc(o)}</i>` : esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
   }).join('');
-  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state>다시 내면 고쳐져요. 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
+  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
 }
 
 function survey(s, ctx) {
