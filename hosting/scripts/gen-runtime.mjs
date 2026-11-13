@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSy
 import { createHash } from 'node:crypto';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pagesHash } from '../src/blake3.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOSTING = join(HERE, '..');
@@ -80,6 +81,17 @@ export function staticFiles() {
   }
   return out.map((f) => ({ ...f, sha256: sha256(f.text) }));
 }
+/**
+ * Pages 보기: 엔진이 사이트에 그대로 넣는 런타임 파일(.js)의 Pages 자산 열쇠(blake3(base64 + 'js') 앞 32자).
+ * 모든 사이트가 같은 내용이라, 서버가 이 열쇠를 미리 알면 사이트마다 이 파일들을 다시 올려받지 않음(새 사이트 하나에 Worker·DO 요청 7개, Pages API 호출 7~14개 덜 씀).
+ * Pages에 아직 없으면(처음 한 번) 공개할 때 missing_blobs로 그 파일만 받음
+ */
+export function pagesRuntime(statics = staticFiles()) {
+  const te = new TextEncoder();
+  const files = [...statics];
+  if (existsSync(join(RUNTIME, 'check.js'))) { const text = norm(readFileSync(join(RUNTIME, 'check.js'), 'utf8')); files.push({ name: 'check.js', text, sha256: sha256(text) }); }
+  return files.map((f) => ({ name: f.name, sha256: f.sha256, phash: pagesHash(te.encode(f.text), 'js') }));
+}
 function writeStatic(files) {
   mkdirSync(RT_DIR, { recursive: true });
   const want = new Set(files.map((f) => `${f.sha256}.js`));
@@ -90,9 +102,9 @@ function writeStatic(files) {
   }
 }
 
-function render(segs, version, sdk, statics = []) {
+function render(segs, version, sdk, statics = [], pagesRt = []) {
   const rows = segs.map((s) => `  [${JSON.stringify(s.name)}, ${s.len}, ${JSON.stringify(s.head)}, '${s.sha256}'],`).join('\n');
-  return `// 자동으로 만든 파일입니다. 고치지 마세요 → node scripts/gen-runtime.mjs\n// 엔진 런타임 조각: [이름, 길이(UTF-16), 앞 ${HEAD_LEN}자, SHA-256(UTF-8, 줄바꿈 LF)]\nexport const RUNTIME_VERSION = '${version}';\n/** Supabase 라이브러리 주소(엔진이 고정한 버전) */\nexport const SUPABASE_SDK = ${JSON.stringify(sdk)};\nexport const RUNTIME_SEGMENTS = [\n${rows}\n];\n/** 정적 자산(public/rt/<sha256>.js)으로도 있는 런타임 파일. 사이트 HTML이 이 내용의 파일을 부르면 /rt/로 바꿔 내보냄 */\nexport const STATIC_RUNTIME = [\n${statics.map((f) => `  '${f.sha256}', // ${f.name}`).join('\n')}\n];\n`;
+  return `// 자동으로 만든 파일입니다. 고치지 마세요 → node scripts/gen-runtime.mjs\n// 엔진 런타임 조각: [이름, 길이(UTF-16), 앞 ${HEAD_LEN}자, SHA-256(UTF-8, 줄바꿈 LF)]\nexport const RUNTIME_VERSION = '${version}';\n/** Supabase 라이브러리 주소(엔진이 고정한 버전) */\nexport const SUPABASE_SDK = ${JSON.stringify(sdk)};\nexport const RUNTIME_SEGMENTS = [\n${rows}\n];\n/** 정적 자산(public/rt/<sha256>.js)으로도 있는 런타임 파일. 사이트 HTML이 이 내용의 파일을 부르면 /rt/로 바꿔 내보냄 */\nexport const STATIC_RUNTIME = [\n${statics.map((f) => `  '${f.sha256}', // ${f.name}`).join('\n')}\n];\n/** Pages 보기: 사이트에 그대로 들어가는 런타임 파일의 Pages 자산 열쇠(sha256 → blake3 열쇠, 확장자 js). 미리 알아 다시 올려받지 않음 */\nexport const PAGES_RUNTIME = {\n${pagesRt.map((f) => `  '${f.sha256}': '${f.phash}', // ${f.name}`).join('\n')}\n};\n`;
 }
 
 function main() {
@@ -114,7 +126,7 @@ function main() {
   const have = new Set(cur.map((s) => s.sha256));
   const old = history.filter((s) => !have.has(s.sha256)).map((s) => ({ ...s, name: `${s.name}@${s.kept || 'old'}` }));
   const statics = staticFiles();
-  const text = render([...cur, ...old], version, supabaseSdk(), statics);
+  const text = render([...cur, ...old], version, supabaseSdk(), statics, pagesRuntime(statics));
   const before = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
   if (args.has('--check')) {
     if (before !== text) { console.error('src/runtime-allow.js가 엔진 런타임과 달라요. node scripts/gen-runtime.mjs 를 실행하세요.'); process.exit(1); }

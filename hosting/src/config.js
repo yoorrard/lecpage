@@ -5,10 +5,13 @@ export const DEFAULTS = {
   MAX_BYTES: 40 * MB, // 사이트 하나
   MAX_FILE_BYTES: 20 * MB, // 파일 하나
   MAX_FILES: 600,
-  SITE_DAYS: 30, // 공개 기간(마지막으로 올린 날부터)
-  SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트
+  SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
+  SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
-  DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). PLAN=paid면 300. 차면 앱이 '내 계정에 올리기'로 안내
+  SITES_PER_DEVICE: 5, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음)
+  SITES_PER_HOUR_SHARED: 30, // 기기 표가 있을 때 같은 IP(학교 공유기 하나에 강사 여럿)의 시간·하루 상한
+  SITES_PER_DAY_SHARED: 60,
+  DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). worker 보기 기본. pages 보기는 200, PLAN=paid면 300(pages 1000). 차면 앱이 '내 계정에 배포하기'로 안내
   MAX_TOTAL_BYTES: 4 * 1024 * MB, // 전체 저장량. 넘으면 새로 받지 않음(무료 한도 5GB보다 낮게)
   DEPLOYS_PER_HOUR: 30, // 사이트 하나를 다시 올리는 횟수
   REPORTS_PER_HOUR: 5, // 같은 IP의 신고
@@ -20,20 +23,29 @@ export const DEFAULTS = {
   LIVE_ROOM_MB: 200, // 방 하나에 올릴 수 있는 파일 합계(R2 없이 DO에 담을 때)
   LIVE_MAX_PARTICIPANTS: 300, // 방 하나의 참가자
   LIVE_SOCKETS_PER_IP: 500, // 한 IP(학교 공유기 하나)가 방 하나에 여는 실시간 연결
-  DAILY_ROOM_CAP: 30, // 하루에 새로 만들 수 있는 방(전체). PLAN=paid면 300
-  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 올라온 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
-  MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 올리면 늘어남)
+  DAILY_ROOM_CAP: 30, // 하루에 새로 만들 수 있는 방(전체). worker 보기 기본. pages 보기는 100, PLAN=paid면 300(pages 1000)
+  PAGES_API_BUDGET: 900, // Pages API를 5분에 이만큼까지(Cloudflare API 한도 1,200/5분의 75%. 넘으면 그 계정의 모든 API가 5분 막힘)
+  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 배포한 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
+  MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 배포하면 늘어남)
   ALLOWED_ORIGINS: 'https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
-  ALERT_AT: '50,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK)
+  ALERT_AT: '45,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK). 넘침 단계와 같게: 45 예약한 연수만, 60 새 일 멈춤, 80 묻기 20초, 95 곧 한도
   STATS_DAILY_CAP: 20000, // 앱 익명 이용 합계: 항목 하나가 하루에 셀 수 있는 최대(부풀리기 막기)
 };
 
 /** 요금제에 따라 달라지는 기본값. free: Cloudflare 무료 요금제 안에서만(하루 한도에 닿으면 그날은 멈춤). paid: Workers Paid(하루 한도 없음, 쓴 만큼) */
 export const PLAN_DEFAULTS = {
   free: {},
-  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 0 },
+  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 0, SITES_PER_DEVICE: 10 },
 };
-/** VIEW=pages일 때 공개 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 올린 날부터) */
+/**
+ * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청 약 12~25, 저장 약 0.2MB).
+ * 오래 가는 한도는 저장 공간: 하루 200개 × 60일 × 0.2MB ≈ 2.4GB(무료 5GB, MAX_TOTAL_BYTES 4GB 안)
+ */
+export const PAGES_VIEW_DEFAULTS = {
+  free: { DAILY_SITE_CAP: 200, DAILY_ROOM_CAP: 100 },
+  paid: { DAILY_SITE_CAP: 1000, DAILY_ROOM_CAP: 1000 },
+};
+/** VIEW=pages일 때 보관 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 배포한 날부터) */
 export const PAGES_SITE_DAYS = 60;
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
 export const NEW_WORK_SHARE = 0.6;
@@ -55,11 +67,11 @@ export function config(env = {}) {
   let publicOrigin = '';
   try { if (env.PUBLIC_ORIGIN) publicOrigin = new URL(String(env.PUBLIC_ORIGIN)).origin; } catch { /* 잘못된 값은 무시 */ }
   const plan = String(env.PLAN ?? '').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
-  const D = { ...DEFAULTS, ...PLAN_DEFAULTS[plan] };
   const pages = pagesConfig(env);
   // 보기: VIEW=pages|worker. 정하지 않으면 Pages 설정(계정·프로젝트·토큰·주소)이 다 있을 때 pages
   const want = String(env.VIEW ?? '').trim().toLowerCase();
   const view = want === 'worker' ? 'worker' : pages ? 'pages' : 'worker';
+  const D = { ...DEFAULTS, ...PLAN_DEFAULTS[plan], ...(view === 'pages' ? PAGES_VIEW_DEFAULTS[plan] : {}) };
   const viewProblem = want === 'pages' && !pages ? 'VIEW=pages인데 CF_ACCOUNT_ID·PAGES_PROJECT·PAGES_TOKEN·PAGES_HOST 중 빠진 것이 있어 Worker로 내보내요.' : '';
   return {
     plan,
@@ -68,7 +80,7 @@ export function config(env = {}) {
     pages: view === 'pages' ? pages : null,
     pagesCfg: pages,
     dailyRequestBudget: num(env.DAILY_REQUEST_BUDGET, D.DAILY_REQUEST_BUDGET, { min: 0 }),
-    // 방문으로 공개 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 올린 날부터')
+    // 방문으로 보관 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 배포한 날부터')
     keepAlive: view === 'worker' && !off(env.KEEP_ALIVE),
     maxSiteDays: num(env.MAX_SITE_DAYS, D.MAX_SITE_DAYS),
     maxBytes: num(env.MAX_BYTES, DEFAULTS.MAX_BYTES),
@@ -77,6 +89,10 @@ export function config(env = {}) {
     days: num(env.SITE_DAYS, view === 'pages' ? PAGES_SITE_DAYS : DEFAULTS.SITE_DAYS, { int: false, min: 1e-9 }),
     sitesPerHour: num(env.SITES_PER_HOUR, DEFAULTS.SITES_PER_HOUR),
     sitesPerDay: num(env.SITES_PER_DAY, DEFAULTS.SITES_PER_DAY),
+    sitesPerDevice: num(env.SITES_PER_DEVICE, D.SITES_PER_DEVICE),
+    sitesPerHourShared: num(env.SITES_PER_HOUR_SHARED, DEFAULTS.SITES_PER_HOUR_SHARED),
+    sitesPerDayShared: num(env.SITES_PER_DAY_SHARED, DEFAULTS.SITES_PER_DAY_SHARED),
+    pagesApiBudget: num(env.PAGES_API_BUDGET, DEFAULTS.PAGES_API_BUDGET),
     dailySiteCap: num(env.DAILY_SITE_CAP, D.DAILY_SITE_CAP),
     maxTotalBytes: num(env.MAX_TOTAL_BYTES, DEFAULTS.MAX_TOTAL_BYTES),
     deploysPerHour: num(env.DEPLOYS_PER_HOUR, DEFAULTS.DEPLOYS_PER_HOUR),
@@ -100,6 +116,9 @@ export function config(env = {}) {
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),
     // 긴 대기(?wait=)를 쓰는 런타임(2026-11 학교망 대비 뒤)이 기본이라 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈(capacity.js). 끄려면 POLL_LONG "off"
     longPoll: !/^(0|false|no|off)$/i.test(String(env.POLL_LONG ?? '').trim()),
+    // 긴 대기를 Worker가 대신 기다릴지(방이 잠들어 DO 시간 과금이 없음, 대신 한 번에 DO 요청 1~2개). 'auto'(기본): 유료면 늘,
+    // 무료면 오늘 DO duration이 하루 13,000 GB-s의 50%를 넘을 때부터(그 전에는 남는 duration 몫으로 방 안에서 기다려 요청을 아낌) → docs/research/scale-2026-11.md
+    pollRelay: ((v) => (v === 'on' ? true : v === 'off' ? false : 'auto'))(String(env.POLL_RELAY ?? 'auto').trim().toLowerCase()),
     // 앱 익명 이용 합계(앱 열기·만들기·공개 횟수, 하루 단위 숫자만). STATS=off면 받지 않음
     stats: !off(env.STATS),
     statsDailyCap: num(env.STATS_DAILY_CAP, DEFAULTS.STATS_DAILY_CAP),

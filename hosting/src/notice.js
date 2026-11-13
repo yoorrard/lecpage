@@ -1,4 +1,4 @@
-// 팝업 공지: 운영자가 관리 화면에서 쓰고, 앱(GET /api/notice)과 공개 사이트의 강사 화면(console.html)이 보여 줌.
+// 팝업 공지: 운영자가 관리 화면에서 쓰고, 앱(GET /api/notice)과 배포한 사이트의 강사 화면(console.html)이 보여 줌.
 // 공지는 글자만입니다. 어디서든 HTML로 해석하지 않고(앱은 Preact 글자, 강사 화면은 서버가 이스케이프), 링크는 https 주소 하나만.
 
 export const NOTICE_TARGETS = ['app', 'teacher'];
