@@ -24,6 +24,8 @@
 // (= max(7000, participants × 60)): the gap the runtime keeps between polls.
 import { DurableObject } from 'cloudflare:workers';
 import { LiveCore, HttpError, errorBody, normCode, sha256hex, keyProblem, isWeakKeyHash, PROTOCOL } from './protocol.js';
+// The entry module may export only handlers and classes (workerd refuses other named exports): helpers live in longpoll.js
+import { MAX_WAIT_S, MAX_WAITERS, snapshotChanged, isLongPoll, pollGapMs, relayWait } from './longpoll.js';
 
 const DAY = 864e5;
 const enc = new TextEncoder();
@@ -79,55 +81,6 @@ function withHeaders(res, extra) {
   const h = new Headers(res.headers);
   for (const [k, v] of extra) h.set(k, v);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
-}
-
-// ---------------------------------------------------------------- long-poll (school networks)
-/** Longest wait of one long-poll (shorter than the runtime's request timeout) and waiters per room. */
-export const MAX_WAIT_S = 25;
-export const MAX_WAITERS = 600;
-/** Did a snapshot answer bring anything after `since` (docs, removals, state)? */
-export function snapshotChanged(body, since) {
-  if (!body || typeof body !== 'object') return true;
-  if (body.full || (Array.isArray(body.removed) && body.removed.length)) return true;
-  if (body.state && Number(body.state.updatedAt) > since) return true;
-  for (const [k, v] of Object.entries(body)) if (k !== 'removed' && Array.isArray(v) && v.length) return true;
-  return false;
-}
-/** GET …/snapshot?since=<cursor>&wait=<s> */
-export function isLongPoll(method, url) {
-  return method === 'GET' && /\/snapshot$/.test(url.pathname) && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
-}
-/** Poll gap the runtime keeps (X-Lec-Poll-Ms): 7 s, longer for big rooms (300 participants → 18 s). */
-export const pollGapMs = (participants) => Math.max(7000, Math.round((participants || 0) * 60));
-/**
- * The Worker waits for the room (Workers bill requests and CPU, not waiting time; the room sleeps, so no Durable Object
- * duration). The room answers 101 + a WebSocket whose first message is the current (unchanged) snapshot; when something
- * changes it sends 'c' and closes, and the Worker asks once more. Time up → the first snapshot. Any other answer as is.
- * onSocket(): called when the room handed a socket (the host counts it).
- */
-export async function relayWait(stub, fwd, waitS, onSocket) {
-  const h = new Headers(fwd.headers);
-  h.set('upgrade', 'websocket'); h.set('x-lp-relay', '1');
-  const res = await stub.fetch(new Request(fwd.url, { method: 'GET', headers: h }));
-  const ws = res.webSocket;
-  if (res.status !== 101 || !ws) return res;
-  if (onSocket) onSocket();
-  const gap = res.headers.get('x-lec-poll-ms');
-  ws.accept();
-  const CHANGED = Symbol('changed');
-  const got = await new Promise((resolve) => {
-    let first = null; let over = false;
-    const finish = (v) => { if (over) return; over = true; clearTimeout(timer); try { ws.close(1000, 'done'); } catch { /* closed */ } resolve(v); };
-    const timer = setTimeout(() => finish(first ?? CHANGED), Math.min(MAX_WAIT_S, Math.max(1, waitS)) * 1000);
-    ws.addEventListener('message', (m) => { if (first === null && typeof m.data === 'string' && m.data !== 'c') first = m.data; else finish(CHANGED); });
-    ws.addEventListener('close', () => finish(CHANGED));
-    ws.addEventListener('error', () => finish(CHANGED));
-  });
-  if (got !== CHANGED) {
-    return new Response(got, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(gap ? { 'x-lec-poll-ms': String(gap) } : {}) } });
-  }
-  const plain = new URL(fwd.url); plain.searchParams.delete('wait');
-  return stub.fetch(new Request(plain, { method: 'GET', headers: fwd.headers }));
 }
 
 export default {

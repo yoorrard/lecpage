@@ -35,6 +35,13 @@ test('core: both server copies of protocol.js are identical', () => {
   assert.equal(fs.readFileSync(protoNode, 'utf8'), fs.readFileSync(protoCf, 'utf8'), 'copy backends/node-server/lib/protocol.js to backends/cloudflare/src/protocol.js');
 });
 
+test('cloudflare: the Worker entry module exports only handlers and classes (workerd refuses other named exports)', () => {
+  const src = fs.readFileSync(path.join(skillDir, 'backends/cloudflare/src/index.js'), 'utf8');
+  const named = [...src.matchAll(/^export\s+(?!default\b)(?:async\s+)?(\w+)\s+(\w+)/gm)].map((m) => `${m[1]} ${m[2]}`);
+  assert.deepEqual(named, ['class LiveRoom', 'class Guard']);
+  assert.ok(!/^export\s*\{/m.test(src), 'no export lists');
+});
+
 test('core: limits and CSV export layout match the server core', async () => {
   const P = await import(protoNode);
   const { LecLive } = makeWindow();

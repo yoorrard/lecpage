@@ -16,7 +16,7 @@ import { siteUrlOf, siteOriginRe } from './pages-site.js';
 import { Site } from './site.js';
 import { Gate } from './gate.js';
 import { Room, Guard } from './room.js';
-import { relayWait as relayLive } from '../../skills/lecpage/backends/cloudflare/src/index.js';
+import { relayWait as relayLive } from '../../skills/lecpage/backends/cloudflare/src/longpoll.js';
 
 export { Site, Gate, Room, Guard };
 

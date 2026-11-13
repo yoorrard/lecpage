@@ -5,9 +5,10 @@
 //   - 사이트가 가려지면 방도 가려지고, 사이트가 지워지거나 보관 기간이 끝나면 방과 올린 파일도 지워짐
 //   - R2가 없으면 올린 파일을 이 방의 SQLite에 담음(src/live/bucket.js)
 //   - 방이 쓰는 저장량을 Gate에 알려 전체 한도에 넣음
-//   - 긴 대기(long-poll)는 LiveRoom이 맡음(backends/cloudflare/src/index.js: Worker가 기다리는 relayWait, 방 안에서 기다리는 longPoll).
+//   - 긴 대기(long-poll)는 LiveRoom이 맡음(backends/cloudflare/src: Worker가 기다리는 relayWait은 longpoll.js, 방 안에서 기다리는 longPoll은 index.js).
 //     여기서는 기다리는 동안 깨어 있던 시간을 Gate에 알리고(waitersChanged), 기다린 뒤 사이트가 가려졌거나 없어졌으면 답하지 않음(afterWait)
-import { LiveRoom, Guard, MAX_WAIT_S, snapshotChanged } from '../../skills/lecpage/backends/cloudflare/src/index.js';
+import { LiveRoom, Guard } from '../../skills/lecpage/backends/cloudflare/src/index.js';
+import { MAX_WAIT_S, snapshotChanged } from '../../skills/lecpage/backends/cloudflare/src/longpoll.js';
 import { config } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { SqlBucket } from './live/bucket.js';
