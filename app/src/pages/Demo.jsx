@@ -171,7 +171,7 @@ export function Demo() {
                 <pre class="prompt-box demo-invite" aria-label="카톡 안내 문구">{invite}</pre>
                 <div class="demo-next">
                   <b>이제 내 교재로 해 보세요.</b>
-                  <div class="btn-row"><button class="btn btn-primary btn-lg" onClick={() => startReal('blank')}>내 교재로 시작하기</button><button class="btn" onClick={() => startReal('example')}>이 예시를 고쳐 쓰기</button><button class="btn btn-quiet" onClick={() => { setPub(''); setStep(1); }}>처음부터 다시 체험</button></div>
+                  <div class="btn-row"><button class="btn btn-primary btn-lg" onClick={() => startReal('blank')}>내 교재로 시작하기</button><button class="btn btn-lg" onClick={() => startReal('example')}>이 예시를 고쳐 쓰기</button><button class="btn btn-quiet" onClick={() => { setPub(''); setStep(1); }}>처음부터 다시 체험</button></div>
                 </div>
               </section>
             )}

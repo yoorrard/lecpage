@@ -314,7 +314,7 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 
 /* ── 디자인 ── */
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px}
-.thumb{display:grid;gap:0;padding:0;border:1px solid var(--hair);border-radius:var(--r-sm);overflow:hidden;background:var(--card);cursor:pointer;text-align:left;color:inherit;transition:border-color .15s,box-shadow .15s}
+.thumb{display:grid;align-content:start;gap:0;padding:0;border:1px solid var(--hair);border-radius:var(--r-sm);overflow:hidden;background:var(--card);cursor:pointer;text-align:left;color:inherit;transition:border-color .15s,box-shadow .15s}
 .thumb:hover{border-color:var(--line-strong);box-shadow:var(--shadow)}
 .thumb[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .thumb-site{position:relative;aspect-ratio:16/10;overflow:hidden;background:var(--sunk);border-bottom:1px solid var(--hair);pointer-events:none}
@@ -733,21 +733,30 @@ details>summary{cursor:pointer}
 .on-touch{display:none}
 @media (hover: none) and (pointer: coarse){ .on-mouse{display:none} .on-touch{display:inline} }
 
-/* ── 넓은 화면: 고치기 단계는 화면 높이에 맞춤 ── */
+/* ── 넓은 화면: 고치기 단계는 화면 높이에 맞춤 ──
+   결과 띠·구성 안내는 왼쪽 칸 위에 두어 미리보기 높이를 먹지 않게(미리보기는 제목 아래부터 끝까지).
+   화면이 낮으면(노트북 750px 등) 미리보기가 폭에 맞는 크기를 지키고 화면이 조금 내려가요 */
 @media (min-width: 1101px){
   html.is-wide .page{padding-bottom:20px}
-  .stage-2{grid-template-rows:auto minmax(0,1fr);height:calc(100dvh - var(--top-h,57px) - 52px);min-height:600px}
-  .stage-2 .wiz-main{grid-template-rows:auto minmax(0,1fr);min-height:0}
-  .stage-2 .wiz-main:has(> .ai-job){grid-template-rows:auto auto minmax(0,1fr)}
-  .stage-2 .step-head{align-items:center}
+  .stage-2{grid-template-rows:auto minmax(0,1fr);min-height:max(600px,calc(100dvh - var(--top-h,57px) - 52px))}
+  .stage-2 .wiz-main{grid-template-columns:clamp(340px,30vw,480px) minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);gap:0 clamp(16px,2vw,28px)}
+  .stage-2 .step-head{grid-column:1/-1;margin-bottom:20px;align-items:center}
   .stage-2 .step-head h1{font-size:1.35rem}
   .stage-2 .step-head p{font-size:.9rem}
-  .stage-2 .workspace{height:100%;min-height:0;align-items:stretch}
-  .stage-2 .ws-panel{grid-template-rows:auto minmax(0,1fr);min-height:0}
-  .stage-2 .ws-body{max-height:none;min-height:0;overflow:auto}
+  .stage-2 .wiz-main>:is(.ai-job,.structure-note){grid-column:1;margin-bottom:12px}
+  /* 왼쪽 칸의 띠: 글 아래 줄에 단추, 닫기(✕)는 띠 오른쪽 위(첫 줄 글과 같은 높이). 아래 되돌린 곳 줄은 띠 끝까지 */
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
+  .stage-2 .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.guard-note{flex-basis:calc(100% + 34px);margin-right:-34px}
+  .stage-2 .wiz-main>.ai-job>.ai-job-t{min-width:calc(100% - 24px)}
+  .stage-2 .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
+  .stage-2 .workspace{display:contents}
+  .stage-2 .ws-panel{grid-column:1;grid-row:5;grid-template-rows:auto minmax(0,1fr);min-height:240px}
+  .stage-2 .ws-body{max-height:none;min-height:0;overflow:auto;contain:size}
   .stage-2 .ws-body .rc{height:100%}
-  .stage-2 .preview{position:static;grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
+  .stage-2 .preview{grid-column:2;grid-row:2/6;position:static;grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
   .stage-2 .pv-stage{height:auto;min-height:0}
+  .stage-2 .preview:not(.full) .pv-stage{min-height:min(calc(56.25cqw + 64px),520px)}
 }
 @media (max-width: 1100px){
   .workspace{grid-template-columns:minmax(0,1fr)}
@@ -772,6 +781,7 @@ details>summary{cursor:pointer}
 /* 휴대폰: 만들기 버튼을 아래에 붙여 둠 */
 @media (max-width: 760px){
   .make-bar{position:sticky;bottom:0;z-index:5;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
+  .make-bar [data-coach]::after{top:auto;bottom:calc(100% - 12px)} /* 화면 아래에 붙은 줄: 코치 꼬리표를 단추 위 가장자리에(아래로 두면 화면 밖) */
 }
 @media (max-width: 560px){
   .top-in{gap:8px}
@@ -910,8 +920,9 @@ details>summary{cursor:pointer}
 .ai-other{margin-top:-4px}
 /* 쓰던 AI 창: AI 버튼 줄, 받을 수 없는 답 안내 */
 .chat-card .key-now{grid-template-columns:minmax(0,1fr)}
-.chat-bots{gap:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
-.chat-bots .chat-bot{justify-content:center;min-height:48px;font-weight:600}
+/* 세 단추가 한 줄에 들어가지 않는 좁은 칸(넓은 화면의 AI로 만들기 카드)에서는 줄을 넘김: 글이 단추 밖으로 나가지 않게 */
+.chat-bots{gap:8px;display:flex;flex-wrap:wrap}
+.chat-bots .chat-bot{flex:1 1 8.5em;justify-content:center;min-height:48px;font-weight:600}
 .chat-bot-last{margin-left:6px;font-size:12px;font-weight:500;color:var(--muted,#666)}
 .chat-bots .btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
 .answer-err{justify-self:stretch;max-width:440px}
@@ -933,7 +944,7 @@ details>summary{cursor:pointer}
 @media (max-width:600px){
   .ai-routes,.guard-diff{grid-template-columns:minmax(0,1fr)}
   .ai-route{padding:14px}
-  .chat-bots{grid-template-columns:minmax(0,1fr)}
+  .chat-bots .chat-bot{flex-basis:100%}
 }
 /* 도움말: 물음마다 접어 둠 */
 .faq{display:grid;border-top:1px solid var(--hair)}
@@ -958,10 +969,11 @@ details>summary{cursor:pointer}
 .help-shot img{display:block;width:100%;height:auto}
 .help-prose>.help-shot{max-width:720px}
 .help-cta{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
-.flow{list-style:none;margin:4px 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 28px;max-width:46em}
+/* ol.flow: .prose ol(간격 6px·왼쪽 들여쓰기)보다 앞서게. 화살표(선 12px + 꺾쇠)는 칸 사이(--g) 가운데에 */
+ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px var(--g);max-width:46em}
 .flow li{position:relative;display:grid;justify-items:center;text-align:center;gap:2px;padding:14px 8px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card);line-height:1.4}
-.flow li+li::before{content:'';position:absolute;left:-20px;top:50%;width:12px;height:1.5px;background:var(--line-strong)}
-.flow li+li::after{content:'';position:absolute;left:-13px;top:50%;width:6px;height:6px;margin-top:-3px;border-top:1.5px solid var(--line-strong);border-right:1.5px solid var(--line-strong);transform:rotate(45deg)}
+.flow li+li::before{content:'';position:absolute;left:calc(var(--g) / -2 - 8px);top:50%;width:12px;height:1.5px;margin-top:-.75px;background:var(--line-strong)}
+.flow li+li::after{content:'';position:absolute;left:calc(var(--g) / -2 - 1.25px);top:50%;width:6px;height:6px;margin-top:-3px;border-top:1.5px solid var(--line-strong);border-right:1.5px solid var(--line-strong);transform:rotate(45deg)}
 .flow-i{color:var(--accent);display:grid}
 .flow b{font-weight:700}
 .flow small{color:var(--muted);font-size:.82rem}
@@ -1013,7 +1025,7 @@ details>summary{cursor:pointer}
   .files li{grid-template-columns:auto minmax(0,1fr) auto}
   .files li>:last-child{grid-column:auto}
   .help-shot{max-width:330px;justify-self:center}
-  .flow{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 24px}
+  ol.flow{--g:24px;grid-template-columns:repeat(2,minmax(0,1fr))}
   .flow li:nth-child(3)::before,.flow li:nth-child(3)::after{display:none}
 }
 @media (prefers-reduced-motion:reduce){.key-now,.btn.nudge{animation:none}}
@@ -1035,8 +1047,6 @@ details>summary{cursor:pointer}
 .structure-left summary{color:var(--ink-2)}
 .structure-left .btn{margin-top:6px}
 @media (min-width: 1101px){
-  .stage-2 .wiz-main:has(> .structure-note){grid-template-rows:auto auto minmax(0,1fr)}
-  .stage-2 .wiz-main:has(> .ai-job):has(> .structure-note){grid-template-rows:auto auto auto minmax(0,1fr)}
   .stage-2 .structure-note{padding:8px 14px}
 }
 
