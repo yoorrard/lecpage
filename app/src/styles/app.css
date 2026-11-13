@@ -733,21 +733,28 @@ details>summary{cursor:pointer}
 .on-touch{display:none}
 @media (hover: none) and (pointer: coarse){ .on-mouse{display:none} .on-touch{display:inline} }
 
-/* ── 넓은 화면: 고치기 단계는 화면 높이에 맞춤 ── */
+/* ── 넓은 화면: 고치기 단계는 화면 높이에 맞춤 ──
+   결과 띠·구성 안내는 왼쪽 칸 위에 두어 미리보기 높이를 먹지 않게(미리보기는 제목 아래부터 끝까지).
+   화면이 낮으면(노트북 750px 등) 미리보기가 폭에 맞는 크기를 지키고 화면이 조금 내려가요 */
 @media (min-width: 1101px){
   html.is-wide .page{padding-bottom:20px}
-  .stage-2{grid-template-rows:auto minmax(0,1fr);height:calc(100dvh - var(--top-h,57px) - 52px);min-height:600px}
-  .stage-2 .wiz-main{grid-template-rows:auto minmax(0,1fr);min-height:0}
-  .stage-2 .wiz-main:has(> .ai-job){grid-template-rows:auto auto minmax(0,1fr)}
-  .stage-2 .step-head{align-items:center}
+  .stage-2{grid-template-rows:auto minmax(0,1fr);min-height:max(600px,calc(100dvh - var(--top-h,57px) - 52px))}
+  .stage-2 .wiz-main{grid-template-columns:clamp(340px,30vw,480px) minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);gap:0 clamp(16px,2vw,28px)}
+  .stage-2 .step-head{grid-column:1/-1;margin-bottom:20px;align-items:center}
   .stage-2 .step-head h1{font-size:1.35rem}
   .stage-2 .step-head p{font-size:.9rem}
-  .stage-2 .workspace{height:100%;min-height:0;align-items:stretch}
-  .stage-2 .ws-panel{grid-template-rows:auto minmax(0,1fr);min-height:0}
-  .stage-2 .ws-body{max-height:none;min-height:0;overflow:auto}
+  .stage-2 .wiz-main>:is(.ai-job,.structure-note){grid-column:1;margin-bottom:12px}
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
+  .stage-2 .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
+  .stage-2 .wiz-main>.ai-job>.ai-job-t{min-width:calc(100% - 24px)}
+  .stage-2 .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
+  .stage-2 .workspace{display:contents}
+  .stage-2 .ws-panel{grid-column:1;grid-row:5;grid-template-rows:auto minmax(0,1fr);min-height:240px}
+  .stage-2 .ws-body{max-height:none;min-height:0;overflow:auto;contain:size}
   .stage-2 .ws-body .rc{height:100%}
-  .stage-2 .preview{position:static;grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
+  .stage-2 .preview{grid-column:2;grid-row:2/6;position:static;grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
   .stage-2 .pv-stage{height:auto;min-height:0}
+  .stage-2 .preview:not(.full) .pv-stage{min-height:min(calc(56.25cqw + 64px),520px)}
 }
 @media (max-width: 1100px){
   .workspace{grid-template-columns:minmax(0,1fr)}
@@ -1035,8 +1042,6 @@ details>summary{cursor:pointer}
 .structure-left summary{color:var(--ink-2)}
 .structure-left .btn{margin-top:6px}
 @media (min-width: 1101px){
-  .stage-2 .wiz-main:has(> .structure-note){grid-template-rows:auto auto minmax(0,1fr)}
-  .stage-2 .wiz-main:has(> .ai-job):has(> .structure-note){grid-template-rows:auto auto auto minmax(0,1fr)}
   .stage-2 .structure-note{padding:8px 14px}
 }
 
