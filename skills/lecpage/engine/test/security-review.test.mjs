@@ -90,7 +90,8 @@ test('개인정보 설정: AI 답·가져온 파일이 받을 정보·동의·�
   // 가져온 파일: 받을 정보·보관 기간은 받고(앱에서 보임), 동의 생략·처리자·문의처는 버림
   const imp = E.sanitizeImported(structuredClone(ai));
   assert.deepEqual(imp.privacy, { collect: ['nickname', 'name', 'school', 'email'], retentionDays: 365, consent: true, processors: [] });
-  const html = E.build({ ...imp, live: { provider: 'local', features: ['qa'] } }, { runtime: nodeRuntime() }).files['privacy.html'];
+  // 보관 기간은 서버가 있는 방식에서 적힘(리허설 local은 '이 브라우저 안에만')
+  const html = E.build({ ...imp, live: { provider: 'http', url: 'https://live.example.com', features: ['qa'] } }, { runtime: nodeRuntime() }).files['privacy.html'];
   assert.match(html, /365일/);
   assert.ok(!html.includes('가짜 처리자') && !html.includes('evil@example.com'));
 });
