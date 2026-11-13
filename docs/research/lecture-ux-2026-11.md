@@ -89,8 +89,9 @@
 
 ## 7. 확인
 
-- 엔진 시험 `npm test`, 새 시험 `lecture-ux.test.mjs`(6): 만든 쪽(안내문에 강사 주소 없음·COOP·noindex), 참가자가 강사용 주소로(휴대폰 첫 화면·버튼 숨김·프로젝터 폭에서는 안 보임), 새 창 하나·전체 화면 안내·참여 QR 크게 왕복, Presentation API(흉내), 휴대폰 QR(가림·60초·키 지움·틀린 키), 연수 뒤·확장자 없는 주소의 QR.
-- 여정 스크립트(`journey.mjs`): 45개 점검 모두 통과(위 1·4절의 값).
-- 새 상태 겹침·axe(`states.mjs`): 8 프리셋 × 밝게·어둡게 × 390·1280 — 들어가기 전 강사 화면·더보기·휴대폰 QR(가림·보임)·발표 화면 안내·큰 QR·맨 위 상자·연수 뒤·휴대폰 발표 화면·공유 창·안내문.
-- 기존 보조 화면 게이트(`body-gate.mjs --only aux,aux-dark,aux-print`)·`overlap-lint`·문구 검사.
-- **런타임이 바뀌었으니 바로 배포 서버 다시 배포 필요**(`console.js`·`screen.js`·`lecpage.js`·`lecpage.css`·`aux.css`). 바로 배포 서버(`hosting/*`) 코드는 고치지 않음.
+- 엔진 시험 `npm test` 413 통과·실패 0(건너뜀 4: Supabase·Cloudflare). 새 시험 `lecture-ux.test.mjs`(6): 만든 쪽(안내문에 강사 주소 없음·발표 화면 COOP·noindex), 참가자가 강사용 주소로(휴대폰 첫 화면·버튼 숨김·프로젝터 폭에서는 안 보임), 새 창 하나·전체 화면 안내·참여 QR 크게 왕복, Presentation API(흉내), 휴대폰 QR(가림·60초·키 지움·틀린 키), 연수 뒤·확장자 없는 주소의 QR. 바뀐 시험: `aux-pages`(안내문 한 장), `runtime-upgrades`(안내문에 강사 화면 없음).
+- 예시 빌드·앱 빌드 통과, `hosting` 139 통과, 기존 e2e(AI 연결 6종·배포·공유 흐름 41·올릴 곳 30) 통과.
+- 여정 스크립트(`journey.mjs`): 42개 점검 모두 통과, 쪽 오류 0(위 1·4절의 값). 고치기 전 값은 `before.mjs`.
+- 새 상태 겹침·axe·가로 넘침(`states.mjs`, overlap-lint의 `pageCheck` + axe WCAG 2.2 AA): 8 프리셋 × 밝게·어둡게 × 390·1280 × 들어가기 전 강사 화면·더보기·휴대폰 QR(가림·보임)·발표 화면 안내·큰 QR·맨 위 상자·연수 뒤·휴대폰 발표 화면·공유 창·안내문 = 288곳 0, 머리 통일 뒤 접속 확인·개인정보 더해 2 프리셋 88곳 0, 합친 뒤 4 프리셋 176곳에서 night-story 들어가기 전 강사 화면 390 밝게 한 곳이 8px 넘침 → 같은 조건 두 번 다시 0(무거운 게이트와 같이 돌 때 한 번, 재현 안 됨). 처음 돌렸을 때 더보기를 연 상태에서 반쯤 가려진 숫자 칸 링크가 axe `target-size`에 걸림 → 열린 동안 아래 칸을 `inert`로(메뉴 밖을 누르면 닫히기만).
+- 보조 화면 게이트(`body-gate.mjs --only aux,aux-dark,aux-print`): 27 프리셋 783조합·검사 자리 9,099곳 문제 0(한 조합이 쪽 열기 시간 초과 → 그 프리셋만 다시 29조합 0). `overlap-lint --pages index,console,screen,poster,check`(예시 둘, 1280·390) 0. 문구 검사(`app/scripts/copy-lint.mjs`) 고칠 곳 0·살필 곳 0.
+- **런타임이 바뀌었으니 바로 배포 서버 다시 배포 필요**(`console.js`·`screen.js`·`check.js`·`lecpage.js`·`lecpage.css`·`aux.css`). 바로 배포 서버(`hosting/*`) 코드는 고치지 않음.
