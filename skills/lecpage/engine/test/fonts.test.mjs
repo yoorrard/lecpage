@@ -83,3 +83,29 @@ test('빌드: 교재 글꼴이 사이트 글꼴이 되고, 기본 글꼴은 프�
   const r = E.build(bp, { runtime: nodeRuntime() });
   for (const u of r.files['index.html'].match(/<link rel="stylesheet" href="https:[^"]+"/g) || []) assert.match(u, /fonts\.googleapis\.com|cdn\.jsdelivr\.net\/(gh|npm)\/[^/]+@|hangeul\.pstatic\.net/, u);
 });
+
+test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각만 사이트 안으로, 쪽은 외부 글꼴 주소 대신 assets/fonts.css', async () => {
+  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }, { type: 'goals', items: ['가나다'] }] }, { runtime: nodeRuntime() });
+  assert.ok(/<link rel="stylesheet" href="https:/.test(r.files['index.html']));
+  const asked = [];
+  // 가짜 CDN: 스타일시트마다 한글 조각(쓰인 글자 '가') · 안 쓰는 조각(일본 가나) · 라틴 조각
+  const fakeFetch = async (url) => {
+    asked.push(url);
+    if (/\.woff2?$/.test(url)) return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+    return { ok: true, text: async () => `@font-face{font-family:'X';src:url(./a/ko.woff2) format('woff2');unicode-range:U+AC00-AC0F}\n@font-face{font-family:'X';src:url(./a/kana.woff2) format('woff2');unicode-range:U+3040-309F}\n@font-face{font-family:'X';src:url(https://fonts.gstatic.com/s/x/latin.woff2) format('woff2');unicode-range:U+0000-00FF}` };
+  };
+  const { files, report } = await E.bundleFonts(r.files, { fetch: fakeFetch });
+  assert.ok(report.ok, report.skipped.join());
+  assert.ok(!asked.some((u) => u.endsWith('kana.woff2')), '쓰지 않는 글자 조각은 받지 않음');
+  assert.ok(asked.some((u) => u.endsWith('/a/ko.woff2')) && asked.some((u) => u.endsWith('latin.woff2')));
+  assert.doesNotMatch(files['index.html'], /<link rel="stylesheet" href="https:/);
+  assert.doesNotMatch(files['index.html'], /preconnect" href="https:\/\/fonts\.gstatic\.com/);
+  assert.match(files['index.html'], /<link rel="stylesheet" href="assets\/fonts\.css">/);
+  const css = files['assets/fonts.css'];
+  for (const u of css.match(/url\(([^)]+)\)/g)) { const p = 'assets/' + u.slice(4, -1); assert.ok(files[p] instanceof Uint8Array, p); }
+  assert.doesNotMatch(css, /kana/);
+  // 하나라도 못 받으면 반쯤 담긴 사이트를 만들지 않고 원래대로
+  const bad = await E.bundleFonts(r.files, { fetch: async () => ({ ok: false, status: 503 }) });
+  assert.equal(bad.report.ok, false); assert.equal(bad.files, r.files);
+  assert.deepEqual(E.parseRange('U+AC00-D7A3, U+0041, U+4??'), [[0xac00, 0xd7a3], [0x41, 0x41], [0x400, 0x4ff]]);
+});

@@ -829,7 +829,7 @@ input,textarea,select{font-size:max(16px,1em)}
 [data-band="accent"] .lp-result{justify-self:start;background:linear-gradient(transparent 62%,color-mix(in srgb,var(--accent-foreground) 22%,transparent) 62% 94%,transparent 94%)}
 .lp-message-side{display:grid;gap:var(--sp-3);align-content:end;max-width:27rem}
 .lp-message-note{font-size:var(--fs-md);line-height:1.7;color:var(--muted-foreground)}
-[data-band="accent"] .lp-message-note,[data-band="accent"] .lp-sec-message .lp-src{opacity:.86}
+[data-band="accent"] .lp-sec-message .lp-src{opacity:.92} /* 메시지 덧말은 띠 색 위에서 4.5:1이 되게 흐리지 않음 */
 @media (min-width:1024px){.lp-message:has(> .lp-message-side){grid-template-columns:minmax(0,8fr) minmax(0,4fr);column-gap:clamp(32px,5vw,88px);align-items:end}}
 /* 보통 단계부터: 스크롤에 맞춰 낱말(공식은 줄)이 차례로 진해짐. 브라우저가 지원하고 움직임이 켜져 있을 때만 — 아니면 처음부터 다 보임 */
 @media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
@@ -971,7 +971,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-diag-list li[data-state="ok"] .lp-diag-dot{background:var(--success)}
 .lp-diag-list li[data-state="fail"] .lp-diag-dot{background:var(--danger)}
 .lp-diag-list li[data-state="wait"] .lp-diag-dot{background:var(--warning);animation:lp-blink 1s infinite}
-.lp-diag-state{font-size:var(--fs-xs)}
+.lp-diag-state{font-size:var(--fs-xs);white-space:nowrap}
+@media (max-width:480px){.lp-diag-list li{grid-template-columns:auto minmax(0,1fr) auto;row-gap:0}.lp-diag-list small{grid-column:2;grid-row:2}.lp-diag-state{grid-column:3;grid-row:1}}
 @keyframes lp-blink{50%{opacity:.3}}
 
 /* 교재 뷰어 */
@@ -1093,7 +1094,12 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-prompt-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .lp-prompt-h b{font-weight:650}
 .lp-prompt-h span{display:inline-flex;gap:8px;align-items:center}
-.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);padding:14px 16px;font-family:var(--font-mono);font-size:.9375rem;line-height:1.7}
+.lp-prompt-text{width:100%;resize:vertical;border-radius:var(--radius-sm);border:1px solid color-mix(in srgb,var(--primary) 30%,var(--rule-c));background:color-mix(in srgb,var(--primary) 6%,var(--background));color:var(--foreground);padding:14px 16px;font-family:var(--font-sans);font-size:1rem;line-height:1.7;field-sizing:content;min-height:calc(2lh + 30px)}
+.lp-st-help{display:grid;gap:6px;max-width:var(--measure);padding:var(--sp-4) var(--sp-5);border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);font-size:var(--fs-sm)}
+.lp-st-help b{display:inline-flex;gap:6px;align-items:center;color:var(--primary);font-weight:700;white-space:nowrap}
+.lp-st-help p{color:var(--foreground)}
+.lp-cal{margin-top:var(--sp-5)}
+.lp-todo{padding:var(--sp-3) var(--sp-4);border:1.5px dashed var(--rule-c);border-radius:var(--radius-sm)}
 .lp-prompt-text:focus{border-color:var(--ring);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
 .lp-prompt-lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:var(--sp-7) var(--sp-6)}
 .lp-prompt-lib .lp-tags{margin-top:-4px}
@@ -1701,6 +1707,8 @@ html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 30px + env(sa
   .lp-brand{min-width:0;flex:1;max-width:none}
   .lp-brand span{overflow:hidden;text-overflow:ellipsis}
   .lp-nav-act .lp-icon-btn{width:44px;height:44px}
+  .lp-lite-btn{width:44px;padding:0} /* 휴대폰: 그림 단추로(글은 화면 낭독기에만) → 연수 이름이 덜 잘림 */
+  .lp-lite-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lp-sheet{width:100%;max-width:100%;margin:auto 0 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:88vh;padding-bottom:env(safe-area-inset-bottom,0px)}
   .lp-sheet[open]{animation:lp-sheet-up var(--dur-3) var(--ease-out)}
   .lp-now-in{gap:8px}
@@ -2189,7 +2197,8 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 /* 터치 화면: 누르는 곳 44px(docs/interaction.md 7절). 보이는 모양이 작은 링크는 안쪽 여백을 주고 같은 만큼 바깥 여백을 빼서
    누르는 영역만 넓힘(줄 간격·배치는 그대로). 입력칸은 16px(iOS가 확대하지 않게) */
 @media (pointer:coarse){
-  .lp-brand,.lp-totop,.lp-follow,.lp-textbtn,.lp-btn,.lp-btn-sm{min-height:44px}
+  .lp-brand,.lp-totop,.lp-follow,.lp-textbtn,.lp-btn,.lp-btn-sm,.lp-link{min-height:44px}
+  :is(.lp-tt,.lp-trw,.lp-tools-item) h3 a{display:inline-flex;align-items:center;gap:.3em;min-height:44px}
   .lp-icon-btn,.lp-nav-act .lp-icon-btn{min-width:44px;min-height:44px}
   .lp-signal button{width:44px}
   .lp-tabs button{min-width:44px}

@@ -4,7 +4,7 @@ import { renderHero, heroComposition, dateParts, titleRandom } from './hero.js';
 import { mosaicSvg } from './hero-graphic.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { contentRenderers, CONTENT_LAYOUTS } from './content.js'; // 본문 칸(절차·사례·질문·표·글)
-import { variantOf, motifFamily } from '../design/layouts.js'; // 본문 배치 변형(섹션 종류마다 구조가 다른 배치)
+import { variantOf, motifFamily, recapWords } from '../design/layouts.js'; // 본문 배치 변형(섹션 종류마다 구조가 다른 배치)
 import { bodyVariants, firstGlyph } from './body-variants.js';
 import { motifSvg, motifRule } from './body-graphic.js';
 import { inlineMd } from './markdown.js';
@@ -107,7 +107,7 @@ function bandClass(ctx) { return getPreset(ctx.design.preset).variants.band === 
 /** 컨셉 모티프의 그림 가족: 컨셉의 motif 글 → 프리셋 */
 export const famOf = (ctx) => motifFamily(ctx.bp, ctx.design.preset);
 /** 이 섹션의 배치(사이트의 섹션 목록과 교재 구성 흐름까지 보고 정함) */
-export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow });
+export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow, instructors: ctx.bp.instructors });
 /**
  * 모티프 되풀이(꾸밈, aria-hidden): 바탕이 같은 두 섹션 사이에는 모티프 한 줄을 구분 장식으로, 옅은 바탕 칸의 구석에는 모티프 그림을 옅게.
  * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만
@@ -157,7 +157,7 @@ function variantSection(s, ctx) {
   const fn = VB().VB[v.type]?.[v.variant];
   if (!fn) return null; // 모양만 바뀌는 배치(따라 하는 칸·교재·메시지·마무리)는 원래 함수가 data-variant를 달고 그림
   let body = '';
-  if (s.type === 'schedule') body = fn(s, ctx, { mins: schedMins(s) }); // 시간 도식은 모든 길이를 알 때만 고름(layouts.js knownDay)
+  if (s.type === 'schedule') body = fn(s, ctx, { mins: schedMins(s) }) + calLink(ctx); // 시간 도식은 모든 길이를 알 때만 고름(layouts.js knownDay)
   else if (s.type === 'glance') body = fn(s, ctx, { numParts });
   else if (s.type === 'materials') body = fn(s, ctx, { rows: s.items.map((m) => ({ kind: m.kind || 'FILE', title: m.title, desc: m.desc, size: m.size, url: m.href, download: !!m.href && !/^https?:/.test(m.href) })) }) + (s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : '');
   else if (s.type === 'followup') {
@@ -258,8 +258,12 @@ function message(s, ctx) {
   if (s.note) aside += `<p class="lp-message-note">${br(s.note)}</p>`;
   const src = s.title ? '' : sourceLine(s.source, ctx);
   // 가운데 무대: 문장 뒤에 이 연수의 모티프 그림이 크게 깔림(꾸밈). 문장은 그림이 비켜 준 가운데 판 위
-  const stage = vOf(s, ctx).variant === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
-  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`, ` data-style="${esc(s.style || 'statement')}"`);
+  const vid = vOf(s, ctx).variant;
+  const stage = vid === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
+  const msg = `<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`;
+  // 그림 곁 문장: 모티프 그림이 세로 판으로 한쪽에 서고 문장은 옆에(좁은 화면에서는 그림이 위의 낮은 띠로)
+  const split = vid === 'split' ? `<div class="lp-msplit"><div class="lp-msplit-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|split|${s.id}`, { w: 480, h: 600, glyph: firstGlyph(ctx.bp.meta.title) })}</div>${msg}</div>` : '';
+  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}${split || msg}`, ` data-style="${esc(s.style || 'statement')}"`);
 }
 
 function steps5(s, ctx) {
@@ -298,8 +302,10 @@ function schedule(s, ctx) {
   }).join('');
   const oneDay = !s.items.some((i) => i.date) && s.items.length > 1 && s.items.length <= 12 && mins.every(Boolean);
   const bar = oneDay ? `<div class="lp-sched-bar" aria-hidden="true">${s.items.map((i, n) => `<i style="--min:${mins[n]}"><b>${esc(i.start)}</b></i>`).join('')}<em>${esc(s.items[s.items.length - 1].end || '')}</em></div>` : '';
-  return wrap(s, ctx, head(s, ctx, '일정') + `<div class="lp-sched">${bar}<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${rows}</ol></div>`);
+  return wrap(s, ctx, head(s, ctx, '일정') + `<div class="lp-sched">${bar}<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${rows}</ol></div>${calLink(ctx)}`);
 }
+/** 내 달력에 넣기: 연수 날짜·시각이 있을 때 빌드가 만든 assets/event.ics(build.js icsFile)로 */
+export const calLink = (ctx) => (ctx.ics ? `<p class="lp-cal"><a class="lp-btn lp-btn-ghost lp-btn-sm" href="assets/event.ics" download>${icon('clock')}<span>내 달력에 넣기</span></a></p>` : '');
 
 // ── 준비 ─────────────────────────────────────────────────
 function readiness(s, ctx) {
@@ -367,6 +373,18 @@ function deck(s, ctx) {
 }
 
 // ── 실습 ─────────────────────────────────────────────────
+/**
+ * 프롬프트 한 상자: 이름 · 복사 · 고쳐 쓰는 글 상자. 글 상자는 처음부터 글이 다 보이는 높이(줄 수는 휴대폰 폭으로 어림하고,
+ * 지원하는 브라우저는 CSS field-sizing으로 글만큼, 그 밖은 lecpage.js가 맞춤). 잘린 프롬프트를 따라 쓰지 않게
+ */
+export function promptRows(text) {
+  return Math.min(16, Math.max(2, String(text || '').split('\n').reduce((a, l) => a + Math.max(1, Math.ceil([...l].length / 21)), 0)));
+}
+function promptBox(p, key, k, ctx, extra = '') {
+  return `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${extra}<textarea class="lp-prompt-text" data-prompt="${esc(key)}" rows="${promptRows(p.text)}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`;
+}
+/** 실습의 '막히면·주의' 메모: 따라 하다 막힌 사람이 바로 찾게 옅은 바탕 상자로(한쪽 색 띠는 쓰지 않음) */
+const helpNote = (t) => `<div class="lp-st-help" role="note"><b>${icon('hand')}<span>도움말</span></b><p>${br(t)}</p></div>`;
 function stations(s, ctx) {
   const n = s.items.length;
   const side = `<aside class="lp-st-side"><nav aria-label="실습 목차"><ol>${s.items.map((st, i) => `<li><a href="#st-${esc(st.id)}" data-st-link="${esc(st.id)}"><span class="lp-st-n">${pad2(i + 1)}</span><span class="lp-st-name">${esc(st.name)}</span><span class="lp-st-ck" aria-hidden="true"></span></a></li>`).join('')}</ol></nav>
@@ -375,11 +393,12 @@ function stations(s, ctx) {
     const steps = st.steps.length ? `<ol class="lp-steps">${st.steps.map((x) => `<li>${br(x)}</li>`).join('')}</ol>` : '';
     const links = st.links.length ? `<div class="lp-st-links">${st.links.map((l) => `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(l.url)}>${esc(l.label || host(l.url))}${icon('external')}</a>`).join('')}</div>` : '';
     const imgs = st.images.length ? `<details class="lp-st-images"><summary>화면 안내 보기 · ${st.images.length}장</summary><div class="lp-st-gallery">${st.images.map((im, k) => `<figure><a href="${esc(im.src)}" target="_blank" rel="noopener"><img src="${esc(im.src)}" alt="${esc(im.caption || `${st.name} 화면 ${k + 1}`)}" loading="lazy"></a>${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div></details>` : '';
-    const prompts = st.prompts.length ? `<div class="lp-prompts"><h4>프롬프트</h4>${st.prompts.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div><textarea class="lp-prompt-text" data-prompt="${esc(st.id)}-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`).join('')}</div>` : '';
+    // 프롬프트가 하나이고 이름이 따로 없으면 '프롬프트' 머리를 두 번 쓰지 않음
+    const prompts = st.prompts.length ? `<div class="lp-prompts">${st.prompts.length > 1 || (st.prompts[0].title && st.prompts[0].title !== '프롬프트') ? '<h4>프롬프트</h4>' : ''}${st.prompts.map((p, k) => promptBox(p, `${st.id}-${k}`, k, ctx)).join('')}</div>` : '';
     const src = sourceLine(st.source, ctx);
     return `<article class="lp-st" id="st-${esc(st.id)}" data-st="${esc(st.id)}" aria-labelledby="st-${esc(st.id)}-h">
 <header class="lp-st-h"><span class="lp-st-big" aria-hidden="true">${pad2(i + 1)}</span><div>${st.tag ? `<span class="lp-st-tag">${esc(st.tag)}</span>` : ''}<h3 id="st-${esc(st.id)}-h">${esc(st.title)}</h3>${st.desc ? `<p>${br(st.desc)}</p>` : ''}${st.minutes ? `<small>${icon('clock')} 약 ${st.minutes}분</small>` : ''}</div></header>
-${links}${steps}${st.note ? `<p class="lp-note">${br(st.note)}</p>` : ''}${imgs}${prompts}${src}
+${links}${steps}${st.note ? helpNote(st.note) : ''}${imgs}${prompts}${src}
 <div class="lp-st-done">
   ${st.outcome ? `<p class="lp-outcome"><b>여기까지 됐나요?</b> ${br(st.outcome)}</p>` : ''}
   <div class="lp-st-actions"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false">${icon('check', 'lp-check-draw')}<span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden>${icon('hand')}<span>도움 요청</span></button></div>
@@ -406,7 +425,7 @@ function tools(s, ctx) {
 }
 
 function prompts(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => `<div class="lp-prompt"><div class="lp-prompt-h"><b>${esc(p.title || `프롬프트 ${k + 1}`)}</b><span><button class="lp-textbtn" type="button" data-restore hidden>원문으로</button><button class="lp-btn lp-btn-sm lp-btn-primary" type="button" data-copy>${icon('copy')}<span>복사</span></button></span></div>${p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<textarea class="lp-prompt-text" data-prompt="lib-${k}" rows="${Math.min(10, Math.max(3, Math.ceil(p.text.length / 46)))}" spellcheck="false" aria-label="${esc(p.title || '프롬프트')}">${esc(p.text)}</textarea>${sourceLine(p.source, ctx)}</div>`).join('')}</div>`);
+  return wrap(s, ctx, head(s, ctx, '프롬프트 모음') + `<div class="lp-prompt-lib">${s.items.map((p, k) => promptBox(p, `lib-${k}`, k, ctx, p.tags.length ? `<ul class="lp-tags">${p.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '')).join('')}</div>`);
 }
 
 // ── 실시간 참여 ───────────────────────────────────────────
@@ -513,7 +532,7 @@ function survey(s, ctx) {
   }
   return wrap(s, ctx, `<div class="lp-survey">
 <div>${title}${lead}
-${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note">설문 주소가 아직 없어요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
+${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면 설문 열기 단추와 QR이 생겨요. 참가자 화면에는 이 칸이 보이지 않아요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
 ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label="설문 QR 코드"></div>` : ''}</div>`);
 }
 
@@ -570,10 +589,13 @@ function closing(s, ctx) {
   const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
   // 배치 변형: finale 큰 문장(기본, 첫 화면 표식의 되풀이) · poster 이 연수의 모티프 그림이 띠를 채우고 문장은 그 위 판에 · card 가운데 서명 카드
   const v = vOf(s, ctx), vid = v.variant || 'finale';
-  const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : deco;
-  const inner = `${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
+  const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : vid === 'recap' ? '' : deco;
+  // 지나온 길: 오늘의 차례(실습·핵심 단계)를 한 줄 길 위의 정류장으로 되짚고, 그 끝에 마지막 문장
+  const stops = vid === 'recap' ? recapWords(ctx.bp.sections) : [];
+  const recap = stops.length ? `<div class="lp-recap"><p class="lp-recap-k">오늘 지나온 길</p><ol class="lp-recap-path" style="--n:${stops.length}">${stops.map((w, i) => `<li style="--i:${i}"><span class="lp-recap-dot" aria-hidden="true">${i + 1}</span><span>${esc(w)}</span></li>`).join('')}</ol></div>` : '';
+  const inner = `${recap}${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
   const stance = v.stance ? ` data-stance="${v.stance}"` : '';
-  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="${vid === 'finale' ? 'finale' : vid}" data-frame="band" data-variant="${vid}" data-lead="${v.meta?.lead || 'text'}"${stance}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${vid === 'poster' ? '' : graphic}${art}<div class="lp-wrap">${vid === 'card' ? `<div class="lp-closing-card">${inner}</div>` : inner}</div>${band}</section>`;
+  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="${vid === 'finale' ? 'finale' : vid}" data-frame="band" data-variant="${vid}" data-lead="${v.meta?.lead || 'text'}"${stance}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${vid === 'poster' ? '' : graphic}${art}<div class="lp-wrap">${vid === 'card' ? `<div class="lp-closing-card">${inner}</div>` : inner}</div>${vid === 'recap' ? '' : band}</section>`;
 }
 
 function faq(s, ctx) {

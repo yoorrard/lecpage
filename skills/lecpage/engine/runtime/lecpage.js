@@ -244,12 +244,17 @@
 
   /* ── 복사·프롬프트 ─────────────────────── */
   function initPrompts() {
+    // 글 상자는 글이 다 보이는 높이: CSS field-sizing을 모르는 브라우저는 폭이 바뀔 때(처음 보일 때 포함)만 글 높이에 맞춤
+    var sized = window.CSS && CSS.supports && CSS.supports('field-sizing', 'content');
+    var fit = function (ta) { if (sized || !ta.offsetWidth) return; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    var ro = !sized && window.ResizeObserver ? new ResizeObserver(function (es) { es.forEach(function (e) { var w = Math.round(e.contentRect.width); if (w && w !== e.target._lpw) { e.target._lpw = w; fit(e.target); } }); }) : null;
     $$('[data-prompt]').forEach(function (ta) {
       var k = 'prompt:' + ta.getAttribute('data-prompt'), orig = ta.value, saved = store.get(k, null);
       var restore = ta.parentNode.querySelector('[data-restore]');
       if (saved !== null && saved !== orig) { ta.value = saved; if (restore) restore.hidden = false; }
-      ta.addEventListener('input', function () { store.set(k, ta.value); if (restore) restore.hidden = ta.value === orig; });
-      if (restore) restore.addEventListener('click', function () { ta.value = orig; store.del(k); restore.hidden = true; toast('원문으로 되돌렸어요.'); });
+      if (ro) ro.observe(ta);
+      ta.addEventListener('input', function () { store.set(k, ta.value); if (restore) restore.hidden = ta.value === orig; fit(ta); });
+      if (restore) restore.addEventListener('click', function () { ta.value = orig; store.del(k); restore.hidden = true; fit(ta); toast('원문으로 되돌렸어요.'); });
     });
     doc.addEventListener('click', function (e) {
       var b = e.target.closest && e.target.closest('[data-copy]');
@@ -300,6 +305,11 @@
      · 도식 잇기([data-linked]): 목록 줄을 가리키거나 초점이 오면 그림의 같은 번호([data-seg]·[data-node])가 켜짐
      · 질문 색인([data-spy]): 읽고 있는 답의 질문이 색인에서 켜짐 */
   function initBody() {
+    // 도표의 '표로 보기'는 인쇄할 때 펼쳐 둠(종이에서는 누를 수 없으므로)
+    if ($('details[data-print-open]')) {
+      window.addEventListener('beforeprint', function () { $$('details[data-print-open]:not([open])').forEach(function (d) { d.open = true; d.setAttribute('data-print-opened', ''); }); });
+      window.addEventListener('afterprint', function () { $$('details[data-print-opened]').forEach(function (d) { d.open = false; d.removeAttribute('data-print-opened'); }); });
+    }
     var rest = +(root.getAttribute('data-rest') || 0), sup = window.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
     if (rest >= 2 && sup && !RM && !root.classList.contains('lp-lowpower')) root.classList.add('lp-sdt');
     var smooth = RM ? 'auto' : 'smooth';

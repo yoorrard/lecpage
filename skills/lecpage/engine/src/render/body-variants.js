@@ -1,11 +1,25 @@
 // 본문 배치 변형의 렌더러: 섹션 종류마다 구조가 다른 배치(design/layouts.js BODY_VARIANTS).
 // 기본 변형(목록의 첫째)은 sections.js·content.js의 원래 렌더러가 그리고, 여기에는 그 밖의 변형만 둡니다.
 // 규칙: 내용은 그대로(지어내지 않음) · 그림은 꾸밈(aria-hidden) · JS 없이도 내용이 다 보임 · 인쇄에서 다 펼쳐짐.
-import { motifSvg, roadSvg, clockSvg, wheelSvg, tallySvg, webSvg } from './body-graphic.js';
-import { inlineMd } from './markdown.js';
+import { motifSvg, roadSvg, clockSvg, wheelSvg, tallySvg, webSvg, roundSvg, lanesSvg, donutSvg, barSvg, targetSvg } from './body-graphic.js';
+import { inlineMd, tableHtml } from './markdown.js';
+import { parseNum, tableChart, glanceSeries } from '../design/numbers.js';
 
 const REST = /쉬는|휴식|점심|식사|break|lunch/i;
 /** 제목의 첫 글자(모티프 '큰 글자' 가족이 씀) */
+/**
+ * 도식 가운데 동그라미에 넣을 짧은 줄들: 낱말을 한 줄 6글자 안팎으로 묶어 3줄까지(첫 글자 하나만 남기지 않음).
+ * 넘치면 셋째 줄 끝에 …(제목 전체는 섹션 제목·첫 화면에 그대로 있음)
+ */
+export function centerLines(t, per = 6, max = 3) {
+  const lines = [];
+  for (const w of String(t || '').trim().split(/\s+/).filter(Boolean)) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && [...last.replace(/\s/g, '')].length + [...w].length <= per) lines[lines.length - 1] = `${last} ${w}`; else lines.push(w);
+  }
+  if (lines.length > max) { lines.length = max; lines[max - 1] += '…'; }
+  return lines;
+}
 export const firstGlyph = (t) => { const s = String(t || '').trim(), lat = /^[A-Za-z0-9]{2,}/.exec(s); return lat ? lat[0].slice(0, 2) : ([...s].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || ''); };
 
 export function bodyVariants(H) {
@@ -34,6 +48,8 @@ export function bodyVariants(H) {
     bento: (s, ctx) => { const sp = bentoSpans(s.items.length); return `<div class="lp-goals lp-goals--alt"><ol class="lp-gb" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((g, i) => `<li data-w="${sp[i]}"${itemFx(ctx)}><svg class="lp-gb-ck" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="21"/><path pathLength="1" d="M14 25l7 7 13-15"/></svg><span class="lp-gb-no" aria-hidden="true">${pad2(i + 1)}</span><p>${esc(g)}</p></li>`).join('')}</ol>${goalMeta(s, ctx)}</div>`; },
     /* 세로 단: 옆으로 나란한 기둥, 기둥마다 큰 윤곽 숫자 */
     columns: (s, ctx) => { const n = s.items.length; return `<div class="lp-goals lp-goals--alt"><ol class="lp-gc" style="--n:${n};--c:${n <= 4 ? n : Math.ceil(n / 2)}">${s.items.map((g, i) => `<li style="--i:${i}"><span class="lp-gc-no" aria-hidden="true">${i + 1}</span><p>${esc(g)}</p></li>`).join('')}</ol>${goalMeta(s, ctx)}</div>`; },
+    /* 과녁: 목표 수만큼의 고리(바깥 1번 → 가운데 마지막 번호), 고리마다 번호. 옆 목록과 번호가 같고, 목록을 가리키면 그 고리가 켜짐 */
+    target: (s, ctx) => `<div class="lp-goals lp-goals--alt"><div class="lp-tg" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-tg-art" aria-hidden="true">${targetSvg(s.items.length)}</div><ol class="lp-tg-list">${s.items.map((g, i) => `<li><span class="lp-tg-no" aria-hidden="true">${i + 1}</span><p>${esc(g)}</p></li>`).join('')}</ol></div>${goalMeta(s, ctx)}</div>`,
   };
 
   // ── 한눈에 보기 ──────────────────────────────────────────
@@ -43,6 +59,8 @@ export function bodyVariants(H) {
     tally: (s, ctx, { numParts }) => `<dl class="lp-tl" data-diagram style="--n:${s.items.length}">${s.items.map((i) => { const p = numParts(i.value), art = tallySvg(p.num, p.unit); return `<div class="lp-tl-item${art ? '' : ' is-plain'}">${art ? `<span class="lp-tl-art" aria-hidden="true">${art}</span>` : ''}<dt>${esc(i.label)}</dt><dd>${fig(p, ctx)}${i.note ? `<small>${esc(i.note)}</small>` : ''}</dd></div>`; }).join('')}</dl>`,
     /* 점선 사양표: 이름 ···· 값 */
     spec: (s, ctx, { numParts }) => `<dl class="lp-spec">${s.items.map((i) => { const p = numParts(i.value); return `<div><dt>${esc(i.label)}${i.note ? `<small>${esc(i.note)}</small>` : ''}</dt><dd>${fig(p, ctx)}</dd></div>`; }).join('')}</dl>`,
+    /* 막대 견줌: 같은 단위의 값만(layouts.js FITS). 이름 | 막대(0부터) | 값 — 값은 글이라 화면 낭독기가 그대로 읽음 */
+    bars: (s) => { const g = glanceSeries(s.items); return `<div class="lp-chart lp-chart--bars" role="list" aria-label="${esc(s.title || '한눈에 보기')}${g.unit ? ` (단위 ${esc(g.unit)})` : ''}">${s.items.map((i, n) => `<div class="lp-chart-row" role="listitem"><span class="lp-chart-k">${esc(i.label)}${i.note ? `<small>${esc(i.note)}</small>` : ''}</span><span class="lp-chart-b">${barSvg(g.vals[n].n, g.max, `c${n === g.vals.findIndex((v) => v.n === g.max) ? 0 : 1}`)}<b class="lp-chart-v">${esc(g.vals[n].raw)}</b></span></div>`).join('')}</div>`; },
   };
 
   // ── 핵심 단계 ────────────────────────────────────────────
@@ -121,13 +139,29 @@ export function bodyVariants(H) {
     groups: p.timeline.map((g) => `<div class="lp-tl-group"><h4>${esc(g.group)}</h4><ul>${g.items.map((it) => `<li><span>${it.url ? `<a ${href(it.url)}>${esc(it.text)}</a>` : esc(it.text)}</span>${it.year ? `<small>${esc(it.year)}</small>` : ''}</li>`).join('')}</ul></div>`),
     ctx,
   });
+  /** 이력을 한 줄로: 모두 연도(첫 네 자리)가 있으면 오래된 것부터, 하나라도 없으면 적힌 차례 그대로(차례를 지어내지 않음) */
+  const careerItems = (p) => {
+    const flat = (p.timeline || []).flatMap((g) => (g.items || []).map((it) => ({ text: it.text, url: it.url, year: String(it.year || '').trim(), group: g.group || '' })));
+    const y = (t) => +(/\d{4}/.exec(t)?.[0] || 0);
+    const out = flat.every((it) => y(it.year)) ? flat.map((it, i) => ({ it, i })).sort((a, b) => y(a.it.year) - y(b.it.year) || a.i - b.i).map((x) => x.it) : flat;
+    return out.map((it) => ({ ...it, now: /[~∼-]\s*(현재)?$/.test(it.year) || /^현/.test(it.group) }));
+  };
   VB.instructor = {
     /* 명함: 테두리 카드 한 장(이름·소속·연락처) + 그 아래 이력을 옆으로 나란히 */
     card: (s, ctx) => ctx.bp.instructors.map((p) => { const P = person(p, ctx); return `<div class="lp-bcw"><div class="lp-bc">${P.avatar}<div class="lp-bc-id"><h3>${esc(p.name)}</h3>${P.role}${P.tags}</div><div class="lp-bc-reach">${P.contact}${P.links}</div></div>${P.bio}${P.groups.length ? `<div class="lp-bc-tl" style="--n:${P.groups.length}">${P.groups.join('')}</div>` : ''}</div>`; }).join(''),
+    /* 이력 연표 그림: 이름·소개 아래, 이력이 한 줄 선 위의 점으로(모두 연도가 있으면 연도 차례, 아니면 교재·강사가 적은 차례 그대로). 지금 하는 일(…~)은 채운 점 */
+    career: (s, ctx) => ctx.bp.instructors.map((p) => {
+      const P = person(p, ctx), items = careerItems(p);
+      const line = items.length >= 2 ? `<ol class="lp-cr-line" style="--n:${items.length};--cols:${Math.min(items.length, 5)}">${items.map((it, i) => `<li${it.now ? ' class="is-now"' : ''} style="--i:${i}"><span class="lp-cr-dot" aria-hidden="true"></span>${it.year ? `<b class="lp-cr-y">${esc(it.year)}</b>` : ''}<span class="lp-cr-t">${it.url ? `<a ${href(it.url)}>${esc(it.text)}</a>` : esc(it.text)}</span>${it.group ? `<small>${esc(it.group)}</small>` : ''}</li>`).join('')}</ol>` : (P.groups.length ? `<div class="lp-timeline">${P.groups.join('')}</div>` : '');
+      return `<div class="lp-cr"><div class="lp-cr-id">${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : ''}<h3>${esc(p.name)}</h3>${P.role}${P.bio}${P.tags}${P.contact}${P.links}</div>${line}</div>`;
+    }).join(''),
     /* 큰 얼굴: 사진(없으면 이름 첫 글자와 모티프 그림)이 한쪽을 채우고, 소개말이 크게 */
     portrait: (s, ctx) => ctx.bp.instructors.map((p, n) => { const P = person(p, ctx); return `<div class="lp-pt"><div class="lp-pt-face${p.photo ? ' has-img' : ''}" data-art${p.photo ? '' : ' aria-hidden="true"'}>${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `${motif(ctx, `${s.id}face${n}`, { w: 360, h: 440 })}<span class="lp-pt-glyph">${esc([...p.name][0] || '')}</span>`}</div><div class="lp-pt-body"><h3>${esc(p.name)}</h3>${P.role}${p.bio ? `<p class="lp-pt-bio">${br(p.bio)}</p>` : ''}${P.tags}${P.contact}${P.links}${P.groups.length ? `<div class="lp-timeline">${P.groups.join('')}</div>` : ''}</div></div>`; }).join(''),
   };
+  const hm = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 0; };
   VB.speakers = {
+    /* 발표 시간 축: 세로 시간 줄 위에 발표 제목이 크게, 발표와 발표 사이 간격이 실제 시간 차이만큼(교재의 시작 시각으로만, 길이를 지어내지 않음) */
+    axis: (s) => `<ol class="lp-sax" data-diagram>${s.items.map((p, i) => `<li style="--gap:${i ? Math.min(90, hm(p.time) - hm(s.items[i - 1].time)) : 0}"><time class="lp-sax-t">${esc(p.time)}</time><span class="lp-sax-dot" aria-hidden="true"></span><div class="lp-sax-b">${p.talk ? `<p class="lp-sax-talk">${esc(p.talk)}</p>` : ''}<h3>${esc(p.name)}</h3>${p.org || p.role ? `<p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p>` : ''}</div></li>`).join('')}</ol>`,
     /* 발표 순서 줄: 시간 | 이름·소속 | 발표 제목 */
     lineup: (s) => `<ol class="lp-lineup">${s.items.map((p) => `<li><span class="lp-lineup-t">${p.time ? esc(p.time) : ''}</span>${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `<span class="lp-avatar lp-avatar-text" aria-hidden="true">${esc([...p.name][0] || '')}</span>`}<div><h3>${esc(p.name)}</h3><p class="lp-person-role">${esc([p.org, p.role].filter(Boolean).join(' '))}</p></div>${p.talk ? `<p class="lp-lineup-talk">${esc(p.talk)}</p>` : ''}</li>`).join('')}</ol>`,
   };
@@ -158,7 +192,7 @@ export function bodyVariants(H) {
     /* 사전 두 단: 낱말 굵게, 풀이는 들여쓰기 */
     dict: (s) => `<dl class="lp-dict">${s.items.map((i) => `<div><dt>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl>`,
     /* 낱말 그물: 연수 제목(첫 줄)을 가운데 두고 낱말이 둘레에 놓인 도식(꾸밈) + 옆에 낱말과 풀이. 도식의 번호와 목록 번호가 같음 */
-    web: (s, ctx) => { const c = String(ctx.bp.meta.title || '').split(/\n|[,·:]\s/)[0].replace(/[,.·:]+$/, '').trim(); /* 제목의 앞 토막(줄바꿈·쉼표 앞) */ return `<div class="lp-gw" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-gw-art" aria-hidden="true">${webSvg(s.items.length)}<span class="lp-gw-c">${esc([...c].length <= 12 ? c : firstGlyph(c))}</span>${s.items.map((i, n) => { const a = (n / s.items.length) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-gw-n" data-node style="--x:${(50 + Math.cos(a) * 38).toFixed(1)}%;--y:${(50 + Math.sin(a) * 38).toFixed(1)}%"><b>${n + 1}</b>${esc([...i.term].length > 9 ? [...i.term].slice(0, 8).join('') + '…' : i.term)}</span>`; }).join('')}</div><dl class="lp-gw-list">${s.items.map((i, n) => `<div><dt><span class="lp-gw-k" aria-hidden="true">${n + 1}</span>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl></div>`; },
+    web: (s, ctx) => { const c = String(ctx.bp.meta.title || '').split(/\n|[,·:]\s/)[0].replace(/[,.·:]+$/, '').trim(); /* 제목의 앞 토막(줄바꿈·쉼표 앞) */ return `<div class="lp-gw" data-diagram data-linked style="--n:${s.items.length}"><div class="lp-gw-art" aria-hidden="true">${webSvg(s.items.length)}<span class="lp-gw-c">${centerLines(c).map(esc).join('<br>')}</span>${s.items.map((i, n) => { const a = (n / s.items.length) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-gw-n" data-node style="--x:${(50 + Math.cos(a) * 38).toFixed(1)}%;--y:${(50 + Math.sin(a) * 38).toFixed(1)}%"><b>${n + 1}</b>${esc([...i.term].length > 9 ? [...i.term].slice(0, 8).join('') + '…' : i.term)}</span>`; }).join('')}</div><dl class="lp-gw-list">${s.items.map((i, n) => `<div><dt><span class="lp-gw-k" aria-hidden="true">${n + 1}</span>${esc(i.term)}</dt><dd>${br(i.desc)}</dd></div>`).join('')}</dl></div>`; },
   };
 
   // ── 절차 ─────────────────────────────────────────────────
@@ -170,6 +204,12 @@ export function bodyVariants(H) {
     flow: (s) => `<ol class="lp-pf" data-diagram data-art style="--n:${s.items.length}">${s.items.map(procLi('lp-pf-no')).join('')}</ol>${procClose(s)}`,
     /* 번호 카드: 큰 윤곽 번호가 붙은 카드 격자 */
     cards: (s) => `<ol class="lp-pc" style="--n:${s.items.length}">${s.items.map(procLi('lp-pc-no')).join('')}</ol>${procClose(s)}`,
+    /* 담당별 갈래 도식: 담당마다 한 갈래(열), 단계는 차례대로 한 줄씩 내려가며 그 담당의 갈래에 놓이고, 꺾인 선이 다음 담당으로 이어줌.
+       좁은 화면에서는 한 줄 목록(담당은 카드 안 글로). 담당 이름은 교재 값 그대로 */
+    lanes: (s) => {
+      const lanes = [...new Set(s.items.map((i) => String(i.who).trim()))], pos = s.items.map((i, r) => ({ c: lanes.indexOf(String(i.who).trim()), r }));
+      return `<div class="lp-pl" data-diagram data-linked style="--lanes:${lanes.length};--n:${s.items.length}"><ol class="lp-pl-heads" aria-hidden="true">${lanes.map((w, k) => `<li class="c${k % 3}" style="--c:${k + 1}">${esc(w)}</li>`).join('')}</ol><div class="lp-pl-grid">${lanesSvg(pos, lanes.length)}<ol class="lp-pl-steps">${s.items.map((i, n) => `<li class="c${pos[n].c % 3}" style="--c:${pos[n].c + 1};--r:${n + 1}"><span class="lp-pl-no" aria-hidden="true">${pad2(n + 1)}</span><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}${procMeta(i)}</li>`).join('')}</ol></div></div>${procClose(s)}`;
+    },
   };
 
   // ── 사례 ─────────────────────────────────────────────────
@@ -189,6 +229,8 @@ export function bodyVariants(H) {
     bigq: (s) => `<div class="lp-bq2"><span class="lp-bq2-mark" data-art aria-hidden="true">?</span><ol class="lp-bq2-list">${s.items.map((q, n) => `<li><span class="lp-bq2-no" aria-hidden="true">Q${n + 1}</span><p>${esc(q)}</p></li>`).join('')}</ol>${rules(s)}</div>${dNote(s)}`,
     /* 말풍선: 질문이 좌우에서 번갈아 건네는 말풍선으로 */
     bubbles: (s) => `<div class="lp-bubw"><ol class="lp-bub">${s.items.map((q, n) => `<li style="--i:${n}"><span class="lp-bub-no" aria-hidden="true">${n + 1}</span><p>${esc(q)}</p></li>`).join('')}</ol>${rules(s)}</div>${dNote(s)}`,
+    /* 모둠 원탁: 둥근 탁자 둘레의 자리마다 질문 번호, 옆에 질문 목록(자리 번호와 목록 번호가 같고, 목록을 가리키면 그 자리가 켜짐) */
+    round: (s) => { const n = s.items.length; return `<div class="lp-rt" data-diagram data-linked style="--n:${n}"><div class="lp-rt-art" aria-hidden="true">${roundSvg(n)}<span class="lp-rt-c"><b>${n}</b>가지 질문</span>${s.items.map((q, i) => { const a = (i / n) * 2 * Math.PI - Math.PI / 2; return `<span class="lp-rt-seat" data-node style="--x:${(50 + Math.cos(a) * 40.5).toFixed(1)}%;--y:${(50 + Math.sin(a) * 40.5).toFixed(1)}%">Q${i + 1}</span>`; }).join('')}</div><div class="lp-rt-side"><ol class="lp-rt-list">${s.items.map((q, i) => `<li><span class="lp-rt-no" aria-hidden="true">Q${i + 1}</span><p>${esc(q)}</p></li>`).join('')}</ol>${rules(s)}</div></div>${dNote(s)}`; },
   };
 
   // ── 표 ───────────────────────────────────────────────────
@@ -196,6 +238,22 @@ export function bodyVariants(H) {
     /* 줄 카드: 한 줄이 카드 한 장(첫 칸이 제목, 나머지는 이름표 + 값) */
     rowcards: (s) => `<div class="lp-rc" role="list" aria-label="${esc(s.title || '표')}">${s.rows.map((r) => `<div role="listitem"><h3>${inlineMd(r[0] ?? '')}</h3><dl>${r.slice(1).map((c, k) => (String(c ?? '').trim() ? `<div>${s.head[k + 1] ? `<dt>${inlineMd(s.head[k + 1])}</dt>` : ''}<dd>${inlineMd(c)}</dd></div>` : '')).join('')}</dl></div>`).join('')}</div>`,
     /* 비교 열: 견주는 것마다 한 단(머리글이 단 제목, 첫 칸이 기준) */
+    /* 수치 도표: 교재 표의 숫자 칸만(layouts.js FITS · design/numbers.js). 합이 100%인 한 칸은 도넛, 그 밖은 0에서 시작하는 막대(칸 1~3개).
+       값은 글로 함께 적어 화면 낭독기·인쇄에서 그대로 읽히고, 원래 표는 '표로 보기'에 그대로(인쇄할 때는 펼침) */
+    chart: (s) => {
+      const c = tableChart(s.head, s.rows), label = s.title || '표', val = (r, k) => parseNum(r[k]);
+      const unit = c.unit ? ` (단위 ${esc(c.unit)})` : '';
+      let art;
+      if (c.kind === 'donut') {
+        const k = c.cols[0];
+        art = `<div class="lp-chart lp-chart--donut" data-linked><div class="lp-chart-art">${donutSvg(s.rows.map((r) => val(r, k).n))}<p class="lp-chart-c" aria-hidden="true">${inlineMd(s.head[k] || '')}</p></div><ul class="lp-chart-leg" aria-label="${esc(label)}${unit}">${s.rows.map((r, i) => `<li><i class="lp-sw c${i % 6}" aria-hidden="true"></i><span>${inlineMd(r[0])}</span><b class="lp-chart-v">${esc(val(r, k).raw)}</b></li>`).join('')}</ul></div>`;
+      } else {
+        const multi = c.cols.length > 1;
+        const leg = multi ? `<ul class="lp-chart-leg lp-chart-leg--row" aria-hidden="true">${c.cols.map((k, j) => `<li><i class="lp-sw c${j}"></i><span>${inlineMd(s.head[k] || '')}</span></li>`).join('')}</ul>` : '';
+        art = `<div class="lp-chart lp-chart--bars${multi ? ' is-multi' : ''}">${leg}<div role="list" aria-label="${esc(label)}${multi ? '' : s.head[c.cols[0]] ? ` · ${esc(String(s.head[c.cols[0]]).replace(/\*\*/g, ''))}` : ''}${unit}">${s.rows.map((r) => `<div class="lp-chart-row" role="listitem"><span class="lp-chart-k">${inlineMd(r[0])}</span><span class="lp-chart-bs">${c.cols.map((k, j) => `<span class="lp-chart-b">${barSvg(val(r, k).n, c.max, `c${j}`)}<b class="lp-chart-v">${multi ? `<span class="lp-sr">${esc(String(s.head[k] || '').replace(/\*\*/g, ''))} </span>` : ''}${esc(val(r, k).raw)}</b></span>`).join('')}</span></div>`).join('')}</div></div>`;
+      }
+      return `${art}<details class="lp-chart-tbl" data-print-open><summary>표로 보기</summary>${tableHtml({ head: s.head, rows: s.rows, label })}</details>`;
+    },
     compare: (s) => `<div class="lp-cmp" role="list" aria-label="${esc(s.title || '표')}" style="--n:${s.head.length - 1};--rows:${s.rows.length}">${s.head.slice(1).map((h, k) => `<div role="listitem" class="c${k % 3}"><h3>${inlineMd(h)}</h3><dl>${s.rows.map((r) => `<div><dt>${inlineMd(r[0] ?? '')}</dt><dd${String(r[k + 1] ?? '').trim() ? '' : ' data-empty'}>${inlineMd(r[k + 1] ?? '') || '–'}</dd></div>`).join('')}</dl></div>`).join('')}</div>`,
   };
 

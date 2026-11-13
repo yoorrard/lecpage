@@ -47,7 +47,7 @@ const PLAN = quick ? [['all', 'all', [1440, 390], 'light', '', false, false, nul
 ];
 const only = arg('only', '') ? arg('only').split(',') : null; // --only all-print,sel: 이 조건만
 if (only) PLAN.splice(0, PLAN.length, ...PLAN.filter((x) => only.includes(x[0])));
-const FORCE = quick || (only && !only.includes('force')) ? [] : [0, 1, 2, 3, 4].flatMap((k) => [['all', k], ['sel', k], ['lab', k]]);
+const FORCE = quick || (only && !only.includes('force')) ? [] : [0, 1, 2, 3, 4, 5].flatMap((k) => [['all', k], ['sel', k], ['lab', k]]);
 const tmp = mkdtempSync(join(tmpdir(), 'lpbgate-')), jobs = [];
 const loadBp = (key) => key === 'xmax' || key === 'xmin' ? extreme(JSON.parse(readFileSync(SRC.all, 'utf8')), key.slice(1)) : JSON.parse(readFileSync(SRC[key], 'utf8'));
 function put(key, bp) { const r = E.build(bp, { runtime: nodeRuntime() }); if (r.errors?.length) { console.log('빌드 오류', key, JSON.stringify(r.errors).slice(0, 200)); return false; } for (const [f, c] of Object.entries(r.files)) { const p = join(tmp, key, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, c); } return r; }
@@ -60,8 +60,15 @@ for (const id of presets) {
   }
 }
 // 배치 변형 강제: 섹션마다 k번째 변형(두 프리셋: 밝은 기본·어두운 장식형)으로 사이트를 만들어 360·1440에서
+// 모든 본문 칸 설계도에는 숫자 표·같은 단위의 한눈에 칸이 없어, 강제할 때 수치 도표용 칸 둘을 덧붙임(교재 값처럼 숫자 + 단위)
+const NUMERIC = [
+  { id: 'tnum', type: 'table', title: '학교급별 참여 학교', head: ['학교급', '2025', '2026'], rows: [['초등학교', '48곳', '62곳'], ['중학교', '21곳', '30곳'], ['고등학교', '12곳', '19곳']] },
+  { id: 'tpct', type: 'table', title: '사고 장소', head: ['장소', '비율'], rows: [['운동장', '41%'], ['교실', '27%'], ['복도·계단', '19%'], ['그 밖', '13%']] },
+  { id: 'gnum', type: 'glance', title: '해마다 늘어난 신고', items: [{ value: '128건', label: '2024년' }, { value: '173건', label: '2025년' }, { value: '210건', label: '2026년', note: '10월까지' }] },
+];
 for (const id of quick ? [] : ['corporate-clean', 'night-story']) for (const [src, k] of FORCE) {
   const bp = loadBp(src); bp.design = { preset: id }; let any = false;
+  if (src === 'all') bp.sections.splice(bp.sections.findIndex((s) => s.type === 'cases'), 0, ...JSON.parse(JSON.stringify(NUMERIC)));
   for (const s of bp.sections) { const t = s.type === 'followup' ? 'materials' : s.type, ids = E.variantIds(t); if (ids[k] && s.type !== 'stations') { s.layout = ids[k]; any = true; } }
   if (!any) continue;
   const key = `${id}__force-${src}${k}`; if (!put(key, bp)) continue;

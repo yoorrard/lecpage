@@ -30,6 +30,21 @@ export function pruneMarked(css, ids, tag) {
   }).join('');
 }
 
+/**
+ * 내 달력에 넣기(iCalendar 한 건): 연수 날짜와 시작 시각을 알 때만(한국 시각 → 세계 표준시로 적어 어느 달력에서나 같은 시각).
+ * 끝 시각이 없으면 끝을 적지 않음(길이를 지어내지 않음)
+ */
+export function icsFile(meta = {}, today = '') {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(meta.date || ''), t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
+  if (!d || !t(meta.start)) return '';
+  const utc = (hm) => { const x = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t(hm)[1] - 9, +t(hm)[2])); return x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+  const txt = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/[,;]/g, (c) => '\\' + c);
+  const stamp = (/^\d{4}-\d{2}-\d{2}/.exec(today || new Date().toISOString())?.[0] || '2026-01-01').replace(/-/g, '') + 'T000000Z';
+  let h = 2166136261; for (const c of `${meta.title}|${meta.date}|${meta.start}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const end = t(meta.end) && utc(meta.end) > utc(meta.start) ? `DTEND:${utc(meta.end)}` : '';
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(meta.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', meta.organizer ? `DESCRIPTION:${txt(meta.organizer)}` : '', 'END:VEVENT', 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).join('\r\n');
+}
+
 /** 사이트를 만든 날(개인정보 처리 안내의 시행일). opts.today('YYYY-MM-DD')가 없으면 오늘 */
 function builtOn(today) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(today || new Date().toISOString());
@@ -72,9 +87,15 @@ export function build(input, opts = {}) {
   const themeName = design.theme && design.theme !== 'preset' ? design.theme : preset.theme;
   const tok = themeTokens(preset, themeName === 'dark' ? 'dark' : 'light', { accent: design.accent });
   const effectIds = design.motion > 0 || design.graphic ? collectEffects(design, bp) : [];
-  const ctx = { bp, design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
+  // 빈 설문 칸(주소도, 사이트 안에서 받을 문항도 없음)은 참가자 화면에 싣지 않음(차례·바닥글 메뉴에서도 빠짐).
+  // 강사 미리보기(opts.preview)에서는 '채울 곳'으로 남겨 무엇을 넣으면 되는지 보임
+  const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
+  const view = opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) };
+  const ics = icsFile(bp.meta, opts.today);
+  const ctx = { bp: view, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
+  if (ics) files['assets/event.ics'] = ics;
   files['index.html'] = renderIndex(ctx);
   files['check.html'] = renderCheck(ctx);
   files['screen.html'] = renderScreen(ctx);
@@ -83,7 +104,7 @@ export function build(input, opts = {}) {
 
   files['assets/theme.css'] = theme.css;
   // 본문 배치 변형의 CSS는 이 사이트에 쓰인 배치만 붙임(runtime/body.css, 표지 @v:종류.변형)
-  files['assets/lecpage.css'] = read('lecpage.css') + pruneMarked(read('body.css'), usedVariants(bp.sections, design.preset, bp.structure?.flow), 'v');
+  files['assets/lecpage.css'] = read('lecpage.css') + pruneMarked(read('body.css'), usedVariants(ctx.bp.sections, design.preset, bp.structure?.flow, bp.instructors), 'v');
   files['assets/boot.js'] = read('boot.js');
   files['assets/lecpage.js'] = read('lecpage.js');
   files['assets/screen.js'] = read('screen.js');
