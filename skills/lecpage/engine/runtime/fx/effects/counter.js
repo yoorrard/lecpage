@@ -29,12 +29,12 @@ LecFX.define('counter', {
     var from = o.from || 0, dur = o.duration || 1500, raf = 0;
     /* 불러온 직후에도 실제 값이 보임: 세기 전까지는 원래 숫자 그대로. 처음부터 화면에 보이던 숫자는
        효과 스크립트가 올 때까지 숨어 있었을 때만(html.fx-boot, boot.js) 0부터 셈 — 아니면 실제 값이 보였다가 0으로 튀므로 세지 않음 */
-    var r0 = el.getBoundingClientRect();
-    if (r0.top < (window.innerHeight || 0) && r0.bottom > 0) {
+    var r0 = el.getBoundingClientRect(), in0 = r0.top < (window.innerHeight || 0) && r0.bottom > 0;
+    if (in0) {
       if (!document.documentElement.classList.contains('fx-boot')) return function () { el.innerHTML = orig; el.classList.remove('fx-counter'); };
       num.textContent = fmt(from);
     }
-    ctx.visible(el, function () {
+    var count = function () {
       var t0 = 0;
       num.textContent = fmt(from);
       var f = function (now) {
@@ -45,7 +45,9 @@ LecFX.define('counter', {
         if (t >= 1) num.textContent = raw;
       };
       raf = requestAnimationFrame(f);
-    }, { once: true, rootMargin: '0px 0px -10% 0px' });
+    };
+    /* 처음부터 화면에 있던 숫자는 바로 셈(화면 아래 끝에 걸린 숫자가 스크롤 전까지 0으로 남지 않게) */
+    if (in0) count(); else ctx.visible(el, count, { once: true, rootMargin: '0px 0px -10% 0px' });
     return function () { if (raf) cancelAnimationFrame(raf); el.innerHTML = orig; el.classList.remove('fx-counter'); };
   }
 });

@@ -19,9 +19,10 @@ html.fx-paused .fx-layer, html.fx-paused .fx-layer *, html.fx-paused .fx-layer *
 html.fx-paused .fx-gradient-text, html.fx-paused .fx-marquee-track, html.fx-paused .fx-beam-ring { animation-play-state: paused !important; }
 
 /* 깜빡임 방지: html.fx-boot(lecpage의 assets/boot.js, 또는 <head>에 LecFX.boot 스니펫)가 붙은 동안 진입 효과 대상과
-   첫 화면에서 그려지며 들어오는 그림(하루 시계·시간 점묘·펼친 교재)만 잠깐 숨긴다. core가 시작하면(최대 3초) 걷힘 */
-html.fx-boot [data-fx~="split-reveal"], html.fx-boot [data-fx~="reveal-up"], html.fx-boot [data-fx~="typewriter"], html.fx-boot [data-fx~="clip-reveal"],
-html.fx-boot .lp-hero :is([data-fx~="schedule-dial"], [data-fx~="minute-map"], [data-fx~="slide-fan"], [data-fx~="scramble"], [data-fx~="counter"]) { opacity: 0; }
+   첫 화면에서 그려지며 들어오는 그림(하루 시계·시간 점묘·펼친 교재)만 잠깐 숨긴다. core가 시작하면(최대 3초) 걷힘.
+   쪽 제목(h1)은 숨기지 않는다: 느린 휴대폰에서 효과 스크립트를 기다리며 제목이 늦게 뜨지 않게(LCP). 이미 그려진 제목에는 core가 등장 효과를 걸지 않음 */
+html.fx-boot :is([data-fx~="split-reveal"], [data-fx~="reveal-up"], [data-fx~="typewriter"], [data-fx~="clip-reveal"]):not(h1),
+html.fx-boot .lp-hero :is([data-fx~="schedule-dial"], [data-fx~="minute-map"], [data-fx~="slide-fan"], [data-fx~="scramble"], [data-fx~="counter"]):not(h1) { opacity: 0; }
 
 /* 움직임 멈춤/재생 버튼(자동으로 붙는 것). 직접 만들려면 아무 버튼에 data-fx-toggle */
 .fx-toggle { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 60; display: inline-flex; align-items: center; gap: .5em; min-height: 36px; padding: .4em .9em .4em .75em; font: 500 13px/1.2 var(--font-sans); color: var(--foreground); background: var(--background); border: var(--border-w, 1px) solid var(--border); border-radius: 999px; box-shadow: var(--shadow); cursor: pointer; opacity: .88; transition: opacity var(--dur-2, 200ms); }
