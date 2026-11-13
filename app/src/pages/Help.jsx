@@ -205,9 +205,23 @@ const BODY = {
   </>,
   skill: <>
     <h1 tabIndex={-1}>AI 도구에서 쓰기(skill)</h1>
-    <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage를 설치하면 대화로 만들고 공개해요.</p><p>쓰던 구독 그대로라 키가 필요 없어요.</p>
+    <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage를 설치하면 대화로 만들어요.</p><p>쓰던 구독 그대로라 키가 필요 없어요.</p>
+    <h2>설치 명령 한 줄</h2>
+    <p><b>Claude Code</b> 대화창에서</p>
+    <pre class="prompt-box">/plugin install lecpage --marketplace yoorrard/lecpage</pre>
+    {/* copy-ok: 설치 명령이 길어 한 문장이 70자를 넘어요 */}
+    <p class="small muted">터미널에서는 <code>claude plugin install lecpage --marketplace yoorrard/lecpage</code>를 써요. 나눠 하려면 <code>/plugin marketplace add yoorrard/lecpage</code> 다음 <code>/plugin install lecpage@lecpage</code>예요.</p>
+    <p><b>Codex</b> 대화창에서</p>
+    <pre class="prompt-box">$skill-installer https://github.com/yoorrard/lecpage/tree/main/skills/lecpage</pre>
+    <p><b>Gemini CLI</b> 터미널에서</p>
+    <pre class="prompt-box">gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage</pre>
+    <p><b>Cursor 등 그 밖의 도구</b> 터미널에서(위 도구에도 돼요)</p>
     <pre class="prompt-box">npx skills add yoorrard/lecpage</pre>
     <p>claude.ai에서는 <code>skills/lecpage</code> 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기로 넣어요.</p><p>그다음 "이 PPT로 연수 사이트 만들어 줘"라고 말해요.</p>
+    <h2>앱에서 이어 하기</h2>
+    <p>디자인을 화면에서 고르거나 참여 기능·공개를 직접 하려면 AI에게 "앱에서 이어 할게"라고 말해요. AI가 건넨 <code>.lecpage</code> 파일을 첫 화면의 [저장한 파일 열기]로 열면 교재 보기 그림까지 그대로 이어져요.</p>
+    <p>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 앱에서 다시 정해요.</p>
+    <p>앱에서 고친 연수는 [파일로 저장]한 파일을 AI에게 주면 다시 이어 해요.</p>
     <p>디자인은 <a href="#/gallery">디자인 둘러보기</a>에서 낱말을 담아 [요청 문장 보기]의 문장을 붙여 넣으면 그대로 맞춰요.</p>
   </>,
   privacy: <>
