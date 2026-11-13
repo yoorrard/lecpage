@@ -164,12 +164,12 @@ function bpTools(bp) {
 }
 /**
  * 확인할 곳: { name, url, kind, need: 'must'|'nice', impact(막히면 생기는 일), fix(할 일) }.
- * 참여 기능 서버는 주소를 찌르는 대신 실제로 연결해 봄(check.js). 같은 호스트는 한 번만
+ * 같은 호스트는 한 번만
  */
 export function checkItems(ctx) {
   const bp = ctx.bp, out = [], seen = new Set();
   const add = (x) => { const h = host(x.url) || x.url; if (!h || seen.has(h)) return; seen.add(h); out.push(x); };
-  if (ctx.live && bp.live.provider !== 'local' && bp.live.url) add({ name: '참여 기능 서버', url: bp.live.url, kind: 'live', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: `기관 정보 담당자에게 ${host(bp.live.url)}을 열어 달라고 하거나, 참가자가 휴대폰 데이터로 들어오게 안내하세요.` });
+  // 참여 기능 서버는 주소를 찌르지 않고 check.js가 실제로 연결해 봄(실시간·새로 읽기 중 어느 방식인지까지)
   if (ctx.live && bp.live.provider === 'supabase') add({ name: 'Supabase 연결 도구', url: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/package.json', kind: 'lib', need: 'must', impact: '참여 기능이 연결되지 않아요.', fix: '기관 정보 담당자에게 cdn.jsdelivr.net을 열어 달라고 요청하세요.' });
   for (const t of [...(bp.sections.find((s) => s.type === 'readiness')?.checks || []), ...bpTools(bp).slice(0, 12)]) add({ name: t.name, url: t.url, kind: 'tool', need: 'must', impact: `실습에서 쓰는 ${t.name}이 열리지 않아요.`, fix: '연수 전에 열어 달라고 요청하거나 대신 쓸 도구를 준비하세요.' });
   const fontHosts = [...new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean))];
