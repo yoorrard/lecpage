@@ -12,3 +12,7 @@ skills/lecpage/backends/node-server/data/
 .env.*
 !.env.example
 .wrangler/
+
+# Claude Code 등 AI 에이전트의 개인 설정·작업 폴더(올리지 않음)
+.claude/worktrees/
+.claude/settings.local.json
