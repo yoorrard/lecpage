@@ -54,7 +54,7 @@ test('기본 한도: pages 보기는 새 사이트·방 상한이 큼(새 사이
   assert.deepEqual([wp.dailySiteCap, wp.dailyRoomCap], [300, 300]);
   assert.deepEqual([p.sitesPerDevice, pp.sitesPerDevice, p.sitesPerHourShared, p.sitesPerDayShared, p.pagesApiBudget], [5, 10, 30, 60, 900]);
   assert.equal(config({ DAILY_SITE_CAP: '7', ...pagesEnv }).dailySiteCap, 7, '운영자가 정한 값이 먼저');
-  assert.deepEqual([config({}).pollRelay, config({ PLAN: 'paid' }).pollRelay, config({ POLL_RELAY: 'on' }).pollRelay, config({ PLAN: 'paid', POLL_RELAY: 'off' }).pollRelay], [false, true, true, false]);
+  assert.deepEqual([config({}).pollRelay, config({ PLAN: 'paid' }).pollRelay, config({ POLL_RELAY: 'on' }).pollRelay, config({ PLAN: 'paid', POLL_RELAY: 'off' }).pollRelay], ['auto', 'auto', true, false], 'auto: 유료면 늘, 무료면 duration 50%부터(index.js가 그때그때)');
 });
 
 test('공정 몫: 기기 표가 있으면 기기마다 하루 5개, 같은 학교 IP는 넉넉히(강사 연수에 여럿이 한 공유기)', async () => {

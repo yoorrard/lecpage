@@ -116,9 +116,9 @@ export function config(env = {}) {
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),
     // 긴 대기(?wait=)를 쓰는 런타임(2026-11 학교망 대비 뒤)이 기본이라 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈(capacity.js). 끄려면 POLL_LONG "off"
     longPoll: !/^(0|false|no|off)$/i.test(String(env.POLL_LONG ?? '').trim()),
-    // 긴 대기를 Worker가 대신 기다릴지(방이 잠들어 DO 시간 과금이 없음, 대신 한 번에 DO 요청 1~2개). auto: 유료면 켬.
-    // 무료는 DO 요청(하루 10만)이 먼저 차고 시간(13,000 GB-s)은 남으므로 방 안에서 기다리는 편이 더 많이 받음 → docs/research/scale-2026-11.md
-    pollRelay: ((v) => (v === 'on' ? true : v === 'off' ? false : plan === 'paid'))(String(env.POLL_RELAY ?? 'auto').trim().toLowerCase()),
+    // 긴 대기를 Worker가 대신 기다릴지(방이 잠들어 DO 시간 과금이 없음, 대신 한 번에 DO 요청 1~2개). 'auto'(기본): 유료면 늘,
+    // 무료면 오늘 DO duration이 하루 13,000 GB-s의 50%를 넘을 때부터(그 전에는 남는 duration 몫으로 방 안에서 기다려 요청을 아낌) → docs/research/scale-2026-11.md
+    pollRelay: ((v) => (v === 'on' ? true : v === 'off' ? false : 'auto'))(String(env.POLL_RELAY ?? 'auto').trim().toLowerCase()),
     // 앱 익명 이용 합계(앱 열기·만들기·공개 횟수, 하루 단위 숫자만). STATS=off면 받지 않음
     stats: !off(env.STATS),
     statsDailyCap: num(env.STATS_DAILY_CAP, DEFAULTS.STATS_DAILY_CAP),

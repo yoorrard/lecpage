@@ -41,14 +41,17 @@ const cfgOf = (env) => {
 // ── 하루 숫자 세기(isolate마다 모아서 Gate에 한 번에) ─────────────────
 const T = new Tally();
 const statLimit = new MinuteLimiter(20);
-/** Gate가 마지막으로 알려 준 오늘 예산 사용률(%). 덜 급한 일(앱 이용 합계 받기)을 미룰 때 씀 */
+/** Gate가 마지막으로 알려 준 오늘 예산 사용률(%, 세 한도 중 가장 빠듯한 것). 덜 급한 일(앱 이용 합계 받기)을 미룰 때 씀 */
 let budgetPct = 0;
+/** 오늘 DO duration 몫(%, 무료). 50%부터 긴 대기를 Worker가 대신, 60%부터 새 SSE는 받지 않음(런타임이 긴 대기로 내려감) */
+let gbsPct = 0;
 function flush(env, ctx, force = false) {
   const batch = T.take(Date.now(), force);
   if (!batch) return;
   ctx.waitUntil(env.GATE.get(env.GATE.idFromName('gate')).fetch('http://gate/tick', post(batch)) // 세는 일 자체는 Gate가 gt로 셈
     .then((r) => (r.ok ? r.json() : null)).then((j) => {
       if (j && Number.isFinite(j.pct)) budgetPct = j.pct;
+      if (j && Number.isFinite(j.gbsPct)) gbsPct = j.gbsPct;
       // 단계·멈춤이 바뀌었으면 /api/info의 20초 기억을 버림
       const c = statusCache?.body;
       if (j && c && (j.state !== c.capacity?.state || !!j.paused !== !!c.paused)) statusCache = null;
@@ -225,7 +228,10 @@ async function live(request, env, url, cfg) {
     target.pathname = t.path;
     const fwd = new Request(target, request);
     fwd.headers.delete('x-lp-relay'); // 안쪽 표시는 Worker만 붙임
-    const longPoll = cfg.pollRelay && t.op === 'snapshot' && request.method === 'GET' && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
+    // 무료에서 duration이 빠듯하면 새 SSE(연결 내내 방이 깨어 있음)는 받지 않음 → 런타임이 긴 대기로 내려가고, 긴 대기는 Worker가 대신
+    if (t.op === 'events' && request.method === 'GET' && cfg.dailyRequestBudget && gbsPct >= 60) throw new LiveError(503, 'busy', '지금은 실시간 연결이 붐벼요. 잠시 묻기 방식으로 이어 갈게요.');
+    const relay = cfg.pollRelay === true || (cfg.pollRelay === 'auto' && (!cfg.dailyRequestBudget || gbsPct >= 50));
+    const longPoll = relay && t.op === 'snapshot' && request.method === 'GET' && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
     const res = longPoll ? await relayWait(env, fwd, t.code, Number(url.searchParams.get('wait'))) : await roomStub(env, t.code).fetch(fwd);
     // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
     if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
@@ -248,6 +254,7 @@ async function relayWait(env, fwd, code, waitS) {
   const res = await roomStub(env, code).fetch(new Request(fwd.url, { method: 'GET', headers: h }));
   const ws = res.webSocket;
   if (res.status !== 101 || !ws) return res;
+  T.mark('dr'); // 웹소켓이 닫힐 때 방이 받는 이벤트도 DO 요청으로 셈(문서에 없어 보수적으로)
   ws.accept();
   const CHANGED = Symbol('changed');
   const got = await new Promise((resolve) => {

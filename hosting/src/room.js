@@ -53,7 +53,30 @@ export class Room extends LiveRoom {
     this.hostBind = new HostBind(ctx.storage.sql);
     this.hostFull = false; // 전체 저장 공간이 찼으면 파일을 더 받지 않음
     this.waiters = new Set(); // 긴 대기 중인 묻기
+    this.awakeMs = 0; this.awakeMark = 0; // 깨어 있던 시간(SSE·방 안 긴 대기): 무료 하루 duration 몫을 Gate가 알게
   }
+
+  // ── 깨어 있던 시간 ────────────────────────────────────────────
+  // SSE 연결이 열려 있거나 방 안에서 긴 대기가 기다리는 동안 이 방은 잠들 수 없어 duration(128MB × 초)을 씀.
+  // 10분 쌓일 때마다, 그리고 아무도 기다리지 않게 되면 Gate에 알림(방 하나가 2시간에 Gate 요청 12번쯤)
+  busy() { return this.sse.size > 0 || this.waiters.size > 0; }
+  awake(now = Date.now()) {
+    if (this.awakeMark) this.awakeMs += now - this.awakeMark;
+    this.awakeMark = this.busy() ? now : 0;
+    if (this.awakeMs >= 600e3 || (!this.awakeMark && this.awakeMs >= 30e3)) {
+      const aw = Math.round(this.awakeMs / 1000); this.awakeMs = 0;
+      const b = this.hostBind.get();
+      if (b) this.ctx.waitUntil?.(this.reportAwake(b.site, aw));
+    }
+  }
+  async reportAwake(site, aw) {
+    try {
+      const gate = this.hostEnv.GATE.get(this.hostEnv.GATE.idFromName('gate'));
+      await gate.fetch('http://gate/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: site, aw }) });
+    } catch (e) { console.error('room awake report failed', e?.message); }
+  }
+  openSse(ip) { const res = super.openSse(ip); this.awake(); return res; }
+  sendSse(text) { super.sendSse(text); this.awake(); }
 
   async core() {
     const core = await super.core();
@@ -116,8 +139,9 @@ export class Room extends LiveRoom {
     try { changed = snapshotChanged(await first.clone().json(), since); } catch { /* 그대로 답 */ }
     if (changed) return first;
     await new Promise((res) => {
-      const w = { res, t: setTimeout(() => { this.waiters.delete(w); res(); }, wait) };
+      const w = { res, t: setTimeout(() => { this.waiters.delete(w); res(); this.awake(); }, wait) };
       this.waiters.add(w);
+      this.awake();
     });
     const b = this.hostBind.get();
     if (!b) return liveError(404, 'unknown_training', '공개 기간이 끝난 연수예요.');
@@ -127,6 +151,7 @@ export class Room extends LiveRoom {
   wake() {
     for (const w of this.waiters) { clearTimeout(w.t); w.res(); }
     this.waiters.clear();
+    this.awake();
     // Worker가 기다리는 긴 대기: 'c'를 보내고 닫음(Worker가 한 번 더 물어 바뀐 것을 받아 감)
     for (const ws of this.ctx.getWebSockets('wait')) { try { ws.send('c'); ws.close(1000, 'changed'); } catch { /* 이미 닫힘 */ } }
   }

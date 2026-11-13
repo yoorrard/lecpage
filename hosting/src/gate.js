@@ -13,7 +13,7 @@ import { HttpError, json, readJson } from './http.js';
 import { sha256Hex, ipBucket } from './ids.js';
 import { WORKER_KEYS, APP_KEYS, paidAdvice } from './tally.js';
 import { checkNotice, publicNotice, NOTICE_LIMITS } from './notice.js';
-import { estimate, cleanBooking, forecast, BOOK_SHARE } from './capacity.js';
+import { estimate, cleanBooking, forecast, BOOK_SHARE, GBS_TO_REQ, FREE } from './capacity.js';
 import { tier, deviceOf, nearBooking, overflow, MSG, NEXT_HOSTS, NEXT_LIVE, TIGHT_SHARE } from './fair.js';
 
 /** 하루 숫자를 남겨 두는 날 수 */
@@ -101,6 +101,17 @@ export class Gate extends DurableObject {
     const row = this.sql.exec('SELECT data FROM daily WHERE day = ?', day).toArray()[0];
     try { return row ? JSON.parse(row.data) : {}; } catch { return {}; }
   }
+  /**
+   * 하루 줄 → 그날 쓴 몫(요청 단위). 무료 하루 한도는 Worker 요청·DO 요청·DO duration이 따로라 가장 빠듯한 것:
+   * DO 요청 = Worker가 부른 Site·Room(ds·dr) + Gate가 받은 것(g·gt) + Site가 부른 Room(rc), duration = 방이 깨어 있던 초(aw, SSE·방 안 긴 대기) × 0.125GB
+   */
+  loadOf(d) {
+    const doReq = (d.ds || 0) + (d.dr || 0) + (d.g || 0) + (d.gt || 0) + (d.rc || 0);
+    const b = this.cfg.dailyRequestBudget || FREE.workerReq;
+    return Math.max(d.req || 0, doReq, Math.round((((d.aw || 0) * 0.125) / FREE.doGbs) * b));
+  }
+  /** 오늘 DO duration 몫(무료 하루 13,000 GB-s의 %) */
+  gbsPct(d) { return Math.round(((d.aw || 0) * 0.125 / FREE.doGbs) * 1000) / 10; }
   /** 오늘 줄에 더함(한 줄 쓰기). fn이 있으면 더한 뒤 그 줄을 더 고칠 수 있음(알림 표시) */
   addDay(patch, now = Date.now(), fn = null) {
     const day = dayOf(now);
@@ -120,20 +131,21 @@ export class Gate extends DurableObject {
     if (c && typeof c === 'object') for (const k of WORKER_KEYS) patch[k] = clamp(c[k]);
     const now = Date.now();
     const cap = this.cfg.statsDailyCap;
-    const { alert, req } = this.addDay(patch, now, (d) => {
+    const { alert, req, gbs } = this.addDay(patch, now, (d) => {
       // 앱 익명 이용 합계: 표에 있는 열쇠만, 항목마다 하루 상한까지
       if (this.cfg.stats && s && typeof s === 'object') for (const k of Object.keys(s)) if (APP_KEYS.has(k)) d[k] = Math.min(cap, (d[k] || 0) + clamp(s[k], cap));
-      return { alert: this.budgetAlert(d, now), req: d.req || 0 };
+      return { alert: this.budgetAlert(d, now), req: this.loadOf(d), gbs: this.gbsPct(d) };
     });
     if (alert) this.send(alert);
     const b = this.cfg.dailyRequestBudget;
-    return { ok: true, pct: b ? Math.round((req / b) * 1000) / 10 : 0, paused: this.paused(), state: this.capacity(now).state };
+    // pct: 쓴 몫(세 한도 중 가장 빠듯한 것), gbsPct: DO duration 몫(Worker가 긴 대기를 대신 맡을지·새 SSE를 받을지 정함)
+    return { ok: true, pct: b ? Math.round((req / b) * 1000) / 10 : 0, gbsPct: b ? gbs : 0, paused: this.paused(), state: this.capacity(now).state };
   }
   /** 예산의 ALERT_AT %를 처음 넘은 때 한 번씩 알림 글을 만듦(같은 날 같은 단계는 다시 보내지 않음) */
   budgetAlert(d, now) {
     const b = this.cfg.dailyRequestBudget;
     if (!b || !this.cfg.alertWebhook) return null;
-    const pct = ((d.req || 0) / b) * 100;
+    const pct = (this.loadOf(d) / b) * 100;
     const step = this.cfg.alertAt.filter((t) => pct >= t && t > (d.al || 0)).pop();
     if (!step) return null;
     d.al = step;
@@ -145,7 +157,9 @@ export class Gate extends DurableObject {
         : step >= stopAt ? `새 사이트·새 방은 받지 않고 강사 계정으로 넘기고 있어요(이미 올라온 사이트는 열려요). 한국 시간 오전 9시에 다시 받아요.`
           : step >= tightAt ? `붐빔: 연수 날짜가 14일 안인 사이트·방만 받고 나머지는 강사 계정으로 넘기고 있어요. ${stopAt}%가 되면 새로 받지 않아요.`
             : `${tightAt}%가 되면 예약한 연수만 받아요.`;
-    return `[lecpage 바로 공개] 오늘 요청이 하루 예산의 ${step}%를 넘었어요(${(d.req || 0).toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} 유료 전환 판단: 관리 화면 /admin`;
+    const load = this.loadOf(d); const gbsReq = Math.round((this.gbsPct(d) / 100) * b);
+    const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : 'DO 요청';
+    return `[lecpage 바로 공개] 오늘 ${which}이 하루 예산의 ${step}%를 넘었어요(${load.toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} 유료 전환 판단: 관리 화면 /admin`;
   }
   send(text) {
     const url = this.cfg.alertWebhook;
@@ -182,7 +196,7 @@ export class Gate extends DurableObject {
   capacity(now = Date.now(), { forRoom = false } = {}) {
     const c = this.cfg; const day = dayOf(now);
     return tier({
-      budget: c.dailyRequestBudget, used: this.dayData(day).req || 0, reserved: this.reservedLeft(now), paused: this.paused(),
+      budget: c.dailyRequestBudget, used: this.loadOf(this.dayData(day)), reserved: this.reservedLeft(now), paused: this.paused(),
       storageFull: this.usage().bytes > c.maxTotalBytes, pagesUntil: forRoom ? 0 : this.pagesHold || 0,
       sitesLeft: c.dailySiteCap - this.count(`site:all:${day}`), roomsLeft: c.dailyRoomCap - this.count(`room:all:${day}`), now,
     });
@@ -251,7 +265,8 @@ export class Gate extends DurableObject {
     const b = cleanBooking(booking, now);
     if (!b || typeof site !== 'string') return { ok: true, booked: false };
     const day = dayOf(b.at);
-    const opt = { view: this.cfg.view, longPoll: this.cfg.longPoll };
+    // 예약 어림은 무료면 방 안에서 기다리는 긴 대기(duration)로, 유료·POLL_RELAY=on이면 Worker가 대신(DO 요청)으로 셈
+    const opt = { view: this.cfg.view, longPoll: this.cfg.longPoll, relay: this.cfg.pollRelay === true || (this.cfg.pollRelay === 'auto' && this.cfg.plan === 'paid') };
     let est = estimate({ ...b, ...opt });
     const budget = this.cfg.dailyRequestBudget;
     const other = this.dayBooked(day, site);
@@ -382,10 +397,11 @@ export class Gate extends DurableObject {
   }
 
   /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '공개' 수를 셈 */
-  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc }) {
+  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, aw }) {
     const calls = (v) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, 10000) : 0);
-    const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0 };
-    if (day.pc || day.pz || day.rc || day.pub) this.addDay(day); // 하루 줄 한 번만 씀
+    // aw: 방이 깨어 있던 초(SSE·방 안 긴 대기). 방 하나가 10분마다·끝날 때 알림
+    const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0, aw: Number.isSafeInteger(aw) && aw > 0 ? Math.min(aw, 86400) : 0 };
+    if (day.pc || day.pz || day.rc || day.pub || day.aw) this.addDay(day); // 하루 줄 한 번만 씀
     if (day.pz) this.pagesBlocked(); // Cloudflare가 API를 막음: 5분 동안 새 올리기를 받지 않고(줄 서기), 운영자에게 알림
     const row = this.sql.exec('SELECT bytes, expires, blocked, room_bytes, code FROM sites WHERE id = ?', id).toArray()[0];
     if (!row) return { ok: false, total: this.usage().bytes };

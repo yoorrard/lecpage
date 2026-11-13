@@ -22,20 +22,27 @@ export const BOOK_SHARE = 0.7;
 export const DEFAULT_MINUTES = 120;
 export const MAX_PEOPLE = 500;
 
+/** 무료 하루 몫을 요청 단위로 맞춤: DO duration 1 GB-s = 하루 요청 예산 / 13,000(예산 10만이면 약 7.7요청) */
+export const GBS_TO_REQ = 100000 / 13000;
 /**
- * @param {{ people?: number, minutes?: number, live?: boolean, network?: string, view?: 'worker'|'pages', longPoll?: boolean }} b
- * @returns {number} 그날 Worker 요청 어림(정수)
+ * 그날 몫 어림(요청 단위). Worker 요청·DO 요청·DO duration(요청 단위로 바꿈) 가운데 가장 큰 것: 무료 하루 한도는 셋이 따로라 먼저 차는 쪽이 그날을 정함.
+ * relay: 긴 대기를 Worker가 대신 기다림(묻기 한 번에 DO 요청 2로 셈, 방은 잠듦). 아니면 방 안에서 기다려 연수 내내 깨어 있음(2시간 900 GB-s)
+ * @param {{ people?: number, minutes?: number, live?: boolean, network?: string, view?: 'worker'|'pages', longPoll?: boolean, relay?: boolean }} b
+ * @returns {number} 그날 몫 어림(정수, 요청 단위)
  */
-export function estimate({ people = 30, minutes = DEFAULT_MINUTES, live = false, network = 'good', view = 'worker', longPoll = false } = {}) {
+export function estimate({ people = 30, minutes = DEFAULT_MINUTES, live = false, network = 'good', view = 'worker', longPoll = false, relay = false } = {}) {
   const n = Math.min(MAX_PEOPLE, Math.max(1, Math.round(Number(people) || 30))) + EST.teacherSeats;
   const min = Math.min(12 * 60, Math.max(10, Math.round(Number(minutes) || DEFAULT_MINUTES)));
-  let r = view === 'pages' ? 0 : n * EST.viewWorker;
-  if (live) {
-    const share = EST.pollShare[network] ?? EST.pollShare.good;
-    r += n * EST.liveBase + n * share * min * (longPoll ? EST.pollPerMinLong : EST.pollPerMin);
-  }
-  return Math.round(r);
+  const site = view === 'pages' ? 0 : n * EST.viewWorker;
+  if (!live) return Math.round(site);
+  const pollers = n * (EST.pollShare[network] ?? EST.pollShare.good);
+  const cycles = pollers * min * (longPoll ? EST.pollPerMinLong : EST.pollPerMin);
+  const worker = site + n * EST.liveBase + cycles;
+  const doReq = n * EST.liveBase + cycles * (longPoll && relay ? 2 : 1);
+  const gbs = longPoll && !relay && pollers >= 1 ? (UNIT_ROOM_HOUR_GBS * min) / 60 : 0;
+  return Math.round(Math.max(worker, doReq, gbs * GBS_TO_REQ));
 }
+const UNIT_ROOM_HOUR_GBS = 450;
 
 /** 'YYYY-MM-DD' + 'HH:MM'(한국 시간) → 그 시각(밀리초). 시각이 없으면 오전 10시로 봄 */
 export function kstTime(date, time = '') {
