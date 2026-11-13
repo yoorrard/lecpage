@@ -28,7 +28,7 @@ test('어림: Pages 보기는 사이트 요청 0, 참여 기능·학교망 묻�
   assert.equal(w, 42 * EST.viewWorker); assert.equal(p, 0);
   const schoolPoll = estimate({ people: 40, minutes: 120, live: true, network: 'restricted', view: 'pages' });
   assert.equal(schoolPoll, Math.round(42 * EST.liveBase + 42 * 120 * EST.pollPerMin));
-  assert.ok(estimate({ people: 40, minutes: 120, live: true, network: 'restricted', view: 'pages', longPoll: true }) < schoolPoll * 0.55, '긴 대기면 절반 아래');
+  assert.ok(estimate({ people: 40, minutes: 120, live: true, network: 'restricted', view: 'pages', longPoll: true }) < schoolPoll * 0.75, '긴 대기면 4분의 3 아래(측정 1분 3.4 대 5)');
   assert.ok(estimate({ people: 40, live: true, network: 'good', view: 'pages' }) < schoolPoll / 3, '실시간 연결이 되는 곳은 훨씬 적음');
 });
 
@@ -44,7 +44,7 @@ test('예약 값 정리: 한국 시각, 끝 시각으로 길이, 지난 날·1�
 });
 
 test('예약: 그날 어림이 예산의 70%를 넘으면 만들 때 알림(다른 날·Pages 보기 사이트 연수는 그대로)', async () => {
-  const { call } = gate({ VIEW: 'worker', SITES_PER_HOUR: 100, SITES_PER_DAY: 100 });
+  const { call } = gate({ VIEW: 'worker', SITES_PER_HOUR: 100, SITES_PER_DAY: 100, POLL_LONG: 'off' }); // 예전 5초 묻기 어림으로(긴 대기 기본값은 아래 시험)
   const big = { date: day(7), start: '10:00', end: '12:00', people: 60, live: true, network: 'restricted' }; // 62 × (25 + 15 + 120×5) ≈ 3.9만
   assert.equal((await reserve(call, 'aaaaaaaaaa', big)).status, 200);
   const st = (await call('GET', `day?date=${day(7)}`)).body.day;
@@ -68,7 +68,7 @@ test('예약: 그날 어림이 예산의 70%를 넘으면 만들 때 알림(다�
 });
 
 test('예약된 연수가 있는 날은 새 일을 일찍 멈춤(오늘 아직 끝나지 않은 몫만큼)', async () => {
-  const { g, call } = gate({ VIEW: 'pages' });
+  const { g, call } = gate({ VIEW: 'pages', POLL_LONG: 'off' });
   assert.equal(g.accepting(), true);
   const later = new Date(Date.now() + 3 * 3600e3);
   const date = kstDate(later.getTime()); const hh = new Date(later.getTime() + 9 * 3600e3).toISOString().slice(11, 16);
@@ -90,6 +90,18 @@ test('그날 상태: 사이트 상태(가림·없음)와 예약', async () => {
   assert.equal(s.site.state, 'open'); assert.equal(s.site.booking.people, 20); assert.equal(s.site.booking.date, day(3));
   assert.equal((await call('GET', 'day?site=gggggggggg')).body.site.state, 'gone');
   assert.equal(s.today.date, kstDate(Date.now()));
+});
+
+test('긴 대기 어림이 기본(POLL_LONG 없으면 on, "off"면 예전 5초 묻기 어림)', async () => {
+  const big = { date: day(7), start: '10:00', end: '12:00', people: 60, live: true, network: 'restricted' };
+  const on = gate({ VIEW: 'worker', SITES_PER_HOUR: 100, SITES_PER_DAY: 100 });
+  await reserve(on.call, 'kkkkkkkkkk', big);
+  const estOn = (await on.call('GET', `day?date=${day(7)}`)).body.day.est;
+  const off = gate({ VIEW: 'worker', SITES_PER_HOUR: 100, SITES_PER_DAY: 100, POLL_LONG: 'off' });
+  await reserve(off.call, 'kkkkkkkkkk', big);
+  const estOff = (await off.call('GET', `day?date=${day(7)}`)).body.day.est;
+  assert.ok(estOn < estOff * 0.75, `${estOn} < ${estOff} × 0.75`);
+  assert.equal((await reserve(on.call, 'mmmmmmmmmm', big)).status, 200, '긴 대기 어림이면 같은 날 60명 학교망 연수 둘도 받음');
 });
 
 test('유료 요금제(예산 0)는 예약으로 막지 않음', async () => {

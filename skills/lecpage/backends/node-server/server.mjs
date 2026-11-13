@@ -177,9 +177,21 @@ export async function start(opts = readOptions()) {
 
   // ---- realtime hub ----
   const rooms = new Map(); // code → { sse:Set<res>, ws:Set<ws>, react:Map, timer }
-  const room = (code) => { let r = rooms.get(code); if (!r) { r = { sse: new Set(), ws: new Set(), react: new Map(), timer: null }; rooms.set(code, r); } return r; };
-  const dropRoom = (code) => { const r = rooms.get(code); if (r && !r.sse.size && !r.ws.size && !r.timer) rooms.delete(code); };
+  const room = (code) => { let r = rooms.get(code); if (!r) { r = { sse: new Set(), ws: new Set(), react: new Map(), timer: null, waiters: new Set() }; rooms.set(code, r); } return r; };
+  const dropRoom = (code) => { const r = rooms.get(code); if (r && !r.sse.size && !r.ws.size && !r.timer && !r.waiters.size) rooms.delete(code); };
+  // 긴 대기(long-poll): 웹소켓·SSE가 막힌 학교망에서 GET snapshot?since=&wait=초 → 바뀐 것이 없으면 바뀔 때까지(최대 25초) 붙잡았다 답함
+  const MAX_WAIT_S = 25, MAX_WAITERS = 2000;
+  const snapshotChanged = (b, since) => !!b && (Object.keys(b).some((k) => Array.isArray(b[k]) && k !== 'removed' && b[k].length) || (b.removed || []).length > 0 || (b.state && b.state.updatedAt > since));
+  function wake(code) { const r = rooms.get(code); if (!r) return; for (const w of r.waiters) w(); r.waiters.clear(); }
+  function holdFor(req, code, ms) {
+    const r = room(code);
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(t); r.waiters.delete(done); req.off('close', done); resolve(); };
+      const t = setTimeout(done, ms); r.waiters.add(done); req.on('close', done);
+    }).then(() => dropRoom(code));
+  }
   function broadcast(code, events) {
+    if (events && events.some((ev) => ev.type !== 'reaction')) wake(code); // 반응(이모지)은 snapshot에 없으니 깨우지 않음
     const r = rooms.get(code); if (!r || !events || !events.length) return;
     for (const ev of events) {
       const pub = ev.pub == null ? null : JSON.stringify({ type: ev.type, col: ev.col, doc: ev.type === 'reset' ? null : ev.pub });
@@ -385,8 +397,15 @@ export async function start(opts = readOptions()) {
       if (a === 'upload' && parts.length === 2 && req.method === 'POST') return await handleUpload(req, res, code, cors);
       if (a === 'files' && b && parts.length === 3 && (req.method === 'GET' || req.method === 'HEAD')) return await serveFile(req, res, code, b, cors);
       const body = await readJson(req);
-      const out = await core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req), origin: reqOrigin(req) });
+      const call = () => core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req), origin: reqOrigin(req) });
+      let out = await call();
       const c = normCode(code);
+      const wait = Math.min(MAX_WAIT_S, Number(url.searchParams.get('wait')) || 0), since = Number(url.searchParams.get('since')) || 0;
+      if (req.method === 'GET' && a === 'snapshot' && parts.length === 2 && wait > 0 && since > 0 && out.status === 200 && !snapshotChanged(out.body, since) && room(c).waiters.size < MAX_WAITERS) {
+        await holdFor(req, c, wait * 1000);
+        if (req.destroyed) return;
+        out = await call();
+      }
       if (out.events) broadcast(c, out.events);
       if (out.reaction) addReaction(c, out.reaction);
       if (out.purgedFiles) await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true });
@@ -459,7 +478,7 @@ export async function start(opts = readOptions()) {
     server, port, core, url: `http://127.0.0.1:${port}`,
     async close() {
       clearInterval(pingTimer); clearInterval(cleanupTimer);
-      for (const [, r] of rooms) { if (r.timer) clearTimeout(r.timer); for (const res of r.sse) res.end(); for (const ws of r.ws) ws.close(1001, 'bye'); }
+      for (const [, r] of rooms) { if (r.timer) clearTimeout(r.timer); for (const w of [...(r.waiters || [])]) w(); for (const res of r.sse) res.end(); for (const ws of r.ws) ws.close(1001, 'bye'); }
       await new Promise((resolve) => { server.close(() => resolve()); server.closeAllConnections?.(); });
       db.close();
     },

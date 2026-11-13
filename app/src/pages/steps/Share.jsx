@@ -12,6 +12,7 @@ import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, 
 import { saveFile, safeName, toast, copy } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml, printHtml } from '../../lib/venue.js';
+import { reach } from '../../lib/netcheck.js';
 import { FEATURES, LIVE_KEYS, syncInfo } from '../../lib/blueprint.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -293,6 +294,8 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [back, setBack] = useState(false); // 다른 서비스에 다녀옴 → [붙여넣기]를 눈에 띄게
+  const [isgdBad, setIsgdBad] = useState(false); // 이 망에서 is.gd에 닿지 않음(아직 짧은 주소가 없을 때 한 번 확인)
+  useEffect(() => { if (short) return undefined; let off = false; reach('short:isgd').then((s) => { if (!off) setIsgdBad(s === 'blocked'); }); return () => { off = true; }; }, [!!short]);
   const went = useRef(false);
   useEffect(() => {
     const f = () => { if (went.current) { went.current = false; setBack(true); } };
@@ -329,7 +332,8 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
       </div>
       {short
         ? <p class="small">참가자가 직접 칠 때 알려 주세요. QR과 [주소 복사]는 원래 주소라서 짧은 주소가 막힌 곳에서도 열려요.</p>
-        : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
+        : isgdBad ? <p class="small" role="status">이 망에서 is.gd에 닿지 않아요. QR과 [주소 복사]는 원래 주소라 그대로 쓰면 돼요. 짧은 주소가 꼭 필요하면 [다른 방법]으로 만들어 넣어요.</p>
+          : <p class="small">직접 칠 때 쓰는 주소예요. 사이트 주소를 is.gd로 보내 광고 없는 짧은 주소를 만들어요.</p>}
       {short && linkOnly && <p class="small">짧은 주소는 누구나 짐작해 넣어 볼 수 있어요. 참가자만 봐야 하면 [공개 범위]에서 암호를 거세요.</p>}
       {stale && <p class="small short-stale"><span>안내문과 발표 화면에는 다시 올려야 {short ? '나와요' : '빠져요'}.</span> <button type="button" class="btn btn-sm" disabled={!!pubBusy} onClick={onRepublish}>다시 올리기</button></p>}
       {err && <p class="small err" role="alert">{err}</p>}

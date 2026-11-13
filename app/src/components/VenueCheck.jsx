@@ -55,6 +55,7 @@ export function VenueBody({ p, url, instantOn }) {
               <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(check, '접속 확인 주소를 복사했어요.')}>주소 복사</button>
             </div>
             {!dayBefore(m.date) && <p class="small muted">연수 날짜를 넣으면 전날 점검 일정을 만들 수 있어요.</p>}
+            {m.shortUrl && <p class="small muted">짧은 주소({m.shortUrl.replace(/^https:\/\//, '')})도 그곳에서 한 번 열어 보세요. 막혀 있으면 QR(원래 주소)로 안내하면 돼요.</p>}
           </div>
           <QR text={check} size={112} alt="접속 확인 QR" />
         </div>
