@@ -117,12 +117,12 @@ const BODY = {
     <KeyMap />
     <h2>어떤 AI를 고를까요?</h2>
     <ul><li><b>ChatGPT·Claude</b>: 구성과 문구가 꼼꼼해요. 크레딧을 충전해 쓰고, 사이트 하나에 몇백 원쯤 들어요.</li>
-      <li><b>Gemini(무료)</b>: 돈을 들이지 않고 해 볼 때 써요. Flash 모델이라 구성과 문구가 단순할 수 있고, 하루에 쓸 수 있는 횟수가 정해져 있어요. 넣은 내용이 구글 제품 개선에 쓰일 수 있고, 계정에 따라 휴대폰 확인을 요청해요. 연결 창 아래의 [무료로 하기(Gemini)]를 눌러요.</li></ul>
-    <Task n="1" title="키 페이지 열기" shot="connect" alt="AI 연결 창: 쓸 AI를 고르고 키 페이지를 여는 단추, 누를 곳을 보여 주는 그림" w={760} h={530}>
-      <p>교재 넣기 화면에서 [AI 연결하고 만들기]를 누르고 쓸 AI를 골라요.</p>
-      <p>단추를 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
+      <li><b>Gemini(무료)</b>: 돈을 들이지 않고 해 볼 때 써요. Flash 모델이라 구성과 문구가 단순할 수 있고, 하루에 쓸 수 있는 횟수가 정해져 있어요. 넣은 내용이 구글 제품 개선에 쓰일 수 있고, 계정에 따라 휴대폰 확인을 요청해요. API 키 연결 창 아래의 [무료로 하기(Gemini)]를 눌러요.</li></ul>
+    <Task n="1" title="키 페이지 열기" shot="connect" alt="AI 연결 창: 쓸 AI를 고르고 키 페이지를 여는 버튼, 누를 곳을 보여 주는 그림" w={760} h={530}>
+      <p>교재 넣기 화면에서 [AI 연결하고 만들기]를 누르고 [API 키 연결하기]를 골라요.</p>
+      <p>쓸 AI를 고르고 버튼을 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
     </Task>
-    <Task n="2" title="돌아와서 붙여넣기" shot="paste" alt="AI 연결 창: 붙여넣기 단추" w={760} h={596}>
+    <Task n="2" title="돌아와서 붙여넣기" shot="paste" alt="AI 연결 창: 붙여넣기 버튼" w={760} h={596}>
       <p>키를 복사하고 돌아와 [붙여넣기]를 누르면 바로 연결돼요.</p>
       <p>어느 회사 키인지는 앱이 알아봐요.</p>
     </Task>
@@ -132,7 +132,7 @@ const BODY = {
     <div class="faq">
       <details><summary>키가 맞지 않대요</summary><p>키를 끝까지 복사했는지 확인하세요. 지웠거나 오래된 키라면 새로 만들어요.</p></details>
       <details><summary>구글이 결제나 휴대폰 확인을 요구해요</summary><p>구글 클라우드를 쓰던 계정이나 학교 계정에서 생겨요. 휴대폰 확인은 카메라로 QR을 찍으면 끝나요. 결제를 요구하면 다른 개인 구글 계정으로 키를 만들거나 ChatGPT·Claude 키를 쓰세요.</p></details>
-      <details><summary>크레딧이 없대요</summary><p>ChatGPT·Claude 키는 그 회사의 결제 페이지에서 크레딧을 충전해야 써져요. 5달러면 사이트를 열 개 넘게 만들어요.</p></details>
+      <details><summary>크레딧이 없대요</summary><p>ChatGPT·Claude 키는 그 회사의 결제 페이지에서 크레딧을 충전해야 써져요. 5달러면 사이트를 열 개 넘게 만들어요. 결제 없이 만들려면 [쓰던 ChatGPT로 만들기]를 누르세요.</p></details>
       <details><summary>AI 회사에 닿지 못했대요</summary><p>학교망이 AI 사이트를 막았을 수 있어요. 휴대폰 핫스팟으로 바꿔 보세요.</p></details>
       <details><summary>무료 횟수를 다 썼대요</summary><p>앱이 잠깐 기다렸다가 다시 하거나, 무료로 되는 다른 모델로 이어서 해요. 그래도 안 되면 한국 시간 {geminiResetKo()}쯤 다시 채워져요. 유료 키도 연결해 두었다면 유료로 이어서 할지 물어봐요.</p></details>
     </div>
@@ -141,8 +141,11 @@ const BODY = {
       <details><summary>키가 뭐예요? 안전한가요?</summary><p>API 키는 AI 회사가 내 계정에 만들어 주는 긴 암호예요. 키와 교재의 글은 이 브라우저에서 고른 AI 회사로만 가고, lecpage 운영자는 볼 수 없어요. '이 기기에서 기억하기'를 켜면 암호화해 이 기기에만 저장해요. 공용 PC에서는 꺼 주세요.</p></details>
       <details><summary>학생 정보가 든 교재를 넣어도 되나요?</summary><p>학생 이름·사진 같은 개인정보는 지우고 넣어 주세요. 교재의 글이 AI 회사로 가고, Gemini 무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요.</p></details>
       <details><summary>모델은 어떻게 고르나요?</summary><p>고르지 않아도 돼요. 그 키로 쓸 수 있는 모델 중 품질과 값의 균형이 좋은 것을 앱이 골라 둬요. 바꾸려면 교재 넣기 화면의 '연결됨' 줄을 눌러요.</p></details>
-      <details><summary>키 없이도 할 수 있나요?</summary><p>네. AI 연결 창의 [키 없이 만들기]를 누르면 쓰던 ChatGPT·Claude·Gemini에 물어보고 답을 붙여 넣어 만들어요. [AI 없이 기본 초안만]으로 시작해 직접 고쳐도 돼요.</p></details>
-      <details><summary>ChatGPT·Claude 구독이 있는데 키가 또 필요한가요?</summary><p>구독으로 이 앱에 바로 로그인할 수는 없어요. ChatGPT Pro·Business, Claude Max·Ultra·Team 구독에는 API 크레딧이 들어 있어 그 회사 사이트에서 받아 쓸 수 있어요. 그 밖의 구독이면 [키 없이 만들기]로 쓰던 챗봇을 그대로 쓰세요.</p></details>
+      <details><summary>쓰던 챗봇으로 만들 수 있나요?</summary><p>네. [AI 연결하고 만들기]를 누르고 [쓰던 챗봇 창으로 만들기]를 고르세요. [ChatGPT 열기]를 누르면 보낼 글이 복사되고 창이 열려요(Claude는 입력 칸까지 채워져요. 비어 있으면 붙여 넣으세요). 답을 복사해 돌아와 [답 넣기]를 누르면 돼요. 고른 방법은 기억해 둬요. Claude 입력 칸을 채우는 방식은 보낼 글이 주소에 담겨 브라우저 방문 기록에도 남아요.</p></details>
+      <details><summary>챗봇 답이 중간에 끊겼어요</summary><p>[이어 쓰기 요청 복사]를 눌러 챗봇에 보내고, 이어진 답을 복사해 [이어진 답 넣기]를 누르세요. 앞의 답 뒤에 이어 붙여요.</p></details>
+      <details><summary>챗봇이 질문만 해요</summary><p>[다시 요청 글 복사]를 눌러 보내면 바로 써 줘요.</p></details>
+      <details><summary>'교재대로 되돌렸어요'는 뭔가요?</summary><p>AI가 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 바꾸거나 빼면 lecpage가 교재대로 되돌려요. [보기]에서 곳마다 견주고, 원하면 [AI 답으로 되돌리기]를 눌러요.</p></details>
+      <details><summary>ChatGPT·Claude 구독이 있는데 키가 또 필요한가요?</summary><p>구독으로 이 앱에 바로 로그인할 수는 없어요. 대신 ChatGPT Pro·Business, Claude Max·Ultra·Team 구독에는 API 크레딧이 들어 있어요. 그 회사 사이트에서 받아 쓰면 돼요. 그 밖의 구독이면 [쓰던 챗봇 창으로 만들기]로 쓰던 챗봇을 그대로 쓰세요.</p></details>
     </div>
   </>,
   edit: <>

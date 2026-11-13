@@ -2,11 +2,11 @@
 // 장점: 지시문과 답이 짧아(보통 5천 자 안팎) 무료 챗봇에서도 답이 끊기지 않고, 섹션 순서·실습 단계·프롬프트·링크는 건드리지 않습니다.
 import { E } from './engine.js';
 
-// 섹션에서 다듬을 글(문자열) 필드. 링크·이름·실습 단계·프롬프트 원문은 넣지 않음(교재 원문 보존)
+// 섹션에서 다듬을 글(문자열) 필드. 링크·이름·실습 단계·프롬프트 원문·일정 제목·FAQ 질문과 답은 넣지 않음(교재 원문 보존, 엔진 guard.js와 같은 기준)
 const SEC_FIELDS = ['eyebrow', 'title', 'subtitle', 'lead', 'text', 'result', 'note', 'notice', 'close', 'thanks'];
 const ITEM_FIELDS = {
-  glance: ['label', 'note'], steps5: ['desc'], outline: ['title', 'desc'], schedule: ['title', 'desc'], readiness: ['label', 'detail'],
-  stations: ['title', 'desc', 'outcome', 'note'], tools: ['desc'], materials: ['desc'], faq: ['q', 'a'], glossary: ['desc'], quiz: ['explain'],
+  glance: ['label', 'note'], steps5: ['desc'], outline: ['title', 'desc'], schedule: ['desc'], readiness: ['label', 'detail'],
+  stations: ['title', 'desc', 'outcome', 'note'], tools: ['desc'], materials: ['desc'], glossary: ['desc'], quiz: ['explain'],
 };
 const MAX_ONE = 600;
 

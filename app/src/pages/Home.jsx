@@ -183,7 +183,7 @@ export function Home() {
         </header>
         <dl class="ld-cost-list">
           <div><dt>lecpage</dt><dd><b>0원</b><span>회원가입이 없어요. 교재 읽기부터 사이트 조립까지 이 브라우저 안에서 해요.</span></dd></div>
-          <div><dt>AI</dt><dd><b>사이트 하나에 몇백 원쯤</b><span>ChatGPT(OpenAI)나 Claude의 API 키를 한 번 붙여 넣어요. 쓴 만큼 그 회사에 직접 내요. Gemini 무료 키도 되지만 Flash 모델이라 구성과 문구가 단순할 수 있어요. AI 없이 기본 초안만 만들 수도 있어요.</span></dd></div>
+          <div><dt>AI</dt><dd><b>쓰던 챗봇이면 0원</b><span>쓰던 ChatGPT·Claude 창으로 만들면 추가 비용이 없어요. API 키를 연결하면 버튼 한 번으로 만들고, 사이트 하나에 몇백 원쯤 그 회사에 직접 내요. Gemini 무료 키도 되지만 Flash 모델이라 구성과 문구가 단순할 수 있어요.</span></dd></div>
           <div><dt>공개·참여 기능</dt><dd><b>강사님 계정의 무료 한도 안에서</b><span>사이트는 Vercel·GitHub Pages 같은 강사님 계정에 올려요. 참여 기능은 구글 시트·Supabase 같은 강사님 계정에 연결해요. 올릴 곳마다 무료 한도를 넘으면 어떻게 되는지 한 줄로 알려 줘요.</span></dd></div>
         </dl>
       </section>

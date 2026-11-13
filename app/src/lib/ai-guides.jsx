@@ -43,7 +43,7 @@ export const KEY_GUIDES = {
   },
   openai: {
     title: 'ChatGPT (OpenAI)', label: 'ChatGPT', tag: '유료',
-    what: '유료 모델이라 구성과 문구가 더 꼼꼼해요. 사이트 하나에 몇백 원쯤 들어요.',
+    what: '처음 한 번 결제 등록과 키 복사가 필요해요. 사이트 하나에 몇백 원쯤 들어요.',
     steps: [
       { id: 'pay', title: '크레딧 충전하기', url: P.openai.billingUrl, open: 'OpenAI 결제 페이지 열기', skip: '이미 충전했어요',
         text: <>ChatGPT 계정 그대로 로그인하고 크레딧을 충전해요. {ENOUGH}</>,
@@ -60,7 +60,7 @@ export const KEY_GUIDES = {
   },
   anthropic: {
     title: 'Claude (Anthropic)', label: 'Claude', tag: '유료',
-    what: '유료 모델이라 구성과 문구가 더 꼼꼼해요. 사이트 하나에 몇백 원쯤 들어요.',
+    what: '처음 한 번 결제 등록과 키 복사가 필요해요. 사이트 하나에 몇백 원쯤 들어요.',
     steps: [
       { id: 'pay', title: '크레딧 충전하기', url: P.anthropic.billingUrl, open: 'Claude 결제 페이지 열기', skip: '이미 충전했어요',
         text: <>Claude Console에 로그인하고 <b>Buy credits</b>로 충전해요. {ENOUGH}</>,

@@ -26,14 +26,20 @@ export function keepFontFields(bp, base, p = null, ing = null) {
   return keepDraftParts(bp, draft || base);
 }
 
-/** 챗봇 답이 중간에 끊겼는지(여는 괄호가 더 많음) */
-export function looksTruncated(text) {
-  const s = String(text || ''); const i = s.indexOf('{'); if (i < 0) return false;
-  let depth = 0, inStr = false, esc = false;
-  for (let k = i; k < s.length; k++) {
-    const c = s[k];
-    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
-    if (c === '"') inStr = true; else if (c === '{' || c === '[') depth++; else if (c === '}' || c === ']') depth--;
-  }
-  return depth > 0;
+/** 설계도·글 속 주소(강사가 넣은 주소는 교재에 없어도 지킴) */
+const urlsIn = (v) => JSON.stringify(v || '').match(/https?:\/\/[^\s"'<>\\]+/g) || [];
+
+/**
+ * AI 답을 받은 뒤 한 번에: 교재 지킴이(엔진 guardMaterial — 프롬프트 원문·단계·일정·FAQ·목표·교재 주소를 교재대로) → keepDraftParts.
+ * 키 연결·쓰던 챗봇 모두 구성까지 짠 답은 이 함수를 거칩니다(문구만 다듬기는 교재 글을 보내지 않아 거치지 않음). restored: 교재대로 되돌린 곳(앱이 한 줄로 알리고 [보기]에서 하나씩 AI 답으로 되돌림)
+ * @returns {{ blueprint, restored }}
+ */
+export function guardAnswer(bp, p, ing, base = null) {
+  const draft = p?.material && ing ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : null;
+  const allowUrls = [...urlsIn(p?.info), ...urlsIn(p?.blueprint)]; // 강사가 적은 접속·설문 주소, 지금 사이트에 이미 있는 주소
+  const g = draft ? E.guardMaterial(bp, draft, { material: p.material, allowUrls }) : { blueprint: bp, restored: [] };
+  return { blueprint: keepDraftParts(g.blueprint, draft || base || p?.blueprint), restored: g.restored };
 }
+
+/** 챗봇 답이 중간에 끊겼는지(대화 전체를 붙여 넣어도 답 부분만 봄) */
+export function looksTruncated(text) { return E.isCutAnswer(text); }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Notice } from './ui.jsx';
-import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI } from '../lib/ai.js';
+import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI, setWay, chatLabel } from '../lib/ai.js';
 import { KEY_GUIDES, GUIDE_ORDER, GUIDE_MORE, KeyPic } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
 
@@ -9,12 +9,56 @@ const looksLikeKey = (s) => /^[\w.-]{20,300}$/.test(s);
 const NO_COPY = '키 옆의 복사 버튼을 누르고 돌아와 다시 눌러 주세요.';
 
 /**
- * AI 연결(처음 한 번). 한 번에 한 걸음만 보입니다: (유료면 크레딧 충전 →) 키 페이지 열기 → 돌아와서 [붙여넣기].
+ * 만드는 길 고르기(처음 한 번): 갖고 있는 것에 맞춰 두 길 중 하나. 고른 길은 기억해 두고(ai.js setWay) 다음에는 바로 그 길로 갑니다.
+ *  - 쓰던 챗봇 창으로: 준비할 것·추가 비용 없음, 만들 때마다 복사·붙여넣기(AiPanel의 Paste)
+ *  - API 키로: 처음 한 번 결제 등록과 키 복사, 그다음부터 버튼 한 번(AiConnect)
+ */
+export function AiChoose({ onChat, onKey }) {
+  const pick = (way, go) => { setWay(way); go(); };
+  return (
+    <div class="ai-choose stack">
+      <p class="ai-what">갖고 있는 것에 맞춰 골라요. 고른 방법은 기억해 둬요.</p>
+      <div class="ai-routes">
+        <button type="button" class="ai-route" data-way="chat" onClick={() => pick('chat', onChat)}>
+          <span class="ai-route-h">쓰던 챗봇 창으로 만들기</span>
+          <span class="ai-route-d">ChatGPT·Claude·Gemini 창에 프롬프트를 붙여 넣고 답을 가져와요.</span>
+          <span class="ai-route-facts"><span>준비할 것 없음</span><span>추가 비용 없음</span><span>만들 때마다 복사·붙여넣기</span></span>
+        </button>
+        <button type="button" class="ai-route" data-way="key" onClick={() => pick('key', onKey)}>
+          <span class="ai-route-h">API 키 연결하기</span>
+          <span class="ai-route-d">처음 한 번 몇 분 걸려요. 그다음부터는 버튼 한 번으로 만들어요.</span>
+          <span class="ai-route-facts"><span>API 결제 등록 필요</span><span>사이트 하나에 몇백 원쯤</span><span>무료 Gemini 키도 돼요</span></span>
+        </button>
+      </div>
+      <p class="small muted">ChatGPT Plus·Claude Pro 구독과 API 결제는 따로예요. 구독만 있으면 챗봇 창으로 만드세요.</p>
+    </div>
+  );
+}
+
+/** 키 없이 쓰던 챗봇 창으로 만들 때의 상태 한 줄(교재 넣기 화면): 누르면 [방법 바꾸기] */
+export function AiWayLine({ onSwap }) {
+  return (
+    <details class="ai-status ai-wayline">
+      <summary>
+        <span class="dot-ok" aria-hidden="true" />
+        <span class="ai-status-t"><span><b>쓰던 챗봇 창</b>으로 만들어요</span><span class="small muted">만들 때마다 복사·붙여넣기</span></span>
+        <span class="ai-status-more">바꾸기</span>
+      </summary>
+      <div class="ai-status-body stack">
+        <p class="small muted">API 키를 연결하면 버튼 한 번으로 만들어요. 처음 한 번 결제 등록이 필요해요.</p>
+        <div class="btn-row"><button type="button" class="btn btn-sm" onClick={onSwap}>API 키 연결하기</button></div>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * AI 키 연결(처음 한 번). 한 번에 한 걸음만 보입니다: (유료면 크레딧 충전 →) 키 페이지 열기 → 돌아와서 [붙여넣기].
  * 페이지를 열고 돌아오면 다음 걸음으로 넘어가고 [붙여넣기]를 눈에 띄게 합니다. 클립보드는 버튼을 눌렀을 때만 읽습니다.
  * 어느 걸음에서든 키를 붙여 넣으면(Ctrl+V) 회사를 알아보고 바로 연결합니다.
  * 키는 이 브라우저에서 AI 회사로만 갑니다. onConnected(ai)로 연결된 정보를 돌려줍니다.
  */
-export function AiConnect({ onConnected, onPaste, onCancel }) {
+export function AiConnect({ onConnected, onChat, onCancel }) {
   const [key, setKey] = useState('');
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -64,7 +108,7 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
       await checkKey(prov, k);
       await saveKey(prov, k, remember);
       const a = await getActiveAI();
-      setKey(''); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
+      setKey(''); setWay('key'); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
       onConnected?.(a);
     } catch (e) { setErr(explainError(e, prov)); }
     setBusy(false);
@@ -118,7 +162,10 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
         )}
       </section>
       {err && <div role="alert"><Notice kind={err.soft ? '' : 'bad'}><div class="stack" style={{ gap: '4px' }}><b>{err.title}</b>{err.body && <span>{err.body}</span>}
-        {err.link && <div><a class="btn btn-sm" href={err.link.href} target="_blank" rel="noopener">{err.link.label}</a></div>}</div></Notice></div>}
+        {(err.link || (onChat && err.actions?.includes('paste'))) && <div class="btn-row">
+          {err.link && <a class="btn btn-sm" href={err.link.href} target="_blank" rel="noopener">{err.link.label}</a>}
+          {onChat && err.actions?.includes('paste') && <button type="button" class="btn btn-sm" onClick={() => { setWay('chat'); onChat(err.provider); }}>{chatLabel(err.provider)}</button>}
+        </div>}</div></Notice></div>}
       <details class="ai-tips">
         <summary class="small">잘 안 되나요?</summary>
         <ul class="small">{g.tips.map((t) => <li>{t}</li>)}</ul>
@@ -126,7 +173,7 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
       {<div class="btn-row">
         {GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
-        {onPaste && <button type="button" class="btn btn-sm btn-quiet" onClick={onPaste}>키 없이 만들기</button>}
+        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(); }}>쓰던 챗봇 창으로 만들기</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>

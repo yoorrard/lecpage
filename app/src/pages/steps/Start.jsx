@@ -3,9 +3,10 @@ import { StepHead } from '../Project.jsx';
 import { Notice, Progress, Field, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPanel } from '../../components/AiPanel.jsx';
-import { AiConnect, AiStatus } from '../../components/AiConnect.jsx';
-import { PROVIDERS, getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
-import { startMakeJob, useAiJob } from '../../lib/ai-job.js';
+import { AiConnect, AiStatus, AiChoose, AiWayLine } from '../../components/AiConnect.jsx';
+import { getActiveAI, forgetKey, takeAiResume, getWay, setWay } from '../../lib/ai.js';
+import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
+import { pushUndoFor } from '../../lib/undo.js';
 import { blobs } from '../../lib/db.js';
 import { fmtBytes, toast } from '../../lib/util.js';
 import { takePendingFiles } from '../../lib/project.js';
@@ -94,16 +95,21 @@ export function StepStart({ p, update, go }) {
   const inp = useRef();
   const titleRef = useRef();
   const [over, setOver] = useState(false);
-  const [paste, setPaste] = useState(false); // 챗봇에 붙여넣기 창
+  // AI로 만들기 창: 'choose'(길 고르기) · 'key'(키 연결, 연결하면 바로 만들기) · 'chat'(쓰던 챗봇 창). 고른 길은 기억(ai.js getWay)
+  const [aiView, setAiView] = useState('');
+  const makeAfter = useRef(false); // [AI로 사이트 만들기]로 연 창이면 키를 연결한 뒤 바로 만듦
+  // 창 안에서 길을 바꾸면(고르기 → 챗봇·키) 새 화면 제목으로 초점
+  useEffect(() => { if (aiView) setTimeout(() => document.querySelector('dialog[open] [data-autofocus]')?.focus({ preventScroll: true }), 0); }, [aiView]);
+  const [way, setWayState] = useState(getWay);
+  const pickWay = (v) => { setWay(v); setWayState(v); };
   const [conn, setConn] = useState(undefined); // 연결된 AI(undefined: 확인 중 · null: 없음)
-  const [connect, setConnect] = useState(false); // AI 연결 창. 'make'면 연결한 뒤 바로 만들기
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
   useEffect(() => {
     // OpenRouter 로그인에서 돌아왔고 '연결하고 만들기' 중이었으면 이어서 만듦
     const load = () => getActiveAI().then((a) => {
       setConn(a);
-      if (a && takeAiResume()) { setConnect(false); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
+      if (a && takeAiResume()) { setAiView(''); let then = ''; try { then = sessionStorage.getItem(AFTER) || ''; sessionStorage.removeItem(AFTER); } catch { } if (then === p.id) makeWithAiRef.current?.(a); }
     });
     load(); addEventListener('lecpage:ai-connected', load); return () => removeEventListener('lecpage:ai-connected', load);
   }, []);
@@ -137,19 +143,28 @@ export function StepStart({ p, update, go }) {
     toast('기본 초안을 만들었어요. 미리보기를 보며 고쳐 보세요.');
     go(2);
   }
-  /** AI로: 기본 초안을 먼저 보여 주고, AI가 교재를 읽어 구성과 문구를 다시 짬(끝나면 바뀌고, 되돌릴 수 있음) */
+  /**
+   * AI로: 키가 연결돼 있으면 기본 초안을 먼저 보여 주고 AI가 교재를 읽어 다시 짬(끝나면 바뀌고, 되돌릴 수 있음).
+   * 키가 없으면 고른 길로(쓰던 챗봇 창 · 키 연결), 고른 적이 없으면 길 고르기부터
+   */
   async function makeWithAi(ai = conn) {
     if (needTitle()) return;
-    if (!ai) { setConnect('make'); return; }
+    if (!ai) { const w = getWay(); makeAfter.current = true; setAiView(w === 'chat' ? 'chat' : w === 'key' ? 'key' : 'choose'); return; }
     const ing = await import('../../lib/ingest.js');
     if (!latest.current.blueprint) update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '' });
     startMakeJob({ getProject: () => latest.current, update });
     go(2);
   }
   makeWithAiRef.current = makeWithAi;
-  function onConnected(a) { setConn(a); const then = connect; setConnect(false); if (then === 'make' && a) makeWithAi(a); }
+  function onConnected(a) { setConn(a); pickWay('key'); setAiView(''); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
   async function disconnect() { await forgetKey(conn.provider); setConn(await getActiveAI()); toast('AI 연결을 끊었어요.'); }
-  function onAi(bp) { update({ blueprint: applyInfo(bp, p.info, p.material, p.blueprint), aiMethod: 'ai' }); setPaste(false); toast('AI가 짠 내용으로 만들었어요.'); go(2); }
+  /** 쓰던 챗봇 창의 답(교재 지킴이를 거친 설계도) → 사이트. 교재대로 되돌린 곳은 다음 화면 띠에서 알림 */
+  function onAi(bp, meta = {}) {
+    if (p.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', p);
+    update({ blueprint: applyInfo(bp, p.info, p.material, p.blueprint), aiMethod: 'ai' });
+    setAiView(''); noteAiResult(p.id, { restored: meta.restored || [], via: '' });
+    toast('AI가 짠 내용으로 만들었어요.'); go(2);
+  }
   const mat = p.material; const d = mat?.detected || {};
 
   const quick = FEATURES.filter((f) => f.quick);
@@ -220,16 +235,19 @@ export function StepStart({ p, update, go }) {
       </section>
 
       {!p.blueprint && conn && <section class="ai-line" aria-label="AI 연결">
-        <AiStatus ai={conn} onChange={setConn} onSwap={() => setConnect(true)} onDisconnect={disconnect} />
+        <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setAiView('key'); }} onDisconnect={disconnect} />
+      </section>}
+      {!p.blueprint && conn === null && way === 'chat' && <section class="ai-line" aria-label="만드는 방법">
+        <AiWayLine onSwap={() => { makeAfter.current = false; pickWay('key'); setAiView('key'); }} />
       </section>}
 
       <div class="make-bar">
         {p.blueprint
           ? <><button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button><button class="btn" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button></>
-          : <><button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : conn ? 'AI로 사이트 만들기 →' : 'AI 연결하고 만들기 →'}</button>
+          : <><button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : conn || way === 'chat' ? 'AI로 사이트 만들기 →' : 'AI 연결하고 만들기 →'}</button>
 </>}
       </div>
-      {!p.blueprint && conn !== undefined && <p class="small muted ai-priv">{conn ? '' : 'AI는 처음 한 번만 연결해요. '}만들 때 교재의 글이 {conn ? conn.label : 'AI 회사'}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>}
+      {!p.blueprint && conn !== undefined && <p class="small muted ai-priv">{conn ? `만들 때 교재의 글이 ${conn.label}로 가요.` : way === 'chat' ? '만들 때 교재의 글을 고른 챗봇(ChatGPT·Claude·Gemini)에 붙여 넣어요.' : '만드는 방법은 처음 한 번만 골라요. 만들 때 교재의 글이 고른 AI 회사로 가요.'} 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>}
       {!p.blueprint && <div class="make-alt">
         <button class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>
       </div>}
@@ -237,14 +255,14 @@ export function StepStart({ p, update, go }) {
       <Dialog open={confirmRemake} onClose={() => setConfirmRemake(false)} label="다시 만들기 확인">
         <h2 class="h-sub">처음부터 다시 만들까요?</h2>
         <p>고친 문구와 섹션 순서가 새 초안으로 바뀌어요. 고른 디자인과 참여 기능 연결은 그대로예요.</p>
-        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
+        <div class="btn-row"><button class="btn btn-primary" onClick={() => { setConfirmRemake(false); makeWithAi(); }}>{conn || way === 'chat' ? 'AI로 다시 만들기' : 'AI 연결하고 다시 만들기'}</button><button class="btn" onClick={() => { setConfirmRemake(false); make(); }}>AI 없이 기본 초안으로</button><button class="btn btn-quiet" data-autofocus onClick={() => setConfirmRemake(false)}>닫기</button></div>
       </Dialog>
-      <Dialog open={!!connect} onClose={() => setConnect(false)} label="AI 연결" wide>
-        {connect && <div class="stack"><h2 class="h-sub">AI 연결 <span class="small muted">처음 한 번만</span></h2>
-          <AiConnect onConnected={onConnected} onPaste={() => { setConnect(false); if (!needTitle()) setPaste(true); }} /></div>}
-      </Dialog>
-      <Dialog open={paste} onClose={() => setPaste(false)} label="키 없이 만들기" wide>
-        {paste && <AiPanel p={p} onBlueprint={onAi} />}
+      <Dialog open={!!aiView} onClose={() => setAiView('')} label={aiView === 'chat' ? '쓰던 챗봇 창으로 만들기' : aiView === 'key' ? 'API 키 연결' : 'AI 연결'} wide>
+        {aiView === 'choose' && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>AI 연결</h2>
+          <AiChoose onChat={() => { setWayState('chat'); setAiView('chat'); }} onKey={() => { setWayState('key'); setAiView('key'); }} /></div>}
+        {aiView === 'key' && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>API 키 연결 <span class="small muted">처음 한 번만</span></h2>
+          <AiConnect onConnected={onConnected} onChat={() => { pickWay('chat'); setAiView('chat'); }} /></div>}
+        {aiView === 'chat' && <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} onKey={() => { pickWay('key'); setAiView('key'); }} />}
       </Dialog>
     </>
   );
