@@ -48,16 +48,17 @@ test('앱 이용 합계를 끄면(STATS=off) 받지 않음', async () => {
   assert.equal(o.today['a:open'], undefined); assert.equal(o.stats, false);
 });
 
-test('하루 예산 알림: 50·60·80·95%를 처음 넘을 때 한 번씩 웹훅', async () => {
+test('하루 예산 알림: 넘침 단계와 같게 45·60·80·95%를 처음 넘을 때 한 번씩 웹훅', async () => {
   const { call } = gate();
-  await call('POST', 'tick', { n: 499 });
+  await call('POST', 'tick', { n: 449 });
   assert.equal(sent.length, 0);
   await call('POST', 'tick', { n: 1 });
   assert.equal(sent.length, 1); assert.equal(sent[0].url, 'https://hooks.example/alert');
-  assert.match(sent[0].body.text, /50%를 넘었어요\(500 \/ 1,000\)/); assert.equal(sent[0].body.content, sent[0].body.text, 'Slack(text)·Discord(content)');
+  assert.match(sent[0].body.text, /45%를 넘었어요\(450 \/ 1,000\)/); assert.equal(sent[0].body.content, sent[0].body.text, 'Slack(text)·Discord(content)');
+  assert.match(sent[0].body.text, /붐빔: 연수 날짜가 14일 안인 사이트·방만/);
   await call('POST', 'tick', { n: 50 });
   assert.equal(sent.length, 1, '같은 단계는 다시 안 보냄');
-  await call('POST', 'tick', { n: 400 }); // 950 → 80%를 건너 95%까지 한 번에
+  await call('POST', 'tick', { n: 450 }); // 950 → 60·80%를 건너 95%까지 한 번에
   assert.equal(sent.length, 2); assert.match(sent[1].body.text, /95%/); assert.match(sent[1].body.text, /오류 1027/);
   assert.equal((await call('GET', 'status')).body.accepting, false, '60%를 넘었으니 새 사이트는 받지 않음');
   // 웹훅이 없거나 유료면 보내지 않음

@@ -13,8 +13,8 @@ import { HttpError, json, readJson } from './http.js';
 import { sha256Hex, ipBucket } from './ids.js';
 import { WORKER_KEYS, APP_KEYS, paidAdvice } from './tally.js';
 import { checkNotice, publicNotice, NOTICE_LIMITS } from './notice.js';
-import { estimate, cleanBooking, BOOK_SHARE } from './capacity.js';
-import { tier, deviceOf, nearBooking, overflow, MSG, NEXT_HOSTS, NEXT_LIVE } from './fair.js';
+import { estimate, cleanBooking, forecast, BOOK_SHARE } from './capacity.js';
+import { tier, deviceOf, nearBooking, overflow, MSG, NEXT_HOSTS, NEXT_LIVE, TIGHT_SHARE } from './fair.js';
 
 /** 하루 숫자를 남겨 두는 날 수 */
 const DAILY_KEEP = 400;
@@ -138,10 +138,13 @@ export class Gate extends DurableObject {
     if (!step) return null;
     d.al = step;
     const hours = Math.max(0, Math.ceil(((dayOf(now) + 1) * DAY_MS - now) / HOUR_MS));
-    const stopAt = Math.round(NEW_WORK_SHARE * 100);
-    const what = step >= 95 ? `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 올라온 사이트도 열리지 않아요(오류 1027).`
-      : step >= stopAt ? `새 사이트·새 방은 받지 않고 있어요(이미 올라온 사이트는 열려요). 한국 시간 오전 9시에 다시 받아요.`
-        : `${stopAt}%가 되면 새 사이트를 받지 않아요.`;
+    const stopAt = Math.round(NEW_WORK_SHARE * 100); const tightAt = Math.round(TIGHT_SHARE * 100);
+    const pages = this.cfg.view === 'pages';
+    const what = step >= 95 ? (pages ? `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 참여 기능 방이 멈춰요(사이트는 Pages라 열려요).` : `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 올라온 사이트도 열리지 않아요(오류 1027).`)
+      : step >= 80 ? '참여 기능 묻기 간격을 20초로 늘려 달라고 알리는 중이에요. 새 사이트·새 방은 받지 않아요.'
+        : step >= stopAt ? `새 사이트·새 방은 받지 않고 강사 계정으로 넘기고 있어요(이미 올라온 사이트는 열려요). 한국 시간 오전 9시에 다시 받아요.`
+          : step >= tightAt ? `붐빔: 연수 날짜가 14일 안인 사이트·방만 받고 나머지는 강사 계정으로 넘기고 있어요. ${stopAt}%가 되면 새로 받지 않아요.`
+            : `${tightAt}%가 되면 예약한 연수만 받아요.`;
     return `[lecpage 바로 공개] 오늘 요청이 하루 예산의 ${step}%를 넘었어요(${(d.req || 0).toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} 유료 전환 판단: 관리 화면 /admin`;
   }
   send(text) {
@@ -363,7 +366,11 @@ export class Gate extends DurableObject {
       this.sql.exec('INSERT INTO sites (id, bytes, created, expires, title, url) VALUES (?, 0, ?, ?, ?, ?)', id, created, expires, String(title || '').slice(0, 120), /^https?:\/\/[^\s"<>]{1,300}$/.test(String(url || '')) ? url : '');
       this.addTot(1, 0);
       if (booking) this.book({ site: id, booking, split }, now);
-      this.addDay({ new: 1 }, now);
+      this.addDay({ new: 1 }, now, (d) => {
+        if (!this.cfg.alertWebhook || d.ca || (d.new || 0) < Math.ceil(c.dailySiteCap * 0.8)) return;
+        d.ca = 1;
+        this.send(`[lecpage 바로 공개] 오늘 새 사이트가 하루 상한(${c.dailySiteCap})의 80%에 닿았어요(${d.new}개). 다 차면 새 사이트는 강사 계정으로 넘겨요. 요청 몫이 넉넉하면 DAILY_SITE_CAP을 올리고, 갑자기 몰린 것이면 관리 화면에서 [새 업로드 멈추기]. 관리 화면 /admin`);
+      });
     });
     await this.ensureAlarm();
     const left = dw ? c.sitesPerDevice - this.count(dw.k) : perDay - this.count(w.day.k);
@@ -390,6 +397,16 @@ export class Gate extends DurableObject {
     const total = this.usage().bytes;
     if (bytes !== undefined || roomBytes !== undefined) this.storageAlert(total);
     return { ok: true, total };
+  }
+  /** 하루 한 번: 무료 요금제에서 추세가 빠듯하면(유료 전환을 권할 때) 일주일에 한 번 알림 */
+  forecastAlert(now = Date.now()) {
+    if (!this.cfg.alertWebhook || this.cfg.plan === 'paid') return;
+    const o = this.overview();
+    if (o.forecast.action !== 'upgrade') return;
+    const last = Number(this.sql.exec("SELECT v FROM kv WHERE k = 'fa'").toArray()[0]?.v || 0);
+    if (now - last < 7 * DAY_MS) return;
+    this.sql.exec("INSERT INTO kv (k, v) VALUES ('fa', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", String(now));
+    this.send(`[lecpage 바로 공개] ${o.forecast.text} 관리 화면 /admin`);
   }
   /** Pages API가 429를 줌(그 계정의 API가 5분 막힘): 5분 동안 새 올리기를 줄 세우고, 하루 한 번 알림 */
   pagesBlocked(now = Date.now()) {
@@ -514,6 +531,10 @@ export class Gate extends DurableObject {
       view: c.view, viewProblem: c.viewProblem || '', bookShare: BOOK_SHARE, reserved: this.reservedLeft(now), upcoming: this.upcoming(now),
       stats: c.stats,
       advice: paidAdvice(days, budget, { view: c.view }),
+      // 이번 달 추세로 언제 무료가 차는지·유료면 월 비용·권하는 행동 한 줄(capacity.js forecast)
+      forecast: forecast(days, { plan: c.plan, budget, storageMB: (s.siteBytes + s.roomBytes) / 1048576, newWorkShare: NEW_WORK_SHARE, dailySiteCap: c.dailySiteCap }),
+      capacity: this.publicCapacity(this.capacity(now)),
+      pagesApi: { used5m: this.pagesUse(now), budget: c.pagesApiBudget, holdUntil: this.pagesHold > now ? this.pagesHold : 0 },
       alerts: { webhook: !!c.alertWebhook, at: c.alertAt },
     };
   }
@@ -586,6 +607,7 @@ export class Gate extends DurableObject {
     this.sql.exec('DELETE FROM daily WHERE day < ?', dayOf(now) - DAILY_KEEP);
     this.sql.exec('DELETE FROM notices WHERE ends < ?', now - 90 * DAY_MS);
     this.sql.exec('DELETE FROM bookings WHERE day < ?', dayOf(now) - 1);
+    try { this.forecastAlert(now); } catch (e) { console.error('forecast alert failed', e?.message); }
     await this.ctx.storage.setAlarm(now + DAY_MS);
   }
 }

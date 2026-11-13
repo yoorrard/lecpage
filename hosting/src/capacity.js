@@ -223,7 +223,11 @@ export function forecast(days, { plan = 'free', budget = FREE.workerReq, storage
   const pct = Math.round((peak7 / limit) * 100);
   const toStop = daysTo(limit * newWorkShare);
   let action = 'none'; let text;
-  if (plan === 'paid') {
+  const newToday = days.length ? days[days.length - 1].new || 0 : 0; const avgNew = avg(w7, (d) => d.new || 0);
+  if (newToday >= 20 && newToday >= 3 * Math.max(1, avgNew)) {
+    action = 'pause_new';
+    text = `오늘 새 사이트가 ${newToday}개로 평소(하루 ${Math.round(avgNew)}개)보다 크게 몰렸어요. 큰 연수가 아니라면 [새 업로드 멈추기]로 잠시 멈추고 사이트 목록·신고를 확인하세요. 이미 올린 사이트는 그대로 열려요.`;
+  } else if (plan === 'paid') {
     text = `유료 요금제예요. 지난 7일 추세로 이번 달 약 ${usd}(기본 $5 포함). 하루 한도로 멈추지 않아요.`;
     if (capHits >= 2) { action = 'raise_caps'; text = `최근 7일 중 ${capHits}일이 하루 새 사이트 상한(${dailySiteCap})에 닿았어요. DAILY_SITE_CAP을 올려도 비용은 거의 그대로예요(이번 달 약 ${usd}).`; }
   } else if (busyDays >= 2 || (toStop != null && toStop <= 7)) {

@@ -109,9 +109,12 @@
 
     var t = o.today || {};
     $('[data-today-date]').textContent = t.date ? '(' + Number(t.date.slice(5, 7)) + '월 ' + Number(t.date.slice(8, 10)) + '일 오전 9시부터, 한국 시간)' : '';
+    // 권하는 행동 한 줄(이번 달 추세로 언제 무료가 차는지, 유료면 월 비용): capacity.js forecast
+    var fc = o.forecast || {};
+    var ACT = { upgrade: '유료 전환을 권해요', raise_caps: '하루 상한을 올려도 돼요', pause_new: '새 업로드 멈추기를 검토하세요', none: '지금은 할 일 없음' };
     var adv = $('[data-advice]');
-    adv.textContent = '유료 전환: ' + ((o.advice && o.advice.text) || '');
-    adv.className = 'advice' + (o.advice && o.advice.recommend ? ' recommend' : '');
+    adv.textContent = (ACT[fc.action] || '권하는 행동') + ': ' + (fc.text || (o.advice && o.advice.text) || '');
+    adv.className = 'advice' + (fc.action && fc.action !== 'none' ? ' recommend' : '');
 
     var stop = Math.round((o.newWorkShare || 0.6) * 100);
     var tiles = clear($('[data-tiles]'));
@@ -124,6 +127,21 @@
     tiles.appendChild(tile('새 실시간 방', n(t.room), '하루 상한 ' + n(o.limits && o.limits.dailyRoomCap)));
     tiles.appendChild(tile('오류(5xx)', n(t.err), '횟수 제한(429) ' + n(t.lim) + '건 · 막은 요청 ' + n(t.bot) + '건'));
     tiles.appendChild(tile('신고 대기', n(o.reports && o.reports.open), '오늘 받은 신고 ' + n(t.rep) + '건'));
+    // 무료 하루 한도는 Worker 요청과 DO 요청이 따로(각 10만). DO 요청 = Worker가 부른 Site·Room + Gate가 받은 것 + 숫자 모으기
+    var dor = (t.ds || 0) + (t.dr || 0) + (t.g || 0) + (t.gt || 0) + (t.rc || 0);
+    var dp = o.plan === 'paid' ? 0 : pct(dor, 100000);
+    tiles.appendChild(tile('오늘 DO 요청(어림)', n(dor), o.plan === 'paid' ? '유료: 월 100만 포함, 넘으면 100만당 $0.15' : '무료 하루 10만의 ' + dp + '% · Gate ' + n(t.g) + '건', o.plan === 'paid' ? null : { value: dp, mark: stop, hot: dp >= stop, label: '무료 DO 하루 한도의 ' + dp + '%' }));
+    var cap = o.capacity || {};
+    var STATE = { open: '받는 중', tight: '붐빔(예약한 연수만)', full: '새로 받지 않음', paused: '멈춤' };
+    var WHY = { budget: '오늘 몫을 거의 씀', tight: '연수 날짜가 2주 안인 것만', daily_cap: '하루 새 사이트 상한', storage: '저장 공간', pages_api: 'Pages API 줄 서기', paused: '운영자가 멈춤' };
+    tiles.appendChild(tile('지금 단계', STATE[cap.state] || '—', (cap.reason ? WHY[cap.reason] || cap.reason : '모두 받음') + ' · 넘치면 강사 계정(' + (cap.next || []).join('·') + ')으로', null));
+    var pa = o.pagesApi || {};
+    if (o.view === 'pages') tiles.appendChild(tile('Pages API(5분)', n(pa.used5m) + ' / ' + n(pa.budget), pa.holdUntil ? 'Cloudflare가 잠시 막음 → ' + when(pa.holdUntil) + '까지 줄 서기' : '토큰 한도 1,200번의 ' + pct(pa.used5m, 1200) + '% · 오늘 ' + n(t.pc) + '번(429 ' + n(t.pz) + ')'));
+    var tr = fc.trend || {}; var pc = fc.paidCost || {};
+    var ft = clear($('[data-forecast-tiles]'));
+    ft.appendChild(tile('이번 달 추세(30일 어림)', n(fc.month && fc.month.workerReq) + '건', 'Worker 요청 · DO 요청 ' + n(fc.month && fc.month.doReq) + '건 · 하루 ' + (tr.perDay >= 0 ? '+' : '') + n(tr.perDay) + '씩'));
+    ft.appendChild(tile('무료가 빠듯해지는 날', tr.daysToStop == null ? '추세로는 없음' : tr.daysToStop === 0 ? '이미' : '약 ' + tr.daysToStop + '일 뒤', '새 사이트를 받지 못하는 선(하루 한도의 ' + stop + '%) · 붐빔(45%)까지 ' + (tr.daysToTight == null ? '—' : tr.daysToTight === 0 ? '이미' : tr.daysToTight + '일') + ' · 최근 7일 가장 많은 날 ' + pct(tr.peak7, tr.limit) + '%'));
+    ft.appendChild(tile('유료로 올리면 월', pc.total != null ? '$' + Number(pc.total).toFixed(2) : '—', pc.items ? '기본 $5 + Worker $' + Number(pc.items.workerReq).toFixed(2) + ' + DO $' + Number(pc.items.doReq).toFixed(2) + ' + 저장 $' + Number(pc.items.storage).toFixed(2) + '(지난 7일 추세)' : ''));
 
     var st = o.sites || {};
     var sp = pct(st.bytes, st.maxBytes);
