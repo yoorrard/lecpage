@@ -169,8 +169,8 @@ function bpTools(bp) {
 export function checkItems(ctx) {
   const bp = ctx.bp, out = [], seen = new Set();
   const add = (x) => { const h = host(x.url) || x.url; if (!h || seen.has(h)) return; seen.add(h); out.push(x); };
-  if (ctx.live && bp.live.provider !== 'local' && bp.live.url) add({ name: '참여 기능 서버', url: bp.live.url, kind: 'live', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: `정보 담당 선생님께 ${host(bp.live.url)}을 열어 달라고 하거나, 참가자가 휴대폰 데이터로 들어오게 안내하세요.` });
-  if (ctx.live && bp.live.provider === 'supabase') add({ name: 'Supabase 연결 도구', url: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/package.json', kind: 'lib', need: 'must', impact: '참여 기능이 연결되지 않아요.', fix: '정보 담당 선생님께 cdn.jsdelivr.net을 열어 달라고 요청하세요.' });
+  if (ctx.live && bp.live.provider !== 'local' && bp.live.url) add({ name: '참여 기능 서버', url: bp.live.url, kind: 'live', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: `기관 정보 담당자에게 ${host(bp.live.url)}을 열어 달라고 하거나, 참가자가 휴대폰 데이터로 들어오게 안내하세요.` });
+  if (ctx.live && bp.live.provider === 'supabase') add({ name: 'Supabase 연결 도구', url: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/package.json', kind: 'lib', need: 'must', impact: '참여 기능이 연결되지 않아요.', fix: '기관 정보 담당자에게 cdn.jsdelivr.net을 열어 달라고 요청하세요.' });
   for (const t of [...(bp.sections.find((s) => s.type === 'readiness')?.checks || []), ...bpTools(bp).slice(0, 12)]) add({ name: t.name, url: t.url, kind: 'tool', need: 'must', impact: `실습에서 쓰는 ${t.name}이 열리지 않아요.`, fix: '연수 전에 열어 달라고 요청하거나 대신 쓸 도구를 준비하세요.' });
   const fontHosts = [...new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean))];
   for (const h of fontHosts) add({ name: h === 'fonts.googleapis.com' ? '구글 글꼴' : h === 'hangeul.pstatic.net' ? '네이버 글꼴' : '글꼴·효과 파일', url: h === 'fonts.googleapis.com' ? 'https://fonts.googleapis.com/css2?family=Jua' : h === 'cdn.jsdelivr.net' ? 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' : `https://${h}/`, kind: 'font', need: 'nice', impact: '글꼴이 기본 글꼴로 보여요. 내용은 그대로예요.', fix: '괜찮으면 그대로 써도 돼요. 꼭 같은 글꼴이 필요하면 글꼴을 함께 담아 다시 만드세요.' });
@@ -200,7 +200,7 @@ export function renderCheck(ctx) {
 <section class="lp-chk-col" data-col="fail" aria-labelledby="lp-chk-fail"><h2 id="lp-chk-fail">안 되는 것 <span data-n="fail">0</span></h2><ul data-list="fail"><li class="lp-chk-none">아직 없어요.</li></ul></section>
 <section class="lp-chk-col" data-col="todo" aria-labelledby="lp-chk-todo"><h2 id="lp-chk-todo">할 일</h2><ol data-list="todo"><li class="lp-chk-none">확인이 끝나면 여기에 적어요.</li></ol></section>
 </div>
-${blocked.length ? `<p class="lp-chk-note"><b>연수 정보에 적어 둔 막힌 곳:</b> ${blocked.map((b) => esc(b)).join(' · ')}. 주소가 아니라 직접 확인할 수 없어요. 연수 전에 담당 선생님께 물어보세요.</p>` : ''}
+${blocked.length ? `<p class="lp-chk-note"><b>연수 정보에 적어 둔 막힌 곳:</b> ${blocked.map((b) => esc(b)).join(' · ')}. 주소가 아니라 직접 확인할 수 없어요. 연수 전에 기관 정보 담당자에게 물어보세요.</p>` : ''}
 <details class="lp-chk-more"><summary>이 기기 정보</summary><p data-env></p></details>
 <p class="lp-chk-back"><a class="lp-link" href="index.html">연수 사이트로 돌아가기 ${icon('arrow')}</a></p>
 </main>

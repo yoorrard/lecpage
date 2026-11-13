@@ -35,15 +35,15 @@
     var t0 = Date.now(), name = '참여 기능(질문·투표)';
     return new Promise(function (res) {
       var c, done = false, end = function (r) { if (done) return; done = true; try { c && c.close(); } catch (e) { } res(r); };
-      setTimeout(function () { end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: '인터넷 연결을 확인하고, 학교망이면 정보 담당 선생님께 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' }); }, 15000);
+      setTimeout(function () { end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.', fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' }); }, 15000);
       try { c = LecLive.create(Object.assign({}, DATA.live, { identity: 'session' })); } catch (e) { return end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '참여 기능을 불러오지 못했어요.', fix: '새로 고침한 뒤 다시 확인해 주세요.' }); }
       c.connect().then(function (r) {
         var ms = Date.now() - t0, mode = r && r.mode;
         if (mode === 'local') return end({ name: name, host: '리허설', state: 'ok', need: 'must', note: '리허설 설정이라 이 브라우저 안에서만 돌고, 참가자 휴대폰과 이어지지 않아요.', fix: '실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.', todo: true, warn: true });
-        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 새로 읽기', state: 'ok', need: 'must', note: '실시간 연결(웹소켓)이 막혀 5~10초마다 새로 읽어요. 질문·투표가 조금 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 정보 담당 선생님께 웹소켓 연결을 열어 달라고 하세요.', todo: true });
+        if (mode === 'polling') return end({ name: name, host: liveInfo.name + ' · 새로 읽기', state: 'ok', need: 'must', note: '실시간 연결(웹소켓)이 막혀 5~10초마다 새로 읽어요. 질문·투표가 조금 늦게 보여요.', fix: '그대로 써도 돼요. 더 빠르게 하려면 기관 정보 담당자에게 웹소켓 연결을 열어 달라고 하세요.', todo: true });
         end({ name: name, host: liveInfo.name + ' · 실시간 · ' + (ms / 1000).toFixed(1) + '초', state: 'ok', need: 'must' });
       }, function (e) {
-        end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.' + (e && e.message ? ' (' + e.message + ')' : ''), fix: '인터넷 연결을 확인하고, 학교망이면 정보 담당 선생님께 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' });
+        end({ name: name, host: liveInfo.name, state: 'fail', need: 'must', impact: '질문·투표·도움 요청이 동작하지 않아요.' + (e && e.message ? ' (' + e.message + ')' : ''), fix: '인터넷 연결을 확인하고, 학교·회사 망이면 정보 담당자에게 참여 기능 서버 주소를 열어 달라고 하세요. 참가자는 휴대폰 데이터로 들어오게 안내할 수 있어요.' });
       });
     });
   }
@@ -76,7 +76,7 @@
     // 할 일: 막힌 곳마다 고칠 방법(같은 문장은 한 번) + 쓸 수는 있지만 알아 둘 것
     var todo = [], seen = {};
     fail.concat(ok.filter(function (r) { return r.todo; })).forEach(function (r) { if (r.fix && !seen[r.fix]) { seen[r.fix] = 1; todo.push(r.fix); } });
-    if (fail.length) todo.push('[결과 복사]로 이 결과를 정보 담당 선생님께 보내면 무엇을 열어야 하는지 바로 알 수 있어요.');
+    if (fail.length) todo.push('[결과 복사]로 이 결과를 기관 정보 담당자에게 보내면 무엇을 열어야 하는지 바로 알 수 있어요.');
     var ol = $('[data-list="todo"]'); ol.textContent = '';
     if (!todo.length) ol.appendChild(el('li', 'lp-chk-none', final ? '할 일이 없어요. 연수 당일에도 같은 Wi-Fi를 쓰면 돼요.' : '확인이 끝나면 여기에 적어요.'));
     todo.forEach(function (t) { var li = el('li'); li.appendChild(el('p', '', t)); ol.appendChild(li); });
