@@ -232,8 +232,18 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .make-way>span{flex:1 1 15em;min-width:0}
 .make-way b{color:var(--ink);margin-right:4px}
 .make-way .btn{flex:none}
+/* AI 에이전트 길(접힘): 설치 명령 한 줄씩 + 복사 */
+.make-agent{font-size:.9rem;line-height:1.5;color:var(--ink-2)}
+.make-agent>summary{min-height:44px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.make-agent>summary b{color:var(--ink);margin-right:4px}
+.make-agent-b{display:grid;gap:10px;padding:4px 0 6px}
+.make-agent-b p{margin:0}
+.agent-cmd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.agent-cmd-for{flex-basis:100%;font-weight:600;color:var(--ink-2)}
+.agent-cmd code{flex:1 1 14em;min-width:0;padding:8px 10px;border-radius:8px;background:var(--sunk);border:1px solid var(--hair);font-family:var(--f-mono);font-size:.86rem;overflow-wrap:anywhere;color:var(--ink)}
+.agent-cmd .btn{flex:none}
 .ai-more{margin:-4px 0 0;padding-left:1.2em;display:grid;gap:2px;color:var(--ink-2)}
-/* 카드 안 챗봇 길: 순서 점(1 챗봇에 보내기 — 2 답 넣기)과 같은 말인 소제목은 화면 읽기 프로그램에만 */
+/* 카드 안 AI 창 길: 순서 점(1 AI에게 보내기 — 2 답 넣기)과 같은 말인 소제목은 화면 읽기 프로그램에만 */
 .make-card .chat-card .key-now-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (min-width:1100px){
   .start-grid.has-make{grid-template-columns:minmax(0,1fr) minmax(360px,430px);grid-template-rows:auto 1fr;grid-template-areas:"files make" "info make";column-gap:28px}
@@ -532,7 +542,7 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .pub-now-t em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--lav-deep)}
 .pub-now-t i{font-style:normal;font-size:.76rem;font-weight:600;color:var(--ok)}
 
-/* 공개 준비 체크리스트: 줄마다 번호(끝나면 ✓)·이름·지금 상태 한 줄·[바꾸기]. 할 일이 남은 줄만 펼쳐 둠 */
+/* 배포 준비 체크리스트: 줄마다 번호(끝나면 ✓)·이름·지금 상태 한 줄·[바꾸기]. 할 일이 남은 줄만 펼쳐 둠 */
 .ready{list-style:none;margin:0;padding:0;display:grid}
 .ready-i{display:grid;gap:12px;padding:16px 0;border-top:1px solid var(--hair);scroll-margin-top:16px}
 .ready-i:first-child{border-top:0;padding-top:4px}
@@ -544,7 +554,7 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .ready-s{color:var(--ink-2);flex:1 1 14em;min-width:0}
 .ready-b{display:grid;gap:12px;padding-left:38px;min-width:0}
 .feat-chips{gap:6px}
-/* 공개 완료: 연수 당일 묶음 */
+/* 배포 완료: 연수 당일 묶음 */
 .day-kit{display:grid;gap:6px;padding-top:10px;border-top:1px solid color-mix(in srgb,currentColor 14%,transparent)}
 .day-kit .btn-row{margin:0}
 /* 연수 장소 확인·혹시 안 열리면(VenueCheck.jsx), 이 망에서 막힌 곳 한 줄(netcheck.js) */
@@ -603,7 +613,7 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .affix input:first-child{padding-left:12px}
 .addr-name .affix{max-width:520px}
 
-/* 공개한 뒤: 주소·QR·짧은 주소 */
+/* 배포한 뒤: 주소·QR·짧은 주소 */
 .qr-side{display:grid;gap:8px;justify-items:center;align-self:start}
 .qr-zoom{display:grid;justify-items:center;gap:4px;padding:6px 6px 8px;color:#333;font:inherit;cursor:zoom-in}
 .qr-zoom:hover{border-color:var(--line-strong)}
@@ -881,7 +891,7 @@ details>summary{cursor:pointer}
 .ai-status-body{gap:12px;padding:4px 14px 14px}
 .ai-status .model-pick{margin-top:0}
 .ai-priv{max-width:44em;margin-top:-8px}
-/* 만드는 길 고르기(쓰던 챗봇 창 · API 키): 갖고 있는 것에 맞춰 큰 카드 두 개 */
+/* 만드는 길 고르기(쓰던 AI 창 · API 키): 갖고 있는 것에 맞춰 큰 카드 두 개 */
 .ai-routes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .ai-route{appearance:none;font:inherit;text-align:left;display:grid;align-content:start;gap:8px;padding:16px 18px;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);color:var(--ink);cursor:pointer;box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s,background .15s}
 .ai-route:hover{border-color:var(--accent);background:color-mix(in srgb,var(--lav-soft) 55%,var(--card))}
@@ -894,7 +904,7 @@ details>summary{cursor:pointer}
 .ai-route-facts>span{font-size:.8rem;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--ink-2)}
 .ai-route[data-way="chat"] .ai-route-facts>span:nth-child(-n+2){background:var(--mint);color:var(--mint-ink)}
 .ai-other{margin-top:-4px}
-/* 쓰던 챗봇 창: 챗봇 버튼 줄, 받을 수 없는 답 안내 */
+/* 쓰던 AI 창: AI 버튼 줄, 받을 수 없는 답 안내 */
 .chat-card .key-now{grid-template-columns:minmax(0,1fr)}
 .chat-bots{gap:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .chat-bots .chat-bot{justify-content:center;min-height:48px;font-weight:600}

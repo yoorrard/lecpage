@@ -9,7 +9,7 @@ import './ReviewChat.css';
 
 /**
  * 수정 요청: 미리보기에 표시(펜·네모·화살표·글자)하고 [완료]를 누르면 그림이 입력창에 붙고, 글과 함께 AI에게 보냅니다.
- * AI는 설계도 패치로 답하고, [적용]은 되돌리기 목록에 들어갑니다. AI 키가 없으면 쓰는 챗봇에 붙여 넣는 길을 안내해요.
+ * AI는 설계도 패치로 답하고, [적용]은 되돌리기 목록에 들어갑니다. AI 키가 없으면 쓰던 AI 창에 붙여 넣는 길을 안내해요.
  * 미리보기(iframe)는 다른 출처라 메시지로만 주고받고, 받은 값은 모두 다시 확인합니다.
  */
 const META_KEYS = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue'];
@@ -173,7 +173,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   }
   function acceptPasted(id, text) {
     const forMsg = (msgs || []).find((x) => x.id === (msgs || []).find((y) => y.id === id)?.forId);
-    patchMsg(id, { ...readAnswer(text, forMsg), via: '챗봇' });
+    patchMsg(id, { ...readAnswer(text, forMsg), via: 'AI' });
   }
 
   // ── 적용·되돌리기 ──
@@ -215,7 +215,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
 
   const canSend = !busy && (draft.trim() || atts.length);
   const attSecs = [...new Set(atts.flatMap((a) => a.sections || []))];
-  const aiLabel = target === undefined ? '' : target ? `${target.label}${target.images ? '' : '(글만)'}로 보내요` : 'AI 키 없음 · 쓰는 챗봇으로 보내요';
+  const aiLabel = target === undefined ? '' : target ? `${target.label}${target.images ? '' : '(글만)'}로 보내요` : 'AI 키 없음 · 쓰던 AI로 보내요';
   return (
     <section class={`rc${folded ? ' folded' : ''}${marking ? ' marking' : ''}`} hidden={hidden} aria-label="수정 요청">
       <div class="rc-head">
@@ -306,7 +306,7 @@ function AiMsg({ m, busy, onApply, onRevert, onAgain, onStop, onPaste, user, pro
   );
 }
 
-/** AI 키 없이: 그림 복사 → 프롬프트 복사 → 챗봇 답 붙여넣기 */
+/** AI 키 없이: 그림 복사 → 프롬프트 복사 → AI 답 붙여넣기 */
 function Handoff({ m, user, promptFor, onPaste, onConnectAi, title }) {
   const [answer, setAnswer] = useState('');
   const imgs = (user?.images || []).filter((im) => !im.gone && (full.get(im.id) || im.url));
@@ -321,17 +321,17 @@ function Handoff({ m, user, promptFor, onPaste, onConnectAi, title }) {
         else saveFile(`${safeName(title)}-수정요청-${i + 1}.png`, blob, 'image/png');
       } catch { try { const { canvas } = await redraw(src, SEND_W, 'image/png'); canvas.toBlob((b) => b && saveFile(`${safeName(title)}-수정요청-${i + 1}.png`, b, 'image/png'), 'image/png'); } catch { } }
     }
-    toast(ok ? (imgs.length > 1 ? '첫 그림은 복사하고, 나머지는 파일로 받았어요. 챗봇 입력창에 붙여 넣으세요.' : '그림을 복사했어요. 챗봇 입력창에 붙여 넣으세요(Ctrl+V).') : '그림을 파일로 받았어요. 챗봇에 끌어다 놓으세요.');
+    toast(ok ? (imgs.length > 1 ? '첫 그림은 복사하고, 나머지는 파일로 받았어요. AI 입력 칸에 붙여 넣으세요.' : '그림을 복사했어요. AI 입력 칸에 붙여 넣으세요(Ctrl+V).') : '그림을 파일로 받았어요. AI 입력 칸에 끌어다 놓으세요.');
   }
   if (!user) return null;
   return (
     <div class="rc-msg ai rc-hand">
-      <p><b>쓰는 챗봇에 보내 주세요.</b> <span class="muted">AI 키가 연결되지 않아 직접 보내지 못했어요.</span></p>
+      <p><b>쓰던 AI 창에 보내 주세요.</b> <span class="muted">AI 키가 연결되지 않아 직접 보내지 못했어요.</span></p>
       <ol>
-        {!!imgs.length && <li><button type="button" class="btn btn-sm" onClick={copyImage}>그림 복사</button> 챗봇 입력창에 붙여 넣어요.</li>}
+        {!!imgs.length && <li><button type="button" class="btn btn-sm" onClick={copyImage}>그림 복사</button> AI 입력 칸에 붙여 넣어요.</li>}
         <li><button type="button" class="btn btn-sm" onClick={() => copy(promptFor(user, imgs.length > 0, m.again), '프롬프트를 복사했어요. 이어서 붙여 넣고 보내세요.')}>프롬프트 복사</button> 이어서 붙여 넣고 보내요. <span class="rc-bots"><a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a> · <a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a> · <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a></span></li>
-        <li>챗봇 답을 통째로 복사해 여기에 붙여 넣어요.
-          <textarea class="input rc-answer" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} aria-label="챗봇의 답" placeholder="{ … } 로 된 답을 붙여 넣으세요" />
+        <li>AI 답을 통째로 복사해 여기에 붙여 넣어요.
+          <textarea class="input rc-answer" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} aria-label="AI의 답" placeholder="{ … } 로 된 답을 붙여 넣으세요" />
           <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" disabled={!answer.trim()} onClick={() => onPaste(m.id, answer)}>답 확인</button>{onConnectAi && <button type="button" class="btn btn-sm btn-quiet" onClick={onConnectAi}>AI 키 연결하기</button>}</div>
         </li>
       </ol>

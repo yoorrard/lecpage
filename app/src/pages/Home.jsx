@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mascot } from '../components/Mascot.jsx';
 import { projects } from '../lib/db.js';
-import { newProject, importProjectFile, setPendingFiles } from '../lib/project.js';
+import { newProject, setPendingFiles, isSavedFile, openSavedFile, OPEN_FAIL } from '../lib/project.js';
 import { toast } from '../lib/util.js';
 import { HeroFold } from '../landing/HeroFold.jsx';
 import '../styles/landing.css';
 
 // 첫 화면: 교재를 넣으면 연수 사이트가 나와요 → 왜 lecpage(내용은 쓰던 AI, 나머지는 lecpage) → 교재 한 장이 사이트가 되고, 참가자 휴대폰에 닿고, 연수 후까지 이어지는 이야기.
 // 첫 화면은 엔진을 받지 않아요(숫자는 빌드 때 계산, 그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md
-// .lecpage(에이전트 스킬·다른 컴퓨터에서 저장한 연수)도 같은 곳에 놓으면 열림
+// .lecpage(AI 에이전트 스킬·다른 컴퓨터에서 저장한 연수)도 같은 곳에 놓으면 열림
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
-const isSaved = (f) => /\.lecpage$/i.test(f?.name || '');
 
 export function Home() {
   const [list, setList] = useState(null);
@@ -53,7 +52,7 @@ export function Home() {
   const busyProps = (key, label = '만드는 중…') => ({ 'aria-busy': busy === key ? 'true' : undefined, 'data-busy': label });
   function startWith(fileList) {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
-    if (files.length === 1 && isSaved(files[0])) return openSaved(files[0]); // 저장한 연수 파일이면 교재가 아니라 연수로 열기
+    if (files.length === 1 && isSavedFile(files[0])) return openSaved(files[0]); // 저장한 연수 파일이면 교재가 아니라 연수로 열기
     return once('blank', async () => {
       const p = await newProject('blank');
       if (files.length) setPendingFiles(p.id, files);
@@ -78,8 +77,8 @@ export function Home() {
   const pick = () => pickRef.current?.click();
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function openSaved(f) {
-    try { const p = await importProjectFile(f); toast(p.origin === 'skill' ? '에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
-    catch (err) { toast(err.friendly ? err.message : '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
+    try { toast(await openSavedFile(f)); }
+    catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
   }
   async function onImport(e) {
     const f = e.target.files?.[0]; if (!f) return;
@@ -92,7 +91,7 @@ export function Home() {
         <div class="ld-hero-t">
           <p class="ld-kicker">강의·연수용 · 무료 · 회원가입 없음</p>
           <h1 id="ld-h1"><span>교재를 넣으면</span> <span><span class="ld-hl">연수 사이트</span>가 나와요</span></h1>
-          <p class="ld-lead">쓰던 AI가 교재로 내용을 짜면, lecpage가 주제에 맞게 꾸며 QR로 공개해요. 질문·투표·출석도 사이트 안에서 해요.</p>
+          <p class="ld-lead">쓰던 AI가 교재로 내용을 짜면, lecpage가 주제에 맞게 꾸며 배포하고 QR까지 만들어요. 질문·투표·출석도 사이트 안에서 해요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>

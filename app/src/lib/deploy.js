@@ -1,4 +1,4 @@
-// 브라우저에서 바로 공개(사용자 토큰). 토큰은 이 브라우저에서 올릴 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
+// 브라우저에서 바로 배포(사용자 토큰). 토큰은 이 브라우저에서 배포할 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
 import { track } from './stats.js';
 
 const GH = 'https://api.github.com';
@@ -72,7 +72,7 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { },
     if (bins.length > 40) await sleep(800); // 콘텐츠 생성 요청 분당 80회 제한
   }
   tree.push({ path: '.nojekyll', mode: '100644', type: 'blob', content: '' });
-  tree.push({ path: '.lecpage-site', mode: '100644', type: 'blob', content: 'lecpage로 만든 연수 사이트 저장소예요. 다시 올리면 이 저장소의 파일이 바뀌어요.\n' });
+  tree.push({ path: '.lecpage-site', mode: '100644', type: 'blob', content: 'lecpage로 만든 연수 사이트 저장소예요. 다시 배포하면 이 저장소의 파일이 바뀌어요.\n' });
   onProgress({ step: '파일 묶기', pct: 84 });
   const t = await gh(token, 'POST', `/repos/${owner}/${repo}/git/trees`, { tree }); // base_tree 없이: 사이트 파일만 남김
   // copy-ok: GitHub 커밋 메시지(화면에 보이지 않음. GitHub의 '배포' 화면과 맞춤)
@@ -95,7 +95,7 @@ const NF_ERR = {
 };
 /** Netlify: 사이트 만들기와 배포를 zip 한 번으로 */
 export async function deployNetlify({ token, siteId, zip, name, onProgress = () => { } }) {
-  onProgress({ step: siteId ? '새 버전 올리기' : '사이트 만들기', pct: 10 });
+  onProgress({ step: siteId ? '새 버전 배포' : '사이트 만들기', pct: 10 });
   const url = siteId ? `https://api.netlify.com/api/v1/sites/${siteId}/deploys` : `https://api.netlify.com/api/v1/sites${name ? `?name=${encodeURIComponent(name)}` : ''}`;
   const r = await net(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/zip' }, body: zip });
   const j = await r.json().catch(() => ({}));
@@ -113,7 +113,7 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
   return { url: j.ssl_url || j.url, siteId: site };
 }
 
-// ── Vercel: 토큰 하나로 파일을 올리고 프로젝트 주소(<이름>.vercel.app)에 공개. 다시 올리면 같은 주소 ──
+// ── Vercel: 토큰 하나로 파일을 올리고 프로젝트 주소(<이름>.vercel.app)에 배포. 다시 배포하면 같은 주소 ──
 // 순서·헤더 근거: docs/research/hosting-2026-11.md §10 (preflight가 허용하는 요청 헤더는 Authorization·Accept·Content-Type·x-vercel-digest)
 const VC = 'https://api.vercel.com';
 const VC_ERR = {
@@ -121,7 +121,7 @@ const VC_ERR = {
   403: 'Vercel 토큰이 맞지 않거나 기한이 지났어요. 토큰을 다시 만들어 주세요.',
   402: 'Vercel 계정의 결제 상태를 확인해 주세요.',
   409: 'Vercel 프로젝트를 옮기는 중이에요. 잠시 뒤 다시 해 주세요.',
-  429: '오늘 올릴 수 있는 횟수를 넘었어요. 내일 다시 하거나 다른 곳에 올려 주세요.',
+  429: '오늘 배포할 수 있는 횟수를 넘었어요. 내일 다시 하거나 다른 곳에 배포해 주세요.',
 };
 async function vc(token, method, path, body, headers = {}) {
   const raw = body instanceof Uint8Array;
@@ -222,11 +222,11 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
 /** 이미 올린 Vercel 프로젝트에 로그인 창이 뜰 때: 참가자가 열 수 있게 보호(Vercel Authentication)를 끔 */
 export const openVercel = (token, projectId) => vc(token, 'PATCH', `/v9/projects/${encodeURIComponent(projectId)}`, { ssoProtection: null });
 
-// ── lecpage 바로 공개: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 올림.
+// ── lecpage 바로 배포: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 배포.
 // 서버의 보기가 worker면 방문이 있는 동안 열려 있고(30일), pages면 사이트마다 다른 주소(s-<id>.….pages.dev)로 마지막으로 올린 날부터 정해진 날까지(info.keepAlive=false) ──
 export const PUBLISH_API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
 let infoP = null;
-/** 바로 공개를 쓸 수 있으면 { plan: 'free'|'paid', accepting, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
+/** 바로 배포를 쓸 수 있으면 { plan: 'free'|'paid', accepting, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
  * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음), accepting이 false면 오늘은 새 사이트를 받지 않음 */
 export function instantInfo() {
   if (!PUBLISH_API) return Promise.resolve(null);
@@ -235,16 +235,16 @@ export function instantInfo() {
 async function ip(method, path, { key, json, raw } = {}) {
   let r;
   try { r = await fetch(PUBLISH_API + path, { method, headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), ...(json ? { 'content-type': 'application/json' } : raw ? { 'content-type': 'application/octet-stream' } : {}) }, body: json ? JSON.stringify(json) : raw }); }
-  catch { const e = new Error('바로 공개 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 주세요.'); e.status = 0; throw e; }
+  catch { const e = new Error('바로 배포 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 주세요.'); e.status = 0; throw e; }
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
   if (!r.ok) {
     const code = j.error?.code || '';
-    const e = new Error(code === 'runtime_mismatch' ? '앱이 새 버전으로 바뀌는 중이에요. 화면을 새로 고친 뒤 다시 해 주세요.' : j.error?.message_ko || `바로 공개 오류 ${r.status}`);
+    const e = new Error(code === 'runtime_mismatch' ? '앱이 새 버전으로 바뀌는 중이에요. 화면을 새로 고친 뒤 다시 해 주세요.' : j.error?.message_ko || `바로 배포 오류 ${r.status}`);
     e.status = r.status; e.code = code; e.reason = j.error?.reason || ''; e.missing = j.error?.missing || []; throw e;
   }
   return j;
 }
-/** 오늘·그날(date: 'YYYY-MM-DD') 바로 공개에 남은 몫과 사이트 상태(site: id). 못 물어보면 null */
+/** 오늘·그날(date: 'YYYY-MM-DD') 바로 배포에 남은 몫과 사이트 상태(site: id). 못 물어보면 null */
 export function instantStatus({ date = '', site = '' } = {}) {
   if (!PUBLISH_API) return Promise.resolve(null);
   const q = new URLSearchParams(); if (date) q.set('date', date); if (site) q.set('site', site);
@@ -271,7 +271,7 @@ export async function deployInstant({ site, title, files, live = null, booking =
   const body = { files: manifest, ...(booking ? { booking } : {}) };
   try { dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body }); }
   catch (e) {
-    // 공개 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
+    // 보관 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
     if (!(site && (e.status === 404 || e.status === 401))) throw e;
     s = await newSite();
     dp = await ip('POST', `/api/sites/${s.id}/deploys`, { key: s.key, json: body });
@@ -286,7 +286,7 @@ export async function deployInstant({ site, title, files, live = null, booking =
   await upload(dp.missing || []);
   let liveUrl = '';
   if (live) { onProgress({ step: '참여 기능 준비', pct: 90 }); liveUrl = (await ip('POST', `/api/sites/${s.id}/live`, { key: s.key, json: live })).url || ''; }
-  onProgress({ step: '공개하는 중', pct: 94 });
+  onProgress({ step: '배포하는 중', pct: 94 });
   let out;
   for (let t = 0; ; t++) {
     try { out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key }); break; }
@@ -300,7 +300,7 @@ export async function deployInstant({ site, title, files, live = null, booking =
   track('publish', 'instant');
   return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
 }
-/** 바로 공개한 사이트 지우기 */
+/** 바로 배포한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });
 
 // ── 올린 주소가 실제로 열리는지: 사이트의 작은 그림을 불러 봄(다른 출처라 응답 내용은 못 읽지만 그림은 열림/막힘을 알 수 있음) ──
@@ -368,7 +368,7 @@ async function isgd(target, alias) {
  */
 export async function shortenUrl(url, name = '') {
   const target = String(url || '').split('#')[0];
-  if (!/^https:\/\/[^\s/]+\.[^\s]+$/.test(target)) throw new Error('인터넷에 올린 주소(https://)만 줄일 수 있어요.');
+  if (!/^https:\/\/[^\s/]+\.[^\s]+$/.test(target)) throw new Error('배포한 주소(https://)만 줄일 수 있어요.');
   if (name) {
     if (!/^[a-z0-9_]{5,30}$/.test(name)) { const e = new Error('이름은 영문·숫자 5~30자로 적어 주세요.'); e.code = 'name'; throw e; }
     try { return await isgd(target, name); }

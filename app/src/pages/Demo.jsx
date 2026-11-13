@@ -11,14 +11,14 @@ import { SayFix } from '../design-words/SayFix.jsx';
 import { applyWords } from '../design-words/words.js';
 import { setTry, useBus } from '../design-words/bus.js';
 
-// 체험하기: 예시 교재로 '교재 넣기 → 살펴보고 고치기 → 공개하기'를 그대로 따라 해 봅니다.
-// AI 답과 공개는 흉내만 냅니다. 키가 필요 없고, 어디로도 보내지 않으며, 프로젝트로 저장하지 않습니다(이 화면의 메모리에만 있음).
+// 체험하기: 예시 교재로 '교재 넣기 → 살펴보고 고치기 → 배포하기'를 그대로 따라 해 봅니다.
+// AI 답과 배포는 흉내만 냅니다. 키가 필요 없고, 어디로도 보내지 않으며, 프로젝트로 저장하지 않습니다(이 화면의 메모리에만 있음).
 const EXAMPLE = 'data-lab';
-const STEPS = ['교재 넣기', '살펴보고 고치기', '공개하기'];
+const STEPS = ['교재 넣기', '살펴보고 고치기', '배포하기'];
 const TIP = [
   '예시 교재와 연수 정보가 들어 있어요. [AI로 사이트 만들기]를 눌러 보세요.',
   '[너무 심심해요]처럼 보이는 느낌을 눌러 보세요. 바꾼 모습을 보고 [적용하기]를 누르면 미리보기가 바뀌어요.',
-  '[공개하기]를 누르면 주소와 QR이 나와요.',
+  '[배포하기]를 누르면 주소와 QR이 나와요.',
 ];
 const exampleUrl = () => new URL(`examples/${EXAMPLE}/index.html`, location.href.split('#')[0]).href;
 
@@ -72,7 +72,7 @@ export function Demo() {
     later(() => setPct(55), 500); later(() => setPct(90), 1100); later(() => { setPct(100); setPub('done'); }, 1700);
   }
   /**
-   * 사이트 열어 보기: 방금 고친 체험 사이트를 실제 공개본과 같은 파일로 만들어 새 탭에 엶(한 파일로 묶어 blob 주소로).
+   * 사이트 열어 보기: 방금 고친 체험 사이트를 실제 배포본과 같은 파일로 만들어 새 탭에 엶(한 파일로 묶어 blob 주소로).
    * 새 탭은 누르는 순간 열어 두고(팝업 막힘 방지) 다 만들면 채움. 만들지 못하면 미리 만들어 둔 예시 사이트로
    */
   async function openSite(e) {
@@ -129,7 +129,7 @@ export function Demo() {
           </>}
           {step === 2 && <>
             <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>살펴보고 고치기</h1></div>
-              <div class="btn-row head-tools"><button class={`btn btn-primary${making ? '' : ' nudge'}`} disabled={making} onClick={() => setStep(3)}>공개하기 →</button></div></div>
+              <div class="btn-row head-tools"><button class={`btn btn-primary${making ? '' : ' nudge'}`} disabled={making} onClick={() => setStep(3)}>배포하기 →</button></div></div>
             {making ? (
               <div class="demo-wait" role="status"><Mascot size={84} mood="think" look /><b>AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요</b><span class="small muted">체험이라 실제로 보내지는 않아요.</span></div>
             ) : (
@@ -150,12 +150,12 @@ export function Demo() {
             )}
           </>}
           {step === 3 && <>
-            <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>공개하기</h1><p>실제로는 처음 한 번만 올릴 곳을 연결해요. 고친 뒤 다시 올려도 주소는 그대로예요.</p></div></div>
+            <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>배포하기</h1><p>실제로는 처음 한 번만 배포할 곳을 연결해요. 고친 뒤 다시 배포해도 주소는 그대로예요.</p></div></div>
             {pub !== 'done' ? (
               <section class="demo-pub">
                 <p><b>공개 범위</b> 주소를 받은 사람만 <span class="small muted">기본값이에요. 암호를 걸거나 누구나 보게 할 수도 있어요.</span></p>
-                <div class="make-bar"><button class={`btn btn-primary btn-lg${pub ? '' : ' nudge'}`} disabled={!!pub} onClick={publish}>{pub ? '올리는 중…' : '공개하기'}</button></div>
-                {pub === 'busy' && <div class="demo-progress" role="status"><Progress pct={pct} /><span class="small muted">사이트를 올리는 흉내를 내고 있어요.</span></div>}
+                <div class="make-bar"><button class={`btn btn-primary btn-lg${pub ? '' : ' nudge'}`} disabled={!!pub} onClick={publish}>{pub ? '배포하는 중…' : '배포하기'}</button></div>
+                {pub === 'busy' && <div class="demo-progress" role="status"><Progress pct={pct} /><span class="small muted">사이트를 배포하는 흉내를 내고 있어요.</span></div>}
               </section>
             ) : (
               <section class="demo-done">
@@ -164,7 +164,7 @@ export function Demo() {
                   <div class="stack">
                     <h2 class="h-sub">주소와 QR이 나왔어요</h2>
                     <p class="demo-url"><a href={url} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, '')}</a></p>
-                    <p class="small muted">[사이트 열어 보기]는 방금 고친 그대로 보여 줘요. 체험이라 인터넷에 올리지는 않았고, 주소와 QR은 미리 만든 예시 사이트로 이어져요.</p>
+                    <p class="small muted">[사이트 열어 보기]는 방금 고친 그대로 보여 줘요. 체험이라 실제로 배포하지는 않았고, 주소와 QR은 미리 만든 예시 사이트로 이어져요.</p>
                     <div class="btn-row"><a class="btn btn-sm btn-primary" href={url} target="_blank" rel="noopener" onClick={openSite}>사이트 열어 보기</a><button class="btn btn-sm" onClick={() => copy(invite, '안내 문구를 복사했어요.')}>카톡 안내 문구 복사</button></div>
                   </div>
                 </div>

@@ -533,7 +533,7 @@ function survey(s, ctx) {
   }
   return wrap(s, ctx, `<div class="lp-survey">
 <div>${title}${lead}
-${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면 설문 열기 단추와 QR이 생겨요. 참가자 화면에는 이 칸이 보이지 않아요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
+${url ? `<a class="lp-btn lp-btn-primary lp-btn-lg" ${href(url)}${fx(ctx, 'hero.cta')}><span>설문 열기</span>${icon('external')}</a>` : '<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면 설문 열기 버튼과 QR이 생겨요. 참가자 화면에는 이 칸이 보이지 않아요.</p>'}${url && s.qr ? '<p class="lp-small">QR을 찍기 어려우면 버튼을 눌러 주세요.</p>' : ''}</div>
 ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label="설문 QR 코드"></div>` : ''}</div>`);
 }
 

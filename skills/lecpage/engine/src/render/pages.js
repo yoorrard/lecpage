@@ -121,7 +121,7 @@ function helpSheet(ctx) {
   if (!ctx.live || !ctx.bp.live.features.includes('help')) return '';
   return `<dialog class="lp-dialog lp-sheet" data-help-dialog aria-labelledby="lp-help-h"><form class="lp-dialog-in" data-help-form>
 <div class="lp-sheet-h"><h2 id="lp-help-h">도움 요청</h2><button class="lp-icon-btn" type="button" data-sheet-close aria-label="닫기">${icon('close')}</button></div>
-<p class="lp-small">강사가 자리로 갈게요. 자리는 이 기기에 저장돼요.</p>
+<p class="lp-small">자리를 적으면 강사가 찾아가요. 적은 자리는 이 기기에 저장돼요.</p>
 <label><span>자리</span><input name="seat" maxlength="20" autocomplete="off" placeholder="예: 3모둠, 창가 두 번째"></label>
 <label><span>무엇이 막혔나요? (선택)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
@@ -141,7 +141,7 @@ function dialogs(ctx) {
   const needSchool = pv.collect.includes('school');
   return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
-<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
+<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
 <h2 id="lp-join-h">참여하기</h2><p class="lp-small">질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>

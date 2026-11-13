@@ -11,7 +11,7 @@ const NO_COPY = '키 옆의 복사 버튼을 누르고 돌아와 다시 눌러 �
 
 /**
  * 만드는 길 고르기(처음 한 번): 갖고 있는 것에 맞춰 두 길 중 하나. 고른 길은 기억해 두고(ai.js setWay) 다음에는 바로 그 길로 갑니다.
- *  - 쓰던 챗봇 창으로: 준비할 것·추가 비용 없음, 만들 때마다 복사·붙여넣기(AiPanel의 Paste)
+ *  - 쓰던 AI로: 준비할 것·추가 비용 없음, 만들 때마다 복사·붙여넣기(AiPanel의 Paste)
  *  - API 키로: 처음 한 번 결제 등록과 키 복사, 그다음부터 버튼 한 번(AiConnect)
  */
 export function AiChoose({ onChat, onKey }) {
@@ -21,7 +21,7 @@ export function AiChoose({ onChat, onKey }) {
       <p class="ai-what">갖고 있는 것에 맞춰 골라요. 고른 방법은 기억해 둬요.</p>
       <div class="ai-routes">
         <button type="button" class="ai-route" data-way="chat" onClick={() => pick('chat', onChat)}>
-          <span class="ai-route-h">쓰던 챗봇 창으로 만들기</span>
+          <span class="ai-route-h">쓰던 AI로 만들기</span>
           <span class="ai-route-d">ChatGPT·Claude·Gemini 창에 프롬프트를 붙여 넣고 답을 가져와요.</span>
           <span class="ai-route-facts"><span>준비할 것 없음</span><span>추가 비용 없음</span><span>만들 때마다 복사·붙여넣기</span></span>
         </button>
@@ -31,18 +31,18 @@ export function AiChoose({ onChat, onKey }) {
           <span class="ai-route-facts"><span>API 결제 등록 필요</span><span>사이트 하나에 몇백 원쯤</span><span>무료 Gemini 키도 돼요</span></span>
         </button>
       </div>
-      <p class="small muted">ChatGPT Plus·Claude Pro 구독과 API 결제는 따로예요. 구독만 있으면 챗봇 창으로 만드세요.</p>
+      <p class="small muted">ChatGPT Plus·Claude Pro 구독과 API 결제는 따로예요. 구독만 있으면 [쓰던 AI로 만들기]를 고르세요.</p>
     </div>
   );
 }
 
-/** 키 없이 쓰던 챗봇 창으로 만들 때의 상태 한 줄(교재 넣기 화면): 누르면 [방법 바꾸기] */
+/** 키 없이 쓰던 AI로 만들 때의 상태 한 줄(교재 넣기 화면): 누르면 [방법 바꾸기] */
 export function AiWayLine({ onSwap }) {
   return (
     <details class="ai-status ai-wayline">
       <summary>
         <span class="dot-ok" aria-hidden="true" />
-        <span class="ai-status-t"><span><b>쓰던 챗봇 창</b>으로 만들어요</span><span class="small muted">만들 때마다 복사·붙여넣기</span></span>
+        <span class="ai-status-t"><span><b>쓰던 AI</b>로 만들어요</span><span class="small muted">만들 때마다 복사·붙여넣기</span></span>
         <span class="ai-status-more">바꾸기</span>
       </summary>
       <div class="ai-status-body stack">
@@ -70,7 +70,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
   const [opened, setOpened] = useState(-1); // 새 창으로 연 걸음 → 돌아오면 그다음 걸음으로
   const [back, setBack] = useState(false); // 키 페이지에서 돌아옴 → [붙여넣기]를 눈에 띄게
   const inputRef = useRef(); const pasteRef = useRef();
-  // 고른 회사의 API가 이 망에서 열리는지(요청 한 번, 잠깐 기억). 막혔으면 키를 만들기 전에 알려 챗봇 창 길로
+  // 고른 회사의 API가 이 망에서 열리는지(요청 한 번, 잠깐 기억). 막혔으면 키를 만들기 전에 알려 쓰던 AI 창 길로
   const [netBad, setNetBad] = useState('');
   useEffect(() => { let off = false; setNetBad(''); reach('ai:' + tab).then((s) => { if (!off && s === 'blocked') setNetBad(tab); }); return () => { off = true; }; }, [tab]);
   const g = KEY_GUIDES[tab]; const last = g.steps.length; const cur = g.steps[step];
@@ -136,7 +136,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
       {g.more?.length > 0 && <ul class="ai-more small" aria-label="무료로 쓸 때 알아 둘 점">{g.more.map((t) => <li>{t}</li>)}</ul>}
       {netBad === tab && <div role="status"><Notice kind="bad"><div class="stack" style={{ gap: '4px' }}>
         <b>이 망에서 {g.label} API에 닿지 않아요.</b>
-        <span>학교·기관 망이 막은 것 같아요. 여기서는 키로 만들 수 없어요. 쓰던 챗봇 창으로 만들거나, 휴대폰 핫스팟으로 바꾼 뒤 다시 열어 주세요.</span>
+        <span>학교·기관 망이 막은 것 같아요. 여기서는 키로 만들 수 없어요. 쓰던 AI로 만들거나, 휴대폰 핫스팟으로 바꾼 뒤 다시 열어 주세요.</span>
         {onChat && <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => { setWay('chat'); onChat(tab); }}>{chatLabel(tab)}</button></div>}
       </div></Notice></div>}
       <section class="key-card" aria-label={`${g.label} 연결 순서`}>
@@ -184,7 +184,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
       {<div class="btn-row">
         {!only && GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
-        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(); }}>쓰던 챗봇 창으로 만들기</button>}
+        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(); }}>쓰던 AI로 만들기</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>
