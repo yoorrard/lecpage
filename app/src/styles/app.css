@@ -747,7 +747,7 @@ details>summary{cursor:pointer}
   /* 왼쪽 칸의 띠: 글 아래 줄에 단추, 닫기(✕)는 띠 오른쪽 위(첫 줄 글과 같은 높이). 아래 되돌린 곳 줄은 띠 끝까지 */
   .stage-2 .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
   .stage-2 .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
-  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.guard-note{margin-right:-34px}
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.guard-note{flex-basis:calc(100% + 34px);margin-right:-34px}
   .stage-2 .wiz-main>.ai-job>.ai-job-t{min-width:calc(100% - 24px)}
   .stage-2 .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
   .stage-2 .workspace{display:contents}
