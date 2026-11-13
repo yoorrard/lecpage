@@ -457,7 +457,9 @@
         } catch (e) { api.g = null; }
         var size = function () {
           var r = c.getBoundingClientRect();
-          var dpr = Math.min(o.maxDpr || 2, ctx.modest ? 1.5 : 2, w.devicePixelRatio || 1) * (o.scale || 1);
+          /* html[data-fx-dpr]: 작게 줄여 보여 주는 미리보기(앱의 디자인 카드)는 해상도 상한을 낮춤 */
+          var cap = parseFloat(html.getAttribute('data-fx-dpr')) || 2;
+          var dpr = Math.min(o.maxDpr || 2, ctx.modest ? 1.5 : 2, cap, w.devicePixelRatio || 1) * (o.scale || 1);
           var W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
           if (W === api.w && H === api.h && dpr === api.dpr) return;
           api.w = W; api.h = H; api.dpr = dpr;

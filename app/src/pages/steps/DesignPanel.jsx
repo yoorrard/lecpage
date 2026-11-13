@@ -102,7 +102,7 @@ export function DesignPanel({ p, update }) {
           <h2 class="h-sub">느낌이 다른 세 안</h2>
           <p class="small muted">이 연수의 실제 내용으로 그린 첫 화면이에요. 고르면 미리보기에 바로 반영되고 [되돌리기]로 돌아갈 수 있어요.</p>
           <div class="trio-big">{ranked.map((r) => { const pr = E.getPreset(r.id); return (
-            <figure class="trio-card"><SiteThumb bp={bp} presetId={r.id} pressed={d.preset === r.id} />
+            <figure class="trio-card"><SiteThumb bp={bp} presetId={r.id} pressed={d.preset === r.id} live />
               <figcaption><b>{pr.name_ko}</b><small>{r.feel || pr.desc_ko}</small></figcaption>
               <button type="button" class={`btn btn-sm${d.preset === r.id ? '' : ' btn-primary'}`} disabled={d.preset === r.id} onClick={() => { pickPreset(r.id); setCompare(false); }}>{d.preset === r.id ? '지금 디자인' : '이 디자인으로'}</button>
             </figure>); })}</div>

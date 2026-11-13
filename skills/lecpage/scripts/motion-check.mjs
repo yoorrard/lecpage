@@ -7,7 +7,7 @@
 //   동작 줄이기: 첫 화면 그림이 비거나(빈 캔버스·숨은 정지 그림) 내용이 숨은 채 남지 않는지('rm-incomplete')
 // 쓰는 곳: 손으로(모든 프리셋을 훑음) · scripts/lecpage.mjs qa에서 만든 사이트 하나(--dir)
 //   node scripts/motion-check.mjs [--presets a,b] [--ex sel-story,data-lab,body-all] [--widths 1440,390] [--themes light,dark]
-//        [--motion d,1,2,3] [--rm] [--device auto|fast|slow] [--dir 만든 사이트 폴더] [--shots 폴더] [--out 결과.json] [--conc 4] [--root 견줄 엔진 폴더]
+//        [--motion d,1,2,3] [--rm] [--device auto|fast|slow] [--layouts 0,1,2,3,4,5] [--dir 만든 사이트 폴더] [--shots 폴더] [--out 결과.json] [--conc 4] [--root 견줄 엔진 폴더]
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
@@ -125,18 +125,19 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
   // 화면 찍기는 CDP로(page.screenshot은 웹 글꼴을 기다려 첫 장이 1초 넘게 늦어져 등장 움직임을 놓침)
   const cdp = await page.context().newCDPSession(page);
   const snap = async () => Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: 1 } })).data, 'base64');
-  // 웹 글꼴(최대 1.2초)까지 기다린 뒤부터 잼: 효과도 첫 화면 등장을 글꼴이 올 때까지(최대 1초) 미룸(core.js enter)
-  await page.evaluate(() => Promise.race([document.fonts ? document.fonts.ready : null, new Promise((r) => setTimeout(r, 1200))])).catch(() => {});
+  // 웹 글꼴(최대 0.9초)까지 기다린 뒤부터 잼: 효과도 첫 화면 등장을 글꼴이 올 때까지(최대 1초) 미룸(core.js enter)
+  await page.evaluate(() => Promise.race([document.fonts ? document.fonts.ready : null, new Promise((r) => setTimeout(r, 900))])).catch(() => {});
   const imgs = []; const t0 = Date.now();
   for (const at of frames) { const wait = at - (Date.now() - t0); if (wait > 0) await page.waitForTimeout(wait); const b = await snap(); imgs.push(b); if (shots) { mkdirSync(shots, { recursive: true }); writeFileSync(join(shots, `${tag}-t${String(at).padStart(4, '0')}.png`), b); } }
   await cdp.detach().catch(() => {});
   const diffs = [];
   for (let i = 1; i < imgs.length; i++) diffs.push(+(await helper.evaluate(diffInPage, [imgs[i - 1].toString('base64'), imgs[i].toString('base64')])).toFixed(4));
   await helper.close();
-  const late = diffs.slice(-2), early = diffs.slice(0, 3);
-  const kind = late.every((d) => d > 0.0015) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
   res.fx = await page.evaluate(fxState);
   const heroLoops = res.fx.filter((f) => f.hero && LOOP_FX.has(f.id));
+  // 끝없이 도는 그림은 별처럼 작은 점만 바뀌기도 해서 더 작은 변화도 '계속 움직임'으로 봄
+  const late = diffs.slice(-2), early = diffs.slice(0, 3), lt = heroLoops.length ? 0.0004 : 0.0015;
+  const kind = late.every((d) => d > lt) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
   const state = await page.evaluate(() => (window.LecFX ? window.LecFX.state() : null));
   res.hero = { kind, diffs, loops: heroLoops.map((f) => `${f.id}:${f.st}`), state, motion: await page.evaluate(() => document.documentElement.getAttribute('data-motion')) };
   if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop') add('hero-still', `${heroLoops.map((f) => f.id).join(',')} 켜졌는데 ${kind}(${diffs.join(' ')})`);
@@ -190,15 +191,18 @@ async function main() {
   const exOf = (ex) => SRC[ex] || ex;
   const dir = arg('dir', '');
   if (dir) { jobs.push({ key: '', root: resolve(dir), preset: 'site', ex: '', motion: '', theme: themes[0] }); }
-  else for (const id of presets) for (const ex of exs) for (const theme of themes) for (const mo of motions) {
+  // --layouts 0,1,…: 모든 본문 칸 설계도에서 섹션마다 k번째 배치를 강제(본문 배치 전부를 훑음, body-gate.mjs와 같은 방식)
+  const forced = arg('layouts', '') ? arg('layouts').split(',').map(Number) : [null];
+  if (!dir) for (const id of presets) for (const ex of exs) for (const theme of themes) for (const mo of motions) for (const k of forced) {
     const bp = JSON.parse(readFileSync(exOf(ex), 'utf8'));
+    if (k !== null) { let any = false; for (const s of bp.sections) { const t = s.type === 'followup' ? 'materials' : s.type, ids = E.variantIds(t); if (ids[k] && s.type !== 'stations') { s.layout = ids[k]; any = true; } } if (!any) continue; }
     bp.design = { preset: id, theme, ...(mo === 'd' ? {} : { motion: +mo }) };
     if (mo !== 'd') bp.audience = { ...(bp.audience || {}), devices: ['laptop'] };
     const r = E.build(bp, { runtime: nodeRuntime() });
     if (r.errors?.length) { console.log('빌드 오류', id, ex); continue; }
-    const key = `${id}__${ex}__${theme}__m${mo}`;
+    const key = `${id}__${ex}${k === null ? '' : '-L' + k}__${theme}__m${mo}`;
     for (const [f, c] of Object.entries(r.files)) { const p = join(tmp, key, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, c); }
-    jobs.push({ key, root: tmp, preset: id, ex, motion: mo === 'd' ? `d${r.design.motion}` : mo, theme, graphic: r.design.graphic });
+    jobs.push({ key, root: tmp, preset: id, ex: ex + (k === null ? '' : '-L' + k), motion: mo === 'd' ? `d${r.design.motion}` : mo, theme, graphic: r.design.graphic });
   }
   const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.woff2': 'font/woff2' };
   const srv = createServer(async (q, r) => { try { const base = dir ? resolve(dir) : tmp; const p = join(base, decodeURIComponent(q.url.split('?')[0])); const b = await readFile(p); r.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } });
