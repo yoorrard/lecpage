@@ -5,33 +5,19 @@
 //   - 사이트가 가려지면 방도 가려지고, 사이트가 지워지거나 보관 기간이 끝나면 방과 올린 파일도 지워짐
 //   - R2가 없으면 올린 파일을 이 방의 SQLite에 담음(src/live/bucket.js)
 //   - 방이 쓰는 저장량을 Gate에 알려 전체 한도에 넣음
-//   - 긴 대기(long-poll): GET snapshot?since=<커서>&wait=<초>면 바뀐 것이 없을 때 바뀔 때까지(최대 25초) 기다렸다 답함.
-//     실시간 연결이 막힌 학교망의 묻기 요청 수를 줄임(5초마다 → 바뀔 때나 20초마다).
-//     기다리는 일은 Worker가 맡음(relayWait): 방은 '잠들 수 있는' WebSocket 하나(태그 wait)를 Worker에 열어 주고 바로 잠듦.
-//     글이 올라오면 그 소켓에 'c'를 보내고 닫음 → Worker가 한 번 더 물어 답함. 방이 깨어 기다리지 않으므로 Durable Object
-//     시간 과금(무료 하루 13,000 GB-s)을 거의 쓰지 않음(예전: 방 하나가 2시간 내내 기다리면 약 900 GB-s).
-//     Worker를 거치지 않은 긴 대기(x-lp-relay 없음)는 예전처럼 방 안에서 기다림(longPoll)
+//   - 긴 대기(long-poll)는 LiveRoom이 맡음(backends/cloudflare/src: Worker가 기다리는 relayWait은 longpoll.js, 방 안에서 기다리는 longPoll은 index.js).
+//     여기서는 기다리는 동안 깨어 있던 시간을 Gate에 알리고(waitersChanged), 기다린 뒤 사이트가 가려졌거나 없어졌으면 답하지 않음(afterWait)
 import { LiveRoom, Guard } from '../../skills/lecpage/backends/cloudflare/src/index.js';
+import { MAX_WAIT_S, snapshotChanged } from '../../skills/lecpage/backends/cloudflare/src/longpoll.js';
 import { config } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { SqlBucket } from './live/bucket.js';
 import { HostBind, bindRoom, roomEnv, maxRetentionDays, translate, LiveError } from './live/host.js';
 
-export { Guard };
+export { Guard, MAX_WAIT_S, snapshotChanged };
 
 const DAY = 864e5;
 const MB = 1024 * 1024;
-/** 긴 대기: 한 번에 최대 25초(앱의 요청 제한 시간보다 짧게), 방 하나에 동시에 600개까지(넘으면 바로 답) */
-export const MAX_WAIT_S = 25;
-const MAX_WAITERS = 600;
-/** snapshot 응답에 since 뒤로 바뀐 것이 있는지(글·지운 것·진행 상태) */
-export function snapshotChanged(body, since) {
-  if (!body || typeof body !== 'object') return true;
-  if (body.full || (Array.isArray(body.removed) && body.removed.length)) return true;
-  if (body.state && Number(body.state.updatedAt) > since) return true;
-  for (const [k, v] of Object.entries(body)) if (k !== 'removed' && Array.isArray(v) && v.length) return true;
-  return false;
-}
 
 /** 실시간 규칙의 오류 모양({ error, message }) */
 function liveError(status, error, message) {
@@ -52,7 +38,6 @@ export class Room extends LiveRoom {
     this.hostToken = setupToken;
     this.hostBind = new HostBind(ctx.storage.sql);
     this.hostFull = false; // 전체 저장 공간이 찼으면 파일을 더 받지 않음
-    this.waiters = new Set(); // 긴 대기 중인 묻기
     this.awakeMs = 0; this.awakeMark = 0; // 깨어 있던 시간(SSE·방 안 긴 대기): 무료 하루 duration 몫을 Gate가 알게
   }
 
@@ -91,71 +76,18 @@ export class Room extends LiveRoom {
     if (!b) return liveError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
-    const wait = this.waitMs(request, url);
-    if (wait) {
-      if (request.headers.get('x-lp-relay') === '1' && (request.headers.get('upgrade') || '').toLowerCase() === 'websocket') return this.relayWait(request, url);
-      return this.longPoll(request, wait);
-    }
-    return super.fetch(request);
+    return super.fetch(request); // 긴 대기도 LiveRoom이 맡음
   }
 
-  /**
-   * Worker가 대신 기다리는 긴 대기. 지금 snapshot을 만들어 바뀐 것이 있으면 그대로 답하고(200),
-   * 없으면 잠들 수 있는 WebSocket을 열어 첫 글로 그 snapshot을 보낸 뒤 바로 잠듦(101). 바뀌면 broadcast가 'c'를 보내고 닫음
-   */
-  async relayWait(request, url) {
-    const mark = this.changes || 0;
-    const plain = new URL(url); plain.searchParams.delete('wait');
-    const h = new Headers(request.headers);
-    for (const k of ['upgrade', 'connection', 'x-lp-relay', 'sec-websocket-key', 'sec-websocket-version', 'sec-websocket-extensions']) h.delete(k);
-    const first = await super.fetch(new Request(plain, { method: 'GET', headers: h }));
-    if (first.status !== 200) return first;
-    const text = await first.text();
-    const since = Number(url.searchParams.get('since')) || 0;
-    let changed = true;
-    try { changed = snapshotChanged(JSON.parse(text), since); } catch { /* 그대로 답 */ }
-    if (changed || this.ctx.getWebSockets('wait').length >= MAX_WAITERS) return new Response(text, { status: 200, headers: first.headers });
-    const [client, server] = Object.values(new WebSocketPair());
-    this.ctx.acceptWebSocket(server, ['wait']);
-    server.serializeAttachment({ admin: false, wait: true });
-    server.send(text);
-    // snapshot을 만드는 사이에 글이 올라왔으면 바로 깨움
-    if ((this.changes || 0) !== mark) { try { server.send('c'); server.close(1000, 'changed'); } catch { /* 이미 닫힘 */ } }
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  // ── 긴 대기(long-poll) ───────────────────────────────────────
-  waitMs(request, url) {
-    if (request.method !== 'GET' || !/\/snapshot$/.test(url.pathname)) return 0;
-    const since = Number(url.searchParams.get('since')) || 0; const w = Number(url.searchParams.get('wait')) || 0;
-    if (since <= 0 || w <= 0 || this.waiters.size >= MAX_WAITERS) return 0;
-    return Math.min(MAX_WAIT_S, w) * 1000;
-  }
-  async longPoll(request, wait) {
-    const first = await super.fetch(request);
-    if (first.status !== 200) return first;
-    const since = Number(new URL(request.url).searchParams.get('since')) || 0;
-    let changed = true;
-    try { changed = snapshotChanged(await first.clone().json(), since); } catch { /* 그대로 답 */ }
-    if (changed) return first;
-    await new Promise((res) => {
-      const w = { res, t: setTimeout(() => { this.waiters.delete(w); res(); this.awake(); }, wait) };
-      this.waiters.add(w);
-      this.awake();
-    });
+  // ── 긴 대기(LiveRoom)에 덧붙이는 것 ─────────────────────────
+  waitersChanged() { this.awake(); }
+  /** 방 안에서 기다린 뒤: 그사이 사이트가 지워졌거나 가려졌으면 답하지 않음 */
+  async afterWait() {
     const b = this.hostBind.get();
     if (!b) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
-    return super.fetch(new Request(request.url, { method: 'GET', headers: request.headers }));
+    return null;
   }
-  wake() {
-    for (const w of this.waiters) { clearTimeout(w.t); w.res(); }
-    this.waiters.clear();
-    this.awake();
-    // Worker가 기다리는 긴 대기: 'c'를 보내고 닫음(Worker가 한 번 더 물어 바뀐 것을 받아 감)
-    for (const ws of this.ctx.getWebSockets('wait')) { try { ws.send('c'); ws.close(1000, 'changed'); } catch { /* 이미 닫힘 */ } }
-  }
-  broadcast(events) { this.changes = (this.changes || 0) + 1; this.wake(); super.broadcast(events); }
 
   // ── 호스트 안에서만 부르는 일(Site → Room) ───────────────────
   async hostOp(request, op) {

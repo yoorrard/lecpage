@@ -47,6 +47,38 @@ test('node: shared-relay mode — setup token, /init, per-training admin keys', 
   } finally { await relay.close(); }
 });
 
+test('node (⑦): the server key sets a code\'s settings (blueprint retention); purge leaves nothing readable in the file', async () => {
+  const s = await startNodeServer({ adminKey: KEY });
+  try {
+    const a = api(s.url, 'RETAIN1');
+    const hash = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(KEY))).toString('hex');
+    assert.equal((await a.call('POST', '/init', { admin: 'wrong-key-0000', body: { adminKeyHash: hash, settings: { retentionDays: 7 } } })).status, 403);
+    const ok = await a.call('POST', '/init', { admin: KEY, body: { adminKeyHash: hash, settings: { retentionDays: 7, uploads: false } } });
+    assert.equal(ok.status, 201); assert.equal(ok.body.settings.retentionDays, 7);
+    const t = s.core.training('RETAIN1');
+    assert.equal(t.admin_hash, null, 'still follows the server key'); assert.equal(s.core.retentionDays(t), 7);
+    assert.equal((await a.call('POST', '/init', { admin: KEY, body: { adminKeyHash: hash, settings: { retentionDays: 14 } } })).status, 200, 'and again');
+    assert.equal(s.core.retentionDays(s.core.training('RETAIN1')), 14);
+    // secure_delete + checkpoint: a purged question's text is not left in the database file or its log
+    assert.equal(s.core.db.get('PRAGMA secure_delete').secure_delete, 1);
+    const p = (await a.call('POST', '/join', { body: { nickname: '지울사람' } })).body;
+    const secret = '지워져야하는문장-' + Math.random().toString(36).slice(2);
+    await a.call('POST', '/questions', { token: p.token, body: { text: secret } });
+    assert.equal((await a.call('DELETE', '', { admin: KEY })).status, 200);
+    const files = fs.readdirSync(s.dataDir).filter((f) => f.startsWith('lecpage-live.sqlite'));
+    for (const f of files) assert.ok(!fs.readFileSync(path.join(s.dataDir, f)).includes(Buffer.from(secret)), f + ' still holds the text');
+    // a WebSocket accepts the session; an unknown one answers session_expired without closing
+    const sess = (await a.call('POST', '/session', { admin: KEY })).body.session;
+    const w = await wsOpen(a.root.replace(/^http/, 'ws') + '/ws');
+    w.ws.send(JSON.stringify({ type: 'auth', admin: 'lps1.' + 'y'.repeat(43) }));
+    const bad = await w.next((m) => m.type === 'auth');
+    assert.equal(bad.ok, false); assert.equal(bad.error, 'session_expired');
+    w.ws.send(JSON.stringify({ type: 'auth', admin: sess }));
+    assert.equal((await w.next((m) => m.type === 'auth' && m.ok)).ok, true);
+    w.close();
+  } finally { await s.close(); }
+});
+
 test('node: CORS restricted to configured origins', async () => {
   const s = await startNodeServer({ adminKey: KEY, origins: ['https://site.example'] });
   try {

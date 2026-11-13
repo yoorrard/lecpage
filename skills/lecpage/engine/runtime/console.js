@@ -170,6 +170,14 @@
     var remSay = function () { if (!remHint) return; remHint.textContent = rem.checked ? '이 기기에 남아요. 공용 컴퓨터라면 끄고, 다 쓴 뒤 [나가기]를 눌러 지워 주세요.' : '끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.'; if (rem.checked) remHint.setAttribute('data-warn', ''); else remHint.removeAttribute('data-warn'); };
     rem.addEventListener('change', remSay); remSay();
   }
+  // ⑪ 교실 LAN 서버 등 http(암호화 없음)로 키가 오가면 한 줄. localhost는 이 컴퓨터 안이라 뺌
+  (function () {
+    var plain = function (u) { try { var x = new URL(u, location.href); return x.protocol === 'http:' && !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(x.hostname); } catch (e) { return false; } };
+    if (!LOCAL && msg && (plain(location.href) || plain(DATA.live.url || ''))) {
+      var w = el('p', 'lp-con-hint', '이 연결은 암호화되지 않아요(http). 같은 Wi-Fi의 다른 기기가 관리자 키를 엿볼 수 있으니 연수가 끝나면 키를 바꿔 주세요.');
+      w.setAttribute('data-warn', ''); w.setAttribute('data-insecure', ''); msg.parentNode.insertBefore(w, msg);
+    }
+  })();
   var show = $('[data-key-show]');
   if (show && keyIn) show.addEventListener('click', function () { var on = keyIn.type === 'password'; keyIn.type = on ? 'text' : 'password'; show.setAttribute('aria-pressed', String(on)); show.setAttribute('aria-label', on ? '키 가리기' : '키 보이기'); keyIn.focus(); });
   form.addEventListener('submit', function (e) {
@@ -204,7 +212,8 @@
       setConn('idle');
       go.disabled = false; go.textContent = '들어가기';
       var st = err && err.status;
-      if (st === 429) { holdFor(Math.min(900, Math.max(10, +err.retryAfter || 60)), '키가 여러 번 틀려 서버가 잠시 막았어요. 기다린 뒤 다시 넣어 주세요.'); if (auto) forgetKey(); return; }
+      // 같은 학교망의 다른 기기가 틀린 키를 넣어도 이렇게 막힘: 기억해 둔 키는 지우지 않음(이미 들어온 강사 화면은 세션으로 계속 씀)
+      if (st === 429) { holdFor(Math.min(900, Math.max(10, +err.retryAfter || 60)), '키가 여러 번 틀려 서버가 잠시 막았어요. 기다린 뒤 다시 넣어 주세요. 이미 열어 둔 강사 화면은 그대로 쓸 수 있어요.'); return; }
       if (st === 401 || st === 403 || (err && err.code === 'admin_required')) {
         if (auto) { forgetKey(); say('기억해 둔 관리자 키가 맞지 않아 지웠어요. 다시 넣어 주세요.'); return; }
         if (from === 'qr') { say('QR에 든 관리자 키가 맞지 않아요. 노트북의 강사 화면에서 QR을 다시 보이거나 키를 넣어 주세요.'); if (keyIn) keyIn.focus(); return; }
@@ -409,7 +418,8 @@
   function lockSwitch(which, label) {
     var b = el('button', 'lp-switch'); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('data-k', 'lock-' + which);
     b.appendChild(el('i')); b.appendChild(el('span', '', label)); var s = el('small'); b.appendChild(s);
-    b.addEventListener('click', function () { var lock = !X.locked(state, which); setState(X.lockPatch(which, lock), lock ? (which === 'qa' ? '새 질문을 잠갔어요. 참가자 화면에 안내가 떠요.' : '새 보드 글을 잠갔어요.') : (which === 'qa' ? '질문을 다시 받아요.' : '보드 글을 다시 받아요.')); });
+    var said = { qa: ['새 질문을 잠갔어요. 참가자 화면에 안내가 떠요.', '질문을 다시 받아요.'], board: ['새 보드 글을 잠갔어요.', '보드 글을 다시 받아요.'], join: ['참여를 닫았어요. 이미 들어온 사람은 그대로 써요.', '참여를 다시 받아요.'] }[which];
+    b.addEventListener('click', function () { var lock = !X.locked(state, which); setState(X.lockPatch(which, lock), said[lock ? 0 : 1]); });
     b._sync = function () { var on = !X.locked(state, which); b.setAttribute('aria-checked', String(on)); s.textContent = on ? '켜짐' : '꺼짐'; };
     return b;
   }
@@ -456,7 +466,7 @@
 
   // 투표: 지금 열린 투표(막대) · 나머지 투표 · 즉석 투표 만들기
   function quickPolls() {
-    return vals('polls').filter(function (q) { return q.question && Array.isArray(q.options) && q.options.length; })
+    return vals('polls').filter(function (q) { return q.question && Array.isArray(q.options) && q.options.length && !/^bp:/.test(q.cid || ''); })
       .sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); })
       .map(function (q) { return { id: q.id, question: q.question, kind: 'choice', options: q.options, quick: true, open: q.open !== false }; });
   }
@@ -464,8 +474,17 @@
   function pollAnswers(id) { return vals('answers').filter(function (a) { return a.poll === id; }); }
   /** 열기·닫기. 즉석 투표는 닫으면 서버에서도 닫아 늦은 답을 받지 않음 */
   function togglePoll(p, openNow) {
+    // 미리 넣은 투표를 처음 열 때 서버에 보기를 알려 둠(cid 'bp:<id>', 여러 번 보내도 하나): 서버가 보기 밖 답을 거절
+    if (!openNow && !p.quick) registerPoll(p);
     setState({ openPoll: openNow ? '' : p.id }, openNow ? '투표를 닫았어요.' : '투표를 띄웠어요. 참가자 화면과 발표 화면에 나와요.');
     if (p.quick && p.open === openNow) conn.update('polls', p.id, { open: !openNow }).catch(function () { });
+  }
+  function registerPoll(p) {
+    if (LOCAL || !p || !p.id || String(p.id).length > 37) return;
+    var kind = p.kind === 'word' || p.kind === 'scale' ? p.kind : 'choice';
+    var opts = (p.options || []).map(function (o) { return String(o).slice(0, 100); }).slice(0, 20);
+    if (kind === 'scale' && !opts.length) opts = ['1', '2', '3', '4', '5'];
+    conn.add('polls', { question: String(p.question || p.id).slice(0, 200), kind: kind, options: kind === 'word' ? [] : opts, open: true, cid: 'bp:' + p.id }).catch(function () { });
   }
   function buildPoll() {
     var b = P.poll.body;
@@ -497,7 +516,7 @@
     });
     d.appendChild(f); b.appendChild(d);
   }
-  function tally(p, list) { var t = {}; list.forEach(function (a) { [].concat(a.value).forEach(function (v) { t[v] = (t[v] || 0) + 1; }); }); return t; }
+  function tally(p, list) { return X.tally(list); }
   function renderPolls() {
     var all = allPolls(), op = all.filter(function (p) { return p.id === state.openPoll; })[0], hidden = X.hiddenWords(state);
     count('poll', all.length || null);
@@ -591,6 +610,8 @@
   // 진행: 공지·타이머·따라 넘기기·실습·교재 쪽·자료 링크
   function sec(title) { var s = el('div', 'lp-con-sec'); s.appendChild(el('h3', '', title)); P.run.body.appendChild(s); return s; }
   function buildRun() {
+    // ② 참여 받기: 모두 들어온 뒤 끄면 새 참가자(낯선 기기·도배)를 받지 않음. 이미 들어온 사람은 그대로
+    C.joinLock = lockSwitch('join', '참여 받기'); P.run.act.appendChild(C.joinLock);
     var s1 = sec('공지'); C.notice = el('div'); s1.appendChild(C.notice);
     var r1 = el('form', 'lp-con-row'); var nt = el('input', 'lp-in'); nt.placeholder = '예: 15:10까지 실습하고 앞을 봐 주세요'; nt.maxLength = 120; nt.setAttribute('aria-label', '공지 문구');
     var nb = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '공지 보내기'); nb.type = 'submit';
@@ -659,6 +680,7 @@
   }
   function syncRun() {
     if (!C.notice) return;
+    if (C.joinLock) C.joinLock._sync();
     keep(C.notice, function () {
       C.notice.textContent = '';
       if (state.notice && state.notice.text) { var n = el('div', 'lp-con-now'); n.appendChild(el('p', '', state.notice.text)); n.appendChild(btn('공지 내리기', '', function () { setState({ notice: null }, '공지를 내렸어요.'); }, 'nclear')); C.notice.appendChild(n); }

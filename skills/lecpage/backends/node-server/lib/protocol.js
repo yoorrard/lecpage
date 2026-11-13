@@ -50,6 +50,13 @@ export const WEAK_KEYS = [
   '12345678', '123456789', '1234567890', '123456789012', 'lecpage', 'lecpage-admin', 'correct-horse-battery', 'secret', 'letmein',
 ];
 export const MIN_KEY_LENGTH = 12;
+/** Instructor session: after one accepted admin key the console gets a random token (the server keeps its SHA-256 only)
+ *  and sends it instead of the key. Wrong-key lockouts apply to key attempts only, so a participant on the same school
+ *  IP who guesses keys cannot lock out a console that is already open. 'lps1.' + 43 base64url characters (256 bits). */
+export const SESSION_TTL = 12 * 3600e3;
+export const SESSION_RE = /^lps1\.[A-Za-z0-9_-]{43}$/;
+export const isSessionToken = (v) => typeof v === 'string' && SESSION_RE.test(v);
+const MAX_SESSIONS = 50;
 const normKey = (k) => String(k == null ? '' : k).normalize('NFC').trim().toLowerCase();
 /** Returns a Korean reason when an admin key / setup token is too weak, otherwise null. */
 export function keyProblem(key) {
@@ -69,10 +76,12 @@ export async function isWeakKeyHash(hash) {
   }
   return weakHashes.has(String(hash || '').toLowerCase());
 }
-/** Participant nicknames that would impersonate the instructor or the service. */
-export const RESERVED_NICKNAMES = ['강사', '운영자', 'admin', 'lecpage'];
+/** Participant nicknames that would impersonate the instructor or the service (also with '님'). */
+export const RESERVED_NICKNAMES = ['강사', '운영자', '관리자', '선생님', '운영진', 'admin', 'lecpage'];
 export function reservedNickname(n) {
-  const s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '');
+  // Cyrillic look-alikes of 'admin' only (а і ԁ); no full confusables check
+  const s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '')
+    .replace(/\u0430/g, 'a').replace(/\u0456/g, 'i').replace(/\u0501/g, 'd');
   return s === 'administrator' || RESERVED_NICKNAMES.some((r) => s === r || s === r + '님');
 }
 function cleanNickname(v, field = 'nickname', required = false) {
@@ -219,6 +228,19 @@ function cleanAnswerValue(v) {
   if (typeof v === 'number') return cleanNum(v, 'value', -1e6, 1e6);
   return cleanText(v, LIMITS.answer, 'value', { required: true });
 }
+/** Poll kinds whose answer must be exactly one of the poll's options ('word' answers and the 'signal' light stay free). */
+export const SCALE_DEFAULT = ['1', '2', '3', '4', '5'];
+/** Blueprint polls are registered by the console as polls docs with cid 'bp:<poll id>' (answers keep the blueprint id). */
+export const BP_POLL = 'bp:';
+/** A choice/scale answer → the one option it names (a one-item array or a number is accepted), else 400. */
+export function pollValue(poll, v) {
+  if (!poll || poll.kind === 'word') return v;
+  const one = Array.isArray(v) ? (v.length === 1 ? v[0] : null) : v;
+  const s = typeof one === 'number' ? String(one) : one;
+  const opts = Array.isArray(poll.options) && poll.options.length ? poll.options : poll.kind === 'scale' ? SCALE_DEFAULT : [];
+  if (typeof s !== 'string' || !opts.includes(s)) throw bad('invalid_value', '보기에 있는 답 하나만 낼 수 있어요.');
+  return s;
+}
 function cleanSurvey(v) {
   if (!isObj(v)) throw bad('invalid_type', 'answers: 객체');
   const keys = Object.keys(v);
@@ -265,7 +287,8 @@ export function cleanAdd(col, b) {
 }
 
 const OWNER_PATCH = {
-  participants: ['nickname'], progress: ['status'], help: ['station', 'seat', 'message', 'status'],
+  // name·school are asked at check-in only (a participant who joined with a nickname adds them then, with consent)
+  participants: ['nickname', 'name', 'school', 'consent'], progress: ['status'], help: ['station', 'seat', 'message', 'status'],
   questions: ['text'], posts: ['kind', 'text', 'files', 'license'], answers: ['value'], survey: ['answers'],
 };
 const ADMIN_PATCH = {
@@ -282,6 +305,9 @@ export function cleanPatch(col, b, role) {
     const v = b[k];
     switch (`${col}.${k}`) {
       case 'participants.nickname': out[k] = role.admin ? cleanText(v, LIMITS.nickname, k, { required: true }) : cleanNickname(v, k, true); break;
+      case 'participants.name': out[k] = cleanText(v, LIMITS.name, k); break;
+      case 'participants.school': out[k] = cleanText(v, LIMITS.school, k); break;
+      case 'participants.consent': out[k] = v === true; break;
       case 'progress.status': out[k] = cleanEnum(v, ['doing', 'done', 'stuck'], k); break;
       case 'help.station': out[k] = cleanText(v, LIMITS.id, k); break;
       case 'help.seat': out[k] = cleanText(v, LIMITS.seat, k); break;
@@ -399,7 +425,7 @@ export function exportTable(kind, data, timeZone, opts) {
       return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: data.participants.map((p) => [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]) };
     case 'attendance': {
       const m = new Map();
-      for (const a of data.attendance || []) { const r = m.get(a.by) || {}; r[a.kind] = a.at || a.createdAt; m.set(a.by, r); }
+      for (const a of data.attendance || []) { const r = m.get(a.by) || {}; const at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); m.set(a.by, r); }
       return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'], rows: data.participants.map((p) => { const r = m.get(p.id) || {}; return [p.nickname, p.name, p.school, t(r.in), t(r.out), t(p.consentAt)]; }) };
     }
     case 'progress': {
@@ -451,21 +477,40 @@ export function completionTable(data, opts, timeZone) {
   const o = opts || {}; const tz = timeZone || 'Asia/Seoul';
   const rate = typeof o.rate === 'number' && o.rate >= 0 && o.rate <= 100 ? o.rate : 90;
   const att = new Map(); const done = new Map(); const sv = new Set(); const stations = new Set();
-  for (const a of data.attendance || []) { const r = att.get(a.by) || {}; if (a.kind === 'in' || a.kind === 'out') r[a.kind] = a.at || a.createdAt; att.set(a.by, r); }
+  // earliest check-in and latest check-out per participant
+  for (const a of data.attendance || []) {
+    const r = att.get(a.by) || {}; const at = a.at || a.createdAt;
+    if (a.kind === 'in') r.in = r.in ? Math.min(r.in, at) : at; else if (a.kind === 'out') r.out = r.out ? Math.max(r.out, at) : at;
+    att.set(a.by, r);
+  }
   for (const x of data.progress || []) { stations.add(x.station); if (x.status === 'done') { const r = done.get(x.by) || new Set(); r.add(x.station); done.set(x.by, r); } }
   for (const s of data.survey || []) if (s.by) sv.add(s.by);
   const total = o.stations > 0 ? Math.floor(o.stations) : stations.size;
-  const rows = [...(data.participants || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((p) => {
-    const r = att.get(p.id) || {}; const inAt = r.in; const outAt = r.out;
+  // One row per person: entries with the same name and school (a second phone, a re-join) are merged —
+  // nicknames joined, earliest check-in, latest check-out, finished stations together, survey sent by any of them.
+  const groups = new Map();
+  for (const p of [...(data.participants || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))) {
+    const key = p.name ? 'n:' + p.name + '|' + (p.school || '') : 'id:' + p.id;
+    const g = groups.get(key) || { nick: [], name: p.name, school: p.school, in: 0, out: 0, done: new Set(), survey: false };
+    if (p.nickname && !g.nick.includes(p.nickname)) g.nick.push(p.nickname);
+    const r = att.get(p.id) || {};
+    if (r.in) g.in = g.in ? Math.min(g.in, r.in) : r.in;
+    if (r.out) g.out = Math.max(g.out, r.out);
+    for (const st of done.get(p.id) || []) g.done.add(st);
+    if (sv.has(p.id)) g.survey = true;
+    groups.set(key, g);
+  }
+  const rows = [...groups.values()].map((g) => {
+    const inAt = g.in || 0; const outAt = g.out || 0;
     const day = o.date || (inAt ? fmtTime(inAt, tz).slice(0, 10) : '');
     const s0 = zonedMs(day, o.start, tz); const s1 = zonedMs(day, o.end, tz);
     const sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
     let mins = '';
     if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
-    const n = (done.get(p.id) || new Set()).size;
+    const n = g.done.size;
     let verdict = '확인 필요';
-    if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!o.survey || sv.has(p.id)) ? 'O' : 'X';
-    return [p.nickname, p.name, p.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', o.survey ? (sv.has(p.id) ? 'O' : 'X') : '해당 없음', verdict];
+    if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!o.survey || g.survey) ? 'O' : 'X';
+    return [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', o.survey ? (g.survey ? 'O' : 'X') : '해당 없음', verdict];
   });
   return { columns: [...COMPLETION_COLS], rows };
 }
@@ -517,6 +562,8 @@ export const SCHEMA = [
   // while its post exists and is not hidden; files without a row (uploaded before this table existed) are legacy.
   `CREATE TABLE IF NOT EXISTS file_refs (code TEXT NOT NULL, name TEXT NOT NULL, post TEXT, PRIMARY KEY (code, name))`,
   `CREATE INDEX IF NOT EXISTS file_refs_post ON file_refs (code, post)`,
+  // instructor sessions (hash only); `akh` = the admin key hash they were issued for, so a new key ends them
+  `CREATE TABLE IF NOT EXISTS admin_sessions (code TEXT NOT NULL, hash TEXT NOT NULL, akh TEXT NOT NULL, exp INTEGER NOT NULL, PRIMARY KEY (code, hash))`,
 ];
 
 // ---------- the core ----------
@@ -623,17 +670,47 @@ export class LiveCore {
   async credentials(headers) {
     // Header values must be Latin-1, so clients send admin keys / setup tokens percent-encoded
     // (encodeURIComponent). A raw ASCII value still works.
+    // The X-Lec-Admin header carries either the admin key or an instructor session token (lps1.…).
     const token = headers.get('x-lec-token'); const admin = decodeHeader(headers.get('x-lec-admin')); const setup = decodeHeader(headers.get('x-lec-setup'));
+    const sess = isSessionToken(admin);
     return {
       tokenHash: token && token.length <= 200 ? await sha256hex(token) : null,
-      adminHash: admin && admin.length <= 200 ? await sha256hex(admin) : null,
+      adminHash: admin && !sess && admin.length <= 200 ? await sha256hex(admin) : null,
+      sessHash: sess ? await sha256hex(admin) : null,
       setupHash: setup && setup.length <= 200 ? await sha256hex(setup) : null,
     };
   }
+  /** The admin key hash in force for a training (its own key, or the server's default key). */
+  adminHashOf(t) { return (t && t.admin_hash) || this.cfg.adminKeyHash || null; }
   isAdmin(t, cred) {
+    if (cred.sessHash) return this.sessionOk(t, cred.sessHash);
     if (!cred.adminHash) return false;
-    const expected = (t && t.admin_hash) || this.cfg.adminKeyHash;
+    const expected = this.adminHashOf(t);
     return !!expected && hashEqual(cred.adminHash, expected);
+  }
+  // ----- instructor sessions (see SESSION_RE) -----
+  sessionOk(t, hash) {
+    if (!t || !hash || !this.ready) return false;
+    const r = this.db.get(`SELECT akh, exp FROM admin_sessions WHERE code = ? AND hash = ?`, t.code, hash);
+    return !!r && r.exp > this.now() && hashEqual(r.akh, this.adminHashOf(t) || '');
+  }
+  /** POST /session with the admin key (or a live session) → { session, expiresAt }. */
+  async newSession(code, cred) {
+    const t0 = this.training(code);
+    if (!t0 && !this.cfg.autoCreate) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
+    this.requireAdmin(t0, cred);
+    const t = t0 || this.training(code, true);
+    this.limit('admin', 'admin:' + code, null);
+    const session = 'lps1.' + randomToken();
+    const hash = await sha256hex(session);
+    const now = this.now(); const exp = now + SESSION_TTL;
+    this.db.tx(() => {
+      this.db.run(`DELETE FROM admin_sessions WHERE code = ? AND (exp <= ? OR akh <> ?)`, code, now, this.adminHashOf(t) || '');
+      this.db.run(`INSERT INTO admin_sessions (code, hash, akh, exp) VALUES (?, ?, ?, ?)`, code, hash, this.adminHashOf(t) || '', exp);
+      this.db.run(`DELETE FROM admin_sessions WHERE code = ? AND hash NOT IN (SELECT hash FROM admin_sessions WHERE code = ? ORDER BY exp DESC LIMIT ${MAX_SESSIONS})`, code, code);
+    });
+    this.touch(t);
+    return { status: 201, body: { session, expiresAt: exp } };
   }
   participant(code, cred) {
     if (!cred.tokenHash || !this.ready) return null;
@@ -664,7 +741,8 @@ export class LiveCore {
     return this.limiter.peek('g:' + key, rate, this.now());
   }
   /** 429 while this (code, IP) or this IP has too many wrong admin keys / setup tokens. Checked before the key, so a
-   *  locked client learns nothing — the right key is refused too until the window ends. */
+   *  locked client learns nothing — the right key is refused too until the window ends. Only key attempts pass here:
+   *  a console that already holds a session keeps working while a participant on the same IP is locked out. */
   async authGate(code, ip) {
     const who = ip || '?'; const now = this.now();
     let w = this.limiter.peek('af:' + code + '|' + who, this.rate.authFail, now);
@@ -683,9 +761,14 @@ export class LiveCore {
     this.guardOk.delete(who);
     await this.gHit('afip:' + who, this.rate.authFailIp);
   }
-  /** WebSocket {type:'auth'}: same throttle as the header. Resolves true/false; throws 429 while locked. */
+  /** WebSocket {type:'auth'}: same throttle as the header. Resolves true/false; throws 429 while locked.
+   *  A session token is checked without the throttle (an expired one → 401 session_expired, never counted). */
   async wsAuth(code, key, ip) {
     const c = normCode(code);
+    if (isSessionToken(key)) {
+      if (this.sessionOk(this.trainingOrNull(c), await sha256hex(key))) return true;
+      throw new HttpError(401, 'session_expired', '강사 화면을 다시 열어 관리자 키를 넣어 주세요.');
+    }
     await this.authGate(c, ip);
     const hash = typeof key === 'string' && key && key.length <= 200 ? await sha256hex(key) : null;
     const ok = !!hash && this.isAdmin(this.trainingOrNull(c), { adminHash: hash });
@@ -764,6 +847,8 @@ export class LiveCore {
     const code = normCode(req.code);
     const cred = await this.credentials(req.headers);
     const [a, b] = req.rest; const m = req.method; const ip = req.ip || '';
+    // An expired or unknown session: tell the console to send the key again (never counted as a wrong key)
+    if (cred.sessHash && !this.sessionOk(this.trainingOrNull(code), cred.sessHash)) throw new HttpError(401, 'session_expired', '강사 화면을 다시 열어 관리자 키를 넣어 주세요.');
     // Wrong admin keys / setup tokens count on every route (a wrong key on a read silently falls back to the public
     // view, which would otherwise be a free oracle).
     if (cred.adminHash || (a === 'init' && cred.setupHash)) {
@@ -774,7 +859,7 @@ export class LiveCore {
     }
     if ((m === 'GET' || m === 'HEAD') && ip) { const w = this.limiter.hit('read:' + ip, this.rate.read, this.now()); if (w) throw rateErr(w); }
     // auto-created trainings per IP (counted across rooms through the guard)
-    if (this.cfg.autoCreate && !b && ((m === 'POST' && (a === 'join' || a === 'polls')) || (a === 'state' && m !== 'GET'))
+    if (this.cfg.autoCreate && !b && ((m === 'POST' && (a === 'join' || a === 'polls' || a === 'session')) || (a === 'state' && m !== 'GET'))
       && (!this.cfg.allowedCodes || this.cfg.allowedCodes.has(code)) && !this.exists(code)) {
       const w = await this.gHit('create:' + (ip || '?'), this.rate.create); if (w) throw rateErr(w);
     }
@@ -786,6 +871,7 @@ export class LiveCore {
     const [a, b, c] = req.rest; const m = req.method;
     if (m === 'POST' && a === 'init' && !b) return this.init(code, req.body, cred);
     if (m === 'POST' && a === 'join' && !b) return this.join(code, req.body, req.ip);
+    if (m === 'POST' && a === 'session' && !b) return this.newSession(code, cred);
     if (m === 'GET' && a === 'snapshot' && !b) return this.snapshot(code, req.query, cred);
     if (a === 'state' && !b) {
       if (m === 'GET') { const t = this.training(code); return { status: 200, body: this.state(code, t) }; }
@@ -802,7 +888,7 @@ export class LiveCore {
       if (b && c === 'vote' && m === 'POST' && a === 'questions') return this.vote(code, a, b, cred, req.ip);
       if (b && c === 'like' && m === 'POST' && a === 'posts') return this.vote(code, a, b, cred, req.ip);
     }
-    if (a && !COLS.includes(a) && !['init', 'join', 'snapshot', 'state', 'react', 'export.csv', 'upload', 'files', 'ws', 'events'].includes(a)) throw new HttpError(404, 'unknown_collection', '없는 컬렉션입니다.');
+    if (a && !COLS.includes(a) && !['init', 'join', 'session', 'snapshot', 'state', 'react', 'export.csv', 'upload', 'files', 'ws', 'events'].includes(a)) throw new HttpError(404, 'unknown_collection', '없는 컬렉션입니다.');
     throw new HttpError(405, 'method_not_allowed', '지원하지 않는 요청입니다.');
   }
 
@@ -812,9 +898,15 @@ export class LiveCore {
     if (!/^[0-9a-f]{64}$/.test(hash)) throw bad('invalid_value', 'adminKeyHash: SHA-256 hex 64자');
     if (await isWeakKeyHash(hash)) throw bad('weak_key', '예시로 쓰인 관리자 키입니다. 새로 만든 키(12자 이상)를 쓰세요.');
     const existing = this.training(code);
+    // Single-teacher server (one ADMIN_KEY for every code): that key may set a code's settings, e.g. the blueprint's
+    // retention days (the app does this right after connecting a server made with the Deploy button). The code keeps
+    // following the server key unless another key hash is given.
+    const serverKey = !!this.cfg.adminKeyHash && !(existing && existing.admin_hash) && this.isAdmin(existing, cred);
     if (existing && existing.admin_hash) {
       // Re-init (key rotation / settings) requires the current admin key.
       this.requireAdmin(existing, cred);
+    } else if (serverKey) {
+      if (!existing && !this.cfg.autoCreate) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     } else if (!this.cfg.openInit) {
       if (!this.cfg.setupTokenHash) throw new HttpError(403, 'init_disabled', '이 서버는 연수 등록을 받지 않습니다(설정 토큰 없음).');
       if (!cred.setupHash || !hashEqual(cred.setupHash, this.cfg.setupTokenHash)) throw new HttpError(403, 'setup_required', '서버 설정 토큰이 맞지 않습니다.');
@@ -828,7 +920,9 @@ export class LiveCore {
     if (s.moderation != null) settings.moderation = cleanBool(s.moderation, 'moderation', false);
     this.ensureSchema();
     const now = this.now();
-    this.db.run(`INSERT INTO trainings (code, admin_hash, settings, created_at, last_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET admin_hash = excluded.admin_hash, settings = excluded.settings, last_at = excluded.last_at`, code, hash, JSON.stringify(settings), now, now);
+    const keep = serverKey && hash === this.cfg.adminKeyHash ? null : hash;
+    this.db.run(`INSERT INTO trainings (code, admin_hash, settings, created_at, last_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET admin_hash = excluded.admin_hash, settings = excluded.settings, last_at = excluded.last_at`, code, keep, JSON.stringify(settings), now, now);
+    if (existing && (existing.admin_hash || null) !== keep) this.db.run(`DELETE FROM admin_sessions WHERE code = ?`, code); // a new key ends old sessions
     return { status: existing ? 200 : 201, body: { ok: true, code, settings } };
   }
 
@@ -847,6 +941,8 @@ export class LiveCore {
     const tokenHash = await sha256hex(token);
     // synchronous from here on
     const t = this.training(code, true);
+    // the instructor closed joining (state.ui.lockJoin): devices that already joined keep working
+    if ((this.state(code, t).ui || {}).lockJoin === true) throw new HttpError(409, 'locked', '지금은 새로 참여할 수 없어요. 강사에게 알려 주세요.');
     if (this.count(code, 'participants') >= this.cfg.maxParticipants) throw new HttpError(403, 'room_full', `참가 인원이 가득 찼어요(최대 ${this.cfg.maxParticipants}명). 강사에게 알려 주세요.`);
     const id = 'p' + randomId(9); const now = this.tick(code);
     const data = { nickname, name, school, consentAt: consent ? now : null };
@@ -949,8 +1045,16 @@ export class LiveCore {
       case 'progress': k = by + '|' + data.station; data.at = now; break;
       case 'answers': {
         k = data.poll + '|' + by;
-        const poll = this.db.get(`SELECT data FROM docs WHERE code = ? AND col = 'polls' AND id = ?`, code, data.poll);
-        if (poll && safeJson(poll.data, {}).open === false) throw new HttpError(409, 'poll_closed', '투표가 닫혔어요.');
+        // ② a known poll only: its options decide (choice·scale = exactly one option). The 'signal' light stays free.
+        // An unknown id is refused unless it is the poll the instructor has open (older consoles do not register
+        // their blueprint polls yet).
+        if (data.poll !== 'signal') {
+          const poll = this.pollDoc(code, data.poll);
+          if (poll) {
+            if (poll.open === false) throw new HttpError(409, 'poll_closed', '투표가 닫혔어요.');
+            data.value = pollValue(poll, data.value);
+          } else if (this.state(code, t).openPoll !== data.poll) throw new HttpError(404, 'unknown_poll', '없는 투표예요. 새로 고침해 주세요.');
+        }
         break;
       }
       case 'survey': k = by; break;
@@ -965,7 +1069,10 @@ export class LiveCore {
     this.db.tx(() => {
       const existing = k ? this.db.get(`SELECT * FROM docs WHERE code = ? AND col = ? AND k = ?`, code, col, k) : null;
       if (existing) {
-        const merged = { ...safeJson(existing.data, {}), ...data };
+        const prev = safeJson(existing.data, {});
+        const merged = { ...prev, ...data };
+        // ⑧ a second tap keeps the first check-in and the last check-out
+        if (col === 'attendance' && prev.at) merged.at = data.kind === 'in' ? Math.min(prev.at, data.at) : Math.max(prev.at, data.at);
         this.db.run(`UPDATE docs SET data = ?, updated_at = ?, cid = ? WHERE code = ? AND col = ? AND id = ?`, JSON.stringify(merged), now, cid, code, col, existing.id);
         row = { ...existing, data: JSON.stringify(merged), updated_at: now, cid };
         type = 'update';
@@ -995,10 +1102,18 @@ export class LiveCore {
     const cur = safeJson(row.data, {});
     if (owner && !admin && col === 'questions' && cur.status === 'hidden') throw new HttpError(403, 'forbidden', '숨겨진 질문은 고칠 수 없어요.');
     if (owner && !admin && (col === 'posts' || col === 'chat') && cur.hidden) throw new HttpError(403, 'forbidden', '숨겨진 글은 고칠 수 없어요.');
-    // L1: an answer cannot change once its poll is closed (same rule as a new answer)
+    // L1: an answer cannot change once its poll is closed (same rule as a new answer), and keeps to the options
     if (col === 'answers' && !admin) {
-      const poll = this.getRow(code, 'polls', String(cur.poll || ''));
-      if (poll && safeJson(poll.data, {}).open === false) throw new HttpError(409, 'poll_closed', '투표가 닫혔어요.');
+      const poll = cur.poll === 'signal' ? null : this.pollDoc(code, String(cur.poll || ''));
+      if (poll && poll.open === false) throw new HttpError(409, 'poll_closed', '투표가 닫혔어요.');
+      if (poll && 'value' in patch) patch.value = pollValue(poll, patch.value);
+    }
+    // name·school (asked at check-in): only with consent, which is recorded once
+    if (col === 'participants') {
+      const consent = patch.consent === true; delete patch.consent;
+      if ((patch.name || patch.school) && !consent && !cur.consentAt) throw bad('consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
+      if (consent && !cur.consentAt && (patch.name || patch.school)) patch.consentAt = this.now();
+      if (!Object.keys(patch).length) throw new HttpError(400, 'nothing_to_update', '바꿀 수 있는 항목이 없습니다.');
     }
     let dropped = [];
     if (col === 'posts' && patch.files) {
@@ -1074,6 +1189,12 @@ export class LiveCore {
     return { status: 200, body: { ok: true }, reaction: emoji };
   }
 
+  /** A poll doc by its id, or a registered blueprint poll by its blueprint id (cid 'bp:<id>'). → data | null */
+  pollDoc(code, id) {
+    const r = this.db.get(`SELECT data FROM docs WHERE code = ? AND col = 'polls' AND (id = ? OR cid = ?) ORDER BY created_at LIMIT 1`, code, id, BP_POLL + id);
+    return r ? safeJson(r.data, {}) : null;
+  }
+
   /** Collects every doc of a training (admin view) — used by export. */
   allDocs(code) {
     const data = {}; for (const c of COLS) data[c] = [];
@@ -1099,7 +1220,7 @@ export class LiveCore {
     const files = this.db.all(`SELECT name FROM files WHERE code = ?`, code).map((r) => r.name);
     this.db.tx(() => {
       for (const tbl of ['docs', 'votes', 'tombstones', 'state', 'files', 'file_refs']) this.db.run(`DELETE FROM ${tbl} WHERE code = ?`, code);
-      if (dropTraining) this.db.run(`DELETE FROM trainings WHERE code = ?`, code);
+      if (dropTraining) { this.db.run(`DELETE FROM trainings WHERE code = ?`, code); this.db.run(`DELETE FROM admin_sessions WHERE code = ?`, code); }
     });
     this.stamps.delete(code);
     for (const c of COLS) this.counts.delete(code + '|' + c);
@@ -1115,6 +1236,7 @@ export class LiveCore {
     }
     // trainings auto-created then never used again keep no data; tombstones older than retention are dropped too
     this.db.run(`DELETE FROM tombstones WHERE at < ?`, now - this.cfg.maxRetentionDays * DAY);
+    this.db.run(`DELETE FROM admin_sessions WHERE exp <= ?`, now);
     return out;
   }
   /** Uploads never attached to a post within maxAge: records dropped, [{code, name}] returned for the host to delete. */

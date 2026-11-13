@@ -20,7 +20,8 @@ before(() => {
   dir = mkdtempSync(join(tmpdir(), 'lecpage-pub-test-'));
   logFile = join(dir, 'wrangler.log');
   mkdirSync(join(dir, 'work'));
-  copyFileSync(EX, join(dir, 'work', 'blueprint.json'));
+  const bp0 = JSON.parse(readFileSync(EX, 'utf8')); bp0.privacy.retentionDays = 21; // 서버 기본값(30)과 다르게
+  writeFileSync(join(dir, 'work', 'blueprint.json'), JSON.stringify(bp0, null, 2));
   writeFileSync(join(dir, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json' }));
   writeFileSync(join(dir, 'work', 'info.json'), JSON.stringify({ size: 30, skill: 'set' }));
   const b = spawnSync(process.execPath, [CLI, 'build', 'work/blueprint.json', '-o', 'dist'], { cwd: dir, encoding: 'utf8' });
@@ -62,6 +63,7 @@ test('publish --live: 중계 → 관리자 키(강사용 파일에만) → 다�
   const toml = readFileSync(join(dir, 'work', 'live-relay', 'wrangler.toml'), 'utf8');
   assert.match(toml, /^name = "lec-test-live"$/m);
   assert.ok(toml.includes(`ALLOWED_CODES = "${bp.live.code}"`), '이 연수 코드만 받음');
+  assert.ok(toml.includes('RETENTION_DAYS = "21"'), '⑦ 설계도의 보관 기간(21일)이 중계로 넘어감');
   const html = readFileSync(join(dir, 'dist', 'index.html'), 'utf8');
   assert.ok(html.includes('lec-test-live.fake-account.workers.dev'), '사이트가 중계 주소로 다시 빌드됨');
   assert.ok(!existsSync(join(dir, 'dist', '관리자-키.txt')));

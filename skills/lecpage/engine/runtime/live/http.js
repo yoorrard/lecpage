@@ -5,6 +5,10 @@
  * Polling (학교망: 웹소켓·SSE가 막힘) is a long-poll when the server holds `snapshot?since=&wait=20` until something changes
  * (lecpage 바로 공개 서버). A server that answers at once is detected after two quick empty answers and polled on an interval instead.
  * The server's `X-Lec-Poll-Ms` is the lower bound of the gap between polls (busy free-plan days ask for 10–20 s).
+ * Server down: two network failures in a row while polling → 'offline' (the page shows its "server unreachable" line;
+ * writes wait in the queue), and a reconnect only falls back to polling when the server answers over HTTP — so a dead
+ * server is never shown as "polling", and its realtime failures are not held against WebSocket. When the server is
+ * back, polling resumes and WebSocket is tried again within ~10 s (then on the usual 3 → 6 → 12 → 30 min schedule).
  * config: { url, code, pollMs?, transports?: ['ws','sse','poll'], longPoll?: false, waitS?: 20 }
  */
 (function (root) {
@@ -31,7 +35,7 @@
     var a = { status: 'offline' };
     var kind = null, ws = null, es = null;
     var timers = {};
-    var lastMsg = 0, openedAt = 0, attempt = 0, closed = true, pollErr = 0, emptyPolls = 0;
+    var lastMsg = 0, openedAt = 0, attempt = 0, closed = true, pollErr = 0, emptyPolls = 0, netErr = 0;
     // 긴 대기: null 아직 모름 · true 서버가 붙잡아 줌 · false 바로 답하는 서버(간격 묻기). quick: 붙잡지 않은 빈 답이 이어진 수
     var longOk = config.longPoll === false ? false : null, quick = 0, lpFail = 0, hintMs = 0, every = 0, upgradeN = 0, lpCtl = null;
     var authBad = false; // the server refused the admin key on the socket: stop resending it until setAdmin()
@@ -49,7 +53,7 @@
     function request(method, path, opts) {
       opts = opts || {};
       var headers = {};
-      var token = opts.noToken ? null : ctx.token(); var admin = ctx.adminKey();
+      var token = opts.noToken ? null : ctx.token(); var admin = opts.admin || ctx.adminKey();
       if (token) headers['X-Lec-Token'] = token;
       if (admin) headers['X-Lec-Admin'] = encodeURIComponent(admin); // headers must be Latin-1 (Korean keys)
       var body;
@@ -97,6 +101,12 @@
       if (!m || typeof m !== 'object') return null;
       if (m.type === 'hello') { emit({ type: 'hello', now: m.now }); return m; }
       if (m.type === 'auth') {
+        // an expired instructor session: send the key on this socket instead
+        if (m.ok === false && m.error === 'session_expired' && ctx.dropSession) {
+          ctx.dropSession(); var k0 = ctx.adminKey();
+          if (k0 && ws && ws.readyState === 1) { try { ws.send(JSON.stringify({ type: 'auth', admin: k0 })); } catch (e) { /* closed */ } }
+          return m;
+        }
         if (m.ok === false) {
           authBad = true;
           emit({ type: 'error', error: L.error(m.error || 'admin_required', m.message || '관리자 키가 맞지 않아요.', { status: m.error === 'rate_limited' ? 429 : 403, retryAfter: m.retryAfter || 0 }) });
@@ -164,15 +174,22 @@
       if (ws) { var w = ws; ws = null; w.onclose = null; w.onmessage = null; try { w.close(); } catch (e) { /* ignore */ } }
       if (es) { var s = es; es = null; s.onerror = null; s.onmessage = null; try { s.close(); } catch (e) { /* ignore */ } }
     }
-    /** Tries transports in order; resolves with the kind that worked ('ws'|'sse'|'poll'). */
-    function openBest(realtimeOnly) {
+    /** Tries transports in order; resolves with the kind that worked ('ws'|'sse'|'poll').
+     *  probe: before settling for polling, ask the server over plain HTTP (a reconnect after a drop). If even that
+     *  fails the server is down, not the network blocking WebSockets: reject (→ 'offline') and do not count the
+     *  realtime failures against WebSocket/SSE. */
+    function openBest(realtimeOnly, probe) {
       var list = order.filter(function (t) { return t === 'poll' ? !realtimeOnly : !skipped(t); });
-      var i = 0;
+      var i = 0, failed = [];
+      function marks() { failed.forEach(markFail); failed = []; }
       function next() {
         if (closed) return Promise.reject(new Error('closed'));
         var t = list[i++];
-        if (!t) return Promise.reject(new Error('no transport'));
-        if (t === 'poll') return Promise.resolve('poll');
+        if (!t) { if (realtimeOnly) marks(); return Promise.reject(new Error('no transport')); }
+        if (t === 'poll') {
+          if (!probe) { marks(); return Promise.resolve('poll'); }
+          return request('GET', '/state', { timeout: 8000 }).then(function (st) { marks(); if (st) emit({ type: 'state', doc: st }); return 'poll'; });
+        }
         return (t === 'ws' ? tryWs() : trySse()).then(function (sock) {
           if (closed) { try { sock.close(); } catch (e) { /* ignore */ } throw new Error('closed'); }
           stopRealtime(); stopPolling();
@@ -181,7 +198,7 @@
           startHeartbeat(t);
           setStatus('live', 'realtime');
           return t;
-        }, function () { markFail(t); return next(); });
+        }, function () { failed.push(t); return next(); });
       }
       return next().then(function (t) { if (t === 'poll') startPolling(); return t; });
     }
@@ -197,7 +214,7 @@
     }
     function reconnect() {
       if (closed) return;
-      openBest(false).then(function () { attempt = 0; ctx.emit({ type: 'resync' }); }, function () {
+      openBest(false, true).then(function () { attempt = 0; ctx.emit({ type: 'resync' }); }, function () {
         if (closed) return;
         setStatus('offline');
         timers.reconnect = setTimeout(reconnect, U.backoff(Math.min(attempt++, 5), 2000, 60000));
@@ -207,7 +224,7 @@
     // ---------------------------------------------------------------- polling
     function startPolling() {
       stopRealtime();
-      kind = 'poll'; pollErr = 0; emptyPolls = 0; quick = 0; lpFail = 0; upgradeN = 0;
+      kind = 'poll'; pollErr = 0; netErr = 0; emptyPolls = 0; quick = 0; lpFail = 0; upgradeN = 0;
       setStatus('polling', 'polling');
       emit({ type: 'net' });
       schedulePoll(pollMs);
@@ -247,19 +264,26 @@
     }
     function pollOnce() {
       if (closed || kind !== 'poll') return;
-      var useLong = longOk !== false && !U.isHidden() && (ctx.cursor() || 0) > 0;
+      var useLong = longOk !== false && !U.isHidden() && (ctx.cursor() || 0) > 0, t0 = Date.now();
       Promise.resolve(useLong ? longPoll() : ctx.emit({ type: 'resync' })).then(function (r) {
         if (closed || kind !== 'poll') return;
         if (r && r.error) {
           pollErr++;
-          if (pollErr >= 3) setStatus('offline');
+          // the server did not answer at all (not an HTTP error): two in a row → offline. A long-poll cut after a while
+          // is a proxy on the way (handled by longOk), not a dead server
+          var net = !r.error.status && (r.error.code === 'network' || r.error.code === 'timeout') && (!useLong || Date.now() - t0 < 3000);
+          netErr = net ? netErr + 1 : 0;
+          if (pollErr >= 3 || netErr >= 2) setStatus('offline');
         } else {
+          var back = a.status === 'offline';
           if (pollErr) setStatus('polling', 'polling');
-          pollErr = 0;
+          pollErr = 0; netErr = 0;
           emptyPolls = r && r.changes ? 0 : emptyPolls + 1;
+          // back after an outage: try realtime again soon (the outage may have been the server, not the network)
+          if (back && order[0] !== 'poll') { upgradeN = 0; clear('upgrade'); timers.upgrade = setTimeout(function () { if (kind === 'poll' && !closed && !U.isHidden()) openBest(true).then(function () { clear('upgrade'); ctx.emit({ type: 'resync' }); }, function () { if (kind === 'poll') scheduleUpgrade(); }); else scheduleUpgrade(); }, U.jitter(8000, 0.3)); }
         }
         // 긴 대기는 쉬는 틈만(바뀐 것이 오면 그 틈 동안 모아 다음 대기에서 받음). 간격 묻기는 바뀐 것 없이 이어지면 늘림
-        var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
+        var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : netErr ? Math.min(30000, 4000 * netErr) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
         schedulePoll(U.jitter(ms, 0.15));
       });
     }
@@ -300,6 +324,8 @@
       return { transport: t, every: kind === 'poll' ? every : 0, wait: t === 'long' ? WAIT : 0, hint: hintMs, longOk: longOk };
     };
     a.setAdmin = function (key) { authBad = false; if (ws && ws.readyState === 1 && key) ws.send(JSON.stringify({ type: 'auth', admin: key })); };
+    /** ① the admin key → an instructor session { session, expiresAt } (POST /session); older servers answer 404 */
+    a.adminSession = function (key) { return request('POST', '/session', { body: {}, admin: key, noToken: true, timeout: 8000 }); };
     a.join = function (p) { return request('POST', '/join', { body: p }); };
     a.snapshot = function (o) {
       return request('GET', '/snapshot?since=' + encodeURIComponent((o && o.since) || 0)).then(function (s) { if (s) { s.time = s.now; fixList(s.posts); } return s; });

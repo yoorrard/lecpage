@@ -82,7 +82,7 @@ ${ctx.live ? `<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialo
 <dialog class="lp-dialog lp-con-dlg" data-purge-dialog aria-labelledby="lp-purge-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-purge-h">모든 기록을 지울까요?</h2>
 <p>참가자 명단·출석·질문·투표 응답·보드 글과 올린 파일·도움 요청·설문 응답이 서버에서 지워져요. 지운 뒤에는 되돌릴 수 없어요.</p>
-<p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 내려받으세요.</p>
+<p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 내려받으세요.${prov === 'sheets' ? ' 구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.' : ''}</p>
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="cancel">닫기</button><button class="lp-btn lp-btn-danger" type="button" data-purge-go>${icon('close')}<span>모두 지우기</span></button></div>
 </form></dialog>
 <noscript><p class="lp-con-noscript">강사 화면은 자바스크립트를 켜야 쓸 수 있어요.</p></noscript>
@@ -268,6 +268,21 @@ export function defaultProcessors(bp) {
   return map[bp.live.provider] || [];
 }
 
+/**
+ * ⑦ [데이터 모두 지우기]가 실제로 얼마나 지우는지, 참여 기능을 맡은 곳마다 사실대로(‘복구할 수 없게’는 그런 곳에만).
+ * 자체 서버(Node): 지운 칸을 0으로 덮고 로그(WAL)도 비움. Cloudflare(workers.dev·바로 배포): 저장소의 '시점 복원'용 기록이 30일 남음.
+ * Supabase: 요금제의 백업 보관 기간 동안 백업에 남을 수 있음. 구글 시트: 행을 지워도 시트의 버전 기록에 남아 파일째 지워야 함.
+ */
+export function eraseFacts(bp) {
+  const prov = bp.live.provider;
+  const h = host(bp.live.url || '');
+  if (prov === 'sheets') return { how: '시트에서 행을 지웁니다. 다만 구글 시트는 지운 행도 버전 기록에 남기므로, 연수가 끝나면 시트 파일째 지우고 드라이브 휴지통을 비워 복구할 수 없게 합니다. 올린 파일은 드라이브 휴지통으로 옮겨집니다.', sure: false };
+  if (prov === 'supabase') return { how: '데이터베이스와 파일 저장소에서 지웁니다. 다만 Supabase가 만드는 백업에는 요금제의 백업 보관 기간 동안 남을 수 있습니다.', sure: false };
+  if (prov === 'http' && (/(^|\.)workers\.dev$/.test(h) || /\/live\/?$/.test(String(bp.live.url || '')))) return { how: '서버에서 지웁니다. 다만 Cloudflare가 저장소 복원용으로 남기는 기록에 30일 동안 남았다가 사라집니다.', sure: false };
+  if (prov === 'http') return { how: '서버에서 지운 자리를 0으로 덮어 복구할 수 없게 지웁니다.', sure: true };
+  return { how: '', sure: false };
+}
+
 export function renderPrivacy(ctx) {
   const bp = ctx.bp, pv = bp.privacy, local = bp.live.provider === 'local';
   const items = { nickname: '별명', name: '이름', school: '소속(학교)', email: '이메일' };
@@ -297,7 +312,7 @@ export function renderPrivacy(ctx) {
 <h2>2. 처리 항목</h2><p>${collect.join(', ')}, 참가자를 구분하는 임의 번호.</p>
 <p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? `\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 ${local ? '기록' : '서버'}에는 그 임의 번호와 함께 저장됩니다.</p>` : ''}
 <p>주민등록번호·전화번호·생년월일은 받지 않습니다. 질문이나 글에 본인 또는 다른 사람의 개인정보를 적지 마세요.</p>${bp.live.provider === 'http' ? '\n<p>접속할 때 IP 주소가 서버에 전달되며, 잘못된 접근과 도배를 막는 횟수 제한에만 씁니다. IP 주소는 기록으로 남기지 않습니다.</p>' : ''}${bp.audience?.minor ? '\n<p>만 14세 미만 참가자도 쓸 수 있도록 별명만 받습니다. 이름 등 다른 개인정보와 파일은 받지 않습니다.</p>' : ''}
-<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>연수 종료 후 ${pv.retentionDays}일까지 보관하고, 그 뒤 지체 없이 파기합니다. 서버의 기록과 올린 파일은 강사 화면의 [데이터 모두 지우기]로 복구할 수 없게 지우고, 내려받은 명단 파일도 함께 지웁니다.${bp.live.provider === 'http' ? ` 마지막 기록 뒤 ${pv.retentionDays}일이 지나면 서버가 저절로 지웁니다.` : ''}</p>`}
+<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>연수 종료 후 ${pv.retentionDays}일까지 보관하고, 그 뒤 지체 없이 파기합니다. 서버의 기록과 올린 파일은 강사 화면의 [데이터 모두 지우기]로 지우고, 내려받은 명단 파일도 함께 지웁니다. ${eraseFacts(bp).how}${bp.live.provider === 'http' ? ` 마지막 기록 뒤 ${pv.retentionDays}일이 지나면 서버가 저절로 지웁니다.` : ''}</p>`}
 <h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 사이트의 안내·교재·실습 화면은 그대로 쓸 수 있습니다.${pv.collect.includes('name') ? ' 다만 출석 확인 등 이름이 필요한 기능은 쓸 수 없습니다.' : ''}</p>
 <h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
 <h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
@@ -327,6 +342,7 @@ export function opsGuide(ctx) {
     '연수 장소의 Wi-Fi로 접속 확인(`check.html`)을 열어 막힌 곳이 없는지 확인하세요.',
     live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요. 강사 화면 위 [더보기]에 참가자 화면·QR 안내문·접속 확인이 모여 있어요.',
     live && wake,
+    live && prov === 'http' && /(^|\.)workers\.dev$/.test(host(bp.live.url || '')) && 'Cloudflare 무료는 하루 10만 요청까지예요(한국 오전 9시에 다시 채워짐). 큰 연수 날이나 요청이 갑자기 몰려 한도가 바닥날 것 같으면 그날만 Workers 유료(월 $5)를 켜 두세요. 멈추지 않고 넘친 만큼만 붙어요.',
   ].filter(Boolean);
   const during = live ? [
     '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 강사 화면 위 [발표 화면 띄우기]를 누르면 크롬·엣지는 프로젝터를 고르는 창이 떠요. 그 창이 없으면 새 창이 열리니 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르세요.',
@@ -336,6 +352,7 @@ export function opsGuide(ctx) {
     '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
     '타이머·공지를 보내면 참가자 화면과 발표 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 지금 실습·쪽으로 참가자 화면이 움직여요.',
     '질문이나 보드 글이 지나치게 몰리면 [질문 받기]·[새 글 받기]를 꺼서 잠시 잠그고, 맞지 않는 글은 [숨기기]로 가려요.',
+    '모두 들어왔으면 진행 칸의 [참여 받기]를 꺼 두세요. 낯선 기기가 더 들어오지 않고, 이미 들어온 사람은 그대로 써요.',
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
     attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요.' : '연수를 시작할 때 참가자 화면 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
   ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
@@ -345,6 +362,7 @@ export function opsGuide(ctx) {
     survey,
     '질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
     `다 받은 뒤, 늦어도 연수가 끝나고 ${days}일 안에 강사 화면의 [데이터 모두 지우기]로 지우세요. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+    prov === 'sheets' && '구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.',
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
   const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');

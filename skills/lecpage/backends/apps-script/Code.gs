@@ -5,11 +5,13 @@
  *
  * JSON API (sheets.js speaks it; same semantics as HTTP protocol v1, polling only):
  *   GET  ?a=snapshot&code=..&since=..   GET ?a=state&code=..   GET ?a=ping
- *   POST text/plain {a:'join'|'snapshot'|'add'|'update'|'remove'|'vote'|'like'|'setState'|'react'|'upload'|'export'|'purge'|'checkAdmin', ...}
+ *   POST text/plain {a:'join'|'snapshot'|'add'|'update'|'remove'|'vote'|'like'|'setState'|'react'|'upload'|'export'|'purge'|'checkAdmin'|'session', ...}
  *   → {ok:true, data} or {ok:false, status, error, message}   (Apps Script cannot set HTTP status codes)
  * Writes take LockService's script lock. Values that look like formulas are stored as text.
  * Security: one sheet = one training code (fixed by setup, or by the first join/admin call); wrong admin keys are
- * counted (20 per 10 minutes, then 429 for everyone — Apps Script cannot see client IPs); board files must be Drive
+ * counted (20 per 10 minutes, then 429 for every key attempt — Apps Script cannot see client IPs). After one accepted
+ * key the console gets a session token (12 hours, only its SHA-256 is kept in the script properties) and sends it
+ * instead of the key: sessions are never throttled, so guessing cannot lock out a console that is open; board files must be Drive
  * files this script created for that participant; they are shared only while their post is visible and trashed on
  * remove, purge and retention clean-up.
  */
@@ -32,7 +34,9 @@ var LIMITS = { nickname: 20, name: 40, school: 60, question: 500, post: 1000, ch
 var RATE = { write: 90, questions: 8, help: 6, posts: 12, chat: 30, vote: 120, react: 90, upload: 10, join: 600 };
 var AUTH_FAILS = 20;          // wrong admin keys per 10 minutes before the sheet answers 429
 var MAX_PARTICIPANTS = 500;
-var RESERVED = ['강사', '강사님', '운영자', '운영자님', 'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'];
+var RESERVED = ['강사', '강사님', '운영자', '운영자님', '관리자', '관리자님', '선생님', '선생님님', '운영진', '운영진님', 'admin', 'admin님', 'administrator', 'lecpage', 'lecpage님'];
+var SESSION_RE = /^lps1\.[A-Za-z0-9_-]{43}$/; var SESSION_TTL = 12 * 3600000; var MAX_SESSIONS = 50;
+var SCALE_DEFAULT = ['1', '2', '3', '4', '5'];
 var WEAK_KEYS = ['change-me', 'changeme', 'change-me-관리자키', '관리자키', '관리자 키', '연수관리자키', '내관리자키', '관리자키-8자-이상',
   '여기에-관리자-키-8자-이상', 'admin', 'administrator', 'password', 'password123', 'qwerty', '12345678', '123456789012', 'lecpage', 'correct-horse-battery'];
 var EMOJIS = ['👍', '❤️', '👏', '🎉', '😂', '😮', '🤔', '🙏', '🔥', '💯', '🙌', '😢', '✅', '❓', '💡'];
@@ -153,6 +157,7 @@ function doPost(e) {
       case 'export': return exportCsv(b);
       case 'purge': return withLock(function () { normCode(b.code); requireAdmin(b.admin); wipeAll(); return { ok: true }; });
       case 'checkAdmin': { var c0 = normCode(b.code); var ok = adminOk(b.admin); if (ok) normCode(c0, true); return ok; }
+      case 'session': return withLock(function () { var c1 = normCode(b.code); requireAdmin(b.admin); normCode(c1, true); return newSession(); });
       default: throw httpErr(400, 'bad_action', '알 수 없는 요청입니다.');
     }
   });
@@ -209,9 +214,14 @@ function isAdmin(key) {
   return !!(h && typeof key === 'string' && key.length > 0 && key.length <= 200 && hashEqual(sha256hex(key), h));
 }
 /** H4: a sent admin key is checked here. Wrong keys are counted in CacheService (10-minute windows); after
- *  AUTH_FAILS every admin call answers 429 — the right key too, so guessing learns nothing. */
+ *  AUTH_FAILS every key attempt answers 429 — the right key too, so guessing learns nothing. A session token
+ *  (lps1.…) is checked first, never counted or throttled; an unknown or expired one → 401 session_expired. */
 function adminOk(key) {
   if (key == null || key === '') return false;
+  if (typeof key === 'string' && SESSION_RE.test(key)) {
+    if (sessionOk(key)) return true;
+    throw httpErr(401, 'session_expired', '강사 화면을 다시 열어 관리자 키를 넣어 주세요.');
+  }
   var cache = CacheService.getScriptCache(); var win = Math.floor(Date.now() / 600000); var k = 'af:' + win;
   var n = Number(cache.get(k) || 0);
   if (n >= AUTH_FAILS) throw httpErr(429, 'rate_limited', '관리자 키가 여러 번 틀려 잠시 막았어요. 몇 분 뒤에 다시 해 주세요.', { retryAfter: Math.max(1, Math.ceil(((win + 1) * 600000 - Date.now()) / 1000)) });
@@ -220,9 +230,46 @@ function adminOk(key) {
   return false;
 }
 function requireAdmin(key) { if (!adminOk(key)) throw httpErr(key ? 403 : 401, 'admin_required', '관리자 키가 필요합니다.'); }
+// ---------------------------------------------------------------- instructor sessions (script properties 'S:<hash>')
+function sessionOk(token) {
+  var props = PropertiesService.getScriptProperties();
+  var raw = props.getProperty('S:' + sha256hex(token)); if (!raw) return false;
+  var s; try { s = JSON.parse(raw); } catch (e) { return false; }
+  return s.exp > Date.now() && s.akh === props.getProperty('ADMIN_HASH');
+}
+function newSession() {
+  var props = PropertiesService.getScriptProperties(); var all = props.getProperties(); var now = Date.now(); var akh = props.getProperty('ADMIN_HASH');
+  var live = [];
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('S:') !== 0) return;
+    var s = null; try { s = JSON.parse(all[k]); } catch (e) { s = null; }
+    if (!s || s.exp <= now || s.akh !== akh) props.deleteProperty(k); else live.push({ k: k, exp: s.exp });
+  });
+  live.sort(function (a, b) { return b.exp - a.exp; }).slice(MAX_SESSIONS - 1).forEach(function (x) { props.deleteProperty(x.k); });
+  var raw = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  var token = 'lps1.' + raw.slice(0, 43);
+  var exp = now + SESSION_TTL;
+  props.setProperty('S:' + sha256hex(token), JSON.stringify({ exp: exp, akh: akh }));
+  return { session: token, expiresAt: exp };
+}
 function reservedNick(n) {
-  var s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '');
+  // Cyrillic look-alikes of 'admin' only (а і ԁ); no full confusables check
+  var s = String(n || '').normalize('NFKC').toLowerCase().replace(/[\s._\-·*~!?()[\]{}'"`:;,/\\|]+/g, '')
+    .replace(/\u0430/g, 'a').replace(/\u0456/g, 'i').replace(/\u0501/g, 'd');
   return RESERVED.indexOf(s) >= 0;
+}
+/** ② a choice/scale answer is exactly one of the poll's options (scale without options: 1~5); 'word' stays free */
+function pollValue(poll, v) {
+  if (!poll || poll.kind === 'word') return v;
+  var one = Array.isArray(v) ? (v.length === 1 ? v[0] : null) : v;
+  var s = typeof one === 'number' ? String(one) : one;
+  var opts = Array.isArray(poll.options) && poll.options.length ? poll.options : poll.kind === 'scale' ? SCALE_DEFAULT : [];
+  if (typeof s !== 'string' || opts.indexOf(s) < 0) throw httpErr(400, 'invalid_value', '보기에 있는 답 하나만 낼 수 있어요.');
+  return s;
+}
+/** A poll by its id, or a blueprint poll the console registered (cid 'bp:<poll id>') */
+function pollFor(code, id) {
+  return rows('polls').filter(function (r) { return r.code === code && (r.id === id || r.cid === 'bp:' + id); })[0] || null;
 }
 function cleanNick(v, required) {
   var s = cleanText(v, LIMITS.nickname, 'nickname', { required: !!required });
@@ -416,6 +463,8 @@ function join(b) {
   var nickname = cleanNick(b.nickname) || '참가자';
   var name = cleanText(b.name, LIMITS.name, 'name'); var school = cleanText(b.school, LIMITS.school, 'school');
   if ((name || school) && b.consent !== true) throw httpErr(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
+  // the instructor closed joining (state.ui.lockJoin): devices that already joined keep working
+  if ((getState(code).ui || {}).lockJoin === true) throw httpErr(409, 'locked', '지금은 새로 참여할 수 없어요. 강사에게 알려 주세요.');
   rateHit('join', code, RATE.join);
   if (rows('participants').filter(function (r) { return r.code === code; }).length >= MAX_PARTICIPANTS) throw httpErr(403, 'room_full', '참가 인원이 가득 찼어요. 강사에게 알려 주세요.');
   var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
@@ -498,8 +547,12 @@ function add(b) {
     }
     case 'answers': {
       d = { poll: cleanText(doc.poll, LIMITS.id, 'poll', { required: true }), value: cleanValue(doc.value) }; key = d.poll + '|' + by;
-      var poll = rows('polls').filter(function (r) { return r.code === code && r.id === d.poll; })[0];
-      if (poll && poll.open === false) throw httpErr(409, 'poll_closed', '투표가 닫혔어요.');
+      // ② a known poll only; choice·scale = one option. An unknown id only while it is the open poll; 'signal' stays free
+      if (d.poll !== 'signal') {
+        var poll = pollFor(code, d.poll);
+        if (poll) { if (poll.open === false) throw httpErr(409, 'poll_closed', '투표가 닫혔어요.'); d.value = pollValue(poll, d.value); }
+        else if (getState(code).openPoll !== d.poll) throw httpErr(404, 'unknown_poll', '없는 투표예요. 새로 고침해 주세요.');
+      }
       break;
     }
     case 'survey': d = { answers: cleanSurvey(doc.answers) }; key = by; break;
@@ -509,6 +562,8 @@ function add(b) {
   if (col === 'attendance' || col === 'progress') d.at = now;
   var existing = key ? rows(col).filter(function (r) { return r.code === code && r.key === key; })[0] : null;
   if (existing) {
+    // ⑧ a second tap keeps the first check-in and the last check-out
+    if (col === 'attendance' && Number(existing.at)) d.at = d.kind === 'in' ? Math.min(Number(existing.at), d.at) : Math.max(Number(existing.at), d.at);
     Object.keys(d).forEach(function (k) { existing[k] = d[k]; });
     existing.updatedAt = now; existing.cid = cid;
     writeRow(col, existing);
@@ -520,7 +575,7 @@ function add(b) {
   if (col === 'posts' && row.files && row.files.length) shareFiles(code, row.id, row.files, !row.hidden);
   return out(col, row, true);
 }
-var OWNER_PATCH = { participants: ['nickname'], progress: ['status'], help: ['station', 'seat', 'message', 'status'], questions: ['text'], posts: ['kind', 'text', 'files', 'license'], answers: ['value'], survey: ['answers'] };
+var OWNER_PATCH = { participants: ['nickname', 'name', 'school', 'consent'], progress: ['status'], help: ['station', 'seat', 'message', 'status'], questions: ['text'], posts: ['kind', 'text', 'files', 'license'], answers: ['value'], survey: ['answers'] };
 var ADMIN_PATCH = { participants: ['nickname'], help: ['status', 'assignee'], questions: ['status', 'pinned', 'text'], posts: ['hidden', 'text'], polls: ['question', 'kind', 'options', 'open'], chat: ['hidden'], progress: ['status'] };
 function update(b) {
   var code = normCode(b.code); var col = b.col;
@@ -536,8 +591,11 @@ function update(b) {
     owner = col === 'participants' ? cur.id === me.id : cur.by === me.id;
     if (!owner) throw httpErr(403, 'forbidden', '내 글만 고칠 수 있어요.');
     if ((col === 'questions' && cur.status === 'hidden') || ((col === 'posts' || col === 'chat') && cur.hidden)) throw httpErr(403, 'forbidden', '숨겨진 글은 고칠 수 없어요.');
-    // L1: an answer cannot change once its poll is closed (same rule as a new answer)
-    if (col === 'answers') { var poll = rows('polls').filter(function (r) { return r.code === code && r.id === cur.poll; })[0]; if (poll && poll.open === false) throw httpErr(409, 'poll_closed', '투표가 닫혔어요.'); }
+    // L1: an answer cannot change once its poll is closed (same rule as a new answer), and keeps to the options
+    var poll = col === 'answers' && cur.poll !== 'signal' ? pollFor(code, cur.poll) : null;
+    if (poll && poll.open === false) throw httpErr(409, 'poll_closed', '투표가 닫혔어요.');
+    // name·school (asked at check-in) need consent, recorded once
+    if (col === 'participants' && ((b.patch.name || b.patch.school) && b.patch.consent !== true && !cur.consentAt)) throw httpErr(400, 'consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
   }
   var oldFiles = col === 'posts' ? (cur.files || []).slice() : null; var wasHidden = !!cur.hidden;
   var allowed = (admin ? ADMIN_PATCH[col] : OWNER_PATCH[col]) || [];
@@ -547,6 +605,9 @@ function update(b) {
     var v = p[k]; changed++;
     switch (col + '.' + k) {
       case 'participants.nickname': cur.nickname = admin ? cleanText(v, LIMITS.nickname, k, { required: true }) : cleanNick(v, true); break;
+      case 'participants.name': cur.name = cleanText(v, LIMITS.name, k); if (!cur.consentAt && cur.name) cur.consentAt = stamp(); break;
+      case 'participants.school': cur.school = cleanText(v, LIMITS.school, k); if (!cur.consentAt && cur.school) cur.consentAt = stamp(); break;
+      case 'participants.consent': changed--; break;
       case 'progress.status': cur.status = cleanEnum(v, ['doing', 'done', 'stuck'], k); break;
       case 'help.station': cur.station = cleanText(v, LIMITS.id, k); break;
       case 'help.seat': cur.seat = cleanText(v, LIMITS.seat, k); break;
@@ -563,7 +624,7 @@ function update(b) {
       case 'polls.question': cur.question = cleanText(v, LIMITS.pollQuestion, k, { required: true }); break;
       case 'polls.kind': cur.kind = cleanEnum(v, ['choice', 'word', 'scale'], k); break;
       case 'polls.options': if (!Array.isArray(v) || v.length > 20) throw httpErr(400, 'invalid_value', k); cur.options = v.map(function (o) { return cleanText(o, LIMITS.option, k, { required: true }); }); break;
-      case 'answers.value': cur.value = cleanValue(v); break;
+      case 'answers.value': cur.value = pollValue(poll, cleanValue(v)); break;
       case 'survey.answers': cur.answers = cleanSurvey(v); break;
       default: changed--;
     }
