@@ -242,7 +242,7 @@
       case 'help': return { columns: ['요청 시각', '별명', '활동', '자리', '내용', '상태', '담당'], rows: (data.help || []).map(function (x) { return [t(x.createdAt), x.nickname, x.station, x.seat, x.message, STATUS_KO[x.status] || x.status, x.assignee]; }) };
       case 'chat': return { columns: ['시각', '별명', '내용', '숨김'], rows: (data.chat || []).map(function (x) { return [t(x.createdAt), x.nickname, x.text, x.hidden ? '예' : '']; }) };
       case 'answers': return { columns: ['투표', '별명', '응답', '시각'], rows: (data.answers || []).map(function (x) { return [x.poll, nick(x.by), x.value, t(x.updatedAt)]; }) };
-      default: throw LiveError('bad_kind', '내보낼 수 없는 종류입니다: ' + kind, { status: 400 });
+      default: throw LiveError('bad_kind', '내보낼 수 없는 종류예요: ' + kind, { status: 400 });
     }
   }
 
@@ -412,9 +412,9 @@
     config = assign({}, config || {});
     config.provider = config.provider || 'local';
     config.code = normCode(config.code || 'DEMO');
-    if (config.provider === 'none') throw LiveError('no_provider', '실시간 기능이 꺼져 있습니다.');
+    if (config.provider === 'none') throw LiveError('no_provider', '참여 기능이 꺼져 있어요. 강사에게 알려 주세요.');
     var factory = registry[config.provider];
-    if (!factory) throw LiveError('unknown_provider', '실시간 어댑터 "' + config.provider + '"를 불러오지 못했습니다.');
+    if (!factory) throw LiveError('unknown_provider', '실시간 어댑터 "' + config.provider + '"를 불러오지 못했어요. 새로 고침해 주세요.');
     this.config = config;
     this.provider = config.provider;
     this.code = config.code;
@@ -449,7 +449,7 @@
       error: LiveError,
     };
     this._adapter = factory(assign({}, config, { adminKey: undefined }), ctx);
-    if (!this._adapter) throw LiveError('bad_adapter', '어댑터를 만들지 못했습니다.');
+    if (!this._adapter) throw LiveError('bad_adapter', '실시간 어댑터를 만들지 못했어요. 새로 고침해 주세요.');
     if (typeof this._adapter.subscribe === 'function') this._unsubAdapter = this._adapter.subscribe(function (evt) { return self._onEvent(evt); });
     this._onOnline = function () {
       if (self._closed) return;
@@ -598,7 +598,7 @@
     var self = this; opts = opts || {};
     var tries = opts.tries == null ? 3 : opts.tries;
     var fn = this._adapter[name];
-    if (typeof fn !== 'function') return Promise.reject(LiveError('unsupported', '이 실시간 방식은 "' + name + '" 기능을 지원하지 않습니다.', { status: 501, retryable: false }));
+    if (typeof fn !== 'function') return Promise.reject(LiveError('unsupported', '이 연결 방식은 "' + name + '" 기능을 지원하지 않아요.', { status: 501, retryable: false }));
     var attempt = 0;
     function run() {
       return Promise.resolve().then(function () { return fn.apply(self._adapter, args); }).catch(function (err) {
@@ -724,7 +724,7 @@
     if (this._joining) return this._joining;
     this._joining = this._call('join', [p], { tries: 3 }).then(function (r) {
       self._joining = null;
-      if (!r || !r.id || !r.token) throw LiveError('bad_response', '참여 응답이 올바르지 않습니다.');
+      if (!r || !r.id || !r.token) throw LiveError('bad_response', '참여 응답이 올바르지 않아요. 새로 고침한 뒤 다시 들어와 주세요.');
       self._me = { id: r.id, token: r.token, nickname: r.nickname || p.nickname, at: Date.now() };
       self._idStore.set(self._ns + ':me', self._me);
       local.set('lecLive:profile', { nickname: self._me.nickname });
@@ -925,7 +925,7 @@
     return this._call('setState', [patch || {}]).then(function (st) { self._setState(st); return self._state; });
   };
   C.react = function (emoji) {
-    if (EMOJIS.indexOf(emoji) < 0) return Promise.reject(LiveError('invalid_value', '보낼 수 없는 반응입니다.', { status: 400, retryable: false }));
+    if (EMOJIS.indexOf(emoji) < 0) return Promise.reject(LiveError('invalid_value', '보낼 수 없는 반응이에요.', { status: 400, retryable: false }));
     var now = Date.now();
     this._reactAt = this._reactAt.filter(function (t) { return now - t < 1000; });
     if (this._reactAt.length >= 6) return Promise.resolve(false);
@@ -940,7 +940,7 @@
     if (!file || typeof file.size !== 'number') return Promise.reject(LiveError('invalid_value', '파일을 골라 주세요.', { status: 400, retryable: false }));
     var maxMb = this.config.maxUploadMb || LIMITS.uploadMb;
     if (file.size > maxMb * 1048576) return Promise.reject(LiveError('too_large', '파일은 ' + maxMb + 'MB까지 올릴 수 있어요.', { status: 413, retryable: false }));
-    if (file.type && !UPLOAD_TYPES[file.type]) return Promise.reject(LiveError('unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.', { status: 415, retryable: false }));
+    if (file.type && !UPLOAD_TYPES[file.type]) return Promise.reject(LiveError('unsupported_type', '사진·PDF·MP3·MP4만 올릴 수 있어요.', { status: 415, retryable: false }));
     return this._ensureJoined().then(function () { return self._call('upload', [file], { tries: 2 }); });
   };
   /** exportCsv(kind, opts) — opts only matter for 'completion' (see completionTable). Servers that do not know

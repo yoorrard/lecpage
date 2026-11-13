@@ -72,6 +72,7 @@ function pageTools() {
       if (el.closest('[inert],dialog:not([open]),[aria-hidden="true"]') || el.disabled) continue;
       let box = el;
       if (el.tagName === 'INPUT' && (!window.__vis(el) || /^(checkbox|radio)$/.test(el.type))) box = el.closest('label') || (window.__vis(el) ? el : el.nextElementSibling) || el; // 이름표까지 한 덩어리로 누름
+      if (el.tagName === 'A') { const af = getComputedStyle(el, '::after'); if (af.content !== 'none' && af.position === 'absolute' && ['top', 'right', 'bottom', 'left'].every((k) => af[k] === '0px') && el.offsetParent) box = el.offsetParent; } // 카드 전체를 덮는 링크(::after inset:0)는 카드 크기로
       if (!window.__vis(box)) continue;
       const cs = getComputedStyle(box);
       if (el.tagName === 'A' && cs.display === 'inline') { const p = el.parentElement; if (p && p.textContent.trim().length > el.textContent.trim().length + 2) continue; }

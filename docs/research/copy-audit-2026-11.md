@@ -154,3 +154,40 @@
 | 6 | 느낌표 3, 조사 병기 1, 긴 단추 4, 권유 1 | `Publish.jsx`, `Start.jsx`, `Settings.jsx`, `AiPanel.jsx`, `Demo.jsx` | 10줄 |
 | 7 | 도움말 줄이기(4,943자·긴 문장 17) | `Help.jsx` | 반나절. 문장 나누기 + 공개하기 안내와 겹치는 단락 빼기 |
 | 8 | CI에 고침 검사 넣기 | `.github/workflows/ci.yml` | 1줄 |
+
+## 10. 2단계 반영(2026-11-13)
+
+`node app/scripts/copy-lint.mjs` 기준. 다른 작업자가 맡은 화면 파일(`Help.jsx`·`Demo.jsx`·`DesignPanel.jsx`·`FxGallery.jsx`)은 고치지 않았다.
+
+| | 문구 | 고침 | 살핌 | 살핌이 있는 파일 |
+|---|---:|---:|---:|---|
+| 1단계 끝(검사 규칙 갱신 뒤) | 3,134 | 2 | 109 | 앱 32개 파일 · 런타임 9 · render 3 |
+| 2단계 | 3,131 | **0** | **24** | `Help.jsx` 19 · `Demo.jsx` 2 · `DesignPanel.jsx` 2 · `FxGallery.jsx` 1(모두 다른 작업자 범위) |
+
+고친 것(9절 순서대로):
+
+| 묶음 | 건수 | 내용 |
+|---|---:|---|
+| 이모지 | 2 | `LiveSetup.jsx` 저장(💾) → "**저장** 아이콘을 눌러요", `Share.jsx` 카톡 안내 👉 → "주소:" |
+| "단추" → "버튼" | 화면 글 15 + 주석 | `AiConnect`·`AiPanel`·`LiveSetup`·`Structure`·`Publish`·`Settings`·`Edit`·`ai-guides`(조사 맞춤: 버튼을·버튼으로·버튼과·버튼(…)을). 엔진 런타임 주석도 함께 |
+| 참가자 화면 합니다체 | 16 | `live/core.js` 7 · `live/local.js` 4 · `sheets.js`·`supabase.js` 각 1 · `annotate.js` 1 · `fx/embed.js` 견본 글 2 |
+| 다음 할 일 없는 오류 | 5 + 4 | `ReviewChat.jsx` 4("PNG나 JPG로 다시 넣어 주세요" · "[표시하기]로 다시 표시해 주세요"), `Home.jsx` 파일 열기(우리 오류만 그대로 보이고 JSON 깨짐 등은 쉬운 말로). `project.js`의 저장한 파일 오류 4개에도 할 일을 붙임 |
+| 창만 닫는 "취소" → "닫기" | 5 | `Start.jsx` 다시 만들기 창, `AiConnect.jsx`(키 바꾸기 접기), `render/pages.js` 도움 요청 창, `render/sections.js` 보드 글쓰기(초안은 남음), `Home.jsx`(이미 닫기) |
+| 용어 | 23 | 프로젝트 6(`project.js`·`Project.jsx`·`Settings.jsx`), 실시간 기능·연결 4, 참여자 3, 이미지 2(→그림·파일, 사진), 더하기 2(→추가, 덧붙이기), 만족도 설문 1, 미리 보기 1, QR 코드 2(화면 읽기 이름표로 옮기거나 copy-ok), 삭제 1(copy-ok) |
+| 그 밖 | 14 | 느낌표 3, 조사 병기 1, 긴 버튼 7("다시 짜는 중…"+본문에 "1~2분 걸려요", "Supabase 열기", "Cloudflare 열기", "이 컴퓨터에서만 시험하기", "저장한 파일 열기", "모든 데이터 지우기"·"한 번 더 눌러 지우기"), 70자 넘는 문장 2를 나눔, 51자 알림 1, "연결됐어요" → "연결했어요" 3 |
+
+- 지우기 버튼 옆 설명을 다크 패턴 기준(7절 7항)에 맞춤: "지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요."
+- `// copy-ok`로 남긴 6곳과 까닭: `Publish.jsx` [Workers & Pages 열기](Cloudflare 메뉴 이름), 같은 파일 개인정보 처리방침 표의 처리 목적(법률 문서라 명사형·"삭제"), `deploy.js` GitHub 커밋 메시지(화면에 안 보임), `console.js` QR 칸의 화면 읽기 이름표 "참여 QR 코드", 랜딩 `Story.jsx`·`facts.js`의 교재 인용 2. writing.md 6절 16번(처리 목적 문장으로 풀기)은 같은 문서의 법률 문서 예외와 부딪혀 예외 쪽을 따랐다.
+- 검사 규칙 두 가지를 고쳤다(오탐). ① 앱 검사: 체크 칸·라디오를 감싼 `<label>`은 이름표가 아니라 문장(동의 문장)으로 봄 — `pages.js` 동의 칸 90자가 빠짐. ② 만든 사이트 검사(`skills/lecpage/scripts/copy-lint.mjs`): `<li>` 하나를 통째로 채운 같은 쪽 링크(`href="#…"`, 질문 색인·차례·일정 목록)는 버튼 길이로 보지 않음 — 본문 디자인 작업자가 메모한 FAQ '질문 색인' 3건과 6절의 일정 링크 5건이 빠짐. 버튼처럼 쓴 링크(`lp-btn`)와 바깥으로 가는 링크는 그대로 본다(시험 `content.test.mjs`·`copy-rules.test.mjs`).
+- 만든 사이트 검사 결과: sel-story 살핌 9 → 6, data-lab 6 → 1(남은 것은 맺음말·핵심 메시지 명제와 교재 인용 "CASEL").
+
+남은 살핌 24(다른 작업자 파일, 고칠 방향):
+
+| 파일 | 건수 | 고칠 방향 |
+|---|---:|---|
+| `pages/Help.jsx` | 19 | 단추 6 → 버튼(aria 3 포함), 프로젝트 4 → 연수·저장한 파일, 배포 4 → 공개(“배포 토큰”·“배포 템플릿”은 다른 서비스·저장소 용어라 copy-ok 후보), 만족도 설문 1, QR 코드 1(라이선스 목록의 파일 이름이면 copy-ok), 70자 넘는 문장 4 나누기 |
+| `pages/Demo.jsx` | 2 | `<QR label=…>` → `alt=`(QR 부품이 이제 `alt`를 받음, 화면 읽기 이름표라 "QR 코드" 그대로 됨), "이제 내 교재로 해 볼까요?" → "이제 내 교재로 만들어 보세요." |
+| `pages/steps/DesignPanel.jsx` | 2 | 버튼 "컨셉에 맞춘 디자인 쓰기: ○" 16자, 견본 글 "…씁니다."(견본이면 copy-ok) |
+| `components/FxGallery.jsx` | 1 | "시작 단추" → "시작 버튼" |
+
+검사 밖이지만 본 것: 실시간 서버(`skills/lecpage/backends/*`, `hosting/src`)의 오류 문구 약 110개가 합니다체다(예: "파일 크기를 알 수 없습니다."). 참가자 화면이 서버 문구를 그대로 띄우는 곳이 있어 다음에 해요체로 맞추고 `copy-lint`의 대상에 넣는 것을 권한다.

@@ -67,18 +67,21 @@ export async function exportProjectFile(p) {
 /** 프로젝트 파일에서 받는 자료: 교재 그림·원본 문서·사진·소리·영상만(스크립트·SVG·HTML 금지, 엔진 파일 덮어쓰기 방지) */
 export const ALLOWED_ASSET = /^(?:assets\/)?(?:slides|media)\/[^/]{1,140}\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx|ppsx|docx|hwpx|xlsx|txt|zip)$/i;
 
+/** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
+const bad = (m) => Object.assign(new Error(m), { friendly: true });
+
 /** 무압축 ZIP 읽기(lecpage가 만든 파일) — 다른 압축 ZIP은 거절 */
 export function readStoredZip(buf, { maxFiles = 3000, maxBytes = 300e6 } = {}) {
   const u8 = new Uint8Array(buf); const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
   const out = {}; let p = 0, n = 0, total = 0; const dec = new TextDecoder();
   while (p + 30 <= u8.length && dv.getUint32(p, true) === 0x04034b50) {
     const method = dv.getUint16(p + 8, true), size = dv.getUint32(p + 18, true), nameLen = dv.getUint16(p + 26, true), extra = dv.getUint16(p + 28, true);
-    if (method !== 0) throw new Error('lecpage가 만든 프로젝트 파일만 열 수 있어요.');
+    if (method !== 0) throw bad('lecpage에서 저장한 .lecpage 파일만 열 수 있어요. [파일로 저장]으로 만든 파일인지 확인해 주세요.');
     const name = dec.decode(u8.subarray(p + 30, p + 30 + nameLen));
     const start = p + 30 + nameLen + extra;
-    if (name.includes('..') || name.startsWith('/')) throw new Error('파일 경로가 올바르지 않아요.');
+    if (name.includes('..') || name.startsWith('/')) throw bad('파일 안의 경로가 올바르지 않아요. lecpage에서 다시 저장한 파일을 열어 주세요.');
     out[name] = u8.slice(start, start + size);
-    total += size; n++; if (n > maxFiles || total > maxBytes) throw new Error('프로젝트 파일이 너무 커요.');
+    total += size; n++; if (n > maxFiles || total > maxBytes) throw bad('저장한 파일이 너무 커요(300MB까지). 교재 파일을 줄여 다시 저장해 주세요.');
     p = start + size;
   }
   return out;
@@ -93,7 +96,7 @@ export async function importProjectFile(file) {
     else { proj = { title: j.meta?.title || '', files: [], info: { ...DEFAULT_INFO, title: j.meta?.title || '' }, blueprint: j }; }
   } else {
     const files = readStoredZip(buf);
-    const pj = files['project.json']; if (!pj) throw new Error('project.json이 없는 파일이에요.');
+    const pj = files['project.json']; if (!pj) throw bad('project.json이 없는 파일이에요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.');
     const j = JSON.parse(new TextDecoder().decode(pj)); proj = j.project;
     for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && ALLOWED_ASSET.test(k) && !k.includes('..')) assets[k] = v;
   }

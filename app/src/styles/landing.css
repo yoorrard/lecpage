@@ -364,6 +364,11 @@
 .ld-cmd{display:flex;flex-wrap:wrap;align-items:center;gap:10px;align-self:center}
 .ld-cmd code{flex:1 1 16em;min-width:0;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--hair);font-family:var(--f-mono);font-size:.94rem;overflow-wrap:anywhere}
 .ld-cmd-help{flex-basis:100%;font-size:.92rem}
+/* 터치 화면: 누르는 곳 44px(docs/interaction.md 7절) */
+@media (pointer: coarse){
+  .ld-name{min-height:44px}
+  .ld-qr figcaption a,.ld-cmd-help{display:inline-flex;align-items:center;min-height:44px}
+}
 @media (min-width:900px){.ld-skill{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);align-items:center}}
 
 /* ── 10. 예시 · 끝 ── */

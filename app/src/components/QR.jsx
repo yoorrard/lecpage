@@ -13,10 +13,11 @@ export function qrSvg(text, { margin = 4, dark = '#000', light = '#fff' } = {}) 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="${light}"/><path d="${d}" fill="${dark}"/></svg>`;
 }
 
-export function QR({ text, size = 200, label = 'QR 코드' }) {
+/** alt: 화면 읽기 프로그램이 읽는 이름(label은 예전 이름) */
+export function QR({ text, size = 200, alt, label }) {
   const svg = useMemo(() => qrSvg(text), [text]);
   const src = useMemo(() => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), [svg]);
-  return <img class="qr" src={src} width={size} height={size} alt={label} />;
+  return <img class="qr" src={src} width={size} height={size} alt={alt ?? label ?? 'QR 코드'} />;
 }
 
 /** QR을 PNG로 저장·복사할 때 쓸 Blob(1024px: A4 안내문·발표 자료에 넣어도 또렷함) */

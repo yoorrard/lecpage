@@ -1,4 +1,4 @@
-// AI 키 만드는 법(연결 창과 도움말이 함께 씀). 단추 이름은 각 사이트 화면에 나오는 그대로(영문) 적습니다.
+// AI 키 만드는 법(연결 창과 도움말이 함께 씀). 버튼 이름은 각 사이트 화면에 나오는 그대로(영문) 적습니다.
 // 각 회사 공식 문서와 맞춰 본 날: 2026-11-12
 //  Gemini — ai.google.dev/gemini-api/docs/{api-key,billing,verification,pricing,rate-limits,troubleshoot-ai-studio}
 //    · 새 계정은 무료 등급에서 시작하고, 약관에 동의하면 기본 프로젝트와 키가 저절로 만들어짐(결제 등록 없이 됨)
@@ -8,7 +8,7 @@
 //  OpenAI — developers.openai.com/api/docs/{quickstart,guides/rate-limits,guides/chatgpt-api-credits,pricing}
 //    · 키: platform.openai.com/api-keys · 결제: platform.openai.com/settings/organization/billing/overview(선불 크레딧, 5달러를 사면 Build 등급)
 //    · ChatGPT Pro·Business 구독은 API 크레딧을 받을 수 있음(무료·Plus는 해당 없음)
-//    · 확인하지 못함: 키 만드는 단추 이름과 최소 충전 금액(도움말 센터가 자동 접속을 막음) → 단추 이름은 괄호 안에만, 금액은 '5달러면 충분'으로 적음
+//    · 확인하지 못함: 키 만드는 버튼 이름과 최소 충전 금액(도움말 센터가 자동 접속을 막음) → 버튼 이름은 괄호 안에만, 금액은 '5달러면 충분'으로 적음
 //  Claude — platform.claude.com/docs/en/{get-api-key,manage-claude/authentication}, support.claude.com 'How do I pay for my API usage'
 //    · 키: platform.claude.com/settings/keys의 Create key(이름·만료·Linked account·Workspace). sk-ant-로 시작하고 한 번만 보임
 //    · 결제: platform.claude.com/settings/billing의 Buy credits(선불). Max·Ultra·Team 구독에는 매달 API 크레딧이 들어 있음(Pro는 해당 없음)
@@ -19,8 +19,8 @@ const P = PROVIDERS;
 const ENOUGH = '5달러면 사이트를 열 개 넘게 만들어요.';
 
 /**
- * label·tag: 고르는 단추 · what: 무엇을 얻고 얼마가 드는지 한 줄
- * steps: 붙여넣기 앞까지의 걸음(연결 창에서는 한 번에 하나만 보임). url: 새 창으로 열 곳 · open: 단추 글 · skip: 건너뛰는 글 · pic: 누를 곳 그림
+ * label·tag: 고르는 버튼 · what: 무엇을 얻고 얼마가 드는지 한 줄
+ * steps: 붙여넣기 앞까지의 걸음(연결 창에서는 한 번에 하나만 보임). url: 새 창으로 열 곳 · open: 버튼 글 · skip: 건너뛰는 글 · pic: 누를 곳 그림
  * tips: 잘 안 될 때(접어 둠)
  */
 export const KEY_GUIDES = {
@@ -29,8 +29,8 @@ export const KEY_GUIDES = {
     what: '무료예요. 대신 Flash 모델이라 유료 모델보다 구성과 문구가 단순할 수 있고, 하루에 쓸 수 있는 횟수가 정해져 있어요.',
     steps: [
       { id: 'key', title: '키 복사하기', url: P.gemini.keyUrl, open: '구글 AI Studio 열기', skip: '이미 복사했어요',
-        text: <>개인 구글 계정으로 로그인하고 약관에 동의하면 키가 만들어져 있어요. 키 옆의 <b>복사 단추</b>를 눌러요.</>,
-        pic: { host: 'aistudio.google.com', head: 'API keys', button: 'Create API key', row: 'key', ring: 'copy', tip: '복사 단추' } },
+        text: <>개인 구글 계정으로 로그인하고 약관에 동의하면 키가 만들어져 있어요. 키 옆의 <b>복사 버튼</b>을 눌러요.</>,
+        pic: { host: 'aistudio.google.com', head: 'API keys', button: 'Create API key', row: 'key', ring: 'copy', tip: '복사 버튼' } },
     ],
     tips: [
       <>키가 안 보이면 <b>Create API key</b>를 눌러요. 구글 클라우드를 쓰던 계정은 키가 저절로 생기지 않아요.</>,
@@ -47,9 +47,9 @@ export const KEY_GUIDES = {
     steps: [
       { id: 'pay', title: '크레딧 충전하기', url: P.openai.billingUrl, open: 'OpenAI 결제 페이지 열기', skip: '이미 충전했어요',
         text: <>ChatGPT 계정 그대로 로그인하고 크레딧을 충전해요. {ENOUGH}</>,
-        pic: { host: 'platform.openai.com', head: 'Billing', row: 'balance', ring: 'button', tip: '충전 단추' } },
+        pic: { host: 'platform.openai.com', head: 'Billing', row: 'balance', ring: 'button', tip: '충전 버튼' } },
       { id: 'key', title: '키 만들기', url: P.openai.keyUrl, open: 'OpenAI 키 페이지 열기', skip: '이미 복사했어요',
-        text: <>키 만들기 단추(<b>Create new secret key</b>)를 누르고, 나온 키를 복사해요. 키는 한 번만 보여요.</>,
+        text: <>키 만들기 버튼(<b>Create new secret key</b>)을 누르고, 나온 키를 복사해요. 키는 한 번만 보여요.</>,
         pic: { host: 'platform.openai.com', head: 'API keys', button: 'Create new secret key', row: 'key', ring: 'button', tip: '키 만들기' } },
     ],
     tips: [
@@ -64,7 +64,7 @@ export const KEY_GUIDES = {
     steps: [
       { id: 'pay', title: '크레딧 충전하기', url: P.anthropic.billingUrl, open: 'Claude 결제 페이지 열기', skip: '이미 충전했어요',
         text: <>Claude Console에 로그인하고 <b>Buy credits</b>로 충전해요. {ENOUGH}</>,
-        pic: { host: 'platform.claude.com', head: 'Billing', button: 'Buy credits', row: 'balance', ring: 'button', tip: '충전 단추' } },
+        pic: { host: 'platform.claude.com', head: 'Billing', button: 'Buy credits', row: 'balance', ring: 'button', tip: '충전 버튼' } },
       { id: 'key', title: '키 만들기', url: P.anthropic.keyUrl, open: 'Claude 키 페이지 열기', skip: '이미 복사했어요',
         text: <><b>Create key</b>를 누르고 이름을 적어 만든 뒤, 나온 키를 복사해요. 키는 한 번만 보여요.</>,
         pic: { host: 'platform.claude.com', head: 'API keys', button: 'Create key', row: 'key', ring: 'button', tip: '키 만들기' } },
@@ -77,17 +77,17 @@ export const KEY_GUIDES = {
     more: [],
   },
 };
-// 먼저 보이는 것: ChatGPT · Claude(결과 품질 기준). Gemini 무료 키는 Flash 모델까지만 되고 한도가 있어 아래 작은 단추로 둠
+// 먼저 보이는 것: ChatGPT · Claude(결과 품질 기준). Gemini 무료 키는 Flash 모델까지만 되고 한도가 있어 아래 작은 버튼으로 둠
 export const GUIDE_ORDER = ['openai', 'anthropic'];
 export const GUIDE_MORE = ['gemini'];
 
 /**
- * 열린 페이지에서 누를 곳을 보여 주는 작은 그림(주소 · 제목 · 단추 · 키나 잔액 한 줄). 동그라미가 누를 곳입니다.
+ * 열린 페이지에서 누를 곳을 보여 주는 작은 그림(주소 · 제목 · 버튼 · 키나 잔액 한 줄). 동그라미가 누를 곳입니다.
  * 실제 화면을 단순하게 그린 것이고, 같은 내용을 글로도 적으므로 화면 읽기 프로그램에는 숨깁니다.
  */
 export function KeyPic({ pic }) {
   if (!pic) return null;
-  const bw = pic.button ? Math.round(20 + pic.button.length * 5.1) : 34; // 단추 너비 어림
+  const bw = pic.button ? Math.round(20 + pic.button.length * 5.1) : 34; // 버튼 너비 어림
   const bx = 208 - bw; const onBtn = pic.ring === 'button';
   const ry = onBtn ? 82 : 60; // 키·잔액 줄의 위쪽
   return (

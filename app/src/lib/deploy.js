@@ -66,13 +66,14 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { },
   for (const [p, data] of bins) {
     const blob = await gh(token, 'POST', `/repos/${owner}/${repo}/git/blobs`, { content: b64(data instanceof Uint8Array ? data : new Uint8Array(data)), encoding: 'base64' });
     tree.push({ path: p, mode: '100644', type: 'blob', sha: blob.sha });
-    done++; onProgress({ step: `이미지 올리기 ${done}/${bins.length}`, pct: 8 + Math.round(done / Math.max(1, bins.length) * 72) });
+    done++; onProgress({ step: `그림·파일 올리기 ${done}/${bins.length}`, pct: 8 + Math.round(done / Math.max(1, bins.length) * 72) });
     if (bins.length > 40) await sleep(800); // 콘텐츠 생성 요청 분당 80회 제한
   }
   tree.push({ path: '.nojekyll', mode: '100644', type: 'blob', content: '' });
   tree.push({ path: '.lecpage-site', mode: '100644', type: 'blob', content: 'lecpage로 만든 연수 사이트 저장소예요. 다시 올리면 이 저장소의 파일이 바뀌어요.\n' });
   onProgress({ step: '파일 묶기', pct: 84 });
   const t = await gh(token, 'POST', `/repos/${owner}/${repo}/git/trees`, { tree }); // base_tree 없이: 사이트 파일만 남김
+  // copy-ok: GitHub 커밋 메시지(화면에 보이지 않음. GitHub의 '배포' 화면과 맞춤)
   const c = await gh(token, 'POST', `/repos/${owner}/${repo}/git/commits`, { message: 'lecpage로 연수 사이트 배포', tree: t.sha, parents: [baseSha] });
   await gh(token, 'PATCH', `/repos/${owner}/${repo}/git/refs/heads/${branch}`, { sha: c.sha, force: true });
   onProgress({ step: 'Pages 켜기', pct: 92 });

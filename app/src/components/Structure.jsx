@@ -18,8 +18,8 @@ export function FoundSummary({ p, setInfo }) {
   const addr = [...(d.addresses?.join || []).map((a) => ({ ...a, key: 'joinUrl' })), ...(d.addresses?.survey || []).map((a) => ({ ...a, key: 'surveyUrl' }))]
     .filter((a) => p.info[a.key] !== a.url).slice(0, 3);
   const use = (a) => {
-    if (a.key === 'joinUrl') { setInfo({ joinUrl: a.url, mode: p.info.mode === 'online' ? 'online' : 'hybrid' }); toast('첫 화면에 입장 단추로 실었어요.'); }
-    else { setInfo({ surveyUrl: a.url }); toast('마무리 앞에 설문 단추와 QR을 실었어요.'); }
+    if (a.key === 'joinUrl') { setInfo({ joinUrl: a.url, mode: p.info.mode === 'online' ? 'online' : 'hybrid' }); toast('첫 화면에 입장 버튼으로 실었어요.'); }
+    else { setInfo({ surveyUrl: a.url }); toast('마무리 앞에 설문 버튼과 QR을 실었어요.'); }
   };
   if (!mat) return null;
   const head = found.slice(0, 4);
@@ -35,7 +35,7 @@ export function FoundSummary({ p, setInfo }) {
       {addr.map((a) => (
         <div class="found-addr">
           <span class="small">교재에서 찾은 {a.why}: <span class="mono">{host(a.url)}</span>{a.page ? ` (${a.page}쪽)` : ''}</span>
-          <button type="button" class="btn btn-sm" onClick={() => use(a)}>{a.key === 'joinUrl' ? '입장 단추로 싣기' : '설문으로 싣기'}</button>
+          <button type="button" class="btn btn-sm" onClick={() => use(a)}>{a.key === 'joinUrl' ? '입장 버튼으로 싣기' : '설문으로 싣기'}</button>
         </div>
       ))}
     </div>
