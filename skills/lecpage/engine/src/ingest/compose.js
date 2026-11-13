@@ -117,30 +117,68 @@ const words = (t) => normLine(t).split(/[\s|·,/()[\]:：]+/).map(textKey).filte
  * 고쳐 쓴 문장도 찾도록 낱말이 60% 넘게 겹치면 실린 것으로 봄. 표지의 일시·장소·강사 줄은 연수 정보가 있으면 실린 것.
  * @returns {{ count:number, items:Array<{file,page,title,text,kind}> }}
  */
-export function findLeftovers(material, bp, { max = 20 } = {}) {
+/** 값 속 글자를 모두 이어 붙임(JSON 문자열로 바꾸면 따옴표 앞에 역빗금이 붙어 교재 글과 맞춰 보기 어려움) */
+function stringsOf(v, out = []) {
+  if (typeof v === 'string') out.push(v);
+  else if (Array.isArray(v)) for (const x of v) stringsOf(x, out);
+  else if (v && typeof v === 'object') for (const x of Object.values(v)) stringsOf(x, out);
+  return out.join('\n');
+}
+
+export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
   if (!material?.pages?.length || !bp) return { count: 0, items: [] };
   const renderOnly = new Set((material.files || []).filter((f) => f.renderOf).map((f) => f.id));
   const boiler = new Set((material.boilerplate || []).map((b) => textKey(b.text)));
   const visible = (bp.sections || []).filter((s) => s && !s.hidden);
-  const hay = textKey(JSON.stringify({ meta: bp.meta, instructors: bp.instructors, sections: visible }));
+  const hay = textKey(stringsOf({ meta: bp.meta, instructors: bp.instructors, sections: visible }));
   const meta = bp.meta || {};
   const has = (text) => {
     const k = textKey(text);
     if (k.length < 6 || boiler.has(k)) return true;
+    if (ignore && [...ignore].some((x) => x.length >= 4 && k.includes(x))) return true; // 강사 확인 전이라 싣지 않은 주소의 링크 글
     if (hay.includes(k) || (k.length > 28 && (hay.includes(k.slice(0, 20)) || hay.includes(k.slice(-20))))) return true;
     const lab = splitLabel(normLine(text).replace(/^[-•·▪◦●○■□▶▷►※*]\s*/, ''));
     if (lab && META_LABEL.test(lab[0]) && (meta.date || meta.venue || (bp.instructors || []).length || meta.organizer || meta.contact)) return true;
     const w = words(lab ? lab[1] : text);
     return w.length >= 2 && w.filter((x) => hay.includes(x)).length / w.length >= 0.6;
   };
-  const items = []; let count = 0;
+  const items = []; let count = 0, total = 0;
   for (const p of material.pages) {
     if (p.hidden || p.error || renderOnly.has(p.file)) continue;
-    const add = (text, kind) => { if (has(text)) return; count++; if (items.length < max) items.push({ file: p.file, page: p.page, title: cleanTitle(p.title), text: truncate(normLine(text), 160), kind }); };
+    const add = (text, kind) => { total++; if (has(text)) return; count++; if (items.length < max) items.push({ file: p.file, page: p.page, title: cleanTitle(p.title), text: truncate(normLine(text), 160), kind }); };
     for (const x of p.paragraphs || []) if (x.text) add(x.text, 'para');
     for (const t of p.tables || []) for (const r of t.rows || []) { const row = r.filter(Boolean).join(' | '); if (row) add(row, 'row'); }
   }
-  return { count, items };
+  return { count, total, items };
+}
+
+/**
+ * 교재 반영 점검: 교재에서 찾은 프롬프트·실습 단계·링크·질문답과 교재의 줄이 설계도의 보이는 칸에 들어갔는지 셉니다.
+ * make·patch 요약의 한 줄로 씁니다. 에이전트가 교재와 사이트를 손으로 한 줄씩 대조하지 않게 하려는 것입니다.
+ * @returns {{ prompts, steps, links, faq, lines: {total, missing, items}, missing: number }} 각 항목 { total, miss: [{page, text}] }
+ */
+export function materialCoverage(material, bp) {
+  const d = material?.detected || {};
+  // 교재 보기(deck)는 쪽마다 교재 글 전체를 담고 있어 빼고 셈: 사이트의 칸에 실렸는지를 봄
+  const visible = (bp?.sections || []).filter((s) => s && !s.hidden && s.type !== 'deck');
+  const json = stringsOf({ meta: bp?.meta, instructors: bp?.instructors, sections: visible });
+  const hay = textKey(json);
+  const has = (t) => { const k = textKey(t); return k.length < 4 || hay.includes(k); };
+  const page = (x) => x?.page || x?.pages?.[0] || x?.refs?.[0]?.page || 0;
+  const tally = (list, ok, text) => { const miss = []; for (const x of list) if (!ok(x)) miss.push({ page: page(x), text: truncate(normLine(text(x)), 60) }); return { total: list.length, miss }; };
+  // 프롬프트는 가장 긴 줄로 봄(교재에서 끝에 붙은 버튼 글 '제미나이 열기' 같은 짧은 줄은 사이트에서 빠져도 됨)
+  const main = (t) => String(t || '').split('\n').sort((a, b) => b.length - a.length)[0] || '';
+  const prompts = tally(d.prompts || [], (x) => has(main(x.text)), (x) => main(x.text));
+  const stepItems = (d.steps || []).flatMap((s) => (s.items || []).map((t) => ({ text: typeof t === 'string' ? t : t?.text || '', page: s.page })));
+  const steps = tally(stepItems, (x) => has(x.text), (x) => x.text);
+  // 접속·설문 주소(addresses)는 강사가 확인한 뒤에만 싣는 것이라 세지 않음(held에 따로)
+  const held = [...(d.addresses?.join || []), ...(d.addresses?.survey || [])].map((a) => a.url).filter(Boolean);
+  const links = tally((d.links || []).filter((l) => /^https?:/i.test(l.url || '') && !held.includes(l.url)),(l) => json.includes(l.url) || json.includes(l.url.replace(/\/$/, '')), (l) => l.url);
+  const faq = tally(d.faq || [], (x) => has(x.q), (x) => x.q);
+  const heldLabels = new Set((material?.pages || []).flatMap((p) => p.links || []).filter((l) => held.includes(l.url) && l.label).map((l) => textKey(l.label)));
+  const lo = findLeftovers(material, { ...bp, sections: visible }, { max: 3, ignore: heldLabels });
+  const lines = { total: lo.total || 0, missing: lo.count, items: lo.items.map((x) => ({ page: x.page, text: truncate(x.text, 60) })) };
+  return { prompts, steps, links, faq, lines, held: held.filter((u) => !json.includes(u)), missing:prompts.miss.length + steps.miss.length + links.miss.length + faq.miss.length + lines.missing };
 }
 
 const TAIL = ['materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'];

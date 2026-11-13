@@ -375,6 +375,25 @@ function briefAny(p) {
   return data?.kind === 'lecpage-material' ? briefMaterial(data) : briefBlueprint(data);
 }
 
+/**
+ * 교재 반영 점검 한 줄(+빠진 것 3개까지): 교재의 프롬프트·실습 단계·링크·질문답·줄이 설계도의 보이는 칸에 있는지.
+ * 엔진이 대조하므로 에이전트는 교재와 사이트를 손으로 맞춰 보지 않습니다.
+ */
+function coverageLines(work, raw) {
+  const mp = join(work, 'material.json');
+  if (!existsSync(mp)) return [];
+  let c; try { c = E.materialCoverage(JSON.parse(readFileSync(mp, 'utf8')), E.validate(raw).blueprint); } catch { return []; }
+  const part = (label, x) => (x.total ? `${label} ${x.total - x.miss.length}/${x.total}` : '');
+  const head = [part('프롬프트', c.prompts), part('실습 단계', c.steps), part('링크', c.links), part('질문답', c.faq), c.lines.total ? `교재 줄 ${c.lines.total - c.lines.missing}/${c.lines.total}` : ''].filter(Boolean).join(' · ');
+  const miss = [...c.prompts.miss.map((x) => ['프롬프트', x]), ...c.steps.miss.map((x) => ['단계', x]), ...c.links.miss.map((x) => ['링크', x]), ...c.faq.miss.map((x) => ['질문답', x]), ...c.lines.items.map((x) => ['줄', x])];
+  return [
+    `교재 반영 ${c.missing ? '△' : '✓'} ${head} · ${c.missing ? `빠진 것 ${c.missing}` : '빠진 것 없음(손으로 대조하지 않아도 돼요)'}`,
+    ...miss.slice(0, 3).map(([k, x]) => `  빠짐 ${k}${x.page ? ` p${x.page}` : ''} ${x.text}`),
+    c.lines.missing ? `  교재 줄 ${c.lines.missing}개는 structure --add-leftovers로 글 칸에 넣을 수 있어요` : '',
+    c.held?.length ? `  교재의 접속·설문 주소 ${c.held.length}개는 강사 확인 뒤 info.json(joinUrl·surveyUrl)에: ${plural(c.held.map((u) => cut(u, 40)), 2, ', ')}` : '',
+  ];
+}
+
 // ── 패치 ─────────────────────────────────────────
 /** --set 경로=값 → 패치. 경로: meta.venue, design.preset, sections.<칸 id>.title, sections.stations.items.0.title */
 function setToPatch(raw, expr) {
@@ -546,7 +565,8 @@ const commands = {
       ...steps,
       bm.lines[0], bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
-      ...bb.lines,
+      ...bb.lines.filter((l) => !l.startsWith('싣지 못한 것')),
+      ...coverageLines(work, raw),
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
@@ -632,6 +652,7 @@ const commands = {
       ...pw.map((w) => `주의 ${w.message_ko}`),
       `검증 ✓${final.warnings.length ? ` (주의 ${final.warnings.length}: ${plural(final.warnings.map((w) => cut(w.message_ko, 50)), 2, ' / ')})` : ''}`,
       b ? buildLine(b) : skip,
+      ...(changes.length ? coverageLines(work, r.raw) : []),
       ...(q ? qaLines(q) : []),
     ];
     say(lines, { ok: true, blueprint: bpPath, changes, note: r.note, patchWarnings: pw, warnings: final.warnings, build: b && { dir: b.dir, sizeKB: b.sizeKB, ...b.report }, skipped: skip, qa: q });
