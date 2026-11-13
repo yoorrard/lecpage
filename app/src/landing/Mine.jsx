@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { stageOf, duplicateProject } from '../lib/project.js';
+import { stageOf, duplicateProject, deleteProject } from '../lib/project.js';
+import { Dialog } from '../components/ui.jsx';
 import { copy, fmtDate, toast } from '../lib/util.js';
 
 // 첫 화면의 '내 연수' 목록. 만든 연수가 있을 때만 받아요(처음 오는 사람의 첫 화면을 가볍게).
@@ -21,8 +22,9 @@ function DayLinks({ p, adminKey }) {
   );
 }
 
-/** list: 연수 목록, once·busyProps: 두 번 눌러도 한 번만(Home), reload: 목록 다시 읽기, onDelete(p): 지우기 확인 */
-export function Mine({ list, once, busyProps, reload, onDelete }) {
+/** list: 연수 목록, once·busyProps: 두 번 눌러도 한 번만(Home), reload: 목록 다시 읽기. 지우기 확인 창도 여기(첫 화면 코드를 가볍게) */
+export function Mine({ list, once, busyProps, reload }) {
+  const [del, setDel] = useState(null);
   // 공개한 연수의 강사 화면 관리자 키(바로 공개는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
   const [keys, setKeys] = useState({});
   useEffect(() => {
@@ -46,12 +48,17 @@ export function Mine({ list, once, busyProps, reload, onDelete }) {
               {p.deploy?.lastUrl && <DayLinks p={p} adminKey={keys[p.id]} />}
               <div class="proj-actions">
                 <button class="btn btn-sm btn-quiet" {...busyProps(`dup-${p.id}`, '복제 중…')} onClick={() => once(`dup-${p.id}`, async () => { await duplicateProject(p); toast('복제했어요.'); reload(); }, { stay: true, fail: '복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.' })}>복제</button>
-                <button class="btn btn-sm btn-quiet" onClick={() => onDelete(p)}>지우기</button>
+                <button class="btn btn-sm btn-quiet" onClick={() => setDel(p)}>지우기</button>
               </div>
             </div>
           );
         })}
       </div>
+      <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
+        <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
+        <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 올린 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>
+        <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button></div>
+      </Dialog>
     </section>
   );
 }

@@ -112,7 +112,7 @@ export function Demo() {
       {!bp ? <p class="muted">불러오는 중…</p> : (
         <div class="wiz-main">
           {step === 1 && <>
-            <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>교재를 넣으면 AI가 사이트를 만들어요</h1><p>실제로는 PPT·PDF·한글(HWPX)·워드 파일을 여기에 놓아요.</p></div></div>
+            <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>교재를 넣으면 AI가 사이트를 만들어요</h1><p>실제로는 PPT·PDF·한글(HWP·HWPX)·워드 파일을 여기에 놓아요.</p></div></div>
             <ul class="files" aria-label="교재 파일(예시)">
               <li><span class="kind">PPTX</span><div><b>{meta.title}.pptx</b><div class="small muted">예시 교재 · 2.4MB · 32쪽</div></div><span class="tag tag-butter">예시</span></li>
             </ul>

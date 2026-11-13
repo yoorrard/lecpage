@@ -71,7 +71,7 @@ lecpage가 그냥 "페이지 만들어 줘"와 다른 점은 이 규칙이 엔�
 교재와 사이트의 인상이 같도록, 교재에 쓴 글꼴을 읽어 같은 글꼴(무료 웹 버전) 또는 결이 비슷한 무료 글꼴로 씁니다.
 
 - **읽는 곳**: PPTX 테마 제목/본문 글꼴(`majorFont`/`minorFont`의 latin·ea·Hang)과 글자 조각의 `a:latin`/`a:ea`(글자 수로 가중) ·
-  DOCX 테마·스타일·`w:rFonts`(eastAsia) · HWPX `header.xml` 글꼴과 글자 모양 · PDF 글꼴 이름(pdf.js 또는 파이썬 대체 경로, `ABCDEF+` 떼기).
+  DOCX 테마·스타일·`w:rFonts`(eastAsia) · HWPX `header.xml`·HWP `DocInfo` 글꼴과 글자 모양 · PDF 글꼴 이름(pdf.js 또는 파이썬 대체 경로, `ABCDEF+` 떼기).
   제목 자리표시자·제목 스타일·크고 짧은 글 = 제목(display), 나머지 = 본문(body).
 - **결과**: `material.detected.fonts = { display:{name, share}, body:{name, share}, all:[{name, share, role}] }`
   → 초안의 `design.sourceFonts = { display:{name, share}, body:{name, share} }`
