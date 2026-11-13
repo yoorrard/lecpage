@@ -208,10 +208,14 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 /* 참여 QR: 흰 바탕 위 검은 점(어느 테마에서나), 크기는 레일 폭에 맞춤 */
 /* 레일 안에서 QR이 남는 높이만큼 커지고(타이머·신호가 오면 줄어듦) 넘치지 않음 */
 .lp-scr-join{display:grid;justify-items:center;gap:clamp(6px,1.2vh,14px);text-align:center}
-.lp-scr-join-h{font-size:clamp(1rem,.8rem + .7vw,1.6rem);font-weight:700}
+.lp-scr-join-h{font-size:clamp(.95rem,min(.8rem + .7vw,3vh),1.6rem);font-weight:700}
 .lp-scr-join .lp-qr-zoom{display:grid;justify-items:center;gap:6px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:zoom-in;border-radius:var(--radius-sm)}
 .lp-scr-join .lp-qr-zoom:disabled{cursor:default}
 .lp-scr-join .lp-qr-zoom:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+/* 레일이 빠듯하면(screen.js가 data-tight) 'QR 크게 보기' 글자를 빼고 간격을 줄임 — 크게 보기는 위 [QR 크게] 단추로 */
+.lp-scr-side[data-tight]{gap:8px;padding-block:12px}
+.lp-scr-side[data-tight] .lp-qr-zoom-t{display:none}
+.lp-scr-side[data-tight] :is(.lp-scr-timer,.lp-scr-signal){padding-top:8px}
 /* 크기는 레일 폭에 맞추고, 타이머·신호가 와서 넘치면 screen.js가 QR만 줄임(뒷자리용은 [QR 크게]) */
 .lp-scr-join .lp-qr{width:min(100%,clamp(170px,24vw,420px));aspect-ratio:1;border-radius:var(--radius-sm);padding:0}
 .lp-scr-join .lp-qr svg{width:100%;height:100%}
@@ -219,13 +223,13 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-qr-zoom-t{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:600;color:var(--muted-foreground)}
 .lp-qr-zoom-t .lp-ic{width:14px;height:14px}
 .lp-qr-zoom:hover .lp-qr-zoom-t{color:var(--foreground)}
-.lp-scr-url{font-family:var(--font-mono);font-size:clamp(1.05rem,.7rem + 1.15vw,2rem);font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.lp-scr-url{font-family:var(--font-mono);font-size:clamp(1rem,min(.7rem + 1.15vw,3.8vh),2rem);font-weight:700;line-height:1.25;overflow-wrap:anywhere}
 .lp-scr-full{font-family:var(--font-mono);font-size:clamp(.8rem,.65rem + .4vw,1.05rem);color:var(--muted-foreground);overflow-wrap:anywhere}
-.lp-scr-code{font-size:clamp(.9rem,.75rem + .45vw,1.2rem);color:var(--muted-foreground)}
+.lp-scr-code{font-size:clamp(.85rem,min(.75rem + .45vw,2.6vh),1.2rem);color:var(--muted-foreground)}
 .lp-scr-code b{margin-left:.3em;font-family:var(--font-mono);font-size:1.35em;letter-spacing:.12em;color:var(--foreground)}
 /* 큰 타이머 */
 .lp-scr-timer{display:grid;justify-items:center;gap:2px;padding-top:clamp(10px,1.8vh,22px);border-top:1px solid var(--rule-c)}
-.lp-scr-timer-h{font-size:clamp(.85rem,.7rem + .4vw,1.15rem);font-weight:700;color:var(--muted-foreground)}
+.lp-scr-timer-h{font-size:clamp(.8rem,min(.7rem + .4vw,2.4vh),1.15rem);font-weight:700;color:var(--muted-foreground)}
 .lp-scr-timer b{font-family:var(--font-num);font-weight:var(--num-weight);font-size:clamp(2.6rem,min(1.6rem + 4.4vw,10vh),7rem);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .lp-scr-timer[data-soon] b{color:var(--warning)}
 .lp-scr-timer[data-over] b{color:var(--danger)}
@@ -239,7 +243,7 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 /* 이해 신호 */
 .lp-scr-signal{display:grid;gap:8px;padding-top:clamp(10px,1.8vh,22px);border-top:1px solid var(--rule-c)}
 .lp-scr-signal .lp-sig{height:clamp(14px,1.6vh,22px)}
-.lp-scr-signal .lp-sig-l{font-size:clamp(.9rem,.75rem + .45vw,1.25rem);justify-content:center}
+.lp-scr-signal .lp-sig-l{font-size:clamp(.85rem,min(.75rem + .45vw,2.6vh),1.25rem);justify-content:center}
 /* 무대: 질문 */
 .lp-scr-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px}
 .lp-scr-h h2{font-size:clamp(1.6rem,1rem + 2.2vw,3.4rem);line-height:1.2}
@@ -318,7 +322,8 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-scr .lp-reactions span{font-size:3rem}
 @media (max-width:899px),(max-aspect-ratio:1/1){
   .lp-scr-join{grid-template-columns:auto minmax(0,1fr);justify-items:start;text-align:left;align-items:center;column-gap:16px}
-  .lp-scr-join .lp-qr-zoom{grid-row:span 4;width:auto}
+  .lp-scr-join .lp-qr-zoom{grid-column:1;grid-row:1 / span 5;width:auto}
+  .lp-scr-join > :not(.lp-qr-zoom){grid-column:2;min-width:0}
   .lp-scr-join .lp-qr{width:clamp(128px,34vw,220px)!important}
   .lp-scr-act .lp-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lp-scr-act .lp-btn{min-width:44px;padding-inline:10px}

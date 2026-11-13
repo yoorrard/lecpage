@@ -237,10 +237,12 @@
   var side = $('.lp-scr-side'), sideQr = $('.lp-scr-join .lp-qr');
   function fitRail() {
     if (!side || !sideQr) return;
-    sideQr.style.width = '';
+    sideQr.style.width = ''; side.removeAttribute('data-tight');
     if (getComputedStyle(side).overflow !== 'hidden') return;
     var over = side.scrollHeight - side.clientHeight;
-    if (over > 0) sideQr.style.width = Math.max(110, sideQr.getBoundingClientRect().width - over) + 'px';
+    if (over > 0) sideQr.style.width = Math.max(96, sideQr.getBoundingClientRect().width - over) + 'px';
+    // QR을 가장 작게 해도 넘치면 덧말을 빼고 간격을 줄임(그래도 넘치면 QR을 더 줄임)
+    if (side.scrollHeight > side.clientHeight + 1) { side.setAttribute('data-tight', ''); var o2 = side.scrollHeight - side.clientHeight; if (o2 > 0) sideQr.style.width = Math.max(72, sideQr.getBoundingClientRect().width - o2) + 'px'; }
   }
   fitRail();
   if (window.ResizeObserver && side) { var sT = 0; new ResizeObserver(function () { clearTimeout(sT); sT = setTimeout(fitRail, 80); }).observe(side); }
