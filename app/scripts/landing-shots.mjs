@@ -4,6 +4,7 @@
 //   --vs-base=<폴더> --vs-bp=<설계도>   '같은 교재, 같은 요청' 비교 그림: AI 에이전트에 그냥 맡겨 만든 사이트 폴더와
 //                                       lecpage 설계도(docs/research/benchmark-2026-11.md의 측정 때 만든 것). 둘 다 주어야 찍음
 // 그림은 모두 엔진이 실제로 만든 예시 사이트예요(모형이 아님). 디자인·렌더러가 바뀌면 다시 돌리세요.
+// 쇼케이스(show)는 PC(1280×800)와 휴대폰(390×700, -m) 두 판을 찍어요. 첫 화면은 휴대폰 너비에서 휴대폰 판을 보여 줘요.
 // 그림은 src 아래에 두어 빌드 때 이름에 해시가 붙고(오래 캐시), 첫 화면은 필요한 그림만 늦게 받습니다.
 // playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다.
 import { createRequire } from 'node:module';
@@ -99,7 +100,10 @@ try {
     const sel = example('sel-story');
     for (const id of SHOWCASE) {
       if (!E.getPreset(id)) { console.warn(`디자인 ${id}가 없어 건너뜀`); continue; }
-      await save(`show-${id}`, await shoot(buildTo(`show-${id}`, withPreset(sel, id))), { q: 0.74 });
+      const dir = buildTo(`show-${id}`, withPreset(sel, id));
+      await save(`show-${id}`, await shoot(dir), { q: 0.74 });
+      // 휴대폰 너비에서 보여 줄 판: 같은 사이트를 휴대폰 크기(390×700)로 찍음(PC 화면을 줄여 보이면 실제 휴대폰 모습과 다름). 400px로 줄여 가볍게
+      await save(`show-${id}-m`, await shoot(dir, { width: 390, height: 700, dpr: 1.5 }), { q: 0.72, w: 400 });
     }
   }
   const quiet = (bp) => ({ ...bp, live: { ...(bp.live || {}), provider: 'none', features: [] } });

@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView } from './motion.js';
+import { useSeen } from './motion-more.js';
 import { shot, shotSize } from './facts.js';
 
 /**
  * 배포하면 주소와 QR: 진짜로 찍히는 QR(이 앱에 들어 있는 예시 사이트로 감)과, 휴대폰 안에서 천천히 내려가는 참가자 화면(실제 예시 사이트를 찍은 그림).
- * QR 그리는 코드는 이 구간에 가까워질 때 받아요(첫 화면을 가볍게). 휴대폰 화면은 이 구간이 보일 때만 움직여요.
+ * QR 그리는 코드는 이 구간에 가까워질 때 받아요(첫 화면을 가볍게). 휴대폰 화면은 휴대폰 그림이 화면 안에 들어왔을 때만 움직여요
+ * (휴대폰 너비에서는 구간이 길어, 구간을 보면 그림이 아직 화면 밖일 때 움직이기 시작함).
  */
 export function Reach() {
-  const box = useRef();
+  const box = useRef(); const phone = useRef();
   const near = useInView(box, { margin: '500px 0px', once: true });
-  const on = useInView(box);
+  const on = useSeen(phone, { amount: 0.6 });
   const [qr, setQr] = useState('');
   const url = new URL('examples/data-lab/index.html', location.href.split('#')[0]).href;
   useEffect(() => {
@@ -35,7 +37,7 @@ export function Reach() {
           {qr ? <img src={qr} width="168" height="168" alt="예시 연수 사이트로 가는 QR" /> : <span class="ld-qr-wait" />}
           <figcaption><b>휴대폰 카메라로 찍어 보세요</b><span>예시 연수 사이트가 열려요.</span><a href="examples/data-lab/index.html" target="_blank" rel="noopener">예시 사이트 새 창으로 열기</a></figcaption>
         </figure>
-        <div class={`ld-phone${on ? ' is-on' : ''}`} aria-hidden="true">
+        <div class={`ld-phone${on ? ' is-on' : ''}`} ref={phone} aria-hidden="true">
           <i class="ld-phone-notch" />
           <div class="ld-phone-screen">{near && <img src={shot('phone-data-lab')} alt="" width={sz.w} height={sz.h} decoding="async" />}</div>
         </div>
