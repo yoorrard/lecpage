@@ -374,9 +374,9 @@ CORS 확인(2026-11-13, `Origin: https://lecpage.example`): `api.onpod.ai/v1/sta
 
 ### 12.4 lecpage에 가져온 것
 
-- **공개 연수일 때만 구조화 데이터**: `access.mode`가 `public`이면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. 기본(주소를 받은 사람만)과 암호 사이트에는 넣지 않습니다.
+- **공개 연수일 때만 구조화 데이터**: `access.mode`가 `public`이고 연수 날짜가 있으면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. 기본(주소를 받은 사람만)과 암호 사이트에는 넣지 않습니다.
 - **Onpod의 자동 파일과 검색 제외**: Onpod에 올릴 때 비공개 사이트에는 짧은 `llms.txt`와 빈 `sitemap.xml`을 함께 올려 Onpod이 쪽 목록(강사 화면 포함)을 자동으로 내놓지 않게 합니다. `robots.txt`는 lecpage 것이 이깁니다. 공개 사이트에는 주소를 미리 알 수 있으므로(`https://이름.onpod.ai/`) 첫 화면만 담은 `sitemap.xml`과 `robots.txt`의 `Sitemap:` 줄을 넣습니다. 첫 화면 JSON-LD 자동 삽입은 막을 수 없지만 비공개 사이트는 `noindex`·`Disallow`라 검색에 영향이 없습니다.
-- **한 마디로 다시 올리기**: `publish work`가 지난번 올린 곳·이름을 기억해 `--host` 없이도 같은 곳·같은 주소로 다시 올립니다.
+- **한 마디로 다시 올리기**: `publish work`가 지난번 올린 곳·이름을 기억해 `--host` 없이도 같은 곳·같은 주소로 다시 올립니다. Onpod에 올린 뒤 Cloudflare 참여 기능 중계가 있으면 중계가 새 주소도 받게 고칩니다.
 - 넣지 않은 것: `llms.txt` 자동 생성(공개 사이트도 첫 화면 글이 곧 설명이라 따로 둘 까닭이 적음), Onpod 프로젝트 초대(연수 사이트가 아니라 실습용 기능).
 
 ### 12.5 확인 못 한 것
