@@ -454,7 +454,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-tt > li:has(h3 a:focus-visible){tr
 .lp-book.c2{background:var(--foreground);color:var(--background)}
 .lp-book.c3{background:var(--accent-2);color:var(--accent-2-foreground)}
 .lp-book b{writing-mode:vertical-rl;font-size:var(--fs-sm);font-weight:700;line-height:1.1;max-height:calc(100% - 2.4em);overflow:hidden;white-space:nowrap}
-.lp-book i{font-style:normal;font-family:var(--font-mono);font-size:10px;opacity:.8}
+.lp-book i{font-style:normal;font-family:var(--font-mono);font-size:10px}
 .lp-book.is-hot{transform:translate3d(0,-14px,0)}
 .lp-shelf-list{list-style:none;display:grid;grid-template-columns:minmax(0,1fr);border-bottom:var(--rule)}
 .lp-shelf-list > li{display:grid;grid-template-columns:3.6rem minmax(0,1fr) auto;gap:var(--sp-3) var(--sp-4);align-items:center;padding:var(--sp-4) 0;border-top:var(--rule)}
@@ -699,7 +699,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-cq-q{position:relative;margin:0;display:grid;gap:var(--sp-3);padding-top:1.8em}
 .lp-cq-q::before{content:"“";position:absolute;left:-.04em;top:-.12em;font-family:var(--font-display);font-weight:var(--display-weight);font-size:4.2em;line-height:1;color:var(--primary)}
 .lp-cq-q p{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-lg);line-height:1.45;letter-spacing:var(--display-tracking);text-wrap:balance}
-.lp-cq-q cite{font-style:normal;font-size:var(--fs-sm);color:var(--muted-foreground)}
+.lp-cq-q cite{font-style:normal;font-size:var(--fs-sm);font-weight:600;color:var(--foreground)} /* 구석 모티프 그림 위에 놓여도 4.5:1(옅은 글자색은 모자람) */
 .lp-cq-b{display:grid;gap:var(--sp-2);padding-top:var(--sp-4);border-top:var(--rule)}
 .lp-cq.is-plain .lp-cq-b{border-top:max(2px,var(--border-w)) solid var(--foreground)}
 .lp-cq-b h3{font-size:var(--fs-md);font-weight:700}
@@ -715,6 +715,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-cn h3{font-size:var(--fs-md);font-weight:700}
 .lp-cn p{font-size:var(--fs-sm);line-height:1.65}
 .lp-cn .lp-bq p{font-size:var(--fs-sm)}
+.lp-cn .lp-bq cite{color:inherit;font-weight:600} /* 옅은 글자색은 쪽지 바탕(색이 섞인 카드) 위에서 4.5:1이 안 됨 */
 .lp-cn:nth-child(3n+2){transform:rotate(1.1deg)}
 .lp-cn:nth-child(3n){transform:rotate(-.6deg)}
 @media (hover:hover){html:not([data-rest="0"]):not(.lp-paused) .lp-cn:hover{transform:rotate(0) translate3d(0,-4px,0)}}
@@ -938,7 +939,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-pl-heads{display:none;list-style:none;gap:var(--sp-4)}
 .lp-pl-heads > li{display:flex;align-items:center;gap:8px;padding-bottom:var(--sp-2);border-bottom:max(2px,var(--border-w)) solid var(--foreground);font-weight:700;font-size:var(--fs-sm)}
 .lp-pl-heads > li::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--lane)}
-.lp-pl :is(.c0){--lane:var(--primary)}.lp-pl :is(.c1){--lane:var(--accent)}.lp-pl :is(.c2){--lane:color-mix(in srgb,var(--foreground) 60%,var(--background))}
+.lp-pl :is(.c0){--lane:var(--primary)}.lp-pl :is(.c1){--lane:var(--accent)}.lp-pl :is(.c2){--lane:color-mix(in srgb,var(--foreground) 80%,var(--background))}
 .lp-pl-grid{position:relative}
 .lp-pl-svg{display:none;position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .lp-pl-svg path{fill:none;stroke:color-mix(in srgb,var(--primary) 55%,transparent);stroke-width:2;stroke-dasharray:5 5;vector-effect:non-scaling-stroke;transition:stroke .2s}
