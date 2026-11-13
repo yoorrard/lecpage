@@ -105,7 +105,7 @@ try {
     if (want('live')) { await page.click('[role=tab]:has-text("참여 기능")'); if (tail) await top('.ws-panel'); await shot('live'); }
     if (want('review')) { await page.click('[role=tab]:has-text("수정 요청")'); if (tail) await top('.ws-panel'); await shot('review'); }
 
-    // 4. 공개하기
+    // 4. 배포하기
     if (want('share')) {
       await top();
       await page.click('.head-tools .btn-primary');

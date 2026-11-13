@@ -1,6 +1,6 @@
 # Cloudflare에 올리기 (끌어 놓기 · wrangler · 실시간 중계)
 
-> 정적 파일 요청이 **무료·무제한**입니다. skill(명령 가능)의 기본 올릴 곳이고, 같은 계정에 실시간 중계(Durable Objects)도 둘 수 있습니다.
+> 정적 파일 요청이 **무료·무제한**입니다. skill(명령 가능)의 기본 배포할 곳이고, 같은 계정에 실시간 중계(Durable Objects)도 둘 수 있습니다.
 > 2026-11-11 확인(`docs/research/hosting-2026-11.md` §3.2). 대시보드 글자는 공식 문서 기준이고 실제 배포는 해 보지 않았습니다 ⚠️.
 
 ## 어느 길로
@@ -79,7 +79,7 @@ D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name 
 알아 둘 것
 - wrangler는 `dist/` 안의 숨은 폴더도 그대로 올립니다(로컬에서 확인). `dist/.git`이 있으면(GitHub Pages에 올린 적이 있으면) `<skill 폴더>/templates/deploy/cloudflare/.assetsignore`를 `dist/`에 복사합니다.
 - `/console.html`은 `/console`로 307 이동해 열립니다. 링크는 그대로 동작합니다.
-- 다시 올리기: 같은 `--name`으로 같은 명령. 주소는 그대로입니다.
+- 다시 배포: 같은 `--name`으로 같은 명령. 주소는 그대로입니다.
 - 이전 판으로: `npx wrangler@4 deployments list --name <이름>` → `npx wrangler@4 rollback <버전ID> --name <이름>`.
 
 `pages.dev` 주소로 올릴 때(내 도메인을 CNAME만으로 붙이려 할 때 등):

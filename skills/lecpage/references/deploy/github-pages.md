@@ -25,12 +25,12 @@ cd dist && git init -b main && git add -A && git commit -m site \
 # → https://<계정>.github.io/lec-20261111/  (처음에는 1~2분, 길면 10분 뒤)
 ```
 - 대화 없이 돕니다(gh 2.89.0 `--help`로 플래그 확인). 인증은 `gh auth status`가 로그인 상태이거나 `GH_TOKEN`.
-- 다시 올리기: 다시 빌드한 뒤 `cd dist && git add -A && git commit -m update && git push`. 주소는 그대로이고, 빌드는 `dist/.git`을 지우지 않습니다.
+- 다시 배포: 다시 빌드한 뒤 `cd dist && git add -A && git commit -m update && git push`. 주소는 그대로이고, 빌드는 `dist/.git`을 지우지 않습니다.
 - `dist/.git`이 생깁니다. 같은 `dist/`를 `pack`(ZIP)이나 wrangler로도 내보내면 `.git`까지 나갑니다. 그때는 `.git`을 지우거나 `cloudflare.md`의 `.assetsignore`를 씁니다.
 - Actions로 배포하려면 `templates/deploy/github-pages/.github/workflows/deploy-pages.yml`을 저장소에 넣고 **Settings → Pages**의 Source를 **GitHub Actions**로 바꿉니다(맨 위의 `.md`와 `.env`·`data/`가 빠짐).
 
 ## 명령어 없이
-**앱**: 공개하기에서 GitHub Pages를 고릅니다. 토큰 만들기 화면에서 **Repository access**를 **All repositories**로 고르고(이 항목은 주소로 미리 채울 수 없음) 맨 아래 **Generate token**. 권한(Administration·Contents·Pages 쓰기)은 미리 채워져 있습니다.
+**앱**: 배포하기에서 GitHub Pages를 고릅니다. 토큰 만들기 화면에서 **Repository access**를 **All repositories**로 고르고(이 항목은 주소로 미리 채울 수 없음) 맨 아래 **Generate token**. 권한(Administration·Contents·Pages 쓰기)은 미리 채워져 있습니다.
 
 **웹 업로드**(앱도 명령도 없이):
 1. https://github.com 로그인 → 오른쪽 위 **+** → **New repository** → 이름(예: `lec-20261111`) → **Public** → **Create repository**.
@@ -62,7 +62,7 @@ skill은 `curl -sI https://<계정>.github.io/<저장소>/ | head -1`이 `200`�
 | 증상 | 원인 → 대처 |
 |---|---|
 | 올렸는데 사이트가 게시되지 않음 | GitHub 이메일 인증을 안 마친 계정 → 인증한 뒤 다시 push |
-| 404 | Pages가 꺼져 있음, 또는 폴더째 올려 `index.html`이 한 단계 안에 있음 → 내용물만 다시 올리기 |
+| 404 | Pages가 꺼져 있음, 또는 폴더째 올려 `index.html`이 한 단계 안에 있음 → 내용물만 다시 배포 |
 | `git commit`이 "Please tell me who you are"로 멈춤 | `dist/`에서 `git config user.name <계정>`과 `git config user.email <계정>@users.noreply.github.com` |
 | 앱에서 올리다 멈춤(403·429) | GitHub API의 2차 제한(콘텐츠를 만드는 요청은 대체로 분당 80·시간당 500). 그림이 450장을 넘으면 걸릴 수 있음 ⚠️ → 잠시 뒤 다시 하거나 위 명령으로 |
 | 슬라이드가 안 보임 | 파일 이름의 대소문자가 다름(GitHub Pages는 대소문자를 가림) |
