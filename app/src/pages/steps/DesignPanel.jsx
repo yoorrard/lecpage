@@ -170,7 +170,7 @@ export function DesignPanel({ p, update }) {
   );
 }
 
-/** 디자인 컨셉: 이 연수가 참가자에게 주는 경험 한 줄과 화면에 되풀이되는 그림. 디자인·움직임·구성이 여기서 출발함. 선생님이 고칠 수 있음 */
+/** 디자인 컨셉: 이 연수가 참가자에게 주는 경험 한 줄과 화면에 되풀이되는 그림. 디자인·움직임·구성이 여기서 출발함. 강사가 고칠 수 있음 */
 function ConceptCard({ bp, concept, update, setD }) {
   const [edit, setEdit] = useState(false);
   const d = bp.design || {};

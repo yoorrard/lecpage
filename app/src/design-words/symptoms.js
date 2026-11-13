@@ -12,7 +12,7 @@ function context(bp0) {
   const r = E.resolveDesign(bp);
   const preset = E.getPreset(r.preset);
   const theme = d.theme && d.theme !== 'preset' ? d.theme : preset.theme;
-  const cap = E.motionCap(bp.audience, bp.meta?.admin?.kind, 3).cap; // 선생님이 고르면 허락되는 가장 높은 단계
+  const cap = E.motionCap(bp.audience, bp.meta?.admin?.kind, 3).cap; // 강사가 고르면 허락되는 가장 높은 단계
   const ranked = E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length).map((x) => x.id);
   return { bp, d, r, preset, theme, motion: r.motion, cap, ranked };
 }
