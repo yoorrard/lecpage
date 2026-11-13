@@ -361,7 +361,10 @@
 .ld-skill{display:grid;gap:24px;padding-top:clamp(28px,4vw,48px);border-top:1px solid var(--line)}
 .ld-skill h2{margin-top:12px;font-size:clamp(1.5rem,1.1rem + 1.6vw,2.2rem)}
 .ld-skill .ld-sub{margin-top:12px}
-.ld-cmd{display:flex;flex-wrap:wrap;align-items:center;gap:10px;align-self:center}
+.ld-cmds{display:grid;gap:16px;align-self:center}
+.ld-cmd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.ld-cmd-for{flex-basis:100%;font-size:.88rem;font-weight:600;color:var(--ink-2)}
+.ld-cmd code span{white-space:nowrap} /* 명령은 낱말 사이에서만 줄을 바꿈(--marketplace가 갈라지지 않게) */
 .ld-cmd code{flex:1 1 16em;min-width:0;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--hair);font-family:var(--f-mono);font-size:.94rem;overflow-wrap:anywhere}
 .ld-cmd-help{flex-basis:100%;font-size:.92rem}
 /* 터치 화면: 누르는 곳 44px(docs/interaction.md 7절) */

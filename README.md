@@ -5,11 +5,16 @@
 **교재를 넣으면 연수 사이트가 나와요.** 연수 교재(PPT·PDF·한글 HWPX·워드)를 놓으면 AI가 연수 흐름과 문구를 짜고, 주제에 맞는 디자인으로 사이트를 만들어요. 단추 하나로 공개하면 참가자에게 보낼 주소와 QR이 나와요. 무료·오픈소스이고 회원가입이 없어요.
 
 - **웹앱**: 브라우저에서 바로 → **https://yoorrard.github.io/lecpage/**
-- **Agent Skill**: Claude Code·Codex·Cursor·Gemini CLI 등 쓰던 AI 도구 안에서, 쓰던 구독 그대로
+- **Agent Skill**: Claude Code·Codex·Cursor·Gemini CLI 등 쓰던 AI 도구 안에서, 쓰던 구독 그대로. 만든 연수는 파일 하나로 웹앱에 넘겨 화면에서 다듬고 공개해요
 
-```bash
-npx skills add yoorrard/lecpage
-```
+| 도구 | 설치(한 줄) |
+|---|---|
+| Claude Code | 대화창에 `/plugin install lecpage --marketplace yoorrard/lecpage` (터미널은 `claude plugin install lecpage --marketplace yoorrard/lecpage`) |
+| Codex | 대화창에 `$skill-installer https://github.com/yoorrard/lecpage/tree/main/skills/lecpage` |
+| Gemini CLI | `gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage` |
+| Cursor 등 그 밖의 도구 | `npx skills add yoorrard/lecpage` (위 도구에도 돼요. 모든 프로젝트에 쓰려면 `-g`) |
+
+근거: [Claude Code 플러그인 설치](https://code.claude.com/docs/en/plugins/install) · [Codex 스킬](https://developers.openai.com/codex/skills) · [Gemini CLI 스킬](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills.md) · [skills CLI](https://github.com/vercel-labs/skills). claude.ai에서는 `skills/lecpage` 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기로 넣어요.
 
 <p align="center"><img src="docs/images/app-home.webp" width="49%" alt="lecpage 첫 화면: 교재 파일을 놓으면 시작"> <img src="docs/images/app-edit.webp" width="49%" alt="살펴보고 고치기: 내용·디자인·참여 기능 탭과 기기별 미리보기"></p>
 <p align="center"><img src="docs/images/presets.webp" width="98%" alt="같은 연수 내용을 여러 디자인으로 만든 첫 화면"></p>
@@ -110,9 +115,12 @@ AI가 HTML을 직접 쓰지 않고, 정해진 엔진과 짧은 명령으로 만�
 | `review dist` | 강사가 사이트에 펜·네모로 표시한 수정 요청을 파일로 받기 |
 | `infra` | 인원·기능·네트워크로 참여 기능 연결 방식과 올릴 곳 고르기 |
 | `qa` · `doctor` | 휴대폰·태블릿·PC × 밝게·어둡게 점검(디자인·문구 검사 포함) · 환경 점검 |
+| `app work` | 웹앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 `.lecpage` 파일 하나로(비밀 값은 빼요). 앱 첫 화면 [저장한 파일 열기]로 열어 디자인·참여 기능·공개를 화면에서 이어 해요 |
+| `app 연수.lecpage` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업 |
 
 ## 저장소 구조
 ```
+.claude-plugin/        Claude Code 플러그인 마켓플레이스(skills/lecpage를 플러그인 하나로 설치)
 skills/lecpage/        Agent Skill (자체 완결: SKILL.md, references, engine, scripts, backends, templates, examples)
   engine/src/          설계도 검증·결정 규칙·디자인 토큰·렌더러·교재 해석·AI 프롬프트 (브라우저+Node 공용)
   engine/runtime/      생성 사이트에 들어가는 실행 파일(효과 fx/, 실시간 live/, 강사 화면·발표 화면)

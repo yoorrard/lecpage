@@ -10,6 +10,7 @@
 
 ```
 lecpage/
+├─ .claude-plugin/            ← Claude Code 플러그인 마켓플레이스. `/plugin install lecpage --marketplace yoorrard/lecpage`가 skills/lecpage를 설치
 ├─ skills/lecpage/            ← Agent Skill 패키지(자체 완결). `npx skills add yoorrard/lecpage`
 │  ├─ SKILL.md
 │  ├─ references/             ← skill이 필요할 때 읽는 문서(인터뷰, 모듈, 디자인, 운영, 배포…)
@@ -302,6 +303,7 @@ assets/slides/*.webp · assets/media/*
 - GitHub Pages(`deployGitHub`)·Netlify(`deployNetlify`)는 v1.0과 같습니다. 토큰은 연결할 때 확인한 뒤 저장합니다(`deploy-<kind>` 키, '기억하기'를 켜면 WebCrypto로 암호화).
 - 바로 공개(`deployInstant`, 선택): 빌드 변수 `VITE_PUBLISH_API`가 있고 `GET /api/info`가 답할 때만 보입니다. API 계약은 `hosting/README.md`.
 - 프로젝트에 남는 값: `deploy = { target, lastUrl, at, vercel:{projectId,name,url}, github:{repo,url}, netlify:{siteId,url,name}, lecpage:{id,key,url,expiresAt}, cloudflare|zip:{url} }`. `.lecpage` 파일로 내보낼 때 `deploy`는 넣지 않습니다.
+- `.lecpage` 파일(무압축 ZIP: `project.json` + 자료)의 규칙은 `engine/src/project-file.js` 하나를 앱(`importProjectFile`·`exportProjectFile`)과 skill(`lecpage.mjs app`)이 함께 씁니다. 받는 자료는 `assets/slides|media`(그림·문서)·`assets/files`(자료실, `USER_ASSET`과 같은 규칙)·`src/`(교재 원본)뿐이고, 여는 쪽이 `sanitizeImported`로 실시간 연결·QR 주소를 다시 비웁니다. skill이 만든 파일은 비밀 값(관리자 키·참여 기능 키·사이트 암호)·접속 주소·내 컴퓨터 경로를 담지 않고, `project.origin: 'skill'`로 앱이 첫 안내를 보입니다.
 
 ### 8.3 AI로 사이트 만들기 (`app/src/lib/ai-job.js`)
 - `startMakeJob({ getProject, update })`: 기본 초안이 보이는 상태에서 읽기 → 묻기 → 만들기 단계로 돌고, 끝나면 되돌리기 지점("AI로 만들기 전")을 쌓은 뒤 설계도를 바꿉니다. `live.url`·`live.code`·`live.anonKey`·`meta.siteUrl` 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
