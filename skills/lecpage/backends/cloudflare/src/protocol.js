@@ -905,7 +905,8 @@ export class LiveCore {
     const t = this.training(code);
     const since = Math.max(0, Number(query.get('since')) || 0);
     const admin = this.isAdmin(t, cred);
-    if (!t) return { status: 200, body: [] };
+    // 아직 없는 연수라도 비공개 모음은 관리자만: 틀린 키가 '빈 명단'으로 통과해 강사 화면이 열린 것처럼 보이지 않게(checkAdmin)
+    if (!t) { if (PRIVATE_COLS.includes(col) && !admin) throw new HttpError(cred.adminHash ? 403 : 401, 'admin_required', '관리자 키가 필요합니다.'); return { status: 200, body: [] }; }
     if (PRIVATE_COLS.includes(col) && !admin) {
       const me = this.requireParticipant(code, cred);
       const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND col = ? AND by = ? AND updated_at > ? ORDER BY updated_at`, code, col, me.id, since);

@@ -443,6 +443,7 @@ ${liveOff(ctx)}</div>`);
  */
 export function boardFiles(s, bp) {
   if (!s?.allowFiles || !(s.maxFiles > 0)) return false;
+  if (bp?.audience?.minor) return false; // 만 14세 미만 연수는 파일을 받지 않음(설계도가 allowFiles를 켜 두었어도)
   const up = bp?.live?.uploads;
   return typeof up === 'boolean' ? up : bp?.live?.provider !== 'sheets';
 }

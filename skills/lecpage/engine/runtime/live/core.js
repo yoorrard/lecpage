@@ -793,6 +793,17 @@
     var self = this;
     return p.then(function () { return self.status === 'offline' ? null : self.sync(true); });
   };
+  /** 강사 화면: 관리자 키를 한 번만 물어 확인하고(틀린 키는 서버가 한 번으로 셈), 맞으면 이 연결에만 씀(저장소에 두지 않음). → true/false */
+  C.useAdminKey = function (key) {
+    var self = this, prev = this._adminKey;
+    this._adminKey = key ? String(key) : null;
+    if (!this._adminKey) { this._adminKey = prev; return Promise.resolve(false); }
+    return this.checkAdmin().then(function (ok) {
+      if (!ok) { self._adminKey = prev; return false; }
+      var a = self._adapter;
+      return Promise.resolve(a.setAdmin ? a.setAdmin(self._adminKey) : null).then(function () { return self.status === 'offline' ? true : self.sync(true).then(function () { return true; }); });
+    }, function (e) { self._adminKey = prev; throw e; });
+  };
   /** Resolves true when the admin key is accepted by the backend. */
   C.checkAdmin = function () {
     if (!this._adminKey) return Promise.resolve(false);

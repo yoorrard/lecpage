@@ -94,8 +94,9 @@
     if (busy) return; busy = true; say(''); go.disabled = true; go.textContent = '확인하는 중…';
     setConn('connecting');
     var c;
-    try { c = LecLive.create(Object.assign({}, DATA.live, { adminKey: key })); } catch (e) { busy = false; go.disabled = false; go.textContent = '들어가기'; say('참여 기능을 불러오지 못했어요. 새로 고침해 주세요.'); return; }
-    c.connect().then(function () { return LOCAL ? true : c.checkAdmin(); }).then(function (ok) {
+    try { c = LecLive.create(DATA.live); } catch (e) { busy = false; go.disabled = false; go.textContent = '들어가기'; say('참여 기능을 불러오지 못했어요. 새로 고침해 주세요.'); return; }
+    // 공개 연결부터 열고, 키는 한 번만 물어 확인(틀린 키가 요청마다 여러 번 세어져 맞는 키까지 막히지 않게)
+    c.connect().then(function () { return c.useAdminKey(key); }).then(function (ok) {
       if (!ok) throw LecLive.error('admin_required', '관리자 키가 맞지 않아요.', { status: 403 });
       return c.getState().then(function (s) { state = s || {}; });
     }).then(function () {
