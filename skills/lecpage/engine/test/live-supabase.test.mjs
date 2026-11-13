@@ -330,3 +330,19 @@ test('supabase (L1, L3, nicknames, L12): closed polls, no `by` for the public, r
   const probe = psql(`select public.lec_snapshot('SUPA8', 9007199254740991)`, o);
   assert.deepEqual(probe.answers, []); assert.ok(probe.state);
 });
+
+test('supabase (2026-11c): instructor locks refuse new questions/posts; invisible characters and stacked marks are removed', { skip }, () => {
+  psql(`select lec_private.init_training('SUPA9', '관리자키-supa-0009')`, { role: null });
+  const o = { code: 'SUPA9', xff: '10.9.0.1' }; const K = '관리자키-supa-0009';
+  const a = psql(`select public.lec_join('SUPA9', '하나')`, o);
+  const inv = String.fromCharCode(0x202e, 0x200b, 0x2066, 0x3164, 0xad);
+  const zal = 'Z' + String.fromCharCode(0x301, 0x302, 0x303, 0x304, 0x305, 0x306);
+  const q1 = psql(`select public.lec_add('SUPA9', ${q(a.token)}, 'questions', ${j({ text: `가${inv}나 ${zal}` })})`, o);
+  assert.equal(q1.text, '가나 ' + 'Ź' + String.fromCharCode(0x302, 0x303));
+  fails(() => psql(`select public.lec_join('SUPA9', ${q('강' + String.fromCharCode(0x3164) + '사')})`, o), 'PT400', 'reserved_nickname');
+  psql(`select public.lec_set_state('SUPA9', ${q(K)}, ${j({ ui: { lockQa: true, lockBoard: true } })})`, o);
+  fails(() => psql(`select public.lec_add('SUPA9', ${q(a.token)}, 'questions', ${j({ text: '잠긴 뒤' })})`, o), 'PT409', 'locked');
+  fails(() => psql(`select public.lec_add('SUPA9', ${q(a.token)}, 'posts', ${j({ text: '잠긴 뒤' })})`, o), 'PT409', 'locked');
+  psql(`select public.lec_set_state('SUPA9', ${q(K)}, ${j({ ui: { lockQa: null, lockBoard: null } })})`, o);
+  assert.ok(psql(`select public.lec_add('SUPA9', ${q(a.token)}, 'questions', ${j({ text: '다시 열림' })})`, o).id);
+});

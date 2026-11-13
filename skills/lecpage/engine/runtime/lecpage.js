@@ -632,6 +632,9 @@
     if (feats.indexOf('help') >= 0) $$('[data-stuck]').forEach(function (b) { b.hidden = false; });
     if (deckApi) deckApi.showFollow();
 
+    function liveErr(err, dflt) { return err && /^(locked|poll_closed|rate_limited|too_long|hidden|reserved_nickname|uploads_disabled)$/.test(err.code) && err.message ? err.message : dflt; }
+    // 연결이 끊긴 동안 쌓아 둔 글이 나중에 거절되면(잠금·닫힌 투표 등) 조용히 사라지지 않게 알림
+    if (conn.on) conn.on('error', function (err, op) { if (op && err && err.status && err.status < 500) toast(liveErr(err, '보내지 못한 기록이 있어요. 다시 해 주세요.')); });
     function setStatus(s) { if (dot) { dot.setAttribute('data-state', s); dot.title = { live: '실시간 연결됨', polling: '새로 읽는 중(느린 연결)', offline: '연결 끊김', connecting: '연결 중', local: '이 기기 안에서만' }[s] || s; } }
     setStatus('connecting');
     function ensureJoin() {
@@ -666,7 +669,7 @@
         var li = el('li', 'lp-qa-item' + (q.pinned ? ' is-pinned' : '') + (q.status === 'answered' ? ' is-answered' : ''));
         var v = el('button', 'lp-vote'); v.type = 'button'; v.setAttribute('aria-pressed', String(!!voted[q.id])); v.setAttribute('aria-label', '공감 ' + (q.votes || 0));
         v.appendChild(el('span', '', '▲')); v.appendChild(el('b', '', String(q.votes || 0)));
-        v.addEventListener('click', function () { if (voted[q.id]) return toast('이미 공감했어요.'); ensureJoin().then(function () { return conn.vote(q.id); }).then(function (r) { voted[q.id] = 1; store.set('voted', voted); if (r && r.votes !== undefined) { q.votes = r.votes; drawQA(); } }, function () { }); });
+        v.addEventListener('click', function () { if (voted[q.id]) return toast('이미 공감했어요.'); ensureJoin().then(function () { return conn.vote(q.id); }).then(function (r) { voted[q.id] = 1; store.set('voted', voted); if (r && r.votes !== undefined) { q.votes = r.votes; drawQA(); } }, function (err) { if (err && err.message !== 'cancel') toast(liveErr(err, '공감을 보내지 못했어요.')); }); });
         var body = el('div'); body.appendChild(el('p', '', q.text));
         var meta = el('p', 'lp-qa-meta'); meta.appendChild(el('span', '', q.anonymous || !q.nickname ? '익명' : q.nickname)); if (q.status === 'answered') meta.appendChild(el('span', '', '답변 완료')); if (q.pinned) meta.appendChild(el('span', '', '강사 고정'));
         body.appendChild(meta); li.appendChild(v); li.appendChild(body); list.appendChild(li);
@@ -677,7 +680,7 @@
       qf.querySelector('textarea').addEventListener('input', function (e) { if (cnt) cnt.textContent = e.target.value.length + ' / 500'; });
       qf.addEventListener('submit', function (e) {
         e.preventDefault(); var ta = qf.querySelector('textarea'), text = ta.value.trim(); if (!text) return;
-        ensureJoin().then(function () { return conn.add('questions', { text: text, anonymous: DATA.live.anonymous !== false, nickname: me.nickname }); }).then(function (d) { if (d && d.id) qs[d.id] = d; ta.value = ''; if (cnt) cnt.textContent = '0 / 500'; drawQA(); toast('질문을 올렸어요.'); }, function (err) { if (err && err.message !== 'cancel') toast('질문을 올리지 못했어요. 잠시 뒤 다시 해 주세요.'); });
+        ensureJoin().then(function () { return conn.add('questions', { text: text, anonymous: DATA.live.anonymous !== false, nickname: me.nickname }); }).then(function (d) { if (d && d.id) qs[d.id] = d; ta.value = ''; if (cnt) cnt.textContent = '0 / 500'; drawQA(); toast('질문을 올렸어요.'); }, function (err) { if (err && err.message !== 'cancel') toast(liveErr(err, '질문을 올리지 못했어요. 잠시 뒤 다시 해 주세요.')); });
       });
       $$('[data-sort]', qaBox).forEach(function (b) { b.addEventListener('click', function () { sortBy = b.getAttribute('data-sort'); $$('[data-sort]', qaBox).forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); }); drawQA(); }); });
     }
@@ -714,7 +717,7 @@
           lk.textContent = '♥ ' + (p.likes || 0);
           lk.addEventListener('click', function () {
             if (store.get('like:' + p.id, false)) return toast('이미 좋아요를 눌렀어요.');
-            ensureJoin().then(function () { return conn.like(p.id); }).then(function (r) { store.set('like:' + p.id, true); p.likes = (r && r.likes !== undefined) ? r.likes : (p.likes || 0) + 1; drawBoard(); }, function () { });
+            ensureJoin().then(function () { return conn.like(p.id); }).then(function (r) { store.set('like:' + p.id, true); p.likes = (r && r.likes !== undefined) ? r.likes : (p.likes || 0) + 1; drawBoard(); }, function (err) { if (err && err.message !== 'cancel') toast(liveErr(err, '좋아요를 보내지 못했어요.')); });
           });
           ft.appendChild(lk);
         }
@@ -794,7 +797,7 @@
     }
     function answer(p, v) {
       if (!v) return;
-      ensureJoin().then(function () { return conn.add('answers', { poll: p.id, value: v }); }).then(function (d) { store.set('ans:' + p.id, v); if (d && d.id) answers[d.id] = d; drawPoll(); drawNow(); toast('응답했어요.'); }, function () { });
+      ensureJoin().then(function () { return conn.add('answers', { poll: p.id, value: v }); }).then(function (d) { store.set('ans:' + p.id, v); if (d && d.id) answers[d.id] = d; drawPoll(); drawNow(); toast('응답했어요.'); }, function (err) { if (err && err.message !== 'cancel') { toast(liveErr(err, '응답을 보내지 못했어요. 잠시 뒤 다시 해 주세요.')); drawPoll(); } });
     }
 
     // 출석
@@ -958,7 +961,17 @@
         if (state.step && stApi) stApi.go(state.step);
         if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide);
       }
-      checkSignalReset(); drawPoll(); drawNow(); drawMats();
+      checkSignalReset(); drawPoll(); drawNow(); drawMats(); drawLocks();
+    }
+    // 강사가 질문·보드를 잠그면 쓰는 칸을 막고 까닭을 보임(서버도 같은 규칙으로 거절)
+    function drawLocks() {
+      [[qaBox, 'qa', '[data-qa-form]', '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.'], [bBox, 'board', '[data-board-write]', '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.']].forEach(function (x) {
+        if (!x[0]) return;
+        var on = X.locked(state, x[1]), f = $(x[2], x[0]), note = $('[data-lock-note]', x[0]);
+        if (on && !note && f) { note = el('p', 'lp-note', x[3]); note.setAttribute('data-lock-note', ''); note.setAttribute('role', 'status'); f.parentNode.insertBefore(note, f); }
+        if (note) note.hidden = !on;
+        if (f) $$('textarea,input,button,select', f.tagName === 'FORM' ? f : f.parentNode).forEach(function (n) { if (f.tagName === 'FORM' || n === f) n.disabled = on; });
+      });
     }
     // 강사가 연수 중에 덧붙인 자료 링크 → 자료실 아래에 보임. 자료실이 없으면 마무리 앞에 만듦
     function drawMats() {
@@ -1028,6 +1041,13 @@
       cb.checked = store.get('card-print', true) !== false;
       var upd = function () { doc.body.classList.toggle('lp-card-off', !cb.checked); };
       upd(); cb.addEventListener('change', function () { store.set('card-print', cb.checked); upd(); });
+    }
+    // 자리 카드 8장(잘라 쓰기): 고를 때만 인쇄·미리보기에 나옴
+    var cc = $('input[data-part-print="cards"]');
+    if (cc) {
+      cc.checked = store.get('cards-print', false) === true;
+      var upc = function () { doc.body.classList.toggle('lp-cards-off', !cc.checked); };
+      upc(); cc.addEventListener('change', function () { store.set('cards-print', cc.checked); upc(); });
     }
   }
 

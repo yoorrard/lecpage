@@ -186,7 +186,7 @@ test('개인정보 안내: 실제로 모으는 기록(설문·투표·입실·�
     sections: [{ type: 'hero' }, { type: 'qa' }, { type: 'poll', items: [{ id: 'p', question: '?', kind: 'word' }] }, { type: 'attendance' }, { type: 'survey', questions: [{ q: '좋았나요?', kind: 'scale' }] }] };
   const html = E.build(bp, { runtime: nodeRuntime() }).files['privacy.html'];
   for (const w of ['질문', '도움 요청', '실습 진행 상태', '투표 응답', '설문 응답', '입실·퇴실 시각', '임의 번호']) assert.ok(html.includes(w), w);
-  assert.match(html, /익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다\. 다만 서버에는/);
+  assert.match(html, /익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다\. 다만 기록에는/); // 리허설(local)은 서버가 없음
   const named = E.build({ ...bp, live: { ...bp.live, anonymous: false } }, { runtime: nodeRuntime() }).files['privacy.html'];
   assert.ok(!named.includes('익명 질문'), '익명이 아니면 문장을 넣지 않음');
   assert.ok(!html.includes('나눔 보드'), '보드가 없으면 보드 글을 적지 않음');

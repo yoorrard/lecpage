@@ -104,6 +104,8 @@ async function buildSite(bp, { out, assets = '', info = null, password = '', fon
     if (fb.report.ok) r.report.sizeKB += Math.round(fb.report.bytes / 1024);
   }
   if (password) {
+    const adv = E.passwordAdvice(password);
+    if (adv.level !== 'good') r.warnings.push({ path: 'access.password', message_ko: adv.message.replace('[새로 만들기]로 바꾸거나 ', '') });
     const { webcrypto } = await import('node:crypto');
     files = await E.protectSite(files, password, { runtime: N.nodeRuntime(), title: r.blueprint.meta.title, crypto: webcrypto });
   }

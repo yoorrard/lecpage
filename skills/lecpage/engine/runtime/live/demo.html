@@ -150,6 +150,8 @@
         provider: $('provider').value, url: $('url').value.trim(), anonKey: $('anonKey').value.trim(), code: $('code').value.trim(),
         adminKey: $('adminKey').value || undefined, identity: qs.get('session') ? 'session' : 'local',
         transports: qs.get('transports') ? qs.get('transports').split(',') : undefined, pollMs: Number(qs.get('pollMs')) || undefined,
+        // 시험용 화면: 보내기 속도 제한은 ?throttle=1일 때만(여러 글을 빨리 보내 동기화를 봄)
+        throttle: qs.get('throttle') === '1' ? undefined : false,
       });
     } catch (err) { log('만들기 실패: ' + err.message); return; }
     live.on('status', function (s) { var el = $('status'); el.textContent = s; el.dataset.s = s; log('상태: ' + s); });

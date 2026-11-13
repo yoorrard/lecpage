@@ -1,8 +1,12 @@
-// 페이지 조립: index(참가자) · console(강사 화면) · screen(발표 화면) · check(접속 확인) · privacy · poster(인쇄용 QR 안내문)
+// 페이지 조립: index(참가자). 보조 화면(console·screen·poster·check·privacy)은 aux.js, 같이 쓰는 머리·CSP는 shell.js
+export { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
+export { phaseWindow, LIB_SCRIPT_SOURCES, cspPolicy, eventJsonLd } from './shell.js';
 import { esc, br, href, icon, koDate, host } from './html.js';
 import { renderSection, contactHtml, boardFiles } from './sections.js';
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
+import { attrs, jsonScript, headTags, siteData, phaseWindow } from './shell.js';
+import { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
 import { deriveConcept } from '../decide/concept.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { FONTS } from '../design/fonts.js';
@@ -25,114 +29,6 @@ function dividerBand(ctx) {
   if (!list.length) list.push(...bp.sections.filter((s) => s.nav).map((s) => s.nav));
   if (!list.length) list.push(bp.meta.title);
   return `<div class="lp-divider" data-fx="${esc(id)}" aria-hidden="true">${list.map((w) => `<span>${esc(w)}</span>`).join('')}</div>`;
-}
-
-const VERSION = '1.0.0';
-
-function attrs(map) { return Object.entries(map).map(([k, v]) => `${k}="${esc(v)}"`).join(' '); }
-function jsonScript(id, data) {
-  return `<script type="application/json" id="${id}">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
-}
-
-/** 검색 노출: 'public'인 참가자 화면만 허용. 나머지 페이지는 늘 noindex */
-function robotsMeta(ctx, page) {
-  return page === 'index' && ctx.bp.access?.mode === 'public' ? '' : '<meta name="robots" content="noindex, nofollow">';
-}
-
-/**
- * 공개 연수(access.mode 'public')의 첫 화면에만 schema.org Event(검색·AI가 일정·장소를 읽게). 날짜를 알 때만.
- * 기본(주소를 받은 사람만)·암호 사이트에는 넣지 않음. 시각은 한국 시각(+09:00), 끝 시각이 없으면 적지 않음(지어내지 않음)
- */
-export function eventJsonLd(ctx, page) {
-  const m = ctx.bp.meta || {};
-  if (page !== 'index' || ctx.bp.access?.mode !== 'public' || !/^\d{4}-\d{2}-\d{2}$/.test(m.date || '')) return '';
-  const at = (t) => (t ? `${m.date}T${t}:00+09:00` : m.date);
-  const desc = m.description || m.subtitle || '';
-  const ev = {
-    '@context': 'https://schema.org', '@type': 'Event', name: m.title, startDate: at(m.start),
-    ...(m.start && m.end && m.end > m.start ? { endDate: at(m.end) } : {}),
-    ...(desc ? { description: desc } : {}),
-    eventStatus: 'https://schema.org/EventScheduled',
-    ...(m.venue ? { eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode', location: { '@type': 'Place', name: m.venue, address: m.venue } } : {}),
-    ...(m.organizer ? { organizer: { '@type': 'Organization', name: m.organizer } } : {}),
-    ...(m.siteUrl ? { url: m.siteUrl } : {}),
-    inLanguage: 'ko',
-  };
-  return `<script type="application/ld+json">${JSON.stringify(ev).replace(/</g, '\\u003c')}</script>`;
-}
-
-/** 생성 사이트 보안 정책(CSP): 스크립트는 이 사이트와 지문을 고정한 라이브러리 경로만, 플러그인·base 바꾸기·틀 넣기 금지.
- * file:은 USB·ZIP으로 열 때를 위해. 실시간 서버가 http(교실 LAN)면 그 주소도 허용 */
-export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/', 'https://cdn.jsdelivr.net/npm/ogl@1.0.11/', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/'];
-function cspMeta(ctx) {
-  let lan = '';
-  try { const u = new URL(ctx.bp.live?.url || ''); if (u.protocol === 'http:') lan = ` ${u.origin} ws://${u.host}`; } catch { /* 없음 */ }
-  const fonts = 'https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net';
-  const p = [
-    "default-src 'self' file:",
-    `script-src 'self' file: ${LIB_SCRIPT_SOURCES.join(' ')}`,
-    `style-src 'self' file: 'unsafe-inline' ${fonts}`,
-    "font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net",
-    "img-src 'self' file: data: blob: https:",
-    "media-src 'self' file: blob: https:",
-    `connect-src 'self' file: https: wss:${lan}`,
-    "frame-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'self'",
-  ];
-  return `<meta http-equiv="Content-Security-Policy" content="${p.join('; ')}">`;
-}
-
-function headTags(ctx, title, extraCss = [], page = 'app') {
-  const m = ctx.bp.meta;
-  const desc = m.description || m.subtitle || `${m.title} 연수 안내`;
-  const bg = ctx.themeColor;
-  return `<meta charset="utf-8">
-${cspMeta(ctx)}
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${esc(title)}</title>
-<meta name="description" content="${esc(desc)}">
-<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
-<meta property="og:title" content="${esc(m.title)}"><meta property="og:description" content="${esc(desc)}">
-${ctx.ogImage ? `<meta property="og:image" content="${esc(ctx.ogImage)}"><meta name="twitter:card" content="summary_large_image">` : ''}
-<meta name="theme-color" content="${esc(bg)}">
-<meta name="generator" content="lecpage ${VERSION}">
-${robotsMeta(ctx, page)}
-${eventJsonLd(ctx, page)}
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
-<link rel="stylesheet" href="assets/theme.css">
-<link rel="stylesheet" href="assets/lecpage.css">
-${ctx.hasFx ? '<link rel="stylesheet" href="assets/fx.css">' : ''}
-${extraCss.map((c) => `<link rel="stylesheet" href="${c}">`).join('\n')}
-<script src="assets/boot.js"></script>`;
-}
-
-function siteData(ctx) {
-  const bp = ctx.bp;
-  const st = bp.sections.find((s) => s.type === 'stations');
-  return {
-    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '',
-    // 짧은 주소(강사가 직접 넣은 것)는 손으로 칠 글자에만 씀. QR·복사는 언제나 원래 주소라 짧은 주소 서비스가 멈춰도 열림
-    shortUrl: bp.meta.shortUrl || '',
-    key: 'lp-' + bp.live.code,
-    live: ctx.live ? { provider: bp.live.provider, url: bp.live.url, anonKey: bp.live.anonKey, code: bp.live.code, features: bp.live.features, anonymous: bp.live.anonymous, pollMs: bp.live.pollMs } : null,
-    privacy: { collect: bp.privacy.collect, consent: bp.privacy.consent, retentionDays: bp.privacy.retentionDays },
-    stations: st ? st.items.map((x) => ({ id: x.id, name: x.name })) : [],
-    motion: ctx.design.motion,
-    base: bp.meta.siteUrl || '',
-    admin: { completionRate: bp.meta.admin?.completionRate ?? 90 },
-    survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
-    phase: phaseWindow(bp),
-  };
-}
-
-/** 연수 기간(현지 시각): 첫날 시작 ~ 마지막 날 끝. 끝난 뒤에는 참가자 화면이 '연수 후' 보기로 바뀜 */
-export function phaseWindow(bp) {
-  const m = bp.meta, ses = m.sessions || [];
-  const dates = [m.date, ...ses.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
-  if (!dates.length) return null;
-  const last = dates[dates.length - 1], lastSes = ses.find((x) => x.date === last);
-  return { start: `${dates[0]}T${m.start || '00:00'}`, end: `${last}T${lastSes?.end || m.end || '23:59'}` };
 }
 
 /** 연수가 끝난 뒤 맨 위에 뜨는 줄: 끝난 날짜와 가장 먼저 볼 칸(연수 후 안내 > 자료 > 교재 > 설문) */
@@ -297,168 +193,6 @@ ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n')}
 `;
 }
 
-function appShell(ctx, title, bodyClass, inner, scripts) {
-  return `<!doctype html>
-<html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-motion': '1' })}>
-<head>
-${headTags(ctx, title)}
-</head>
-<body class="${bodyClass}">
-${inner}
-${jsonScript('lp-data', siteData(ctx))}
-${jsonScript('lp-blueprint', { sections: ctx.bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? s.items : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, ctx.bp) : undefined })), stations: (ctx.bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title })), deck: ctx.bp.sections.find((s) => s.type === 'deck')?.slides.length || 0 })}
-${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n')}
-</body>
-</html>
-`;
-}
-
-export function renderConsole(ctx) {
-  const inner = `<div class="lp-app" data-console>
-<header class="lp-app-h"><div><p class="lp-small">강사 화면</p><h1>${esc(ctx.bp.meta.title)}</h1></div><div class="lp-app-h-act"><a class="lp-btn lp-btn-ghost lp-btn-sm" href="screen.html" target="_blank" rel="opener">${icon('expand')}<span>발표 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html" target="_blank">${icon('external')}<span>참가자 화면</span></a><a class="lp-btn lp-btn-ghost lp-btn-sm" href="poster.html" target="_blank">${icon('print')}<span>QR 안내문 인쇄</span></a></div></header>
-<form class="lp-card lp-login" data-admin-form><h2>관리자 키</h2><p class="lp-small">배포할 때 만든 관리자 키를 넣어 주세요. 키는 이 탭에만 남아요.</p><label><span class="lp-sr">관리자 키</span><input type="password" name="key" autocomplete="current-password" required></label><button class="lp-btn lp-btn-primary" type="submit">들어가기</button>${ctx.bp.live.provider === 'local' ? '<p class="lp-small">미리보기에서는 아무 키나 넣어도 돼요.</p>' : ''}</form>
-<main class="lp-console" data-console-main hidden></main>
-<details class="lp-card lp-console-help" data-console-help><summary>도움말 · 연수 전·중·후에 할 일</summary><div class="lp-prose">${md(opsGuide(ctx))}</div></details>
-<div class="lp-toast" data-toast role="status" aria-live="polite"></div></div>`;
-  return appShell(ctx, `강사 화면 · ${ctx.bp.meta.title}`, 'lp-body-app', inner, ['assets/qr.js', 'assets/live.js', 'assets/console.js']);
-}
-
-export function renderScreen(ctx) {
-  const signal = ctx.live && ctx.bp.live.features.includes('signal');
-  const inner = `<div class="lp-screen" data-screen>
-<header class="lp-screen-h"><h1>${esc(ctx.bp.meta.title)}</h1><div class="lp-screen-join"><button class="lp-qr-zoom" type="button" data-join-zoom aria-haspopup="dialog" aria-label="참여 QR 코드 크게 보기"><span class="lp-qr" data-qr-join></span><span class="lp-qr-zoom-t">${icon('expand')}크게 보기</span></button><div><p class="lp-small">휴대폰 카메라로 찍거나 주소로 들어오세요</p><p class="lp-screen-url" data-join-url></p><p class="lp-small lp-screen-full" data-join-full hidden></p>${ctx.live ? `<p class="lp-screen-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}</div></div>
-<button class="lp-btn lp-btn-ghost lp-tools-btn" type="button" data-tools-open aria-expanded="false" aria-controls="lp-tools">${icon('tools')}<span>도구</span></button></header>
-<main class="lp-screen-body">
-<div class="lp-screen-notice" data-notice hidden role="status"></div>
-<div class="lp-screen-timer" data-timer hidden></div>
-<div class="lp-timers" data-timers hidden role="region" aria-label="타이머"></div>
-${signal ? '<div class="lp-screen-signal" data-screen-signal hidden role="region" aria-label="이해 신호"></div>' : ''}
-<section class="lp-stage" data-tool-stage hidden aria-live="polite" aria-labelledby="lp-stage-h"><div class="lp-stage-h"><h2 id="lp-stage-h" data-stage-title></h2><button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-stage-close>${icon('close')}<span>닫기</span></button></div><div data-stage-body></div></section>
-<div class="lp-screen-main" data-screen-main><p class="lp-empty">${ctx.live ? '질문과 투표 결과가 여기에 크게 보여요.' : '오른쪽 위 도구에서 이름 뽑기·모둠·타이머를 쓸 수 있어요.'}</p></div>
-</main>
-<aside class="lp-drawer" id="lp-tools" data-tools hidden aria-labelledby="lp-tools-h"><div class="lp-drawer-h"><h2 id="lp-tools-h" tabindex="-1">도구</h2><button class="lp-icon-btn" type="button" data-tools-close aria-label="도구 닫기">${icon('close')}</button></div><div data-tools-body></div>
-<p class="lp-drawer-links"><a class="lp-link" href="poster.html" target="_blank">${icon('print')}QR 안내문 인쇄</a>${ctx.live ? `<a class="lp-link" href="console.html" target="_blank">${icon('external')}강사 화면</a>` : ''}</p></aside>
-<div class="lp-reactions" data-reactions aria-hidden="true"></div></div>
-<dialog class="lp-joinbig" data-joinbig aria-labelledby="lp-joinbig-h"><form method="dialog" class="lp-joinbig-in">
-<div class="lp-qr" data-qr-big role="img" aria-label="참여 QR 코드"></div>
-<div class="lp-joinbig-t"><h2 id="lp-joinbig-h">휴대폰 카메라로 QR을 찍어 주세요</h2><p class="lp-joinbig-url" data-join-url></p><p class="lp-joinbig-full" data-join-full hidden></p>${ctx.live ? `<p class="lp-screen-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}</div>
-<button class="lp-btn lp-btn-ghost lp-joinbig-x" value="close">${icon('close')}<span>닫기</span></button></form></dialog>
-<div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
-  return appShell(ctx, `발표 화면 · ${ctx.bp.meta.title}`, 'lp-body-screen', inner, ['assets/qr.js', ctx.live && 'assets/live.js', 'assets/screen.js'].filter(Boolean));
-}
-
-/** 인쇄용 QR 안내문(A4 한 장) + 강사 카드(반 장, 따로 인쇄). 참가자 주소·QR은 lecpage.js가 그립니다. */
-export function renderPoster(ctx) {
-  const m = ctx.bp.meta;
-  const when = m.date ? `${koDate(m.date)}${m.start ? ` ${m.start}${m.end ? `~${m.end}` : ''}` : ''}` : '';
-  const code = ctx.live ? ctx.bp.live.code : '';
-  const inner = `<header class="lp-poster-bar"><p class="lp-small">A4 한 장으로 인쇄돼요. 강사 카드는 따로 한 장에 나와요.</p><label class="lp-row"><input type="checkbox" data-card-print checked><span>강사 카드도 인쇄</span></label><button class="lp-btn lp-btn-primary" type="button" data-print>${icon('print')}<span>인쇄하기</span></button><a class="lp-link" href="index.html">연수 사이트로</a></header>
-<main class="lp-poster" data-poster>
-<section class="lp-poster-page" aria-labelledby="lp-poster-h">
-${m.organizer ? `<p class="lp-poster-org">${esc(m.organizer)}</p>` : ''}<h1 id="lp-poster-h">${br(m.title)}</h1>${m.subtitle ? `<p class="lp-poster-sub">${br(m.subtitle)}</p>` : ''}
-${when || m.venue ? `<dl class="lp-poster-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : ''}
-<div class="lp-poster-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드"></div>
-<p class="lp-poster-cta">휴대폰 카메라로 QR을 찍어 들어오세요</p>
-<p class="lp-poster-url" data-url-self></p>
-<p class="lp-poster-full" data-url-full hidden></p>
-${code ? `<p class="lp-poster-code">연수 코드 <b>${esc(code)}</b></p>` : ''}
-<div class="lp-poster-wifi"><b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>
-</section>
-<section class="lp-poster-card" data-teacher-card aria-labelledby="lp-card-h">
-<p class="lp-poster-only">강사만</p><h2 id="lp-card-h">강사 카드 · ${esc(m.title)}</h2>
-<p class="lp-small">이 카드는 강사만 보세요. 벽에 붙이지 말고, 관리자 키는 적지 마세요.</p>
-<div class="lp-card-grid">${ctx.live ? `<div class="lp-qr" data-qr-page="console.html" role="img" aria-label="강사 화면 QR 코드"></div>` : ''}<dl>
-${ctx.live ? `<div><dt>강사 화면</dt><dd data-url-page="console.html"></dd></div>` : ''}<div><dt>발표 화면</dt><dd data-url-page="screen.html"></dd></div><div><dt>접속 확인</dt><dd data-url-page="check.html"></dd></div>${code ? `<div><dt>연수 코드</dt><dd>${esc(code)}</dd></div>` : ''}</dl></div>
-</section>
-</main><div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
-  return appShell(ctx, `QR 안내문 · ${m.title}`, 'lp-body-poster', inner, ['assets/qr.js', 'assets/lecpage.js']);
-}
-
-export function renderCheck(ctx) {
-  const ready = ctx.bp.sections.find((s) => s.type === 'readiness');
-  const checks = [
-    { name: '글꼴·라이브러리 CDN', url: 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' },
-    ...(ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? [{ name: '구글 글꼴', url: 'https://fonts.googleapis.com/css2?family=Jua' }] : []),
-    ...(ctx.live && ctx.bp.live.url ? [{ name: '실시간 서버', url: ctx.bp.live.url }] : []),
-    ...((ready?.checks) || []),
-    ...(bpTools(ctx.bp).slice(0, 12)),
-  ];
-  const uniq = []; const seen = new Set();
-  for (const c of checks) { const h = host(c.url) || c.url; if (!seen.has(h)) { seen.add(h); uniq.push(c); } }
-  // 연수 정보에 적어 둔 '학교에서 막힌 곳'(audience.blocked): 주소면 함께 확인하고, 그 밖의 말(예: websocket)은 글로만 알려 줌
-  const blocked = ctx.bp.audience?.blocked || [];
-  const asUrl = (b) => { const m = /^(?:https?:\/\/)?((?:[\w-]+\.)+[a-z]{2,})(\/\S*)?$/i.exec(String(b).trim()); return m ? `https://${m[1]}${m[2] || '/'}` : ''; };
-  for (const b of blocked) { const u = asUrl(b); if (u && !seen.has(host(u))) { seen.add(host(u)); uniq.push({ name: host(u), url: u, known: true }); } }
-  const blockedNote = blocked.length ? `<div class="lp-notice-box lp-check-blocked"><b>미리 알려 준 막힌 곳 ${blocked.length}곳</b><p>${blocked.map((b) => esc(b)).join(' · ')}</p><p>연수 정보에 적어 둔 곳이에요. 여기서도 막힘으로 나오면 다른 도구를 준비하거나 정보 담당 선생님께 열어 달라고 요청하세요.</p></div>` : '';
-  const inner = `<main class="lp-wrap lp-check"><h1 class="lp-h2">접속 확인</h1><p class="lp-lead">연수에 쓰는 사이트가 이 기기와 네트워크에서 열리는지 확인해요. 막힌 곳이 있으면 결과를 복사해 정보 담당 선생님께 보내 주세요.</p>
-<div class="lp-diag lp-card" data-diag='${esc(JSON.stringify(uniq))}' data-diag-auto data-live-check="${ctx.live ? 1 : 0}"><div class="lp-diag-h"><h2>확인 항목 ${uniq.length}개</h2><button class="lp-btn lp-btn-primary" type="button" data-diag-run>다시 확인</button></div>
-<ul class="lp-diag-list">${uniq.map((c) => `<li data-url="${esc(c.url)}"${c.known ? ' data-known-blocked' : ''}><span class="lp-diag-dot" aria-hidden="true"></span><span>${esc(c.name)}${c.known ? ' <em class="lp-diag-known">막힌 곳으로 적어 둠</em>' : ''}</span><small>${esc(host(c.url))}</small><b class="lp-diag-state">확인 전</b></li>`).join('')}</ul>
-${blockedNote}
-${ctx.live ? '<p class="lp-small" data-live-diag>실시간 연결 방식: 확인 중…</p>' : ''}
-<p class="lp-small" data-env></p><button class="lp-btn lp-btn-ghost" type="button" data-diag-copy>${icon('copy')}<span>결과 복사</span></button></div>
-<p><a class="lp-link" href="index.html">연수 사이트로 돌아가기 ${icon('arrow')}</a></p></main><div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
-  return appShell(ctx, `접속 확인 · ${ctx.bp.meta.title}`, 'lp-body-check', inner, [ctx.live && 'assets/live.js', 'assets/lecpage.js'].filter(Boolean));
-}
-function bpTools(bp) {
-  const t = bp.sections.find((s) => s.type === 'tools');
-  return (t?.items || []).filter((x) => x.url).map((x) => ({ name: x.name, url: x.url }));
-}
-
-export function renderPrivacy(ctx) {
-  const bp = ctx.bp, pv = bp.privacy;
-  const items = { nickname: '별명', name: '이름', school: '소속(학교)', email: '이메일' };
-  const procs = pv.processors.length ? pv.processors : defaultProcessors(bp);
-  const acts = activityItems(bp);
-  const anonQa = bp.live.anonymous !== false && (bp.sections.some((s) => s.type === 'qa') || bp.live.features.includes('qa'));
-  const who = bp.meta.organizer || bp.instructors[0]?.name || '연수 운영자';
-  const contact = contactHtml(pv.contact || bp.meta.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '연수 운영자에게 문의해 주세요.');
-  const rows = (p) => [['이전받는 자', `${esc(p.name)}${p.contact ? ` (${contactHtml(p.contact)})` : ''}`], ['이전 국가', esc(p.country)], ['이전 항목', '위 2의 항목 전부'], ['이전 시기·방법', '참여 기능을 쓸 때마다 네트워크로 전송'], ['이용 목적·보유 기간', `${esc(p.purpose)}, 위 3의 보유 기간까지`], ['거부 방법과 효과', '참여 기능을 쓰지 않으면 전송되지 않습니다. 이 경우 질문·투표 등은 쓸 수 없고, 안내와 교재는 그대로 볼 수 있습니다.']];
-  const inner = `<main class="lp-wrap lp-prose lp-privacy"><h1 class="lp-h2">개인정보 처리 안내</h1>
-<p><b>개인정보처리자</b> ${esc(who)}</p>
-<p>「${esc(bp.meta.title)}」 연수를 운영하면서 아래 개인정보만 처리합니다. 이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.</p>
-<h2>1. 처리 목적</h2><p>연수 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
-<h2>2. 처리 항목</h2><p>${pv.collect.map((c) => items[c]).filter(Boolean).join(', ')}, 참가자를 구분하는 임의 번호.</p>
-<p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? '\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 서버에는 그 임의 번호와 함께 저장됩니다.</p>' : ''}
-<p>주민등록번호·전화번호·생년월일은 받지 않습니다. 질문이나 글에 본인 또는 다른 사람의 개인정보를 적지 마세요.</p>${bp.live.provider === 'http' ? '\n<p>접속할 때 IP 주소가 서버에 전달되며, 잘못된 접근을 막는 횟수 제한에만 씁니다.</p>' : ''}${bp.audience?.minor ? '\n<p>만 14세 미만 참가자는 별명만 입력합니다. 이름 등 다른 개인정보는 받지 않습니다.</p>' : ''}
-<h2>3. 보유 기간과 파기</h2><p>연수 종료 후 ${pv.retentionDays}일까지 보관하고, 그 뒤 지체 없이 파기합니다. 서버의 기록과 올린 파일은 강사 화면의 '데이터 모두 지우기'로 복구할 수 없게 지우고, 내려받은 명단 파일도 함께 지웁니다.</p>
-<h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 사이트의 안내·교재·실습 화면은 그대로 쓸 수 있습니다. 다만 출석 확인 등 이름이 필요한 기능은 쓸 수 없습니다.</p>
-<h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
-<h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
-<p>사이트 파일을 보내 주는 호스팅 회사와 글꼴·효과 파일을 보내 주는 CDN(jsDelivr, Google Fonts, 네이버)에 접속 기록(IP 주소 등)이 남을 수 있습니다.</p>
-<h2>7. 안전 조치</h2><p>모든 전송은 암호화(HTTPS)됩니다. 기록은 관리자 키를 아는 강사만 볼 수 있고, 틀린 키를 여러 번 넣으면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
-<h2>8. 이 브라우저에 저장하는 정보</h2><p>별명과 임의 번호, 화면 설정을 이 브라우저의 저장소(localStorage)에 둡니다. 쿠키와 분석 도구는 쓰지 않습니다. 브라우저의 사이트 데이터 삭제로 지울 수 있습니다.</p>
-<h2>9. 문의</h2><p>${contact}</p>
-<p>침해 신고·상담: 개인정보침해신고센터(privacy.kisa.or.kr, 118), 개인정보 분쟁조정위원회(www.kopico.go.kr, 1833-6972)</p>
-<p class="lp-small">${ctx.builtOn ? `시행일 ${esc(ctx.builtOn)}. ` : ''}이 안내는 연수 설정에 맞춰 자동으로 만들어졌습니다. 소속 기관의 개인정보 처리방침이 따로 있으면 그 방침이 우선합니다.</p>
-<p><a class="lp-link" href="index.html">연수 사이트로 돌아가기</a></p></main>`;
-  return appShell(ctx, `개인정보 처리 안내 · ${bp.meta.title}`, 'lp-body-doc', inner, []);
-}
-/** 이 사이트가 실제로 모으는 참여 기록(켜진 칸·기능만) */
-function activityItems(bp) {
-  const has = (t) => bp.sections.some((s) => s.type === t);
-  const on = (k) => bp.live.features.includes(k);
-  const boards = bp.sections.filter((s) => s.type === 'board');
-  return [
-    (has('qa') || on('qa')) && '질문',
-    boards.length && (boards.some((s) => boardFiles(s, bp)) ? '나눔 보드에 올린 글·파일' : '나눔 보드에 올린 글'),
-    on('help') && '도움 요청과 자리 번호',
-    on('progress') && '실습 진행 상태',
-    (has('poll') || on('poll') || bp.live.features.length) && '투표 응답', // 강사 화면의 즉석 투표는 어느 참여 기능 사이트에서나 띄울 수 있음
-    on('signal') && '신호등 응답',
-    bp.sections.some((s) => s.type === 'survey' && s.questions?.length) && '설문 응답',
-    (has('attendance') || on('attendance')) && '입실·퇴실 시각',
-    quickAttend(bp) && '출석을 누른 시각',
-  ].filter(Boolean);
-}
-function defaultProcessors(bp) {
-  const map = {
-    supabase: [{ name: 'Supabase Inc.', contact: 'privacy@supabase.com', country: '미국(서버 지역은 강사가 선택)', purpose: '실시간 기능 데이터 저장' }],
-    sheets: [{ name: 'Google LLC', contact: 'https://support.google.com/policies/contact/general_privacy_form', country: '미국', purpose: '구글 시트·드라이브에 응답 저장' }],
-    http: [{ name: '실시간 서버 운영자(Cloudflare, Inc. 또는 자체 서버)', contact: /(^|\.)workers\.dev$/.test(host(bp.live.url)) ? 'privacyquestions@cloudflare.com' : '', country: 'Cloudflare: 미국 / 자체 서버: 서버 위치', purpose: '실시간 기능 중계와 저장' }],
-  };
-  return map[bp.live.provider] || [];
-}
-
 // ── 문서 ─────────────────────────────────────────────────
 /** DESIGN.md의 컨셉 단락: 한 줄 컨셉(참가자가 겪는 경험)·모티프·근거. 설계도에 없으면 주제에서 규칙으로 세운 것을 적음 */
 function conceptBlock(ctx, p) {
@@ -529,39 +263,6 @@ const PROVIDER_WHY = {
  * 강사 안내(연수 전·중·후). 운영안내.md와 강사 화면의 '도움말'이 같은 글을 씁니다.
  * 강사 화면(console.html)은 누구나 열 수 있는 파일이라, 강사 메모처럼 강사만 볼 내용은 넣지 않습니다(운영안내.md에만).
  */
-export function opsGuide(ctx) {
-  const bp = ctx.bp;
-  const live = ctx.live;
-  const prov = live ? bp.live.provider : 'none';
-  const days = bp.privacy.retentionDays;
-  const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
-  const svIn = live && sv?.questions?.length;
-  const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
-  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 확인하세요.', http: '실시간 서버가 켜져 있는지 접속 확인(`check.html`)으로 보세요.', local: '지금은 한 브라우저 안에서만 이어지는 시험용이에요. 연수 전에 실시간 서버를 연결하고 다시 만드세요.' }[prov];
-  const before = [
-    '사이트를 올리면 주소와 QR이 나와요. 현장에 붙일 안내문은 `poster.html`을 인쇄하세요(인쇄 창에서 PDF로 저장할 수도 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
-    '연수 장소의 와이파이로 `check.html`을 열어 막힌 곳이 없는지 확인하세요.',
-    live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요.',
-    live && wake,
-  ].filter(Boolean);
-  const during = live ? [
-    '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 질문과 투표 결과가 크게 보여요.',
-    '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
-    '타이머·공지를 보내면 참가자 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 지금 실습·쪽으로 참가자 화면이 움직여요.',
-    bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
-    attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요.' : '연수를 시작할 때 참가자 화면 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 참가자 명단에 남아요.',
-  ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요.'];
-  const survey = sv ? (svIn ? '설문 결과: [기록 내려받기 (CSV)] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
-  const after = live ? [
-    `참가자 명단(별명): 강사 화면의 [기록 내려받기 (CSV)] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
-    survey,
-    '질문·투표 결과도 같은 메뉴에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
-    `다 받은 뒤, 늦어도 연수가 끝나고 ${days}일 안에 강사 화면 맨 아래 [데이터 모두 지우기]를 두 번 눌러 지우세요. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
-  ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
-  const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
-  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 빌드하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
-}
-
 /**
  * 운영안내.md(강사용 폴더, 올리지 않음). 운영 방식은 실제로 연결한 live.provider를 따릅니다.
  * infra(decideInfra 결과)는 추천이 연결한 방식과 같으면 주의만, 다르면 추천한 방식을 한 줄로 덧붙입니다.

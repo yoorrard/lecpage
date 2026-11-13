@@ -181,7 +181,7 @@ test('supabase adapter (fake supabase-js): ticks fetch by rev cursor, flush nudg
     return w;
   }
   const W = win();
-  const c = W.LecLive.create({ provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'sb_publishable_x', code: 'sb1' });
+  const c = W.LecLive.create({ provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'sb_publishable_x', code: 'sb1', throttle: false });
   const info = await c.connect();
   assert.equal(info.mode, 'realtime'); assert.equal(c.status, 'live');
   assert.equal(created.opts.global.headers['x-lec-code'], 'SB1');

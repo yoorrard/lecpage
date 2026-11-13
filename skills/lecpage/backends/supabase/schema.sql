@@ -336,12 +336,14 @@ begin
   s := replace(replace(s, E'\r\n', E'\n'), E'\r', E'\n');
   s := normalize(s, NFC);
   if multiline then
-    s := regexp_replace(s, '[\x01-\x08\x0B\x0C\x0E-\x1F\x7F​‌‎‏‪-‮⁦-⁩﻿]', '', 'g');
+    s := regexp_replace(s, '[\x01-\x08\x0B\x0C\x0E-\x1F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB\U000E0000-\U000E01EF]', '', 'g');
     s := regexp_replace(s, E'\n{4,}', E'\n\n\n', 'g');
   else
-    s := regexp_replace(s, '[\x01-\x1F\x7F​‌‎‏‪-‮⁦-⁩﻿]', ' ', 'g');
+    s := regexp_replace(regexp_replace(s, '[\x01-\x08\x0B\x0C\x0E-\x1F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFA0\uFFF9-\uFFFB\U000E0000-\U000E01EF]', '', 'g'), '[\t\n]', ' ', 'g');
     s := regexp_replace(s, '\s{2,}', ' ', 'g');
   end if;
+  -- combining marks: at most two in a row (stacked 'zalgo' text)
+  s := regexp_replace(s, '([\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]{2})[\u0300-\u036F\u0483-\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]+', '\1', 'g');
   s := btrim(s, E' \n\t');
   if required and s = '' then perform lec_private.fail(400, 'required', field || ': 비어 있습니다.'); end if;
   if char_length(s) > maxlen then perform lec_private.fail(400, 'too_long', field || ': ' || maxlen || '자 이하로 써 주세요.'); end if;
@@ -516,6 +518,11 @@ create or replace function lec_private.moderated(t lec_private.trainings)
 returns boolean language sql stable set search_path = '' as $$
   select coalesce(t.settings ->> 'moderation', '') = 'true'
       or coalesce((select s.data -> 'ui' ->> 'moderation' from public.lec_state s where s.training_code = t.code), '') = 'true'
+$$;
+-- instructor locks: no new questions (state.ui.lockQa) or board posts (state.ui.lockBoard) while on (admin-only state)
+create or replace function lec_private.locked(t lec_private.trainings, p_which text)
+returns boolean language sql stable set search_path = '' as $$
+  select coalesce((select s.data -> 'ui' ->> (case p_which when 'qa' then 'lockQa' else 'lockBoard' end) from public.lec_state s where s.training_code = t.code), '') = 'true'
 $$;
 -- '<CODE>/<32hex>.<ext>' from a file entry: its `path`, or an old public/signed URL of this bucket
 create or replace function lec_private.file_path(f jsonb, p_code text)
@@ -948,12 +955,14 @@ begin
       values (v_code, p.id, p.nickname, lec_private.jtxt(p_doc, 'station', 64), lec_private.jtxt(p_doc, 'seat', 20), lec_private.jtxt(p_doc, 'message', 300, false, true), v_cid, v_rev)
       returning lec_private.out('help', to_jsonb(h.*)) into j;
     when 'questions' then
+      if lec_private.locked(t, 'qa') then perform lec_private.fail(409, 'locked', '지금은 질문을 받지 않아요. 강사가 다시 열면 보낼 수 있어요.'); end if;
       v_text := lec_private.jtxt(p_doc, 'text', 500, true, true);
       v_anon := lec_private.jbool(p_doc, 'anonymous', true);
       insert into public.lec_questions as q (training_code, by, text, nickname, anonymous, cid, rev)
       values (v_code, p.id, v_text, case when v_anon then '' else p.nickname end, v_anon, v_cid, v_rev)
       returning lec_private.out('questions', to_jsonb(q.*)) into j;
     when 'posts' then
+      if lec_private.locked(t, 'board') then perform lec_private.fail(409, 'locked', '지금은 보드에 글을 받지 않아요. 강사가 다시 열면 올릴 수 있어요.'); end if;
       v_text := lec_private.jtxt(p_doc, 'text', 1000, false, true);
       v_files := lec_private.clean_files(p_doc -> 'files', v_code, p.id, null);
       if v_text = '' and jsonb_array_length(v_files) = 0 then perform lec_private.fail(400, 'required', 'text 또는 files가 필요합니다.'); end if;

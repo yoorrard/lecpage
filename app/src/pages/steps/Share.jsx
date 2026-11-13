@@ -177,6 +177,7 @@ export function StepShare({ p, update, go }) {
           <button class="btn btn-sm" onClick={() => update({ sitePassword: friendlyPassword() })}>새로 만들기</button>
         </div>
       )}
+      {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
       <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
     </> });
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: 'note', line: `${notes.length}곳. 그대로 올려도 돼요.`,
@@ -227,11 +228,8 @@ export function StepShare({ p, update, go }) {
   );
 }
 
-function friendlyPassword() {
-  const W = ['숲속', '바다', '햇살', '별빛', '구름', '나무', '노을', '새싹', '바람', '물결', '연필', '공책'];
-  const b = crypto.getRandomValues(new Uint32Array(3));
-  return `${W[b[0] % W.length]}${W[b[1] % W.length]}${String(1000 + (b[2] % 9000))}`;
-}
+/** 사람이 읽고 칠 수 있는 암호(낱말 셋 + 숫자 넷). 만드는 법은 엔진 하나(engine/src/protect.js) */
+const friendlyPassword = () => E.friendlyPassword();
 
 /** 올린 주소가 참가자에게 실제로 열리는지 확인(GitHub Pages는 보통 1~2분, 길면 10분. 로그인 창이 걸려 있으면 열리지 않음) */
 function OpenState({ url, at }) {
