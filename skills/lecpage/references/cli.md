@@ -43,6 +43,7 @@
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
 | `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP | 한 줄 |
 | `draft` · `prompt` · `presets` · `effects` | 초안만, AI 프롬프트 파일, 목록 | |
+| `guard <AI 답.json\|txt> <material.json> [-i info.json] [-o blueprint.json]` | 교재 지킴이: 다른 AI가 짠 설계도(챗봇 답 글도 됨)를 교재 초안과 견줘 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 교재대로 되돌리고, 교재에 없는 주소는 뺌 | 되돌린 곳 한 줄씩 |
 
 교재 해석만 따로 할 때: `node <skill>/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media --slides work/assets/slides`.
 

@@ -52,6 +52,7 @@ export function Settings() {
           <li><span>{anyAi ? <span class="small muted">다른 AI</span> : <><b>AI</b> <span class="small muted">연결 안 됨</span></>}</span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '더 연결하기' : '연결하기'}</button></li>
         </ul>
+        <p class="small muted">쓰던 챗봇 창(ChatGPT·Claude·Gemini)으로 만들 때는 연결하지 않아도 돼요.</p>
         {anyPaid && <div class="field">
           <span>무료 한도를 다 쓰면</span>
           <Seg label="무료 한도를 다 쓰면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추고 물어보기' }, { value: 'pay', label: '유료로 이어가기' }]} />
