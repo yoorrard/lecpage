@@ -54,12 +54,37 @@
     if (v > 1 && el && el.closest && el.closest(CALM)) v = 1;
     return v;
   }
+  /* 저사양: 정말 약한 기기(코어 2개 이하·메모리 2GB 이하)와 데이터 절약 모드만 미리 판정.
+     코어 4개·메모리 4GB는 요즘 휴대폰·아이패드·노트북 대부분이라(크롬은 6GB도 4로 알림) 여기서 막으면 그래픽이 거의 어디서나 정지 화면이 됨.
+     그런 기기(modest)는 끝없이 도는 그림의 프레임과 해상도만 낮추고, 실제로 프레임이 계속 밀리면(slow) 그때 정지 화면으로 내림 */
+  var slow = false;
   function lowPower() {
     var a = html.getAttribute('data-fx-lowpower');
     if (a === '0') return false;
     if (a === '1') return true;
+    if (slow) return true;
     var n = w.navigator || {}, c = n.connection || {};
-    return !!((n.hardwareConcurrency && n.hardwareConcurrency <= 4) || (n.deviceMemory && n.deviceMemory <= 4) || c.saveData);
+    return !!((n.hardwareConcurrency && n.hardwareConcurrency <= 2) || (n.deviceMemory && n.deviceMemory <= 2) || c.saveData);
+  }
+  function modest() {
+    if (html.getAttribute('data-fx-lowpower') === '0') return false;
+    var n = w.navigator || {};
+    return lowPower() || !!((n.hardwareConcurrency && n.hardwareConcurrency <= 4) || (n.deviceMemory && n.deviceMemory <= 4));
+  }
+  /* 프레임 감시: 도는 그림이 있을 때 실제 프레임 간격을 잼. 시작 1.5초 뒤부터 3초 동안 프레임의 70% 넘게 50ms(초당 20장)를 넘기면
+     이 기기에서는 끝없이 도는 그림을 정지 화면으로 내림(html.fx-slow, 다시 불러오기 전까지). 숨은 탭·화면 밖에서는 재지 않음 */
+  var watch = { n: 0, bad: 0, t0: 0 };
+  function frameSeen(dt, now) {
+    if (slow || html.getAttribute('data-fx-lowpower') === '0') return;
+    if (!watch.t0) { watch.t0 = now; return; }
+    if (now - watch.t0 < 1500) return;
+    if (dt > 400) { watch.n = watch.bad = 0; watch.t0 = now - 1500; return; } // 탭 전환·멈춤 뒤의 긴 틈은 셈하지 않음
+    watch.n++; if (dt > 50) watch.bad++;
+    if (now - watch.t0 < 4500 || watch.n < 40) return;
+    if (watch.bad / watch.n > 0.7) {
+      slow = true; html.classList.add('fx-slow');
+      pauseSubs.slice().forEach(function (f) { try { f(isPaused()); } catch (e) { /* 무시 */ } });
+    } else { watch.n = watch.bad = 0; watch.t0 = now - 1500; }
   }
 
   /* ---------- 스크립트 지연 로드 ---------- */
@@ -138,6 +163,18 @@
       if (!l.length) { rec.map['delete'](el); rec.io.unobserve(el); }
     }
     return off;
+  }
+
+  /* ---------- 웹 글꼴 기다리기(최대 1초) ---------- */
+  var fontWait = null, fontGiveUp = false;
+  function fontsOk() { return fontGiveUp || !d.fonts || d.fonts.status === 'loaded'; }
+  function whenFonts(cb) {
+    if (!fontWait) fontWait = new Promise(function (res) {
+      var done = function () { fontGiveUp = true; res(); };
+      try { d.fonts.ready.then(done, done); } catch (e) { done(); }
+      setTimeout(done, 1000);
+    });
+    fontWait.then(cb);
   }
 
   /* ---------- 토큰·색 ---------- */
@@ -344,6 +381,7 @@
       reduced: reduced(),
       level: level(el),
       lowPower: lp,
+      modest: modest(),
       fine: !!(mqF && mqF.matches),
       util: util,
       isPaused: isPaused,
@@ -360,6 +398,8 @@
       onScroll: function (fn, o) { var off = onScroll(fn, o); cl.push(off); return off; },
       on: function (t, type, fn, opt) { t.addEventListener(type, fn, opt); cl.push(function () { t.removeEventListener(type, fn, opt); }); },
       cleanup: function (fn) { cl.push(fn); },
+      /* 웹 글꼴이 오면(최대 1초) 부름: 글자를 다루는 효과가 대체 글꼴로 돌다가 튀지 않게 */
+      fonts: function (cb) { if (fontsOk()) cb(); else whenFonts(function () { if (!inst.dead) cb(); }); },
       fail: function (err) { fail(inst, err); },
       /* 진입: 대기 상태(data-fx-pre)를 붙였다가 화면에 들어오면 걷어 낸다 */
       enter: function (t, cb, o) {
@@ -372,6 +412,8 @@
         t.removeAttribute('data-fx-snap');
         var go = function () {
           if (!t.hasAttribute('data-fx-pre')) return;
+          /* 웹 글꼴이 아직이면 잠깐(최대 1초) 기다렸다 들어옴: 대체 글꼴로 들어오다 글꼴이 바뀌며 글자가 튀지 않게(첫 화면 제목) */
+          if (!fontsOk()) { whenFonts(go); return; }
           void t.offsetWidth;
           t.removeAttribute('data-fx-pre');
           t.setAttribute('data-fx-in', '');
@@ -415,7 +457,7 @@
         } catch (e) { api.g = null; }
         var size = function () {
           var r = c.getBoundingClientRect();
-          var dpr = Math.min(o.maxDpr || 2, w.devicePixelRatio || 1) * (o.scale || 1);
+          var dpr = Math.min(o.maxDpr || 2, ctx.modest ? 1.5 : 2, w.devicePixelRatio || 1) * (o.scale || 1);
           var W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
           if (W === api.w && H === api.h && dpr === api.dpr) return;
           api.w = W; api.h = H; api.dpr = dpr;
@@ -436,14 +478,18 @@
       /* 반복 그리기: 보일 때·탭이 보일 때·멈춤 아님·동작 줄이기 아님에서만 돈다. 아니면 정지 화면 한 장 */
       loop: function (target, draw, o) {
         o = o || {};
-        var raf = 0, last = 0, T = o.t || 0, vis = false, alive = true;
-        var minDt = o.fps ? 1000 / o.fps : 0;
-        var still = function () { return ctx.reduced || (lp && !o.lowPowerOK); };
+        var raf = 0, last = 0, prev = 0, T = o.t || 0, vis = false, alive = true;
+        /* 보통 기기(modest)는 초당 30장까지만 */
+        var fps = ctx.modest && !lp ? Math.min(o.fps || 30, 30) : o.fps;
+        var minDt = fps ? 1000 / fps : 0;
+        var still = function () { return ctx.reduced || ((lp || slow) && !o.lowPowerOK); };
         var want = function () { return alive && vis && !d.hidden && !isPaused() && !still(); };
         var frame = function (now) {
           raf = 0;
-          if (!want()) { last = 0; return; }
+          if (!want()) { last = prev = 0; return; }
           raf = requestAnimationFrame(frame);
+          if (prev) frameSeen(now - prev, now);
+          prev = now;
           if (!last) { last = now; return; }
           var dt = now - last;
           if (minDt && dt < minDt - 2) return;
@@ -453,7 +499,7 @@
           try { draw(T, dt / 1000, false); } catch (e) { alive = false; fail(inst, e); }
         };
         var update = function () {
-          if (want()) { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } return; }
+          if (want()) { if (!raf) { last = prev = 0; raf = requestAnimationFrame(frame); } return; }
           if (raf) { cancelAnimationFrame(raf); raf = 0; }
           if (vis && alive) { try { draw(T, 0, true); } catch (e) { alive = false; fail(inst, e); } }
         };
@@ -641,7 +687,7 @@
     copied: function (btn) { emit('lecfx:copied', { el: btn }, btn || d); },
     has: function (id) { return !!specs[id]; },
     list: function () { return Object.keys(specs); },
-    state: function () { return { level: level(), reduced: reduced(), paused: isPaused(), lowPower: lowPower(), loops: loopCount }; },
+    state: function () { return { level: level(), reduced: reduced(), paused: isPaused(), lowPower: lowPower(), modest: modest(), slow: slow, loops: loopCount }; },
     level: level,
     util: util,
     /* 깜빡임 방지용 부트 스니펫: <head>에 인라인으로 넣으면 core가 시작할 때(또는 2.5초 뒤) 풀린다 */

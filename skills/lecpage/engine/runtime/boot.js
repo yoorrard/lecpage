@@ -7,5 +7,12 @@
     if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
     if (localStorage.getItem('lp-motion-paused') === '1') d.classList.add('lp-paused');
   } catch (e) { /* 저장소를 못 쓰는 환경 */ }
-  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) d.classList.add('lp-reduced');
+  var reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (reduced) d.classList.add('lp-reduced');
+  /* 등장 효과의 깜빡임 방지: 효과 스크립트(fx.js, defer)가 늦게 오면 제목이 다 보였다가 사라진 뒤 다시 들어와 튐.
+     움직임이 켜진 사이트는 효과가 시작할 때까지(최대 3초) 등장 효과 대상만 숨겨 둠(fx.css html.fx-boot, core.js start가 걷어 냄) */
+  if (d.hasAttribute('data-rest') && +d.getAttribute('data-motion') > 0 && !reduced) { // 참가자 화면(강사·발표 화면은 효과 스크립트를 싣지 않음)
+    d.classList.add('fx-boot');
+    setTimeout(function () { d.classList.remove('fx-boot'); }, 3000);
+  }
 })();
