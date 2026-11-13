@@ -2,7 +2,8 @@
 //  meta   사이트 정보 한 줄(열쇠 해시, 만든 때, 끝나는 때, 가림, 제목, 저장 크기, 지금 배포, 준비 중인 배포, 묶인 실시간 방 코드)
 //  deploy 배포 목록(경로 → sha256·크기)을 JSON 한 줄로. 지금 것과 준비 중인 것만 남김
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
-//  passet (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠. 내용은 두지 않음(up=0: 작은 파일을 공개할 때 한 번에 올리려고 blob에 잠깐 둔 것)
+//  passet (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠. 내용은 두지 않음
+//         (작은 파일은 받을 때 메모리에만 두었다가 공개할 때 한 번에 올리고 그때 적음 → deferred)
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
 //
 // 보기(view)는 사이트를 만들 때 정해져 바뀌지 않습니다.
@@ -30,10 +31,13 @@ export const CHUNK = 1024 * 1024;
 /** 정적 사본(/rt/)이 있는 런타임 파일 */
 const RT = new Set(STATIC_RUNTIME || []);
 /**
- * Pages 보기: 이 크기 아래의 파일(CSS·작은 그림·글꼴 등)은 받을 때 바로 Pages에 올리지 않고 잠깐 여기 두었다가 공개할 때 HTML과 한 번에 올림.
- * 파일마다 Pages API를 1~2번 부르던 것이 공개 한 번에 1번으로 줄어 Cloudflare API 한도(5분에 1,200번)에 덜 닿음
+ * Pages 보기: 이 크기 아래의 파일(CSS·작은 그림·글꼴 등)은 받을 때 바로 Pages에 올리지 않고 메모리에 잠깐 두었다가 공개할 때 HTML과 한 번에 올림.
+ * 파일마다 Pages API를 1~2번 부르던 것이 공개 한 번에 1번으로 줄어 Cloudflare API 한도(5분에 1,200번)에 덜 닿고, 저장소에 쓰지 않아 행 쓰기(무료 하루 10만)도 늘지 않음.
+ * 그사이 이 객체가 내려가 메모리가 비면 공개할 때 missing_blobs로 그 파일만 다시 받음(앱이 알아서 다시 보냄)
  */
 export const DEFER_MAX = 512 * 1024;
+/** 사이트 하나가 메모리에 잠깐 두는 파일 합계(넘으면 받을 때 바로 Pages에 올림) */
+const DEFER_TOTAL = 16 * 1024 * 1024;
 /** Pages 보기에서 올려받지 않는 파일(호스트 정책으로 바꿔 넣음) */
 const PAGES_SKIP = new Set(['robots.txt']);
 /** 공개 한 번에 드는 Pages API 어림(토큰·확인·올리기·열쇠 적기·배포·준비 확인·지난 배포 지우기) */
@@ -44,7 +48,7 @@ const MANIFEST_MAX = 1024 * 1024;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT, live_code TEXT, view TEXT NOT NULL DEFAULT 'worker', pstate TEXT);
-CREATE TABLE IF NOT EXISTS passet (sha TEXT NOT NULL, ext TEXT NOT NULL, phash TEXT NOT NULL, size INTEGER NOT NULL, up INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (sha, ext)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS passet (sha TEXT NOT NULL, ext TEXT NOT NULL, phash TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (sha, ext)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS deploy (id TEXT PRIMARY KEY, created INTEGER NOT NULL, bytes INTEGER NOT NULL, stored INTEGER NOT NULL, files TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS blob (sha TEXT NOT NULL, i INTEGER NOT NULL, total INTEGER, data BLOB NOT NULL, PRIMARY KEY (sha, i)) WITHOUT ROWID;
 `;
@@ -62,6 +66,8 @@ export class Site extends DurableObject {
     this.liveTimes = [];
     this.queue = Promise.resolve();
     this.ogCache = new Map(); // 배포 id → 미리보기 카드 그림 경로('' = 없음)
+    this.deferred = new Map(); // (Pages 보기) 공개할 때 한 번에 올릴 작은 파일: sha256 → { bytes, items: [{ ext, hash, parts, contentType }] }
+    this.deferredBytes = 0;
   }
 
   async fetch(request) {
@@ -101,7 +107,6 @@ export class Site extends DurableObject {
     if (!cols.has('view')) this.sql.exec("ALTER TABLE meta ADD COLUMN view TEXT NOT NULL DEFAULT 'worker'");
     if (!cols.has('pstate')) this.sql.exec('ALTER TABLE meta ADD COLUMN pstate TEXT');
     if (!cols.has('view') || !cols.has('pstate')) this.sql.exec(SCHEMA);
-    if (!this.sql.exec('PRAGMA table_info(passet)').toArray().some((r) => r.name === 'up')) this.sql.exec('ALTER TABLE passet ADD COLUMN up INTEGER NOT NULL DEFAULT 1');
   }
   /** VIEW=pages로 만든 사이트인지 */
   isPages(meta = this.load()) { return !!meta && meta.view === 'pages'; }
@@ -128,12 +133,13 @@ export class Site extends DurableObject {
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */
   keepsHere(meta, path) { return !this.isPages(meta) || typeOf(path)?.kind === 'html' || isMedia(path); }
   passet(sha, ext) { return this.sql.exec('SELECT phash FROM passet WHERE sha = ? AND ext = ?', sha, ext).toArray()[0]?.phash || ''; }
+  deferredItem(sha, ext) { return this.deferred.get(sha)?.items.find((x) => x.ext === ext) || null; }
   /** Pages 보기: 엔진 런타임 그대로인 .js는 모든 사이트가 같아 Pages 열쇠를 미리 앎(scripts/gen-runtime.mjs) → 올려받지 않음 */
   knownRuntime(files) {
     for (const [path, sha, size] of files) {
       const ph = PAGES_RUNTIME?.[sha];
       if (!ph || rawExt(path) !== 'js' || this.passet(sha, 'js')) continue;
-      this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size, up) VALUES (?, ?, ?, ?, 1)', sha, 'js', ph, size);
+      this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, 'js', ph, size);
       this.jsOk.add(sha);
     }
   }
@@ -149,7 +155,7 @@ export class Site extends DurableObject {
     const out = []; const seen = new Set();
     for (const [path, sha] of files) {
       if (PAGES_SKIP.has(path)) continue;
-      const ok = this.keepsHere(meta, path) ? have.has(sha) : !!this.passet(sha, rawExt(path));
+      const ok = this.keepsHere(meta, path) ? have.has(sha) : !!this.passet(sha, rawExt(path)) || !!this.deferredItem(sha, rawExt(path));
       if (!ok && !seen.has(sha)) { seen.add(sha); out.push(sha); }
     }
     return out;
@@ -318,6 +324,7 @@ export class Site extends DurableObject {
       if (!keep.has(sha)) { this.sql.exec('DELETE FROM blob WHERE sha = ?', sha); this.jsOk.delete(sha); }
     }
     if (this.isPages(meta)) for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM passet').toArray()) if (!keep.has(sha)) this.sql.exec('DELETE FROM passet WHERE sha = ?', sha);
+    for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.bytes.length; }
   }
 
   // ── 파일 받기 ────────────────────────────────────────────────
@@ -409,9 +416,9 @@ export class Site extends DurableObject {
   async uploadPages(request, meta, man, sha, size) {
     const paths = man.list.filter(([p, s]) => s === sha && !PAGES_SKIP.has(p)).map(([p]) => p);
     const exts = [...new Set(paths.filter((p) => !this.keepsHere(meta, p)).map(rawExt))].filter((e) => !this.passet(sha, e));
-    // 작은 파일은 여기 잠깐 두었다가 공개할 때 한 번에 올림(up=0)
-    const defer = exts.length > 0 && size <= DEFER_MAX;
-    const needBlob = (defer || paths.some((p) => this.keepsHere(meta, p))) && !this.hasBlob(sha);
+    // 작은 파일은 메모리에 두었다가 공개할 때 한 번에 올림
+    const defer = exts.length > 0 && size <= DEFER_MAX && this.deferredBytes + size <= DEFER_TOTAL;
+    const needBlob = paths.some((p) => this.keepsHere(meta, p)) && !this.hasBlob(sha);
     if (!needBlob && !exts.length) { request.body?.cancel().catch(() => { }); return noContent(); }
     const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => {
       const bytes = await readAll(request, size);
@@ -420,20 +427,21 @@ export class Site extends DurableObject {
       if (!this.load()) throw new HttpError('not_found'); // 받는 사이에 사이트가 지워짐
       const parts = exts.length ? base64Parts(bytes) : null;
       const items = exts.map((e) => ({ ext: e, hash: pagesHash(bytes, e, parts), parts, contentType: contentTypeOf(paths.find((p) => rawExt(p) === e)) }));
-      // 0번 줄을 맨 나중에(= 다 들어옴). 미룬 파일은 열쇠도 같이 적음(한 번에)
-      this.ctx.storage.transactionSync(() => {
-        if (needBlob && !this.hasBlob(sha)) {
+      if (needBlob && !this.hasBlob(sha)) {
+        // 0번 줄을 맨 나중에(= 다 들어옴)
+        this.ctx.storage.transactionSync(() => {
           for (let i = 1, o = CHUNK; o < bytes.length; i++, o += CHUNK) this.sql.exec('INSERT OR REPLACE INTO blob (sha, i, total, data) VALUES (?, ?, NULL, ?)', sha, i, bytes.slice(o, o + CHUNK));
           this.sql.exec('INSERT OR REPLACE INTO blob (sha, i, total, data) VALUES (?, 0, ?, ?)', sha, size, bytes.slice(0, CHUNK));
-        }
-        if (defer) for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size, up) VALUES (?, ?, ?, ?, 0)', sha, x.ext, x.hash, size);
-      });
+        });
+      }
+      if (defer && !this.deferred.has(sha)) { this.deferred.set(sha, { bytes, items }); this.deferredBytes += bytes.length; }
+      else if (defer) { const d = this.deferred.get(sha); for (const x of items) if (!d.items.some((y) => y.ext === x.ext)) d.items.push(x); }
       if (exts.length && !defer) {
         const pc = this.pc();
         const missing = new Set(await pc.checkMissing(items.map((x) => x.hash)));
         const up = items.filter((x) => missing.has(x.hash));
         if (up.length) await pc.upload(up);
-        for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size, up) VALUES (?, ?, ?, ?, 1)', sha, x.ext, x.hash, size);
+        for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
       }
     });
     try { await run; } catch (e) { throw await this.pagesFail(e, `파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요. (${e?.step || ''})`); }
@@ -488,7 +496,7 @@ export class Site extends DurableObject {
   async publishPages(request, meta, deployId, man) {
     const self = request.headers.get('x-lp-origin') || '';
     const id = meta.site; const url = this.siteUrl(meta);
-    const manifest = {}; const extra = []; const media = []; const paths = []; const deferred = new Map(); // Pages 열쇠 → sha
+    const manifest = {}; const extra = []; const media = []; const paths = []; const deferred = new Map(); const lostHere = new Set(); // deferred: Pages 열쇠 → 메모리에서 올린 파일
     const add = (path, bytes) => {
       const parts = base64Parts(bytes); const hash = pagesHash(bytes, rawExt(path), parts);
       manifest[`/${path}`] = hash; extra.push({ hash, parts, contentType: contentTypeOf(path) }); paths.push(path);
@@ -505,18 +513,15 @@ export class Site extends DurableObject {
         add(path, new Uint8Array(await res.arrayBuffer()));
         continue;
       }
-      const row = this.sql.exec('SELECT phash, up FROM passet WHERE sha = ? AND ext = ?', sha, rawExt(path)).toArray()[0];
-      if (!row) throw new HttpError('missing_blobs', undefined, { missing: [sha] });
-      manifest[`/${path}`] = row.phash; paths.push(path);
-      if (!row.up && !deferred.has(row.phash)) {
-        // 받을 때 미룬 작은 파일: 여기 둔 내용을 이번에 같이 올림
-        const blob = this.sql.exec('SELECT data FROM blob WHERE sha = ? AND i = 0', sha).toArray()[0];
-        if (!blob) { this.sql.exec('DELETE FROM passet WHERE sha = ?', sha); throw new HttpError('missing_blobs', undefined, { missing: [sha] }); }
-        const bytes = new Uint8Array(blob.data);
-        deferred.set(row.phash, sha);
-        extra.push({ hash: row.phash, parts: base64Parts(bytes), contentType: contentTypeOf(path) });
-      }
+      const ph = this.passet(sha, rawExt(path));
+      if (ph) { manifest[`/${path}`] = ph; paths.push(path); continue; }
+      // 받을 때 메모리에 둔 작은 파일: 이번에 HTML과 같이 올림. 메모리가 비었으면(객체가 내려감) 그 파일만 다시 받음
+      const d = this.deferredItem(sha, rawExt(path));
+      if (!d) { lostHere.add(sha); continue; }
+      manifest[`/${path}`] = d.hash; paths.push(path);
+      if (!deferred.has(d.hash)) { deferred.set(d.hash, { sha, ext: d.ext, size: this.deferred.get(sha).bytes.length }); extra.push(d); }
     }
+    if (lostHere.size) throw new HttpError('missing_blobs', undefined, { missing: [...lostHere] });
     const te = new TextEncoder();
     add('robots.txt', te.encode(ROBOTS));
     if (!man.files.has('404.html')) add('404.html', te.encode(noFileHtml()));
@@ -540,12 +545,10 @@ export class Site extends DurableObject {
       this.sql.exec('UPDATE meta SET current = ?, pending = NULL, bytes = ?, expires = ? WHERE id = 1', deployId, kept, expires);
       if (prev && prev !== deployId) this.sql.exec('DELETE FROM deploy WHERE id = ?', prev);
       this.savePs(meta, st);
-      // 같이 올린 작은 파일: 이제 Pages에 있음. 여기 둘 까닭이 없는 내용은 지움(HTML·영상·소리로도 쓰이면 둠)
-      for (const sha of new Set(deferred.values())) {
-        this.sql.exec('UPDATE passet SET up = 1 WHERE sha = ?', sha);
-        if (!man.list.some(([p, s]) => s === sha && this.keepsHere(meta, p))) this.sql.exec('DELETE FROM blob WHERE sha = ?', sha);
-      }
+      // 같이 올린 작은 파일: 이제 Pages에 있으니 열쇠를 적고 메모리에서 뺌
+      for (const [hash, x] of deferred) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', x.sha, x.ext, hash, x.size);
     });
+    for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.bytes.length; } }
     Object.assign(meta, { current: deployId, pending: null, bytes: kept, expires });
     if (prev && prev !== deployId) this.manifests.delete(prev);
     await this.ctx.storage.setAlarm(expires);
@@ -604,7 +607,7 @@ export class Site extends DurableObject {
     if (this.isPages(meta)) await this.wipePages(meta);
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
-    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = [];
+    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
   }
   /**
