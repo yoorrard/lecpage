@@ -81,7 +81,9 @@ const SECTION_FIX = {
     id: slug(i.id || i.name || i.title, n + 1), name: str(i.name || i.title, 30), title: str(i.title || i.name, 100), tag: str(i.tag, 16).toUpperCase(), desc: str(i.desc ?? i.sub, 400),
     steps: strArr(i.steps, 500).slice(0, 20), prompts: arr(i.prompts).slice(0, 12).map((p) => ({ title: str(p.title, 80), text: str(p.text, 4000) })).filter((p) => p.text),
     images: arr(i.images).slice(0, 20).map((im) => ({ src: safeUrl(im.src), caption: str(im.caption, 120) })).filter((im) => im.src),
-    links: links(i.links), outcome: str(i.outcome ?? i.out, 300), note: str(i.note, 400), minutes: num(i.minutes, 0, 0, 600), source: source(i.source) })).filter((i) => i.title) }),
+    links: links(i.links), outcome: str(i.outcome ?? i.out, 300), note: str(i.note, 400), minutes: num(i.minutes, 0, 0, 600), source: source(i.source),
+    // 강사 메모(발표자 노트의 진행 메모): 참가자 화면에는 그리지 않고 강사용 운영안내에만
+    ...(i.teacherNote ? { teacherNote: str(i.teacherNote, 600) } : {}) })).filter((i) => i.title) }),
   tools: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 300), items: arr(s.items).map((i) => ({ name: str(i.name, 40), url: safeUrl(i.url), desc: str(i.desc, 200), pages: arr(i.pages).map((p) => num(p, 0, 1, 9999)).filter(Boolean).slice(0, 12), icon: str(i.icon, 20) })).filter((i) => i.name) }),
   prompts: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((i) => ({ title: str(i.title, 80), text: str(i.text, 4000), tags: strArr(i.tags, 20).slice(0, 6) })).filter((i) => i.text) }),
   qa: (s) => ({ lead: str(s.lead, 300), anonymous: s.anonymous !== false }),

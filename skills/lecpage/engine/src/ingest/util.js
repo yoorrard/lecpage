@@ -301,6 +301,16 @@ export function pageText(p) {
   return lines.join('\n');
 }
 
+/**
+ * 쪽 그림을 어느 쪽에 붙일지. LibreOffice·PDF 내보내기는 숨긴 쪽을 그리지 않으므로,
+ * 그림 수가 보이는 쪽 수와 같으면(또는 짝 PDF가 숨긴 쪽을 뺐으면) 숨긴 쪽을 건너뛰고 차례대로 맞춤.
+ * 그렇지 않으면 모든 쪽에 차례대로(숨긴 쪽도 그려진 경우).
+ */
+export function pagesForImages(pages, count, skipsHidden = false) {
+  const visible = pages.filter((p) => !p.hidden);
+  return skipsHidden || (count !== pages.length && count === visible.length) ? visible : pages;
+}
+
 export function sizeLabel(n) {
   if (!n && n !== 0) return '';
   if (n < 1024) return `${n}B`;

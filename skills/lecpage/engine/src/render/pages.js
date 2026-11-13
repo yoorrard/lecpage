@@ -75,7 +75,7 @@ ${ctx.ogImage ? `<meta property="og:image" content="${esc(ctx.ogImage)}"><meta n
 <meta name="generator" content="lecpage ${VERSION}">
 ${robotsMeta(ctx, page)}
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
+${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/lecpage.css">
 ${ctx.hasFx ? '<link rel="stylesheet" href="assets/fx.css">' : ''}
@@ -502,7 +502,11 @@ export function opsDoc(ctx, infra) {
   const same = !!infra && infra.liveProvider === prov;
   const rec = infra && !same ? infra.backendInfo?.name_ko : '';
   const files = ['`index.html` 참가자 화면', live && '`console.html` 강사 화면', '`screen.html` 발표 화면', '`check.html` 접속 확인', '`poster.html` QR 안내문 인쇄', live && '`privacy.html` 개인정보 처리 안내'].filter(Boolean);
-  const before = { supabase: 'Supabase 무료 프로젝트는 7일 동안 사용이 없으면 멈춥니다. 연수 하루 전 접속 확인(`check.html`)으로 깨어 있는지 봅니다.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 확인합니다.', http: '서버가 켜져 있는지 확인합니다.', local: '실시간 서버를 연결했는지 확인합니다. 지금은 참가자 기기끼리 이어지지 않습니다.' }[prov];
+  // 발표자 노트의 진행 메모(참가자 화면에는 싣지 않음): 실습별로 강사만 보는 이 문서에
+  const memos = (bp.sections.find((s) => s.type === 'stations')?.items || []).filter((x) => x.teacherNote)
+    .map((x) => `- **${x.title}**${x.source?.pages?.length ? ` (${x.source.pages.join('·')}쪽)` : ''}\n${x.teacherNote.split('\n').map((t) => `  - ${t}`).join('\n')}`);
+  const memoDoc = memos.length ? `\n## 실습별 강사 메모(발표자 노트)\n참가자 화면에는 보이지 않아요.\n${memos.join('\n')}\n` : '';
+  const before = { supabase:'Supabase 무료 프로젝트는 7일 동안 사용이 없으면 멈춥니다. 연수 하루 전 접속 확인(`check.html`)으로 깨어 있는지 봅니다.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 확인합니다.', http: '서버가 켜져 있는지 확인합니다.', local: '실시간 서버를 연결했는지 확인합니다. 지금은 참가자 기기끼리 이어지지 않습니다.' }[prov];
   return `# 운영 안내 — ${bp.meta.title}
 
 ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.meta.end ? '~' + bp.meta.end : ''}\n` : ''}연수 코드: **${bp.live.code}** · 실시간 방식: ${live ? name : '없음'}
@@ -515,7 +519,7 @@ ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.
 2. 연수 장소의 와이파이로 \`check.html\`을 열어 막힌 사이트가 없는지 확인합니다.
 ${live ? `3. 관리자 키로 강사 화면(\`console.html\`)에 들어가 참가자 화면과 함께 리허설합니다(두 기기로 질문·도움 요청을 보내 보세요).\n${before ? `4. ${before}\n` : ''}` : ''}
 ## 연수 중
-${live ? '- 강사 화면에서 진행 현황(누가 어디까지 했는지)과 도움 요청한 사람을 봅니다. 도움 요청은 "맡기" → "해결"로 처리합니다.\n- 타이머·공지를 보내면 참가자 화면 위에 나타납니다. "강사 따라가기"를 켜면 지금 단계·쪽으로 참가자 화면이 움직입니다.\n- 프로젝터에는 발표 화면(`screen.html`)을 띄웁니다.\n' : '- 프로젝터에 첫 화면의 QR(공유 버튼)을 띄워 접속을 안내합니다.\n'}
+${live ? '- 강사 화면에서 진행 현황(누가 어디까지 했는지)과 도움 요청한 사람을 봅니다. 도움 요청은 "맡기" → "해결"로 처리합니다.\n- 타이머·공지를 보내면 참가자 화면 위에 나타납니다. "강사 따라가기"를 켜면 지금 단계·쪽으로 참가자 화면이 움직입니다.\n- 프로젝터에는 발표 화면(`screen.html`)을 띄웁니다.\n' : '- 프로젝터에 첫 화면의 QR(공유 버튼)을 띄워 접속을 안내합니다.\n'}${memoDoc}
 ## 연수 후
 - 만족도 조사 응답을 확인합니다.
 ${live ? `- 강사 화면에서 출석·진행·질문 기록을 CSV로 내려받습니다.\n- 보유 기간(${bp.privacy.retentionDays}일)이 지나면 강사 화면의 "데이터 모두 지우기"를 누릅니다.\n- 계속 공개할 사이트라면 실시간 기능을 끄고 다시 만들어 정적 아카이브로 바꿉니다.\n` : '- 사이트는 그대로 두면 자료 아카이브로 쓸 수 있습니다.\n'}- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 뜨고, \`연수 후 안내\` 칸이 첫 화면 바로 아래로 올라옵니다. 다시 보기 영상·소통방·이수 처리 일정을 그 칸에 넣어 다시 빌드하세요(미리 보기: 주소 끝에 \`?phase=after\`).

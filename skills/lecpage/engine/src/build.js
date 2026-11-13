@@ -9,6 +9,7 @@ import { designTokens } from './design/dtcg.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, renderPoster, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
 import { usedVariants } from './design/layouts.js';
+import { pruneUnusedCss } from './css-prune.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
 // 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음
@@ -103,6 +104,13 @@ export function build(input, opts = {}) {
     parts.push('if(window.LecFX){document.readyState!=="loading"?LecFX.start():document.addEventListener("DOMContentLoaded",function(){LecFX.start()})}');
     files['assets/fx.js'] = parts.join('\n;\n');
     files['assets/fx.css'] = pruneFxCss(read('fx/fx.css'), effectIds);
+  }
+
+  // 런타임 CSS에서 이 사이트의 쪽·스크립트 어디에도 없는 클래스·프리셋 규칙을 뺌(학교망·휴대폰에서 가볍게).
+  // 모든 쪽과 스크립트를 만든 뒤에 해야 함. opts.keepAllCss면 그대로(디버깅용)
+  if (!opts.keepAllCss) {
+    const used = Object.entries(files).filter(([p, v]) => typeof v === 'string' && /\.(html|js)$/.test(p)).map(([, v]) => v).join('\n');
+    files['assets/lecpage.css'] = pruneUnusedCss(files['assets/lecpage.css'], used);
   }
 
   const infra = opts.infra ? decideInfra(opts.infra) : null;

@@ -363,10 +363,30 @@ export function foundSummary(d = {}, n = 6) {
   return out.slice(0, n);
 }
 
-/** 발표자 노트에서 '막히는 곳' 문장만(진행 메모는 싣지 않음) */
-export function noteTips(notes) {
-  return sentences(normLine(notes || '').replace(/^(?:막히면|막힐\s*때|안\s*되면|주의|tip|팁)\s*[:：]\s*/i, '막히면: '))
-    .filter((s) => NOTE_CUE.test(s)).map((s) => s.replace(/^막히면:\s*/, '')).filter((s) => s.length >= 8 && s.length <= 160).slice(0, 2);
+// 발표자 노트 가운데 강사에게 하는 말(진행 메모): "~하도록 안내.", "~로 진행.", "~순서로 설명.", "안 된 분은 …", "참가자에게 …"
+const MEMO_END = /(?:안내|설명|강조|진행|지도|유도|시연|언급|소개|제시|배부|순회|예고|발문|격려|칭찬)\s*(?:함|할\s*것|하기|요망)?\s*[.。]?$/;
+const TO_TEACHER = /(?:안내|설명|강조|지도|시연)\s*(?:한다|합니다|해\s*주세요|해야|할\s*것|하기)|(?:하|되|두|쓰|않|고르|넣|올리|열|보)도록\s*(?:한다|합니다|하기|해\s*주세요|안내|지도|유도|함)|참가자|참여자|수강생|연수생|선생님들|(?<=[가-힣]\s)분들?(?:은|께|에게|만)\s|돌아다니며|시간이\s*(?:남으면|부족하면|모자라면)|다음\s*(?:장|쪽|슬라이드)에서|발표\s*때/;
+const NOTE_LABEL = /^(?:막히면|막힐\s*때|안\s*되면|안\s*될\s*때|주의|tip|팁)\s*[:：]\s*/i;
+/** 강사에게 하는 말투인지(발표자 노트 문장 하나) */
+export const isTeacherMemo = (s) => MEMO_END.test(s) || TO_TEACHER.test(s);
+
+/**
+ * 발표자 노트 나누기: tips = 참가자에게 그대로 보여 줄 '막히면 이렇게' 문장(교재 글자 그대로),
+ * memos = 강사에게 하는 진행 메모(참가자 화면에 싣지 않고 강사용 운영안내로).
+ * "막히면:" 이름표로 시작한 줄은 그 줄 전체가 해결 요령. 강사 말투 문장은 이름표 안에 있어도 메모로.
+ */
+export function splitNotes(notes) {
+  const tips = [], memos = [];
+  for (const raw of String(notes || '').split(/\n+/)) {
+    const line = normLine(raw);
+    if (!line) continue;
+    const scoped = NOTE_LABEL.test(line);
+    for (const s of sentences(line.replace(NOTE_LABEL, ''))) {
+      const tip = !isTeacherMemo(s) && (scoped || NOTE_CUE.test(s)) && s.length >= 8 && s.length <= 160;
+      (tip ? tips : memos).push(s);
+    }
+  }
+  return { tips: tips.slice(0, 3), memos: [...memos, ...tips.slice(3)] };
 }
 
 /**
