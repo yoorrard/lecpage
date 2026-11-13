@@ -1,4 +1,4 @@
-// lecpage 바로 공개 호스트(선택). 운영자가 직접 배포할 때만 켜집니다 → README.md
+// lecpage 바로 배포 호스트(선택). 운영자가 직접 배포할 때만 켜집니다 → README.md
 // 앱(lecpage)과 반드시 다른 주소(출처)에 두세요. 앱은 사용자의 AI 키를 자기 출처에 보관합니다.
 // 무료 요금제로도 돕니다: Worker + Durable Objects(SQLite 저장). R2·KV를 쓰지 않아 카드 등록이 필요 없습니다.
 // 처음 켤 때는 npm run setup(README §2): 배포·비밀 값·사이트 보기(VIEW=pages, Cloudflare Pages)·관리 Worker(wrangler.admin.jsonc)까지.
@@ -34,11 +34,11 @@
   // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK, ALERT_WEBHOOK, ACCESS_EMAILS)과
   // 사이트 보기 설정(VIEW, CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_HOST, PAGES_TOKEN, APP_ORIGINS)은 npm run setup이 비밀 값으로 넣습니다(다시 배포해도 남음).
   "vars": {
-    // 바로 공개를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
+    // 바로 배포를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
     "ALLOWED_ORIGINS": "https://yoorrard.github.io,http://localhost:5173,http://localhost:4173"
     // 요금제: PLAN "free"(기본. 무료 요금제 안에서만: 하루 예산의 45%부터 예약한 연수만, 60%부터 새 사이트·새 방은 강사 계정으로) | "paid"(Workers Paid로 올린 뒤. 하루 한도 없음)
     // 수용량·비용 표: node scripts/capacity-model.mjs, README §4
-    // DAILY_REQUEST_BUDGET 100000(paid는 0) · KEEP_ALIVE "on"(방문이 있으면 공개 기간을 다시 채움) · MAX_SITE_DAYS 365
+    // DAILY_REQUEST_BUDGET 100000(paid는 0) · KEEP_ALIVE "on"(방문이 있으면 보관 기간을 다시 채움) · MAX_SITE_DAYS 365
     // 바꿀 수 있는 한도(기본값): MAX_BYTES 41943040 · MAX_FILE_BYTES 20971520 · MAX_FILES 600 · SITE_DAYS 30
     // SITES_PER_HOUR 6 · SITES_PER_DAY 20(기기 표가 없을 때 IP마다) · SITES_PER_DEVICE 5(paid 10) · SITES_PER_HOUR_SHARED 30 · SITES_PER_DAY_SHARED 60
     // DAILY_SITE_CAP pages 보기 200(paid 1000), worker 보기 30(paid 300) · MAX_TOTAL_BYTES 4294967296 · DEPLOYS_PER_HOUR 30 · PAGES_API_BUDGET 900(5분)

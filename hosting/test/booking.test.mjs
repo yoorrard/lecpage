@@ -51,7 +51,7 @@ test('예약: 그날 어림이 예산의 70%를 넘으면 만들 때 알림(다�
   assert.equal(st.trainings, 1); assert.equal(st.people, 60); assert.ok(st.est > 39000 && st.est < 40000); assert.equal(st.ok, true);
   const no = await reserve(call, 'bbbbbbbbbb', big);
   assert.equal(no.status, 429); assert.equal(no.body.error.reason, 'booked'); assert.equal(no.body.error.day, day(7));
-  assert.match(no.body.error.message_ko, /^\d+월 \d+일은 바로 공개에 예약된 연수가 많아\(1개\)/);
+  assert.match(no.body.error.message_ko, /^\d+월 \d+일은 바로 배포에 예약된 연수가 많아\(1개\)/);
   assert.equal((await call('GET', 'sites')).body.sites.length, 1, '거절되면 사이트도 만들지 않음');
   assert.equal((await reserve(call, 'cccccccccc', { ...big, date: day(8) })).status, 200, '다른 날은 됨');
   assert.equal((await reserve(call, 'dddddddddd', { ...big, live: false })).status, 200, '참여 기능이 없는 연수는 작음');

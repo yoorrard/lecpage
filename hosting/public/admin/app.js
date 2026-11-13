@@ -1,4 +1,4 @@
-// lecpage 바로 공개 관리 화면. Cloudflare Access 뒤에서만 열리고, 모든 글은 textContent로만 그립니다(innerHTML 없음, Trusted Types).
+// lecpage 바로 배포 관리 화면. Cloudflare Access 뒤에서만 열리고, 모든 글은 textContent로만 그립니다(innerHTML 없음, Trusted Types).
 // API: /admin/api/… (같은 출처, x-lecpage-admin 머리글. 상태를 바꾸는 요청은 JSON POST)
 (function () {
   'use strict';
@@ -105,13 +105,13 @@
     plan.className = 'badge ' + (o.plan === 'paid' ? 'good' : '');
     var paused = $('[data-paused]');
     paused.hidden = !(o.uploads && o.uploads.paused);
-    paused.textContent = o.uploads && o.uploads.paused ? '새 업로드를 멈춰 둔 상태예요' + (o.uploads.reason ? ' — ' + o.uploads.reason : '') + '. 이미 올라온 사이트는 열려요.' : '';
+    paused.textContent = o.uploads && o.uploads.paused ? '새 배포를 멈춰 둔 상태예요' + (o.uploads.reason ? ' — ' + o.uploads.reason : '') + '. 이미 배포한 사이트는 열려요.' : '';
 
     var t = o.today || {};
     $('[data-today-date]').textContent = t.date ? '(' + Number(t.date.slice(5, 7)) + '월 ' + Number(t.date.slice(8, 10)) + '일 오전 9시부터, 한국 시간)' : '';
     // 권하는 행동 한 줄(이번 달 추세로 언제 무료가 차는지, 유료면 월 비용): capacity.js forecast
     var fc = o.forecast || {};
-    var ACT = { upgrade: '유료 전환을 권해요', raise_caps: '하루 상한을 올려도 돼요', pause_new: '새 업로드 멈추기를 검토하세요', none: '지금은 할 일 없음' };
+    var ACT = { upgrade: '유료 전환을 권해요', raise_caps: '하루 상한을 올려도 돼요', pause_new: '새 배포 멈추기를 검토하세요', none: '지금은 할 일 없음' };
     var adv = $('[data-advice]');
     adv.textContent = (ACT[fc.action] || '권하는 행동') + ': ' + (fc.text || (o.advice && o.advice.text) || '');
     adv.className = 'advice' + (fc.action && fc.action !== 'none' ? ' recommend' : '');
@@ -119,11 +119,11 @@
     var stop = Math.round((o.newWorkShare || 0.6) * 100);
     var tiles = clear($('[data-tiles]'));
     var rp = pct(t.req, o.budget);
-    tiles.appendChild(tile('오늘 요청', n(t.req), o.budget ? '하루 예산 ' + n(o.budget) + '의 ' + rp + '% · ' + stop + '%에서 새 업로드 멈춤' : '하루 예산 없음(유료)', o.budget ? { value: rp, mark: stop, hot: rp >= stop, label: '하루 예산의 ' + rp + '%' } : null));
+    tiles.appendChild(tile('오늘 요청', n(t.req), o.budget ? '하루 예산 ' + n(o.budget) + '의 ' + rp + '% · ' + stop + '%에서 새 배포 멈춤' : '하루 예산 없음(유료)', o.budget ? { value: rp, mark: stop, hot: rp >= stop, label: '하루 예산의 ' + rp + '%' } : null));
     tiles.appendChild(tile('사이트 파일 요청', n(t.site), o.view === 'pages' ? 'Pages로 내보내 세지 않아요(여기는 영상·두 번째 주소만)' : '데이터센터 캐시에서 ' + n(t.edge) + '건'));
     tiles.appendChild(tile('참여 기능 요청', n(t.live), '실시간 방(질문·보드·투표)'));
-    tiles.appendChild(tile('API 요청', n(t.api), '올리기·공지·이용 합계 등'));
-    tiles.appendChild(tile('새 사이트', n(t.new), '공개 ' + n(t.pub) + '번 · 하루 상한 ' + n(o.limits && o.limits.dailySiteCap)));
+    tiles.appendChild(tile('API 요청', n(t.api), '배포·공지·이용 합계 등'));
+    tiles.appendChild(tile('새 사이트', n(t.new), '배포 ' + n(t.pub) + '번 · 하루 상한 ' + n(o.limits && o.limits.dailySiteCap)));
     tiles.appendChild(tile('새 실시간 방', n(t.room), '하루 상한 ' + n(o.limits && o.limits.dailyRoomCap)));
     tiles.appendChild(tile('오류(5xx)', n(t.err), '횟수 제한(429) ' + n(t.lim) + '건 · 막은 요청 ' + n(t.bot) + '건'));
     tiles.appendChild(tile('신고 대기', n(o.reports && o.reports.open), '오늘 받은 신고 ' + n(t.rep) + '건'));
@@ -146,7 +146,7 @@
     var st = o.sites || {};
     var sp = pct(st.bytes, st.maxBytes);
     var siteTiles = clear($('[data-site-tiles]'));
-    siteTiles.appendChild(tile('살아 있는 사이트', n(st.alive), '공개한 것 ' + n(st.published) + '개 · 기간 ' + ((o.limits && o.limits.siteDays) || 30) + (o.view === 'pages' ? '일(마지막으로 올린 날부터, Pages)' : '일(방문이 있으면 다시 채움)')));
+    siteTiles.appendChild(tile('살아 있는 사이트', n(st.alive), '배포한 것 ' + n(st.published) + '개 · 기간 ' + ((o.limits && o.limits.siteDays) || 30) + (o.view === 'pages' ? '일(마지막으로 배포한 날부터, Pages)' : '일(방문이 있으면 다시 채움)')));
     siteTiles.appendChild(tile('가린 사이트', n(st.blocked), '신고로 임시조치 중'));
     siteTiles.appendChild(tile('참여 기능 방', n(st.rooms), '30일 참여 요청 ' + n(o.month && o.month.live)));
     siteTiles.appendChild(tile('저장량', bytes(st.bytes), '상한 ' + bytes(st.maxBytes) + '의 ' + sp + '% · 사이트 ' + bytes(st.siteBytes) + ' + 방 ' + bytes(st.roomBytes), { value: sp, mark: 80, hot: sp >= 80, label: '저장 상한의 ' + sp + '%' }));
@@ -189,7 +189,7 @@
       if ((i % step === 0 && last - i >= step / 2) || i === last) svg.appendChild(s('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: d.date.slice(5).replace('-', '/') }));
     });
     if (o.budget) {
-      [[0.5, '50%', ''], [o.newWorkShare || 0.6, Math.round((o.newWorkShare || 0.6) * 100) + '% 새 업로드 멈춤', 'stop']].forEach(function (ref) {
+      [[0.5, '50%', ''], [o.newWorkShare || 0.6, Math.round((o.newWorkShare || 0.6) * 100) + '% 새 배포 멈춤', 'stop']].forEach(function (ref) {
         var yy = y(o.budget * ref[0]);
         svg.appendChild(s('line', { class: 'ref ' + ref[2], x1: L, x2: W - R, y1: yy, y2: yy }));
         svg.appendChild(s('text', { class: 'reflabel', x: W - R - 4, y: yy - 4, 'text-anchor': 'end', text: ref[1] }));
@@ -199,7 +199,7 @@
   }
   function renderDaysTable(o) {
     var t = clear($('[data-days-table]'));
-    t.appendChild(h('thead', null, h('tr', null, ['날짜', '요청', '예산 %', '사이트 파일', '캐시', '참여 기능', 'API', '새 사이트', '공개', '오류'].map(function (x, i) { return h('th', { class: i ? 'num' : '', scope: 'col', text: x }); }))));
+    t.appendChild(h('thead', null, h('tr', null, ['날짜', '요청', '예산 %', '사이트 파일', '캐시', '참여 기능', 'API', '새 사이트', '배포', '오류'].map(function (x, i) { return h('th', { class: i ? 'num' : '', scope: 'col', text: x }); }))));
     var tb = h('tbody');
     (o.days || []).slice().reverse().forEach(function (d) {
       tb.appendChild(h('tr', null, h('td', { text: d.date }), [d.req, o.budget ? pct(d.req, o.budget) + '%' : '—', d.site, d.edge, d.live, d.api, d.new, d.pub, d.err].map(function (v) { return h('td', { class: 'num', text: typeof v === 'string' ? v : n(v) }); })));
@@ -207,7 +207,7 @@
     t.appendChild(tb);
   }
 
-  var USAGE = [['a:open', '앱 열기(하루 한 번)'], ['a:make:key', '만들기 완료 · API 키'], ['a:make:chat', '만들기 완료 · 쓰던 챗봇'], ['a:pub:instant', '공개 · 바로 공개'], ['a:pub:vercel', '공개 · Vercel'], ['a:pub:github', '공개 · GitHub Pages'], ['a:pub:netlify', '공개 · Netlify']];
+  var USAGE = [['a:open', '앱 열기(하루 한 번)'], ['a:make:key', '만들기 완료 · API 키'], ['a:make:chat', '만들기 완료 · 쓰던 AI 창'], ['a:pub:instant', '배포 · 바로 배포'], ['a:pub:vercel', '배포 · Vercel'], ['a:pub:github', '배포 · GitHub Pages'], ['a:pub:netlify', '배포 · Netlify']];
   function renderUsage(o) {
     var t = clear($('[data-usage-table]'));
     if (!o.stats) { t.appendChild(h('tbody', null, h('tr', null, h('td', { text: '앱 이용 합계를 받지 않게 해 두었어요(STATS=off).' })))); return; }
@@ -219,22 +219,22 @@
     t.appendChild(tb);
   }
 
-  // ── 새 업로드 멈춤 ─────────────────────────────────────
+  // ── 새 배포 멈춤 ─────────────────────────────────────
   function renderUploads(o) {
     var p = o.uploads && o.uploads.paused;
     $('[data-uploads-state]').textContent = p ? '지금: 멈춤' + (o.uploads.at ? ' (' + when(o.uploads.at) + ')' : '') : (o.accepting ? '지금: 받는 중' : '지금: 하루 예산을 많이 써서 받지 않는 중(오전 9시에 다시 받음)');
     var btn = $('[data-uploads-btn]');
-    btn.textContent = p ? '다시 받기' : '새 업로드 멈추기';
+    btn.textContent = p ? '다시 받기' : '새 배포 멈추기';
     btn.className = 'btn ' + (p ? 'primary' : 'danger');
   }
   $('[data-uploads-form]').addEventListener('submit', function (e) {
     e.preventDefault();
     var p = !(state.overview && state.overview.uploads && state.overview.uploads.paused);
     var reason = e.target.reason.value.trim();
-    var go = p ? ask({ title: '새 업로드를 멈출까요?', text: '새 사이트·다시 올리기·새 실시간 방을 받지 않아요. 이미 올라온 사이트는 열려요.', ok: '멈추기', danger: true }) : Promise.resolve(true);
+    var go = p ? ask({ title: '새 배포를 멈출까요?', text: '새 사이트·다시 배포·새 실시간 방을 받지 않아요. 이미 배포한 사이트는 열려요.', ok: '멈추기', danger: true }) : Promise.resolve(true);
     go.then(function (yes) {
       if (!yes) return;
-      return api('uploads', { body: { paused: p, reason: reason } }).then(function () { e.target.reason.value = ''; flash(p ? '새 업로드를 멈췄어요.' : '새 업로드를 다시 받아요.'); return loadOverview(); });
+      return api('uploads', { body: { paused: p, reason: reason } }).then(function () { e.target.reason.value = ''; flash(p ? '새 배포를 멈췄어요.' : '새 배포를 다시 받아요.'); return loadOverview(); });
     }).catch(function (err) { flash(err.message, true); });
   });
 
@@ -285,7 +285,7 @@
           h('td', { class: 'mono', text: x.liveCode || '—' }),
           h('td', { text: when(x.createdAt) }),
           h('td', { text: dateOnly(x.expiresAt) }),
-          h('td', null, h('span', { class: 'badge ' + (x.blocked ? 'bad' : x.bytes ? 'good' : ''), text: x.blocked ? '가림' : x.bytes ? '공개' : '올리는 중' })),
+          h('td', null, h('span', { class: 'badge ' + (x.blocked ? 'bad' : x.bytes ? 'good' : ''), text: x.blocked ? '가림' : x.bytes ? '배포됨' : '배포 중' })),
           h('td', { class: 'acts' },
             h('button', { type: 'button', class: 'btn sm', text: x.blocked ? '풀기' : '가리기', onclick: function () { blockSite(x.id, !x.blocked); } }),
             h('button', { type: 'button', class: 'btn sm danger', text: '지우기', onclick: function () { deleteSite(x.id); } }))));
@@ -391,7 +391,7 @@
   }
 
   // ── 감사 기록 ───────────────────────────────────────────
-  var ACTIONS = { 'site.block': '사이트 가림', 'site.unblock': '사이트 풂', 'site.delete': '사이트 지움', 'report.done': '신고 처리함', 'report.reopen': '신고 다시 엶', 'notice.create': '공지 만듦', 'notice.update': '공지 고침', 'notice.off': '공지 끔', 'uploads.pause': '새 업로드 멈춤', 'uploads.resume': '새 업로드 다시 받음' };
+  var ACTIONS = { 'site.block': '사이트 가림', 'site.unblock': '사이트 풂', 'site.delete': '사이트 지움', 'report.done': '신고 처리함', 'report.reopen': '신고 다시 엶', 'notice.create': '공지 만듦', 'notice.update': '공지 고침', 'notice.off': '공지 끔', 'uploads.pause': '새 배포 멈춤', 'uploads.resume': '새 배포 다시 받음' };
   function loadAudit() {
     return api('audit').then(function (j) {
       var t = clear($('[data-audit-table]'));

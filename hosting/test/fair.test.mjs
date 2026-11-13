@@ -104,7 +104,7 @@ test('tight(붐빔): 연수 날짜가 2주 안인 사이트·방만 받고, 예�
   assert.equal((await call('GET', 'sites')).body.sites[0].liveCode, 'ROOM01', '방을 받으면 Gate가 코드를 적음(따로 부르지 않음)');
 });
 
-test('full: 새 사이트·새 방은 거절(까닭·다시 될 때·넘길 곳), 다시 올리기는 됨', async () => {
+test('full: 새 사이트·새 방은 거절(까닭·다시 될 때·넘길 곳), 다시 배포는 됨', async () => {
   const { call } = gate();
   const s = await reserve(call, {});
   assert.equal(s.status, 200); assert.equal(s.body.advice.code, 'long_term', '예약 없는 사이트(오래 쓸 수 있음)는 내 계정도 권함');

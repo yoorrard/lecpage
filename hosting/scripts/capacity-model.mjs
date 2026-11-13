@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 수용량·비용 표를 만듭니다(docs/research/scale-2026-11.md에 붙임). 값은 src/capacity.js의 모형(공식 한도·요금 × 측정한 단위 비용).
-//   node scripts/capacity-model.mjs                 기본 가정(강사 한 명 한 달 연수 2회, 바로 공개 70%, 참가자 40명, 참여 기능 50%, 그중 학교망 40%)
+//   node scripts/capacity-model.mjs                 기본 가정(강사 한 명 한 달 연수 2회, 바로 배포 70%, 참가자 40명, 참여 기능 50%, 그중 학교망 40%)
 //   node scripts/capacity-model.mjs --json          같은 값을 JSON으로
 //   node scripts/capacity-model.mjs perUser=4 people=100 liveShare=1   가정 바꾸기
 import { scenario, freeMaxUsers, trainingCost, costOf } from '../src/capacity.js';
@@ -30,7 +30,7 @@ if (args.includes('--json')) {
 }
 
 const a = out.assumptions;
-console.log(`가정: 강사 한 명이 한 달에 연수 ${a.perUser}회, 그중 바로 공개 ${a.instantShare * 100}%, 참가자 ${a.people}명, ${a.minutes}분, 참여 기능 ${a.liveShare * 100}%, 그중 학교망(실시간 연결 막힘) ${a.schoolShare * 100}%, 가장 바쁜 날 = 평일 평균 × ${a.peakFactor}, 사이트 공개 ${a.siteDays}일, 다시 올리기 ${a.republishes}번\n`);
+console.log(`가정: 강사 한 명이 한 달에 연수 ${a.perUser}회, 그중 바로 배포 ${a.instantShare * 100}%, 참가자 ${a.people}명, ${a.minutes}분, 참여 기능 ${a.liveShare * 100}%, 그중 학교망(실시간 연결 막힘) ${a.schoolShare * 100}%, 가장 바쁜 날 = 평일 평균 × ${a.peakFactor}, 사이트 공개 ${a.siteDays}일, 다시 배포 ${a.republishes}번\n`);
 
 console.log('### 연수 한 번이 드는 몫(Pages 보기)\n');
 console.log('| 연수 | Worker 요청 | DO 요청 | DO duration(GB-s) | DO 행 쓰기 | Pages API | 유료면(넘는 몫) |');

@@ -3,8 +3,8 @@
 //  - 사이트 목록과 저장량 합계(사이트 파일 + 실시간 방. 가득 차면 새로 받지 않음)
 //  - 신고 보관과 처리 상태
 //  - 하루 단위 숫자(요청 수·새 사이트·오류·앱 익명 이용 합계)와 하루 예산 알림
-//  - 운영자 설정(새 업로드 멈춤), 팝업 공지, 감사 기록(관리 화면에서 누가 언제 무엇을)
-//  - 연수 예약: 앱이 공개할 때 보낸 연수 날짜·시간·인원으로 그날 요청을 어림해 쌓아 둠(capacity.js).
+//  - 운영자 설정(새 배포 멈춤), 팝업 공지, 감사 기록(관리 화면에서 누가 언제 무엇을)
+//  - 연수 예약: 앱이 배포할 때 보낸 연수 날짜·시간·인원으로 그날 요청을 어림해 쌓아 둠(capacity.js).
 //    그날이 하루 예산에 가까우면 '만들 때' 알려 강사 계정으로 안내하고, 예약된 연수가 있는 날은 새 일을 일찍 멈춰 그 몫을 지킴
 // Worker와 Site·Room만 부릅니다(바깥에서 직접 닿을 수 없음).
 import { DurableObject } from 'cloudflare:workers';
@@ -152,14 +152,14 @@ export class Gate extends DurableObject {
     const hours = Math.max(0, Math.ceil(((dayOf(now) + 1) * DAY_MS - now) / HOUR_MS));
     const stopAt = Math.round(NEW_WORK_SHARE * 100); const tightAt = Math.round(TIGHT_SHARE * 100);
     const pages = this.cfg.view === 'pages';
-    const what = step >= 95 ? (pages ? `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 참여 기능 방이 멈춰요(사이트는 Pages라 열려요).` : `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 올라온 사이트도 열리지 않아요(오류 1027).`)
+    const what = step >= 95 ? (pages ? `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 참여 기능 방이 멈춰요(사이트는 Pages라 열려요).` : `곧 하루 한도에 닿아요. 닿으면 남은 ${hours}시간 동안 배포한 사이트도 열리지 않아요(오류 1027).`)
       : step >= 80 ? '참여 기능 묻기 간격을 20초로 늘려 달라고 알리는 중이에요. 새 사이트·새 방은 받지 않아요.'
-        : step >= stopAt ? `새 사이트·새 방은 받지 않고 강사 계정으로 넘기고 있어요(이미 올라온 사이트는 열려요). 한국 시간 오전 9시에 다시 받아요.`
+        : step >= stopAt ? `새 사이트·새 방은 받지 않고 강사 계정으로 넘기고 있어요(이미 배포한 사이트는 열려요). 한국 시간 오전 9시에 다시 받아요.`
           : step >= tightAt ? `붐빔: 연수 날짜가 14일 안인 사이트·방만 받고 나머지는 강사 계정으로 넘기고 있어요. ${stopAt}%가 되면 새로 받지 않아요.`
             : `${tightAt}%가 되면 예약한 연수만 받아요.`;
     const load = this.loadOf(d); const gbsReq = Math.round((this.gbsPct(d) / 100) * b);
     const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : 'DO 요청';
-    return `[lecpage 바로 공개] 오늘 ${which}이 하루 예산의 ${step}%를 넘었어요(${load.toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} 유료 전환 판단: 관리 화면 /admin`;
+    return `[lecpage 바로 배포] 오늘 ${which}이 하루 예산의 ${step}%를 넘었어요(${load.toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} 유료 전환 판단: 관리 화면 /admin`;
   }
   send(text) {
     const url = this.cfg.alertWebhook;
@@ -168,7 +168,7 @@ export class Gate extends DurableObject {
     this.ctx.waitUntil?.(p);
   }
 
-  // ── 운영자 설정: 새 업로드 멈춤 ───────────────────────────────
+  // ── 운영자 설정: 새 배포 멈춤 ───────────────────────────────
   settings() {
     if (!this.settingsCache) {
       const row = this.sql.exec("SELECT v FROM kv WHERE k = 'uploads'").toArray()[0];
@@ -254,7 +254,7 @@ export class Gate extends DurableObject {
     return { trainings: r.n, people: r.people, est: r.est, live: r.live };
   }
   /**
-   * 사이트의 연수 예약을 적음(다시 올리면 바뀐 날짜·인원으로 갈아 끼움). 그날 예약 어림이 예산의 BOOK_SHARE를 넘으면 받지 않음.
+   * 사이트의 연수 예약을 적음(다시 배포하면 바뀐 날짜·인원으로 갈아 끼움). 그날 예약 어림이 예산의 BOOK_SHARE를 넘으면 받지 않음.
    * check만 하면(dry) 적지 않음. 예약이 없거나 지난 날짜면 아무것도 하지 않음
    */
   /**
@@ -276,7 +276,7 @@ export class Gate extends DurableObject {
       const siteOnly = b.live ? estimate({ ...b, ...opt, live: false }) : est;
       if (split && b.live && other.est + siteOnly <= budget * BOOK_SHARE) { denied = 1; est = siteOnly; }
       else {
-        throw new HttpError('rate_limited', `${koDate(date)}은 바로 공개에 예약된 연수가 많아(${other.trainings}개) 그날 참여 기능이 멈출 수 있어요. 이 연수는 내 계정에 올려 주세요.`,
+        throw new HttpError('rate_limited', `${koDate(date)}은 바로 배포에 예약된 연수가 많아(${other.trainings}개) 그날 참여 기능이 멈출 수 있어요. 이 연수는 내 계정에 배포해 주세요.`,
           { reason: 'booked', day: date, ...overflow('everyone', { liveNext: NEXT_LIVE }), headers: { 'retry-after': '3600' } });
       }
     }
@@ -384,7 +384,7 @@ export class Gate extends DurableObject {
       this.addDay({ new: 1 }, now, (d) => {
         if (!this.cfg.alertWebhook || d.ca || (d.new || 0) < Math.ceil(c.dailySiteCap * 0.8)) return;
         d.ca = 1;
-        this.send(`[lecpage 바로 공개] 오늘 새 사이트가 하루 상한(${c.dailySiteCap})의 80%에 닿았어요(${d.new}개). 다 차면 새 사이트는 강사 계정으로 넘겨요. 요청 몫이 넉넉하면 DAILY_SITE_CAP을 올리고, 갑자기 몰린 것이면 관리 화면에서 [새 업로드 멈추기]. 관리 화면 /admin`);
+        this.send(`[lecpage 바로 배포] 오늘 새 사이트가 하루 상한(${c.dailySiteCap})의 80%에 닿았어요(${d.new}개). 다 차면 새 사이트는 강사 계정으로 넘겨요. 요청 몫이 넉넉하면 DAILY_SITE_CAP을 올리고, 갑자기 몰린 것이면 관리 화면에서 [새 배포 멈추기]. 관리 화면 /admin`);
       });
     });
     await this.ensureAlarm();
@@ -396,13 +396,13 @@ export class Gate extends DurableObject {
     };
   }
 
-  /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '공개' 수를 셈 */
+  /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '배포' 수를 셈 */
   siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, aw }) {
     const calls = (v) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, 10000) : 0);
     // aw: 방이 깨어 있던 초(SSE·방 안 긴 대기). 방 하나가 10분마다·끝날 때 알림
     const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0, aw: Number.isSafeInteger(aw) && aw > 0 ? Math.min(aw, 86400) : 0 };
     if (day.pc || day.pz || day.rc || day.pub || day.aw) this.addDay(day); // 하루 줄 한 번만 씀
-    if (day.pz) this.pagesBlocked(); // Cloudflare가 API를 막음: 5분 동안 새 올리기를 받지 않고(줄 서기), 운영자에게 알림
+    if (day.pz) this.pagesBlocked(); // Cloudflare가 API를 막음: 5분 동안 새 배포를 받지 않고(줄 서기), 운영자에게 알림
     const row = this.sql.exec('SELECT bytes, expires, blocked, room_bytes, code FROM sites WHERE id = ?', id).toArray()[0];
     if (!row) return { ok: false, total: this.usage().bytes };
     const int = (v, d) => (Number.isSafeInteger(v) && v >= 0 ? v : d);
@@ -422,14 +422,14 @@ export class Gate extends DurableObject {
     const last = Number(this.sql.exec("SELECT v FROM kv WHERE k = 'fa'").toArray()[0]?.v || 0);
     if (now - last < 7 * DAY_MS) return;
     this.sql.exec("INSERT INTO kv (k, v) VALUES ('fa', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", String(now));
-    this.send(`[lecpage 바로 공개] ${o.forecast.text} 관리 화면 /admin`);
+    this.send(`[lecpage 바로 배포] ${o.forecast.text} 관리 화면 /admin`);
   }
-  /** Pages API가 429를 줌(그 계정의 API가 5분 막힘): 5분 동안 새 올리기를 줄 세우고, 하루 한 번 알림 */
+  /** Pages API가 429를 줌(그 계정의 API가 5분 막힘): 5분 동안 새 배포를 줄 세우고, 하루 한 번 알림 */
   pagesBlocked(now = Date.now()) {
     this.pagesHold = now + 5 * 60e3;
     if (!this.cfg.alertWebhook || this.dayData(dayOf(now)).pa) return;
     this.addDay({ pa: 1 }, now);
-    this.send('[lecpage 바로 공개] Cloudflare Pages API가 요청이 많다며 잠시 막았어요(5분). 그동안 새 올리기는 줄을 서고 이미 올린 사이트는 그대로 열려요. 자주 오면 PAGES_API_BUDGET을 낮추세요. 관리 화면 /admin');
+    this.send('[lecpage 바로 배포] Cloudflare Pages API가 요청이 많다며 잠시 막았어요(5분). 그동안 새 배포는 줄을 서고 이미 배포한 사이트는 그대로 열려요. 자주 오면 PAGES_API_BUDGET을 낮추세요. 관리 화면 /admin');
   }
   /** 저장량이 상한의 80%를 넘으면 하루 한 번 알림 */
   storageAlert(total) {
@@ -438,7 +438,7 @@ export class Gate extends DurableObject {
     const now = Date.now();
     if (this.dayData(dayOf(now)).sa) return;
     this.addDay({ sa: 1 }, now);
-    this.send(`[lecpage 바로 공개] 저장량이 상한의 ${Math.round((total / cap) * 100)}%예요(${(total / 1048576).toFixed(0)}MB / ${(cap / 1048576).toFixed(0)}MB). 다 차면 새 사이트를 받지 않아요. 관리 화면 /admin`);
+    this.send(`[lecpage 바로 배포] 저장량이 상한의 ${Math.round((total / cap) * 100)}%예요(${(total / 1048576).toFixed(0)}MB / ${(cap / 1048576).toFixed(0)}MB). 다 차면 새 사이트를 받지 않아요. 관리 화면 /admin`);
   }
   forget({ id, pc, pz, rc }) {
     if (pc || pz || rc) this.siteUpdate({ id: '', pc, pz, rc });
@@ -462,7 +462,7 @@ export class Gate extends DurableObject {
   addTot(sites, bytes) { if (this.tot) { this.tot.sites += sites; this.tot.bytes += bytes; } }
   /**
    * 새 실시간 방 자리(사이트의 첫 방일 때 Site가 부름): 단계 → 붐비면 예약한 연수만 → 그날 방이 차서 넘긴 예약이면 거절 → 하루 방 상한.
-   * 거절할 때 liveNext(강사 계정의 Cloudflare·Supabase)를 같이 줌: 사이트는 바로 공개 그대로, 참여 기능만 넘기면 됨. 받으면 사이트 줄에 코드를 적음
+   * 거절할 때 liveNext(강사 계정의 Cloudflare·Supabase)를 같이 줌: 사이트는 바로 배포 그대로, 참여 기능만 넘기면 됨. 받으면 사이트 줄에 코드를 적음
    */
   room({ id = '', code } = {}) {
     const now = Date.now(); const day = dayOf(now);

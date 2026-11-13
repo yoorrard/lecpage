@@ -1,7 +1,7 @@
 // 수용량·부하 시험(VIEW=pages, 로컬 workerd + 흉내 Cloudflare API).
-//  1. 단위 비용: 새 사이트 공개 한 번·다시 올리기·참여 기능(실시간 연결·묻기·긴 대기)에 드는 Worker 요청·DO 요청·Pages API 호출을 잼
+//  1. 단위 비용: 새 사이트 배포 한 번·다시 배포·참여 기능(실시간 연결·묻기·긴 대기)에 드는 Worker 요청·DO 요청·Pages API 호출을 잼
 //     → src/capacity.js의 UNIT 값과 docs/research/scale-2026-11.md의 표
-//  2. 부하: 강사 TEACHERS명이 동시에 공개(참여 기능 방 묶기)하고, 방마다 참가자 PER_ROOM명이 동시에 들어와 글·투표·묻기·긴 대기
+//  2. 부하: 강사 TEACHERS명이 동시에 배포(참여 기능 방 묶기)하고, 방마다 참가자 PER_ROOM명이 동시에 들어와 글·투표·묻기·긴 대기
 //     → 실패·5xx 없음, 글이 빠지지 않음, Gate(하나뿐인 DO)가 받는 몫, 응답 시간
 // 크기: LOAD_TEACHERS(기본 50)·LOAD_PER_ROOM(기본 60). SCALE_OUT=<파일>이면 잰 값을 JSON으로 씀.
 import { test, after } from 'node:test';
@@ -95,7 +95,7 @@ async function participant(lv, origin, mode, { polls = 3, gapMs = 150, wait = 2 
   return { ok: true, lat, id: j.body.id };
 }
 
-test('단위 비용: 새 사이트·다시 올리기·참여 기능 한 자리', async (t) => {
+test('단위 비용: 새 사이트·다시 배포·참여 기능 한 자리', async (t) => {
   const e = await setup(t); if (!e) return;
   const { base, files } = e;
   // 앱이 켜질 때(한 번): info
@@ -112,7 +112,7 @@ test('단위 비용: 새 사이트·다시 올리기·참여 기능 한 자리',
   const second = await measure(e, () => appPublish(base, files2, { live: liveFor(code1), booking }));
   assert.ok(second.r.ok, JSON.stringify(second.r.res?.body));
   out.newSite = { ...second.d, puts: second.r.puts, calls: second.r.calls };
-  // 다시 올리기(첫 화면 글 한 줄 고침, 방은 그대로)
+  // 다시 배포(첫 화면 글 한 줄 고침, 방은 그대로)
   const files3 = { ...files2, 'index.html': te.encode(new TextDecoder().decode(files2['index.html']).replace('<!-- 2 -->', '<!-- 3 -->')) };
   const again = await measure(e, () => appPublish(base, files3, { site: second.r.site, booking }));
   assert.ok(again.r.ok, JSON.stringify(again.r.res?.body));
@@ -151,12 +151,12 @@ test('단위 비용: 새 사이트·다시 올리기·참여 기능 한 자리',
   t.diagnostic(JSON.stringify(out));
 });
 
-test(`부하: 강사 ${TEACHERS}명 동시 공개 + 방 ${TEACHERS}개 × 참가자 ${PER_ROOM}명`, async (t) => {
+test(`부하: 강사 ${TEACHERS}명 동시 배포 + 방 ${TEACHERS}개 × 참가자 ${PER_ROOM}명`, async (t) => {
   const e = await setup(t); if (!e) return;
   const { base, files } = e;
   const t0 = performance.now();
   const before = await today(base, ADMIN); const cf0 = e.cf.state.calls.length;
-  // 1) 동시 공개
+  // 1) 동시 배포
   const codes = Array.from({ length: TEACHERS }, (_, i) => 'LD' + String(i).padStart(3, '0') + randomBytes(2).toString('hex').toUpperCase());
   const pubLat = [];
   const pubs = await Promise.all(codes.map((code, i) => {

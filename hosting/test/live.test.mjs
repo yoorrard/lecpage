@@ -79,7 +79,7 @@ test('묶기: 새 방, 같은 사이트가 다시(관리자 키만 바꿈), 다�
   assert.equal(sql.writes, 0, '묶기 전에는 아무것도 쓰지 않음');
   const exp = Date.now() + 30 * day;
   const a = await bindRoom(room, { site: SITE, code: 'ab12cd', adminKeyHash: sha(KEY), settings: { retentionDays: 365, uploads: true, moderation: true, maxUploadMb: 999, title: '<b>' }, expires: exp });
-  assert.deepEqual(a, { created: true, code: 'AB12CD', settings: { retentionDays: 30, uploads: true, moderation: true } }, '보관일은 공개 기간까지만, 모르는 설정은 버림');
+  assert.deepEqual(a, { created: true, code: 'AB12CD', settings: { retentionDays: 30, uploads: true, moderation: true } }, '보관일은 보관 기간까지만, 모르는 설정은 버림');
   assert.deepEqual({ ...bind.get() }, { site: SITE, code: 'AB12CD', expires: exp, blocked: 0 });
   assert.equal(core.trainingOrNull('AB12CD').admin_hash, sha(KEY));
   // 같은 사이트: 지금 관리자 키 없이 해시를 바꿈. settings를 안 보내면 그대로
@@ -162,7 +162,7 @@ test('방 쓰기: 묶기 → 참여 → 질문 → 강사가 봄. 운영자 열�
   assert.equal(b.status, 200); assert.equal(b.body.created, true); assert.equal(b.body.code, 'AB12CD');
   assert.ok(ctx.sql.tables().includes('trainings') && ctx.sql.tables().includes('host_bind'));
   assert.ok(ctx.alarm > Date.now(), '정리 알람이 잡힘');
-  assert.ok(ctx.alarm <= Date.now() + 30 * day + 3700e3, '정리 알람은 사이트 공개 기간 끝을 넘기지 않음');
+  assert.ok(ctx.alarm <= Date.now() + 30 * day + 3700e3, '정리 알람은 사이트 보관 기간 끝을 넘기지 않음');
 
   const j = await call('POST', '/api/AB12CD/join', { json: { nickname: '봄날' } });
   assert.equal(j.status, 201); assert.ok(j.body.token && j.body.id);
@@ -296,7 +296,7 @@ test('지우기: 사이트가 지워지면 방·파일·알람이 모두 사라�
   assert.equal((await call('GET', '/api/AB12CD/snapshot', { admin: KEY2 })).body.participants.length, 0, '예전 참가 기록은 없음');
 });
 
-test('공개 기간: 끝나면 사이트에 물어보고, 늘었으면 이어 쓰고 없어졌으면 비움', async () => {
+test('보관 기간: 끝나면 사이트에 물어보고, 늘었으면 이어 쓰고 없어졌으면 비움', async () => {
   let alive = { alive: true, expires: Date.now() + 10 * day, blocked: false };
   const { call, bind, ctx, room, SITE_NS } = makeRoom({}, { siteAlive: () => alive });
   await bind({ expires: Date.now() - 1000 }); // 방이 아는 기간은 이미 지남

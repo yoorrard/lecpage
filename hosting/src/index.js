@@ -1,5 +1,5 @@
-// lecpage 바로 공개 호스트 — Worker 입구.
-//   /api/*   JSON API(앱이 부름)            /s/<id>/…  올라온 사이트
+// lecpage 바로 배포 호스트 — Worker 입구.
+//   /api/*   JSON API(앱이 부름)            /s/<id>/…  배포한 사이트
 //   /live/api/<코드>/…  실시간 방(질문·보드·투표). 사이트 화면이 같은 출처에서 부름
 //   /admin, /admin/api/…  운영자 관리 화면(Cloudflare Access 뒤. 켜지 않았으면 404) → admin.js
 //   /, /report, /robots.txt, /rt/<sha>.js 등은 public/ 의 정적 자산이라 이 코드를 거치지 않습니다(요청 수에도 들지 않음).
@@ -105,7 +105,7 @@ function secure(res) {
 }
 
 // ── 사이트 내보내기 ─────────────────────────────────────────────
-// 없는 사이트(공개 기간 끝·지움)를 1분 기억: 같은 주소를 두드려도 Durable Object를 깨우지 않음
+// 없는 사이트(보관 기간 끝·지움)를 1분 기억: 같은 주소를 두드려도 Durable Object를 깨우지 않음
 const goneMem = new Map();
 const GONE_MS = 60000;
 // 사이트 파일 응답을 Cloudflare 데이터센터 캐시(Cache API)에 10분 둠. 내 도메인을 붙였을 때만 동작(workers.dev에서는 아무 일도 안 함)
@@ -279,7 +279,7 @@ async function api(request, env, ctx, url, cfg) {
   let res;
   try {
     const self = cfg.publicOrigin || url.origin;
-    // 브라우저가 보낸 요청이면 허용한 앱 주소에서만. 올라온 사이트(같은 출처)의 화면이 API를 부르는 것도 막음. 신고만 이 호스트의 신고 화면에서 받음
+    // 브라우저가 보낸 요청이면 허용한 앱 주소에서만. 배포한 사이트(같은 출처)의 화면이 API를 부르는 것도 막음. 신고만 이 호스트의 신고 화면에서 받음
     if (origin && !cfg.origins.has(origin) && !(origin === self && SELF_OK.has(url.pathname))) {
       throw new HttpError('unauthorized', '허용하지 않은 곳에서 온 요청이에요.', { status: 403 });
     }
@@ -298,13 +298,13 @@ async function route(request, env, ctx, url, cfg, self) {
 
   if (a === 'info' && parts.length === 1 && method === 'GET') {
     // accepting: 지금 새 사이트를 받는지(하루 요청 예산을 많이 썼거나 운영자가 멈췄으면 false). 못 물어보면 받는 것으로
-    // capacity: 단계(open·tight·full·paused)·까닭·넘길 곳(fair.js). 앱이 공개 화면을 열 때 이것으로 처음부터 알맞은 길을 고름
+    // capacity: 단계(open·tight·full·paused)·까닭·넘길 곳(fair.js). 앱이 배포 화면을 열 때 이것으로 처음부터 알맞은 길을 고름
     // 앱이 켜질 때마다 부르므로 isolate에 20초 두고 브라우저에도 30초(Gate 요청을 줄임)
     const s = await gateStatus(env);
     const accepting = s ? s.accepting !== false : true; const paused = !!s?.paused;
     return json({
       ok: true, v: 1, plan: cfg.plan, accepting, ...(paused ? { paused } : {}), ...(s?.capacity ? { capacity: s.capacity } : {}),
-      // view: 사이트를 내보내는 곳(pages: 사이트마다 다른 주소, 방문이 하루 한도에 들지 않음). keepAlive: 방문이 있으면 공개 기간을 다시 채우는지
+      // view: 사이트를 내보내는 곳(pages: 사이트마다 다른 주소, 방문이 하루 한도에 들지 않음). keepAlive: 방문이 있으면 보관 기간을 다시 채우는지
       view: cfg.view, keepAlive: cfg.keepAlive,
       limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
       report: `${self}/report`,
@@ -329,7 +329,7 @@ async function route(request, env, ctx, url, cfg, self) {
     return quiet;
   }
 
-  // 상태: 앱의 '공개 전 점검'·'연수 전날 점검'. 오늘·그날(date) 남은 몫, 사이트·참여 기능 방 상태. 1분 캐시(브라우저·이 isolate)
+  // 상태: 앱의 '배포 전 점검'·'연수 전날 점검'. 오늘·그날(date) 남은 몫, 사이트·참여 기능 방 상태. 1분 캐시(브라우저·이 isolate)
   if (a === 'status' && parts.length === 1 && method === 'GET') return status(env, url, cfg);
 
   if (a === 'sites' && parts.length === 1 && method === 'POST') return createSite(request, env, cfg, self);
@@ -478,7 +478,7 @@ async function report(request, env, ctx, cfg, self) {
   const saved = await (await ok(await gateStub(env).fetch('http://gate/report', post({ ip, site: id, reason, contact })))).json();
   if (cfg.reportWebhook) {
     const link = cfg.pagesCfg && raw.includes(`s-${id}.`) ? siteUrlOf(cfg.pagesCfg, id) : `${self}/s/${id}/`;
-    const text = `[lecpage 바로 공개 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}\n처리: ${self}/admin/`.slice(0, 1800);
+    const text = `[lecpage 바로 배포 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}\n처리: ${self}/admin/`.slice(0, 1800);
     // text는 Slack, content는 Discord 웹훅이 읽는 이름
     ctx.waitUntil(fetch(cfg.reportWebhook, post({ text, content: text, n: saved.n, site: id, url: link, reason, contact, at: saved.at })).catch((e) => console.error('report webhook failed', e?.message)));
   }

@@ -1,4 +1,4 @@
-// 관리 Worker(lecpage-admin): 운영자 관리 화면만 내보내는 작은 Worker. 바로 공개 Worker(lecpage-sites)의 Durable Object(Gate·Site)에
+// 관리 Worker(lecpage-admin): 운영자 관리 화면만 내보내는 작은 Worker. 바로 배포 Worker(lecpage-sites)의 Durable Object(Gate·Site)에
 // script_name으로 묶여 같은 자료를 봅니다(wrangler.admin.jsonc).
 //  - 도메인 없이: 이 Worker의 workers.dev 주소 전체를 Cloudflare Access(Worker 단위 앱)가 지킴. 설정 스크립트가 API로 켬(scripts/setup.mjs)
 //  - 여기서 한 번 더 확인: ACCESS_TEAM_DOMAIN이 있으면 Access 토큰(JWT) 서명·AUD·만료를 확인(access.js),
@@ -66,7 +66,7 @@ export default {
     const res = await admin(request, env, url, a.cfg, {
       gate: () => env.GATE.get(env.GATE.idFromName('gate')),
       site: (id) => env.SITE.get(env.SITE.idFromName(id)),
-      onNoticeChange: () => { }, // 바로 공개 Worker의 공지 캐시는 1분 뒤 저절로 바뀜
+      onNoticeChange: () => { }, // 바로 배포 Worker의 공지 캐시는 1분 뒤 저절로 바뀜
       verify, asset,
     });
     if (url.protocol !== 'https:') return res;

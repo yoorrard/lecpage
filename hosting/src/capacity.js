@@ -98,7 +98,7 @@ export const PAID = {
  */
 export const UNIT = {
   newSite: { workerReq: 17, doReq: 22, pagesApi: 5, rows: 60 }, // 만들기·목록·파일 13개·방 묶기·공개(행: Site 약 33 + Gate 약 12 + 방 표 만들기 약 15)
-  republish: { workerReq: 3, doReq: 6, pagesApi: 5, rows: 12 }, // 글 한 줄 고쳐 다시 올리기
+  republish: { workerReq: 3, doReq: 6, pagesApi: 5, rows: 12 }, // 글 한 줄 고쳐 다시 배포
   appChecks: { workerReq: 3, doReq: 1 }, // /api/info 1번(isolate 20초 기억) + /api/status 2번(공개 전·연수 전날)
   seatRows: 25, // 참가자 한 명이 연수 동안 쓰는 행(들어오기·출석·글 2~3개·투표)
   siteMB: 0.2, roomMB: 0.1, // 사이트 하나(Pages 보기: HTML 원본·표), 방 하나
@@ -155,7 +155,7 @@ export function costOf(m) {
  * 사용자 수 → 한 달·가장 바쁜 날 쓰는 몫, 무료 하루 한도 대비(%), 먼저 차는 것, 유료 월 비용.
  * @param {{ users: number, perUser?: number, instantShare?: number, people?: number, liveShare?: number, schoolShare?: number, minutes?: number,
  *   longPoll?: boolean, relay?: boolean, peakFactor?: number, workdays?: number, siteDays?: number, republishes?: number }} o
- *   perUser: 강사 한 명이 한 달에 하는 연수, instantShare: 그중 바로 공개로 올리는 몫, liveShare: 참여 기능을 쓰는 몫,
+ *   perUser: 강사 한 명이 한 달에 하는 연수, instantShare: 그중 바로 배포로 올리는 몫, liveShare: 참여 기능을 쓰는 몫,
  *   schoolShare: 참여 기능 연수 중 학교망(실시간 연결 막힘) 몫, peakFactor: 가장 바쁜 날이 평일 평균의 몇 배
  */
 export function scenario({ users, perUser = 2, instantShare = 0.7, people = 40, liveShare = 0.5, schoolShare = 0.4, minutes = DEFAULT_MINUTES, longPoll = false, relay = false, peakFactor = 2, workdays = 20, siteDays = 60, republishes = 1 } = {}) {
@@ -169,7 +169,7 @@ export function scenario({ users, perUser = 2, instantShare = 0.7, people = 40, 
   for (const { w, c } of kinds) for (const [k, v] of Object.entries(c)) per[k] = (per[k] || 0) + w * v;
   const month = {};
   for (const [k, v] of Object.entries(per)) month[k] = v * trainings;
-  month.storageMB = per.storageMB * trainings * (siteDays / 30); // 살아 있는 사이트(공개 기간 동안)
+  month.storageMB = per.storageMB * trainings * (siteDays / 30); // 살아 있는 사이트(보관 기간 동안)
   const peakTrainings = (trainings / workdays) * peakFactor;
   const peak = {};
   for (const k of ['workerReq', 'doReq', 'doGbs', 'rows', 'pagesApi']) peak[k] = per[k] * peakTrainings;
@@ -234,13 +234,13 @@ export function forecast(days, { plan = 'free', budget = FREE.workerReq, storage
   const newToday = days.length ? days[days.length - 1].new || 0 : 0; const avgNew = avg(w7, (d) => d.new || 0);
   if (newToday >= 20 && newToday >= 3 * Math.max(1, avgNew)) {
     action = 'pause_new';
-    text = `오늘 새 사이트가 ${newToday}개로 평소(하루 ${Math.round(avgNew)}개)보다 크게 몰렸어요. 큰 연수가 아니라면 [새 업로드 멈추기]로 잠시 멈추고 사이트 목록·신고를 확인하세요. 이미 올린 사이트는 그대로 열려요.`;
+    text = `오늘 새 사이트가 ${newToday}개로 평소(하루 ${Math.round(avgNew)}개)보다 크게 몰렸어요. 큰 연수가 아니라면 [새 배포 멈추기]로 잠시 멈추고 사이트 목록·신고를 확인하세요. 이미 배포한 사이트는 그대로 열려요.`;
   } else if (plan === 'paid') {
     text = `유료 요금제예요. 지난 7일 추세로 이번 달 약 ${usd}(기본 $5 포함). 하루 한도로 멈추지 않아요.`;
     if (capHits >= 2) { action = 'raise_caps'; text = `최근 7일 중 ${capHits}일이 하루 새 사이트 상한(${dailySiteCap})에 닿았어요. DAILY_SITE_CAP을 올려도 비용은 거의 그대로예요(이번 달 약 ${usd}).`; }
   } else if (busyDays >= 2 || (toStop != null && toStop <= 7)) {
     action = 'upgrade';
-    text = `무료가 빠듯해요(최근 7일 중 ${busyDays}일이 하루 한도의 50%를 넘음${toStop != null ? `, 이 추세면 ${toStop}일 뒤 새 사이트를 받지 못하는 날이 와요` : ''}). Workers Paid로 올리면 이번 달 약 ${usd}예요. 올리기 싫으면 [새 업로드 멈추기]로 오늘 연수를 지키고 새 연수는 강사 계정으로 넘기세요.`;
+    text = `무료가 빠듯해요(최근 7일 중 ${busyDays}일이 하루 한도의 50%를 넘음${toStop != null ? `, 이 추세면 ${toStop}일 뒤 새 사이트를 받지 못하는 날이 와요` : ''}). Workers Paid로 올리면 이번 달 약 ${usd}예요. 올리기 싫으면 [새 배포 멈추기]로 오늘 연수를 지키고 새 연수는 강사 계정으로 넘기세요.`;
   } else if (capHits >= 2 && peak7 < limit * 0.3) {
     action = 'raise_caps';
     text = `요청은 넉넉한데(가장 많은 날 ${pct}%) 최근 7일 중 ${capHits}일이 하루 새 사이트 상한(${dailySiteCap})에 닿았어요. DAILY_SITE_CAP을 올려도 돼요.`;

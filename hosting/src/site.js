@@ -240,7 +240,7 @@ export class Site extends DurableObject {
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
       const missing = this.missingFor(meta, man.files, have);
-      // Gate에 한 번만 물음: 운영자 멈춤(다시 올리기도 받지 않음, 이미 공개한 판은 그대로 열림) · Pages API 5분 창 · 연수 날짜·인원(그날이 찼으면 올리기 전에 알림, 바뀌면 갈아 끼움) · 저장량
+      // Gate에 한 번만 물음: 운영자 멈춤(다시 배포도 받지 않음, 이미 공개한 판은 그대로 열림) · Pages API 5분 창 · 연수 날짜·인원(그날이 찼으면 올리기 전에 알림, 바뀌면 갈아 끼움) · 저장량
       const chk = await this.gate('POST', 'deploy-check', {
         site: meta.site, booking: body.booking && typeof body.booking === 'object' ? body.booking : null,
         pages: this.isPages(meta) ? this.pagesEstimate(meta, man.files, missing) : 0, split: Array.isArray(body.caps) && body.caps.includes('split'),
@@ -479,7 +479,7 @@ export class Site extends DurableObject {
       await this.ctx.storage.setAlarm(expires);
       this.sweep();
       try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
-      // 공개 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
+      // 보관 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
       if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
       return json({ url: this.url(request, meta), expiresAt: expires });
     });
@@ -562,18 +562,18 @@ export class Site extends DurableObject {
   }
   /** Pages API 오류를 앱이 알아듣는 오류로 */
   async pagesCall(fn) {
-    try { return await fn(); } catch (e) { throw await this.pagesFail(e, 'Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요.'); }
+    try { return await fn(); } catch (e) { throw await this.pagesFail(e, 'Cloudflare Pages에 배포하지 못했어요. 잠시 뒤 다시 해 주세요.'); }
   }
   /**
-   * Pages API 실패 → 오류. 429(그 계정의 API가 5분 막힘)면 Gate에 바로 알려 5분 동안 새 올리기를 줄 세우고(다른 강사가 같은 벽에 부딪히지 않게),
-   * 앱에는 rate_limited + reason 'pages_api' + retry-after로(앱의 [다시 올리기]로 이어짐)
+   * Pages API 실패 → 오류. 429(그 계정의 API가 5분 막힘)면 Gate에 바로 알려 5분 동안 새 배포를 줄 세우고(다른 강사가 같은 벽에 부딪히지 않게),
+   * 앱에는 rate_limited + reason 'pages_api' + retry-after로(앱의 [다시 배포]로 이어짐)
    */
   async pagesFail(e, message) {
     if (e instanceof HttpError || !e?.step) return e;
     console.error('pages error', e.step, e.status, e.code);
     if (e.status === 429) {
       try { await this.gate('POST', 'site', { id: this.load()?.site || '', ...this.pagesDelta() }); } catch { /* 다음 알림 때 */ }
-      return new HttpError('rate_limited', '올리는 사람이 한꺼번에 많아 Cloudflare가 잠시 쉬게 했어요. 2~5분 뒤 다시 올려 주세요. 이미 올린 사이트는 그대로 열려요.', { reason: 'pages_api', scope: 'everyone', retryAt: Date.now() + 300e3, headers: { 'retry-after': '300' } });
+      return new HttpError('rate_limited', '배포하는 사람이 한꺼번에 많아 Cloudflare가 잠시 쉬게 했어요. 2~5분 뒤 다시 배포해 주세요. 이미 배포한 사이트는 그대로 열려요.', { reason: 'pages_api', scope: 'everyone', retryAt: Date.now() + 300e3, headers: { 'retry-after': '300' } });
     }
     return new HttpError('bad_request', message, { status: 502 });
   }
@@ -640,7 +640,7 @@ export class Site extends DurableObject {
       this.sql.exec('UPDATE meta SET blocked = ?, block_reason = ? WHERE id = 1', body.blocked ? 1 : 0, reason);
       Object.assign(meta, { blocked: body.blocked ? 1 : 0, block_reason: reason });
       try { await this.gate('POST', 'site', { id: meta.site, blocked: body.blocked, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
-      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null, ...(restored === false ? { restored: false, note: 'Pages에서 지난 파일을 찾지 못해 다시 열지 못했어요. 강사가 다시 올리면 열려요.' } : {}) });
+      return json({ ok: true, id: meta.site, blocked: body.blocked, title: meta.title, expiresAt: meta.expires, liveCode: meta.live_code || null, ...(restored === false ? { restored: false, note: 'Pages에서 지난 파일을 찾지 못해 다시 열지 못했어요. 강사가 다시 배포하면 열려요.' } : {}) });
     });
   }
   async holdPages(meta) {
@@ -662,7 +662,7 @@ export class Site extends DurableObject {
   }
 
   /**
-   * 쓰이는 사이트는 지우지 않음: 화면을 여는 방문이 있고 남은 기간이 절반 아래면 공개 기간을 다시 채움(사이트마다 보름에 한 번쯤만 씀).
+   * 쓰이는 사이트는 지우지 않음: 화면을 여는 방문이 있고 남은 기간이 절반 아래면 보관 기간을 다시 채움(사이트마다 보름에 한 번쯤만 씀).
    * 처음 만든 날부터 MAX_SITE_DAYS가 지나면 더 늘리지 않음. 가린 사이트는 늘리지 않음.
    */
   keepAlive(meta) {
@@ -678,7 +678,7 @@ export class Site extends DurableObject {
     })());
   }
 
-  /** 공개 기간이 끝나면 전부 지움 */
+  /** 보관 기간이 끝나면 전부 지움 */
   async alarm() {
     const meta = this.load();
     if (!meta) return;

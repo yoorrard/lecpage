@@ -1,4 +1,4 @@
-/* lecpage 바로 공개 관리 화면. 인라인 스타일 없이 이 파일만(CSP style-src 'self') */
+/* lecpage 바로 배포 관리 화면. 인라인 스타일 없이 이 파일만(CSP style-src 'self') */
 :root {
   color-scheme: light;
   --page: #f9f9f7; --surface: #fcfcfb; --card: #ffffff; --line: rgba(11, 11, 11, .10); --grid: #e1e0d9; --axis: #c3c2b7;

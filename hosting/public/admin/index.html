@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>관리 · lecpage 바로 공개</title>
+<title>관리 · lecpage 바로 배포</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/admin/app.css">
 <script src="/admin/app.js" defer></script>
@@ -14,7 +14,7 @@
 <header class="top">
   <div class="top-in">
     <div>
-      <h1>lecpage 바로 공개 관리</h1>
+      <h1>lecpage 바로 배포 관리</h1>
       <p class="muted small" data-me>불러오는 중…</p>
     </div>
     <div class="top-act">
@@ -23,7 +23,7 @@
     </div>
   </div>
   <nav class="tabs" aria-label="관리 화면 차례">
-    <a href="#today">오늘</a><a href="#trend">30일</a><a href="#sites">사이트</a><a href="#reports">신고</a><a href="#notices">공지</a><a href="#uploads">새 업로드</a><a href="#usage">앱 이용</a><a href="#audit">감사 기록</a>
+    <a href="#today">오늘</a><a href="#trend">30일</a><a href="#sites">사이트</a><a href="#reports">신고</a><a href="#notices">공지</a><a href="#uploads">새 배포</a><a href="#usage">앱 이용</a><a href="#audit">감사 기록</a>
   </nav>
 </header>
 
@@ -42,7 +42,7 @@
 
   <section id="bookings" aria-labelledby="h-bookings">
     <h2 id="h-bookings">앞으로 7일 연수 예약</h2>
-    <p class="muted small" data-bookings-note>앱이 공개할 때 보낸 연수 날짜·인원으로 그날 요청을 어림해요. 하루 예산의 70%가 차면 그날 연수는 새로 받지 않고 강사 계정으로 안내해요.</p>
+    <p class="muted small" data-bookings-note>앱이 배포할 때 보낸 연수 날짜·인원으로 그날 요청을 어림해요. 하루 예산의 70%가 차면 그날 연수는 새로 받지 않고 강사 계정으로 안내해요.</p>
     <div class="scroll"><table data-bookings-table></table></div>
   </section>
 
@@ -75,7 +75,7 @@
 
   <section id="notices" aria-labelledby="h-notices">
     <h2 id="h-notices">팝업 공지</h2>
-    <p class="muted small">앱을 켤 때 한 번 뜨는 공지와, 공개 사이트 강사 화면 맨 위의 공지 띠예요. 글자만 나가요(HTML은 그대로 글자로 보여요). 링크는 https 주소 하나만, 가는 곳의 주소가 함께 보여요.</p>
+    <p class="muted small">앱을 켤 때 한 번 뜨는 공지와, 배포한 사이트의 강사 화면 맨 위의 공지 띠예요. 글자만 나가요(HTML은 그대로 글자로 보여요). 링크는 https 주소 하나만, 가는 곳의 주소가 함께 보여요.</p>
     <div data-notices-list></div>
     <form class="card notice-form" data-notice-form novalidate>
       <h3 data-notice-form-title>새 공지</h3>
@@ -90,7 +90,7 @@
       <fieldset class="row">
         <legend>보여 줄 곳</legend>
         <label class="check"><input type="checkbox" name="t-app" checked> 앱(켤 때 한 번)</label>
-        <label class="check"><input type="checkbox" name="t-teacher"> 공개 사이트 강사 화면</label>
+        <label class="check"><input type="checkbox" name="t-teacher"> 배포한 사이트의 강사 화면</label>
       </fieldset>
       <div class="row">
         <label>시작 <input type="datetime-local" name="starts" required></label>
@@ -106,8 +106,8 @@
   </section>
 
   <section id="uploads" aria-labelledby="h-uploads">
-    <h2 id="h-uploads">새 업로드</h2>
-    <p class="muted small">멈추면 새 사이트·다시 올리기·새 실시간 방을 받지 않아요. 이미 올라온 사이트는 그대로 열려요. 앱은 '내 계정에 올리기'로 안내해요.</p>
+    <h2 id="h-uploads">새 배포</h2>
+    <p class="muted small">멈추면 새 사이트·다시 배포·새 실시간 방을 받지 않아요. 이미 배포한 사이트는 그대로 열려요. 앱은 '내 계정에 배포하기'로 안내해요.</p>
     <form class="card row" data-uploads-form>
       <p class="grow" data-uploads-state></p>
       <label class="grow">까닭(선택, 감사 기록에 남음) <input name="reason" maxlength="200" autocomplete="off"></label>

@@ -1,4 +1,4 @@
-// Gate(호스트 전체에 하나뿐인 Durable Object)의 하루 숫자·예산 알림·새 업로드 멈춤·공지·신고 처리·감사 기록.
+// Gate(호스트 전체에 하나뿐인 Durable Object)의 하루 숫자·예산 알림·새 배포 멈춤·공지·신고 처리·감사 기록.
 // Durable Object는 흉내(test/fake-do.mjs)로 돌립니다. 실제 workerd에서는 integration.test.mjs가 확인합니다.
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -74,7 +74,7 @@ test('하루 예산 알림: 넘침 단계와 같게 45·60·80·95%를 처음 �
   assert.equal(sent.at(-1).url, 'https://hooks.example/report'); assert.match(sent.at(-1).body.text, /60%.*새 사이트·새 방은 받지 않고/);
 });
 
-test('새 업로드 멈춤: 새 사이트·새 방을 막고(rate_limited, 503), 풀면 다시 받음. 감사 기록', async () => {
+test('새 배포 멈춤: 새 사이트·새 방을 막고(rate_limited, 503), 풀면 다시 받음. 감사 기록', async () => {
   const { call } = gate();
   assert.equal((await reserve(call, 'aaaaaaaaaa')).status, 200);
   assert.equal((await call('POST', 'uploads', { paused: 'yes' })).status, 400);
@@ -82,9 +82,9 @@ test('새 업로드 멈춤: 새 사이트·새 방을 막고(rate_limited, 503),
   assert.equal(p.status, 200); assert.equal(p.body.reason, '스팸이 몰림 점검');
   const st = (await call('GET', 'status')).body;
   assert.deepEqual([st.accepting, st.paused], [false, true]);
-  assert.equal((await call('GET', 'usage')).body.paused, true, '사이트 다시 올리기도 이것을 보고 막음');
+  assert.equal((await call('GET', 'usage')).body.paused, true, '사이트 다시 배포도 이것을 보고 막음');
   const r = await reserve(call, 'bbbbbbbbbb');
-  assert.equal(r.status, 503); assert.equal(r.body.error.code, 'rate_limited'); assert.match(r.body.error.message_ko, /운영자가 잠시 새 업로드를 멈췄어요/);
+  assert.equal(r.status, 503); assert.equal(r.body.error.code, 'rate_limited'); assert.match(r.body.error.message_ko, /운영자가 잠시 새 배포를 멈췄어요/);
   const room = await call('POST', 'room', { id: 'aaaaaaaaaa' });
   assert.equal(room.status, 503);
   await call('POST', 'uploads', { paused: false, who: 'op@example.com' });

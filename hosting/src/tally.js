@@ -72,7 +72,7 @@ export function paidAdvice(days, budget, { share = 0.5, window = 7, need = 2, vi
     over, of: recent.length, peakPct: pct, recommend,
     text: recommend
       ? (view === 'pages'
-        ? `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. 사이트는 Pages라 한도와 상관없이 열리지만 참여 기능·새로 올리기가 멈출 수 있어요. Workers Paid(월 $5)를 권해요.`
+        ? `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. 사이트는 Pages라 한도와 상관없이 열리지만 참여 기능·새 배포가 멈출 수 있어요. Workers Paid(월 $5)를 권해요.`
         : `최근 ${recent.length}일 중 ${over}일이 하루 예산의 ${Math.round(share * 100)}%를 넘었어요. Workers Paid(월 $5)로 올리면 사이트가 멈출 걱정이 없어요.`)
       : `최근 ${recent.length}일 중 하루 예산의 ${Math.round(share * 100)}%를 넘은 날은 ${over}일이에요(가장 많은 날 ${pct}%). 아직 무료로 충분해요.`,
   };

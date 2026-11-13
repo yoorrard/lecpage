@@ -2,7 +2,7 @@
 // 방의 규칙과 저장은 skills/lecpage/backends/cloudflare/src/index.js 의 LiveRoom을 그대로 물려받아 쓰고,
 // 여기서는 호스트에 얹는 데 필요한 것만 더합니다:
 //   - 사이트에 묶인 코드만 열림(묶이지 않은 코드는 아무것도 쓰지 않고 404)
-//   - 사이트가 가려지면 방도 가려지고, 사이트가 지워지거나 공개 기간이 끝나면 방과 올린 파일도 지워짐
+//   - 사이트가 가려지면 방도 가려지고, 사이트가 지워지거나 보관 기간이 끝나면 방과 올린 파일도 지워짐
 //   - R2가 없으면 올린 파일을 이 방의 SQLite에 담음(src/live/bucket.js)
 //   - 방이 쓰는 저장량을 Gate에 알려 전체 한도에 넣음
 //   - 긴 대기(long-poll): GET snapshot?since=<커서>&wait=<초>면 바뀐 것이 없을 때 바뀔 때까지(최대 25초) 기다렸다 답함.
@@ -80,7 +80,7 @@ export class Room extends LiveRoom {
 
   async core() {
     const core = await super.core();
-    core.cfg.maxRetentionDays = maxRetentionDays(this.hostCfg); // 방 자료는 사이트 공개 기간보다 오래 두지 않음
+    core.cfg.maxRetentionDays = maxRetentionDays(this.hostCfg); // 방 자료는 사이트 보관 기간보다 오래 두지 않음
     return core;
   }
 
@@ -90,7 +90,7 @@ export class Room extends LiveRoom {
     const b = this.hostBind.get();
     if (!b) return liveError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
-    if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '공개 기간이 끝난 연수예요.');
+    if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
     const wait = this.waitMs(request, url);
     if (wait) {
       if (request.headers.get('x-lp-relay') === '1' && (request.headers.get('upgrade') || '').toLowerCase() === 'websocket') return this.relayWait(request, url);
@@ -144,7 +144,7 @@ export class Room extends LiveRoom {
       this.awake();
     });
     const b = this.hostBind.get();
-    if (!b) return liveError(404, 'unknown_training', '공개 기간이 끝난 연수예요.');
+    if (!b) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     return super.fetch(new Request(request.url, { method: 'GET', headers: request.headers }));
   }
@@ -242,7 +242,7 @@ export class Room extends LiveRoom {
 
   // ── LiveRoom의 동작에 덧붙이는 것 ────────────────────────────
   async upload(core, code, request, ip) {
-    if (this.hostFull) throw new LiveError(507, 'storage_full', '바로 공개 저장 공간이 가득 차서 지금은 파일을 올릴 수 없어요.');
+    if (this.hostFull) throw new LiveError(507, 'storage_full', '바로 배포 저장 공간이 가득 차서 지금은 파일을 올릴 수 없어요.');
     const res = await super.upload(core, code, request, ip);
     await this.report();
     return res;
@@ -255,7 +255,7 @@ export class Room extends LiveRoom {
     await super.deleteFiles(code);
     await this.report();
   }
-  /** 정리 알람은 사이트 공개 기간이 끝나는 때를 넘기지 않음 */
+  /** 정리 알람은 사이트 보관 기간이 끝나는 때를 넘기지 않음 */
   async scheduleCleanup(core, code) {
     const b = this.hostBind.get();
     if (!b) return super.scheduleCleanup(core, code);

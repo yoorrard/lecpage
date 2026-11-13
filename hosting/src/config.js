@@ -5,13 +5,13 @@ export const DEFAULTS = {
   MAX_BYTES: 40 * MB, // 사이트 하나
   MAX_FILE_BYTES: 20 * MB, // 파일 하나
   MAX_FILES: 600,
-  SITE_DAYS: 30, // 공개 기간(마지막으로 올린 날부터)
+  SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
-  SITES_PER_DEVICE: 5, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 올리기는 세지 않음)
+  SITES_PER_DEVICE: 5, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음)
   SITES_PER_HOUR_SHARED: 30, // 기기 표가 있을 때 같은 IP(학교 공유기 하나에 강사 여럿)의 시간·하루 상한
   SITES_PER_DAY_SHARED: 60,
-  DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). worker 보기 기본. pages 보기는 200, PLAN=paid면 300(pages 1000). 차면 앱이 '내 계정에 올리기'로 안내
+  DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). worker 보기 기본. pages 보기는 200, PLAN=paid면 300(pages 1000). 차면 앱이 '내 계정에 배포하기'로 안내
   MAX_TOTAL_BYTES: 4 * 1024 * MB, // 전체 저장량. 넘으면 새로 받지 않음(무료 한도 5GB보다 낮게)
   DEPLOYS_PER_HOUR: 30, // 사이트 하나를 다시 올리는 횟수
   REPORTS_PER_HOUR: 5, // 같은 IP의 신고
@@ -25,8 +25,8 @@ export const DEFAULTS = {
   LIVE_SOCKETS_PER_IP: 500, // 한 IP(학교 공유기 하나)가 방 하나에 여는 실시간 연결
   DAILY_ROOM_CAP: 30, // 하루에 새로 만들 수 있는 방(전체). worker 보기 기본. pages 보기는 100, PLAN=paid면 300(pages 1000)
   PAGES_API_BUDGET: 900, // Pages API를 5분에 이만큼까지(Cloudflare API 한도 1,200/5분의 75%. 넘으면 그 계정의 모든 API가 5분 막힘)
-  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 올라온 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
-  MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 올리면 늘어남)
+  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 배포한 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
+  MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 배포하면 늘어남)
   ALLOWED_ORIGINS: 'https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
   ALERT_AT: '45,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK). 넘침 단계와 같게: 45 예약한 연수만, 60 새 일 멈춤, 80 묻기 20초, 95 곧 한도
   STATS_DAILY_CAP: 20000, // 앱 익명 이용 합계: 항목 하나가 하루에 셀 수 있는 최대(부풀리기 막기)
@@ -45,7 +45,7 @@ export const PAGES_VIEW_DEFAULTS = {
   free: { DAILY_SITE_CAP: 200, DAILY_ROOM_CAP: 100 },
   paid: { DAILY_SITE_CAP: 1000, DAILY_ROOM_CAP: 1000 },
 };
-/** VIEW=pages일 때 공개 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 올린 날부터) */
+/** VIEW=pages일 때 보관 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 배포한 날부터) */
 export const PAGES_SITE_DAYS = 60;
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
 export const NEW_WORK_SHARE = 0.6;
@@ -80,7 +80,7 @@ export function config(env = {}) {
     pages: view === 'pages' ? pages : null,
     pagesCfg: pages,
     dailyRequestBudget: num(env.DAILY_REQUEST_BUDGET, D.DAILY_REQUEST_BUDGET, { min: 0 }),
-    // 방문으로 공개 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 올린 날부터')
+    // 방문으로 보관 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 배포한 날부터')
     keepAlive: view === 'worker' && !off(env.KEEP_ALIVE),
     maxSiteDays: num(env.MAX_SITE_DAYS, D.MAX_SITE_DAYS),
     maxBytes: num(env.MAX_BYTES, DEFAULTS.MAX_BYTES),
