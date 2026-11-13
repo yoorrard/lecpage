@@ -824,16 +824,16 @@ const commands = {
     const GUIDE = { vercel: 'vercel', cloudflare: 'cloudflare', 'github-pages': 'github-pages', netlify: 'netlify', firebase: 'firebase', s3: 'aws-s3-cloudfront', server: 'own-server-nginx-caddy', lan: 'local-lan-classroom', zip: 'zip-usb-offline' };
     const BACKEND = { sheets: 'apps-script', supabase: 'supabase', cloudflare: 'cloudflare', server: 'node-server', lan: 'node-server' };
     const top = r.hostInfo[0];
-    const how = top ? [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ') : '';
+    const how = top ? (top.id === 'cloudflare' ? 'publish work (먼저 --dry-run) · references/deploy/cloudflare.md' : [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ')) : '';
     say([
-      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
+      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
       ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
       how ? `올리기 ${how}` : '',
       // 무료 한도를 넘으면 어떻게 되는지(멈추는지, 유료로 이어지는지). 강사에게 한 줄로 전하고 고르게 함
       [top?.atLimit_ko && `${top.name_ko}: ${top.atLimit_ko}`, r.backendInfo.atLimit_ko && `${r.backendInfo.name_ko}: ${r.backendInfo.atLimit_ko}`].filter(Boolean).map((x) => '한도 ' + x).join('\n'),
       ...r.warnings.map((x) => '주의 ' + x),
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
-      `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
+      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live --features ${(info.features || []).join(',') || 'qa,poll'} (먼저 --dry-run)` : `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
     ], r);
   },
 

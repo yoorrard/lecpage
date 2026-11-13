@@ -3,6 +3,18 @@
 // 익명 로그인 IP당 시간당 30회(그래서 lecpage는 Supabase Auth를 쓰지 않음), Apps Script 계정당 동시 실행 30,
 // Cloudflare Workers 무료 하루 10만 요청·정적 파일 무제한·Durable Objects 대기 중 웹소켓 과금 없음.
 
+/**
+ * 강사가 직접 할 일(앱·에이전트 밖에서 누르기·붙여 넣기·가입 횟수, 어림). 참여 기능을 고르는 기준 하나.
+ * app: 2026-11-13 앱 경로 측정(구글 시트 약 23, Supabase 약 12, Cloudflare 버튼 6 + GitHub 연결 허락 1, GitHub 계정 필요).
+ * skill: Cloudflare는 가입·`wrangler login` 승인(publish --live가 나머지), Supabase는 가입·토큰 만들기·환경 변수,
+ * 구글 시트는 에이전트가 대신할 수 없어 강사가 Apps Script에 붙여 넣음(앱 경로에서 앱 안 단계를 뺀 어림).
+ */
+export const TEACHER_STEPS = {
+  none: { app: 0, skill: 0 }, local: { app: 0, skill: 0 },
+  sheets: { app: 23, skill: 20 }, supabase: { app: 12, skill: 3 }, cloudflare: { app: 7, skill: 2 },
+  server: { app: null, skill: 2 }, lan: { app: null, skill: 1 },
+};
+
 export const REALTIME_FEATURES = ['qa', 'help', 'progress', 'poll', 'reactions', 'signal'];
 export const STORE_FEATURES = ['attendance', 'board', 'survey'];
 
@@ -182,14 +194,19 @@ export function decideInfra(input = {}) {
     if (size > 300) warnings.push('300명이 넘는 행사는 Cloudflare Workers 유료($5/월)를 켜 두세요. 한도를 넘어도 오류 대신 소액만 과금돼요.');
     if (realtime) warnings.push('질문·투표만 실시간으로 두고, 교재·실습 화면은 정적으로 둬요.');
   }
-  // skill이 사이트를 Cloudflare에 올리면 참여 기능도 같은 계정에(가입 하나, 7일 멈춤 없음, publish --live 한 번으로 둘 다 올림).
-  // 앱(클릭만)은 버튼에 GitHub 계정도 필요해서 그대로 둠. 이미 연결해 둔 곳이 Vercel 등이면 그쪽 결과를 따름
-  if (skill !== 'click' && (backend === 'supabase' || backend === 'sheets') && decideHost({ ...input, skill, network, infra, backend: undefined }).pick === 'cloudflare') {
-    backend = 'cloudflare'; tier = Math.max(tier, 3);
-    reasons.length = 0;
-    reasons.push('사이트를 올릴 Cloudflare 계정에 참여 기능도 함께 둬요. 가입 하나로 끝나고, 쓰지 않아도 7일 뒤 멈추지 않아요.');
-    reasons.push('질문·투표가 바로 바뀌고, 학교 와이파이 하나에서 모두 접속해도 막히지 않아요. 무료는 하루 10만 요청까지예요.');
-    warnings.splice(0, warnings.length, ...warnings.filter((w) => !/Supabase|Apps Script/.test(w)));
+  // skill: 강사가 할 일이 가장 적은 참여 기능으로(TEACHER_STEPS). Cloudflare 중계는 가입·로그인 승인 2번이고 publish --live가 나머지를 함.
+  // 이미 연결해 둔 곳(connected)은 0번으로 셈. 같으면 7일 멈춤이 없는 Cloudflare. 앱(클릭만)은 아래 규칙 그대로(앱 화면 안내와 함께 바꿔야 함)
+  if (skill !== 'click' && (backend === 'supabase' || backend === 'sheets')) {
+    const conn = new Set([].concat(input.connected || []));
+    const cost = (b) => (conn.has(b) ? 0 : TEACHER_STEPS[b].skill);
+    if (cost('cloudflare') <= cost(backend)) {
+      const sameAccount = decideHost({ ...input, skill, network, infra, backend: undefined }).pick === 'cloudflare';
+      backend = 'cloudflare'; tier = Math.max(tier, 3);
+      reasons.length = 0;
+      reasons.push(`강사가 할 일이 가장 적어요(${conn.has('cloudflare') ? '이미 로그인해 둬서 더 할 일 없음' : '가입·로그인 승인 2번'}). ${sameAccount ? '사이트와 같은 Cloudflare 계정에 두고, ' : ''}쓰지 않아도 7일 뒤 멈추지 않아요.`);
+      reasons.push('질문·투표가 바로 바뀌고, 학교 와이파이 하나에서 모두 접속해도 막히지 않아요. 무료는 하루 10만 요청까지예요.');
+      warnings.splice(0, warnings.length, ...warnings.filter((w) => !/Supabase|Apps Script/.test(w)));
+    }
   }
   // 웹소켓이 막힌 망에서는 5초마다 묻는 방식이라 요청이 크게 늘어남(100명 2시간이면 14만 건쯤)
   if (backend === 'cloudflare' && network === 'restricted' && size > 60) warnings.push('웹소켓이 막힌 망에서 60명이 넘으면 Cloudflare 무료의 하루 한도에 닿을 수 있어요. 그날만이라도 유료(월 $5)를 켜 두세요.');
@@ -212,6 +229,7 @@ export function decideInfra(input = {}) {
     tier, backend, backendInfo: BACKENDS[backend], hosts, hostInfo: hosts.map((h) => ({ id: h, ...HOSTS[h] })),
     hostReasons: hostPick.reasons,
     alternatives, reasons, warnings,
+    teacherSteps: TEACHER_STEPS[backend]?.[skill === 'click' ? 'app' : 'skill'] ?? null,
     liveProvider: { none: 'none', local: 'local', sheets: 'sheets', supabase: 'supabase', cloudflare: 'http', server: 'http', lan: 'http' }[backend],
   };
 }

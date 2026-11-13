@@ -71,8 +71,8 @@
 | 참여 기록이 필요 없음 | none | 0원 | — |
 | 출석·제출만 모음, 40명 이하 | Google Sheets + Apps Script | 0원 | backends/apps-script |
 | **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
-| **skill이 사이트를 Cloudflare에 올림**(100명 이하도) | **Cloudflare DO 중계**(같은 계정, 가입 하나, 7일 멈춤 없음). `publish work --live`가 사이트와 함께 올림 | 0원(무료 한도 안) | `deploy/cloudflare.md` |
-| 100명 이하, 회원가입 가능(사이트가 Cloudflare가 아닐 때) | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
+| **skill(명령 가능)**, 인원과 상관없이 | **Cloudflare DO 중계**(강사가 할 일 2번: 가입·로그인 승인, 7일 멈춤 없음). `publish work --live`가 사이트와 함께 올림 | 0원(무료 한도 안) | `deploy/cloudflare.md` |
+| 100명 이하, 회원가입 가능(앱, 또는 Supabase를 이미 연결해 둔 skill) | Supabase(강사 소유, 서울 리전, 강사가 할 일 앱 약 12번·skill 3번) | 0원 | backends/supabase |
 | 100명 넘음, 또는 반응이 많음 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**. GitHub 계정도 필요) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
 | 서버·NAS·VPS·학교 서버가 있음 | node-server(Docker). 사이트도 같은 서버 | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 서버는 없지만 node-server를 쓰고 싶은 개발자 | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
@@ -112,7 +112,7 @@
 6. **L06** WebSocket이 막힌 학교(`wsBlocked`) → `cf-relay`(SSE·새로 읽기 자동 전환). 클릭만 가능하면 `sheets`(일반 HTTPS만 씀).
 7. ★ **L07** 출석·제출처럼 **모으기만**(`realtime` 없음) + 40명 이하 → `sheets`.
 8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·도움 요청·진행 현황·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
-9. ★ **L08b** skill(basic 이상)이고 올릴 곳의 맨 앞이 `cloudflare`(§3.2를 실시간 없이 먼저 돌려 봄)인데 L07·L08·L09가 `sheets`·`supabase`를 낸다 → `cf-relay`(같은 Cloudflare 계정). 가입이 하나로 끝나고 7일 멈춤이 없으며, `publish work --host cloudflare --live` 한 번으로 사이트·중계·관리자 키·허용 주소까지 올립니다. 이미 연결해 둔 곳이 Vercel 등이라 맨 앞이 바뀌면 L09 그대로.
+9. ★ **L08b** skill(basic 이상)인데 L07·L08·L09가 `sheets`·`supabase`를 낸다 → **강사가 할 일 수**(엔진 `TEACHER_STEPS`)로 다시 견줌: `cf-relay` 2번(가입·`wrangler login` 승인, 나머지는 `publish work --live`), Supabase 3번(가입·토큰·환경 변수), 시트 약 20번(Apps Script 붙여 넣기는 강사가). 이미 연결해 둔 곳은 0번. 같으면 7일 멈춤이 없는 `cf-relay`. 그래서 skill은 Supabase를 이미 연결해 둔 때만 L09로 갑니다. 앱(클릭만)은 L08·L09 그대로입니다(측정: 앱 밖 일 시트 약 23 · Supabase 약 12 · Cloudflare 버튼 6+GitHub 연결 허락 1. 앱 안내와 함께 바꿀 일).
 10. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
 11. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
 
@@ -213,7 +213,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"L06b","when":{"wsBlocked":true},"pick":"sheets"},
     {"id":"L07","engine":true,"when":{"realtime":false,"participants":{"lte":40}},"pick":"sheets","note":"출석·제출처럼 모으기만"},
     {"id":"L08","engine":true,"when":{"skill":"click","participants":{"lte":50}},"pick":"sheets","alt":["supabase"],"note":"질문·도움 요청·진행 현황 포함. 7초 새로 읽기. 앱의 안내 + 연결 확인"},
-    {"id":"L08b","engine":true,"when":{"skill":["basic","dev"],"firstHost":"cloudflare","wouldPick":["sheets","supabase"]},"pick":"cf-relay","alt":["supabase"],"note":"사이트와 같은 계정. publish --live가 함께 올림"},
+    {"id":"L08b","engine":true,"when":{"skill":["basic","dev"],"wouldPick":["sheets","supabase"]},"pick":"fewest TEACHER_STEPS (cf-relay 2 · supabase 3 · sheets 20, connected=0, 같으면 cf-relay)","alt":["supabase"],"note":"publish --live가 사이트와 함께 올림"},
     {"id":"L09","engine":true,"when":{"participants":{"lte":100}},"pick":"supabase","region":"ap-northeast-2","alt":["cf-relay","node-server"]},
     {"id":"L10","engine":true,"when":{},"pick":"cf-relay","alt":["supabase","node-server"],"note":"강사 계정. skill은 wrangler로 직접(backends/cloudflare/README.md §2), 앱은 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요)"}
   ],
