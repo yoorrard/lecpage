@@ -195,15 +195,17 @@ export function decideInfra(input = {}) {
     if (realtime) warnings.push('질문·투표만 실시간으로 두고, 교재·실습 화면은 정적으로 둬요.');
   }
   // skill: 강사가 할 일이 가장 적은 참여 기능으로(TEACHER_STEPS). Cloudflare 중계는 가입·로그인 승인 2번이고 publish --live가 나머지를 함.
-  // 이미 연결해 둔 곳(connected)은 0번으로 셈. 같으면 7일 멈춤이 없는 Cloudflare. 앱(클릭만)은 아래 규칙 그대로(앱 화면 안내와 함께 바꿔야 함)
-  if (skill !== 'click' && (backend === 'supabase' || backend === 'sheets')) {
+  // 이미 연결해 둔 곳(connected)은 0번으로 셈. 같으면 7일 멈춤이 없는 Cloudflare
+  // 앱(클릭만)도 같은 기준: 앱 화면이 내 서버(Cloudflare 버튼)를 먼저 권함(시트 약 23번·Supabase 약 12번 → Cloudflare 약 7번)
+  if (backend === 'supabase' || backend === 'sheets') {
     const conn = new Set([].concat(input.connected || []));
-    const cost = (b) => (conn.has(b) ? 0 : TEACHER_STEPS[b].skill);
+    const who = skill === 'click' ? 'app' : 'skill';
+    const cost = (b) => (conn.has(b) ? 0 : TEACHER_STEPS[b][who]);
     if (cost('cloudflare') <= cost(backend)) {
       const sameAccount = decideHost({ ...input, skill, network, infra, backend: undefined }).pick === 'cloudflare';
       backend = 'cloudflare'; tier = Math.max(tier, 3);
       reasons.length = 0;
-      reasons.push(`강사가 할 일이 가장 적어요(${conn.has('cloudflare') ? '이미 로그인해 둬서 더 할 일 없음' : '가입·로그인 승인 2번'}). ${sameAccount ? '사이트와 같은 Cloudflare 계정에 두고, ' : ''}쓰지 않아도 7일 뒤 멈추지 않아요.`);
+      reasons.push(`강사가 할 일이 가장 적어요(${conn.has('cloudflare') ? '이미 연결해 둬서 더 할 일 없음' : who === 'app' ? 'Cloudflare 가입·GitHub 연결 허락·배포 버튼' : '가입·로그인 승인 2번'}). ${sameAccount ? '사이트와 같은 Cloudflare 계정에 두고, ' : ''}쓰지 않아도 7일 뒤 멈추지 않아요.`);
       reasons.push('질문·투표가 바로 바뀌고, 학교 와이파이 하나에서 모두 접속해도 막히지 않아요. 무료는 하루 10만 요청까지예요.');
       warnings.splice(0, warnings.length, ...warnings.filter((w) => !/Supabase|Apps Script/.test(w)));
     }
