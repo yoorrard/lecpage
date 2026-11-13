@@ -199,6 +199,15 @@ describe('몰림 풀기 · 수치 도표 · 빈 칸', () => {
     assert.match(sec(pre, 'sv'), /<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면/);
     assert.match(build({ ...bp, sections: [...bp.sections.slice(0, 2), { id: 'sv', type: 'survey', url: 'https://forms.gle/x' }] }).files['index.html'], /id="sv"/);
   });
+  test('내 달력에 넣기: 날짜·시작 시각이 있을 때만 assets/event.ics(한국 시각 → 세계 표준시), 일정 칸 아래 단추', () => {
+    const ics = E.icsFile({ title: '생성형 AI, 수업', date: '2026-12-03', start: '14:00', end: '17:00', venue: '본관 3층' }, '2026-11-13');
+    assert.match(ics, /DTSTART:20261203T050000Z\r\nDTEND:20261203T080000Z\r\nSUMMARY:생성형 AI\\, 수업\r\nLOCATION:본관 3층/);
+    assert.equal(E.icsFile({ title: 't', date: '2026-12-03' }), '', '시작 시각이 없으면 만들지 않음');
+    assert.doesNotMatch(E.icsFile({ title: 't', date: '2026-12-03', start: '09:00' }), /DTEND/, '끝 시각을 지어내지 않음');
+    const r = build({ meta: { title: 't', date: '2026-12-03', start: '14:00', end: '15:00' }, sections: [{ type: 'hero' }, { id: 'sc', type: 'schedule', items: [{ start: '14:00', end: '14:30', title: 'a' }, { start: '14:30', end: '15:00', title: 'b' }] }] });
+    assert.ok(r.files['assets/event.ics']);
+    assert.match(sec(r.files['index.html'], 'sc'), /<a class="lp-btn lp-btn-ghost lp-btn-sm" href="assets\/event\.ics" download>/);
+  });
   test('실습 프롬프트: 글이 다 보이는 높이로 시작(잘리지 않음), 막히면 도움말 상자', () => {
     assert.equal(E.promptRows('짧은 글'), 2);
     assert.equal(E.promptRows('가'.repeat(63)), 3);

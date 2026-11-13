@@ -1,6 +1,6 @@
 // lecpage 엔진 공개 API (브라우저·Node 공통, ESM)
 export { validate, safeUrl, makeCode, randomCode } from './validate.js';
-export { build, collectEffects } from './build.js';
+export { build, collectEffects, icsFile } from './build.js';
 export { protectSite, unlockUrl, PROTECTED_PAGES } from './protect.js';
 export { zipFiles } from './zip-write.js';
 export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, DEFAULT_SURVEY } from './schema/sections.js';

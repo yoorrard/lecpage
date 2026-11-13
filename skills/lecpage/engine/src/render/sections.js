@@ -157,7 +157,7 @@ function variantSection(s, ctx) {
   const fn = VB().VB[v.type]?.[v.variant];
   if (!fn) return null; // 모양만 바뀌는 배치(따라 하는 칸·교재·메시지·마무리)는 원래 함수가 data-variant를 달고 그림
   let body = '';
-  if (s.type === 'schedule') body = fn(s, ctx, { mins: schedMins(s) }); // 시간 도식은 모든 길이를 알 때만 고름(layouts.js knownDay)
+  if (s.type === 'schedule') body = fn(s, ctx, { mins: schedMins(s) }) + calLink(ctx); // 시간 도식은 모든 길이를 알 때만 고름(layouts.js knownDay)
   else if (s.type === 'glance') body = fn(s, ctx, { numParts });
   else if (s.type === 'materials') body = fn(s, ctx, { rows: s.items.map((m) => ({ kind: m.kind || 'FILE', title: m.title, desc: m.desc, size: m.size, url: m.href, download: !!m.href && !/^https?:/.test(m.href) })) }) + (s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : '');
   else if (s.type === 'followup') {
@@ -302,8 +302,10 @@ function schedule(s, ctx) {
   }).join('');
   const oneDay = !s.items.some((i) => i.date) && s.items.length > 1 && s.items.length <= 12 && mins.every(Boolean);
   const bar = oneDay ? `<div class="lp-sched-bar" aria-hidden="true">${s.items.map((i, n) => `<i style="--min:${mins[n]}"><b>${esc(i.start)}</b></i>`).join('')}<em>${esc(s.items[s.items.length - 1].end || '')}</em></div>` : '';
-  return wrap(s, ctx, head(s, ctx, '일정') + `<div class="lp-sched">${bar}<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${rows}</ol></div>`);
+  return wrap(s, ctx, head(s, ctx, '일정') + `<div class="lp-sched">${bar}<ol class="lp-schedule"${fx(ctx, 'schedule')} data-date="${esc(ctx.bp.meta.date)}">${rows}</ol></div>${calLink(ctx)}`);
 }
+/** 내 달력에 넣기: 연수 날짜·시각이 있을 때 빌드가 만든 assets/event.ics(build.js icsFile)로 */
+export const calLink = (ctx) => (ctx.ics ? `<p class="lp-cal"><a class="lp-btn lp-btn-ghost lp-btn-sm" href="assets/event.ics" download>${icon('clock')}<span>내 달력에 넣기</span></a></p>` : '');
 
 // ── 준비 ─────────────────────────────────────────────────
 function readiness(s, ctx) {

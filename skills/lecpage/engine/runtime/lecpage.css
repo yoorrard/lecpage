@@ -1098,6 +1098,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-st-help{display:grid;gap:6px;max-width:var(--measure);padding:var(--sp-4) var(--sp-5);border-radius:var(--radius-sm);border:1px solid var(--rule-c);background:var(--tint);font-size:var(--fs-sm)}
 .lp-st-help b{display:inline-flex;gap:6px;align-items:center;color:var(--primary);font-weight:700;white-space:nowrap}
 .lp-st-help p{color:var(--foreground)}
+.lp-cal{margin-top:var(--sp-5)}
 .lp-todo{padding:var(--sp-3) var(--sp-4);border:1.5px dashed var(--rule-c);border-radius:var(--radius-sm)}
 .lp-prompt-text:focus{border-color:var(--ring);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
 .lp-prompt-lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:var(--sp-7) var(--sp-6)}
