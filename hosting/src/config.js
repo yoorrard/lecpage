@@ -33,6 +33,8 @@ export const PLAN_DEFAULTS = {
   free: {},
   paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 0 },
 };
+/** VIEW=pages일 때 공개 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 올린 날부터) */
+export const PAGES_SITE_DAYS = 60;
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
 export const NEW_WORK_SHARE = 0.6;
 /** 하루 요청 예산에서 덜 급한 요청(앱 이용 합계 받기)까지 받는 구간. 넘으면 Worker가 DO를 부르지 않고 바로 버림 */
@@ -48,20 +50,31 @@ function num(v, d, { int = true, min = 1 } = {}) {
 }
 
 export function config(env = {}) {
-  const origins = String(env.ALLOWED_ORIGINS ?? DEFAULTS.ALLOWED_ORIGINS).split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
+  // ALLOWED_ORIGINS(wrangler.jsonc) + APP_ORIGINS(설정 스크립트가 비밀 값으로 넣는 운영자 앱 주소)
+  const origins = [env.ALLOWED_ORIGINS ?? DEFAULTS.ALLOWED_ORIGINS, env.APP_ORIGINS ?? ''].join(',').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
   let publicOrigin = '';
   try { if (env.PUBLIC_ORIGIN) publicOrigin = new URL(String(env.PUBLIC_ORIGIN)).origin; } catch { /* 잘못된 값은 무시 */ }
   const plan = String(env.PLAN ?? '').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
   const D = { ...DEFAULTS, ...PLAN_DEFAULTS[plan] };
+  const pages = pagesConfig(env);
+  // 보기: VIEW=pages|worker. 정하지 않으면 Pages 설정(계정·프로젝트·토큰·주소)이 다 있을 때 pages
+  const want = String(env.VIEW ?? '').trim().toLowerCase();
+  const view = want === 'worker' ? 'worker' : pages ? 'pages' : 'worker';
+  const viewProblem = want === 'pages' && !pages ? 'VIEW=pages인데 CF_ACCOUNT_ID·PAGES_PROJECT·PAGES_TOKEN·PAGES_HOST 중 빠진 것이 있어 Worker로 내보내요.' : '';
   return {
     plan,
+    view, viewProblem,
+    // pages: 새 사이트를 Pages로 내보낼 때만. pagesCfg: 설정이 있으면 늘(VIEW를 worker로 돌려도 이미 Pages에 있는 사이트를 지우고 가릴 수 있게)
+    pages: view === 'pages' ? pages : null,
+    pagesCfg: pages,
     dailyRequestBudget: num(env.DAILY_REQUEST_BUDGET, D.DAILY_REQUEST_BUDGET, { min: 0 }),
-    keepAlive: !off(env.KEEP_ALIVE),
+    // 방문으로 공개 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 올린 날부터')
+    keepAlive: view === 'worker' && !off(env.KEEP_ALIVE),
     maxSiteDays: num(env.MAX_SITE_DAYS, D.MAX_SITE_DAYS),
     maxBytes: num(env.MAX_BYTES, DEFAULTS.MAX_BYTES),
     maxFileBytes: num(env.MAX_FILE_BYTES, DEFAULTS.MAX_FILE_BYTES),
     maxFiles: num(env.MAX_FILES, DEFAULTS.MAX_FILES),
-    days: num(env.SITE_DAYS, DEFAULTS.SITE_DAYS, { int: false, min: 1e-9 }),
+    days: num(env.SITE_DAYS, view === 'pages' ? PAGES_SITE_DAYS : DEFAULTS.SITE_DAYS, { int: false, min: 1e-9 }),
     sitesPerHour: num(env.SITES_PER_HOUR, DEFAULTS.SITES_PER_HOUR),
     sitesPerDay: num(env.SITES_PER_DAY, DEFAULTS.SITES_PER_DAY),
     dailySiteCap: num(env.DAILY_SITE_CAP, D.DAILY_SITE_CAP),
@@ -97,6 +110,22 @@ export function config(env = {}) {
     // 켜면 Supabase 연결을 쓰는 사이트가 엔진이 고정한 supabase-js 파일 하나를 cdn.jsdelivr.net에서 불러올 수 있음(기본은 꺼짐)
     allowSupabaseSdk: /^(1|true|yes|on)$/i.test(String(env.ALLOW_SUPABASE_SDK ?? '').trim()),
   };
+}
+/**
+ * VIEW=pages 설정. 넷 다 있어야 켜짐: CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_TOKEN(비밀, Pages Write만), PAGES_HOST('<프로젝트 주소>.pages.dev')
+ * PAGES_SITE_URL(선택): 사이트 주소 틀. 기본 'https://{branch}.<PAGES_HOST>/'. CF_API_BASE(시험용): API 주소
+ * @returns {{ api: string, accountId: string, project: string, token: string, host: string, siteUrl: string } | null}
+ */
+export function pagesConfig(env) {
+  const t = (v) => (typeof v === 'string' ? v.trim() : '');
+  const accountId = t(env.CF_ACCOUNT_ID); const project = t(env.PAGES_PROJECT); const token = t(env.PAGES_TOKEN);
+  const host = t(env.PAGES_HOST).toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (!/^[0-9a-f]{32}$/i.test(accountId) || !/^[a-z0-9][a-z0-9-]{0,57}$/.test(project) || token.length < 20 || !/^[a-z0-9.-]+(:\d+)?$/.test(host)) return null;
+  let siteUrl = t(env.PAGES_SITE_URL) || `https://{branch}.${host}/`;
+  if (!siteUrl.includes('{branch}') || !/^https?:\/\//.test(siteUrl)) siteUrl = `https://{branch}.${host}/`;
+  if (!siteUrl.endsWith('/')) siteUrl += '/';
+  const api = /^https?:\/\/[^\s]+$/.test(t(env.CF_API_BASE)) ? t(env.CF_API_BASE).replace(/\/+$/, '') : 'https://api.cloudflare.com/client/v4';
+  return { api, accountId, project, token, host, siteUrl };
 }
 /**
  * ACCESS_TEAM_DOMAIN: "<팀>.cloudflareaccess.com"(https:// 붙여도 됨). 로컬 시험만 http://127.0.0.1:<포트>·http://localhost:<포트>.

@@ -33,6 +33,7 @@ export class Gate extends DurableObject {
     `);
     // 이미 돌던 서버의 표에 새 칸을 더함(없을 때만)
     this.addColumn('sites', 'title', "TEXT NOT NULL DEFAULT ''");
+    this.addColumn('sites', 'url', "TEXT NOT NULL DEFAULT ''"); // 공개 주소(VIEW=pages면 사이트마다 다른 호스트)
     this.addColumn('reports', 'status', "TEXT NOT NULL DEFAULT 'open'");
     this.addColumn('reports', 'handled_at', 'INTEGER NOT NULL DEFAULT 0');
     this.settingsCache = null;
@@ -185,7 +186,7 @@ export class Gate extends DurableObject {
   }
 
   /** 새 사이트 자리 잡기: 횟수·저장량을 보고 목록에 올림 */
-  async reserve({ ip, id, created, expires, title }) {
+  async reserve({ ip, id, created, expires, title, url }) {
     const now = Date.now(); const c = this.cfg;
     const w = await this.windows('site', ip, now);
     if (!this.accepting(now)) throw this.busy(now);
@@ -196,7 +197,7 @@ export class Gate extends DurableObject {
     if (this.sql.exec('SELECT 1 FROM sites WHERE id = ?', id).toArray().length) throw new HttpError('bad_request', '이미 있는 주소예요.', { status: 409 });
     this.ctx.storage.transactionSync(() => {
       for (const x of [w.hour, w.day, w.all]) this.bump(x.k, x.exp);
-      this.sql.exec('INSERT INTO sites (id, bytes, created, expires, title) VALUES (?, 0, ?, ?, ?)', id, created, expires, String(title || '').slice(0, 120));
+      this.sql.exec('INSERT INTO sites (id, bytes, created, expires, title, url) VALUES (?, 0, ?, ?, ?, ?)', id, created, expires, String(title || '').slice(0, 120), /^https?:\/\/[^\s"<>]{1,300}$/.test(String(url || '')) ? url : '');
       this.addDay({ new: 1 }, now);
     });
     await this.ensureAlarm();
@@ -279,7 +280,7 @@ export class Gate extends DurableObject {
 
   sites(q) {
     const s = String(q || '').trim().toLowerCase().slice(0, 60);
-    const cols = 'id, title, bytes, room_bytes AS roomBytes, code AS liveCode, created AS createdAt, expires AS expiresAt, blocked';
+    const cols = 'id, title, url, bytes, room_bytes AS roomBytes, code AS liveCode, created AS createdAt, expires AS expiresAt, blocked';
     const rows = s
       ? this.sql.exec(`SELECT ${cols} FROM sites WHERE id LIKE ? ESCAPE '\\' OR lower(title) LIKE ? ESCAPE '\\' ORDER BY created DESC LIMIT 200`, `${s.replace(/[\\%_]/g, '\\$&')}%`, `%${s.replace(/[\\%_]/g, '\\$&')}%`).toArray()
       : this.sql.exec(`SELECT ${cols} FROM sites ORDER BY created DESC LIMIT 1000`).toArray();
