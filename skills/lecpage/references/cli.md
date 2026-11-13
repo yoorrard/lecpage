@@ -45,10 +45,10 @@
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://yoorrard.github.io/lecpage/` | 5줄 안팎 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음 | 4줄 |
 | `publish [work] [--host cloudflare] [--live] [--features qa,poll] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-qa]` | 강사 Cloudflare 계정에 올리기. `--live`: 중계 올리기 → 관리자 키를 만들어 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만(화면에 안 찍음, 이미 있으면 그대로) → `info.json` `live`에 중계 주소·연수 코드 → `patch -i`로 다시 빌드·점검 → 빈 임시 폴더에서 사이트 올리기 → 중계가 이 사이트만 받게(`ALLOWED_ORIGINS`, 연수 코드는 `ALLOWED_CODES`) → 사이트·`check.html`·중계 `/api/health` 확인 → `handouts`. 인증은 `wrangler login`이나 `CLOUDFLARE_API_TOKEN`(+`CLOUDFLARE_ACCOUNT_ID`) 환경 변수만. `--dry-run`은 순서와 강사가 할 일만 보여 주고 아무것도 바꾸지 않음. 다시 올릴 때 같은 명령(이름·키 그대로). 다른 곳은 한 줄 명령을 알려 주고 멈춤 | 10줄 안팎 |
-| `handouts <올린 주소\|dist> [-o 폴더] [--password 암호]` | `poster.html`·`screen.html`을 열어 `QR-안내문.pdf`(참가자용 A4 한 장)·`발표화면.png`·`발표화면-QR-크게.png`. 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림. Playwright가 없으면 건너뜀 | 3줄 |
+| `handouts <배포한 주소\|dist> [-o 폴더] [--password 암호]` | `poster.html`·`screen.html`을 열어 `QR-안내문.pdf`(참가자용 A4 한 장)·`발표화면.png`·`발표화면-QR-크게.png`. 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림. Playwright가 없으면 건너뜀 | 3줄 |
 | `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP | 한 줄 |
 | `draft` · `prompt` · `presets` · `effects` | 초안만, AI 프롬프트 파일, 목록 | |
-| `guard <AI 답.json\|txt> <material.json> [-i info.json] [-o blueprint.json]` | 교재 지킴이: 다른 AI가 짠 설계도(챗봇 답 글도 됨)를 교재 초안과 견줘 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 교재대로 되돌리고, 교재에 없는 주소는 뺌 | 되돌린 곳 한 줄씩 |
+| `guard <AI 답.json\|txt> <material.json> [-i info.json] [-o blueprint.json]` | 교재 지킴이: 다른 AI가 짠 설계도(AI 창에서 복사한 답 글도 됨)를 교재 초안과 견줘 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 교재대로 되돌리고, 교재에 없는 주소는 뺌 | 되돌린 곳 한 줄씩 |
 
 교재 해석만 따로 할 때: `node <skill>/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media --slides work/assets/slides`.
 

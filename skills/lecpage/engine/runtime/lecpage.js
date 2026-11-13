@@ -61,7 +61,7 @@
   window.LecPage.qr = qrSvg; window.LecPage.needQR = needQR;
   // 주소: 파일로 열었거나(file:) 앱 미리보기(about:)면 진짜 주소가 없으니 안내 문구를 보여 줍니다(meta.siteUrl이 있으면 그 주소).
   var LOCAL_PAGE = /^(file|about|blob|data):$/.test(location.protocol);
-  var URL_OFF = '인터넷에 올리면 여기에 참가자 주소와 QR이 나와요.';
+  var URL_OFF = '배포하면 여기에 참가자 주소와 QR이 나와요.';
   // 원래 주소(QR·복사): 강사가 준 사이트 주소, 없으면 지금 페이지 주소. 파일로 열었으면 모름('')
   function siteUrl() {
     if (DATA.siteUrl) return DATA.siteUrl;
@@ -96,8 +96,8 @@
   }
   function paintQRs() {
     $$('[data-qr]').forEach(function (n) { n.innerHTML = qrSvg(n.getAttribute('data-qr')); });
-    $$('[data-qr-self]').forEach(function (n) { if (!n.closest('dialog')) fillQR(n, joinUrl(), pageUrl() ? '인터넷에 올리면 QR이 나와요.' : ''); });
-    $$('[data-qr-page]').forEach(function (n) { fillQR(n, siblingUrl(n.getAttribute('data-qr-page')), '인터넷에 올리면 QR이 나와요.'); });
+    $$('[data-qr-self]').forEach(function (n) { if (!n.closest('dialog')) fillQR(n, joinUrl(), pageUrl() ? '배포하면 QR이 나와요.' : ''); });
+    $$('[data-qr-page]').forEach(function (n) { fillQR(n, siblingUrl(n.getAttribute('data-qr-page')), '배포하면 QR이 나와요.'); });
   }
   function drawQRs() {
     // 대화상자 밖에 QR 칸이 있으면(설문 QR·안내문): 이미 실려 있으면 바로, 아니면 화면에 가까워질 때 불러와 그림
@@ -110,7 +110,7 @@
       } else needQR().then(paintQRs);
     }
     fillUrls();
-    $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '올린 사이트 주소 + ' + n.getAttribute('data-url-page'); });
+    $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '배포한 사이트 주소 + ' + n.getAttribute('data-url-page'); });
   }
   window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, short: shortShown, off: URL_OFF };
 

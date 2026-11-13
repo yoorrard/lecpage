@@ -57,7 +57,7 @@ ${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
 <p class="lp-con-for"><span>강사용 화면이에요. 참가자라면</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></p>
 <div class="lp-con-login-mark" aria-hidden="true">${motif(ctx, 'login')}</div>
 <h2 id="lp-login-h">관리자 키</h2>
-<p class="lp-con-login-lead">공개할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
+<p class="lp-con-login-lead">배포할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
 <label class="lp-con-field" for="lp-key">관리자 키</label>
 <div class="lp-con-keyrow"><input id="lp-key" type="password" name="key" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="200" required aria-describedby="lp-key-msg lp-key-hint"><button class="lp-icon-btn" type="button" data-key-show aria-pressed="false" aria-label="키 보이기">${icon('eye')}</button></div>
 <label class="lp-con-check"><input type="checkbox" name="remember" data-remember><span>이 기기에서 기억하기</span></label>
@@ -321,9 +321,9 @@ export function opsGuide(ctx) {
   const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
   const svIn = live && sv?.questions?.length;
   const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
-  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 접속 확인(`check.html`)으로 확인하세요.', http: '참여 기능 서버가 켜져 있는지 접속 확인(`check.html`)으로 확인하세요.', local: '지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.' }[prov];
+  const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 접속 확인(`check.html`)으로 확인하세요.', http: '참여 기능 서버가 켜져 있는지 접속 확인(`check.html`)으로 확인하세요.', local: '지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.' }[prov];
   const before = [
-    '사이트를 올리면 주소와 QR이 나와요. 현장에 붙일 안내문은 QR 안내문(`poster.html`)을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
+    '사이트를 배포하면 주소와 QR이 나와요. 현장에 붙일 안내문은 QR 안내문(`poster.html`)을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
     '연수 장소의 Wi-Fi로 접속 확인(`check.html`)을 열어 막힌 곳이 없는지 확인하세요.',
     live && '관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요. 강사 화면 위 [더보기]에 참가자 화면·QR 안내문·접속 확인이 모여 있어요.',
     live && wake,
@@ -348,5 +348,5 @@ export function opsGuide(ctx) {
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
   const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
-  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 빌드하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
+  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 배포하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
 }

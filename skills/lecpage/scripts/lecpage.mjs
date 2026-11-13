@@ -487,7 +487,7 @@ async function toAppFile(P, work) {
     `담은 것 설계도(칸 ${v.blueprint.sections.length}) · 연수 정보 · ${material ? `교재 해석(${material.pages?.length || 0}쪽)` : '교재 해석 없음'} · 쪽 그림 ${c.slides} · 교재 그림 ${c.media}${c.files ? ` · 자료실 파일 ${c.files}` : ''} · 교재 원본 ${c.originals}`,
     `담지 않은 것 ${NOT_PACKED}(앱에서 다시 정해요)`,
     r.dropped.length || big.length ? `뺀 자료 ${r.dropped.length + big.length}: ${plural([...r.dropped.map((x) => basename(x)), ...big.map((x) => x + '(100MB 넘음)')], 3, ', ')}` : '',
-    `강사에게 ${P.APP_URL} 를 열고 [저장한 파일 열기]로 이 파일을 열면 디자인·참여 기능·공개를 화면에서 이어 해요.`,
+    `강사에게 ${P.APP_URL} 를 열고 [저장한 파일 열기]로 이 파일을 열면 디자인·참여 기능·배포를 화면에서 이어 해요.`,
   ], { ok: true, file: out, kb, counts: c, dropped: [...r.dropped, ...big], app: P.APP_URL });
 }
 
@@ -577,7 +577,7 @@ const commands = {
     const sh = (p) => { const r = relative(base, p); return r && !r.startsWith('..') && !isAbsolute(r) ? r : p; };
     const bpShort = sh(bpPath);
     const lines = [
-      `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(올릴 사이트) · ${sh(b.tdir)}(강사용, 올리지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
+      `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(배포할 사이트) · ${sh(b.tdir)}(강사용, 배포하지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
       ...steps,
       bm.lines[0], bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
@@ -804,7 +804,7 @@ const commands = {
     writeFileSync(args.o, text); say([`프롬프트 → ${args.o} (${text.length}자)`], { ok: true, file: resolve(args.o), chars: text.length });
   },
 
-  /** AI 답(설계도 JSON 또는 챗봇 답 글)을 교재 초안과 견줘 교재 글을 지킴(교재 지킴이) */
+  /** AI 답(설계도 JSON 또는 AI 창 답 글)을 교재 초안과 견줘 교재 글을 지킴(교재 지킴이) */
   async guard() {
     const api = await ingestApi();
     const text = readFileSync(args._[0], 'utf8');
@@ -839,9 +839,9 @@ const commands = {
     // publish가 대신 올리는 곳(Cloudflare·Onpod)은 그 명령을, 나머지는 한 줄 명령과 안내 파일
     const how = top ? (['cloudflare', 'onpod'].includes(top.id) ? `publish work${top.id === 'onpod' ? ' --host onpod' : ''} (먼저 --dry-run) · references/deploy/${top.id}.md` : [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ')) : '';
     say([
-      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}${r.hostSteps === 0 ? ' (첫째 곳은 이미 연결돼 강사가 더 할 일 없음)' : r.hostSteps != null ? ` (첫째 곳 강사가 할 일 약 ${r.hostSteps}번)` : ''}`,
-      ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
-      how ? `올리기 ${how}` : '',
+      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 배포할 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}${r.hostSteps === 0 ? ' (첫째 곳은 이미 연결돼 강사가 더 할 일 없음)' : r.hostSteps != null ? ` (첫째 곳 강사가 할 일 약 ${r.hostSteps}번)` : ''}`,
+      ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(배포할 곳) ' + x),
+      how ? `배포 ${how}` : '',
       // 무료 한도를 넘으면 어떻게 되는지(멈추는지, 유료로 이어지는지). 강사에게 한 줄로 전하고 고르게 함
       [top?.atLimit_ko && `${top.name_ko}: ${top.atLimit_ko}`, r.backendInfo.atLimit_ko && `${r.backendInfo.name_ko}: ${r.backendInfo.atLimit_ko}`].filter(Boolean).map((x) => '한도 ' + x).join('\n'),
       ...r.warnings.map((x) => '주의 ' + x),
@@ -866,7 +866,7 @@ const commands = {
     if (!args._[0]) fail('설계도 파일을 지정해 주세요.');
     const b = await buildSite(readJson(args._[0]), { out: args.o || 'dist', assets: args.assets ? resolve(args.assets) : '', info: args.i ? readJson(args.i) : null, password: args.password });
     if (!b.ok) { say([...b.warnings.map((w) => `주의 ${w.path}: ${w.message_ko}`), ...b.errors.map((e) => `오류 ${e.path}: ${e.message_ko}`)], { ok: false, errors: b.errors, warnings: b.warnings }); process.exit(1); }
-    say([buildLine(b), `강사용 파일(올리지 않음) ${rel(b.tdir)}`, b.access === 'password' ? '암호 보호: 참가자 QR은 주소 뒤에 #k=암호 를 붙이면 바로 열려요.' : '',
+    say([buildLine(b), `강사용 파일(배포하지 않음) ${rel(b.tdir)}`, b.access === 'password' ? '암호 보호: 참가자 QR은 주소 뒤에 #k=암호 를 붙이면 바로 열려요.' : '',
       b.warnings.length ? `주의 ${b.warnings.length}: ${plural(b.warnings.map((w) => cut(w.message_ko, 60)), 3, ' / ')}` : ''],
     { ok: true, dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, access: b.access, ...b.report, warnings: b.warnings });
   },

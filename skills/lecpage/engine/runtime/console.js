@@ -143,7 +143,7 @@
   function now() { return conn && conn.now ? conn.now() : Date.now(); }
 
   // ── 관리자 키 ──
-  // 키 이름에 사이트 경로를 넣음: 여러 사이트가 한 출처를 쓰는 서버(바로 공개)에서 다른 사이트의 화면이 이 키를 쓰지 못하게
+  // 키 이름에 사이트 경로를 넣음: 여러 사이트가 한 출처를 쓰는 서버(바로 배포)에서 다른 사이트의 화면이 이 키를 쓰지 못하게
   var ADMIN_SLOT = 'lp-admin:' + location.pathname.replace(/[^/]*$/, '') + ':' + DATA.live.code;
   function store(kind) { try { return window[kind]; } catch (e) { return null; } }
   function savedKey() { var s = store('sessionStorage'), l = store('localStorage'); try { return (s && s.getItem(ADMIN_SLOT)) || (l && l.getItem(ADMIN_SLOT)) || ''; } catch (e) { return ''; } }
@@ -210,8 +210,8 @@
         if (from === 'qr') { say('QR에 든 관리자 키가 맞지 않아요. 노트북의 강사 화면에서 QR을 다시 보이거나 키를 넣어 주세요.'); if (keyIn) keyIn.focus(); return; }
         fails++;
         // 틀린 키를 계속 넣으면 이 화면에서도 조금씩 늦춤(서버도 따로 셈)
-        if (fails >= 3) holdFor(Math.min(60, Math.pow(2, fails - 2) * 5), '관리자 키가 맞지 않아요. 공개할 때 받은 키를 다시 확인해 주세요.');
-        else say('관리자 키가 맞지 않아요. 공개할 때 받은 키를 다시 확인해 주세요.');
+        if (fails >= 3) holdFor(Math.min(60, Math.pow(2, fails - 2) * 5), '관리자 키가 맞지 않아요. 배포할 때 받은 키를 다시 확인해 주세요.');
+        else say('관리자 키가 맞지 않아요. 배포할 때 받은 키를 다시 확인해 주세요.');
         if (keyIn) { keyIn.select(); keyIn.focus(); }
         return;
       }
@@ -237,7 +237,7 @@
   function sec(ms) { return Math.max(1, Math.round((ms || 0) / 1000)) + '초'; }
   function netWords(st, ni) {
     var t = ni.transport, hint = ni.hint >= 10000 ? ' 오늘 서버가 붐벼 ' + sec(ni.hint) + ' 간격으로 늘렸어요.' : '';
-    if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 공개하세요.'];
+    if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.'];
     if (st === 'offline') return ['연결이 끊겼어요 · 다시 잇는 중', '참가자 화면의 교재·실습·프롬프트는 그대로 열려요. 질문은 구두로 받고, 설문은 QR로 다른 설문지를 띄워도 돼요. 연결되면 쌓인 글이 들어와요.'];
     if (t === 'ws' || t === 'realtime') return ['연결됨 · 바로 받음(웹소켓)', ''];
     if (t === 'sse') return ['연결됨 · 바로 받음(SSE)', ''];
@@ -778,10 +778,10 @@
     var s3 = el('div', 'lp-con-sec'); s3.appendChild(el('h3', '', '참여 주소'));
     var j = el('div', 'lp-con-join'); var q = el('div', 'lp-qr'); q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드'); // copy-ok: 화면 읽기 이름표는 'QR 코드'도 됨(writing.md 4절)
     if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
-    else q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
+    else q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
     var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
     var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
-    add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '인터넷에 올리면 여기에 나와요.');
+    add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '배포하면 여기에 나와요.');
     if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
     add('연수 코드', DATA.live.code);
     j.appendChild(q); j.appendChild(dl); s3.appendChild(j); b.appendChild(s3);
@@ -810,7 +810,7 @@
     var cl = $('button[value="close"]', phone); if (cl) cl.focus();
   }
   if (phone && phoneBtn) {
-    var why = LOCAL ? '리허설 설정이라 휴대폰과 이어지지 않아요. 참여 기능 서버를 연결해 다시 공개하면 쓸 수 있어요.' : !siteDir() ? '인터넷에 올리면 쓸 수 있어요.' : '';
+    var why = LOCAL ? '리허설 설정이라 휴대폰과 이어지지 않아요. 참여 기능 서버를 연결해 다시 배포하면 쓸 수 있어요.' : !siteDir() ? '배포하면 쓸 수 있어요.' : '';
     if (why) { $('[data-phone-lead]', phone).textContent = why; $('[data-phone-box]', phone).hidden = true; }
     phoneBtn.addEventListener('click', function () { phoneHide(); if (phone.showModal) phone.showModal(); });
     $('[data-phone-show]', phone).addEventListener('click', phoneShow);

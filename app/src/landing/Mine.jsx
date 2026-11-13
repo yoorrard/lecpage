@@ -4,10 +4,10 @@ import { Dialog } from '../components/ui.jsx';
 import { copy, fmtDate, toast } from '../lib/util.js';
 
 // 첫 화면의 '내 연수' 목록. 만든 연수가 있을 때만 받아요(처음 오는 사람의 첫 화면을 가볍게).
-const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공개하기'];
+const STAGE = ['', '교재 넣기', '살펴보고 고치기', '배포하기'];
 
 /**
- * 공개한 연수 카드의 연수 당일 바로 가기: 강사 화면(참여 기능이 있을 때, 다른 화면은 모두 여기서)·발표 화면·주소와 QR.
+ * 배포한 연수 카드의 연수 당일 바로 가기: 강사 화면(참여 기능이 있을 때, 다른 화면은 모두 여기서)·발표 화면·주소와 QR.
  * 강사 화면을 누르면 이 기기에 기억한 관리자 키를 먼저 복사해 둠(새 탭이 열리기 전에, 붙여 넣기만 하게)
  */
 function DayLinks({ p, adminKey }) {
@@ -25,7 +25,7 @@ function DayLinks({ p, adminKey }) {
 /** list: 연수 목록, once·busyProps: 두 번 눌러도 한 번만(Home), reload: 목록 다시 읽기. 지우기 확인 창도 여기(첫 화면 코드를 가볍게) */
 export function Mine({ list, once, busyProps, reload }) {
   const [del, setDel] = useState(null);
-  // 공개한 연수의 강사 화면 관리자 키(바로 공개는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
+  // 배포한 연수의 강사 화면 관리자 키(바로 배포는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
   const [keys, setKeys] = useState({});
   useEffect(() => {
     const pub = list.filter((p) => p.deploy?.lastUrl && (p.blueprint?.live?.features || []).length);
@@ -56,7 +56,7 @@ export function Mine({ list, once, busyProps, reload }) {
       </div>
       <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
         <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
-        <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 올린 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>
+        <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 이미 배포한 사이트는 그대로예요. 필요하면 먼저 파일로 저장해 두세요.</p>
         <div class="btn-row"><button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button></div>
       </Dialog>
     </section>

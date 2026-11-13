@@ -10,7 +10,7 @@ import { StepShare } from './steps/Share.jsx';
 export const STEPS = [
   { n: 1, name: '교재 넣기', C: StepStart },
   { n: 2, name: '살펴보고 고치기', C: StepEdit },
-  { n: 3, name: '공개하기', C: StepShare },
+  { n: 3, name: '배포하기', C: StepShare },
 ];
 
 export function Project({ id, step }) {
@@ -37,7 +37,7 @@ export function Project({ id, step }) {
   function update(patch, opt) {
     const next = { ...ref.current, ...(typeof patch === 'function' ? patch(ref.current) : patch) };
     if (next.blueprint?.meta?.title) next.title = next.blueprint.meta.title; else if (next.info?.title) next.title = next.info.title;
-    // 공개한 뒤 바뀌었는지(다시 올리기 알림). 올리면서 주소를 적는 것(deploy와 함께 바뀜)은 고친 것이 아님
+    // 배포한 뒤 바뀌었는지(다시 배포 알림). 배포하면서 주소를 적는 것(deploy와 함께 바뀜)은 고친 것이 아님
     if (next.blueprint && next.blueprint !== ref.current.blueprint && next.deploy === ref.current.deploy) next.editedAt = Date.now();
     ref.current = next; setP(next); save(next);
     if (opt?.now) save.flush();

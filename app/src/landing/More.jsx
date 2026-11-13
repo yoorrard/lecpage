@@ -8,7 +8,7 @@ import { LiveDay } from './LiveDay.jsx';
 import { Paths } from './Paths.jsx';
 import '../styles/landing-more.css';
 
-// 첫 화면 아래 이야기: 왜 lecpage(한 문장·두 사이트 견주기·다른 점 넷) → 교재가 사이트가 되기까지 → 말로 고치기 → 디자인 → 공개 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·스킬) → 예시 → 마무리.
+// 첫 화면 아래 이야기: 왜 lecpage(한 문장·두 사이트 견주기·다른 점 넷) → 교재가 사이트가 되기까지 → 말로 고치기 → 디자인 → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·스킬) → 예시 → 마무리.
 // 첫 화면(Home.jsx)이 그려진 다음 틈에 받는 묶음이라 첫 화면 JS·CSS에 들지 않아요. 구성과 근거: docs/research/landing-2026-11.md
 const EXAMPLES = [
   { id: 'data-lab', title: '데이터로 읽는 우리 반', kind: '디지털 연수 · 실습형 3시간', desc: '실습 5개, 도움 요청·진행 현황, 퀴즈, 만족도 조사', img: 'img/example-data-lab.webp' },

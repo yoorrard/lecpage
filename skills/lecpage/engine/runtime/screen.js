@@ -79,9 +79,9 @@
   var q = $('[data-qr-join]');
   if (q) {
     if (qrMarkup) q.innerHTML = qrMarkup;
-    else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', '인터넷에 올리면 QR이 나와요.'));
+    else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
   }
-  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) { n.textContent = shortUrl || fullUrl || '인터넷에 올리면 여기에 참가자 주소가 나와요.'; });
+  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) { n.textContent = shortUrl || fullUrl || '배포하면 여기에 참가자 주소가 나와요.'; });
   [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
   // QR 크게 보기: 뒷자리에서도 찍히게 화면 가득(QR 한 변은 찍는 거리의 1/10쯤이 필요)
   var zoom = $('[data-join-zoom]'), big = $('[data-joinbig]'), jo = $('[data-join-open]');

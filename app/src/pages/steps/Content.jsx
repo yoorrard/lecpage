@@ -112,7 +112,7 @@ const isTyping = (el) => /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName) && !/^(ch
 
 const safeName = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
 
-/** 자료실: 내 컴퓨터의 파일을 올림. 파일은 이 브라우저에 두었다가 공개할 때 사이트와 함께 올라가고, 참가자가 내려받음 */
+/** 자료실: 내 컴퓨터의 파일을 올림. 파일은 이 브라우저에 두었다가 배포할 때 사이트와 함께 올라가고, 참가자가 내려받음 */
 function MaterialUpload({ pid, s, put }) {
   const inp = useRef(); const [busy, setBusy] = useState(false);
   async function add(files) {
@@ -129,14 +129,14 @@ function MaterialUpload({ pid, s, put }) {
         items.push({ title: f.name.replace(/\.[^.]+$/, '').slice(0, 100), href: 'assets/files/' + name, desc: '', kind: (f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 12), size: fmtBytes(f.size) });
         n++;
       }
-      if (n) { put({ items }); toast(`자료 ${n}개를 넣었어요. 공개하면 참가자가 내려받을 수 있어요.`); }
+      if (n) { put({ items }); toast(`자료 ${n}개를 넣었어요. 배포하면 참가자가 내려받을 수 있어요.`); }
     } catch (e) { toast('파일을 넣지 못했어요. 저장 공간을 확인해 주세요.'); }
     setBusy(false);
   }
   return (
     <div class="mat-up">
       <button type="button" class="btn btn-sm" disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={() => inp.current?.click()}>{busy ? '넣는 중…' : '＋ 파일 올리기'}</button>
-      <span class="small muted">PDF·한글·PPT·ZIP 등. 공개한 뒤에 더 넣어도 돼요. 넣고 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 반영돼요.</span>
+      <span class="small muted">PDF·한글·PPT·ZIP 등. 배포한 뒤에 더 넣어도 돼요. 넣은 뒤 [다시 배포하기]를 누르면 같은 주소에 반영돼요.</span>
       <input ref={inp} type="file" multiple hidden onChange={(e) => { add([...e.target.files]); e.target.value = ''; }} />
     </div>
   );
