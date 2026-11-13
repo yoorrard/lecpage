@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // 움직임 점검: 효과·첫 화면 그림·본문 등장이 '실제로' 움직이는지 시간과 스크롤에 따라 재요(Playwright).
-//   첫 화면: 가만히 둔 채 0.3~6초 사이 몇 장을 찍어 바뀐 화소 비율을 잼 → 계속 움직임(loop) · 들어오고 멈춤(enter) · 정지(still)
-//            그림이 끝없이 도는 효과(loop)인데 정지면 'hero-still', 효과가 실렸는데 건너뜀·실패면 'fx-skipped'·'fx-failed'
-//   본문: 한 화면씩 내려가며 등장 효과(data-fx-pre → data-fx-in)가 걸리는지, 다 내려간 뒤 숨은 채 남은 것('stuck-hidden'),
-//         스크롤 연동 효과가 스크롤에 따라 값이 바뀌는지('scroll-dead'), 화면 밖으로 나간 꾸밈('offscreen-art')
-//   동작 줄이기: 첫 화면 그림이 비거나(빈 캔버스·숨은 정지 그림) 내용이 숨은 채 남지 않는지('rm-incomplete')
+//   첫 화면: 가만히 둔 채(웹 글꼴을 최대 0.9초 기다린 뒤) 0.1~5.6초 사이 몇 장을 찍어 바뀐 화소 비율을 잼 → 계속 움직임(loop) · 들어오고 멈춤(enter) · 정지(still)
+//            끝없이 도는 그림이 켜졌는데 정지면 'hero-still', 움직임 단계인데 첫 화면이 그대로면 'hero-no-motion', 효과가 단계 2 이상 자리에서 건너뛰거나 실패하면 'fx-skipped'·'fx-failed'
+//   본문: 한 화면씩 내려가며 화면 가운데 띠에 온전히 들어온 글이 흐리거나 숨은 채인지('dim-in-view'), 다 내려간 뒤 대기 상태로 남은 것('stuck-pre'),
+//         CSS 스크롤 타임라인이 스크롤에 따라 값이 바뀌는지('scroll-dead'), 화면 밖으로 나간 꾸밈 층('offscreen-art')
+//   동작 줄이기(--rm): 첫 화면 그림이 비거나(빈 캔버스·숨은 정지 그림) 제목·단추가 숨은 채인지('rm-incomplete')
+//   효과 하나씩(--effects): 효과 견본 장면을 띄워 도는 효과는 계속, 나머지는 한 번이라도 움직이는지
 // 쓰는 곳: 손으로(모든 프리셋을 훑음) · scripts/lecpage.mjs qa에서 만든 사이트 하나(--dir)
+//   node scripts/motion-check.mjs --effects [--fx a,b] [--rm]   효과 견본 하나씩(58가지)
 //   node scripts/motion-check.mjs [--presets a,b] [--ex sel-story,data-lab,body-all] [--widths 1440,390] [--themes light,dark]
 //        [--motion d,1,2,3] [--rm] [--device auto|fast|slow] [--layouts 0,1,2,3,4,5] [--dir 만든 사이트 폴더] [--shots 폴더] [--out 결과.json] [--conc 4] [--root 견줄 엔진 폴더]
 import { createRequire } from 'node:module';
@@ -108,6 +110,13 @@ function heroComplete() {
   return { ok: !bad.length, bad };
 }
 
+/** CSS 애니메이션(타임라인이 시간인 것)의 대상 값이 0.7초 사이 바뀌는지: 부드러운 빛 번짐처럼 화소 차이로는 잘 안 잡히는 흐름용 */
+export async function cssMoving(page, within = '') {
+  const read = () => page.evaluate((sel) => document.getAnimations().filter((a) => a.playState === 'running' && a.timeline === document.timeline && a.effect && a.effect.target && (!sel || a.effect.target.closest(sel))).map((a) => { const c = getComputedStyle(a.effect.target); return c.transform + c.opacity + c.backgroundPosition; }), within);
+  const a = await read(); await page.waitForTimeout(700); const b = await read();
+  return a.filter((x, i) => b[i] !== undefined && b[i] !== x).length;
+}
+
 export const LOOP_FX = new Set(['arc-ripple', 'aurora', 'blobs-morph', 'bokeh', 'border-beam', 'dot-grid', 'gradient-text', 'marquee', 'mesh-gradient', 'noise-orb', 'orbit-3d', 'particles-network', 'perspective-grid', 'shader-gradient', 'starfield', 'stream-lines', 'three-hero', 'topo-lines', 'waves', 'word-rotate']);
 
 /**
@@ -137,9 +146,10 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
   const heroLoops = res.fx.filter((f) => f.hero && LOOP_FX.has(f.id));
   // 끝없이 도는 그림은 별처럼 작은 점만 바뀌기도 해서 더 작은 변화도 '계속 움직임'으로 봄
   const late = diffs.slice(-2), early = diffs.slice(0, 3), lt = heroLoops.length ? 0.0004 : 0.0015;
-  const kind = late.every((d) => d > lt) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
+  let kind = late.every((d) => d > lt) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
   const state = await page.evaluate(() => (window.LecFX ? window.LecFX.state() : null));
   res.hero = { kind, diffs, loops: heroLoops.map((f) => `${f.id}:${f.st}`), state, motion: await page.evaluate(() => document.documentElement.getAttribute('data-motion')) };
+  if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop' && await cssMoving(page, '.lp-hero')) res.hero.kind = kind = 'loop'; // 화소로는 안 잡히는 부드러운 흐름(오로라 등)
   if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop') add('hero-still', `${heroLoops.map((f) => f.id).join(',')} 켜졌는데 ${kind}(${diffs.join(' ')})`);
   if (!rm && +res.hero.motion >= 1 && kind === 'still') add('hero-no-motion', `움직임 ${res.hero.motion}단계인데 첫 화면이 처음부터 그대로`);
   for (const f of res.fx) {
@@ -158,7 +168,8 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
     if (lastSample) { const m = new Map(lastSample.map((x) => [x.k, x.v])); for (const x of s) if (m.has(x.k)) { scrollSeen++; if (m.get(x.k) !== x.v) scrollMoves++; } }
     lastSample = s;
     await page.waitForTimeout(settle);
-    const v = await page.evaluate(viewCheck);
+    let v = await page.evaluate(viewCheck);
+    if (v.dim.length) { await page.waitForTimeout(1000); v = await page.evaluate(viewCheck); } // 차례로 들어오는 중이면 조금 더 기다려 봄
     for (const d of v.dim) dims.add(d); for (const o of v.offArt) offs.add(o);
   }
   await page.evaluate(() => scrollTo(0, 0));
@@ -173,9 +184,55 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
 }
 
 // ── 단독 실행: 프리셋 × 예시를 빌드해 훑음 ──
+/**
+ * 효과 하나씩(--effects): 효과 견본(runtime/fx/demo.html?fx=<id>&embed=1, 앱 갤러리의 작은 미리보기와 같은 장면)을 띄워
+ * 시간에 따라 바뀌는지 잼. 견본은 스크롤·포인터를 흉내 내므로 손대지 않아도 움직여야 함. 동작 줄이기면 완성된 모습 그대로여야 함
+ */
+async function effects(chromium, { rm, shots, ids }) {
+  const FXDIR = join(ROOT, 'engine/runtime/fx');
+  const { FX } = await import(pathToFileURL(join(ROOT, 'engine/src/design/fx-catalog.js')).href);
+  const list = FX.filter((f) => !ids || ids.includes(f.id));
+  const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+  const srv = createServer(async (q, r) => { try { const p = join(FXDIR, decodeURIComponent(q.url.split('?')[0])); const b = await readFile(p); r.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } });
+  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
+  const browser = await chromium.launch();
+  const out = [];
+  for (const f of list) {
+    const ctx = await browser.newContext({ viewport: { width: 640, height: 400 }, deviceScaleFactor: 1, reducedMotion: rm ? 'reduce' : 'no-preference' });
+    const page = await ctx.newPage(), helper = await ctx.newPage(); await helper.goto('about:blank');
+    const errs = []; page.on('pageerror', (e) => errs.push(e.message.slice(0, 90)));
+    await page.goto(`http://127.0.0.1:${srv.address().port}/demo.html?fx=${f.id}&embed=1&theme=light`, { waitUntil: 'domcontentloaded' });
+    const cdp = await ctx.newCDPSession(page);
+    const imgs = []; const t0 = Date.now();
+    for (const at of [300, 900, 1700, 2700, 4000, 5500]) { const wt = at - (Date.now() - t0); if (wt > 0) await page.waitForTimeout(wt); const b = Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'); imgs.push(b); if (shots) { mkdirSync(shots, { recursive: true }); writeFileSync(join(shots, `fx-${f.id}${rm ? '-rm' : ''}-t${String(at).padStart(4, '0')}.png`), b); } }
+    const d = []; for (let i = 1; i < imgs.length; i++) d.push(+(await helper.evaluate(diffInPage, [imgs[i - 1].toString('base64'), imgs[i].toString('base64')])).toFixed(4));
+    const st = await page.evaluate(() => [...document.querySelectorAll('[data-fx]')].map((e) => Object.entries(e.__lecfx || {}).map(([k, v]) => k + ':' + (v.skipped ? 'skip' : v.dead ? (e.getAttribute('data-fx-error') ? 'fail' : 'stop') : 'on')).join(',')).filter(Boolean).join(' '));
+    const soft = await cssMoving(page); // 화소로는 안 잡히는 부드러운 흐름
+    const moved = d.some((x) => x > 0.0015) || soft > 0, keeps = d.slice(-2).every((x) => x > 0.0004) || soft > 0;
+    const libs = (f.libs || []).length > 0;
+    // 동작 줄이기: 처음 한 장(글꼴·그림이 자리 잡는 때) 뒤로 계속 바뀌면 문제
+    const later = d.slice(2).some((x) => x > 0.0015);
+    let verdict = rm ? (later && f.level > 0 ? '동작 줄이기인데 움직임' : '정상') : moved ? (f.loop && !keeps ? '도는 효과인데 멈춤' : '정상') : libs ? '바깥 라이브러리 막힘(정지 그림)' : '안 움직임';
+    if (/fail/.test(st) || errs.length) verdict = '오류';
+    out.push({ id: f.id, level: f.level, loop: !!f.loop, group: f.group, diffs: d, st, errs, verdict });
+    console.log(`${verdict.padEnd(10)} ${f.id.padEnd(18)} 단계${f.level}${f.loop ? ' 도는' : '    '} [${d.join(' ')}] ${st}${errs.length ? ' ' + errs.join(' / ') : ''}`);
+    await ctx.close();
+  }
+  await browser.close(); srv.close();
+  return out;
+}
+
 async function main() {
   const chromium = await loadChromium();
   if (!chromium) { console.error('Playwright가 없어 건너뜁니다.'); return; }
+  if (has('effects')) {
+    const r = await effects(chromium, { rm: has('rm'), shots: arg('shots', '') ? resolve(arg('shots')) : '', ids: arg('fx', '') ? arg('fx').split(',') : null });
+    if (arg('out', '')) writeFileSync(arg('out'), JSON.stringify(r, null, 1));
+    const bad = r.filter((x) => x.verdict !== '정상' && !/라이브러리/.test(x.verdict));
+    console.log(`효과 ${r.length}개 중 문제 ${bad.length}개`);
+    process.exitCode = bad.length ? 1 : 0;
+    return;
+  }
   const ER = resolve(arg('root', ROOT)); // 다른 판의 엔진으로 견줄 때(고치기 전 판을 풀어 둔 폴더)
   const E = await import(pathToFileURL(join(ER, 'engine/src/index.js')).href);
   const { nodeRuntime } = await import(pathToFileURL(join(ER, 'engine/node.js')).href);
@@ -197,7 +254,8 @@ async function main() {
     const bp = JSON.parse(readFileSync(exOf(ex), 'utf8'));
     if (k !== null) { let any = false; for (const s of bp.sections) { const t = s.type === 'followup' ? 'materials' : s.type, ids = E.variantIds(t); if (ids[k] && s.type !== 'stations') { s.layout = ids[k]; any = true; } } if (!any) continue; }
     bp.design = { preset: id, theme, ...(mo === 'd' ? {} : { motion: +mo }) };
-    if (mo !== 'd') bp.audience = { ...(bp.audience || {}), devices: ['laptop'] };
+    // 단계를 정해 잴 때는 그 단계가 실제로 걸리게: 휴대폰 대상(3→2)·교육청 직무연수(→1) 상한을 풂
+    if (mo !== 'd') { bp.audience = { ...(bp.audience || {}), devices: ['laptop'] }; if (bp.meta?.admin?.kind === 'official') bp.meta.admin = { ...bp.meta.admin, kind: 'school' }; }
     const r = E.build(bp, { runtime: nodeRuntime() });
     if (r.errors?.length) { console.log('빌드 오류', id, ex); continue; }
     const key = `${id}__${ex}${k === null ? '' : '-L' + k}__${theme}__m${mo}`;

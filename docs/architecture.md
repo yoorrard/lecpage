@@ -139,7 +139,8 @@ LecFX.define('split-reveal', {
   init(el, opts, ctx) {              // 요소 하나에 적용. 정리 함수를 돌려줄 수 있음
     // ctx.reduced      동작 줄이기(true면 최종 상태만 보여 주고 끝)
     // ctx.level        사이트 최대 강도(0~3). 효과 level이 더 크면 core가 init을 부르지 않음
-    // ctx.lowPower     저사양 추정(코어 수·메모리·절약 모드)
+    // ctx.lowPower     저사양(코어·메모리 2 이하·절약 모드, 또는 프레임이 계속 밀림) · ctx.modest 보통 기기(코어·메모리 4 이하)
+    // ctx.fonts(cb)   웹 글꼴이 오면(최대 1초) 부름
     // ctx.load(url)    스크립트 지연 로드(Promise). 실패해도 reject 대신 false
     // ctx.visible(el, cb, {once, threshold})  화면에 들어올 때
     // ctx.token(name)  CSS 변수 값 읽기
