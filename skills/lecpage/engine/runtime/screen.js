@@ -32,19 +32,43 @@
     root.setAttribute('data-theme', dark ? 'light' : 'dark'); try { localStorage.setItem('lp-theme', dark ? 'light' : 'dark'); } catch (e) { }
   });
   // 전체 화면
-  var fs = $('[data-fullscreen]');
+  var scr = $('[data-screen]'), fs = $('[data-fullscreen]');
+  function goFull() { return doc.documentElement.requestFullscreen().catch(function () { toast('전체 화면을 열지 못했어요. 브라우저의 F11을 눌러 주세요.'); }); }
   if (fs) {
     if (!doc.documentElement.requestFullscreen) fs.hidden = true;
     else {
-      fs.addEventListener('click', function () { if (doc.fullscreenElement) doc.exitFullscreen(); else doc.documentElement.requestFullscreen().catch(function () { toast('전체 화면을 열지 못했어요. 브라우저의 F11을 눌러 주세요.'); }); });
-      doc.addEventListener('fullscreenchange', function () { var on = !!doc.fullscreenElement; fs.setAttribute('aria-pressed', String(on)); var s = fs.querySelector('span'); if (s) s.textContent = on ? '전체 화면 끝' : '전체 화면'; });
+      fs.addEventListener('click', function () { if (doc.fullscreenElement) doc.exitFullscreen(); else goFull(); });
+      doc.addEventListener('fullscreenchange', function () {
+        var on = !!doc.fullscreenElement; fs.setAttribute('aria-pressed', String(on)); var s = fs.querySelector('span'); if (s) s.textContent = on ? '전체 화면 끝' : '전체 화면';
+        if (scr) { if (on) scr.setAttribute('data-full', ''); else scr.removeAttribute('data-full'); } idle();
+      });
     }
+  }
+  // 전체 화면에서는 위 버튼을 숨겼다가 마우스를 움직이거나 키보드로 오면 다시 보임(프로젝터에는 내용만)
+  var idleT = 0;
+  function idle() {
+    if (!scr) return; clearTimeout(idleT); scr.removeAttribute('data-idle');
+    if (scr.hasAttribute('data-full')) idleT = setTimeout(function () { scr.setAttribute('data-idle', ''); }, 2500);
+  }
+  ['mousemove', 'pointerdown', 'keydown'].forEach(function (t) { doc.addEventListener(t, idle, { passive: true }); });
+  // 강사 화면의 [발표 화면 띄우기]로 연 쪽
+  // - 프로젝터(Presentation API)로 띄웠으면 받는 쪽: 이미 전체 화면이고 누를 사람이 없어 버튼을 모두 숨김
+  // - 새 창으로 열었으면: 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르라는 안내 한 번
+  var RECEIVER = !!(navigator.presentation && navigator.presentation.receiver);
+  if (RECEIVER && scr) scr.setAttribute('data-receiver', '');
+  var fsDlg = $('[data-fs-dialog]');
+  if (fsDlg) {
+    var fsGo = $('[data-fs-go]', fsDlg);
+    if (!doc.documentElement.requestFullscreen) fsGo.hidden = true;
+    fsGo.addEventListener('click', function () { fsDlg.close(); goFull(); });
+    if (!RECEIVER && window.name === 'lp-screen' && !doc.fullscreenElement && doc.documentElement.requestFullscreen && fsDlg.showModal) fsDlg.showModal();
   }
 
   // ── 참여 QR·주소(파일로 열었거나 미리보기면 안내 문구, 암호 보호면 #k=는 QR에만) ──
   // 손으로 칠 주소는 강사가 넣은 짧은 주소가 있으면 그것을 크게, 원래 주소는 그 아래 작게. QR은 언제나 원래 주소(짧은 주소 서비스가 멈춰도 열림).
   var LOCAL = /^(file|about|blob|data):$/.test(location.protocol);
-  var siteUrl = DATA.siteUrl || (LOCAL ? '' : location.href.split('#')[0].split('?')[0].replace(/screen\.html.*$/, ''));
+  // /screen.html이든 /screen(확장자 없는 주소)이든 그 폴더(= 참가자 화면)를 가리킴
+  var siteUrl = DATA.siteUrl || (LOCAL ? '' : location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, ''));
   var joinUrl = siteUrl || (LOCAL ? DATA.shortUrl || '' : '');
   var ul = $('meta[name="lp-unlock"]'), qrUrl = siteUrl ? siteUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
   function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
@@ -61,7 +85,7 @@
   [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
   // QR 크게 보기: 뒷자리에서도 찍히게 화면 가득(QR 한 변은 찍는 거리의 1/10쯤이 필요)
   var zoom = $('[data-join-zoom]'), big = $('[data-joinbig]'), jo = $('[data-join-open]');
-  function openBig() { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; big.showModal(); }
+  function openBig() { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; if (!big.open) big.showModal(); }
   if (zoom && big) {
     if (!qrMarkup || !big.showModal) { zoom.disabled = true; var zt = $('.lp-qr-zoom-t', zoom); if (zt) zt.hidden = true; if (jo) jo.hidden = true; }
     else {
@@ -309,8 +333,21 @@
     };
     tk(); tiv = setInterval(tk, 500);
   }
+  // 강사 화면의 [참여 QR 크게]: 상태(ui.qrBig)를 따라 QR을 화면 가득 열고 닫음. 이 화면에서 닫으면(관리자 키가 있을 때) 상태도 끔
+  var bigByState = false;
+  function syncBig() {
+    if (!big || !qrMarkup || !big.showModal) return;
+    var want = (state.ui || {}).qrBig === true;
+    if (want && !big.open) { openBig(); bigByState = true; }
+    else if (!want && big.open && bigByState) { bigByState = false; big.close(); }
+  }
+  if (big) big.addEventListener('close', function () {
+    if (bigByState && (state.ui || {}).qrBig === true && canWrite) conn.setState({ ui: { qrBig: null } }).catch(function () { });
+    bigByState = false;
+  });
   draw = function () {
     draw.last = true;
+    syncBig();
     var n = $('[data-notice]'); if (state.notice && state.notice.text) { n.hidden = false; n.textContent = state.notice.text; } else n.hidden = true;
     drawTimer(); drawSignal(); fitRail();
     var p = openPoll();

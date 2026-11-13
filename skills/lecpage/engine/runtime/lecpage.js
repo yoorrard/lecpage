@@ -66,7 +66,8 @@
   function siteUrl() {
     if (DATA.siteUrl) return DATA.siteUrl;
     if (LOCAL_PAGE) return '';
-    return location.href.split('#')[0].replace(/(check|console|screen|privacy|poster)\.html$/, '');
+    // 보조 화면이면 그 폴더(= 참가자 화면). /poster.html이든 /poster(확장자 없는 주소)든 같음
+    return location.href.split('#')[0].split('?')[0].replace(/(check|console|screen|privacy|poster)(\.html)?$/, '');
   }
   // 보여 줄 주소: 원래 주소를 모르면(파일로 연 안내문) 강사가 넣은 짧은 주소라도 글자로 보여 줌. QR·복사에는 쓰지 않음
   function pageUrl() { return siteUrl() || (LOCAL_PAGE ? DATA.shortUrl || '' : ''); }
@@ -1064,12 +1065,6 @@
   /* ── 인쇄용 QR 안내문 ─────────────────── */
   function initPoster() {
     var pb = $('[data-print]'); if (pb) pb.addEventListener('click', function () { window.print(); });
-    var cb = $('[data-card-print]');
-    if (cb) {
-      cb.checked = store.get('card-print', true) !== false;
-      var upd = function () { doc.body.classList.toggle('lp-card-off', !cb.checked); };
-      upd(); cb.addEventListener('change', function () { store.set('card-print', cb.checked); upd(); });
-    }
     // 자리 카드 8장(잘라 쓰기): 고를 때만 인쇄·미리보기에 나옴
     var cc = $('input[data-part-print="cards"]');
     if (cc) {
