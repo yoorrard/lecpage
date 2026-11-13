@@ -124,4 +124,40 @@ export function tallySvg(num, unit) {
   return '';
 }
 
+/** 과녁: 목표 n개 = 고리 n개(바깥이 1번). 고리마다 번호 딱지(오른쪽 위 비스듬히 줄지어), 가운데는 채운 점 */
+export function targetSvg(n) {
+  const rs = Array.from({ length: n }, (_, i) => R(176 - (i * 132) / Math.max(1, n - 1 || 1)));
+  const a = -Math.PI / 4, tags = rs.map((r, i) => { const x = R(200 + Math.cos(a) * r), y = R(200 + Math.sin(a) * r); return `<g class="lp-tg-tag" data-node style="--i:${i}"><circle cx="${x}" cy="${y}" r="17"/><text x="${x}" y="${R(y + 6)}" text-anchor="middle">${i + 1}</text></g>`; }).join('');
+  return `<svg class="lp-tg-svg" viewBox="0 0 400 400" aria-hidden="true" focusable="false">${rs.map((r, i) => `<circle class="lp-tg-ring" data-seg style="--i:${i}" cx="200" cy="200" r="${r}"/>`).join('')}<circle class="lp-tg-eye" cx="200" cy="200" r="${R(Math.max(18, rs[n - 1] * 0.42))}"/>${tags}</svg>`;
+}
+
+/** 모둠 원탁: 가운데 둥근 탁자, 둘레에 질문 수만큼 의자(자리 번호는 옆 목록의 Q 번호와 같음, 번호 글은 HTML이 얹음) */
+export function roundSvg(n) {
+  const chairs = Array.from({ length: n }, (_, i) => { const a = (i / n) * 360 - 90; return `<g class="lp-rt-chair" data-seg style="--i:${i}" transform="rotate(${R(a + 90)} 200 200)"><rect x="176" y="22" width="48" height="30" rx="10"/></g>`; }).join('');
+  return `<svg class="lp-rt-svg" viewBox="0 0 400 400" aria-hidden="true" focusable="false"><circle class="lp-rt-table" cx="200" cy="200" r="118"/><circle class="lp-rt-rim" cx="200" cy="200" r="98"/>${chairs}</svg>`;
+}
+
+/**
+ * 담당별 갈래 도식의 이어받는 선: 단계 n의 칸 가운데에서 다음 단계 칸 가운데로 꺾인 선. 칸 한 개 = 100단위(줄 높이가 같은 격자라 칸과 맞음).
+ * 선은 카드 밑에 깔려 카드 사이 틈에서만 보임. 두께는 화면에서 그대로(non-scaling-stroke)
+ */
+export function lanesSvg(pos, lanes) {
+  const n = pos.length, P = (c, r) => [c * 100 + 50, r * 100 + 50];
+  const segs = pos.slice(1).map((p, k) => { const [x1, y1] = P(pos[k].c, pos[k].r), [x2, y2] = P(p.c, p.r), ym = y1 + 50; return `<path data-seg d="M${x1} ${y1}V${ym}H${x2}V${y2}"/>`; }).join('');
+  return `<svg class="lp-pl-svg" viewBox="0 0 ${lanes * 100} ${n * 100}" preserveAspectRatio="none" aria-hidden="true" focusable="false">${segs}</svg>`;
+}
+
+/** 도넛(부분이 전체를 나눔): 값 %의 조각. 조각 사이에 바탕색 틈. c0~c5는 CSS가 토큰으로 칠함 */
+export function donutSvg(vals) {
+  const tot = vals.reduce((a, b) => a + b, 0) || 1; let acc = 0;
+  const segs = vals.map((v, i) => { const p = (v / tot) * 100, len = Math.max(0, p - (vals.length > 1 ? 0.8 : 0)); const o = `<circle class="lp-donut-s c${i % 6}" data-seg cx="21" cy="21" r="15.9155" pathLength="100" stroke-dasharray="${R(len)} ${R(100 - len)}" stroke-dashoffset="${R(25 - acc)}"/>`; acc += p; return o; }).join('');
+  return `<svg class="lp-donut" viewBox="0 0 42 42" aria-hidden="true" focusable="false"><circle class="lp-donut-t" cx="21" cy="21" r="15.9155"/>${segs}</svg>`;
+}
+
+/** 막대 하나: 길이 = 값 ÷ 가장 큰 값(0부터 시작하는 축). 폭은 CSS가, 길이는 % 너비라 늘어나도 비율 그대로 */
+export function barSvg(v, max, cls = 'c0') {
+  const w = max > 0 ? Math.max(v > 0 ? 0.6 : 0, (v / max) * 100) : 0;
+  return `<svg class="lp-bar ${cls}" aria-hidden="true" focusable="false"><rect class="lp-bar-t" width="100%" height="100%" rx="3"/><rect class="lp-bar-v" width="${R(w)}%" height="100%" rx="3"/></svg>`;
+}
+
 export { hashStr, seeded };

@@ -67,13 +67,32 @@ const MARK = {
   'faq.twocol': /<dl class="lp-fq2">/, 'faq.index': /<div class="lp-fqi" data-spy><nav class="lp-fqi-nav"/,
   'glossary.cards': /<dl class="lp-gcards"/, 'glossary.dict': /<dl class="lp-dict">/, 'glossary.web': /<div class="lp-gw" data-diagram data-linked[\s\S]*?<span class="lp-gw-n" data-node/,
   'closing.poster': /data-variant="poster"[\s\S]*?<div class="lp-poster-art" aria-hidden="true"><svg class="lp-motif/, 'closing.card': /<div class="lp-closing-card">/,
+  // 몰림을 푼 두 번째 그림 배치 · 수치 도표
+  'message.split': /<div class="lp-msplit"><div class="lp-msplit-art" aria-hidden="true"><svg class="lp-motif/,
+  'procedure.lanes': /<div class="lp-pl" data-diagram data-linked style="--lanes:3;--n:4"><ol class="lp-pl-heads" aria-hidden="true"><li class="c0" style="--c:1">발견한 교사<\/li>[\s\S]*?<svg class="lp-pl-svg"[\s\S]*?<li class="c2" style="--c:3;--r:4">/,
+  'discuss.round': /<div class="lp-rt" data-diagram data-linked style="--n:3"><div class="lp-rt-art" aria-hidden="true"><svg class="lp-rt-svg"[\s\S]*?<span class="lp-rt-c"><b>3<\/b>가지 질문<\/span>/,
+  'instructor.career': /<ol class="lp-cr-line" style="--n:3;--cols:3"><li style="--i:0"><span class="lp-cr-dot" aria-hidden="true"><\/span><b class="lp-cr-y">2009~2021<\/b>[\s\S]*?<li class="is-now"/,
+  'goals.target': /<div class="lp-tg" data-diagram data-linked style="--n:3"><div class="lp-tg-art" aria-hidden="true"><svg class="lp-tg-svg"/,
+  'closing.recap': /<div class="lp-recap"><p class="lp-recap-k">오늘 지나온 길<\/p><ol class="lp-recap-path"/,
+  'speakers.axis': /<ol class="lp-sax" data-diagram><li style="--gap:0"><time class="lp-sax-t">14:00<\/time>[\s\S]*?<li style="--gap:20">/,
+  'table.chart': /<div class="lp-chart lp-chart--bars[\s\S]*?<details class="lp-chart-tbl" data-print-open><summary>표로 보기<\/summary>/,
+  'glance.bars': /<div class="lp-chart lp-chart--bars" role="list"[\s\S]*?<b class="lp-chart-v">173건<\/b>/,
 };
+/** 수치 도표를 시험할 칸(모든 본문 칸 설계도에는 숫자 표·같은 단위의 한눈에 칸이 없어 이 시험에만 덧붙임) */
+const NUMERIC = [
+  { id: 'tnum', type: 'table', title: '학교급별 참여 학교', head: ['학교급', '2025', '2026'], rows: [['초등학교', '48곳', '62곳'], ['중학교', '21곳', '30곳'], ['고등학교', '12곳', '19곳']] },
+  { id: 'gnum', type: 'glance', title: '해마다 늘어난 신고', items: [{ value: '128건', label: '2024년' }, { value: '173건', label: '2025년' }, { value: '210건', label: '2026년' }] },
+];
 describe('배치 변형 하나하나', () => {
   test('설계도 layout으로 고르면 그 구조가 그려지고(내용 그대로), 그림은 꾸밈(aria-hidden)', () => {
     const base = load('body-all');
-    for (let k = 1; k < 5; k++) {
+    const seen = new Set();
+    for (let k = 1; k < 6; k++) {
       const bp = JSON.parse(JSON.stringify(base)); bp.design = { preset: 'corporate-clean' };
-      for (const s of bp.sections) { const t = s.type === 'followup' ? 'materials' : s.type; const ids = E.variantIds(t); if (ids[k]) s.layout = ids[k]; }
+      bp.sections.splice(bp.sections.findIndex((s) => s.type === 'cases'), 0, ...JSON.parse(JSON.stringify(NUMERIC)));
+      const site = { sections: bp.sections, instructors: bp.instructors };
+      // 내용이 그 배치에 맞을 때만 고름(숫자가 없는 표에 도표를 강제하지 않음 — 그런 칸은 기본 배치로 그려짐, 아래 시험)
+      for (const s of bp.sections) { const t = s.type === 'followup' ? 'materials' : s.type; const ids = E.variantIds(t); if (NUMERIC.some((x) => x.id === s.id) && !['chart', 'bars'].includes(ids[k])) continue; if (ids[k] && E.variantOf({ ...s, layout: ids[k] }, 'corporate-clean', site).variant === ids[k]) { s.layout = ids[k]; seen.add(`${t}.${ids[k]}`); } }
       const r = build(bp), html = r.files['index.html'];
       assert.deepEqual(r.errors || [], []);
       for (const s of bp.sections) {
@@ -86,12 +105,14 @@ describe('배치 변형 하나하나', () => {
         const first = s.items?.[0]; const word = typeof first === 'string' ? first : first?.title || first?.term || first?.q || first?.word || first?.name || first?.label;
         if (word && s.type !== 'glance') assert.ok(h.includes(word), `${key}: 첫 항목 "${word}"`);
         // 꾸밈 그림은 화면 낭독기에서 빠짐
-        for (const svg of h.match(/<svg class="lp-(?:motif|jr-road|wh-ring|tl-svg|gw-svg)[^>]*>/g) || []) assert.match(svg, /aria-hidden="true"/, key);
+        for (const svg of h.match(/<svg class="lp-(?:motif|jr-road|wh-ring|tl-svg|gw-svg|pl-svg|rt-svg|tg-svg|donut|bar)\b[^>]*>/g) || []) assert.match(svg, /aria-hidden="true"/, key);
       }
-      // 이 사이트에 쓰인 배치의 CSS만 붙음
+      // 이 사이트에 쓰인 배치의 CSS만 붙음(표지 하나에 배치 여럿을 적을 수 있음)
       const css = r.files['assets/lecpage.css'];
-      for (const v of E.usedVariants(validate(bp).blueprint.sections, 'corporate-clean')) if (!E.variantIds(v.split('.')[0])[0] || !v.endsWith('.' + E.variantIds(v.split('.')[0])[0])) assert.ok(css.includes(`/*@v:${v}*/`), `CSS ${v}`);
+      for (const v of E.usedVariants(validate(bp).blueprint.sections, 'corporate-clean', '', bp.instructors)) if (!E.variantIds(v.split('.')[0])[0] || !v.endsWith('.' + E.variantIds(v.split('.')[0])[0])) assert.match(css, new RegExp(`/\\*@v:[^*]*(?<![\\w.])${v.replace('.', '\\.')}(?![\\w.])[^*]*\\*/`), `CSS ${v}`);
     }
+    // 모든 배치가 한 번씩은 시험됨(기본 배치 빼고)
+    for (const t of Object.keys(E.BODY_VARIANTS)) for (const v of E.variantIds(t).slice(1)) if (MARK[`${t}.${v}`]) assert.ok(seen.has(`${t}.${v}`), `시험되지 않은 배치 ${t}.${v}`);
   });
   test('설계도 layout 값: 그 섹션 종류의 변형만 받고(자세 @c·@r·@l 포함), 실습의 layout은 그대로', () => {
     const { blueprint: b } = validate({ meta: { title: 't' }, sections: [{ type: 'goals', layout: 'journey@c', items: ['a', 'b'] }, { type: 'faq', layout: 'journey', items: [{ q: 'q', a: 'a' }] }, { type: 'stations', layout: 'tabs', items: [{ title: 'x', steps: ['y'] }] }] });
@@ -121,6 +142,72 @@ describe('배치 변형 하나하나', () => {
     assert.equal(E.variantOf(proc, rail, { sections: [proc], flow: 'procedure' }).variant, 'flow');
     const other = E.PRESET_IDS.find((id) => E.variantOf(proc, id).variant === 'cards');
     if (other) assert.equal(E.variantOf(proc, other, { sections: [proc], flow: 'procedure' }).variant, 'cards');
+  });
+});
+
+describe('몰림 풀기 · 수치 도표 · 빈 칸', () => {
+  test('한 배치를 27개 프리셋 중 10개 넘게 쓰지 않음(배치가 셋 넘는 종류), 그림 배치가 하나뿐인 칸이 없음', () => {
+    const use = {};
+    for (const [, spec] of Object.values(E.PRESET_BODY)) for (const w of spec.split(/\s+/)) { const [t, v] = w.split(':'); const k = `${t}.${v.split('@')[0]}`; use[k] = (use[k] || 0) + 1; }
+    for (const [k, c] of Object.entries(use)) { const n = E.variantIds(k.split('.')[0]).length; assert.ok(c <= (n >= 3 ? 10 : Math.ceil(E.PRESETS.length / n)), `${k} ${c}/${E.PRESETS.length}`); }
+    const graphic = (t) => E.variantIds(t).filter((v) => /^(figure|diagram)$/.test(E.BODY_VARIANTS[t][v].lead)).length;
+    for (const t of ['message', 'procedure', 'discuss', 'instructor', 'closing', 'goals']) assert.ok(graphic(t) >= 2, `${t}: 그림 배치 ${graphic(t)}`);
+  });
+  test('수치 도표는 교재 값이 "숫자 + 같은 단위"일 때만(지어내지 않음): 합이 100%면 도넛, 그 밖은 막대, 글이 섞인 표는 표 그대로', () => {
+    const { parseNum, tableChart, glanceSeries } = E;
+    assert.deepEqual(parseNum('1,234명'), { n: 1234, unit: '명', raw: '1,234명' });
+    assert.deepEqual(parseNum('**45%**'), { n: 45, unit: '%', raw: '45%' });
+    for (const x of ['약 30분 안', '3~5명', '2025년', '즉시', '', '10분 이내']) assert.equal(parseNum(x), null, x);
+    assert.equal(tableChart(['장소', '비율'], [['운동장', '41%'], ['교실', '27%'], ['복도', '19%'], ['그 밖', '13%']]).kind, 'donut');
+    assert.equal(tableChart(['장소', '비율'], [['운동장', '41%'], ['교실', '27%']]).kind, 'bars', '합이 100이 아니면 막대');
+    assert.deepEqual(tableChart(['학교급', '2025', '2026'], [['초', '48곳', '62곳'], ['중', '21곳', '30곳']]).cols, [1, 2]);
+    assert.equal(tableChart(['정도', '기준', '건수'], [['가벼움', '보건실 처치', '41건'], ['보통', '병원 진료', '12건']]), null, '글 칸이 섞인 표');
+    assert.equal(tableChart(['구분', '값'], [['가', '3시간'], ['나', '40분']]), null, '단위가 다름');
+    assert.equal(tableChart(['구분', '값'], [['가', '3']]), null, '한 줄');
+    assert.equal(glanceSeries([{ value: '150분' }, { value: '4' }, { value: '80%' }]), null, '섞인 단위');
+    assert.equal(glanceSeries([{ value: '4' }, { value: '3' }]), null, '단위가 없는 수(단계 수·사례 수는 견주지 않음)');
+    assert.ok(glanceSeries([{ value: '128건' }, { value: '173건' }]));
+    // 숫자 표는 프리셋이 기본(표)을 골랐으면 도표로, 숫자가 없으면 그대로
+    const num = { type: 'table', head: ['학교급', '수'], rows: [['초', '48곳'], ['중', '21곳']] }, txt = { type: 'table', head: ['정도', '조치'], rows: [['가벼움', '기록'], ['보통', '연락']] };
+    const plainPreset = E.PRESET_IDS.find((id) => E.variantOf(txt, id).variant === 'table');
+    assert.equal(E.variantOf(num, plainPreset).variant, 'chart');
+    // 도표: 값은 글로, 원래 표는 '표로 보기'(인쇄할 때 펼침)
+    const html = build({ meta: { title: 't' }, sections: [{ type: 'hero' }, { id: 'tn', type: 'table', layout: 'chart', title: '사고 장소', head: ['장소', '비율'], rows: [['운동장', '41%'], ['교실', '27%'], ['복도', '19%'], ['그 밖', '13%']] }] }).files['index.html'];
+    const h = sec(html, 'tn');
+    assert.match(h, /<svg class="lp-donut" viewBox="0 0 42 42" aria-hidden="true"/);
+    assert.match(h, /<ul class="lp-chart-leg" aria-label="사고 장소 \(단위 %\)"><li><i class="lp-sw c0" aria-hidden="true"><\/i><span>운동장<\/span><b class="lp-chart-v">41%<\/b>/);
+    assert.match(h, /<details class="lp-chart-tbl" data-print-open><summary>표로 보기<\/summary>[\s\S]*?<th[^>]*>비율<\/th>/);
+  });
+  test('새 그림 배치는 교재 값이 그 그림을 채울 때만', () => {
+    const v = (s, site) => E.variantOf(s, 'x', site).variant;
+    const steps = (who) => who.map((w, i) => ({ title: `s${i}`, who: w }));
+    assert.equal(v({ type: 'procedure', layout: 'lanes', items: steps(['담임', '보건', '담임']) }), 'lanes');
+    assert.equal(v({ type: 'procedure', layout: 'lanes', items: steps(['담임', '담임']) }), 'rail', '담당이 하나');
+    assert.equal(v({ type: 'procedure', layout: 'lanes', items: [{ title: 'a', who: '담임' }, { title: 'b' }] }), 'rail', '담당이 빈 단계');
+    assert.equal(v({ type: 'speakers', layout: 'axis', items: [{ name: 'a', time: '14:00' }, { name: 'b', time: '13:00' }] }), 'people', '시각이 거꾸로');
+    assert.equal(v({ type: 'instructor', layout: 'career' }, { sections: [], instructors: [{ name: 'a', timeline: [{ group: 'g', items: [{ text: 'x' }] }] }] }), 'profile', '이력 하나');
+    assert.equal(v({ type: 'closing', layout: 'recap' }, { sections: [{ type: 'outline', items: [{ title: 'a' }, { title: 'b' }] }] }), 'finale', '차례 둘');
+    assert.deepEqual(E.recapWords([{ type: 'stations', items: [{ name: '하나' }, { name: '둘' }, { name: '셋' }] }]), ['하나', '둘', '셋']);
+    assert.equal(v({ type: 'materials', layout: 'pile', items: [{ title: 'a' }] }), 'files', '한 장은 더미가 아님');
+  });
+  test('빈 설문 칸(주소·받을 문항 없음)은 참가자 화면·차례에서 빠지고, 강사 미리보기에서는 채울 곳으로', () => {
+    const bp = { meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'goals', items: ['a'] }, { id: 'sv', type: 'survey', nav: '설문', title: '만족도 조사' }] };
+    const out = build(bp).files['index.html'];
+    assert.ok(!out.includes('id="sv"') && !out.includes('href="#sv"'));
+    assert.doesNotMatch(out, /설문 주소가 아직 없어요/);
+    const pre = E.build(bp, { runtime: nodeRuntime(), preview: true }).files['index.html'];
+    assert.match(sec(pre, 'sv'), /<p class="lp-note lp-todo" data-todo>채울 곳: 설문 주소를 넣으면/);
+    assert.match(build({ ...bp, sections: [...bp.sections.slice(0, 2), { id: 'sv', type: 'survey', url: 'https://forms.gle/x' }] }).files['index.html'], /id="sv"/);
+  });
+  test('실습 프롬프트: 글이 다 보이는 높이로 시작(잘리지 않음), 막히면 도움말 상자', () => {
+    assert.equal(E.promptRows('짧은 글'), 2);
+    assert.equal(E.promptRows('가'.repeat(63)), 3);
+    assert.equal(E.promptRows('역할: 가\n조건: 나\n형식: 다'), 3);
+    const html = build({ meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'stations', items: [{ title: '실습', steps: ['a'], note: '막히면: 새로 고침', prompts: [{ text: '너는 초등학교 5학년 과학 교사야. 학습 목표를 학생이 이해할 말로 3개 써 줘. 각 목표는 한 문장으로 써 줘.' }] }] }] }).files['index.html'];
+    assert.match(html, /<textarea class="lp-prompt-text"[^>]*rows="3"/);
+    assert.match(html, /<div class="lp-st-help" role="note"><b>[\s\S]*?<span>도움말<\/span><\/b><p>막히면: 새로 고침<\/p><\/div>/);
+    assert.doesNotMatch(html, /<h4>프롬프트<\/h4>/, '하나뿐인 이름 없는 프롬프트는 머리를 두 번 쓰지 않음');
+    assert.match(nodeRuntime().read('lecpage.css'), /\.lp-prompt-text\{[^}]*field-sizing:content/);
   });
 });
 

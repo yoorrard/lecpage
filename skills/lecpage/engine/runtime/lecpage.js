@@ -305,6 +305,11 @@
      · 도식 잇기([data-linked]): 목록 줄을 가리키거나 초점이 오면 그림의 같은 번호([data-seg]·[data-node])가 켜짐
      · 질문 색인([data-spy]): 읽고 있는 답의 질문이 색인에서 켜짐 */
   function initBody() {
+    // 도표의 '표로 보기'는 인쇄할 때 펼쳐 둠(종이에서는 누를 수 없으므로)
+    if ($('details[data-print-open]')) {
+      window.addEventListener('beforeprint', function () { $$('details[data-print-open]:not([open])').forEach(function (d) { d.open = true; d.setAttribute('data-print-opened', ''); }); });
+      window.addEventListener('afterprint', function () { $$('details[data-print-opened]').forEach(function (d) { d.open = false; d.removeAttribute('data-print-opened'); }); });
+    }
     var rest = +(root.getAttribute('data-rest') || 0), sup = window.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
     if (rest >= 2 && sup && !RM && !root.classList.contains('lp-lowpower')) root.classList.add('lp-sdt');
     var smooth = RM ? 'auto' : 'smooth';

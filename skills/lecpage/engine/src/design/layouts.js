@@ -7,6 +7,8 @@
 //   자세(stance): 계획에서 '종류:변형@c'처럼 적으면 그 섹션만 가운데(@c)·오른쪽(@r)에 섬. 변형의 기본 자세는 [7]
 //   등장 방식(mode): 프리셋 계획이 그 섹션 종류의 방식을 따로 정하지 않았을 때 이 배치에 어울리는 방식(reveal-up의 mode)
 //   어울림(tags): 프리셋 분위기와 맞추는 낱말(calm formal playful editorial tech bold warm) — 프리셋 계획을 짤 때 참고(scripts/plan-body.mjs)
+import { tableChart, glanceSeries } from './numbers.js';
+
 const V = (ko, lead = 'text', frame = '', enter = '', enter2, use = '', stance = '', mode = '', tags = '') => ({ ko, lead, frame, enter, enter2: enter2 === undefined ? enter : enter2, use, stance, mode, tags: tags.split(' ').filter(Boolean) });
 const TOOL = (ko, use, tags = '') => V(ko, 'tool', '', '', undefined, use, '', '', tags);
 
@@ -17,15 +19,18 @@ export const BODY_VARIANTS = {
     journey: V('여정(길 위의 정류장)', 'diagram', 'full', '.lp-jr > li, .lp-goal-meta', '.lp-goal-meta', '목표에 순서가 있어 하나씩 거쳐 가는 길로 보일 때', '', 'clip', 'warm playful calm'),
     bento: V('체크 카드 벤토', 'text', '', '.lp-gb > li, .lp-goal-meta', undefined, '목표가 4~6개이고 서로 독립이라 카드로 나눠 볼 때', '', 'scale', 'playful tech'),
     columns: V('세로 단(큰 윤곽 숫자)', 'text', 'full', '.lp-gc > li, .lp-goal-meta', undefined, '목표가 2~4개라 옆으로 나란히 견줄 때', '', 'side', 'editorial formal bold'),
+    target: V('과녁(목표마다 한 고리)', 'diagram', 'full', '.lp-tg-list > li, .lp-goal-meta', undefined, '목표가 2~5개이고 한 과녁을 겨누는 여러 고리처럼 보일 때', '', 'scale', 'bold tech playful formal'),
   },
   glance: {
     figures: V('큰 숫자 줄', 'number', '', '.lp-glance-item', undefined, '숫자 서너 개를 크게(기본)', '', '', 'formal bold'),
     tally: V('그림 숫자(점·고리로 그린 수)', 'diagram', 'full', '.lp-tl-item', undefined, '분·시간·퍼센트·개수처럼 양이 눈에 보이면 좋을 때', '', 'scale', 'playful warm tech'),
     spec: V('점선 사양표', 'number', '', '.lp-spec > div', undefined, '항목이 다섯 넘거나 공식 문서처럼 차분해야 할 때', '', 'wipe', 'formal tech calm'),
+    bars: V('막대 견줌(같은 단위의 수치)', 'diagram', 'full', '.lp-chart-row', undefined, '같은 단위의 수치 2~8개를 견줄 때(교재 값만, 단위가 섞이면 큰 숫자 줄)', '', 'wipe', 'tech formal'),
   },
   message: {
     band: V('띠 문장', 'text', '', '', '', '문장을 화면 폭 띠에 크게(기본)', '', '', 'bold formal'),
     stage: V('가운데 무대(모티프 그림)', 'figure', '', '', '', '한 문장이 짧고, 컨셉 그림과 함께 보여 줄 때', 'c', '', 'warm playful editorial'),
+    split: V('그림 곁 문장(옆 판에 모티프)', 'figure', '', '', '', '문장이 두세 줄이고 컨셉 그림을 옆 판에 세워 둘 때', '', '', 'calm editorial tech formal'),
   },
   steps5: {
     steps: V('계단', 'text', '', '.lp-steps5 > li, .lp-close-line', '.lp-close-line', '단계가 차례로 올라가는 느낌일 때(기본)', '', '', 'calm formal'),
@@ -61,10 +66,12 @@ export const BODY_VARIANTS = {
     profile: V('이름과 이력표', 'text', '', '.lp-person-card, .lp-tl-group', undefined, '이력이 길 때(기본)', '', '', 'formal calm'),
     card: V('명함', 'text', 'full', '.lp-bc, .lp-bc-tl > div', undefined, '연락처·소속이 중심일 때', '', 'flip', 'formal tech'),
     portrait: V('큰 얼굴과 소개말', 'figure', 'full', '.lp-pt-body > *', undefined, '소개말이 있고 사진이나 이름을 크게 보일 때', '', 'side', 'editorial warm bold'),
+    career: V('이력 연표 그림(선 위의 활동)', 'diagram', 'full', '.lp-cr-id, .lp-cr-line > li', undefined, '이력이 둘 넘고(연도가 있으면 연도 차례로) 걸어온 길을 한 줄로 보일 때', '', 'wipe', 'formal tech calm'),
   },
   speakers: {
     people: V('얼굴 격자', 'text', '', '.lp-speakers > li', undefined, '연사가 여럿일 때(기본)', '', '', 'warm playful'),
     lineup: V('발표 순서 줄', 'text', '', '.lp-lineup > li', undefined, '발표 시간·순서가 중요할 때', '', 'wipe', 'formal tech'),
+    axis: V('발표 시간 축(사이 간격이 시간만큼)', 'diagram', 'full', '.lp-sax > li', undefined, '발표마다 시작 시각이 있고 발표 제목이 주인공일 때', '', 'side', 'tech calm editorial warm'),
   },
   sessions: {
     course: V('줄 목록', 'text', '', '.lp-sessions > li', undefined, '차시가 많을 때(기본)', '', '', 'formal calm'),
@@ -86,6 +93,7 @@ export const BODY_VARIANTS = {
     rail: V('번호 줄', 'text', '', '.lp-proc > li', undefined, '단계 설명이 길 때(기본)', '', '', 'formal calm'),
     flow: V('단계 흐름도', 'diagram', 'full', '.lp-pf > li', undefined, '단계 3~8개가 차례로 이어질 때', '', 'side', 'tech formal'),
     cards: V('번호 카드', 'text', 'full', '.lp-pc > li', undefined, '단계마다 담당·시간이 달라 나눠 볼 때', '', 'flip', 'playful bold'),
+    lanes: V('담당별 갈래 도식', 'diagram', 'full', '.lp-pl-steps > li', undefined, '단계마다 담당이 적혀 있고 담당이 2~4갈래일 때(누가 언제 이어받는지)', '', 'wipe', 'formal tech calm warm'),
   },
   cases: {
     rows: V('번호 줄', 'text', '', '.lp-case', undefined, '사례 본문이 길 때(기본)', '', '', 'formal calm'),
@@ -96,16 +104,19 @@ export const BODY_VARIANTS = {
     list: V('번호 질문', 'text', '', '.lp-discuss-q > li, .lp-discuss-rules', undefined, '질문이 많을 때(기본)', '', '', 'formal calm'),
     bigq: V('큰 물음표', 'figure', 'full', '.lp-bq2-list > li, .lp-discuss-rules', undefined, '질문이 1~4개이고 화면에 크게 띄울 때', 'c', 'scale', 'bold editorial'),
     bubbles: V('말풍선', 'text', 'full', '.lp-bub > li', undefined, '서로 주고받는 대화처럼 보이게 할 때', '', 'side', 'playful warm'),
+    round: V('모둠 원탁(자리마다 질문)', 'diagram', 'full', '.lp-rt-list > li, .lp-discuss-rules', undefined, '모둠으로 둘러앉아 질문 2~6개를 차례로 나눌 때', '', 'scale', 'warm calm playful'),
   },
   table: {
     table: V('표', 'text', '', '', '', '칸이 많은 표(기본)', '', '', 'formal'),
     rowcards: V('줄 카드', 'text', 'full', '.lp-rc > div', undefined, '줄마다 한 묶음으로 읽는 표(칸 2~5개)', '', 'scale', 'playful warm'),
     compare: V('비교 열', 'text', 'full', '.lp-cmp > div', undefined, '2~4가지를 같은 기준으로 견줄 때', '', 'side', 'tech formal editorial'),
+    chart: V('수치 도표(막대·도넛, 표로 보기 곁들임)', 'diagram', 'full', '.lp-chart-row, .lp-chart-leg > li', undefined, '교재 표에 숫자 칸이 있을 때만(합이 100%면 도넛, 아니면 막대). 숫자가 없으면 표', '', 'wipe', 'tech formal bold'),
   },
   closing: {
     finale: V('큰 문장', 'text', '', '', '', '마지막 문장을 크게(기본)', '', '', 'bold'),
     poster: V('그래픽 가득', 'figure', '', '', '', '컨셉 그림으로 끝을 맺을 때', '', '', 'playful tech bold warm'),
     card: V('서명 카드', 'text', '', '', '', '인사·서명을 편지처럼 건넬 때', 'c', '', 'warm calm formal editorial'),
+    recap: V('지나온 길(오늘의 차례를 한 줄로)', 'diagram', '', '', '', '차례·실습·핵심 단계가 셋 넘게 있어 마지막에 하루를 되짚을 때', '', '', 'calm formal tech warm'),
   },
   // 따라 하는 칸(조작이 중심): 쓰는 법은 같고 놓이는 구조만 다름(CSS만 바뀜)
   readiness: { checklist: TOOL('체크 줄', '기본', 'formal calm'), tiles: TOOL('체크 타일', '준비물이 2~6개일 때', 'playful warm'), steps: TOOL('가로 단계', '준비가 순서대로 이어질 때', 'tech editorial') },
@@ -136,33 +147,33 @@ export const motifFamily = (bp, presetId) => conceptMotif(bp?.concept?.motif) ||
 // 프리셋 → [모티프 가족, 본문 계획]. 계획은 scripts/plan-body.mjs가 짬(분위기에 맞는 변형 중에서, 어느 두 프리셋도 절반 넘게 같지 않게,
 // 프리셋마다 그래픽 주인공 본문 2개 이상·글만 있는 섹션 절반 이하·왼쪽 정렬이 아닌 섹션 2개 이상). test/body-layouts.test.mjs가 지킴
 export const PRESET_BODY = {
-  'night-story': ['stars', 'message:stage goals:journey@c steps5:flow outline:zigzag schedule:table deck:stage tools:rows poll:stage board:mosaic qa:wall faq:accordion materials:shelf instructor:portrait survey:sheet closing:poster@c readiness:tiles glossary:cards quiz:list reflection:notes glance:figures procedure:flow table:rowcards cases:notes discuss:list sessions:map speakers:people'],
-  'paper-workbook': ['grid', 'message:stage goals:journey@c steps5:wheel outline:filmstrip schedule:timeline deck:stage tools:tiles poll:split board:feed qa:wall faq:index materials:files instructor:profile survey:form closing:poster@c readiness:checklist glossary:web quiz:cards reflection:letter glance:tally procedure:rail table:table cases:rows discuss:bigq sessions:grid speakers:people'],
-  'glass-lab': ['dots', 'message:band@c goals:journey@c steps5:flow outline:filmstrip schedule:blocks deck:rail tools:tiles poll:split board:mosaic qa:thread faq:index materials:files instructor:portrait survey:cards closing:finale@c readiness:steps glossary:dict quiz:cards reflection:notes glance:figures procedure:flow table:compare cases:rows discuss:bigq sessions:map speakers:lineup'],
-  'playground': ['tiles', 'message:stage goals:columns@c steps5:flow outline:bento schedule:clock deck:stage tools:bento poll:stage board:wall qa:thread faq:accordion materials:files instructor:portrait survey:cards closing:poster@c readiness:tiles glossary:index quiz:list reflection:notes glance:spec procedure:flow table:compare cases:quote discuss:bigq sessions:grid speakers:lineup'],
-  'calm-forest': ['waves', 'message:stage goals:journey@c steps5:steps outline:zigzag schedule:track deck:viewer tools:bento poll:stage board:feed qa:wall faq:twocol materials:files instructor:portrait survey:sheet closing:card readiness:checklist glossary:web quiz:list reflection:notes glance:figures procedure:rail table:compare cases:quote discuss:bigq sessions:grid speakers:people'],
-  'official-brief': ['blocks', 'message:stage goals:bento@c steps5:flow outline:zigzag schedule:blocks deck:viewer tools:rows poll:panel board:feed qa:thread faq:index materials:files instructor:card survey:cards closing:poster@c readiness:tiles glossary:web quiz:list reflection:journal glance:figures procedure:flow table:compare cases:notes discuss:list sessions:grid speakers:lineup'],
-  'editorial-ink': ['glyph', 'message:stage goals:journey@c steps5:wheel outline:filmstrip schedule:clock deck:stage tools:bento poll:split board:mosaic qa:thread faq:accordion materials:pile instructor:portrait survey:form closing:card readiness:steps glossary:web quiz:list reflection:letter glance:figures procedure:flow table:table cases:notes discuss:list sessions:map speakers:lineup'],
-  'retro-pop': ['rings', 'message:band@c goals:manifesto steps5:wheel outline:zigzag schedule:blocks deck:stage tools:tiles poll:stage board:mosaic qa:split faq:twocol materials:files instructor:portrait survey:cards closing:poster@c readiness:tiles glossary:web quiz:cards reflection:letter glance:tally procedure:cards table:rowcards cases:notes discuss:bigq sessions:grid speakers:lineup'],
-  'chalkboard': ['waves', 'message:stage goals:journey@c steps5:wheel outline:zigzag schedule:clock deck:rail tools:tiles poll:panel board:wall qa:wall faq:twocol materials:files instructor:card survey:sheet closing:poster@c readiness:tiles glossary:dict quiz:cards reflection:journal glance:spec procedure:flow table:rowcards cases:quote discuss:bubbles sessions:map speakers:people'],
-  'blueprint-tech': ['grid', 'message:band@c goals:journey@c steps5:flow outline:filmstrip schedule:clock deck:stage tools:bento poll:panel board:feed qa:split faq:index materials:shelf instructor:portrait survey:sheet closing:poster@c readiness:steps glossary:cards quiz:big reflection:letter glance:spec procedure:flow table:table cases:rows discuss:list sessions:grid speakers:lineup'],
-  'riso-zine': ['dots', 'message:stage goals:columns@c steps5:wheel outline:zigzag schedule:blocks deck:stage tools:rows poll:split board:wall qa:wall faq:twocol materials:pile instructor:portrait survey:form closing:poster@c readiness:tiles glossary:dict quiz:cards reflection:notes glance:tally procedure:flow table:compare cases:notes discuss:bigq sessions:map speakers:people'],
-  'sunrise-warm': ['arcs', 'message:stage goals:ledger steps5:wheel outline:filmstrip schedule:blocks deck:rail tools:bento poll:panel board:wall qa:thread faq:index materials:files instructor:portrait survey:form closing:poster readiness:checklist glossary:cards quiz:big reflection:letter glance:tally procedure:flow table:table cases:quote discuss:bubbles sessions:map speakers:lineup'],
-  'keynote-dark': ['stars', 'message:band goals:journey steps5:flow outline:filmstrip schedule:track deck:rail tools:rows poll:stage board:wall qa:wall faq:index materials:pile instructor:card survey:cards closing:poster readiness:steps glossary:web quiz:list reflection:letter glance:spec procedure:flow table:rowcards cases:notes discuss:bigq sessions:map speakers:lineup'],
-  'corporate-clean': ['blocks', 'message:stage goals:journey@c steps5:flow outline:zigzag schedule:blocks deck:viewer tools:tiles poll:panel board:feed qa:split faq:accordion materials:pile instructor:profile survey:form closing:card readiness:checklist glossary:web quiz:cards reflection:journal glance:spec procedure:flow table:compare cases:rows discuss:bigq sessions:grid speakers:people'],
-  'soft-pastel': ['tiles', 'message:stage goals:journey steps5:flow outline:zigzag schedule:blocks deck:stage tools:bento poll:stage board:wall qa:thread faq:twocol materials:shelf instructor:card survey:form closing:finale readiness:tiles glossary:web quiz:big reflection:notes glance:tally procedure:flow table:table cases:quote discuss:list sessions:grid speakers:people'],
-  'kinetic-type': ['glyph', 'message:stage goals:manifesto steps5:flow outline:filmstrip schedule:clock deck:rail tools:tiles poll:stage board:mosaic qa:thread faq:twocol materials:shelf instructor:profile survey:form closing:poster@c readiness:steps glossary:cards quiz:big reflection:notes glance:tally procedure:flow table:compare cases:quote discuss:bigq sessions:map speakers:people'],
-  'warm-minimal': ['waves', 'message:stage goals:ledger@c steps5:flow outline:zigzag schedule:clock deck:rail tools:rows poll:stage board:feed qa:split faq:accordion materials:files instructor:portrait survey:form closing:finale@c readiness:checklist glossary:web quiz:list reflection:letter glance:spec procedure:rail table:table cases:rows discuss:bigq sessions:map speakers:people'],
-  'deck-collage': ['blocks', 'message:stage goals:bento@c steps5:wheel outline:zigzag schedule:blocks deck:rail tools:rows poll:panel board:mosaic qa:split faq:index materials:shelf instructor:portrait survey:sheet closing:card readiness:tiles glossary:web quiz:big reflection:notes glance:figures procedure:cards table:table cases:quote discuss:bigq sessions:map speakers:people'],
-  'time-dial': ['arcs', 'message:stage goals:journey@c steps5:tabs outline:bento schedule:track deck:rail tools:bento poll:stage board:mosaic qa:thread faq:index materials:shelf instructor:portrait survey:sheet closing:finale@c readiness:checklist glossary:web quiz:cards reflection:journal glance:tally procedure:flow table:compare cases:notes discuss:bigq sessions:map speakers:lineup'],
-  'knot-orbit': ['rings', 'message:stage goals:bento@c steps5:tabs outline:filmstrip schedule:track deck:viewer tools:tiles poll:split board:feed qa:split faq:accordion materials:files instructor:portrait survey:sheet closing:poster@c readiness:steps glossary:index quiz:cards reflection:journal glance:figures procedure:flow table:table cases:notes discuss:bigq sessions:map speakers:people'],
-  'stone-stream': ['waves', 'message:stage goals:journey@c steps5:wheel outline:filmstrip schedule:track deck:rail tools:bento poll:panel board:feed qa:thread faq:twocol materials:shelf instructor:card survey:cards closing:card readiness:checklist glossary:index quiz:list reflection:letter glance:figures procedure:flow table:rowcards cases:rows discuss:bigq sessions:map speakers:people'],
-  'ripple-center': ['rings', 'message:stage goals:manifesto steps5:wheel outline:toc schedule:clock deck:viewer tools:tiles poll:stage board:feed qa:wall faq:index materials:pile instructor:portrait survey:sheet closing:poster readiness:tiles glossary:web quiz:big reflection:letter glance:figures procedure:flow table:rowcards cases:quote discuss:bigq sessions:grid speakers:people'],
-  'minute-map': ['dots', 'message:stage goals:ledger@c steps5:flow outline:filmstrip schedule:track deck:stage tools:tiles poll:panel board:wall qa:split faq:twocol materials:files instructor:portrait survey:cards closing:card readiness:steps glossary:web quiz:cards reflection:notes glance:spec procedure:flow table:rowcards cases:rows discuss:bubbles sessions:grid speakers:lineup'],
-  'mosaic-split': ['tiles', 'message:stage goals:bento@c steps5:flow outline:zigzag schedule:track deck:rail tools:bento poll:split board:feed qa:wall faq:index materials:shelf instructor:portrait survey:form closing:poster@c readiness:tiles glossary:dict quiz:big reflection:journal glance:tally procedure:rail table:rowcards cases:rows discuss:bigq sessions:grid speakers:people'],
-  'cover-sheet': ['glyph', 'message:band@c goals:columns@c steps5:wheel outline:zigzag schedule:track deck:viewer tools:bento poll:split board:mosaic qa:thread faq:index materials:files instructor:portrait survey:sheet closing:poster@c readiness:checklist glossary:web quiz:big reflection:letter glance:figures procedure:flow table:rowcards cases:rows discuss:list sessions:map speakers:people'],
-  'vertical-type': ['glyph', 'message:stage goals:journey steps5:wheel outline:filmstrip schedule:blocks deck:viewer tools:rows poll:stage board:wall qa:split faq:twocol materials:shelf instructor:profile survey:cards closing:poster readiness:checklist glossary:dict quiz:big reflection:letter glance:spec procedure:rail table:rowcards cases:quote discuss:bigq sessions:grid speakers:lineup'],
-  'swiss-offset': ['blocks', 'message:band@c goals:ledger@r steps5:wheel outline:zigzag schedule:clock deck:viewer tools:rows poll:panel board:mosaic qa:wall faq:accordion materials:shelf instructor:profile survey:form closing:poster@c readiness:checklist glossary:web quiz:list reflection:journal glance:figures procedure:flow table:compare cases:rows discuss:bigq sessions:grid speakers:lineup'],
+  'night-story': ['stars', 'message:band@c goals:manifesto steps5:flow outline:filmstrip schedule:clock deck:viewer tools:bento poll:stage board:mosaic qa:wall faq:twocol materials:shelf instructor:portrait survey:sheet closing:poster@c readiness:tiles glossary:web quiz:big reflection:letter glance:tally procedure:lanes table:compare cases:notes discuss:bubbles sessions:course speakers:axis'],
+  'paper-workbook': ['grid', 'message:split@c goals:journey@c steps5:flow outline:zigzag schedule:blocks deck:viewer tools:rows poll:stage board:feed qa:thread faq:index materials:files instructor:profile survey:cards closing:card readiness:checklist glossary:dict quiz:list reflection:letter glance:bars procedure:lanes table:compare cases:rows discuss:list sessions:grid speakers:axis'],
+  'glass-lab': ['dots', 'message:split@c goals:target@c steps5:flow outline:bento schedule:blocks deck:viewer tools:tiles poll:split board:mosaic qa:thread faq:twocol materials:files instructor:card survey:form closing:recap@c readiness:steps glossary:index quiz:cards reflection:letter glance:spec procedure:rail table:compare cases:notes discuss:bigq sessions:grid speakers:axis'],
+  'playground': ['tiles', 'message:stage goals:journey@c steps5:tabs outline:filmstrip schedule:blocks deck:stage tools:bento poll:stage board:wall qa:wall faq:accordion materials:shelf instructor:portrait survey:cards closing:poster@c readiness:tiles glossary:index quiz:cards reflection:journal glance:tally procedure:cards table:rowcards cases:notes discuss:bigq sessions:map speakers:people'],
+  'calm-forest': ['waves', 'message:stage goals:journey@c steps5:wheel outline:zigzag schedule:blocks deck:viewer tools:rows poll:split board:feed qa:split faq:accordion materials:pile instructor:profile survey:form closing:recap@c readiness:tiles glossary:cards quiz:big reflection:letter glance:tally procedure:lanes table:rowcards cases:rows discuss:round sessions:course speakers:axis'],
+  'official-brief': ['blocks', 'message:split@c goals:ledger@c steps5:steps outline:filmstrip schedule:clock deck:viewer tools:tiles poll:panel board:feed qa:thread faq:accordion materials:files instructor:career survey:sheet closing:recap@c readiness:checklist glossary:cards quiz:big reflection:journal glance:spec procedure:flow table:compare cases:rows discuss:round sessions:map speakers:lineup'],
+  'editorial-ink': ['glyph', 'message:band@c goals:target@c steps5:flow outline:toc schedule:track deck:viewer tools:rows poll:stage board:feed qa:thread faq:accordion materials:shelf instructor:profile survey:form closing:poster@c readiness:steps glossary:index quiz:list reflection:journal glance:spec procedure:lanes table:compare cases:rows discuss:bigq sessions:grid speakers:axis'],
+  'retro-pop': ['rings', 'message:stage goals:target@c steps5:wheel outline:bento schedule:clock deck:stage tools:tiles poll:stage board:mosaic qa:wall faq:accordion materials:files instructor:career survey:cards closing:poster@c readiness:tiles glossary:cards quiz:list reflection:notes glance:tally procedure:flow table:rowcards cases:notes discuss:bigq sessions:course speakers:people'],
+  'chalkboard': ['waves', 'message:split@c goals:target@c steps5:wheel outline:zigzag schedule:track deck:stage tools:bento poll:split board:wall qa:wall faq:twocol materials:pile instructor:portrait survey:sheet closing:card readiness:tiles glossary:dict quiz:big reflection:notes glance:tally procedure:flow table:rowcards cases:notes discuss:round sessions:map speakers:people'],
+  'blueprint-tech': ['grid', 'message:split@c goals:bento@c steps5:tabs outline:toc schedule:clock deck:stage tools:bento poll:split board:mosaic qa:wall faq:index materials:shelf instructor:career survey:cards closing:recap@c readiness:steps glossary:web quiz:cards reflection:journal glance:spec procedure:flow table:compare cases:rows discuss:bigq sessions:grid speakers:lineup'],
+  'riso-zine': ['dots', 'message:stage goals:journey@c steps5:tabs outline:zigzag schedule:clock deck:rail tools:bento poll:split board:wall qa:split faq:index materials:files instructor:portrait survey:sheet closing:card readiness:tiles glossary:web quiz:cards reflection:notes glance:tally procedure:cards table:rowcards cases:quote discuss:bubbles sessions:map speakers:axis'],
+  'sunrise-warm': ['arcs', 'message:stage goals:journey steps5:flow outline:bento schedule:track deck:stage tools:tiles poll:stage board:wall qa:wall faq:twocol materials:shelf instructor:profile survey:form closing:recap readiness:checklist glossary:web quiz:list reflection:notes glance:bars procedure:lanes table:rowcards cases:quote discuss:bubbles sessions:course speakers:axis'],
+  'keynote-dark': ['stars', 'message:band goals:target steps5:wheel outline:filmstrip schedule:track deck:stage tools:rows poll:stage board:mosaic qa:thread faq:index materials:shelf instructor:career survey:cards closing:recap readiness:checklist glossary:dict quiz:big reflection:letter glance:figures procedure:flow table:chart cases:rows discuss:list sessions:grid speakers:lineup'],
+  'corporate-clean': ['blocks', 'message:split@c goals:target@c steps5:steps outline:toc schedule:blocks deck:viewer tools:rows poll:panel board:feed qa:split faq:accordion materials:shelf instructor:card survey:cards closing:recap@c readiness:checklist glossary:web quiz:list reflection:journal glance:figures procedure:lanes table:table cases:notes discuss:bigq sessions:grid speakers:lineup'],
+  'soft-pastel': ['tiles', 'message:stage goals:journey steps5:wheel outline:zigzag schedule:blocks deck:viewer tools:bento poll:panel board:wall qa:thread faq:twocol materials:pile instructor:card survey:cards closing:poster readiness:checklist glossary:web quiz:cards reflection:notes glance:tally procedure:flow table:table cases:quote discuss:bigq sessions:course speakers:people'],
+  'kinetic-type': ['glyph', 'message:band@c goals:journey@c steps5:wheel outline:filmstrip schedule:track deck:stage tools:tiles poll:stage board:feed qa:split faq:twocol materials:shelf instructor:portrait survey:sheet closing:finale@c readiness:steps glossary:web quiz:big reflection:journal glance:figures procedure:cards table:chart cases:quote discuss:round sessions:map speakers:people'],
+  'warm-minimal': ['waves', 'message:split@c goals:journey@c steps5:wheel outline:toc schedule:timeline deck:viewer tools:rows poll:panel board:wall qa:split faq:accordion materials:files instructor:career survey:form closing:poster@c readiness:checklist glossary:dict quiz:list reflection:journal glance:spec procedure:lanes table:chart cases:rows discuss:round sessions:course speakers:axis'],
+  'deck-collage': ['blocks', 'message:band@c goals:manifesto steps5:tabs outline:zigzag schedule:blocks deck:rail tools:rows poll:split board:mosaic qa:split faq:twocol materials:shelf instructor:portrait survey:sheet closing:recap@c readiness:steps glossary:dict quiz:big reflection:letter glance:spec procedure:flow table:compare cases:quote discuss:round sessions:map speakers:axis'],
+  'time-dial': ['arcs', 'message:split@c goals:target@c steps5:flow outline:filmstrip schedule:track deck:stage tools:bento poll:split board:mosaic qa:split faq:accordion materials:pile instructor:career survey:cards closing:poster@c readiness:steps glossary:index quiz:cards reflection:notes glance:bars procedure:flow table:chart cases:quote discuss:bubbles sessions:grid speakers:lineup'],
+  'knot-orbit': ['rings', 'message:band@c goals:target@c steps5:flow outline:filmstrip schedule:track deck:rail tools:bento poll:panel board:mosaic qa:split faq:index materials:files instructor:portrait survey:sheet closing:finale@c readiness:steps glossary:web quiz:list reflection:letter glance:tally procedure:flow table:chart cases:quote discuss:list sessions:map speakers:lineup'],
+  'stone-stream': ['waves', 'message:band@c goals:target@c steps5:wheel outline:stack schedule:blocks deck:rail tools:rows poll:panel board:feed qa:wall faq:accordion materials:files instructor:career survey:form closing:card readiness:tiles glossary:web quiz:big reflection:letter glance:bars procedure:lanes table:compare cases:rows discuss:round sessions:map speakers:lineup'],
+  'ripple-center': ['rings', 'message:stage goals:manifesto steps5:wheel outline:zigzag schedule:clock deck:stage tools:tiles poll:stage board:wall qa:thread faq:index materials:pile instructor:portrait survey:form closing:poster readiness:tiles glossary:index quiz:big reflection:notes glance:tally procedure:lanes table:compare cases:quote discuss:round sessions:map speakers:people'],
+  'minute-map': ['dots', 'message:stage goals:ledger@c steps5:flow outline:filmstrip schedule:track deck:viewer tools:bento poll:split board:feed qa:thread faq:twocol materials:files instructor:career survey:form closing:card readiness:tiles glossary:web quiz:cards reflection:journal glance:spec procedure:lanes table:chart cases:rows discuss:round sessions:course speakers:lineup'],
+  'mosaic-split': ['tiles', 'message:stage goals:bento@c steps5:flow outline:filmstrip schedule:blocks deck:stage tools:tiles poll:panel board:wall qa:split faq:twocol materials:pile instructor:portrait survey:sheet closing:poster@c readiness:tiles glossary:cards quiz:list reflection:letter glance:figures procedure:flow table:chart cases:notes discuss:round sessions:map speakers:people'],
+  'cover-sheet': ['glyph', 'message:stage goals:columns@c steps5:steps outline:filmstrip schedule:clock deck:rail tools:tiles poll:panel board:mosaic qa:thread faq:index materials:shelf instructor:career survey:form closing:poster@c readiness:steps glossary:dict quiz:big reflection:journal glance:spec procedure:cards table:chart cases:quote discuss:bigq sessions:grid speakers:axis'],
+  'vertical-type': ['glyph', 'message:split goals:journey steps5:flow outline:zigzag schedule:clock deck:rail tools:rows poll:panel board:feed qa:split faq:index materials:pile instructor:career survey:sheet closing:recap readiness:checklist glossary:dict quiz:list reflection:letter glance:spec procedure:rail table:table cases:quote discuss:bigq sessions:grid speakers:lineup'],
+  'swiss-offset': ['blocks', 'message:split@c goals:ledger@r steps5:wheel outline:zigzag schedule:track deck:rail tools:rows poll:panel board:mosaic qa:thread faq:accordion materials:files instructor:portrait survey:form closing:recap@c readiness:checklist glossary:index quiz:list reflection:notes glance:bars procedure:rail table:chart cases:rows discuss:bigq sessions:grid speakers:lineup'],
 };
 
 const STANCES = { c: 'center', r: 'right' };
@@ -195,8 +206,25 @@ const FITS = {
   'sessions.map': (s) => n(s) >= 2 && n(s) <= 10, 'faq.index': (s) => n(s) >= 2, 'faq.twocol': (s) => n(s) <= 10,
   'glossary.web': (s) => n(s) >= 3 && n(s) <= 8, 'procedure.flow': (s) => n(s) >= 2 && n(s) <= 8, 'discuss.bigq': (s) => n(s) <= 6,
   'table.compare': (s) => n(s, 'head') >= 3 && n(s, 'head') <= 5 && n(s, 'rows') <= 10, 'table.rowcards': (s) => n(s, 'head') >= 2 && n(s, 'head') <= 6,
-  'materials.shelf': (s) => n(s) >= 2 && n(s) <= 10, 'materials.pile': (s) => n(s) >= 2 && n(s) <= 8, // 한 장뿐이면 더미·책장이 아니라 빈 화면 'deck.rail': (s) => n(s, 'slides') >= 3, 'cases.notes': (s) => n(s) <= 8,
+  'materials.shelf': (s) => n(s) >= 2 && n(s) <= 10, 'materials.pile': (s) => n(s) >= 2 && n(s) <= 8, // 한 장뿐이면 더미·책장이 아니라 빈 화면
+  'deck.rail': (s) => n(s, 'slides') >= 3, 'cases.notes': (s) => n(s) <= 8,
+  // 새 그림 배치: 교재 값이 그 그림을 채울 때만
+  'procedure.lanes': (s) => { const it = s.items || [], who = new Set(it.map((i) => String(i.who || '').trim())); return it.length >= 2 && it.length <= 8 && !who.has('') && who.size >= 2 && who.size <= 4; },
+  'discuss.round': (s) => n(s) >= 2 && n(s) <= 6,
+  'instructor.career': (s, site) => { const list = site?.instructors; return !list || list.some((p) => (p.timeline || []).reduce((a, g) => a + (g.items || []).length, 0) >= 2); },
+  'table.chart': (s) => !!tableChart(s.head, s.rows), 'glance.bars': (s) => !!glanceSeries(s.items),
+  'goals.target': (s) => n(s) >= 2 && n(s) <= 5,
+  'speakers.axis': (s) => { const t = (s.items || []).map((p) => toMin(p.time)); return t.length >= 2 && t.length <= 10 && t.every((x, i) => x !== null && (!i || x > t[i - 1])) && t[t.length - 1] - t[0] <= 600; }, 'closing.recap': (s, site) => !site?.sections || recapWords(site.sections).length >= 3,
 };
+/** 마무리 '지나온 길'의 정류장: 이 연수의 실제 차례(없으면 실습 이름, 핵심 단계 낱말). 짧은 것만 3~7개 */
+export function recapWords(sections = []) {
+  for (const [t, f] of [['outline', (i) => i.title], ['stations', (i) => i.name || i.title], ['steps5', (i) => i.word]]) {
+    const sec = sections.find((x) => x.type === t);
+    const list = [...new Set((sec?.items || []).map(f).filter((w) => w && [...String(w)].length <= 22))];
+    if (list.length >= 3) return list.slice(0, 7);
+  }
+  return [];
+}
 /**
  * 교재 구성의 흐름(설계도 structure.flow, decide/structure.js)이 주인공으로 삼는 칸: 프리셋 계획이 그 칸에 기본(글) 배치를 골랐을 때만
  * 그림·도식 배치로 바꿈(이미 다른 배치를 고른 프리셋은 그대로 — 프리셋끼리의 차이를 지킴)
@@ -205,7 +233,9 @@ const FLOW_LEAD = {
   procedure: { procedure: 'flow', steps5: 'flow' }, discussion: { discuss: 'bigq', cases: 'quote' }, course: { sessions: 'map' },
   event: { schedule: 'track', glance: 'tally' }, talk: { message: 'stage', speakers: 'lineup' },
 };
-const fitsV = (t, v, s) => !FITS[`${t}.${v}`] || FITS[`${t}.${v}`](s);
+/** 숫자가 주인공인 표: 프리셋이 기본(표)을 골랐고 교재 표에 숫자 칸이 있으면 도표로(표로 보기를 곁들임). 흐름의 주인공 칸이 먼저 */
+const NUM_LEAD = { table: 'chart' };
+const fitsV = (t, v, s, site) => !FITS[`${t}.${v}`] || FITS[`${t}.${v}`](s, site && !Array.isArray(site) ? site : null);
 /**
  * 이 섹션의 배치: 설계도에 적은 layout → (흐름의 주인공 칸) → 프리셋의 본문 계획 → 섹션 종류의 기본. 내용이 배치에 맞지 않으면 기본으로.
  * 같은 종류의 칸이 앞에 또 있으면(한눈에 보기 둘 등) 앞 칸과 다른 배치를 계획 순서대로 골라 같은 모양이 되풀이되지 않게 함.
@@ -219,17 +249,18 @@ export function variantOf(s, presetId, site) {
   const own = typeof s.layout === 'string' && s.type !== 'stations' ? s.layout.split('@') : [];
   const plan = presetBody(presetId)[t], def = defaultVariant(t);
   let variant;
-  if (all[own[0]]) variant = fitsV(t, own[0], s) ? own[0] : def;
+  const fits = (v) => fitsV(t, v, s, site);
+  if (all[own[0]]) variant = fits(own[0]) ? own[0] : def;
   else {
     let base = plan?.variant || def;
-    const lead = FLOW_LEAD[flow]?.[t];
-    if (lead && base === def && fitsV(t, lead, s)) base = lead;
+    const lead = FLOW_LEAD[flow]?.[t] || NUM_LEAD[t];
+    if (lead && (base === def || !fits(base)) && fits(lead)) base = lead; // 계획한 배치가 내용에 맞지 않아 기본으로 떨어질 때도
     const prev = list ? list.slice(0, Math.max(0, list.indexOf(s))).filter((x) => variantType(x.type) === t) : [];
-    if (!prev.length) variant = fitsV(t, base, s) ? base : def;
+    if (!prev.length) variant = fits(base) ? base : def;
     else {
       const used = new Set(prev.map((x) => variantOf(x, presetId, site).variant)), ids = variantIds(t), k = ids.indexOf(base);
       const order = ids.slice(k).concat(ids.slice(0, k));
-      variant = order.find((v) => fitsV(t, v, s) && !used.has(v)) || (fitsV(t, base, s) ? base : def);
+      variant = order.find((v) => fits(v) && !used.has(v)) || (fits(base) ? base : def);
     }
   }
   const meta = all[variant];
@@ -243,13 +274,14 @@ export function cleanLayout(type, v) {
   return BODY_VARIANTS[variantType(type)]?.[id] ? id + (/^[crl]$/.test(st) ? '@' + st : '') : '';
 }
 /** 이 사이트에 쓰인 배치 이름들('종류.변형'): 런타임 CSS(runtime/body.css)에서 쓰는 묶음만 남길 때 */
-export function usedVariants(sections, presetId, flow = '') {
-  const out = new Set(), site = { sections, flow };
+export function usedVariants(sections, presetId, flow = '', instructors) {
+  const out = new Set(), site = { sections, flow, instructors };
   for (const s of sections) { const v = variantOf(s, presetId, site); if (v.variant) out.add(`${v.type}.${v.variant}`); }
   return [...out];
 }
 /** 제 그림이 움직이는 배치(runtime/body.css): 스크롤 연동 단계에서는 스크롤에 맞춰, 차분 단계에서는 들어올 때 한 번. 연출 검사가 효과처럼 셈 */
-export const MOTION_VARIANTS = ['goals.manifesto', 'goals.journey', 'glance.tally', 'message.stage', 'steps5.wheel', 'steps5.flow', 'outline.zigzag', 'outline.filmstrip', 'schedule.track', 'schedule.clock', 'materials.shelf', 'sessions.map', 'glossary.web', 'procedure.flow', 'discuss.bigq', 'closing.poster'];
+export const MOTION_VARIANTS = ['goals.manifesto', 'goals.journey', 'glance.tally', 'message.stage', 'steps5.wheel', 'steps5.flow', 'outline.zigzag', 'outline.filmstrip', 'schedule.track', 'schedule.clock', 'materials.shelf', 'sessions.map', 'glossary.web', 'procedure.flow', 'discuss.bigq', 'closing.poster',
+  'message.split', 'procedure.lanes', 'discuss.round', 'instructor.career', 'goals.target', 'closing.recap', 'speakers.axis', 'table.chart', 'glance.bars'];
 /** 정적 지문(테스트·문서): 섹션마다 '종류:변형'(자세는 뺌 — 정렬만 다른 것은 같은 구조로 셈) */
 export function bodyFingerprint(sections, presetId, flow = '') {
   const site = { sections, flow };

@@ -4,7 +4,7 @@ import { renderHero, heroComposition, dateParts, titleRandom } from './hero.js';
 import { mosaicSvg } from './hero-graphic.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { contentRenderers, CONTENT_LAYOUTS } from './content.js'; // 본문 칸(절차·사례·질문·표·글)
-import { variantOf, motifFamily } from '../design/layouts.js'; // 본문 배치 변형(섹션 종류마다 구조가 다른 배치)
+import { variantOf, motifFamily, recapWords } from '../design/layouts.js'; // 본문 배치 변형(섹션 종류마다 구조가 다른 배치)
 import { bodyVariants, firstGlyph } from './body-variants.js';
 import { motifSvg, motifRule } from './body-graphic.js';
 import { inlineMd } from './markdown.js';
@@ -107,7 +107,7 @@ function bandClass(ctx) { return getPreset(ctx.design.preset).variants.band === 
 /** 컨셉 모티프의 그림 가족: 컨셉의 motif 글 → 프리셋 */
 export const famOf = (ctx) => motifFamily(ctx.bp, ctx.design.preset);
 /** 이 섹션의 배치(사이트의 섹션 목록과 교재 구성 흐름까지 보고 정함) */
-export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow });
+export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow, instructors: ctx.bp.instructors });
 /**
  * 모티프 되풀이(꾸밈, aria-hidden): 바탕이 같은 두 섹션 사이에는 모티프 한 줄을 구분 장식으로, 옅은 바탕 칸의 구석에는 모티프 그림을 옅게.
  * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만
@@ -258,8 +258,12 @@ function message(s, ctx) {
   if (s.note) aside += `<p class="lp-message-note">${br(s.note)}</p>`;
   const src = s.title ? '' : sourceLine(s.source, ctx);
   // 가운데 무대: 문장 뒤에 이 연수의 모티프 그림이 크게 깔림(꾸밈). 문장은 그림이 비켜 준 가운데 판 위
-  const stage = vOf(s, ctx).variant === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
-  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`, ` data-style="${esc(s.style || 'statement')}"`);
+  const vid = vOf(s, ctx).variant;
+  const stage = vid === 'stage' ? `<div class="lp-stage-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|stage|${s.id}`, { w: 960, h: 540, glyph: firstGlyph(ctx.bp.meta.title) })}</div>` : '';
+  const msg = `<div class="lp-message">${body}${aside || src ? `<div class="lp-message-side">${aside}${src}</div>` : ''}</div>`;
+  // 그림 곁 문장: 모티프 그림이 세로 판으로 한쪽에 서고 문장은 옆에(좁은 화면에서는 그림이 위의 낮은 띠로)
+  const split = vid === 'split' ? `<div class="lp-msplit"><div class="lp-msplit-art" aria-hidden="true">${motifSvg(famOf(ctx), `${ctx.bp.meta.title}|split|${s.id}`, { w: 480, h: 600, glyph: firstGlyph(ctx.bp.meta.title) })}</div>${msg}</div>` : '';
+  return wrap(s, ctx, `${s.title ? head(s, ctx) : ''}${stage}${split || msg}`, ` data-style="${esc(s.style || 'statement')}"`);
 }
 
 function steps5(s, ctx) {
@@ -583,10 +587,13 @@ function closing(s, ctx) {
   const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
   // 배치 변형: finale 큰 문장(기본, 첫 화면 표식의 되풀이) · poster 이 연수의 모티프 그림이 띠를 채우고 문장은 그 위 판에 · card 가운데 서명 카드
   const v = vOf(s, ctx), vid = v.variant || 'finale';
-  const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : deco;
-  const inner = `${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
+  const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : vid === 'recap' ? '' : deco;
+  // 지나온 길: 오늘의 차례(실습·핵심 단계)를 한 줄 길 위의 정류장으로 되짚고, 그 끝에 마지막 문장
+  const stops = vid === 'recap' ? recapWords(ctx.bp.sections) : [];
+  const recap = stops.length ? `<div class="lp-recap"><p class="lp-recap-k">오늘 지나온 길</p><ol class="lp-recap-path" style="--n:${stops.length}">${stops.map((w, i) => `<li style="--i:${i}"><span class="lp-recap-dot" aria-hidden="true">${i + 1}</span><span>${esc(w)}</span></li>`).join('')}</ol></div>` : '';
+  const inner = `${recap}${s.lead ? `<p class="lp-closing-lead">${br(s.lead)}</p>` : ''}<p class="lp-closing-text"${fx(ctx, 'closing.title')}>${br(text)}</p>${s.thanks || sign.length ? `<div class="lp-closing-foot">${s.thanks ? `<p class="lp-closing-thanks">${br(s.thanks)}</p>` : ''}${sign.length ? `<p class="lp-closing-sign">${sign.map((x) => `<span>${esc(x)}</span>`).join('')}</p>` : ''}</div>` : ''}`;
   const stance = v.stance ? ` data-stance="${v.stance}"` : '';
-  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="${vid === 'finale' ? 'finale' : vid}" data-frame="band" data-variant="${vid}" data-lead="${v.meta?.lead || 'text'}"${stance}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${vid === 'poster' ? '' : graphic}${art}<div class="lp-wrap">${vid === 'card' ? `<div class="lp-closing-card">${inner}</div>` : inner}</div>${band}</section>`;
+  return `<section id="${esc(s.id)}" class="lp-sec lp-closing lp-closing--${comp}${bandClass(ctx)}" data-layout="${vid === 'finale' ? 'finale' : vid}" data-frame="band" data-variant="${vid}" data-lead="${v.meta?.lead || 'text'}"${stance}${s.tone ? ` data-tone="${esc(s.tone)}"` : ''}>${vid === 'poster' ? '' : graphic}${art}<div class="lp-wrap">${vid === 'card' ? `<div class="lp-closing-card">${inner}</div>` : inner}</div>${vid === 'recap' ? '' : band}</section>`;
 }
 
 function faq(s, ctx) {
