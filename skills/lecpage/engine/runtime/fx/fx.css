@@ -461,7 +461,7 @@ html.lenis, html.lenis body { height: auto; }
   .fx-link-underline a, .fx-hl { transition: none !important; }
 }
 @media print {
-  [data-fx-pre], [data-fx-pre] .fx-reveal-item { opacity: 1 !important; transform: none !important; clip-path: none !important; visibility: visible !important; }
+  [data-fx-pre], [data-fx-pre] :is(.fx-reveal-item, .fx-wi, .fx-c), .fx-wait { opacity: 1 !important; transform: none !important; clip-path: none !important; visibility: visible !important; }
   .fx-layer, .fx-toggle, .fx-cursor, .fx-gp, .fx-gp-steps, .fx-confetti, .fx-hsnap-bar { display: none !important; }
   .fx-zoom { height: auto !important; }
   .fx-zoom-sticky { position: static !important; height: auto !important; }

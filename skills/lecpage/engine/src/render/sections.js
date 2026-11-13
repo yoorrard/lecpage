@@ -110,18 +110,24 @@ export const famOf = (ctx) => motifFamily(ctx.bp, ctx.design.preset);
 export const vOf = (s, ctx) => variantOf(s, ctx.design.preset, { sections: ctx.bp.sections, flow: ctx.bp.structure?.flow, instructors: ctx.bp.instructors });
 /**
  * 모티프 되풀이(꾸밈, aria-hidden): 바탕이 같은 두 섹션 사이에는 모티프 한 줄을 구분 장식으로, 옅은 바탕 칸의 구석에는 모티프 그림을 옅게.
- * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만
+ * 그림 크기를 지키려고 구분 장식은 한 칸 걸러, 구석 그림은 앞의 두 칸에만(모티프가 주인공인 칸이 있으면 그만큼 덜)
  */
+/** 이 쪽에서 모티프 그림이 주인공인 칸 수(메시지 무대·나란히, 마무리 포스터). 모티프 그림은 한 쪽에 두 번까지 */
+function motifArts(ctx) {
+  return ctx.bp.sections.filter((x) => (x.type === 'message' && ['stage', 'split'].includes(vOf(x, ctx).variant)) || (x.type === 'closing' && vOf(x, ctx).variant === 'poster')).length;
+}
 function motifDeco(s, ctx, frame, calm) {
   if (calm || frame === 'band' || ctx.design.motion === 0 && ctx.design.rest === 0) return '';
   const list = ctx.bp.sections, i = list.indexOf(s), prev = list[i - 1], fam = famOf(ctx);
   const plain = (x) => x && x.type !== 'hero' && !TINTED.includes(x.type) && !['message', 'closing'].includes(x.type) && !CALM_TYPES.includes(x.type);
   let out = '';
   if (plain(s) && plain(prev) && secNo(s, ctx) % 2 === 1) out += `<div class="lp-mrule-w" aria-hidden="true">${motifRule(fam, s.id)}</div>`;
-  if (TINTED.includes(s.type) && list.filter((x) => TINTED.includes(x.type) && !CALM_TYPES.includes(x.type)).indexOf(s) < 2) out += `<div class="lp-mbg" aria-hidden="true">${motifSvg(fam, `${ctx.bp.meta.title}|bg|${s.id}`, { w: 480, h: 320, glyph: firstGlyph(s.title || ctx.bp.meta.title), lite: true })}</div>`;
+  if (TINTED.includes(s.type) && list.filter((x) => TINTED.includes(x.type) && !CALM_TYPES.includes(x.type)).indexOf(s) < 2 - motifArts(ctx)) out += `<div class="lp-mbg" aria-hidden="true">${motifSvg(fam, `${ctx.bp.meta.title}|bg|${s.id}`, { w: 480, h: 320, glyph: firstGlyph(s.title || ctx.bp.meta.title), lite: true })}</div>`;
   return out;
 }
 
+/** '표지 한 장' 첫 글자 워터마크를 받을 수 있는 칸(앞의 두 칸에만 둠) */
+const glyphSecs = (ctx) => ctx.bp.sections.filter((x) => x.title && !CALM_TYPES.includes(x.type) && !['hero', 'closing'].includes(x.type));
 function wrap(s, ctx, inner, extraAttrs = '') {
   const labelled = s.title ? ` aria-labelledby="${esc(s.id)}-h"` : '';
   const enterId = ctx.design.effects?.['section.enter'];
@@ -134,8 +140,8 @@ function wrap(s, ctx, inner, extraAttrs = '') {
   const cls = `lp-sec lp-sec-${esc(s.type)}${frame === 'band' ? bandClass(ctx) : ''}${TINTED.includes(s.type) ? ' lp-tinted' : ''}`;
   // '움직이는 글자' 프리셋: 섹션 제목이 뒤에서 윤곽선으로 크게 메아리침(CSS가 data-echo를 읽음). 따라 하는 칸에는 두지 않음
   const echo = !calm && s.title && frame !== 'band' && preset.variants.hero === 'ticker' ? ` data-echo="${esc(String(s.title).replace(/\n/g, ' ').slice(0, 40))}"` : '';
-  // '표지 한 장' 프리셋: 섹션 제목의 첫 글자가 뒤에 크게 깔림(첫 화면 포스터의 되풀이). '시간 점묘': 섹션 위 점 줄에 지나온 섹션만큼 색 점(--no)
-  const glyph = !calm && s.title && frame !== 'band' && preset.variants.hero === 'cover' ? ` data-glyph="${esc([...String(s.title).trim()].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '')}"` : '';
+  // '표지 한 장' 프리셋: 앞의 두 섹션은 제목의 첫 글자가 뒤에 크게 깔림(첫 화면 포스터의 되풀이). '시간 점묘': 섹션 위 점 줄에 지나온 섹션만큼 색 점(--no)
+  const glyph = !calm && s.title && frame !== 'band' && preset.variants.hero === 'cover' && glyphSecs(ctx).indexOf(s) < 2 ? ` data-glyph="${esc([...String(s.title).trim()].find((ch) => /[\p{L}\p{N}]/u.test(ch)) || '')}"` : '';
   const no = preset.variants.align === 'ledger' && frame !== 'band' ? ` style="--no:${secNo(s, ctx)}"` : '';
   // 배치 변형: data-variant(구조) · data-lead(주인공: 글·숫자·그림·도식·조작) · data-stance(이 섹션만 가운데·오른쪽)
   const vat = v.meta ? ` data-variant="${esc(v.variant)}" data-lead="${v.meta.lead}"${v.stance ? ` data-stance="${v.stance}"` : ''}` : '';
@@ -587,7 +593,7 @@ function closing(s, ctx) {
     minutes: '<div class="lp-closing-dots" aria-hidden="true"></div>',
   }[comp] || '';
   const wordsList = ctx.design.motion >= 3 ? closingWords(ctx) : [];
-  const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${[0, 1].map(() => wordsList.map((w) => `<li>${esc(w)}</li>`).join('')).join('')}</ul></div>` : '';
+  const band = wordsList.length ? `<div class="lp-closing-band" aria-hidden="true"><ul>${wordsList.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '';
   // 배치 변형: finale 큰 문장(기본, 첫 화면 표식의 되풀이) · poster 이 연수의 모티프 그림이 띠를 채우고 문장은 그 위 판에 · card 가운데 서명 카드
   const v = vOf(s, ctx), vid = v.variant || 'finale';
   const art = vid === 'poster' ? `<div class="lp-poster-art" aria-hidden="true">${motifSvg(famOf(ctx), `${m.title}|closing`, { w: 1440, h: 720, glyph: firstGlyph(text) })}</div>` : vid === 'recap' ? '' : deco;

@@ -465,7 +465,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero--ticker .lp-hero-inner{gap:0}
 .lp-hero--ticker .lp-hero-top{padding-bottom:var(--sp-3);border-bottom:max(3px,var(--border-w)) solid var(--foreground)}
 .lp-hero--ticker .lp-h1{--fs-hero:clamp(3.25rem,11vw,11.25rem);line-height:1;letter-spacing:-.04em;padding-top:clamp(16px,2.4vw,36px)}
-.lp-kin-echo{margin:clamp(4px,1vw,14px) 0 clamp(20px,3vw,44px);overflow:hidden;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(2rem,5.6vw,5.5rem);line-height:1.12;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1.5px var(--foreground);-webkit-user-select:none;user-select:none}
+.lp-kin-echo{margin:clamp(4px,1vw,14px) 0 clamp(20px,3vw,44px);overflow:hidden;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(2rem,5.6vw,5.5rem);line-height:1.12;letter-spacing:-.04em;color:color-mix(in srgb,var(--foreground) 14%,transparent);-webkit-user-select:none;user-select:none} /* 한글 윤곽선은 획이 겹쳐 보여 옅은 채움 */
 .lp-kin-echo span{display:inline-block;padding-left:max(20px,env(safe-area-inset-left,0px))}
 .lp-kin-foot{position:relative;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--sp-5) var(--sp-8);align-items:start}
 .lp-kin-foot > .lp-hero-sub,.lp-kin-foot > .lp-ctas{grid-column:1}
@@ -1143,7 +1143,7 @@ input,textarea,select{font-size:max(16px,1em)}
 [data-card="glass"] .lp-tools-item:not(:first-child){background:color-mix(in srgb,var(--card) 70%,transparent);border-color:color-mix(in srgb,var(--foreground) 13%,transparent)}
 [data-card="paper"] .lp-tools-item{box-shadow:var(--shadow)}
 @media (min-width:700px){.lp-tools-item[data-w="7"]{grid-column:span 7}.lp-tools-item[data-w="5"]{grid-column:span 5}.lp-tools-item[data-w="12"]{min-height:0}}
-.lp-pages{font-size:var(--fs-xs);color:var(--muted-foreground);display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}
+.lp-pages{font-size:var(--fs-xs);color:var(--muted-foreground)} /* 한 줄 글: 칸 사이 틈(gap)으로 "교재 3 쪽"처럼 벌어지지 않게 */
 .lp-pages a{font-family:var(--font-mono);color:var(--foreground);text-decoration:underline;text-decoration-color:var(--rule-c);padding:1px 8px;margin:-1px -8px} /* 쪽 번호 한 글자도 누르는 곳은 24px(여백만큼 바깥 여백을 빼 배치는 그대로) */
 
 /* 자료: 한 줄씩(형식 · 제목 · 크기 · 받기) */
@@ -1311,12 +1311,11 @@ input,textarea,select{font-size:max(16px,1em)}
 [data-band="accent"] .lp-closing-lead,[data-band="accent"] .lp-closing-sign{opacity:.88}
 /* 스크롤 연출 단계: 이 연수의 낱말이 아래 띠로 흐름. 가벼운 모드·동작 줄이기에서는 멈춘 한 줄 */
 .lp-closing-band{margin-top:clamp(40px,6vw,88px);overflow:hidden;border-block:1px solid var(--rule-c)}
-.lp-closing-band ul{list-style:none;display:flex;width:max-content;padding:var(--sp-4) 0;font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-h2s);line-height:1.2;letter-spacing:var(--display-tracking);white-space:nowrap}
+.lp-closing-band ul{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;row-gap:var(--sp-2);padding:var(--sp-4) 0;font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-h2s);line-height:1.2;letter-spacing:var(--display-tracking);white-space:nowrap}
 .lp-closing-band li{display:inline-flex;align-items:center;gap:var(--sp-6);padding-left:var(--sp-6)}
 .lp-closing-band li::after{content:"";width:.34em;height:.34em;border-radius:50%;background:var(--primary)}
-.lp-closing-band li:nth-child(even){color:transparent;-webkit-text-stroke:1px var(--foreground)}
-@media (prefers-reduced-motion:no-preference){html[data-motion="3"]:not(.lp-paused):not(.fx-paused) .lp-closing-band ul{animation:lp-marquee 36s linear infinite}}
-@keyframes lp-marquee{to{transform:translate3d(-50%,0,0)}}
+.lp-closing-band li:last-child::after{display:none}
+.lp-closing-band li:nth-child(even){color:color-mix(in srgb,var(--foreground) 46%,transparent)} /* 한글은 윤곽선(text-stroke)이면 획이 겹친 선이 보여 옅은 채움으로 */
 /* 구성별 표식 */
 .lp-closing .lp-cine-date{top:auto;bottom:-.06em;right:-.03em}
 .lp-closing.lp-closing--cinema{background:radial-gradient(90% 60% at 50% 124%,color-mix(in srgb,var(--hero-from) 46%,transparent),transparent 72%),linear-gradient(180deg,var(--background) 20%,color-mix(in srgb,var(--background) 80%,var(--hero-to)) 150%)}
@@ -1333,7 +1332,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-closing.lp-closing--board{--background:#1f3a30;--foreground:#eef2e9;--muted-foreground:#bccabd;--primary:#f2d35e;--card:#264638;--card-foreground:#eef2e9;--rule-c:rgba(238,242,233,.24);margin:0 clamp(12px,3vw,40px) clamp(24px,4vw,56px);background:radial-gradient(80% 60% at 28% 18%,rgba(255,255,255,.055),transparent 70%),#1f3a30;color:var(--foreground);border:clamp(8px,1vw,14px) solid #8a5a33;border-radius:10px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.28),inset 0 0 64px rgba(0,0,0,.26)}
 .lp-closing--board .lp-closing-text{color:var(--primary)}
 .lp-closing--spec .lp-closing-text{padding-bottom:.3em;background:linear-gradient(var(--primary),var(--primary)) 0 100%/100% 1px no-repeat,linear-gradient(var(--primary),var(--primary)) 0 100%/1px .22em no-repeat,linear-gradient(var(--primary),var(--primary)) 100% 100%/1px .22em no-repeat}
-.lp-closing--spec .lp-closing-sign,.lp-closing--zine .lp-closing-sign{font-family:var(--font-mono)}
+.lp-closing--spec .lp-closing-sign,.lp-closing--zine .lp-closing-sign{font-family:var(--font-mono);word-spacing:-.3em} /* 고정폭 글꼴의 빈칸(0.6em)이 한글 사이에서 두 칸처럼 보이지 않게 */
 .lp-closing--masthead .lp-closing-foot{border-top:3px double var(--foreground)}
 .lp-closing--masthead .lp-closing-text::after{content:"";display:inline-block;width:.34em;height:.34em;margin-left:.2em;background:var(--primary)}
 .lp-closing--brief::before{content:"";position:absolute;inset:0 0 auto 0;height:6px;background:linear-gradient(90deg,var(--primary) 0 30%,var(--accent) 30% 62%,color-mix(in srgb,var(--accent) 42%,var(--background)) 62%)}
@@ -1766,7 +1765,7 @@ html[data-preset="glass-lab"]:not(.lp-lowpower):not(.lp-handheld):not(.lp-lite) 
 
 /* 움직이는 글자: ① 섹션마다 제목이 윤곽선으로 크게 메아리침(data-echo) ② 섹션 사이 굵은 선 ③ 굵은 선의 판 */
 [data-preset="kinetic-type"] .lp-sec[data-echo]{overflow:clip;border-top:max(3px,var(--border-w)) solid var(--foreground)}
-[data-preset="kinetic-type"] .lp-sec[data-echo]::before{content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo);content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo) / "";position:absolute;left:-.04em;top:-.12em;z-index:-1;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(3.5rem,11vw,10rem);line-height:1;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1px color-mix(in srgb,var(--foreground) 13%,transparent);pointer-events:none;-webkit-user-select:none;user-select:none}
+[data-preset="kinetic-type"] .lp-sec[data-echo]::before{content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo);content:attr(data-echo) " · " attr(data-echo) " · " attr(data-echo) / "";position:absolute;left:-.04em;top:-.12em;z-index:-1;white-space:nowrap;font-family:var(--font-display);font-weight:var(--display-weight);font-size:clamp(3.5rem,11vw,10rem);line-height:1;letter-spacing:-.04em;color:color-mix(in srgb,var(--foreground) 6%,transparent);pointer-events:none;-webkit-user-select:none;user-select:none}
 [data-preset="kinetic-type"] .lp-sec[data-echo] > .lp-wrap{padding-top:clamp(28px,5vw,80px)}
 [data-preset="kinetic-type"] :is(.lp-outline-item,.lp-tools-item:not(:first-child)){border-width:max(3px,var(--border-w)) 0 0;border-color:var(--foreground);background:none;padding-inline:0}
 [data-preset="kinetic-type"] .lp-goal-list p{font-family:var(--font-display);font-weight:var(--display-weight);letter-spacing:-.03em}
@@ -1927,14 +1926,20 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
 @media print{
   .lp-nav,.lp-dock,.lp-toast,.lp-now,.lp-hero-graphic,.lp-closing-graphic,.lp-st-side,.lp-deck-bar,.lp-st-pn{display:none!important}
   .lp-st-shell.is-ready .lp-st,.lp-deck.is-ready .lp-slide{display:grid!important}
-  .lp-sec{padding-block:24px;break-inside:avoid-page}
-  .lp-sec .lp-head{position:static}
+  /* 스크롤 연출·전환이 화면에서 멈춘 상태(흐림·밀림)로 새지 않게: 인쇄는 언제나 완성된 정지 모습 */
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  /* 칸 하나를 통째로 다음 장으로 넘기지 않음(빈 쪽이 생겨 장수가 늘었음). 머리는 내용과 붙이고, 작은 덩어리만 쪼개지 않음 */
+  .lp-sec{padding-block:24px;break-inside:auto}
+  .lp-sec .lp-head{position:static;break-after:avoid}
+  :is(.lp-sec h2,.lp-sec h3){break-after:avoid}
+  :is(.lp-sec li,figure,tr,.lp-card,.lp-slide){break-inside:avoid}
+  .lp-hero{min-height:0!important}
   html,body{background:#fff!important;color:#111}
 }
 
 
-/* 읽기 우선: 아주 굵은 포스터 글꼴을 쓰는 디자인은 큰 제목에만 그 글꼴을 쓰고, 카드·단계·교재 쪽의 작은 제목은 본문 글꼴 굵게 */
-:is([data-preset="riso-zine"],[data-preset="retro-pop"],[data-preset="playground"],[data-preset="kinetic-type"]) :is(.lp-outline-item h3,.lp-steps5 h3,.lp-tools h3,.lp-slide-text h3,.lp-wsheet-t){font-family:var(--font-body);font-weight:800;letter-spacing:-.02em}
+/* 읽기 우선: 아주 굵은 포스터 글꼴을 쓰는 디자인은 큰 제목에만 그 글꼴을 쓰고, 카드·단계·교재 쪽·용어의 작은 제목은 본문 글꼴 굵게 */
+:is([data-preset="riso-zine"],[data-preset="retro-pop"],[data-preset="playground"],[data-preset="kinetic-type"]) :is(.lp-outline-item h3,.lp-steps5 h3,.lp-tools h3,.lp-slide-text h3,.lp-wsheet-t,.lp-glossary dt,.lp-dict dt,.lp-gcards dt){font-family:var(--font-body);font-weight:800;letter-spacing:-.02em}
 
 /* ═══ 본문 칸: 절차(procedure) · 사례(cases) · 함께 나눌 질문(discuss) · 표(table) · 글 칸의 표·인용·강조 상자 ═══
    렌더러: src/render/content.js, src/render/markdown.js. 색은 theme.css 변수만 쓰고, 상자 대신 가는 선·여백·글자 크기로 나눕니다.
