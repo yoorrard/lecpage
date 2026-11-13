@@ -77,7 +77,14 @@ test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 25, features: ['attendance'] }).backend, 'sheets');
   assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'] }).backend, 'supabase');
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'] }).backend, 'sheets', '클릭만 하는 30명 실습은 구글 시트');
-  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'], skill: 'set' }).backend, 'supabase');
+  // skill이 Cloudflare에 올리면 참여 기능도 같은 계정(가입 하나, 7일 멈춤 없음). 이미 Vercel에 연결해 두었으면 Supabase
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'], skill: 'set' }).backend, 'cloudflare');
+  assert.equal(E.decideInfra({ size: 25, features: ['attendance'], skill: 'set' }).backend, 'cloudflare');
+  // 기준은 강사가 할 일 수(TEACHER_STEPS): 사이트가 다른 곳이어도 Cloudflare 중계(가입·로그인 2번) < Supabase(3번). Supabase를 이미 연결해 두었으면 Supabase
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set', connected: ['vercel'] }).backend, 'cloudflare');
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set', connected: ['supabase'] }).backend, 'supabase');
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'], skill: 'set' }).teacherSteps, 2);
+  assert.equal(E.decideInfra({ size: 30, features: ['qa', 'poll'] }).teacherSteps, 23, '앱(클릭만)은 그대로 구글 시트: 앱 안내와 함께 바꿀 일');
   assert.equal(E.decideInfra({ size: 500, features: ['qa', 'poll'] }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa'], network: 'offline' }).backend, 'lan');
   assert.equal(E.decideInfra({ size: 80, features: ['qa'], infra: ['nas'], skill: 'set' }).backend, 'server');

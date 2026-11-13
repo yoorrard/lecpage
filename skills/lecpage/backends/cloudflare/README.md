@@ -19,7 +19,7 @@
 
 ## 2. 명령줄로 배포 (skill이 직접)
 
-셸이 있는 에이전트(skill)가 그대로 돌립니다. 강사는 로그인하거나 토큰을 넣어 주기만 합니다. 모두 묻지 않고 돕니다.
+셸이 있는 에이전트(skill)는 보통 `lecpage.mjs publish work --live`로 아래와 사이트 올리기·`ALLOWED_ORIGINS`·확인을 한 번에 합니다(이 폴더를 `work/live-relay`에 복사해 이름을 `<사이트>-live`로, `ALLOWED_CODES`를 그 연수 코드로). 손으로 할 때는 아래를 그대로 돌립니다. 강사는 로그인하거나 토큰을 넣어 주기만 합니다. 모두 묻지 않고 돕니다.
 
 ```bash
 cd <skill 폴더>/backends/cloudflare
