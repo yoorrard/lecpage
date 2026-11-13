@@ -95,6 +95,13 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     const p = url.pathname.replace(/^\/client\/v4/, '');
     const m = req.method;
     state.calls.push([m, p]);
+    // 흉내 wrangler가 배포를 알림(시험 전용)
+    if (p === '/__fake/scripts' && m === 'POST') {
+      const x = JSON.parse(body.toString('utf8'));
+      if (!state.scripts.has(x.name)) state.scripts.set(x.name, { id: randomBytes(16).toString('hex'), secrets: new Map(), workersDev: true });
+      state.deploys = (state.deploys || 0) + 1;
+      return send(res, 200, ok(null));
+    }
     const auth = req.headers.authorization || '';
     // 자산 API(JWT)
     if (p.startsWith('/pages/assets/')) {
@@ -117,7 +124,12 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     if ((mm = /^\/accounts\/([^/]+)\/pages\/projects\/([^/]+)(\/.*)?$/.exec(p))) {
       const [, acc, proj, rest = ''] = mm;
       if (acc !== ACCOUNT) return send(res, 403, fail(10000, 'bad account'));
-      if (rest === '' && m === 'GET') return state.projects.has(proj) ? send(res, 200, ok(state.projects.get(proj))) : send(res, 404, fail(8000007, 'Project not found'));
+      if (rest === '' && m === 'GET') {
+        const pr = state.projects.get(proj);
+        if (!pr) return send(res, 404, fail(8000007, 'Project not found'));
+        const prod = deploymentsOf(pr.production_branch, proj).at(-1);
+        return send(res, 200, ok({ ...pr, canonical_deployment: prod ? view(prod) : null, latest_deployment: prod ? view(prod) : null }));
+      }
       if (!state.projects.has(proj)) return send(res, 404, fail(8000007, 'Project not found'));
       if (rest === '/upload-token' && m === 'GET') return send(res, 200, ok({ jwt: jwt({ exp: Math.floor(Date.now() / 1000) + 300, max_file_count_allowed: 20000 }) }));
       if (rest === '/deployments' && m === 'POST') {
