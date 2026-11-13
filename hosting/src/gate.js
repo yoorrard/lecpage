@@ -302,12 +302,13 @@ export class Gate extends DurableObject {
   /** 상태 API: 오늘과 그날(date)의 남은 몫, 사이트 상태 */
   dayStatus(date, site) {
     const now = Date.now(); const budget = this.cfg.dailyRequestBudget; const today = dayOf(now);
-    const used = this.dayData(today).req || 0;
+    const used = this.loadOf(this.dayData(today)); // 세 한도(Worker 요청·DO 요청·duration) 중 가장 빠듯한 것
     const reserved = this.reservedLeft(now);
     const cap = this.capacity(now);
     const out = {
       accepting: cap.newSites, paused: cap.state === 'paused', budget, capacity: this.publicCapacity(cap),
-      today: { date: kstDate(now), used, reserved, pct: budget ? Math.round(((used + reserved) / budget) * 100) : 0 },
+      // 오늘 = Cloudflare 하루(한국 오전 9시 ~ 다음 날 오전 9시, 이름은 시작한 날). 7일 표·관리 화면과 같은 이름. until = 끝나는 때(다시 참)
+      today: { date: kstDate(today * DAY_MS + 3600e3), until: (today + 1) * DAY_MS, used, reserved, pct: budget ? Math.round(((used + reserved) / budget) * 100) : 0 },
     };
     const at = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? Date.UTC(...date.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0)), 1) : NaN; // 그날 한국 시간 10시
     if (Number.isFinite(at)) {

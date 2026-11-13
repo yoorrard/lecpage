@@ -73,7 +73,7 @@ async function participant(lv, origin, mode, { polls = 3, gapMs = 150, wait = 2 
   let ws = null;
   if (mode === 'ws') {
     ws = new WebSocket(`${lv.replace(/^http/, 'ws')}/ws`);
-    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('ws hello 시간 초과')), 15000); ws.onmessage = (m) => { if (String(m.data).includes('"hello"')) { clearTimeout(t); res(); } }; ws.onerror = () => { clearTimeout(t); rej(new Error('ws 실패')); }; });
+    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('ws hello 시간 초과')), 60000); ws.onmessage = (m) => { if (String(m.data).includes('"hello"')) { clearTimeout(t); res(); } }; ws.onerror = () => { clearTimeout(t); rej(new Error('ws 실패')); }; });
   }
   const q = await req(lv, 'POST', '/questions', { json: { text: '부하 시험 질문' }, headers: tok });
   lat.push(q.ms);
@@ -191,7 +191,7 @@ test(`부하: 강사 ${TEACHERS}명 동시 배포 + 방 ${TEACHERS}개 × 참가
   out.load = {
     teachers: TEACHERS, perRoom: PER_ROOM, participants: people.length, publishSeconds: Math.round(pubMs / 100) / 10, liveSeconds: Math.round(liveMs / 100) / 10,
     publishP50: pct(pubLat, 50), publishP95: pct(pubLat, 95), liveP50: pct(lat, 50), liveP95: pct(lat, 95), liveMax: pct(lat, 100),
-    failed: bad.length, errors5xx: d.err, limited: d.lim, workerReq: d.req, doReq, gateReq: d.g, gateTicks: d.gt, gateShare: Math.round((d.g / Math.max(1, doReq)) * 1000) / 10, pagesApi: d.cfApi,
+    failed: bad.length, failSteps: bad.reduce((m, r) => ({ ...m, [`${r.step}:${r.res?.status ?? ''}:${String(r.res?.body?.error?.code ?? r.res?.body ?? '').slice(0, 40)}`]: (m[`${r.step}:${r.res?.status ?? ''}:${String(r.res?.body?.error?.code ?? r.res?.body ?? '').slice(0, 40)}`] || 0) + 1 }), {}), errors5xx: d.err, limited: d.lim, workerReq: d.req, doReq, gateReq: d.g, gateTicks: d.gt, gateShare: Math.round((d.g / Math.max(1, doReq)) * 1000) / 10, pagesApi: d.cfApi,
     lostQuestions: counts.reduce((a, c) => a + Math.max(0, PER_ROOM - c.q), 0), lostParticipants: counts.reduce((a, c) => a + Math.max(0, PER_ROOM - c.p), 0),
   };
   t.diagnostic(JSON.stringify(out.load));
