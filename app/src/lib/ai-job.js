@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { E } from './engine.js';
 import { makePrompt, looksTruncated, applyInfo, guardAnswer } from './blueprint.js';
-import { generateAuto, getActiveAI, explainError, PROVIDERS } from './ai.js';
+import { generateAuto, getActiveAI, explainError, PROVIDERS, AiError } from './ai.js';
+import { reach } from './netcheck.js';
 import { pushUndoFor } from './undo.js';
 import { track } from './stats.js';
 
@@ -49,6 +50,9 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
   try {
     const ai = await getActiveAI();
     if (!ai) throw Object.assign(new Error('no-ai'), { kind: 'no-ai' });
+    // 학교·기관 망이 AI 회사 API를 막았으면 1~2분 기다리게 하지 않고 바로 챗봇 창 길로(요청 한 번, 결과는 잠깐 기억)
+    set(pid, { provider: ai.provider });
+    if (await reach('ai:' + ai.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: ai.provider });
     const ing = await import('./ingest.js');
     const prompt = makePrompt(p0, ing);
     set(pid, { phase: 'ask', provider: ai.provider, label: ai.label });
