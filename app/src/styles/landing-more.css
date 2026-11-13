@@ -28,7 +28,7 @@
 .ld-why-h3{margin-top:clamp(56px,7vw,88px);font-size:clamp(1.3rem,1.1rem + .8vw,1.7rem);line-height:1.3;letter-spacing:-.025em}
 .ld-pts{margin:20px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:minmax(0,1fr);gap:0 clamp(28px,4vw,48px)}
 .ld-pts>li{display:grid;gap:12px;align-content:start;padding:24px 0 30px;border-top:1px solid var(--line)}
-.ld-pts h4{font-size:1.08rem;line-height:1.45;letter-spacing:-.015em}
+.ld-pts h4{font-size:1.08rem;line-height:1.45;letter-spacing:-.015em;text-wrap:balance}
 .ld-pt-num{display:grid;gap:6px}
 .ld-pt-num b{font-size:clamp(2.6rem,2rem + 2.2vw,3.5rem);line-height:1;letter-spacing:-.035em;font-weight:800;font-variant-numeric:tabular-nums;color:var(--lav-deep)}
 .ld-pt-num b span{margin-left:.08em;font-size:.42em;font-weight:750;letter-spacing:-.01em}

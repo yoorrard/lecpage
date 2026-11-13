@@ -19,7 +19,7 @@ const ABOUT = {
   'github-pages': { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '저장소가 공개돼서 사이트 파일을 누구나 볼 수 있어요.' },
   cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 강사료를 받는 연수에도 쓸 수 있어요.' },
   netlify: { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '2026년 7월 28일 뒤에 가입했다면 올린 뒤 Netlify에서 Make public을 눌러야 열려요. 무료는 한 달에 20번쯤 올릴 수 있어요.' },
-  zip: { lead: '학교 서버·NAS·USB로 나눌 때 써요.' },
+  zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');

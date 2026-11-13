@@ -162,7 +162,7 @@ export function LiveSetup({ p, update }) {
       { t: '내 서버 만들기', body: <>
         <p><a class="btn btn-sm btn-primary" href={CF_DEPLOY} target="_blank" rel="noopener" onClick={() => { copyKey('관리자 키를 복사했어요. ADMIN_KEY 칸에 붙여 넣으세요.'); setAt(1); }}>Cloudflare 열기</a> 누르면 관리자 키가 복사돼요.</p>
         <p>Cloudflare에 로그인(무료 가입)하고 <b>GitHub 연결을 허락</b>해요. <b>ADMIN_KEY</b> 칸에 붙여 넣고 <b>Deploy</b>를 눌러요. 나온 주소(…workers.dev)를 복사해 돌아와요.</p>
-        <p class="small muted">한 번 만들면 다음 연수부터는 이 기기에서 저절로 연결돼요. 학교 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
+        <p class="small muted">한 번 만들면 다음 연수부터는 이 기기에서 저절로 연결돼요. 기관 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
       </> },
       { t: '서버 URL 붙여넣기', body: finish },
     ],
