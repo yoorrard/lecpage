@@ -191,3 +191,20 @@ describe('교재 그대로: 조각 함수', () => {
     assert.ok(html.includes('막힌 곳이 있으면 강사에게 알려 주세요.'));
   });
 });
+
+describe('교재 반영 점검(make·patch 요약 한 줄)', () => {
+  test('초안은 교재의 프롬프트·단계를 모두 담고, 단계를 지우면 빠진 것으로 셈', () => {
+    const m = lesson();
+    m.detected = detect(m);
+    const bp = draftOf(m);
+    const c = E.materialCoverage(m, bp);
+    assert.ok(c.prompts.total > 0 && c.steps.total > 0);
+    assert.equal(c.prompts.miss.length, 0, JSON.stringify(c.prompts.miss));
+    assert.equal(c.steps.miss.length, 0, JSON.stringify(c.steps.miss));
+    const cut = structuredClone(bp);
+    for (const s of cut.sections) if (s.type === 'stations') s.hidden = true;
+    const c2 = E.materialCoverage(m, cut);
+    assert.ok(c2.steps.miss.length >= 1, '숨긴 칸의 단계는 빠짐');
+    assert.ok(c2.missing > c.missing);
+  });
+});
