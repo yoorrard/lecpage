@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 본문 겹침·꼬임 게이트: 모든 프리셋 × 설계도(예시 2종 + 모든 본문 칸 + 극단 입력) × 폭 360·390·768·1280·1440 × 밝게·어둡게 × 움직임 0~3 × 동작 줄이기 × 인쇄.
+// 본문 겹침·꼬임 게이트: 모든 프리셋 × 설계도(예시 2종 + 모든 본문 칸 + 극단 입력) × 폭 360·390·768·1024·1280·1440 × 밝게·어둡게 × 움직임 0~3 × 동작 줄이기 × 인쇄.
 // 보조 화면(--only aux): 강사·발표·안내문·접속 확인을 리허설(local)로 참여 기록(긴 글·주소·쌓인 부호)을 채워 390·1280·1920(발표 화면은 720 높이도) × 밝게·어둡게, 안내문은 인쇄.
 // 자리마다(0·25·50·75·100% + 처음으로 돌아옴) 움직이는 도중과 멈춘 뒤를 검사(overlap-lint.mjs scanPage) + 콘솔 오류. 배치 변형은 설계도 layout으로 하나하나 강제해서도 훑음.
 //   node scripts/body-gate.mjs [--presets a,b] [--quick] [--only all-print,sel,force] [--out 결과.json] [--conc 6]
@@ -38,9 +38,9 @@ function extreme(bp, kind) {
   return bp;
 }
 // 조합: [이름, 설계도, 폭들, 테마, 움직임(''=기본), 동작 줄이기, 인쇄, layout 강제(k)]
-const W5 = [360, 390, 768, 1280, 1440];
+const WS = [360, 390, 768, 1024, 1280, 1440]; // 1024: 낮은 노트북·가로 태블릿(이 폭에서만 넘치는 칸이 있었음)
 const PLAN = quick ? [['all', 'all', [1440, 390], 'light', '', false, false, null]] : [
-  ['sel', 'sel', W5, 'light', '', false, false, null], ['lab', 'lab', W5, 'light', '', false, false, null], ['all', 'all', W5, 'light', '', false, false, null],
+  ['sel', 'sel', WS, 'light', '', false, false, null], ['lab', 'lab', WS, 'light', '', false, false, null], ['all', 'all', WS, 'light', '', false, false, null],
   ['all-dark', 'all', [390, 1440], 'dark', '', false, false, null], ['sel-dark', 'sel', [1280], 'dark', '', false, false, null],
   ...[0, 1, 2, 3].map((m) => [`all-m${m}`, 'all', [390, 1280], 'light', m, false, false, null]),
   ['all-rm', 'all', [1440], 'light', '', true, false, null], ['all-print', 'all', [1280], 'light', '', false, true, null],

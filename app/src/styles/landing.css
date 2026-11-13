@@ -66,11 +66,13 @@
   background:radial-gradient(120% 90% at 0 100%,color-mix(in srgb,var(--sunk) 80%,transparent),transparent 60%),var(--paper)}
 /* 글은 왼쪽 아래 62% 안에만: 모서리가 가장 많이 접혀도(높이의 94%) 글을 가리지 않게 */
 .ld-cover>*{max-width:62%}
-.ld-cover small{position:absolute;top:6cqi;left:7cqi}
-.ld-cover small{font-size:.7rem;font-size:max(9px,1.7cqi);font-weight:650;color:var(--muted);letter-spacing:.02em}
-.ld-cover b{margin-top:2cqi;font-size:2rem;font-size:6.6cqi;line-height:1.12;letter-spacing:-.04em;font-weight:800}
+/* 작은 글은 맨 위에 두되, 좁아서 자리가 모자라면 제목 바로 위로 내려옴(제목과 겹치지 않게) */
+.ld-cover small{margin-bottom:auto;font-size:.7rem;font-size:max(9px,1.7cqi);font-weight:650;color:var(--muted);letter-spacing:.02em}
+.ld-cover b{font-size:2rem;font-size:6.6cqi;line-height:1.12;letter-spacing:-.04em;font-weight:800}
 .ld-cover b>span{display:block;white-space:nowrap}
 .ld-cover>span{max-width:62%;min-height:calc(1.6em * 3);font-size:.86rem;font-size:max(10px,2.25cqi);line-height:1.6;color:var(--ink-2)}
+/* 좁은 그림에서는 소개 글이 두 줄이라 두 줄 자리만(작은 글이 위 여백에 남게) */
+@container (max-width:440px){.ld-cover>span{min-height:calc(1.6em * 2)}}
 .ld-cover-rule{display:block;width:12cqi;height:3px;margin-top:2cqi;border-radius:2px;background:var(--accent)}
 .ld-cover em{font-style:normal;font-size:max(9px,1.9cqi);font-weight:600;color:var(--ink-2)}
 .ld-cover-dots{display:block;margin-top:1cqi;width:62%;height:1.6cqi;min-height:7px;

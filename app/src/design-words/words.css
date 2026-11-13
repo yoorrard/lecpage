@@ -13,7 +13,7 @@
 .sayfix-form input{flex:1;min-width:0;min-height:40px;border-radius:var(--r-xs);border:1px solid var(--line);background:var(--card);padding:8px 12px;font-size:16px}
 .sayfix-form input:hover{border-color:var(--line-strong)}
 .sayfix-form input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-.say-chips{display:flex;flex-wrap:wrap;gap:6px}
+.say-chips{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px}
 .say-chips .chip{font-size:.86rem;min-height:32px;padding:4px 10px}
 .sayfix-out{display:grid;gap:6px;min-height:0}
 .sayfix-out:empty{display:none}

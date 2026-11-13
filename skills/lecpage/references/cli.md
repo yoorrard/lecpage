@@ -15,7 +15,7 @@
 | 경로 | 내용 | 올리나 |
 |---|---|---|
 | `dist/` | 참가자 사이트(index·강사 화면·발표 화면·접속 확인·자료) | 올림 |
-| `dist-강사용/` | 운영안내.md · DESIGN.md · 설계도 사본, `publish` 뒤 `관리자-키.txt`(본인만 읽기)·`QR-안내문.pdf`·`강사-카드.pdf`·`발표화면.png` | **안 올림** |
+| `dist-강사용/` | 운영안내.md · DESIGN.md · 설계도 사본, `publish` 뒤 `관리자-키.txt`(본인만 읽기)·`QR-안내문.pdf`·`발표화면.png` | **안 올림** |
 | `work/material.json` | 교재 해석 결과(형식: `material-format.md`) | 안 올림 |
 | `work/draft.json` | AI 없이 만든 설계도 초안 | 안 올림 |
 | `work/blueprint.json` | 지금 설계도. `patch`가 고치는 파일 | 안 올림 |

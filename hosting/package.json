@@ -2,7 +2,7 @@
   "name": "lecpage-sites",
   "private": true,
   "version": "1.0.0",
-  "description": "lecpage 바로 공개 호스트(선택). Cloudflare Worker + Durable Objects(SQLite)",
+  "description": "lecpage 바로 배포 서버(선택). Cloudflare Worker + Durable Objects(SQLite)",
   "license": "Apache-2.0",
   "type": "module",
   "engines": { "node": ">=22.15" },

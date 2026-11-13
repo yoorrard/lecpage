@@ -24,7 +24,7 @@
 //   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
 //        강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
-//   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·강사-카드.pdf·발표화면.png(Playwright 필요)
+//   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·발표화면.png(Playwright 필요)
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -884,7 +884,7 @@ const commands = {
 
   /** 올리기: Cloudflare 계정 하나에 사이트(+ --live면 참여 기능 중계)를 올리고 주소 확인·안내물까지(scripts/publish.mjs) */
   async publish() { const { publishCmd } = await import('./publish.mjs'); await publishCmd(helpers()); },
-  /** 올린 주소 → 강사용 폴더에 QR-안내문.pdf·강사-카드.pdf·발표화면.png */
+  /** 올린 주소 → 강사용 폴더에 QR-안내문.pdf·발표화면.png */
   async handouts() { const { handoutsCmd } = await import('./publish.mjs'); await handoutsCmd(helpers()); },
 
   pack() {
