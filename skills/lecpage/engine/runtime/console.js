@@ -297,7 +297,7 @@
     f.appendChild(lq); f.appendChild(q);
     var og = el('div', 'lp-con-opts'), opts = [];
     function addOpt() { if (opts.length >= 5) return; var o = el('input', 'lp-in'); o.maxLength = 40; o.placeholder = '보기 ' + (opts.length + 1); o.setAttribute('aria-label', '보기 ' + (opts.length + 1)); opts.push(o); og.appendChild(o); more.hidden = opts.length >= 5; return o; }
-    var more = btn('보기 더하기', '', function () { var o = addOpt(); if (o) o.focus(); });
+    var more = btn('보기 추가', '', function () { var o = addOpt(); if (o) o.focus(); });
     f.appendChild(og); addOpt(); addOpt(); addOpt();
     var row = el('div', 'lp-con-row'); var goB = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '바로 띄우기'); goB.type = 'submit';
     row.appendChild(goB); row.appendChild(more); f.appendChild(row);
