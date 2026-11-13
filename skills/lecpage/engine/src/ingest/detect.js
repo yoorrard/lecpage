@@ -977,13 +977,19 @@ function detectSessions(pages, refYear) {
       // 표의 한 줄: 날짜 칸을 뺀 첫 글 칸이 주제, 나머지(강사·방식)는 설명
       const cells = rest.split(' | ').map((c) => c.trim()).filter((c) => c && !parseKoreanDates(c, refYear).length && !parseTimeRange(c));
       const title = cells.find((c) => /[가-힣A-Za-z]{2,}/.test(c));
-      if (title && !e.title) { e.title = truncate(title, 80); e.desc = truncate(cells.filter((c) => c !== title).join(' · '), 160); }
-    } else if (!dates.length && rest.length >= 2 && rest.length <= 60 && !e.title) { e.title = rest; e.at = { p, x }; }
+      if (title && !e.title) { e.title = truncate(title, 80); e.desc = truncate(cells.filter((c) => c !== title).join(' · '), 160); e.fromTable = true; }
+    } else if (!dates.length && rest.length >= 2 && rest.length <= 60 && !e.at) {
+      // 차시표(표)에서 제목을 얻었어도, 같은 제목의 "n차시 …" 줄이 뒤에 있으면 그 아래 내용도 설명에 이어 붙임
+      if (!e.title) { e.title = rest; e.at = { p, x }; }
+      else if (e.fromTable && (textKey(rest).includes(textKey(e.title)) || textKey(e.title).includes(textKey(rest)))) e.at = { p, x };
+    }
     map.set(no, e);
   }
   // 차시 제목 줄 아래에 이어지는 줄(내용·준비물·과제)은 그 차시의 설명으로(다음 차시·다음 절 제목 전까지)
   for (const e of map.values()) {
-    if (!e.at || e.desc) { delete e.at; continue; }
+    const fromTable = e.fromTable;
+    delete e.fromTable;
+    if (!e.at || (e.desc && !fromTable)) { delete e.at; continue; }
     const list = e.at.p.paragraphs || []; const i = list.indexOf(e.at.x); const more = [];
     for (let k = i + 1; i >= 0 && k < list.length && more.length < 6; k++) {
       const raw = normLine(list[k].text);
@@ -996,7 +1002,7 @@ function detectSessions(pages, refYear) {
       if (SESSION_HEAD.test(t) || head) break;
       if (t) more.push(t);
     }
-    e.desc = truncate(more.join(' · '), 300);
+    e.desc = truncate([fromTable ? e.desc : '', ...more].filter(Boolean).join(' · '), 300);
     delete e.at;
   }
   const list = [...map.values()].sort((a, b) => a.no - b.no).filter((e) => e.title);
