@@ -106,7 +106,7 @@ export function AiConnect({ onConnected, onPaste, onCancel }) {
               <h3 class="key-now-h">붙여넣기</h3>
               <p>{busy ? '키를 확인하고 있어요.' : key ? (prov ? `${PROVIDERS[prov].name} 키예요.` : '넣은 키로 연결해 볼게요.') : '키를 복사했으면 누르세요. 바로 연결돼요.'}</p>
               <div class="key-now-go">
-                <button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !key && !busy ? ' nudge' : ''}`} disabled={busy} onClick={() => (key ? connect() : pasteKey())}>{busy ? '확인하는 중…' : key ? '연결' : '붙여넣기'}</button>
+                <button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !key && !busy ? ' nudge' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={() => (key ? connect() : pasteKey())}>{busy ? '확인하는 중…' : key ? '연결' : '붙여넣기'}</button>
               </div>
               <input ref={inputRef} class="input key-input" type="password" aria-label="API 키" value={key} placeholder="또는 여기에 직접 붙여넣기" autoComplete="off" spellcheck={false} data-1p-ignore data-lpignore="true" data-form-type="other"
                 onInput={(e) => { setKey(e.target.value.trim()); setErr(null); }}

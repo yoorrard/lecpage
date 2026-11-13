@@ -126,10 +126,13 @@ export function StepStart({ p, update, go }) {
   const set = (k) => (e) => setInfo({ [k]: e?.target ? e.target.value : e });
 
   const needTitle = () => { if (info.title?.trim()) return false; setTitleErr(true); titleRef.current?.focus(); titleRef.current?.scrollIntoView({ block: 'center' }); return true; };
-  /** AI 없이: 교재에서 찾은 내용으로 기본 초안만 */
+  /** AI 없이: 교재에서 찾은 내용으로 기본 초안만. 두 번 눌러도 한 번만(교재 모듈을 받는 동안 다시 누를 수 있어서) */
+  const making = useRef(false);
   async function make() {
-    if (needTitle()) return;
-    const ing = await import('../../lib/ingest.js');
+    if (needTitle() || making.current) return;
+    making.current = true;
+    let ing;
+    try { ing = await import('../../lib/ingest.js'); } catch { making.current = false; toast('초안 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); return; }
     update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '' });
     toast('기본 초안을 만들었어요. 미리보기를 보며 고쳐 보세요.');
     go(2);
@@ -223,7 +226,7 @@ export function StepStart({ p, update, go }) {
       <div class="make-bar">
         {p.blueprint
           ? <><button class="btn btn-primary btn-lg" onClick={() => go(2)}>살펴보고 고치기 →</button><button class="btn" disabled={!!busy || job?.status === 'running'} onClick={() => setConfirmRemake(true)}>처음부터 다시 만들기</button></>
-          : <><button class="btn btn-primary btn-lg" disabled={!!busy} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : conn ? 'AI로 사이트 만들기 →' : 'AI 연결하고 만들기 →'}</button>
+          : <><button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : conn ? 'AI로 사이트 만들기 →' : 'AI 연결하고 만들기 →'}</button>
 </>}
       </div>
       {!p.blueprint && conn !== undefined && <p class="small muted ai-priv">{conn ? '' : 'AI는 처음 한 번만 연결해요. '}만들 때 교재의 글이 {conn ? conn.label : 'AI 회사'}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>}

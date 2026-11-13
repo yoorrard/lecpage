@@ -245,7 +245,7 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
           ? <><span class="short-url">{showUrl(short)}</span>
             <button type="button" class="btn btn-sm" onClick={() => copy(short, '짧은 주소를 복사했어요.')}>복사</button>
             <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(open)} onClick={() => { setOpen(!open); setErr(''); }}>바꾸기</button></>
-          : <><button type="button" class="btn btn-sm" disabled={busy} onClick={() => make()}>{busy ? '만드는 중…' : '짧은 주소 만들기'}</button>
+          : <><button type="button" class="btn btn-sm" disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={() => make()}>{busy ? '만드는 중…' : '짧은 주소 만들기'}</button>
             <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(open)} onClick={() => { setOpen(!open); setErr(''); }}>다른 방법</button></>}
       </div>
       {short

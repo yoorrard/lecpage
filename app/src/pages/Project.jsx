@@ -20,6 +20,13 @@ export function Project({ id, step }) {
   const headRef = useRef(null);
   const save = useMemo(() => debounce((v) => projects.put(v).catch(() => toast('저장하지 못했어요. 저장 공간을 확인해 주세요.')), 400), []);
   useEffect(() => { projects.get(id).then((v) => { if (!v) setMissing(true); else { if (!v.stage) v.stage = stageOf(v.step || 1); ref.current = v; setP(v); } }); }, [id]);
+  // 자동 저장은 0.4초 모아 쓰므로, 탭을 닫거나 숨기거나 다른 화면으로 갈 때 남은 것을 바로 씀(docs/interaction.md 9절)
+  useEffect(() => {
+    const now = () => save.flush();
+    const hide = () => { if (document.visibilityState === 'hidden') now(); };
+    addEventListener('pagehide', now); document.addEventListener('visibilitychange', hide);
+    return () => { removeEventListener('pagehide', now); document.removeEventListener('visibilitychange', hide); now(); };
+  }, [save]);
   const s = step > 3 ? stageOf(step) : Math.min(3, Math.max(1, step || p?.stage || 1));
   useEffect(() => { if (p && p.stage !== s) update({ stage: s, visited: { ...(p.visited || {}), [s]: true } }); }, [s, !!p]);
   // 단계가 바뀌면 그 단계 제목으로 초점을 옮겨 화면 읽기 프로그램이 알 수 있게

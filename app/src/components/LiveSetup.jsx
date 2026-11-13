@@ -95,8 +95,8 @@ export function LiveSetup({ p, update }) {
         {method === 'supabase' && <Field label="publishable 키"><input value={draft.anonKey} onInput={(e) => setDraft({ ...draft, anonKey: e.target.value })} placeholder="sb_publishable_…" autoComplete="off" spellcheck={false} /></Field>}
       </div>
       <div class="btn-row">
-        {method !== 'supabase' && !draft.url && <button class="btn btn-primary" disabled={state.busy} onClick={pasteUrl}>{state.busy ? '확인하는 중…' : '붙여넣기'}</button>}
-        {(method === 'supabase' || draft.url) && <button class="btn btn-primary" disabled={!draft.url || state.busy} onClick={() => test(false)}>{state.busy ? '확인하는 중…' : '연결 확인'}</button>}
+        {method !== 'supabase' && !draft.url && <button class="btn btn-primary" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={pasteUrl}>{state.busy ? '확인하는 중…' : '붙여넣기'}</button>}
+        {(method === 'supabase' || draft.url) && <button class="btn btn-primary" disabled={!draft.url || state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(false)}>{state.busy ? '확인하는 중…' : '연결 확인'}</button>}
       </div>
       {state.msg && !state.busy && <Notice kind={state.ok ? 'ok' : 'bad'}>{state.msg}</Notice>}
     </>
@@ -145,7 +145,7 @@ export function LiveSetup({ p, update }) {
   return (
     <div class="stack">
       {connected ? (
-        <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
+        <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span><div class="btn-row"><button class="btn btn-sm" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
       ) : (
         <Notice kind="lav"><span><b>추천: {reco.backendInfo.name_ko}</b> · {reco.reasons[0]}</span></Notice>
       )}

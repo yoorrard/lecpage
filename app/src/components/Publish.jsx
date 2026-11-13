@@ -118,7 +118,7 @@ function Connect({ t, kind, onConnected, onChange }) {
             onInput={(e) => { t.setToken(e.target.value.trim()); setErr(''); }}
             onPaste={(e) => { const x = e.clipboardData?.getData('text'); if (x) { e.preventDefault(); take(x); } }}
             onKeyDown={(e) => e.key === 'Enter' && t.token && take(t.token)} />
-          <button type="button" class={`btn btn-sm btn-primary${back ? ' attn' : ''}`} disabled={busy} onClick={paste}>{busy ? '확인하는 중…' : '붙여넣기'}</button>
+          <button type="button" class={`btn btn-sm btn-primary${back ? ' attn' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={paste}>{busy ? '확인하는 중…' : '붙여넣기'}</button>
         </div>
         {t.token && !busy && <div><button type="button" class="btn btn-sm" onClick={() => take(t.token)}>연결</button></div>}
         {err && <p class="small err" role="alert">{err}</p>}
@@ -149,7 +149,7 @@ function AddrName({ label = '주소 이름', optional, pre, post, value, onInput
 const cleanName = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+/, '');
 
 const Go = ({ on, busy, again, onClick, disabled, name = '공개하기' }) => (
-  <div class="btn-row"><button class="btn btn-primary btn-lg" disabled={disabled || !!busy} onClick={onClick}>{on ? '올리는 중…' : again ? '바뀐 내용 다시 올리기' : name}</button></div>
+  <div class="btn-row"><button class="btn btn-primary btn-lg" disabled={disabled || !!busy} aria-busy={on ? 'true' : undefined} onClick={onClick}>{on ? '올리는 중…' : again ? '바뀐 내용 다시 올리기' : name}</button></div>
 );
 
 /**
@@ -349,7 +349,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
   const cf = kind === 'cloudflare';
   const get = { t: '사이트 파일 받기', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
   const save = { t: prev ? '올린 주소 확인하기' : '올린 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '올린 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>

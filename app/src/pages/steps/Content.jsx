@@ -133,7 +133,7 @@ function MaterialUpload({ pid, s, put }) {
   }
   return (
     <div class="mat-up">
-      <button type="button" class="btn btn-sm" disabled={busy} onClick={() => inp.current?.click()}>{busy ? '넣는 중…' : '＋ 파일 올리기'}</button>
+      <button type="button" class="btn btn-sm" disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={() => inp.current?.click()}>{busy ? '넣는 중…' : '＋ 파일 올리기'}</button>
       <span class="small muted">PDF·한글·PPT·ZIP 등. 공개한 뒤에 더 넣어도 돼요. 넣고 [바뀐 내용 다시 올리기]를 누르면 같은 주소에 반영돼요.</span>
       <input ref={inp} type="file" multiple hidden onChange={(e) => { add([...e.target.files]); e.target.value = ''; }} />
     </div>

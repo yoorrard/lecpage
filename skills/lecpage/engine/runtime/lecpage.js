@@ -604,6 +604,9 @@
     var X = LecLive.util.ext, U = LecLive.util;
     if (dock && root.getAttribute('data-phase') !== 'after') { // 끝난 연수에는 도움 요청·신호 도크를 띄우지 않음
       dock.hidden = false; root.classList.add('lp-dock-on');
+      // 도크 높이(휴대폰에서는 두 줄이 되기도 함)를 --lp-dock-h로: Tab으로 옮긴 칸이 도크 밑에 숨지 않게 scroll-padding-bottom에 씀(lecpage.css)
+      var dockH = function () { root.style.setProperty('--lp-dock-h', dock.offsetHeight + 'px'); };
+      dockH(); if ('ResizeObserver' in window) new ResizeObserver(dockH).observe(dock);
       // 첫 화면이 화면 아래쪽에 걸려 있는 동안은 도크를 감춤(첫 화면 오른쪽 아래를 가리지 않게). 지나가면 나타남
       var hero0 = $('main > .lp-hero');
       if (hero0 && scrollY < innerHeight * 0.5) root.classList.add('lp-hero-in');

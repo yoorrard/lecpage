@@ -190,7 +190,7 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay }
           <p class="small muted">{PROVIDERS[ai.provider].note}</p>
         </AiStatus>
         <div class="btn-row">
-          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} onClick={() => run()}>{busy ? (full ? '다시 짜는 중…' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
+          <button class="btn btn-primary btn-lg" disabled={!ready || !!busy} aria-busy={busy ? 'true' : undefined} onClick={() => run()}>{busy ? (full ? '다시 짜는 중…' : '다듬는 중…') : full ? 'AI로 새로 짜기' : 'AI로 문구 다듬기'}</button>
           {busy && <button class="btn btn-quiet" onClick={() => ctrl.current?.abort()}>멈추기</button>}
         </div>
         {busy && <div class="row" role="status"><Mascot size={48} mood="think" look /><span class="muted">{note || (full ? '교재를 읽고 연수 흐름을 짜고 있어요. 1~2분 걸려요.' : '문구를 읽고 다듬고 있어요.')}</span></div>}
