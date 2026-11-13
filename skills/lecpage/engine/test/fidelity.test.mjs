@@ -178,9 +178,9 @@ describe('교재 그대로: 조각 함수', () => {
     for (const cls of ['lp-st', 'lp-note', 'lp-schedule', 'lp-btn']) assert.ok(small.includes(`.${cls}{`) || small.includes(`.${cls} `) || small.includes(`.${cls},`), cls);
   });
 
-  test('가볍게: 프리셋 기본 제목 글꼴로 나눠 받기 없는 큰 글꼴(G마켓 산스 600KB)을 쓰지 않음', () => {
+  test('가볍게: 프리셋 기본 글꼴로 나눠 받기 없는 큰 글꼴(G마켓 산스 600KB·나눔바른고딕 1.6MB)을 쓰지 않음(교재가 그 글꼴일 때만)', () => {
     assert.ok(E.PRESETS.length > 10);
-    for (const p of E.PRESETS) assert.notEqual(p.fonts?.display, 'gmarket', p.id);
+    for (const p of E.PRESETS) for (const f of [p.fonts, ...(p.fontAlts || [])]) for (const k of ['display', 'body']) assert.ok(!['gmarket', 'nanumBarun'].includes(f?.[k]), `${p.id} ${k} ${f?.[k]}`);
   });
 
   test('8. 고정 안내 문구: 설문 안내는 강사가 적었을 때만, 접속 확인은 중립적인 다음 할 일', () => {

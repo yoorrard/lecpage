@@ -1,5 +1,5 @@
 // 프리셋(압축 팔레트) → 계약 §3의 CSS 변수로 펼치기
-import { mix, alpha, ensureContrast, readableOn, isHex, contrast } from './color.js';
+import { mix, alpha, ensureContrast, readableOn, isHex, contrast, luminance } from './color.js';
 import { fontStack, fontAssets, fontNeeds, FONTS } from './fonts.js';
 import { getPreset } from './presets.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './seeds.js';
@@ -56,10 +56,22 @@ function applyAccent(pal, accent, theme) {
 export function themeTokens(preset, theme, opts = {}) {
   let p = { ...preset[theme] };
   if (opts.accent) p = applyAccent(p, opts.accent, theme);
-  // 강조색은 작은 글자(번호·링크)로도 쓰므로 바탕과 4.5:1 이상
-  p.primary = ensureContrast(p.primary, p.bg, 4.5);
+  // 강조색·흐린 글자는 작은 글자(번호·링크·메모)로도 쓰므로 그 글자가 놓이는 모든 바탕과 4.5:1 이상:
+  // 바탕·카드·옅은 띠(--surface-2, 색 띠 섹션)·--muted. 바탕만 보면 색 띠 섹션에서 4.4:1로 떨어짐
+  // 바탕 기준으로 맞춘 뒤, 남은 바탕에서 모자라면 꼭 필요한 만큼만 더 진하게(색이 크게 바뀌지 않게)
+  const grounds = [p.bg, p.card, mix(p.bg, p.fg, 0.035), mix(p.bg, p.fg, 0.06)].filter(isHex);
+  const worst = (c) => grounds.reduce((w, g) => (contrast(c, g) < contrast(c, w) ? g : w), grounds[0]);
+  const enough = (c) => {
+    const g = worst(c);
+    if (!isHex(c) || !g || contrast(c, g) >= 4.5) return c;
+    const to = luminance(g) > 0.4 ? '#000000' : '#ffffff';
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 16; i++) { const m = (lo + hi) / 2; if (contrast(mix(c, to, m), g) >= 4.5) hi = m; else lo = m; }
+    return mix(c, to, hi);
+  };
+  p.primary = enough(ensureContrast(p.primary, p.bg, 4.5));
   const border = p.border || mix(p.bg, p.fg, theme === 'dark' ? 0.18 : 0.14);
-  const muted = ensureContrast(p.muted || mix(p.fg, p.bg, 0.35), p.bg, 4.5);
+  const muted = enough(ensureContrast(p.muted || mix(p.fg, p.bg, 0.35), p.bg, 4.5));
   const primaryFg = contrast(p.primary, p.primaryFg) >= 4.5 ? p.primaryFg : readableOn(p.primary);
   const sem = SEMANTIC[theme];
   return {

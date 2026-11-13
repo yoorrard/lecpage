@@ -343,8 +343,8 @@ export const PRESETS = [
     desc_ko: '모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에.',
     moods: ['emotional', 'calm', 'warm'], topics: ['sel', 'counseling', 'parent', 'environment', 'general'],
     archetypes: ['story', 'live', 'course'], theme: 'light', motion: 2, layout: 'center',
-    fonts: { display: 'gowunDodum', body: 'nanumBarun', num: 'fraunces', mono: 'plexMono', displayWeight: 400 },
-    fontAlts: [{ display: 'maruburi', body: 'nanumBarun', displayWeight: 700, topics: ['counseling', 'parent'] }],
+    fonts: { display: 'gowunDodum', body: 'pretendard', num: 'fraunces', mono: 'plexMono', displayWeight: 400 }, // 본문: 나눔바른고딕(굵기당 1.6MB, 나눠 받기 없음) 대신 결이 같은 Pretendard(가변 글꼴 나눠 받기, 굵기끼리 조각을 같이 씀)
+    fontAlts: [{ display: 'maruburi', body: 'pretendard', displayWeight: 700, topics: ['counseling', 'parent'] }],
     light: { bg: '#f1f5f4', fg: '#12262b', card: '#ffffff', muted: '#4d6168', primary: '#0f6a73', primaryFg: '#ffffff', accent: '#e8734a', accent2: '#6f8fd6', accent3: '#b9d9d3', heroFrom: '#d3e9e5', heroTo: '#f1f5f4' },
     dark: { bg: '#0c1a1e', fg: '#e9f2f0', card: '#132830', muted: '#a3b8b8', primary: '#7fd6cf', primaryFg: '#06201f', accent: '#ff9a76', accent2: '#9db5ff', accent3: '#2d5a5c', heroFrom: '#14393d', heroTo: '#0c1a1e' },
     shape: { radius: 20, radiusSm: 12, radiusLg: 28, borderW: 1, shadow: 'soft' },
