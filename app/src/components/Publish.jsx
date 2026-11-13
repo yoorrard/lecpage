@@ -15,11 +15,11 @@ export const KIND = { vercel: 'vercel', 'github-pages': 'github', netlify: 'netl
 // 고른 곳마다 한 줄 소개(lead)와 알아 둘 점(care). 숫자·약관 근거: docs/research/hosting-2026-11.md, 2026-11-12에 공식 문서로 다시 확인
 const ABOUT = {
   lecpage: { lead: '가입이나 토큰 없이 바로 공개해요.' },
-  vercel: { lead: '토큰 하나로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '무료는 비상업 개인 용도예요. 강사료를 받는 연수는 Cloudflare나 GitHub Pages에 올리세요.' },
+  vercel: { lead: '토큰 하나로 바로 올리고, 다시 올려도 주소가 그대로예요.' },
   'github-pages': { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '저장소가 공개돼서 사이트 파일을 누구나 볼 수 있어요.' },
-  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 강사료를 받는 연수에도 쓸 수 있어요.' },
+  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.' },
   netlify: { lead: '토큰으로 바로 올리고, 다시 올려도 주소가 그대로예요.', care: '2026년 7월 28일 뒤에 가입했다면 올린 뒤 Netlify에서 Make public을 눌러야 열려요. 무료는 한 달에 20번쯤 올릴 수 있어요.' },
-  zip: { lead: '학교 서버·NAS·USB로 나눌 때 써요.' },
+  zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');

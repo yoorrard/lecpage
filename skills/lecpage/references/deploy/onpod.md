@@ -1,13 +1,13 @@
 # Onpod에 올리기
 
-> 한국 서비스(주식회사 AI3)입니다. `publish work --host onpod` 한 번으로 `https://<이름>.onpod.ai`에 **사이트만** 올립니다. 한국어 화면·국내 리전, 카드 없이 무료, 상업 이용 제한 없음.
+> 한국 서비스(주식회사 AI3)입니다. `publish work --host onpod` 한 번으로 `https://<이름>.onpod.ai`에 **사이트만** 올립니다. 한국어 화면·국내 리전, 카드 없이 무료.
 > 2026-11-13 확인. 근거는 `docs/research/hosting-2026-11.md` §12. 실제 계정·배포로는 시험하지 않았습니다(가짜 CLI로 순서만 시험) ⚠️.
 
 ## 언제 고르나요
 | 고릅니다 | 고르지 않습니다 → 대신 |
 |---|---|
 | 강사가 이미 Onpod을 쓰거나 `ONPOD_TOKEN`이 있음(강사가 더 할 일 없음) | 처음 올리는데 가장 빨리 → Cloudflare(가입·로그인 승인 2번, Onpod은 키를 만들어 건네야 해서 약 4번) |
-| 한국 회사·한국어 화면을 원함, 강사료를 받는 연수 | 질문·투표 중계까지 한 계정에 → `publish work --host cloudflare --live` |
+| 한국 회사·한국어 화면을 원함 | 질문·투표 중계까지 한 계정에 → `publish work --host cloudflare --live` |
 | 내 도메인을 무료로 붙이고 싶음(apex도 됨) | 사이트 100MB·파일 50MB·5,000개를 넘음 → Cloudflare·GitHub Pages |
 | | 강사가 사이트를 계정당 10개 넘게 이미 올려 둠 → 안 쓰는 사이트를 지우거나 Cloudflare |
 | | **앱(브라우저만)에서 올리기** → 못 합니다. Onpod API가 다른 사이트의 요청을 막습니다. 앱은 Vercel·GitHub Pages·Cloudflare ZIP |

@@ -1,12 +1,12 @@
 # Vercel에 올리기
 
-> 토큰 하나로 `https://<프로젝트>.vercel.app`에 올립니다. 앱(브라우저만)의 기본 올릴 곳입니다. 무료(Hobby)는 **비상업 개인 용도만**.
+> 토큰 하나로 `https://<프로젝트>.vercel.app`에 올립니다. 앱(브라우저만)의 기본 올릴 곳입니다.
 > 2026-11-11 확인. 근거와 API 순서는 `docs/research/hosting-2026-11.md` §3.1·§10. 실제 배포로 끝까지 시험하지는 않았습니다 ⚠️.
 
 ## 언제 고르나요
 | 고릅니다 | 고르지 않습니다 → 대신 |
 |---|---|
-| 앱에서 클릭만으로 공개(새 계정도 바로 열리고, 파일이 공개 저장소에 올라가지 않음) | **강사료를 받는 연수** → Cloudflare, 다음은 GitHub Pages |
+| 앱에서 클릭만으로 공개(새 계정도 바로 열리고, 파일이 공개 저장소에 올라가지 않음) | 방문이 아주 많은 행사 → Cloudflare |
 | 강사가 이미 Vercel을 쓰거나 `VERCEL_TOKEN`이 있음 | 사이트가 100MB를 넘음 → GitHub Pages |
 | | 참여 기능 서버를 Vercel 안에 두려 함 → Sheets·Supabase·cf-relay(`../infra-decision.md`) |
 
@@ -21,7 +21,6 @@ Vercel 함수의 WebSocket은 최대 실행 시간(Hobby 300초)에 끊기고 �
 | 프로젝트·도메인 | 프로젝트 200개, 프로젝트당 도메인 50개 |
 | 넘으면 | 대개 30일 뒤에 다시 쓸 수 있음 |
 
-- 상업 이용의 정의는 "제작에 관여한 누구든 금전적 이득을 얻는 배포"입니다. 예: 결제, 광고, 사이트 제작·호스팅의 대가. 기부 요청은 예외. 강사료를 받는 연수는 회색이라 `decide-infra`가 Vercel을 뺍니다(`commercial: true`).
 - Hobby에는 암호 보호가 없습니다. 잠가야 하면 lecpage의 암호(`--password`)를 씁니다.
 - 출처: https://vercel.com/docs/limits · https://vercel.com/docs/plans/hobby · https://vercel.com/docs/limits/fair-use-guidelines · https://vercel.com/docs/functions/websockets
 

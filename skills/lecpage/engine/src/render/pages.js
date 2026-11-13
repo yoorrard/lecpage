@@ -464,7 +464,7 @@ function defaultProcessors(bp) {
 function conceptBlock(ctx, p) {
   const bp = ctx.bp;
   const c = bp.concept || deriveConcept({ title: bp.meta.title, subtitle: bp.meta.subtitle, topics: bp.design?.topics || [], archetype: bp.archetype?.primary, admin: bp.meta.admin?.kind });
-  const by = { ai: 'AI가 교재를 읽고 세움', teacher: '선생님이 정함', auto: '주제에서 자동으로 세움' }[c.source] || '';
+  const by = { ai: 'AI가 교재를 읽고 세움', teacher: '강사가 정함', auto: '주제에서 자동으로 세움' }[c.source] || '';
   const plan = presetPlan(p);
   const KO = { rise: '떠오름', fade: '번짐', side: '옆에서', wipe: '왼쪽부터 펼침', clip: '위에서 펼침', scale: '살짝 커짐', drop: '내려앉음', flip: '넘어옴' };
   const enter = Object.entries(plan.enter).map(([k, v]) => `${k === 'default' ? '기본' : SECTION_DEFS[k]?.label || k} ${KO[v] || v}`).join(' · ');

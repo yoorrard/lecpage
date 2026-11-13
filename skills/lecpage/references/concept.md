@@ -16,7 +16,7 @@
 | `preset` | 컨셉에 맞는 디자인 id. `design.preset`을 따로 적지 않았을 때 쓴다 | `validate`, 초안 만들기 |
 | `motion` | 컨셉이 바라는 페이지 연출 단계 0~3. 환경 상한(공식 연수·크롬북)이 먼저다 | `validate` |
 | `sections` · `features` | 컨셉 때문에 고른 섹션 타입·참여 기능 | 구성(디자인은 읽지 않음) |
-| `source` | `ai` · `auto`(규칙으로 세움) · `teacher`(선생님이 고침) | 다시 만들 때 `teacher`는 지킨다 |
+| `source` | `ai` · `auto`(규칙으로 세움) · `teacher`(강사가 고침) | 다시 만들 때 `teacher`는 지킨다 |
 
 `design.preset`을 직접 적으면 그것이 먼저다. `concept`가 없는 예전 설계도는 그대로 동작한다.
 

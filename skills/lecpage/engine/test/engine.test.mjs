@@ -90,7 +90,6 @@ test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 500, features: ['qa', 'poll'] }).backend, 'cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa'], network: 'offline' }).backend, 'lan');
   assert.equal(E.decideInfra({ size: 80, features: ['qa'], infra: ['nas'], skill: 'set' }).backend, 'server');
-  assert.ok(!E.decideInfra({ size: 30, features: ['qa'], commercial: true }).hosts.includes('vercel'));
 });
 
 test('유형 결정', () => {
@@ -231,11 +230,10 @@ test('짧은 주소: 사이트 주소와 따로 넘기고(QR·복사는 원래 �
   assert.match(r.files['assets/screen.js'], /createSvgTag\(\{ cellSize: 6, margin: 24/);
 });
 
-test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사료가 있으면 Vercel 제외, 연결·지난번에 올린 곳 먼저', () => {
+test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 연결·지난번에 올린 곳 먼저', () => {
   assert.equal(E.decideHost({}).pick, 'vercel');
   assert.equal(E.decideHost({ skill: 'dev' }).pick, 'cloudflare');
-  const paid = E.decideHost({ commercial: true });
-  assert.ok(!paid.hosts.includes('vercel')); assert.equal(paid.pick, 'cloudflare'); assert.equal(paid.hosts[1], 'github-pages'); assert.ok(paid.warnings.length);
+  assert.ok(E.decideHost({}).hosts.includes('vercel'), '강사료를 받는 강의여도 올릴 곳을 빼지 않음');
   assert.equal(E.decideHost({ previous: 'netlify' }).pick, 'netlify');
   assert.equal(E.decideHost({ connected: ['github-pages'] }).pick, 'github-pages');
   assert.equal(E.decideHost({ instant: true }).pick, 'lecpage');
@@ -249,7 +247,6 @@ test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사�
   const big = E.decideHost({ siteMB: 180 });
   assert.equal(big.pick, 'cloudflare', '100MB가 넘는 사이트는 Cloudflare 먼저'); assert.ok(big.warnings.some((w) => /100MB/.test(w)));
   assert.equal(big.hosts.at(-3), 'vercel', 'Vercel은 맨 뒤(뒤에 firebase·zip)');
-  assert.equal(E.decideHost({ commercial: true, maxFileMB: 40 }).pick, 'github-pages');
   assert.equal(E.decideHost({ skill: 'dev', files: 1500 }).pick, 'cloudflare', '명령으로 올리면 20,000개까지');
   assert.equal(E.decideHost({ skill: 'dev', files: 25000 }).pick, 'github-pages');
   assert.equal(E.decideHost({ files: 1500 }).pick, 'github-pages', '앱(끌어 놓기)은 1,000개까지');
@@ -265,7 +262,7 @@ test('올릴 곳 Onpod: 명령(skill)에서만, Cloudflare 뒤. 이미 쓰면 �
   assert.equal(dev.steps, 2, 'Cloudflare: 가입·로그인 승인');
   const mine = E.decideHost({ skill: 'dev', connected: ['onpod'] });
   assert.equal(mine.pick, 'onpod'); assert.equal(mine.steps, 0);
-  assert.ok(E.decideHost({ skill: 'dev', commercial: true }).hosts.includes('onpod'), '상업 이용 제한 없음');
+  assert.ok(E.decideHost({ skill: 'dev' }).hosts.includes('onpod'));
   const big = E.decideHost({ skill: 'dev', siteMB: 150 }).hosts;
   assert.equal(big.indexOf('onpod'), big.indexOf('firebase') - 1, '사이트 100MB를 넘으면 맨 뒤(firebase·zip 앞)');
   assert.equal(E.HOST_STEPS.onpod.skill, 4); assert.equal(E.HOST_STEPS.onpod.app, null);

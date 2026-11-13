@@ -5,7 +5,7 @@
 
 ## 언제 고르나요
 - 개발자이고, 데이터를 직접 소유하는 node-server를 쓰고 싶은데 학교 서버·NAS·VPS가 없을 때.
-- 고르지 말 것: 0원이어야 할 때(→ Supabase·Sheets·Cloudflare 중계), 클릭만 하는 선생님, 국내 보관이 필요할 때(→ `aws-lightsail-docker.md`의 서울 리전).
+- 고르지 말 것: 0원이어야 할 때(→ Supabase·Sheets·Cloudflare 중계), 클릭만 하는 강사, 국내 보관이 필요할 때(→ `aws-lightsail-docker.md`의 서울 리전).
 
 ## 세 곳 비교 (2026-11 확인. 이번 2026-11-09 재검증에서는 다시 보지 않음 ⚠️)
 | | Fly.io | Railway | Render |

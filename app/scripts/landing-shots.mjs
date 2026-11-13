@@ -72,7 +72,7 @@ async function save(name, png, { q = 0.76, w = 0 } = {}) {
   console.log(`${name}.webp ${W}×${H} ${Math.round(buf.length / 1024)}KB`);
 }
 async function shoot(dir, { width = 1280, height = 800, dpr = 1, full = 0, wait = 2600 } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, locale: 'ko-KR', colorScheme: 'light', reducedMotion: 'no-preference' });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, locale: 'ko-KR', colorScheme: 'light', reducedMotion: 'reduce' }); // 동작 줄이기: 움직이는 그래픽이 멈춘 중간 모습이 아니라 완성된 정지 그림으로 찍힘(엔진이 보장하는 상태)
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.error(`  ${dir} 화면 오류:`, e.message));
   await page.goto(base + dir + '/index.html', { waitUntil: 'load' });
@@ -105,6 +105,7 @@ try {
       const png = await shoot(dir);
       await save('site-data-lab', png, { q: 0.76, w: 1120 }); // 이야기 '펼쳐요' 장면
       await save('hero-data-lab', png, { q: 0.62, w: 760 }); // 첫 화면: 교재 표지 밑에 깔려 모서리만 보이므로 작게(첫 화면을 빨리)
+      await save('hero-data-lab-s', png, { q: 0.5, w: 520 }); // 좁은 화면 첫 화면(글 아래에 조금 걸침): 더 가볍게, 미리 받아도 첫 그림을 늦추지 않게
     }
     if (want('phone')) await save('phone-data-lab', await shoot(dir, { width: 390, height: 844, dpr: 1.5, full: 2400 }), { q: 0.7 });
   }
