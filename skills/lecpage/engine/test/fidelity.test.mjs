@@ -9,6 +9,7 @@ import { validate } from '../src/validate.js';
 import { materialToDraft, detect } from '../src/ingest/index.js';
 import { splitNotes } from '../src/ingest/signals.js';
 import { pagesForImages } from '../src/ingest/util.js';
+import { pruneUnusedCss } from '../src/css-prune.js';
 
 // ── 교재 조각 만들기 ─────────────────────────────────
 const para = (x, block = 1) => (typeof x === 'string' ? { text: x, level: 0, block } : { level: 0, block, ...x });
@@ -160,6 +161,26 @@ describe('교재 그대로: 조각 함수', () => {
     assert.deepEqual(pagesForImages(pages, 20).map((p) => p.page).slice(-2), [19, 21], '그림 20장 = 보이는 쪽 20개');
     assert.equal(pagesForImages(pages, 21).length, 21, '숨긴 쪽도 그렸으면 모든 쪽');
     assert.equal(pagesForImages(pages, 21, true).length, 20, '짝 PDF가 숨긴 쪽을 뺐으면 보이는 쪽만');
+  });
+
+  test('가볍게: 런타임 CSS에서 이 사이트가 쓰지 않는 규칙만 뺌', () => {
+    const css = '/*@v:goals.x*/.lp-a{color:red}.lp-b{color:blue}.lp-a:not(.lp-zz){x:1}[data-preset="p1"] .lp-a{x:2}[data-preset="p2"] .lp-a{x:3}'
+      + '.lp-rip-g3{x:4}@media (min-width:9px){.lp-b{x:5}.lp-a{x:6}}@keyframes used{to{x:1}}@keyframes gone{to{x:1}}.lp-a{animation:used 1s}[data-theme="dark"] .lp-a{x:7}';
+    const used = '<html data-preset="p1"><p class="lp-a">…</p><script>el.className = \'lp-rip-g\' + n;</script>';
+    const out = pruneUnusedCss(css, used);
+    for (const keep of ['/*@v:goals.x*/', '.lp-a{color:red}', '.lp-a:not(.lp-zz)', '[data-preset="p1"] .lp-a', '.lp-rip-g3', '@media (min-width:9px){.lp-a{x:6}}', '@keyframes used', '[data-theme="dark"] .lp-a']) assert.ok(out.includes(keep), keep);
+    for (const drop of ['.lp-b', '[data-preset="p2"]', '@keyframes gone']) assert.ok(!out.includes(drop), drop);
+    // 실제 빌드: 쓰는 규칙은 남고 크기는 절반 아래로
+    const r = E.build(validate(draftOf(lesson())).blueprint, { runtime: nodeRuntime() });
+    const full = E.build(validate(draftOf(lesson())).blueprint, { runtime: nodeRuntime(), keepAllCss: true }).files['assets/lecpage.css'];
+    const small = r.files['assets/lecpage.css'];
+    assert.ok(small.length < full.length * 0.5, `${small.length} / ${full.length}`);
+    for (const cls of ['lp-st', 'lp-note', 'lp-schedule', 'lp-btn']) assert.ok(small.includes(`.${cls}{`) || small.includes(`.${cls} `) || small.includes(`.${cls},`), cls);
+  });
+
+  test('가볍게: 프리셋 기본 제목 글꼴로 나눠 받기 없는 큰 글꼴(G마켓 산스 600KB)을 쓰지 않음', () => {
+    assert.ok(E.PRESETS.length > 10);
+    for (const p of E.PRESETS) assert.notEqual(p.fonts?.display, 'gmarket', p.id);
   });
 
   test('8. 고정 안내 문구: 설문 안내는 강사가 적었을 때만, 접속 확인은 중립적인 다음 할 일', () => {

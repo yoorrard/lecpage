@@ -75,7 +75,7 @@ ${ctx.ogImage ? `<meta property="og:image" content="${esc(ctx.ogImage)}"><meta n
 <meta name="generator" content="lecpage ${VERSION}">
 ${robotsMeta(ctx, page)}
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
+${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/lecpage.css">
 ${ctx.hasFx ? '<link rel="stylesheet" href="assets/fx.css">' : ''}
