@@ -15,6 +15,7 @@
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호]
 //   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
+//   guard <AI 답.json|txt> <material.json> [-i info.json] [-o blueprint.json]   AI 답의 교재 글(프롬프트·단계·일정·FAQ·목표·주소)을 교재대로
 //   design <blueprint.json>                          컨셉(한 줄·모티프·권하는 디자인)과 디자인 순위·적용된 효과
 //   decide-infra -i info.json · presets · effects
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -686,6 +687,22 @@ const commands = {
     const text = E.buildPrompt({ context, info, draft, material });
     if (!args.o) return console.log(text);
     writeFileSync(args.o, text); say([`프롬프트 → ${args.o} (${text.length}자)`], { ok: true, file: resolve(args.o), chars: text.length });
+  },
+
+  /** AI 답(설계도 JSON 또는 챗봇 답 글)을 교재 초안과 견줘 교재 글을 지킴(교재 지킴이) */
+  async guard() {
+    const api = await ingestApi();
+    const text = readFileSync(args._[0], 'utf8');
+    const read = E.readAnswer(text);
+    if (read.kind !== 'ok') { say([`AI 답을 읽지 못했어요(${read.kind}).`], { ok: false, kind: read.kind }); process.exit(1); }
+    const material = readJson(args._[1]); const info = args.i ? readJson(args.i) : {};
+    const draft = api.materialToDraft(material, E.draftInfo(info));
+    const { blueprint, restored } = E.guardMaterial(read.json, draft, { material, allowUrls: [info.joinUrl, info.surveyUrl].filter(Boolean) });
+    const bp = E.keepDraftParts(blueprint, draft);
+    const o = args.o || 'blueprint.json'; writeJson(o, bp);
+    say([`교재 지킴이 → ${rel(resolve(o))} · 되돌린 곳 ${E.restoredCount(restored)}${restored.length > E.restoredCount(restored) ? `(채운 목록 ${restored.length - E.restoredCount(restored)})` : ''}`,
+      ...restored.filter((r) => !r.quiet).slice(0, 12).map((r) => `- ${r.where}: ${cut(r.before || '(없음)', 40)} → ${cut(r.after || '(뺌)', 40)}`)],
+    { ok: true, file: resolve(o), restored });
   },
 
   validate() {

@@ -290,16 +290,91 @@ function prune(v, noFalse = false) {
   return o;
 }
 
-/** AI 응답에서 JSON 꺼내기(코드 블록, 앞뒤 설명, 끝 쉼표, 굽은 따옴표 보정) */
-export function extractJson(text) {
-  if (text && typeof text === 'object') return text;
-  let s = String(text || '').trim();
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(s);
-  if (fence) s = fence[1].trim();
-  const a = s.indexOf('{'), b = s.lastIndexOf('}');
-  if (a < 0 || b < a) throw new Error('응답에서 JSON을 찾지 못했습니다.');
-  s = s.slice(a, b + 1);
+// ── AI 답 읽기 ──
+// 쓰던 챗봇 창에서 복사한 답은 모양이 제각각입니다: 코드 블록, 앞뒤 설명, 대화 전체(프롬프트 + 답), 중간에 끊긴 답, JSON 대신 질문.
+// 프롬프트 끝 줄 뒤만 답으로 보고, 짝이 맞는 { … } 덩어리를 모두 찾아 설계도처럼 생긴 것을 고릅니다.
+const PROMPT_ENDS = [PROMPT_END, '이제 JSON만 답한다.', '이제 패치 JSON만 출력한다.'];
+const PROMPT_HEADS = ['너는 한국 교사 연수 사이트를 설계하는 편집자다', '너는 한국 교사 연수 사이트의 문구를 다듬는 편집자다'];
+/** 대화 전체를 붙여 넣었으면 프롬프트 끝 줄 뒤만 */
+export function answerPart(text) {
+  const s = String(text || '');
+  let at = -1;
+  for (const m of PROMPT_ENDS) { const i = s.lastIndexOf(m); if (i >= 0) at = Math.max(at, i + m.length); }
+  return at >= 0 ? s.slice(at) : s;
+}
+const stripFences = (s) => String(s || '').replace(/^[ \t]*```[\w-]*[ \t]*$/gm, '');
+/** 짝이 맞는 { … } 덩어리들(문자열 안의 괄호는 셈하지 않음). open: 끝까지 닫히지 않은 덩어리가 있는지 */
+function jsonChunks(s) {
+  const out = []; let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (depth > 0 && inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '{') { if (depth === 0) start = i; depth++; }
+    else if (depth > 0 && c === '[') depth++;
+    else if (depth > 0 && (c === '}' || c === ']')) { depth--; if (depth === 0) out.push(s.slice(start, i + 1)); }
+    else if (depth > 0 && c === '"') inStr = true;
+  }
+  return { chunks: out, open: depth > 0 };
+}
+function parseLoose(s) {
   try { return JSON.parse(s); } catch { /* 보정 시도 */ }
   const fixed = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/,\s*([}\]])/g, '$1').replace(/\/\/[^\n"]*\n/g, '\n');
   return JSON.parse(fixed);
+}
+
+/** AI 응답에서 JSON 꺼내기(코드 블록, 앞뒤 설명, 대화 전체, 끝 쉼표, 굽은 따옴표 보정). 못 찾으면 던짐 */
+export function extractJson(text) {
+  if (text && typeof text === 'object') return text;
+  const s = stripFences(answerPart(text)).trim();
+  const { chunks } = jsonChunks(s);
+  const found = [];
+  chunks.forEach((c, i) => { try { const j = parseLoose(c); if (j && typeof j === 'object') found.push({ j, i, n: c.length }); } catch { /* 다음 덩어리 */ } });
+  if (found.length) {
+    // 설계도(sections)·문구 다듬기(changes)처럼 생긴 것 > 컨셉·디자인까지 있는 것 > 뒤에 있는 것 > 큰 것
+    const rank = ({ j, i, n }) => [Array.isArray(j.sections) || Array.isArray(j.changes) || Array.isArray(j.ops) ? 1 : 0, j.concept || j.design || j.version ? 1 : 0, i, n];
+    found.sort((a, b) => { const x = rank(a), y = rank(b); for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return y[k] - x[k]; return 0; });
+    return found[0].j;
+  }
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('응답에서 JSON을 찾지 못했습니다.');
+  return parseLoose(s.slice(a, b + 1));
+}
+
+/**
+ * 붙여 넣은 답을 읽어 다음에 할 일을 정함.
+ * @returns {{kind:'ok', json}|{kind:'cut'}|{kind:'prompt'}|{kind:'question'}|{kind:'talk'}|{kind:'empty'}}
+ *   cut: JSON이 시작됐는데 끝나지 않음(답이 끊김) · prompt: 답이 아니라 프롬프트를 붙여 넣음 · question: JSON 없이 되물음 · talk: JSON 없이 설명만
+ */
+export function readAnswer(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return { kind: 'empty' };
+  const part = stripFences(answerPart(raw));
+  const { open } = jsonChunks(part);
+  try { const json = extractJson(raw); if (json && typeof json === 'object' && !open) return { kind: 'ok', json }; } catch { /* 아래에서 가림 */ }
+  if (open) return { kind: 'cut' };
+  if (!part.trim() || (PROMPT_HEADS.some((h) => raw.includes(h)) && !/[{}]/.test(part))) return { kind: 'prompt' };
+  return { kind: /[?？]\s*($|\n)/.test(part) ? 'question' : 'talk' };
+}
+/** 답이 중간에 끊겼는지 */
+export const isCutAnswer = (text) => readAnswer(text).kind === 'cut';
+
+/** 챗봇에 보낼 짧은 글: 끊긴 답 이어 쓰기, JSON 대신 질문·설명을 했을 때 다시 요청 */
+export const CONTINUE_ASK = '답이 중간에 끊겼어요. 끊긴 곳 바로 다음 글자부터 이어서 써 주세요. 이미 쓴 부분과 설명은 빼고요.';
+export const JSON_ONLY_ASK = '질문이나 설명 없이, 모르는 것은 빈칸으로 두고 위 규칙대로 JSON 하나만 바로 써 주세요.';
+
+/**
+ * 끊긴 답(a) 뒤에 이어 쓴 답(b)을 붙임. b가 처음부터 다시 쓴 완전한 답이면 b만,
+ * b가 a의 끝부분을 되풀이하며 시작하면 겹친 곳을 한 번만, b 앞의 설명 한 줄("이어서 쓸게요:")은 뺌
+ */
+export function joinAnswer(a, b) {
+  const A = stripFences(answerPart(a)).trimEnd();
+  let B = stripFences(b).replace(/^\s+/, '');
+  if (!jsonChunks(B).open) { try { const j = extractJson(B); if (Array.isArray(j?.sections) || Array.isArray(j?.changes)) return B; } catch { /* 이어 붙이기 */ } }
+  const lines = B.split('\n');
+  while (lines.length > 1 && /[가-힣]/.test(lines[0]) && !/["{}[\]]/.test(lines[0])) lines.shift();
+  B = lines.join('\n');
+  for (let k = Math.min(400, A.length, B.length); k >= 6; k--) if (A.endsWith(B.slice(0, k))) return A + B.slice(k);
+  const first = B.split('\n')[0].trim();
+  if (first.length >= 12) { const i = A.lastIndexOf(first); if (i >= 0 && i >= A.length - 4000) return A.slice(0, i) + B.slice(B.indexOf(first)); }
+  return A + B;
 }
