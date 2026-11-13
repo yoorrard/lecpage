@@ -49,7 +49,7 @@ function fxState() {
       const m = el.__lecfx && el.__lecfx[id];
       const st = !m ? (window.LecFX && window.LecFX.has(id) ? 'idle' : 'unloaded') : m.skipped ? 'skipped' : m.dead ? (el.getAttribute('data-fx-error') === id ? 'failed' : 'stopped') : 'on';
       const r = el.getBoundingClientRect();
-      out.push({ id, st, lv: window.LecFX ? window.LecFX.level(el) : null, sec: sec ? (sec.id || String(sec.className).split(' ')[0]) : '', hero: !!el.closest('.lp-hero'), top: Math.round(r.top + scrollY) });
+      out.push({ id, st, lv: window.LecFX ? window.LecFX.level(el) : null, sec: sec ? (sec.id || String(sec.className).split(' ')[0]) : '', hero: !!el.closest('.lp-hero'), top: Math.round(r.top + scrollY), inView: r.bottom > 0 && r.top < innerHeight && r.width > 0 });
     }
   }
   return out;
@@ -74,6 +74,7 @@ function viewCheck() {
   const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; };
   for (const el of document.querySelectorAll('main :is(h1,h2,h3,p,li,dt,dd,figcaption,td,th,blockquote)')) {
     if (el.closest('[aria-hidden="true"],.lp-sr,.fx-sr,[hidden],details:not([open]),dialog,[data-phase-show],[data-phase-hide],[data-live-off],.lp-band,.fx-marquee')) continue;
+    if (document.documentElement.getAttribute('data-motion') === '3' && el.closest('main > .lp-hero')) continue; // 스크롤 연출 단계: 첫 화면이 내려가며 옅어지는 것은 의도(lp-hero-park)
     if (!el.textContent.trim() || !shown(el)) continue;
     const r = el.getBoundingClientRect(); if (!r.width || r.top < vh * 0.15 || r.bottom > vh * 0.85 || r.right < 0 || r.left > vw) continue;
     let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= +getComputedStyle(n).opacity;
@@ -143,7 +144,7 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
   for (let i = 1; i < imgs.length; i++) diffs.push(+(await helper.evaluate(diffInPage, [imgs[i - 1].toString('base64'), imgs[i].toString('base64')])).toFixed(4));
   await helper.close();
   res.fx = await page.evaluate(fxState);
-  const heroLoops = res.fx.filter((f) => f.hero && LOOP_FX.has(f.id));
+  const heroLoops = res.fx.filter((f) => f.hero && f.inView && LOOP_FX.has(f.id)); // 화면 밖(좁은 화면에서 첫 화면 아래로 밀린 띠 등)은 쉬는 것이 맞음
   // 끝없이 도는 그림은 별처럼 작은 점만 바뀌기도 해서 더 작은 변화도 '계속 움직임'으로 봄
   const late = diffs.slice(-2), early = diffs.slice(0, 3), lt = heroLoops.length ? 0.0004 : 0.0015;
   let kind = late.every((d) => d > lt) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
@@ -172,12 +173,17 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
     if (v.dim.length) { await page.waitForTimeout(1000); v = await page.evaluate(viewCheck); } // 차례로 들어오는 중이면 조금 더 기다려 봄
     for (const d of v.dim) dims.add(d); for (const o of v.offArt) offs.add(o);
   }
+  // 맨 끝까지(글꼴·그림으로 쪽이 길어졌을 수 있음): 마지막 칸이 들어왔는지
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(1300);
+  const pre = await page.evaluate(preLeft);
+  const vb = await page.evaluate(viewCheck); for (const d of vb.dim) dims.add(d);
   await page.evaluate(() => scrollTo(0, 0));
   await page.waitForTimeout(700);
   const v0 = await page.evaluate(viewCheck); for (const d of v0.dim) dims.add(d);
   res.scroll = { seen: scrollSeen, moved: scrollMoves };
   if (scrollSeen > 3 && !scrollMoves) add('scroll-dead', `스크롤 타임라인 ${scrollSeen}번 봤는데 값이 그대로`);
-  for (const p of new Set(await page.evaluate(preLeft))) add('stuck-pre', p);
+  for (const p of new Set(pre)) add('stuck-pre', p);
   for (const p of dims) add('dim-in-view', p);
   for (const p of offs) add('offscreen-art', p);
   return res;
@@ -188,9 +194,9 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
  * 효과 하나씩(--effects): 효과 견본(runtime/fx/demo.html?fx=<id>&embed=1, 앱 갤러리의 작은 미리보기와 같은 장면)을 띄워
  * 시간에 따라 바뀌는지 잼. 견본은 스크롤·포인터를 흉내 내므로 손대지 않아도 움직여야 함. 동작 줄이기면 완성된 모습 그대로여야 함
  */
-async function effects(chromium, { rm, shots, ids }) {
-  const FXDIR = join(ROOT, 'engine/runtime/fx');
-  const { FX } = await import(pathToFileURL(join(ROOT, 'engine/src/design/fx-catalog.js')).href);
+async function effects(chromium, { rm, shots, ids, root = ROOT }) {
+  const FXDIR = join(root, 'engine/runtime/fx');
+  const { FX } = await import(pathToFileURL(join(root, 'engine/src/design/fx-catalog.js')).href);
   const list = FX.filter((f) => !ids || ids.includes(f.id));
   const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
   const srv = createServer(async (q, r) => { try { const p = join(FXDIR, decodeURIComponent(q.url.split('?')[0])); const b = await readFile(p); r.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } });
@@ -226,7 +232,7 @@ async function main() {
   const chromium = await loadChromium();
   if (!chromium) { console.error('Playwright가 없어 건너뜁니다.'); return; }
   if (has('effects')) {
-    const r = await effects(chromium, { rm: has('rm'), shots: arg('shots', '') ? resolve(arg('shots')) : '', ids: arg('fx', '') ? arg('fx').split(',') : null });
+    const r = await effects(chromium, { rm: has('rm'), shots: arg('shots', '') ? resolve(arg('shots')) : '', ids: arg('fx', '') ? arg('fx').split(',') : null, root: resolve(arg('root', ROOT)) });
     if (arg('out', '')) writeFileSync(arg('out'), JSON.stringify(r, null, 1));
     const bad = r.filter((x) => x.verdict !== '정상' && !/라이브러리/.test(x.verdict));
     console.log(`효과 ${r.length}개 중 문제 ${bad.length}개`);
