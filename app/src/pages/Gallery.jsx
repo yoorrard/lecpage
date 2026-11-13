@@ -170,9 +170,9 @@ export function Gallery({ tab: tab0 }) {
 
       <div class="dict-intro">
         <div class="dict-say">
-          {sample ? <SayFix bp={composed || sample} hTag="h2" idp="dsay" title="말로 찾기" desc="바라는 느낌이나 아쉬운 점을 적으면 맞는 낱말을 찾아 예시로 보여 줘요." sayings={SAYINGS}
+          <SayFix bp={composed || sample || null} hTag="h2" idp="dsay" title="말로 찾기" desc="바라는 느낌이나 아쉬운 점을 적으면 맞는 낱말을 찾아 예시로 보여 줘요." sayings={SAYINGS}
             onApply={(f) => { let next = ids; for (const id of f.ids) next = addWord(next, id); setIds(next); }}
-            isDone={(f) => f.ids.every(has)} onUndo={(f) => setIds(ids.filter((x) => !f.ids.includes(x)))} words={{ apply: '담기', done: '담았어요', undo: '빼기' }} /> : <p class="muted">불러오는 중…</p>}
+            isDone={(f) => f.ids.every(has)} onUndo={(f) => setIds(ids.filter((x) => !f.ids.includes(x)))} words={{ apply: '담기', done: '담았어요', undo: '빼기' }} />
         </div>
         <section class="dict-now" aria-labelledby="dnow-h">
           <div class="spread"><h2 id="dnow-h" class="h-sub">{ids.length ? `담은 낱말로 본 예시` : '예시 연수'}</h2><Seg label="예시 내용" value={sampleId} onChange={setSampleId} options={SAMPLES} /></div>
