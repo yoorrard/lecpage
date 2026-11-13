@@ -38,6 +38,7 @@ async function setup(t) {
       // 부하 시험: 하루 상한·IP 상한은 넉넉히(전부 127.0.0.1에서 옴), 예산은 크게(멈춤 판단은 단위 시험이 따로 봄)
       SITES_PER_HOUR: 100000, SITES_PER_DAY: 100000, DAILY_SITE_CAP: 100000, DAILY_ROOM_CAP: 100000, DAILY_REQUEST_BUDGET: 100000000,
       LIVE_SOCKETS_PER_IP: 100000, LIVE_MAX_PARTICIPANTS: 1000, DEPLOYS_PER_HOUR: 1000,
+      POLL_RELAY: 'on', // 긴 대기를 Worker가 대신 기다림(유료 기본). 무료 기본(방 안에서 기다림)은 pages.integration이 봄
     });
   } catch (e) { t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); return null; }
   closers.push(h.stop);
@@ -128,8 +129,25 @@ test('단위 비용: 새 사이트·다시 올리기·참여 기능 한 자리',
   const now = (await req(lv, 'GET', '/snapshot?since=0', { headers: tok })).body.now;
   out.poll = (await measure(e, () => req(lv, 'GET', `/snapshot?since=${now}`, { headers: tok }))).d;
   const lp = await measure(e, () => req(lv, 'GET', `/snapshot?since=${now}&wait=1`, { headers: tok }));
-  assert.equal(lp.r.status, 200);
+  assert.equal(lp.r.status, 200); assert.ok(lp.r.ms >= 900, '바뀐 것이 없으면 기다림'); assert.equal(lp.r.body.questions.length, 0);
   out.longPollIdle = lp.d;
+  // Worker가 기다리는 긴 대기: 글이 올라오면 바로 깨어 바뀐 것을 줌(방은 그동안 잠들 수 있음)
+  const cur = lp.r.body.now;
+  const t0 = performance.now();
+  const waiting = req(lv, 'GET', `/snapshot?since=${cur}&wait=15`, { headers: tok });
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await req(lv, 'POST', '/questions', { json: { text: '깨우기' }, headers: tok })).status, 201);
+  const woke = await waiting;
+  assert.equal(woke.status, 200); assert.ok(performance.now() - t0 < 5000, '글이 올라오면 바로 답');
+  assert.deepEqual(woke.body.questions.map((q) => q.text), ['깨우기']);
+  // 기다리는 동안 사이트를 가리면 바로 끊고 가림을 알림
+  const now2 = woke.body.now;
+  const hold = req(lv, 'GET', `/snapshot?since=${now2}&wait=15`, { headers: tok });
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await req(base, 'POST', `/api/admin/sites/${second.r.site.id}/block`, { json: { blocked: true, reason: '시험' }, headers: { authorization: `Bearer ${ADMIN}` } })).status, 200);
+  const cut = await hold;
+  assert.equal(cut.status, 403); assert.equal(cut.body.error, 'blocked');
+  assert.equal((await req(base, 'POST', `/api/admin/sites/${second.r.site.id}/block`, { json: { blocked: false }, headers: { authorization: `Bearer ${ADMIN}` } })).status, 200);
   t.diagnostic(JSON.stringify(out));
 });
 

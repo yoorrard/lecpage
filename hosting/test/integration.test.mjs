@@ -37,7 +37,12 @@ test('바로 공개: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
   await t.test('안내: /api/info, 정적 화면, CORS', async () => {
     const info = await call(base, 'GET', '/api/info');
     assert.equal(info.status, 200);
-    assert.deepEqual(info.body, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
+    const { capacity, ...rest } = info.body;
+    assert.deepEqual(rest, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30 }, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10 } });
+    // 넘침 신호: 단계·넘길 곳(앱이 공개 화면을 열 때 처음부터 알맞은 길을 고름)
+    assert.equal(capacity.state, 'open'); assert.equal(capacity.newSites, true); assert.equal(capacity.reason, null);
+    assert.deepEqual(capacity.next, ['cloudflare', 'vercel', 'github', 'netlify']); assert.deepEqual(capacity.liveNext, ['cloudflare', 'supabase']);
+    assert.ok(capacity.resetAt > Date.now()); assert.equal(info.headers.get('cache-control'), 'public, max-age=30');
     const home = await text(`${base}/`);
     assert.equal(home.status, 200); assert.ok(home.text.includes('바로 공개') && home.text.includes('href="/report"'));
     // Cloudflare Access를 켜지 않았으면 관리 화면은 없음(정적 파일도 Worker를 거쳐 404)

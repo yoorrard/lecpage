@@ -100,6 +100,13 @@ export async function deploy(base, site, files) {
     const u = await call(base, 'PUT', `/api/sites/${site.id}/blobs/${sha}`, { key: site.key, raw: blobs.get(sha) });
     if (u.status !== 204) return { step: 'blobs', sha, missing: d.body.missing, ...u };
   }
-  const p = await call(base, 'POST', `/api/sites/${site.id}/deploys/${d.body.deploy}/publish`, { key: site.key });
-  return { step: 'publish', missing: d.body.missing, deploy: d.body.deploy, ...p };
+  // 앱처럼: 서버가 맡긴 곳(Pages)에 없는 파일이면(처음 쓰는 런타임·Pages가 지운 파일) 그것만 다시 올리고 한 번 더(2번까지)
+  for (let t = 0; ; t++) {
+    const p = await call(base, 'POST', `/api/sites/${site.id}/deploys/${d.body.deploy}/publish`, { key: site.key });
+    if (p.body?.error?.code !== 'missing_blobs' || t >= 2) return { step: 'publish', missing: d.body.missing, deploy: d.body.deploy, again: t, ...p };
+    for (const sha of p.body.error.missing || []) {
+      const u = await call(base, 'PUT', `/api/sites/${site.id}/blobs/${sha}`, { key: site.key, raw: blobs.get(sha) });
+      if (u.status !== 204) return { step: 'blobs-again', sha, ...u };
+    }
+  }
 }
