@@ -229,7 +229,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   return (
     <section class="key-card chat-card" aria-label="쓰던 챗봇 창으로 만드는 순서">
       <ol class="key-dots" aria-label="순서">
-        {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
+        {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} aria-label={`${i + 1}. ${n}`} onClick={() => setStep(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
       </ol>
       {step === 0 ? (
         <div class="key-now"><div class="key-now-b">

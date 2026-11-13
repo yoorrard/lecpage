@@ -3,26 +3,26 @@ import { StepHead } from '../Project.jsx';
 import { Sheet, Field, Notice, Progress, Dialog } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { QR, qrPng, copyQr } from '../../components/QR.jsx';
-import { LiveSetup } from '../../components/LiveSetup.jsx';
+import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
 import { projectAssets } from '../../components/Preview.jsx';
 import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { Publish } from '../../components/Publish.jsx';
 import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy } from '../../lib/util.js';
+import { FEATURES, LIVE_KEYS, syncInfo } from '../../lib/blueprint.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const LIVE_READY = (live, ok) => ['sheets', 'supabase', 'http'].includes(live?.provider) && live?.url && ok;
+const LIVE_NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버' };
 
-function checks(p, autoLive) {
+/** 공개 전에 볼 곳(참여 기능 연결은 체크리스트 첫 줄이 맡음) */
+function checks(p) {
   const bp = p.blueprint; const v = E.validate(bp); const b = v.blueprint; const out = [];
   if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(첫 화면·일정에 보여요).', go: 1 });
   const deck = b.sections.find((s) => s.type === 'deck');
   if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
-  if (b.live.features.length && !LIVE_READY(b.live, p.liveOk)) out.push(autoLive ? { k: 'info', t: "참여 기능은 '바로 공개'로 올리면 따로 연결할 것 없이 켜져요. 다른 곳에 올릴 때는 맨 아래에서 연결해요." } : { k: 'warn', t: '참여 기능이 아직 연결되지 않았어요. 맨 아래에서 10분이면 연결돼요.' });
-  if (b.access.mode === 'password' && !p.sitePassword) out.push({ k: 'bad', t: '암호를 정해 주세요(누가 볼 수 있나요?).' });
   for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
-  if (!out.length) out.push({ k: 'ok', t: '확인할 문제가 없어요.' });
   return out;
 }
 
@@ -43,10 +43,20 @@ export function StepShare({ p, update, go }) {
   const [prog, setProg] = useState(null);
   const [ask, setAsk] = useState(null); // 참여 기능 미연결로 올릴 때 확인
   const [showPw, setShowPw] = useState(false);
-  const [liveOpen, setLiveOpen] = useState(false);
   const [autoLive, setAutoLive] = useState(false); // 운영자의 바로 공개 서버가 참여 기능까지 맡는지
+  const [target, setTarget] = useState(''); // 지금 고른 올릴 곳(Publish가 알려 줌)
+  const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 올리기
+  const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const built = useRef(''); const again = useRef(null);
   useEffect(() => { instantInfo().then((i) => setAutoLive(!!i?.live?.url)); }, []);
+  // 고치기 화면의 [바뀐 내용 다시 올리기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 올림(연결을 읽는 동안 잠깐 기다림)
+  useEffect(() => {
+    let id = ''; try { id = sessionStorage.getItem('lecpage:republish') || ''; sessionStorage.removeItem('lecpage:republish'); } catch { }
+    if (id !== p.id) return;
+    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 30) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
+    return () => clearInterval(t);
+  }, []);
   if (!bp) return <><StepHead title="공개하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
@@ -82,8 +92,12 @@ export function StepShare({ p, update, go }) {
     }
     return { files, teacher: r.teacher };
   }
-  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄 */
-  function guard(run, auto = false) { if (liveOn && !liveReady && !auto) setAsk(() => run); else run({}); }
+  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [이번엔 빼고 올리기]를 골랐으면 묻지 않고 참여 기능 없이 */
+  function guard(run, auto = false) { if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {}); }
+  const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info, patch) }; });
+  const feats = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f));
+  const toggleFeat = (v) => setInfo({ features: (p.info.features || []).includes(v) ? (p.info.features || []).filter((x) => x !== v) : [...(p.info.features || []), v] });
+  const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); };
   async function zip(opts = {}) {
     setBusy('zip');
     try { const r = await buildFiles(opts); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 내려받았어요.'); }
@@ -127,53 +141,86 @@ export function StepShare({ p, update, go }) {
     else document.querySelector('.publish')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
+  // 공개 준비 체크리스트: 참여 기능 → 공개 범위 → 확인할 곳 → 올릴 곳(+공개하기). 끝난 줄은 한 줄로 접히고 [바꾸기]로 펼침
+  const names = feats.map((f) => FEATURES.find((x) => x.value === f)?.label || f);
+  const featLine = names.length > 3 ? `${names.slice(0, 3).join('·')} 외 ${names.length - 3}개` : names.join('·');
+  const autoHere = autoLive && target === 'lecpage';
+  const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : 'todo';
+  const liveLine = { off: '꺼져 있어요. 쓸 기능을 누르면 켜져요.', auto: `${featLine} · 바로 공개가 함께 켜요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 올려요.', todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
+  const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
+  const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
+  const needPw = access === 'password' && !p.sitePassword;
+  const notes = checks(p);
+  const rows = [];
+  rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' ? 'todo' : 'done', line: liveLine,
+    btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['되돌리기', () => setSkipLive(false)] : [open.live ? '접기' : '바꾸기', () => toggle('live')],
+    body: liveBody && <>
+      <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
+        {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
+      </div>
+      {liveOn && !autoHere && <LiveSetup p={p} update={update} />}
+      {liveOn && autoLive && !autoHere && <p class="small muted">아래 올릴 곳을 바로 공개로 바꾸면 따로 연결할 것 없이 켜져요.</p>}
+      {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 빼고 올리기</button></div>}
+    </> });
+  rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 내려받기' : ''}`,
+    btn: needPw ? null : [open.access ? '접기' : '바꾸기', () => toggle('access')],
+    body: (open.access || needPw) && <>
+      <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
+        {[['link', '주소를 받은 사람만', '검색에 나오지 않아요. 주소나 QR을 받은 사람만 들어와요.'], ['password', '암호를 아는 사람만', '교재 그림까지 암호로 잠가요. 안내 QR로 들어오면 바로 열려요.'], ['public', '누구나', '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
+          <label class="radio-card"><input type="radio" name="access" checked={access === v} onChange={() => setAccess(v)} /><span><b>{t}</b><small>{d}</small></span></label>
+        ))}
+      </div>
+      {access === 'password' && (
+        <div class="row" style={{ alignItems: 'end' }}>
+          <Field label="암호(4자 이상, 길수록 안전해요)"><input type={showPw ? 'text' : 'password'} value={p.sitePassword || ''} onInput={(e) => update({ sitePassword: e.target.value })} autoComplete="new-password" /></Field>
+          <button class="btn btn-sm btn-quiet" onClick={() => setShowPw(!showPw)}>{showPw ? '가리기' : '보기'}</button>
+          <button class="btn btn-sm" onClick={() => update({ sitePassword: friendlyPassword() })}>새로 만들기</button>
+        </div>
+      )}
+      <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
+    </> });
+  if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: 'note', line: `${notes.length}곳. 그대로 올려도 돼요.`,
+    btn: [open.notes === false ? '보기' : '접기', () => setOpen((o) => ({ ...o, notes: o.notes === false }))],
+    body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul> });
+  rows.push({ k: 'host', title: '올릴 곳', state: 'go', line: '',
+    body: <>
+      {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
+      <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} onTarget={setTarget} />
+    </> });
+
   return (
     <>
-      <StepHead title="공개하기" desc="누가 볼지 정하고 [공개하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요." />
+      <StepHead title="공개하기" desc={p.deploy?.lastUrl ? '고친 내용은 [바뀐 내용 다시 올리기]로 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [공개하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'} />
       {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} />}
 
       <Sheet>
         <div class="stack">
-          <h2 class="h-sub">마지막 확인</h2>
-          <ul class="warnings">{checks(p, autoLive).map((c) => <li style={{ color: c.k === 'bad' ? 'var(--bad)' : c.k === 'ok' ? 'var(--ok)' : undefined }}>{c.k === 'ok' ? '✓' : c.k === 'bad' ? '✕' : '·'} {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul>
-
-          <h2 class="h-sub sep">누가 볼 수 있나요?</h2>
-          <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
-            {[['link', '주소를 받은 사람만', '검색에 나오지 않아요. 주소나 QR을 받은 사람만 들어와요.'], ['password', '암호를 아는 사람만', '교재 그림까지 암호로 잠가요. 안내 QR로 들어오면 바로 열려요.'], ['public', '누구나', '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
-              <label class="radio-card"><input type="radio" name="access" checked={access === v} onChange={() => setAccess(v)} /><span><b>{t}</b><small>{d}</small></span></label>
+          <h2 class="h-sub">{p.deploy?.lastUrl ? '다시 올리기' : '공개 준비'}</h2>
+          <ol class="ready" aria-label="공개 준비">
+            {rows.map((r, i) => (
+              <li class={`ready-i is-${r.state}`} id={r.id} key={r.k}>
+                <div class="ready-h">
+                  <span class="ready-n" aria-hidden="true">{r.state === 'done' ? '✓' : i + 1}</span>
+                  <b class="ready-t">{r.title}</b>
+                  {r.line && <span class="ready-s">{r.line}</span>}
+                  {r.btn && <button type="button" class="btn btn-sm btn-quiet" aria-expanded={r.body ? 'true' : 'false'} onClick={r.btn[1]}>{r.btn[0]}</button>}
+                </div>
+                {r.body && <div class="ready-b">{r.body}</div>}
+              </li>
             ))}
-          </div>
-          {access === 'password' && (
-            <div class="row" style={{ alignItems: 'end' }}>
-              <Field label="암호(4자 이상, 길수록 안전해요)"><input type={showPw ? 'text' : 'password'} value={p.sitePassword || ''} onInput={(e) => update({ sitePassword: e.target.value })} autoComplete="new-password" /></Field>
-              <button class="btn btn-sm btn-quiet" onClick={() => setShowPw(!showPw)}>{showPw ? '가리기' : '보기'}</button>
-              <button class="btn btn-sm" onClick={() => update({ sitePassword: friendlyPassword() })}>새로 만들기</button>
-            </div>
-          )}
-          <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
-
-          <h2 class="h-sub sep">어디에 공개할까요?</h2>
-          {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
-          <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} />
+          </ol>
           <p class="small muted">공개하면 <a href="#/help/terms">이용약관</a>에 따라 올린 내용은 올린 분이 책임져요. 교재의 저작권과 개인정보를 확인해 주세요.</p>
           <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 받기(ZIP)</button><span class="small muted">운영 안내·디자인 규칙·설계도. 사이트에는 올라가지 않아요.</span></div>
-          {liveOn && <details class="more" id="live-setup" open={liveOpen} onToggle={(e) => setLiveOpen(e.target.open)}>
-            <summary><b>참여 기능 연결</b><span class="small muted">{bp.live.features.length}개 켜짐 · {liveReady ? '연결됨' : '아직 연결 안 됨'}</span></summary>
-            <div class="stack more-body">
-              <p class="small muted">질문·투표 같은 참여 기능은 강사의 구글 시트나 Supabase에 연결해야 참가자끼리 이어져요. 연결하지 않아도 사이트는 공개할 수 있어요.</p>
-              <LiveSetup p={p} update={update} />
-            </div>
-          </details>}
         </div>
       </Sheet>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
 
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
         <h2 class="h-sub">참여 기능이 아직 연결되지 않았어요</h2>
-        <p>지금 올리면 질문·도움 요청 같은 기능이 이 컴퓨터 밖에서는 동작하지 않아요. 연결은 10분이면 돼요.</p>
+        <p>지금 올리면 질문·투표 같은 기능이 참가자끼리 이어지지 않아요. 나중에 연결하고 다시 올려도 돼요.</p>
         <div class="btn-row">
-          <button class="btn btn-primary" onClick={() => { setAsk(null); setLiveOpen(true); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); }}>먼저 연결할게요</button>
-          <button class="btn" onClick={() => { const run = ask; setAsk(null); run({ liveOff: true }); }}>참여 기능 없이 올리기</button>
+          <button class="btn btn-primary" onClick={() => { setAsk(null); goLive(); }}>먼저 연결할게요</button>
+          <button class="btn" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 올리기</button>
         </div>
       </Dialog>
     </>
@@ -307,6 +354,10 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
   const [big, setBig] = useState(false);
   const when = [m.date, m.start && `${m.start}${m.end ? '~' + m.end : ''}`].filter(Boolean).join(' ');
   const liveOn = (p.blueprint.live?.features || []).length > 0;
+  // 강사 화면 관리자 키: 바로 공개는 올릴 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
+  const [adminKey, setAdminKey] = useState('');
+  const liveUrl = p.blueprint.live?.url || '';
+  useEffect(() => { if (p.deploy.target === 'lecpage') setAdminKey(p.deploy.lecpage?.adminKey || ''); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn]);
   const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
   return (
     <Sheet class="success">
@@ -321,14 +372,17 @@ function Success({ p, update, onAddMaterials, onRepublish, busy }) {
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={p.blueprint.access?.mode !== 'password' && p.blueprint.access?.mode !== 'public'} />}
-          <div class="btn-row">
-            <a class="btn btn-sm" href={url + 'poster.html'} target="_blank" rel="noopener">QR 안내문 인쇄(A4)</a>
-            <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면 열기</a>
-            {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener">강사 화면 열기</a>}
+          <div class="day-kit" role="group" aria-labelledby="day-kit-h">
+            <b class="small" id="day-kit-h">연수 당일</b>
+            <div class="btn-row">
+              <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면 열기</a>
+              {liveOn && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener">강사 화면 열기</a>}
+              <a class="btn btn-sm" href={url + 'poster.html'} target="_blank" rel="noopener">QR 안내문 인쇄(A4)</a>
+            </div>
+            {liveOn && (adminKey
+              ? <p class="small">강사 화면 관리자 키 <b class="mono">{adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(adminKey, '관리자 키를 복사했어요.')}>복사</button></p>
+              : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
-          {liveOn && (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey
-            ? <p class="small">강사 화면 관리자 키 <b class="mono">{p.deploy.lecpage.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(p.deploy.lecpage.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>
-            : <p class="small">강사 화면에는 관리자 키로 들어가요.</p>)}
           <p class="small">내용을 고치거나 자료를 더 넣은 뒤 다시 올리면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
         </div>
         <div class="qr-side">

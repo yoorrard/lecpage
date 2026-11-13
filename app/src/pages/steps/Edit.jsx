@@ -55,6 +55,9 @@ export function StepEdit({ p, update, go }) {
   /** 교재대로 되돌린 곳 하나를 AI 답으로(그곳만, 강사가 고친 다른 곳은 그대로) */
   function undoGuard(r) { update((cur) => ({ blueprint: E.undoRestore(cur.blueprint, r) })); markUndone(p.id, r.id); toast(`AI 답으로 되돌렸어요: ${r.where}`); }
   const liveCount = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f)).length;
+  // 공개한 뒤 고쳤으면 머리 버튼이 [바뀐 내용 다시 올리기](공개하기 화면에서 지난번 곳에 바로 올림)
+  const published = !!p.deploy?.lastUrl;
+  const changed = published && (p.editedAt || 0) > (p.deploy.at || 0);
   const tabs = [
     { value: 'content', label: '내용' },
     { value: 'design', label: '디자인' },
@@ -67,7 +70,9 @@ export function StepEdit({ p, update, go }) {
       <StepHead title="살펴보고 고치기" desc="미리보기를 보며 고치세요. 고친 내용은 자동으로 저장돼요.">
         <div class="btn-row head-tools">
           <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label}` : '되돌릴 것이 없어요'}>되돌리기</button>
-          <button class="btn btn-primary" onClick={() => go(3)}>공개하기 →</button>
+          {!published ? <button class="btn btn-primary" onClick={() => go(3)}>공개하기 →</button>
+            : changed ? <button class="btn btn-primary" onClick={() => { try { sessionStorage.setItem('lecpage:republish', p.id); } catch { } go(3); }}>바뀐 내용 다시 올리기</button>
+              : <button class="btn" onClick={() => go(3)}>주소·QR 보기 →</button>}
         </div>
       </StepHead>
       {job && <AiJobBar job={job} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}

@@ -130,7 +130,7 @@ export function AiConnect({ onConnected, onChat, onCancel }) {
       <p class="ai-what">{GUIDE_MORE.includes(tab) && <b>{g.label} · </b>}{g.what}</p>
       <section class="key-card" aria-label={`${g.label} 연결 순서`}>
         <ol class="key-dots" aria-label="순서">
-          {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} onClick={() => go(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
+          {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} aria-label={`${i + 1}. ${n}`} onClick={() => go(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
         </ol>
         {cur ? (
           <div class="key-now" key={tab + step}>

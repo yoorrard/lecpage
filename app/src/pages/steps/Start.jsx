@@ -214,22 +214,6 @@ export function StepStart({ p, update, go }) {
           {mat && !busy && <FoundSummary p={p} setInfo={setInfo} />}
       </section>
 
-      {showMake && <section class="make-card" aria-labelledby="make-h">
-        {conn ? <div class="stack">
-          {makeHead}
-          {request}
-          <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setKeyOpen(true); }} onDisconnect={disconnect} />
-          <button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : 'AI로 사이트 만들기 →'}</button>
-          <p class="small muted">만들 때 교재의 글이 {conn.label}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
-        </div>
-          : conn === null ? <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} head={makeHead} wait={p.chatWait} onWait={(v) => update({ chatWait: v }, { now: true })} guard={() => !needTitle()} busy={!!busy}>{request}</AiPanel>
-            : <p class="muted small" aria-live="polite">불러오는 중…</p>}
-        <div class="make-alt">
-          {conn === null && <button type="button" class="btn-link" onClick={() => { makeAfter.current = true; setKeyOpen(true); }}>API 키로 버튼 한 번에 만들기</button>}
-          {!p.blueprint && <button type="button" class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>}
-          {remake && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setRemake(false); update({ chatWait: null }); }}>닫기</button>}
-        </div>
-      </section>}
 
       <section class="block start-info">
         <h2 class="h-sub">연수 정보 {mat && <span class="small muted">교재에서 찾은 값을 채웠어요</span>}</h2>
@@ -262,6 +246,22 @@ export function StepStart({ p, update, go }) {
           </div>
         </details>
       </section>
+      {showMake && <section class="make-card" aria-labelledby="make-h">
+        {conn ? <div class="stack">
+          {makeHead}
+          {request}
+          <AiStatus ai={conn} onChange={setConn} onSwap={() => { makeAfter.current = false; setKeyOpen(true); }} onDisconnect={disconnect} />
+          <button class="btn btn-primary btn-lg" disabled={!!busy} aria-busy={busy ? 'true' : undefined} onClick={() => makeWithAi()}>{busy ? '교재를 읽는 중…' : 'AI로 사이트 만들기 →'}</button>
+          <p class="small muted">만들 때 교재의 글이 {conn.label}로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
+        </div>
+          : conn === null ? <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} head={makeHead} wait={p.chatWait} onWait={(v) => update({ chatWait: v }, { now: true })} guard={() => !needTitle()} busy={!!busy}>{request}</AiPanel>
+            : <p class="muted small" aria-live="polite">불러오는 중…</p>}
+        <div class="make-alt">
+          {conn === null && <button type="button" class="btn-link" onClick={() => { makeAfter.current = true; setKeyOpen(true); }}>API 키로 만들기</button>}
+          {!p.blueprint && <button type="button" class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>}
+          {remake && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setRemake(false); update({ chatWait: null }); }}>닫기</button>}
+        </div>
+      </section>}
       </div>
 
       {p.blueprint && <div class="make-bar">

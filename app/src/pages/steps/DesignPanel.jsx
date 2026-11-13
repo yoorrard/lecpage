@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Field, Seg } from '../../components/ui.jsx';
-import { TASTES, inTaste, mixOrder, recommend } from '../../lib/tastes.js';
+import { TASTES, inTaste, mixOrder, threeFeelings } from '../../lib/tastes.js';
 import { E } from '../../lib/engine.js';
 import { SiteThumb } from '../../components/SiteThumb.jsx';
 import { FxGallery } from '../../components/FxGallery.jsx';
@@ -50,7 +50,10 @@ export function DesignPanel({ p, update }) {
   const bp = p.blueprint;
   const d = bp.design || {};
   const concept = bp.concept || E.deriveConcept({ title: bp.meta?.title, subtitle: bp.meta?.subtitle, topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind });
-  const ranked = useMemo(() => recommend(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), (id) => !!E.getPreset(id).showcase, 4, concept.preset), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary, concept.preset]);
+  // 느낌이 다른 세 안(차분·따뜻·전문·발랄·강렬 가운데 겹치지 않게): 한눈에 비교하고 하나 누르면 끝
+  const ranked = useMemo(() => threeFeelings(E.rankPresets({ moods: d.mood || [], topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind, minor: bp.audience?.minor }, E.PRESETS.length), E.getPreset, concept.preset), [(d.mood || []).join(), (d.topics || []).join(), bp.archetype?.primary, concept.preset]);
+  const [compare, setCompare] = useState(false);
+  const pickPreset = (id) => { if (d.preset === id) return; setD({ preset: id, seed: '' }, `디자인 ${E.getPreset(id).name_ko}`); toast(`${E.getPreset(id).name_ko}로 바꿨어요. 마음에 안 들면 [되돌리기]를 누르세요.`); };
   const latest = useRef(p); latest.current = p;
   /** 되돌리기에 남기고 바꿈(고르는 것은 모두 [되돌리기]로 돌아갈 수 있게) */
   const remember = (label) => pushUndoFor(p.id, label, latest.current);
@@ -87,12 +90,24 @@ export function DesignPanel({ p, update }) {
   const whyText = (r) => (r.concept ? `컨셉 '${concept.motif || concept.idea}'에 맞춘 디자인` : (r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
-      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="아래에서 직접 고르거나 [수정 요청]에 적어 AI에게 맡겨요." />
+      <section class="trio" aria-labelledby="trio-h">
+        <div class="trio-head"><h3 class="h-sub" id="trio-h">느낌이 다른 세 안</h3><button type="button" class="btn btn-sm" onClick={() => setCompare(true)}>크게 비교</button></div>
+        <div class="thumbs trio-thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={[r.feel, r.concept ? '컨셉에 맞춤' : ''].filter(Boolean).join(' · ') || whyText(r)} onPick={() => pickPreset(r.id)} />)}</div>
+      </section>
+      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="위에서 고르거나 [수정 요청]에 적어 AI에게 맡겨요." />
       <BasketNote p={p} update={update} remember={remember} />
       <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
-      <div class="field"><span>추천 디자인</span>
-        <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' }, `디자인 ${E.getPreset(r.id).name_ko}`)} />)}</div>
-      </div>
+      <Dialog open={compare} onClose={() => setCompare(false)} label="세 안 크게 비교" wide>
+        {compare && <div class="stack">
+          <h2 class="h-sub">느낌이 다른 세 안</h2>
+          <p class="small muted">이 연수의 실제 내용으로 그린 첫 화면이에요. 고르면 미리보기에 바로 반영되고 [되돌리기]로 돌아갈 수 있어요.</p>
+          <div class="trio-big">{ranked.map((r) => { const pr = E.getPreset(r.id); return (
+            <figure class="trio-card"><SiteThumb bp={bp} presetId={r.id} pressed={d.preset === r.id} />
+              <figcaption><b>{pr.name_ko}</b><small>{r.feel || pr.desc_ko}</small></figcaption>
+              <button type="button" class={`btn btn-sm${d.preset === r.id ? '' : ' btn-primary'}`} disabled={d.preset === r.id} onClick={() => { pickPreset(r.id); setCompare(false); }}>{d.preset === r.id ? '지금 디자인' : '이 디자인으로'}</button>
+            </figure>); })}</div>
+        </div>}
+      </Dialog>
       <details>
         <summary>다른 디자인 {others.length}가지 더 보기</summary>
         <div style={{ marginTop: '10px' }}><Seg label="분위기" value={taste} onChange={setTaste} options={TASTES} /></div>

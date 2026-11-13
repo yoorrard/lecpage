@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mascot } from '../components/Mascot.jsx';
 import { Dialog } from '../components/ui.jsx';
 import { projects } from '../lib/db.js';
-import { newProject, importProjectFile, setPendingFiles, deleteProject, duplicateProject, stageOf } from '../lib/project.js';
-import { copy, fmtDate, toast } from '../lib/util.js';
+import { newProject, importProjectFile, setPendingFiles, deleteProject } from '../lib/project.js';
+import { copy, toast } from '../lib/util.js';
 import { useInView } from '../landing/motion.js';
 import { PRESET_COUNT } from '../landing/facts.js';
 import { HeroFold } from '../landing/HeroFold.jsx';
@@ -16,8 +16,9 @@ import '../styles/landing.css';
 
 // 첫 화면: 교재 한 장이 연수 사이트가 되고, 참가자 휴대폰에 닿고, 연수 뒤까지 이어지는 이야기.
 // 첫 화면은 엔진을 받지 않아요(숫자는 빌드 때 계산, 그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md
-const STAGE = ['', '교재 넣기', '살펴보고 고치기', '공개하기'];
-const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc';
+// .lecpage(에이전트 스킬·다른 컴퓨터에서 저장한 연수)도 같은 곳에 놓으면 열림
+const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
+const isSaved = (f) => /\.lecpage$/i.test(f?.name || '');
 // 설치 명령: Claude Code는 플러그인 한 줄(code.claude.com/docs/en/plugins/install), 그 밖의 도구는 skills CLI(github.com/vercel-labs/skills)
 const SKILL_CMDS = [
   { for: 'Claude Code', cmd: '/plugin install lecpage --marketplace yoorrard/lecpage' },
@@ -61,6 +62,7 @@ export function Home() {
   const [more, setMore] = useState(false);
   const [drag, setDrag] = useState(false);
   const [del, setDel] = useState(null);
+  const [Mine, setMine] = useState(null); // '내 연수' 목록(만든 연수가 있을 때만 받음)
   const fileRef = useRef(); const pickRef = useRef();
   const reload = () => projects.all().then(setList, () => setList([]));
   useEffect(() => { reload(); }, []);
@@ -69,8 +71,11 @@ export function Home() {
     if (more) return;
     // 목록이 오래 걸리면(저장소가 막힘) 기다리지 않음
     if (list === null) { const t = setTimeout(() => setMore(true), 1500); return () => clearTimeout(t); }
-    let t; const id = requestAnimationFrame(() => { t = setTimeout(() => setMore(true), 0); });
-    return () => { cancelAnimationFrame(id); clearTimeout(t); };
+    let t, id, off = false;
+    const go = () => { if (off) return; id = requestAnimationFrame(() => { t = setTimeout(() => setMore(true), 0); }); };
+    // 만든 연수가 있을 때만 '내 연수' 목록 코드를 받고, 받은 뒤 아래 이야기와 함께 넣음(위쪽이 밀리지 않게)
+    if (list.length && !Mine) import('../landing/Mine.jsx').then((m) => { if (!off) setMine(() => m.Mine); go(); }, go); else go();
+    return () => { off = true; cancelAnimationFrame(id); clearTimeout(t); };
   }, [list]);
   // 두 번 눌러도 한 번만(interaction.md 1절): 누르는 순간 막고, 0.3초 넘게 걸리면 누른 버튼에 '만드는 중…'
   const running = useRef(false);
@@ -87,6 +92,7 @@ export function Home() {
   const busyProps = (key, label = '만드는 중…') => ({ 'aria-busy': busy === key ? 'true' : undefined, 'data-busy': label });
   function startWith(fileList) {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
+    if (files.length === 1 && isSaved(files[0])) return openSaved(files[0]); // 저장한 연수 파일이면 교재가 아니라 연수로 열기
     return once('blank', async () => {
       const p = await newProject('blank');
       if (files.length) setPendingFiles(p.id, files);
@@ -106,10 +112,13 @@ export function Home() {
   }, []);
   const pick = () => pickRef.current?.click();
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
-  async function onImport(e) {
-    const f = e.target.files?.[0]; if (!f) return;
+  async function openSaved(f) {
     try { const p = await importProjectFile(f); toast(p.origin === 'skill' ? '에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능 연결과 공개 주소는 다시 정해 주세요.'); location.hash = `#/p/${p.id}/${p.stage || 1}`; }
     catch (err) { toast(err.friendly ? err.message : '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.'); }
+  }
+  async function onImport(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    await openSaved(f);
     e.target.value = '';
   }
   return (
@@ -136,26 +145,7 @@ export function Home() {
       </section>
 
       {!more && <div class="ld-later" aria-hidden="true" />}
-      {more && list?.length > 0 && (
-        <section class="ld-mine" aria-labelledby="ld-mine-h">
-          <div class="section-title"><h2 id="ld-mine-h">내 연수</h2><p class="muted">이 브라우저에 저장돼 있어요. 눌러서 이어서 만들어요.</p></div>
-          <div class="grid grid-3">
-            {list.map((p) => {
-              const st = p.stage || stageOf(p.step || 1);
-              return (
-                <div class="proj">
-                  <a class="proj-link" href={`#/p/${p.id}/${st}`}><h3>{p.title || '이름 없는 연수'}</h3></a>
-                  <div class="meta"><span class="tag tag-lav">{STAGE[st]}</span>{p.deploy?.lastUrl && <span class="tag tag-mint">공유 중</span>}<span>{fmtDate(p.updatedAt)}</span></div>
-                  <div class="proj-actions">
-                    <button class="btn btn-sm btn-quiet" {...busyProps(`dup-${p.id}`, '복제 중…')} onClick={() => once(`dup-${p.id}`, async () => { await duplicateProject(p); toast('복제했어요.'); reload(); }, { stay: true, fail: '복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.' })}>복제</button>
-                    <button class="btn btn-sm btn-quiet" onClick={() => setDel(p)}>지우기</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {more && list?.length > 0 && Mine && <Mine list={list} once={once} busyProps={busyProps} reload={reload} onDelete={setDel} />}
 
       {more && <>
       <Story />

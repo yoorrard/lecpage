@@ -157,7 +157,7 @@ const Go = ({ on, busy, again, onClick, disabled, name = '공개하기' }) => (
  * buildFiles(opts) → { files }, guard(run): 참여 기능 연결 전이면 먼저 물어봄, done(url, patch): 주소 저장.
  * again: { current } 지난번에 올린 곳에 바로 다시 올리는 함수를 여기에 걸어 둠(성공 카드의 [다시 올리기]가 부름). 못 하면 null
  */
-export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again }) {
+export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, onTarget }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(''); // 바로 공개를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
@@ -166,9 +166,14 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const full = instantOff || (instant && instant.accepting === false ? '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.' : '');
   const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
-  const order = [...new Set([...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
+  // 바로 공개가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 올린 적이 있으면 그곳이 먼저(주소가 그대로)
+  const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
+  const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
+  const best = order[0];
   const [picked, setPicked] = useState('');
-  const target = picked && order.includes(picked) ? picked : order[0];
+  const [more, setMore] = useState(false); // 다른 곳에 올리기(올릴 곳 목록 펼치기)
+  const target = picked && order.includes(picked) ? picked : best;
+  useEffect(() => { onTarget?.(target); }, [target]);
   /** 한 곳에 올리기: 사이트 만들기 → 그곳의 한도 확인 → 올리기. up(files)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음 */
   const start = (id, up, onFail, auto = null) => guard(async (opts = {}) => {
     setBusy(id); setProg({ step: '사이트 만드는 중', pct: 1 });
@@ -186,6 +191,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const lead = `${target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko}${rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}`;
   const limit = target === 'lecpage' ? (live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
   const limitLine = limit && !lead.includes(limit) ? limit : ''; // 소개 줄에 이미 나온 말은 되풀이하지 않음
+  const showLimit = more || target === 'lecpage'; // 무료 한도는 고를 때(목록을 펼쳤을 때)만. 바로 공개는 운영자 한도라 늘
   const days = instant?.limits?.days || 30;
   const care = target === 'lecpage' ? `${days}일 동안 아무도 오지 않으면 지워져요. 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
   if (again) again.current = null;
@@ -196,16 +202,20 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   };
   return (
     <div class="stack publish">
-      <div class="pub-pick" role="radiogroup" aria-label="올릴 곳">
+      <div class="pub-now">
+        <span class="pub-now-t"><b>{LABEL[target]}</b>{target === best && <em>추천</em>}{connected.includes(target) && <i>연결됨</i>}</span>
+        <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(more)} aria-controls="pub-pick" onClick={() => setMore(!more)}>{more ? '접기' : '다른 곳에 올리기'}</button>
+      </div>
+      {more && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="올릴 곳">
         {order.map((id) => (
           <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => setPicked(id)} />
-            <span><b>{LABEL[id]}</b>{id === rec.pick && <em>추천</em>}{id === 'lecpage' && id !== rec.pick && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}</span></label>
+            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}</span></label>
         ))}
-      </div>
+      </div>}
       <div class="pub-about">
         <p>{lead}</p>
-        {(limitLine || care) && <dl class="pub-facts small">
-          {limitLine && <div class="pub-limit"><dt>무료 한도</dt><dd>{limitLine}</dd></div>}
+        {((showLimit && limitLine) || care) && <dl class="pub-facts small">
+          {showLimit && limitLine && <div class="pub-limit"><dt>무료 한도</dt><dd>{limitLine}</dd></div>}
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
         </dl>}
       </div>
