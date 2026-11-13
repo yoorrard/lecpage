@@ -15,7 +15,8 @@ import { extOf } from './paths.js';
 import { siteUrlOf, siteOriginRe } from './pages-site.js';
 import { Site } from './site.js';
 import { Gate } from './gate.js';
-import { Room, Guard, MAX_WAIT_S } from './room.js';
+import { Room, Guard } from './room.js';
+import { relayWait as relayLive } from '../../skills/lecpage/backends/cloudflare/src/index.js';
 
 export { Site, Gate, Room, Guard };
 
@@ -234,6 +235,7 @@ async function live(request, env, url, cfg) {
     const longPoll = relay && t.op === 'snapshot' && request.method === 'GET' && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
     const res = longPoll ? await relayWait(env, fwd, t.code, Number(url.searchParams.get('wait'))) : await roomStub(env, t.code).fetch(fwd);
     // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
+    // (방이 붙인 간격 대신 이 호스트의 하루 예산에 따른 간격을 씀)
     if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
     return done(res);
   } catch (e) {
@@ -243,31 +245,9 @@ async function live(request, env, url, cfg) {
   }
 }
 
-/**
- * 긴 대기를 Worker가 대신 기다림(방은 잠듦 → Durable Object 시간 과금 없음). Worker는 기다리는 시간에 과금되지 않음(공식: Workers 요금은 요청·CPU).
- * 방이 101 + WebSocket을 주면: 첫 글 = 지금 snapshot(바뀐 것 없음). 그 뒤 글이 오거나 닫히면 바뀐 것 → 한 번 더 물어 답함. 시간이 다 되면 첫 글로 답함.
- * 방이 101이 아니면(바뀐 것이 이미 있음·오류·대기 자리 없음) 그 답을 그대로.
- */
-async function relayWait(env, fwd, code, waitS) {
-  const h = new Headers(fwd.headers);
-  h.set('upgrade', 'websocket'); h.set('x-lp-relay', '1');
-  const res = await roomStub(env, code).fetch(new Request(fwd.url, { method: 'GET', headers: h }));
-  const ws = res.webSocket;
-  if (res.status !== 101 || !ws) return res;
-  T.mark('dr'); // 웹소켓이 닫힐 때 방이 받는 이벤트도 DO 요청으로 셈(문서에 없어 보수적으로)
-  ws.accept();
-  const CHANGED = Symbol('changed');
-  const got = await new Promise((resolve) => {
-    let first = null; let over = false;
-    const finish = (v) => { if (over) return; over = true; clearTimeout(timer); try { ws.close(1000, 'done'); } catch { /* 이미 닫힘 */ } resolve(v); };
-    const timer = setTimeout(() => finish(first ?? CHANGED), Math.min(MAX_WAIT_S, Math.max(1, waitS)) * 1000);
-    ws.addEventListener('message', (m) => { if (first === null && typeof m.data === 'string' && m.data !== 'c') first = m.data; else finish(CHANGED); });
-    ws.addEventListener('close', () => finish(CHANGED));
-    ws.addEventListener('error', () => finish(CHANGED));
-  });
-  if (got !== CHANGED) return new Response(got, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
-  const plain = new URL(fwd.url); plain.searchParams.delete('wait');
-  return roomStub(env, code).fetch(new Request(plain, { method: 'GET', headers: fwd.headers }));
+/** 긴 대기를 Worker가 대신 기다림(방은 잠듦): 규칙은 skills/lecpage/backends/cloudflare의 relayWait 그대로. 방이 소켓을 주면 DO 요청 하나로 셈 */
+function relayWait(env, fwd, code, waitS) {
+  return relayLive(roomStub(env, code), fwd, waitS, () => T.mark('dr'));
 }
 
 // ── API ─────────────────────────────────────────────────────────

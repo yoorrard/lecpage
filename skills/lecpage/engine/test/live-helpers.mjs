@@ -102,7 +102,7 @@ export const PNG_1PX = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEA
 export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
   const uniq = () => Math.random().toString(36).slice(2, 8).toUpperCase();
   const fresh = (p = 'T') => { const c = ctx(); return { ...c, code: (p + uniq()).slice(0, 12), a: null }; };
-  const joinAs = async (a, nickname = '선생님') => (await a.call('POST', '/join', { body: { nickname } })).body;
+  const joinAs = async (a, nickname = '김교사') => (await a.call('POST', '/join', { body: { nickname } })).body;
 
   test(`${name}: join validates input and returns a token`, async () => {
     const c = fresh('J'); const a = api(c.base, c.code);
@@ -233,10 +233,29 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     const a1 = (await a.call('POST', '/answers', { token: p.token, body: { poll: poll.id, value: '좋음' } })).body;
     const a2 = (await a.call('POST', '/answers', { token: p.token, body: { poll: poll.id, value: '보통' } })).body;
     assert.equal(a1.id, a2.id); assert.equal(a2.value, '보통');
+    // ② choice: exactly one of the options; an unknown poll id is refused
+    for (const bad of [['좋음', '좋음', '좋음'], '<img src=x>', ['좋음', '보통']]) {
+      const r = await a.call('POST', '/answers', { token: p.token, body: { poll: poll.id, value: bad } });
+      assert.equal(r.status, 400, JSON.stringify(bad)); assert.equal(r.body.error, 'invalid_value');
+    }
+    assert.equal((await a.call('POST', '/answers', { token: p.token, body: { poll: poll.id, value: ['좋음'] } })).body.value, '좋음', 'one-item array → the option');
+    assert.equal((await a.call('PATCH', `/answers/${a1.id}`, { token: p.token, body: { value: '없는 보기' } })).status, 400, 'a changed answer keeps to the options');
+    const unknown = await a.call('POST', '/answers', { token: p.token, body: { poll: 'nonexistent-poll', value: 'X' } });
+    assert.equal(unknown.status, 404); assert.equal(unknown.body.error, 'unknown_poll');
+    // blueprint polls: registered by the console (cid 'bp:<id>'), idempotent; answers keep the blueprint id
+    const reg = await a.call('POST', '/polls', { admin: c.adminKey, body: { question: '도구', kind: 'scale', options: [], open: true, cid: 'bp:bp-scale' } });
+    assert.equal(reg.status, 201);
+    assert.equal((await a.call('POST', '/polls', { admin: c.adminKey, body: { question: '도구', kind: 'scale', options: [], open: true, cid: 'bp:bp-scale' } })).body.id, reg.body.id);
+    assert.equal((await a.call('POST', '/answers', { token: p.token, body: { poll: 'bp-scale', value: 4 } })).body.value, '4', 'scale without options → 1~5');
+    assert.equal((await a.call('POST', '/answers', { token: p.token, body: { poll: 'bp-scale', value: '9' } })).status, 400);
+    // an unregistered blueprint poll is still answered while it is the open poll (older consoles), word answers stay free
+    assert.equal((await a.call('POST', '/answers', { token: p.token, body: { poll: 'blueprint-poll', value: ['협업'] } })).status, 404);
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { openPoll: 'blueprint-poll' } });
     const words = (await a.call('POST', '/answers', { token: p.token, body: { poll: 'blueprint-poll', value: ['협업', '피드백'] } })).body;
     assert.deepEqual(words.value, ['협업', '피드백']);
+    assert.equal((await a.call('POST', '/answers', { token: p.token, body: { poll: 'signal', value: 'red' } })).status, 201, 'the signal light is free');
     const help = (await a.call('POST', '/help', { token: p.token, body: { station: 's2', seat: '3모둠', message: '로그인이 안 돼요' } })).body;
-    assert.equal(help.status, 'open'); assert.equal(help.nickname, '선생님');
+    assert.equal(help.status, 'open'); assert.equal(help.nickname, '김교사');
     const claim = await a.call('PATCH', `/help/${help.id}`, { admin: c.adminKey, body: { status: 'claimed', assignee: '보조강사' } });
     assert.equal(claim.body.status, 'claimed');
     const selfClaim = await a.call('PATCH', `/help/${help.id}`, { token: p.token, body: { status: 'claimed' } });
@@ -362,6 +381,62 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.ok(p.token, 'a name that only contains the word is fine');
     const ren = await a.call('PATCH', `/participants/${p.id}`, { token: p.token, body: { nickname: '운영자' } });
     assert.equal(ren.status, 400); assert.equal(ren.body.error, 'reserved_nickname');
+    // ⑩ a few more: 관리자·선생님·운영진(님), admin with a Cyrillic а
+    for (const n of ['관리자', '선생님', '운영진', '관리자님', 'аdmin']) assert.equal((await a.call('POST', '/join', { body: { nickname: n } })).body.error, 'reserved_nickname', n);
+    for (const n of ['김선생', '운영진 일동']) assert.equal((await a.call('POST', '/join', { body: { nickname: n } })).status, 201, n);
+  });
+
+  test(`${name}: instructor sessions — a console that is in keeps working while wrong keys lock the IP`, async () => {
+    const c = fresh('S'); const a = api(c.base, c.code);
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { notice: null } });
+    assert.equal((await a.call('POST', '/session', { admin: 'wrong-key-000000' })).status, 403);
+    const s = await a.call('POST', '/session', { admin: c.adminKey });
+    assert.equal(s.status, 201); assert.match(s.body.session, /^lps1\.[A-Za-z0-9_-]{43}$/); assert.ok(s.body.expiresAt > Date.now() + 11 * 3600e3);
+    const S = s.body.session;
+    for (let i = 0; i < 9; i++) await a.call('GET', '/participants', { admin: 'guess-' + i + '-xxxxxxxx' }); // + the wrong /session above = 10
+    assert.equal((await a.call('GET', '/participants', { admin: c.adminKey })).status, 429, 'a key attempt is still locked (no oracle)');
+    assert.equal((await a.call('GET', '/participants', { admin: S })).status, 200, 'the session is not');
+    assert.equal((await a.call('PUT', '/state', { admin: S, body: { notice: { text: '공지' } } })).status, 200);
+    assert.equal((await a.call('POST', '/session', { admin: S })).status, 201, 'a session can be renewed while locked');
+    const fake = await a.call('GET', '/participants', { admin: 'lps1.' + 'x'.repeat(43) });
+    assert.equal(fake.status, 401); assert.equal(fake.body.error, 'session_expired', 'unknown session → send the key again (never counted)');
+    // a session of another training is not valid here
+    const other = api(c.base, 'O' + uniq());
+    await other.call('PUT', '/state', { admin: c.adminKey, body: { notice: null } });
+    assert.equal((await other.call('GET', '/participants', { admin: S })).status, 401);
+  });
+
+  test(`${name}: ui.lockJoin closes joining; check-in keeps the first time, check-out the last; name·school later with consent`, async () => {
+    const c = fresh('K'); const a = api(c.base, c.code);
+    const p = await joinAs(a, '먼저옴');
+    assert.equal((await a.call('PUT', '/state', { token: p.token, body: { ui: { lockJoin: true } } })).status, 401);
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { lockJoin: true } } });
+    const late = await a.call('POST', '/join', { body: { nickname: '늦게옴' } });
+    assert.equal(late.status, 409); assert.equal(late.body.error, 'locked');
+    assert.equal((await a.call('POST', '/questions', { token: p.token, body: { text: '이미 들어온 사람은 그대로' } })).status, 201);
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { lockJoin: null } } });
+    assert.equal((await a.call('POST', '/join', { body: { nickname: '다시열림' } })).status, 201);
+    // ⑧ attendance
+    const in1 = (await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } })).body;
+    await new Promise((r) => setTimeout(r, 15));
+    const in2 = (await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } })).body;
+    assert.equal(in2.id, in1.id); assert.equal(in2.at, in1.at, 'a second tap keeps the first check-in');
+    const o1 = (await a.call('POST', '/attendance', { token: p.token, body: { kind: 'out' } })).body;
+    await new Promise((r) => setTimeout(r, 15));
+    const o2 = (await a.call('POST', '/attendance', { token: p.token, body: { kind: 'out' } })).body;
+    assert.ok(o2.at > o1.at, 'check-out keeps the last time');
+    // 편의 2: joined with a nickname only, name·school are added at check-in (consent required)
+    const nc = await a.call('PATCH', `/participants/${p.id}`, { token: p.token, body: { name: '홍길동', school: '한빛초' } });
+    assert.equal(nc.status, 400); assert.equal(nc.body.error, 'consent_required');
+    const ok = await a.call('PATCH', `/participants/${p.id}`, { token: p.token, body: { name: '홍길동', school: '한빛초', consent: true } });
+    assert.equal(ok.status, 200); assert.equal(ok.body.name, '홍길동'); assert.ok(ok.body.consentAt > 0); assert.equal(ok.body.consent, undefined);
+    // completion: the same name·school on two devices is one row (earliest in, latest out)
+    const p2 = await joinAs(a, '휴대폰2');
+    await a.call('PATCH', `/participants/${p2.id}`, { token: p2.token, body: { name: '홍길동', school: '한빛초', consent: true } });
+    await a.call('POST', '/attendance', { token: p2.token, body: { kind: 'out' } });
+    const csv = await (await a.call('GET', '/export.csv?kind=completion', { admin: c.adminKey, raw: true })).text();
+    const rows = csv.trim().split('\r\n').slice(1).filter((r) => r.includes('홍길동'));
+    assert.equal(rows.length, 1, csv); assert.match(rows[0], /^먼저옴 \/ 휴대폰2,홍길동,한빛초,/);
   });
 
   if (uploads) test(`${name}: board files — only my own uploads; hide, remove and uploads=false take effect on the server`, async () => {

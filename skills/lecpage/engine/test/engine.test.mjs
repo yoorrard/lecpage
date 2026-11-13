@@ -77,6 +77,9 @@ test('운영 결정 규칙', () => {
   assert.equal(E.decideInfra({ size: 25, features: ['attendance'] }).backend, 'cloudflare', '강사 할 일이 가장 적은 곳(시트 약 23번 → Cloudflare 약 7번)');
   assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'] }).backend, 'cloudflare', '60명 실시간도 할 일이 가장 적은 Cloudflare');
   assert.equal(E.decideInfra({ size: 60, features: ['qa', 'progress'], connected: ['supabase'] }).backend, 'supabase', '이미 연결한 Supabase는 그대로');
+  // ⑥ Supabase는 80명까지(글 하나에 받는 사람 수만큼 메시지가 나가 100명이면 초당 100건을 넘음)
+  assert.equal(E.decideInfra({ size: 80, features: ['qa'], connected: ['supabase'] }).backend, 'supabase');
+  assert.equal(E.decideInfra({ size: 90, features: ['qa'], connected: ['supabase'] }).backend, 'cloudflare', '81명부터는 Cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa', 'help', 'progress'] }).backend, 'cloudflare', '클릭만 하는 30명 실습도 할 일이 가장 적은 Cloudflare');
   assert.equal(E.decideInfra({ size: 30, features: ['qa'], connected: ['sheets'] }).backend, 'sheets', '이미 연결해 둔 시트는 그대로');
   // skill이 Cloudflare에 올리면 참여 기능도 같은 계정(가입 하나, 7일 멈춤 없음). 이미 Vercel에 연결해 두었으면 Supabase
@@ -152,6 +155,17 @@ test('암호 보호: 페이지·교재 그림을 잠그고 같은 암호로 풀�
   assert.deepEqual([...new Uint8Array(await dec(key, out['assets/slides/slide-001.webp.enc']))], [1, 2, 3, 4]);
   await assert.rejects(async () => dec(await derive('틀린암호'), new Uint8Array(Buffer.from(payload.data, 'base64'))));
   await assert.rejects(() => protectSite(r.files, '12', { runtime: nodeRuntime() }));
+  // ③ 잠그지 않는 쪽(접속 확인·개인정보 안내)에는 참여 기능 서버 주소·연수 코드·키가 없음. 접속 확인은 /api/health만
+  const bp = EX('data-lab'); bp.live = { ...bp.live, provider: 'supabase', url: 'https://abcd1234.supabase.co', anonKey: 'sb_publishable_SECRETKEY' };
+  const r2 = E.build(bp, { runtime: nodeRuntime() });
+  const out2 = await protectSite(r2.files, '숲속1234', { runtime: nodeRuntime(), iterations: 1000 });
+  const code = r2.blueprint.live.code;
+  for (const page of ['check.html', 'privacy.html']) {
+    const d = JSON.parse(/<script type="application\/json" id="lp-data">([\s\S]*?)<\/script>/.exec(out2[page])[1]);
+    assert.ok(!JSON.stringify(d).includes(code) && !out2[page].includes('sb_publishable_SECRETKEY'), page);
+    assert.equal(d.live.url, undefined, page); assert.equal(d.live.health, 'https://abcd1234.supabase.co/auth/v1/health');
+  }
+  assert.ok(r2.files['check.html'].includes(code), '잠그지 않을 때(암호 없음)는 그대로');
 });
 
 test('보안: 사용자 자료가 엔진 파일을 덮어쓰지 못하고 스크립트·SVG는 빠진다', () => {

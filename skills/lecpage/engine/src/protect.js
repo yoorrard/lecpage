@@ -6,6 +6,26 @@ import { esc } from './render/html.js';
 export const PROTECT_ITERATIONS = 600000;
 /** 잠그는 페이지(접속 진단·개인정보 안내는 누구나 볼 수 있게 둠) */
 export const PROTECTED_PAGES = ['index.html', 'console.html', 'screen.html', 'poster.html'];
+
+/**
+ * ③ 잠그지 않는 쪽(접속 확인·개인정보 안내)의 사이트 정보에서 참여 기능 서버 주소·연수 코드·Supabase 키를 뺌.
+ * 그 셋이 있으면 암호를 모르는 사람도 질문·투표를 읽고 쓸 수 있음. 접속 확인은 서버가 닿는지만 봄:
+ * http(Cloudflare·자체 서버·바로 배포) = 서버의 /api/health(연수 코드 없는 주소), Supabase = 프로젝트의 health 주소,
+ * 구글 시트 = script.google.com(배포 주소는 남기지 않음)
+ */
+export function publicSiteData(d) {
+  if (!d || !d.live) return d;
+  const { provider, url } = d.live;
+  let health = '';
+  try {
+    const u = new URL(url);
+    if (provider === 'http') health = String(url).replace(/\/+$/, '').replace(/\/api$/, '') + '/api/health';
+    else if (provider === 'supabase') health = u.origin + '/auth/v1/health';
+    else if (provider === 'sheets') health = 'https://script.google.com/';
+  } catch { /* 주소 없음(리허설) */ }
+  return { ...d, key: '', live: { provider, features: d.live.features, health } };
+}
+const LP_DATA = /(<script type="application\/json" id="lp-data">)([\s\S]*?)(<\/script>)/;
 const ENC_FILE = /^(?:assets\/)?(?:slides|media)\/[^"'?#]+$/;
 const te = new TextEncoder();
 
@@ -89,7 +109,9 @@ export async function protectSite(files, password, opts = {}) {
   const encrypted = new Set();
   for (const [p, data] of Object.entries(files)) {
     if (ENC_FILE.test(p) && !/\.(css|js)$/i.test(p)) { out[p + '.enc'] = await enc(toBytes(data)); encrypted.add(p); }
-    else out[p] = data;
+    else if (/\.html$/i.test(p) && !PROTECTED_PAGES.includes(p) && typeof data === 'string' && LP_DATA.test(data)) {
+      out[p] = data.replace(LP_DATA, (m, a, json, b) => { let d; try { d = JSON.parse(json); } catch { return m; } return a + JSON.stringify(publicSiteData(d)).replace(/</g, '\\u003c') + b; });
+    } else out[p] = data;
   }
   const meta = { v: 1, salt: b64(salt), iter: iterations };
   for (const page of PROTECTED_PAGES) {

@@ -71,13 +71,14 @@ function siteName(h, bp, state) {
   return `lec-${d}-${String(bp.live?.code || randomBytes(2).toString('hex')).slice(0, 4).toLowerCase()}`.replace(/[^a-z0-9-]/g, '');
 }
 
-/** 중계 폴더 준비: backends/cloudflare의 코드와 설정을 work/live-relay에(스킬 폴더를 더럽히지 않게). 이름과 받을 연수 코드를 적음 */
-function prepareRelay(dir, relayName, code) {
+/** 중계 폴더 준비: backends/cloudflare의 코드와 설정을 work/live-relay에(스킬 폴더를 더럽히지 않게). 이름·받을 연수 코드·보관 기간(설계도)을 적음 */
+export function prepareRelay(dir, relayName, code, retentionDays = 30) {
   mkdirSync(dir, { recursive: true });
   cpSync(join(RELAY_SRC, 'src'), join(dir, 'src'), { recursive: true });
   copyFileSync(join(RELAY_SRC, 'package.json'), join(dir, 'package.json'));
   let toml = readFileSync(join(RELAY_SRC, 'wrangler.toml'), 'utf8');
-  toml = toml.replace(/^name = ".*"$/m, `name = "${relayName}"`).replace(/^ALLOWED_CODES = ".*"$/m, `ALLOWED_CODES = "${code}"`);
+  const days = Math.min(365, Math.max(1, Math.round(Number(retentionDays) || 30)));
+  toml = toml.replace(/^name = ".*"$/m, `name = "${relayName}"`).replace(/^ALLOWED_CODES = ".*"$/m, `ALLOWED_CODES = "${code}"`).replace(/^RETENTION_DAYS = ".*"$/m, `RETENTION_DAYS = "${days}"`);
   writeFileSync(join(dir, 'wrangler.toml'), toml);
   if (!existsSync(join(dir, '.gitignore'))) writeFileSync(join(dir, '.gitignore'), 'node_modules\n.wrangler\n.dev.vars\n');
 }
@@ -158,7 +159,7 @@ export async function publishCmd(h) {
 
   let relayUrl = '';
   if (live) {
-    prepareRelay(relayDir, relayName, code);
+    prepareRelay(relayDir, relayName, code, bp.privacy?.retentionDays); // 개인정보 안내에 적힌 보관 기간 그대로
     const sl = wrangler(['secret', 'list', '-c', 'wrangler.toml'], { cwd: relayDir });
     if (sl.ok && /ADMIN_KEY/.test(sl.raw)) lines.push(`관리자 키 그대로(지난번에 만든 키${existsSync(keyFile) ? `: ${rel(keyFile)}` : '. 처음 건넨 파일이나 비밀번호 관리 앱에 있어요'})`);
     else {

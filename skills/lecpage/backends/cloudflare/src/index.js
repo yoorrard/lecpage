@@ -18,6 +18,10 @@
 // ALLOWED_CODES) or on /init: plain reads of an unknown code never create storage, and an object without a training
 // deletes everything it holds in its alarm. A Guard object per client IP (binding GUARD) counts wrong admin keys and
 // new trainings across all codes.
+// School networks that block WebSockets and SSE poll: GET snapshot?since=<cursor>&wait=<s> is a long-poll. The Worker
+// does the waiting (relayWait) while the object sleeps, so a blocked school costs a request per change or per 25 s,
+// not one every few seconds, and no Durable Object duration. Every snapshot answer carries X-Lec-Poll-Ms
+// (= max(7000, participants × 60)): the gap the runtime keeps between polls.
 import { DurableObject } from 'cloudflare:workers';
 import { LiveCore, HttpError, errorBody, normCode, sha256hex, keyProblem, isWeakKeyHash, PROTOCOL } from './protocol.js';
 
@@ -32,6 +36,7 @@ function corsHeaders(request, env) {
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Setup, X-Lec-Filename',
+    'Access-Control-Expose-Headers': 'X-Lec-Poll-Ms, Retry-After',
     'Access-Control-Max-Age': '86400',
   });
   if (!origins.length) h.set('Access-Control-Allow-Origin', '*');
@@ -76,6 +81,55 @@ function withHeaders(res, extra) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
 
+// ---------------------------------------------------------------- long-poll (school networks)
+/** Longest wait of one long-poll (shorter than the runtime's request timeout) and waiters per room. */
+export const MAX_WAIT_S = 25;
+export const MAX_WAITERS = 600;
+/** Did a snapshot answer bring anything after `since` (docs, removals, state)? */
+export function snapshotChanged(body, since) {
+  if (!body || typeof body !== 'object') return true;
+  if (body.full || (Array.isArray(body.removed) && body.removed.length)) return true;
+  if (body.state && Number(body.state.updatedAt) > since) return true;
+  for (const [k, v] of Object.entries(body)) if (k !== 'removed' && Array.isArray(v) && v.length) return true;
+  return false;
+}
+/** GET …/snapshot?since=<cursor>&wait=<s> */
+export function isLongPoll(method, url) {
+  return method === 'GET' && /\/snapshot$/.test(url.pathname) && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
+}
+/** Poll gap the runtime keeps (X-Lec-Poll-Ms): 7 s, longer for big rooms (300 participants → 18 s). */
+export const pollGapMs = (participants) => Math.max(7000, Math.round((participants || 0) * 60));
+/**
+ * The Worker waits for the room (Workers bill requests and CPU, not waiting time; the room sleeps, so no Durable Object
+ * duration). The room answers 101 + a WebSocket whose first message is the current (unchanged) snapshot; when something
+ * changes it sends 'c' and closes, and the Worker asks once more. Time up → the first snapshot. Any other answer as is.
+ * onSocket(): called when the room handed a socket (the host counts it).
+ */
+export async function relayWait(stub, fwd, waitS, onSocket) {
+  const h = new Headers(fwd.headers);
+  h.set('upgrade', 'websocket'); h.set('x-lp-relay', '1');
+  const res = await stub.fetch(new Request(fwd.url, { method: 'GET', headers: h }));
+  const ws = res.webSocket;
+  if (res.status !== 101 || !ws) return res;
+  if (onSocket) onSocket();
+  const gap = res.headers.get('x-lec-poll-ms');
+  ws.accept();
+  const CHANGED = Symbol('changed');
+  const got = await new Promise((resolve) => {
+    let first = null; let over = false;
+    const finish = (v) => { if (over) return; over = true; clearTimeout(timer); try { ws.close(1000, 'done'); } catch { /* closed */ } resolve(v); };
+    const timer = setTimeout(() => finish(first ?? CHANGED), Math.min(MAX_WAIT_S, Math.max(1, waitS)) * 1000);
+    ws.addEventListener('message', (m) => { if (first === null && typeof m.data === 'string' && m.data !== 'c') first = m.data; else finish(CHANGED); });
+    ws.addEventListener('close', () => finish(CHANGED));
+    ws.addEventListener('error', () => finish(CHANGED));
+  });
+  if (got !== CHANGED) {
+    return new Response(got, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(gap ? { 'x-lec-poll-ms': String(gap) } : {}) } });
+  }
+  const plain = new URL(fwd.url); plain.searchParams.delete('wait');
+  return stub.fetch(new Request(plain, { method: 'GET', headers: fwd.headers }));
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -94,7 +148,9 @@ export default {
       let code;
       try { code = normCode(decodeURIComponent(raw)); } catch (e) { throw e instanceof HttpError ? e : new HttpError(400, 'bad_code', '연수 코드가 올바르지 않습니다.'); }
       const stub = env.LIVE.getByName(code);
-      const res = await stub.fetch(request);
+      // the relay mark is set by this Worker only
+      const fwd = new Request(request); fwd.headers.delete('x-lp-relay');
+      const res = isLongPoll(request.method, url) ? await relayWait(stub, fwd, Number(url.searchParams.get('wait'))) : await stub.fetch(fwd);
       return withHeaders(res, cors);
     } catch (e) {
       return errorResponse(e, cors);
@@ -111,6 +167,8 @@ export class LiveRoom extends DurableObject {
     this.pingTimer = null;
     this.corePromise = null;
     this.wsFails = new WeakMap(); // wrong auth messages per socket (messages may be handled concurrently)
+    this.waiters = new Set(); // long-polls waiting inside this object (requests that did not come through the relay)
+    this.changes = 0; // broadcasts so far (a relay socket opened while a snapshot was made wakes at once)
     // Answered by the runtime without waking the object (no duration charge).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -154,7 +212,82 @@ export class LiveRoom extends DurableObject {
     return this.corePromise;
   }
 
+  /** Long-polls first (relay socket or a wait inside the object), everything else → handle(). */
   async fetch(request) {
+    const url = new URL(request.url);
+    const wait = this.waitMs(request, url);
+    if (wait) {
+      if (request.headers.get('x-lp-relay') === '1' && (request.headers.get('upgrade') || '').toLowerCase() === 'websocket') return this.relaySocket(request, url);
+      return this.longPoll(request, wait);
+    }
+    return this.handle(request);
+  }
+
+  // ---------------------------------------------------------------- long-poll
+  waitMs(request, url) {
+    if (!isLongPoll(request.method, url) || this.waiters.size >= MAX_WAITERS) return 0;
+    return Math.min(MAX_WAIT_S, Number(url.searchParams.get('wait'))) * 1000;
+  }
+  /** Called when waiters come and go (the host counts the time the object stays awake). */
+  waitersChanged() { }
+  /** After a wait inside the object: a host may refuse the answer now (site hidden or gone). → Response | null */
+  async afterWait() { return null; }
+  /** The snapshot without the wait parameter (same headers). */
+  plainSnapshot(request, url) {
+    const plain = new URL(url); plain.searchParams.delete('wait');
+    const h = new Headers(request.headers);
+    for (const k of ['upgrade', 'connection', 'x-lp-relay', 'sec-websocket-key', 'sec-websocket-version', 'sec-websocket-extensions']) h.delete(k);
+    return this.handle(new Request(plain, { method: 'GET', headers: h }));
+  }
+  /**
+   * Relay (the Worker waits, see relayWait): changed already → 200 with the snapshot. Otherwise a hibernatable WebSocket
+   * (tag 'wait') whose first message is the snapshot; broadcast() sends 'c' and closes it. The object can sleep meanwhile.
+   */
+  async relaySocket(request, url) {
+    const mark = this.changes;
+    const first = await this.plainSnapshot(request, url);
+    if (first.status !== 200) return first;
+    const text = await first.text();
+    const since = Number(url.searchParams.get('since')) || 0;
+    let changed = true;
+    try { changed = snapshotChanged(JSON.parse(text), since); } catch { /* answer as is */ }
+    if (changed || this.ctx.getWebSockets('wait').length >= MAX_WAITERS) return new Response(text, { status: 200, headers: first.headers });
+    const [client, server] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(server, ['wait']);
+    server.serializeAttachment({ admin: false, wait: true });
+    server.send(text);
+    // something was written while the snapshot was made: wake at once
+    if (this.changes !== mark) { try { server.send('c'); server.close(1000, 'changed'); } catch { /* closed */ } }
+    const gap = first.headers.get('x-lec-poll-ms');
+    return new Response(null, { status: 101, webSocket: client, ...(gap ? { headers: { 'x-lec-poll-ms': gap } } : {}) });
+  }
+  /** A long-poll that did not come through the relay: this object waits (it stays awake meanwhile). */
+  async longPoll(request, wait) {
+    const url = new URL(request.url);
+    const first = await this.plainSnapshot(request, url);
+    if (first.status !== 200) return first;
+    const since = Number(url.searchParams.get('since')) || 0;
+    let changed = true;
+    try { changed = snapshotChanged(await first.clone().json(), since); } catch { /* answer as is */ }
+    if (changed) return first;
+    await new Promise((res) => {
+      const w = { res, t: setTimeout(() => { this.waiters.delete(w); res(); this.waitersChanged(); }, wait) };
+      this.waiters.add(w);
+      this.waitersChanged();
+    });
+    const no = await this.afterWait();
+    if (no) return no;
+    return this.plainSnapshot(request, url);
+  }
+  /** Something changed: answer every waiting long-poll (here and through the relay). */
+  wake() {
+    for (const w of this.waiters) { clearTimeout(w.t); w.res(); }
+    const had = this.waiters.size; this.waiters.clear();
+    if (had) this.waitersChanged();
+    for (const ws of this.ctx.getWebSockets('wait')) { try { ws.send('c'); ws.close(1000, 'changed'); } catch { /* closed */ } }
+  }
+
+  async handle(request) {
     const url = new URL(request.url);
     const parts = url.pathname.slice(5).split('/').filter(Boolean).map((s) => { try { return decodeURIComponent(s); } catch { return s; } });
     const [rawCode, a, b] = parts;
@@ -177,6 +310,8 @@ export class LiveRoom extends DurableObject {
       if (out.contentType) {
         return new Response(out.body, { status: out.status, headers: { 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` } });
       }
+      // ⑤ polling clients (school networks) keep this gap between polls: longer for big rooms
+      if (a === 'snapshot' && request.method === 'GET' && out.status === 200) return json(out.status, out.body, { 'X-Lec-Poll-Ms': String(pollGapMs(core.count(code, 'participants'))) });
       return json(out.status, out.body);
     } catch (e) {
       return errorResponse(e);
@@ -220,9 +355,11 @@ export class LiveRoom extends DurableObject {
         if (att.closing) ws.close(1008, 'auth');
       } catch (e) {
         const { body, retryAfter } = errorBody(e);
+        // an expired session: the console sends the key again on this socket
+        const keep = body.error === 'session_expired';
         try {
-          const att = ws.deserializeAttachment() || att0; att.admin = false; att.closing = true; ws.serializeAttachment(att);
-          ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); ws.close(1008, 'auth');
+          const att = ws.deserializeAttachment() || att0; att.admin = false; if (!keep) att.closing = true; ws.serializeAttachment(att);
+          ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); if (!keep) ws.close(1008, 'auth');
         } catch { /* closed */ }
       }
     } else if (o && o.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now: Date.now() }));
@@ -255,12 +392,15 @@ export class LiveRoom extends DurableObject {
     for (const x of this.sse) x.w.write(bytes).catch(() => { this.sse.delete(x); try { x.w.abort(); } catch { /* ignore */ } });
   }
   broadcast(events) {
+    this.changes++;
+    if (events && events.some((ev) => ev.type !== 'reaction')) this.wake(); // reactions are not in snapshots
     const sockets = this.ctx.getWebSockets();
     for (const ev of events) {
       const pub = ev.pub == null ? null : JSON.stringify({ type: ev.type, col: ev.col, doc: ev.type === 'reset' ? null : ev.pub });
       const adm = JSON.stringify({ type: ev.type, col: ev.col, doc: ev.doc });
       for (const ws of sockets) {
         const att = ws.deserializeAttachment() || {};
+        if (att.wait) continue; // long-poll relay sockets only get 'c' (wake)
         const m = att.admin ? adm : pub;
         if (m) { try { ws.send(m); } catch { /* closed */ } }
       }

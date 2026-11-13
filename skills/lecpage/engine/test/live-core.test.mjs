@@ -260,3 +260,71 @@ test('자료 링크: 강사가 연수 중에 덧붙인 주소는 state.ui(m1…m
   // 서버가 바꿔 놓은 값(주소가 아닌 글)은 버림
   assert.equal(X.materials({ ui: { m1: '<script>alert(1)</script>', m2: 'https://ok.example/x 좋아요' } }).length, 1);
 });
+
+test('core (①): an accepted key becomes a session; requests carry it; an expired session falls back to the key once', async () => {
+  const win = makeWindow({ scripts: [] }); const { LecLive } = win;
+  const KEY = 'k-123456789012'; let valid = null; const seen = [];
+  LecLive.register('fake', (config, ctx) => {
+    const a = { status: 'live' };
+    a.subscribe = () => () => {};
+    a.connect = async () => ({ mode: 'realtime' });
+    a.snapshot = async () => {
+      const k = ctx.adminKey(); seen.push(k);
+      if (k && k !== KEY && k !== valid) throw LecLive.error('session_expired', '다시', { status: 401 });
+      return { now: 1, state: {} };
+    };
+    a.checkAdmin = async () => { const k = ctx.adminKey(); seen.push('check:' + k); return k === KEY || k === valid; };
+    a.adminSession = async (key) => { assert.equal(key, KEY, 'the session is asked for with the key itself'); valid = 'lps1.' + 'a'.repeat(43); return { session: valid, expiresAt: Date.now() + 3600e3 }; };
+    return a;
+  });
+  const c = LecLive.create({ provider: 'fake', code: 'S1' });
+  await c.connect();
+  assert.equal(await c.useAdminKey(KEY), true);
+  assert.equal(seen.at(-1), valid, 'after the key is accepted, requests carry the session');
+  // reload in the same tab: the stored session is used without a key attempt
+  const c2 = LecLive.create({ provider: 'fake', code: 'S1' }); await c2.connect(); seen.length = 0;
+  assert.equal(await c2.useAdminKey(KEY), true);
+  assert.equal(seen[0], 'check:' + valid);
+  // the server forgot the session (new key, wiped): one retry with the key, then a fresh session
+  valid = 'lps1.' + 'z'.repeat(43); seen.length = 0;
+  await c2.sync(true);
+  assert.deepEqual(seen.slice(0, 2), ['lps1.' + 'a'.repeat(43), KEY]);
+  await wait(10);
+  assert.equal(win.sessionStorage.getItem('lecLive:fake:' + LecLive.util.hashStr('') + ':S1:asess') !== null, true);
+  // logout drops the session
+  await c2.setAdminKey(null);
+  assert.equal(win.sessionStorage.getItem('lecLive:fake:' + LecLive.util.hashStr('') + ':S1:asess'), null);
+});
+
+test('core (②⑧): one vote per respondent on every screen; completion merges the same name·school and keeps first in / last out', async () => {
+  const P = await import(protoNode);
+  const { LecLive } = makeWindow();
+  const X = LecLive.util.ext;
+  assert.deepEqual({ ...X.tally([{ value: ['A', 'A', 'A', 'A', 'A'] }, { value: 'B' }, { value: 'A' }, { value: ['B'] }]) }, { A: 2, B: 2 });
+  const data = {
+    participants: [
+      { id: 'p1', nickname: '폰', name: '홍길동', school: '한빛초', createdAt: 1 },
+      { id: 'p2', nickname: '노트북', name: '홍길동', school: '한빛초', createdAt: 2 },
+      { id: 'p3', nickname: '별명만', createdAt: 3 },
+      { id: 'p4', nickname: '동명이인', name: '홍길동', school: '푸른초', createdAt: 4 },
+    ],
+    attendance: [{ by: 'p1', kind: 'in', at: Date.UTC(2026, 10, 13, 0, 5) }, { by: 'p2', kind: 'in', at: Date.UTC(2026, 10, 13, 0, 30) }, { by: 'p2', kind: 'out', at: Date.UTC(2026, 10, 13, 6, 0) }, { by: 'p1', kind: 'out', at: Date.UTC(2026, 10, 13, 3, 0) }],
+    progress: [{ by: 'p1', station: 's1', status: 'done' }, { by: 'p2', station: 's2', status: 'done' }],
+    survey: [{ by: 'p2', answers: { q: 1 } }],
+  };
+  const opts = { date: '2026-11-13', start: '09:00', end: '15:00', rate: 90, survey: true };
+  const s = P.exportTable('completion', data, 'Asia/Seoul', opts); const c = LecLive.util.exportTable('completion', data, 'Asia/Seoul', opts);
+  assert.equal(LecLive.util.toCsv(c.columns, c.rows), P.toCsv(s.columns, s.rows), 'client and server agree');
+  assert.equal(s.rows.length, 3, 'same name·school on two devices → one row; another school stays separate');
+  assert.deepEqual(s.rows[0], ['폰 / 노트북', '홍길동', '한빛초', '2026-11-13 09:05:00', '2026-11-13 15:00:00', 355, '2 / 2', 'O', 'O']);
+});
+
+test('protect (③): the pages left open carry no live url, code or key; check only probes /api/health', async () => {
+  const { publicSiteData } = await import(path.join(skillDir, 'engine/src/protect.js'));
+  const http = publicSiteData({ key: 'lp-AB12CD', title: 't', live: { provider: 'http', url: 'https://lec.example.workers.dev', code: 'AB12CD', anonKey: '', features: ['qa'], pollMs: 5000 } });
+  assert.deepEqual(http.live, { provider: 'http', features: ['qa'], health: 'https://lec.example.workers.dev/api/health' }); assert.equal(http.key, '');
+  assert.equal(publicSiteData({ live: { provider: 'http', url: 'https://sites.example/live', code: 'X' } }).live.health, 'https://sites.example/live/api/health');
+  const sb = publicSiteData({ live: { provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'sb_publishable_x', code: 'AB12CD' } });
+  assert.equal(sb.live.health, 'https://abc.supabase.co/auth/v1/health'); assert.ok(!JSON.stringify(sb).includes('sb_publishable_x')); assert.ok(!JSON.stringify(sb).includes('AB12CD'));
+  assert.equal(publicSiteData({ live: { provider: 'sheets', url: 'https://script.google.com/macros/s/AKfy123/exec', code: 'C1' } }).live.health, 'https://script.google.com/');
+});
