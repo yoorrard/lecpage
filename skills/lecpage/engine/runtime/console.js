@@ -87,11 +87,13 @@
   }
   function openWindow() {
     if (scrWin && !scrWin.closed) { try { scrWin.focus(); } catch (e) { } say2('발표 화면 창은 이미 열려 있어요. 앞으로 가져왔어요.'); return; }
+    if (PREVIEW) { say2('미리보기에서는 새 창을 열지 않아요. 미리볼 화면에서 [발표 화면]을 고르세요.'); return; }
     var w = null;
     try {
-      // 이름이 같은 창이 이미 있으면(강사 화면을 새로 고친 뒤) 다시 불러오지 않고 그 창을 씀
+      // 이름이 같은 창이 이미 있으면(강사 화면을 새로 고친 뒤) 다시 불러오지 않고 그 창을 씀.
+      // 파일로 열었으면(USB) 빈 창 주소를 읽을 수 없으니 바로 그 주소로
       w = window.open('', 'lp-screen', 'popup,width=1280,height=720');
-      if (w && (w.location.href === 'about:blank' || !/screen(\.html)?$/.test(w.location.pathname))) w.location.replace(new URL(SCREEN, location.href).href);
+      if (w) { var fresh = true; try { fresh = w.location.href === 'about:blank' || !/screen(\.html)?$/.test(w.location.pathname); } catch (x) { } if (fresh) w.location.replace(new URL(SCREEN, location.href).href); }
     } catch (e) { }
     if (!w) { say2('브라우저가 새 창을 막았어요. 주소창 오른쪽의 팝업 표시를 눌러 허용한 뒤 다시 눌러 주세요.'); return; }
     scrWin = w; try { w.focus(); } catch (e) { }
