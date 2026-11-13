@@ -24,7 +24,7 @@ const EXTENDED = new Set([1, 2, 3, 11, 12, 14, 15, 16, 17, 18, 21, 22, 23]);
 const HEAD = ['NONE', 'OUTLINE', 'NUMBER', 'BULLET'];
 
 export const HWP_LIMITS = Object.freeze({
-  maxRecords: 3_000_000, // 문서 전체 레코드 수
+  maxRecords: 800_000,   // 문서 전체 레코드 수(1000쪽 문서도 수십만 개)
   maxDepth: 64,          // 레코드 나무 깊이(표 속 표…)
   maxSections: 512,      // 구역 수
 });
@@ -35,9 +35,11 @@ const i32 = (d, o) => u32(d, o) | 0;
 const chid = (d) => String.fromCharCode(d[3] || 0, d[2] || 0, d[1] || 0, d[0] || 0); // 'tbl ', 'gso ', '%hlk'…
 
 /** UTF-16LE 조각 → 글자 */
+const U16 = new TextDecoder('utf-16le');
 function wstr(d, o, n) {
-  let s = '';
   const end = Math.min(d.length, o + n * 2);
+  if (end - o >= 64) return U16.decode(d.subarray(o, end - ((end - o) & 1)));
+  let s = '';
   for (let i = o; i + 1 < end; i += 2) s += String.fromCharCode(d[i] | (d[i + 1] << 8));
   return s;
 }

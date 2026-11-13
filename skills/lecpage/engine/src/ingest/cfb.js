@@ -61,11 +61,12 @@ export class Cfb {
     }
     // 2) FAT
     const ePer = this.ss / 4;
-    const fat = new Uint32Array(fatSectors.length * ePer).fill(NOSTREAM);
+    // 파일에 있는 섹터 수만큼만(선언만 크게 한 FAT로 메모리를 잡지 않게)
+    const fat = new Uint32Array(Math.min(fatSectors.length * ePer, this.nSectors + ePer)).fill(NOSTREAM);
     fatSectors.forEach((s, k) => {
-      if (s >= this.nSectors) return;
+      if (s >= this.nSectors || k * ePer >= fat.length) return;
       const off = this.offset(s);
-      for (let i = 0; i < ePer; i++) { const p = off + i * 4; if (p + 4 <= bytes.length) fat[k * ePer + i] = dv.getUint32(p, true); }
+      for (let i = 0; i < ePer && k * ePer + i < fat.length; i++) { const p = off + i * 4; if (p + 4 <= bytes.length) fat[k * ePer + i] = dv.getUint32(p, true); }
     });
     this.fat = fat;
 
@@ -197,12 +198,12 @@ export class Cfb {
 
   readMini(start, size) {
     if (!this._miniFat) {
-      const secs = this.chain(this._miniFatStart, this.fat, this.nSectors);
+      const rootSize = Math.min(this.root.size, this.nSectors * this.ss);
       const ePer = this.ss / 4;
+      const secs = this.chain(this._miniFatStart, this.fat, Math.ceil(rootSize / 64 / ePer) + 1);
       const mf = new Uint32Array(secs.length * ePer).fill(NOSTREAM);
       secs.forEach((s, k) => { const off = this.offset(s); for (let i = 0; i < ePer; i++) mf[k * ePer + i] = this.u32(off + i * 4); });
       this._miniFat = mf;
-      const rootSize = Math.min(this.root.size, this.nSectors * this.ss);
       this._ministream = this.readChain(this.root.start, rootSize, this.fat, this.ss, (sid) => this.offset(sid), this.bytes);
     }
     return this.readChain(start, size, this._miniFat, 64, (sid) => sid * 64, this._ministream);
