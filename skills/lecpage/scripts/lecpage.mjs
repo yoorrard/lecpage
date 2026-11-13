@@ -17,6 +17,8 @@
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
 //   design <blueprint.json>                          컨셉(한 줄·모티프·권하는 디자인)과 디자인 순위·적용된 효과
 //   decide-infra -i info.json · presets · effects
+//   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
+//   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -33,7 +35,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -417,6 +419,73 @@ function mergePatches(a, b) {
   return out;
 }
 
+// ── 앱과 주고받기(app) ─────────────────────────
+const NOT_PACKED = '참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소';
+async function toAppFile(P, work) {
+  const bpPath = join(work, 'blueprint.json');
+  if (!existsSync(bpPath)) fail(`${rel(work)}에 blueprint.json이 없어요. make로 먼저 만들어 주세요.`);
+  const raw = readJson(bpPath);
+  const v = E.validate(raw);
+  if (v.errors.length) fail('설계도 검증 실패: ' + v.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '));
+  const state = loadState(work);
+  const infoPath = args.i ? resolve(args.i) : state.info ? resolve(work, state.info) : join(work, 'info.json');
+  const info = existsSync(infoPath) ? readJson(infoPath) : {};
+  const material = existsSync(join(work, 'material.json')) ? readJson(join(work, 'material.json')) : null;
+  const assets = N.readAssetDir(state.assets ? resolve(work, state.assets) : join(work, 'assets'), 'assets/');
+  // 교재 원본: make에 준 파일(100MB까지, 앱과 같은 한도). 앱에서 교재를 빼거나 원본을 자료로 올릴 때 씀
+  const originals = [], big = [];
+  for (const f of state.inputs || []) {
+    if (/^https?:/i.test(f) || !existsSync(f) || !statSync(f).isFile()) continue;
+    if (statSync(f).size > 100e6) { big.push(basename(f)); continue; }
+    originals.push({ name: basename(f), bytes: new Uint8Array(readFileSync(f)) });
+  }
+  const summary = material ? (await ingestApi()).summarizeMaterial(material) : '';
+  // 비밀·접속 주소는 담지 않음: 앱이 열 때도 같은 규칙으로 다시 정리함(sanitizeImported)
+  const r = P.packProject({ blueprint: E.sanitizeImported(raw), material, info, assets, originals, summary });
+  const out = resolve(args.o || join(dirname(work), P.projectFileName(raw.meta?.title)));
+  const zip = E.zipFiles(r.files);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, zip);
+  const kb = Math.round(zip.length / 1024);
+  const c = r.counts;
+  say([
+    `앱으로 넘길 파일 ✓ ${rel(out)} (${kb >= 1024 ? (kb / 1024).toFixed(1) + 'MB' : kb + 'KB'})`,
+    `담은 것 설계도(칸 ${v.blueprint.sections.length}) · 연수 정보 · ${material ? `교재 해석(${material.pages?.length || 0}쪽)` : '교재 해석 없음'} · 쪽 그림 ${c.slides} · 교재 그림 ${c.media}${c.files ? ` · 자료실 파일 ${c.files}` : ''} · 교재 원본 ${c.originals}`,
+    `담지 않은 것 ${NOT_PACKED}(앱에서 다시 정해요)`,
+    r.dropped.length || big.length ? `뺀 자료 ${r.dropped.length + big.length}: ${plural([...r.dropped.map((x) => basename(x)), ...big.map((x) => x + '(100MB 넘음)')], 3, ', ')}` : '',
+    `강사에게 ${P.APP_URL} 를 열고 [저장한 파일 열기]로 이 파일을 열면 디자인·참여 기능·공개를 화면에서 이어 해요.`,
+  ], { ok: true, file: out, kb, counts: c, dropped: [...r.dropped, ...big], app: P.APP_URL });
+}
+
+async function fromAppFile(P, file) {
+  let u;
+  try { u = P.unpackProject(P.readStoredZip(readFileSync(file))); } catch (e) { fail(e.friendly ? e.message : `파일을 읽지 못했어요: ${e.message}`); }
+  if (!u.blueprint || typeof u.blueprint !== 'object') fail('설계도가 없는 파일이에요. 앱에서 사이트 초안을 만든 뒤 [파일로 저장]해 주세요.');
+  const work = resolve(args.o || 'work');
+  if (existsSync(join(work, 'blueprint.json')) && !args.force) fail(`${rel(work)}에 설계도가 이미 있어요. 다른 폴더를 -o로 주거나, 덮어쓰려면 --force를 붙여 주세요.`);
+  const bp = E.sanitizeImported(u.blueprint);
+  const v = E.validate(bp);
+  if (v.errors.length) fail('설계도 검증 실패: ' + v.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '));
+  writeJson(join(work, 'blueprint.json'), bp);
+  if (u.material) writeJson(join(work, 'material.json'), u.material);
+  writeJson(join(work, 'info.json'), u.info);
+  N.writeFiles(work, u.assets);
+  const inputs = [];
+  for (const o of u.originals) { const f = join(work, 'src', o.file); N.writeFiles(join(work, 'src'), { [o.file]: o.bytes }); inputs.push(f); }
+  const out = resolve(dirname(work), 'dist');
+  saveState(work, { out: relative(work, out), assets: 'assets', info: 'info.json', blueprint: 'blueprint.json', inputs, from: 'app' });
+  const slides = Object.keys(u.assets).filter((k) => k.startsWith('assets/slides/')).length;
+  let b = null, skip = '';
+  if (bp.access?.mode === 'password' && !args.password && !process.env.LECPAGE_PASSWORD) skip = '암호 보호 연수라 빌드는 건너뜀(--password로 patch 하면 빌드해요)';
+  else { b = await buildSite(bp, { out, assets: join(work, 'assets'), info: u.info, password: args.password }); if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; } }
+  say([
+    `앱에서 저장한 연수 ✓ 「${cut(bp.meta?.title || '이름 없음', 40)}」 → ${rel(work)}(설계도·연수 정보·${u.material ? '교재 해석' : '교재 해석 없음'}) · 쪽 그림 ${slides} · 교재 원본 ${inputs.length}${inputs.length ? `(${rel(join(work, 'src'))})` : ''}`,
+    `받지 않은 것 ${NOT_PACKED}. 쓰려면 강사에게 다시 받아 ${rel(join(work, 'info.json'))}에 넣어요`,
+    b ? buildLine(b) : skip,
+    `다음 brief ${rel(work)} · patch ${rel(join(work, 'blueprint.json'))} --set 경로=값`,
+  ], { ok: true, work, blueprint: join(work, 'blueprint.json'), slides, originals: inputs, build: b && { dir: b.dir, sizeKB: b.sizeKB }, skipped: skip });
+}
+
 // ── 명령 ─────────────────────────────────────────
 const commands = {
   async make() {
@@ -629,6 +698,14 @@ const commands = {
       `고르면 patch ${rel(bpPath)} --set design.preset=<id> · 각 안 미리보기 ${rel(outDir)}/<id>/index.html`,
     ];
     say(lines, { ok: true, sheet, skipped, options: results.map(({ pc, pc2, phone, ...r }) => ({ ...r, shots: { pc, pc2, phone } })) });
+  },
+
+  /** 앱(웹)과 주고받기: 작업 폴더 → <연수 이름>.lecpage(앱 [저장한 파일 열기]), 앱에서 저장한 .lecpage → 작업 폴더 */
+  async app() {
+    const P = await imp('src/project-file.js');
+    const src = resolve(args._[0] || 'work');
+    if (!existsSync(src)) fail(`${rel(src)}가 없어요. make로 만든 작업 폴더(work)나 앱에서 저장한 .lecpage 파일을 주세요.`);
+    return statSync(src).isFile() && !/\.json$/i.test(src) ? fromAppFile(P, src) : toAppFile(P, statSync(src).isFile() ? dirname(src) : src);
   },
 
   /** 만든 사이트를 띄우고 '수정 요청'(펜·네모로 표시 + 글)을 work/feedback/에 모음. AI는 그 파일을 읽고 patch로 고침 */

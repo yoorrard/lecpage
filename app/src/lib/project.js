@@ -2,6 +2,10 @@
 import { projects, blobs } from './db.js';
 import { uid } from './util.js';
 import { zipFiles } from '@engine/src/zip-write.js';
+import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, appInfoFrom, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
+
+// .lecpage 형식(받는 자료·ZIP 읽기·연수 정보 기본값)은 skill CLI(`lecpage.mjs app`)와 함께 쓰는 엔진 규칙
+export { DEFAULT_INFO, ALLOWED_ASSET, readStoredZip };
 
 // 예시 설계도는 필요할 때만 불러옵니다(첫 화면을 가볍게)
 export async function loadExample(id) {
@@ -10,13 +14,6 @@ export async function loadExample(id) {
     : await import('../../../skills/lecpage/examples/data-lab.blueprint.json');
   return JSON.parse(JSON.stringify(m.default));
 }
-
-export const DEFAULT_INFO = {
-  title: '', subtitle: '', organizer: '', date: '', start: '', end: '', venue: '', mode: 'offline',
-  size: 25, format: '', features: [], devices: ['laptop'], network: 'good',
-  minor: false, admin: 'school', commercial: false, completionRate: 80,
-  surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '', contact: '', joinUrl: '',
-};
 
 /** 첫 화면에 놓은 교재 파일을 '교재 넣기' 화면으로 넘길 때 잠시 보관 */
 const pending = new Map();
@@ -59,46 +56,27 @@ export async function duplicateProject(p0) {
 
 export async function exportProjectFile(p) {
   const assets = await blobs.all(p.id);
-  const files = { 'project.json': JSON.stringify({ format: 'lecpage-project', version: 1, project: { ...p, deploy: undefined } }, null, 2) };
+  const files = { 'project.json': JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project: { ...p, deploy: undefined } }, null, 2) };
   for (const [k, v] of Object.entries(assets)) files[k] = v;
   return zipFiles(files);
 }
 
-/** 프로젝트 파일에서 받는 자료: 교재 그림·원본 문서·사진·소리·영상만(스크립트·SVG·HTML 금지, 엔진 파일 덮어쓰기 방지) */
-export const ALLOWED_ASSET = /^(?:assets\/)?(?:slides|media)\/[^/]{1,140}\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx|ppsx|docx|hwpx|xlsx|txt|zip)$/i;
-
 /** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
 const bad = (m) => Object.assign(new Error(m), { friendly: true });
-
-/** 무압축 ZIP 읽기(lecpage가 만든 파일) — 다른 압축 ZIP은 거절 */
-export function readStoredZip(buf, { maxFiles = 3000, maxBytes = 300e6 } = {}) {
-  const u8 = new Uint8Array(buf); const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
-  const out = {}; let p = 0, n = 0, total = 0; const dec = new TextDecoder();
-  while (p + 30 <= u8.length && dv.getUint32(p, true) === 0x04034b50) {
-    const method = dv.getUint16(p + 8, true), size = dv.getUint32(p + 18, true), nameLen = dv.getUint16(p + 26, true), extra = dv.getUint16(p + 28, true);
-    if (method !== 0) throw bad('lecpage에서 저장한 .lecpage 파일만 열 수 있어요. [파일로 저장]으로 만든 파일인지 확인해 주세요.');
-    const name = dec.decode(u8.subarray(p + 30, p + 30 + nameLen));
-    const start = p + 30 + nameLen + extra;
-    if (name.includes('..') || name.startsWith('/')) throw bad('파일 안의 경로가 올바르지 않아요. lecpage에서 다시 저장한 파일을 열어 주세요.');
-    out[name] = u8.slice(start, start + size);
-    total += size; n++; if (n > maxFiles || total > maxBytes) throw bad('저장한 파일이 너무 커요(300MB까지). 교재 파일을 줄여 다시 저장해 주세요.');
-    p = start + size;
-  }
-  return out;
-}
 
 export async function importProjectFile(file) {
   const buf = await file.arrayBuffer();
   let proj, assets = {};
   if (/\.json$/i.test(file.name)) {
     const j = JSON.parse(new TextDecoder().decode(buf));
-    if (j.format === 'lecpage-project') proj = j.project;
-    else { proj = { title: j.meta?.title || '', files: [], info: { ...DEFAULT_INFO, title: j.meta?.title || '' }, blueprint: j }; }
+    if (j.format === PROJECT_FORMAT) proj = j.project;
+    // 설계도만 받으면 연수 정보를 설계도에서 채움(연수 정보를 고칠 때 빈 칸이 설계도의 날짜·장소를 지우지 않게)
+    else { proj = { title: j.meta?.title || '', files: [], info: appInfoFrom(j && typeof j === 'object' ? j : {}), blueprint: j }; }
   } else {
     const files = readStoredZip(buf);
     const pj = files['project.json']; if (!pj) throw bad('project.json이 없는 파일이에요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.');
     const j = JSON.parse(new TextDecoder().decode(pj)); proj = j.project;
-    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && ALLOWED_ASSET.test(k) && !k.includes('..')) assets[k] = v;
+    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && isAllowedAsset(k)) assets[k] = v;
   }
   // 남이 준 파일: 실시간 연결·QR 주소는 다시 정하게 비우고, 자료는 그림·문서만 받음
   const { sanitizeImported } = await import('./blueprint.js');

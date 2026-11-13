@@ -41,6 +41,8 @@
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
+| `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://yoorrard.github.io/lecpage/` | 5줄 안팎 |
+| `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음 | 4줄 |
 | `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP | 한 줄 |
 | `draft` · `prompt` · `presets` · `effects` | 초안만, AI 프롬프트 파일, 목록 | |
 
