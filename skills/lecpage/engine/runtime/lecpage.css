@@ -1152,6 +1152,10 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-console-mats{list-style:none;display:grid;gap:var(--sp-2);margin-top:var(--sp-2)}
 .lp-console-mats li{display:flex;align-items:center;gap:var(--sp-3);justify-content:space-between}
 .lp-console-mats a{overflow-wrap:anywhere}
+.lp-console-help{margin-top:16px}
+.lp-console-help>summary{cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center}
+.lp-console-help .lp-prose{max-width:72ch;margin-top:var(--sp-2)}
+.lp-quick-poll{display:grid;gap:4px;padding-bottom:var(--sp-3);margin-bottom:var(--sp-3);border-bottom:1px solid var(--rule-c)}
 .lp-materials p,.lp-materials small{color:var(--muted-foreground);font-size:var(--fs-sm)}
 .lp-file-kind{font-family:var(--font-mono);font-size:var(--fs-xs);font-weight:700;color:var(--primary);align-self:baseline;padding-top:.3em}
 .lp-notice-box{margin-top:var(--sp-5);display:grid;gap:4px;font-size:var(--fs-sm);color:var(--muted-foreground);max-width:var(--measure)}

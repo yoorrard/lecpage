@@ -1,6 +1,6 @@
 # 교재 해석 결과(Material JSON) 형식
 
-교재 파일(PPTX·PDF·HWPX·DOCX·TXT·MD)이나 링크를 읽은 결과입니다. 이 JSON에서 **설계도 초안**(`materialToDraft`)과 **AI용 교재 요약 글**(`materialToAIContext`)을 만듭니다.
+교재 파일(PPTX·PDF·HWP·HWPX·DOCX·TXT·MD)이나 링크를 읽은 결과입니다. 이 JSON에서 **설계도 초안**(`materialToDraft`)과 **AI용 교재 요약 글**(`materialToAIContext`)을 만듭니다.
 JS 엔진(`engine/src/ingest`, 브라우저·Node 공통)과 파이썬 보조 스크립트(`scripts/ingest.py`)가 **같은 모양**을 만듭니다. 다른 점은 하나뿐입니다: 파이썬은 `detected`를 비워 두고(`null`), Node CLI가 JS 감지 규칙으로 채웁니다.
 
 ## 1. 만들기
@@ -44,7 +44,7 @@ bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides
   "meta": { "title": "", "author": "", "created": "", "modified": "" },   // 첫 파일의 문서 속성
   "boilerplate": [ { "file": "deck1", "text": "○○교육지원청 AI 연수" } ], // 절반 넘는 쪽에 반복돼 문단에서 뺀 머리글·바닥글
   "detected": { /* §6 감지 결과 (파이썬 단독 실행이면 null) */ },
-  "errors":   [ { "code": "legacy-hwp", "message_ko": "예전 한글 파일(.hwp)은 …", "file": "계획.hwp" } ],
+  "errors":   [ { "code": "hwp-distribution", "message_ko": "배포용 문서로 저장된 한글 파일이라 …", "file": "계획.hwp" } ],
   "warnings": [ { "code": "hidden-slides", "message_ko": "숨긴 슬라이드 2장은 …", "file": "교재.pptx" } ]
 }
 ```
@@ -53,9 +53,9 @@ bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides
 
 | 필드 | 뜻 |
 |---|---|
-| `id` | 파일 id. 슬라이드형(PPTX·PDF)은 `deck1`, `deck2`…, 문서형(DOCX·HWPX·TXT·MD)은 `doc1`…, 링크는 `link1`… |
+| `id` | 파일 id. 슬라이드형(PPTX·PDF)은 `deck1`, `deck2`…, 문서형(DOCX·HWP·HWPX·TXT·MD)은 `doc1`…, 링크는 `link1`… |
 | `name` | 파일 이름(NFC로 정리) |
-| `type` | `pptx` · `pdf` · `docx` · `hwpx` · `txt` · `md` · `link` |
+| `type` | `pptx` · `pdf` · `docx` · `hwp` · `hwpx` · `txt` · `md` · `link` |
 | `size` | 바이트 |
 | `pages`, `unit` | 쪽 수와 단위: `slide`(PPTX), `page`(PDF), `section`(문서형: 제목 기준으로 나눈 부분), `link` |
 | `title`, `author`, `modified` | 문서 속성(있을 때) |
@@ -116,7 +116,7 @@ bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides
   "slideSize": { "width": 1280, "height": 720, "ratio": "16:9" }
 }
 ```
-HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를, PDF는 `slideSize`만 채웁니다.
+HWP·HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를, PDF는 `slideSize`만 채웁니다.
 
 ## 6. 감지 결과(`detected`)
 
@@ -154,7 +154,8 @@ HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를,
 | code | 상황 |
 |---|---|
 | `empty` · `too-large` · `not-found` | 빈 파일 · 100MB 초과(바꿀 수 있음) · 경로 없음(CLI) |
-| `legacy-hwp` · `legacy-ppt` · `legacy-doc` · `legacy-office` | 예전 형식 → HWPX·PPTX·DOCX·PDF로 다시 저장 안내 |
+| `legacy-hwp` · `legacy-ppt` · `legacy-doc` · `legacy-office` | 예전 형식(한글 97 이전 HWP·PPT·DOC) → HWP·HWPX·PPTX·DOCX·PDF로 다시 저장 안내 |
+| `hwp-distribution` | 배포용으로 저장한 한글 문서 → 원본이나 PDF로 |
 | `encrypted` · `pdf-encrypted` · `drm` | 암호·문서 보안(DRM, 학교 문서보안 프로그램) |
 | `corrupt` · `parse-failed` · `zip-bomb` | 손상 · 해석 실패 · 압축을 풀면 지나치게 큰 파일(선언 크기 합계 600MB·파일 하나 200MB·항목 2만 개 상한) |
 | `unsupported` · `keynote` · `odf` · `spreadsheet` | 지원하지 않는 형식(안내 포함) |

@@ -15,13 +15,15 @@ import { Zip } from './zip.js';
 import { parsePptx } from './pptx.js';
 import { parseDocx } from './docx.js';
 import { parseHwpx } from './hwpx.js';
+import { parseHwp, isHwp } from './hwp.js';
+import { Cfb } from './cfb.js';
 import { parsePdf, loadPdfjs } from './pdf.js';
 import { parseText, parseTextFile } from './text.js';
 import { detect } from './detect.js';
 import { toolForUrl } from './tools-db.js';
 
 export const MATERIAL_VERSION = 1;
-export const SUPPORTED = ['pptx', 'pdf', 'hwpx', 'docx', 'txt', 'md'];
+export const SUPPORTED = ['pptx', 'pdf', 'hwp', 'hwpx', 'docx', 'txt', 'md'];
 export const ACCEPT = '.pptx,.ppsx,.potx,.pptm,.pdf,.hwpx,.docx,.dotx,.docm,.txt,.md,.markdown,.hwp,.ppt,.doc';
 
 export function emptyMaterial() {
@@ -31,7 +33,7 @@ export function emptyMaterial() {
   };
 }
 
-const PREFIX = { pptx: 'deck', pdf: 'deck', docx: 'doc', hwpx: 'doc', txt: 'doc', md: 'doc', link: 'link' };
+const PREFIX = { pptx: 'deck', pdf: 'deck', docx: 'doc', hwp: 'doc', hwpx: 'doc', txt: 'doc', md: 'doc', link: 'link' };
 const UNIT_KO = { slide: '장', page: '쪽', section: '절', link: '개' };
 
 function zipType(zip, ext) {
@@ -75,18 +77,21 @@ export async function ingestFile(name, bytes, opts = {}) {
     if (b.length > limits.maxBytes) throw new IngestError('too-large', { mb: (b.length / 1048576).toFixed(1), limitMb: Math.round(limits.maxBytes / 1048576) });
     const kind = sniff(b);
     let type = '';
-    let zip = null;
+    let zip = null, cfb = null;
     if (kind === 'zip') { zip = new Zip(b, limits); type = zipType(zip, ext); }
     else if (kind === 'pdf') type = 'pdf';
-    else if (kind === 'cfb') throw new IngestError(cfbError(ext));
-    else if (kind === 'hwp3') throw new IngestError('legacy-hwp');
+    else if (kind === 'cfb') {
+      // OLE 복합 문서: 한글 HWP 5.0이면 읽고, 예전 PPT·DOC·암호 걸린 OOXML이면 안내
+      try { cfb = new Cfb(b, limits); } catch (e) { if (e instanceof IngestError && e.code === 'zip-bomb') throw e; cfb = null; }
+      if (cfb && isHwp(cfb)) type = 'hwp';
+      else throw new IngestError(cfbError(ext));
+    } else if (kind === 'hwp3') throw new IngestError('legacy-hwp');
     else if (kind === 'drm') throw new IngestError('drm');
     else if (kind === 'text') {
       if (['pptx', 'docx', 'hwpx', 'xlsx', 'pdf', 'hwp', 'ppt', 'doc'].includes(ext)) throw new IngestError('drm');
       type = ['md', 'markdown', 'mdown'].includes(ext) ? 'md' : 'txt';
     } else {
-      if (['pptx', 'docx', 'hwpx', 'xlsx', 'ppsx', 'potx'].includes(ext)) throw new IngestError('drm');
-      if (ext === 'hwp') throw new IngestError('legacy-hwp');
+      if (['pptx', 'docx', 'hwp', 'hwpx', 'xlsx', 'ppsx', 'potx'].includes(ext)) throw new IngestError('drm');
       throw new IngestError('unsupported', { ext });
     }
     if (type === 'xlsx') throw new IngestError('spreadsheet');
@@ -101,6 +106,7 @@ export async function ingestFile(name, bytes, opts = {}) {
     if (type === 'pptx') res = parsePptx(zip, ctx);
     else if (type === 'docx') res = parseDocx(zip, ctx);
     else if (type === 'hwpx') res = parseHwpx(zip, ctx);
+    else if (type === 'hwp') res = parseHwp(cfb, ctx);
     else if (type === 'pdf') res = await parsePdf(b, ctx);
     else res = parseTextFile(b, ctx, { markdown: type === 'md' });
 
@@ -132,7 +138,7 @@ export async function ingestFile(name, bytes, opts = {}) {
 }
 
 function cfbError(ext) {
-  if (ext === 'hwp') return 'legacy-hwp';
+  if (ext === 'hwp') return 'corrupt'; // OLE 그릇이지만 한글 문서가 아님(망가졌거나 다른 형식)
   if (ext === 'ppt' || ext === 'pps' || ext === 'pot') return 'legacy-ppt';
   if (ext === 'doc' || ext === 'dot') return 'legacy-doc';
   if (['pptx', 'docx', 'xlsx', 'ppsx', 'potx', 'dotx'].includes(ext)) return 'encrypted'; // 암호 걸린 OOXML은 CFB 안에 들어 있음
@@ -282,7 +288,7 @@ export function exportUrlFor(url) {
   if (m) return { url: `https://docs.google.com/document/d/${m[1]}/export?format=docx`, name: 'google-docs.docx' };
   m = /drive\.google\.com\/file\/d\/([\w-]{10,})/.exec(u);
   if (m) return { url: `https://drive.google.com/uc?export=download&id=${m[1]}`, name: 'drive-file' };
-  if (/\.(pptx|pdf|docx|hwpx|txt|md)(?:[?#]|$)/i.test(new URL(u).pathname)) return { url: u, name: decodeURIComponent(baseName(new URL(u).pathname)) };
+  if (/\.(pptx|pdf|docx|hwpx?|txt|md)(?:[?#]|$)/i.test(new URL(u).pathname)) return { url: u, name: decodeURIComponent(baseName(new URL(u).pathname)) };
   return null;
 }
 

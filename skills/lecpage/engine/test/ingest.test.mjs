@@ -428,7 +428,7 @@ describe('오류는 던지지 않고 한국어 안내로', () => {
   const cfb = new Uint8Array([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, ...new Array(600).fill(0)]);
   const cases = [
     ['빈 파일', 'a.pptx', new Uint8Array(0), 'empty'],
-    ['예전 한글', '계획.hwp', cfb, 'legacy-hwp'],
+    ['망가진 한글(OLE 그릇만 있고 한글 문서가 아님)', '계획.hwp', cfb, 'corrupt'],
     ['예전 한글 3.0', '옛날.hwp', strToU8('HWP Document File V3.00 \x1a\x01\x02\x03\x04\x05'), 'legacy-hwp'],
     ['예전 파워포인트', '교재.ppt', cfb, 'legacy-ppt'],
     ['예전 워드', '안내.doc', cfb, 'legacy-doc'],

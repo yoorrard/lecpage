@@ -21,7 +21,7 @@ lecpage/
 │  │  │  ├─ decide/           ← 유형·운영·디자인·효과 결정 규칙
 │  │  │  ├─ design/           ← 프리셋, 토큰→CSS, 글꼴, fx-catalog.js
 │  │  │  ├─ render/           ← 문자열 템플릿 렌더러(모듈별)
-│  │  │  ├─ ingest/           ← PPTX·DOCX·HWPX·PDF 해석(브라우저+Node)
+│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF 해석(브라우저+Node)
 │  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 수정 요청(review). AI 제공자 호출은 앱(app/src/lib/ai.js)
 │  │  │  └─ build.js          ← blueprint → 파일 묶음
 │  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
@@ -296,6 +296,8 @@ assets/slides/*.webp · assets/media/*
 - `HOSTS[id]`: `{ name_ko, cost, app(앱에서 바로 올림), account, limit?: { siteMB, fileMB, files }, cli?, note_ko }`. id: `lecpage`(바로 공개) · `vercel` · `github-pages` · `cloudflare` · `netlify` · `firebase` · `s3` · `server` · `lan` · `zip`. 숫자 근거는 `docs/research/hosting-2026-11.md`.
 - `decideHost(input) → { hosts, pick, reasons, warnings }`. 입력: `skill`(`click` 앱 / `set`·`dev` skill), `commercial`, `network`, `infra[]`, `backend`, `previous`(지난번에 올린 곳), `connected[]`(연결해 둔 곳), `instant`(바로 공개를 쓸 수 있음), `keep`, `customDomain`, `siteMB`, `maxFileMB`, `files`. 규칙 순서: 인터넷 없음 → 자체 서버 → 기본(앱 Vercel, skill Cloudflare) → 강사료(Vercel 제외, Cloudflare 먼저) → 내 도메인 → 크기(25MB 넘는 파일이나 파일 수 초과(끌어 놓기 1,000개·명령 20,000개)면 GitHub Pages 먼저, 100MB 넘는 사이트는 Cloudflare 먼저·Vercel 맨 뒤) → 바로 공개 → 지난번에 올린 곳·연결해 둔 곳 먼저.
 - `checkHost(host, { bytes, files, maxFile, binaries }) → { ok, errors, warnings }`: 올리기 직전에 그곳의 한도를 확인합니다.
+- `TEACHER_STEPS[backend] = { app, skill }`: 참여 기능마다 강사가 직접 할 일 수(어림, 근거는 파일 주석). `decideInfra`는 skill(`set`·`dev`)에서 시트·Supabase가 나오면 이 수로 다시 견줘 가장 적은 곳(보통 Cloudflare 중계, 연결해 둔 곳은 0)을 고르고, 결과에 `teacherSteps`를 담습니다. 앱(`click`)은 같은 함수를 쓰고 순서는 L08·L09 그대로입니다.
+- CLI `publish work [--live]`(`skills/lecpage/scripts/publish.mjs`): Cloudflare에 사이트와 중계를 함께 올림. 중계는 `work/live-relay`(백엔드 복사, `ALLOWED_CODES`=연수 코드), 관리자 키는 `<out>-강사용/관리자-키.txt`만, 사이트는 `info.json` `live`로 다시 빌드, 마지막에 `ALLOWED_ORIGINS`=사이트 주소. `handouts <주소>`는 `poster.html`·`screen.html`을 PDF·PNG로.
 
 ### 8.2 앱의 공개하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
 - 흐름: 사이트 만들기(`buildFiles`) → `checkHost` → 올리기 → 주소 저장 → `probeSite`(사이트의 `assets/favicon.svg`를 그림으로 불러 실제로 열리는지 확인).

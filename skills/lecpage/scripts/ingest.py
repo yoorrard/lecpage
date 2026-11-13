@@ -28,7 +28,8 @@ WEB_IMAGE = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'}
 MESSAGES = {
     'empty': '파일이 비어 있어요. 내용이 있는 파일을 다시 올려 주세요.',
     'too-large': '파일이 너무 커요. 100MB 이하로 줄이거나, 그림을 압축하거나, PDF로 저장해 올려 주세요.',
-    'legacy-hwp': '예전 한글 파일(.hwp)은 바로 읽을 수 없어요. 한글에서 [파일 → 다른 이름으로 저장하기]를 눌러 파일 형식을 "HWPX" 또는 "PDF"로 바꿔 저장한 뒤 올려 주세요.',
+    'legacy-hwp': '한글 97 이전에 만든 아주 예전 한글 파일이라 바로 읽을 수 없어요. 한글에서 [파일 → 다른 이름으로 저장하기]를 눌러 HWP·HWPX·PDF 가운데 하나로 저장한 뒤 올려 주세요.',
+    'hwp-use-node': '한글 파일(.hwp)은 node scripts/ingest.mjs로 읽어요(이 파이썬 보조 스크립트는 주로 PDF용이에요).',
     'legacy-ppt': '예전 파워포인트 파일(.ppt)은 바로 읽을 수 없어요. 파워포인트에서 [다른 이름으로 저장]을 눌러 "PowerPoint 프레젠테이션(.pptx)" 또는 "PDF"로 저장한 뒤 올려 주세요.',
     'legacy-doc': '예전 워드 파일(.doc)은 바로 읽을 수 없어요. 워드에서 [다른 이름으로 저장]을 눌러 "Word 문서(.docx)" 또는 "PDF"로 저장한 뒤 올려 주세요.',
     'legacy-office': '예전 형식의 오피스 파일이라 바로 읽을 수 없어요. PPTX·DOCX·PDF 가운데 하나로 다시 저장해 올려 주세요.',
@@ -36,9 +37,9 @@ MESSAGES = {
     'drm': '문서 보안(DRM)이 걸린 파일 같아요. 학교 문서보안 프로그램에서 보안을 해제하거나, PDF로 인쇄(저장)한 뒤 올려 주세요.',
     'corrupt': '파일을 열 수 없어요. 파일이 손상되었거나 다른 형식일 수 있어요. 원본 프로그램에서 다시 저장해 올려 주세요.',
     'zip-bomb': '압축을 풀면 지나치게 커지는 파일이라 안전을 위해 읽지 않았어요. 그림을 줄이거나 PDF로 저장해 올려 주세요.',
-    'unsupported': '이 형식은 아직 읽을 수 없어요. PPTX·PDF·HWPX·DOCX·TXT 가운데 하나로 저장해 올려 주세요.',
+    'unsupported': '이 형식은 아직 읽을 수 없어요. PPTX·PDF·HWP·HWPX·DOCX·TXT 가운데 하나로 저장해 올려 주세요.',
     'pdf-encrypted': '암호가 걸린 PDF예요. 암호를 해제한 PDF로 다시 저장해 올려 주세요.',
-    'pdf-failed': 'PDF를 읽다가 문제가 생겼어요. 다른 프로그램에서 PDF로 다시 저장하거나 원본(PPTX·HWPX)을 올려 주세요.',
+    'pdf-failed': 'PDF를 읽다가 문제가 생겼어요. 다른 프로그램에서 PDF로 다시 저장하거나 원본(PPTX·HWP·HWPX)을 올려 주세요.',
     'no-text': '글자를 읽을 수 없는 PDF예요(스캔본이나 그림으로 된 PDF). 쪽 그림은 쓸 수 있지만, 내용은 직접 적어 주시거나 원본 파일을 올려 주세요.',
     'needs-library': '이 형식을 읽는 파이썬 라이브러리가 없어요. pip install pymupdf python-pptx python-docx 로 설치해 주세요.',
     'parse-failed': '파일 내용을 읽다가 문제가 생겼어요. 원본 프로그램에서 다시 저장해 올려 주세요. 계속 안 되면 PDF로 올려 주세요.',
@@ -82,23 +83,198 @@ def norm_line(s):
     return re.sub(r'\s*\n+\s*', ' ', norm_text(s)).strip()
 
 
-def gap_spaced(d):
-    """rawdict(글자마다 위치) → dict 모양(span['text']). 공백 글자 없이 위치로만 띄어 쓴 PDF는
-    같은 글꼴 조각(span) 안에서 글자 사이 틈이 글자 크기의 0.25배보다 넓으면 띄어 씀.
-    글꼴이 바뀌는 곳(한글 ↔ 영문·괄호)은 글자 폭 차이로 틈이 생겨도 띄지 않음."""
-    for b in d.get('blocks', []):
-        for ln in b.get('lines', []):
-            for s in ln.get('spans', []):
-                out, prev = [], None
-                for ch in s.get('chars', []):
-                    c = ch.get('c', '')
-                    if prev is not None and c and not c.isspace() and not prev['c'].isspace():
-                        if ch['bbox'][0] - prev['bbox'][2] > max(1.0, s.get('size', 10) * 0.25):
-                            out.append(' ')
-                    out.append(c)
-                    prev = ch
-                s['text'] = ''.join(out)
-    return d
+def line_chars(ln):
+    """PyMuPDF rawdict 줄 → 글자 목록 [{c, x0, x1, size}] (공백 글자 포함)"""
+    out = []
+    for sp in ln.get('spans', []):
+        size = sp.get('size', 10)
+        for ch in sp.get('chars', []):
+            c = ch.get('c', '')
+            if c:
+                out.append({'c': c, 'x0': ch['bbox'][0], 'x1': ch['bbox'][2], 'size': size})
+    return out
+
+
+PDF_MARKER = re.compile(r'^(?:\d{1,2}[.)]|[가-하][.)]|\(\d{1,2}\)|[①-⑳]|[•·▪▫◦●○■□◆◇▶▷►➢➤✓✔☞※\-–]|[\ue000-\uf8ff])$')
+
+
+def text_and_segments(chars):
+    """글자 위치로 줄 글과 칸 조각 만들기(engine/src/ingest/pdf.js의 lineSegments와 같은 기준).
+    공백 글자가 있거나 틈이 글자 크기의 0.18배보다 넓으면 띄어 쓰고, 0.9배보다 넓으면 칸이 나뉜 것으로 봄.
+    공백 없이 위치로만 띄어 쓴 PDF와, 공백이 따로 떨어진 PDF(LibreOffice 등) 모두 같은 결과."""
+    segs, cur, prev, sp = [], None, None, False
+    for ch in sorted(chars, key=lambda c: c['x0']):
+        c = ch['c']
+        if c.isspace():
+            sp = True
+            continue
+        if prev is not None:
+            gap = ch['x0'] - prev['x1']
+            size = min(prev['size'], ch['size'])
+            if gap > max(3.0, size * 0.9):
+                cur = None
+            elif sp or gap > max(1.0, size * 0.18):
+                cur['text'] += ' '
+        if cur is None:
+            cur = {'text': '', 'x': ch['x0'], 'right': ch['x1'], 'size': ch['size']}
+            segs.append(cur)
+        cur['text'] += c
+        cur['right'] = max(cur['right'], ch['x1'])
+        cur['size'] = max(cur['size'], ch['size'])
+        prev, sp = ch, False
+    text = tidy(' '.join(x['text'] for x in segs))
+    i = 0
+    while i + 1 < len(segs):  # 목록 머리표("•", "1.")는 칸이 아니라 뒤 글의 일부
+        t = re.sub(r'[\ue000-\uf8ff]', '•', segs[i]['text'].strip())
+        if PDF_MARKER.match(t):
+            nxt = dict(segs[i + 1], text=('' if t == '•' else t + ' ') + segs[i + 1]['text'], x=segs[i]['x'], marker=True)
+            segs[i:i + 2] = [nxt]
+            continue
+        i += 1
+    for x in segs:
+        x['text'] = tidy(x['text'])
+    return text, [x for x in segs if x['text']]
+
+
+def extract_tables(lines):
+    """줄 목록 → (표 목록[rows], 표가 아닌 줄). 규칙은 engine/src/ingest/pdf.js의 extractTables와 같음"""
+    used, tables, i = set(), [], 0
+    while i < len(lines):
+        if len(lines[i]['segs']) < 2:
+            i += 1
+            continue
+        idx = [i]
+        for k in range(i + 1, len(lines)):
+            prev, cur = lines[idx[-1]], lines[k]
+            vgap, lh = cur['y'] - prev['y'], max(prev['size'], cur['size'])
+            if vgap <= 0 or vgap > lh * 4.2 or abs(cur['size'] - lines[i]['size']) > lines[i]['size'] * 0.3:
+                break
+            if len(cur['segs']) >= 2 or vgap <= lh * 1.75:
+                idx.append(k)
+            else:
+                break
+        t = build_table([lines[k] for k in idx])
+        if t:
+            tables.append(t[0])
+            used.update(idx[:t[1]])
+            i = idx[t[1] - 1] + 1
+        else:
+            i = idx[-1] + 1 if len(idx) >= 8 else i + 1  # 긴 구간(여러 단 글 등)은 다시 보지 않음
+    return tables, [l for k, l in enumerate(lines) if k not in used]
+
+
+def build_table(cands):
+    multi = [c for c in cands if len(c['segs']) >= 2]
+    if len(multi) < 3:
+        return None
+    segs = [x for c in multi for x in c['segs']]
+    size = sorted(x['size'] for x in segs)[len(segs) // 2] or 10
+    lo, hi = int(min(x['x'] for x in segs)), int(-(-max(x['right'] for x in segs) // 1))
+    if not hi > lo or hi - lo > 4000:
+        return None
+    cov = [0] * (hi - lo + 1)
+    for c in multi:
+        for x in c['segs']:
+            for k in range(max(0, int(x['x']) - lo), min(len(cov), int(-(-x['right'] // 1)) - lo)):
+                cov[k] += 1
+    thr = len(multi) * 15 // 100
+    runs = []
+    for k, v in enumerate(cov):
+        if v <= thr:
+            continue
+        if runs and k - runs[-1][1] <= max(2, size * 0.5):
+            runs[-1][1] = k + 1
+        else:
+            runs.append([k, k + 1])
+    cols = [(a + lo, b + lo) for a, b in runs]
+    if len(cols) < 2 or len(cols) > 12:
+        return None
+
+    def place(x):
+        ov = [max(0, min(b, x['right']) - max(a, x['x'])) for a, b in cols]
+        j = max(range(len(ov)), key=lambda k: (ov[k], -k))
+        # 걸친 칸 수: 조각 폭의 20% 또는 그 칸 폭의 절반 넘게 겹치는 칸
+        return j, sum(1 for k, v in enumerate(ov) if v > min((x['right'] - x['x']) * 0.2, (cols[k][1] - cols[k][0]) * 0.5))
+
+    # 줄 사이 간격이 둘로 갈리면(가까운 줄 = 줄 높이, 먼 줄 ≥ 1.4배) 먼 곳에서만 새 행
+    gaps = [cands[k + 1]['y'] - cands[k]['y'] for k in range(len(cands) - 1)]
+    min_gap = min(gaps) if gaps else 0
+    two_gaps = bool(gaps) and min_gap <= size * 1.6 and sum(1 for g in gaps if g >= min_gap * 1.4) >= 2
+
+    def make_rows(by_gap):
+        rows, cur, count = [], None, 0
+        for m, c in enumerate(cands):
+            cells, bad = [None] * len(cols), False
+            for x in c['segs']:
+                j, spans = place(x)
+                if len(c['segs']) == 1 and spans > 1:
+                    bad = True
+                cells[j] = dict(cells[j], text=cells[j]['text'] + ' ' + x['text'], right=x['right']) if cells[j] else dict(x)
+            if bad:
+                break
+            vgap = gaps[m - 1] if m else float('inf')
+            cont = cur is not None and ((cells[0] is None and vgap <= c['size'] * 1.75) or (by_gap and vgap < min_gap * 1.4))
+            if len(c['segs']) == 1 and not cont:
+                break
+            if cont:
+                for j, x in enumerate(cells):
+                    if x:
+                        if cur[j] is None:
+                            cur[j] = {'parts': [], 'marker': False}
+                        cur[j]['parts'].append(x)
+            else:
+                cur = [{'parts': [x], 'marker': bool(x.get('marker'))} if x else None for x in cells]
+                rows.append(cur)
+            count += 1
+        return rows, count
+
+    made = make_rows(True) if two_gaps else None
+    if not made or len(made[0]) < 3:
+        made = make_rows(False)
+    rows, count = made
+    if len(rows) < 3:
+        return None
+    stats = []
+    for j, (a, b) in enumerate(cols):
+        cells = [r[j] for r in rows if r[j]]
+        parts = [x for cell in cells for x in cell['parts']]
+        right = max([x['right'] for x in parts] + [b])
+        width = max(1, right - min([x['x'] for x in parts] + [a]))
+        n = max(1, len(parts))
+        stats.append({'right': right, 'fill': len(cells) / len(rows),
+                      'meanLen': sum(len(x['text']) for x in parts) / n,
+                      'full': sum(1 for x in parts if x['right'] - x['x'] >= width * 0.75) / n,
+                      'markers': sum(1 for x in cells if x['marker'] or PDF_LIST_START.match(x['parts'][0]['text'])) / max(1, len(cells)),
+                      'leftovers': [right - x['right'] for cell in cells for x in cell['parts'][:-1]]})
+    if sum(1 for x in stats if x['fill'] >= 0.5) < 2:
+        return None
+    if any(x['markers'] >= 0.5 for x in stats):
+        return None  # 나란한 목록·번호 목록 옆 글상자
+    # 칸 안 줄바꿈이 글자 단위인지: 줄바꿈된 줄이 모두 칸 끝까지 차 있으면 글자 단위, 아니면 어절 단위
+    left = [v for x in stats for v in x['leftovers']]
+    char_wrap = bool(left) and max(left) < size * 1.3
+    out = [[join_cell_lines(cell['parts'], char_wrap) if cell else '' for cell in r] for r in rows]
+    heads = [r[0] for r in out if r[0]]
+    if len(cols) == 2 and sum(1 for t in heads if re.search(r'[:：]$', t)) >= len(heads) * 0.8:
+        return None  # 이름표 양식("기간: …")은 문단
+    widths = [b - a for a, b in cols]
+    equal = max(widths) <= min(widths) * 1.25
+    dense = sum(1 for r in rows if all(r)) >= len(rows) * 0.8
+    if all(x['full'] >= 0.6 for x in stats) and (all(x['meanLen'] >= 14 for x in stats) or (equal and dense and len(rows) >= 5 and all(x['meanLen'] >= 6 for x in stats))):
+        return None  # 여러 단 글
+    return [r for r in out if any(r)], count
+
+
+PDF_LIST_START = re.compile(r'^(?:\d{1,2}[.)](?!\s*\d{1,2}\.)\s|[①-⑳]|[•·▪◦●○■□▶▷►]\s?)')
+
+
+def join_cell_lines(parts, char_wrap):
+    """칸 안에서 줄바꿈된 조각 잇기. 글자 단위로 줄을 바꾼 표는 한글끼리 붙이되, 앞 줄이 조사·어미로 끝나면 띄움. 어절 단위 표는 늘 띄움"""
+    text = ''
+    for x in parts:
+        glue = char_wrap and re.search(r'[가-힣]$', text) and re.match(r'^[가-힣]', x['text']) and not re.search(r'[은는을를의와과에로서고며면다요]$', text)
+        text = x['text'] if not text else text + ('' if glue else ' ') + x['text']
+    return norm_line(text)
 
 
 def text_key(s):
@@ -108,7 +284,10 @@ def text_key(s):
 def tidy(s):
     s = norm_line(s)
     s = re.sub(r'\s+([.,!?)\]}:;·%])', r'\1', s)
-    return re.sub(r'([(\[{])\s+', r'\1', s)
+    s = re.sub(r'([(\[{])\s+', r'\1', s)
+    s = re.sub(r'([가-힣])·\s+(?=[가-힣])', r'\1·', s)  # 가운뎃점 뒤 틈("검색· 요약")
+    # 숫자와 한글 단위가 다른 글꼴 조각이라 생긴 틈("15 시간", "201 호") 붙이기(pdf.js 길 tidy와 같음)
+    return re.sub(r'(\d)\s+(시간|분|초|일|주|개월|년|학년도|학년|차시|회|명|개|쪽|권|대|호|층|교시|번|원|점|인|조)(?![가-힣]{2})', r'\1\2', s)
 
 
 URL_RE = re.compile(r'\b((?:https?://|www\.)[^\s<>"\'“”‘’()\[\]{}|\\^`]+[^\s<>"\'“”‘’()\[\]{}|\\^`.,;:!?。、])', re.I)
@@ -408,18 +587,21 @@ def parse_pdf(path, fid, sink, warnings):
         rect = pg.rect
         if size is None:
             size = (round(rect.width), round(rect.height))
-        d = gap_spaced(pg.get_text('rawdict'))
+        d = pg.get_text('rawdict')
         raw = []
         for b in d.get('blocks', []):
             if b.get('type') != 0:
                 continue
             for ln in b.get('lines', []):
-                spans = [s for s in ln.get('spans', []) if s.get('text', '').strip()]
-                if not spans:
+                lchars = line_chars(ln)
+                spans = [sp for sp in ln.get('spans', []) if ''.join(c.get('c', '') for c in sp.get('chars', [])).strip()]
+                if not spans or not any(not c['c'].isspace() for c in lchars):
                     continue
+                for sp in spans:
+                    sp['text'] = ''.join(c.get('c', '') for c in sp.get('chars', []))
                 x0, y0, x1, y1 = ln['bbox']
-                raw.append({'spans': spans, 'x': x0, 'y': y0, 'right': x1, 'size': max(s['size'] for s in spans),
-                            'text': ''.join(s['text'] for s in ln['spans'])})
+                raw.append({'spans': spans, 'chars': lchars, 'x': x0, 'y': y0, 'right': x1, 'size': max(sp['size'] for sp in spans),
+                            'text': ''.join(sp['text'] for sp in spans)})
         # 글꼴 역할: 쪽에서 글자가 큰 짧은 줄 = 제목(display), 나머지 = 본문(body)
         if raw:
             szs = sorted(l['size'] for l in raw)
@@ -443,12 +625,12 @@ def parse_pdf(path, fid, sink, warnings):
         lines = []
         for g in merged:
             parts = sorted(g['parts'], key=lambda l: l['x'])
-            text = tidy(' '.join(pp['text'] for pp in parts))
+            text, segs = text_and_segments([c for pp in parts for c in pp['chars']])
             if not text or re.match(r'^-?\s*\d{1,3}\s*-?$', text):
                 continue
             spans = [s for pp in parts for s in pp['spans']]
             bold = all((s.get('flags', 0) & 16) or re.search(r'bold|black|heavy', s.get('font', ''), re.I) for s in spans)
-            lines.append({'text': text, 'x': parts[0]['x'], 'y': g['y'], 'right': max(pp['right'] for pp in parts),
+            lines.append({'text': text, 'segs': segs, 'x': parts[0]['x'], 'y': g['y'], 'right': max(pp['right'] for pp in parts),
                           'size': max(pp['size'] for pp in parts), 'bold': bool(bold)})
         # 제목
         title, guessed, tlines = '', False, []
@@ -471,9 +653,15 @@ def parse_pdf(path, fid, sink, warnings):
             elif len(lines[0]['text']) <= 50 and (lines[0]['bold'] or lines[0]['size'] > median) and lines[0]['y'] <= rect.height * 0.3:
                 tlines.append(lines[0])
                 guessed = True
-            title = norm_line(' '.join(l['text'] for l in tlines))
-        body = [l for l in lines if l not in tlines]
+            # 여러 줄 제목: 줄이 바뀌며 낱말이 잘린 곳("…안" + "내")은 띄우지 않고 이음(pdf.js 길과 같음)
+            for l in tlines:
+                glue = title and ((re.search(r'(?:^|\s)[가-힣]$', title) and re.match(r'^[가-힣]{1,2}$', l['text']))
+                                  or (re.search(r'[가-힣]$', title) and re.match(r'^[가-힣]$', l['text'])))
+                title = l['text'] if not title else title + ('' if glue else ' ') + l['text']
+            title = norm_line(title)
+        tables, body = extract_tables([l for l in lines if l not in tlines])
         page = new_page(fid, no, 'page', title)
+        page['tables'] = [{'rows': r} for r in tables]
         if guessed and title:
             page['titleGuessed'] = True
         min_x = min((l['x'] for l in body), default=0)
@@ -510,7 +698,7 @@ def parse_pdf(path, fid, sink, warnings):
                 para['bullet'] = True
             page['paragraphs'].append(para)
             prev = {'para': para, 'line': l, 'x': l['x']}
-        chars += len(title) + sum(len(p['text']) for p in page['paragraphs'])
+        chars += len(title) + sum(len(p['text']) for p in page['paragraphs']) + sum(len(''.join(r)) for t in tables for r in t)
         for lk in pg.get_links():
             url = clean_url(lk.get('uri') or '')
             if not url or any(x['url'] == url for x in page['links']):
@@ -1035,7 +1223,7 @@ def ingest(path, fid=None, images=None, out=None):
         elif b'%PDF-' in head:
             kind = 'pdf'
         elif head.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
-            raise ValueError({'hwp': 'legacy-hwp', 'ppt': 'legacy-ppt', 'doc': 'legacy-doc'}.get(ext, 'encrypted' if ext in ('pptx', 'docx', 'xlsx') else 'legacy-office'))
+            raise ValueError({'hwp': 'hwp-use-node', 'ppt': 'legacy-ppt', 'doc': 'legacy-doc'}.get(ext, 'encrypted' if ext in ('pptx', 'docx', 'xlsx') else 'legacy-office'))
         elif head.startswith(b'HWP Document File'):
             raise ValueError('legacy-hwp')
         elif b'\x00' not in head:
