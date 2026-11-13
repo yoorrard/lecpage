@@ -19,6 +19,8 @@ export function fakeSql() {
     writes: 0,
     exec(query, ...params) {
       if (/^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i.test(query)) sql.writes++;
+      // 문장 여럿(표 만들기 등)은 DO처럼 모두 실행
+      if (!params.length && /;\s*\S/.test(query.trim().replace(/;\s*$/, ''))) { db.exec(query); return { toArray: () => [], one: () => { throw new Error('one(): 0 rows'); } }; }
       const rows = db.prepare(query).all(...params.map((p) => (p instanceof ArrayBuffer ? new Uint8Array(p) : p)));
       return { toArray: () => rows, one: () => { if (rows.length !== 1) throw new Error(`one(): ${rows.length} rows`); return rows[0]; } };
     },

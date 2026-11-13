@@ -173,7 +173,8 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   const textNow = () => { const c = cache.current; if (!c.deps || c.deps.some((x, i) => x !== now[i])) cache.current = { deps: now, v: ready ? prompt() : '' }; return cache.current.v; };
   const [text, setText] = useState('');
   useEffect(() => { const t = setTimeout(() => setText(textNow()), 250); return () => clearTimeout(t); }, now);
-  const bots = [...CHATBOTS].sort((a, b) => (b.id === bot) - (a.id === bot));
+  // 순서는 늘 ChatGPT·Claude·Gemini, 크기는 모두 같게(어느 하나를 더 크게 권하지 않음). 지난번에 쓴 곳만 작은 표시
+  const bots = CHATBOTS;
   useEffect(() => { if (partial) { setStep(1); setAnswer(''); } }, [partial]);
   useEffect(() => { if (err) setStep(1); }, [err]); // 받을 수 없는 답이면 그 안내가 보이는 걸음으로
   /** 허락받은 클립보드면 돌아오는 순간 답을 읽어 넣음. 답이 아니면(프롬프트 그대로 등) 아무것도 하지 않고 [답 넣기]에 초점만 */
@@ -245,8 +246,8 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
           <div class="btn-row chat-bots">
             {bots.map((b, i) => {
               const pre = b.prefill?.(text) || '';
-              return <a class={`btn${i === 0 ? ' btn-primary btn-lg' : ' btn-sm'}`} href={pre || b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined}
-                onClick={(e) => send(e, b)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>;
+              return <a class="btn chat-bot" href={pre || b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined}
+                onClick={(e) => send(e, b)}>{b.name} 열기{b.id === bot && <small class="chat-bot-last">지난번</small>}<span class="ext" aria-hidden="true">↗</span></a>;
             })}
           </div>
           <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(textNow())); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>

@@ -6,7 +6,7 @@
 //   node scripts/gen-runtime.mjs          현재 런타임(+ runtime-history.json에 적어 둔 이전 판)으로 목록 생성
 //   node scripts/gen-runtime.mjs --keep   지금 런타임을 runtime-history.json에 적어 둠(새 판을 낸 뒤에도 예전 앱이 올릴 수 있게)
 //   node scripts/gen-runtime.mjs --check  파일을 쓰지 않고, 이미 있는 목록이 최신인지 확인(다르면 종료 코드 1)
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,8 @@ const RUNTIME = join(ENGINE, 'runtime');
 // 시험할 때만 다른 곳에 쓰게 바꿈
 const OUT = process.env.LECPAGE_RUNTIME_OUT || join(HOSTING, 'src', 'runtime-allow.js');
 const HISTORY = process.env.LECPAGE_RUNTIME_HISTORY || join(HOSTING, 'runtime-history.json');
+// 사이트들이 같이 쓰는 런타임 파일의 정적 사본(public/rt/<sha256>.js). Worker 요청 수에 들지 않는 정적 자산으로 내보내고, 모든 사이트가 브라우저 캐시를 같이 씀
+const RT_DIR = process.env.LECPAGE_RT_DIR || join(HOSTING, 'public', 'rt');
 export const HEAD_LEN = 32;
 /** 사이트에 들어가지 않는 런타임(앱 미리보기의 검토 도구)은 받지 않음 */
 const SKIP_DIRS = new Set(['review']);
@@ -67,9 +69,30 @@ function readHistory() {
   return Array.isArray(j.segments) ? j.segments.filter((s) => s && typeof s.sha256 === 'string' && Number.isInteger(s.len) && typeof s.head === 'string') : [];
 }
 
-function render(segs, version, sdk) {
+/** 엔진이 사이트에 '그대로' 넣는 런타임 파일(engine/src/build.js·protect.js). live.js는 core + 제공자 하나 */
+const WHOLE_FILES = ['boot.js', 'lecpage.js', 'screen.js', 'console.js', 'unlock.js', 'vendor/qrcode.js'];
+export function staticFiles() {
+  const read = (n) => norm(readFileSync(join(RUNTIME, n), 'utf8'));
+  const out = WHOLE_FILES.filter((n) => existsSync(join(RUNTIME, n))).map((n) => ({ name: n, text: read(n) }));
+  const liveDir = join(RUNTIME, 'live');
+  if (existsSync(join(liveDir, 'core.js'))) {
+    for (const p of readdirSync(liveDir).sort()) if (p.endsWith('.js') && p !== 'core.js') out.push({ name: `live.js(${p})`, text: [read('live/core.js'), read(`live/${p}`)].join('\n;\n') });
+  }
+  return out.map((f) => ({ ...f, sha256: sha256(f.text) }));
+}
+function writeStatic(files) {
+  mkdirSync(RT_DIR, { recursive: true });
+  const want = new Set(files.map((f) => `${f.sha256}.js`));
+  for (const name of readdirSync(RT_DIR)) if (!want.has(name)) unlinkSync(join(RT_DIR, name));
+  for (const f of files) {
+    const p = join(RT_DIR, `${f.sha256}.js`);
+    if (!existsSync(p) || readFileSync(p, 'utf8') !== f.text) writeFileSync(p, f.text);
+  }
+}
+
+function render(segs, version, sdk, statics = []) {
   const rows = segs.map((s) => `  [${JSON.stringify(s.name)}, ${s.len}, ${JSON.stringify(s.head)}, '${s.sha256}'],`).join('\n');
-  return `// 자동으로 만든 파일입니다. 고치지 마세요 → node scripts/gen-runtime.mjs\n// 엔진 런타임 조각: [이름, 길이(UTF-16), 앞 ${HEAD_LEN}자, SHA-256(UTF-8, 줄바꿈 LF)]\nexport const RUNTIME_VERSION = '${version}';\n/** Supabase 라이브러리 주소(엔진이 고정한 버전) */\nexport const SUPABASE_SDK = ${JSON.stringify(sdk)};\nexport const RUNTIME_SEGMENTS = [\n${rows}\n];\n`;
+  return `// 자동으로 만든 파일입니다. 고치지 마세요 → node scripts/gen-runtime.mjs\n// 엔진 런타임 조각: [이름, 길이(UTF-16), 앞 ${HEAD_LEN}자, SHA-256(UTF-8, 줄바꿈 LF)]\nexport const RUNTIME_VERSION = '${version}';\n/** Supabase 라이브러리 주소(엔진이 고정한 버전) */\nexport const SUPABASE_SDK = ${JSON.stringify(sdk)};\nexport const RUNTIME_SEGMENTS = [\n${rows}\n];\n/** 정적 자산(public/rt/<sha256>.js)으로도 있는 런타임 파일. 사이트 HTML이 이 내용의 파일을 부르면 /rt/로 바꿔 내보냄 */\nexport const STATIC_RUNTIME = [\n${statics.map((f) => `  '${f.sha256}', // ${f.name}`).join('\n')}\n];\n`;
 }
 
 function main() {
@@ -90,7 +113,8 @@ function main() {
 
   const have = new Set(cur.map((s) => s.sha256));
   const old = history.filter((s) => !have.has(s.sha256)).map((s) => ({ ...s, name: `${s.name}@${s.kept || 'old'}` }));
-  const text = render([...cur, ...old], version, supabaseSdk());
+  const statics = staticFiles();
+  const text = render([...cur, ...old], version, supabaseSdk(), statics);
   const before = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
   if (args.has('--check')) {
     if (before !== text) { console.error('src/runtime-allow.js가 엔진 런타임과 달라요. node scripts/gen-runtime.mjs 를 실행하세요.'); process.exit(1); }
@@ -98,6 +122,7 @@ function main() {
   }
   // 내용이 같으면 쓰지 않음(wrangler dev가 src를 지켜보다가 다시 빌드하는 고리를 막음)
   if (before !== text) writeFileSync(OUT, text);
+  writeStatic(statics);
   console.log(`runtime-allow.js: 조각 ${cur.length}개${old.length ? ` + 이전 판 ${old.length}개` : ''} · 런타임 ${version}${before === text ? ' (변동 없음)' : ''}`);
 }
 

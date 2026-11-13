@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>관리 · lecpage 바로 공개</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/admin/app.css">
+<script src="/admin/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div>
+      <h1>lecpage 바로 공개 관리</h1>
+      <p class="muted small" data-me>불러오는 중…</p>
+    </div>
+    <div class="top-act">
+      <span class="badge" data-plan></span>
+      <button type="button" class="btn" data-refresh>새로 고침</button>
+    </div>
+  </div>
+  <nav class="tabs" aria-label="관리 화면 차례">
+    <a href="#today">오늘</a><a href="#trend">30일</a><a href="#sites">사이트</a><a href="#reports">신고</a><a href="#notices">공지</a><a href="#uploads">새 업로드</a><a href="#usage">앱 이용</a><a href="#audit">감사 기록</a>
+  </nav>
+</header>
+
+<main>
+  <p class="flash" role="status" aria-live="polite" data-flash hidden></p>
+  <p class="paused-band" data-paused hidden></p>
+
+  <section id="today" aria-labelledby="h-today">
+    <h2 id="h-today">오늘 <small class="muted" data-today-date></small></h2>
+    <p class="advice" data-advice></p>
+    <div class="tiles" data-tiles></div>
+  </section>
+
+  <section id="trend" aria-labelledby="h-trend">
+    <h2 id="h-trend">최근 30일 요청 수</h2>
+    <p class="muted small">Worker가 센 요청 수(어림). 하루는 한국 시간 오전 9시에 바뀌어요. 정적 화면(첫 화면·신고 화면·엔진 런타임 사본)은 세지 않아요.</p>
+    <div class="chart" data-chart></div>
+    <details class="table-view">
+      <summary>표로 보기</summary>
+      <div class="scroll"><table data-days-table></table></div>
+    </details>
+  </section>
+
+  <section id="sites" aria-labelledby="h-sites">
+    <h2 id="h-sites">사이트</h2>
+    <div class="tiles" data-site-tiles></div>
+    <form class="row" data-site-search role="search">
+      <label class="grow">사이트 찾기 <input type="search" name="q" placeholder="주소 10자 앞부분이나 제목" autocomplete="off" maxlength="60"></label>
+      <button type="submit" class="btn">찾기</button>
+    </form>
+    <div class="scroll"><table data-sites-table></table></div>
+  </section>
+
+  <section id="reports" aria-labelledby="h-reports">
+    <h2 id="h-reports">신고 <small class="muted" data-reports-count></small></h2>
+    <p class="muted small">권리 침해 신고는 지체 없이 가리거나(임시조치, 30일 안) 지우고, 처리했으면 [처리함]을 눌러요. 신고는 90일 뒤 지워져요.</p>
+    <label class="check"><input type="checkbox" data-reports-all> 처리한 신고도 보기</label>
+    <div data-reports-list></div>
+  </section>
+
+  <section id="notices" aria-labelledby="h-notices">
+    <h2 id="h-notices">팝업 공지</h2>
+    <p class="muted small">앱을 켤 때 한 번 뜨는 공지와, 공개 사이트 강사 화면 맨 위의 공지 띠예요. 글자만 나가요(HTML은 그대로 글자로 보여요). 링크는 https 주소 하나만, 가는 곳의 주소가 함께 보여요.</p>
+    <div data-notices-list></div>
+    <form class="card notice-form" data-notice-form novalidate>
+      <h3 data-notice-form-title>새 공지</h3>
+      <input type="hidden" name="id">
+      <label>제목 <small class="muted" data-count="title"></small><input name="title" required maxlength="60" autocomplete="off"></label>
+      <label>본문 <small class="muted" data-count="body"></small><textarea name="body" required maxlength="400" rows="4"></textarea></label>
+      <div class="row">
+        <label class="grow">링크(선택, https만) <input name="link" type="url" inputmode="url" maxlength="300" placeholder="https://" autocomplete="off"></label>
+        <label>링크 글자 <input name="linkLabel" maxlength="20" placeholder="자세히 보기" autocomplete="off"></label>
+      </div>
+      <p class="small muted" data-link-host></p>
+      <fieldset class="row">
+        <legend>보여 줄 곳</legend>
+        <label class="check"><input type="checkbox" name="t-app" checked> 앱(켤 때 한 번)</label>
+        <label class="check"><input type="checkbox" name="t-teacher"> 공개 사이트 강사 화면</label>
+      </fieldset>
+      <div class="row">
+        <label>시작 <input type="datetime-local" name="starts" required></label>
+        <label>끝 <input type="datetime-local" name="ends" required></label>
+        <label class="check"><input type="checkbox" name="active" checked> 켜 두기</label>
+      </div>
+      <div class="row">
+        <button type="submit" class="btn primary">저장</button>
+        <button type="button" class="btn quiet" data-notice-reset>새로 쓰기</button>
+      </div>
+      <p class="form-msg" role="status" aria-live="polite" data-notice-msg></p>
+    </form>
+  </section>
+
+  <section id="uploads" aria-labelledby="h-uploads">
+    <h2 id="h-uploads">새 업로드</h2>
+    <p class="muted small">멈추면 새 사이트·다시 올리기·새 실시간 방을 받지 않아요. 이미 올라온 사이트는 그대로 열려요. 앱은 '내 계정에 올리기'로 안내해요.</p>
+    <form class="card row" data-uploads-form>
+      <p class="grow" data-uploads-state></p>
+      <label class="grow">까닭(선택, 감사 기록에 남음) <input name="reason" maxlength="200" autocomplete="off"></label>
+      <button type="submit" class="btn" data-uploads-btn></button>
+    </form>
+  </section>
+
+  <section id="usage" aria-labelledby="h-usage">
+    <h2 id="h-usage">앱 이용 합계(익명)</h2>
+    <p class="muted small">앱이 보낸 하루 단위 숫자만 있어요. 누가 보냈는지는 알 수 없어요. 앱 설정에서 끈 사람과 '추적 안 함'을 켠 브라우저는 보내지 않아요.</p>
+    <div class="scroll"><table data-usage-table></table></div>
+  </section>
+
+  <section id="audit" aria-labelledby="h-audit">
+    <h2 id="h-audit">감사 기록</h2>
+    <p class="muted small">관리 화면과 관리자 열쇠(curl)로 한 일. 최근 300개.</p>
+    <div class="scroll"><table data-audit-table></table></div>
+  </section>
+</main>
+
+<dialog data-dialog aria-labelledby="dlg-title">
+  <form method="dialog" data-dialog-form>
+    <h3 id="dlg-title" data-dialog-title></h3>
+    <p data-dialog-text></p>
+    <label data-dialog-label hidden><span data-dialog-label-text></span><input data-dialog-input autocomplete="off"></label>
+    <div class="row end">
+      <button type="button" class="btn quiet" value="cancel" data-dialog-cancel>그만두기</button>
+      <button type="submit" class="btn primary" value="ok" data-dialog-ok></button>
+    </div>
+  </form>
+</dialog>
+<div class="tip" role="tooltip" data-tip hidden></div>
+</body>
+</html>

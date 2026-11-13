@@ -21,8 +21,9 @@
 //   decide-infra -i info.json · presets · effects
 //   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
 //   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
-//   publish [work] [--host cloudflare] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
+//   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
 //        강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
+//        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
 //   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·강사-카드.pdf·발표화면.png(Playwright 필요)
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -830,12 +831,13 @@ const commands = {
     const info = args.i ? readJson(args.i) : { size: +args.size || 30, features: String(args.features || '').split(',').filter(Boolean), skill: args.skill || 'click', duration: args.duration || 'day', network: args.network || 'good', infra: String(args.infra || '').split(',').filter(Boolean), commercial: !!args.commercial, minor: !!args.minor };
     const r = E.decideInfra(info);
     // 맨 앞 올릴 곳의 한 줄 명령·안내 파일과 백엔드 만드는 안내(skill 폴더 기준 경로)
-    const GUIDE = { vercel: 'vercel', cloudflare: 'cloudflare', 'github-pages': 'github-pages', netlify: 'netlify', firebase: 'firebase', s3: 'aws-s3-cloudfront', server: 'own-server-nginx-caddy', lan: 'local-lan-classroom', zip: 'zip-usb-offline' };
+    const GUIDE = { vercel: 'vercel', cloudflare: 'cloudflare', onpod: 'onpod', 'github-pages': 'github-pages', netlify: 'netlify', firebase: 'firebase', s3: 'aws-s3-cloudfront', server: 'own-server-nginx-caddy', lan: 'local-lan-classroom', zip: 'zip-usb-offline' };
     const BACKEND = { sheets: 'apps-script', supabase: 'supabase', cloudflare: 'cloudflare', server: 'node-server', lan: 'node-server' };
     const top = r.hostInfo[0];
-    const how = top ? (top.id === 'cloudflare' ? 'publish work (먼저 --dry-run) · references/deploy/cloudflare.md' : [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ')) : '';
+    // publish가 대신 올리는 곳(Cloudflare·Onpod)은 그 명령을, 나머지는 한 줄 명령과 안내 파일
+    const how = top ? (['cloudflare', 'onpod'].includes(top.id) ? `publish work${top.id === 'onpod' ? ' --host onpod' : ''} (먼저 --dry-run) · references/deploy/${top.id}.md` : [top.cli, GUIDE[top.id] && `references/deploy/${GUIDE[top.id]}.md`].filter(Boolean).join(' · ')) : '';
     say([
-      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}`,
+      `추천 ${r.backendInfo.name_ko}(${r.backend}, ${r.backendInfo.cost}${r.teacherSteps != null && r.backend !== 'none' ? `, 강사가 할 일 약 ${r.teacherSteps}번` : ''}) × 올릴 곳 ${r.hostInfo.map((h) => `${h.name_ko}(${h.id})`).join(' · ')}${r.hostSteps === 0 ? ' (첫째 곳은 이미 연결돼 강사가 더 할 일 없음)' : r.hostSteps != null ? ` (첫째 곳 강사가 할 일 약 ${r.hostSteps}번)` : ''}`,
       ...r.reasons.map((x) => '이유 ' + x), ...r.hostReasons.map((x) => '이유(올릴 곳) ' + x),
       how ? `올리기 ${how}` : '',
       // 무료 한도를 넘으면 어떻게 되는지(멈추는지, 유료로 이어지는지). 강사에게 한 줄로 전하고 고르게 함

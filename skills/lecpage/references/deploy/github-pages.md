@@ -7,13 +7,12 @@
 | 고릅니다 | 고르지 않습니다 → 대신 |
 |---|---|
 | 사이트가 100MB를 넘거나(Vercel 불가) 25MB가 넘는 파일이 있음(Cloudflare 불가) | 사이트 파일이 공개 저장소에 놓이면 곤란 → 암호(`--password`)로 빌드하거나 Vercel·Cloudflare |
-| 강사료를 받는 연수에서 Cloudflare 다음 | 사이트가 900MB를 넘음 → 슬라이드 화질을 낮추고 영상은 유튜브 링크로 |
+| Cloudflare 다음 후보 | 사이트가 900MB를 넘음 → 슬라이드 화질을 낮추고 영상은 유튜브 링크로 |
 | 강사가 GitHub를 쓰고 `gh`에 로그인돼 있음. 고친 기록을 남기고 싶음 | 학교망이 `*.github.io`를 막음 → 내 도메인(`custom-domain-and-short-url.md`) |
 
 ## 비용과 한도 (0원)
 - 사이트 1GB(엔진은 900MB에서 막음), 파일 하나 100MiB, 월 100GB 전송(권고), 시간당 10빌드(권고), 배포 한 번에 10분.
 - 무료 계정은 **공개 저장소만** 게시됩니다. 사이트 파일(교재 그림·원본 포함)을 누구나 내려받을 수 있습니다. 암호로 빌드하면 저장소에서도 내용이 보이지 않습니다.
-- 금지 용도는 "온라인 사업, 전자상거래, 상거래나 상업 SaaS 제공이 주목적인 사이트"입니다. 연수 자료 사이트가 여기에 들 가능성은 낮지만 판단은 강사 몫입니다.
 - 브랜치에서 게시하려면 올리는 계정이 저장소 관리자이고 **이메일 인증**을 마쳤어야 합니다. 갓 가입한 계정이 여기서 막힙니다.
 - 응답 헤더를 바꿀 수 없습니다(`_headers`는 무시됨). CSP는 엔진이 페이지마다 `<meta>`로 넣습니다.
 - 출처: https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits · https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github · https://docs.github.com/en/get-started/learning-about-github/githubs-plans

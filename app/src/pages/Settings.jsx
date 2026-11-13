@@ -6,6 +6,7 @@ import { storageInfo, askPersist, projects } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
 import { HostConnect, KIND } from '../components/Publish.jsx';
+import { StatsSetting } from '../components/StatsSetting.jsx';
 
 export function Settings() {
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('lecpage:theme') || 'auto'; } catch { return 'auto'; } });
@@ -75,6 +76,7 @@ export function Settings() {
         </div>
         <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·공개 토큰이 모두 없어져요. 이미 올린 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
+      <StatsSetting />
     </div>
   );
 }

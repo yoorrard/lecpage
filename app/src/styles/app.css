@@ -877,7 +877,9 @@ details>summary{cursor:pointer}
 .ai-other{margin-top:-4px}
 /* 쓰던 챗봇 창: 챗봇 버튼 줄, 받을 수 없는 답 안내 */
 .chat-card .key-now{grid-template-columns:minmax(0,1fr)}
-.chat-bots{gap:8px}
+.chat-bots{gap:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.chat-bots .chat-bot{justify-content:center;min-height:48px;font-weight:600}
+.chat-bot-last{margin-left:6px;font-size:12px;font-weight:500;color:var(--muted,#666)}
 .chat-bots .btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
 .answer-err{justify-self:stretch;max-width:440px}
 /* 교재대로 되돌린 곳(AI 결과 띠 아래 한 줄 + 목록) */
@@ -898,7 +900,7 @@ details>summary{cursor:pointer}
 @media (max-width:600px){
   .ai-routes,.guard-diff{grid-template-columns:minmax(0,1fr)}
   .ai-route{padding:14px}
-  .chat-bots .btn{flex:1 1 100%}
+  .chat-bots{grid-template-columns:minmax(0,1fr)}
 }
 /* 도움말: 물음마다 접어 둠 */
 .faq{display:grid;border-top:1px solid var(--hair)}

@@ -15,7 +15,21 @@ export const TEACHER_STEPS = {
   server: { app: null, skill: 2 }, lan: { app: null, skill: 1 },
 };
 
-export const REALTIME_FEATURES = ['qa', 'help', 'progress', 'poll', 'reactions', 'signal'];
+/**
+ * 올릴 곳마다 강사가 처음에 직접 할 일(어림, 근거: docs/research/hosting-2026-11.md §9·§12). 이미 연결해 둔 곳은 0번.
+ * app: Vercel은 앱 측정(가입·토큰 만들기·복사 6), 나머지는 앱 안내 단계 수. skill: 에이전트가 명령을 대신 칠 때 남는 일.
+ * Onpod은 CLI에 브라우저 로그인이 없어 콘솔에서 API 키를 만들어 건네야 함(가입·키 만들기·복사·환경 변수). null = 그 길로는 못 올림
+ */
+export const HOST_STEPS = {
+  lecpage: { app: 0, skill: null },
+  vercel: { app: 6, skill: 3 },
+  'github-pages': { app: 6, skill: 3 },
+  cloudflare: { app: 6, skill: 2 },
+  netlify: { app: 7, skill: 3 },
+  onpod: { app: null, skill: 4 },
+};
+
+export const REALTIME_FEATURES =['qa', 'help', 'progress', 'poll', 'reactions', 'signal'];
 export const STORE_FEATURES = ['attendance', 'board', 'survey'];
 
 export const BACKENDS = {
@@ -38,9 +52,9 @@ export const HOSTS = {
   lecpage: { name_ko: 'lecpage 주소', cost: '0원', app: true, account: false, limit: { siteMB: 40, fileMB: 20, files: 600 },
     note_ko: '가입 없이 바로 공개해요. 30일 동안 방문이 없으면 지워져요.',
     atLimit_ko: '방문이 있는 동안은 계속 열려 있어요.', atLimitFree_ko: '무료로 운영되는 서버라 방문이 몰리는 날은 멈출 수 있어요. 본 연수는 내 계정에 올리는 편이 안전해요.' },
-  vercel: { name_ko: 'Vercel', cost: '0원', app: true, account: true, limit: { siteMB: 100, files: 15000 }, commercial: false,
+  vercel: { name_ko: 'Vercel', cost: '0원', app: true, account: true, limit: { siteMB: 100, files: 15000 },
     cli: 'VERCEL_TOKEN=… npx vercel@latest deploy ./dist --prod --yes --project <이름> --create-if-missing',
-    note_ko: '토큰 하나로 바로 올리고, 다시 올려도 같은 주소예요. 무료 요금제는 비상업용이에요.',
+    note_ko: '토큰 하나로 바로 올리고, 다시 올려도 같은 주소예요.',
     transferGB: 100, stops: true, atLimit_ko: '무료는 월 100GB까지예요. 넘으면 멈추고, Pro로 바꾸면 이어져요.' },
   'github-pages': { name_ko: 'GitHub Pages', cost: '0원', app: true, account: true, limit: { siteMB: 900, fileMB: 100 },
     cli: 'gh repo create <이름> --public --source=. --push && gh api -X POST "repos/{owner}/{repo}/pages" -f "source[branch]=main" -f "source[path]=/"',
@@ -49,8 +63,14 @@ export const HOSTS = {
   cloudflare: { name_ko: 'Cloudflare', cost: '0원', app: false, account: true, limit: { fileMB: 25, files: 1000 },
     // 빈 임시 폴더에서 돌림: wrangler는 실행한 폴더와 위쪽 폴더의 wrangler 설정을 읽어 그 프로젝트를 올릴 수 있음
     cli: 'D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name <이름> --compatibility-date <오늘>)',
-    note_ko: '정적 파일 요청이 무료·무제한이고 강사료를 받는 연수에도 쓸 수 있어요. 앱에서는 ZIP을 끌어다 놓아요.',
+    note_ko: '정적 파일 요청이 무료·무제한이라 방문이 많아도 멈추지 않아요. 앱에서는 ZIP을 끌어다 놓아요.',
     stops: false, atLimit_ko: '방문이 많아도 멈추지 않아요.' },
+  // Onpod(한국 서비스): skill 전용. REST가 다른 출처를 막아 앱에서는 못 올림(조사 §12, 2026-11-13).
+  // CLI는 CDN의 최신 바이너리만 받으므로 버전을 고정하지 않음(@latest). 무료 정적 사이트는 계정당 10개
+  onpod: { name_ko: 'Onpod', cost: '0원(사이트 10개까지)', app: false, account: true, limit: { siteMB: 100, fileMB: 50, files: 5000 },
+    cli: 'ONPOD_TOKEN=… npx --yes onpod@latest static deploy ./dist --name <이름> --no-spa',
+    note_ko: '한국 서비스예요(한국어 화면·국내 리전). 구글로 가입하고 콘솔에서 만든 API 키 하나로 올려요. 무료는 계정당 사이트 10개까지예요.',
+    transferGB: 100, stops: true, atLimit_ko: '무료는 월 100GB까지예요. 넘으면 그달은 멈췄다가 다음 달 1일에 다시 열려요.' },
   netlify: { name_ko: 'Netlify', cost: '0원(월 300크레딧)', app: true, account: true, limit: { files: 25000 },
     cli: 'NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name <이름>',
     note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 28일 뒤에 만든 계정이라면 올린 뒤 Make public을 눌러야 열려요.',
@@ -83,7 +103,7 @@ export function checkHost(host, stat = {}) {
 /**
  * 올릴 곳 고르기. 앞에 있을수록 추천.
  * @param {object} input
- *   skill 'click'(앱·초보) | 'set' | 'dev'(skill·명령 가능), commercial(강사료를 받는 연수), network, infra[], backend(실시간 방식),
+ *   skill 'click'(앱·초보) | 'set' | 'dev'(skill·명령 가능), network, infra[], backend(실시간 방식),
  *   previous(지난번에 올린 곳), connected[](이미 연결해 둔 곳), instant(운영자의 '바로 공개'를 쓸 수 있음),
  *   keep('long'이면 연수 뒤에도 오래 둘 사이트), customDomain(내 도메인을 붙일 계획),
  *   maxFileMB(가장 큰 파일), siteMB(사이트 합계), files(파일 수)
@@ -92,7 +112,6 @@ export function checkHost(host, stat = {}) {
 export function decideHost(input = {}) {
   const skill = input.skill || 'click';
   const infra = [].concat(input.infra || []);
-  const paid = !!input.commercial;
   const reasons = [], warnings = [];
   const why = (t) => { reasons.length = 0; reasons.push(t); };
   const first = (h, list) => [h, ...list.filter((x) => x !== h)];
@@ -101,14 +120,10 @@ export function decideHost(input = {}) {
   if (input.network === 'offline') { hosts = ['lan', 'zip']; reasons.push('연수 장소에 인터넷이 없어 강사 노트북에서 열어요.'); }
   else if (input.backend === 'server') { hosts = ['server']; reasons.push('가진 서버에서 사이트와 참여 기능을 함께 돌려요.'); }
   else {
-    // 기본: 앱(브라우저만)은 토큰 하나로 끝나는 Vercel, skill(명령 가능)은 요청 무제한·상업 이용이 되는 Cloudflare
-    hosts = skill === 'click' ? ['vercel', 'github-pages', 'cloudflare', 'netlify'] : ['cloudflare', 'vercel', 'github-pages', 'netlify'];
+    // 기본: 앱(브라우저만)은 토큰 하나로 끝나는 Vercel, skill(명령 가능)은 요청 무제한인 Cloudflare
+    // Onpod은 명령(skill)으로만 올림. 할 일이 Cloudflare보다 많아(API 키 만들기) 뒤에 두고, 이미 쓰면(connected·previous) 앞으로
+    hosts = skill === 'click' ? ['vercel', 'github-pages', 'cloudflare', 'netlify'] : ['cloudflare', 'vercel', 'github-pages', 'onpod', 'netlify'];
     reasons.push(skill === 'click' ? 'Vercel은 토큰 하나로 앱에서 바로 올리고, 다시 올려도 주소가 그대로예요.' : 'Cloudflare는 정적 파일 요청이 무료·무제한이고 명령 한 줄로 올려요.');
-    if (paid) {
-      hosts = first('cloudflare', hosts.filter((h) => h !== 'vercel'));
-      why('강사료를 받는 연수라 상업 이용이 되는 Cloudflare를 권해요.');
-      warnings.push('Vercel 무료(Hobby) 요금제는 비상업 개인 용도만 허용해서 뺐어요.');
-    }
     if (input.backend === 'cloudflare' && skill !== 'click') hosts = first('cloudflare', hosts);
     if (input.customDomain || (input.network === 'restricted' && skill !== 'click')) {
       hosts = first('cloudflare', hosts);
@@ -128,6 +143,8 @@ export function decideHost(input = {}) {
       why('사이트가 100MB를 넘어 Cloudflare를 권해요.');
     }
     if (bigSite && hosts.includes('vercel')) { hosts = last('vercel', hosts); warnings.push('Vercel 무료는 한 번에 올리는 파일 합계가 100MB까지예요.'); }
+    // Onpod 무료: 사이트 100MB·파일 50MB·5,000개
+    if (hosts.includes('onpod') && (bigSite || Number(input.maxFileMB) > 50 || Number(input.files) > 5000)) hosts = last('onpod', hosts);
     if (input.network === 'restricted') warnings.push('학교망에서 기본 주소가 막힐 수 있어요. 연수 전날 참가자 망에서 주소를 열어 보고, 막히면 내 도메인을 붙이세요.');
     if (infra.includes('aws') && skill !== 'click') hosts.unshift('s3');
     // 멈추지 않는 것이 먼저: 참가자가 많고 사이트가 크면 한 달 전송량(사이트 크기 × 인원 × 6번)이 무료 한도에 닿는 곳을 뒤로
@@ -149,7 +166,9 @@ export function decideHost(input = {}) {
     if (mine.length) { hosts = [...new Set([...mine, ...hosts])]; why(input.previous && mine[0] === input.previous ? '지난번에 올린 곳에 다시 올리면 주소가 그대로예요.' : '이미 연결해 둔 곳이라 바로 올릴 수 있어요.'); }
     hosts.push('firebase', 'zip');
   }
-  return { hosts, pick: hosts[0], reasons, warnings };
+  const conn = new Set([].concat(input.connected || [], input.previous || []));
+  const steps = conn.has(hosts[0]) ? 0 : HOST_STEPS[hosts[0]]?.[skill === 'click' ? 'app' : 'skill'] ?? null;
+  return { hosts, pick: hosts[0], reasons, warnings, steps };
 }
 
 export function decideInfra(input = {}) {
@@ -159,7 +178,6 @@ export function decideInfra(input = {}) {
   const duration = input.duration || 'day'; // day | month | long
   const infra = [].concat(input.infra || []); // aws | server | nas | school-server
   const network = input.network || 'good'; // good | slow | restricted | offline
-  const paid = !!input.commercial; // 강사료를 받는 연수(skill 인터뷰에서만 물음, 앱은 묻지 않음). 없으면 Vercel도 후보
   const realtime = features.some((f) => REALTIME_FEATURES.includes(f));
   const store = features.some((f) => STORE_FEATURES.includes(f));
   const reasons = [], warnings = [];
@@ -229,7 +247,7 @@ export function decideInfra(input = {}) {
 
   return {
     tier, backend, backendInfo: BACKENDS[backend], hosts, hostInfo: hosts.map((h) => ({ id: h, ...HOSTS[h] })),
-    hostReasons: hostPick.reasons,
+    hostReasons: hostPick.reasons, hostSteps: hostPick.steps,
     alternatives, reasons, warnings,
     teacherSteps: TEACHER_STEPS[backend]?.[skill === 'click' ? 'app' : 'skill'] ?? null,
     liveProvider: { none: 'none', local: 'local', sheets: 'sheets', supabase: 'supabase', cloudflare: 'http', server: 'http', lan: 'http' }[backend],

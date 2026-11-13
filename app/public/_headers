@@ -35,3 +35,6 @@
 /sw.js
   Cache-Control: no-cache
 
+/notice.json
+  Cache-Control: no-cache
+
