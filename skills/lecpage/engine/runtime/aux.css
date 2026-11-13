@@ -207,14 +207,15 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 }
 /* 참여 QR: 흰 바탕 위 검은 점(어느 테마에서나), 크기는 레일 폭에 맞춤 */
 /* 레일 안에서 QR이 남는 높이만큼 커지고(타이머·신호가 오면 줄어듦) 넘치지 않음 */
-.lp-scr-join{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vh,14px);text-align:center}
+.lp-scr-join{display:grid;justify-items:center;gap:clamp(6px,1.2vh,14px);text-align:center}
 .lp-scr-join-h{font-size:clamp(1rem,.8rem + .7vw,1.6rem);font-weight:700}
-.lp-scr-join .lp-qr-zoom{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:zoom-in;border-radius:var(--radius-sm)}
+.lp-scr-join .lp-qr-zoom{display:grid;justify-items:center;gap:6px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:zoom-in;border-radius:var(--radius-sm)}
 .lp-scr-join .lp-qr-zoom:disabled{cursor:default}
 .lp-scr-join .lp-qr-zoom:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
-.lp-scr-join .lp-qr{flex:0 1 clamp(170px,24vw,420px);min-height:120px;width:auto;max-width:100%;aspect-ratio:1;border-radius:var(--radius-sm);padding:0}
+/* 크기는 레일 폭에 맞추고, 타이머·신호가 와서 넘치면 screen.js가 QR만 줄임(뒷자리용은 [QR 크게]) */
+.lp-scr-join .lp-qr{width:min(100%,clamp(170px,24vw,420px));aspect-ratio:1;border-radius:var(--radius-sm);padding:0}
 .lp-scr-join .lp-qr svg{width:100%;height:100%}
-.lp-scr-join > p,.lp-scr-timer,.lp-scr-signal,.lp-timers{flex:none}
+.lp-scr-side > *{flex:none}
 .lp-qr-zoom-t{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:600;color:var(--muted-foreground)}
 .lp-qr-zoom-t .lp-ic{width:14px;height:14px}
 .lp-qr-zoom:hover .lp-qr-zoom-t{color:var(--foreground)}
@@ -317,9 +318,8 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-scr .lp-reactions span{font-size:3rem}
 @media (max-width:899px),(max-aspect-ratio:1/1){
   .lp-scr-join{grid-template-columns:auto minmax(0,1fr);justify-items:start;text-align:left;align-items:center;column-gap:16px}
-  .lp-scr-join{display:grid;flex:none}
   .lp-scr-join .lp-qr-zoom{grid-row:span 4;width:auto}
-  .lp-scr-join .lp-qr{flex:none;width:clamp(128px,34vw,220px);height:auto}
+  .lp-scr-join .lp-qr{width:clamp(128px,34vw,220px)!important}
   .lp-scr-act .lp-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lp-scr-act .lp-btn{min-width:44px;padding-inline:10px}
 }
@@ -332,7 +332,9 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-pst-bar-t span{color:var(--muted-foreground)}
 .lp-pst-opts{display:flex;flex-wrap:wrap;gap:0 16px;margin:0;padding:0;border:0}
 .lp-pst{display:grid;justify-items:center;gap:28px;padding:28px 16px 56px}
-.lp-pst-sheet{--ink:#111;--ink-2:#3d3d3d;--paper:#fff;position:relative;width:min(210mm,100%);container-type:inline-size;background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 14px 40px rgba(0,0,0,.16);border-radius:2px;color-scheme:light}
+/* 쪽(종이 한 장)이 크기 기준(container): 안의 글자·QR·여백을 종이 폭의 몇 %로(cqw) 정해 화면 미리보기와 인쇄가 같은 비율 */
+.lp-pst-page{width:min(210mm,100%);container-type:inline-size}
+.lp-pst-sheet{--ink:#111;--ink-2:#3d3d3d;--paper:#fff;position:relative;width:100%;background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 14px 40px rgba(0,0,0,.16);border-radius:2px;color-scheme:light}
 .lp-pst-sheet .lp-qr{background:#fff;padding:0;border-radius:0}
 /* A4 한 장: 폭에 맞춰 글자·QR이 함께 커지고 줄어듦(cqw, 인쇄 폭 190mm에서도 같은 비율) */
 .lp-pst-a4{aspect-ratio:210 / 297;display:flex;flex-direction:column;align-items:center;gap:2.2cqw;padding:6cqw 8cqw 5cqw;text-align:center;overflow:hidden;border-top:2.2cqw solid var(--primary)}
@@ -382,7 +384,7 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-pst-tgrid dd{margin:0;font-family:var(--font-mono);font-size:max(10px,2.2cqw);overflow-wrap:anywhere}
 .lp-pst-steps{display:grid;gap:.8cqw;padding-left:1.4em;font-size:max(11px,2.3cqw);color:var(--ink-2)}
 .lp-pst-sheet:not(.lp-pst-a4) .lp-qr-off,.lp-pst-a4 .lp-qr-off{font-size:max(10px,2.2cqw)}
-.lp-card-off .lp-pst-teacher,.lp-cards-off .lp-pst-cards{display:none}
+.lp-card-off [data-part="teacher"],.lp-cards-off [data-part="cards"]{display:none}
 @media (max-width:520px){.lp-pst-bar .lp-btn{flex:1 1 auto}}
 @media print{
   @page{size:A4 portrait;margin:10mm}
@@ -390,8 +392,10 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
   .lp-pst-bar,.lp-toast,.lp-ax-bar,.lp-con-bar{display:none!important}
   .lp-body-pst{background:#fff}
   .lp-pst{display:block;padding:0}
-  .lp-pst-sheet{width:190mm;margin:0 auto;box-shadow:none;border-radius:0;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .lp-pst-sheet:last-child,.lp-card-off .lp-pst-cards{break-after:auto}
+  :root,:root[data-theme]{color-scheme:light!important;background:#fff!important}
+  .lp-pst-page{width:190mm;margin:0 auto}
+  .lp-pst-page + .lp-pst-page{break-before:page}
+  .lp-pst-sheet{box-shadow:none;border-radius:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .lp-pst-a4{height:277mm;aspect-ratio:auto}
   .lp-pst-cards{height:auto}
   .lp-pst-teacher{border:0;border-bottom:1px dashed #888}

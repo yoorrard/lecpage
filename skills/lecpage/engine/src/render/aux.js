@@ -126,7 +126,7 @@ export function renderPoster(ctx) {
 <a class="lp-link" href="index.html">연수 사이트로</a>
 </div></header>
 <main class="lp-pst" data-poster>
-<section class="lp-pst-sheet lp-pst-a4" data-len="${tlen <= 12 ? 's' : tlen <= 26 ? 'm' : 'l'}" aria-labelledby="lp-poster-h">
+<div class="lp-pst-page"><section class="lp-pst-sheet lp-pst-a4" data-len="${tlen <= 12 ? 's' : tlen <= 26 ? 'm' : 'l'}" aria-labelledby="lp-poster-h">
 <div class="lp-pst-head">
 ${m.organizer ? `<p class="lp-pst-org">${esc(m.organizer)}</p>` : ''}<h1 id="lp-poster-h">${br(m.title)}</h1>${m.subtitle ? `<p class="lp-pst-sub">${br(m.subtitle)}</p>` : ''}
 <div class="lp-pst-rule" aria-hidden="true">${motif(ctx, 'poster')}</div>
@@ -141,18 +141,18 @@ ${meta}
 ${code ? `<p class="lp-pst-code">연수 코드 <b>${esc(code)}</b></p>` : ''}
 </div>
 <div class="lp-pst-wifi">${icon('wifi')}<b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>
-</section>
-<section class="lp-pst-sheet lp-pst-cards" data-print-part="cards" aria-label="자리 카드(잘라 쓰기)">
+</section></div>
+<div class="lp-pst-page" data-part="cards"><section class="lp-pst-sheet lp-pst-cards" aria-label="자리 카드(잘라 쓰기)">
 <p class="lp-pst-cut">${icon('scissors')}<span>점선을 따라 잘라 자리마다 놓아 주세요.</span></p>
 <div class="lp-pst-grid">${Array.from({ length: 8 }, (_, i) => mini(i)).join('')}</div>
-</section>
-<section class="lp-pst-sheet lp-pst-teacher" data-teacher-card aria-labelledby="lp-card-h">
+</section></div>
+<div class="lp-pst-page" data-part="teacher"><section class="lp-pst-sheet lp-pst-teacher" data-teacher-card aria-labelledby="lp-card-h">
 <p class="lp-pst-only">강사만</p><h2 id="lp-card-h">강사 카드 · ${esc(m.title)}</h2>
 <p class="lp-pst-warn">이 카드는 강사만 보세요. 벽에 붙이지 말고, 관리자 키는 적지 마세요.</p>
 <div class="lp-pst-tgrid">${ctx.live ? `<div class="lp-qr" data-qr-page="console.html" role="img" aria-label="강사 화면 QR 코드"></div>` : ''}<dl>
 ${ctx.live ? `<div><dt>강사 화면</dt><dd data-url-page="console.html"></dd></div>` : ''}<div><dt>발표 화면</dt><dd data-url-page="screen.html"></dd></div><div><dt>접속 확인</dt><dd data-url-page="check.html"></dd></div>${code ? `<div><dt>연수 코드</dt><dd>${esc(code)}</dd></div>` : ''}</dl></div>
 <ol class="lp-pst-steps"><li>연수 전날 장소의 Wi-Fi로 접속 확인을 열어요.</li><li>프로젝터에 발표 화면을 띄워요.</li>${ctx.live ? '<li>노트북에서 강사 화면에 들어가요.</li>' : ''}</ol>
-</section>
+</section></div>
 </main><div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
   return appShell(ctx, { title: `QR 안내문 · ${m.title}`, page: 'poster', bodyClass: 'lp-body-pst lp-cards-off', inner, scripts: ['assets/qr.js', 'assets/lecpage.js'] });
 }

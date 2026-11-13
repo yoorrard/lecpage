@@ -168,7 +168,7 @@
         tList.appendChild(li);
       });
     }
-    tick(); fit();
+    tick(); fit(); if (typeof fitRail === 'function') fitRail();
     if (timers.some(function (t) { return t.running; })) tIv = setInterval(tick, 500);
   }
   function tick() {
@@ -233,6 +233,17 @@
     list.setAttribute('data-hidden', String(hiddenN));
     if (more) { more.hidden = !hiddenN; more.textContent = '질문 ' + hiddenN + '개 더 · 강사 화면에서 볼 수 있어요'; }
   }
+  // 레일(QR·타이머·신호)이 넘치면 QR만 줄임(넓은 화면에서 한 화면에 다 보이게)
+  var side = $('.lp-scr-side'), sideQr = $('.lp-scr-join .lp-qr');
+  function fitRail() {
+    if (!side || !sideQr) return;
+    sideQr.style.width = '';
+    if (getComputedStyle(side).overflow !== 'hidden') return;
+    var over = side.scrollHeight - side.clientHeight;
+    if (over > 0) sideQr.style.width = Math.max(110, sideQr.getBoundingClientRect().width - over) + 'px';
+  }
+  fitRail();
+  if (window.ResizeObserver && side) { var sT = 0; new ResizeObserver(function () { clearTimeout(sT); sT = setTimeout(fitRail, 80); }).observe(side); }
   if (window.ResizeObserver && stageBox) { var rT = 0; new ResizeObserver(function () { clearTimeout(rT); rT = setTimeout(function () { if (draw.last) draw(); }, 120); }).observe(stageBox); }
 
   drawTimers();
@@ -299,7 +310,7 @@
   draw = function () {
     draw.last = true;
     var n = $('[data-notice]'); if (state.notice && state.notice.text) { n.hidden = false; n.textContent = state.notice.text; } else n.hidden = true;
-    drawTimer(); drawSignal();
+    drawTimer(); drawSignal(); fitRail();
     var p = openPoll();
     mainBox.textContent = '';
     if (p) {
