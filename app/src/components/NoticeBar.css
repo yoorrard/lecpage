@@ -1,0 +1,14 @@
+/* 운영자 공지(늦게 받는 묶음에만 들어감). 화면을 가리지 않는 오른쪽 아래 카드, 휴대폰에서는 아래쪽 가득 */
+.lp-notice{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:80;width:min(380px,calc(100% - 32px));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:start;padding:16px 16px 14px 18px;background:var(--paper);color:var(--ink);border:var(--bw) solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);box-shadow:var(--shadow-lg);animation:lp-notice-in .35s var(--ease)}
+.lp-notice-in{display:grid;gap:4px;min-width:0}
+.lp-notice-k{font-size:.78rem;font-weight:700;color:var(--accent);letter-spacing:.02em}
+.lp-notice-t{font-size:1.02rem;line-height:1.4}
+.lp-notice-b{white-space:pre-line;color:var(--ink-2);font-size:.94rem;overflow-wrap:anywhere}
+.lp-notice-l{font-size:.92rem;overflow-wrap:anywhere}
+.lp-notice-l a{color:var(--accent);font-weight:650}
+.lp-notice-l span{color:var(--muted);font-size:.86rem}
+.lp-notice-x{flex:none}
+@keyframes lp-notice-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.lp-notice{animation:none}}
+@media (max-width:560px){.lp-notice{right:16px;left:16px;width:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px))}}
+@media print{.lp-notice{display:none}}

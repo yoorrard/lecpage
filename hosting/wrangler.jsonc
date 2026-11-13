@@ -9,8 +9,9 @@
   "workers_dev": true,
   "preview_urls": false,
 
-  // 안내·신고 화면(public/)은 정적 자산이라 Worker 요청 수에 들지 않습니다. 그 밖의 주소(/api, /s)는 src/index.js로 갑니다.
-  "assets": { "directory": "./public" },
+  // 안내·신고 화면과 엔진 런타임 사본(public/, public/rt/)은 정적 자산이라 Worker 요청 수에 들지 않습니다. 그 밖의 주소(/api, /s)는 src/index.js로 갑니다.
+  // 관리 화면(public/admin/)만은 정적 파일이어도 Worker를 먼저 거쳐 Cloudflare Access 토큰을 확인합니다(run_worker_first).
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/admin", "/admin/*"] },
 
   // 배포·개발 서버를 띄우기 전에 엔진 런타임 목록(src/runtime-allow.js)을 다시 만듭니다.
   "build": { "command": "node scripts/gen-runtime.mjs" },
@@ -28,7 +29,7 @@
   // 보드 파일을 R2에 두려면(선택, 카드 등록 필요) 버킷을 만들고 아래 주석을 푸세요. 없으면 방의 SQLite에 담습니다.
   // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "lecpage-sites-uploads" }],
 
-  // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK)은 `npx wrangler secret put`으로 넣으세요.
+  // 여기 적은 값은 배포할 때마다 그대로 들어갑니다. 비밀 값(ADMIN_KEY, REPORT_WEBHOOK, ALERT_WEBHOOK, ACCESS_EMAILS)은 `npx wrangler secret put`으로 넣으세요.
   "vars": {
     // 바로 공개를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
     "ALLOWED_ORIGINS": "https://yoorrard.github.io,http://localhost:5173,http://localhost:4173"
@@ -40,5 +41,7 @@
     // 실시간 방: LIVE "on"(끄려면 "off") · LIVE_UPLOADS "on" · LIVE_MAX_UPLOAD_MB 10 · LIVE_ROOM_MB 200
     // LIVE_MAX_PARTICIPANTS 300 · LIVE_SOCKETS_PER_IP 500 · DAILY_ROOM_CAP 30
     // ALLOW_SUPABASE_SDK "1"(Supabase 실시간을 쓰는 사이트를 받을 때만. README의 '실시간 연결' 참고)
+    // 관리 화면(README §10): ACCESS_TEAM_DOMAIN "<팀>.cloudflareaccess.com" · ACCESS_AUD "<Access 애플리케이션의 AUD 태그>"(둘 다 있어야 /admin이 열림)
+    // 알림: ALERT_AT "50,60,80,95"(하루 예산의 %) · 공지 링크 제한: NOTICE_LINK_HOSTS "github.com,내도메인" · 앱 익명 이용 합계: STATS "on"(끄려면 "off")
   }
 }

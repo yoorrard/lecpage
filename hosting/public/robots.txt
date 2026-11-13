@@ -1,2 +1,16 @@
+# 검색에는 내보내지 않고(사이트마다 noindex), 메신저·SNS의 링크 미리보기 카드만 사이트 화면(/s/)을 읽게 합니다.
 User-agent: *
+Disallow: /
+
+User-agent: facebookexternalhit
+User-agent: Facebot
+User-agent: Twitterbot
+User-agent: Slackbot-LinkExpanding
+User-agent: Discordbot
+User-agent: TelegramBot
+User-agent: LinkedInBot
+User-agent: WhatsApp
+User-agent: kakaotalk-scrap
+User-agent: Iframely
+Allow: /s/
 Disallow: /

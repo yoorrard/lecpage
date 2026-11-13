@@ -24,6 +24,8 @@ export const DEFAULTS = {
   DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 올라온 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
   MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 올리면 늘어남)
   ALLOWED_ORIGINS: 'https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
+  ALERT_AT: '50,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK)
+  STATS_DAILY_CAP: 20000, // 앱 익명 이용 합계: 항목 하나가 하루에 셀 수 있는 최대(부풀리기 막기)
 };
 
 /** 요금제에 따라 달라지는 기본값. free: Cloudflare 무료 요금제 안에서만(하루 한도에 닿으면 그날은 멈춤). paid: Workers Paid(하루 한도 없음, 쓴 만큼) */
@@ -33,6 +35,8 @@ export const PLAN_DEFAULTS = {
 };
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
 export const NEW_WORK_SHARE = 0.6;
+/** 하루 요청 예산에서 덜 급한 요청(앱 이용 합계 받기)까지 받는 구간. 넘으면 Worker가 DO를 부르지 않고 바로 버림 */
+export const EXTRA_WORK_SHARE = 0.85;
 
 /** "off"·"0"·"false"·"no"면 끈 것 */
 const off = (v) => /^(off|0|false|no)$/i.test(String(v ?? '').trim());
@@ -78,9 +82,42 @@ export function config(env = {}) {
     adminKey: typeof env.ADMIN_KEY === 'string' ? env.ADMIN_KEY.trim() : '',
     reportWebhook: typeof env.REPORT_WEBHOOK === 'string' && /^https:\/\//.test(env.REPORT_WEBHOOK.trim()) ? env.REPORT_WEBHOOK.trim() : '',
     publicOrigin,
+    // 알림: 하루 예산의 ALERT_AT %를 넘을 때, 저장량이 80%를 넘을 때. 비밀 ALERT_WEBHOOK(없으면 REPORT_WEBHOOK)으로 보냄
+    alertWebhook: [env.ALERT_WEBHOOK, env.REPORT_WEBHOOK].map((v) => (typeof v === 'string' ? v.trim() : '')).find((v) => /^https:\/\//.test(v)) || '',
+    alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),
+    // 앱 익명 이용 합계(앱 열기·만들기·공개 횟수, 하루 단위 숫자만). STATS=off면 받지 않음
+    stats: !off(env.STATS),
+    statsDailyCap: num(env.STATS_DAILY_CAP, DEFAULTS.STATS_DAILY_CAP),
+    // Worker가 하루 숫자를 Gate에 묶어 보내는 단위(요청 수). 시험에서만 1로 줄임
+    tallyEvery: num(env.TALLY_EVERY, 50),
+    // 관리 화면(/admin): Cloudflare Access 팀 도메인과 애플리케이션 AUD. 둘 다 있어야 켜짐(없으면 /admin은 404)
+    access: accessConfig(env),
+    // 공지 링크가 갈 수 있는 곳(쉼표로 구분한 호스트). 비우면 https 주소면 됨
+    noticeLinkHosts: String(env.NOTICE_LINK_HOSTS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
     // 켜면 Supabase 연결을 쓰는 사이트가 엔진이 고정한 supabase-js 파일 하나를 cdn.jsdelivr.net에서 불러올 수 있음(기본은 꺼짐)
     allowSupabaseSdk: /^(1|true|yes|on)$/i.test(String(env.ALLOW_SUPABASE_SDK ?? '').trim()),
   };
+}
+/**
+ * ACCESS_TEAM_DOMAIN: "<팀>.cloudflareaccess.com"(https:// 붙여도 됨). 로컬 시험만 http://127.0.0.1:<포트>·http://localhost:<포트>.
+ * ACCESS_AUD: Access 애플리케이션의 Application Audience(AUD) 태그(쉼표로 여러 개). ACCESS_EMAILS(선택, 비밀): 한 번 더 확인할 이메일.
+ * @returns {{ team: string, aud: string[], emails: Set<string> } | null}
+ */
+export function accessConfig(env) {
+  const team = normTeam(env.ACCESS_TEAM_DOMAIN);
+  const aud = String(env.ACCESS_AUD ?? '').split(',').map((s) => s.trim()).filter((s) => /^[A-Za-z0-9]{16,128}$/.test(s));
+  if (!team || !aud.length) return null;
+  const emails = new Set(String(env.ACCESS_EMAILS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.includes('@')));
+  return { team, aud, emails };
+}
+/** 팀 도메인 → 'https://<팀>.cloudflareaccess.com'. 다른 곳(공격자의 열쇠 목록)을 가리키지 못하게 모양을 좁힘 */
+export function normTeam(v) {
+  const s = String(v ?? '').trim().toLowerCase().replace(/\/+$/, '');
+  if (!s) return '';
+  const m = /^(?:https:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.cloudflareaccess\.com$/.exec(s);
+  if (m) return `https://${m[1]}.cloudflareaccess.com`;
+  const dev = /^http:\/\/(127\.0\.0\.1|localhost):(\d{2,5})$/.exec(s);
+  return dev ? `http://${dev[1]}:${dev[2]}` : '';
 }
 export const DAY_MS = 86400000;
 export const HOUR_MS = 3600000;

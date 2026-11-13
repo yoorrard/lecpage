@@ -39,6 +39,7 @@ export const TYPES = {
   odp: T('application/vnd.oasis.opendocument.presentation', { download: true }),
   ods: T('application/vnd.oasis.opendocument.spreadsheet', { download: true }),
   csv: T('text/csv; charset=utf-8', { download: true }),
+  ics: T('text/calendar; charset=utf-8', { download: true }), // 내 달력에 넣기(assets/event.ics)
   md: T('text/markdown; charset=utf-8', { download: true }),
   zip: T('application/zip', { download: true }),
   // 암호로 잠근 사이트의 교재 그림·자료(engine/src/protect.js). unlock.js가 받아서 풂

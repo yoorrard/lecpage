@@ -76,7 +76,9 @@ test('파일별 응답 머리글', () => {
   assert.equal(html['content-security-policy'], htmlCsp());
   assert.equal(html['x-frame-options'], undefined);
   assert.equal(html['cross-origin-resource-policy'], undefined);
-  assert.equal(html.etag, `"${sha}-r1"`);
+  assert.equal(html.etag, `"${sha}-r2"`);
+  assert.equal(fileHeaders('index.html', typeOf('index.html'), sha, { tag: 'abcd1234' }).etag, `"${sha}-abcd1234-r2"`, '배포·공지가 바뀌면 HTML etag도 바뀜');
+  assert.equal(fileHeaders('index.html', typeOf('index.html'), sha, { immutable: true })['cache-control'], 'no-cache', 'HTML은 지문이 있어도 오래 두지 않음');
 
   const consoleH = fileHeaders('console.html', typeOf('console.html'), sha);
   assert.ok(consoleH['content-security-policy'].endsWith("frame-ancestors 'none'"));
@@ -86,6 +88,7 @@ test('파일별 응답 머리글', () => {
   const js = fileHeaders('assets/lecpage.js', typeOf('assets/lecpage.js'), sha);
   assert.equal(js['content-type'], 'text/javascript; charset=utf-8');
   assert.equal(js['cache-control'], 'public, max-age=600');
+  assert.equal(fileHeaders('assets/lecpage.js', typeOf('assets/lecpage.js'), sha, { immutable: true })['cache-control'], 'public, max-age=31536000, immutable', '주소의 지문이 맞으면 1년');
   assert.equal(js['cross-origin-resource-policy'], 'same-origin');
   assert.equal(js.etag, `"${sha}"`);
   assert.equal(js['content-security-policy'], undefined);

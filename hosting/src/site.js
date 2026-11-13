@@ -10,7 +10,7 @@ import { bearer, keyMatches, newDeployId, hex, SHA256_RE, DEPLOY_RE } from './id
 import { checkManifest, missingBlobs, scriptBlobs } from './manifest.js';
 import { typeOf, extOf, requestPath } from './paths.js';
 import { isRuntimeJs } from './runtime.js';
-import { SUPABASE_SDK } from './runtime-allow.js';
+import { SUPABASE_SDK, STATIC_RUNTIME } from './runtime-allow.js';
 import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES } from './csp.js';
 import { rewriteHtml } from './rewrite.js';
 import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
@@ -18,6 +18,10 @@ import { normCode } from './live/host.js';
 
 /** blob 한 줄의 크기(DO SQLite는 한 줄 2MB까지) */
 export const CHUNK = 1024 * 1024;
+/** 정적 사본(/rt/)이 있는 런타임 파일 */
+const RT = new Set(STATIC_RUNTIME || []);
+/** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
+const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
 
 const SCHEMA = `
@@ -38,6 +42,7 @@ export class Site extends DurableObject {
     this.deployTimes = [];
     this.liveTimes = [];
     this.queue = Promise.resolve();
+    this.ogCache = new Map(); // 배포 id → 미리보기 카드 그림 경로('' = 없음)
   }
 
   async fetch(request) {
@@ -138,6 +143,8 @@ export class Site extends DurableObject {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
       const usage = await this.gate('GET', 'usage');
+      // 운영자가 새 업로드를 멈췄으면 다시 올리기도 받지 않음(이미 공개한 판은 그대로 열림)
+      if (usage.paused) throw new HttpError('rate_limited', '운영자가 잠시 새 업로드를 멈췄어요. 이미 올린 사이트는 그대로 열려요. 나중에 다시 하거나 내 계정에 올려 주세요.', { status: 503, headers: { 'retry-after': '3600' } });
       if (usage.bytes - meta.bytes + man.stored > this.cfg.maxTotalBytes) throw new HttpError('full');
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
@@ -324,7 +331,7 @@ export class Site extends DurableObject {
       if (prev && prev !== deployId) this.manifests.delete(prev);
       await this.ctx.storage.setAlarm(expires);
       this.sweep();
-      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires }); } catch (e) { console.error('gate site update failed', e?.message); }
+      try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true }); } catch (e) { console.error('gate site update failed', e?.message); }
       // 공개 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
       if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
       return json({ url: this.url(request, meta), expiresAt: expires });
@@ -386,11 +393,39 @@ export class Site extends DurableObject {
     else await this.ctx.storage.setAlarm(meta.expires);
   }
 
+  /**
+   * 링크 미리보기 카드 그림: 첫 화면(index.html)에 og:image가 없으면, 처음 나오는 사이트 안 그림(png·jpg·webp, 8KB 넘는 것).
+   * 배포마다 한 번만 읽고 기억함
+   */
+  ogImageFor(deployId, man) {
+    if (this.ogCache.has(deployId)) return this.ogCache.get(deployId);
+    let found = '';
+    const hit = man.files.get('index.html');
+    if (hit) {
+      const row = this.sql.exec('SELECT data FROM blob WHERE sha = ? AND i = 0', hit[0]).toArray()[0];
+      const html = row ? new TextDecoder().decode(new Uint8Array(row.data)) : '';
+      if (!/<meta[^>]+property=["']og:image["']/i.test(html)) {
+        for (const m of html.matchAll(/<img\b[^>]*?\ssrc=["']([^"'?#]+\.(?:png|jpe?g|webp))["']/gi)) {
+          const p = m[1].replace(/^\.\//, '');
+          let path; try { path = decodeURI(p); } catch { continue; }
+          const f = man.files.get(path);
+          if (f && f[1] >= OG_MIN_BYTES) { found = p; break; }
+        }
+      }
+    }
+    if (this.ogCache.size > 8) this.ogCache.clear();
+    this.ogCache.set(deployId, found);
+    return found;
+  }
+
   // ── 내보내기 ─────────────────────────────────────────────────
   serve(request, url) {
     const head = request.method === 'HEAD';
     const meta = this.load();
-    if (!meta || Date.now() >= meta.expires) return gonePage(head);
+    if (!meta || Date.now() >= meta.expires) {
+      // Worker가 짧게 기억해 같은 없는 주소로 이 객체를 다시 깨우지 않게 함(밖으로는 내보내지 않음)
+      const r = gonePage(head); r.headers.set('x-lp-state', 'gone'); return r;
+    }
     if (meta.blocked) return blockedPage(meta.site, head);
     const man = meta.current ? this.manifest(meta.current) : null;
     const path = requestPath(url.searchParams.get('p'));
@@ -403,7 +438,15 @@ export class Site extends DurableObject {
     }
     const [sha, size] = hit;
     const type = typeOf(name);
-    const headers = fileHeaders(name, type, sha, { scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
+    // 강사 화면에 붙일 운영자 공지(Worker가 넘겨 줌). 공지가 바뀌면 etag도 바뀌게 공지 id를 넣음
+    let notices = [];
+    if (type.kind === 'html' && name === 'console.html') {
+      try { notices = JSON.parse(decodeURIComponent(request.headers.get('x-lp-notice') || '') || '[]'); } catch { notices = []; }
+      if (!Array.isArray(notices)) notices = [];
+    }
+    const tag = type.kind === 'html' ? `${String(meta.current).slice(0, 8)}${notices.length ? `.${notices.map((n) => n.id).join('.')}` : ''}` : '';
+    const v = url.searchParams.get('v') || '';
+    const headers = fileHeaders(name, type, sha, { tag, immutable: status === 200 && v.length >= 8 && sha.startsWith(v), scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
     if (status === 200 && etagMatches(request.headers.get('if-none-match'), headers.etag)) {
       delete headers['content-type'];
       return new Response(null, { status: 304, headers });
@@ -411,7 +454,10 @@ export class Site extends DurableObject {
     if (type.kind === 'html') {
       if (status === 200) this.keepAlive(meta);
       if (head) return new Response(null, { status, headers });
-      return rewriteHtml(new Response(this.stream(sha, 0, size - 1), { status, headers }), meta.site, { reportLink: !NO_FRAME_PAGES.has(name) });
+      return rewriteHtml(new Response(this.stream(sha, 0, size - 1), { status, headers }), meta.site, {
+        reportLink: !NO_FRAME_PAGES.has(name), path: name, files: man.files, rt: RT, notices,
+        origin: request.headers.get('x-lp-origin') || '', ogImage: name === 'index.html' ? this.ogImageFor(meta.current, man) : '',
+      });
     }
     let range = status === 200 ? parseRange(request.headers.get('range'), size) : null;
     const ifRange = request.headers.get('if-range');

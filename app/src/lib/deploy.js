@@ -1,4 +1,6 @@
 // 브라우저에서 바로 공개(사용자 토큰). 토큰은 이 브라우저에서 올릴 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
+import { track } from './stats.js';
+
 const GH = 'https://api.github.com';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isText = (p) => /\.(html|css|js|json|md|svg|txt|webmanifest)$/i.test(p);
@@ -82,6 +84,7 @@ export async function deployGitHub({ token, repo, files, onProgress = () => { },
   let url = `https://${owner}.github.io/${repo}/`;
   try { const pg = await gh(token, 'GET', `/repos/${owner}/${repo}/pages`); if (pg.html_url) url = pg.html_url; } catch { }
   onProgress({ step: '완료(처음에는 1~2분, 길면 10분 뒤 열려요)', pct: 100 });
+  track('publish', 'github'); // 익명 이용 합계(올릴 곳 종류만)
   return { url, repoUrl: `https://github.com/${owner}/${repo}` };
 }
 
@@ -103,9 +106,10 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
   for (let i = 0; i < 30; i++) {
     await sleep(2000);
     const s = await fetch(`https://api.netlify.com/api/v1/sites/${site}/deploys/${deployId}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json()).catch(() => ({}));
-    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site }; }
+    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); track('publish', 'netlify'); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site }; }
     if (s.state === 'error') throw new Error(s.error_message || 'Netlify에서 사이트를 만들지 못했어요. 잠시 뒤 다시 해 주세요.');
   }
+  track('publish', 'netlify');
   return { url: j.ssl_url || j.url, siteId: site };
 }
 
@@ -211,6 +215,7 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
   if (!hosts.length) { try { const dm = await vc(token, 'GET', `/v9/projects/${encodeURIComponent(pid)}/domains`); hosts = (dm.domains || []).map((x) => x.name); } catch { } }
   const host = hosts.find((h) => h === `${pname}.vercel.app`) || hosts.sort((a, b) => a.length - b.length)[0] || `${pname}.vercel.app`;
   onProgress({ step: '완료', pct: 100 });
+  track('publish', 'vercel');
   return { url: `https://${host}/`, projectId: pid, name: pname, opened };
 }
 
@@ -271,6 +276,7 @@ export async function deployInstant({ site, title, files, live = null, onProgres
   onProgress({ step: '공개하는 중', pct: 94 });
   const out = await ip('POST', `/api/sites/${s.id}/deploys/${dp.deploy}/publish`, { key: s.key });
   onProgress({ step: '완료', pct: 100 });
+  track('publish', 'instant');
   return { url: out.url || s.url, id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl };
 }
 /** 바로 공개한 사이트 지우기 */
