@@ -31,7 +31,7 @@ export function Paths() {
           <ol aria-label="lecpage가 이어서 하는 일">{STAGES.map((s) => <li>{s}</li>)}</ol>
         </div>
       </div>
-      <p class="ld-paths-note">배포와 참여 기능은 강사님 계정(Vercel·Cloudflare·구글 시트 등)의 무료 한도 안에서 돌아가요. 한 번 연결하면 같은 기기의 다음 연수부터 저절로 이어져요.</p>
+      <p class="ld-paths-note">배포와 참여 기능은 강사님 계정(Vercel·Cloudflare·구글 시트 등)의 무료 한도 안에서 돌아가요.</p>
       <div class="ld-skill">
         <div>
           <h3 class="ld-h3">AI 에이전트에서 쓰기</h3>

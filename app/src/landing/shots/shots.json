@@ -2,7 +2,7 @@
  "show-night-story": {
   "w": 1280,
   "h": 800,
-  "kb": 32
+  "kb": 33
  },
  "show-paper-workbook": {
   "w": 1280,
@@ -22,7 +22,7 @@
  "show-chalkboard": {
   "w": 1280,
   "h": 800,
-  "kb": 32
+  "kb": 34
  },
  "show-deck-collage": {
   "w": 1280,
@@ -32,7 +32,7 @@
  "show-vertical-type": {
   "w": 1280,
   "h": 800,
-  "kb": 28
+  "kb": 26
  },
  "show-retro-pop": {
   "w": 1280,
@@ -135,5 +135,45 @@
   "w": 585,
   "h": 1140,
   "kb": 29
+ },
+ "show-night-story-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 19
+ },
+ "show-paper-workbook-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 16
+ },
+ "show-editorial-ink-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 17
+ },
+ "show-ripple-center-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 22
+ },
+ "show-chalkboard-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 19
+ },
+ "show-deck-collage-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 13
+ },
+ "show-vertical-type-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 13
+ },
+ "show-retro-pop-m": {
+  "w": 400,
+  "h": 718,
+  "kb": 23
  }
 }
