@@ -325,6 +325,18 @@
   .ld-show-names{display:grid}
   .ld-show-foot{display:grid;justify-items:start}
 }
+/* 휴대폰: 휴대폰 크기로 찍은 판을 왼쪽에, 디자인 이름을 오른쪽에 세로로(PC 화면을 작게 줄여 보이지 않게) */
+@media (max-width:599.98px){
+  .ld-show-stage{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px 12px;align-items:start}
+  .ld-show-stage>.ld-frame{border-radius:22px;box-shadow:var(--shadow)}
+  .ld-show-stage>.ld-frame>.ld-bar{display:none}
+  .ld-show-img.is-m{aspect-ratio:400/718}
+  .ld-show-cap{padding:10px 12px 12px}
+  .ld-show-cap span{font-size:.84rem;line-height:1.5}
+  .ld-show-pick{display:contents}
+  .ld-show-names{display:grid;align-content:start;gap:6px}
+  .ld-name{width:100%}
+  .ld-show-foot{grid-column:1 / -1}
 ::view-transition-old(root),::view-transition-new(root){animation:none}
 ::view-transition-old(ld-shot){animation:none;mix-blend-mode:normal}
 ::view-transition-new(ld-shot){animation:ld-unfold .75s var(--ease) both;mix-blend-mode:normal}

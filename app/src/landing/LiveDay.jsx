@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView } from './motion.js';
+import { useSeen } from './motion-more.js';
 import { EX } from './example.js';
 
 /**
  * 연수 당일: 참가자 휴대폰에서 질문이 올라가고, 발표 화면에 투표 결과가 차오르는 장면(예시 화면).
  * 발표 화면은 엔진의 발표 화면(screen.html)과 같은 짜임: 위 막대(연수명·상태) · 큰 질문과 결과 막대 · 오른쪽 '휴대폰으로 참여' QR.
- * 질문 문구·투표 수는 그림을 위한 예시이고, 투표 질문과 보기는 예시 연수에서 옮겼어요. 이 구간이 보일 때만 움직여요.
+ * 질문 문구·투표 수는 그림을 위한 예시이고, 투표 질문과 보기는 예시 연수에서 옮겼어요. 그림이 화면 안에 60% 넘게 들어왔을 때만 움직여요(막대가 화면 밖에서 차오르지 않게).
  * 발표 화면의 QR은 진짜로 찍히는 QR(예시 연수 사이트로 감). 그리는 코드는 이 구간에 가까워질 때 받아요(배포 장면과 같은 모듈).
  */
 const VOTES = [11, 7, 4, 2];
@@ -20,7 +21,7 @@ const FEATURES = [
 ];
 export function LiveDay() {
   const box = useRef();
-  const on = useInView(box, { margin: '-10% 0px' });
+  const on = useSeen(box, { amount: 0.6 });
   const near = useInView(box, { margin: '600px 0px', once: true });
   const [qr, setQr] = useState('');
   useEffect(() => {
