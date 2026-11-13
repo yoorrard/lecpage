@@ -220,7 +220,7 @@
 
 ### 6-4. P2-2 · P2-4 · 빈 설문 칸
 - **P2-2(휴대폰 차례 한 항목 280px)**: 차례 배치마다 390px에서 잼(sel-story/모든 본문 칸). 좌우 번갈아 433 → **125~185px**(그림을 왼쪽 작은 쪽 그림으로), 벤토 267 → **170~232px**(번호를 왼쪽 작은 단으로), 겹쳐 쌓이는 판 169~229px(앞서 고친 것), 책 차례 145~173px, 필름 띠는 가로로 넘김.
-- **P2-4(글꼴 CDN 외부 요청 7~30개)**: `make`·`build --bundle-fonts`. 빌드 결과의 글꼴 스타일시트(구글·jsDelivr·네이버)와 `theme.css`의 `@font-face`를 받아, **사이트에 쓰인 글자가 든 조각(unicode-range)만** `assets/fonts/`에 담고 `assets/fonts.css`로 바꿔 씀(`engine/src/font-bundle.js`, 브라우저 fetch로도 돌아감). sel-story: 외부 글꼴 4곳 → 사이트 안 파일 37개(1.3MB), 첫 쪽 외부 요청 21 → **0**. 하나라도 못 받으면 반쯤 담긴 사이트를 만들지 않고 CDN 주소 그대로 + 알림. `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
+- **P2-4(글꼴 CDN 외부 요청 7~30개)**: `make`·`build --bundle-fonts`. 빌드 결과의 글꼴 스타일시트(구글·jsDelivr·네이버)와 `theme.css`의 `@font-face`를 받아, **사이트에 쓰인 글자가 든 조각(unicode-range)만** `assets/fonts/`에 담고 `assets/fonts.css`로 바꿔 씀(`engine/src/font-bundle.js`, 브라우저 fetch로도 돌아감). sel-story: 외부 글꼴 4곳 → 사이트 안 파일 37개(1.3MB), 첫 쪽 외부 요청 21 → **0**. 바깥 주소를 모두 막은 브라우저(학교망 흉내)에서 담은 판은 글꼴 4가지(Pretendard·MaruBuri·Fraunces·IBM Plex Mono)가 모두 실림, CDN 판은 0가지(기기 글꼴로 바뀜). 하나라도 못 받으면 반쯤 담긴 사이트를 만들지 않고 CDN 주소 그대로 + 알림. `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
 - **빈 설문 칸 숨기기(렌더)**: 위 6-1 표.
 
 ### 6-5. 게이트·시험
