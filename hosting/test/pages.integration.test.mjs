@@ -153,6 +153,43 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     cf.state.failDeleteLatest = false;
   });
 
+  await t.test('예약·상태 API·긴 대기(학교망 묻기 줄이기)', async () => {
+    const kst = (n) => new Date(Date.now() + 9 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+    const booking = { date: kst(5), start: '10:00', end: '12:00', people: 40, live: true, network: 'restricted' };
+    const s3 = (await call(base, 'POST', '/api/sites', { json: { title: '예약', booking } })).body;
+    const st = await call(base, 'GET', `/api/status?date=${kst(5)}&site=${s3.id}`);
+    assert.equal(st.status, 200); assert.equal(st.headers.get('cache-control'), 'public, max-age=60');
+    assert.equal(st.body.view, 'pages'); assert.equal(st.body.day.trainings, 1); assert.equal(st.body.day.people, 40);
+    assert.equal(st.body.site.state, 'open'); assert.equal(st.body.site.booking.date, kst(5)); assert.ok(st.body.today.date);
+    // 그날이 차면 만들 때 거절(예산 10만의 70%: 300명 학교망 하루 종일이면 넘음)
+    const huge = await call(base, 'POST', '/api/sites', { json: { booking: { ...booking, people: 300, end: '17:00' } } });
+    assert.equal(huge.status, 429); assert.equal(huge.body.error.reason, 'booked');
+    // 다시 올릴 때(deploys) 날짜를 보내면 예약을 바꿈
+    const f2 = await buildSite('sel-story');
+    const d = await call(base, 'POST', `/api/sites/${s3.id}/deploys`, { key: s3.key, json: { files: manifestOf(f2), booking: { ...booking, date: kst(6) } } });
+    assert.equal(d.status, 200);
+    assert.equal((await call(base, 'GET', `/api/status?date=${kst(6)}`)).body.day.trainings, 1);
+    // 긴 대기: 방을 묶고, 바뀐 것이 없으면 기다렸다가 질문이 올라오면 바로 답
+    const CODE = 'LP' + randomBytes(3).toString('hex').toUpperCase();
+    assert.equal((await call(base, 'POST', `/api/sites/${s3.id}/live`, { key: s3.key, json: { code: CODE, adminKeyHash: sha256('teacher-key-' + CODE) } })).status, 200);
+    const origin = new URL(site.url).origin;
+    const lv = `${base}/live/api/${CODE}`;
+    const j = await (await fetch(`${lv}/join`, { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify({ nickname: '봄' }) })).json();
+    const snap = await fetch(`${lv}/snapshot?since=0`, { headers: { origin } });
+    assert.equal(snap.headers.get('x-lec-poll-ms'), '5000'); assert.match(snap.headers.get('access-control-expose-headers'), /X-Lec-Poll-Ms/i);
+    const now = (await snap.json()).now;
+    let t0 = Date.now();
+    const idle = await (await fetch(`${lv}/snapshot?since=${now}&wait=2`, { headers: { origin } })).json();
+    assert.ok(Date.now() - t0 >= 1800, '바뀐 것이 없으면 기다림'); assert.equal(idle.questions.length, 0);
+    t0 = Date.now();
+    const waiting = fetch(`${lv}/snapshot?since=${idle.now}&wait=20`, { headers: { origin } }).then((r) => r.json());
+    await new Promise((r) => setTimeout(r, 500));
+    const q = await fetch(`${lv}/questions`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lec-token': j.token, origin }, body: JSON.stringify({ text: '긴 대기 시험' }) });
+    assert.equal(q.status, 201);
+    const woke = await waiting;
+    assert.ok(Date.now() - t0 < 5000, '글이 올라오면 바로 답'); assert.equal(woke.questions[0].text, '긴 대기 시험');
+  });
+
   await t.test('신고: Pages 주소로도 받음', async () => {
     const s2 = (await call(base, 'POST', '/api/sites', { json: {} })).body;
     const r = await call(base, 'POST', '/api/report', { json: { site: s2.url, reason: '시험 신고' } });

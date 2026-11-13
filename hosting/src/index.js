@@ -190,6 +190,11 @@ async function noticesFor(env, target) {
 function liveJson(status, body, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
 }
+/** 묻기 간격 권고(밀리초). 무료 요금제에서 하루 예산 50%를 넘으면 10초, 80%를 넘으면 20초 */
+function pollHint(cfg, pct = budgetPct) {
+  if (!cfg.dailyRequestBudget) return 5000;
+  return pct >= 80 ? 20000 : pct >= 50 ? 10000 : 5000;
+}
 /** VIEW=pages 사이트(다른 출처)가 방을 부를 때 붙이는 CORS 머리글. 그 밖의 출처에는 붙이지 않음 */
 const LIVE_CORS_BASE = { 'access-control-allow-methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Filename', 'access-control-max-age': '86400', vary: 'Origin' };
 function liveCors(origin, cfg) {
@@ -210,7 +215,10 @@ async function live(request, env, url, cfg) {
     // 방(Durable Object)에는 '/api/<코드>/…' 경로로 넘김. WebSocket 연결(101)도 그대로 돌려줌
     const target = new URL(url);
     target.pathname = t.path;
-    return done(await env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request)));
+    const res = await env.ROOM.get(env.ROOM.idFromName(t.code)).fetch(new Request(target, request));
+    // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
+    if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
+    return done(res);
   } catch (e) {
     if (e instanceof LiveError) return done(liveJson(e.status, { error: e.code, message: e.message }));
     console.error('live error', e?.stack || e);
@@ -275,6 +283,9 @@ async function route(request, env, ctx, url, cfg, self) {
     return quiet;
   }
 
+  // 상태: 앱의 '공개 전 점검'·'연수 전날 점검'. 오늘·그날(date) 남은 몫, 사이트·참여 기능 방 상태. 1분 캐시(브라우저·이 isolate)
+  if (a === 'status' && parts.length === 1 && method === 'GET') return status(env, url, cfg);
+
   if (a === 'sites' && parts.length === 1 && method === 'POST') return createSite(request, env, cfg, self);
 
   if (a === 'sites' && parts.length >= 2) {
@@ -336,6 +347,22 @@ async function route(request, env, ctx, url, cfg, self) {
   throw new HttpError('not_found', '없는 주소예요.');
 }
 
+const statusMem = new Map(); // 쿼리 → { at, body }
+async function status(env, url, cfg) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date') || '') ? url.searchParams.get('date') : '';
+  const site = ID_RE.test(url.searchParams.get('site') || '') ? url.searchParams.get('site') : '';
+  const k = `${date}|${site}`;
+  const hit = statusMem.get(k);
+  let body = hit && Date.now() - hit.at < 30000 ? hit.body : null;
+  if (!body) {
+    const g = await (await ok(await gateStub(env).fetch(`http://gate/day?date=${date}&site=${site}`))).json();
+    body = { ok: true, view: cfg.view, plan: cfg.plan, live: cfg.live, ...g };
+    if (statusMem.size > 500) statusMem.clear();
+    statusMem.set(k, { at: Date.now(), body });
+  }
+  return json(body, 200, { 'cache-control': 'public, max-age=60' });
+}
+
 /** 본문을 max바이트까지만 글자로(넘으면 '') */
 async function smallText(request, max) {
   if (Number(request.headers.get('content-length') || 0) > max || !request.body) return '';
@@ -354,6 +381,7 @@ async function smallText(request, max) {
 
 async function createSite(request, env, cfg, self) {
   const body = await readJson(request, 4096, { optional: true });
+  const booking = body.booking && typeof body.booking === 'object' ? body.booking : null;
   const title = typeof body.title === 'string' ? body.title.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 120) : '';
   const now = Date.now();
   const expires = expiryFrom(now, cfg.days);
@@ -362,7 +390,7 @@ async function createSite(request, env, cfg, self) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = newId(); const key = newKey();
     const url = cfg.pages ? siteUrlOf(cfg.pages, id) : `${self}/s/${id}/`;
-    const reserved = await gate.fetch('http://gate/reserve', post({ ip, id, created: now, expires, title, url }));
+    const reserved = await gate.fetch('http://gate/reserve', post({ ip, id, created: now, expires, title, url, booking }));
     if (reserved.status === 409) continue; // 같은 주소가 이미 있음(거의 없는 일) → 다시 뽑음
     await ok(reserved);
     const made = await siteStub(env, id).fetch('http://site/init', post({ id, keyHash: await sha256Hex(key), title, created: now, expires, view: cfg.pages ? 'pages' : 'worker' }));

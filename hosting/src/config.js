@@ -98,6 +98,8 @@ export function config(env = {}) {
     // 알림: 하루 예산의 ALERT_AT %를 넘을 때, 저장량이 80%를 넘을 때. 비밀 ALERT_WEBHOOK(없으면 REPORT_WEBHOOK)으로 보냄
     alertWebhook: [env.ALERT_WEBHOOK, env.REPORT_WEBHOOK].map((v) => (typeof v === 'string' ? v.trim() : '')).find((v) => /^https:\/\//.test(v)) || '',
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),
+    // 실시간 방 런타임이 긴 대기(?wait=)를 쓰면 on: 예약 어림이 묻기 비용을 그만큼 낮게 셈(capacity.js)
+    longPoll: /^(1|true|yes|on)$/i.test(String(env.POLL_LONG ?? '').trim()),
     // 앱 익명 이용 합계(앱 열기·만들기·공개 횟수, 하루 단위 숫자만). STATS=off면 받지 않음
     stats: !off(env.STATS),
     statsDailyCap: num(env.STATS_DAILY_CAP, DEFAULTS.STATS_DAILY_CAP),

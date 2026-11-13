@@ -191,11 +191,14 @@ export class Site extends DurableObject {
     if (this.deployTimes.length >= this.cfg.deploysPerHour) {
       throw new HttpError('rate_limited', '이 사이트를 너무 자주 올렸어요. 잠시 뒤에 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil((this.deployTimes[0] + HOUR_MS - now) / 1000)) } });
     }
-    const man = checkManifest(await readJson(request, MANIFEST_MAX), this.cfg);
+    const body = await readJson(request, MANIFEST_MAX);
+    const man = checkManifest(body, this.cfg);
     return this.exclusive(async () => {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
       const usage = await this.gate('GET', 'usage');
+      // 연수 날짜·인원(앱이 보냄): 그날이 찼으면 올리기 전에 알림. 다시 올리며 날짜가 바뀌면 예약도 바뀜
+      if (body.booking && typeof body.booking === 'object') await this.gate('POST', 'book', { site: meta.site, booking: body.booking });
       // 운영자가 새 업로드를 멈췄으면 다시 올리기도 받지 않음(이미 공개한 판은 그대로 열림)
       if (usage.paused) throw new HttpError('rate_limited', '운영자가 잠시 새 업로드를 멈췄어요. 이미 올린 사이트는 그대로 열려요. 나중에 다시 하거나 내 계정에 올려 주세요.', { status: 503, headers: { 'retry-after': '3600' } });
       const keep = this.keptBytes(meta, man.files);

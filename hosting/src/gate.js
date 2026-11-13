@@ -4,6 +4,8 @@
 //  - 신고 보관과 처리 상태
 //  - 하루 단위 숫자(요청 수·새 사이트·오류·앱 익명 이용 합계)와 하루 예산 알림
 //  - 운영자 설정(새 업로드 멈춤), 팝업 공지, 감사 기록(관리 화면에서 누가 언제 무엇을)
+//  - 연수 예약: 앱이 공개할 때 보낸 연수 날짜·시간·인원으로 그날 요청을 어림해 쌓아 둠(capacity.js).
+//    그날이 하루 예산에 가까우면 '만들 때' 알려 강사 계정으로 안내하고, 예약된 연수가 있는 날은 새 일을 일찍 멈춰 그 몫을 지킴
 // Worker와 Site·Room만 부릅니다(바깥에서 직접 닿을 수 없음).
 import { DurableObject } from 'cloudflare:workers';
 import { config, DAY_MS, HOUR_MS, NEW_WORK_SHARE } from './config.js';
@@ -11,11 +13,16 @@ import { HttpError, json, readJson } from './http.js';
 import { sha256Hex, ipBucket } from './ids.js';
 import { WORKER_KEYS, APP_KEYS, paidAdvice } from './tally.js';
 import { checkNotice, publicNotice, NOTICE_LIMITS } from './notice.js';
+import { estimate, cleanBooking, BOOK_SHARE } from './capacity.js';
 
 /** 하루 숫자를 남겨 두는 날 수 */
 const DAILY_KEEP = 400;
 const AUDIT_KEEP = 2000;
 export const dayOf = (now) => Math.floor(now / DAY_MS); // UTC 날짜 = 한국 시간 오전 9시에 바뀜(Cloudflare 하루 한도와 같음)
+/** 'YYYY-MM-DD' → '11월 20일' */
+const koDate = (d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
+/** 한국 날짜 'YYYY-MM-DD' */
+export const kstDate = (t) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
 
 export class Gate extends DurableObject {
   constructor(ctx, env) {
@@ -30,6 +37,8 @@ export class Gate extends DurableObject {
       CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, link TEXT NOT NULL DEFAULT '', link_label TEXT NOT NULL DEFAULT '', targets TEXT NOT NULL, starts INTEGER NOT NULL, ends INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, rev INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL, updated INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS audit (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, who TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '');
+      CREATE TABLE IF NOT EXISTS bookings (site TEXT PRIMARY KEY, day INTEGER NOT NULL, at INTEGER NOT NULL, minutes INTEGER NOT NULL, people INTEGER NOT NULL, live INTEGER NOT NULL DEFAULT 0, network TEXT NOT NULL DEFAULT 'good', est INTEGER NOT NULL, created INTEGER NOT NULL) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS bookings_day ON bookings (day);
     `);
     // 이미 돌던 서버의 표에 새 칸을 더함(없을 때만)
     this.addColumn('sites', 'title', "TEXT NOT NULL DEFAULT ''");
@@ -53,6 +62,8 @@ export class Gate extends DurableObject {
         case 'POST site': return json(this.siteUpdate(body));
         case 'POST forget': return json(this.forget(body));
         case 'POST room': return json(this.room(body));
+        case 'POST book': return json(this.book(body));
+        case 'GET day': return json(this.dayStatus(url.searchParams.get('date'), url.searchParams.get('site')));
         case 'GET usage': return json({ ...this.usage(), paused: this.paused() });
         case 'POST tick': return json(this.tick(body));
         case 'GET status': return json(this.status());
@@ -160,11 +171,79 @@ export class Gate extends DurableObject {
   /** 새 사이트·새 방을 받는지. 예산의 60%를 넘으면 받지 않아, 남은 몫을 이미 올라온 사이트의 방문에 씀 */
   accepting(now = Date.now()) {
     const b = this.cfg.dailyRequestBudget;
-    return !this.paused() && (!b || (this.dayData(dayOf(now)).req || 0) < b * NEW_WORK_SHARE);
+    // 오늘 아직 끝나지 않은 예약 연수의 남은 몫만큼 일찍 멈춤
+    return !this.paused() && (!b || (this.dayData(dayOf(now)).req || 0) + this.reservedLeft(now) < b * NEW_WORK_SHARE);
   }
   status() {
     const now = Date.now();
-    return { accepting: this.accepting(now), paused: this.paused(), requests: this.dayData(dayOf(now)).req || 0, budget: this.cfg.dailyRequestBudget };
+    return { accepting: this.accepting(now), paused: this.paused(), requests: this.dayData(dayOf(now)).req || 0, budget: this.cfg.dailyRequestBudget, reserved: this.reservedLeft(now) };
+  }
+
+  // ── 연수 예약 ───────────────────────────────────────────────
+  /** 오늘 예약 중 아직 끝나지 않은 연수가 더 쓸 요청 어림(진행 중이면 남은 시간만큼) */
+  reservedLeft(now = Date.now()) {
+    let left = 0;
+    for (const r of this.sql.exec('SELECT at, minutes, est FROM bookings WHERE day = ?', dayOf(now)).toArray()) {
+      const end = r.at + r.minutes * 60000;
+      if (end <= now) continue;
+      left += r.at >= now ? r.est : r.est * ((end - now) / (end - r.at));
+    }
+    return Math.round(left);
+  }
+  dayBooked(day, except = '') {
+    const r = this.sql.exec('SELECT COUNT(*) AS n, COALESCE(SUM(people), 0) AS people, COALESCE(SUM(est), 0) AS est, COALESCE(SUM(live), 0) AS live FROM bookings WHERE day = ? AND site != ?', day, except).one();
+    return { trainings: r.n, people: r.people, est: r.est, live: r.live };
+  }
+  /**
+   * 사이트의 연수 예약을 적음(다시 올리면 바뀐 날짜·인원으로 갈아 끼움). 그날 예약 어림이 예산의 BOOK_SHARE를 넘으면 받지 않음.
+   * check만 하면(dry) 적지 않음. 예약이 없거나 지난 날짜면 아무것도 하지 않음
+   */
+  book({ site, booking, dry = false }, now = Date.now()) {
+    const b = cleanBooking(booking, now);
+    if (!b || typeof site !== 'string') return { ok: true, booked: false };
+    const day = dayOf(b.at);
+    const est = estimate({ ...b, view: this.cfg.view, longPoll: this.cfg.longPoll });
+    const budget = this.cfg.dailyRequestBudget;
+    const other = this.dayBooked(day, site);
+    const date = kstDate(b.at);
+    if (budget && est > 0 && other.est + est > budget * BOOK_SHARE) {
+      throw new HttpError('rate_limited', `${koDate(date)}은 바로 공개에 예약된 연수가 많아(${other.trainings}개) 그날 참여 기능이 멈출 수 있어요. 이 연수는 내 계정에 올려 주세요.`, { reason: 'booked', day: date, headers: { 'retry-after': '3600' } });
+    }
+    if (!dry) this.sql.exec(`INSERT INTO bookings (site, day, at, minutes, people, live, network, est, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (site) DO UPDATE SET day = excluded.day, at = excluded.at, minutes = excluded.minutes, people = excluded.people, live = excluded.live, network = excluded.network, est = excluded.est`,
+    site, day, b.at, b.minutes, b.people, b.live ? 1 : 0, b.network, est, now);
+    return { ok: true, booked: !dry, day: date, est, dayEst: other.est + est, budget };
+  }
+  /** 상태 API: 오늘과 그날(date)의 남은 몫, 사이트 상태 */
+  dayStatus(date, site) {
+    const now = Date.now(); const budget = this.cfg.dailyRequestBudget; const today = dayOf(now);
+    const used = this.dayData(today).req || 0;
+    const reserved = this.reservedLeft(now);
+    const out = {
+      accepting: this.accepting(now), paused: this.paused(), budget,
+      today: { date: kstDate(now), used, reserved, pct: budget ? Math.round(((used + reserved) / budget) * 100) : 0 },
+    };
+    const at = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? Date.UTC(...date.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0)), 1) : NaN; // 그날 한국 시간 10시
+    if (Number.isFinite(at)) {
+      const d = dayOf(at); const bk = this.dayBooked(d);
+      const room = budget ? Math.max(0, Math.round(budget * BOOK_SHARE) - bk.est) : null;
+      out.day = { date, ...bk, budget, pct: budget ? Math.round((bk.est / budget) * 100) : 0, room, ok: !budget || room > 0 };
+    }
+    if (typeof site === 'string' && /^[0-9a-hjkmnp-tv-z]{10}$/.test(site)) {
+      const r = this.sql.exec('SELECT id, url, expires, blocked, code FROM sites WHERE id = ?', site).toArray()[0];
+      const bk = this.sql.exec('SELECT at, minutes, people, live, est FROM bookings WHERE site = ?', site).toArray()[0];
+      out.site = !r || r.expires < now ? { id: site, state: 'gone' } : { id: site, state: r.blocked ? 'blocked' : 'open', url: r.url || '', expiresAt: r.expires, live: r.code ? { code: r.code, state: r.blocked ? 'blocked' : 'ready' } : null, booking: bk ? { date: kstDate(bk.at), at: bk.at, minutes: bk.minutes, people: bk.people, live: !!bk.live, est: bk.est } : null };
+    }
+    return out;
+  }
+  /** 관리 화면: 앞으로 7일(오늘 포함) 예약표 */
+  upcoming(now = Date.now()) {
+    const today = dayOf(now); const budget = this.cfg.dailyRequestBudget; const out = [];
+    for (let d = today; d < today + 7; d++) {
+      const bk = this.dayBooked(d);
+      out.push({ day: d, date: kstDate(d * DAY_MS + 3600e3), ...bk, pct: budget ? Math.round((bk.est / budget) * 100) : 0, full: !!budget && bk.est >= budget * BOOK_SHARE });
+    }
+    return out;
   }
   busy(now) {
     if (this.paused()) return this.pausedError();
@@ -186,10 +265,11 @@ export class Gate extends DurableObject {
   }
 
   /** 새 사이트 자리 잡기: 횟수·저장량을 보고 목록에 올림 */
-  async reserve({ ip, id, created, expires, title, url }) {
+  async reserve({ ip, id, created, expires, title, url, booking }) {
     const now = Date.now(); const c = this.cfg;
     const w = await this.windows('site', ip, now);
     if (!this.accepting(now)) throw this.busy(now);
+    this.book({ site: id, booking, dry: true }, now); // 그날이 찼으면 만들기 전에 알림
     if (this.count(w.hour.k) >= c.sitesPerHour) throw this.limited(w.hour, now);
     if (this.count(w.day.k) >= c.sitesPerDay) throw this.limited(w.day, now);
     if (this.count(w.all.k) >= c.dailySiteCap) throw new HttpError('rate_limited', '오늘은 바로 공개로 새 사이트를 더 만들 수 없어요. 내일 다시 하거나 다른 공개 방법을 써 주세요.', { headers: { 'retry-after': String(Math.ceil((w.all.exp - now) / 1000)) } });
@@ -198,6 +278,7 @@ export class Gate extends DurableObject {
     this.ctx.storage.transactionSync(() => {
       for (const x of [w.hour, w.day, w.all]) this.bump(x.k, x.exp);
       this.sql.exec('INSERT INTO sites (id, bytes, created, expires, title, url) VALUES (?, 0, ?, ?, ?, ?)', id, created, expires, String(title || '').slice(0, 120), /^https?:\/\/[^\s"<>]{1,300}$/.test(String(url || '')) ? url : '');
+      if (booking) this.book({ site: id, booking }, now);
       this.addDay({ new: 1 }, now);
     });
     await this.ensureAlarm();
@@ -225,7 +306,7 @@ export class Gate extends DurableObject {
     this.addDay({ sa: 1 }, now);
     this.send(`[lecpage 바로 공개] 저장량이 상한의 ${Math.round((total / cap) * 100)}%예요(${(total / 1048576).toFixed(0)}MB / ${(cap / 1048576).toFixed(0)}MB). 다 차면 새 사이트를 받지 않아요. 관리 화면 /admin`);
   }
-  forget({ id }) { this.sql.exec('DELETE FROM sites WHERE id = ?', id); return { ok: true }; }
+  forget({ id }) { this.sql.exec('DELETE FROM sites WHERE id = ?', id); this.sql.exec('DELETE FROM bookings WHERE site = ?', id); return { ok: true }; }
   /** bytes = 사이트 파일 + 실시간 방(참가 기록·보드 파일) */
   usage() {
     const r = this.sql.exec('SELECT COUNT(*) AS sites, COALESCE(SUM(bytes + room_bytes), 0) AS bytes FROM sites').one();
@@ -263,9 +344,9 @@ export class Gate extends DurableObject {
       ? this.sql.exec('SELECT n, at, site, reason, contact, status, handled_at AS handledAt FROM reports WHERE status = ? ORDER BY n DESC', status).toArray()
       : this.sql.exec('SELECT n, at, site, reason, contact, status, handled_at AS handledAt FROM reports ORDER BY n DESC').toArray();
     // 신고된 사이트의 지금 상태(가림·있음)를 같이
-    const state = new Map(this.sql.exec('SELECT id, blocked, expires FROM sites').toArray().map((s) => [s.id, s]));
+    const state = new Map(this.sql.exec('SELECT id, blocked, expires, url FROM sites').toArray().map((s) => [s.id, s]));
     const now = Date.now();
-    return rows.map((r) => { const s = state.get(r.site); return { ...r, siteState: !s || s.expires < now ? 'gone' : s.blocked ? 'blocked' : 'open' }; });
+    return rows.map((r) => { const s = state.get(r.site); return { ...r, siteUrl: s?.url || '', siteState: !s || s.expires < now ? 'gone' : s.blocked ? 'blocked' : 'open' }; });
   }
   reportStatus({ n, status, who }) {
     if (!Number.isSafeInteger(n) || !['open', 'done'].includes(status)) throw new HttpError('bad_request', '신고 번호와 상태(open·done)를 보내 주세요.');
@@ -306,8 +387,9 @@ export class Gate extends DurableObject {
       reports: { open },
       notices: { active: this.activeNotices(null).length },
       limits: { dailySiteCap: c.dailySiteCap, dailyRoomCap: c.dailyRoomCap, siteDays: c.days },
+      view: c.view, viewProblem: c.viewProblem || '', bookShare: BOOK_SHARE, reserved: this.reservedLeft(now), upcoming: this.upcoming(now),
       stats: c.stats,
-      advice: paidAdvice(days, budget),
+      advice: paidAdvice(days, budget, { view: c.view }),
       alerts: { webhook: !!c.alertWebhook, at: c.alertAt },
     };
   }
@@ -378,6 +460,7 @@ export class Gate extends DurableObject {
     this.sql.exec('DELETE FROM reports WHERE at < ?', now - this.cfg.reportDays * DAY_MS);
     this.sql.exec('DELETE FROM daily WHERE day < ?', dayOf(now) - DAILY_KEEP);
     this.sql.exec('DELETE FROM notices WHERE ends < ?', now - 90 * DAY_MS);
+    this.sql.exec('DELETE FROM bookings WHERE day < ?', dayOf(now) - 1);
     await this.ctx.storage.setAlarm(now + DAY_MS);
   }
 }

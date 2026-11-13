@@ -5,6 +5,9 @@
 //   - 사이트가 가려지면 방도 가려지고, 사이트가 지워지거나 공개 기간이 끝나면 방과 올린 파일도 지워짐
 //   - R2가 없으면 올린 파일을 이 방의 SQLite에 담음(src/live/bucket.js)
 //   - 방이 쓰는 저장량을 Gate에 알려 전체 한도에 넣음
+//   - 긴 대기(long-poll): GET snapshot?since=<커서>&wait=<초>면 바뀐 것이 없을 때 바뀔 때까지(최대 25초) 기다렸다 답함.
+//     실시간 연결이 막힌 학교망의 묻기 요청 수를 줄임(5초마다 → 바뀔 때나 20초마다). 기다리는 동안 이 방은 깨어 있어
+//     Durable Object 시간 과금(무료 하루 13,000 GB-s)을 씀: 방 하나가 2시간 내내 기다리면 약 900 GB-s → README 수용량 표
 import { LiveRoom, Guard } from '../../skills/lecpage/backends/cloudflare/src/index.js';
 import { config } from './config.js';
 import { HttpError, json, readJson } from './http.js';
@@ -15,6 +18,17 @@ export { Guard };
 
 const DAY = 864e5;
 const MB = 1024 * 1024;
+/** 긴 대기: 한 번에 최대 25초(앱의 요청 제한 시간보다 짧게), 방 하나에 동시에 600개까지(넘으면 바로 답) */
+export const MAX_WAIT_S = 25;
+const MAX_WAITERS = 600;
+/** snapshot 응답에 since 뒤로 바뀐 것이 있는지(글·지운 것·진행 상태) */
+export function snapshotChanged(body, since) {
+  if (!body || typeof body !== 'object') return true;
+  if (body.full || (Array.isArray(body.removed) && body.removed.length)) return true;
+  if (body.state && Number(body.state.updatedAt) > since) return true;
+  for (const [k, v] of Object.entries(body)) if (k !== 'removed' && Array.isArray(v) && v.length) return true;
+  return false;
+}
 
 /** 실시간 규칙의 오류 모양({ error, message }) */
 function liveError(status, error, message) {
@@ -35,6 +49,7 @@ export class Room extends LiveRoom {
     this.hostToken = setupToken;
     this.hostBind = new HostBind(ctx.storage.sql);
     this.hostFull = false; // 전체 저장 공간이 찼으면 파일을 더 받지 않음
+    this.waiters = new Set(); // 긴 대기 중인 묻기
   }
 
   async core() {
@@ -50,8 +65,36 @@ export class Room extends LiveRoom {
     if (!b) return liveError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '공개 기간이 끝난 연수예요.');
+    const wait = this.waitMs(request, url);
+    if (wait) return this.longPoll(request, wait);
     return super.fetch(request);
   }
+
+  // ── 긴 대기(long-poll) ───────────────────────────────────────
+  waitMs(request, url) {
+    if (request.method !== 'GET' || !/\/snapshot$/.test(url.pathname)) return 0;
+    const since = Number(url.searchParams.get('since')) || 0; const w = Number(url.searchParams.get('wait')) || 0;
+    if (since <= 0 || w <= 0 || this.waiters.size >= MAX_WAITERS) return 0;
+    return Math.min(MAX_WAIT_S, w) * 1000;
+  }
+  async longPoll(request, wait) {
+    const first = await super.fetch(request);
+    if (first.status !== 200) return first;
+    const since = Number(new URL(request.url).searchParams.get('since')) || 0;
+    let changed = true;
+    try { changed = snapshotChanged(await first.clone().json(), since); } catch { /* 그대로 답 */ }
+    if (changed) return first;
+    await new Promise((res) => {
+      const w = { res, t: setTimeout(() => { this.waiters.delete(w); res(); }, wait) };
+      this.waiters.add(w);
+    });
+    const b = this.hostBind.get();
+    if (!b) return liveError(404, 'unknown_training', '공개 기간이 끝난 연수예요.');
+    if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
+    return super.fetch(new Request(request.url, { method: 'GET', headers: request.headers }));
+  }
+  wake() { for (const w of this.waiters) { clearTimeout(w.t); w.res(); } this.waiters.clear(); }
+  broadcast(events) { super.broadcast(events); this.wake(); }
 
   // ── 호스트 안에서만 부르는 일(Site → Room) ───────────────────
   async hostOp(request, op) {
@@ -102,6 +145,7 @@ export class Room extends LiveRoom {
   }
 
   hangUp(code, reason) {
+    this.wake();
     for (const ws of this.ctx.getWebSockets()) { try { ws.close(code, reason); } catch { /* 이미 닫힘 */ } }
     for (const x of this.sse) { try { x.w.close().catch(() => { }); } catch { /* 이미 닫힘 */ } }
     this.sse.clear();

@@ -117,7 +117,7 @@
     var tiles = clear($('[data-tiles]'));
     var rp = pct(t.req, o.budget);
     tiles.appendChild(tile('오늘 요청', n(t.req), o.budget ? '하루 예산 ' + n(o.budget) + '의 ' + rp + '% · ' + stop + '%에서 새 업로드 멈춤' : '하루 예산 없음(유료)', o.budget ? { value: rp, mark: stop, hot: rp >= stop, label: '하루 예산의 ' + rp + '%' } : null));
-    tiles.appendChild(tile('사이트 파일 요청', n(t.site), '데이터센터 캐시에서 ' + n(t.edge) + '건'));
+    tiles.appendChild(tile('사이트 파일 요청', n(t.site), o.view === 'pages' ? 'Pages로 내보내 세지 않아요(여기는 영상·두 번째 주소만)' : '데이터센터 캐시에서 ' + n(t.edge) + '건'));
     tiles.appendChild(tile('참여 기능 요청', n(t.live), '실시간 방(질문·보드·투표)'));
     tiles.appendChild(tile('API 요청', n(t.api), '올리기·공지·이용 합계 등'));
     tiles.appendChild(tile('새 사이트', n(t.new), '공개 ' + n(t.pub) + '번 · 하루 상한 ' + n(o.limits && o.limits.dailySiteCap)));
@@ -128,11 +128,13 @@
     var st = o.sites || {};
     var sp = pct(st.bytes, st.maxBytes);
     var siteTiles = clear($('[data-site-tiles]'));
-    siteTiles.appendChild(tile('살아 있는 사이트', n(st.alive), '공개한 것 ' + n(st.published) + '개 · 기간 ' + ((o.limits && o.limits.siteDays) || 30) + '일(방문이 있으면 다시 채움)'));
+    siteTiles.appendChild(tile('살아 있는 사이트', n(st.alive), '공개한 것 ' + n(st.published) + '개 · 기간 ' + ((o.limits && o.limits.siteDays) || 30) + (o.view === 'pages' ? '일(마지막으로 올린 날부터, Pages)' : '일(방문이 있으면 다시 채움)')));
     siteTiles.appendChild(tile('가린 사이트', n(st.blocked), '신고로 임시조치 중'));
     siteTiles.appendChild(tile('참여 기능 방', n(st.rooms), '30일 참여 요청 ' + n(o.month && o.month.live)));
     siteTiles.appendChild(tile('저장량', bytes(st.bytes), '상한 ' + bytes(st.maxBytes) + '의 ' + sp + '% · 사이트 ' + bytes(st.siteBytes) + ' + 방 ' + bytes(st.roomBytes), { value: sp, mark: 80, hot: sp >= 80, label: '저장 상한의 ' + sp + '%' }));
 
+    if (o.viewProblem) flash(o.viewProblem, true);
+    renderBookings(o);
     renderChart(o);
     renderDaysTable(o);
     renderUsage(o);
@@ -219,7 +221,21 @@
   });
 
   // ── 사이트 ─────────────────────────────────────────────
-  function siteLink(id) { return h('a', { href: '/s/' + encodeURIComponent(id) + '/', target: '_blank', rel: 'noopener noreferrer', class: 'mono', text: id }); }
+  function renderBookings(o) {
+    var t = clear($('[data-bookings-table]'));
+    var list = o.upcoming || [];
+    t.appendChild(h('thead', null, h('tr', null, ['날짜', '연수', '참가자', '참여 기능', '요청 어림', '예산 %', ''].map(function (x, i) { return h('th', { class: i && i < 6 ? 'num' : '', scope: 'col', text: x }); }))));
+    var tb = h('tbody');
+    list.forEach(function (d, i) {
+      tb.appendChild(h('tr', null,
+        h('td', { text: Number(d.date.slice(5, 7)) + '월 ' + Number(d.date.slice(8, 10)) + '일' + (i === 0 ? ' (오늘)' : '') }),
+        h('td', { class: 'num', text: n(d.trainings) }), h('td', { class: 'num', text: n(d.people) }), h('td', { class: 'num', text: n(d.live) }),
+        h('td', { class: 'num', text: n(d.est) }), h('td', { class: 'num', text: o.budget ? d.pct + '%' : '—' }),
+        h('td', null, d.full ? h('span', { class: 'badge bad', text: '꽉 참' }) : d.pct >= 50 ? h('span', { class: 'badge', text: '많음' }) : null)));
+    });
+    t.appendChild(tb);
+  }
+  function siteLink(id, url) { return h('a', { href: /^https?:\/\//.test(url || '') ? url : '/s/' + encodeURIComponent(id) + '/', target: '_blank', rel: 'noopener noreferrer', class: 'mono', text: id }); }
   function blockSite(id, blocked) {
     var go = blocked
       ? ask({ title: '사이트 ' + id + '를 가릴까요?', text: '확인하는 동안 사이트와 딸린 실시간 방이 닫혀요(451 안내 화면). 가린 날부터 30일 안에 풀거나 지워 주세요.', input: { label: '까닭(올린 사람이 볼 수 없음, 감사 기록에 남음)', placeholder: '저작권 신고 확인 중' }, ok: '가리기', danger: true })
@@ -245,7 +261,7 @@
       var tb = h('tbody');
       list.slice(0, 300).forEach(function (x) {
         tb.appendChild(h('tr', null,
-          h('td', null, siteLink(x.id)),
+          h('td', null, siteLink(x.id, x.url)),
           h('td', { text: x.title || '(제목 없음)' }),
           h('td', { class: 'num', text: bytes(x.bytes + x.roomBytes) }),
           h('td', { class: 'mono', text: x.liveCode || '—' }),
@@ -275,7 +291,7 @@
         var stateText = { gone: '사이트 없음', blocked: '가림', open: '열려 있음' }[r.siteState] || '';
         wrap.appendChild(h('article', { class: 'card report' },
           h('div', { class: 'head' },
-            h('div', null, h('b', { text: '#' + r.n + ' ' }), siteLink(r.site), ' ', h('span', { class: 'badge ' + (r.siteState === 'blocked' ? 'bad' : ''), text: stateText }), ' ', h('span', { class: 'badge ' + (r.status === 'done' ? 'good' : 'warn'), text: r.status === 'done' ? '처리함' : '대기' })),
+            h('div', null, h('b', { text: '#' + r.n + ' ' }), siteLink(r.site, r.siteUrl), ' ', h('span', { class: 'badge ' + (r.siteState === 'blocked' ? 'bad' : ''), text: stateText }), ' ', h('span', { class: 'badge ' + (r.status === 'done' ? 'good' : 'warn'), text: r.status === 'done' ? '처리함' : '대기' })),
             h('span', { class: 'muted small', text: when(r.at) + ' 받음' + (r.handledAt ? ' · ' + when(r.handledAt) + ' 처리' : '') })),
           h('p', { class: 'reason', text: r.reason }),
           h('p', { class: 'muted small', text: '연락처: ' + (r.contact || '없음') }),
