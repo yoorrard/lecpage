@@ -57,15 +57,18 @@ function initSql(code, hash, bp) {
   return `select lec_private.init_training_hash('${code}', '${hash}', '${JSON.stringify(settings)}');`;
 }
 
-export function LiveSetup({ p, update }) {
+/** prefer: 바로 배포 서버가 참여 기능을 넘기며 준 순서(liveNext: ['cloudflare', 'supabase']). 주면 그 순서로 권함 */
+export function LiveSetup({ p, update, prefer = null }) {
   const bp = p.blueprint; const live = bp.live || {}; const info = p.info;
   const code = E.validate(bp).blueprint.live.code;
   const reco = E.decideInfra({ size: info.size, features: info.features, skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
   // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).
   // 엔진의 클릭용 규칙(시트)은 skill 초안의 기본값이라 그대로 두고, 앱 화면에서만 내 서버(Cloudflare)를 첫째로
-  const appFirst = ['sheets', 'supabase'].includes(reco.backend);
-  const recoMethod = appFirst ? 'http' : METHOD_OF[reco.backend] || 'sheets';
+  const pref = [...new Set((prefer || []).map((x) => METHOD_OF[x]).filter((m) => m && m !== 'sheets'))];
+  const appFirst = ['sheets', 'supabase'].includes(reco.backend) || pref[0] === 'http';
+  const recoMethod = pref[0] || (appFirst ? 'http' : METHOD_OF[reco.backend] || 'sheets');
+  const order = [...new Set([...pref, ...(recoMethod === 'http' ? ['http', 'sheets', 'supabase'] : ['sheets', 'supabase', 'http'])])];
   const [method, setMethod] = useState(connected ? live.provider : recoMethod);
   const [newKey] = useState(() => randomKey(20)); // ADMIN_KEY 칸·시트 메뉴에 넣을 관리자 키(앱이 만듦)
   const usedKey = useRef(false); // 이번에 만든 키를 복사해 바깥에 넣었음 → 연결되면 그 주소의 관리자 키로 기억
@@ -180,7 +183,7 @@ export function LiveSetup({ p, update }) {
       )}
       {connected && state.msg && !state.ok && <Notice kind="bad">{state.msg}</Notice>}
       {!connected && <>
-        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={recoMethod === 'http' ? [{ value: 'http', label: '내 서버·Cloudflare' }, { value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }] : [{ value: 'sheets', label: '구글 시트' }, { value: 'supabase', label: 'Supabase' }, { value: 'http', label: '내 서버·Cloudflare' }]} />
+        <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={order.map((v) => ({ value: v, label: NAME[v] }))} />
         {B?.atLimit_ko && <p class="small muted">{B.atLimit_ko}</p>}
         <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
         <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={useLocal}>이 컴퓨터에서만 시험하기</button></div>

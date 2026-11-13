@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantGate, instantShare, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
@@ -24,6 +24,22 @@ const ABOUT = {
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');
+const sameUrl = (a, b) => String(a || '').replace(/^https?:\/\//, '').replace(/\/+$/, '') === String(b || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+// 바로 배포 서버가 넘길 곳(next)의 이름 → 앱의 배포할 곳. 참여 기능(liveNext)은 Cloudflare(무료)·Supabase
+const NEXT_ID = { cloudflare: 'cloudflare', vercel: 'vercel', github: 'github-pages', netlify: 'netlify' };
+const LIVE_NEXT = { cloudflare: 'Cloudflare(무료)', supabase: 'Supabase' };
+export const liveNames = (next) => (next || []).map((n) => LIVE_NEXT[n]).filter(Boolean).join('나 ') || LIVE_NEXT.cloudflare;
+/**
+ * 바로 배포의 참여 기능 방이 차서 참여 기능만 강사 계정으로 넘긴 기록. { reason, day, next, at } 또는 null.
+ * 그날 방이 참(booked)은 연수 날짜가 같은 동안, 오늘 붐빔(방 상한 등)은 오늘(한국 오전 9시까지)만
+ */
+export const lecLiveOff = (p) => {
+  const o = p?.deploy?.lecpage?.liveOff;
+  if (!o || o.day !== (p.blueprint?.meta?.date || '')) return null;
+  return o.reason === 'booked' || Math.floor((o.at || 0) / 864e5) === Math.floor(Date.now() / 864e5) ? o : null;
+};
+/** 바로 배포가 참여 기능 방을 맡지 못할 때 한 줄: 사이트는 바로 배포 그대로, 참여 기능만 강사 계정으로(liveNext 순서) */
+export const liveOffLine = (o) => `${o.reason === 'booked' ? '그날은' : '오늘은'} 바로 배포의 참여 기능 방이 다 찼어요. 사이트는 바로 배포 그대로 두고, 참여 기능만 내 ${liveNames(o.next)}로 연결해 주세요.`;
 
 /** 배포할 곳의 토큰(이 탭 또는 '기억하기'를 켠 기기에만). 한 번 연결해 두면 다음부터는 버튼 하나 */
 export function useToken(kind) {
@@ -161,20 +177,27 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
 export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, onTarget }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
-  const [instantOff, setInstantOff] = useState(''); // 바로 배포를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
+  const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
+  const [share] = useState(() => instantShare()); // 이 기기의 오늘 남은 새 사이트 몫(모르면 null)
   // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
   useEffect(() => { connectedTargets().then(setConnected); instantInfo().then((i) => setInstant(i || (PUBLISH_API ? false : null))); }, []);
   const [netBad, setNetBad] = useState({}); // 이 망에서 API에 닿지 않는 배포할 곳(토큰으로 배포하는 곳만 확인)
   const [moved, setMoved] = useState(''); // 막혀서 다른 곳으로 바꾼 사실 한 줄
   const forced = useRef(new Set()); // 막혔다고 알린 뒤에도 강사가 다시 고른 곳(다시 바꾸지 않음)
-  const live = instant && instant.accepting !== false && !instantOff ? instant : null;
-  // 운영자가 새 업로드를 잠시 멈췄으면(paused) 그대로, 아니면 하루 한도 때문에 멈춘 것
-  const full = instantOff || (instant && instant.accepting === false ? (instant.paused ? '바로 배포가 잠시 새 사이트를 받지 않아요. 다른 곳에 배포해 주세요.' : '오늘은 바로 배포에 방문이 많아 새 사이트를 받지 않아요.') : '');
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view]);
+  // 붐빔 단계(서버의 capacity): 이미 배포한 사이트는 붐벼도 다시 배포가 되고, 새 사이트만 내 계정으로 넘김. 평소에는 아무 줄도 없음
+  const lec = p.deploy?.lecpage;
+  const hasSite = !!(lec?.id && lec.expiresAt && (instant?.keepAlive !== false || lec.expiresAt > Date.now()));
+  const gate = instant ? instantGate(instant, { hasSite, date: p.blueprint?.meta?.date || '', start: p.blueprint?.meta?.start || '', share }) : null;
+  const live = gate?.ok && !instantOff ? instant : null;
+  const full = instantOff?.t || (instant && !gate.ok ? gate.note : '');
+  // 넘길 때는 서버가 준 순서(next)로. 이미 연결해 둔 곳이 있으면 그곳이 먼저(같은 파일을 버튼 하나로)
+  const nextHosts = live ? [] : (instantOff?.next?.length ? instantOff.next : instant?.capacity?.next || []).map((h) => NEXT_ID[h]).filter(Boolean);
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view, !!instantOff]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 배포가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 배포한 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
-  const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
+  const nextFirst = nextHosts.length ? [...rec.hosts.filter((h) => connected.includes(h)), ...nextHosts] : [];
+  const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...nextFirst.filter((h) => usable.includes(h)), ...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
   const best = order.find((h) => !netBad[h]) || order[0];
   const [picked, setPicked] = useState('');
   const [more, setMore] = useState(false); // 다른 곳에 배포하기(배포할 곳 목록 펼치기)
@@ -194,14 +217,18 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
     });
     return () => { off = true; };
   }, [target]);
-  /** 한 곳에 배포하기: 사이트 만들기 → 그곳의 한도 확인 → 배포하기. up(files)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음 */
+  /**
+   * 한 곳에 배포하기: 사이트 만들기 → 그곳의 한도 확인 → 배포하기. up(files, setProg, rebuild)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음.
+   * rebuild(o): auto(바로 배포의 참여 기능)를 빼고 다시 만든 파일(그날 참여 기능 방이 차서 강사 계정으로 넘길 때)
+   */
   const start = (id, up, onFail, auto = null) => guard(async (opts = {}) => {
     setBusy(id); setProg({ step: '사이트 만드는 중', pct: 1 });
     try {
-      const r = await buildFiles({ ...opts, ...(auto || {}), target: id, view: live?.view || '' });
+      const view = live?.view || '';
+      const r = await buildFiles({ ...opts, ...(auto || {}), target: id, view });
       const chk = E.checkHost(id, siteStat(r.files));
       if (!chk.ok) throw new Error(chk.errors[0]);
-      await up(r.files, setProg);
+      await up(r.files, setProg, async (o = {}) => (await buildFiles({ ...opts, ...o, target: id, view })).files);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { if (!onFail?.(e)) toast('배포하지 못했어요. ' + e.message); }
     setBusy(''); setProg(null);
@@ -240,11 +267,11 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
         </dl>}
       </div>
-      {full && <p class="small" role="status">{full} 내 계정에 배포하면 바로 돼요.</p>}
+      {full && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
-      {target === 'lecpage' && <Instant {...ctx} info={instant} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
       {target === 'netlify' && <Netlify {...ctx} />}
@@ -255,15 +282,19 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 }
 
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, bind, info, onUnavailable }) {
+function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
   const bp = p.blueprint;
   const liveOn = (bp.live?.features || []).length > 0;
-  const autoLive = liveOn && !!info?.live?.url; // 참여 기능을 이 서버가 맡음
+  const lecUrl = info?.live?.url || '';
+  // 강사가 따로 연결한 참여 기능 서버(이 바로 배포 서버가 아닌 것)
+  const own = ['sheets', 'supabase', 'http'].includes(bp.live?.provider) && !!bp.live?.url && !!p.liveOk && !sameUrl(bp.live.url, lecUrl);
+  const liveOff = lecLiveOff(p); // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있음 → 강사가 연결한 서버가 있으면 그것으로
+  const autoLive = liveOn && !!lecUrl && !(liveOff && own); // 참여 기능을 이 서버가 맡음(방이 차면 서버가 알려 주고 뺌)
   // newCode: 연수 코드가 다른 사이트와 겹쳤을 때 새로 정한 코드(사이트를 그 코드로 다시 만들어 올림)
-  const run = (newCode = '') => start('lecpage', async (files, onProgress) => {
+  const run = (newCode = '') => start('lecpage', async (files, onProgress, rebuild) => {
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
@@ -272,30 +303,40 @@ function Instant({ p, busy, start, done, bind, info, onUnavailable }) {
     // 연수 날짜·인원: 서버가 그날 몫을 미리 셈(차면 지금 알려 줌)
     const m = bp.meta || {};
     const booking = m.date ? { date: m.date, start: m.start || '', end: m.end || '', people: p.info?.size || 30, network: p.info?.network || 'good', live: autoLive } : null;
-    const out = await deployInstant({ site: prev, title: p.title, files, live, booking, onProgress });
-    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(autoLive ? { adminKey } : {}) } },
-      autoLive ? { live: { provider: 'http', url: out.liveUrl || info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true } : null);
-    toast(prev?.id === out.id ? '같은 주소에 다시 배포했어요.' : '배포했어요.');
+    // 그날 참여 기능 방이 차면 사이트는 그대로 배포: 강사가 연결한 서버가 있으면 그것으로, 없으면 참여 기능을 뺀 사이트로(연결한 뒤 다시 배포)
+    const out = await deployInstant({ site: prev, title: p.title, files, live, booking, onProgress, onLiveOff: () => rebuild(own ? {} : { liveOff: true }) });
+    const lecLive = autoLive && !out.liveOff;
+    const off = out.liveOff ? { ...out.liveOff, at: Date.now() } : !lecLive && liveOff && own ? liveOff : null; // 연결한 서버로 넘긴 동안은 그대로 기억
+    const wasLec = bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl);
+    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(lecLive ? { adminKey } : {}),
+      ...(off ? { liveOff: off } : {}), ...(out.advice || (prev?.longTerm && prev.id === out.id) ? { longTerm: true } : {}) } },
+    lecLive ? { live: { provider: 'http', url: out.liveUrl || lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true }
+      : out.liveOff && wasLec ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null);
+    toast(out.liveOff && !own ? '배포했어요. 참여 기능은 따로 연결해 주세요.' : prev?.id === out.id ? '같은 주소에 다시 배포했어요.' : '배포했어요.');
   }, (e) => {
     if (e.code === 'code_taken' && !newCode) { setTimeout(() => run(E.randomCode()), 0); return true; }
-    // 자리가 찼거나(무료 한도 안에서만 받음) 서버에 닿지 않으면 내 계정에 배포하는 길로 넘김
-    if (e.code === 'full' || e.code === 'rate_limited' || e.status === 0 || e.status >= 500) {
-      onUnavailable?.(e.reason === 'booked' ? e.message : e.code === 'full' || e.code === 'rate_limited' ? '오늘은 바로 배포 자리가 찼어요.' : '바로 배포 서버에 지금 닿지 않아요.');
-      return true;
-    }
+    // 붐빔(서버가 까닭을 줌: 오늘 모두 / 이 기기·이 인터넷만)·저장 공간이 참: 서버 문구 그대로 두고 내 계정에 배포하는 길로(넘길 곳은 서버가 준 순서).
+    // 줄 서기(pages_api)는 deployInstant가 이미 기다렸다가 다시 했음. 까닭 없는 rate_limited(이 사이트를 너무 자주 올림)는 알림만
+    if ((e.reason && e.reason !== 'pages_api') || e.code === 'full') { onUnavailable?.({ t: e.message, next: e.next }); return true; }
+    if (e.status === 0 || e.status >= 500) { onUnavailable?.({ t: '바로 배포 서버에 지금 닿지 않아요.' }); return true; }
     return false;
   },
-  autoLive ? { live: { provider: 'http', url: info.live.url, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형·'삭제' 그대로) */ purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
+  autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: info.report || '', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형·'삭제' 그대로) */ purpose: '사이트와 참여 기록 저장. 공개 기간이 끝나면 삭제' } } : null);
   bind(() => run());
   async function remove() {
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
     catch (e) { toast('내리지 못했어요. ' + e.message); }
   }
+  const days = info?.capacity?.siteDays || info?.limits?.days || 30;
   return (
     <div class="stack">
-      {autoLive && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
+      {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
+      {liveOn && liveOff && !own && <p class="small" role="status">{liveOffLine(liveOff)}</p>}
+      {autoLive && !liveOff && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
+      {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
+      {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
       {alive && prev.adminKey && <p class="small">강사 화면 관리자 키 <b class="mono">{prev.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(prev.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>}
     </div>
   );

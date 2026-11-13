@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { QR } from './QR.jsx';
 import { instantStatus, PUBLISH_API } from '../lib/deploy.js';
+import { liveNames } from './Publish.jsx';
 import { venueIcs, checkUrlOf, dayBefore, kitHtml, printHtml } from '../lib/venue.js';
 import { saveFile, safeName, copy, toast } from '../lib/util.js';
 
@@ -36,6 +37,9 @@ export function VenueBody({ p, url, instantOn }) {
   const [st, again] = useDayStatus({ on: instantOn, date: m.date || '', site });
   const line = dayLine(st, m.date);
   const siteGone = st?.site?.state === 'gone' ? '보관 기간이 끝나 사이트가 지워졌어요. 다시 배포해 주세요.' : st?.site?.state === 'blocked' ? '사이트가 가려져 있어요. 운영자에게 문의해 주세요.' : '';
+  // 그날 바로 배포의 참여 기능 방이 차서 참여 기능만 넘긴 연수: 강사 계정에 연결하고 다시 배포해야 참가자끼리 이어짐
+  const bk = st?.site?.state === 'open' ? st.site.booking : null;
+  const liveDenied = bk?.liveDenied ? `${md(bk.date) || '그날'}은 바로 배포의 참여 기능 방이 다 찼어요. 참여 기능을 내 ${liveNames(bk.liveNext)}로 연결하고 다시 배포해 주세요.` : '';
   const ics = () => {
     const t = venueIcs({ title: m.title, date: m.date, siteUrl: url, altUrl: p.deploy?.lecpage?.altUrl || p.deploy?.second || '', venue: m.venue || '' });
     saveFile(safeName(m.title) + '_전날점검.ics', t, 'text/calendar;charset=utf-8'); toast('달력 일정을 내려받았어요. 열면 달력 앱에 들어가요.');
@@ -44,6 +48,7 @@ export function VenueBody({ p, url, instantOn }) {
     <div class="stack venue">
       {line && <p class={`small venue-day is-${line.k}`} role="status">{line.t} {instantOn && <button type="button" class="btn btn-sm btn-quiet" onClick={again}>다시 확인</button>}</p>}
       {siteGone && <p class="small err" role="alert">{siteGone}</p>}
+      {liveDenied && <p class="small venue-day is-full" role="alert">{liveDenied}</p>}
       {!url ? <p class="small">배포하면 접속 확인 주소와 QR이 나와요. 연수 전날, 연수 장소의 Wi-Fi로 열어 막힌 곳이 없는지 확인해요.</p> : <>
         <div class="venue-row">
           <div class="stack" style={{ gap: '6px' }}>

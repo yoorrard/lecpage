@@ -5,6 +5,16 @@ export const uid = (n = 10) => {
 };
 export const fmtBytes = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + 'GB' : n > 1e6 ? (n / 1e6).toFixed(1) + 'MB' : n > 1e3 ? Math.round(n / 1e3) + 'KB' : n + 'B');
 export const fmtDate = (t) => (t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+/** 시각(밀리초) → 한국 시각을 사람이 읽기 쉽게: '오늘 오전 9시', '내일 오전 9시', '11월 14일 오후 3시 5분'. 분은 올림. day: false면 날은 뺌 */
+export function koTime(t, { now = Date.now(), day = true } = {}) {
+  const k = (x) => new Date(Math.ceil(x / 60000) * 60000 + 9 * 3600e3); // UTC 값으로 한국 시각을 읽음(기기 시간대와 상관없이)
+  const d = k(t); const n = k(now);
+  const h = d.getUTCHours(); const m = d.getUTCMinutes();
+  const time = `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${m ? ` ${m}분` : ''}`;
+  if (!day) return time;
+  const gap = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())) / 864e5);
+  return `${gap === 0 ? '오늘' : gap === 1 ? '내일' : `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`} ${time}`;
+}
 /** 마지막 부름만 ms 뒤에 실행. .flush()는 기다리는 것을 바로 실행(탭을 닫거나 화면을 떠날 때) */
 export function debounce(fn, ms) {
   let t = 0; let last = null;
