@@ -56,7 +56,8 @@ export function SayDemo() {
             {f ? <><p class="ld-say-what"><small>고친 곳</small><b>{f.title}</b></p><p class="ld-say-why">{f.why}</p></>
               : <p class="ld-say-why">앱에서는 느낌을 직접 적어도 돼요. 고칠 곳을 두세 가지 찾아 ‘지금’과 ‘바꾸면’을 나란히 보여 줘요.</p>}
           </div>
-          {cur >= 0 && <button type="button" class="btn btn-sm btn-quiet ld-say-reset" onClick={() => pick(-1)}>처음 모습 보기</button>}
+          {/* 자리는 늘 잡아 둠(고르기 전에는 숨김): 결과가 나와도 그림이 밀리지 않게 */}
+          <button type="button" class="btn btn-sm btn-quiet ld-say-reset" style={cur < 0 ? { visibility: 'hidden' } : undefined} onClick={() => pick(-1)}>처음 모습 보기</button>
         </div>
         <figure class="ld-frame ld-say-frame">
           <i class="ld-bar"><b /><b /><b /><span>데이터로 읽는 우리 반</span><em>{f ? '바꾼 모습' : '지금'}</em></i>

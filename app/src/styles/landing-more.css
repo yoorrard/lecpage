@@ -296,7 +296,7 @@
 .ld-say-chip{min-height:40px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-size:.95rem;font-weight:600;cursor:pointer;text-align:left;transition:border-color .15s,background .15s,color .15s}
 .ld-say-chip:hover{border-color:var(--line-strong)}
 .ld-say-chip[aria-pressed="true"]{border-color:var(--accent);background:var(--lav-soft);color:var(--lav-ink);box-shadow:inset 0 0 0 1px var(--accent)}
-.ld-say-out{display:grid;gap:4px;min-height:5.4em}
+.ld-say-out{display:grid;align-content:start;gap:4px;min-height:7.6rem} /* 고친 곳 이름(두 줄까지)과 까닭(두 줄)이 들어가는 자리 */
 .ld-say-what{display:grid;gap:2px}
 .ld-say-what small{font-size:.8rem;font-weight:700;color:var(--lav-deep)}
 .ld-say-what b{font-size:1.12rem;letter-spacing:-.015em}
@@ -427,7 +427,7 @@
 .ld-days-list ul li::before{content:"";position:absolute;left:0;top:.72em;width:5px;height:5px;border-radius:50%;background:var(--line-strong)}
 @supports (animation-timeline: view()){
   @media (prefers-reduced-motion:no-preference){
-    .ld-days-list::before{animation:ld-rail linear both;animation-timeline:--ld-days;animation-range:cover 12% cover 50%}
+    .ld-days-list::before{animation:ld-rail linear both;animation-timeline:--ld-days;animation-range:cover 8% cover 42%}
     .ld-days-line{animation:ld-draw linear both;animation-timeline:view();animation-range:cover 8% cover 42%}
     .ld-hub-line{animation:ld-draw linear both;animation-timeline:view();animation-range:cover 12% cover 40%}
   }
