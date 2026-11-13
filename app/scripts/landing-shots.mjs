@@ -72,7 +72,7 @@ async function save(name, png, { q = 0.76, w = 0 } = {}) {
   console.log(`${name}.webp ${W}×${H} ${Math.round(buf.length / 1024)}KB`);
 }
 async function shoot(dir, { width = 1280, height = 800, dpr = 1, full = 0, wait = 2600 } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, locale: 'ko-KR', colorScheme: 'light', reducedMotion: 'no-preference' });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, locale: 'ko-KR', colorScheme: 'light', reducedMotion: 'reduce' }); // 동작 줄이기: 움직이는 그래픽이 멈춘 중간 모습이 아니라 완성된 정지 그림으로 찍힘(엔진이 보장하는 상태)
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.error(`  ${dir} 화면 오류:`, e.message));
   await page.goto(base + dir + '/index.html', { waitUntil: 'load' });
