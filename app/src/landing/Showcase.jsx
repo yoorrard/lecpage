@@ -37,8 +37,9 @@ export function Showcase() {
     // 손으로 고를 때만 View Transitions(스크롤 중에 저절로 넘어갈 때는 가볍게 겹쳐 바꿈)
     if (byHand && el && document.startViewTransition && !reduced) {
       viaVT.current = true;
+      el.style.viewTransitionName = 'ld-shot'; // 이 그림만 넘김(다른 그림은 가만히)
       const vt = document.startViewTransition(async () => { el.src = list[n].src; try { await el.decode(); } catch { } setI(n); });
-      vt.finished?.catch(() => { });
+      vt.finished?.finally(() => { el.style.viewTransitionName = ''; }).catch(() => { });
     } else setI(n);
   }
   if (!list.length) return null;
@@ -47,7 +48,7 @@ export function Showcase() {
       <header class="ld-head">
         <p class="ld-kicker">디자인 {PRESET_COUNT}가지</p>
         <h2 id="ld-show-h">같은 연수, 디자인만 바꿔 보면</h2>
-        <p class="ld-sub">디자인마다 첫 화면 구성·글 배치·글꼴이 달라요. 아래는 같은 연수 내용을 디자인만 바꿔 lecpage가 만든 실제 화면이에요. 교재를 넣으면 주제와 분위기에 맞는 것을 먼저 골라 줘요.</p>
+        <p class="ld-sub">디자인마다 첫 화면 짜임, 글 배치, 글꼴이 달라요. 아래는 lecpage가 같은 연수 내용으로 만든 실제 화면이에요. 교재를 넣으면 주제와 분위기에 맞는 디자인을 먼저 골라 줘요.</p>
       </header>
       <div class="ld-show-stage" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)} onFocusCapture={() => setHold(true)} onBlurCapture={() => setHold(false)}>
         <figure class="ld-frame">
@@ -60,7 +61,7 @@ export function Showcase() {
             {list.map((d, n) => <button type="button" class="ld-name" aria-pressed={n === i ? 'true' : 'false'} onClick={() => go(n, true)}>{d.name}</button>)}
           </div>
           <div class="ld-show-foot">
-            {!reduced && <button type="button" class="btn btn-sm btn-quiet ld-auto" onClick={() => setAuto(!auto)}>{auto ? '저절로 넘기기 멈추기' : '저절로 넘기기'}</button>}
+            {!reduced && <button type="button" class="btn btn-sm btn-quiet ld-auto" onClick={() => setAuto(!auto)}>{auto ? '자동 넘김 멈추기' : '자동 넘김 켜기'}</button>}
             <a class="btn btn-sm" href="#/gallery">디자인 {PRESET_COUNT}가지 모두 보기</a>
           </div>
         </div>

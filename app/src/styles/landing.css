@@ -14,7 +14,7 @@
 .ld>section+section{margin-top:var(--ld-gap)}
 
 /* 같이 쓰는 브라우저 틀 */
-.ld-bar{display:flex;gap:5px;align-items:center;height:26px;padding:0 10px;background:var(--paper);border-bottom:1px solid var(--hair)}
+.ld-bar{display:flex;gap:5px;font-style:normal;align-items:center;height:26px;padding:0 10px;background:var(--paper);border-bottom:1px solid var(--hair)}
 .ld-bar b{flex:none;width:7px;height:7px;border-radius:50%;background:var(--line)}
 .ld-bar span{margin-left:8px;min-width:0;font-size:.72rem;font-weight:550;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 

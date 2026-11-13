@@ -1,4 +1,4 @@
-// '그냥 AI에게 맡길 때'와 lecpage를 재어 본 값. src/data/benchmark.json을 읽어 그리고, 파일이 없거나 값이 하나도 없으면 이 구간은 나오지 않아요.
+// '그냥 AI에게 맡길 때'와 lecpage를 잰 값. src/data/benchmark.json을 읽어 그리고, 파일이 없거나 값이 하나도 없으면 이 구간은 나오지 않아요.
 // 형식: docs/research/landing-2026-11.md '비교 수치(benchmark.json)'. 두 값을 나란히 놓는 조용한 막대(항목마다 자기 단위의 척도).
 const files = import.meta.glob('../data/benchmark.json', { eager: true, import: 'default' });
 const REPO = 'https://github.com/yoorrard/lecpage/blob/main/';
@@ -23,7 +23,7 @@ export function Bench() {
   const base = data.baseline || 'AI에게 그냥 맡길 때';
   return (
     <div class="ld-bench">
-      <h3 id="ld-bench-h">재어 본 값</h3>
+      <h3 id="ld-bench-h">잰 값</h3>
       <p class="ld-bench-legend" aria-hidden="true"><span class="k-base">{base}</span><span class="k-lp">lecpage</span></p>
       <table class="ld-bench-t" aria-labelledby="ld-bench-h">
         <thead><tr><th scope="col">항목</th><th scope="col">{base}</th><th scope="col">lecpage</th><th scope="col">잰 날짜·조건</th></tr></thead>
