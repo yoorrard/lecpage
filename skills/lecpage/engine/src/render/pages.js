@@ -39,6 +39,28 @@ function robotsMeta(ctx, page) {
   return page === 'index' && ctx.bp.access?.mode === 'public' ? '' : '<meta name="robots" content="noindex, nofollow">';
 }
 
+/**
+ * 공개 연수(access.mode 'public')의 첫 화면에만 schema.org Event(검색·AI가 일정·장소를 읽게). 날짜를 알 때만.
+ * 기본(주소를 받은 사람만)·암호 사이트에는 넣지 않음. 시각은 한국 시각(+09:00), 끝 시각이 없으면 적지 않음(지어내지 않음)
+ */
+export function eventJsonLd(ctx, page) {
+  const m = ctx.bp.meta || {};
+  if (page !== 'index' || ctx.bp.access?.mode !== 'public' || !/^\d{4}-\d{2}-\d{2}$/.test(m.date || '')) return '';
+  const at = (t) => (t ? `${m.date}T${t}:00+09:00` : m.date);
+  const desc = m.description || m.subtitle || '';
+  const ev = {
+    '@context': 'https://schema.org', '@type': 'Event', name: m.title, startDate: at(m.start),
+    ...(m.start && m.end && m.end > m.start ? { endDate: at(m.end) } : {}),
+    ...(desc ? { description: desc } : {}),
+    eventStatus: 'https://schema.org/EventScheduled',
+    ...(m.venue ? { eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode', location: { '@type': 'Place', name: m.venue, address: m.venue } } : {}),
+    ...(m.organizer ? { organizer: { '@type': 'Organization', name: m.organizer } } : {}),
+    ...(m.siteUrl ? { url: m.siteUrl } : {}),
+    inLanguage: 'ko',
+  };
+  return `<script type="application/ld+json">${JSON.stringify(ev).replace(/</g, '\\u003c')}</script>`;
+}
+
 /** 생성 사이트 보안 정책(CSP): 스크립트는 이 사이트와 지문을 고정한 라이브러리 경로만, 플러그인·base 바꾸기·틀 넣기 금지.
  * file:은 USB·ZIP으로 열 때를 위해. 실시간 서버가 http(교실 LAN)면 그 주소도 허용 */
 export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/', 'https://cdn.jsdelivr.net/npm/ogl@1.0.11/', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/'];
@@ -75,6 +97,7 @@ ${ctx.ogImage ? `<meta property="og:image" content="${esc(ctx.ogImage)}"><meta n
 <meta name="theme-color" content="${esc(bg)}">
 <meta name="generator" content="lecpage ${VERSION}">
 ${robotsMeta(ctx, page)}
+${eventJsonLd(ctx, page)}
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 ${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
 <link rel="stylesheet" href="assets/theme.css">

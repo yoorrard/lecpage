@@ -127,24 +127,24 @@
 
 기본 순서
 3. ★ **S09** 앱(`skill: click`) → `vercel` · `github-pages` · `cloudflare` · `netlify`. Vercel은 토큰 하나로 앱에서 바로 올리고, 새 계정도 바로 열리고, 다시 올려도 주소가 그대로입니다. 여기서 `cloudflare`는 ZIP 끌어 놓기(Pages)입니다.
-4. ★ **S08** skill(`basic`·`dev`) → `cloudflare` · `vercel` · `github-pages` · `netlify`. 여기서 `cloudflare`는 Workers 정적 자산(`wrangler deploy --assets`)입니다. 상업 이용 가능, 정적 요청 무제한, `_headers` 그대로, 계정이 없어도 `--temporary`로 먼저 띄울 수 있습니다.
+4. ★ **S08** skill(`basic`·`dev`) → `cloudflare` · `vercel` · `github-pages` · `onpod` · `netlify`. 여기서 `cloudflare`는 Workers 정적 자산(`wrangler deploy --assets`)입니다. 상업 이용 가능, 정적 요청 무제한, `_headers` 그대로, 계정이 없어도 `--temporary`로 먼저 띄울 수 있습니다. `onpod`(한국 서비스, `publish work --host onpod`)은 콘솔에서 API 키를 만들어 건네야 해서(강사 할 일 약 4번, 엔진 `HOST_STEPS`) Cloudflare(2번) 뒤에 둡니다. 앱에서는 못 올립니다(REST가 다른 출처를 막음).
 
 조정(순서대로 모두)
 5. ★ **S10** 강사료를 받는 연수(`paid`) → `vercel`을 빼고 `cloudflare`를 맨 앞으로. 다음은 `github-pages`.
 6. ★ **S03** live가 `cf-relay`이고 skill이 basic 이상 → `cloudflare`를 맨 앞으로(같은 계정에서 관리).
 7. ★ **S11** 내 도메인을 붙일 계획(`customDomain`), 또는 학교망이 엄격하고(`restricted`) skill이 basic 이상 → `cloudflare`를 맨 앞으로(도메인 연결이 가장 쉬움).
 8. ★ **S13** 파일 하나 > 25MB, 또는 파일 수가 Cloudflare 한도를 넘음(앱의 끌어 놓기 1,000개, skill이 wrangler로 올리면 20,000개) → `github-pages`를 맨 앞으로, `cloudflare`를 맨 뒤로. `--temporary`는 1,000개·파일당 5MiB까지입니다(G30).
-9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로.
+9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로. `onpod`은 사이트 > 100MB·파일 > 50MB·5,000개 넘음이면 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
 12. ★ **S15** (앱 전용) 운영자가 '바로 공개'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소, 방문이 있는 동안 열려 있음). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
-13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로. Netlify는 이 규칙으로만 앞에 옵니다.
+13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로(강사 할 일 0번). Netlify·Onpod은 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
 
 ### 3.3 공개 범위(access)
 - `link`(기본): 모든 페이지에 `noindex`, `robots.txt`는 `Disallow: /`. 주소·QR을 받은 사람만 들어옵니다. 접근 제어는 아닙니다.
-- `public`: 검색 허용(`robots.txt` `Allow: /`).
+- `public`: 검색 허용(`robots.txt` `Allow: /`). 연수 날짜가 있으면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. `link`·`password`에는 넣지 않습니다.
 - `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다. QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
 - 강사용 파일(DESIGN.md·운영안내.md·lecpage.blueprint.json)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `<out>-강사용/`, 앱은 따로 내려받기).
 
@@ -153,10 +153,10 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 | 순서 | skill이 하는 일 |
 |---|---|
-| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
+| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`·`ONPOD_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
 | 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
-| 4 | Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
+| 4 | Onpod이면 `publish work --host onpod`(사이트만, 참여 기능 중계는 Cloudflare·Supabase·시트). Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
 | 5 | `publish`가 `<주소>/`·`check.html`·중계 `/api/health`를 확인합니다. 손으로 올렸으면 `curl -sI <주소>/ \| head -1`이 `200`인지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
 | 6 | 건넵니다: 참가자 주소와 `<out>-강사용/`의 `QR-안내문.pdf`·`강사-카드.pdf`·`발표화면.png`(손으로 올렸으면 `handouts <주소>`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일(강사 화면의 도움말에 있음) |
 
