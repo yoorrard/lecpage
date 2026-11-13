@@ -138,10 +138,10 @@ export function Why() {
     <section class="ld-why" aria-labelledby="ld-why-h">
       <header class="ld-head ld-why-head">
         <p class="ld-kicker">왜 lecpage인가요</p>
-        <h2 id="ld-why-h" class="ld-ink" ref={head}><span class="ld-ink-l"><Words text={`${l1},`} /></span>{' '}<span class="ld-ink-l"><Words text={l2} keys={['노하우가']} from={4} /></span></h2>
+        <h2 id="ld-why-h" class="ld-ink" ref={head}><span class="ld-ink-l"><Words text={`${l1},`} /></span>{' '}<span class="ld-ink-l"><Words text={l2} keys={['노하우가']} from={l1.split(' ').length} /></span></h2>
         <p class="ld-sub">AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강사가 할 일과 드는 토큰이 달라요.</p>
       </header>
-      <div class={`ld-led${reduced ? ' is-still' : ''}`} ref={led}>
+      <div class="ld-led" ref={led}>
         <p class="ld-led-head" aria-hidden="true"><span /><span class="is-base">{base}</span><span class="is-lp">lecpage</span></p>
         <ol class="ld-rows">{ROWS.map((r, i) => <Row r={r} i={i} on={rows[i]} near={near} base={base} />)}</ol>
         <Tally rows={rows} reduced={reduced} base={base} />
