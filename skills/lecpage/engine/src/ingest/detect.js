@@ -145,14 +145,19 @@ export function isRequestLine(t) {
 
 function detectPrompts(pages) {
   const found = [];
-  const add = (p, text, cue, score, title) => {
+  // at: 쪽 안에서 읽는 순서(문단 번호). 따옴표·노트 속 요청(inline)은 같은 쪽의 이름표·틀 프롬프트 뒤에 둠
+  const add = (p, text, cue, score, title, at = 0) => {
     const t = cleanPrompt(text);
     if (t.length < 6 || t.length > 4000) return;
     if (/^https?:\/\/\S+$/.test(t)) return;
-    found.push({ title: title || '', text: t, ...ref(p), cue, score });
+    found.push({ title: title || '', text: t, ...ref(p), cue, score, at, inline: cue === 'quote' || cue === 'notes' });
   };
   for (const p of pages) {
+    // 문단 전체가 링크 글자(“제미나이 열기” 같은 버튼·링크 이름)면 프롬프트 본문이 아님
+    const linkLabels = new Set((p.links || []).map((l) => textKey(l.label || '')).filter(Boolean));
+    const isLinkLabel = (y) => linkLabels.has(textKey(y.text));
     const paras = (p.paragraphs || []).filter((x) => x.text);
+    const at = (x) => paras.indexOf(x);
     const titleCue = /프롬프트|prompt|명령어|이렇게\s*(물어|입력)|질문하기/i.test(p.title || '');
     // 블록 묶기
     const blocks = new Map();
@@ -172,7 +177,7 @@ function detectPrompts(pages) {
       const rest = [];
       for (let j = i + 1; j < paras.length && rest.length < 15; j++) {
         const y = paras[j];
-        if (LABEL.test(y.text)) break;
+        if (LABEL.test(y.text) || isLinkLabel(y)) break;
         if (body && y.block !== x.block) break;
         if (!body && y.block !== x.block && rest.length) break;
         if (!body && y.block !== x.block && j > i + 1) break;
@@ -182,11 +187,11 @@ function detectPrompts(pages) {
       }
       rest.forEach((y) => used.add(y));
       const text = [body, ...rest.map((y) => y.text)].filter(Boolean).join('\n');
-      if (text) add(p, text, 'label', 5, /^\s*[\[【<(「]?\s*(?:프롬프트|prompt)\s*$/i.test(label) ? '' : label);
+      if (text) add(p, text, 'label', 5, /^\s*[\[【<(「]?\s*(?:프롬프트|prompt)\s*$/i.test(label) ? '' : label, i);
     });
     // 2) 틀(템플릿) 블록: 역할:/형식:/[주제] 자리 표시
     for (const [, list] of blocks) {
-      const free = list.filter((y) => !used.has(y));
+      const free = list.filter((y) => !used.has(y) && !isLinkLabel(y));
       if (free.length < 2) continue;
       const tmpl = free.filter((y) => TEMPLATE_LINE.test(y.text)).length;
       const ph = free.filter((y) => PLACEHOLDER.test(y.text)).length;
@@ -195,7 +200,7 @@ function detectPrompts(pages) {
       if (!strong && !ph) continue; // "대상: …", "목표: …"만 있는 안내·목표 묶음은 프롬프트가 아님
       if (tmpl >= 2 || (tmpl >= 1 && (ph >= 1 || req)) || (ph >= 1 && free.some((y) => isRequestLine(y.text)))) {
         free.forEach((y) => used.add(y));
-        add(p, free.map((y) => y.text).join('\n'), 'template', 4);
+        add(p, free.map((y) => y.text).join('\n'), 'template', 4, '', at(free[0]));
       }
     }
     // 3) 따옴표 안의 요청
@@ -206,7 +211,7 @@ function detectPrompts(pages) {
       while ((m = QUOTE_RE.exec(x.text))) {
         const q = m[1].trim();
         const near = /(입력|물어|질문|요청|프롬프트|검색|말해|타이핑|명령|쳐|적어)/.test(x.text.replace(m[0], ''));
-        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q) && !EXAM.test(q))) { add(p, q, 'quote', 4); used.add(x); }
+        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q) && !EXAM.test(q))) { add(p, q, 'quote', 4, '', at(x)); used.add(x); }
       }
     }
     // 4) 요청 어미(~해줘, ~만들어줘 …)로 끝나는 줄
@@ -214,30 +219,30 @@ function detectPrompts(pages) {
       if (used.has(x) || x.role === 'heading' || x.text.length < 8) continue;
       const t = x.text.replace(LEAD_MARK, '');
       if (EXAM.test(t) || (TO_PEOPLE.test(t) && !AI_STRONG.test(t))) continue;
-      if (REQ_STRONG.test(t)) { add(p, t, 'request', 3); used.add(x); }
-      else if (REQ_POLITE.test(t) && AI_STRONG.test(t) && !INSTRUCT.test(t) && !TO_PEOPLE.test(t)) { add(p, t, 'request', 2); used.add(x); }
-      else if (EN_PROMPT.test(t) && t.length >= 15 && !/[가-힣]/.test(t.slice(0, 10))) { add(p, t, 'english', 2); used.add(x); }
-      else if (x.role === 'code' && (TEMPLATE_LINE.test(t) || PLACEHOLDER.test(t) || AI_CUE.test(t))) { add(p, t, 'code', 3); used.add(x); }
+      if (REQ_STRONG.test(t)) { add(p, t, 'request', 3, '', at(x)); used.add(x); }
+      else if (REQ_POLITE.test(t) && AI_STRONG.test(t) && !INSTRUCT.test(t) && !TO_PEOPLE.test(t)) { add(p, t, 'request', 2, '', at(x)); used.add(x); }
+      else if (EN_PROMPT.test(t) && t.length >= 15 && !/[가-힣]/.test(t.slice(0, 10))) { add(p, t, 'english', 2, '', at(x)); used.add(x); }
+      else if (x.role === 'code' && (TEMPLATE_LINE.test(t) || PLACEHOLDER.test(t) || AI_CUE.test(t))) { add(p, t, 'code', 3, '', at(x)); used.add(x); }
     }
     // 5) 제목이 '프롬프트'인 쪽: 남은 긴 글상자
     if (titleCue) {
       for (const [, list] of blocks) {
-        const free = list.filter((y) => !used.has(y) && y.role !== 'heading');
+        const free = list.filter((y) => !used.has(y) && y.role !== 'heading' && !isLinkLabel(y));
         const text = free.map((y) => y.text).join('\n');
-        if (text.length >= 15 && !INSTRUCT.test(text.split('\n')[0]) && (AI_CUE.test(text) || isRequestLine(text))) { add(p, text, 'block', 3); free.forEach((y) => used.add(y)); }
+        if (text.length >= 15 && !INSTRUCT.test(text.split('\n')[0]) && (AI_CUE.test(text) || isRequestLine(text))) { add(p, text, 'block', 3, '', at(free[0])); free.forEach((y) => used.add(y)); }
       }
     }
     // 6) 노트 속 이름표 프롬프트
     if (p.notes) {
-      for (const line of p.notes.split('\n')) {
+      p.notes.split('\n').forEach((line, n) => {
         const m = LABEL.exec(line);
-        if (m && m[1] && m[1].length >= 6) add(p, m[1], 'notes', 2);
+        if (m && m[1] && m[1].length >= 6) add(p, m[1], 'notes', 2, '', paras.length + n);
         else {
           QUOTE_RE.lastIndex = 0;
           let q;
-          while ((q = QUOTE_RE.exec(line))) if (isRequestLine(q[1])) add(p, q[1], 'notes', 2);
+          while ((q = QUOTE_RE.exec(line))) if (isRequestLine(q[1])) add(p, q[1], 'notes', 2, '', paras.length + n);
         }
-      }
+      });
     }
   }
   // 중복 제거(같은 글, 또는 같은 쪽에서 다른 프롬프트에 포함된 글)
@@ -252,7 +257,10 @@ function detectPrompts(pages) {
     keys.set(k, item);
     out.push(item);
   }
-  return out.sort((a, b) => fileOrder(a, b) || a.page - b.page);
+  // 교재의 읽는 순서대로: 파일 → 쪽 → (따로 선 프롬프트 먼저, 따옴표·노트 속 요청은 뒤) → 쪽 안의 위치
+  out.sort((a, b) => fileOrder(a, b) || a.page - b.page || a.inline - b.inline || a.at - b.at);
+  for (const o of out) { delete o.at; delete o.inline; }
+  return out;
 }
 let FILE_ORDER = new Map();
 const fileOrder = (a, b) => (FILE_ORDER.get(a.file) ?? 0) - (FILE_ORDER.get(b.file) ?? 0);
@@ -387,6 +395,48 @@ function markNo(m) {
   return ROMAN[v.toLowerCase()] || ROMAN[v] || 0;
 }
 
+// 일정표의 머리글 칸: 시간 · 내용(제목) · 방식(강의·실습 등) · 담당(강사·발표자) · 그 밖(비고 등)
+const COL_TIME = /^(?:시\s*간|시각|일\s*시|때|시간대|교시|time)$/i;
+const COL_TITLE = /^(?:(?:세부\s*|교육\s*|연수\s*|강의\s*|활동\s*)?(?:내\s*용|주\s*제|제\s*목)|프로그램|활\s*동|과\s*정|순\s*서|session|title|contents?|topic|program)$/i;
+const COL_PART = /^(?:(?:진행\s*|운영\s*|수업\s*)?(?:방\s*식|형\s*태)|방\s*법|유\s*형|구\s*분|format|type|mode)$/i;
+const COL_WHO = /^(?:강\s*사|담\s*당(?:\s*자)?|진\s*행(?:\s*자)?|발표(?:\s*자)?|연\s*사|강연자|speakers?|presenters?)$/i;
+/**
+ * 일정표(표)를 칸별로 읽기: 머리글이 있으면 그 이름으로 시간·내용·방식·담당을 나눔.
+ * 머리글이 없으면 시간 칸 다음 첫 칸이 내용, 나머지 칸은 설명. 칸을 한 줄로 합치지 않음(내용과 방식이 섞이지 않게)
+ */
+function agendaFromTable(t) {
+  const rows = (t?.rows || []).map((r) => r.map((c) => normLine(c || '')));
+  if (rows.length < 2) return [];
+  const isHead = (r) => r.some((c) => COL_TIME.test(c) || COL_TITLE.test(c)) && !r.some((c) => parseTimeRange(c));
+  const head = isHead(rows[0]) ? rows[0] : null;
+  const body = head ? rows.slice(1) : rows;
+  const width = Math.max(...rows.map((r) => r.length));
+  const col = (re) => (head ? head.findIndex((c) => re.test(c)) : -1);
+  let ti = col(COL_TIME);
+  if (ti < 0) { for (let k = 0; k < width; k++) if (body.filter((r) => parseTimeRange(r[k] || '')).length >= Math.max(2, body.length * 0.5)) { ti = k; break; } }
+  let ci = col(COL_TITLE);
+  if (ci < 0) ci = [...Array(width).keys()].find((k) => k !== ti && body.some((r) => r[k])) ?? -1;
+  const pi = col(COL_PART), wi = col(COL_WHO);
+  const out = [];
+  for (const r of body) {
+    const tr = ti >= 0 ? parseTimeRange(r[ti] || '') : null;
+    let text = ci >= 0 ? r[ci] || '' : '';
+    // 시간 칸이 없거나 내용 칸이 비면: 시간 아닌 첫 칸
+    if (!text) text = r.find((c, k) => k !== ti && c && !parseTimeRange(c)) || '';
+    if (!text || text.length > 120) continue;
+    const it = { text };
+    if (tr) { it.start = tr.start; it.end = tr.end; }
+    if (pi >= 0 && r[pi] && pi !== ci) it.part = truncate(r[pi], 20);
+    const rest = r.filter((c, k) => c && k !== ti && k !== ci && k !== pi && c !== text);
+    const who = wi >= 0 && wi !== ci ? r[wi] || '' : '';
+    const desc = [who, ...rest.filter((c, k) => c !== who)].filter(Boolean);
+    if (desc.length) it.desc = truncate(desc.join(' · '), 200);
+    if (!it.part) { const m = SECTION_MARK.exec(text); if (m) { it.part = normLine(m[0]); it.no = markNo(m); it.text = normLine(text.slice(m[0].length).replace(/^[\s.:)\-–—|·]+/, '')) || text; } }
+    out.push(it);
+  }
+  return out;
+}
+
 function detectAgenda(pages) {
   let best = null;
   for (const p of pages.slice(0, Math.max(6, Math.ceil(pages.length * 0.3)))) {
@@ -395,7 +445,11 @@ function detectAgenda(pages) {
     const src = (p.paragraphs || []).filter((x) => x.text && x.text !== head && x.level <= 1);
     let items = src.filter((x) => x.level === 0).map((x) => x.text);
     if (items.length < 2) items = src.map((x) => x.text);
-    if (items.length < 2 && p.tables?.length) items = p.tables[0].rows.map((r) => r.filter(Boolean).join(' '));
+    if (items.length < 2 && p.tables?.length) {
+      const rows = agendaFromTable(p.tables[0]);
+      if (rows.length >= 2) { if (!best || rows.length > best.items.length) best = { ...ref(p), title: p.title || head, items: rows }; continue; }
+      items = p.tables[0].rows.map((r) => r.filter(Boolean).join(' '));
+    }
     items = items.map((t) => normLine(t)).filter((t) => t && t.length <= 120);
     if (items.length < 2) continue;
     const parsed = items.map((t) => {
@@ -519,10 +573,12 @@ function detectInstructor(pages, profilePages = []) {
       if (m && !NAME_STOP.has(m[1])) { name = m[1]; break; }
     }
     const bio = lines.filter((t) => CAREER.test(t) || (/^[-•·]/.test(t) && t.length <= 80)).map((t) => normLine(t.replace(/^[-•·]\s*/, '')));
-    const roleLine = lines.find((t) => ROLE_WORD.test(t) && t.length <= 60 && !EMAIL.test(t) && t !== name) || '';
-    const cur = lines.find((t) => /^\s*\(?\s*(?:현|現)\s*\)?/.test(t)) || roleLine;
-    let org = '';
     const ORG_RE = /([가-힣A-Za-z0-9]+(?:초등학교|중학교|고등학교|학교|교육청|교육지원청|연수원|교육원|대학교|연구소|연구회))/;
+    const roleLine = lines.find((t) => ROLE_WORD.test(t) && t.length <= 60 && !EMAIL.test(t) && t !== name) || '';
+    // 소속·직함은 따로 적힌 소속 줄("새솔초등학교 교사")이 먼저. 현)·전) 줄은 약력이라 소속 칸에 섞지 않음
+    const affLine = lines.find((t) => t.length <= 60 && t !== name && !EMAIL.test(t) && !CAREER.test(t) && !/^\s*\(?\s*(?:현|전|前|現)\s*\)/.test(t) && !/^[-•·▪◦]/.test(t) && (ROLE_WORD.test(t) || ORG_RE.test(t))) || '';
+    const cur = affLine || lines.find((t) => /^\s*\(?\s*(?:현|現)\s*\)?/.test(t)) || roleLine;
+    let org = '';
     const om = ORG_RE.exec(cur || '') || ORG_RE.exec(roleLine) || ORG_RE.exec(lines.filter((t) => !CAREER.test(t) || /^\s*\(?\s*(?:현|現)/.test(t)).join('\n'));
     if (om) org = om[1];
     let role = normLine((cur || '').replace(CAREER, '').replace(org, '').replace(name, ''));
@@ -816,14 +872,14 @@ function detectMessages(pages, promptKeys, special, stepPages) {
   const out = [];
   const closingPages = new Set();
   const seen = new Set();
-  const add = (text, p, score) => {
+  const add = (text, p, score, label = '') => {
     let t = normLine(text).replace(/^[“"「『‘']|[”"」』’']$/g, '');
     if (t.length < 8 || t.length > 120 || /https?:\/\//.test(t) || promptKeys.has(textKey(t))) return;
     if (parseKoreanDates(t).length || parseTimeRange(t)) return;
     const k = textKey(t);
     if (seen.has(k)) return;
     seen.add(k);
-    out.push({ text: t, ...ref(p), score });
+    out.push({ text: t, ...ref(p), score, ...(label ? { label } : {}) });
   };
   pages.forEach((p, i) => {
     if (special.has(p) || i === 0 || stepPages.has(`${p.file}:${p.page}`)) return;
@@ -835,7 +891,8 @@ function detectMessages(pages, promptKeys, special, stepPages) {
     // 글 없이 제목만 있는 슬라이드의 제목. 문서(HWPX·DOCX)의 소제목은 핵심 문장이 아님(표만 있는 절의 제목 등)
     if (!paras.length && p.kind !== 'section' && p.title && p.title.length >= 12 && p.layout !== 'section' && !SECTION_MARK.test(p.title)) add(p.title, p, (p.titleGuessed ? 3 : 1.5) + (/[!！]$/.test(p.title) ? 1 : 0));
     for (const x of paras) {
-      if (MSG_CUE.test(x.text)) add(x.text.replace(/^(핵심|한\s*줄\s*(요약|정리)|오늘의\s*메시지)\s*[:：]\s*/, ''), p, 3);
+      // "핵심: …"의 이름표는 떼어 label에(마무리 칸의 작은 머리말로 교재 글자 그대로 씀)
+      if (MSG_CUE.test(x.text)) { const lm = /^(핵심|한\s*줄\s*(?:요약|정리)|오늘의\s*메시지)\s*[:：]\s*/.exec(x.text); add(lm ? x.text.slice(lm[0].length) : x.text, p, 3, lm ? normLine(lm[1]) : ''); }
       QUOTE_RE.lastIndex = 0;
       let m;
       // 따옴표 문장: 글이 많은 쪽(사례·이야기 속 인용)은 약한 후보(1.5)로만 — 초안의 핵심 메시지 칸에는 2점 이상만 씀

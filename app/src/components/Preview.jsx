@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { buildSite, previewHtml } from '../lib/engine.js';
 import { blobs } from '../lib/db.js';
+import { Seg } from './ui.jsx';
+import { useBus, setTry } from '../design-words/bus.js';
+import { labelCss } from '../design-words/words.js';
+import '../design-words/words.css';
+
+let LABELS = '';
+const labels = () => LABELS || (LABELS = labelCss());
 
 const assetCache = new Map();
 export async function projectAssets(pid, fresh = false) {
@@ -68,11 +75,22 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
   const [focusable, setFocusable] = useState(false);
   const [picking, setPicking] = useState(false);
   const t = useRef(); const frame = useRef(); const canvas = useRef(); const wasMarking = useRef(false);
+  const tryFrame = useRef(); const tt = useRef();
   const box = useBox(canvas);
+  // 디자인 칸이 보낸 연락: 고칠 안 비교(try) · 배치 이름 보기(labels) · 이 섹션으로 옮기기(focus)
+  const bus = useBus(p.id);
+  const tr = bus.try;
+  const [tryHtml, setTryHtml] = useState('');
+  const [view, setView] = useState('after');
   const setDevice = (v) => { setDeviceRaw(v); store.set('device', v); };
   const setLand = (v) => { setLandRaw(v); store.set('land', v ? '1' : ''); };
 
   const sendPick = (on) => { try { frame.current?.contentWindow?.postMessage({ type: 'lp-pick', on }, '*'); } catch { } };
+  const post = (el, msg) => { try { el?.contentWindow?.postMessage(msg, '*'); } catch { } };
+  // 섹션으로 옮기기는 알린 뒤 잠깐만 유효(바꾼 칸이 다시 그려질 때 한 번 옮기고, 그 뒤 다른 고침에서는 그대로)
+  const goTo = useRef({ id: '', until: 0 });
+  /** 새로 그린 화면에 지금 상태(배치 이름·보던 섹션)를 다시 알림 */
+  const syncFrame = (el, id = Date.now() < goTo.current.until ? goTo.current.id : '') => { post(el, { type: 'lp-labels', on: bus.labels }); if (id) post(el, { type: 'lp-scroll', id }); };
   useEffect(() => {
     if (!onPick) return;
     const ids = new Set((p.blueprint?.sections || []).map((s) => s.id));
@@ -80,6 +98,26 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
     addEventListener('message', f); return () => removeEventListener('message', f);
   }, [onPick, p.blueprint]);
   useEffect(() => { sendPick(picking); }, [picking]);
+  useEffect(() => { post(frame.current, { type: 'lp-labels', on: bus.labels }); post(tryFrame.current, { type: 'lp-labels', on: bus.labels }); }, [bus.labels]);
+  useEffect(() => { if (!bus.focus) return; goTo.current = { id: bus.focus.id, until: Date.now() + 4000 }; post(frame.current, { type: 'lp-scroll', id: bus.focus.id }); post(tryFrame.current, { type: 'lp-scroll', id: bus.focus.id }); }, [bus.focus?.n]);
+  // 비교할 안: 바꾼 설계도를 따로 그려 '바꾸면' 화면으로
+  useEffect(() => {
+    clearTimeout(tt.current);
+    if (!tr) { setTryHtml(''); return; }
+    setView('after'); setTryHtml('');
+    tt.current = setTimeout(async () => {
+      const r = await buildSite(tr.bp, await projectAssets(p.id));
+      if (!r.errors?.length) setTryHtml(previewHtml(r.files, 'index.html', { extraCss: labels() }));
+    }, 60);
+    return () => clearTimeout(tt.current);
+  }, [tr]);
+  // 다른 화면으로 가면 비교를 끔
+  useEffect(() => () => setTry(p.id, null), [p.id]);
+  useEffect(() => {
+    if (!tr) return;
+    const k = (e) => { if (e.key === 'Escape' && !full) setTry(p.id, null); };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, [tr, full]);
   useEffect(() => {
     if (!p.blueprint) return;
     clearTimeout(t.current);
@@ -89,7 +127,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
       if (r.errors?.length) { setHtml(`<p style="font:16px sans-serif;padding:24px">${r.errors.map((e) => e.message_ko).join('<br>')}</p>`); return; }
       setSize(r.report.sizeKB);
       const pg = r.files[page] ? page : 'index.html';
-      setHtml(previewHtml(r.files, pg));
+      setHtml(previewHtml(r.files, pg, { extraCss: labels() }));
     }, 350);
     return () => clearTimeout(t.current);
   }, [p.blueprint, page]);
@@ -123,6 +161,14 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
           <select value={page} onChange={(e) => setPage(e.target.value)}>{pages.map((x) => <option value={x.value}>{x.label}</option>)}</select>
         </label>
       </div>
+      {tr && <div class="pv-try" role="region" aria-label="바꾸면 비교">
+        <span class="pv-try-t"><b>비교하는 중</b><span>{tr.label}</span></span>
+        <Seg label="볼 화면" value={view} onChange={setView} options={[{ value: 'before', label: '지금' }, { value: 'after', label: '바꾸면' }]} />
+        <span class="btn-row">
+          {tr.apply && <button type="button" class="btn btn-sm btn-primary" onClick={() => { tr.apply(); setTry(p.id, null); }}>적용하기</button>}
+          <button type="button" class="btn btn-sm" onClick={() => setTry(p.id, null)}>그만 보기</button>
+        </span>
+      </div>}
       <div class={`pv-stage preview-frame${marking ? ' marking' : ''}`}>
         <div class="pv-tools">
           <div class="seg pv-devices" role="group" aria-label="화면 크기">
@@ -139,9 +185,20 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
         <div class={`pv-canvas ${fit ? 'is-fit' : ''}`} ref={canvas}>
           {html && box.w > 0 ? (
             <div class={`pv-device is-${kind}${turned ? ' is-land' : ''}`} style={fit ? undefined : { width: `${Math.round(vw * scale)}px`, height: `${Math.round(vh * scale)}px`, '--s': scale }}>
+              {tr && tryHtml && <iframe
+                ref={tryFrame}
+                hidden={view !== 'after'}
+                onLoad={(e) => { syncFrame(e.currentTarget, tr.focus); if (tr.focus) syncFrame(frame.current, tr.focus); }}
+                title="바꾼 모습 미리보기"
+                tabIndex={focusable ? 0 : -1}
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals"
+                srcdoc={tryHtml}
+                style={fit ? undefined : { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` }}
+              />}
               <iframe
                 ref={(el) => { frame.current = el; if (frameRef) frameRef.current = el; }}
-                onLoad={() => sendPick(picking)}
+                hidden={!!(tr && tryHtml && view === 'after')}
+                onLoad={(e) => { sendPick(picking); syncFrame(e.currentTarget); }}
                 title="연수 사이트 미리보기"
                 tabIndex={focusable ? 0 : -1}
                 sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals"

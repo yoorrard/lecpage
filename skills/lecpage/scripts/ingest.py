@@ -82,6 +82,25 @@ def norm_line(s):
     return re.sub(r'\s*\n+\s*', ' ', norm_text(s)).strip()
 
 
+def gap_spaced(d):
+    """rawdict(글자마다 위치) → dict 모양(span['text']). 공백 글자 없이 위치로만 띄어 쓴 PDF는
+    같은 글꼴 조각(span) 안에서 글자 사이 틈이 글자 크기의 0.25배보다 넓으면 띄어 씀.
+    글꼴이 바뀌는 곳(한글 ↔ 영문·괄호)은 글자 폭 차이로 틈이 생겨도 띄지 않음."""
+    for b in d.get('blocks', []):
+        for ln in b.get('lines', []):
+            for s in ln.get('spans', []):
+                out, prev = [], None
+                for ch in s.get('chars', []):
+                    c = ch.get('c', '')
+                    if prev is not None and c and not c.isspace() and not prev['c'].isspace():
+                        if ch['bbox'][0] - prev['bbox'][2] > max(1.0, s.get('size', 10) * 0.25):
+                            out.append(' ')
+                    out.append(c)
+                    prev = ch
+                s['text'] = ''.join(out)
+    return d
+
+
 def text_key(s):
     return re.sub(r'[\s"\'“”‘’「」『』`.,!?~·:;()\[\]{}<>\-–—…]', '', norm_line(s).lower())
 
@@ -389,7 +408,7 @@ def parse_pdf(path, fid, sink, warnings):
         rect = pg.rect
         if size is None:
             size = (round(rect.width), round(rect.height))
-        d = pg.get_text('dict')
+        d = gap_spaced(pg.get_text('rawdict'))
         raw = []
         for b in d.get('blocks', []):
             if b.get('type') != 0:

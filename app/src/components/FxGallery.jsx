@@ -12,7 +12,7 @@ export const FX_GROUPS = [
 ];
 const GROUP_OF = (f) => (f.group === 'lib' ? 'scroll' : f.group);
 const LV = ['늘 켜짐', '차분', '보통', '화려'];
-const SLOT_KO = { 'hero.title': '첫 화면 제목', 'hero.graphic': '첫 화면 배경', 'hero.cta': '시작 단추', 'section.title': '섹션 제목', 'section.enter': '섹션이 나타날 때', divider: '구분 띠', cards: '카드', list: '목록', numbers: '숫자', message: '핵심 메시지', schedule: '일정표', gallery: '사진', progress: '진행 표시', scroll: '스크롤', cursor: '마우스', celebrate: '완료했을 때', 'closing.title': '마무리 문장', 'closing.graphic': '마무리 배경' };
+const SLOT_KO = { 'hero.title': '첫 화면 제목', 'hero.graphic': '첫 화면 배경', 'hero.cta': '시작 버튼', 'section.title': '섹션 제목', 'section.enter': '섹션이 나타날 때', divider: '구분 띠', cards: '카드', list: '목록', numbers: '숫자', message: '핵심 메시지', schedule: '일정표', gallery: '사진', progress: '진행 표시', scroll: '스크롤', cursor: '마우스', celebrate: '완료했을 때', 'closing.title': '마무리 문장', 'closing.graphic': '마무리 배경' };
 export const slotsKo = (f) => [...new Set((f.slots || []).map((s) => SLOT_KO[s] || s))].join(' · ');
 const TREND = { up: '요즘 많이 써요', warn: '아껴 써요' };
 

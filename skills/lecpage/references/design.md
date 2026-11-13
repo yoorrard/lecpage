@@ -41,12 +41,12 @@
 | `warm-minimal` | 따뜻한 미니멀 | 넓은 여백과 명조 제목, 가는 큰 날짜 하나, 점선으로 이은 정보. 독서·인문·상담처럼 조용히 읽히는 자리에. | minimal, calm, natural | 나눔명조 / 아스타 산스 / Fraunces | 차분 | column | 왼쪽 정렬 | 번짐·떠오름·왼쪽부터 펼침 + line-draw, link-underline | highlight-sweep |
 | `deck-collage` | 펼친 교재 | 교재 쪽을 부채처럼 펼친 3D 더미가 첫 화면에. 마우스에 기울고, 누르면 다음 장이 올라와요. 교재가 주인공인 연수에. | editorial, handmade, bold | 페이퍼로지 / 아스타 산스 / Sora | 보통 | collage | 왼쪽 정렬 | 넘어옴·떠오름·옆에서 + spotlight, clip-reveal, link-underline | slide-fan(첫 화면 그림) |
 | `time-dial` | 하루 시계 | 하루 일정이 둥근 시계로 그려지는 첫 화면. 순서마다 호가 그려지고, 연수 중에는 지금 바늘이 돌아요. 일정이 중요한 행사·종일 연수에. | futuristic, bold, tech | 아스타 산스 / 아스타 산스 / Red Hat Display | 보통 | dial | 왼쪽 정렬 | 옆에서·떠오름·살짝 커짐·번짐 + spotlight, line-draw | schedule-dial(첫 화면 그림) |
-| `knot-orbit` | 입체 궤도 | 점으로 짠 입체 매듭이 천천히 도는 첫 화면. 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레를 돌아요. AI·코딩·과학처럼 기술이 주제인 연수에. | futuristic, tech, bold | G마켓 산스 / Noto Sans KR(본고딕) / Syne | 보통 | orbit | 왼쪽 정렬 | 살짝 커짐·왼쪽부터 펼침·위에서 펼침·옆에서 + spotlight, line-draw, link-underline | orbit-3d(첫 화면 그림) |
+| `knot-orbit` | 입체 궤도 | 점으로 짠 입체 매듭이 천천히 도는 첫 화면. 마우스 쪽으로 기울고, 이 연수의 낱말이 둘레를 돌아요. AI·코딩·과학처럼 기술이 주제인 연수에. | futuristic, tech, bold | 페이퍼로지 / Noto Sans KR(본고딕) / Syne | 보통 | orbit | 왼쪽 정렬 | 살짝 커짐·왼쪽부터 펼침·위에서 펼침·옆에서 + spotlight, line-draw, link-underline | orbit-3d(첫 화면 그림) |
 | `stone-stream` | 돌과 물결 | 연수 제목으로 그린 그림 한 장이 첫 화면에. 돌을 돌아 흐르는 물결 선이 일렁이고, 마우스를 올리면 물결이 비켜 흘러요. 미술·독서·생태·마음 연수에. | editorial, natural, calm | 송명 / 고딕 A1 / Instrument Serif | 보통 | stream | 왼쪽 정렬 | 번짐·떠오름·왼쪽부터 펼침 + line-draw, clip-reveal, link-underline | stream-lines(첫 화면 그림) |
-| `ripple-center` | 번지는 파문 | 모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에. | emotional, calm, warm | 고운돋움 / 나눔바른고딕 / Fraunces | 보통 | ripple | 가운데 정렬 | 살짝 커짐·번짐·떠오름 + link-underline, line-draw, clip-reveal | arc-ripple(첫 화면 그림) |
+| `ripple-center` | 번지는 파문 | 모든 글이 가운데 축에 놓이고, 뒤에서 물결 고리가 번져 서로 겹쳐요. 누른 자리에서 새 물결이 생겨요. 본문도 가운데 정렬. 마음·관계·성찰이 주제인 연수에. | emotional, calm, warm | 고운돋움 / Pretendard / Fraunces | 보통 | ripple | 가운데 정렬 | 살짝 커짐·번짐·떠오름 + link-underline, line-draw, clip-reveal | arc-ripple(첫 화면 그림) |
 | `minute-map` | 시간 점묘 | 연수의 1분이 점 하나. 순서마다 제 색으로 찍힌 점 지도가 첫 화면에. 일정에 마우스를 올리면 그 시간의 점만 또렷해져요. 본문은 왼쪽에 고정폭 이름표를 둔 장부 격자. 데이터·평가·연구 연수에. | tech, minimal, formal | 나눔스퀘어 / 스포카 한 산스 네오 / JetBrains Mono | 차분 | minutes | 자료 그림(본문 ledger) | 왼쪽부터 펼침·옆에서·떠오름·번짐 + link-underline, line-draw | minute-map(첫 화면 그림) |
 | `mosaic-split` | 도형 모자이크 | 화면을 반으로 나눠 한쪽은 제목에서 나온 도형 타일 그림, 한쪽은 글. 타일은 저마다 돌고, 마우스를 올리면 돌아가요. 본문도 머리 왼쪽·내용 오른쪽의 두 단. 미술·수학·메이커·창의 연수에. | playful, bold, editorial | 도현 / 나눔고딕 / Outfit | 보통 | mosaic | 반반 화면 | 넘어옴·옆에서·내려앉음·떠오름 + link-underline, line-draw, clip-reveal | 제목에서 나온 그림(첫 화면 그림) |
-| `cover-sheet` | 표지 한 장 | 그림이 화면 위쪽을 가득 채우고 제목 판이 그림에 걸쳐요. 교재 첫 쪽 그림이 있으면 그 그림, 없으면 제목 첫 글자를 크게 자른 포스터. 본문 섹션마다 큰 첫 글자가 뒤에 깔려요. 교재·발표 자료가 얼굴인 연수에. | bold, editorial, minimal | G마켓 산스 / 고운돋움 / Bricolage Grotesque | 보통 | cover | 그림 가득 | 위에서 펼침·떠오름·옆에서·번짐 + line-draw, clip-reveal, split-reveal, link-underline | 제목에서 나온 그림(첫 화면 그림) |
+| `cover-sheet` | 표지 한 장 | 그림이 화면 위쪽을 가득 채우고 제목 판이 그림에 걸쳐요. 교재 첫 쪽 그림이 있으면 그 그림, 없으면 제목 첫 글자를 크게 자른 포스터. 본문 섹션마다 큰 첫 글자가 뒤에 깔려요. 교재·발표 자료가 얼굴인 연수에. | bold, editorial, minimal | 페이퍼로지 / 고운돋움 / Bricolage Grotesque | 보통 | cover | 그림 가득 | 위에서 펼침·떠오름·옆에서·번짐 + line-draw, clip-reveal, split-reveal, link-underline | 제목에서 나온 그림(첫 화면 그림) |
 | `vertical-type` | 세로쓰기 | 제목을 세로로 쓰고 큰 원 하나와 날짜 도장을 곁들인 책 표지. 글과 버튼은 오른쪽 맞춤, 본문 머리도 오른쪽에 서요. 국어·독서·역사·인문처럼 글과 여백이 주인공인 연수에. | editorial, calm, natural | 나눔명조 / 리디바탕 / Instrument Serif | 차분 | vertical | 오른쪽 정렬·세로쓰기 | 번짐·옆에서·왼쪽부터 펼침 + line-draw, link-underline | highlight-sweep |
 | `swiss-offset` | 어긋난 격자 | 열두 칸 격자 위에 계단처럼 어긋난 큰 제목이 색면에 걸치고, 가장자리에 날짜를 세워 썼어요. 본문은 섹션마다 머리와 내용의 자리가 좌우로 엇갈려요. 정책·설명회·수학·기관 연수에. | minimal, bold, formal | 스포카 한 산스 네오 / 나눔고딕 / Barlow Condensed | 보통 | offset | 어긋난 격자 | 옆에서·왼쪽부터 펼침·위에서 펼침 + line-draw, split-reveal, link-underline | scroll-fill |
 
@@ -92,6 +92,35 @@
 
 움직임: 차분 단계(1)는 섹션이 들어올 때 한 번(배치마다 어울리는 방식, 그림은 길·축·고리가 제자리로), 보통·스크롤 연출(2·3)은 스크롤에 맞춰 그려짐(여정의 길·트랙 채움·시계판·고리 회전·선언문 문장·필름 띠 가운데 장면·마무리 그림 미끄러짐). 반응: 도식과 목록 잇기(가리키거나 초점이 오면 같은 번호가 켜짐)·낱말 넘김·필름 띠·질문 색인·카드 들림. 동작 줄이기·가벼운 모드·JS가 없으면 완성된 정지 모습이고 아무것도 숨지 않는다.
 모티프(`concept.motif` → 그림 가족: 고리·점·도형 타일·물결·호·색면·별·큰 글자·모눈): 바탕이 같은 두 섹션 사이의 구분 장식, 옅은 바탕 칸 구석의 그림, 무대·좌우 번갈아·큰 얼굴·마무리 그림으로 되풀이한다.
+
+## 3-2. 말로 고치기(디자인 낱말)
+강사가 디자인을 느낌으로 말하면("좀 답답해 보여요") 아래 표로 고칠 곳 2~3가지를 골라 **지금과 바꾼 모습**을 보여 주고(`options`·스크린숏), 고른 것만 `patch`로 적용한다. 지금 설정과 같은 안은 내지 않는다. 앱의 [디자인] 탭·디자인 둘러보기가 같은 규칙을 쓴다(`app/src/design-words/symptoms.js`).
+
+| 이런 말 | 고칠 곳(위에서부터) |
+|---|---|
+| 답답해요·빽빽해요 | 여백이 넓은 프리셋(`calm-forest`·`warm-minimal`·`editorial-ink`·`ripple-center`·`vertical-type`·`sunrise-warm`·`corporate-clean`) · 어두우면 `theme=light` · 움직임 2 이상이면 1 · 칸이 많은 배치(벤토·타일·쪽지)를 줄 목록으로 |
+| 글씨가 잘 안 읽혀요 | 어두우면 `theme=light` · 본문이 명조면 고딕 글꼴 짝(`pretendard-solo` 등) · 장식이 적은 프리셋(`official-brief`·`corporate-clean`) · 움직임 1 |
+| 심심해요·밋밋해요 | 글만 있는 칸을 도식·그림 배치로(일정 `track`·`clock`, 목표 `journey`, 단계 `wheel` 등 내용에 맞는 것) · 그림 첫 화면 프리셋(showcase) · 움직임 한 단계 위 |
+| 움직임이 정신없어요 | 움직임 1 → 0 · 첫 화면 그래픽 빼기(`design.graphic=''`) |
+| 학교 느낌 | `chalkboard`·`paper-workbook`·`playground`·`soft-pastel` |
+| 공식적으로 | `official-brief`·`swiss-offset`·`corporate-clean` · 움직임 1 |
+| 흔한 사이트 같아요 | 왼쪽 정렬이 아닌 프리셋(가운데·세로쓰기·반반·그림 가득·어긋난 격자·자료 그림) · 도식 배치 두 곳 |
+| 일정이 한눈에 안 들어와요(섹션 이름을 말함) | 그 섹션에 맞는 다른 배치(`variantOf`로 맞는지 확인한 것만) |
+| 따뜻하게·세련되게·깔끔하게·발랄하게 | 그 분위기 낱말로 다시 매긴 프리셋 순위 위의 둘·셋 |
+| 너무 어두워요 / 눈부셔요 | `theme=light` / `theme=dark` |
+| 색이 촌스러워요(색 이름을 말함) | 말한 색을 `design.accent`로 · 분위기가 맞는 색 조합(`design.palette`) |
+| 휴대폰에서 길어요 | 가로로 넘기거나 접는 배치(`outline:filmstrip`·`steps5:tabs`·`faq:accordion`) |
+
+디자인 둘러보기에서 낱말을 담으면 이런 요청 문장이 나온다. 괄호 속 이름이 설계도 값이다.
+```
+디자인은 '숲의 숨'(calm-forest)으로 해 주세요.          → design.preset
+첫 화면은 '가운데 정렬'(center)로 놓아 주세요.          → 그 글 배치(layout)를 쓰는 프리셋 가운데 주제·분위기에 가장 맞는 것
+색 조합은 '숲길'(forest-walk)로 해 주세요.              → design.palette   · 화면은 어둡게 → design.theme=dark
+글꼴은 '잡지 명조'(serif-editorial) 짝으로 해 주세요.   → design.fontPair
+움직임은 '차분하게'(1단계)로 해 주세요.                 → design.motion=1
+효과는 '형광펜 긋기'(highlight-sweep)를 써 주세요.      → 2단계 이상이면 design.signature, 첫 화면 바탕이면 design.graphic, 아니면 design.effects[칸]
+본문은 일정표를 '가로 트랙(시간 축)'(schedule:track) 배치로 그려 주세요. → 그 종류 섹션의 layout(내용이 맞을 때만)
+```
 
 ## 4. 효과 58가지
 | id | 이름 | 강도 | 슬롯 | 설명 |

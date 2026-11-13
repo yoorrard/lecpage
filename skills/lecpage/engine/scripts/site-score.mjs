@@ -123,11 +123,13 @@ function probePage() {
   const parse = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return null; const p = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
   const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
   const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
-  let low = 0, unknown = 0, checked = 0;
+  // 화면 낭독기에서 숨긴 꾸밈 글자(aria-hidden, 큰 윤곽 숫자·글자)는 WCAG 1.4.3 예외라 대비를 보지 않고 따로 셈(axe와 같은 기준)
+  let low = 0, unknown = 0, checked = 0, decorative = 0;
   const seen = new Set();
   const tw = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
   for (let n = tw.nextNode(); n && checked < 1500; n = tw.nextNode()) {
     const el = n.parentElement; if (!el || seen.has(el) || !n.nodeValue.trim() || !vis(el)) continue; seen.add(el);
+    if (el.closest('[aria-hidden="true"]')) { decorative++; continue; }
     const cs = getComputedStyle(el); if (+cs.opacity < 0.9) { unknown++; continue; }
     const fg = parse(cs.color); if (!fg) continue;
     let bg = null, bad = false;
@@ -156,7 +158,7 @@ function probePage() {
       checkNearReady: near(/준비물|준비\s*(점검|사항|해요|하기|할\s*것)|사전\s*준비|미리\s*준비|체크리스트|시작\s*전에/i, 'input[type=checkbox], [role=checkbox]'),
     },
     qrLike, css: { print, reduce, dark }, overflow, horizontalScroll: document.documentElement.scrollWidth > innerWidth + 1,
-    a11y: { imgNoAlt: imgs.filter((im) => !im.hasAttribute('alt')).length, controlsNoName: controls.filter((c) => vis(c) && !name(c)).length, inputsNoLabel: [...document.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]), textarea, select')].filter((el) => vis(el) && !labelled(el)).length, headingSkips, h1: document.querySelectorAll('h1').length, lowContrast: low, contrastUnknown: unknown, contrastChecked: checked },
+    a11y: { imgNoAlt: imgs.filter((im) => !im.hasAttribute('alt')).length, controlsNoName: controls.filter((c) => vis(c) && !name(c)).length, inputsNoLabel: [...document.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]), textarea, select')].filter((el) => vis(el) && !labelled(el)).length, headingSkips, h1: document.querySelectorAll('h1').length, lowContrast: low, contrastUnknown: unknown, contrastChecked: checked, contrastDecorative: decorative },
     animations: (document.getAnimations ? document.getAnimations() : []).filter((a) => a.playState === 'running').length,
   };
 }
