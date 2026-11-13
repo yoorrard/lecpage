@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView } from './motion.js';
-import { EX } from './facts.js';
+import { EX } from './example.js';
 
 /**
  * 연수 당일: 참가자 휴대폰에서 질문이 올라가고, 발표 화면에 투표 결과가 차오르는 장면(예시 화면).

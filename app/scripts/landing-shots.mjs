@@ -108,6 +108,7 @@ try {
     if (want('site')) {
       const png = await shoot(dir);
       await save('site-data-lab', png, { q: 0.76, w: 1120 }); // 이야기 '엮어요' 장면, 말로 고치기의 처음 모습
+      // 첫 화면 두 판의 폭(760·520)을 바꾸면 src/landing/hero-shot.js의 크기도 함께
       await save('hero-data-lab', png, { q: 0.62, w: 760 }); // 첫 화면: 교재 표지 밑에 깔려 모서리만 보이므로 작게(첫 화면을 빨리)
       await save('hero-data-lab-s', png, { q: 0.5, w: 520 }); // 좁은 화면 첫 화면(글 아래에 조금 걸침): 더 가볍게, 미리 받아도 첫 그림을 늦추지 않게
     }

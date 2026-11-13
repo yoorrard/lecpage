@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { isReduced } from './motion.js';
-import { EX, shot, shotSize } from './facts.js';
+import { EX } from './example.js';
+import { HERO } from './hero-shot.js';
 
 /**
  * 첫 화면 그림: 교재 표지 한 장의 모서리(로고의 접힌 모서리)가 접혀 넘어가며, 밑에 깔린 연수 사이트가 드러나요.
@@ -40,9 +41,9 @@ export function HeroFold() {
       if (fine) { hero.removeEventListener('pointermove', onMove); hero.removeEventListener('pointerleave', onLeave); }
     };
   }, []);
-  const src = shot('hero-data-lab'), sz = shotSize('hero-data-lab');
+  const src = HERO.big, sz = { w: HERO.big_w, h: HERO.big_h };
   // 좁은 화면은 가벼운 그림(표지 밑에 깔려 모서리만 보이고, 글 아래에 조금 걸침). index.html이 화면 폭에 맞는 쪽만 미리 받음
-  const small = shot('hero-data-lab-s'), ssz = shotSize('hero-data-lab-s');
+  const small = HERO.small, ssz = { w: HERO.small_w, h: HERO.small_h };
   return (
     <div class="ld-hero-vis" ref={box} aria-hidden="true">
       <div class="ld-fold">
