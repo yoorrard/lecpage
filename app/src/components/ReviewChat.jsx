@@ -198,7 +198,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   function revert(m) {
     const a = applied.get(m.id);
     if (a && undoTop() === a.entry) undo();
-    else if (a) { pushUndo('수정 요청 되돌리기'); update({ blueprint: a.blueprint, info: a.info }); toast('되돌렸어요. 그 뒤에 고친 것도 함께요. 위 [되돌리기]로 다시 살려요.'); }
+    else if (a) { pushUndo('수정 요청 되돌리기'); update({ blueprint: a.blueprint, info: a.info }); toast('그 뒤에 고친 것까지 되돌렸어요. 다시 살리려면 위의 [되돌리기]를 누르세요.'); }
     else { toast('새로 고친 뒤라 여기서는 되돌릴 수 없어요. 위의 [되돌리기]를 눌러 주세요.'); return; }
     patchMsg(m.id, { status: 'undone' });
   }
