@@ -57,6 +57,7 @@ export default {
     // 내 도메인에 http로 들어오면 https로(로컬 개발은 그대로)
     if (url.protocol === 'http:' && !isLocalHost(url.hostname)) { url.protocol = 'https:'; return Response.redirect(url.href, 308); }
     const cfg = cfgOf(env);
+    T.every = cfg.tallyEvery;
     let res;
     try {
       if (kind === 'site') res = await serveSite(request, env, ctx, url, cfg);

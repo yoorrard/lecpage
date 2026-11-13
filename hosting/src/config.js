@@ -88,6 +88,8 @@ export function config(env = {}) {
     // 앱 익명 이용 합계(앱 열기·만들기·공개 횟수, 하루 단위 숫자만). STATS=off면 받지 않음
     stats: !off(env.STATS),
     statsDailyCap: num(env.STATS_DAILY_CAP, DEFAULTS.STATS_DAILY_CAP),
+    // Worker가 하루 숫자를 Gate에 묶어 보내는 단위(요청 수). 시험에서만 1로 줄임
+    tallyEvery: num(env.TALLY_EVERY, 50),
     // 관리 화면(/admin): Cloudflare Access 팀 도메인과 애플리케이션 AUD. 둘 다 있어야 켜짐(없으면 /admin은 404)
     access: accessConfig(env),
     // 공지 링크가 갈 수 있는 곳(쉼표로 구분한 호스트). 비우면 https 주소면 됨
