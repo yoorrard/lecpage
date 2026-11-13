@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { FxLive, FX_GROUPS } from '../components/FxGallery.jsx';
 import { E } from '../lib/engine.js';
-import { loadExample } from '../lib/project.js';
+import { loadExample, newProject } from '../lib/project.js';
 import { projects } from '../lib/db.js';
 import { pushUndoFor } from '../lib/undo.js';
 import { copy, toast, fmtDate } from '../lib/util.js';
 import { TASTES, inTaste, mixOrder } from '../lib/tastes.js';
-import { allWords, wordById, KINDS, applyWords, addWord, sentenceOf, siteWords, presetForLayout, typeKo, LEAD_KO, MOTION_KO } from '../design-words/words.js';
+import { allWords, wordById, KINDS, applyWords, addWord, sentenceOf, requestText, siteWords, presetForLayout, typeKo, LEAD_KO, MOTION_KO } from '../design-words/words.js';
 import { SayFix, changesLine } from '../design-words/SayFix.jsx';
 import { SAYINGS, useLine } from '../design-words/symptoms.js';
 import { MiniSite } from '../design-words/MiniSite.jsx';
@@ -148,6 +148,14 @@ export function Gallery({ tab: tab0 }) {
   const toggle = (w) => { if (has(w.id)) setIds(ids.filter((x) => x !== w.id)); else { setIds(addWord(ids, w.id)); toast(`담았어요: ${w.name}`); } };
   const composed = useMemo(() => (sample ? applyWords(sample, ids) : null), [sample, ids.join()]);
   async function openPick() { const all = (await projects.all()).filter((x) => x.blueprint); setPick(all); }
+  /** 첫째 길: 요청 문장을 새 연수의 요청 사항에 넣고 교재 넣기로. 낱말은 연수에 함께 두어, 만든 뒤 [디자인] 탭에서 덜 맞은 것만 바로 맞춤 */
+  async function makeNew() {
+    const p = await newProject('blank');
+    await projects.put({ ...p, info: { ...p.info, request: requestText(ids) }, designWords: ids });
+    setIds([]);
+    toast('요청 사항에 넣었어요. 교재를 넣고 [AI로 사이트 만들기]를 누르세요.');
+    location.hash = `#/p/${p.id}/1`;
+  }
   async function applyTo(p) {
     pushUndoFor(p.id, '담은 낱말 적용', p);
     await projects.put({ ...p, blueprint: applyWords(p.blueprint, ids) });
@@ -158,7 +166,7 @@ export function Gallery({ tab: tab0 }) {
   const sentence = sentenceOf(ids);
   return (
     <div class="stack gallery">
-      <div class="step-head"><div class="step-head-t"><h1>디자인 둘러보기</h1><p>lecpage가 쓰는 디자인 낱말 {words.length}개를 실제 화면으로 봐요. 담은 낱말은 AI 없이 내 연수에 바로 적용돼요.</p></div></div>
+      <div class="step-head"><div class="step-head-t"><h1>디자인 둘러보기</h1><p>lecpage가 쓰는 디자인 낱말 {words.length}개를 실제 화면으로 봐요. 담은 낱말은 AI로 만들 때 요청 사항이 되고, 만든 연수에는 바로 적용돼요.</p></div></div>
 
       <div class="dict-intro">
         <div class="dict-say">
@@ -201,14 +209,15 @@ export function Gallery({ tab: tab0 }) {
           <span class="basket-t"><b>담은 낱말 {ids.length}개</b> · {changesLine(ids)}</span>
           <span class="btn-row">
             <button type="button" class="btn btn-sm" aria-expanded={String(showSentence)} onClick={() => setShowSentence(!showSentence)}>{showSentence ? '문장 접기' : '요청 문장 보기'}</button>
-            <button type="button" class="btn btn-sm btn-primary" onClick={openPick}>내 연수에 적용</button>
+            <button type="button" class="btn btn-sm btn-primary" onClick={makeNew}>요청 사항에 넣고 만들기</button>
+            <button type="button" class="btn btn-sm" onClick={openPick}>만든 연수에 적용</button>
             <button type="button" class="btn btn-sm btn-quiet" onClick={() => setIds([])}>비우기</button>
           </span>
         </div>
         {showSentence && <>
           <div class="basket-list" role="group" aria-label="담은 낱말 빼기">{ids.map((id) => <button type="button" class="chip" onClick={() => setIds(ids.filter((x) => x !== id))} aria-label={`${wordById(id)?.name} 빼기`}>{wordById(id)?.name}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>)}</div>
           <pre class="basket-sentence" aria-label="요청 문장">{sentence}</pre>
-          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">AI 도구(lecpage 스킬)나 AI 요청 사항에 붙여 넣을 때 써요.</span></div>
+          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">AI 도구의 lecpage 스킬에 붙여 넣어도 그대로 맞춰요.</span></div>
         </>}
       </aside>}
 
@@ -226,8 +235,8 @@ export function Gallery({ tab: tab0 }) {
             <ul class="proj-pick">{pick.map((p) => <li><button type="button" onClick={() => applyTo(p)}><b>{p.title || '이름 없는 연수'}</b><small>{fmtDate(p.updatedAt)} 고침 · 디자인 {E.getPreset(p.blueprint.design?.preset).name_ko}</small></button></li>)}</ul>
             <p class="small muted">적용한 뒤 [되돌리기]로 돌아갈 수 있어요.</p>
           </> : <>
-            <p>아직 만든 연수가 없어요. 담은 낱말은 이 브라우저에 남아 있어서, 연수를 만든 뒤 [디자인] 탭에서 한 번에 적용할 수 있어요.</p>
-            <div class="btn-row"><a class="btn btn-primary" href="#/" onClick={() => setPick(null)}>교재 넣고 만들기</a></div>
+            <p>아직 만든 연수가 없어요. 담은 낱말을 요청 사항에 넣고 새로 만들어요.</p>
+            <div class="btn-row"><button type="button" class="btn btn-primary" onClick={makeNew}>요청 사항에 넣고 만들기</button></div>
           </>}
         </div>}
       </Dialog>

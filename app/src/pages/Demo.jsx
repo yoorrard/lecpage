@@ -102,7 +102,7 @@ export function Demo() {
                       <h2 class="h-sub">고쳐 보기</h2>
                       <Field label="연수명"><input value={meta.title} onInput={(e) => setMeta({ title: e.target.value })} maxLength={160} /></Field>
                       <Field label="첫 화면 제목"><textarea class="ta-short" rows={2} value={hero.title || ''} onInput={(e) => setHero({ title: e.target.value })} maxLength={120} /></Field>
-                      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} title="디자인 말로 고치기" desc="예시를 눌러 보세요. 실제 앱에서도 AI 없이 이렇게 바로 바뀌어요." idp="demosay" />
+                      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} title="디자인 말로 고치기" desc="예시를 눌러 보세요. 실제 앱의 [디자인] 탭에서도 이렇게 바로 바뀌어요." idp="demosay" />
                     </div>
                   </div>
                   <Preview p={p} />

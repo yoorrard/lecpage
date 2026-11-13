@@ -231,6 +231,12 @@ export function sentenceOf(ids) {
   if (body.length) lines.push(`본문은 ${body.map((w) => `${w.section}${josa(w.section, '을/를')} ${q(w)}(${w.type}:${w.key})`).join(', ')} 배치로 그려 주세요.`);
   return lines.join('\n');
 }
+/** 새 연수의 요청 사항 칸에 넣을 글(칸 길이 600자 안, 줄 단위로 자름) */
+export function requestText(ids, max = 600) {
+  const out = [];
+  for (const line of sentenceOf(ids).split('\n')) { if ([...out, line].join('\n').length > max) break; out.push(line); }
+  return out.join('\n');
+}
 
 /** 이 사이트에 지금 쓰인 낱말(디자인·첫 화면 배치·움직임·밝기·본문 배치) */
 export function siteWords(bp) {

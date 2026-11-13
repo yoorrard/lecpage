@@ -9,7 +9,7 @@ import { isAdvanced } from './Content.jsx';
 import { pushUndoFor, popUndo, undoStack } from '../../lib/undo.js';
 import { toast } from '../../lib/util.js';
 import { SayFix, changesLine } from '../../design-words/SayFix.jsx';
-import { applyWords, variantOptions, currentVariant, hasVariants, typeKo, LEAD_KO, MOTION_KO } from '../../design-words/words.js';
+import { applyWords, variantOptions, currentVariant, hasVariants, typeKo, wordById, changes, LEAD_KO, MOTION_KO } from '../../design-words/words.js';
 import { useBus, setTry, setLabels, focusSection } from '../../design-words/bus.js';
 import { useBasket } from '../../design-words/basket.js';
 
@@ -87,8 +87,8 @@ export function DesignPanel({ p, update }) {
   const whyText = (r) => (r.concept ? `컨셉 '${concept.motif || concept.idea}'에 맞춘 디자인` : (r.why || []).length ? `어울리는 이유: ${r.why.map(whyKo).join(', ')}` : '');
   return (
     <div class="stack">
-      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="아래에서 직접 고르거나, AI를 연결했다면 [수정 요청]에 적어요." />
-      <BasketNote update={update} remember={remember} />
+      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="아래에서 직접 고르거나 [수정 요청]에 적어 AI에게 맡겨요." />
+      <BasketNote p={p} update={update} remember={remember} />
       <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
       <div class="field"><span>추천 디자인</span>
         <div class="thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={whyText(r)} onPick={() => setD({ preset: r.id, seed: '' }, `디자인 ${E.getPreset(r.id).name_ko}`)} />)}</div>
@@ -245,14 +245,18 @@ function SourceFonts({ d, resolved, setD }) {
 }
 
 /** 갤러리(낱말 사전)에서 담아 둔 낱말: 이 연수에 한 번에 적용 */
-function BasketNote({ update, remember }) {
-  const [ids, setIds] = useBasket();
+function BasketNote({ p, update, remember }) {
+  const [basket, setBasket] = useBasket();
+  // 둘러보기에서 담아 새 연수를 만들었으면 그 낱말이 연수에 남아 있음: AI가 요청을 다 따르지 않았을 때 덜 맞은 것만 보여 줌
+  const own = useMemo(() => (p.designWords || []).filter((id) => wordById(id) && changes(p.blueprint, id)), [p.designWords, p.blueprint]);
+  const ids = basket.length ? basket : own;
   if (!ids.length) return null;
-  const apply = () => { remember('담은 낱말 적용'); update((cur) => ({ blueprint: applyWords(cur.blueprint, ids) })); setIds([]); toast('담은 낱말을 적용했어요. 마음에 안 들면 [되돌리기]를 누르세요.'); };
+  const clear = () => (basket.length ? setBasket([]) : update({ designWords: [] }));
+  const apply = () => { remember('담은 낱말 적용'); update((cur) => ({ blueprint: applyWords(cur.blueprint, ids), ...(basket.length ? {} : { designWords: [] }) })); if (basket.length) setBasket([]); toast('담은 낱말을 적용했어요. 마음에 안 들면 [되돌리기]를 누르세요.'); };
   return (
     <div class="word-note" role="region" aria-label="담아 둔 낱말">
-      <p><b>디자인 둘러보기에서 담은 낱말</b><br />{changesLine(ids)}</p>
-      <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={apply}>모두 적용하기</button><button type="button" class="btn btn-sm btn-quiet" onClick={() => setIds([])}>비우기</button></div>
+      <p><b>{basket.length ? '디자인 둘러보기에서 담은 낱말' : '만들 때 고른 낱말 가운데 아직 다른 것'}</b><br />{changesLine(ids)}</p>
+      <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={apply}>모두 적용하기</button><button type="button" class="btn btn-sm btn-quiet" onClick={clear}>{basket.length ? '비우기' : '그대로 두기'}</button></div>
     </div>
   );
 }
