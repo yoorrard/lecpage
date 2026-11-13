@@ -34,6 +34,9 @@ html.fx-boot .lp-hero :is([data-fx~="schedule-dial"], [data-fx~="minute-map"], [
 /* ---------- 글자 ---------- */
 /* 나눈 낱말은 줄바꿈되지 않는 덩어리. 글자 모드(.fx-wc)는 inline-block 안에 글자들 → 한국어 낱말 중간 줄바꿈 방지 */
 .fx-w { white-space: nowrap; }
+/* 낱말 하나가 줄보다 길면(글자 크게·좁은 화면) 그 안에서만 나눔: 가로로 넘치지 않게. 글자 모드(.fx-wc)는 글자 덩어리라 그대로 */
+.fx-w:not(.fx-wc) { max-width: 100%; }
+@supports (overflow-wrap: anywhere) { .fx-w:not(.fx-wc) { white-space: normal; overflow-wrap: anywhere; } }
 .fx-wc { display: inline-block; }
 /*@fx:split-reveal*/
 .fx-split-reveal .fx-w { display: inline-block; overflow: hidden; vertical-align: top; padding: .1em .03em .16em; margin: -.1em -.03em -.16em; }

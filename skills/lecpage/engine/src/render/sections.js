@@ -387,7 +387,7 @@ function promptBox(p, key, k, ctx, extra = '') {
 const helpNote = (t) => `<div class="lp-st-help" role="note"><b>${icon('hand')}<span>도움말</span></b><p>${br(t)}</p></div>`;
 function stations(s, ctx) {
   const n = s.items.length;
-  const side = `<aside class="lp-st-side"><nav aria-label="실습 목차"><ol>${s.items.map((st, i) => `<li><a href="#st-${esc(st.id)}" data-st-link="${esc(st.id)}"><span class="lp-st-n">${pad2(i + 1)}</span><span class="lp-st-name">${esc(st.name)}</span><span class="lp-st-ck" aria-hidden="true"></span></a></li>`).join('')}</ol></nav>
+  const side = `<aside class="lp-st-side" aria-label="실습 목록과 나의 기록"><nav aria-label="실습 목차"><ol>${s.items.map((st, i) => `<li><a href="#st-${esc(st.id)}" data-st-link="${esc(st.id)}"><span class="lp-st-n">${pad2(i + 1)}</span><span class="lp-st-name">${esc(st.name)}</span><span class="lp-st-ck" aria-hidden="true"></span></a></li>`).join('')}</ol></nav>
 <div class="lp-st-record"><div class="lp-st-record-h"><b>나의 실습 기록</b><span data-st-count>0 / ${n}</span></div><progress max="${n}" value="0" data-st-progress aria-label="실습 진행"></progress><button class="lp-textbtn" type="button" data-st-export>기록 내려받기 ${icon('download')}</button><small>완료 체크와 메모는 이 브라우저에만 저장돼요.</small></div></aside>`;
   const panels = s.items.map((st, i) => {
     const steps = st.steps.length ? `<ol class="lp-steps">${st.steps.map((x) => `<li>${br(x)}</li>`).join('')}</ol>` : '';
@@ -404,7 +404,7 @@ ${links}${steps}${st.note ? helpNote(st.note) : ''}${imgs}${prompts}${src}
   <div class="lp-st-actions"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false">${icon('check', 'lp-check-draw')}<span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden>${icon('hand')}<span>도움 요청</span></button></div>
   <label class="lp-memo"><span>메모</span><textarea data-memo="${esc(st.id)}" rows="3" placeholder="내 수업이나 업무에 어떻게 쓸지 적어 두세요."></textarea></label>
 </div>
-<nav class="lp-st-pn" aria-label="실습 이동">${i > 0 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i - 1].id)}">${icon('left')}<span>이전 실습</span></a>` : '<span></span>'}${i < n - 1 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i + 1].id)}"><span>다음 실습</span>${icon('right')}</a>` : '<span></span>'}</nav>
+<nav class="lp-st-pn" aria-label="${i + 1}번 실습에서 이동">${i > 0 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i - 1].id)}">${icon('left')}<span>이전 실습</span></a>` : '<span></span>'}${i < n - 1 ? `<a class="lp-btn lp-btn-ghost" href="#st-${esc(s.items[i + 1].id)}"><span>다음 실습</span>${icon('right')}</a>` : '<span></span>'}</nav>
 </article>`;
   }).join('\n');
   return wrap(s, ctx, head(s, ctx, '실습') + `<div class="lp-st-shell" data-stations="${esc(s.id)}" data-layout="${esc(s.layout)}"${fx(ctx, 'progress') ? ` data-progress-fx="${esc(ctx.design.effects.progress)}"` : ''}>${side}<div class="lp-st-panels">${panels}</div></div>`);

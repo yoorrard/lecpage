@@ -132,11 +132,13 @@ function helpSheet(ctx) {
 
 /**
  * 도크의 '출석' 한 번 누르기: 질문·투표를 하지 않은 사람도 참가자 명단(별명)에 남게 함.
- * 출석 칸(입실·퇴실)이 있으면 그 칸이 맡고, 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
+ * 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
  */
 export function quickAttend(bp) {
   return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
 }
+/** 출석 칸(입실·퇴실)이 있는 연수: 연수 시간에 아직 입실하지 않았으면 도크의 [출석]이 입실을 바로 보냄(칸까지 내려가 찾지 않게) */
+const dockAttend = (bp) => quickAttend(bp) || (bp.live.provider !== 'none' && bp.sections.some((s) => s.type === 'attendance'));
 
 function dialogs(ctx) {
   const pv = ctx.bp.privacy;
@@ -156,7 +158,7 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input typ
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
-  ${quickAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend hidden>${icon('check')}<span>출석</span></button>` : ''}
+  ${dockAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend${quickAttend(ctx.bp) ? '' : '="in"'} hidden>${icon('check')}<span>출석</span></button>` : ''}
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
   ${ctx.bp.live.features.includes('signal') ? `<div class="lp-fold lp-signal"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="지금 이해 정도 보내기" title="이해 정도"><i data-signal-now aria-hidden="true"></i></button><div class="lp-fold-list" role="group" aria-label="지금 이해 정도">${SIGNALS.map((x) => `<button type="button" data-signal="${x.v}" aria-pressed="false"><i aria-hidden="true">${x.g}</i><span>${x.label}</span></button>`).join('')}</div></div>` : ''}

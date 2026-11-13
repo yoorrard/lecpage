@@ -879,17 +879,20 @@
       if (!b.getAttribute('data-attend') || b.tagName !== 'BUTTON') return;
       b.addEventListener('click', function () {
         var kind = b.getAttribute('data-attend');
-        ensureJoin().then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
+        ensureJoin().then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); if (kind === 'in') $$('[data-dock-attend]').forEach(function (d) { d.hidden = true; }); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
       });
     });
 
-    // 출석 한 번 누르기(도크, 출석 칸이 없는 사이트): 별명을 정하고 누르면 참가자 명단에 남음. 질문·투표를 하지 않은 사람도 명단에 들어가게
-    var da = $('[data-dock-attend]');
-    if (da && store.get('att:in', null) === null) {
+    // 출석 한 번 누르기(도크): 별명을 정하고 누르면 참가자 명단에 남음. 질문·투표를 하지 않은 사람도 명단에 들어가게.
+    // 출석 칸이 있는 사이트(data-dock-attend="in")는 연수 시간(시작 30분 전부터)에 입실 전일 때만 보이고, 누르면 그 칸의 입실 확인과 같음
+    var da = $('[data-dock-attend]'), ph = DATA.phase, gate = da && da.getAttribute('data-dock-attend') === 'in';
+    var soon = !gate || (ph && ph.start && new Date(ph.start) - new Date() < 30 * 60000 && root.getAttribute('data-phase') !== 'after');
+    if (da && soon && store.get('att:in', null) === null) {
       da.hidden = false;
       da.addEventListener('click', function () {
         ensureJoin().then(function () { return conn.add('attendance', { kind: 'in' }); }).then(function () {
-          store.set('att:in', new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); da.hidden = true; toast('출석했어요. 고마워요.');
+          var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), s = $('[data-attend-state]');
+          store.set('att:in', t); da.hidden = true; if (s) s.textContent = '입실 확인 ' + t; toast(gate ? '입실을 확인했어요.' : '출석했어요. 고마워요.');
         }, function (err) { if (err && err.message !== 'cancel') toast('출석을 보내지 못했어요. 잠시 뒤 다시 눌러 주세요.'); });
       });
     }
