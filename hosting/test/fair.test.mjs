@@ -162,3 +162,15 @@ test('저장량 합계: 메모리로 더하고 빼도 표를 훑은 값과 같�
   g.tot = null;
   assert.deepEqual(g.usage(), { sites: 29, bytes: scan().bytes }, '다시 깨어나면 한 번 훑음');
 });
+
+test('경합: 50명이 동시에 만들어도 하루 상한·기기 몫을 정확히 지킴(확인과 적기 사이에 기다림이 없음)', async () => {
+  const { call } = gate({ DAILY_SITE_CAP: 30, SITES_PER_HOUR: 1000, SITES_PER_DAY: 1000 });
+  const res = await Promise.all(Array.from({ length: 50 }, (_, k) => reserve(call, { id: `d${String(k).padStart(9, 'x')}`.slice(0, 10), ip: `10.1.${k}.1` })));
+  assert.equal(res.filter((r) => r.status === 200).length, 30);
+  const no = res.filter((r) => r.status !== 200);
+  assert.ok(no.every((r) => r.status === 429 && r.body.error.reason === 'daily_cap' && r.body.error.scope === 'everyone'), JSON.stringify(no[0]?.body));
+  assert.equal((await call('GET', 'sites')).body.sites.length, 30);
+  const { call: c2 } = gate({ SITES_PER_DEVICE: 3, SITES_PER_HOUR_SHARED: 1000, SITES_PER_DAY_SHARED: 1000 });
+  const same = await Promise.all(Array.from({ length: 10 }, (_, k) => reserve(c2, { id: `e${String(k).padStart(9, 'x')}`.slice(0, 10), device: 'one-device-0123456789' })));
+  assert.equal(same.filter((r) => r.status === 200).length, 3, '한 기기는 동시에 보내도 하루 3개');
+});

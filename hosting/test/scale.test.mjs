@@ -202,3 +202,25 @@ test(`부하: 강사 ${TEACHERS}명 동시 공개 + 방 ${TEACHERS}개 × 참가
   assert.equal(out.load.lostParticipants, 0, '참가자가 빠지지 않음');
   assert.ok(!/Uncaught|overloaded/i.test(e.h.log()), e.h.log().slice(-1500));
 });
+
+const BIG = Number(process.env.LOAD_BIG_ROOM) || 300;
+test(`큰 방 하나(DO 하나에 몰림): 강당 연수 참가자 ${BIG}명이 한꺼번에 들어와 묻기·긴 대기`, async (t) => {
+  const e = await setup(t); if (!e) return;
+  const { base, files } = e;
+  const code = 'BIG' + randomBytes(3).toString('hex').toUpperCase();
+  const pub = await appPublish(base, files, { live: liveFor(code), booking: { date: kst(2), people: BIG, live: true, network: 'restricted' } });
+  assert.ok(pub.ok, JSON.stringify(pub.res?.body));
+  const origin = new URL(pub.site.url).origin; const lv = `${base}/live/api/${code}`;
+  const t0 = performance.now(); const lat = [];
+  const res = await pool(Array.from({ length: BIG }, (_, k) => (k % 2 ? 'poll' : 'long')), BIG, async (mode) => {
+    const r = await participant(lv, origin, mode, { polls: 4, gapMs: 100 }).catch((err) => ({ ok: false, step: 'throw', res: { status: 0, body: String(err.message) } }));
+    if (r.lat) lat.push(...r.lat);
+    return r;
+  });
+  const s = await req(lv, 'GET', '/snapshot?since=0', { headers: { 'x-lec-admin': encodeURIComponent(teacherKey(code)) } });
+  out.bigRoom = { participants: BIG, seconds: Math.round((performance.now() - t0) / 100) / 10, p50: pct(lat, 50), p95: pct(lat, 95), max: pct(lat, 100), failed: res.filter((r) => !r.ok).length, questions: s.body.questions.length, joined: s.body.participants.length };
+  t.diagnostic(JSON.stringify(out.bigRoom));
+  if (process.env.SCALE_OUT) writeFileSync(process.env.SCALE_OUT, JSON.stringify(out, null, 2));
+  assert.equal(out.bigRoom.failed, 0, JSON.stringify(res.filter((r) => !r.ok).slice(0, 2).map((r) => ({ step: r.step, status: r.res?.status, body: r.res?.body }))));
+  assert.equal(out.bigRoom.questions, BIG); assert.equal(out.bigRoom.joined, BIG);
+});
