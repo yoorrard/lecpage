@@ -258,6 +258,40 @@ test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 강사�
   for (const h of E.decideHost({ instant: true }).hosts) assert.ok(E.HOSTS[h], h);
 });
 
+test('올릴 곳 Onpod: 명령(skill)에서만, Cloudflare 뒤. 이미 쓰면 먼저이고 할 일 0번, 한도 밖이면 뒤로', () => {
+  assert.ok(!E.decideHost({}).hosts.includes('onpod'), '앱에서는 못 올림(REST CORS 없음)');
+  const dev = E.decideHost({ skill: 'dev' });
+  assert.ok(dev.hosts.indexOf('onpod') > dev.hosts.indexOf('cloudflare'));
+  assert.equal(dev.steps, 2, 'Cloudflare: 가입·로그인 승인');
+  const mine = E.decideHost({ skill: 'dev', connected: ['onpod'] });
+  assert.equal(mine.pick, 'onpod'); assert.equal(mine.steps, 0);
+  assert.ok(E.decideHost({ skill: 'dev', commercial: true }).hosts.includes('onpod'), '상업 이용 제한 없음');
+  const big = E.decideHost({ skill: 'dev', siteMB: 150 }).hosts;
+  assert.equal(big.indexOf('onpod'), big.indexOf('firebase') - 1, '사이트 100MB를 넘으면 맨 뒤(firebase·zip 앞)');
+  assert.equal(E.HOST_STEPS.onpod.skill, 4); assert.equal(E.HOST_STEPS.onpod.app, null);
+  assert.equal(E.decideInfra({ size: 30, skill: 'set' }).hostSteps, 2);
+  assert.equal(E.decideInfra({ size: 30 }).hostSteps, 6, '앱 기본(Vercel 가입·토큰) 측정값');
+  const MB = 1024 * 1024;
+  assert.ok(E.checkHost('onpod', { bytes: 90 * MB, files: 4000, maxFile: 40 * MB }).ok);
+  assert.equal(E.checkHost('onpod', { bytes: 120 * MB, files: 6000, maxFile: 60 * MB }).errors.length, 3);
+  assert.match(E.HOSTS.onpod.cli, /onpod@latest static deploy .* --no-spa/);
+});
+
+test('구조화 데이터: 공개 연수의 첫 화면에만 Event JSON-LD(비공개·다른 쪽에는 없음)', () => {
+  const bp = EX('data-lab');
+  const pub = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, venue: '연수원 3층', start: '14:00', end: '17:00' } }, { runtime: nodeRuntime() });
+  const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(pub.files['index.html'])[1]);
+  assert.equal(ld['@type'], 'Event'); assert.equal(ld.startDate, `${bp.meta.date}T14:00:00+09:00`); assert.equal(ld.endDate, `${bp.meta.date}T17:00:00+09:00`);
+  assert.equal(ld.location.name, '연수원 3층');
+  assert.ok(!/ld\+json/.test(pub.files['check.html']) && !/ld\+json/.test(pub.files['poster.html']));
+  for (const mode of ['link', 'password']) assert.ok(!/ld\+json/.test(E.build({ ...bp, access: { mode } }, { runtime: nodeRuntime() }).files['index.html']), mode);
+  const noTime = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, start: '', end: '' } }, { runtime: nodeRuntime() });
+  const ld2 = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(noTime.files['index.html'])[1]);
+  assert.equal(ld2.startDate, bp.meta.date); assert.ok(!('endDate' in ld2), '끝 시각을 지어내지 않음');
+  const evil = E.build({ ...bp, access: { mode: 'public' }, meta: { ...bp.meta, title: '</script><script>alert(1)</script>' } }, { runtime: nodeRuntime() });
+  assert.ok(!/<\/script><script>alert/.test(evil.files['index.html']), '제목 속 </script>가 블록을 닫지 못함');
+});
+
 test('올릴 곳 한도: 크기·파일 수가 넘으면 올리기 전에 알려 줌', () => {
   const MB = 1024 * 1024;
   assert.ok(E.checkHost('vercel', { bytes: 20 * MB, files: 200, maxFile: 2 * MB }).ok);
