@@ -116,9 +116,9 @@
 .ld-keep li.is-ch i{background:color-mix(in srgb,var(--accent) 45%,var(--line))}
 @supports (animation-timeline: view()){
   @media (prefers-reduced-motion:no-preference){
-    .ld-keep li.is-ch{animation:ld-back linear both;animation-timeline:--ld-keep;animation-range:cover calc(26% + var(--i) * 5%) cover calc(32% + var(--i) * 5%)}
-    .ld-keep li.is-ch i{animation:ld-back-i linear both;animation-timeline:--ld-keep;animation-range:cover calc(26% + var(--i) * 5%) cover calc(32% + var(--i) * 5%)}
-    .ld-keep li.is-ch::after{animation:ld-back-ok linear both;animation-timeline:--ld-keep;animation-range:cover calc(28% + var(--i) * 5%) cover calc(33% + var(--i) * 5%)}
+    .ld-keep li.is-ch{animation:ld-back linear both;animation-timeline:--ld-keep;animation-range:cover calc(12% + var(--i) * 4%) cover calc(18% + var(--i) * 4%)}
+    .ld-keep li.is-ch i{animation:ld-back-i linear both;animation-timeline:--ld-keep;animation-range:cover calc(12% + var(--i) * 4%) cover calc(18% + var(--i) * 4%)}
+    .ld-keep li.is-ch::after{animation:ld-back-ok linear both;animation-timeline:--ld-keep;animation-range:cover calc(14% + var(--i) * 4%) cover calc(19% + var(--i) * 4%)}
   }
 }
 @keyframes ld-back{from{border-color:var(--peach-ink);border-style:dashed;background:var(--peach)}}
