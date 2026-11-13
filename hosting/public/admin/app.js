@@ -108,7 +108,7 @@
     paused.textContent = o.uploads && o.uploads.paused ? '새 업로드를 멈춰 둔 상태예요' + (o.uploads.reason ? ' — ' + o.uploads.reason : '') + '. 이미 올라온 사이트는 열려요.' : '';
 
     var t = o.today || {};
-    $('[data-today-date]').textContent = t.date ? '(' + t.date + ' 오전 9시부터, UTC 날짜)' : '';
+    $('[data-today-date]').textContent = t.date ? '(' + Number(t.date.slice(5, 7)) + '월 ' + Number(t.date.slice(8, 10)) + '일 오전 9시부터, 한국 시간)' : '';
     var adv = $('[data-advice]');
     adv.textContent = '유료 전환: ' + ((o.advice && o.advice.text) || '');
     adv.className = 'advice' + (o.advice && o.advice.recommend ? ' recommend' : '');
@@ -142,11 +142,12 @@
   function renderChart(o) {
     var box = clear($('[data-chart]'));
     var days = o.days || [];
-    var W = 720; var H = 240; var L = 44; var R = 12; var T = 12; var B = 26;
+    // 그릴 곳의 실제 너비로 그려 글자가 눌리지 않게(창 크기가 바뀌면 다시 그림)
+    var W = Math.max(300, Math.round(box.clientWidth || 720)); var H = W < 560 ? 200 : 240; var L = 40; var R = 8; var T = 12; var B = 26;
     var max = Math.max.apply(null, days.map(function (d) { return d.req || 0; }).concat([1]));
     var top = o.budget ? Math.max(o.budget * 0.7, max) : max * 1.15;
     var y = function (v) { return T + (H - T - B) * (1 - v / top); };
-    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none', role: 'img', 'aria-label': '최근 30일 하루 요청 수 막대그래프' });
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'img', 'aria-label': '최근 30일 하루 요청 수 막대그래프' });
     for (var g = 0; g <= 4; g++) {
       var v = (top / 4) * g; var yy = y(v);
       svg.appendChild(s('line', { class: g ? 'grid' : 'base', x1: L, x2: W - R, y1: yy, y2: yy }));
@@ -164,7 +165,7 @@
       hit.addEventListener('mousemove', function (e) { tip.textContent = label; tip.hidden = false; tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; bar.classList.add('on'); });
       hit.addEventListener('mouseleave', function () { tip.hidden = true; bar.classList.remove('on'); });
       svg.appendChild(hit); svg.appendChild(bar);
-      if (i % 5 === 0 || i === days.length - 1) svg.appendChild(s('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: d.date.slice(5).replace('-', '/') }));
+      if (i % (W < 560 ? 7 : 5) === 0 || i === days.length - 1) svg.appendChild(s('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: d.date.slice(5).replace('-', '/') }));
     });
     if (o.budget) {
       [[0.5, '50%', ''], [o.newWorkShare || 0.6, Math.round((o.newWorkShare || 0.6) * 100) + '% 새 업로드 멈춤', 'stop']].forEach(function (ref) {
@@ -373,6 +374,8 @@
     return Promise.all([loadOverview(), loadSites($('[data-site-search]').q.value.trim()), loadReports(), loadNotices(), loadAudit()])
       .catch(function (err) { flash(err.status === 403 ? '로그인이 끝났어요. 화면을 새로 고쳐 Cloudflare Access로 다시 들어와 주세요.' : err.message, true); });
   }
+  var resizeT = 0;
+  addEventListener('resize', function () { clearTimeout(resizeT); resizeT = setTimeout(function () { if (state.overview) renderChart(state.overview); }, 150); });
   $('[data-refresh]').addEventListener('click', function () { reloadAll().then(function () { flash('새로 불러왔어요.'); }); });
   resetForm();
   reloadAll();
