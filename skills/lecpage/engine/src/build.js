@@ -10,6 +10,7 @@ import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, r
 import { esc } from './render/html.js';
 import { usedVariants } from './design/layouts.js';
 import { pruneUnusedCss } from './css-prune.js';
+import { deferFontLinks } from './font-bundle.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
 // 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음
@@ -163,6 +164,8 @@ export function build(input, opts = {}) {
     files[p] = data;
   }
   if (missingFx.length) warnings.push({ path: 'design.effects', message_ko: `효과 파일이 없어 뺐습니다: ${missingFx.join(', ')}` });
+
+  deferFontLinks(files); // 글꼴 CDN이 막혀도 첫 화면이 기다리지 않게(boot.js가 받은 뒤 적용)
 
   const report = {
     preset: design.preset, motion: design.motion, effects: effectIds.filter((x) => !missingFx.includes(x)), live: live ? bp.live.provider : 'none',

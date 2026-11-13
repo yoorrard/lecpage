@@ -110,6 +110,17 @@ test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각만 �
   assert.deepEqual(E.parseRange('U+AC00-D7A3, U+0041, U+4??'), [[0xac00, 0xd7a3], [0x41, 0x41], [0x400, 0x4ff]]);
 });
 
+test('바깥 글꼴 스타일시트는 첫 화면을 붙잡지 않음(media="print" → 받은 뒤 boot.js가 all로): 글꼴 CDN이 응답 없이 막힌 망에서도 쪽이 뜸', () => {
+  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  for (const page of Object.keys(r.files).filter((k) => k.endsWith('.html'))) {
+    const links = r.files[page].match(/<link rel="stylesheet" href="https:[^>]+>/g) || [];
+    assert.ok(links.length, page);
+    for (const l of links) assert.match(l, / media="print" data-lp-font>$/, page + ': ' + l);
+    assert.ok(r.files[page].indexOf('data-lp-font') < r.files[page].indexOf('assets/boot.js'), 'boot.js가 글꼴 링크 뒤에 있어야 찾음');
+  }
+  assert.match(r.files['assets/boot.js'], /link\[data-lp-font\][\s\S]*media = 'all'/);
+});
+
 test('글꼴 함께 담기(학교망 기본값): woff2만 담고, 사이트가 쓰는 굵기로 브라우저가 고를 굵기만 남긴다(가변 굵기는 그대로)', async () => {
   const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
   const w = E.usedWeights(r.files);

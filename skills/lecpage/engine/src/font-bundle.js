@@ -28,6 +28,19 @@ export function siteCodepoints(files) {
 }
 const needed = (range, cps) => { if (!range.length) return true; for (const c of cps) for (const [a, b] of range) if (c >= a && c <= b) return true; return false; };
 
+/**
+ * 바깥 글꼴 스타일시트가 첫 화면을 붙잡지 않게: media="print"로 받아 두고, 다 받으면 boot.js가 'all'로 바꿈.
+ * 학교·기관 망이 글꼴 CDN을 응답 없이 버리면(패킷 버림) 머리의 스타일시트를 기다리느라 쪽이 하얗게 멈췄음(8초 뒤에도 첫 화면 없음, school-network-2026-11 §7).
+ * 이제는 기본 글꼴로 바로 뜨고 글꼴이 오면 바뀜. 스크립트가 꺼진 브라우저는 기본 글꼴 그대로(인쇄에는 글꼴이 씀)
+ */
+export function deferFontLinks(files) {
+  for (const p of Object.keys(files)) {
+    if (!p.endsWith('.html') || typeof files[p] !== 'string') continue;
+    files[p] = files[p].replace(/<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin>/g, (all, u) => (FONT_HOSTS.test(u.replace(/&amp;/g, '&')) ? `<link rel="stylesheet" href="${u}" crossorigin media="print" data-lp-font>` : all));
+  }
+  return files;
+}
+
 /** 사이트 CSS·쪽이 쓰는 굵기(font-weight·--…weight 변수·font 줄임 속성). 400·700(보통·굵게)은 늘 */
 export function usedWeights(files) {
   const set = new Set([400, 700]);
@@ -100,7 +113,7 @@ export async function bundleFonts(files, o = {}) {
   const out = { ...files }, report = { ok: false, external: 0, bundled: 0, bytes: 0, skipped: [] };
   if (typeof get !== 'function') { report.skipped.push('fetch 없음'); return { files: out, report }; }
   const htmls = Object.keys(out).filter((p) => p.endsWith('.html') && typeof out[p] === 'string');
-  const linkRe = /<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin>\n?/g;
+  const linkRe = /<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin(?: media="print" data-lp-font)?>\n?/g;
   const sheets = [...new Set(htmls.flatMap((p) => [...out[p].matchAll(linkRe)].map((m) => m[1].replace(/&amp;/g, '&')).filter((u) => FONT_HOSTS.test(u))))];
   const theme = typeof out['assets/theme.css'] === 'string' ? out['assets/theme.css'] : '';
   report.external = sheets.length + faces(theme).filter((f) => f.urls.some((u) => FONT_HOSTS.test(u))).length;

@@ -7,7 +7,7 @@ export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES,
 export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES } from './design/presets.js';
 export { BODY_VARIANTS, PRESET_BODY, MOTION_VARIANTS, variantOf, variantIds, defaultVariant, cleanLayout, bodyFingerprint, usedVariants, motifFamily, recapWords } from './design/layouts.js';
 export { parseNum, tableChart, glanceSeries } from './design/numbers.js';
-export { bundleFonts, siteCodepoints, parseRange, usedWeights } from './font-bundle.js';
+export { bundleFonts, siteCodepoints, parseRange, usedWeights, deferFontLinks } from './font-bundle.js';
 export { promptRows } from './render/sections.js';
 export { FONTS, fontAssets, fontStack, matchFont, fontsFromSource, fontFamilyName } from './design/fonts.js';
 export { themeCSS, themeTokens, htmlAttrs, presetWithOverrides } from './design/tokens.js';
