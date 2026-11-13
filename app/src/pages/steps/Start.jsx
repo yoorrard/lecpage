@@ -8,8 +8,9 @@ import { getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
 import { pushUndoFor } from '../../lib/undo.js';
 import { blobs } from '../../lib/db.js';
-import { fmtBytes, toast } from '../../lib/util.js';
-import { takePendingFiles } from '../../lib/project.js';
+import { fmtBytes, toast, copy } from '../../lib/util.js';
+import { takePendingFiles, deleteProject, isSavedFile, openSavedFile, OPEN_FAIL } from '../../lib/project.js';
+import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
 import { FEATURES, makeDraft, syncInfo, applyInfo } from '../../lib/blueprint.js';
@@ -18,7 +19,7 @@ import { FoundSummary } from '../../components/Structure.jsx';
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
 const FORMATS = [{ value: '', label: '교재 보고 정하기' }, { value: 'lecture', label: '강의·특강' }, { value: 'practice', label: '실습·워크숍' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'course', label: '여러 차시 과정' }];
 const AFTER = 'lecpage:after-connect'; // (예전 OpenRouter 로그인) 로그인하러 나갔다 돌아오면 이어서 만들 프로젝트
-const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc';
+const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
 const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 
 /** 교재 파일 읽기(브라우저 안). 원본은 src/에 보관하고 사이트에는 넣지 않음(공유하기에서 고를 때만) */
@@ -50,7 +51,7 @@ function useIngest(p, update) {
     const det = merged?.detected || {};
     const summary = merged ? ing.summarizeMaterial(merged) : '';
     dropAssetCache(p.id); // 새 쪽 그림을 미리보기가 바로 쓰게
-    // 지금 값(cur)에 합침: 읽는 동안 바뀐 연수 정보(바로 공개 서버가 켠 참여 기능 등)를 예전 값으로 덮지 않게
+    // 지금 값(cur)에 합침: 읽는 동안 바뀐 연수 정보(바로 배포 서버가 켠 참여 기능 등)를 예전 값으로 덮지 않게
     update((cur) => {
       const info = { ...cur.info };
       // 교재에서 찾은 값은 빈칸에만(강사가 쓴 값이 우선). 어디서 왔는지 기억해 교재를 지우면 함께 지움
@@ -99,9 +100,9 @@ export function StepStart({ p, update, go }) {
   const inp = useRef();
   const titleRef = useRef();
   const [over, setOver] = useState(false);
-  // AI로 만들기: 쓰던 챗봇 창 길은 이 화면 안 카드(AiPanel)에서 바로. API 키 길은 작은 링크 → 연결 창(연결하면 바로 만들기)
+  // AI로 만들기: 쓰던 AI 창 길은 이 화면 안 카드(AiPanel)에서 바로. API 키 길은 작은 링크 → 연결 창(연결하면 바로 만들기)
   const [keyOpen, setKeyOpen] = useState(''); // '' | 'key'(API 키) | 'gemini'(무료 키)
-  const [remake, setRemake] = useState(false); // 사이트가 있는데 키 없이 AI로 다시 만들 때: 챗봇 카드를 다시 보여 줌
+  const [remake, setRemake] = useState(false); // 사이트가 있는데 키 없이 AI로 다시 만들 때: AI 창 카드를 다시 보여 줌
   const makeAfter = useRef(false); // [API 키로 만들기]로 연 창이면 키를 연결한 뒤 바로 만듦
   const [conn, setConn] = useState(undefined); // 연결된 AI(undefined: 확인 중 · null: 없음)
   const job = useAiJob(p.id);
@@ -118,9 +119,18 @@ export function StepStart({ p, update, go }) {
   const [confirmRemake, setConfirmRemake] = useState(false);
   const [titleErr, setTitleErr] = useState(false);
   const { busy, pct, handle, removeFile } = useIngest(p, update);
+  /** 교재 자리에 저장한 연수(.lecpage, AI 에이전트가 만든 것 포함)를 놓으면 교재가 아니라 그 연수로 엶. 이 연수가 아직 비어 있으면 지움 */
+  async function take(list) {
+    const files = Array.from(list || []);
+    const saved = files.find(isSavedFile);
+    if (!saved) return handle(files);
+    const cur = latest.current; const empty = !cur.blueprint && !cur.files?.length && !cur.info?.title?.trim();
+    try { toast(await openSavedFile(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
+    catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
+  }
   const info = p.info;
   useEffect(() => { const f = takePendingFiles(p.id); if (f.length) handle(f); }, []);
-  // 운영자의 '바로 공개' 서버가 참여 기능까지 맡는 앱이면, 새 연수는 질문 받기·나눔 보드를 켠 채로 시작(따로 연결할 것이 없으므로)
+  // 운영자의 '바로 배포' 서버가 참여 기능까지 맡는 앱이면, 새 연수는 질문 받기·나눔 보드를 켠 채로 시작(따로 연결할 것이 없으므로)
   useEffect(() => {
     if (p.blueprint || p.infoTouched || (p.info.features || []).length) return;
     instantInfo().then((i) => { if (i?.live?.url && !latest.current.blueprint && !latest.current.infoTouched) update((cur) => ({ info: { ...cur.info, features: ['qa', 'board'] } })); });
@@ -146,7 +156,7 @@ export function StepStart({ p, update, go }) {
   }
   /**
    * AI로(키가 연결돼 있을 때): 기본 초안을 먼저 보여 주고 AI가 교재를 읽어 다시 짬(끝나면 바뀌고, 되돌릴 수 있음).
-   * 키가 없으면 이 화면의 챗봇 카드로(사이트가 있으면 카드를 다시 펼침)
+   * 키가 없으면 이 화면의 AI 창 카드로(사이트가 있으면 카드를 다시 펼침)
    */
   async function makeWithAi(ai = conn) {
     if (needTitle()) return;
@@ -159,7 +169,7 @@ export function StepStart({ p, update, go }) {
   makeWithAiRef.current = makeWithAi;
   function onConnected(a) { setConn(a); setKeyOpen(''); if (a && makeAfter.current) makeWithAi(a); makeAfter.current = false; }
   async function disconnect() { await forgetKey(conn.provider); setConn(await getActiveAI()); toast('AI 연결을 끊었어요.'); }
-  /** 쓰던 챗봇 창의 답(교재 지킴이를 거친 설계도) → 사이트. 교재대로 되돌린 곳은 다음 화면 띠에서 알림 */
+  /** 쓰던 AI 창의 답(교재 지킴이를 거친 설계도) → 사이트. 교재대로 되돌린 곳은 다음 화면 띠에서 알림 */
   function onAi(bp, meta = {}) {
     const cur = latest.current;
     if (cur.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', cur);
@@ -193,7 +203,7 @@ export function StepStart({ p, update, go }) {
           <div class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-            onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) handle(e.dataTransfer.files); }}>
+            onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) take(e.dataTransfer.files); }}>
             {p.files?.length && !busy ? <b aria-live="polite">＋ 교재 더 넣기</b> : <>
               <Mascot size={72} mood={busy ? 'think' : over ? 'wow' : 'idle'} look={!!busy} />
               <b aria-live="polite">{busy || '여기에 교재 파일을 놓거나 눌러서 고르세요'}</b>
@@ -201,7 +211,7 @@ export function StepStart({ p, update, go }) {
               {busy && pct > 0 && <div style={{ width: 'min(320px,80%)' }}><Progress pct={pct} /></div>}
             </>}
           </div>
-          <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { handle(e.target.files); e.target.value = ''; }} />
+          <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
           {p.files?.length > 0 && (
             <ul class="files">
               {p.files.map((f, i) => (
@@ -256,12 +266,15 @@ export function StepStart({ p, update, go }) {
         </div>
           : conn === null ? <AiPanel p={p} onBlueprint={onAi} start={{ how: 'paste', full: true, make: true }} head={makeHead} wait={p.chatWait} onWait={(v) => update({ chatWait: v }, { now: true })} guard={() => !needTitle()} busy={!!busy}>{request}</AiPanel>
             : <p class="muted small" aria-live="polite">불러오는 중…</p>}
-        {conn === null && <div class="make-ways" role="group" aria-labelledby="make-ways-h">
+        {conn !== undefined && <div class="make-ways" role="group" aria-labelledby="make-ways-h">
           <p class="small make-ways-h" id="make-ways-h">다른 방법</p>
-          <div class="make-way"><span><b>API 키</b> 버튼 한 번으로 만들어요. 처음에 결제 등록이 필요하고, 사이트 하나에 몇백 원쯤 들어요.</span>
-            <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('key'); }}>API 키로 만들기</button></div>
-          <div class="make-way"><span><b>Gemini 무료 키</b> 돈 없이 버튼 한 번. Flash 모델이라 구성·문구가 단순할 수 있고, 하루 횟수가 정해져 있어요.</span>
-            <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('gemini'); }}>무료 키로 만들기</button></div>
+          {conn === null && <>
+            <div class="make-way"><span><b>API 키</b> 버튼 한 번으로 만들어요. 처음에 결제 등록이 필요하고, 사이트 하나에 몇백 원쯤 들어요.</span>
+              <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('key'); }}>API 키로 만들기</button></div>
+            <div class="make-way"><span><b>Gemini 무료 키</b> 돈 없이 버튼 한 번. Flash 모델이라 구성·문구가 단순할 수 있고, 하루 횟수가 정해져 있어요.</span>
+              <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('gemini'); }}>무료 키로 만들기</button></div>
+          </>}
+          <AgentWay />
         </div>}
         <div class="make-alt">
           {!p.blueprint && <button type="button" class="btn btn-sm btn-quiet" disabled={!!busy} onClick={make}>AI 없이 기본 초안만</button>}
@@ -285,5 +298,25 @@ export function StepStart({ p, update, go }) {
           <AiConnect initial={keyOpen === 'gemini' ? 'gemini' : ''} onConnected={onConnected} onChat={() => { setKeyOpen(''); makeAfter.current = false; }} /></div>}
       </Dialog>
     </>
+  );
+}
+
+/** AI 카드 '다른 방법'의 AI 에이전트 줄(접힘): 스킬 설치 명령(lib/agent.js, 랜딩과 같은 데이터)과 .lecpage로 이어 하기 */
+function AgentWay() {
+  return (
+    <details class="make-agent">
+      <summary><b>AI 에이전트</b> Claude Code·Codex 등을 쓴다면</summary>
+      <div class="make-agent-b">
+        <p>lecpage 스킬을 넣고 "이 PPT로 연수 사이트 만들어 줘"라고 말해요.</p>
+        {SKILL_CMDS.map((c) => (
+          <div class="agent-cmd">
+            <span class="agent-cmd-for">{c.for} {c.where}</span>
+            <code>{c.cmd}</code>
+            <button type="button" class="btn btn-sm" aria-label={`${c.for} 설치 명령 복사`} onClick={() => copy(c.cmd, '명령을 복사했어요.')}>복사</button>
+          </div>
+        ))}
+        <p>만든 연수는 .lecpage 파일로 이 화면에 놓으면 디자인·배포를 이어서 해요. <a href="#/help/skill">도구별 설치 방법</a></p>
+      </div>
+    </details>
   );
 }

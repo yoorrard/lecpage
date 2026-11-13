@@ -31,7 +31,7 @@ const urlsIn = (v) => JSON.stringify(v || '').match(/https?:\/\/[^\s"'<>\\]+/g) 
 
 /**
  * AI 답을 받은 뒤 한 번에: 교재 지킴이(엔진 guardMaterial — 프롬프트 원문·단계·일정·FAQ·목표·교재 주소를 교재대로) → keepDraftParts.
- * 키 연결·쓰던 챗봇 모두 구성까지 짠 답은 이 함수를 거칩니다(문구만 다듬기는 교재 글을 보내지 않아 거치지 않음). restored: 교재대로 되돌린 곳(앱이 한 줄로 알리고 [보기]에서 하나씩 AI 답으로 되돌림)
+ * 키 연결·쓰던 AI 창 모두 구성까지 짠 답은 이 함수를 거칩니다(문구만 다듬기는 교재 글을 보내지 않아 거치지 않음). restored: 교재대로 되돌린 곳(앱이 한 줄로 알리고 [보기]에서 하나씩 AI 답으로 되돌림)
  * @returns {{ blueprint, restored }}
  */
 export function guardAnswer(bp, p, ing, base = null) {
@@ -41,5 +41,5 @@ export function guardAnswer(bp, p, ing, base = null) {
   return { blueprint: keepDraftParts(g.blueprint, draft || base || p?.blueprint), restored: g.restored };
 }
 
-/** 챗봇 답이 중간에 끊겼는지(대화 전체를 붙여 넣어도 답 부분만 봄) */
+/** AI 답이 중간에 끊겼는지(대화 전체를 붙여 넣어도 답 부분만 봄) */
 export function looksTruncated(text) { return E.isCutAnswer(text); }

@@ -12,8 +12,8 @@ const LINE = [['내용은'], ['쓰던', 'k'], ['AI가', 'k'], ['짜고,'], ['나
 
 // AI 에이전트에 그냥 맡겼을 때 강사가 직접 한 일(측정 기록의 순서 목록). 같은 기기 두 번째 연수부터 lecpage는 0가지
 const TASKS = [
-  ['공개', ['ZIP 압축 풀기', '올릴 곳에 로그인', '폴더 끌어 놓기', '사이트 이름 바꾸기', 'QR 페이지 열기', '주소가 열리는지 확인']],
-  ['질문·투표', ['투표 서비스 가입', '행사 만들기', '투표 문항 넣기', '링크 넣고 다시 올리기', '발표 모드 켜기', '투표 시작하기']],
+  ['배포', ['ZIP 압축 풀기', '배포할 곳에 로그인', '폴더 끌어 놓기', '사이트 이름 바꾸기', 'QR 페이지 열기', '주소가 열리는지 확인']],
+  ['질문·투표', ['투표 서비스 가입', '행사 만들기', '투표 문항 넣기', '링크 넣고 다시 배포', '발표 모드 켜기', '투표 시작하기']],
 ];
 const CHANGED = [1, 4, 7]; // 시험 답에서 AI가 바꿔 쓴 프롬프트(9개 중 3개)
 
@@ -83,7 +83,7 @@ function Proof() {
             <div class="ld-waf-one"><i /></div>
             <small class="ld-waf-k">그냥 맡길 때 127</small><small class="ld-waf-k is-lp">lecpage 1</small>
           </div>
-          <p>AI는 교재로 내용을 짤 때 한 번만 불러요. 디자인·공개·참여 기능·안내물·CSV에는 AI를 쓰지 않아요.</p>
+          <p>AI는 교재로 내용을 짤 때 한 번만 불러요. 디자인·배포·참여 기능·안내물·CSV에는 AI를 쓰지 않아요.</p>
           <p class="ld-foot">입력 약 2,630만 → 6,643토큰 · 출력 약 22만 → 약 6,000토큰. 같은 교재·같은 요청으로 만들기부터 연수 후 CSV까지, 토큰 단가로 환산</p>
         </article>
         <article class="ld-tile ld-t-todo">
@@ -92,7 +92,7 @@ function Proof() {
           <div class="ld-todo" aria-hidden="true">
             {TASKS.map(([g, list], k) => <div><small>{g}</small><ol style={{ '--k': k }}>{list.map((t, i) => <li style={{ '--i': k * 6 + i }}>{t}</li>)}</ol></div>)}
           </div>
-          <p>공개와 질문·투표 준비는 앱이 해요. 첫 연수에 앱 안내대로 한 번 연결하면, 같은 기기의 두 번째 연수부터는 할 일이 없어요.</p>
+          <p>배포와 질문·투표 준비는 앱이 해요. 첫 연수에 앱 안내대로 한 번 연결하면, 같은 기기의 두 번째 연수부터는 할 일이 없어요.</p>
           <p class="ld-foot">줄 그은 목록은 AI 에이전트에 그냥 맡겼을 때 강사가 직접 한 일이에요.</p>
         </article>
         <article class="ld-tile ld-t-keep">
@@ -129,7 +129,7 @@ export function Why() {
       <header class="ld-head ld-why-head">
         <p class="ld-kicker">왜 lecpage인가요</p>
         <h2 id="ld-why-h" class="ld-ink">{LINE.map(([w, k], i) => <>{i ? ' ' : ''}<span class={k ? 'is-k' : ''} style={{ '--i': i }}>{w}</span></>)}</h2>
-        <p class="ld-sub">ChatGPT·Claude·Gemini 창, API 키, AI 에이전트 무엇으로 내용을 짜도 돼요. 디자인·공개·진행·마무리는 lecpage가 이어서 해요.</p>
+        <p class="ld-sub">ChatGPT·Claude·Gemini 창, API 키, AI 에이전트 무엇으로 내용을 짜도 돼요. 디자인·배포·진행·마무리는 lecpage가 이어서 해요.</p>
       </header>
       <Compare />
       <Proof />

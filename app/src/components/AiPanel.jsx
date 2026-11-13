@@ -19,7 +19,7 @@ export function useAiResume(open) {
 }
 
 const touch = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
-/** 앱 옆에 챗봇 창을 나란히 띄울 만큼 넓은 마우스 화면인지(좁거나 터치면 새 탭·챗봇 앱) */
+/** 앱 옆에 AI 창을 나란히 띄울 만큼 넓은 마우스 화면인지(좁거나 터치면 새 탭·AI 앱) */
 const sideBySide = () => { try { return !touch() && screen.availWidth >= 1280 && innerWidth >= 900; } catch { return false; } };
 
 /**
@@ -39,18 +39,18 @@ function copyNow(text) {
 }
 
 /**
- * AI로 만들기·다듬기. 방법: 연결한 AI로 바로(키) / 쓰던 챗봇 창에 붙여넣기.
- * 처음 만들 때(교재 넣기 단계)는 쓰던 챗봇 창 길만 보여 줌(키 길은 AiConnect). onKey가 있으면 [API 키로 바꾸기]
- * start: { how: 'paste'|'connect', full, bot, make } — 오류에서 넘어올 때 고를 길·전체 다시 짜기·먼저 내세울 챗봇. make: 사이트가 있어도 '처음 만들기' 화면(교재 넣기 단계의 다시 만들기)
+ * AI로 만들기·다듬기. 방법: 연결한 AI로 바로(키) / 쓰던 AI 창에 붙여넣기.
+ * 처음 만들 때(교재 넣기 단계)는 쓰던 AI 창 길만 보여 줌(키 길은 AiConnect). onKey가 있으면 [API 키로 바꾸기]
+ * start: { how: 'paste'|'connect', full, bot, make } — 오류에서 넘어올 때 고를 길·전체 다시 짜기·먼저 내세울 AI. make: 사이트가 있어도 '처음 만들기' 화면(교재 넣기 단계의 다시 만들기)
  * onBlueprint(bp, { polish, count, restored }) — polish면 문구만 바뀐 설계도, 아니면 AI가 짠 설계도(부르는 쪽이 applyInfo로 강사 값을 지킴).
  * 구성까지 새로 짠 답은 교재 지킴이(guardAnswer)를 거친 뒤이고, restored는 교재대로 되돌린 곳
- * 교재 넣기 화면 안에 둘 때: head(제목 대신 그릴 것) · wait/onWait(챗봇에 보낸 사실을 연수에 저장해, 새로 고쳐도 [답 넣기] 자리로)
- * · guard()(보내기 전에 확인, false면 멈춤) · busy(교재를 읽는 중이면 보내지 않음) · children(챗봇 버튼 위에 넣을 것: 요청 사항)
+ * 교재 넣기 화면 안에 둘 때: head(제목 대신 그릴 것) · wait/onWait(AI에게 보낸 사실을 연수에 저장해, 새로 고쳐도 [답 넣기] 자리로)
+ * · guard()(보내기 전에 확인, false면 멈춤) · busy(교재를 읽는 중이면 보내지 않음) · children(AI 버튼 위에 넣을 것: 요청 사항)
  */
 export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = null, wait = null, onWait = null, guard = null, busy = false, children }) {
   const [ing, setIng] = useState(null);
   const [ai, setAi] = useState(undefined); // undefined: 확인 중 · null: 연결 없음
-  const first = !p.blueprint || !!start?.make; // 처음 만들기(쓰던 챗봇 창 길만) · 아니면 다듬기(키·챗봇 고르기, 문구만 다듬기 선택)
+  const first = !p.blueprint || !!start?.make; // 처음 만들기(쓰던 AI 창 길만) · 아니면 다듬기(키·AI 창 고르기, 문구만 다듬기 선택)
   const [how, setHow] = useState(start?.how || '');
   const [full, setFull] = useState(start?.full ?? first);
   const [err, setErr] = useState(null);
@@ -72,17 +72,17 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
     setErr(null);
     const text = partial ? E.joinAnswer(partial, raw) : String(raw || '');
     const r = E.readAnswer(text);
-    if (r.kind === 'empty') { setErr({ title: '붙여 넣은 답이 없어요.', body: '챗봇 답 아래의 복사 버튼을 누르고 다시 넣어 주세요.' }); return; }
+    if (r.kind === 'empty') { setErr({ title: '붙여 넣은 답이 없어요.', body: 'AI 답 아래의 복사 버튼을 누르고 다시 넣어 주세요.' }); return; }
     if (r.kind === 'cut') {
       setPartial(text);
-      setErr({ title: partial ? '아직 끊긴 데가 있어요.' : '답이 중간에 끊겼어요.', body: '[이어 쓰기 요청 복사]를 눌러 챗봇에 보내고, 이어진 답을 복사해 [이어진 답 넣기]를 누르세요. 앞의 답은 기억해 둬요.', actions: ['continue'] });
+      setErr({ title: partial ? '아직 끊긴 데가 있어요.' : '답이 중간에 끊겼어요.', body: '[이어 쓰기 요청 복사]를 눌러 AI에게 보내고, 이어진 답을 복사해 [이어진 답 넣기]를 누르세요. 앞의 답은 기억해 둬요.', actions: ['continue'] });
       return;
     }
-    if (r.kind === 'prompt') { setErr({ title: '붙여 넣은 글이 프롬프트예요.', body: '챗봇이 쓴 답을 복사해 주세요. 답 아래의 복사 버튼을 누르면 돼요.' }); return; }
-    if (r.kind === 'question') { setErr({ title: '챗봇이 답 대신 질문을 했어요.', body: '[다시 요청 글 복사]를 눌러 챗봇에 보내면 바로 써 줘요. 모르는 것은 빈칸으로 두라고 적혀 있어요.', actions: ['jsononly'] }); return; }
-    if (r.kind === 'talk') { setErr({ title: '챗봇이 설명만 하고 사이트 내용을 쓰지 않았어요.', body: '[다시 요청 글 복사]를 눌러 챗봇에 보내 주세요.', actions: ['jsononly'] }); return; }
+    if (r.kind === 'prompt') { setErr({ title: '붙여 넣은 글이 프롬프트예요.', body: 'AI가 쓴 답을 복사해 주세요. 답 아래의 복사 버튼을 누르면 돼요.' }); return; }
+    if (r.kind === 'question') { setErr({ title: 'AI가 답 대신 질문을 했어요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내면 바로 써 줘요. 모르는 것은 빈칸으로 두라고 적혀 있어요.', actions: ['jsononly'] }); return; }
+    if (r.kind === 'talk') { setErr({ title: 'AI가 설명만 하고 사이트 내용을 쓰지 않았어요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내 주세요.', actions: ['jsononly'] }); return; }
     setPartial('');
-    onWait?.(null); // 답을 받았으니 '챗봇에 보냄' 표시는 지움(받을 수 없는 답이면 남겨 둬서 다시 넣을 수 있게)
+    onWait?.(null); // 답을 받았으니 'AI에게 보냄' 표시는 지움(받을 수 없는 답이면 남겨 둬서 다시 넣을 수 있게)
     const json = r.json;
     if (Array.isArray(json.changes) || (!full && !Array.isArray(json.sections))) {
       const pr = applyPolish(base.current, targets, json);
@@ -104,16 +104,16 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
       {!first ? <>
         <div class="stack" style={{ gap: '4px' }}>
           <h2 class="h-sub">AI로 다듬기</h2>
-          <p class="small muted">마음에 안 들면 [되돌리기]로 돌아가요. 참여 기능 연결과 공개 설정은 그대로예요.</p>
+          <p class="small muted">마음에 안 들면 [되돌리기]로 돌아가요. 참여 기능 연결과 배포 설정은 그대로예요.</p>
         </div>
         <label class="check"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); setErr(null); setPartial(''); }} />
           <span>섹션 구성과 순서까지 새로 짜기 <span class="small muted">끄면 문구만 빠르게 다듬어요.</span></span></label>
-        {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'connect', label: ai ? `${PROVIDERS[ai.provider].short}로 바로` : 'API 키로' }, { value: 'paste', label: '쓰던 챗봇 창으로' }]} />}
+        {ai !== undefined && <Seg label="방법" value={how} onChange={(v) => { setHow(v); setErr(null); }} options={[{ value: 'connect', label: ai ? `${PROVIDERS[ai.provider].short}로 바로` : 'API 키로' }, { value: 'paste', label: '쓰던 AI로' }]} />}
       </> : head || (
         // 처음 만들 때(교재 넣기 단계): 고를 것 없이 두 걸음만
         <div class="stack" style={{ gap: '4px' }}>
-          <h2 class="h-sub" tabIndex={-1} data-autofocus>쓰던 챗봇 창으로 만들기</h2>
-          <p class="small muted">준비할 것 없어요. 챗봇에 프롬프트를 붙여 넣고, 답을 복사해 와요. 무료 챗봇도 돼요.</p>
+          <h2 class="h-sub" tabIndex={-1} data-autofocus>쓰던 AI로 만들기</h2>
+          <p class="small muted">준비할 것이 없어요. ChatGPT·Claude·Gemini에 프롬프트를 붙여 넣고 답을 복사해 와요. 무료 요금제여도 돼요.</p>
         </div>
       )}
       {children}
@@ -151,10 +151,10 @@ export function ErrorBox({ e, provider, onPaste, onConnect, onPay, onLight }) {
 }
 
 /**
- * 쓰던 챗봇 창: ① [ChatGPT 열기] 한 번에 프롬프트가 복사되고 챗봇이 열림(넓은 화면은 앱 옆에 나란히, Claude는 프롬프트가 짧으면 입력 칸까지 채움)
+ * 쓰던 AI 창: ① [ChatGPT 열기] 한 번에 프롬프트가 복사되고 AI 창이 열림(넓은 화면은 앱 옆에 나란히, Claude는 프롬프트가 짧으면 입력 칸까지 채움)
  * → ② 돌아오면 [답 넣기]에 초점, 누르면 클립보드의 답을 읽어 바로 적용(화면 어디서든 Ctrl+V도 됨).
  * 클립보드 읽기를 이미 허락한 브라우저면 돌아오는 순간 답을 저절로 넣음(보낼 때 프롬프트로 클립보드를 덮었을 때만 → 예전 답을 잘못 넣지 않게).
- * 보낸 사실(wait)은 연수에 저장: 휴대폰에서 챗봇 앱에 다녀오며 탭이 새로 고쳐져도 [답 넣기] 자리로 돌아옴.
+ * 보낸 사실(wait)은 연수에 저장: 휴대폰에서 AI 앱에 다녀오며 탭이 새로 고쳐져도 [답 넣기] 자리로 돌아옴.
  * 답이 끊겼으면 이어 쓰기 요청 글을 복사해 주고, 이어진 답을 넣으면 앞의 답 뒤에 붙임
  */
 const WAIT_MS = 3 * 60 * 60 * 1000; // 세 시간 넘게 지난 '보냄' 표시는 잊음
@@ -196,7 +196,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   }, [sent]);
   useEffect(() => { if (step === 1 && back) pasteRef.current?.focus({ preventScroll: true }); }, [step, back]);
   useEffect(() => { if (waiting) setTimeout(() => pasteRef.current?.scrollIntoView({ block: 'center' }), 50); }, []); // 새로 고친 뒤: [답 넣기]가 보이게
-  // 화면 어디서든(입력 칸 밖) 붙여 넣은 글이 챗봇 답이면 바로 넣음. 보내기 전에는 답 모양일 때만(다른 글 붙여넣기를 막지 않게)
+  // 화면 어디서든(입력 칸 밖) 붙여 넣은 글이 AI 답이면 바로 넣음. 보내기 전에는 답 모양일 때만(다른 글 붙여넣기를 막지 않게)
   useEffect(() => {
     const f = (e) => {
       if (!ready || e.defaultPrevented) return;
@@ -210,7 +210,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   }, [ready, step, partial]);
 
   const mark = (id, ok) => { fresh.current = ok; setSent(id); setBack(false); onWait?.({ bot: id, at: Date.now(), fresh: ok }); };
-  /** 챗봇 열기(링크): 누르는 순간 프롬프트를 복사. 넓은 화면은 앱 옆에 창을 띄워 두 화면을 함께 보게, 그 밖에는 새 탭(휴대폰은 챗봇 앱) */
+  /** AI 창 열기(링크): 누르는 순간 프롬프트를 복사. 넓은 화면은 앱 옆에 창을 띄워 두 화면을 함께 보게, 그 밖에는 새 탭(휴대폰은 AI 앱) */
   function send(e, b) {
     if (!ready || (guard && !guard())) { e.preventDefault(); return; }
     const t = textNow(); const pre = b.prefill?.(t) || '';
@@ -224,26 +224,26 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
     }
     toast(pre ? 'Claude 입력 칸에 채웠어요. 비어 있으면 붙여 넣으세요.' : `프롬프트를 복사했어요. ${b.name} 입력 칸에 붙여 넣으세요.`);
   }
-  /** 챗봇 답을 클립보드에서 읽어 바로 적용(누를 때만 읽음) */
+  /** AI 답을 클립보드에서 읽어 바로 적용(누를 때만 읽음) */
   async function pasteAnswer() {
     let v = '';
     try { v = (await navigator.clipboard.readText()).trim(); }
     catch { toast(touch() ? '아래 칸을 길게 눌러 [붙여넣기]를 골라 주세요.' : '아래 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); taRef.current?.focus(); return; }
-    if (!v) { toast('복사한 답이 없어요. 챗봇 답 아래의 복사 버튼을 눌러 주세요.'); return; }
+    if (!v) { toast('복사한 답이 없어요. AI 답 아래의 복사 버튼을 눌러 주세요.'); return; }
     setAnswer(''); onApply(v);
   }
-  /** 챗봇에 보낼 짧은 글(이어 쓰기·다시 요청)을 복사. 챗봇에서 돌아오면 [답 넣기]에 다시 초점 */
+  /** AI에게 보낼 짧은 글(이어 쓰기·다시 요청)을 복사. AI 창에서 돌아오면 [답 넣기]에 다시 초점 */
   const askCopy = (t, msg) => { copy(t, msg); setSent('ask'); setBack(false); };
-  const names = ['챗봇에 보내기', partial ? '이어진 답 넣기' : '답 넣기'];
+  const names = ['AI에게 보내기', partial ? '이어진 답 넣기' : '답 넣기'];
   return (
-    <section class="key-card chat-card" aria-label="쓰던 챗봇 창으로 만드는 순서">
+    <section class="key-card chat-card" aria-label="쓰던 AI로 만드는 순서">
       <ol class="key-dots" aria-label="순서">
         {names.map((n, i) => <li><button type="button" class={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined} aria-label={`${i + 1}. ${n}`} onClick={() => setStep(i)}><span class="n" aria-hidden="true">{i < step ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
       </ol>
       {step === 0 ? (
         <div class="key-now"><div class="key-now-b">
-          <h3 class="key-now-h">챗봇에 보내기</h3>
-          <p>누르면 프롬프트가 복사되고 챗봇이 새 창으로 열려요. 입력 칸에 붙여 넣고{touch() ? '(길게 눌러 붙여넣기)' : '(Ctrl+V)'} 보내세요.</p>
+          <h3 class="key-now-h">AI에게 보내기</h3>
+          <p>누르면 프롬프트가 복사되고 새 창이 열려요. 입력 칸에 붙여 넣고{touch() ? '(길게 눌러 붙여넣기)' : '(Ctrl+V)'} 보내세요.</p>
           <div class="btn-row chat-bots">
             {bots.map((b, i) => {
               const pre = b.prefill?.(text) || '';
@@ -251,20 +251,20 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
                 onClick={(e) => send(e, b)}>{b.name} 열기{b.id === bot && <small class="chat-bot-last">지난번</small>}<span class="ext" aria-hidden="true">↗</span></a>;
             })}
           </div>
-          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(textNow())); toast('복사했어요. 챗봇에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
-          {full && text.length > 30000 && <p class="small muted">교재가 길어 무료 챗봇은 답을 중간에 멈출 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어 받아요.</p>}
-          <p class="small muted">교재의 글이 고른 챗봇 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
+          <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(textNow())); toast('복사했어요. AI 입력 칸에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
+          {full && text.length > 30000 && <p class="small muted">교재가 길면 무료 요금제에서는 답이 중간에 끊길 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어서 받아요.</p>}
+          <p class="small muted">교재의 글이 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
         </div></div>
       ) : (
         <div class="key-now key-now-paste"><div class="key-now-b">
           <h3 class="key-now-h">{partial ? '이어진 답 넣기' : '답 넣기'}</h3>
-          <p>{partial ? '챗봇이 이어서 쓴 답을 복사하고 돌아와 누르세요. 앞의 답 뒤에 붙여요.' : `답이 다 나오면 답 아래의 복사 버튼을 누르고 돌아와 누르세요.${touch() ? '' : ' Ctrl+V로 넣어도 돼요.'}`}</p>
+          <p>{partial ? 'AI가 이어서 쓴 답을 복사하고 돌아와 누르세요. 앞의 답 뒤에 붙여요.' : `답이 다 나오면 답 아래의 복사 버튼을 누르고 돌아와 누르세요.${touch() ? '' : ' Ctrl+V로 넣어도 돼요.'}`}</p>
           {err && <AnswerError e={err} onAsk={askCopy} />}
           <div class="key-now-go"><button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !answer ? ' nudge' : ''}`} disabled={!ready} onClick={pasteAnswer}>{partial ? '이어진 답 넣기' : '답 넣기'}</button></div>
-          <textarea ref={taRef} class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여넣기" aria-label={partial ? '챗봇이 이어서 쓴 답' : '챗봇의 답'} />
+          <textarea ref={taRef} class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여넣기" aria-label={partial ? 'AI가 이어서 쓴 답' : 'AI의 답'} />
           {answer.trim() && <div><button type="button" class="btn btn-primary" onClick={() => { const v = answer; setAnswer(''); onApply(v); }}>{partial ? '이어서 붙이기' : first ? '이 답으로 만들기' : '이 답으로 바꾸기'}</button></div>}
           <div class="btn-row">
-            <button type="button" class="btn-link" onClick={() => setStep(0)}>← 챗봇 다시 열기</button>
+            <button type="button" class="btn-link" onClick={() => setStep(0)}>← AI 창 다시 열기</button>
             {partial && <button type="button" class="btn-link" onClick={onRestart}>처음 답부터 다시 넣기</button>}
           </div>
         </div></div>
@@ -273,14 +273,14 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
   );
 }
 
-/** 붙여 넣은 답을 받을 수 없을 때: 무엇이 문제인지 + 챗봇에 보낼 짧은 글 복사 */
+/** 붙여 넣은 답을 받을 수 없을 때: 무엇이 문제인지 + AI에게 보낼 짧은 글 복사 */
 function AnswerError({ e, onAsk }) {
   return (
     <div role="alert" class="answer-err">
       <Notice kind="bad"><div class="stack" style={{ gap: '6px' }}>
         <b>{e.title}</b>{e.body && <span>{e.body}</span>}
-        {e.actions?.includes('continue') && <div><button type="button" class="btn btn-sm btn-primary" onClick={() => onAsk(E.CONTINUE_ASK, '복사했어요. 챗봇에 보내세요.')}>이어 쓰기 요청 복사</button></div>}
-        {e.actions?.includes('jsononly') && <div><button type="button" class="btn btn-sm btn-primary" onClick={() => onAsk(E.JSON_ONLY_ASK, '복사했어요. 챗봇에 보내세요.')}>다시 요청 글 복사</button></div>}
+        {e.actions?.includes('continue') && <div><button type="button" class="btn btn-sm btn-primary" onClick={() => onAsk(E.CONTINUE_ASK, '복사했어요. AI에게 보내세요.')}>이어 쓰기 요청 복사</button></div>}
+        {e.actions?.includes('jsononly') && <div><button type="button" class="btn btn-sm btn-primary" onClick={() => onAsk(E.JSON_ONLY_ASK, '복사했어요. AI에게 보내세요.')}>다시 요청 글 복사</button></div>}
       </div></Notice>
     </div>
   );
@@ -298,8 +298,8 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay, 
 
   async function run(allowPaid) {
     setErr(null); setBusy('run'); ctrl.current = new AbortController();
-    // 이 망에서 AI 회사 API가 막혔으면 기다리지 않고 쓰던 챗봇 창 길로 바꿈
-    if (await reach('ai:' + ai.provider) === 'blocked') { setBusy(''); toast(netLine('ai:' + ai.provider, '쓰던 챗봇 창')); onChat?.(ai.provider); return; }
+    // 이 망에서 AI 회사 API가 막혔으면 기다리지 않고 쓰던 AI 창 길로 바꿈
+    if (await reach('ai:' + ai.provider) === 'blocked') { setBusy(''); toast(netLine('ai:' + ai.provider, '쓰던 AI 창')); onChat?.(ai.provider); return; }
     try {
       const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
       const { text, cut } = await generateAuto({ provider: ai.provider, key: ai.key, model: ai.model, prompt: prompt(), signal: ctrl.current.signal, maxTokens: (full ? 16000 : 8000) * big },

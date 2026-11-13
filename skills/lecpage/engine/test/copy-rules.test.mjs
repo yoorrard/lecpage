@@ -99,6 +99,28 @@ describe('문구 규칙: 용어 통일', () => {
     assert.ok(!has('순서를 바꾸거나 더하고 빼요.', 'term', 'text', { terms: 'all' }), '문장 속 "더하다"는 그대로');
     assert.ok(TERM_RULES.every((t) => t.re && t.why && t.fix));
   });
+  test('사이트를 올리는 일은 "배포", 대화창 AI는 "AI"(챗봇 아님), 도구는 "AI 에이전트"', () => {
+    const all = { terms: 'all' };
+    for (const s of ['[공개하기]를 누르세요.', '공개했어요.', '바로 공개 서버에 닿지 않아요.', '올릴 곳을 골라요.', '고친 뒤 다시 올리기를 눌러요.', '인터넷에 올리면 QR이 나와요.', '올린 주소를 적어요.'])
+      assert.ok(has(s, 'term', 'text', all), s);
+    for (const s of ['공개 범위를 바꿔요.', '결과는 강사가 공개하면 보여요.', '[결과 공개]를 눌러요.', '저장소가 공개돼서 누구나 봐요.', '파일을 다시 올려 주세요.', '배포했어요.', '사진·파일 올리기'])
+      assert.ok(!has(s, 'term', 'text', all), s);
+    assert.ok(!has('[공개하기]를 누르세요.', 'term'), 'AI가 쓰는 참가자 화면 글에는 적용하지 않음');
+    assert.ok(has('쓰던 챗봇 창으로 만들기', 'term', 'button', all));
+    assert.equal(suggestFix('챗봇 답을 복사해 넣으세요.', 'toast', all), 'AI 답을 복사해 넣으세요.');
+    assert.equal(suggestFix('챗봇이 질문만 했어요.', 'toast', all), 'AI가 질문만 했어요.', '받침에 맞는 조사');
+    assert.ok(has('에이전트에서 만든 연수를 열었어요.', 'term', 'toast', all));
+    assert.ok(!has('AI 에이전트에서 만든 연수를 열었어요.', 'term', 'toast', all));
+  });
+});
+
+describe('문구 규칙: 번역투 더', () => {
+  test('~를 위한·~에 대해·~에 의해·~것이 좋다·어디서 하는 ~든·제공해요는 살핌, 비슷한 바른 말은 통과', () => {
+    for (const s of ['교사를 위한 안내예요.', '오류에 대해 알려요.', '강사에 의해 열려요.', '서버로부터 받아요.', '먼저 저장하는 것이 좋아요.', '학교·기업 어디서 하는 강의든 써요.', '자료를 제공해요.', '안내해 드리도록 하겠습니다.'])
+      assert.ok(lintText(s).some((f) => f.id === 'trans' && f.level === 'warn'), s);
+    for (const s of ['교사용 안내예요.', '오류를 알려요.', '강사가 열어요.', '서버에서 받아요.', '먼저 저장하는 게 좋아요.', '어디서든 열려요.', '대해 일러 둘 것', '위한 자리'])
+      assert.ok(!lintText(s).some((f) => f.id === 'trans'), s);
+  });
 });
 
 describe('고친 안(suggestFix)', () => {

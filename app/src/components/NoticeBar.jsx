@@ -1,5 +1,5 @@
 // 운영자 공지: 앱이 켜진 뒤 한가할 때 받아(첫 화면 JS에 들지 않음) 한 번만 보여 줍니다.
-// 바로 공개 서버가 있으면 GET <서버>/api/notice?for=app, 없으면 앱 배포 안의 notice.json.
+// 바로 배포 서버가 있으면 GET <서버>/api/notice?for=app, 없으면 앱 배포 안의 notice.json.
 // 공지는 글자로만 그립니다(HTML로 해석하지 않음). 링크는 https 주소만, 가는 곳의 주소를 함께 보여 줍니다.
 import { render } from 'preact';
 import { useState } from 'preact/hooks';

@@ -46,15 +46,15 @@ export const BACKENDS = {
   lan: { name_ko: '내 서버·Cloudflare', cost: '0원', note_ko: '강사 노트북을 서버로 써요. 인터넷 없이 같은 와이파이·핫스폿에서 접속해요.' },
 };
 
-// 올릴 곳. app = 앱에서 바로 올림(브라우저에서 API를 부를 수 있는 곳), cli = skill이 쓰는 명령(대화 없이 돎).
+// 배포할 곳. app = 앱에서 바로 배포(브라우저에서 API를 부를 수 있는 곳), cli = skill이 쓰는 명령(대화 없이 돎).
 // 숫자·약관 근거: docs/research/hosting-2026-11.md (2026-11-11 확인). limit: siteMB(사이트 합계)·fileMB(파일 하나)·files(파일 수)
 export const HOSTS = {
   lecpage: { name_ko: 'lecpage 주소', cost: '0원', app: true, account: false, limit: { siteMB: 40, fileMB: 20, files: 600 },
-    note_ko: '가입 없이 바로 공개해요. 30일 동안 방문이 없으면 지워져요.',
-    atLimit_ko: '방문이 있는 동안은 계속 열려 있어요.', atLimitFree_ko: '무료로 운영되는 서버라 방문이 몰리는 날은 멈출 수 있어요. 본 연수는 내 계정에 올리는 편이 안전해요.' },
+    note_ko: '가입 없이 바로 배포해요. 30일 동안 방문이 없으면 지워져요.',
+    atLimit_ko: '방문이 있는 동안은 계속 열려 있어요.', atLimitFree_ko: '무료로 운영되는 서버라 방문이 몰리는 날은 멈출 수 있어요. 본 연수는 내 계정에 배포하는 편이 안전해요.' },
   vercel: { name_ko: 'Vercel', cost: '0원', app: true, account: true, limit: { siteMB: 100, files: 15000 },
     cli: 'VERCEL_TOKEN=… npx vercel@latest deploy ./dist --prod --yes --project <이름> --create-if-missing',
-    note_ko: '토큰 하나로 바로 올리고, 다시 올려도 같은 주소예요.',
+    note_ko: '토큰 하나로 배포하고, 다시 배포해도 같은 주소예요.',
     transferGB: 100, stops: true, atLimit_ko: '무료는 월 100GB까지예요. 넘으면 멈추고, Pro로 바꾸면 이어져요.' },
   'github-pages': { name_ko: 'GitHub Pages', cost: '0원', app: true, account: true, limit: { siteMB: 900, fileMB: 100 },
     cli: 'gh repo create <이름> --public --source=. --push && gh api -X POST "repos/{owner}/{repo}/pages" -f "source[branch]=main" -f "source[path]=/"',
@@ -69,11 +69,11 @@ export const HOSTS = {
   // CLI는 CDN의 최신 바이너리만 받으므로 버전을 고정하지 않음(@latest). 무료 정적 사이트는 계정당 10개
   onpod: { name_ko: 'Onpod', cost: '0원(사이트 10개까지)', app: false, account: true, limit: { siteMB: 100, fileMB: 50, files: 5000 },
     cli: 'ONPOD_TOKEN=… npx --yes onpod@latest static deploy ./dist --name <이름> --no-spa',
-    note_ko: '한국 서비스예요(한국어 화면·국내 리전). 구글로 가입하고 콘솔에서 만든 API 키 하나로 올려요. 무료는 계정당 사이트 10개까지예요.',
+    note_ko: '한국 서비스예요(한국어 화면·국내 리전). 구글로 가입하고 콘솔에서 만든 API 키 하나로 배포해요. 무료는 계정당 사이트 10개까지예요.',
     transferGB: 100, stops: true, atLimit_ko: '무료는 월 100GB까지예요. 넘으면 그달은 멈췄다가 다음 달 1일에 다시 열려요.' },
   netlify: { name_ko: 'Netlify', cost: '0원(월 300크레딧)', app: true, account: true, limit: { files: 25000 },
     cli: 'NETLIFY_AUTH_TOKEN=… npx netlify-cli deploy --dir dist --prod --no-build --site-name <이름>',
-    note_ko: '무료는 한 달에 20번쯤 올릴 수 있어요. 2026년 7월 28일 뒤에 만든 계정이라면 올린 뒤 Make public을 눌러야 열려요.',
+    note_ko: '무료는 한 달에 20번쯤 배포할 수 있어요. 2026년 7월 28일 뒤에 만든 계정이라면 배포한 뒤 Make public을 눌러야 열려요.',
     transferGB: 12, stops: true, atLimit_ko: '월 300크레딧을 다 쓰면 그달은 멈춰요. 충전하면 이어져요.' },
   firebase: { name_ko: 'Firebase Hosting', cost: '0원', app: false, account: true, note_ko: '구글 계정으로 시작. 무료 전송량은 월 10GB이고, 넘으면 그달 사이트가 멈춰요.' },
   s3: { name_ko: 'AWS S3 + CloudFront', cost: '소액', app: false, account: true, note_ko: 'AWS 계정이 있을 때. 1년 무료 이후 사용량 과금.' },
@@ -104,7 +104,7 @@ export function checkHost(host, stat = {}) {
  * 올릴 곳 고르기. 앞에 있을수록 추천.
  * @param {object} input
  *   skill 'click'(앱·초보) | 'set' | 'dev'(skill·명령 가능), network, infra[], backend(실시간 방식),
- *   previous(지난번에 올린 곳), connected[](이미 연결해 둔 곳), instant(운영자의 '바로 공개'를 쓸 수 있음: 'stable'|'limited'|'pages'),
+ *   previous(지난번에 배포한 곳), connected[](이미 연결해 둔 곳), instant(운영자의 '바로 배포'를 쓸 수 있음: 'stable'|'limited'|'pages'),
  *   keep('long'이면 연수 뒤에도 오래 둘 사이트), customDomain(내 도메인을 붙일 계획),
  *   maxFileMB(가장 큰 파일), siteMB(사이트 합계), files(파일 수)
  * @returns {{ hosts: string[], pick: string, reasons: string[], warnings: string[] }}
@@ -123,7 +123,7 @@ export function decideHost(input = {}) {
     // 기본: 앱(브라우저만)은 토큰 하나로 끝나는 Vercel, skill(명령 가능)은 요청 무제한인 Cloudflare
     // Onpod은 명령(skill)으로만 올림. 할 일이 Cloudflare보다 많아(API 키 만들기) 뒤에 두고, 이미 쓰면(connected·previous) 앞으로
     hosts = skill === 'click' ? ['vercel', 'github-pages', 'cloudflare', 'netlify'] : ['cloudflare', 'vercel', 'github-pages', 'onpod', 'netlify'];
-    reasons.push(skill === 'click' ? 'Vercel은 토큰 하나로 앱에서 바로 올리고, 다시 올려도 주소가 그대로예요.' : 'Cloudflare는 정적 파일 요청이 무료·무제한이고 명령 한 줄로 올려요.');
+    reasons.push(skill === 'click' ? 'Vercel은 토큰 하나로 앱에서 바로 배포하고, 다시 배포해도 주소가 그대로예요.' : 'Cloudflare는 정적 파일 요청이 무료·무제한이고 명령 한 줄로 배포해요.');
     if (input.backend === 'cloudflare' && skill !== 'click') hosts = first('cloudflare', hosts);
     if (input.customDomain || (input.network === 'restricted' && skill !== 'click')) {
       hosts = first('cloudflare', hosts);
@@ -136,7 +136,7 @@ export function decideHost(input = {}) {
       // Cloudflare에 못 올림 → GitHub Pages(파일 100MB까지)를 먼저. Vercel은 파일 하나의 한도가 문서에 없어 뒤로
       hosts = first('github-pages', last('cloudflare', hosts));
       why(bigFile ? '25MB가 넘는 파일이 있어 GitHub Pages를 권해요.' : `파일이 ${cfFiles.toLocaleString('en-US')}개를 넘어 GitHub Pages를 권해요.`);
-      warnings.push(bigFile ? '25MB가 넘는 파일은 Cloudflare에 올릴 수 없어요. 영상은 유튜브 링크로 바꾸는 것이 좋아요.' : `Cloudflare는 파일 ${cfFiles.toLocaleString('en-US')}개까지예요.`);
+      warnings.push(bigFile ? '25MB가 넘는 파일은 Cloudflare에 올릴 수 없어요. 영상은 유튜브 링크로 바꾸는 게 좋아요.' : `Cloudflare는 파일 ${cfFiles.toLocaleString('en-US')}개까지예요.`);
     } else if (bigSite) {
       // 큰 사이트는 요청·크기 한도가 넉넉한 Cloudflare를 먼저(앱에서는 ZIP 끌어 놓기)
       hosts = first('cloudflare', hosts);
@@ -157,14 +157,14 @@ export function decideHost(input = {}) {
     }
     const fitsInstant = !(Number(input.siteMB) > HOSTS.lecpage.limit.siteMB) && !(Number(input.maxFileMB) > HOSTS.lecpage.limit.fileMB) && !(Number(input.files) > HOSTS.lecpage.limit.files);
     if (input.instant && fitsInstant) {
-      // 운영자가 '바로 공개'를 켜 둔 앱: 가입이 필요 없어 가장 빠름. 오래 둘 사이트·내 도메인은 본인 계정이 먼저.
+      // 운영자가 '바로 배포'를 켜 둔 앱: 가입이 필요 없어 가장 빠름. 오래 둘 사이트·내 도메인은 본인 계정이 먼저.
       // 운영자가 무료 요금제로 돌리면(instant: 'limited') 하루 한도에 닿는 날 멈출 수 있어 첫째로 권하지 않음.
       // 'pages': 사이트를 Cloudflare Pages로 내보내는 서버(방문이 하루 한도에 들지 않아 무료여도 사이트는 멈추지 않음)
       if (input.instant === 'limited' || input.keep === 'long' || input.customDomain) hosts.splice(1, 0, 'lecpage');
-      else { hosts.unshift('lecpage'); why(input.instant === 'pages' ? '가입이나 토큰 없이 바로 공개해요. 방문이 많아도 사이트는 멈추지 않아요.' : '가입이나 토큰 없이 바로 공개해요. 방문이 있는 동안은 계속 열려 있어요.'); }
+      else { hosts.unshift('lecpage'); why(input.instant === 'pages' ? '가입이나 토큰 없이 바로 배포해요. 방문이 많아도 사이트는 멈추지 않아요.' : '가입이나 토큰 없이 바로 배포해요. 방문이 있는 동안은 계속 열려 있어요.'); }
     }
     const mine = [input.previous, ...[].concat(input.connected || [])].filter((h) => h && hosts.includes(h));
-    if (mine.length) { hosts = [...new Set([...mine, ...hosts])]; why(input.previous && mine[0] === input.previous ? '지난번에 올린 곳에 다시 올리면 주소가 그대로예요.' : '이미 연결해 둔 곳이라 바로 올릴 수 있어요.'); }
+    if (mine.length) { hosts = [...new Set([...mine, ...hosts])]; why(input.previous && mine[0] === input.previous ? '지난번에 배포한 곳에 다시 배포하면 주소가 그대로예요.' : '이미 연결해 둔 곳이라 바로 배포할 수 있어요.'); }
     hosts.push('firebase', 'zip');
   }
   const conn = new Set([].concat(input.connected || [], input.previous || []));

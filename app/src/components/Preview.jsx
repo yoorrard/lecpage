@@ -12,7 +12,7 @@ const labels = () => LABELS || (LABELS = labelCss());
 const assetCache = new Map();
 export async function projectAssets(pid, fresh = false) {
   if (!fresh && assetCache.has(pid)) return assetCache.get(pid);
-  // 교재 원본(src/)은 사이트에 넣지 않음. 내려받기용 자료(assets/files/)는 미리보기에 필요 없어 공개할 때(fresh)만 읽음
+  // 교재 원본(src/)은 사이트에 넣지 않음. 내려받기용 자료(assets/files/)는 미리보기에 필요 없어 배포할 때(fresh)만 읽음
   const keys = (await blobs.keys(pid)).filter((k) => k.startsWith('assets/') && (fresh || !k.startsWith('assets/files/')));
   const a = {};
   for (const k of keys) { const v = await blobs.get(pid, k); a[k] = v instanceof Blob ? new Uint8Array(await v.arrayBuffer()) : v; }

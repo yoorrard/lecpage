@@ -16,11 +16,11 @@ const set = (pid, patch) => { jobs.set(pid, { ...(jobs.get(pid) || {}), ...patch
 export const getJob = (pid) => jobs.get(pid) || null;
 export function clearJob(pid) { jobs.delete(pid); emit(); }
 /**
- * 쓰던 챗봇·문구 다듬기로 받은 답도 키 연결과 같은 '끝남' 띠로 알림(교재대로 되돌린 곳 한 줄 + [보기])
+ * 쓰던 AI 창·문구 다듬기로 받은 답도 키 연결과 같은 '끝남' 띠로 알림(교재대로 되돌린 곳 한 줄 + [보기])
  * @param {{ restored?: object[], via?: string, polish?: boolean }} o
  */
 export function noteAiResult(pid, { restored = [], via = '', polish = false } = {}) {
-  if (!polish) track('make', 'chat'); // 익명 이용 합계(바로 공개 서버가 있을 때만, 끌 수 있음)
+  if (!polish) track('make', 'chat'); // 익명 이용 합계(바로 배포 서버가 있을 때만, 끌 수 있음)
   set(pid, { status: 'done', phase: 'done', startedAt: Date.now(), error: null, ctrl: null, via, restored, polish, undone: [] });
 }
 /** 되돌린 곳 하나를 AI 답으로 되돌렸다고 적음(띠의 목록에서 그 줄을 '되돌림'으로) */
@@ -50,7 +50,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
   try {
     const ai = await getActiveAI();
     if (!ai) throw Object.assign(new Error('no-ai'), { kind: 'no-ai' });
-    // 학교·기관 망이 AI 회사 API를 막았으면 1~2분 기다리게 하지 않고 바로 챗봇 창 길로(요청 한 번, 결과는 잠깐 기억)
+    // 학교·기관 망이 AI 회사 API를 막았으면 1~2분 기다리게 하지 않고 바로 AI 창 길로(요청 한 번, 결과는 잠깐 기억)
     set(pid, { provider: ai.provider });
     if (await reach('ai:' + ai.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: ai.provider });
     const ing = await import('./ingest.js');

@@ -7,7 +7,7 @@ import { saveFile, safeName, copy, toast } from '../lib/util.js';
 const md = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''); return m ? `${+m[2]}월 ${+m[3]}일` : ''; };
 
 /**
- * 바로 공개 서버의 그날 몫(상태 API, 1분 캐시). 만들 때 이미 '꽉 참'이면 서버가 알려 주지만, 그 전에 미리 보여 줌.
+ * 바로 배포 서버의 그날 몫(상태 API, 1분 캐시). 만들 때 이미 '꽉 참'이면 서버가 알려 주지만, 그 전에 미리 보여 줌.
  * date: 연수 날짜, site: 올린 사이트 id. 한 번만 묻고, [다시 확인]으로 다시
  */
 export function useDayStatus({ on, date, site }) {
@@ -18,15 +18,15 @@ export function useDayStatus({ on, date, site }) {
 /** 그날 몫 → 한 줄({ k: 'ok'|'tight'|'full', t }) */
 export function dayLine(st, date) {
   const d = st?.day; if (!d) return null;
-  if (!d.budget) return { k: 'ok', t: `${md(date)}: 바로 공개 서버에 하루 한도가 없어요.` };
-  const head = `${md(date)} 바로 공개 예약: 연수 ${d.trainings || 0}개 · 참가자 ${d.people || 0}명`;
-  if (!d.ok) return { k: 'full', t: `${head}. 그날 참여 기능 자리가 찼어요. 지금 공개하면 만들 때 알려 줘요. 내 계정에 올리면 붐벼도 상관없어요.` };
+  if (!d.budget) return { k: 'ok', t: `${md(date)}: 바로 배포 서버에 하루 한도가 없어요.` };
+  const head = `${md(date)} 바로 배포 예약: 연수 ${d.trainings || 0}개 · 참가자 ${d.people || 0}명`;
+  if (!d.ok) return { k: 'full', t: `${head}. 그날 참여 기능 자리가 찼어요. 지금 배포하면 만들 때 알려 줘요. 내 계정에 배포하면 붐벼도 상관없어요.` };
   if (d.pct >= 50) return { k: 'tight', t: `${head}. 그날 참여 기능 자리가 빠듯해요(하루 몫의 ${d.pct}%). 사이트는 붐벼도 열려요.` };
   return { k: 'ok', t: `${head}. 여유 있어요.` };
 }
 
 /**
- * 공개 체크리스트의 '연수 장소 확인': 공개 전에는 그날 몫(바로 공개), 공개 뒤에는 접속 확인 주소·QR과 전날 점검 일정(.ics).
+ * 배포 체크리스트의 '연수 장소 확인': 배포 전에는 그날 몫(바로 배포), 배포 뒤에는 접속 확인 주소·QR과 전날 점검 일정(.ics).
  * 연수 장소의 Wi-Fi(참가자와 같은 망)로 전날 한 번 열어 보는 것이 가장 확실함
  */
 export function VenueBody({ p, url, instantOn }) {
@@ -35,7 +35,7 @@ export function VenueBody({ p, url, instantOn }) {
   const site = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.id || '' : '';
   const [st, again] = useDayStatus({ on: instantOn, date: m.date || '', site });
   const line = dayLine(st, m.date);
-  const siteGone = st?.site?.state === 'gone' ? '공개 기간이 끝나 사이트가 지워졌어요. 다시 올려 주세요.' : st?.site?.state === 'blocked' ? '사이트가 가려져 있어요. 운영자에게 문의해 주세요.' : '';
+  const siteGone = st?.site?.state === 'gone' ? '보관 기간이 끝나 사이트가 지워졌어요. 다시 배포해 주세요.' : st?.site?.state === 'blocked' ? '사이트가 가려져 있어요. 운영자에게 문의해 주세요.' : '';
   const ics = () => {
     const t = venueIcs({ title: m.title, date: m.date, siteUrl: url, altUrl: p.deploy?.lecpage?.altUrl || p.deploy?.second || '', venue: m.venue || '' });
     saveFile(safeName(m.title) + '_전날점검.ics', t, 'text/calendar;charset=utf-8'); toast('달력 일정을 내려받았어요. 열면 달력 앱에 들어가요.');
@@ -44,7 +44,7 @@ export function VenueBody({ p, url, instantOn }) {
     <div class="stack venue">
       {line && <p class={`small venue-day is-${line.k}`} role="status">{line.t} {instantOn && <button type="button" class="btn btn-sm btn-quiet" onClick={again}>다시 확인</button>}</p>}
       {siteGone && <p class="small err" role="alert">{siteGone}</p>}
-      {!url ? <p class="small">공개하면 접속 확인 주소와 QR이 나와요. 연수 전날, 연수 장소의 Wi-Fi로 열어 막힌 곳이 없는지 확인해요.</p> : <>
+      {!url ? <p class="small">배포하면 접속 확인 주소와 QR이 나와요. 연수 전날, 연수 장소의 Wi-Fi로 열어 막힌 곳이 없는지 확인해요.</p> : <>
         <div class="venue-row">
           <div class="stack" style={{ gap: '6px' }}>
             <p class="small">연수 전날, <b>연수 장소의 Wi-Fi</b>(참가자와 같은 망)로 이 QR을 찍거나 주소를 열어 보세요. 막힌 곳과 할 일이 나와요. 결과는 강사 화면 맨 위에도 남아요.</p>
@@ -65,8 +65,8 @@ export function VenueBody({ p, url, instantOn }) {
 }
 
 /**
- * '혹시 안 열리면' 한 장과 인쇄용 실습·프롬프트 모음(공개 완료 화면). 두 번째 주소는 바로 공개면 서버가 주고,
- * 아니면 사이트 ZIP을 다른 곳에 한 번 더 올리고 주소를 적어 둠(p.deploy.second)
+ * '혹시 안 열리면' 한 장과 인쇄용 실습·프롬프트 모음(배포 완료 화면). 두 번째 주소는 바로 배포면 서버가 주고,
+ * 아니면 사이트 ZIP을 다른 곳에 한 번 더 배포하고 주소를 적어 둠(p.deploy.second)
  */
 export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
   const m = p.blueprint?.meta || {};
@@ -83,7 +83,7 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
       <div class="stack rescue-b">
         {alt ? null
           : <div class="stack" style={{ gap: '6px' }}>
-            <p class="small">두 번째 주소를 만들어 두면 첫 주소가 막힌 곳에서도 열려요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 올리고 주소를 적어 두세요.</p>
+            <p class="small">두 번째 주소를 만들어 두면 첫 주소가 막힌 곳에서도 열려요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 배포하고 주소를 적어 두세요.</p>
             <div class="row token-row"><input class="input" value={second} onInput={(e) => setSecond(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} placeholder="https://" inputMode="url" autoComplete="off" spellcheck={false} aria-label="두 번째 주소" aria-invalid={okSecond ? undefined : 'true'} />
               <button type="button" class="btn btn-sm" disabled={!okSecond} onClick={save}>적어 두기</button></div>
             {!okSecond && <p class="small err">https://로 시작하는 주소를 넣어 주세요.</p>}
