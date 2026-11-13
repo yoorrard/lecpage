@@ -1,10 +1,11 @@
-import { useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView } from './motion.js';
 import { EX } from './facts.js';
 
 /**
  * 연수 당일: 참가자 휴대폰에서 질문이 올라가고, 발표 화면에 투표 결과가 차오르는 장면(예시 화면).
  * 질문 문구·투표 수는 그림을 위한 예시이고, 투표 질문과 보기는 예시 연수에서 옮겼어요. 이 구간이 보일 때만 움직여요.
+ * 발표 화면의 작은 QR은 진짜로 찍히는 QR(예시 연수 사이트로 감). 그리는 코드는 이 구간에 가까워질 때 받아요(공개 장면과 같은 모듈).
  */
 const VOTES = [11, 7, 4, 2];
 const QS = ['피벗 테이블은 구글 시트에서도 되나요?', '학생 이름은 어떻게 가리면 좋을까요?'];
@@ -19,6 +20,14 @@ const FEATURES = [
 export function LiveDay() {
   const box = useRef();
   const on = useInView(box, { margin: '-10% 0px' });
+  const near = useInView(box, { margin: '600px 0px', once: true });
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    if (!near) return;
+    // 짧은 주소(폴더)로: 점이 적어 작은 그림에서도 또렷함
+    const url = new URL('examples/data-lab/', location.href.split('#')[0]).href;
+    import('../components/QR.jsx').then((m) => setQr('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(m.qrSvg(url, { margin: 1 })))).catch(() => { });
+  }, [near]);
   const total = VOTES.reduce((a, b) => a + b, 0);
   return (
     <section class="ld-live" aria-labelledby="ld-live-h">
@@ -27,7 +36,7 @@ export function LiveDay() {
           <p class="ld-kicker">연수 당일</p>
           <h2 id="ld-live-h">휴대폰으로 묻고,<br />화면으로 함께 봐요</h2>
         </header>
-        <p class="ld-sub">참가자는 휴대폰으로 질문을 남기고 투표해요. 강사는 강사 화면에서 질문을 고르고, 발표 화면에 결과를 띄워요. 참여 기능은 강사님 계정(구글 시트·Supabase·Cloudflare 등)에 바로 연결해요. lecpage 운영자는 참가자 기록을 보지 않아요.</p>
+        <p class="ld-sub">참가자는 휴대폰으로 질문을 남기고 투표해요. 강사는 강사 화면에서 질문을 고르고, 발표 화면에 결과를 띄워요. 모두 연수 사이트 안이라 참가자가 다른 서비스에 가입하지 않아요. 기록은 강사님 계정에만 쌓이고, lecpage 운영자는 보지 않아요.</p>
         <dl class="ld-feat">{FEATURES.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
       </div>
       <div class={`ld-live-vis${on ? ' is-on' : ''}`} ref={box} aria-hidden="true">
@@ -35,7 +44,7 @@ export function LiveDay() {
           <div class="ld-screen-head"><b>잠깐 투표</b><span>발표 화면 · 예시</span></div>
           <p class="ld-screen-q">{EX.poll.q}</p>
           <ul class="ld-bars">{EX.poll.options.map((o, i) => <li style={{ '--v': VOTES[i] / total, '--i': i }}><span>{o}</span><i /><b>{VOTES[i]}</b></li>)}</ul>
-          <div class="ld-screen-side"><i class="ld-mini-qr" /><small>QR로 들어와요</small></div>
+          <div class="ld-screen-side"><i class="ld-mini-qr">{qr && <img src={qr} alt="" width="96" height="96" />}</i><small>QR로 들어와요</small></div>
         </div>
         <div class="ld-phone ld-phone-live">
           <i class="ld-phone-notch" />

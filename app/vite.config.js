@@ -123,7 +123,8 @@ function landingFacts() {
       let show = [];
       try { show = JSON.parse(read('src/landing/shots/shots.json')).showcase || []; } catch { /* 그림이 아직 없음 */ }
       const designs = Object.fromEntries(show.map((k) => E.getPreset(k)).filter(Boolean).map((p) => [p.id, { name: p.name_ko, desc: p.desc_ko }]));
-      return `export default ${JSON.stringify({ presets: E.PRESETS.length, fx: E.FX.length, designs })};`;
+      const layouts = Object.values(E.BODY_VARIANTS).reduce((n, v) => n + Object.keys(v).length, 0); // 본문 배치(섹션 종류마다 다른 짜임) 수
+      return `export default ${JSON.stringify({ presets: E.PRESETS.length, fx: E.FX.length, layouts, designs })};`;
     },
   };
 }
