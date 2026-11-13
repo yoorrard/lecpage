@@ -143,6 +143,8 @@ export class Site extends DurableObject {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
       const usage = await this.gate('GET', 'usage');
+      // 운영자가 새 업로드를 멈췄으면 다시 올리기도 받지 않음(이미 공개한 판은 그대로 열림)
+      if (usage.paused) throw new HttpError('rate_limited', '운영자가 잠시 새 업로드를 멈췄어요. 이미 올린 사이트는 그대로 열려요. 나중에 다시 하거나 내 계정에 올려 주세요.', { status: 503, headers: { 'retry-after': '3600' } });
       if (usage.bytes - meta.bytes + man.stored > this.cfg.maxTotalBytes) throw new HttpError('full');
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
