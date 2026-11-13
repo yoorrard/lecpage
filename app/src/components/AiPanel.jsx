@@ -40,7 +40,7 @@ function copyNow(text) {
  * 처음 만들 때(교재 넣기 단계)는 쓰던 챗봇 창 길만 보여 줌(키 길은 AiConnect). onKey가 있으면 [API 키로 바꾸기]
  * start: { how: 'paste'|'connect', full, bot, make } — 오류에서 넘어올 때 고를 길·전체 다시 짜기·먼저 내세울 챗봇. make: 사이트가 있어도 '처음 만들기' 화면(교재 넣기 단계의 다시 만들기)
  * onBlueprint(bp, { polish, count, restored }) — polish면 문구만 바뀐 설계도, 아니면 AI가 짠 설계도(부르는 쪽이 applyInfo로 강사 값을 지킴).
- * 어느 쪽이든 교재 지킴이(guardAnswer)를 거친 뒤이고, restored는 교재대로 되돌린 곳
+ * 구성까지 새로 짠 답은 교재 지킴이(guardAnswer)를 거친 뒤이고, restored는 교재대로 되돌린 곳
  */
 export function AiPanel({ p, onBlueprint, start = null, onKey = null }) {
   const [ing, setIng] = useState(null);
@@ -81,8 +81,8 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null }) {
     if (Array.isArray(json.changes) || (!full && !Array.isArray(json.sections))) {
       const pr = applyPolish(base.current, targets, json);
       if (!pr.count) { setErr({ title: '바꿀 문구가 없대요.', body: '지금 문구가 괜찮다는 뜻이에요. 구성까지 바꾸려면 위의 체크를 켜고 다시 해 보세요.' }); return; }
-      const g = guardAnswer(pr.blueprint, p, ing, base.current);
-      onBlueprint(g.blueprint, { polish: true, count: pr.count, restored: g.restored }); return;
+      // 문구만 다듬기는 교재 글(단계·프롬프트·일정 제목·FAQ)을 보내지 않아 바뀔 일이 없고, 강사가 고친 곳을 교재로 되돌리면 안 되므로 지킴이를 거치지 않음
+      onBlueprint(pr.blueprint, { polish: true, count: pr.count, restored: [] }); return;
     }
     if (!Array.isArray(json.sections)) { setErr({ title: '답의 형식이 달라요.', body: '프롬프트를 다시 복사해 새 대화에 붙여 넣어 주세요.' }); return; }
     const v = E.validate(json);
