@@ -31,8 +31,10 @@
 .ld-vs-a picture,.ld-vs-b picture{display:contents}
 .ld-vs-a img,.ld-vs-b img{display:block;width:100%;height:100%;object-fit:cover;object-position:top center;pointer-events:none}
 .ld-vs-b{clip-path:inset(0 0 0 var(--v))}
-.ld-vs-handle{position:absolute;top:0;bottom:0;left:var(--v);width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px rgb(28 26 25 / .22)}
-.ld-vs-handle b{position:absolute;top:50%;left:50%;display:grid;place-items:center;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#fff;box-shadow:0 6px 18px -4px rgb(28 26 25 / .4),0 0 0 1px rgb(28 26 25 / .12)}
+/* 손잡이는 transform으로만 옮김(자리 밀림으로 세지 않게): 틀 너비의 요소를 --v만큼 밀고, 선과 동그라미는 그 왼쪽 끝에 */
+.ld-vs-handle{position:absolute;top:0;bottom:0;left:0;width:100%;transform:translateX(var(--v));pointer-events:none}
+.ld-vs-handle::before{content:"";position:absolute;top:0;bottom:0;left:-1px;width:2px;background:#fff;box-shadow:0 0 0 1px rgb(28 26 25 / .22)}
+.ld-vs-handle b{position:absolute;top:50%;left:0;display:grid;place-items:center;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#fff;box-shadow:0 6px 18px -4px rgb(28 26 25 / .4),0 0 0 1px rgb(28 26 25 / .12)}
 .ld-vs-handle b::before{content:"";width:24px;height:14px;background:#1C1A19;
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 14' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 2 2 7l5 5M17 2l5 5-5 5'/%3E%3C/svg%3E") center/contain no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 14' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 2 2 7l5 5M17 2l5 5-5 5'/%3E%3C/svg%3E") center/contain no-repeat}

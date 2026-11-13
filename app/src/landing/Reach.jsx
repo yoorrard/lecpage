@@ -23,7 +23,7 @@ export function Reach() {
         <header class="ld-head">
           <h2 id="ld-reach-h">공개하면 바로<br />주소와 QR이 나와요</h2>
         </header>
-        <p class="ld-sub">올릴 곳을 골라 주고, [공개하기]를 누르면 주소·QR·카톡 안내 문구를 함께 줘요. 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
+        <p class="ld-sub">올릴 곳은 lecpage가 골라 줘요. [공개하기]를 누르면 카톡 안내 문구도 함께 나오고, 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
         <dl class="ld-facts">
           <div><dt>올릴 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로 올리고, 기관 서버·USB에는 ZIP으로 옮겨요.</dd></div>
           <div><dt>공개 범위</dt><dd>주소를 받은 사람만(기본) · 암호를 아는 사람만 · 누구나</dd></div>
