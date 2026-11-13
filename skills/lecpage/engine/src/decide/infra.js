@@ -182,6 +182,15 @@ export function decideInfra(input = {}) {
     if (size > 300) warnings.push('300명이 넘는 행사는 Cloudflare Workers 유료($5/월)를 켜 두세요. 한도를 넘어도 오류 대신 소액만 과금돼요.');
     if (realtime) warnings.push('질문·투표만 실시간으로 두고, 교재·실습 화면은 정적으로 둬요.');
   }
+  // skill이 사이트를 Cloudflare에 올리면 참여 기능도 같은 계정에(가입 하나, 7일 멈춤 없음, publish --live 한 번으로 둘 다 올림).
+  // 앱(클릭만)은 버튼에 GitHub 계정도 필요해서 그대로 둠. 이미 연결해 둔 곳이 Vercel 등이면 그쪽 결과를 따름
+  if (skill !== 'click' && (backend === 'supabase' || backend === 'sheets') && decideHost({ ...input, skill, network, infra, backend: undefined }).pick === 'cloudflare') {
+    backend = 'cloudflare'; tier = Math.max(tier, 3);
+    reasons.length = 0;
+    reasons.push('사이트를 올릴 Cloudflare 계정에 참여 기능도 함께 둬요. 가입 하나로 끝나고, 쓰지 않아도 7일 뒤 멈추지 않아요.');
+    reasons.push('질문·투표가 바로 바뀌고, 학교 와이파이 하나에서 모두 접속해도 막히지 않아요. 무료는 하루 10만 요청까지예요.');
+    warnings.splice(0, warnings.length, ...warnings.filter((w) => !/Supabase|Apps Script/.test(w)));
+  }
   // 웹소켓이 막힌 망에서는 5초마다 묻는 방식이라 요청이 크게 늘어남(100명 2시간이면 14만 건쯤)
   if (backend === 'cloudflare' && network === 'restricted' && size > 60) warnings.push('웹소켓이 막힌 망에서 60명이 넘으면 Cloudflare 무료의 하루 한도에 닿을 수 있어요. 그날만이라도 유료(월 $5)를 켜 두세요.');
 

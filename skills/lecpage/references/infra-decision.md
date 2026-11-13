@@ -71,7 +71,8 @@
 | 참여 기록이 필요 없음 | none | 0원 | — |
 | 출석·제출만 모음, 40명 이하 | Google Sheets + Apps Script | 0원 | backends/apps-script |
 | **50명 이하, 질문·도움 요청·진행 현황·투표, 클릭만** | **Google Sheets + Apps Script**(강사 구글 계정, 7초마다 새로 읽기) | 0원 | 앱의 "구글 시트 연결" 안내 + backends/apps-script |
-| 100명 이하, 회원가입 가능 | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
+| **skill이 사이트를 Cloudflare에 올림**(100명 이하도) | **Cloudflare DO 중계**(같은 계정, 가입 하나, 7일 멈춤 없음). `publish work --live`가 사이트와 함께 올림 | 0원(무료 한도 안) | `deploy/cloudflare.md` |
+| 100명 이하, 회원가입 가능(사이트가 Cloudflare가 아닐 때) | Supabase(강사 소유, 서울 리전) | 0원 | backends/supabase |
 | 100명 넘음, 또는 반응이 많음 | Cloudflare DO 중계(강사 계정, **Deploy to Cloudflare 버튼**. GitHub 계정도 필요) | 0원(무료 한도 안) | `deploy/cloudflare.md` |
 | 서버·NAS·VPS·학교 서버가 있음 | node-server(Docker). 사이트도 같은 서버 | 기존 비용 | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 서버는 없지만 node-server를 쓰고 싶은 개발자 | node-server(Fly.io·Railway·Render, 유료) | 월 $2~7 | `deploy/paas-node-hosting.md` |
@@ -111,10 +112,11 @@
 6. **L06** WebSocket이 막힌 학교(`wsBlocked`) → `cf-relay`(SSE·새로 읽기 자동 전환). 클릭만 가능하면 `sheets`(일반 HTTPS만 씀).
 7. ★ **L07** 출석·제출처럼 **모으기만**(`realtime` 없음) + 40명 이하 → `sheets`.
 8. ★ **L08** **클릭만 가능 + 50명 이하 → `sheets`.** 질문·도움 요청·진행 현황·투표·반응도 됩니다(7초마다 새로 읽기). 구글 계정만 있으면 앱의 안내를 따라 10분 안에 연결하고 "연결 확인"으로 시험합니다.
-9. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
-10. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
+9. ★ **L08b** skill(basic 이상)이고 올릴 곳의 맨 앞이 `cloudflare`(§3.2를 실시간 없이 먼저 돌려 봄)인데 L07·L08·L09가 `sheets`·`supabase`를 낸다 → `cf-relay`(같은 Cloudflare 계정). 가입이 하나로 끝나고 7일 멈춤이 없으며, `publish work --host cloudflare --live` 한 번으로 사이트·중계·관리자 키·허용 주소까지 올립니다. 이미 연결해 둔 곳이 Vercel 등이라 맨 앞이 바뀌면 L09 그대로.
+10. ★ **L09** 100명 이하 → `supabase`(강사 소유, 서울 리전). 클릭만 하는 강사에게도 이 결과가 나오면 회원가입이 필요하다고 먼저 알립니다(G23).
+11. ★ **L10** 그 밖(100명 초과) → `cf-relay`(강사 Cloudflare 계정). skill은 wrangler로 직접 올리고, 앱에서는 명령어 없이 **Deploy to Cloudflare 버튼**으로 만듭니다(버튼은 GitHub·GitLab 계정도 필요). 대안: `node-server`.
 
-실시간 백엔드도 skill이 직접 만듭니다. 강사는 로그인하거나 토큰을 환경 변수로 넣어 주기만 합니다: Supabase는 `backends/supabase/README.md`의 "명령으로 한 번에", Cloudflare 중계는 `backends/cloudflare/README.md` §2. Sheets만 강사가 구글 계정에서 직접 붙여 넣습니다.
+실시간 백엔드도 skill이 직접 만듭니다. 강사는 로그인하거나 토큰을 환경 변수로 넣어 주기만 합니다: Cloudflare 중계는 `publish work --live`(사이트와 함께, 손으로 하려면 `backends/cloudflare/README.md` §2), Supabase는 `backends/supabase/README.md`의 "명령으로 한 번에". Sheets만 강사가 구글 계정에서 직접 붙여 넣습니다.
 
 ### 3.2 올릴 곳(static)
 엔진 `decideHost()`와 같은 순서입니다. **먼저 맞으면 끝**(S01·S02) → **기본 순서**(S09·S08) → **조정**(맞는 것을 위에서부터 모두 적용). 맨 앞이 추천이고 나머지는 대안입니다. 끝에는 언제나 `firebase`, `zip`이 붙습니다.
@@ -154,9 +156,9 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
 | 2 | `decide-infra -i work/info.json` → 올릴 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
-| 4 | 한 줄 명령으로 올립니다(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
-| 5 | `curl -sI <주소>/ \| head -1`이 `200`인지, `<주소>/check.html`(접속 확인)이 열리는지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
-| 6 | 건넵니다: 참가자 주소와 QR(`poster.html`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일 |
+| 4 | Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
+| 5 | `publish`가 `<주소>/`·`check.html`·중계 `/api/health`를 확인합니다. 손으로 올렸으면 `curl -sI <주소>/ \| head -1`이 `200`인지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
+| 6 | 건넵니다: 참가자 주소와 `<out>-강사용/`의 `QR-안내문.pdf`·`강사-카드.pdf`·`발표화면.png`(손으로 올렸으면 `handouts <주소>`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일(강사 화면의 도움말에 있음) |
 
 ---
 
@@ -211,6 +213,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"L06b","when":{"wsBlocked":true},"pick":"sheets"},
     {"id":"L07","engine":true,"when":{"realtime":false,"participants":{"lte":40}},"pick":"sheets","note":"출석·제출처럼 모으기만"},
     {"id":"L08","engine":true,"when":{"skill":"click","participants":{"lte":50}},"pick":"sheets","alt":["supabase"],"note":"질문·도움 요청·진행 현황 포함. 7초 새로 읽기. 앱의 안내 + 연결 확인"},
+    {"id":"L08b","engine":true,"when":{"skill":["basic","dev"],"firstHost":"cloudflare","wouldPick":["sheets","supabase"]},"pick":"cf-relay","alt":["supabase"],"note":"사이트와 같은 계정. publish --live가 함께 올림"},
     {"id":"L09","engine":true,"when":{"participants":{"lte":100}},"pick":"supabase","region":"ap-northeast-2","alt":["cf-relay","node-server"]},
     {"id":"L10","engine":true,"when":{},"pick":"cf-relay","alt":["supabase","node-server"],"note":"강사 계정. skill은 wrangler로 직접(backends/cloudflare/README.md §2), 앱은 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요)"}
   ],
@@ -425,7 +428,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 > "Supabase라는 무료 데이터베이스를 선생님 계정에 제가 만들어 둘게요. 선생님은 가입하고 토큰 하나만 만들어 주시면 돼요. 서울 서버에 두고, 질문·투표가 바로바로 떠요. 하나만 기억해 주세요. 일주일 넘게 안 쓰면 잠들어서 연수 2~3일 전에 한 번 열어 주셔야 해요. 토큰은 설정이 끝나면 지우시면 됩니다."
 
 **E. Cloudflare 중계(DO) + Cloudflare 사이트**
-> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 제가 올릴게요. 로그인만 한 번 해 주시면 돼요. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요. 강사 화면에 들어갈 관리자 키는 파일로 따로 건네 드릴게요."
+> "사이트와 실시간 서버를 둘 다 선생님 Cloudflare 계정에 제가 올릴게요. 로그인만 한 번 해 주시면 돼요. 가입이 하나로 끝나고, 오래 안 써도 멈추지 않아요. 인원이 많거나 반응을 쓰셔도 무료 범위 안에서 충분하고, 무료 한도는 매일 오전 9시에 다시 채워져요. 강사 화면에 들어갈 관리자 키는 파일로 따로 건네 드릴게요."
 
 **F. "lecpage 서버를 그냥 빌려 쓰면 안 되나요?"라고 물을 때**
 > "제가 만들어 드리는 사이트는 참가자 기록을 lecpage 쪽 서버에 맡기지 않아요. 기록을 맡는 순간 그 기록의 책임이 운영자에게 넘어가고, 여러 연수가 한 서버를 나눠 쓰면 한 곳에 문제가 생길 때 모두가 멈추거든요. 대신 선생님 계정(Supabase·Cloudflare·구글)에 제가 만들어 드릴게요. 기록은 선생님만 보고, 선생님이 지울 수 있어요."
