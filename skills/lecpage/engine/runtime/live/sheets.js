@@ -18,7 +18,7 @@
     var handlers = [];
     var a = { status: 'offline' };
     var timers = {};
-    var closed = true, pollErr = 0, emptyPolls = 0, rs = 0, epoch = null;
+    var closed = true, pollErr = 0, emptyPolls = 0, rs = 0, epoch = null, every = pollMs;
 
     function emit(evt) { var r; handlers.forEach(function (h, i) { try { var x = h(evt); if (i === 0) r = x; } catch (e) { /* isolate */ } }); return r; }
     function setStatus(s, mode) { if (a.status === s) return; a.status = s; emit({ type: 'status', status: s, mode: mode }); }
@@ -55,7 +55,9 @@
         if (closed) return;
         if (r && r.error) { pollErr++; if (pollErr >= 3) setStatus('offline'); }
         else { if (pollErr || a.status !== 'polling') setStatus('polling', 'polling'); pollErr = 0; emptyPolls = r && r.changes ? 0 : emptyPolls + 1; }
-        var ms = pollErr ? Math.min(60000, pollMs * Math.pow(2, pollErr)) : U.isHidden() ? Math.max(30000, pollMs * 3) : emptyPolls > 8 ? Math.min(pollMs + 3000, 10000) : pollMs;
+        // 묻기 간격 규칙은 core의 pollDelay 한 곳(숨겨진 화면 1분, 바뀐 것 없이 이어지면 늘림). 예전 core에서는 그대로
+        var ms = U.pollDelay ? U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, admin: !!ctx.adminKey() }) : pollErr ? Math.min(60000, pollMs * Math.pow(2, pollErr)) : U.isHidden() ? Math.max(30000, pollMs * 3) : emptyPolls > 8 ? Math.min(pollMs + 3000, 10000) : pollMs;
+        every = ms;
         schedulePoll(U.jitter(ms, 0.2));
       });
     }
@@ -75,6 +77,7 @@
       }, function (e) { setStatus('offline'); throw e; });
     };
     a.close = function () { closed = true; Object.keys(timers).forEach(clear); setStatus('offline'); };
+    a.netInfo = function () { return { transport: 'poll', every: every }; };
     a.join = function (p) { return post({ a: 'join', nickname: p.nickname || '', name: p.name || '', school: p.school || '', consent: !!p.consent }); };
     a.snapshot = function (o) {
       var since = (o && o.since) || 0;

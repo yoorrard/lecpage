@@ -89,7 +89,7 @@ $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stati
 ```
 암호는 파일에 쓰지 않습니다: `--password '<암호>'` 또는 `LECPAGE_PASSWORD`. `--password`를 주면 `access`는 저절로 `password`.
 
-글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(예시 한 벌 약 1.3MB 더해짐, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
+글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담아 예시 한 벌 0.8~1.4MB 더해짐. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
 
 ## 5. 문제가 생기면
 | 증상 | 할 일 |

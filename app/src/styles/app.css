@@ -544,6 +544,22 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 /* 공개 완료: 연수 당일 묶음 */
 .day-kit{display:grid;gap:6px;padding-top:10px;border-top:1px solid color-mix(in srgb,currentColor 14%,transparent)}
 .day-kit .btn-row{margin:0}
+/* 연수 장소 확인·혹시 안 열리면(VenueCheck.jsx), 이 망에서 막힌 곳 한 줄(netcheck.js) */
+.venue{gap:8px}
+.venue-row{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;min-width:0}
+.venue-row > .stack{flex:1 1 auto;min-width:0}
+.venue-row .qr{flex:none;border-radius:6px}
+.venue-url{margin:0;word-break:break-all;color:var(--ink-2)}
+.venue-day{margin:0}
+.venue-day.is-tight{font-weight:600}
+.venue-day.is-full{font-weight:700;color:var(--bad)}
+.rescue{border-top:1px solid color-mix(in srgb,currentColor 14%,transparent);padding-top:10px}
+.rescue summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.rescue-b{gap:10px;padding-top:10px}
+.rescue-list{margin:0;padding-left:1.2em;display:grid;gap:4px}
+.net-line{margin:0}
+.pub-opt i.net-bad{color:var(--bad)}
+@media (max-width:420px){.venue-row{flex-direction:column}}
 @media (max-width:560px){.ready-b{padding-left:0}}
 
 /* 한 번에 한 단계만 펼쳐 보이는 순서(올릴 곳 연결·참여 기능 연결) */

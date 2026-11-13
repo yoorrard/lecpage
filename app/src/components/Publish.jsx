@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
+import { reach } from '../lib/netcheck.js';
 
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 공개)는 운영자가 켜 둔 앱에서만 보임
@@ -161,7 +162,11 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(''); // 바로 공개를 지금 못 쓰는 까닭(자리가 참·닿지 않음)
-  useEffect(() => { connectedTargets().then(setConnected); instantInfo().then(setInstant); }, []);
+  // false: 바로 공개를 켠 앱인데 이 망에서 서버에 닿지 않음
+  useEffect(() => { connectedTargets().then(setConnected); instantInfo().then((i) => setInstant(i || (PUBLISH_API ? false : null))); }, []);
+  const [netBad, setNetBad] = useState({}); // 이 망에서 API에 닿지 않는 올릴 곳(토큰으로 올리는 곳만 확인)
+  const [moved, setMoved] = useState(''); // 막혀서 다른 곳으로 바꾼 사실 한 줄
+  const forced = useRef(new Set()); // 막혔다고 알린 뒤에도 강사가 다시 고른 곳(다시 바꾸지 않음)
   const live = instant && instant.accepting !== false && !instantOff ? instant : null;
   // 운영자가 새 업로드를 잠시 멈췄으면(paused) 그대로, 아니면 하루 한도 때문에 멈춘 것
   const full = instantOff || (instant && instant.accepting === false ? (instant.paused ? '바로 공개가 잠시 새 사이트를 받지 않아요. 다른 곳에 올려 주세요.' : '오늘은 바로 공개에 방문이 많아 새로 받지 않아요.') : '');
@@ -170,16 +175,30 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   // 바로 공개가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 올린 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
   const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
-  const best = order[0];
+  const best = order.find((h) => !netBad[h]) || order[0];
   const [picked, setPicked] = useState('');
   const [more, setMore] = useState(false); // 다른 곳에 올리기(올릴 곳 목록 펼치기)
   const target = picked && order.includes(picked) ? picked : best;
   useEffect(() => { onTarget?.(target); }, [target]);
+  // 고른 곳의 API가 이 망에서 막혔으면(요청 한 번) 다음 추천 곳으로 바꾸고 한 줄로 알림. 핫스팟으로 바꾸면 3분 뒤 다시 확인
+  useEffect(() => {
+    if (!KIND[target]) return undefined;
+    let off = false;
+    reach('host:' + target).then((s) => {
+      if (off || s !== 'blocked') return;
+      const bad = { ...netBad, [target]: true }; setNetBad(bad);
+      if (forced.current.has(target)) return;
+      const alt = order.find((h) => h !== target && !bad[h]) || 'zip';
+      setMoved(`이 망에서 ${LABEL[target]}에 닿지 않아 ${LABEL[alt]}로 바꿨어요. 휴대폰 핫스팟으로 바꾸면 ${LABEL[target]}에도 올릴 수 있어요.`);
+      setPicked(alt);
+    });
+    return () => { off = true; };
+  }, [target]);
   /** 한 곳에 올리기: 사이트 만들기 → 그곳의 한도 확인 → 올리기. up(files)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음 */
   const start = (id, up, onFail, auto = null) => guard(async (opts = {}) => {
     setBusy(id); setProg({ step: '사이트 만드는 중', pct: 1 });
     try {
-      const r = await buildFiles({ ...opts, ...(auto || {}) });
+      const r = await buildFiles({ ...opts, ...(auto || {}), target: id, view: live?.view || '' });
       const chk = E.checkHost(id, siteStat(r.files));
       if (!chk.ok) throw new Error(chk.errors[0]);
       await up(r.files, setProg);
@@ -210,8 +229,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       </div>
       {more && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="올릴 곳">
         {order.map((id) => (
-          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => setPicked(id)} />
-            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}</span></label>
+          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { if (netBad[id]) forced.current.add(id); setMoved(''); setPicked(id); }} />
+            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
       <div class="pub-about">
@@ -222,6 +241,9 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
         </dl>}
       </div>
       {full && <p class="small" role="status">{full} 내 계정에 올리면 바로 돼요.</p>}
+      {moved && <p class="small net-line" role="status">{moved}</p>}
+      {instant === false && <p class="small muted net-line">이 망에서 바로 공개 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
+      {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 올리다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
       {target === 'lecpage' && <Instant {...ctx} info={instant} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}

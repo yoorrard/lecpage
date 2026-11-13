@@ -43,6 +43,13 @@ export function StepEdit({ p, update, go }) {
   const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
+  // AI 회사 API가 이 망에서 막혔으면(만들기 전에 확인) 오류 띠 대신 바로 쓰던 챗봇 창 길을 엶
+  useEffect(() => {
+    if (job?.status !== 'error' || job.error?.kind !== 'blocked') return;
+    const prov = job.error.provider; clearJob(p.id); setWay('chat');
+    toast(`이 망에서 ${PROVIDERS[prov]?.short || 'AI'} API에 닿지 않아 쓰던 챗봇 창으로 바꿨어요.`);
+    setAi({ how: 'paste', full: true, bot: chatbotFor(prov) });
+  }, [job?.status, job?.error?.kind]);
   if (!p.blueprint) return <><StepHead title="살펴보고 고치기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
   const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info, patch) }; });
   function onAi(bp, meta = {}) {

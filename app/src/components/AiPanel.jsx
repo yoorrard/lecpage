@@ -7,6 +7,7 @@ import { polishTargets, makePolishPrompt, applyPolish } from '../lib/polish.js';
 import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, explainError, takeAiResume, CHATBOTS, getChatbot, setChatbot, chatLabel, chatbotFor, setWay } from '../lib/ai.js';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { copy, toast } from '../lib/util.js';
+import { reach, netLine } from '../lib/netcheck.js';
 
 /** OpenRouter 로그인에서 돌아오면 AI 창을 다시 엶 */
 export function useAiResume(open) {
@@ -297,6 +298,8 @@ function Connect({ ai, setAi, full, ready, prompt, onResult, setErr, swap, pay, 
 
   async function run(allowPaid) {
     setErr(null); setBusy('run'); ctrl.current = new AbortController();
+    // 이 망에서 AI 회사 API가 막혔으면 기다리지 않고 쓰던 챗봇 창 길로 바꿈
+    if (await reach('ai:' + ai.provider) === 'blocked') { setBusy(''); toast(netLine('ai:' + ai.provider, '쓰던 챗봇 창')); onChat?.(ai.provider); return; }
     try {
       const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
       const { text, cut } = await generateAuto({ provider: ai.provider, key: ai.key, model: ai.model, prompt: prompt(), signal: ctrl.current.signal, maxTokens: (full ? 16000 : 8000) * big },
