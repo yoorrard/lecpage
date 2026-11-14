@@ -1,0 +1,13 @@
+{
+  "name": "lecpage-engine",
+  "version": "1.1.0",
+  "private": true,
+  "description": "lecpage 엔진과 skill CLI의 판(version)은 이 파일 하나에서 정해요. 위쪽 폴더의 package.json(\"type\":\"commonjs\" 등)과 상관없이 ESM으로 읽히게 type을 적어 둬요.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "npm --prefix ../../.. test",
+    "examples": "npm --prefix ../../.. run examples"
+  }
+}

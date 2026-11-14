@@ -27,6 +27,6 @@ export { deriveConcept, cleanConcept, conceptDesign, conceptLine, conceptKeyword
 export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO, PROMPT_END, readAnswer, isCutAnswer, joinAnswer, answerPart, CONTINUE_ASK, JSON_ONLY_ASK } from './prompt/bridge.js';
 export { guardMaterial, undoRestore, restoredCount, dropMissingAssets } from './guard.js';
 export { applyBlueprintPatch, diffSummary, withSectionIds, PROTECTED_PATHS } from './patch.js';
-export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';
+export { applyInfo, keepTeacherLinks, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';
 export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
-export const VERSION = '1.0.0';
+export { VERSION } from './version.js';

@@ -45,6 +45,9 @@ export function safeUrl(v) {
 }
 
 const arr = (v) => (Array.isArray(v) ? v.slice(0, LIMITS.items) : []);
+/** 객체 목록: null·글자 같은 빈 항목은 빼고 셈(AI 답·손으로 고친 JSON의 [null]에서 멈추지 않게, 뺀 수는 validate가 주의로 알림) */
+let dropped = 0;
+const objs = (v) => { const a = arr(v); const o = a.filter((x) => x && typeof x === 'object' && !Array.isArray(x)); dropped += a.length - o.length; return o; };
 const strArr = (v, max = LIMITS.short) => arr(v).map((x) => str(x, max)).filter(Boolean);
 const num = (v, d = 0, min = -Infinity, max = Infinity) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
 const pick = (v, allowed, d) => (allowed.includes(v) ? v : d);
@@ -67,41 +70,41 @@ function source(v) { if (!v || typeof v !== 'object') return undefined; const pa
 // 섹션별 정리 함수
 const SECTION_FIX = {
   hero: (s) => ({ eyebrow: str(s.eyebrow, LIMITS.short), title: str(s.title, LIMITS.title), subtitle: str(s.subtitle, 400),
-    ctas: arr(s.ctas).slice(0, 3).map((c) => ({ label: str(c.label, 30), href: safeUrl(c.href) || '#main' })).filter((c) => c.label),
-    meta: arr(s.meta).slice(0, 6).map((m) => ({ label: str(m.label, 20), value: str(m.value, 80), url: safeUrl(m.url) || undefined })).filter((m) => m.value) }),
+    ctas: objs(s.ctas).slice(0, 3).map((c) => ({ label: str(c.label, 30), href: safeUrl(c.href) || '#main' })).filter((c) => c.label),
+    meta: objs(s.meta).slice(0, 6).map((m) => ({ label: str(m.label, 20), value: str(m.value, 80), url: safeUrl(m.url) || undefined })).filter((m) => m.value) }),
   goals: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((x) => textItem(x, 120)).filter(Boolean).slice(0, 6), who: str(s.who, 160) }),
-  glance: (s) => ({ items: arr(s.items).slice(0, 8).map((i) => ({ value: str(i.value, 20), label: str(i.label, 40), note: str(i.note, 80) })).filter((i) => i.value) }),
+  glance: (s) => ({ items: objs(s.items).slice(0, 8).map((i) => ({ value: str(i.value, 20), label: str(i.label, 40), note: str(i.note, 80) })).filter((i) => i.value) }),
   message: (s) => ({ text: str(s.text, 600), note: str(s.note, 300), style: pick(s.style, ['statement', 'formula', 'quote'], 'statement'), parts: strArr(s.parts, 30).slice(0, 6), result: str(s.result, 40), cite: str(s.cite, 80) }),
-  steps5: (s) => ({ lead: str(s.lead, 200), items: arr(s.items).slice(0, 8).map((i) => ({ word: str(i.word ?? i.title, 20), desc: str(i.desc, 120) })).filter((i) => i.word), close: str(s.close, 200) }),
-  outline: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).slice(0, 8).map((i, n) => ({ part: str(i.part, 20) || `PART ${n + 1}`, title: str(i.title, 80), desc: str(i.desc, 200), tags: strArr(i.tags, 20).slice(0, 6), target: str(i.target, 40) })).filter((i) => i.title) }),
-  schedule: (s) => ({ items: arr(s.items).map((i) => ({ start: time(i.start), end: time(i.end), title: str(i.title, 100), desc: str(i.desc, 200), part: str(i.part, 20), date: date(i.date) })).filter((i) => i.title) }),
-  readiness: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((i) => ({ label: str(i.label ?? i.title, 120), detail: str(i.detail, 300), url: safeUrl(i.url) })).filter((i) => i.label), checks: arr(s.checks).slice(0, 20).map((c) => ({ name: str(c.name, 40), url: safeUrl(c.url) })).filter((c) => c.url) }),
-  deck: (s) => ({ lead: str(s.lead, 300), slides: arr(s.slides).slice(0, 400).map((sl, n) => ({ src: safeUrl(sl.src), page: num(sl.page, n + 1, 1, 9999), title: str(sl.title, 120), text: str(sl.text, 1500), tools: strArr(sl.tools, 40).slice(0, 8) })), download: s.download ? { href: safeUrl(s.download.href), size: str(s.download.size, 20), label: str(s.download.label, 60) } : undefined, notice: str(s.notice, 400) }),
-  stations: (s) => ({ layout: pick(s.layout, ['sidebar', 'tabs', 'scroll'], 'sidebar'), lead: str(s.lead, 300), items: arr(s.items).slice(0, 60).map((i, n) => ({
+  steps5: (s) => ({ lead: str(s.lead, 200), items: objs(s.items).slice(0, 8).map((i) => ({ word: str(i.word ?? i.title, 20), desc: str(i.desc, 120) })).filter((i) => i.word), close: str(s.close, 200) }),
+  outline: (s) => ({ lead: str(s.lead, 300), items: objs(s.items).slice(0, 8).map((i, n) => ({ part: str(i.part, 20) || `PART ${n + 1}`, title: str(i.title, 80), desc: str(i.desc, 200), tags: strArr(i.tags, 20).slice(0, 6), target: str(i.target, 40) })).filter((i) => i.title) }),
+  schedule: (s) => ({ items: objs(s.items).map((i) => ({ start: time(i.start), end: time(i.end), title: str(i.title, 100), desc: str(i.desc, 200), part: str(i.part, 20), date: date(i.date) })).filter((i) => i.title) }),
+  readiness: (s) => ({ lead: str(s.lead, 300), items: objs(s.items).map((i) => ({ label: str(i.label ?? i.title, 120), detail: str(i.detail, 300), url: safeUrl(i.url) })).filter((i) => i.label), checks: objs(s.checks).slice(0, 20).map((c) => ({ name: str(c.name, 40), url: safeUrl(c.url) })).filter((c) => c.url) }),
+  deck: (s) => ({ lead: str(s.lead, 300), slides: objs(s.slides).slice(0, 400).map((sl, n) => ({ src: safeUrl(sl.src), page: num(sl.page, n + 1, 1, 9999), title: str(sl.title, 120), text: str(sl.text, 1500), tools: strArr(sl.tools, 40).slice(0, 8) })), download: s.download ? { href: safeUrl(s.download.href), size: str(s.download.size, 20), label: str(s.download.label, 60) } : undefined, notice: str(s.notice, 400) }),
+  stations: (s) => ({ layout: pick(s.layout, ['sidebar', 'tabs', 'scroll'], 'sidebar'), lead: str(s.lead, 300), items: objs(s.items).slice(0, 60).map((i, n) => ({
     id: slug(i.id || i.name || i.title, n + 1), name: str(i.name || i.title, 30), title: str(i.title || i.name, 100), tag: str(i.tag, 16).toUpperCase(), desc: str(i.desc ?? i.sub, 400),
-    steps: strArr(i.steps, 500).slice(0, 20), prompts: arr(i.prompts).slice(0, 12).map((p) => ({ title: str(p.title, 80), text: str(p.text, 4000) })).filter((p) => p.text),
-    images: arr(i.images).slice(0, 20).map((im) => ({ src: safeUrl(im.src), caption: str(im.caption, 120) })).filter((im) => im.src),
+    steps: strArr(i.steps, 500).slice(0, 20), prompts: objs(i.prompts).slice(0, 12).map((p) => ({ title: str(p.title, 80), text: str(p.text, 4000) })).filter((p) => p.text),
+    images: objs(i.images).slice(0, 20).map((im) => ({ src: safeUrl(im.src), caption: str(im.caption, 120) })).filter((im) => im.src),
     links: links(i.links), outcome: str(i.outcome ?? i.out, 300), note: str(i.note, 400), minutes: num(i.minutes, 0, 0, 600), source: source(i.source),
     // 강사 메모(발표자 노트의 진행 메모): 참가자 화면에는 그리지 않고 강사용 운영안내에만
     ...(i.teacherNote ? { teacherNote: str(i.teacherNote, 600) } : {}) })).filter((i) => i.title) }),
-  tools: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 300), items: arr(s.items).map((i) => ({ name: str(i.name, 40), url: safeUrl(i.url), desc: str(i.desc, 200), pages: arr(i.pages).map((p) => num(p, 0, 1, 9999)).filter(Boolean).slice(0, 12), icon: str(i.icon, 20) })).filter((i) => i.name) }),
-  prompts: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((i) => ({ title: str(i.title, 80), text: str(i.text, 4000), tags: strArr(i.tags, 20).slice(0, 6) })).filter((i) => i.text) }),
+  tools: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 300), items: objs(s.items).map((i) => ({ name: str(i.name, 40), url: safeUrl(i.url), desc: str(i.desc, 200), pages: arr(i.pages).map((p) => num(p, 0, 1, 9999)).filter(Boolean).slice(0, 12), icon: str(i.icon, 20) })).filter((i) => i.name) }),
+  prompts: (s) => ({ lead: str(s.lead, 300), items: objs(s.items).map((i) => ({ title: str(i.title, 80), text: str(i.text, 4000), tags: strArr(i.tags, 20).slice(0, 6) })).filter((i) => i.text) }),
   qa: (s) => ({ lead: str(s.lead, 300), anonymous: s.anonymous !== false }),
-  board: (s) => ({ lead: str(s.lead, 300), categories: arr(s.categories).slice(0, 6).map((c, n) => ({ id: slug(c.id || c.label, n + 1), label: str(c.label, 20) })).filter((c) => c.label), allowFiles: s.allowFiles !== false, maxFiles: num(s.maxFiles, 4, 0, 8), moderation: !!s.moderation, externalUrl: safeUrl(s.externalUrl), notice: str(s.notice, 300) }),
-  poll: (s) => ({ items: arr(s.items).slice(0, 20).map((p, n) => ({ id: slug(p.id, n + 1), question: str(p.question, 200), kind: pick(p.kind, ['choice', 'word', 'scale'], 'choice'), options: strArr(p.options, 60).slice(0, 10) })).filter((p) => p.question) }),
-  quiz: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).slice(0, 30).map((q) => ({ q: str(q.q ?? q.question, 300), options: strArr(q.options, 120).slice(0, 6), answer: num(q.answer, 0, 0, 5), explain: str(q.explain, 400) })).filter((q) => q.q && q.options.length >= 2) }),
-  materials: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 500), items: arr(s.items).map((i) => ({ title: str(i.title, 100), desc: str(i.desc, 300), href: safeUrl(i.href ?? i.url), kind: str(i.kind, 12).toUpperCase(), size: str(i.size, 20) })).filter((i) => i.title) }),
+  board: (s) => ({ lead: str(s.lead, 300), categories: objs(s.categories).slice(0, 6).map((c, n) => ({ id: slug(c.id || c.label, n + 1), label: str(c.label, 20) })).filter((c) => c.label), allowFiles: s.allowFiles !== false, maxFiles: num(s.maxFiles, 4, 0, 8), moderation: !!s.moderation, externalUrl: safeUrl(s.externalUrl), notice: str(s.notice, 300) }),
+  poll: (s) => ({ items: objs(s.items).slice(0, 20).map((p, n) => ({ id: slug(p.id, n + 1), question: str(p.question, 200), kind: pick(p.kind, ['choice', 'word', 'scale'], 'choice'), options: strArr(p.options, 60).slice(0, 10) })).filter((p) => p.question) }),
+  quiz: (s) => ({ lead: str(s.lead, 300), items: objs(s.items).slice(0, 30).map((q) => ({ q: str(q.q ?? q.question, 300), options: strArr(q.options, 120).slice(0, 6), answer: num(q.answer, 0, 0, 5), explain: str(q.explain, 400) })).filter((q) => q.q && q.options.length >= 2) }),
+  materials: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 500), items: objs(s.items).map((i) => ({ title: str(i.title, 100), desc: str(i.desc, 300), href: safeUrl(i.href ?? i.url), kind: str(i.kind, 12).toUpperCase(), size: str(i.size, 20) })).filter((i) => i.title) }),
   instructor: (s) => ({ lead: str(s.lead, 300) }),
-  speakers: (s) => ({ items: arr(s.items).map((i) => ({ name: str(i.name, 40), role: str(i.role, 60), org: str(i.org, 60), photo: safeUrl(i.photo), talk: str(i.talk, 120), time: str(i.time, 20) })).filter((i) => i.name) }),
-  sessions: (s) => ({ items: arr(s.items).map((i, n) => ({ no: num(i.no, n + 1, 1, 999), date: date(i.date), title: str(i.title, 120), desc: str(i.desc, 300), status: pick(i.status, ['done', 'now', 'next', ''], ''), links: links(i.links) })).filter((i) => i.title) }),
-  survey: (s) => ({ lead: str(s.lead, 300), url: safeUrl(s.url), qr: s.qr !== false, questions: arr(s.questions).slice(0, 20).map((q) => ({ q: str(q.q, 200), kind: pick(q.kind, ['scale', 'choice', 'text'], 'scale'), options: strArr(q.options, 60).slice(0, 8) })).filter((q) => q.q) }),
+  speakers: (s) => ({ items: objs(s.items).map((i) => ({ name: str(i.name, 40), role: str(i.role, 60), org: str(i.org, 60), photo: safeUrl(i.photo), talk: str(i.talk, 120), time: str(i.time, 20) })).filter((i) => i.name) }),
+  sessions: (s) => ({ items: objs(s.items).map((i, n) => ({ no: num(i.no, n + 1, 1, 999), date: date(i.date), title: str(i.title, 120), desc: str(i.desc, 300), status: pick(i.status, ['done', 'now', 'next', ''], ''), links: links(i.links) })).filter((i) => i.title) }),
+  survey: (s) => ({ lead: str(s.lead, 300), url: safeUrl(s.url), qr: s.qr !== false, questions: objs(s.questions).slice(0, 20).map((q) => ({ q: str(q.q, 200), kind: pick(q.kind, ['scale', 'choice', 'text'], 'scale'), options: strArr(q.options, 60).slice(0, 8) })).filter((q) => q.q) }),
   followup: (s) => ({ lead: str(s.lead, 300), completion: str(s.completion, 300),
     items: arr(s.items).slice(0, 12).map((i) => { const url = safeUrl(i?.url ?? i?.href); return { title: str(i?.title ?? i?.label, 80), desc: str(i?.desc, 200), url, kind: pick(i?.kind, FOLLOWUP_KINDS, followupKind(url)) }; }).filter((i) => i.title && (i.url || i.desc)) }),
   closing: (s) => ({ lead: str(s.lead, 200), text: str(s.text, 200), thanks: str(s.thanks, 200) }),
-  faq: (s) => ({ items: arr(s.items).map((i) => ({ q: str(i.q, 200), a: mdStr(i.a, 1200) })).filter((i) => i.q && i.a) }),
-  glossary: (s) => ({ items: arr(s.items).map((i) => ({ term: str(i.term, 60), desc: str(i.desc, 400) })).filter((i) => i.term) }),
-  video: (s) => ({ items: arr(s.items).map((i) => ({ title: str(i.title, 120), url: safeUrl(i.url), thumb: safeUrl(i.thumb), length: str(i.length, 12) })).filter((i) => i.url) }),
-  gallery: (s) => ({ items: arr(s.items).map((i) => ({ src: safeUrl(i.src), caption: str(i.caption, 160) })).filter((i) => i.src) }),
+  faq: (s) => ({ items: objs(s.items).map((i) => ({ q: str(i.q, 200), a: mdStr(i.a, 1200) })).filter((i) => i.q && i.a) }),
+  glossary: (s) => ({ items: objs(s.items).map((i) => ({ term: str(i.term, 60), desc: str(i.desc, 400) })).filter((i) => i.term) }),
+  video: (s) => ({ items: objs(s.items).map((i) => ({ title: str(i.title, 120), url: safeUrl(i.url), thumb: safeUrl(i.thumb), length: str(i.length, 12) })).filter((i) => i.url) }),
+  gallery: (s) => ({ items: objs(s.items).map((i) => ({ src: safeUrl(i.src), caption: str(i.caption, 160) })).filter((i) => i.src) }),
   reflection: (s) => ({ lead: str(s.lead, 300), prompts: strArr(s.prompts, 200).slice(0, 8) }),
   attendance: (s) => ({ lead: str(s.lead, 300) }),
   text: (s) => ({ md: mdStr(s.md, LIMITS.long) }),
@@ -122,6 +125,7 @@ const SECTION_FIX = {
 
 export function validate(input) {
   const errors = [], warnings = [];
+  dropped = 0; let droppedInSections = 0;
   const b = (input && typeof input === 'object') ? input : {};
   if (!input || typeof input !== 'object') errors.push({ path: '', message_ko: '설계도가 JSON 객체가 아니에요.' });
 
@@ -132,7 +136,7 @@ export function validate(input) {
     mode: pick(m.mode, ['offline', 'online', 'hybrid'], 'offline'), joinUrl: safeUrl(m.joinUrl), shortUrl: safeUrl(m.shortUrl), siteUrl: safeUrl(m.siteUrl),
     lang: 'ko', description: str(m.description, 300), contact: str(m.contact, 120),
     admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 90, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
-    sessions: arr(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
+    sessions: objs(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
   };
   if (!meta.title) { meta.title = '연수'; warnings.push({ path: 'meta.title', message_ko: '연수명이 없어 "연수"로 채웠어요.' }); }
 
@@ -178,11 +182,11 @@ export function validate(input) {
     warnings.push({ path: 'design.preset', code: 'unknown-preset', suggest: near, message_ko: `"${str(d.preset, 30)}" 디자인이 없어요.${near.length ? ` 혹시 ${near.map((x) => `"${x}"`).join('·')}인가요?` : ''} 지금은 "${design.preset}"(${getPreset(design.preset).name_ko})로 만들어요.` });
   }
 
-  const instructors = arr(b.instructors || (b.instructor ? [b.instructor] : [])).slice(0, 12).map((p) => ({
+  const instructors = objs(b.instructors || (b.instructor ? [b.instructor] : [])).slice(0, 12).map((p) => ({
     name: str(p.name, 40), role: str(p.role, 80), org: str(p.org, 80), photo: safeUrl(p.photo), bio: str(p.bio, 800),
     email: /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(str(p.email, 120)) ? str(p.email, 120) : '', showEmail: p.showEmail !== false,
     tags: strArr(p.tags, 20).slice(0, 8), links: links(p.links).slice(0, 10),
-    timeline: arr(p.timeline).slice(0, 6).map((g) => ({ group: str(g.group, 40), items: arr(g.items).slice(0, 12).map((it) => ({ text: str(it.text ?? it, 160), year: str(it.year, 20), url: safeUrl(it.url) })).filter((it) => it.text) })).filter((g) => g.items.length),
+    timeline: objs(p.timeline).slice(0, 6).map((g) => ({ group: str(g.group, 40), items: arr(g.items).filter((it) => it != null).slice(0, 12).map((it) => ({ text: str(it.text ?? it, 160), year: str(it.year, 20), url: safeUrl(it.url) })).filter((it) => it.text) })).filter((g) => g.items.length),
   })).filter((p) => p.name);
 
   const lv = b.live || {};
@@ -195,7 +199,7 @@ export function validate(input) {
   };
 
   const pv = b.privacy || {};
-  const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: arr(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
+  const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: objs(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
   if (!privacy.collect.length) privacy.collect = ['nickname'];
   if (audience.minor) { privacy.collect = ['nickname']; warnings.push({ path: 'privacy.collect', message_ko: '만 14세 미만이 참여해 별명만 받도록 바꿨어요.' }); }
 
@@ -216,7 +220,9 @@ export function validate(input) {
     while (seen.has(id)) id += '-' + (i + 1);
     seen.add(id);
     const def = SECTION_DEFS[type];
+    const d0 = dropped;
     const fixed = SECTION_FIX[type](s);
+    if (dropped > d0) { droppedInSections += dropped - d0; warnings.push({ path: `sections[${i}]`, message_ko: `"${str(s.title, 40) || def.label}" 칸의 빈 항목 ${dropped - d0}개를 뺐어요.` }); }
     const out = { id, type, title: str(s.title, LIMITS.title), nav: s.nav === undefined ? def.nav : str(s.nav, 12), tone: pick(s.tone, ['night', 'dawn', 'day', ''], ''), lead: fixed.lead ?? str(s.lead, 300), ...fixed, source: source(s.source) };
     if (def.list && !out[def.list]?.length && !['board', 'qa'].includes(type) && !(type === 'followup' && out.completion)) { warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션에 내용이 없어 뺐어요.` }); return; }
     if (def.live && live.provider === 'none' && type !== 'board') warnings.push({ path: `sections[${i}]`, message_ko: `"${def.label}" 섹션은 참여 기능을 연결해야 동작해요. 연결 전에는 안내 문구만 보여요.` });
@@ -244,8 +250,10 @@ export function validate(input) {
   warnings.push(...checkOrder(sections));
   // 구성 결과(흐름·이유·권하는 기능·싣지 못한 것): 있으면 정리해 남김
   const structure = cleanStructure(b.structure);
+  const sources = objs(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) }));
+  if (dropped > droppedInSections) warnings.push({ path: '', message_ko: `빈 항목 ${dropped - droppedInSections}개(강사·일정·자료 목록 등)를 뺐어요.` });
 
-  return { blueprint: { version: 1, meta, audience, archetype, ...(concept ? { concept } : {}), ...(structure ? { structure } : {}), design, instructors, sections, live, privacy, deploy, access, sources: arr(b.sources).slice(0, 20).map((x) => ({ id: str(x.id, 40), name: str(x.name, 120), pages: num(x.pages, 0, 0, 9999) })) }, errors, warnings };
+  return { blueprint: { version: 1, meta, audience, archetype, ...(concept ? { concept } : {}), ...(structure ? { structure } : {}), design, instructors, sections, live, privacy, deploy, access, sources }, errors, warnings };
 }
 
 /** 무작위 연수 코드(헷갈리는 글자 제외, 기본 10자 ≈ 50비트). 같은 서버를 여러 연수가 함께 써도 남이 짐작할 수 없게 */

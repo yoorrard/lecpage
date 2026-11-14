@@ -3,7 +3,7 @@ import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { boardFiles } from './sections.js';
 
-export const VERSION = '1.0.0';
+import { VERSION } from '../version.js';
 
 export function attrs(map) { return Object.entries(map).map(([k, v]) => `${k}="${esc(v)}"`).join(' '); }
 export function jsonScript(id, data) {

@@ -3,8 +3,24 @@
 // 비밀 값(관리자 키·참여 기능 키·사이트 암호)은 담지 않고, 여는 쪽(앱 importProjectFile)이 설계도를 다시 정리해요(intake.js sanitizeImported).
 // 앱 첫 화면이 이 파일을 읽으므로 다른 엔진 모듈을 불러오지 않아요(가볍게).
 
+import { VERSION } from './version.js';
+
 export const PROJECT_FORMAT = 'lecpage-project';
 export const PROJECT_VERSION = 1;
+/** 파일을 만든 lecpage 판(앱·skill이 project.json의 engine에 적음). 여는 쪽이 자기 판보다 새 파일이면 한 줄로 알림(versionNote) */
+export const ENGINE_VERSION = VERSION;
+const verNum = (v) => String(v || '').split('.').map((x) => parseInt(x, 10) || 0);
+/** a가 b보다 새 판이면 true(1.10.0 > 1.9.0) */
+export function newerVersion(a, b) { const x = verNum(a), y = verNum(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; }
+/**
+ * 연 파일이 지금 판보다 새 lecpage로 만든 것이면 알림 한 줄('' = 할 일 없음). 형식 판(version)·엔진 판(engine)을 봄.
+ * 예전 판으로 만든 파일은 그대로 읽으므로 알리지 않음
+ * @param file unpackProject 결과의 { formatVersion, engine }  @param how 새 판 받는 법(부른 쪽이 앱·skill에 맞게)
+ */
+export function versionNote({ formatVersion, engine } = {}, how = '') {
+  const newer = (+formatVersion || 0) > PROJECT_VERSION || (engine && newerVersion(engine, ENGINE_VERSION));
+  return newer ? `더 새 lecpage(${engine || `형식 ${formatVersion}`})로 만든 파일이에요. 지금 판(${ENGINE_VERSION})은 새 칸·설정을 빠뜨릴 수 있어요${how ? ` — ${how}` : ''}.` : '';
+}
 /** 앱 주소: 스킬이 만든 파일을 열 곳 */
 export const APP_URL = 'https://lecpage.com/';
 
@@ -159,7 +175,7 @@ export function packProject({ blueprint, material = null, info = {}, assets = {}
     autoFilled: {}, infoTouched: true, slidesMade: counts.slides, summary: summary || '',
     draftFormat: APP_FORMATS.includes(info.format) ? info.format : '', visited: {},
   };
-  files['project.json'] = JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project }, null, 2);
+  files['project.json'] = JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, engine: ENGINE_VERSION, project }, null, 2);
   // project.json을 맨 앞에(사람이 ZIP을 열어 볼 때)
   const ordered = { 'project.json': files['project.json'] };
   for (const [k, v] of Object.entries(files)) if (k !== 'project.json') ordered[k] = v;
@@ -183,5 +199,5 @@ export function unpackProject(zipFiles) {
     if (k.startsWith('src/')) originals.push({ key: k, file: k.slice(4), name: names.get(k) || k.slice(4), bytes: v });
     else assets[k.startsWith('assets/') ? k : 'assets/' + k] = v;
   }
-  return { project: proj, blueprint: proj.blueprint || null, material: proj.material || null, info: workInfoFrom(proj.info), assets, originals };
+  return { project: proj, blueprint: proj.blueprint || null, material: proj.material || null, info: workInfoFrom(proj.info), assets, originals, formatVersion: +j.version || 0, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '' };
 }
