@@ -9,7 +9,7 @@ const KO_SANS = "'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif";
 // 원칙(2026-11 글꼴 조사, docs/research/fonts-2026-11.md): 한글 2종(제목·본문) + 라틴 1종, 필요한 글자만.
 //  - css: 글자 묶음을 나눠 받는(unicode-range) 스타일시트를 먼저 고릅니다. 쓰인 글자·굵기만 내려받습니다.
 //  - face: 나눠 받기가 없는 글꼴. fontAssets()가 역할에 맞는 굵기만(글꼴당 최대 2개) @font-face로 만듭니다.
-//    alt: 같은 글꼴(윤곽·너비가 같음을 확인)의 woff. 쪽에는 쓰지 않고, 글꼴 함께 담기가 brotli를 못 푸는 곳(앱)에서 글자를 줄일 때만 읽음
+//    alt: 같은 글꼴(글자표·윤곽·너비가 모두 같음을 확인)의 woff. 쪽에는 쓰지 않고, 글꼴 함께 담기가 brotli를 못 푸는 곳(앱)에서 글자를 줄일 때만 읽음
 //  - variable: 굵기가 이어지는 가변 글꼴(움직이는 글자 굵기 효과에 씀)
 
 export const FONTS = {
@@ -53,9 +53,9 @@ export const FONTS = {
   nanumMyeongjo: { family: 'Nanum Myeongjo', label: '나눔명조', kind: 'serif', license: 'OFL-1.1', css: GF('family=Nanum+Myeongjo:wght@400;700;800'), fallback: "'Noto Serif KR', 'AppleMyungjo', serif" },
   nanumSquare: {
     family: 'NanumSquare', label: '나눔스퀘어', kind: 'sans', license: 'OFL-1.1(네이버 나눔스퀘어)',
-    face: [ // 네이버는 woff만 → 같은 글꼴의 woff2 사본(@kfonts, 윤곽·너비가 네이버 woff와 같음을 확인)
-      { weight: 400, url: `${KF}/NanumSquareR.woff2`, alt: `${NV}/NanumSquare/NanumSquareR.woff` },
-      { weight: 700, url: `${KF}/NanumSquareB.woff2`, alt: `${NV}/NanumSquare/NanumSquareB.woff` },
+    face: [ // 네이버는 woff만. 800은 같은 글꼴의 woff2 사본(@kfonts: 글자표·윤곽·너비가 네이버 woff와 같음을 확인). 400·700 사본은 판이 달라(글자 수 다름) 네이버 그대로
+      { weight: 400, url: `${NV}/NanumSquare/NanumSquareR.woff` },
+      { weight: 700, url: `${NV}/NanumSquare/NanumSquareB.woff` },
       { weight: 800, url: `${KF}/NanumSquareEB.woff2`, alt: `${NV}/NanumSquare/NanumSquareEB.woff` },
     ],
     fallback: "'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif",

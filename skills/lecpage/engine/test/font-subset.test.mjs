@@ -134,7 +134,7 @@ test('글꼴 함께 담기: 파일 이름은 내용 해시, 원본 뒤에 사이
   assert.equal(new Set(plain.files['assets/fonts.css'].match(/@font-face\s*\{[^}]*\}/g)).size, 1);
 });
 
-test('글꼴 함께 담기(brotli가 없는 브라우저): 우리 글꼴 목록의 alt(같은 글꼴 woff)로 줄이고, 원본도 그 파일로 맞춘다', async () => {
+test('글꼴 함께 담기(brotli가 없는 브라우저): 우리 글꼴 목록의 alt(같은 글꼴로 확인한 woff)로 줄이고, 원본은 더 작은 woff2 그대로', async () => {
   const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
   assert.doesNotMatch(r.files['assets/theme.css'], /MaruBuri-\w+\.woff'\)/, '쪽에는 woff2만(alt는 담을 때만 씀)');
   for (const f of Object.values(E.FONTS)) for (const x of f.face || []) if (x.alt) assert.match(x.alt, /^https:\/\/hangeul\.pstatic\.net\/.+\.woff$/, '같은 글꼴로 확인한 네이버 woff만');
@@ -147,16 +147,18 @@ test('글꼴 함께 담기(brotli가 없는 브라우저): 우리 글꼴 목록�
     if (/\.(woff|ttf)$/.test(url)) return { ok: true, arrayBuffer: async () => font.slice().buffer };
     return { ok: true, text: async () => '' };
   };
-  const saved = globalThis.DecompressionStream;
-  globalThis.DecompressionStream = class extends saved { constructor(f) { if (f === 'brotli') throw new TypeError('no brotli'); super(f); } };
+  const saved = { D: globalThis.DecompressionStream, C: globalThis.CompressionStream };
+  globalThis.DecompressionStream = class extends saved.D { constructor(f) { if (f === 'brotli') throw new TypeError('no brotli'); super(f); } };
+  globalThis.CompressionStream = class extends saved.C { constructor(f) { if (f === 'brotli') throw new TypeError('no brotli'); super(f); } };
   try {
     const { files, report } = await E.bundleFonts(r.files, { fetch: fakeFetch });
     assert.ok(report.ok, report.skipped.join());
     assert.ok(asked.some((u) => /MaruBuri-[A-Za-z]+\.woff$/.test(u)), 'alt woff를 받아 줄임');
     const faces = files['assets/theme.css'].match(/@font-face\{font-family:'MaruBuri'[^}]*\}/g);
     assert.equal(faces.length, 2);
-    for (const f of faces) assert.doesNotMatch(f, /format\('woff2'\)[^}]*\.woff2/, '원본과 줄인 것 모두 woff2 아닌 같은 계열');
-    assert.match(faces[0], /format\('(woff|truetype)'\)/, '원본은 줄인 근거가 된 그 파일');
+    assert.match(faces[0], /\.woff2\) format\('woff2'\)/, '원본은 woff2(alt와 같은 글꼴)');
+    assert.match(faces[1], /\.woff\) format\('woff'\)/, '줄인 것은 brotli 없이 쓸 수 있는 woff');
+    assert.equal(files['assets/' + /url\(([^)]+)\)/.exec(faces[0])[1]].byteLength, woff2ish.byteLength, '원본 자리는 받은 woff2 그 파일(alt woff는 담지 않음)');
     for (const k of Object.keys(files).filter((x) => x.startsWith('assets/fonts/'))) assert.ok((files['assets/fonts.css'] + files['assets/theme.css']).includes(k.slice(7)), '가리키지 않는 글꼴 파일은 담지 않음: ' + k);
-  } finally { globalThis.DecompressionStream = saved; }
+  } finally { globalThis.DecompressionStream = saved.D; globalThis.CompressionStream = saved.C; }
 });

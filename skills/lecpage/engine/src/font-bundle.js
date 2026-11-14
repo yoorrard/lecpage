@@ -160,7 +160,7 @@ export async function bundleFonts(files, o = {}) {
     if (!saved.has(url)) { const buf = await fetchBytes(url); saved.set(url, { buf, name: await put(buf, (/\.(woff2|woff|ttf|otf)(?:$|\?)/.exec(url) || [, 'woff2'])[1]) }); }
     return saved.get(url);
   };
-  // 글자 줄이기. brotli를 못 푸는 곳(지금 브라우저)은 우리 글꼴 목록이 같은 글꼴로 확인해 둔 woff(ALT)를 읽고 원본도 그 파일로. 안 되면 null
+  // 글자 줄이기. brotli를 못 푸는 곳(지금 브라우저)은 우리 글꼴 목록이 같은 글꼴로 확인해 둔 woff(ALT)를 읽음(원본은 더 작은 woff2 그대로). 안 되면 null
   const shrink = async (buf, url, range) => {
     if (o.subset === false) return null;
     try {
@@ -171,7 +171,7 @@ export async function bundleFonts(files, o = {}) {
       }
       const r = await subsetFont(src, cps, { range });
       if (!r || !r.kept.length || r.kept.length === r.cover.length || r.data.byteLength > 0.7 * src.byteLength) return null;
-      return { ...r, alt: src === buf ? null : src };
+      return r;
     } catch { return null; }
   };
   // 한 덩어리: 쓰는 글자가 든 조각만 받아 주소를 사이트 안으로 바꿈(경로는 assets/fonts.css·theme.css 기준이라 fonts/…)
@@ -188,13 +188,12 @@ export async function bundleFonts(files, o = {}) {
         const abs = new URL(urls[0], base).href, g = await grab(abs);
         const sub = await shrink(g.buf, abs, f0.range);
         if (sub) {
-          const full = sub.alt ? await put(sub.alt, extOf(sub.alt)) : g.name;
-          const fb = withSrc(block, full.replace(/^assets\//, ''), fmtOf(full));
+          const fb = withSrc(block, g.name.replace(/^assets\//, ''), fmtOf(g.name));
           const name = await put(sub.data, sub.format);
           res += (meta.split ? fb : withRange(fb, unicodeRange(sub.cover, 64))) + '\n';
           res += withRange(withSrc(block, name.replace(/^assets\//, ''), sub.format), unicodeRange(sub.kept)) + '\n';
           made.push({ ...meta, name, size: sub.data.byteLength });
-          report.subset++; report.saved += (sub.alt || g.buf).byteLength - sub.data.byteLength;
+          report.subset++; report.saved += g.buf.byteLength - sub.data.byteLength;
           continue;
         }
         made.push({ ...meta, name: g.name, size: g.buf.byteLength });
