@@ -85,12 +85,13 @@ export function useLive(bp, on, assets) {
  * tour면 사이트 안에서 본문까지 천천히 내려감(정지 그림처럼 틀을 길게 늘려 미는 대신 실제 스크롤이라 효과가 제대로 돎)
  */
 const SETTLE = 1300;
-export function LiveLayer({ html, title = '', style, tour = false }) {
+/** alone: 밑에 정지 그림이 없음(늘 움직이는 카드) → 다 읽히면 바로 보임(첫 화면 등장도 그대로 보임) */
+export function LiveLayer({ html, title = '', style, tour = false, alone = false }) {
   const [shown, setShown] = useState(false); const ref = useRef(); const timer = useRef(0);
   const post = (on) => { try { ref.current?.contentWindow?.postMessage({ type: 'lp-tour', on }, '*'); } catch { } };
   useEffect(() => { setShown(false); return () => clearTimeout(timer.current); }, [html]);
   useEffect(() => { if (shown) post(tour); }, [tour, shown]);
-  const loaded = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setShown(true), SETTLE); };
+  const loaded = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setShown(true), alone ? 0 : SETTLE); };
   return html ? <iframe ref={ref} class={`is-live${shown ? ' is-on' : ''}`} sandbox="allow-scripts" srcdoc={html} tabIndex={-1} aria-hidden="true" title={title} onLoad={loaded} style={style} /> : null;
 }
 
@@ -139,15 +140,19 @@ export function MiniSite({ bp, focus = '', vw = 1280, ratio = 1.6, assets, eager
     if (card) { card.addEventListener('pointerenter', on); card.addEventListener('pointerleave', off); card.addEventListener('focusin', on); card.addEventListener('focusout', off); }
     return () => { ro.disconnect(); io?.disconnect(); if (card) { card.removeEventListener('pointerenter', on); card.removeEventListener('pointerleave', off); card.removeEventListener('focusin', on); card.removeEventListener('focusout', off); } };
   }, [vw, eager, tour]);
-  const html = useStatic(bp, focus, near, assets, first || eager);
+  // 늘 움직이는 카드(live)는 정지 그림을 따로 그리지 않음: 같은 사이트를 두 장 그리면 글꼴도 두 번 받음
+  // (스크립트 없는 sandbox iframe은 출처가 서로 달라 브라우저가 글꼴을 함께 쓰지 못함. 둘러보기 휴대폰 첫 화면 글꼴 약 1.5MB의 절반)
+  const alone = live && !focus;
+  const html = useStatic(bp, focus, near && !alone, assets, first || eager);
   const lh = useLive(bp, near && !focus && (live || touring), assets);
   const vh = Math.round(vw / ratio);
   // 움직이는 화면이 있으면 둘러보기도 그 안에서(실제 스크롤). 없을 때만 정지 그림의 틀을 늘려 밂
   const pan = touring && !lh;
   return (
     <div class={`mini-site ${cls}${pan ? ' is-tour' : ''}`} ref={box} style={{ '--s': s, '--pan': `${-(PAGE - vh)}px`, aspectRatio: String(ratio) }}>
-      {html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: (pan ? PAGE : vh) + 'px' }} /> : <span class="thumb-wait" />}
-      {html && near && <LiveLayer html={lh} tour={touring} style={{ width: vw + 'px', height: vh + 'px' }} />}
+      {alone ? (lh && near ? null : <span class="thumb-wait" />)
+        : html && near ? <iframe sandbox="" srcdoc={html} tabIndex={-1} aria-hidden="true" title="" style={{ width: vw + 'px', height: (pan ? PAGE : vh) + 'px' }} /> : <span class="thumb-wait" />}
+      {(alone || html) && near && <LiveLayer html={lh} tour={touring} alone={alone} style={{ width: vw + 'px', height: vh + 'px' }} />}
     </div>
   );
 }

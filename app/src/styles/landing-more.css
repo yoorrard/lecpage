@@ -2,6 +2,16 @@
    움직임 원칙: 한 화면에 큰 움직임 하나. 스크롤에 묶인 것(낱말 잉크·선 그리기·단계 선)은 CSS 스크롤 타임라인으로,
    지원하지 않는 브라우저는 완성된 모습 그대로이거나 화면에 들어올 때 한 번(낱말 잉크), '동작 줄이기'에서는 완성된 모습(@supports + prefers-reduced-motion). 글자색은 처음 모습에서도 대비 4.5:1 이상. */
 
+/* 화면 가까이 온 섹션만 배치·그리기(content-visibility:auto). 아래 이야기(DOM 900여 개)를 한꺼번에 넣어도 휴대폰에서 긴 작업이 생기지 않게.
+   자리 높이는 잰 값(390px·1440px 폭)이고, 한 번 그린 뒤에는 실제 높이를 기억(auto). 화면에 들어오기 전에 그려지므로 스크롤 연출은 그대로 */
+.ld>:is(.ld-why,.ld-story,.ld-say,.ld-show,.ld-reach,.ld-live,.ld-days,.ld-paths,.ld-ex,.ld-end){content-visibility:auto;contain-intrinsic-size:auto var(--ld-ih,800px)}
+.ld>.ld-why{--ld-ih:3100px}.ld>.ld-story{--ld-ih:2700px}.ld>.ld-say{--ld-ih:830px}.ld>.ld-show{--ld-ih:750px}.ld>.ld-reach{--ld-ih:1350px}
+.ld>.ld-live{--ld-ih:1020px}.ld>.ld-days{--ld-ih:610px}.ld>.ld-paths{--ld-ih:1200px}.ld>.ld-ex{--ld-ih:860px}.ld>.ld-end{--ld-ih:290px}
+@media (min-width:900px){
+  .ld>.ld-why{--ld-ih:1810px}.ld>.ld-story{--ld-ih:3090px}.ld>.ld-say{--ld-ih:720px}.ld>.ld-show{--ld-ih:900px}.ld>.ld-reach{--ld-ih:540px}
+  .ld>.ld-live{--ld-ih:680px}.ld>.ld-days{--ld-ih:440px}.ld>.ld-paths{--ld-ih:900px}.ld>.ld-ex{--ld-ih:630px}.ld>.ld-end{--ld-ih:300px}
+}
+
 .ld-h3{font-size:clamp(1.3rem,1.1rem + .8vw,1.7rem);line-height:1.3;letter-spacing:-.025em;text-wrap:balance}
 .ld-frame{position:relative;margin:0;overflow:hidden;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--shadow-lg)}
 .ld-bar em{margin-left:auto;padding-left:10px;font-style:normal;font-size:.72rem;font-weight:700;color:var(--lav-deep);white-space:nowrap}

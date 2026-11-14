@@ -153,7 +153,7 @@ export function Gallery({ tab: tab0 }) {
     const p = await newProject('blank');
     await projects.put({ ...p, info: { ...p.info, request: requestText(ids) }, designWords: ids });
     setIds([]);
-    toast('요청 사항에 넣었어요. 교재를 넣고 [AI로 사이트 만들기]를 누르세요.');
+    toast('요청 사항에 넣었어요. 교재를 넣고 AI로 만들면 반영돼요.');
     location.hash = `#/p/${p.id}/1`;
   }
   async function applyTo(p) {

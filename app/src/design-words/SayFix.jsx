@@ -47,7 +47,8 @@ export function SayFix({ bp, onApply, onTry, applied, isDone, onUndo, tried, ass
   );
 }
 
-function FixCard({ f, bp, done, trying, onApply, onTry, onUndo, assets, words }) {
+/** 고칠 안 하나: 지금 → 바꾸면 그림, 이름·까닭, [적용하기]·[크게 비교] 또는 적용한 뒤 [되돌리기]. 수정 요청(ReviewChat)도 씀 */
+export function FixCard({ f, bp, done, trying, onApply, onTry, onUndo, assets, words = WORDS }) {
   const after = useMemo(() => applyWords(bp, f.ids), [bp, f.key]);
   // 제목에 낱말 이름이 다 들어 있으면 '바뀌는 것' 줄은 되풀이라 뺌
   const what = f.ids.map(wordById).every((w) => w && f.title.includes(w.name)) ? '' : changesLine(f.ids);

@@ -1,7 +1,7 @@
 // 교재에 맞춘 구성 알리기: 1단계의 "교재에서 찾은 것"(교재 성격에 맞게)·교재에서 찾은 주소 확인,
 // 2단계의 "이렇게 구성했어요"·권하는 기능(누르면 켬)·싣지 못한 것(누르면 본문에 넣음).
 // 규칙은 엔진(decide/structure.js·ingest/signals.js·ingest/compose.js)에 있고 여기서는 보여 주기만 해요.
-import { useMemo } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { E } from '../lib/engine.js';
 import { draftInfo } from '../lib/blueprint.js';
 import { toast } from '../lib/util.js';
@@ -42,13 +42,22 @@ export function FoundSummary({ p, setInfo }) {
   );
 }
 
-/** 2단계: 이렇게 구성했어요(한 줄 + 펼치기) · 권하는 기능 칩(누르면 켬) · 싣지 못한 것 n개(누르면 본문에 넣음) */
-export function StructureNote({ p, update, setInfo, pushUndo }) {
+/** 2단계 구성 안내의 값: 구성(흐름·까닭) · 권하는 기능 칩(아직 켜지 않은 것) · 싣지 못한 것 */
+export function useStructure(p) {
   const bp = p.blueprint; const st = bp?.structure;
   const left = useMemo(() => (p.material?.pages?.length && bp ? E.findLeftovers(p.material, bp, { max: 40 }) : st?.leftovers || { count: 0, items: [] }), [bp, p.material]);
   if (!st?.flow) return null;
   const on = new Set((p.info.features || []).flatMap((x) => String(x).split('+')));
   const chips = (st.suggested || []).filter((x) => !on.has(x.feature));
+  return { st, chips, left };
+}
+
+/** 구성 안내 한 줄의 요약: "따라 하기 · 권하는 기능 3"(싣지 못한 것은 펼치면) */
+export const structureLine = (s) => s ? [s.st.label, s.chips.length ? `권하는 기능 ${s.chips.length}` : ''].filter(Boolean).join(' · ') : '';
+
+/** 구성 안내를 펼친 내용: 까닭 · 권하는 기능 칩(누르면 켬) · 싣지 못한 것 n개(누르면 본문에 넣음) */
+export function StructureMore({ p, s, update, setInfo, pushUndo }) {
+  const { st, chips, left } = s;
   const turnOn = (x) => { pushUndo?.(`${x.label} 켜기`); setInfo({ features: [...(p.info.features || []), x.feature] }); toast(`켰어요: ${x.label}. '참여 기능' 탭에서 끌 수 있어요.`); };
   function addLeftovers() {
     pushUndo?.('싣지 못한 것 넣기');
@@ -61,11 +70,9 @@ export function StructureNote({ p, update, setInfo, pushUndo }) {
     toast(`교재 순서 자리에 글 칸으로 넣었어요. 고치거나 빼도 돼요.`);
   }
   return (
-    <section class="structure-note" aria-label="구성">
-      <details>
-        <summary><b>이렇게 구성했어요</b> <span>{st.label}. {st.reasons?.[0] || ''}</span></summary>
-        {st.reasons?.length > 1 && <ul class="small">{st.reasons.slice(1).map((r) => <li>{r}</li>)}</ul>}
-      </details>
+    <div class="structure-more">
+      <p class="small"><b>이렇게 구성했어요</b> {st.label}. {st.reasons?.[0] || ''}</p>
+      {st.reasons?.length > 1 && <ul class="small">{st.reasons.slice(1).map((r) => <li>{r}</li>)}</ul>}
       {(chips.length > 0 || left.count > 0) && <div class="structure-acts">
         {chips.length > 0 && <div class="chips" role="group" aria-label="권하는 참여 기능">
           <span class="small muted">권하는 기능</span>
@@ -77,6 +84,25 @@ export function StructureNote({ p, update, setInfo, pushUndo }) {
           <button type="button" class="btn btn-sm" onClick={addLeftovers}>본문에 넣기</button>
         </details>}
       </div>}
+    </div>
+  );
+}
+
+/**
+ * 2단계 구성 안내(AI 결과 띠를 본 뒤·다시 열었을 때): 접힌 한 줄 "이렇게 구성했어요 · 따라 하기 구성 · 권하는 기능 3 [자세히]".
+ * 펼치면 까닭·권하는 기능·싣지 못한 것. AI가 막 짰을 때는 결과 띠(Edit.jsx ResultBand) 안에 함께 들어가요
+ */
+export function StructureNote({ p, update, setInfo, pushUndo }) {
+  const s = useStructure(p);
+  const [open, setOpen] = useState(false);
+  if (!s) return null;
+  return (
+    <section class={`structure-note${open ? ' is-open' : ''}`} aria-label="구성">
+      <div class="structure-line">
+        <span class="small" title={structureLine(s)}><b>이렇게 구성했어요</b> <span>{structureLine(s)}</span></span>
+        <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(open)} onClick={() => setOpen(!open)}>{open ? '접기' : '자세히'}</button>
+      </div>
+      {open && <StructureMore p={p} s={s} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
     </section>
   );
 }

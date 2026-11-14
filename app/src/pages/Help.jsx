@@ -99,7 +99,7 @@ const BODY = {
     <p>교재를 넣으면 AI가 연수 사이트를 만들고, 버튼 하나로 배포해요. 회원가입과 이용료가 없어요.</p>
     <Flow />
     <p class="help-cta"><a class="btn btn-primary" href="#/demo">체험하기</a><span class="small muted">예시 자료로 끝까지 해 봐요. 키가 필요 없어요.</span></p>
-    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 교재 파일과 연수 정보, AI로 사이트 만들기 버튼">
+    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 교재 파일과 연수 정보, AI로 만들기 카드">
       <p>PPT·PDF·한글(HWP·HWPX)·워드 파일을 놓고 연수명을 확인해요.</p>
       <p>'AI로 만들기' 카드에서 [ChatGPT 열기]를 누르고, 답을 복사해 돌아와 [답 넣기]를 눌러요. API 키가 있으면 버튼 한 번이에요. <a href="#/help/ai">AI 연결</a></p>
     </Task>

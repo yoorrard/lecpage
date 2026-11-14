@@ -28,6 +28,22 @@ export function noteAiResult(pid, { restored = [], via = '', polish = false } = 
 export function markUndone(pid, id) { const j = jobs.get(pid); if (j) set(pid, { undone: [...(j.undone || []), id] }); }
 export function stopJob(pid) { jobs.get(pid)?.ctrl?.abort(); }
 
+// 짜는 동안 디자인·참여 기능 탭에서 섹션에 고른 배치(layout)·보드 설정은 AI 결과의 같은 종류 섹션에도 이어 줌.
+// 내용 탭(글)은 짜는 동안 읽기만이라 덮일 것이 없음. 배치가 새 내용에 맞지 않으면 엔진이 기본 배치로 그림
+const CARRY = ['layout', 'moderation', 'allowFiles'];
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+export function carryPicks(bp, before = [], now = []) {
+  const picks = {};
+  for (const s of now || []) {
+    const b = (before || []).find((x) => x.type === s.type);
+    if (!b || picks[s.type]) continue;
+    const ch = Object.fromEntries(CARRY.filter((k) => !same(s[k], b[k])).map((k) => [k, s[k]]));
+    if (Object.keys(ch).length) picks[s.type] = ch;
+  }
+  if (!Object.keys(picks).length) return bp;
+  return { ...bp, sections: (bp.sections || []).map((s) => (picks[s.type] ? { ...s, ...picks[s.type] } : s)) };
+}
+
 /** 지금 프로젝트의 AI 작업 상태(없으면 null). 1초마다 다시 그려 걸린 시간을 보여 줌 */
 export function useAiJob(pid) {
   const [, tick] = useState(0);
@@ -56,6 +72,8 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     if (await reach('ai:' + ai.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: ai.provider });
     const ing = await import('./ingest.js');
     const prompt = makePrompt(p0, ing);
+    // 짜는 동안 고른 섹션 배치를 알아보려고 지금 섹션을 떠 둠(기본 초안은 이 작업과 함께 막 저장되므로 시작 때가 아니라 여기서)
+    const before = JSON.parse(JSON.stringify(getProject().blueprint?.sections || []));
     set(pid, { phase: 'ask', provider: ai.provider, label: ai.label });
     const big = ['gemini', 'openai'].includes(ai.provider) ? 2 : 1;
     // 무료 한도·혼잡은 알아서 기다렸다 다시 하거나 다음 모델·다른 연결로 넘김(유료 연결은 강사가 허락했을 때만)
@@ -73,7 +91,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     pushUndoFor(pid, 'AI로 만들기 전', cur);
     // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서(guardAnswer)
     const g = guardAnswer(bp, cur, ing, cur.blueprint, { assets: await blobs.keys(pid).catch(() => null) }); // 저장소에 없는 그림 주소는 비움
-    update((c) => ({ blueprint: applyInfo(g.blueprint, c.info, c.material, c.blueprint), aiMethod: 'ai' }));
+    update((c) => ({ blueprint: carryPicks(applyInfo(g.blueprint, c.info, c.material, c.blueprint), before, c.blueprint?.sections), aiMethod: 'ai' }));
     set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null, restored: g.restored, undone: [] });
     track('make', 'key');
   } catch (e) {

@@ -14,10 +14,11 @@ import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone } f
 import { E } from '../../lib/engine.js';
 import { PROVIDERS, chatLabel, chatbotFor, setWay } from '../../lib/ai.js';
 import { SIZE } from './Start.jsx';
-import { StructureNote } from '../../components/Structure.jsx';
+import { StructureNote, StructureMore, useStructure, structureLine } from '../../components/Structure.jsx';
 
 const ADMIN = [{ value: 'school', label: '교내 자율연수' }, { value: 'official', label: '교육청 승인 직무연수' }, { value: 'conference', label: '설명회·컨퍼런스' }, { value: 'student', label: '학생 대상' }];
 const DEVICES = [{ value: 'laptop', label: '개인 노트북' }, { value: 'chromebook', label: '학교 크롬북' }, { value: 'tablet', label: '태블릿' }, { value: 'phone', label: '휴대폰' }];
+const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘Z' : 'Ctrl+Z';
 const NETWORK = [{ value: 'good', label: '잘 됨' }, { value: 'slow', label: '느림' }, { value: 'restricted', label: '학교망(막힌 곳 있음)' }, { value: 'offline', label: '인터넷 없음' }];
 
 
@@ -43,6 +44,25 @@ export function StepEdit({ p, update, go }) {
   const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
+  // Ctrl+Z(맥 ⌘Z): 고치기 화면의 [되돌리기]. 입력 칸 안에서는 브라우저의 글자 되돌리기 그대로, 창이 떠 있으면 하지 않음
+  const undoRef = useRef(undo); undoRef.current = undo;
+  useEffect(() => {
+    const k = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.isComposing || !(e.code === 'KeyZ' || /^z$/i.test(e.key))) return;
+      if (e.target?.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]') || document.querySelector('dialog[open]')) return;
+      e.preventDefault();
+      if (undoStack(p.id).length) undoRef.current(); else toast('되돌릴 것이 없어요.');
+    };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, [p.id]);
+  // 좁은 화면(미리보기 아래에 편집 칸): 머리의 [되돌리기]가 화면 밖으로 나가면 편집 칸 아래쪽에 따라다니는 [되돌리기]
+  const headRef = useRef(null); const [headSeen, setHeadSeen] = useState(true);
+  useEffect(() => {
+    const el = headRef.current; if (!el || typeof IntersectionObserver !== 'function') return;
+    const io = new IntersectionObserver(([e]) => setHeadSeen(e.isIntersecting)); io.observe(el);
+    return () => io.disconnect();
+  }, [!!p.blueprint]);
+  const locked = job?.status === 'running'; // AI가 짜는 동안 내용·수정 요청은 읽기만(끝나면 섹션 글이 AI 결과로 바뀜)
   // AI 회사 API가 이 망에서 막혔으면(만들기 전에 확인) 오류 띠 대신 바로 쓰던 AI 창 길을 엶
   useEffect(() => {
     if (job?.status !== 'error' || job.error?.kind !== 'blocked') return;
@@ -76,30 +96,32 @@ export function StepEdit({ p, update, go }) {
     <>
       <StepHead title="살펴보고 고치기" desc="미리보기를 보며 고치세요. 고친 내용은 자동으로 저장돼요.">
         <div class="btn-row head-tools">
-          <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label}` : '되돌릴 것이 없어요'}>되돌리기</button>
+          <button ref={headRef} class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label} (${UNDO_KEY})` : '되돌릴 것이 없어요'}>되돌리기</button>
           {!published ? <button class="btn btn-primary" onClick={() => go(3)}>배포하기 →</button>
             : changed ? <button class="btn btn-primary" onClick={() => { try { sessionStorage.setItem('lecpage:republish', p.id); } catch { } go(3); }}>다시 배포하기</button>
               : <button class="btn" onClick={() => go(3)}>주소·QR 보기 →</button>}
         </div>
       </StepHead>
-      {job && <AiJobBar job={job} found={p.material ? E.foundSummary(p.material.detected || {}, 3).join(' · ') : ''} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'}
-        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onUndoGuard={undoGuard} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
+      {job && job.status !== 'done' && <AiJobBar job={job} found={p.material ? E.foundSummary(p.material.detected || {}, 3).join(' · ') : ''} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)}
+        onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
       {fromSkill && <div class="ai-job ok" role="status">
         <span class="ai-job-t"><b>AI 에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·배포를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
         <button class="btn btn-sm" onClick={() => setTab('live')}>참여 기능 보기</button>
         <button class="icon-btn" onClick={() => update({ originSeen: true })} aria-label="안내 닫기">✕</button>
       </div>}
-      {job?.status !== 'running' && <StructureNote p={p} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
+      {job?.status === 'done' ? <ResultBand p={p} job={job} update={update} setInfo={setInfo} pushUndo={pushUndo} onClose={() => clearJob(p.id)} onUndo={undo} canUndo={stack[stack.length - 1]?.label === 'AI로 만들기 전'} onUndoGuard={undoGuard} />
+        : !locked && <StructureNote p={p} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
       <div class="workspace">
         <div class="ws-panel">
           <Tabs label="고칠 것" tabs={tabs} value={tab} onChange={setTab} />
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} class="ws-body">
-            {tab === 'content' && <ContentPanel p={p} update={update} pushUndo={pushUndo} focusId={focusId} />}
+            {tab === 'content' && <ContentPanel p={p} update={update} pushUndo={pushUndo} focusId={focusId} locked={locked} />}
             {tab === 'design' && <DesignPanel p={p} update={update} />}
             {tab === 'live' && <FeaturesPanel p={p} update={update} setInfo={setInfo} />}
             {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} />}
-            <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} onPolish={() => setAi(true)} />
+            <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} onPolish={() => setAi(true)} locked={locked} />
           </div>
+          {!!stack.length && !headSeen && tab !== 'review' && <button type="button" class="btn btn-sm undo-float" onClick={undo} title={`되돌리기: ${stack[stack.length - 1].label} (${UNDO_KEY})`}><span aria-hidden="true">↶ </span>되돌리기</button>}
         </div>
         <Preview p={p} onPick={onPick} frameRef={frameRef} marking={marking} onMark={onMark} />
       </div>
@@ -116,7 +138,7 @@ export function StepEdit({ p, update, go }) {
 
 const PHASE = { read: '교재를 정리하고 있어요', ask: 'AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요', build: '사이트를 조립하고 있어요', wait: '무료 한도라 잠깐 기다렸다가 이어서 해요', swap: '다른 모델로 이어서 하고 있어요', other: '연결해 둔 다른 AI로 이어서 하고 있어요' };
 /** AI로 만들기 진행 띠: 초안을 먼저 보여 주고, 끝나면 AI가 짠 내용으로 바뀜 */
-function AiJobBar({ job, found, onStop, onClose, onUndo, canUndo, onRetry, onPaste, onConnect, onPay, onLight, onUndoGuard }) {
+function AiJobBar({ job, found, onStop, onClose, onRetry, onPaste, onConnect, onPay, onLight }) {
   if (job.status === 'running') {
     const sec = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
     return (
@@ -124,16 +146,6 @@ function AiJobBar({ job, found, onStop, onClose, onUndo, canUndo, onRetry, onPas
         <span class="ai-job-dot" aria-hidden="true" />
         <span class="ai-job-t"><b>{PHASE[job.phase] || PHASE.ask}</b><small>{found ? `교재에서 찾은 것(${found})은 그대로 실어요. ` : ''}지금 보이는 것은 기본 초안이고, 1~2분 뒤 AI가 짠 내용으로 바뀌어요. {sec}초</small></span>
         <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
-      </div>
-    );
-  }
-  if (job.status === 'done') {
-    return (
-      <div class="ai-job ok" role="status">
-        <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b><small>미리보기를 보며 고치고, 마음에 들면 배포하세요.</small></span>
-        {canUndo && <button class="btn btn-sm btn-quiet" onClick={() => { onUndo(); onClose(); }}>기본 초안으로 되돌리기</button>}
-        <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
-        <GuardNote restored={job.restored} undone={job.undone} onUndo={onUndoGuard} />
       </div>
     );
   }
@@ -149,6 +161,28 @@ function AiJobBar({ job, found, onStop, onClose, onUndo, canUndo, onRetry, onPas
       {e.actions?.includes('connect') && <button class="btn btn-sm" onClick={onConnect}>다른 AI 연결</button>}
       {e.actions?.includes('paste') && <button class={`btn btn-sm${e.actions[0] === 'paste' ? ' btn-primary' : ' btn-quiet'}`} onClick={() => onPaste(e.provider)}>{chatLabel(e.provider)}</button>}
       <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
+    </div>
+  );
+}
+
+/**
+ * AI가 막 짰을 때의 결과 띠: AI 결과·교재 지킴이·구성 안내를 한 띠에(따로 두 상자였던 것을 합침).
+ * 구성 안내는 한 줄 요약만 보이고 [자세히]로 펼침. 닫으면(✕) 또는 다시 열면 구성 안내 한 줄(StructureNote)만 남아요
+ */
+function ResultBand({ p, job, update, setInfo, pushUndo, onClose, onUndo, canUndo, onUndoGuard }) {
+  const s = useStructure(p);
+  const [more, setMore] = useState(false);
+  const line = structureLine(s); // 접힌 단추의 풀이(따라 하기 · 권하는 기능 3)
+  return (
+    <div class="ai-job ok result-band" role="status">
+      <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b></span>
+      <button class="icon-btn" onClick={onClose} aria-label="닫기">✕</button>
+      <GuardNote restored={job.restored} undone={job.undone} onUndo={onUndoGuard} />
+      {(canUndo || s) && <div class="rb-acts">
+        {s && <button type="button" class="btn btn-sm btn-quiet rb-more" aria-expanded={String(more)} onClick={() => setMore(!more)} title={line}><span>이렇게 구성했어요</span><span class="rb-chev" aria-hidden="true" /></button>}
+        {canUndo && <button class="btn btn-sm btn-quiet" onClick={() => { onUndo(); onClose(); }}>기본 초안으로 되돌리기</button>}
+      </div>}
+      {more && s && <StructureMore p={p} s={s} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
     </div>
   );
 }

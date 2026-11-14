@@ -47,8 +47,11 @@ const TEMPLATES = {
 const COMMON = ['goals', 'message', 'schedule', 'prompts', 'tools', 'quiz', 'faq', 'materials', 'followup', 'text', 'procedure', 'table', 'cases', 'discuss'];
 export const isAdvanced = () => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } };
 
-/** 내용 탭: 사이트를 이루는 섹션 목록과 섹션별 고치기 */
-export function ContentPanel({ p, update, pushUndo, focusId }) {
+/**
+ * 내용 탭: 사이트를 이루는 섹션 목록과 섹션별 고치기.
+ * locked: AI가 사이트를 짜는 동안(키 길 1~2분)은 읽기만. 끝나면 섹션 글이 AI 결과로 바뀌어 그 사이 고친 글이 사라지기 때문
+ */
+export function ContentPanel({ p, update, pushUndo, focusId, locked = false }) {
   const bp = p.blueprint;
   const [open, setOpen] = useState(null);
   // 미리보기에서 고른 섹션을 열고 보이게
@@ -72,8 +75,9 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
   const anchors = sections.filter((x) => x.type !== 'hero' && !x.hidden && x.id).map((x) => ({ value: '#' + x.id, label: x.title || E.SECTION_DEFS[x.type]?.label || x.type }));
   return (
     <div class="stack">
-      <div class="sec-tools"><p class="small muted">섹션을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
-        <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(reorder)} onClick={() => setReorder(!reorder)}>순서 바꾸기</button></div>
+      {locked ? <p class="lock-note small">AI가 짜는 중이에요. 끝나면 고칠 수 있어요.</p>
+        : <div class="sec-tools"><p class="small muted">섹션을 눌러 고치세요. 눈 아이콘으로 잠깐 숨길 수 있어요.</p>
+          <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(reorder)} onClick={() => setReorder(!reorder)}>순서 바꾸기</button></div>}
       <ol class={`sec-list${reorder ? ' is-reorder' : ''}`}>
         {sections.map((s, i) => {
           const def = E.SECTION_DEFS[s.type] || { label: s.type };
@@ -81,7 +85,7 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
           return (
             <li key={s.id || i} class="sec-item" data-sec-id={s.id} data-off={s.hidden ? 'true' : undefined} data-picked={open === s.id ? 'true' : undefined}>
               <div class="sec-row">
-                {reorder ? <div class="row" style={{ gap: '2px' }}>
+                {reorder && !locked ? <div class="row" style={{ gap: '2px' }}>
                   <button class="icon-btn" aria-label={`${def.label} 위로`} onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
                   <button class="icon-btn" aria-label={`${def.label} 아래로`} onClick={() => move(i, 1)} disabled={i === sections.length - 1}>↓</button>
                 </div> : <span aria-hidden="true" />}
@@ -89,15 +93,15 @@ export function ContentPanel({ p, update, pushUndo, focusId }) {
                   <div class="type">{def.label}{s.nav ? ` · 메뉴 "${s.nav}"` : ''}{def.live ? ' · 참여 기능' : ''}{s.hidden ? ' · 숨김' : ''}</div>
                   <div class="ttl">{s.type === 'hero' ? (s.title || meta.title) : (s.title || s.text || def.label)}</div>
                 </button>
-                <button class="icon-btn" onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 섹션 보이기` : `${def.label} 섹션 숨기기`} title={s.hidden ? '섹션 보이기' : '섹션 숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
+                <button class="icon-btn" disabled={locked} onClick={() => toggle(i)} aria-pressed={String(!s.hidden)} aria-label={s.hidden ? `${def.label} 섹션 보이기` : `${def.label} 섹션 숨기기`} title={s.hidden ? '섹션 보이기' : '섹션 숨기기'}>{s.hidden ? <EyeOff /> : <Eye />}</button>
               </div>
-              {isOpen && <SectionEditor pid={p.id} s={s} set={(patch) => setSec(i, patch)} pushUndo={pushUndo} anchors={s.type === 'hero' ? anchors : undefined} onRemove={s.type === 'hero' ? null : () => remove(i)} />}
+              {isOpen && <fieldset class="sec-lock" disabled={locked}><SectionEditor pid={p.id} s={s} set={(patch) => setSec(i, patch)} pushUndo={pushUndo} anchors={s.type === 'hero' ? anchors : undefined} onRemove={s.type === 'hero' ? null : () => remove(i)} /></fieldset>}
             </li>
           );
         })}
       </ol>
       <div class="row">
-        <select class="input" style={{ width: '100%' }} value={addType} onChange={(e) => add(e.target.value)} aria-label="더할 섹션 고르기">
+        <select class="input" style={{ width: '100%' }} value={addType} disabled={locked} onChange={(e) => add(e.target.value)} aria-label="더할 섹션 고르기">
           <option value="">+ 섹션 추가…</option>
           <optgroup label="자주 쓰는 섹션">{COMMON.map((t) => <option value={t}>{E.SECTION_DEFS[t].label} — {E.SECTION_DEFS[t].desc}</option>)}</optgroup>
           <optgroup label="더 보기">{Object.entries(E.SECTION_DEFS).filter(([t]) => t !== 'hero' && !COMMON.includes(t)).map(([t, d]) => <option value={t}>{d.label} — {d.desc}</option>)}</optgroup>
