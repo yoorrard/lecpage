@@ -333,8 +333,15 @@ function detectAddresses(pages, d) {
   for (const l of d.links || []) {
     if (l.kind === 'meeting') join.push(one(l, '회의 주소'));
     else if (l.kind === 'video' && (/\/live\b|\/live\//.test(l.url) || /중계|실시간|라이브|스트리밍|live/i.test(ctx(l)))) join.push(one(l, '중계 주소'));
-    else if (l.kind === 'form') survey.push(one(l, '설문 주소'));
+    else if (l.kind === 'form') {
+      // 설문 서비스 주소라도 실습 결과를 내는 폼("모둠별로 … 구글 설문에 올리기", 과제 제출)은 만족도 설문 후보가 아님 — 실습 칸의 링크로 둠
+      const c = ctx(l);
+      const satisfaction = /(만족도|설문\s*조사|연수\s*평가|강의\s*평가|소감|이수\s*처리|사후\s*설문)/.test(c);
+      if (!satisfaction && /(제출|올리기|올려|모둠|결과물|과제|퀴즈|신청|접수)/.test(c)) continue;
+      survey.push({ ...one(l, satisfaction ? '만족도 설문 주소' : '설문 주소'), satisfaction });
+    }
   }
+  survey.sort((a, b) => (b.satisfaction ? 1 : 0) - (a.satisfaction ? 1 : 0));
   return { join: join.slice(0, 3), survey: survey.slice(0, 3) };
 }
 

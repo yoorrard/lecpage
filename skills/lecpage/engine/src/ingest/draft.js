@@ -254,11 +254,8 @@ export function materialToDraft(material, info = {}) {
   }).filter((s) => s.steps.length || s.prompts.length || s.links.length || s.desc);
   // 짧은 이름(엔진 한 규칙: station-name.js — 검증이 AI 답의 빈 이름을 채울 때도 같음)과 시간(한 일정 칸에 실습 하나일 때만)
   const names = stationNames(stations.map((x) => x.title));
-  stations.forEach((x, k) => {
-    x.name = names[k];
-    if (x._slot && stations.filter((y) => y._slot === x._slot).length > 1) x.minutes = 0;
-    delete x._slot;
-  });
+  const shared = stations.map((x) => !!x._slot && stations.filter((y) => y._slot === x._slot).length > 1);
+  stations.forEach((x, k) => { x.name = names[k]; if (shared[k]) x.minutes = 0; delete x._slot; });
 
   // ── 섹션 만들기 ───────────────────────────
   const S = {};

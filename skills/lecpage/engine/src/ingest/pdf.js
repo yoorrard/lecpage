@@ -435,3 +435,4 @@ function joinCellLines(parts, charWrap) {
 }
 
 export { normText };
+export { tidy as tidyPdfLine }; // 시험용: 글 조각 틈 정리(scripts/ingest.py tidy와 같은 규칙)

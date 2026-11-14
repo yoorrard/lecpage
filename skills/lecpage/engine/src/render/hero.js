@@ -160,7 +160,8 @@ C.worksheet = (M) => {
   const items = M.st?.items || [];
   const date = M.dp ? `<p class="lp-wsheet-d">${shortDate(M)}(${M.dp.w})</p>` : '';
   if (items.length) {
-    const shown = items.slice(0, 5), total = items.reduce((a, x) => a + (x.minutes || 0), 0);
+    // 합계는 모든 실습에 시간이 있을 때만(일부만 알면 합이 실제보다 작게 보임)
+    const shown = items.slice(0, 5), total = items.every((x) => x.minutes) ? items.reduce((a, x) => a + x.minutes, 0) : 0;
     const foot = [`실습 ${items.length}개`, total ? `약 ${minText(total)}` : '', items.length > shown.length ? `나머지 ${items.length - shown.length}개는 실습 칸에` : ''].filter(Boolean).join(' · ');
     sheet = `<aside class="lp-wsheet" aria-label="오늘의 실습지"><div class="lp-wsheet-h"><p class="lp-wsheet-t">오늘의 실습지</p>${date}</div>
 <ol class="lp-wsheet-list">${shown.map((x, i) => `<li><a href="#st-${esc(x.id)}" data-hero-st="${esc(x.id)}"><i class="lp-wsheet-box" aria-hidden="true"></i><span class="lp-wsheet-n">${pad2(i + 1)}</span><span class="lp-wsheet-name">${esc(x.name || x.title)}</span>${x.minutes ? `<span class="lp-wsheet-min">${x.minutes}분</span>` : ''}</a></li>`).join('')}</ol>
