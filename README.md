@@ -71,7 +71,7 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 | | |
 |---|---|
 | lecpage | **0원**. 회원가입이 없어요 |
-| AI | 쓰던 ChatGPT·Claude·Gemini 창이면 **0원**. API 키를 쓰면 사이트 하나에 몇백 원쯤을 그 AI 회사에 직접 내요 |
+| AI | 쓰던 ChatGPT·Claude·Gemini 창이면 **0원**. API 키를 쓰면 사이트 하나에 몇백 원쯤을 그 AI 회사에 직접 내요(Gemini 무료 키는 0원, 대신 하루 횟수가 정해져 있음) |
 | 배포·참여 기능 | 강사가 연결한 계정(Vercel·GitHub Pages·Netlify·Cloudflare·구글 시트 등)의 무료 한도 안에서 돌아가요 |
 
 ## 더 알아보기
