@@ -252,8 +252,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   // 서버 보기가 Pages면 사이트는 하루 한도와 상관없이 열리고, 무료 서버에서 멈출 수 있는 것은 참여 기능뿐
   const limit = target === 'lecpage' ? (live?.view === 'pages' ? (live.plan === 'paid' ? '' : '사이트는 늘 열려요. 무료 서버라 참여 기능은 붐비는 날 멈출 수 있어요.') : live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
   // 소개 줄에 이미 나온 말(같은 문장이나 '멈추지 않아요'·'늘 열려요'처럼 같은 뜻)은 되풀이하지 않음
-  const sameSense = (a, b) => a.includes(b) || (/멈추지 않|늘 열려/.test(a) && /멈추지 않|늘 열려/.test(b) && !/참여 기능/.test(b));
-  const limitLine = limit && !sameSense(lead, limit) ? limit : '';
+  const limitLine = !limit || lead.includes(limit) ? '' : /멈추지 않|늘 열려/.test(lead) ? limit.replace(/^사이트는 늘 열려요\.\s*/, '') : limit;
   const showLimit = true; // 무료 한도를 넘으면 어떻게 되는지는 늘 미리(writing.md 비용 규칙)
   const days = instant?.limits?.days || 30;
   const care = target === 'lecpage' ? `${instant?.keepAlive === false ? `배포한 날부터 ${days}일 뒤 지워져요(다시 배포하면 그날부터 ${days}일).` : `${days}일 동안 아무도 오지 않으면 지워져요.`} 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;

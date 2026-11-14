@@ -126,11 +126,11 @@ export function StepShare({ p, update, go }) {
   const lecSite = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage : null;
   useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, p.blueprint?.live?.code]);
   useEffect(() => { if (goAgain) (goNow.current || again.current)?.(); }, [goAgain]);
-  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결을 읽는 동안 잠깐 기다림)
+  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 6초까지 기다림)
   useEffect(() => {
     let id = ''; try { id = sessionStorage.getItem('lecpage:republish') || ''; sessionStorage.removeItem('lecpage:republish'); } catch { }
     if (id !== p.id) return;
-    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 30) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
+    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 60) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
     return () => clearInterval(t);
   }, []);
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
@@ -251,7 +251,7 @@ export function StepShare({ p, update, go }) {
   const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
-  const notes = checks(p, exp);
+  const notes = checks(p, target === 'lecpage' || (!target && autoLive) ? exp : null); // 보관 기간 알림은 바로 배포에 배포할 때만
   const day = isPastDate(bp.meta?.date) ? null : dayLine(daySt, bp.meta?.date); // 지난 날짜는 '확인할 곳'에서 한 번만 알림
   const rows = [];
   // 다른 기기에서 저장한 파일로 연 연수: 그 파일에 배포 열쇠가 있으면 같은 주소에 이을지 고르고, 없으면 예전 주소와 새 주소가 생긴다는 사실만

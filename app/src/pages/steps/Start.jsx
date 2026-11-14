@@ -25,7 +25,7 @@ const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
 const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 // 사진은 교재로 읽지 않음: 빨간 오류 대신 실제로 넣는 곳을 한 줄로(여러 장이어도 한 줄)
 const PHOTO = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
-const PHOTO_NOTE = "사진은 교재로 읽지 않아요. 사이트에 싣으려면 사이트를 만든 뒤 '내용 → 자료실'의 [＋ 파일 올리기]로 넣어요.";
+const PHOTO_NOTE = "사진은 교재로 읽지 않아요. 사이트에 실으려면 사이트를 만든 뒤 '내용 → 자료실'의 [＋ 파일 올리기]로 넣어요.";
 
 /** 교재 파일 읽기(브라우저 안). 원본은 src/에 보관하고 사이트에는 넣지 않음(공유하기에서 고를 때만) */
 function useIngest(p, update) {
