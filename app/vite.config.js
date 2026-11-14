@@ -103,6 +103,8 @@ Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOT
         out.push(`${label} — MIT\n\n${head}`);
       }
       out.push(`OpenJPEG (inside the pdf.js worker) — BSD-2-Clause\nhttps://github.com/uclouvain/openjpeg\n\n${OPENJPEG}`);
+      // ai-catalog.json(하루 한 번 모으는 AI 모델 값표)에 models.dev 자료 일부가 들어감(scripts/ai-catalog)
+      out.push(`models.dev (model prices and release dates in ai-catalog.json) — MIT\nhttps://models.dev\n\n${MIT('Copyright (c) 2025 models.dev')}`);
       // Vite가 번들에 넣는 작은 도우미(모듈 미리 읽기 등)
       out.push(`vite (build helpers) — MIT\nhttps://vite.dev\n\n${read('node_modules/vite/LICENSE.md').split('# Licenses of bundled dependencies')[0].replace('# Vite core license\nVite is released under the MIT license:\n\n', '').trim()}`);
       this.emitFile({ type: 'asset', fileName: 'licenses.txt', source: out.join(`\n\n${'='.repeat(72)}\n\n`) + '\n' });

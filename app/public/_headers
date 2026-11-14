@@ -41,3 +41,6 @@
 /notice.json
   Cache-Control: no-cache
 
+# 하루 한 번 바뀌는 AI 값표(scripts/ai-catalog). 늘 새로 확인하게(바뀌지 않았으면 304로 가볍게)
+/ai-catalog.json
+  Cache-Control: no-cache
