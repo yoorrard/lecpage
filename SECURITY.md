@@ -1,7 +1,7 @@
 # 보안 정책 (Security policy)
 
 ## 문제를 찾았다면
-- **공개 이슈에 올리지 말고** GitHub의 비공개 보안 제보를 써 주세요: 저장소 **Security → Report a vulnerability**. 이 버튼이 보이지 않으면 [개인정보 처리방침](docs/legal/privacy.md)의 문의 주소로 보내 주세요.
+- **공개 이슈에 올리지 말고** GitHub의 비공개 보안 제보를 써 주세요: 저장소 **Security → Report a vulnerability**. 이 버튼이 보이지 않으면 hello@lecpage.com으로 보내 주세요.
 - 재현 방법, 영향(누가 무엇을 할 수 있게 되는지), 가능하면 고치는 방법을 적어 주세요.
 - 참가자 개인정보나 실제 연수 자료는 첨부하지 마세요.
 - 7일 안에 받았다는 답을 드리고, 확인되면 고친 판과 함께 알려 드려요.
@@ -26,4 +26,4 @@
 
 ---
 
-**Reporting:** please use GitHub private vulnerability reporting (Security → Report a vulnerability) instead of public issues. If it is unavailable, use the contact address in [docs/legal/privacy.md](docs/legal/privacy.md). We aim to acknowledge within 7 days. To report abuse of a site hosted by the instant-deploy service, use the **신고** (report) link at the bottom of that site.
+**Reporting:** please use GitHub private vulnerability reporting (Security → Report a vulnerability) instead of public issues. If it is unavailable, email hello@lecpage.com. We aim to acknowledge within 7 days. To report abuse of a site hosted by the instant-deploy service, use the **신고** (report) link at the bottom of that site.
