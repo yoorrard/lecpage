@@ -72,7 +72,7 @@ const ATTR_KIND = { 'aria-label': 'aria', title: 'aria', alt: 'aria', 'aria-desc
 const PROP_KIND = { label: 'label', title: 'title', t: 'text', name: 'title', heading: 'title', placeholder: 'placeholder', cta: 'button', btn: 'button', button: 'button', next: 'button' };
 const CALL_KIND = { toast: 'toast', Error: 'error', AiError: 'error', TypeError: 'error', RangeError: 'error', confirm: 'confirm', alert: 'confirm', prompt: 'confirm', fail: 'error' };
 // 화면 글이 아닌 것: 개인정보 안내·운영 안내·디자인 규칙 같은 문서(합니다체 그대로, 말투는 보지 않음)와 AI에게 주는 지시문(보지 않음)
-const DOC_FN = /^(renderPrivacy|defaultProcessors|activityItems|designDoc|opsDoc|conceptBlock|privacy\w*|terms\w*|license\w*)$/i;
+const DOC_FN = /^(renderPrivacy|eraseFacts|defaultProcessors|activityItems|designDoc|opsDoc|conceptBlock|privacy\w*|terms\w*|license\w*)$/i;
 const PROMPT_FN = /^(make\w*Prompt|promptFor|build\w*Prompt)$/;
 const PROMPT_VAR = /^(RULES|PROMPT|SYSTEM|INSTR)/;
 const DOC_VAR = /^PROVIDER_WHY$/; // 운영 안내(opsDoc)에만 들어가는 설명

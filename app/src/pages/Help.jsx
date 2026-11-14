@@ -245,7 +245,7 @@ const BODY = {
       <li><b>AI 회사의 학습 이용</b>: 회사와 요금제마다 달라요. 학생 이름·사진은 보내기 전에 지워 주세요.</li>
       <li><b>접속 기록</b>: 웹앱을 보내 주는 호스팅 회사가 보안을 위해 IP 주소를 기록해요. 운영자는 볼 수 없어요.</li>
       <li><b>익명 이용 합계</b>: 바로 배포가 켜진 앱만, 앱 열기·만들기·배포가 하루 몇 번인지 숫자만 운영자 서버에 더해요. 누가 했는지·교재·주소는 보내지 않고, [설정]에서 끌 수 있어요.</li>
-      <li><b>문의</b>: 운영자가 받는 개인정보는 이메일 문의뿐이에요. <a href="mailto:yyj19962004@gmail.com">yyj19962004@gmail.com</a></li></ul>
+      <li><b>문의</b>: 운영자가 받는 개인정보는 이메일 문의뿐이에요. <a href="mailto:hello@lecpage.com">hello@lecpage.com</a></li></ul>
     <p>연수 사이트에서 참가자 정보를 받으면 개인정보처리자는 강사·기관이에요.</p><p>기록은 강사님이 연결한 계정에만 쌓여요. '개인정보 처리 안내' 페이지가 함께 생겨요.</p>
     <p><a href={`${REPO}/blob/main/docs/legal/privacy.md`} target="_blank" rel="noopener">개인정보 처리방침 전문</a> · <a href={`${REPO}/blob/main/docs/legal/participant-privacy-guide.md`} target="_blank" rel="noopener">참가자 개인정보 안내(강사용)</a></p>
   </>,

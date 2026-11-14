@@ -100,7 +100,7 @@ async function buildSite(bp, { out, assets = '', info = null, password = '', fon
   if (fonts) {
     const fb = await E.bundleFonts(files);
     files = fb.files;
-    r.warnings.push({ path: 'fonts', message_ko: fb.report.ok ? `글꼴 함께 담기: 외부 글꼴 ${fb.report.external}곳 → 사이트 안 파일 ${fb.report.bundled}개(${Math.round(fb.report.bytes / 1024)}KB)` : `글꼴을 받지 못해 CDN 주소 그대로 뒀어요(${fb.report.skipped.join(', ')})${(process.env.HTTPS_PROXY || process.env.https_proxy) && !process.env.NODE_USE_ENV_PROXY ? ' — 프록시를 거치는 곳이면 NODE_USE_ENV_PROXY=1 을 붙여 다시 실행하세요' : ''}` });
+    r.warnings.push({ path: 'fonts', message_ko: fb.report.ok ? `글꼴 함께 담기: 외부 글꼴 ${fb.report.external}곳 → 사이트 안 파일 ${fb.report.bundled}개(${Math.round(fb.report.bytes / 1024)}KB)${fb.report.subset ? `, 사이트 글자만 남긴 글꼴 ${fb.report.subset}개(원본보다 ${Math.round(fb.report.saved / 1024)}KB 작음)` : ''}` : `글꼴을 받지 못해 CDN 주소 그대로 뒀어요(${fb.report.skipped.join(', ')})${(process.env.HTTPS_PROXY || process.env.https_proxy) && !process.env.NODE_USE_ENV_PROXY ? ' — 프록시를 거치는 곳이면 NODE_USE_ENV_PROXY=1 을 붙여 다시 실행하세요' : ''}` });
     if (fb.report.ok) r.report.sizeKB += Math.round(fb.report.bytes / 1024);
   }
   if (password) {

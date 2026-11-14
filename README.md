@@ -7,7 +7,7 @@
 
 <p align="center">강의·연수를 하는 강사와 연수 담당자가 쓰는 무료 오픈소스 도구예요. 회원가입이 없어요.</p>
 
-<p align="center"><a href="https://yoorrard.github.io/lecpage/"><b>웹앱 열기</b></a> · <a href="https://yoorrard.github.io/lecpage/#/demo">먼저 체험해 보기</a> · <a href="#ai-에이전트에서-쓰기">AI 에이전트에서 쓰기</a></p>
+<p align="center"><a href="https://lecpage.com/"><b>웹앱 열기</b></a> · <a href="https://lecpage.com/#/demo">먼저 체험해 보기</a> · <a href="#ai-에이전트에서-쓰기">AI 에이전트에서 쓰기</a></p>
 
 <p align="center"><img src="docs/images/app-home.webp" width="49%" alt="lecpage 첫 화면: 교재를 놓으면 시작"> <img src="docs/images/app-edit.webp" width="49%" alt="살펴보고 고치기: 디자인 탭과 기기별 미리보기"></p>
 
@@ -43,14 +43,14 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 
 ## 시작하기
 
-**웹앱**: **https://yoorrard.github.io/lecpage/** 에 교재 파일을 놓으면 시작해요. 교재는 브라우저 안에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.
+**웹앱**: **https://lecpage.com/** 에 교재 파일을 놓으면 시작해요. 교재는 브라우저 안에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.
 
 1. **교재 넣기**: 연수명·날짜·장소를 교재에서 찾아 채워요.
 2. **AI로 만들기**: 쓰던 ChatGPT·Claude·Gemini 창에 붙여 넣거나(추가 비용 없음), API 키로 버튼 한 번에 만들어요.
 3. **살펴보고 고치기**: 휴대폰·태블릿·PC 크기로 보며 디자인과 내용을 고쳐요. 디자인은 말로도 고쳐요.
 4. **배포하기**: 주소·QR·카톡 안내 문구가 나와요. 연수 당일에는 강사 화면에서 [발표 화면 띄우기]로 프로젝터에 띄우고, QR을 찍어 휴대폰으로도 진행해요.
 
-화면별 안내는 앱의 [도움말](https://yoorrard.github.io/lecpage/#/help/start)에 있어요.
+화면별 안내는 앱의 [도움말](https://lecpage.com/#/help/start)에 있어요.
 
 ### AI 에이전트에서 쓰기
 
@@ -76,7 +76,7 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 
 ## 더 알아보기
 
-- 무엇을 만들어 주나요: [기획서](docs/plan.md)(사이트 유형·섹션·강사용 화면) · [디자인 27가지와 효과](skills/lecpage/references/design.md) · 앱의 [디자인 둘러보기](https://yoorrard.github.io/lecpage/#/gallery)
+- 무엇을 만들어 주나요: [기획서](docs/plan.md)(사이트 유형·섹션·강사용 화면) · [디자인 27가지와 효과](skills/lecpage/references/design.md) · 앱의 [디자인 둘러보기](https://lecpage.com/#/gallery)
 - 배포와 참여 기능: [배포할 곳 안내서](skills/lecpage/references/deploy) · [참여 기능 연결 고르기](skills/lecpage/references/infra-decision.md) · [운영비와 멈추지 않기](docs/research/zero-cost-2026-11.md)
 - 개발자용: [아키텍처와 계약](docs/architecture.md) · [문구 기준](docs/writing.md) · [동작 기준](docs/interaction.md) · [웹앱 운영 안내](docs/operations.md) · [바로 배포 서버](hosting/README.md) · [조사 기록](docs/research)
 - 약속: [보안 정책](SECURITY.md) · [이용약관](docs/legal/terms.md) · [개인정보 처리방침](docs/legal/privacy.md) · [참가자 개인정보 안내 가이드(강사용)](docs/legal/participant-privacy-guide.md)

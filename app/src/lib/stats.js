@@ -1,7 +1,7 @@
 // 익명 이용 합계: 바로 배포 서버(운영자)가 켜져 있을 때만, 하루 단위 숫자를 하나 더하라고 알립니다.
 // 보내는 것은 { e: 무슨 일, k: 갈래 } 뿐입니다. 식별자·쿠키·교재 내용·주소·키는 보내지 않고, 서버도 IP를 남기지 않습니다.
 // 설정에서 끌 수 있고, 브라우저의 '추적 안 함'(DNT·GPC)을 켰으면 보내지 않습니다. 근거: docs/legal/privacy.md 9-1
-const API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
+import { PUBLISH_API as API } from './publish-api.js';
 const OFF_KEY = 'lecpage:stats-off';
 const OPEN_KEY = 'lecpage:stats-open-day';
 /** 개인정보 처리방침에 알린 뒤 7일이 지난 날부터 보냄 */

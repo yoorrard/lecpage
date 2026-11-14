@@ -42,7 +42,7 @@
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호] [--bundle-fonts]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
-| `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://yoorrard.github.io/lecpage/` | 5줄 안팎 |
+| `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://lecpage.com/` | 5줄 안팎 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음 | 4줄 |
 | `publish [work] [--host cloudflare] [--live] [--features qa,poll] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-qa]` | 강사 Cloudflare 계정에 올리기. `--live`: 중계 올리기 → 관리자 키를 만들어 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만(화면에 안 찍음, 이미 있으면 그대로) → `info.json` `live`에 중계 주소·연수 코드 → `patch -i`로 다시 빌드·점검 → 빈 임시 폴더에서 사이트 올리기 → 중계가 이 사이트만 받게(`ALLOWED_ORIGINS`, 연수 코드는 `ALLOWED_CODES`) → 사이트·`check.html`·중계 `/api/health` 확인 → `handouts`. 인증은 `wrangler login`이나 `CLOUDFLARE_API_TOKEN`(+`CLOUDFLARE_ACCOUNT_ID`) 환경 변수만. `--dry-run`은 순서와 강사가 할 일만 보여 주고 아무것도 바꾸지 않음. 다시 올릴 때 같은 명령(이름·키 그대로). 다른 곳은 한 줄 명령을 알려 주고 멈춤 | 10줄 안팎 |
 | `handouts <배포한 주소\|dist> [-o 폴더] [--password 암호]` | `poster.html`·`screen.html`을 열어 `QR-안내문.pdf`(참가자용 A4 한 장)·`발표화면.png`·`발표화면-QR-크게.png`. 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림. Playwright가 없으면 건너뜀 | 3줄 |
@@ -89,7 +89,7 @@ $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stati
 ```
 암호는 파일에 쓰지 않습니다: `--password '<암호>'` 또는 `LECPAGE_PASSWORD`. `--password`를 주면 `access`는 저절로 `password`.
 
-글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담아 예시 한 벌 0.8~1.4MB 더해짐. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
+글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담음. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴 파일마다 사이트 글자만 남긴 같은 글꼴을 먼저 받게 하고 원본은 사이트에 없던 글자(참가자 글)가 나올 때만 받아, 첫 로딩 글꼴이 예시 기준 0.5~1.0MB → 0.23~0.65MB. 파일 이름이 내용 해시라 `_headers`에 1년 캐시(`/assets/fonts/*`)를 적고, 첫 화면 제목 글꼴은 미리 받음(preload). 사이트 한 벌의 크기는 원본과 줄인 것을 함께 담아 1~3MB. 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
 
 ## 5. 문제가 생기면
 | 증상 | 할 일 |

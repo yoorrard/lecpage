@@ -39,9 +39,11 @@ const bins = (files) => Object.keys(files).filter((k) => !/\.(html|css|js|json|m
 async function withFonts(files, { target, view }) {
   if (!FONT_HOSTS.includes(target) || (target === 'lecpage' && view !== 'pages')) return { files, note: '' };
   const get = (u) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000); return fetch(u, { mode: 'cors', credentials: 'omit', signal: c.signal }).finally(() => clearTimeout(t)); };
-  const fb = await E.bundleFonts(files, { fetch: get });
+  let fb = await E.bundleFonts(files, { fetch: get });
   if (!fb.report.ok) return { files, note: '글꼴 서버에 닿지 않아 글꼴을 사이트에 담지 못했어요. 연수 장소에서 글꼴이 늦게 뜨거나 바뀌어 보일 수 있어요.' };
-  if (target === 'github-pages' && bins(fb.files) > 40) return { files, note: '' };
+  // GitHub Pages: 글자만 남긴 글꼴은 원본과 둘씩이라 파일이 늘어남 → 넘치면 원본만 담아 다시 셈
+  if (target === 'github-pages' && bins(fb.files) > 40 && fb.report.subset) fb = await E.bundleFonts(files, { fetch: get, subset: false });
+  if (target === 'github-pages' && (!fb.report.ok || bins(fb.files) > 40)) return { files, note: '' };
   return { files: fb.files, note: '' };
 }
 

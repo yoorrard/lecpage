@@ -9,7 +9,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 |---|---|---|
 | 구조 | **로컬 우선 정적 PWA**. 교재 해석·사이트 조립·ZIP 만들기를 모두 브라우저에서 | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
-| 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
+| 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 도메인 대안 | lecpage.kr(가비아 연 약 ₩22,000~23,000 ⚠️) + 네임서버를 Cloudflare로 | 한국 주소가 더 중요할 때. Cloudflare Registrar는 `.kr`을 팔지 않음. `.kr` 네임서버 변경은 본인 인증이 필요할 수 있음 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
 | 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |
@@ -100,12 +100,12 @@ Worker → **Settings → Build → Build watch paths**
 
 ## 5. 도메인 사기 체크리스트
 - [ ] Cloudflare 계정 2단계 인증이 켜져 있다.
-- [ ] 대시보드 → **Domain Registration → Register Domains**에서 `lecpage.com` 검색 → 값 확인(2026-11-09 기준 등록·갱신 모두 $11.17, 2차 출처라 화면에서 확인) → 등록. Registrar는 결제 수단이 필요합니다(도메인 값에만 씀).
+- [x] 대시보드 → **Domain Registration → Register Domains**에서 `lecpage.com` 검색 → 값 확인(2026-11-09 기준 등록·갱신 모두 $11.17, 2차 출처라 화면에서 확인) → 등록. Registrar는 결제 수단이 필요합니다(도메인 값에만 씀).
 - [ ] 등록자 연락처를 정확히 넣는다. WHOIS 공개 정보는 Cloudflare가 가려 줍니다.
 - [ ] **자동 갱신**이 켜져 있고, 결제 수단 만료일이 갱신일보다 뒤다. 만료 알림을 받을 메일을 확인한다.
 - [ ] **이전 잠금**(transfer lock)이 켜져 있다.
-- [ ] **Email Routing**을 켜고 `hello@lecpage.com`(문의·보안 신고용)을 운영자 메일로 전달한다. 받기 전용이며 무료입니다. 필요한 DNS 레코드는 자동으로 추가됩니다. 이 주소를 README·SECURITY.md·앱 개인정보 안내에 적는다.
-- [ ] Worker에 내 도메인을 붙인다(§3.5).
+- [x] **Email Routing**을 켜고 `hello@lecpage.com`(문의·보안 신고용)을 운영자 메일로 전달한다. 받기 전용이며 무료입니다. 필요한 DNS 레코드는 자동으로 추가됩니다. 이 주소를 README·SECURITY.md·앱 개인정보 안내에 적는다.
+- [x] Worker에 내 도메인을 붙인다(§3.5).
 - [ ] (대안 `.kr`) 가비아에서 사고 → Cloudflare **Add a domain**(Free) → 받은 네임서버 2개를 가비아 **네임서버 설정**에 입력 → 본인 인증 → "Active" 확인.
 - [ ] (선택) `lec.page`(짧은 주소용, $10.20 — 3글자라 예약·프리미엄일 수 있음 ⚠️)는 강사 QR용 짧은 주소가 필요해질 때 검토.
 
@@ -116,7 +116,7 @@ Worker → **Settings → Build → Build watch paths**
 - [ ] Workers는 **Free 플랜 유지**. 한도에서 오류가 날 뿐 요금이 청구되지 않습니다.
 - [ ] GitHub `main` **브랜치 보호**(규칙 집합): PR 필수, 검사(CI) 통과 필수, 강제 푸시·삭제 금지.
 - [ ] **Dependabot alerts**와 보안 업데이트를 켠다(npm `/app`, `/skills/lecpage/backends/cloudflare`, GitHub Actions).
-- [ ] **Private vulnerability reporting**을 켠다(**Settings → Security**). `SECURITY.md`에 신고 방법과 `hello@lecpage.com`을 적는다.
+- [x] **Private vulnerability reporting**을 켠다(**Settings → Security**). `SECURITY.md`에 신고 방법과 `hello@lecpage.com`을 적는다.
 - [ ] **Secret scanning**과 push protection을 켠다(공개 저장소 무료).
 - [ ] Actions 기본 권한은 읽기 전용(**Settings → Actions → Workflow permissions**).
 - [ ] 개인정보 안내 페이지(앱 `#/help/privacy`)가 실제 동작(분석 없음, 오류 수집 없음, 사용자 키는 브라우저에서 AI 회사로 직접)과 맞는지 배포 때마다 본다.
