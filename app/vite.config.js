@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const read = (p) => readFileSync(here(p), 'utf8');
@@ -103,6 +103,8 @@ Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOT
         out.push(`${label} — MIT\n\n${head}`);
       }
       out.push(`OpenJPEG (inside the pdf.js worker) — BSD-2-Clause\nhttps://github.com/uclouvain/openjpeg\n\n${OPENJPEG}`);
+      // pdf.js 표준 글꼴(dist/pdfjs/standard_fonts, 글꼴을 담지 않은 PDF를 그릴 때만 받음): Foxit(BSD 계열)·Liberation(OFL-1.1)
+      out.push(`pdf.js standard fonts — Foxit fonts (BSD-style) and Liberation fonts (SIL OFL 1.1)\nhttps://github.com/mozilla/pdf.js/tree/master/external/standard_fonts\n\n${read(PDFJS_DIR + 'standard_fonts/LICENSE_FOXIT').trim()}\n\n${'-'.repeat(40)}\n\n${read(PDFJS_DIR + 'standard_fonts/LICENSE_LIBERATION').trim()}`);
       // ai-catalog.json(하루 한 번 모으는 AI 모델 값표)에 models.dev 자료 일부가 들어감(scripts/ai-catalog)
       out.push(`models.dev (model prices and release dates in ai-catalog.json) — MIT\nhttps://models.dev\n\n${MIT('Copyright (c) 2025 models.dev')}`);
       // Vite가 번들에 넣는 작은 도우미(모듈 미리 읽기 등)
@@ -160,10 +162,39 @@ function swWarm() {
   };
 }
 
+// 글꼴을 담지 않은 한글 PDF(공문·예전 PDF의 HYSMyeongJo·UniKS-UCS2-H 등)를 읽고 그리려면 pdf.js가 CMap·표준 글꼴 자료를 받아야 함.
+// 한국어 CMap(Adobe-Korea1·KSC·UniKS, 26개)과 표준 글꼴을 dist/pdfjs/ 아래 같은 출처로 냄(외부 CDN 없이 학교망에서도).
+// 그런 PDF를 열 때만 받으므로 첫 화면 무게는 그대로. 쓰는 곳: src/lib/ingest.js(cMapUrl·standardFontDataUrl)
+const PDFJS_DIR = 'node_modules/pdfjs-dist/';
+const KO_CMAP = /^(Adobe-Korea1|KSC|UniKS)/;
+function pdfjsAssets() {
+  const list = () => [
+    ...readdirSync(here(PDFJS_DIR + 'cmaps')).filter((f) => KO_CMAP.test(f) && f.endsWith('.bcmap')).map((f) => ['cmaps/' + f, PDFJS_DIR + 'cmaps/' + f]),
+    ...readdirSync(here(PDFJS_DIR + 'standard_fonts')).map((f) => ['standard_fonts/' + f, PDFJS_DIR + 'standard_fonts/' + f]),
+  ];
+  return {
+    name: 'lecpage-pdfjs-assets',
+    // 개발 서버: /pdfjs/… 를 node_modules에서 바로
+    configureServer(server) {
+      const files = new Map(list());
+      server.middlewares.use((req, res, next) => {
+        const m = /\/pdfjs\/((?:cmaps|standard_fonts)\/[\w.-]+)$/.exec((req.url || '').split('?')[0]);
+        if (!m || !files.has(m[1])) return next();
+        res.setHeader('content-type', 'application/octet-stream'); res.end(readFileSync(here(files.get(m[1]))));
+      });
+    },
+    generateBundle() {
+      const all = list();
+      if (all.filter(([n]) => n.startsWith('cmaps/')).length < 20) throw new Error('pdfjs-assets: 한국어 CMap을 찾지 못했습니다(pdfjs-dist 판을 확인하세요).');
+      for (const [name, src] of all) this.emitFile({ type: 'asset', fileName: 'pdfjs/' + name, source: readFileSync(here(src)) });
+    },
+  };
+}
+
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt(), landingFacts(), swWarm()],
+  plugins: [preact(), licensesTxt(), landingFacts(), swWarm(), pdfjsAssets()],
   resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },

@@ -44,3 +44,7 @@
 # 하루 한 번 바뀌는 AI 값표(scripts/ai-catalog). 늘 새로 확인하게(바뀌지 않았으면 304로 가볍게)
 /ai-catalog.json
   Cache-Control: no-cache
+
+# pdf.js 한국어 CMap·표준 글꼴(글꼴을 담지 않은 PDF를 열 때만 받음). 이름에 해시가 없어 일주일만 캐시
+/pdfjs/*
+  Cache-Control: public, max-age=604800

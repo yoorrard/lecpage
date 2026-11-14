@@ -27,24 +27,29 @@ const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 function useIngest(p, update) {
   const [busy, setBusy] = useState('');
   const [pct, setPct] = useState(0);
+  const [stop, setStop] = useState(null); // 쪽 그림을 만드는 동안: [쪽 그림 그만 만들기](그때까지 만든 그림은 씀)
   async function ingestAll(fileObjs, { replace = false } = {}) {
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
     const mats = []; const metas = replace ? [] : [...(p.files || [])];
-    let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0;
+    let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0; let empty = 0; let cut = 0;
     for (const [i, f] of fileObjs.entries()) {
       if (f.size > 100e6) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] }); continue; }
       setBusy(`${f.name} 읽는 중 (${i + 1}/${fileObjs.length})`); setPct(5 + Math.round((i / fileObjs.length) * 10));
       const { material, bytes } = await ing.readFile(f);
       const ext = (f.name.split('.').pop() || '').toLowerCase();
       const errors = (material.errors || []).map((e) => e.message_ko);
-      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors });
+      // 읽었지만 알릴 것(스캔본처럼 글자가 없는 PDF·앞쪽만 읽음·숨긴 슬라이드 등): 그 파일 줄에 주황 한 줄
+      const warns = errors.length ? [] : (material.warnings || []).map((w) => w.message_ko);
+      if (!errors.length && (material.warnings || []).some((w) => w.code === 'no-text' || w.code === 'no-content')) empty++;
+      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors, ...(warns.length ? { warns } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
       if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes));
       if (ext === 'pdf' && !errors.length) {
         await blobs.removePrefix(p.id, 'assets/slides/');
-        const shots = await ing.renderSlides(bytes, (done, total) => { setBusy(`슬라이드 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); });
+        const ctl = new AbortController(); setStop(ctl);
+        const shots = await ing.renderSlides(bytes, (done, total) => { setBusy(`슬라이드 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); }, ctl.signal).finally(() => setStop(null));
         for (const s of shots) await blobs.put(p.id, 'assets/slides/' + ing.slideFileName(s.page, s.type), s.blob);
-        slidesMade = shots.length;
+        slidesMade = shots.length; if (ctl.signal.aborted) cut = shots.length;
       }
     }
     const prev = !replace && p.material ? [p.material] : [];
@@ -67,7 +72,8 @@ function useIngest(p, update) {
       return { material: merged, files: metas, info, autoFilled: auto, slidesMade, summary };
     });
     const bad = fileObjs.length - ok;
-    toast(!fileObjs.length ? '' : bad === 0 ? `교재 ${ok}개를 읽었어요.` : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
+    toast(!fileObjs.length ? '' : bad === 0 ? (empty ? (empty === ok ? '교재에서 글자를 거의 읽지 못했어요. 주황 글씨를 확인해 주세요.' : `교재 ${ok}개를 넣었어요. 글자를 못 읽은 파일이 있어요. 주황 글씨를 확인해 주세요.`) : cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.` : `교재 ${ok}개를 읽었어요.`)
+      : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
   async function handle(list) {
     const files = Array.from(list || []); if (!files.length) return;
@@ -99,7 +105,7 @@ function useIngest(p, update) {
     } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0);
   }
-  return { busy, pct, handle, removeFile };
+  return { busy, pct, handle, removeFile, stop };
 }
 
 export function StepStart({ p, update, go }) {
@@ -124,7 +130,13 @@ export function StepStart({ p, update, go }) {
   const makeWithAiRef = useRef(null);
   const [confirmRemake, setConfirmRemake] = useState(false);
   const [titleErr, setTitleErr] = useState(false);
-  const { busy, pct, handle, removeFile } = useIngest(p, update);
+  const { busy, pct, handle, removeFile, stop } = useIngest(p, update);
+  // ✕로 교재를 뺀 뒤 초점: 같은 자리(없으면 앞) 파일의 ✕, 다 뺐으면 교재 넣는 칸(초점이 화면 맨 위로 사라지지 않게)
+  const listRef = useRef(); const dropRef = useRef();
+  async function remove(i) {
+    await removeFile(i);
+    setTimeout(() => { const b = listRef.current?.querySelectorAll('.icon-btn'); (b?.[i] || b?.[i - 1] || dropRef.current)?.focus(); }, 30);
+  }
   /** 교재 자리에 저장한 연수(.lecpage, AI 에이전트가 만든 것 포함)를 놓으면 교재가 아니라 그 연수로 엶. 이 연수가 아직 비어 있으면 지움 */
   async function take(list) {
     const files = Array.from(list || []);
@@ -210,7 +222,7 @@ export function StepStart({ p, update, go }) {
       {p.blueprint && <Notice kind="ok">사이트가 있어요. 여기서 고친 정보는 바로 반영돼요.</Notice>}
       <div class={`start-grid${showMake ? ' has-make' : ''}`}>
       <section class="stack start-files" aria-label="교재 파일">
-          <div class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
+          <div ref={dropRef} class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) take(e.dataTransfer.files); }}>
@@ -221,13 +233,14 @@ export function StepStart({ p, update, go }) {
               {busy && pct > 0 && <div style={{ width: 'min(320px,80%)' }}><Progress pct={pct} /></div>}
             </>}
           </div>
+          {stop && <div><button type="button" class="btn btn-sm" onClick={() => stop.abort()}>쪽 그림 그만 만들기</button> <span class="small muted">그때까지 만든 그림은 써요.</span></div>}
           <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
           {p.files?.length > 0 && (
-            <ul class="files">
+            <ul class="files" ref={listRef}>
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{fmtBytes(f.size)}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}</div>
-                  <button class="icon-btn" disabled={!!busy} onClick={() => removeFile(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
+                  <div><b>{f.name}</b><div class="small muted">{fmtBytes(f.size)}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <button class="icon-btn" disabled={!!busy} onClick={() => remove(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
               ))}
             </ul>
           )}

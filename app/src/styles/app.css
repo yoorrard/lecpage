@@ -298,6 +298,7 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .warnings{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:.9rem;color:var(--ink-2)}
 .warnings .is-warn{color:var(--ink);font-weight:600}
 .warn-line{color:var(--bad);font-weight:600}
+.file-warn{color:var(--butter-ink);font-weight:600}
 .progress{height:6px;border-radius:999px;background:var(--sunk);overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);width:var(--w,0%);transition:width .3s var(--ease)}
 
