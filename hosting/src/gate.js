@@ -398,14 +398,16 @@ export class Gate extends DurableObject {
   }
 
   /** Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '배포' 수를 셈 */
-  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, aw }) {
+  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, aw, pagesRoot }) {
     const calls = (v) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, 10000) : 0);
+    // Pages 첫 주소 안내 화면: 공개한 Site가 물으면(ask) 한 번만 맡기고, 결과(made·had·failed)를 적어 둠
+    const root = pagesRoot === 'ask' ? (published ? this.pagesRootClaim() : false) : (typeof pagesRoot === 'string' ? this.pagesRootDone(pagesRoot) : false);
     // aw: 방이 깨어 있던 초(SSE·방 안 긴 대기). 방 하나가 10분마다·끝날 때 알림
     const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0, aw: Number.isSafeInteger(aw) && aw > 0 ? Math.min(aw, 86400) : 0 };
     if (day.pc || day.pz || day.rc || day.pub || day.aw) this.addDay(day); // 하루 줄 한 번만 씀
     if (day.pz) this.pagesBlocked(); // Cloudflare가 API를 막음: 5분 동안 새 배포를 받지 않고(줄 서기), 운영자에게 알림
     const row = this.sql.exec('SELECT bytes, expires, blocked, room_bytes, code FROM sites WHERE id = ?', id).toArray()[0];
-    if (!row) return { ok: false, total: this.usage().bytes };
+    if (!row) return { ok: false, total: this.usage().bytes, ...(root ? { pagesRoot: true } : {}) };
     const int = (v, d) => (Number.isSafeInteger(v) && v >= 0 ? v : d);
     const nb = int(bytes, row.bytes); const nr = int(roomBytes, row.room_bytes);
     this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ?, room_bytes = ?, code = ? WHERE id = ?',
@@ -413,7 +415,23 @@ export class Gate extends DurableObject {
     this.addTot(0, nb + nr - row.bytes - row.room_bytes);
     const total = this.usage().bytes;
     if (bytes !== undefined || roomBytes !== undefined) this.storageAlert(total);
-    return { ok: true, total };
+    return { ok: true, total, ...(root ? { pagesRoot: true } : {}) };
+  }
+  /**
+   * Pages 프로젝트의 첫 주소(…pages.dev 뿌리)에 본 배포가 없으면 안내 화면을 한 번 올려야 함(설정 스크립트가 프록시 등으로 못 올렸을 때).
+   * 처음 공개한 Site 하나에만 맡김(true). 끝났으면(done) 다시 맡기지 않고, 하는 중이면 10분·실패했으면 6시간 기다린 뒤 다른 공개에 다시 맡김
+   */
+  pagesRootClaim(now = Date.now()) {
+    let v = null; try { v = JSON.parse(this.sql.exec("SELECT v FROM kv WHERE k = 'pages-root'").toArray()[0]?.v || 'null'); } catch { v = null; }
+    if (v?.s === 'done' || (v && now - v.at < (v.s === 'doing' ? 10 * 60e3 : 6 * HOUR_MS))) return false;
+    this.sql.exec("INSERT INTO kv (k, v) VALUES ('pages-root', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify({ s: 'doing', at: now }));
+    return true;
+  }
+  /** made(올림)·had(이미 있었음) = 끝, failed = 나중에 다시 */
+  pagesRootDone(result, now = Date.now()) {
+    if (!['made', 'had', 'failed'].includes(result)) return false;
+    this.sql.exec("INSERT INTO kv (k, v) VALUES ('pages-root', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify({ s: result === 'failed' ? 'failed' : 'done', r: result, at: now }));
+    return false;
   }
   /** 하루 한 번: 무료 요금제에서 추세가 빠듯하면(유료 전환을 권할 때) 일주일에 한 번 알림 */
   forecastAlert(now = Date.now()) {

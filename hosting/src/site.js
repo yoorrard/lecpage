@@ -556,7 +556,9 @@ export class Site extends DurableObject {
     // 지난 배포(각자 고유 주소가 있음)는 지움. 못 지운 것은 다음 공개·지우기 때 다시
     const left = await this.dropDeployments(old.filter((d) => d !== deployment.id));
     if (left.length) { const s2 = this.ps(meta); s2.hold = left; this.savePs(meta, s2); }
-    try { await this.gate('POST', 'site', { id, bytes: kept, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
+    let g = null;
+    try { g = await this.gate('POST', 'site', { id, bytes: kept, expires, published: true, pagesRoot: 'ask', ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
+    if (g?.pagesRoot) this.ctx.waitUntil(this.pagesRoot()); // 공개 응답은 기다리지 않음
     if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: id, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
     return json(this.published(request, meta));
   }
@@ -585,13 +587,27 @@ export class Site extends DurableObject {
   }
   /** 브랜치에 안내 화면 하나만 배포(가림·지움). 배포 id */
   async placeholder(meta, html) {
-    const te = new TextEncoder(); const manifest = {}; const extra = [];
-    for (const p of ['index.html', '404.html']) {
-      const bytes = te.encode(html); const parts = base64Parts(bytes); const hash = pagesHash(bytes, 'html', parts);
-      manifest[`/${p}`] = hash; if (!extra.some((x) => x.hash === hash)) extra.push({ hash, parts, contentType: contentTypeOf(p) });
-    }
-    const { deployment } = await this.pagesCall(() => deploySite(this.pc(), { branch: branchOf(meta.site), manifest, extra, headers: NOTICE_HEADERS, message: 'lecpage notice' }));
+    const { deployment } = await this.pagesCall(() => this.noticeDeploy(branchOf(meta.site), html, 'lecpage notice'));
     return deployment.id;
+  }
+  /** 안내 화면 한 장(index.html = 404.html)만 있는 배포 */
+  noticeDeploy(branch, html, message) {
+    const bytes = new TextEncoder().encode(html); const parts = base64Parts(bytes); const hash = pagesHash(bytes, 'html', parts);
+    return deploySite(this.pc(), { branch, manifest: { '/index.html': hash, '/404.html': hash }, extra: [{ hash, parts, contentType: contentTypeOf('index.html') }], headers: NOTICE_HEADERS, message });
+  }
+  /**
+   * Pages 프로젝트의 첫 주소(…pages.dev 뿌리)에 본 배포(production)가 없으면 '보관 기간이 끝났어요' 안내 화면을 올림.
+   * 설정 스크립트(npm run setup)가 올리지만 프록시가 Authorization 머리글을 바꾸는 환경에서는 못 올림 → 처음 공개할 때 한 번(Gate가 한 Site에만 맡김)
+   */
+  async pagesRoot() {
+    let result = 'failed';
+    try {
+      const pr = await this.pc().getProject();
+      if (pr?.canonical_deployment) result = 'had';
+      else { await this.noticeDeploy(pr?.production_branch || 'main', goneHtml(this.cfg.publicOrigin ? `${this.cfg.publicOrigin}/` : ''), 'lecpage 안내 화면'); result = 'made'; }
+    } catch (e) { console.error('pages root notice failed', e?.step, e?.status, e?.code); }
+    try { await this.gate('POST', 'site', { id: '', pagesRoot: result, ...this.pagesDelta() }); } catch (e) { console.error('gate pages-root update failed', e?.message); }
+    return result;
   }
 
   // ── 지우기·가리기 ────────────────────────────────────────────
