@@ -7,14 +7,14 @@ import { AiConnect, AiStatus } from '../../components/AiConnect.jsx';
 import { getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
 import { pushUndoFor } from '../../lib/undo.js';
-import { blobs } from '../../lib/db.js';
+import { blobs, storageKind, STORAGE_MSG } from '../../lib/db.js';
 import { fmtBytes, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile, openSavedFile, OPEN_FAIL } from '../../lib/project.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
-import { FEATURES, makeDraft, syncInfo, applyInfo, dropMissing } from '../../lib/blueprint.js';
+import { FEATURES, makeDraft, syncInfo, applyAnswer, dropMissing } from '../../lib/blueprint.js';
 import { FoundSummary } from '../../components/Structure.jsx';
 
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
@@ -76,7 +76,7 @@ function useIngest(p, update) {
       console.error(e);
       // 읽기 도구를 못 받음: 새 버전이면 아래 띠·저절로 새로 고침이 알리고, 망 오류면 여기서
       if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 넣어 주세요.');
-      else if (!e.kind) toast('교재를 읽지 못했어요: ' + (e.message || e));
+      else if (!e.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 읽지 못했어요. 새로 고침한 뒤 다시 넣어 주세요.'); // 영어 원문은 보이지 않음(콘솔에만)
     }
     setBusy(''); setPct(0);
   }
@@ -96,7 +96,7 @@ function useIngest(p, update) {
       if (again.length) await ingestAll(again, { replace: true });
       else update({ material: null, files: [], slidesMade: 0, summary: '' });
       toast(`뺐어요: ${f.name}`);
-    } catch (e) { toast('다시 읽지 못했어요: ' + e.message); }
+    } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0);
   }
   return { busy, pct, handle, removeFile };
@@ -183,7 +183,7 @@ export function StepStart({ p, update, go }) {
   function onAi(bp, meta = {}) {
     const cur = latest.current;
     if (cur.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', cur);
-    update({ blueprint: applyInfo(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai', chatWait: null });
+    update({ blueprint: applyAnswer(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai', chatWait: null });
     setRemake(false); noteAiResult(p.id, { restored: meta.restored || [], via: '' });
     toast('AI가 짠 내용으로 만들었어요.'); go(2);
   }

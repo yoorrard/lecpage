@@ -6,6 +6,7 @@ import { Toast } from './components/ui.jsx';
 import { Home } from './pages/Home.jsx';
 import { toast } from './lib/util.js';
 import { hasPendingFiles } from './lib/project.js';
+import { storageBlocked, STORAGE_MSG } from './lib/db.js';
 import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } from './lib/fresh.jsx';
 
 // 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임)
@@ -53,6 +54,14 @@ function useHash() {
   return h;
 }
 
+/** 이 창에서 브라우저 저장소를 쓸 수 없으면(사생활 보호 창·사이트 데이터 차단·기관 정책) 만들기·설정 화면 위에 한 줄. 체험·둘러보기·도움말은 그대로 됨 */
+function StorageBar({ route }) {
+  const [off, setOff] = useState(false);
+  useEffect(() => { storageBlocked().then(setOff); }, []);
+  if (!off || ['demo', 'gallery', 'help'].includes(route)) return null;
+  return <div class="storage-bar" role="alert"><b>연수를 만들거나 열 수 없어요.</b> {STORAGE_MSG.blocked} <a href="#/demo">체험</a>과 <a href="#/gallery">디자인 둘러보기</a>는 그대로 돼요.</div>;
+}
+
 function App() {
   const hash = useHash();
   const parts = hash.replace(/^#\/?/, '').split('/');
@@ -87,7 +96,7 @@ function App() {
           <a href="#/settings" aria-current={cur('settings')}>설정</a>
         </nav>
       </div></header>
-      <main class="page" id="main" tabIndex={-1}>{page}</main>
+      <main class="page" id="main" tabIndex={-1}><StorageBar route={route || ''} />{page}</main>
       <footer class="foot"><div class="foot-in">
         <span><b class="latin">lecpage</b> · 교재를 넣으면 연수 사이트가 나와요</span>
         <span>회원가입 없음 · 교재는 이 브라우저에서 읽어요</span>

@@ -2,11 +2,13 @@
 const DB_NAME = 'lecpage';
 const VERSION = 1;
 let dbp = null;
+let blocked = null; // 저장소를 열지 못한 까닭(사생활 보호 창·사이트 데이터 차단·기관 정책). 한 번 실패하면 이 탭에서는 다시 열지 않음
 
 function open() {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, VERSION);
+    req.onblocked = () => { /* 예전 판을 연 다른 탭이 닫히기를 기다림(지금은 판이 하나라 생기지 않음) */ };
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
@@ -15,9 +17,37 @@ function open() {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
-  });
+  }).catch((e) => { blocked = e || new Error('indexedDB'); throw Object.assign(blocked, { storage: 'blocked' }); });
   return dbp;
 }
+
+/** 이 창에서 브라우저 저장소를 쓸 수 없는지(앱을 열 때 한 번 시험). true면 연수를 만들거나 열 수 없음 → 안내 띠(main.jsx) */
+export const storageBlocked = () => open().then(() => false, () => true);
+
+/**
+ * 저장 오류 → 'quota'(저장 공간이 꽉 참) | 'blocked'(이 창은 저장이 막힘) | ''(그 밖)
+ * 강사에게는 영어 원문 대신 이 종류에 맞는 안내(STORAGE_MSG)를 보임
+ */
+export function storageKind(e) {
+  if (!e) return '';
+  if (e.storage === 'blocked' || blocked) return 'blocked';
+  if (e.name === 'QuotaExceededError' || e.code === 22 || /quota|storage.*full|disk.*full/i.test(String(e.message || ''))) return 'quota';
+  return '';
+}
+export const STORAGE_MSG = {
+  quota: '이 브라우저의 저장 공간이 꽉 찼어요. 설정에서 안 쓰는 연수를 파일로 저장한 뒤 지워 주세요.',
+  blocked: '이 창은 브라우저 저장이 막혀 있어요. 일반 창에서 열거나 브라우저 설정에서 이 사이트의 데이터 저장을 허용해 주세요.',
+};
+
+// 탭 사이 알림(같은 브라우저의 다른 탭): 연수를 저장하거나 지우면 id와 판(updatedAt)만 알림.
+// 같은 연수를 연 다른 탭은 덮어쓰지 않고 '다른 탭에서 고쳤어요'를 띄움(Project.jsx). 내용은 보내지 않음
+let bc = null;
+try { bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('lecpage') : null; } catch { bc = null; }
+const hear = new Set();
+if (bc) bc.onmessage = (e) => { const m = e.data; if (m && m.id) hear.forEach((f) => f(m)); };
+const tell = (m) => { try { bc?.postMessage(m); } catch { /* 알림만 못 함 */ } };
+/** 다른 탭에서 연수를 저장(type 'saved', at)하거나 지웠을 때(type 'deleted') */
+export function onProjectChange(f) { hear.add(f); return () => hear.delete(f); }
 
 function tx(store, mode, fn) {
   return open().then((db) => new Promise((resolve, reject) => {
@@ -35,11 +65,32 @@ const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result)
 export const projects = {
   all: () => tx('projects', 'readonly', (s) => req(s.getAll())).then((a) => (a || []).sort((x, y) => (y.updatedAt || 0) - (x.updatedAt || 0))),
   get: (id) => tx('projects', 'readonly', (s) => req(s.get(id))),
-  put: (p) => tx('projects', 'readwrite', (s) => req(s.put({ ...p, updatedAt: Date.now() }))),
+  put: (p) => { const at = Math.max(Date.now(), (p.updatedAt || 0) + 1); return tx('projects', 'readwrite', (s) => req(s.put({ ...p, updatedAt: at }))).then((k) => { tell({ type: 'saved', id: p.id, at }); return k; }); },
+  /**
+   * 연수 화면의 자동 저장: 이 탭이 마지막으로 읽거나 쓴 판(base) 위에만 씀(읽기와 쓰기를 한 트랜잭션에서).
+   * 그 사이 다른 탭이 고쳤으면 { changed }, 지웠으면 { gone }을 돌려주고 쓰지 않음(덮어쓰거나 지운 연수를 되살리지 않게). 썼으면 { at }
+   */
+  save: (p, base) => open().then((db) => new Promise((resolve, reject) => {
+    const t = db.transaction('projects', 'readwrite'); const s = t.objectStore('projects');
+    let out = null; let thrown = null;
+    const g = s.get(p.id);
+    g.onsuccess = () => {
+      const cur = g.result;
+      if (!cur) { out = { gone: true }; return; }
+      if ((cur.updatedAt || 0) > (base || 0)) { out = { changed: true, at: cur.updatedAt }; return; }
+      const at = Math.max(Date.now(), (cur.updatedAt || 0) + 1);
+      try { s.put({ ...p, updatedAt: at }); out = { at }; } catch (e) { thrown = e; try { t.abort(); } catch { /* 이미 끝남 */ } }
+    };
+    t.oncomplete = () => { if (out?.at && !out.changed) tell({ type: 'saved', id: p.id, at: out.at }); resolve(out || { gone: true }); };
+    t.onerror = () => reject(thrown || t.error);
+    t.onabort = () => reject(thrown || t.error);
+  })),
   remove: async (id) => {
     await tx('projects', 'readwrite', (s) => req(s.delete(id)));
+    tell({ type: 'deleted', id });
     const keys = await blobs.keys(id);
     await tx('blobs', 'readwrite', (s) => Promise.all(keys.map((k) => req(s.delete(id + ':' + k)))));
+    await kv.del('undo:' + id).catch(() => { }); // 'AI로 만들기 전' 판(undo.js)
   },
 };
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mascot } from '../components/Mascot.jsx';
-import { projects } from '../lib/db.js';
+import { projects, storageKind, STORAGE_MSG } from '../lib/db.js';
 import { newProject, setPendingFiles, isSavedFile, openSavedFile, OPEN_FAIL } from '../lib/project.js';
 import { toast } from '../lib/util.js';
 import { HeroFold } from '../landing/HeroFold.jsx';
@@ -45,7 +45,7 @@ export function Home() {
     running.current = true;
     const t = setTimeout(() => setBusy(key), 300);
     let ok = false;
-    try { await fn(); ok = true; } catch (e) { console.error(e); toast(fail); }
+    try { await fn(); ok = true; } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || fail); }
     clearTimeout(t); setBusy('');
     if (!ok || stay) running.current = false; // 다른 화면으로 넘어가면 이 화면은 닫히니 그대로 막아 둠
   }

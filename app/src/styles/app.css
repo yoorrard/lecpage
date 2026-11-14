@@ -207,6 +207,10 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .stepper a.done .n{background:var(--mint);border-color:color-mix(in srgb,var(--mint-ink) 35%,transparent);color:var(--mint-ink)}
 .stepper a[aria-disabled="true"]{opacity:.5}
 .side-tools{justify-self:end;display:flex;align-items:center;gap:10px}
+.save-bad{color:var(--bad);font-weight:650}
+.storage-bar{margin:0 0 18px;padding:11px 14px;border-radius:var(--r-xs);background:var(--peach);color:var(--peach-ink);border:1px solid color-mix(in srgb,var(--peach-ink) 14%,transparent);font-size:.92rem}
+.storage-bar a{color:inherit;font-weight:650}
+.wiz-head>.save-band{grid-column:1/-1;order:9}
 .wiz-main{min-width:0;display:grid;gap:20px;align-content:start}
 .step-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
 .step-head-t{display:grid;gap:6px}

@@ -71,8 +71,9 @@ export async function saveKey(provider, key, remember) {
   } else await kv.del('ai:' + provider);
 }
 export async function loadKey(provider) {
-  if (mem.has(provider)) return { key: mem.get(provider), remembered: !!(await kv.get('ai:' + provider)) };
-  const rec = await kv.get('ai:' + provider);
+  // 저장이 막힌 창(사생활 보호 등)이면 읽기는 '없음'으로(설정·연결 화면이 멈추지 않게. 저장하려 할 때 안내)
+  if (mem.has(provider)) return { key: mem.get(provider), remembered: !!(await kv.get('ai:' + provider).catch(() => null)) };
+  const rec = await kv.get('ai:' + provider).catch(() => null);
   if (!rec) return { key: '', remembered: false };
   try {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.iv }, await deviceKey(), rec.ct);
@@ -87,7 +88,7 @@ export async function forgetKey(provider) {
 }
 
 // 고른 회사·모델(비밀 아님)
-async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {}, blocked: s.blocked || {} }; }
+async function prefs() { const s = (await kv.get('ai-prefs').catch(() => null)) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {}, blocked: s.blocked || {} }; }
 /** 이 키로는 못 쓰는 모델로 확인된 것(예: Gemini 무료 등급에서 Gemini 4 Carbon·Argon). 고르는 칸에서 '유료 키 필요'로 보임 */
 async function markBlocked(provider, id) {
   const s = await prefs(); const list = s.blocked[provider] || [];
