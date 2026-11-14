@@ -16,9 +16,10 @@ const sfnt = (tables) => {
   return Uint8Array.from([...head, ...dir, ...body]);
 };
 /**
- * chars: 글자마다 단순 글리프. extra: 글자표에 없는 글리프(GSUB 대체 결과), comp: [글자, 부품 글자] 합성 글리프, sub: [글자, extra 번째] GSUB 한 글자 대체
+ * chars: 글자마다 단순 글리프. extra: 글자표에 없는 글리프(GSUB 대체 결과), comp: [글자, 부품 글자] 합성 글리프, sub: [글자, extra 번째] GSUB 한 글자 대체,
+ * copyright: name 표 저작권(0번) 글
  */
-function tinyFont(chars, { extra = 0, comp = [], sub = [] } = {}) {
+function tinyFont(chars, { extra = 0, comp = [], sub = [], copyright = '' } = {}) {
   const glyphs = [[]]; // 0번 .notdef 비움
   const tri = (k) => [0, 1, ...be(2, 0), ...be(2, 0), ...be(2, 500 + k), ...be(2, 700), ...be(2, 2), ...be(2, 0), 1, 1, 1, ...be(2, 0), ...be(2, 500 + k), ...be(2, -500 - k + 0x10000).slice(0), ...be(2, 0), ...be(2, 0), ...be(2, 700)];
   const cmap = new Map();
@@ -40,6 +41,10 @@ function tinyFont(chars, { extra = 0, comp = [], sub = [] } = {}) {
     loca, glyf,
     post: [...be(4, 0x00030000), ...new Array(28).fill(0)],
   };
+  if (copyright) { // name 표: 윈도 영어 저작권(0번) 한 줄, UTF-16BE
+    const str = [...copyright].flatMap((c) => be(2, c.charCodeAt(0)));
+    tables.name = [...be(2, 0), ...be(2, 1), ...be(2, 18), ...be(2, 3), ...be(2, 1), ...be(2, 0x409), ...be(2, 0), ...be(2, str.length), ...be(2, 0), ...str];
+  }
   if (sub.length) {
     // GSUB: 찾아보기 1개(종류 1, 형식 2): sub의 글자 → extra 글리프
     const cov = [...be(2, 1), ...be(2, sub.length), ...sub.flatMap(([c]) => be(2, cmap.get(c.codePointAt(0))))];
@@ -161,4 +166,20 @@ test('글꼴 함께 담기(brotli가 없는 브라우저): 우리 글꼴 목록�
     assert.equal(files['assets/' + /url\(([^)]+)\)/.exec(faces[0])[1]].byteLength, woff2ish.byteLength, '원본 자리는 받은 woff2 그 파일(alt woff는 담지 않음)');
     for (const k of Object.keys(files).filter((x) => x.startsWith('assets/fonts/'))) assert.ok((files['assets/fonts.css'] + files['assets/theme.css']).includes(k.slice(7)), '가리키지 않는 글꼴 파일은 담지 않음: ' + k);
   } finally { globalThis.DecompressionStream = saved.D; globalThis.CompressionStream = saved.C; }
+});
+
+test('라이선스: 저작권·라이선스 설명에 예약 글꼴 이름(Reserved Font Name)이 있는 글꼴은 줄이지 않고 원본만 담는다', async () => {
+  const chars = ['A', ...'가나다뷁똠쀍휅꿻뙠땷쏾쭯'], keep = new Set([0xac00]);
+  const rfn = tinyFont(chars, { copyright: "Copyright 2026 Someone, with Reserved Font Name 'Tiny'." });
+  const free = tinyFont(chars, { copyright: 'Copyright 2026 Someone.' });
+  assert.equal(await subsetFont(rfn, keep), null, '예약 글꼴 이름 → 줄이지 않음');
+  assert.ok(await subsetFont(free, keep), '예약 글꼴 이름이 없으면 줄임');
+  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  const fakeFetch = async (url) => (/\.(woff2?|ttf)$/.test(url) ? { ok: true, arrayBuffer: async () => rfn.slice().buffer } : { ok: true, text: async () => "@font-face{font-family:'X';src:url(./x.ttf) format('truetype')}" });
+  const { files, report } = await E.bundleFonts(r.files, { fetch: fakeFetch });
+  assert.ok(report.ok, report.skipped.join());
+  assert.equal(report.subset, 0, '줄인 파일 없음');
+  assert.equal(new Set(files['assets/fonts.css'].match(/@font-face\s*\{[^}]*\}/g)).size, 1, '원본 선언 하나만(예전과 같음)');
+  assert.doesNotMatch(files['assets/fonts.css'], /unicode-range/);
+  assert.match(files._headers, /\/assets\/fonts\/\*\n {2}Cache-Control: public, max-age=31536000, immutable/, '캐시는 그대로');
 });

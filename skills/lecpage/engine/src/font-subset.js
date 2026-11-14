@@ -3,6 +3,7 @@
 // 대체 글리프(GSUB, 세로쓰기 문장부호 등)는 원본과 같습니다. 비운 글자는 원본 파일이 맡습니다(font-bundle.js가 둘을 함께 선언).
 // 읽기: TrueType·CFF 글꼴(.ttf·.otf), WOFF(zlib), WOFF2(brotli 압축 풀기가 되는 곳: Node 22. 지금 브라우저는 안 되어 null)
 // 쓰기: brotli 압축이 되면 WOFF2(표 변환 없음), 아니면 WOFF. 외부 의존성 없음(zlib은 vendor/fflate.js)
+// 라이선스: OFL 글꼴 가운데 '예약 글꼴 이름(Reserved Font Name)'이 적힌 글꼴은 줄이지 않음(hasReservedName)
 import { unzlibSync, zlibSync } from '../vendor/fflate.js';
 
 const u16 = (b, o) => (b[o] << 8) | b[o + 1];
@@ -546,6 +547,24 @@ async function writeWoff2(flavor, sfnt) {
 
 const DROP = new Set(['DSIG', 'FFTM', 'hdmx', 'LTSH', 'VDMX', 'PCLT']);
 
+/** name 표 → [{ id, text }] (유니코드·윈도는 UTF-16BE, 매킨토시는 한 바이트) */
+export function nameRecords(t) {
+  const out = []; if (!t || t.length < 6) return out;
+  const n = u16(t, 2), base = u16(t, 4);
+  for (let i = 0; i < n; i++) {
+    const r = 6 + i * 12, pid = u16(t, r), id = u16(t, r + 6), len = u16(t, r + 8), off = base + u16(t, r + 10);
+    const b = t.subarray(off, off + len); let text = '';
+    if (pid === 1) text = String.fromCharCode(...b); else for (let k = 0; k + 1 < b.length; k += 2) text += String.fromCharCode(u16(b, k));
+    out.push({ id, text });
+  }
+  return out;
+}
+/**
+ * OFL의 '예약 글꼴 이름(Reserved Font Name)'이 있는 글꼴인지(저작권·라이선스 설명 nameID 0·13).
+ * 이런 글꼴을 고친 판(글자를 줄인 파일 포함)은 원래 이름으로 낼 수 없어(OFL 3항) 줄이지 않고 원본만 담음
+ */
+export const hasReservedName = (tables) => nameRecords(tables.get('name')).some((r) => (r.id === 0 || r.id === 13) && /reserved\s+font\s+names?/i.test(r.text));
+
 /**
  * 글꼴을 keep 글자만 남긴 같은 글꼴로.
  * @param bytes 글꼴 파일(woff2·woff·ttf·otf)
@@ -555,7 +574,7 @@ const DROP = new Set(['DSIG', 'FFTM', 'hdmx', 'LTSH', 'VDMX', 'PCLT']);
  */
 export async function subsetFont(bytes, keep, o = {}) {
   const font = await readFont(bytes);
-  if (!font) return null;
+  if (!font || hasReservedName(font.tables)) return null; // 예약 글꼴 이름이 있으면 원본만(줄인 판을 같은 이름으로 내지 않음)
   const T = new Map(font.tables);
   for (const x of ['CFF2', 'COLR', 'SVG ', 'sbix', 'CBDT', 'EBDT']) if (T.has(x)) return null; // 색·비트맵·가변 CFF는 그대로 둠
   const tt = T.has('glyf') && T.has('loca'), cff = T.has('CFF ');
