@@ -171,7 +171,7 @@ export function parseGoogleModels(md) {
 }
 
 // ── 검사 ──
-const count = (models) => Object.fromEntries(PROVS.map((p) => [p, models.filter((m) => provOf(m.id) === p).length]));
+const count = (models) => Object.fromEntries(PROVS.map((p) => [p, models.filter((m) => m && typeof m.id === 'string' && provOf(m.id) === p).length]));
 /** Gemini 무료 등급 칸만 따로 검사(틀리면 그 칸만 앞 판 값을 씀) */
 export function checkGemini(g, prev) {
   const errs = [];
@@ -268,7 +268,7 @@ export function scanNames(files) {
 }
 /** 찾은 이름 중 지금 목록(값표·Gemini 모델 문서)에 없는 것 */
 export function missingNames(found, c) {
-  const have = new Set((c.models || []).map((m) => normId(m.id.split('/').slice(1).join('/'))));
+  const have = new Set((c.models || []).filter((m) => m && typeof m.id === 'string').map((m) => normId(m.id.split('/').slice(1).join('/'))));
   for (const x of c.geminiDocs?.current || []) have.add(normId(x));
   const prev = new Set((c.geminiDocs?.previous || []).map(normId));
   const by = new Map();
@@ -284,7 +284,7 @@ export function missingNames(found, c) {
 /** 앱 규칙(rankModels)으로 회사별 추천을 어림: 그 회사 모델 전부를 키의 목록으로 보고 고름 */
 export function simulateRecs(c, now = Date.now()) {
   const cat = fromFile(JSON.parse(serialize(c)));
-  const list = (p) => c.models.filter((m) => provOf(m.id) === p).map((m) => ({ id: m.id.slice(p.length + 1) }));
+  const list = (p) => (c.models || []).filter((m) => m && typeof m.id === 'string' && provOf(m.id) === p).map((m) => ({ id: m.id.slice(p.length + 1) }));
   const rec = (prov, p, freeTier) => (rankModels(prov, list(p), { cat, freeTier, now }).find((r) => r.rec) || {}).id || '';
   return { openai: rec('openai', 'openai', false), anthropic: rec('anthropic', 'anthropic', false), gemini: rec('gemini', 'google', false), geminiFree: rec('gemini', 'google', true) };
 }

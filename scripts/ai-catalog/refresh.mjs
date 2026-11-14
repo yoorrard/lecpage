@@ -72,7 +72,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   const problems = [], notes = [];
   if (prevText && !prev) problems.push(`지금 ${OUT}을 읽지 못했어요(모양이 깨짐). 이번 판은 앞 판과 견주지 않고 만들어요.`);
   // 받기 실패: 연결·혼잡(일시적)은 참고로, 4xx·모양이 다름(주소가 바뀌었거나 형식이 바뀜)은 사람이 볼 일로
-  const failed = (label, e) => (e?.hard || e instanceof SyntaxError || e?.shape ? problems : notes).push(`${label}을 받지 못했어요(${why(e)}). 앞 판 값을 그대로 써요.`);
+  const failed = (label, e) => (e?.hard || e instanceof SyntaxError || e?.shape ? problems : notes).push(`${label} 받지 못했어요(${why(e)}). 앞 판 값을 그대로 써요.`);
 
   // 1) 모으기
   const got = {}; const ok = { openrouter: false, modelsdev: false, googlePricing: false, googleModels: false };
@@ -81,11 +81,11 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
     const r = await fetchBody(fetchFn, SOURCES.openrouter, { json: true, headers: { origin: ORIGIN }, pause });
     got.or = parseOpenRouter(r.body, today); orHeaders = r.headers; ok.openrouter = true;
     if (got.or.dropped > Math.max(10, r.body.data.length * 0.1)) problems.push(`OpenRouter 목록에서 모양이 이상한 줄이 ${got.or.dropped}개예요(형식이 바뀌었을 수 있어요).`);
-  } catch (e) { if (/data 배열/.test(e.message)) e.shape = true; failed('OpenRouter 모델 목록', e); delete got.or; }
+  } catch (e) { if (/data 배열/.test(e.message)) e.shape = true; failed('OpenRouter 모델 목록을', e); delete got.or; }
   try {
     const r = await fetchBody(fetchFn, SOURCES.modelsdev, { json: true, pause });
     got.md = parseModelsDev(r.body, today); ok.modelsdev = true;
-  } catch (e) { if (/회사 목록/.test(e.message)) e.shape = true; failed('models.dev 목록', e); delete got.md; }
+  } catch (e) { if (/회사 목록/.test(e.message)) e.shape = true; failed('models.dev 목록을', e); delete got.md; }
   const google = async (urls, parse, label, key) => {
     let lastErr;
     for (const u of urls) {
@@ -96,7 +96,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
         got[key] = parse(r.body); ok[label] = true; return;
       } catch (e) { lastErr = e; }
     }
-    failed(label === 'googlePricing' ? 'Gemini 가격표' : 'Gemini 모델 문서', lastErr);
+    failed(label === 'googlePricing' ? 'Gemini 가격표를' : 'Gemini 모델 문서를', lastErr);
   };
   await google(SOURCES.googlePricing, parseGooglePricing, 'googlePricing', 'pricing');
   await google(SOURCES.googleModels, parseGoogleModels, 'googleModels', 'docs');
@@ -119,7 +119,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   const view = final || catalog; // 거부됐으면 앞 판 기준(앞 판도 없으면 새 판)
   const facts = repo || repoFacts(root);
   for (const m of missingNames(scanNames(facts.files), view)) {
-    problems.push(`문서·코드에 적힌 모델 이름 \`${m.id}\`이 지금 목록에 없어요${m.previous ? '(Gemini 문서의 이전 모델로 옮겨짐)' : ''}: ${m.where.join(', ')}. 이름이 바뀌었으면 안내 문구와 주석을 고쳐 주세요.`);
+    problems.push(`문서·코드에 적힌 모델 이름이 지금 목록에 없어요${m.previous ? '(Gemini 문서의 이전 모델로 옮겨짐)' : ''}: \`${m.id}\` — ${m.where.join(', ')}. 이름이 바뀌었으면 안내 문구와 주석을 고쳐 주세요.`);
   }
   const recs = simulateRecs(view, now.getTime());
   // 어제 앞 판으로 본 추천과 견줌: 자료가 바뀐 것과 '나온 지 2주' 창이 지난 것 모두 알림
@@ -130,7 +130,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
     else if (before && before[k] && before[k] !== recs[k]) problems.push(`${RN[k]} 추천이 바뀌었어요: ${before[k]} → ${recs[k]}. 앱은 알아서 따라가요. 문서(ai-facts)의 추천 이름과 안내 문구를 확인해 주세요.`);
   }
   const pg = prev?.geminiFree, ng = view.geminiFree;
-  if (pg && ng) {
+  if (pg && ng && [pg.free, pg.paidOnly, ng.free, ng.paidOnly].every(Array.isArray)) {
     const add = ng.free.filter((c) => !pg.free.includes(c)), del = pg.free.filter((c) => !ng.free.includes(c));
     const addP = ng.paidOnly.filter((c) => !pg.paidOnly.includes(c)), delP = pg.paidOnly.filter((c) => !ng.paidOnly.includes(c));
     if (add.length || del.length || addP.length || delP.length) problems.push(`Gemini 무료 등급 목록이 바뀌었어요(무료 +${add.join(',') || '없음'} −${del.join(',') || '없음'} · 유료 전용 +${addP.join(',') || '없음'} −${delP.join(',') || '없음'}). 앱은 알아서 따라가요. 키 연결 창의 Gemini 안내(ai-guides.jsx·AiConnect.jsx)가 맞는지 봐 주세요.`);
@@ -155,7 +155,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
     }
     const links = await Promise.all(facts.urls.map(async (u) => ({ u, r: await checkLink(fetchFn, u) })));
     for (const { u, r } of links) {
-      if (r.level === 'bad') problems.push(`앱이 여는 주소 ${u}가 열리지 않아요(${r.msg}). ai.js의 PROVIDERS·CHATBOTS 주소와 키 안내(ai-guides.jsx)를 고쳐 주세요.`);
+      if (r.level === 'bad') problems.push(`앱이 여는 주소가 열리지 않아요(${r.msg}): ${u}. ai.js의 PROVIDERS·CHATBOTS 주소와 키 안내(ai-guides.jsx)를 고쳐 주세요.`);
       else if (r.level === 'unknown') notes.push(`주소 확인 못 함 ${u}: ${r.msg}`);
     }
   } else notes.push('주소·CORS 점검을 건너뛰었어요(--no-check).');

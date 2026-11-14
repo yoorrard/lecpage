@@ -167,3 +167,35 @@ Worker → **Settings → Build → Build watch paths**
 3. 앱을 빌드할 때 `VITE_SHEET_TEMPLATE`에 그 주소를 넣습니다(GitHub Pages 미러는 저장소 변수 `LECPAGE_SHEET_TEMPLATE`).
 - 그러면 앱의 안내가 "시트 사본 만들기 → 웹 앱으로 배포 → 주소 붙여넣기"로 줄어듭니다. `Code.gs`가 바뀌면 틀도 새로 만들어 주소를 바꿉니다.
 - 틀에는 자료를 넣지 않습니다. 사본은 강사 계정에 만들어지고 운영자는 볼 수 없습니다.
+
+## 12. AI 정보 매일 갱신 (자동, 2026-11-14부터)
+
+모델 값·출시일·Gemini 무료 등급은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
+
+- **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 바뀐 것이 없으면 커밋하지 않습니다. 검사에 하나라도 걸리면 그 파일도 그대로 둡니다.
+- **배포**: 봇 커밋도 Cloudflare Workers Builds가 다시 배포합니다(`app/*` 감시 경로, 하루 1번 이하라 무료 빌드 시간 월 3,000분 중 한 달 60분 안팎). GitHub Actions의 토큰으로 올린 커밋은 다른 워크플로를 깨우지 않아 GitHub Pages 미러는 다음 사람 커밋 때 함께 반영됩니다(미러는 예비용이라 괜찮음).
+- **권한**: 저장소 기본 권한이 읽기 전용(§6)이어도, 이 워크플로는 필요한 권한(`contents: write`·`issues: write`)만 스스로 적어 두어 동작합니다.
+- **main 규칙**: 지금 규칙(삭제·강제 push 금지)과 맞습니다(빨리 감기로만 올리고, 그사이 main이 바뀌면 다시 얹어 세 번까지). §6처럼 'PR 필수'를 켜면 봇의 바로 올리기가 막히니, 그때는 이 워크플로를 규칙의 예외(우회 목록에 GitHub Actions)로 두거나 끕니다.
+
+### 12.1 이슈 '[자동] AI 정보 점검 필요'가 오면
+
+이슈 본문의 '사람이 볼 일'을 위에서부터 봅니다. 같은 문제가 계속되면 댓글이 다시 달리지 않습니다(다 고친 뒤 이슈를 닫으면 됩니다).
+
+| 이슈 문구 | 뜻 | 할 일 |
+|---|---|---|
+| 문서·코드에 적힌 모델 이름이 지금 목록에 없어요 | 화면 안내·주석에 적힌 모델이 사라졌거나 이름이 바뀜 | 적힌 파일:줄의 문구를 지금 이름으로. 일부러 옛 이름을 둘 줄에는 `ai-catalog-ok` 주석 |
+| … 추천이 바뀌었어요: A → B | 앱이 고르는 모델이 바뀜(앱은 알아서 따라감) | 안내 문구에 옛 추천 이름이 있으면 고침. 그 회사 공식 문서의 권장과 맞는지 한 번 봄 |
+| Gemini 무료 등급 목록이 바뀌었어요 | 무료 키로 되는 모델이 늘거나 줄었음 | `ai-guides.jsx`(Gemini 한 줄·무료로 쓸 때)와 `AiConnect.jsx` 무료 키 안내가 맞는지 |
+| … 브라우저에서 바로 부를 수 없게 바뀌었어요 | 그 회사 API가 lecpage.com의 CORS 사전 요청을 거절 | 그 회사 키 연결이 안 됨. 공식 문서를 확인하고 `ai.js`(머리글)·안내를 고치거나, 그동안 키 연결 창에서 그 회사를 뒤로 |
+| 앱이 여는 주소가 열리지 않아요(404) | 키·결제 화면, 쓰던 AI 창 주소가 바뀜 | `ai.js`의 `PROVIDERS`(keyUrl·billingUrl)·`CHATBOTS` 주소와 키 안내 |
+| …을 받지 못했어요(404 등) · 표가 검사에 걸려 앞 판 값을 썼어요 | 출처 주소나 문서 형식이 바뀜 | `scripts/ai-catalog/lib.mjs`의 `SOURCES`·해석 함수를 고치고 `node --test "scripts/ai-catalog/test/*.test.mjs"` |
+| 검사에 걸려 …을 바꾸지 않았어요 | 받은 자료가 이상함(급감·값 오류 등). 앱은 앞 판으로 그대로 동작 | '갱신을 거부한 까닭'을 보고, 진짜 변화(예: 회사가 모델을 크게 정리)면 `LIMITS`를 그 판만 풀어 한 번 돌림. 아니면 다음 날 다시 |
+
+'참고' 칸(봇 확인 화면 403, 일시적 연결 실패, 새로 생긴 모델)은 할 일이 아닙니다. 매일 결과는 Actions → AI catalog → 실행 → Summary에서 봅니다.
+
+### 12.2 직접 돌리기·끄기
+
+- 바로 한 번: Actions → **AI catalog** → **Run workflow**. 내 PC에서는 `npm run ai-catalog`(`--dry` 파일을 쓰지 않음, `--no-check` 주소·CORS 점검 건너뜀). 프록시 뒤라면 `NODE_USE_ENV_PROXY=1`.
+- 잠깐 끄기: Actions → AI catalog → **⋯ → Disable workflow**. 앱은 마지막 `ai-catalog.json`과 OpenRouter 실시간 목록으로 그대로 동작합니다.
+- 아주 끄기: 워크플로 파일을 지웁니다. `ai-catalog.json`을 지워도 앱은 예전처럼 실시간 목록 → 이름 규칙으로 동작합니다.
+- 공개 저장소의 예약 실행은 저장소에 60일 동안 활동이 없으면 GitHub가 멈춥니다. 멈추면 Actions에서 다시 켭니다.

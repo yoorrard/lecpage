@@ -51,7 +51,7 @@ export function fromFile(j) {
   if (!j || typeof j !== 'object' || j.schema !== 1 || !Array.isArray(j.models)) return null;
   const map = new Map();
   const put = (x, free) => {
-    if (!x || typeof x.id !== 'string' || x.id.length > 120) return;
+    if (!x || typeof x.id !== 'string' || x.id.length > 120 || !/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/.test(x.id)) return;
     const pin = free ? 0 : num(x.in), pout = free ? 0 : num(x.out);
     if (!okPrice(pin) || !okPrice(pout)) return;
     const created = typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? Date.parse(x.date + 'T00:00:00Z') || 0 : 0;

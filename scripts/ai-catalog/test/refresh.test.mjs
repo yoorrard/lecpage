@@ -213,7 +213,7 @@ test('run: 이름·CORS·주소 점검이 어긋나면 사람이 볼 일로(같�
   const a = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gemini-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
   assert.ok(a.problems.some((p) => /gemini-9-zircon/.test(p)));
   assert.ok(a.problems.some((p) => /Claude 만들기.*허용 출처가 없음/.test(p)));
-  assert.ok(a.problems.some((p) => /aistudio\.example\/apikey가 열리지 않아요\(404\)/.test(p)));
+  assert.ok(a.problems.some((p) => /열리지 않아요\(404\): https:\/\/aistudio\.example\/apikey/.test(p)));
   const b = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gemini-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
   assert.equal(a.digest, b.digest);
   const blocked = await run({ fetchFn: fakeNet({ link: 403 }), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
