@@ -1,6 +1,7 @@
 # Cloudflare Workers 정적 자산(기본 주소)에서 적용되는 보안 헤더. GitHub Pages 미러는 이 파일을 무시하고 index.html의 meta CSP만 씁니다.
 # 앱 화면(/, /index.html, /404.html)은 다른 사이트가 틀(iframe)에 넣지 못하게 하고, 앱이 틀로 보여 주는 효과 미리보기(/fx-demo)와
 # 예시(/examples)는 같은 출처에서만 틀에 넣을 수 있게 합니다. 이 CSP는 index.html의 meta CSP에 더해집니다(둘 다 지켜야 함).
+# 앱 HTML의 no-transform: Cloudflare가 HTML을 고치지 못하게 함(웹 분석 스크립트 자동 삽입 등. 처리방침상 분석 없음)
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -11,15 +12,17 @@
 /
   Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Frame-Options: DENY
+  Cache-Control: no-cache, no-transform
 
 /index.html
   Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Frame-Options: DENY
-  Cache-Control: no-cache
+  Cache-Control: no-cache, no-transform
 
 /404.html
   Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   X-Frame-Options: DENY
+  Cache-Control: no-cache, no-transform
 
 /fx-demo/*
   Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'
