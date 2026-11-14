@@ -2,6 +2,7 @@
 // 키와 교재는 운영자 서버로 가지 않고, 브라우저에서 AI 회사로 바로 갑니다.
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
+import { TIER_KO, catalogLoader, rankModels, geminiPaidOnly } from './ai-catalog.js';
 
 // 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 버튼으로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소·오류 모양은 각 회사 공식 문서와 맞춰 봄(2026-11-14, 근거는 docs/research/ai-facts-2026-11-14.md).
 // OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
@@ -253,80 +254,18 @@ async function listRaw(provider, key, signal) {
 }
 // ── 모델 등급과 추천 ──
 // 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Astra·GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5·Sonnet 5.5·Haiku 5.5,
-// Gemini 4 Carbon·Argon·Hydrogen — Gemini 4부터는 Pro·Flash라는 이름이 없음). 이름으로 고르면 금방 틀리므로
-// 가격과 출시일을 OpenRouter 공개 목록에서 그때그때 읽어 등급을 매깁니다(키 없이 읽히고 운영자 서버를 거치지 않음). 못 읽으면 이름으로 어림.
-//   등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
+// Gemini 4 Carbon·Argon·Hydrogen — Gemini 4부터는 Pro·Flash라는 이름이 없음). 이름으로 고르면 금방 틀리므로 값과 출시일로 등급을 매깁니다.
+// 값표(카탈로그)와 규칙은 ai-catalog.js 한 곳: 같은 출처의 ai-catalog.json(하루 한 번 자동으로 모음, scripts/ai-catalog) → OpenRouter 공개 목록이 오면 덮어씀
+// → 둘 다 없으면 이름으로 어림. 키와 교재는 보내지 않음.
 //   추천 = 고품질 등급에서 가장 새 모델(나온 지 2주가 안 된 것은 뒤로). 교재를 읽고 연수 흐름을 짜는 일은 가벼운 모델에서 결과가 눈에 띄게 단순해짐
 //   공식 문서와 맞춰 봄(2026-11-14): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5",
-//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 4 Hydrogen(2026-11-12 출시)·3.8 Flash 등은 됨 → 무료 키는 처음 한 번 실패한 뒤
-//   표준 등급에서 고른 모델을 기억(Hydrogen은 나온 지 2주가 지나는 11-26부터 추천으로 올라옴)
-// 글을 쓰는 대화 모델이 아닌 것(음성·그림·영상·음악·임베딩·에이전트·결정 API 전용)과 승인받은 곳만 쓰는 모델(cyber·rosalind)
-const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|translate|search|instruct|codex|computer|robotics|nano|banana|omni|learnlm|gemma|guard|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora|veo|lyria|decision|antigravity|cyber|rosalind/i;
-export const TIER_KO = ['가벼움', '표준', '고품질', '최상위'];
-const OR_PREFIX = { openai: 'openai/', gemini: 'google/', anthropic: 'anthropic/', openrouter: '' };
-const PREFER = { anthropic: /opus/, openrouter: /^anthropic\/claude-opus/ };
-const FRESH_MS = 14 * 86400000;
-const normId = (id) => String(id).toLowerCase().replace(/^models\//, '').replace(/\./g, '-').replace(/-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{3})$/, '');
-const tierByPrice = (out) => (out >= 30 ? 3 : out >= 8 ? 2 : out >= 3 ? 1 : 0);
-const tierByName = (id) => (/astra|fable|mythos|ultra|daybreak-red/.test(id) ? 3 : /opus|sonnet|(?:^|[-/])sol(?:-|$)|carbon|argon|(?:^|-)pro(?:-|$)|daybreak-blue/.test(id) ? 2 : /(?:^|[-/.])(?:haiku|luna|mini|lite|small)(?:[-.]|$)/.test(id) ? 0 : 1);
-/** 이름 속 판 번호(가격 목록을 못 읽었을 때 새 모델을 가리는 데 씀): claude-opus-5-5 → 5.05, gpt-6.1-sol → 6.01 */
-const verOf = (id) => { const m = /(?:^|[-/])(\d{1,2})(?:[.-](\d{1,2}))?(?=-|$)/.exec(normId(id)); return m ? +m[1] + (+m[2] || 0) / 100 : 0; };
-let catalogP = null;
-/** @returns {Promise<Map<string,{in:number,out:number,created:number,text:boolean}>>} 열쇠는 normId('회사/모델') */
-function catalog() {
-  if (!catalogP) {
-    catalogP = (async () => {
-      const m = new Map();
-      try {
-        const r = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(8000) });
-        for (const x of (await r.json()).data || []) {
-          if (/:[\w-]+$/.test(x.id)) continue; // :free·:batch 같은 변형
-          const mods = x.architecture?.output_modalities;
-          m.set(normId(x.id), { in: +x.pricing?.prompt * 1e6 || 0, out: +x.pricing?.completion * 1e6 || 0, created: (x.created || 0) * 1000, text: !Array.isArray(mods) || mods.every((t) => t === 'text') });
-        }
-      } catch { catalogP = null; } // 못 읽으면 이번에는 이름으로 어림하고, 다음에 다시 읽음
-      return m;
-    })();
-  }
-  return catalogP;
-}
-/**
- * 목록에 등급·추천·어림 값을 붙이고 고르기 좋은 순서로(맨 앞이 추천).
- * @returns {Promise<Array<{id,label,tier,rec,won,locked,free}>>} won: 사이트 한 번 만들 때 어림 값(원, 입력 1만·출력 1만 4천 토큰, 1달러 1,400원). 무료로 쓰는 연결은 0
- */
+//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 4 Hydrogen(2026-11-12 출시)·3.8 Flash 등은 됨. 어느 모델이 무료 등급에서 되는지는
+//   공식 가격표에서 매일 모은 목록(ai-catalog.json의 geminiFree)을 씀 → 무료 키로 알게 되면 안 되는 모델을 써 보기 전부터 '유료 키 필요'로.
+//   한 번 실패한 모델을 기억하는 것(markBlocked)은 두 번째 안전망
+export { TIER_KO };
+const catalog = catalogLoader();
 async function rank(provider, list, freeTier) {
-  const cat = await catalog(); const now = Date.now();
-  const blockedIds = new Set((await prefs()).blocked[provider] || []);
-  const rows = [];
-  list.forEach((m, i) => {
-    const id = m.id.toLowerCase();
-    if (provider === 'openrouter') {
-      if (freeTier ? !(m.free || id === 'openrouter/free') : !/^(anthropic|openai|google)\//.test(id)) return;
-    } else if (SKIP.test(id) || (provider === 'openai' && (!/^gpt-/.test(id) || /-pro$/.test(id)))) return;
-    if (provider === 'openrouter' && !freeTier && (SKIP.test(id) || /:[\w-]+$/.test(id))) return;
-    const c = cat.get(OR_PREFIX[provider] + normId(id));
-    if (c && !c.text) return;
-    const free = provider === 'openrouter' && !!freeTier;
-    const tier = free ? 0 : c && c.out > 0 ? tierByPrice(c.out) : tierByName(id);
-    const paidOnly = blockedIds.has(m.id); // 이 키로 못 쓴다고 확인된 모델
-    const won = free || provider === 'gemini' || !c ? 0 : Math.max(10, Math.round(((10000 * c.in + 14000 * c.out) / 1e6) * 1400 / 10) * 10);
-    rows.push({ id: m.id, label: m.label || m.id, tier, rec: false, won, locked: paidOnly, free, created: c?.created || 0, i });
-  });
-  // 추천: 고품질 등급(없으면 그 아래에서 가장 높은 등급)에서 고름
-  const usable = rows.filter((r) => !r.locked && !r.free);
-  // Gemini 무료 키(처음 만들 때 알게 됨)는 표준 등급에서 고름: 고품질 등급은 대부분 결제를 등록한 키만 됨(되는 것도 있어 고를 수는 있음)
-  const cap = provider === 'gemini' && freeTier ? 1 : 2;
-  const top = Math.max(-1, ...usable.filter((r) => r.tier <= cap).map((r) => r.tier));
-  const pool = usable.filter((r) => r.tier === top);
-  const pref = PREFER[provider];
-  const score = (r) => [pref && pref.test(r.id.toLowerCase()) ? 0 : 1, r.created && now - r.created < FRESH_MS ? 1 : 0, -r.created, -verOf(r.id), r.id.length, r.i];
-  const cmp = (a, b) => { const x = score(a), y = score(b); for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return x[k] - y[k]; return 0; };
-  const rec = pool.sort(cmp)[0];
-  if (rec) rec.rec = true;
-  const order = { 2: 0, 3: 1, 1: 2, 0: 3 };
-  // 같은 등급 안에서는 추천과 같은 기준(갓 나온 모델은 뒤로)으로: 무료 키가 못 쓰는 모델을 건너뛸 때(generateAuto) 추천과 같은 모델로 내려가게
-  const fresh = (r) => (r.created && now - r.created < FRESH_MS ? 1 : 0);
-  return rows.sort((a, b) => (b.rec - a.rec) || (a.locked - b.locked) || (order[a.tier] - order[b.tier]) || (fresh(a) - fresh(b)) || (b.created - a.created) || (verOf(b.id) - verOf(a.id)) || (a.i - b.i));
+  return rankModels(provider, list, { cat: await catalog(), freeTier, blocked: (await prefs()).blocked[provider] || [] });
 }
 /** 고르는 칸에 보일 이름: '모델 · 추천 · 약 220원' */
 export function modelText(m) {
@@ -500,12 +439,15 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
         try {
           if (!model) model = s.models[provider] || '';
           tried.add(model);
+          // Gemini: 공식 가격표에 '무료 등급에서 안 됨'으로 적힌 모델이 막혔으면 무료 키 → 무료 등급 목록으로 다시 매긴 추천으로 바로(같은 처지의 모델을 또 써 보지 않게)
+          const freeNow = blocked && provider === 'gemini' && !s.free.gemini && geminiPaidOnly(await catalog(), model);
+          if (freeNow) { s.free.gemini = true; list = null; }
           list = list || await models(provider, key, { freeTier: !!s.free[provider] });
           const cur = list.find((m) => m.id === model);
           const rest = list.filter((m) => !tried.has(m.id) && !m.locked);
           // 한도를 다 쓴 것이면 같은 등급 이상에서만 이어감. 더 가벼운 모델은 품질이 떨어지므로 강사에게 물어봄
           // 못 쓰는 모델이면 같은 등급의 다른 모델도 대개 못 쓰므로(무료 키) 바로 아래 등급으로
-          next = blocked ? (cur && rest.find((m) => m.tier < cur.tier)) || rest[0] : allowLight || !cur ? rest[0] : rest.find((m) => m.tier >= cur.tier);
+          next = freeNow ? rest[0] : blocked ? (cur && rest.find((m) => m.tier < cur.tier)) || rest[0] : allowLight || !cur ? rest[0] : rest.find((m) => m.tier >= cur.tier);
           if (!next && rest[0]) lightOption = lightOption || { provider, id: rest[0].id, label: rest[0].label };
         } catch { /* 목록을 못 받으면 넘기지 않음 */ }
         if (!next) throw e;

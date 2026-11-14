@@ -1,0 +1,467 @@
+{
+ "data": [
+  {
+   "id": "openai/gpt-6-astra",
+   "name": "X: openai/gpt-6-astra",
+   "created": 1788523200,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.00001",
+    "completion": "0.00005"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6-astra:batch",
+   "name": "X: openai/gpt-6-astra:batch",
+   "created": 1788523200,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000005",
+    "completion": "0.000025"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6.1-sol",
+   "name": "X: openai/gpt-6.1-sol",
+   "created": 1790683200,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000002",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6.1-sol:batch",
+   "name": "X: openai/gpt-6.1-sol:batch",
+   "created": 1790683200,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000001",
+    "completion": "0.000005"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6.1-terra",
+   "name": "X: openai/gpt-6.1-terra",
+   "created": 1793016000,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000001",
+    "completion": "0.000005"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6-luna",
+   "name": "X: openai/gpt-6-luna",
+   "created": 1790078400,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "1.0000000000000001e-7",
+    "completion": "5e-7"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-6-sol",
+   "name": "X: openai/gpt-6-sol",
+   "created": 1790078400,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000002",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-5.5",
+   "name": "X: openai/gpt-5.5",
+   "created": 1777032000,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000005",
+    "completion": "0.00003"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-5.4-mini",
+   "name": "X: openai/gpt-5.4-mini",
+   "created": 1773748800,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "7.5e-7",
+    "completion": "0.0000045"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-4o",
+   "name": "X: openai/gpt-4o",
+   "created": 1715601600,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.0000025",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-5-image",
+   "name": "X: openai/gpt-5-image",
+   "created": 1760443200,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "image",
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.00001",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "anthropic/claude-fable-5.2",
+   "name": "X: anthropic/claude-fable-5.2",
+   "created": 1794225600,
+   "context_length": 1000000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000008",
+    "completion": "0.00004"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "anthropic/claude-opus-5.5",
+   "name": "X: anthropic/claude-opus-5.5",
+   "created": 1790078400,
+   "context_length": 1000000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000004",
+    "completion": "0.00002"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "anthropic/claude-sonnet-5.5",
+   "name": "X: anthropic/claude-sonnet-5.5",
+   "created": 1790596800,
+   "context_length": 1000000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000002",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "anthropic/claude-haiku-5.5",
+   "name": "X: anthropic/claude-haiku-5.5",
+   "created": 1791374400,
+   "context_length": 1000000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "1.0000000000000001e-7",
+    "completion": "5e-7"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "anthropic/claude-opus-5",
+   "name": "X: anthropic/claude-opus-5",
+   "created": 1784894400,
+   "context_length": 1000000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000005",
+    "completion": "0.000025"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-4-carbon",
+   "name": "X: google/gemini-4-carbon",
+   "created": 1794312000,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000002",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-4-argon",
+   "name": "X: google/gemini-4-argon",
+   "created": 1791892800,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000002",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-4-hydrogen",
+   "name": "X: google/gemini-4-hydrogen",
+   "created": 1794484800,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.0000015",
+    "completion": "0.0000075"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-3.8-flash",
+   "name": "X: google/gemini-3.8-flash",
+   "created": 1788350400,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "8.3e-7",
+    "completion": "0.00000413"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-3.6-flash",
+   "name": "X: google/gemini-3.6-flash",
+   "created": 1784635200,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "7.5e-7",
+    "completion": "0.00000375"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-3.5-flash-lite",
+   "name": "X: google/gemini-3.5-flash-lite",
+   "created": 1784635200,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "3e-7",
+    "completion": "0.0000025"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-2.5-pro",
+   "name": "X: google/gemini-2.5-pro",
+   "created": 1750161600,
+   "context_length": 1048576,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.00000125",
+    "completion": "0.00001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemini-nano-banana-2.1",
+   "name": "X: google/gemini-nano-banana-2.1",
+   "created": 1791288000,
+   "context_length": 65536,
+   "architecture": {
+    "output_modalities": [
+     "image",
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.0000015",
+    "completion": "0.0000075"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "google/gemma-4-31b-it:free",
+   "name": "X: google/gemma-4-31b-it:free",
+   "created": 1775131200,
+   "context_length": 262144,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0",
+    "completion": "0"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "meta-llama/llama-5-70b:free",
+   "name": "X: meta-llama/llama-5-70b:free",
+   "created": 1777636800,
+   "context_length": 131072,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0",
+    "completion": "0"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openrouter/auto",
+   "created": 1735732800,
+   "pricing": {
+    "prompt": "-1",
+    "completion": "-1"
+   },
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   }
+  },
+  {
+   "id": "openai/GPT-Bad Id",
+   "name": "X: openai/GPT-Bad Id",
+   "created": 1767268800,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000001",
+    "completion": "0.000001"
+   },
+   "description": "<b>ignored</b>"
+  },
+  {
+   "id": "openai/gpt-weird-price",
+   "name": "X: openai/gpt-weird-price",
+   "created": 1767268800,
+   "context_length": 400000,
+   "architecture": {
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "abc",
+    "completion": "1"
+   },
+   "description": "<b>ignored</b>"
+  }
+ ]
+}

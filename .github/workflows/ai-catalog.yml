@@ -1,0 +1,67 @@
+# AI 정보 매일 갱신: 모델 값·출시일·Gemini 무료 등급을 공개 목록에서 모아 app/public/ai-catalog.json을 새로 쓰고,
+# 앱이 기대는 사실(문서·코드의 모델 이름, 키 화면 주소, 브라우저 직접 호출)이 어긋나면 이슈 하나로 알립니다.
+# 자동으로 바꾸는 것은 이 데이터 파일 하나뿐입니다(검사에 걸리면 그것도 그대로). 안내 문구·정책 설명은 사람이 고칩니다.
+# 할 일과 끄는 법: docs/operations.md §12
+name: AI catalog
+on:
+  schedule: [{ cron: '43 19 * * *' }] # 매일 한국 시간 새벽 4시 43분(UTC 19:43). 정각은 몰려서 피함
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: ai-catalog, cancel-in-progress: false }
+jobs:
+  refresh:
+    # 포크에서는 돌지 않음
+    if: github.repository == 'yoorrard/lecpage'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: { contents: write, issues: write }
+    steps:
+      # 액션은 커밋 SHA로 고정(ci.yml과 같은 판)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
+      - name: 모으기·검사·점검
+        id: r
+        run: node scripts/ai-catalog/refresh.mjs --report "$RUNNER_TEMP/ai-report.md"
+      - name: AI 단위 시험(바뀐 파일을 앱 규칙으로 읽어 봄)
+        if: steps.r.outputs.status == 'updated'
+        run: node --test "scripts/ai-catalog/test/*.test.mjs"
+      - name: 데이터 파일만 커밋
+        if: steps.r.outputs.status == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/public/ai-catalog.json
+          if git diff --cached --quiet; then echo '바뀐 것이 없어요'; exit 0; fi
+          git commit -m "AI 정보 자동 갱신($(date -u +%F))"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          g() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" "$@"; }
+          # main 규칙(삭제·강제 push 금지)에 맞게 빨리 감기로만 올림. 그사이 main이 바뀌었으면 위에 다시 얹어 세 번까지
+          for _ in 1 2 3; do
+            if g push origin HEAD:main; then exit 0; fi
+            g pull --rebase origin main || { git rebase --abort || true; echo '다시 얹지 못했어요(내일 다시 돌아요)'; exit 1; }
+          done
+          exit 1
+      - name: 점검 결과를 이슈로(같은 제목이 열려 있으면 바뀐 내용만 댓글)
+        if: ${{ !cancelled() && steps.r.outcome == 'success' && steps.r.outputs.problems != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: '[자동] AI 정보 점검 필요'
+        run: |
+          set -eu
+          report="$RUNNER_TEMP/ai-report.md"
+          digest=$(grep -o 'ai-catalog-digest: [0-9a-f]*' "$report" || true)
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json number,title \
+            --template '{{range .}}{{.number}}{{"\t"}}{{.title}}{{"\n"}}{{end}}' | awk -F'\t' -v t="$TITLE" '$2 == t { print $1; exit }')
+          if [ -z "$num" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$report"
+          elif [ -n "$digest" ] && gh issue view "$num" --repo "$GITHUB_REPOSITORY" --json body,comments --jq '.body, .comments[].body' | grep -qF "$digest"; then
+            echo "같은 내용이 이미 #$num에 있어요"
+          else
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body-file "$report"
+          fi
