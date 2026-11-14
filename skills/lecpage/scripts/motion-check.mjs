@@ -47,7 +47,7 @@ function fxState() {
     const sec = el.closest('.lp-sec,section,header,footer');
     for (const id of ids) {
       const m = el.__lecfx && el.__lecfx[id];
-      const st = !m ? (window.LecFX && window.LecFX.has(id) ? 'idle' : 'unloaded') : m.skipped ? 'skipped' : m.dead ? (el.getAttribute('data-fx-error') === id ? 'failed' : 'stopped') : 'on';
+      const st = !m ? (window.LecFX && window.LecFX.has(id) ? 'idle' : 'unloaded') : m.skipped ? 'skipped' : m.shown ? 'shown' : m.dead ? (el.getAttribute('data-fx-error') === id ? 'failed' : 'stopped') : 'on';
       const r = el.getBoundingClientRect();
       out.push({ id, st, lv: window.LecFX ? window.LecFX.level(el) : null, sec: sec ? (sec.id || String(sec.className).split(' ')[0]) : '', hero: !!el.closest('.lp-hero'), top: Math.round(r.top + scrollY), inView: r.bottom > 0 && r.top < innerHeight && r.width > 0 });
     }
@@ -153,7 +153,8 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
   res.hero = { kind, diffs, loops: heroLoops.map((f) => `${f.id}:${f.st}`), state, motion: await page.evaluate(() => document.documentElement.getAttribute('data-motion')) };
   if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop' && await cssMoving(page, '.lp-hero')) res.hero.kind = kind = 'loop'; // 화소로는 안 잡히는 부드러운 흐름(오로라 등)
   if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop') add('hero-still', `${heroLoops.map((f) => f.id).join(',')} 켜졌는데 ${kind}(${diffs.join(' ')})`);
-  if (!rm && +res.hero.motion >= 1 && kind === 'still') add('hero-no-motion', `움직임 ${res.hero.motion}단계인데 첫 화면이 처음부터 그대로`);
+  // 첫 화면 제목은 효과 스크립트보다 먼저 그려지면 그대로 둠(core shownTitle, 휴대폰 LCP): 그때 첫 화면이 그대로인 것은 문제가 아님
+  if (!rm && +res.hero.motion >= 1 && kind === 'still' && !res.fx.some((f) => f.hero && f.st === 'shown')) add('hero-no-motion', `움직임 ${res.hero.motion}단계인데 첫 화면이 처음부터 그대로`);
   for (const f of res.fx) {
     if (f.st === 'failed') add('fx-failed', `${f.id} @${f.sec}`);
     if (f.st === 'skipped' && !rm && f.lv >= 2) add('fx-skipped', `${f.id} @${f.sec}${f.hero ? '(첫 화면)' : ''} 그 자리 단계 ${f.lv}`);

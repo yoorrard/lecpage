@@ -129,7 +129,17 @@ const block = (sel, map) => `${sel}{${Object.entries(map).map(([k, v]) => `${k}:
 export function themeCSS(design = {}) {
   const preset = presetWithOverrides(design);
   const opts = { accent: design.accent, fonts: design.fonts && pickFontKeys(design.fonts), motion: design.motion };
-  const light = themeTokens(preset, 'light', opts), dark = themeTokens(preset, 'dark', opts);
+  // 큰 강조색 면(마무리 색 띠·교재 표지 쪽·도구 첫 칸): 밝은 화면은 강조색 그대로, 어두운 화면은 카드 바탕에 강조색을 조금 섞은 깊은 면 + 밝은 글자(눈부시지 않게)
+  const light = { ...themeTokens(preset, 'light', opts) }, dark = { ...themeTokens(preset, 'dark', opts) };
+  light['--band-fg'] = light['--primary-foreground']; light['--band-mix'] = '100%';
+  dark['--band-fg'] = dark['--foreground']; dark['--band-mix'] = '26%';
+  // 어두운 무대(교재 '무대' 배치): 밝은 화면은 글자색에 가까운 어두운 면, 어두운 화면은 바탕보다 한 단 깊은 면(밝은 띠로 뒤집히지 않게)
+  light['--stage'] = mix(light['--foreground'], light['--background'], 0.06); light['--on-stage'] = light['--background'];
+  dark['--stage'] = mix(dark['--background'], '#000000', 0.45); dark['--on-stage'] = dark['--foreground'];
+  // 반전 띠(.lp-invert)가 어두운 화면에서 밝은 띠로 바뀌면 눈부심 → 어두운 화면에서는 한 단 떠 있는 어두운 면
+  const darkRaised = { ...dark, '--background': mix(dark['--background'], dark['--foreground'], 0.06), 'color-scheme': 'dark' };
+  // 어두운 장면이 정체인 디자인(밤하늘·유리 실험실·키노트 등)은 밝은 화면에서도 첫 화면과 마무리만 어두운 장면으로 가둠(본문은 밝게)
+  const darkScene = preset.theme === 'dark' ? block(':root[data-theme="light"] :is(.lp-hero,.lp-closing),:root[data-theme="auto"] :is(.lp-hero,.lp-closing)', { ...dark, 'color-scheme': 'dark' }) : '';
   const fonts = { ...preset.fonts, ...(opts.fonts || {}) };
   const pair = FONT_PAIR_BY_ID[design.fontPair];
   const base = baseTokens(preset, opts);
@@ -162,10 +172,11 @@ export function themeCSS(design = {}) {
     // 톤 여정: 섹션마다 밤·새벽·낮 색을 따로 씀(밤하늘 서사 등)
     preset.variants.tones ? block(':root[data-tones] .lp-sec[data-tone="night"]', { ...dark, 'color-scheme': 'dark' }) : '',
     preset.variants.tones ? block(':root[data-tones] .lp-sec[data-tone="dawn"],:root[data-tones] .lp-sec[data-tone="day"]', { ...light, 'color-scheme': 'light' }) : '',
-    // 반전 띠(.lp-invert): 그 자리만 반대 테마의 색을 씀(밝은 쪽 안의 어두운 띠, 어두운 쪽 안의 밝은 띠). 대비는 두 테마 모두 검사된 값
+    // 반전 띠(.lp-invert): 밝은 쪽 안에서는 어두운 띠, 어두운 쪽 안에서는 한 단 떠 있는 어두운 면. 대비는 두 테마 모두 검사된 값
     block(':root[data-theme="light"] .lp-invert,:root[data-theme="auto"] .lp-invert', { ...dark, 'color-scheme': 'dark' }),
-    block(':root[data-theme="dark"] .lp-invert', { ...light, 'color-scheme': 'light' }),
-    `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"] .lp-invert', { ...light, 'color-scheme': 'light' })}}`,
+    block(':root[data-theme="dark"] .lp-invert', darkRaised),
+    `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"] .lp-invert', darkRaised)}}`,
+    darkScene,
   ].filter(Boolean).join('\n');
   return { css, fontLinks: assets.links, preset };
 }

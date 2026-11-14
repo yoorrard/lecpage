@@ -100,7 +100,7 @@ test('첫 화면 밖 전 구간 연출: 단계마다(0 정적 · 1 등장과 가
     // 1단계: 섹션마다 등장(따라 하는 칸은 머리만), 본문 효과는 1단계 이하
     const r1 = build('sel-story', { preset: p.id, motion: 1 }, school), s1 = sections(r1.files['index.html']).filter((s) => s.type !== 'hero');
     for (const [slot, id] of Object.entries(r1.design.effects)) if (!slot.startsWith('hero.')) assert.ok(E.fxInfo(id).level <= 1, `${p.id} 1단계: ${slot}=${id}`);
-    for (const s of s1.filter((x) => /data-calm/.test(x.tag))) { assert.ok(!/data-fx=/.test(s.tag), `${p.id}: 따라 하는 칸 자체에는 효과 없음`); assert.match(s.body, /<header class="lp-head" data-fx="reveal-up"/, `${p.id}: 머리만 등장`); }
+    for (const s of s1.filter((x) => /data-calm/.test(x.tag))) { assert.ok(!/data-fx=/.test(s.tag), `${p.id}: 따라 하는 칸 자체에는 효과 없음`); assert.match(s.body, /<header class="lp-head(?: lp-head--sm)?" data-fx="reveal-up"/, `${p.id}: 머리만 등장`); }
     const modes = new Set(s1.map((s) => /data-fx="reveal-up" data-fx-opts='\{&quot;mode&quot;:&quot;(\w+)&quot;/.exec(s.tag)?.[1]).filter(Boolean));
     assert.ok(modes.size >= 3, `${p.id}: 한 페이지 안에서도 등장 방식이 세 가지 넘게(${[...modes].join()})`);
     // 2단계: 첫 화면 밖에서 효과가 있는 섹션 종류가 셋 넘게, 효과 가짓수도 셋 넘게
@@ -131,7 +131,7 @@ test('효과의 대기 상태: 곧바로 들어가고(전환 없이), 인쇄·�
   const rt = nodeRuntime(), core = rt.read('fx/core.js'), css = rt.read('fx/fx.css');
   assert.match(core, /setAttribute\('data-fx-snap', ''\);\s*t\.setAttribute\('data-fx-pre', ''\);\s*void t\.offsetWidth;\s*t\.removeAttribute\('data-fx-snap'\)/);
   assert.match(css, /\[data-fx-snap\][^{]*\{ transition: none !important; \}/);
-  assert.match(css, /@media print \{\s*\[data-fx-pre\], \[data-fx-pre\] \.fx-reveal-item \{ opacity: 1 !important;/);
+  assert.match(css, /@media print \{\s*\[data-fx-pre\], \[data-fx-pre\] :is\(\.fx-reveal-item, \.fx-wi, \.fx-c\), \.fx-wait \{ opacity: 1 !important;/);
   for (const m of E.ENTER_MODES.filter((x) => x !== 'rise')) assert.ok(css.includes(`.fx-rv-${m}[data-fx-pre]`), m);
   for (const f of ['chalkboard', 'doodle-scribbles']) assert.ok(rt.read(`fx/effects/${f}.js`).includes("'data-fx-snap'"), f);
 });
