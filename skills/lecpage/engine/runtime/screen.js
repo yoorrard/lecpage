@@ -67,29 +67,47 @@
   // ── 참여 QR·주소(파일로 열었거나 미리보기면 안내 문구, 암호 보호면 #k=는 QR에만) ──
   // 손으로 칠 주소는 강사가 넣은 짧은 주소가 있으면 그것을 크게, 원래 주소는 그 아래 작게. QR은 언제나 원래 주소(짧은 주소 서비스가 멈춰도 열림).
   var LOCAL = /^(file|about|blob|data):$/.test(location.protocol);
-  // /screen.html이든 /screen(확장자 없는 주소)이든 그 폴더(= 참가자 화면)를 가리킴
-  var siteUrl = DATA.siteUrl || (LOCAL ? '' : location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, ''));
-  var joinUrl = siteUrl || (LOCAL ? DATA.shortUrl || '' : '');
-  var ul = $('meta[name="lp-unlock"]'), qrUrl = siteUrl ? siteUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+  // localhost·127.x로 연 발표 화면(강사 노트북에서 Node 서버를 켜고 연 경우): 그 주소는 이 컴퓨터에서만 열려 QR을 찍어도 아무도 못 들어옴.
+  // 서버가 같은 와이파이 주소를 알려 주면(/api/lan, 이 컴퓨터에서 온 요청에만) 그 주소를 QR·글자에 쓰고, 모르면 QR 자리에 바꾸는 법을 크게
+  var LOOP = !DATA.siteUrl && !LOCAL && /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(location.hostname);
+  var LOOP_MSG = 'localhost 주소는 이 컴퓨터에서만 열려요. 노트북의 와이파이 주소(예: http://192.168.0.10:8787)로 이 화면을 다시 열면 참가자 QR이 나와요.';
+  var ul = $('meta[name="lp-unlock"]');
   function bare(u) { var s = String(u || '').replace(/^https?:\/\//, '').replace(/\/$/, ''); try { return decodeURI(s); } catch (e) { return s; } }
-  var fullUrl = bare(joinUrl), shortUrl = bare(DATA.shortUrl); if (!fullUrl || shortUrl === fullUrl) shortUrl = '';
-  var qrMarkup = '';
-  // 둘레 여백 4칸(QR 규격의 quiet zone)을 그림 안에 넣음
-  if (qrUrl && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qrUrl); qq.make(); qrMarkup = qq.createSvgTag({ cellSize: 6, margin: 24, scalable: true }); } catch (e) { } }
-  var q = $('[data-qr-join]');
-  if (q) {
-    if (qrMarkup) q.innerHTML = qrMarkup;
-    else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
-  }
+  var siteUrl = '', joinUrl = '', qrUrl = '', fullUrl = '', shortUrl = '', qrMarkup = '';
   // 손으로 칠 주소: 한 줄에 맞춤(fitUrl, 원래 크기의 60%까지 줄임). 안 되면 점·빗금 뒤에서만 줄을 바꿈(조각은 끊지 않음 — 's-'·'lecpage-'에서 끊기지 않게)
   function urlNodes(n, u) {
-    n.textContent = '';
+    n.textContent = ''; n.removeAttribute('data-plain');
     u.replace(/([./])/g, '$1\n').split('\n').filter(Boolean).forEach(function (part, i) { if (i) n.appendChild(doc.createElement('wbr')); n.appendChild(el('span', '', part)); });
   }
-  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) {
-    var u = shortUrl || fullUrl;
-    if (u) urlNodes(n, u); else { n.textContent = '배포하면 여기에 참가자 주소가 나와요.'; n.setAttribute('data-plain', ''); }
-  });
+  /** 참여 주소를 정하고 QR·글자를 그림. lan = 서버가 알려 준 같은 와이파이 주소(http://IP:포트) */
+  function setJoin(lan) {
+    // /screen.html이든 /screen(확장자 없는 주소)이든 그 폴더(= 참가자 화면)를 가리킴
+    var dir = location.pathname.replace(/[^/]*$/, '');
+    siteUrl = DATA.siteUrl || (LOCAL ? '' : LOOP ? (lan ? lan + dir : '') : location.origin + dir);
+    joinUrl = siteUrl || (LOCAL ? DATA.shortUrl || '' : '');
+    qrUrl = siteUrl ? siteUrl.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+    fullUrl = bare(joinUrl); shortUrl = bare(DATA.shortUrl); if (!fullUrl || shortUrl === fullUrl) shortUrl = '';
+    qrMarkup = '';
+    // 둘레 여백 4칸(QR 규격의 quiet zone)을 그림 안에 넣음
+    if (qrUrl && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qrUrl); qq.make(); qrMarkup = qq.createSvgTag({ cellSize: 6, margin: 24, scalable: true }); } catch (e) { } }
+    var q = $('[data-qr-join]');
+    if (q) {
+      q.textContent = '';
+      if (qrMarkup) q.innerHTML = qrMarkup;
+      else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', LOOP ? LOOP_MSG : '배포하면 QR이 나와요.'));
+      var zb = q.closest('[data-join-zoom]'); if (zb) zb.toggleAttribute('data-loop', LOOP && !qrUrl);
+    }
+    [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) {
+      var u = shortUrl || fullUrl;
+      if (u) urlNodes(n, u); else { n.textContent = LOOP ? '이 컴퓨터 밖에서는 열리지 않는 주소예요' : '배포하면 여기에 참가자 주소가 나와요.'; n.setAttribute('data-plain', ''); }
+    });
+    [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
+    var bq = big && $('[data-qr-big]', big); if (bq) bq.textContent = '';
+    if (zoom && big) {
+      var off = !qrMarkup || !big.showModal;
+      zoom.disabled = off; var zt = $('.lp-qr-zoom-t', zoom); if (zt) zt.hidden = off; if (jo) jo.hidden = off;
+    }
+  }
   function fitUrl(n) {
     if (!n || n.hasAttribute('data-plain') || !n.getClientRects().length) return;
     n.style.fontSize = ''; n.removeAttribute('data-wrap');
@@ -104,17 +122,21 @@
     }
   }
   function fitUrls() { [].forEach.call(doc.querySelectorAll('[data-join-url]'), fitUrl); }
-  [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
   // QR 크게 보기: 뒷자리에서도 찍히게 화면 가득(QR 한 변은 찍는 거리의 1/10쯤이 필요)
   var zoom = $('[data-join-zoom]'), big = $('[data-joinbig]'), jo = $('[data-join-open]');
-  function openBig() { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; if (!big.open) big.showModal(); fitUrl($('[data-join-url]', big)); }
-  if (zoom && big) {
-    if (!qrMarkup || !big.showModal) { zoom.disabled = true; var zt = $('.lp-qr-zoom-t', zoom); if (zt) zt.hidden = true; if (jo) jo.hidden = true; }
-    else {
-      zoom.addEventListener('click', openBig); if (jo) jo.addEventListener('click', openBig);
-      big.addEventListener('click', function (e) { if (e.target === big) big.close(); });
-    }
+  function openBig() { if (!qrMarkup) return; var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; if (!big.open) big.showModal(); fitUrl($('[data-join-url]', big)); }
+  setJoin('');
+  if (zoom && big && big.showModal) {
+    zoom.addEventListener('click', openBig); if (jo) jo.addEventListener('click', openBig);
+    big.addEventListener('click', function (e) { if (e.target === big) big.close(); });
   }
+  if (LOOP && window.fetch) {
+    fetch('/api/lan', { cache: 'no-store', credentials: 'omit' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
+      var u = j && j.urls && j.urls[0];
+      if (typeof u === 'string' && /^http:\/\/[\d.]+:\d+\/?$/.test(u)) { setJoin(u.replace(/\/$/, '')); if (typeof fitRail === 'function') fitRail(); fitUrls(); }
+    }, function () { });
+  }
+
 
   // ── 무대: 뽑힌 이름·모둠을 크게 ──
   var stage = $('[data-tool-stage]');

@@ -121,6 +121,48 @@ test('node: serves the static site safely and keeps the API on the same origin',
   } finally { await s.close(); }
 });
 
+test('node: 다시 배포해도 옛 스크립트와 섞이지 않게(이름이 같은 파일은 쓸 때마다 확인 → 304), https로 내보낼 때만 upgrade-insecure-requests', async () => {
+  const site = tmpDir('lec-static2-');
+  fs.mkdirSync(path.join(site, 'assets'));
+  fs.writeFileSync(path.join(site, 'index.html'), '<!doctype html><p>hi');
+  fs.writeFileSync(path.join(site, 'assets', 'lecpage.js'), 'window.v=1');
+  const s = await startNodeServer({ adminKey: KEY, staticDir: site });
+  const behind = await startNodeServer({ adminKey: KEY, staticDir: site, trustedProxies: 1 });
+  try {
+    const js = await fetch(s.url + '/assets/lecpage.js');
+    assert.equal(js.headers.get('cache-control'), 'no-cache', '1시간 묵히지 않음');
+    const tag = js.headers.get('etag'); assert.ok(tag);
+    assert.equal((await fetch(s.url + '/assets/lecpage.js', { headers: { 'if-none-match': tag } })).status, 304, '바뀌지 않았으면 본문 없이');
+    fs.writeFileSync(path.join(site, 'assets', 'lecpage.js'), 'window.v=22'); // 연수 중 다시 배포
+    const again = await fetch(s.url + '/assets/lecpage.js', { headers: { 'if-none-match': tag } });
+    assert.equal(again.status, 200); assert.equal(await again.text(), 'window.v=22');
+    assert.match((await fetch(s.url + '/assets/lecpage.js?v=1a2b3c4d')).headers.get('cache-control'), /immutable/, '지문이 붙은 주소만 오래');
+    // http(교실 LAN)에서는 올려 받기 머리글이 없음. 믿는 프록시가 https라고 하면 붙임(머리글을 위조해도 프록시를 믿지 않으면 무시)
+    assert.equal((await fetch(s.url + '/')).headers.get('content-security-policy'), null);
+    assert.equal((await fetch(s.url + '/', { headers: { 'x-forwarded-proto': 'https' } })).headers.get('content-security-policy'), null);
+    assert.equal((await fetch(behind.url + '/', { headers: { 'x-forwarded-proto': 'https' } })).headers.get('content-security-policy'), 'upgrade-insecure-requests');
+    assert.equal((await fetch(behind.url + '/assets/lecpage.js', { headers: { 'x-forwarded-proto': 'https' } })).headers.get('content-security-policy'), null);
+  } finally { await s.close(); await behind.close(); fs.rmSync(site, { recursive: true, force: true }); }
+});
+
+test('node: 같은 와이파이 주소(/api/lan)는 이 컴퓨터에서 연 쪽에만, 127.0.0.1에서만 듣는 서버는 알려 줄 주소 없음', async () => {
+  const site = tmpDir('lec-static3-'); fs.writeFileSync(path.join(site, 'index.html'), '<p>hi');
+  const all = await startNodeServer({ adminKey: KEY, staticDir: site, host: '0.0.0.0' });
+  const local = await startNodeServer({ adminKey: KEY, staticDir: site });
+  try {
+    const os = await import('node:os');
+    const ips = Object.values(os.networkInterfaces()).flat().filter((n) => n && (n.family === 'IPv4' || n.family === 4) && !n.internal && !/^169\.254\./.test(n.address)).map((n) => n.address);
+    const port = all.port;
+    const got = await (await fetch(`http://127.0.0.1:${port}/api/lan`)).json();
+    assert.deepEqual(got.urls.map((u) => new URL(u).hostname).sort(), [...new Set(ips)].slice(0, 3).sort());
+    for (const u of got.urls) assert.match(u, new RegExp(`^http://[\\d.]+:${port}/$`));
+    assert.equal((await fetch(`http://127.0.0.1:${port}/api/lan`)).headers.get('cache-control'), 'no-store');
+    // 프록시를 거쳐 온 요청(바깥)에는 알려 주지 않음
+    assert.deepEqual((await (await fetch(`http://127.0.0.1:${port}/api/lan`, { headers: { 'x-forwarded-for': '203.0.113.9' } })).json()).urls, []);
+    assert.deepEqual(await (await fetch(local.url + '/api/lan')).json(), { urls: [], listen: 'local' });
+  } finally { await all.close(); await local.close(); fs.rmSync(site, { recursive: true, force: true }); }
+});
+
 test('node: retention cleanup removes idle trainings and their files', async () => {
   const s = await startNodeServer({ adminKey: KEY, retentionDays: 1 });
   try {

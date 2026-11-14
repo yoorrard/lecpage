@@ -160,7 +160,7 @@ test('apps-script + sheets.js: two clients sync by polling; admin sees private d
 // ---------------------------------------------------------------- security regressions (2026-11 review)
 const PNG_B64 = Buffer.from(PNG_1PX).toString('base64');
 
-test('apps-script (L11, L1, L3, nicknames): one code per sheet, closed polls, no `by` for the public', async () => {
+test('apps-script (L11, L1, L3, M1, nicknames): one code per sheet, closed polls, no `by` for the public, progress·help only for the owner, values after a reveal', async () => {
   const code = 'SHEET1';
   const other = await call({ a: 'join', code: 'OTHER1', nickname: 'x' });
   assert.equal(other.status, 404); assert.equal(other.error, 'unknown_training', 'a code the sheet was not set up for is refused');
@@ -174,9 +174,15 @@ test('apps-script (L11, L1, L3, nicknames): one code per sheet, closed polls, no
   const late = await call({ a: 'update', code, token: a.token, col: 'answers', id: ans.id, patch: { value: '아니요' } });
   assert.equal(late.status, 409); assert.equal(late.error, 'poll_closed');
   const pub = (await (await fetch(`${url}?a=snapshot&code=${code}&since=0`)).json()).data;
-  assert.ok(pub.answers.length && pub.answers.every((d) => d.by === undefined)); assert.ok(pub.progress.every((d) => d.by === undefined));
+  assert.ok(pub.answers.length && pub.answers.every((d) => d.by === undefined)); assert.equal(pub.progress, undefined, 'progress is not public');
+  assert.ok(pub.answers.every((d) => d.value === '' && d.sealed), 'no values before the reveal');
   const mine = (await call({ a: 'snapshot', code, since: 0, token: a.token })).data;
   assert.equal(mine.answers.find((d) => d.id === ans.id).by, a.id, 'my own answer keeps by');
+  assert.equal(mine.answers.find((d) => d.id === ans.id).value, '예', 'and its value');
+  assert.deepEqual(mine.progress.map((d) => d.status), ['stuck'], 'my own progress comes back');
+  await call({ a: 'setState', code, admin: ADMIN, patch: { ui: { reveal: poll.id } } });
+  const after = (await (await fetch(`${url}?a=snapshot&code=${code}&since=0`)).json()).data;
+  assert.deepEqual(after.answers.map((d) => d.value), ['예'], 'values after the reveal');
 });
 
 test('apps-script (M7, H3, M8): own Drive files only; sharing follows the post; trash on remove and purge', async () => {

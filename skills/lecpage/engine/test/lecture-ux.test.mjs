@@ -9,7 +9,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
-import { startNodeServer, here } from './live-helpers.mjs';
+import { startNodeServer, here, LAN_ARGS, viaLan } from './live-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -27,14 +27,15 @@ const spyQR = () => { let real; Object.defineProperty(window, 'qrcode', { config
 before(async () => {
   site = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-ux-'));
   srv = skip ? null : await startNodeServer({ adminKey: ADMIN, staticDir: site });
-  const r = E.build(blueprint({ provider: 'http', url: srv ? srv.url : 'https://live.example.com', code: 'UXJOIN' }), { runtime: nodeRuntime() });
+  // 교실 와이파이 주소처럼 연 사이트(localhost·127.x로 열면 QR 대신 '와이파이 주소로 다시 여세요'가 나옴 → 아래 따로 봄)
+  const r = E.build(blueprint({ provider: 'http', url: srv ? viaLan(srv.url) : 'https://live.example.com', code: 'UXJOIN' }), { runtime: nodeRuntime() });
   assert.deepEqual(r.errors, []);
   files = r.files; writeFiles(site, r.files);
-  if (!skip) browser = await chromium.launch();
+  if (!skip) browser = await chromium.launch({ args: LAN_ARGS });
 });
 after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmSync(site, { recursive: true, force: true }); });
 
-const open = async (ctx, p) => { const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page._errs = errs; await page.goto(srv.url + '/' + p); return page; };
+const open = async (ctx, p) => { const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page._errs = errs; await page.goto(viaLan(srv.url) + '/' + p); return page; };
 async function login(page) { await page.fill('#lp-key', ADMIN); await page.click('[data-key-go]'); await page.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip'); }
 
 test('만든 쪽: 안내문에 강사 화면 주소·QR이 없고, 참가자 공유 창은 발표 화면만, 발표 화면도 같은 창 정책(COOP)', () => {
@@ -123,7 +124,7 @@ test('휴대폰에서 열기: QR은 누를 때만·떠나면 가림, 찍으면 �
     await c.click('[data-phone-show]');
     assert.ok(await c.locator('[data-phone-qr] svg').isVisible());
     const u = (await c.evaluate(() => window.__qr)).find((x) => /#key=/.test(x));
-    assert.equal(u, srv.url + '/console.html#key=' + encodeURIComponent(ADMIN));
+    assert.equal(u, viaLan(srv.url) + '/console.html#key=' + encodeURIComponent(ADMIN));
     assert.ok(!(await c.content()).includes(ADMIN), 'DOM에 키 글자는 없음');
     await c.evaluate(() => window.dispatchEvent(new Event('blur')));
     assert.ok(await c.locator('[data-phone-qr]').isHidden(), '창을 떠나면 다시 가림');
@@ -133,7 +134,7 @@ test('휴대폰에서 열기: QR은 누를 때만·떠나면 가림, 찍으면 �
     assert.ok(!p.url().includes('key='), '주소에서 키를 지움: ' + p.url());
     assert.deepEqual(await p.evaluate(() => [Object.keys(sessionStorage).filter((k) => k.startsWith('lp-admin:')).length, Object.keys(localStorage).filter((k) => k.startsWith('lp-admin:')).length]), [1, 0]);
     // 틀린 키가 든 QR: 들어가지 않고 열쇠 칸으로
-    const q = await phone.newPage(); await q.goto(srv.url + '/console.html#key=wrong-key-xxxxx');
+    const q = await phone.newPage(); await q.goto(viaLan(srv.url) + '/console.html#key=wrong-key-xxxxx');
     await q.waitForFunction(() => document.querySelector('[data-key-msg]').textContent.length > 0, null, { timeout: 10000 });
     assert.match(await q.textContent('[data-key-msg]'), /QR에 든 관리자 키가 맞지 않아요/);
     assert.ok(!q.url().includes('key='));
@@ -149,7 +150,7 @@ test('연수가 끝나면 맨 위에 [기록·정리로], 확장자 없는 주�
     const f = path.resolve(site, '.' + p); if (!f.startsWith(path.resolve(site)) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(fs.readFileSync(f));
   }).listen(0, '127.0.0.1', () => done(s)); });
-  const base = `http://127.0.0.1:${cs.address().port}/`;
+  const base = viaLan(`http://127.0.0.1:${cs.address().port}/`);
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await ctx.addInitScript(spyQR);
   try {

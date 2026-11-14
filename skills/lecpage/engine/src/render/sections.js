@@ -442,8 +442,9 @@ function prompts(s, ctx) {
 function qa(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '질문') + `<div class="lp-qa" data-qa>
 <form class="lp-compose" data-qa-form><label class="lp-sr" for="${esc(s.id)}-q">질문</label><textarea id="${esc(s.id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 적어 주세요.${s.anonymous ? ' 이름은 보이지 않아요.' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
-<div class="lp-tabs" role="tablist" aria-label="정렬"><button role="tab" aria-selected="true" data-sort="votes">공감순</button><button role="tab" aria-selected="false" data-sort="new">최신순</button></div>
-<ul class="lp-qa-list" data-qa-list aria-live="polite"><li class="lp-empty">아직 질문이 없어요. 첫 질문을 올려 주세요.</li></ul>
+<div class="lp-tabs" role="group" aria-label="정렬"><button type="button" aria-pressed="true" data-sort="votes">공감순</button><button type="button" aria-pressed="false" data-sort="new">최신순</button></div>
+<p class="lp-sr" role="status" data-list-news></p>
+<ul class="lp-qa-list" data-qa-list><li class="lp-empty">아직 질문이 없어요. 첫 질문을 올려 주세요.</li></ul>
 ${liveOff(ctx)}</div>`);
 }
 
@@ -463,7 +464,7 @@ function board(s, ctx) {
   if (!ctx.live && s.externalUrl) return wrap(s, ctx, head(s, ctx, '나눔 보드') + `<p><a class="lp-btn lp-btn-primary" ${href(s.externalUrl)}>보드 열기${icon('external')}</a></p>`);
   const files = boardFiles(s, ctx.bp);
   return wrap(s, ctx, head(s, ctx, '나눔 보드') + `<div class="lp-board" data-board data-max-files="${files ? s.maxFiles : 0}" data-moderation="${s.moderation ? 1 : 0}">
-<div class="lp-board-bar"><div class="lp-tabs" role="tablist" aria-label="보드 분류"><button role="tab" aria-selected="true" data-cat="">전체</button>${cats.map((c) => `<button role="tab" aria-selected="false" data-cat="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div><button class="lp-btn lp-btn-primary" type="button" data-board-write>${icon('sparkle')}<span>글 올리기</span></button></div>
+<div class="lp-board-bar"><div class="lp-tabs" role="group" aria-label="보드 분류"><button type="button" aria-pressed="true" data-cat="">전체</button>${cats.map((c) => `<button type="button" aria-pressed="false" data-cat="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div><button class="lp-btn lp-btn-primary" type="button" data-board-write>${icon('sparkle')}<span>글 올리기</span></button></div>
 <form class="lp-compose lp-board-form" data-board-form hidden>
   <fieldset class="lp-seg"><legend class="lp-sr">분류</legend>${cats.map((c, i) => `<label><input type="radio" name="kind" value="${esc(c.id)}"${i ? '' : ' checked'}><span>${esc(c.label)}</span></label>`).join('')}</fieldset>
   <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
@@ -472,7 +473,8 @@ function board(s, ctx) {
   <p class="lp-small">학생 얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
   <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>닫기</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
 </form>
-<ul class="lp-board-grid" data-board-list aria-live="polite"><li class="lp-empty">아직 올라온 글이 없어요. 첫 글을 올려 주세요.</li></ul>
+<p class="lp-sr" role="status" data-list-news></p>
+<ul class="lp-board-grid" data-board-list><li class="lp-empty">아직 올라온 글이 없어요. 첫 글을 올려 주세요.</li></ul>
 ${liveOff(ctx)}${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}</div>`);
 }
 

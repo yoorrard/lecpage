@@ -12,8 +12,9 @@
 
   var VERSION = '1.0.0';
   var COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
-  var PUBLIC_COLS = ['questions', 'posts', 'help', 'progress', 'polls', 'answers', 'chat'];
-  var PRIVATE_COLS = ['participants', 'attendance', 'survey'];
+  // 연수 코드만 알면 읽는 것(남의 투표 응답은 강사가 결과를 공개한 뒤에만 값이 옴) / 강사만 읽고 참가자는 자기 것만 읽는 것
+  var PUBLIC_COLS = ['questions', 'posts', 'polls', 'answers', 'chat'];
+  var PRIVATE_COLS = ['participants', 'attendance', 'survey', 'help', 'progress'];
   var LIMITS = {
     nickname: 20, name: 40, school: 60, question: 500, post: 1000, chat: 300, help: 300, seat: 20, id: 64, kind: 32,
     pollQuestion: 200, option: 100, answer: 200, notice: 300, timerLabel: 40, fileName: 120, files: 5, license: 40,
@@ -684,6 +685,8 @@
     // Servers show `by` of answers/progress/help only to their owner (and the admin); public events omit it.
     // Same id = same owner, so keep what we knew.
     if (old && old.by != null && doc.by == null) doc.by = old.by;
+    // 결과 공개 전 남의 응답은 값 없이(sealed) 옴: 이미 값을 아는 응답(내 것·공개 뒤 받은 것)을 빈 값으로 덮지 않음
+    if (col === 'answers' && doc.sealed && old && !old.sealed && old.value !== undefined) { doc.value = old.value; delete doc.sealed; }
     if (doc.cid) {
       for (var k in m) {
         if (m[k]._pending && m[k].cid === doc.cid && k !== doc.id) {
@@ -709,9 +712,24 @@
     if (this._state.updatedAt && st.updatedAt && st.updatedAt < this._state.updatedAt) return false;
     var next = assign(defaultState(), st);
     if (same(next, this._state)) return false;
+    var before = this._state;
     this._state = next;
     this._emitChange({ type: 'state', col: null, doc: next });
+    this._fetchRevealed(before, next);
     return true;
+  };
+  /** 강사가 결과를 공개한 투표가 새로 생기면 그 응답 값을 다시 받아 옴(공개 전에는 서버가 값을 보내지 않음).
+   *  같은 순간 수백 명이 한꺼번에 묻지 않게 0~1.5초 흩어서 */
+  C._fetchRevealed = function (before, next) {
+    var self = this;
+    if (this._adminKey || this.provider === 'local' || typeof this._adapter.list !== 'function') return;
+    var fresh = splitList(uiOf(next).reveal).concat(Object.keys(next.pollReveal || {}).filter(function (k) { return next.pollReveal[k]; }))
+      .filter(function (id) { return !ext.revealed(before, id); });
+    if (!fresh.length || this._revealT) return;
+    this._revealT = setTimeout(function () {
+      self._revealT = 0;
+      self._call('list', ['answers', {}], { tries: 2 }).then(function (docs) { (docs || []).forEach(function (d) { self._merge('answers', d); }); }, function () { /* 다음 동기화 때 */ });
+    }, Math.round(Math.random() * 1500));
   };
   C._reset = function () {
     var self = this;

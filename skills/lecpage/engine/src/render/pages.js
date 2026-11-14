@@ -61,6 +61,7 @@ function nowBar(ctx) {
   return `<div class="lp-now" data-now hidden><div class="lp-now-in" role="region" aria-label="지금 진행">
 <span class="lp-now-tag" aria-hidden="true">지금</span>
 <p class="lp-now-text" role="status"><b data-now-main></b><span data-now-sub></span></p>
+<button class="lp-now-more" type="button" data-now-more aria-expanded="false" hidden>더 보기</button>
 <span class="lp-now-timer" data-timer role="timer" hidden></span>
 <a class="lp-btn lp-btn-primary lp-btn-sm lp-now-cta" data-now-cta href="#main" hidden></a>
 </div></div>`;

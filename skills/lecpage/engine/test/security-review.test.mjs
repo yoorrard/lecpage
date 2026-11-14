@@ -100,10 +100,15 @@ test('개인정보 설정: AI 답·가져온 파일이 받을 정보·동의·�
 const require = createRequire(import.meta.url);
 let chromium = null;
 try { ({ chromium } = require('playwright')); } catch { /* 없음 */ }
-test('짧은 주소: 파일로 연 안내문·발표 화면에서도 QR·복사에는 넣지 않음', { skip: !chromium && 'playwright is not installed' }, async () => {
+test('짧은 주소: 파일로 연 안내문·발표 화면에서도 QR·복사에는 넣지 않음 · localhost로 연 쪽은 와이파이 주소로(모르면 바꾸는 법)', { skip: !chromium && 'playwright is not installed' }, async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'lp-short-'));
+  // 올린 사이트(http): 암호 보호 쪽은 Web Crypto가 필요해 이 컴퓨터 주소(127.0.0.1, 안전한 곳)로 엶. 이 주소는 휴대폰에서 열리지 않으므로
+  // QR·복사에는 서버가 알려 주는 같은 와이파이 주소(/api/lan, Node 서버 흉내)를 씀
+  let lan = '';
+  const srv = createServer((q, s) => { if (q.url === '/api/lan') { s.writeHead(200, { 'content-type': 'application/json' }); s.end(JSON.stringify({ urls: lan ? [lan] : [] })); return; } const f = path.join(dir, decodeURIComponent(q.url.split('?')[0].split('#')[0]) || 'index.html'); if (!f.startsWith(dir) || !existsSync(f)) { s.writeHead(404); s.end(); return; } s.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8' }); s.end(readFileSync(f)); }).listen(0);
+  await new Promise((r) => srv.once('listening', r));
+  const base = `http://127.0.0.1:${srv.address().port}/`;
   const browser = await chromium.launch();
-  let srv;
   try {
     const bp = { meta: { title: '연수', shortUrl: 'https://is.gd/tomika' }, sections: [{ type: 'hero' }, { type: 'qa' }], live: { provider: 'local', features: ['qa'] } };
     const r = E.build(bp, { runtime: nodeRuntime() });
@@ -125,13 +130,17 @@ test('짧은 주소: 파일로 연 안내문·발표 화면에서도 QR·복사�
     page = await open(pathToFileURL(path.join(dir, 'screen.html')).href + K);
     await page.waitForFunction(() => document.querySelector('[data-join-url]')?.textContent.includes('is.gd'), null, { timeout: 15000 });
     assert.equal(await page.locator('[data-qr-join] svg').count(), 0);
-    // 올린 사이트(http): QR·복사는 그 페이지 주소, 짧은 주소는 글자로
-    srv = createServer((q, s) => { const f = path.join(dir, decodeURIComponent(q.url.split('?')[0].split('#')[0]) || 'index.html'); if (!f.startsWith(dir) || !existsSync(f)) { s.writeHead(404); s.end(); return; } s.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8' }); s.end(readFileSync(f)); }).listen(0);
-    const base = `http://127.0.0.1:${srv.address().port}/`;
+    // 서버가 와이파이 주소를 모르면: QR 대신 바꾸는 법, 복사할 주소 없음(127.0.0.1을 QR에 넣지 않음)
+    page = await open(base + 'poster.html' + K);
+    await page.waitForFunction(() => window.LecPage?.urls && document.querySelector('[data-qr-self] .lp-qr-off'), null, { timeout: 15000 });
+    assert.equal(await page.evaluate(() => window.LecPage.urls.join()), '');
+    assert.match(await page.textContent('[data-qr-self]'), /이 컴퓨터에서만 열려요/);
+    // 와이파이 주소를 알면: QR·복사는 그 주소(+#k=), 짧은 주소는 글자로
+    lan = `http://192.168.0.10:${srv.address().port}/`;
     page = await open(base + 'poster.html' + K);
     await page.waitForFunction(() => window.LecPage?.urls && document.querySelector('[data-qr-self] svg'), null, { timeout: 15000 });
     const join = await page.evaluate(() => window.LecPage.urls.join());
-    assert.ok(join.startsWith(base) && join.includes('#k='), join);
+    assert.ok(join.startsWith(lan) && join.includes('#k='), join);
     assert.equal((await page.textContent('[data-url-self]')).trim(), 'is.gd/tomika');
   } finally {
     await browser.close(); srv?.close(); rmSync(dir, { recursive: true, force: true });
