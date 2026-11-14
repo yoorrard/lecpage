@@ -11,8 +11,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, '..', '..', 'scripts', 'lecpage.mjs');
 const EX = join(HERE, '..', '..', 'examples', 'data-lab.blueprint.json');
 let dir, logFile;
+// 글꼴 함께 담기(publish 기본)가 바깥 글꼴 서버에 닿지 않게: 닫힌 프록시로 보내 바로 실패 → 바깥 글꼴 주소 그대로(인터넷이 막힌 곳과 같음)
+const OFFLINE = { NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: 'http://127.0.0.1:9', https_proxy: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9', http_proxy: 'http://127.0.0.1:9', NO_PROXY: '', no_proxy: '' };
 const run = (args, env = {}) => {
-  const r = spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: 'utf8', timeout: 120000, env: { ...process.env, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), FAKE_WRANGLER_LOG: logFile, CLOUDFLARE_API_TOKEN: '', ...env } });
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...OFFLINE, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), FAKE_WRANGLER_LOG: logFile, CLOUDFLARE_API_TOKEN: '', ...env } });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
 
@@ -83,6 +85,35 @@ test('publish 다시: 중계에 관리자 키가 있으면 새로 만들지 않�
   assert.ok(r.out.includes('lec-test.fake-account.workers.dev'), '지난번 이름 그대로');
 });
 
+test('publish: 글꼴은 기본으로 담고(앱과 같게), 글꼴 서버에 못 닿으면 바깥 글꼴 그대로 배포, --no-bundle-fonts면 끔', () => {
+  const plan = run(['publish', 'work', '--dry-run']);
+  assert.equal(plan.code, 0, plan.out);
+  assert.match(plan.out, /1 글꼴 함께 담기: .*끄기 --no-bundle-fonts/);
+  assert.doesNotMatch(run(['publish', 'work', '--dry-run', '--no-bundle-fonts']).out, /글꼴 함께 담기/);
+  const r = run(['publish', 'work', '--no-verify', '--no-handouts']);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /글꼴을 받지 못해 CDN 주소 그대로 뒀어요/, '막힌 망: 바깥 글꼴로 돌아가고 배포는 이어짐');
+  assert.match(r.out, /올렸어요 ✓/);
+  const st = () => JSON.parse(readFileSync(join(dir, 'work', 'lecpage.state.json'), 'utf8'));
+  assert.equal(st().bundleFonts, true, '다음 patch·make에도 이어짐');
+  const off = run(['publish', 'work', '--no-verify', '--no-handouts', '--no-bundle-fonts']);
+  assert.equal(off.code, 0, off.out);
+  assert.doesNotMatch(off.out, /글꼴/);
+  assert.equal(st().bundleFonts, false);
+});
+
+test('publish: 참여 기능이 없는 사이트는 강사 화면 주소를 알리지 않음', () => {
+  const w = join(dir, 'plain'); mkdirSync(join(w, 'work'), { recursive: true });
+  const bp = JSON.parse(readFileSync(EX, 'utf8')); bp.live = { provider: 'none', features: [] }; bp.sections = bp.sections.filter((s) => !['qa', 'board', 'poll', 'attendance', 'survey'].includes(s.type));
+  writeFileSync(join(w, 'work', 'blueprint.json'), JSON.stringify(bp));
+  writeFileSync(join(w, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json' }));
+  assert.equal(spawnSync(process.execPath, [CLI, 'build', 'work/blueprint.json', '-o', 'dist'], { cwd: w, encoding: 'utf8' }).status, 0);
+  assert.ok(!existsSync(join(w, 'dist', 'console.html')));
+  const r = spawnSync(process.execPath, [CLI, 'publish', 'work', '--name', 'lec-plain', '--no-verify', '--no-handouts', '--no-bundle-fonts'], { cwd: w, encoding: 'utf8', env: { ...process.env, ...OFFLINE, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), CLOUDFLARE_API_TOKEN: '' } });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!r.stdout.includes('console.html'), r.stdout);
+});
+
 test('publish: Cloudflare가 아닌 곳은 한 줄 명령을 알려 주고 멈춤', () => {
   const r = run(['publish', 'work', '--host', 'vercel']);
   assert.notEqual(r.code, 0);
@@ -92,7 +123,7 @@ test('publish: Cloudflare가 아닌 곳은 한 줄 명령을 알려 주고 멈�
 // ── Onpod: 가짜 onpod CLI로(실제 계정에 닿지 않음). 앞 시험의 상태를 건드리지 않게 따로 복사한 폴더에서 ──
 let odir, ologFile;
 const orun = (args, env = {}) => {
-  const r = spawnSync(process.execPath, [CLI, ...args], { cwd: odir, encoding: 'utf8', timeout: 120000, env: { ...process.env, LECPAGE_ONPOD: join(HERE, 'fixtures', 'fake-onpod.mjs'), FAKE_ONPOD_LOG: ologFile, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), FAKE_WRANGLER_LOG: join(odir, 'wrangler.log'), ONPOD_TOKEN: '', CLOUDFLARE_API_TOKEN: '', ...env } });
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd: odir, encoding: 'utf8', timeout: 120000, env: { ...process.env, ...OFFLINE, LECPAGE_ONPOD: join(HERE, 'fixtures', 'fake-onpod.mjs'), FAKE_ONPOD_LOG: ologFile, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), FAKE_WRANGLER_LOG: join(odir, 'wrangler.log'), ONPOD_TOKEN: '', CLOUDFLARE_API_TOKEN: '', ...env } });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
 const ofresh = () => {

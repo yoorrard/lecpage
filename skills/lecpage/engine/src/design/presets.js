@@ -440,3 +440,11 @@ export function presetPlan(preset) {
   return { enter, slots: Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, String(v).split('|').filter(Boolean)])) };
 }
 export function getPreset(id) { return PRESETS.find((p) => p.id === id) || PRESETS[0]; }
+/** 없는 디자인 이름에 가까운 이름(오타·앞뒤 글자 빠짐). 편집 거리 3 안, 또는 서로 품는 이름. 가까운 순으로 n개 */
+export function nearestPresets(id, n = 2) {
+  const q = String(id || '').toLowerCase().trim();
+  if (!q) return [];
+  const dist = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j); for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } } return d[b.length]; };
+  return PRESETS.map((p) => ({ id: p.id, d: p.id.includes(q) || q.includes(p.id) ? 1 : dist(q, p.id) }))
+    .filter((x) => x.d <= Math.max(2, Math.min(3, Math.floor(q.length / 3)))).sort((a, b) => a.d - b.d).slice(0, n).map((x) => x.id);
+}

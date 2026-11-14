@@ -211,7 +211,10 @@ function detectPrompts(pages) {
       while ((m = QUOTE_RE.exec(x.text))) {
         const q = m[1].trim();
         const near = /(입력|물어|질문|요청|프롬프트|검색|말해|타이핑|명령|쳐|적어)/.test(x.text.replace(m[0], ''));
-        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q) && !EXAM.test(q))) { add(p, q, 'quote', 4, '', at(x)); used.add(x); }
+        // 따옴표 앞의 조건 구절("더 쉽게 만들고 싶다면 “…”라고 입력해 보세요")은 교재 글 그대로 프롬프트 이름으로(언제 쓰는지가 남게)
+        const lead = normLine(x.text.slice(0, m.index)).replace(LEAD_MARK, '').replace(/[,，]\s*$/, '').trim();
+        const when = lead.length >= 4 && lead.length <= 30 && !/[“"「『‘]/.test(lead) && /(?:면|때|때는|경우|경우에는)$/.test(lead) ? lead : '';
+        if (isRequestLine(q) || (near && q.length >= 8) || (REQ_POLITE.test(q) && AI_CUE.test(q) && !EXAM.test(q))) { add(p, q, 'quote', 4, when, at(x)); used.add(x); }
       }
     }
     // 4) 요청 어미(~해줘, ~만들어줘 …)로 끝나는 줄
