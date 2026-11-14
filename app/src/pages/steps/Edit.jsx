@@ -9,7 +9,7 @@ import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyAnswer } from '../../lib/blueprint.js';
 import { toast } from '../../lib/util.js';
-import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
+import { undoStack, pushUndoFor, popUndo, onUndoChange, loadSavedUndo } from '../../lib/undo.js';
 import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone, wasInterrupted, forgetInterrupted } from '../../lib/ai-job.js';
 import { E } from '../../lib/engine.js';
 import { PROVIDERS, chatLabel, chatbotFor, setWay } from '../../lib/ai.js';
@@ -39,6 +39,7 @@ export function StepEdit({ p, update, go }) {
   const onMark = (mode) => { setTab('review'); review.current?.start(mode); };
   const [, force] = useState(0);
   useEffect(() => onUndoChange(() => force((x) => x + 1)), []);
+  useEffect(() => { loadSavedUndo(p.id); }, [p.id]); // 새로 고친 뒤에도 'AI로 만들기 전'으로 되돌릴 수 있게
   const stack = undoStack(p.id);
   const pushUndo = (label) => pushUndoFor(p.id, label, p);
   const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };

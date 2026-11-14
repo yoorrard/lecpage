@@ -10,7 +10,8 @@ import { pushUndoFor } from '../../lib/undo.js';
 import { blobs, storageKind, STORAGE_MSG } from '../../lib/db.js';
 import { fmtBytes, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
-import { takePendingFiles, deleteProject, isSavedFile, openSavedFile, OPEN_FAIL } from '../../lib/project.js';
+import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
+import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
@@ -143,8 +144,8 @@ export function StepStart({ p, update, go }) {
     const saved = files.find(isSavedFile);
     if (!saved) return handle(files);
     const cur = latest.current; const empty = !cur.blueprint && !cur.files?.length && !cur.info?.title?.trim();
-    try { toast(await openSavedFile(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
-    catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
+    try { toast(await openSaved(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
+    catch (err) { toast(openFailMessage(err)); }
   }
   const info = p.info;
   // 교재에서 채운 날짜가 오늘(한국 시각)보다 앞: 지난 연수 교재를 그대로 쓴 경우가 많음. 고치라고만 알리고 바꾸지는 않음
