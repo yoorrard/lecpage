@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 본문 겹침·꼬임 게이트: 모든 프리셋 × 설계도(예시 2종 + 모든 본문 칸 + 극단 입력) × 폭 360·390·768·1024·1280·1440 × 밝게·어둡게 × 움직임 0~3 × 동작 줄이기 × 인쇄.
+// 본문 겹침·꼬임 게이트: 모든 프리셋 × 설계도(예시 2종 + 모든 본문 칸 + 극단 입력) × 폭 360·390·768·1024·1280·1440 × 밝게·어둡게 × 움직임 0~3 × 동작 줄이기 × 인쇄 × 기기 글자 크게(32px).
 // 보조 화면(--only aux): 강사·발표·안내문·접속 확인을 리허설(local)로 참여 기록(긴 글·주소·쌓인 부호)을 채워 390·1280·1920(발표 화면은 720 높이도) × 밝게·어둡게, 안내문은 인쇄.
 // 자리마다(0·25·50·75·100% + 처음으로 돌아옴) 움직이는 도중과 멈춘 뒤를 검사(overlap-lint.mjs scanPage) + 콘솔 오류. 배치 변형은 설계도 layout으로 하나하나 강제해서도 훑음.
 //   node scripts/body-gate.mjs [--presets a,b] [--quick] [--only all-print,sel,force] [--out 결과.json] [--conc 6]
@@ -37,13 +37,14 @@ function extreme(bp, kind) {
   }
   return bp;
 }
-// 조합: [이름, 설계도, 폭들, 테마, 움직임(''=기본), 동작 줄이기, 인쇄, layout 강제(k)]
+// 조합: [이름, 설계도, 폭들, 테마, 움직임(''=기본), 동작 줄이기, 인쇄, layout 강제(k), 브라우저 글자 크기(px, 글자 크게 설정)]
 const WS = [360, 390, 768, 1024, 1280, 1440]; // 1024: 낮은 노트북·가로 태블릿(이 폭에서만 넘치는 칸이 있었음)
 const PLAN = quick ? [['all', 'all', [1440, 390], 'light', '', false, false, null]] : [
   ['sel', 'sel', WS, 'light', '', false, false, null], ['lab', 'lab', WS, 'light', '', false, false, null], ['all', 'all', WS, 'light', '', false, false, null],
   ['all-dark', 'all', [390, 1440], 'dark', '', false, false, null], ['sel-dark', 'sel', [1280], 'dark', '', false, false, null],
   ...[0, 1, 2, 3].map((m) => [`all-m${m}`, 'all', [390, 1280], 'light', m, false, false, null]),
   ['all-rm', 'all', [1440], 'light', '', true, false, null], ['all-print', 'all', [1280], 'light', '', false, true, null],
+  ['all-big', 'all', [390], 'light', '', false, false, null, 32], ['sel-big', 'sel', [390], 'light', '', false, false, null, 32], // 기기 글자 크게(32px)
   ['xmax', 'xmax', [360, 1440], 'light', '', false, false, null], ['xmin', 'xmin', [360, 1440], 'light', '', false, false, null],
 ];
 const AUX = ['console.html', 'screen.html', 'poster.html', 'check.html'];
@@ -55,12 +56,12 @@ const tmp = mkdtempSync(join(tmpdir(), 'lpbgate-')), jobs = [];
 const loadBp = (key) => key === 'aux' ? { ...JSON.parse(readFileSync(SRC.lab, 'utf8')), live: { provider: 'local', code: 'GATEAUX', features: ['qa', 'help', 'progress', 'board', 'poll', 'reactions', 'signal'] } } : key === 'xmax' || key === 'xmin' ? extreme(JSON.parse(readFileSync(SRC.all, 'utf8')), key.slice(1)) : JSON.parse(readFileSync(SRC[key], 'utf8'));
 function put(key, bp) { const r = E.build(bp, { runtime: nodeRuntime() }); if (r.errors?.length) { console.log('빌드 오류', key, JSON.stringify(r.errors).slice(0, 200)); return false; } for (const [f, c] of Object.entries(r.files)) { const p = join(tmp, key, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, c); } return r; }
 for (const id of presets) {
-  for (const [name, src, widths, theme, motion, rm, print] of PLAN) {
+  for (const [name, src, widths, theme, motion, rm, print, , big] of PLAN) {
     const bp = loadBp(src); bp.design = { preset: id, theme, ...(motion === '' ? {} : { motion }) };
     if (motion !== '') { bp.audience = { ...(bp.audience || {}), devices: ['laptop'] }; if (bp.meta?.admin?.kind === 'official') bp.meta.admin = { ...bp.meta.admin, kind: 'school' }; } // 휴대폰 대상(3→2)·교육청 직무연수(→1) 상한이 정한 단계를 덮지 않게
     const key = `${id}__${name}`, r = put(key, bp); if (!r) continue;
     const pages = src === 'aux' ? (print ? ['poster.html'] : AUX) : ['index.html'];
-    for (const pg of pages) for (const w of widths) for (const h of pg === 'screen.html' && w >= 1280 ? [720, 1080] : [0]) jobs.push({ id, name, theme, motion: motion === '' ? `기본(${r.design.motion})` : String(r.design.motion), rm, print, w, key, page: pg, h });
+    for (const pg of pages) for (const w of widths) for (const h of pg === 'screen.html' && w >= 1280 ? [720, 1080] : [0]) jobs.push({ id, name, theme, motion: motion === '' ? `기본(${r.design.motion})` : String(r.design.motion), rm, print, w, key, page: pg, h, big });
   }
 }
 // 배치 변형 강제: 섹션마다 k번째 변형(두 프리셋: 밝은 기본·어두운 장식형)으로 사이트를 만들어 360·1440에서
@@ -114,6 +115,7 @@ await Promise.all(Array.from({ length: conc }, async () => {
     const ctx = await browser.newContext({ viewport: { width: j.w, height: j.h || (j.w < 700 ? 780 : j.w < 1000 ? 1100 : 900) }, deviceScaleFactor: 1, colorScheme: j.theme, reducedMotion: j.rm ? 'reduce' : 'no-preference' });
     await ctx.addInitScript((t) => { try { localStorage.setItem('lp-theme', t); } catch (e) { } }, j.theme);
     const page = await ctx.newPage(), errs = [];
+    if (j.big) await (await ctx.newCDPSession(page)).send('Page.setFontSizes', { fontSizes: { standard: j.big, fixed: Math.round(j.big * 0.8) } });
     page.on('pageerror', (e) => errs.push(String(e.message).slice(0, 100)));
     page.on('console', (m) => { if (m.type() === 'error' && !/net::ERR|Failed to load resource/.test(m.text())) errs.push(m.text().slice(0, 100)); });
     try {
@@ -129,6 +131,9 @@ await Promise.all(Array.from({ length: conc }, async () => {
         const o = await page.evaluate(pageCheck, false);
         const hidden = await page.evaluate(() => [...document.querySelectorAll('main :is(h1,h2,h3,p,li,dt,dd)')].filter((e) => e.textContent.trim() && !e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide],.lp-cards-off [data-part="cards"],.lp-card-off [data-part="teacher"]') && getComputedStyle(e).display !== 'contents' && (getComputedStyle(e).visibility === 'hidden' || +getComputedStyle(e).opacity < 0.2 || e.getClientRects().length === 0)).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
         if (hidden.length) o['print-hidden'] = hidden;
+        // 스크롤 연출이 멈춘 상태(흐림)로 인쇄에 새는지: 조상까지 곱한 투명도가 절반 아래인 글
+        const dim = await page.evaluate(() => [...document.querySelectorAll('main :is(h1,h2,h3,p,li,dt,dd)')].filter((e) => { if (!e.textContent.trim() || e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide]') || !e.getClientRects().length) return false; let o = 1; for (let n = e; n; n = n.parentElement) o *= +getComputedStyle(n).opacity; return o > 0.2 && o < 0.5; }).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
+        if (dim.length) o['print-dim'] = dim;
         findings = Object.entries(o).map(([rule, samples]) => ({ rule, count: samples.length, samples }));
       } else ({ findings } = await scanPage(page));
       results.push({ ...j, findings, errs });

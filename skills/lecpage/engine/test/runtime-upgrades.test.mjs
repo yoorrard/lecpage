@@ -174,6 +174,9 @@ test('pages: robots meta, poster, nav split, console and screen controls', () =>
   const idx = r.files['index.html'];
   assert.match(idx, /data-toc-open/); assert.match(idx, /data-toc-sheet/); assert.match(idx, /data-now hidden/); assert.match(idx, /data-help-dialog/);
   assert.match(idx, /<details class="lp-more"/);
+  // 도크: 이해 정도·반응은 단추 하나로 접고, 신호에는 글이 붙음
+  assert.match(idx, /class="lp-fold lp-signal"[\s\S]*?data-signal="green"[^>]*><i aria-hidden="true">✓<\/i><span>이해했어요<\/span>/);
+  assert.match(idx, /class="lp-fold lp-react"><button[^>]*data-fold-toggle/);
   assert.ok(!/\son[a-z]+="/i.test(idx), 'no inline event handlers');
   assert.ok(!/window\.prompt/.test(r.files['assets/lecpage.js']));
   const data = JSON.parse(/<script type="application\/json" id="lp-data">([\s\S]*?)<\/script>/.exec(idx)[1]);
@@ -229,4 +232,16 @@ test('board moderation: new posts stay hidden until the instructor shows them (s
   await c.setState({ ui: { moderation: true } });
   assert.equal((await c.add('posts', { text: '대기' })).hidden, true);
   await c.close();
+});
+
+test('출석: 기능만 켜고 칸이 없으면 출석 칸을 넣고, 칸이 있어도 도크 [출석]이 입실을 바로 보냄', () => {
+  const bp = EX('sel-story'); bp.live = { ...bp.live, features: [...bp.live.features, 'attendance'] };
+  bp.sections = bp.sections.filter((s) => s.type !== 'attendance');
+  const r = E.build(bp, { runtime: nodeRuntime() });
+  const types = r.blueprint.sections.map((s) => s.type);
+  assert.ok(types.includes('attendance'), '출석 칸이 들어감');
+  assert.ok(types.indexOf('attendance') < types.indexOf('outline'), '차례 앞');
+  assert.match(r.files['index.html'], /data-attend="in"/);
+  assert.match(r.files['index.html'], /data-dock-attend="in" hidden/);
+  assert.ok(r.warnings.some((w) => /출석 칸이 없어 넣었어요/.test(w.message_ko)));
 });

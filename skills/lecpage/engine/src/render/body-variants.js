@@ -82,9 +82,10 @@ export function bodyVariants(H) {
     return { target, img: sl?.src || '', page: i.target?.startsWith('deck:') ? i.target.slice(5) : '', link: target ? `<a class="lp-link" href="${esc(target)}">${target.startsWith('#deck-p') ? `교재 ${esc(i.target.slice(5))}쪽 보기` : '바로 가기'}${icon('arrow')}</a>` : '' };
   };
   const outlineBody = (i, b) => `${i.part ? `<p class="lp-outline-part">${esc(i.part)}</p>` : ''}<h3>${esc(i.title)}</h3>${i.desc ? `<p class="lp-ol-d">${esc(i.desc)}</p>` : ''}${tags(i.tags)}${b.link}`;
-  const outlineArt = (i, n, b, ctx, s) => `<div class="lp-ol-art${b.img ? ' has-img' : ''}" aria-hidden="true">${b.img ? `<img src="${esc(b.img)}" alt="" loading="lazy" decoding="async">` : motif(ctx, `${s.id}${n}`, { w: 480, h: 300 })}<span class="lp-ol-no">${pad2(n + 1)}</span></div>`;
+  // 교재 쪽 그림이 없으면 모티프 그림을 줄마다 되풀이하지 않고 큰 번호만(그림 칸은 순서를 알리는 판)
+  const outlineArt = (i, n, b, ctx, s) => `<div class="lp-ol-art${b.img ? ' has-img' : ''}" aria-hidden="true">${b.img ? `<img src="${esc(b.img)}" alt="" loading="lazy" decoding="async">` : ''}<span class="lp-ol-no">${pad2(n + 1)}</span></div>`;
   VB.outline = {
-    /* 좌우 번갈아: 그림(교재 쪽 그림, 없으면 모티프 그림)과 글이 줄마다 자리를 바꿈 */
+    /* 좌우 번갈아: 그림(교재 쪽 그림, 없으면 큰 번호 판)과 글이 줄마다 자리를 바꿈 */
     zigzag: (s, ctx) => `<ol class="lp-zz" style="--n:${s.items.length}">${s.items.map((i, n) => { const b = outlineBits(i, ctx); return `<li class="lp-zz-item" style="--i:${n}">${outlineArt(i, n, b, ctx, s)}<div class="lp-zz-body">${outlineBody(i, b)}</div></li>`; }).join('')}</ol>`,
     /* 벤토 격자: 크기가 다른 칸에 번호·제목·설명 */
     bento: (s, ctx) => { const sp = bentoSpans(s.items.length); return `<ol class="lp-ob" style="--n:${s.items.length}"${groupFx(ctx)}>${s.items.map((i, n) => `<li data-w="${sp[n]}"${itemFx(ctx)}><span class="lp-ob-no" aria-hidden="true">${pad2(n + 1)}</span><div class="lp-ob-b">${outlineBody(i, outlineBits(i, ctx))}</div></li>`).join('')}</ol>`; },
@@ -155,8 +156,8 @@ export function bodyVariants(H) {
       const line = items.length >= 2 ? `<ol class="lp-cr-line" style="--n:${items.length};--cols:${Math.min(items.length, 5)}">${items.map((it, i) => `<li${it.now ? ' class="is-now"' : ''} style="--i:${i}"><span class="lp-cr-dot" aria-hidden="true"></span>${it.year ? `<b class="lp-cr-y">${esc(it.year)}</b>` : ''}<span class="lp-cr-t">${it.url ? `<a ${href(it.url)}>${esc(it.text)}</a>` : esc(it.text)}</span>${it.group ? `<small>${esc(it.group)}</small>` : ''}</li>`).join('')}</ol>` : (P.groups.length ? `<div class="lp-timeline">${P.groups.join('')}</div>` : '');
       return `<div class="lp-cr"><div class="lp-cr-id">${p.photo ? `<img class="lp-avatar" src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : ''}<h3>${esc(p.name)}</h3>${P.role}${P.bio}${P.tags}${P.contact}${P.links}</div>${line}</div>`;
     }).join(''),
-    /* 큰 얼굴: 사진(없으면 이름 첫 글자와 모티프 그림)이 한쪽을 채우고, 소개말이 크게 */
-    portrait: (s, ctx) => ctx.bp.instructors.map((p, n) => { const P = person(p, ctx); return `<div class="lp-pt"><div class="lp-pt-face${p.photo ? ' has-img' : ''}" data-art${p.photo ? '' : ' aria-hidden="true"'}>${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy">` : `${motif(ctx, `${s.id}face${n}`, { w: 360, h: 440 })}<span class="lp-pt-glyph">${esc([...p.name][0] || '')}</span>`}</div><div class="lp-pt-body"><h3>${esc(p.name)}</h3>${P.role}${p.bio ? `<p class="lp-pt-bio">${br(p.bio)}</p>` : ''}${P.tags}${P.contact}${P.links}${P.groups.length ? `<div class="lp-timeline">${P.groups.join('')}</div>` : ''}</div></div>`; }).join(''),
+    /* 큰 얼굴: 사진이 한쪽을 채우고 소개말이 크게. 사진이 없으면 얼굴 칸 없이 소개말만(이름 첫 글자·꾸밈 그림을 대신 채우지 않음) */
+    portrait: (s, ctx) => ctx.bp.instructors.map((p, n) => { const P = person(p, ctx); return `<div class="lp-pt${p.photo ? '' : ' is-noface'}">${p.photo ? `<div class="lp-pt-face has-img" data-art><img src="${esc(p.photo)}" alt="${esc(p.name)} 사진" loading="lazy"></div>` : ''}<div class="lp-pt-body"><h3>${esc(p.name)}</h3>${P.role}${p.bio ? `<p class="lp-pt-bio">${br(p.bio)}</p>` : ''}${P.tags}${P.contact}${P.links}${P.groups.length ? `<div class="lp-timeline">${P.groups.join('')}</div>` : ''}</div></div>`; }).join(''),
   };
   const hm = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 0; };
   VB.speakers = {

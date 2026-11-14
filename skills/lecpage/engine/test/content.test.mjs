@@ -89,9 +89,11 @@ describe('렌더: 새 칸과 자동 표시', () => {
     assert.ok(html.includes('설문을 내야 이수가 확인돼요.'));
     assert.ok(html.includes('둘 다 눌러야 이수가 확인돼요.'));
   });
-  test('온라인·혼합: 회의 입장 버튼이 맨 앞, 끝나면 숨김 표시. 오프라인은 버튼 없음', () => {
+  test('온라인: 회의 입장 버튼이 맨 앞. 혼합: 현장 단추 다음 둘째. 끝나면 숨김 표시. 오프라인은 버튼 없음', () => {
     const on = index({ meta: { title: 't', mode: 'hybrid', venue: '3층', joinUrl: 'https://us02web.zoom.us/j/123' }, sections: [{ type: 'hero', ctas: [{ label: '교재 보기', href: '#deck' }] }] });
-    assert.match(on, /<a class="lp-btn lp-btn-primary" href="https:\/\/us02web\.zoom\.us\/j\/123"[^>]*data-phase-hide="after"><span>Zoom 입장<\/span>/);
+    assert.match(on, /<a class="lp-btn lp-btn-primary" href="#deck"[^>]*><span>교재 보기<\/span>[\s\S]*?<a class="lp-btn lp-btn-ghost" href="https:\/\/us02web\.zoom\.us\/j\/123"[^>]*data-phase-hide="after"><span>Zoom 입장<\/span>/);
+    const online = index({ meta: { title: 't', mode: 'online', joinUrl: 'https://us02web.zoom.us/j/123' }, sections: [{ type: 'hero', ctas: [{ label: '교재 보기', href: '#deck' }] }] });
+    assert.match(online, /<a class="lp-btn lp-btn-primary" href="https:\/\/us02web\.zoom\.us\/j\/123"[^>]*data-phase-hide="after"><span>Zoom 입장<\/span>/);
     assert.match(on, /<dt>장소<\/dt><dd>3층 · 온라인 \(Zoom\)<\/dd>/);
     const meet = index({ meta: { title: 't', mode: 'online', joinUrl: 'https://meet.google.com/abc-defg-hij' }, sections: [{ type: 'hero' }] });
     assert.ok(meet.includes('Google Meet 입장'));

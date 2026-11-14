@@ -77,6 +77,9 @@ export const REACTIONS = [
   { v: '❤️', label: '좋아요', ic: icon('heart') },
 ];
 
+/** 이해 정도 신호: 도크에는 단추 하나(지금 보낸 신호), 누르면 글이 붙은 세 가지가 펼쳐짐 */
+const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
+
 function nav(ctx) {
   const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
   const brand = ctx.design.brandName || ctx.bp.meta.title;
@@ -129,11 +132,13 @@ function helpSheet(ctx) {
 
 /**
  * 도크의 '출석' 한 번 누르기: 질문·투표를 하지 않은 사람도 참가자 명단(별명)에 남게 함.
- * 출석 칸(입실·퇴실)이 있으면 그 칸이 맡고, 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
+ * 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
  */
 export function quickAttend(bp) {
   return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
 }
+/** 출석 칸(입실·퇴실)이 있는 연수: 연수 시간에 아직 입실하지 않았으면 도크의 [출석]이 입실을 바로 보냄(칸까지 내려가 찾지 않게) */
+const dockAttend = (bp) => quickAttend(bp) || (bp.live.provider !== 'none' && bp.sections.some((s) => s.type === 'attendance'));
 
 function dialogs(ctx) {
   const pv = ctx.bp.privacy;
@@ -154,11 +159,11 @@ ${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
-  ${quickAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend hidden>${icon('check')}<span>출석</span></button>` : ''}
+  ${dockAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend${quickAttend(ctx.bp) ? '' : '="in"'} hidden>${icon('check')}<span>출석</span></button>` : ''}
   ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
   ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
-  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-signal" role="group" aria-label="지금 이해 정도"><button type="button" data-signal="green" aria-pressed="false" title="이해했어요"><i aria-hidden="true">✓</i><span class="lp-sr">이해했어요</span></button><button type="button" data-signal="yellow" aria-pressed="false" title="조금 헷갈려요"><i aria-hidden="true">?</i><span class="lp-sr">조금 헷갈려요</span></button><button type="button" data-signal="red" aria-pressed="false" title="모르겠어요"><i aria-hidden="true">!</i><span class="lp-sr">모르겠어요</span></button></div>` : ''}
-  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-react" role="group" aria-label="반응 보내기"><button type="button" class="lp-react-toggle" data-react-toggle aria-expanded="false" aria-label="반응 고르기">${REACTIONS[0].ic}</button><div class="lp-react-list" data-react-list>${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
+  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-fold lp-signal"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="지금 이해 정도 보내기" title="이해 정도"><i data-signal-now aria-hidden="true"></i></button><div class="lp-fold-list" role="group" aria-label="지금 이해 정도">${SIGNALS.map((x) => `<button type="button" data-signal="${x.v}" aria-pressed="false"><i aria-hidden="true">${x.g}</i><span>${x.label}</span></button>`).join('')}</div></div>` : ''}
+  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-fold lp-react"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="반응 보내기" title="반응">${REACTIONS[0].ic}</button><div class="lp-fold-list" role="group" aria-label="반응 보내기">${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
 </aside><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
 ${tocSheet(ctx)}${helpSheet(ctx)}
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;

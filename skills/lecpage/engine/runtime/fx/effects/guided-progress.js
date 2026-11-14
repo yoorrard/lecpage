@@ -1,4 +1,5 @@
-/* guided-progress — 위쪽 진행 막대 + 단계 표시(현재 단계는 aria-current="step"). 기능형이라 모션 0에서도 동작 */
+/* guided-progress — 위쪽 진행 막대 + 넓은 화면 오른쪽 단계 점(현재 단계는 aria-current="step"). 기능형이라 모션 0에서도 동작.
+   좁은 화면에는 점을 두지 않음: 메뉴의 '목차'와 진행 막대가 같은 일을 함(떠 있는 'n / 15' 칩은 도크·본문을 가려서 뺌) */
 LecFX.define('guided-progress', {
   level: 0,
   init: function (el, o, ctx) {
@@ -11,7 +12,7 @@ LecFX.define('guided-progress', {
     fill.className = 'fx-gp-fill';
     bar.appendChild(fill);
     el.appendChild(bar);
-    var links = [], chip = null, nav = null;
+    var links = [], nav = null;
     if (secs.length > 1 && o.steps !== false && !el.closest('[aria-hidden="true"]')) {
       nav = document.createElement('nav');
       nav.className = 'fx-gp-steps';
@@ -28,13 +29,9 @@ LecFX.define('guided-progress', {
         links.push({ a: a, name: name });
       });
       nav.appendChild(ol);
-      chip = document.createElement('span');
-      chip.className = 'fx-gp-chip';
-      chip.setAttribute('aria-hidden', 'true');
-      // 단계 목록·칩은 body에 붙임: 막대를 둔 자리(머리의 backdrop-filter, 진행 막대의 transform) 안에서는
+      // 단계 목록은 body에 붙임: 막대를 둔 자리(머리의 backdrop-filter, 진행 막대의 transform) 안에서는
       // position:fixed가 그 자리를 기준으로 그려져 0 너비로 눌리고, 보이지 않는 링크에 Tab 초점만 감
       document.body.appendChild(nav);
-      document.body.appendChild(chip);
     }
     var cur = -1, lastP = -1;
     ctx.onScroll(function (y, vh) {
@@ -51,12 +48,8 @@ LecFX.define('guided-progress', {
           if (j === idx) l.a.setAttribute('aria-current', 'step'); else l.a.removeAttribute('aria-current');
           l.a.classList.toggle('is-done', j < idx);
         });
-        chip.textContent = (idx + 1) + ' / ' + links.length + '  ' + links[idx].name;
       };
     });
-    var idle = 0;
-    if (chip) ctx.on(window, 'scroll', function () { chip.classList.add('is-show'); clearTimeout(idle); idle = setTimeout(function () { chip.classList.remove('is-show'); }, 1600); }, { passive: true });
-    ctx.cleanup(function () { clearTimeout(idle); });
-    return function () { bar.remove(); if (nav) nav.remove(); if (chip) chip.remove(); el.classList.remove('fx-gp'); };
+    return function () { bar.remove(); if (nav) nav.remove(); el.classList.remove('fx-gp'); };
   }
 });

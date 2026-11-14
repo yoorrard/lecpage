@@ -28,10 +28,14 @@
     } catch (e) { }
     fb(); return Promise.resolve(false);
   }
-  function download(name, text) {
+  // 카카오톡·네이버 앱 등 안의 브라우저는 파일 내려받기를 막음(눌러도 아무 일 없음) → 기록을 복사해 줌
+  var IN_APP = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|\bLine\//i.test(navigator.userAgent || '');
+  function download(name, text, okMsg) {
+    if (IN_APP) return copyText(text, '이 앱에서는 내려받을 수 없어 기록을 복사했어요. 메모에 붙여 넣어 두세요.');
     var url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
     var a = el('a'); a.href = url; a.download = name; doc.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    if (okMsg) toast(okMsg);
   }
   window.LecPage = { toast: toast, store: store, data: DATA, copy: copyText };
 
@@ -113,6 +117,32 @@
     $$('[data-url-page]').forEach(function (n) { n.textContent = siblingUrl(n.getAttribute('data-url-page')) || '배포한 사이트 주소 + ' + n.getAttribute('data-url-page'); });
   }
   window.LecPage.urls = { page: pageUrl, join: joinUrl, sibling: siblingUrl, short: shortShown, off: URL_OFF };
+
+  /* ── 목록을 다시 그릴 때 키보드 초점 지키기 ──
+     그리기 전 초점이 목록 안이면 같은 항목(data-id)의 같은 단추로, 그 항목이 없어졌으면 목록 첫 단추나 목록 자체로.
+     목록 밖 같은 칸의 양식이 닫히며 초점을 잃으면(보드 올리기 뒤) back()이 주는 단추로. 화면 낭독기·키보드 사용자가 맨 위로 튀지 않게 */
+  var FOCUSABLE = 'button,a[href],input,textarea,select';
+  function keepFocus(draw, list, back) {
+    return function () {
+      var host = list(), a = doc.activeElement, sec = host && host.closest('section');
+      if (!host || !a || a === doc.body || !(sec || host).contains(a)) return draw.apply(this, arguments);
+      var inList = host.contains(a), item = inList && a.closest('[data-id]'), id = item ? item.getAttribute('data-id') : null;
+      var k = $$(FOCUSABLE, item || host).indexOf(a), cls = a.className;
+      var r = draw.apply(this, arguments);
+      var now = doc.activeElement;
+      if (now && now !== doc.body && now.isConnected && now.getClientRects().length) return r; // 초점이 그대로 살아 있음
+      var t = null;
+      if (inList) {
+        var ni = id ? $$('[data-id]', host).filter(function (n) { return n.getAttribute('data-id') === id; })[0] : host;
+        var cand = ni ? $$(FOCUSABLE, ni) : [];
+        t = (cls ? cand.filter(function (n) { return n.className === cls; })[0] : null) || cand[k] || $$(FOCUSABLE, host)[0] || host;
+      } else t = back && back();
+      if (!t) return r;
+      if (t === host && !host.hasAttribute('tabindex')) host.setAttribute('tabindex', '-1');
+      try { t.focus({ preventScroll: true }); } catch (e) { }
+      return r;
+    };
+  }
 
   /* ── 대화상자: 열 때 누른 버튼을 기억했다가 닫으면 그 버튼으로 초점을 돌려줍니다 ── */
   function closeDialog(d) { if (d.close && d.open) d.close(); else d.removeAttribute('open'); }
@@ -481,13 +511,30 @@
     var sx = null; stage.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
     stage.addEventListener('touchend', function (e) { if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 50) go(cur + (dx < 0 ? 1 : -1)); sx = null; });
     var fb = $('[data-deck-full]', deck);
-    if (fb) { if (!deck.requestFullscreen) fb.hidden = true; else fb.addEventListener('click', function () { (doc.fullscreenElement ? doc.exitFullscreen() : deck.requestFullscreen()).catch(function () { }); }); }
+    if (fb) {
+      if (!deck.requestFullscreen) fb.hidden = true;
+      else fb.addEventListener('click', function () {
+        if (doc.fullscreenElement) return doc.exitFullscreen().catch(function () { });
+        deck.requestFullscreen().then(function () {
+          if (!(window.matchMedia && matchMedia('(orientation: portrait)').matches)) return;
+          var o = screen.orientation, tip = function () { toast('휴대폰을 가로로 돌리면 쪽이 크게 보여요.'); };
+          if (o && o.lock) o.lock('landscape').catch(tip); else tip();
+        }, function () { });
+      });
+    }
     var ob = $('[data-deck-overview]', deck);
-    if (ob) ob.addEventListener('click', function () { overview(slides, function (i) { go(i); stage.focus(); }); });
+    if (ob) ob.addEventListener('click', function () { overview(slides, function (i) { go(i); stage.focus(); }, ob); });
     function fromHash() { var m = /^#deck-p(\d+)$/.exec(location.hash); if (!m) return false; var i = slides.findIndex(function (s) { return s.getAttribute('data-page') === m[1]; }); if (i >= 0) { go(i); deck.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); } return true; }
     window.addEventListener('hashchange', fromHash);
     if (!fromHash()) go(0, { quiet: true });
-    deckApi = { go: function (page) { var i = slides.findIndex(function (s) { return +s.getAttribute('data-page') === +page; }); if (i >= 0) go(i); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
+    deckApi = { go: function (page, move) {
+      var i = slides.findIndex(function (s) { return +s.getAttribute('data-page') === +page; }); if (i < 0 || i === cur) return;
+      go(i);
+      if (!move) return;
+      var a = doc.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !deck.contains(a), r = deck.getBoundingClientRect();
+      if (!typing && (r.bottom < 80 || r.top > innerHeight * 0.6)) { deck.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); toast('강사가 보는 ' + page + '쪽으로 옮겼어요.'); }
+      else if (typing) toast('강사가 ' + page + '쪽을 보고 있어요.');
+    }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
   }
   // 글만 있는 쪽의 작은 미리보기: 쪽 번호 + 제목(표지·부 시작은 큰 슬라이드와 같은 바탕)
   function thumbText(s) {
@@ -496,25 +543,27 @@
     t.appendChild(el('b', '', s.getAttribute('data-page'))); t.appendChild(el('i', '', (h && h.textContent) || s.getAttribute('data-title') || ''));
     return t;
   }
-  function overview(slides, pick) {
-    var ov = el('div', 'lp-overview'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', '전체 쪽 보기');
+  function overview(slides, pick, opener) {
+    var ov = el('dialog', 'lp-overview'); ov.setAttribute('aria-label', '전체 쪽 보기');
     var h = el('div', 'lp-overview-h'); var inp = el('input'); inp.type = 'search'; inp.placeholder = '제목·내용으로 찾기'; inp.setAttribute('aria-label', '쪽 찾기');
     var close = el('button', 'lp-btn lp-btn-ghost', '닫기'); close.type = 'button';
     h.appendChild(inp); h.appendChild(close); ov.appendChild(h);
     var grid = el('div', 'lp-overview-grid'); ov.appendChild(grid);
+    var picked = -1;
     var btns = slides.map(function (s, i) {
       var b = el('button'); b.type = 'button'; var img = s.querySelector('img');
       if (img) { var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
       else b.appendChild(thumbText(s));
-      b.addEventListener('click', function () { done(); pick(i); });
+      b.addEventListener('click', function () { picked = i; ov.close(); });
       b._q = ((s.getAttribute('data-title') || '') + ' ' + (s.getAttribute('data-text') || '')).toLowerCase();
       grid.appendChild(b); return b;
     });
     inp.addEventListener('input', function () { var q = inp.value.trim().toLowerCase(); btns.forEach(function (b) { b.hidden = !!q && b._q.indexOf(q) < 0; }); });
-    function done() { ov.remove(); doc.removeEventListener('keydown', esc); }
-    function esc(e) { if (e.key === 'Escape') done(); }
-    close.addEventListener('click', done); doc.addEventListener('keydown', esc);
-    doc.body.appendChild(ov); inp.focus();
+    close.addEventListener('click', function () { ov.close(); });
+    ov.addEventListener('close', function () { ov.remove(); if (picked >= 0) pick(picked); else if (opener && doc.contains(opener)) opener.focus(); });
+    doc.body.appendChild(ov);
+    if (ov.showModal) ov.showModal(); else ov.setAttribute('open', '');
+    inp.focus();
   }
 
   /* ── 실습 ─────────────────────────────── */
@@ -576,7 +625,7 @@
         $$('[data-prompt]', a).forEach(function (ta) { var v = store.get('prompt:' + ta.getAttribute('data-prompt'), null); if (v !== null) t += '  고친 프롬프트: ' + v.replace(/\n/g, ' ') + '\n'; });
         t += '\n';
       });
-      download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '') + '_나의기록.txt', t); toast('실습 기록을 내려받았어요.');
+      download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '') + '_나의기록.txt', t, '실습 기록을 내려받았어요.');
     });
     paint();
     stApi = { go: function (id) { var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === id; }); if (i >= 0 && i !== cur) { show(i, true); toast('강사가 보는 실습으로 이동했어요.'); } }, current: function () { return cur >= 0 ? idOf(cur) : null; }, done: function () { return done.slice(); } };
@@ -601,7 +650,7 @@
       if (b) b.addEventListener('click', function () {
         var t = (DATA.title || '연수') + ' · 나의 기록\n\n';
         $$('label', f).forEach(function (l) { t += '■ ' + l.querySelector('span').textContent + '\n' + (l.querySelector('textarea').value || '(비어 있음)') + '\n\n'; });
-        download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '') + '_나의기록.txt', t); toast('내려받았어요.');
+        download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '') + '_나의기록.txt', t, '내려받았어요.');
       });
     });
   }
@@ -722,7 +771,7 @@
       var hl = $('[data-hero-live]'); if (hl) { hl.hidden = false; $('[data-hero-live-n]', hl).textContent = arr.length; } // 첫 화면 유리 칸: 지금 올라온 질문 수
       if (!arr.length) { list.appendChild(el('li', 'lp-empty', '아직 질문이 없어요. 첫 질문을 올려 주세요.')); return; }
       arr.forEach(function (q) {
-        var li = el('li', 'lp-qa-item' + (q.pinned ? ' is-pinned' : '') + (q.status === 'answered' ? ' is-answered' : ''));
+        var li = el('li', 'lp-qa-item' + (q.pinned ? ' is-pinned' : '') + (q.status === 'answered' ? ' is-answered' : '')); li.setAttribute('data-id', q.id);
         var v = el('button', 'lp-vote'); v.type = 'button'; v.setAttribute('aria-pressed', String(!!voted[q.id])); v.setAttribute('aria-label', '공감 ' + (q.votes || 0));
         v.appendChild(el('span', '', '▲')); v.appendChild(el('b', '', String(q.votes || 0)));
         v.addEventListener('click', function () { if (voted[q.id]) return toast('이미 공감했어요.'); ensureJoin().then(function () { return conn.vote(q.id); }).then(function (r) { voted[q.id] = 1; store.set('voted', voted); if (r && r.votes !== undefined) { q.votes = r.votes; drawQA(); } }, function (err) { if (err && err.message !== 'cancel') toast(liveErr(err, '공감을 보내지 못했어요.')); }); });
@@ -750,7 +799,7 @@
       list.textContent = '';
       if (!arr.length) { list.appendChild(el('li', 'lp-empty', '아직 올라온 글이 없어요. 첫 글을 올려 주세요.')); return; }
       arr.forEach(function (p) {
-        var li = el('li', 'lp-card lp-post');
+        var li = el('li', 'lp-card lp-post'); li.setAttribute('data-id', p.id);
         if (p.files && p.files.length) {
           var fl = el('div', 'lp-post-files');
           p.files.forEach(function (f) {
@@ -861,17 +910,20 @@
       if (!b.getAttribute('data-attend') || b.tagName !== 'BUTTON') return;
       b.addEventListener('click', function () {
         var kind = b.getAttribute('data-attend');
-        ensureJoin({ attend: kind === 'in' }).then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
+        ensureJoin({ attend: kind === 'in' }).then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); if (kind === 'in') $$('[data-dock-attend]').forEach(function (d) { d.hidden = true; }); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
       });
     });
 
-    // 출석 한 번 누르기(도크, 출석 칸이 없는 사이트): 별명을 정하고 누르면 참가자 명단에 남음. 질문·투표를 하지 않은 사람도 명단에 들어가게
-    var da = $('[data-dock-attend]');
-    if (da && store.get('att:in', null) === null) {
+    // 출석 한 번 누르기(도크): 별명을 정하고 누르면 참가자 명단에 남음. 질문·투표를 하지 않은 사람도 명단에 들어가게.
+    // 출석 칸이 있는 사이트(data-dock-attend="in")는 연수 시간(시작 30분 전부터)에 입실 전일 때만 보이고, 누르면 그 칸의 입실 확인과 같음
+    var da = $('[data-dock-attend]'), ph = DATA.phase, gate = da && da.getAttribute('data-dock-attend') === 'in';
+    var soon = !gate || (ph && ph.start && new Date(ph.start) - new Date() < 30 * 60000 && root.getAttribute('data-phase') !== 'after');
+    if (da && soon && store.get('att:in', null) === null) {
       da.hidden = false;
       da.addEventListener('click', function () {
         ensureJoin({ attend: true }).then(function () { return conn.add('attendance', { kind: 'in' }); }).then(function () {
-          store.set('att:in', new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); da.hidden = true; toast('출석했어요. 고마워요.');
+          var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), s = $('[data-attend-state]');
+          store.set('att:in', t); da.hidden = true; if (s) s.textContent = '입실 확인 ' + t; toast(gate ? '입실을 확인했어요.' : '출석했어요. 고마워요.');
         }, function (err) { if (err && err.message !== 'cancel') toast('출석을 보내지 못했어요. 잠시 뒤 다시 눌러 주세요.'); });
       });
     }
@@ -902,7 +954,12 @@
     // 신호등: 참가자당 하나(answers, poll='signal')를 덮어씀
     var mySignal = store.get('signal', null);
     if (typeof mySignal === 'string') mySignal = mySignal ? { v: mySignal, at: 0 } : null;
-    function paintSignal() { $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(!!mySignal && b.getAttribute('data-signal') === mySignal.v)); }); }
+    var SIG_G = { green: '✓', yellow: '?', red: '!' };
+    function paintSignal() {
+      $$('[data-signal]').forEach(function (b) { b.setAttribute('aria-pressed', String(!!mySignal && b.getAttribute('data-signal') === mySignal.v)); });
+      // 도크의 접은 단추에는 지금 보낸 신호(없으면 신호등 세 점)
+      $$('[data-signal-now]').forEach(function (n) { if (mySignal && SIG_G[mySignal.v]) { n.setAttribute('data-v', mySignal.v); n.textContent = SIG_G[mySignal.v]; } else { n.removeAttribute('data-v'); n.textContent = ''; } });
+    }
     function checkSignalReset() {
       var r = X.signalReset(state);
       if (mySignal && r && r > (mySignal.at || 0)) { mySignal = null; store.del('signal'); paintSignal(); if ($('[data-signal]')) toast('강사가 신호를 새로 받아요. 지금 상태를 다시 눌러 주세요.'); }
@@ -910,19 +967,24 @@
     paintSignal();
     $$('[data-signal]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var v = b.getAttribute('data-signal');
+        var v = b.getAttribute('data-signal'); closeFolds();
         ensureJoin().then(function () { return conn.add('answers', { poll: 'signal', value: v }); }).then(function () { mySignal = { v: v, at: conn.now ? conn.now() : Date.now() }; store.set('signal', mySignal); paintSignal(); toast({ green: '‘이해했어요’를 보냈어요.', yellow: '‘조금 헷갈려요’를 보냈어요.', red: '‘모르겠어요’를 보냈어요. 곧 갈게요.' }[v]); }, function () { });
       });
     });
-    // 반응: 휴대폰에서는 버튼 하나로 접어 둠
-    var rt = $('[data-react-toggle]'), rbox = rt && rt.parentNode;
-    function setReact(open) { if (!rbox) return; rbox.classList.toggle('is-open', open); rt.setAttribute('aria-expanded', String(open)); }
-    if (rt) {
-      rt.addEventListener('click', function () { setReact(!rbox.classList.contains('is-open')); });
-      doc.addEventListener('click', function (e) { if (rbox.classList.contains('is-open') && !rbox.contains(e.target)) setReact(false); });
-      rbox.addEventListener('keydown', function (e) { if (e.key === 'Escape' && rbox.classList.contains('is-open')) { setReact(false); rt.focus(); } });
-    }
-    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); setReact(false); if (conn.react) conn.react(e).catch(function () { }); }); });
+    // 도크의 접는 단추(이해 정도·반응): 단추 하나를 누르면 위로 펼침. 바깥을 누르거나 Esc면 닫힘
+    var folds = $$('.lp-fold');
+    function setFold(box, open) { box.classList.toggle('is-open', open); $('[data-fold-toggle]', box).setAttribute('aria-expanded', String(open)); }
+    function closeFolds() { folds.forEach(function (x) { setFold(x, false); }); }
+    folds.forEach(function (box) {
+      var t = $('[data-fold-toggle]', box);
+      t.addEventListener('click', function () {
+        var open = !box.classList.contains('is-open'); closeFolds(); setFold(box, open);
+        if (open) { var f = $('[aria-pressed="true"]', box) || $('.lp-fold-list button', box); if (f) f.focus(); }
+      });
+      box.addEventListener('keydown', function (e) { if (e.key === 'Escape' && box.classList.contains('is-open')) { setFold(box, false); t.focus(); } });
+    });
+    if (folds.length) doc.addEventListener('click', function (e) { folds.forEach(function (x) { if (x.classList.contains('is-open') && !x.contains(e.target)) setFold(x, false); }); });
+    $$('[data-react]').forEach(function (b) { b.addEventListener('click', function () { var e = b.getAttribute('data-react'); floatReaction(e); closeFolds(); if (conn.react) conn.react(e).catch(function () { }); }); });
 
     // 만족도 설문(참가자당 하나, 다시 내면 덮어씀)
     $$('[data-survey]').forEach(function (f) {
@@ -944,12 +1006,15 @@
         });
         if (st) st.textContent = '제출했어요. 고칠 게 있으면 바꾼 뒤 다시 내 주세요.';
       }
+      var sbtn = f.querySelector('[type=submit]'), sLabel = sbtn ? sbtn.textContent : '', ask = 0;
+      f.addEventListener('change', function () { if (ask) { ask = 0; if (sbtn) sbtn.textContent = sLabel; } });
       f.addEventListener('submit', function (e) {
         e.preventDefault();
         var r = collect();
-        if (!Object.keys(r.answers).length) return toast('한 문항 이상 답해 주세요.');
-        if (r.missing && !window.confirm('답하지 않은 문항이 ' + r.missing + '개 있어요. 이대로 낼까요?')) return;
-        var btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
+        if (!Object.keys(r.answers).length) { if (st) st.textContent = '한 문항 이상 답해 주세요.'; return; }
+        if (r.missing && ask !== r.missing) { ask = r.missing; if (st) st.textContent = r.missing + '문항이 비었어요. 그대로 내도 돼요.'; if (sbtn) sbtn.textContent = '그대로 내기'; return; }
+        ask = 0; if (sbtn) sbtn.textContent = sLabel;
+        var btn = sbtn; if (btn) btn.disabled = true;
         ensureJoin().then(function () { return conn.add('survey', { answers: r.answers }); }).then(function () {
           store.set(sk, r.answers); if (st) st.textContent = '제출했어요. 고칠 게 있으면 바꾼 뒤 다시 내 주세요.'; toast('제출했어요. 고마워요.');
         }, function (err) { if (err && err.message !== 'cancel') toast('제출하지 못했어요: ' + (err.message || '잠시 뒤 다시 해 주세요.')); }).then(function () { if (btn) btn.disabled = false; });
@@ -971,20 +1036,23 @@
     }
     function drawNow() {
       if (!nowEl) return;
-      var main = '', sub = '', cta = null, sts = DATA.stations || [];
+      // 끝난 연수: 남은 공지·타이머·투표 대신 맨 위 '종료' 줄만(initPhase)
+      if (root.getAttribute('data-phase') === 'after') { clearInterval(timerIv); if (!nowEl.hidden) { nowEl.hidden = true; fitScrollPad(); } return; }
+      var main = '', sub = '', where = '', cta = null, sts = DATA.stations || [];
       var p = openPoll();
       var si = state.step ? sts.map(function (x) { return x.id; }).indexOf(state.step) : -1;
-      if (p) {
-        main = '투표: ' + p.question;
-        if (store.get('ans:' + p.id, null) === null) cta = { label: '투표하기', href: '#' + pollSecId(), poll: true };
-        else if (X.revealed(state, p.id)) cta = { label: '결과 보기', href: '#' + pollSecId(), poll: true };
-      } else if (si >= 0 && stApi) {
-        main = (si + 1) + '번 실습 · ' + sts[si].name;
+      if (si >= 0 && stApi) {
+        where = (si + 1) + '번 실습 · ' + sts[si].name;
         if (stApi.current() !== state.step) cta = { label: (si + 1) + '번 실습 열기', href: '#st-' + state.step };
       } else if (state.slide > 0 && deckApi) {
-        main = '교재 ' + state.slide + '쪽';
+        where = '교재 ' + state.slide + '쪽';
         cta = { label: state.slide + '쪽 보기', href: '#deck-p' + state.slide };
       }
+      if (p) {
+        main = '투표: ' + p.question; sub = where;
+        if (store.get('ans:' + p.id, null) === null) cta = { label: '투표하기', href: '#' + pollSecId(), poll: true };
+        else if (X.revealed(state, p.id)) cta = { label: '결과 보기', href: '#' + pollSecId(), poll: true };
+      } else main = where;
       var notice = state.notice && state.notice.text;
       if (notice) { sub = main; main = notice; }
       var t = runningTimer();
@@ -1011,12 +1079,14 @@
       });
       window.addEventListener('hashchange', function () { setTimeout(drawNow, 0); });
     }
+    var seenState = false;
     function applyState(s) {
       state = s || {};
       if (state.follow) {
         if (state.step && stApi) stApi.go(state.step);
-        if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide);
+        if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide, seenState); // 처음 열 때는 쪽만 맞추고 화면은 옮기지 않음
       }
+      seenState = true;
       checkSignalReset(); drawPoll(); drawNow(); drawMats(); drawLocks();
     }
     // 강사가 질문·보드를 잠그면 쓰는 칸을 막고 까닭을 보임(서버도 같은 규칙으로 거절)
@@ -1070,6 +1140,9 @@
       if (ev.type === 'remove') delete bag[d.id]; else bag[d.id] = Object.assign(bag[d.id] || {}, d);
       if (ev.col === 'questions') drawQA(); else if (ev.col === 'posts') drawBoard(); else { drawPoll(); if (ev.col === 'polls') drawNow(); }
     }
+    drawQA = keepFocus(drawQA, function () { return qaBox && $('[data-qa-list]', qaBox); });
+    drawBoard = keepFocus(drawBoard, function () { return bBox && $('[data-board-list]', bBox); }, function () { return bBox && $('[data-board-write]', bBox); });
+    drawPoll = keepFocus(drawPoll, function () { return pollBox && $('[data-poll-live]', pollBox); });
     function loadAll() {
       var jobs = [];
       if (qaBox) jobs.push(conn.list('questions', {}).then(function (a) { (a || []).forEach(function (d) { qs[d.id] = d; }); drawQA(); }));
