@@ -84,20 +84,29 @@ test('빌드: 교재 글꼴이 사이트 글꼴이 되고, 기본 글꼴은 프�
   for (const u of r.files['index.html'].match(/<link rel="stylesheet" href="https:[^"]+"/g) || []) assert.match(u, /fonts\.googleapis\.com|cdn\.jsdelivr\.net\/(gh|npm)\/[^/]+@|hangeul\.pstatic\.net/, u);
 });
 
-test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각만 사이트 안으로, 쪽은 외부 글꼴 주소 대신 assets/fonts.css', async () => {
+test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각과 한글 조각만 사이트 안으로, 쪽은 외부 글꼴 주소 대신 assets/fonts.css', async () => {
   const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }, { type: 'goals', items: ['가나다'] }] }, { runtime: nodeRuntime() });
   assert.ok(/<link rel="stylesheet" href="https:/.test(r.files['index.html']));
   const asked = [];
-  // 가짜 CDN: 스타일시트마다 한글 조각(쓰인 글자 '가') · 안 쓰는 조각(일본 가나) · 라틴 조각
+  // 가짜 CDN: 스타일시트마다 한글 조각(쓰인 글자 '가') · 사이트에 없는 글자만 든 한글 조각('챗' 등) · 안 쓰는 조각(일본 가나) · 라틴 조각
+  let n = 0;
   const fakeFetch = async (url) => {
     asked.push(url);
-    if (/\.woff2?$/.test(url)) return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
-    return { ok: true, text: async () => `@font-face{font-family:'X';src:url(./a/ko.woff2) format('woff2');unicode-range:U+AC00-AC0F}\n@font-face{font-family:'X';src:url(./a/kana.woff2) format('woff2');unicode-range:U+3040-309F}\n@font-face{font-family:'X';src:url(https://fonts.gstatic.com/s/x/latin.woff2) format('woff2');unicode-range:U+0000-00FF}` };
+    if (/\.woff2?$/.test(url)) return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3, n++]).buffer };
+    return { ok: true, text: async () => `@font-face{font-family:'X';src:url(./a/ko.woff2) format('woff2');unicode-range:U+AC00-AC0F}\n@font-face{font-family:'X';src:url(./a/ko2.woff2) format('woff2');unicode-range:U+CC57-CC60}\n@font-face{font-family:'X';src:url(./a/kana.woff2) format('woff2');unicode-range:U+3040-309F}\n@font-face{font-family:'X';src:url(https://fonts.gstatic.com/s/x/latin.woff2) format('woff2');unicode-range:U+0000-00FF}` };
   };
   const { files, report } = await E.bundleFonts(r.files, { fetch: fakeFetch });
   assert.ok(report.ok, report.skipped.join());
-  assert.ok(!asked.some((u) => u.endsWith('kana.woff2')), '쓰지 않는 글자 조각은 받지 않음');
+  assert.ok(!asked.some((u) => u.endsWith('kana.woff2')), '쓰지 않는 글자 조각(한글 아님)은 받지 않음');
   assert.ok(asked.some((u) => u.endsWith('/a/ko.woff2')) && asked.some((u) => u.endsWith('latin.woff2')));
+  // 한글 조각은 사이트에 없는 글자뿐이어도 담음: 참가자가 '챗'을 써도 같은 글꼴로(unicode-range라 첫 로딩에는 받지 않음)
+  assert.ok(asked.some((u) => u.endsWith('/a/ko2.woff2')));
+  assert.match(files['assets/fonts.css'], /unicode-range:\s*U\+CC57-CC60/);
+  assert.equal(report.hangul, 'all');
+  // 배포할 곳의 한도를 넘으면 한글 조각을 단계마다 덜 담음(마지막은 쓰인 글자가 든 조각만)
+  const small = await E.bundleFonts(r.files, { fetch: fakeFetch, fits: (f) => Object.keys(f).filter((k) => k.startsWith('assets/fonts/')).length < 3 });
+  assert.equal(small.report.hangul, 'none');
+  assert.doesNotMatch(small.files['assets/fonts.css'], /U\+CC57/);
   assert.doesNotMatch(files['index.html'], /<link rel="stylesheet" href="https:/);
   assert.doesNotMatch(files['index.html'], /preconnect" href="https:\/\/fonts\.gstatic\.com/);
   assert.match(files['index.html'], /<link rel="stylesheet" href="assets\/fonts\.css">/);

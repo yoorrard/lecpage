@@ -138,7 +138,8 @@ export function siteData(ctx) {
 /** 보조 화면(강사·발표·안내문·접속 확인·개인정보)의 틀: 같은 테마·글꼴·단추 모양을 이어받고, 쪽마다 aux.css를 더함 */
 export function appShell(ctx, { title, page, bodyClass, inner, scripts = [], blueprint = false }) {
   const bp = ctx.bp;
-  const bpData = blueprint ? jsonScript('lp-blueprint', { sections: bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? s.items : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, bp) : undefined })), stations: (bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title })), deck: bp.sections.find((s) => s.type === 'deck')?.slides.length || 0 }) : '';
+  // pages: 교재의 실제 쪽 번호(교재 일부만 담으면 1,2,4,8…). 강사 화면은 이 번호를 보내고 참가자 화면은 같은 번호(data-page)로 찾음
+  const bpData = blueprint ? jsonScript('lp-blueprint', { sections: bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? s.items : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, bp) : undefined })), stations: (bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title })), pages: (bp.sections.find((s) => s.type === 'deck')?.slides || []).map((x) => x.page) }) : '';
   return `<!doctype html>
 <html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-motion': '1', 'data-page': page })}>
 <head>

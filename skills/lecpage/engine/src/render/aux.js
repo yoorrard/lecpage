@@ -208,8 +208,15 @@ export function checkItems(ctx) {
   // 참여 기능 서버는 주소를 찌르지 않고 check.js가 실제로 연결해 봄(실시간·새로 읽기 중 어느 방식인지까지)
   if (ctx.live && bp.live.provider === 'supabase') add({ name: 'Supabase 연결 도구', url: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/package.json', kind: 'lib', need: 'must', impact: '참여 기능이 연결되지 않아요.', fix: '기관 정보 담당자에게 cdn.jsdelivr.net을 열어 달라고 요청하세요.' });
   for (const t of [...(bp.sections.find((s) => s.type === 'readiness')?.checks || []), ...bpTools(bp).slice(0, 12)]) add({ name: t.name, url: t.url, kind: 'tool', need: 'must', impact: `실습에서 쓰는 ${t.name}이 열리지 않아요.`, fix: '연수 전에 열어 달라고 요청하거나 대신 쓸 도구를 준비하세요.' });
-  const fontHosts = [...new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean))];
-  for (const h of fontHosts) add({ name: h === 'fonts.googleapis.com' ? '구글 글꼴' : h === 'hangeul.pstatic.net' ? '네이버 글꼴' : '글꼴·효과 파일', url: h === 'fonts.googleapis.com' ? 'https://fonts.googleapis.com/css2?family=Jua' : h === 'cdn.jsdelivr.net' ? 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' : `https://${h}/`, kind: 'font', need: 'nice', impact: '글꼴이 기본 글꼴로 보여요. 내용은 그대로예요.', fix: '괜찮으면 그대로 써도 돼요. 꼭 같은 글꼴이 필요하면 글꼴을 함께 담아 다시 만드세요.' });
+  // 글꼴 CDN·움직임 효과 라이브러리(jsDelivr). 글꼴을 사이트에 담으면(assets/fonts.css) check.js가 글꼴 몫을 빼고 효과 몫만 봄(font: true, fx*)
+  const fontHosts = new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean)), fxHosts = new Set((ctx.fxLibs || []).map((u) => host(u)).filter(Boolean));
+  const FX = { fxName: '움직임 효과 파일', fxImpact: '일부 움직임 효과(부드러운 스크롤 등)가 빠져요. 내용은 그대로예요.', fxFix: '그대로 써도 돼요.' };
+  for (const h of new Set([...fontHosts, ...fxHosts])) {
+    const font = fontHosts.has(h), fx = fxHosts.has(h), url = h === 'fonts.googleapis.com' ? 'https://fonts.googleapis.com/css2?family=Jua' : h === 'cdn.jsdelivr.net' ? 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' : `https://${h}/`;
+    const base = { url, kind: 'font', need: 'nice' };
+    if (!font) { add({ ...base, kind: 'fx', name: FX.fxName, impact: FX.fxImpact, fix: FX.fxFix }); continue; }
+    add({ ...base, font: true, name: h === 'fonts.googleapis.com' ? '구글 글꼴' : h === 'hangeul.pstatic.net' ? '네이버 글꼴' : fx ? '글꼴·효과 파일' : '글꼴 파일', impact: fx ? '글꼴이 기본 글꼴로 보이고, 일부 움직임 효과가 빠져요. 내용은 그대로예요.' : '글꼴이 기본 글꼴로 보여요. 내용은 그대로예요.', fix: '괜찮으면 그대로 써도 돼요. 꼭 같은 글꼴이 필요하면 글꼴을 함께 담아 다시 만드세요.', ...(fx ? FX : {}) });
+  }
   // 연수 정보에 적어 둔 '학교에서 막힌 곳'(audience.blocked): 주소면 함께 확인
   const asUrl = (b) => { const r = /^(?:https?:\/\/)?((?:[\w-]+\.)+[a-z]{2,})(\/\S*)?$/i.exec(String(b).trim()); return r ? `https://${r[1]}${r[2] || '/'}` : ''; };
   for (const b of bp.audience?.blocked || []) { const u = asUrl(b); if (u) add({ name: host(u), url: u, kind: 'blocked', need: 'must', impact: '연수 정보에 막힌 곳으로 적어 둔 사이트예요.', fix: '여기서도 막히면 다른 도구를 준비하거나 열어 달라고 요청하세요.' }); }
@@ -228,7 +235,7 @@ export function renderCheck(ctx) {
 </header>
 <section class="lp-chk-verdict" data-verdict data-state="wait" aria-labelledby="lp-verdict-h">
 <div class="lp-chk-mark" aria-hidden="true"><span data-m="wait">${icon('refresh')}</span><span data-m="ok">${icon('check')}</span><span data-m="warn">${icon('alert')}</span><span data-m="fail">${icon('close')}</span></div>
-<div class="lp-chk-say"><h2 id="lp-verdict-h" data-verdict-big aria-live="polite">확인하는 중…</h2><p data-verdict-sub>${items.length + (ctx.live ? 1 : 0) + 1}곳을 차례로 열어 봐요.</p></div>
+<div class="lp-chk-say"><h2 id="lp-verdict-h" data-verdict-big aria-live="polite">확인하는 중…</h2><p data-verdict-sub>연수에 쓰는 곳을 차례로 열어 봐요.</p></div>
 <div class="lp-chk-do"><button class="lp-btn lp-btn-primary" type="button" data-diag-run>${icon('refresh')}<span>다시 확인</span></button><button class="lp-btn lp-btn-ghost" type="button" data-diag-copy>${icon('copy')}<span>결과 복사</span></button></div>
 </section>
 <div class="lp-chk-cols">
@@ -265,13 +272,26 @@ export function activityItems(bp) {
 function quickAttendOn(bp) {
   return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
 }
+/** 참여 기능 서버가 Cloudflare(강사의 workers.dev 또는 바로 배포의 /live)인지. 아니면 강사·기관의 자체 서버 */
+const onCloudflare = (bp) => /(^|\.)workers\.dev$/.test(host(bp.live.url || '')) || /\/live\/?$/.test(String(bp.live.url || ''));
 export function defaultProcessors(bp) {
   const map = {
     supabase: [{ name: 'Supabase Inc.', contact: 'privacy@supabase.com', country: '미국(서버 지역은 강사가 선택)', purpose: '참여 기능 기록 저장' }],
     sheets: [{ name: 'Google LLC', contact: 'https://support.google.com/policies/contact/general_privacy_form', country: '미국', purpose: '구글 시트·드라이브에 응답 저장' }],
-    http: [{ name: '참여 기능 서버 운영자(Cloudflare, Inc. 또는 자체 서버)', contact: /(^|\.)workers\.dev$/.test(host(bp.live.url)) ? 'privacyquestions@cloudflare.com' : '', country: 'Cloudflare: 미국 / 자체 서버: 서버 위치', purpose: '참여 기능 중계와 저장' }],
+    // 자체 서버(강사·기관이 직접 운영)는 맡기는 곳·국외 이전이 없음
+    http: onCloudflare(bp) ? [{ name: 'Cloudflare, Inc.', contact: 'privacyquestions@cloudflare.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: '참여 기능 중계와 저장' }] : [],
   };
   return map[bp.live.provider] || [];
+}
+/** 바로 배포 서버가 참여 기록을 맡음(앱이 처리자로 'lecpage 운영자'를 넣음): 운영자는 강사를 대신해 저장만 하는 수탁자 */
+const byOperator = (bp) => (bp.privacy.processors || []).some((p) => /^lecpage 운영자/.test(p.name));
+/**
+ * 참여 기록을 언제 지우는지: 개인정보 안내(한눈에·3)·참여하기 동의·운영 안내가 이 한 문장을 씀.
+ * 서버마다 '마지막 기록 뒤 N일'이 지나면 지움(node·Cloudflare·바로 배포·Supabase pg_cron·시트 트리거). 바로 배포는 사이트를 지울 때 늦어도 함께
+ */
+export function keepRule(bp) {
+  const d = bp.privacy.retentionDays;
+  return { short: `마지막 기록 뒤 ${d}일`, site: byOperator(bp) ? '사이트 보관 기간이 먼저 끝나면 사이트와 함께' : '' };
 }
 
 /**
@@ -281,11 +301,10 @@ export function defaultProcessors(bp) {
  */
 export function eraseFacts(bp) {
   const prov = bp.live.provider;
-  const h = host(bp.live.url || '');
-  if (prov === 'sheets') return { how: '시트에서 행을 지웁니다. 다만 구글 시트는 지운 행도 버전 기록에 남기므로, 연수가 끝나면 시트 파일째 지우고 드라이브 휴지통을 비워 복구할 수 없게 합니다. 올린 파일은 드라이브 휴지통으로 옮겨집니다.', sure: false };
-  if (prov === 'supabase') return { how: '데이터베이스와 파일 저장소에서 지웁니다. 다만 Supabase가 만드는 백업에는 요금제의 백업 보관 기간 동안 남을 수 있습니다.', sure: false };
-  if (prov === 'http' && (/(^|\.)workers\.dev$/.test(h) || /\/live\/?$/.test(String(bp.live.url || '')))) return { how: '서버에서 지웁니다. 다만 Cloudflare가 저장소 복원용으로 남기는 기록에 30일 동안 남았다가 사라집니다.', sure: false };
-  if (prov === 'http') return { how: '서버에서 지운 자리를 0으로 덮어 복구할 수 없게 지웁니다.', sure: true };
+  if (prov === 'sheets') return { how: '구글 시트는 지운 행도 버전 기록에 남기므로, 연수가 끝나면 시트 파일째 지우고 드라이브 휴지통을 비워 복구할 수 없게 합니다. 올린 파일은 드라이브 휴지통으로 옮겨집니다.', sure: false };
+  if (prov === 'supabase') return { how: '지운 기록도 Supabase 백업에는 요금제의 백업 보관 기간 동안 남을 수 있습니다.', sure: false };
+  if (prov === 'http' && onCloudflare(bp)) return { how: '지운 기록도 Cloudflare가 저장소 복원용으로 30일 동안 남겼다가 지웁니다.', sure: false };
+  if (prov === 'http') return { how: '지운 자리는 0으로 덮어 복구할 수 없습니다.', sure: true };
   return { how: '', sure: false };
 }
 
@@ -293,18 +312,22 @@ export function renderPrivacy(ctx) {
   const bp = ctx.bp, pv = bp.privacy, local = bp.live.provider === 'local';
   const items = { nickname: '별명', name: '이름', school: '소속(학교)', email: '이메일' };
   const procs = local ? [] : (pv.processors.length ? pv.processors : defaultProcessors(bp));
+  const keep = keepRule(bp);
+  const tls = ['supabase', 'sheets'].includes(bp.live.provider) || /^https:\/\//i.test(bp.live.url || '');
+  // 접속 기록이 남을 수 있는 바깥 파일 서버: 이 사이트의 글꼴·효과가 부르는 곳만(글꼴을 사이트에 담으면 실제로는 부르지 않으니 '남을 수 있습니다'로 둠)
+  const cdnName = { 'fonts.googleapis.com': 'Google Fonts', 'cdn.jsdelivr.net': 'jsDelivr', 'hangeul.pstatic.net': '네이버' };
+  const cdns = [...new Set([...ctx.fontLinks, ...(ctx.fxLibs || [])].map((u) => cdnName[host(u)] || host(u)).filter(Boolean))];
   const acts = activityItems(bp);
   const anonQa = bp.live.anonymous !== false && (bp.sections.some((s) => s.type === 'qa') || bp.live.features.includes('qa'));
   const who = bp.meta.organizer || bp.instructors[0]?.name || '연수 운영자';
   const contactRaw = pv.contact || bp.meta.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '';
   const contact = contactHtml(contactRaw || '연수 운영자에게 문의해 주세요.');
   const collect = pv.collect.map((c) => items[c]).filter(Boolean);
-  // 바로 배포 서버가 참여 기록을 맡으면(앱이 처리자로 'lecpage 운영자'를 넣음) 운영자는 강사를 대신해 저장만 하는 수탁자
-  const byOperator = procs.some((p) => /^lecpage 운영자/.test(p.name));
-  const rows =(p) => [['이전받는 자', `${esc(p.name)}${p.contact ? ` (${contactHtml(p.contact)})` : ''}`], ['이전 국가', esc(p.country)], ['이전 항목', '위 2의 항목 전부'], ['이전 시기·방법', '참여 기능을 쓸 때마다 네트워크로 전송'], ['이용 목적·보유 기간', `${esc(p.purpose)}, 위 3의 보유 기간까지`], ['거부 방법과 효과', '참여 기능을 쓰지 않으면 전송되지 않습니다. 이 경우 질문·투표 등은 쓸 수 없고, 안내와 교재는 그대로 볼 수 있습니다.']];
+  const op = byOperator(bp);
+  const rows = (p) => [['이전받는 자', `${esc(p.name)}${p.contact ? ` (${contactHtml(p.contact)})` : ''}`], ['이전 국가', esc(p.country)], ['이전 항목', '위 2의 항목 전부'], ['이전 시기·방법', '참여 기능을 쓸 때마다 네트워크로 전송'], ['이용 목적·보유 기간', `${esc(p.purpose)}. 참여 기록은 위 3의 보유 기간까지`], ['거부 방법과 효과', '참여 기능을 쓰지 않으면 전송되지 않습니다. 이 경우 질문·투표 등은 쓸 수 없고, 안내와 교재는 그대로 볼 수 있습니다.']];
   const sum = [
     ['받는 정보', `${collect.join('·')}${pv.collect.includes('name') ? '' : ' (이름·연락처는 받지 않음)'}`],
-    ['보관', local ? '이 브라우저 안에만(리허설)' : `연수가 끝나고 ${pv.retentionDays}일`],
+    ['보관', local ? '이 브라우저 안에만(리허설)' : keep.short],
     ['맡기는 곳', local ? '없음' : procs.length ? procs.map((p) => esc(p.name.replace(/\(.*\)$/, '').trim())).join(', ') : '없음'],
     ['지우기', local ? '브라우저의 사이트 데이터 삭제' : '강사가 강사 화면에서 바로 지울 수 있음'],
     ['문의', contactRaw ? contactHtml(contactRaw) : esc(who)],
@@ -315,17 +338,17 @@ export function renderPrivacy(ctx) {
 <p class="lp-doc-lead">「${esc(bp.meta.title)}」 연수의 참여 기능(질문·투표 등)이 어떤 정보를 받고 어떻게 다루는지 적은 안내입니다.</p>
 <section class="lp-doc-sum" aria-labelledby="lp-sum-h"><h2 id="lp-sum-h">한눈에 보기</h2><dl>${sum.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
 <p><b>개인정보처리자</b> ${esc(who)}</p>
-<p>이 연수를 운영하면서 아래 개인정보만 처리합니다. ${byOperator ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않고, 늦어도 사이트가 지워질 때 함께 지웁니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
+<p>이 연수를 운영하면서 아래 개인정보만 처리합니다. ${op ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않습니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
 <h2>1. 처리 목적</h2><p>연수 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
 <h2>2. 처리 항목</h2><p>${collect.join(', ')}, 참가자를 구분하는 임의 번호.</p>
 <p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? `\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 ${local ? '기록' : '서버'}에는 그 임의 번호와 함께 저장됩니다.</p>` : ''}
 <p>주민등록번호·전화번호·생년월일은 받지 않습니다. 질문이나 글에 본인 또는 다른 사람의 개인정보를 적지 마세요.</p>${bp.live.provider === 'http' ? '\n<p>접속할 때 IP 주소가 서버에 전달되며, 잘못된 접근과 도배를 막는 횟수 제한에만 씁니다. IP 주소는 기록으로 남기지 않습니다.</p>' : ''}${bp.audience?.minor ? '\n<p>만 14세 미만 참가자도 쓸 수 있도록 별명만 받습니다. 이름 등 다른 개인정보와 파일은 받지 않습니다.</p>' : ''}
-<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>연수 종료 후 ${pv.retentionDays}일까지 보관하고, 그 뒤 지체 없이 파기합니다. 서버의 기록과 올린 파일은 강사 화면의 [데이터 모두 지우기]로 지우고, 내려받은 명단 파일도 함께 지웁니다. ${eraseFacts(bp).how}${bp.live.provider === 'http' ? ` 마지막 기록 뒤 ${pv.retentionDays}일이 지나면 서버가 저절로 지웁니다.` : ''}</p>`}
-<h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 사이트의 안내·교재·실습 화면은 그대로 쓸 수 있습니다.${pv.collect.includes('name') ? ' 다만 출석 확인 등 이름이 필요한 기능은 쓸 수 없습니다.' : ''}</p>
+<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>참여 기록과 올린 파일은 ${keep.short}까지 보관하고, 그 뒤 지체 없이 파기합니다${keep.site ? `(${keep.site})` : ''}. 강사는 그 전에도 강사 화면의 [데이터 모두 지우기]로 바로 지울 수 있습니다. ${eraseFacts(bp).how} 내려받은 명단 파일도 다 쓰면 지웁니다.</p>`}
+<h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 안내·교재·실습과 질문·투표는 그대로 쓸 수 있습니다.${pv.collect.includes('name') || pv.collect.includes('school') ? ' 이름·소속을 받는 입실 기록만 남지 않습니다.' : ''}</p>
 <h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
 <h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
-<p>사이트 파일을 보내 주는 호스팅 회사와 글꼴·효과 파일을 보내 주는 CDN(jsDelivr, Google Fonts, 네이버)에 접속 기록(IP 주소 등)이 남을 수 있습니다.</p>
-<h2>7. 안전 조치</h2><p>${local ? '참여 기록은 이 브라우저 밖으로 나가지 않습니다.' : '모든 전송은 암호화(HTTPS)됩니다. 기록은 관리자 키를 아는 강사만 볼 수 있고, 틀린 키를 여러 번 넣으면 잠시 막습니다.'} 글은 글자로만 보이고(링크·스크립트로 바뀌지 않음), 한 기기에서 너무 자주 보내면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
+<p>사이트 파일을 보내 주는 호스팅 회사${cdns.length ? `와 글꼴·효과 파일을 보내 주는 곳(${cdns.join(', ')})` : ''}에 접속 기록(IP 주소 등)이 남을 수 있습니다.</p>
+<h2>7. 안전 조치</h2><p>${local ? '참여 기록은 이 브라우저 밖으로 나가지 않습니다.' : `${tls ? '모든 전송은 암호화(HTTPS)됩니다. ' : ''}기록은 관리자 키를 아는 강사만 볼 수 있고, 틀린 키를 여러 번 넣으면 잠시 막습니다.`} 글은 글자로만 보이고(링크·스크립트로 바뀌지 않음), 한 기기에서 너무 자주 보내면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
 <h2>8. 이 브라우저에 저장하는 정보</h2><p>별명과 임의 번호, 화면 설정을 이 브라우저의 저장소(localStorage)에 둡니다. 쿠키와 분석 도구는 쓰지 않습니다. 브라우저의 사이트 데이터 삭제로 지울 수 있습니다.</p>
 <h2>9. 문의</h2><p>${contact}</p>
 <p>침해 신고·상담: 개인정보침해신고센터(privacy.kisa.or.kr, 118), 개인정보 분쟁조정위원회(www.kopico.go.kr, 1833-6972)</p>
@@ -340,7 +363,6 @@ export function opsGuide(ctx) {
   const bp = ctx.bp;
   const live = ctx.live;
   const prov = live ? bp.live.provider : 'none';
-  const days = bp.privacy.retentionDays;
   const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
   const svIn = live && sv?.questions?.length;
   const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
@@ -369,7 +391,7 @@ export function opsGuide(ctx) {
     `참가자 명단(별명): 강사 화면의 [기록 내려받기] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
     survey,
     '질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
-    `다 받은 뒤, 늦어도 연수가 끝나고 ${days}일 안에 강사 화면의 [데이터 모두 지우기]로 지우세요. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+    `다 받은 뒤 강사 화면의 [데이터 모두 지우기]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
     prov === 'sheets' && '구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.',
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];

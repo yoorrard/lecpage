@@ -8,7 +8,7 @@ import { projectAssets } from '../../components/Preview.jsx';
 import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { Publish, lecLiveOff } from '../../components/Publish.jsx';
-import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
+import { probeSite, instantInfo, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml, printHtml } from '../../lib/venue.js';
@@ -41,7 +41,10 @@ const bins = (files) => Object.keys(files).filter((k) => !/\.(html|css|js|json|m
 async function withFonts(files, { target, view }) {
   if (!FONT_HOSTS.includes(target) || (target === 'lecpage' && view !== 'pages')) return { files, note: '' };
   const get = (u) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000); return fetch(u, { mode: 'cors', credentials: 'omit', signal: c.signal }).finally(() => clearTimeout(t)); };
-  let fb = await E.bundleFonts(files, { fetch: get });
+  // 참가자가 새 글자를 써도 같은 글꼴로 보이게 한글 조각을 모두 담되, 올릴 곳의 한도(파일 수·크기)를 넘으면 엔진이 덜 담음(바로 배포는 서버가 알려 준 한도, 잠글 때 늘 파일 몫을 남김)
+  const lim = target === 'lecpage' ? (await instantInfo())?.limits : null;
+  const fits = (f) => { const st = siteStat(f); return target === 'github-pages' ? bins(f) <= 40 : lim ? st.files <= lim.maxFiles - 8 && st.bytes <= lim.maxBytes && st.maxFile <= lim.maxFileBytes : E.checkHost(target, st).ok; };
+  let fb = await E.bundleFonts(files, { fetch: get, fits });
   if (!fb.report.ok) return { files, note: '글꼴 서버에 닿지 않아 글꼴을 사이트에 담지 못했어요. 연수 장소에서 글꼴이 늦게 뜨거나 바뀌어 보일 수 있어요.' };
   // GitHub Pages: 글자만 남긴 글꼴은 원본과 둘씩이라 파일이 늘어남 → 넘치면 원본만 담아 다시 셈
   if (target === 'github-pages' && bins(fb.files) > 40 && fb.report.subset) fb = await E.bundleFonts(files, { fetch: get, subset: false });

@@ -215,6 +215,20 @@ test('개인정보 안내: 바로 배포 서버가 참여 기록을 맡으면 �
   assert.ok(lec.includes('hello@lecpage.com'));
   const own = E.build({ ...bp, live: { provider: 'supabase', url: 'https://x.supabase.co', features: ['qa'] }, privacy: {} }, { runtime: nodeRuntime() }).files['privacy.html'];
   assert.match(own, /lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다/);
+  // 보관 기간은 한 기준(마지막 기록 뒤 N일)으로 한눈에·3·참여 동의가 같은 말. 바로 배포는 늦어도 사이트와 함께
+  const days = (h) => [...new Set(h.replace(/<[^>]+>/g, ' ').match(/(연수가 끝나고|연수 종료 후|마지막 [가-힣 ]{1,8}뒤) ?\d+일/g) || [])];
+  assert.deepEqual(days(lec), ['마지막 기록 뒤 30일']);
+  assert.match(lec, /사이트 보관 기간이 먼저 끝나면 사이트와 함께/);
+  assert.match(lec, /모든 전송은 암호화\(HTTPS\)됩니다/);
+  // 자체 서버: 맡기는 곳·국외 이전 없음, http 주소면 암호화했다고 쓰지 않음. 강사의 workers.dev는 Cloudflare
+  const self = (url) => E.build({ ...bp, live: { provider: 'http', url, features: ['qa', 'attendance'] }, privacy: { collect: ['nickname', 'name', 'school'], retentionDays: 14 } }, { runtime: nodeRuntime() }).files;
+  const s1 = self('http://192.168.0.10:8787')['privacy.html'];
+  assert.match(s1, /처리를 맡기는 곳도 없습니다/); assert.doesNotMatch(s1, /이전 국가|HTTPS|Cloudflare/); assert.deepEqual(days(s1), ['마지막 기록 뒤 14일']);
+  assert.match(self('https://lec.teacher.workers.dev')['privacy.html'], /Cloudflare, Inc\./);
+  // 참여하기 동의: 이름·소속은 입실 때만 받으니 동의하지 않아도 질문·투표는 그대로
+  const idx = self('https://live.school.kr')['index.html'];
+  assert.match(idx, /이름·소속을 출석 확인에만 쓰고 마지막 기록 뒤 14일 안에 지우는 데 동의합니다\. 동의하지 않으면 입실 기록만 남지 않아요\(질문·투표는 그대로\)/);
+  assert.doesNotMatch(idx, /참여 기능을 쓸 수 없어요/);
 });
 
 test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을 파일 목록에 넣음', () => {

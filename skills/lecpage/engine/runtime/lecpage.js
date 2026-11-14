@@ -158,7 +158,7 @@
     if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
   }
   // 메뉴 높이만큼 앵커 이동 여백을 맞춤(지금 줄이 생기면 메뉴가 길어짐)
-  function fitScrollPad() { var h = $('.lp-nav'); if (h) root.style.scrollPaddingTop = (h.offsetHeight + 16) + 'px'; }
+  function fitScrollPad() { var h = $('.lp-nav'); if (h) root.style.setProperty('--lp-head', (h.offsetHeight + 16) + 'px'); }
   function goTo(id) {
     var t = doc.getElementById(id); if (!t) return;
     if (location.hash === '#' + id) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); else location.hash = id;
@@ -534,7 +534,7 @@
       var a = doc.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !deck.contains(a), r = deck.getBoundingClientRect();
       if (!typing && (r.bottom < 80 || r.top > innerHeight * 0.6)) { deck.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); toast('강사가 보는 ' + page + '쪽으로 옮겼어요.'); }
       else if (typing) toast('강사가 ' + page + '쪽을 보고 있어요.');
-    }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
+    }, has: function (page) { return slides.some(function (s) { return +s.getAttribute('data-page') === +page; }); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
   }
   // 글만 있는 쪽의 작은 미리보기: 쪽 번호 + 제목(표지·부 시작은 큰 슬라이드와 같은 바탕)
   function thumbText(s) {
@@ -867,10 +867,18 @@
       pollBox = box; return box;
     }
     function pollSecId() { var s = pollBox && pollBox.closest('section'); return s ? s.id : ''; }
+    // 투표 칸이 화면 가운데쯤 보이는지('지금' 줄의 [투표하기]·[결과 보기]를 뺄 때)
+    var pollVis = false;
+    function watchPoll() {
+      if (!pollBox || pollBox._io || !('IntersectionObserver' in window)) return;
+      pollBox._io = new IntersectionObserver(function (es) { var v = es[es.length - 1].isIntersecting; if (v !== pollVis) { pollVis = v; drawNow(); } }, { rootMargin: '-25% 0px -25% 0px' });
+      pollBox._io.observe(pollBox);
+    }
     function drawPoll() {
       var p = openPoll();
       if (!pollBox && !p) return;
       if (!ensurePollBox()) return;
+      watchPoll();
       var host = $('[data-poll-live]', pollBox); host.textContent = '';
       if (!p) { host.appendChild(el('p', 'lp-empty', '강사가 투표를 열면 여기에 나타나요.')); return; }
       host.appendChild(el('h3', '', p.question));
@@ -918,8 +926,8 @@
     // 출석 칸이 있는 사이트(data-dock-attend="in")는 연수 시간(시작 30분 전부터)에 입실 전일 때만 보이고, 누르면 그 칸의 입실 확인과 같음
     var da = $('[data-dock-attend]'), ph = DATA.phase, gate = da && da.getAttribute('data-dock-attend') === 'in';
     var soon = !gate || (ph && ph.start && new Date(ph.start) - new Date() < 30 * 60000 && root.getAttribute('data-phase') !== 'after');
-    if (da && soon && store.get('att:in', null) === null) {
-      da.hidden = false;
+    if (da && soon) {
+      da.hidden = store.get('att:in', null) !== null;
       da.addEventListener('click', function () {
         ensureJoin({ attend: true }).then(function () { return conn.add('attendance', { kind: 'in' }); }).then(function () {
           var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), s = $('[data-attend-state]');
@@ -1044,14 +1052,15 @@
       if (si >= 0 && stApi) {
         where = (si + 1) + '번 실습 · ' + sts[si].name;
         if (stApi.current() !== state.step) cta = { label: (si + 1) + '번 실습 열기', href: '#st-' + state.step };
-      } else if (state.slide > 0 && deckApi) {
+      } else if (state.slide > 0 && deckApi && deckApi.has(state.slide)) {
         where = '교재 ' + state.slide + '쪽';
         cta = { label: state.slide + '쪽 보기', href: '#deck-p' + state.slide };
       }
       if (p) {
         main = '투표: ' + p.question; sub = where;
-        if (store.get('ans:' + p.id, null) === null) cta = { label: '투표하기', href: '#' + pollSecId(), poll: true };
-        else if (X.revealed(state, p.id)) cta = { label: '결과 보기', href: '#' + pollSecId(), poll: true };
+        // 투표 칸을 이미 보고 있으면 그리 가는 단추는 빼고(같은 것 두 번) 실습·쪽 단추만
+        var pollCta = !pollVis && (store.get('ans:' + p.id, null) === null ? '투표하기' : X.revealed(state, p.id) ? '결과 보기' : '');
+        if (pollCta) cta = { label: pollCta, href: '#' + pollSecId(), poll: true };
       } else main = where;
       var notice = state.notice && state.notice.text;
       if (notice) { sub = main; main = notice; }
@@ -1131,8 +1140,23 @@
       s.style.left = Math.round(Math.random() * 30) + 'px'; s.style.setProperty('--dx', (Math.random() * 40 - 20) + 'px');
       host.appendChild(s); setTimeout(function () { s.remove(); }, 2700);
     }
+    // 강사가 [데이터 모두 지우기]: 열린 화면의 목록과 이 기기에 남은 이 연수의 참여 기록(응답·좋아요·출석·설문·신호)을 비움.
+    // 서버의 참가자 명단도 지워졌으니 이 기기의 참여 정보도 비워, 다음에 참여할 때 별명(입실이면 이름·소속)을 새로 받음
+    function onReset() {
+      [qs, posts, answers, quick, voted, lastProg].forEach(function (b) { for (var k in b) delete b[k]; });
+      var pre = KEY + ':', gone = [];
+      try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0 && /^(ans|like|att|survey):|^(voted|signal)$/.test(k.slice(pre.length))) gone.push(k.slice(pre.length)); } } catch (e) { }
+      gone.forEach(store.del);
+      me = null; store.del('me'); if (conn.leave) conn.leave();
+      mySignal = null; paintSignal();
+      $$('[data-attend-state]').forEach(function (n) { n.textContent = ''; });
+      if (da && soon) da.hidden = false;
+      $$('[data-survey]').forEach(function (f) { f.reset(); var st = $('[data-sv-state]', f); if (st) st.textContent = ''; });
+      drawQA(); drawBoard(); applyState({}); // 서버의 진행 상태(공지·투표)도 함께 지워짐
+    }
     function onEvent(ev) {
       if (!ev) return;
+      if (ev.type === 'reset') return onReset();
       if (ev.type === 'state') return applyState(ev.doc || ev.state);
       if (ev.type === 'reaction') return floatReaction((ev.doc && ev.doc.emoji) || ev.emoji);
       var d = ev.doc; if (!d || !d.id) return;

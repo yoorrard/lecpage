@@ -28,7 +28,10 @@
 [data-heading="heavy"]{--display-tracking:-.035em}
 
 *,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;scroll-padding-top:84px}
+html{-webkit-text-size-adjust:100%}
+/* 위 메뉴(sticky)에 가리지 않게: 옮겨 가는 곳(섹션·#주소·본문의 칸, 따라 넘기기가 옮기는 교재·실습 칸)에만 위 여백(--lp-head = 메뉴 높이 + 16px, lecpage.js).
+   html의 scroll-padding-top은 쓰지 않음: 메뉴 안 단추에 초점이 가면 그 여백에 가린 것으로 보고 화면이 위로 튐 */
+:where(section[id],[id]:target,main [id],main :is(a[href],button,input,select,textarea,summary,[tabindex]),[data-deck],[data-stations]){scroll-margin-top:var(--lp-head,84px)}
 body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:var(--fs-base);line-height:1.75;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"kern"}
 /* 글자 크게(브라우저 글꼴 크기 키움)에서도 가로로 넘치지 않게: 낱말 단위 줄바꿈(keep-all)은 그대로, 한 낱말이 칸보다 길 때만 그 안에서 나눔(격자·줄 칸이 긴 낱말에 밀려 넓어지지 않음) */
 :is(h1,h2,h3,h4,p,dt,dd,li,blockquote,figcaption){overflow-wrap:anywhere}
@@ -354,8 +357,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-chalk-agenda{align-self:center;display:grid;gap:var(--sp-3);min-width:0;padding-left:clamp(20px,3vw,44px);border-left:1.5px dashed var(--rule-c)}
 .lp-chalk-k{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-lg);color:var(--primary)}
 .lp-chalk-agenda ol{list-style:none;display:grid;gap:10px}
-.lp-chalk-agenda li{display:grid;grid-template-columns:3.3em minmax(0,1fr);gap:var(--sp-3);align-items:baseline;font-weight:600;line-height:1.45}
-.lp-chalk-t{font-family:var(--font-mono);font-size:var(--fs-sm);color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+.lp-chalk-agenda li{display:grid;grid-template-columns:minmax(3.3em,max-content) minmax(0,1fr);gap:var(--sp-3);align-items:baseline;font-weight:600;line-height:1.45}
+.lp-chalk-t{font-family:var(--font-mono);font-size:var(--fs-sm);color:var(--muted-foreground);font-variant-numeric:tabular-nums;white-space:nowrap} /* 글자 크게(200%)에서도 시각이 '14:/00'으로 접히지 않게 */
 .lp-chalk-more{font-size:var(--fs-sm);color:var(--muted-foreground)}
 .lp-chalk-tray{position:absolute;left:0;right:0;bottom:0;height:16px;display:flex;align-items:flex-end;gap:12px;padding-inline:clamp(22px,4.6vw,68px);background:linear-gradient(#a06f41,#7b4f2a);border-top:1px solid rgba(0,0,0,.4)}
 .lp-chalk-tray i{display:block;width:40px;height:9px;border-radius:2px;background:#f4f1e8;transform:translateY(-16px)}
@@ -631,7 +634,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-rip-rail > div + div{border-left:1px solid var(--rule-c)}
 .lp-rip-rail dd{justify-content:center}
 .lp-rip-rail .lp-num{font-size:var(--fs-lg)}
-/* 23 minutes(시간 점묘): 고정폭 표제 줄, 제목 옆 정보, 화면 폭의 점 지도(한 줄이 30분·한 시간)와 그 아래 일정 풀이 */
+/* 23 minutes(시간 점묘): 고정폭 표제 줄, 제목 옆 정보, 화면 폭의 점 지도(한 줄이 30분·한 시간)와 그 아래 일정 풀이.
+   점 지도 옆 일정 칸은 17rem 아래로 줄지 않음(점이 대신 작아짐): 1024 안팎에서 일정 글자가 세로로 한 글자씩 쌓이지 않게 */
 .lp-hero--minutes .lp-hero-inner{grid-template-columns:minmax(0,8fr) minmax(0,4fr);grid-template-areas:"top top" "copy meta" "art art";gap:clamp(20px,3vw,44px) clamp(24px,4vw,64px);align-items:end}
 .lp-hero--minutes .lp-hero-inner.is-solo{grid-template-areas:"top top" "copy meta"}
 .lp-min-top{grid-area:top;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:var(--sp-2) var(--sp-5);padding-bottom:var(--sp-3);border-bottom:max(2px,var(--border-w)) solid var(--foreground)}
@@ -642,7 +646,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero--minutes .lp-hero-meta{grid-area:meta;grid-template-columns:minmax(0,1fr);gap:0;align-self:end}
 .lp-hero--minutes .lp-hero-meta > div{grid-template-columns:4.2em minmax(0,1fr);align-items:baseline;gap:var(--sp-3);padding:.6em 0;border-top:1px solid var(--rule-c)}
 .lp-hero--minutes .lp-hero-meta dt{font-family:var(--font-mono)}
-.lp-minmap{grid-area:art;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:var(--sp-5) clamp(28px,5vw,80px);min-width:0;padding-top:var(--sp-5);border-top:1px solid var(--rule-c)}
+.lp-minmap{grid-area:art;display:grid;grid-template-columns:minmax(0,auto) minmax(17rem,1fr);align-items:start;gap:var(--sp-5) clamp(28px,5vw,80px);min-width:0;padding-top:var(--sp-5);border-top:1px solid var(--rule-c)}
 .lp-min-field{display:grid;gap:clamp(5px,.75vw,10px)}
 .lp-min-row{display:grid;grid-template-columns:3.6em minmax(0,1fr);align-items:center;gap:var(--sp-3)}
 .lp-min-row time,.lp-min-legend time,.lp-min-legend small,.lp-min-key{font-family:var(--font-mono);font-size:var(--fs-xs);font-variant-numeric:tabular-nums;color:var(--muted-foreground)}
@@ -983,7 +987,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-deck{display:grid;gap:var(--sp-3);grid-template-columns:minmax(0,1fr)}
 .lp-deck-stage{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:var(--sp-5);outline:none}
 .lp-deck-stage:focus-visible{outline:2px solid var(--ring);outline-offset:4px;border-radius:min(var(--radius),12px)}
-.lp-slide{margin:0;display:grid;gap:var(--sp-2);scroll-margin-top:90px}
+.lp-slide{margin:0;display:grid;gap:var(--sp-2)}
 .lp-slide img{width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--card);border-radius:min(var(--radius),12px);border:1px solid var(--rule-c)}
 /* 그림이 없는 쪽: 16:9 슬라이드 한 장. 글자 크기는 슬라이드 폭에 맞춰 커지고 줄어듦(cqw). 표지(cover)·부 시작(part)·본문(body) */
 .lp-slide-text{position:relative;container-type:inline-size;display:grid;grid-template-rows:auto minmax(0,1fr);width:100%;aspect-ratio:16/9;overflow:hidden;background:var(--card);color:var(--card-foreground);border:1px solid var(--rule-c);border-radius:min(var(--radius),12px)}
@@ -1074,7 +1078,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-st-record progress{width:100%;height:6px;accent-color:var(--primary)}
 .lp-st-record small{color:var(--muted-foreground);font-size:var(--fs-xs)}
 .lp-st-panels{display:grid;gap:var(--sp-8);min-width:0}
-.lp-st{display:grid;gap:var(--sp-6);min-width:0;scroll-margin-top:90px}
+.lp-st{display:grid;gap:var(--sp-6);min-width:0}
 .lp-st-shell.is-ready .lp-st{display:none}
 .lp-st-shell.is-ready .lp-st.is-active{display:grid}
 .lp-st-h{display:grid;grid-template-columns:auto 1fr;gap:var(--sp-5);align-items:start}
@@ -1539,6 +1543,8 @@ html.lp-dock-on .lp-foot{padding-bottom:calc(var(--lp-dock-h,58px) + 48px + env(
   .lp-pop-row{grid-template-columns:minmax(0,1fr)}
   .lp-ctas .lp-btn{flex:1 1 auto}
 }
+/* 휴대폰 첫 화면: 대표 단추는 한 줄을 다 씀. 기본 글꼴에서는 이미 두 줄이라, 글꼴이 늦게 와 단추 줄 수가 바뀌며 아래가 밀리지 않게 */
+@media (max-width:480px){.lp-hero .lp-ctas > .lp-btn-primary{flex-basis:100%}}
 
 /* 반응형 */
 /* 메뉴: 1024 아래(태블릿·좁은 노트북)는 가로 메뉴 대신 [목차] 하나 — 메뉴 글이 가로 띠에서 중간에 잘리지 않게 */

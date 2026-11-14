@@ -286,3 +286,23 @@ test('겹침·꼬임 축약 검사(모든 본문 칸 × 2프리셋 × 1280·390)
     }
   } finally { await browser.close(); srv.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+// 좁아진 글 열(overlap-lint narrow-text): 시간 점묘 첫 화면의 일정 칸이 1024 안팎에서 점 지도에 밀려 한 글자씩 세로로 쌓이던 것
+test('좁아진 글 열: 시간 점묘(minute-map) 첫 화면의 일정 칸이 900~1100에서도 한 줄로', { timeout: 60000 }, async (t) => {
+  let chromium; try { ({ chromium } = createRequire(import.meta.url)('playwright')); } catch { try { ({ chromium } = createRequire('/opt/node-tools/')('playwright')); } catch { return t.skip('Playwright 없음'); } }
+  const { pageCheck } = await import('../../scripts/overlap-lint.mjs');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { pathToFileURL } = await import('node:url');
+  const dir = mkdtempSync(join(tmpdir(), 'lpnarrow-'));
+  const r = build({ ...load('data-lab'), design: { preset: 'minute-map' } });
+  for (const [f, c] of Object.entries(r.files)) { const fp = join(dir, f); mkdirSync(dirname(fp), { recursive: true }); writeFileSync(fp, c); }
+  let browser; try { browser = await chromium.launch(); } catch { rmSync(dir, { recursive: true, force: true }); return t.skip('Chromium 실행 실패'); }
+  try {
+    for (const w of [920, 1024, 1100]) {
+      const page = await browser.newPage({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
+      await page.goto(pathToFileURL(join(dir, 'index.html')).href, { waitUntil: 'load' }); await page.waitForTimeout(300);
+      const o = await page.evaluate(pageCheck, false);
+      assert.deepEqual(o['narrow-text'] || [], [], `${w}`);
+      await page.close();
+    }
+  } finally { await browser.close(); rmSync(dir, { recursive: true, force: true }); }
+});

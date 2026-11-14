@@ -6,7 +6,7 @@ import { renderSection, contactHtml, boardFiles } from './sections.js';
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { attrs, jsonScript, headTags, siteData, phaseWindow } from './shell.js';
-import { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
+import { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide, keepRule } from './aux.js';
 import { deriveConcept } from '../decide/concept.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { FONTS } from '../design/fonts.js';
@@ -144,6 +144,7 @@ function dialogs(ctx) {
   const pv = ctx.bp.privacy;
   const needName = pv.collect.includes('name');
   const needSchool = pv.collect.includes('school');
+  const idWords = [needName && '이름', needSchool && '소속'].filter(Boolean).join('·');
   return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
 <p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
@@ -155,7 +156,7 @@ ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-joi
 <p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
 ${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
 ${needSchool ? '<label data-join-id><span>소속(학교)</span><input name="school" maxlength="40" required autocomplete="organization"></label>' : ''}
-${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>이름·소속을 출석 확인에만 쓰고, 연수가 끝나고 ${pv.retentionDays}일 뒤 지우는 데 동의합니다. 동의하지 않으면 참여 기능을 쓸 수 없어요. 안내와 교재는 그대로 볼 수 있어요. <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
+${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰고 ${keepRule(ctx.bp).short} 안에 지우는 데 동의합니다. 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
