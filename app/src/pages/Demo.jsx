@@ -28,6 +28,7 @@ const exampleUrl = () => new URL('examples/data-lab/index.html', location.href.s
  */
 function placeCoach(el, keep = false) {
   if (keep && el.hasAttribute('data-coach-room')) return;
+  el.removeAttribute('data-coach-room'); // 벌린 자리를 빼고 둘레를 잼(벌린 채로 재면 아래가 비어 보여 자리를 잘못 고르고 꼬리표가 칩을 덮음)
   const cur = el.getAttribute('data-coach');
   if (!cur) el.setAttribute('data-coach', 'below');
   const st = getComputedStyle(el, '::after'), n = (v) => parseFloat(v) || 0, bb = st.boxSizing === 'border-box';
@@ -49,7 +50,6 @@ function placeCoach(el, keep = false) {
   if (keep && cur && at[cur] && !hits(cur)) return;
   let best = 'below', least = Infinity;
   for (const side of Object.keys(at)) { const hit = hits(side); if (hit < least) { least = hit; best = side; } if (!hit) break; }
-  el.removeAttribute('data-coach-room');
   if (least && !pin) { best = 'below'; el.setAttribute('data-coach-room', ''); }
   el.setAttribute('data-coach', best);
 }

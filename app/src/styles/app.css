@@ -1016,6 +1016,7 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 [data-coach="right"]::after{left:calc(100% + 10px);top:50%;transform:translateY(-50%)}
 [data-coach="left"]::after{left:auto;right:calc(100% + 10px);top:50%;transform:translateY(-50%)}
 [data-coach-room]{margin-bottom:calc(.78rem * 1.5 + 6px + 12px)} /* 빈자리가 없을 때 대상 아래를 꼬리표(높이+간격)만큼 벌림 */
+:has(>[data-coach-room]){align-items:flex-start} /* 벌린 대상 때문에 같은 줄의 옆 단추·칩이 가운데로 내려와 꼬리표에 덮이지 않게 */
 @keyframes coach-in{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){[data-coach]::after{animation:none}}
 .demo-bar .btn[aria-pressed="true"]{background:color-mix(in srgb,var(--butter-ink) 10%,transparent)}

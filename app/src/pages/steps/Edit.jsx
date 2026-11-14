@@ -172,7 +172,7 @@ function AiJobBar({ job, found, onStop, onClose, onRetry, onPaste, onConnect, on
 function ResultBand({ p, job, update, setInfo, pushUndo, onClose, onUndo, canUndo, onUndoGuard }) {
   const s = useStructure(p);
   const [more, setMore] = useState(false);
-  const line = structureLine(s); // 접힌 단추의 풀이(따라 하기 구성 · 권하는 기능 3)
+  const line = structureLine(s); // 접힌 단추의 풀이(따라 하기 · 권하는 기능 3)
   return (
     <div class="ai-job ok result-band" role="status">
       <span class="ai-job-t"><b>{job.polish ? 'AI가 문구를 다듬었어요.' : job.via ? `${job.via}로 이어서 사이트를 짰어요.` : 'AI가 교재에 맞게 사이트를 짰어요.'}</b></span>

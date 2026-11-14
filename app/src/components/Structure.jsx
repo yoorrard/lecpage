@@ -52,8 +52,8 @@ export function useStructure(p) {
   return { st, chips, left };
 }
 
-/** 구성 안내 한 줄의 요약: "따라 하기 구성 · 권하는 기능 3" */
-export const structureLine = (s) => s ? [`${s.st.label} 구성`, s.chips.length ? `권하는 기능 ${s.chips.length}` : '', s.left.count ? `싣지 못한 것 ${s.left.count}` : ''].filter(Boolean).join(' · ') : '';
+/** 구성 안내 한 줄의 요약: "따라 하기 · 권하는 기능 3"(싣지 못한 것은 펼치면) */
+export const structureLine = (s) => s ? [s.st.label, s.chips.length ? `권하는 기능 ${s.chips.length}` : ''].filter(Boolean).join(' · ') : '';
 
 /** 구성 안내를 펼친 내용: 까닭 · 권하는 기능 칩(누르면 켬) · 싣지 못한 것 n개(누르면 본문에 넣음) */
 export function StructureMore({ p, s, update, setInfo, pushUndo }) {
@@ -99,7 +99,7 @@ export function StructureNote({ p, update, setInfo, pushUndo }) {
   return (
     <section class={`structure-note${open ? ' is-open' : ''}`} aria-label="구성">
       <div class="structure-line">
-        <span class="small"><b>이렇게 구성했어요</b> <span>{structureLine(s)}</span></span>
+        <span class="small" title={structureLine(s)}><b>이렇게 구성했어요</b> <span>{structureLine(s)}</span></span>
         <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(open)} onClick={() => setOpen(!open)}>{open ? '접기' : '자세히'}</button>
       </div>
       {open && <StructureMore p={p} s={s} update={update} setInfo={setInfo} pushUndo={pushUndo} />}
