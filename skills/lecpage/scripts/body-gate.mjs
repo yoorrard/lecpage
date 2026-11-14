@@ -131,6 +131,9 @@ await Promise.all(Array.from({ length: conc }, async () => {
         const o = await page.evaluate(pageCheck, false);
         const hidden = await page.evaluate(() => [...document.querySelectorAll('main :is(h1,h2,h3,p,li,dt,dd)')].filter((e) => e.textContent.trim() && !e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide],.lp-cards-off [data-part="cards"],.lp-card-off [data-part="teacher"]') && getComputedStyle(e).display !== 'contents' && (getComputedStyle(e).visibility === 'hidden' || +getComputedStyle(e).opacity < 0.2 || e.getClientRects().length === 0)).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
         if (hidden.length) o['print-hidden'] = hidden;
+        // 스크롤 연출이 멈춘 상태(흐림)로 인쇄에 새는지: 조상까지 곱한 투명도가 절반 아래인 글
+        const dim = await page.evaluate(() => [...document.querySelectorAll('main :is(h1,h2,h3,p,li,dt,dd)')].filter((e) => { if (!e.textContent.trim() || e.closest('[aria-hidden="true"],.lp-sr,[hidden],details:not([open]),dialog,[data-live-off],[data-phase-show],[data-phase-hide]') || !e.getClientRects().length) return false; let o = 1; for (let n = e; n; n = n.parentElement) o *= +getComputedStyle(n).opacity; return o > 0.2 && o < 0.5; }).map((e) => `${e.closest('section')?.id || ''} ${e.tagName} "${e.textContent.trim().slice(0, 14)}"`).slice(0, 6));
+        if (dim.length) o['print-dim'] = dim;
         findings = Object.entries(o).map(([rule, samples]) => ({ rule, count: samples.length, samples }));
       } else ({ findings } = await scanPage(page));
       results.push({ ...j, findings, errs });

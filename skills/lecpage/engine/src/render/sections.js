@@ -69,6 +69,8 @@ function enterFx(s, ctx, head) {
  * 섹션 머리: 번호(+메뉴 이름) · 제목 · 설명 · 원본 쪽. 모양은 프리셋마다 다름(<html data-head>, runtime/lecpage.css '섹션 머리').
  * 번호 줄은 메뉴와 같은 정보라 화면 낭독기에는 숨김
  */
+/** 참여·도움 칸(질문·보드·투표·설문·출석·자주 묻는 질문·준비 점검·연수 후 안내)은 한 단 작은 촘촘한 머리: 모든 섹션 머리가 같은 무게로 되풀이되지 않게 */
+const COMPACT_HEAD = ['qa', 'board', 'poll', 'survey', 'attendance', 'faq', 'readiness', 'followup'];
 function head(s, ctx, fallbackTitle) {
   const title = s.title || fallbackTitle;
   if (!title && !s.lead) return '';
@@ -77,7 +79,7 @@ function head(s, ctx, fallbackTitle) {
   const tfx = CALM_TYPES.includes(s.type) ? '' : fx(ctx, 'section.title');
   const label = s.nav && s.nav !== title ? s.nav : '';
   const k = no > 0 && title ? `<p class="lp-head-k" aria-hidden="true"><span class="lp-head-no">${pad2(no)}</span>${label ? `<span class="lp-head-label">${esc(label)}</span>` : ''}</p>` : '';
-  return `<header class="lp-head"${CALM_TYPES.includes(s.type) ? enterFx(s, ctx, true) : ''}>${k}${title ? `<h2 class="lp-h2" id="${esc(s.id)}-h"${tfx}>${br(title)}</h2>` : ''}${s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : ''}${sourceLine(s.source, ctx)}</header>`;
+  return `<header class="lp-head${COMPACT_HEAD.includes(s.type) ? ' lp-head--sm' : ''}"${CALM_TYPES.includes(s.type) ? enterFx(s, ctx, true) : ''}>${k}${title ? `<h2 class="lp-h2" id="${esc(s.id)}-h"${tfx}>${br(title)}</h2>` : ''}${s.lead ? `<p class="lp-lead">${br(s.lead)}</p>` : ''}${sourceLine(s.source, ctx)}</header>`;
 }
 
 /**
