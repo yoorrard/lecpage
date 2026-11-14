@@ -1,0 +1,151 @@
+{
+ "openai": {
+  "id": "openai",
+  "models": {
+   "gpt-6.1-sol": {
+    "id": "gpt-6.1-sol",
+    "name": "gpt-6.1-sol",
+    "release_date": "2026-09-29",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 2,
+     "output": 10
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   },
+   "o9-mini": {
+    "id": "o9-mini",
+    "name": "o9-mini",
+    "release_date": "2026-08-01",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 1.1,
+     "output": 4.4
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   },
+   "gpt-nocost": {
+    "id": "gpt-nocost",
+    "release_date": "2026-01-01"
+   }
+  }
+ },
+ "anthropic": {
+  "id": "anthropic",
+  "models": {
+   "claude-opus-5-5": {
+    "id": "claude-opus-5-5",
+    "name": "claude-opus-5-5",
+    "release_date": "2026-09-22",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 4,
+     "output": 20
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   },
+   "claude-sonnet-5": {
+    "id": "claude-sonnet-5",
+    "name": "claude-sonnet-5",
+    "release_date": "2026-06-29",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 2,
+     "output": 10
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   }
+  }
+ },
+ "google": {
+  "id": "google",
+  "models": {
+   "gemini-3.7-flash": {
+    "id": "gemini-3.7-flash",
+    "name": "gemini-3.7-flash",
+    "release_date": "2026-08-13",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 0.75,
+     "output": 3.75
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   }
+  }
+ },
+ "somebody": {
+  "models": {
+   "x": {
+    "id": "x",
+    "name": "x",
+    "release_date": "2026-01-01",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 1,
+     "output": 1
+    },
+    "limit": {
+     "context": 200000,
+     "output": 64000
+    }
+   }
+  }
+ }
+}
