@@ -174,7 +174,7 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
  * buildFiles(opts) → { files }, guard(run): 참여 기능 연결 전이면 먼저 물어봄, done(url, patch): 주소 저장.
  * again: { current } 지난번에 배포한 곳에 바로 다시 배포하는 함수를 여기에 걸어 둠(성공 카드의 [다시 배포하기]가 부름). 못 하면 null
  */
-export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, onTarget, records }) {
+export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
@@ -258,10 +258,11 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const days = instant?.limits?.days || 30;
   const care = target === 'lecpage' ? `${instant?.keepAlive === false ? `배포한 날부터 ${days}일 뒤 지워져요(다시 배포하면 그날부터 ${days}일).` : `${days}일 동안 아무도 오지 않으면 지워져요.`} 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
   if (again) again.current = null;
+  if (goNow) goNow.current = null;
   const ctx = {
     p, busy, start, done: (url, patch, more) => { done(url, { ...patch, target }, more); connectedTargets().then(setConnected); },
     refresh: () => connectedTargets().then(setConnected), // 연결하거나 끊은 뒤 '연결됨' 표시를 맞춤
-    bind: (fn) => { if (again) again.current = fn && target === p.deploy?.target ? fn : null; },
+    bind: (fn) => { if (again) again.current = fn && target === p.deploy?.target ? fn : null; if (goNow) goNow.current = fn || null; },
   };
   if (infoWait) return <div class="stack publish"><p class="small muted" role="status" aria-live="polite">배포할 곳을 확인하는 중…</p></div>;
   if (!online) {
@@ -295,7 +296,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
-      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} records={records} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} records={records} freshRoom={freshRoom} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
       {target === 'netlify' && <Netlify {...ctx} />}
@@ -306,7 +307,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 }
 
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, bind, info, gate, records, onUnavailable }) {
+function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   const [ask, setAsk] = useState(false); // [사이트 내리기] 확인 창
   const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
@@ -320,8 +321,9 @@ function Instant({ p, busy, start, done, bind, info, gate, records, onUnavailabl
   const own = ['sheets', 'supabase', 'http'].includes(bp.live?.provider) && !!bp.live?.url && !!p.liveOk && !sameUrl(bp.live.url, lecUrl);
   const liveOff = lecLiveOff(p); // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있음 → 강사가 연결한 서버가 있으면 그것으로
   const autoLive = liveOn && !!lecUrl && !(liveOff && own); // 참여 기능을 이 서버가 맡음(방이 차면 서버가 알려 주고 뺌)
-  // newCode: 연수 코드가 다른 사이트와 겹쳤을 때 새로 정한 코드(사이트를 그 코드로 다시 만들어 올림)
-  const run = (newCode = '') => start('lecpage', async (files, onProgress, rebuild) => {
+  // newCode: 연수 코드가 다른 사이트와 겹쳤을 때, 또는 지난 기록을 비우고 배포할 때(freshRoom) 새로 정한 코드.
+  // 사이트를 그 코드로 다시 만들어 올리고 방을 새로 묶음(서버가 예전 코드의 방을 비움). 주소·관리자 키는 그대로
+  const run = (newCode = freshRoom && autoLive ? E.randomCode() : '', retried = false) => start('lecpage', async (files, onProgress, rebuild) => {
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
@@ -335,13 +337,13 @@ function Instant({ p, busy, start, done, bind, info, gate, records, onUnavailabl
     const lecLive = autoLive && !out.liveOff;
     const off = out.liveOff ? { ...out.liveOff, at: Date.now() } : !lecLive && liveOff && own ? liveOff : null; // 연결한 서버로 넘긴 동안은 그대로 기억
     const wasLec = bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl);
-    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(lecLive ? { adminKey } : {}),
+    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(lecLive ? { adminKey } : {}), ...(info?.keepAlive === false ? { fixed: true } : {}), // fixed: 보관 기간이 정해진 서버(방문으로 늘지 않음)
       ...(off ? { liveOff: off } : {}), ...(out.advice || (prev?.longTerm && prev.id === out.id) ? { longTerm: true } : {}) } },
     lecLive ? { live: { provider: 'http', url: out.liveUrl || lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true }
       : out.liveOff && wasLec ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null);
-    toast(out.liveOff && !own ? '배포했어요. 참여 기능은 따로 연결해 주세요.' : prev?.id === out.id ? '같은 주소에 다시 배포했어요.' : '배포했어요.');
+    toast(out.liveOff && !own ? '배포했어요. 참여 기능은 따로 연결해 주세요.' : prev?.id === out.id ? (newCode && !retried && freshRoom ? '지난 기록을 비우고 같은 주소에 다시 배포했어요.' : '같은 주소에 다시 배포했어요.') : prev?.id ? '보관 기간이 끝나 새 주소로 배포했어요. 새 주소와 QR을 다시 보내 주세요.' : '배포했어요.');
   }, (e) => {
-    if (e.code === 'code_taken' && !newCode) { setTimeout(() => run(E.randomCode()), 0); return true; }
+    if (e.code === 'code_taken' && !retried) { setTimeout(() => run(E.randomCode(), true), 0); return true; }
     // 붐빔(서버가 까닭을 줌: 오늘 모두 / 이 기기·이 인터넷만)·저장 공간이 참: 서버 문구 그대로 두고 내 계정에 배포하는 길로(넘길 곳은 서버가 준 순서).
     // 줄 서기(pages_api)는 deployInstant가 이미 기다렸다가 다시 했음. 까닭 없는 rate_limited(이 사이트를 너무 자주 올림)는 알림만
     if ((e.reason && e.reason !== 'pages_api') || e.code === 'full') { onUnavailable?.({ t: e.message, next: e.next }); return true; }

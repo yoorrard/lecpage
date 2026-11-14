@@ -275,7 +275,8 @@ CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보�
 | `PUT /api/sites/:id/blobs/:sha256` (본문 = 파일) | `204` · `pages` 보기는 받으면서 검사한 뒤 Pages에 올림 |
 | `POST /api/sites/:id/deploys/:deploy/publish` | `{ url, expiresAt, altUrl?, view? }` · 덜 올렸으면(또는 `pages` 보기에서 Pages가 지운 파일이 있으면) `409 missing_blobs`(+`missing`) → 그 파일만 다시 올리고 한 번 더 |
 | `POST /api/sites/:id/live` `{ code, adminKeyHash, settings?: { retentionDays?, uploads?, moderation? } }` | `{ url: "<호스트>/live", code }` |
-| `DELETE /api/sites/:id` | `204` |
+| `GET /api/sites/:id/records` | `{ ok, live: false }` 또는 `{ ok, live: true, counts: { participants, attendance, questions, posts, answers, survey }, last }` · 사이트 열쇠로만, 수만(내용 없음). 앱이 [사이트 내리기]·다시 배포 전에 지워질 기록과 지난 기수 기록을 알릴 때 |
+| `DELETE /api/sites/:id` | `204` · 사이트·파일·방을 지우고, 보관 기간이 남은 동안 그 주소에 '강사가 사이트를 내렸어요'(보관 기간 끝·운영자 지움은 '보관 기간이 끝났어요') |
 | `POST /api/report` `{ site, reason, contact? }` | `{ ok: true }` |
 | `GET /api/notice?for=app\|teacher` | `{ notices: [{ id, title, body, ends, link?, linkLabel?, linkHost? }] }` · 글자만, 1분 캐시 |
 | `POST /api/stats` (본문 글자 `{"e":"open"\|"make"\|"publish","k"?}`, 200바이트까지) | 언제나 `204`. 허용한 앱 주소에서 온 것만, 표에 있는 항목만 그날 숫자에 더함 |
