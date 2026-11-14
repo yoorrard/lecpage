@@ -67,7 +67,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 
 1. 로그인 확인(계정이 여럿이면 `CLOUDFLARE_ACCOUNT_ID`)
 2. workers.dev 하위 도메인(없으면 만듦, `--subdomain`)
-3. 사이트 보기: Pages 프로젝트 `lecpage-view`(`--project`)와 본 배포(없는 주소 안내 화면)
+3. 사이트 보기: Pages 프로젝트 `lecpage-view`(`--project`)와 본 배포(없는 주소 안내 화면. 여기서 못 올리면 첫 사이트를 공개할 때 서버가 한 번 올림)
 4. `wrangler deploy`(바로 배포 Worker `lecpage-sites`)
 5. 비밀 값: `ADMIN_KEY`(만들어 `~/.lecpage/<계정>/admin-key`에 0600으로만 두고 화면에 찍지 않음), `REPORT_WEBHOOK`(답했으면), `VIEW`·`CF_ACCOUNT_ID`·`PAGES_PROJECT`·`PAGES_HOST`·`PAGES_TOKEN`, `APP_ORIGINS`(`--app-origin`). 보기 설정도 비밀 값이라 `npm run deploy`를 다시 해도 지워지지 않습니다
 6. 관리 Worker `lecpage-admin` 배포 → Access 앱(Worker 단위, 도메인 없이 workers.dev 전체, 정책: 운영자 이메일 하나, 세션 24시간) → 관리 Worker 비밀 값 `ACCESS_AUD`·`ACCESS_EMAILS`·`ACCESS_TEAM_DOMAIN`. 이메일은 Cloudflare에만 넣고 저장소·로그·`setup.json`에 남기지 않습니다(화면에는 `o***@…`로 가려서)

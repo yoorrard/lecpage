@@ -92,12 +92,18 @@ ${ctx.live ? `<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialo
 }
 
 // ── 발표 화면 ─────────────────────────────────────────────
+/** 질문·투표가 없을 때의 무대(로비): 큰 연수 제목 + 세 단계. screen.js의 lobbyStage()와 같은 꼴(그려 둔 채로 열려 화면이 밀리지 않게) */
+const SCREEN_STEPS = ['QR을 찍어 들어와요', '[질문]에 올려요', '마음에 드는 질문에 공감을 눌러요'];
+function lobbyHtml(title, live) {
+  const steps = SCREEN_STEPS.map((t, i) => `<li><b>${i + 1}</b><span>${esc(t)}</span></li>`).join('');
+  return `<div class="lp-scr-empty"><p class="lp-scr-lobby-t" aria-hidden="true">${esc(title)}</p>${live ? `<ol class="lp-scr-steps">${steps}</ol>` : '<p class="lp-scr-empty-s">이름 뽑기·모둠·타이머는 오른쪽 위 [도구]에 있어요.</p>'}</div>`;
+}
 export function renderScreen(ctx) {
   const bp = ctx.bp, m = bp.meta, live = ctx.live;
   const signal = live && bp.live.features.includes('signal');
   const code = live ? `<p class="lp-scr-code">연수 코드 <b>${esc(bp.live.code)}</b></p>` : '';
-  const inner = `<p class="lp-scr-for"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></p>
-<div class="lp-scr" data-screen${live ? '' : ' data-offline'}>
+  const inner = `<aside class="lp-scr-for" aria-label="참가자 안내"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></aside>
+<div class="lp-scr" data-screen data-lobby${live ? '' : ' data-offline'}>
 <header class="lp-scr-top">
 <h1 class="lp-scr-title"><span class="lp-brand-dot" aria-hidden="true"></span><span>${esc(m.title)}</span></h1>
 ${live ? '<p class="lp-scr-conn" data-conn data-state="idle"><i aria-hidden="true"></i><span data-conn-text>연결하는 중…</span></p>' : ''}
@@ -110,8 +116,8 @@ ${themeBtn()}
 </header>
 <p class="lp-scr-notice" data-notice hidden role="status"></p>
 <main class="lp-scr-stage" aria-label="발표 화면">
-<section class="lp-stage" data-tool-stage hidden aria-live="polite" aria-labelledby="lp-stage-h"><div class="lp-stage-h"><h2 id="lp-stage-h" data-stage-title></h2><button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-stage-close>${icon('close')}<span>닫기</span></button></div><div data-stage-body></div></section>
-<div class="lp-scr-main" data-screen-main aria-live="polite"><div class="lp-scr-empty"><p class="lp-scr-empty-t">${live ? '질문과 투표 결과가 여기에 크게 보여요' : '이름 뽑기·모둠·타이머는 오른쪽 위 [도구]에 있어요'}</p>${live ? '<p class="lp-scr-empty-s">휴대폰으로 QR을 찍고 들어와 질문을 올려 주세요.</p>' : ''}</div></div>
+<section class="lp-stage" data-tool-stage hidden aria-live="polite" aria-labelledby="lp-stage-h"><div class="lp-stage-h"><h2 id="lp-stage-h" data-stage-title>도구</h2><button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-stage-close>${icon('close')}<span>닫기</span></button></div><div data-stage-body></div></section>
+<div class="lp-scr-main" data-screen-main aria-live="polite">${lobbyHtml(m.title, live)}</div>
 </main>
 <aside class="lp-scr-side" aria-label="참여 안내">
 <div class="lp-scr-join">
