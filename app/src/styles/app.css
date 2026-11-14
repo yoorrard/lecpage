@@ -1042,6 +1042,7 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .demo-ai-ans{display:grid;gap:8px;min-width:0}
 .demo-ai-code{margin:0;padding:10px 12px;border-radius:8px;background:var(--sunk);border:1px solid var(--hair);font-family:var(--f-mono);font-size:.78rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .demo-ai-tools{display:flex;gap:6px}
+.demo-ai-tools:has(>[data-coach="below"]){padding-bottom:34px} /* 누를 곳 안내 꼬리표가 창 테두리에 걸치지 않게 */
 .demo-ai-copy svg{flex:none}
 @media (prefers-reduced-motion:reduce){.demo-ai-typing .rc-dots i{animation:none;opacity:.6}}
 .demo-edit{padding:4px 4px 0 0}

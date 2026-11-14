@@ -58,7 +58,7 @@ function placeCoach(el, keep = false) {
 function FakeChat({ bot, bp, typing, onCopy }) {
   const m = bp.meta || {};
   const one = (t) => String(t || '').replace(/\s+/g, ' ').trim();
-  const secs = (bp.sections || []).slice(0, 3).map((s) => `    { "type": "${s.type}", "title": "${one(s.title || m.title).slice(0, 18)}" }`);
+  const secs = (bp.sections || []).slice(0, 3).map((s) => `    { "type": "${s.type}", "title": "${one(s.title || m.title).slice(0, 24)}" }`);
   const code = ['{', `  "meta": { "title": "${one(m.title)}", … },`, '  "sections": [', secs.join(',\n') + ',', '    …', '  ]', '}'].join('\n');
   return (
     <div class="demo-ai" role="group" aria-label={`${bot.name} 창(체험용 흉내)`}>
@@ -89,13 +89,16 @@ export function Demo() {
   const [applied, setApplied] = useState('');
   const timers = useRef([]);
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
+  const raw = useRef(null); const work = useRef(null); const alive = useRef(true);
+  /** 2·3단계 묶음 받기(한 번만). 받으면 예시 설계도를 앱이 가져온 설계도처럼 거름(1단계에서 고친 연수 정보는 그대로) */
+  const loadWork = () => work.current || (work.current = Promise.all([raw.current, import('./DemoWork.jsx')]).then(([b, m]) => { if (!alive.current) return; setW(() => m); setBp((cur) => m.sanitize(cur || b)); }, () => { work.current = null; }));
   useEffect(() => {
-    let off = false;
-    const raw = exampleBp();
-    raw.then((b) => { if (!off) setBp((cur) => cur || b); }, () => { });
-    // 2·3단계는 1단계를 그린 다음 틈에 받음. 받으면 예시 설계도를 앱이 가져온 설계도처럼 거름(1단계에서 고친 연수 정보는 그대로)
-    const id = requestAnimationFrame(() => setTimeout(() => Promise.all([raw, import('./DemoWork.jsx')]).then(([b, m]) => { if (off) return; setW(() => m); setBp((cur) => m.sanitize(cur || b)); }, () => { }), 0));
-    return () => { off = true; cancelAnimationFrame(id); timers.current.forEach(clearTimeout); };
+    raw.current = exampleBp();
+    raw.current.then((b) => { if (alive.current) setBp((cur) => cur || b); }, () => { });
+    // 엔진이 든 2·3단계 묶음은 첫 화면이 다 그려진 뒤 한가할 때(또는 AI 창 버튼을 누르면 바로) 받음: 1단계 글이 엔진을 기다리지 않게
+    const idle = (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 0));
+    later(() => idle(loadWork), 2500);
+    return () => { alive.current = false; timers.current.forEach(clearTimeout); };
   }, []);
   useEffect(() => { document.querySelector('.demo h1')?.focus({ preventScroll: true }); window.scrollTo(0, 0); }, [step]);
   // 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 '여기를 눌러요'. 말로 하는 안내는 위의 안내 줄(role=status)이 함(2단계는 안내 줄이 말하는 [너무 심심해요] 칩).
@@ -126,9 +129,9 @@ export function Demo() {
   const setMeta = (patch) => setBp((b) => ({ ...b, meta: { ...b.meta, ...patch } }));
 
   /** [ChatGPT 열기] 등: 실제로는 프롬프트를 복사하고 AI 창을 엶. 체험은 흉내 낸 창을 열고 잠깐 뒤 답을 보여 줌 */
-  function openBot(b) { setBot(b); setChat('ai'); setTyping(true); later(() => setTyping(false), 1300); }
+  function openBot(b) { loadWork(); setBot(b); setChat('ai'); setTyping(true); later(() => setTyping(false), 1300); }
   /** [답 넣기]: 실제로는 복사한 답을 읽어 바로 사이트를 만듦(몇 초). 체험은 미리 만든 답으로 */
-  function make() { setMaking(true); setStep(2); later(() => setMaking(false), 1200); }
+  function make() { loadWork(); setMaking(true); setStep(2); later(() => setMaking(false), 1200); }
 
   const url = exampleUrl();
   const tip = step === 1 ? TIP1[chat === 'ai' && typing ? 'typing' : chat]

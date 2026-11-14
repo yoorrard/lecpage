@@ -123,7 +123,7 @@ await page.goto(base + '#/demo');
 // 1단계: 쓰던 AI 창(흉내) 열기 → 답 아래 [복사] → [답 넣기]
 await page.locator('.demo .chat-bots .chat-bot').first().click({ timeout: 20000 });
 await page.locator('.demo-ai-copy').click({ timeout: 10000 });
-await page.getByRole('button', { name: '답 넣기' }).click();
+await page.locator('.demo .make-bar .btn-primary').click();
 const demoFrame = page.locator('iframe[sandbox*="allow-modals"]').first();
 await demoFrame.waitFor({ timeout: 40000 });
 await page.waitForTimeout(2500);
