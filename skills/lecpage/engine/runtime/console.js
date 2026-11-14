@@ -1,5 +1,5 @@
 /* lecpage console — 강사 화면. 모든 화면 출력은 textContent로 만듭니다(HTML 주입 금지).
- * 켜진 기능과 섹션의 패널만 만듭니다. 맨 위 '지금' 띠: 참가자·도움 요청·모르겠어요 신호·열린 투표·질문·설문.
+ * 켜진 기능과 섹션의 패널만 만듭니다. 맨 위 '지금' 띠: 참가자·도움 요청·모르겠어요 신호·실습 막힘·열린 투표·질문·설문.
  * 관리자 키: 이 탭(sessionStorage)에만 두고, '이 기기에서 기억하기'를 고르면 이 기기(localStorage)에도. 주소·화면·기록에는 남기지 않음. */
 (function () {
   'use strict';
@@ -243,18 +243,18 @@
 
   // ── 묻기 방식·할 일·전날 점검(맨 위 한 줄) ──
   // 학교망에서 실시간 연결이 막히면 참가자 화면은 '긴 대기 묻기'(바뀌면 바로, 없으면 20초마다)나 간격 묻기로 바뀜. 강사가 무엇을 할지 한 줄로
-  function sec(ms) { return Math.max(1, Math.round((ms || 0) / 1000)) + '초'; }
+  function secText(ms) { return Math.max(1, Math.round((ms || 0) / 1000)) + '초'; }
   function netWords(st, ni) {
-    var t = ni.transport, hint = ni.hint >= 10000 ? ' 오늘 서버가 붐벼 ' + sec(ni.hint) + ' 간격으로 늘렸어요.' : '';
+    var t = ni.transport, hint = ni.hint >= 10000 ? ' 오늘 서버가 붐벼 ' + secText(ni.hint) + ' 간격으로 늘렸어요.' : '';
     if (LOCAL) return ['리허설 · 이 브라우저 안에서만', '참가자 휴대폰과는 이어지지 않아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.'];
     if (st === 'offline') return ['연결이 끊겼어요 · 다시 잇는 중', '참가자 화면의 교재·실습·프롬프트는 그대로 열려요. 질문은 구두로 받고, 설문은 QR로 다른 설문지를 띄워도 돼요. 연결되면 쌓인 글이 들어와요.'];
     if (t === 'ws' || t === 'realtime') return ['연결됨 · 바로 받음(웹소켓)', ''];
     if (t === 'sse') return ['연결됨 · 바로 받음(SSE)', ''];
     if (t === 'long') return ['긴 대기 묻기 · 바뀌면 바로, 없으면 ' + (ni.wait || 20) + '초마다', '이 망이 웹소켓을 막아 천천히 묻는 중이에요. 질문·투표가 몇 초 늦게 보여요. 그대로 써도 돼요.' + hint];
-    if (t === 'poll') return [(ni.every ? sec(ni.every) + '마다 묻기' : '간격 묻기'), '이 망이 웹소켓을 막아 정해진 간격으로 물어요. 질문·투표가 조금 늦게 보여요. 그대로 써도 돼요.' + hint];
+    if (t === 'poll') return [(ni.every ? secText(ni.every) + '마다 묻기' : '간격 묻기'), '이 망이 웹소켓을 막아 정해진 간격으로 물어요. 질문·투표가 조금 늦게 보여요. 그대로 써도 돼요.' + hint];
     return ['연결됨', ''];
   }
-  /** 접속 확인(check.html)이 이 기기에 남긴 마지막 결과 */
+  /** 접속 확인(check.html)이 이 기기에 남긴 마지막 결과(다른 기기에서 한 확인은 여기서 알 수 없음) */
   function lastCheck() { try { var v = JSON.parse(localStorage.getItem('lp-check:' + location.pathname.replace(/[^/]*$/, '')) || 'null'); return v && v.at ? v : null; } catch (e) { return null; } }
   function paintNet() {
     if (!C.net) return;
@@ -265,8 +265,8 @@
     C.netCk.textContent = '';
     if (ck) {
       var d = new Date(ck.at), when = (d.getMonth() + 1) + '. ' + d.getDate() + '. ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      C.netCk.appendChild(doc.createTextNode('접속 확인 ' + when + ' · ' + (ck.verdict || '') + (ck.live ? ' · 참여 기능 ' + ck.live : '') + ' '));
-    } else C.netCk.appendChild(doc.createTextNode('연수 장소에서 접속 확인을 아직 하지 않았어요. 전날 그곳 Wi-Fi로 열어 보세요. '));
+      C.netCk.appendChild(doc.createTextNode('이 기기에서 한 접속 확인 ' + when + ' · ' + (ck.verdict || '') + (ck.live ? ' · 참여 기능 ' + ck.live : '') + ' '));
+    } else C.netCk.appendChild(doc.createTextNode('이 기기에서는 아직 접속 확인을 하지 않았어요. 전날 연수 장소 Wi-Fi로 열어 보세요. '));
     var a = el('a', '', ck ? '다시 확인' : '접속 확인 열기'); a.href = 'check.html'; a.target = '_blank'; a.rel = 'noopener'; C.netCk.appendChild(a);
   }
   /** 맨 위 상자: 발표 화면(지금 크게 보이는 것·참여 QR 크게·끄기) · 묻기 방식(연결·접속 확인) · 연수가 끝났으면 기록 정리로 */
@@ -368,14 +368,17 @@
     main.textContent = '';
     main.appendChild(buildNet()); paintNet();
     C.strip = el('div', 'lp-con-strip'); C.strip.setAttribute('role', 'region'); C.strip.setAttribute('aria-label', '지금 상황'); main.appendChild(C.strip);
+    // 오른쪽 단: 자주 누르는 공지·타이머 → 읽는 것(도움 요청·이해 신호·실습 진행) → 가끔 쓰는 폼(이끌기·자료 링크) → 기록.
+    // 참가자 수·도움 요청·신호·실습 막힘은 맨 위 띠에 숫자로 먼저 보임. 왼쪽 단: 질문·투표·보드
     var a = el('div', 'lp-con-col'), b = el('div', 'lp-con-col'); main.appendChild(a); main.appendChild(b);
     if (ON.qa) { panel('qa', '질문', 'qa', a); buildQA(); }
     panel('poll', '투표', 'poll', a); buildPoll();
     if (ON.board) { panel('board', '보드', 'board', a); buildBoard(); }
-    if (ON.help) panel('help', '도움 요청', 'help', b);
     panel('run', '진행', 'run', b); buildRun();
+    if (ON.help) panel('help', '도움 요청', 'help', b);
     if (ON.signal) panel('signal', '이해 신호', 'signal', b);
     if (ON.progress) panel('heat', '실습 진행 현황', 'heat', b);
+    panel('lead', '참가자 화면', 'lead', b); buildLead();
     panel('data', '기록·정리', 'data', b); buildData();
     render();
   }
@@ -392,6 +395,7 @@
       kpi(parts.length, '참가자', parts.length ? '연수 코드 ' + DATA.live.code : '아직 들어온 사람이 없어요', '');
       if (ON.help) kpi(openHelp.length, '도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '없어요', '#lp-p-help', openHelp.length > 0);
       if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(rs + '%', '모르겠어요', sig.total + '명 중 ' + sig.red + '명', '#lp-p-signal', sig.total > 0 && rs >= 25); }
+      if (ON.progress) { var pc = { done: 0, doing: 0, stuck: 0 }; latestProgress().forEach(function (x) { if (pc[x.status] !== undefined) pc[x.status]++; }); kpi(pc.stuck, '실습 막힘', '완료 ' + pc.done + ' · 하는 중 ' + pc.doing, '#lp-p-heat', pc.stuck > 0); }
       kpi(op ? pollAnswers(op.id).length : '–', '지금 투표', op ? op.question : '열린 투표가 없어요', '#lp-p-poll');
       if (ON.qa) kpi(qs.filter(function (q) { return q.status === 'open'; }).length, '열린 질문', '전체 ' + qs.length + '개', '#lp-p-qa');
       if (ON.survey) kpi(vals('survey').length, '설문 응답', '', '#lp-p-data');
@@ -607,18 +611,18 @@
     });
   }
 
-  // 진행: 공지·타이머·따라 넘기기·실습·교재 쪽·자료 링크
-  function sec(title) { var s = el('div', 'lp-con-sec'); s.appendChild(el('h3', '', title)); P.run.body.appendChild(s); return s; }
+  // 진행(공지·타이머) · 참가자 화면(따라 넘기기·실습·교재 쪽·자료 링크)
+  function runPart(title, id) { var s = el('div', 'lp-con-sec'); s.appendChild(el('h3', '', title)); P[id || 'run'].body.appendChild(s); return s; }
   function buildRun() {
     // ② 참여 받기: 모두 들어온 뒤 끄면 새 참가자(낯선 기기·도배)를 받지 않음. 이미 들어온 사람은 그대로
     C.joinLock = lockSwitch('join', '참여 받기'); P.run.act.appendChild(C.joinLock);
-    var s1 = sec('공지'); C.notice = el('div'); s1.appendChild(C.notice);
+    var s1 = runPart('공지'); C.notice = el('div'); s1.appendChild(C.notice);
     var r1 = el('form', 'lp-con-row'); var nt = el('input', 'lp-in'); nt.placeholder = '예: 15:10까지 실습하고 앞을 봐 주세요'; nt.maxLength = 120; nt.setAttribute('aria-label', '공지 문구');
     var nb = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '공지 보내기'); nb.type = 'submit';
     r1.appendChild(nt); r1.appendChild(nb); s1.appendChild(r1);
     r1.addEventListener('submit', function (e) { e.preventDefault(); var v = nt.value.trim(); if (!v) { nt.focus(); return; } setState({ notice: { text: v, level: 'info' } }, '공지를 보냈어요. 참가자·발표 화면 위에 보여요.').then(function () { nt.value = ''; }); });
 
-    var s2 = sec('타이머'); C.clock = el('div', 'lp-con-clock'); s2.appendChild(C.clock);
+    var s2 = runPart('타이머'); C.clock = el('div', 'lp-con-clock'); s2.appendChild(C.clock);
     var r2 = el('div', 'lp-con-row');
     [1, 3, 5, 10, 15].forEach(function (m) { r2.appendChild(btn(m + '분', '', function () { startTimer(m); }, 't' + m)); });
     s2.appendChild(r2);
@@ -629,8 +633,10 @@
     r2b.addEventListener('submit', function (e) { e.preventDefault(); var m = Math.round(+tm.value); if (!(m >= 1 && m <= 180)) { toast('1~180분 사이로 넣어 주세요.'); tm.focus(); return; } startTimer(m, tl.value.trim()); tm.value = ''; tl.value = ''; });
     function startTimer(m, label) { setState({ timer: { endsAt: now() + m * 60000, label: label || '', running: true } }, m + '분 타이머를 시작했어요.'); }
     s2.appendChild(el('p', 'lp-con-sub', '타이머 여러 개·이름 뽑기·모둠 만들기는 발표 화면의 [도구]에 있어요.'));
-
-    var s3 = sec('참가자 화면 이끌기');
+    clearInterval(C.tick); C.tick = setInterval(drawClock, 1000);
+  }
+  function buildLead() {
+    var s3 = runPart('이끌기', 'lead');
     C.follow = el('button', 'lp-switch'); C.follow.type = 'button'; C.follow.setAttribute('role', 'switch'); C.follow.setAttribute('data-k', 'follow');
     C.follow.appendChild(el('i')); C.follow.appendChild(el('span', '', '강사 따라 넘기기')); C.followS = el('small'); C.follow.appendChild(C.followS);
     C.follow.addEventListener('click', function () { setState({ follow: !state.follow }, !state.follow ? '참가자 화면이 강사가 고른 실습·쪽으로 움직여요.' : '참가자가 자유롭게 넘겨요.'); });
@@ -652,7 +658,7 @@
       s3.appendChild(r4); C.slide = inp;
     }
     // 자료 링크: 연수 중에 덧붙이면 참가자 화면의 자료실에 바로 보임(파일은 드라이브 등에 올린 공유 주소로)
-    var s4 = sec('자료 링크');
+    var s4 = runPart('자료 링크', 'lead');
     var r5 = el('form', 'lp-con-row'); var mt = el('input', 'lp-in'); mt.placeholder = '자료 이름'; mt.maxLength = 40; mt.setAttribute('aria-label', '자료 이름');
     var mu = el('input', 'lp-in'); mu.type = 'url'; mu.placeholder = 'https://'; mu.setAttribute('aria-label', '자료 주소(https)'); mu.style.flex = '2 1 12em';
     var mb = el('button', 'lp-btn lp-btn-sm', '자료 추가'); mb.type = 'submit';
@@ -663,7 +669,6 @@
       setState(patch, '자료를 추가했어요. 참가자 화면의 자료실에 보여요.'); mt.value = ''; mu.value = '';
     });
     C.mats = el('ul', 'lp-con-mats'); s4.appendChild(C.mats);
-    clearInterval(C.tick); C.tick = setInterval(drawClock, 1000);
   }
   function drawClock() {
     if (!C.clock) return;
@@ -735,10 +740,13 @@
       sg.appendChild(row);
     });
   }
-  // 실습 진행 현황
-  function renderHeat(parts) {
+  // 실습 진행 현황: 참가자·실습 칸마다 마지막 기록
+  function latestProgress() {
     var latest = {}; vals('progress').forEach(function (p) { var k = (p.by || p.id) + '|' + p.station; if (!latest[k] || (p.at || p.createdAt) >= (latest[k].at || latest[k].createdAt)) latest[k] = p; });
-    var prog = Object.keys(latest).map(function (k) { return latest[k]; });
+    return Object.keys(latest).map(function (k) { return latest[k]; });
+  }
+  function renderHeat(parts) {
+    var prog = latestProgress();
     var hb = P.heat.body; hb.textContent = '';
     var total = Math.max(parts.length, 1), ul = el('ul', 'lp-heat');
     stations.forEach(function (s) {

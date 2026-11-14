@@ -163,3 +163,19 @@ test('저장량 알림: 상한의 80%를 넘으면 하루 한 번', async () => 
   await call('POST', 'site', { id: 'hhhhhhhhhh', bytes: 9000 });
   assert.equal(sent.length, 1, '같은 날 한 번');
 });
+
+test('Pages 첫 주소 안내 화면: 처음 공개한 사이트 하나에만 맡기고, 올렸거나 이미 있으면 다시 맡기지 않음(실패하면 6시간 뒤 다시)', async () => {
+  const { g, call } = gate();
+  await reserve(call, 'pppppppppp');
+  const ask = async () => (await call('POST', 'site', { id: 'pppppppppp', bytes: 10, published: true, pagesRoot: 'ask' })).body.pagesRoot;
+  assert.equal((await call('POST', 'site', { id: 'pppppppppp', bytes: 10, pagesRoot: 'ask' })).body.pagesRoot, undefined, '공개가 아니면 맡기지 않음');
+  assert.equal(await ask(), true, '처음 공개한 사이트에 맡김');
+  assert.equal(await ask(), undefined, '하는 중에는 다른 공개에 맡기지 않음');
+  await call('POST', 'site', { id: '', pagesRoot: 'failed', pc: 3 });
+  assert.equal(await ask(), undefined, '실패 바로 뒤에는 기다림');
+  assert.equal(g.pagesRootClaim(Date.now() + 7 * 3600e3), true, '6시간 지나면 다시 맡김');
+  await call('POST', 'site', { id: '', pagesRoot: 'made' });
+  assert.equal(await ask(), undefined);
+  assert.equal(g.pagesRootClaim(Date.now() + 400 * 864e5), false, '올린 뒤에는 다시 맡기지 않음');
+  assert.equal((await call('GET', 'overview')).body.today.pc, 3, 'Pages API 부른 수는 하루 숫자에');
+});

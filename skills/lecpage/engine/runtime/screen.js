@@ -81,11 +81,33 @@
     if (qrMarkup) q.innerHTML = qrMarkup;
     else if (!qrUrl) q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
   }
-  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) { n.textContent = shortUrl || fullUrl || '배포하면 여기에 참가자 주소가 나와요.'; });
+  // 손으로 칠 주소: 한 줄에 맞춤(fitUrl, 원래 크기의 60%까지 줄임). 안 되면 점·빗금 뒤에서만 줄을 바꿈(조각은 끊지 않음 — 's-'·'lecpage-'에서 끊기지 않게)
+  function urlNodes(n, u) {
+    n.textContent = '';
+    u.replace(/([./])/g, '$1\n').split('\n').filter(Boolean).forEach(function (part, i) { if (i) n.appendChild(doc.createElement('wbr')); n.appendChild(el('span', '', part)); });
+  }
+  [].forEach.call(doc.querySelectorAll('[data-join-url]'), function (n) {
+    var u = shortUrl || fullUrl;
+    if (u) urlNodes(n, u); else { n.textContent = '배포하면 여기에 참가자 주소가 나와요.'; n.setAttribute('data-plain', ''); }
+  });
+  function fitUrl(n) {
+    if (!n || n.hasAttribute('data-plain') || !n.getClientRects().length) return;
+    n.style.fontSize = ''; n.removeAttribute('data-wrap');
+    var base = parseFloat(getComputedStyle(n).fontSize) || 16, f = base, min = Math.max(14, base * 0.6);
+    while (n.scrollWidth > n.clientWidth + 1 && f > min) { f = Math.max(min, Math.floor(f * 0.93)); n.style.fontSize = f + 'px'; }
+    // 많이 줄여도 안 들어가면(좁은 레일) 원래 크기로 두고 점·빗금 뒤에서 줄을 바꿈(작은 한 줄보다 큰 두세 줄이 뒷자리에서 읽힘)
+    if (n.scrollWidth > n.clientWidth + 1) {
+      n.style.fontSize = ''; n.setAttribute('data-wrap', '');
+      // 조각 하나가 칸보다 길면(긴 경로 이름) 그 조각이 들어갈 만큼만 줄이고, 그래도 넘치면 조각 안에서도 끊음
+      f = base; while (n.scrollWidth > n.clientWidth + 1 && f > 12) { f = Math.max(12, Math.floor(f * 0.93)); n.style.fontSize = f + 'px'; }
+      if (n.scrollWidth > n.clientWidth + 1) n.setAttribute('data-wrap', 'any');
+    }
+  }
+  function fitUrls() { [].forEach.call(doc.querySelectorAll('[data-join-url]'), fitUrl); }
   [].forEach.call(doc.querySelectorAll('[data-join-full]'), function (n) { n.hidden = !shortUrl; n.textContent = shortUrl ? fullUrl : ''; });
   // QR 크게 보기: 뒷자리에서도 찍히게 화면 가득(QR 한 변은 찍는 거리의 1/10쯤이 필요)
   var zoom = $('[data-join-zoom]'), big = $('[data-joinbig]'), jo = $('[data-join-open]');
-  function openBig() { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; if (!big.open) big.showModal(); }
+  function openBig() { var bq = $('[data-qr-big]', big); if (bq && !bq.firstChild) bq.innerHTML = qrMarkup; if (!big.open) big.showModal(); fitUrl($('[data-join-url]', big)); }
   if (zoom && big) {
     if (!qrMarkup || !big.showModal) { zoom.disabled = true; var zt = $('.lp-qr-zoom-t', zoom); if (zt) zt.hidden = true; if (jo) jo.hidden = true; }
     else {
@@ -101,9 +123,9 @@
     if (!stage) return;
     $('[data-stage-title]', stage).textContent = title;
     var body = $('[data-stage-body]', stage); body.textContent = ''; body.appendChild(node);
-    stage.hidden = false; fit();
+    stage.hidden = false; setLobby(); fit();
   }
-  if (stage) $('[data-stage-close]', stage).addEventListener('click', function () { stage.hidden = true; fit(); var o = $('[data-tools-open]'); if (o) o.focus(); });
+  if (stage) $('[data-stage-close]', stage).addEventListener('click', function () { stage.hidden = true; setLobby(); fit(); var o = $('[data-tools-open]'); if (o) o.focus(); });
 
   // ── 도구 서랍 ──
   var drawer = $('[data-tools]'), opener = $('[data-tools-open]');
@@ -261,7 +283,7 @@
   var side = $('.lp-scr-side'), sideQr = $('.lp-scr-join .lp-qr');
   function fitRail() {
     if (!side || !sideQr) return;
-    sideQr.style.width = ''; side.removeAttribute('data-tight');
+    sideQr.style.width = ''; side.removeAttribute('data-tight'); fitUrls();
     if (getComputedStyle(side).overflow !== 'hidden') return;
     var over = side.scrollHeight - side.clientHeight;
     if (over > 0) sideQr.style.width = Math.max(96, sideQr.getBoundingClientRect().width - over) + 'px';
@@ -269,21 +291,29 @@
     if (side.scrollHeight > side.clientHeight + 1) { side.setAttribute('data-tight', ''); var o2 = side.scrollHeight - side.clientHeight; if (o2 > 0) sideQr.style.width = Math.max(72, sideQr.getBoundingClientRect().width - o2) + 'px'; }
   }
   fitRail();
+  if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(fitRail); // 글꼴이 바뀌면 주소 폭도 바뀜
   if (window.ResizeObserver && side) { var sT = 0; new ResizeObserver(function () { clearTimeout(sT); sT = setTimeout(fitRail, 80); }).observe(side); }
   if (window.ResizeObserver && stageBox) { var rT = 0; new ResizeObserver(function () { clearTimeout(rT); rT = setTimeout(function () { if (draw.last) draw(); }, 120); }).observe(stageBox); }
 
   drawTimers();
 
-  function emptyStage(live) {
-    mainBox.textContent = '';
-    var e = el('div', 'lp-scr-empty');
-    e.appendChild(el('p', 'lp-scr-empty-t', live ? '질문을 기다리고 있어요' : '이름 뽑기·모둠·타이머는 오른쪽 위 [도구]에 있어요'));
-    if (live) {
+  // 로비: 질문·투표가 없을 때(도구 결과도 없을 때) 참여 QR을 화면 높이의 절반쯤으로 크게 + 큰 연수 제목 + 세 단계.
+  // 첫 질문·투표가 오면 지금 배치(무대 + 오른쪽 레일)로. 처음 모습은 aux.js가 그려 둠(같은 꼴)
+  function setLobby() {
+    if (!scr || !mainBox) return;
+    var on = !!mainBox.querySelector('.lp-scr-empty') && !(stage && !stage.hidden);
+    if (on === scr.hasAttribute('data-lobby')) return;
+    if (on) scr.setAttribute('data-lobby', ''); else scr.removeAttribute('data-lobby');
+    fitRail();
+  }
+  function lobbyStage() {
+    if (!mainBox.querySelector('.lp-scr-empty')) { // 이미 로비면 다시 그리지 않음(읽어 주기 되풀이 없게)
+      var e = el('div', 'lp-scr-empty'), t = el('p', 'lp-scr-lobby-t', DATA.title || ''); t.setAttribute('aria-hidden', 'true'); e.appendChild(t);
       var st = el('ol', 'lp-scr-steps');
-      ['QR을 찍어 들어와요', '[질문]에 올려요', '마음에 드는 질문에 공감을 눌러요'].forEach(function (t, i) { var li = el('li'); li.appendChild(el('b', '', String(i + 1))); li.appendChild(el('span', '', t)); st.appendChild(li); });
-      e.appendChild(st);
+      ['QR을 찍어 들어와요', '[질문]에 올려요', '마음에 드는 질문에 공감을 눌러요'].forEach(function (x, i) { var li = el('li'); li.appendChild(el('b', '', String(i + 1))); li.appendChild(el('span', '', x)); st.appendChild(li); });
+      e.appendChild(st); mainBox.textContent = ''; mainBox.appendChild(e);
     }
-    mainBox.appendChild(e);
+    setLobby();
   }
   function draw() { draw.last = true; }
   if (!DATA.live || !window.LecLive) return;
@@ -351,7 +381,9 @@
     var n = $('[data-notice]'); if (state.notice && state.notice.text) { n.hidden = false; n.textContent = state.notice.text; } else n.hidden = true;
     drawTimer(); drawSignal(); fitRail();
     var p = openPoll();
-    mainBox.textContent = '';
+    var arr = Object.keys(qs).map(function (k) { return qs[k]; }).filter(function (x) { return x.status === 'open' || (x.pinned && x.status !== 'hidden'); }).sort(function (a, b) { return (!!b.pinned - !!a.pinned) || (b.votes || 0) - (a.votes || 0) || (a.createdAt || 0) - (b.createdAt || 0); });
+    if (!p && !arr.length) { lobbyStage(); return; }
+    mainBox.textContent = ''; setLobby();
     if (p) {
       mainBox.appendChild(el('h2', 'lp-scr-pq', shown(p.question, 140)));
       var list = Object.keys(answers).map(function (k) { return answers[k]; }).filter(function (a) { return a.poll === p.id; }), total = list.length;
@@ -380,8 +412,6 @@
       mainBox.appendChild(el('p', 'lp-scr-pmeta', '응답 ' + total + '명'));
       return fit();
     }
-    var arr = Object.keys(qs).map(function (k) { return qs[k]; }).filter(function (x) { return x.status === 'open' || (x.pinned && x.status !== 'hidden'); }).sort(function (a, b) { return (!!b.pinned - !!a.pinned) || (b.votes || 0) - (a.votes || 0) || (a.createdAt || 0) - (b.createdAt || 0); });
-    if (!arr.length) { emptyStage(true); return; }
     var head = el('div', 'lp-scr-h'); head.appendChild(el('h2', '', '질문')); head.appendChild(el('p', '', '공감이 많은 순 · ' + arr.length + '개')); mainBox.appendChild(head);
     var ulq = el('ol', 'lp-scr-qs');
     arr.slice(0, 6).forEach(function (x) {
@@ -397,7 +427,6 @@
   };
   function react(e) { var h = $('[data-reactions]'); if (!h || RM) return; var s = el('span', '', e); s.style.left = Math.round(Math.random() * 30) + 'px'; h.appendChild(s); setTimeout(function () { s.remove(); }, 2700); }
   var rq = 0; function redraw() { if (rq) return; rq = (window.requestAnimationFrame || setTimeout)(function () { rq = 0; draw(); }); }
-  emptyStage(true);
   conn.connect().then(function () {
     conn.subscribe(function (ev) {
       if (!ev) return;

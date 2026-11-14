@@ -235,7 +235,7 @@ export async function setup(argv = process.argv.slice(2), { env = process.env, i
         await deploySite(pc, { branch: 'main', manifest: { '/index.html': hash, '/404.html': hash }, extra: [{ hash, parts, contentType: 'text/html; charset=utf-8' }], headers: NOTICE_HEADERS, message: 'lecpage 안내 화면' });
         st.did.push('Pages 본 배포(없는 주소 안내 화면)');
       } catch (e) {
-        st.todo.push(`Pages 첫 주소(${host})의 안내 화면을 못 올렸어요(${String(e.message || e).slice(0, 80)}). 사이트 배포와는 상관없어요. 다른 컴퓨터에서 npm run setup을 다시 돌리면 채워져요.`);
+        st.todo.push(`Pages 첫 주소(${host})의 안내 화면을 못 올렸어요(${String(e.message || e).slice(0, 80)}). 사이트 배포와는 상관없어요. 첫 사이트를 공개할 때 바로 배포 서버가 한 번 올려요.`);
       }
     }
   });

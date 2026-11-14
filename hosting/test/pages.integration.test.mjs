@@ -96,6 +96,16 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(con.status, 200); assert.equal(con.headers.get('x-frame-options'), 'DENY');
   });
 
+  await t.test('프로젝트 첫 주소: 본 배포가 없으면 처음 공개 때 안내 화면을 한 번 올림(설정 스크립트가 못 올렸을 때)', async () => {
+    for (let i = 0; i < 60 && !cf.deploymentsOf('main').length; i++) await new Promise((r) => setTimeout(r, 100));
+    const main = cf.deploymentsOf('main');
+    assert.equal(main.length, 1);
+    assert.deepEqual(Object.keys(main[0].manifest).sort(), ['/404.html', '/index.html']);
+    assert.match(main[0].headers, /X-Robots-Tag: noindex, nofollow/);
+    const root = await get(`${cf.url}/__view/main/`);
+    assert.match(root.text, /이 사이트는 보관 기간이 끝났어요/);
+  });
+
   await t.test('다시 배포: 바뀐 파일만 받고 지난 배포는 지움', async () => {
     const changed = { ...files, 'index.html': te.encode(new TextDecoder().decode(files['index.html']).replace('</body>', '<p>고침</p></body>')) };
     const r = await deploy(base, site, changed);
@@ -104,6 +114,8 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     const deps = cf.deploymentsOf(`s-${site.id}`);
     assert.equal(deps.length, 1, '지난 배포를 지움'); assert.notEqual(deps[0].id, first.id);
     assert.ok((await get(site.url)).text.includes('<p>고침</p>'));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(cf.deploymentsOf('main').length, 1, '첫 주소 안내 화면은 한 번만');
   });
 
   await t.test('Pages가 자산을 지웠으면 missing_blobs로 다시 받아 공개', async () => {
