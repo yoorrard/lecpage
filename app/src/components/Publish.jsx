@@ -284,13 +284,14 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
             <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
-      <div class="pub-about">
+      {/* 같은 곳에 다시 배포할 때는 소개·한도·알아 둘 점을 되풀이하지 않음(처음 배포할 때 봤고, 보관 기간은 위 완료 카드에 있음) */}
+      {!(p.deploy?.lastUrl && target === p.deploy?.target) && <div class="pub-about">
         <p>{lead}</p>
         {((showLimit && limitLine) || care) && <dl class="pub-facts small">
           {showLimit && limitLine && <div class="pub-limit"><dt>무료 한도</dt><dd>{limitLine}</dd></div>}
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
         </dl>}
-      </div>
+      </div>}
       {full && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
@@ -364,7 +365,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     <div class="stack">
       {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
       {liveOn && liveOff && !own && <p class="small" role="status">{liveOffLine(liveOff)}</p>}
-      {autoLive && !liveOff && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
+      {autoLive && !liveOff && !alive && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 내리기</button></p>}
