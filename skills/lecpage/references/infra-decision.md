@@ -4,7 +4,7 @@
 > 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
 > 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
 > 배포할 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
-> skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 배포'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **앱 전용이고 skill은 쓰지 않습니다**.
+> skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 배포'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능, 60일 보관. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **skill이 직접 부르지 않고 앱으로 넘깁니다**: 강사에게 배포할 곳 계정이 없으면 `app work`로 `.lecpage` 파일을 만들고, 강사가 lecpage.com [저장한 파일 열기] → [배포하기]에서 가입 없이 배포합니다.
 
 ---
 
@@ -29,7 +29,7 @@
 | `keep` | `long` | 연수 뒤에도 오래 둘 사이트인가요? | 없음 |
 | `access` | `link` · `public` · `password` | 사이트를 누가 볼 수 있나요? 주소·QR을 받은 사람만 / 누구나(검색 허용) / 암호를 아는 사람만 | `link` |
 | `siteMB` · `files` · `maxFileMB` | 수 | (빌드 결과) 사이트 크기, 파일 수, 가장 큰 파일. 앞의 둘은 빌드 요약 줄에, 큰 파일은 `find dist -type f -size +5M`로 | 빌드 결과 |
-| `instant` | bool | (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱인지. skill은 쓰지 않음 | false |
+| `instant` | bool | (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱인지. skill은 이 값을 쓰지 않고, 계정이 없는 강사는 `app work`로 앱에 넘김 | false |
 
 파생 값
 - `realtime` = `features`에 `qa help progress poll reactions signal` 중 하나라도 있음.
@@ -60,7 +60,7 @@
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
-| (앱 전용, skill은 쓰지 않음) '바로 배포'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 마지막으로 배포한 날부터 정해진 날까지. 붐비는 날은 앱이 같은 파일 그대로 내 계정으로, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 넘김) | 앱 화면 |
+| (앱 전용, skill은 `app work`로 넘김) '바로 배포'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 마지막으로 배포한 날부터 정해진 날까지. 붐비는 날은 앱이 같은 파일 그대로 내 계정으로, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 넘김) | 앱 화면 |
 
 ### 2.2 실시간
 
@@ -134,7 +134,7 @@
 9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로. `onpod`은 사이트 > 100MB·파일 > 50MB·5,000개 넘음이면 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
-12. ★ **S15** (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소. 붐비는 날은 앱이 같은 파일 그대로 다음 곳으로 넘김). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 쓰지 않습니다.
+12. ★ **S15** (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소. 붐비는 날은 앱이 같은 파일 그대로 다음 곳으로 넘김). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 직접 부르지 않고, 계정이 없는 강사에게 `app work` → 앱의 [배포하기]를 안내합니다.
 13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로(강사 할 일 0번). Netlify·Onpod은 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
@@ -277,7 +277,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
     "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작 → Make public","domain":"*.netlify.app"},
-    "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 쓰지 않음). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 30일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
+    "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 `app work`로 넘김). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 60일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
     "aws-amplify":  {"target":"s3","guide":"deploy/aws-s3-cloudfront.md#amplify-끌어-놓기","headers":"amplify-console","cost":"GB당 $0.15 전송","domain":"*.amplifyapp.com"},
@@ -347,7 +347,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | Appwrite Cloud / Convex | 각 서비스 계정 | Appwrite: 한도 넘으면 프로젝트 동결 / Convex: 함수 호출 100만/월 | (어댑터 없음) | 참고만 |
 | Vercel 함수 | — | WebSocket이 되지만 최대 실행 시간(Hobby 300초)에 끊기고 상태를 둘 곳이 없음 | (어댑터 없음) | 실시간 백엔드로 쓰지 않음. 배포할 곳이 Vercel이어도 실시간은 위에서 고름 |
 
-**아무 연수나 받는 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다. '바로 배포'로 올린 사이트에 딸린 방만 운영자 서버가 맡습니다(앱 전용, skill은 쓰지 않음).
+**아무 연수나 받는 운영자 공용 중계는 없습니다.** 운영자가 참가자 기록을 맡으면 개인정보 처리자가 되고, 무료 한도가 여러 강사의 공용 공격 대상이 되며, 신고·삭제 의무와 사용자에 비례하는 비용이 생깁니다. 대신 강사 계정에 skill이 직접 만들어 주거나(Supabase·Cloudflare), Sheets 안내(연결 확인 포함)와 Deploy to Cloudflare 버튼으로 강사 소유를 쉽게 만듭니다. '바로 배포'로 올린 사이트에 딸린 방만 운영자 서버가 맡습니다(앱 전용, skill은 직접 부르지 않고 앱으로 넘김).
 
 ### 5.3 조합할 때 지켜야 할 것
 - **주소(origin)** : 엔진이 페이지마다 넣는 CSP `<meta>`는 `connect-src`에 `https:`·`wss:`를 허용하므로 실시간 주소를 따로 적을 일이 없습니다. §10의 CSP 헤더 템플릿을 따로 쓸 때만 `{{LIVE_ORIGIN}}`을 채웁니다.

@@ -299,7 +299,9 @@ export function renderPrivacy(ctx) {
   const contactRaw = pv.contact || bp.meta.contact || bp.instructors.find((i) => i.email && i.showEmail)?.email || '';
   const contact = contactHtml(contactRaw || '연수 운영자에게 문의해 주세요.');
   const collect = pv.collect.map((c) => items[c]).filter(Boolean);
-  const rows = (p) => [['이전받는 자', `${esc(p.name)}${p.contact ? ` (${contactHtml(p.contact)})` : ''}`], ['이전 국가', esc(p.country)], ['이전 항목', '위 2의 항목 전부'], ['이전 시기·방법', '참여 기능을 쓸 때마다 네트워크로 전송'], ['이용 목적·보유 기간', `${esc(p.purpose)}, 위 3의 보유 기간까지`], ['거부 방법과 효과', '참여 기능을 쓰지 않으면 전송되지 않습니다. 이 경우 질문·투표 등은 쓸 수 없고, 안내와 교재는 그대로 볼 수 있습니다.']];
+  // 바로 배포 서버가 참여 기록을 맡으면(앱이 처리자로 'lecpage 운영자'를 넣음) 운영자는 강사를 대신해 저장만 하는 수탁자
+  const byOperator = procs.some((p) => /^lecpage 운영자/.test(p.name));
+  const rows =(p) => [['이전받는 자', `${esc(p.name)}${p.contact ? ` (${contactHtml(p.contact)})` : ''}`], ['이전 국가', esc(p.country)], ['이전 항목', '위 2의 항목 전부'], ['이전 시기·방법', '참여 기능을 쓸 때마다 네트워크로 전송'], ['이용 목적·보유 기간', `${esc(p.purpose)}, 위 3의 보유 기간까지`], ['거부 방법과 효과', '참여 기능을 쓰지 않으면 전송되지 않습니다. 이 경우 질문·투표 등은 쓸 수 없고, 안내와 교재는 그대로 볼 수 있습니다.']];
   const sum = [
     ['받는 정보', `${collect.join('·')}${pv.collect.includes('name') ? '' : ' (이름·연락처는 받지 않음)'}`],
     ['보관', local ? '이 브라우저 안에만(리허설)' : `연수가 끝나고 ${pv.retentionDays}일`],
@@ -313,7 +315,7 @@ export function renderPrivacy(ctx) {
 <p class="lp-doc-lead">「${esc(bp.meta.title)}」 연수의 참여 기능(질문·투표 등)이 어떤 정보를 받고 어떻게 다루는지 적은 안내입니다.</p>
 <section class="lp-doc-sum" aria-labelledby="lp-sum-h"><h2 id="lp-sum-h">한눈에 보기</h2><dl>${sum.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
 <p><b>개인정보처리자</b> ${esc(who)}</p>
-<p>이 연수를 운영하면서 아래 개인정보만 처리합니다. 이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.</p>
+<p>이 연수를 운영하면서 아래 개인정보만 처리합니다. ${byOperator ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않고, 늦어도 사이트가 지워질 때 함께 지웁니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
 <h2>1. 처리 목적</h2><p>연수 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
 <h2>2. 처리 항목</h2><p>${collect.join(', ')}, 참가자를 구분하는 임의 번호.</p>
 <p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? `\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 ${local ? '기록' : '서버'}에는 그 임의 번호와 함께 저장됩니다.</p>` : ''}

@@ -30,11 +30,11 @@ $L handouts <배포한 주소>                                     # QR-안내�
 ## 작업 흐름 (도구 호출을 적게)
 1. **만들기**: `make 교재 -o dist`. PPTX와 그 PDF를 함께 주면 쪽 그림이 원본 글꼴. HWP(한글 2002 이후)도 바로 읽는다. 구형 PPT·DOC와 암호·배포용 HWP는 PDF·PPTX·HWPX로 저장해 달라고 한다.
 2. **요약만 읽기**: `교재 반영` 줄이 ✓면 교재 대조는 끝이다. 교재와 사이트를 손으로 맞춰 보지 않는다(엔진의 반영 점검·`qa`·교재 지킴이가 한다). △면 `빠짐` 줄의 것만 고친다.
-3. **빈칸 묻기**: 요약의 `빈칸`만 고르기형으로 묻는다(기본 4문항, 많아야 7). 교재에서 알아낸 것을 한 줄로 알린다. "알아서"면 기본값과 가정을 한 줄로. 답은 `work/info.json`(키: `references/intake.md`) → `make 교재 -i work/info.json -o dist --fresh`.
+3. **빈칸 묻기**: 요약의 `빈칸`·`물을 것`만 고르기형으로 묻는다(보통 3~4문항, 많아야 7). 교재에서 알아낸 것을 한 줄로 알린다. "알아서"면 기본값과 가정을 한 줄로. 답은 `work/info.json`(키: `references/intake.md`) → `make 교재 -i work/info.json -o dist --fresh`.
 4. **다듬기**: `patch`로 필요한 칸만(여러 곳은 패치 파일 한 번, 마지막에 `--qa`). 설계도를 다시 쓰지 않는다. 요약의 `구성` 줄은 강사에게 한 줄로 알린다. 칸 요령 `references/blueprint.md`, 문구 `references/copywriting.md`. 점검 스크린샷(`qa/*.png`)은 보고, 사람 점검은 `references/qa-checklist.md`.
 5. **컨셉·디자인**: `design work/blueprint.json`의 컨셉을 교재 말로 고쳐 `--set concept.idea=… concept.motif=… concept.why=…`(방법: `references/concept.md`). 디자인 요청은 `options` 한 번 → `work/options/contact-sheet.png`를 보여 주고, 고르면 `patch --set design.preset=<id> --set design.accent=#…`.
-6. **배포·참여 기능**: `info.json`에 `skill: "set"`과 이미 로그인된 곳(`connected`) → `decide-infra -i work/info.json`(강사가 할 일 수로 고름). Cloudflare면 `publish work --dry-run`으로 순서와 강사가 할 일을 보이고, 강사가 로그인(또는 토큰을 환경 변수로)하면 `--dry-run` 없이 한 번. 질문·투표를 쓰면 `--live --features qa,poll`. Onpod(한국 서비스, `ONPOD_TOKEN`)이면 `--host onpod`(사이트만). 다시 배포할 땐 `publish work`만(지난번 곳·주소). 관리자 키는 `dist-강사용/관리자-키.txt`에만 있고 화면에 찍지 않는다. 다른 곳은 `references/deploy/<대상>.md`의 한 줄. 인터넷이 없으면 `pack dist -o site.zip`. 공개 범위는 묻고 `info.json`의 `access`(`link` 기본·`public`). 암호는 `--password '<낱말 서너 개>'`(https에서만, 교실 LAN·ZIP은 안 됨).
-7. **건네기**: 참가자 주소, `dist-강사용/`의 `QR-안내문.pdf`·`발표화면.png`, 강사 화면 주소와 관리자 키 보관법. 강사 화면이 출발점이다: [발표 화면 띄우기]로 프로젝터에, [더보기]에 QR 안내문·접속 확인·휴대폰에서 열기·**도움말**(연수 전·중·후 할 일).
+6. **배포·참여 기능**: 배포할 곳 계정이 없으면 `app work` → 강사가 lecpage.com [저장한 파일 열기] → [배포하기]의 바로 배포(가입 없음, 60일 보관). 계정이 있으면 `info.json`에 `skill: "set"`과 이미 로그인된 곳(`connected`) → `decide-infra -i work/info.json`(강사가 할 일 수로 고름). Cloudflare면 `publish work --dry-run`으로 순서와 강사가 할 일을 보이고, 강사가 로그인(또는 토큰을 환경 변수로)하면 `--dry-run` 없이 한 번. 질문·투표를 쓰면 `--live --features qa,poll`. Onpod(한국 서비스, `ONPOD_TOKEN`)이면 `--host onpod`(사이트만). 다시 배포할 땐 `publish work`만(지난번 곳·주소). 관리자 키는 `dist-강사용/관리자-키.txt`에만 있고 화면에 찍지 않는다. 다른 곳은 `references/deploy/<대상>.md`의 한 줄. 인터넷이 없으면 `pack dist -o site.zip`. 공개 범위는 묻고 `info.json`의 `access`(`link` 기본·`public`). 암호는 `--password '<낱말 서너 개>'`(https에서만, 교실 LAN·ZIP은 안 됨).
+7. **건네기**: 참가자 주소, `dist-강사용/`의 `QR-안내문.pdf`·`발표화면.png`. 참여 기능을 켰으면(`console.html`이 있음) 강사 화면 주소와 관리자 키 보관법도: 강사 화면이 출발점이다([발표 화면 띄우기]로 프로젝터에, [더보기]에 QR 안내문·접속 확인·휴대폰에서 열기·**도움말**). 없으면 `dist-강사용/운영안내.md`가 연수 전·중·후 할 일.
 8. **고쳐 달라면**: `review dist` → `work/feedback/`을 읽고 `patch`. 앱으로 넘기려면 `app work`(`.lecpage` 파일, 비밀 값 빠짐).
 
 ## 이미 있는 것 (새로 짜기 전에 이 표와 `brief`)
@@ -65,7 +65,7 @@ $L handouts <배포한 주소>                                     # QR-안내�
 | 칸 필드를 고칠 때 | references/blueprint.md · references/copywriting.md |
 | 구성·기능 표, 컨셉 | references/modules.md · references/concept.md |
 | 프리셋·효과·글꼴, 'AI 티' 검사 | references/design.md · references/design-quality.md |
-| 배포할 곳·참여 기능을 고를 때, 막혔을 때 | references/infra-decision.md · references/deploy/<대상>.md · backends/*/README.md |
+| 배포할 곳·참여 기능 | `decide-infra` 출력이면 충분. 막혔을 때만 references/deploy/<대상>.md · backends/*/README.md(규칙 자체를 볼 때만 infra-decision.md) |
 | 개인정보·연수 행정 | references/privacy-admin.md |
 | 사람 점검 목록 | references/qa-checklist.md |
 | 교재 해석 형식, 완성 예시 | references/material-format.md · examples/*.blueprint.json |

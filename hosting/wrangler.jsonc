@@ -35,7 +35,9 @@
   // 사이트 보기 설정(VIEW, CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_HOST, PAGES_TOKEN, APP_ORIGINS)은 npm run setup이 비밀 값으로 넣습니다(다시 배포해도 남음).
   "vars": {
     // 바로 배포를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
-    "ALLOWED_ORIGINS": "https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173"
+    "ALLOWED_ORIGINS": "https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173",
+    // 신고 알림의 '처리' 링크가 가리킬 관리 화면(관리 Worker lecpage-admin). 포크는 자기 주소로 바꾸거나 지우세요(없으면 링크를 뺌)
+    "ADMIN_URL": "https://lecpage-admin.lecpage.workers.dev/admin/"
     // 요금제: PLAN "free"(기본. 무료 요금제 안에서만: 하루 예산의 45%부터 예약한 연수만, 60%부터 새 사이트·새 방은 강사 계정으로) | "paid"(Workers Paid로 올린 뒤. 하루 한도 없음)
     // 수용량·비용 표: node scripts/capacity-model.mjs, README §4
     // DAILY_REQUEST_BUDGET 100000(paid는 0) · KEEP_ALIVE "on"(방문이 있으면 보관 기간을 다시 채움) · MAX_SITE_DAYS 365

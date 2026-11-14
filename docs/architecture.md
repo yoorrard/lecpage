@@ -35,8 +35,9 @@ lecpage/
 │  ├─ templates/deploy/       ← 호스팅별 설정 파일
 │  └─ examples/               ← 예시 설계도(강의형 sel-story, 실습형 data-lab)
 ├─ app/                       ← lecpage 웹앱(Vite, 정적 배포). 엔진을 상대 경로로 import
+├─ scripts/ai-catalog/        ← AI 모델 값표 매일 갱신(refresh.mjs, 의존성 없음) → app/public/ai-catalog.json
 ├─ docs/                      ← 기획서, 아키텍처, 운영, 조사 자료
-└─ .github/workflows/         ← CI, Pages 배포
+└─ .github/workflows/         ← CI, Pages 배포, AI 정보 매일 갱신(ai-catalog.yml)
 ```
 
 원칙
@@ -318,6 +319,7 @@ assets/slides/*.webp · assets/media/*
 - `startMakeJob({ getProject, update })`: 기본 초안이 보이는 상태에서 읽기 → 묻기 → 만들기 단계로 돌고, 끝나면 되돌리기 지점("AI로 만들기 전")을 쌓은 뒤 설계도를 바꿉니다. `live.url`·`live.code`·`live.anonKey`·`meta.siteUrl` 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
 - 연결(`AiConnect`): 키 붙여넣기(OpenAI·Claude가 먼저, Gemini 무료 키는 작은 단추로. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) · 쓰던 AI에 복사·붙여넣기. OpenRouter는 고르는 화면에서 뺐고 저장해 둔 연결만 그대로 동작합니다. 설정의 '연결'에서 미리 해 둘 수 있습니다.
 - AI 회사 호출(`app/src/lib/ai.js`, 수정 요청은 `ai-vision.js`가 같은 규칙을 씀): 모델은 회사의 목록 API와 OpenRouter 공개 목록의 값·출시일로 고르고 이름을 코드에 박지 않습니다. Gemini 본문(`geminiBody`)은 temperature 없이, `maxOutputTokens` 32,768 이상, `store: false`(유료 프로젝트 기본 기록 끄기). 오류는 상태 코드와 회사별 오류 코드(code·type·details.error_code)·문구로 가립니다(`classify`). 회사별 사실과 출처는 `docs/research/ai-facts-2026-11-14.md`.
+- 모델 값표(`app/src/lib/ai-catalog.js`, 등급·추천 규칙 `rankModels`도 여기): 같은 출처의 `ai-catalog.json`(GitHub Actions가 하루 한 번 `scripts/ai-catalog/refresh.mjs`로 모아 이 파일만 커밋, 검사에 걸리면 그대로) → OpenRouter 실시간 목록이 오면 덮어씀 → 둘 다 없으면 이름 규칙. Gemini 무료 키는 파일의 `geminiFree`로 유료 전용 모델을 처음부터 잠금. 어긋난 사실(문서의 모델 이름·주소·CORS)은 자동으로 고치지 않고 이슈로 알림(`docs/operations.md` §12).
 
 ### 8.4 디자인 토큰 내보내기
 - `design/color.js` `ramp12(hex) → { light:[12], dark:[12] }`(OKLCH), `design/dtcg.js` `designTokens(design)` → 강사용 파일 `tokens.json`(DTCG 2025.10). 올리는 사이트에는 넣지 않습니다.

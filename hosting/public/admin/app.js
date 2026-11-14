@@ -112,9 +112,17 @@
     // 권하는 행동 한 줄(이번 달 추세로 언제 무료가 차는지, 유료면 월 비용): capacity.js forecast
     var fc = o.forecast || {};
     var ACT = { upgrade: '유료 전환을 권해요', raise_caps: '하루 상한을 올려도 돼요', pause_new: '새 배포 멈추기를 검토하세요', none: '지금은 할 일 없음' };
-    var adv = $('[data-advice]');
-    adv.textContent = (ACT[fc.action] || '권하는 행동') + ': ' + (fc.text || (o.advice && o.advice.text) || '');
-    adv.className = 'advice' + (fc.action && fc.action !== 'none' ? ' recommend' : '');
+    var adv = clear($('[data-advice]'));
+    // 처리 안 된 신고가 있으면 그것부터(권리 침해 신고는 지체 없이 가리거나 지워야 함)
+    var openReports = (o.reports && o.reports.open) || 0;
+    if (openReports) add(adv, [h('a', { href: '#reports', text: '신고 ' + n(openReports) + '건이 기다려요: 먼저 확인해 가리거나(임시조치) 지우고 [처리함]을 눌러요.' }), h('br')]);
+    add(adv, (ACT[fc.action] || '권하는 행동') + ': ' + (fc.text || (o.advice && o.advice.text) || ''));
+    adv.className = 'advice' + (openReports || (fc.action && fc.action !== 'none') ? ' recommend' : '');
+    $('[data-advice-steps]').hidden = fc.action !== 'upgrade';
+    // Pages 보기 사이트에는 강사 화면 공지 띠가 붙지 않음(정적 배포라 보는 때에 끼울 수 없음): 그 대상은 숨기고 한 줄 안내
+    var pagesView = o.view === 'pages';
+    $('[data-teacher-target]').hidden = pagesView; $('[data-teacher-note]').hidden = !pagesView;
+    if (pagesView) form['t-teacher'].checked = false;
 
     var stop = Math.round((o.newWorkShare || 0.6) * 100);
     var tiles = clear($('[data-tiles]'));

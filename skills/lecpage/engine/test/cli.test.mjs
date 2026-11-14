@@ -29,6 +29,8 @@ test('make: 교재 → 사이트·강사용 파일·설계도를 한 번에, 짧
   assert.equal(make.code, 0, make.out);
   assert.ok(make.out.length < 2200, `요약이 너무 김: ${make.out.length}자`);
   for (const k of ['lecpage make', '칸 ', '사이트 dist', '점검', '다음']) assert.ok(make.out.includes(k), `${k} 없음\n${make.out}`);
+  // 연수 정보(info.json) 없이 만들면 빈칸이 없어도 참여 기능·인원·학교망을 묻게 함(권하는 기능과 함께)
+  assert.match(make.out, /물을 것\(.*\) 참여 기능\(권함: .*진행 현황.*\) · 인원 · 학교망/);
   for (const f of ['dist/index.html', 'dist/robots.txt', 'dist-강사용/DESIGN.md', 'dist-강사용/lecpage.blueprint.json', 'work/material.json', 'work/draft.json', 'work/blueprint.json', 'work/lecpage.state.json']) assert.ok(existsSync(join(dir, f)), f);
   for (const f of ['DESIGN.md', '운영안내.md', 'lecpage.blueprint.json']) assert.ok(!existsSync(join(dir, 'dist', f)), `${f}가 올릴 사이트에 있음`);
   const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));
@@ -98,6 +100,36 @@ test('structure: 흐름·이유·칸 순서·권하는 기능, 싣지 못한 것
   assert.equal(json('structure', 'work2').data.leftovers.count, 0);
 });
 
+test('교재 반영: make가 빠졌다고 한 교재 줄을 structure --add-leftovers가 같은 기준으로 패치로 만들고, 넣으면 ✓', () => {
+  // make와 structure는 같은 '보이는 칸'(교재 보기 제외)을 봄 → 빠진 줄 수가 같음
+  const missing = +(/교재 줄 \d+\/\d+ · 빠진 것 (\d+)/.exec(make.out) || [])[1];
+  assert.ok(missing > 0, make.out);
+  const w = join(dir, 'work3'); mkdirSync(w, { recursive: true });
+  for (const f of ['material.json', 'blueprint.json']) writeFileSync(join(w, f), readFileSync(join(dir, 'work', f)));
+  const j = json('structure', 'work3', '--add-leftovers');
+  assert.equal(j.data.leftovers.count, missing, JSON.stringify(j.data.leftovers));
+  const p = run('patch', 'work3/blueprint.json', 'work3/leftovers.patch.json', '--no-build');
+  assert.equal(p.code, 0, p.out);
+  assert.match(p.out, /교재 반영 ✓/);
+  // “…”라고 입력하는 문장: 따옴표 속 글은 프롬프트로, 앞의 조건 구절은 그 프롬프트 이름으로(교재 글 그대로) → 빠진 줄로 세지 않음
+  assert.doesNotMatch(make.out, /빠짐 줄 p9 더 쉽게/);
+  const m = JSON.parse(readFileSync(join(dir, 'work/material.json'), 'utf8'));
+  assert.equal(m.detected.prompts.find((x) => x.text.startsWith('우리 반 학생 수준에 맞게'))?.title, '더 쉽게 만들고 싶다면');
+});
+
+test('문구 검사: 교재에서 그대로 온 글(실습 단계 합니다체 등)은 고칠 곳으로 세지 않고, 엔진 고정 문구는 알림만', async () => {
+  const { lintHtml } = await import('../../scripts/copy-lint.mjs');
+  const html = readFileSync(join(dir, 'dist/index.html'), 'utf8');
+  const src = { material: JSON.parse(readFileSync(join(dir, 'work/material.json'), 'utf8')), blueprint: JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8')) };
+  const raw = lintHtml(html, 'index.html');
+  assert.ok(raw.some((f) => /합니다체/.test(f.why)), '교재 원문의 합니다체가 있는 견본');
+  const kept = lintHtml(html, 'index.html', src);
+  assert.ok(kept.length < raw.length && !kept.some((f) => /합니다/.test(f.hit)), JSON.stringify(kept));
+  // 설계도에 없는 글(엔진이 그리는 단추)은 owner: engine
+  const eng = lintHtml('<main><button>발표 화면 새 창 이 노트북에서 창으로 띄워요</button></main>', 'console.html', src);
+  assert.ok(eng.length && eng.every((f) => f.owner === 'engine'), JSON.stringify(eng));
+});
+
 test('patch: --set과 패치 파일로 일부만 고치고 다시 빌드, 보호 값은 막음, --undo', () => {
   writeFileSync(join(dir, 'p.json'), JSON.stringify({ sections: { quiz: null }, live: { url: 'https://evil.example' }, meta: { siteUrl: 'https://evil.example' }, note: '퀴즈 빼기' }));
   const r = run('patch', 'work/blueprint.json', 'p.json', '--set', 'meta.venue=본관 4층 강당', '--set', 'sections.stations.items.0.title=영상 요약 실습');
@@ -126,6 +158,40 @@ test('patch: 강사 정보 파일(-i)로만 공개 범위·사이트 주소를 �
   const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));
   assert.equal(bp.access.mode, 'public');
   assert.equal(bp.meta.siteUrl, 'https://teacher.example/lec/');
+});
+
+test('patch --undo: 한 판씩 앞으로(두 번 되돌려도 되돌린 것이 다시 돌아오지 않음)', () => {
+  const w = join(dir, 'work4'); mkdirSync(w, { recursive: true });
+  writeFileSync(join(w, 'blueprint.json'), readFileSync(join(dir, 'work/blueprint.json')));
+  const venue = () => JSON.parse(readFileSync(join(w, 'blueprint.json'), 'utf8')).meta.venue;
+  const v0 = venue();
+  assert.equal(run('patch', 'work4/blueprint.json', '--set', 'meta.venue=A관', '--no-build').code, 0);
+  assert.equal(run('patch', 'work4/blueprint.json', '--set', 'meta.venue=B관', '--no-build').code, 0);
+  const u1 = run('patch', 'work4/blueprint.json', '--undo', '--no-build');
+  assert.equal(u1.code, 0, u1.out); assert.equal(venue(), 'A관'); assert.match(u1.out, /더 되돌릴 판 1개/);
+  assert.equal(run('patch', 'work4/blueprint.json', '--undo', '--no-build').code, 0); assert.equal(venue(), v0);
+  const u3 = run('patch', 'work4/blueprint.json', '--undo', '--no-build');
+  assert.equal(u3.code, 1); assert.match(u3.out, /더 되돌릴 이전 판이 없어요/); assert.equal(venue(), v0);
+});
+
+test('없는 디자인 이름: validate·patch가 오류로 막고 가까운 이름을 알려 줌(조용히 다른 디자인으로 빌드하지 않음)', () => {
+  const bp = JSON.parse(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'));
+  writeFileSync(join(dir, 'typo.json'), JSON.stringify({ ...bp, design: { ...bp.design, preset: 'knot-orbitt' } }));
+  const v = run('validate', 'typo.json');
+  assert.equal(v.code, 1, v.out);
+  assert.match(v.out, /"knot-orbitt" 디자인이 없어요\. 혹시 "knot-orbit"인가요\?/);
+  const before = readFileSync(join(dir, 'work/blueprint.json'), 'utf8');
+  const p = run('patch', 'work/blueprint.json', '--set', 'design.preset=knot-orbitt', '--no-build');
+  assert.equal(p.code, 1, p.out);
+  assert.match(p.out, /--set design\.preset=knot-orbit/);
+  assert.equal(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'), before, '저장하지 않음');
+});
+
+test('decide-infra: 연결해 둔 곳이 없으면 가입 없는 길(app work → 앱의 바로 배포)을 한 줄로', () => {
+  writeFileSync(join(dir, 'i0.json'), JSON.stringify({ skill: 'set', size: 30, features: [], connected: [] }));
+  assert.match(run('decide-infra', '-i', 'i0.json').out, /계정이 없으면 app work → .*lecpage\.com \[저장한 파일 열기\] → \[배포하기\]/);
+  writeFileSync(join(dir, 'i1.json'), JSON.stringify({ skill: 'set', size: 30, features: [], connected: ['cloudflare'] }));
+  assert.doesNotMatch(run('decide-infra', '-i', 'i1.json').out, /app work/);
 });
 
 test('validate: 통과·실패 종료 코드', () => {

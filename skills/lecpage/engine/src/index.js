@@ -4,7 +4,7 @@ export { build, collectEffects, icsFile } from './build.js';
 export { protectSite, unlockUrl, PROTECTED_PAGES, passwordAdvice, friendlyPassword } from './protect.js';
 export { zipFiles } from './zip-write.js';
 export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, DEFAULT_SURVEY } from './schema/sections.js';
-export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES } from './design/presets.js';
+export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES, nearestPresets } from './design/presets.js';
 export { BODY_VARIANTS, PRESET_BODY, MOTION_VARIANTS, variantOf, variantIds, defaultVariant, cleanLayout, bodyFingerprint, usedVariants, motifFamily, recapWords } from './design/layouts.js';
 export { parseNum, tableChart, glanceSeries } from './design/numbers.js';
 export { bundleFonts, siteCodepoints, parseRange, usedWeights, deferFontLinks } from './font-bundle.js';

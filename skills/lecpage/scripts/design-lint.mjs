@@ -13,7 +13,10 @@ import { join, extname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-/** 규칙 설명(한국어). level: error = 고쳐야 함, warn = 살펴볼 것 */
+/**
+ * 규칙 설명(한국어). level: error = 고쳐야 함, warn = 살펴볼 것.
+ * owner 'engine': 엔진 CSS가 정하는 것(글 폭·크기 단계·제목 비율)이라 설계도로 고칠 수 없음 → make 요약에서 '알림만, 손댈 것 없음'
+ */
 export const RULES = {
   'side-stripe': { level: 'error', ko: '상자 한쪽에만 굵은 색 띠(border-left 등)가 있어요. 띠 대신 제목·여백으로 구분하세요.' },
   'pill-chip': { level: 'error', ko: '알약 모양 꼬리표(배경·테두리가 있는 둥근 작은 글자)가 있어요. 작은 글자와 가운뎃점으로 바꾸세요.' },
@@ -21,9 +24,9 @@ export const RULES = {
   'gradient-text': { level: 'error', ko: '그라데이션 글자가 있어요. 강조는 크기·굵기·한 가지 색으로 하세요.' },
   'emoji-icon': { level: 'error', ko: '이모지·글리프를 아이콘 대신 썼어요. 같은 굵기의 SVG 아이콘을 쓰거나 빼세요.' },
   'uniform-card-grid': { level: 'warn', ko: '똑같은 크기의 상자를 세 개 넘게 나란히 놓았어요. 목록·표·번호 단계처럼 내용에 맞는 모양을 고르세요.' },
-  'line-length': { level: 'warn', ko: '본문 한 줄이 너무 길어요(한국어 40자, 영어 80자 넘음). 글 폭을 줄이세요.' },
-  'heading-ratio': { level: 'warn', ko: '제목과 본문의 크기 차이가 작아요. 섹션 제목은 본문의 1.6배 넘게 키우세요.' },
-  'font-sizes': { level: 'warn', ko: '글자 크기 가짓수가 너무 많아요. 정해 둔 크기 단계만 쓰세요.' },
+  'line-length': { level: 'warn', ko: '본문 한 줄이 너무 길어요(한국어 40자, 영어 80자 넘음). 글 폭을 줄이세요.', owner: 'engine' },
+  'heading-ratio': { level: 'warn', ko: '제목과 본문의 크기 차이가 작아요. 섹션 제목은 본문의 1.6배 넘게 키우세요.', owner: 'engine' },
+  'font-sizes': { level: 'warn', ko: '글자 크기 가짓수가 너무 많아요. 정해 둔 크기 단계만 쓰세요.', owner: 'engine' },
   'long-label': { level: 'warn', ko: '단추·메뉴·라벨 글이 길거나 어색해요. 짧은 동사형으로 줄이세요(예: "자료 받기").' },
   'layout-repeat': { level: 'error', ko: '같은 배치의 섹션이 셋 넘게 줄지어 나와요(머리 왼쪽·줄 목록 오른쪽 등). 사이에 다른 배치를 두거나 섹션 순서를 바꾸세요.' },
 };
@@ -185,7 +188,7 @@ function inPage() {
 /** Playwright Page 하나 검사 → { findings, metrics } */
 export async function lintPage(page) {
   const { out, metrics } = await page.evaluate(inPage);
-  const findings = Object.entries(out).map(([rule, samples]) => ({ rule, level: RULES[rule]?.level || 'warn', count: samples.length, message_ko: RULES[rule]?.ko || rule, samples: [...new Set(samples)].slice(0, 6) }))
+  const findings = Object.entries(out).map(([rule, samples]) => ({ rule, level: RULES[rule]?.level || 'warn', count: samples.length, message_ko: RULES[rule]?.ko || rule, ...(RULES[rule]?.owner ? { owner: RULES[rule].owner } : {}), samples: [...new Set(samples)].slice(0, 6) }))
     .sort((a, b) => (a.level === b.level ? b.count - a.count : a.level === 'error' ? -1 : 1));
   return { findings, metrics };
 }
