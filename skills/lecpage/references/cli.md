@@ -19,7 +19,7 @@
 | `work/material.json` | 교재 해석 결과(형식: `material-format.md`) | 안 올림 |
 | `work/draft.json` | AI 없이 만든 설계도 초안 | 안 올림 |
 | `work/blueprint.json` | 지금 설계도. `patch`가 고치는 파일 | 안 올림 |
-| `work/blueprint.prev.json` | 직전 판(`patch --undo`) | 안 올림 |
+| `work/blueprint.prev.json` | 직전 판(`patch --undo`). 그 앞 판은 `.prev2`~`.prev5.json`(되돌릴 때마다 한 판씩 앞으로) | 안 올림 |
 | `work/assets/` | 쪽 그림(`slides/`)·교재 속 그림(`media/`) | 빌드가 `dist/assets/`로 복사 |
 | `work/lecpage.state.json` | 마지막 빌드 위치(work 기준 상대 경로)·교재 해석 캐시 키·마지막으로 올린 곳(`deploy`: 이름·주소, 비밀 값 없음) | 안 올림 |
 | `work/live-relay/` | `publish --live`가 `backends/cloudflare`를 복사해 이 연수 코드만 받게 한 중계(이름 `<사이트>-live`) | 강사 Cloudflare에 올림 |
@@ -31,20 +31,20 @@
 
 | 명령 | 하는 일 | 출력 |
 |---|---|---|
-| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, **교재 반영**(프롬프트·실습 단계·링크·질문답·교재 줄이 보이는 칸에 실렸는지, 빠진 것 3개까지. 교재 보기는 빼고 셈), 빌드, 점검 |
+| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides] [--bundle-fonts\|--no-bundle-fonts]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, `info.json`이 없으면 **물을 것**(참여 기능·인원·학교망), **교재 반영**(프롬프트·실습 단계·링크·질문답·교재 줄이 보이는 칸에 실렸는지, 빠진 것 3개까지. 교재 보기는 빼고 셈. 빠진 교재 줄은 `structure --add-leftovers`가 같은 기준으로 패치를 만듦), 빌드, 점검 |
 | `brief [work\|blueprint.json\|material.json]` | 큰 JSON 대신 읽는 요약. 칸 id·항목 수, 구성(흐름·권하는 기능), 실습별 단계·프롬프트 수와 쪽, 빈칸, **싣지 못한 것 n개**, 주의, 글꼴. 교재 요약에는 찾은 것과 교재에서 찾은 주소(강사 확인 뒤 `info.json`) | 10줄 안팎(수백 토큰) |
 | `structure [work\|blueprint.json] [-i info.json] [--add-leftovers]` | 구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것. `--add-leftovers`는 그것을 교재 순서 자리에 글 칸으로 넣는 `work/leftovers.patch.json`을 씀 → `patch`로 반영 | 6줄 안팎 |
-| `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증 → 저장(직전 판 보관) → 마지막 빌드 위치에 다시 빌드 | 바뀐 점 한 줄씩 + 교재 반영 한 줄 |
+| `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증(없는 디자인 이름은 오류, 가까운 이름 제안) → 저장(이전 판 5개까지) → 마지막 빌드 위치에 다시 빌드. `--undo`는 한 판씩 앞으로 | 바뀐 점 한 줄씩 + 교재 반영 한 줄 |
 | `options <blueprint.json> [--presets a,b,c] [--mood calm,bold] [-o 폴더]` | `--mood`: 강사가 말한 느낌(calm·warm·bold·minimal·playful·formal·tech·editorial·energetic…)으로 순위. 추천 3안(또는 고른 안)을 따로 빌드하고 PC 첫 화면·PC 본문·휴대폰을 한 장(`work/options/contact-sheet.png`)에 모음 | 안마다 한 줄 |
 | `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |
 | `review <dist> [--port 4180] [--out 폴더]` | 사이트를 127.0.0.1에 띄우고 '수정 요청' 단추를 붙임. 강사가 펜·네모·화살표·글자로 표시하고 글을 쓰면 `work/feedback/NNN.png`·`NNN.json`(글·칸 id·시각)으로 저장 | 주소 한 줄 |
-| `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·겹침 검사(`overlap-lint.mjs`, error면 실패)·움직임 검사(`motion-check.mjs`, PC 화면 한 번: 첫 화면 그림이 실제로 도는지·등장이 숨은 채 남지 않는지, 알림만)·문구 검사(`copy-lint.mjs`, 알림만)가 있으면 함께. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
+| `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·겹침 검사(`overlap-lint.mjs`, error면 실패)·움직임 검사(`motion-check.mjs`, PC 화면 한 번: 첫 화면 그림이 실제로 도는지·등장이 숨은 채 남지 않는지, 알림만)·문구 검사(`copy-lint.mjs`, 알림만. 옆의 `work/`가 있으면 교재에서 그대로 온 글은 세지 않음)가 있으면 함께. 엔진 CSS·고정 문구라 설계도로 못 고치는 것(글 폭·크기 단계 등)은 `알림만(엔진 몫, 손댈 것 없음)` 한 줄. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호] [--bundle-fonts]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://lecpage.com/` | 5줄 안팎 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음 | 4줄 |
-| `publish [work] [--host cloudflare] [--live] [--features qa,poll] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-qa]` | 강사 Cloudflare 계정에 올리기. `--live`: 중계 올리기 → 관리자 키를 만들어 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만(화면에 안 찍음, 이미 있으면 그대로) → `info.json` `live`에 중계 주소·연수 코드 → `patch -i`로 다시 빌드·점검 → 빈 임시 폴더에서 사이트 올리기 → 중계가 이 사이트만 받게(`ALLOWED_ORIGINS`, 연수 코드는 `ALLOWED_CODES`) → 사이트·`check.html`·중계 `/api/health` 확인 → `handouts`. 인증은 `wrangler login`이나 `CLOUDFLARE_API_TOKEN`(+`CLOUDFLARE_ACCOUNT_ID`) 환경 변수만. `--dry-run`은 순서와 강사가 할 일만 보여 주고 아무것도 바꾸지 않음. 다시 올릴 때 같은 명령(이름·키 그대로). 다른 곳은 한 줄 명령을 알려 주고 멈춤 | 10줄 안팎 |
+| `publish [work] [--host cloudflare] [--live] [--features qa,poll] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-qa] [--no-bundle-fonts]` | 강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기 `--no-bundle-fonts`). `--live`: 중계 올리기 → 관리자 키를 만들어 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만(화면에 안 찍음, 이미 있으면 그대로) → `info.json` `live`에 중계 주소·연수 코드 → `patch -i`로 다시 빌드·점검 → 빈 임시 폴더에서 사이트 올리기 → 중계가 이 사이트만 받게(`ALLOWED_ORIGINS`, 연수 코드는 `ALLOWED_CODES`) → 사이트·`check.html`·중계 `/api/health` 확인 → `handouts`. 인증은 `wrangler login`이나 `CLOUDFLARE_API_TOKEN`(+`CLOUDFLARE_ACCOUNT_ID`) 환경 변수만. `--dry-run`은 순서와 강사가 할 일만 보여 주고 아무것도 바꾸지 않음. 다시 올릴 때 같은 명령(이름·키 그대로). 다른 곳은 한 줄 명령을 알려 주고 멈춤 | 10줄 안팎 |
 | `handouts <배포한 주소\|dist> [-o 폴더] [--password 암호]` | `poster.html`·`screen.html`을 열어 `QR-안내문.pdf`(참가자용 A4 한 장)·`발표화면.png`·`발표화면-QR-크게.png`. 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림. Playwright가 없으면 건너뜀 | 3줄 |
 | `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP | 한 줄 |
 | `draft` · `prompt` · `presets` · `effects` | 초안만, AI 프롬프트 파일, 목록 | |
@@ -89,7 +89,7 @@ $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stati
 ```
 암호는 파일에 쓰지 않습니다: `--password '<암호>'` 또는 `LECPAGE_PASSWORD`. `--password`를 주면 `access`는 저절로 `password`.
 
-글꼴 CDN이 막힌 학교망: `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담음. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴 파일마다 사이트 글자만 남긴 같은 글꼴을 먼저 받게 하고 원본은 사이트에 없던 글자(참가자 글)가 나올 때만 받아, 첫 로딩 글꼴이 예시 기준 0.5~1.0MB → 0.23~0.65MB. 파일 이름이 내용 해시라 `_headers`에 1년 캐시(`/assets/fonts/*`)를 적고, 첫 화면 제목 글꼴은 미리 받음(preload). 사이트 한 벌의 크기는 원본과 줄인 것을 함께 담아 1~3MB. 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
+글꼴 CDN이 막힌 학교망: `publish`와, `info.json`의 `network`가 `restricted`·`offline`인 `make`는 글꼴을 기본으로 담습니다(끄기 `--no-bundle-fonts`). 그 밖에는 `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담음. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴 파일마다 사이트 글자만 남긴 같은 글꼴을 먼저 받게 하고 원본은 사이트에 없던 글자(참가자 글)가 나올 때만 받아, 첫 로딩 글꼴이 예시 기준 0.5~1.0MB → 0.23~0.65MB. 파일 이름이 내용 해시라 `_headers`에 1년 캐시(`/assets/fonts/*`)를 적고, 첫 화면 제목 글꼴은 미리 받음(preload). 사이트 한 벌의 크기는 원본과 줄인 것을 함께 담아 1~3MB. 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
 
 ## 5. 문제가 생기면
 | 증상 | 할 일 |
