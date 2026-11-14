@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Dialog } from './ui.jsx';
+import { Dialog, SecretLine } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
 import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantGate, instantShare, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
@@ -337,7 +337,7 @@ function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
-      {alive && prev.adminKey && <p class="small">강사 화면 관리자 키 <b class="mono">{prev.adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(prev.adminKey, '관리자 키를 복사했어요.')}>복사</button></p>}
+      {alive && prev.adminKey && <SecretLine label="강사 화면 관리자 키" value={prev.adminKey} copied="관리자 키를 복사했어요." />}
     </div>
   );
 }

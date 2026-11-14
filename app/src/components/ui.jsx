@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { onToast } from '../lib/util.js';
+import { onToast, copy } from '../lib/util.js';
 
 /** 로고의 접힌 모서리 */
 export function Fold() {
@@ -57,3 +57,18 @@ export function Tabs({ tabs, value, onChange, label }) {
 export function Progress({ pct }) { return <div class="progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }
 
 export function Notice({ kind = '', children }) { return <div class={`notice ${kind}`}>{children}</div>; }
+
+/**
+ * 비밀 값 한 줄(강사 화면 관리자 키 등): 처음에는 가려 두고 [보기]·[복사]. 배포 완료 화면을 발표 화면에 비추거나 공유해도 그대로 보이지 않게
+ * label: 앞 글 · value: 값 · copied: 복사했을 때 알림
+ */
+export function SecretLine({ label, value, copied = '복사했어요.' }) {
+  const [show, setShow] = useState(false);
+  return (
+    <p class="small secret-line">{label}{' '}
+      {show ? <b class="mono">{value}</b> : <b class="mono secret-dots" role="img" aria-label="가려 둠">{'•'.repeat(10)}</b>}{' '}
+      <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(show)} onClick={() => setShow(!show)}>{show ? '가리기' : '보기'}</button>
+      <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(value, copied)}>복사</button>
+    </p>
+  );
+}

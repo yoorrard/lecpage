@@ -62,8 +62,10 @@
 
 ## 4. 만들 때·공개할 때: 가벼운 확인(`app/src/lib/netcheck.js`)
 
-- 확인은 인증 없는 가벼운 주소 하나(`/v1/models`·`/v2/user`·`/zen`·`create.php?format=json`). 401·403이 와도 '닿음'.
-- **cors로 묻는 까닭**: 진짜 서버는 CORS 머리글을 주므로(2026-11-13 직접 확인: OpenAI·Vercel·Netlify·is.gd `*`, Gemini는 출처를 그대로) 학교 필터가 내미는 차단 화면(머리글 없음)은 '막힘'으로 잡힌다. Claude API만 브라우저 허용 머리글 없이는 CORS 머리글을 주지 않아 no-cors로 묻는다.
+- 확인은 인증 없는 가벼운 주소 하나. 응답 머리글을 받으면 바로 끊어 본문은 받지 않는다.
+  - AI 회사는 키 없이 2xx를 주는 주소(2026-11-14 직접 확인): OpenAI `/healthz`(200, CORS 머리글 없음 → no-cors), Claude `/api/hello`(200, no-cors), Gemini `/$discovery/rest?version=v1beta`(200, 출처를 그대로 CORS로 줌), OpenRouter `/models?limit=1`(200). 예전 `/v1/models`는 키가 없으면 401·403이라 브라우저 콘솔에 빨간 줄이 찍혔다.
+  - 올릴 곳(`/v2/user`·`/api/v1/user`)은 키 없이 2xx를 주는 주소가 없어 401·403도 '닿음'으로 본다. `/zen`·`create.php?format=json`은 200.
+- **cors로 묻는 까닭**: 진짜 서버는 CORS 머리글을 주므로(2026-11-13 직접 확인: Vercel·Netlify·is.gd `*`, Gemini는 출처를 그대로) 학교 필터가 내미는 차단 화면(머리글 없음)은 '막힘'으로 잡힌다. OpenAI `/healthz`·Claude `/api/hello`는 CORS 머리글이 없어 no-cors로 묻는다(필터 차단 화면은 키를 넣어 실제로 부를 때 오류로 드러남).
 - **챗봇 사이트를 묻지 않는 까닭**: `claude.ai`는 `Cross-Origin-Resource-Policy: same-origin`, `gemini.google.com`은 `same-site`를 줘서 다른 출처의 no-cors 요청을 브라우저가 막는다(열려 있어도 '막힘'으로 보임). 막히면 강사가 연 창에서 바로 보이므로 따로 묻지 않는다.
 - 쓰는 곳: AI 키 연결 화면(고른 회사), AI로 만들기·다듬기를 누를 때(막혔으면 오류 대신 챗봇 창 길을 바로 엶), 공개하기(고른 곳, 막혔으면 다음 추천 곳), 짧은 주소(아직 없을 때).
 - 요청 수: 한 화면에서 많아야 1~2개, 같은 곳은 10분 안에 다시 묻지 않음. 오프라인이 되면 기억을 지움.

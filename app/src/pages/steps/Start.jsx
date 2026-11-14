@@ -8,12 +8,13 @@ import { getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
 import { pushUndoFor } from '../../lib/undo.js';
 import { blobs } from '../../lib/db.js';
-import { fmtBytes, toast, copy } from '../../lib/util.js';
+import { fmtBytes, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
+import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile, openSavedFile, OPEN_FAIL } from '../../lib/project.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
-import { FEATURES, makeDraft, syncInfo, applyInfo } from '../../lib/blueprint.js';
+import { FEATURES, makeDraft, syncInfo, applyInfo, dropMissing } from '../../lib/blueprint.js';
 import { FoundSummary } from '../../components/Structure.jsx';
 
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
@@ -27,7 +28,7 @@ function useIngest(p, update) {
   const [busy, setBusy] = useState('');
   const [pct, setPct] = useState(0);
   async function ingestAll(fileObjs, { replace = false } = {}) {
-    const ing = await import('../../lib/ingest.js');
+    const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
     const mats = []; const metas = replace ? [] : [...(p.files || [])];
     let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0;
     for (const [i, f] of fileObjs.entries()) {
@@ -71,7 +72,12 @@ function useIngest(p, update) {
   async function handle(list) {
     const files = Array.from(list || []); if (!files.length) return;
     setBusy('교재를 읽는 중이에요…'); setPct(3);
-    try { await ingestAll(files); } catch (e) { console.error(e); toast('교재를 읽지 못했어요: ' + (e.message || e)); }
+    try { await ingestAll(files); } catch (e) {
+      console.error(e);
+      // 읽기 도구를 못 받음: 새 버전이면 아래 띠·저절로 새로 고침이 알리고, 망 오류면 여기서
+      if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 넣어 주세요.');
+      else if (!e.kind) toast('교재를 읽지 못했어요: ' + (e.message || e));
+    }
     setBusy(''); setPct(0);
   }
   async function removeFile(i) {
@@ -129,6 +135,8 @@ export function StepStart({ p, update, go }) {
     catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
   }
   const info = p.info;
+  // 교재에서 채운 날짜가 오늘(한국 시각)보다 앞: 지난 연수 교재를 그대로 쓴 경우가 많음. 고치라고만 알리고 바꾸지는 않음
+  const pastAuto = !!info.date && info.date === p.autoFilled?.date && isPastDate(info.date);
   useEffect(() => { const f = takePendingFiles(p.id); if (f.length) handle(f); }, []);
   // 운영자의 '바로 배포' 서버가 참여 기능까지 맡는 앱이면, 새 연수는 질문 받기·나눔 보드를 켠 채로 시작(따로 연결할 것이 없으므로)
   useEffect(() => {
@@ -149,8 +157,9 @@ export function StepStart({ p, update, go }) {
     if (needTitle() || making.current) return;
     making.current = true;
     let ing;
-    try { ing = await import('../../lib/ingest.js'); } catch { making.current = false; toast('초안 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); return; }
-    update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '', chatWait: null });
+    try { ing = await loadChunk(() => import('../../lib/ingest.js')); } catch (e) { making.current = false; if (e.kind === 'net' || !e.kind) toast('초안 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 눌러 주세요.'); return; }
+    const keys = await blobs.keys(p.id).catch(() => null); // 교재 속 그림은 저장하지 않으므로 초안의 없는 그림 주소는 비움
+    update({ blueprint: dropMissing(makeDraft(latest.current, ing), keys), aiMethod: 'draft', draftFormat: info.format || '', chatWait: null });
     toast('기본 초안을 만들었어요. 미리보기를 보며 고쳐 보세요.');
     go(2);
   }
@@ -161,8 +170,9 @@ export function StepStart({ p, update, go }) {
   async function makeWithAi(ai = conn) {
     if (needTitle()) return;
     if (!ai) { setRemake(true); setTimeout(() => document.getElementById('make-h')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 30); return; }
-    const ing = await import('../../lib/ingest.js');
-    if (!latest.current.blueprint) update({ blueprint: makeDraft(latest.current, ing), aiMethod: 'draft', draftFormat: info.format || '' });
+    let ing;
+    try { ing = await loadChunk(() => import('../../lib/ingest.js')); } catch (e) { if (e.kind === 'net' || !e.kind) toast('교재 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 눌러 주세요.'); return; }
+    if (!latest.current.blueprint) { const keys = await blobs.keys(p.id).catch(() => null); update({ blueprint: dropMissing(makeDraft(latest.current, ing), keys), aiMethod: 'draft', draftFormat: info.format || '' }); }
     startMakeJob({ getProject: () => latest.current, update });
     go(2);
   }
@@ -231,7 +241,7 @@ export function StepStart({ p, update, go }) {
           <Field label="연수명 (필수)" hint={titleErr && !info.title ? <span style={{ color: 'var(--bad)' }}>연수명을 적어 주세요.</span> : null}>
             <input ref={titleRef} value={info.title} onInput={(e) => { setTitleErr(false); set('title')(e); }} maxLength={160} placeholder="예: 업무에 바로 쓰는 생성형 AI" aria-required="true" aria-invalid={titleErr && !info.title ? 'true' : undefined} />
           </Field>
-          <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
+          <Field label="날짜" hint={pastAuto ? <span class="warn-line" role="status">교재에 적힌 날짜({monthDay(info.date)})가 지났어요. 이번 연수 날짜로 고쳐 주세요.</span> : null}><input type="date" value={info.date} onInput={set('date')} aria-invalid={pastAuto ? 'true' : undefined} /></Field>
           <div class="pair">
             <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
             <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>

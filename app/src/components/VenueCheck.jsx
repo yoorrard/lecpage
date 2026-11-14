@@ -3,7 +3,7 @@ import { QR } from './QR.jsx';
 import { instantStatus, PUBLISH_API } from '../lib/deploy.js';
 import { liveNames } from './Publish.jsx';
 import { venueIcs, checkUrlOf, dayBefore, kitHtml, printHtml } from '../lib/venue.js';
-import { saveFile, safeName, copy, toast } from '../lib/util.js';
+import { saveFile, safeName, copy, toast, isPastDate } from '../lib/util.js';
 
 const md = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''); return m ? `${+m[2]}월 ${+m[3]}일` : ''; };
 
@@ -16,8 +16,9 @@ export function useDayStatus({ on, date, site }) {
   useEffect(() => { if (!on || !PUBLISH_API || (!date && !site)) { setSt(null); return undefined; } let off = false; instantStatus({ date, site }).then((s) => { if (!off) setSt(s || false); }); return () => { off = true; }; }, [on, date, site, n]);
   return [st, () => setN((x) => x + 1)];
 }
-/** 그날 몫 → 한 줄({ k: 'ok'|'tight'|'full', t }) */
+/** 그날 몫 → 한 줄({ k: 'ok'|'tight'|'full'|'past', t }). 지난 날짜면 몫을 보지 않고 '지났어요'(여유 있다고 하지 않음) */
 export function dayLine(st, date) {
+  if (isPastDate(date)) return { k: 'past', t: `${md(date)}은 이미 지난 날짜예요. 연수 날짜가 맞는지 확인해 주세요.` };
   const d = st?.day; if (!d) return null;
   if (!d.budget) return { k: 'ok', t: `${md(date)}: 바로 배포 서버에 하루 한도가 없어요.` };
   const head = `${md(date)} 바로 배포 예약: 연수 ${d.trainings || 0}개 · 참가자 ${d.people || 0}명`;
@@ -36,6 +37,7 @@ export function VenueBody({ p, url, instantOn }) {
   const site = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.id || '' : '';
   const [st, again] = useDayStatus({ on: instantOn, date: m.date || '', site });
   const line = dayLine(st, m.date);
+  const past = isPastDate(m.date);
   const siteGone = st?.site?.state === 'gone' ? '보관 기간이 끝나 사이트가 지워졌어요. 다시 배포해 주세요.' : st?.site?.state === 'blocked' ? '사이트가 가려져 있어요. 운영자에게 문의해 주세요.' : '';
   // 그날 바로 배포의 참여 기능 방이 차서 참여 기능만 넘긴 연수: 강사 계정에 연결하고 다시 배포해야 참가자끼리 이어짐
   const bk = st?.site?.state === 'open' ? st.site.booking : null;
@@ -46,7 +48,7 @@ export function VenueBody({ p, url, instantOn }) {
   };
   return (
     <div class="stack venue">
-      {line && <p class={`small venue-day is-${line.k}`} role="status">{line.t} {instantOn && <button type="button" class="btn btn-sm btn-quiet" onClick={again}>다시 확인</button>}</p>}
+      {line && <p class={`small venue-day is-${line.k}`} role="status">{line.t} {instantOn && !past && <button type="button" class="btn btn-sm btn-quiet" onClick={again}>다시 확인</button>}</p>}
       {siteGone && <p class="small err" role="alert">{siteGone}</p>}
       {liveDenied && <p class="small venue-day is-full" role="alert">{liveDenied}</p>}
       {!url ? <p class="small">배포하면 접속 확인 주소와 QR이 나와요. 연수 전날, 연수 장소의 Wi-Fi로 열어 막힌 곳이 없는지 확인해요.</p> : <>
@@ -56,7 +58,7 @@ export function VenueBody({ p, url, instantOn }) {
             <p class="small mono venue-url">{check.replace(/^https:\/\//, '')}</p>
             <div class="btn-row">
               <a class="btn btn-sm" href={check} target="_blank" rel="noopener">접속 확인 열기</a>
-              <button type="button" class="btn btn-sm" disabled={!dayBefore(m.date)} onClick={ics}>전날 점검 달력에 넣기</button>
+              <button type="button" class="btn btn-sm" disabled={!dayBefore(m.date) || past} onClick={ics}>전날 점검 달력에 넣기</button>
               <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(check, '접속 확인 주소를 복사했어요.')}>주소 복사</button>
             </div>
             {!dayBefore(m.date) && <p class="small muted">연수 날짜를 넣으면 전날 점검 일정을 만들 수 있어요.</p>}

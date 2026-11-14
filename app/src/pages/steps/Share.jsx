@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { StepHead } from '../Project.jsx';
-import { Sheet, Field, Notice, Progress, Dialog } from '../../components/ui.jsx';
+import { Sheet, Field, Notice, Progress, Dialog, SecretLine } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { QR, qrPng, copyQr } from '../../components/QR.jsx';
 import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
@@ -9,7 +9,7 @@ import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { Publish, lecLiveOff } from '../../components/Publish.jsx';
 import { probeSite, instantInfo, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
-import { saveFile, safeName, toast, copy } from '../../lib/util.js';
+import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml, printHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
@@ -23,6 +23,8 @@ const LIVE_NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 �
 function checks(p) {
   const bp = p.blueprint; const v = E.validate(bp); const b = v.blueprint; const out = [];
   if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(첫 화면·일정에 보여요).', go: 1 });
+  // 지난 날짜(교재에 적힌 지난 연수 날짜를 그대로 쓴 경우가 많음): 고치라고만 알림(바꾸지 않음)
+  else if (isPastDate(b.meta.date)) out.push({ k: 'warn', t: `연수 날짜(${monthDay(b.meta.date)})가 지났어요. 첫 화면·일정·QR 안내문에 이 날짜가 나와요.`, go: 1 });
   const deck = b.sections.find((s) => s.type === 'deck');
   if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
   for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
@@ -186,7 +188,7 @@ export function StepShare({ p, update, go }) {
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
   const notes = checks(p);
-  const day = dayLine(daySt, bp.meta?.date);
+  const day = isPastDate(bp.meta?.date) ? null : dayLine(daySt, bp.meta?.date); // 지난 날짜는 '확인할 곳'에서 한 번만 알림
   const rows = [];
   rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' ? 'todo' : 'done', line: liveLine,
     btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['되돌리기', () => setSkipLive(false)] : [open.live ? '접기' : '바꾸기', () => toggle('live')],
@@ -216,9 +218,10 @@ export function StepShare({ p, update, go }) {
       {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
       <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
     </> });
-  if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: 'note', line: `${notes.length}곳. 그대로 배포해도 돼요.`,
+  const warns = notes.filter((c) => c.k === 'warn').length;
+  if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: warns ? 'todo' : 'note', line: warns ? `${notes.length}곳 · 배포 전에 확인해 주세요.` : `${notes.length}곳`,
     btn: [open.notes === false ? '보기' : '접기', () => setOpen((o) => ({ ...o, notes: o.notes === false }))],
-    body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul> });
+    body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li class={c.k === 'warn' ? 'is-warn' : ''}>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul> });
   if (!p.deploy?.lastUrl) rows.push({ k: 'venue', title: '연수 장소 확인', state: day?.k === 'full' ? 'todo' : 'note', line: day && day.k !== 'ok' ? '' : '배포한 뒤 연수 전날, 그곳 Wi-Fi로 열리는지 확인해요.',
     btn: day && day.k !== 'ok' ? null : [open.venue ? '접기' : '보기', () => toggle('venue')],
     body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
@@ -427,8 +430,9 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
               <a class="btn btn-sm" href={url + 'screen.html'} target="_blank" rel="noopener">발표 화면 열기</a>
               <a class="btn btn-sm" href={url + 'poster.html'} target="_blank" rel="noopener">QR 안내문 인쇄(A4)</a>
             </div>
+            {/* 관리자 키는 가려 둠(발표 화면에 비추거나 화면을 공유해도 보이지 않게) */}
             {liveOn && (adminKey
-              ? <p class="small">강사 화면 관리자 키 <b class="mono">{adminKey}</b> <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(adminKey, '관리자 키를 복사했어요.')}>복사</button></p>
+              ? <SecretLine label="강사 화면 관리자 키" value={adminKey} copied="관리자 키를 복사했어요." />
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />

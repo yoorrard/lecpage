@@ -205,14 +205,14 @@ function DetailsPanel({ p, setInfo }) {
         <Radios name="mode" value={info.mode || 'offline'} onChange={(v) => setInfo({ mode: v })} options={[{ value: 'offline', label: '오프라인' }, { value: 'online', label: '온라인' }, { value: 'hybrid', label: '병행' }]} label="진행 방식" />
       </fieldset>
       {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 버튼으로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
-      <h3 class="h-sub">강사</h3>
+      <h2 class="h-sub">강사</h2>
       <div class="form-grid">
         <Field label="이름"><input value={info.instructorName} onInput={set('instructorName')} maxLength={40} /></Field>
         <Field label="소속·직함"><input value={info.instructorOrg} onInput={set('instructorOrg')} maxLength={80} /></Field>
         <Field label="이메일(적으면 사이트에 보여요)"><input type="email" value={info.instructorEmail} onInput={set('instructorEmail')} /></Field>
       </div>
       <Field label="강사 소개"><textarea value={info.instructorBio} onInput={set('instructorBio')} maxLength={600} rows={3} /></Field>
-      <h3 class="h-sub">참가자와 연수</h3>
+      <h2 class="h-sub">참가자와 연수</h2>
       <div class="form-grid">
         <Field label="참가 인원"><select value={info.size} onChange={(e) => setInfo({ size: +e.target.value })}>{SIZE.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>
         <Field label="연수 성격"><select value={info.admin} onChange={(e) => { const v = e.target.value; setInfo({ admin: v, minor: v === 'student' ? true : info.minor }); }}>{ADMIN.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>
