@@ -709,23 +709,54 @@
       });
     }
     setStatus('connecting');
-    function ensureJoin() {
+    // 이름·소속은 입실할 때만 받음(설계도가 받기로 한 경우). 질문·투표·도움 요청은 별명만
+    var NEED_ID = !!(DATA.privacy && (DATA.privacy.collect || []).some(function (c) { return c === 'name' || c === 'school'; }));
+    /** o.attend: 입실 확인(이름·소속이 필요하면 받고, 이미 별명으로 들어왔으면 그 사람 기록에 더함) */
+    function ensureJoin(o) {
+      var forId = !!(o && o.attend) && NEED_ID;
       // 서버에 닿지 않는 동안 처음 참여하려 하면 빈 창을 띄우지 않고 그 사실만(이미 참여했으면 보낼 글은 연결되면 보냄)
       if (down && !(me && me.token)) { toast('참여 기능 서버에 지금 닿지 않아요. 교재와 실습은 그대로 쓸 수 있어요.'); return Promise.reject(new Error('cancel')); }
-      if (me && me.token) return Promise.resolve(me);
+      if (me && me.token && !(forId && !me.named)) return Promise.resolve(me);
       var dlg = $('[data-join-dialog]');
       return new Promise(function (resolve, reject) {
         if (!dlg) return reject(new Error('no dialog'));
-        var f = $('[data-join-form]', dlg);
+        var f = $('[data-join-form]', dlg), errBox = $('[data-join-err]', dlg), lead = $('[data-join-lead]', dlg), nick = f.elements.nickname;
+        var profileOnly = !!(me && me.token); // 이미 별명으로 들어옴: 이름·소속만 더함
+        if (lead && !lead._orig) lead._orig = lead.textContent;
+        if (lead) lead.textContent = profileOnly ? '입실 확인에 쓸 이름·소속을 적어 주세요.' : forId ? '입실 확인에 쓸 별명과 이름·소속을 적어 주세요.' : lead._orig;
+        // 쓰지 않는 칸은 감추고 꺼 둠(꺼진 칸은 필수 검사와 보내는 값에서 빠짐)
+        $$('[data-join-id]', dlg).forEach(function (l) { l.hidden = !forId; $$('input', l).forEach(function (i) { i.disabled = !forId; }); });
+        var nl = $('[data-join-nick]', dlg); if (nl) { nl.hidden = profileOnly; nick.disabled = profileOnly; }
+        function sayErr(t, field) {
+          if (!errBox) { toast(t); return; }
+          errBox.textContent = t || ''; errBox.hidden = !t;
+          [nick].concat($$('[data-join-id] input', dlg)).forEach(function (i) { if (i) i.removeAttribute('aria-invalid'); });
+          if (t && field) { field.setAttribute('aria-invalid', 'true'); field.focus(); if (field.select) field.select(); }
+        }
+        sayErr('');
         function onSubmit(e) {
           e.preventDefault();
-          var fd = new FormData(f), prof = { nickname: (fd.get('nickname') || '').trim(), name: (fd.get('name') || '').trim() || undefined, school: (fd.get('school') || '').trim() || undefined, consent: !!fd.get('consent') };
-          conn.join(prof).then(function (r) { me = { id: r.id, token: r.token, nickname: prof.nickname }; store.set('me', me); dlg.close(); cleanup(); resolve(me); }, function (err) { toast('참여하지 못했어요: ' + (err && err.message || '잠시 뒤 다시 해 주세요.')); });
+          var fd = new FormData(f), nm = (fd.get('name') || '').trim(), sc = (fd.get('school') || '').trim(), consent = !!fd.get('consent');
+          var go;
+          if (profileOnly) go = conn.update('participants', me.id, { name: nm || undefined, school: sc || undefined, consent: consent }).then(function () { return { id: me.id, token: me.token }; });
+          else go = conn.join({ nickname: (fd.get('nickname') || '').trim(), name: forId ? nm || undefined : undefined, school: forId ? sc || undefined : undefined, consent: forId && consent });
+          go.then(function (r) {
+            me = { id: r.id, token: r.token, nickname: profileOnly ? me.nickname : (fd.get('nickname') || '').trim(), named: forId || !!(me && me.named) };
+            store.set('me', me); dlg.close(); cleanup(); resolve(me);
+          }, function (err) {
+            // 오류는 창 안 그 칸 옆에(토스트는 창 뒤에 가려짐). 적은 것은 그대로 둠
+            var code = err && err.code, m = err && err.message;
+            if (code === 'reserved_nickname' || (code === 'too_long' && !profileOnly)) sayErr(m || '이 별명은 쓸 수 없어요. 다른 별명을 골라 주세요.', nick);
+            else if (code === 'locked') sayErr(m || '지금은 새로 참여할 수 없어요. 강사에게 알려 주세요.', null);
+            else sayErr('참여하지 못했어요: ' + (m || '잠시 뒤 다시 해 주세요.'), profileOnly ? null : nick);
+          });
         }
         function onCancel() { dlg.close(); cleanup(); reject(new Error('cancel')); }
-        function cleanup() { f.removeEventListener('submit', onSubmit); var c = $('[data-join-cancel]', dlg); if (c) c.removeEventListener('click', onCancel); }
-        f.addEventListener('submit', onSubmit); var c = $('[data-join-cancel]', dlg); if (c) c.addEventListener('click', onCancel);
+        function onInput() { if (errBox && !errBox.hidden) sayErr(''); }
+        function cleanup() { f.removeEventListener('submit', onSubmit); f.removeEventListener('input', onInput); var c = $('[data-join-cancel]', dlg); if (c) c.removeEventListener('click', onCancel); }
+        f.addEventListener('submit', onSubmit); f.addEventListener('input', onInput); var c = $('[data-join-cancel]', dlg); if (c) c.addEventListener('click', onCancel);
         dlg.showModal ? dlg.showModal() : dlg.setAttribute('open', '');
+        setTimeout(function () { var first = profileOnly ? $('[data-join-id] input:not([disabled])', dlg) : nick; if (first) first.focus(); }, 30);
       });
     }
 
@@ -845,7 +876,7 @@
       host.appendChild(el('h3', '', p.question));
       var mine = store.get('ans:' + p.id, null);
       var list = Object.keys(answers).map(function (k) { return answers[k]; }).filter(function (a) { return a.poll === p.id; });
-      var tally = {}; list.forEach(function (a) { tally[a.value] = (tally[a.value] || 0) + 1; });
+      var tally = X.tally(list); // 응답자당 한 표(강사·발표 화면과 같은 수)
       if (mine === null) {
         if (p.kind === 'word') {
           var f = el('form', 'lp-row'); var i = el('input'); i.maxLength = 20; i.placeholder = '낱말 하나'; i.required = true; i.setAttribute('aria-label', '응답');
@@ -879,7 +910,7 @@
       if (!b.getAttribute('data-attend') || b.tagName !== 'BUTTON') return;
       b.addEventListener('click', function () {
         var kind = b.getAttribute('data-attend');
-        ensureJoin().then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); if (kind === 'in') $$('[data-dock-attend]').forEach(function (d) { d.hidden = true; }); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
+        ensureJoin({ attend: kind === 'in' }).then(function () { return conn.add('attendance', { kind: kind }); }).then(function () { var s = $('[data-attend-state]'); var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); if (s) s.textContent = (kind === 'in' ? '입실' : '퇴실') + ' 확인 ' + t; store.set('att:' + kind, t); if (kind === 'in') $$('[data-dock-attend]').forEach(function (d) { d.hidden = true; }); toast((kind === 'in' ? '입실' : '퇴실') + '을 확인했어요.'); }, function () { });
       });
     });
 
@@ -890,7 +921,7 @@
     if (da && soon && store.get('att:in', null) === null) {
       da.hidden = false;
       da.addEventListener('click', function () {
-        ensureJoin().then(function () { return conn.add('attendance', { kind: 'in' }); }).then(function () {
+        ensureJoin({ attend: true }).then(function () { return conn.add('attendance', { kind: 'in' }); }).then(function () {
           var t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), s = $('[data-attend-state]');
           store.set('att:in', t); da.hidden = true; if (s) s.textContent = '입실 확인 ' + t; toast(gate ? '입실을 확인했어요.' : '출석했어요. 고마워요.');
         }, function (err) { if (err && err.message !== 'cancel') toast('출석을 보내지 못했어요. 잠시 뒤 다시 눌러 주세요.'); });

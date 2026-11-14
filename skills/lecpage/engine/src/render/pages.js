@@ -150,11 +150,12 @@ function dialogs(ctx) {
 <p class="lp-small lp-share-scr">프로젝터에는 <a href="screen.html">발표 화면</a>을 띄워요. QR${ctx.live ? '과 질문·투표 결과가' : '이'} 크게 보여요.</p>
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
-<h2 id="lp-join-h">참여하기</h2><p class="lp-small">질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
-<label><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname"></label>
-${needName ? '<label><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
-${needSchool ? '<label><span>소속(학교)</span><input name="school" maxlength="40" required autocomplete="organization"></label>' : ''}
-${pv.consent && (needName || needSchool) ? `<label class="lp-consent"><input type="checkbox" name="consent" required><span>이름·소속을 출석 확인에만 쓰고, 연수가 끝나고 ${pv.retentionDays}일 뒤 지우는 데 동의합니다. 동의하지 않으면 참여 기능을 쓸 수 없어요. 안내와 교재는 그대로 볼 수 있어요. <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
+<h2 id="lp-join-h">참여하기</h2><p class="lp-small" data-join-lead>질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
+<label data-join-nick><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname" aria-describedby="lp-join-err"></label>
+<p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
+${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
+${needSchool ? '<label data-join-id><span>소속(학교)</span><input name="school" maxlength="40" required autocomplete="organization"></label>' : ''}
+${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>이름·소속을 출석 확인에만 쓰고, 연수가 끝나고 ${pv.retentionDays}일 뒤 지우는 데 동의합니다. 동의하지 않으면 참여 기능을 쓸 수 없어요. 안내와 교재는 그대로 볼 수 있어요. <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
@@ -259,7 +260,7 @@ ${(ctx.design._notes || []).length ? `\n## 결정 메모\n${ctx.design._notes.ma
 const PROVIDER_KO = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버·Cloudflare', local: '이 컴퓨터에서만 시험', none: '없음' };
 const PROVIDER_WHY = {
   sheets: '구글 시트(Apps Script)에 연결했습니다. 기록이 강사의 구글 시트에 쌓이고, 화면은 5~10초마다 새로 읽습니다. 50명 안팎까지 알맞습니다.',
-  supabase: 'Supabase에 연결했습니다. 질문·진행 현황이 바로 바뀌고, 기록은 강사의 Supabase 프로젝트에 쌓입니다. 100명 안팎까지 알맞습니다.',
+  supabase: 'Supabase에 연결했습니다. 질문·진행 현황이 바로 바뀌고, 기록은 강사의 Supabase 프로젝트에 쌓입니다. 80명까지 알맞습니다.',
   http: '내 서버 또는 Cloudflare에 연결했습니다. 기록은 그 서버에 쌓입니다.',
   local: '실시간 서버에 연결하지 않았습니다. 한 브라우저 안에서만 이어지는 시험용이라 참가자 기기끼리는 이어지지 않습니다. 연수 전에 서버를 연결하고 다시 만드세요.',
   none: '실시간 기능을 쓰지 않습니다. 완료 체크·메모는 참가자 각자의 브라우저에 저장됩니다.',

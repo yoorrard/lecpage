@@ -51,9 +51,25 @@ export function liveSettings(bp) {
   const board = (bp.sections || []).find((x) => x.type === 'board');
   return { retentionDays: bp.privacy?.retentionDays || 30, uploads: !!board && board.allowFiles !== false && !bp.audience?.minor, moderation: !!board?.moderation };
 }
-/** Supabase 연수 등록 SQL: 보관 기간·파일 올리기·사전 검토를 서버에도 똑같이 걸어 둠 */
+/**
+ * ⑦ 내 서버(Deploy to Cloudflare 버튼·학교 서버)에 이 연수의 설정(보관 기간·파일 올리기·사전 검토)을 걸어 둠.
+ * 그 서버의 관리자 키로 /init을 부름(서버 기본값 30일 대신 설계도의 보관 기간). 예전 서버가 받지 않으면 그대로 둠
+ */
+export async function applyServerSettings(url, code, key, bp) {
+  if (!url || !key || !code) return false;
+  try {
+    const r = await fetch(`${String(url).replace(/\/+$/, '')}/api/${encodeURIComponent(code)}/init`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-lec-admin': encodeURIComponent(key) },
+      body: JSON.stringify({ adminKeyHash: await sha256Hex(key), settings: liveSettings(bp) }), signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
+    });
+    return r.ok;
+  } catch { return false; }
+}
+/** Supabase 틱 간격(ms): 인원이 많을수록 길게(받는 사람 수만큼 세는 초당 100건 한도). 30명 2초 · 80명 2초 · 200명 5초 */
+export const supabaseFlushMs = (bp) => Math.min(10000, Math.max(2000, Math.round((Number(bp.audience?.size) || 0) * 25)));
+/** Supabase 연수 등록 SQL: 보관 기간·파일 올리기·사전 검토·틱 간격을 서버에도 똑같이 걸어 둠 */
 function initSql(code, hash, bp) {
-  const settings = liveSettings(bp);
+  const settings = { ...liveSettings(bp), flushMs: supabaseFlushMs(bp) };
   return `select lec_private.init_training_hash('${code}', '${hash}', '${JSON.stringify(settings)}');`;
 }
 
@@ -91,6 +107,7 @@ export function LiveSetup({ p, update, prefer = null }) {
       update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, ...next } }, liveOk: true }));
       if (!again && next.provider === 'http') saveKey('live-server', next.url, true).catch(() => { });
       if (!again && usedKey.current) keepAdminKey(next.url, next.provider === 'supabase' && adm ? adm.key : newKey);
+      if (next.provider === 'http') (usedKey.current ? Promise.resolve(newKey) : adminKeyFor(next.url)).then((k) => applyServerSettings(next.url, code, k, bp));
       const done = quiet ? '지난번에 연결한 내 서버에 연결했어요.' : msg;
       setState({ busy: false, msg: done, ok: true }); toast(done);
     } catch (e) { if (again) update({ liveOk: false }); if (quiet) { setState({ busy: false, msg: '', ok: false }); return; } setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }

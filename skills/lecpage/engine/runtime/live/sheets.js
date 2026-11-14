@@ -114,6 +114,8 @@
       }).then(function (b64) { return post({ a: 'upload', name: file.name || 'file', type: file.type, data: b64, token: ctx.token() }); });
     };
     a.checkAdmin = function () { return post({ a: 'checkAdmin', admin: ctx.adminKey() || '' }).then(function (ok) { return ok === true; }); };
+    /** ① the admin key → an instructor session { session, expiresAt } (older scripts answer bad_action) */
+    a.adminSession = function (key) { return post({ a: 'session', admin: key }); };
     a.exportCsv = function (kind, opts) {
       // 'completion' needs the course times, which the sheet does not know: build it from the admin snapshot here
       if (kind === 'completion') return post({ a: 'snapshot', since: 0, admin: ctx.adminKey() }).then(function (s) { var t = U.exportTable(kind, s || {}, undefined, opts); return U.toCsv(t.columns, t.rows); });

@@ -265,7 +265,7 @@
     switch (kind) {
       case 'participants': return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: P.map(function (p) { return [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]; }) };
       case 'attendance': {
-        var m = {}; (data.attendance || []).forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); r[a.kind] = a.at || a.createdAt; });
+        var m = {}; (data.attendance || []).forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); var at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); });
         return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt)]; }) };
       }
       case 'progress': {
@@ -309,21 +309,37 @@
     opts = opts || {}; tz = tz || 'Asia/Seoul';
     var rate = typeof opts.rate === 'number' && opts.rate >= 0 && opts.rate <= 100 ? opts.rate : 90;
     var att = {}, done = {}, sv = {}, seen = {}, stations = [];
-    (data.attendance || []).forEach(function (a) { var r = att[a.by] || (att[a.by] = {}); var at = a.at || a.createdAt; if (a.kind === 'in' || a.kind === 'out') r[a.kind] = at; });
+    // earliest check-in and latest check-out per participant
+    (data.attendance || []).forEach(function (a) {
+      var r = att[a.by] || (att[a.by] = {}); var at = a.at || a.createdAt;
+      if (a.kind === 'in') r['in'] = r['in'] ? Math.min(r['in'], at) : at; else if (a.kind === 'out') r.out = r.out ? Math.max(r.out, at) : at;
+    });
     (data.progress || []).forEach(function (x) { if (!seen[x.station]) { seen[x.station] = 1; stations.push(x.station); } if (x.status === 'done') (done[x.by] || (done[x.by] = {}))[x.station] = 1; });
     (data.survey || []).forEach(function (s) { if (s.by) sv[s.by] = 1; });
     var total = opts.stations > 0 ? Math.floor(opts.stations) : stations.length;
-    var rows = (data.participants || []).slice().sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }).map(function (p) {
-      var r = att[p.id] || {}, inAt = r['in'], outAt = r.out;
+    // one row per person: the same name and school on two devices (or a re-join) is merged
+    var groups = {}, order = [];
+    (data.participants || []).slice().sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }).forEach(function (p) {
+      var key = p.name ? 'n:' + p.name + '|' + (p.school || '') : 'id:' + p.id;
+      var g = groups[key]; if (!g) { g = groups[key] = { nick: [], name: p.name, school: p.school, inAt: 0, outAt: 0, done: {}, survey: false }; order.push(g); }
+      if (p.nickname && g.nick.indexOf(p.nickname) < 0) g.nick.push(p.nickname);
+      var r = att[p.id] || {};
+      if (r['in']) g.inAt = g.inAt ? Math.min(g.inAt, r['in']) : r['in'];
+      if (r.out) g.outAt = Math.max(g.outAt, r.out);
+      for (var st in (done[p.id] || {})) g.done[st] = 1;
+      if (sv[p.id]) g.survey = true;
+    });
+    var rows = order.map(function (g) {
+      var inAt = g.inAt || 0, outAt = g.outAt || 0;
       var day = opts.date || (inAt ? dayOf(inAt, tz) : '');
       var s0 = zonedMs(day, opts.start, tz), s1 = zonedMs(day, opts.end, tz);
       var sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
       var mins = '';
       if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
-      var n = Object.keys(done[p.id] || {}).length;
+      var n = Object.keys(g.done).length;
       var verdict = '확인 필요';
-      if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!opts.survey || sv[p.id]) ? 'O' : 'X';
-      return [p.nickname, p.name, p.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', opts.survey ? (sv[p.id] ? 'O' : 'X') : '해당 없음', verdict];
+      if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!opts.survey || g.survey) ? 'O' : 'X';
+      return [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', opts.survey ? (g.survey ? 'O' : 'X') : '해당 없음', verdict];
     });
     return { columns: COMPLETION_COLS.slice(), rows: rows };
   }
@@ -430,9 +446,15 @@
       return { ui: patch };
     },
     materialRemove: function (slot) { var patch = {}; patch['m' + slot] = null; return { ui: patch }; },
-    /** 강사가 잠근 칸: 'qa'(새 질문) · 'board'(새 보드 글). 서버도 ui.lockQa·ui.lockBoard를 보고 거절 */
-    locked: function (st, which) { var ui = uiOf(st); return which === 'qa' ? ui.lockQa === true : which === 'board' ? ui.lockBoard === true : false; },
-    lockPatch: function (which, on) { var patch = {}; patch[which === 'qa' ? 'lockQa' : 'lockBoard'] = on ? true : null; return { ui: patch }; },
+    /** 투표 집계: 응답자(답 기록) 하나에 한 표. 예전 서버에 남은 배열 답은 첫 보기 하나로 셈(강사·발표·참가자 화면이 같은 수) */
+    tally: function (list) {
+      var t = {};
+      (list || []).forEach(function (a) { var v = Array.isArray(a.value) ? a.value[0] : a.value; if (v == null || v === '') return; v = String(v); t[v] = (t[v] || 0) + 1; });
+      return t;
+    },
+    /** 강사가 잠근 칸: 'qa'(새 질문) · 'board'(새 보드 글) · 'join'(새 참여). 서버도 ui.lockQa·ui.lockBoard·ui.lockJoin을 보고 거절 */
+    locked: function (st, which) { var ui = uiOf(st); return which === 'qa' ? ui.lockQa === true : which === 'board' ? ui.lockBoard === true : which === 'join' ? ui.lockJoin === true : false; },
+    lockPatch: function (which, on) { var patch = {}; patch[which === 'qa' ? 'lockQa' : which === 'join' ? 'lockJoin' : 'lockBoard'] = on ? true : null; return { ui: patch }; },
     timersValue: function (list) {
       var out = (list || []).slice(0, 8).map(function (t) { return [cps(String(t.label || '')).slice(0, 12).join(''), t.endsAt || 0, t.remaining || 0, t.running ? 1 : 0]; });
       var s = JSON.stringify(out);
@@ -440,6 +462,77 @@
       return out.length ? s : null;
     },
   };
+
+  // ---------------------------------------------------------------- photo uploads (④)
+  // JPEG·WebP photos (and big PNGs) are drawn on a canvas, long side at most 1600 px, and sent as JPEG: the copy
+  // carries no EXIF (GPS location, camera, time) and is a few hundred KB. If that fails the photo is not sent at all
+  // (sending the original would send the location). PNG screenshots and diagrams up to 3 MB stay sharp: their
+  // metadata chunks (eXIf, text, time) are cut out and the pixels kept as they are. GIF has no EXIF.
+  var IMG_SIDE = 1600, IMG_QUALITY = 0.82, PNG_KEEP = 3 * 1048576;
+  var PNG_DROP = { eXIf: 1, tEXt: 1, zTXt: 1, iTXt: 1, tIME: 1 };
+  function imgErr() { return LiveError('image_failed', '사진을 줄이지 못해 올리지 않았어요(위치 정보가 함께 올라가지 않게). 화면을 캡처해 다시 올려 주세요.', { status: 422, retryable: false }); }
+  function readBytes(blob) {
+    if (blob && typeof blob.arrayBuffer === 'function') return blob.arrayBuffer().then(function (b) { return new Uint8Array(b); });
+    return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(new Uint8Array(r.result)); }; r.onerror = rej; r.readAsArrayBuffer(blob); });
+  }
+  function sniffImage(b) {
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+    if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+    return '';
+  }
+  function asFile(blob, name, type) {
+    try { return new File([blob], name, { type: type }); } catch (e) { var b = new Blob([blob], { type: type }); try { b.name = name; } catch (x) { /* read-only */ } return b; }
+  }
+  function renamed(name, ext) { return String(name || 'photo').replace(/\.[A-Za-z0-9]{1,5}$/, '') + '.' + ext; }
+  /** PNG without metadata chunks (eXIf·tEXt·zTXt·iTXt·tIME); pixels untouched. null when the bytes are not a valid PNG. */
+  function stripPng(b) {
+    var out = [b.subarray(0, 8)], i = 8;
+    while (i + 12 <= b.length) {
+      var len = ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0, end = i + 12 + len;
+      if (end > b.length) return null;
+      var type = String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]);
+      if (!PNG_DROP[type]) out.push(b.subarray(i, end));
+      i = end;
+      if (type === 'IEND') return out;
+    }
+    return null;
+  }
+  function decodeImage(file) {
+    if (typeof root.createImageBitmap === 'function') {
+      return root.createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return root.createImageBitmap(file); });
+    }
+    return new Promise(function (res, rej) {
+      if (!root.URL || !root.Image) return rej(new Error('no image'));
+      var u = URL.createObjectURL(file), img = new root.Image();
+      img.onload = function () { res(img); setTimeout(function () { URL.revokeObjectURL(u); }, 0); };
+      img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('decode')); };
+      img.src = u;
+    });
+  }
+  function shrinkImage(file) {
+    return decodeImage(file).then(function (img) {
+      var w = img.width || img.naturalWidth, h = img.height || img.naturalHeight;
+      if (!w || !h) throw new Error('size');
+      var k = Math.min(1, IMG_SIDE / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+      var cv = root.document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.drawImage(img, 0, 0, cw, ch);
+      if (img.close) { try { img.close(); } catch (e) { /* ignore */ } }
+      return new Promise(function (res, rej) { cv.toBlob(function (b) { if (b && b.size) res(b); else rej(new Error('encode')); }, 'image/jpeg', IMG_QUALITY); });
+    }).then(function (blob) { return asFile(blob, renamed(file.name, 'jpg'), 'image/jpeg'); });
+  }
+  function prepUpload(file) {
+    var head = file.slice ? file.slice(0, 16) : file;
+    return readBytes(head).then(function (h) {
+      var kind = sniffImage(h);
+      if (!kind) return file; // PDF·MP3·MP4·GIF: as they are (the server checks the type from the bytes)
+      if (kind === 'image/png' && file.size <= PNG_KEEP) {
+        return readBytes(file).then(function (b) { var parts = stripPng(b); if (!parts) throw imgErr(); return asFile(new Blob(parts, { type: 'image/png' }), renamed(file.name, 'png'), 'image/png'); });
+      }
+      if (!root.document || !root.document.createElement) throw imgErr();
+      return shrinkImage(file).catch(function () { throw imgErr(); });
+    }, function () { throw imgErr(); });
+  }
 
   // ---------------------------------------------------------------- registry & global events
   var registry = {};
@@ -473,6 +566,7 @@
     this._idStore = config.identity === 'session' ? session : local;
     this._me = this._idStore.get(this._ns + ':me');
     this._adminKey = config.adminKey || session.get(this._ns + ':admin') || null;
+    this._adminSess = null; this._loadSession();
     this._queue = local.get(this._ns + ':queue') || [];
     this._voted = local.get(this._ns + ':voted') || {};
     this._mine = local.get(this._ns + ':mine') || {};
@@ -484,13 +578,16 @@
       config: config,
       token: function () { return self._me && self._me.token; },
       me: function () { return self._me; },
-      adminKey: function () { return self._adminKey; },
+      // the instructor session (after one accepted key) goes instead of the key; adapters send whatever this returns
+      adminKey: function () { return self._adminSess ? self._adminSess.t : self._adminKey; },
+      dropSession: function () { self._dropSession(); },
       cursor: function () { return self._cursor; },
       emit: function (evt) { return self._onEvent(evt); },
       storage: { local: local, session: session, ns: this._ns },
       util: api.util,
       error: LiveError,
     };
+    this._ctx = ctx;
     this._adapter = factory(assign({}, config, { adminKey: undefined }), ctx);
     if (!this._adapter) throw LiveError('bad_adapter', '참여 기능을 준비하지 못했어요. 새로 고침해 주세요.');
     if (typeof this._adapter.subscribe === 'function') this._unsubAdapter = this._adapter.subscribe(function (evt) { return self._onEvent(evt); });
@@ -675,6 +772,10 @@
     function run() {
       return Promise.resolve().then(function () { return fn.apply(self._adapter, args); }).catch(function (err) {
         if (!err || typeof err !== 'object') err = LiveError('error', String(err));
+        if (err.code === 'session_expired' && self._adminSess && !opts.noResess) {
+          opts.noResess = true; self._dropSession();
+          return run().then(function (r) { self._getSession(); return r; });
+        }
         if (err.code === 'invalid_token' && !opts.noRejoin && self._me && name !== 'join') {
           opts.noRejoin = true;
           return self._rejoin().then(run);
@@ -709,6 +810,7 @@
       self.mode = info.mode || 'realtime';
       var as = self._adapter.status;
       self._setStatus(as === 'live' || as === 'polling' ? as : (info.mode === 'polling' ? 'polling' : 'live'));
+      if (self._adminKey && !self._adminSess) self._getSession();
       return self.sync(true).then(function () { self._flushQueue(); return info; });
     }, function (err) {
       self._setStatus('offline');
@@ -809,23 +911,48 @@
   /** Forget this device's participant identity (shared computers). */
   C.leave = function () { this._me = null; this._idStore.del(this._ns + ':me'); this._voted = {}; local.del(this._ns + ':voted'); };
   C.setAdminKey = function (key) {
+    if ((key ? String(key) : null) !== this._adminKey) this._dropSession();
     this._adminKey = key ? String(key) : null;
     if (key) session.set(this._ns + ':admin', String(key)); else session.del(this._ns + ':admin');
-    var a = this._adapter;
-    var p = a.setAdmin ? Promise.resolve(a.setAdmin(this._adminKey)) : Promise.resolve();
-    var self = this;
+    this._loadSession();
+    var a = this._adapter, self = this;
+    var p = (this._adminKey ? this._getSession() : Promise.resolve()).then(function () { return a.setAdmin ? a.setAdmin(self._ctx.adminKey()) : null; });
     return p.then(function () { return self.status === 'offline' ? null : self.sync(true); });
+  };
+  // ----- instructor session: one accepted admin key → a 12-hour token the server keeps only as a hash.
+  // Requests then carry the token instead of the key, and the server's wrong-key lockout (counted per school IP)
+  // never reaches a console that is already in. Kept in this tab (sessionStorage), tied to the key it came from.
+  C._loadSession = function () {
+    this._adminSess = null;
+    var s = this._adminKey ? session.get(this._ns + ':asess') : null;
+    if (s && typeof s.t === 'string' && s.h === hashStr(this._adminKey) && s.exp > Date.now() + 60000) this._adminSess = s;
+  };
+  C._dropSession = function () { this._adminSess = null; session.del(this._ns + ':asess'); };
+  C._getSession = function () {
+    var self = this, a = this._adapter, key = this._adminKey;
+    if (!key || this._adminSess || typeof a.adminSession !== 'function' || /^lps1\./.test(key)) return Promise.resolve(this._adminSess);
+    if (this._sessJob) return this._sessJob;
+    this._sessJob = Promise.resolve().then(function () { return a.adminSession(key); }).then(function (r) {
+      self._sessJob = null;
+      if (!r || typeof r.session !== 'string' || self._adminKey !== key) return null;
+      self._adminSess = { t: r.session, exp: Number(r.expiresAt) || Date.now() + 12 * 3600e3, h: hashStr(key) };
+      session.set(self._ns + ':asess', self._adminSess);
+      return self._adminSess;
+    }, function () { self._sessJob = null; return null; }); // older server or locked right now: keep using the key
+    return this._sessJob;
   };
   /** 강사 화면: 관리자 키를 한 번만 물어 확인하고(틀린 키는 서버가 한 번으로 셈), 맞으면 이 연결에만 씀(저장소에 두지 않음). → true/false */
   C.useAdminKey = function (key) {
     var self = this, prev = this._adminKey;
     this._adminKey = key ? String(key) : null;
     if (!this._adminKey) { this._adminKey = prev; return Promise.resolve(false); }
+    if (this._adminKey !== prev) this._loadSession(); // a session this tab already holds for this key: no key attempt
     return this.checkAdmin().then(function (ok) {
-      if (!ok) { self._adminKey = prev; return false; }
+      if (!ok) { self._adminKey = prev; self._loadSession(); return false; }
       var a = self._adapter;
-      return Promise.resolve(a.setAdmin ? a.setAdmin(self._adminKey) : null).then(function () { return self.status === 'offline' ? true : self.sync(true).then(function () { return true; }); });
-    }, function (e) { self._adminKey = prev; throw e; });
+      return self._getSession().then(function () { return a.setAdmin ? a.setAdmin(self._ctx.adminKey()) : null; })
+        .then(function () { return self.status === 'offline' ? true : self.sync(true).then(function () { return true; }); });
+    }, function (e) { self._adminKey = prev; self._loadSession(); throw e; });
   };
   /** Resolves true when the admin key is accepted by the backend. */
   C.checkAdmin = function () {
@@ -1032,9 +1159,12 @@
     var self = this;
     if (!file || typeof file.size !== 'number') return Promise.reject(LiveError('invalid_value', '파일을 골라 주세요.', { status: 400, retryable: false }));
     var maxMb = this.config.maxUploadMb || LIMITS.uploadMb;
-    if (file.size > maxMb * 1048576) return Promise.reject(LiveError('too_large', '파일은 ' + maxMb + 'MB까지 올릴 수 있어요.', { status: 413, retryable: false }));
     if (file.type && !UPLOAD_TYPES[file.type]) return Promise.reject(LiveError('unsupported_type', '사진·PDF·MP3·MP4만 올릴 수 있어요.', { status: 415, retryable: false }));
-    return this._ensureJoined().then(function () { return self._call('upload', [file], { tries: 2 }); });
+    // ④ photos are drawn again before they leave the device: location (EXIF GPS) and other metadata go, size drops
+    return prepUpload(file).then(function (f) {
+      if (f.size > maxMb * 1048576) throw LiveError('too_large', '파일은 ' + maxMb + 'MB까지 올릴 수 있어요.', { status: 413, retryable: false });
+      return self._ensureJoined().then(function () { return self._call('upload', [f], { tries: 2 }); });
+    });
   };
   /** exportCsv(kind, opts) — opts only matter for 'completion' (see completionTable). Servers that do not know
    *  'completion' yet are covered by building it here from the admin store. */

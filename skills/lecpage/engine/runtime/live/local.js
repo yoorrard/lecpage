@@ -82,6 +82,7 @@
       var now = stamp(); var id = 'p' + U.uid(12); var token = U.uid(16) + U.uid(16);
       var doc = { id: id, nickname: p.nickname || '참가자', name: p.name || '', school: p.school || '', consentAt: p.consent ? now : null, createdAt: now, updatedAt: now };
       if ((doc.name || doc.school) && !p.consent) return Promise.reject(err('consent_required', '이름·소속을 남기려면 개인정보 수집·이용에 동의해 주세요.'));
+      if ((adapter._state().ui || {}).lockJoin === true) return Promise.reject(err('locked', '지금은 새로 참여할 수 없어요. 강사에게 알려 주세요.', 409));
       ls.set(P + 't:' + token, id);
       save('participants', doc, 'add');
       return Promise.resolve({ id: id, token: token, nickname: doc.nickname });
@@ -141,6 +142,7 @@
         if (col === 'help') U.assign(d, { nickname: p.nickname, status: 'open', assignee: '' });
         if (col === 'polls') d.open = !!d.open;
         var old = match ? readCol(col).filter(match)[0] : null;
+        if (old && col === 'attendance' && old.at) d.at = d.kind === 'in' ? Math.min(old.at, d.at) : Math.max(old.at, d.at); // the first check-in stays
         if (old) { d = U.assign({}, old, d, { id: old.id, createdAt: old.createdAt }); return save(col, d, 'update'); }
         d.id = col.charAt(0) + U.uid(12);
         return save(col, d, 'add');
@@ -151,6 +153,8 @@
         var cur = ls.get(key(col, id));
         if (!cur) throw err('not_found', '지워진 글이에요. 새로 고침해 주세요.', 404);
         var next = U.assign({}, cur, patch || {}, { id: id, updatedAt: stamp() });
+        if (col === 'participants' && patch && patch.consent === true && !cur.consentAt) next.consentAt = next.updatedAt;
+        delete next.consent;
         return save(col, next, 'update');
       });
     };

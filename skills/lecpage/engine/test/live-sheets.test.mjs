@@ -50,7 +50,7 @@ function makeGas() {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, getUi: () => { throw new Error('no ui'); } }, DriveApp,
     PropertiesService: { getScriptProperties: () => ({
       getProperty: (k) => (props.has(k) ? props.get(k) : null), setProperty: (k, v) => { props.set(k, String(v)); },
-      setProperties: (o) => { for (const k in o) props.set(k, String(o[k])); }, deleteProperty: (k) => { props.delete(k); }, getKeys: () => [...props.keys()],
+      setProperties: (o) => { for (const k in o) props.set(k, String(o[k])); }, deleteProperty: (k) => { props.delete(k); }, getKeys: () => [...props.keys()], getProperties: () => Object.fromEntries(props),
     }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (cache.has(k) ? cache.get(k) : null), put: (k, v) => { cache.set(k, v); }, remove: (k) => { cache.delete(k); } }) },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
@@ -231,4 +231,38 @@ test('apps-script (2026-11c): instructor locks refuse new questions/posts; invis
   for (const col of ['questions', 'posts']) { const r = await call({ a: 'add', code, token: a.token, col, doc: { text: '잠긴 뒤' } }); assert.equal(r.status, 409, col); assert.equal(r.error, 'locked', col); }
   await call({ a: 'setState', code, admin: ADMIN, patch: { ui: { lockQa: null, lockBoard: null } } });
   assert.equal((await call({ a: 'add', code, token: a.token, col: 'questions', doc: { text: '다시 열림' } })).ok, true);
+});
+
+test('apps-script (2026-11d): a session survives the sheet-wide lockout; polls keep to options; first check-in; name later; lockJoin', async () => {
+  const code = 'SHEET1';
+  for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
+  const s = (await call({ a: 'session', code, admin: ADMIN })).data;
+  assert.match(s.session, /^lps1\.[A-Za-z0-9_-]{43}$/); assert.ok(s.expiresAt > Date.now() + 11 * 3600e3);
+  assert.ok(![...gas.props.values()].some((v) => String(v).includes(s.session)), 'only the hash is stored');
+  for (let i = 0; i < 20; i++) await call({ a: 'checkAdmin', code, admin: 'guess-' + i });
+  assert.equal((await call({ a: 'setState', code, admin: ADMIN, patch: { slide: 2 } })).status, 429, 'key attempts stay locked');
+  assert.equal((await call({ a: 'setState', code, admin: s.session, patch: { slide: 2 } })).ok, true, 'the open console keeps working');
+  assert.ok((await call({ a: 'snapshot', code, since: 0, admin: s.session })).data.participants, 'admin view with the session');
+  const fake = await call({ a: 'checkAdmin', code, admin: 'lps1.' + 'x'.repeat(43) });
+  assert.equal(fake.status, 401); assert.equal(fake.error, 'session_expired');
+  const a = (await call({ a: 'join', code, nickname: '투표자' })).data;
+  const poll = (await call({ a: 'add', code, admin: s.session, col: 'polls', doc: { question: '고르기', options: ['가', '나'], open: true } })).data;
+  for (const v of [['가', '가', '가'], '<img>']) assert.equal((await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: poll.id, value: v } })).error, 'invalid_value');
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: poll.id, value: ['나'] } })).data.value, '나');
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: 'nope', value: 'X' } })).error, 'unknown_poll');
+  const reg = (await call({ a: 'add', code, admin: s.session, col: 'polls', doc: { question: '척도', kind: 'scale', options: [], open: true, cid: 'bp:sc1' } })).data;
+  assert.equal((await call({ a: 'add', code, admin: s.session, col: 'polls', doc: { question: '척도', kind: 'scale', options: [], open: true, cid: 'bp:sc1' } })).data.id, reg.id);
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: 'sc1', value: 5 } })).data.value, '5');
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'answers', doc: { poll: 'signal', value: 'red' } })).ok, true);
+  const in1 = (await call({ a: 'add', code, token: a.token, col: 'attendance', doc: { kind: 'in' } })).data;
+  await new Promise((r) => setTimeout(r, 15));
+  assert.equal((await call({ a: 'add', code, token: a.token, col: 'attendance', doc: { kind: 'in' } })).data.at, in1.at, 'the first check-in stays');
+  assert.equal((await call({ a: 'update', code, token: a.token, col: 'participants', id: a.id, patch: { name: '홍길동' } })).error, 'consent_required');
+  const named = (await call({ a: 'update', code, token: a.token, col: 'participants', id: a.id, patch: { name: '홍길동', school: '한빛초', consent: true } })).data;
+  assert.equal(named.name, '홍길동'); assert.ok(named.consentAt > 0);
+  await call({ a: 'setState', code, admin: s.session, patch: { ui: { lockJoin: true } } });
+  assert.equal((await call({ a: 'join', code, nickname: '늦게' })).error, 'locked');
+  await call({ a: 'setState', code, admin: s.session, patch: { ui: { lockJoin: null } } });
+  for (const n of ['관리자', '선생님', '운영진', 'аdmin']) assert.equal((await call({ a: 'join', code, nickname: n })).error, 'reserved_nickname', n);
+  for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
 });

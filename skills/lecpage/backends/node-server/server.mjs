@@ -102,7 +102,8 @@ export function clientIpOf(req, hops = 0) {
 
 function openDb(file) {
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
+  // secure_delete: deleted rows are overwritten with zeros (not left in free pages of the file)
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA secure_delete = ON;');
   const cache = new Map();
   const st = (sql) => { let s = cache.get(sql); if (!s) { s = db.prepare(sql); cache.set(sql, s); } return s; };
   let depth = 0;
@@ -116,6 +117,8 @@ function openDb(file) {
       depth++; db.exec('BEGIN IMMEDIATE');
       try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { try { db.exec('ROLLBACK'); } catch { /* ignore */ } throw e; } finally { depth--; }
     },
+    /** After a wipe: copy the WAL back into the (zeroed) database file and empty it, so no old page stays in the log. */
+    checkpoint: () => { try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch { /* busy: the next one does it */ } },
     close: () => db.close(),
   };
 }
@@ -221,7 +224,9 @@ export async function start(opts = readOptions()) {
   const cleanupTimer = setInterval(() => runCleanup(), 3600_000);
   async function runCleanup() {
     try {
-      for (const { code } of core.cleanup()) await fsp.rm(path.join(opts.data, 'uploads', code), { recursive: true, force: true });
+      const gone = core.cleanup();
+      for (const { code } of gone) await fsp.rm(path.join(opts.data, 'uploads', code), { recursive: true, force: true });
+      if (gone.length) db.checkpoint();
       for (const { code, name } of core.sweepOrphans()) await removeStored(code, [name]);
     } catch (e) { log('cleanup error', e.message); }
   }
@@ -408,7 +413,7 @@ export async function start(opts = readOptions()) {
       }
       if (out.events) broadcast(c, out.events);
       if (out.reaction) addReaction(c, out.reaction);
-      if (out.purgedFiles) await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true });
+      if (out.purgedFiles) { await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true }); db.checkpoint(); }
       if (out.deleteFiles) await removeStored(c, out.deleteFiles);
       if (out.contentType) {
         res.writeHead(out.status, { ...cors, 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` });
@@ -459,7 +464,8 @@ export async function start(opts = readOptions()) {
               const { body, retryAfter } = errorBody(e);
               w.attachment.admin = false;
               w.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter }));
-              w.close(1008, 'auth');
+              // an expired session: the console sends the key again on this socket
+              if (body.error !== 'session_expired') w.close(1008, 'auth');
             }
           });
         } else if (o && o.type === 'ping') w.send(JSON.stringify({ type: 'pong', now: Date.now() }));
