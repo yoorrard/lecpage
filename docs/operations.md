@@ -9,7 +9,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 |---|---|---|
 | 구조 | **로컬 우선 정적 PWA**. 교재 해석·사이트 조립·ZIP 만들기를 모두 브라우저에서 | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
-| 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
+| 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 도메인 대안 | lecpage.kr(가비아 연 약 ₩22,000~23,000 ⚠️) + 네임서버를 Cloudflare로 | 한국 주소가 더 중요할 때. Cloudflare Registrar는 `.kr`을 팔지 않음. `.kr` 네임서버 변경은 본인 인증이 필요할 수 있음 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
 | 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |

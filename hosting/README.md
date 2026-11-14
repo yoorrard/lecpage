@@ -31,7 +31,7 @@
 1. **API 토큰 하나 만들기**(대시보드, 아래 권한 표)
 2. **`npm run setup`**(묻는 것: 운영자 이메일, 알림 웹훅. 둘 다 환경 변수로 줄 수 있음)
 3. (Zero Trust를 처음 쓰면) 대시보드에서 Zero Trust 가입 한 번 → `npm run setup` 다시(관리 화면만 이어서 켬)
-4. 앱 빌드 변수 `VITE_PUBLISH_API`(스크립트가 값과 `gh variable set …` 한 줄을 찍어 줌)
+4. 앱 연결: 운영자 앱 주소에서는 저절로 이어짐. 서버 주소가 다르면 `app/src/lib/publish-api.js`나 앱 빌드 변수 `VITE_PUBLISH_API`(아래 '앱에 연결')
 
 ```bash
 cd hosting
@@ -72,7 +72,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 5. 비밀 값: `ADMIN_KEY`(만들어 `~/.lecpage/<계정>/admin-key`에 0600으로만 두고 화면에 찍지 않음), `REPORT_WEBHOOK`(답했으면), `VIEW`·`CF_ACCOUNT_ID`·`PAGES_PROJECT`·`PAGES_HOST`·`PAGES_TOKEN`, `APP_ORIGINS`(`--app-origin`). 보기 설정도 비밀 값이라 `npm run deploy`를 다시 해도 지워지지 않습니다
 6. 관리 Worker `lecpage-admin` 배포 → Access 앱(Worker 단위, 도메인 없이 workers.dev 전체, 정책: 운영자 이메일 하나, 세션 24시간) → 관리 Worker 비밀 값 `ACCESS_AUD`·`ACCESS_EMAILS`·`ACCESS_TEAM_DOMAIN`. 이메일은 Cloudflare에만 넣고 저장소·로그·`setup.json`에 남기지 않습니다(화면에는 `o***@…`로 가려서)
 7. (선택 `--domain`) Worker 도메인·`PUBLIC_ORIGIN`·WAF 속도 제한 규칙 1개(같은 IP 10초 400건)
-8. `/api/info` 확인, 앱 빌드 변수 `VITE_PUBLISH_API=<주소>`와 넣는 곳 안내
+8. `/api/info` 확인, 앱 연결 안내
 
 - **Zero Trust 첫 가입은 대시보드에서만**: 대시보드 → Zero Trust → 팀 이름 → Free 요금제 → **결제 수단 입력**(무료 요금제도 입력은 받지만 청구하지 않음, 공식 문서 cloudflare-one/setup). 안 했으면 스크립트가 이 한 단계만 안내하고 나머지를 끝냅니다. 그동안 관리 화면은 닫혀 있고(404) curl 관리(§3)는 됩니다.
 - **Cloudflare가 최선인가**: 무료로 '서버 쪽 검사(런타임 외 스크립트 금지) + 사이트마다 다른 주소 + 하루 한도와 무관한 보기 + 실시간 방'을 한 계정에서 다 하는 곳은 찾지 못했습니다. Workers Previews는 Worker 하나에 미리보기 100개(무료)까지라 오래된 것부터 지워지고, Pages는 미리보기 배포 개수가 무제한입니다. 근거·위험은 조사 문서.
@@ -82,7 +82,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 
 ### 앱에 연결
 
-앱을 빌드할 때 `VITE_PUBLISH_API=https://<호스트>`를 넣습니다. 비어 있으면 앱에 "바로 배포"가 보이지 않습니다.
+운영자의 앱 주소(`lecpage.com`·`www.lecpage.com`·GitHub Pages 미러)에서 열린 앱은 운영 서버 `https://lecpage-sites.lecpage.workers.dev`를 기본으로 씁니다([`app/src/lib/publish-api.js`](../app/src/lib/publish-api.js)). 다른 서버를 쓰거나 포크에서 켤 때만 앱 빌드 변수 `VITE_PUBLISH_API=https://<호스트>`를 넣습니다. 포크는 이 값이 비어 있어 "바로 배포"가 보이지 않습니다.
 
 | 앱을 올리는 곳 | 넣는 곳 |
 |---|---|
@@ -199,7 +199,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 ## 5. 끄기
 
 - **잠깐 새로 받지 않기**: 관리 화면의 [새 배포 멈추기](또는 `curl -X POST -H "$A" -H 'content-type: application/json' -d '{"paused":true}' $H/api/admin/uploads`). 새 사이트·다시 배포·새 방을 받지 않고, 앱은 '내 계정에 배포하기'로 안내합니다.
-- **새로 받지만 않기**: 앱 빌드 변수(`LECPAGE_PUBLISH_API`, `VITE_PUBLISH_API`)를 비우고 앱을 다시 배포합니다. 이미 배포한 사이트는 보관 기간까지 열려 있다가 지워집니다. 서버에서도 막으려면 `DAILY_SITE_CAP`을 1로 낮춥니다.
+- **새로 받지만 않기**: 관리 화면의 [새 배포 멈추기]가 가장 빠릅니다. 앱에서 아예 숨기려면 `app/src/lib/publish-api.js`의 운영 서버 주소를 비우고 앱을 다시 배포합니다. 이미 배포한 사이트는 보관 기간까지 열려 있다가 지워집니다. 서버에서도 막으려면 `DAILY_SITE_CAP`을 1로 낮춥니다.
 - **실시간 방만 끄기**: `LIVE=off`로 다시 배포. `/api/info`에서 `live`가 빠지고 `/live`는 404가 됩니다. 이미 있던 방 자료는 사이트가 지워질 때 함께 지워집니다.
 - **완전히 내리기**: `npx wrangler delete -c wrangler.admin.jsonc`, `npx wrangler delete`. Worker와 Durable Object에 담긴 모든 사이트·방·신고가 지워집니다. `pages` 보기 사이트는 Pages 프로젝트 `lecpage-view`도 지웁니다(배포가 100개를 넘으면 프로젝트가 바로 안 지워질 수 있어 `npx wrangler pages deployment delete`로 먼저 지움, 공식 문서 known issues). 강사들에게 미리 알리세요.
 

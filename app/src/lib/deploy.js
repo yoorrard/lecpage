@@ -1,4 +1,5 @@
 // 브라우저에서 바로 배포(사용자 토큰). 토큰은 이 브라우저에서 배포할 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
+import { PUBLISH_API } from './publish-api.js';
 import { track } from './stats.js';
 import { koTime } from './util.js';
 
@@ -223,11 +224,11 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
 /** 이미 올린 Vercel 프로젝트에 로그인 창이 뜰 때: 참가자가 열 수 있게 보호(Vercel Authentication)를 끔 */
 export const openVercel = (token, projectId) => vc(token, 'PATCH', `/v9/projects/${encodeURIComponent(projectId)}`, { ssoProtection: null });
 
-// ── lecpage 바로 배포: 운영자가 켜 둔 경우에만(빌드 변수 VITE_PUBLISH_API). 가입·토큰 없이 배포.
+// ── lecpage 바로 배포: 운영자가 켜 둔 경우에만(publish-api.js). 가입·토큰 없이 배포.
 // 서버의 보기가 worker면 방문이 있는 동안 열려 있고(30일), pages면 사이트마다 다른 주소(s-<id>.….pages.dev)로 마지막으로 올린 날부터 정해진 날까지(info.keepAlive=false) ──
 // 붐빌 때(넘침 처리, hosting/src/fair.js): 서버가 단계(info.capacity)·까닭(reason)·누구 몫인지(scope)·넘길 곳(next)을 알려 주고,
 // 앱은 같은 파일 그대로 강사 계정에 배포하는 길로 넘김. 평소(open)에는 화면에 아무것도 더하지 않음
-export const PUBLISH_API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
+export { PUBLISH_API };
 let infoP = null; let infoAt = 0;
 /** 바로 배포를 쓸 수 있으면 { plan: 'free'|'paid', accepting, capacity?, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
  * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음). capacity(붐빔 단계)는 instantGate가 읽음.

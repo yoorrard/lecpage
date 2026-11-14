@@ -5,7 +5,7 @@ import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import './NoticeBar.css';
 
-const API = String(import.meta.env?.VITE_PUBLISH_API || '').replace(/\/+$/, '');
+import { PUBLISH_API as API } from '../lib/publish-api.js';
 const SEEN_KEY = 'lecpage:notice-seen';
 const LIMITS = { id: 60, title: 60, body: 400, linkLabel: 20 };
 const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g; // 지울 때(제어 문자·보이지 않는 글자·방향 바꿈 글자)

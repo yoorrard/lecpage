@@ -6,7 +6,7 @@
 export const PROJECT_FORMAT = 'lecpage-project';
 export const PROJECT_VERSION = 1;
 /** 앱 주소: 스킬이 만든 파일을 열 곳 */
-export const APP_URL = 'https://yoorrard.github.io/lecpage/';
+export const APP_URL = 'https://lecpage.com/';
 
 /** 앱의 연수 정보 기본값(앱 '교재 넣기'·'연수 정보' 칸) */
 export const DEFAULT_INFO = {
