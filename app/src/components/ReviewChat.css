@@ -63,7 +63,7 @@
 /* 표시하는 동안 미리보기 테두리 */
 .preview-frame.marking{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent)}
 
-@media (max-width:1100px){
+@media (max-width:960px){
   /* 좁은 화면: 대화는 아래에서 올라오는 시트, 표시할 때는 미리보기를 화면 가득 */
   .rc{position:fixed;left:0;right:0;bottom:0;z-index:60;height:auto;max-height:min(68dvh,620px);min-height:0;background:var(--paper);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.14);padding:4px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
   .rc.folded .rc-thread{display:none}

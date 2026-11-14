@@ -1,26 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Field, Progress } from '../components/ui.jsx';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { Field } from '../components/ui.jsx';
 import { Mascot } from '../components/Mascot.jsx';
-import { Preview } from '../components/Preview.jsx';
-import { QR } from '../components/QR.jsx';
-import { loadExample, newProject } from '../lib/project.js';
-import { sanitizeImported } from '../lib/blueprint.js';
-import { copy, toast } from '../lib/util.js';
-import { buildSite, previewHtml } from '../lib/engine.js';
-import { SayFix } from '../design-words/SayFix.jsx';
-import { applyWords } from '../design-words/words.js';
-import { setTry, useBus } from '../design-words/bus.js';
 
 // 체험하기: 예시 교재로 '교재 넣기 → 살펴보고 고치기 → 배포하기'를 그대로 따라 해 봅니다.
-// AI 답과 배포는 흉내만 냅니다. 키가 필요 없고, 어디로도 보내지 않으며, 프로젝트로 저장하지 않습니다(이 화면의 메모리에만 있음).
-const EXAMPLE = 'data-lab';
+// 1단계는 실제 기본 길(쓰던 AI 창: [ChatGPT 열기]로 프롬프트 복사·AI 창 → 답 아래 [복사] → [답 넣기])과 같은 모양이고,
+// AI 창과 배포는 흉내만 냅니다. 키가 필요 없고, 어디로도 보내지 않으며, 프로젝트로 저장하지 않습니다(이 화면의 메모리에만 있음).
+// 2·3단계(미리보기·엔진·QR)는 DemoWork.jsx로 나눠 1단계를 그린 다음 틈에 받아요(첫 화면이 엔진을 기다리지 않게).
 const STEPS = ['교재 넣기', '살펴보고 고치기', '배포하기'];
+const BOTS = [{ id: 'chatgpt', name: 'ChatGPT', host: 'chatgpt.com' }, { id: 'claude', name: 'Claude', host: 'claude.ai' }, { id: 'gemini', name: 'Gemini', host: 'gemini.google.com' }];
+const TIP1 = {
+  send: '예시 교재와 연수 정보가 들어 있어요. [ChatGPT 열기]를 눌러 보세요.',
+  typing: '프롬프트를 AI 창에 붙여 넣고 보냈어요. AI가 답을 쓰고 있어요.',
+  ai: 'AI 답이 나왔어요. 답 아래의 [복사]를 누르세요.',
+  paste: '답을 복사했어요. lecpage로 돌아와 [답 넣기]를 누르세요.',
+};
 const TIP = [
-  '예시 교재와 연수 정보가 들어 있어요. [AI로 사이트 만들기]를 눌러 보세요.',
+  '',
   '[너무 심심해요]처럼 보이는 느낌을 눌러 보세요. 바꾼 모습을 보고 [적용하기]를 누르면 미리보기가 바뀌어요.',
   '[배포하기]를 누르면 주소와 QR이 나와요.',
 ];
-const exampleUrl = () => new URL(`examples/${EXAMPLE}/index.html`, location.href.split('#')[0]).href;
+const exampleBp = () => import('../../../skills/lecpage/examples/data-lab.blueprint.json').then((m) => JSON.parse(JSON.stringify(m.default)));
+const exampleUrl = () => new URL('examples/data-lab/index.html', location.href.split('#')[0]).href;
 /**
  * 코치 꼬리표('여기를 눌러요') 자리: 아래 → 위 → 오른쪽 → 왼쪽 가운데 화면 안에 들고 다른 단추·글을 덮지 않는 첫 자리.
  * 빈자리가 없으면(좁은 화면의 칩 사이) 대상 아래를 꼬리표만큼 벌려 그 자리에 둠. 화면에 붙은 줄(sticky) 안이면 그 줄 안의 것만 피하고 화면 밖으로는 안 나가게.
@@ -54,18 +54,49 @@ function placeCoach(el, keep = false) {
   el.setAttribute('data-coach', best);
 }
 
+/** 흉내 낸 AI 창: 붙여 넣은 프롬프트(첫 줄만) → AI가 쓴 답(설계도 앞부분) + 답 아래 [복사] */
+function FakeChat({ bot, bp, typing, onCopy }) {
+  const m = bp.meta || {};
+  const one = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const secs = (bp.sections || []).slice(0, 3).map((s) => `    { "type": "${s.type}", "title": "${one(s.title || m.title).slice(0, 18)}" }`);
+  const code = ['{', `  "meta": { "title": "${one(m.title)}", … },`, '  "sections": [', secs.join(',\n') + ',', '    …', '  ]', '}'].join('\n');
+  return (
+    <div class="demo-ai" role="group" aria-label={`${bot.name} 창(체험용 흉내)`}>
+      <div class="demo-ai-bar" aria-hidden="true"><i /><i /><i /><span>{bot.host}</span><em>체험용 흉내</em></div>
+      <div class="demo-ai-body">
+        <p class="demo-ai-me">너는 한국 강의·연수 사이트를 설계하는 편집자다. … <span>(lecpage가 복사한 프롬프트. 교재 32쪽과 연수 정보가 이어져요)</span></p>
+        {typing ? <p class="demo-ai-typing"><span class="rc-dots" aria-hidden="true"><i /><i /><i /></span> 답을 쓰는 중이에요. 실제로는 1~2분 걸려요.</p> : <div class="demo-ai-ans">
+          <p>교재를 읽고 연수 설계도를 짰어요.</p>
+          <pre class="demo-ai-code" aria-label="AI 답(설계도 앞부분)">{code}</pre>
+          <div class="demo-ai-tools"><button type="button" class="btn btn-sm demo-ai-copy" onClick={onCopy}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>복사</button></div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 export function Demo() {
   const [bp, setBp] = useState(null);
+  const [W, setW] = useState(null); // 2·3단계 묶음(DemoWork.jsx)
   const [step, setStep] = useState(1);
-  const [making, setMaking] = useState(false); // AI가 만드는 중(흉내)
+  const [chat, setChat] = useState('send'); // 1단계 쓰던 AI 창: send(AI 창 열기) → ai(흉내 낸 창에 답) → paste([답 넣기])
+  const [bot, setBot] = useState(null);
+  const [typing, setTyping] = useState(false);
+  const [making, setMaking] = useState(false); // 답으로 사이트를 조립하는 중(흉내)
   const [pub, setPub] = useState(''); // '' | 'busy' | 'done'
-  const [pct, setPct] = useState(0);
   const [hist, setHist] = useState([]); // 말로 고치기 되돌리기(이 화면 안에서만)
   const [applied, setApplied] = useState('');
-  const bus = useBus('demo');
   const timers = useRef([]);
   const later = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
-  useEffect(() => { loadExample(EXAMPLE).then((b) => setBp(sanitizeImported(b))); return () => timers.current.forEach(clearTimeout); }, []);
+  useEffect(() => {
+    let off = false;
+    const raw = exampleBp();
+    raw.then((b) => { if (!off) setBp((cur) => cur || b); }, () => { });
+    // 2·3단계는 1단계를 그린 다음 틈에 받음. 받으면 예시 설계도를 앱이 가져온 설계도처럼 거름(1단계에서 고친 연수 정보는 그대로)
+    const id = requestAnimationFrame(() => setTimeout(() => Promise.all([raw, import('./DemoWork.jsx')]).then(([b, m]) => { if (off) return; setW(() => m); setBp((cur) => m.sanitize(cur || b)); }, () => { }), 0));
+    return () => { off = true; cancelAnimationFrame(id); timers.current.forEach(clearTimeout); };
+  }, []);
   useEffect(() => { document.querySelector('.demo h1')?.focus({ preventScroll: true }); window.scrollTo(0, 0); }, [step]);
   // 누를 곳 안내(코치 마크): 지금 누를 버튼 하나에 테두리와 '여기를 눌러요'. 말로 하는 안내는 위의 안내 줄(role=status)이 함(2단계는 안내 줄이 말하는 [너무 심심해요] 칩).
   // 따로 라이브러리를 쓰지 않음(Driver.js는 MIT·약 5KB지만 체험 한 화면에는 이것으로 충분, Shepherd는 AGPL·상용 이중 라이선스라 뺌)
@@ -77,8 +108,8 @@ export function Demo() {
     let last = null;
     const target = () => {
       const q = (sel) => document.querySelector(sel);
-      if (step === 1) return q('.demo .make-bar .btn-primary');
-      if (step === 2) return making ? null : q('.demo .fix-card.is-done') ? q('.demo .head-tools .btn-primary') : q('.demo .fix-card .btn-primary') || [...document.querySelectorAll('.demo .sayfix .chip')].find((c) => c.textContent === '너무 심심해요') || q('.demo .sayfix .chip');
+      if (step === 1) return chat === 'send' ? q('.demo .chat-bots .chat-bot') : chat === 'ai' ? (typing ? null : q('.demo .demo-ai-copy')) : q('.demo .make-bar .btn-primary');
+      if (step === 2) return making || !W ? null : q('.demo .fix-card.is-done') ? q('.demo .head-tools .btn-primary') : q('.demo .fix-card .btn-primary') || [...document.querySelectorAll('.demo .sayfix .chip')].find((c) => c.textContent === '너무 심심해요') || q('.demo .sayfix .chip');
       return pub === 'done' ? q('.demo .demo-done a.btn-primary') : pub ? null : q('.demo .demo-pub .btn-primary');
     };
     const tick = () => {
@@ -90,42 +121,21 @@ export function Demo() {
     const onResize = () => { clearTimeout(rt); rt = setTimeout(() => last?.isConnected && placeCoach(last), 150); };
     tick(); const t = setInterval(tick, 400); addEventListener('resize', onResize);
     return () => { clearInterval(t); clearTimeout(rt); removeEventListener('resize', onResize); clear(); };
-  }, [coach, step, making, pub]);
-  const p = useMemo(() => ({ id: 'demo', blueprint: bp }), [bp]);
+  }, [coach, step, making, pub, chat, typing, !!W]);
   const meta = bp?.meta || {};
-  const hero = bp?.sections.find((s) => s.type === 'hero') || {};
   const setMeta = (patch) => setBp((b) => ({ ...b, meta: { ...b.meta, ...patch } }));
-  const setHero = (patch) => setBp((b) => ({ ...b, sections: b.sections.map((s) => (s.type === 'hero' ? { ...s, ...patch } : s)) }));
-  const applyFix = (f) => { setHist((h) => [...h, bp]); setBp((b) => applyWords(b, f.ids)); setApplied(f.key); setTry('demo', null); };
-  const undoFix = () => { const last = hist[hist.length - 1]; if (!last) return; setBp(last); setHist(hist.slice(0, -1)); setApplied(''); };
-  const tryFix = (f) => setTry('demo', f ? { key: f.key, bp: applyWords(bp, f.ids), label: f.title, focus: f.focus, apply: () => applyFix(f) } : null);
 
-  function make() { setMaking(true); setStep(2); later(() => setMaking(false), 2600); }
-  function publish() {
-    setPub('busy'); setPct(12);
-    later(() => setPct(55), 500); later(() => setPct(90), 1100); later(() => { setPct(100); setPub('done'); }, 1700);
-  }
-  /**
-   * 사이트 열어 보기: 방금 고친 체험 사이트를 실제 배포본과 같은 파일로 만들어 새 탭에 엶(한 파일로 묶어 blob 주소로).
-   * 새 탭은 누르는 순간 열어 두고(팝업 막힘 방지) 다 만들면 채움. 만들지 못하면 미리 만들어 둔 예시 사이트로
-   */
-  async function openSite(e) {
-    e.preventDefault();
-    const w = window.open('', '_blank');
-    try {
-      const r = await buildSite({ ...bp, live: { ...(bp.live || {}), provider: 'local' } }, {});
-      if (r.errors?.length) throw new Error('build');
-      const blob = URL.createObjectURL(new Blob([previewHtml(r.files, 'index.html')], { type: 'text/html' }));
-      if (w) w.location.href = blob; else window.open(blob, '_blank');
-      setTimeout(() => URL.revokeObjectURL(blob), 60000);
-    } catch { if (w) w.location.href = url; else window.open(url, '_blank', 'noopener'); toast('예시 사이트를 열었어요.'); }
-  }
-  async function startReal(kind) { const np = await newProject(kind, EXAMPLE); location.hash = `#/p/${np.id}/${kind === 'example' ? 2 : 1}`; }
+  /** [ChatGPT 열기] 등: 실제로는 프롬프트를 복사하고 AI 창을 엶. 체험은 흉내 낸 창을 열고 잠깐 뒤 답을 보여 줌 */
+  function openBot(b) { setBot(b); setChat('ai'); setTyping(true); later(() => setTyping(false), 1300); }
+  /** [답 넣기]: 실제로는 복사한 답을 읽어 바로 사이트를 만듦(몇 초). 체험은 미리 만든 답으로 */
+  function make() { setMaking(true); setStep(2); later(() => setMaking(false), 1200); }
 
   const url = exampleUrl();
-  const day = /^\d{4}-\d{2}-\d{2}$/.test(meta.date || '') ? new Date(meta.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : '';
-  const when = [day, [meta.start, meta.end].filter(Boolean).join('~')].filter(Boolean).join(' ');
-  const invite = `[${meta.title}] 연수 사이트예요.\n${[when, meta.venue].filter(Boolean).join(' · ')}\n아래 주소로 들어오세요.\n${url}`;
+  const tip = step === 1 ? TIP1[chat === 'ai' && typing ? 'typing' : chat]
+    : making || !W ? 'AI 답으로 사이트를 조립하고 있어요. 실제로도 몇 초면 돼요.' : pub === 'done' ? '여기까지가 전부예요. 이제 내 교재로 해 보세요.' : TIP[step - 1];
+  const dots = ['AI에게 보내기', '답 넣기'];
+  const at = chat === 'paste' ? 1 : 0;
+  const ready = !!meta.title?.trim();
 
   return (
     <div class="wiz demo">
@@ -142,7 +152,7 @@ export function Demo() {
         </ol>
         <span />
       </header>
-      <p class="demo-tip" role="status"><span class="demo-tip-n">{step}/3</span>{making ? 'AI가 만드는 동안 잠깐 기다려요. 실제로는 1~2분 걸려요.' : pub === 'done' ? '여기까지가 전부예요. 이제 내 교재로 해 보세요.' : TIP[step - 1]}</p>
+      <p class="demo-tip" role="status"><span class="demo-tip-n">{step}/3</span>{tip}</p>
       {!bp ? <p class="muted">불러오는 중…</p> : (
         <div class="wiz-main">
           {step === 1 && <>
@@ -158,57 +168,41 @@ export function Demo() {
                 <Field label="장소"><input value={meta.venue} onInput={(e) => setMeta({ venue: e.target.value })} maxLength={120} /></Field>
               </div>
             </section>
-            <div class="make-bar"><button class="btn btn-primary btn-lg nudge" disabled={!meta.title?.trim()} onClick={make}>AI로 사이트 만들기 →</button></div>
-            <p class="small muted ai-priv">실제로 만들 때는 AI를 한 번 연결해요. 체험에서는 미리 만들어 둔 결과를 보여 줘요.</p>
+            <section class="make-card demo-make" aria-labelledby="demo-make-h">
+              <div class="stack make-head"><h2 class="h-sub" id="demo-make-h">AI로 만들기</h2>
+                <p class="small muted">쓰던 ChatGPT·Claude·Gemini 창에 보내고 답을 가져와요. 키는 필요 없어요.</p></div>
+              <section class="key-card chat-card" aria-label="쓰던 AI로 만드는 순서">
+                <ol class="key-dots" aria-label="순서">
+                  {dots.map((n, i) => <li><button type="button" class={i === at ? 'on' : i < at ? 'done' : ''} aria-current={i === at ? 'step' : undefined} aria-label={`${i + 1}. ${n}`} onClick={() => setChat(i ? 'paste' : bot ? 'ai' : 'send')}><span class="n" aria-hidden="true">{i < at ? '✓' : i + 1}</span><span class="t">{n}</span></button></li>)}
+                </ol>
+                {chat === 'send' && <div class="key-now"><div class="key-now-b">
+                  <p>누르면 프롬프트가 복사되고 AI 창이 열려요. 입력 칸에 붙여 넣고 보내세요.</p>
+                  <div class="btn-row chat-bots">
+                    {BOTS.map((b) => <button type="button" class="btn chat-bot" disabled={!ready} onClick={() => openBot(b)}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></button>)}
+                  </div>
+                </div></div>}
+                {chat === 'ai' && bot && <div class="key-now"><div class="key-now-b">
+                  <FakeChat bot={bot} bp={bp} typing={typing} onCopy={() => setChat('paste')} />
+                </div></div>}
+                {chat === 'paste' && <div class="key-now key-now-paste"><div class="key-now-b">
+                  <p>답이 다 나오면 답 아래의 복사 버튼을 누르고 돌아와 누르세요.</p>
+                  <div class="key-now-go make-bar"><button type="button" class="btn btn-primary btn-lg nudge" disabled={!ready} onClick={make}>답 넣기</button></div>
+                  <div class="btn-row"><button type="button" class="btn-link" onClick={() => setChat(bot ? 'ai' : 'send')}>← AI 창 다시 열기</button></div>
+                </div></div>}
+              </section>
+              <p class="small muted">체험에서는 실제 AI 창 대신 흉내 낸 창이 열리고, 미리 만든 답을 보여 줘요.</p>
+            </section>
           </>}
           {step === 2 && <>
             <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>살펴보고 고치기</h1></div>
-              <div class="btn-row head-tools"><button class={`btn btn-primary${making ? '' : ' nudge'}`} disabled={making} onClick={() => setStep(3)}>배포하기 →</button></div></div>
-            {making ? (
-              <div class="demo-wait" role="status"><Mascot size={84} mood="think" look /><b>AI가 교재를 읽고 연수 흐름과 문구를 짜고 있어요</b><span class="small muted">체험이라 실제로 보내지는 않아요.</span></div>
-            ) : (
-              <>
-                <div class="ai-job ok" role="status"><span class="ai-job-t"><b>AI가 교재에 맞게 사이트를 짰어요.</b><small>섹션 {bp.sections.length}개를 만들었어요. 실제 화면에서는 내용·디자인·참여 기능을 모두 고칠 수 있어요.</small></span></div>
-                <div class="workspace">
-                  <div class="ws-panel">
-                    <div class="stack demo-edit">
-                      <h2 class="h-sub">고쳐 보기</h2>
-                      <Field label="연수명"><input value={meta.title} onInput={(e) => setMeta({ title: e.target.value })} maxLength={160} /></Field>
-                      <Field label="첫 화면 제목"><textarea class="ta-short" rows={2} value={hero.title || ''} onInput={(e) => setHero({ title: e.target.value })} maxLength={120} /></Field>
-                      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} title="디자인 말로 고치기" desc="예시를 눌러 보세요. 실제 앱의 [디자인] 탭에서도 이렇게 바로 바뀌어요." idp="demosay" />
-                    </div>
-                  </div>
-                  <Preview p={p} />
-                </div>
-              </>
-            )}
+              <div class="btn-row head-tools"><button class={`btn btn-primary${making || !W ? '' : ' nudge'}`} disabled={making || !W} onClick={() => setStep(3)}>배포하기 →</button></div></div>
+            {making || !W ? (
+              <div class="demo-wait" role="status"><Mascot size={84} mood="think" look /><b>AI 답으로 사이트를 조립하고 있어요</b><span class="small muted">체험이라 실제로 보내지는 않아요.</span></div>
+            ) : <W.DemoEdit bp={bp} setBp={setBp} hist={hist} setHist={setHist} applied={applied} setApplied={setApplied} />}
           </>}
           {step === 3 && <>
             <div class="step-head"><div class="step-head-t"><h1 tabIndex={-1}>배포하기</h1><p>실제로는 처음 한 번만 배포할 곳을 연결해요. 고친 뒤 다시 배포해도 주소는 그대로예요.</p></div></div>
-            {pub !== 'done' ? (
-              <section class="demo-pub">
-                <p><b>공개 범위</b> 주소를 받은 사람만 <span class="small muted">기본값이에요. 암호를 걸거나 누구나 보게 할 수도 있어요.</span></p>
-                <div class="make-bar"><button class={`btn btn-primary btn-lg${pub ? '' : ' nudge'}`} disabled={!!pub} onClick={publish}>{pub ? '배포하는 중…' : '배포하기'}</button></div>
-                {pub === 'busy' && <div class="demo-progress" role="status"><Progress pct={pct} /><span class="small muted">사이트를 배포하는 흉내를 내고 있어요.</span></div>}
-              </section>
-            ) : (
-              <section class="demo-done">
-                <div class="demo-done-main">
-                  <div class="qr-box"><QR text={url} size={168} label="예시 사이트 QR" /></div>
-                  <div class="stack">
-                    <h2 class="h-sub">주소와 QR이 나왔어요</h2>
-                    <p class="demo-url"><a href={url} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, '')}</a></p>
-                    <p class="small muted">[사이트 열어 보기]는 방금 고친 그대로 보여 줘요. 체험이라 실제로 배포하지는 않았고, 주소와 QR은 미리 만든 예시 사이트로 이어져요.</p>
-                    <div class="btn-row"><a class="btn btn-sm btn-primary" href={url} target="_blank" rel="noopener" onClick={openSite}>사이트 열어 보기</a><button class="btn btn-sm" onClick={() => copy(invite, '안내 문구를 복사했어요.')}>카톡 안내 문구 복사</button></div>
-                  </div>
-                </div>
-                <pre class="prompt-box demo-invite" aria-label="카톡 안내 문구">{invite}</pre>
-                <div class="demo-next">
-                  <b>이제 내 교재로 해 보세요.</b>
-                  <div class="btn-row"><button class="btn btn-primary btn-lg" onClick={() => startReal('blank')}>내 교재로 시작하기</button><button class="btn btn-lg" onClick={() => startReal('example')}>이 예시를 고쳐 쓰기</button><button class="btn btn-quiet" onClick={() => { setPub(''); setStep(1); }}>처음부터 다시 체험</button></div>
-                </div>
-              </section>
-            )}
+            {W ? <W.DemoPublish bp={bp} pub={pub} setPub={setPub} url={url} onAgain={() => { setPub(''); setChat('send'); setBot(null); setStep(1); }} /> : <p class="muted">불러오는 중…</p>}
           </>}
         </div>
       )}

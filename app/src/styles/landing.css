@@ -56,9 +56,12 @@
 /* 첫 화면 그림: 교재 표지의 모서리가 접히며 사이트가 드러남 */
 .ld-hero-vis{position:relative;min-width:0;width:100%;max-width:640px;justify-self:center;transition:--ld-k 1.15s cubic-bezier(.22,1,.36,1)}
 .ld-fold{position:relative;aspect-ratio:16/10;container-type:inline-size}
-.ld-fold-site{position:absolute;inset:0;overflow:hidden;border-radius:14px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-lg)}
+/* 드러나는 것은 오른쪽 위 세모(높이의 k만큼)뿐이라, 사이트 그림을 줄여(0.56배) 그 세모에 사이트의 제목·첫 줄·점 도표가 오게 옮김.
+   그림 밖은 사이트 바탕색(그림은 밝은 사이트라 어두운 화면에서도 같은 색). 옮긴 그림이 위 막대를 덮지 않게 막대를 위로(이 안에서만: isolation) */
+.ld-fold-site{position:absolute;inset:0;overflow:hidden;isolation:isolate;border-radius:14px;background:#F6F5EE;border:1px solid var(--line);box-shadow:var(--shadow-lg)}
+.ld-fold-site .ld-bar{position:relative;z-index:1}
 .ld-fold-site picture{display:contents}
-.ld-fold-site img{display:block;width:100%;height:calc(100% - 26px);object-fit:cover;object-position:top left}
+.ld-fold-site img{display:block;width:100%;height:calc(100% - 26px);object-fit:cover;object-position:top left;transform-origin:0 0;transform:translate(calc(67cqi + 26px),-8.7cqi) scale(.56)}
 .ld-sheet{position:absolute;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
 .ld-cover{inset:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:2cqi;padding:6cqi 7cqi 7cqi;border-radius:14px;
   /* 접는 선: 높이의 k만큼(16:10이라 폭으로는 62.5%×k) */

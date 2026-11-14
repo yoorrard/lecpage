@@ -125,7 +125,7 @@
 .thumb-body b{font-weight:650;color:var(--muted)}
 .label-toggle{position:absolute;left:10px;bottom:10px;z-index:2}
 /* 비교 줄이 생기면 미리보기 칸의 줄을 하나 늘림(넓은 화면의 고치기 단계는 줄 높이가 정해져 있음) */
-@media (min-width:1101px){.stage-2 .preview:has(> .pv-try){grid-template-rows:auto auto minmax(0,1fr) auto}}
+@media (min-width:961px){.stage-2 .preview:has(> .pv-try){grid-template-rows:auto auto minmax(0,1fr) auto}}
 .preview>.pv-try{margin-bottom:8px}
 .mini-site iframe{transition:transform .6s ease-out}
 @media (prefers-reduced-motion:no-preference){.mini-site.is-tour iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}}

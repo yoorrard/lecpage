@@ -309,6 +309,9 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .sec-open{text-align:left;border:0;background:none;cursor:pointer;min-width:0;padding:4px 6px;border-radius:var(--r-xs);color:inherit}
 .sec-open:hover{background:var(--sunk)}
 .sec-body{padding:6px 4px 18px 76px;display:grid;gap:12px}
+/* AI가 짜는 동안: 섹션 글은 읽기만(입력 칸 묶음 fieldset은 자리만 차지하지 않게) */
+.sec-lock{border:0;margin:0;padding:0;min-width:0}
+.lock-note{margin:0;padding:8px 12px;border-radius:var(--r-xs);background:var(--lav-soft);color:var(--lav-ink);font-weight:600}
 .mini-list{display:grid;border-top:1px solid var(--hair)}
 .mini-item{border-bottom:1px solid var(--hair);padding:10px 0;display:grid;gap:8px}
 
@@ -476,7 +479,7 @@ main.page:focus{outline:none}
 
 /* ── 작업 공간 ── */
 html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
-.workspace{display:grid;grid-template-columns:clamp(340px,30vw,480px) minmax(0,1fr);gap:clamp(16px,2vw,28px);align-items:start}
+.workspace{--ws-col:clamp(340px,30vw,480px);display:grid;grid-template-columns:var(--ws-col) minmax(0,1fr);gap:clamp(16px,2vw,28px);align-items:start}
 .ws-panel{display:grid;gap:12px;align-content:start;min-width:0}
 .ws-body{padding:14px 4px 16px 0;max-height:calc(100vh - 230px);overflow:auto;overscroll-behavior:contain}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--hair);overflow-x:auto;scrollbar-width:none;min-width:0}
@@ -733,21 +736,26 @@ details>summary{cursor:pointer}
 .on-touch{display:none}
 @media (hover: none) and (pointer: coarse){ .on-mouse{display:none} .on-touch{display:inline} }
 
-/* ── 넓은 화면: 고치기 단계는 화면 높이에 맞춤 ──
+/* ── 넓은 화면(961px~): 고치기 단계는 화면 높이에 맞춤 ──
    결과 띠·구성 안내는 왼쪽 칸 위에 두어 미리보기 높이를 먹지 않게(미리보기는 제목 아래부터 끝까지).
-   화면이 낮으면(노트북 750px 등) 미리보기가 폭에 맞는 크기를 지키고 화면이 조금 내려가요 */
-@media (min-width: 1101px){
+   화면이 낮으면(노트북 750px 등) 미리보기가 폭에 맞는 크기를 지키고 화면이 조금 내려가요.
+   961~1100px(작은 노트북·가로 태블릿)은 편집 칸을 조금 좁혀(300~420px) 미리보기와 나란히 */
+@media (min-width: 961px) and (max-width: 1100px){
+  .workspace,.stage-2 .wiz-main{--ws-col:clamp(300px,34vw,420px)}
+}
+@media (min-width: 961px){
   html.is-wide .page{padding-bottom:20px}
   .stage-2{grid-template-rows:auto minmax(0,1fr);min-height:max(600px,calc(100dvh - var(--top-h,57px) - 52px))}
-  .stage-2 .wiz-main{grid-template-columns:clamp(340px,30vw,480px) minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);gap:0 clamp(16px,2vw,28px)}
+  .stage-2 .wiz-main{grid-template-columns:var(--ws-col,clamp(340px,30vw,480px)) minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);gap:0 clamp(16px,2vw,28px)}
   .stage-2 .step-head{grid-column:1/-1;margin-bottom:20px;align-items:center}
   .stage-2 .step-head h1{font-size:1.35rem}
   .stage-2 .step-head p{font-size:.9rem}
-  .stage-2 .wiz-main>:is(.ai-job,.structure-note){grid-column:1;margin-bottom:12px}
+  .stage-2 .wiz-main>:is(.ai-job,.structure-note){grid-column:1;margin-bottom:10px}
   /* 왼쪽 칸의 띠: 글 아래 줄에 단추, 닫기(✕)는 띠 오른쪽 위(첫 줄 글과 같은 높이). 아래 되돌린 곳 줄은 띠 끝까지 */
   .stage-2 .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
   .stage-2 .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
-  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.guard-note{flex-basis:calc(100% + 34px);margin-right:-34px}
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>:is(.guard-note,.rb-acts,.structure-more){flex-basis:calc(100% + 34px);margin-right:-34px}
+  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.rb-acts{flex-basis:calc(100% + 34px + .75em)}
   .stage-2 .wiz-main>.ai-job>.ai-job-t{min-width:calc(100% - 24px)}
   .stage-2 .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
   .stage-2 .workspace{display:contents}
@@ -758,11 +766,15 @@ details>summary{cursor:pointer}
   .stage-2 .pv-stage{height:auto;min-height:0}
   .stage-2 .preview:not(.full) .pv-stage{min-height:min(calc(56.25cqw + 64px),520px)}
 }
-@media (max-width: 1100px){
+/* 좁은 화면(~960px): 미리보기 → 편집 칸으로 쌓음. 미리보기는 화면의 절반쯤만(편집 칸이 첫 화면 가까이 오게),
+   [되돌리기]는 머리의 버튼이 화면 밖이면 편집 칸 아래쪽에 따라다님 */
+@media (max-width: 960px){
   .workspace{grid-template-columns:minmax(0,1fr)}
   .workspace .preview{order:-1;position:static}
-  .workspace .pv-stage{height:min(72vh,720px)}
+  .workspace .pv-stage{height:clamp(260px,42vh,480px)}
+  .workspace .pv-canvas{padding:12px}
   .ws-body{max-height:none}
+  .ws-panel>.undo-float{display:inline-flex;position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:6;justify-self:end;margin-top:-4px;box-shadow:var(--shadow-lg);background:var(--paper)}
 }
 @media (max-width: 960px){
   .success-in{grid-template-columns:minmax(0,1fr)}
@@ -783,6 +795,7 @@ details>summary{cursor:pointer}
   .make-bar{position:sticky;bottom:0;z-index:5;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
 }
 @media (max-width: 560px){
+  .workspace .pv-stage{height:clamp(300px,52vh,520px)}
   .top-in{gap:8px}
   .top nav{gap:0}
   .top nav a{padding:0 8px;font-size:.86rem}
@@ -1003,6 +1016,27 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .demo-tip-n{font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums;opacity:.75;flex:none}
 .demo .stepper a[aria-disabled="true"]{cursor:default}
 .demo-wait{display:grid;justify-items:center;gap:8px;text-align:center;padding:56px 16px;border:1px dashed var(--line);border-radius:var(--r)}
+/* 체험 1단계: 실제 'AI로 만들기' 카드와 같은 모양. 흉내 낸 AI 창(창 틀 · 붙여 넣은 프롬프트 · 답 + 답 아래 [복사]) */
+.demo-make{max-width:46em}
+.demo-ai{justify-self:stretch;display:grid;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper);box-shadow:var(--shadow)}
+.demo-ai-bar{display:flex;align-items:center;gap:5px;padding:7px 10px;border-radius:var(--r-sm) var(--r-sm) 0 0;background:var(--sunk);border-bottom:1px solid var(--hair);font-size:.78rem;color:var(--muted)}
+.demo-ai-bar i{width:8px;height:8px;border-radius:50%;background:var(--line-strong);flex:none}
+.demo-ai-bar span{margin-left:6px;font-family:var(--f-mono);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.demo-ai-bar em{margin-left:auto;font-style:normal;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--butter);color:var(--butter-ink);white-space:nowrap}
+.demo-ai-body{display:grid;gap:12px;padding:14px;font-size:.92rem;line-height:1.6}
+.demo-ai-body p{margin:0}
+.demo-ai-me{justify-self:end;max-width:88%;padding:8px 12px;border-radius:14px 14px 4px 14px;background:var(--sunk);color:var(--ink-2)}
+.demo-ai-me span{color:var(--muted)}
+.demo-ai-typing{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
+.demo-ai-typing .rc-dots{display:inline-flex;gap:4px}
+.demo-ai-typing .rc-dots i{width:6px;height:6px;border-radius:50%;background:var(--ink-2);animation:demo-b 1s infinite ease-in-out}
+.demo-ai-typing .rc-dots i:nth-child(2){animation-delay:.15s}.demo-ai-typing .rc-dots i:nth-child(3){animation-delay:.3s}
+@keyframes demo-b{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.demo-ai-ans{display:grid;gap:8px;min-width:0}
+.demo-ai-code{margin:0;padding:10px 12px;border-radius:8px;background:var(--sunk);border:1px solid var(--hair);font-family:var(--f-mono);font-size:.78rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.demo-ai-tools{display:flex;gap:6px}
+.demo-ai-copy svg{flex:none}
+@media (prefers-reduced-motion:reduce){.demo-ai-typing .rc-dots i{animation:none;opacity:.6}}
 .demo-edit{padding:4px 4px 0 0}
 .demo-presets{display:flex;flex-wrap:wrap;gap:6px}
 .demo-presets .btn[aria-pressed="true"]{background:var(--lav-soft);border-color:var(--accent);color:var(--lav-ink)}
@@ -1042,17 +1076,31 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .found-tip{padding:6px 10px;border-radius:var(--r-xs);background:var(--lav-soft);color:var(--lav-ink)}
 .found-addr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 10px;border:1px dashed var(--line);border-radius:var(--r-xs)}
 .found-addr .mono{word-break:break-all}
-.structure-note{display:grid;gap:8px;padding:10px 14px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
-.structure-note summary{cursor:pointer;line-height:1.5}
-.structure-note summary span{color:var(--ink-2)}
-.structure-note ul{margin:6px 0 0;padding-left:1.2em}
+/* 구성 안내: 접힌 한 줄(이렇게 구성했어요 · 따라 하기 구성 · 권하는 기능 3 [자세히]). 펼치면 까닭·권하는 기능·싣지 못한 것 */
+.structure-note{display:grid;gap:8px;padding:2px 4px 2px 14px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
+.structure-note.is-open{padding-bottom:12px}
+.structure-line{display:flex;align-items:center;gap:8px;min-width:0}
+.structure-line>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.structure-line>span>span{color:var(--ink-2)}
+.structure-more{display:grid;gap:8px;min-width:0}
+.structure-more p{margin:0;line-height:1.55}
+.structure-more ul{margin:0;padding-left:1.2em}
 .structure-acts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 18px}
 .structure-acts .chips{align-items:center}
-.structure-left summary{color:var(--ink-2)}
+.structure-left summary{cursor:pointer;color:var(--ink-2)}
 .structure-left .btn{margin-top:6px}
-@media (min-width: 1101px){
-  .stage-2 .structure-note{padding:8px 14px}
-}
+/* AI 결과 띠(결과·교재 지킴이·구성 안내 한 띠): 제목 한 줄, 되돌린 곳 한 줄, 구성 요약·되돌리기 한 줄 */
+.result-band{gap:6px 12px;padding:8px 14px}
+.result-band .guard-note{padding-top:6px}
+.rb-acts{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;margin:-2px 0 -4px calc(-1 * .75em);min-width:0}
+.rb-acts .btn{color:inherit}
+.rb-more{min-width:0;max-width:100%;font-weight:600}
+.rb-more>span:first-child{overflow:hidden;text-overflow:ellipsis}
+.rb-chev{flex:none;width:7px;height:7px;margin:-3px 2px 0 2px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+.rb-more[aria-expanded="true"] .rb-chev{transform:rotate(-135deg);margin-top:3px}
+.result-band>.structure-more{flex-basis:100%;padding:10px 12px;border-radius:var(--r-xs);background:var(--card);color:var(--ink)}
+/* 좁은 화면에서 따라다니는 [되돌리기](머리의 버튼이 화면 밖일 때만, 편집 칸 아래쪽에 붙음) */
+.undo-float{display:none}
 
 /* 도움말: 눌러 보는 예(말로 고치기). 누르기 전에는 버튼만, 누르면 예시 연수와 고칠 안(design-words/words.css) */
 .help-task-wide>.help-cta{align-self:stretch;display:grid;place-content:center;justify-items:center;gap:8px;min-height:180px;padding:20px;border:1px dashed var(--line-strong);border-radius:var(--r-sm);background:var(--sunk);text-align:center}

@@ -5,6 +5,10 @@ import { visionTarget, askVision } from '../lib/ai-vision.js';
 import { explainError } from '../lib/ai.js';
 import { copy, toast, saveFile, uid, safeName } from '../lib/util.js';
 import { Dialog } from './ui.jsx';
+import { findFixes } from '../design-words/symptoms.js';
+import { applyWords } from '../design-words/words.js';
+import { FixCard } from '../design-words/SayFix.jsx';
+import { useBus, setTry, focusSection } from '../design-words/bus.js';
 import './ReviewChat.css';
 
 /**
@@ -17,6 +21,16 @@ const MAX_MSGS = 40, IMG_MSGS = 8, STORE_W = 1280, SEND_W = 1568;
 const full = new Map(); // 붙인 그림 원본(이 탭 메모리에만): 보낼 때 씀. 저장본은 줄인 JPEG
 const applied = new Map(); // 메시지 id → 적용 직전 상태(되돌리기용)
 const store = (pid) => `review:${pid}`;
+// 글·순서·숫자를 바꾸라는 요청(따옴표로 문구를 주거나, 넣기·빼기·바꾸기 같은 말). 이런 요청만 AI에게 보내고,
+// 느낌·색·글꼴 같은 디자인 요청은 디자인 말로 고치기(design-words)로 AI 없이 바로 고칠 안을 보여 줘요
+const CONTENT_ASK = /["'“”‘’「」『』]|오타|맞춤법|띄어쓰기|문구|문장|내용을|제목을|이름을|날짜|시간을|장소|주소|링크|항목|순서를|추가|넣어|넣고|빼 ?주|빼고|빼서|지워|삭제|고쳐 ?(써|적)|바꿔 ?(써|적)|줄여|늘려|요약|설명을|설명해|번역|영어로|숫자를|\d+ ?(분|시|쪽|개|명|줄|문항)/;
+/** 디자인 말로 바로 고칠 수 있는 요청이면 고칠 안(AI 없이). 글을 바꾸는 요청이거나 맞는 안이 없으면 null */
+export function quickFixes(bp, text) {
+  const t = String(text || '').trim();
+  if (!bp || !t || CONTENT_ASK.test(t)) return null;
+  const r = findFixes(bp, t);
+  return r.fixes.length ? { fixes: r.fixes, heard: r.heard } : null;
+}
 
 function loadImg(url) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('그림을 읽지 못했어요. PNG나 JPG로 다시 넣어 주세요.')); i.src = url; }); }
 /** 그림을 다시 그려 크기·형식을 맞춤(받은 데이터를 그대로 쓰지 않음) */
@@ -30,7 +44,7 @@ async function redraw(url, maxW, type = 'image/jpeg', q = 0.84) {
 const fileUrl = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(r.error); r.readAsDataURL(f); });
 const nums = (o, keys) => (o && typeof o === 'object' ? Object.fromEntries(keys.map((k) => [k, Math.max(0, Math.min(1e6, Math.round(+o[k] || 0)))])) : null);
 
-export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marking, setMarking, apiRef, onConnectAi, onPolish, hidden }) {
+export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marking, setMarking, apiRef, onConnectAi, onPolish, hidden, locked = false }) {
   const [msgs, setMsgs] = useState(null);
   const [draft, setDraft] = useState('');
   const [atts, setAtts] = useState([]);
@@ -46,6 +60,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   const secs = E.withSectionIds(p.blueprint?.sections || []);
   const ids = new Set(secs.map((s) => s.id));
   const name = (id) => { const s = secs.find((x) => x.id === id); return s ? (s.nav || s.title || E.SECTION_DEFS[s.type]?.label || id).slice(0, 20) : id; };
+  const bus = useBus(p.id);
 
   // 불러오기·저장(프로젝트마다, 그림은 줄여서 최근 것만)
   useEffect(() => {
@@ -135,6 +150,9 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
     if ((!text && !atts.length) || busy) return;
     const m = { id: uid(8), role: 'user', text: text.slice(0, 2000), at: Date.now(), images: atts.map((a) => ({ id: a.id, url: a.url, w: a.w, h: a.h, viewport: a.viewport, scroll: a.scroll, sections: a.sections, notes: a.notes })), sections: [...new Set(atts.flatMap((a) => a.sections || []))] };
     add(m); setDraft(''); setAtts([]); setSay('');
+    // 느낌·색·글꼴 같은 디자인 요청은 AI에게 보내지 않고 바로 고칠 안(키가 없어도 바깥 AI 창을 오가지 않게)
+    const q = quickFixes(pRef.current.blueprint, m.text);
+    if (q) { add({ id: uid(8), role: 'ai', kind: 'quick', forId: m.id, at: Date.now(), fixes: q.fixes, heard: q.heard, status: 'ready' }); return; }
     await respond(m);
   }
   function promptFor(m, imagesAttached, again) {
@@ -200,7 +218,27 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
     if (a && undoTop() === a.entry) undo();
     else if (a) { pushUndo('수정 요청 되돌리기'); update({ blueprint: a.blueprint, info: a.info }); toast('그 뒤에 고친 것까지 되돌렸어요. 다시 살리려면 위의 [되돌리기]를 누르세요.'); }
     else { toast('새로 고친 뒤라 여기서는 되돌릴 수 없어요. 위의 [되돌리기]를 눌러 주세요.'); return; }
-    patchMsg(m.id, { status: 'undone' });
+    applied.delete(m.id);
+    patchMsg(m.id, { status: 'undone', key: '' });
+  }
+  // ── AI 없이 바로 고치기(디자인 말) ──
+  function applyQuick(m, f) {
+    // 같은 카드의 다른 안을 이미 적용했으면 그것을 되돌린 뒤 바꿈(안끼리 갈아 끼우기)
+    if (m.status === 'applied' && m.key !== f.key && applied.get(m.id)?.entry === undoTop()) undo();
+    const now = pRef.current.blueprint;
+    pushUndo(`수정 요청: ${f.title}`.slice(0, 40));
+    applied.set(m.id, { entry: undoTop(), blueprint: JSON.parse(JSON.stringify(now)), info: { ...pRef.current.info } });
+    update((cur) => ({ blueprint: applyWords(cur.blueprint, f.ids) }));
+    setTry(p.id, null);
+    patchMsg(m.id, { status: 'applied', key: f.key });
+    if (f.focus) focusSection(p.id, f.focus);
+    toast('바꿨어요. 마음에 안 들면 [되돌리기]를 누르세요.');
+  }
+  const tryQuick = (m, f) => setTry(p.id, f ? { key: f.key, bp: applyWords(pRef.current.blueprint, f.ids), label: f.title, focus: f.focus, apply: () => applyQuick(m, f) } : null);
+  /** 맞는 안이 없으면: 같은 요청을 AI에게(키가 있으면 바로, 없으면 쓰던 AI 창 길) */
+  function toAi(m) {
+    const u = (msgs || []).find((x) => x.id === m.forId); if (!u) return;
+    setTry(p.id, null); patchMsg(m.id, { sent: true }); respond(u);
   }
   function again(m) {
     const u = (msgs || []).find((x) => x.id === m.forId);
@@ -213,7 +251,8 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
     setSure(false); setMsgs([]); await kv.del(store(p.id)).catch(() => { }); toast('대화를 지웠어요.');
   }
 
-  const canSend = !busy && (draft.trim() || atts.length);
+  const canSend = !busy && !locked && (draft.trim() || atts.length);
+  const lastQuick = (msgs || []).reduce((k, m) => (m.kind === 'quick' ? m.id : k), '');
   const attSecs = [...new Set(atts.flatMap((a) => a.sections || []))];
   const aiLabel = target === undefined ? '' : target ? `${target.label}${target.images ? '' : '(글만)'}로 보내요` : 'AI 키 없음 · 쓰던 AI로 보내요';
   return (
@@ -222,14 +261,15 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
         <button type="button" class="rc-grip" aria-expanded={String(!folded)} onClick={() => setFolded(!folded)}><span aria-hidden="true" />{folded ? '대화 펼치기' : '대화 접기'}</button>
         <h2 class="rc-title">수정 요청</h2>
         <span class="rc-ai small muted">{aiLabel}{target === null && onConnectAi && <> · <button type="button" class="rc-link" onClick={onConnectAi}>AI 연결</button></>}</span>
-        {onPolish && <button type="button" class="btn btn-sm rc-polish" onClick={onPolish} title="사이트 문구 전체를 AI가 한 번에 다듬어요(되돌리기 가능)">문구 전체 다듬기</button>}
+        {onPolish && <button type="button" class="btn btn-sm rc-polish" disabled={locked} onClick={onPolish} title="사이트 문구 전체를 AI가 한 번에 다듬어요(되돌리기 가능)">문구 전체 다듬기</button>}
         {!!msgs?.length && <button type="button" class="btn btn-sm btn-quiet rc-clear" onClick={clearAll}>{sure ? '한 번 더 누르면 지워요' : '대화 지우기'}</button>}
       </div>
       <div class="rc-thread" ref={thread} role="log" aria-live="polite" aria-label="수정 요청 대화" tabIndex={0}>
         {msgs && !msgs.length && <Intro />}
         {(msgs || []).map((m) => (m.role === 'user'
           ? <UserMsg m={m} name={name} onOpen={setBig} />
-          : <AiMsg m={m} busy={busy} onApply={apply} onRevert={revert} onAgain={again} onStop={() => ctrl.current?.abort()} onPaste={acceptPasted} user={(msgs || []).find((x) => x.id === m.forId)} promptFor={promptFor} onConnectAi={onConnectAi} title={p.blueprint?.meta?.title} />))}
+          : m.kind === 'quick' ? <QuickMsg m={m} bp={p.blueprint} full={m.id === lastQuick} tried={bus.try?.key} busy={busy || locked} onApply={applyQuick} onTry={tryQuick} onUndo={revert} onAi={toAi} keyed={!!target} />
+            : <AiMsg m={m} busy={busy} locked={locked} onApply={apply} onRevert={revert} onAgain={again} onStop={() => ctrl.current?.abort()} onPaste={acceptPasted} user={(msgs || []).find((x) => x.id === m.forId)} promptFor={promptFor} onConnectAi={onConnectAi} title={p.blueprint?.meta?.title} />))}
       </div>
       <div class={`rc-compose${drag ? ' drag' : ''}`} onDragOver={(e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); setDrag(true); } }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer?.files); }}>
         {!!atts.length && <ul class="rc-atts" aria-label="붙인 그림">
@@ -247,6 +287,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
           <button type="button" class="btn btn-sm btn-primary" disabled={!canSend} onClick={send}>보내기</button>
         </div>
         <span id="rc-mark-d" hidden>미리보기에 펜이나 네모로 표시하고 완료를 누르면 그림이 여기에 붙어요.</span>
+        {locked && <p class="lock-note small">AI가 짜는 중이에요. 끝나면 고칠 수 있어요.</p>}
         <p class="rc-say" role="status" aria-live="polite">{say}</p>
         {marking && <p class="rc-marking small">미리보기에서 표시하고 <b>완료</b>를 누르세요. 그만두려면 Esc.</p>}
       </div>
@@ -261,7 +302,7 @@ function Intro() {
       <p><b>미리보기를 보며 고칠 곳을 알려 주세요.</b></p>
       <ol>
         <li><b>✎ 표시하기</b>를 누르고 미리보기에 펜이나 네모로 표시한 뒤 <b>완료</b>를 누르면 그림이 붙어요.</li>
-        <li>무엇을 바꿀지 적어 보내면 AI가 고칠 안을 보여 줘요.</li>
+        <li>무엇을 바꿀지 적어 보내요. '좀 답답해 보여요'처럼 디자인 느낌이면 AI 없이 바로 고칠 안이 나오고, 글·순서는 AI가 고칠 안을 만들어요.</li>
         <li><b>적용</b>하면 바로 바뀌고, 마음에 안 들면 <b>되돌리기</b>로 돌아가요.</li>
       </ol>
     </div>
@@ -280,7 +321,22 @@ function UserMsg({ m, name, onOpen }) {
   );
 }
 
-function AiMsg({ m, busy, onApply, onRevert, onAgain, onStop, onPaste, user, promptFor, onConnectAi, title }) {
+/** AI 없이 바로 고칠 수 있는 요청: 디자인 말로 고칠 안 2~3가지(바로 적용·되돌리기), 맞는 안이 없으면 [AI에게 보내기] */
+function QuickMsg({ m, bp, full, tried, busy, onApply, onTry, onUndo, onAi, keyed }) {
+  const words = { apply: '바로 적용', done: '적용했어요', undo: '되돌리기' };
+  return (
+    <div class="rc-msg ai rc-quick">
+      <p class="rc-note">AI 없이 바로 고칠 수 있어요.</p>
+      {!!m.heard?.length && <p class="small muted">알아들은 말: {m.heard.join(' · ')}</p>}
+      {full ? <ol class="fix-list">
+        {m.fixes.map((f) => <FixCard key={f.key} f={f} bp={bp} done={m.status === 'applied' && m.key === f.key} trying={tried === f.key} onApply={(x) => onApply(m, x)} onTry={(x) => onTry(m, x)} onUndo={() => onUndo(m)} words={words} />)}
+      </ol> : <ul class="rc-diff">{m.fixes.map((f) => <li>{f.title}{m.status === 'applied' && m.key === f.key ? ' · 적용함' : ''}</li>)}</ul>}
+      {!m.sent && <p class="small rc-quick-ai"><span class="muted">맞는 안이 없으면</span> <button type="button" class="rc-link" disabled={busy} onClick={() => onAi(m)}>{keyed ? 'AI에게 보내기' : '쓰던 AI로 보내기'}</button></p>}
+    </div>
+  );
+}
+
+function AiMsg({ m, busy, locked, onApply, onRevert, onAgain, onStop, onPaste, user, promptFor, onConnectAi, title }) {
   if (m.kind === 'handoff') return <Handoff m={m} user={user} promptFor={promptFor} onPaste={onPaste} onConnectAi={onConnectAi} title={title} />;
   return (
     <div class="rc-msg ai">
@@ -296,7 +352,7 @@ function AiMsg({ m, busy, onApply, onRevert, onAgain, onStop, onPaste, user, pro
         <ul class="rc-diff">{m.lines.map((l) => <li>{l}</li>)}</ul>
         {!!m.warn?.length && <p class="small muted">{m.warn.join(' · ')}</p>}
         <div class="btn-row">
-          {m.status === 'ready' && <><button type="button" class="btn btn-sm btn-primary" onClick={() => onApply(m)}>적용</button><button type="button" class="btn btn-sm btn-quiet" disabled={busy} onClick={() => onAgain(m)}>다시 요청</button></>}
+          {m.status === 'ready' && <><button type="button" class="btn btn-sm btn-primary" disabled={locked} onClick={() => onApply(m)}>적용</button><button type="button" class="btn btn-sm btn-quiet" disabled={busy} onClick={() => onAgain(m)}>다시 요청</button></>}
           {m.status === 'applied' && <><span class="rc-done">적용했어요</span><button type="button" class="btn btn-sm" onClick={() => onRevert(m)}>되돌리기</button></>}
           {m.status === 'undone' && <><span class="muted small">되돌렸어요</span><button type="button" class="btn btn-sm btn-quiet" onClick={() => onApply(m)}>다시 적용</button></>}
           {m.status === 'replaced' && <span class="muted small">다시 요청했어요</span>}
