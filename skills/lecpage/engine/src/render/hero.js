@@ -13,6 +13,7 @@
 import { esc, br, href, fx, pad2, icon, koDate } from './html.js';
 import { getPreset } from '../design/presets.js';
 import { graphicHeroes } from './hero-graphic.js';
+import { whenText, eventDays, whoText, BASE_LABELS } from '../hero-meta.js';
 
 const WEEK = '일월화수목금토';
 export function dateParts(d) {
@@ -48,13 +49,19 @@ function model(s, ctx, h) {
   const st = sec('stations'), deck = sec('deck'), tools = sec('tools'), sched = sec('schedule'), outline = sec('outline'), goals = sec('goals'), ready = sec('readiness'), mats = sec('materials');
   const ins = bp.instructors[0];
   const time = m.start ? `${m.start}${m.end ? `~${m.end}` : ''}` : '';
-  const when = m.date ? `${koDate(m.date)}${time ? ` ${time}` : ''}` : '';
+  // 일시·장소·강사는 연수 정보에서 그때그때(hero-meta.js 한 곳: QR 안내문·달력 파일과 같은 날짜). 여러 날이면 기간으로
+  const when = m.date || eventDays(m).length ? whenText(m) : '';
+  const multi = eventDays(m).length >= 2;
   const place = h.placeText(m);
-  const custom = !!s.meta?.length;
-  const meta = custom ? s.meta.slice() : [
+  const rows = Array.isArray(s.meta) ? s.meta.filter((x) => x && x.value) : [];
+  // 설계도에 일시·장소·강사 줄이 직접 적혀 있으면(강사가 고친 첫 화면·예전 설계도) 그 줄을 그대로, 아니면 기본 줄 + 덧붙인 줄(발표·대상)
+  const own = rows.some((x) => BASE_LABELS.includes(x.label));
+  const custom = own || rows.length > 0 || multi;
+  const meta = own ? rows.slice() : [
     when && { k: 'when', label: '일시', value: when },
     place && { k: 'where', label: '장소', value: place },
-    ins && { k: 'who', label: '강사', value: `${ins.name}${ins.org ? ` · ${ins.org}` : ''}` },
+    ins && { k: 'who', label: h.words?.who || '강사', value: whoText(ins) },
+    ...rows,
   ].filter(Boolean);
   // 이수 기준: 연수 목표 칸이 없을 때만 첫 화면에(같은 말을 두 번 하지 않게)
   const done = h.completionLine(ctx);

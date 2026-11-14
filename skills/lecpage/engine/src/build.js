@@ -12,6 +12,7 @@ import { esc } from './render/html.js';
 import { usedVariants } from './design/layouts.js';
 import { pruneUnusedCss } from './css-prune.js';
 import { deferFontLinks } from './font-bundle.js';
+import { eventDays } from './hero-meta.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
 // 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음.
@@ -42,14 +43,20 @@ export function pruneMarked(css, ids, tag) {
  * 끝 시각이 없으면 끝을 적지 않음(길이를 지어내지 않음)
  */
 export function icsFile(meta = {}, today = '') {
-  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(meta.date || ''), t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
-  if (!d || !t(meta.start)) return '';
-  const utc = (hm) => { const x = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t(hm)[1] - 9, +t(hm)[2])); return x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+  const t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
+  // 연수 날(하루 또는 여러 날, hero-meta.js eventDays — 첫 화면·QR 안내문과 같은 날짜). 시작 시각을 아는 날만 한 건씩
+  const days = eventDays(meta).filter((x) => t(x.start));
+  if (!days.length) return '';
   const txt = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/[,;]/g, (c) => '\\' + c);
   const stamp = (/^\d{4}-\d{2}-\d{2}/.exec(today || new Date().toISOString())?.[0] || '2026-01-01').replace(/-/g, '') + 'T000000Z';
   let h = 2166136261; for (const c of `${meta.title}|${meta.date}|${meta.start}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
-  const end = t(meta.end) && utc(meta.end) > utc(meta.start) ? `DTEND:${utc(meta.end)}` : '';
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(meta.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', meta.organizer ? `DESCRIPTION:${txt(meta.organizer)}` : '', 'END:VEVENT', 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).join('\r\n');
+  const ev = days.flatMap((x) => {
+    const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x.date);
+    const utc = (hm) => { const v = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t(hm)[1] - 9, +t(hm)[2])); return v.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+    const end = t(x.end) && utc(x.end) > utc(x.start) ? `DTEND:${utc(x.end)}` : '';
+    return ['BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(x.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', meta.organizer ? `DESCRIPTION:${txt(meta.organizer)}` : '', 'END:VEVENT'];
+  });
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', ...ev, 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).join('\r\n');
 }
 
 /** 사이트를 만든 날(개인정보 처리 안내의 시행일). opts.today('YYYY-MM-DD')가 없으면 오늘 */

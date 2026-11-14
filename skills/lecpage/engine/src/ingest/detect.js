@@ -30,7 +30,9 @@ export function parseKoreanDates(line, refYear = new Date().getFullYear()) {
     spans.push([index, index + text.length]);
   };
   // 2026. 11. 4.(수) · 2026-11-04 · 2026/11/4 · 2026년 11월 4일(수요일) · 26. 11. 4.(수)
-  const re1 = new RegExp(`(?<![\\d.])((?:19|20)\\d{2}|\\d{2})\\s*(?:\\.|-|/|년)\\s*(\\d{1,2})\\s*(?:\\.|-|/|월)\\s*(\\d{1,2})(?!\\d)\\s*(?:일|\\.)?${WDP}`, 'g');
+  // 날 숫자 뒤에 '주'(N월 N주 = 그 달 N째 주)·'주차'·'교시'·'학년'이 오면 날짜가 아님(교육청·학교 문서에 흔함)
+  const NOT_DAY = '(?!\\s*(?:주|차|교시|학년|학기|반(?![가-힣])))';
+  const re1 = new RegExp(`(?<![\\d.])((?:19|20)\\d{2}|\\d{2})\\s*(?:\\.|-|/|년)\\s*(\\d{1,2})\\s*(?:\\.|-|/|월)\\s*(\\d{1,2})(?!\\d)${NOT_DAY}\\s*(?:일|\\.)?${WDP}`, 'g');
   let m;
   while ((m = re1.exec(s))) {
     let y = +m[1];
@@ -59,6 +61,17 @@ export function parseKoreanDates(line, refYear = new Date().getFullYear()) {
 function inferYear(mo, d, w, refYear) {
   if (w) for (const y of [refYear, refYear + 1, refYear - 1]) if (validYmd(y, mo, d) && weekdayOf(y, mo, d) === w) return y;
   return refYear;
+}
+/** 해 없이 적힌 날짜("2월 25일")를 행사 날짜(anchor, 해까지 적힌 것)에 가장 가까운 해로. 요일이 있으면 요일이 맞는 해만 */
+function nearYear(c, anchor) {
+  const [, mo, d] = c.date.split('-').map(Number), ay = +anchor.slice(0, 4), at = Date.parse(anchor);
+  let best = null;
+  for (const y of [ay - 1, ay, ay + 1]) {
+    if (!validYmd(y, mo, d) || (c.weekdayGiven && weekdayOf(y, mo, d) !== c.weekdayGiven)) continue;
+    const dist = Math.abs(Date.UTC(y, mo - 1, d) - at);
+    if (!best || dist < best.dist) best = { y, dist };
+  }
+  return best ? `${best.y}-${pad(mo)}-${pad(d)}` : c.date;
 }
 
 /** 시간 범위 찾기: 15:10~16:40 · 오후 3시 10분 ~ 4시 40분 · 14:00-16:00 → {start:'15:10', end:'16:40', text} */
@@ -645,6 +658,23 @@ const ONLINE = /(온라인|원격|실시간\s*쌍방향|비대면|zoom|줌\s*(?:
 const ORG_LABEL = /(?:주\s*최|주\s*관|주최\s*[·/]\s*주관|organized\s*by)\s*[:：]?\s*([^|/\n]{2,40})/i;
 const ORG_LINE = /^[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)?\s*[가-힣]*(?:교육청|교육지원청|교육연수원|연수원|교육원|교원연수원|교육연구원|교원단체|교사연구회|연구회|학회)$/;
 const DATE_LABEL = /(일\s*시|일\s*자|날\s*짜|때|기\s*간|연수\s*일|date|when)/i;
+// 일정(차시·하루하루)이라는 표시: "1차시", "2일차", "둘째 날". 이런 줄이나 날짜 바로 뒤에 시각이 있는 줄만 차시 날짜로 셈
+const SCHEDULE_CUE = /(\d{1,2}\s*(?:차시|회차|일차|주차|회기)(?![가-힣])|(?:첫|둘|셋|넷|다섯)째\s*날|[1-9]\s*일\s*째)/;
+// 행사 날짜가 아닌 날짜: 마감·제출·신청·다음 연수·발행일("과제는 11월 27일까지", "다음 연수: 12월 11일", "교복 맞춤: 2월 25일까지")
+const NOT_EVENT_BEFORE = /(마감|기한|제출|접수|신청|과제|공고|발행|작성\s*일|시행\s*일|기준\s*일|개정|다음\s*(?:연수|시간|차시|모임|수업|만남|강의)|예고|지난\s*(?:연수|해))\s*[:：]?\s*[^\d]{0,12}$/;
+const NOT_EVENT_AFTER = /^\s*(?:\([월화수목금토일](?:요일)?\)\s*)?(?:까지|이전|전까지|마감|에\s*(?:마감|발표|안내|공지|열리는|있을|만나요)|부터\s*(?:신청|접수|적용))/;
+/** 한 날짜가 '행사 날짜'로 볼 만한지: 마감·다음 연수 같은 날짜가 아니고, 일시 이름표·차시 표시·바로 뒤 시각 가운데 하나가 있음 */
+function dateRole(line, d, nextLine) {
+  // 표의 한 줄("1차시 | 1. 11.(월) | 주제 | 과제 제출")은 날짜가 든 칸만 봄
+  let seg = line, at = d.index;
+  if (line.includes(' | ')) { let pos = 0; for (const cell of line.split(' | ')) { if (d.index >= pos && d.index < pos + cell.length) { seg = cell; at = d.index - pos; break; } pos += cell.length + 3; } }
+  const before = seg.slice(Math.max(0, at - 16), at), after = seg.slice(at + d.text.length, at + d.text.length + 14);
+  if (NOT_EVENT_BEFORE.test(before) || NOT_EVENT_AFTER.test(after)) return 'other';
+  const time = parseTimeRange(seg.slice(at + d.text.length));
+  const shortLine = seg.replace(d.text, '').replace(/[\s:：|·,-]/g, '').length <= 4; // 날짜만 적힌 줄(표지): 다음 줄의 시각을 그날 시각으로
+  if (DATE_LABEL.test(seg.slice(0, at)) || SCHEDULE_CUE.test(line) || time || (shortLine && parseTimeRange(nextLine || ''))) return 'event';
+  return 'mention';
+}
 
 function detectEvent(pages, refYear) {
   const cands = [];
@@ -662,12 +692,14 @@ function detectEvent(pages, refYear) {
         if (d.yearGiven) score += 1;
         const y = +d.date.slice(0, 4);
         if (Math.abs(y - refYear) <= 1) score += 1;
-        cands.push({ ...d, score, time: tr, line, li, p });
+        const role = dateRole(line, d, lines[li + 1]);
+        if (role === 'other') score -= 6; // 마감·다음 연수 날짜는 연수 날짜로 고르지 않음
+        cands.push({ ...d, score, time: tr, line, li, p, role });
       }
     });
   });
   cands.sort((a, b) => b.score - a.score || a.p.page - b.p.page);
-  const best = cands[0] || null;
+  const best = cands.find((c) => c.role !== 'other') || null;
   const ev = { date: '', dateText: '', weekday: '', start: '', end: '', venue: '', organizer: '', mode: '', joinUrl: '' };
   let evPage = null;
   if (best) {
@@ -675,8 +707,12 @@ function detectEvent(pages, refYear) {
     if (best.time) { ev.start = best.time.start; ev.end = best.time.end; }
     evPage = best.p;
     ev.file = best.p.file; ev.page = best.p.page;
-    // 같은 행사 날짜가 여러 개면(과정형) 모두 기록
-    const uniq = [...new Set(cands.filter((c) => c.score >= 3).map((c) => c.date))].sort();
+    // 해 없이 적힌 날짜는 행사 날짜의 해에 맞춤("2월 25일"이 다음 해 2월 행사의 일이면 그해)
+    if (best.yearGiven) for (const c of cands) if (!c.yearGiven) c.date = nearYear(c, best.date);
+    // 차시 날짜(과정형): 일정 문맥의 날짜만(마감·다음 연수·본문 속 언급은 빼고), 행사 날짜보다 반년 넘게 앞서거나 1년 넘게 뒤면 버림
+    const t0 = Date.parse(best.date);
+    const inRange = (c) => { const t = Date.parse(c.date); return t >= t0 - 183 * 864e5 && t <= t0 + 366 * 864e5; };
+    const uniq = [...new Set(cands.filter((c) => c.role === 'event' && c.score >= 3 && inRange(c)).map((c) => c.date))].sort();
     if (uniq.length >= 2) ev.dates = uniq.slice(0, 20);
   }
   if (!ev.start) {
@@ -689,8 +725,8 @@ function detectEvent(pages, refYear) {
       if (ev.start) break;
     }
   }
-  // 장소
-  const venuePages = [evPage, ...pages.slice(0, 3), ...pages.slice(-2)].filter(Boolean);
+  // 장소: 연수 날짜가 있는 쪽, 앞 3쪽·뒤 2쪽, 그리고 교재 파일마다 첫 쪽(운영 계획서가 둘째 파일일 때)
+  const venuePages = [...new Set([evPage, ...pages.slice(0, 3), ...pages.filter((p, i) => i === 0 || pages[i - 1].file !== p.file), ...pages.slice(-2)].filter(Boolean))];
   outer: for (const p of venuePages) {
     for (const t of linesOf(p, { withTitle: true }).map((x) => x.text)) {
       const m = VENUE_LABEL.exec(t);
@@ -698,11 +734,12 @@ function detectEvent(pages, refYear) {
     }
   }
   if (!ev.venue) {
+    // 이름표 없는 줄: "2026. 11. 20.(금) 14:00~17:00 새봄중학교 3층 컴퓨터실"처럼 날짜·시각과 한 줄이면 그 뒤가 장소
     outer2: for (const p of venuePages) {
       for (const t of linesOf(p, { withTitle: false }).map((x) => x.text)) {
-        if (t.length > 60 || LABEL_LINE.test(t) || parseKoreanDates(t, refYear).length && !VENUE_KEY.test(t.replace(/\d{4}.*?\)/, ''))) continue;
-        const m = VENUE_KEY.exec(t);
-        if (m && !/(교육청|교육지원청|연수원)$/.test(normLine(t))) { ev.venue = cleanVenue(t); break outer2; }
+        if (t.length > 80 || LABEL_LINE.test(t)) continue;
+        const v = venueFrom(t, refYear);
+        if (v && VENUE_KEY.test(v) && v.length <= 60 && !/(교육청|교육지원청|연수원)$/.test(v)) { ev.venue = v; break outer2; }
       }
     }
   }
@@ -716,13 +753,23 @@ function detectEvent(pages, refYear) {
     }
     if (ev.organizer) break;
   }
-  // 온라인·혼합
-  const first = pages.slice(0, 3).map((p) => pageText(p) + '\n' + (p.notes || '')).join('\n');
+  // 온라인·혼합: 회의 주소가 있거나, 앞쪽(표지·안내)의 장소·방식 이름표 줄("장소: Zoom", "방식: 실시간 쌍방향")이나
+  // 짧은 안내 줄("온라인 연수", "원격 직무연수")에 온라인 낱말이 있을 때만. 본문 속 "온라인학교" 같은 낱말로는 정하지 않음
   const join = pages.flatMap((p) => p.links || []).find((l) => /zoom\.us\/j|meet\.google\.com\/[a-z]|teams\.microsoft\.com\/l\/meetup/i.test(l.url));
   if (join) ev.joinUrl = join.url;
-  const online = ONLINE.test(first) || !!join;
+  const MODE_LABEL = /(?:장\s*소|방\s*식|형\s*태|운영|진행|연수\s*방법|수업\s*방법|참여\s*방법|접속|일\s*시|where|venue)\s*[:：]/i;
+  const modeLine = (t) => ONLINE.test(t) && (MODE_LABEL.test(t) || (t.length <= 40 && /(연수|강의|수업|설명회|과정|교육|세미나|워크숍|특강)/.test(t) && !/[다요]\.?$/.test(t)));
+  const online = !!join || [...new Set([...pages.slice(0, 3), ...venuePages])].some((p) => linesOf(p, { withTitle: true }).some((x) => modeLine(normLine(x.text || ''))));
   ev.mode = online && ev.venue ? 'hybrid' : online ? 'online' : ev.venue ? 'offline' : '';
   return ev;
+}
+/** 날짜·시각을 걷어 낸 나머지(장소 후보). 날짜만 있고 장소 낱말이 없으면 '' */
+function venueFrom(t, refYear) {
+  let v = normLine(t);
+  for (const d of parseKoreanDates(v, refYear).reverse()) v = v.slice(0, d.index) + ' ' + v.slice(d.index + d.text.length);
+  for (let k = 0, tr; k < 3 && (tr = parseTimeRange(v)); k++) v = v.slice(0, tr.index) + ' ' + v.slice(tr.index + tr.text.length);
+  v = v.replace(/\(\s*\d+\s*시간\s*\)/g, ' ');
+  return cleanVenue(v);
 }
 function cleanVenue(s) {
   let v = normLine(s).replace(/^[\s:：\-–—|·]+/, '');
@@ -910,6 +957,7 @@ function detectMessages(pages, promptKeys, special, stepPages) {
 }
 
 // ── 연수 제목 ─────────────────────────────────────────
+const TITLE_LABEL = /^\s*(?:연수\s*명|강의\s*명|과정\s*명|교육\s*명|행사\s*명|주\s*제|제\s*목)\s*[:：]\s*(.{2,120})$/;
 const GENERIC_TITLE = /^(powerpoint\s*프레젠테이션|프레젠테이션|presentation|제목\s*없음|untitled|슬라이드\s*\d*|slide\s*\d*|문서\s*\d*|document\s*\d*|microsoft\s*word.*|새\s*문서)$/i;
 function detectTitle(material, pages) {
   const first = pages[0];
@@ -924,6 +972,14 @@ function detectTitle(material, pages) {
   }
   const metaTitle = material.meta?.title || '';
   if ((!title || GENERIC_TITLE.test(title)) && metaTitle && !GENERIC_TITLE.test(metaTitle)) title = metaTitle;
+  // 다른 교재의 '연수명: …' 이름표가 제목과 띄어쓰기만 다르면 그 값(PDF 글 조각 틈으로 생긴 'AI 로'를 '연수명: 생성형 AI로…'대로)
+  if (title) {
+    const firsts = pages.filter((p, i) => i === 0 || pages[i - 1].file !== p.file);
+    for (const p of firsts) for (const x of linesOf(p, { withTitle: true })) {
+      const m = TITLE_LABEL.exec(x.text || '');
+      if (m && textKey(m[1]) === textKey(title) && normLine(m[1]) !== normLine(title)) { title = normLine(m[1]); break; }
+    }
+  }
   if (!title) title = (material.files?.[0]?.name || '').replace(/\.[^.]+$/, '');
   return { title: truncate(normLine(title), 120), subtitle: truncate(normLine(subtitle), 160) };
 }
@@ -961,6 +1017,19 @@ function archetypeHint(material, pages, practice, event, instructors, title, siz
   if (primary === 'story' && ratio >= 0.2) mix.push('lab');
   if (primary === 'course' && ratio >= 0.3) mix.push('lab');
   return { primary, mix, format, reason_ko: reasons.join(' '), sessions: Math.max(sessions.size, dates) || 1 };
+}
+
+// ── 대상·성격(연수 성격 admin.kind의 추정) ───────────────────
+// official 직무연수 · conference 설명회·컨퍼런스 · student 학생 수업 · school 그 밖의 교사 연수. 화면 낱말(연수·수업·설명회)과 연수 성격 기본값에 씀
+const STUDENT_CUE = /(?:^|[\s(\[])(?:초|중|고)\s?[1-6](?=[\s:·)\]]|$)|[1-6]\s*학년\s*(?:[1-9]{1,2}\s*반|학생)|(?:^|\s)수업\s*(?:일시|시간|날짜|장소)\s*[:：]|학생용/m;
+const TEACHER_CUE = /(연수|교원|교사|선생님들|직무|장학|교직원|학부모)/;
+function kindOf(title, subtitle, pages, admin) {
+  if (admin?.official) return 'official';
+  const head = `${title} ${subtitle}`;
+  if (LIVE_WORD.test(head)) return 'conference';
+  const front = pages.slice(0, 2).flatMap((p) => linesOf(p, { withTitle: true }).map((x) => x.text)).slice(0, 12).join('\n');
+  if ((STUDENT_CUE.test(head) || STUDENT_CUE.test(front)) && !TEACHER_CUE.test(head)) return 'student';
+  return 'school';
 }
 
 // ── 차시(과정형) ──────────────────────────────────────
@@ -1078,7 +1147,7 @@ export function detect(material, opts = {}) {
   let extra = {};
   try { extra = detectSignals(material, pages, base, { parseKoreanDates, parseTimeRange }); } catch { extra = {}; }
   return {
-    ...base, ...extra,
+    ...base, ...extra, kind: kindOf(title, subtitle, pages, extra.admin),
     fonts: detectFonts(material),
     stats: {
       pages: (material.pages || []).length,

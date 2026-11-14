@@ -365,7 +365,7 @@ export function summarizeMaterial(m) {
 
 export { detect } from './detect.js';
 export { detectFonts } from './fonts.js';
-export { materialToDraft } from './draft.js';
+export { materialToDraft, detectedInfo, infoDays } from './draft.js';
 export { materialToAIContext } from './outline.js';
 export { TOOLS, CATEGORIES, matchToolsInText, toolForUrl, getTool, findTool } from './tools-db.js';
 export { parseKoreanDates, parseTimeRange } from './detect.js';

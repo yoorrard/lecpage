@@ -792,8 +792,8 @@
       }, 'dl' + x[0]));
     });
     s1.appendChild(g);
-    var rate = (DATA.admin || {}).completionRate; rate = rate == null ? 90 : rate;
-    s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
+    var rate = (DATA.admin || {}).completionRate || 90, rateSet = (DATA.admin || {}).rateSet !== false;
+    s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '%' + (rateSet ? '' : '(이수 기준을 정하지 않아 기본값)') + ' 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '지우기'));
     s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '연수가 끝나고 ' + ((DATA.privacy || {}).retentionDays || 30) + '일 안에 모든 기록을 지워 주세요. 내려받은 CSV에도 별명이 들어 있어요.'));

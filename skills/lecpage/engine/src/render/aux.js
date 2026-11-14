@@ -6,6 +6,7 @@ import { contactHtml, boardFiles } from './sections.js';
 import { appShell } from './shell.js';
 import { motifFamily } from '../design/layouts.js';
 import { motifRule } from './body-graphic.js';
+import { whenText, eventDays } from '../hero-meta.js';
 
 const PROVIDER_KO = { local: '리허설(이 브라우저 안에서만)', http: '참여 기능 서버', supabase: 'Supabase', sheets: '구글 시트' };
 const themeBtn = () => `<button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>`;
@@ -154,7 +155,7 @@ ${signal ? '<div class="lp-scr-signal" data-screen-signal hidden role="region" a
  */
 export function renderPoster(ctx) {
   const bp = ctx.bp, m = bp.meta;
-  const when = m.date ? `${koDate(m.date)}${m.start ? ` ${m.start}${m.end ? `~${m.end}` : ''}` : ''}` : '';
+  const when = m.date || eventDays(m).length ? whenText(m) : ''; // 첫 화면·달력 파일과 같은 날짜(hero-meta.js)
   const code = ctx.live ? bp.live.code : '';
   const tlen = [...String(m.title || '')].length;
   const meta = when || m.venue ? `<dl class="lp-pst-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : '';

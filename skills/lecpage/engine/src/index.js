@@ -21,7 +21,7 @@ export { decideArchetype } from './decide/archetype.js';
 export { decideStructure, structureFor, cleanStructure, checkOrder, linkConcept, flowGuide, FLOW_INFO, SIGNAL_TABLE, FEATURE_LABEL } from './decide/structure.js';
 export { findLeftovers, materialCoverage, leftoversToSections, leftoverAdds } from './ingest/compose.js';
 export { foundSummary } from './ingest/signals.js';
-export { syncHeroMeta } from './hero-meta.js';
+export { syncHeroMeta, whenText, eventDays, infoDays } from './hero-meta.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 export { deriveConcept, cleanConcept, conceptDesign, conceptLine, conceptKeywords, TOPIC_CONCEPTS } from './decide/concept.js';
 export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO, PROMPT_END, readAnswer, isCutAnswer, joinAnswer, answerPart, CONTINUE_ASK, JSON_ONLY_ASK } from './prompt/bridge.js';

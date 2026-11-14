@@ -4,7 +4,7 @@
 import { decideArchetype } from './decide/archetype.js';
 import { decideStructure, structureFor, linkConcept, cleanStructure, FLOW_INFO } from './decide/structure.js';
 import { findLeftovers, keepUrlText } from './ingest/compose.js';
-import { syncHeroMeta } from './hero-meta.js';
+import { syncHeroMeta, infoDays } from './hero-meta.js';
 import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, deriveConcept } from './decide/concept.js';
@@ -48,8 +48,8 @@ export function draftInfo(info = {}, slidesMade = false) {
   const ins = info.instructor || (info.instructorName ? { name: info.instructorName, org: info.instructorOrg, email: info.instructorEmail, bio: info.instructorBio } : undefined);
   return {
     title: info.title, subtitle: info.subtitle, organizer: info.organizer, date: info.date, start: info.start, end: info.end, venue: info.venue,
-    mode: info.mode, joinUrl: info.joinUrl || '', contact: info.contact, size: info.size, adminKind: info.admin, surveyUrl: info.surveyUrl,
-    goals: info.goals, who: info.who, dates: info.dates, archetype: info.archetype, today: info.today,
+    mode: info.mode, joinUrl: info.joinUrl || '', contact: info.contact, size: info.size, adminKind: info.admin || undefined, completionRate: info.completionRate, surveyUrl: info.surveyUrl,
+    goals: info.goals, who: info.who, dates: info.dates, sessions: info.sessions, archetype: info.archetype, today: info.today,
     // 구성 정하기(decide/structure.js)가 읽는 값: 강사가 고른 형식(요청 사항의 "실습 위주"도), 켠 참여 기능, 연수 성격, 컨셉
     format: info.format || (info.request ? requestHints(info.request).format : '') || undefined,
     features: info.features, admin: info.admin, concept: info.concept,
@@ -180,9 +180,18 @@ function applyDesignAnswers(bp, info) {
 function applyMeta(bp, info, fill = false) {
   bp.meta = bp.meta || {};
   const use = (k) => (fill ? !!info[k] : has(info, k));
+  const was = { date: bp.meta.date || '', sessions: Array.isArray(bp.meta.sessions) ? bp.meta.sessions : [] };
   for (const k of META_KEYS) if (use(k)) bp.meta[k] = info[k];
   if (use('joinUrl')) bp.meta.joinUrl = info.joinUrl || ''; // 온라인 접속 주소: 강사가 적은 값만
-  if (has(info, 'admin') || info.completionRate) bp.meta.admin = { ...(bp.meta.admin || {}), ...(has(info, 'admin') ? { kind: info.admin || 'school' } : {}), ...(info.completionRate ? { completionRate: +info.completionRate } : {}) };
+  // 연수 날들: 강사가 준 여러 날(info.sessions·dates)이 있으면 그것으로. 날짜 하나만 바꿨는데 그 날이 지난 차시 날짜에 없으면
+  // (2기로 날짜를 바꾼 경우 등) 예전 차시 날짜는 지움 — 첫 화면·QR 안내문·달력이 새 날짜 하나를 따름. 날짜를 지어 옮기지는 않음
+  const days = infoDays(info);
+  if (days) {
+    bp.meta.sessions = days.length >= 2 ? days.map((d, i) => ({ no: i + 1, date: d.date, start: d.start, end: d.end, title: was.sessions.find((x) => x?.date === d.date)?.title || '' })) : [];
+    if (!info.date || !days.some((d) => d.date === info.date)) bp.meta.date = days[0].date;
+  } else if (bp.meta.date && bp.meta.date !== was.date && was.sessions.length && !was.sessions.some((x) => x?.date === bp.meta.date)) bp.meta.sessions = [];
+  // 연수 성격: 빈 값('')은 '정하지 않음'(교재에서 찾은 값을 지킴). 이수 기준 %도 준 값만
+  if (info.admin || info.completionRate) bp.meta.admin = { ...(bp.meta.admin || {}), ...(info.admin ? { kind: info.admin } : {}), ...(info.completionRate ? { completionRate: +info.completionRate } : {}) };
   bp.audience = {
     ...(bp.audience || {}),
     ...(has(info, 'size') ? { size: info.size } : {}),
@@ -303,8 +312,11 @@ export function syncInfo(bp0, info = {}, changed = null) {
   applyDesignAnswers(bp, info);
   bp.sections = Array.isArray(bp.sections) ? bp.sections : [];
   if (info.instructorName) {
+    // 이름만 고쳐도 교재에서 찾은 소속·소개는 지킴(빈 칸으로 덮지 않음). 강사가 그 칸을 바꿨다고 알려 준 때(changed)만 비움
     const cur = bp.instructors?.[0] || {};
-    bp.instructors = [{ ...cur, name: info.instructorName, org: info.instructorOrg, email: info.instructorEmail, showEmail: !!info.instructorEmail, bio: info.instructorBio }, ...(bp.instructors || []).slice(1)];
+    const ck = changed ? (Array.isArray(changed) ? changed : Object.keys(changed)) : [];
+    const keep = (k, key) => (info[k] || ck.includes(k) ? info[k] || '' : cur[key] || '');
+    bp.instructors = [{ ...cur, name: info.instructorName, org: keep('instructorOrg', 'org'), email: keep('instructorEmail', 'email'), showEmail: !!keep('instructorEmail', 'email'), bio: keep('instructorBio', 'bio') }, ...(bp.instructors || []).slice(1)];
   }
   ensureInstructorSection(bp);
   syncHeroMeta(bp0, bp); // 첫 화면에 따로 적힌 일시·장소·강사 줄도 함께(초안이 만든 글자 그대로일 때만)

@@ -111,7 +111,8 @@ describe('렌더: 새 칸과 자동 표시', () => {
   test('연수 기간(phase)과 끝난 뒤 줄: 날짜가 있으면 만들고, 가장 먼저 볼 칸으로 연결', () => {
     const html = index({ meta: { title: 't', date: '2026-12-16', start: '14:00', end: '17:00', sessions: [{ date: '2026-12-23', end: '16:00' }] },
       sections: [{ type: 'hero' }, { type: 'materials', items: [{ title: '교재' }] }, { type: 'followup', id: 'after', items: [{ title: '다시 보기', url: 'https://youtu.be/x' }] }] });
-    assert.deepEqual(data(html).phase, { start: '2026-12-16T14:00', end: '2026-12-23T16:00' });
+    // 여러 날이면 날마다의 시간(days)도: 참가자 화면이 그날 연수 시간에만 [출석]을 띄움
+    assert.deepEqual(data(html).phase, { start: '2026-12-16T14:00', end: '2026-12-23T16:00', days: [{ start: '2026-12-16T14:00', end: '2026-12-16T17:00' }, { start: '2026-12-23T14:00', end: '2026-12-23T16:00' }] });
     assert.match(html, /data-phase-bar hidden[\s\S]*?2026\. 12\. 23\.\(수\)에 끝난 연수예요\.[\s\S]*?href="#after">연수 후 안내<\/a>/);
     const none = index({ meta: { title: 't' }, sections: [{ type: 'hero' }] });
     assert.equal(data(none).phase, null);

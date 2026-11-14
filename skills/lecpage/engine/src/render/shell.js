@@ -2,6 +2,7 @@
 import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { boardFiles } from './sections.js';
+import { eventDays } from '../hero-meta.js';
 
 export const VERSION = '1.0.0';
 
@@ -109,11 +110,12 @@ ${extraCss.map((c) => `<link rel="stylesheet" href="${c}">`).join('\n')}
 
 /** 연수 기간(현지 시각): 첫날 시작 ~ 마지막 날 끝. 끝난 뒤에는 참가자 화면이 '연수 후' 보기로 바뀜 */
 export function phaseWindow(bp) {
-  const m = bp.meta, ses = m.sessions || [];
-  const dates = [m.date, ...ses.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
+  const m = bp.meta, days = eventDays(m);
+  const dates = [...days.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
   if (!dates.length) return null;
-  const last = dates[dates.length - 1], lastSes = ses.find((x) => x.date === last);
-  return { start: `${dates[0]}T${m.start || '00:00'}`, end: `${last}T${lastSes?.end || m.end || '23:59'}` };
+  const last = dates[dates.length - 1], lastDay = days.find((x) => x.date === last), firstDay = days.find((x) => x.date === dates[0]);
+  // days: 연수 날마다의 시작·끝(여러 날이면 참가자 화면이 그날 시간에만 [출석]을 띄움)
+  return { start: `${dates[0]}T${firstDay?.start || m.start || '00:00'}`, end: `${last}T${lastDay?.end || m.end || '23:59'}`, ...(days.length >= 2 ? { days: days.map((d) => ({ start: `${d.date}T${d.start || m.start || '00:00'}`, end: `${d.date}T${d.end || m.end || '23:59'}` })) } : {}) };
 }
 
 export function siteData(ctx) {
@@ -129,7 +131,8 @@ export function siteData(ctx) {
     stations: st ? st.items.map((x) => ({ id: x.id, name: x.name })) : [],
     motion: ctx.design.motion,
     base: bp.meta.siteUrl || '',
-    admin: { completionRate: bp.meta.admin?.completionRate ?? 90 },
+    // 이수 기준(출석 %): 교재·강사가 정한 값. 정하지 않았으면 0 → 강사 화면의 이수자 명단은 90%로 세고 그 사실을 적음
+    admin: { completionRate: bp.meta.admin?.completionRate || 90, rateSet: !!bp.meta.admin?.completionRate },
     survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
     phase: phaseWindow(bp),
   };

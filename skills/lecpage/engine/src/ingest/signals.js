@@ -295,7 +295,9 @@ function detectAdmin(pages, title) {
   for (const p of pages) for (const x of p.paragraphs || []) {
     const t = clean(x.text); if (!t || t.length > 140 || QA_Q.test(t) || QA_A.test(t)) continue;
     const lab = splitLabel(t);
-    if (/직무\s*연수|이수\s*(?:기준|시간|처리|결과)/.test(t)) out.official = true;
+    // 직무연수: '직무연수·자격연수' 낱말, 또는 연수 행정 이름표 줄("이수 기준: …", "이수 시간: 15시간").
+    // 본문 속 "과목 이수 기준"(고교학점제 안내 등)은 연수 행정이 아님
+    if (/직무\s*연수|자격\s*연수/.test(t) || (lab && /^(?:연수\s*)?이수\s*(?:기준|시간|처리|조건|요건|방법)$/.test(lab[0]))) out.official = true;
     const rate = /출석(?:률)?\s*(\d{2,3})\s*%/.exec(t);
     if (rate && !out.completionRate && +rate[1] <= 100) { out.completionRate = +rate[1]; out.rateText = lab ? lab[1] : t; }
     const hrs = /^(?:총\s*)?(?:연수|이수|교육)\s*시간\s*[:：]?\s*(\d{1,3})\s*시간/.exec(t);

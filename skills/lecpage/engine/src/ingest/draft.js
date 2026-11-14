@@ -8,7 +8,9 @@ import { getTool } from './tools-db.js';
 import { composeBody, findLeftovers } from './compose.js';
 import { splitNotes } from './signals.js';
 import { decideStructure } from '../decide/structure.js';
-import { whenText, placeText, whoText } from '../hero-meta.js';
+import { whenText, placeText, whoText, infoDays } from '../hero-meta.js';
+export { infoDays };
+import { stationNames } from '../station-name.js';
 
 const pad3 = (n) => String(n).padStart(3, '0');
 const ACCOUNT_LABEL = {
@@ -35,11 +37,14 @@ const paraLines = (p) => (p.paragraphs || []).map((x) => normLine(x.text)).filte
 /** 교재에 적힌 연수 목표(지어내지 않음): 목표 쪽의 항목, 없으면 "연수 목표: …" 한 줄 */
 const HEAD_LINE = /^(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s*\S/;
 const KO_LEAD = /^[가-하]\s*[.)]\s+/;
+/** 교재의 목표 칸 머리말(번호를 뗀 것: "오늘 배울 것", "학습 목표"). 사이트 칸 제목도 교재 말 그대로 */
+const goalHead = (t) => normLine(t).replace(/^(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]|[가-하])\s*[.)]\s*/, '').slice(0, 40);
+const withHead = (items, head) => Object.assign(items, { heading: goalHead(head) });
 function findGoals(pages, promptKeys) {
   for (const p of pages.slice(0, 12)) {
     if (!GOAL_TITLE.test(normLine(p.title || ''))) continue;
     const items = paraLines(p).map((t) => t.replace(LEAD, '').replace(KO_LEAD, '').trim()).filter((t) => t.length >= 6 && t.length <= 110 && !promptKeys.has(textKey(t)) && !/https?:\/\//.test(t) && !WHO_LINE.test(t));
-    if (items.length) return items.slice(0, 5);
+    if (items.length) return withHead(items.slice(0, 5), p.title);
   }
   // 쪽 안의 소제목("2. 연수 목표") 아래 항목: PDF처럼 제목으로 쪽이 나뉘지 않는 자료
   for (const p of pages.slice(0, 6)) {
@@ -53,7 +58,7 @@ function findGoals(pages, promptKeys) {
       if (x.length >= 6 && x.length <= 110 && !promptKeys.has(textKey(x)) && !/https?:\/\//.test(x) && !WHO_LINE.test(x)) items.push(x);
       if (items.length >= 5) break;
     }
-    if (items.length) return items;
+    if (items.length) return withHead(items, lines[i]);
   }
   for (const p of pages.slice(0, 6)) for (const t of paraLines(p)) { const m = GOAL_LINE.exec(t.replace(LEAD, '')); if (m) return m[1].split(/\s*[;／]\s*/).map((x) => x.trim()).filter((x) => x.length >= 4).slice(0, 5); }
   return [];
@@ -76,11 +81,27 @@ function hoursLabel(min) {
 }
 
 /**
+ * 교재에서 찾은 연수 정보(앱 '교재 넣기'의 빈칸 채우기와 skill 초안이 같은 값을 쓰게 하는 한 함수).
+ * 키는 앱 연수 정보(project-file.js DEFAULT_INFO)와 같음. 찾지 못한 것은 빈 값(지어내지 않음).
+ *   admin: official(직무연수)·conference(설명회)·student(학생 수업)·school / completionRate: 교재의 출석 %(없으면 '')
+ *   dates: 차시 날짜(일정 문맥의 날짜가 둘 이상일 때만) / instructorName·instructorOrg: 표지·소개 쪽의 강사
+ */
+export function detectedInfo(detected = {}) {
+  const d = detected || {}, ev = d.event || {}, ins = d.instructor?.name && !(d.speakers || []).length ? d.instructor : null;
+  const dates = ev.dates?.length >= 2 ? ev.dates.slice() : (d.sessions || []).length >= 2 && d.sessions.every((x) => x.date) ? d.sessions.map((x) => x.date) : [];
+  return {
+    title: d.title || '', subtitle: d.subtitle || '', organizer: ev.organizer || '', date: ev.date || '', start: ev.start || '', end: ev.end || '',
+    venue: ev.venue || '', mode: ev.mode || '', admin: d.kind || (d.admin?.official ? 'official' : ''), completionRate: d.admin?.completionRate || '',
+    instructorName: ins?.name || '', instructorOrg: ins?.org || '', format: d.archetype?.format || '', size: ev.size || 0, dates,
+  };
+}
+
+/**
  * @param {object} material ingest 결과(detected가 없으면 여기서 감지)
  * @param {object} [info] 사용자가 직접 준 정보(감지보다 우선)
  *   title, subtitle, organizer, date, start, end, venue, mode, joinUrl, size, audience{}, level, archetype, format,
  *   instructor{name,role,org,email,bio}, surveyUrl, slidesBase('assets/slides/'), imageBase('assets/media/'),
- *   deckHref, materials{ [fileId]: href }, today, goals[], who, contact, dates[](차시 날짜), concept(컨셉: 있으면 구성 이유에 반영)
+ *   deckHref, materials{ [fileId]: href }, today, goals[], who, contact, dates[](차시 날짜) · sessions[{date,start,end}](날마다 시각이 다른 여러 날), concept(컨셉: 있으면 구성 이유에 반영)
  */
 export function materialToDraft(material, info = {}) {
   const d = material.detected?.signals ? material.detected : detect(material, info);
@@ -112,7 +133,7 @@ export function materialToDraft(material, info = {}) {
     contact: info.contact || findLine([...pages.slice(0, 3), ...pages.slice(-3)], CONTACT_LINE),
     lang: 'ko',
     // 직무연수·이수 기준·연수 시간은 교재에 적혀 있으면 그 값으로(강사가 고른 값이 우선)
-    admin: { kind: info.adminKind || (admin?.official ? 'official' : 'school'), completionRate: +info.completionRate || admin?.completionRate || 90, hours: admin?.hours || Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
+    admin: { kind: info.adminKind || d.kind || (admin?.official ? 'official' : 'school'), completionRate: +info.completionRate || admin?.completionRate || 0, hours: admin?.hours || Math.round((minutesBetween(info.start || ev.start, info.end || ev.end) / 60) * 10) / 10 },
     sessions: [],
   };
   if (meta.subtitle === meta.title) meta.subtitle = '';
@@ -211,18 +232,26 @@ export function materialToDraft(material, info = {}) {
     const images = g.pages.flatMap((p) => (p.images || []).filter((im) => !im.repeated && im.web !== false && (im.share || 0.3) >= 0.08))
       .map((im) => ({ src: imgSrc(im), caption: im.alt || '' })).filter((im) => im.src).slice(0, 8);
     const title = normLine(g.title) || `실습 ${i + 1}`;
-    // 걸리는 시간: 일정표에 같은 번호의 실습("실습 1 14:20~15:00")이 있을 때만(지어내지 않음)
+    // 걸리는 시간: 일정표에 같은 번호의 실습("실습 1 14:20~15:00")이 있을 때만(지어내지 않음). 한 일정 칸이 여러 실습 쪽에
+    // 걸치면("실습 1-1 단계"·"실습 1-2 검토하기"가 모두 실습 1) 쪽마다의 시간을 모르므로 적지 않음(아래에서 셈)
     const no = /(?:실습|활동|미션)\s*(\d{1,2})/.exec(title)?.[1];
     const slot = no ? timed.find((it) => new RegExp(`(?:실습|활동|미션)\\s*${no}(?!\\d)`).test(it.text || '') && it.end) : null;
     const minutes = slot ? minutesBetween(slot.start, slot.end) : 0;
     return {
-      id: `st${i + 1}`, name: truncate(title.replace(/^(?:실습|활동|미션)(?:\s*\d+\s*[.:)\-–]?\s*|\s*[.:)\-–]\s*|\s+(?=\S))/, '') || title, 30), title: truncate(title, 100),
+      id: `st${i + 1}`, name: '', title: truncate(title, 100), _slot: slot,
       tag: g.section ? truncate(g.section.label || '', 16) : '', desc: truncate(desc, 300),
       steps, prompts: promptTitles(prompts, g, nums).map((t, k) => ({ title: t, text: prompts[k].text })),
       images, links, outcome: '', note: truncate(note, 400), minutes: minutes > 0 && minutes <= 240 ? minutes : 0, source: { file, pages: nums },
       ...(memos.length ? { teacherNote: truncate(memos.join('\n'), 600) } : {}),
     };
   }).filter((s) => s.steps.length || s.prompts.length || s.links.length || s.desc);
+  // 짧은 이름(엔진 한 규칙: station-name.js — 검증이 AI 답의 빈 이름을 채울 때도 같음)과 시간(한 일정 칸에 실습 하나일 때만)
+  const names = stationNames(stations.map((x) => x.title));
+  stations.forEach((x, k) => {
+    x.name = names[k];
+    if (x._slot && stations.filter((y) => y._slot === x._slot).length > 1) x.minutes = 0;
+    delete x._slot;
+  });
 
   // ── 섹션 만들기 ───────────────────────────
   const S = {};
@@ -234,7 +263,8 @@ export function materialToDraft(material, info = {}) {
   const goalItems = info.goals?.length ? info.goals : findGoals(pages, promptKeySet);
   const who = info.who || findLine(pages.slice(0, 3), WHO_LINE);
   // 교재에 적힌 목표 문장 그대로(말끝 "~할 수 있다."도 바꾸지 않음)
-  if (goalItems.length) S.goals = { id: 'goals', type: 'goals', title: '연수 목표', items: goalItems.map((t) => truncate(t, 120)), who };
+  // 칸 제목: 교재의 머리말("오늘 배울 것"·"학습 목표") 그대로, 없으면 비워 두고 화면이 대상에 맞는 말(연수 목표·수업 목표)로
+  if (goalItems.length) S.goals = { id: 'goals', type: 'goals', title: goalItems.heading || '', items: goalItems.map((t) => truncate(t, 120)), who };
 
   const msgs = d.messages || [];
   const lead = msgs.find((m) => (m.score ?? 2) >= 2); // 사례 속 인용 같은 약한 후보는 첫 화면 메시지로 올리지 않음
@@ -261,17 +291,20 @@ export function materialToDraft(material, info = {}) {
     slotPage.outline = d.sections?.[0]?.page;
   }
 
-  // 차시(날짜가 둘 이상): 제목은 교재 차례와 개수가 맞을 때만 가져옴(지어내지 않음)
-  const dates = info.dates?.length ? info.dates : (ev.dates || []);
-  if (dates.length >= 2 && !(d.sessions || []).length) {
-    meta.sessions = dates.map((date, i) => ({ no: i + 1, date, start: '', end: '', title: '' }));
+  // 차시(날짜가 둘 이상): 제목은 교재 차례와 개수가 맞을 때만 가져옴(지어내지 않음).
+  // 강사가 준 날짜(info.sessions [{date,start,end}] 또는 info.dates)가 교재보다 우선
+  const days = infoDays(info);
+  const dates = days ? days.map((x) => x.date) : (ev.dates || []);
+  if (days && !info.date) { meta.date = days[0].date; if (!info.start) meta.start = days[0].start || meta.start; if (!info.end) meta.end = days[0].end || meta.end; }
+  if (dates.length >= 2 && (days || !(d.sessions || []).length)) {
+    meta.sessions = dates.map((date, i) => ({ no: i + 1, date, start: days?.[i]?.start || '', end: days?.[i]?.end || '', title: '' }));
     const titles = (d.sections || []).length === dates.length ? d.sections.map((x) => x.title) : (d.agenda?.items || []).length === dates.length ? d.agenda.items.map((x) => x.text) : [];
     if (titles.length) S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: dates.map((date, i) => ({ no: i + 1, date, title: titles[i], desc: '', links: [] })) };
   }
   // 교재의 차시표("1차시 1. 11.(월) 주제"): 날짜가 없어도 번호·주제는 그대로. 차시 줄 아래의 내용·준비물·과제는 설명에
   if (!S.sessions && (d.sessions || []).length >= 2) {
     S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: d.sessions.map((x) => ({ no: x.no, date: x.date || '', title: x.title, desc: x.desc || '', links: [] })), source: { file: d.sessions[0].file, pages: [...new Set(d.sessions.map((x) => x.page))] } };
-    if (d.sessions.every((x) => x.date)) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
+    if (!days && d.sessions.every((x) => x.date)) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
     slotPage.sessions = d.sessions[0].page;
   }
 
@@ -428,17 +461,13 @@ export function materialToDraft(material, info = {}) {
   else if (sourceBody && firstBody) ctas.push({ label: { procedure: '절차 보기', cases: '사례 보기', discuss: '질문 보기' }[firstBody.type], href: `#${firstBody.type}` });
   if (hasDeckFile) ctas.push({ label: '교재 보기', href: '#deck' });
   if (!ctas.length && S.outline) ctas.push({ label: '차례 보기', href: '#outline' });
-  const heroMeta = [];
-  const extraRows = [speakers.length >= 2 && { label: '발표', value: truncate(speakers.map((p) => p.name).join(' · '), 80) }, !S.goals && who && { label: '대상', value: truncate(who, 80) }].filter(Boolean);
-  if (extraRows.length || meta.sessions.filter((x) => x.date).length >= 2) {
-    const base = [['일시', whenText(meta)], ['장소', placeText(meta)], ['강사', whoText(instructors[0])]].filter(([, v]) => v).map(([label, value]) => ({ label, value }));
-    heroMeta.push(...base, ...extraRows);
-  }
+  // 일시·장소·강사 줄은 적지 않음: 화면(render/hero.js)이 연수 정보에서 그때그때 그려서 날짜를 고치면 첫 화면도 따라옴(hero-meta.js 한 곳)
+  const heroMeta = [speakers.length >= 2 && { label: '발표', value: truncate(speakers.map((p) => p.name).join(' · '), 80) }, !S.goals && who && { label: '대상', value: truncate(who, 80) }].filter(Boolean);
   S.hero = { id: 'hero', type: 'hero', nav: '처음', eyebrow: meta.organizer || '', title: meta.title, subtitle: meta.subtitle, ctas: ctas.slice(0, 2), meta: heroMeta };
 
   // ── 칸 놓기: 흐름의 순서에 본문 칸을 교재 순서로 끼움 ─────────────
   // 이름표 줄 묶음(과정 개요 등): 첫 화면·목표·한눈에 보기에 이미 실린 줄이 대부분이면 되풀이하지 않음
-  const headHay = textKey(JSON.stringify([meta, S.hero, S.goals, S.glance, instructors, whenText(meta)]));
+  const headHay = textKey(JSON.stringify([meta, S.hero, S.goals, S.glance, instructors, whenText(meta), placeText(meta), whoText(instructors[0])]));
   const shown = (v) => { const w = normLine(v).split(/[\s|·,/()~+]+/).map(textKey).filter((x) => x.length >= 2); return w.length ? w.filter((x) => headHay.includes(x)).length / w.length >= 0.6 : true; };
   const entries = composed.entries.filter((e) => !(e.section?._facts && e.section.rows.filter((r) => shown(r[1])).length >= e.section.rows.length * 0.7));
   const used = new Map();

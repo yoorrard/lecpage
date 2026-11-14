@@ -13,6 +13,7 @@ import { FONTS } from '../design/fonts.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { fxInfo } from '../decide/design.js';
 import { md } from './markdown.js';
+import { whenText } from '../hero-meta.js';
 
 /** 구분 띠: 첫 화면 아래에 흐르는 띠(marquee)나 선·물결 장식 */
 function dividerBand(ctx) {
@@ -106,7 +107,7 @@ function footer(ctx) {
   const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
   const collects = ctx.bp.privacy.collect.some((c) => c !== 'nickname') && ctx.live;
   return `<footer class="lp-foot"><div class="lp-wrap">
-<div class="lp-foot-main"><p class="lp-foot-title">${esc(m.title)}</p>${m.organizer ? `<p>${esc(m.organizer)}</p>` : ''}${m.date ? `<p>${esc(koDate(m.date))}${m.venue ? ` · ${esc(m.venue)}` : ''}</p>` : ''}${m.contact ? `<p>문의 ${contactHtml(m.contact)}</p>` : ''}</div>
+<div class="lp-foot-main"><p class="lp-foot-title">${esc(m.title)}</p>${m.organizer ? `<p>${esc(m.organizer)}</p>` : ''}${m.date ? `<p>${esc(whenText(m, { time: false }))}${m.venue ? ` · ${esc(m.venue)}` : ''}</p>` : ''}${m.contact ? `<p>문의 ${contactHtml(m.contact)}</p>` : ''}</div>
 ${links.length ? `<nav class="lp-foot-links" aria-label="바닥글 메뉴">${links.map((s) => `<a href="#${esc(s.id)}">${esc(s.nav)}</a>`).join('')}</nav>` : ''}
 <div class="lp-foot-meta">${collects || ctx.live ? '<a href="privacy.html">개인정보 처리 안내</a>' : ''}<a href="check.html">접속 확인</a><span>lecpage로 만들었어요</span><a href="#main" class="lp-totop">맨 위로 ${icon('up')}</a></div>
 </div></footer>`;
