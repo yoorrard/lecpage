@@ -25,7 +25,7 @@ export { syncHeroMeta } from './hero-meta.js';
 export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 export { deriveConcept, cleanConcept, conceptDesign, conceptLine, conceptKeywords, TOPIC_CONCEPTS } from './decide/concept.js';
 export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO, PROMPT_END, readAnswer, isCutAnswer, joinAnswer, answerPart, CONTINUE_ASK, JSON_ONLY_ASK } from './prompt/bridge.js';
-export { guardMaterial, undoRestore, restoredCount } from './guard.js';
+export { guardMaterial, undoRestore, restoredCount, dropMissingAssets } from './guard.js';
 export { applyBlueprintPatch, diffSummary, withSectionIds, PROTECTED_PATHS } from './patch.js';
 export { applyInfo, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints } from './intake.js';
 export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';

@@ -19,6 +19,8 @@ export async function loadExample(id) {
 const pending = new Map();
 export function setPendingFiles(id, files) { pending.set(id, Array.from(files || [])); }
 export function takePendingFiles(id) { const f = pending.get(id) || []; pending.delete(id); return f; }
+/** 첫 화면에 놓고 아직 읽지 않은 교재가 있는지(새로 고치면 사라지므로 다시 고르라고 알릴 때) */
+export const hasPendingFiles = () => [...pending.values()].some((f) => f.length > 0);
 
 /** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·배포하기) */
 export const stageOf = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : 3);

@@ -223,3 +223,49 @@ describe('교재 지킴이', () => {
     assert.equal(E.guardMaterial(ai, null).blueprint, ai);
   });
 });
+
+describe('없는 그림·파일 주소 비우기(dropMissingAssets)', () => {
+  const bp = () => ({
+    version: 1, meta: { title: '연수' }, design: { logo: 'assets/media/logo.png' },
+    sections: [
+      { id: 'st', type: 'stations', items: [{ id: 'a', title: '실습', images: [{ src: 'assets/media/deck1-p8-1.png', caption: '교재 그림' }, { src: 'assets/slides/slide-002.webp', caption: '있는 쪽 그림' }, { src: 'https://example.com/a.png', caption: '바깥 주소' }] }] },
+      { id: 'deck', type: 'deck', slides: [{ src: 'assets/slides/slide-001.webp', page: 1, title: '첫 쪽' }, { src: 'slides/p9.png', page: 9, title: '없는 쪽' }] },
+      { id: 'mat', type: 'materials', items: [{ title: '활동지', href: './assets/files/%ED%99%9C%EB%8F%99%EC%A7%80.pdf' }, { title: '없는 파일', href: 'assets/files/x.pdf' }] },
+      { id: 'txt', type: 'text', title: '안내', md: 'assets/media/ 폴더 이야기', desc: 'media/a.png' },
+    ],
+  });
+  const HAS = ['assets/slides/slide-001.webp', 'assets/slides/slide-002.webp', 'assets/files/활동지.pdf', 'src/교재.pptx'];
+
+  test('저장소에 없는 assets·media·slides 주소만 비우고, 비게 된 그림은 목록에서 뺌', () => {
+    const r = E.dropMissingAssets(bp(), HAS);
+    const st = r.blueprint.sections[0].items[0];
+    assert.deepEqual(st.images.map((x) => x.src), ['assets/slides/slide-002.webp', 'https://example.com/a.png'], '교재에 없는 그림은 빠지고 있는 그림·바깥 주소는 그대로');
+    assert.deepEqual(r.blueprint.sections[1].slides.map((x) => x.src), ['assets/slides/slide-001.webp', ''], '쪽은 남고 그림 주소만 비움');
+    assert.equal(r.blueprint.sections[1].slides[1].title, '없는 쪽');
+    assert.equal(r.blueprint.sections[2].items[0].href, './assets/files/%ED%99%9C%EB%8F%99%EC%A7%80.pdf', './·%인코딩도 같은 파일로 봄');
+    assert.equal(r.blueprint.sections[2].items[1].href, '');
+    assert.equal(r.blueprint.design.logo, '');
+    assert.equal(r.blueprint.sections[3].md, 'assets/media/ 폴더 이야기', '글 칸은 건드리지 않음');
+    assert.equal(r.blueprint.sections[3].desc, 'media/a.png', '주소 칸이 아니면 그대로');
+    assert.deepEqual(r.dropped.sort(), ['assets/files/x.pdf', 'assets/media/deck1-p8-1.png', 'assets/media/logo.png', 'slides/p9.png']);
+  });
+
+  test('비울 것이 없으면 같은 설계도를 그대로, 확인 함수도 받음', () => {
+    const b = { version: 1, meta: { title: '연수' }, sections: [{ id: 'd', type: 'deck', slides: [{ src: 'assets/slides/slide-001.webp' }] }] };
+    assert.equal(E.dropMissingAssets(b, HAS).blueprint, b);
+    assert.equal(E.dropMissingAssets(b, (p) => p.startsWith('assets/slides/')).dropped.length, 0);
+    assert.equal(E.dropMissingAssets(b, () => false).blueprint.sections[0].slides[0].src, '');
+    assert.equal(E.dropMissingAssets(null, HAS).blueprint, null);
+  });
+
+  test('앱 흐름: 교재 지킴이가 이어 준 초안의 실습 그림도 저장소에 없으면 빠지고, 검사기를 지남', () => {
+    const d = clone(draft);
+    sec(d, 'stations').items[0].images = [{ src: 'assets/media/deck1-p8-1.png', caption: '' }];
+    const ai = aiAnswer(); sec(ai, 'stations').items.forEach((it) => { delete it.images; });
+    const kept = E.keepDraftParts(E.guardMaterial(ai, d, { material }).blueprint, d);
+    assert.equal(sec(kept, 'stations').items[0].images?.[0]?.src, 'assets/media/deck1-p8-1.png', '전: 초안 그림이 AI 답으로 이어짐');
+    const out = E.dropMissingAssets(kept, []).blueprint;
+    assert.deepEqual(sec(out, 'stations').items[0].images, []);
+    assert.equal(E.validate(out).errors.length, 0);
+  });
+});

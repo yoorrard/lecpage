@@ -129,10 +129,39 @@ function landingFacts() {
   };
 }
 
+// 오프라인용 목록 sw-warm.json: 연수 화면(#/p)에 처음 들어가면 서비스 워커(public/sw.js)가 이 목록의 조각을 미리 받아 둡니다.
+// 첫 화면(쉘)·만들기 화면·교재 읽기·미리보기 런타임·도움말·설정과 그 조각들이 정적으로 가져오는 조각·CSS. heavy: PDF 읽기 도구(약 1.4MB, 마우스 화면에서만)
+// 첫 방문 랜딩에서는 받지 않음(휴대폰 데이터). 빌드마다 조각 이름(해시)이 바뀌므로 목록도 빌드 때 만듦
+const WARM = ['src/pages/Project.jsx', 'src/lib/ingest.js', 'src/lib/runtime-files.js', 'src/pages/Help.jsx', 'src/pages/Settings.jsx'];
+function swWarm() {
+  return {
+    name: 'lecpage-sw-warm',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
+      const files = new Set(); const heavy = new Set();
+      const add = (c) => {
+        if (!c || files.has(c.fileName)) return;
+        files.add(c.fileName);
+        for (const css of c.viteMetadata?.importedCss || []) files.add(css);
+        for (const a of c.viteMetadata?.importedAssets || []) if (/pdf\.worker/.test(a)) heavy.add(a);
+        for (const i of c.imports) add(bundle[i]);
+      };
+      add(chunks.find((c) => c.isEntry));
+      for (const w of WARM) {
+        const c = chunks.find((x) => (x.facadeModuleId || '').replace(/\\/g, '/').endsWith('/' + w));
+        if (!c) throw new Error(`sw-warm.json: ${w} 조각을 찾지 못했습니다(파일을 옮겼으면 vite.config.js의 WARM을 고치세요).`);
+        add(c);
+      }
+      this.emitFile({ type: 'asset', fileName: 'sw-warm.json', source: JSON.stringify({ files: [...files].sort(), heavy: [...heavy] }) + '\n' });
+    },
+  };
+}
+
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt(), landingFacts()],
+  plugins: [preact(), licensesTxt(), landingFacts(), swWarm()],
   resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },

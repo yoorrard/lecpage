@@ -15,6 +15,12 @@ export function koTime(t, { now = Date.now(), day = true } = {}) {
   const gap = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())) / 864e5);
   return `${gap === 0 ? '오늘' : gap === 1 ? '내일' : `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`} ${time}`;
 }
+/** 오늘 날짜(한국 시각, 'YYYY-MM-DD'). 기기 시간대와 상관없이 */
+export const todayKst = (now = Date.now()) => new Date(now + 9 * 3600e3).toISOString().slice(0, 10);
+/** 'YYYY-MM-DD'가 오늘(한국 시각)보다 앞인지. 날짜가 없거나 모양이 다르면 false */
+export const isPastDate = (date, now = Date.now()) => /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) && date < todayKst(now);
+/** 'YYYY-MM-DD' → '11월 4일' */
+export const monthDay = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || '')); return m ? `${+m[2]}월 ${+m[3]}일` : ''; };
 /** 마지막 부름만 ms 뒤에 실행. .flush()는 기다리는 것을 바로 실행(탭을 닫거나 화면을 떠날 때) */
 export function debounce(fn, ms) {
   let t = 0; let last = null;

@@ -436,3 +436,30 @@ export function undoRestore(bp0, r) {
 
 /** 알림에 셀 곳(조용히 채운 목록은 빼고) */
 export const restoredCount = (restored) => arr(restored).filter((r) => !r.quiet).length;
+
+// ── 없는 그림·파일 주소 ──
+const ASSET_PATH = /^(?:\.\/)?(?:assets|media|slides)\/\S+$/i;
+const ASSET_KEY = /^(?:src|href|url|photo|logo|thumb|image|poster)$/;
+const cleanPath = (p) => { let s = String(p || '').trim().replace(/^\.\//, '').split(/[?#]/)[0]; try { s = decodeURIComponent(s); } catch { /* 그대로 */ } return s; };
+/**
+ * 설계도 속 상대 경로(assets/·media/·slides/) 가운데 이 연수에 없는 파일을 비웁니다. AI가 지어내거나 다른 연수·예시에서 옮겨 온 그림 주소,
+ * 교재에서 찾았지만 저장하지 않은 그림은 사이트에서 깨진 그림이 되고, 앱 미리보기에서는 앱 주소로 새어 나가 브라우저가 막습니다(ORB).
+ * 주소 칸(src·href·url·photo·logo·thumb…)의 빈칸 없는 경로만 보고 글 칸은 건드리지 않습니다. 그림 목록(images)에서 비게 된 항목은 뺍니다.
+ * @param {object} bp 설계도
+ * @param {Iterable<string>|((path: string) => boolean)} has 있는 파일 경로(예: 'assets/slides/slide-001.webp') 또는 확인 함수
+ * @returns {{ blueprint: object, dropped: string[] }} dropped: 비운 주소(없으면 설계도를 그대로 돌려줌)
+ */
+export function dropMissingAssets(bp, has) {
+  if (!isObj(bp)) return { blueprint: bp, dropped: [] };
+  const set = typeof has === 'function' ? null : new Set([...(has || [])].map(cleanPath));
+  const ok = (p) => (set ? set.has(cleanPath(p)) : !!has(cleanPath(p)));
+  const dropped = [];
+  const walk = (v, key) => {
+    if (typeof v === 'string') { if (ASSET_KEY.test(key) && ASSET_PATH.test(v.trim()) && !ok(v)) { dropped.push(v); return ''; } return v; }
+    if (Array.isArray(v)) { const out = v.map((x) => walk(x, key)); return key === 'images' ? out.filter((x) => !(isObj(x) && 'src' in x && !x.src)) : out; }
+    if (isObj(v)) { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = walk(x, k); return o; }
+    return v;
+  };
+  const out = walk(bp, '');
+  return { blueprint: dropped.length ? out : bp, dropped };
+}
