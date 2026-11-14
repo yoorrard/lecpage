@@ -458,7 +458,9 @@ async function report(request, env, ctx, cfg, self) {
   const saved = await (await ok(await gateStub(env).fetch('http://gate/report', post({ ip, site: id, reason, contact })))).json();
   if (cfg.reportWebhook) {
     const link = cfg.pagesCfg && raw.includes(`s-${id}.`) ? siteUrlOf(cfg.pagesCfg, id) : `${self}/s/${id}/`;
-    const text = `[lecpage 바로 배포 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}\n처리: ${self}/admin/`.slice(0, 1800);
+    // 처리 링크: 관리 Worker 주소(ADMIN_URL). 없으면 이 Worker 안의 /admin(경로 Access를 켰을 때만), 그것도 없으면 뺌
+    const adminLink = cfg.adminUrl || (cfg.access ? `${self}/admin/` : '');
+    const text = `[lecpage 바로 배포 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}${adminLink ? `\n처리: ${adminLink}` : ''}`.slice(0, 1800);
     // text는 Slack, content는 Discord 웹훅이 읽는 이름
     ctx.waitUntil(fetch(cfg.reportWebhook, post({ text, content: text, n: saved.n, site: id, url: link, reason, contact, at: saved.at })).catch((e) => console.error('report webhook failed', e?.message)));
   }

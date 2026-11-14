@@ -92,5 +92,9 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(c.publicOrigin, 'https://sites.example.com');
   assert.equal(c.allowSupabaseSdk, true);
   assert.equal(config({ REPORT_WEBHOOK: 'https://hooks.example/x' }).reportWebhook, 'https://hooks.example/x');
+  // 신고 알림의 '처리' 링크(관리 Worker 주소): https만, 없으면 빈 값(링크를 뺌)
+  assert.equal(d.adminUrl, '');
+  assert.equal(config({ ADMIN_URL: 'https://lecpage-admin.x.workers.dev/admin/' }).adminUrl, 'https://lecpage-admin.x.workers.dev/admin/');
+  assert.equal(config({ ADMIN_URL: 'http://lecpage-admin.x.workers.dev/' }).adminUrl, '');
   assert.equal(expiryFrom(1000, 30), 1000 + 30 * 86400000);
 });

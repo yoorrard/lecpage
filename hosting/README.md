@@ -78,7 +78,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 - **Cloudflare가 최선인가**: 무료로 '서버 쪽 검사(런타임 외 스크립트 금지) + 사이트마다 다른 주소 + 하루 한도와 무관한 보기 + 실시간 방'을 한 계정에서 다 하는 곳은 찾지 못했습니다. Workers Previews는 Worker 하나에 미리보기 100개(무료)까지라 오래된 것부터 지워지고, Pages는 미리보기 배포 개수가 무제한입니다. 근거·위험은 조사 문서.
 - 손으로 하던 길(`npx wrangler login` → `npm run deploy` → `npx wrangler secret put …`)도 그대로 됩니다. 관리 Worker는 `npm run deploy:admin`. 앱 주소 허용은 [`wrangler.jsonc`](wrangler.jsonc)의 `ALLOWED_ORIGINS`(또는 비밀 값 `APP_ORIGINS`), 내 도메인은 붙인 뒤 `PUBLIC_ORIGIN`.
 - 확인: `curl https://<호스트>/api/info` → `{"ok":true,"view":"pages",…}`
-- 자동 배포를 원하면 Workers Builds에 연결합니다. Root directory `hosting`, Deploy command `npm ci && npm run deploy`, 감시 경로 `hosting/*`, `skills/lecpage/engine/runtime/*`, `skills/lecpage/engine/src/build.js`, `skills/lecpage/backends/cloudflare/src/*`.
+- 자동 배포는 위 'GitHub에서 저절로 다시 배포'(Workers Builds, 명령은 그 2번). 감시 경로 `hosting/*`, `skills/lecpage/engine/runtime/*`, `skills/lecpage/engine/src/build.js`, `skills/lecpage/backends/cloudflare/src/*`.
 
 ### 앱에 연결
 
@@ -112,7 +112,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 ## 4. 한도와 비용
 
-모두 `wrangler.jsonc`의 `vars`(또는 대시보드 변수)로 바꿉니다.
+모두 `wrangler.jsonc`의 `vars`에 적어 커밋합니다. 대시보드에 적은 평문 변수는 다음 배포(Workers Builds) 때 지워집니다(비밀 값은 남음).
 
 | 변수 | 기본 | 뜻 |
 |---|---|---|
@@ -138,6 +138,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `LIVE_MAX_PARTICIPANTS` / `LIVE_SOCKETS_PER_IP` | 300 / 500 | 방 하나의 참가자, 한 IP의 실시간 연결 |
 | `ALLOWED_ORIGINS` | Pages 미러, localhost | 이 서버를 부를 수 있는 앱 주소 |
 | `PUBLIC_ORIGIN` | (요청 주소) | 내 도메인을 붙였을 때 돌려줄 주소 |
+| `ADMIN_URL` | (wrangler.jsonc에 운영 주소) | 신고 알림의 '처리' 링크가 가리킬 관리 화면(관리 Worker). 없으면 링크를 뺌 |
 | `ALLOW_SUPABASE_SDK` | (꺼짐) | §6 참고 |
 | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | (없음) | 관리 화면(§11). 관리 Worker에는 설정 스크립트가 넣음. 바로 배포 Worker에 넣으면 그 안의 `/admin`(경로 Access, 예전 방식)이 열림. 저장소에 적지 말고 비밀 값으로 |
 | `ALERT_AT` | `45,60,80,95` | 하루 예산의 몇 %에서 알림을 보낼지(넘침 단계와 같게: 예약한 연수만 → 새 일 멈춤 → 묻기 20초 → 곧 한도) |
@@ -194,7 +195,10 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 **요청을 줄이는 장치**: `pages` 보기는 엔진 런타임 `.js`의 Pages 열쇠를 배포 때 미리 계산해 사이트마다 다시 받지 않고, 512KB 아래 파일은 배포 때 HTML과 한 번에 Pages에 올립니다. Gate는 목록·방 묶기 확인을 한 번에 받고 저장량 합계를 메모리로 셉니다(사이트 표를 매번 훑지 않음). `/api/info`는 isolate 20초·브라우저 30초 기억. `worker` 보기는 런타임 정적 사본(`/rt/`)·내용 지문(`?v=`)·1년 캐시(§6).
 
-**유료 전환(Workers Paid 월 $5)**: 관리 화면 맨 위 한 줄이 권합니다(§10). `worker` 보기는 하루 한도에 닿으면 사이트까지 멈추므로 여러 강사에게 열어 둘 서버면 처음부터. `pages` 보기는 사이트가 멈추지 않으므로 참여 기능(특히 학교망 연수)이 많은 날이 이어질 때. 올리면 `PLAN=paid`(하루 상한 1,000·긴 대기를 Worker가 대신), `MAX_TOTAL_BYTES`도 그때 올립니다.
+**유료 전환(Workers Paid 월 $5)**: 관리 화면 맨 위 한 줄이 권합니다(§10). `worker` 보기는 하루 한도에 닿으면 사이트까지 멈추므로 여러 강사에게 열어 둘 서버면 처음부터. `pages` 보기는 사이트가 멈추지 않으므로 참여 기능(특히 학교망 연수)이 많은 날이 이어질 때. `PLAN=paid`면 하루 상한 1,000·긴 대기를 Worker가 대신하고, `MAX_TOTAL_BYTES`도 그때 올립니다. 순서:
+1. 대시보드에서 Workers Paid 구독
+2. `wrangler.jsonc`와 `wrangler.admin.jsonc`의 `vars`에 `"PLAN": "paid"`를 넣어 커밋(대시보드 평문 변수는 Workers Builds가 덮어씀)
+3. main에 push → Workers Builds가 다시 배포(관리 Worker를 따로 연결하지 않았으면 `npm run deploy:admin`)
 
 ## 5. 끄기
 
@@ -212,7 +216,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 3. HTML은 내보내면서 `<meta http-equiv="refresh">`, `<base>`, `<object>`, `<embed>`, 바깥 주소의 `<script>`를 빼고 "신고" 링크를 붙입니다.
 4. 사이트 주소는 무작위 10자, 수정 열쇠는 무작위 32바이트이고 서버에는 해시만 둡니다. 없는 주소를 두드려도 저장소에는 아무것도 생기지 않습니다.
 
-**앱과 서버의 버전이 다를 때**: 엔진 런타임이 바뀌면 서버를 다시 배포해야 새 앱이 올릴 수 있습니다(같은 저장소에서 같이 배포하면 됩니다). 서버가 먼저 바뀌면, 예전 앱을 띄워 둔 사람은 `runtime_mismatch`를 받고 앱이 "새로 고친 뒤 다시"라고 안내합니다. 이 틈을 없애려면 런타임을 고치기 **전에** `npm run runtime:keep`을 실행해 `runtime-history.json`을 커밋해 두세요. 거기 적힌 예전 판도 받습니다. 보안 문제로 막아야 하는 판은 그 파일에서 지웁니다.
+**앱과 서버의 버전이 다를 때**: 엔진 런타임이 바뀌면 서버도 새 판이어야 새 앱이 올릴 수 있습니다(main에 push하면 Workers Builds가 앱과 서버를 함께 배포). 서버가 먼저 바뀌면, 예전 앱을 띄워 둔 사람은 `runtime_mismatch`를 받고 앱이 "새로 고친 뒤 다시"라고 안내합니다. 이 틈을 없애려면 런타임을 고치기 **전에** `npm run runtime:keep`을 실행해 `runtime-history.json`을 커밋해 두세요. 거기 적힌 예전 판도 받습니다. 보안 문제로 막아야 하는 판은 그 파일에서 지웁니다.
 
 **`pages` 보기에서 더하는 것**
 - 받을 때 검사(런타임 대조·크기·형식)를 마친 파일만 **서버가** Pages 직접 올리기 API로 올립니다. 자산 API의 JWT는 앱(브라우저)에 주지 않습니다: Pages가 열쇠와 내용이 맞는지 확인하는지 알 수 없어, 브라우저가 직접 올리면 남의 사이트가 쓰는 파일을 바꿔치기할 수 있기 때문입니다(이 API는 CORS도 열려 있지 않음, 2026-11-13 확인).
@@ -220,7 +224,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 - HTML은 배포할 때 한 번 손봐(위 3번. 신고 링크는 이 호스트의 `/report`, 미리보기 카드 주소는 Pages 주소) 올리고, 응답 머리글은 서버가 만든 `_headers`로만 정합니다(CSP·nosniff·noindex·SVG 가둠·내려받기 형식·강사 화면 틀 막기, Pages 기본 `Access-Control-Allow-Origin: *`는 뗌). `robots.txt`는 호스트 정책으로 바꾸고, `404.html`이 없으면 넣습니다(없으면 Pages가 모든 주소에 첫 화면을 보여 줌). 사이트가 보낸 `_headers`·`_redirects`는 쓰지 않습니다.
 - **영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고** Durable Object에 두어 Worker가 Range(206)까지 맞춰 내보냅니다. Pages·Workers 정적 자산은 Range 요청에 200을 주는데 Safari(아이폰)가 영상을 틀 때 Range가 필요합니다(공식 문서). Pages 주소로 오면 `_redirects`가 `/s/<id>/…`로 넘깁니다.
 - 사이트마다 출처(`s-<id>.….pages.dev`)가 갈려 브라우저 저장소를 같이 쓰지 않고, 한 사이트가 피싱 신고로 막혀도 다른 사이트는 그대로입니다.
-- 가리기: 그 브랜치에 '가려 둔 사이트' 화면만 배포합니다(지난 배포는 풀 때 다시 쓰려고 둠. 배포마다 생기는 고유 주소 `<해시>.….pages.dev`는 앱·서버가 어디에도 내보내지 않음). 풀기: 마지막 배포 목록으로 다시 배포하고 안내 화면 배포를 지움. 지우기·기간 끝: 그 브랜치 배포를 모두 지움(가장 최근 배포를 못 지우면 '보관 기간이 끝났어요' 화면만 남김). 확실히 내려야 하면 가리지 말고 지우세요.
+- 가리기: 그 브랜치에 '가려 둔 사이트' 화면만 배포합니다(지난 배포는 풀 때 다시 쓰려고 둠. 배포마다 생기는 고유 주소 `<해시>.….pages.dev`는 앱·서버가 어디에도 내보내지 않음). 풀기: 마지막 배포 목록으로 다시 배포하고 안내 화면 배포를 지움. 기간 끝: 그 브랜치에 '보관 기간이 끝났어요' 화면 하나만 남기고 나머지를 지움(주소가 Cloudflare 영어 404가 되지 않게). 지우기: 그 브랜치 배포를 모두 지움(가장 최근 배포를 못 지우면 같은 화면만 남김). 확실히 내려야 하면 가리지 말고 지우세요.
 - 같은 사이트를 이 호스트의 `/s/<id>/`로도 엽니다(학교망에서 pages.dev가 막혔을 때 쓰는 두 번째 주소. Worker가 Pages에서 가져와 같은 머리글로 내보내고, 이 주소로 연 방문은 Worker 요청에 듦).
 - 강사 화면에 운영자 공지 띠를 붙이지 않습니다(정적 배포라 보는 때에 끼울 수 없음). 앱 공지는 그대로입니다.
 
@@ -304,7 +308,7 @@ node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, �
 | 연수 예약(그날 70%) | 그날 참여 기능이 멈출 연수를 '만들 때' 내 계정으로 안내 | 기본(앱이 날짜·인원을 보냄) |
 | 넘침 단계: 45%부터 예약한 연수만, 60%(+ 오늘 예약 연수의 남은 몫)에서 새 사이트·새 방만 멈춤 | 남은 몫을 이미 올라온 연수에 쓰고, 새로 만드는 사람은 같은 파일 그대로 강사 계정으로 | 기본(PLAN=free) |
 | 공정 몫(기기 표·IP)·Pages API 5분 창 | 한 사람이 몫을 다 쓰는 것, 배포가 몰려 Cloudflare API가 5분 막히는 것 | 기본(기기 표는 앱이 보낼 때) |
-| 긴 대기·묻기 간격 권고 | 학교망 묻기 요청(§7) | 기본(서버·런타임 모두). 런타임이 바뀌었으니 서버를 다시 배포해야 새 사이트에 들어감 |
+| 긴 대기·묻기 간격 권고 | 학교망 묻기 요청(§7) | 기본(서버·런타임 모두) |
 | 런타임 정적 사본·지문 주소·1년 캐시 | `worker` 보기 방문 한 번에 드는 요청 수 | 기본 |
 | 예산 85%부터 앱 이용 합계는 Gate를 부르지 않고 버림 | 덜 급한 일이 몫을 쓰는 것 | 기본 |
 | 없는 주소 1분 기억, 주소 모양 먼저 검사 | 주소 두드리기로 저장소를 깨우는 것 | 기본 |
@@ -313,12 +317,12 @@ node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, �
 | WAF 속도 제한 규칙(무료 1개) | 한 IP의 폭주(Worker에 닿기 전에 막아 요청 수에도 안 듦) | 내 도메인이 있을 때 `npm run setup -- --domain …`(1개까지 자동) |
 | 두 번째 주소 `/s/<id>/` | 학교망이 pages.dev를 막은 경우(§12) | 기본(내 도메인이면 그 도메인 주소) |
 
-**운영자가 할 일**: ① 토큰 만들기 ② `npm run setup` ③ (처음이면) Zero Trust 가입 후 다시 돌리기 ④ 앱 빌드 변수(§2). 확인: 스크립트 끝의 `/api/info`, 관리 화면의 오늘 요청 수·앞으로 7일 예약표, 알림 웹훅에 시험 글(`ALERT_AT`을 잠깐 `1`로).
+**운영자가 할 일**: ① 토큰 만들기 ② `npm run setup` ③ (처음이면) Zero Trust 가입 후 다시 돌리기 ④ 앱 연결(운영자 앱 주소는 저절로, 다른 주소만 빌드 변수, §2). 확인: 스크립트 끝의 `/api/info`, 관리 화면의 오늘 요청 수·앞으로 7일 예약표, 알림 웹훅에 시험 글(`ALERT_AT`을 잠깐 `1`로).
 
 **내 도메인(선택)**: 앱과 **다른 등록 도메인**(예: `lecpage-sites.example`)을 Cloudflare에 넣고 `npm run setup -- --domain sites.lecpage-sites.example`. Worker 도메인·`PUBLIC_ORIGIN`·WAF 규칙을 넣습니다. 규칙: 이름 `lecpage 폭주 막기`, 조건 `starts_with(http.request.uri.path, "/s/") or starts_with(http.request.uri.path, "/api/") or starts_with(http.request.uri.path, "/live/")`, 같은 IP 10초에 **400**건 넘으면 Block 10초(무료 요금제에서 고를 수 있는 값). 학교 한 곳(IP 하나)에 40명이 동시에 처음 열어도 300건 안쪽입니다. 강당 큰 연수가 막히면 대시보드에서 600으로 올립니다. Security → Bots의 **Block AI bots**는 켜도 되고, **Bot Fight Mode는 끄세요**(카카오톡 미리보기 봇과 앱의 API 요청이 막힐 수 있음). 도메인이 있으면 `worker` 보기 사이트 파일을 데이터센터 캐시에 10분 둡니다.
 
-**권하는 행동**(관리 화면 맨 위 한 줄이 지난 7일·28일 숫자로 계산, [`src/capacity.js`](src/capacity.js) `forecast`)
-- **유료 전환을 권해요**(월 약 $N을 같이 보여 줌): 무료이고 최근 7일 중 **2일 이상** 하루 한도(Worker·DO 요청 중 큰 쪽)의 50%를 넘었거나, 28일 추세로 **7일 안에** 60%(새 사이트를 받지 못하는 선)에 닿을 때. 이때 웹훅으로도 일주일에 한 번 알립니다.
+**권하는 행동**(관리 화면 맨 위 한 줄이 지난 7일·28일 숫자로 계산, [`src/capacity.js`](src/capacity.js) `forecast`. 처리 안 된 신고가 있으면 그것을 먼저 보임)
+- **유료 전환을 권해요**(월 약 $N과 §4의 올리는 순서 3줄을 같이 보여 줌): 무료이고 최근 7일 중 **2일 이상** 하루 한도(Worker·DO 요청 중 큰 쪽)의 50%를 넘었거나, 28일 추세로 **7일 안에** 60%(새 사이트를 받지 못하는 선)에 닿을 때. 이때 웹훅으로도 일주일에 한 번 알립니다.
 - **하루 상한을 올려도 돼요**: 요청은 넉넉한데(가장 많은 날 30% 아래) 최근 7일 중 2일 이상 하루 새 사이트 상한에 닿았을 때 → `DAILY_SITE_CAP`.
 - **새 배포 멈추기를 검토하세요**: 오늘 새 사이트가 20개를 넘고 평소의 3배를 넘을 때(스팸·이상한 몰림). 큰 연수가 아니면 [새 배포 멈추기] 뒤 사이트 목록·신고 확인.
 - 그 밖은 '지금은 할 일 없음'과 '이 추세면 약 N일 뒤 빠듯해져요'.
@@ -351,7 +355,7 @@ node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, �
 
 **할 수 있는 것**: 팝업 공지 만들기·고치기·끄기(제목 60자·본문 400자 글자만, 링크는 https 하나, 대상: 앱/배포한 사이트의 강사 화면, 기간 90일까지), 새 배포 멈춤·다시 받기, 신고 처리(가리기·풀기·지우기·처리함), 사이트 찾기·가리기·지우기(지울 때 주소 10자를 한 번 더 적음).
 
-사이트 주소는 보기에 맞게(`pages`면 `s-<id>.….pages.dev`) 링크합니다. 공지 대상 '배포한 사이트의 강사 화면'은 `worker` 보기 사이트에만 붙습니다.
+사이트 주소는 보기에 맞게(`pages`면 `s-<id>.….pages.dev`) 링크합니다. 공지 대상 '배포한 사이트의 강사 화면'은 `worker` 보기 사이트에만 붙어, `pages` 보기 서버에서는 그 선택지를 숨기고 한 줄로 알립니다.
 
 숫자는 바로 배포 Worker 안에서 세어 Gate(Durable Object)의 하루 한 줄에 더합니다(바깥 분석 API·토큰 없음). isolate마다 50건씩 묶어 보내므로 어림이고, 정적 자산(첫 화면·신고 화면·`/rt/`)과 Pages 방문은 세지 않습니다. 하루 숫자는 400일 둡니다.
 

@@ -66,6 +66,9 @@ export function config(env = {}) {
   const origins = [env.ALLOWED_ORIGINS ?? DEFAULTS.ALLOWED_ORIGINS, env.APP_ORIGINS ?? ''].join(',').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
   let publicOrigin = '';
   try { if (env.PUBLIC_ORIGIN) publicOrigin = new URL(String(env.PUBLIC_ORIGIN)).origin; } catch { /* 잘못된 값은 무시 */ }
+  // 관리 화면 주소(관리 Worker). 신고 알림의 '처리' 링크. https만
+  let adminUrl = '';
+  try { const u = new URL(String(env.ADMIN_URL ?? '').trim()); if (u.protocol === 'https:') adminUrl = u.href; } catch { /* 없거나 잘못된 값이면 링크를 뺌 */ }
   const plan = String(env.PLAN ?? '').trim().toLowerCase() === 'paid' ? 'paid' : 'free';
   const pages = pagesConfig(env);
   // 보기: VIEW=pages|worker. 정하지 않으면 Pages 설정(계정·프로젝트·토큰·주소)이 다 있을 때 pages
@@ -111,6 +114,7 @@ export function config(env = {}) {
     adminKey: typeof env.ADMIN_KEY === 'string' ? env.ADMIN_KEY.trim() : '',
     reportWebhook: typeof env.REPORT_WEBHOOK === 'string' && /^https:\/\//.test(env.REPORT_WEBHOOK.trim()) ? env.REPORT_WEBHOOK.trim() : '',
     publicOrigin,
+    adminUrl,
     // 알림: 하루 예산의 ALERT_AT %를 넘을 때, 저장량이 80%를 넘을 때. 비밀 ALERT_WEBHOOK(없으면 REPORT_WEBHOOK)으로 보냄
     alertWebhook: [env.ALERT_WEBHOOK, env.REPORT_WEBHOOK].map((v) => (typeof v === 'string' ? v.trim() : '')).find((v) => /^https:\/\//.test(v)) || '',
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),

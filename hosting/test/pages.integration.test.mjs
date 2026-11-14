@@ -211,3 +211,31 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(r.status, 200, JSON.stringify(r.body));
   });
 });
+
+test('VIEW=pages: 보관 기간이 끝나면 배포를 모두 지우고 그 주소에 "보관 기간이 끝났어요" 안내 하나만 남김(Cloudflare 영어 404가 아니게)', async (t) => {
+  if (!existsSync(join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'))) return t.skip('wrangler가 설치되지 않았어요');
+  const cf = await startFakeCf();
+  closers.push(cf.stop);
+  let h;
+  try {
+    h = await startHost({
+      SITE_DAYS: 10 / 86400, // 10초
+      VIEW: 'pages', CF_ACCOUNT_ID: ACCOUNT, PAGES_PROJECT: 'lecpage-view', PAGES_TOKEN: TOKEN, PAGES_HOST: `127.0.0.1:${cf.port}`,
+      PAGES_SITE_URL: `${cf.url}/__view/{branch}/`, CF_API_BASE: cf.api,
+    });
+  } catch (e) { return t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); }
+  closers.push(h.stop);
+  const site = (await call(h.url, 'POST', '/api/sites', { json: { title: '만료 시험' } })).body;
+  const r = await deploy(h.url, site, await buildSite('data-lab'));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const before = cf.deploymentsOf(`s-${site.id}`);
+  assert.equal(before.length, 1);
+  let left = before;
+  for (let i = 0; i < 90 && (left.length !== 1 || left[0].id === before[0].id); i++) { await new Promise((res) => setTimeout(res, 500)); left = cf.deploymentsOf(`s-${site.id}`); }
+  assert.equal(left.length, 1, '안내 화면 배포 하나만 남음');
+  assert.notEqual(left[0].id, before[0].id, '사이트 배포는 지움');
+  assert.deepEqual(Object.keys(left[0].manifest).sort(), ['/404.html', '/index.html']);
+  assert.match((await get(site.url)).text, /이 사이트는 보관 기간이 끝났어요/);
+  assert.equal((await get(`${site.url}assets/lecpage.js`)).status, 404, '사이트 파일은 열리지 않음');
+  assert.equal((await get(site.altUrl)).status, 404, '두 번째 주소도 없음');
+});
