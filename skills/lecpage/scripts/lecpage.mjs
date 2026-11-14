@@ -634,7 +634,10 @@ const commands = {
     const bpShort = sh(bpPath);
     // 연수 정보(info.json)가 없으면 빈칸이 없어도 강사에게 세 가지만 물음: 참여 기능을 모르면 참여 기능 없는 사이트가 됨
     const infoGuess = join(work, 'info.json');
-    const ask = args.i ? '' : existsSync(infoGuess) ? `연수 정보 ${sh(infoGuess)}가 있는데 쓰지 않았어요 → make … -i ${sh(infoGuess)}` : askLine(bb.json.structure?.suggested || [], sh(infoGuess));
+    // 교재로 정할 수 없어 한 번 확인할 것(엔진 intakeAsks: 차시 날짜·출석 기준·직무연수의 출석, references/intake.md 2절)
+    const more = E.intakeAsks({ material: m, blueprint: v.blueprint, info });
+    const recs = [...(bb.json.structure?.suggested || []), ...(v.blueprint.meta.admin.kind === 'official' ? ['attendance'] : [])];
+    const ask = args.i ? (more.length ? `물을 것 ${more.map((x) => x.ask_ko).join(' · ')} → ${sh(resolve(args.i))}(${more.map((x) => x.key).join('·')})` : '') : existsSync(infoGuess) ? `연수 정보 ${sh(infoGuess)}가 있는데 쓰지 않았어요 → make … -i ${sh(infoGuess)}` : askLine([...new Set(recs.map((f) => (typeof f === 'string' ? f : f.feature)))], sh(infoGuess)) + (more.length ? ` · ${more.map((x) => x.ask_ko).join(' · ')}` : '');
     const lines = [
       `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(배포할 사이트) · ${sh(b.tdir)}(강사용, 배포하지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
       ...steps,
@@ -649,7 +652,7 @@ const commands = {
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
     ];
-    say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, ask: ask.startsWith('물을 것') ? ['features', 'size', 'network'] : [], material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
+    say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, ask: ask.startsWith('물을 것') ? [...(args.i ? [] : ['features', 'size', 'network']), ...more.map((x) => x.key)] : [], material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
     process.exitCode = q && !q.ok ? 1 : 0;
   },
 

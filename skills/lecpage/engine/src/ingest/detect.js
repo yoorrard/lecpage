@@ -1,6 +1,6 @@
 // 교재 내용에서 연수 정보를 찾아내는 규칙(휴리스틱). AI 없이도 쓸 만한 설계도 초안을 만들기 위한 바탕입니다.
 // 찾는 것: 프롬프트, 실습 단계, 링크, 도구, 부(Part)·차례, 퀴즈·질문, 용어, 핵심 문장, 강사 소개, 일시·장소, 실습 비율 → 유형 힌트
-import { normText, normLine, textKey, findUrls, urlKey, hostOf, pageText, truncate } from './util.js';
+import { normText, normLine, textKey, findUrls, urlKey, hostOf, pageText, truncate, labelBeforeUrl } from './util.js';
 import { matchToolsInText, toolForUrl, getTool, CATEGORIES } from './tools-db.js';
 import { detectFonts } from './fonts.js';
 
@@ -285,6 +285,17 @@ const fileOrder = (a, b) => (FILE_ORDER.get(a.file) ?? 0) - (FILE_ORDER.get(b.fi
 const STEP_RE = /^(?:(\d{1,2})\s*[.)]\s*(?!\d)|\((\d{1,2})\)\s*|([①-⑳])\s*|([❶-❿➊-➓])\s*|(?:step|STEP|Step)\s*\.?\s*(\d{1,2})\s*[.:)\-–]?\s*|(\d{1,2})\s*단계\s*[.:)\-–]?\s*|(첫째|둘째|셋째|넷째|다섯째|여섯째)\s*[,.:)]?\s*)(.{2,})$/;
 const IMPERATIVE = /(하기|기|세요|합니다|십시오|클릭|선택|입력|접속|로그인|열기|누르기|업로드|저장|공유|복사|붙여\s?넣기|확인|만들기|제출|설치)[.!]?$/;
 function stepText(x) { const m = STEP_RE.exec(x.text); return m ? normText(m[8]) : x.text; }
+const CIRCLE_NO = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳', DARK_NO = '❶❷❸❹❺❻❼❽❾❿', DARK2 = '➊➋➌➍➎➏➐➑➒➓';
+/** 단계 번호(1·①·❶·Step 1·1단계). 모르면 0 */
+function stepNo(x) {
+  if (+x.num > 0) return +x.num;
+  const m = STEP_RE.exec(x.text || ''); if (!m) return 0;
+  const n = m[1] || m[2] || m[5] || m[6];
+  if (n) return +n;
+  if (m[3]) return CIRCLE_NO.indexOf(m[3]) + 1;
+  if (m[4]) return (DARK_NO.indexOf(m[4]) + 1) || (DARK2.indexOf(m[4]) + 1);
+  return ['첫째', '둘째', '셋째', '넷째', '다섯째', '여섯째'].indexOf(m[7]) + 1;
+}
 function isStepLine(x) { return !!x.num || STEP_RE.test(x.text); }
 
 function detectSteps(pages, promptKeys, agendaPages) {
@@ -300,7 +311,10 @@ function detectSteps(pages, promptKeys, agendaPages) {
       if (step && (!cur || x.level <= cur.level)) {
         if (cur && x.level < cur.level) { groups.push(cur); cur = null; }
         if (!cur) cur = { level: x.level, items: [], start: i };
-        cur.items.push(stepText(x));
+        cur.items.push(stepText(x)); cur.no = stepNo(x);
+      } else if (cur && (x.role === 'code' || promptKeys.has(textKey(x.text))) && cur.no && paras[i + 1] && isStepLine(paras[i + 1]) && stepNo(paras[i + 1]) === cur.no + 1) {
+        // "3. 아래 프롬프트를 넣습니다 → (코드 블록) → 4. 결과를 확인합니다": 프롬프트는 프롬프트 칸이 맡고 번호 단계는 이어짐
+        continue;
       } else if (cur && x.level > cur.level) {
         cur.items[cur.items.length - 1] += '\n' + x.text; // 하위 설명
       } else if (cur) { groups.push(cur); cur = null; }
@@ -330,14 +344,7 @@ function detectSteps(pages, promptKeys, agendaPages) {
 }
 
 // ── 링크 ──────────────────────────────────────────────
-function linkLabelFromLine(line, raw) {
-  const i = line.indexOf(raw);
-  if (i <= 0) return '';
-  let s = line.slice(0, i).replace(/[\s:：\-–—→▶>|(\[]+$/, '').replace(LEAD_MARK, '');
-  s = s.split(/[|·/,]\s*/).pop() || s;
-  s = normLine(s);
-  return s.length >= 2 && s.length <= 30 ? s : '';
-}
+function linkLabelFromLine(line, raw) { return labelBeforeUrl(line, raw, LEAD_MARK); }
 function linkKind(url, tool) {
   const h = hostOf(url);
   if (/youtube\.com|youtu\.be|vimeo\.com|tv\.naver\.com/.test(h)) return 'video';
@@ -880,7 +887,8 @@ function detectGlossary(pages, promptKeys) {
     }
     for (const x of p.paragraphs || []) {
       const s = x.text;
-      if (!s || s.length > 260 || STEP_RE.test(s) || (containsPrompt(s, promptKeys) && !(gPage && /^프롬프트\s*[:：]/.test(s)))) continue;
+      // 꺾쇠로 시작하는 줄(HTML·스크립트 조각)은 용어가 아님
+      if (!s || s.length > 260 || /^\s*</.test(s) || STEP_RE.test(s) || (containsPrompt(s, promptKeys) && !(gPage && /^프롬프트\s*[:：]/.test(s)))) continue;
       let m = /^([^:：\n]{1,24}?)\s*(\([^)]{1,40}\))?\s*[:：]\s*(.{6,240})$/.exec(s);
       if (m && !/\s{2,}/.test(m[1]) && m[1].split(' ').length <= 3) {
         const strong = gPage || !!m[2] || /[A-Za-z]{2,}/.test(m[1]) || DEF_END.test(m[3]);

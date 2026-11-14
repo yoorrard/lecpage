@@ -370,3 +370,37 @@ export function applyTeacherValues(bp, info = {}, { access = '', password = '' }
   }
   return bp;
 }
+
+const md = (d) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(d || ''); return m ? `${+m[1]}. ${+m[2]}.` : d; };
+/**
+ * 연수 성격과 참여 기능이 맞지 않는 곳: 앱 배포 체크리스트와 skill 요약이 같은 값을 씀. 없으면 [].
+ *   attendance-off: 직무연수(이수 처리)인데 출석이 꺼져 있음 → fix.features(출석을 더한 목록)
+ *   rate-unset: 직무연수인데 이수 기준(출석 %)을 교재·강사 모두 정하지 않음(사이트에는 % 없이, 이수자 명단은 90%로 셈)
+ */
+export function setupAdvice(bp) {
+  const out = [];
+  const m = bp?.meta || {}, f = Array.isArray(bp?.live?.features) ? bp.live.features : [];
+  if (m.admin?.kind !== 'official') return out;
+  const att = f.includes('attendance') || (bp.sections || []).some((s) => s?.type === 'attendance');
+  if (!att) out.push({ code: 'attendance-off', level: 'warn', message_ko: '직무연수인데 출석이 꺼져 있어 사이트에서 입실·퇴실과 이수자 명단을 받을 수 없어요. 참여 기능의 [출석·이수 확인]을 켜 주세요.', fix: { features: [...new Set([...f, 'attendance'])] } });
+  if (!m.admin?.completionRate) out.push({ code: 'rate-unset', level: 'info', message_ko: '이수 기준(출석 %)이 교재에 없어요. 사이트에는 %를 쓰지 않고, 이수자 명단은 90%로 세요. 기준이 있으면 연수 정보에 적어 주세요.' });
+  return out;
+}
+
+/**
+ * skill make 요약의 '물을 것'에 더할 질문(references/intake.md 2절): 교재로 정할 수 없어 강사에게 한 번 확인할 것만.
+ *   dates: 교재에서 날짜를 둘 이상 찾았는데(과정형으로 볼 수 있음) 강사가 날짜를 주지 않음 — 날짜를 저절로 고치지 않고 묻기만
+ *   completionRate: 직무연수인데 출석 기준이 없음 · features: 직무연수인데 출석이 꺼져 있음(info로 기능을 골랐을 때)
+ * @returns [{ key, ask_ko }]
+ */
+export function intakeAsks({ material = null, blueprint = null, info = {} } = {}) {
+  const d = material?.detected || {}, out = [];
+  const found = d.event?.dates?.length >= 2 ? d.event.dates : [];
+  if (found.length && !infoDays(info)) out.push({ key: 'dates', ask_ko: `차시 날짜가 맞나요?(교재에서 찾은 날 ${found.slice(0, 5).map(md).join('·')}${found.length > 5 ? ` 외 ${found.length - 5}` : ''} / 하루짜리예요 → dates에 그날 하나)` });
+  const bp = blueprint || {};
+  for (const a of setupAdvice(bp)) {
+    if (a.code === 'rate-unset' && !info.completionRate) out.push({ key: 'completionRate', ask_ko: '출석 기준(90% / 80% / 직접 입력)' });
+    if (a.code === 'attendance-off' && Array.isArray(info.features)) out.push({ key: 'features', ask_ko: '직무연수인데 출석이 꺼져 있어요: 출석·이수 확인을 켤까요(features에 attendance)' });
+  }
+  return out;
+}

@@ -2,7 +2,7 @@
 // 모두 참가자 화면과 같은 프리셋(색·글꼴·단추·상자 모양·모티프)을 이어받고, 쪽마다 쓰임에 맞춘 배치를 assets/aux.css가 맡습니다.
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
 import { esc, br, icon, koDate, host, md } from './html.js';
-import { contactHtml, boardFiles } from './sections.js';
+import { contactHtml, boardFiles, joinName } from './sections.js';
 import { appShell, keepRule, byOperator } from './shell.js';
 import { motifFamily } from '../design/layouts.js';
 import { motifRule } from './body-graphic.js';
@@ -159,6 +159,8 @@ export function renderPoster(ctx) {
   const when = m.date || eventDays(m).length ? whenText(m) : ''; // 첫 화면·달력 파일과 같은 날짜(hero-meta.js)
   const code = ctx.live ? bp.live.code : '';
   const W = ctx.words || wordsFor(bp);
+  // 원격(온라인만) 연수: 종이 대신 화면으로 나누는 안내 — Wi-Fi 칸 대신 회의 입장 주소, 'QR을 찍어' 대신 주소 먼저
+  const online = m.mode === 'online';
   const tlen = [...String(m.title || '')].length;
   const meta = when || m.venue ? `<dl class="lp-pst-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : '';
   const mini = (i) => `<div class="lp-pst-mini"><p class="lp-pst-mini-t">${esc(m.title)}</p><div class="lp-pst-mini-qr lp-qr" data-qr-self role="img" aria-label="${esc(W.site)} QR 코드 ${i + 1}"></div><p class="lp-pst-mini-u" data-url-self></p>${code ? `<p class="lp-pst-mini-c">${esc(W.code)} ${esc(code)}</p>` : ''}</div>`;
@@ -179,14 +181,14 @@ ${m.organizer ? `<p class="lp-pst-org">${esc(m.organizer)}</p>` : ''}<h1 id="lp-
 </div>
 ${meta}
 <div class="lp-pst-qr lp-qr" data-qr-self role="img" aria-label="${esc(W.site)} QR 코드"></div>
-<p class="lp-pst-cta">휴대폰 카메라로 QR을 찍어 들어오세요</p>
+<p class="lp-pst-cta">${online ? '이 주소로 들어오세요. 휴대폰은 카메라로 QR을 찍어도 돼요' : '휴대폰 카메라로 QR을 찍어 들어오세요'}</p>
 <div class="lp-pst-type">
-<p class="lp-pst-type-h">카메라가 안 되면 주소를 쳐 주세요</p>
+<p class="lp-pst-type-h">${online ? `${esc(W.site)} 주소` : '카메라가 안 되면 주소를 쳐 주세요'}</p>
 <p class="lp-pst-url" data-url-self></p>
 <p class="lp-pst-full" data-url-full hidden></p>
 ${code ? `<p class="lp-pst-code">${esc(W.code)} <b>${esc(code)}</b></p>` : ''}
 </div>
-<div class="lp-pst-wifi">${icon('wifi')}<b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>
+${online ? (m.joinUrl ? `<p class="lp-pst-join">${icon('external')}<b>${esc(joinName(m.joinUrl) || '온라인')} 입장</b><span>${esc(m.joinUrl.replace(/^https?:\/\//, ''))}</span></p>` : '') : '<div class="lp-pst-wifi">' + icon('wifi') + '<b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>'}
 </section></div>
 <div class="lp-pst-page" data-part="cards"><section class="lp-pst-sheet lp-pst-cards" aria-label="자리 카드(잘라 쓰기)">
 <p class="lp-pst-cut">${icon('scissors')}<span>점선을 따라 잘라 자리마다 놓아 주세요.</span></p>

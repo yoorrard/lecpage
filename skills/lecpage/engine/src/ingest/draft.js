@@ -211,13 +211,21 @@ export function materialToDraft(material, info = {}) {
     const promptKeys = prompts.map((x) => textKey(x.text));
     const links = (d.links || []).filter((l) => onPages(l, file, nums) && l.kind !== 'meeting' && !heldUrls.has(l.url)).slice(0, 8).map((l) => ({ label: l.label, url: l.url }));
     const linkLabels = new Set(links.map((l) => textKey(l.label)));
-    const desc = g.pages.flatMap((p) => p.paragraphs || []).map((x) => x.text)
-      .find((t) => {
-        if (!t || t.length < 8 || t.length > 200) return false;
-        const k = textKey(t);
-        if (stepKeys.has(k) || linkLabels.has(k) || promptKeys.some((pk) => pk && (k.includes(pk) || pk.includes(k)))) return false;
-        return !NOTE_LINE.test(t) && !/^(\d{1,2}[.)]|[①-⑳]|step\s*\d)/i.test(t) && !/https?:\/\/|[a-z0-9-]+\.(com|net|org|io|ai|kr)\b/i.test(t) && !/^[^:：]{1,10}[:：]/.test(t);
-      }) || '';
+    const gParas = g.pages.flatMap((p) => p.paragraphs || []);
+    const di = gParas.findIndex((x) => {
+      const t = x.text;
+      if (!t || t.length < 8 || t.length > 200) return false;
+      const k = textKey(t);
+      if (stepKeys.has(k) || linkLabels.has(k) || promptKeys.some((pk) => pk && (k.includes(pk) || pk.includes(k)))) return false;
+      return !NOTE_LINE.test(t) && !/^(\d{1,2}[.)]|[①-⑳]|step\s*\d)/i.test(t) && !/https?:\/\/|[a-z0-9-]+\.(com|net|org|io|ai|kr)\b/i.test(t) && !/^[^:：]{1,10}[:：]/.test(t);
+    });
+    // 설명 자리에 글머리 목록의 첫 줄이 걸리면 목록 전체를(그 위의 짧은 이름표 줄 "약속 예시"와 함께) 실음 — 첫 줄만 남고 나머지가 빠지지 않게
+    let desc = di >= 0 ? gParas[di].text : '';
+    if (di >= 0 && gParas[di].bullet) {
+      let end = di; while (end + 1 < gParas.length && gParas[end + 1].bullet && gParas[end + 1].level === gParas[di].level) end++;
+      const lab = gParas[di - 1] && !gParas[di - 1].bullet && gParas[di - 1].text.length <= 24 && !/[다요]\.?$/.test(gParas[di - 1].text) && !stepKeys.has(textKey(gParas[di - 1].text)) ? gParas[di - 1].text : '';
+      if (end > di) desc = [lab, ...gParas.slice(di, end + 1).map((x) => `· ${x.text}`)].filter(Boolean).join('\n');
+    }
     // 막히기 쉬운 곳: 쪽의 "※ …", "주의: …", "안 되면: …" 줄과 발표자 노트의 '막히면·안 되면·주의' 문장.
     // 강사에게 하는 진행 메모("~하도록 안내.")는 참가자 화면에 싣지 않고 teacherNote(강사용 운영안내)로
     const marked = g.pages.flatMap(paraLines).map((t) => NOTE_LINE.exec(t)).filter(Boolean).map((m) => (m[1] || m[2]).trim());
@@ -552,6 +560,7 @@ export function materialToDraft(material, info = {}) {
       !meta.contact && '문의처(연수 담당자 연락처)를 넣어 주세요.',
       meta.admin.kind === 'official' && !completion && '이수 처리 일정(언제 등록되는지)을 연수 후 안내에 적어 주세요.',
       dates.length >= 2 && !S.sessions && '차시별 제목을 넣어 주세요.',
+      groups.length > 40 && `실습 쪽 묶음이 ${groups.length}개라 앞 40개만 실습 칸에 실었어요. 나머지는 교재 보기에 있어요(교재를 나눠 두 연수로 만들면 모두 실려요).`,
       !info.surveyUrl && (found.survey?.length ? `만족도 조사: 교재에서 찾은 설문 주소(${hostOf(found.survey[0].url)})를 쓸지 확인해 주세요.` : '만족도 조사 주소(설문 링크)를 넣어 주세요.'),
       hasDeckFile && !info.slidesBase && !pages.some((p) => p.image) && '교재 쪽 그림(slide-001.webp…)을 만들면 교재 보기에 보여요.',
       !S.materials && '참가자가 받을 자료가 있으면 자료실에 올려 주세요.',

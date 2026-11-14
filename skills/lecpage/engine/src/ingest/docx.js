@@ -26,6 +26,7 @@ export function parseDocx(zip, ctx) {
   const blocks = [];
   walkBody(body, c, blocks);
   const pages = blocksToPages(blocks, { fileId: ctx.fileId, unit: 'section', maxPages: ctx.limits.maxPages });
+  if (pages.overflow) ctx.warn('too-many-sections', { pages: pages.length + pages.overflow, limit: ctx.limits.maxPages });
   if (c.unsupportedExt.size) ctx.warn('images-unsupported', { exts: [...c.unsupportedExt].join(', ') });
   if (ctx.opts.withImages) {
     const want = new Set(pages.flatMap((p) => p.images.map((im) => im.path)));
