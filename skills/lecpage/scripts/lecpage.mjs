@@ -39,7 +39,7 @@ const ENGINE = join(HERE, '..', 'engine');
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 const E = await imp('src/index.js');
 const N = await imp('node.js');
-const { USER_ASSET } = await imp('src/build.js');
+const { isUserAsset } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
 const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary', 'bundle-fonts', 'no-bundle-fonts']);
@@ -90,18 +90,27 @@ async function loadPlaywright() {
   try { return createRequire(import.meta.url)('playwright'); } catch { return null; }
 }
 
-/** 자료 폴더 → 빌드 자료. 설계도는 assets/slides/…·assets/media/…를 가리키므로 앞에 assets/를 맞춰 붙임 */
+/**
+ * 자료 폴더 → 빌드 자료. 설계도는 assets/slides/…·assets/media/…를 가리키므로 앞에 assets/를 맞춰 붙임.
+ * 사이트에 넣을 수 없는 파일(형식·이름·두 단계 넘는 폴더)은 빼고 dropped에 적음(요약이 알림 — 조용히 빠지지 않게)
+ */
 function assetFiles(dir) {
   const raw = N.readAssetDir(dir, '');
-  const out = {};
-  for (const [k, v] of Object.entries(raw)) { const key = k.startsWith('assets/') ? k : 'assets/' + k; if (USER_ASSET.test(key)) out[key] = v; }
-  return out;
+  const files = {}, dropped = [];
+  for (const [k, v] of Object.entries(raw)) {
+    const key = k.startsWith('assets/') ? k : 'assets/' + k;
+    if (isUserAsset(key)) files[key] = v; else if (!/(^|\/)\.[^/]*$/.test(key)) dropped.push(key); // 숨김 파일(.DS_Store 등)은 알리지 않음
+  }
+  return { files, dropped };
 }
+const droppedLine = (list) => `자료 ${list.length}개는 사이트에 넣지 못했어요(형식·이름 글자·폴더 깊이): ${plural(list.map((x) => cut(x, 48)), 3, ', ')} → 그림·문서 형식으로, 폴더는 assets/slides·media 아래 한 단계까지`;
 
 /** 빌드해 쓰기. 예전 빌드가 남긴 엔진 파일(꺼진 기능의 화면 등)은 지움(CNAME 같은 남의 파일은 그대로) */
 async function buildSite(bp, { out, assets = '', info = null, password = '', fonts = !!args['bundle-fonts'] }) {
-  const r0 = E.build(bp, { runtime: N.nodeRuntime(), assets: assets && existsSync(assets) ? assetFiles(assets) : {}, infra: info && (info.size || info.features) ? info : null });
+  const af = assets && existsSync(assets) ? assetFiles(assets) : { files: {}, dropped: [] };
+  const r0 = E.build(bp, { runtime: N.nodeRuntime(), assets: af.files, infra: info && (info.size || info.features) ? info : null });
   const r = { ...r0, ...strict(r0) };
+  if (af.dropped.length) r.warnings.push({ path: 'assets', message_ko: droppedLine(af.dropped), dropped: af.dropped });
   if (r.errors.length) return { ok: false, errors: r.errors, warnings: r.warnings };
   const dir = resolve(out);
   password = password || process.env.LECPAGE_PASSWORD || '';
@@ -635,6 +644,7 @@ const commands = {
       ask,
       ...coverageLines(work, raw),
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
+      ...b.warnings.filter((w) => w.path === 'assets').map((w) => `  ${w.message_ko}`),
       ...b.warnings.filter((w) => w.path === 'fonts').map((w) => `  ${w.message_ko}${args['bundle-fonts'] ? '' : ' (끄기 --no-bundle-fonts)'}`),
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
@@ -731,6 +741,7 @@ const commands = {
       ...pw.map((w) => `주의 ${w.message_ko}`),
       `검증 ✓${final.warnings.length ? ` (주의 ${final.warnings.length}: ${plural(final.warnings.map((w) => cut(w.message_ko, 50)), 2, ' / ')})` : ''}`,
       b ? buildLine(b) : skip,
+      ...(b ? b.warnings.filter((w) => w.path === 'assets').map((w) => `  ${w.message_ko}`) : []),
       ...(changes.length ? coverageLines(work, r.raw) : []),
       ...(q ? qaLines(q) : []),
     ];

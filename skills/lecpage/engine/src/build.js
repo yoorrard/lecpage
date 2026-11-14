@@ -14,8 +14,13 @@ import { pruneUnusedCss } from './css-prune.js';
 import { deferFontLinks } from './font-bundle.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
-// 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음
-export const USER_ASSET = /^(?:assets\/)?(?:slides|media|files)\/[\w가-힣ㄱ-ㅎㅏ-ㅣ.\-()\[\] ]{1,140}\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx?|ppsx|docx?|hwpx?|xlsx?|csv|txt|md|zip|key|pages|numbers|odt|odp|ods)$/i;
+// 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음.
+// 엔진이 만드는 slides·media는 교재마다 한 단계 하위 폴더(slides/deck1/slide-001.webp, skill CLI)도 받음. 폴더 이름은 점으로
+// 시작하지 않고(.. ·숨김 폴더 없음) 한 단계까지. 강사가 올리는 files는 한 폴더만(앱 자료실과 같음). '..'는 build가 따로 막음
+const ASSET_NAME = "[\\w가-힣ㄱ-ㅎㅏ-ㅣ.\\-()\\[\\] ]{1,140}\\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx?|ppsx|docx?|hwpx?|xlsx?|csv|txt|md|zip|key|pages|numbers|odt|odp|ods)";
+export const USER_ASSET = new RegExp(`^(?:assets\\/)?(?:(?:slides|media)\\/(?:[\\w가-힣ㄱ-ㅎㅏ-ㅣ\\-()\\[\\] ][\\w가-힣ㄱ-ㅎㅏ-ㅣ.\\-()\\[\\] ]{0,59}\\/)?|files\\/)${ASSET_NAME}$`, 'i');
+/** 자료 경로 검사: USER_ASSET이면서 '..'·빈 칸 경로가 없음 */
+export const isUserAsset = (p) => typeof p === 'string' && USER_ASSET.test(p) && !p.includes('..') && !p.includes('//');
 
 const LIVE_FILES = { local: 'live/local.js', http: 'live/http.js', supabase: 'live/supabase.js', sheets: 'live/sheets.js' };
 
@@ -162,7 +167,7 @@ export function build(input, opts = {}) {
 
   // 사용자 자료는 정해진 폴더·형식만(엔진이 만든 파일은 절대 덮어쓰지 않음, 스크립트·SVG·HTML 금지)
   for (const [p, data] of Object.entries(opts.assets || {})) {
-    if (!USER_ASSET.test(p) || p.includes('..') || p in files) { warnings.push({ path: p, message_ko: `허용되지 않는 자료라 뺐습니다: ${p}` }); continue; }
+    if (!isUserAsset(p) || p in files) { warnings.push({ path: p, message_ko: `허용되지 않는 자료라 뺐습니다: ${p}` }); continue; }
     files[p] = data;
   }
   if (missingFx.length) warnings.push({ path: 'design.effects', message_ko: `효과 파일이 없어 뺐습니다: ${missingFx.join(', ')}` });
