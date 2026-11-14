@@ -8,6 +8,7 @@ import { reach } from './netcheck.js';
 import { pushUndoFor } from './undo.js';
 import { track } from './stats.js';
 import { blobs } from './db.js';
+import { extractAnswer } from './answer.js';
 
 const jobs = new Map(); // pid → { status: 'running'|'done'|'error', phase, startedAt, error, ctrl }
 const subs = new Set();
@@ -16,6 +17,23 @@ const set = (pid, patch) => { jobs.set(pid, { ...(jobs.get(pid) || {}), ...patch
 
 export const getJob = (pid) => jobs.get(pid) || null;
 export function clearJob(pid) { jobs.delete(pid); emit(); }
+
+// 만드는 중에 새로 고치거나 탭을 닫으면 작업이 끊김: 시작할 때 이 브라우저에 적고 끝나면 지움.
+// 다시 열었을 때 적힌 것이 남아 있으면(한 시간 안) '새로 고쳐 멈췄어요 [다시 만들기]'(Edit.jsx)
+const RUN = (pid) => 'lecpage:ai-run:' + pid;
+function markRun(pid, on) { try { if (on) localStorage.setItem(RUN(pid), String(Date.now())); else localStorage.removeItem(RUN(pid)); } catch { /* 저장이 막힌 창 */ } }
+/** 이 탭에 작업이 없는데 지난번 만들기가 끝나지 않은 채 끊겼는지 */
+export function wasInterrupted(pid) {
+  if (jobs.get(pid)) return false;
+  let t = 0; try { t = +localStorage.getItem(RUN(pid)) || 0; } catch { return false; }
+  if (t && Date.now() - t < 3600e3) return true;
+  if (t) markRun(pid, false);
+  return false;
+}
+export const forgetInterrupted = (pid) => markRun(pid, false);
+// 떠나는 중(새로 고침·탭 닫기)에 요청이 끊겨 끝난 작업은 '끊김' 표시를 남겨 둠
+let leaving = false;
+if (typeof addEventListener === 'function') { addEventListener('pagehide', () => { leaving = true; }); addEventListener('pageshow', () => { leaving = false; }); }
 /**
  * 쓰던 AI 창·문구 다듬기로 받은 답도 키 연결과 같은 '끝남' 띠로 알림(교재대로 되돌린 곳 한 줄 + [보기])
  * @param {{ restored?: object[], via?: string, polish?: boolean }} o
@@ -64,6 +82,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
   if (jobs.get(pid)?.status === 'running') return;
   const ctrl = new AbortController();
   set(pid, { status: 'running', phase: 'read', startedAt: Date.now(), error: null, ctrl, restored: [], undone: [], via: '', polish: false });
+  markRun(pid, true);
   try {
     const ai = await getActiveAI();
     if (!ai) throw Object.assign(new Error('no-ai'), { kind: 'no-ai' });
@@ -83,7 +102,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     if (cut && looksTruncated(text)) throw Object.assign(new Error('truncated'), { kind: 'truncated' });
     set(pid, { phase: 'build' });
     let bp;
-    try { bp = E.extractJson(text); } catch { throw Object.assign(new Error('format'), { kind: looksTruncated(text) ? 'truncated' : 'format' }); }
+    try { bp = extractAnswer(text); } catch { throw Object.assign(new Error('format'), { kind: looksTruncated(text) ? 'truncated' : 'format' }); }
     if (!bp || typeof bp !== 'object' || !Array.isArray(bp.sections) || !bp.sections.length) throw Object.assign(new Error('format'), { kind: 'format' });
     const v = E.validate(bp);
     if (v.errors.length) throw Object.assign(new Error(v.errors.map((x) => x.message_ko).join(' ')), { kind: 'invalid' });
@@ -102,5 +121,5 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
         : kind === 'invalid' ? { title: 'AI 답에 고칠 점이 있어요.', body: e.message, actions: ['paste'] }
           : explainError(kind === 'truncated' ? { kind: 'truncated' } : e, jobs.get(pid)?.provider);
     set(pid, { status: 'error', error: x, ctrl: null });
-  }
+  } finally { if (!leaving) markRun(pid, false); }
 }

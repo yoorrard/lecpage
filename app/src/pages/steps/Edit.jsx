@@ -10,7 +10,7 @@ import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyAnswer } from '../../lib/blueprint.js';
 import { toast } from '../../lib/util.js';
 import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
-import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone } from '../../lib/ai-job.js';
+import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone, wasInterrupted, forgetInterrupted } from '../../lib/ai-job.js';
 import { E } from '../../lib/engine.js';
 import { PROVIDERS, chatLabel, chatbotFor, setWay } from '../../lib/ai.js';
 import { SIZE } from './Start.jsx';
@@ -44,6 +44,8 @@ export function StepEdit({ p, update, go }) {
   const undo = () => { const s = popUndo(p.id); if (!s) return; update({ blueprint: s.blueprint, info: s.info }); toast(`되돌렸어요: ${s.label}`); };
   const job = useAiJob(p.id);
   const latest = useRef(p); latest.current = p;
+  const [cutRun, setCutRun] = useState(() => wasInterrupted(p.id)); // 만드는 중에 새로 고쳐 끊긴 AI 만들기
+  const dropCut = () => { forgetInterrupted(p.id); setCutRun(false); };
   // Ctrl+Z(맥 ⌘Z): 고치기 화면의 [되돌리기]. 입력 칸 안에서는 브라우저의 글자 되돌리기 그대로, 창이 떠 있으면 하지 않음
   const undoRef = useRef(undo); undoRef.current = undo;
   useEffect(() => {
@@ -104,6 +106,11 @@ export function StepEdit({ p, update, go }) {
       </StepHead>
       {job && job.status !== 'done' && <AiJobBar job={job} found={p.material ? E.foundSummary(p.material.detected || {}, 3).join(' · ') : ''} onStop={() => stopJob(p.id)} onClose={() => clearJob(p.id)}
         onRetry={() => startMakeJob({ getProject: () => latest.current, update })} onPaste={(prov) => { clearJob(p.id); setWay('chat'); setAi({ how: 'paste', full: true, bot: chatbotFor(prov) }); }} onConnect={() => setConnectAi(true)} onPay={() => startMakeJob({ getProject: () => latest.current, update, allowPaid: true })} onLight={() => startMakeJob({ getProject: () => latest.current, update, allowLight: true })} />}
+      {cutRun && !job && <div class="ai-job bad" role="alert">
+        <span class="ai-job-t"><b>새로 고쳐서 AI 만들기가 멈췄어요.</b><small>사이트는 AI로 바꾸기 전 그대로예요. 다시 만들면 처음부터 짜요.</small></span>
+        <button class="btn btn-sm btn-primary" onClick={() => { dropCut(); startMakeJob({ getProject: () => latest.current, update }); }}>다시 만들기</button>
+        <button class="icon-btn" onClick={dropCut} aria-label="안내 닫기">✕</button>
+      </div>}
       {fromSkill && <div class="ai-job ok" role="status">
         <span class="ai-job-t"><b>AI 에이전트에서 만든 연수를 열었어요. 디자인·참여 기능·배포를 여기서 이어서 하세요.</b><small>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 여기서 다시 정해요.</small></span>
         <button class="btn btn-sm" onClick={() => setTab('live')}>참여 기능 보기</button>

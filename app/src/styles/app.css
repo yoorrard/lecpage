@@ -947,7 +947,7 @@ details>summary{cursor:pointer}
 /* 세 단추가 한 줄에 들어가지 않는 좁은 칸(넓은 화면의 AI로 만들기 카드)에서는 줄을 넘김: 글이 단추 밖으로 나가지 않게 */
 .chat-bots{gap:8px;display:flex;flex-wrap:wrap}
 .chat-bots .chat-bot{flex:1 1 8.5em;justify-content:center;min-height:48px;font-weight:600}
-.chat-bot-last{margin-left:6px;font-size:12px;font-weight:500;color:var(--muted,#666)}
+.chat-bot-last{margin-left:6px;white-space:nowrap;font-size:12px;font-weight:500;color:var(--muted,#666)}
 .chat-bots .btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
 .answer-err{justify-self:stretch;max-width:440px}
 /* 교재대로 되돌린 곳(AI 결과 띠 아래 한 줄 + 목록) */

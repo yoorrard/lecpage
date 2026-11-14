@@ -147,7 +147,19 @@ export function classify(status, msg, code) {
   if (status >= 500 || status === 529 || /overloaded/i.test(m)) return 'busy';
   return 'other';
 }
+/**
+ * 학교·기관 망의 차단 화면: AI 회사 주소인데 JSON이 아니라 웹 페이지(HTML)가 옴(200이어도). 원문(영어 개발자 문구) 대신
+ * 'blocked'(이 망에서 닿지 않음 → 쓰던 AI 창 길)로. 같은 규칙을 수정 요청(ai-vision.js)도 씀
+ */
+// 5xx·429는 회사 쪽 CDN의 오류 화면일 수 있어 상태 코드대로(바쁨·한도) 둠
+export const isBlockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
+export async function readJson(r, provider) {
+  if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider });
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { throw new AiError(/^\s*</.test(t) ? 'blocked' : 'other', /^\s*</.test(t) ? 'html page' : '', { status: r.status, provider }); }
+}
 async function fail(r, provider) {
+  if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider });
   const j = await r.json().catch(() => ({}));
   const e = j.error || j;
   const msg = (typeof e === 'string' ? e : e.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
@@ -163,7 +175,7 @@ async function send(provider, url, init) {
   try { r = await fetch(url, init); }
   catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider }); }
   if (!r.ok) await fail(r, provider);
-  return r.json();
+  return readJson(r, provider);
 }
 
 /**
@@ -320,6 +332,7 @@ async function anthropic(key, model, prompt, maxTokens, signal) {
       r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal, headers: plus ? { ...headers(), 'anthropic-beta': 'server-side-fallback-2026-07-01' } : headers(), body: JSON.stringify(plus ? { ...base, fallbacks: 'default' } : base) });
     } catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider: 'anthropic' }); }
     if (!r.ok) await fail(r, 'anthropic');
+    if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider: 'anthropic' }); // 망의 차단 화면(스트림 대신 웹 페이지)
     const reader = r.body.getReader(); const dec = new TextDecoder();
     let buf = '', text = '', stop = '';
     for (;;) {

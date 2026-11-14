@@ -1,5 +1,5 @@
 // 수정 요청용 AI 호출: 글 + 그림(PNG·JPEG)을 함께 보냅니다. 키는 lib/ai.js가 보관한 것을 그대로 쓰고, 브라우저에서 AI 회사로 바로 갑니다.
-import { getActiveAI, models, AiError, PROVIDERS, antHeaders, withWorkspace, classify, geminiBody } from './ai.js';
+import { getActiveAI, models, AiError, PROVIDERS, antHeaders, withWorkspace, classify, geminiBody, isBlockPage } from './ai.js';
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 // 오류 종류는 만들기(ai.js)와 같은 규칙으로: 회사마다 다른 오류 코드(OpenAI credit_balance_exhausted·Claude 한도 등)를 같은 안내로
@@ -9,7 +9,10 @@ async function send(provider, url, init) {
   let r;
   try { r = await fetch(url, init); }
   catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider }); }
-  const j = await r.json().catch(() => ({}));
+  // 망의 차단 화면(웹 페이지)이면 영어 원문 대신 '이 망에서 닿지 않음'
+  if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider });
+  const j = await r.json().catch(() => null);
+  if (j === null) throw new AiError(r.ok ? 'blocked' : classify(r.status, '', ''), '', { status: r.status, provider });
   if (!r.ok) {
     const e = j.error || j; const msg = (typeof e === 'string' ? e : e?.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
     throw new AiError(classify(r.status, msg, codesOf(e)), msg, { status: r.status, provider });
