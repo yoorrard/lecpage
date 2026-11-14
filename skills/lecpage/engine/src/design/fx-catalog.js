@@ -132,7 +132,7 @@ export const FX = [
   { id: 'guided-progress', name_ko: '진행 막대·단계 표시', name_en: 'Guided progress', group: 'scroll',
     slots: ['progress', 'scroll'], moods: MOODS.slice(), topics: TOPICS.slice(),
     level: 0, libs: [], license: MIT, trend: 'std', weightKB: 3.2,
-    desc_ko: '위쪽에 읽은 만큼 차는 막대, 넓은 화면 오른쪽에 섹션 단계 점(이름은 마우스·포커스에), 좁은 화면은 "3 / 7 실습" 칩.',
+    desc_ko: '위쪽에 읽은 만큼 차는 막대, 넓은 화면 오른쪽에 섹션 단계 점(이름은 마우스·포커스에). 좁은 화면은 막대만(목차는 메뉴의 [목차]).',
     use_ko: '빈 <div data-fx="guided-progress">를 body 맨 앞에. 섹션의 data-nav와 id를 읽습니다. opts: top("64px" 고정 머리 높이), steps(선택자), label.',
     a11y_ko: '단계는 실제 링크 목록(nav, aria-current="step"). 막대는 장식. 모션 0에서도 동작.' },
   { id: 'sticky-scrolly', name_ko: '그림 고정 스크롤', name_en: 'Sticky scrollytelling', group: 'scroll',

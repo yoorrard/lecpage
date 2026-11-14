@@ -229,6 +229,13 @@ export function validate(input) {
     sections.unshift({ id: 'hero', type: 'hero', nav: '처음', title: '', tone: '', ...SECTION_FIX.hero({ title: meta.title, subtitle: meta.subtitle }) });
     warnings.push({ path: 'sections', message_ko: '첫 화면이 없어 넣었어요.' });
   }
+  // 출석 기능을 켰는데 출석 칸이 없으면 참가자가 출석할 곳이 없음 → 준비·차례·실습 앞(없으면 첫 화면 다음)에 넣음
+  if (live.provider !== 'none' && live.features.includes('attendance') && !sections.some((s) => s.type === 'attendance')) {
+    const ids = new Set(sections.map((s) => s.id)); let id = 'attendance'; for (let n = 2; ids.has(id); n++) id = `attendance-${n}`;
+    const at = sections.findIndex((s) => ['readiness', 'outline', 'stations'].includes(s.type));
+    sections.splice(at > 0 ? at : sections.findIndex((s) => s.type === 'hero') + 1, 0, { id, type: 'attendance', nav: '출석', title: '출석 확인', tone: '', ...SECTION_FIX.attendance({}) });
+    warnings.push({ path: 'sections', message_ko: '출석 기능이 켜져 있는데 출석 칸이 없어 넣었어요.' });
+  }
   // 순서 가드레일(첫 화면 → 목표 → 본문 → 자료·연수 후 → 설문 → 마무리): 알리기만 하고 옮기지 않음
   warnings.push(...checkOrder(sections));
   // 구성 결과(흐름·이유·권하는 기능·싣지 못한 것): 있으면 정리해 남김

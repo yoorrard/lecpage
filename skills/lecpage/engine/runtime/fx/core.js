@@ -564,12 +564,22 @@
       return o && typeof o === 'object' ? o : {};
     } catch (e) { return {}; }
   }
+  /* 쪽 제목(h1)은 효과 스크립트를 기다리며 숨기지 않음(fx.css html.fx-boot). 그래서 이미 그려져 화면에 보인 제목에는 등장 효과를 걸지 않음:
+     보였다가 사라진 뒤 다시 들어오며 튀지 않게. 효과가 첫 그리기보다 먼저 왔으면(빠른 연결·캐시) 그대로 들어옴 */
+  var ENTRANCE = /^(split-reveal|reveal-up|typewriter|clip-reveal|scramble)$/;
+  function shownTitle(el, id) {
+    if (el.tagName !== 'H1' || !ENTRANCE.test(id)) return false;
+    var p = []; try { p = w.performance && performance.getEntriesByType ? performance.getEntriesByType('paint') : []; } catch (e) { }
+    if (!p.length) return false;
+    var r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < (w.innerHeight || 0);
+  }
   function initOne(el, id) {
     var spec = specs[id];
     if (!spec) return;
     el.__lecfx = el.__lecfx || {};
     if (el.__lecfx[id]) return;
     if ((spec.level == null ? 1 : spec.level) > level(el)) { el.__lecfx[id] = { skipped: true }; return; }
+    if (shownTitle(el, id)) { el.__lecfx[id] = { shown: true }; return; }
     /* 가벼운 모드·저사양: WebGL·외부 라이브러리를 쓰는 효과는 시작하지 않음(쉬는 상태가 완성 상태라 글은 그대로 보임) */
     if (spec.heavy && lowPower()) { el.__lecfx[id] = { skipped: true }; return; }
     var inst = { el: el, id: id, cleanups: [], dead: false };
