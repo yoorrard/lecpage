@@ -11,8 +11,21 @@ import { cleanConcept, deriveConcept } from './decide/concept.js';
 import { PRESET_IDS } from './design/presets.js';
 import { DEFAULT_SURVEY } from './schema/sections.js';
 import { randomCode } from './validate.js';
+import { wordsFor } from './words.js';
 
 export const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'signal'];
+
+/** 사이트 안 만족도 설문 기본 문항(대상에 맞는 말로: 연수·수업·설명회) */
+export function surveyFor(w) {
+  return DEFAULT_SURVEY.map((q, i) => (i === 0 ? { ...q, q: w.survey } : i === 1 ? { ...q, q: w.apply } : { ...q }));
+}
+/** 문항이 엔진 기본 설문 그대로인지(어느 대상의 기본값이든) */
+function isDefaultSurvey(list) {
+  if (!Array.isArray(list) || !list.length) return false;
+  const metas = [{ admin: { kind: 'school' } }, { admin: { kind: 'student' } }, { admin: { kind: 'conference' }, title: '설명회' }, { admin: { kind: 'conference' } }];
+  const defaults = [DEFAULT_SURVEY, ...metas.map((meta) => surveyFor(wordsFor({ meta })))];
+  return defaults.some((d) => d.length === list.length && d.every((q, i) => q.q === list[i]?.q));
+}
 
 /** 참여 기능(강사에게 보이는 이름·설명). quick=첫 화면에서 바로 고르는 세 가지 */
 export const FEATURES = [
@@ -120,16 +133,19 @@ export function applyFeatures(bp, info = {}) {
   if (on('qa') && !hasType(bp, 'qa')) insertBefore(bp, ['board', 'materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'qa', type: 'qa', nav: '질문', title: '질문' });
   if (on('board') && !hasType(bp, 'board')) insertBefore(bp, ['materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'board', type: 'board', nav: '보드', title: '나눔 보드', categories: [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }], allowFiles: !info.minor });
   if (on('attendance') && !hasType(bp, 'attendance')) insertBefore(bp, ['readiness', 'outline', 'stations'], { id: 'attendance', type: 'attendance', nav: '출석', title: '출석 확인' });
-  if (on('poll') && !hasType(bp, 'poll')) insertBefore(bp, ['qa', 'board', 'materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'poll', type: 'poll', nav: '투표', title: '투표', items: [{ id: 'word', question: '오늘 연수를 한 낱말로 말하면?', kind: 'word', options: [] }] });
+  const w = wordsFor(bp);
+  if (on('poll') && !hasType(bp, 'poll')) insertBefore(bp, ['qa', 'board', 'materials', 'followup', 'instructor', 'survey', 'closing'], { id: 'poll', type: 'poll', nav: '투표', title: '투표', items: [{ id: 'word', question: w.pollWord, kind: 'word', options: [] }] });
   // 끈 기능의 칸은 뺌(내용이 거의 없는 칸만)
   const off = ['qa', 'board', 'attendance', 'poll'].filter((t) => !on(t));
   bp.sections = bp.sections.filter((s) => !off.includes(s?.type));
   if (info.minor) bp.sections.forEach((s) => { if (s?.type === 'board') s.allowFiles = false; });
   const liveOn = f.some((x) => LIVE_KEYS.includes(x));
-  // 만족도 조사: 실시간이 켜져 있으면 사이트 안 기본 설문, 아니면 설문 주소가 있을 때만. 마무리 칸 앞에
-  if (!hasType(bp, 'survey') && (liveOn || info.surveyUrl)) insertBefore(bp, ['closing'], { id: 'survey', type: 'survey', nav: '설문', title: '만족도 조사', url: info.surveyUrl || '', qr: true, questions: liveOn ? DEFAULT_SURVEY.map((q) => ({ ...q })) : [] });
-  if (info.surveyUrl) bp.sections.forEach((s) => { if (s?.type === 'survey' && !s.url) s.url = info.surveyUrl; });
-  if (liveOn) bp.sections.forEach((s) => { if (s?.type === 'survey' && !s.url && !s.questions?.length) s.questions = DEFAULT_SURVEY.map((q) => ({ ...q })); });
+  // 만족도 조사는 하나만: 강사가 기관 설문 주소(surveyUrl)를 주면 그 설문만(사이트 기본 문항은 빼서 설문이 둘이 되지 않게),
+  // 아니면 참여 기능이 켜져 있을 때 사이트 안 기본 설문. 마무리 칸 앞에. 강사·AI가 고쳐 쓴 문항은 그대로
+  const qs = () => surveyFor(w).map((q) => ({ ...q }));
+  if (!hasType(bp, 'survey') && (liveOn || info.surveyUrl)) insertBefore(bp, ['closing'], { id: 'survey', type: 'survey', nav: '설문', title: '만족도 조사', url: info.surveyUrl || '', qr: true, questions: liveOn && !info.surveyUrl ? qs() : [] });
+  if (info.surveyUrl) bp.sections.forEach((s) => { if (s?.type !== 'survey') return; if (!s.url) s.url = info.surveyUrl; if (isDefaultSurvey(s.questions)) s.questions = []; });
+  if (liveOn && !info.surveyUrl) bp.sections.forEach((s) => { if (s?.type === 'survey' && !s.url && !s.questions?.length) s.questions = qs(); });
   if (!liveOn) bp.sections = bp.sections.filter((s) => !(s?.type === 'survey' && !s.url && s.questions?.length));
   const prev = bp.live || {};
   bp.live = { ...prev, features: f.filter((x) => LIVE_KEYS.includes(x)), provider: liveOn ? (prev.provider && prev.provider !== 'none' ? prev.provider : 'local') : 'none', code: prev.code || randomCode() };

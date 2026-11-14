@@ -162,13 +162,14 @@ describe('초안(draft): 교재에서 채우기', () => {
     assert.ok(!st.desc.startsWith('※'));
     assert.deepEqual(sec('followup').items.map((i) => [i.title, i.kind]), [['다시 보기 영상', 'recording'], ['안내서', 'link']]);
   });
-  test('설문은 주소가 있을 때만(기본 5문항, 마무리 앞). 없으면 빈 칸을 만들지 않고 할 일에 남김', () => {
+  test('설문은 주소가 있을 때만(그 기관 설문 하나, 마무리 앞 — 사이트 기본 문항과 둘이 되지 않게). 없으면 빈 칸을 만들지 않고 할 일에 남김', () => {
     assert.equal(sec('survey'), undefined, '주소가 없으면 참가자에게 "설문 주소가 아직 없어요"가 보이지 않게');
     assert.ok(d._draft.todo.some((t) => /만족도 조사/.test(t)));
     assert.deepEqual(validate(d).warnings, []);
     const d3 = materialToDraft(ingestText(MD, { name: 'notes.md' }), { today: '2026-11-01', surveyUrl: 'https://forms.gle/abcdEFGH123' });
     const sv = d3.sections.find((s) => s.type === 'survey');
-    assert.equal(sv.questions.length, DEFAULT_SURVEY.length);
+    assert.equal(sv.url, 'https://forms.gle/abcdEFGH123');
+    assert.equal(sv.questions.length, 0, '기관 설문이 있으면 사이트 기본 문항을 함께 싣지 않음');
     const types = d3.sections.map((s) => s.type);
     assert.ok(types.indexOf('survey') < types.indexOf('closing'));
   });

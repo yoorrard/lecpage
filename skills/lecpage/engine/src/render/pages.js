@@ -2,7 +2,8 @@
 export { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
 export { phaseWindow, LIB_SCRIPT_SOURCES, cspPolicy, eventJsonLd } from './shell.js';
 import { esc, br, href, icon, koDate, host } from './html.js';
-import { renderSection, contactHtml, boardFiles } from './sections.js';
+import { renderSection, contactHtml, boardFiles, quickAttend, dockAttend } from './sections.js';
+export { quickAttend };
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { attrs, jsonScript, headTags, siteData, phaseWindow } from './shell.js';
@@ -36,10 +37,10 @@ function dividerBand(ctx) {
 function phaseBar(ctx) {
   const w = phaseWindow(ctx.bp); if (!w) return '';
   const find = (t) => ctx.bp.sections.find((s) => s.type === t);
-  const go = [['followup', '연수 후 안내'], ['materials', '자료 받기'], ['deck', '교재 다시 보기'], ['survey', '설문 참여']].map(([t, label]) => find(t) && { id: find(t).id, label }).find(Boolean);
-  return `<div class="lp-now lp-phase" data-phase-bar hidden><div class="lp-now-in" role="region" aria-label="연수 안내">
+  const go = [['followup', ctx.words?.followup || '연수 후 안내'], ['materials', '자료 받기'], ['deck', '교재 다시 보기'], ['survey', '설문 참여']].map(([t, label]) => find(t) && { id: find(t).id, label }).find(Boolean);
+  return `<div class="lp-now lp-phase" data-phase-bar hidden><div class="lp-now-in" role="region" aria-label="${esc(ctx.words?.ev || '연수')} 안내">
 <span class="lp-now-tag" aria-hidden="true">종료</span>
-<p class="lp-now-text"><b>${esc(koDate(w.end.slice(0, 10)))}에 끝난 연수예요.</b></p>
+<p class="lp-now-text"><b>${esc(ctx.words ? ctx.words.endedOn(koDate(w.end.slice(0, 10))) : `${koDate(w.end.slice(0, 10))}에 끝난 연수예요.`)}</b></p>
 ${go ? `<a class="lp-btn lp-btn-primary lp-btn-sm lp-now-cta" href="#${esc(go.id)}">${esc(go.label)}</a>` : ''}
 </div></div>`;
 }
@@ -131,34 +132,27 @@ function helpSheet(ctx) {
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
 }
 
-/**
- * 도크의 '출석' 한 번 누르기: 질문·투표를 하지 않은 사람도 참가자 명단(별명)에 남게 함.
- * 끝난 연수에는 도크가 뜨지 않음. 별명만 받고 동의 흐름은 참여하기 창 그대로
- */
-export function quickAttend(bp) {
-  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
-}
-/** 출석 칸(입실·퇴실)이 있는 연수: 연수 시간에 아직 입실하지 않았으면 도크의 [출석]이 입실을 바로 보냄(칸까지 내려가 찾지 않게) */
-const dockAttend = (bp) => quickAttend(bp) || (bp.live.provider !== 'none' && bp.sections.some((s) => s.type === 'attendance'));
 
 function dialogs(ctx) {
   const pv = ctx.bp.privacy;
   const needName = pv.collect.includes('name');
   const needSchool = pv.collect.includes('school');
   const idWords = [needName && '이름', needSchool && '소속'].filter(Boolean).join('·');
+  // 소속은 직무연수(이수 처리에 소속이 들어감)만 꼭 받고, 교내 연수·설명회 등은 선택(이름만 적어도 입실)
+  const schoolMust = needSchool && (ctx.bp.meta.admin?.kind === 'official' || !needName);
   return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
-<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">연수 코드 <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
+<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">${esc(ctx.words?.code || '연수 코드')} <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
 <p class="lp-small lp-share-scr">프로젝터에는 <a href="screen.html">발표 화면</a>을 띄워요. QR${ctx.live ? '과 질문·투표 결과가' : '이'} 크게 보여요.</p>
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 ${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
-<h2 id="lp-join-h">참여하기</h2><p class="lp-small" data-join-lead>질문·보드·도움 요청에 쓸 별명을 정해 주세요.${ctx.bp.live.anonymous ? ' 질문은 이름 없이 올라가요.' : ''}</p>
+<h2 id="lp-join-h">참여하기</h2><p class="lp-small" data-join-lead>${ctx.bp.live.anonymous ? '보드 글에 보일 별명을 정해 주세요. 투표와 질문은 별명 없이 바로 돼요.' : '질문과 보드 글에 보일 별명을 정해 주세요.'}</p>
 <label data-join-nick><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname" aria-describedby="lp-join-err"></label>
 <p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
 ${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
-${needSchool ? '<label data-join-id><span>소속(학교)</span><input name="school" maxlength="40" required autocomplete="organization"></label>' : ''}
+${needSchool ? `<label data-join-id><span>소속(학교)${schoolMust ? '' : ' · 선택'}</span><input name="school" maxlength="40"${schoolMust ? ' required' : ''} autocomplete="organization"></label>` : ''}
 ${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰고 ${keepRule(ctx.bp).short} 안에 지우는 데 동의합니다. 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit">참여</button></div></form></dialog>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit" data-join-go>참여</button></div></form></dialog>
 <aside class="lp-dock" data-dock hidden aria-label="참여 도구">
   <span class="lp-live-dot" data-live-status title="연결 상태"></span>
   ${dockAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend${quickAttend(ctx.bp) ? '' : '="in"'} hidden>${icon('check')}<span>출석</span></button>` : ''}

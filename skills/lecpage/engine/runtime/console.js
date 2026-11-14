@@ -392,7 +392,7 @@
     var op = allPolls().filter(function (p) { return p.id === state.openPoll; })[0];
     keep(C.strip, function () {
       C.strip.textContent = '';
-      kpi(parts.length, '참가자', parts.length ? '연수 코드 ' + DATA.live.code : '아직 들어온 사람이 없어요', '');
+      kpi(parts.length, '참가자', parts.length ? ((DATA.words && DATA.words.code) || '연수 코드') + ' ' + DATA.live.code : '아직 들어온 사람이 없어요', '');
       if (ON.help) kpi(openHelp.length, '도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '없어요', '#lp-p-help', openHelp.length > 0);
       if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(rs + '%', '모르겠어요', sig.total + '명 중 ' + sig.red + '명', '#lp-p-signal', sig.total > 0 && rs >= 25); }
       if (ON.progress) { var pc = { done: 0, doing: 0, stuck: 0 }; latestProgress().forEach(function (x) { if (pc[x.status] !== undefined) pc[x.status]++; }); kpi(pc.stuck, '실습 막힘', '완료 ' + pc.done + ' · 하는 중 ' + pc.doing, '#lp-p-heat', pc.stuck > 0); }
@@ -796,7 +796,7 @@
     s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '%' + (rateSet ? '' : '(이수 기준을 정하지 않아 기본값)') + ' 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '지우기'));
-    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '연수가 끝나고 ' + ((DATA.privacy || {}).retentionDays || 30) + '일 안에 모든 기록을 지워 주세요. 내려받은 CSV에도 별명이 들어 있어요.'));
+    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [데이터 모두 지우기]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 지우기를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
     var dlg = $('[data-purge-dialog]');
     var del = btn('데이터 모두 지우기', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
     var r = el('div', 'lp-con-row'); r.appendChild(del); s2.appendChild(r); b.appendChild(s2);
@@ -817,7 +817,7 @@
     var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
     add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '배포하면 여기에 나와요.');
     if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
-    add('연수 코드', DATA.live.code);
+    add((DATA.words && DATA.words.code) || '연수 코드', DATA.live.code);
     j.appendChild(q); j.appendChild(dl); s3.appendChild(j); b.appendChild(s3);
   }
   function purge() { conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); queue(); toast('모든 기록을 지웠어요.'); }, err); }

@@ -13,6 +13,7 @@ import { usedVariants } from './design/layouts.js';
 import { pruneUnusedCss } from './css-prune.js';
 import { deferFontLinks } from './font-bundle.js';
 import { eventDays } from './hero-meta.js';
+import { wordsFor, localizeSections } from './words.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
 // 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음.
@@ -104,9 +105,10 @@ export function build(input, opts = {}) {
   // 빈 설문 칸(주소도, 사이트 안에서 받을 문항도 없음)은 참가자 화면에 싣지 않음(차례·바닥글 메뉴에서도 빠짐).
   // 강사 미리보기(opts.preview)에서는 '채울 곳'으로 남겨 무엇을 넣으면 되는지 보임
   const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
-  const view = opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) };
+  const words = wordsFor(bp); // 대상에 맞는 낱말(연수·수업·설명회): 엔진 기본 제목만 화면에서 바꿈(words.js)
+  const view = localizeSections(opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) }, words);
   const ics = icsFile(bp.meta, opts.today);
-  const ctx = { bp: view, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, fxLibs: [...new Set(effectIds.flatMap((id) => FX_BY_ID[id]?.libs || []))], ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
+  const ctx = { bp: view, words, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, fxLibs: [...new Set(effectIds.flatMap((id) => FX_BY_ID[id]?.libs || []))], ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
   if (ics) files['assets/event.ics'] = ics;

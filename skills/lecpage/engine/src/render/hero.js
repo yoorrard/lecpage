@@ -60,7 +60,7 @@ function model(s, ctx, h) {
   const meta = own ? rows.slice() : [
     when && { k: 'when', label: '일시', value: when },
     place && { k: 'where', label: '장소', value: place },
-    ins && { k: 'who', label: h.words?.who || '강사', value: whoText(ins) },
+    ins && { k: 'who', label: ctx.words?.who || '강사', value: whoText(ins) },
     ...rows,
   ].filter(Boolean);
   // 이수 기준: 연수 목표 칸이 없을 때만 첫 화면에(같은 말을 두 번 하지 않게)
@@ -80,7 +80,7 @@ function model(s, ctx, h) {
   const agenda = sched?.items.length ? sched.items.map((x) => ({ t: x.start, end: x.end, title: x.title }))
     : outline?.items.length ? outline.items.map((x) => ({ t: x.part, title: x.title })) : [];
   return {
-    m, s, ctx, h, st, deck, tools, sched, outline, goals, mats, ins, meta, custom, nums, who, prep, agenda, time, when, place, done, dur,
+    m, s, ctx, h, st, deck, tools, sched, outline, goals, mats, ins, meta, custom, nums, who, prep, agenda, time, when, place, done, dur, attend: !!h.attendOn?.(ctx),
     dp: dateParts(m.date), title: s.title || m.title, org: s.eyebrow || m.organizer || '', sub: s.subtitle || m.subtitle || '',
     id: esc(s.id),
   };
@@ -89,7 +89,7 @@ function model(s, ctx, h) {
 // ── 조각 ─────────────────────────────────────────────
 const org = (M, cls = '') => (M.org ? `<p class="lp-hero-org${cls ? ' ' + cls : ''}">${esc(M.org)}</p>` : '');
 /** 연수 전·중·후 한 줄. 날짜가 있을 때만 두고, 참가자 화면(lecpage.js initPhase)이 글을 채워 보여 줍니다 */
-const state = (M) => (M.dp ? '<p class="lp-hero-state" data-hero-state hidden><i aria-hidden="true"></i><span data-hero-state-text></span></p>' : '');
+const state = (M) => (M.dp ? `<p class="lp-hero-state" data-hero-state hidden><i aria-hidden="true"></i><span data-hero-state-text></span>${M.attend ? `<button class="lp-btn lp-btn-primary lp-btn-sm lp-hero-attend" type="button" data-hero-attend hidden>${icon('check')}<span>출석</span></button>` : ''}</p>` : '');
 const h1 = (M, cls = '') => `<h1 class="lp-h1${cls ? ' ' + cls : ''}" id="${M.id}-h"${fx(M.ctx, 'hero.title')}>${titleHtml(M.title)}</h1>`;
 const sub = (M, cls = '') => (M.sub ? `<p class="lp-hero-sub${cls ? ' ' + cls : ''}">${br(M.sub)}</p>` : '');
 function ctas(M, extra = []) {
@@ -102,7 +102,7 @@ function ctas(M, extra = []) {
   const list = [...lead, ...extra.filter((e) => !c0.some((c) => c.href === e.href))].slice(0, 3);
   // 연수가 끝나면: 입장 버튼 대신 '연수 후 안내'(있을 때)
   const fu = ctx.bp.sections.find((x) => x.type === 'followup');
-  const after = fu ? `<a class="lp-btn lp-btn-primary" href="#${esc(fu.id)}" data-phase-show="after" hidden><span>연수 후 안내</span>${icon('arrow')}</a>` : '';
+  const after = fu ? `<a class="lp-btn lp-btn-primary" href="#${esc(fu.id)}" data-phase-show="after" hidden><span>${esc(ctx.words?.followup || '연수 후 안내')}</span>${icon('arrow')}</a>` : '';
   if (!list.length && !after) return '';
   return `<div class="lp-ctas">${after}${list.map((c, i) => `<a class="lp-btn ${i ? 'lp-btn-ghost' : 'lp-btn-primary'}" ${href(c.href)}${i ? '' : fx(ctx, 'hero.cta')}${c.download ? ' download' : ''}${c.join || c.href === m.joinUrl ? ' data-phase-hide="after"' : ''}><span>${esc(c.label)}</span>${icon(c.download ? 'download' : /^https?:/.test(c.href) ? 'external' : 'arrow')}</a>`).join('')}</div>`;
 }
@@ -274,7 +274,7 @@ C.spec = (M) => {
   const nums = pick(M, 'st', 'deck', 'dur', 'tools').slice(0, 3);
   const dim = M.dur ? `<p class="lp-spec-dim" aria-hidden="true"><span>${M.dur.text ? esc(M.dur.text) : `${M.dur.num}${esc(M.dur.unit)}`}${M.time ? ` · ${esc(M.time)}` : ''}</span></p>` : '';
   return `<div class="lp-wrap lp-hero-inner">
-  <div class="lp-spec-id">${M.org ? `<span class="lp-hero-org">${esc(M.org)}</span>` : '<span>연수 안내</span>'}${state(M)}${M.dp ? `<time datetime="${isoDate(M)}">${M.dp.y}-${pad2(M.dp.m)}-${pad2(M.dp.d)}</time>` : ''}</div>
+  <div class="lp-spec-id">${M.org ? `<span class="lp-hero-org">${esc(M.org)}</span>` : `<span>${esc(M.ctx.words?.ev || '연수')} 안내</span>`}${state(M)}${M.dp ? `<time datetime="${isoDate(M)}">${M.dp.y}-${pad2(M.dp.m)}-${pad2(M.dp.d)}</time>` : ''}</div>
   <div class="lp-hero-copy">${h1(M)}${dim}${sub(M)}${ctas(M)}</div>
   <dl class="lp-hero-meta lp-spec">${cells.map((x) => cell(x, 'lp-spec-c')).join('')}${nums.map((x) => numCell(M, x, 'lp-spec-c lp-spec-n')).join('')}</dl>
 </div>`;

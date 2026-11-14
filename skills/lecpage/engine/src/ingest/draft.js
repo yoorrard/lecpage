@@ -1,7 +1,6 @@
 // AI 없이 교재만으로 연수 설계도(blueprint v1) 초안 만들기. docs/architecture.md §2를 따릅니다.
 // 결과는 validate()로 한 번 더 다듬어 쓰면 됩니다. 감지가 틀릴 수 있으니 사람이 고칠 자리를 비워 둡니다(지어내지 않음).
 import { randomCode, followupKind } from '../validate.js';
-import { DEFAULT_SURVEY } from '../schema/sections.js';
 import { detect } from './detect.js';
 import { normLine, normText, truncate, textKey, sizeLabel, hostOf, extOf } from './util.js';
 import { getTool } from './tools-db.js';
@@ -428,7 +427,8 @@ export function materialToDraft(material, info = {}) {
 
   if (instructors.length) S.instructor = { id: 'instructor', type: 'instructor', nav: '강사', source: d.instructor ? { file: d.instructor.file, pages: [d.instructor.page] } : undefined };
   // 만족도 조사: 강사가 준 주소가 있을 때만. 주소가 없으면 참여 기능을 켤 때 사이트 안 설문이 들어감(intake.js applyFeatures)
-  if (info.surveyUrl) S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl, qr: true, questions: DEFAULT_SURVEY.map((q) => ({ ...q })) };
+  // 강사가 준 기관 설문 주소가 있으면 그 설문 하나(사이트 기본 문항을 함께 넣지 않음 — 설문이 둘이 되지 않게)
+  if (info.surveyUrl) S.survey = { id: 'survey', type: 'survey', nav: '설문', url: info.surveyUrl, qr: true, questions: [] };
   // 마무리: 교재의 맺는 문장이 있으면 그 문장(이름표 "핵심:"은 머리말로). 인사말·서명("함께해 주셔서 고맙습니다", "○○○ 드림")은
   // 교재에 없으므로 지어 넣지 않음. 문장이 없으면 비워 두고, 화면에는 연수 제목·날짜·주최가 나옴
   const closingMsg = msgs.find((m) => m.closing) || msgs.find((m) => m !== lead && (m.score ?? 2) >= 2 && m.file === (hasDeckFile && hasDeckFile.id)) || null;
