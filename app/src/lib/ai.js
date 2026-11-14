@@ -3,13 +3,13 @@
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
 
-// 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 버튼으로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소는 각 회사 공식 문서와 맞춰 봄(2026-11-12, 근거는 ai-guides.jsx 머리말).
+// 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 버튼으로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소·오류 모양은 각 회사 공식 문서와 맞춰 봄(2026-11-14, 근거는 docs/research/ai-facts-2026-11-14.md).
 // OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
 export const PROVIDERS = {
-  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/billing', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', modelHint: /flash/i, images: true },
-  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', modelHint: /gemini.*flash|claude|gpt/i, oauth: true, images: true },
-  openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 충전한 크레딧에서 나가요.', modelHint: /^gpt-/i, images: true },
-  anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 충전한 크레딧에서 나가요.', modelHint: /sonnet/i, images: true },
+  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/billing', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', images: true },
+  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', oauth: true, images: true },
+  openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
+  anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
 };
 /** 고르는 화면에 보이는 회사(이 순서대로) */
 export const VISIBLE = ['openai', 'anthropic', 'gemini'].filter((id) => PROVIDERS[id] && !PROVIDERS[id].hidden);
@@ -87,7 +87,7 @@ export async function forgetKey(provider) {
 
 // 고른 회사·모델(비밀 아님)
 async function prefs() { const s = (await kv.get('ai-prefs')) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {}, blocked: s.blocked || {} }; }
-/** 이 키로는 못 쓰는 모델로 확인된 것(예: Gemini 무료 등급에서 Gemini 4). 고르는 칸에서 '유료 키 필요'로 보임 */
+/** 이 키로는 못 쓰는 모델로 확인된 것(예: Gemini 무료 등급에서 Gemini 4 Carbon·Argon). 고르는 칸에서 '유료 키 필요'로 보임 */
 async function markBlocked(provider, id) {
   const s = await prefs(); const list = s.blocked[provider] || [];
   if (!list.includes(id)) { s.blocked[provider] = [...list, id].slice(-20); await kv.set('ai-prefs', s); }
@@ -122,17 +122,22 @@ export async function getActiveAI() {
 export class AiError extends Error {
   constructor(kind, message, { status = 0, provider = '', retryAfter = 0 } = {}) { super(message); this.kind = kind; this.status = status; this.provider = provider; this.retryAfter = retryAfter; }
 }
-function classify(status, msg, code) {
+/** 상태 코드·오류 코드·문구 → 오류 종류(ai-vision.js도 씀). code: 회사가 준 코드들을 이어 붙인 글 */
+export function classify(status, msg, code) {
   const m = `${code || ''} ${msg || ''}`;
   if (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(m)) return 'verify'; // Gemini 무료 등급: 휴대폰 확인이 필요한 프로젝트(403)
   if (/CORS requests are not allowed/i.test(m)) return 'no-browser'; // Claude: 브라우저에서 바로 부르지 못하게 막아 둔 조직(401)
   if (/anthropic-workspace-id|workspace ID|specify (a|the) workspace/i.test(m)) return 'workspace'; // Claude: Workspace를 고르지 않고 만든 키
-  if (status === 429 && /API usage limits|monthly API usage/i.test(m)) return 'cap'; // Claude: 이번 달 쓸 수 있는 금액을 다 씀
+  // 이번 달 쓸 수 있는 금액을 다 씀. Claude: 등급 한도 429(enforced_spend_limit_reached)·직접 정한 한도 400("You have reached your specified API usage limits")
+  // OpenAI: 직접 정한 한도·OpenAI가 정한 한도 429(organization_/project_spend_limit_exceeded, organization_usage_limit_exceeded)
+  if (/API usage limits|monthly API usage|enforced_spend_limit_reached|spend_limit_exceeded|usage_limit_exceeded/i.test(m)) return 'cap';
   if (status === 401 || /API_KEY_INVALID|API key not valid|invalid.?x-api-key|Incorrect API key|invalid_api_key|No auth credentials|User not found|authentication_error/i.test(m)) return 'bad-key';
   if (/location is not supported|unsupported_country|not available in your (country|region)|FAILED_PRECONDITION/i.test(m)) return 'region';
-  if (status === 402 || /insufficient_quota|credit balance is too low|Insufficient credits|billing|payment/i.test(m)) return 'billing';
+  // Gemini 한도 초과(429 RESOURCE_EXHAUSTED) 문구에는 "check your plan and billing details"가 들어 있어 결제 문제로 잘못 읽지 않게 뺌
+  const gQuota = status === 429 && /RESOURCE_EXHAUSTED/.test(m);
+  if (status === 402 || (!gQuota && /insufficient_quota|credit_balance_exhausted|credit balance is too low|Insufficient credits|billing|payment/i.test(m))) return 'billing'; // OpenAI 크레딧 없음은 429 credit_balance_exhausted(2026-11)
   if (status === 429 && /limit:\s*0\b/.test(m)) return 'no-access'; // 무료 키로는 못 쓰는 모델(한도 0)
-  if (status === 429 && /per.?day|free-models-per-day|PerDay|daily/i.test(m)) return 'quota-day';
+  if (status === 429 && /per.?day|free-models-per-day|PerDay|daily|\bquota_exceeded\b/i.test(m)) return 'quota-day';
   if (status === 429 || /RESOURCE_EXHAUSTED|rate.?limit/i.test(m)) return 'quota';
   if (status === 403) return 'forbidden';
   if (status === 404 || /model.*(not found|does not exist)|No endpoints found/i.test(m)) return 'model';
@@ -144,7 +149,8 @@ async function fail(r, provider) {
   const j = await r.json().catch(() => ({}));
   const e = j.error || j;
   const msg = (typeof e === 'string' ? e : e.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
-  const code = e.status || e.code || e.type || '';
+  // 오류 코드는 회사마다 자리가 다름: Gemini status, OpenAI code·type(크레딧 없음은 code credit_balance_exhausted, type insufficient_quota), Claude type·details.error_code
+  const code = [e.status, e.code, e.type, e.details?.error_code].filter((x) => typeof x === 'string').join(' ');
   // 얼마 뒤에 다시 하라는지: retry-after 헤더, Gemini의 RetryInfo("retryDelay":"34s")나 문구("retry in 34.2s")
   const d = (Array.isArray(e.details) ? e.details : []).map((x) => x && x.retryDelay).find(Boolean);
   const retryAfter = Math.ceil(+r.headers.get('retry-after') || parseFloat(d) || +(/retry in ([\d.]+)\s*s/i.exec(msg) || [])[1] || 0);
@@ -176,9 +182,9 @@ export function explainError(err, provider) {
     billing: provider === 'gemini' ? ['결제가 연결된 프로젝트의 키예요.', '구글 AI Studio에서 크레딧을 충전해야 쓸 수 있어요. 결제를 연결하지 않은 프로젝트에서 키를 새로 만들면 무료로 쓸 수 있어요.', ['billing', 'key', 'connect', 'paste']]
       : provider === 'openrouter' ? ['크레딧이 없어요.', '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 다른 AI를 연결해 주세요.', ['connect']]
         : ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 지금은 쓰던 ${provider === 'openai' ? 'ChatGPT' : 'Claude'} 창으로 만들 수 있어요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['paste', 'billing']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? `한국 시간 ${geminiResetKo()}쯤 다시 채워져요.` : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? `한국 시간 ${geminiResetKo()}쯤 다시 채워져요.` : provider === 'openrouter' ? '한국 시간 오전 9시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달 1일에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['paste']],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
     refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI로 다시 해 보세요.', ['connect', 'paste']],
@@ -199,7 +205,7 @@ export function explainError(err, provider) {
   }
   return { kind: k, provider, link, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
 }
-/** Gemini 무료 횟수는 미국 태평양 시간 자정에 다시 채워짐(공식 문서) → 한국 시간으로 여름 '오후 4시', 겨울 '오후 5시' */
+/** Gemini 무료 횟수(하루 요청 수)는 미국 태평양 시간 자정에 다시 채워짐(공식 문서 Rate limits) → 한국 시간으로 여름 '오후 4시', 겨울 '오후 5시'. OpenRouter 무료 모델은 UTC 자정(한국 오전 9시) */
 export function geminiResetKo(now = new Date()) {
   let h = 5;
   try { if (/PDT|GMT-7/.test(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).format(now))) h = 4; } catch { /* 시간대를 모르면 겨울 기준 */ }
@@ -246,13 +252,16 @@ async function listRaw(provider, key, signal) {
   return (j.data || []).map((m) => ({ id: m.id, label: m.name || m.id, free: /:free$/.test(m.id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0) }));
 }
 // ── 모델 등급과 추천 ──
-// 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Sol·Terra·Luna, Gemini 4 Carbon·Argon …). 이름으로 고르면 금방 틀리므로
+// 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Astra·GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5·Sonnet 5.5·Haiku 5.5,
+// Gemini 4 Carbon·Argon·Hydrogen — Gemini 4부터는 Pro·Flash라는 이름이 없음). 이름으로 고르면 금방 틀리므로
 // 가격과 출시일을 OpenRouter 공개 목록에서 그때그때 읽어 등급을 매깁니다(키 없이 읽히고 운영자 서버를 거치지 않음). 못 읽으면 이름으로 어림.
 //   등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
 //   추천 = 고품질 등급에서 가장 새 모델(나온 지 2주가 안 된 것은 뒤로). 교재를 읽고 연수 흐름을 짜는 일은 가벼운 모델에서 결과가 눈에 띄게 단순해짐
-//   공식 문서와 맞춰 봄(2026-11-12): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5",
-//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 3.8 Flash는 됨 → 무료 키는 처음 한 번 실패한 뒤 쓸 수 있는 가장 좋은 모델을 기억
-const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|translate|search|instruct|codex|computer|robotics|nano|banana|omni|learnlm|gemma|guard|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora/i;
+//   공식 문서와 맞춰 봄(2026-11-14): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5",
+//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 4 Hydrogen(2026-11-12 출시)·3.8 Flash 등은 됨 → 무료 키는 처음 한 번 실패한 뒤
+//   표준 등급에서 고른 모델을 기억(Hydrogen은 나온 지 2주가 지나는 11-26부터 추천으로 올라옴)
+// 글을 쓰는 대화 모델이 아닌 것(음성·그림·영상·음악·임베딩·에이전트·결정 API 전용)과 승인받은 곳만 쓰는 모델(cyber·rosalind)
+const SKIP = /tts|audio|image|vision|embed|live|realtime|transcribe|translate|search|instruct|codex|computer|robotics|nano|banana|omni|learnlm|gemma|guard|aqa|-exp|preview-\d\d-\d\d|deep-research|moderation|dall|whisper|sora|veo|lyria|decision|antigravity|cyber|rosalind/i;
 export const TIER_KO = ['가벼움', '표준', '고품질', '최상위'];
 const OR_PREFIX = { openai: 'openai/', gemini: 'google/', anthropic: 'anthropic/', openrouter: '' };
 const PREFER = { anthropic: /opus/, openrouter: /^anthropic\/claude-opus/ };
@@ -315,7 +324,9 @@ async function rank(provider, list, freeTier) {
   const rec = pool.sort(cmp)[0];
   if (rec) rec.rec = true;
   const order = { 2: 0, 3: 1, 1: 2, 0: 3 };
-  return rows.sort((a, b) => (b.rec - a.rec) || (a.locked - b.locked) || (order[a.tier] - order[b.tier]) || (b.created - a.created) || (verOf(b.id) - verOf(a.id)) || (a.i - b.i));
+  // 같은 등급 안에서는 추천과 같은 기준(갓 나온 모델은 뒤로)으로: 무료 키가 못 쓰는 모델을 건너뛸 때(generateAuto) 추천과 같은 모델로 내려가게
+  const fresh = (r) => (r.created && now - r.created < FRESH_MS ? 1 : 0);
+  return rows.sort((a, b) => (b.rec - a.rec) || (a.locked - b.locked) || (order[a.tier] - order[b.tier]) || (fresh(a) - fresh(b)) || (b.created - a.created) || (verOf(b.id) - verOf(a.id)) || (a.i - b.i));
 }
 /** 고르는 칸에 보일 이름: '모델 · 추천 · 약 220원' */
 export function modelText(m) {
@@ -348,6 +359,7 @@ export async function checkKey(provider, key, { signal } = {}) {
   const list = await models(provider, key, { freeTier });
   // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
   const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
+  // 목록에서 고를 모델이 없을 때만 Gemini 공식 별칭(-latest: 그 계열의 최신판을 가리킴)으로
   const model = (kept || list.find((m) => !m.locked) || {}).id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
   if (!model) throw new AiError('model', 'no model', { provider });
   await setActive(provider, { model, freeTier });
@@ -390,11 +402,20 @@ async function anthropic(key, model, prompt, maxTokens, signal) {
   return withWorkspace(key, signal, async () => {
     if (!extra) return call(false);
     try { return await call(true); }
-    catch (e) { if (e instanceof AiError && e.kind !== 'workspace' && (e.status === 400 || e.kind === 'network')) return call(false); throw e; }
+    catch (e) { if (e instanceof AiError && ((e.kind === 'other' && e.status === 400) || e.kind === 'network')) return call(false); throw e; } // 한도·Workspace 같은 400은 다시 보내도 같음
   });
 }
 
 // ── 생성 ──
+/**
+ * Gemini 요청 본문(ai-vision.js도 씀). 공식 문서(2026-11) 기준:
+ *  - temperature·topP는 Gemini 3.6 이후·4에서 무시되고 경고가 오며, 앞으로 400이 됨 → 보내지 않음
+ *  - maxOutputTokens는 생각하는 토큰까지 합친 한도. Gemini 4는 32,768 이상을 권함(Carbon·Argon은 스트리밍 아닌 요청 한 번에 32,768까지)
+ *  - 2026-10-26 뒤에 만든 유료 프로젝트는 요청을 기록(store)하는 것이 기본 → 교재가 키 주인의 기록에 남지 않게 store: false
+ */
+export function geminiBody(parts, maxTokens) {
+  return { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: Math.max(maxTokens, 32768) }, store: false };
+}
 /**
  * 브라우저에서 사용자 키로 바로 호출. 상태 코드별로 AiError를 던짐.
  * @returns {Promise<{text}>}
@@ -406,7 +427,7 @@ export async function generate({ provider, key, model, prompt, signal, maxTokens
   if (provider === 'gemini') {
     const j = await send(provider, `${GEMINI}/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', signal, headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, temperature: 0.4 } }),
+      body: JSON.stringify(geminiBody([{ text: prompt }], maxTokens)),
     });
     const c = j.candidates?.[0];
     if (!c && j.promptFeedback?.blockReason) throw new AiError('other', `차단됨(${j.promptFeedback.blockReason})`, { provider });
@@ -425,7 +446,7 @@ export async function generate({ provider, key, model, prompt, signal, maxTokens
         : { model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens }),
     });
     const ch = j.choices?.[0];
-    if (!ch && j.error) throw new AiError(classify(j.error.code || 0, j.error.message), j.error.message, { provider });
+    if (!ch && j.error) throw new AiError(classify(+j.error.code || 0, j.error.message, [j.error.type, j.error.code].filter((x) => typeof x === 'string').join(' ')), j.error.message, { provider });
     text = ch?.message?.content || '';
     cut = ch?.finish_reason === 'length';
   }
@@ -472,7 +493,7 @@ export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === '
           const sec = Math.max(4, e.retryAfter || (waits ? 20 : 8)); waits++;
           onStatus?.({ wait: sec }); await sleep(sec * 1000, o.signal); continue;
         }
-        // 이 키로는 못 쓰는 모델. Gemini 4는 무료 등급에서 안 됨(공식 가격표 2026-11). 그때 오는 오류 모양이 한 가지가 아니라 넓게 받음
+        // 이 키로는 못 쓰는 모델. Gemini 4 Carbon·Argon은 무료 등급에서 안 됨(공식 가격표 2026-11). 그때 오는 오류 모양이 한 가지가 아니라 넓게 받음
         const blocked = e.kind === 'no-access' || e.kind === 'model' || (provider === 'gemini' && ['forbidden', 'region', 'billing'].includes(e.kind));
         if (!swap || !(blocked || LIMIT_KINDS.includes(e.kind)) || swaps >= (blocked ? 5 : 2)) throw e;
         let next = null;

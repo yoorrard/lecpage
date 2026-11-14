@@ -1,9 +1,9 @@
 // 수정 요청용 AI 호출: 글 + 그림(PNG·JPEG)을 함께 보냅니다. 키는 lib/ai.js가 보관한 것을 그대로 쓰고, 브라우저에서 AI 회사로 바로 갑니다.
-import { getActiveAI, models, AiError, PROVIDERS, antHeaders, withWorkspace } from './ai.js';
+import { getActiveAI, models, AiError, PROVIDERS, antHeaders, withWorkspace, classify, geminiBody } from './ai.js';
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
-const kindOf = (status, msg) => (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(msg) ? 'verify' : /anthropic-workspace-id|workspace ID|specify (a|the) workspace/i.test(msg) ? 'workspace' : status === 401 ? 'bad-key' : status === 402 ? 'billing' : status === 403 ? 'forbidden' : status === 404 ? 'model'
-  : status === 413 || /too long|context length|too large/i.test(msg) ? 'too-long' : status === 429 ? (/day|daily/i.test(msg) ? 'quota-day' : 'quota') : status >= 500 ? 'busy' : 'other');
+// 오류 종류는 만들기(ai.js)와 같은 규칙으로: 회사마다 다른 오류 코드(OpenAI credit_balance_exhausted·Claude 한도 등)를 같은 안내로
+const codesOf = (e) => (e && typeof e === 'object' ? [e.status, e.code, e.type, e.details?.error_code].filter((x) => typeof x === 'string').join(' ') : '');
 
 async function send(provider, url, init) {
   let r;
@@ -12,7 +12,7 @@ async function send(provider, url, init) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const e = j.error || j; const msg = (typeof e === 'string' ? e : e?.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
-    throw new AiError(kindOf(r.status, msg), msg, { status: r.status, provider });
+    throw new AiError(classify(r.status, msg, codesOf(e)), msg, { status: r.status, provider });
   }
   return j;
 }
@@ -47,7 +47,7 @@ export async function askVision(ai, { prompt, images = [], signal, maxTokens = 8
     const parts = [...pics.map((p) => ({ inline_data: { mime_type: p.mime, data: p.data } })), { text: prompt }];
     const j = await send(provider, `${GEMINI}/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', signal, headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, temperature: 0.3 } }),
+      body: JSON.stringify(geminiBody(parts, maxTokens)),
     });
     const c = j.candidates?.[0];
     if (!c && j.promptFeedback?.blockReason) throw new AiError('other', `차단됨(${j.promptFeedback.blockReason})`, { provider });
@@ -73,7 +73,7 @@ export async function askVision(ai, { prompt, images = [], signal, maxTokens = 8
         : { model, messages: [{ role: 'user', content }], max_tokens: maxTokens }),
     });
     const ch = j.choices?.[0];
-    if (!ch && j.error) throw new AiError(kindOf(+j.error.code || 0, j.error.message || ''), j.error.message || 'error', { provider });
+    if (!ch && j.error) throw new AiError(classify(+j.error.code || 0, j.error.message || '', codesOf(j.error)), j.error.message || 'error', { provider });
     text = ch?.message?.content || '';
     cut = ch?.finish_reason === 'length';
   }

@@ -57,6 +57,8 @@ WebRTC(Trystero 등)로 강사 브라우저가 방 역할을 하면 서버가 0�
 
 ## 5. AI 모델 추천을 정하는 방법
 
+> 2026-11-14: Gemini 4 Hydrogen이 무료 등급으로 나와 아래 'Gemini 4는 무료 불가·무료 키는 3.8 Flash' 단정이 낡았습니다. 지금 사실은 [`ai-facts-2026-11-14.md`](ai-facts-2026-11-14.md).
+
 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6.1 Sol·Terra, GPT-6 Astra·Luna / Gemini 4 Carbon·Argon, 3.8 Flash / Claude Opus 5.5·Sonnet 5.5·Haiku 5.5·Fable 5.2). 이름으로 고르는 규칙은 금방 틀리므로, 앱이 **OpenRouter 공개 목록의 가격과 출시일**을 읽어 등급을 매깁니다(키 없이 읽히고 운영자 서버를 거치지 않음. 못 읽으면 이름으로 어림).
 
 - 등급(출력 100만 토큰 값): 최상위 $30~ · 고품질 $8~ · 표준 $3~ · 가벼움 그 아래
