@@ -233,3 +233,46 @@ test('보고서: 문제가 없으면 사람이 볼 일 칸이 없음', () => {
   const r = renderReport({ status: 'unchanged', today: TODAY, counts: { openai: 1, anthropic: 1, google: 1, free: 0 }, sources: {}, kept: [], recs: {}, geminiFree: null, problems: [], notes: [] });
   assert.ok(!/사람이 볼 일/.test(r.text));
 });
+
+// ── 값 급변·빈 추천·확인한 날 ──
+test('검사: 값이 한꺼번에 1/1000이 되면 거부(단위 실수), 모델 몇 개 값 내림은 통과', () => {
+  const prev = good();
+  const scaled = JSON.parse(serialize(prev));
+  for (const m of scaled.models) { m.in = Math.round(m.in / 1000 * 1e4) / 1e4; m.out = Math.round(m.out / 1000 * 1e4) / 1e4; }
+  assert.match(validateCatalog(scaled, prev, TODAY).join(' / '), /openai 모델 값이 한꺼번에 앞 판의 1\/\d+배가 됐어요/);
+  const cut = JSON.parse(serialize(prev));
+  for (const m of cut.models.filter((x) => x.id.startsWith('openai/')).slice(0, 2)) { m.in /= 2; m.out /= 2; }
+  assert.deepEqual(validateCatalog(cut, prev, TODAY), [], '두 모델 값이 반으로: 통과');
+});
+
+test('검사: 앞 판에는 있던 추천이 비면 거부(모든 모델이 그림 전용으로 바뀌는 등)', () => {
+  const prev = good();
+  const img = JSON.parse(serialize(prev));
+  for (const m of img.models) m.text = false;
+  const errs = validateCatalog(img, prev, TODAY).join(' / ');
+  assert.match(errs, /OpenAI: 앞 판에는 앱이 추천할 모델\(gpt-6\.1-sol\)이 있었는데 이번 판에는 없어요/);
+  assert.match(errs, /Claude: 앞 판에는/);
+});
+
+test('run: 값이 같아도 네 출처를 모두 받았으면 이틀에 한 번 확인한 날(checked)을 적음(하루 점검이 갱신 멈춤을 봄). 3일 넘게 다 못 받으면 사람이 볼 일로', async () => {
+  const a = await run({ fetchFn: fakeNet(), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
+  assert.equal(JSON.parse(a.text).checked, TODAY);
+  const day = (n) => new Date(NOW.getTime() + n * 86400000);
+  const b = await run({ fetchFn: fakeNet(), repo: repo(), prevText: a.text, now: day(1), write: false, pause: 1 });
+  assert.equal(b.status, 'unchanged', '하루 뒤: 그대로(날마다 커밋하지 않음)');
+  const c = await run({ fetchFn: fakeNet(), repo: repo(), prevText: a.text, now: day(2), write: false, pause: 1 });
+  assert.equal(c.status, 'checked');
+  const cj = JSON.parse(c.text);
+  assert.deepEqual([cj.updated, cj.checked], [TODAY, '2026-11-16'], '값의 날짜(updated)는 그대로, 확인한 날만');
+  assert.match(c.report, /결과: 값은 그대로\(확인한 날만 새로 적음\)/);
+  assert.match(c.report, /네 출처를 모두 받은 마지막 날: 2026-11-16\(오늘\)/);
+  assert.deepEqual(c.problems, []);
+  // 출처 하나가 계속 끊김: 3일까지는 참고, 넘으면 사람이 볼 일(날 수가 보임)
+  const d = await run({ fetchFn: fakeNet({ fail: ['models.dev'] }), repo: repo(), prevText: a.text, now: day(3), write: false, pause: 1 });
+  assert.equal(d.status, 'unchanged'); assert.deepEqual(d.problems, []);
+  assert.ok(d.notes.some((n) => /네 출처를 모두 받은 마지막 날이 2026-11-14\(3일 전\)이에요\. 받지 못한 곳: models\.dev/.test(n)), d.notes.join('\n'));
+  const e = await run({ fetchFn: fakeNet({ fail: ['models.dev'] }), repo: repo(), prevText: a.text, now: day(4), write: false, pause: 1 });
+  assert.ok(e.problems.some((p) => /2026-11-14\(4일 전\).*받지 못한 곳: models\.dev.*SOURCES/.test(p)), e.problems.join('\n'));
+  assert.equal(JSON.parse(e.text).checked, TODAY, '다 받지 못한 날은 확인한 날을 바꾸지 않음');
+  assert.deepEqual(validateCatalog({ ...JSON.parse(a.text), checked: '2099-01-01' }, null, TODAY), ['확인한 날(checked) 모양이 달라요']);
+});
