@@ -168,6 +168,19 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     cf.state.failDeleteLatest = false;
   });
 
+  await t.test('강사가 내리면(사이트 열쇠) Pages 주소에 "강사가 사이트를 내렸어요" 안내 하나만 남김(보관 기간 끝과 나눔)', async () => {
+    const s4 = (await call(base, 'POST', '/api/sites', { json: { title: '내리기 시험' } })).body;
+    assert.equal((await deploy(base, s4, await buildSite('data-lab'))).status, 200);
+    const before = cf.deploymentsOf(`s-${s4.id}`);
+    assert.equal(before.length, 1);
+    assert.equal((await call(base, 'DELETE', `/api/sites/${s4.id}`, { key: s4.key })).status, 204);
+    const left = cf.deploymentsOf(`s-${s4.id}`);
+    assert.equal(left.length, 1, '안내 화면 하나만'); assert.notEqual(left[0].id, before[0].id, '사이트 배포는 지움');
+    const page = (await get(s4.url)).text;
+    assert.match(page, /강사가 사이트를 내렸어요/); assert.doesNotMatch(page, /보관 기간이 끝났어요/);
+    assert.match((await get(s4.altUrl)).text, /강사가 사이트를 내렸어요/, '두 번째 주소도');
+  });
+
   await t.test('예약·상태 API·긴 대기(학교망 묻기 줄이기)', async () => {
     const kst = (n) => new Date(Date.now() + 9 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
     const booking = { date: kst(5), start: '10:00', end: '12:00', people: 40, live: true, network: 'restricted' };

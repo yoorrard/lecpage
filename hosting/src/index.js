@@ -7,7 +7,7 @@
 import { config, expiryFrom, EXTRA_WORK_SHARE } from './config.js';
 import { HttpError, json, readJson, errorFrom, corsHeaders, preflight, withHeaders } from './http.js';
 import { ID_RE, SHA256_RE, DEPLOY_RE, newId, newKey, sha256Hex, bearer, secretMatches } from './ids.js';
-import { notFoundPage, gonePage, methodNotAllowed } from './pages.js';
+import { notFoundPage, gonePage, removedPage, methodNotAllowed } from './pages.js';
 import { liveTarget, liveOriginOk, FILE_ALIAS, LIVE_PREFIX, LiveError } from './live/host.js';
 import { Tally, MinuteLimiter, appStatKey } from './tally.js';
 import { admin } from './admin.js';
@@ -106,7 +106,7 @@ function secure(res) {
 }
 
 // ── 사이트 내보내기 ─────────────────────────────────────────────
-// 없는 사이트(보관 기간 끝·지움)를 1분 기억: 같은 주소를 두드려도 Durable Object를 깨우지 않음
+// 없는 사이트(보관 기간 끝·지움·강사가 내림)를 1분 기억: 같은 주소를 두드려도 Durable Object를 깨우지 않음. 값: { until, removed }
 const goneMem = new Map();
 const GONE_MS = 60000;
 // 사이트 파일 응답을 Cloudflare 데이터센터 캐시(Cache API)에 10분 둠. 내 도메인을 붙였을 때만 동작(workers.dev에서는 아무 일도 안 함)
@@ -121,7 +121,7 @@ async function serveSite(request, env, ctx, url, cfg) {
   const id = m[1];
   if (m[2] === undefined) return new Response(null, { status: 308, headers: { location: `/s/${id}/${url.search}`, 'cache-control': 'no-store' } });
   const g = goneMem.get(id);
-  if (g && g > Date.now()) { T.mark('bot'); return gonePage(head); }
+  if (g && g.until > Date.now()) { T.mark('bot'); return g.removed ? removedPage(head) : gonePage(head); }
   const path = m[3];
   const v = url.searchParams.get('v') || '';
   // 데이터센터 캐시: 지문(?v=)만 붙었거나 물음표가 없는 HTML 아닌 파일. Range·HEAD는 그대로 보냄
@@ -142,9 +142,10 @@ async function serveSite(request, env, ctx, url, cfg) {
   let res = await siteStub(env, id).fetch(`http://site/file?p=${encodeURIComponent(path)}${v ? `&v=${encodeURIComponent(v)}` : ''}`, { method: request.method, headers });
   const proxy = res.headers.get('x-lp-proxy');
   if (proxy) res = await fromPages(request, proxy, id, path);
-  if (res.headers.get('x-lp-state') === 'gone') {
+  const lpState = res.headers.get('x-lp-state');
+  if (lpState === 'gone' || lpState === 'removed') {
     if (goneMem.size > 5000) goneMem.clear();
-    goneMem.set(id, Date.now() + GONE_MS);
+    goneMem.set(id, { until: Date.now() + GONE_MS, removed: lpState === 'removed' });
     const out = new Response(res.body, res); out.headers.delete('x-lp-state'); return out;
   }
   if (cache && res.status === 200 && /^public/.test(res.headers.get('cache-control') || '')) {
@@ -324,6 +325,7 @@ async function route(request, env, ctx, url, cfg, self) {
     };
     const size = Number(request.headers.get('content-length') || 0);
     if (parts.length === 2 && method === 'DELETE') return forward('site');
+    if (c === 'records' && parts.length === 3 && method === 'GET') return forward('records');
     if (c === 'deploys' && parts.length === 3 && method === 'POST') return forward('deploys');
     if (c === 'live' && parts.length === 3 && method === 'POST') return forward('live');
     if (c === 'deploys' && e === 'publish' && parts.length === 5 && method === 'POST') {

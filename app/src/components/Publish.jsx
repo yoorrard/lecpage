@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Dialog, SecretLine } from './ui.jsx';
+import { Dialog } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantGate, instantShare, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
@@ -174,16 +174,32 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
  * buildFiles(opts) → { files }, guard(run): 참여 기능 연결 전이면 먼저 물어봄, done(url, patch): 주소 저장.
  * again: { current } 지난번에 배포한 곳에 바로 다시 배포하는 함수를 여기에 걸어 둠(성공 카드의 [다시 배포하기]가 부름). 못 하면 null
  */
-export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, onTarget }) {
+export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, onTarget, records }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
   const [share] = useState(() => instantShare()); // 이 기기의 오늘 남은 새 사이트 몫(모르면 null)
-  // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
-  useEffect(() => { connectedTargets().then(setConnected); instantInfo().then((i) => setInstant(i || (PUBLISH_API ? false : null))); }, []);
+  // 인터넷이 끊겼으면(오프라인) 되는 길(사이트 파일 받기)만. 다시 이어지면 바로 배포 서버에 다시 물음
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  useEffect(() => {
+    const on = () => setOnline(true); const off = () => setOnline(false);
+    addEventListener('online', on); addEventListener('offline', off);
+    return () => { removeEventListener('online', on); removeEventListener('offline', off); };
+  }, []);
+  // 바로 배포 서버의 답(/api/info)을 받기 전에는 배포할 곳을 정하지 않음: 먼저 끝난 망 확인(막힌 곳이 바로 실패하는 학교망)이
+  // 바로 배포를 건너뛴 곳으로 못 박지 않게. 3초가 지나도 안 오면 나머지로 보여 주고, 늦게 오면 그때 다시 고름(강사가 직접 고른 곳은 그대로)
+  const [infoWait, setInfoWait] = useState(!!PUBLISH_API);
+  const first = useRef(true);
+  useEffect(() => {
+    let off = false;
+    connectedTargets().then((c) => { if (!off) setConnected(c); });
+    const t = setTimeout(() => { if (!off) setInfoWait(false); }, 3000);
+    // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
+    instantInfo(!first.current).then((i) => { if (off) return; setInstant(i || (PUBLISH_API ? false : null)); setInfoWait(false); clearTimeout(t); });
+    first.current = false;
+    return () => { off = true; clearTimeout(t); };
+  }, [online]);
   const [netBad, setNetBad] = useState({}); // 이 망에서 API에 닿지 않는 배포할 곳(토큰으로 배포하는 곳만 확인)
-  const [moved, setMoved] = useState(''); // 막혀서 다른 곳으로 바꾼 사실 한 줄
-  const forced = useRef(new Set()); // 막혔다고 알린 뒤에도 강사가 다시 고른 곳(다시 바꾸지 않음)
   // 붐빔 단계(서버의 capacity): 이미 배포한 사이트는 붐벼도 다시 배포가 되고, 새 사이트만 내 계정으로 넘김. 평소에는 아무 줄도 없음
   const lec = p.deploy?.lecpage;
   const hasSite = !!(lec?.id && lec.expiresAt && (instant?.keepAlive !== false || lec.expiresAt > Date.now()));
@@ -198,25 +214,22 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
   const nextFirst = nextHosts.length ? [...rec.hosts.filter((h) => connected.includes(h)), ...nextHosts] : [];
   const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...nextFirst.filter((h) => usable.includes(h)), ...rec.hosts.filter((h) => usable.includes(h)), ...usable])];
+  // 추천: 이 망에서 닿는 첫째 곳. 망 확인은 고른 곳을 바꾸지 않고(약한 고름) 추천만 비켜 가게 해서, 바로 배포·지난번 곳이 늦게 와도 그쪽을 따름
   const best = order.find((h) => !netBad[h]) || order[0];
-  const [picked, setPicked] = useState('');
+  const [picked, setPicked] = useState(''); // 강사가 직접 고른 곳(망 확인·늦은 답으로 바꾸지 않음)
   const [more, setMore] = useState(false); // 다른 곳에 배포하기(배포할 곳 목록 펼치기)
-  const target = picked && order.includes(picked) ? picked : best;
-  useEffect(() => { onTarget?.(target); }, [target]);
-  // 고른 곳의 API가 이 망에서 막혔으면(요청 한 번) 다음 추천 곳으로 바꾸고 한 줄로 알림. 핫스팟으로 바꾸면 3분 뒤 다시 확인
+  const chosen = picked && order.includes(picked) ? picked : best;
+  const target = online ? chosen : 'zip'; // 끊긴 동안은 사이트 파일 받기만 됨
+  useEffect(() => { if (!infoWait) onTarget?.(target); }, [target, infoWait]);
+  const skipped = !picked && order[0] !== best && netBad[order[0]] ? order[0] : ''; // 막혀서 건너뛴 첫째 곳
+  const moved = skipped ? `이 망에서 ${LABEL[skipped]}에 닿지 않아 ${LABEL[best]}로 바꿨어요. 휴대폰 핫스팟으로 바꾸면 ${LABEL[skipped]}에도 배포할 수 있어요.` : '';
+  // 고른 곳의 API가 이 망에서 막혔는지(요청 한 번). 막혔으면 추천이 다음 곳으로 비켜 감. 핫스팟으로 바꾸면 3분 뒤 다시 확인
   useEffect(() => {
-    if (!KIND[target]) return undefined;
+    if (!KIND[target] || infoWait) return undefined;
     let off = false;
-    reach('host:' + target).then((s) => {
-      if (off || s !== 'blocked') return;
-      const bad = { ...netBad, [target]: true }; setNetBad(bad);
-      if (forced.current.has(target)) return;
-      const alt = order.find((h) => h !== target && !bad[h]) || 'zip';
-      setMoved(`이 망에서 ${LABEL[target]}에 닿지 않아 ${LABEL[alt]}로 바꿨어요. 휴대폰 핫스팟으로 바꾸면 ${LABEL[target]}에도 배포할 수 있어요.`);
-      setPicked(alt);
-    });
+    reach('host:' + target).then((s) => { if (!off && s === 'blocked') setNetBad((b) => ({ ...b, [target]: true })); });
     return () => { off = true; };
-  }, [target]);
+  }, [target, infoWait]);
   /**
    * 한 곳에 배포하기: 사이트 만들기 → 그곳의 한도 확인 → 배포하기. up(files, setProg, rebuild)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음.
    * rebuild(o): auto(바로 배포의 참여 기능)를 빼고 다시 만든 파일(그날 참여 기능 방이 차서 강사 계정으로 넘길 때)
@@ -238,16 +251,27 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const lead = `${target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko}${rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}`;
   // 서버 보기가 Pages면 사이트는 하루 한도와 상관없이 열리고, 무료 서버에서 멈출 수 있는 것은 참여 기능뿐
   const limit = target === 'lecpage' ? (live?.view === 'pages' ? (live.plan === 'paid' ? '' : '사이트는 늘 열려요. 무료 서버라 참여 기능은 붐비는 날 멈출 수 있어요.') : live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
-  const limitLine = limit && !lead.includes(limit) ? limit : ''; // 소개 줄에 이미 나온 말은 되풀이하지 않음
+  // 소개 줄에 이미 나온 말(같은 문장이나 '멈추지 않아요'·'늘 열려요'처럼 같은 뜻)은 되풀이하지 않음
+  const sameSense = (a, b) => a.includes(b) || (/멈추지 않|늘 열려/.test(a) && /멈추지 않|늘 열려/.test(b) && !/참여 기능/.test(b));
+  const limitLine = limit && !sameSense(lead, limit) ? limit : '';
   const showLimit = true; // 무료 한도를 넘으면 어떻게 되는지는 늘 미리(writing.md 비용 규칙)
   const days = instant?.limits?.days || 30;
-  const care = target === 'lecpage' ? `${instant?.keepAlive === false ? `배포한 날부터 ${days}일 뒤 지워져요(다시 배포하면 그날부터).` : `${days}일 동안 아무도 오지 않으면 지워져요.`} 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
+  const care = target === 'lecpage' ? `${instant?.keepAlive === false ? `배포한 날부터 ${days}일 뒤 지워져요(다시 배포하면 그날부터 ${days}일).` : `${days}일 동안 아무도 오지 않으면 지워져요.`} 사이트 파일이 lecpage 서버에 저장되니 남의 저작물이나 개인정보가 없는지 확인해 주세요.` : ABOUT[target]?.care;
   if (again) again.current = null;
   const ctx = {
     p, busy, start, done: (url, patch, more) => { done(url, { ...patch, target }, more); connectedTargets().then(setConnected); },
     refresh: () => connectedTargets().then(setConnected), // 연결하거나 끊은 뒤 '연결됨' 표시를 맞춤
     bind: (fn) => { if (again) again.current = fn && target === p.deploy?.target ? fn : null; },
   };
+  if (infoWait) return <div class="stack publish"><p class="small muted" role="status" aria-live="polite">배포할 곳을 확인하는 중…</p></div>;
+  if (!online) {
+    return (
+      <div class="stack publish">
+        <p class="small net-line" role="status">인터넷이 끊겨 있어요. 연결되면 배포할 수 있어요. 지금은 사이트 파일(ZIP)만 받을 수 있어요.</p>
+        <Manual {...ctx} guard={guard} zip={zip} kind="zip" key="zip" />
+      </div>
+    );
+  }
   return (
     <div class="stack publish">
       <div class="pub-now">
@@ -256,7 +280,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       </div>
       {more && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="배포할 곳">
         {order.map((id) => (
-          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { if (netBad[id]) forced.current.add(id); setMoved(''); setPicked(id); }} />
+          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { setPicked(id); setMore(false); }} />
             <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
@@ -271,7 +295,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
-      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} records={records} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
       {target === 'netlify' && <Netlify {...ctx} />}
@@ -282,8 +306,10 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 }
 
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
+function Instant({ p, busy, start, done, bind, info, gate, records, onUnavailable }) {
   const prev = p.deploy?.lecpage;
+  const [ask, setAsk] = useState(false); // [사이트 내리기] 확인 창
+  const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
   const bp = p.blueprint;
@@ -325,9 +351,14 @@ function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
   autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형). 참여 기록의 보관 기간은 안내 3(마지막 기록 뒤 N일, 늦어도 사이트와 함께) */ purpose: `강사를 대신해 사이트와 참여 기록 저장(사이트는 마지막 ${info?.keepAlive === false ? '배포' : '배포나 방문'} 뒤 ${days}일 보관)` } } : null);
   bind(() => run());
   async function remove() {
+    setAsk(false);
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
     catch (e) { toast('내리지 못했어요. ' + e.message); }
   }
+  const askRemove = () => { setRec(records || null); setAsk(true); instantRecords(prev).then((r) => r && setRec(r)); };
+  const recLine = recordsLine(rec);
+  const hasRoom = !!prev?.adminKey || !!rec?.live; // 이 사이트에 참여 기능 방이 있음(기록이 지워짐)
+  const siteUrl = String(prev?.url || p.deploy?.lastUrl || '').replace(/\/?$/, '/');
   return (
     <div class="stack">
       {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
@@ -335,9 +366,18 @@ function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
       {autoLive && !liveOff && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
-      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" onClick={remove}>지금 내리기</button></p>}
+      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 내리기</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
-      {alive && prev.adminKey && <SecretLine label="강사 화면 관리자 키" value={prev.adminKey} copied="관리자 키를 복사했어요." />}
+      <Dialog open={ask} onClose={() => setAsk(false)} label="사이트 내리기 확인">
+        <h2 class="h-sub">사이트를 내릴까요?</h2>
+        <p>주소와 QR이 바로 끊기고 되돌릴 수 없어요. 참가자에게는 '강사가 사이트를 내렸어요'가 보여요.</p>
+        {hasRoom && <p>참가자가 남긴 기록{recLine ? `(${recLine})` : '(출석·질문·보드·설문)'}도 함께 지워져요. 이수 처리에 쓸 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</p>}
+        <div class="btn-row">
+          <button class="btn btn-quiet" data-autofocus onClick={() => setAsk(false)}>닫기</button>
+          {hasRoom && <a class="btn" href={siteUrl + 'console.html'} target="_blank" rel="noopener" onClick={() => prev.adminKey && copy(prev.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
+          <button class="btn btn-danger" onClick={remove}>사이트 내리기</button>
+        </div>
+      </Dialog>
     </div>
   );
 }
