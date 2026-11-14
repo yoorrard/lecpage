@@ -18,6 +18,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-padding-top: 120px; }
 body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.6 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; word-break: keep-all; }
 a { color: var(--accent); }
@@ -71,6 +72,8 @@ legend { font-weight: 600; font-size: .9rem; padding: 0; margin-bottom: 4px; }
 
 .advice { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-weight: 600; }
 .advice.recommend { background: var(--band); color: var(--band-ink); }
+.advice a { color: inherit; }
+.advice-steps { margin: -4px 0 12px; padding-left: 22px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }

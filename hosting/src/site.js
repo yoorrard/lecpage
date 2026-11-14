@@ -615,31 +615,33 @@ export class Site extends DurableObject {
     if (admin) { if (!this.load()) throw new HttpError('not_found'); } else await this.authed(request);
     return this.exclusive(async () => { if (this.load()) await this.wipe(); return noContent(); });
   }
-  async wipe() {
+  /** expired: 보관 기간이 끝나 지움(Pages 주소에 안내 화면을 남김) */
+  async wipe(expired = false) {
     const meta = this.load();
     const id = meta?.site;
     // 묶인 실시간 방(참가 기록·보드 파일)도 같이 지움. 실패해도 방이 기간 끝에 사이트를 확인하고 스스로 비움
     if (meta?.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
-    if (this.isPages(meta)) await this.wipePages(meta);
+    if (this.isPages(meta)) await this.wipePages(meta, expired);
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
   }
   /**
-   * Pages에 있는 이 사이트의 배포를 모두 지움. 가장 최근 배포를 못 지우면(별칭) 안내 화면을 올린 뒤 나머지를 지움.
+   * Pages에 있는 이 사이트의 배포를 모두 지움. 보관 기간이 끝났거나(expired) 가장 최근 배포를 못 지우면(별칭) '보관 기간이 끝났어요'
+   * 안내 화면 하나를 그 브랜치에 올린 뒤 나머지를 지움(배포가 하나도 없으면 그 주소가 Cloudflare 영어 404가 됨).
    * 실패해도 여기 기록은 지움(같은 브랜치 이름을 다시 쓰지 않으므로 남은 배포는 운영자가 대시보드에서 지울 수 있음)
    */
-  async wipePages(meta) {
+  async wipePages(meta, expired = false) {
     if (!this.cfg.pagesCfg) { console.error('pages wipe skipped: no PAGES config', meta.site); return; }
     const st = this.ps(meta);
-    let left = await this.dropDeployments([...st.deps, ...st.hold]);
+    const all = [...st.deps, ...st.hold];
+    let left = expired ? all : await this.dropDeployments(all);
     if (!left.length) return;
-    try {
-      const g = await this.placeholder(meta, goneHtml());
-      left = await this.dropDeployments(left.filter((d) => d !== g));
-      if (left.length) console.error('pages deployments left', meta.site, left.length);
-    } catch (e) { console.error('pages wipe placeholder failed', e?.message); }
+    let g = '';
+    try { g = await this.placeholder(meta, goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); }
+    left = await this.dropDeployments(left.filter((d) => d !== g));
+    if (left.length) console.error('pages deployments left', meta.site, left.length);
   }
   async block(request) {
     const body = await readJson(request, 8192);
@@ -698,7 +700,7 @@ export class Site extends DurableObject {
   async alarm() {
     const meta = this.load();
     if (!meta) return;
-    if (Date.now() >= meta.expires) await this.wipe();
+    if (Date.now() >= meta.expires) await this.wipe(true);
     else await this.ctx.storage.setAlarm(meta.expires);
   }
 
