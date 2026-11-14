@@ -9,11 +9,11 @@
     {
       "name": "lecpage",
       "source": "./skills/lecpage",
-      "description": "교재로 연수·강의·워크숍 사이트를 만들고 점검해요. 실습 안내·프롬프트 복사·교재 보기·참여 기능·강사 화면을 갖추고, 앱(yoorrard.github.io/lecpage)으로 넘겨 화면에서 다듬고 공개할 수 있어요.",
+      "description": "교재로 연수·강의·워크숍 사이트를 만들고 점검해요. 실습 안내·프롬프트 복사·교재 보기·참여 기능·강사 화면을 갖추고, 앱(lecpage.com)으로 넘겨 화면에서 다듬고 공개할 수 있어요.",
       "author": {
         "name": "lecpage contributors"
       },
-      "homepage": "https://yoorrard.github.io/lecpage/",
+      "homepage": "https://lecpage.com/",
       "repository": "https://github.com/yoorrard/lecpage",
       "license": "Apache-2.0",
       "keywords": ["training", "workshop", "lecture", "slides", "education", "korean"],

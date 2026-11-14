@@ -29,11 +29,12 @@ test('오류 모양: { error: { code, message_ko } } + 알맞은 상태 코드',
 
 test('CORS: 허용한 출처만 되돌려 줌', () => {
   const allowed = config({}).origins;
-  assert.deepEqual([...allowed], ['https://yoorrard.github.io', 'http://localhost:5173', 'http://localhost:4173']);
+  assert.deepEqual([...allowed], ['https://lecpage.com', 'https://www.lecpage.com', 'https://yoorrard.github.io', 'http://localhost:5173', 'http://localhost:4173']);
+  assert.equal(corsHeaders('https://lecpage.com', allowed)['access-control-allow-origin'], 'https://lecpage.com');
   const ok = corsHeaders('https://yoorrard.github.io', allowed);
   assert.equal(ok['access-control-allow-origin'], 'https://yoorrard.github.io');
   assert.equal(ok.vary, 'Origin');
-  for (const o of ['https://evil.example', 'https://yoorrard.github.io.evil.example', 'http://yoorrard.github.io', 'null', '', null]) {
+  for (const o of ['https://evil.example', 'https://yoorrard.github.io.evil.example', 'https://lecpage.com.evil.example', 'https://evil-lecpage.com', 'http://yoorrard.github.io', 'null', '', null]) {
     assert.equal(corsHeaders(o, allowed)['access-control-allow-origin'], undefined, String(o));
   }
   const pre = preflight('http://localhost:5173', allowed);

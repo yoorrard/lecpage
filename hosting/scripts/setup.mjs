@@ -7,7 +7,7 @@
 //
 // 하는 일: ① 로그인 확인 ② workers.dev 하위 도메인 ③ 보기(Pages 프로젝트·올리기 전용 토큰) ④ 바로 배포 Worker 배포
 //          ⑤ 비밀 값(ADMIN_KEY는 만들어 파일에만, 화면에 찍지 않음) ⑥ 관리 Worker 배포 + Access(도메인 없이 workers.dev, 운영자 이메일만)
-//          ⑦ (선택) 내 도메인·WAF 규칙 1개 ⑧ 확인 ⑨ 앱 빌드 변수 VITE_PUBLISH_API 안내
+//          ⑦ (선택) 내 도메인·WAF 규칙 1개 ⑧ 확인 ⑨ 앱 연결 안내
 // 이메일·토큰·열쇠는 저장소와 로그에 쓰지 않습니다. 이메일은 Cloudflare(Access 정책·관리 Worker 비밀 값)에만, ADMIN_KEY는 ~/.lecpage/<계정>/admin-key(0600)에만.
 //
 // 옵션(환경 변수도 같음):
@@ -399,10 +399,9 @@ export async function setup(argv = process.argv.slice(2), { env = process.env, i
   for (const d of st.did) say(`  ✓ ${d}`);
   for (const s of st.skipped) say(`  · ${s}`);
   if (st.sitesUrl) {
-    say(`\n앱 빌드 변수: VITE_PUBLISH_API=${st.sitesUrl}`);
-    say('  GitHub Pages 미러: 저장소 Settings → Secrets and variables → Actions → Variables → LECPAGE_PUBLISH_API');
-    say(`    (gh CLI가 있으면) gh variable set LECPAGE_PUBLISH_API --body ${st.sitesUrl}`);
-    say('  Cloudflare Workers Builds: 앱 Worker → Settings → Build → Variables → VITE_PUBLISH_API');
+    say(`\n앱 연결: 서버 주소 ${st.sitesUrl}`);
+    say('  운영자 앱(lecpage.com·GitHub Pages 미러)은 app/src/lib/publish-api.js의 운영 서버 주소를 씀. 주소가 다르면 그 파일을 고치거나');
+    say(`  앱 빌드 변수 VITE_PUBLISH_API=${st.sitesUrl}(GitHub Pages 미러는 저장소 변수 LECPAGE_PUBLISH_API)`);
   }
   if (st.adminUrl && !st.todo.some((t) => t.includes('관리 화면') || t.includes('Zero Trust'))) say(`관리 화면: ${st.adminUrl}/admin/ (Cloudflare Access 로그인)`);
   if (st.todo.length) { say('\n남은 일:'); st.todo.forEach((t, i) => say(`  ${i + 1}. ${t}`)); }

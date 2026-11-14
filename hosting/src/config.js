@@ -27,7 +27,7 @@ export const DEFAULTS = {
   PAGES_API_BUDGET: 900, // Pages API를 5분에 이만큼까지(Cloudflare API 한도 1,200/5분의 75%. 넘으면 그 계정의 모든 API가 5분 막힘)
   DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 배포한 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
   MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 배포하면 늘어남)
-  ALLOWED_ORIGINS: 'https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
+  ALLOWED_ORIGINS: 'https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
   ALERT_AT: '45,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK). 넘침 단계와 같게: 45 예약한 연수만, 60 새 일 멈춤, 80 묻기 20초, 95 곧 한도
   STATS_DAILY_CAP: 20000, // 앱 익명 이용 합계: 항목 하나가 하루에 셀 수 있는 최대(부풀리기 막기)
 };
