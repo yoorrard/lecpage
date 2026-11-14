@@ -97,8 +97,26 @@
     }
     return t;
   }
+  // ── 확인할 일(하루 점검과 같은 글) ─────────────────────────
+  var DAY = 864e5;
+  function renderOps(o) {
+    var box = clear($('[data-ops]'));
+    var ops = o.ops || {}; var lines = ops.lines || []; var last = ops.last; var hook = ops.hook;
+    var hookOn = o.alerts && o.alerts.webhook;
+    var status = '하루 점검(매일 한국 시간 오전 9시쯤): ' + (last ? '마지막 ' + when(last.at) + (last.sent ? ' · 웹훅으로 보냄' : '') : '아직 돈 적 없음') +
+      ' · 알림 웹훅 ' + (hookOn ? '켜짐' + (hook ? (hook.ok ? '(마지막 보냄 ' + when(hook.at) + ')' : '') : '') : '없음(이 화면에서만 보여요)');
+    if (!lines.length) { box.className = 'ops'; box.appendChild(h('p', { class: 'muted small', text: '확인할 일 없음. ' + status })); return; }
+    box.className = 'ops recommend';
+    box.appendChild(h('p', null, h('b', { text: '확인할 일 ' + lines.length + '가지' })));
+    var ul = h('ul');
+    lines.forEach(function (x) { ul.appendChild(h('li', { text: x.text })); });
+    box.appendChild(ul);
+    box.appendChild(h('p', { class: 'small', text: status }));
+  }
+
   function renderOverview(o) {
     state.overview = o;
+    renderOps(o);
     $('[data-me]').textContent = '운영자 계정: ' + o.me + ' (Cloudflare Access)';
     var plan = $('[data-plan]');
     plan.textContent = o.plan === 'paid' ? 'Workers Paid' : '무료 요금제';
@@ -155,7 +173,8 @@
     var sp = pct(st.bytes, st.maxBytes);
     var siteTiles = clear($('[data-site-tiles]'));
     siteTiles.appendChild(tile('살아 있는 사이트', n(st.alive), '배포한 것 ' + n(st.published) + '개 · 기간 ' + ((o.limits && o.limits.siteDays) || 30) + (o.view === 'pages' ? '일(마지막으로 배포한 날부터, Pages)' : '일(방문이 있으면 다시 채움)')));
-    siteTiles.appendChild(tile('가린 사이트', n(st.blocked), '신고로 임시조치 중'));
+    siteTiles.appendChild(tile('가린 사이트', n(st.blocked), '신고로 임시조치 중 · 가린 날부터 30일 안에 풀거나 지우기'));
+    if (st.wiping) siteTiles.appendChild(tile('지우는 중', n(st.wiping), 'Cloudflare Pages가 답하지 않아 서버가 다시 하는 중'));
     siteTiles.appendChild(tile('참여 기능 방', n(st.rooms), '30일 참여 요청 ' + n(o.month && o.month.live)));
     siteTiles.appendChild(tile('저장량', bytes(st.bytes), '상한 ' + bytes(st.maxBytes) + '의 ' + sp + '% · 사이트 ' + bytes(st.siteBytes) + ' + 방 ' + bytes(st.roomBytes), { value: sp, mark: 80, hot: sp >= 80, label: '저장 상한의 ' + sp + '%' }));
 
@@ -271,17 +290,30 @@
       return api('sites/' + id + '/block', { body: { blocked: blocked, reason: typeof v === 'string' ? v : '' } }).then(function () { flash(blocked ? '가렸어요.' : '다시 열었어요.'); return reloadAll(); });
     }).catch(function (err) { flash(err.message, true); });
   }
+  var WIPING = '지우는 중이에요. Cloudflare Pages가 잠시 답하지 않아 서버가 1분·10분·1시간… 간격으로 다시 지워요. 6시간이 지나도 남으면 하루 점검이 알려요.';
+  function deleted(j) { flash(j && j.wiping ? WIPING : '지웠어요.', !!(j && j.wiping)); return reloadAll(); }
   function deleteSite(id) {
     return ask({ title: '사이트 ' + id + '를 지울까요?', text: '파일과 딸린 실시간 방 자료까지 지워지고 되돌릴 수 없어요.', input: { label: '확인: 사이트 주소 10자(' + id + ')를 적어 주세요', placeholder: id }, ok: '지우기', danger: true }).then(function (v) {
       if (v === null) return;
-      return api('sites/' + id + '/delete', { body: { confirm: v } }).then(function () { flash('지웠어요.'); return reloadAll(); });
+      return api('sites/' + id + '/delete', { body: { confirm: v } }).then(deleted);
     }).catch(function (err) { flash(err.message, true); });
+  }
+  /** 지우는 중인 사이트: 지금 한 번 더(이미 지우기로 한 사이트라 주소를 다시 적지 않음) */
+  function wipeAgain(id) { return api('sites/' + id + '/delete', { body: { confirm: id } }).then(deleted).catch(function (err) { flash(err.message, true); }); }
+  /** 상태 칸: 지우는 중 · N시간째 / 가림 · N일째(30일 기한) / 배포됨 / 배포 중 */
+  function siteBadge(x, now) {
+    if (x.wiping) return h('span', { class: 'badge warn', text: '지우는 중 · ' + Math.max(1, Math.round((now - x.wiping) / 36e5)) + '시간째' });
+    if (x.blocked) {
+      var d = x.blockedAt ? Math.floor((now - x.blockedAt) / DAY) + 1 : 0;
+      return h('span', { class: 'badge bad', text: d ? '가림 · ' + d + '일째' + (d >= 25 ? '(30일 기한까지 ' + Math.max(0, 30 - d) + '일)' : '') : '가림' });
+    }
+    return h('span', { class: 'badge ' + (x.bytes ? 'good' : ''), text: x.bytes ? '배포됨' : '배포 중' });
   }
   function loadSites(q) {
     return api('sites?q=' + encodeURIComponent(q || '')).then(function (j) {
       var t = clear($('[data-sites-table]'));
       var now = Date.now();
-      var list = (j.sites || []).filter(function (x) { return x.expiresAt > now; });
+      var list = (j.sites || []).filter(function (x) { return x.expiresAt > now || x.wiping; });
       if (!list.length) { t.appendChild(h('tbody', null, h('tr', null, h('td', { class: 'empty', text: q ? '찾는 사이트가 없어요.' : '살아 있는 사이트가 없어요.' })))); return; }
       t.appendChild(h('thead', null, h('tr', null, ['주소', '제목', '크기', '참여 방', '만든 때', '끝나는 때', '상태', ''].map(function (x, i) { return h('th', { class: i === 2 ? 'num' : '', scope: 'col', text: x }); }))));
       var tb = h('tbody');
@@ -293,10 +325,12 @@
           h('td', { class: 'mono', text: x.liveCode || '—' }),
           h('td', { text: when(x.createdAt) }),
           h('td', { text: dateOnly(x.expiresAt) }),
-          h('td', null, h('span', { class: 'badge ' + (x.blocked ? 'bad' : x.bytes ? 'good' : ''), text: x.blocked ? '가림' : x.bytes ? '배포됨' : '배포 중' })),
-          h('td', { class: 'acts' },
-            h('button', { type: 'button', class: 'btn sm', text: x.blocked ? '풀기' : '가리기', onclick: function () { blockSite(x.id, !x.blocked); } }),
-            h('button', { type: 'button', class: 'btn sm danger', text: '지우기', onclick: function () { deleteSite(x.id); } }))));
+          h('td', null, siteBadge(x, now)),
+          x.wiping
+            ? h('td', { class: 'acts' }, h('button', { type: 'button', class: 'btn sm', text: '다시 지우기', onclick: function () { wipeAgain(x.id); } }))
+            : h('td', { class: 'acts' },
+              h('button', { type: 'button', class: 'btn sm', text: x.blocked ? '풀기' : '가리기', onclick: function () { blockSite(x.id, !x.blocked); } }),
+              h('button', { type: 'button', class: 'btn sm danger', text: '지우기', onclick: function () { deleteSite(x.id); } }))));
       });
       t.appendChild(tb);
     });
@@ -314,7 +348,7 @@
       if (!list.length) { box.appendChild(h('p', { class: 'empty', text: '처리할 신고가 없어요.' })); return; }
       var wrap = h('div', { class: 'reports' });
       list.forEach(function (r) {
-        var stateText = { gone: '사이트 없음', blocked: '가림', open: '열려 있음' }[r.siteState] || '';
+        var stateText = { gone: '사이트 없음', blocked: '가림', open: '열려 있음', wiping: '지우는 중' }[r.siteState] || '';
         wrap.appendChild(h('article', { class: 'card report' },
           h('div', { class: 'head' },
             h('div', null, h('b', { text: '#' + r.n + ' ' }), siteLink(r.site, r.siteUrl), ' ', h('span', { class: 'badge ' + (r.siteState === 'blocked' ? 'bad' : ''), text: stateText }), ' ', h('span', { class: 'badge ' + (r.status === 'done' ? 'good' : 'warn'), text: r.status === 'done' ? '처리함' : '대기' })),
@@ -324,7 +358,8 @@
           h('div', { class: 'acts' },
             r.siteState === 'open' ? h('button', { type: 'button', class: 'btn sm danger', text: '가리기(임시조치)', onclick: function () { blockSite(r.site, true); } }) : null,
             r.siteState === 'blocked' ? h('button', { type: 'button', class: 'btn sm', text: '풀기', onclick: function () { blockSite(r.site, false); } }) : null,
-            r.siteState !== 'gone' ? h('button', { type: 'button', class: 'btn sm danger', text: '지우기', onclick: function () { deleteSite(r.site); } }) : null,
+            r.siteState === 'wiping' ? h('button', { type: 'button', class: 'btn sm', text: '다시 지우기', onclick: function () { wipeAgain(r.site); } })
+              : r.siteState !== 'gone' ? h('button', { type: 'button', class: 'btn sm danger', text: '지우기', onclick: function () { deleteSite(r.site); } }) : null,
             h('button', { type: 'button', class: 'btn sm', text: r.status === 'done' ? '다시 열기' : '처리함', onclick: function () {
               api('reports/' + r.n, { body: { status: r.status === 'done' ? 'open' : 'done' } }).then(function () { flash('신고 상태를 바꿨어요.'); return reloadAll(); }).catch(function (err) { flash(err.message, true); });
             } }))));

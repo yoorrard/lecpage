@@ -9,7 +9,7 @@
 //     여기서는 기다리는 동안 깨어 있던 시간을 Gate에 알리고(waitersChanged), 기다린 뒤 사이트가 가려졌거나 없어졌으면 답하지 않음(afterWait)
 import { LiveRoom, Guard } from '../../skills/lecpage/backends/cloudflare/src/index.js';
 import { MAX_WAIT_S, snapshotChanged } from '../../skills/lecpage/backends/cloudflare/src/longpoll.js';
-import { config } from './config.js';
+import { config, SSE_STOP_PCT } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { SqlBucket } from './live/bucket.js';
 import { HostBind, bindRoom, roomEnv, maxRetentionDays, translate, LiveError } from './live/host.js';
@@ -57,8 +57,17 @@ export class Room extends LiveRoom {
   async reportAwake(site, aw) {
     try {
       const gate = this.hostEnv.GATE.get(this.hostEnv.GATE.idFromName('gate'));
-      await gate.fetch('http://gate/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: site, aw }) });
+      const res = await gate.fetch('http://gate/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: site, aw }) });
+      const j = res.ok ? await res.json() : null;
+      // 무료 하루 DO 시간(duration)이 빠듯하면 이미 열린 SSE도 닫음(새 SSE는 Worker가 이미 받지 않음): 런타임이 다시 붙으려다 긴 대기로 내려가고,
+      // 긴 대기는 Worker가 대신 기다려 방이 잠듦. 방 기능과 사이트는 그대로(묻기 방식만 바뀜). 방은 깨어 있던 시간을 10분마다 알리므로 길어야 10분 뒤
+      if (j && Number(j.gbsPct) >= SSE_STOP_PCT && this.sse.size) this.closeSse();
     } catch (e) { console.error('room awake report failed', e?.message); }
+  }
+  closeSse() {
+    for (const x of this.sse) { try { x.w.close().catch(() => { }); } catch { /* 이미 닫힘 */ } }
+    this.sse.clear();
+    this.awake();
   }
   openSse(ip) { const res = super.openSse(ip); this.awake(); return res; }
   sendSse(text) { super.sendSse(text); this.awake(); }
@@ -198,13 +207,19 @@ export class Room extends LiveRoom {
     const cur = await this.ctx.storage.getAlarm();
     if (!cur || Math.abs(cur - due) > DAY / 2) { await this.ctx.storage.setAlarm(due); this.alarmAt = due; } else this.alarmAt = cur;
   }
+  /** 정리 알람. 실패하면 1시간 뒤로 스스로 다시 잡음(공식 재시도는 2초부터 6번뿐이라 무료 하루 한도가 찬 시간에 걸리면 다시 오지 않음) */
   async alarm() {
-    const b = this.hostBind.get();
-    if (b && Date.now() >= b.expires && !(await this.stillAlive(b)) && !this.hostBind.get()) return; // 사이트가 없어져 방을 비움
-    await super.alarm();
-    // 오래 쓰지 않아 LiveRoom이 스스로 비웠을 수 있음
-    this.hostBind.reset();
-    if (this.hostBucket) this.hostBucket.ready = false;
-    if (b && !this.hostBind.get()) { this.forget(); await this.report(b.site, 0); }
+    try {
+      const b = this.hostBind.get();
+      if (b && Date.now() >= b.expires && !(await this.stillAlive(b)) && !this.hostBind.get()) return; // 사이트가 없어져 방을 비움
+      await super.alarm();
+      // 오래 쓰지 않아 LiveRoom이 스스로 비웠을 수 있음
+      this.hostBind.reset();
+      if (this.hostBucket) this.hostBucket.ready = false;
+      if (b && !this.hostBind.get()) { this.forget(); await this.report(b.site, 0); }
+    } catch (e) {
+      console.error('room alarm failed', e?.message);
+      await this.ctx.storage.setAlarm(Date.now() + 3600e3);
+    }
   }
 }

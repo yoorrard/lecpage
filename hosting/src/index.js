@@ -4,7 +4,7 @@
 //   /admin, /admin/api/…  운영자 관리 화면(Cloudflare Access 뒤. 켜지 않았으면 404) → admin.js
 //   /, /report, /robots.txt, /rt/<sha>.js 등은 public/ 의 정적 자산이라 이 코드를 거치지 않습니다(요청 수에도 들지 않음).
 // Worker는 길만 정하고, 무거운 일(검사·저장·HTML 손보기)은 Durable Object가 합니다(무료 요금제의 요청당 CPU 10ms).
-import { config, expiryFrom, EXTRA_WORK_SHARE } from './config.js';
+import { config, expiryFrom, EXTRA_WORK_SHARE, SSE_STOP_PCT } from './config.js';
 import { HttpError, json, readJson, errorFrom, corsHeaders, preflight, withHeaders } from './http.js';
 import { ID_RE, SHA256_RE, DEPLOY_RE, newId, newKey, sha256Hex, bearer, secretMatches } from './ids.js';
 import { notFoundPage, gonePage, methodNotAllowed } from './pages.js';
@@ -91,6 +91,10 @@ export default {
     }
     count(res, env, ctx);
     return url.protocol === 'https:' ? secure(res) : res;
+  },
+  // 하루 한 번(wrangler.jsonc triggers, 무료 요금제 cron): 정리와 운영 점검은 Gate가 함(gate.js daily). Worker는 부르기만
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(env.GATE.get(env.GATE.idFromName('gate')).fetch('http://gate/daily', post({ at: event.scheduledTime || Date.now() })));
   },
 };
 function count(res, env, ctx) {
@@ -230,8 +234,8 @@ async function live(request, env, url, cfg) {
     const fwd = new Request(target, request);
     fwd.headers.delete('x-lp-relay'); // 안쪽 표시는 Worker만 붙임
     // 무료에서 duration이 빠듯하면 새 SSE(연결 내내 방이 깨어 있음)는 받지 않음 → 런타임이 긴 대기로 내려가고, 긴 대기는 Worker가 대신
-    if (t.op === 'events' && request.method === 'GET' && cfg.dailyRequestBudget && gbsPct >= 60) throw new LiveError(503, 'busy', '지금은 실시간 연결이 붐벼요. 잠시 묻기 방식으로 이어 갈게요.');
-    const relay = cfg.pollRelay === true || (cfg.pollRelay === 'auto' && (!cfg.dailyRequestBudget || gbsPct >= 50));
+    if (t.op === 'events' && request.method === 'GET' && cfg.dailyRequestBudget && gbsPct >= SSE_STOP_PCT) throw new LiveError(503, 'busy', '지금은 실시간 연결이 붐벼요. 잠시 묻기 방식으로 이어 갈게요.');
+    const relay = cfg.pollRelay === true || (cfg.pollRelay === 'auto' && (cfg.plan === 'paid' || !cfg.dailyRequestBudget || gbsPct >= 50));
     const longPoll = relay && t.op === 'snapshot' && request.method === 'GET' && Number(url.searchParams.get('since')) > 0 && Number(url.searchParams.get('wait')) > 0;
     const res = longPoll ? await relayWait(env, fwd, t.code, Number(url.searchParams.get('wait'))) : await roomStub(env, t.code).fetch(fwd);
     // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
@@ -457,12 +461,12 @@ async function report(request, env, ctx, cfg, self) {
   const ip = request.headers.get('cf-connecting-ip') || '';
   const saved = await (await ok(await gateStub(env).fetch('http://gate/report', post({ ip, site: id, reason, contact })))).json();
   if (cfg.reportWebhook) {
-    const link = cfg.pagesCfg && raw.includes(`s-${id}.`) ? siteUrlOf(cfg.pagesCfg, id) : `${self}/s/${id}/`;
+    // 메신저(국외 서비스)에는 신고 번호와 처리 링크만: 신고 내용·연락처는 Gate에만 두고(90일) 관리 화면에서 봄(개인정보 처리방침 1번)
     // 처리 링크: 관리 Worker 주소(ADMIN_URL). 없으면 이 Worker 안의 /admin(경로 Access를 켰을 때만), 그것도 없으면 뺌
     const adminLink = cfg.adminUrl || (cfg.access ? `${self}/admin/` : '');
-    const text = `[lecpage 바로 배포 신고 #${saved.n}] ${link}\n${reason}\n연락처: ${contact || '없음'}${adminLink ? `\n처리: ${adminLink}` : ''}`.slice(0, 1800);
+    const text = `[lecpage 바로 배포] 신고 #${saved.n}이 들어왔어요. 지체 없이 확인해 주세요${adminLink ? `: ${adminLink}#reports` : '(관리 화면 신고)'}`;
     // text는 Slack, content는 Discord 웹훅이 읽는 이름
-    ctx.waitUntil(fetch(cfg.reportWebhook, post({ text, content: text, n: saved.n, site: id, url: link, reason, contact, at: saved.at })).catch((e) => console.error('report webhook failed', e?.message)));
+    ctx.waitUntil(fetch(cfg.reportWebhook, post({ text, content: text, n: saved.n })).catch((e) => console.error('report webhook failed', e?.message)));
   }
   return json({ ok: true });
 }

@@ -24,7 +24,7 @@ import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
 import { normCode } from './live/host.js';
 import { PagesClient, deploySite } from './pages-api.js';
 import { pagesHash, base64Parts } from './blake3.js';
-import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, NOTICE_HEADERS, contentTypeOf, rawExt, fontHashed, fontsHashed } from './pages-site.js';
+import { isMedia, branchOf, siteUrlOf, headersFile, headerRules, PAGES_HEADER_RULES, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, NOTICE_HEADERS, contentTypeOf, rawExt, fontHashed, fontsHashed } from './pages-site.js';
 
 /** blob 한 줄의 크기(DO SQLite는 한 줄 2MB까지) */
 export const CHUNK = 1024 * 1024;
@@ -45,6 +45,12 @@ const PUBLISH_CALLS = 7;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
+/**
+ * 지우기에서 Pages 배포를 다 지우지 못했을 때 다시 해 볼 때까지(뒤로 갈수록 길게, 그 뒤로는 하루마다). 그동안 이 사이트는 '지우는 중':
+ * 두 번째 주소·방·고치기는 바로 닫히고, Gate 목록과 관리 화면에 '지우는 중'으로 남음. 6시간이 지나도 안 되면 하루 점검이 웹훅으로 한 번 알림
+ */
+export const WIPE_RETRY_MS = [60e3, 10 * 60e3, HOUR_MS, 6 * HOUR_MS, DAY_MS];
+const WIPING_MSG = '사이트를 내리는 중이에요. Cloudflare가 잠시 답하지 않아 서버가 몇 분 안에 다시 해서 지워요. 이 주소는 그동안에도 고치거나 다시 배포할 수 없어요.';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT, live_code TEXT, view TEXT NOT NULL DEFAULT 'worker', pstate TEXT);
@@ -85,6 +91,7 @@ export class Site extends DurableObject {
         case 'POST admin-block': return await this.block(request);
         case 'POST live': return await this.bindLive(request);
         case 'GET live-status': return this.liveStatus(url);
+        case 'POST expire': return await this.expireCheck(); // Gate 하루 점검: 기간이 지났는데 아직 목록에 있는 사이트
         default: throw new HttpError('not_found', '없는 주소예요.');
       }
     } catch (e) {
@@ -117,6 +124,10 @@ export class Site extends DurableObject {
     return { url: '', deps: [], man: null, hold: [], ...(v || {}) };
   }
   savePs(meta, st) { const j = JSON.stringify(st); this.sql.exec('UPDATE meta SET pstate = ? WHERE id = 1', j); meta.pstate = j; }
+  /** 지우는 중이면 { at, n, expired }(Pages 배포를 다 못 지워 알람으로 다시 하는 중), 아니면 null */
+  wiping(meta = this.load()) { return meta && meta.pstate ? this.ps(meta).wiping || null : null; }
+  /** 살아 있는 사이트(지우는 중이 아님) */
+  alive(meta = this.load()) { return !!meta && !this.wiping(meta); }
   pc() {
     const p = this.cfg.pagesCfg;
     if (!p) throw new HttpError('bad_request', 'Pages 설정(PAGES_TOKEN 등)이 없어 이 사이트를 다룰 수 없어요. 운영자에게 알려 주세요.', { status: 503 });
@@ -194,9 +205,10 @@ export class Site extends DurableObject {
     if (!res.ok) throw await errorFrom(res);
     return res.json();
   }
-  async authed(request) {
+  /** wiping: 지우는 중인 사이트도 받음(지우기를 다시 부를 때만) */
+  async authed(request, { wiping = false } = {}) {
     const meta = this.load();
-    if (!meta || Date.now() >= meta.expires) throw new HttpError('not_found');
+    if (!meta || Date.now() >= meta.expires || (!wiping && this.wiping(meta))) throw new HttpError('not_found');
     if (!(await keyMatches(bearer(request.headers.get('authorization')), meta.key_hash))) throw new HttpError('unauthorized');
     return meta;
   }
@@ -233,9 +245,13 @@ export class Site extends DurableObject {
     }
     const body = await readJson(request, MANIFEST_MAX);
     const man = checkManifest(body, this.cfg);
+    // Pages _headers는 규칙 100개까지(넘는 규칙은 버려짐): 확장자 대소문자 모양이 너무 여러 가지면 올리기 전에 거절(보안 규칙이 빠지지 않게)
+    if (this.isPages(first) && headerRules(man.files.map(([p]) => p)).length > PAGES_HEADER_RULES) {
+      throw new HttpError('bad_path', '파일 이름 끝(.png 같은 확장자)의 대문자·소문자 모양이 너무 여러 가지예요. 확장자를 소문자로 맞춰 다시 배포해 주세요.');
+    }
     return this.exclusive(async () => {
       const meta = this.load();
-      if (!meta) throw new HttpError('not_found');
+      if (!this.alive(meta)) throw new HttpError('not_found');
       if (this.isPages(meta)) this.knownRuntime(man.files);
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
@@ -246,7 +262,11 @@ export class Site extends DurableObject {
         pages: this.isPages(meta) ? this.pagesEstimate(meta, man.files, missing) : 0, split: Array.isArray(body.caps) && body.caps.includes('split'),
       });
       const keep = this.keptBytes(meta, man.files);
-      if (chk.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) throw new HttpError('full');
+      if (chk.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) {
+        // 아직 한 번도 배포하지 않은 사이트(방금 만든 빈 사이트)면 기록을 남기지 않음. 앱은 다음에 새 주소로 다시 만듦
+        if (!meta.current) await this.wipe();
+        throw new HttpError('full');
+      }
       const id = newDeployId();
       const old = meta.pending && meta.pending !== meta.current ? meta.pending : null;
       this.ctx.storage.transactionSync(() => {
@@ -281,7 +301,7 @@ export class Site extends DurableObject {
     if (!SHA256_RE.test(adminKeyHash)) throw new HttpError('bad_request', 'adminKeyHash는 관리자 키의 SHA-256(16진수 64자)이어야 해요.');
     return this.exclusive(async () => {
       const meta = this.load();
-      if (!meta) throw new HttpError('not_found');
+      if (!this.alive(meta)) throw new HttpError('not_found');
       const prev = meta.live_code || null;
       // 이 사이트의 첫 방일 때만 하루 개수에 셈(코드를 바꾸는 것은 방 하나를 갈아 끼우는 것). Gate가 이때 코드도 적음(따로 부르지 않음)
       if (!prev) await this.gate('POST', 'room', { id: meta.site, code });
@@ -307,7 +327,7 @@ export class Site extends DurableObject {
   /** Room이 "이 사이트가 아직 살아 있고 이 코드를 쓰나?"를 물을 때 */
   liveStatus(url) {
     const meta = this.load();
-    const alive = !!meta && Date.now() < meta.expires && meta.live_code === url.searchParams.get('code');
+    const alive = this.alive(meta) && Date.now() < meta.expires && meta.live_code === url.searchParams.get('code');
     return json({ alive, expires: alive ? meta.expires : 0, blocked: alive ? !!meta.blocked : false });
   }
 
@@ -453,7 +473,7 @@ export class Site extends DurableObject {
     await this.authed(request);
     return this.exclusive(async () => {
       const meta = this.load();
-      if (!meta) throw new HttpError('not_found');
+      if (!this.alive(meta)) throw new HttpError('not_found');
       if (meta.blocked) throw new HttpError('blocked');
       // 이미 공개한 배포를 다시 부르면(응답을 못 받은 경우) 같은 답
       if (deployId && deployId === meta.current && deployId !== meta.pending) return json(this.published(request, meta));
@@ -611,37 +631,83 @@ export class Site extends DurableObject {
   }
 
   // ── 지우기·가리기 ────────────────────────────────────────────
+  /**
+   * 지우기(강사 [지금 내리기]·관리 화면). 다 지웠으면 204, Pages 배포가 남아 '지우는 중'이 되면 202 { state: 'wiping' }(서버가 알람으로 다시 함).
+   * 지우는 중인 사이트를 다시 지우라고 하면 바로 한 번 더 해 봄
+   */
   async remove(request, admin) {
-    if (admin) { if (!this.load()) throw new HttpError('not_found'); } else await this.authed(request);
-    return this.exclusive(async () => { if (this.load()) await this.wipe(); return noContent(); });
+    if (admin) { if (!this.load()) throw new HttpError('not_found'); } else await this.authed(request, { wiping: true });
+    return this.exclusive(async () => {
+      const meta = this.load();
+      if (!meta) return noContent();
+      const w = this.wiping(meta);
+      return (await this.wipe(w ? w.expired : false)) ? noContent() : json({ ok: true, state: 'wiping', message_ko: WIPING_MSG }, 202);
+    });
   }
-  /** expired: 보관 기간이 끝나 지움(Pages 주소에 안내 화면을 남김) */
+  /**
+   * 사이트를 지움: 실시간 방 → (Pages 보기) Pages 배포 → 여기 기록 → Gate 목록. expired: 보관 기간이 끝나 지움(Pages 주소에 안내 화면을 남김).
+   * Pages 배포를 다 지우지 못하면 여기 파일은 지우고 '지우는 중'으로 남겨 알람으로 다시 함(holdWipe). 다 지웠으면 true
+   */
   async wipe(expired = false) {
     const meta = this.load();
-    const id = meta?.site;
+    if (!meta) return true;
+    const id = meta.site;
     // 묶인 실시간 방(참가 기록·보드 파일)도 같이 지움. 실패해도 방이 기간 끝에 사이트를 확인하고 스스로 비움
-    if (meta?.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
-    if (this.isPages(meta)) await this.wipePages(meta, expired);
+    if (meta.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
+    if (this.isPages(meta) && !(await this.wipePages(meta, expired))) { await this.holdWipe(meta, expired); return false; }
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
+    return true;
   }
   /**
    * Pages에 있는 이 사이트의 배포를 모두 지움. 보관 기간이 끝났거나(expired) 가장 최근 배포를 못 지우면(별칭) '보관 기간이 끝났어요'
-   * 안내 화면 하나를 그 브랜치에 올린 뒤 나머지를 지움(배포가 하나도 없으면 그 주소가 Cloudflare 영어 404가 됨).
-   * 실패해도 여기 기록은 지움(같은 브랜치 이름을 다시 쓰지 않으므로 남은 배포는 운영자가 대시보드에서 지울 수 있음)
+   * 안내 화면 하나를 그 브랜치에 올린 뒤 나머지를 지움(배포가 하나도 없으면 그 주소가 Cloudflare 영어 404가 됨). 안내 화면은 남겨 둠(st.gone).
+   * 사이트 내용이 든 배포가 하나도 남지 않으면 true. 남으면 그 id를 적어 두고 false(다음에 그것만 다시)
    */
   async wipePages(meta, expired = false) {
-    if (!this.cfg.pagesCfg) { console.error('pages wipe skipped: no PAGES config', meta.site); return; }
+    if (!this.cfg.pagesCfg) { console.error('pages wipe: no PAGES config', meta.site); return false; }
     const st = this.ps(meta);
-    const all = [...st.deps, ...st.hold];
-    let left = expired ? all : await this.dropDeployments(all);
-    if (!left.length) return;
-    let g = '';
-    try { g = await this.placeholder(meta, goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); }
-    left = await this.dropDeployments(left.filter((d) => d !== g));
+    let gone = st.gone || '';
+    const all = [...st.deps, ...st.hold].filter((d) => d && d !== gone);
+    let left = expired && !gone ? all : await this.dropDeployments(all);
+    if (left.length && !gone) { try { gone = await this.placeholder(meta, goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); } }
+    if (left.length) left = await this.dropDeployments(left);
+    st.deps = []; st.hold = left; st.gone = gone; this.savePs(meta, st);
     if (left.length) console.error('pages deployments left', meta.site, left.length);
+    return !left.length;
+  }
+  /**
+   * 지우는 중으로 둠: 여기 파일·배포 목록은 지금 지우고(저장량 0, 두 번째 주소는 404, 고치기·방은 닫힘) 사이트 줄과 남은 Pages 배포 id만 남김.
+   * 알람으로 다시(WIPE_RETRY_MS). 처음 한 번 Gate에 알려 관리 화면에 '지우는 중'으로 보이게 함
+   */
+  async holdWipe(meta, expired) {
+    const now = Date.now();
+    const st = this.ps(meta);
+    const w = { at: now, n: 0, ...(st.wiping || {}) };
+    w.n += 1; w.expired = !!(w.expired || expired); w.last = now;
+    st.wiping = w;
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM passet');
+      this.sql.exec('UPDATE meta SET current = NULL, pending = NULL, bytes = 0, live_code = NULL WHERE id = 1');
+      this.savePs(meta, st);
+    });
+    Object.assign(meta, { current: null, pending: null, bytes: 0, live_code: null });
+    this.manifests.clear(); this.jsOk.clear(); this.deferred.clear(); this.deferredBytes = 0;
+    await this.ctx.storage.setAlarm(now + WIPE_RETRY_MS[Math.min(w.n, WIPE_RETRY_MS.length) - 1]);
+    if (w.n === 1) { try { await this.gate('POST', 'site', { id: meta.site, bytes: 0, wiping: w.at, ...this.pagesDelta() }); } catch (e) { console.error('gate wiping update failed', e?.message); } }
+  }
+  /** Gate 하루 점검이 부름: 기간이 지났으면(또는 지우는 중이면) 지금 지움. 사이트가 없어졌는지 돌려줌 */
+  async expireCheck() {
+    return this.exclusive(async () => {
+      const meta = this.load();
+      if (!meta) return json({ gone: true });
+      const w = this.wiping(meta);
+      if (w || Date.now() >= meta.expires) await this.wipe(w ? w.expired : true);
+      else await this.ctx.storage.setAlarm(meta.expires);
+      return json({ gone: !this.load() });
+    });
   }
   async block(request) {
     const body = await readJson(request, 8192);
@@ -649,6 +715,7 @@ export class Site extends DurableObject {
     return this.exclusive(async () => {
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
+      if (this.wiping(meta)) throw new HttpError('bad_request', '지우는 중인 사이트예요. 다 지우면 목록에서 사라져요.', { status: 409 });
       const reason = body.blocked ? String(body.reason || '').slice(0, 500) : '';
       // 방부터 가림: 여기서 실패하면 사이트 상태도 바꾸지 않고 오류를 돌려줌(다시 하면 됨)
       if (meta.live_code) await this.room(meta.live_code, 'touch', { site: meta.site, blocked: body.blocked });
@@ -696,12 +763,22 @@ export class Site extends DurableObject {
     })());
   }
 
-  /** 보관 기간이 끝나면 전부 지움 */
+  /**
+   * 보관 기간이 끝나면 전부 지움. 지우는 중이면 다시 해 봄.
+   * 실패하면 1시간 뒤로 스스로 다시 잡음: 공식 재시도는 2초부터 6번(몇 분)뿐이라, 무료 하루 한도가 찬 시간에 걸리면 다 실패하고 다시 오지 않음
+   * (그래도 놓치면 Gate 하루 점검이 기간 지난 사이트를 다시 지우라고 함)
+   */
   async alarm() {
-    const meta = this.load();
-    if (!meta) return;
-    if (Date.now() >= meta.expires) await this.wipe(true);
-    else await this.ctx.storage.setAlarm(meta.expires);
+    try {
+      const meta = this.load();
+      if (!meta) return;
+      const w = this.wiping(meta);
+      if (w || Date.now() >= meta.expires) await this.exclusive(() => this.wipe(w ? w.expired : true));
+      else await this.ctx.storage.setAlarm(meta.expires);
+    } catch (e) {
+      console.error('site alarm failed', e?.message);
+      await this.ctx.storage.setAlarm(Date.now() + HOUR_MS);
+    }
   }
 
   /**
@@ -733,7 +810,7 @@ export class Site extends DurableObject {
   serve(request, url) {
     const head = request.method === 'HEAD';
     const meta = this.load();
-    if (!meta || Date.now() >= meta.expires) {
+    if (!this.alive(meta) || Date.now() >= meta.expires) {
       // Worker가 짧게 기억해 같은 없는 주소로 이 객체를 다시 깨우지 않게 함(밖으로는 내보내지 않음)
       const r = gonePage(head); r.headers.set('x-lp-state', 'gone'); return r;
     }
