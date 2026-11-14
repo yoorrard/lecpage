@@ -242,6 +242,16 @@ describe('교재에 있는데 싣지 못한 것', () => {
     const st = structureFor(E.applyInfo(ai, {}, m, null), {}, m, lo);
     assert.equal(st.leftovers.count, lo.count);
   });
+  test('교재 보기(deck)에만 있는 줄은 싣지 못한 것: make의 교재 반영과 같은 기준(structure --add-leftovers가 패치로 만들 수 있게)', () => {
+    const m = mat(DISCUSS);
+    const d = materialToDraft(m, { today: TODAY });
+    const deck = { type: 'deck', slides: m.pages.map((p) => ({ page: p.page, text: (p.paragraphs || []).map((x) => x.text).join('\n') })) };
+    const only = { ...d, sections: [d.sections[0], deck] };
+    const lo = findLeftovers(m, only);
+    assert.ok(lo.count >= 5, JSON.stringify(lo));
+    assert.equal(E.materialCoverage(m, only).lines.missing, lo.count);
+    assert.equal(findLeftovers(m, { ...only, sections: [...only.sections, ...leftoversToSections(findLeftovers(m, only, { max: 99 }))] }).count, 0, '넣은 뒤에는 0');
+  });
   test('AI 없는 초안은 교재 5종 모양(사례·절차·행사·과정)에서 싣지 못한 것이 없음', () => {
     for (const t of [DISCUSS, PROC, EVENT, COURSE]) {
       const d = materialToDraft(mat(t), { today: TODAY });

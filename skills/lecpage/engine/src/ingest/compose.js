@@ -112,11 +112,21 @@ export function composeBody(material, d, { skipUrls = new Set() } = {}) {
 // ── 교재에 있는데 싣지 못한 것 ─────────────────────────────
 const META_LABEL = /^(?:일\s*시|날\s*짜|기\s*간|일\s*자|시\s*간|장\s*소|강\s*사|발\s*표\s*자|연\s*사|주\s*최|주\s*관|문\s*의(?:처)?|연락처|대\s*상|참\s*석|참\s*가|인\s*원)$/;
 const words = (t) => normLine(t).split(/[\s|·,/()[\]:：]+/).map(textKey).filter((w) => w.length >= 2);
+// “…”라고 입력하는 문장: 따옴표 속 글이 프롬프트이고, 앞뒤는 '입력해 보세요' 같은 안내(ingest/detect.js 따옴표 프롬프트와 같은 단서)
+const QUOTED = /[“"「『‘]([^“”"「」『』‘’\n]{6,400}?)[”"」』’]/g;
+const ASK_NEAR = /(입력|물어|질문|요청|프롬프트|검색|말해|타이핑|명령|쳐|적어)/;
 /**
- * 교재의 문단·표 줄 가운데 설계도 어느 칸에도(교재 보기 포함) 없는 것.
- * 고쳐 쓴 문장도 찾도록 낱말이 60% 넘게 겹치면 실린 것으로 봄. 표지의 일시·장소·강사 줄은 연수 정보가 있으면 실린 것.
- * @returns {{ count:number, items:Array<{file,page,title,text,kind}> }}
+ * 교재 반영을 셀 '보이는 칸': 숨기지 않은 칸 가운데 교재 보기(deck)를 뺀 것.
+ * 교재 보기는 쪽마다 교재 글 전체를 담고 있어 넣으면 무엇이든 실린 것이 됨. make의 반영 점검과 structure --add-leftovers가 같은 기준을 씀
  */
+export const coverSections = (bp) => (bp?.sections || []).filter((s) => s && !s.hidden && s.type !== 'deck');
+/** 강사 확인 전이라 싣지 않은 접속·설문 주소와 그 링크 글(교재 반영에서 세지 않음) */
+function heldOf(material) {
+  const d = material?.detected || {};
+  const urls = [...(d.addresses?.join || []), ...(d.addresses?.survey || [])].map((a) => a.url).filter(Boolean);
+  const labels = new Set((material?.pages || []).flatMap((p) => p.links || []).filter((l) => urls.includes(l.url) && l.label).map((l) => textKey(l.label)));
+  return { urls, labels };
+}
 /** 값 속 글자를 모두 이어 붙임(JSON 문자열로 바꾸면 따옴표 앞에 역빗금이 붙어 교재 글과 맞춰 보기 어려움) */
 function stringsOf(v, out = []) {
   if (typeof v === 'string') out.push(v);
@@ -125,22 +135,33 @@ function stringsOf(v, out = []) {
   return out.join('\n');
 }
 
+/**
+ * 교재의 문단·표 줄 가운데 설계도의 보이는 칸(coverSections: 교재 보기 제외)에 없는 것.
+ * 고쳐 쓴 문장도 찾도록 낱말이 60% 넘게 겹치면 실린 것으로 봄. 표지의 일시·장소·강사 줄은 연수 정보가 있으면 실린 것.
+ * “…”라고 입력하는 문장은 따옴표 속 글이 사이트에 있으면(프롬프트 칸) 실린 것. 강사 확인 전 접속·설문 주소의 링크 글은 세지 않음.
+ * @returns {{ count:number, total:number, items:Array<{file,page,title,text,kind}> }}
+ */
 export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
   if (!material?.pages?.length || !bp) return { count: 0, items: [] };
   const renderOnly = new Set((material.files || []).filter((f) => f.renderOf).map((f) => f.id));
   const boiler = new Set((material.boilerplate || []).map((b) => textKey(b.text)));
-  const visible = (bp.sections || []).filter((s) => s && !s.hidden);
-  const hay = textKey(stringsOf({ meta: bp.meta, instructors: bp.instructors, sections: visible }));
+  const hay = textKey(stringsOf({ meta: bp.meta, instructors: bp.instructors, sections: coverSections(bp) }));
   const meta = bp.meta || {};
+  const skip = [...heldOf(material).labels, ...(ignore || [])].filter((x) => x.length >= 4);
+  const mostly = (t) => { const w = words(t); return w.length >= 2 && w.filter((x) => hay.includes(x)).length / w.length >= 0.6; };
   const has = (text) => {
     const k = textKey(text);
     if (k.length < 6 || boiler.has(k)) return true;
-    if (ignore && [...ignore].some((x) => x.length >= 4 && k.includes(x))) return true; // 강사 확인 전이라 싣지 않은 주소의 링크 글
+    if (skip.some((x) => k.includes(x))) return true; // 강사 확인 전이라 싣지 않은 주소의 링크 글
     if (hay.includes(k) || (k.length > 28 && (hay.includes(k.slice(0, 20)) || hay.includes(k.slice(-20))))) return true;
     const lab = splitLabel(normLine(text).replace(/^[-•·▪◦●○■□▶▷►※*]\s*/, ''));
     if (lab && META_LABEL.test(lab[0]) && (meta.date || meta.venue || (bp.instructors || []).length || meta.organizer || meta.contact)) return true;
-    const w = words(lab ? lab[1] : text);
-    return w.length >= 2 && w.filter((x) => hay.includes(x)).length / w.length >= 0.6;
+    const quotes = [...String(text).matchAll(QUOTED)].map((m) => textKey(m[1])).filter((q) => q.length >= 6);
+    if (quotes.length && quotes.every((q) => hay.includes(q))) {
+      const rest = String(text).replace(QUOTED, ' ');
+      if (ASK_NEAR.test(rest) && (textKey(rest).length <= 30 || mostly(rest))) return true;
+    }
+    return mostly(lab ? lab[1] : text);
   };
   const items = []; let count = 0, total = 0;
   for (const p of material.pages) {
@@ -159,9 +180,8 @@ export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
  */
 export function materialCoverage(material, bp) {
   const d = material?.detected || {};
-  // 교재 보기(deck)는 쪽마다 교재 글 전체를 담고 있어 빼고 셈: 사이트의 칸에 실렸는지를 봄
-  const visible = (bp?.sections || []).filter((s) => s && !s.hidden && s.type !== 'deck');
-  const json = stringsOf({ meta: bp?.meta, instructors: bp?.instructors, sections: visible });
+  // 교재 보기(deck)는 빼고 셈(coverSections): 사이트의 칸에 실렸는지를 봄. 교재 줄은 findLeftovers가 같은 기준으로
+  const json = stringsOf({ meta: bp?.meta, instructors: bp?.instructors, sections: coverSections(bp) });
   const hay = textKey(json);
   const has = (t) => { const k = textKey(t); return k.length < 4 || hay.includes(k); };
   const page = (x) => x?.page || x?.pages?.[0] || x?.refs?.[0]?.page || 0;
@@ -172,11 +192,10 @@ export function materialCoverage(material, bp) {
   const stepItems = (d.steps || []).flatMap((s) => (s.items || []).map((t) => ({ text: typeof t === 'string' ? t : t?.text || '', page: s.page })));
   const steps = tally(stepItems, (x) => has(x.text), (x) => x.text);
   // 접속·설문 주소(addresses)는 강사가 확인한 뒤에만 싣는 것이라 세지 않음(held에 따로)
-  const held = [...(d.addresses?.join || []), ...(d.addresses?.survey || [])].map((a) => a.url).filter(Boolean);
+  const held = heldOf(material).urls;
   const links = tally((d.links || []).filter((l) => /^https?:/i.test(l.url || '') && !held.includes(l.url)),(l) => json.includes(l.url) || json.includes(l.url.replace(/\/$/, '')), (l) => l.url);
   const faq = tally(d.faq || [], (x) => has(x.q), (x) => x.q);
-  const heldLabels = new Set((material?.pages || []).flatMap((p) => p.links || []).filter((l) => held.includes(l.url) && l.label).map((l) => textKey(l.label)));
-  const lo = findLeftovers(material, { ...bp, sections: visible }, { max: 3, ignore: heldLabels });
+  const lo = findLeftovers(material, bp || {}, { max: 3 });
   const lines = { total: lo.total || 0, missing: lo.count, items: lo.items.map((x) => ({ page: x.page, text: truncate(x.text, 60) })) };
   return { prompts, steps, links, faq, lines, held: held.filter((u) => !json.includes(u)), missing:prompts.miss.length + steps.miss.length + links.miss.length + faq.miss.length + lines.missing };
 }

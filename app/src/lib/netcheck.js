@@ -1,12 +1,15 @@
 // 지금 망에서 앱이 쓰는 곳(AI 회사 API·올릴 곳 API·짧은 주소·글꼴 서버)이 열리는지 가볍게 확인합니다.
-// - 필요할 때 그곳 하나만, 요청 한 번(본문을 거의 받지 않는 주소). 결과는 이 탭에 잠깐 기억(열림 10분, 막힘 3분 → 핫스팟으로 바꾸면 곧 다시 확인)
+// - 필요할 때 그곳 하나만, 요청 한 번. 응답 머리글을 받으면 바로 끊어 본문은 받지 않음. 결과는 이 탭에 잠깐 기억(열림 10분, 막힘 3분 → 핫스팟으로 바꾸면 곧 다시 확인)
 // - 진짜 서버가 CORS 머리글을 주는 곳은 cors로 물음: 학교 필터의 차단 화면(머리글 없음)을 '열림'으로 잘못 보지 않음
-// - 키·교재·주소는 보내지 않음(인증 없는 요청이라 401·403이 와도 '닿음'으로 봄)
+// - 키·교재·주소는 보내지 않음. AI 회사는 키 없이 2xx를 주는 주소로 물음(…/models는 키가 없으면 401·403이라 브라우저 콘솔에 빨간 줄이 찍힘).
+//   올릴 곳(Vercel·Netlify)은 그런 주소가 없어 인증 없는 요청의 401·403도 '닿음'으로 봄
 // 근거: docs/research/school-network-2026-11.md §4
 const SPOTS = {
-  'ai:openai': { name: 'OpenAI API', url: 'https://api.openai.com/v1/models', cors: true },
-  'ai:anthropic': { name: 'Claude API', url: 'https://api.anthropic.com/v1/models', cors: false }, // 브라우저 허용 머리글 없이는 CORS 머리글을 주지 않음
-  'ai:gemini': { name: 'Gemini API', url: 'https://generativelanguage.googleapis.com/v1beta/models', cors: true },
+  // 키 없이 200(빈 본문). CORS 머리글은 없어 no-cors로 물음(필터 차단 화면은 실제로 키를 넣을 때 오류로 드러남)
+  'ai:openai': { name: 'OpenAI API', url: 'https://api.openai.com/healthz', cors: false },
+  'ai:anthropic': { name: 'Claude API', url: 'https://api.anthropic.com/api/hello', cors: false }, // 키 없이 200. 브라우저 허용 머리글 없이는 CORS 머리글을 주지 않음
+  // 공개 API 설명서(키 없이 200, 출처를 그대로 CORS로 줌). 머리글만 받고 끊음
+  'ai:gemini': { name: 'Gemini API', url: 'https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta', cors: true },
   'ai:openrouter': { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1/models?limit=1', cors: true },
   'host:vercel': { name: 'Vercel', url: 'https://api.vercel.com/v2/user', cors: true },
   'host:github-pages': { name: 'GitHub', url: 'https://api.github.com/zen', cors: true },
@@ -32,7 +35,7 @@ export function probe({ url, cors = true, timeout = 6000 }) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve('offline');
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
   return fetch(url, { mode: cors ? 'cors' : 'no-cors', cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal })
-    .then(() => 'ok', () => 'blocked') // 막힘·끊김·차단 화면(CORS 머리글 없음)·응답 없음(제한 시간) 모두 '닿지 않음'
+    .then(() => { ctl.abort(); return 'ok'; }, () => 'blocked') // 머리글을 받으면 끊음(본문은 받지 않음). 막힘·끊김·차단 화면(CORS 머리글 없음)·응답 없음(제한 시간) 모두 '닿지 않음'
     .finally(() => clearTimeout(t));
 }
 

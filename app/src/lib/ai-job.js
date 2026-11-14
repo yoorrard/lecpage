@@ -7,6 +7,7 @@ import { generateAuto, getActiveAI, explainError, PROVIDERS, AiError } from './a
 import { reach } from './netcheck.js';
 import { pushUndoFor } from './undo.js';
 import { track } from './stats.js';
+import { blobs } from './db.js';
 
 const jobs = new Map(); // pid → { status: 'running'|'done'|'error', phase, startedAt, error, ctrl }
 const subs = new Set();
@@ -89,7 +90,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     const cur = getProject();
     pushUndoFor(pid, 'AI로 만들기 전', cur);
     // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서(guardAnswer)
-    const g = guardAnswer(bp, cur, ing, cur.blueprint);
+    const g = guardAnswer(bp, cur, ing, cur.blueprint, { assets: await blobs.keys(pid).catch(() => null) }); // 저장소에 없는 그림 주소는 비움
     update((c) => ({ blueprint: carryPicks(applyInfo(g.blueprint, c.info, c.material, c.blueprint), before, c.blueprint?.sections), aiMethod: 'ai' }));
     set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null, restored: g.restored, undone: [] });
     track('make', 'key');

@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Notice, Seg } from './ui.jsx';
 import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
-import { makePrompt, makeDraft, looksTruncated, guardAnswer } from '../lib/blueprint.js';
+import { makePrompt, makeDraft, looksTruncated, guardAnswer, dropMissing } from '../lib/blueprint.js';
 import { polishTargets, makePolishPrompt, applyPolish } from '../lib/polish.js';
 import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, explainError, takeAiResume, CHATBOTS, getChatbot, setChatbot, chatLabel, chatbotFor, setWay } from '../lib/ai.js';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { copy, toast } from '../lib/util.js';
 import { reach, netLine } from '../lib/netcheck.js';
+import { loadChunk } from '../lib/fresh.jsx';
+import { blobs } from '../lib/db.js';
 
 /** OpenRouter 로그인에서 돌아오면 AI 창을 다시 엶 */
 export function useAiResume(open) {
@@ -58,10 +60,17 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
   const [swap, setSwap] = useState(0); // 오류에서 [다른 AI 연결]을 누르면 연결 화면으로
   const [pay, setPay] = useState(0); // 오류에서 [유료로 이어서 하기]를 누르면 이번 한 번만 유료 연결로
   const [bot, setBot] = useState(start?.bot || '');
+  // 프롬프트를 만들 교재 도구. 못 받으면 버튼을 회색으로만 두지 않고 까닭과 할 일을 보임
+  // (새 버전: 저절로 새로 고침, 이미 한 번 했으면 아래 '새 버전' 띠 · 망 오류·그 밖: 여기서 [새로 고침]).
+  // 같은 조각을 다시 import해도 브라우저가 실패를 기억해 또 실패하므로 다시 받기는 새로 고침으로(연수는 저장돼 있음)
+  const [ingErr, setIngErr] = useState(''); // '' | 'net' | 'new' | 'reload' | 'bug'
   useEffect(() => {
-    import('../lib/ingest.js').then(setIng);
+    loadChunk(() => import('../lib/ingest.js')).then(setIng, (e) => setIngErr(e.kind || 'bug'));
     getActiveAI().then((a) => { setAi(a); if (!start?.how) setHow(!first && a ? 'connect' : 'paste'); });
   }, []);
+  // 이 연수 저장소에 있는 파일(쪽 그림·자료): AI 답의 없는 그림 주소를 비울 때(교재 지킴이)
+  const [assetKeys, setAssetKeys] = useState(null);
+  useEffect(() => { let off = false; blobs.keys(p.id).then((k) => { if (!off) setAssetKeys(k); }, () => { }); return () => { off = true; }; }, [p.id, p.slidesMade, p.files]);
   const base = useRef(null);
   if (ing && !base.current) base.current = p.blueprint || makeDraft(p, ing);
   const targets = base.current ? polishTargets(base.current) : [];
@@ -88,13 +97,13 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
       const pr = applyPolish(base.current, targets, json);
       if (!pr.count) { setErr({ title: '바꿀 문구가 없대요.', body: '지금 문구가 괜찮다는 뜻이에요. 구성까지 바꾸려면 위의 체크를 켜고 다시 해 보세요.' }); return; }
       // 문구만 다듬기는 교재 글(단계·프롬프트·일정 제목·FAQ)을 보내지 않아 바뀔 일이 없고, 강사가 고친 곳을 교재로 되돌리면 안 되므로 지킴이를 거치지 않음
-      onBlueprint(pr.blueprint, { polish: true, count: pr.count, restored: [] }); return;
+      onBlueprint(dropMissing(pr.blueprint, assetKeys), { polish: true, count: pr.count, restored: [] }); return;
     }
     if (!Array.isArray(json.sections)) { setErr({ title: '답의 형식이 달라요.', body: '프롬프트를 다시 복사해 새 대화에 붙여 넣어 주세요.' }); return; }
     const v = E.validate(json);
     if (v.errors.length) { setErr({ title: '답에 고칠 점이 있어요.', body: v.errors.map((x) => x.message_ko).join(' ') }); return; }
     // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서
-    const g = guardAnswer(json, p, ing, base.current);
+    const g = guardAnswer(json, p, ing, base.current, { assets: assetKeys });
     onBlueprint(g.blueprint, { polish: false, restored: g.restored });
   }
   const toPaste = (provider) => { setWay('chat'); setHow('paste'); setErr(null); if (chatbotFor(provider)) setBot(chatbotFor(provider)); };
@@ -117,6 +126,7 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
         </div>
       )}
       {children}
+      {(ingErr === 'net' || ingErr === 'bug') && <Notice kind="bad"><span role="alert">{ingErr === 'net' ? '교재 도구를 받지 못해 아직 보낼 수 없어요. 인터넷 연결을 확인하고 새로 고침해 주세요.' : '교재 도구를 열지 못해 아직 보낼 수 없어요. 새로 고침해 주세요.'}</span> <button type="button" class="btn btn-sm" onClick={() => location.reload()}>새로 고침</button></Notice>}
       {(how === 'paste' || first) && <Paste ready={!!ing && !busy} prompt={prompt} dep={[p.material, p.info, p.blueprint]} full={full} first={first} bot={bot} partial={partial} onApply={accept} onRestart={() => { setPartial(''); setErr(null); }} err={err} wait={wait} onWait={onWait} guard={guard} />}
       {how === 'connect' && !first && <Connect ai={ai} setAi={setAi} full={full} ready={!!ing} prompt={prompt} onResult={accept} setErr={setErr} swap={swap} pay={pay} onChat={toPaste} />}
       {err && how === 'connect' && !first && <ErrorBox e={err} provider={ai?.provider} onPaste={() => toPaste(err.provider || ai?.provider)} onConnect={() => { setHow('connect'); setSwap((n) => n + 1); setErr(null); }} onPay={() => { setErr(null); setPay({ n: Date.now() }); }} onLight={() => { setErr(null); setPay({ n: Date.now(), light: true }); }} />}

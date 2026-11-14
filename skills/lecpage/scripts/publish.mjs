@@ -83,6 +83,31 @@ export function prepareRelay(dir, relayName, code, retentionDays = 30) {
   if (!existsSync(join(dir, '.gitignore'))) writeFileSync(join(dir, '.gitignore'), 'node_modules\n.wrangler\n.dev.vars\n');
 }
 
+/** 사이트에 글꼴이 담겼는지(글꼴 함께 담기를 하면 assets/fonts/에 글꼴 조각이 생김) */
+const fontsBundled = (dist) => { try { return readdirSync(join(dist, 'assets', 'fonts')).length > 0; } catch { return false; } };
+/** --dry-run에 보일 글꼴 단계(할 일이 없으면 '') */
+const fontsPlan = (args, dist) => {
+  const want = !args['no-bundle-fonts'];
+  if (want === fontsBundled(dist)) return '';
+  return want ? '글꼴 함께 담기: 사이트를 다시 빌드해 쓰인 글자가 든 글꼴 조각을 사이트 안에(학교망이 글꼴 CDN을 막아도 같은 글꼴. 끄기 --no-bundle-fonts)' : '글꼴 함께 담기 끄기(--no-bundle-fonts): 바깥 글꼴 주소로 다시 빌드';
+};
+/**
+ * 올리기 전에 글꼴 함께 담기(앱과 같게 기본으로 켬: 학교망이 글꼴 CDN을 막아도 같은 글꼴). --no-bundle-fonts면 끔.
+ * 켜고 끈 것은 작업 폴더에 남아 다음 patch·make에도 이어짐. 글꼴을 받지 못하면(인터넷이 막힘) 바깥 글꼴 주소 그대로 올림
+ * @returns {string} 요약 한 줄(할 일이 없으면 '')
+ */
+async function ensureFonts(h, { work, dist }) {
+  const want = !h.args['no-bundle-fonts'];
+  const st = h.loadState(work);
+  if (want !== !!st.bundleFonts) h.saveState(work, { bundleFonts: want });
+  if (want === fontsBundled(dist)) return '';
+  const b = await h.rebuildWork(work, { fonts: want });
+  if (!b.ok) return `글꼴 함께 담기 건너뜀(${b.errors.map((e) => e.message_ko).join(' ').slice(0, 120)})`;
+  if (!want) return '글꼴 함께 담기 끔(--no-bundle-fonts): 바깥 글꼴 주소로 다시 빌드했어요';
+  const w = b.warnings.find((x) => x.path === 'fonts');
+  return w ? w.message_ko : '';
+}
+
 export async function publishCmd(h) {
   const { args, E, rel, fail, say, readJson, writeJson, loadState, saveState } = h;
   const dry = !!args['dry-run'];
@@ -131,18 +156,22 @@ export async function publishCmd(h) {
 
   if (dry) {
     const W = `npx wrangler@${WRANGLER_VER}`;
+    let n = 0;
+    const step = (t) => `${++n} ${t}`;
+    const fontStep = fontsPlan(args, dist);
     say([
       `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Cloudflare · 사이트 ${name}${live ? ` · 중계 ${relayName}` : ''} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
       `인증 ${auth === 'token' ? 'CLOUDFLARE_API_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 wrangler 로그인을 확인해요'}`,
       ...(live ? [
-        `1 중계 폴더 ${rel(relayDir)} ← backends/cloudflare (이름 ${relayName}, 받을 연수 코드 ${code})`,
-        `2 관리자 키를 만들어 중계 비밀로(${W} secret put ADMIN_KEY, 값은 표준 입력) → ${rel(keyFile)}에만 적음(이미 있으면 그대로)`,
-        `3 ${W} deploy -c wrangler.toml → https://${relayName}.<계정>.workers.dev · /api/health 확인`,
-        `4 ${rel(infoPath)}의 live = { provider: "http", url: <중계 주소> }${want.length ? ` · features += ${want.join(',')}` : ''} → patch -i로 다시 빌드·점검(참여 기능 ${feats.join(',') || '없음'})`,
+        step(`중계 폴더 ${rel(relayDir)} ← backends/cloudflare (이름 ${relayName}, 받을 연수 코드 ${code})`),
+        step(`관리자 키를 만들어 중계 비밀로(${W} secret put ADMIN_KEY, 값은 표준 입력) → ${rel(keyFile)}에만 적음(이미 있으면 그대로)`),
+        step(`${W} deploy -c wrangler.toml → https://${relayName}.<계정>.workers.dev · /api/health 확인`),
+        step(`${rel(infoPath)}의 live = { provider: "http", url: <중계 주소> }${want.length ? ` · features += ${want.join(',')}` : ''} → patch -i로 다시 빌드·점검(참여 기능 ${feats.join(',') || '없음'})`),
       ] : []),
-      `${live ? 5 : 1} 빈 임시 폴더에서 ${W} deploy --assets ${rel(dist)} --name ${name} --compatibility-date ${today}${args.temporary ? ' --temporary' : ''} → https://${name}.<계정>.workers.dev`,
-      live ? `6 ${W} deploy -c wrangler.toml --var ALLOWED_ORIGINS:<사이트 주소> (중계가 이 사이트만 받게)` : '',
-      `${live ? 7 : 2} 주소 확인(사이트·check.html${live ? '·중계' : ''}) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·발표화면.png`,
+      fontStep ? step(fontStep) : '',
+      step(`빈 임시 폴더에서 ${W} deploy --assets ${rel(dist)} --name ${name} --compatibility-date ${today}${args.temporary ? ' --temporary' : ''} → https://${name}.<계정>.workers.dev`),
+      live ? step(`${W} deploy -c wrangler.toml --var ALLOWED_ORIGINS:<사이트 주소> (중계가 이 사이트만 받게)`) : '',
+      step(`주소 확인(사이트·check.html${live ? '·중계' : ''}) → handouts <주소>로 ${rel(tdir)}/QR-안내문.pdf·발표화면.png`),
       ...warn.map((w) => '주의 ' + w),
       '강사가 할 일:',
       auth === 'token' ? '  없음(토큰이 있어요). 명령에서 --dry-run을 빼고 다시 실행해요' : '  1. Cloudflare 가입(https://dash.cloudflare.com/sign-up, 이메일만, 결제 정보 없음)\n  2. 이 컴퓨터에서 npx wrangler@4 login을 실행하고 브라우저에서 [Allow] — 또는 Edit Cloudflare Workers 템플릿으로 만든 API 토큰을 CLOUDFLARE_API_TOKEN 환경 변수로 넣기(대화에 붙여 넣지 않기)',
@@ -158,6 +187,8 @@ export async function publishCmd(h) {
   }
 
   let relayUrl = '';
+  // 글꼴 함께 담기를 먼저 적어 둠: --live의 다시 빌드(patch)도 글꼴을 담게
+  if (!args['no-bundle-fonts'] !== !!loadState(work).bundleFonts) saveState(work, { bundleFonts: !args['no-bundle-fonts'] });
   if (live) {
     prepareRelay(relayDir, relayName, code, bp.privacy?.retentionDays); // 개인정보 안내에 적힌 보관 기간 그대로
     const sl = wrangler(['secret', 'list', '-c', 'wrangler.toml'], { cwd: relayDir });
@@ -184,6 +215,9 @@ export async function publishCmd(h) {
     lines.push(...pl.filter((l) => /^(사이트|점검|고침)/.test(l)).map((l) => '다시 빌드 ' + l));
     if (pa.status !== 0 && !/점검/.test(pa.stdout || '')) fail('사이트를 중계에 잇지 못했어요.\n' + lastLines(`${pa.stdout}\n${pa.stderr}`).join('\n'));
   }
+
+  const fl = await ensureFonts(h, { work, dist });
+  if (fl) lines.push(fl);
 
   // 사이트 올리기: 빈 임시 폴더에서(위쪽 폴더의 wrangler.json·jsonc·toml을 읽지 않게)
   if (existsSync(join(dist, '.git')) && !existsSync(join(dist, '.assetsignore'))) copyFileSync(join(SKILL, 'templates', 'deploy', 'cloudflare', '.assetsignore'), join(dist, '.assetsignore'));
@@ -215,7 +249,7 @@ export async function publishCmd(h) {
     `올렸어요 ✓ ${siteBase}`,
     ...lines,
     claim ? `임시 계정이에요. 60분 안에 강사가 ${claim}에서 가입해야 사이트가 남아요` : '',
-    `참가자 ${siteBase} · QR 안내문 ${siteBase}poster.html · 발표 화면 ${siteBase}screen.html${live || bp.live.provider !== 'none' ? ` · 강사 화면 ${siteBase}console.html(도움말 칸에 연수 후 할 일)` : ''} · 접속 확인 ${siteBase}check.html`,
+    `참가자 ${siteBase} · QR 안내문 ${siteBase}poster.html · 발표 화면 ${siteBase}screen.html${existsSync(join(dist, 'console.html')) ? ` · 강사 화면 ${siteBase}console.html(도움말 칸에 연수 후 할 일)` : ''} · 접속 확인 ${siteBase}check.html`,
     ...(ho ? ho.lines : []),
     live ? `건넬 것: 관리자 키 파일 ${rel(keyFile)} — 비밀번호 관리 앱에 옮긴 뒤 파일 지우기. 키를 대화에 적지 않아요` : '',
     `다시 배포: 같은 명령(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 배포하지 않아요`,
@@ -268,6 +302,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
   if (!NAME_RE.test(name)) fail(`사이트 이름은 소문자·숫자·하이픈으로 63자까지예요: ${name} (--name으로 바꿔 주세요)`);
   const siteBase = `https://${name}.onpod.ai/`;
   const publicSite = bp.access?.mode === 'public';
+  const fontLine = dry ? '' : await ensureFonts(h, { work, dist }); // 올리는 사본을 만들기 전에(사본은 dist를 그대로 복사)
   const { stage, added } = onpodStage(dist, { publicSite, url: siteBase });
   const cleanup = () => rmSync(stage, { recursive: true, force: true });
   const st = siteStat(stage);
@@ -286,6 +321,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
     say([
       `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Onpod · 사이트 ${name} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
       `인증 ${auth ? 'ONPOD_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 onpod whoami로 로그인을 확인해요'}`,
+      fontsPlan(args, dist) ? `먼저 ${fontsPlan(args, dist)}` : '',
       `1 올릴 사본(빈 임시 폴더): _headers·점 파일 빼기${added.length ? ` · 더하기 ${added.join(', ')}` : ''}(${publicSite ? '공개 연수: 첫 화면만 담은 sitemap' : '검색 제외: Onpod이 쪽 목록을 자동으로 내지 않게'})`,
       `2 onpod static deploy <사본> --name ${name} --no-spa → ${siteBase}`,
       relay ? `3 참여 기능 중계 ${relay.name}가 새 주소도 받게: wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:${allow(siteBase)}` : '',
@@ -312,7 +348,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
   }
   const found = dep.raw.match(new RegExp(`https://${name.replace(/-/g, '\\-')}\\.onpod\\.ai`)) || dep.raw.match(/https:\/\/[a-z0-9-]+\.onpod\.ai/);
   const url = (found ? found[0] : siteBase).replace(/\/?$/, '/');
-  const lines = [];
+  const lines = fontLine ? [fontLine] : [];
   if (added.length) lines.push(`함께 올림 ${added.join(', ')}(${publicSite ? '공개 연수' : '검색 제외 그대로'})`);
   if (relay) {
     const lo = wrangler(['deploy', '-c', 'wrangler.toml', '--var', `ALLOWED_ORIGINS:${allow(url)}`], { cwd: relayDir });
@@ -328,7 +364,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
   say([
     `올렸어요 ✓ ${url}`,
     ...lines,
-    `참가자 ${url} · QR 안내문 ${url}poster.html · 발표 화면 ${url}screen.html${bp.live.provider !== 'none' ? ` · 강사 화면 ${url}console.html` : ''} · 접속 확인 ${url}check.html`,
+    `참가자 ${url} · QR 안내문 ${url}poster.html · 발표 화면 ${url}screen.html${existsSync(join(dist, 'console.html')) ? ` · 강사 화면 ${url}console.html` : ''} · 접속 확인 ${url}check.html`,
     ...(ho ? ho.lines : []),
     '무료 한도: 계정당 사이트 10개·월 100GB(넘으면 그달 멈췄다가 다음 달 1일에 다시 열림). 그림을 같은 파일 이름으로 바꿔 올리면 최대 1시간 옛것이 보여요',
     `다시 배포: publish work(주소 그대로) · 강사용 폴더 ${rel(tdir)}는 배포하지 않아요`,
@@ -340,9 +376,10 @@ export async function handoutsCmd(h, o = {}) {
   let target = o.url || args._[0];
   if (!target) fail('배포한 주소(https://…)나 사이트 폴더를 주세요. 예: handouts https://lec-20261203.example.workers.dev');
   let out = resolve(o.out || args.o || '');
-  let server = null, local = false;
+  let server = null, local = false, siteDir = '';
   if (!/^https?:\/\//i.test(target)) {
     const dir = resolve(target);
+    siteDir = dir;
     if (!existsSync(join(dir, 'poster.html'))) fail(`${rel(dir)}에 poster.html이 없어요.`);
     if (!o.out && !args.o) out = dir + '-강사용';
     server = staticServer(dir); await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
@@ -354,6 +391,9 @@ export async function handoutsCmd(h, o = {}) {
   }
   const base = target.replace(/[?#].*$/, '').replace(/\/[^/]*\.html$/, '/').replace(/\/?$/, '/');
   if (/^http:\/\/(127\.0\.0\.1|localhost)/.test(base)) local = true;
+  // 강사 화면(console.html)은 참여 기능이 있는 사이트에만 있음 → 그때만 강사 화면 안내
+  if (!siteDir && out.endsWith('-강사용') && existsSync(join(out.slice(0, -'-강사용'.length), 'index.html'))) siteDir = out.slice(0, -'-강사용'.length);
+  const hasConsole = siteDir ? existsSync(join(siteDir, 'console.html')) : await fetch(base + 'console.html', { method: 'HEAD', signal: AbortSignal.timeout(8000) }).then((r) => r.ok).catch(() => false);
   const pw = args.password || process.env.LECPAGE_PASSWORD || '';
   const frag = pw ? '#k=' + encodeURIComponent(pw) : '';
   const pwr = await loadPlaywright();
@@ -378,6 +418,8 @@ export async function handoutsCmd(h, o = {}) {
     await s.goto(base + 'screen.html' + frag, { waitUntil: 'load', timeout: 30000 });
     await s.waitForSelector('[data-qr-join] svg, [data-qr-join] img', { timeout: 15000 }).catch(() => {});
     await s.waitForTimeout(600);
+    // 슬라이드에 넣는 그림: 화면을 다루는 단추(QR 크게·전체 화면·도구)와 [도구] 안내·'크게 보기' 글은 빼고 찍음(프로젝터 수신 화면과 같은 모양)
+    await s.evaluate(() => { document.querySelector('[data-screen]')?.setAttribute('data-receiver', ''); document.querySelectorAll('.lp-scr-empty-s,.lp-qr-zoom-t').forEach((e) => e.remove()); }).catch(() => {});
     await s.screenshot({ path: join(out, '발표화면.png') }); files.push('발표화면.png');
     const zoom = s.locator('[data-join-zoom]:not([disabled])');
     if (await zoom.count()) { await zoom.click(); await s.waitForTimeout(500); await s.screenshot({ path: join(out, '발표화면-QR-크게.png') }); files.push('발표화면-QR-크게.png'); }
@@ -386,7 +428,7 @@ export async function handoutsCmd(h, o = {}) {
     return finish([
       `안내물 ${errs.length ? '△' : '✓'} ${rel(out)}/ ${files.join(' · ')}${shown ? ` (QR 주소 ${shown.trim().slice(0, 60)})` : ''}`,
       local ? '  주의: 로컬 주소라 QR이 다른 기기에서 열리지 않아요. 배포한 뒤 handouts <배포한 주소>로 다시 만드세요' : '',
-      '  QR-안내문.pdf는 참가자용 A4 한 장이에요. 발표화면.png는 슬라이드에 넣어도 돼요. 휴대폰으로 강사 화면을 열려면 강사 화면의 [더보기] → [휴대폰에서 열기]',
+      `  QR-안내문.pdf는 참가자용 A4 한 장이에요. 발표화면.png는 슬라이드에 넣어도 돼요.${hasConsole ? ' 휴대폰으로 강사 화면을 열려면 강사 화면의 [더보기] → [휴대폰에서 열기]' : ''}`,
       ...errs.slice(0, 3).map((e) => '  오류 ' + e.slice(0, 120)),
     ], files);
   } catch (e) {

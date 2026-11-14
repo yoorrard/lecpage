@@ -34,6 +34,11 @@
   <section id="today" aria-labelledby="h-today">
     <h2 id="h-today">오늘 <small class="muted" data-today-date></small></h2>
     <p class="advice" data-advice></p>
+    <ol class="advice-steps small" data-advice-steps hidden>
+      <li>Cloudflare 대시보드에서 Workers Paid(월 $5)를 구독해요.</li>
+      <li><code>hosting/wrangler.jsonc</code>와 <code>wrangler.admin.jsonc</code>의 <code>vars</code>에 <code>"PLAN": "paid"</code>를 넣어 커밋해요. 대시보드에 적은 변수는 다음 배포 때 지워져요.</li>
+      <li>main에 push하면 Workers Builds가 다시 배포해요. 관리 Worker를 따로 연결하지 않았으면 <code>npm run deploy:admin</code>도 해요.</li>
+    </ol>
     <div class="tiles" data-tiles></div>
     <h3 class="sub">이번 달 추세와 비용</h3>
     <p class="muted small">지난 7일·28일 숫자로 어림해요. 유료 비용은 Workers Paid(월 $5 + 넘는 만큼) 공식 요금으로 셈해요. 근거: <code>hosting/README.md</code> §4 수용량.</p>
@@ -90,8 +95,9 @@
       <fieldset class="row">
         <legend>보여 줄 곳</legend>
         <label class="check"><input type="checkbox" name="t-app" checked> 앱(켤 때 한 번)</label>
-        <label class="check"><input type="checkbox" name="t-teacher"> 배포한 사이트의 강사 화면</label>
+        <label class="check" data-teacher-target><input type="checkbox" name="t-teacher"> 배포한 사이트의 강사 화면</label>
       </fieldset>
+      <p class="small muted" data-teacher-note hidden>Pages 보기 사이트는 강사 화면에 공지 띠가 붙지 않아요. 앱 공지만 보여요.</p>
       <div class="row">
         <label>시작 <input type="datetime-local" name="starts" required></label>
         <label>끝 <input type="datetime-local" name="ends" required></label>

@@ -2,10 +2,11 @@
 // lecpage CLI — Node 22 이상. qa·options만 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
 // 기본 출력은 짧은 요약, --json을 붙이면 기계용 JSON.
 //
-//   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts]
+//   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts|--no-bundle-fonts]
 //        교재 → 해석 → 초안 → 검증 → 빌드 → 점검을 한 번에(작업 파일은 dist 옆 work/)
 //        다시 부르면 교재 해석은 재사용, 고친 설계도는 유지(--fresh: 설계도를 새 초안으로)
 //        --bundle-fonts: 글꼴 CDN이 막힌 학교망용. 쓰인 글자가 든 글꼴 조각을 사이트 안에 담음(쪽을 열 때 외부 요청 0, 다시 만들 때도 이어짐)
+//        info.json의 network가 restricted·offline이면 저절로 켜짐(앱과 같게). 끄기: --no-bundle-fonts
 //   brief [blueprint.json|material.json|work]        짧은 요약: 칸 id·개수·구성·빈칸·싣지 못한 것·주의·글꼴
 //   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
@@ -21,8 +22,8 @@
 //   decide-infra -i info.json · presets · effects
 //   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
 //   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
-//   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
-//        강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
+//   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts]
+//        강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기: --no-bundle-fonts). --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
 //   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·발표화면.png(Playwright 필요)
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -41,7 +42,7 @@ const N = await imp('node.js');
 const { USER_ASSET } = await imp('src/build.js');
 
 // ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary', 'bundle-fonts']);
+const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary', 'bundle-fonts', 'no-bundle-fonts']);
 const [cmd, ...rest] = process.argv.slice(2);
 const args = { _: [], set: [] };
 for (let i = 0; i < rest.length; i++) {
@@ -57,6 +58,15 @@ for (let i = 0; i < rest.length; i++) {
 const JSON_OUT = !!args.json;
 
 // ── 공통 ─────────────────────────────────────────
+/**
+ * skill 명령의 검증: 없는 디자인 이름(unknown-preset)은 알림이 아니라 오류로(조용히 다른 디자인으로 빌드되지 않게, 가까운 이름 제안).
+ * 앱은 AI 답의 이름이 틀려도 만들어지게 알림으로 둠
+ */
+function strict(v) {
+  const bad = (v.warnings || []).filter((w) => w.code === 'unknown-preset');
+  if (!bad.length) return v;
+  return { ...v, errors: [...(v.errors || []), ...bad.map((w) => ({ path: w.path, message_ko: w.message_ko.replace(/ 지금은 .*$/, '') + ` 디자인 이름은 presets 명령으로 확인해요${w.suggest?.length ? `(고치기: --set design.preset=${w.suggest[0]})` : ''}.` }))], warnings: v.warnings.filter((w) => w.code !== 'unknown-preset') };
+}
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch (e) { fail(`JSON을 읽지 못했어요: ${p} (${e.code === 'ENOENT' ? '파일 없음' : e.message})`); } };
 const writeJson = (p, v) => { mkdirSync(dirname(resolve(p)), { recursive: true }); writeFileSync(p, JSON.stringify(v, null, 2) + '\n'); };
 const rel = (p) => { if (!p) return ''; const r = relative(process.cwd(), p); if (!r) return '.'; return !r.startsWith('..') && !isAbsolute(r) ? r : p; };
@@ -90,7 +100,8 @@ function assetFiles(dir) {
 
 /** 빌드해 쓰기. 예전 빌드가 남긴 엔진 파일(꺼진 기능의 화면 등)은 지움(CNAME 같은 남의 파일은 그대로) */
 async function buildSite(bp, { out, assets = '', info = null, password = '', fonts = !!args['bundle-fonts'] }) {
-  const r = E.build(bp, { runtime: N.nodeRuntime(), assets: assets && existsSync(assets) ? assetFiles(assets) : {}, infra: info && (info.size || info.features) ? info : null });
+  const r0 = E.build(bp, { runtime: N.nodeRuntime(), assets: assets && existsSync(assets) ? assetFiles(assets) : {}, infra: info && (info.size || info.features) ? info : null });
+  const r = { ...r0, ...strict(r0) };
   if (r.errors.length) return { ok: false, errors: r.errors, warnings: r.warnings };
   const dir = resolve(out);
   password = password || process.env.LECPAGE_PASSWORD || '';
@@ -152,8 +163,9 @@ function brokenRefs(dir) {
 /**
  * 다른 작업이 만드는 검사기. 없으면 건너뜀.
  *   design-lint.mjs: lintPage(page) — 브라우저 화면에서(밝은 화면 PC·휴대폰)
- *   copy-lint.mjs:   lintHtml(html, file) — 만든 페이지 글에서(브라우저 없이도)
- * blocking: 디자인 검사 error는 점검 실패. 문구는 교재 원문이 섞여 있어 알림만
+ *   copy-lint.mjs:   lintHtml(html, file, { material, blueprint }) — 만든 페이지 글에서(브라우저 없이도). 교재 원문은 빼고 셈
+ * blocking: 디자인 검사 error는 점검 실패. 문구는 알림만.
+ * owner 'engine'(엔진 CSS·고정 문구라 설계도로 못 고침)은 요약에서 '알림만, 손댈 것 없음'으로 따로 셈
  */
 async function loadLinters() {
   const list = [];
@@ -176,6 +188,7 @@ function lintIssues(res) {
     level: /err|high|fail/i.test(x.level || x.severity || '') ? 'error' : 'warn',
     message: x.message_ko || x.message || x.msg || (x.why ? `${x.hit ? `"${cut(x.hit, 24)}" ` : ''}${x.why}${x.fix ? ` → ${x.fix}` : ''}` : x.rule || JSON.stringify(x)),
     where: x.selector || x.where || x.path || '',
+    ...(x.owner ? { owner: x.owner, rule: x.rule || '' } : {}),
   }));
 }
 const addIssues = (L, list) => { for (const it of list) if (!L.issues.some((x) => x.message === it.message)) L.issues.push(it); };
@@ -191,8 +204,21 @@ function firstLoad(dir) {
   } catch { return null; }
 }
 
-async function runQa(dir, { outDir, password = '' } = {}) {
+/** 사이트 폴더 → make가 쓴 작업 폴더(옆의 work/이고 그 빌드 위치가 이 폴더일 때) */
+function workFor(dir) {
+  const w = join(dirname(dir), 'work');
+  const st = loadState(w);
+  return st.out && resolve(w, st.out) === dir ? w : '';
+}
+
+async function runQa(dir, { outDir, password = '', work = '' } = {}) {
   dir = resolve(dir);
+  work = work || workFor(dir);
+  // 문구 검사가 교재 원문(실습 단계·프롬프트)을 고칠 곳으로 세지 않게: 교재 해석과 설계도를 함께 줌
+  const rd = (f) => { try { return JSON.parse(readFileSync(join(work, f), 'utf8')); } catch { return null; } };
+  const src = work ? { material: rd('material.json'), blueprint: rd('blueprint.json') } : {};
+  // 작업 폴더가 없으면(build로만 만든 사이트) 강사용 폴더의 설계도 사본으로 엔진 고정 문구만 가림
+  if (!src.blueprint) try { src.blueprint = JSON.parse(readFileSync(dir + '-강사용/lecpage.blueprint.json', 'utf8')); } catch { /* 없음 */ }
   if (!existsSync(join(dir, 'index.html'))) return { ok: false, error: `${rel(dir)}에 index.html이 없어요.` };
   outDir = resolve(outDir || join(dir, '..', 'qa'));
   const broken = brokenRefs(dir);
@@ -203,7 +229,7 @@ async function runQa(dir, { outDir, password = '' } = {}) {
   // 글 검사(브라우저 없이): 참가자·강사가 보는 페이지
   for (const L of linters.filter((x) => x.html && protectedSite)) L.status = 'skipped';
   for (const L of linters.filter((x) => x.html && !protectedSite)) {
-    try { for (const f of readdirSync(dir).filter((x) => /^(index|console|screen|check|poster)\.html$/.test(x))) addIssues(L, lintIssues(L.html(readFileSync(join(dir, f), 'utf8'), f))); }
+    try { for (const f of readdirSync(dir).filter((x) => /^(index|console|screen|check|poster)\.html$/.test(x))) addIssues(L, lintIssues(L.html(readFileSync(join(dir, f), 'utf8'), f, src))); }
     catch (e) { L.status = 'error'; L.error = cut(e.message, 80); }
   }
   const finish = () => {
@@ -249,6 +275,7 @@ async function runQa(dir, { outDir, password = '' } = {}) {
   return finish();
 }
 
+const ENGINE_RULE_KO = { 'line-length': '글 폭', 'font-sizes': '크기 단계', 'heading-ratio': '제목 크기 비율' };
 function qaLines(q) {
   if (q.error) return [`점검 ✕ ${q.error}`];
   const lines = [];
@@ -259,14 +286,18 @@ function qaLines(q) {
   }
   if (q.broken.length) problems.push(`  깨진 자료 ${q.broken.length}: ${plural(q.broken.map((b) => cut(b, 40)), 3, ', ')}`);
   const missing = q.lint.filter((l) => l.status === 'missing').map((l) => l.name);
-  const count = (l) => { const e = l.issues.filter((i) => i.level === 'error').length; return l.issues.length ? `${e ? `고칠 곳 ${e}` : ''}${e && l.issues.length > e ? '·' : ''}${l.issues.length > e ? `살필 곳 ${l.issues.length - e}` : ''}` : '이상 없음'; };
+  const mine = (l) => l.issues.filter((i) => i.owner !== 'engine');
+  const count = (l) => { const is = mine(l); const e = is.filter((i) => i.level === 'error').length; return is.length ? `${e ? `고칠 곳 ${e}` : ''}${e && is.length > e ? '·' : ''}${is.length > e ? `살필 곳 ${is.length - e}` : ''}` : '이상 없음'; };
   const lint = [...q.lint.map((l) => (l.status === 'missing' ? '' : l.status === 'skipped' ? `${l.name} 검사 건너뜀(암호 페이지)` : l.status === 'error' ? `${l.name} 검사 실패(${l.error})` : `${l.name} ${count(l)}`)).filter(Boolean), missing.length ? `${missing.join('·')} 검사 없음(건너뜀)` : ''].filter(Boolean);
   const head = q.skipped ? `점검 ${q.broken.length ? '✕' : '△'} 화면 검사 건너뜀(${q.skipped}) · 깨진 자료 ${q.broken.length}` : `점검 ${q.ok ? '✓ 통과' : '✕ 문제 있음'} · ${q.views.length}화면(휴대폰·태블릿·PC × 밝게·어둡게) · 깨진 자료 ${q.broken.length}${lint.length ? ' · ' + lint.join(' · ') : ''}`;
   lines.push(head + (q.weight ? ` · 첫 화면 ${q.weight.kb}KB` : ''), ...problems);
   if (q.weight?.kb > 200) lines.push(`  첫 화면 파일이 ${q.weight.kb}KB예요(목표 200KB). 효과를 줄이거나 움직임을 낮춰 보세요.`);
-  // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(교재 원문이 섞여 있어 참고용, qa/report.json)
+  // 엔진 몫(글 폭·크기 단계·엔진 고정 문구): 설계도로 고칠 수 없어 한 줄로만 알림
+  const eng = q.lint.map((l) => [l.name, l.issues.filter((i) => i.owner === 'engine')]).filter(([, is]) => is.length);
+  if (eng.length) lines.push(`  알림만(엔진 몫, 손댈 것 없음) ${eng.map(([n, is]) => `${n}${n === '디자인' ? `(${[...new Set(is.map((i) => ENGINE_RULE_KO[i.rule] || cut(i.message, 16)))].join('·')})` : ` ${is.length}곳`}`).join(' · ')}`);
+  // 자세히는 고칠 곳(error)과 디자인 검사만. 문구 '살필 곳'은 개수만(qa/report.json)
   for (const l of q.lint) {
-    const shown = l.issues.filter((it) => it.level === 'error' || l.blocking);
+    const shown = mine(l).filter((it) => it.level === 'error' || l.blocking);
     for (const it of shown.slice(0, 3)) lines.push(`  ${l.name} ${it.level === 'error' ? '고침' : '살핌'}: ${cut(it.message, 70)}${it.where ? ` (${cut(it.where, 30)})` : ''}`);
     if (shown.length > 3) lines.push(`  ${l.name} 외 ${shown.length - 3}건(${rel(join(q.outDir, 'report.json'))})`);
   }
@@ -408,6 +439,12 @@ function coverageLines(work, raw) {
   ];
 }
 
+/** 연수 정보가 없을 때 강사에게 물을 세 가지(고르기형, 짧게). 권하는 기능은 구성(structure)에서 */
+function askLine(suggested, infoPath) {
+  const rec = suggested.map((f) => (typeof f === 'string' ? f : f.feature)).filter((f) => E.FEATURE_LABEL[f]);
+  return `물을 것(연수 정보가 없어요, 고르기형으로 짧게) 참여 기능(${rec.length ? `권함: ${rec.map((f) => E.FEATURE_LABEL[f]).join('·')} / 질문·투표 / 필요 없음` : '질문·투표·도움 요청 / 필요 없음'}) · 인원 · 학교망이라 막히는 사이트가 있는지 → 답은 ${infoPath}(features·size·network) → make … -i ${infoPath}`;
+}
+
 // ── 패치 ─────────────────────────────────────────
 /** --set 경로=값 → 패치. 경로: meta.venue, design.preset, sections.<칸 id>.title, sections.stations.items.0.title */
 function setToPatch(raw, expr) {
@@ -520,8 +557,16 @@ async function fromAppFile(P, file) {
   ], { ok: true, work, blueprint: join(work, 'blueprint.json'), slides, originals: inputs, build: b && { dir: b.dir, sizeKB: b.sizeKB }, skipped: skip });
 }
 
+/** 작업 폴더의 설계도를 지난번 빌드 위치에 다시 빌드(publish가 글꼴을 담거나 뺄 때). 연수 정보·자료·암호는 지난번 그대로 */
+async function rebuildWork(work, { fonts } = {}) {
+  const state = loadState(work);
+  if (!state.out) return { ok: false, errors: [{ message_ko: '빌드할 곳을 몰라요(make로 먼저 만들어 주세요)' }] };
+  const infoPath = state.info ? resolve(work, state.info) : '';
+  return buildSite(readJson(join(work, state.blueprint || 'blueprint.json')), { out: resolve(work, state.out), assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: infoPath && existsSync(infoPath) ? readJson(infoPath) : null, password: args.password, fonts });
+}
+
 // ── 명령 ─────────────────────────────────────────
-const helpers = () => ({ args, E, N, rel, fail, say, readJson, writeJson, loadState, saveState, loadPlaywright, staticServer });
+const helpers = () => ({ args, E, N, rel, fail, say, readJson, writeJson, loadState, saveState, loadPlaywright, staticServer, rebuildWork });
 const commands = {
   async make() {
     const t0 = Date.now();
@@ -561,33 +606,40 @@ const commands = {
     writeJson(bpPath, raw);
 
     // 3) 검증·빌드
-    const v = E.validate(raw);
+    const v = strict(E.validate(raw));
     if (v.errors.length) fail('설계도 검증 실패: ' + v.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '));
-    const fonts = !!args["bundle-fonts"] || !!loadState(work).bundleFonts;
+    // 글꼴 함께 담기: --bundle-fonts, 지난번에 켠 것, 또는 학교망·인터넷 없음으로 답한 연수(앱과 같게). --no-bundle-fonts면 끔
+    const net = info.network || v.blueprint.audience.network;
+    const fonts = !args['no-bundle-fonts'] && (!!args['bundle-fonts'] || !!loadState(work).bundleFonts || ['restricted', 'offline'].includes(net));
     const b = await buildSite(raw, { out, assets, info: Object.keys(info).length ? info : null, password: args.password, fonts });
     if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
     // 경로는 work 기준 상대 경로로(work 폴더를 복사해 patch해도 원래 폴더의 dist를 덮어쓰지 않게). 글꼴 함께 담기는 다시 만들 때도 이어짐
-    saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs, ...(fonts ? { bundleFonts: true } : {}) });
+    saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs, bundleFonts: fonts });
 
     // 4) 점검
-    const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '' });
+    const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '', work });
     const bm = briefMaterial(m), bb = briefBlueprint(raw);
     const sec = ((Date.now() - t0) / 1000).toFixed(0);
     const base = dirname(out);
     const sh = (p) => { const r = relative(base, p); return r && !r.startsWith('..') && !isAbsolute(r) ? r : p; };
     const bpShort = sh(bpPath);
+    // 연수 정보(info.json)가 없으면 빈칸이 없어도 강사에게 세 가지만 물음: 참여 기능을 모르면 참여 기능 없는 사이트가 됨
+    const infoGuess = join(work, 'info.json');
+    const ask = args.i ? '' : existsSync(infoGuess) ? `연수 정보 ${sh(infoGuess)}가 있는데 쓰지 않았어요 → make … -i ${sh(infoGuess)}` : askLine(bb.json.structure?.suggested || [], sh(infoGuess));
     const lines = [
       `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(배포할 사이트) · ${sh(b.tdir)}(강사용, 배포하지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
       ...steps,
       bm.lines[0], bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
       ...bb.lines.filter((l) => !l.startsWith('싣지 못한 것')),
+      ask,
       ...coverageLines(work, raw),
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
+      ...b.warnings.filter((w) => w.path === 'fonts').map((w) => `  ${w.message_ko}${args['bundle-fonts'] ? '' : ' (끄기 --no-bundle-fonts)'}`),
       ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
     ];
-    say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
+    say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, ask: ask.startsWith('물을 것') ? ['features', 'size', 'network'] : [], material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
     process.exitCode = q && !q.ok ? 1 : 0;
   },
 
@@ -628,14 +680,21 @@ const commands = {
 
   async patch() {
     const bpPath = resolve(args._[0] || 'work/blueprint.json');
-    const prev = bpPath.replace(/\.json$/, '') + '.prev.json';
+    // 이전 판: .prev.json(직전) · .prev2.json … .prev5.json(그 앞). --undo는 한 판씩 앞으로 가고, 되돌린 판은 다시 돌아오지 않음
+    const KEEP = 5;
+    const prevN = (n) => bpPath.replace(/\.json$/, '') + (n === 1 ? '.prev.json' : `.prev${n}.json`);
+    const prev = prevN(1);
     const work = dirname(bpPath);
     const state = loadState(work);
-    let undoFrom = null;
+    let undoFrom = null, left = 0;
     if (args.undo) {
-      if (!existsSync(prev)) fail('되돌릴 이전 판이 없어요.');
+      if (!existsSync(prev)) fail('더 되돌릴 이전 판이 없어요.');
       undoFrom = readJson(bpPath);
-      const cur = readFileSync(bpPath, 'utf8'); copyFileSync(prev, bpPath); writeFileSync(prev, cur);
+      copyFileSync(prev, bpPath);
+      let n = 1;
+      while (n < KEEP && existsSync(prevN(n + 1))) { copyFileSync(prevN(n + 1), prevN(n)); n++; }
+      rmSync(prevN(n), { force: true });
+      left = n - 1;
     }
     const before = readJson(bpPath);
     let patch = {};
@@ -647,23 +706,27 @@ const commands = {
     }
     const r = E.applyBlueprintPatch(before, patch);
     if (args.i) { const info = readJson(args.i); r.raw = E.applyTeacherValues(E.syncInfo(r.raw, info), info, { access: args.access }); }
-    const final = args.i ? E.validate(r.raw) : { errors: r.errors, warnings: r.warnings.filter((w) => w.kind !== 'patch') };
+    const final = strict(args.i ? E.validate(r.raw) : { errors: r.errors, warnings: r.warnings.filter((w) => w.kind !== 'patch') });
     const pw = r.warnings.filter((w) => w.kind === 'patch');
     if (final.errors.length) fail('검증 실패로 저장하지 않았어요: ' + final.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '), { warnings: pw });
     const changes = E.diffSummary(undoFrom || before, r.raw);
-    if (!args.undo && changes.length) { writeFileSync(prev, readFileSync(bpPath)); writeJson(bpPath, r.raw); }
+    if (!args.undo && changes.length) {
+      for (let n = KEEP - 1; n >= 1; n--) if (existsSync(prevN(n))) copyFileSync(prevN(n), prevN(n + 1));
+      writeFileSync(prev, readFileSync(bpPath)); writeJson(bpPath, r.raw);
+    }
+    if (args['bundle-fonts'] || args['no-bundle-fonts']) saveState(work, { bundleFonts: !args['no-bundle-fonts'] });
     const out = args.o ? resolve(args.o) : state.out ? resolve(work, state.out) : '';
     let b = null, q = null, skip = '';
     if (!changes.length) skip = '바뀐 것이 없어 다시 빌드하지 않았어요.';
     else if (args['no-build']) skip = '빌드 건너뜀(--no-build)';
     else if (!out) skip = '빌드할 곳을 모름: -o dist 를 붙이면 다시 빌드해요.';
     else {
-      b = await buildSite(r.raw, { out, assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: state.info && existsSync(resolve(work, state.info)) ? readJson(resolve(work, state.info)) : null, password: args.password, fonts: !!args['bundle-fonts'] || !!state.bundleFonts });
+      b = await buildSite(r.raw, { out, assets: state.assets ? resolve(work, state.assets) : join(work, 'assets'), info: state.info && existsSync(resolve(work, state.info)) ? readJson(resolve(work, state.info)) : null, password: args.password, fonts: !args['no-bundle-fonts'] && (!!args['bundle-fonts'] || !!state.bundleFonts) });
       if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; }
-      else if (args.qa) q = await runQa(out, { password: args.password || process.env.LECPAGE_PASSWORD || '' });
+      else if (args.qa) q = await runQa(out, { password: args.password || process.env.LECPAGE_PASSWORD || '', work });
     }
     const lines = [
-      `${args.undo ? '되돌림' : '고침'} ${changes.length}건 → ${rel(bpPath)}${changes.length && !args.undo ? ` (이전 판 ${basename(prev)}, --undo로 되돌리기)` : ''}${r.note ? ` · ${r.note}` : ''}`,
+      `${args.undo ? '되돌림' : '고침'} ${changes.length}건 → ${rel(bpPath)}${changes.length && !args.undo ? ` (이전 판 ${basename(prev)}, --undo로 되돌리기)` : ''}${args.undo ? ` (더 되돌릴 판 ${left}개)` : ''}${r.note ? ` · ${r.note}` : ''}`,
       ...changes.map((c) => '- ' + c),
       ...pw.map((w) => `주의 ${w.message_ko}`),
       `검증 ✓${final.warnings.length ? ` (주의 ${final.warnings.length}: ${plural(final.warnings.map((w) => cut(w.message_ko, 50)), 2, ' / ')})` : ''}`,
@@ -821,7 +884,7 @@ const commands = {
   },
 
   validate() {
-    const r = E.validate(readJson(args._[0]));
+    const r = strict(E.validate(readJson(args._[0])));
     if (args.o) writeJson(args.o, r.blueprint);
     const lines = [r.errors.length ? `검증 ✕ 오류 ${r.errors.length}` : `검증 ✓ 칸 ${r.blueprint.sections.length}${r.warnings.length ? ` · 주의 ${r.warnings.length}` : ''}`,
       ...r.errors.map((e) => `오류 ${e.path}: ${e.message_ko}`), ...r.warnings.slice(0, 8).map((w) => `주의 ${w.path}: ${w.message_ko}`), r.warnings.length > 8 ? `주의 외 ${r.warnings.length - 8}건(--json)` : ''];
@@ -846,6 +909,8 @@ const commands = {
       [top?.atLimit_ko && `${top.name_ko}: ${top.atLimit_ko}`, r.backendInfo.atLimit_ko && `${r.backendInfo.name_ko}: ${r.backendInfo.atLimit_ko}`].filter(Boolean).map((x) => '한도 ' + x).join('\n'),
       ...r.warnings.map((x) => '주의 ' + x),
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
+      // 이미 연결해 둔 곳이 없으면: 가입 없는 길(앱의 바로 배포). skill은 바로 배포를 직접 부르지 않고 앱으로 넘김
+      ![].concat(info.connected || []).length && !info.previous && info.network !== 'offline' ? '계정이 없으면 app work → 강사가 lecpage.com [저장한 파일 열기] → [배포하기]의 바로 배포(가입 없음, 60일 보관, 참여 기능 포함)' : '',
       r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live --features ${(info.features || []).join(',') || 'qa,poll'} (먼저 --dry-run)` : `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
     ], r);
   },

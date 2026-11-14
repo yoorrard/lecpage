@@ -206,6 +206,17 @@ test('개인정보 안내: 실제로 모으는 기록(설문·투표·입실·�
   assert.ok(!html.includes('나눔 보드'), '보드가 없으면 보드 글을 적지 않음');
 });
 
+test('개인정보 안내: 바로 배포 서버가 참여 기록을 맡으면 운영자를 수탁자로 밝힘(받지 않는다고 쓰지 않음)', () => {
+  const bp = { meta: { title: 't' }, live: { provider: 'http', url: 'https://lecpage-sites.lecpage.workers.dev/live', features: ['qa'] }, sections: [{ type: 'hero' }, { type: 'qa' }],
+    privacy: { processors: [{ name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등', purpose: '강사를 대신해 사이트와 참여 기록 저장' }] } };
+  const lec = E.build(bp, { runtime: nodeRuntime() }).files['privacy.html'];
+  assert.ok(!lec.includes('받거나 보관하지 않습니다'));
+  assert.match(lec, /lecpage 운영자가 강사를 대신해 저장만 합니다/);
+  assert.ok(lec.includes('hello@lecpage.com'));
+  const own = E.build({ ...bp, live: { provider: 'supabase', url: 'https://x.supabase.co', features: ['qa'] }, privacy: {} }, { runtime: nodeRuntime() }).files['privacy.html'];
+  assert.match(own, /lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다/);
+});
+
 test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을 파일 목록에 넣음', () => {
   const base = { meta: { title: 't' }, sections: [{ type: 'hero' }, { type: 'qa' }] };
   const doc = (live, infra) => E.build({ ...base, live: { features: ['qa'], ...live } }, { runtime: nodeRuntime(), infra }).teacher['운영안내.md'];

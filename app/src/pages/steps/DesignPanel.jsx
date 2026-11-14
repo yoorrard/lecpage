@@ -91,7 +91,7 @@ export function DesignPanel({ p, update }) {
   return (
     <div class="stack">
       <section class="trio" aria-labelledby="trio-h">
-        <div class="trio-head"><h3 class="h-sub" id="trio-h">느낌이 다른 세 안</h3><button type="button" class="btn btn-sm" onClick={() => setCompare(true)}>크게 비교</button></div>
+        <div class="trio-head"><h2 class="h-sub" id="trio-h">느낌이 다른 세 안</h2><button type="button" class="btn btn-sm" onClick={() => setCompare(true)}>크게 비교</button></div>
         <div class="thumbs trio-thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={[r.feel, r.concept ? '컨셉에 맞춤' : ''].filter(Boolean).join(' · ') || whyText(r)} onPick={() => pickPreset(r.id)} />)}</div>
       </section>
       <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="위에서 고르거나 [수정 요청]에 적어 AI에게 맡겨요." />

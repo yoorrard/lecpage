@@ -292,6 +292,8 @@ textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .notice.bad{background:var(--peach);color:var(--peach-ink);border-color:color-mix(in srgb,var(--peach-ink) 14%,transparent)}
 .notice.lav{background:var(--lav-soft);color:var(--lav-ink);border-color:color-mix(in srgb,var(--accent) 16%,transparent)}
 .warnings{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:.9rem;color:var(--ink-2)}
+.warnings .is-warn{color:var(--ink);font-weight:600}
+.warn-line{color:var(--bad);font-weight:600}
 .progress{height:6px;border-radius:999px;background:var(--sunk);overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);width:var(--w,0%);transition:width .3s var(--ease)}
 
@@ -419,6 +421,9 @@ html.pv-lock{overflow:hidden}
 /* ── 알림·대화상자 ── */
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,12px);z-index:90;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--r-sm);font-weight:550;font-size:.94rem;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity .2s,transform .3s var(--ease);max-width:calc(100% - 32px);text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+/* 새 배포 뒤 열린 탭(lib/fresh.jsx): 알림(toast) 자리 위에 머무는 한 줄 + [새로 고침] */
+.fresh-bar{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:91;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;background:var(--ink);color:var(--bg);padding:10px 12px 10px 16px;border-radius:var(--r-sm);font-weight:550;font-size:.94rem;box-shadow:var(--shadow-lg);width:max-content;max-width:calc(100% - 32px)}
+.secret-dots{letter-spacing:.08em}
 dialog.dlg{border:1px solid var(--hair);border-radius:var(--r);padding:0;background:var(--paper);color:var(--ink);width:min(560px,calc(100% - 32px));box-shadow:var(--shadow-lg)}
 dialog.dlg::backdrop{background:rgba(20,18,16,.42);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 dialog.dlg.dlg-wide{width:min(760px,calc(100% - 24px));max-height:calc(100vh - 32px)}
@@ -571,7 +576,7 @@ html.is-wide .top-in,html.is-wide .page,html.is-wide .foot-in{max-width:1760px}
 .venue-row .qr{flex:none;border-radius:6px}
 .venue-url{margin:0;word-break:break-all;color:var(--ink-2)}
 .venue-day{margin:0}
-.venue-day.is-tight{font-weight:600}
+.venue-day.is-tight,.venue-day.is-past{font-weight:600}
 .venue-day.is-full{font-weight:700;color:var(--bad)}
 .rescue{border-top:1px solid color-mix(in srgb,currentColor 14%,transparent);padding-top:10px}
 .rescue summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
@@ -726,6 +731,8 @@ dialog.join-big::backdrop{background:var(--bg)}
 details>summary{cursor:pointer}
 /* 터치 화면: 펼치기 줄도 44px 높이로 누르게 */
 @media (pointer: coarse){details>summary{padding-block:10px}.more>summary{align-items:center}.proj-link{display:flex;align-items:center;min-height:44px}}
+/* 좁은 화면(터치로 잡히지 않는 휴대폰 보기 포함): 작은 펼치기 줄·체크 상자도 24px 이상(WCAG 2.5.8) */
+@media (max-width: 760px){.found-more>summary,.structure-left>summary{padding-block:6px}.check input{width:24px;height:24px;margin-top:0}}
 .more{border-top:1px solid var(--hair);margin-top:12px;padding-top:16px}
 .more>summary{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;list-style:none;font-size:1.06rem;letter-spacing:-.018em}
 .more>summary::-webkit-details-marker{display:none}

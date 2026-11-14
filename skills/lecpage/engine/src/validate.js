@@ -3,7 +3,7 @@
 import { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, FOLLOWUP_KINDS } from './schema/sections.js';
 import { cleanStructure, checkOrder } from './decide/structure.js';
 import { mdIssues } from './md-syntax.js';
-import { PRESET_IDS, getPreset } from './design/presets.js';
+import { PRESET_IDS, getPreset, nearestPresets } from './design/presets.js';
 import { isHex } from './design/color.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, conceptDesign } from './decide/concept.js';
@@ -171,7 +171,11 @@ export function validate(input) {
     if (!design.topics.length) design.topics = detectTopics([meta.title, meta.subtitle, ...arr(b.sections).map((s) => s?.title || '')].join(' '));
     const moods = design.mood.length ? design.mood : moodsForTopics(design.topics);
     design.preset = rankPresets({ moods, topics: design.topics, archetype: pick(b.archetype?.primary, ARCHETYPES, 'story'), admin: meta.admin.kind, minor: !!b.audience?.minor })[0].id;
-    if (d.preset) warnings.push({ path: 'design.preset', message_ko: `"${str(d.preset, 30)}" 디자인을 찾지 못해 "${getPreset(design.preset).name_ko}" 디자인으로 골랐어요.` });
+  }
+  // 없는 디자인 이름: 다른 디자인으로 조용히 바뀌지 않게 알림(code unknown-preset). 앱은 알림으로 두고, skill 명령(validate·patch·build)은 오류로 막음
+  if (d.preset && !PRESET_IDS.includes(d.preset)) {
+    const near = nearestPresets(d.preset);
+    warnings.push({ path: 'design.preset', code: 'unknown-preset', suggest: near, message_ko: `"${str(d.preset, 30)}" 디자인이 없어요.${near.length ? ` 혹시 ${near.map((x) => `"${x}"`).join('·')}인가요?` : ''} 지금은 "${design.preset}"(${getPreset(design.preset).name_ko})로 만들어요.` });
   }
 
   const instructors = arr(b.instructors || (b.instructor ? [b.instructor] : [])).slice(0, 12).map((p) => ({
