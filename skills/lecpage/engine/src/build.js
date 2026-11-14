@@ -5,6 +5,7 @@ import { resolveDesign } from './decide/design.js';
 import { decideInfra } from './decide/infra.js';
 import { themeCSS, themeTokens, presetWithOverrides } from './design/tokens.js';
 import { getPreset } from './design/presets.js';
+import { FX_BY_ID } from './design/fx-catalog.js';
 import { designTokens } from './design/dtcg.js';
 import { renderIndex, renderConsole, renderScreen, renderCheck, renderPrivacy, renderPoster, designDoc, opsDoc } from './render/pages.js';
 import { esc } from './render/html.js';
@@ -93,7 +94,7 @@ export function build(input, opts = {}) {
   const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
   const view = opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) };
   const ics = icsFile(bp.meta, opts.today);
-  const ctx = { bp: view, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
+  const ctx = { bp: view, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, fxLibs: [...new Set(effectIds.flatMap((id) => FX_BY_ID[id]?.libs || []))], ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
   if (ics) files['assets/event.ics'] = ics;

@@ -358,9 +358,11 @@ function textSlide(sl, i, total, deckName) {
 function deck(s, ctx) {
   const toolMap = Object.fromEntries((ctx.bp.sections.find((x) => x.type === 'tools')?.items || []).map((t) => [t.name, t]));
   const deckName = ctx.design.brandName || ctx.bp.meta.title;
+  // 쪽 표시 'N / 끝 쪽': 교재 일부만 담으면(1,2,4,8…) 장 수가 아니라 실제 마지막 쪽 번호로
+  const last = Math.max(...s.slides.map((x) => +x.page || 0), s.slides.length);
   const slides = s.slides.map((sl, i) => {
     const tools = (sl.tools || []).map((n) => toolMap[n]).filter(Boolean);
-    const media = sl.src ? `<img src="${esc(sl.src)}" alt="${esc(`${sl.page}쪽${sl.title ? ': ' + sl.title : ''}`)}" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async">` : textSlide(sl, i, s.slides.length, deckName);
+    const media = sl.src ? `<img src="${esc(sl.src)}" alt="${esc(`${sl.page}쪽${sl.title ? ': ' + sl.title : ''}`)}" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async">` : textSlide(sl, i, last, deckName);
     return `<figure class="lp-slide" id="deck-p${sl.page}" data-page="${sl.page}" data-title="${esc(sl.title)}" data-text="${esc((sl.text || '').slice(0, 400))}">${media}<figcaption><span class="lp-slide-no">${sl.page}</span>${esc(sl.title)}${tools.length ? `<span class="lp-slide-tools">${tools.map((t) => `<a ${href(t.url)}>${esc(t.name)}${icon('external')}</a>`).join('')}</span>` : ''}</figcaption></figure>`;
   }).join('\n');
   const dl = s.download?.href ? `<a class="lp-btn lp-btn-ghost" ${href(s.download.href)} download>${icon('download')}<span>${esc(s.download.label || '교재 내려받기')}${s.download.size ? ` · ${esc(s.download.size)}` : ''}</span></a>` : '';
@@ -368,7 +370,7 @@ function deck(s, ctx) {
   <div class="lp-deck-stage" tabindex="0" aria-roledescription="슬라이드" aria-label="교재 ${s.slides.length}쪽">${slides}</div>
   <div class="lp-deck-bar" hidden>
     <button class="lp-icon-btn" type="button" data-deck-prev aria-label="이전 쪽">${icon('left')}</button>
-    <span class="lp-deck-count" aria-live="polite"><b data-deck-cur>1</b> / ${s.slides.length}</span>
+    <span class="lp-deck-count" aria-live="polite"><b data-deck-cur>${s.slides[0]?.page ?? 1}</b> / ${last}</span>
     <button class="lp-icon-btn" type="button" data-deck-next aria-label="다음 쪽">${icon('right')}</button>
     <span class="lp-grow"></span>
     <button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-deck-overview>${icon('grid')}<span>전체 보기</span></button>
@@ -484,7 +486,7 @@ function quiz(s, ctx) {
 }
 
 function attendance(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p>연수를 시작할 때와 마칠 때 한 번씩 눌러 주세요.${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><div class="lp-ctas"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
+  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p data-phase-hide="after">연수를 시작할 때와 마칠 때 한 번씩 눌러 주세요.${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><p data-phase-show="after" hidden>끝난 연수라 출석은 받지 않아요.</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
 }
 
 // ── 자료·사람 ─────────────────────────────────────────────

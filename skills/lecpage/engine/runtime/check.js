@@ -12,6 +12,8 @@
   var page = $('[data-check-page]'); if (!page) return;
   var DATA = {}; try { DATA = JSON.parse($('#lp-data').textContent); } catch (e) { }
   var items = []; try { items = JSON.parse(page.getAttribute('data-items') || '[]'); } catch (e) { }
+  // 글꼴을 사이트에 함께 담았으면(assets/fonts.css) 글꼴 CDN은 확인할 까닭이 없음: 빼고, 같은 곳이 움직임 효과 파일도 보내면 그 영향만 남김
+  if ($('link[href$="assets/fonts.css"]')) items = items.filter(function (it) { return !it.font || it.fxImpact; }).map(function (it) { return it.font ? { name: it.fxName, url: it.url, need: it.need, impact: it.fxImpact, fix: it.fxFix } : it; });
   var liveInfo = null; try { liveInfo = JSON.parse(page.getAttribute('data-live-check') || 'null'); } catch (e) { }
   var tt; function toast(m) { var t = $('[data-toast]'); if (!t) return; t.textContent = m; t.classList.add('is-on'); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove('is-on'); }, 2400); }
   var IC = {

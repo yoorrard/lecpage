@@ -322,7 +322,7 @@ function Instant({ p, busy, start, done, bind, info, gate, onUnavailable }) {
     if (e.status === 0 || e.status >= 500) { onUnavailable?.({ t: '바로 배포 서버에 지금 닿지 않아요.' }); return true; }
     return false;
   },
-  autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형·'삭제' 그대로) */ purpose: `강사를 대신해 사이트와 참여 기록 저장. 보관 기간(마지막 ${info?.keepAlive === false ? '배포' : '배포나 방문'} 뒤 ${days}일)이 끝나면 삭제` } } : null);
+  autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형). 참여 기록의 보관 기간은 안내 3(마지막 기록 뒤 N일, 늦어도 사이트와 함께) */ purpose: `강사를 대신해 사이트와 참여 기록 저장(사이트는 마지막 ${info?.keepAlive === false ? '배포' : '배포나 방문'} 뒤 ${days}일 보관)` } } : null);
   bind(() => run());
   async function remove() {
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }

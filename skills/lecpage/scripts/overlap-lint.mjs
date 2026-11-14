@@ -2,6 +2,7 @@
 // 겹침·꼬임 검사: 효과를 얹은 뒤에도 화면이 엉키지 않았는지 스크롤 자리마다 잽니다(Playwright page를 받음).
 //   글이 다른 글·단추와 겹침 · 글이 틀에서 잘리거나 화면 밖으로 나감 · 가로 넘침 · 첫 화면 그림이 제목·단추를 덮음
 //   움직임이 끝난 뒤에도 숨은 채 남은 내용 · 한 요소를 두 움직임이 함께 움직임(등장 + 시차 + 붙박이 겹침) · 꾸밈 층이 메뉴 위로 올라옴
+//   글 칸이 좁아져 글자가 세로로 한 글자씩 쌓임
 // 쓰는 곳: scripts/lecpage.mjs qa(휴대폰·태블릿·PC 밝은 화면에서 한 번씩) · 모든 프리셋을 도는 점검 스크립트(scanPage를 직접 부름)
 //   node scripts/overlap-lint.mjs <dist 폴더> [--width 1280,390] [--pages index,console,screen,poster,check] [--json]  (강사 화면은 리허설이면 아무 키로 들어감)
 import { pathToFileURL } from 'node:url';
@@ -15,6 +16,7 @@ export const RULES = {
   'covered': { level: 'error', ko: '제목·단추·메뉴가 다른 층에 덮여요(그림이나 꾸밈 층이 위에 있음).' },
   'stuck-hidden': { level: 'error', ko: '움직임이 끝났는데 내용이 숨은 채 남았어요.' },
   'fx-tangle': { level: 'error', ko: '한 요소를 두 움직임이 함께 움직여요(등장·시차·붙박이 겹침 등). 하나만 남기세요.' },
+  'narrow-text': { level: 'error', ko: '글 칸이 너무 좁아 글자가 세로로 한 글자씩 쌓여요. 칸에 최소 폭을 주거나 더 넓은 폭에서 한 줄로 쌓으세요.' },
 };
 
 /** 브라우저 안에서 도는 검사. mid = 움직이는 도중(겹침·넘침·꼬임만) */
@@ -83,17 +85,28 @@ export function pageCheck(mid) {
     add('text-on-control', `${sec(a.el)}"${a.txt.slice(0, 14)}" × ${name(c)}`);
   }
   // 한 요소를 두 움직임이: 같은 요소의 transform(또는 translate·scale·rotate)을 움직이는 애니메이션·전환이 둘 넘게 돌거나, 붙박이(sticky) 요소가 등장 대기 상태
+  // 요소와 그 ::before·::after는 따로 셈(꾸밈 점이 제자리에서 커지는 것은 요소의 등장과 같은 transform을 다투지 않음)
   const byEl = new Map();
   for (const an of document.getAnimations()) {
     const el = an.effect && an.effect.target; if (!el || an.playState !== 'running' || el.closest('[aria-hidden="true"]')) continue;
     const props = an.transitionProperty ? [an.transitionProperty] : [...new Set(an.effect.getKeyframes().flatMap((k) => Object.keys(k)))];
     if (!props.some((p) => /^(transform|translate|scale|rotate)$/.test(p))) continue;
     const b = el.getBoundingClientRect(); if (b.bottom < 0 || b.top > vh) continue;
-    byEl.set(el, (byEl.get(el) || new Set()).add(an.animationName || 'transition'));
+    const pe = an.effect.pseudoElement || '', box = byEl.get(el) || new Map();
+    box.set(pe, (box.get(pe) || new Set()).add(an.animationName || 'transition')); byEl.set(el, box);
   }
-  for (const [el, set] of byEl) if (set.size > 1) add('fx-tangle', `${sec(el)}${name(el)}: ${[...set].join(' + ')}`);
+  for (const [el, box] of byEl) for (const [pe, set] of box) if (set.size > 1) add('fx-tangle', `${sec(el)}${name(el)}${pe}: ${[...set].join(' + ')}`);
   for (const el of document.querySelectorAll('.fx-reveal-item')) if (cs(el).position === 'sticky') add('fx-tangle', `${sec(el)}${name(el)}: 등장 + 붙박이`);
   if (mid) return out;
+  // 좁아진 글 열: 글 상자가 한 글자 반 폭도 안 되는데 세 줄 넘게 쌓임(옆 칸에 밀려 세로로 한 글자씩). 세로쓰기는 제외.
+  // 기기 글자를 크게(200%) 키운 휴대폰에서 두 글자씩 접히는 칸(설문 눈금 이름 등)은 정한 배치라 보지 않음
+  for (const n of document.querySelectorAll('main *')) {
+    let t = ''; for (const c of n.childNodes) if (c.nodeType === 3) t += c.nodeValue;
+    if ((t = t.trim()).length < 4 || n.closest(SKIP)) continue;
+    const s = cs(n); if (/vertical/.test(s.writingMode)) continue;
+    const b = n.getBoundingClientRect(), fs = parseFloat(s.fontSize), lh = parseFloat(s.lineHeight) || fs * 1.4;
+    if (b.width > 0 && b.width < fs * 1.6 && b.height > lh * 2.5) add('narrow-text', `${sec(n)}${name(n)} "${t.slice(0, 10)}" ${Math.round(b.width)}×${Math.round(b.height)}`);
+  }
   // 잘림·화면 밖: 스크롤 칸 안의 글과 줄임표(…) 글은 제외
   for (const a of items) {
     if (scrollBox(a.el)) continue;

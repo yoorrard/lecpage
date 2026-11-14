@@ -649,12 +649,16 @@
       r3.appendChild(btn('다음 실습', '', function () { var i = stations.findIndex(function (s) { return s.id === state.step; }); var n = stations[Math.min(stations.length - 1, i + 1)]; if (n) setState({ step: n.id }); }));
       s3.appendChild(r3); C.step = sel;
     }
-    if (BP.deck) {
+    // 교재 쪽: 참가자 화면의 쪽 번호(data-page)와 같은 실제 번호를 보냄. 앞·다음은 담은 쪽 목록에서 한 칸씩
+    var pages = BP.pages || [];
+    if (pages.length) {
       var r4 = el('div', 'lp-con-row');
-      var pv = btn('앞 쪽', '', function () { setState({ slide: Math.max(1, (state.slide || 1) - 1) }); });
-      var inp = el('input', 'lp-in'); inp.type = 'number'; inp.min = 1; inp.max = BP.deck; inp.placeholder = '쪽'; inp.style.flex = '0 1 6em'; inp.setAttribute('aria-label', '교재 쪽(1~' + BP.deck + ')');
-      var nx = btn('다음 쪽', '', function () { setState({ slide: Math.min(BP.deck, (state.slide || 0) + 1) }); });
-      r4.appendChild(pv); r4.appendChild(inp); r4.appendChild(btn('이 쪽 보내기', '', function () { setState({ slide: Math.max(1, Math.min(BP.deck, Math.round(+inp.value) || 1)) }); })); r4.appendChild(nx);
+      var near = function (n) { return pages.reduce(function (b, p) { return Math.abs(p - n) < Math.abs(b - n) ? p : b; }, pages[0]); };
+      var step = function (d) { var i = state.slide ? pages.indexOf(near(state.slide)) : -1; setState({ slide: pages[Math.max(0, Math.min(pages.length - 1, i + d))] }); };
+      var pv = btn('앞 쪽', '', function () { step(-1); });
+      var inp = el('input', 'lp-in'); inp.type = 'number'; inp.min = pages[0]; inp.max = pages[pages.length - 1]; inp.placeholder = '쪽'; inp.style.flex = '0 1 6em'; inp.setAttribute('aria-label', '교재 쪽(' + pages[0] + '~' + pages[pages.length - 1] + ')');
+      var nx = btn('다음 쪽', '', function () { step(1); });
+      r4.appendChild(pv); r4.appendChild(inp); r4.appendChild(btn('이 쪽 보내기', '', function () { var n = Math.round(+inp.value) || pages[0], p = near(n); setState({ slide: p }, p === n ? '' : '교재에 ' + n + '쪽이 없어 가장 가까운 ' + p + '쪽을 보냈어요.'); })); r4.appendChild(nx);
       s3.appendChild(r4); C.slide = inp;
     }
     // 자료 링크: 연수 중에 덧붙이면 참가자 화면의 자료실에 바로 보임(파일은 드라이브 등에 올린 공유 주소로)

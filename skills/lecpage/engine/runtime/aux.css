@@ -61,11 +61,13 @@
 .lp-con-menu b{font-size:var(--fs-sm);font-weight:700;line-height:1.4}
 .lp-con-menu small{font-size:var(--fs-xs);line-height:1.45;color:var(--muted-foreground)}
 /* 들어가기 */
-.lp-con-login{flex:1;display:grid;place-items:center;padding:clamp(24px,7vh,88px) 16px}
+/* 상자는 위에 붙임(가운데 맞춤이면 글꼴이 늦게 와 글 높이가 바뀔 때 상자 전체가 밀림) */
+.lp-con-login{flex:1;display:grid;place-items:start center;padding:clamp(24px,7vh,88px) 16px}
 .lp-con-login-card{display:grid;gap:12px;width:min(460px,100%);padding:clamp(24px,4vw,40px);box-shadow:var(--shadow)}
 /* 강사용 화면이라는 것과 참가자 길: 열쇠 칸보다 먼저(휴대폰에서도 첫 화면에) */
 .lp-con-for{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin-bottom:6px;padding-bottom:16px;border-bottom:1px solid var(--rule-c);font-size:var(--fs-sm);font-weight:700;line-height:1.5}
 .lp-con-for .lp-btn{flex:none}
+@media (max-width:480px){.lp-con-for{flex-direction:column;align-items:flex-start}} /* 좁은 폭: 글과 단추를 늘 두 줄로(글꼴이 늦게 와 한 줄↔두 줄로 바뀌며 상자 안이 밀리지 않게) */
 .lp-con-login-mark{width:144px;height:24px;margin-bottom:4px}
 .lp-con-login-card h2{font-size:var(--fs-h2s);line-height:1.2}
 .lp-con-login-lead{color:var(--muted-foreground);font-size:var(--fs-sm);line-height:1.65}

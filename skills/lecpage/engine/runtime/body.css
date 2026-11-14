@@ -277,8 +277,13 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-gb-ck{transition:transform .4s var
 .lp-ob-b{display:grid;gap:var(--sp-2)}
 .lp-ob-b h3{font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-lg);letter-spacing:var(--display-tracking)}
 .lp-ob-b .lp-ol-d{font-size:var(--fs-sm)}
-.lp-ob > li:first-child{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary);--muted-foreground:var(--primary-foreground)}
-.lp-ob > li:first-child > *{--primary:var(--primary-foreground)}
+.lp-ob > li:first-child{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
+.lp-ob > li:first-child > *{--primary:var(--primary-foreground);--muted-foreground:var(--primary-foreground)}
+/* 어두운 화면·어두운 장면(color-scheme: dark): 진한 바탕 위 큰 원색 칸은 눈부심 → .lp-gb처럼 옅게 섞고 글자는 보통 칸과 같게 */
+@supports (color:light-dark(#000,#fff)){
+  .lp-ob > li:first-child{--ob-p:var(--primary);--ob-m:var(--muted-foreground);background:light-dark(var(--primary),color-mix(in srgb,var(--primary) 14%,var(--card)));color:light-dark(var(--primary-foreground),var(--card-foreground));border-color:light-dark(var(--primary),color-mix(in srgb,var(--primary) 45%,var(--border)))}
+  .lp-ob > li:first-child > *{--primary:light-dark(var(--primary-foreground),var(--ob-p));--muted-foreground:light-dark(var(--primary-foreground),var(--ob-m))}
+}
 @media (min-width:768px){.lp-ob > li[data-w="7"]{grid-column:span 7}.lp-ob > li[data-w="5"]{grid-column:span 5}}
 @media (max-width:600px){.lp-ob{gap:var(--sp-3)}.lp-ob > li{min-height:0;grid-template-columns:auto minmax(0,1fr);align-content:start;align-items:baseline;gap:var(--sp-3);padding:var(--sp-4) var(--sp-5)}.lp-ob-no{font-size:2rem}} /* 휴대폰: 번호를 왼쪽 작은 단으로(항목마다 칸 높이를 채우지 않음) */
 [data-card="brutal"] .lp-ob > li{box-shadow:5px 5px 0 var(--border)}
@@ -598,7 +603,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-fqi-nav a:hover,.lp-fqi-nav a[aria-current="true"]{color:var(--primary)}
 .lp-fqi-n{font-family:var(--font-mono);font-size:var(--fs-xs);font-weight:700;color:var(--primary)}
 .lp-fqi-list{display:grid;gap:var(--sp-7)}
-.lp-fqi-item{display:grid;gap:var(--sp-3);scroll-margin-top:100px}
+.lp-fqi-item{display:grid;gap:var(--sp-3);scroll-margin-top:calc(var(--lp-head,84px) + 16px)}
 .lp-fqi-item h3{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--sp-3);align-items:baseline;font-family:var(--font-display);font-weight:var(--display-weight);font-size:var(--fs-lg);line-height:1.35;letter-spacing:var(--display-tracking)}
 .lp-fqi-item h3 .lp-fqi-n{font-size:var(--fs-sm)}
 .lp-fqi-a{display:grid;gap:var(--sp-3);max-width:var(--measure);color:var(--muted-foreground)}
