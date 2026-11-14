@@ -1,23 +1,41 @@
-# 의존성 업데이트: 매주, 새 버전이 나오고 7일 지난 것만(공급망 공격 대비)
+# 의존성 업데이트: 한 달에 한 번, 새 판이 나오고 7일 지난 것만(공급망 공격 대비), 항목마다 PR 하나로 묶어서(minor·patch).
+# 메이저 판은 받지 않음: 원인을 가리기 어렵고 CI가 앱 동작을 다 보지 못하므로 사람이 하나씩 올림(분기에 한 번, docs/operations.md §7).
+# ignore는 보안 업데이트에도 적용됨(GitHub 문서): 메이저가 필요한 보안 수정은 PR 대신 Dependabot alerts와 CI의 npm audit(high)로 보임 → 사람이 올림.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /app
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
     cooldown: { default-days: 7 }
-    groups: { app: { patterns: ['*'] } }
-  - package-ecosystem: npm
-    directory: /skills/lecpage/backends/cloudflare
-    schedule: { interval: weekly }
-    cooldown: { default-days: 7 }
+    groups: { app: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore: [{ dependency-name: '*', update-types: ['version-update:semver-major'] }]
   - package-ecosystem: npm
     directory: /hosting
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
     cooldown: { default-days: 7 }
+    groups: { hosting: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore: [{ dependency-name: '*', update-types: ['version-update:semver-major'] }]
+  - package-ecosystem: npm
+    directory: /skills/lecpage/backends/cloudflare
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+    groups: { backend-cloudflare: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore: [{ dependency-name: '*', update-types: ['version-update:semver-major'] }]
+  # 저장소 맨 위: 앱 Workers Builds 배포 명령이 쓰는 wrangler(잠금 파일 판, docs/operations.md §3.2)
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+    groups: { root: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore: [{ dependency-name: '*', update-types: ['version-update:semver-major'] }]
+  # node 메이저(LTS)는 사람이 올림: Dockerfile·템플릿·CI node-version을 한 번에(해마다 10월, docs/operations.md §7). 여기서는 같은 판의 alpine 패치만
   - package-ecosystem: docker
     directory: /skills/lecpage/backends/node-server
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+    ignore: [{ dependency-name: node, update-types: ['version-update:semver-major'] }]
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
     cooldown: { default-days: 7 }
+    groups: { actions: { patterns: ['*'], update-types: [minor, patch] } }
