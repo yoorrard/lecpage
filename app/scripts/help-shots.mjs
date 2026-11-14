@@ -44,7 +44,7 @@ const browser = await playwright.chromium.launch({ args: ['--lang=ko-KR'] });
 const route = async (r) => {
   const u = r.request().url();
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
-  if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] }] });
+  if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', supportedGenerationMethods: ['generateContent'] }] }); // 무료 등급의 지금 모델(2026-11-14)
   if (u.includes(':generateContent')) return json(r, { candidates: [{ content: { parts: [{ text: JSON.stringify(EXAMPLE) }] }, finishReason: 'STOP' }] });
   return r.fulfill({ status: 204, headers: CORS }); // 그 밖의 바깥 요청은 빈 응답(막으면 접속 확인이 '이 망에서 막힘'으로 보여 화면이 달라짐)
 };

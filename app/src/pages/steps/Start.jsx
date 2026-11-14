@@ -271,7 +271,7 @@ export function StepStart({ p, update, go }) {
           {conn === null && <>
             <div class="make-way"><span><b>API 키</b> 버튼 한 번으로 만들어요. 처음에 결제 등록이 필요하고, 사이트 하나에 몇백 원쯤 들어요.</span>
               <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('key'); }}>API 키로 만들기</button></div>
-            <div class="make-way"><span><b>Gemini 무료 키</b> 돈 없이 버튼 한 번. Flash 모델이라 구성·문구가 단순할 수 있고, 하루 횟수가 정해져 있어요.</span>
+            <div class="make-way"><span><b>Gemini 무료 키</b> 돈 없이 버튼 한 번. 가장 좋은 모델은 못 써서 구성·문구가 단순할 수 있고, 하루 횟수가 정해져 있어요.</span>
               <button type="button" class="btn btn-sm" onClick={() => { makeAfter.current = true; setKeyOpen('gemini'); }}>무료 키로 만들기</button></div>
           </>}
           <AgentWay />

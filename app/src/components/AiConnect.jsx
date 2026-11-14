@@ -210,10 +210,11 @@ function useModels(ai, onChange) {
 function ModelPick({ ai, list, onChange }) {
   const cur = list.find((m) => m.id === ai.model);
   const pick = async (id) => { await setActive(ai.provider, { model: id, picked: true }); onChange?.({ ...ai, model: id }); };
-  // Gemini 키가 무료인지는 처음 만들 때 알게 됨. 그 전에는 '추천'을 붙이지 않음(무료 키에서는 Gemini 4가 안 되므로)
+  // Gemini 키가 무료인지는 처음 만들 때 알게 됨. 그 전에는 '추천'을 붙이지 않음(무료 키에서는 Gemini 4 Carbon·Argon이 안 되므로)
   const unsure = ai.provider === 'gemini' && !ai.freeTier;
-  const hint = cur && cur.tier < 2 && list.some((m) => m.rec && m.id !== cur.id) ? '가벼운 모델은 빠르고 싸지만 구성과 문구가 단순해져요.'
-    : ai.provider === 'gemini' ? (ai.freeTier ? '무료 키로 쓸 수 있는 가장 좋은 모델이에요. Gemini 4는 결제를 연결한 키만 돼요.' : '가장 좋은 모델부터 해 보고, 무료 키에서 안 되면 되는 모델로 알아서 바꿔요.')
+  const rec = list.find((m) => m.rec);
+  const hint = cur && rec && rec.id !== cur.id && cur.tier < rec.tier ? '가벼운 모델은 빠르고 싸지만 구성과 문구가 단순해져요.'
+    : ai.provider === 'gemini' ? (ai.freeTier ? '무료 키로 쓸 수 있는 모델이에요. Gemini 4 Carbon·Argon은 결제를 연결한 키만 돼요.' : '가장 좋은 모델부터 해 보고, 무료 키에서 안 되면 되는 모델로 알아서 바꿔요.')
       : cur?.free ? '무료 모델은 결과가 고르지 않아요.'
         : '추천은 품질과 값의 균형이 좋은 최신 모델이에요. 값은 사이트 하나를 만들 때의 어림이에요.';
   return (
