@@ -6,7 +6,7 @@
 //    → _redirects로 Worker 주소(/s/<id>/…)로 넘김
 import { htmlCsp, SVG_CSP, NO_FRAME_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
 import { TYPES, extOf } from './paths.js';
-import { pageHtml } from './pages.js';
+import { pageHtml, REMOVED } from './pages.js';
 
 /** Pages에 올리지 않고 Durable Object에 두는 형식(Worker가 Range까지 맞춰 내보냄) */
 export const MEDIA_EXT = new Set(['mp3', 'm4a', 'mp4', 'webm']);
@@ -48,41 +48,51 @@ User-agent: *
 Disallow: /
 `;
 
+/** Pages _headers 규칙 수 한도(공식: 100개. 넘는 규칙은 버려짐) */
+export const PAGES_HEADER_RULES = 100;
 /**
- * 사이트의 _headers. 사이트에 실제로 있는 확장자(대소문자 그대로)마다 규칙을 만듦(100개 한도 안).
+ * 사이트의 _headers 규칙 [패턴, 머리글…]을 중요한 것부터: 모든 파일(CSP·nosniff) → 강사용 화면 틀 막기 → SVG 가둠 → 나머지(같은 출처만·내려받기) → 글꼴 캐시.
+ * 사이트에 실제로 있는 확장자(대소문자 그대로, Pages 주소 맞추기는 대소문자를 가림)마다 규칙 하나. 보통 사이트는 20개 안팎이고,
+ * 확장자 대소문자 모양을 수십 가지로 늘려 100개를 넘기면 site.js가 올리기 전에 거절함(보안 규칙이 버려지지 않게)
  * @param {string[]} paths 사이트 안 경로(Pages에 올리는 것)
  * @param {{ scripts?: string[], fontsHashed?: boolean }} [o] htmlCsp에 더할 스크립트 주소, fontsHashed: assets/fonts/의 파일 이름이 모두 내용 해시(fontsHashed())
+ * @returns {[string, string[]][]}
  */
-export function headersFile(paths, { scripts = [], fontsHashed = false } = {}) {
-  const lines = [];
-  const rule = (pattern, hs) => { lines.push(pattern); for (const h of hs) lines.push(`  ${h}`); };
-  rule('/*', [
+export function headerRules(paths, { scripts = [], fontsHashed = false } = {}) {
+  const first = []; const rest = [];
+  first.push(['/*', [
     '! Access-Control-Allow-Origin',
     `Content-Security-Policy: ${htmlCsp({ scripts })}`,
     `X-Content-Type-Options: ${BASE_HEADERS['x-content-type-options']}`,
     `Referrer-Policy: ${BASE_HEADERS['referrer-policy']}`,
     `Permissions-Policy: ${BASE_HEADERS['permissions-policy']}`,
     `X-Robots-Tag: ${BASE_HEADERS['x-robots-tag']}`,
-  ]);
+  ]]);
+  // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
+  for (const f of [...NO_FRAME_PAGES].sort()) {
+    const bare = f.replace(/\.html$/, '');
+    for (const p of [`/${f}`, `/${bare}`]) first.push([p, ['X-Frame-Options: DENY', '! Content-Security-Policy', `Content-Security-Policy: ${htmlCsp({ noFrame: true, scripts })}`]]);
+  }
   const exts = new Set();
   for (const p of paths) { const name = p.slice(p.lastIndexOf('/') + 1); const dot = name.lastIndexOf('.'); if (dot > 0) exts.add(name.slice(dot + 1)); }
   for (const e of [...exts].sort()) {
     const low = e.toLowerCase(); const t = TYPES[low];
-    if (!t) continue;
+    if (!t || !/^[A-Za-z0-9]+$/.test(e)) continue;
     const hs = [];
     if (t.kind === 'svg') hs.push('! Content-Security-Policy', `Content-Security-Policy: ${SVG_CSP}`);
     if (SAME_ORIGIN_EXT.has(low)) hs.push('Cross-Origin-Resource-Policy: same-origin');
     if (t.download) hs.push('Content-Disposition: attachment');
-    if (hs.length && /^[A-Za-z0-9]+$/.test(e)) rule(`/*.${e}`, hs);
+    if (hs.length) (t.kind === 'svg' ? first : rest).push([`/*.${e}`, hs]);
   }
   // 엔진이 담은 글꼴은 이름이 내용 해시(SHA-256 앞 16자리)라 1년 캐시. 이름과 내용이 맞을 때만(site.js가 확인)
-  if (fontsHashed) rule('/assets/fonts/*', [`Cache-Control: ${IMMUTABLE}`]);
-  // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
-  for (const f of [...NO_FRAME_PAGES].sort()) {
-    const bare = f.replace(/\.html$/, '');
-    for (const p of [`/${f}`, `/${bare}`]) rule(p, ['X-Frame-Options: DENY', '! Content-Security-Policy', `Content-Security-Policy: ${htmlCsp({ noFrame: true, scripts })}`]);
-  }
-  return `${lines.join('\n')}\n`;
+  if (fontsHashed) rest.push(['/assets/fonts/*', [`Cache-Control: ${IMMUTABLE}`]]);
+  return [...first, ...rest];
+}
+/** headerRules를 _headers 글로. 규칙이 100개를 넘으면 오류(site.js가 받을 때 이미 거절하므로 여기까지 오지 않음) */
+export function headersFile(paths, o = {}) {
+  const rules = headerRules(paths, o);
+  if (rules.length > PAGES_HEADER_RULES) throw new Error(`_headers 규칙이 ${rules.length}개라 Pages 한도(${PAGES_HEADER_RULES})를 넘어요`);
+  return `${rules.map(([p, hs]) => [p, ...hs.map((h) => `  ${h}`)].join('\n')).join('\n')}\n`;
 }
 
 /** 엔진이 담은 글꼴 파일(assets/fonts/<내용 SHA-256 앞 16자리>.woff2 등)이고 이름의 해시가 실제 내용의 SHA-256과 맞는지 */
@@ -117,6 +127,8 @@ export const noFileHtml = () => pageHtml('이 사이트에 없는 페이지예�
 export const blockedHtml = (id, reportUrl) => pageHtml('잠시 가려 둔 사이트예요', ['신고가 들어와서 확인하는 동안 열리지 않게 해 두었어요.', '이 사이트를 올린 분이고 사정을 알리고 싶다면 아래 화면에서 알려 주세요.'], reportA(reportUrl, id));
 /** 지운 뒤(가장 최근 배포를 지우지 못할 때) 남기는 화면. 프로젝트의 본 배포(없는 주소)도 같은 화면 */
 export const goneHtml = (home = '') => pageHtml('이 사이트는 보관 기간이 끝났어요', ['보관 기간이 지나면 사이트와 파일이 지워져요. 주소가 맞는지도 한 번 확인해 주세요.', '다시 보려면 사이트를 만든 강사에게 새 주소를 물어봐 주세요.'], home ? `<a href="${esc(home)}">이곳은 어떤 곳인가요?</a>` : '');
+/** 강사가 내린 사이트의 Pages 주소에 남기는 화면(참가자가 '보관 기간 끝'과 헷갈리지 않게) */
+export const removedHtml = (home = '') => pageHtml(REMOVED[0], REMOVED[1], home ? `<a href="${esc(home)}">이곳은 어떤 곳인가요?</a>` : '');
 /** 안내 화면만 있는 배포의 _headers */
 export const NOTICE_HEADERS = `/*\n  ! Access-Control-Allow-Origin\n  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  X-Robots-Tag: noindex, nofollow\n  Cache-Control: no-store\n`;
 

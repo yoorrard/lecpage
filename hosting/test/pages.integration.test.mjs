@@ -24,7 +24,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
   let h;
   try {
     h = await startHost({
-      ADMIN_KEY: ADMIN, SITES_PER_HOUR: 100, SITES_PER_DAY: 1000, MAX_FILES: 80,
+      ADMIN_KEY: ADMIN, SITES_PER_HOUR: 100, SITES_PER_DAY: 1000, MAX_FILES: 80, CATALOG_URL: 'off', // 하루 점검이 바깥(lecpage.com)에 묻지 않게
       VIEW: 'pages', CF_ACCOUNT_ID: ACCOUNT, PAGES_PROJECT: 'lecpage-view', PAGES_TOKEN: TOKEN, PAGES_HOST: `127.0.0.1:${cf.port}`,
       PAGES_SITE_URL: `${cf.url}/__view/{branch}/`, CF_API_BASE: cf.api,
     });
@@ -168,6 +168,19 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     cf.state.failDeleteLatest = false;
   });
 
+  await t.test('강사가 내리면(사이트 열쇠) Pages 주소에 "강사가 사이트를 내렸어요" 안내 하나만 남김(보관 기간 끝과 나눔)', async () => {
+    const s4 = (await call(base, 'POST', '/api/sites', { json: { title: '내리기 시험' } })).body;
+    assert.equal((await deploy(base, s4, await buildSite('data-lab'))).status, 200);
+    const before = cf.deploymentsOf(`s-${s4.id}`);
+    assert.equal(before.length, 1);
+    assert.equal((await call(base, 'DELETE', `/api/sites/${s4.id}`, { key: s4.key })).status, 204);
+    const left = cf.deploymentsOf(`s-${s4.id}`);
+    assert.equal(left.length, 1, '안내 화면 하나만'); assert.notEqual(left[0].id, before[0].id, '사이트 배포는 지움');
+    const page = (await get(s4.url)).text;
+    assert.match(page, /강사가 사이트를 내렸어요/); assert.doesNotMatch(page, /보관 기간이 끝났어요/);
+    assert.match((await get(s4.altUrl)).text, /강사가 사이트를 내렸어요/, '두 번째 주소도');
+  });
+
   await t.test('예약·상태 API·긴 대기(학교망 묻기 줄이기)', async () => {
     const kst = (n) => new Date(Date.now() + 9 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
     const booking = { date: kst(5), start: '10:00', end: '12:00', people: 40, live: true, network: 'restricted' };
@@ -209,6 +222,41 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     const s2 = (await call(base, 'POST', '/api/sites', { json: {} })).body;
     const r = await call(base, 'POST', '/api/report', { json: { site: s2.url, reason: '시험 신고' } });
     assert.equal(r.status, 200, JSON.stringify(r.body));
+  });
+
+  await t.test('지우기: Pages API가 막히면 "지웠어요"(204) 대신 202 지우는 중 → 관리 목록에 남고 두 번째 주소는 닫힘 → 다시 지우면 끝(204)', async () => {
+    const s4 = (await call(base, 'POST', '/api/sites', { json: { title: '지우기 시험' } })).body;
+    assert.equal((await deploy(base, s4, await buildSite('data-lab'))).status, 200);
+    const A = { authorization: `Bearer ${ADMIN}` };
+    cf.state.tokenOk = false; // Cloudflare API가 모두 403
+    try {
+      const d1 = await call(base, 'DELETE', `/api/sites/${s4.id}`, { key: s4.key });
+      assert.equal(d1.status, 202, JSON.stringify(d1.body)); assert.equal(d1.body.state, 'wiping');
+      assert.equal(cf.deploymentsOf(`s-${s4.id}`).length, 1, 'Pages에는 아직 남음');
+      assert.equal((await get(s4.altUrl)).status, 404, '두 번째 주소는 바로 닫힘');
+      const st = await (await fetch(`${base}/api/admin/stats`, { headers: A })).json();
+      assert.equal(st.sites.wiping, 1);
+      const row = (await (await fetch(`${base}/api/admin/sites`, { headers: A })).json()).sites.find((x) => x.id === s4.id);
+      assert.ok(row && row.wiping > 0, '관리 목록에 지우는 중으로');
+      assert.equal((await call(base, 'GET', `/api/status?site=${s4.id}`)).body.site.state, 'gone', '강사 앱에는 내린 사이트');
+    } finally { cf.state.tokenOk = true; }
+    const d2 = await call(base, 'DELETE', `/api/sites/${s4.id}`, { key: s4.key });
+    assert.equal(d2.status, 204);
+    assert.equal(cf.deploymentsOf(`s-${s4.id}`).length, 1, 'Pages 배포까지 지우고 "강사가 사이트를 내렸어요" 안내 하나만 남김');
+    const list = (await (await fetch(`${base}/api/admin/sites`, { headers: A })).json()).sites;
+    assert.ok(!list.some((x) => x.id === s4.id), '목록에서도 빠짐');
+  });
+
+  await t.test('하루 점검(cron): 로컬 scheduled를 부르면 Gate가 점검하고 관리 숫자에 남김', async (st) => {
+    const r = await fetch(`${base}/cdn-cgi/local/scheduled?format=json`);
+    if (r.status === 404) return st.skip('이 wrangler 판에는 로컬 scheduled 주소가 없어요');
+    assert.equal(r.status, 200, await r.text());
+    let last = null;
+    for (let i = 0; i < 40 && !last; i++) {
+      last = (await (await fetch(`${base}/api/admin/stats`, { headers: { authorization: `Bearer ${ADMIN}` } })).json()).ops?.last;
+      if (!last) await new Promise((res) => setTimeout(res, 100));
+    }
+    assert.equal(last?.via, 'cron');
   });
 });
 

@@ -1,6 +1,6 @@
 // 프로젝트 만들기·저장·내보내기(.lecpage = 무압축 ZIP: project.json + 자산 파일)
 import { projects, blobs } from './db.js';
-import { uid } from './util.js';
+import { uid, sha256Hex } from './util.js';
 import { zipFiles } from '@engine/src/zip-write.js';
 import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, appInfoFrom, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
 
@@ -45,7 +45,8 @@ export async function deleteProject(id) { await projects.remove(id); }
 /** 프로젝트 복제(교재·그림 포함) */
 export async function duplicateProject(p0) {
   const id = uid(10);
-  const p = { ...JSON.parse(JSON.stringify(p0)), id, title: (p0.title || '이름 없는 연수') + ' (사본)', createdAt: Date.now(), deploy: {} };
+  // 사본은 새 연수: 배포 정보·지난 배포 표시·파일 지문은 따라가지 않음(새 주소·새 연수 코드)
+  const p = { ...JSON.parse(JSON.stringify(p0)), id, title: (p0.title || '이름 없는 연수') + ' (사본)', createdAt: Date.now(), deploy: {}, pastDeploy: undefined, carryPending: undefined, fileHash: undefined };
   if (p.blueprint?.meta) p.blueprint.meta.title = p.title;
   if (p.info) p.info.title = p.title;
   if (p.blueprint?.live) { const { E } = await import('./engine.js'); p.blueprint.live.code = E.randomCode(); }
@@ -56,12 +57,51 @@ export async function duplicateProject(p0) {
 }
 
 
-export async function exportProjectFile(p) {
+const OWN_LIVE = ['sheets', 'supabase', 'http'];
+/** 배포한 적이 있으면 무엇이 어디에 배포돼 있었는지(비밀 아님): 주소·배포한 곳·보관 기간. 다른 기기에서 열었을 때 보여 주려고 */
+const pastOf = (p) => (p.deploy?.lastUrl ? { url: p.deploy.lastUrl, target: p.deploy.target || '', at: p.deploy.at || 0, ...(p.deploy.target === 'lecpage' && p.deploy.lecpage?.expiresAt ? { expiresAt: p.deploy.lecpage.expiresAt, view: p.deploy.lecpage.view || '' } : {}) } : null);
+
+/**
+ * .lecpage 파일 만들기. 기본은 남에게 건네도 되는 파일: 사이트 열쇠·강사 화면 관리자 키·사이트 암호·배포 토큰은 담지 않고,
+ * 예전 주소·보관 기간(pastDeploy)만 담음. withKeys('내 다른 기기에서 이어 배포'를 켬)면 배포 정보와 참여 기능 연결·사이트 암호를 carry에 담아
+ * 다른 기기에서도 같은 주소·같은 방으로 다시 배포(연 기기에서 강사가 [이 주소에 이어서 배포]를 눌러야 씀)
+ */
+export async function exportProjectFile(p, { withKeys = false } = {}) {
   const assets = await blobs.all(p.id);
-  // 사이트 암호는 담지 않음(파일을 남에게 건네면 암호가 새어 나감). 연 뒤 배포 단계에서 다시 정하라고 알려 줌
-  const files = { 'project.json': JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project: { ...p, deploy: undefined, sitePassword: undefined } }, null, 2) };
+  let carry;
+  if (withKeys && p.deploy?.lastUrl) {
+    const live = p.blueprint?.live || {};
+    const own = OWN_LIVE.includes(live.provider) && live.url;
+    const liveAdminKey = own ? (await (await import('./ai.js')).loadKey('live-admin:' + String(live.url).replace(/\/+$/, ''))).key || '' : '';
+    carry = { deploy: p.deploy, live: { provider: live.provider || 'none', url: live.url || '', anonKey: live.anonKey || '', code: live.code || '' }, liveOk: !!p.liveOk, sitePassword: p.sitePassword || '', ...(liveAdminKey ? { liveAdminKey } : {}) };
+  }
+  const project = { ...p, deploy: undefined, sitePassword: undefined, carry: undefined, carryPending: undefined, fileHash: undefined, pastDeploy: pastOf(p) || p.pastDeploy || undefined, ...(carry ? { carry } : {}) };
+  const files = { 'project.json': JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project }, null, 2) };
   for (const [k, v] of Object.entries(assets)) files[k] = v;
   return zipFiles(files);
+}
+
+/** 파일에서 받은 예전 배포 표시(글자·숫자만) */
+function cleanPast(x) {
+  if (!x || typeof x !== 'object' || !/^https?:\/\/\S+$/.test(String(x.url || ''))) return undefined;
+  return { url: String(x.url).slice(0, 300), target: String(x.target || '').slice(0, 30), at: Number(x.at) || 0, expiresAt: Number(x.expiresAt) || 0, view: x.view === 'pages' ? 'pages' : '' };
+}
+/** 파일에서 받은 배포 정보(열쇠 포함): 모양만 확인해 두고, 쓰는 것은 강사가 배포하기 화면에서 [이 주소에 이어서 배포]를 누를 때 */
+function cleanCarry(c) {
+  if (!c || typeof c !== 'object' || !c.deploy || typeof c.deploy !== 'object' || !/^https?:\/\/\S+$/.test(String(c.deploy.lastUrl || ''))) return undefined;
+  const l = c.live && typeof c.live === 'object' ? c.live : {};
+  return { deploy: JSON.parse(JSON.stringify(c.deploy)), live: { provider: [...OWN_LIVE, 'local', 'none'].includes(l.provider) ? l.provider : 'none', url: String(l.url || '').slice(0, 300), anonKey: String(l.anonKey || '').slice(0, 400), code: String(l.code || '').slice(0, 40) },
+    liveOk: !!c.liveOk, sitePassword: String(c.sitePassword || '').slice(0, 200), liveAdminKey: String(c.liveAdminKey || '').slice(0, 200) };
+}
+/**
+ * 배포하기 화면의 [이 주소에 이어서 배포]: 파일에 담아 온 배포 정보를 이 연수에 씀(같은 주소·같은 참여 기능 방·같은 관리자 키).
+ * @returns {object} update()에 넘길 patch
+ */
+export function carryPatch(cur) {
+  const c = cur.carryPending; if (!c) return {};
+  if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => m.saveKey('live-admin:' + c.live.url.replace(/\/+$/, ''), c.liveAdminKey, true)).catch(() => { });
+  const bp = cur.blueprint ? { ...cur.blueprint, live: { ...(cur.blueprint.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(cur.blueprint.meta || {}), siteUrl: c.deploy.lastUrl } } : cur.blueprint;
+  return { deploy: c.deploy, blueprint: bp, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
 }
 
 /** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
@@ -74,28 +114,40 @@ export const isSavedFile = (f) => /\.lecpage$/i.test(f?.name || '');
 export async function openSavedFile(file) {
   const p = await importProjectFile(file);
   location.hash = `#/p/${p.id}/${p.stage || 1}`;
-  return p.origin === 'skill' ? 'AI 에이전트에서 만든 연수를 열었어요.' : '저장한 파일을 열었어요. 참여 기능과 배포할 곳은 다시 연결해 주세요.';
+  if (p.reopened) return '이미 연 파일이라 그때 연 연수를 다시 열었어요. 하나 더 만들려면 처음 화면에서 [복제]를 눌러요.';
+  if (p.origin === 'skill') return 'AI 에이전트에서 만든 연수를 열었어요.';
+  if (p.carryPending) return '저장한 파일을 열었어요. 배포하기에서 같은 주소에 이어서 배포할 수 있어요.';
+  if (p.pastDeploy) return '저장한 파일을 열었어요. 이 파일에는 배포 열쇠가 없어서, 여기서 배포하면 새 주소가 생겨요.';
+  return '저장한 파일을 열었어요.';
 }
 export const OPEN_FAIL = '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.';
 
 export async function importProjectFile(file) {
   const buf = await file.arrayBuffer();
-  let proj, assets = {};
+  let proj, assets = {}, text;
   if (/\.json$/i.test(file.name)) {
-    const j = JSON.parse(new TextDecoder().decode(buf));
+    text = new TextDecoder().decode(buf);
+    const j = JSON.parse(text);
     if (j.format === PROJECT_FORMAT) proj = j.project;
     // 설계도만 받으면 연수 정보를 설계도에서 채움(연수 정보를 고칠 때 빈 칸이 설계도의 날짜·장소를 지우지 않게)
     else { proj = { title: j.meta?.title || '', files: [], info: appInfoFrom(j && typeof j === 'object' ? j : {}), blueprint: j }; }
   } else {
     const files = readStoredZip(buf);
-    const pj = files['project.json']; if (!pj) throw bad('project.json이 없는 파일이에요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.');
-    const j = JSON.parse(new TextDecoder().decode(pj)); proj = j.project;
+    const pj = files['project.json']; if (!pj) throw bad('lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 만든 .lecpage 파일을 넣어 주세요.');
+    text = new TextDecoder().decode(pj);
+    const j = JSON.parse(text); proj = j.project;
     for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && isAllowedAsset(k)) assets[k] = v;
   }
+  // 같은 파일을 두 번 열면 같은 이름 연수가 둘 생기지 않게 그때 연 연수를 다시 엶(따로 하나 더 쓰려면 [복제])
+  const fileHash = await sha256Hex(text).catch(() => '');
+  const same = fileHash && (await projects.all()).find((x) => x.fileHash === fileHash);
+  if (same) return { ...same, reopened: true };
   // 남이 준 파일: 실시간 연결·QR 주소는 다시 정하게 비우고, 자료는 그림·문서만 받음
   const { sanitizeImported } = await import('./blueprint.js');
   const id = uid(10);
-  const p = { ...proj, id, createdAt: Date.now(), deploy: {}, stage: proj?.blueprint ? 2 : 1, imported: true };
+  // 배포 정보: 열쇠를 담은 파일(carry)이어도 바로 쓰지 않고 배포하기 화면에서 강사가 고르게(남이 준 파일의 열쇠로 남의 사이트에 배포하지 않게)
+  const carry = cleanCarry(proj?.carry);
+  const p = { ...proj, id, createdAt: Date.now(), deploy: {}, stage: proj?.blueprint ? 2 : 1, imported: true, fileHash, carry: undefined, carryPending: carry, pastDeploy: carry ? cleanPast({ ...pastOf(carry), ...(proj?.pastDeploy || {}) }) : cleanPast(proj?.pastDeploy) };
   p.blueprint = sanitizeImported(p.blueprint);
   await projects.put(p);
   for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);

@@ -30,6 +30,7 @@
 <main>
   <p class="flash" role="status" aria-live="polite" data-flash hidden></p>
   <p class="paused-band" data-paused hidden></p>
+  <div class="ops" data-ops></div>
 
   <section id="today" aria-labelledby="h-today">
     <h2 id="h-today">오늘 <small class="muted" data-today-date></small></h2>
@@ -38,6 +39,7 @@
       <li>Cloudflare 대시보드에서 Workers Paid(월 $5)를 구독해요.</li>
       <li><code>hosting/wrangler.jsonc</code>와 <code>wrangler.admin.jsonc</code>의 <code>vars</code>에 <code>"PLAN": "paid"</code>를 넣어 커밋해요. 대시보드에 적은 변수는 다음 배포 때 지워져요.</li>
       <li>main에 push하면 Workers Builds가 다시 배포해요. 관리 Worker를 따로 연결하지 않았으면 <code>npm run deploy:admin</code>도 해요.</li>
+      <li>대시보드 <b>Billing → Spend Management</b>에서 Workers와 Durable Objects에 지출 한도(예: 각 $10)를 걸어요. 앱(lecpage.com)과 Pages 사이트는 정적이라 한도에 닿아도 열리고, 바로 배포·참여 기능만 멈춰요. 서버도 하루 예산(유료 기본 100만)에서 새 일을 멈춰요.</li>
     </ol>
     <div class="tiles" data-tiles></div>
     <h3 class="sub">이번 달 추세와 비용</h3>

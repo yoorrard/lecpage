@@ -236,7 +236,9 @@ export function forecast(days, { plan = 'free', budget = FREE.workerReq, storage
     action = 'pause_new';
     text = `오늘 새 사이트가 ${newToday}개로 평소(하루 ${Math.round(avgNew)}개)보다 크게 몰렸어요. 큰 연수가 아니라면 [새 배포 멈추기]로 잠시 멈추고 사이트 목록·신고를 확인하세요. 이미 배포한 사이트는 그대로 열려요.`;
   } else if (plan === 'paid') {
-    text = `유료 요금제예요. 지난 7일 추세로 이번 달 약 ${usd}(기본 $5 포함). 하루 한도로 멈추지 않아요.`;
+    text = budget
+      ? `유료 요금제예요. 지난 7일 추세로 이번 달 약 ${usd}(기본 $5 포함). 비용 상한으로 하루 예산 ${budget.toLocaleString('en-US')}의 ${Math.round(newWorkShare * 100)}%부터 새 사이트·새 방은 강사 계정으로 넘겨요(가장 많은 날 ${pct}%).`
+      : `유료 요금제예요. 지난 7일 추세로 이번 달 약 ${usd}(기본 $5 포함). 하루 예산을 끈 상태라 Cloudflare 지출 한도만 비용을 막아요.`;
     if (capHits >= 2) { action = 'raise_caps'; text = `최근 7일 중 ${capHits}일이 하루 새 사이트 상한(${dailySiteCap})에 닿았어요. DAILY_SITE_CAP을 올려도 비용은 거의 그대로예요(이번 달 약 ${usd}).`; }
   } else if (busyDays >= 2 || (toStop != null && toStop <= 7)) {
     action = 'upgrade';
