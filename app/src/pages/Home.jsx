@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mascot } from '../components/Mascot.jsx';
 import { projects, storageKind, STORAGE_MSG } from '../lib/db.js';
 import { newProject, setPendingFiles, isSavedFile, stageOf } from '../lib/project.js';
-import { openSaved as openSavedOnce, openFailMessage } from '../lib/open-saved.js';
 import { toast } from '../lib/util.js';
 import { HeroFold } from '../landing/HeroFold.jsx';
 import '../styles/landing.css';
@@ -89,8 +88,10 @@ export function Home() {
   const pick = () => pickRef.current?.click();
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function openSaved(f) {
-    try { toast(await openSavedOnce(f)); }
-    catch (err) { toast(openFailMessage(err)); }
+    const m = await import('../lib/open-saved.js').catch(() => null); // 파일을 열 때만 받음(첫 화면 묶음을 가볍게)
+    if (!m) { toast('파일 여는 도구를 받지 못했어요. 인터넷 연결을 확인하고 새로 고침해 주세요.'); return; }
+    try { toast(await m.openSaved(f)); }
+    catch (err) { toast(m.openFailMessage(err)); }
   }
   // 다시 온 강사: 가장 최근에 고친 연수로 바로 이어 가는 단추(첫 화면 단추 줄, '먼저 체험해 보기' 자리). '내 연수' 목록은 아래 그대로
   const recent = list?.[0];

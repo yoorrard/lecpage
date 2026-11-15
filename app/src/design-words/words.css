@@ -130,6 +130,6 @@
 .mini-site iframe{transition:transform .6s ease-out}
 @media (prefers-reduced-motion:no-preference){.mini-site.is-tour iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}}
 .word-card:has(.word-open:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
-.word-open.word-name{display:block;text-align:left}
+.word-open.word-name{display:block;text-align:left;min-height:24px}
 .dict-now{display:grid;gap:10px;align-content:start;grid-template-columns:minmax(0,1fr)}
 .dict-now .mini-site{box-shadow:var(--shadow)}

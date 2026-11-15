@@ -165,8 +165,8 @@ export function Gallery({ tab: tab0 }) {
   }
   const sentence = sentenceOf(ids);
   return (
-    <div class="stack gallery">
-      <div class="step-head"><div class="step-head-t"><h1>디자인 둘러보기</h1><p>lecpage가 쓰는 디자인 낱말 {words.length}개를 실제 화면으로 봐요. 담은 낱말은 AI로 만들 때 요청 사항이 되고, 만든 연수에는 바로 적용돼요.</p></div></div>
+    // 머리(제목·안내)는 main.jsx가 이 조각 밖에서 먼저 그려 둠(GalleryHead): 엔진을 받는 동안에도 보이고, 받은 뒤에도 같은 글이 그대로 남음
+    <div class="stack">
 
       <div class="dict-intro">
         <div class="dict-say">

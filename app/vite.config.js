@@ -118,10 +118,16 @@ Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOT
 // 첫 화면이 엔진 전체(약 370KB)를 받지 않게 하려는 것. 쓰는 곳: src/landing/facts.js (import facts from 'virtual:lp-facts')
 function landingFacts() {
   const id = 'virtual:lp-facts', rid = '\0' + id;
+  const wid = 'virtual:lp-words', wrid = '\0' + wid; // 둘러보기 낱말 수만(첫 화면 묶음에 들어가므로 따로 작게)
   return {
     name: 'lecpage-landing-facts',
-    resolveId: (s) => (s === id ? rid : null),
+    resolveId: (s) => (s === id ? rid : s === wid ? wrid : null),
     async load(s) {
+      if (s === wrid) {
+        // 디자인 둘러보기의 낱말 수(엔진을 받기 전에 머리를 먼저 그릴 때: src/pages/GalleryHead.jsx)
+        const W = await import(pathToFileURL(here('src/design-words/words.js')).href);
+        return `export default ${W.allWords().filter((w) => !w.off).length};`;
+      }
       if (s !== rid) return null;
       const E = await import(pathToFileURL(here('../skills/lecpage/engine/src/index.js')).href);
       let show = [];
@@ -191,10 +197,33 @@ function pdfjsAssets() {
   };
 }
 
+// 첫 화면 그림 미리 받기(index.html의 link rel=preload)를 첫 화면(#/)으로 들어올 때만: 둘러보기·연수·도움말 주소로 바로 오면
+// 쓰지 않을 그림을 받고 콘솔에 '쓰지 않은 preload' 경고가 남던 것(점검 2026-11 L7). 빌드가 그림 이름(해시)을 넣은 뒤 작은 인라인 스크립트로 바꿈
+function homeOnlyPreload() {
+  return {
+    name: 'lecpage-home-only-preload',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const links = [];
+        const out = html.replace(/<link rel="preload" as="image"[^>]*>\n?/g, (tag) => {
+          const at = (k) => (new RegExp(`${k}="([^"]*)"`).exec(tag) || [])[1] || '';
+          links.push([at('href'), at('media'), at('fetchpriority')]);
+          return '';
+        });
+        if (!links.length) return html;
+        const js = `(function(){if(location.hash&&!/^#\\/?$/.test(location.hash))return;${JSON.stringify(links)}.forEach(function(x){var l=document.createElement('link');l.rel='preload';l.as='image';l.type='image/webp';l.href=x[0];if(x[1])l.media=x[1];if(x[2])l.setAttribute('fetchpriority',x[2]);document.head.appendChild(l);});})();`;
+        return out.replace('</head>', `<script>${js}</script>\n</head>`);
+      },
+    },
+  };
+}
+
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt(), landingFacts(), swWarm(), pdfjsAssets()],
+  plugins: [preact(), licensesTxt(), landingFacts(), swWarm(), pdfjsAssets(), homeOnlyPreload()],
   resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },

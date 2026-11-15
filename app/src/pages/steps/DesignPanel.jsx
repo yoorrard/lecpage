@@ -46,7 +46,15 @@ const koWord = (w) => MOOD_KO[w] || E.TOPIC_LABELS?.[w] || w;
 /** "분위기(tech, futuristic)" → "분위기(테크·미래적)" */
 const whyKo = (x) => String(x).replace('사이트 유형', '연수 유형').replace(/\(([^)]*)\)/, (m, inner) => '(' + inner.split(/,\s*/).map(koWord).join('·') + ')');
 
-export function DesignPanel({ p, update, onSay }) {
+/** 디자인 탭: 누르면 머리만 먼저 그리고(누름 반응을 빠르게), 디자인 카드·미리 그림은 그린 다음 틀에(CPU가 느린 기기에서 탭 전환이 굳지 않게) */
+export function DesignPanel(props) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { let t = 0; const id = requestAnimationFrame(() => { t = setTimeout(() => setReady(true), 0); }); return () => { cancelAnimationFrame(id); clearTimeout(t); }; }, []);
+  if (ready) return <DesignPanelBody {...props} />;
+  return <div class="stack" aria-busy="true"><section class="trio"><div class="trio-head"><h2 class="h-sub">느낌이 다른 세 안</h2></div><div class="thumbs trio-thumbs design-wait" /></section></div>;
+}
+
+function DesignPanelBody({ p, update, onSay }) {
   const bp = p.blueprint;
   const d = bp.design || {};
   const concept = bp.concept || E.deriveConcept({ title: bp.meta?.title, subtitle: bp.meta?.subtitle, topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind });

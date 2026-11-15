@@ -7,6 +7,8 @@ import { reach } from '../lib/netcheck.js';
 
 /** 키처럼 생긴 글인지(한 덩어리, 20자 이상). 처음 보는 모양의 키도 고른 회사 키로 확인해 볼 수 있게 */
 const looksLikeKey = (s) => /^[\w.-]{20,300}$/.test(s);
+/** 붙여 넣은 키 다듬기: 앞뒤 빈칸·따옴표, 문서에서 함께 복사한 'Bearer '·'Authorization:'·'x-api-key:'·'KEY=' 머리는 뗌 */
+const cleanKey = (s) => String(s || '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^(?:authorization\s*:\s*)?(?:bearer\s+)?/i, '').replace(/^(?:x-(?:goog-)?api-key|[A-Z_]*API_KEY)\s*[:=]\s*/i, '').replace(/^["'`]+|["'`]+$/g, '').trim();
 const NO_COPY = '키 옆의 복사 버튼을 누르고 돌아와 다시 눌러 주세요.';
 
 /**
@@ -91,7 +93,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
 
   /** 붙여 넣은 글이 키로 보이면 바로 연결(버튼을 한 번 덜 누르게). 키가 아닌 글은 칸에 남기지 않음 */
   function take(text) {
-    const k = String(text || '').trim();
+    const k = cleanKey(text);
     if (!k) { setErr({ title: '복사한 것이 없어요.', body: NO_COPY }); return; }
     if (detectProvider(k)) { setKey(k); connect(k); return; }
     if (!looksLikeKey(k)) { setErr({ title: '복사한 글이 키가 아니에요.', body: NO_COPY }); return; }
@@ -103,7 +105,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
   }
 
   async function connect(k = key) {
-    k = String(k || '').trim();
+    k = cleanKey(k);
     const prov = detectProvider(k) || (looksLikeKey(k) ? tab : null);
     if (!prov) { setErr({ title: '키가 아닌 것 같아요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요.' }); return; }
     setErr(null); setBusy(true);
@@ -164,8 +166,8 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
                 <button ref={pasteRef} type="button" class={`btn btn-primary btn-lg${back && !key && !busy ? ' nudge' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={() => (key ? connect() : pasteKey())}>{busy ? '확인하는 중…' : key ? '연결' : '붙여넣기'}</button>
               </div>
               <input ref={inputRef} class="input key-input" type="password" aria-label="API 키" value={key} placeholder="또는 여기에 직접 붙여넣기" autoComplete="off" spellcheck={false} data-1p-ignore data-lpignore="true" data-form-type="other"
-                onInput={(e) => { setKey(e.target.value.trim()); setErr(null); }}
-                onPaste={(e) => { const v = e.clipboardData?.getData('text'); if (v && detectProvider(v.trim())) { e.preventDefault(); take(v); } }}
+                onInput={(e) => { setKey(cleanKey(e.target.value)); setErr(null); }}
+                onPaste={(e) => { const v = e.clipboardData?.getData('text'); if (v && detectProvider(cleanKey(v))) { e.preventDefault(); take(v); } }}
                 onKeyDown={(e) => e.key === 'Enter' && key && !busy && connect()} />
               <label class="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>이 기기에서 기억하기 <span class="small muted">공용 PC에서는 끄세요.</span></span></label>
             </div>

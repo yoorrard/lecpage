@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { buildSite } from '../lib/engine.js';
+import { noAssets } from '../lib/no-assets.js';
 import { staticHtml, useLive, LiveLayer } from '../design-words/MiniSite.jsx';
 
 /**
@@ -30,7 +31,7 @@ export function SiteThumb({ bp, presetId, pressed, live = false }) {
     const t = setTimeout(async () => {
       const design = pressed ? { ...d, preset: presetId, motion: 0 } : { ...d, preset: presetId, motion: 0, palette: '', accent: '', fontPair: '', graphic: undefined, signature: '', effects: {} };
       const b = { ...bp, design, live: { ...(bp.live || {}), provider: 'none', features: [] } };
-      try { const r = await buildSite(b, {}); if (!off && !r.errors?.length) setHtml(staticHtml(r.files)); } catch { }
+      try { const r = await buildSite(noAssets(b), {}); if (!off && !r.errors?.length) setHtml(staticHtml(r.files)); } catch { }
     }, 120);
     return () => { off = true; clearTimeout(t); };
   }, [vis, key]);

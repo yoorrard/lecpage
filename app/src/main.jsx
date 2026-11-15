@@ -8,6 +8,8 @@ import { toast } from './lib/util.js';
 import { hasPendingFiles } from './lib/project.js';
 import { storageBlocked, STORAGE_MSG } from './lib/db.js';
 import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } from './lib/fresh.jsx';
+import { GalleryHead } from './pages/GalleryHead.jsx';
+import WORDS from 'virtual:lp-words';
 
 // 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임)
 const LOADERS = {
@@ -79,7 +81,8 @@ function App() {
   // key: 화면이 바뀔 때 이전 화면 컴포넌트가 새 화면의 값을 받지 않게
   if (route === 'p' && a) page = <Lazy key="project" name="project" id={a} step={Number(b) || 0} />;
   else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
-  else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" tab={a} />;
+  // 둘러보기 머리는 조각 밖에서 바로(엔진 묶음 약 480KB를 기다리지 않고 첫 글이 뜸. 조각이 오면 그 아래만 채움)
+  else if (route === 'gallery') page = <div key="gallery" class="stack gallery"><GalleryHead count={WORDS} /><Lazy name="gallery" tab={a} /></div>;
   else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
   else if (route === 'demo') page = <Lazy key="demo" name="demo" />;
   else page = <Home />;
@@ -124,9 +127,10 @@ addEventListener('vite:preloadError', (e) => { if (isChunkError(e.payload)) chun
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => { });
-    // 첫 화면이 뜬 뒤 한가할 때 만들기 화면을 미리 받아 둠(다음 화면이 바로 열림). 데이터 절약 모드면 생략.
+    // 첫 화면(#/)으로 들어왔으면 한가할 때 만들기 화면을 미리 받아 둠(다음 화면이 바로 열림). 데이터 절약 모드면 생략.
+    // 둘러보기·체험·도움말로 바로 온 경우는 받지 않음(그 화면이 쓸 망·CPU를 나눠 쓰지 않게. 점검 2026-11 M6·M7)
     // 오프라인용 저장은 여기서 하지 않음(첫 방문 랜딩에서 전체 캐시 금지 → 연수 화면에 들어갈 때 warmOffline)
-    if (navigator.connection?.saveData) return;
+    if (navigator.connection?.saveData || !/^#?\/?$/.test(location.hash)) return;
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 2500));
     idle(() => { LOADERS.project().then(() => import('./lib/engine.js')).then((m) => m.loadRuntime()).catch(() => { }); });
   });
