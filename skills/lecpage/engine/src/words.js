@@ -12,8 +12,8 @@ export const josa = (w, withB, without) => `${w}${batchim(w) ? withB : without}`
 
 const T = {
   teacher: { goals: '연수 목표', deck: '연수 교재', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개', who: '강사', code: '연수 코드' },
-  student: { goals: '수업 목표', deck: '수업 자료', materials: '수업 자료', followup: '수업 후 안내', instructor: '선생님 소개', who: '선생님', code: '참여 코드' },
-  event: { goals: '오늘 다룰 내용', deck: '발표 자료', materials: '자료', followup: '', instructor: '발표자 소개', who: '발표', code: '참여 코드' },
+  student: { goals: '수업 목표', deck: '수업 자료', materials: '수업 자료', followup: '수업 후 안내', instructor: '선생님 소개', who: '선생님', code: '수업 코드' },
+  event: { goals: '오늘 다룰 내용', deck: '발표 자료', materials: '자료', followup: '', instructor: '발표자 소개', who: '발표', code: '' },
 };
 /** 엔진이 예전부터 칸 제목 기본값으로 적던 말(설계도에 이 말이 그대로 있으면 대상에 맞는 말로 바꿔 그림) */
 export const TEACHER_DEFAULTS = { goals: '연수 목표', deck: '연수 교재', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개' };
@@ -31,6 +31,7 @@ export function wordsFor(bp) {
   return {
     kind, ev, ...t,
     followup: t.followup || `${ev} 후 안내`,
+    code: t.code || `${ev} 코드`, // 용어 통일(docs/writing.md): '연수 코드'와 같은 꼴(참여·입장 코드라고 하지 않음)
     site: `${ev} 사이트`,
     ended: `끝난 ${ev}`,
     endedOn: (day) => `${day}에 끝난 ${josa(ev, '이에요', '예요')}.`,

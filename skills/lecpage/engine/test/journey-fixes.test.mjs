@@ -176,18 +176,18 @@ describe('skill H3: 교재에 없는 사실을 넣지 않음', () => {
 describe('M5 대상에 맞는 낱말', () => {
   const kinds = (kind, title) => build({ meta: { title, date: '2026-11-26', admin: { kind } }, live: { provider: 'local', features: ['qa', 'attendance'] }, instructors: [{ name: '김하늘' }],
     sections: [{ type: 'hero' }, { type: 'goals', title: '연수 목표', items: ['순서도 기호를 안다'] }, { type: 'attendance' }, { type: 'followup', nav: '연수 후', items: [{ title: '다시 보기', url: 'https://youtu.be/x' }] }, { type: 'instructor', nav: '강사', title: '강사 소개' }] });
-  test('학생 수업: 수업 목표·참여 코드·선생님, 끝나면 "끝난 수업"', () => {
+  test('학생 수업: 수업 목표·수업 코드·선생님, 끝나면 "끝난 수업"', () => {
     const r = kinds('student', '중1 정보: 알고리즘으로 생각하기');
     const h = r.files['index.html'];
-    for (const s of ['수업 목표', '선생님 소개', '수업 후 안내', '참여 코드', '수업을 시작할 때와 마칠 때', '끝난 수업이라']) assert.ok(h.includes(s), s);
+    for (const s of ['수업 목표', '선생님 소개', '수업 후 안내', '수업 코드', '수업을 시작할 때와 마칠 때', '끝난 수업이라']) assert.ok(h.includes(s), s);
     for (const s of ['연수 목표', '강사 소개', '연수 코드', '연수를 시작할 때']) assert.ok(!h.includes(s), s);
     assert.equal(data(h).words.ended, '끝난 수업');
-    assert.ok(r.files['poster.html'].includes('참여 코드') && !r.files['poster.html'].includes('연수 코드'));
-    assert.ok(r.files['screen.html'].includes('참여 코드'));
+    assert.ok(r.files['poster.html'].includes('수업 코드') && !r.files['poster.html'].includes('연수 코드'));
+    assert.ok(r.files['screen.html'].includes('수업 코드'));
   });
   test('학부모 설명회: 설명회 낱말, 교사 연수는 그대로 "연수"', () => {
     const h = kinds('conference', '신입생 학부모 설명회').files['index.html'];
-    for (const s of ['오늘 다룰 내용', '발표자 소개', '설명회 후 안내', '참여 코드']) assert.ok(h.includes(s), s);
+    for (const s of ['오늘 다룰 내용', '발표자 소개', '설명회 후 안내', '설명회 코드']) assert.ok(h.includes(s), s);
     const t = kinds('official', '직무연수').files['index.html'];
     for (const s of ['연수 목표', '강사 소개', '연수 코드']) assert.ok(t.includes(s), s);
   });
