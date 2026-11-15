@@ -1,6 +1,7 @@
 # lecpage 웹앱 운영 안내 (운영자용)
 
-lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준일 2026-11-14. 운영자 유영재, 문의 hello@lecpage.com.
+lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준일 2026-11-15. 운영자 유영재, 문의 hello@lecpage.com.
+**원칙: 알림이 오지 않으면 할 일 없음.** 바로 배포 서버의 하루 점검(§10)이 놓치기 쉬운 일을 웹훅 한 통으로 모아 알리고, 월요일마다 '주간 점검'이 오면 알림 길도 살아 있다는 뜻입니다. 장애 때는 §13, 대시보드에서만 되는 일은 §14.
 근거: [2026-11 점검 결정 기록](research/2026-11-review.md) · [호스팅 조사](research/hosting.md) · [앱 운영 조사](research/app-operations.md).
 
 ## 0. 지금 켜진 것
@@ -13,7 +14,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 웹앱 예비 주소(GitHub Pages) | https://yoorrard.github.io/lecpage/ | 자동: Actions `pages.yml` | 0원 |
 | 바로 배포 서버(Worker `lecpage-sites`) | https://lecpage-sites.lecpage.workers.dev | 자동: Workers Builds(root `hosting`) | 0원(무료 요금제, `PLAN` free) |
 | 바로 배포 사이트 보기(Pages `lecpage-view`) | `https://s-<id>.lecpage-view.pages.dev` | 서버가 배포마다 올림. 마지막 배포 뒤 60일 보관 | 0원 |
-| 관리 화면(Worker `lecpage-admin`) | https://lecpage-admin.lecpage.workers.dev/admin/ | `npm run setup`이 배포(바꿀 때 `npm run deploy:admin`). Cloudflare Access, 메일 일회용 번호 | 0원(Zero Trust Free) |
+| 관리 화면(Worker `lecpage-admin`) | https://lecpage-admin.lecpage.workers.dev/admin/ | `npm run setup`이 배포. 자동 배포는 Workers Builds 연결 한 번(§14), 그 전에는 바꿀 때 `npm run deploy:admin`. Cloudflare Access, 메일 일회용 번호 | 0원(Zero Trust Free) |
 | 도메인 `lecpage.com` | Cloudflare Registrar | 자동 갱신 | 연 $11.17 |
 | 문의 메일 `hello@lecpage.com` | Email Routing → 운영자 Gmail | — | 0원 |
 
@@ -63,8 +64,8 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 칸 | 값 |
 |---|---|
 | Project / Worker name | `lecpage` (`wrangler.jsonc`의 `name`과 같아야 함) |
-| Build command | `npm --prefix app ci && npm --prefix app run build` |
-| Deploy command | `npx wrangler@4.151.3 deploy` |
+| Build command | `npm ci && npm --prefix app ci && npm --prefix app run build` |
+| Deploy command | `npx wrangler deploy` (맨 위 `package.json`·`package-lock.json`에 고정한 wrangler 판을 씀. Dependabot이 판 올림·보안 수정을 챙김) |
 | Root directory | 비움(저장소 맨 위) |
 | 빌드 변수(선택) | `NODE_VERSION=22` (기본 이미지는 Node 24) |
 
@@ -122,12 +123,17 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 ## 7. 정기 할 일
 
-| 주기 | 할 일 |
+정해진 날에 들여다볼 곳을 줄이고, 알림이 오는 일만 합니다. 알림은 모두 같은 웹훅(바로 배포 서버의 `ALERT_WEBHOOK`, 없으면 `REPORT_WEBHOOK`)과 GitHub 알림 메일로 옵니다.
+
+| 언제 | 할 일 |
 |---|---|
-| 매일 | 신고 알림(웹훅) 확인 → 관리 화면 **신고**에서 가리거나(임시조치) 지우고 [처리함]. 권리 침해 신고는 지체 없이 |
-| 매주 | GitHub 이슈 '[자동] AI 정보 점검 필요'가 열려 있으면 §12.1대로 확인 · 가린 사이트는 가린 날부터 30일 안에 풀거나 지우기 · 관리 화면 맨 위 '권하는 행동'(유료 전환·상한)과 오류(5xx) · GitHub 이슈(진단 정보에 참가자 개인정보·교재를 붙이지 않게) · Dependabot PR(lockfile 기준, pdf.js는 보안 수정 판 이상) |
-| 매달 | 답을 마친 지 1년 지난 문의 메일을 메일함·휴지통에서 지우기(처리방침 1·7번) · Cloudflare API 토큰 목록에서 다 쓴 토큰 지우기 |
-| 매년 | `lecpage.com` 자동 갱신 켜짐과 결제 수단 만료일(갱신일보다 뒤) · 2단계 인증 복구 코드 · [호스팅 조사](research/hosting.md)의 한도·약관 다시 보기(6개월마다면 더 좋음) |
+| 신고 알림('신고 #N')이 오면 | 관리 화면 **신고**에서 내용을 보고 가리거나(임시조치) 지우고 [처리함]. 권리 침해 신고는 지체 없이. 24시간 안에 처리하지 않으면 하루 점검이 날마다 다시 알림 |
+| 하루 점검 '확인할 일'이 오면(오전 9시쯤) | 적힌 일만: 처리 안 된 신고 · 가린 지 25일 넘은 사이트(30일 안에 풀거나 지우기) · 지우지 못한 사이트(§13 '지우는 중') · AI 정보 파일 묵음(§12) |
+| 월요일 오전 9시쯤 | '주간 점검' 한 줄이 왔는지만 봄. 안 왔으면 관리 화면 맨 위(마지막 점검·웹훅 결과)와 §13 '웹훅이 오지 않음' |
+| GitHub 알림 메일이 오면 | '[자동] AI 정보 점검 필요' 이슈는 §12.1 · Dependabot PR(한 달에 한 번, 항목마다 minor·patch 묶음 하나)은 CI(시험·문구 검사·앱 짧은 흐름·audit)가 통과하면 병합 · CI 실패 메일은 그 커밋을 고침 |
+| 분기에 한 번 | 메이저 판(Dependabot이 일부러 올리지 않음): `npm outdated --prefix app`으로 보고 하나씩 올려 `npm --prefix app run build`·`node app/scripts/smoke.mjs`·e2e로 확인. pdf.js는 보안 수정 판 이상 |
+| 매달 | 답을 마친 지 1년 지난 문의 메일을 메일함·휴지통에서 지우기(처리방침 1·7번. Gmail 필터 `older_than:1y`로 찾으면 빠름) · Cloudflare API 토큰 목록에서 다 쓴 토큰 지우기 |
+| 매년 10월 | Node LTS 올리기(CI·워크플로 `node-version`, Workers Builds `NODE_VERSION`, `skills/lecpage/backends/node-server/Dockerfile`·`templates/deploy/server/`의 `node:<판>-alpine`을 한 번에. Node 22는 2027-04-30 수명 끝) · `app/public/.well-known/security.txt`와 `hosting/public/.well-known/security.txt`의 `Expires`를 1년 뒤로 · `lecpage.com` 자동 갱신과 결제 수단 만료일 · 2단계 인증 복구 코드 · [호스팅 조사](research/hosting.md)의 한도·약관(값이 바뀌면 `hosting/src/config.js`·`capacity.js`) |
 
 ## 8. 비용
 
@@ -158,7 +164,8 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 | 앱에 보이는 곳 | 운영자 주소(lecpage.com·www·예비 주소)에서 연 앱은 빌드 변수 없이 운영 서버를 씀([`app/src/lib/publish-api.js`](../app/src/lib/publish-api.js)). 다른 주소·포크는 `VITE_PUBLISH_API`를 넣어야 보임 |
 | 맡는 것 | 사이트 파일(Pages, 사이트마다 `s-<id>` 주소)과 딸린 실시간 방(별명·질문·보드 파일). **마지막 배포 뒤 60일** 보관(방문으로 늘지 않음), 끝나면 그 주소에 '보관 기간이 끝났어요' 안내만 남김. 방만 빼려면 `LIVE=off` |
 | 운영자 책임 | §1의 "서버 없음"이 이 범위에서 바뀜: 신고 창구(정보통신망법 임시조치, 저작권법 제102·103조), 참여 기록 수탁자(처리방침 9번), 기간 안에서만 보관 |
-| 요금제 | `PLAN` free: 하루 몫 45%부터 연수 날짜가 14일 안인 것만, 60%부터 새 사이트는 같은 파일 그대로 강사 계정으로. 오늘 연수·배포한 사이트는 그대로 열림. 유료 전환은 README §4의 3줄(구독 → 두 wrangler 설정에 `PLAN` 커밋 → push). 근거 [`scale-2026-11.md`](research/scale-2026-11.md) §5, [`zero-cost-2026-11.md`](research/zero-cost-2026-11.md) |
+| 요금제 | `PLAN` free: 하루 몫 45%부터 연수 날짜가 14일 안인 것만, 60%부터 새 사이트는 같은 파일 그대로 강사 계정으로. 오늘 연수·배포한 사이트는 그대로 열림. 유료 전환은 README §4의 4줄(구독 → 두 wrangler 설정에 `PLAN` 커밋 → push → Workers·DO 지출 한도). 유료에서도 하루 예산 100만(월 약 $15 상한)이 기본. 근거 [`scale-2026-11.md`](research/scale-2026-11.md) §5, [`zero-cost-2026-11.md`](research/zero-cost-2026-11.md) |
+| 하루 점검 | cron 매일 한국 시간 오전 9시 7분: 처리 안 된 신고(24시간)·가린 지 25일·지우지 못한 사이트(6시간)·AI 정보 파일 묵음(3일)을 웹훅 한 통으로, 월요일엔 주간 요약. 웹훅이 없으면 관리 화면 맨 위에만. 표와 기준 [`hosting/README.md`](../hosting/README.md) §10 |
 | 관리 화면 | `lecpage-admin`(§0): 이용량·30일 추이·권하는 행동(처리 안 된 신고 먼저)·신고·팝업 공지·새 배포 멈춤·감사 기록. 근거·보안 검토 [`admin-2026-11.md`](research/admin-2026-11.md) |
 
 ## 11. 구글 시트 틀 미리 만들어 두기 (선택)
@@ -174,7 +181,8 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 모델 값·출시일·Gemini 무료 등급은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
 
-- **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 바뀐 것이 없으면 커밋하지 않습니다. 검사에 하나라도 걸리면 그 파일도 그대로 둡니다.
+- **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 값이 바뀌면 커밋하고, 값이 그대로면 '네 출처를 모두 받은 날'(`checked`)만 이틀에 한 번 새로 적어 커밋합니다(날마다 배포가 생기지 않게). 검사(급감·값이 한꺼번에 1/5~5배 밖·앞 판에 있던 추천이 빔·형식)에 하나라도 걸리면 그 파일도 그대로 둡니다.
+- **멈춤 감지**: 바로 배포 서버의 하루 점검이 `https://lecpage.com/ai-catalog.json`의 `checked`가 3일 넘게 묵으면 웹훅으로 알립니다(예약이 꺼졌거나 실패가 이어질 때도). 출처를 3일 넘게 다 받지 못하면 이슈에도 '모두 받은 마지막 날(N일 전)'이 사람이 볼 일로 올라옵니다.
 - **배포**: 봇 커밋도 Cloudflare Workers Builds가 다시 배포합니다(`app/*` 감시 경로, 하루 1번 이하라 무료 빌드 시간 월 3,000분 중 한 달 60분 안팎). GitHub Actions의 토큰으로 올린 커밋은 다른 워크플로를 깨우지 않아 GitHub Pages 미러는 다음 사람 커밋 때 함께 반영됩니다(미러는 예비용이라 괜찮음).
 - **권한**: 저장소 기본 권한이 읽기 전용(§6)이어도, 이 워크플로는 필요한 권한(`contents: write`·`issues: write`)만 스스로 적어 두어 동작합니다.
 - **main 규칙**: 지금 규칙(삭제·강제 push 금지)과 맞습니다(빨리 감기로만 올리고, 그사이 main이 바뀌면 다시 얹어 세 번까지). §6처럼 'PR 필수'를 켜면 봇의 바로 올리기가 막히니, 그때는 이 워크플로를 규칙의 예외(우회 목록에 GitHub Actions)로 두거나 끕니다.
@@ -201,3 +209,49 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 - 잠깐 끄기: Actions → AI catalog → **⋯ → Disable workflow**. 앱은 마지막 `ai-catalog.json`과 OpenRouter 실시간 목록으로 그대로 동작합니다.
 - 아주 끄기: 워크플로 파일을 지웁니다. `ai-catalog.json`을 지워도 앱은 예전처럼 실시간 목록 → 이름 규칙으로 동작합니다.
 - 공개 저장소의 예약 실행은 저장소에 60일 동안 활동이 없으면 GitHub가 멈춥니다. 멈추면 Actions에서 다시 켭니다.
+
+## 13. 장애·복구
+
+먼저 사용자 쪽은 이미 버티게 되어 있습니다: 앱은 PWA라 다녀간 사람에게는 캐시로 열리고, 예비 주소 `https://yoorrard.github.io/lecpage/`는 다른 회사(GitHub)라 장애 영역이 다르며, 강사 자료는 강사 브라우저(IndexedDB)와 `.lecpage` 파일에 있어 어디로든 다시 배포할 수 있습니다. 공지는 관리 화면 팝업 공지(앱·강사 화면)나, 그것도 안 되면 GitHub 저장소 README 맨 위·고정 이슈로 합니다.
+
+| 상황 | 사용자에게 보이는 것 | 운영자 할 일 | 공지 문구(예) |
+|---|---|---|---|
+| Cloudflare 계정 잠금·정지(바로 배포 사이트 신고로 계정 조치 등) | lecpage.com 첫 방문이 안 열림(다녀간 사람은 열림), hello@ 메일이 오지 않음, 바로 배포·관리 화면·Pages 사이트 멈춤 | ① 예비 주소를 README 맨 위·고정 이슈로 공지 ② 문의는 GitHub 이슈, 보안 신고는 Private vulnerability reporting으로 받기 ③ 대시보드 Support로 이의 제기 ④ 강사에게 예비 주소의 '내 계정에 배포'(같은 파일)를 안내. 예방: 바로 배포를 두 번째 계정으로(§14), 알림 'Trust and Safety: New Blocks' | "lecpage.com이 잠시 열리지 않아요. https://yoorrard.github.io/lecpage/ 에서 그대로 쓸 수 있어요. 바로 배포 대신 '내 계정에 배포'를 써 주세요." |
+| 도메인 만료·결제 실패 | lecpage.com이 열리지 않음(예비 주소는 열림) | Registrar → Manage domain에서 결제 수단을 고치고 갱신(만료 뒤에도 유예 기간 안에는 되살릴 수 있으나 값이 더 들 수 있음). 예방: 자동 갱신 + 몇 년치 미리 갱신(§14), 10월 점검(§7) | 위와 같음 |
+| Pages 프로젝트(`lecpage-view`)가 지워짐·고장 | 바로 배포 사이트 주소가 모두 열리지 않음(두 번째 주소도 Pages에서 가져오므로 같음, 영상·소리만 열림) | `cd hosting && npm run setup -- --skip-deploy`로 프로젝트·토큰을 다시 만듦 → 관리 화면 공지로 강사에게 [다시 배포]를 안내(서버에는 HTML 원본·영상만 있어 혼자 되살릴 수 없음, 강사 앱이 같은 파일을 다시 올림). 프로젝트 이름이 바뀌면 사이트 주소도 바뀌니 QR을 다시 뽑도록 함 | "바로 배포 사이트가 잠시 열리지 않았어요. 앱에서 [다시 배포]를 한 번 눌러 주세요. 주소가 바뀌었으면 QR을 다시 받아 주세요." |
+| 바로 배포 Worker를 잘못 배포함 | 앱 배포 화면이 "바로 배포 서버에 지금 닿지 않아요" → 내 계정 배포로 안내. Pages 사이트는 그대로 열림 | Cloudflare → `lecpage-sites` → Deployments에서 앞 판으로 Rollback, 또는 문제 커밋을 `git revert`해 push | 보통 필요 없음 |
+| 관리 Worker를 다시 배포해야 함(관리 화면 코드가 바뀜·망가짐) | 운영자만 영향 | Workers Builds를 연결해 두었으면 push만(§14). 아니면 `cd hosting && npm ci && npx wrangler login && npm run deploy:admin`. Access 앱·비밀 값(`ACCESS_AUD`·`ACCESS_EMAILS`)은 다시 배포해도 남음. 화면이 404면 비밀 값이 빠진 것 → `npm run setup -- --skip-deploy` | — |
+| GitHub 계정·저장소 문제(잠금·삭제·Actions 정지) | 이미 배포된 앱·서버는 그대로. 새 배포(Workers Builds)·AI 정보 갱신·예비 주소 갱신만 멈춤(하루 점검이 3일 뒤 'AI 정보 파일 묵음'으로 알림) | 내 PC의 최신 clone(또는 미리 만든 다른 곳 미러)을 새 저장소로 push → Cloudflare Workers Builds의 저장소 연결을 바꿈 → Actions 다시 켜기. 공개 저장소의 예약은 60일 무활동이면 꺼지니 Actions에서 다시 켬 | — |
+| 지우는 중이 끝나지 않음(하루 점검 '지우지 못한 사이트') | 그 사이트의 lecpage 두 번째 주소·참여 기능은 이미 닫힘, Pages 주소에는 내용이 남아 있을 수 있음 | 관리 화면 사이트 목록 [다시 지우기]. 그래도 남으면 Cloudflare → Workers & Pages → `lecpage-view` → Deployments에서 브랜치 `s-<주소 10자>`의 배포를 모두 지운 뒤 [다시 지우기](이번엔 남은 것이 없어 끝남). Pages 토큰이 만료·삭제됐으면 `npm run setup -- --skip-deploy`로 새로 | — |
+| 웹훅이 오지 않음(월요일 주간 점검이 없음, 관리 화면 '웹훅을 보내지 못했어요') | 없음(운영자만 알림을 못 받음) | 메신저에서 웹훅 주소를 새로 만들어 `cd hosting && npx wrangler secret put ALERT_WEBHOOK`(신고도 받으려면 `REPORT_WEBHOOK`). 관리 화면 맨 위 '마지막 점검'이 하루 넘게 그대로면 cron이 멈춘 것 → `lecpage-sites` → Settings → Triggers에 `7 0 * * *`가 있는지 | — |
+| 개인정보가 샜다고 의심됨(바로 배포 서버) | — | ① 무엇이·언제·몇 명 몫이 샜는지 확인(감사 기록·Cloudflare 로그) ② [새 배포 멈추기]로 더 받지 않기 ③ 운영자는 수탁자라 처리자(강사·기관)에게 지체 없이 알림: 관리 화면 팝업 공지(앱·강사 화면) ④ 1천 명 이상이거나 외부 침입이면 72시간 안에 개인정보보호위원회·한국인터넷진흥원 신고(개인정보 보호법 제34조) ⑤ 문의는 hello@로 받기 | "바로 배포 서버에서 ○○이 노출됐을 수 있어요(기간·범위). 참가자에게 알릴 내용과 문의처는 …" |
+
+**백업이 필요한 것**(나머지는 다시 만들 수 있거나 백업하지 않기로 함)
+
+| 무엇 | 어디에 | 왜 |
+|---|---|---|
+| 저장소(코드·문서) | GitHub + 내 PC의 clone, (권함) 다른 곳 무료 '당겨 오기 미러' 하나 | GitHub 계정 문제 때 Workers Builds 저장소만 바꾸면 다시 배포 |
+| 2단계 인증 복구 코드(GitHub·Cloudflare·Google) | 오프라인(종이·비밀번호 관리자) | 계정을 잃으면 모든 것이 멈춤. 10월 점검 |
+| 알림 웹훅 주소, `ADMIN_KEY` | 비밀번호 관리자(`ADMIN_KEY`는 설정 스크립트가 `~/.lecpage/<계정>/admin-key`에도 둠) | Worker를 다시 켤 때 그대로 넣음(Pages 토큰·Access는 `npm run setup`이 다시 만듦) |
+| 바로 배포 사이트 파일 | 백업하지 않음(강사 브라우저·`.lecpage` 파일이 원본, 처리방침상 60일 보관) | 운영자가 사본을 두면 보관 약속이 깨짐 |
+| Gate 자료(신고·감사 기록·공지·설정) | 백업하지 않음. 꼭 필요하면 Durable Objects SQLite의 30일 시점 복구(Cloudflare 공식 문서) | 잃어도 사이트·방은 그대로 열림. 신고는 웹훅의 번호·메일로 다시 확인 |
+
+## 14. 대시보드에서만 할 수 있는 일
+
+코드·자동화로 대신할 수 없는 것만 모았습니다. 대부분 한 번이면 끝납니다.
+
+| 무엇을 | 어디서 | 왜 | 언제 |
+|---|---|---|---|
+| Dependabot alerts·security updates 켜기 | GitHub 저장소 Settings → Advanced Security(Code security) | 취약점 경고와 보안 PR. `dependabot.yml`은 판 올림만 정함 | 한 번 |
+| Secret scanning·push protection 켜기 | 같은 곳 | 비밀 값을 실수로 커밋하지 않게 | 한 번 |
+| Actions 기본 권한 읽기 전용 | Settings → Actions → General → Workflow permissions | 최소 권한(AI catalog 워크플로는 필요한 권한을 스스로 적음) | 한 번 |
+| 앱 Workers Builds 명령 바꾸기 | Cloudflare → Workers & Pages → `lecpage` → Settings → Build | Build `npm ci && npm --prefix app ci && npm --prefix app run build`, Deploy `npx wrangler deploy`: 취약한 wrangler 4.151.3 대신 잠금 파일 판(4.158.0) | 한 번 |
+| 관리 Worker를 Workers Builds에 연결 | Workers & Pages → Create → GitHub → `lecpage` | 이름 `lecpage-admin`, Root `hosting`, Build `npm ci && node scripts/gen-admin.mjs`, Deploy `npx wrangler deploy -c wrangler.admin.jsonc`: 관리 화면도 push로 자동 배포 | 한 번 |
+| 바로 배포 cron 확인 | `lecpage-sites` → Settings → Triggers | `7 0 * * *`가 보이면 됨(배포하면 `wrangler.jsonc`에서 저절로 들어감) | 첫 배포 뒤 한 번 |
+| 알림 켜기: Trust and Safety New Blocks, Pages Deployment failed | Cloudflare → Notifications | 계정·사이트 조치와 Pages 실패를 메일로(모든 요금제) | 한 번 |
+| DMARC·DNSSEC | `lecpage.com` → DNS(또는 Email → DMARC Management), DNS → Settings → DNSSEC | 받기 전용 도메인을 사칭한 메일을 막음: `_dmarc` TXT `v=DMARC1; p=reject; adkim=s; aspf=s` | 한 번 |
+| 도메인 몇 년치 미리 갱신·결제 수단 | Domain Registration → Manage → Renew | 카드 만료로 도메인을 잃지 않게(총비용 같음) | 몇 년에 한 번 |
+| AI catalog를 한 번 직접 실행 | GitHub Actions → AI catalog → Run workflow | 첫 예약 전에 커밋·이슈까지 끝까지 확인 | 한 번 |
+| Dependabot PR 정리 | GitHub Pull requests | #4(메이저 넷 묶음)·#5(Node 25) 닫기, #6은 이 저장소가 wrangler 4.158.0으로 올려 대신함(저절로 닫힘) | 한 번 |
+| 유료로 올릴 때만: 구독 + 지출 한도 | Billing → Subscriptions, Billing → Spend Management(Workers·Durable Objects) | 비용 상한. 순서는 `hosting/README.md` §4 | 전환 때 한 번 |
+| (권함) 바로 배포용 두 번째 Cloudflare 계정 | 새 계정 → `npm run setup` → `app/src/lib/publish-api.js` 주소 한 줄 | 남이 올린 사이트 신고로 계정이 막혀도 앱·메일·도메인은 그대로 | 한 번 |
