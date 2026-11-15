@@ -135,6 +135,10 @@ function stringsOf(v, out = []) {
   return out.join('\n');
 }
 
+const QA_MARK = /^\s*(?:Q\d*|A\d*|질문|답변?|문|답)\s*[.:：)]\s*/i;
+/** 표의 첫 줄이 머리줄인지: 줄이 둘 넘고, 첫 줄 칸이 모두 짧은 이름표(16자 안, 문장 끝 없음) */
+const headerRow = (t) => (t.rows || []).length >= 2 && (t.rows[0] || []).filter(Boolean).length >= 2 && (t.rows[0] || []).every((c) => !c || ([...String(c)].length <= 16 && !/[다요]\.?$/.test(String(c))));
+
 /**
  * 교재의 문단·표 줄 가운데 설계도의 보이는 칸(coverSections: 교재 보기 제외)에 없는 것.
  * 고쳐 쓴 문장도 찾도록 낱말이 60% 넘게 겹치면 실린 것으로 봄. 표지의 일시·장소·강사 줄은 연수 정보가 있으면 실린 것.
@@ -149,7 +153,10 @@ export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
   const meta = bp.meta || {};
   const skip = [...heldOf(material).labels, ...(ignore || [])].filter((x) => x.length >= 4);
   const mostly = (t) => { const w = words(t); return w.length >= 2 && w.filter((x) => hay.includes(x)).length / w.length >= 0.6; };
-  const has = (text) => {
+  const has = (text0) => {
+    // 질문답 머리표("Q. ", "A: ")는 떼고 맞춰 봄(자주 묻는 질문 칸에는 머리표 없이 실림)
+    // 절 번호("2. 달라지는 점")도 떼고 맞춰 봄(사이트 칸 제목에는 번호 없이 실림)
+    const text = String(text0 || '').replace(QA_MARK, '').replace(/^\s*(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s+(?=\S)/, '');
     const k = textKey(text);
     if (k.length < 6 || boiler.has(k)) return true;
     if (skip.some((x) => k.includes(x))) return true; // 강사 확인 전이라 싣지 않은 주소의 링크 글
@@ -168,7 +175,8 @@ export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
     if (p.hidden || p.error || renderOnly.has(p.file)) continue;
     const add = (text, kind) => { total++; if (has(text)) return; count++; if (items.length < max) items.push({ file: p.file, page: p.page, title: cleanTitle(p.title), text: truncate(normLine(text), 160), kind }); };
     for (const x of p.paragraphs || []) if (x.text) add(x.text, 'para');
-    for (const t of p.tables || []) for (const r of t.rows || []) { const row = r.filter(Boolean).join(' | '); if (row) add(row, 'row'); }
+    // 표 머리줄("시간 | 내용 | 비고")은 내용이 아니라 세지 않음(머리줄만 글 칸으로 떨어지지 않게)
+    for (const t of p.tables || []) (t.rows || []).forEach((r, i) => { if (i === 0 && headerRow(t)) return; const row = r.filter(Boolean).join(' | '); if (row) add(row, 'row'); });
   }
   return { count, total, items };
 }

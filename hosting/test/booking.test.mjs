@@ -105,8 +105,8 @@ test('긴 대기 어림이 기본(POLL_LONG 없으면 on, "off"면 예전 5초 �
   assert.equal((await reserve(on.call, 'mmmmmmmmmm', big)).status, 200, '긴 대기 어림이면 같은 날 60명 학교망 연수 둘도 받음');
 });
 
-test('유료 요금제(예산 0)는 예약으로 막지 않음', async () => {
-  const { call } = gate({ PLAN: 'paid', DAILY_REQUEST_BUDGET: undefined });
+test('유료 요금제에서 예산을 끄면(DAILY_REQUEST_BUDGET 0) 예약으로 막지 않음', async () => {
+  const { call } = gate({ PLAN: 'paid', DAILY_REQUEST_BUDGET: '0' });
   const big = { date: day(5), people: 500, live: true, network: 'restricted', minutes: 600 };
   assert.equal((await call('POST', 'book', { site: 'hhhhhhhhhh', booking: big })).status, 200);
   assert.equal((await call('POST', 'book', { site: 'jjjjjjjjjj', booking: big })).status, 200);

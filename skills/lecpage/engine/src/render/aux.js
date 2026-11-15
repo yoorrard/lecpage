@@ -2,10 +2,12 @@
 // 모두 참가자 화면과 같은 프리셋(색·글꼴·단추·상자 모양·모티프)을 이어받고, 쪽마다 쓰임에 맞춘 배치를 assets/aux.css가 맡습니다.
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
 import { esc, br, icon, koDate, host, md } from './html.js';
-import { contactHtml, boardFiles } from './sections.js';
-import { appShell, servedOverLan } from './shell.js';
+import { contactHtml, boardFiles, joinName } from './sections.js';
+import { appShell, keepRule, byOperator, servedOverLan } from './shell.js';
 import { motifFamily } from '../design/layouts.js';
 import { motifRule } from './body-graphic.js';
+import { whenText, eventDays } from '../hero-meta.js';
+import { wordsFor } from '../words.js';
 
 const PROVIDER_KO = { local: '리허설(이 브라우저 안에서만)', http: '참여 기능 서버', supabase: 'Supabase', sheets: '구글 시트' };
 const themeBtn = () => `<button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>`;
@@ -108,7 +110,7 @@ function lobbyHtml(title, live) {
 export function renderScreen(ctx) {
   const bp = ctx.bp, m = bp.meta, live = ctx.live;
   const signal = live && bp.live.features.includes('signal');
-  const code = live ? `<p class="lp-scr-code">연수 코드 <b>${esc(bp.live.code)}</b></p>` : '';
+  const code = live ? `<p class="lp-scr-code">${esc(ctx.words?.code || '연수 코드')} <b>${esc(bp.live.code)}</b></p>` : '';
   const inner = `<aside class="lp-scr-for" aria-label="참가자 안내"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></aside>
 <div class="lp-scr" data-screen data-lobby${live ? '' : ' data-offline'}>
 <header class="lp-scr-top">
@@ -161,11 +163,14 @@ ${signal ? '<div class="lp-scr-signal" data-screen-signal hidden role="region" a
  */
 export function renderPoster(ctx) {
   const bp = ctx.bp, m = bp.meta;
-  const when = m.date ? `${koDate(m.date)}${m.start ? ` ${m.start}${m.end ? `~${m.end}` : ''}` : ''}` : '';
+  const when = m.date || eventDays(m).length ? whenText(m) : ''; // 첫 화면·달력 파일과 같은 날짜(hero-meta.js)
   const code = ctx.live ? bp.live.code : '';
+  const W = ctx.words || wordsFor(bp);
+  // 원격(온라인만) 연수: 종이 대신 화면으로 나누는 안내 — Wi-Fi 칸 대신 회의 입장 주소, 'QR을 찍어' 대신 주소 먼저
+  const online = m.mode === 'online';
   const tlen = [...String(m.title || '')].length;
   const meta = when || m.venue ? `<dl class="lp-pst-meta">${when ? `<div><dt>일시</dt><dd>${esc(when)}</dd></div>` : ''}${m.venue ? `<div><dt>장소</dt><dd>${esc(m.venue)}</dd></div>` : ''}</dl>` : '';
-  const mini = (i) => `<div class="lp-pst-mini"><p class="lp-pst-mini-t">${esc(m.title)}</p><div class="lp-pst-mini-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드 ${i + 1}"></div><p class="lp-pst-mini-u" data-url-self></p>${code ? `<p class="lp-pst-mini-c">연수 코드 ${esc(code)}</p>` : ''}</div>`;
+  const mini = (i) => `<div class="lp-pst-mini"><p class="lp-pst-mini-t">${esc(m.title)}</p><div class="lp-pst-mini-qr lp-qr" data-qr-self role="img" aria-label="${esc(W.site)} QR 코드 ${i + 1}"></div><p class="lp-pst-mini-u" data-url-self></p>${code ? `<p class="lp-pst-mini-c">${esc(W.code)} ${esc(code)}</p>` : ''}</div>`;
   const inner = `<header class="lp-pst-bar"><div class="lp-pst-bar-in">
 ${auxId(ctx, 'QR 안내문')}
 <p class="lp-pst-bar-t">A4 한 장이에요. 흑백으로 인쇄해도 QR이 잘 찍혀요.</p>
@@ -182,15 +187,15 @@ ${m.organizer ? `<p class="lp-pst-org">${esc(m.organizer)}</p>` : ''}<h1 id="lp-
 <div class="lp-pst-rule" aria-hidden="true">${motif(ctx, 'poster')}</div>
 </div>
 ${meta}
-<div class="lp-pst-qr lp-qr" data-qr-self role="img" aria-label="연수 사이트 QR 코드"></div>
-<p class="lp-pst-cta">휴대폰 카메라로 QR을 찍어 들어오세요</p>
+<div class="lp-pst-qr lp-qr" data-qr-self role="img" aria-label="${esc(W.site)} QR 코드"></div>
+<p class="lp-pst-cta">${online ? '이 주소로 들어오세요. 휴대폰은 카메라로 QR을 찍어도 돼요' : '휴대폰 카메라로 QR을 찍어 들어오세요'}</p>
 <div class="lp-pst-type">
-<p class="lp-pst-type-h">카메라가 안 되면 주소를 쳐 주세요</p>
+<p class="lp-pst-type-h">${online ? `${esc(W.site)} 주소` : '카메라가 안 되면 주소를 쳐 주세요'}</p>
 <p class="lp-pst-url" data-url-self></p>
 <p class="lp-pst-full" data-url-full hidden></p>
-${code ? `<p class="lp-pst-code">연수 코드 <b>${esc(code)}</b></p>` : ''}
+${code ? `<p class="lp-pst-code">${esc(W.code)} <b>${esc(code)}</b></p>` : ''}
 </div>
-<div class="lp-pst-wifi">${icon('wifi')}<b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>
+${online ? (m.joinUrl ? `<p class="lp-pst-join">${icon('external')}<b>${esc(joinName(m.joinUrl) || '온라인')} 입장</b><span>${esc(m.joinUrl.replace(/^https?:\/\//, ''))}</span></p>` : '') : '<div class="lp-pst-wifi">' + icon('wifi') + '<b>Wi-Fi</b><span>이름</span><i></i><span>암호</span><i></i></div>'}
 </section></div>
 <div class="lp-pst-page" data-part="cards"><section class="lp-pst-sheet lp-pst-cards" aria-label="자리 카드(잘라 쓰기)">
 <p class="lp-pst-cut">${icon('scissors')}<span>점선을 따라 잘라 자리마다 놓아 주세요.</span></p>
@@ -291,15 +296,7 @@ export function defaultProcessors(bp) {
   return map[bp.live.provider] || [];
 }
 /** 바로 배포 서버가 참여 기록을 맡음(앱이 처리자로 'lecpage 운영자'를 넣음): 운영자는 강사를 대신해 저장만 하는 수탁자 */
-const byOperator = (bp) => (bp.privacy.processors || []).some((p) => /^lecpage 운영자/.test(p.name));
-/**
- * 참여 기록을 언제 지우는지: 개인정보 안내(한눈에·3)·참여하기 동의·운영 안내가 이 한 문장을 씀.
- * 서버마다 '마지막 기록 뒤 N일'이 지나면 지움(node·Cloudflare·바로 배포·Supabase pg_cron·시트 트리거). 바로 배포는 사이트를 지울 때 늦어도 함께
- */
-export function keepRule(bp) {
-  const d = bp.privacy.retentionDays;
-  return { short: `마지막 기록 뒤 ${d}일`, site: byOperator(bp) ? '사이트 보관 기간이 먼저 끝나면 사이트와 함께' : '' };
-}
+export { keepRule }; // 보관 기준 한 문장(shell.js): 개인정보 안내·참여 동의·운영 안내·강사 화면이 같은 말
 
 /**
  * ⑦ [데이터 모두 지우기]가 실제로 얼마나 지우는지, 참여 기능을 맡은 곳마다 사실대로(‘복구할 수 없게’는 그런 곳에만).
@@ -342,7 +339,7 @@ export function renderPrivacy(ctx) {
   const inner = `${auxBar(ctx, '개인정보 처리 안내')}
 <main class="lp-doc lp-prose">
 <h1>개인정보 처리 안내</h1>
-<p class="lp-doc-lead">「${esc(bp.meta.title)}」 연수의 참여 기능(질문·투표 등)이 어떤 정보를 받고 어떻게 다루는지 적은 안내입니다.</p>
+<p class="lp-doc-lead">「${esc(bp.meta.title)}」 ${esc(ctx.words?.ev || '연수')}의 참여 기능(질문·투표 등)이 어떤 정보를 받고 어떻게 다루는지 적은 안내입니다.</p>
 <section class="lp-doc-sum" aria-labelledby="lp-sum-h"><h2 id="lp-sum-h">한눈에 보기</h2><dl>${sum.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
 <p><b>개인정보처리자</b> ${esc(who)}</p>
 <p>이 연수를 운영하면서 아래 개인정보만 처리합니다. ${op ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않습니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
@@ -391,7 +388,7 @@ export function opsGuide(ctx) {
     '질문이나 보드 글이 지나치게 몰리면 [질문 받기]·[새 글 받기]를 꺼서 잠시 잠그고, 맞지 않는 글은 [숨기기]로 가려요.',
     '모두 들어왔으면 진행 칸의 [참여 받기]를 꺼 두세요. 낯선 기기가 더 들어오지 않고, 이미 들어온 사람은 그대로 써요.',
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
-    attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요.' : '연수를 시작할 때 참가자 화면 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
+    attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요).' : '연수를 시작할 때 참가자 첫 화면이나 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
   ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
   const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [기록 내려받기] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
   const after = live ? [

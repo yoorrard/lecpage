@@ -100,8 +100,10 @@ async function adminApi(request, url, cfg, d, me) {
     if (c === 'delete') {
       // 되돌릴 수 없는 일: 화면에서 사이트 주소를 한 번 더 받음
       if (body.confirm !== b) throw new HttpError('bad_request', '지울 사이트 주소(10자)를 한 번 더 적어 주세요.');
-      await ok(await d.site(b).fetch('http://site/admin-site', { method: 'DELETE' }));
+      const res = await ok(await d.site(b).fetch('http://site/admin-site', { method: 'DELETE' }));
       await audit('site.delete', b, String(body.reason || '').slice(0, 300));
+      // 202: Pages 배포가 남아 '지우는 중'(서버가 알람으로 다시 함). 화면은 '지웠어요' 대신 그대로 알림
+      if (res.status === 202) return json({ ok: true, id: b, wiping: true, message_ko: (await res.json().catch(() => ({}))).message_ko || '' }, 202);
       return json({ ok: true, id: b });
     }
   }

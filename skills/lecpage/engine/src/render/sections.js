@@ -8,6 +8,7 @@ import { variantOf, motifFamily, recapWords } from '../design/layouts.js'; // �
 import { bodyVariants, firstGlyph } from './body-variants.js';
 import { motifSvg, motifRule } from './body-graphic.js';
 import { inlineMd } from './markdown.js';
+import { wordsFor } from '../words.js';
 
 /** 실습·질문·교재처럼 따라 하며 쓰는 칸: 움직임은 차분 단계(1)까지만 */
 export const CALM_TYPES = ['stations', 'qa', 'deck', 'board', 'poll', 'prompts'];
@@ -154,6 +155,8 @@ function wrap(s, ctx, inner, extraAttrs = '') {
 // ── 배치 변형으로 그리기(기본 배치가 아닐 때). 기본 배치는 아래 섹션별 함수가 그대로 그림 ──
 let VBC = null;
 const VB = () => VBC || (VBC = bodyVariants({ esc, br, pad2, icon, href, host, koDate, fx, md, sourceLine, itemFx, groupFx, completionLine, bentoSpans, hasDeck, famOf }));
+/** 대상에 맞는 낱말(build가 ctx.words에 넣음. 단독으로 그릴 때는 설계도에서) */
+const W = (ctx) => ctx.words || (ctx.words = wordsFor(ctx.bp));
 const FALLBACK = { goals: '연수 목표', outline: '오늘의 차례', schedule: '일정', tools: '도구 모음', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개', speakers: '연사', sessions: '차시', faq: '자주 묻는 질문', glossary: '용어 풀이', procedure: '절차', cases: '사례', discuss: '함께 나눌 질문' };
 /** 일정 순서마다 걸리는 분(끝 시각이 없으면 다음 순서의 시작까지). 알 수 없으면 0 */
 function schedMins(s) {
@@ -171,25 +174,29 @@ function variantSection(s, ctx) {
   else if (s.type === 'followup') {
     const contact = ctx.bp.meta.contact;
     body = (s.items.length ? fn(s, ctx, { rows: s.items.map((i) => ({ kind: FOLLOWUP_KIND[i.kind] || '링크', title: i.title, desc: i.desc, url: i.url })) }) : '') + (s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : '') + (contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : '');
-    return wrap(s, ctx, head(s, ctx, FALLBACK.followup) + body, ' data-followup');
+    return wrap(s, ctx, head(s, ctx, W(ctx).followup) + body, ' data-followup');
   } else if (s.type === 'sessions') body = fn(s, ctx, { auto: !s.items.some((x) => x.status) && s.items.some((x) => x.date) });
   else if (s.type === 'instructor') { if (!ctx.bp.instructors.length) return ''; body = fn(s, ctx); }
   else if (s.type === 'table') body = fn(s, ctx) + (s.note ? `<p class="lp-note">${inlineMd(s.note)}</p>` : '');
   else body = fn(s, ctx);
-  return wrap(s, ctx, head(s, ctx, FALLBACK[s.type]) + body);
+  return wrap(s, ctx, head(s, ctx, ['goals', 'materials', 'followup', 'instructor'].includes(s.type) ? W(ctx)[s.type] : FALLBACK[s.type]) + body);
 }
 
 function liveOff(ctx) {
   return ctx.live ? '' : '<p class="lp-note" data-live-off>참여 기능을 켜면 여기서 쓸 수 있어요.</p>';
 }
 
-/** 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출" */
+/**
+ * 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출".
+ * 출석 %는 사이트가 출석(입실·퇴실)을 받을 때만(받을 길이 없는데 기준만 보이지 않게, 검증이 알림을 남김)
+ */
 export function completionLine(ctx) {
   const a = ctx.bp.meta.admin || {};
   if (a.kind !== 'official') return '';
   const h = +a.hours || 0, hm = h % 1 ? `${Math.floor(h) ? `${Math.floor(h)}시간 ` : ''}${Math.round((h % 1) * 60)}분` : h ? `${h}시간` : '';
   const survey = ctx.live && ctx.bp.sections.some((s) => s.type === 'survey' && s.questions?.length);
-  return [hm, a.completionRate ? `출석 ${a.completionRate}% 이상` : '', survey ? '설문 제출' : ''].filter(Boolean).join(' · ');
+  const attend = ctx.live && (ctx.bp.sections.some((s) => s.type === 'attendance') || ctx.bp.live.features.includes('attendance'));
+  return [hm, a.completionRate && attend ? `출석 ${a.completionRate}% 이상` : '', survey ? '설문 제출' : ''].filter(Boolean).join(' · ');
 }
 
 /** 온라인 회의 서비스 이름(입장 버튼·장소 표시용) */
@@ -205,7 +212,17 @@ function placeText(m) {
 }
 
 // ── 첫 화면: 프리셋마다 다른 구성(render/hero.js) ──────────────
-function hero(s, ctx) { return renderHero(s, ctx, { placeText, completionLine, joinCta, defaultCtas }); }
+function hero(s, ctx) { return renderHero(s, ctx, { placeText, completionLine, joinCta, defaultCtas, attendOn: (c) => c.live && dockAttend(c.bp) }); }
+
+/**
+ * 도크의 '출석' 한 번 누르기: 질문·투표를 하지 않은 사람도 참가자 명단(별명)에 남게 함.
+ * 끝난 연수에는 도크가 뜨지 않음. 별명은 서버가 붙이고 창을 띄우지 않음
+ */
+export function quickAttend(bp) {
+  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
+}
+/** 출석 칸(입실·퇴실)이 있는 연수: 연수 시간에 아직 입실하지 않았으면 도크와 첫 화면 줄의 [출석]이 입실을 바로 보냄(칸까지 내려가 찾지 않게) */
+export const dockAttend = (bp) => quickAttend(bp) || (bp.live.provider !== 'none' && bp.sections.some((s) => s.type === 'attendance'));
 function defaultCtas(ctx) {
   const order = ['stations', 'deck', 'outline', 'schedule', 'tools'];
   const out = [];
@@ -218,7 +235,7 @@ function goals(s, ctx) {
   const done = completionLine(ctx);
   const rows = [s.who && ['대상', s.who], done && ['이수', done]].filter(Boolean);
   // 큰 번호 + 문장. 번호는 꾸밈(순서는 <ol>이 알려 줌)이라 화면 낭독기에는 숨김
-  return wrap(s, ctx, head(s, ctx, '연수 목표') + `<div class="lp-goals">
+  return wrap(s, ctx, head(s, ctx, W(ctx).goals) + `<div class="lp-goals">
 <ol class="lp-goal-list">${s.items.map((g, i) => `<li><span class="lp-goal-no" aria-hidden="true">${pad2(i + 1)}</span><p>${esc(g)}</p></li>`).join('')}</ol>
 ${rows.length ? `<div class="lp-goal-meta">${rows.map(([k, v]) => `<p><b>${k}</b> ${esc(v)}</p>`).join('')}</div>` : ''}
 </div>`);
@@ -366,7 +383,7 @@ function deck(s, ctx) {
     return `<figure class="lp-slide" id="deck-p${sl.page}" data-page="${sl.page}" data-title="${esc(sl.title)}" data-text="${esc((sl.text || '').slice(0, 400))}">${media}<figcaption><span class="lp-slide-no">${sl.page}</span>${esc(sl.title)}${tools.length ? `<span class="lp-slide-tools">${tools.map((t) => `<a ${href(t.url)}>${esc(t.name)}${icon('external')}</a>`).join('')}</span>` : ''}</figcaption></figure>`;
   }).join('\n');
   const dl = s.download?.href ? `<a class="lp-btn lp-btn-ghost" ${href(s.download.href)} download>${icon('download')}<span>${esc(s.download.label || '교재 내려받기')}${s.download.size ? ` · ${esc(s.download.size)}` : ''}</span></a>` : '';
-  return wrap(s, ctx, head(s, ctx, '연수 교재') + `<div class="lp-deck" data-deck>
+  return wrap(s, ctx, head(s, ctx, W(ctx).deck) + `<div class="lp-deck" data-deck>
   <div class="lp-deck-stage" tabindex="0" aria-roledescription="슬라이드" aria-label="교재 ${s.slides.length}쪽">${slides}</div>
   <div class="lp-deck-bar" hidden>
     <button class="lp-icon-btn" type="button" data-deck-prev aria-label="이전 쪽">${icon('left')}</button>
@@ -488,12 +505,12 @@ function quiz(s, ctx) {
 }
 
 function attendance(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p data-phase-hide="after">연수를 시작할 때와 마칠 때 한 번씩 눌러 주세요.${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><p data-phase-show="after" hidden>끝난 연수라 출석은 받지 않아요.</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
+  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p data-phase-hide="after">${W(ctx).attendLead}${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><p data-phase-show="after" hidden>${W(ctx).attendAfter}</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
 }
 
 // ── 자료·사람 ─────────────────────────────────────────────
 function materials(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '연수 자료') + `<ul class="lp-materials"${fx(ctx, 'list')}>${s.items.map((m) => `<li><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
+  return wrap(s, ctx, head(s, ctx, W(ctx).materials) + `<ul class="lp-materials"${fx(ctx, 'list')}>${s.items.map((m) => `<li><span class="lp-file-kind">${esc(m.kind || 'FILE')}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(m.href)}${/^https?:/.test(m.href) ? '' : ' download'}>${icon(/^https?:/.test(m.href) ? 'external' : 'download')}<span>${/^https?:/.test(m.href) ? '열기' : '내려받기'}</span></a>` : ''}</li>`).join('')}</ul>${s.notice ? `<div class="lp-notice-box"><b>자료 이용 안내</b><p>${br(s.notice)}</p></div>` : ''}`);
 }
 
 function instructor(s, ctx) {
@@ -553,7 +570,7 @@ ${url && s.qr ? `<div class="lp-qr" data-qr="${esc(url)}" role="img" aria-label=
 const FOLLOWUP_KIND = { recording: '영상', community: '소통', next: '다음', read: '읽기', link: '링크' };
 function followup(s, ctx) {
   const contact = ctx.bp.meta.contact;
-  return wrap(s, ctx, head(s, ctx, '연수 후 안내') + `${s.items.length ? `<ul class="lp-materials lp-followup"${fx(ctx, 'list')}>${s.items.map((i) => `<li><span class="lp-file-kind">${FOLLOWUP_KIND[i.kind] || '링크'}</span><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}</div>${i.url ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(i.url)}>${icon(/^https?:/.test(i.url) ? 'external' : 'arrow')}<span>열기</span></a>` : ''}</li>`).join('')}</ul>` : ''}${s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : ''}${contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : ''}`, ' data-followup');
+  return wrap(s, ctx, head(s, ctx, W(ctx).followup) + `${s.items.length ? `<ul class="lp-materials lp-followup"${fx(ctx, 'list')}>${s.items.map((i) => `<li><span class="lp-file-kind">${FOLLOWUP_KIND[i.kind] || '링크'}</span><div><h3>${esc(i.title)}</h3>${i.desc ? `<p>${br(i.desc)}</p>` : ''}</div>${i.url ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" ${href(i.url)}>${icon(/^https?:/.test(i.url) ? 'external' : 'arrow')}<span>열기</span></a>` : ''}</li>`).join('')}</ul>` : ''}${s.completion ? `<div class="lp-notice-box"><b>이수 안내</b><p>${br(s.completion)}</p></div>` : ''}${contact ? `<p class="lp-note">문의: ${contactHtml(contact)}</p>` : ''}`, ' data-followup');
 }
 /** 문의처: 이메일·전화번호는 눌러서 바로 연결 */
 export function contactHtml(c) {

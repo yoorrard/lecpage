@@ -14,7 +14,7 @@
     }
   } catch (e) { }
   // 다른 사이트가 강사 화면을 틀(iframe)에 넣어 관리자 키를 가로채지 못하게(헤더를 못 바꾸는 GitHub Pages 대비). 앱 미리보기는 예외
-  try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.</p></body>'; return; } } catch (e) { return; }
+  try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.<\/p><\/body>'; return; } } catch (e) { return; }
   var doc = document, root = doc.documentElement, $ = function (s, r) { return (r || doc).querySelector(s); };
   var DATA = {}, BP = {};
   try { DATA = JSON.parse($('#lp-data').textContent); BP = JSON.parse($('#lp-blueprint').textContent); } catch (e) { }
@@ -295,6 +295,9 @@
     var h = el('p', 'lp-con-net-h'); h.appendChild(el('b', '', '묻기 방식')); C.netWay = el('span'); h.appendChild(C.netWay); C.net.appendChild(h);
     C.netDo = el('p', 'lp-con-net-do'); C.net.appendChild(C.netDo);
     C.netCk = el('p', 'lp-con-net-ck'); C.net.appendChild(C.netCk);
+    // 사이트 보관 끝 예정일(배포할 곳이 정한 값, meta.keepUntil): 연수 마지막 날보다 먼저 닫히면 다시 배포하라고 함께
+    var ku = /^(\d{4})-(\d{2})-(\d{2})$/.exec(DATA.keepUntil || ''), last = ((DATA.phase && DATA.phase.end) || DATA.date || '').slice(0, 10);
+    if (ku) C.net.appendChild(el('p', 'lp-con-net-ck', '사이트는 ' + (+ku[2]) + '월 ' + (+ku[3]) + '일까지 열려 있어요.' + (last && DATA.keepUntil < last ? ' 연수 날보다 먼저 닫혀요. 연수 전에 다시 배포해 주세요.' : '')));
     C.box.appendChild(C.net);
     if (ended()) {
       var r3 = el('div', 'lp-con-net-r lp-con-after'), h3 = el('p', 'lp-con-net-h');
@@ -404,7 +407,7 @@
     var op = allPolls().filter(function (p) { return p.id === state.openPoll; })[0];
     keep(C.strip, function () {
       C.strip.textContent = '';
-      kpi(parts.length, '참가자', parts.length ? '연수 코드 ' + DATA.live.code : '아직 들어온 사람이 없어요', '');
+      kpi(parts.length, '참가자', parts.length ? ((DATA.words && DATA.words.code) || '연수 코드') + ' ' + DATA.live.code : '아직 들어온 사람이 없어요', '');
       if (ON.help) kpi(openHelp.length, '도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '없어요', '#lp-p-help', openHelp.length > 0);
       if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(rs + '%', '모르겠어요', sig.total + '명 중 ' + sig.red + '명', '#lp-p-signal', sig.total > 0 && rs >= 25); }
       if (ON.progress) { var pc = { done: 0, doing: 0, stuck: 0 }; latestProgress().forEach(function (x) { if (pc[x.status] !== undefined) pc[x.status]++; }); kpi(pc.stuck, '실습 막힘', '완료 ' + pc.done + ' · 하는 중 ' + pc.doing, '#lp-p-heat', pc.stuck > 0); }
@@ -814,11 +817,11 @@
       }, 'dl' + x[0]));
     });
     s1.appendChild(g);
-    var rate = (DATA.admin || {}).completionRate; rate = rate == null ? 90 : rate;
-    s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
+    var rate = (DATA.admin || {}).completionRate || 90, rateSet = (DATA.admin || {}).rateSet !== false;
+    s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '%' + (rateSet ? '' : '(이수 기준을 정하지 않아 기본값)') + ' 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '지우기'));
-    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '연수가 끝나고 ' + ((DATA.privacy || {}).retentionDays || 30) + '일 안에 모든 기록을 지워 주세요. 내려받은 CSV에도 별명이 들어 있어요.'));
+    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [데이터 모두 지우기]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 지우기를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
     var dlg = $('[data-purge-dialog]');
     var del = btn('데이터 모두 지우기', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
     var r = el('div', 'lp-con-row'); r.appendChild(del); s2.appendChild(r); b.appendChild(s2);
@@ -843,7 +846,7 @@
       var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
       add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : LOOP ? LOOP_MSG : '배포하면 여기에 나와요.');
       if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
-      add('연수 코드', DATA.live.code);
+      add((DATA.words && DATA.words.code) || '연수 코드', DATA.live.code);
       j.appendChild(q); j.appendChild(dl);
       if (LOOP && site) j.appendChild(el('p', 'lp-con-sub', '이 노트북의 와이파이 주소예요. 참가자는 같은 와이파이에서 이 주소로 들어와요.'));
     }

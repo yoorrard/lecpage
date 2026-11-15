@@ -12,10 +12,17 @@ import { esc } from './render/html.js';
 import { usedVariants } from './design/layouts.js';
 import { pruneUnusedCss } from './css-prune.js';
 import { deferFontLinks } from './font-bundle.js';
+import { eventDays } from './hero-meta.js';
+import { wordsFor, localizeSections } from './words.js';
 
 /** 사이트에 넣을 수 있는 사용자 자료(교재 그림·원본·사진·소리·영상) */
-// 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음
-export const USER_ASSET = /^(?:assets\/)?(?:slides|media|files)\/[\w가-힣ㄱ-ㅎㅏ-ㅣ.\-()\[\] ]{1,140}\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx?|ppsx|docx?|hwpx?|xlsx?|csv|txt|md|zip|key|pages|numbers|odt|odp|ods)$/i;
+// 사용자 자료: 교재 쪽 그림(slides)·교재 속 그림과 원본(media)·강사가 올린 내려받기 자료(files). 스크립트·SVG·HTML은 받지 않음.
+// 엔진이 만드는 slides·media는 교재마다 한 단계 하위 폴더(slides/deck1/slide-001.webp, skill CLI)도 받음. 폴더 이름은 점으로
+// 시작하지 않고(.. ·숨김 폴더 없음) 한 단계까지. 강사가 올리는 files는 한 폴더만(앱 자료실과 같음). '..'는 build가 따로 막음
+const ASSET_NAME = "[\\w가-힣ㄱ-ㅎㅏ-ㅣ.\\-()\\[\\] ]{1,140}\\.(png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx?|ppsx|docx?|hwpx?|xlsx?|csv|txt|md|zip|key|pages|numbers|odt|odp|ods)";
+export const USER_ASSET = new RegExp(`^(?:assets\\/)?(?:(?:slides|media)\\/(?:[\\w가-힣ㄱ-ㅎㅏ-ㅣ\\-()\\[\\] ][\\w가-힣ㄱ-ㅎㅏ-ㅣ.\\-()\\[\\] ]{0,59}\\/)?|files\\/)${ASSET_NAME}$`, 'i');
+/** 자료 경로 검사: USER_ASSET이면서 '..'·빈 칸 경로가 없음 */
+export const isUserAsset = (p) => typeof p === 'string' && USER_ASSET.test(p) && !p.includes('..') && !p.includes('//');
 
 const LIVE_FILES = { local: 'live/local.js', http: 'live/http.js', supabase: 'live/supabase.js', sheets: 'live/sheets.js' };
 
@@ -38,13 +45,13 @@ export function pruneMarked(css, ids, tag) {
  * 사이트 주소를 빌드 때 모르면 참가자 화면(lecpage.js)이 내려받을 때 지금 주소를 넣음. 긴 줄은 75바이트에서 접음(RFC 5545)
  */
 export function icsFile(meta = {}, today = '') {
-  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(meta.date || ''), t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
-  if (!d || !t(meta.start)) return '';
-  const utc = (hm) => { const x = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t(hm)[1] - 9, +t(hm)[2])); return x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+  const t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
+  // 연수 날(하루 또는 여러 날, hero-meta.js eventDays — 첫 화면·QR 안내문과 같은 날짜). 시작 시각을 아는 날만 한 건씩
+  const days = eventDays(meta).filter((x) => t(x.start));
+  if (!days.length) return '';
   const txt = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/[,;]/g, (c) => '\\' + c);
   const stamp = (/^\d{4}-\d{2}-\d{2}/.exec(today || new Date().toISOString())?.[0] || '2026-01-01').replace(/-/g, '') + 'T000000Z';
   let h = 2166136261; for (const c of `${meta.title}|${meta.date}|${meta.start}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
-  const end = t(meta.end) && utc(meta.end) > utc(meta.start) ? `DTEND:${utc(meta.end)}` : '';
   const web = (u) => (/^https?:\/\/[^\s]+$/i.test(u || '') ? u : '');
   const site = web(meta.siteUrl), join = meta.mode !== 'offline' ? web(meta.joinUrl) : '';
   const desc = [meta.organizer || '', site ? `연수 사이트: ${site}` : '', join ? `온라인 입장: ${join}` : ''].filter(Boolean).join('\n');
@@ -54,9 +61,14 @@ export function icsFile(meta = {}, today = '') {
     for (const ch of line) { const b = enc.encode(ch).length; if (n + b > (out.length ? 74 : 75)) { out.push(cur); cur = ''; n = 0; } cur += ch; n += b; }
     out.push(cur); return out.join('\r\n ');
   };
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(meta.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', desc ? `DESCRIPTION:${txt(desc)}` : '', site ? `URL:${site}` : '',
-    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${txt(`${meta.title} 30분 전`)}`, 'TRIGGER:-PT30M', 'END:VALARM',
-    'END:VEVENT', 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).map(fold).join('\r\n');
+  const ev = days.flatMap((x) => {
+    const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x.date);
+    const utc = (hm) => { const v = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t(hm)[1] - 9, +t(hm)[2])); return v.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+    const end = t(x.end) && utc(x.end) > utc(x.start) ? `DTEND:${utc(x.end)}` : '';
+    return ['BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(x.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', desc ? `DESCRIPTION:${txt(desc)}` : '', site ? `URL:${site}` : '',
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${txt(`${meta.title} 30분 전`)}`, 'TRIGGER:-PT30M', 'END:VALARM', 'END:VEVENT'];
+  });
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', ...ev, 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).map(fold).join('\r\n');
 }
 
 /** 사이트를 만든 날(개인정보 처리 안내의 시행일). opts.today('YYYY-MM-DD')가 없으면 오늘 */
@@ -104,9 +116,10 @@ export function build(input, opts = {}) {
   // 빈 설문 칸(주소도, 사이트 안에서 받을 문항도 없음)은 참가자 화면에 싣지 않음(차례·바닥글 메뉴에서도 빠짐).
   // 강사 미리보기(opts.preview)에서는 '채울 곳'으로 남겨 무엇을 넣으면 되는지 보임
   const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
-  const view = opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) };
+  const words = wordsFor(bp); // 대상에 맞는 낱말(연수·수업·설명회): 엔진 기본 제목만 화면에서 바꿈(words.js)
+  const view = localizeSections(opts.preview || !bp.sections.some(emptySurvey) ? bp : { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) }, words);
   const ics = icsFile(bp.meta, opts.today);
-  const ctx = { bp: view, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, fxLibs: [...new Set(effectIds.flatMap((id) => FX_BY_ID[id]?.libs || []))], ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
+  const ctx = { bp: view, words, design, live, preview: !!opts.preview, ics: !!ics, fontLinks: theme.fontLinks, themeColor: tok['--background'], hasFx: effectIds.length > 0, fxLibs: [...new Set(effectIds.flatMap((id) => FX_BY_ID[id]?.libs || []))], ogImage: opts.ogImage || '', builtOn: builtOn(opts.today) };
 
   const files = {};
   if (ics) files['assets/event.ics'] = ics;
@@ -174,7 +187,7 @@ export function build(input, opts = {}) {
 
   // 사용자 자료는 정해진 폴더·형식만(엔진이 만든 파일은 절대 덮어쓰지 않음, 스크립트·SVG·HTML 금지)
   for (const [p, data] of Object.entries(opts.assets || {})) {
-    if (!USER_ASSET.test(p) || p.includes('..') || p in files) { warnings.push({ path: p, message_ko: `허용되지 않는 자료라 뺐습니다: ${p}` }); continue; }
+    if (!isUserAsset(p) || p in files) { warnings.push({ path: p, message_ko: `허용되지 않는 자료라 뺐습니다: ${p}` }); continue; }
     files[p] = data;
   }
   if (missingFx.length) warnings.push({ path: 'design.effects', message_ko: `효과 파일이 없어 뺐습니다: ${missingFx.join(', ')}` });

@@ -177,6 +177,15 @@ test('보안: 사용자 자료가 엔진 파일을 덮어쓰지 못하고 스크
   assert.ok(r.warnings.some((w) => /허용되지 않는 자료/.test(w.message_ko)));
 });
 
+test('자료 하위 폴더: 교재마다 나눈 쪽 그림(slides/deck1/…)은 들어가고, .. ·숨김 폴더·두 단계·자료실 하위 폴더는 빠진다', () => {
+  const ok = ['assets/slides/deck1/slide-001.webp', 'assets/media/doc1/p1.png', 'assets/slides/slide-002.webp'];
+  const no = ['assets/slides/../console.js', 'assets/slides/.x/a.webp', 'assets/slides/a/b/c.webp', 'assets/files/a/b.pdf', 'assets/slides//a.webp', 'assets/slides/deck1/x.html'];
+  const r = E.build(EX('sel-story'), { runtime: nodeRuntime(), assets: Object.fromEntries([...ok, ...no].map((k) => [k, new Uint8Array([1])])) });
+  for (const k of ok) assert.ok(r.files[k], k);
+  for (const k of no) assert.ok(!r.files[k], k);
+  assert.equal(r.warnings.filter((w) => /허용되지 않는 자료/.test(w.message_ko)).length, no.length);
+});
+
 const BOARD_BP = (live) => ({ meta: { title: 't' }, live: { features: ['board'], url: 'https://example.org/x', ...live }, sections: [{ type: 'hero' }, { type: 'board' }] });
 const fileInput = (r) => /<input type="file" name="files"/.test(r.files['index.html']);
 const consoleBoard = (r) => JSON.parse(/<script type="application\/json" id="lp-blueprint">([\s\S]*?)<\/script>/.exec(r.files['console.html'])[1]).sections.find((s) => s.type === 'board');

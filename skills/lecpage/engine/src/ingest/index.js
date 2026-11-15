@@ -9,7 +9,7 @@
 // Material 모양은 skills/lecpage/references/material-format.md 에 적어 두었습니다.
 import {
   DEFAULT_LIMITS, IngestError, makeError, toUserError, toBytes, sniff, extOf, baseName, normLine, normText,
-  findUrls, cleanUrl, hostOf, findBoilerplate, textKey, urlKey, pageText, sizeLabel,
+  findUrls, cleanUrl, hostOf, findBoilerplate, textKey, urlKey, pageText, sizeLabel, labelBeforeUrl,
 } from './util.js';
 import { Zip } from './zip.js';
 import { parsePptx } from './pptx.js';
@@ -92,6 +92,7 @@ export async function ingestFile(name, bytes, opts = {}) {
       type = ['md', 'markdown', 'mdown'].includes(ext) ? 'md' : 'txt';
     } else {
       if (['pptx', 'docx', 'hwp', 'hwpx', 'xlsx', 'ppsx', 'potx'].includes(ext)) throw new IngestError('drm');
+      if (/^(jpe?g|png|gif|webp|avif|heic|heif|bmp|tiff?)$/.test(ext)) throw new IngestError('image-file', { ext });
       throw new IngestError('unsupported', { ext });
     }
     if (type === 'xlsx') throw new IngestError('spreadsheet');
@@ -174,9 +175,8 @@ function postProcess(mat, file) {
       if (!line) continue;
       for (const f of findUrls(line)) {
         if (p.links.some((l) => l.url === f.url || urlKey(l.url) === urlKey(f.url))) continue;
-        let label = line.slice(0, line.indexOf(f.raw)).replace(/[\s:：\-–—→▶>|(\[]+$/, '').replace(/^[-•·▪◦●○■□▶▷►➢➤→\d.)\s]+/, '');
-        label = normLine(label.split(/[|·/,]\s*/).pop() || '');
-        if (label.length > 30 || label.length < 2 || /^(step\s*\d+|\d+\s*단계|[①-⑳]|\d+[.)]?)$/i.test(label)) label = toolForUrl(f.url)?.name || '';
+        let label = labelBeforeUrl(line, f.raw, /^[-•·▪◦●○■□▶▷►➢➤→\d.)\s]+/);
+        if (!label || /^(step\s*\d+|\d+\s*단계|[①-⑳]|\d+[.)]?)$/i.test(label)) label = toolForUrl(f.url)?.name || '';
         p.links.push({ url: f.url, label, from: 'text' });
       }
     }
@@ -365,7 +365,7 @@ export function summarizeMaterial(m) {
 
 export { detect } from './detect.js';
 export { detectFonts } from './fonts.js';
-export { materialToDraft } from './draft.js';
+export { materialToDraft, detectedInfo, infoDays } from './draft.js';
 export { materialToAIContext } from './outline.js';
 export { TOOLS, CATEGORIES, matchToolsInText, toolForUrl, getTool, findTool } from './tools-db.js';
 export { parseKoreanDates, parseTimeRange } from './detect.js';

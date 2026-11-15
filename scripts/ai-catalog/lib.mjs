@@ -31,7 +31,15 @@ export const LIMITS = {
   minGeminiFree: 2,
   maxGeminiVanish: 0.5,
   minGeminiCurrent: 3,
+  maxPriceShift: 5, // 회사마다 두 판에 다 있는 모델의 값 비율 가운데 값이 1/5~5배 밖이면 거부(단위·형식이 바뀐 것)
+  minPriceCompare: 5, // 그 비교에 필요한 같은 모델 수
 };
+/** 확인한 날(checked)을 새로 적는 간격(일). 값이 같으면 이틀에 한 번만 커밋해 앱 배포가 날마다 생기지 않게. 하루 점검(hosting gate.js)은 3일 넘게 묵으면 알림 */
+export const CHECK_EVERY_DAYS = 2;
+/** 네 출처를 모두 받은 마지막 날이 이 날 수보다 오래면 '사람이 볼 일'(하루 점검의 기준과 같음) */
+export const STALE_DAYS = 3;
+/** 앱 추천 칸 이름(점검 글) */
+export const REC_NAMES = { openai: 'OpenAI', anthropic: 'Claude', gemini: 'Gemini(유료 키)', geminiFree: 'Gemini 무료 키' };
 const PROVS = ['openai', 'anthropic', 'google'];
 export const ID_RE = /^(openai|anthropic|google)\/[a-z0-9][a-z0-9._-]{0,100}$/;
 export const FREE_RE = /^[a-z0-9][a-z0-9._-]{0,40}\/[a-z0-9][a-z0-9._-]{0,100}:free$/;
@@ -49,6 +57,10 @@ function okDate(s, today) {
   return s;
 }
 const provOf = (id) => id.split('/')[0];
+const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const times = (r) => (r < 1 ? `1/${Math.round(1 / r)}` : `${Math.round(r * 10) / 10}`);
+/** 두 날짜('YYYY-MM-DD') 사이 날 수 */
+export const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
 
 /** OpenRouter 공개 목록 → { models, free, dropped }. 모양이 아예 다르면 throw */
 export function parseOpenRouter(j, today) {
@@ -189,6 +201,7 @@ export function checkGemini(g, prev) {
 export function validateCatalog(c, prev, today) {
   const errs = [];
   if (!c || c.schema !== 1 || typeof c.updated !== 'string' || !DATE_RE.test(c.updated)) return ['파일 모양(schema·updated)이 달라요'];
+  if (c.checked !== undefined && okDate(c.checked, today) === null) return ['확인한 날(checked) 모양이 달라요'];
   if (!Array.isArray(c.models) || c.models.length > LIMITS.maxModels) return ['models 배열이 없거나 너무 커요'];
   const keys = new Set();
   for (const m of c.models) {
@@ -210,6 +223,25 @@ export function validateCatalog(c, prev, today) {
       const gone = before.filter((k) => !keys.has(k)).length;
       if (gone / before.length > LIMITS.maxVanish) errs.push(`${p} 모델 ${before.length}개 중 ${gone}개가 한 번에 사라졌어요(${Math.round((gone / before.length) * 100)}%, 기준 ${LIMITS.maxVanish * 100}%)`);
     }
+    // 값 급변: 같은 모델의 (입력+출력) 값이 회사마다 한꺼번에 크게 바뀌면(1/1000 같은 단위 실수) 거부. 모델 한두 개의 값 내림은 통과
+    const was = new Map(prev.models.filter((m) => m && typeof m.id === 'string' && okPrice(m.in) && okPrice(m.out)).map((m) => [normId(m.id), m]));
+    for (const p of PROVS) {
+      const ratios = [];
+      for (const m of c.models) {
+        if (!m || typeof m.id !== 'string' || provOf(m.id) !== p || !okPrice(m.in) || !okPrice(m.out)) continue;
+        const o = was.get(normId(m.id));
+        if (o && o.in + o.out > 0) ratios.push((m.in + m.out) / (o.in + o.out));
+      }
+      if (ratios.length < LIMITS.minPriceCompare) continue;
+      const r = median(ratios);
+      if (r < 1 / LIMITS.maxPriceShift || r > LIMITS.maxPriceShift) errs.push(`${p} 모델 값이 한꺼번에 앞 판의 ${times(r)}배가 됐어요(두 판에 다 있는 ${ratios.length}개의 가운데 값, 기준 1/${LIMITS.maxPriceShift}~${LIMITS.maxPriceShift}배). 단위나 형식이 바뀌었을 수 있어요`);
+    }
+    // 추천이 비면 거부: 앞 판에서는 앱이 고를 모델이 있었는데 이번 판에는 없음(모든 모델이 그림 전용으로 바뀌는 등)
+    try {
+      const at = Date.parse(`${today}T00:00:00Z`);
+      const before = simulateRecs(prev, at); const now = simulateRecs(c, at);
+      for (const k of Object.keys(REC_NAMES)) if (before[k] && !now[k]) errs.push(`${REC_NAMES[k]}: 앞 판에는 앱이 추천할 모델(${before[k]})이 있었는데 이번 판에는 없어요`);
+    } catch { /* 앞 판 모양이 달라 견줄 수 없음(위 검사가 이미 걸러 냄) */ }
   }
   errs.push(...checkGemini(c.geminiFree, prev?.geminiFree).map((e) => `Gemini 무료 등급: ${e}`));
   const gd = c.geminiDocs;
@@ -224,12 +256,12 @@ export function validateCatalog(c, prev, today) {
 /** 줄마다 모델 하나(바뀐 곳이 잘 보이게). 같은 내용이면 같은 글 */
 export function serialize(c) {
   const arr = (a) => (a.length ? `[\n${a.map((x) => '    ' + JSON.stringify(x)).join(',\n')}\n  ]` : '[]');
-  return `{\n  "schema": 1,\n  "updated": ${JSON.stringify(c.updated)},\n  "about": ${JSON.stringify(c.about)},\n`
+  return `{\n  "schema": 1,\n  "updated": ${JSON.stringify(c.updated)},\n${typeof c.checked === 'string' ? `  "checked": ${JSON.stringify(c.checked)},\n` : ''}  "about": ${JSON.stringify(c.about)},\n`
     + `  "models": ${arr(c.models)},\n  "free": ${arr(c.free)},\n`
     + `  "geminiFree": ${JSON.stringify(c.geminiFree)},\n  "geminiDocs": ${JSON.stringify(c.geminiDocs)}\n}\n`;
 }
-/** updated를 뺀 내용이 같은지 */
-export const sameData = (a, b) => !!a && !!b && serialize({ ...a, updated: '' }) === serialize({ ...b, updated: '' });
+/** updated·checked(날짜)를 뺀 내용이 같은지 */
+export const sameData = (a, b) => !!a && !!b && serialize({ ...a, updated: '', checked: undefined }) === serialize({ ...b, updated: '', checked: undefined });
 
 /**
  * 출처별 결과로 새 판을 만듦. 못 받은 출처는 앞 판의 그 출처 몫을 그대로 씀(하루 끊겨도 모델이 사라지지 않게).
@@ -345,14 +377,15 @@ export function appUrls(aiJs) {
 }
 
 /** 점검 결과 → 이슈·요약에 쓸 마크다운. 같은 문제 목록이면 digest가 같음(이슈에 같은 글을 되풀이하지 않게) */
-export function renderReport({ status, today, counts, sources, kept, recs, geminiFree, problems, notes, rejected }) {
+export function renderReport({ status, today, counts, sources, kept, recs, geminiFree, problems, notes, rejected, checked = '' }) {
   const digest = createHash('sha256').update(problems.join('\n')).digest('hex').slice(0, 16);
   const yn = (ok) => (ok ? '받음' : '못 받음');
   const L = [
     `## AI 정보 점검 (${today})`, '',
-    `- 결과: ${{ updated: '갱신함', unchanged: '바뀐 것 없음', rejected: '갱신 거부(파일은 그대로)' }[status] || status}`,
+    `- 결과: ${{ updated: '갱신함', checked: '값은 그대로(확인한 날만 새로 적음)', unchanged: '바뀐 것 없음', rejected: '갱신 거부(파일은 그대로)' }[status] || status}`,
     `- 모델 수: OpenAI ${counts.openai} · Claude ${counts.anthropic} · Google ${counts.google} · OpenRouter 무료 ${counts.free}`,
     `- 출처: OpenRouter ${yn(sources.openrouter)} · models.dev ${yn(sources.modelsdev)} · Gemini 가격표 ${yn(sources.googlePricing)} · Gemini 모델 문서 ${yn(sources.googleModels)}${kept.length ? ` (앞 판 값 유지: ${kept.join(', ')})` : ''}`,
+    ...(checked ? [`- 네 출처를 모두 받은 마지막 날: ${checked}${checked === today ? '(오늘)' : `(${daysBetween(checked, today)}일 전)`}`] : []),
     `- Gemini 무료 등급: ${(geminiFree?.free || []).join(', ') || '없음'}`,
     `- Gemini 무료 등급에서 안 됨: ${(geminiFree?.paidOnly || []).join(', ') || '없음'}`,
     `- 앱 추천(어림): OpenAI ${recs.openai || '없음'} · Claude ${recs.anthropic || '없음'} · Gemini ${recs.gemini || '없음'} · Gemini 무료 키 ${recs.geminiFree || '없음'}`,
