@@ -787,6 +787,11 @@ details>summary{cursor:pointer}
   .workspace .pv-canvas{padding:12px}
   .ws-body{max-height:none}
   .ws-panel>.undo-float{display:inline-flex;position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:6;justify-self:end;margin-top:-4px;box-shadow:var(--shadow-lg);background:var(--paper)}
+  /* 탭 줄(내용·디자인·…)은 미리보기 위: 휴대폰 첫 화면에서 고칠 것을 고를 수 있게. 고른 탭의 내용은 미리보기 아래 */
+  .workspace>.ws-panel{display:contents}
+  .workspace>.ws-panel>.tabs{order:-2}
+  /* 수정 요청 시트가 열려 있으면 [되돌리기]·[배포하기]가 시트에 가리지 않게 머리 아래 오른쪽에 띄워 둠 */
+  .wiz-main:has(.rc:not([hidden]):not(.marking)) .head-tools{position:fixed;top:calc(var(--top-h,57px) + env(safe-area-inset-top,0px) + 8px);right:max(12px,env(safe-area-inset-right,0px));z-index:61;padding:6px;border-radius:var(--r-sm);background:var(--paper);box-shadow:var(--shadow-lg)}
 }
 @media (max-width: 960px){
   .success-in{grid-template-columns:minmax(0,1fr)}

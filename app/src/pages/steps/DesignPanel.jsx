@@ -6,9 +6,9 @@ import { SiteThumb } from '../../components/SiteThumb.jsx';
 import { FxGallery } from '../../components/FxGallery.jsx';
 import { Dialog } from '../../components/ui.jsx';
 import { isAdvanced } from './Content.jsx';
-import { pushUndoFor, popUndo, undoStack } from '../../lib/undo.js';
+import { pushUndoFor } from '../../lib/undo.js';
 import { toast } from '../../lib/util.js';
-import { SayFix, changesLine } from '../../design-words/SayFix.jsx';
+import { changesLine } from '../../design-words/SayFix.jsx';
 import { applyWords, variantOptions, currentVariant, hasVariants, typeKo, wordById, changes, LEAD_KO, MOTION_KO } from '../../design-words/words.js';
 import { useBus, setTry, setLabels, focusSection } from '../../design-words/bus.js';
 import { useBasket } from '../../design-words/basket.js';
@@ -46,7 +46,7 @@ const koWord = (w) => MOOD_KO[w] || E.TOPIC_LABELS?.[w] || w;
 /** "분위기(tech, futuristic)" → "분위기(테크·미래적)" */
 const whyKo = (x) => String(x).replace('사이트 유형', '연수 유형').replace(/\(([^)]*)\)/, (m, inner) => '(' + inner.split(/,\s*/).map(koWord).join('·') + ')');
 
-export function DesignPanel({ p, update }) {
+export function DesignPanel({ p, update, onSay }) {
   const bp = p.blueprint;
   const d = bp.design || {};
   const concept = bp.concept || E.deriveConcept({ title: bp.meta?.title, subtitle: bp.meta?.subtitle, topics: d.topics || [], archetype: bp.archetype?.primary, admin: bp.meta?.admin?.kind });
@@ -58,28 +58,9 @@ export function DesignPanel({ p, update }) {
   /** 되돌리기에 남기고 바꿈(고르는 것은 모두 [되돌리기]로 돌아갈 수 있게) */
   const remember = (label) => pushUndoFor(p.id, label, latest.current);
   const setD = (patch, label) => { if (label) remember(label); update((cur) => ({ blueprint: { ...cur.blueprint, _presetAuto: false, design: { ...(cur.blueprint.design || {}), ...patch } } })); };
-  // 말로 고치기: 적용 · 되돌리기 · 크게 비교
-  const [applied, setApplied] = useState('');
+  // 보이는 느낌을 말로 고치기는 [수정 요청] 한 곳에서(디자인 말이면 AI 없이 바로 고칠 안). 이 탭에서는 그리로 가는 한 줄만
   const bus = useBus(p.id);
   useEffect(() => () => { setTry(p.id, null); setLabels(p.id, false); }, [p.id]);
-  const applyFix = (f) => {
-    remember(`말로 고치기: ${f.title}`);
-    update((cur) => ({ blueprint: applyWords(cur.blueprint, f.ids) }));
-    setApplied(f.key); setTry(p.id, null);
-    if (f.focus) focusSection(p.id, f.focus);
-  };
-  const undoFix = () => {
-    const st = undoStack(p.id); const top = st[st.length - 1];
-    if (!top || !/^말로 고치기: /.test(top.label)) { toast('위쪽의 [되돌리기]를 눌러 주세요.'); return; }
-    const v = popUndo(p.id); update({ blueprint: v.blueprint, info: v.info }); setApplied(''); toast(`되돌렸어요: ${v.label.replace(/^말로 고치기: /, '')}`);
-  };
-  const tryFix = (f) => {
-    if (!f) { setTry(p.id, null); return; }
-    setTry(p.id, { key: f.key, bp: applyWords(latest.current.blueprint, f.ids), label: f.title, focus: f.focus, apply: () => applyFix(f) });
-    // 미리보기가 위에 있는 좁은 화면: 비교 화면이 보이게 올림
-    const pv = document.querySelector('.workspace .preview');
-    if (pv && pv.getBoundingClientRect().top < 0) pv.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  };
   const resolved = E.resolveDesign(E.validate(bp).blueprint);
   const others = mixOrder(E.PRESETS.filter((x) => !ranked.some((r) => r.id === x.id)));
   const graphics = E.FX.filter((f) => (f.slots || []).includes('hero.graphic'));
@@ -94,7 +75,7 @@ export function DesignPanel({ p, update }) {
         <div class="trio-head"><h2 class="h-sub" id="trio-h">느낌이 다른 세 안</h2><button type="button" class="btn btn-sm" onClick={() => setCompare(true)}>크게 비교</button></div>
         <div class="thumbs trio-thumbs">{ranked.map((r) => <Thumb preset={E.getPreset(r.id)} bp={bp} pressed={d.preset === r.id} why={[r.feel, r.concept ? '컨셉에 맞춤' : ''].filter(Boolean).join(' · ') || whyText(r)} onPick={() => pickPreset(r.id)} />)}</div>
       </section>
-      <SayFix bp={bp} onApply={applyFix} onUndo={undoFix} applied={applied} onTry={tryFix} tried={bus.try?.key} more="위에서 고르거나 [수정 요청]에 적어 AI에게 맡겨요." />
+      {onSay && <p class="small muted say-move">'좀 답답해 보여요'처럼 보이는 느낌을 말로 고치려면 <button type="button" class="btn-link" onClick={onSay}>수정 요청</button>에 적어요. AI 없이 바로 고칠 안이 나와요.</p>}
       <BasketNote p={p} update={update} remember={remember} />
       <ConceptCard bp={bp} concept={concept} update={update} setD={setD} />
       <Dialog open={compare} onClose={() => setCompare(false)} label="세 안 크게 비교" wide>

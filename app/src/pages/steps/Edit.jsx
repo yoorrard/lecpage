@@ -124,7 +124,7 @@ export function StepEdit({ p, update, go }) {
           <Tabs label="고칠 것" tabs={tabs} value={tab} onChange={setTab} />
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} class="ws-body">
             {tab === 'content' && <ContentPanel p={p} update={update} pushUndo={pushUndo} focusId={focusId} locked={locked} />}
-            {tab === 'design' && <DesignPanel p={p} update={update} />}
+            {tab === 'design' && <DesignPanel p={p} update={update} onSay={() => setTab('review')} />}
             {tab === 'live' && <FeaturesPanel p={p} update={update} setInfo={setInfo} />}
             {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} />}
             <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} onPolish={() => setAi(true)} locked={locked} />

@@ -74,6 +74,8 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
   const [size, setSize] = useState(0);
   const [focusable, setFocusable] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [narrow, setNarrow] = useState(() => { try { return matchMedia('(max-width: 600px)').matches; } catch { return false; } });
+  useEffect(() => { let m; try { m = matchMedia('(max-width: 600px)'); } catch { return undefined; } const f = () => setNarrow(m.matches); m.addEventListener?.('change', f); return () => m.removeEventListener?.('change', f); }, []);
   const t = useRef(); const frame = useRef(); const canvas = useRef(); const wasMarking = useRef(false);
   const tryFrame = useRef(); const tt = useRef();
   const box = useBox(canvas);
@@ -142,7 +144,9 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
 
   const live = p.blueprint?.live?.provider && p.blueprint.live.provider !== 'none';
   const pages = PAGES.filter((x) => !x.live || live);
-  const d = DEVICES.find((x) => x.value === device) || DEVICES[1];
+  // 휴대폰 화면에서는 휴대폰·태블릿·맞춤만(모니터·노트북은 작은 화면에서 알아보기 어려워 고를 것만 늘림)
+  const devices = narrow ? DEVICES.filter((x) => ['tablet', 'phone', 'fit'].includes(x.value)) : DEVICES;
+  const d = devices.find((x) => x.value === device) || (narrow ? DEVICES[3] : DEVICES[1]);
   const fit = d.value === 'fit';
   const turned = d.rotate && land;
   const vw = fit ? Math.round(box.w) : turned ? d.h : d.w;
@@ -172,8 +176,8 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
       <div class={`pv-stage preview-frame${marking ? ' marking' : ''}`}>
         <div class="pv-tools">
           <div class="seg pv-devices" role="group" aria-label="화면 크기">
-            {DEVICES.map((x) => (
-              <button type="button" aria-pressed={String(device === x.value)} onClick={() => setDevice(x.value)} title={x.w ? `${x.label} ${x.w}×${x.h}` : '미리보기 크기 그대로'}>
+            {devices.map((x) => (
+              <button type="button" aria-pressed={String(d.value === x.value)} onClick={() => setDevice(x.value)} title={x.w ? `${x.label} ${x.w}×${x.h}` : '미리보기 크기 그대로'}>
                 <Icon name={x.icon} /><span class="pv-label">{x.label}</span>
               </button>
             ))}
