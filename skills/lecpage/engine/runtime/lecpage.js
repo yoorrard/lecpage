@@ -1405,7 +1405,7 @@
       e.preventDefault();
       fetch(a.getAttribute('href'), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('ics'); return r.text(); }).then(function (t) {
         var line = 'URL:' + u, parts = [line.slice(0, 75)]; for (var i = 75; i < line.length; i += 74) parts.push(' ' + line.slice(i, i + 74)); // 75바이트 접기(주소는 ASCII)
-        if (!/\r\nURL:/.test(t)) t = t.replace('\r\nBEGIN:VALARM', '\r\n' + parts.join('\r\n') + '\r\nBEGIN:VALARM');
+        if (!/\r\nURL:/.test(t)) t = t.replace(/\r\nBEGIN:VALARM/g, '\r\n' + parts.join('\r\n') + '\r\nBEGIN:VALARM'); // 여러 날 연수면 날마다
         var url = URL.createObjectURL(new Blob([t], { type: 'text/calendar;charset=utf-8' }));
         var x = el('a'); x.href = url; x.download = 'event.ics'; doc.body.appendChild(x); x.click(); x.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1500);

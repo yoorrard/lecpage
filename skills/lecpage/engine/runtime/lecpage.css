@@ -59,7 +59,7 @@ main[tabindex="-1"]:focus{outline:0}
 .lp-sec{--band-primary:var(--primary);position:relative;padding-block:clamp(48px,5.8vw,92px);background:var(--background);color:var(--foreground);isolation:isolate}
 .lp-tinted{background:var(--surface-2)}
 /* 큰 연수(pages.js data-big): 화면 밖 칸의 배치·그리기를 미룸. 칸 안쪽(.lp-wrap)에만 걸어 칸 둘레 꾸밈은 잘리지 않게, 한 번 그린 높이는 기억(auto) */
-[data-big] main > .lp-sec:not(.lp-hero) > .lp-wrap{content-visibility:auto;contain-intrinsic-size:auto 900px}
+[data-big] main > .lp-sec:not(.lp-hero):not(.lp-bleed):not(.lp-invert) > .lp-wrap{content-visibility:auto;contain-intrinsic-size:auto 900px} /* 색 띠(bleed·invert) 칸은 그대로: 화면 밖에서도 배경 대비를 재는 도구(axe)가 헷갈리지 않게 */
 /* 섹션 머리: 번호 줄(.lp-head-k) + 제목 + 설명. 번호 줄의 모양은 프리셋마다 다릅니다(<html data-head>) */
 .lp-head{display:grid;gap:var(--sp-3);margin-bottom:clamp(24px,3.4vw,48px)}
 .lp-head > *{max-width:46rem}
