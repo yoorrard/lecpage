@@ -101,10 +101,10 @@
   var DAY = 864e5;
   function renderOps(o) {
     var box = clear($('[data-ops]'));
-    var ops = o.ops || {}; var lines = ops.lines || []; var last = ops.last; var hook = ops.hook;
+    var ops = o.ops || {}; var lines = ops.lines || []; var last = ops.last;
     var hookOn = o.alerts && o.alerts.webhook;
-    var status = '하루 점검(매일 한국 시간 오전 9시쯤): ' + (last ? '마지막 ' + when(last.at) + (last.sent ? ' · 웹훅으로 보냄' : '') : '아직 돈 적 없음') +
-      ' · 알림 웹훅 ' + (hookOn ? '켜짐' + (hook ? (hook.ok ? '(마지막 보냄 ' + when(hook.at) + ')' : '') : '') : '없음(이 화면에서만 보여요)');
+    var status = '하루 점검(매일 한국 시간 오전 9시쯤): ' + (last ? '마지막 ' + when(last.at) + (last.sent ? '(웹훅으로 보냄)' : '') : '아직 돈 적 없음') +
+      ' · 알림 웹훅 ' + (hookOn ? '켜짐' : '없음(이 화면에서만 보여요)');
     if (!lines.length) { box.className = 'ops'; box.appendChild(h('p', { class: 'muted small', text: '확인할 일 없음. ' + status })); return; }
     box.className = 'ops recommend';
     box.appendChild(h('p', null, h('b', { text: '확인할 일 ' + lines.length + '가지' })));
