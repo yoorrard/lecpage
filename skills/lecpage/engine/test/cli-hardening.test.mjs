@@ -302,3 +302,12 @@ test('copy-lint 단독 실행: 설계도 옆 material.json이 있으면 교재 �
   writeFileSync(join(work, 'material.json'), JSON.stringify(material));
   assert.match(lint([join(work, 'blueprint.json')]).stdout, /고칠 곳이 없어요/);
 });
+
+test('L11: patch --set이 검증에서 버려질 값(날짜·색 모양이 틀림)은 바뀜으로 저장하지 않고 고칠 모양을 알려 줌', () => {
+  const before = readFileSync(join(dir, 'work/blueprint.json'), 'utf8');
+  const d = run(['patch', 'work/blueprint.json', '--set', 'meta.date=내일', '--no-build']);
+  assert.equal(d.code, 1); assert.match(d.out, /YYYY-MM-DD/);
+  const c = run(['patch', 'work/blueprint.json', '--set', 'design.accent=빨강', '--no-build']);
+  assert.equal(c.code, 1); assert.match(c.out, /#RRGGBB/);
+  assert.equal(readFileSync(join(dir, 'work/blueprint.json'), 'utf8'), before);
+});

@@ -1,6 +1,8 @@
 # CLI 자세히
 
-`L="node <skill 폴더>/scripts/lecpage.mjs"`. 모든 명령은 짧은 요약을 내고, `--json`을 붙이면 같은 내용을 JSON으로 냅니다. 실패하면 종료 코드 1.
+`L="node <skill 폴더>/scripts/lecpage.mjs"`. 모든 명령은 짧은 요약을 내고, `--json`을 붙이면 같은 내용을 JSON으로 냅니다. `<명령> --help`는 그 명령 도움말만 보이고 실행하지 않습니다. `$L --version`은 판.
+
+종료 코드: **0** 성공 · **1** 실패(`make`·`qa`·`patch --qa`는 사이트를 만들었어도 점검에 `고침`이 있으면 1 — 사이트는 그대로 쓸 수 있고, `점검` 아래 `고침` 줄만 고침. `알림만(엔진 몫)`은 손대지 않음) · **2** 명령·옵션을 잘못 씀(모르는 옵션은 비슷한 이름을 알려 줌, 값을 받는 옵션에 값이 없으면 멈춤). 오류는 한국어 한 줄과 다음 할 일, 자세한 기록은 `LECPAGE_DEBUG=1`.
 
 ## 목차
 1. 작업 폴더
@@ -23,7 +25,7 @@
 | `work/assets/` | 쪽 그림(`slides/`)·교재 속 그림(`media/`) | 빌드가 `dist/assets/`로 복사 |
 | `work/lecpage.state.json` | 마지막 빌드 위치(work 기준 상대 경로)·교재 해석 캐시 키·마지막으로 올린 곳(`deploy`: 이름·주소, 비밀 값 없음) | 안 올림 |
 | `work/live-relay/` | `publish --live`가 `backends/cloudflare`를 복사해 이 연수 코드만 받게 한 중계(이름 `<사이트>-live`) | 강사 Cloudflare에 올림 |
-| `qa/` | 점검 스크린샷 4장과 report.json | 안 올림 |
+| `qa/` | 점검 스크린샷 6장(휴대폰·태블릿·PC × 밝게·어둡게)과 report.json | 안 올림 |
 
 `--work 폴더`로 작업 폴더를 바꿀 수 있습니다.
 
@@ -31,26 +33,26 @@
 
 | 명령 | 하는 일 | 출력 |
 |---|---|---|
-| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides] [--bundle-fonts\|--no-bundle-fonts]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎: 교재 요약, 칸 목록, 빈칸, `info.json`이 없으면 **물을 것**(참여 기능·인원·학교망), **교재 반영**(프롬프트·실습 단계·링크·질문답·교재 줄이 보이는 칸에 실렸는지, 빠진 것 3개까지. 교재 보기는 빼고 셈. 빠진 교재 줄은 `structure --add-leftovers`가 같은 기준으로 패치를 만듦), 빌드, 점검 |
+| `make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--fresh] [--no-qa] [--no-slides] [--bundle-fonts\|--no-bundle-fonts]` | 해석 → 초안 → 검증 → 빌드 → 점검. 교재가 그대로면 해석을 재사용(쪽 그림이 가장 느림, 다시 읽기는 `--reingest`). 이미 있는 `blueprint.json`은 지키고, `--fresh`일 때만 새 초안으로 바꿈. `info.json`의 인터뷰 답(분위기·움직임·강조색·참여 기능·대상)을 설계도에 넣음 | 15줄 안팎(오래 걸리면 stderr에 진행 줄 `… 쪽 그림 그리는 중 120/300쪽`): 교재 요약, 칸 목록, 빈칸, `info.json`이 없으면 **물을 것**(참여 기능·인원·학교망), **교재 반영**(프롬프트·실습 단계·링크·질문답·교재 줄이 보이는 칸에 실렸는지, 빠진 것 3개까지. 교재 보기는 빼고 셈. 빠진 교재 줄은 `structure --add-leftovers`가 같은 기준으로 패치를 만듦), 빌드, 점검 |
 | `brief [work\|blueprint.json\|material.json]` | 큰 JSON 대신 읽는 요약. 칸 id·항목 수, 구성(흐름·권하는 기능), 실습별 단계·프롬프트 수와 쪽, 빈칸, **싣지 못한 것 n개**, 주의, 글꼴. 교재 요약에는 찾은 것과 교재에서 찾은 주소(강사 확인 뒤 `info.json`) | 10줄 안팎(수백 토큰) |
 | `structure [work\|blueprint.json] [-i info.json] [--add-leftovers]` | 구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것. `--add-leftovers`는 그것을 교재 순서 자리에 글 칸으로 넣는 `work/leftovers.patch.json`을 씀 → `patch`로 반영 | 6줄 안팎 |
 | `patch <blueprint.json> [patch.json\|'{…}'] [--set 경로=값]… [-i info.json] [--undo] [--no-build] [--qa]` | 패치 적용 → 검증(없는 디자인 이름은 오류, 가까운 이름 제안) → 저장(이전 판 5개까지) → 마지막 빌드 위치에 다시 빌드. `--undo`는 한 판씩 앞으로 | 바뀐 점 한 줄씩 + 교재 반영 한 줄 |
 | `options <blueprint.json> [--presets a,b,c] [--mood calm,bold] [-o 폴더]` | `--mood`: 강사가 말한 느낌(calm·warm·bold·minimal·playful·formal·tech·editorial·energetic…)으로 순위. 추천 3안(또는 고른 안)을 따로 빌드하고 PC 첫 화면·PC 본문·휴대폰을 한 장(`work/options/contact-sheet.png`)에 모음 | 안마다 한 줄 |
-| `doctor` | Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령 | 도구마다 한 줄 |
+| `doctor` | 판(첫 줄)·Node·Playwright·npx·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령(윈도우·macOS·리눅스) | 도구마다 한 줄 |
 | `review <dist> [--port 4180] [--out 폴더]` | 사이트를 127.0.0.1에 띄우고 '수정 요청' 단추를 붙임. 강사가 펜·네모·화살표·글자로 표시하고 글을 쓰면 `work/feedback/NNN.png`·`NNN.json`(글·칸 id·시각)으로 저장 | 주소 한 줄 |
-| `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·겹침 검사(`overlap-lint.mjs`, error면 실패)·움직임 검사(`motion-check.mjs`, PC 화면 한 번: 첫 화면 그림이 실제로 도는지·등장이 숨은 채 남지 않는지, 알림만)·문구 검사(`copy-lint.mjs`, 알림만. 옆의 `work/`가 있으면 교재에서 그대로 온 글은 세지 않음)가 있으면 함께. 엔진 CSS·고정 문구라 설계도로 못 고치는 것(글 폭·크기 단계 등)은 `알림만(엔진 몫, 손댈 것 없음)` 한 줄. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
+| `qa <dist> [--password 암호]` | 내부 http로 열어 휴대폰·태블릿·PC × 밝게·어둡게: 스크립트 오류, 가로 넘침, 대체 텍스트, h1, 이름 없는 버튼, 깨진 자료 경로. 디자인 검사(`scripts/design-lint.mjs`, error면 실패)·겹침 검사(`overlap-lint.mjs`, error면 실패)·움직임 검사(`motion-check.mjs`, PC 화면 한 번: 첫 화면의 애니메이션·전환·그리기 사건으로 움직임이 있는지·도는 그림이 계속 도는지·등장이 숨은 채 남지 않는지, 알림만. 시각이 아니라 사건으로 판정해 부하가 커도 같은 결과)·문구 검사(`copy-lint.mjs`, 알림만. 옆의 `work/`가 있으면 교재에서 그대로 온 글은 세지 않음)가 있으면 함께. 엔진 CSS·고정 문구라 설계도로 못 고치는 것(글 폭·크기 단계 등)은 `알림만(엔진 몫, 손댈 것 없음)` 한 줄. 암호 사이트는 `--password`로 풀어서 점검 | 문제만 줄마다 |
 | `build <bp> -o dist [--assets work/assets] [-i info.json] [--password 암호] [--bundle-fonts]` | 빌드만 | 한 줄 |
 | `validate <bp>` | 검증만(주의 8개까지, 나머지는 `--json`) | 몇 줄 |
 | `design <bp>` · `decide-infra -i info.json` | 프리셋 순위·효과 / 호스팅 × 실시간 백엔드 추천 | 몇 줄 |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림(앱과 같은 이름 `slide-<쪽>.webp`)·교재 그림·교재 원본을 앱이 [저장한 파일 열기]로 여는 파일 하나로. 참여 기능 연결·관리자 키·사이트 암호·온라인 접속 주소·내 컴퓨터 경로는 담지 않음(앱에서 다시 정함). 앱은 `https://lecpage.com/` | 5줄 안팎 |
-| `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음 | 4줄 |
+| `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 [파일로 저장]한 연수를 작업 폴더(설계도·`info.json`·교재 해석·`assets/`·교재 원본 `src/`)로 풀고 옆 `dist/`에 빌드. 이미 있는 설계도는 `--force` 없이 덮지 않음. 접속 주소·참여 기능 키는 강사에게 다시 받음. 파일이 이 skill보다 새 판으로 만든 것이면 `알림` 한 줄(새 판 받는 명령) | 4줄 |
 | `publish [work] [--host cloudflare] [--live] [--features qa,poll] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-qa] [--no-bundle-fonts]` | 강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기 `--no-bundle-fonts`). `--live`: 중계 올리기 → 관리자 키를 만들어 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만(화면에 안 찍음, 이미 있으면 그대로) → `info.json` `live`에 중계 주소·연수 코드 → `patch -i`로 다시 빌드·점검 → 빈 임시 폴더에서 사이트 올리기 → 중계가 이 사이트만 받게(`ALLOWED_ORIGINS`, 연수 코드는 `ALLOWED_CODES`) → 사이트·`check.html`·중계 `/api/health` 확인 → `handouts`. 인증은 `wrangler login`이나 `CLOUDFLARE_API_TOKEN`(+`CLOUDFLARE_ACCOUNT_ID`) 환경 변수만. `--dry-run`은 순서와 강사가 할 일만 보여 주고 아무것도 바꾸지 않음. 다시 올릴 때 같은 명령(이름·키 그대로). 다른 곳은 한 줄 명령을 알려 주고 멈춤 | 10줄 안팎 |
 | `handouts <배포한 주소\|dist> [-o 폴더] [--password 암호]` | `poster.html`·`screen.html`을 열어 `QR-안내문.pdf`(참가자용 A4 한 장)·`발표화면.png`·`발표화면-QR-크게.png`. 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림. Playwright가 없으면 건너뜀 | 3줄 |
-| `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP | 한 줄 |
+| `serve dist [--port 4173] [--host 0.0.0.0]` · `pack dist -o site.zip` | 미리보기 서버 / ZIP(`index.html`이 없는 폴더는 실패, `-o`의 폴더는 만듦) | 한 줄 |
 | `draft` · `prompt` · `presets` · `effects` | 초안만, AI 프롬프트 파일, 목록 | |
-| `guard <AI 답.json\|txt> <material.json> [-i info.json] [-o blueprint.json]` | 교재 지킴이: 다른 AI가 짠 설계도(AI 창에서 복사한 답 글도 됨)를 교재 초안과 견줘 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 교재대로 되돌리고, 교재에 없는 주소는 뺌 | 되돌린 곳 한 줄씩 |
+| `guard <AI 답.json\|txt> <material.json> [-i info.json] [-o blueprint.json]` | 교재 지킴이: 다른 AI가 짠 설계도(AI 창에서 복사한 답 글도 됨)를 교재 초안과 견줘 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 교재대로 되돌리고, 교재에 없는 주소는 뺌. 강사만 정하는 값(참여 기능 서버·연수 코드·키·공개 범위·개인정보·QR·접속 주소·설문 주소·바깥 로고)은 앱과 같은 규칙(`applyInfo`)으로 AI 답에서 받지 않고 지금 설계도·`info.json` 값을 씀 | 되돌린 곳 한 줄씩 |
 
-교재 해석만 따로 할 때: `node <skill>/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media --slides work/assets/slides`.
+교재 해석만 따로 할 때: `node <skill>/scripts/ingest.mjs 교재.pptx -o work/material.json --images work/assets/media --slides work/assets/slides`. 쪽 그림만: `node <skill>/scripts/render-slides.mjs 교재.pptx work/assets/slides`(셸 없이 LibreOffice·pdftoppm을 바로 부름, 큰 교재는 쪽을 나눠 동시에).
 
 ## 3. 패치 형식
 설계도를 통째로 다시 쓰지 않습니다. 바뀐 곳만 보냅니다. 앱의 검토 대화도 같은 형식을 씁니다(엔진 `applyBlueprintPatch`).
@@ -76,8 +78,9 @@
 **`--set` 한 줄 고치기**(배열 안 한 항목도 됨, 번호는 0부터):
 ```bash
 $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stations.items.1.title="활동지 만들기" --set sections.quiz.hidden=true
+$L patch work/blueprint.json --set concept.idea="…" concept.motif="…"   # --set 하나 뒤에 경로=값 여러 개도 됨
 ```
-값은 JSON으로 읽히면 JSON(`true`, `3`, `null`, `["a"]`), 아니면 글자 그대로. 패치 파일 없이 `'{"meta":{…}}'`처럼 바로 줘도 됩니다.
+값은 JSON으로 읽히면 JSON(`true`, `3`, `null`, `["a"]`), 아니면 글자 그대로. 목록 번호는 있는 번호나 바로 다음(끝에 붙이기)까지만. 패치 파일 없이 `'{"meta":{…}}'`처럼 바로 줘도 됩니다.
 
 ## 4. 강사에게 직접 받는 값(info.json)
 패치는 AI 출력에서 오므로 아래 값은 **패치로 바꿀 수 없습니다**(경고와 함께 빠짐): `meta.siteUrl`·`joinUrl`·`shortUrl`, `live.url`·`code`·`anonKey`, `access`.
@@ -89,13 +92,14 @@ $L patch work/blueprint.json --set meta.venue="본관 3층" --set sections.stati
 ```
 암호는 파일에 쓰지 않습니다: `--password '<암호>'` 또는 `LECPAGE_PASSWORD`. `--password`를 주면 `access`는 저절로 `password`.
 
-글꼴 CDN이 막힌 학교망: `publish`와, `info.json`의 `network`가 `restricted`·`offline`인 `make`는 글꼴을 기본으로 담습니다(끄기 `--no-bundle-fonts`). 그 밖에는 `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담음. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴 파일마다 사이트 글자만 남긴 같은 글꼴을 먼저 받게 하고 원본은 사이트에 없던 글자(참가자 글)가 나올 때만 받아, 첫 로딩 글꼴이 예시 기준 0.5~1.0MB → 0.23~0.65MB. 파일 이름이 내용 해시라 `_headers`에 1년 캐시(`/assets/fonts/*`)를 적고, 첫 화면 제목 글꼴은 미리 받음(preload). 사이트 한 벌의 크기는 원본과 줄인 것을 함께 담아 1~3MB. 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시를 거치는 곳은 `NODE_USE_ENV_PROXY=1`.
+글꼴 CDN이 막힌 학교망: `publish`와, `info.json`의 `network`가 `restricted`·`offline`인 `make`는 글꼴을 기본으로 담습니다(끄기 `--no-bundle-fonts`). 그 밖에는 `make`·`build`에 `--bundle-fonts`를 붙이면 사이트에 쓰인 글자가 든 글꼴 조각만 `assets/fonts/`로 담아 쪽을 열 때 외부 요청이 0이 됩니다(woff2·쓰는 굵기만 담음. 앱은 대부분의 올릴 곳에서 기본으로 담음, `make`로 한 번 켜면 `patch`로 다시 만들 때도 이어짐). 글꼴 파일마다 사이트 글자만 남긴 같은 글꼴을 먼저 받게 하고 원본은 사이트에 없던 글자(참가자 글)가 나올 때만 받아, 첫 로딩 글꼴이 예시 기준 0.5~1.0MB → 0.23~0.65MB. 파일 이름이 내용 해시라 `_headers`에 1년 캐시(`/assets/fonts/*`)를 적고, 첫 화면 제목 글꼴은 미리 받음(preload). 사이트 한 벌의 크기는 원본과 줄인 것을 함께 담아 1~3MB. 글꼴을 못 받으면 CDN 주소 그대로 두고 알려 줌. 프록시(`HTTPS_PROXY`) 뒤에서는 CLI가 `NODE_USE_ENV_PROXY=1`(Node 22.21·24 이상)을 붙여 스스로 다시 실행하므로 따로 할 일이 없음.
 
 ## 5. 문제가 생기면
 | 증상 | 할 일 |
 |---|---|
 | 점검이 "화면 검사 건너뜀" | `doctor`의 Playwright 설치 명령. 빌드 결과는 그대로 쓸 수 있음 |
-| 쪽 그림이 없음(`render-failed`) | 교재를 PDF로 저장해 함께 넣기(`make 교재.pptx 교재.pdf`), 또는 `doctor`의 LibreOffice·pdftoppm 설치 |
+| 쪽 그림이 없음(`render-failed`) | 교재를 PDF로 저장해 함께 넣기(`make 교재.pptx 교재.pdf`), 또는 `doctor`의 LibreOffice·pdftoppm 설치(윈도우는 winget 명령, LibreOffice는 기본 설치 위치 `Program Files\LibreOffice`도 찾음) |
+| 쪽이 많아 오래 걸림 | 진행 줄이 stderr에 나옴(멈춘 것 아님). 에이전트 명령 시간 제한(Claude Code 기본 2분)을 10분으로 늘리거나 백그라운드로. 같은 교재로 다시 부르면 쪽 그림은 재사용 |
 | PDF 글이 비어 있음(`no-text`) | 스캔본. 쪽 그림만 쓰고 내용은 강사에게 받기 |
 | `깨진 자료 N` | 설계도의 `src`가 `work/assets/`에 없는 그림을 가리킴. 경로를 고치거나 칸을 숨김 |
 | 엔진을 고친 뒤 해석이 예전 그대로 | `make … --reingest` |

@@ -16,8 +16,8 @@ node $SKILL/scripts/ingest.mjs 교재.pptx 교재.pdf 안내.hwpx -o work/materi
 # 파이썬만(파일 하나)
 python3 $SKILL/scripts/ingest.py 교재.pdf -o work/material.json --images work/assets/media
 
-# 쪽 그림만(LibreOffice + pdftoppm → slide-001.webp …)
-bash $SKILL/scripts/render_slides.sh 교재.pptx work/assets/slides
+# 쪽 그림만(LibreOffice + pdftoppm → slide-001.webp …, 셸 없이 Node로 — 윈도우도 같음)
+node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
 ```
 
 | 옵션 | 뜻 |

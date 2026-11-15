@@ -742,7 +742,7 @@ const commands = {
       ...coverageLines(work, raw),
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
       ...b.warnings.filter((w) => w.path === 'fonts').map((w) => `  ${w.message_ko}${args['bundle-fonts'] ? '' : ' (끄기 --no-bundle-fonts)'}`),
-      ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
+      ...(q ? qaLines(q) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
     ];
     say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, ask: ask.startsWith('물을 것') ? ['features', 'size', 'network'] : [], material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
@@ -813,6 +813,22 @@ const commands = {
     const r = E.applyBlueprintPatch(before, patch);
     if (args.i) { const info = readJson(args.i); r.raw = E.applyTeacherValues(E.syncInfo(r.raw, info), info, { access: args.access }); }
     const final = strict(args.i ? E.validate(r.raw) : { errors: r.errors, warnings: r.warnings.filter((w) => w.kind !== 'patch') });
+    // --set 값이 검증에서 버려지면(형식이 틀림) '바뀜'으로 저장하지 않고 고칠 모양을 알려 줌
+    if (!args.undo && args.set.length) {
+      const vbp = E.validate(r.raw).blueprint;
+      const HINT = { date: '날짜는 YYYY-MM-DD(예: 2026-12-03)', start: '시각은 HH:MM(예: 14:00)', end: '시각은 HH:MM(예: 16:30)', accent: '색은 #RRGGBB(예: #12306b)', logo: '로고는 https 주소나 assets/ 안의 그림 경로', url: '주소는 https://…', href: '주소는 https://…', joinUrl: '주소는 https://…' };
+      const lost = [];
+      for (const expr of args.set) {
+        const at = expr.indexOf('='); const parts = expr.slice(0, at).trim().split('.').filter(Boolean);
+        let val = expr.slice(at + 1); try { val = JSON.parse(val); } catch { /* 글자 그대로 */ }
+        if (!['string', 'number'].includes(typeof val) || val === '') continue;
+        let got;
+        if (parts[0] === 'sections') { if (parts.length !== 3 || parts[2] === 'hidden') continue; const sec = vbp.sections.find((x) => x.id === parts[1]); if (!sec) continue; got = sec[parts[2]]; }
+        else got = parts.reduce((o, k) => (o === null || o === undefined ? undefined : o[k]), vbp);
+        if (got === '') lost.push(`${parts.join('.')}="${cut(String(val), 30)}"(쓸 수 없는 값이라 빌드에서 빠짐${HINT[parts.at(-1)] ? `. ${HINT[parts.at(-1)]}` : ''})`);
+      }
+      if (lost.length) fail('저장하지 않았어요: ' + lost.join(' / '));
+    }
     const pw = r.warnings.filter((w) => w.kind === 'patch');
     if (final.errors.length) fail('검증 실패로 저장하지 않았어요: ' + final.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '), { warnings: pw });
     const changes = E.diffSummary(undoFrom || before, r.raw);
