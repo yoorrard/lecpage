@@ -397,7 +397,8 @@ export async function start(opts = readOptions()) {
     // 캐시: 엔진이 만든 파일은 이름이 늘 같음(assets/lecpage.js …). 연수 중에 다시 배포해도 새 쪽과 옛 스크립트가 섞이지 않게
     // 쓰기 전마다 물어봄(no-cache + ETag → 바뀌지 않았으면 304, 본문 없이). 주소에 지문(?v=)이 붙은 파일만 오래 둠
     const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
-    const fingerprinted = /[?&]v=[\w.-]{6,}/.test(req.url || '');
+    // 지문이 붙은 것: 주소의 ?v=…, 또는 이름이 내용 해시인 담은 글꼴(assets/fonts/<16자리>.woff2)
+    const fingerprinted = /[?&]v=[\w.-]{6,}/.test(req.url || '') || /\/assets\/fonts\/[0-9a-f]{12,}\.(woff2?|ttf|otf)$/.test(pathname);
     const h = {
       'Content-Type': MIME[ext] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', ETag: etag, 'Last-Modified': new Date(st.mtimeMs).toUTCString(),
       'Cache-Control': fingerprinted && ext !== '.html' ? 'public, max-age=31536000, immutable' : 'no-cache', 'Referrer-Policy': 'strict-origin-when-cross-origin',
