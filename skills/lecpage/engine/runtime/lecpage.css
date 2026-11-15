@@ -1320,7 +1320,7 @@ main[tabindex="-1"]:focus{outline:0}
 .lp-qr{width:200px;aspect-ratio:1;background:#fff;border-radius:8px;padding:4px;display:grid;place-items:center}
 .lp-qr svg,.lp-qr img{width:100%;height:auto;display:block}
 .lp-qr-lg{width:min(280px,70vw);margin:0 auto}
-.lp-qr-off{font-size:.86rem;line-height:1.45;color:#333;text-align:center;padding:8px;word-break:keep-all}
+.lp-qr-off{font-size:.86rem;line-height:1.45;color:#333;text-align:center;padding:8px;word-break:keep-all;overflow-wrap:anywhere}
 /* 마무리: 화면 폭 띠에 아주 큰 문장 + 서명 줄. 프리셋의 첫 화면 표식을 한 번 더 써서 끝을 맺음(.lp-closing--구성) */
 .lp-closing{display:grid;align-content:center;min-height:min(86svh,820px);overflow:hidden;overflow:clip;padding-block:clamp(88px,12vw,176px) clamp(56px,7vw,104px)}
 .lp-closing > .lp-wrap{position:relative;display:grid;gap:var(--sp-5);justify-items:start}

@@ -71,7 +71,7 @@
   var LOOP = !DATA.siteUrl && !LOCAL_PAGE && /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(location.hostname);
   var URL_LOOP = 'localhost 주소는 이 컴퓨터에서만 열려요. 노트북의 와이파이 주소(예: http://192.168.0.10:8787)로 이 쪽을 다시 열면 참가자 QR이 나와요.';
   var LAN_BASE = '';
-  function offText() { return LOOP ? URL_LOOP : URL_OFF; }
+  function offText(short) { return LOOP ? (short ? '이 컴퓨터 밖에서는 열리지 않는 주소예요' : URL_LOOP) : URL_OFF; }
   // 지금 주소의 경로(보조 화면이면 그 폴더 = 참가자 화면. /poster.html이든 /poster(확장자 없는 주소)든 같음)
   function herePath() { return location.href.split('#')[0].split('?')[0].replace(/^[a-z]+:\/\/[^/]+/i, '').replace(/(check|console|screen|privacy|poster)(\.html)?$/, ''); }
   // 원래 주소(QR·복사): 강사가 준 사이트 주소, 없으면 지금 페이지 주소. 파일로 열었거나 localhost인데 와이파이 주소를 모르면 ''
@@ -96,7 +96,7 @@
   function shortShown() { var s = bare(DATA.shortUrl), u = bare(pageUrl()); return s && u && s !== u ? s : ''; }
   function fillUrls() {
     var u = pageUrl(), s = shortShown();
-    $$('[data-url-self]').forEach(function (n) { n.textContent = s || (u ? bare(u) : offText()); });
+    $$('[data-url-self]').forEach(function (n) { n.textContent = s || (u ? bare(u) : offText(true)); });
     $$('[data-url-full]').forEach(function (n) { n.hidden = !s; n.textContent = s ? bare(u) : ''; });
   }
   // 방 안에 있는 사람용 주소(QR·복사): 암호 보호 사이트면 #k=…를 붙여 바로 열리게(보이는 글자에는 붙이지 않음)
