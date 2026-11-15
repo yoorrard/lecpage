@@ -16,7 +16,7 @@
 // handouts <주소|사이트 폴더> [-o 저장 폴더] [--password 암호]
 //   QR-안내문.pdf(참가자용 A4 한 장) · 발표화면.png · 발표화면-QR-크게.png. Playwright가 없으면 건너뜀
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, copyFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { join, resolve, dirname, basename } from 'node:path';
+import { join, resolve, dirname, basename, win32, posix } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -37,11 +37,29 @@ function siteStat(dir) {
   return { files, max, bytes, maxName };
 }
 
+// cmd.exe가 특별히 읽는 글자(따옴표 안에서도 ^로 막음). cross-spawn과 같은 규칙
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+const winArg = (a) => `"${String(a).replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, '$1$1')}"`.replace(CMD_META, '^$1').replace(CMD_META, '^$1');
+/**
+ * npx를 셸 없이 부르는 길: Node에 딸린 npm의 npx-cli.js를 node로 바로 실행(윈도우의 npx.cmd는 셸 없이 못 띄움 —
+ * Node 문서 child_process 'Spawning .bat and .cmd files on Windows'). 못 찾으면 POSIX는 npx, 윈도우는 cmd.exe /d /s /c로 인자를 막아 넘김
+ * @returns {{ cmd: string, args: string[], opts: object }}
+ */
+export function npxCommand(argv, { platform = process.platform, execPath = process.execPath, env = process.env, exists = existsSync } = {}) {
+  const P = platform === 'win32' ? win32 : posix, dir = P.dirname(execPath);
+  const cli = [/npm-cli\.js$/.test(env.npm_execpath || '') && P.join(P.dirname(env.npm_execpath), 'npx-cli.js'), P.join(dir, 'node_modules', 'npm', 'bin', 'npx-cli.js'), P.join(dir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js')].find((p) => p && exists(p));
+  if (cli) return { cmd: execPath, args: [cli, ...argv], opts: {} };
+  if (platform !== 'win32') return { cmd: 'npx', args: argv, opts: {} };
+  return { cmd: env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `"${['npx', ...argv.map(winArg)].join(' ')}"`], opts: { windowsVerbatimArguments: true } };
+}
+/** npx로 패키지 명령 실행(spawnSync 결과) */
+export function npx(argv, o = {}) { const n = npxCommand(argv); return spawnSync(n.cmd, n.args, { ...n.opts, windowsHide: true, ...o }); }
+
 /** wrangler 실행: 시험용 가짜 명령 → 고정 버전 npx. 비밀은 input(stdin)으로만 넘기고, 출력에서 토큰 모양은 가림 */
 function wrangler(argv, { cwd, input } = {}) {
   const fake = process.env.LECPAGE_WRANGLER;
-  const [cmd, pre] = fake ? [process.execPath, [fake]] : [process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', `wrangler@${WRANGLER_VER}`]];
-  const r = spawnSync(cmd, [...pre, ...argv], { cwd, input, encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, maxBuffer: 32 * MiB, timeout: 10 * 60e3 });
+  const o = { cwd, input, encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' }, maxBuffer: 32 * MiB, timeout: 10 * 60e3 };
+  const r = fake ? spawnSync(process.execPath, [fake, ...argv], o) : npx(['--yes', `wrangler@${WRANGLER_VER}`, ...argv], o);
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, out: redact(out), raw: out };
 }
@@ -267,9 +285,9 @@ let onpodBin = null;
 function onpodRun(argv, { cwd } = {}) {
   const fake = process.env.LECPAGE_ONPOD;
   // 이미 깔린 onpod이 있으면 그것, 없으면 npx. CDN이 최신 바이너리만 주므로 버전을 고정하지 않음(고정하면 해시가 안 맞아 설치가 멈춤)
-  if (!fake && onpodBin === null) onpodBin = spawnSync('onpod', ['--version'], { encoding: 'utf8', timeout: 20e3 }).status === 0;
-  const [cmd, pre] = fake ? [process.execPath, [fake]] : onpodBin ? ['onpod', []] : [process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'onpod@latest']];
-  const r = spawnSync(cmd, [...pre, ...argv], { cwd, encoding: 'utf8', env: process.env, maxBuffer: 32 * MiB, timeout: 10 * 60e3 });
+  if (!fake && onpodBin === null) onpodBin = spawnSync('onpod', ['--version'], { encoding: 'utf8', timeout: 20e3, windowsHide: true }).status === 0;
+  const o = { cwd, encoding: 'utf8', env: process.env, maxBuffer: 32 * MiB, timeout: 10 * 60e3 };
+  const r = fake ? spawnSync(process.execPath, [fake, ...argv], o) : onpodBin ? spawnSync('onpod', argv, { ...o, windowsHide: true }) : npx(['--yes', 'onpod@latest', ...argv], o);
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, out: redact(out), raw: out };
 }
@@ -393,6 +411,12 @@ export async function handoutsCmd(h, o = {}) {
   if (/^http:\/\/(127\.0\.0\.1|localhost)/.test(base)) local = true;
   // 강사 화면(console.html)은 참여 기능이 있는 사이트에만 있음 → 그때만 강사 화면 안내
   if (!siteDir && out.endsWith('-강사용') && existsSync(join(out.slice(0, -'-강사용'.length), 'index.html'))) siteDir = out.slice(0, -'-강사용'.length);
+  // 열리지 않는 주소면 브라우저를 띄우기 전에 멈춤(직접 부르면 종료 코드 1, publish 안에서는 한 줄로)
+  const unreachable = `주소가 열리지 않아요: ${base}poster.html — 배포가 끝났는지(새 주소는 1~2분 걸릴 수 있어요)·주소가 맞는지 확인하고 다시 handouts를 실행해 주세요`;
+  if (!local) {
+    const ok = await fetch(base + 'poster.html', { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) }).then((r) => r.ok).catch(() => false);
+    if (!ok) { if (!o.quiet) fail(unreachable); return { lines: [`안내물 ✕ ${unreachable}`], files: [] }; }
+  }
   const hasConsole = siteDir ? existsSync(join(siteDir, 'console.html')) : await fetch(base + 'console.html', { method: 'HEAD', signal: AbortSignal.timeout(8000) }).then((r) => r.ok).catch(() => false);
   const pw = args.password || process.env.LECPAGE_PASSWORD || '';
   const frag = pw ? '#k=' + encodeURIComponent(pw) : '';
@@ -400,7 +424,9 @@ export async function handoutsCmd(h, o = {}) {
   const finish = (lines, files) => { if (server) server.close(); if (!o.quiet) say(lines, { ok: true, files, local }); return { lines, files }; };
   if (!pwr) return finish([`안내물 건너뜀(Playwright 없음): ${base}poster.html을 열어 [인쇄하기] → PDF로 저장, 발표 화면은 ${base}screen.html`], []);
   let browser;
-  try { browser = await pwr.chromium.launch(); } catch { return finish(['안내물 건너뜀(Chromium 실행 실패: npx playwright install chromium)'], []); }
+  // 프록시(HTTPS_PROXY) 뒤면 브라우저도 그 길로(이 컴퓨터 안 주소는 바로)
+  const proxyUrl = !local && (process.env.HTTPS_PROXY || process.env.https_proxy);
+  try { browser = await pwr.chromium.launch(proxyUrl ? { proxy: { server: proxyUrl, bypass: '127.0.0.1,localhost' } } : {}); } catch { return finish(['안내물 건너뜀(Chromium 실행 실패: npx playwright install chromium)'], []); }
   mkdirSync(out, { recursive: true });
   const files = [], errs = [];
   try {
@@ -433,6 +459,9 @@ export async function handoutsCmd(h, o = {}) {
     ], files);
   } catch (e) {
     await browser.close().catch(() => {});
-    return finish([`안내물 ✕ ${e.message.split('\n')[0].slice(0, 140)}`], files);
+    if (server) server.close();
+    const why = /net::ERR_|ECONNREFUSED|ENOTFOUND|Timeout/i.test(e.message) ? unreachable : `안내물을 만들지 못했어요: ${e.message.split('\n')[0].slice(0, 140)}`;
+    if (!o.quiet) fail(why);
+    return { lines: [`안내물 ✕ ${why}`], files };
   }
 }

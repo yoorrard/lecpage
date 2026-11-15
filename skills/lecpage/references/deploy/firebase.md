@@ -28,18 +28,18 @@ cp -r ../site ./site                                   # firebase.json 의 "publ
 cp ../skills/lecpage/templates/deploy/firebase/firebase.json .
 cp ../skills/lecpage/templates/deploy/firebase/.firebaserc .
 # .firebaserc 의 {{FIREBASE_PROJECT_ID}} 를 콘솔의 프로젝트 ID로, firebase.json 의 {{…}} 치환
-npx firebase-tools@latest login
-npx firebase-tools@latest deploy --only hosting
+npx firebase-tools@15.34.2 login
+npx firebase-tools@15.34.2 deploy --only hosting
 # → https://<프로젝트ID>.web.app
 ```
-3. 미리 보기 채널(임시 주소, 7일): `npx firebase-tools@latest hosting:channel:deploy preview --expires 7d`
+3. 미리 보기 채널(임시 주소, 7일): `npx firebase-tools@15.34.2 hosting:channel:deploy preview --expires 7d`
 
 ## 확인하기
 - `…/check.html` 초록. 콘솔 **Hosting → 사용량**에서 이달 전송량 확인(연수 전날).
 
 ## 되돌리기·정리
 - 콘솔 **Hosting → 출시 기록** → 이전 버전 **⋮ → 롤백**.
-- 사이트 내리기: `npx firebase-tools@latest hosting:disable`.
+- 사이트 내리기: `npx firebase-tools@15.34.2 hosting:disable`.
 - 프로젝트 삭제: 콘솔 **프로젝트 설정 → 일반 → 프로젝트 삭제**(30일 뒤 완전 삭제).
 
 ## 연수가 끝난 뒤

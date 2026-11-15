@@ -14,7 +14,7 @@
 // 보안: 패치는 AI 출력에서 올 수 있어(프롬프트 주입 통로) 참가자 QR·관리자 키가 향하는 값은 받지 않습니다.
 //   meta.siteUrl·joinUrl·shortUrl, live.url·code·anonKey, access 는 지우고 주의를 남깁니다. 이 값은 강사에게 직접 받습니다.
 import { validate, str } from './validate.js';
-import { SECTION_DEFS, SECTION_TYPES } from './schema/sections.js';
+import { SECTION_DEFS, SECTION_TYPES, TEACHER_ONLY } from './schema/sections.js';
 import { PRESETS } from './design/presets.js';
 import { FX } from './design/fx-catalog.js';
 import { syncHeroMeta, alignSessions } from './hero-meta.js';
@@ -28,8 +28,6 @@ const slug = (s, i) => (str(s, 40).toLowerCase().replace(/[^a-z0-9가-힣]+/g, '
 const MERGE_KEYS = ['meta', 'design', 'audience', 'archetype', 'privacy', 'live', 'deploy', 'concept'];
 const REPLACE_KEYS = ['instructors', 'sources'];
 const KNOWN = new Set([...MERGE_KEYS, ...REPLACE_KEYS, 'sections', 'add', 'order', 'note']);
-/** 패치로 바꿀 수 없는 값(강사에게 직접 받는 값) */
-export const PROTECTED_PATHS = ['meta.siteUrl', 'meta.joinUrl', 'meta.shortUrl', 'live.url', 'live.code', 'live.anonKey', 'access'];
 
 /** RFC 7396(JSON Merge Patch): 객체는 재귀 병합, 배열·값은 바꿈, null은 키 삭제 */
 function mergeDeep(target, patch) {
@@ -58,9 +56,9 @@ export function withSectionIds(sections) {
 function stripProtected(patch, warnings) {
   const p = { ...patch };
   const drop = (path) => warnings.push({ path, message_ko: `${path} 값은 패치로 바꾸지 않아요. 강사에게 직접 받아 연수 정보(info)로 넣어 주세요.` });
-  if ('access' in p) { delete p.access; drop('access'); }
-  if (isObj(p.meta)) { p.meta = { ...p.meta }; for (const k of ['siteUrl', 'joinUrl', 'shortUrl']) if (k in p.meta) { delete p.meta[k]; drop('meta.' + k); } }
-  if (isObj(p.live)) { p.live = { ...p.live }; for (const k of ['url', 'code', 'anonKey']) if (k in p.live) { delete p.live[k]; drop('live.' + k); } }
+  // 강사만 정하는 값(한 벌: schema/sections.js TEACHER_ONLY)
+  for (const top of TEACHER_ONLY.whole) if (top in p) { delete p[top]; drop(top); }
+  for (const top of ['meta', 'live']) if (isObj(p[top])) { p[top] = { ...p[top] }; for (const k of TEACHER_ONLY[top]) if (k in p[top]) { delete p[top][k]; drop(`${top}.${k}`); } }
   return p;
 }
 
