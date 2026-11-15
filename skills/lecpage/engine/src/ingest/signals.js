@@ -77,6 +77,15 @@ export function docBlocks(material) {
         });
         for (const l of p.links || []) cur.links.push(l);
       }
+      // 자리를 모르는 표(PDF는 표가 쪽마다 따로 나옴): 그 쪽에서 제목만 있고 글이 없는 절("2. 달라지는 점" 바로 아래가 표)에, 없으면 그 쪽의 마지막 절에.
+      // 어느 절에도 붙지 않아 표가 통째로 빠지지 않게(교재 반영 L3)
+      const mine = out.filter((u) => u.file === f.id);
+      for (const p of pages) for (const t of p.tables || []) {
+        if (mine.some((u) => u.tables.includes(t))) continue;
+        const onPage = mine.filter((u) => u.pages.includes(p.page) && !u.cover);
+        const host = onPage.find((u) => !u.paras.length && !u.tables.length) || onPage[onPage.length - 1];
+        if (host) host.tables.push(t);
+      }
     }
   }
   return out;
@@ -295,7 +304,9 @@ function detectAdmin(pages, title) {
   for (const p of pages) for (const x of p.paragraphs || []) {
     const t = clean(x.text); if (!t || t.length > 140 || QA_Q.test(t) || QA_A.test(t)) continue;
     const lab = splitLabel(t);
-    if (/직무\s*연수|이수\s*(?:기준|시간|처리|결과)/.test(t)) out.official = true;
+    // 직무연수: '직무연수·자격연수' 낱말, 또는 연수 행정 이름표 줄("이수 기준: …", "이수 시간: 15시간").
+    // 본문 속 "과목 이수 기준"(고교학점제 안내 등)은 연수 행정이 아님
+    if (/직무\s*연수|자격\s*연수/.test(t) || (lab && /^(?:연수\s*)?이수\s*(?:기준|시간|처리|조건|요건|방법)$/.test(lab[0]))) out.official = true;
     const rate = /출석(?:률)?\s*(\d{2,3})\s*%/.exec(t);
     if (rate && !out.completionRate && +rate[1] <= 100) { out.completionRate = +rate[1]; out.rateText = lab ? lab[1] : t; }
     const hrs = /^(?:총\s*)?(?:연수|이수|교육)\s*시간\s*[:：]?\s*(\d{1,3})\s*시간/.exec(t);
@@ -331,8 +342,15 @@ function detectAddresses(pages, d) {
   for (const l of d.links || []) {
     if (l.kind === 'meeting') join.push(one(l, '회의 주소'));
     else if (l.kind === 'video' && (/\/live\b|\/live\//.test(l.url) || /중계|실시간|라이브|스트리밍|live/i.test(ctx(l)))) join.push(one(l, '중계 주소'));
-    else if (l.kind === 'form') survey.push(one(l, '설문 주소'));
+    else if (l.kind === 'form') {
+      // 설문 서비스 주소라도 실습 결과를 내는 폼("모둠별로 … 구글 설문에 올리기", 과제 제출)은 만족도 설문 후보가 아님 — 실습 칸의 링크로 둠
+      const c = ctx(l);
+      const satisfaction = /(만족도|설문\s*조사|연수\s*평가|강의\s*평가|소감|이수\s*처리|사후\s*설문)/.test(c);
+      if (!satisfaction && /(제출|올리기|올려|모둠|결과물|과제|퀴즈|신청|접수)/.test(c)) continue;
+      survey.push({ ...one(l, satisfaction ? '만족도 설문 주소' : '설문 주소'), satisfaction });
+    }
   }
+  survey.sort((a, b) => (b.satisfaction ? 1 : 0) - (a.satisfaction ? 1 : 0));
   return { join: join.slice(0, 3), survey: survey.slice(0, 3) };
 }
 

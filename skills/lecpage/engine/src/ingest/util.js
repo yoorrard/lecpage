@@ -23,6 +23,7 @@ const MESSAGES = {
   'drm': () => '문서 보안(DRM)이 걸린 파일 같아요. 학교 문서보안 프로그램에서 보안을 해제하거나, PDF로 인쇄(저장)한 뒤 올려 주세요.',
   'corrupt': () => '파일을 열 수 없어요. 파일이 손상되었거나 다른 형식일 수 있어요. 원본 프로그램에서 다시 저장해 올려 주세요.',
   'zip-bomb': () => '압축을 풀면 지나치게 커지는 파일이라 안전을 위해 읽지 않았어요. 그림을 줄이거나 PDF로 저장해 올려 주세요.',
+  'image-file': () => '사진·그림 파일은 교재로 읽지 않아요. 사이트에 싣고 싶으면 자료실에 올려 주세요(교재는 PPTX·PDF·HWP·HWPX·DOCX).',
   'unsupported': (d) => `이 형식${d.ext ? `(.${d.ext})` : ''}은 아직 읽을 수 없어요. PPTX·PDF·HWP·HWPX·DOCX·TXT 가운데 하나로 저장해 올려 주세요.`,
   'keynote': () => '키노트 파일은 바로 읽을 수 없어요. 키노트에서 [파일 → 내보내기 → PowerPoint 또는 PDF]로 저장해 올려 주세요.',
   'odf': () => 'ODF(오픈오피스·리브레오피스) 파일은 바로 읽을 수 없어요. [다른 이름으로 저장]에서 PPTX·DOCX 또는 PDF로 저장해 올려 주세요.',
@@ -35,6 +36,7 @@ const MESSAGES = {
   'no-text': () => '글자를 읽을 수 없는 PDF예요(스캔본이나 그림으로 된 PDF). 쪽 그림은 쓸 수 있지만, 내용은 직접 적어 주시거나 원본 파일을 올려 주세요.',
   'parse-failed': () => '파일 내용을 읽다가 문제가 생겼어요. 원본 프로그램에서 다시 저장해 올려 주세요. 계속 안 되면 PDF로 올려 주세요.',
   'too-many-pages': (d) => `쪽 수가 많아(${d.pages}쪽) 앞의 ${d.limit}쪽만 읽었어요.`,
+  'too-many-sections': (d) => `절이 많아(${d.pages}절 넘음) ${d.limit}절째부터는 마지막 절에 이어 붙였어요. 교재를 나눠 두 연수로 만들면 차례가 또렷해져요.`,
   'hidden-slides': (d) => `숨긴 슬라이드 ${d.count}장은 내용 분석에서 뺐어요.`,
   'link-only': () => '링크만으로는 내용을 읽을 수 없어요. 파일로 내려받아(예: 구글 슬라이드 → 파일 → 다운로드 → PPTX) 올려 주시면 더 정확해요.',
   'link-fetch-failed': () => '링크의 내용을 가져오지 못했어요. 공개 범위를 "링크가 있는 모든 사용자"로 바꾸거나, 파일로 내려받아 올려 주세요.',
@@ -313,4 +315,20 @@ export function sizeLabel(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)}KB`;
   return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)}MB`;
+}
+
+/**
+ * 줄에서 주소 앞에 적힌 이름("패들렛: https://…", "자료 내려받기 → https://…"). 이름이 아니면 ''.
+ * 주소가 문장 한가운데에 있거나("…주소를 https://… 로 설정하세요") 앞 글이 조사로 끝나는 말·꺾쇠(HTML 조각)면 이름으로 쓰지 않음
+ * (교재의 지시문이 링크 이름이 되어 누를 수 있는 글처럼 보이지 않게). detect.js·index.js가 같은 규칙을 씀
+ */
+export function labelBeforeUrl(line, raw, lead = null) {
+  const i = String(line || '').indexOf(raw);
+  if (i <= 0) return '';
+  if (/^\s*(?:로|으로|에서|에|를|을|은|는|이|가|와|과)?\s*[가-힣]{2,}/.test(line.slice(i + raw.length).replace(/^[\s)\]"'”’]+/, ''))) return '';
+  let s = line.slice(0, i).replace(/[\s:：\-–—→▶>|(\["'“‘]+$/, '');
+  if (lead) s = s.replace(lead, '');
+  s = normLine(s.split(/[|·/,]\s*/).pop() || s);
+  if (/[<>=]/.test(s) || (/\s/.test(s) && /(?:을|를|은|는|이|가|에|에서|로|으로|와|과|의|하고|해서)\)?$/.test(s))) return '';
+  return s.length >= 2 && s.length <= 30 ? s : '';
 }

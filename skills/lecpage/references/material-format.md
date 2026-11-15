@@ -125,7 +125,7 @@ HWP·HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed
 | 키 | 모양 | 찾는 방법(요약) |
 |---|---|---|
 | `title`, `subtitle` | 문자열 | 첫 쪽 제목·부제 → 문서 속성 → 파일 이름 |
-| `event` | `{date:"2026-11-04", dateText, weekday:"수", start:"15:10", end:"16:40", venue, organizer, mode:"offline|online|hybrid", joinUrl, dates?[], size?, file, page}` | "2026. 11. 4.(수)", "2026년 11월 4일", "11월 4일(수)"(요일로 연도 추정), "15:10~16:40", "오후 3시 10분 ~ 4시 40분", "장소:", "주최·주관:", 온라인 낱말·줌/미트 링크. `size`: "참석 300명"·"대상: … 48명" |
+| `event` | `{date:"2026-11-04", dateText, weekday:"수", start:"15:10", end:"16:40", venue, organizer, mode:"offline|online|hybrid", joinUrl, dates?[], size?, file, page}` | "2026. 11. 4.(수)", "2026년 11월 4일", "11월 4일(수)"(요일로 연도 추정, 해가 없으면 행사 날짜의 해에 맞춤), "15:10~16:40", "오후 3시 10분 ~ 4시 40분", "장소:"(날짜·시각과 한 줄이면 그 뒤, 교재 파일마다 첫 쪽도 봄), "주최·주관:", 온라인은 장소·방식 이름표 줄이나 줌/미트 링크만. `dates`: 일정 문맥(일시 이름표·n차시/n일차·날짜 바로 뒤 시각)의 날짜가 둘 이상일 때만 — 마감·제출·'다음 연수'·"~까지"·"N월 N주"는 빼고 행사 날짜보다 반년 앞서거나 1년 넘게 뒤면 버림. `size`: "참석 300명"·"대상: … 48명" |
 | `sessions` | `[{no, date?, title, desc, file, page}]` | 차시표의 줄·표("1차시 1. 11.(월) 주제"), 1차시부터 이어질 때만. 차시 줄 아래 내용·준비물·과제는 `desc` |
 | `instructor` | `{name, role, org, bio[], email, links[], photo(그림 id), file, page}` 또는 `null` | "강사 소개·프로필·약력" 제목, "현)·전)" 줄, 이메일, 사진 |
 | `agenda` | `{file, page, title, items:[{text, part?, no?, start?, end?}]}` 또는 `null` | "목차·차례·오늘의 흐름·진행 순서·시간표" 쪽의 목록 |
@@ -143,8 +143,9 @@ HWP·HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed
 | `signals` | `{doc, blocks, procedure, tables, cases, questions, reflection, figures, keypoints, speakers, sessions, official, qaTime}` | 구성 신호 개수(`ingest/signals.js`): 교재를 절·쪽 묶음으로 나눠 쓰임(절차·사례·질문·성찰·표·수치·글…)을 정함. `decide/structure.js`가 읽음 |
 | `figures` | `[{value, label, note, score, file, page}]` | 문서의 수치 문장("1시간 이내", "68%", "3회에서 1회로"), 4개까지 |
 | `speakers` | `[{name, role, org, note, talk, time, file, page}]` | 발표자 소개 쪽(이름 줄 + 소속·직함), 일정표의 "이름 직함" 칸. 둘 이상일 때만 |
-| `admin` | `{official, completionRate, hours, hoursText, rateText, completion[], assignment[]}` 또는 `null` | "직무연수", "출석 80%", "연수 시간: 15시간", "과제:·제출 기한:", "나이스에 등록" |
-| `addresses` | `{join:[{url,label,page,file,why}], survey:[…]}` | 중계·회의 주소, 설문 주소. **싣지 않고** 강사 확인 후보로만(앱 1단계 "교재에서 찾은 주소", CLI `brief`) |
+| `admin` | `{official, completionRate, hours, hoursText, rateText, completion[], assignment[]}` 또는 `null` | "직무연수·자격연수" 낱말이나 "이수 기준:·이수 시간:" 이름표 줄(본문 속 "과목 이수 기준"은 아님), "출석 80%", "연수 시간: 15시간", "과제:·제출 기한:", "나이스에 등록" |
+| `kind` | `"official"|"conference"|"student"|"school"` | 연수 성격 추정: 직무연수 → official, 제목에 설명회·컨퍼런스·포럼 → conference, "중1 정보"·"수업 일시:" → student(제목에 연수·교원이 있으면 아님). 화면 낱말과 `meta.admin.kind` 기본값 |
+| `addresses` | `{join:[{url,label,page,file,why}], survey:[{…, satisfaction}]}` | 중계·회의 주소, 설문 주소(만족도·이수 처리 문맥이면 `satisfaction:true`로 앞에, 실습 제출용 폼은 빼고 실습 링크로). **싣지 않고** 강사 확인 후보로만(앱 1단계 "교재에서 찾은 주소", CLI `brief`) |
 | `stats` | `{pages, hidden, chars, images, tables, notes}` | |
 
 ## 7. 오류 코드(`errors[].code`)

@@ -75,7 +75,8 @@ export function blocksToPages(blocks0, { fileId, unit = 'section', maxPages = 10
   };
   let block = 0;
   for (const b of blocks) {
-    if (pages.length >= maxPages && cur) { /* 나머지는 마지막 쪽에 붙임 */ }
+    if (pages.length >= maxPages && cur && isSplit(b)) { pages.overflow = (pages.overflow || 0) + 1; } // 나머지는 마지막 쪽에 붙임(읽는 쪽이 알림)
+    else if (pages.length >= maxPages && cur) { /* 나머지는 마지막 쪽에 붙임 */ }
     else if (!cur || (isSplit(b) && (cur.paragraphs.length || cur.tables.length || cur.images.length || (mode === 'break' && cur.title)))
       || (mode === 'chunk' && count >= chunk && b.type === 'p' && (b.gapBefore || b.heading !== null && b.heading !== undefined || count >= chunk * 1.6))) {
       const asTitle = b.type === 'p' && (isSplit(b) || (b.heading !== null && b.heading !== undefined)) && b.text.length <= 120;

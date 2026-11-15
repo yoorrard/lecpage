@@ -148,6 +148,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-nav{position:sticky;top:0;z-index:40;padding-top:env(safe-area-inset-top,0px);background:color-mix(in srgb,var(--background) 90%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule-c)}
 .lp-nav-in{display:flex;align-items:center;gap:16px;max-width:1160px;margin:0 auto;padding:8px max(20px,env(safe-area-inset-right,0px)) 8px max(20px,env(safe-area-inset-left,0px))}
 .lp-brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:var(--fs-sm);color:var(--foreground);text-decoration:none;white-space:nowrap;max-width:16em;overflow:hidden;text-overflow:ellipsis}
+.lp-brand>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp-brand img{border-radius:6px}
 .lp-brand-dot{width:10px;height:10px;border-radius:2px;background:var(--primary);flex:none}
 .lp-nav-links{display:flex;align-items:center;gap:2px;flex:1;min-width:0}
@@ -177,6 +178,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero-state{display:inline-flex;align-items:center;gap:.55em;font-size:var(--fs-sm);font-weight:700;color:var(--foreground);font-variant-numeric:tabular-nums;white-space:nowrap}
 .lp-hero-state i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--primary)}
 [data-phase="during"] .lp-hero-state i{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 28%,transparent)}
+.lp-hero-state .lp-hero-attend{flex:none;margin-left:.3em;font-variant-numeric:normal}
+.lp-hero-attend svg{width:1.05em;height:1.05em}
 [data-phase="after"] .lp-hero-state i{background:var(--muted-foreground)}
 .lp-h1{font-size:var(--fs-hero,var(--fs-2xl));line-height:1.1}
 .lp-accent{font-style:normal;color:var(--primary)}
@@ -1552,7 +1555,6 @@ html.lp-dock-on .lp-foot{padding-bottom:calc(var(--lp-dock-h,58px) + 48px + env(
   .lp-nav-links{display:none}
   .lp-toc-btn{display:inline-flex!important;min-height:44px}
   .lp-brand{min-width:0;flex:1;max-width:none}
-  .lp-brand span{overflow:hidden;text-overflow:ellipsis}
 }
 @media (max-width: 900px){
   .lp-st-shell{grid-template-columns:minmax(0,1fr)}

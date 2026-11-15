@@ -28,7 +28,7 @@ export const APP_URL = 'https://lecpage.com/';
 export const DEFAULT_INFO = {
   title: '', subtitle: '', organizer: '', date: '', start: '', end: '', venue: '', mode: 'offline',
   size: 25, format: '', features: [], devices: ['laptop'], network: 'good',
-  minor: false, admin: 'school', completionRate: 80,
+  minor: false, admin: 'school', completionRate: '', // 이수 기준(%)은 교재·강사가 정한 값만(빈 값이면 사이트에 %를 쓰지 않고 이수자 명단은 90%로 셈)
   surveyUrl: '', instructorName: '', instructorOrg: '', instructorBio: '', instructorEmail: '', contact: '', joinUrl: '',
 };
 

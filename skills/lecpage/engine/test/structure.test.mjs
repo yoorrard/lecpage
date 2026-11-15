@@ -277,17 +277,27 @@ describe('AI 답에 초안을 이어 주기(keepDraftParts)', () => {
 });
 
 describe('한 곳 고치기 뒤 첫 화면(P1-7)', () => {
-  test('patch로 장소를 바꾸면 첫 화면에 따로 적힌 장소 줄도 바뀜(손으로 고친 줄은 그대로)', () => {
+  test('patch로 장소를 바꾸면 첫 화면 장소도 바뀜: 초안은 일시·장소·강사 줄을 적지 않고 화면이 연수 정보에서 그림(덧붙인 줄은 그대로)', () => {
     const d = materialToDraft(mat(EVENT), { today: TODAY });
     const hero = d.sections.find((s) => s.type === 'hero');
-    assert.ok(hero.meta.some((x) => x.label === '장소' && x.value === '다울교육청 대강당'), JSON.stringify(hero.meta));
+    assert.ok(!hero.meta.some((x) => ['일시', '장소', '강사'].includes(x.label)), JSON.stringify(hero.meta));
     hero.meta.push({ label: '주차', value: '지하 2층' });
+    const before = E.build(d, { runtime: nodeRuntime() }).files['index.html'];
+    assert.ok(before.includes('다울교육청 대강당') && before.includes('지하 2층'));
+    const r = E.applyBlueprintPatch(d, { meta: { venue: '다울교육청 별관 강당' } });
+    assert.equal(r.raw.sections.find((s) => s.type === 'hero').meta.find((x) => x.label === '주차').value, '지하 2층');
+    const html = E.build(r.raw, { runtime: nodeRuntime() }).files['index.html'];
+    assert.ok(html.includes('다울교육청 별관 강당') && !html.includes('다울교육청 대강당'), '옛 장소가 남지 않음');
+    assert.ok(html.includes('지하 2층'), '덧붙인 줄은 그대로');
+  });
+  test('예전 설계도처럼 첫 화면에 장소 줄이 적혀 있어도 patch가 같이 바꿈(손으로 고친 줄은 그대로)', () => {
+    const d = materialToDraft(mat(EVENT), { today: TODAY });
+    const hero = d.sections.find((s) => s.type === 'hero');
+    hero.meta = [{ label: '장소', value: d.meta.venue }, { label: '주차', value: '지하 2층' }];
     const r = E.applyBlueprintPatch(d, { meta: { venue: '다울교육청 별관 강당' } });
     const meta = r.raw.sections.find((s) => s.type === 'hero').meta;
     assert.equal(meta.find((x) => x.label === '장소').value, '다울교육청 별관 강당');
     assert.equal(meta.find((x) => x.label === '주차').value, '지하 2층');
-    const html = E.build(r.raw, { runtime: nodeRuntime() }).files['index.html'];
-    assert.ok(!html.includes('다울교육청 대강당'), '옛 장소가 남지 않음');
   });
 });
 
