@@ -126,7 +126,7 @@ export function materialToDraft(material, info = {}) {
     date: info.date || ev.date || '',
     start: info.start || ev.start || '',
     end: info.end || ev.end || '',
-    venue: info.venue || ev.venue || '',
+    venue: info.venue || (info.mode === 'online' ? '' : ev.venue) || '', // 강사가 온라인으로만 한다고 했으면 교재의 장소를 쓰지 않음
     mode: info.mode || ev.mode || 'offline',
     joinUrl: info.joinUrl || '', // 온라인 접속 주소는 강사가 준 값만(교재에서 찾은 주소는 detected.addresses에 후보로)
     contact: info.contact || findLine([...pages.slice(0, 3), ...pages.slice(-3)], CONTACT_LINE),
