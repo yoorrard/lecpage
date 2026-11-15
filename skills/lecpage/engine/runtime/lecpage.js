@@ -1164,7 +1164,7 @@
         // 답한 뒤에는 기다리는 동안 할 일이 없다는 것을 띠에서도(결과는 강사가 공개하면 [결과 보기])
         var mine = store.get('ans:' + p.id, null), shown = X.revealed(state, p.id);
         main = '투표: ' + p.question;
-        sub = mine === null ? where : [shown ? '결과가 공개됐어요' : '응답했어요 · 결과는 강사가 공개하면 보여요', where].filter(Boolean).join(' · ');
+        sub = mine === null ? where : [shown ? '강사가 결과를 공개했어요' : '응답했어요 · 결과는 강사가 공개하면 보여요', where].filter(Boolean).join(' · ');
         // 투표 칸을 이미 보고 있으면 그리 가는 단추는 빼고(같은 것 두 번) 실습·쪽 단추만
         var pollCta = !pollVis && (mine === null ? '투표하기' : shown ? '결과 보기' : '');
         if (pollCta) cta = { label: pollCta, href: '#' + pollSecId(), poll: true };

@@ -30,7 +30,7 @@ const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), s
 /** 관리자 키를 잃어버렸을 때 다시 찾는 실제 길(연결한 방식마다 한 줄). 노트북·학교 서버(Node)는 서버가 만든 키 파일,
  *  그 밖(바로 배포·내 Cloudflare·시트·Supabase)은 배포한 브라우저의 lecpage 앱이 기억한 키, Skill로 배포했으면 강사용 폴더의 키 파일 */
 export function keyLostLine(bp) {
-  if (servedOverLan(bp)) return '키를 잃어버렸으면: 서버를 켠 컴퓨터의 data/admin-key.txt에 있어요(서버를 켤 때 키를 직접 정했다면 그 키예요).';
+  if (servedOverLan(bp)) return '키를 잃어버렸으면: 서버를 켠 컴퓨터의 data/admin-key.txt에 있어요. 서버를 켤 때 직접 정했다면 그 키예요.';
   return '키를 잃어버렸으면: 배포한 브라우저에서 lecpage 앱의 [내 연수] → 이 연수의 [강사 화면]을 누르면 키가 복사돼요. Skill로 배포했다면 강사용 폴더의 관리자-키.txt나 옮겨 둔 비밀번호 관리 앱에 있어요.';
 }
 
