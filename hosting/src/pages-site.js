@@ -48,41 +48,51 @@ User-agent: *
 Disallow: /
 `;
 
+/** Pages _headers 규칙 수 한도(공식: 100개. 넘는 규칙은 버려짐) */
+export const PAGES_HEADER_RULES = 100;
 /**
- * 사이트의 _headers. 사이트에 실제로 있는 확장자(대소문자 그대로)마다 규칙을 만듦(100개 한도 안).
+ * 사이트의 _headers 규칙 [패턴, 머리글…]을 중요한 것부터: 모든 파일(CSP·nosniff) → 강사용 화면 틀 막기 → SVG 가둠 → 나머지(같은 출처만·내려받기) → 글꼴 캐시.
+ * 사이트에 실제로 있는 확장자(대소문자 그대로, Pages 주소 맞추기는 대소문자를 가림)마다 규칙 하나. 보통 사이트는 20개 안팎이고,
+ * 확장자 대소문자 모양을 수십 가지로 늘려 100개를 넘기면 site.js가 올리기 전에 거절함(보안 규칙이 버려지지 않게)
  * @param {string[]} paths 사이트 안 경로(Pages에 올리는 것)
  * @param {{ scripts?: string[], fontsHashed?: boolean }} [o] htmlCsp에 더할 스크립트 주소, fontsHashed: assets/fonts/의 파일 이름이 모두 내용 해시(fontsHashed())
+ * @returns {[string, string[]][]}
  */
-export function headersFile(paths, { scripts = [], fontsHashed = false } = {}) {
-  const lines = [];
-  const rule = (pattern, hs) => { lines.push(pattern); for (const h of hs) lines.push(`  ${h}`); };
-  rule('/*', [
+export function headerRules(paths, { scripts = [], fontsHashed = false } = {}) {
+  const first = []; const rest = [];
+  first.push(['/*', [
     '! Access-Control-Allow-Origin',
     `Content-Security-Policy: ${htmlCsp({ scripts })}`,
     `X-Content-Type-Options: ${BASE_HEADERS['x-content-type-options']}`,
     `Referrer-Policy: ${BASE_HEADERS['referrer-policy']}`,
     `Permissions-Policy: ${BASE_HEADERS['permissions-policy']}`,
     `X-Robots-Tag: ${BASE_HEADERS['x-robots-tag']}`,
-  ]);
+  ]]);
+  // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
+  for (const f of [...NO_FRAME_PAGES].sort()) {
+    const bare = f.replace(/\.html$/, '');
+    for (const p of [`/${f}`, `/${bare}`]) first.push([p, ['X-Frame-Options: DENY', '! Content-Security-Policy', `Content-Security-Policy: ${htmlCsp({ noFrame: true, scripts })}`]]);
+  }
   const exts = new Set();
   for (const p of paths) { const name = p.slice(p.lastIndexOf('/') + 1); const dot = name.lastIndexOf('.'); if (dot > 0) exts.add(name.slice(dot + 1)); }
   for (const e of [...exts].sort()) {
     const low = e.toLowerCase(); const t = TYPES[low];
-    if (!t) continue;
+    if (!t || !/^[A-Za-z0-9]+$/.test(e)) continue;
     const hs = [];
     if (t.kind === 'svg') hs.push('! Content-Security-Policy', `Content-Security-Policy: ${SVG_CSP}`);
     if (SAME_ORIGIN_EXT.has(low)) hs.push('Cross-Origin-Resource-Policy: same-origin');
     if (t.download) hs.push('Content-Disposition: attachment');
-    if (hs.length && /^[A-Za-z0-9]+$/.test(e)) rule(`/*.${e}`, hs);
+    if (hs.length) (t.kind === 'svg' ? first : rest).push([`/*.${e}`, hs]);
   }
   // 엔진이 담은 글꼴은 이름이 내용 해시(SHA-256 앞 16자리)라 1년 캐시. 이름과 내용이 맞을 때만(site.js가 확인)
-  if (fontsHashed) rule('/assets/fonts/*', [`Cache-Control: ${IMMUTABLE}`]);
-  // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
-  for (const f of [...NO_FRAME_PAGES].sort()) {
-    const bare = f.replace(/\.html$/, '');
-    for (const p of [`/${f}`, `/${bare}`]) rule(p, ['X-Frame-Options: DENY', '! Content-Security-Policy', `Content-Security-Policy: ${htmlCsp({ noFrame: true, scripts })}`]);
-  }
-  return `${lines.join('\n')}\n`;
+  if (fontsHashed) rest.push(['/assets/fonts/*', [`Cache-Control: ${IMMUTABLE}`]]);
+  return [...first, ...rest];
+}
+/** headerRules를 _headers 글로. 규칙이 100개를 넘으면 오류(site.js가 받을 때 이미 거절하므로 여기까지 오지 않음) */
+export function headersFile(paths, o = {}) {
+  const rules = headerRules(paths, o);
+  if (rules.length > PAGES_HEADER_RULES) throw new Error(`_headers 규칙이 ${rules.length}개라 Pages 한도(${PAGES_HEADER_RULES})를 넘어요`);
+  return `${rules.map(([p, hs]) => [p, ...hs.map((h) => `  ${h}`)].join('\n')).join('\n')}\n`;
 }
 
 /** 엔진이 담은 글꼴 파일(assets/fonts/<내용 SHA-256 앞 16자리>.woff2 등)이고 이름의 해시가 실제 내용의 SHA-256과 맞는지 */

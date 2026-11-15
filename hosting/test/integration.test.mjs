@@ -55,6 +55,9 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.ok(rb.includes('User-agent: *\nDisallow: /\n'), '검색 로봇은 막음');
     assert.ok(/User-agent: kakaotalk-scrap[\s\S]*Allow: \/s\//.test(rb) && /User-agent: facebookexternalhit/.test(rb) && /User-agent: Twitterbot/.test(rb), '링크 미리보기 카드는 /s/를 읽게');
     assert.equal((await text(`${base}/없는-주소`)).status, 404);
+    // 보안 연락처(RFC 9116): 정적 자산이라 Worker 요청 수에 들지 않음
+    const sec = await text(`${base}/.well-known/security.txt`);
+    assert.equal(sec.status, 200); assert.match(sec.text, /^Contact: mailto:hello@lecpage\.com$/m); assert.match(sec.text, /^Expires: \d{4}-/m);
     // CORS: 허용한 앱 주소만
     const pre = await fetch(`${base}/api/sites`, { method: 'OPTIONS', headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization,content-type' } });
     assert.equal(pre.status, 204);
