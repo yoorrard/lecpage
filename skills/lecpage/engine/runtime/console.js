@@ -628,7 +628,10 @@
     var r1 = el('form', 'lp-con-row'); var nt = el('input', 'lp-in'); nt.placeholder = '예: 15:10까지 실습하고 앞을 봐 주세요'; nt.maxLength = 120; nt.setAttribute('aria-label', '공지 문구');
     var nb = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '공지 보내기'); nb.type = 'submit';
     r1.appendChild(nt); r1.appendChild(nb); s1.appendChild(r1);
-    r1.addEventListener('submit', function (e) { e.preventDefault(); var v = nt.value.trim(); if (!v) { nt.focus(); return; } setState({ notice: { text: v, level: 'info' } }, '공지를 보냈어요. 참가자·발표 화면 위에 보여요.').then(function () { nt.value = ''; }); });
+    // 긴 공지: 휴대폰 '지금' 줄에는 두 줄(40자쯤)까지 보이고 나머지는 [더 보기]로 펼침 → 칠 때만 한 줄 알림
+    var nh = el('p', 'lp-con-sub', '휴대폰에서는 앞 40자쯤 보이고 나머지는 [더 보기]로 펼쳐요. 중요한 말을 앞에 두세요.'); nh.hidden = true; s1.appendChild(nh);
+    nt.addEventListener('input', function () { nh.hidden = nt.value.trim().length <= 40; });
+    r1.addEventListener('submit', function (e) { e.preventDefault(); var v = nt.value.trim(); if (!v) { nt.focus(); return; } setState({ notice: { text: v, level: 'info' } }, '공지를 보냈어요. 참가자·발표 화면 위에 보여요.').then(function () { nt.value = ''; nh.hidden = true; }); });
 
     var s2 = runPart('타이머'); C.clock = el('div', 'lp-con-clock'); s2.appendChild(C.clock);
     var r2 = el('div', 'lp-con-row');
@@ -690,9 +693,12 @@
     if (C.clock.getAttribute('data-on') !== '1') {
       C.clock.setAttribute('data-on', '1'); C.clock.textContent = '';
       C.clockB = el('b'); C.clockL = el('span', 'lp-con-sub'); C.clock.appendChild(C.clockB); C.clock.appendChild(C.clockL);
-      C.clock.appendChild(btn('멈춤', '', function () { setState({ timer: null }, '타이머를 멈췄어요.'); }, 'tstop'));
+      C.clockX = btn('멈춤', '', function () { var over = !!(state.timer && state.timer.endsAt <= now()); setState({ timer: null }, over ? '타이머를 지웠어요.' : '타이머를 멈췄어요.'); }, 'tstop');
+      C.clock.appendChild(C.clockX);
     }
-    C.clockB.textContent = left <= 0 ? '0:00' : mmss(left); C.clockL.textContent = (t.label ? t.label + ' · ' : '') + (left <= 0 ? '시간이 다 됐어요' : '남은 시간');
+    // 끝난 뒤: 참가자 화면은 '끝났어요'를 잠깐 보인 뒤 지우고, 발표 화면은 0:00을 그대로 둠 → 여기서는 [지우기]
+    C.clockB.textContent = left <= 0 ? '0:00' : mmss(left); C.clockL.textContent = (t.label ? t.label + ' · ' : '') + (left <= 0 ? '시간이 다 됐어요 · 참가자 화면에서는 곧 사라져요' : '남은 시간');
+    C.clockX.textContent = left <= 0 ? '지우기' : '멈춤';
     if (left <= 0) C.clock.setAttribute('data-over', ''); else C.clock.removeAttribute('data-over');
   }
   function syncRun() {
