@@ -77,6 +77,15 @@ export function docBlocks(material) {
         });
         for (const l of p.links || []) cur.links.push(l);
       }
+      // 자리를 모르는 표(PDF는 표가 쪽마다 따로 나옴): 그 쪽에서 제목만 있고 글이 없는 절("2. 달라지는 점" 바로 아래가 표)에, 없으면 그 쪽의 마지막 절에.
+      // 어느 절에도 붙지 않아 표가 통째로 빠지지 않게(교재 반영 L3)
+      const mine = out.filter((u) => u.file === f.id);
+      for (const p of pages) for (const t of p.tables || []) {
+        if (mine.some((u) => u.tables.includes(t))) continue;
+        const onPage = mine.filter((u) => u.pages.includes(p.page) && !u.cover);
+        const host = onPage.find((u) => !u.paras.length && !u.tables.length) || onPage[onPage.length - 1];
+        if (host) host.tables.push(t);
+      }
     }
   }
   return out;

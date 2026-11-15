@@ -330,6 +330,8 @@ function detectSteps(pages, promptKeys, agendaPages) {
       if (items.length < 2) continue;
       // 퀴즈 선택지처럼 짧은 것만 있는 무리는 제외
       if (items.every((s) => s.length <= 6)) continue;
+      // 번호 붙은 절 제목("2. 달라지는 점", "3. 수강 신청 일정")만 모인 무리는 실습 단계가 아님(PDF 문서의 차례)
+      if (!g.table && items.length <= 8 && items.every((s) => s.length <= 16 && !IMPERATIVE.test(s) && !/[다요]\.?$/.test(s) && !/\s(?:을|를)\s/.test(s))) continue;
       const before = paras[g.start - 1]?.text || '';
       if (/[?？]$|까요\??$|고르(세요|시오)/.test(before) && items.every((s) => s.length <= 30)) continue;
       out.push({ title: p.title || '', items, ...ref(p), kind: g.table ? 'table' : 'numbered' });
