@@ -1321,6 +1321,23 @@
     });
   }
 
+  /* ── 내 달력에 넣기: 빌드 때 사이트 주소를 몰랐으면(설계도에 siteUrl 없음) 내려받을 때 지금 주소를 넣음 ──
+     연수 날 달력 알림에서 바로 사이트로. 암호 보호 사이트의 #k=(암호)는 넣지 않음. 앱 안 브라우저는 파일 그대로(내려받기를 막으므로) */
+  function initCal() {
+    var a = $('a[href$="event.ics"]'); if (!a || DATA.siteUrl || IN_APP || !window.fetch || !window.Blob) return;
+    a.addEventListener('click', function (e) {
+      var u = siteUrl().split('#')[0]; if (!/^https?:\/\//.test(u)) return;
+      e.preventDefault();
+      fetch(a.getAttribute('href'), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('ics'); return r.text(); }).then(function (t) {
+        var line = 'URL:' + u, parts = [line.slice(0, 75)]; for (var i = 75; i < line.length; i += 74) parts.push(' ' + line.slice(i, i + 74)); // 75바이트 접기(주소는 ASCII)
+        if (!/\r\nURL:/.test(t)) t = t.replace('\r\nBEGIN:VALARM', '\r\n' + parts.join('\r\n') + '\r\nBEGIN:VALARM');
+        var url = URL.createObjectURL(new Blob([t], { type: 'text/calendar;charset=utf-8' }));
+        var x = el('a'); x.href = url; x.download = 'event.ics'; doc.body.appendChild(x); x.click(); x.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      }).catch(function () { location.href = a.href; });
+    });
+  }
+
   /* ── 인쇄용 QR 안내문 ─────────────────── */
   function initPoster() {
     var pb = $('[data-print]'); if (pb) pb.addEventListener('click', function () { window.print(); });
@@ -1337,7 +1354,7 @@
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
     $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
-    drawQRs(); initChrome(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
+    drawQRs(); initChrome(); initCal(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

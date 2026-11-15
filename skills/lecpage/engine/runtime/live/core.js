@@ -352,11 +352,13 @@
   function DEFAULT_BANNED() {
     return ['바보', '멍청이', '등신', '쓰레기', '죽어', '죽을래', '한남', '한녀', '틀딱', '맘충', '급식충', '김치녀', '섹스', 'sex', 'porn', '야동'];
   }
-  /** NFC, trim, lowercase latin, strip edge punctuation and one trailing particle (when ≥2 chars remain). */
+  /** NFC, trim, lowercase latin, drop tag-like bits ('<b>굵게</b>' → '굵게'), join a Hangul-only answer typed with spaces
+   *  ('맑 음' = '맑음'), strip edge punctuation and one trailing particle (when ≥2 chars remain). */
   function normWord(v) {
     if (v == null) return '';
     var s = String(v); if (s.normalize) s = s.normalize('NFC');
-    s = s.replace(CTRL, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    s = s.replace(CTRL, '').replace(/<\/?[A-Za-z][^<>]{0,40}>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (/^[가-힣ㄱ-ㅎㅏ-ㅣ ]+$/.test(s)) s = s.replace(/ /g, '');
     s = s.replace(/^[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+|[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+$/g, '');
     var c = cps(s);
     if (c.length >= 3 && PARTICLES.indexOf(c[c.length - 1]) >= 0 && KEEP_WORDS.indexOf(s) < 0) s = c.slice(0, -1).join('').trim();
@@ -598,6 +600,12 @@
       else if (self._queue.length) setTimeout(function () { self._flushQueue(); }, 300);
     };
     if (root.addEventListener) root.addEventListener('online', this._onOnline);
+    // 숨겼던 탭으로 돌아오면 기다리지 않고 바로 다시 이어 봄
+    this._onVisible = function () {
+      if (self._closed || isHidden() || self.status !== 'offline' || !self._reconnectTimer) return;
+      clearTimeout(self._reconnectTimer); self._reconnectTimer = null; self._reconnectSoon(300);
+    };
+    try { if (root.document) root.document.addEventListener('visibilitychange', this._onVisible); } catch (e) { /* 없음 */ }
     current = this;
   }
   var C = Client.prototype;
@@ -846,7 +854,7 @@
       self._reconnectTimer = null;
       if (self._closed || self.status !== 'offline') return;
       self.connect().then(function () { self._reconnectN = 0; }, function () { /* next round scheduled */ });
-    }, ms || backoff(Math.min(self._reconnectN, 5), 2000, 60000));
+    }, ms || backoff(Math.min(self._reconnectN, 5), 2000, isHidden() ? 60000 : 10000)); // 화면을 보고 있으면 10초 안에 다시(서버가 돌아오면 곧 이어짐), 숨긴 탭은 길게
   };
   /** Fetches changes since the cursor (or everything when full) and merges them. → {changes} */
   C.sync = function (full) {
@@ -889,6 +897,7 @@
     if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
     if (this._flushTimer) { clearTimeout(this._flushTimer); this._flushTimer = null; }
     if (root.removeEventListener) root.removeEventListener('online', this._onOnline);
+    try { if (root.document) root.document.removeEventListener('visibilitychange', this._onVisible); } catch (e) { /* 없음 */ }
     this._connecting = null;
     var a = this._adapter;
     this._setStatus('offline');

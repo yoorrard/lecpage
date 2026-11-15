@@ -53,6 +53,8 @@ export function splitNav(links, max = 6) {
   const shown = links.filter((s) => keep.includes(s) || others.includes(s));
   return { shown, more: links.filter((s) => !shown.includes(s)) };
 }
+/** 메뉴·목차·바닥글에 올릴 섹션: 실제로 그려지는 것만(강사 정보가 없어 빠지는 '강사' 칸 등 → 눌러도 갈 곳 없는 링크를 만들지 않음) */
+const navSections = (ctx) => ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero' && !(s.type === 'instructor' && !ctx.bp.instructors.length));
 const navLink = (s) => `<a href="#${esc(s.id)}" data-nav-link="${esc(s.id)}">${esc(s.nav)}</a>`;
 
 /** '지금' 줄: 실시간 상태(열린 투표·공지·타이머·강사가 보는 실습/쪽)를 한 줄로. 보여 줄 게 없으면 숨김 */
@@ -82,7 +84,7 @@ export const REACTIONS = [
 const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
 
 function nav(ctx) {
-  const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
+  const links = navSections(ctx);
   const brand = ctx.design.brandName || ctx.bp.meta.title;
   const { shown, more } = splitNav(links);
   const moreMenu = more.length ? `<details class="lp-more" data-more><summary aria-label="메뉴 더보기">더보기${icon('down')}</summary><ul class="lp-more-list">${more.map((s) => `<li>${navLink(s)}</li>`).join('')}</ul></details>` : '';
@@ -104,7 +106,7 @@ ${ctx.design.effects?.progress === 'guided-progress' ? '<div class="lp-scrollbar
 
 function footer(ctx) {
   const m = ctx.bp.meta;
-  const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
+  const links = navSections(ctx);
   const collects = ctx.bp.privacy.collect.some((c) => c !== 'nickname') && ctx.live;
   return `<footer class="lp-foot"><div class="lp-wrap">
 <div class="lp-foot-main"><p class="lp-foot-title">${esc(m.title)}</p>${m.organizer ? `<p>${esc(m.organizer)}</p>` : ''}${m.date ? `<p>${esc(koDate(m.date))}${m.venue ? ` · ${esc(m.venue)}` : ''}</p>` : ''}${m.contact ? `<p>문의 ${contactHtml(m.contact)}</p>` : ''}</div>
@@ -114,7 +116,7 @@ ${links.length ? `<nav class="lp-foot-links" aria-label="바닥글 메뉴">${lin
 }
 
 function tocSheet(ctx) {
-  const links = ctx.bp.sections.filter((s) => s.nav && s.type !== 'hero');
+  const links = navSections(ctx);
   if (!links.length) return '';
   return `<dialog class="lp-dialog lp-sheet" data-toc-sheet aria-labelledby="lp-toc-h"><div class="lp-dialog-in">
 <div class="lp-sheet-h"><h2 id="lp-toc-h">목차</h2><button class="lp-icon-btn" type="button" data-sheet-close aria-label="목차 닫기">${icon('close')}</button></div>
@@ -188,7 +190,7 @@ ${headTags(ctx, bp.meta.title, [], 'index')}
 <body${pageFx ? ` data-fx="${esc(pageFx)}"` : ''}>
 <a class="lp-skip" href="#main">본문 바로 가기</a>
 ${nav(ctx)}
-<main id="main">
+<main id="main" tabindex="-1">
 ${body}
 </main>
 ${footer(ctx)}

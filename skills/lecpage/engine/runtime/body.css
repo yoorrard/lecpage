@@ -417,7 +417,7 @@ html.js .lp-film-nav{visibility:visible}
 .lp-blk > li.is-now{outline:2px solid var(--primary);outline-offset:-2px}
 .lp-blk > li.is-now h3::after{content:"지금";margin-left:.6em;font-size:var(--fs-xs);color:var(--primary)}
 .lp-blk > li.is-done{opacity:.6}
-@media (max-width:520px){.lp-blk > li{grid-template-columns:3.8rem minmax(0,1fr)}.lp-blk-min{grid-column:2}}
+@media (max-width:520px){.lp-blk > li{grid-template-columns:3.8rem minmax(0,1fr)}.lp-blk-min{grid-column:2;white-space:normal}} /* 글자 200%: '이야기 · 25분'이 칸을 넘지 않게 줄바꿈 */
 
 /*@v:tools.rows*/
 /* 도구 · 줄 색인: 번호 | 큰 이름 | 설명·쪽 | 주소 */

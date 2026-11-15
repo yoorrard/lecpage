@@ -34,7 +34,8 @@ export function pruneMarked(css, ids, tag) {
 
 /**
  * 내 달력에 넣기(iCalendar 한 건): 연수 날짜와 시작 시각을 알 때만(한국 시각 → 세계 표준시로 적어 어느 달력에서나 같은 시각).
- * 끝 시각이 없으면 끝을 적지 않음(길이를 지어내지 않음)
+ * 끝 시각이 없으면 끝을 적지 않음(길이를 지어내지 않음). 연수 날 사이트·온라인 입장으로 돌아올 주소(아는 것만)와 30분 전 알림.
+ * 사이트 주소를 빌드 때 모르면 참가자 화면(lecpage.js)이 내려받을 때 지금 주소를 넣음. 긴 줄은 75바이트에서 접음(RFC 5545)
  */
 export function icsFile(meta = {}, today = '') {
   const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(meta.date || ''), t = (x) => /^(\d{1,2}):(\d{2})$/.exec(x || '');
@@ -44,7 +45,18 @@ export function icsFile(meta = {}, today = '') {
   const stamp = (/^\d{4}-\d{2}-\d{2}/.exec(today || new Date().toISOString())?.[0] || '2026-01-01').replace(/-/g, '') + 'T000000Z';
   let h = 2166136261; for (const c of `${meta.title}|${meta.date}|${meta.start}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
   const end = t(meta.end) && utc(meta.end) > utc(meta.start) ? `DTEND:${utc(meta.end)}` : '';
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(meta.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', meta.organizer ? `DESCRIPTION:${txt(meta.organizer)}` : '', 'END:VEVENT', 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).join('\r\n');
+  const web = (u) => (/^https?:\/\/[^\s]+$/i.test(u || '') ? u : '');
+  const site = web(meta.siteUrl), join = meta.mode !== 'offline' ? web(meta.joinUrl) : '';
+  const desc = [meta.organizer || '', site ? `연수 사이트: ${site}` : '', join ? `온라인 입장: ${join}` : ''].filter(Boolean).join('\n');
+  const fold = (line) => {
+    const enc = new TextEncoder(); if (enc.encode(line).length <= 75) return line;
+    const out = []; let cur = '', n = 0;
+    for (const ch of line) { const b = enc.encode(ch).length; if (n + b > (out.length ? 74 : 75)) { out.push(cur); cur = ''; n = 0; } cur += ch; n += b; }
+    out.push(cur); return out.join('\r\n ');
+  };
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//lecpage//KO', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${(h >>> 0).toString(36)}-${d[1]}${d[2]}${d[3]}@lecpage`, `DTSTAMP:${stamp}`, `DTSTART:${utc(meta.start)}`, end, `SUMMARY:${txt(meta.title)}`, meta.venue ? `LOCATION:${txt(meta.venue)}` : '', desc ? `DESCRIPTION:${txt(desc)}` : '', site ? `URL:${site}` : '',
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${txt(`${meta.title} 30분 전`)}`, 'TRIGGER:-PT30M', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR', ''].filter((x, i, a) => x || i === a.length - 1).map(fold).join('\r\n');
 }
 
 /** 사이트를 만든 날(개인정보 처리 안내의 시행일). opts.today('YYYY-MM-DD')가 없으면 오늘 */

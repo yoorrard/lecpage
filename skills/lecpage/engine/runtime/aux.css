@@ -455,7 +455,8 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-pst-rule{width:28cqw;height:3cqw;margin-top:.6cqw}
 .lp-pst-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:.6cqw 4cqw;margin:0;font-size:max(12px,2.9cqw)}
 .lp-pst-meta div{display:flex;gap:1.6cqw}
-.lp-pst-meta dt{font-weight:800}
+.lp-pst-meta dt{flex:none;white-space:nowrap;font-weight:800} /* 장소가 길어도 이름표 '장소'가 세로로 끊기지 않게 */
+.lp-pst-meta dd{min-width:0}
 .lp-pst-meta dd{margin:0}
 /* QR: 높이를 먼저 정하고 너비가 따라감(글이 길면 QR만 조금 줄어 한 장에 들어감). 둘레 여백 4칸은 그림 안에 있음 */
 .lp-pst-qr{flex:0 1 58cqw;min-height:34cqw;width:auto;max-width:100%;aspect-ratio:1;margin-top:1cqw;padding:1.2cqw!important;border:.45cqw solid var(--ink);box-sizing:border-box}

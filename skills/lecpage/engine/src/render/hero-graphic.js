@@ -69,7 +69,7 @@ export function verticalLines(title) {
 
 /** hero.js가 건네는 조각(P)으로 구성 여섯 가지를 만듦 */
 export function graphicHeroes(P) {
-  const { org, state, h1, sub, ctas, metaDl, cell, numCell, pick, seeded, hashStr, seedOf, longDate, shortDate, isoDate, dialRows, artFx, fx, REST } = P;
+  const { org, state, h1, tlen, sub, ctas, metaDl, cell, numCell, pick, seeded, hashStr, seedOf, longDate, shortDate, isoDate, dialRows, artFx, fx, REST } = P;
   const C = {};
   const rail = (M, cls, n = 4, ...ks) => { const r = [...M.meta, ...pick(M, ...ks)].slice(0, n); return r.length ? `<dl class="lp-hero-meta ${cls}">${r.map((x) => (x.value !== undefined ? cell(x) : numCell(M, x))).join('')}</dl>` : ''; };
 
@@ -152,7 +152,7 @@ export function graphicHeroes(P) {
   C.offset = (M) => {
     const lines = String(M.title || '').split('\n');
     const words = lines.length > 1 ? lines : (() => { const w = lines[0].split(' ').filter(Boolean); if (w.length < 2) return lines; const cut = Math.ceil(w.length / 2); return [w.slice(0, cut).join(' '), w.slice(cut).join(' ')]; })();
-    const title = `<h1 class="lp-h1 lp-off-h" id="${M.id}-h"${fx(M.ctx, 'hero.title')}>${words.map((l, i) => `<span class="lp-off-l${words.length > 1 && i === words.length - 1 ? ' lp-accent' : ''}" style="--n:${i}">${esc(l)}</span>`).join(' ')}</h1>`;
+    const title = `<h1 class="lp-h1 lp-off-h" id="${M.id}-h"${tlen(M)}${fx(M.ctx, 'hero.title')}>${words.map((l, i) => `<span class="lp-off-l${words.length > 1 && i === words.length - 1 ? ' lp-accent' : ''}" style="--n:${i}">${esc(l)}</span>`).join(' ')}</h1>`;
     const nums = pick(M, 'dur', 'st', 'deck', 'parts').slice(0, 2);
     return `<i class="lp-off-block" aria-hidden="true"></i>
 ${M.dp ? `<p class="lp-off-spine" aria-hidden="true">${M.dp.y}.${pad2(M.dp.m)}.${pad2(M.dp.d)} ${M.dp.w}${M.time ? ` — ${esc(M.time)}` : ''}</p>` : ''}
