@@ -9,7 +9,7 @@ import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, deriveConcept } from './decide/concept.js';
 import { PRESET_IDS } from './design/presets.js';
-import { DEFAULT_SURVEY } from './schema/sections.js';
+import { DEFAULT_SURVEY, TEACHER_ONLY } from './schema/sections.js';
 import { randomCode } from './validate.js';
 
 export const LIVE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'attendance', 'reactions', 'signal'];
@@ -28,8 +28,8 @@ export const FEATURES = [
 
 /** 강사 정보로만 정하는 meta(교재 감지·AI가 채운 값은 강사가 확인한 info로 덮음) */
 export const META_KEYS = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue', 'mode', 'contact'];
-/** QR·링크 대상: AI 답·남이 준 파일·교재가 정하지 못하게(joinUrl은 강사가 적은 info.joinUrl만) */
-export const UNTRUSTED_META = ['siteUrl', 'shortUrl', 'joinUrl'];
+/** QR·링크 대상: AI 답·남이 준 파일·교재가 정하지 못하게(joinUrl은 강사가 적은 info.joinUrl만). 목록은 schema/sections.js TEACHER_ONLY 한 벌 */
+export const UNTRUSTED_META = TEACHER_ONLY.meta;
 
 const clone = (x) => JSON.parse(JSON.stringify(x || {}));
 const has = (o, k) => o && o[k] !== undefined && o[k] !== null;
@@ -355,7 +355,7 @@ export function applyTeacherValues(bp, info = {}, { access = '', password = '' }
   const mode = access || info.access || (password ? 'password' : '');
   if (['link', 'public', 'password'].includes(mode)) bp.access = { mode };
   bp.meta = bp.meta || {};
-  for (const k of ['siteUrl', 'joinUrl', 'shortUrl']) if (info[k]) bp.meta[k] = info[k];
+  for (const k of TEACHER_ONLY.meta) if (info[k]) bp.meta[k] = info[k];
   if (info.live && typeof info.live === 'object') {
     bp.live = { ...(bp.live || {}) };
     for (const k of ['provider', 'url', 'anonKey', 'code', 'features']) if (info.live[k] !== undefined) bp.live[k] = info.live[k];

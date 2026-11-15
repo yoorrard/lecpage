@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 문구 점검: 설계도(JSON)나 만든 사이트(폴더·HTML)에서 AI 티가 나는 말투, 흔한 용어 풀어쓰기, 긴 버튼·메뉴 이름을 찾습니다.
 // 쓰는 법: node scripts/copy-lint.mjs <설계도.json | 사이트 폴더 | 파일.html> [--json] [--strict]
+//   설계도 옆의 material.json(make의 work/)이나 사이트 옆 work/가 있으면 교재에서 그대로 온 글은 세지 않음
 //   종료 코드: error가 있으면 1(--strict면 warn도 1), 없으면 0
 // 규칙은 engine/src/prompt/copy-rules.js 한 곳에서 관리합니다(AI 프롬프트와 같은 목록).
 import { readFileSync, statSync, readdirSync, existsSync } from 'node:fs';
@@ -55,11 +56,12 @@ function* walk(v, path = '') {
   if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) yield* walk(x, path ? `${path}.${k}` : k);
 }
 
-export function lintBlueprint(bp) {
+/** 설계도 점검. material(교재 해석)을 주면 교재에서 그대로 온 글(실습 단계·프롬프트 등)은 세지 않음(qa·make와 같은 기준) */
+export function lintBlueprint(bp, { material = null } = {}) {
   const out = [];
   for (const [path, text] of walk(bp)) {
     if (SKIP.test(path)) continue;
-    for (const f of lintText(text, kindOf(path))) out.push({ where: path, ...f });
+    for (const f of lintText(text, kindOf(path))) if (!material || ownerOf(text, f.hit, { material }) !== 'material') out.push({ where: path, ...f });
   }
   return out;
 }
@@ -100,7 +102,12 @@ function lintPath(p) {
     const src = existsSync(join(w, 'material.json')) ? { material: rd('material.json'), blueprint: rd('blueprint.json') } : {};
     return pages.flatMap((f) => lintHtml(readFileSync(join(p, f), 'utf8'), f, src));
   }
-  if (extname(p) === '.json') { const j = JSON.parse(readFileSync(p, 'utf8')); return lintBlueprint(j.blueprint || j); }
+  if (extname(p) === '.json') {
+    const j = JSON.parse(readFileSync(p, 'utf8'));
+    // 설계도 옆(work/)에 교재 해석이 있으면 교재 원문은 빼고 봄(SKILL: 프롬프트·실습 단계는 고쳐 쓰지 않음)
+    let material = null; try { material = JSON.parse(readFileSync(join(dirname(p), 'material.json'), 'utf8')); } catch { /* 없음 */ }
+    return lintBlueprint(j.blueprint || j, { material });
+  }
   return lintHtml(readFileSync(p, 'utf8'), p.split(/[\\/]/).pop());
 }
 

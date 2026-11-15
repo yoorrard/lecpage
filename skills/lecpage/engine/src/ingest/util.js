@@ -137,10 +137,6 @@ export function baseName(p) {
   return String(p || '').split(/[\\/]/).pop();
 }
 
-export function stripExt(name) {
-  return baseName(name).replace(/\.[A-Za-z0-9]{1,8}$/, '');
-}
-
 const MIME = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
   svg: 'image/svg+xml', tif: 'image/tiff', tiff: 'image/tiff', emf: 'image/x-emf', wmf: 'image/x-wmf', ico: 'image/x-icon',

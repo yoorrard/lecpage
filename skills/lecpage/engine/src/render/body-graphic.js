@@ -56,7 +56,6 @@ const MOTIF = {
     return o;
   },
 };
-export const MOTIF_FAMILIES = Object.keys(MOTIF);
 /** 컨셉 모티프 그림 한 장. 같은 씨앗이면 같은 그림. lite = 바탕에 옅게 까는 작은 판(점·타일 수를 줄여 크기를 아낌) */
 export function motifSvg(family, seed, { w = 400, h = 300, cls = '', glyph = '', lite = false } = {}) {
   const f = MOTIF[family] ? family : 'rings';
