@@ -822,6 +822,7 @@ const commands = {
         const at = expr.indexOf('='); const parts = expr.slice(0, at).trim().split('.').filter(Boolean);
         let val = expr.slice(at + 1); try { val = JSON.parse(val); } catch { /* 글자 그대로 */ }
         if (!['string', 'number'].includes(typeof val) || val === '') continue;
+        if (r.warnings.some((w) => w.kind === 'patch' && (w.path === parts.join('.') || w.path === parts[0]))) continue; // 강사만 정하는 값: 패치 주의가 따로 알림
         let got;
         if (parts[0] === 'sections') { if (parts.length !== 3 || parts[2] === 'hidden') continue; const sec = vbp.sections.find((x) => x.id === parts[1]); if (!sec) continue; got = sec[parts[2]]; }
         else got = parts.reduce((o, k) => (o === null || o === undefined ? undefined : o[k]), vbp);
