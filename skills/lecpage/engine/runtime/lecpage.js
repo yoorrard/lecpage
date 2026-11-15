@@ -230,7 +230,10 @@
       var cur = root.getAttribute('data-theme');
       if (cur === 'auto') cur = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       var next = cur === 'dark' ? 'light' : 'dark';
+      // 색이 바뀌는 수천 개 칸이 한꺼번에 전환(transition)을 만들지 않게 한 장면 동안 끔(큰 연수에서 누른 뒤 멈칫하던 것)
+      root.classList.add('lp-theming');
       root.setAttribute('data-theme', next);
+      requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove('lp-theming'); }); });
       try { localStorage.setItem('lp-theme', next); } catch (e) { }
     });
     // 가벼운 모드: 움직임을 차분 단계(1)로 낮추고, 무거운 효과(WebGL·외부 라이브러리·끝없이 도는 그림)를 끈 뒤 효과를 다시 시작
@@ -505,15 +508,27 @@
     var stage = $('.lp-deck-stage', deck), bar = $('.lp-deck-bar', deck), cur = 0;
     deck.classList.add('is-ready'); bar.hidden = false;
     var thumbs = el('div', 'lp-deck-thumbs'); thumbs.setAttribute('aria-label', '쪽 미리보기');
-    slides.forEach(function (s, i) {
-      var b = el('button'); b.type = 'button';
-      var img = s.querySelector('img');
-      // 그림만 있는 버튼은 쪽 번호를 이름으로, 글자가 보이는 버튼은 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
-      if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
-      b.addEventListener('click', function () { go(i); });
-      thumbs.appendChild(b);
-    });
+    // 쪽 미리보기 단추는 교재가 화면에 가까워질 때 만듦(교재 수백 쪽이면 단추 수백 개 — 첫 화면을 그리는 동안 만들지 않게)
+    var made = false;
+    function makeThumbs() {
+      if (made) return; made = true;
+      var frag = doc.createDocumentFragment();
+      slides.forEach(function (s, i) {
+        var b = el('button'); b.type = 'button';
+        var img = s.querySelector('img');
+        // 그림만 있는 버튼은 쪽 번호를 이름으로, 글자가 보이는 버튼은 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
+        if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
+        b.addEventListener('click', function () { go(i); });
+        frag.appendChild(b);
+      });
+      thumbs.appendChild(frag);
+      go(cur, { quiet: true });
+    }
     bar.parentNode.insertBefore(thumbs, bar.nextSibling);
+    if (slides.length > 24 && 'IntersectionObserver' in window) {
+      var tio = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { tio.disconnect(); makeThumbs(); } }, { rootMargin: '900px 0px' });
+      tio.observe(deck);
+    } else makeThumbs();
     // 그림 주소가 나중에 바뀌면(암호 보호 사이트의 blob: 주소) 미리보기도 따라 바꿈
     if (window.MutationObserver) new MutationObserver(function (ms) { ms.forEach(function (m) { if (m.target._lpThumb) m.target._lpThumb.src = m.target.src; }); }).observe(stage, { attributes: true, attributeFilter: ['src'], subtree: true });
     function go(i, opt) {

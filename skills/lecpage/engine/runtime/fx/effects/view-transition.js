@@ -7,12 +7,12 @@ LecFX.define('view-transition', {
     var name = 'fx-vt-' + (Math.random() * 1e6 | 0);
     el.style.viewTransitionName = name;
     el.classList.add('fx-vt');
-    var sel = o.items || '[role=tab], [data-vt], [data-filter], summary, [aria-controls]';
+    var sel = o.items || '[role=tab], [data-sort], [data-cat], [data-vt], [data-filter], summary, [aria-controls]';
     var passing = false;
     ctx.on(el, 'click', function (e) {
       if (passing || !e.isTrusted) return;
       var t = e.target.closest ? e.target.closest(sel) : null;
-      if (!t || !el.contains(t) || t.getAttribute('aria-selected') === 'true' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!t || !el.contains(t) || t.getAttribute('aria-selected') === 'true' || (t.matches('[data-sort],[data-cat]') && t.getAttribute('aria-pressed') === 'true') || e.metaKey || e.ctrlKey || e.shiftKey) return;
       if (t.tagName === 'A' && t.getAttribute('href') && t.getAttribute('href').charAt(0) !== '#') return;
       e.preventDefault();
       e.stopImmediatePropagation();

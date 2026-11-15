@@ -182,8 +182,10 @@ export function renderIndex(ctx) {
   const pageFx = ctx.design.signature && (fxInfo(ctx.design.signature)?.slots || []).includes('scroll') ? ctx.design.signature : '';
   // QR 그리기(qr.js, 56KB)는 처음에 싣지 않음: 공유 대화상자를 열거나 QR 칸이 화면에 가까워지면 lecpage.js가 불러옴
   const scripts = [ctx.hasFx && 'assets/fx.js', ctx.live && 'assets/live.js', 'assets/lecpage.js'].filter(Boolean);
+  // 큰 연수(교재 수백 쪽·일정 수십 개 등, 본문이 보통 사이트의 두세 배 넘게 김): 화면 밖 칸은 그리기를 미룸(lecpage.css [data-big])
+  const big = body.length > 180000;
   return `<!doctype html>
-<html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-rest': String(ctx.design.rest ?? ctx.design.motion ?? 1) })}${ctx.design.signature ? ` data-signature="${esc(ctx.design.signature)}"` : ''}${ctx.design.signature === 'tone-journey' ? ' data-tones="1"' : ''}${ctx.design.motion > 0 ? ' data-pause-btn="nav"' : ''}>
+<html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-rest': String(ctx.design.rest ?? ctx.design.motion ?? 1) })}${big ? ' data-big="1"' : ''}${ctx.design.signature ? ` data-signature="${esc(ctx.design.signature)}"` : ''}${ctx.design.signature === 'tone-journey' ? ' data-tones="1"' : ''}${ctx.design.motion > 0 ? ' data-pause-btn="nav"' : ''}>
 <head>
 ${headTags(ctx, bp.meta.title, [], 'index')}
 </head>
