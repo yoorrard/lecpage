@@ -3,7 +3,7 @@
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
 import { esc, br, icon, koDate, host, md } from './html.js';
 import { contactHtml, boardFiles } from './sections.js';
-import { appShell } from './shell.js';
+import { appShell, servedOverLan } from './shell.js';
 import { motifFamily } from '../design/layouts.js';
 import { motifRule } from './body-graphic.js';
 
@@ -27,6 +27,13 @@ const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), s
  * 강사 화면 = 강사의 출발점. 들어가기 전에는 '강사용 화면이에요 → [참가자 화면으로]'와 열쇠 칸만 보이고,
  * 들어간 뒤에 위 띠에 [발표 화면 띄우기]와 [더보기](참가자 화면·QR 안내문·접속 확인·휴대폰에서 열기·도움말)가 나옴.
  */
+/** 관리자 키를 잃어버렸을 때 다시 찾는 실제 길(연결한 방식마다 한 줄). 노트북·학교 서버(Node)는 서버가 만든 키 파일,
+ *  그 밖(바로 배포·내 Cloudflare·시트·Supabase)은 배포한 브라우저의 lecpage 앱이 기억한 키, Skill로 배포했으면 강사용 폴더의 키 파일 */
+export function keyLostLine(bp) {
+  if (servedOverLan(bp)) return '키를 잃어버렸으면: 서버를 켠 컴퓨터의 data/admin-key.txt에 있어요(서버를 켤 때 키를 직접 정했다면 그 키예요).';
+  return '키를 잃어버렸으면: 배포한 브라우저에서 lecpage 앱의 [내 연수] → 이 연수의 [강사 화면]을 누르면 키가 복사돼요. Skill로 배포했다면 강사용 폴더의 관리자-키.txt나 옮겨 둔 비밀번호 관리 앱에 있어요.';
+}
+
 export function renderConsole(ctx) {
   const bp = ctx.bp, m = bp.meta, prov = bp.live.provider;
   const item = (href, name, sub, ic) => `<li><a href="${href}" target="_blank" rel="noopener">${icon(ic)}<span><b>${name}</b><small>${sub}</small></span></a></li>`;
@@ -64,7 +71,7 @@ ${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
 <p class="lp-con-hint" id="lp-key-hint" data-remember-hint>끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.</p>
 <p class="lp-con-msg" id="lp-key-msg" data-key-msg role="alert"></p>
 <button class="lp-btn lp-btn-primary lp-btn-lg" type="submit" data-key-go>들어가기</button>
-${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>' : ''}
+${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>' : `<p class="lp-con-hint" data-key-lost>${keyLostLine(bp)}</p>`}
 </form>
 </section>
 <main id="lp-con-main" class="lp-con-main" data-console-main hidden tabindex="-1" aria-label="연수 진행"></main>

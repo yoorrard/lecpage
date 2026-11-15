@@ -376,6 +376,10 @@
     main.textContent = '';
     main.appendChild(buildNet()); paintNet();
     C.strip = el('div', 'lp-con-strip'); C.strip.setAttribute('role', 'region'); C.strip.setAttribute('aria-label', '지금 상황'); main.appendChild(C.strip);
+    // 휴대폰(교실을 돌며 한 손으로): 칸이 한 줄로 길게 늘어서므로 위에 붙는 짧은 칸 이동 줄(투표 열기·다음 쪽까지 한 번에). 넓은 화면에서는 숨김(aux.css)
+    var jump = el('nav', 'lp-con-jump'); jump.setAttribute('aria-label', '칸 바로 가기');
+    [['run', '진행'], ON.help && ['help', '도움'], ON.qa && ['qa', '질문'], ['poll', '투표'], ON.board && ['board', '보드'], ['lead', '쪽·실습'], ['data', '기록']].filter(Boolean).forEach(function (x) { var a = el('a', '', x[1]); a.href = '#lp-p-' + x[0]; jump.appendChild(a); });
+    main.appendChild(jump);
     // 오른쪽 단: 자주 누르는 공지·타이머 → 읽는 것(도움 요청·이해 신호·실습 진행) → 가끔 쓰는 폼(이끌기·자료 링크) → 기록.
     // 참가자 수·도움 요청·신호·실습 막힘은 맨 위 띠에 숫자로 먼저 보임. 왼쪽 단: 질문·투표·보드
     var a = el('div', 'lp-con-col'), b = el('div', 'lp-con-col'); main.appendChild(a); main.appendChild(b);
@@ -473,6 +477,10 @@
         a.appendChild(btn(q.status === 'hidden' ? '다시 보이기' : '숨기기', '', function () { conn.update('questions', q.id, { status: q.status === 'hidden' ? 'open' : 'hidden', pinned: false }).catch(err); }, 'hide' + q.id));
         li.appendChild(a); C.qaList.appendChild(li);
       });
+      // 휴대폰에서는 처음 5개만(질문이 몰리면 투표·진행 칸이 한참 아래로 밀리지 않게). 넓은 화면은 모두(aux.css)
+      var fold = list.length > 5;
+      C.qaList.toggleAttribute('data-fold', fold && !C.qaAll);
+      if (fold) { var fl = el('li', 'lp-con-fold'); fl.appendChild(btn(C.qaAll ? '처음 5개만 보기' : '질문 ' + list.length + '개 모두 보기', '', function () { C.qaAll = !C.qaAll; renderQA(vals('questions')); }, 'qafold')); C.qaList.appendChild(fl); }
     });
   }
 
