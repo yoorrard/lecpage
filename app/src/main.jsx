@@ -11,13 +11,16 @@ import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } 
 import { GalleryHead } from './pages/GalleryHead.jsx';
 import WORDS from 'virtual:lp-words';
 
-// 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임)
+// 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임). 그 화면들의 CSS(styles/screens.css)도 함께 받음:
+// 첫 화면은 기본 CSS(app.css)만 기다려 휴대폰에서 먼저 그려짐(점검 2026-11 L6)
+const screensCss = () => import('./styles/screens.js');
+const lazyPage = (load, pick) => () => Promise.all([load(), screensCss()]).then(([m]) => pick(m));
 const LOADERS = {
-  project: () => import('./pages/Project.jsx').then((m) => m.Project),
-  settings: () => import('./pages/Settings.jsx').then((m) => m.Settings),
-  gallery: () => import('./pages/Gallery.jsx').then((m) => m.Gallery),
-  help: () => import('./pages/Help.jsx').then((m) => m.Help),
-  demo: () => import('./pages/Demo.jsx').then((m) => m.Demo),
+  project: lazyPage(() => import('./pages/Project.jsx'), (m) => m.Project),
+  settings: lazyPage(() => import('./pages/Settings.jsx'), (m) => m.Settings),
+  gallery: lazyPage(() => import('./pages/Gallery.jsx'), (m) => m.Gallery),
+  help: lazyPage(() => import('./pages/Help.jsx'), (m) => m.Help),
+  demo: lazyPage(() => import('./pages/Demo.jsx'), (m) => m.Demo),
 };
 const loaded = {};
 function Lazy({ name, ...props }) {
@@ -131,8 +134,13 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     // 둘러보기·체험·도움말로 바로 온 경우는 받지 않음(그 화면이 쓸 망·CPU를 나눠 쓰지 않게. 점검 2026-11 M6·M7)
     // 오프라인용 저장은 여기서 하지 않음(첫 방문 랜딩에서 전체 캐시 금지 → 연수 화면에 들어갈 때 warmOffline)
     if (navigator.connection?.saveData || !/^#?\/?$/.test(location.hash)) return;
+    // 받기만 하고 실행하지 않음(link rel=prefetch, 낮은 우선순위): 첫 화면 직후 휴대폰 CPU를 쓰지 않게. 목록은 빌드가 만듦(prefetch.json)
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 2500));
-    idle(() => { LOADERS.project().then(() => import('./lib/engine.js')).then((m) => m.loadRuntime()).catch(() => { }); });
+    idle(() => {
+      fetch('./prefetch.json').then((r) => r.json()).then(({ files }) => {
+        for (const f of files || []) { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = './' + f; document.head.appendChild(l); }
+      }).catch(() => { });
+    });
   });
 }
 

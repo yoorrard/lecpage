@@ -142,7 +142,7 @@ function landingFacts() {
 // 오프라인용 목록 sw-warm.json: 연수 화면(#/p)에 처음 들어가면 서비스 워커(public/sw.js)가 이 목록의 조각을 미리 받아 둡니다.
 // 첫 화면(쉘)·만들기 화면·교재 읽기·미리보기 런타임·도움말·설정과 그 조각들이 정적으로 가져오는 조각·CSS. heavy: PDF 읽기 도구(약 1.4MB, 마우스 화면에서만)
 // 첫 방문 랜딩에서는 받지 않음(휴대폰 데이터). 빌드마다 조각 이름(해시)이 바뀌므로 목록도 빌드 때 만듦
-const WARM = ['src/pages/Project.jsx', 'src/lib/ingest.js', 'src/lib/runtime-files.js', 'src/pages/Help.jsx', 'src/pages/Settings.jsx'];
+const WARM = ['src/pages/Project.jsx', 'src/lib/ingest.js', 'src/lib/runtime-files.js', 'src/pages/Help.jsx', 'src/pages/Settings.jsx', 'src/styles/screens.js'];
 function swWarm() {
   return {
     name: 'lecpage-sw-warm',
@@ -164,6 +164,13 @@ function swWarm() {
         add(c);
       }
       this.emitFile({ type: 'asset', fileName: 'sw-warm.json', source: JSON.stringify({ files: [...files].sort(), heavy: [...heavy] }) + '\n' });
+      // 첫 화면에서 한가할 때 미리 받을 것(prefetch.json): 만들기 화면과 그 화면 CSS·미리보기 런타임. 받기만 하고 실행하지 않음(main.jsx).
+      // 실행까지 하면(import) 휴대폰에서 첫 화면 직후 긴 작업이 생겨 누름 반응이 늦어짐
+      const entry = chunks.find((c) => c.isEntry); const pre = new Set(); const seen = new Set();
+      const walk = (c) => { if (!c || seen.has(c.fileName)) return; seen.add(c.fileName); pre.add(c.fileName); for (const css of c.viteMetadata?.importedCss || []) pre.add(css); for (const i of c.imports) walk(bundle[i]); };
+      for (const w of ['src/pages/Project.jsx', 'src/lib/runtime-files.js', 'src/styles/screens.js']) walk(chunks.find((x) => (x.facadeModuleId || '').replace(/\\/g, '/').endsWith('/' + w)));
+      const inEntry = new Set(); const mark = (c) => { if (!c || inEntry.has(c.fileName)) return; inEntry.add(c.fileName); for (const css of c.viteMetadata?.importedCss || []) inEntry.add(css); for (const i of c.imports) mark(bundle[i]); }; mark(entry);
+      this.emitFile({ type: 'asset', fileName: 'prefetch.json', source: JSON.stringify({ files: [...pre].filter((f) => !inEntry.has(f)).sort() }) + '\n' });
     },
   };
 }
