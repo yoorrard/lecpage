@@ -689,7 +689,7 @@ const commands = {
       if (unread.length && (m.files || []).every((f) => f.type === 'link')) fail(`교재 주소를 받지 못했어요: ${unread.join(', ')} — 주소가 열리는지·공개 범위가 "링크가 있는 모든 사용자"인지 확인하거나, 교재를 파일(PPTX·PDF·HWPX·DOCX)로 저장해 그 파일로 다시 make 해 주세요.`);
       if (m.pages.length && !args['no-slides']) {
         progress(`교재 ${m.pages.length}쪽 읽음 → 쪽 그림 만드는 중`, true);
-        await C.attachSlides(m, join(assets, 'slides'), material, { onProgress: (d, t, st, name) => progress(st === 'pdf' ? `쪽 그림: ${name}을 PDF로 바꾸는 중(LibreOffice)` : `쪽 그림 ${st === 'webp' ? '용량 줄이는 중' : '그리는 중'} ${d}${t ? '/' + t : ''}쪽`, st === 'pdf') });
+        await C.attachSlides(m, join(assets, 'slides'), material, { onProgress: (d, t, st, name) => progress(st === 'pdf' ? `쪽 그림: PDF로 바꾸는 중(LibreOffice, ${name})` : `쪽 그림 ${st === 'webp' ? '용량 줄이는 중' : '그리는 중'} ${d}${t ? '/' + t : ''}쪽`, st === 'pdf') });
       }
       await C.writeMaterial(m, material, { imagesDir: join(assets, 'media') });
       m = readJson(material);
