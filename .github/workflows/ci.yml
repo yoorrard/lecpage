@@ -19,8 +19,20 @@ jobs:
         run: npm run examples
       - name: 앱 빌드
         run: npm --prefix app ci && npm --prefix app run build
-      - name: 의존성 보안 점검(앱 배포 묶음)
-        run: npm --prefix app audit --omit=dev --audit-level=high
+      # 사용자 약속: 앱 문구는 해요체·번역투 없음(docs/writing.md). 고칠 곳이 하나라도 있으면 실패
+      - name: 앱 문구 검사(copy-lint)
+        run: node app/scripts/copy-lint.mjs
+      # 짧은 앱 흐름(첫 화면 → 디자인 둘러보기 → 개인정보 안내가 그려지고 스크립트 오류 없음). 의존성 판을 올린 PR이 '빌드는 되는데 빈 화면'이 되지 않게
+      - name: 앱 짧은 흐름 시험(Playwright Chromium)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pw" --no-save --no-audit --no-fund playwright@1.63.0
+          npx --prefix "$RUNNER_TEMP/pw" playwright install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node app/scripts/smoke.mjs
+      - name: 의존성 보안 점검(앱 배포 묶음·맨 위 wrangler·실시간 서버 템플릿)
+        run: |
+          npm --prefix app audit --omit=dev --audit-level=high
+          npm audit --package-lock-only --audit-level=high
+          (cd skills/lecpage/backends/cloudflare && npm audit --package-lock-only --audit-level=high)
   # 바로 공개 서버(선택 기능): 단위 테스트 + 로컬 workerd 통합 테스트(workerd를 못 띄우면 통합 부분만 건너뜀)
   hosting:
     runs-on: ubuntu-latest
@@ -32,3 +44,5 @@ jobs:
         with: { node-version: 22 }
       - name: 바로 공개 서버 테스트
         run: npm --prefix hosting ci && npm --prefix hosting test
+      - name: 의존성 보안 점검(바로 배포 서버)
+        run: npm --prefix hosting audit --audit-level=high

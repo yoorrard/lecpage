@@ -58,7 +58,8 @@ const TOUR_JS = `<script>(function(){var on=0,t0=0,raf=0,tm=0;if(matchMedia('(pr
  */
 export function liveHtml(files) {
   const h = previewHtml(files, 'index.html', { lean: true, extraCss: LIVE_CSS, dpr: 1 });
-  return h.includes('</body>') ? h.replace('</body>', () => TOUR_JS + '</body>') : h + TOUR_JS;
+  const at = h.lastIndexOf('</body>'); // 마지막(진짜) </body>: 끼워 넣은 스크립트 글 안의 같은 글자는 건너뜀
+  return at < 0 ? h + TOUR_JS : h.slice(0, at) + TOUR_JS + h.slice(at);
 }
 const liveCache = new Map();
 /** 움직이는 html(같은 설계도는 다시 만들지 않음, 최근 12개). on일 때만 만듦 */

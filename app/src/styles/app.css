@@ -117,6 +117,7 @@ main.page{min-height:calc(100dvh - var(--top-h,57px))}
 .tag{display:inline-block;font-size:.8rem;font-weight:650;color:var(--muted)}
 .tag-lav{color:var(--lav-deep)}
 .tag-mint{color:var(--mint-ink)}
+.tag-peach{color:var(--peach-ink)}
 
 /* ── 입력 ── */
 .field{display:grid;gap:6px}

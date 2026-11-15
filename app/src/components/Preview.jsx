@@ -20,6 +20,12 @@ export async function projectAssets(pid, fresh = false) {
   return a;
 }
 export function dropAssetCache(pid) { assetCache.delete(pid); }
+/**
+ * 미리보기는 늘 리허설: 배포한 뒤 실제 참여 기능 서버가 연결돼 있어도 미리보기 틀(출처 없음)에서는 그 방을 부르지 않음.
+ * 실제 방은 미리보기 출처를 받지 않아(서버 CORS) 막히고, 붙더라도 시험 글이 실제 참가자 기록에 섞이면 안 됨
+ */
+const REAL_LIVE = ['http', 'sheets', 'supabase'];
+export const rehearsal = (bp) => (bp?.live && REAL_LIVE.includes(bp.live.provider) ? { ...bp, live: { ...bp.live, provider: 'local', url: '', anonKey: '' } } : bp);
 
 // 화면 크기(CSS 픽셀). 근거: docs/research/preview-responsive-2026-11.md
 export const DEVICES = [
@@ -108,7 +114,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
     if (!tr) { setTryHtml(''); return; }
     setView('after'); setTryHtml('');
     tt.current = setTimeout(async () => {
-      const r = await buildSite(tr.bp, await projectAssets(p.id));
+      const r = await buildSite(rehearsal(tr.bp), await projectAssets(p.id));
       if (!r.errors?.length) setTryHtml(previewHtml(r.files, 'index.html', { extraCss: labels() }));
     }, 60);
     return () => clearTimeout(tt.current);
@@ -125,7 +131,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
     clearTimeout(t.current);
     t.current = setTimeout(async () => {
       const assets = await projectAssets(p.id);
-      const r = await buildSite(p.blueprint, assets);
+      const r = await buildSite(rehearsal(p.blueprint), assets);
       if (r.errors?.length) { setHtml(`<p style="font:16px sans-serif;padding:24px">${r.errors.map((e) => e.message_ko).join('<br>')}</p>`); return; }
       setSize(r.report.sizeKB);
       const pg = r.files[page] ? page : 'index.html';
@@ -214,7 +220,7 @@ export function Preview({ p, onPick, frameRef, marking, onMark }) {
         </div>
       </div>
       <div class="pv-foot small muted">
-        <span>{live ? '참여 기능은 미리보기 안에서 시험해 볼 수 있어요.' : '고친 내용이 바로 반영돼요.'}{size ? ` 사이트 크기 약 ${size >= 1000 ? (size / 1000).toFixed(1) + 'MB' : size + 'KB'}` : ''}</span>
+        <span>{live ? (REAL_LIVE.includes(p.blueprint.live.provider) ? '미리보기의 참여 기능은 시험용이라 실제 참가자 기록과 섞이지 않아요.' : '참여 기능은 미리보기 안에서 시험해 볼 수 있어요.') : '고친 내용이 바로 반영돼요.'}{size ? ` 사이트 크기 약 ${size >= 1000 ? (size / 1000).toFixed(1) + 'MB' : size + 'KB'}` : ''}</span>
         <button class="btn btn-sm btn-quiet" onClick={() => setFocusable(!focusable)} aria-pressed={String(focusable)}>{focusable ? '키보드 둘러보기 끄기' : '키보드로 둘러보기'}</button>
       </div>
     </div>

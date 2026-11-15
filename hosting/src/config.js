@@ -25,7 +25,7 @@ export const DEFAULTS = {
   LIVE_SOCKETS_PER_IP: 500, // 한 IP(학교 공유기 하나)가 방 하나에 여는 실시간 연결
   DAILY_ROOM_CAP: 30, // 하루에 새로 만들 수 있는 방(전체). worker 보기 기본. pages 보기는 100, PLAN=paid면 300(pages 1000)
   PAGES_API_BUDGET: 900, // Pages API를 5분에 이만큼까지(Cloudflare API 한도 1,200/5분의 75%. 넘으면 그 계정의 모든 API가 5분 막힘)
-  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 배포한 사이트가 쓸 몫을 남김. PLAN=paid면 0(끔)
+  DAILY_REQUEST_BUDGET: 100000, // 하루 요청 예산(무료 요금제 한도). 60%를 넘으면 새 사이트·새 방을 받지 않아 이미 배포한 사이트가 쓸 몫을 남김. PLAN=paid면 100만(비용 상한), 0이면 끔
   MAX_SITE_DAYS: 365, // 방문이 이어져도 처음 만든 날부터 이만큼 지나면 더 늘리지 않음(다시 배포하면 늘어남)
   ALLOWED_ORIGINS: 'https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173',
   ALERT_AT: '45,60,80,95', // 하루 요청 예산의 몇 %에서 알림(ALERT_WEBHOOK, 없으면 REPORT_WEBHOOK). 넘침 단계와 같게: 45 예약한 연수만, 60 새 일 멈춤, 80 묻기 20초, 95 곧 한도
@@ -35,7 +35,9 @@ export const DEFAULTS = {
 /** 요금제에 따라 달라지는 기본값. free: Cloudflare 무료 요금제 안에서만(하루 한도에 닿으면 그날은 멈춤). paid: Workers Paid(하루 한도 없음, 쓴 만큼) */
 export const PLAN_DEFAULTS = {
   free: {},
-  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 0, SITES_PER_DEVICE: 10 },
+  // 유료도 하루 예산을 둠(비용 상한): 100만이면 날마다 다 써도 월 약 $15(기본 $5 포함, capacity.js costOf). 60%부터 새 사이트·새 방은 강사 계정으로.
+  // 더 받으려면 DAILY_REQUEST_BUDGET을 올리고, 끄려면 0(그때는 Cloudflare 지출 한도만 남음 → README §4)
+  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 10 },
 };
 /**
  * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청 약 12~25, 저장 약 0.2MB).
@@ -51,6 +53,8 @@ export const PAGES_SITE_DAYS = 60;
 export const NEW_WORK_SHARE = 0.6;
 /** 하루 요청 예산에서 덜 급한 요청(앱 이용 합계 받기)까지 받는 구간. 넘으면 Worker가 DO를 부르지 않고 바로 버림 */
 export const EXTRA_WORK_SHARE = 0.85;
+/** 오늘 DO duration 몫(%)이 이만큼이면 새 SSE는 받지 않고(index.js), 이미 열린 SSE도 방이 다음에 알릴 때(10분마다) 닫음(room.js) → 런타임이 긴 대기로 내려감 */
+export const SSE_STOP_PCT = 60;
 
 /** "off"·"0"·"false"·"no"면 끈 것 */
 const off = (v) => /^(off|0|false|no)$/i.test(String(v ?? '').trim());
@@ -115,6 +119,8 @@ export function config(env = {}) {
     reportWebhook: typeof env.REPORT_WEBHOOK === 'string' && /^https:\/\//.test(env.REPORT_WEBHOOK.trim()) ? env.REPORT_WEBHOOK.trim() : '',
     publicOrigin,
     adminUrl,
+    // 하루 점검이 '며칠째 그대로인지' 볼 AI 정보 파일(앱 주소의 ai-catalog.json, https만). 없으면 그 점검을 건너뜀
+    catalogUrl: ((v) => { try { const u = new URL(v); return u.protocol === 'https:' ? u.href : ''; } catch { return ''; } })(String(env.CATALOG_URL ?? '').trim()),
     // 알림: 하루 예산의 ALERT_AT %를 넘을 때, 저장량이 80%를 넘을 때. 비밀 ALERT_WEBHOOK(없으면 REPORT_WEBHOOK)으로 보냄
     alertWebhook: [env.ALERT_WEBHOOK, env.REPORT_WEBHOOK].map((v) => (typeof v === 'string' ? v.trim() : '')).find((v) => /^https:\/\//.test(v)) || '',
     alertAt: String(env.ALERT_AT ?? DEFAULTS.ALERT_AT).split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0 && n <= 100).sort((a, b) => a - b),

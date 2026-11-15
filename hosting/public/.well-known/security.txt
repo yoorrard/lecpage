@@ -1,0 +1,6 @@
+# lecpage 보안 연락처(RFC 9116). 해마다 10월에 Expires를 1년 뒤로(docs/operations.md §7)
+Contact: https://github.com/yoorrard/lecpage/security/advisories/new
+Contact: mailto:hello@lecpage.com
+Expires: 2027-11-14T00:00:00.000Z
+Preferred-Languages: ko, en
+Policy: https://github.com/yoorrard/lecpage/blob/main/SECURITY.md

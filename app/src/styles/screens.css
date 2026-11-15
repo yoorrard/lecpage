@@ -470,6 +470,8 @@ dialog.join-big::backdrop{background:var(--bg)}
 .list-rows>li{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--hair)}
 .plain-fieldset{border:0;margin:0;padding:0;min-width:0}
 .plain-fieldset legend{font-weight:600;font-size:.9rem;color:var(--ink-2);padding:0;margin-bottom:6px}
+.days-field{grid-column:1/-1;display:grid;gap:8px}
+.days-field small{color:var(--muted);font-size:.85rem}
 /* AI로 만들기 진행 띠 */
 .ai-job{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--hair));border-radius:var(--r-sm);background:var(--lav-soft);color:var(--lav-ink)}
 .ai-job.ok{background:var(--mint);color:var(--mint-ink);border-color:color-mix(in srgb,var(--mint-ink) 18%,transparent)}

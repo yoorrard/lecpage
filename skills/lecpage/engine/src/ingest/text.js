@@ -75,5 +75,6 @@ export function parseText(raw, ctx, { markdown = false } = {}) {
   const h1 = blocks.filter((b) => b.heading === 1);
   if (h1.length === 1 && blocks.indexOf(h1[0]) === 0 && blocks.some((b) => b.heading === 2)) h1[0].heading = 0;
   const pages = blocksToPages(blocks, { fileId: ctx.fileId, unit: 'section', maxPages: ctx.limits.maxPages });
+  if (pages.overflow) ctx.warn('too-many-sections', { pages: pages.length + pages.overflow, limit: ctx.limits.maxPages });
   return { pages, design: null, meta: {}, unit: 'section' };
 }

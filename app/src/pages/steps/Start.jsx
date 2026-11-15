@@ -12,6 +12,7 @@ import { fmtBytes, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
 import { openSaved, openFailMessage } from '../../lib/open-saved.js';
+import { trainingDays, daysPatch } from '../../lib/days.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
@@ -23,15 +24,28 @@ const FORMATS = [{ value: '', label: '교재 보고 정하기' }, { value: 'lect
 const AFTER = 'lecpage:after-connect'; // (예전 OpenRouter 로그인) 로그인하러 나갔다 돌아오면 이어서 만들 프로젝트
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
 const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
+// 사진은 교재로 읽지 않음: 빨간 오류 대신 실제로 넣는 곳을 한 줄로(여러 장이어도 한 줄)
+const PHOTO = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
+const PHOTO_NOTE = "사진은 교재로 읽지 않아요. 사이트에 실으려면 사이트를 만든 뒤 '내용 → 자료실'의 [＋ 파일 올리기]로 넣어요.";
 
 /** 교재 파일 읽기(브라우저 안). 원본은 src/에 보관하고 사이트에는 넣지 않음(공유하기에서 고를 때만) */
 function useIngest(p, update) {
   const [busy, setBusy] = useState('');
   const [pct, setPct] = useState(0);
   const [stop, setStop] = useState(null); // 쪽 그림을 만드는 동안: [쪽 그림 그만 만들기](그때까지 만든 그림은 씀)
-  async function ingestAll(fileObjs, { replace = false } = {}) {
+  async function ingestAll(fileObjs0, { replace = false, keep = null } = {}) {
+    const photos = fileObjs0.filter((f) => PHOTO.test(f.name));
+    const fileObjs = fileObjs0.filter((f) => !PHOTO.test(f.name));
+    const metas = replace ? [] : (p.files || []).filter((f) => !f.pending && !f.photos);
+    const keepPhotos = keep || (replace ? [] : (p.files || []).filter((f) => f.photos).flatMap((f) => f.photos));
+    const photoRow = (names) => (names.length ? [{ name: names.length > 1 ? `사진 ${names.length}장` : names[0], ext: 'jpg', size: 0, pages: 0, errors: [], photos: names, note: PHOTO_NOTE }] : []);
+    // 읽는 동안 창을 닫아도 교재가 남게: 원본을 먼저 담고 목록에 '읽는 중'으로 적어 둠(다시 열면 이어서 읽음)
+    if (!replace && fileObjs.length) {
+      for (const f of fileObjs) if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
+      update({ files: [...metas, ...fileObjs.map((f) => ({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: [], pending: true })), ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
+    }
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
-    const mats = []; const metas = replace ? [] : [...(p.files || [])];
+    const mats = [];
     let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0; let empty = 0; let cut = 0;
     for (const [i, f] of fileObjs.entries()) {
       if (f.size > 100e6) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] }); continue; }
@@ -44,7 +58,7 @@ function useIngest(p, update) {
       if (!errors.length && (material.warnings || []).some((w) => w.code === 'no-text' || w.code === 'no-content')) empty++;
       metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors, ...(warns.length ? { warns } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
-      if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes));
+      if (f.size <= 100e6 && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
       if (ext === 'pdf' && !errors.length) {
         await blobs.removePrefix(p.id, 'assets/slides/');
         const ctl = new AbortController(); setStop(ctl);
@@ -70,11 +84,12 @@ function useIngest(p, update) {
       // 교재에 적힌 참석 인원("300명") → 인원 구간(강사가 인원을 고르지 않았을 때만)
       const n = det.event?.size;
       if (n && (!info.size || info.size === cur.autoFilled?.size || (!cur.infoTouched && info.size === SIZE[0].value))) { info.size = n <= 30 ? 25 : n <= 100 ? 60 : n <= 300 ? 200 : 500; auto.size = info.size; }
-      return { material: merged, files: metas, info, autoFilled: auto, slidesMade, summary };
+      return { material: merged, files: [...metas, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], info, autoFilled: auto, slidesMade, summary };
     });
     const bad = fileObjs.length - ok;
-    toast(!fileObjs.length ? '' : bad === 0 ? (empty ? (empty === ok ? '교재에서 글자를 거의 읽지 못했어요. 주황 글씨를 확인해 주세요.' : `교재 ${ok}개를 넣었어요. 글자를 못 읽은 파일이 있어요. 주황 글씨를 확인해 주세요.`) : cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.` : `교재 ${ok}개를 읽었어요.`)
-      : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
+    const ph = photos.length ? ` 사진 ${photos.length}장은 자료실에 따로 넣어요.` : '';
+    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (empty ? (empty === ok ? `교재에서 글자를 거의 읽지 못했어요. 주황 글씨를 확인해 주세요.${ph}` : `교재 ${ok}개를 넣었어요. 글자를 못 읽은 파일이 있어요. 주황 글씨를 확인해 주세요.${ph}`) : cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
+      : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
   async function handle(list) {
     const files = Array.from(list || []); if (!files.length) return;
@@ -100,13 +115,24 @@ function useIngest(p, update) {
       // 지운 교재에서 저절로 채운 칸은 비움
       const info = { ...p.info }; for (const [k, v] of Object.entries(p.autoFilled || {})) if (info[k] === v) info[k] = '';
       update({ info, autoFilled: {} });
-      if (again.length) await ingestAll(again, { replace: true });
-      else update({ material: null, files: [], slidesMade: 0, summary: '' });
+      const keep = rest.filter((m) => m.photos).flatMap((m) => m.photos); // 사진 줄은 그대로(뺀 것이 사진 줄이면 빠짐)
+      if (again.length) await ingestAll(again, { replace: true, keep });
+      else update({ material: null, files: rest.filter((m) => m.photos), slidesMade: 0, summary: '' });
       toast(`뺐어요: ${f.name}`);
     } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0);
   }
-  return { busy, pct, handle, removeFile, stop };
+  /** 읽는 중에 창을 닫았던 교재(목록에 '읽는 중'으로 남음): 담아 둔 원본으로 이어서 읽음 */
+  async function resume() {
+    const pend = (p.files || []).filter((f) => f.pending && f.key); if (!pend.length || busy) return;
+    const all = await blobs.all(p.id).catch(() => ({}));
+    const again = pend.map((m) => (all[m.key] ? new File([all[m.key]], m.name) : null)).filter(Boolean);
+    if (!again.length) { update({ files: (p.files || []).filter((f) => !f.pending) }); return; }
+    setBusy('교재를 이어서 읽는 중이에요…'); setPct(3);
+    try { await ingestAll(again); } catch (e) { console.error(e); }
+    setBusy(''); setPct(0);
+  }
+  return { busy, pct, handle, removeFile, resume, stop };
 }
 
 export function StepStart({ p, update, go }) {
@@ -131,7 +157,8 @@ export function StepStart({ p, update, go }) {
   const makeWithAiRef = useRef(null);
   const [confirmRemake, setConfirmRemake] = useState(false);
   const [titleErr, setTitleErr] = useState(false);
-  const { busy, pct, handle, removeFile, stop } = useIngest(p, update);
+  const { busy, pct, handle, removeFile, resume, stop } = useIngest(p, update);
+  useEffect(() => { resume(); }, []);
   // ✕로 교재를 뺀 뒤 초점: 같은 자리(없으면 앞) 파일의 ✕, 다 뺐으면 교재 넣는 칸(초점이 화면 맨 위로 사라지지 않게)
   const listRef = useRef(); const dropRef = useRef();
   async function remove(i) {
@@ -158,6 +185,8 @@ export function StepStart({ p, update, go }) {
   }, []);
 
   const setInfo = (patch) => update((cur) => {
+    // 사이트가 있으면 날짜는 차시 날짜(meta.sessions)와 함께 고침(첫 화면 일시 줄이 따라 바뀌게). 둘째 날부터는 그대로
+    if ('date' in patch && cur.blueprint) return daysPatch(cur, [patch.date, ...trainingDays(cur.blueprint).slice(1)]);
     const nextInfo = { ...cur.info, ...patch };
     return { info: nextInfo, infoTouched: true, blueprint: cur.blueprint ? syncInfo(cur.blueprint, nextInfo, patch) : cur.blueprint };
   });
@@ -240,7 +269,7 @@ export function StepStart({ p, update, go }) {
             <ul class="files" ref={listRef}>
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{fmtBytes(f.size)}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
                   <button class="icon-btn" disabled={!!busy} onClick={() => remove(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
               ))}
             </ul>

@@ -12,5 +12,8 @@
     "examples": "node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/sel-story.blueprint.json -o .out/sel-story && node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/data-lab.blueprint.json -o .out/data-lab",
     "app:dev": "npm --prefix app run dev",
     "app:build": "npm --prefix app run build"
+  },
+  "devDependencies": {
+    "wrangler": "4.158.0"
   }
 }

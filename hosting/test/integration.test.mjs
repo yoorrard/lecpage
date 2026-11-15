@@ -55,6 +55,9 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.ok(rb.includes('User-agent: *\nDisallow: /\n'), '검색 로봇은 막음');
     assert.ok(/User-agent: kakaotalk-scrap[\s\S]*Allow: \/s\//.test(rb) && /User-agent: facebookexternalhit/.test(rb) && /User-agent: Twitterbot/.test(rb), '링크 미리보기 카드는 /s/를 읽게');
     assert.equal((await text(`${base}/없는-주소`)).status, 404);
+    // 보안 연락처(RFC 9116): 정적 자산이라 Worker 요청 수에 들지 않음
+    const sec = await text(`${base}/.well-known/security.txt`);
+    assert.equal(sec.status, 200); assert.match(sec.text, /^Contact: mailto:hello@lecpage\.com$/m); assert.match(sec.text, /^Expires: \d{4}-/m);
     // CORS: 허용한 앱 주소만
     const pre = await fetch(`${base}/api/sites`, { method: 'OPTIONS', headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization,content-type' } });
     assert.equal(pre.status, 204);
@@ -393,7 +396,8 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal((await text(site.url)).status, 200);
     assert.equal((await call(base, 'DELETE', `/api/sites/${site.id}`, { key: site.key })).status, 204);
     const gone = await text(site.url);
-    assert.equal(gone.status, 404); assert.ok(gone.text.includes('이 사이트는 보관 기간이 끝났어요'));
+    assert.equal(gone.status, 404); assert.ok(gone.text.includes('강사가 사이트를 내렸어요') && !gone.text.includes('보관 기간이 끝났어요'), '강사가 내림 ≠ 보관 기간 끝');
+    assert.ok((await text(site.url)).text.includes('강사가 사이트를 내렸어요'), '1분 기억(Worker)에서도 같은 화면');
     assert.equal((await text(`${site.url}assets/lecpage.js`)).status, 404);
     const d = await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifestOf(v2) } });
     assert.equal(d.status, 404); assert.equal(code(d), 'not_found');
@@ -510,8 +514,18 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal((await deploy(base, s, liveFiles)).status, 200);
     assert.equal((await lv('GET', '/snapshot')).body.questions.length, 1);
 
+    // 내리기·다시 배포 전에 앱이 보는 기록 수(사이트 열쇠로만, 내용 없이 수만)
+    assert.equal((await call(base, 'GET', `/api/sites/${s.id}/records`)).status, 401);
+    const rec = await call(base, 'GET', `/api/sites/${s.id}/records`, { key: s.key });
+    assert.equal(rec.status, 200, JSON.stringify(rec.body));
+    assert.equal(rec.body.live, true);
+    assert.deepEqual({ p: rec.body.counts.participants, q: rec.body.counts.questions, b: rec.body.counts.posts }, { p: 1, q: 1, b: 1 });
+    assert.ok(rec.body.last > Date.now() - 600e3, '마지막 기록 때');
+    assert.equal((await call(base, 'GET', `/api/sites/${other.id}/records`, { key: other.key })).body.live, false, '방이 없으면 live: false');
     // 사이트를 지우면 방·파일도 사라짐
     assert.equal((await call(base, 'DELETE', `/api/sites/${s.id}`, { key: s.key })).status, 204);
+    assert.ok((await text(s.url)).text.includes('강사가 사이트를 내렸어요'), '강사가 내린 사이트는 보관 기간 끝과 나눠 알림');
+    assert.ok((await text(`${s.url}console.html`)).text.includes('강사가 사이트를 내렸어요'), '강사 화면 주소도');
     const gone = await lv('GET', '/snapshot', { admin: TEACHER });
     assert.equal(gone.status, 404); assert.equal(gone.body.error, 'unknown_training');
     assert.equal((await fetch(base + up.body.url)).status, 404);

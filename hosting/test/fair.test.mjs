@@ -50,7 +50,7 @@ test('기본 한도: pages 보기는 새 사이트·방 상한이 큼(새 사이
   const w = config({}); const p = config(pagesEnv); const pp = config({ ...pagesEnv, PLAN: 'paid' }); const wp = config({ PLAN: 'paid' });
   assert.deepEqual([w.dailySiteCap, w.dailyRoomCap], [30, 30]);
   assert.deepEqual([p.view, p.dailySiteCap, p.dailyRoomCap], ['pages', 200, 100]);
-  assert.deepEqual([pp.dailySiteCap, pp.dailyRoomCap, pp.dailyRequestBudget], [1000, 1000, 0]);
+  assert.deepEqual([pp.dailySiteCap, pp.dailyRoomCap, pp.dailyRequestBudget], [1000, 1000, 1000000], '유료도 하루 예산(비용 상한)이 있음');
   assert.deepEqual([wp.dailySiteCap, wp.dailyRoomCap], [300, 300]);
   assert.deepEqual([p.sitesPerDevice, pp.sitesPerDevice, p.sitesPerHourShared, p.sitesPerDayShared, p.pagesApiBudget], [5, 10, 30, 60, 900]);
   assert.equal(config({ DAILY_SITE_CAP: '7', ...pagesEnv }).dailySiteCap, 7, '운영자가 정한 값이 먼저');

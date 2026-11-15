@@ -4,6 +4,7 @@ import { toast, saveFile, safeName } from '../lib/util.js';
 import { makeSaver, restoreDraft, dropDraft } from '../lib/saver.js';
 import { exportProjectFile, stageOf } from '../lib/project.js';
 import { Mascot } from '../components/Mascot.jsx';
+import { Dialog } from '../components/ui.jsx';
 import { StepStart } from './steps/Start.jsx';
 import { StepEdit } from './steps/Edit.jsx';
 import { StepShare } from './steps/Share.jsx';
@@ -39,6 +40,8 @@ export function Project({ id, step }) {
     if (m.type === 'deleted') { saver.halt('gone'); setSt({ s: 'gone' }); }
     else if (m.type === 'saved' && m.at > saver.base()) { saver.halt('changed'); setSt({ s: 'changed' }); }
   }), [id, saver]);
+  const [saveAsk, setSaveAsk] = useState(false); // 배포한 연수의 [파일로 저장]: 열쇠를 담을지
+  const [withKeys, setWithKeys] = useState(false);
   // 떠날 때(탭 닫기·새로 고침·숨김·다른 화면): 아직 다 쓰지 못한 것은 임시본을 동기로 남기고 바로 씀(docs/interaction.md 9절)
   useEffect(() => {
     const now = () => { saver.stash(ref.current); saver.flush(); };
@@ -71,7 +74,14 @@ export function Project({ id, step }) {
   const cur = STEPS.find((x) => x.n === s) || STEPS[0];
   const go = (n) => { location.hash = `#/p/${id}/${n}`; };
   const done = (n) => (n === 1 ? !!p.blueprint : n === 2 ? !!p.visited?.[3] : !!p.deploy?.lastUrl);
-  async function saveProjectFile() { const z = await exportProjectFile(p); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip'); toast('연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.'); }
+  // 배포한 연수면 한 번 물음: 남에게 줄 파일(기본, 열쇠 없음) / 내 다른 기기에서 같은 주소로 이어 배포(열쇠 포함)
+  async function saveProjectFile(keys = false) {
+    setSaveAsk(false);
+    const z = await exportProjectFile(p, { withKeys: keys }); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip');
+    toast(keys ? '열쇠까지 담아 저장했어요. 다른 기기에서 열면 같은 주소에 이어 배포해요.' : '연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.');
+  }
+  /** [파일로 저장]: 배포한 연수면 열쇠를 담을지 먼저 물음 */
+  const askSave = () => (p.deploy?.lastUrl ? (setWithKeys(false), setSaveAsk(true)) : saveProjectFile());
   return (
     <div class={`wiz stage-${s}`}>
       <header class="wiz-head">
@@ -84,7 +94,7 @@ export function Project({ id, step }) {
         <div class="side-tools">
           {st.s === 'failed' || st.s === 'changed' ? <span class="small save-bad">저장 안 됨</span>
             : <span class="small muted" title="이 브라우저에 자동으로 저장돼요">{st.s === 'saving' ? '저장 중…' : '자동 저장'}</span>}
-          <button class="btn btn-sm" onClick={saveProjectFile} title="다른 컴퓨터에서 이어 하려면 파일로 저장해 옮기세요">파일로 저장</button>
+          <button class="btn btn-sm" onClick={askSave} title="다른 컴퓨터에서 이어 하려면 파일로 저장해 옮기세요">파일로 저장</button>
         </div>
         {st.s === 'changed' && <div class="ai-job bad save-band" role="alert">
           <span class="ai-job-t"><b>다른 탭에서 이 연수를 고쳤어요.</b><small>덮어쓰지 않게 이 탭은 저장을 멈췄어요. 다시 불러오면 그 탭에서 고친 내용으로 이어서 해요.</small></span>
@@ -93,11 +103,17 @@ export function Project({ id, step }) {
         {st.s === 'failed' && <div class="ai-job bad save-band" role="alert">
           <span class="ai-job-t"><b>{storageKind(st.err) === 'quota' ? '저장 공간이 꽉 차 고친 내용을 저장하지 못했어요.' : storageKind(st.err) === 'blocked' ? '이 창은 브라우저 저장이 막혀 고친 내용을 저장하지 못했어요.' : '고친 내용을 저장하지 못했어요.'}</b>
             <small>{storageKind(st.err) === 'quota' ? '닫기 전에 [파일로 저장]으로 받아 두세요. 설정에서 안 쓰는 연수를 지우면 다시 저장돼요.' : storageKind(st.err) === 'blocked' ? '닫기 전에 [파일로 저장]으로 받아 두세요. 일반 창에서 열면 저장돼요.' : '닫기 전에 [파일로 저장]으로 받아 두세요.'}</small></span>
-          <button class="btn btn-sm btn-primary" onClick={saveProjectFile}>파일로 저장</button>
+          <button class="btn btn-sm btn-primary" onClick={askSave}>파일로 저장</button>
           {storageKind(st.err) === 'quota' && <a class="btn btn-sm" href="#/settings" target="_blank" rel="noopener">설정 열기</a>}
           <button class="btn btn-sm btn-quiet" onClick={() => saver.retry()}>다시 저장</button>
         </div>}
       </header>
+      <Dialog open={saveAsk} onClose={() => setSaveAsk(false)} label="파일로 저장">
+        <h2 class="h-sub">파일로 저장</h2>
+        <p>다른 컴퓨터에서 [저장한 파일 열기]로 열어 이어서 고쳐요. 기본 파일에는 배포 열쇠가 없어서 남에게 줘도 되고, 그 파일로 배포하면 새 주소가 생겨요.</p>
+        <label class="check"><input type="checkbox" checked={withKeys} onChange={(e) => setWithKeys(e.target.checked)} /><span>내 다른 기기에서 같은 주소로 이어 배포하기{withKeys && <small class="err"> 사이트 열쇠·강사 화면 관리자 키가 파일에 들어가요. 이 파일은 남에게 주지 마세요.</small>}</span></label>
+        <div class="btn-row"><button class="btn btn-primary" data-autofocus onClick={() => saveProjectFile(withKeys)}>저장</button><button class="btn btn-quiet" onClick={() => setSaveAsk(false)}>닫기</button></div>
+      </Dialog>
       <div class="wiz-main"><cur.C key={gen} p={p} update={update} go={go} /></div>
     </div>
   );

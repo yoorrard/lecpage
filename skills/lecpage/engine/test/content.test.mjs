@@ -72,13 +72,18 @@ describe('렌더: 새 칸과 자동 표시', () => {
     assert.ok(html.includes('<a href="tel:0311234567">031-123-4567</a>'), '전화는 tel 링크');
     assert.ok(/<section id="followup"[^>]*data-followup/.test(html));
   });
-  test('이수 기준: 직무연수(official)면 목표 칸에, 목표 칸이 없으면 첫 화면에', () => {
+  test('이수 기준: 직무연수(official)면 목표 칸에, 목표 칸이 없으면 첫 화면에. 출석 %는 사이트가 출석을 받을 때만', () => {
     const meta = { title: 't', date: '2026-12-16', admin: { kind: 'official', hours: 1.5, completionRate: 80 } };
-    const withGoals = index({ meta, sections: [{ type: 'hero' }, { type: 'goals', items: ['표로 모아요'] }] });
+    const live = { provider: 'local', features: ['attendance'] };
+    const withGoals = index({ meta, live, sections: [{ type: 'hero' }, { type: 'goals', items: ['표로 모아요'] }, { type: 'attendance' }] });
     assert.match(withGoals, /<b>이수<\/b> 1시간 30분 · 출석 80% 이상/);
     assert.ok(!/<dt>이수<\/dt>/.test(withGoals), '같은 말을 두 번 하지 않음');
-    const noGoals = index({ meta, sections: [{ type: 'hero' }] });
+    const noGoals = index({ meta, live, sections: [{ type: 'hero' }, { type: 'attendance' }] });
     assert.match(noGoals, /<dt>이수<\/dt><dd>1시간 30분 · 출석 80% 이상<\/dd>/);
+    // 출석을 받지 않는 사이트: 출석 기준을 쓰지 않고(받을 길이 없으니) 검증이 알림
+    const noAttend = { meta, sections: [{ type: 'hero' }] };
+    assert.match(index(noAttend), /<dt>이수<\/dt><dd>1시간 30분<\/dd>/);
+    assert.ok(validate(noAttend).warnings.some((w) => w.code === 'attendance-off'));
     const school = index({ meta: { ...meta, admin: { kind: 'school' } }, sections: [{ type: 'hero' }] });
     assert.ok(!school.includes('<dt>이수</dt>'));
   });
@@ -111,7 +116,8 @@ describe('렌더: 새 칸과 자동 표시', () => {
   test('연수 기간(phase)과 끝난 뒤 줄: 날짜가 있으면 만들고, 가장 먼저 볼 칸으로 연결', () => {
     const html = index({ meta: { title: 't', date: '2026-12-16', start: '14:00', end: '17:00', sessions: [{ date: '2026-12-23', end: '16:00' }] },
       sections: [{ type: 'hero' }, { type: 'materials', items: [{ title: '교재' }] }, { type: 'followup', id: 'after', items: [{ title: '다시 보기', url: 'https://youtu.be/x' }] }] });
-    assert.deepEqual(data(html).phase, { start: '2026-12-16T14:00', end: '2026-12-23T16:00' });
+    // 여러 날이면 날마다의 시간(days)도: 참가자 화면이 그날 연수 시간에만 [출석]을 띄움
+    assert.deepEqual(data(html).phase, { start: '2026-12-16T14:00', end: '2026-12-23T16:00', days: [{ start: '2026-12-16T14:00', end: '2026-12-16T17:00' }, { start: '2026-12-23T14:00', end: '2026-12-23T16:00' }] });
     assert.match(html, /data-phase-bar hidden[\s\S]*?2026\. 12\. 23\.\(수\)에 끝난 연수예요\.[\s\S]*?href="#after">연수 후 안내<\/a>/);
     const none = index({ meta: { title: 't' }, sections: [{ type: 'hero' }] });
     assert.equal(data(none).phase, null);
@@ -161,13 +167,14 @@ describe('초안(draft): 교재에서 채우기', () => {
     assert.ok(!st.desc.startsWith('※'));
     assert.deepEqual(sec('followup').items.map((i) => [i.title, i.kind]), [['다시 보기 영상', 'recording'], ['안내서', 'link']]);
   });
-  test('설문은 주소가 있을 때만(기본 5문항, 마무리 앞). 없으면 빈 칸을 만들지 않고 할 일에 남김', () => {
+  test('설문은 주소가 있을 때만(그 기관 설문 하나, 마무리 앞 — 사이트 기본 문항과 둘이 되지 않게). 없으면 빈 칸을 만들지 않고 할 일에 남김', () => {
     assert.equal(sec('survey'), undefined, '주소가 없으면 참가자에게 "설문 주소가 아직 없어요"가 보이지 않게');
     assert.ok(d._draft.todo.some((t) => /만족도 조사/.test(t)));
     assert.deepEqual(validate(d).warnings, []);
     const d3 = materialToDraft(ingestText(MD, { name: 'notes.md' }), { today: '2026-11-01', surveyUrl: 'https://forms.gle/abcdEFGH123' });
     const sv = d3.sections.find((s) => s.type === 'survey');
-    assert.equal(sv.questions.length, DEFAULT_SURVEY.length);
+    assert.equal(sv.url, 'https://forms.gle/abcdEFGH123');
+    assert.equal(sv.questions.length, 0, '기관 설문이 있으면 사이트 기본 문항을 함께 싣지 않음');
     const types = d3.sections.map((s) => s.type);
     assert.ok(types.indexOf('survey') < types.indexOf('closing'));
   });

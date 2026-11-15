@@ -74,6 +74,11 @@ legend { font-weight: 600; font-size: .9rem; padding: 0; margin-bottom: 4px; }
 .advice.recommend { background: var(--band); color: var(--band-ink); }
 .advice a { color: inherit; }
 .advice-steps { margin: -4px 0 12px; padding-left: 22px; }
+.ops { padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+.ops p { margin: 0; }
+.ops ul { margin: 6px 0; padding-left: 20px; }
+.ops.recommend { background: var(--band); color: var(--band-ink); font-weight: 600; }
+.ops.recommend .small { font-weight: 400; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }

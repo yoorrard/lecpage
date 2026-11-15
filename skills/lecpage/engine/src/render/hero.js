@@ -13,6 +13,7 @@
 import { esc, br, href, fx, pad2, icon, koDate } from './html.js';
 import { getPreset } from '../design/presets.js';
 import { graphicHeroes } from './hero-graphic.js';
+import { whenText, eventDays, whoText, BASE_LABELS } from '../hero-meta.js';
 
 const WEEK = '일월화수목금토';
 export function dateParts(d) {
@@ -48,13 +49,19 @@ function model(s, ctx, h) {
   const st = sec('stations'), deck = sec('deck'), tools = sec('tools'), sched = sec('schedule'), outline = sec('outline'), goals = sec('goals'), ready = sec('readiness'), mats = sec('materials');
   const ins = bp.instructors[0];
   const time = m.start ? `${m.start}${m.end ? `~${m.end}` : ''}` : '';
-  const when = m.date ? `${koDate(m.date)}${time ? ` ${time}` : ''}` : '';
+  // 일시·장소·강사는 연수 정보에서 그때그때(hero-meta.js 한 곳: QR 안내문·달력 파일과 같은 날짜). 여러 날이면 기간으로
+  const when = m.date || eventDays(m).length ? whenText(m) : '';
+  const multi = eventDays(m).length >= 2;
   const place = h.placeText(m);
-  const custom = !!s.meta?.length;
-  const meta = custom ? s.meta.slice() : [
+  const rows = Array.isArray(s.meta) ? s.meta.filter((x) => x && x.value) : [];
+  // 설계도에 일시·장소·강사 줄이 직접 적혀 있으면(강사가 고친 첫 화면·예전 설계도) 그 줄을 그대로, 아니면 기본 줄 + 덧붙인 줄(발표·대상)
+  const own = rows.some((x) => BASE_LABELS.includes(x.label));
+  const custom = own || rows.length > 0 || multi;
+  const meta = own ? rows.slice() : [
     when && { k: 'when', label: '일시', value: when },
     place && { k: 'where', label: '장소', value: place },
-    ins && { k: 'who', label: '강사', value: `${ins.name}${ins.org ? ` · ${ins.org}` : ''}` },
+    ins && { k: 'who', label: ctx.words?.who || '강사', value: whoText(ins) },
+    ...rows,
   ].filter(Boolean);
   // 이수 기준: 연수 목표 칸이 없을 때만 첫 화면에(같은 말을 두 번 하지 않게)
   const done = h.completionLine(ctx);
@@ -73,7 +80,7 @@ function model(s, ctx, h) {
   const agenda = sched?.items.length ? sched.items.map((x) => ({ t: x.start, end: x.end, title: x.title }))
     : outline?.items.length ? outline.items.map((x) => ({ t: x.part, title: x.title })) : [];
   return {
-    m, s, ctx, h, st, deck, tools, sched, outline, goals, mats, ins, meta, custom, nums, who, prep, agenda, time, when, place, done, dur,
+    m, s, ctx, h, st, deck, tools, sched, outline, goals, mats, ins, meta, custom, nums, who, prep, agenda, time, when, place, done, dur, attend: !!h.attendOn?.(ctx),
     dp: dateParts(m.date), title: s.title || m.title, org: s.eyebrow || m.organizer || '', sub: s.subtitle || m.subtitle || '',
     id: esc(s.id),
   };
@@ -82,7 +89,7 @@ function model(s, ctx, h) {
 // ── 조각 ─────────────────────────────────────────────
 const org = (M, cls = '') => (M.org ? `<p class="lp-hero-org${cls ? ' ' + cls : ''}">${esc(M.org)}</p>` : '');
 /** 연수 전·중·후 한 줄. 날짜가 있을 때만 두고, 참가자 화면(lecpage.js initPhase)이 글을 채워 보여 줍니다 */
-const state = (M) => (M.dp ? '<p class="lp-hero-state" data-hero-state hidden><i aria-hidden="true"></i><span data-hero-state-text></span></p>' : '');
+const state = (M) => (M.dp ? `<p class="lp-hero-state" data-hero-state hidden><i aria-hidden="true"></i><span data-hero-state-text></span>${M.attend ? `<button class="lp-btn lp-btn-primary lp-btn-sm lp-hero-attend" type="button" data-hero-attend hidden>${icon('check')}<span>출석</span></button>` : ''}</p>` : '');
 const h1 = (M, cls = '') => `<h1 class="lp-h1${cls ? ' ' + cls : ''}" id="${M.id}-h"${fx(M.ctx, 'hero.title')}>${titleHtml(M.title)}</h1>`;
 const sub = (M, cls = '') => (M.sub ? `<p class="lp-hero-sub${cls ? ' ' + cls : ''}">${br(M.sub)}</p>` : '');
 function ctas(M, extra = []) {
@@ -95,7 +102,7 @@ function ctas(M, extra = []) {
   const list = [...lead, ...extra.filter((e) => !c0.some((c) => c.href === e.href))].slice(0, 3);
   // 연수가 끝나면: 입장 버튼 대신 '연수 후 안내'(있을 때)
   const fu = ctx.bp.sections.find((x) => x.type === 'followup');
-  const after = fu ? `<a class="lp-btn lp-btn-primary" href="#${esc(fu.id)}" data-phase-show="after" hidden><span>연수 후 안내</span>${icon('arrow')}</a>` : '';
+  const after = fu ? `<a class="lp-btn lp-btn-primary" href="#${esc(fu.id)}" data-phase-show="after" hidden><span>${esc(ctx.words?.followup || '연수 후 안내')}</span>${icon('arrow')}</a>` : '';
   if (!list.length && !after) return '';
   return `<div class="lp-ctas">${after}${list.map((c, i) => `<a class="lp-btn ${i ? 'lp-btn-ghost' : 'lp-btn-primary'}" ${href(c.href)}${i ? '' : fx(ctx, 'hero.cta')}${c.download ? ' download' : ''}${c.join || c.href === m.joinUrl ? ' data-phase-hide="after"' : ''}><span>${esc(c.label)}</span>${icon(c.download ? 'download' : /^https?:/.test(c.href) ? 'external' : 'arrow')}</a>`).join('')}</div>`;
 }
@@ -153,7 +160,8 @@ C.worksheet = (M) => {
   const items = M.st?.items || [];
   const date = M.dp ? `<p class="lp-wsheet-d">${shortDate(M)}(${M.dp.w})</p>` : '';
   if (items.length) {
-    const shown = items.slice(0, 5), total = items.reduce((a, x) => a + (x.minutes || 0), 0);
+    // 합계는 모든 실습에 시간이 있을 때만(일부만 알면 합이 실제보다 작게 보임)
+    const shown = items.slice(0, 5), total = items.every((x) => x.minutes) ? items.reduce((a, x) => a + x.minutes, 0) : 0;
     const foot = [`실습 ${items.length}개`, total ? `약 ${minText(total)}` : '', items.length > shown.length ? `나머지 ${items.length - shown.length}개는 실습 칸에` : ''].filter(Boolean).join(' · ');
     sheet = `<aside class="lp-wsheet" aria-label="오늘의 실습지"><div class="lp-wsheet-h"><p class="lp-wsheet-t">오늘의 실습지</p>${date}</div>
 <ol class="lp-wsheet-list">${shown.map((x, i) => `<li><a href="#st-${esc(x.id)}" data-hero-st="${esc(x.id)}"><i class="lp-wsheet-box" aria-hidden="true"></i><span class="lp-wsheet-n">${pad2(i + 1)}</span><span class="lp-wsheet-name">${esc(x.name || x.title)}</span>${x.minutes ? `<span class="lp-wsheet-min">${x.minutes}분</span>` : ''}</a></li>`).join('')}</ol>
@@ -267,7 +275,7 @@ C.spec = (M) => {
   const nums = pick(M, 'st', 'deck', 'dur', 'tools').slice(0, 3);
   const dim = M.dur ? `<p class="lp-spec-dim" aria-hidden="true"><span>${M.dur.text ? esc(M.dur.text) : `${M.dur.num}${esc(M.dur.unit)}`}${M.time ? ` · ${esc(M.time)}` : ''}</span></p>` : '';
   return `<div class="lp-wrap lp-hero-inner">
-  <div class="lp-spec-id">${M.org ? `<span class="lp-hero-org">${esc(M.org)}</span>` : '<span>연수 안내</span>'}${state(M)}${M.dp ? `<time datetime="${isoDate(M)}">${M.dp.y}-${pad2(M.dp.m)}-${pad2(M.dp.d)}</time>` : ''}</div>
+  <div class="lp-spec-id">${M.org ? `<span class="lp-hero-org">${esc(M.org)}</span>` : `<span>${esc(M.ctx.words?.ev || '연수')} 안내</span>`}${state(M)}${M.dp ? `<time datetime="${isoDate(M)}">${M.dp.y}-${pad2(M.dp.m)}-${pad2(M.dp.d)}</time>` : ''}</div>
   <div class="lp-hero-copy">${h1(M)}${dim}${sub(M)}${ctas(M)}</div>
   <dl class="lp-hero-meta lp-spec">${cells.map((x) => cell(x, 'lp-spec-c')).join('')}${nums.map((x) => numCell(M, x, 'lp-spec-c lp-spec-n')).join('')}</dl>
 </div>`;

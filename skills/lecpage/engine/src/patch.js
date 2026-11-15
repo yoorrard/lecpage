@@ -17,7 +17,7 @@ import { validate, str } from './validate.js';
 import { SECTION_DEFS, SECTION_TYPES } from './schema/sections.js';
 import { PRESETS } from './design/presets.js';
 import { FX } from './design/fx-catalog.js';
-import { syncHeroMeta } from './hero-meta.js';
+import { syncHeroMeta, alignSessions } from './hero-meta.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -101,6 +101,8 @@ export function applyBlueprintPatch(bp, patch) {
     raw[k] = clone(p[k]); applied++;
   }
 
+  // 첫날만 바꿔 지난 차시 날짜와 어긋나면 차시 날짜를 비움(--set meta.date=…, 연수 정보 길과 같은 규칙)
+  if (isObj(p.meta) && 'date' in p.meta && !('sessions' in p.meta) && isObj(raw.meta)) alignSessions(raw.meta, bp?.meta?.date);
   // 일시·장소·강사가 바뀌면 첫 화면에 따로 적힌 그 줄도 함께 바꿈(초안이 만든 글자 그대로일 때만)
   if (('meta' in p || 'instructors' in p) && isObj(bp)) syncHeroMeta(bp, raw);
 
