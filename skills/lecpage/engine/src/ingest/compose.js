@@ -155,7 +155,8 @@ export function findLeftovers(material, bp, { max = 20, ignore = null } = {}) {
   const mostly = (t) => { const w = words(t); return w.length >= 2 && w.filter((x) => hay.includes(x)).length / w.length >= 0.6; };
   const has = (text0) => {
     // 질문답 머리표("Q. ", "A: ")는 떼고 맞춰 봄(자주 묻는 질문 칸에는 머리표 없이 실림)
-    const text = String(text0 || '').replace(QA_MARK, '');
+    // 절 번호("2. 달라지는 점")도 떼고 맞춰 봄(사이트 칸 제목에는 번호 없이 실림)
+    const text = String(text0 || '').replace(QA_MARK, '').replace(/^\s*(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.)]\s+(?=\S)/, '');
     const k = textKey(text);
     if (k.length < 6 || boiler.has(k)) return true;
     if (skip.some((x) => k.includes(x))) return true; // 강사 확인 전이라 싣지 않은 주소의 링크 글
