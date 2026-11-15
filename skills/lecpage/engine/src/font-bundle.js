@@ -226,7 +226,7 @@ export async function bundleFonts(files, o = {}) {
             const name = await put(sub.data, sub.format);
             res += (meta.split ? fb : withRange(fb, unicodeRange(sub.cover, 64))) + '\n';
             res += withRange(withSrc(block, name.replace(/^assets\//, ''), sub.format), unicodeRange(sub.kept)) + '\n';
-            made.push({ ...meta, name, size: sub.data.byteLength });
+            made.push({ ...meta, name, size: sub.data.byteLength, sub: true });
             report.subset++; report.saved += g.buf.byteLength - sub.data.byteLength;
             continue;
           }
@@ -293,15 +293,19 @@ const fam = (v) => v.split(',')[0].trim().replace(/^['"]|['"]$/g, '').toLowerCas
 
 /** theme.css의 --font-display·--font-sans 첫 글꼴(제목 굵기·400) 가운데 파일 하나로 정해지는 것을, 합이 budget을 넘지 않게 제목부터 */
 function critical(theme, made, budget = 64 * 1024) {
+  // 나눠 받기(unicode-range) 글꼴은 그 굵기의 '사이트 글자만 남긴' 조각 파일들을 함께(합이 예산 안일 때만). 제목·본문 글이 글꼴이 늦게 와 다시 줄바꿈되며
+  // 첫 화면이 밀리던 것(CLS)을 줄임. 사이트에 없는 한글 조각(참가자 글용)은 미리 받지 않음
   const pick = (family, w) => {
     const fs = made.filter((f) => f.family === family && f.style === 'n');
-    if (!fs.length || fs.some((f) => f.split)) return null; // 나눠 받기 조각 글꼴은 파일이 여럿이라 고르지 않음
+    if (!fs.length) return [];
     const best = pickWeight(w, [...new Set(fs.map((f) => f.weight))]), hit = fs.filter((f) => f.weight === best);
-    return hit.length === 1 ? hit[0] : null;
+    if (hit.some((f) => f.split)) return hit.filter((f) => f.sub);
+    return hit.length === 1 ? hit : [];
   };
   const out = []; let used = 0;
-  for (const f of [pick(fam(tok(theme, '--font-display')), Number(tok(theme, '--display-weight')) || 700), pick(fam(tok(theme, '--font-sans')), 400)]) {
-    if (f && !out.includes(f.name) && used + f.size <= budget) { out.push(f.name); used += f.size; }
+  for (const group of [pick(fam(tok(theme, '--font-display')), Number(tok(theme, '--display-weight')) || 700), pick(fam(tok(theme, '--font-sans')), 400)]) {
+    const fresh = group.filter((f) => !out.includes(f.name)), size = fresh.reduce((a, f) => a + f.size, 0);
+    if (fresh.length && used + size <= budget) { for (const f of fresh) out.push(f.name); used += size; }
   }
   return out;
 }

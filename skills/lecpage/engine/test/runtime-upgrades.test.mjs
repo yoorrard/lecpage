@@ -127,6 +127,9 @@ test('word cloud: normalize, strip one particle, merge, drop banned and hidden w
   assert.equal(normWord('ＡＩ'.normalize('NFKC') + '가'), 'ai');
   assert.equal(normWord('AI'), 'ai');
   assert.equal(normWord('소통은!'), '소통');
+  assert.equal(normWord('<b>굵게</b>'), '굵게', '태그 모양은 통째로 뺌');
+  assert.equal(normWord('맑 음'), normWord('맑음'), '한글만 띄어 친 답은 같은 낱말');
+  assert.equal(normWord('AI 수업'), 'ai 수업', '라틴이 섞이면 띄어쓰기 그대로');
   assert.equal(normWord('아이'), '아이', 'would leave one letter');
   assert.equal(normWord('고양이'), '고양이', 'keep-list');
   assert.equal(normWord('행복도'), '행복');

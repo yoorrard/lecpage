@@ -13,7 +13,7 @@ export const nodeServerDir = path.join(skillDir, 'backends/node-server');
 
 /** 브라우저 시험에서 사이트를 교실 와이파이 주소처럼 열기: lan.lecpage.test → 127.0.0.1(localhost로 연 쪽은 QR 대신 안내가 나오므로) */
 export const LAN_HOST = 'lan.lecpage.test';
-export const LAN_ARGS = [`--host-resolver-rules=MAP ${LAN_HOST} 127.0.0.1`];
+export const LAN_ARGS = [`--host-resolver-rules=MAP ${LAN_HOST} 127.0.0.1`, `--proxy-bypass-list=${LAN_HOST};127.0.0.1;localhost`];
 export const viaLan = (u) => String(u).replace('://127.0.0.1', '://' + LAN_HOST);
 
 export function tmpDir(prefix = 'lec-live-') { return fs.mkdtempSync(path.join(os.tmpdir(), prefix)); }

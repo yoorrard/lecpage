@@ -695,6 +695,8 @@
     if (old && old.by != null && doc.by == null) doc.by = old.by;
     // 결과 공개 전 남의 응답은 값 없이(sealed) 옴: 이미 값을 아는 응답(내 것·공개 뒤 받은 것)을 빈 값으로 덮지 않음
     if (col === 'answers' && doc.sealed && old && !old.sealed && old.value !== undefined) { doc.value = old.value; delete doc.sealed; }
+    // 공개되어 값이 온 응답: 화면들이 Object.assign으로 합치므로 '봉인' 표시를 분명히 거둠
+    if (col === 'answers' && old && old.sealed && !doc.sealed) doc.sealed = false;
     if (doc.cid) {
       for (var k in m) {
         if (m[k]._pending && m[k].cid === doc.cid && k !== doc.id) {
