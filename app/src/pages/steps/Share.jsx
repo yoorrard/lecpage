@@ -8,20 +8,49 @@ import { projectAssets } from '../../components/Preview.jsx';
 import { buildSite, loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { Publish, lecLiveOff } from '../../components/Publish.jsx';
-import { probeSite, instantInfo, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
+import { probeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml, printHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
 import { FEATURES, LIVE_KEYS, syncInfo } from '../../lib/blueprint.js';
+import { duplicateProject, carryPatch } from '../../lib/project.js';
+import { whenText } from '@engine/src/hero-meta.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const LIVE_READY = (live, ok) => ['sheets', 'supabase', 'http'].includes(live?.provider) && live?.url && ok;
 const LIVE_NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버' };
 
+const DAY = 864e5;
+/** 연수 마지막 날이 끝나는 때(한국 시간 다음 날 0시). 차시 날짜가 있으면 마지막 차시. 날짜가 없으면 0 */
+export function trainingEnd(meta = {}) {
+  const days = [meta.date, ...(meta.sessions || []).map((x) => x.date)].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
+  return days.length ? Date.parse(`${days[days.length - 1]}T00:00:00+09:00`) + DAY : 0;
+}
+const md = (t) => new Date(t).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' });
+/**
+ * 바로 배포의 보관 기간과 연수 날짜. 보관 기간이 정해진 서버(keepAlive=false: 마지막 배포 뒤 N일)에서만.
+ * { gone: 이미 지워짐, short: 연수 날 전에 지워짐, until, again: 지금 다시 배포하면 늘어나는 날, enough: 다시 배포로 연수 날까지 닿는지, remindAt: 다시 배포할 때(연수 2주 전쯤) }
+ */
+export function lecExpiry(p, info, now = Date.now()) {
+  const lec = p.deploy?.lecpage; const fixed = info ? info.keepAlive === false : lec?.view === 'pages' || !!lec?.fixed;
+  if (!fixed) return null;
+  const days = info?.limits?.days || 60; const end = trainingEnd(p.blueprint?.meta);
+  const until = lec?.expiresAt && p.deploy?.target === 'lecpage' ? lec.expiresAt : 0;
+  const again = now + days * DAY;
+  return { until, gone: !!until && until <= now, short: !!end && end > now && (until ? until < end : again < end), again, enough: !end || again >= end, remindAt: end ? Math.max(now, end - 14 * DAY) : 0, days, end };
+}
+
 /** 배포 전에 볼 곳(참여 기능 연결은 체크리스트 첫 줄이 맡음) */
-function checks(p) {
+function checks(p, exp) {
   const bp = p.blueprint; const v = E.validate(bp); const b = v.blueprint; const out = [];
+  // 보관 기간이 연수 날보다 먼저 끝남: 다시 배포로 닿으면 그 길을, 연수 날이 너무 멀면 언제 다시 배포할지
+  if (exp?.short && !exp.gone) {
+    const last = md(exp.end - DAY);
+    out.push({ k: 'warn', t: exp.until
+      ? `지금 사이트는 ${md(exp.until)}까지라 연수 날(${last})에는 열리지 않아요. ${exp.enough ? `다시 배포하면 ${md(exp.again)}까지로 늘어나요.` : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}`
+      : `바로 배포는 배포한 날부터 ${exp.days}일 보관이라 연수 날(${last})에는 지워져 있어요. ${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.` });
+  }
   if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(첫 화면·일정에 보여요).', go: 1 });
   // 지난 날짜(교재에 적힌 지난 연수 날짜를 그대로 쓴 경우가 많음): 고치라고만 알림(바꾸지 않음)
   else if (isPastDate(b.meta.date)) out.push({ k: 'warn', t: `연수 날짜(${monthDay(b.meta.date)})가 지났어요. 첫 화면·일정·QR 안내문에 이 날짜가 나와요.`, go: 1 });
@@ -29,6 +58,18 @@ function checks(p) {
   if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
   for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
   return out;
+}
+
+/**
+ * 다시 배포할 때 지난 참여 기록이 남아 있는지: 기록이 연수 날 전에 쌓였으면(지난 기수·미리 해 본 시험) 새 참가자에게도 보이므로 묻기.
+ * 연수 날·연수 뒤에 쌓인 기록(이번 연수 것)은 묻지 않음
+ */
+function oldRecords(p, rec) {
+  const c = rec?.counts; if (!c) return null;
+  const n = (c.participants || 0) + (c.questions || 0) + (c.posts || 0) + (c.survey || 0) + (c.answers || 0);
+  const day = p.blueprint?.meta?.date;
+  if (!n || !/^\d{4}-\d{2}-\d{2}$/.test(day || '') || !rec.last || rec.last >= Date.parse(`${day}T00:00:00+09:00`)) return null;
+  return { line: recordsLine(rec), when: md(rec.last) };
 }
 
 /**
@@ -74,14 +115,22 @@ export function StepShare({ p, update, go }) {
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 배포하기
   const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
   const [fontNote, setFontNote] = useState(''); // 글꼴을 사이트에 담지 못했을 때 한 줄
+  const [info, setInfoSrv] = useState(null); // 바로 배포 서버의 /api/info(보관 기간·하루 한도)
+  const [records, setRecords] = useState(null); // 바로 배포한 사이트의 참여 기록 수
+  const [room, setRoom] = useState(''); // 지난 기록을 어떻게 할지: 'fresh'(비우고 배포) | 'keep'(그대로) | ''(아직)
+  const [askRoom, setAskRoom] = useState(null); // 고르지 않고 다시 배포할 때 확인
+  const [goAgain, setGoAgain] = useState(0); // 확인 창에서 고른 뒤 다시 배포(고른 값이 반영된 다음 그림의 배포 함수로)
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
-  const built = useRef(''); const again = useRef(null);
-  useEffect(() => { instantInfo().then((i) => setAutoLive(!!i?.live?.url)); }, []);
-  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결을 읽는 동안 잠깐 기다림)
+  const built = useRef(''); const again = useRef(null); const goNow = useRef(null);
+  useEffect(() => { instantInfo().then((i) => { setAutoLive(!!i?.live?.url); setInfoSrv(i || null); }); }, []);
+  const lecSite = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage : null;
+  useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, p.blueprint?.live?.code]);
+  useEffect(() => { if (goAgain) (goNow.current || again.current)?.(); }, [goAgain]);
+  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 6초까지 기다림)
   useEffect(() => {
     let id = ''; try { id = sessionStorage.getItem('lecpage:republish') || ''; sessionStorage.removeItem('lecpage:republish'); } catch { }
     if (id !== p.id) return;
-    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 30) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
+    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 60) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
     return () => clearInterval(t);
   }, []);
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
@@ -90,6 +139,10 @@ export function StepShare({ p, update, go }) {
   if (!bp) return <><StepHead title="배포하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
+  const exp = (target === 'lecpage' || (!target && autoLive) || p.deploy?.target === 'lecpage') ? lecExpiry(p, info) : null;
+  const old = p.deploy?.lastUrl ? oldRecords(p, records) : null;
+  // 새 연수(새 코드)로: 복제하면 새 주소·새 QR, 기록도 따로
+  const dupNew = () => duplicateProject(p).then((n) => { toast('복제했어요. 새 연수로 배포해요.'); location.hash = `#/p/${n.id}/3`; }, () => toast('복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.'));
   const liveReady = LIVE_READY(bp.live, p.liveOk);
   const setAccess = (mode) => update((cur) => ({ blueprint: { ...cur.blueprint, access: { mode } }, sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
 
@@ -124,7 +177,11 @@ export function StepShare({ p, update, go }) {
     return { files, teacher: r.teacher };
   }
   /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 빼고 배포하기]를 골랐으면 묻지 않고 참여 기능 없이 */
-  function guard(run, auto = false) { if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {}); }
+  function guard(run, auto = false) {
+    // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음)
+    if (old && !room) { setAskRoom(true); return; }
+    if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
+  }
   const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info, patch) }; });
   const feats = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f));
   const toggleFeat = (v) => setInfo({ features: (p.info.features || []).includes(v) ? (p.info.features || []).filter((x) => x !== v) : [...(p.info.features || []), v] });
@@ -163,10 +220,12 @@ export function StepShare({ p, update, go }) {
     go(2);
   }
   function done(url, patch, more) {
+    setRoom('');
     // 주소가 바뀌면(다른 곳에 올림·내림) 예전 짧은 주소는 옛 사이트를 가리키므로 지움
     const moved = !url || (!!p.deploy?.lastUrl && same(url) !== same(p.deploy.lastUrl));
     if (moved && bp.meta?.shortUrl) toast('사이트 주소가 바뀌어 짧은 주소를 지웠어요. 다시 만들어 주세요.');
     update((cur) => ({
+      pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
       deploy: { ...(cur.deploy || {}), ...patch, lastUrl: url, at: Date.now(), shortLive: moved ? '' : built.current },
       blueprint: { ...cur.blueprint, meta: { ...cur.blueprint.meta, siteUrl: url, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...cur.blueprint.live, ...more.live } } : {}) },
       ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
@@ -186,14 +245,34 @@ export function StepShare({ p, update, go }) {
   const liveOffHere = lecLiveOff(p);
   const autoHere = autoLive && target === 'lecpage' && !liveOffHere;
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : 'todo';
-  const liveLine = { off: '꺼져 있어요. 쓸 기능을 누르면 켜져요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
+  // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
+  const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
   const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
-  const notes = checks(p);
+  const notes = checks(p, target === 'lecpage' || (!target && autoLive) ? exp : null); // 보관 기간 알림은 바로 배포에 배포할 때만
   const day = isPastDate(bp.meta?.date) ? null : dayLine(daySt, bp.meta?.date); // 지난 날짜는 '확인할 곳'에서 한 번만 알림
   const rows = [];
-  rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' ? 'todo' : 'done', line: liveLine,
+  // 다른 기기에서 저장한 파일로 연 연수: 그 파일에 배포 열쇠가 있으면 같은 주소에 이을지 고르고, 없으면 예전 주소와 새 주소가 생긴다는 사실만
+  const past = !p.deploy?.lastUrl ? p.pastDeploy : null;
+  if (past) {
+    const left = past.expiresAt ? (past.expiresAt > Date.now() ? `${md(past.expiresAt)}까지 열려 있어요` : '보관 기간이 끝났어요') : '';
+    const where = <><a href={past.url} target="_blank" rel="noopener">{showUrl(past.url)}</a>{left ? ` (${left})` : ''}</>;
+    rows.push(p.carryPending
+      ? { k: 'past', title: '지난 배포', state: 'todo', line: <>다른 기기에서 {where}에 배포한 연수예요.</>,
+        body: <>
+          <p class="small">이 파일에 그 사이트의 열쇠가 들어 있어요. 내가 저장한 파일이면 같은 주소·같은 QR로 이어서 배포해요. 남에게 받은 파일이면 [새 주소로 배포]를 골라 주세요.</p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-sm btn-primary" onClick={() => { update((cur) => carryPatch(cur)); toast('같은 주소에 이어서 배포할 수 있어요.'); }}>이 주소에 이어서 배포</button>
+            <button type="button" class="btn btn-sm" onClick={() => update({ carryPending: undefined })}>새 주소로 배포</button>
+          </div>
+        </> }
+      : { k: 'past', title: '지난 배포', state: 'note', line: <>{where}에 배포돼 있었어요. 이 기기에는 그 사이트의 열쇠가 없어 여기서 배포하면 새 주소가 생겨요.</>,
+        btn: [open.past ? '접기' : '같은 주소로 하려면', () => toggle('past')],
+        body: open.past && <p class="small">처음 배포한 기기에서 [파일로 저장]을 누르고 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 그 파일을 여기서 열어 주세요. 새 주소로 배포하면 인쇄한 QR과 보낸 주소도 새것으로 바꿔야 해요.</p> });
+  }
+  rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' || (liveState === 'off' && official) ? 'todo' : liveState === 'off' ? 'note' : 'done', line: liveLine,
     btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['되돌리기', () => setSkipLive(false)] : [open.live ? '접기' : '바꾸기', () => toggle('live')],
     body: liveBody && <>
       <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
@@ -228,16 +307,32 @@ export function StepShare({ p, update, go }) {
   if (!p.deploy?.lastUrl) rows.push({ k: 'venue', title: '연수 장소 확인', state: day?.k === 'full' ? 'todo' : 'note', line: day && day.k !== 'ok' ? '' : '배포한 뒤 연수 전날, 그곳 Wi-Fi로 열리는지 확인해요.',
     btn: day && day.k !== 'ok' ? null : [open.venue ? '접기' : '보기', () => toggle('venue')],
     body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
+  if (old) rows.push({ k: 'room', title: '지난 기록', state: room ? 'done' : 'todo',
+    line: room === 'fresh' ? '비우고 배포해요. 주소·QR·관리자 키는 그대로예요.' : room === 'keep' ? '그대로 두고 배포해요.' : `${old.when}까지 남긴 기록(${old.line})이 그대로 있어요. 다시 배포해도 새 참가자에게 보여요.`,
+    btn: room ? ['되돌리기', () => setRoom('')] : null,
+    body: !room && <>
+      <p class="small">필요한 기록은 먼저 강사 화면에서 CSV로 받아 두세요. 비우면 되돌릴 수 없어요.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm" onClick={() => setRoom('fresh')}>기록 비우고 배포</button>
+        <button type="button" class="btn btn-sm" onClick={() => setRoom('keep')}>그대로 두기</button>
+        <button type="button" class="btn btn-sm btn-quiet" onClick={dupNew}>복제해서 새 연수로</button>
+        {lecSite?.adminKey && <a class="btn btn-sm btn-quiet" href={String(p.deploy.lastUrl).replace(/\/?$/, '/') + 'console.html'} target="_blank" rel="noopener" onClick={() => copy(lecSite.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
+      </div>
+      <p class="small muted">복제하면 새 주소·새 QR로 따로 배포해요.</p>
+    </> });
   rows.push({ k: 'host', title: '배포할 곳', state: 'go', line: '',
     body: <>
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
-      <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} onTarget={setTarget} />
+      <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'} />
     </> });
 
   return (
     <>
-      <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [배포하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'} />
-      {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} />}
+      <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [배포하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'}>
+        {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
+        {!p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class="btn btn-primary" disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : document.querySelector('.publish')?.scrollIntoView({ block: 'center', behavior: 'smooth' }))}>배포하기</button>}
+      </StepHead>
+      {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
         <div class="stack">
@@ -261,6 +356,15 @@ export function StepShare({ p, update, go }) {
       </Sheet>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
 
+      <Dialog open={!!askRoom} onClose={() => setAskRoom(null)} label="지난 기록 확인">
+        <h2 class="h-sub">지난 기록이 남아 있어요</h2>
+        <p>{old ? `${old.when}까지 남긴 기록(${old.line})이 있어요. ` : ''}그대로 배포하면 새 참가자에게도 지난 질문·보드 글이 보여요. 필요한 기록은 먼저 강사 화면에서 CSV로 받아 두세요.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" onClick={() => { setAskRoom(null); setRoom('fresh'); setGoAgain((n) => n + 1); }}>기록 비우고 배포</button>
+          <button class="btn" onClick={() => { setAskRoom(null); setRoom('keep'); setGoAgain((n) => n + 1); }}>그대로 두고 배포</button>
+          <button class="btn btn-quiet" data-autofocus onClick={() => setAskRoom(null)}>닫기</button>
+        </div>
+      </Dialog>
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
         <h2 class="h-sub">참여 기능이 아직 연결되지 않았어요</h2>
         <p>지금 배포하면 질문·투표 같은 기능이 참가자끼리 이어지지 않아요. 나중에 연결하고 다시 배포해도 돼요.</p>
@@ -390,7 +494,7 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
   );
 }
 
-function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantOn, fontNote }) {
+function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
   const pw = p.blueprint.access?.mode === 'password' ? p.sitePassword : '';
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
@@ -398,20 +502,36 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
   const short = m.shortUrl && same(m.shortUrl) !== same(url) ? m.shortUrl : '';
   const stale = /^https:/.test(url) && (short || '') !== (p.deploy.shortLive || '');
   const [big, setBig] = useState(false);
-  const when = [m.date, m.start && `${m.start}${m.end ? '~' + m.end : ''}`].filter(Boolean).join(' ');
+  const when = whenText(m); // 사이트 첫 화면과 같은 꼴(2026. 11. 20.(금) 14:00~17:00)
   const liveOn = (p.blueprint.live?.features || []).length > 0;
   // 강사 화면 관리자 키: 바로 배포는 배포할 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
   const [adminKey, setAdminKey] = useState('');
   const liveUrl = p.blueprint.live?.url || '';
   useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
-  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : ''}`;
+  const feats = p.blueprint.live?.features || [];
+  // 받는 사람이 할 일 한 줄: 출석이 있으면 도착해서 [출석], 아니면 연수 중에 질문·참여
+  const todo = feats.includes('attendance') ? '\n도착하면 이 사이트에서 [출석]을 눌러 주세요.' : liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : '';
+  const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${todo}`;
+  const gone = !!exp?.gone; // 보관 기간이 끝나 지워짐(다시 배포하면 새 주소)
+  if (gone) {
+    return (
+      <Sheet class="success">
+        <div class="stack">
+          <div class="row"><Mascot size={48} mood="oops" /><h2 class="h-sub">보관 기간이 끝나 사이트가 지워졌어요</h2></div>
+          <p>{`${md(exp.until)}에 지워졌어요. 다시 배포하면 새 주소로 열려요. 인쇄한 QR과 보낸 주소는 새것으로 바꿔 주세요.`}</p>
+          <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!!busy} onClick={onRepublish}>다시 배포하기</button></div>
+        </div>
+      </Sheet>
+    );
+  }
   return (
     <Sheet class="success">
       <div class="success-in">
         <div class="stack">
           <div class="row"><Mascot size={48} mood="happy" /><h2 class="h-sub">참가자에게 보낼 주소가 생겼어요</h2></div>
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
-          {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{p.deploy.lecpage?.view === 'pages' && p.deploy.lecpage.expiresAt ? `${new Date(p.deploy.lecpage.expiresAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}까지 열려 있어요. 다시 배포하면 늘어나요.` : '방문이 있는 동안은 계속 열려 있어요. 30일 동안 아무도 오지 않으면 지워져요.'}</p> : <OpenState url={url} at={p.deploy.at} />}
+          {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{exp?.until ? `${md(exp.until)}까지 열려 있어요. 다시 배포하면 그날부터 ${exp.days}일로 늘어나요.` : `방문이 있는 동안은 계속 열려 있어요. ${days}일 동안 아무도 오지 않으면 지워져요.`}</p> : <OpenState url={url} at={p.deploy.at} />}
+          {exp?.short && exp.until && <p class="small venue-day is-full" role="alert">{`연수 날(${md(exp.end - DAY)})에는 지워져 있어요. `}{exp.enough ? <>지금 다시 배포하면 {md(exp.again)}까지 열려요. <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포해 늘리기</button></> : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}</p>}
           {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">학교망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           {fontNote && <p class="small" role="status">{fontNote}</p>}

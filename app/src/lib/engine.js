@@ -33,6 +33,12 @@ function toDataUrl(path, data) {
 export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6, tour = false, extraCss = '', lean = false, dpr = 0 } = {}) {
   let html = files[page]; if (!html) return '<p>미리볼 페이지가 없어요.</p>';
   const escClose = (s) => String(s).replace(/<\/(script)/gi, '<\\/$1');
+  // 자리 잡기(<html·<body·</head>)는 자산을 끼워 넣기 전에: 끼워 넣은 스크립트 글(console.js의 '<body>…</body>' 등)에 같은 글자가 있어도 진짜 태그에만 붙음
+  html = html.replace('<body', '<body data-lp-preview="1"');
+  if (dpr) html = html.replace('<html ', `<html data-fx-dpr="${+dpr}" `); // 작게 줄여 보여 주는 카드: 캔버스 해상도 상한(core.js)
+  if (extraCss) html = html.replace('</head>', () => `<style>${String(extraCss).replace(/<\//g, '<\\/')}</style></head>`);
+  const END = '\u0000lp-body-end\u0000'; // 마지막 </body>(문서 끝의 진짜 태그) 자리 표시. 스크립트를 끼운 뒤 그 자리에 미리보기 도구를 넣음
+  { const at = html.lastIndexOf('</body>'); html = at < 0 ? html + END : html.slice(0, at) + END + html.slice(at); }
   html = html.replace(/<link rel="stylesheet" href="(assets\/[^"]+)">/g, (m, p) => (files[p] !== undefined ? `<style>${files[p]}</style>` : ''));
   html = html.replace(/<script src="(assets\/[^"]+)"( defer)?><\/script>/g, (m, p) => (files[p] !== undefined ? `<script>${escClose(files[p])}</script>` : ''));
   let budget = maxImageBytes;
@@ -46,9 +52,6 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6, t
   });
   // 미리보기 안에서는 다른 페이지 링크가 동작하지 않으니 표시만
   html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/i, ''); // 미리보기는 앱 안(한 파일로 묶어 넣음)이라 사이트용 CSP를 뺌
-  html = html.replace('<body', '<body data-lp-preview="1"');
-  if (dpr) html = html.replace('<html ', `<html data-fx-dpr="${+dpr}" `); // 작게 줄여 보여 주는 카드: 캔버스 해상도 상한(core.js)
-  if (extraCss) html = html.replace('</head>', () => `<style>${String(extraCss).replace(/<\//g, '<\\/')}</style></head>`);
   // '고칠 곳 고르기': 앱이 켜면 칸에 마우스를 올려 고르고, 누르면 그 칸의 id만 앱으로 보냄(앱은 아는 id인지 다시 확인)
   const pick = `<script>(function(){var on=false;var st=document.createElement('style');st.textContent='html.lp-pick main [id]:not(main [id] [id]):hover{outline:3px dashed #5B49B0;outline-offset:-3px;cursor:pointer}';document.head.appendChild(st);addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type==='lp-pick'){on=!!d.on;document.documentElement.classList.toggle('lp-pick',on);}if(d.type==='lp-labels'){document.documentElement.classList.toggle('lp-labels',!!d.on);}if(d.type==='lp-scroll'&&typeof d.id==='string'){var t=document.getElementById(d.id);if(t)t.scrollIntoView({block:'start'});}});document.addEventListener('click',function(e){if(!on)return;var m=document.querySelector('main');var s=e.target.closest&&e.target.closest('[id]');while(s&&s.parentElement&&s.parentElement.closest&&s.parentElement.closest('main [id]'))s=s.parentElement.closest('main [id]');if(!s||!m||!m.contains(s))return;e.preventDefault();e.stopPropagation();parent.postMessage({type:'lp-picked',id:String(s.id).slice(0,80)},'*');},true);})();<\/script>`;
   // '본문 둘러보기'(디자인 크게 보기): 잠깐 첫 화면을 보여 준 뒤 본문 끝까지 천천히 내려가고 처음으로 돌아옴. 손을 대면 멈춤. 동작 줄이기에서는 하지 않음
@@ -56,7 +59,6 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 6e6, t
   const review = reviewJs ? `<script>${escClose(reviewJs)}<\/script>` : '';
   // lean(디자인 카드의 움직이는 모습): 고칠 곳 고르기·표시 도구 없이 사이트 스크립트만
   const extra = lean ? tourJs : pick + review + tourJs;
-  html = html.includes('</body>') ? html.replace('</body>', () => extra + '</body>') : html + extra;
-  return html;
+  return html.replace(END, () => extra);
 }
 

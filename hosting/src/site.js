@@ -20,11 +20,11 @@ import { isRuntimeJs } from './runtime.js';
 import { SUPABASE_SDK, STATIC_RUNTIME, PAGES_RUNTIME } from './runtime-allow.js';
 import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES } from './csp.js';
 import { rewriteHtml } from './rewrite.js';
-import { gonePage, blockedPage, notFoundPage, noFilePage } from './pages.js';
+import { gonePage, removedPage, blockedPage, notFoundPage, noFilePage } from './pages.js';
 import { normCode } from './live/host.js';
 import { PagesClient, deploySite } from './pages-api.js';
 import { pagesHash, base64Parts } from './blake3.js';
-import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, NOTICE_HEADERS, contentTypeOf, rawExt, fontHashed, fontsHashed } from './pages-site.js';
+import { isMedia, branchOf, siteUrlOf, headersFile, redirectsFile, ROBOTS, noFileHtml, blockedHtml, goneHtml, removedHtml, NOTICE_HEADERS, contentTypeOf, rawExt, fontHashed, fontsHashed } from './pages-site.js';
 
 /** blob 한 줄의 크기(DO SQLite는 한 줄 2MB까지) */
 export const CHUNK = 1024 * 1024;
@@ -85,6 +85,7 @@ export class Site extends DurableObject {
         case 'POST admin-block': return await this.block(request);
         case 'POST live': return await this.bindLive(request);
         case 'GET live-status': return this.liveStatus(url);
+        case 'GET records': return await this.records(request);
         default: throw new HttpError('not_found', '없는 주소예요.');
       }
     } catch (e) {
@@ -309,6 +310,18 @@ export class Site extends DurableObject {
     const meta = this.load();
     const alive = !!meta && Date.now() < meta.expires && meta.live_code === url.searchParams.get('code');
     return json({ alive, expires: alive ? meta.expires : 0, blocked: alive ? !!meta.blocked : false });
+  }
+
+  /**
+   * 강사(사이트 열쇠)가 [사이트 내리기]·다시 배포 전에 보는 참여 기록 수(참가자·출석·질문·보드 글·투표 답·설문)와 마지막 기록 때.
+   * 내용은 주지 않음(강사 화면에서 봄). 방이 없으면 live: false
+   */
+  async records(request) {
+    const meta = await this.authed(request);
+    if (!meta.live_code) return json({ ok: true, live: false });
+    let r = null;
+    try { r = await this.room(meta.live_code, 'counts', { site: meta.site }); } catch (e) { console.error('room counts failed', e?.message); }
+    return json({ ok: true, live: true, ...(r?.ok ? { counts: r.counts, last: r.last || 0 } : {}) });
   }
 
   /** 지금 배포·준비 중인 배포·올리는 중인 것 말고는 지움 */
@@ -613,33 +626,58 @@ export class Site extends DurableObject {
   // ── 지우기·가리기 ────────────────────────────────────────────
   async remove(request, admin) {
     if (admin) { if (!this.load()) throw new HttpError('not_found'); } else await this.authed(request);
-    return this.exclusive(async () => { if (this.load()) await this.wipe(); return noContent(); });
+    return this.exclusive(async () => {
+      const meta = this.load();
+      if (meta) {
+        const until = meta.expires;
+        await this.wipe(false, admin ? '' : 'removed');
+        // 강사가 내린 사이트: 보관 기간이 남은 동안 '강사가 사이트를 내렸어요'(보관 기간 끝과 나눔). 그 뒤 알람이 이 표시도 지움
+        if (!admin && until > Date.now()) await this.markRemoved(until);
+      }
+      return noContent();
+    });
   }
-  /** expired: 보관 기간이 끝나 지움(Pages 주소에 안내 화면을 남김) */
-  async wipe(expired = false) {
+  /** 내린 표시(작은 표 하나). meta 표가 없으니 load()는 그대로 null(없는 사이트) */
+  async markRemoved(until) {
+    this.sql.exec('CREATE TABLE IF NOT EXISTS gone (id INTEGER PRIMARY KEY, why TEXT NOT NULL, until INTEGER NOT NULL)');
+    this.sql.exec("INSERT OR REPLACE INTO gone (id, why, until) VALUES (1, 'removed', ?)", until);
+    this.goneMark = { why: 'removed', until };
+    await this.ctx.storage.setAlarm(until);
+  }
+  /** 없는 사이트의 까닭: 'removed'(강사가 내림, 보관 기간 안) 또는 ''(보관 기간 끝·없는 주소) */
+  goneWhy() {
+    if (this.goneMark === undefined) {
+      const has = this.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gone'").toArray().length;
+      this.goneMark = (has && this.sql.exec('SELECT why, until FROM gone WHERE id = 1').toArray()[0]) || null;
+    }
+    return this.goneMark && this.goneMark.until > Date.now() ? this.goneMark.why : '';
+  }
+  /** expired: 보관 기간이 끝나 지움, why 'removed': 강사가 내림(둘 다 Pages 주소에 그 안내 화면을 남김) */
+  async wipe(expired = false, why = '') {
     const meta = this.load();
     const id = meta?.site;
     // 묶인 실시간 방(참가 기록·보드 파일)도 같이 지움. 실패해도 방이 기간 끝에 사이트를 확인하고 스스로 비움
     if (meta?.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
-    if (this.isPages(meta)) await this.wipePages(meta, expired);
+    if (this.isPages(meta)) await this.wipePages(meta, expired, why);
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
   }
   /**
-   * Pages에 있는 이 사이트의 배포를 모두 지움. 보관 기간이 끝났거나(expired) 가장 최근 배포를 못 지우면(별칭) '보관 기간이 끝났어요'
-   * 안내 화면 하나를 그 브랜치에 올린 뒤 나머지를 지움(배포가 하나도 없으면 그 주소가 Cloudflare 영어 404가 됨).
+   * Pages에 있는 이 사이트의 배포를 모두 지움. 보관 기간이 끝났거나(expired) 강사가 내렸거나(why 'removed') 가장 최근 배포를 못 지우면(별칭)
+   * 안내 화면('보관 기간이 끝났어요' / '강사가 사이트를 내렸어요') 하나를 그 브랜치에 올린 뒤 나머지를 지움(배포가 하나도 없으면 그 주소가 Cloudflare 영어 404가 됨).
    * 실패해도 여기 기록은 지움(같은 브랜치 이름을 다시 쓰지 않으므로 남은 배포는 운영자가 대시보드에서 지울 수 있음)
    */
-  async wipePages(meta, expired = false) {
+  async wipePages(meta, expired = false, why = '') {
     if (!this.cfg.pagesCfg) { console.error('pages wipe skipped: no PAGES config', meta.site); return; }
     const st = this.ps(meta);
     const all = [...st.deps, ...st.hold];
-    let left = expired ? all : await this.dropDeployments(all);
+    const removed = why === 'removed';
+    let left = expired || removed ? all : await this.dropDeployments(all);
     if (!left.length) return;
     let g = '';
-    try { g = await this.placeholder(meta, goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); }
+    try { g = await this.placeholder(meta, removed ? removedHtml() : goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); }
     left = await this.dropDeployments(left.filter((d) => d !== g));
     if (left.length) console.error('pages deployments left', meta.site, left.length);
   }
@@ -699,7 +737,11 @@ export class Site extends DurableObject {
   /** 보관 기간이 끝나면 전부 지움 */
   async alarm() {
     const meta = this.load();
-    if (!meta) return;
+    if (!meta) { // 내린 표시는 보관 기간이 끝나면 지움(그 뒤로는 '보관 기간이 끝났어요')
+      if (this.goneWhy()) await this.ctx.storage.setAlarm(this.goneMark.until);
+      else { await this.ctx.storage.deleteAll(); this.goneMark = undefined; }
+      return;
+    }
     if (Date.now() >= meta.expires) await this.wipe(true);
     else await this.ctx.storage.setAlarm(meta.expires);
   }
@@ -735,7 +777,8 @@ export class Site extends DurableObject {
     const meta = this.load();
     if (!meta || Date.now() >= meta.expires) {
       // Worker가 짧게 기억해 같은 없는 주소로 이 객체를 다시 깨우지 않게 함(밖으로는 내보내지 않음)
-      const r = gonePage(head); r.headers.set('x-lp-state', 'gone'); return r;
+      const removed = !meta && this.goneWhy() === 'removed';
+      const r = removed ? removedPage(head) : gonePage(head); r.headers.set('x-lp-state', removed ? 'removed' : 'gone'); return r;
     }
     if (meta.blocked) return blockedPage(meta.site, head);
     const man = meta.current ? this.manifest(meta.current) : null;

@@ -233,11 +233,14 @@ let infoP = null; let infoAt = 0;
 /** 바로 배포를 쓸 수 있으면 { plan: 'free'|'paid', accepting, capacity?, limits: {maxBytes, maxFileBytes, maxFiles, days}, report, live? }, 아니면 null.
  * plan이 free면 운영자가 무료 요금제로 돌리는 것(하루 한도에 닿으면 그날 멈출 수 있음). capacity(붐빔 단계)는 instantGate가 읽음.
  * 배포 화면을 열 때 단계가 맞게 1분만 기억(서버·브라우저도 30초 기억) */
-export function instantInfo() {
+export function instantInfo(fresh = false) {
   if (!PUBLISH_API) return Promise.resolve(null);
-  if (!infoP || Date.now() - infoAt > 60000) {
+  if (fresh || !infoP || Date.now() - infoAt > 60000) {
     infoAt = Date.now();
-    infoP = fetch(`${PUBLISH_API}/api/info`).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null);
+    // 느리게 막힌 망(응답 없이 붙잡힘)에서도 8초 안에 '닿지 않음'으로 끝냄. 못 받은 결과(null)는 오래 기억하지 않음(망이 돌아오면 다시 물음)
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000);
+    infoP = fetch(`${PUBLISH_API}/api/info`, { signal: c.signal }).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null)
+      .finally(() => clearTimeout(t)).then((j) => { if (!j) infoAt = Date.now() - 50000; return j; });
   }
   return infoP;
 }
@@ -435,6 +438,19 @@ export async function deployInstant({ site, title, files, live = null, booking =
 }
 /** 바로 배포한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });
+/**
+ * 바로 배포한 사이트의 참여 기록 수(내리기·다시 배포 전에 알려 줄 때). 내용은 받지 않음.
+ * @returns {Promise<{ live: boolean, counts?: { participants, attendance, questions, posts, answers, survey }, last?: number }|null>} 못 물어보면 null(망·지워진 사이트·옛 서버)
+ */
+export function instantRecords(site) {
+  if (!PUBLISH_API || !site?.id || !site?.key) return Promise.resolve(null);
+  return ip('GET', `/api/sites/${site.id}/records`, { key: site.key }).catch(() => null);
+}
+/** 기록 수 → 한 줄 조각("참가자 12명 · 질문 8개 · 보드 글 3개"). 하나도 없으면 '' */
+export function recordsLine(r) {
+  const c = r?.counts; if (!c) return '';
+  return [['participants', '참가자', '명'], ['questions', '질문', '개'], ['posts', '보드 글', '개'], ['survey', '설문 응답', '개']].filter(([k]) => c[k] > 0).map(([k, t, u]) => `${t} ${c[k]}${u}`).join(' · ');
+}
 
 // ── 올린 주소가 실제로 열리는지: 사이트의 작은 그림을 불러 봄(다른 출처라 응답 내용은 못 읽지만 그림은 열림/막힘을 알 수 있음) ──
 /** @returns {Promise<boolean>} */

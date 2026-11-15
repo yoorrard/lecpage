@@ -8,7 +8,8 @@ import { ReviewChat } from '../../components/ReviewChat.jsx';
 import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
 import { FEATURES, LIVE_KEYS, syncInfo, applyInfo } from '../../lib/blueprint.js';
-import { toast } from '../../lib/util.js';
+import { toast, monthDay } from '../../lib/util.js';
+import { trainingDays, daysPatch, nextDay } from '../../lib/days.js';
 import { undoStack, pushUndoFor, popUndo, onUndoChange } from '../../lib/undo.js';
 import { useAiJob, startMakeJob, stopJob, clearJob, noteAiResult, markUndone } from '../../lib/ai-job.js';
 import { E } from '../../lib/engine.js';
@@ -118,7 +119,7 @@ export function StepEdit({ p, update, go }) {
             {tab === 'content' && <ContentPanel p={p} update={update} pushUndo={pushUndo} focusId={focusId} locked={locked} />}
             {tab === 'design' && <DesignPanel p={p} update={update} />}
             {tab === 'live' && <FeaturesPanel p={p} update={update} setInfo={setInfo} />}
-            {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} />}
+            {tab === 'more' && <DetailsPanel p={p} setInfo={setInfo} update={update} />}
             <ReviewChat hidden={tab !== 'review'} p={p} update={update} pushUndo={pushUndo} undo={undo} undoTop={() => stack[stack.length - 1]} frameRef={frameRef} marking={marking} setMarking={setMarking} apiRef={review} onConnectAi={() => setAi(true)} onPolish={() => setAi(true)} locked={locked} />
           </div>
           {!!stack.length && !headSeen && tab !== 'review' && <button type="button" class="btn btn-sm undo-float" onClick={undo} title={`되돌리기: ${stack[stack.length - 1].label} (${UNDO_KEY})`}><span aria-hidden="true">↶ </span>되돌리기</button>}
@@ -220,16 +221,43 @@ function FeaturesPanel({ p, update, setInfo }) {
   );
 }
 
-function DetailsPanel({ p, setInfo }) {
+function DetailsPanel({ p, setInfo, update }) {
   const info = p.info;
   const set = (k) => (e) => setInfo({ [k]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e });
+  // 날짜: 하루짜리면 칸 하나, 차시 날짜가 둘 이상이면(교재에서 찾았거나 강사가 더함) 날짜마다 칸. 고치면 첫 화면 일시 줄도 같이
+  const days = trainingDays(p.blueprint);
+  const setDays = (list) => update((cur) => daysPatch(cur, list));
+  // 강사: 탭에 직접 쓴 적이 없으면 사이트에 실제로 나오는 강사(설계도 첫 사람)를 보여 줌. 고치면 그 사람만 바뀜(소속·직함은 한 칸)
+  const inst = p.blueprint?.instructors?.[0] || {};
+  const own = !!info.instructorSet || !!info.instructorName;
+  const tv = own ? { instructorName: info.instructorName || '', instructorOrg: info.instructorOrg || '', instructorEmail: info.instructorEmail || '', instructorBio: info.instructorBio || '' }
+    : { instructorName: inst.name || '', instructorOrg: [inst.org, inst.role].filter(Boolean).join(' '), instructorEmail: inst.email || '', instructorBio: inst.bio || '' };
+  const setT = (k) => (e) => {
+    const patch = { ...tv, [k]: e.target.value, instructorSet: true };
+    update((cur) => {
+      const ni = { ...cur.info, ...patch };
+      const i0 = cur.blueprint?.instructors?.[0];
+      // 직함이 따로 있던 사람은 소속 칸에 합쳐 보여 줬으니, 고칠 때 직함 칸을 비워 두 번 나오지 않게
+      const base = !own && i0?.role ? { ...cur.blueprint, instructors: [{ ...i0, org: tv.instructorOrg, role: '' }, ...cur.blueprint.instructors.slice(1)] } : cur.blueprint;
+      return { info: ni, infoTouched: true, blueprint: base ? syncInfo(base, ni, patch) : base };
+    });
+  };
   return (
     <div class="stack">
       <div class="form-grid">
         <Field label="연수명"><input value={info.title} onInput={set('title')} maxLength={160} /></Field>
         <Field label="핵심 메시지(부제)"><input value={info.subtitle} onInput={set('subtitle')} maxLength={200} placeholder="이 연수가 약속하는 한 문장" /></Field>
         <Field label="주최·주관"><input value={info.organizer} onInput={set('organizer')} maxLength={120} /></Field>
-        <Field label="날짜"><input type="date" value={info.date} onInput={set('date')} /></Field>
+        {days.length >= 2
+          ? <fieldset class="field plain-fieldset days-field"><legend>날짜 <span class="small muted">여러 날 연수 · {days.length}일</span></legend>
+            {days.map((d, i) => <span class="row days-row" key={i}>
+              <input type="date" value={d} aria-label={`${i + 1}일째 날짜`} onChange={(e) => setDays(days.map((x, j) => (j === i ? e.target.value : x)))} />
+              <button type="button" class="btn btn-sm btn-quiet" aria-label={`${monthDay(d)} 빼기`} onClick={() => setDays(days.filter((_, j) => j !== i))}>빼기</button>
+            </span>)}
+            <span class="btn-row"><button type="button" class="btn btn-sm" onClick={() => setDays([...days, nextDay(days)])}>날짜 추가</button><button type="button" class="btn btn-sm btn-quiet" onClick={() => setDays([days[0]])}>하루짜리예요({monthDay(days[0])}만)</button></span>
+            <small>교재에 마감·다음 연수 날짜가 있으면 차시로 잘못 잡힐 수 있어요. 연수하는 날만 남겨 주세요.</small>
+          </fieldset>
+          : <Field label="날짜" hint={days.length ? <button type="button" class="btn btn-sm btn-quiet" onClick={() => setDays([...days, nextDay(days)])}>여러 날이면 날짜 추가</button> : null}><input type="date" value={days[0] || info.date} onChange={(e) => setDays([e.target.value])} /></Field>}
         <Field label="시작"><input type="time" value={info.start} onInput={set('start')} /></Field>
         <Field label="끝"><input type="time" value={info.end} onInput={set('end')} /></Field>
         <Field label="장소"><input value={info.venue} onInput={set('venue')} maxLength={120} /></Field>
@@ -241,11 +269,11 @@ function DetailsPanel({ p, setInfo }) {
       {(info.mode === 'online' || info.mode === 'hybrid') && <Field label="온라인 접속 주소" hint="Zoom·Meet 등. 참가자 첫 화면에 입장 버튼으로 보여요."><input type="url" value={info.joinUrl || ''} onInput={set('joinUrl')} placeholder="https://" maxLength={300} /></Field>}
       <h2 class="h-sub">강사</h2>
       <div class="form-grid">
-        <Field label="이름"><input value={info.instructorName} onInput={set('instructorName')} maxLength={40} /></Field>
-        <Field label="소속·직함"><input value={info.instructorOrg} onInput={set('instructorOrg')} maxLength={80} /></Field>
-        <Field label="이메일(적으면 사이트에 보여요)"><input type="email" value={info.instructorEmail} onInput={set('instructorEmail')} /></Field>
+        <Field label="이름"><input value={tv.instructorName} onInput={setT('instructorName')} maxLength={40} /></Field>
+        <Field label="소속·직함"><input value={tv.instructorOrg} onInput={setT('instructorOrg')} maxLength={80} /></Field>
+        <Field label="이메일(적으면 사이트에 보여요)"><input type="email" value={tv.instructorEmail} onInput={setT('instructorEmail')} /></Field>
       </div>
-      <Field label="강사 소개"><textarea value={info.instructorBio} onInput={set('instructorBio')} maxLength={600} rows={3} /></Field>
+      <Field label="강사 소개"><textarea value={tv.instructorBio} onInput={setT('instructorBio')} maxLength={600} rows={3} /></Field>
       <h2 class="h-sub">참가자와 연수</h2>
       <div class="form-grid">
         <Field label="참가 인원"><select value={info.size} onChange={(e) => setInfo({ size: +e.target.value })}>{SIZE.map((o) => <option value={o.value}>{o.label}</option>)}</select></Field>

@@ -109,7 +109,7 @@ const BODY = {
     <Task n="3" title="배포하기" shot="share" alt="배포하기 화면">
       <p>체크리스트(참여 기능 → 공개 범위 → 배포할 곳)를 따라가 [배포하기]를 누르면 주소·QR이 나와요. <a href="#/help/deploy">배포하는 법</a></p>
     </Task>
-    <p class="small muted">다른 컴퓨터에서 이어 하려면 [파일로 저장]으로 저장하고, 그 컴퓨터에서 [저장한 파일 열기]로 열어요.</p>
+    <p class="small muted">다른 컴퓨터에서 이어 하려면 [파일로 저장]으로 저장하고, 그 컴퓨터에서 [저장한 파일 열기]로 열어요. 배포한 연수를 같은 주소로 이어 배포하려면 저장할 때 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요.</p>
   </>,
   ai: <>
     <h1 tabIndex={-1}>AI 연결</h1>
@@ -201,7 +201,7 @@ const BODY = {
       <li><b>누구나</b>: 검색에도 나와요.</li></ul>
     <h2>배포할 곳</h2>
     <p>추천 한 곳이 보이고, 다른 곳은 [다른 곳에 배포하기]로 펼쳐요. 처음 한 번만 연결하면 되고, 다시 배포해도 주소는 그대로예요. 배포한 뒤 고쳤으면 고치기 화면의 [다시 배포하기]를 눌러요.</p>
-    <ul><li><b>바로 배포</b>: 가입·토큰 없이 바로 주소가 나와요(운영자가 켠 앱에서만 보여요). 붐비는 날에는 같은 파일 그대로 내 계정에 배포하게 안내하고, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 연결해요.</li>
+    <ul><li><b>바로 배포</b>: 가입·토큰 없이 바로 주소가 나와요(운영자가 켠 앱에서만 보여요). 마지막으로 배포한 날부터 60일 동안 열려 있고, 다시 배포하면 그날부터 다시 60일이에요. 연수 날이 그보다 뒤면 배포 화면이 언제 다시 배포할지 알려 줘요. 붐비는 날에는 같은 파일 그대로 내 계정에 배포하게 안내하고, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 연결해요.</li>
       <li><b>Vercel</b>: 토큰을 한 번 붙여 넣어요. 다시 배포해도 주소가 그대로예요.</li>
       <li><b>GitHub Pages</b>: 토큰으로 배포해요. 사이트 파일이 저장소에 공개되고, 방문이 많아도 바로 멈추지 않아요.</li>
       <li><b>Cloudflare</b>: 받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.</li>
@@ -211,6 +211,7 @@ const BODY = {
     <div class="faq">
       <details><summary>짧은 주소와 QR</summary><ul><li>[짧은 주소 만들기]를 누르면 치기 쉬운 주소(is.gd)가 생겨요. joo.is·bit.ly 주소를 붙여 넣어도 돼요.</li><li>QR과 [주소 복사]는 늘 원래 주소예요.</li><li>짧은 주소는 짐작될 수 있어요. 지켜야 할 사이트는 공개 범위를 '암호를 아는 사람만'으로 해요.</li><li>QR은 크게 띄우거나, 그림으로 저장하거나, 안내문(A4)으로 인쇄해요.</li></ul></details>
       <details><summary>강사용 파일</summary><p>운영 안내·디자인 규칙·설계도는 사이트에 올라가지 않아요. [강사용 파일 받기]로 따로 받아요.</p></details>
+      <details><summary>다음 기수·사이트 내리기</summary><ul><li>같은 연수를 다음 기수로 하면 [복제]해서 날짜를 고쳐 배포해요. 새 주소·새 QR이라 지난 기록과 섞이지 않아요.</li><li>같은 주소로 다시 배포할 때 지난 참여 기록이 남아 있으면 체크리스트의 '지난 기록'에서 비울지 그대로 둘지 골라요.</li><li>바로 배포한 사이트는 [사이트 내리기]로 지워요. 확인 창에 함께 지워질 기록이 나오니 필요한 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</li></ul></details>
     </div>
     <p>자세한 단계: <a href={`${REPO}/tree/main/skills/lecpage/references/deploy`} target="_blank" rel="noopener">배포 안내 모음</a></p>
   </>,
@@ -219,15 +220,15 @@ const BODY = {
     <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage를 설치하면 대화로 만들어요.</p><p>쓰던 구독 그대로라 키가 필요 없어요.</p>
     <h2>설치 명령 한 줄</h2>
     <p><b>Claude Code</b> 대화창에서</p>
-    <pre class="prompt-box">/plugin install lecpage --marketplace yoorrard/lecpage</pre>
+    <pre class="prompt-box" tabIndex={0}>/plugin install lecpage --marketplace yoorrard/lecpage</pre>
     {/* copy-ok: 설치 명령이 길어 한 문장이 70자를 넘어요 */}
     <p class="small muted">터미널에서는 <code>claude plugin install lecpage --marketplace yoorrard/lecpage</code>를 써요. 나눠 하려면 <code>/plugin marketplace add yoorrard/lecpage</code> 다음 <code>/plugin install lecpage@lecpage</code>예요.</p>
     <p><b>Codex</b> 대화창에서</p>
-    <pre class="prompt-box">$skill-installer https://github.com/yoorrard/lecpage/tree/main/skills/lecpage</pre>
+    <pre class="prompt-box" tabIndex={0}>$skill-installer https://github.com/yoorrard/lecpage/tree/main/skills/lecpage</pre>
     <p><b>Gemini CLI</b> 터미널에서</p>
-    <pre class="prompt-box">gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage</pre>
+    <pre class="prompt-box" tabIndex={0}>gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage</pre>
     <p><b>Cursor 등 그 밖의 도구</b> 터미널에서(위 도구에도 돼요)</p>
-    <pre class="prompt-box">npx skills add yoorrard/lecpage</pre>
+    <pre class="prompt-box" tabIndex={0}>npx skills add yoorrard/lecpage</pre>
     <p>claude.ai에서는 <code>skills/lecpage</code> 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기로 넣어요.</p><p>그다음 "이 PPT로 연수 사이트 만들어 줘"라고 말해요.</p>
     <h2>앱에서 이어 하기</h2>
     <p>디자인을 화면에서 고르거나 참여 기능·배포를 직접 하려면 AI에게 "앱에서 이어 할게"라고 말해요. AI가 건넨 <code>.lecpage</code> 파일을 첫 화면의 [저장한 파일 열기]로 열면 교재 보기 그림까지 그대로 이어져요.</p>
@@ -276,7 +277,7 @@ const BODY = {
     {/* copy-ok: "배포용"은 한글 프로그램의 메뉴 이름(배포용 문서로 저장하기) */}<h3>한글(HWP) 파일도 되나요?</h3><p>네, HWP와 HWPX 모두 그대로 넣으면 돼요. 암호를 걸었거나 배포용으로 저장한 문서는 원본 파일이나 PDF로 넣어 주세요.</p>
     <h3>교재 보기에 그림이 안 나와요.</h3><p>슬라이드 그림은 PDF에서 만들어요. PPT를 PDF로도 저장해 함께 넣어 주세요.</p>
     <h3>참가자가 교재를 내려받지 못하게 하고 싶어요.</h3><p>교재 원본은 기본으로 사이트에 넣지 않아요. 슬라이드 그림까지 지키려면 공개 범위를 '암호를 아는 사람만'으로 해요.</p>
-    <h3>다른 컴퓨터에서 이어 하고 싶어요.</h3><p>[파일로 저장]으로 저장하고, 다른 컴퓨터에서 [저장한 파일 열기]로 열어요. 남이 준 파일은 안전을 위해 참여 기능을 다시 연결해요.</p>
+    <h3>다른 컴퓨터에서 이어 하고 싶어요.</h3><p>[파일로 저장]으로 저장하고, 다른 컴퓨터에서 [저장한 파일 열기]로 열어요. 기본 파일에는 배포 열쇠가 없어 남에게 줘도 되고, 그 파일로 배포하면 새 주소가 생겨요.</p><p>같은 주소로 이어 배포하려면 저장할 때 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 연 뒤에는 배포하기 화면에서 [이 주소에 이어서 배포]를 눌러요. 이 파일에는 열쇠가 들어가니 남에게 주지 마세요.</p>
     <h3>디자인을 원하는 대로 바꾸고 싶어요.</h3><p>[디자인] 탭에 보이는 느낌을 말로 적거나, <a href="#/gallery">디자인 둘러보기</a>에서 낱말을 담아 적용해요.</p>
     <div class="row"><Mascot size={64} mood="happy" /><span>더 궁금한 점은 <a href={`${REPO}/issues`} target="_blank" rel="noopener">GitHub 이슈</a>로 남겨 주세요.</span></div>
   </>,

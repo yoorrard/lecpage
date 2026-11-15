@@ -111,6 +111,12 @@ export class Room extends LiveRoom {
         return json({ ok: true });
       }
       if (op === 'wipe') { await this.wipeAll(); return json({ ok: true }); }
+      // 강사가 내리기·다시 배포 전에 보는 기록 수(내용은 주지 않음). 아직 아무도 쓰지 않은 방은 표가 없어 모두 0
+      if (op === 'counts') {
+        const core = await this.core();
+        const counts = Object.fromEntries(['participants', 'attendance', 'questions', 'posts', 'answers', 'survey'].map((c) => [c, core.count(b.code, c)]));
+        return json({ ok: true, counts, last: core.ready ? core._maxStamp(b.code) : 0 });
+      }
       throw new HttpError('not_found', '없는 주소예요.');
     } catch (e) {
       const t = translate(e);
