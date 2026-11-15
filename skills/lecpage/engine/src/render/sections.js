@@ -186,13 +186,17 @@ function liveOff(ctx) {
   return ctx.live ? '' : '<p class="lp-note" data-live-off>참여 기능을 켜면 여기서 쓸 수 있어요.</p>';
 }
 
-/** 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출" */
+/**
+ * 이수 기준(교육청 승인 직무연수일 때만): "3시간 · 출석 80% 이상 · 설문 제출".
+ * 출석 %는 사이트가 출석(입실·퇴실)을 받을 때만(받을 길이 없는데 기준만 보이지 않게, 검증이 알림을 남김)
+ */
 export function completionLine(ctx) {
   const a = ctx.bp.meta.admin || {};
   if (a.kind !== 'official') return '';
   const h = +a.hours || 0, hm = h % 1 ? `${Math.floor(h) ? `${Math.floor(h)}시간 ` : ''}${Math.round((h % 1) * 60)}분` : h ? `${h}시간` : '';
   const survey = ctx.live && ctx.bp.sections.some((s) => s.type === 'survey' && s.questions?.length);
-  return [hm, a.completionRate ? `출석 ${a.completionRate}% 이상` : '', survey ? '설문 제출' : ''].filter(Boolean).join(' · ');
+  const attend = ctx.live && (ctx.bp.sections.some((s) => s.type === 'attendance') || ctx.bp.live.features.includes('attendance'));
+  return [hm, a.completionRate && attend ? `출석 ${a.completionRate}% 이상` : '', survey ? '설문 제출' : ''].filter(Boolean).join(' · ');
 }
 
 /** 온라인 회의 서비스 이름(입장 버튼·장소 표시용) */

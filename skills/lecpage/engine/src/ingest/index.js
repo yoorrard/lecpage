@@ -92,6 +92,7 @@ export async function ingestFile(name, bytes, opts = {}) {
       type = ['md', 'markdown', 'mdown'].includes(ext) ? 'md' : 'txt';
     } else {
       if (['pptx', 'docx', 'hwp', 'hwpx', 'xlsx', 'ppsx', 'potx'].includes(ext)) throw new IngestError('drm');
+      if (/^(jpe?g|png|gif|webp|avif|heic|heif|bmp|tiff?)$/.test(ext)) throw new IngestError('image-file', { ext });
       throw new IngestError('unsupported', { ext });
     }
     if (type === 'xlsx') throw new IngestError('spreadsheet');

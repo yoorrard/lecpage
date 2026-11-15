@@ -83,6 +83,33 @@ describe('H1 차시 날짜: 일정 문맥의 날짜만', () => {
   });
 });
 
+describe('앱 작업자가 넘긴 것: 날짜·보관 끝·사진·강사 화면 글', () => {
+  test('강사가 준 날짜(info.date)가 교재에서 찾은 차시 날짜에 없으면 그 날짜들로 덮지 않음, patch로 첫날만 바꿔도 차시를 맞춤', () => {
+    const course = md(['# 연수', '## 일정', '- 1차시 2027. 1. 11.(월) 09:30~12:30', '- 2차시 2027. 1. 18.(월) 09:30~12:30']);
+    const d = materialToDraft(course, { today: TODAY, date: '2027-03-02' });
+    assert.equal(d.meta.date, '2027-03-02');
+    assert.deepEqual(d.meta.sessions, []);
+    assert.equal(materialToDraft(course, { today: TODAY, date: '2027-01-11' }).meta.sessions.length, 2, '교재 날짜에 든 날이면 그대로 과정');
+    const bp = { meta: { title: 't', date: '2027-01-11', sessions: [{ no: 1, date: '2027-01-11' }, { no: 2, date: '2027-01-18' }] }, sections: [{ type: 'hero' }] };
+    assert.deepEqual(E.applyBlueprintPatch(bp, { meta: { date: '2027-03-02' } }).raw.meta.sessions, []);
+    assert.equal(E.applyBlueprintPatch(bp, { meta: { date: '2027-01-18' } }).raw.meta.sessions.length, 2, '차시 날짜 가운데 하나로 바꾸면 그대로');
+  });
+  test('사이트 보관 끝 예정일(meta.keepUntil): 검증이 받고 강사 화면이 한 줄로(연수 날보다 이르면 다시 배포 안내)', () => {
+    const r = build({ meta: { title: 't', date: '2027-01-20', keepUntil: '2027-01-14' }, live: { provider: 'local', features: ['qa'] }, sections: [{ type: 'hero' }, { type: 'qa' }] });
+    assert.equal(data(r.files['index.html']).keepUntil, '2027-01-14');
+    assert.ok(r.files['assets/console.js'].includes("'사이트는 ' + (+ku[2]) + '월 '") && r.files['assets/console.js'].includes('연수 날보다 먼저 닫혀요'));
+    assert.equal(E.validate({ meta: { title: 't', keepUntil: '내일' } }).blueprint.meta.keepUntil, undefined, '날짜가 아니면 버림');
+  });
+  test('사진 파일은 "형식을 바꿔 올려" 대신 자료실 안내, 강사 화면 스크립트 문자열에 </body>가 그대로 없음', async () => {
+    const { ingestFile } = await import('../src/ingest/index.js');
+    const m = await ingestFile('칠판.jpg', new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]), {});
+    assert.equal(m.errors[0]?.code, 'image-file');
+    assert.match(m.errors[0].message_ko, /자료실/);
+    const r = build({ meta: { title: 't' }, live: { provider: 'local', features: ['qa'] }, sections: [{ type: 'hero' }, { type: 'qa' }] });
+    assert.ok(!r.files['assets/console.js'].includes('</body>'));
+  });
+});
+
 describe('L4 원격·1박 2일', () => {
   test('1박 2일 날마다 다른 시각: 첫 화면·안내문·달력(두 건)이 같은 날짜, 그날 시간에만 출석', () => {
     const d = materialToDraft(md(JOURNEY), { today: TODAY, sessions: [{ date: '2026-11-20', start: '14:00', end: '17:00' }, { date: '2026-11-21', start: '09:00', end: '12:00' }] });

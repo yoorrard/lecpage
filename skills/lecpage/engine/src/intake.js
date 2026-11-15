@@ -4,7 +4,7 @@
 import { decideArchetype } from './decide/archetype.js';
 import { decideStructure, structureFor, linkConcept, cleanStructure, FLOW_INFO } from './decide/structure.js';
 import { findLeftovers, keepUrlText } from './ingest/compose.js';
-import { syncHeroMeta, infoDays } from './hero-meta.js';
+import { syncHeroMeta, infoDays, alignSessions } from './hero-meta.js';
 import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, deriveConcept } from './decide/concept.js';
@@ -205,7 +205,7 @@ function applyMeta(bp, info, fill = false) {
   if (days) {
     bp.meta.sessions = days.length >= 2 ? days.map((d, i) => ({ no: i + 1, date: d.date, start: d.start, end: d.end, title: was.sessions.find((x) => x?.date === d.date)?.title || '' })) : [];
     if (!info.date || !days.some((d) => d.date === info.date)) bp.meta.date = days[0].date;
-  } else if (bp.meta.date && bp.meta.date !== was.date && was.sessions.length && !was.sessions.some((x) => x?.date === bp.meta.date)) bp.meta.sessions = [];
+  } else alignSessions(bp.meta, was.date);
   // 연수 성격: 빈 값('')은 '정하지 않음'(교재에서 찾은 값을 지킴). 이수 기준 %도 준 값만
   if (info.admin || info.completionRate) bp.meta.admin = { ...(bp.meta.admin || {}), ...(info.admin ? { kind: info.admin } : {}), ...(info.completionRate ? { completionRate: +info.completionRate } : {}) };
   bp.audience = {

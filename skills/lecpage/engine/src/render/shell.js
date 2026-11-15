@@ -132,7 +132,7 @@ export function siteData(ctx) {
   const bp = ctx.bp;
   const st = bp.sections.find((s) => s.type === 'stations');
   return {
-    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '',
+    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '', keepUntil: bp.meta.keepUntil || '',
     // 짧은 주소(강사가 직접 넣은 것)는 손으로 칠 글자에만 씀. QR·복사는 언제나 원래 주소라 짧은 주소 서비스가 멈춰도 열림
     shortUrl: bp.meta.shortUrl || '',
     key: 'lp-' + bp.live.code,

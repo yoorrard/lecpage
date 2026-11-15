@@ -72,13 +72,18 @@ describe('렌더: 새 칸과 자동 표시', () => {
     assert.ok(html.includes('<a href="tel:0311234567">031-123-4567</a>'), '전화는 tel 링크');
     assert.ok(/<section id="followup"[^>]*data-followup/.test(html));
   });
-  test('이수 기준: 직무연수(official)면 목표 칸에, 목표 칸이 없으면 첫 화면에', () => {
+  test('이수 기준: 직무연수(official)면 목표 칸에, 목표 칸이 없으면 첫 화면에. 출석 %는 사이트가 출석을 받을 때만', () => {
     const meta = { title: 't', date: '2026-12-16', admin: { kind: 'official', hours: 1.5, completionRate: 80 } };
-    const withGoals = index({ meta, sections: [{ type: 'hero' }, { type: 'goals', items: ['표로 모아요'] }] });
+    const live = { provider: 'local', features: ['attendance'] };
+    const withGoals = index({ meta, live, sections: [{ type: 'hero' }, { type: 'goals', items: ['표로 모아요'] }, { type: 'attendance' }] });
     assert.match(withGoals, /<b>이수<\/b> 1시간 30분 · 출석 80% 이상/);
     assert.ok(!/<dt>이수<\/dt>/.test(withGoals), '같은 말을 두 번 하지 않음');
-    const noGoals = index({ meta, sections: [{ type: 'hero' }] });
+    const noGoals = index({ meta, live, sections: [{ type: 'hero' }, { type: 'attendance' }] });
     assert.match(noGoals, /<dt>이수<\/dt><dd>1시간 30분 · 출석 80% 이상<\/dd>/);
+    // 출석을 받지 않는 사이트: 출석 기준을 쓰지 않고(받을 길이 없으니) 검증이 알림
+    const noAttend = { meta, sections: [{ type: 'hero' }] };
+    assert.match(index(noAttend), /<dt>이수<\/dt><dd>1시간 30분<\/dd>/);
+    assert.ok(validate(noAttend).warnings.some((w) => w.code === 'attendance-off'));
     const school = index({ meta: { ...meta, admin: { kind: 'school' } }, sections: [{ type: 'hero' }] });
     assert.ok(!school.includes('<dt>이수</dt>'));
   });

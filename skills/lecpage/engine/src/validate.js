@@ -133,6 +133,8 @@ export function validate(input) {
     date: date(m.date), start: time(m.start), end: time(m.end), venue: str(m.venue, 120),
     mode: pick(m.mode, ['offline', 'online', 'hybrid'], 'offline'), joinUrl: safeUrl(m.joinUrl), shortUrl: safeUrl(m.shortUrl), siteUrl: safeUrl(m.siteUrl),
     lang: 'ko', description: str(m.description, 300), contact: str(m.contact, 120),
+    // 사이트 보관 끝 예정일(배포할 곳이 정함, 예: 바로 배포 60일). 강사 화면 머리에 '사이트는 X월 X일까지'
+    ...(date(m.keepUntil) ? { keepUntil: date(m.keepUntil) } : {}),
     admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 0, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
     sessions: arr(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
   };
@@ -200,6 +202,10 @@ export function validate(input) {
   const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: arr(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
   if (!privacy.collect.length) privacy.collect = ['nickname'];
   if (audience.minor) { privacy.collect = ['nickname']; warnings.push({ path: 'privacy.collect', message_ko: '만 14세 미만이 참여해 별명만 받도록 바꿨어요.' }); }
+  // 이수 기준에 출석 %가 있는데 사이트에서 출석을 받지 않으면 사이트에는 %를 쓰지 않음(sections.js completionLine) — 알림으로 남김
+  if (meta.admin.kind === 'official' && meta.admin.completionRate && !(live.provider !== 'none' && (live.features.includes('attendance') || arr(b.sections).some((s) => s?.type === 'attendance')))) {
+    warnings.push({ path: 'live.features', code: 'attendance-off', message_ko: `이수 기준에 출석 ${meta.admin.completionRate}%가 있지만 출석이 꺼져 있어 사이트에는 출석 기준을 쓰지 않았어요. 출석·이수 확인을 켜면 입실·퇴실과 이수자 명단을 받아요.` });
+  }
 
   const dp = b.deploy || {};
   const deploy = { target: pick(dp.target, DEPLOY_TARGETS, 'zip'), base: str(dp.base, 120) || '/' };

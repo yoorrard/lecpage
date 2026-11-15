@@ -14,7 +14,7 @@
     }
   } catch (e) { }
   // 다른 사이트가 강사 화면을 틀(iframe)에 넣어 관리자 키를 가로채지 못하게(헤더를 못 바꾸는 GitHub Pages 대비). 앱 미리보기는 예외
-  try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.</p></body>'; return; } } catch (e) { return; }
+  try { if (window.top !== window.self && !document.body.hasAttribute('data-lp-preview')) { document.documentElement.innerHTML = '<body><p style="font:16px sans-serif;padding:24px">강사 화면은 새 창에서 열어 주세요.<\/p><\/body>'; return; } } catch (e) { return; }
   var doc = document, root = doc.documentElement, $ = function (s, r) { return (r || doc).querySelector(s); };
   var DATA = {}, BP = {};
   try { DATA = JSON.parse($('#lp-data').textContent); BP = JSON.parse($('#lp-blueprint').textContent); } catch (e) { }
@@ -287,6 +287,9 @@
     var h = el('p', 'lp-con-net-h'); h.appendChild(el('b', '', '묻기 방식')); C.netWay = el('span'); h.appendChild(C.netWay); C.net.appendChild(h);
     C.netDo = el('p', 'lp-con-net-do'); C.net.appendChild(C.netDo);
     C.netCk = el('p', 'lp-con-net-ck'); C.net.appendChild(C.netCk);
+    // 사이트 보관 끝 예정일(배포할 곳이 정한 값, meta.keepUntil): 연수 마지막 날보다 먼저 닫히면 다시 배포하라고 함께
+    var ku = /^(\d{4})-(\d{2})-(\d{2})$/.exec(DATA.keepUntil || ''), last = ((DATA.phase && DATA.phase.end) || DATA.date || '').slice(0, 10);
+    if (ku) C.net.appendChild(el('p', 'lp-con-net-ck', '사이트는 ' + (+ku[2]) + '월 ' + (+ku[3]) + '일까지 열려 있어요.' + (last && DATA.keepUntil < last ? ' 연수 날보다 먼저 닫혀요. 연수 전에 다시 배포해 주세요.' : '')));
     C.box.appendChild(C.net);
     if (ended()) {
       var r3 = el('div', 'lp-con-net-r lp-con-after'), h3 = el('p', 'lp-con-net-h');

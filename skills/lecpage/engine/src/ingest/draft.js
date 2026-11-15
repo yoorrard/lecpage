@@ -298,7 +298,8 @@ export function materialToDraft(material, info = {}) {
   // 차시(날짜가 둘 이상): 제목은 교재 차례와 개수가 맞을 때만 가져옴(지어내지 않음).
   // 강사가 준 날짜(info.sessions [{date,start,end}] 또는 info.dates)가 교재보다 우선
   const days = infoDays(info);
-  const dates = days ? days.map((x) => x.date) : (ev.dates || []);
+  const evDates = !info.date || (ev.dates || []).includes(info.date) ? (ev.dates || []) : [];
+  const dates = days ? days.map((x) => x.date) : evDates;
   if (days && !info.date) { meta.date = days[0].date; if (!info.start) meta.start = days[0].start || meta.start; if (!info.end) meta.end = days[0].end || meta.end; }
   if (dates.length >= 2 && (days || !(d.sessions || []).length)) {
     meta.sessions = dates.map((date, i) => ({ no: i + 1, date, start: days?.[i]?.start || '', end: days?.[i]?.end || '', title: '' }));
@@ -308,7 +309,7 @@ export function materialToDraft(material, info = {}) {
   // 교재의 차시표("1차시 1. 11.(월) 주제"): 날짜가 없어도 번호·주제는 그대로. 차시 줄 아래의 내용·준비물·과제는 설명에
   if (!S.sessions && (d.sessions || []).length >= 2) {
     S.sessions = { id: 'sessions', type: 'sessions', nav: '차시', items: d.sessions.map((x) => ({ no: x.no, date: x.date || '', title: x.title, desc: x.desc || '', links: [] })), source: { file: d.sessions[0].file, pages: [...new Set(d.sessions.map((x) => x.page))] } };
-    if (!days && d.sessions.every((x) => x.date)) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
+    if (!days && d.sessions.every((x) => x.date) && (!info.date || d.sessions.some((x) => x.date === info.date))) meta.sessions = d.sessions.map((x) => ({ no: x.no, date: x.date, start: '', end: '', title: x.title }));
     slotPage.sessions = d.sessions[0].page;
   }
 

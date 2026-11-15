@@ -54,6 +54,16 @@ export function infoDays(info = {}) {
   return out.length ? out : null;
 }
 
+/**
+ * 첫날(meta.date)만 바꿨는데 그 날이 지금 차시 날짜(meta.sessions)에 없으면 예전 차시 날짜를 비움(2기로 날짜를 옮긴 경우 등):
+ * 첫 화면·QR 안내문·달력이 새 날짜 하나를 따름. 날짜를 지어 옮기지는 않음. 강사가 여러 날을 다시 주면(info.dates·sessions) 그것으로
+ * @param meta 바꾼 뒤 meta(이 객체를 고침)  @param prevDate 바꾸기 전 meta.date
+ */
+export function alignSessions(meta, prevDate) {
+  const ses = Array.isArray(meta?.sessions) ? meta.sessions : [];
+  if (meta?.date && meta.date !== prevDate && ses.length && !ses.some((x) => x?.date === meta.date)) meta.sessions = [];
+  return meta;
+}
 export function placeText(meta = {}) { return [meta.venue, meta.mode === 'online' || meta.mode === 'hybrid' ? '온라인' : ''].filter(Boolean).join(' · '); }
 export function whoText(p) { return p?.name ? [p.name, [p.org, p.role].filter(Boolean).join(' ')].filter(Boolean).join(' · ') : ''; }
 /** 첫 화면 기본 줄의 이름표(일시·장소·강사). 설계도의 hero.meta에 이 이름표가 있으면 강사가 쓴 줄로 보고 그대로 둠 */
