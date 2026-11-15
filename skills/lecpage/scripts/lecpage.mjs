@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lecpage CLI — Node 22 이상. qa·options만 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
+// lecpage CLI — Node 22 이상. qa·options·handouts는 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
 // 기본 출력은 짧은 요약, --json을 붙이면 기계용 JSON.
 //
 //   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts|--no-bundle-fonts]
@@ -26,6 +26,8 @@
 //        강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기: --no-bundle-fonts). --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
 //   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·발표화면.png(Playwright 필요)
+//   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
+//   종료 코드: 0 성공 · 1 실패(make·qa·patch --qa는 사이트를 만들었어도 점검에 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -36,26 +38,105 @@ import { createRequire } from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE = join(HERE, '..', 'engine');
+const DEBUG = !!process.env.LECPAGE_DEBUG;
+// 판은 engine/package.json 하나에서(엔진 코드의 VERSION은 시험이 같은지 확인)
+const SKILL_VERSION = (() => { try { return JSON.parse(readFileSync(join(ENGINE, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
+const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude Code 플러그인) · npx skills update(npx skills로 설치) · 그 밖에는 설치한 명령을 다시';
+
+// ── 인자 ─────────────────────────────────────────
+// 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤
+const VALUE_OPTS = new Set(['i', 'o', 'set', 'password', 'preset', 'presets', 'mood', 'assets', 'port', 'host', 'name', 'relay', 'features', 'today', 'access', 'work', 'out', 'size', 'skill', 'duration', 'network', 'infra']);
+const OPTS = {
+  make: 'i o work preset password access today no-qa fresh reingest no-slides no-python bundle-fonts no-bundle-fonts',
+  brief: '', structure: 'i today add-leftovers',
+  patch: 'set i o undo no-build qa password access bundle-fonts no-bundle-fonts',
+  options: 'presets mood o assets keep-design', doctor: '', review: 'port out',
+  build: 'o assets i password bundle-fonts', validate: 'o', qa: 'password out', serve: 'port host', pack: 'o',
+  draft: 'i o', prompt: 'i o', guard: 'i o', design: '',
+  'decide-infra': 'i size features skill duration network infra commercial minor', presets: '', effects: '',
+  app: 'i o force password',
+  publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
+  handouts: 'o password',
+};
+const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
+const flag = (k) => (k.length === 1 ? '-' : '--') + k;
+/** 글자 거리(오타 제안용) */
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const nearest = (w, list) => list.map((x) => [x, editDistance(w, x)]).filter(([x, n]) => n <= Math.max(2, Math.floor(x.length / 3))).sort((p, q) => p[1] - q[1]).map(([x]) => x)[0] || '';
+
+/** process.argv → { cmd, args, problems }. --set 뒤의 경로=값은 여러 개를 이어 받음(--set a=1 b=2) */
+function parseArgs(argv) {
+  let [cmd = '', ...rest] = argv;
+  if (['--help', '-h', 'help'].includes(cmd)) { const c = rest[0] && !rest[0].startsWith('-') ? rest[0] : ''; return { cmd: c, args: { _: [], set: [], help: true }, problems: [] }; }
+  if (['--version', '-v', 'version'].includes(cmd)) return { cmd: 'version', args: { _: [], set: [], json: rest.includes('--json') }, problems: [] };
+  const allowed = new Set(optList(cmd));
+  const args = { _: [], set: [] }, problems = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--') { args._.push(...rest.slice(i + 1)); break; }
+    if (a === '-h') { args.help = true; continue; }
+    let k = null, inline;
+    if (a === '-o' || a === '-i') k = a.slice(1);
+    else if (a.startsWith('--') && a.length > 2) [k, inline] = a.slice(2).split(/=(.*)/s);
+    else if (/^-[A-Za-z]/.test(a)) { problems.push(`모르는 옵션 ${a}`); continue; }
+    if (k === null) { args._.push(a); continue; }
+    if (!allowed.has(k) && OPTS[cmd] !== undefined) {
+      const near = nearest(k, optList(cmd));
+      const other = Object.keys(OPTS).filter((c) => optList(c).includes(k));
+      problems.push(`${cmd}에는 ${flag(k)} 옵션이 없어요${near ? ` — 혹시 ${flag(near)}?` : ''}${!near && other.length ? ` (${other.slice(0, 3).join('·')} 명령의 옵션이에요)` : ''}`);
+      if (VALUE_OPTS.has(k) && inline === undefined && rest[i + 1] !== undefined && !rest[i + 1].startsWith('-')) i++; // 그 옵션의 값은 교재로 삼키지 않게 건너뜀
+      continue;
+    }
+    if (!VALUE_OPTS.has(k)) {
+      if (inline !== undefined && !/^(1|true|yes)$/i.test(inline)) problems.push(`${flag(k)}는 값을 받지 않아요: ${a}`);
+      args[k] = true; continue;
+    }
+    let v = inline;
+    if (v === undefined) {
+      const nx = rest[i + 1];
+      if (nx === undefined || (nx.startsWith('-') && nx.length > 1)) { problems.push(`${flag(k)} 뒤에 값이 없어요${k === 'password' ? "(암호 없이 만들지 않았어요. 예: --password '숲속바다햇살4821')" : k === 'set' ? '(예: --set meta.venue="본관 3층")' : ''}`); continue; }
+      v = nx; i++;
+    }
+    if (k === 'set') {
+      args.set.push(v);
+      while (/^[A-Za-z_][\w.-]*=/.test(rest[i + 1] || '')) args.set.push(rest[++i]); // --set a=1 b=2 c=3
+      continue;
+    }
+    if (k === 'password' && [...v].length < 4) problems.push('암호는 4자 이상이어야 해요(낱말 서너 개를 이어 쓰면 좋아요).');
+    if (k === 'port' && !(/^\d{1,5}$/.test(v) && +v <= 65535)) problems.push(`--port는 숫자예요(0~65535): ${v}`);
+    args[k] = v;
+  }
+  return { cmd, args, problems };
+}
+const parsed = parseArgs(process.argv.slice(2));
+const { cmd, args } = parsed;
+const JSON_OUT = !!args.json;
+
+// Node 판: 엔진을 읽기 전에(낡은 Node에서 알 수 없는 문법 오류 대신 한 줄로)
+if (+process.versions.node.split('.')[0] < 20) { console.error(`오류: Node.js 22 이상이 필요해요(지금 ${process.versions.node}). https://nodejs.org 에서 LTS를 설치하거나 nvm install 22 — 설치 뒤 node --version으로 확인해요.`); process.exit(1); }
+
+// 프록시(HTTPS_PROXY) 뒤: Node의 fetch는 NODE_USE_ENV_PROXY=1로 시작할 때만 프록시를 탐(Node 22.21·24 이상).
+// 인터넷을 쓰는 명령(글꼴 받기·주소 확인)이면 그 변수를 붙여 한 번 다시 띄움. 이 컴퓨터 안 주소는 프록시를 거치지 않게 NO_PROXY에 더함
+{
+  const [maj, min] = process.versions.node.split('.').map(Number);
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['make', 'build', 'patch', 'publish', 'handouts', 'app'].includes(cmd) && !args.help && !parsed.problems.length) {
+    const local = 'localhost,127.0.0.1,::1';
+    const np = [process.env.NO_PROXY || process.env.no_proxy, local].filter(Boolean).join(',');
+    const r = spawnSync(process.execPath, [...process.execArgv, '--disable-warning=UNDICI-EHPA', ...process.argv.slice(1)], { stdio: 'inherit', env: { ...process.env, NODE_USE_ENV_PROXY: '1', NO_PROXY: np, no_proxy: np } });
+    process.exit(r.status ?? 1);
+  }
+}
+
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 const E = await imp('src/index.js');
 const N = await imp('node.js');
 const { isUserAsset } = await imp('src/build.js');
-
-// ── 인자 ─────────────────────────────────────────
-const BOOL = new Set(['json', 'add-leftovers', 'fresh', 'reingest', 'no-qa', 'no-slides', 'no-build', 'undo', 'qa', 'help', 'commercial', 'minor', 'keep-design', 'no-python', 'force', 'live', 'dry-run', 'no-handouts', 'no-verify', 'temporary', 'bundle-fonts', 'no-bundle-fonts']);
-const [cmd, ...rest] = process.argv.slice(2);
-const args = { _: [], set: [] };
-for (let i = 0; i < rest.length; i++) {
-  const a = rest[i];
-  if (a === '-o' || a === '-i') args[a.slice(1)] = rest[++i];
-  else if (a === '-h') args.help = true;
-  else if (a.startsWith('--')) {
-    const [k, inline] = a.slice(2).split(/=(.*)/s);
-    if (BOOL.has(k)) args[k] = true;
-    else { const v = inline !== undefined ? inline : rest[++i]; if (k === 'set') args.set.push(v); else args[k] = v; }
-  } else args._.push(a);
-}
-const JSON_OUT = !!args.json;
 
 // ── 공통 ─────────────────────────────────────────
 /**
@@ -68,8 +149,17 @@ function strict(v) {
   return { ...v, errors: [...(v.errors || []), ...bad.map((w) => ({ path: w.path, message_ko: w.message_ko.replace(/ 지금은 .*$/, '') + ` 디자인 이름은 presets 명령으로 확인해요${w.suggest?.length ? `(고치기: --set design.preset=${w.suggest[0]})` : ''}.` }))], warnings: v.warnings.filter((w) => w.code !== 'unknown-preset') };
 }
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch (e) { fail(`JSON을 읽지 못했어요: ${p} (${e.code === 'ENOENT' ? '파일 없음' : e.message})`); } };
+/** 폴더 만들기: mkdirSync(recursive)는 /proc처럼 만들 수 없는 곳에서 끝없이 돌기도 해(Node) 한 단계씩 */
+function ensureDir(p) {
+  p = resolve(p); const miss = [];
+  while (!existsSync(p)) { miss.unshift(p); const up = dirname(p); if (up === p) break; p = up; }
+  if (existsSync(p) && !statSync(p).isDirectory()) throw Object.assign(new Error('ENOTDIR'), { code: 'ENOTDIR', path: p });
+  for (const d of miss) mkdirSync(d);
+}
 const writeJson = (p, v) => { mkdirSync(dirname(resolve(p)), { recursive: true }); writeFileSync(p, JSON.stringify(v, null, 2) + '\n'); };
 const rel = (p) => { if (!p) return ''; const r = relative(process.cwd(), p); if (!r) return '.'; return !r.startsWith('..') && !isAbsolute(r) ? r : p; };
+/** 꼭 필요한 인자가 없으면 쓰는 법과 함께 멈춤(종료 코드 2) */
+const need = (v, m) => { if (v === undefined || v === '') { if (JSON_OUT) console.log(JSON.stringify({ ok: false, error: m })); else console.error('오류: ' + m); process.exit(2); } return v; };
 const fail = (m, extra = {}) => { if (JSON_OUT) console.log(JSON.stringify({ ok: false, error: m, ...extra })); else console.error('오류: ' + m); process.exit(1); };
 const say = (lines, json) => { if (JSON_OUT) console.log(JSON.stringify(json)); else console.log(lines.filter((l) => l !== null && l !== undefined && l !== '').join('\n')); };
 const cut = (s, n = 40) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -80,6 +170,8 @@ const saveState = (work, s) => writeJson(statePath(work), { ...loadState(work), 
 const ARCH_KO = { story: '강의형', lab: '실습형', live: '행사형', course: '과정형' };
 const FLOW_PATH = (f) => E.FLOW_INFO[f]?.path || '';
 const ACCESS_KO = { link: '주소를 받은 사람만', public: '누구나(검색 허용)', password: '암호' };
+
+const IMAGE_ONLY = '사진·그림 파일은 교재로 읽지 않아요. 교재(PPTX·PDF·HWP·HWPX·DOCX)와 함께 주면 사진은 사이트 사진 칸으로 넣을 수 있어요(예: make 교재.pptx 단체사진.jpg).';
 
 async function ingestCli() { return imp('src/ingest/cli.js'); }
 async function ingestApi() { return imp('src/ingest/index.js'); }
@@ -335,6 +427,12 @@ function fontLine(src, design = {}) {
   return '글꼴 교재 ' + [...groups.values()].map((g) => `${g.name}(${g.roles.join('·')})${g.to ? ' → ' + g.to : ''}`).join(' · ');
 }
 
+/** 빈칸 '강사'를 대상에 맞는 말로(엔진 wordsFor): 학생 수업은 선생님, 설명회·행사는 발표자(없어도 되는 칸이라 '있으면') */
+function whoGap(bpLike, key = '') {
+  const w = E.wordsFor(bpLike);
+  return w.kind === 'conference' ? `발표자(${key ? key + ', ' : ''}있으면)` : `${w.who}${key ? `(${key})` : ''}`;
+}
+
 function briefMaterial(m) {
   const d = m.detected || {};
   const ev = d.event || {};
@@ -347,7 +445,7 @@ function briefMaterial(m) {
   if (!ev.date) missing.push('날짜');
   if (!ev.start) missing.push('시간');
   if (!ev.venue && ev.mode !== 'online') missing.push('장소');
-  if (!d.instructor?.name) missing.push('강사');
+  if (!d.instructor?.name) missing.push(whoGap({ meta: { title: d.title, subtitle: d.subtitle, admin: { kind: d.kind } } }));
   const lines = [
     `교재 ${files.join(' + ')} · 그림 ${st.images ?? 0} · 표 ${st.tables ?? 0} · 노트 ${st.notes ?? 0}${st.hidden ? ` · 숨김 ${st.hidden}` : ''}${rendered ? ` · 쪽 그림 ${rendered}` : ''}`,
     `연수명 ${cut(d.title || '(못 찾음)', 50)}${d.subtitle ? ` / ${cut(d.subtitle, 40)}` : ''}`,
@@ -376,7 +474,7 @@ function blueprintGaps(bp, raw = {}) {
   if (!m.date) g.push('날짜(meta.date)');
   if (!m.start) g.push('시간(meta.start·end)');
   if (!m.venue && m.mode !== 'online') g.push('장소(meta.venue)');
-  if (!bp.instructors.length) g.push('강사(instructors)');
+  if (!bp.instructors.length) g.push(whoGap(bp, 'instructors'));
   const st = bp.sections.find((s) => s.type === 'stations');
   if (st && st.items.some((i) => !i.source?.pages?.length)) g.push('실습 쪽 번호(source.pages)');
   const live = bp.sections.filter((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type));
@@ -468,7 +566,7 @@ function setToPatch(raw, expr) {
     const [, id, key, ...deeper] = path;
     const sec = E.withSectionIds(raw.sections).find((s) => s?.id === id);
     if (!sec && deeper.length) fail(`"${id}" 칸이 없어요. brief로 칸 id를 확인해 주세요.`);
-    patch.sections = { [id]: { [key]: deeper.length ? setDeep(structuredClone(sec[key] ?? {}), deeper, value) : value } };
+    patch.sections = { [id]: { [key]: deeper.length ? setDeep(structuredClone(sec[key] ?? {}), deeper, value, ['sections', id, key]) : value } };
     return patch;
   }
   // 배열을 만나면 그 배열을 통째로(병합 규칙상 배열은 바꿈) 넣음
@@ -477,15 +575,17 @@ function setToPatch(raw, expr) {
     const key = path[k];
     if (k === path.length - 1) { node[key] = value; break; }
     const next = src?.[key];
-    if (Array.isArray(next)) { node[key] = setDeep(structuredClone(next), path.slice(k + 1), value); break; }
+    if (Array.isArray(next)) { node[key] = setDeep(structuredClone(next), path.slice(k + 1), value, path.slice(0, k + 1)); break; }
     node = node[key] = {}; src = next;
   }
   return patch;
 }
-function setDeep(obj, path, value) {
+function setDeep(obj, path, value, pre = []) {
   let o = obj;
-  for (let k = 0; k < path.length - 1; k++) { const key = /^\d+$/.test(path[k]) ? +path[k] : path[k]; if (o[key] === undefined || o[key] === null) o[key] = /^\d+$/.test(path[k + 1]) ? [] : {}; o = o[key]; }
-  const last = /^\d+$/.test(path.at(-1)) ? +path.at(-1) : path.at(-1);
+  // 목록 번호는 있는 것 또는 바로 다음(끝에 붙이기)까지만: 건너뛴 번호는 빈 항목이 되어 설계도가 깨짐
+  const idx = (arr, key, at) => { if (Array.isArray(arr) && typeof key === 'number' && key > arr.length) fail(`${[...pre, ...path.slice(0, at)].join('.') || '목록'}에는 ${arr.length}개가 있어요: 번호는 0~${Math.max(0, arr.length - 1)}${arr.length ? `, 끝에 붙이려면 ${arr.length}` : ''}(brief로 확인).`); return key; };
+  for (let k = 0; k < path.length - 1; k++) { const key = idx(o, /^\d+$/.test(path[k]) ? +path[k] : path[k], k); if (o[key] === undefined || o[key] === null) o[key] = /^\d+$/.test(path[k + 1]) ? [] : {}; o = o[key]; }
+  const last = idx(o, /^\d+$/.test(path.at(-1)) ? +path.at(-1) : path.at(-1), path.length - 1);
   if (value === null && !Array.isArray(o)) delete o[last]; else o[last] = value;
   return obj;
 }
@@ -558,12 +658,14 @@ async function fromAppFile(P, file) {
   let b = null, skip = '';
   if (bp.access?.mode === 'password' && !args.password && !process.env.LECPAGE_PASSWORD) skip = '암호 보호 연수라 빌드는 건너뜀(--password로 patch 하면 빌드해요)';
   else { b = await buildSite(bp, { out, assets: join(work, 'assets'), info: u.info, password: args.password }); if (!b.ok) { skip = '빌드 못 함: ' + b.errors.map((e) => e.message_ko).join(' '); b = null; } }
+  const newer = P.versionNote(u, UPDATE_HOW); // 앱(또는 다른 skill)이 이 skill보다 새 판이면 한 줄
   say([
     `앱에서 저장한 연수 ✓ 「${cut(bp.meta?.title || '이름 없음', 40)}」 → ${rel(work)}(설계도·연수 정보·${u.material ? '교재 해석' : '교재 해석 없음'}) · 쪽 그림 ${slides} · 교재 원본 ${inputs.length}${inputs.length ? `(${rel(join(work, 'src'))})` : ''}`,
+    newer ? `알림 ${newer}` : '',
     `받지 않은 것 ${NOT_PACKED}. 쓰려면 강사에게 다시 받아 ${rel(join(work, 'info.json'))}에 넣어요`,
     b ? buildLine(b) : skip,
     `다음 brief ${rel(work)} · patch ${rel(join(work, 'blueprint.json'))} --set 경로=값`,
-  ], { ok: true, work, blueprint: join(work, 'blueprint.json'), slides, originals: inputs, build: b && { dir: b.dir, sizeKB: b.sizeKB }, skipped: skip });
+  ], { ok: true, work, blueprint: join(work, 'blueprint.json'), slides, originals: inputs, build: b && { dir: b.dir, sizeKB: b.sizeKB }, skipped: skip, fileVersion: u.engine || '', version: SKILL_VERSION, ...(newer ? { notice: newer } : {}) });
 }
 
 /** 작업 폴더의 설계도를 지난번 빌드 위치에 다시 빌드(publish가 글꼴을 담거나 뺄 때). 연수 정보·자료·암호는 지난번 그대로 */
@@ -579,12 +681,16 @@ const helpers = () => ({ args, E, N, rel, fail, say, readJson, writeJson, loadSt
 const commands = {
   async make() {
     const t0 = Date.now();
+    // 진행 줄(stderr, 오래 걸릴 때만): 8초가 지나면 단계를, 쪽 그림은 15초마다 몇 쪽째인지. 요약(stdout·--json)은 그대로
+    let lastLine = 0;
+    const progress = (msg, stage = false) => { const now = Date.now(); if (now - t0 < 8000 || (!stage && now - lastLine < 15000)) return; lastLine = now; console.error(`… ${msg} (${Math.round((now - t0) / 1000)}초)`); };
     const inputs = args._.map((p) => (/^https?:/i.test(p) ? p : resolve(p)));
     if (!inputs.length) fail('교재 파일을 주세요. 예: lecpage.mjs make 교재.pptx 교재.pdf -o dist');
     const out = resolve(args.o || 'dist');
     const work = resolve(args.work || join(dirname(out), 'work'));
     const material = join(work, 'material.json'), draftPath = join(work, 'draft.json'), bpPath = join(work, 'blueprint.json'), assets = join(work, 'assets');
-    mkdirSync(work, { recursive: true });
+    if (existsSync(out) && !statSync(out).isDirectory()) fail(`-o ${rel(out)}는 파일이에요. 사이트를 만들 폴더 이름을 주세요(예: -o dist).`);
+    ensureDir(work); ensureDir(dirname(out)); // 쓸 수 없는 곳이면 교재를 읽기 전에 멈춤
     const state = loadState(work);
     const steps = [];
 
@@ -595,12 +701,18 @@ const commands = {
     else {
       const C = await ingestCli();
       m = await C.ingestPaths(inputs, { withImages: true, today: args.today || undefined, python: !args['no-python'] });
-      if (m.pages.length && !args['no-slides']) await C.attachSlides(m, join(assets, 'slides'), material);
+      // 주소로 준 교재를 받지 못했으면(닿지 않음·비공개) 빈 사이트를 만들지 않음. 읽을 수 없는 링크 교재(Padlet 등)는 링크 칸으로 그대로
+      const unread = (m.warnings || []).filter((w) => w.code === 'link-fetch-failed').map((w) => w.file);
+      if (unread.length && (m.files || []).every((f) => f.type === 'link')) fail(`교재 주소를 받지 못했어요: ${unread.join(', ')} — 주소가 열리는지·공개 범위가 "링크가 있는 모든 사용자"인지 확인하거나, 교재를 파일(PPTX·PDF·HWPX·DOCX)로 저장해 그 파일로 다시 make 해 주세요.`);
+      if (m.pages.length && !args['no-slides']) {
+        progress(`교재 ${m.pages.length}쪽 읽음 → 쪽 그림 만드는 중`, true);
+        await C.attachSlides(m, join(assets, 'slides'), material, { onProgress: (d, t, st, name) => progress(st === 'pdf' ? `쪽 그림: PDF로 바꾸는 중(LibreOffice, ${name})` : `쪽 그림 ${st === 'webp' ? '용량 줄이는 중' : '그리는 중'} ${d}${t ? '/' + t : ''}쪽`, st === 'pdf') });
+      }
       await C.writeMaterial(m, material, { imagesDir: join(assets, 'media') });
       m = readJson(material);
       saveState(work, { ingestKey: key });
     }
-    if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + (m.errors || []).map((e) => e.message_ko).join(' '), { errors: m.errors });
+    if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => (e.code === 'image-file' ? IMAGE_ONLY : e.message_ko)))].join(' '), { errors: m.errors });
 
     // 2) 초안과 설계도(이미 고친 설계도가 있으면 지키고, --fresh면 새로)
     const info = args.i ? readJson(args.i) : {};
@@ -620,18 +732,37 @@ const commands = {
     // 글꼴 함께 담기: --bundle-fonts, 지난번에 켠 것, 또는 학교망·인터넷 없음으로 답한 연수(앱과 같게). --no-bundle-fonts면 끔
     const net = info.network || v.blueprint.audience.network;
     const fonts = !args['no-bundle-fonts'] && (!!args['bundle-fonts'] || !!loadState(work).bundleFonts || ['restricted', 'offline'].includes(net));
+    progress(`사이트 빌드 중${fonts ? '(글꼴 함께 담기)' : ''}`, true);
     const b = await buildSite(raw, { out, assets, info: Object.keys(info).length ? info : null, password: args.password, fonts });
     if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
     // 경로는 work 기준 상대 경로로(work 폴더를 복사해 patch해도 원래 폴더의 dist를 덮어쓰지 않게). 글꼴 함께 담기는 다시 만들 때도 이어짐
     saveState(work, { out: relative(work, out), assets: relative(work, assets), info: args.i ? relative(work, resolve(args.i)) : '', blueprint: 'blueprint.json', inputs, bundleFonts: fonts });
 
     // 4) 점검
+    if (!args['no-qa']) progress('점검 중(휴대폰·태블릿·PC × 밝게·어둡게)', true);
     const q = args['no-qa'] ? null : await runQa(out, { outDir: join(dirname(out), 'qa'), password: args.password || process.env.LECPAGE_PASSWORD || '', work });
     const bm = briefMaterial(m), bb = briefBlueprint(raw);
     const sec = ((Date.now() - t0) / 1000).toFixed(0);
     const base = dirname(out);
     const sh = (p) => { const r = relative(base, p); return r && !r.startsWith('..') && !isAbsolute(r) ? r : p; };
     const bpShort = sh(bpPath);
+    // 함께 준 사진·그림(교재로 읽지 않음): work/assets/media/로 복사하고 사진 칸으로 넣는 패치를 만들어 둠(structure --add-leftovers와 같은 방식)
+    const photoNames = new Set((m.errors || []).filter((e) => e.code === 'image-file').map((e) => e.file));
+    const photos = inputs.filter((p) => !/^https?:/i.test(p) && photoNames.has(basename(p)) && existsSync(p));
+    let photoLine = '';
+    if (photos.length) {
+      ensureDir(join(assets, 'media'));
+      const items = photos.map((p) => { const name = basename(p).replace(/[^\w가-힣.\-]+/g, '_'); copyFileSync(p, join(assets, 'media', name)); return { src: `assets/media/${name}`, caption: '' }; });
+      const secs = E.withSectionIds(Array.isArray(raw.sections) ? raw.sections : []).filter((x) => x && !x.hidden);
+      const ci = secs.findIndex((x) => ['materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'].includes(x.type)); // 본문 끝(자료·강사·설문·마무리 앞)
+      const after = (ci > 0 ? secs[ci - 1] : secs.at(-1))?.id;
+      const pp = join(work, 'photos.patch.json');
+      writeJson(pp, { note: '교재와 함께 준 사진을 사진 칸으로', add: [{ ...(after ? { after } : {}), section: { type: 'gallery', title: '사진', items } }] });
+      photoLine = `사진 ${photos.length}장은 교재로 읽지 않았어요 → 사진 칸으로 넣으려면 patch ${sh(bpPath)} ${sh(pp)} (사진은 ${sh(join(assets, 'media'))}/에 복사해 둠)`;
+    }
+    // 교재 알림(쪽·절이 많아 앞부분만 읽음 등)과 읽지 못한 파일: 한 줄씩(많으면 3줄 + 외 N)
+    const notes = [...(m.errors || []).filter((e) => e.code !== 'image-file').map((e) => `${e.file ? e.file + ': ' : ''}${e.message_ko}`), ...(m.warnings || []).filter((w) => w.code !== 'python-fallback').map((w) => `${w.file && !String(w.message_ko).includes(w.file) ? w.file + ': ' : ''}${w.message_ko}`)];
+    const noteLines = [...notes.slice(0, 3).map((x) => `  알림 ${cut(x, 150)}`), notes.length > 3 ? `  알림 외 ${notes.length - 3}건(brief ${sh(work)})` : ''];
     // 연수 정보(info.json)가 없으면 빈칸이 없어도 강사에게 세 가지만 물음: 참여 기능을 모르면 참여 기능 없는 사이트가 됨
     const infoGuess = join(work, 'info.json');
     // 교재로 정할 수 없어 한 번 확인할 것(엔진 intakeAsks: 차시 날짜·출석 기준·직무연수의 출석, references/intake.md 2절)
@@ -641,7 +772,7 @@ const commands = {
     const lines = [
       `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(배포할 사이트) · ${sh(b.tdir)}(강사용, 배포하지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
       ...steps,
-      bm.lines[0], bm.lines[5],
+      bm.lines[0], ...noteLines, photoLine, bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
       ...bb.lines.filter((l) => !l.startsWith('싣지 못한 것')),
       ask,
@@ -649,7 +780,7 @@ const commands = {
       buildLine(b).replace(rel(b.dir), sh(b.dir)),
       ...b.warnings.filter((w) => w.path === 'assets').map((w) => `  ${w.message_ko}`),
       ...b.warnings.filter((w) => w.path === 'fonts').map((w) => `  ${w.message_ko}${args['bundle-fonts'] ? '' : ' (끄기 --no-bundle-fonts)'}`),
-      ...(q ? qaLines(q).filter((l) => !l.includes('스크린샷')) : ['점검 건너뜀(--no-qa)']),
+      ...(q ? qaLines(q) : ['점검 건너뜀(--no-qa)']),
       `다음${rel(base) === '.' ? '' : `(${rel(base)} 폴더에서)`} 내용 확인 → patch ${bpShort} --set 경로=값 · 디자인 비교 options ${bpShort} · 미리보기 serve ${sh(out)}`,
     ];
     say(lines, { ok: !q || q.ok, seconds: +sec, work, blueprint: bpPath, kept, ask: ask.startsWith('물을 것') ? [...(args.i ? [] : ['features', 'size', 'network']), ...more.map((x) => x.key)] : [], material: bm.json, brief: bb.json, build: { dir: b.dir, teacherDir: b.tdir, files: b.files, sizeKB: b.sizeKB, ...b.report }, qa: q });
@@ -720,6 +851,23 @@ const commands = {
     const r = E.applyBlueprintPatch(before, patch);
     if (args.i) { const info = readJson(args.i); r.raw = E.applyTeacherValues(E.syncInfo(r.raw, info), info, { access: args.access }); }
     const final = strict(args.i ? E.validate(r.raw) : { errors: r.errors, warnings: r.warnings.filter((w) => w.kind !== 'patch') });
+    // --set 값이 검증에서 버려지면(형식이 틀림) '바뀜'으로 저장하지 않고 고칠 모양을 알려 줌
+    if (!args.undo && args.set.length) {
+      const vbp = E.validate(r.raw).blueprint;
+      const HINT = { date: '날짜는 YYYY-MM-DD(예: 2026-12-03)', start: '시각은 HH:MM(예: 14:00)', end: '시각은 HH:MM(예: 16:30)', accent: '색은 #RRGGBB(예: #12306b)', logo: '로고는 https 주소나 assets/ 안의 그림 경로', url: '주소는 https://…', href: '주소는 https://…', joinUrl: '주소는 https://…' };
+      const lost = [];
+      for (const expr of args.set) {
+        const at = expr.indexOf('='); const parts = expr.slice(0, at).trim().split('.').filter(Boolean);
+        let val = expr.slice(at + 1); try { val = JSON.parse(val); } catch { /* 글자 그대로 */ }
+        if (!['string', 'number'].includes(typeof val) || val === '') continue;
+        if (r.warnings.some((w) => w.kind === 'patch' && (w.path === parts.join('.') || w.path === parts[0]))) continue; // 강사만 정하는 값: 패치 주의가 따로 알림
+        let got;
+        if (parts[0] === 'sections') { if (parts.length !== 3 || parts[2] === 'hidden') continue; const sec = vbp.sections.find((x) => x.id === parts[1]); if (!sec) continue; got = sec[parts[2]]; }
+        else got = parts.reduce((o, k) => (o === null || o === undefined ? undefined : o[k]), vbp);
+        if (got === '') lost.push(`${parts.join('.')}="${cut(String(val), 30)}"(쓸 수 없는 값이라 빌드에서 빠짐${HINT[parts.at(-1)] ? `. ${HINT[parts.at(-1)]}` : ''})`);
+      }
+      if (lost.length) fail('저장하지 않았어요: ' + lost.join(' / '));
+    }
     const pw = r.warnings.filter((w) => w.kind === 'patch');
     if (final.errors.length) fail('검증 실패로 저장하지 않았어요: ' + final.errors.map((e) => `${e.path} ${e.message_ko}`).join(' / '), { warnings: pw });
     const changes = E.diffSummary(undoFrom || before, r.raw);
@@ -748,7 +896,8 @@ const commands = {
       ...(changes.length ? coverageLines(work, r.raw) : []),
       ...(q ? qaLines(q) : []),
     ];
-    say(lines, { ok: true, blueprint: bpPath, changes, note: r.note, patchWarnings: pw, warnings: final.warnings, build: b && { dir: b.dir, sizeKB: b.sizeKB, ...b.report }, skipped: skip, qa: q });
+    say(lines, { ok: !q || q.ok, blueprint: bpPath, changes, note: r.note, patchWarnings: pw, warnings: final.warnings, build: b && { dir: b.dir, sizeKB: b.sizeKB, ...b.report }, skipped: skip, qa: q });
+    process.exitCode = q && !q.ok ? 1 : 0;
   },
 
   async options() {
@@ -837,21 +986,27 @@ const commands = {
     let chromium = false;
     if (pw) { try { const p = pw.chromium.executablePath(); chromium = !!p && existsSync(p); } catch { chromium = false; } }
     checks.push({ name: 'Playwright', ok: !!pw && chromium, info: pw ? (chromium ? 'chromium 있음' : 'chromium 없음') : '', use: '점검(qa)·디자인 비교(options)', fix: pw ? 'npx playwright install chromium' : 'npm i -D playwright && npx playwright install chromium' });
-    const soffice = has('soffice') || has('libreoffice') || existsSync('/Applications/LibreOffice.app/Contents/MacOS/soffice');
-    checks.push({ name: 'LibreOffice', ok: soffice, use: 'PPTX·HWPX·DOCX 쪽 그림(PDF를 함께 주면 없어도 됨)', fix: fix({ linux: 'sudo apt-get install -y libreoffice-impress', mac: 'brew install --cask libreoffice', win: 'winget install TheDocumentFoundation.LibreOffice' }) });
-    checks.push({ name: 'pdftoppm', ok: has('pdftoppm'), use: '쪽 그림(교재 보기)', fix: fix({ linux: 'sudo apt-get install -y poppler-utils', mac: 'brew install poppler', win: 'winget install oschwartz10612.Poppler' }) });
-    checks.push({ name: 'cwebp', ok: has('cwebp'), use: '쪽 그림 용량 줄이기(없으면 PNG)', fix: fix({ linux: 'sudo apt-get install -y webp', mac: 'brew install webp', win: 'winget install Google.Libwebp' }) });
-    const py = spawnSync('python3', ['-c', 'import pymupdf'], { encoding: 'utf8' }).status === 0 || spawnSync('python3', ['-c', 'import fitz'], { encoding: 'utf8' }).status === 0;
+    // 쪽 그림·배포는 셸(bash·cmd) 없이 프로그램을 바로 부름(scripts/render-slides.mjs·publish.mjs): 같은 길로 찾음
+    const RS = await import('./render-slides.mjs');
+    const { npx } = await import('./publish.mjs');
+    const nv = npx(['--version'], { encoding: 'utf8', timeout: 60000 });
+    checks.push({ name: 'npx', ok: nv.status === 0, info: nv.status === 0 ? `npm ${String(nv.stdout).trim()}` : '', use: '배포(publish: Cloudflare·Onpod)', fix: 'Node.js 공식 설치본을 다시 설치(npm·npx 포함)' });
+    checks.push({ name: 'LibreOffice', ok: !!RS.sofficePath(), use: 'PPTX·HWPX·DOCX 쪽 그림(PDF를 함께 주면 없어도 됨)', fix: fix({ linux: 'sudo apt-get install -y libreoffice-impress', mac: 'brew install --cask libreoffice', win: 'winget install TheDocumentFoundation.LibreOffice' }) });
+    checks.push({ name: 'pdftoppm', ok: !!RS.pdftoppmPath(), use: '쪽 그림(교재 보기)', fix: fix({ linux: 'sudo apt-get install -y poppler-utils', mac: 'brew install poppler', win: 'winget install oschwartz10612.Poppler' }) });
+    checks.push({ name: 'cwebp', ok: !!RS.findProgram(['cwebp']), use: '쪽 그림 용량 줄이기(없으면 PNG)', fix: fix({ linux: 'sudo apt-get install -y webp', mac: 'brew install webp', win: 'winget install Google.Libwebp' }) });
+    const pyBin = await (await ingestCli()).findPython();
+    const pyRun = (mod) => !!pyBin && spawnSync(pyBin[0], [...pyBin[1], '-c', 'import ' + mod], { encoding: 'utf8', windowsHide: true }).status === 0;
+    const py = pyRun('pymupdf') || pyRun('fitz');
     let pdfjs = false; try { createRequire(import.meta.url).resolve('pdfjs-dist/package.json'); pdfjs = true; } catch { /* 없음 */ }
     checks.push({ name: 'PDF 읽기', ok: py || pdfjs, info: pdfjs ? 'pdfjs-dist' : py ? 'PyMuPDF' : '', use: 'PDF 교재 글 읽기', fix: 'pip install pymupdf (또는 npm i pdfjs-dist)' });
     if (os !== 'win' && has('fc-list')) {
       const ko = spawnSync('fc-list', [':lang=ko', 'family'], { encoding: 'utf8' }).stdout?.trim().split('\n').filter(Boolean).length || 0;
       checks.push({ name: '한글 글꼴', ok: ko > 0, info: ko ? `${ko}종` : '', use: '쪽 그림의 한글이 깨지지 않게', fix: fix({ linux: 'sudo apt-get install -y fonts-noto-cjk fonts-nanum', mac: '기본 포함' }) });
     }
-    const lines = checks.map((c) => `${c.ok ? '✓' : c.need ? '✕' : '–'} ${c.name}${c.info ? ` ${c.info}` : ''}${c.ok ? '' : ` — ${c.use}: ${c.fix}`}`);
+    const lines = [`lecpage ${SKILL_VERSION} (${UPDATE_HOW})`, ...checks.map((c) => `${c.ok ? '✓' : c.need ? '✕' : '–'} ${c.name}${c.info ? ` ${c.info}` : ''}${c.ok ? '' : ` — ${c.use}: ${c.fix}`}`)];
     const missing = checks.filter((c) => !c.ok);
     lines.push(missing.some((c) => c.need) ? '필수 도구가 없어요. 위 명령으로 설치해 주세요.' : missing.length ? '만들기는 돼요. – 표시는 그 기능만 건너뛰어요.' : '모두 준비됐어요.');
-    say(lines, { ok: !missing.some((c) => c.need), checks });
+    say(lines, { ok: !missing.some((c) => c.need), version: SKILL_VERSION, checks });
     process.exitCode = missing.some((c) => c.need) ? 1 : 0;
   },
 
@@ -866,7 +1021,7 @@ const commands = {
 
   async draft() {
     const api = await ingestApi();
-    const material = readJson(args._[0]); const info = args.i ? readJson(args.i) : {};
+    const material = readJson(need(args._[0], '교재 해석 파일을 주세요. 예: draft work/material.json -o draft.json')); const info = args.i ? readJson(args.i) : {};
     const d = api.materialToDraft(material, info);
     const o = args.o || 'draft.json'; writeJson(o, d);
     say([`초안 → ${rel(resolve(o))} · 칸 ${d.sections.length}`, d._draft?.todo?.length ? `빈칸 ${d._draft.todo.join(' ')}` : ''], { ok: true, file: resolve(o), sections: d.sections.length, todo: d._draft?.todo || [] });
@@ -883,6 +1038,7 @@ const commands = {
 
   /** AI 답(설계도 JSON 또는 AI 창 답 글)을 교재 초안과 견줘 교재 글을 지킴(교재 지킴이) */
   async guard() {
+    need(args._[0] && args._[1], 'AI 답 파일과 교재 해석(material.json)을 주세요. 예: guard ai-answer.json work/material.json -o work/blueprint.json');
     const api = await ingestApi();
     const text = readFileSync(args._[0], 'utf8');
     const read = E.readAnswer(text);
@@ -890,15 +1046,26 @@ const commands = {
     const material = readJson(args._[1]); const info = args.i ? readJson(args.i) : {};
     const draft = api.materialToDraft(material, E.draftInfo(info));
     const { blueprint, restored } = E.guardMaterial(read.json, draft, { material, allowUrls: [info.joinUrl, info.surveyUrl].filter(Boolean) });
-    const bp = E.keepDraftParts(blueprint, draft);
-    const o = args.o || 'blueprint.json'; writeJson(o, bp);
+    // 강사만 정하는 값(참여 기능 서버·연수 코드·키, 공개 범위, 개인정보, QR·접속 주소, 설문 주소, 로고)은 AI 답에서 받지 않음: 앱과 같은 applyInfo.
+    // 지금 설계도(-o 자리나 material.json 옆 blueprint.json)가 있으면 강사가 이미 연결한 값을 지킴. info.json의 값은 make처럼 넣음
+    const o = args.o || 'blueprint.json';
+    const prevPath = [resolve(o), join(dirname(resolve(args._[1])), 'blueprint.json')].find((p) => existsSync(p));
+    const prev = prevPath ? readJson(prevPath) : null;
+    const before = E.keepDraftParts(blueprint, draft);
+    const bp = E.applyTeacherValues(E.applyInfo(before, info, material, prev), info);
+    const T = (x) => ({ live: JSON.stringify([x.live?.provider || 'none', x.live?.url || '', x.live?.anonKey || '']), access: x.access?.mode || 'link', siteUrl: x.meta?.siteUrl || '', joinUrl: x.meta?.joinUrl || '', shortUrl: x.meta?.shortUrl || '', logo: x.design?.logo || '', survey: JSON.stringify((x.sections || []).filter((s) => s?.type === 'survey').map((s) => s.url || '')) });
+    const tb = T(before), ta = T(bp);
+    const KO = { live: '참여 기능 서버', access: '공개 범위', siteUrl: '사이트 주소', joinUrl: '접속 주소', shortUrl: '짧은 주소', logo: '로고', survey: '설문 주소' };
+    const teacher = Object.keys(KO).filter((k) => tb[k] !== ta[k] && !(k === 'access' && tb[k] === 'link'));
+    writeJson(o, bp);
     say([`교재 지킴이 → ${rel(resolve(o))} · 되돌린 곳 ${E.restoredCount(restored)}${restored.length > E.restoredCount(restored) ? `(채운 목록 ${restored.length - E.restoredCount(restored)})` : ''}`,
-      ...restored.filter((r) => !r.quiet).slice(0, 12).map((r) => `- ${r.where}: ${cut(r.before || '(없음)', 40)} → ${cut(r.after || '(뺌)', 40)}`)],
-    { ok: true, file: resolve(o), restored });
+      ...restored.filter((r) => !r.quiet).slice(0, 12).map((r) => `- ${r.where}: ${cut(r.before || '(없음)', 40)} → ${cut(r.after || '(뺌)', 40)}`),
+      teacher.length ? `강사만 정하는 값은 AI 답에서 받지 않았어요: ${teacher.map((k) => KO[k]).join('·')} → ${prev ? '지금 설계도' : '기본'}${Object.keys(info).length ? '·연수 정보' : ''} 값(바꾸려면 info.json으로)` : ''],
+    { ok: true, file: resolve(o), restored, teacherOnly: teacher });
   },
 
   validate() {
-    const r = strict(E.validate(readJson(args._[0])));
+    const r = strict(E.validate(readJson(need(args._[0], '설계도 파일을 주세요. 예: validate work/blueprint.json'))));
     if (args.o) writeJson(args.o, r.blueprint);
     const lines = [r.errors.length ? `검증 ✕ 오류 ${r.errors.length}` : `검증 ✓ 칸 ${r.blueprint.sections.length}${r.warnings.length ? ` · 주의 ${r.warnings.length}` : ''}`,
       ...r.errors.map((e) => `오류 ${e.path}: ${e.message_ko}`), ...r.warnings.slice(0, 8).map((w) => `주의 ${w.path}: ${w.message_ko}`), r.warnings.length > 8 ? `주의 외 ${r.warnings.length - 8}건(--json)` : ''];
@@ -930,7 +1097,7 @@ const commands = {
   },
 
   design() {
-    const { blueprint: bp } = E.validate(readJson(args._[0]));
+    const { blueprint: bp } = E.validate(readJson(need(args._[0], '설계도 파일을 주세요. 예: design work/blueprint.json')));
     const ranked = E.rankPresets({ moods: bp.design.mood, topics: bp.design.topics.length ? bp.design.topics : E.detectTopics(bp.meta.title + ' ' + bp.meta.subtitle), archetype: bp.archetype.primary, admin: bp.meta.admin.kind, minor: bp.audience.minor });
     const d = E.resolveDesign(bp);
     // 컨셉 먼저: 설계도에 concept가 있으면 그것을, 없으면 주제에서 규칙으로 세운 것을 보여 줌(고치려면 patch --set concept.idea=… 등)
@@ -942,7 +1109,7 @@ const commands = {
   },
 
   async build() {
-    if (!args._[0]) fail('설계도 파일을 지정해 주세요.');
+    need(args._[0], '설계도 파일을 주세요. 예: build work/blueprint.json -o dist');
     const b = await buildSite(readJson(args._[0]), { out: args.o || 'dist', assets: args.assets ? resolve(args.assets) : '', info: args.i ? readJson(args.i) : null, password: args.password });
     if (!b.ok) { say([...b.warnings.map((w) => `주의 ${w.path}: ${w.message_ko}`), ...b.errors.map((e) => `오류 ${e.path}: ${e.message_ko}`)], { ok: false, errors: b.errors, warnings: b.warnings }); process.exit(1); }
     say([buildLine(b), `강사용 파일(배포하지 않음) ${rel(b.tdir)}`, b.access === 'password' ? '암호 보호: 참가자 QR은 주소 뒤에 #k=암호 를 붙이면 바로 열려요.' : '',
@@ -958,6 +1125,7 @@ const commands = {
 
   serve() {
     const port = +args.port || 4173;
+    if (!existsSync(join(resolve(args._[0] || 'dist'), 'index.html'))) fail(`${rel(resolve(args._[0] || 'dist'))}에 사이트가 없어요(index.html 없음). make나 build로 만든 폴더를 주세요.`);
     staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
 
@@ -968,16 +1136,61 @@ const commands = {
 
   pack() {
     const dir = resolve(args._[0] || 'dist');
+    if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). make나 build로 먼저 만들고 그 폴더를 주세요. 예: pack dist -o site.zip`);
     const files = N.readAssetDir(dir, '');
     const zip = E.zipFiles(files);
-    const target = args.o || 'site.zip'; writeFileSync(target, zip);
+    const target = args.o || 'site.zip';
+    mkdirSync(dirname(resolve(target)), { recursive: true });
+    writeFileSync(target, zip);
     say([`→ ${target} (${Math.round(zip.length / 1024)}KB, 파일 ${Object.keys(files).length}개)`], { ok: true, file: resolve(target), kb: Math.round(zip.length / 1024), files: Object.keys(files).length });
   },
 };
 commands['decide-infra'] = commands.decideInfra;
 delete commands.decideInfra;
 
-if (!cmd || args.help && !commands[cmd] || !commands[cmd]) {
-  console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1).filter((l, i, a) => a.slice(0, i + 1).every((x) => x.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
-  process.exitCode = cmd && !['help', '-h', '--help'].includes(cmd) ? 2 : 0;
-} else await commands[cmd]();
+/** 도움말: 이 파일 머리 주석. 명령을 주면 그 명령 줄과 이어지는 설명만 */
+function helpText(c = '') {
+  const lines = readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1);
+  const head = lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, ''));
+  if (!c) return head.join('\n');
+  const blocks = []; let cur = null;
+  for (const l of head) { if (/^  \S/.test(l)) blocks.push(cur = [l]); else if (/^ {3,}\S/.test(l) && cur) cur.push(l); else cur = null; }
+  const mine = blocks.filter((b) => new RegExp(`(?:^  |· )${c.replace(/[-]/g, '\\-')}(?: |$)`).test(b[0]));
+  return [head[0], ...mine.flat(), ...blocks.filter((b) => /^  (?:공통|종료 코드)/.test(b[0])).flat()].join('\n');
+}
+/** 던진 오류 → 한국어 한 줄 + 다음 할 일. 스택은 LECPAGE_DEBUG=1일 때만 */
+function friendly(e) {
+  if (!(e instanceof Error)) return String(e);
+  const p = e.path || e.dest ? rel(String(e.path || e.dest)) : '';
+  const native = e instanceof TypeError || e instanceof RangeError || e instanceof ReferenceError || e instanceof SyntaxError;
+  if (e.friendly || (!native && !e.code && /[가-힣]/.test(e.message))) return e.message;
+  const byCode = {
+    ENOENT: `파일이나 폴더가 없어요: ${p}. 이름과 위치를 확인해 주세요.`,
+    ENOTDIR: `${p}: 폴더가 들어갈 자리에 파일이 있어요. -o에는 새 폴더 이름을 주세요.`,
+    EISDIR: `${p}: 파일이 들어갈 자리에 폴더가 있어요. 파일 이름을 주세요(예: -o site.zip).`,
+    EEXIST: `${p}가 이미 있어요. 다른 이름을 주세요.`,
+    EACCES: `${p}에 쓸 수 없어요(권한). 내 폴더 안의 다른 곳을 -o로 주세요.`, EPERM: `${p}에 쓸 수 없어요(권한). 내 폴더 안의 다른 곳을 -o로 주세요.`, EROFS: `${p}는 읽기 전용이에요. 다른 폴더를 -o로 주세요.`,
+    ENOSPC: '디스크 공간이 모자라요. 공간을 비운 뒤 다시 해 주세요.',
+    EADDRINUSE: `포트 ${e.port}를 다른 프로그램이 쓰고 있어요. --port ${(+e.port || 4172) + 1}처럼 다른 번호를 주세요.`,
+  };
+  if (byCode[e.code]) return byCode[e.code];
+  return `예상하지 못한 오류예요: ${String(e.message).split('\n')[0].slice(0, 160)} — LECPAGE_DEBUG=1을 붙여 다시 실행하면 자세한 기록이 나와요. 고쳐지지 않으면 https://github.com/yoorrard/lecpage/issues 에 이 줄을 알려 주세요.`;
+}
+const crash = (e) => { if (DEBUG) console.error(e?.stack || e); fail(friendly(e)); };
+process.on('uncaughtException', crash);
+process.on('unhandledRejection', crash);
+
+if (cmd === 'version') say([`lecpage ${SKILL_VERSION}`, `  ${UPDATE_HOW}`], { ok: true, version: SKILL_VERSION });
+else if (args.help) console.log(helpText(commands[cmd] ? cmd : ''));
+else if (!cmd || !commands[cmd]) {
+  const near = cmd && nearest(cmd, Object.keys(commands));
+  if (cmd) { const m = `모르는 명령이에요: ${cmd}${near ? ` — 혹시 ${near}?` : ''} (명령 목록: lecpage.mjs --help)`; if (JSON_OUT) console.log(JSON.stringify({ ok: false, error: m })); else console.error('오류: ' + m); }
+  else console.log(helpText());
+  process.exitCode = cmd ? 2 : 0;
+} else if (parsed.problems.length) {
+  const m = parsed.problems.join(' / ') + ` (도움말: lecpage.mjs ${cmd} --help)`;
+  if (JSON_OUT) console.log(JSON.stringify({ ok: false, error: m })); else console.error('오류: ' + m);
+  process.exitCode = 2;
+} else {
+  try { await commands[cmd](); } catch (e) { crash(e); }
+}

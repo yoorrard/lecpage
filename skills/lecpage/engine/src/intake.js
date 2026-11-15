@@ -9,7 +9,7 @@ import { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
 import { rankPresets } from './decide/design.js';
 import { cleanConcept, deriveConcept } from './decide/concept.js';
 import { PRESET_IDS } from './design/presets.js';
-import { DEFAULT_SURVEY } from './schema/sections.js';
+import { DEFAULT_SURVEY, TEACHER_ONLY } from './schema/sections.js';
 import { randomCode } from './validate.js';
 import { wordsFor } from './words.js';
 
@@ -41,8 +41,8 @@ export const FEATURES = [
 
 /** 강사 정보로만 정하는 meta(교재 감지·AI가 채운 값은 강사가 확인한 info로 덮음) */
 export const META_KEYS = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue', 'mode', 'contact'];
-/** QR·링크 대상: AI 답·남이 준 파일·교재가 정하지 못하게(joinUrl은 강사가 적은 info.joinUrl만) */
-export const UNTRUSTED_META = ['siteUrl', 'shortUrl', 'joinUrl'];
+/** QR·링크 대상: AI 답·남이 준 파일·교재가 정하지 못하게(joinUrl은 강사가 적은 info.joinUrl만). 목록은 schema/sections.js TEACHER_ONLY 한 벌 */
+export const UNTRUSTED_META = TEACHER_ONLY.meta;
 
 const clone = (x) => JSON.parse(JSON.stringify(x || {}));
 const has = (o, k) => o && o[k] !== undefined && o[k] !== null;
@@ -262,6 +262,25 @@ function dropPendingUrls(bp, urls) {
   for (const k of Object.keys(bp)) if (!['meta', 'live', 'privacy', 'access', 'design'].includes(k)) walk(bp[k], k);
 }
 
+/**
+ * 강사만 정하는 링크(공용 규칙: applyInfo가 부르고, 앱·CLI guard가 같은 길을 씀). AI 답·가져온 설계도·교재 속 지시가 넣은 주소는 버림.
+ *  - 설문 주소(survey 칸의 url): info.surveyUrl이나 지금 설계도(prev)에 있던 설문 주소만(다른 주소는 info.surveyUrl로, 없으면 비움)
+ *  - 로고(design.logo): info.logo·prev의 로고·사이트 안 자료(assets/…)만. 바깥 그림 주소는 추적·피싱 그림이 될 수 있음
+ * (실시간 연결·공개 범위·개인정보·QR·접속 주소(meta.siteUrl·joinUrl·shortUrl)는 applyInfo 본문이 같은 원칙으로 강사 값만 씀)
+ * @returns {string[]} 되돌린 곳(요약용)
+ */
+export function keepTeacherLinks(bp, info = {}, prev = null) {
+  const undone = [];
+  const prevSurvey = (Array.isArray(prev?.sections) ? prev.sections : []).filter((s) => s?.type === 'survey').map((s) => s.url);
+  const okSurvey = new Set([info.surveyUrl, ...prevSurvey].filter(Boolean));
+  for (const s of Array.isArray(bp.sections) ? bp.sections : []) {
+    if (s?.type === 'survey' && s.url && !okSurvey.has(s.url)) { s.url = info.surveyUrl || ''; undone.push('survey.url'); }
+  }
+  const logo = bp.design?.logo;
+  if (typeof logo === 'string' && /^(?:[a-z][\w+.-]*:|\/\/)/i.test(logo.trim()) && ![info.logo, prev?.design?.logo].includes(logo)) { delete bp.design.logo; undone.push('design.logo'); }
+  return undone;
+}
+
 export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const bp = clone(bp0);
   bp.version = 1;
@@ -283,6 +302,7 @@ export function applyInfo(bp0, info = {}, material = null, prev = null) {
   const srcFonts = bp0?.design?.sourceFonts || prev?.design?.sourceFonts;
   if (srcFonts) bp.design.sourceFonts = clone(srcFonts);
   applyDesignAnswers(bp, info);
+  keepTeacherLinks(bp, info, prev);
   // 컨셉 먼저: 강사가 고친 컨셉이 있으면 그것을, 아니면 AI 답·가져온 설계도의 컨셉을, 그것도 없으면 주제에서 규칙으로 세움
   // '강사가 고친 컨셉' 표시는 강사 값(prev)에서만. AI 답·가져온 설계도가 스스로 teacher라고 적으면 ai로
   if (bp.concept?.source === 'teacher' && prev?.concept?.source !== 'teacher') bp.concept = { ...bp.concept, source: 'ai' };
@@ -363,7 +383,7 @@ export function applyTeacherValues(bp, info = {}, { access = '', password = '' }
   const mode = access || info.access || (password ? 'password' : '');
   if (['link', 'public', 'password'].includes(mode)) bp.access = { mode };
   bp.meta = bp.meta || {};
-  for (const k of ['siteUrl', 'joinUrl', 'shortUrl']) if (info[k]) bp.meta[k] = info[k];
+  for (const k of TEACHER_ONLY.meta) if (info[k]) bp.meta[k] = info[k];
   if (info.live && typeof info.live === 'object') {
     bp.live = { ...(bp.live || {}) };
     for (const k of ['provider', 'url', 'anonKey', 'code', 'features']) if (info.live[k] !== undefined) bp.live[k] = info.live[k];

@@ -23,7 +23,7 @@
 ```bash
 cd site
 cp ../skills/lecpage/templates/deploy/azure/staticwebapp.config.json .
-npx @azure/static-web-apps-cli@latest deploy . --deployment-token "<토큰>" --env production
+npx @azure/static-web-apps-cli@2.1.0 deploy . --deployment-token "<토큰>" --env production
 ```
 5. 개요의 **URL**로 접속.
 

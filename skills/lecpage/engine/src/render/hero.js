@@ -510,7 +510,6 @@ const DECOR_ART = { 'orbit-3d': () => orbitArt(), 'stream-lines': (M) => streamA
 
 /** 프리셋 구성 이름 → 렌더(옛 이름 stage·split·center·editorial도 받음) */
 const ALIAS = { stage: 'cinema', split: 'worksheet', center: 'quiet', editorial: 'masthead' };
-export const HERO_COMPOSITIONS = Object.keys(C);
 export function heroComposition(ctx) {
   const v = getPreset(ctx.design.preset).variants.hero;
   return C[v] ? v : ALIAS[v] || 'cinema';

@@ -10,7 +10,7 @@ import { nodeRuntime } from '../node.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EX = (id) => JSON.parse(readFileSync(join(HERE, '..', '..', 'examples', `${id}.blueprint.json`), 'utf8'));
 
-test('강조색은 작은 글자로 써도 바탕과 4.5:1 이상(12프리셋 × 34색 조합)', () => {
+test('강조색은 작은 글자로 써도 바탕과 4.5:1 이상(모든 프리셋 × 밝게·어둡게, 색 씨앗 34가지)', () => {
   for (const p of E.PRESETS) for (const t of ['light', 'dark']) { const k = E.themeTokens(p, t); assert.ok(E.contrast(k['--primary'], k['--background']) >= 4.5, p.id + t); }
   for (const s of E.PALETTE_SEEDS) for (const t of ['light', 'dark']) { const k = E.themeTokens(E.presetWithOverrides({ preset: 'paper-workbook', palette: s.id }), t); assert.ok(E.contrast(k['--primary'], k['--background']) >= 4.5, s.id + t); }
 });

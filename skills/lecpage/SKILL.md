@@ -25,11 +25,11 @@ $L options work/blueprint.json [--mood calm,bold]          # 디자인 3안 비�
 $L publish work [--live --features qa,poll] [--dry-run]    # Cloudflare에 사이트(+참여 기능)·확인·안내물
 $L handouts <배포한 주소>                                     # QR-안내문.pdf·발표화면.png
 ```
-출력은 짧은 요약이다. 요약만 읽고, `material.json`·`blueprint.json`·만든 HTML을 열어 보지 않는다. 필요한 칸만 `brief`나 `jq`로. 명령·패치 형식: `references/cli.md`.
+출력은 짧은 요약이다. 요약만 읽고, `material.json`·`blueprint.json`·만든 HTML을 열어 보지 않는다. 필요한 칸만 `brief`나 `jq`로. 명령·패치 형식: `references/cli.md`(`<명령> --help`는 실행하지 않고 도움말만). 판은 `$L --version`, 새 판 받기는 `claude plugin update lecpage@lecpage`·`npx skills update`(그 밖에는 설치한 명령을 다시).
 
 ## 작업 흐름 (도구 호출을 적게)
-1. **만들기**: `make 교재 -o dist`. PPTX와 그 PDF를 함께 주면 쪽 그림이 원본 글꼴. HWP(한글 2002 이후)도 바로 읽는다. 구형 PPT·DOC와 암호·배포용 HWP는 PDF·PPTX·HWPX로 저장해 달라고 한다.
-2. **요약만 읽기**: `교재 반영` 줄이 ✓면 교재 대조는 끝이다. 교재와 사이트를 손으로 맞춰 보지 않는다(엔진의 반영 점검·`qa`·교재 지킴이가 한다). △면 `빠짐` 줄의 것만 고친다.
+1. **만들기**: `make 교재 -o dist`. 쪽이 많은 교재(100쪽 안팎부터)는 명령 시간 제한을 10분으로 늘리거나 백그라운드로 돌린다(진행 줄이 나옴, 멈춘 것 아님). PPTX와 그 PDF를 함께 주면 쪽 그림이 원본 글꼴. HWP(한글 2002 이후)도 바로 읽는다. 구형 PPT·DOC와 암호·배포용 HWP는 PDF·PPTX·HWPX로 저장해 달라고 한다.
+2. **요약만 읽기**: `교재 반영` 줄이 ✓면 교재 대조는 끝이다. 교재와 사이트를 손으로 맞춰 보지 않는다(엔진의 반영 점검·`qa`·교재 지킴이가 한다). △면 `빠짐` 줄의 것만 고친다. make가 1로 끝나도 사이트는 만들어졌다: `점검` 아래 `고침` 줄만 고치고 `알림만(엔진 몫)`은 손대지 않는다.
 3. **빈칸 묻기**: 요약의 `빈칸`·`물을 것`만 고르기형으로 묻는다(보통 3~4문항, 많아야 7). 교재에서 알아낸 것을 한 줄로 알린다. "알아서"면 기본값과 가정을 한 줄로. 답은 `work/info.json`(키: `references/intake.md`) → `make 교재 -i work/info.json -o dist --fresh`.
 4. **다듬기**: `patch`로 필요한 칸만(여러 곳은 패치 파일 한 번, 마지막에 `--qa`). 설계도를 다시 쓰지 않는다. 요약의 `구성` 줄은 강사에게 한 줄로 알린다. 칸 요령 `references/blueprint.md`, 문구 `references/copywriting.md`. 점검 스크린샷(`qa/*.png`)은 보고, 사람 점검은 `references/qa-checklist.md`.
 5. **컨셉·디자인**: `design work/blueprint.json`의 컨셉을 교재 말로 고쳐 `--set concept.idea=… concept.motif=… concept.why=…`(방법: `references/concept.md`). 디자인 요청은 `options` 한 번 → `work/options/contact-sheet.png`를 보여 주고, 고르면 `patch --set design.preset=<id> --set design.accent=#…`.
@@ -45,7 +45,7 @@ $L handouts <배포한 주소>                                     # QR-안내�
 | 그 자리에서 투표 | 강사 화면 투표 칸의 즉석 투표(질문 한 줄+보기 2~5개, 참가자·발표 화면 막대) |
 | QR 안내문·발표 화면 접속 안내 | `poster.html`·`screen.html` → `handouts`가 PDF·PNG로(`publish`가 자동) |
 | 강사만 보는 안내 | 강사 화면(`console.html`) 도움말 칸 + `dist-강사용/운영안내.md` |
-| 명단(별명)·설문·투표 CSV | 강사 화면 [기록 내려받기 (CSV)]. 참가자 화면 [출석] 한 번으로 명단이 빠짐없이 |
+| 명단(별명)·설문·투표 CSV | 강사 화면 [기록 내려받기(CSV)]. 참가자 화면 [출석] 한 번으로 명단이 빠짐없이 |
 | 접속 확인·개인정보 안내 | `check.html`·`privacy.html` |
 자세히와 "만들지 않는 것": `references/ready-made.md`. 표에 없을 때만 새로 만들고, 만든 것은 보고한다.
 

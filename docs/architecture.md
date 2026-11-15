@@ -15,6 +15,7 @@ lecpage/
 │  ├─ SKILL.md
 │  ├─ references/             ← skill이 필요할 때 읽는 문서(인터뷰, 모듈, 디자인, 운영, 배포…)
 │  ├─ engine/                 ← 단일 소스 엔진. Node와 브라우저(앱) 모두에서 import
+│  │  ├─ package.json         ← 판(version) 하나의 출처 + "type":"module"(위쪽 폴더가 commonjs여도 ESM으로). src/version.js는 시험이 같은 값인지 확인
 │  │  ├─ src/                 ← ESM. 의존성 없음(vendor/ 제외)
 │  │  │  ├─ schema/           ← 섹션 정의·상수(sections.js)
 │  │  │  ├─ validate.js       ← 검증·자동 보정(normalize)
@@ -27,15 +28,20 @@ lecpage/
 │  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
 │  │  │  ├─ lecpage.css · aux.css · boot.js · lecpage.js · console.js · screen.js · check.js · unlock.js
 │  │  │  ├─ fx/               ← 효과 레지스트리(core.js, fx.css, effects/*.js)
-│  │  │  └─ live/             ← 실시간 어댑터(core.js, local.js, http.js, supabase.js, sheets.js)
-│  │  ├─ vendor/              ← 작은 MIT 라이브러리(예: fflate)
+│  │  │  ├─ live/             ← 실시간 어댑터(core.js, local.js, http.js, supabase.js, sheets.js)
+│  │  │  ├─ review/           ← 수정 요청 도구(앱 미리보기·review 서버에서만, vendor/ modern-screenshot·perfect-freehand)
+│  │  │  └─ vendor/qrcode.js  ← 만든 사이트의 assets/qr.js
+│  │  ├─ vendor/              ← 작은 MIT 라이브러리(fflate) + VENDOR.json(담아 둔 라이브러리·판을 고정한 배포 명령 표, CI가 OSV로 확인)
+│  │  ├─ scripts/site-score.mjs ← 만든 사이트 채점(점검용)
 │  │  └─ test/                ← node:test
-│  ├─ scripts/                ← CLI(lecpage.mjs), 파이썬 보조(ingest.py), render_slides.sh
+│  ├─ scripts/                ← CLI(lecpage.mjs·publish.mjs·review-server.mjs), 쪽 그림(render-slides.mjs, 셸 없이), 검사기(design-lint·overlap-lint·copy-lint·motion-check·body-gate·body-diversity), 파이썬 보조(ingest.py)
+│  ├─ evals/                  ← skill 평가 문항(evals.json·triggers.json)과 확인 스크립트
 │  ├─ backends/               ← supabase/, apps-script/, cloudflare/, node-server/
 │  ├─ templates/deploy/       ← 호스팅별 설정 파일
 │  └─ examples/               ← 예시 설계도(강의형 sel-story, 실습형 data-lab)
 ├─ app/                       ← lecpage 웹앱(Vite, 정적 배포). 엔진을 상대 경로로 import
 ├─ scripts/ai-catalog/        ← AI 모델 값표 매일 갱신(refresh.mjs, 의존성 없음) → app/public/ai-catalog.json
+├─ scripts/vendor-audit.mjs   ← skill에 담아 둔 라이브러리·고정한 배포 명령의 알려진 취약점(OSV) 확인(CI)
 ├─ docs/                      ← 기획서, 아키텍처, 운영, 조사 자료
 └─ .github/workflows/         ← CI, Pages 배포, AI 정보 매일 갱신(ai-catalog.yml)
 ```

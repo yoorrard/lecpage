@@ -23,7 +23,6 @@ import { detect } from './detect.js';
 import { toolForUrl } from './tools-db.js';
 
 export const MATERIAL_VERSION = 1;
-export const SUPPORTED = ['pptx', 'pdf', 'hwp', 'hwpx', 'docx', 'txt', 'md'];
 export const ACCEPT = '.pptx,.ppsx,.potx,.pptm,.pdf,.hwpx,.docx,.dotx,.docm,.txt,.md,.markdown,.hwp,.ppt,.doc';
 
 export function emptyMaterial() {
