@@ -116,5 +116,7 @@ export function blocksToPages(blocks0, { fileId, unit = 'section', maxPages = 10
     for (const l of p.links) { if (!seen.has(l.url)) seen.set(l.url, { ...l }); else if (!seen.get(l.url).label && l.label) seen.get(l.url).label = l.label; }
     p.links = [...seen.values()];
   }
-  return pages.filter((p) => p.title || p.paragraphs.length || p.tables.length || p.images.length).map((p, i) => ({ ...p, page: i + 1 }));
+  const kept = pages.filter((p) => p.title || p.paragraphs.length || p.tables.length || p.images.length).map((p, i) => ({ ...p, page: i + 1 }));
+  if (pages.overflow) kept.overflow = pages.overflow; // 한도를 넘은 절 수(text·docx가 too-many-sections로 알림). filter·map이 떨어뜨리지 않게
+  return kept;
 }

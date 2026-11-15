@@ -303,6 +303,29 @@ test('copy-lint 단독 실행: 설계도 옆 material.json이 있으면 교재 �
   assert.match(lint([join(work, 'blueprint.json')]).stdout, /고칠 곳이 없어요/);
 });
 
+test('make: 교재 알림(링크만·읽지 못한 파일)을 요약에 한 줄씩, 함께 준 사진은 사진 칸 패치로, 사진만이면 CLI 길로 안내', () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63f8cf00000301010018dd8db40000000049454e44ae426082', 'hex');
+  writeFileSync(join(dir, '단체사진.png'), png);
+  const only = run(['make', '단체사진.png', '-o', 'pdist', '--no-qa']);
+  assert.equal(only.code, 1); assert.match(only.out, /교재.*와 함께 주면 사진은 사이트 사진 칸으로/); assert.doesNotMatch(only.out, /자료실에 올려/);
+  const mixed = run(['make', join(FX, 'notes.md'), '단체사진.png', '-o', 'pdist2/dist', '--no-qa']);
+  assert.equal(mixed.code, 0, mixed.out);
+  assert.match(mixed.out, /사진 1장은 교재로 읽지 않았어요 → 사진 칸으로 넣으려면 patch .*photos\.patch\.json/);
+  assert.ok(existsSync(join(dir, 'pdist2/work/assets/media/단체사진.png')));
+  const pa = run(['patch', 'pdist2/work/blueprint.json', 'pdist2/work/photos.patch.json']);
+  assert.equal(pa.code, 0, pa.out); assert.match(pa.out, /섹션 추가/);
+  assert.match(readFileSync(join(dir, 'pdist2/dist/index.html'), 'utf8'), /assets\/media\/단체사진\.png/);
+  const link = run(['make', 'https://padlet.com/example/board', '-o', 'ldist/dist', '--no-qa']);
+  assert.equal(link.code, 0, link.out); assert.match(link.out, /\n  알림 .*링크만으로는 내용을 읽을 수 없어요/);
+});
+
+test('빈칸 강사: 학생 수업은 선생님, 설명회는 발표자(있으면) — 엔진 wordsFor', () => {
+  const mk = (kind, title) => { const p = join(dir, `who-${kind}.json`); writeFileSync(p, JSON.stringify({ meta: { title, admin: { kind } }, sections: [{ type: 'text', md: '안내' }] })); return run(['brief', p]).out; };
+  assert.match(mk('student', '3학년 과학 수업'), /빈칸 .*선생님\(instructors\)/);
+  assert.match(mk('conference', '학부모 설명회'), /빈칸 .*발표자\(instructors, 있으면\)/);
+  assert.match(mk('school', '교원 연수'), /빈칸 .*강사\(instructors\)/);
+});
+
 test('L11: patch --set이 검증에서 버려질 값(날짜·색 모양이 틀림)은 바뀜으로 저장하지 않고 고칠 모양을 알려 줌', () => {
   const before = readFileSync(join(dir, 'work/blueprint.json'), 'utf8');
   const d = run(['patch', 'work/blueprint.json', '--set', 'meta.date=내일', '--no-build']);

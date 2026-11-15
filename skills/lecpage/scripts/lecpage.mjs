@@ -171,6 +171,8 @@ const ARCH_KO = { story: '강의형', lab: '실습형', live: '행사형', cours
 const FLOW_PATH = (f) => E.FLOW_INFO[f]?.path || '';
 const ACCESS_KO = { link: '주소를 받은 사람만', public: '누구나(검색 허용)', password: '암호' };
 
+const IMAGE_ONLY = '사진·그림 파일은 교재로 읽지 않아요. 교재(PPTX·PDF·HWP·HWPX·DOCX)와 함께 주면 사진은 사이트 사진 칸으로 넣을 수 있어요(예: make 교재.pptx 단체사진.jpg).';
+
 async function ingestCli() { return imp('src/ingest/cli.js'); }
 async function ingestApi() { return imp('src/ingest/index.js'); }
 
@@ -425,6 +427,12 @@ function fontLine(src, design = {}) {
   return '글꼴 교재 ' + [...groups.values()].map((g) => `${g.name}(${g.roles.join('·')})${g.to ? ' → ' + g.to : ''}`).join(' · ');
 }
 
+/** 빈칸 '강사'를 대상에 맞는 말로(엔진 wordsFor): 학생 수업은 선생님, 설명회·행사는 발표자(없어도 되는 칸이라 '있으면') */
+function whoGap(bpLike, key = '') {
+  const w = E.wordsFor(bpLike);
+  return w.kind === 'conference' ? `발표자(${key ? key + ', ' : ''}있으면)` : `${w.who}${key ? `(${key})` : ''}`;
+}
+
 function briefMaterial(m) {
   const d = m.detected || {};
   const ev = d.event || {};
@@ -437,7 +445,7 @@ function briefMaterial(m) {
   if (!ev.date) missing.push('날짜');
   if (!ev.start) missing.push('시간');
   if (!ev.venue && ev.mode !== 'online') missing.push('장소');
-  if (!d.instructor?.name) missing.push('강사');
+  if (!d.instructor?.name) missing.push(whoGap({ meta: { title: d.title, subtitle: d.subtitle, admin: { kind: d.kind } } }));
   const lines = [
     `교재 ${files.join(' + ')} · 그림 ${st.images ?? 0} · 표 ${st.tables ?? 0} · 노트 ${st.notes ?? 0}${st.hidden ? ` · 숨김 ${st.hidden}` : ''}${rendered ? ` · 쪽 그림 ${rendered}` : ''}`,
     `연수명 ${cut(d.title || '(못 찾음)', 50)}${d.subtitle ? ` / ${cut(d.subtitle, 40)}` : ''}`,
@@ -466,7 +474,7 @@ function blueprintGaps(bp, raw = {}) {
   if (!m.date) g.push('날짜(meta.date)');
   if (!m.start) g.push('시간(meta.start·end)');
   if (!m.venue && m.mode !== 'online') g.push('장소(meta.venue)');
-  if (!bp.instructors.length) g.push('강사(instructors)');
+  if (!bp.instructors.length) g.push(whoGap(bp, 'instructors'));
   const st = bp.sections.find((s) => s.type === 'stations');
   if (st && st.items.some((i) => !i.source?.pages?.length)) g.push('실습 쪽 번호(source.pages)');
   const live = bp.sections.filter((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type));
@@ -704,7 +712,7 @@ const commands = {
       m = readJson(material);
       saveState(work, { ingestKey: key });
     }
-    if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + (m.errors || []).map((e) => e.message_ko).join(' '), { errors: m.errors });
+    if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => (e.code === 'image-file' ? IMAGE_ONLY : e.message_ko)))].join(' '), { errors: m.errors });
 
     // 2) 초안과 설계도(이미 고친 설계도가 있으면 지키고, --fresh면 새로)
     const info = args.i ? readJson(args.i) : {};
@@ -738,6 +746,23 @@ const commands = {
     const base = dirname(out);
     const sh = (p) => { const r = relative(base, p); return r && !r.startsWith('..') && !isAbsolute(r) ? r : p; };
     const bpShort = sh(bpPath);
+    // 함께 준 사진·그림(교재로 읽지 않음): work/assets/media/로 복사하고 사진 칸으로 넣는 패치를 만들어 둠(structure --add-leftovers와 같은 방식)
+    const photoNames = new Set((m.errors || []).filter((e) => e.code === 'image-file').map((e) => e.file));
+    const photos = inputs.filter((p) => !/^https?:/i.test(p) && photoNames.has(basename(p)) && existsSync(p));
+    let photoLine = '';
+    if (photos.length) {
+      ensureDir(join(assets, 'media'));
+      const items = photos.map((p) => { const name = basename(p).replace(/[^\w가-힣.\-]+/g, '_'); copyFileSync(p, join(assets, 'media', name)); return { src: `assets/media/${name}`, caption: '' }; });
+      const secs = E.withSectionIds(Array.isArray(raw.sections) ? raw.sections : []).filter((x) => x && !x.hidden);
+      const ci = secs.findIndex((x) => ['materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'].includes(x.type)); // 본문 끝(자료·강사·설문·마무리 앞)
+      const after = (ci > 0 ? secs[ci - 1] : secs.at(-1))?.id;
+      const pp = join(work, 'photos.patch.json');
+      writeJson(pp, { note: '교재와 함께 준 사진을 사진 칸으로', add: [{ ...(after ? { after } : {}), section: { type: 'gallery', title: '사진', items } }] });
+      photoLine = `사진 ${photos.length}장은 교재로 읽지 않았어요 → 사진 칸으로 넣으려면 patch ${sh(bpPath)} ${sh(pp)} (사진은 ${sh(join(assets, 'media'))}/에 복사해 둠)`;
+    }
+    // 교재 알림(쪽·절이 많아 앞부분만 읽음 등)과 읽지 못한 파일: 한 줄씩(많으면 3줄 + 외 N)
+    const notes = [...(m.errors || []).filter((e) => e.code !== 'image-file').map((e) => `${e.file ? e.file + ': ' : ''}${e.message_ko}`), ...(m.warnings || []).filter((w) => w.code !== 'python-fallback').map((w) => `${w.file && !String(w.message_ko).includes(w.file) ? w.file + ': ' : ''}${w.message_ko}`)];
+    const noteLines = [...notes.slice(0, 3).map((x) => `  알림 ${cut(x, 150)}`), notes.length > 3 ? `  알림 외 ${notes.length - 3}건(brief ${sh(work)})` : ''];
     // 연수 정보(info.json)가 없으면 빈칸이 없어도 강사에게 세 가지만 물음: 참여 기능을 모르면 참여 기능 없는 사이트가 됨
     const infoGuess = join(work, 'info.json');
     // 교재로 정할 수 없어 한 번 확인할 것(엔진 intakeAsks: 차시 날짜·출석 기준·직무연수의 출석, references/intake.md 2절)
@@ -747,7 +772,7 @@ const commands = {
     const lines = [
       `lecpage make ${q && !q.ok ? '△' : '✓'} ${sec}초 · 폴더 ${rel(base)}: ${sh(out)}(배포할 사이트) · ${sh(b.tdir)}(강사용, 배포하지 않음) · ${sh(work)}(설계도·교재 해석)${q && q.shots.length ? ` · ${sh(q.outDir)}(스크린샷)` : ''}`,
       ...steps,
-      bm.lines[0], bm.lines[5],
+      bm.lines[0], ...noteLines, photoLine, bm.lines[5],
       kept ? `${bpShort}: 기존 설계도를 지켰어요(새 초안은 draft.json, 새 초안으로 바꾸려면 --fresh)` : '',
       ...bb.lines.filter((l) => !l.startsWith('싣지 못한 것')),
       ask,
