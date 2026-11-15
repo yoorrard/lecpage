@@ -10,6 +10,7 @@ import { cleanConcept, conceptDesign } from './decide/concept.js';
 import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
 import { detectTopics, moodsForTopics } from './decide/topic.js';
 import { cleanLayout } from './design/layouts.js';
+import { stationNames } from './station-name.js';
 
 const LIMITS = { short: 80, title: 160, text: 1200, long: 6000, items: 200 };
 
@@ -77,13 +78,14 @@ const SECTION_FIX = {
   schedule: (s) => ({ items: arr(s.items).map((i) => ({ start: time(i.start), end: time(i.end), title: str(i.title, 100), desc: str(i.desc, 200), part: str(i.part, 20), date: date(i.date) })).filter((i) => i.title) }),
   readiness: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((i) => ({ label: str(i.label ?? i.title, 120), detail: str(i.detail, 300), url: safeUrl(i.url) })).filter((i) => i.label), checks: arr(s.checks).slice(0, 20).map((c) => ({ name: str(c.name, 40), url: safeUrl(c.url) })).filter((c) => c.url) }),
   deck: (s) => ({ lead: str(s.lead, 300), slides: arr(s.slides).slice(0, 400).map((sl, n) => ({ src: safeUrl(sl.src), page: num(sl.page, n + 1, 1, 9999), title: str(sl.title, 120), text: str(sl.text, 1500), tools: strArr(sl.tools, 40).slice(0, 8) })), download: s.download ? { href: safeUrl(s.download.href), size: str(s.download.size, 20), label: str(s.download.label, 60) } : undefined, notice: str(s.notice, 400) }),
-  stations: (s) => ({ layout: pick(s.layout, ['sidebar', 'tabs', 'scroll'], 'sidebar'), lead: str(s.lead, 300), items: arr(s.items).slice(0, 60).map((i, n) => ({
-    id: slug(i.id || i.name || i.title, n + 1), name: str(i.name || i.title, 30), title: str(i.title || i.name, 100), tag: str(i.tag, 16).toUpperCase(), desc: str(i.desc ?? i.sub, 400),
+  // 이름이 빈 실습(AI 답 등)은 초안과 같은 규칙(station-name.js)으로 짧은 이름을 채움
+  stations: (s) => { const auto = stationNames(arr(s.items).slice(0, 60).map((i) => str(i?.title, 100))); return { layout: pick(s.layout, ['sidebar', 'tabs', 'scroll'], 'sidebar'), lead: str(s.lead, 300), items: arr(s.items).slice(0, 60).map((i, n) => ({
+    id: slug(i.id || i.name || i.title, n + 1), name: str(i.name, 30) || auto[n] || str(i.title, 30), title: str(i.title || i.name, 100), tag: str(i.tag, 16).toUpperCase(), desc: str(i.desc ?? i.sub, 400),
     steps: strArr(i.steps, 500).slice(0, 20), prompts: arr(i.prompts).slice(0, 12).map((p) => ({ title: str(p.title, 80), text: str(p.text, 4000) })).filter((p) => p.text),
     images: arr(i.images).slice(0, 20).map((im) => ({ src: safeUrl(im.src), caption: str(im.caption, 120) })).filter((im) => im.src),
     links: links(i.links), outcome: str(i.outcome ?? i.out, 300), note: str(i.note, 400), minutes: num(i.minutes, 0, 0, 600), source: source(i.source),
     // 강사 메모(발표자 노트의 진행 메모): 참가자 화면에는 그리지 않고 강사용 운영안내에만
-    ...(i.teacherNote ? { teacherNote: str(i.teacherNote, 600) } : {}) })).filter((i) => i.title) }),
+    ...(i.teacherNote ? { teacherNote: str(i.teacherNote, 600) } : {}) })).filter((i) => i.title) }; },
   tools: (s) => ({ lead: str(s.lead, 300), notice: str(s.notice, 300), items: arr(s.items).map((i) => ({ name: str(i.name, 40), url: safeUrl(i.url), desc: str(i.desc, 200), pages: arr(i.pages).map((p) => num(p, 0, 1, 9999)).filter(Boolean).slice(0, 12), icon: str(i.icon, 20) })).filter((i) => i.name) }),
   prompts: (s) => ({ lead: str(s.lead, 300), items: arr(s.items).map((i) => ({ title: str(i.title, 80), text: str(i.text, 4000), tags: strArr(i.tags, 20).slice(0, 6) })).filter((i) => i.text) }),
   qa: (s) => ({ lead: str(s.lead, 300), anonymous: s.anonymous !== false }),
@@ -131,7 +133,9 @@ export function validate(input) {
     date: date(m.date), start: time(m.start), end: time(m.end), venue: str(m.venue, 120),
     mode: pick(m.mode, ['offline', 'online', 'hybrid'], 'offline'), joinUrl: safeUrl(m.joinUrl), shortUrl: safeUrl(m.shortUrl), siteUrl: safeUrl(m.siteUrl),
     lang: 'ko', description: str(m.description, 300), contact: str(m.contact, 120),
-    admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 90, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
+    // 사이트 보관 끝 예정일(배포할 곳이 정함, 예: 바로 배포 60일). 강사 화면 머리에 '사이트는 X월 X일까지'
+    ...(date(m.keepUntil) ? { keepUntil: date(m.keepUntil) } : {}),
+    admin: { kind: pick(m.admin?.kind, ['school', 'official', 'conference', 'student'], 'school'), completionRate: num(m.admin?.completionRate, 0, 0, 100), hours: num(m.admin?.hours, 0, 0, 200) },
     sessions: arr(m.sessions).map((s, n) => ({ no: num(s.no, n + 1, 1, 999), date: date(s.date), start: time(s.start), end: time(s.end), title: str(s.title, 120) })),
   };
   if (!meta.title) { meta.title = '연수'; warnings.push({ path: 'meta.title', message_ko: '연수명이 없어 "연수"로 채웠어요.' }); }
@@ -198,6 +202,10 @@ export function validate(input) {
   const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: arr(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
   if (!privacy.collect.length) privacy.collect = ['nickname'];
   if (audience.minor) { privacy.collect = ['nickname']; warnings.push({ path: 'privacy.collect', message_ko: '만 14세 미만이 참여해 별명만 받도록 바꿨어요.' }); }
+  // 이수 기준에 출석 %가 있는데 사이트에서 출석을 받지 않으면 사이트에는 %를 쓰지 않음(sections.js completionLine) — 알림으로 남김
+  if (meta.admin.kind === 'official' && meta.admin.completionRate && !(live.provider !== 'none' && (live.features.includes('attendance') || arr(b.sections).some((s) => s?.type === 'attendance')))) {
+    warnings.push({ path: 'live.features', code: 'attendance-off', message_ko: `이수 기준에 출석 ${meta.admin.completionRate}%가 있지만 출석이 꺼져 있어 사이트에는 출석 기준을 쓰지 않았어요. 출석·이수 확인을 켜면 입실·퇴실과 이수자 명단을 받아요.` });
+  }
 
   const dp = b.deploy || {};
   const deploy = { target: pick(dp.target, DEPLOY_TARGETS, 'zip'), base: str(dp.base, 120) || '/' };

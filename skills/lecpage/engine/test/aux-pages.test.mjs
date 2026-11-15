@@ -175,11 +175,13 @@ test('잠그기·즉석 투표·결과 공개·닫힌 투표에 늦은 답·CSV 
     assert.ok(!left.some((k) => /^lp-AUXTEST:(ans|att|voted)/.test(k)), left.join());
     assert.ok(left.includes('lp-AUXTEST:memo:st1') && left.includes('lp-OTHER:ans:x'), left.join());
     assert.deepEqual(alerts, []);
-    // 명단도 지워졌으니 다시 물으면 별명을 새로 받고, 새 질문은 강사 화면에 올라옴(한 기기 보내기 간격 3초를 넘겨서)
+    // 명단도 지워졌으니 다시 물으면 새 참가자로 들어가고(질문은 별명 창 없이, 서버가 '참가자123'을 붙임), 새 질문은 강사 화면에 올라옴(한 기기 보내기 간격 3초를 넘겨서)
     await p.waitForTimeout(3200);
     await ask(p, '지운 뒤 다시 묻기', '바다2');
     await c.waitForSelector('.lp-con-list .lp-con-t:has-text("지운 뒤 다시 묻기")', { timeout: 10000 });
-    assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('lp-AUXTEST:me') || 'null')?.nickname), '바다2');
+    assert.equal(await p.locator('[data-join-dialog][open]').count(), 0, '질문 전에 별명 창이 뜨지 않음');
+    const me2 = await p.evaluate(() => JSON.parse(localStorage.getItem('lp-AUXTEST:me') || 'null'));
+    assert.ok(me2?.token && me2.auto && /^참가자\d+$/.test(me2.nickname), JSON.stringify(me2));
     assert.deepEqual([...c._errs, ...s._errs, ...p._errs], []);
   } finally { await adm.close(); await par.close(); }
 });

@@ -56,6 +56,19 @@ test('make: 쪽 그림은 설계도가 가리키는 assets/slides에 들어가�
   assert.match(make.out, /깨진 자료 0/);
 });
 
+test('make·patch: 사이트에 넣지 못한 자료는 조용히 빠지지 않고 요약에 한 줄(교재마다 나눈 쪽 그림 폴더는 그대로 들어감)', () => {
+  const w = join(dir, 'work/assets');
+  mkdirSync(join(w, 'slides/deck9'), { recursive: true }); mkdirSync(join(w, 'media/a/b'), { recursive: true });
+  writeFileSync(join(w, 'slides/deck9/slide-001.webp'), 'x'); writeFileSync(join(w, 'media/a/b/deep.png'), 'x'); writeFileSync(join(w, 'media/run.exe'), 'x'); writeFileSync(join(w, 'media/.DS_Store'), 'x');
+  const r = run('patch', 'work/blueprint.json', '--set', 'meta.subtitle=자료 폴더 시험');
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /자료 2개는 사이트에 넣지 못했어요/);
+  assert.ok(r.out.includes('media/run.exe') && r.out.includes('media/a/b/deep.png') && !r.out.includes('.DS_Store'), r.out);
+  assert.ok(existsSync(join(dir, 'dist/assets/slides/deck9/slide-001.webp')), '한 단계 하위 폴더 쪽 그림은 사이트에');
+  for (const f of ['slides/deck9', 'media/a', 'media/run.exe', 'media/.DS_Store']) rmSync(join(w, f), { recursive: true, force: true });
+  run('patch', 'work/blueprint.json', '--undo');
+});
+
 test('make 다시: 교재 해석은 지난 결과를 쓰고, 고친 설계도는 지킴', () => {
   const p = join(dir, 'work/blueprint.json');
   const bp = JSON.parse(readFileSync(p, 'utf8'));

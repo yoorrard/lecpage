@@ -2,6 +2,7 @@
 import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { boardFiles } from './sections.js';
+import { eventDays } from '../hero-meta.js';
 
 export const VERSION = '1.0.0';
 
@@ -81,7 +82,7 @@ function cspMeta(ctx, page) { return `<meta http-equiv="Content-Security-Policy"
 
 export function headTags(ctx, title, extraCss = [], page = 'app') {
   const m = ctx.bp.meta;
-  const desc = m.description || m.subtitle || `${m.title} 연수 안내`;
+  const desc = m.description || m.subtitle || `${m.title} ${ctx.words?.ev || '연수'} 안내`;
   const bg = ctx.themeColor;
   // 보조 화면(강사·발표·안내문·접속 확인)은 공유 미리보기(og)를 싣지 않음: 메신저에 붙여도 연수 사이트 첫 화면이 아니라는 것만 보임
   const og = page === 'index' || page === 'app' ? `<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
@@ -107,31 +108,45 @@ ${extraCss.map((c) => `<link rel="stylesheet" href="${c}">`).join('\n')}
 <script src="assets/boot.js"></script>`;
 }
 
+export const byOperator = (bp) => (bp.privacy.processors || []).some((p) => /^lecpage 운영자/.test(p.name));
+/**
+ * 참여 기록을 언제 지우는지: 개인정보 안내(한눈에·3)·참여하기 동의·운영 안내·강사 화면(DATA.privacy.keep)이 이 한 문장을 씀.
+ * 서버마다 '마지막 기록 뒤 N일'이 지나면 지움(node·Cloudflare·바로 배포·Supabase pg_cron·시트 트리거). 바로 배포는 사이트를 지울 때 늦어도 함께
+ */
+export function keepRule(bp) {
+  const d = bp.privacy.retentionDays;
+  return { short: `마지막 기록 뒤 ${d}일`, site: byOperator(bp) ? '사이트 보관 기간이 먼저 끝나면 사이트와 함께' : '' };
+}
+
 /** 연수 기간(현지 시각): 첫날 시작 ~ 마지막 날 끝. 끝난 뒤에는 참가자 화면이 '연수 후' 보기로 바뀜 */
 export function phaseWindow(bp) {
-  const m = bp.meta, ses = m.sessions || [];
-  const dates = [m.date, ...ses.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
+  const m = bp.meta, days = eventDays(m);
+  const dates = [...days.map((x) => x.date), ...bp.sections.filter((s) => s.type === 'sessions').flatMap((s) => s.items.map((x) => x.date))].filter(Boolean).sort();
   if (!dates.length) return null;
-  const last = dates[dates.length - 1], lastSes = ses.find((x) => x.date === last);
-  return { start: `${dates[0]}T${m.start || '00:00'}`, end: `${last}T${lastSes?.end || m.end || '23:59'}` };
+  const last = dates[dates.length - 1], lastDay = days.find((x) => x.date === last), firstDay = days.find((x) => x.date === dates[0]);
+  // days: 연수 날마다의 시작·끝(여러 날이면 참가자 화면이 그날 시간에만 [출석]을 띄움)
+  return { start: `${dates[0]}T${firstDay?.start || m.start || '00:00'}`, end: `${last}T${lastDay?.end || m.end || '23:59'}`, ...(days.length >= 2 ? { days: days.map((d) => ({ start: `${d.date}T${d.start || m.start || '00:00'}`, end: `${d.date}T${d.end || m.end || '23:59'}` })) } : {}) };
 }
 
 export function siteData(ctx) {
   const bp = ctx.bp;
   const st = bp.sections.find((s) => s.type === 'stations');
   return {
-    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '',
+    v: VERSION, title: bp.meta.title, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, siteUrl: bp.meta.siteUrl || '', keepUntil: bp.meta.keepUntil || '',
     // 짧은 주소(강사가 직접 넣은 것)는 손으로 칠 글자에만 씀. QR·복사는 언제나 원래 주소라 짧은 주소 서비스가 멈춰도 열림
     shortUrl: bp.meta.shortUrl || '',
     key: 'lp-' + bp.live.code,
     live: ctx.live ? { provider: bp.live.provider, url: bp.live.url, anonKey: bp.live.anonKey, code: bp.live.code, features: bp.live.features, anonymous: bp.live.anonymous, pollMs: bp.live.pollMs } : null,
-    privacy: { collect: bp.privacy.collect, consent: bp.privacy.consent, retentionDays: bp.privacy.retentionDays },
+    privacy: { collect: bp.privacy.collect, consent: bp.privacy.consent, retentionDays: bp.privacy.retentionDays, keep: keepRule(bp).short },
     stations: st ? st.items.map((x) => ({ id: x.id, name: x.name })) : [],
     motion: ctx.design.motion,
     base: bp.meta.siteUrl || '',
-    admin: { completionRate: bp.meta.admin?.completionRate ?? 90 },
+    // 이수 기준(출석 %): 교재·강사가 정한 값. 정하지 않았으면 0 → 강사 화면의 이수자 명단은 90%로 세고 그 사실을 적음
+    admin: { completionRate: bp.meta.admin?.completionRate || 90, rateSet: !!bp.meta.admin?.completionRate },
     survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
     phase: phaseWindow(bp),
+    // 참가자 화면이 스스로 쓰는 낱말(끝난 연수·수업, 자료 칸, 연수·수업 코드)
+    words: ctx.words ? { ev: ctx.words.ev, ended: ctx.words.ended, materials: ctx.words.materials, code: ctx.words.code } : undefined,
   };
 }
 
