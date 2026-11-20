@@ -119,7 +119,7 @@ export async function acceptChatAnswer(pid, input) {
     return { ok: false, problems: [problem('no-html', '답에서 사이트 HTML을 찾지 못했어요. AI 답의 코드 블록 전체를 복사해 붙여 넣어 주세요.')] };
   }
   if (a.cut || htmlCut(a.html, { doc: a.doc })) {
-    await chatDb.put({ pid, mode: 'make', partial: a.html, at: Date.now() }).catch(() => { });
+    await chatDb.put({ pid, mode: 'make', partial: joined, at: Date.now() }).catch(() => { }); // 붙여 넣은 글 그대로(코드 블록 표시 포함) → 다음 조각을 바르게 이어 붙임
     return { ok: false, problems: [problem('cut', '답이 중간에 끊겼어요. 아래 문구를 AI 창에 보내 이어서 받은 뒤 다시 붙여 넣어 주세요.', 'warn')], continuePrompt: P.buildContinuePrompt(a.html) };
   }
   const { html, css } = splitStyles(a.html);

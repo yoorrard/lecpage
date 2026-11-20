@@ -159,12 +159,16 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         onText: (t, all) => { piece = all; persist(); },
         onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
       });
-      const got = res.text;
+      const got = res.text; const before = acc.length;
       acc = cont ? stitch(acc, got) : got; piece = ''; token = null; cont = false;
       step.usage = res.usage || step.usage;
-      if (res.stop === 'max_tokens' || isCut(acc)) {
-        if (continues < 3) { continues++; persist(); await save(rec, { quiet: true }); continue; }
+      // 잘림: 한도에 닿았으면(max_tokens) 세 번까지 '이어서'. 스스로 끝냈는데 덜 돼 보이면 한 번만(늘어났을 때)
+      const grew = acc.length > before;
+      if ((res.stop === 'max_tokens' && continues < 3) || (res.stop !== 'max_tokens' && isCut(acc) && grew && !step.cutTry)) {
+        if (res.stop !== 'max_tokens') step.cutTry = true;
+        continues++; persist(); await save(rec, { quiet: true }); continue;
       }
+      step.cutTry = false;
       Object.assign(step, { acc: '', piece: '', cont: false, token: null, continues: 0 });
       return acc;
     } catch (e) {

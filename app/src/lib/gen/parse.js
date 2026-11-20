@@ -204,7 +204,8 @@ export function extractJson(text, { prefer = '' } = {}) {
   for (const b of blocks) { const k = braceSlice(b.body, b.body.search(/[{[]/)); cands.push({ ...k, cut: k.cut || !b.closed && k.cut }); }
   for (let i = s.indexOf('{'); i >= 0 && cands.length < 12; i = s.indexOf('{', i + 1)) {
     const k = braceSlice(s, i); cands.push(k);
-    if (!k.cut) i += k.text.length - 1;
+    if (k.cut) break; // 끝까지 안 닫힘: 뒤의 {는 모두 이 안쪽(잘린 바깥 객체의 조각을 답으로 잘못 고르지 않게)
+    i += k.text.length - 1;
   }
   let cutSeen = false; const parsed = [];
   for (const c of cands) {
@@ -260,40 +261,45 @@ export function balance(html) {
   return s + open.reverse().map((t) => `</${t.name}>`).join('');
 }
 
-/** 이어 받은 글에서 코드 블록 표시·설명을 떼어 코드만 */
-function bodyOfContinuation(next) {
+/**
+ * 이어 받은 글의 감싸기 벗기기. 앞 글이 코드 블록 안에서 끊겼는데 뒤 글이 블록을 새로 열었으면(설명 한 줄 + ```html) 그 여는 줄을 뺌.
+ * 앞 글에 코드 블록 표시가 아예 없고(코드만 복사) 뒤 글이 블록으로 감싸였으면 첫 블록의 여닫는 줄을 뺌. 그 밖(블록 사이에서 끊김)은 그대로
+ */
+function bodyOfContinuation(prev, next) {
   const t = clean(next);
-  const blocks = extractBlocks(t);
-  if (blocks.length) return blocks.map((b) => b.body).join('\n');
-  // 닫는 ``` 만 남은 경우(앞 조각의 코드 블록이 이어짐)
-  return t.replace(/\n?[ \t]*`{3,}[ \t]*$/, '').replace(/^[ \t]*`{3,}[\w-]*[ \t]*\n/, '');
+  const fences = (String(prev || '').match(/^[ \t]*(`{3,}|~{3,})/gm) || []).length;
+  const op = /^\s*(?:[^\n`<{]{0,200}\n)?[ \t]*(`{3,}|~{3,})[ \t]*[\w.+-]*[^\n]*\n/.exec(t);
+  if (!op) return t;
+  const rest = t.slice(op[0].length);
+  if (fences % 2 === 1) return rest;
+  if (fences === 0) {
+    const close = new RegExp(`(^|\\n)[ \\t]*${op[1][0] === '`' ? '`' : '~'}{${op[1].length},}[ \\t]*(?=\\n|$)`).exec(rest);
+    return close ? rest.slice(0, close.index) + rest.slice(close.index + close[0].length) : rest;
+  }
+  return t;
 }
 
 /**
- * 이어 붙이기: 앞 글의 끝과 이어 받은 글의 앞이 겹치면 한 번만. 앞 글이 줄 중간에서 끊겼고 뒤 글이 그 줄을 처음부터 다시 쓰면 그 줄로 바꿈
+ * 이어 붙이기(조심스럽게: 사이트에는 같은 줄이 자주 되풀이되므로 확실할 때만 겹침을 지움)
+ * 1) 뒤 글의 앞 40자 이상이 앞 글의 끝과 똑같으면 한 번만  2) 앞 글이 줄 중간에서 끊겼고 뒤 글이 그 줄을 처음부터 다시 쓰면 그 줄로 바꿈
+ * 3) 뒤 글의 첫 줄이 앞 글의 마지막 온전한 줄과 같으면(그 줄부터 다시 씀) 그 줄을 뺌  4) 그 밖은 그대로 이음
  */
 export function stitch(prev, next) {
   const a = String(prev || '');
-  let b = bodyOfContinuation(next);
+  const b = bodyOfContinuation(a, next);
   if (!a) return b;
-  if (!b) return a;
-  const bs = b.replace(/^\s+/, '');
-  // 1) 글자 단위로 정확히 겹침(20자 이상)
-  const max = Math.min(a.length, bs.length, 6000);
-  for (let k = max; k >= 20; k--) if (a.endsWith(bs.slice(0, k))) return a + bs.slice(k);
-  // 2) 앞 글의 마지막 (덜 된) 줄을 뒤 글이 처음부터 다시 씀
+  if (!b.trim()) return a;
+  const lead = b.match(/^\s*/)[0]; const bs = b.slice(lead.length);
+  const max = Math.min(a.length, bs.length, 8000);
+  for (let k = max; k >= 40; k--) if (a.endsWith(bs.slice(0, k))) return a + bs.slice(k);
   const nl = a.lastIndexOf('\n'); const frag = a.slice(nl + 1);
-  if (frag.trim().length >= 3 && bs.startsWith(frag.trim())) return a.slice(0, nl + 1) + frag.match(/^\s*/)[0] + bs;
-  // 3) 뒤 글 앞부분 30줄 안에 앞 글의 마지막 온전한 줄이 있으면 그 뒤부터
-  const lines = a.replace(/\s+$/, '').split('\n');
-  const lastFull = (nl >= 0 && frag.trim() ? lines[lines.length - 2] : lines[lines.length - 1]) || '';
-  if (lastFull.trim().length >= 12) {
-    const bl = bs.split('\n').slice(0, 30);
-    const at = bl.findIndex((l) => l.trim() === lastFull.trim());
-    if (at >= 0) { b = bs.split('\n').slice(at + 1).join('\n'); return (frag.trim() ? a.slice(0, nl + 1) : a.replace(/\s*$/, '\n')) + b; }
+  if (frag.trim().length >= 6 && bs.startsWith(frag.trim()) && bs.length > frag.trim().length) return a.slice(0, nl + 1) + frag.match(/^\s*/)[0] + bs;
+  if (!frag.trim()) {
+    const lines = a.replace(/\s+$/, '').split('\n'); const lastFull = lines[lines.length - 1] || '';
+    const first = bs.split('\n')[0];
+    if (lastFull.trim().length >= 12 && first.trim() === lastFull.trim()) return a + bs.slice(first.length).replace(/^\n/, '');
   }
-  // 4) 그냥 잇기(앞 글이 태그나 줄 사이에서 끊겼으면 붙여서)
-  return a + (/[>\n]\s*$/.test(a) && !/^\s/.test(bs) ? '\n' : '') + (/^\s/.test(b) ? b.replace(/^\s+/, (w) => (a.endsWith('\n') ? w.replace(/^\n+/, '') : w)) : b);
+  return a + b;
 }
 
 export const SECTIONS_MARK = '<!-- lp:sections -->';
