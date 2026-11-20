@@ -37,6 +37,7 @@ export async function prepareCmd(h) {
   const siteDir = join(work, 'site'), matDir = join(siteDir, 'material'), tmp = join(work, '.lecpage', 'slides');
   mkdirSync(matDir, { recursive: true }); mkdirSync(tmp, { recursive: true });
   const C = await imp('src/ingest/cli.js');
+  const { tangledTitle } = await imp('src/kit/meta.js');
   const t0 = Date.now();
   const m = await C.ingestPaths(inputs, { withImages: false, today: args.today || undefined, python: !args['no-python'] });
   if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => e.message_ko))].join(' '));
@@ -54,7 +55,8 @@ export async function prepareCmd(h) {
       const ext = (extname(p.image) || '.webp').toLowerCase().replace('.jpeg', '.jpg');
       if (existsSync(from)) { img = `material/p-${pad3(n)}${ext}`; copyFileSync(from, join(siteDir, img)); images++; }
     }
-    pages.push({ page: n, file: files[p.file]?.name || '', filePage: p.page, title: String(p.title || '').trim(), text: pageText(p), notes: String(p.notes || '').trim(), image: img });
+    const title = String(p.title || '').trim();
+    pages.push({ page: n, file: files[p.file]?.name || '', filePage: p.page, title: tangledTitle(title) ? '' : title, text: pageText(p), notes: String(p.notes || '').trim(), image: img });
   });
   rmSync(join(work, '.lecpage', 'slides'), { recursive: true, force: true });
   writeJson(join(work, '.lecpage', 'pages.json'), pages.map(({ page, title, text }) => ({ page, title, text: text.slice(0, 400) })));
@@ -97,6 +99,7 @@ AI 에이전트가 교재를 직접 읽고 강의 흐름·구성·디자인·HTM
 1. \`site/index.html\`(필수) · \`site/assets/style.css\` · 필요하면 \`site/assets/site.js\` · 그림 \`site/assets/img/\`(png·jpg·webp)
 2. \`lecpage.json\`(v:2): 제목·일정(YYYY-MM-DD, HH:MM)·장소·강사·기능(features)·색(theme)·facts(교재 몇 쪽에서 찾았는지)
 3. 강의 기능은 자리 표시로(\`<div data-lp="qa"></div>\`, 실습 단계 \`<section data-lp-step="s1" data-title="1단계: …">\` 등, kit.md)
+4. 쪽 제목(교재 넘기기 캡션·강사 화면 쪽 목록): \`material.md\`의 \`## p-001 · … · 제목\`이 교재에서 뽑은 제목이에요. 엉키거나 비었으면 쪽 그림을 보고 \`lecpage.json\`의 \`pages\`에 \`[{"page":1,"title":"…"}]\`로 고쳐요(쓴 쪽만 바뀜)
 
 ## 지킬 것
 - 교재·강사에게 없는 날짜·장소·이름·수치·도구는 지어내지 않기(모르면 비우기). 프롬프트·실습 단계·주소는 교재 원문 그대로.
@@ -142,16 +145,33 @@ function writeDist(N, work, files) {
 
 /**
  * v2 작업 폴더 조립 → work/dist(올릴 사이트) + work/dist-강사용/운영안내.md(올리지 않음). publish·pack·app·serve·handouts가 함께 씀
- * @returns { ok, errors, dist, tdir, r(assemble 결과), K, site, metaRaw }
+ * @param o.fonts 글꼴 함께 담기(사이트가 쓰는 글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안으로: 학교망이 CDN을 막아도 같은 글꼴, 못 받으면 CDN 그대로)
+ * @param o.password 암호로 잠그기(쪽·교재 쪽 그림·자료실 파일, 접속 확인·개인정보 안내만 열어 둠). 공개 범위가 password인데 암호가 없으면 오류
+ * @returns { ok, errors, dist, tdir, r(assemble 결과), K, site, metaRaw, notes:[한 줄], access }
  */
-export async function buildWorkV2(h, work) {
+export async function buildWorkV2(h, work, { fonts = false, password = '' } = {}) {
   const a = await assembleWork(h, work);
   if (a.r.errors?.length) return { ok: false, errors: a.r.errors, ...a };
-  const dist = writeDist(h.N, work, a.r.files);
+  if (a.r.meta.access === 'password' && !password) return { ok: false, errors: [{ code: 'password', message_ko: '공개 범위가 암호(lecpage.teacher.json access: password)예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.' }], ...a };
+  let files = a.r.files;
+  const notes = [];
+  if (fonts) {
+    const fb = await h.E.bundleFonts(files);
+    if (fb.report.ok && fb.report.external) { files = fb.files; notes.push(`글꼴 함께 담기: 외부 글꼴 ${fb.report.external}곳 → 사이트 안 파일 ${fb.report.bundled}개(${Math.round(fb.report.bytes / 1024)}KB)${fb.report.subset ? `, 사이트 글자만 남긴 글꼴 ${fb.report.subset}개` : ''}`); }
+    else if (!fb.report.ok) notes.push(`글꼴을 받지 못해 CDN 주소 그대로 뒀어요(${fb.report.skipped.join(', ').slice(0, 120)})${(process.env.HTTPS_PROXY || process.env.https_proxy) && !process.env.NODE_USE_ENV_PROXY ? ' — 프록시를 거치는 곳이면 NODE_USE_ENV_PROXY=1 을 붙여 다시 실행하세요' : ''}`);
+  }
+  if (password) {
+    const adv = h.E.passwordAdvice(password);
+    if (adv.level !== 'good') notes.push(adv.message.replace('[새로 만들기]로 바꾸거나 ', ''));
+    const { webcrypto } = await import('node:crypto');
+    files = await h.E.protectSite(files, password, { runtime: h.N.nodeRuntime(), title: a.r.meta.title || '연수 사이트', crypto: webcrypto });
+    notes.push(`암호로 잠금: 쪽 ${Object.keys(files).filter((p) => /^[^/]+\.html$/.test(p) && /id="lp-locked"/.test(files[p])).length}개·자료 ${Object.keys(files).filter((p) => p.endsWith('.enc')).length}개(접속 확인·개인정보 안내는 열어 둠)`);
+  }
+  const dist = writeDist(h.N, work, files);
   const tdir = dist + '-강사용';
   if (a.r.teacher && Object.keys(a.r.teacher).length) h.N.writeFiles(tdir, a.r.teacher);
   h.saveState(work, { v: 2, out: 'dist' });
-  return { ok: true, dist, tdir, ...a };
+  return { ok: true, dist, tdir, notes, access: password ? 'password' : a.r.meta.access, ...a };
 }
 
 /** check <work> [--port] [--no-shots] */
@@ -187,10 +207,11 @@ export async function checkCmd(h) {
             const th = w < 600 ? 1200 : 900;
             await page.setViewportSize({ width: w, height: th });
             await page.waitForTimeout(250);
+            await K.settlePage(page); // 폭이 바뀌면 그림·움직임을 다시 다 본 모습으로(늦게 받는 그림이 비어 찍히지 않게)
             const H = await page.evaluate(() => document.documentElement.scrollHeight);
             for (let i = 0; i < Math.min(12, Math.ceil(H / th)); i++) {
               const f = join(checkDir, 'tiles', `${name}-${w}-${String(i + 1).padStart(2, '0')}.png`);
-              await page.screenshot({ path: f, fullPage: true, clip: { x: 0, y: i * th, width: w, height: Math.min(th, H - i * th) } });
+              await page.screenshot({ path: f, fullPage: true, animations: 'disabled', clip: { x: 0, y: i * th, width: w, height: Math.min(th, H - i * th) } });
               tiles.push(f);
             }
           }
@@ -218,7 +239,7 @@ export async function checkCmd(h) {
   const line = (x) => `${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'} ${x.where.file}${x.where.selector ? ' ' + x.where.selector : ''}${x.where.width ? ` (${x.where.width}px)` : ''}: ${x.message_ko}`;
   say([
     `조립 ${rel(dist)}: 쪽 ${r.report.pages.length} · 파일 ${r.report.files}개 · ${r.report.sizeKB}KB · 참여 기능 ${r.report.live === 'none' ? '없음' : `${r.report.live}(${r.report.features.join(',')})`}`,
-    r.collected ? `키트 투표 ${r.collected.polls.length} · 실습 단계 ${r.collected.steps.length} · 교재 쪽 ${r.collected.deck.length} · 질문 ${r.collected.qa ? '있음' : '없음'} · 보드 ${r.collected.board.length} · 설문 ${r.collected.survey.length}` : '',
+    r.collected ? `키트 투표 ${r.collected.polls.length} · 실습 단계 ${r.collected.steps.length} · 교재 쪽 ${r.collected.deck.length}${r.collected.untitled?.length ? `(제목 없는 쪽 ${r.collected.untitled.length}: ${r.collected.untitled.slice(0, 6).join('·')}${r.collected.untitled.length > 6 ? '…' : ''} → 필요하면 lecpage.json pages)` : ''} · 질문 ${r.collected.qa ? '있음' : '없음'} · 보드 ${r.collected.board.length} · 설문 ${r.collected.survey.length}` : '',
     `검수 ${K.issueSummary(all)}`,
     ...[...errors, ...all.filter((x) => x.level !== 'error')].slice(0, 10).map(line),
     all.length > 10 ? `… 나머지는 ${rel(join(checkDir, 'issues.md'))}` : '',

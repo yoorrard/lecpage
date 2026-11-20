@@ -121,7 +121,15 @@ export function inspectRendered(opts) {
   // 겹친 글: 서로 품지 않는 글 요소의 상자가 크게 겹침
   var boxes = vis.filter(function (el) { return !el.closest('.lpk-chrome,.lpk-now,[aria-hidden="true"]') && win.getComputedStyle(el).position !== 'fixed'; }).map(function (el) {
     var range = doc.createRange(); range.selectNodeContents(el); var r = range.getBoundingClientRect();
-    return { el: el, l: r.left, t: r.top + win.scrollY, r: r.right, b: r.bottom + win.scrollY };
+    // 실제로 보이는 부분만: 넘치는 것을 가리는 조상(overflow hidden·clip·auto·scroll)의 틀로 자름(말줄임표로 줄인 글, 가로로 넘기는 칸)
+    var L = r.left, T = r.top, R = r.right, B = r.bottom;
+    for (var n = el; n && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
+      var oc = win.getComputedStyle(n); if (oc.overflowX === 'visible' && oc.overflowY === 'visible') continue;
+      var q = n.getBoundingClientRect();
+      if (oc.overflowX !== 'visible') { L = Math.max(L, q.left); R = Math.min(R, q.right); }
+      if (oc.overflowY !== 'visible') { T = Math.max(T, q.top); B = Math.min(B, q.bottom); }
+    }
+    return { el: el, l: L, t: T + win.scrollY, r: R, b: B + win.scrollY };
   }).filter(function (x) { return x.r - x.l > 2 && x.b - x.t > 2; }).sort(function (a, b) { return a.t - b.t; });
   var hits = 0;
   for (var i = 0; i < boxes.length && hits < 60; i++) {
@@ -145,7 +153,8 @@ export function inspectRendered(opts) {
     if (seenT > 200 || !visible(el)) return; seenT++;
     var r = el.getBoundingClientRect(), cs = win.getComputedStyle(el);
     if (el.tagName === 'A' && cs.display === 'inline' && el.closest('p,li,dd,td,figcaption,blockquote')) return; // 문장 안 링크는 예외
-    if (el.tagName === 'INPUT' && /^(checkbox|radio)$/.test(el.type) && el.closest('label')) return;
+    // 이름표 안의 고르기 칸은 이름표 전체가 누를 곳 → 이름표 크기로 잼
+    if (el.tagName === 'INPUT' && /^(checkbox|radio)$/.test(el.type) && el.closest('label')) { var lb = el.closest('label').getBoundingClientRect(); if (lb.width >= 24 && lb.height >= 24) return; r = lb; }
     if (r.width < 24 || r.height < 24) add('small-target', 'warn', el, '누를 곳이 ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px로 작아요("' + (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 20) + '").', '버튼·링크를 24×24px(휴대폰은 44px) 이상으로 해 주세요.');
   });
   // 빈 섹션
@@ -168,20 +177,51 @@ export function inspectRenderedScript({ id = '', file = 'index.html', delay = 60
 }
 
 /**
+ * Playwright 도우미: 찍고 재기 전에 화면을 '다 본 뒤' 모습으로. 늦게 받는 그림(loading="lazy")을 바로 받게 하고, 끝까지 한 번 스크롤해
+ * 화면에 들어와야 도는 움직임·늦게 만드는 부품을 깨우고, 그림이 다 오길 기다린 뒤 끝이 있는 움직임(CSS·Web Animations)은 끝 상태로 보내고 맨 위로.
+ * 전체 그림(fullPage)이 빈 그림·시작 전 모습으로 찍히던 것(교재 썸네일·차트 선 긋기 등)을 막음
+ */
+export async function settlePage(page, { pause = 60, imgWait = 4000, settle = 350, maxScroll = 60000 } = {}) {
+  await page.evaluate(async ({ pause, imgWait, maxScroll }) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const go = (y) => scrollTo({ top: y, left: 0, behavior: 'instant' }); // 사이트의 scroll-behavior:smooth와 상관없이 바로
+    document.querySelectorAll('img[loading="lazy"]').forEach((n) => { n.loading = 'eager'; });
+    const H = () => Math.min(document.documentElement.scrollHeight, maxScroll);
+    for (let y = 0; y < H(); y += Math.max(240, Math.round(innerHeight * 0.8))) { go(y); await sleep(pause); }
+    go(H()); await sleep(pause * 2);
+    const wait = [...document.images].filter((i) => i.getAttribute('src') && !i.complete).map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }));
+    await Promise.race([Promise.all(wait), sleep(imgWait)]);
+    go(0);
+  }, { pause, imgWait, maxScroll });
+  await page.waitForTimeout(settle);
+  await page.evaluate(() => {
+    for (const a of document.getAnimations ? document.getAnimations() : []) {
+      try {
+        if (a.timeline && typeof DocumentTimeline !== 'undefined' && !(a.timeline instanceof DocumentTimeline)) continue; // 스크롤에 묶인 움직임은 그대로
+        const t = a.effect && a.effect.getComputedTiming();
+        if (t && Number.isFinite(t.endTime) && a.playState !== 'finished') a.finish();
+      } catch { /* 끝낼 수 없는 움직임 */ }
+    }
+  });
+  await page.waitForTimeout(80);
+}
+
+/**
  * Playwright 도우미: 두 폭(390·1280)에서 검수하고 화면 그림을 찍음.
  * @param page Playwright page(이미 사이트를 연 상태가 아니어도 됨) @param url 열 주소
- * @param opts { widths:[390,1280], shots: (width)=>파일 경로 | null, file, fullPage:true, wait: 800 }
+ * @param opts { widths:[390,1280], shots: (width)=>파일 경로 | null, file, fullPage:true, wait: 800, settle:true(settlePage 뒤에 재고 찍음) }
  * @returns issues[](폭마다 where.width)
  */
-export async function inspectPage(page, url, { widths = [390, 1280], shots = null, file = 'index.html', fullPage = true, wait = 800 } = {}) {
+export async function inspectPage(page, url, { widths = [390, 1280], shots = null, file = 'index.html', fullPage = true, wait = 800, settle = true } = {}) {
   const all = [];
   for (const w of widths) {
     await page.setViewportSize({ width: w, height: w <= 480 ? 844 : 800 });
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForTimeout(wait);
+    if (settle) await settlePage(page);
     const issues = await page.evaluate(`${inspectRenderedSource}({ file: ${JSON.stringify(file)} })`);
     all.push(...issues);
-    if (shots) { const p = shots(w); if (p) await page.screenshot({ path: p, fullPage }); }
+    if (shots) { const p = shots(w); if (p) await page.screenshot({ path: p, fullPage, animations: 'disabled' }); }
   }
   return all;
 }

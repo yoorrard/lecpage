@@ -19,6 +19,7 @@
 - 참여 막대(출석·도움 요청·질문·반응)와 '지금' 줄(공지·타이머·투표)은 저절로 붙어요. 자리를 정하려면 `data-lp="dock"`·`data-lp="now"`.
 - 자리 표시 안에는 글을 쓰지 않아요(조립 때 지워짐). JSON 속성은 작은따옴표로 감싸요.
 - 실습 단계의 [완료 체크]·[도움 요청](`.lpk-step-f`)은 그 요소 안쪽 맨 끝에 붙어요. 본문 폭에 맞추려면 `data-lp-step`을 내용 상자에 달거나 `.lpk-step-f`에 여백을 줘요.
+- 실습 진행을 사이트 모양으로 보이려면(선택): 단계 주소는 `#st-s1`, 단계 링크 `<a href="#st-s1" data-st-link="s1">`(끝낸 단계 `.is-done`, 지금 단계 `aria-current="step"`), 끝낸 수 `<b data-st-count></b>`("2 / 5"), 막대 `<progress data-st-progress></progress>`. 지금 보는 단계에는 `.lp-st.is-active`가 붙어요.
 - 조립이 만드는 것도 링크할 수 있어요: `assets/event.ics`(달력에 넣기), `screen.html`(발표 화면), `check.html`(접속 확인).
 - 복사 단추는 스크립트 없이: `<button type="button" data-copy-text="프롬프트 원문">복사</button>`(복사하고 알림을 띄워요).
 
@@ -27,7 +28,7 @@
 ```css
 :root{ --lp-accent:#b4441c; --lp-ink:#1f1a17; --lp-paper:#fbf6ee; --lp-font:'Noto Sans KR',sans-serif; --lp-radius:6px }
 ```
-글자와 바탕은 4.5:1 이상. 키트를 고쳐 쓰려면 `.lpk .lp-btn-primary{…}`처럼.
+글자와 바탕은 4.5:1 이상. 강조색 위 글자(주 단추)는 키트가 강조색 밝기로 흰색·검정을 골라요(어두운 모드에서 `--lp-accent`를 바꿔도). 정하려면 `--lp-on-accent`. 키트를 고쳐 쓰려면 `.lpk .lp-btn-primary{…}`처럼.
 
 ## 지킬 것(CSP)
 - 스크립트는 `assets/site.js`에, `onclick` 대신 `addEventListener`. 바깥 스크립트는 허용 목록(gsap·lenis·ogl)만, 바깥 CSS는 글꼴만.
@@ -46,4 +47,5 @@
 ```
 교재에 없는 값은 비우고, `facts`에 찾은 쪽을 적어요. 공개 범위·주소·참여 서버는 강사가 정해요.
 - `features`: qa·poll·board·attendance·survey·help·reactions·signal·progress·deck·materials·timer. `mode`: offline·online·blended. `audience`: teachers·students·parents·staff·other
-- 선택 칸: `subtitle`·`organizer`·`contact`·`description`, 직무연수면 `admin: {"kind":"official","hours":3,"completionRate":90}`(kind: school·official·conference·student, 교재·강사가 준 값만), `theme.font`·`theme.radius`
+- 선택 칸: `subtitle`·`organizer`·`contact`·`description`, 직무연수면 `admin: {"kind":"official","hours":3,"completionRate":90}`(kind: school·official·conference·student, 교재·강사가 준 값만), `theme.font`(본문)·`theme.fontHeading`(제목: 강사·발표 화면·QR 안내문 제목에도)·`theme.radius`
+- `pages`: 교재 넘기기 캡션·강사 화면 쪽 목록의 쪽 제목. 교재에서 뽑은 제목(material.md 머리)이 엉키거나 비었으면 쪽 그림을 보고 `[{"page":1,"title":"표지 · …"}]`로 고쳐요(쓴 쪽만 바뀜).

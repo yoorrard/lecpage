@@ -3,6 +3,7 @@
 // 글 조각(텍스트 항목)을 줄로 묶고, 글자 크기로 제목을 고르고, 링크 주석의 표시 글자를 찾습니다.
 import { normText, normLine, cleanUrl, IngestError, isNode } from './util.js';
 import { FontRoles } from './fonts.js';
+import { tangledTitle } from '../kit/meta.js';
 
 const PDFJS_NODE = 'pdfjs-dist/legacy/build/pdf.mjs';
 
@@ -150,6 +151,22 @@ function tidy(t) {
     .replace(/(\d일)\s+\((?=[월화수목금토일](?:요일)?\))/g, '$1(');
 }
 
+/** 한 줄로 묶을 글자 크기 비(큰 쪽 ÷ 작은 쪽). 넘으면 같은 높이여도 다른 줄(ingest.py SIZE_RATIO와 같음) */
+const SIZE_RATIO = 1.5;
+/** 한 줄의 조각을 크게 떨어진 곳(글자 크기의 2.5배 넘는 틈)에서 나눈 글들(두 단 제목) */
+function columns(l) {
+  const fs = l.frags.filter((f) => f.str.trim()).sort((a, b) => a.x - b.x);
+  const out = []; let cur = '', right = -Infinity;
+  for (const f of fs) {
+    const gap = f.x - right;
+    if (cur && gap > l.size * 2.5) { out.push(cur); cur = ''; }
+    cur += (cur && gap > Math.max(1, l.size * 0.18) && !/\s$/.test(cur) && !/^\s/.test(f.str) ? ' ' : '') + f.str;
+    right = Math.max(right, f.x + f.w);
+  }
+  if (cur) out.push(cur);
+  return out.length > 1 ? out.map((t) => tidy(t)).filter(Boolean) : [l.text];
+}
+
 /** pdf.js 텍스트 항목 → 줄 → 문단 + 제목 */
 export function buildPage(lib, items, anns, vp, no, ctx) {
   const toVp = (tr) => (lib.Util && lib.Util.transform ? lib.Util.transform(vp.transform, tr) : [tr[0], tr[1], tr[2], tr[3], tr[4], vp.height - tr[5]]);
@@ -162,24 +179,27 @@ export function buildPage(lib, items, anns, vp, no, ctx) {
     const w = (it.width || 0) * (vp.scale || 1);
     frags.push({ str: it.str, x, y, w, size, bold: /bold|black|heavy|extrabold/i.test(it.fontName || '') , eol: it.hasEOL });
   }
-  // 줄 묶기
+  // 줄 묶기: 같은 높이이고 글자 크기가 비슷한 조각만 한 줄로(큰 제목 옆에 같은 높이로 놓인 작은 표 머리·큰 번호 '1'이 제목에 섞이지 않게).
+  // 최근 몇 줄 안에서 맞는 줄을 찾음(같은 높이에 크기가 다른 두 줄이 번갈아 나올 때)
   frags.sort((a, b) => (Math.abs(a.y - b.y) > Math.min(a.size, b.size) * 0.5 ? a.y - b.y : a.x - b.x));
   const lines = [];
+  const sameLine = (l, f) => Math.abs(l.y - f.y) <= Math.min(l.size, f.size) * 0.5 && Math.max(l.size, f.size) <= Math.min(l.lo, f.size) * SIZE_RATIO;
   for (const f of frags) {
     if (!f.str.trim() && !f.str) continue;
-    const last = lines[lines.length - 1];
-    if (last && Math.abs(last.y - f.y) <= Math.min(last.size, f.size) * 0.5) {
+    let last = null;
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 8); i--) if (sameLine(lines[i], f)) { last = lines[i]; break; }
+    if (last) {
       const gap = f.x - last.right;
       if (f.str.trim()) {
         const needSpace = gap > Math.max(1, last.size * 0.18) && !/\s$/.test(last.text) && !/^\s/.test(f.str);
         last.text += (needSpace ? ' ' : '') + f.str;
-        last.size = Math.max(last.size, f.size);
+        last.size = Math.max(last.size, f.size); last.lo = Math.min(last.lo, f.size);
         last.bold = last.bold && f.bold;
       } else last.text += f.str;
       last.right = Math.max(last.right, f.x + f.w);
       last.frags.push(f);
     } else if (f.str.trim()) {
-      lines.push({ text: f.str, x: f.x, y: f.y, right: f.x + f.w, size: f.size, bold: f.bold, frags: [f] });
+      lines.push({ text: f.str, x: f.x, y: f.y, right: f.x + f.w, size: f.size, lo: f.size, bold: f.bold, frags: [f] });
     }
   }
   for (const l of lines) l.text = tidy(l.text);
@@ -208,9 +228,13 @@ export function buildPage(lib, items, anns, vp, no, ctx) {
     } else if (kept[0].text.length <= 50 && (kept[0].bold || kept[0].size > median) && kept[0].y <= vp.height * 0.3) {
       titleLines.push(kept[0]); titleGuessed = true;
     }
+    // 두 단 제목("오늘 쓰는 말 네 개"   "세 문제"): 크게 떨어진 조각은 ' · '로. 셋 이상으로 갈리면(표 머리 등) 엉킨 것이라 비움
+    const parts = titleLines.map(columns);
+    const tangled = parts.some((p) => p.length > 2) || parts.filter((p) => p.length > 1).length > 1;
     // 여러 줄 제목: 줄이 바뀌며 낱말이 잘린 곳("…안" + "내")은 띄우지 않고 이음
     // 한 글자만 다음 줄로 넘어간 곳("…가르치" + "기")도 이음
-    title = normLine(titleLines.reduce((acc, l) => (!acc ? l.text : acc + ((/(?:^|\s)[가-힣]$/.test(acc) && /^[가-힣]{1,2}$/.test(l.text)) || (/[가-힣]$/.test(acc) && /^[가-힣]$/.test(l.text)) ? '' : ' ') + l.text), ''));
+    title = tangled ? '' : normLine(parts.map((p) => p.join(' · ')).reduce((acc, t) => (!acc ? t : acc + ((/(?:^|\s)[가-힣]$/.test(acc) && /^[가-힣]{1,2}$/.test(t)) || (/[가-힣]$/.test(acc) && /^[가-힣]$/.test(t)) ? '' : ' ') + t), ''));
+    if (tangledTitle(title)) title = '';
   }
   // 표: 글 조각의 x 위치로 칸을 나눠, 같은 칸 자리가 이어지는 줄들을 표로(칸 안 줄바꿈은 위 줄에 붙임)
   const { tables, rest: body } = extractTables(kept.filter((l) => !titleLines.includes(l)));

@@ -568,6 +568,30 @@ def parse_pptx(path, fid, sink, warnings):
 
 
 # ── PDF ──────────────────────────────────────────────
+SIZE_RATIO = 1.5  # 한 줄로 묶을 글자 크기 비(pdf.js 길과 같음)
+
+
+def columns(parts):
+    """한 줄의 조각(PyMuPDF 줄)을 크게 떨어진 곳(글자 크기의 2.5배 넘는 틈)에서 나눈 글들(두 단 제목)"""
+    ps = sorted(parts, key=lambda p: p['x'])
+    size = max(p['size'] for p in ps)
+    out, cur, right = [], [], None
+    for p in ps:
+        if cur and right is not None and p['x'] - right > size * 2.5:
+            out.append(cur)
+            cur = []
+        cur.append(p)
+        right = p['right'] if right is None else max(right, p['right'])
+    if cur:
+        out.append(cur)
+    return [t for t in (tidy(text_and_segments([ch for p in c for ch in p['chars']])[0]) for c in out) if t]
+
+
+def tangled_title(t):
+    """뽑은 제목이 엉켰는지: 한 글자짜리 영문·숫자 낱말이 셋 이상(표 머리 A B C 등이 섞임). 엔진 kit/meta.js tangledTitle과 같은 규칙"""
+    return sum(1 for w in str(t or '').split() if re.match(r'^[A-Za-z0-9]$', w)) >= 3
+
+
 def parse_pdf(path, fid, sink, warnings):
     try:
         import pymupdf as fitz
@@ -617,15 +641,21 @@ def parse_pdf(path, fid, sink, warnings):
                     n = len(re.sub(r'\s', '', sp.get('text', '')))
                     if fn and n:
                         font_roles[role][fn] = font_roles[role].get(fn, 0) + n
-        # 같은 높이의 조각을 한 줄로(번호 "1."이 따로 떨어진 경우 등)
+        # 같은 높이의 조각을 한 줄로(번호 "1."이 따로 떨어진 경우 등). 글자 크기가 SIZE_RATIO배 넘게 다르면 다른 줄:
+        # 큰 제목 옆에 같은 높이로 놓인 작은 표 머리·큰 번호('1'·'2'부)가 제목에 섞이지 않게(pdf.js 길과 같음). 최근 몇 줄 안에서 맞는 줄을 찾음
         raw.sort(key=lambda l: (l['y'], l['x']))
         merged = []
         for l in raw:
-            last = merged[-1] if merged else None
-            if last and abs(last['y'] - l['y']) <= min(last['size'], l['size']) * 0.5:
-                last['parts'].append(l)
+            target = None
+            for g in reversed(merged[-8:]):
+                if abs(g['y'] - l['y']) <= min(g['size'], l['size']) * 0.5 and max(g['hi'], l['size']) <= min(g['lo'], l['size']) * SIZE_RATIO:
+                    target = g
+                    break
+            if target:
+                target['parts'].append(l)
+                target['hi'], target['lo'] = max(target['hi'], l['size']), min(target['lo'], l['size'])
             else:
-                merged.append({'y': l['y'], 'size': l['size'], 'parts': [l]})
+                merged.append({'y': l['y'], 'size': l['size'], 'hi': l['size'], 'lo': l['size'], 'parts': [l]})
         lines = []
         for g in merged:
             parts = sorted(g['parts'], key=lambda l: l['x'])
@@ -635,7 +665,7 @@ def parse_pdf(path, fid, sink, warnings):
             spans = [s for pp in parts for s in pp['spans']]
             bold = all((s.get('flags', 0) & 16) or re.search(r'bold|black|heavy', s.get('font', ''), re.I) for s in spans)
             lines.append({'text': text, 'segs': segs, 'x': parts[0]['x'], 'y': g['y'], 'right': max(pp['right'] for pp in parts),
-                          'size': max(pp['size'] for pp in parts), 'bold': bool(bold)})
+                          'size': max(pp['size'] for pp in parts), 'bold': bool(bold), 'cols': columns(parts)})
         # 제목
         title, guessed, tlines = '', False, []
         if lines:
@@ -657,12 +687,18 @@ def parse_pdf(path, fid, sink, warnings):
             elif len(lines[0]['text']) <= 50 and (lines[0]['bold'] or lines[0]['size'] > median) and lines[0]['y'] <= rect.height * 0.3:
                 tlines.append(lines[0])
                 guessed = True
+            # 두 단 제목은 ' · '로, 셋 이상으로 갈리면(표 머리 등) 엉킨 것이라 비움(pdf.js 길과 같음)
+            cols = [l['cols'] if len(l['cols']) > 1 else [l['text']] for l in tlines]
+            tangled = any(len(c) > 2 for c in cols) or sum(1 for c in cols if len(c) > 1) > 1
             # 여러 줄 제목: 줄이 바뀌며 낱말이 잘린 곳("…안" + "내")은 띄우지 않고 이음(pdf.js 길과 같음)
-            for l in tlines:
-                glue = title and ((re.search(r'(?:^|\s)[가-힣]$', title) and re.match(r'^[가-힣]{1,2}$', l['text']))
-                                  or (re.search(r'[가-힣]$', title) and re.match(r'^[가-힣]$', l['text'])))
-                title = l['text'] if not title else title + ('' if glue else ' ') + l['text']
+            for c in ([] if tangled else cols):
+                t = ' · '.join(c)
+                glue = title and ((re.search(r'(?:^|\s)[가-힣]$', title) and re.match(r'^[가-힣]{1,2}$', t))
+                                  or (re.search(r'[가-힣]$', title) and re.match(r'^[가-힣]$', t)))
+                title = t if not title else title + ('' if glue else ' ') + t
             title = norm_line(title)
+            if tangled_title(title):
+                title = ''
         tables, body = extract_tables([l for l in lines if l not in tlines])
         page = new_page(fid, no, 'page', title)
         page['tables'] = [{'rows': r} for r in tables]

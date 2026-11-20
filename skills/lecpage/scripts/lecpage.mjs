@@ -12,7 +12,7 @@
 //        조립해서 강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 강사 값에 중계 주소 → 다시 조립 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로. --dry-run: 순서와 강사가 할 일만
 //   handouts <올린 주소|work> [-o 폴더]   QR-안내문.pdf·발표화면.png(Playwright 필요)
-//   pack <work|폴더> -o site.zip · serve <work|폴더> [--port 4173] · doctor · decide-infra [-i 답.json] [--size 30 …]
+//   pack <work|폴더> -o site.zip [--bundle-fonts] [--password 암호] · serve <work|폴더> [--port 4173] · doctor · decide-infra [-i 답.json] [--size 30 …]
 //        pack: 조립한 사이트를 ZIP으로 · doctor: 환경 점검과 설치 방법 · decide-infra: 배포할 곳 × 참여 기능 서버 추천
 //   예전 흐름(설계도 work/blueprint.json, 이어 쓸 때만. 다음 판에서 없앰):
 //   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts|--no-bundle-fonts]
@@ -54,7 +54,7 @@ const OPTS = {
   brief: '', structure: 'i today add-leftovers',
   patch: 'set i o undo no-build qa password access bundle-fonts no-bundle-fonts',
   options: 'presets mood o assets keep-design', doctor: '', review: 'port out',
-  build: 'o assets i password bundle-fonts', validate: 'o', qa: 'password out', serve: 'port host', pack: 'o',
+  build: 'o assets i password bundle-fonts', validate: 'o', qa: 'password out', serve: 'port host', pack: 'o bundle-fonts password',
   draft: 'i o', prompt: 'i o', guard: 'i o', design: '',
   'decide-infra': 'i size features skill duration network infra commercial minor', presets: '', effects: '',
   app: 'i o force password',
@@ -1159,10 +1159,11 @@ const commands = {
   async pack() {
     let dir = resolve(args._[0] || 'dist');
     const KC = await import('./kit-cmds.mjs');
-    if (KC.isV2Work(dir)) { // 작업 폴더(work)면 조립한 사이트(work/dist)를 담음
-      const b = await KC.buildWorkV2(helpers(), dir);
+    let notes = [];
+    if (KC.isV2Work(dir)) { // 작업 폴더(work)면 조립한 사이트(work/dist)를 담음(--bundle-fonts: 글꼴 함께 담기, --password: 암호로 잠그기)
+      const b = await KC.buildWorkV2(helpers(), dir, { fonts: !!args['bundle-fonts'], password: String(args.password || process.env.LECPAGE_PASSWORD || '') });
       if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
-      dir = b.dist;
+      dir = b.dist; notes = b.notes;
     }
     if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). 작업 폴더(work)나 조립한 폴더(work/dist)를 주세요. 예: pack work -o site.zip`);
     const files = N.readAssetDir(dir, '');
@@ -1170,7 +1171,7 @@ const commands = {
     const target = args.o || 'site.zip';
     mkdirSync(dirname(resolve(target)), { recursive: true });
     writeFileSync(target, zip);
-    say([`→ ${target} (${Math.round(zip.length / 1024)}KB, 파일 ${Object.keys(files).length}개)`], { ok: true, file: resolve(target), kb: Math.round(zip.length / 1024), files: Object.keys(files).length });
+    say([`→ ${target} (${Math.round(zip.length / 1024)}KB, 파일 ${Object.keys(files).length}개)`, ...notes], { ok: true, file: resolve(target), kb: Math.round(zip.length / 1024), files: Object.keys(files).length });
   },
 };
 commands['decide-infra'] = commands.decideInfra;

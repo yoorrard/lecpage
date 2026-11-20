@@ -3,7 +3,7 @@
 //   키트 CSS·런타임·#lp-data, 강사·발표 화면용 목록(#lp-blueprint), CSP meta·_headers, 보조 쪽(console·screen·poster·check·privacy),
 //   일정 파일(.ics)·favicon·robots·noindex, 교재 쪽 그림 경로 확인, 허용 목록 밖 외부 스크립트 빼기.
 import { scanTags, elementAt, rewriteOpen, applyEdits, attr, hasAttr, escAttr, escHtml, textOf, resolvePath } from './html.js';
-import { readMeta, firstSession, liveFeatures, themeFromCss, isHex } from './meta.js';
+import { readMeta, firstSession, liveFeatures, themeFromCss, isHex, tangledTitle } from './meta.js';
 import * as W from './widgets.js';
 import { build } from '../build.js';
 import { validate, makeCode } from '../validate.js';
@@ -12,7 +12,7 @@ import { siteData, LIB_SCRIPT_SOURCES, liveOrigins, servedOverLan, jsonScript, k
 import { boardFiles } from '../render/sections.js';
 import { wordsFor } from '../words.js';
 import { surveyFor } from '../intake.js';
-import { contrast, readableOn, mix, ensureContrast, luminance } from '../design/color.js';
+import { contrast, readableOn, mix, ensureContrast, luminance, alpha } from '../design/color.js';
 import { matchFont } from '../design/fonts.js';
 import { VERSION } from '../version.js';
 import { icon } from '../render/html.js';
@@ -48,31 +48,57 @@ export function kitCsp(bp, { live = true } = {}) {
   return p.join('; ');
 }
 
-/** 연수 정보 → 보조 쪽 테마(밝은·어두운 바탕에 맞는 프리셋 + 강조색·글꼴) */
+/** 글꼴 이름 → 엔진 글꼴 열쇠(같은 글꼴을 아는 것만) */
+function fontKey(name, role) {
+  if (!name) return '';
+  const f = matchFont(String(name).split(',')[0].replace(/["']/g, '').trim(), role);
+  return f && !f.system && f.exact ? f.id : '';
+}
+/** 연수 정보 → 보조 쪽 테마(밝은·어두운 바탕에 맞는 프리셋 + 강조색·본문 글꼴·제목 글꼴) */
 function auxDesign(theme) {
   const dark = isHex(theme.paper) && luminance(theme.paper) < 0.25;
   const d = { preset: dark ? 'keynote-dark' : 'corporate-clean', theme: dark ? 'dark' : 'light', motion: 0, graphic: '', closingGraphic: '', signature: '', effects: {} };
   if (isHex(theme.accent)) d.accent = theme.accent;
-  if (theme.font) { const f = matchFont(String(theme.font).split(',')[0].replace(/["']/g, '').trim(), 'body'); if (f && !f.system && f.exact) d.fonts = { display: f.id, body: f.id }; }
+  const body = fontKey(theme.font, 'body'), head = fontKey(theme.fontHeading, 'display');
+  if (body || head) d.fonts = { display: head || body, ...(body ? { body } : {}) };
   return d;
 }
-/** 보조 쪽 테마에 사이트 바탕·글자색을 덮음(대비가 충분할 때만) */
-function auxThemeOverride(theme, dark) {
-  if (!isHex(theme.paper)) return '';
-  const bg = theme.paper, fg = isHex(theme.ink) && contrast(theme.ink, bg) >= 7 ? theme.ink : readableOn(bg, '#ffffff', '#141414');
-  const prim = isHex(theme.accent) ? ensureContrast(theme.accent, bg, 4.5) : '';
-  const t = {
+/** 바탕·글자·강조색 셋으로 보조 쪽 색 묶음 하나(장식색 accent·accent-2·accent-3도 이 셋에서만: 프리셋의 파랑·주황이 섞이지 않게) */
+function auxPalette(bg, fg, accent, dark) {
+  const on = (c) => readableOn(c, '#ffffff', '#111111');
+  const prim = isHex(accent) ? ensureContrast(accent, bg, 4.5) : '';
+  const key = prim || fg; // 강조색이 없으면 글자색이 장식을 맡음
+  const a1 = mix(key, bg, dark ? 0.3 : 0.42), a2 = mix(fg, bg, dark ? 0.22 : 0.18), a3 = mix(key, bg, dark ? 0.55 : 0.72);
+  return {
     '--background': bg, '--foreground': fg, '--card': dark ? mix(bg, fg, 0.06) : mix(bg, '#ffffff', 0.6), '--card-foreground': fg,
     '--muted': mix(bg, fg, 0.06), '--muted-foreground': ensureContrast(mix(fg, bg, 0.35), bg, 4.6), '--secondary': mix(bg, fg, 0.08), '--secondary-foreground': fg,
     '--border': mix(bg, fg, dark ? 0.18 : 0.14), '--surface-2': mix(bg, fg, 0.035),
-    ...(prim ? { '--primary': prim, '--primary-foreground': readableOn(prim, '#ffffff', '#111111'), '--ring': prim } : {}),
+    ...(prim ? { '--primary': prim, '--primary-foreground': on(prim), '--ring': prim } : {}),
+    '--accent': a1, '--accent-foreground': on(a1), '--accent-2': a2, '--accent-2-foreground': on(a2), '--accent-3': a3, '--accent-3-foreground': on(a3),
+    '--hero-from': key, '--hero-to': bg, '--selection': alpha(key, 0.28), '--stage': dark ? mix(bg, '#000000', 0.35) : mix(fg, '#000000', 0.2), '--on-stage': dark ? fg : bg,
   };
-  return `\n/* 사이트 바탕·글자색(연수 정보 theme) */\n:root[data-theme="${dark ? 'dark' : 'light'}"]{${Object.entries(t).map(([k, v]) => `${k}:${v}`).join(';')}}\n`;
 }
-/** 키트 CSS 앞에 붙는 값: 연수 정보 theme(+ 사이트 CSS의 --lp-*)에서 */
+/**
+ * 보조 쪽 테마에 사이트 색을 덮음: 바탕(paper)·글자(ink)·강조(accent)와 그 섞음만. 사이트 쪽 밝기(밝은·어두운)와 반대쪽(밝게·어둡게 단추)도
+ * 반대쪽은 바탕과 글자를 맞바꿔 만듦(밝은 사이트의 어두운 화면 = 잉크 바탕 + 종이 글자)
+ */
+function auxThemeOverride(theme) {
+  const has = (k) => isHex(theme[k]);
+  if (!has('paper') && !has('ink') && !has('accent')) return '';
+  const bg = has('paper') ? theme.paper : has('ink') && luminance(theme.ink) > 0.4 ? '#141414' : '#ffffff';
+  const fg = has('ink') && contrast(theme.ink, bg) >= 7 ? theme.ink : readableOn(bg, '#ffffff', '#141414');
+  const dark = luminance(bg) < 0.25;
+  // 반대쪽: 밝은 사이트면 잉크(충분히 어두우면) 바탕, 어두운 사이트면 잉크(충분히 밝으면) 바탕
+  const altBg = dark ? (luminance(fg) > 0.6 ? mix(fg, '#ffffff', 0.4) : '#fafafa') : (luminance(fg) < 0.05 ? fg : '#141414');
+  const altFg = contrast(bg, altBg) >= 7 ? bg : readableOn(altBg, '#ffffff', '#141414');
+  const css = (sel, t) => `${sel}{${Object.entries(t).map(([k, v]) => `${k}:${v}`).join(';')}}`;
+  const main = dark ? 'dark' : 'light', alt = dark ? 'light' : 'dark';
+  return `\n/* 사이트 색(연수 정보 theme: 바탕·글자·강조와 그 섞음만) */\n${css(`:root[data-theme="${main}"]`, auxPalette(bg, fg, theme.accent, dark))}\n${css(`:root[data-theme="${alt}"]`, auxPalette(altBg, altFg, theme.accent, !dark))}\n`;
+}
+/** 키트 CSS 앞에 붙는 값: 연수 정보 theme(+ 사이트 CSS의 --lp-*)에서. 강조색 위 글자색은 키트 CSS가 강조색 밝기로 다시 고름(이 값은 그걸 못 하는 옛 브라우저용) */
 function kitVars(theme) {
   const v = {};
-  if (isHex(theme.accent)) { v['--lpk-accent'] = theme.accent; v['--lpk-on-accent'] = readableOn(theme.accent, '#ffffff', '#111111'); }
+  if (isHex(theme.accent)) { v['--lpk-accent'] = theme.accent; v['--lpk-on-accent'] = readableOn(theme.accent, '#ffffff', '#000000'); }
   const paper = isHex(theme.paper) ? theme.paper : '';
   let ink = isHex(theme.ink) ? theme.ink : '';
   if (paper && (!ink || contrast(ink, paper) < 4.5)) ink = readableOn(paper, '#ffffff', '#141414');
@@ -85,7 +111,7 @@ function kitVars(theme) {
 }
 
 /** 연수 정보·모은 기능 → 엔진 설계도(v1). 보조 쪽·#lp-data·강사 화면 목록을 지금 엔진으로 만들 때 씀 */
-function synthBlueprint(meta, col, { preview = false } = {}) {
+function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} } = {}) {
   const s1 = firstSession(meta);
   // 자리 표시가 있으면 그 기능은 켬. 실습 단계가 있고 참여 기능이 켜져 있으면 진행 현황도(강사 화면이 단계별 진행을 셈)
   const extra = [col.qa && 'qa', col.board.length && 'board', col.polls.length && 'poll', col.attend && 'attendance'].filter(Boolean);
@@ -118,7 +144,7 @@ function synthBlueprint(meta, col, { preview = false } = {}) {
       admin: meta.admin ? { ...meta.admin, kind } : { kind }, sessions: meta.sessions.length > 1 ? meta.sessions : [],
     },
     audience: { type: meta.audience, minor },
-    design: auxDesign(meta.theme || {}),
+    design: auxDesign(theme), // 연수 정보 theme + 사이트 CSS의 --lp-*(글꼴·제목 글꼴·강조색)
     instructors: meta.instructors,
     sections, live,
     privacy: { collect, retentionDays: meta.privacy?.retentionDays || 30, consent: meta.privacy?.consent !== false, processors: meta.privacy?.processors || [], contact: meta.privacy?.contact || '' },
@@ -447,7 +473,9 @@ export function assemble(site, meta0, opts = {}) {
   // 교재 쪽 그림
   const materialPages = Object.keys(src).map((p) => /^material\/p-(\d{3,4})\.(webp|png|jpe?g)$/i.exec(p)).filter(Boolean).map((m) => +m[1]).sort((a, b) => a - b);
   const pageFile = Object.fromEntries(Object.keys(src).map((p) => [/^material\/p-(\d{3,4})\./i.exec(p)?.[1], p]).filter(([k]) => k).map(([k, p]) => [+k, p]));
-  const pageInfo = Object.fromEntries((opts.material?.pages || []).map((p) => [+p.page, { title: String(p.title || '').slice(0, 120), text: String(p.text || '').slice(0, 400) }]));
+  // 쪽 제목: 교재에서 뽑은 제목(material.pages, 엉킨 것은 비움) 위에 AI가 고친 제목(lecpage.json pages)을 덮음
+  const pageInfo = Object.fromEntries((opts.material?.pages || []).map((p) => [+p.page, { title: tangledTitle(p.title) ? '' : String(p.title || '').slice(0, 120), text: String(p.text || '').slice(0, 400) }]));
+  for (const p of meta.pages || []) pageInfo[p.page] = { text: '', ...pageInfo[p.page], title: p.title };
 
   // 1단계: 쪽마다 머리·스크립트 정리
   const out = {}; const cleaned = {};
@@ -468,7 +496,7 @@ export function assemble(site, meta0, opts = {}) {
     if (attr(t, 'data-lp-step') !== undefined) pre.steps.push(1);
   }
   const preview = !!opts.preview || opts.target === 'preview';
-  const bp0 = synthBlueprint(meta, pre, { preview });
+  const bp0 = synthBlueprint(meta, pre, { preview, theme });
   const v0 = validate(bp0).blueprint;
   const words = wordsFor(v0);
   const liveOn = v0.live.provider !== 'none';
@@ -479,7 +507,7 @@ export function assemble(site, meta0, opts = {}) {
     done: v0.meta.admin.kind === 'official' && !!(v0.meta.admin.completionRate || v0.meta.admin.hours), surveyUrl: meta.surveyUrl, materialPages, pageInfo,
     pageSrc: (n) => pageFile[n] || W.pagePath(n), materials: Array.isArray(opts.materials) ? opts.materials : [],
     dock: { attend: (quick || pre.attend || f.includes('attendance')) && (quick ? 'quick' : 'in'), help: f.includes('help'), qa: f.includes('qa') && pre.qa, signal: f.includes('signal'), reactions: f.includes('reactions') },
-    phaseText: '',
+    phaseText: endedText(v0, words), // 끝난 연수 줄: 자리를 정한 '지금' 줄(data-lp="now")에도 들어가게 펼치기 전에
   };
 
   // 2단계: 자리 표시 펼치기
@@ -494,7 +522,7 @@ export function assemble(site, meta0, opts = {}) {
   }
 
   // 최종 설계도(모은 것 전부) → 엔진으로 보조 쪽
-  const bp = synthBlueprint(meta, col, { preview });
+  const bp = synthBlueprint(meta, col, { preview, theme });
   const built = build(bp, { runtime, today: opts.today, preview: false });
   if (built.errors?.length) for (const e of built.errors) warn('engine', e.message_ko);
   const vb = built.blueprint;
@@ -510,7 +538,7 @@ export function assemble(site, meta0, opts = {}) {
     if (p === 'index.html' || p === '_headers' || p === 'robots.txt') continue;
     out[p] = v;
   }
-  out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme, auxDesign(theme).theme === 'dark');
+  out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme);
   out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${read('kit.css')}`;
   if (!out['assets/lecpage.js']) out['assets/lecpage.js'] = read('lecpage.js');
   if (!out['assets/qr.js']) out['assets/qr.js'] = read('vendor/qrcode.js');
@@ -551,7 +579,7 @@ export function assemble(site, meta0, opts = {}) {
   }
 
   const collected = {
-    polls: col.polls, steps: col.steps.map(({ id, name, title }) => ({ id, name, title })), deck: col.deck.map((x) => x.page), qa: col.qa, board: col.board, attend: col.attend,
+    polls: col.polls, steps: col.steps.map(({ id, name, title }) => ({ id, name, title })), deck: col.deck.map((x) => x.page), untitled: col.deck.filter((x) => !x.title).map((x) => x.page), qa: col.qa, board: col.board, attend: col.attend,
     survey: col.survey, materials: col.materials, tools: col.tools, liveFeatures: vb.live.features, provider: vb.live.provider, code: vb.live.code,
   };
   const report = { pages, files: Object.keys(out).length, sizeKB: Math.round(Object.values(out).reduce((a, v) => a + enc(v), 0) / 1024), live: live ? vb.live.provider : 'none', features: vb.live.features };
