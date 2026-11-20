@@ -466,7 +466,12 @@
       $$('[data-phase-show="after"]').forEach(function (n) { n.hidden = false; });
       var fu = $('[data-followup]'), hero = $('main > .lp-hero');
       if (fu && hero) { var at = hero.nextElementSibling; if (at && at.classList.contains('lp-divider')) at = at.nextElementSibling; if (at !== fu) hero.parentNode.insertBefore(fu, at); }
-      var bar = $('[data-phase-bar]'); if (bar) { bar.hidden = false; fitScrollPad(); }
+      var bar = $('[data-phase-bar]');
+      if (bar) {
+        // 키트 사이트: '종료' 줄이 키트 상자(.lpk) 밖에 있으면(사이트가 옮겼거나 조립 결과를 다시 쓴 경우) 키트 줄 상자에 넣어 모양을 갖춤
+        if (root.hasAttribute('data-lpk') && !bar.closest('.lpk')) { var box = el('div', 'lpk lpk-now'); doc.body.appendChild(box); box.appendChild(bar); }
+        bar.hidden = false; fitScrollPad();
+      }
     }
     if (!first) doc.dispatchEvent(new CustomEvent('lp:phase', { detail: p.phase }));
   }
@@ -658,7 +663,7 @@
         b.setAttribute('aria-pressed', String(on)); b.querySelector('span').textContent = on ? '완료했어요' : '완료 체크';
       });
       var c = $('[data-st-count]', shell); if (c) c.textContent = done.length + ' / ' + arts.length;
-      var p = $('[data-st-progress]', shell); if (p) p.value = done.length;
+      var p = $('[data-st-progress]', shell); if (p) { p.max = arts.length; p.value = done.length; } // 최대는 단계 수(사이트가 max를 적지 않아도)
     }
     function show(i, scroll) {
       if (i < 0 || i >= arts.length) return;

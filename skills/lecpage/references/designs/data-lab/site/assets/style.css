@@ -29,7 +29,7 @@
     --pen:#f08a6c; --pen-soft:#3a2620;
     --mark:#f4d85c; --mark-bg:#5a4f22;
     --slate:#7d858f; --slate-2:#4b5159;
-    --lp-accent:#f08a6c; --lp-ink:#ece8df; --lp-paper:#202327; --lpk-on-accent:#141619;
+    --lp-accent:#f08a6c; --lp-ink:#ece8df; --lp-paper:#202327;
     color-scheme:dark;
   }
 }
@@ -39,7 +39,7 @@
   --pen:#f08a6c; --pen-soft:#3a2620;
   --mark:#f4d85c; --mark-bg:#5a4f22;
   --slate:#7d858f; --slate-2:#4b5159;
-  --lp-accent:#f08a6c; --lp-ink:#ece8df; --lp-paper:#202327; --lpk-on-accent:#141619;
+  --lp-accent:#f08a6c; --lp-ink:#ece8df; --lp-paper:#202327;
   color-scheme:dark;
 }
 @media (min-width:900px){ :root{ --g:40px; --bar:60px } }
@@ -77,7 +77,7 @@ p{text-wrap:pretty}
 .fxbar{flex:1;min-width:0;display:flex;align-items:stretch;height:36px;border:1px solid var(--rule-2);background:var(--cell);font-size:var(--fs-sm)}
 .namebox{flex:none;display:flex;align-items:center;padding:0 10px;min-width:52px;font:600 .8125rem/1 var(--sans);font-variant-numeric:tabular-nums;color:var(--ink);border-right:1px solid var(--rule-2);white-space:nowrap}
 .fx{flex:none;display:flex;align-items:center;padding:0 8px 0 10px;font:italic 500 .8125rem/1 var(--mono);color:var(--pen)}
-.fx-t{min-width:0;display:flex;align-items:center;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.fx-t{min-width:0;display:block;align-self:center;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500} /* 블록이어야 말줄임(…)이 걸림(flex 상자는 글을 잘라만 냄) */
 .nav{display:none;gap:2px;flex:none}
 .nav a{padding:8px 11px;font-size:var(--fs-sm);font-weight:500;text-decoration:none;border-radius:3px;color:var(--ink-2)}
 .nav a:hover{color:var(--ink);background:var(--paper-2)}

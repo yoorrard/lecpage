@@ -16,7 +16,7 @@
 | `work/dist/` | check·preview·publish | 조립 결과(참가자 사이트 + 강사 화면·발표 화면·안내문·접속 확인·개인정보 안내·`_headers`) | **이것을 올림** |
 | `work/dist-강사용/` | 조립·publish | `운영안내.md`, `publish --live` 뒤 `관리자-키.txt`(본인만 읽기), `QR-안내문.pdf`·`발표화면.png` | **안 올림** |
 | `work/check/` | check | `issues.md`(고칠 곳, AI가 읽기 좋은 꼴)·`report.json`·`<쪽>-390.png`·`-1280.png` | 안 올림 |
-| `work/.lecpage/` | prepare | 쪽 제목(`pages.json`)·교재 목록(`sources.json`) | 안 올림 |
+| `work/.lecpage/` | prepare | 교재에서 뽑은 쪽 제목(`pages.json`, 고칠 때는 `lecpage.json`의 `pages`)·교재 목록(`sources.json`) | 안 올림 |
 | `work/lecpage.state.json` | CLI | 마지막으로 올린 곳(이름·주소, 비밀 값 없음) | 안 올림 |
 | `work/live-relay/` | publish --live | 참여 기능 중계(backends/cloudflare 사본, 이 연수 코드만 받음) | 강사 Cloudflare에 |
 
@@ -29,9 +29,9 @@
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기(.lecpage v2): 사이트 폴더·연수 정보·쪽 그림·쪽 제목·교재 원본(100MB까지). 참여 기능 키·관리자 키는 담지 않음. 강사가 https://lecpage.com/ [저장한 파일 열기]로 열어 미리보기·고치기·배포 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 저장한 파일을 작업 폴더로(사이트·`lecpage.json`·원본 `src/`). 파일 안의 강사 값은 `lecpage.teacher.from-file.json`에 따로 두니, 강사에게 확인받고 `lecpage.teacher.json`으로 옮김. 예전 판(설계도) 파일은 예전 작업 폴더로 풂 |
 | `studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]` | 내 PC 연결 프로그램: 앱을 `http://127.0.0.1:<포트>/`에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함(그 사람의 구독 한도). 자세히 `references/studio.md` |
-| `publish [work] [--host cloudflare\|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]` | 조립 → 강사 계정에 올리기 → 주소 확인 → 안내물. `--dry-run`은 순서와 **강사가 할 일**만 보여 줌. `--live`(Cloudflare): 중계 올리기 → 관리자 키를 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만 → `lecpage.teacher.json`의 `live`에 중계 주소·연수 코드 → 다시 조립 → 올리기 → 중계가 이 사이트만 받게 → 확인. 인증은 `npx wrangler@4 login`이나 `CLOUDFLARE_API_TOKEN`(Onpod은 `ONPOD_TOKEN`) 환경 변수만. 다시 올릴 때는 `publish work`만(지난번 곳·주소) |
+| `publish [work] [--host cloudflare\|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts] [--password 암호]` | 조립(글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안에 담음, 끄기 `--no-bundle-fonts` · `--password`면 쪽·교재 쪽 그림·자료실 파일을 암호로 잠금) → 강사 계정에 올리기 → 주소 확인 → 안내물. `--dry-run`은 순서와 **강사가 할 일**만 보여 줌. `--live`(Cloudflare): 중계 올리기 → 관리자 키를 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만 → `lecpage.teacher.json`의 `live`에 중계 주소·연수 코드 → 다시 조립 → 올리기 → 중계가 이 사이트만 받게 → 확인. 인증은 `npx wrangler@4 login`이나 `CLOUDFLARE_API_TOKEN`(Onpod은 `ONPOD_TOKEN`) 환경 변수만. 다시 올릴 때는 `publish work`만(지난번 곳·주소) |
 | `handouts <배포한 주소\|work> [-o 폴더]` | `QR-안내문.pdf`(참가자용 A4)·`발표화면.png`·`발표화면-QR-크게.png`. 작업 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림 |
-| `pack [work\|work/dist] -o site.zip` | 조립한 사이트를 ZIP 하나로(USB·교실 LAN). 강사용 폴더는 담지 않음 |
+| `pack [work\|work/dist] -o site.zip [--bundle-fonts] [--password 암호]` | 조립한 사이트를 ZIP 하나로(USB·교실 LAN). 강사용 폴더는 담지 않음. 인터넷이 막힌 교실이면 `--bundle-fonts` |
 | `serve [work\|폴더] [--port 4173]` | 작업 폴더면 `preview`와 같음, 다른 폴더는 그대로 띄움 |
 | `doctor` | 판·Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령(윈도우·macOS·리눅스) |
 | `decide-infra [-i 답.json] [--size 30] [--features qa,poll] [--skill set] [--network good\|restricted\|offline] [--minor]` | 배포할 곳 × 참여 기능 서버 추천(강사가 할 일 수로 고름). 이미 연결한 곳은 `-i`의 JSON에 `connected:["cloudflare"]` 등(`references/infra-decision.md`) |

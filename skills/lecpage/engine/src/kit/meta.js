@@ -100,18 +100,42 @@ export function keepTeacherValues(next = {}, prev = null) {
   return { meta: { ...(isObj(next) ? next : {}), ...t }, dropped };
 }
 
-/** 사이트 CSS의 --lp-accent·--lp-ink·--lp-paper·--lp-font·--lp-radius 값(처음 나온 것) */
+/** 사이트 CSS의 --lp-accent·--lp-ink·--lp-paper·--lp-font·--lp-font-heading·--lp-radius 값(처음 나온 것) */
 export function themeFromCss(css = '') {
   const out = {};
-  for (const [k, name] of [['accent', 'accent'], ['ink', 'ink'], ['paper', 'paper'], ['font', 'font'], ['radius', 'radius']]) {
+  for (const [k, name] of [['accent', 'accent'], ['ink', 'ink'], ['paper', 'paper'], ['font', 'font'], ['fontHeading', 'font-heading'], ['radius', 'radius']]) {
     const m = new RegExp(`--lp-${name}\\s*:\\s*([^;}{]+)`).exec(String(css));
     if (!m) continue;
     const v = m[1].replace(/!important/, '').trim();
     if (['accent', 'ink', 'paper'].includes(k)) { if (isHex(v)) out[k] = v.toLowerCase(); }
-    else if (k === 'font') out.font = str(v, 120);
+    else if (k === 'font' || k === 'fontHeading') { if (!/^var\(/.test(v)) out[k] = str(v, 120).replace(/[;{}<>]/g, ''); }
     else if (/^\d+(\.\d+)?(px|rem|em)$|^0$/.test(v)) out.radius = v;
   }
   return out;
+}
+
+/**
+ * 교재에서 뽑은 쪽 제목이 엉켰는지: 제목 줄에 표 머리(열 글자 A B C …)·번호 조각이 섞이면 한 글자짜리 영문·숫자 낱말이 셋 이상 생김.
+ * 엉킨 제목보다 빈 제목이 나음(교재 넘기기 캡션·강사 화면 쪽 목록). ingest(pdf.js·ingest.py)와 조립이 같은 규칙
+ */
+export function tangledTitle(t) {
+  return String(t || '').trim().split(/\s+/).filter((w) => /^[A-Za-z0-9]$/.test(w)).length >= 3;
+}
+
+/**
+ * 쪽 제목 고치기(lecpage.json pages): [{ page, title }] — 교재 넘기기 캡션·강사 화면 쪽 목록에 쓰는 제목.
+ * 교재에서 뽑은 제목(prepare)이 엉키면 AI가 쪽 그림을 보고 고침. 쓴 쪽만 바뀌고, 빈 글이면 제목 없음
+ */
+export function cleanPages(v, warn = () => {}) {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v)) { warn('pages', 'pages-shape', 'pages는 [{"page":1,"title":"…"}] 꼴의 목록이어야 해요.'); return []; }
+  const out = new Map();
+  v.slice(0, 1000).forEach((p, i) => {
+    const page = isObj(p) ? Math.round(Number(p.page ?? p.n)) : NaN;
+    if (!(page >= 1 && page <= 9999)) { warn(`pages[${i}]`, 'pages-page', `pages ${i + 1}번째의 쪽 번호가 숫자가 아니라 뺐어요.`); return; }
+    out.set(page, { page, title: str(p.title, 120) });
+  });
+  return [...out.values()].sort((a, b) => a.page - b.page);
 }
 
 /**
@@ -168,6 +192,7 @@ export function readMeta(input, { prev = null } = {}) {
       if (isHex(raw.theme[k])) theme[k] = raw.theme[k].trim().toLowerCase(); else warn(`theme.${k}`, 'theme-color', `theme.${k} "${str(raw.theme[k], 20)}"는 #RRGGBB 꼴이 아니라 뺐어요.`);
     }
     if (str(raw.theme.font, 120)) theme.font = str(raw.theme.font, 120).replace(/[;{}<>]/g, '');
+    if (str(raw.theme.fontHeading, 120)) theme.fontHeading = str(raw.theme.fontHeading, 120).replace(/[;{}<>]/g, '');
     if (raw.theme.radius !== undefined) { const r = str(raw.theme.radius, 12); if (/^\d+(\.\d+)?(px|rem|em)$|^0$/.test(r)) theme.radius = r; }
   }
 
@@ -179,6 +204,8 @@ export function readMeta(input, { prev = null } = {}) {
     sessions, venue: str(raw.venue, 120), mode, audience, ...(admin ? { admin } : {}), instructors, features, theme,
     facts: cleanFacts(raw.facts, warn),
   };
+  const pages = cleanPages(raw.pages, warn);
+  if (pages.length) base.pages = pages;
   const { meta: kept, dropped } = keepTeacherValues(raw, prev);
   for (const k of dropped) warn(k, 'teacher-value', `${k}는 강사가 정하는 칸이라 파일의 값을 쓰지 않았어요.`);
   const meta = { ...base };

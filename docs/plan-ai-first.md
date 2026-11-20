@@ -57,8 +57,8 @@ lecpage.json        연수 정보·참여 기능 설정(아래)
 - **강사 값**: `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`에 더해 `surveyUrl`(기관 설문)·`privacy`(받을 정보·보관 기간)·`keepUntil`도. AI 답·남이 준 파일에 있어도 버리고 이전 값(`prev`)을 지킴(엔진 `keepTeacherLinks`와 같은 규칙, `kit/meta.js` `keepTeacherValues`). Skill은 강사 값을 `work/lecpage.teacher.json`에 따로 둠.
 - `live` 꼴은 v1과 같음: `{ provider:'local'|'http'|'supabase'|'sheets', url, code, anonKey, anonymous?, pollMs?, uploads? }`. 없으면 기능이 켜져 있을 때 `local`(이 기기 안 연습, v1과 같음).
 - 날짜 `YYYY-MM-DD`(달력에 있는 날)·시각 `HH:MM`. `2026.12.3`·`9:00`은 고쳐 받고, 틀리면 그 칸만 비우고 알림. `mode`는 `hybrid`도 `blended`로 받음.
-- 선택 칸(AI): `organizer`·`contact`·`description`·`admin{kind,hours,completionRate}`(직무연수 이수 기준)·`theme.radius`. `features`에는 `signal`·`progress`도 쓸 수 있음.
-- `theme`은 AI가 고른 색·글꼴. 강사 화면·발표 화면·QR 안내문이 이 색을 이어받음(밝은·어두운 바탕에 맞는 기본 틀 + 강조색·바탕·글자색·글꼴). `theme`이 비면 사이트 CSS의 `--lp-*` 값을 씀.
+- 선택 칸(AI): `organizer`·`contact`·`description`·`admin{kind,hours,completionRate}`(직무연수 이수 기준)·`theme.radius`·`theme.fontHeading`(제목 글꼴: 보조 쪽 제목에도)·`pages:[{page,title}]`(쪽 제목 고치기: 교재에서 뽑은 제목 위에 덮어 교재 넘기기 캡션·강사 화면 쪽 목록에 씀, 쓴 쪽만·빈 글이면 제목 없음). `features`에는 `signal`·`progress`도 쓸 수 있음.
+- `theme`은 AI가 고른 색·글꼴. 강사 화면·발표 화면·QR 안내문이 이 색을 이어받음(밝은·어두운 바탕에 맞는 기본 틀 + 강조색·바탕·글자색·본문·제목 글꼴, 장식색도 이 셋을 섞은 색만, 밝게·어둡게 단추의 반대쪽은 바탕과 글자를 맞바꿈). `theme`이 비면 사이트 CSS의 `--lp-*`(`--lp-font-heading` 포함) 값을 씀.
 
 ## 4. 강의 전용 기능 키트 (약속 B)
 AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리를 실제 기능으로 채웁니다. 디자인은 사이트를 따릅니다.
@@ -79,7 +79,8 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 - 자리 표시 요소는 그대로 두고(class·id·배치는 AI 것) 안을 채움: `class="lpk lpk-w lpk-<종류>"`, 아이디가 없으면 `id="lpk-<종류>"`. 안에 쓴 글은 지움(자료실만 남김). 실습 단계에는 `class="lp-st" data-st` + `#st-<아이디>` 앵커 + 끝에 [완료 체크]·[도움 요청].
 - 투표 자리는 여럿 둘 수 있음(열린 투표는 그 문항이 적힌 자리에, 즉석 투표는 첫 자리). 보드·교재 넘기기는 실시간으로 첫 자리 하나만.
 - 참여 막대(도크: 출석·질문·도움 요청·반응)와 '지금' 띠(공지·타이머·투표 알림)는 `features`에 있으면 조립이 자동으로 붙임. AI가 `<div data-lp="dock">`·`<div data-lp="now">`로 자리를 정할 수도 있음. 저절로 붙은 '지금' 띠는 화면 아래(도크 바로 위)에 떠서 사이트 머리를 가리지 않음.
-- 키트 모양은 사이트 CSS 변수 `--lp-accent --lp-ink --lp-paper --lp-font --lp-radius`를 따름(없으면 `theme` 값, 그것도 없으면 주변 글자색·글꼴). 키트 CSS는 `.lpk` 아래에만 적용돼 AI의 CSS를 건드리지 않음.
+- 키트 모양은 사이트 CSS 변수 `--lp-accent --lp-ink --lp-paper --lp-font --lp-radius`를 따름(없으면 `theme` 값, 그것도 없으면 주변 글자색·글꼴). 강조색 위 글자는 강조색 밝기로 흰색·검정을 고름(상대 색 문법, `--lp-on-accent`로 정할 수 있음). 키트 CSS는 `.lpk` 아래에만 적용돼 AI의 CSS를 건드리지 않음.
+- 실습 진행 표시(선택): `data-st-link`(단계 링크)·`data-st-count`(끝낸 수)·`data-st-progress`(막대, 최대는 단계 수)를 런타임이 채움.
 - 런타임(`engine/runtime/lecpage.js`·`live/*`)은 지금 것을 그대로 씀. 조립이 자리 표시를 런타임이 아는 표시(`data-qa`·`data-poll-live`·`data-dock` …)로 펼침(위젯 HTML은 지금 `render/sections.js`의 위젯 부분을 떼어 `kit/widgets.js`로).
 - 강사 화면·발표 화면은 자리 표시에서 투표·실습 단계·교재 쪽 목록을 모아 만듦(지금의 `lp-blueprint` 자리).
 - 키트 설명서: `skills/lecpage/references/kit.md`(AI에게 주는 짧은 문서, 앱 프롬프트에도 같은 글).
