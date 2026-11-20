@@ -290,7 +290,8 @@ async function route(request, env, ctx, url, cfg, self) {
     return json({
       ok: true, v: 1, plan: cfg.plan, accepting, ...(paused ? { paused } : {}), ...(s?.capacity ? { capacity: s.capacity } : {}),
       // view: 사이트를 내보내는 곳(pages: 사이트마다 다른 주소, 방문이 하루 한도에 들지 않음). keepAlive: 방문이 있으면 보관 기간을 다시 채우는지
-      view: cfg.view, keepAlive: cfg.keepAlive,
+      // siteScripts: 사이트가 직접 쓴 스크립트(assets/site.js 등)를 받는지(pages 보기만. README §6)
+      view: cfg.view, keepAlive: cfg.keepAlive, siteScripts: cfg.view === 'pages',
       limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
       report: `${self}/report`,
       ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),

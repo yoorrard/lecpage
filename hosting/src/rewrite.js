@@ -1,11 +1,13 @@
 // 사이트 HTML을 내보낼 때 손보는 일(HTMLRewriter, 흘려보내며 처리):
 //  - 자동으로 다른 곳으로 넘기는 <meta http-equiv="refresh">, 주소 기준을 바꾸는 <base>, 플러그인 <object>·<embed>를 뺌
-//  - src가 이 사이트 안(상대 경로)이 아닌 <script>를 뺌. 자료 블록(type="application/json")과 src 없는 것은 그대로 둠(실행은 CSP가 막음)
+//  - src가 이 사이트 안(상대 경로)도, 고정 라이브러리(csp.js LIB_SCRIPT_SOURCES, CSP가 허용하는 것과 같음)도 아닌 <script>를 뺌.
+//    자료 블록(type="application/json")과 src 없는 것(인라인)은 그대로 둠(실행은 CSP가 막음)
 //  - 바닥글(없으면 본문 끝)에 작은 "신고" 링크를 붙임
 //  - 이 사이트의 파일을 부르는 주소에 내용 지문(?v=)을 붙여 브라우저가 오래 두게 함. 엔진 런타임 그대로인 .js는 정적 사본(/rt/<sha>.js)으로
 //  - 링크 미리보기 카드: og:url이 없으면 붙이고, og:image가 상대 주소면 전체 주소로, 없으면 첫 화면의 큰 그림을 씀
 //  - 강사 화면(console.html)에는 운영자 공지 띠를 붙임(글자만, 이스케이프)
 import { noticeBandHtml } from './notice.js';
+import { LIB_SCRIPT_SOURCES } from './csp.js';
 
 const escAttr = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -47,6 +49,17 @@ export function isLocalSrc(src) {
   if (s.startsWith('/')) return false; // '/…', '//host/…'
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return false; // https:, data:, javascript: …
   return true;
+}
+/**
+ * 스크립트 주소가 고정 라이브러리 경로(버전까지 고정한 jsdelivr npm 경로) 안의 파일인지.
+ * 앞머리가 정확히 같고 그 뒤가 파일 경로 글자뿐일 때만(물음표·#·역빗금·'..'·제어 문자 없음). CSP의 script-src와 같은 목록
+ */
+export function isLibSrc(src) {
+  const s = String(src ?? '').trim();
+  const pre = LIB_SCRIPT_SOURCES.find((p) => s.startsWith(p));
+  if (!pre) return false;
+  const rest = s.slice(pre.length);
+  return /^[A-Za-z0-9@_.+\/-]+$/.test(rest) && !rest.split('/').some((seg) => seg === '..' || seg === '.' || seg === '');
 }
 /** 실행되지 않는 자료 블록인지 */
 export function isDataScript(type) {
@@ -117,7 +130,9 @@ export function rewriteHtml(res, siteId, opts = {}) {
       element(el) {
         if (isDataScript(el.getAttribute('type'))) return;
         if (!el.hasAttribute('src')) return;
-        if (!isLocalSrc(el.getAttribute('src'))) { el.remove(); return; }
+        const src = el.getAttribute('src');
+        if (isLibSrc(src)) return;
+        if (!isLocalSrc(src)) { el.remove(); return; }
         ver(el, 'src');
       },
     })

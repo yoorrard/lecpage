@@ -5,8 +5,8 @@
 - **켜기: `cd hosting && npm run setup` 한 번**(§2). 토큰 하나를 만들고 운영자 이메일과 (선택) 알림 웹훅만 답하면 배포·비밀 값·사이트 보기·관리 화면까지 켭니다. 다시 돌려도 안전합니다.
 - Cloudflare Worker + Durable Objects(SQLite) + (기본) Cloudflare Pages. R2·KV를 쓰지 않아 **무료 요금제, 카드 등록 없이** 돕니다(관리 화면에 쓰는 Zero Trust 첫 가입만 결제 수단 입력, 청구 없음).
 - **사이트 보기(`VIEW`)**
-  - `pages`(설정 스크립트의 기본): 사이트마다 `https://s-<id>.<프로젝트>.pages.dev/`. 방문은 Pages 정적 요청이라 **Workers 하루 10만 요청에 들지 않아 하루 한도로 사이트가 멈추지 않고**, 사이트마다 출처가 갈립니다. 보관 기간은 **마지막으로 배포한 날부터 60일**(방문으로는 늘지 않음).
-  - `worker`: 예전 방식. `https://<호스트>/s/<id>/`, 보관 기간 30일이고 방문이 있으면 다시 채움. 방문 하나하나가 하루 한도에 듭니다.
+  - `pages`(설정 스크립트의 기본): 사이트마다 `https://s-<id>.<프로젝트>.pages.dev/`. 방문은 Pages 정적 요청이라 **Workers 하루 10만 요청에 들지 않아 하루 한도로 사이트가 멈추지 않고**, 사이트마다 출처가 갈립니다. 보관 기간은 **마지막으로 배포한 날부터 60일**(방문으로는 늘지 않음). AI가 직접 쓴 사이트(`assets/site.js` 같은 사이트 스크립트)도 검사해 받습니다(§6).
+  - `worker`: 예전 방식. `https://<호스트>/s/<id>/`, 보관 기간 30일이고 방문이 있으면 다시 채움. 방문 하나하나가 하루 한도에 듭니다. 모든 사이트가 한 출처라 `.js`는 엔진 런타임만 받습니다.
 - 사이트에 딸린 실시간 방(질문·보드·투표)은 어느 보기든 이 Worker의 Durable Object가 맡습니다. 강사가 따로 준비할 것이 없습니다(§7, 끄려면 `LIVE=off`).
 - 운영자 관리 화면은 **따로 작은 관리 Worker**(`lecpage-admin`)의 workers.dev 주소. 도메인 없이 Cloudflare Access가 운영자 이메일만 들여보냅니다(§11).
 - 연수 날짜·인원을 미리 받아 그날 자리가 차면 **만들 때** 알려 줍니다(§4 수용량). 학교망 대비는 §12.
@@ -75,7 +75,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 8. `/api/info` 확인, 앱 연결 안내
 
 - **Zero Trust 첫 가입은 대시보드에서만**: 대시보드 → Zero Trust → 팀 이름 → Free 요금제 → **결제 수단 입력**(무료 요금제도 입력은 받지만 청구하지 않음, 공식 문서 cloudflare-one/setup). 안 했으면 스크립트가 이 한 단계만 안내하고 나머지를 끝냅니다. 그동안 관리 화면은 닫혀 있고(404) curl 관리(§3)는 됩니다.
-- **Cloudflare가 최선인가**: 무료로 '서버 쪽 검사(런타임 외 스크립트 금지) + 사이트마다 다른 주소 + 하루 한도와 무관한 보기 + 실시간 방'을 한 계정에서 다 하는 곳은 찾지 못했습니다. Workers Previews는 Worker 하나에 미리보기 100개(무료)까지라 오래된 것부터 지워지고, Pages는 미리보기 배포 개수가 무제한입니다. 근거·위험은 조사 문서.
+- **Cloudflare가 최선인가**: 무료로 '서버 쪽 검사(올릴 때 거절 규칙·서버가 정하는 CSP) + 사이트마다 다른 주소 + 하루 한도와 무관한 보기 + 실시간 방'을 한 계정에서 다 하는 곳은 찾지 못했습니다. Workers Previews는 Worker 하나에 미리보기 100개(무료)까지라 오래된 것부터 지워지고, Pages는 미리보기 배포 개수가 무제한입니다. 근거·위험은 조사 문서.
 - 손으로 하던 길(`npx wrangler login` → `npm run deploy` → `npx wrangler secret put …`)도 그대로 됩니다. 관리 Worker는 `npm run deploy:admin`. 앱 주소 허용은 [`wrangler.jsonc`](wrangler.jsonc)의 `ALLOWED_ORIGINS`(또는 비밀 값 `APP_ORIGINS`), 내 도메인은 붙인 뒤 `PUBLIC_ORIGIN`.
 - 확인: `curl https://<호스트>/api/info` → `{"ok":true,"view":"pages",…}`
 - 자동 배포는 위 'GitHub에서 저절로 다시 배포'(Workers Builds, 명령은 그 2번). 감시 경로 `hosting/*`, `skills/lecpage/engine/runtime/*`, `skills/lecpage/engine/src/build.js`, `skills/lecpage/backends/cloudflare/src/*`.
@@ -142,7 +142,6 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `PUBLIC_ORIGIN` | (요청 주소) | 내 도메인을 붙였을 때 돌려줄 주소 |
 | `ADMIN_URL` | (wrangler.jsonc에 운영 주소) | 신고 알림·하루 점검의 관리 화면 링크(관리 Worker). 없으면 `/admin` |
 | `CATALOG_URL` | (wrangler.jsonc에 `https://lecpage.com/ai-catalog.json`) | 하루 점검이 '며칠째 그대로인지' 볼 AI 정보 파일(https만). 없으면 그 점검만 건너뜀 |
-| `ALLOW_SUPABASE_SDK` | (꺼짐) | §6 참고 |
 | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | (없음) | 관리 화면(§11). 관리 Worker에는 설정 스크립트가 넣음. 바로 배포 Worker에 넣으면 그 안의 `/admin`(경로 Access, 예전 방식)이 열림. 저장소에 적지 말고 비밀 값으로 |
 | `ALERT_AT` | `45,60,80,95` | 하루 예산의 몇 %에서 알림을 보낼지(넘침 단계와 같게: 예약한 연수만 → 새 일 멈춤 → 묻기 20초 → 곧 한도) |
 | `STATS` / `STATS_DAILY_CAP` | on / 20000 | 앱 익명 이용 합계를 받을지, 항목 하나의 하루 상한 |
@@ -213,29 +212,64 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 ## 6. 안전장치
 
-`worker` 보기는 모든 사이트가 한 출처(`/s/<id>/`)를, `pages` 보기도 Pages 프로젝트 하나를 같이 쓰므로, **올린 사람이 쓴 스크립트는 절대 돌지 않게** 두 겹으로 막습니다(두 보기 모두 같은 검사).
+받는 사이트는 두 가지입니다. **엔진 템플릿으로 만든 사이트**(v1)와 **AI가 직접 쓴 사이트**(`index.html` + `assets/style.css` + `assets/site.js` + 엔진이 끼워 넣은 키트 런타임·보조 쪽, [`docs/plan-ai-first.md`](../docs/plan-ai-first.md) §3). 둘 다 같은 검사를 거칩니다.
 
-1. **받을 때**: `.js`는 내용이 lecpage 엔진 런타임(`skills/lecpage/engine/runtime`) 파일 그대로이거나, 그 파일들을 `\n;\n`로 이은 것일 때만 받습니다. `scripts/gen-runtime.mjs`가 런타임 조각마다 길이·앞머리·SHA-256을 뽑아 `src/runtime-allow.js`를 만들고(배포·시험 때마다), 서버는 올라온 내용을 앞에서부터 조각으로 나눠 해시를 맞춰 봅니다. 올릴 때 한 번, 배포할 때 한 번 더 봅니다. 다르면 `runtime_mismatch`.
-2. **내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다(`script-src 'self'`, `form-action 'none'`, `base-uri 'none'`, `frame-src 'none'` …). 올라온 `_headers`는 쓰지 않습니다. 형식은 확장자 표로만 정하고 `nosniff`를 붙여, `.js`가 아닌 파일은 스크립트로 읽히지 않습니다. SVG는 가둔(sandbox) 채로 내보냅니다.
-3. HTML은 내보내면서 `<meta http-equiv="refresh">`, `<base>`, `<object>`, `<embed>`, 바깥 주소의 `<script>`를 빼고 "신고" 링크를 붙입니다.
-4. 사이트 주소는 무작위 10자, 수정 열쇠는 무작위 32바이트이고 서버에는 해시만 둡니다. 없는 주소를 두드려도 저장소에는 아무것도 생기지 않습니다.
+**스크립트(.js) 받기**
+- `.js` 하나는 1MB까지. 내용이 lecpage 엔진 런타임(`skills/lecpage/engine/runtime`) 파일 그대로이거나 그 파일들을 `\n;\n`로 이은 것이면 **엔진 런타임**입니다. `scripts/gen-runtime.mjs`가 런타임 조각마다 길이·앞머리·SHA-256을 뽑아 `src/runtime-allow.js`를 만들고(배포·시험 때마다), 서버가 해시를 맞춰 봅니다.
+- 그 밖의 `.js`는 **사이트가 직접 쓴 스크립트**입니다.
+  - `pages` 보기(사이트마다 출처가 갈림): 검사(아래 거절 규칙)를 통과하면 받습니다. 어느 `.js`가 사이트 스크립트인지 사이트 저장소(`jsk` 표)에 적어 둡니다.
+  - `worker` 보기와 `pages` 보기의 두 번째 주소(이 호스트의 `/s/<id>/`)는 **모든 사이트가 같이 쓰는 출처**라 사이트 스크립트를 돌리지 않습니다. `worker` 보기는 올릴 때 `script_not_allowed`(422)로 거절하고, 두 번째 주소는 사이트 스크립트·목록에 없는 `.js`·못 쓰는 경로를 404로 답합니다(엔진 런타임만 Pages에서 가져와 내보냄).
+  - 런타임 파일처럼 시작하는데(앞머리가 같음) 해시가 다르면 두 보기 모두 `runtime_mismatch`: 앱과 서버의 판이 어긋났거나 런타임을 손댄 것입니다(아래).
+- 올릴 때 한 번, 배포할 때 한 번 더 봅니다(다른 이름으로 올려 둔 내용을 `.js`로 돌려 쓰는 길을 막음).
 
-**앱과 서버의 버전이 다를 때**: 엔진 런타임이 바뀌면 서버도 새 판이어야 새 앱이 올릴 수 있습니다. main에 push 한 번에 Workers Builds가 앱과 서버를 함께 다시 배포하고(몇 분 차이), 그 사이 예전 앱을 띄워 둔 사람은 `runtime_mismatch`를 받아 앱이 "새로 고친 뒤 다시"라고 안내하며, 앱은 새 판을 받으면 저절로 한 번 새로 고칩니다. 그래서 **보통은 할 일이 없습니다**(바로 배포를 부르는 것은 앱뿐이고 Skill CLI는 부르지 않음). 서버만 먼저 되돌리거나 앱 배포를 일부러 미룰 때처럼 예전 판을 며칠 더 받아야 하면 그때만 `npm run runtime:keep`으로 지금 판을 `runtime-history.json`에 적어 커밋합니다(적힌 예전 판도 받음, 보안 문제로 막을 판은 그 파일에서 지움).
+**올릴 때 거절**(422 `unsafe_site`, [`src/sitecheck.js`](src/sitecheck.js)). 오류에 `rule`·`path`와 한국어 `message_ko`(앱이 그대로 보여 줌)가 붙습니다. 잘못 걸리는 일이 적은 단순한 규칙만 둡니다.
+
+| `rule` | 어디서 | 무엇 |
+|---|---|---|
+| `password` | HTML·사이트 스크립트 | 비밀번호 입력 칸(`input type=password`, 스크립트가 만드는 것 포함) |
+| `password_label` | HTML | 이름·안내 글이 '비밀번호'뿐인 칸(`placeholder="비밀번호"`, `name="password"`, `autocomplete=current-password` …). 문장 속의 '비밀번호'(와이파이 비밀번호 안내 등)는 걸리지 않음 |
+| `login` | HTML | 로그인 화면 흉내: 아이디·이메일 칸과 글이 '로그인'뿐인 단추가 함께 있음 |
+| `form` | HTML | 다른 사이트로 보내는 양식(`form action`·`formaction`이 바깥 주소, `mailto:`·`javascript:` 포함) |
+| `masked` | HTML·CSS·사이트 스크립트 | 입력 글자 가림(`-webkit-text-security`) |
+| `service_worker` | 사이트 스크립트 | 서비스 워커 등록(`navigator.serviceWorker.register`). CSP의 `worker-src 'none'`도 막음 |
+| `aux_script` | HTML | 보조 쪽(맨 위 폴더의 `console`·`screen`·`poster`·`check`·`privacy.html`)에 사이트 스크립트 |
+
+엔진이 만드는 비밀번호 칸 둘(강사 화면의 관리자 키, 암호 잠금 화면의 암호 칸)은 모양(속성)이 정확히 같고 그 쪽에 사이트 스크립트가 없을 때만 받습니다. HTML은 주석·인라인 `<script>`·`<textarea>` 안쪽을 태그로 읽지 않고(돌지 않거나 그려지지 않음), 속성은 브라우저처럼 읽습니다(같은 속성은 처음 것, `&#112;` 같은 문자 참조는 풂, `iframe srcdoc`도 봄).
+
+**내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다. 올라온 `_headers`·meta CSP로는 넓힐 수 없습니다(브라우저는 meta CSP를 겹쳐 더 좁게만 씀). 사이트 쪽 CSP는 엔진 조립이 넣는 meta CSP(`skills/lecpage/engine/src/kit/assemble.js`의 `kitCsp`)와 지시어·출처가 같고 서버는 더 좁게만 둡니다(`default-src 'none'`, 실시간 방은 출처 전체가 아니라 그 방 경로). `test/csp.test.mjs`가 참여 서버 네 가지(이 호스트의 방·강사 계정 Cloudflare·Supabase·구글 시트)로 둘을 비교합니다.
+
+| | 사이트 쪽(첫 화면·AI가 쓴 쪽) | 보조 쪽(엔진이 만드는 강사·발표·QR 안내문·접속 확인·개인정보 쪽) |
+|---|---|---|
+| `script-src` | `'self'` + 버전을 고정한 라이브러리 경로(엔진 `render/shell.js`의 `LIB_SCRIPT_SOURCES`: gsap·lenis·ogl·supabase-js). 인라인은 막음(엔진 조립이 인라인 `<script>`를 `assets/site.js`·`assets/<쪽>.js`·`*.module.js`로, onclick 같은 속성을 `assets/<쪽>-events.js`로 옮김) | 같음 |
+| `connect-src` | `'self'` + **그 사이트의 실시간 방 경로만**(`…/live/api/<코드>`·같은 경로의 `wss:`·보드 파일 `…/api/<코드>/files/`) + 사이트 자료에 적힌 강사 계정 서버(https의 `*.workers.dev`·`*.supabase.co`, 구글 시트는 Apps Script) | `'self' https: wss:`(접속 확인이 바깥 도구가 열리는지 잼) |
+| `img-src` / `media-src` | `'self' data: blob:` + 방의 보드 파일(강사 계정 서버면 그 출처, 구글 시트면 Apps Script·드라이브) / `'self' blob:` + 보드 파일 + (pages 보기) 이 호스트의 `/s/<id>/`(영상·소리) | `https:` 포함(예전 그대로) |
+| `style-src` / `font-src` | `'self' 'unsafe-inline'` + 글꼴 CSS / `'self' data:` + 글꼴 CDN | 같음 |
+| `frame-src` | `https://www.youtube-nocookie.com https://player.vimeo.com` | `'none'` |
+| 그 밖 | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'none'` `default-src 'none'` | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'none'`, 강사·발표·안내문은 `frame-ancestors 'none'` |
+
+- 방 코드는 강사가 [배포하기]로 방을 묶은 뒤 공개할 때 CSP에 들어갑니다(앱은 이미 이 순서). `pages` 보기는 공개할 때 만든 `_headers`로, `worker` 보기는 요청마다 지금 묶인 방으로 정합니다.
+- 형식은 확장자 표로만 정하고 `nosniff`를 붙여, `.js`가 아닌 파일은 스크립트로 읽히지 않습니다. SVG는 가둔(sandbox) 채로 내보냅니다.
+- HTML은 내보내면서 `<meta http-equiv="refresh">`, `<base>`, `<object>`, `<embed>`, 바깥 주소의 `<script>`(고정 라이브러리 경로는 남김)를 빼고 "신고" 링크를 붙입니다.
+- 사이트 주소는 무작위 10자, 수정 열쇠는 무작위 32바이트이고 서버에는 해시만 둡니다. 없는 주소를 두드려도 저장소에는 아무것도 생기지 않습니다.
+
+**CSP와 검사로 막을 수 없는 것**(신고·가리기로 대응): 사이트 스크립트가 입력값을 주소에 붙여 다른 사이트로 **이동**(`location = …`)하는 것은 CSP로 막을 수 없습니다(`navigate-to`는 표준에서 빠짐). 그 사이트의 실시간 방에 적어 두었다가 강사 화면에서 읽는 것도 막을 수 없습니다(방은 그 사이트를 만든 사람의 것). 그래서 모든 사이트 아래에 **신고** 링크를 붙이고, 운영자는 신고를 받으면 가립니다(가리면 사이트·방이 함께 닫힘, §3). 거절 규칙은 흔한 흉내를 걸러 낼 뿐 모든 피싱을 알아보지는 못합니다.
+
+**앱과 서버의 버전이 다를 때**: 엔진 런타임이 바뀌면 서버도 새 판이어야 새 앱이 올릴 수 있습니다. main에 push 한 번에 Workers Builds가 앱과 서버를 함께 다시 배포하고(몇 분 차이), 그 사이 예전 앱을 띄워 둔 사람은 `runtime_mismatch`를 받아 앱이 "새로 고친 뒤 다시"라고 안내하며, 앱은 새 판을 받으면 저절로 한 번 새로 고칩니다. 그래서 **보통은 할 일이 없습니다**(바로 배포를 부르는 것은 앱뿐이고 Skill CLI는 부르지 않음). 서버만 먼저 되돌리거나 앱 배포를 일부러 미룰 때처럼 예전 판을 며칠 더 받아야 하면 그때만 `npm run runtime:keep`으로 지금 판을 `runtime-history.json`에 적어 커밋합니다(적힌 예전 판도 받음, 보안 문제로 막을 판은 그 파일에서 지움). 두 번째 주소에서 엔진 런타임으로 알아보는 것도 이 목록 기준입니다.
 
 **`pages` 보기에서 더하는 것**
-- 받을 때 검사(런타임 대조·크기·형식)를 마친 파일만 **서버가** Pages 직접 올리기 API로 올립니다. 자산 API의 JWT는 앱(브라우저)에 주지 않습니다: Pages가 열쇠와 내용이 맞는지 확인하는지 알 수 없어, 브라우저가 직접 올리면 남의 사이트가 쓰는 파일을 바꿔치기할 수 있기 때문입니다(이 API는 CORS도 열려 있지 않음, 2026-11-13 확인).
+- 받을 때 검사(런타임 대조·사이트 스크립트 검사·CSS 검사·크기·형식)를 마친 파일만 **서버가** Pages 직접 올리기 API로 올립니다. HTML은 공개할 때 검사하고, 걸리면 Pages에 아무것도 배포하지 않습니다. 자산 API의 JWT는 앱(브라우저)에 주지 않습니다: Pages가 열쇠와 내용이 맞는지 확인하는지 알 수 없어, 브라우저가 직접 올리면 남의 사이트가 쓰는 파일을 바꿔치기할 수 있기 때문입니다(이 API는 CORS도 열려 있지 않음, 2026-11-13 확인).
 - Pages 열쇠는 wrangler와 같은 blake3(base64 + 확장자)입니다([`src/blake3.js`](src/blake3.js), blake3-wasm과 맞춰 시험). 형식(`content-type`)은 확장자 표로 정해 올립니다.
-- HTML은 배포할 때 한 번 손봐(위 3번. 신고 링크는 이 호스트의 `/report`, 미리보기 카드 주소는 Pages 주소) 올리고, 응답 머리글은 서버가 만든 `_headers`로만 정합니다(CSP·nosniff·noindex·SVG 가둠·내려받기 형식·강사 화면 틀 막기, Pages 기본 `Access-Control-Allow-Origin: *`는 뗌). `robots.txt`는 호스트 정책으로 바꾸고, `404.html`이 없으면 넣습니다(없으면 Pages가 모든 주소에 첫 화면을 보여 줌). 사이트가 보낸 `_headers`·`_redirects`는 쓰지 않습니다.
+- HTML은 배포할 때 한 번 손봐(위. 신고 링크는 이 호스트의 `/report`, 미리보기 카드 주소는 Pages 주소) 올리고, 응답 머리글은 서버가 만든 `_headers`로만 정합니다(사이트 쪽·보조 쪽 CSP·nosniff·noindex·SVG 가둠·내려받기 형식·강사 화면 틀 막기, Pages 기본 `Access-Control-Allow-Origin: *`는 뗌). `robots.txt`는 호스트 정책으로 바꾸고, `404.html`이 없으면 넣습니다(없으면 Pages가 모든 주소에 첫 화면을 보여 줌). 사이트가 보낸 `_headers`·`_redirects`는 쓰지 않습니다.
 - **영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고** Durable Object에 두어 Worker가 Range(206)까지 맞춰 내보냅니다. Pages·Workers 정적 자산은 Range 요청에 200을 주는데 Safari(아이폰)가 영상을 틀 때 Range가 필요합니다(공식 문서). Pages 주소로 오면 `_redirects`가 `/s/<id>/…`로 넘깁니다.
-- 사이트마다 출처(`s-<id>.….pages.dev`)가 갈려 브라우저 저장소를 같이 쓰지 않고, 한 사이트가 피싱 신고로 막혀도 다른 사이트는 그대로입니다.
+- 사이트마다 출처(`s-<id>.….pages.dev`)가 갈려 브라우저 저장소를 같이 쓰지 않고, 한 사이트가 피싱 신고로 막혀도 다른 사이트는 그대로입니다. 다만 모두 같은 '사이트'(등록 가능 도메인 `<프로젝트>.pages.dev`)라 SameSite 쿠키는 함께 갑니다(lecpage는 쿠키를 쓰지 않음).
 - 가리기: 그 브랜치에 '가려 둔 사이트' 화면만 배포합니다(지난 배포는 풀 때 다시 쓰려고 둠. 배포마다 생기는 고유 주소 `<해시>.….pages.dev`는 앱·서버가 어디에도 내보내지 않음). 풀기: 마지막 배포 목록으로 다시 배포하고 안내 화면 배포를 지움. 기간 끝: 그 브랜치에 '보관 기간이 끝났어요' 화면 하나만 남기고 나머지를 지움(주소가 Cloudflare 영어 404가 되지 않게). 강사가 내림(사이트 열쇠): 그 브랜치에 '강사가 사이트를 내렸어요' 화면 하나만 남기고 나머지를 지움. 운영자 지우기: 그 브랜치 배포를 모두 지움(가장 최근 배포를 못 지우면 '보관 기간이 끝났어요' 화면만 남김). 확실히 내려야 하면 가리지 말고 지우세요.
-- 같은 사이트를 이 호스트의 `/s/<id>/`로도 엽니다(학교망에서 pages.dev가 막혔을 때 쓰는 두 번째 주소. Worker가 Pages에서 가져와 같은 머리글로 내보내고, 이 주소로 연 방문은 Worker 요청에 듦).
+- 같은 사이트를 이 호스트의 `/s/<id>/`로도 엽니다(학교망에서 pages.dev가 막혔을 때 쓰는 두 번째 주소. Worker가 Pages에서 가져와 같은 머리글로 내보내고, 이 주소로 연 방문은 Worker 요청에 듦). 이 주소에서는 사이트 스크립트가 돌지 않아 사이트가 직접 만든 움직임·버튼은 동작하지 않고, 엔진 키트(질문·투표 등)는 그대로 동작합니다.
 - 강사 화면에 운영자 공지 띠를 붙이지 않습니다(정적 배포라 보는 때에 끼울 수 없음). 앱 공지는 그대로입니다.
 
 **알아 둘 것**
-- CDN에서 라이브러리를 받는 효과 셋(Lenis 부드러운 스크롤, GSAP, OGL)은 CSP에 막혀 기본 동작으로 돌아갑니다. 화면은 깨지지 않습니다.
-- **Supabase 실시간**을 쓰는 사이트는 `supabase-js`를 CDN에서 받으므로 기본 설정에서는 연결되지 않습니다. 받아 주려면 `ALLOW_SUPABASE_SDK="1"`: 엔진이 버전까지 고정한 그 파일 하나만 CSP에 더합니다. 이 서버의 실시간 방이나 구글 시트 연결은 그대로 됩니다.
-- 암호로 잠근 사이트는 내용이 암호문이라 서버가 3번(HTML 손보기)을 할 수 없습니다. 스크립트는 CSP가 그대로 막지만, 풀린 화면에는 신고 링크가 없습니다(잠금 화면에는 있습니다).
+- CDN에서 라이브러리를 받는 효과 셋(Lenis 부드러운 스크롤, GSAP, OGL)과 Supabase 실시간의 `supabase-js`는 고정 라이브러리 경로라 그대로 돕니다(예전의 `ALLOW_SUPABASE_SDK` 설정은 없어짐).
+- 엔진 템플릿 사이트(v1)는 그대로 받습니다. 다만 사이트 쪽 `img-src`가 좁아져, 그림 주소를 바깥 https 주소로 적은 v1 사이트(드묾. 엔진은 올린 그림을 사이트에 담음)는 그 그림이 보이지 않습니다.
+- 암호로 잠근 사이트는 내용이 암호문이라 서버가 HTML 손보기·검사를 할 수 없습니다. 잠금 화면 자체는 검사하고(엔진 잠금 화면 모양만 받음), 스크립트는 CSP가 그대로 막지만 풀린 화면에는 신고 링크가 없습니다(잠금 화면에는 있습니다).
 - `worker` 보기에서는 브라우저 저장소(localStorage 등)를 이 호스트의 모든 사이트가 같이 씁니다. 돌 수 있는 스크립트가 엔진 런타임뿐이라 남의 사이트가 마음대로 읽어 갈 수는 없지만, 완전히 나누려면 `pages` 보기를 쓰세요.
 
 **빠르고 덜 부르게**(`worker` 보기. `pages` 보기는 Pages 캐시·ETag가 맡고 요청 수에 들지 않음)
@@ -267,17 +301,17 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 ## 8. API
 
-오류는 언제나 `{ "error": { "code", "message_ko" } }`. 넘침 때문이면 `reason`(`paused`·`budget`·`tight`·`daily_cap`·`room_cap`·`storage`·`pages_api`·`booked`·`device`·`ip`·`ip_hour`)·`scope`(`you` 이 기기·주소만 / `everyone` 오늘 모두)·`next`(강사 계정 배포 순서)·`liveNext`(참여 기능)·`retryAt`(밀리초)이 붙습니다. 코드: `bad_request` `unauthorized` `not_found` `too_large` `too_many_files` `bad_path` `bad_type` `runtime_mismatch` `rate_limited` `full` `blocked` `missing_blobs` `code_taken`.
+오류는 언제나 `{ "error": { "code", "message_ko" } }`. 넘침 때문이면 `reason`(`paused`·`budget`·`tight`·`daily_cap`·`room_cap`·`storage`·`pages_api`·`booked`·`device`·`ip`·`ip_hour`)·`scope`(`you` 이 기기·주소만 / `everyone` 오늘 모두)·`next`(강사 계정 배포 순서)·`liveNext`(참여 기능)·`retryAt`(밀리초)이 붙습니다. 코드: `bad_request` `unauthorized` `not_found` `too_large` `too_many_files` `bad_path` `bad_type` `runtime_mismatch` `script_not_allowed` `unsafe_site` `rate_limited` `full` `blocked` `missing_blobs` `code_taken`. `unsafe_site`에는 `rule`(§6 표)·`path`, `script_not_allowed`·`runtime_mismatch`에는 `path`가 붙습니다.
 CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보낸 요청은 403입니다.
 
 | 요청 | 답 |
 |---|---|
-| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, capacity, view: 'pages'\|'worker', keepAlive, limits: { maxBytes, maxFileBytes, maxFiles, days }, report, live?: { url, uploads, maxUploadMb } }` · `capacity: { state: 'open'\|'tight'\|'full'\|'paused', reason, newSites, newRooms, onlyBooked, pct, resetAt, retryAt?, message_ko?, next, liveNext, siteDays }`(§4 넘침 처리) · 30초 캐시 |
+| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, capacity, view: 'pages'\|'worker', keepAlive, siteScripts, limits: { maxBytes, maxFileBytes, maxFiles, days }, report, live?: { url, uploads, maxUploadMb } }` · `capacity: { state: 'open'\|'tight'\|'full'\|'paused', reason, newSites, newRooms, onlyBooked, pct, resetAt, retryAt?, message_ko?, next, liveNext, siteDays }`(§4 넘침 처리) · 30초 캐시 |
 | `GET /api/status?date=YYYY-MM-DD&site=<id>` | `{ ok, view, plan, live, accepting, paused, capacity, budget, today: { date, until, used, reserved, pct }, day?: { date, trainings, people, est, live, budget, pct, room, ok }, site?: { id, state: 'open'\|'blocked'\|'gone', url, expiresAt, live: { code, state }, booking: { …, liveDenied?, liveNext? } } }` · 배포 전·연수 전날 점검용, 1분 캐시 |
 | `POST /api/sites` `{ title?, booking?, device?, caps? }` | `201 { id, key, url, expiresAt, altUrl?, view?, share: { scope: 'device'\|'ip', left }, live?, advice? }` · `expiresAt`은 밀리초 숫자 · `key`는 이때 한 번만 · `booking: { date, start?, end?, people, network: 'good'\|'slow'\|'restricted', live }`(한국 시간) · `device`: 앱이 기기에 둔 무작위 값(영문·숫자·`_-` 16~64자, 공정 몫) · `caps: ['split']`: 그날 방이 차면 사이트는 받고 `live: { ok: false, reason: 'booked', next }`로 참여 기능만 넘김(없으면 `429` + `reason: 'booked'`, `day`) · `advice: { code: 'long_term' }`: 예약 없는 사이트 |
 | `POST /api/sites/:id/deploys` `{ files: { "<경로>": { sha256, size } }, booking?, caps? }` | `{ deploy, missing: [sha256…], live? }` · Pages API 5분 창이 차면 `429` + `reason: 'pages_api'` |
-| `PUT /api/sites/:id/blobs/:sha256` (본문 = 파일) | `204` · `pages` 보기는 받으면서 검사한 뒤 Pages에 올림 |
-| `POST /api/sites/:id/deploys/:deploy/publish` | `{ url, expiresAt, altUrl?, view? }` · 덜 올렸으면(또는 `pages` 보기에서 Pages가 지운 파일이 있으면) `409 missing_blobs`(+`missing`) → 그 파일만 다시 올리고 한 번 더 |
+| `PUT /api/sites/:id/blobs/:sha256` (본문 = 파일) | `204` · `pages` 보기는 받으면서 검사한 뒤 Pages에 올림 · `.js`·CSS가 받기 규칙에 걸리면 `422`(`unsafe_site`·`script_not_allowed`·`runtime_mismatch`, §6) |
+| `POST /api/sites/:id/deploys/:deploy/publish` | `{ url, expiresAt, altUrl?, view? }` · 덜 올렸으면(또는 `pages` 보기에서 Pages가 지운 파일이 있으면) `409 missing_blobs`(+`missing`) → 그 파일만 다시 올리고 한 번 더 · HTML이 받기 규칙에 걸리면 `422 unsafe_site`(+`rule`·`path`, §6). 공개된 판은 그대로 |
 | `POST /api/sites/:id/live` `{ code, adminKeyHash, settings?: { retentionDays?, uploads?, moderation? } }` | `{ url: "<호스트>/live", code }` |
 | `GET /api/sites/:id/records` | `{ ok, live: false }` 또는 `{ ok, live: true, counts: { participants, attendance, questions, posts, answers, survey }, last }` · 사이트 열쇠로만, 수만(내용 없음). 앱이 [사이트 내리기]·다시 배포 전에 지워질 기록과 지난 기수 기록을 알릴 때 |
 | `DELETE /api/sites/:id` | `204`(다 지움) · 사이트·파일·방을 지우고, 보관 기간이 남은 동안 그 주소에 '강사가 사이트를 내렸어요'(보관 기간 끝·운영자 지움은 '보관 기간이 끝났어요') · Pages 배포를 다 지우지 못하면 `202 { ok, state: 'wiping', message_ko }`(서버가 알람으로 다시 지움, 그동안 이 주소는 고치거나 다시 배포할 수 없음. 같은 요청을 다시 보내면 한 번 더 해 봄) |
@@ -289,7 +323,7 @@ CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보�
 | `GET /s/:id/…` | 사이트 파일 · 기간 끝·지움 404 · 가림 451 · `pages` 보기 사이트는 Pages에서 가져와 내보냄(두 번째 주소), 영상·소리는 여기서 |
 | `/live/api/<코드>/…` | 실시간 방(HTTP 프로토콜 v1) · `snapshot?since=&wait=` 긴 대기 · 응답 머리글 `X-Lec-Poll-Ms` |
 
-사이트를 고치는 요청에는 `Authorization: Bearer <key>`가 필요합니다. 받는 형식: html css js(런타임만) json webmanifest txt svg png jpg jpeg webp avif gif ico woff2 pdf mp3 m4a mp4 webm, 내려받기 전용 ppt pptx ppsx doc docx xls xlsx hwp hwpx key pages numbers odt odp ods csv md zip, 암호 사이트의 `*.enc`.
+사이트를 고치는 요청에는 `Authorization: Bearer <key>`가 필요합니다. 받는 형식: html css js·mjs(엔진 런타임, `pages` 보기는 검사를 통과한 사이트 스크립트도. 1MB까지) json webmanifest txt svg png jpg jpeg webp avif gif ico woff2 woff ttf otf vtt pdf mp3 m4a mp4 webm(엔진 조립이 받는 사이트 파일 형식이 모두 들어 있음, `test/paths.test.mjs`), 내려받기 전용 ppt pptx ppsx doc docx xls xlsx hwp hwpx key pages numbers odt odp ods csv md zip, 암호 사이트의 `*.enc`.
 
 ## 9. 시험
 
@@ -298,6 +332,8 @@ cd hosting
 npm test                  # 단위 시험 + 통합 시험(로컬 workerd에 실제 엔진 사이트를 올려 봄, 가짜 Access로 관리 화면까지). workerd를 못 띄우면 통합 시험만 건너뜁니다
                           #  + VIEW=pages 통합 시험(흉내 Cloudflare API test/fake-cf.mjs: 직접 올리기·blake3 열쇠·가리기·지우기·긴 대기·예약)
                           #  + 설정 스크립트(흉내 API·흉내 wrangler: 처음·다시·도메인·실패·--dry-run), 관리 Worker(ctx.access·JWT)
+                          #  + 받기 규칙(test/sitecheck.test.mjs: 엔진 v1 사이트·AI가 쓴 사이트는 통과, 거절 규칙만 걸림) · AI가 쓴 사이트를 두 보기에 올려 봄
+LECPAGE_TEST_PORTS=6400-6449 npm test   # 시험 서버의 포트를 이 범위에서만 고름(같은 기계에서 범위를 나눠 쓸 때)
 npm run check             # wrangler deploy --dry-run (바로 배포 Worker와 관리 Worker 둘 다 묶음만 만들어 봄)
 npm run dev               # http://localhost:8787
 node test/fake-cf.mjs     # 흉내 Cloudflare(e2e용): http://127.0.0.1:8790, 보기 http://s-<id>.localhost:8790/
