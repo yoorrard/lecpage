@@ -6,7 +6,7 @@
 // - 같은 연수를 두 탭에서 동시에 돌리지 않음(Web Locks, 없으면 기록의 심장 박동)
 // - 탭이 가려진 동안 끊기면 횟수를 쓰지 않고 기다렸다가, 탭이 돌아오면(또는 망이 돌아오면) 이어 함
 import { getActiveAI, loadKey, explainError, checkKey, models as listModels, PROVIDERS } from '../ai.js';
-import { projects } from '../db.js';
+import { projects, blobs } from '../db.js';
 import { uid } from '../util.js';
 import { reach } from '../netcheck.js';
 import { jobsDb } from './store.js';
@@ -17,9 +17,10 @@ import { discard as openaiDiscard } from './providers/openai.js';
 import { preparePageImages, packMaterial, sourceFiles } from './material.js';
 import * as P from './prompts.js';
 import { extractJson, extractCss, extractHtml, extractSections, mergeSections, replaceSections, stitch, balance, trimCss, cssCut, skeleton, SECTIONS_MARK } from './parse.js';
-import { assemble, inspect, readMeta, themeFromCss } from './kit.js';
-import { inlineSite, materialFiles } from './preview.js';
+import { inspect, readMeta, themeFromCss, issuesForAi } from './kit.js';
+import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, decodeBinary } from './local.js';
 
 const TAB = uid(8);
 const live = new Map(); // pid → { ctrl, rec, wait, elsewhere }
@@ -96,7 +97,8 @@ function withLock(pid, fn) {
 
 // ── 단계 목록 ──
 const STEP = (name) => ({ name, status: 'todo', attempts: 0, output: null, error: null });
-function stepsFor(kind) {
+function stepsFor(kind, way) {
+  if (way === 'local') return [STEP('agent'), STEP('assemble')]; // 내 PC의 에이전트가 사이트 전체를 파일로 씀 → 앱은 조립·검수만
   if (kind === 'make') return [STEP('plan'), STEP('design'), STEP('assemble')];
   if (kind === 'edit') return [STEP('edit'), STEP('assemble')];
   if (kind === 'fix') return [STEP('fix'), STEP('assemble')];
@@ -115,8 +117,8 @@ export function viewOf(rec, { elsewhere = false } = {}) {
   const L = live.get(rec.pid);
   return {
     status, jobId: rec.id, kind: rec.kind, way: rec.way, provider: rec.provider, model: rec.model,
-    step: cur ? { name: cur.name, label_ko: P.stepLabel(cur.name, secTotal), index: rec.status === 'done' ? total : i + 1, total, received: (cur.acc?.length || 0) + (cur.piece?.length || 0) } : null,
-    steps: rec.steps.map((s) => ({ name: s.name, label_ko: P.stepLabel(s.name, secTotal), status: s.status, attempts: s.attempts })),
+    step: cur ? { name: cur.name, label_ko: cur.label || P.stepLabel(cur.name, secTotal), index: rec.status === 'done' ? total : i + 1, total, received: (cur.acc?.length || 0) + (cur.piece?.length || 0) } : null,
+    steps: rec.steps.map((s) => ({ name: s.name, label_ko: s.label || P.stepLabel(s.name, secTotal), status: s.status, attempts: s.attempts })),
     startedAt: rec.startedAt, updatedAt: rec.updatedAt,
     error: status === 'error' || status === 'paused' ? rec.error || null : null,
     wait: L?.wait || null, // { reason: 'quota'|'retry'|'hidden'|'offline', until }
@@ -136,7 +138,8 @@ function errorView(e, provider) {
   if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
-  if (k === 'local') return { kind: k, title: '내 PC 연결은 아직 쓸 수 없어요.', body: 'API 키나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste'] };
+  if (k === 'local') return { kind: k, title: '내 PC의 연결 프로그램에 닿지 못했어요.', body: '연결 프로그램이 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키나 쓰던 AI 창으로도 만들 수 있어요.', actions: ['resume', 'connect', 'paste'] };
+  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: '연결 프로그램을 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
   const x = explainError(e, provider);
   return { kind: x.kind, title: x.title, body: x.body, actions: ['resume', ...x.actions.filter((a) => a !== 'pay' && a !== 'light')], link: x.link || null };
 }
@@ -348,31 +351,38 @@ function metaFrom(plan, css, prev) {
   return readMeta({ v: 2, title: plan.title, subtitle: plan.subtitle, organizer: plan.organizer, sessions: plan.sessions, venue: plan.venue, mode: plan.mode, audience: plan.audience, instructors: plan.instructors, features: plan.features, theme, facts: plan.facts }, { prev }).meta;
 }
 
-/** 조립 + 정적 검사 + 숨은 틀 검사 → issues */
-export async function inspectSite(pid, site, meta) {
-  const mat = await materialFiles(pid);
-  const { files, warnings } = assemble(site, meta, { preview: true, target: 'preview', material: Object.keys(mat) });
-  const issues = inspect({ ...Object.fromEntries(Object.keys(mat).map((k) => [k, mat[k]])), ...files }, meta);
+/**
+ * 조립(엔진 키트, 미리보기·연습 모드) + 정적 검수(AI가 쓴 폴더 기준) + 숨은 틀에서 그려서 검수(1280·390).
+ * issue마다 key(같은 종류가 여럿일 때 하나를 가리킴: id|파일|선택자|섹션|폭)를 붙임
+ */
+export async function inspectSite(pid, site, meta, project = null) {
+  const a = await assembleSite(pid, site, meta, { project });
+  const issues = inspect({ ...a.material, ...(site || {}) }, meta);
+  for (const w of [...(a.errors || []), ...(a.warnings || [])]) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
   let rendered = [];
-  if (!hook().noRender) { try { rendered = await renderIssues(inlineSite({ ...mat, ...files }, 'index.html')); } catch { rendered = []; } }
+  if (!hook().noRender && a.files && a.files['index.html']) { try { rendered = await renderIssues(a.files); } catch { rendered = []; } }
   const seen = new Set(); const out = [];
-  for (const i of [...issues, ...rendered]) { const k = `${i.id.split(':')[0]}|${i.where?.selector || ''}|${i.where?.section || ''}`; if (seen.has(k)) continue; seen.add(k); out.push(i); }
-  return { issues: out, warnings };
+  for (const i of [...issues, ...rendered]) {
+    const key = [i.id, i.where?.file || '', i.where?.selector || '', i.where?.section || '', i.where?.width || ''].join('|');
+    if (seen.has(key) || out.some((x) => x.message_ko === i.message_ko && !i.where?.width)) continue;
+    seen.add(key); out.push({ ...i, key });
+  }
+  return { issues: out, warnings: a.warnings || [], collected: a.collected || null };
 }
 
 async function runAssemble(ctx, step) {
   const rec = ctx.rec;
   let site; let meta;
-  if (rec.kind === 'make' && !rec.steps.some((s) => s.name === 'fix' && s.status === 'done')) {
+  if (rec.kind === 'make' && rec.way !== 'local' && !rec.steps.some((s) => s.name === 'fix' && s.status === 'done')) {
     site = siteFromSteps(ctx);
     meta = metaFrom(planOf(rec), site['assets/style.css'], ctx.project.meta);
   } else { site = rec.site; meta = rec.meta; }
-  const { issues } = await inspectSite(rec.pid, site, meta);
+  const { issues } = await inspectSite(rec.pid, site, meta, ctx.project);
   rec.site = site; rec.meta = meta;
   step.output = { issues };
   // 고칠 수 있는 문제(섹션이 정해진 오류)가 있으면 그 섹션만 한 번 고치기
   const fixable = issues.filter((i) => i.level === 'error' && i.where?.section);
-  if (rec.kind === 'make' && fixable.length && !rec.steps.some((s) => s.name === 'fix') && !hook().noFix) {
+  if (rec.kind === 'make' && rec.way !== 'local' && fixable.length && !rec.steps.some((s) => s.name === 'fix') && !hook().noFix) {
     rec.steps.push({ ...STEP('fix'), issues: fixable.slice(0, 12) }, STEP('assemble'));
   }
 }
@@ -387,7 +397,7 @@ async function runFix(ctx, step) {
   const targets = all.filter((s) => ids.includes(s.id));
   if (!targets.length) { step.output = { skipped: true }; return; }
   const text = await askStep(ctx, step, {
-    prompt: P.buildFixPrompt({ issues: issues.filter((i) => ids.includes(i.where?.section)), sections: targets, classes: P.cssClasses(site['assets/style.css']) }), maxTokens: 32000,
+    prompt: P.buildFixPrompt({ issuesText: issuesForAi(issues.filter((i) => ids.includes(i.where?.section))), sections: targets, classes: P.cssClasses(site['assets/style.css']) }), maxTokens: 32000,
     isCut: (t) => { const s = extractSections(extractHtml(t).html); return s.length > 0 && !s[s.length - 1].complete; },
   });
   const secs = extractSections(extractHtml(text).html).filter((s) => s.id && ids.includes(s.id)).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
@@ -427,7 +437,42 @@ async function runEdit(ctx, step) {
   step.output = { changed: secs.map((s) => s.id), css: !!c.css, meta: !!metaPatch };
 }
 
-const RUN = { plan: runPlan, design: runDesign, assemble: runAssemble, fix: runFix, edit: runEdit };
+/** 내 PC의 Claude Code·Codex(연결 프로그램)에게 맡김: 사이트 파일 전체를 받아 옴(그림은 blobs 'site/…') */
+async function runAgent(ctx, step) {
+  const { rec, project } = ctx;
+  const request = rec.kind === 'fix' ? `lecpage 검수에서 나온 문제를 고쳐 주세요.\n${issuesForAi(step.issues || [])}` : rec.opts.request;
+  const payload = {
+    agent: rec.model || 'claude', kind: rec.kind === 'make' ? 'make' : 'edit', request, meta: project.meta || {}, reference: rec.opts.reference || null,
+    files: step.bridgeJob ? [] : await bridgeFiles(blobs, rec.pid, project, ctx.images?.list || []),
+    ...(rec.kind !== 'make' ? { site: rec.site || project.site || {} } : {}),
+  };
+  const run = (jobId) => runBridgeJob({
+    payload, jobId, signal: ctx.signal,
+    onJobId: (id) => { step.bridgeJob = id; save(rec).catch(() => { }); },
+    onStep: (label) => { step.label = label; save(rec, { quiet: true }).catch(() => { }); },
+    onLog: (t) => { step.log = String(t).slice(-300); saveSoon(rec); },
+  });
+  let res;
+  try { res = await run(step.bridgeJob || ''); } catch (e) {
+    // 연결 프로그램을 다시 켜서 하던 일이 없어짐 → 처음부터 한 번 더
+    if (e?.kind !== 'gone' || !step.bridgeJob) throw e;
+    step.bridgeJob = ''; payload.files = await bridgeFiles(blobs, rec.pid, project, ctx.images?.list || []);
+    res = await run('');
+  }
+  const site = {};
+  for (const [k, v] of Object.entries(res.site || {})) {
+    const path = String(k).replace(/^\.?\/+/, '').replace(/^site\//, '');
+    if (/\.(png|jpe?g|webp|gif|avif)$/i.test(path)) { if (!path.startsWith('material/') || !(ctx.images?.list || []).includes(path)) await blobs.put(rec.pid, 'site/' + path, decodeBinary(v)); }
+    else if (typeof v === 'string') site[path] = v;
+  }
+  if (!site['index.html']) throw new AiError('format', 'no index');
+  rec.site = site;
+  rec.meta = readMeta({ ...(res.meta || {}), theme: { ...(res.meta?.theme || {}), ...themeFromCss(site['assets/style.css'] || '') } }, { prev: project.meta || null }).meta;
+  step.output = { agentIssues: res.issues.length };
+  step.bridgeJob = '';
+}
+
+const RUN = { plan: runPlan, design: runDesign, assemble: runAssemble, fix: runFix, edit: runEdit, agent: runAgent };
 
 /** 끝: 연수에 site·meta·versions·gen 저장 */
 async function finish(ctx) {
@@ -474,17 +519,18 @@ async function drive(pid) {
     const project = await projects.get(pid);
     if (!project) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
     ctx.project = project;
-    if (rec.way === 'local') throw new AiError('local', 'local');
-    const { key } = await loadKey(rec.provider);
-    if (!key) throw new AiError('no-key', 'no key', { provider: rec.provider });
-    ctx.key = key;
-    if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
+    if (rec.way !== 'local') {
+      const { key } = await loadKey(rec.provider);
+      if (!key) throw new AiError('no-key', 'no key', { provider: rec.provider });
+      ctx.key = key;
+      if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
+    }
     // 학교망이 AI 회사를 막았으면 오래 기다리지 않게(처음 시작할 때만, 시험 주소면 건너뜀)
-    if (!rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
+    if (rec.way !== 'local' && !rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
     // 교재도 요청 글도 없으면 AI가 지어낼 것밖에 없음 → 교재를 먼저
     if (rec.kind === 'make' && !sourceFiles(project).length && !project.material && !String(rec.opts.request || '').trim()) throw new AiError('no-material', 'no material');
     ctx.images = await preparePageImages(pid, project, { signal });
-    await repack(ctx);
+    if (rec.way !== 'local') await repack(ctx);
     for (;;) {
       const step = rec.steps.find((s) => s.status !== 'done');
       if (!step) break;
@@ -506,6 +552,7 @@ async function drive(pid) {
       const step = rec.steps.find((s) => s.status === 'running'); if (step) step.status = 'todo';
       // 멈추기: OpenAI는 서버에서 도는 답을 취소하고 지움(받은 글은 남겨 이어서 만들기에서 '이어서'로 씀)
       if (L.stopReason === 'user' && rec.provider === 'openai' && step?.token) { openaiDiscard(ctx.key, step.token.id, { cancel: true }); step.token = null; }
+      if (L.stopReason === 'user' && step?.bridgeJob) { cancelBridgeJob(step.bridgeJob); step.bridgeJob = ''; }
       await save(rec).catch(() => { });
       return;
     }
@@ -549,7 +596,7 @@ if (typeof addEventListener === 'function') {
 export async function startJob(pid, kind, opts = {}) {
   if (live.get(pid)?.ctrl) return { jobId: live.get(pid).rec.id, already: true };
   if (await heldElsewhere(pid)) return { jobId: (await jobsDb.get(pid).catch(() => null))?.id || '', elsewhere: true };
-  let provider = opts.provider; let model = opts.model || '';
+  let provider = opts.way === 'local' ? 'local' : opts.provider; let model = opts.model || opts.agent || '';
   // 고치기·수정 요청은 따로 고르지 않았으면 이 사이트를 만든 AI·모델로(키가 있을 때)
   if (!provider && kind !== 'make' && opts.way !== 'local') {
     const g = (await projects.get(pid).catch(() => null))?.gen;
@@ -571,7 +618,7 @@ export async function startJob(pid, kind, opts = {}) {
 }
 function newRec(pid, kind, o) {
   return { pid, id: uid(10), kind, provider: o.provider || '', model: o.model || '', way: o.way || 'key', startedAt: Date.now(), status: 'running', level: 0, notes: [],
-    opts: { request: o.request || '', reference: o.reference || null, target: o.target || 'all' }, steps: stepsFor(kind), site: null, meta: null, error: null };
+    opts: { request: o.request || '', reference: o.reference || null, target: o.target || 'all' }, steps: stepsFor(kind, o.way), site: null, meta: null, error: null };
 }
 
 /** 멈춘(새로 고침·오류·멈추기) 작업 이어 하기. change: { provider, model }로 모델을 바꿔도 앞 단계 결과는 그대로 */

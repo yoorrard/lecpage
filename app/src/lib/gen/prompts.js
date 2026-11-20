@@ -3,24 +3,9 @@
 // 모든 단계가 같은 SYSTEM과 같은 교재 앞부분을 쓰고 단계 글만 뒤에 붙임 → 회사들의 프롬프트 캐시가 교재를 다시 읽는 값을 줄임.
 // 키트 설명서: skills/lecpage/references/kit.md(키트 작업자가 만드는 중)를 빌드 때 글로 가져옴. 아직 없으면 아래 임시 글.
 
-// 빌드 때 파일이 있으면 글로 들어오고, 없으면 빈 객체(빌드가 깨지지 않음)
-const found = import.meta.glob('../../../../skills/lecpage/references/kit.md', { query: '?raw', import: 'default', eager: true });
-// TODO(kit 합치기): kit.md가 들어오면 이 임시 글은 쓰이지 않음(지워도 됨). plan-ai-first.md §4 표를 옮김
-const INSTR_KIT_FALLBACK = `## 강의 참여 기능(키트) 자리 표시
-사이트 어디에나 아래 표시를 넣으면 lecpage가 조립할 때 실제 기능으로 채워요. 모양은 사이트 CSS 변수(--lp-accent --lp-ink --lp-paper --lp-font --lp-radius)를 따라요. 표시 안은 비워 두세요.
-- <div data-lp="qa"></div> 질문 받기(공감순)
-- <div data-lp="poll" data-question="질문" data-options='["선택1","선택2"]'></div> 투표(강사 화면에서 열고 닫음)
-- <div data-lp="board" data-prompt="무엇을 올릴지"></div> 보드(글·사진)
-- <div data-lp="attend"></div> 출석(입실·퇴실)
-- <div data-lp="survey" data-questions='[{"q":"오늘 연수는 어땠나요?","type":"scale"},{"q":"하고 싶은 말","type":"text"}]'></div> 설문(별점 scale·객관식 choice(options)·주관식 text)
-- <div data-lp="deck" data-pages="1-12"></div> 교재 넘기기(강사 따라 넘기기)
-- <div data-lp="materials"></div> 자료실(강사가 올린 파일·링크)
-- <div data-lp="join"></div> 접속 QR·코드
-- <section data-lp-step="s1" data-title="1단계: …"> 실습 단계(진행 현황·도움 요청이 이 단계를 셈)
-- 참여 막대(출석·질문·도움 요청·반응)와 '지금' 띠(공지·타이머·투표 알림)는 features에 있으면 자동으로 붙어요. 자리를 정하려면 <div data-lp="dock"></div>.
-- 키트 CSS는 .lpk 아래에만 적용돼요. 키트 모양을 직접 꾸미지 마세요.`;
-export const KIT_DOC = (Object.values(found)[0] || INSTR_KIT_FALLBACK).trim();
-export const KIT_DOC_IS_FALLBACK = !Object.values(found)[0];
+// 키트 설명서(엔진 작업자가 씀)를 빌드 때 글로 가져와 그대로 넣음
+import KIT_MD from '../../../../skills/lecpage/references/kit.md?raw';
+export const KIT_DOC = String(KIT_MD).trim();
 
 export const SYSTEM_GEN = `당신은 연수·강의용 웹사이트를 설계하고 HTML·CSS·JS를 직접 쓰는 웹 디자이너이자 개발자예요. lecpage(강의 사이트 작업대)가 일을 단계로 나눠 맡겨요.
 
@@ -32,10 +17,10 @@ export const SYSTEM_GEN = `당신은 연수·강의용 웹사이트를 설계하
 5. 참가자가 연수 중 휴대폰(390px)과 교실 화면(1280px 이상)에서 봐요. 가로로 넘치지 않고, 글자 대비 4.5:1 이상, 본문 16px 이상, 그림에는 alt를 달아요.
 
 기술 규칙
-- 정적 사이트예요. 바깥 스크립트·CDN·추적 코드·iframe 남의 사이트 넣기·비밀번호 칸·다른 곳으로 보내는 form은 쓰지 않아요. 꼭 필요한 동작만 작은 JS로 써요.
-- 그림은 lecpage가 만든 교재 쪽 그림(material/p-NNN.webp, 목록을 줌)만 <img>로 써요. 바깥 그림 주소는 쓰지 않아요. 작은 도식·아이콘은 인라인 SVG로 그려도 돼요.
-- 글꼴은 시스템 글꼴 묶음으로 써요(예: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif). 바깥 글꼴 링크는 넣지 않아요.
-- 참여 기능은 직접 만들지 말고 아래 키트 표시를 넣어요.
+- 정적 사이트예요. 추적 코드·남의 사이트 틀·비밀번호 칸·다른 곳으로 보내는 form은 쓰지 않아요. 꼭 필요한 동작만 작은 JS로 쓰고, 바깥 스크립트·CSS는 아래 키트 설명서가 허락한 것만 써요.
+- 그림은 lecpage가 만든 교재 쪽 그림(material/p-NNN.webp, 목록을 줌)을 <img>로 써요. 바깥 그림 주소는 막혀요. 작은 도식·아이콘은 HTML 안에 <svg>로 그려도 돼요.
+- 글꼴은 시스템 글꼴 묶음(예: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif)을 먼저 써요.
+- 참여 기능은 직접 만들지 말고 아래 키트 설명서의 자리 표시를 넣어요.
 
 ${KIT_DOC}`;
 
@@ -123,10 +108,10 @@ ${j(batch)}
 }
 
 /** 검수 문제 → 그 섹션만 고치기 */
-export function buildFixPrompt({ issues, sections, classes }) {
+export function buildFixPrompt({ issuesText, sections, classes }) {
   return `작업 단계: fix (검수 문제 고치기)
 lecpage 검수에서 아래 문제가 나왔어요:
-${issues.map((i) => `- [${i.level}] ${i.where?.section ? `#${i.where.section} ` : ''}${i.where?.selector ? `(${i.where.selector}) ` : ''}${i.message_ko} → ${i.fix_hint_ko || ''}`).join('\n')}
+${issuesText}
 
 문제가 있는 섹션의 지금 HTML:
 \`\`\`html
@@ -211,6 +196,7 @@ export function stepLabel(name, total) {
   if (name === 'assemble') return '조립하고 검수하는 중';
   if (name === 'fix') return '검수에서 찾은 문제를 고치는 중';
   if (name === 'edit') return '요청대로 고치는 중';
+  if (name === 'agent') return '내 PC의 AI에게 맡기는 중';
   return '마무리하는 중';
 }
 

@@ -17,17 +17,19 @@ import { materialFiles } from './preview.js';
 
 export { sitePreviewHtml } from './preview.js';
 export { isGenerating, onBusyChange } from './busy.js';
-export { KIT_SHIM } from './kit.js';
+export { issueSummary, issuesForAi } from './kit.js';
+export { bridgeStatus, bridgeAvailable } from './local.js';
 
 /**
  * AI로 사이트 만들기 시작(키 연결·로컬). 앞 단계는 저장되며 끊겨도 resumeGeneration으로 이어 함.
  * @param {string} pid
- * @param {{ way?: 'key'|'local', provider?: string, model?: string, request?: string, reference?: string|{ name, mood } }} o
- *   provider를 비우면 지금 연결된 AI(getActiveAI). reference는 분위기 설명만 AI에게 붙음
+ * @param {{ way?: 'key'|'local', provider?: string, model?: string, agent?: 'claude'|'codex', request?: string, reference?: string|{ name, mood } }} o
+ *   provider를 비우면 지금 연결된 AI(getActiveAI). reference는 분위기 설명만 AI에게 붙음.
+ *   way:'local'은 연결 프로그램(§10)의 에이전트(agent, 기본 claude)에게 맡김 — bridgeAvailable()이 true일 때만(bridgeStatus()로 설치된 에이전트 확인)
  * @returns {Promise<string>} jobId (다른 탭이 이미 만드는 중이면 그 작업의 id — useGeneration의 elsewhere가 true)
  */
 export async function startGeneration(pid, o = {}) {
-  const r = await startJob(pid, 'make', { way: o.way || 'key', provider: o.provider, model: o.model, request: o.request, reference: o.reference });
+  const r = await startJob(pid, 'make', { way: o.way || 'key', provider: o.provider, model: o.model, agent: o.agent, request: o.request, reference: o.reference });
   return r.jobId;
 }
 /** 멈춘 작업 이어 하기(새로 고침 뒤 useGeneration이 저절로도 부름). change: { provider, model }로 바꿔 이어 할 수 있음(앞 단계 결과 유지) */
@@ -160,8 +162,8 @@ async function saveSite(pid, site, meta, { label, way, provider = '', model = ''
  * 수정 요청(키·로컬). target: 'all' 또는 섹션 id
  * @returns {Promise<string>} jobId
  */
-export async function editSite(pid, { target = 'all', request = '', way = 'key', provider, model } = {}) {
-  const r = await startJob(pid, 'edit', { target, request, way, provider, model });
+export async function editSite(pid, { target = 'all', request = '', way = 'key', provider, model, agent } = {}) {
+  const r = await startJob(pid, 'edit', { target, request, way, provider, model, agent });
   return r.jobId;
 }
 /** 수정 요청(쓰던 AI 창에 붙일 글). 답은 acceptChatAnswer로 받으면 그 섹션만 갈아 끼움 */
@@ -178,17 +180,17 @@ export async function chatEditPrompt(pid, { target = 'all', request = '' } = {})
 export async function runInspect(pid) {
   const p = await projects.get(pid);
   if (!p?.site?.['index.html']) return [problem('no-site', '아직 만든 사이트가 없어요.')];
-  const { issues } = await inspectSite(pid, p.site, p.meta || {});
+  const { issues } = await inspectSite(pid, p.site, p.meta || {}, p);
   const out = await projects.patch(pid, () => ({ inspect: { at: Date.now(), issues } }));
   if (out) notifySaved(pid, out.updatedAt);
   return issues;
 }
 
-/** 검수 문제를 AI에게(그 섹션만 고침). issueIds를 비우면 오류 전부 → jobId. 섹션이 정해진 문제가 없으면 '' */
+/** 검수 문제를 AI에게(그 섹션만 고침). issueIds: issue.key(하나) 또는 issue.id(그 종류 전부), 비우면 오류 전부 → jobId. 섹션이 정해진 문제가 없으면 '' */
 export async function fixIssues(pid, issueIds = [], { provider, model } = {}) {
   const p = await projects.get(pid);
   const all = p?.inspect?.issues || [];
-  const issues = (issueIds.length ? all.filter((i) => issueIds.includes(i.id)) : all.filter((i) => i.level === 'error')).filter((i) => i.where?.section);
+  const issues = (issueIds.length ? all.filter((i) => issueIds.includes(i.key) || issueIds.includes(i.id)) : all.filter((i) => i.level === 'error')).filter((i) => i.where?.section);
   if (!issues.length) return '';
   const r = await startJob(pid, 'fix', { issues, provider, model });
   return r.jobId;
