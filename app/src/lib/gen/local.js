@@ -21,7 +21,8 @@ async function call(path, init = {}) {
   catch (e) { if (e?.name === 'AbortError') throw e; throw new AiError('network', e?.message || 'bridge', { provider: 'local' }); }
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
-    throw new AiError(r.status === 404 ? 'gone' : r.status === 401 || r.status === 403 ? 'local' : r.status >= 500 ? 'busy' : 'other', j.error?.message || j.error || `bridge ${r.status}`, { provider: 'local', status: r.status });
+    // 연결 프로그램의 거절은 { ok:false, error:'코드', message_ko }(scripts/studio.mjs fail)
+    throw new AiError(r.status === 404 ? 'gone' : r.status === 401 || r.status === 403 ? 'local' : r.status >= 500 ? 'busy' : 'other', j.message_ko || j.error?.message || j.error || `bridge ${r.status}`, { provider: 'local', status: r.status });
   }
   return r;
 }
@@ -80,16 +81,26 @@ export async function runBridgeJob({ payload, jobId = '', signal, onJobId, onSte
 /** 멈추기: 연결 프로그램에 그 일을 그만두라고(지움) */
 export function cancelBridgeJob(jobId) { return jobId ? call(`/bridge/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => { }) : Promise.resolve(); }
 
-/** 보낼 파일: 교재 원본(src/*)과 교재 쪽 그림(material/p-NNN.webp) */
-export async function bridgeFiles(blobs, pid, project, images = []) {
+/** 보낼 교재 원본(src/*) → files:[{ name, type, base64 }] */
+export async function bridgeFiles(blobs, pid, project) {
   const out = [];
   for (const f of (project.files || []).filter((x) => x.key && !x.photos)) {
     const v = await blobs.get(pid, f.key).catch(() => null);
     if (v) out.push({ name: f.name, type: f.ext === 'pdf' ? 'application/pdf' : 'application/octet-stream', base64: await toBase64(v) });
   }
-  for (const path of images) {
-    const v = await blobs.get(pid, 'site/' + path).catch(() => null);
-    if (v) out.push({ name: path, type: /\.png$/.test(path) ? 'image/png' : /\.jpe?g$/.test(path) ? 'image/jpeg' : 'image/webp', base64: await toBase64(v) });
+  return out;
+}
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf' };
+/**
+ * 사이트 폴더의 바이트 파일(저장소 'site/…': 교재 쪽 그림·올린 사진·자료실 파일) → site:{ 경로: { base64, type } }.
+ * only: 이 경로만(새로 만들 때는 교재 쪽 그림), null이면 전부(고칠 때는 지금 사이트 그대로)
+ */
+export async function bridgeSite(blobs, pid, only = null) {
+  const out = {};
+  const keys = (await blobs.keys(pid).catch(() => [])).filter((k) => k.startsWith('site/') && (!only || only.includes(k.slice(5))));
+  for (const k of keys) {
+    const v = await blobs.get(pid, k).catch(() => null);
+    if (v) out[k.slice(5)] = { base64: await toBase64(v), type: MIME[(k.split('.').pop() || '').toLowerCase()] || 'application/octet-stream' };
   }
   return out;
 }

@@ -66,5 +66,10 @@ export function makeSaver(id, base, onState) {
     reset(b) { base = b; stop = ''; failed = false; latest = null; dirty = false; clearTimeout(timer); timer = 0; },
     base: () => base,
     stopped: () => stop,
+    /** 기다리는 것을 다 쓸 때까지(생성 쪽이 저장소에서 이 연수를 읽기 전에) */
+    async idle() {
+      if (timer) { clearTimeout(timer); run(); }
+      for (let i = 0; i < 100 && (busy || timer || (latest && !stop && !failed)); i++) await new Promise((r) => setTimeout(r, 30));
+    },
   };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
-import { PROVIDERS, loadKey, forgetKey, getOnLimit, setOnLimit, isPaidAI } from '../lib/ai.js';
+import { PROVIDERS, loadKey, forgetKey } from '../lib/ai.js';
 import { storageInfo, askPersist, projects } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
@@ -14,10 +14,8 @@ export function Settings() {
   const [st, setSt] = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [ai, setAi] = useState(false);
-  const [onLimit, setLimit] = useState(getOnLimit);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
   const anyAi = Object.values(keys).some((k) => k?.key);
-  const anyPaid = Object.keys(keys).some((id) => keys[id]?.key && isPaidAI(id)); // '무료 한도를 다 쓰면'은 유료 키가 있을 때만 뜻이 있음
   const [adv, setAdv] = useState(() => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } });
   const toggleAdv = (v) => { setAdv(v); try { localStorage.setItem('lecpage:advanced', v ? '1' : '0'); } catch { } toast(v ? '고급 기능을 켰어요.' : '고급 기능을 껐어요.'); };
   useEffect(() => { (async () => { await reloadKeys(); setSt(await storageInfo()); })(); window.addEventListener('lecpage:ai-connected', reloadKeys); return () => window.removeEventListener('lecpage:ai-connected', reloadKeys); }, []);
@@ -54,11 +52,6 @@ export function Settings() {
             <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '더 연결하기' : '연결하기'}</button></li>
         </ul>
         <p class="small muted">쓰던 AI 창(ChatGPT·Claude·Gemini)으로 만들 때는 연결하지 않아도 돼요.</p>
-        {anyPaid && <div class="field">
-          <span>무료 한도를 다 쓰면</span>
-          <Seg label="무료 한도를 다 쓰면" value={onLimit} onChange={(v) => { setOnLimit(v); setLimit(v); }} options={[{ value: 'stop', label: '멈추고 물어보기' }, { value: 'pay', label: '유료로 이어가기' }]} />
-          <small>{onLimit === 'pay' ? '연결해 둔 유료 키로 이어서 만들어요. 쓴 만큼 크레딧에서 나가요.' : '유료 키를 쓰기 전에 물어봐요.'}</small>
-        </div>}
         <h3 class="h-label">배포할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 옮겨요. <a href="#/help/deploy">배포하는 법</a></p>

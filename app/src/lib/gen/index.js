@@ -1,31 +1,29 @@
-// AI 생성 API(docs/plan-ai-first.md §15). 화면은 이 파일만 부르고, 생성 쪽은 화면을 모릅니다.
+// AI 생성 API(docs/plan-ai-first.md §15). 화면은 lib/studio.js를 거쳐 이 파일만 부르고, 생성 쪽은 화면을 모릅니다.
 //   startGeneration · resumeGeneration · stopGeneration · useGeneration · chatPrompt · acceptChatAnswer
-//   editSite · chatEditPrompt · runInspect · fixIssues
-// 덤: sitePreviewHtml(미리보기 한 파일 HTML) · restoreVersion · forgetGeneration · isGenerating · siteMapOf
-// 끝나면 연수(projects)에 { v:2, site, meta, gen, versions, inspect }를 저장하고 창에 'lecpage:gen-saved'({ pid, at }) 이벤트를 보냄
-// (같은 탭의 화면은 이 이벤트를 받으면 연수를 다시 읽어야 함. 다른 탭은 db.js onProjectChange로 알게 됨)
+//   editSite · chatEditPrompt · runInspect · fixIssues · bridgeStatus
+// 사이트를 바꾸면(작업 끝·쓰던 AI 창의 답) 연수(projects)에 { v:2, site, meta, gen, versions, inspect, notes? }를 저장하고
+// 창에 'lecpage:gen-saved'({ pid, at }) 이벤트를 보냄 → 같은 탭의 연수 화면은 다시 읽고 자동 저장의 기준 판을 맞춤(Project.jsx).
+// 다른 탭은 db.js onProjectChange로 알게 됨. 검수(runInspect)는 연수를 바꾸지 않음(결과만 돌려주고 이 탭에 기억).
 import { useEffect, useState } from 'preact/hooks';
 import { projects } from '../db.js';
 import { uid } from '../util.js';
-import { startJob, resumeJob, stopJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, readJob } from './job.js';
-import { jobsDb, chatDb } from './store.js';
+import { startJob, resumeJob, stopJob, forgetJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, versionsAfter, settle } from './job.js';
+import { chatDb } from './store.js';
 import * as P from './prompts.js';
-import { parseChatAnswer, extractHtml, extractSections, extractCss, replaceSections, stitch, siteMap, htmlCut, trimCss } from './parse.js';
+import { parseChatAnswer, extractHtml, extractSections, extractCss, replaceSections, stitch, htmlCut, trimCss } from './parse.js';
 import { readMeta, themeFromCss } from './kit.js';
 import { sourceFiles } from './material.js';
-import { materialFiles } from './preview.js';
 
-export { sitePreviewHtml } from './preview.js';
-export { isGenerating, onBusyChange } from './busy.js';
-export { issueSummary, issuesForAi } from './kit.js';
-export { bridgeStatus, bridgeAvailable } from './local.js';
+export { bridgeStatus } from './local.js';
+export { assembleProject } from './preview.js';
+export { pageTitles } from './kit.js';
 
 /**
- * AI로 사이트 만들기 시작(키 연결·로컬). 앞 단계는 저장되며 끊겨도 resumeGeneration으로 이어 함.
+ * AI로 사이트 만들기 시작. 앞 단계는 저장되며 끊겨도 resumeGeneration으로 이어 함.
  * @param {string} pid
- * @param {{ way?: 'key'|'local', provider?: string, model?: string, agent?: 'claude'|'codex', request?: string, reference?: string|{ name, mood } }} o
- *   provider를 비우면 지금 연결된 AI(getActiveAI). reference는 분위기 설명만 AI에게 붙음.
- *   way:'local'은 연결 프로그램(§10)의 에이전트(agent, 기본 claude)에게 맡김 — bridgeAvailable()이 true일 때만(bridgeStatus()로 설치된 에이전트 확인)
+ * @param {{ way?: 'key'|'local'|'demo', provider?: string, model?: string, agent?: 'claude'|'codex', request?: string, reference?: string|{ name, mood } }} o
+ *   way 'key': provider를 비우면 지금 연결된 AI. 'local': 연결 프로그램(§10)의 에이전트(agent, 기본 claude). 'demo': 먼저 해보기(어디로도 보내지 않음)
+ *   reference는 분위기 설명만 AI에게 붙음(따를 의무 없음)
  * @returns {Promise<string>} jobId (다른 탭이 이미 만드는 중이면 그 작업의 id — useGeneration의 elsewhere가 true)
  */
 export async function startGeneration(pid, o = {}) {
@@ -36,13 +34,16 @@ export async function startGeneration(pid, o = {}) {
 export async function resumeGeneration(pid, change = {}) { return (await resumeJob(pid, change)).jobId; }
 /** 멈추기 → status 'paused'. resumeGeneration으로 멈춘 단계부터 */
 export function stopGeneration(pid) { return stopJob(pid); }
+/** 멈추거나 실패한 작업을 그만둠(기록을 지움 → status 'idle'). 도는 중이면 하지 않음 */
+export function forgetGeneration(pid) { return forgetJob(pid); }
 
 /**
- * 진행 상태(Preact 훅). 1초마다 다시 그려 걸린 시간을 셀 수 있게 now를 넣음.
- * → { status: 'idle'|'running'|'paused'|'done'|'error', step: { name, label_ko, index, total, received }, steps[], startedAt,
- *     error: { kind, title, body, actions[] } | null, wait: { reason: 'quota'|'retry'|'hidden', until } | null,
- *     notes[], elsewhere(다른 탭이 만드는 중), jobId, kind, preview?: { site } }
- * error.actions: 'resume'(이어서 만들기) · 'connect'(다른 AI·키 연결) · 'paste'(쓰던 AI 창으로) · 'key' · 'billing' · 'link'(error.link.href)
+ * 진행 상태(Preact 훅). 도는 동안 1초마다 now를 넣어 다시 그림(걸린 시간).
+ * → { status: 'idle'|'running'|'paused'|'done'|'error', jobId, kind: 'make'|'edit'|'fix', way, provider, model, agent,
+ *     step: { name, label_ko, index(1부터), total, received(받은 글자 수) }, steps[{ name, label_ko, status: 'todo'|'running'|'done'|'error', attempts }],
+ *     startedAt, updatedAt, endedAt, error: { kind, title, body, actions[], link? } | null, wait: { reason: 'quota'|'retry'|'hidden', until } | null,
+ *     notes[], elsewhere(다른 탭이 만드는 중), now }
+ * error.actions: 'resume'(이어서 만들기) · 'connect'(다른 AI 고르기) · 'paste'(쓰던 AI 창으로) · 'key'(키 페이지) · 'billing'(결제 페이지) · 'link'(error.link)
  * 처음 그릴 때 새로 고침으로 끊긴 작업이 있으면 저절로 이어 함
  */
 export function useGeneration(pid) {
@@ -65,8 +66,6 @@ export function useGeneration(pid) {
   }, [pid]);
   return v;
 }
-/** 화면 밖에서 상태를 읽을 때(한 번) */
-export const generationState = (pid) => currentView(pid);
 
 // ── 쓰던 AI 창(키 없이) ──
 /**
@@ -92,81 +91,103 @@ function splitStyles(html) {
   return { html: out.replace(/<\/head>/i, '<link rel="stylesheet" href="assets/style.css">\n</head>'), css: css.join('\n\n') };
 }
 
-const problem = (code, message_ko, level = 'error') => ({ id: code, level, where: { file: 'index.html' }, message_ko, fix_hint_ko: '' });
-
+const CUT = '답이 중간에 끊겼어요. 아래 문구를 AI 창에 보내 이어서 받은 뒤 다시 붙여 넣어 주세요.';
 /**
- * 쓰던 AI 창의 답 받기: 붙여 넣은 글 또는 내려받은 .html 파일. 잘렸으면 continuePrompt(이어서 문구)를 주고,
- * 다음에 붙여 넣는 답을 앞 조각에 이어 붙임. 수정 요청(chatEditPrompt) 뒤라면 답의 섹션만 갈아 끼움.
- * @returns {Promise<{ ok, site?, meta?, problems: issue[], continuePrompt? }>}
+ * 쓰던 AI 창의 답 받기: 붙여 넣은 글 또는 내려받은 .html 파일. 받으면 연수에 저장하고 'lecpage:gen-saved'를 보냄.
+ * 잘렸으면 continuePrompt(이어서 문구)를 주고, 다음에 붙여 넣는 답을 앞 조각에 이어 붙임(새로 만들기·수정 요청 모두).
+ * target: 수정 요청의 답이면 고친 곳('all' 또는 섹션 id) — 답의 섹션만 갈아 끼움. 비우면 마지막 요청 글(chatPrompt·chatEditPrompt)대로
+ * @returns {Promise<{ ok, site?, meta?, problems: string[](답에서 알게 된 것), issues?: issue[](검수), continuePrompt? }>}
  */
-export async function acceptChatAnswer(pid, input) {
-  const text = typeof input === 'string' ? input : input && typeof input.text === 'function' ? await input.text() : '';
-  if (!String(text).trim()) return { ok: false, problems: [problem('empty', '붙여 넣은 글이 비었어요.')] };
+export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
+  const text = String(typeof input === 'string' ? input : input && typeof input.text === 'function' ? await input.text() : '');
+  if (!text.trim()) return { ok: false, problems: ['붙여 넣은 글이 비었어요.'] };
   const p = await projects.get(pid);
-  if (!p) return { ok: false, problems: [problem('no-project', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.')] };
-  const st = (await chatDb.get(pid).catch(() => null)) || { pid, mode: 'make', partial: '' };
+  if (!p) return { ok: false, problems: ['연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.'] };
+  const st0 = (await chatDb.get(pid).catch(() => null)) || { pid, mode: 'make', partial: '' };
+  const edit = (target || st0.mode === 'edit') && !!p.site?.['index.html'];
+  const want = edit ? target || st0.target || 'all' : '';
+  // 받는 중이던 조각은 같은 일(새로 만들기 / 같은 곳 고치기)의 것만 이어 붙임
+  const st = (edit ? st0.mode === 'edit' && (st0.target || 'all') === want : st0.mode !== 'edit') ? st0 : { pid, partial: '' };
   const fresh = /<!doctype\s+html|<html[\s>]/i.test(text);
+  const keep = (partial) => chatDb.put({ pid, mode: edit ? 'edit' : 'make', target: want, partial, at: Date.now() }).catch(() => { });
 
-  // 수정 요청의 답: 섹션만 갈아 끼움(문서 전체가 오면 아래 '새 사이트'로)
-  if (st.mode === 'edit' && !fresh && p.site?.['index.html']) {
-    const secs = extractSections(extractHtml(text).html).filter((s) => s.id && s.complete);
-    if (!secs.length) return { ok: false, problems: [problem('no-section', '답에서 고친 섹션(<section id="…">)을 찾지 못했어요. 코드 블록 전체를 복사해 붙여 넣어 주세요.')] };
-    const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, ''));
+  // 수정 요청의 답: 섹션만 갈아 끼움(문서 전체가 오면 아래 '새 사이트'로 받되 고치기 전 판을 남김)
+  if (edit && !(fresh && !st.partial)) {
+    const joined = st.partial && !fresh ? stitch(st.partial, text) : text;
+    const all = extractSections(extractHtml(joined).html);
+    const cut = all.length > 0 && !all[all.length - 1].complete;
+    let secs = all.filter((s) => s.complete);
+    // 섹션 하나를 고칠 때는 그 섹션만(다른 섹션은 버림). id가 다르거나 없는 섹션 하나만 오면 그 섹션으로 봄
+    if (want !== 'all') {
+      const same = secs.filter((x) => x.id === want);
+      secs = same.length ? same.slice(0, 1) : secs.length === 1 ? [{ ...secs[0], id: want, html: secs[0].id ? secs[0].html.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${want}$2`) : secs[0].html.replace(/<section\b/i, `<section id="${want}"`) }] : [];
+    }
+    secs = secs.filter((s) => s.id);
+    if (cut) { await keep(joined); return { ok: false, problems: [CUT], continuePrompt: P.buildContinuePrompt(extractHtml(joined).html) }; }
+    if (!secs.length) return { ok: false, problems: ['답에서 고친 섹션(<section id="…">)을 찾지 못했어요. 코드 블록 전체를 복사해 붙여 넣어 주세요.'] };
+    const c = extractCss(joined.replace(/```html[\s\S]*?(```|$)/gi, ''));
     const site = { ...p.site, 'index.html': replaceSections(p.site['index.html'], secs).html };
     if (c.css && !/<[a-zA-Z]/.test(c.css)) site['assets/style.css'] = `${p.site['assets/style.css'] || ''}\n\n/* 수정 요청 */\n${c.cut ? trimCss(c.css) : c.css}`;
     const meta = { ...(p.meta || {}), theme: { ...(p.meta?.theme || {}), ...themeFromCss(site['assets/style.css'] || ''), ...(c.css ? themeFromCss(c.css) : {}) } };
-    const saved = await saveSite(pid, site, meta, { label: 'AI가 고친 판', way: 'chat' });
+    const saved = await saveSite(pid, site, meta, 'edit');
     await chatDb.del(pid).catch(() => { });
-    return { ok: true, site, meta, problems: saved.issues };
+    return { ok: true, site: saved.site, meta: saved.meta, problems: [], issues: saved.issues };
   }
 
   // 새 사이트: 앞에서 잘린 조각이 있으면 이어 붙임
   const joined = st.partial && !fresh ? stitch(st.partial, text) : text;
   const a = parseChatAnswer(joined);
-  if (!a.html || (!a.doc && !extractSections(a.html).length)) {
-    return { ok: false, problems: [problem('no-html', '답에서 사이트 HTML을 찾지 못했어요. AI 답의 코드 블록 전체를 복사해 붙여 넣어 주세요.')] };
-  }
+  if (!a.html || (!a.doc && !extractSections(a.html).length)) return { ok: false, problems: ['답에서 사이트 HTML을 찾지 못했어요. AI 답의 코드 블록 전체를 복사해 붙여 넣어 주세요.'] };
   if (a.cut || htmlCut(a.html, { doc: a.doc })) {
-    await chatDb.put({ pid, mode: 'make', partial: joined, at: Date.now() }).catch(() => { }); // 붙여 넣은 글 그대로(코드 블록 표시 포함) → 다음 조각을 바르게 이어 붙임
-    return { ok: false, problems: [problem('cut', '답이 중간에 끊겼어요. 아래 문구를 AI 창에 보내 이어서 받은 뒤 다시 붙여 넣어 주세요.', 'warn')], continuePrompt: P.buildContinuePrompt(a.html) };
+    await keep(joined); // 붙여 넣은 글 그대로(코드 블록 표시 포함) → 다음 조각을 바르게 이어 붙임
+    return { ok: false, problems: [CUT], continuePrompt: P.buildContinuePrompt(a.html) };
   }
   const { html, css } = splitStyles(a.html);
   const site = { 'index.html': html, ...(css ? { 'assets/style.css': css } : {}) };
   const titleTag = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || '';
-  const raw = a.meta || { title: titleTag.trim() };
+  // 고친 사이트 전체가 왔는데 연수 정보가 없으면 지금 연수 정보를 그대로(새로 만들 때만 제목으로 시작)
+  const raw = a.meta || (edit ? { ...(p.meta || {}) } : { title: titleTag.trim() });
   if (!raw.title && titleTag) raw.title = titleTag.trim();
-  const meta = readMeta({ ...raw, theme: { ...(raw.theme || {}), ...themeFromCss(css) } }, { prev: p.meta }).meta;
-  const saved = await saveSite(pid, site, meta, { label: '쓰던 AI가 만든 판', way: 'chat' });
+  const r = readMeta({ ...raw, theme: { ...(raw.theme || {}), ...themeFromCss(css) } }, { prev: p.meta });
+  const problems = [
+    ...(a.meta || edit ? [] : ['답 끝에 연수 정보(lecpage.json)가 없어 제목만 읽었어요. 연수 정보에서 확인해 주세요.']),
+    ...(r.meta.sessions?.some((s) => s?.date) ? [] : ['답에 연수 날짜가 없어요. 연수 정보에서 넣어 주세요.']),
+    ...r.warnings.filter((w) => w.code !== 'teacher-value' && w.code !== 'title-empty').slice(0, 3).map((w) => w.message_ko),
+  ];
+  const saved = await saveSite(pid, site, r.meta, edit ? 'edit' : 'make', problems);
   await chatDb.del(pid).catch(() => { });
-  const problems = [...(a.meta ? [] : [problem('no-meta', '답 끝에 연수 정보(lecpage.json)가 없어 제목만 읽었어요. 연수 정보에서 확인해 주세요.', 'warn')]), ...saved.issues];
-  return { ok: true, site, meta, problems };
+  return { ok: true, site: saved.site, meta: saved.meta, problems, issues: saved.issues };
 }
 
-/** 사이트를 저장(판 기록·검수 결과와 함께) → { issues } */
-async function saveSite(pid, site, meta, { label, way, provider = '', model = '' }) {
-  const { issues } = await inspectSite(pid, site, meta);
+/** 쓰던 AI 창의 답으로 받은 사이트를 저장(판 기록·검수 결과와 함께) → { issues } */
+async function saveSite(pid, site0, meta0, kind, notes = []) {
+  const p = await projects.get(pid);
+  const { site, meta } = settle(p || {}, { site: site0, meta: meta0 });
+  const { issues } = await inspectSite(pid, site, meta, p);
+  remember(pid, issues);
   const at = Date.now();
   const out = await projects.patch(pid, (cur) => ({
     v: 2, site, meta,
-    gen: { jobId: 'chat-' + uid(6), status: 'done', way, provider, model, at, kind: 'make' },
-    versions: [...(Array.isArray(cur.versions) ? cur.versions : []), { id: uid(8), at, label, site, meta }].slice(-10),
+    gen: { jobId: 'chat-' + uid(6), status: 'done', way: 'chat', provider: '', model: '', at, kind },
+    versions: versionsAfter(cur, kind, { site, meta }, true),
     inspect: { at, issues },
+    ...(kind === 'make' ? { notes: notes.length ? notes : undefined, metaChecked: false } : {}),
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
   }));
   if (out) notifySaved(pid, out.updatedAt);
-  return { issues };
+  return { site, meta, issues };
 }
 
 // ── 고치기 ──
 /**
- * 수정 요청(키·로컬). target: 'all' 또는 섹션 id
+ * 수정 요청(키·내 PC). target: 'all' 또는 섹션 id. way 'local'이면 agent('claude'|'codex')에게
  * @returns {Promise<string>} jobId
  */
 export async function editSite(pid, { target = 'all', request = '', way = 'key', provider, model, agent } = {}) {
   const r = await startJob(pid, 'edit', { target, request, way, provider, model, agent });
   return r.jobId;
 }
-/** 수정 요청(쓰던 AI 창에 붙일 글). 답은 acceptChatAnswer로 받으면 그 섹션만 갈아 끼움 */
+/** 수정 요청(쓰던 AI 창에 붙일 글). 답은 acceptChatAnswer(pid, 답, { target })로 받으면 그 섹션만 갈아 끼움 */
 export async function chatEditPrompt(pid, { target = 'all', request = '' } = {}) {
   const p = await projects.get(pid);
   const html = p?.site?.['index.html'] || '';
@@ -176,37 +197,28 @@ export async function chatEditPrompt(pid, { target = 'all', request = '' } = {})
   return P.buildChatEditPrompt({ request, target, sections, css: target === 'all' ? '' : p?.site?.['assets/style.css'] || '' });
 }
 
-/** 조립 + 정적 검사 + 숨은 틀에서 그려서 검사 → issues[] (연수의 inspect에도 저장) */
+// 마지막 검수 결과(이 탭): fixIssues가 key로 찾음
+const lastIssues = new Map();
+const remember = (pid, issues) => { lastIssues.set(pid, issues); return issues; };
+/** 조립 + 정적 검사 + 숨은 틀에서 그려서 검사(390·1280) → issues[](key 붙음). 연수는 바꾸지 않음 */
 export async function runInspect(pid) {
   const p = await projects.get(pid);
-  if (!p?.site?.['index.html']) return [problem('no-site', '아직 만든 사이트가 없어요.')];
+  if (!p?.site?.['index.html']) return [];
   const { issues } = await inspectSite(pid, p.site, p.meta || {}, p);
-  const out = await projects.patch(pid, () => ({ inspect: { at: Date.now(), issues } }));
-  if (out) notifySaved(pid, out.updatedAt);
-  return issues;
+  return remember(pid, issues);
 }
 
-/** 검수 문제를 AI에게(그 섹션만 고침). issueIds: issue.key(하나) 또는 issue.id(그 종류 전부), 비우면 오류 전부 → jobId. 섹션이 정해진 문제가 없으면 '' */
-export async function fixIssues(pid, issueIds = [], { provider, model } = {}) {
+/**
+ * 검수 문제를 AI에게. ids: issue.key(하나) 또는 issue.id(그 종류 전부), 비우면 꼭 고칠 곳 전부.
+ * 키로 연결한 AI는 섹션이 정해진 문제만 그 섹션을 고치고(없으면 '' → 화면이 수정 요청으로), 내 PC의 에이전트는 사이트 전체에서 고침
+ * @returns {Promise<string>} jobId 또는 ''
+ */
+export async function fixIssues(pid, ids = [], { way = 'key', provider, model, agent } = {}) {
   const p = await projects.get(pid);
-  const all = p?.inspect?.issues || [];
-  const issues = (issueIds.length ? all.filter((i) => issueIds.includes(i.key) || issueIds.includes(i.id)) : all.filter((i) => i.level === 'error')).filter((i) => i.where?.section);
+  const all = lastIssues.get(pid) || p?.inspect?.issues || [];
+  const picked = ids.length ? all.filter((i) => ids.includes(i.key) || ids.includes(i.id)) : all.filter((i) => i.level === 'error');
+  const issues = way === 'local' ? picked : picked.filter((i) => i.where?.section);
   if (!issues.length) return '';
-  const r = await startJob(pid, 'fix', { issues, provider, model });
+  const r = await startJob(pid, 'fix', { issues, way, provider, model, agent });
   return r.jobId;
 }
-
-/** 판 되돌리기(versions의 id) */
-export async function restoreVersion(pid, versionId) {
-  const out = await projects.patch(pid, (cur) => { const v = (cur.versions || []).find((x) => x.id === versionId); return v ? { site: v.site, meta: v.meta } : null; });
-  if (out) notifySaved(pid, out.updatedAt);
-  return !!out;
-}
-/** 작업 기록·받던 답 조각 지우기(연수를 지울 때·처음부터 다시) */
-export async function forgetGeneration(pid) { stopJob(pid); await jobsDb.del(pid).catch(() => { }); await chatDb.del(pid).catch(() => { }); }
-/** 사이트 파일 지도(목록 화면용): 섹션·키트 표시·깨진 경로 */
-export async function siteMapOf(pid) {
-  const p = await projects.get(pid);
-  return siteMap(p?.site || {}, { material: Object.keys(await materialFiles(pid)) });
-}
-export { readJob };

@@ -1,179 +1,23 @@
 {
- "show-night-story": {
-  "w": 1280,
-  "h": 800,
-  "kb": 33
- },
- "show-paper-workbook": {
-  "w": 1280,
-  "h": 800,
-  "kb": 41
- },
- "show-editorial-ink": {
-  "w": 1280,
-  "h": 800,
-  "kb": 29
- },
- "show-ripple-center": {
-  "w": 1280,
-  "h": 800,
-  "kb": 39
- },
- "show-chalkboard": {
-  "w": 1280,
-  "h": 800,
-  "kb": 34
- },
- "show-deck-collage": {
-  "w": 1280,
-  "h": 800,
-  "kb": 28
- },
- "show-vertical-type": {
-  "w": 1280,
-  "h": 800,
-  "kb": 26
- },
- "show-retro-pop": {
-  "w": 1280,
-  "h": 800,
-  "kb": 44
- },
  "site-data-lab": {
   "w": 1120,
   "h": 700,
-  "kb": 43
+  "kb": 40
  },
  "phone-data-lab": {
   "w": 585,
   "h": 3600,
-  "kb": 91
+  "kb": 92
  },
- "showcase": [
-  "night-story",
-  "paper-workbook",
-  "editorial-ink",
-  "ripple-center",
-  "chalkboard",
-  "deck-collage",
-  "vertical-type",
-  "retro-pop"
- ],
- "made": "2026-11-13",
  "hero-data-lab": {
   "w": 760,
   "h": 475,
-  "kb": 27
+  "kb": 23
  },
  "hero-data-lab-s": {
   "w": 520,
   "h": 325,
-  "kb": 15
+  "kb": 11
  },
- "say": [
-  {
-   "shot": "say-0",
-   "text": "좀 답답해 보여요",
-   "title": "여백이 넓은 디자인: 깔끔한 기업형",
-   "why": "상자가 적고 글 사이가 넓어 트여 보여요."
-  },
-  {
-   "shot": "say-1",
-   "text": "흔한 사이트 같아요",
-   "title": "배치가 다른 디자인: 어긋난 격자",
-   "why": "어긋난 격자 배치예요. 흔한 왼쪽 정렬과 달라요."
-  },
-  {
-   "shot": "say-2",
-   "text": "학교 느낌이 나면 좋겠어요",
-   "title": "종이 워크북",
-   "why": "실습 목록과 완료 체크가 첫 화면부터 보이는 실습형 워크숍에 어울려요."
-  },
-  {
-   "shot": "say-3",
-   "text": "어두운 화면이 좋아요",
-   "title": "어두운 화면",
-   "why": "화면 밝기를 바꿔요."
-  }
- ],
- "say-0": {
-  "w": 1120,
-  "h": 700,
-  "kb": 24
- },
- "say-1": {
-  "w": 1120,
-  "h": 700,
-  "kb": 23
- },
- "say-2": {
-  "w": 1120,
-  "h": 700,
-  "kb": 34
- },
- "say-3": {
-  "w": 1120,
-  "h": 700,
-  "kb": 41
- },
- "vs-base": {
-  "w": 1120,
-  "h": 700,
-  "kb": 17
- },
- "vs-base-m": {
-  "w": 585,
-  "h": 1140,
-  "kb": 28
- },
- "vs-lp": {
-  "w": 1120,
-  "h": 700,
-  "kb": 25
- },
- "vs-lp-m": {
-  "w": 585,
-  "h": 1140,
-  "kb": 29
- },
- "show-night-story-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 19
- },
- "show-paper-workbook-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 16
- },
- "show-editorial-ink-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 17
- },
- "show-ripple-center-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 22
- },
- "show-chalkboard-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 19
- },
- "show-deck-collage-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 13
- },
- "show-vertical-type-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 13
- },
- "show-retro-pop-m": {
-  "w": 400,
-  "h": 718,
-  "kb": 23
- }
+ "made": "2026-11-20"
 }

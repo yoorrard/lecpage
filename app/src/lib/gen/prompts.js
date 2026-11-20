@@ -67,10 +67,12 @@ export function buildPlanPrompt({ request, reference, info, prevMeta } = {}) {
  "designBrief": {"mood": "분위기", "fromMaterial": "교재 디자인에서 가져올 색·글꼴 느낌·모양·그림", "layout": "배치 방향", "typography": "글자 위계", "motifs": "반복해 쓸 모양·도식"},
  "theme": {"accent": "#RRGGBB", "ink": "#RRGGBB", "paper": "#RRGGBB", "font": "글꼴 묶음"},
  "features": ["qa","poll","board","attendance","survey","help","reactions","deck","materials","timer" 중 이 연수에 맞는 것],
+ "pages": [{"page": 교재 쪽 번호, "title": "그 쪽의 제목(쪽 그림에 보이는 대로 짧게)"}],
  "sections": [{"id": "영문-소문자-id", "title": "섹션 이름", "purpose": "이 섹션이 참가자에게 주는 것", "outline": ["담을 내용(교재 쪽 번호와 함께)"], "widgets": ["poll" 같은 키트 표시], "pages": [교재 쪽 번호], "images": ["material/p-003.webp"]}]
 }
 - 섹션은 6~12개. 첫 섹션은 첫 화면(id "hero"). 실습이 있으면 실습 단계를 섹션으로, 교재 쪽 그림을 보여 줄 곳을 정해요.
 - facts에는 교재에서 직접 찾은 것만, 쪽 번호와 함께. 찾지 못한 칸은 빈 글이나 빈 목록으로 둬요.
+- pages는 교재 넘기기 캡션·강사 화면 쪽 목록에 쓰는 쪽 제목이에요. 보조 글자의 제목이 엉켰거나 빈 쪽만 적어도 돼요.
 - theme 색은 교재에서 가져오고, ink와 paper의 대비는 4.5:1 이상으로.`;
 }
 
@@ -188,16 +190,16 @@ ${css ? `사이트 CSS(참고):\n\`\`\`css\n${String(css).slice(0, 20000)}\n\`\`
 요청대로 고친 섹션 전체만 \`\`\`html 코드 블록 하나로 답해 주세요(같은 id, 설명 없이). CSS를 바꿔야 하면 덧붙일 규칙만 \`\`\`css 블록으로. 교재에 없는 사실은 지어내지 마세요.`;
 }
 
-/** 단계 이름 → 화면 글 */
+/** 단계 이름 → 화면 글(단계 목록에 '끝·하는 중·기다림'과 함께 보이므로 이름꼴) */
 export function stepLabel(name, total) {
-  if (name === 'plan') return '교재를 읽고 설계하는 중';
-  if (name === 'design') return '디자인을 정하는 중';
-  if (name.startsWith('sections:')) return `섹션을 만드는 중 (${name.split(':')[1]}/${total})`;
-  if (name === 'assemble') return '조립하고 검수하는 중';
-  if (name === 'fix') return '검수에서 찾은 문제를 고치는 중';
-  if (name === 'edit') return '요청대로 고치는 중';
-  if (name === 'agent') return '내 PC의 AI에게 맡기는 중';
-  return '마무리하는 중';
+  if (name === 'plan') return '교재 읽고 설계하기';
+  if (name === 'design') return '디자인 정하기';
+  if (name.startsWith('sections:')) return `섹션 만들기 ${name.split(':')[1]}/${total}`;
+  if (name === 'assemble') return '조립하고 검수하기';
+  if (name === 'fix') return '검수에서 찾은 곳 고치기';
+  if (name === 'edit') return '요청대로 고치기';
+  if (name === 'agent') return '내 PC의 AI에게 맡기기';
+  return '마무리하기';
 }
 
 /** CSS에서 클래스 이름 목록(디자인 단계 결과 → 섹션 단계에 줌) */

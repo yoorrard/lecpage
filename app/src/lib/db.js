@@ -110,7 +110,7 @@ export const projects = {
     tell({ type: 'deleted', id });
     const keys = await blobs.keys(id);
     await tx('blobs', 'readwrite', (s) => Promise.all(keys.map((k) => req(s.delete(id + ':' + k)))));
-    await kv.del('undo:' + id).catch(() => { }); // 'AI로 만들기 전' 판(undo.js)
+    await kv.del('undo:' + id).catch(() => { }); // 예전 판의 'AI로 만들기 전' 되돌리기(지금은 판 기록이 연수 안에 있음)
     await import('./gen/store.js').then((m) => Promise.all([m.jobsDb.del(id), m.chatDb.del(id)])).catch(() => { }); // AI 작업 기록(lib/gen)
   },
 };

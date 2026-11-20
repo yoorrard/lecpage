@@ -240,7 +240,7 @@ export function extractSections(html) {
 }
 export function headingOf(h) {
   const m = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(h || '');
-  return m ? m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+  return m ? m[1].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) : '';
 }
 
 /** 마지막 완성 태그까지 자름(덜 된 태그·덜 닫힌 스크립트 앞에서) */

@@ -189,24 +189,32 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 ## 15. 앱 안의 약속 (생성 ↔ 화면)
 작업자 둘(생성 파이프라인 `app/src/lib/gen/*` / 화면 흐름 `app/src/pages/*`·`components/*`)이 이 꼴로 맞물립니다.
 
-프로젝트(IndexedDB `projects`)에 더하는 칸
+프로젝트(IndexedDB `projects`)에 더하는 칸 — **생성 쪽만 씀**(작업 끝·쓰던 AI 창의 답). 화면은 직접 고친 것(글·목록·색·연수 정보·되돌리기)만 씀
 ```js
-{ v: 2, site: { 'index.html': '…', 'assets/style.css': '…', … },   // AI가 만든 사이트(교재 쪽 그림은 blobs 'site/material/p-NNN.webp')
+{ v: 2, site: { 'index.html': '…', 'assets/style.css': '…', … },   // AI가 만든 사이트(그림·자료실 파일은 blobs 'site/…', 교재 쪽 그림 'site/material/p-NNN.webp')
   meta: { …lecpage.json },                                          // 연수 정보·참여 기능
-  gen: { jobId, status, way, provider, model },                     // 마지막 생성 작업 요약(자세한 기록은 'jobs' 저장소)
-  versions: [{ id, at, label, site, meta }]                         // 되돌리기(최근 10판)
+  gen: { jobId, status, way:'key'|'local'|'chat'|'demo', provider, model, agent, kind:'make'|'edit'|'fix', at },
+  versions: [{ id, at, label, site, meta }],                        // 판 기록(최근 10판, 새것이 앞): 'AI가 만든 판'·'다시 만들기 전'·'AI가 고치기 전'·'검수 고치기 전'…
+  inspect: { at, issues },                                          // 저장할 때의 검수 결과(화면이 처음에 보여 줌)
+  notes: [ '…' ]                                                    // 만들며 알게 된 것(답에 연수 정보가 없음, 쪽 그림으로 보냄 등)
 }
 ```
-생성 API(`app/src/lib/gen/index.js`)
+생성 API(`app/src/lib/gen/index.js`, 화면은 `lib/studio.js`로만 부름)
 ```js
-startGeneration(pid, { way:'key'|'local', provider, model, request, reference })  → jobId
-resumeGeneration(pid)            // 멈춘 작업 이어 하기(새로 고침 뒤 자동으로도)
+startGeneration(pid, { way:'key'|'local'|'demo', provider, model, agent:'claude'|'codex', request, reference:{ id, name, mood } })  → jobId
+resumeGeneration(pid, { provider, model }?)   // 멈춘 작업 이어 하기(새로 고침 뒤 useGeneration이 저절로도)
 stopGeneration(pid)
-useGeneration(pid) → { status:'idle'|'running'|'paused'|'done'|'error', step:{ name, label_ko, index, total }, steps[], startedAt, error:{ title, body, actions[] }, preview?:{ site } }
+useGeneration(pid) → { status:'idle'|'running'|'paused'|'done'|'error', jobId, kind, way, provider, model, agent,
+                       step:{ name, label_ko, index(1부터), total, received }, steps[{ name, label_ko, status:'todo'|'running'|'done'|'error', attempts }],
+                       startedAt, endedAt, error:{ title, body, actions:['resume'|'connect'|'paste'|'key'|'billing'|'link'], link? }, wait, notes, elsewhere }
 chatPrompt(pid, { request, reference }) → string              // 쓰던 AI 창에 붙일 글(교재 원본을 첨부하라는 안내 포함)
-acceptChatAnswer(pid, text|File) → { ok, site, meta, problems[], continuePrompt? }
-editSite(pid, { target: 'all'|sectionId, request, way }) → jobId   // 수정 요청(키·로컬) / chatEditPrompt(pid, …)로 쓰던 AI 창
-runInspect(pid) → issues[]                                    // 조립 + inspect + 숨은 틀 inspectRendered
-fixIssues(pid, issueIds) → jobId                              // 검수 문제를 AI에게
+acceptChatAnswer(pid, text|File, { target? }) → { ok, site, meta, problems:string[], issues, continuePrompt? }  // target: 수정 요청의 고칠 곳('all'|섹션 id). 잘리면 이어 붙임
+editSite(pid, { target:'all'|sectionId, request, way:'key'|'local', provider, model, agent }) → jobId   // chatEditPrompt(pid, { target, request })로 쓰던 AI 창
+runInspect(pid) → issues[]                                    // 조립 + inspect + 숨은 틀 inspectRendered(issue.key 붙음). 연수는 바꾸지 않음
+fixIssues(pid, keys|ids, { way, provider, model, agent }) → jobId | ''   // 섹션이 정해지지 않은 문제뿐이면 '' → 화면이 수정 요청에 채움
+bridgeStatus() → { agents[] } | null                           // 내 PC 연결 프로그램
+assembleProject(p, { site, meta, target:'preview'|'zip'|'hosted', prev, extra, materials })  // 미리보기·검수·배포가 함께 쓰는 조립 한 곳
 ```
-화면은 이 API만 부르고, 생성 쪽은 화면을 모름. 작업 중에는 목록·미리보기 창이 없음(진행 단계만).
+- 생성 쪽은 저장한 뒤 창에 `lecpage:gen-saved`({ pid, at })를 보냄 → 연수 화면(Project.jsx)은 기다리던 자동 저장을 마저 쓰고 다시 읽음(단계 화면은 새로 그리지 않음). 생성 쪽은 화면을 모름.
+- 작업 중에는 목록·미리보기 창이 없음(진행 단계만). 만들기 단계 이름은 실제 파이프라인 그대로(교재 읽고 설계하기 → 디자인 정하기 → 섹션 만들기 n/N → 조립하고 검수하기 → (검수에서 찾은 곳 고치기)).
+- 먼저 해보기는 같은 파이프라인을 `way:'demo'`로 돌림: 대표 레퍼런스(data-lab)의 교재 PDF를 실제로 읽고, AI 답 자리만 그 사이트에서 떼어 낸 글(`lib/gen/demo-answers.js`)로 채움(어디로도 보내지 않음).

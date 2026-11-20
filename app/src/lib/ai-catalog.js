@@ -150,7 +150,7 @@ export function rankModels(provider, list, { cat = EMPTY, freeTier = false, bloc
   const rec = pool.sort(cmp)[0];
   if (rec) rec.rec = true;
   const order = { 2: 0, 3: 1, 1: 2, 0: 3 };
-  // 같은 등급 안에서는 추천과 같은 기준(갓 나온 모델은 뒤로)으로: 무료 키가 못 쓰는 모델을 건너뛸 때(generateAuto) 추천과 같은 모델로 내려가게
+  // 같은 등급 안에서는 추천과 같은 기준(갓 나온 모델은 뒤로)으로: 무료 키가 못 쓰는 모델을 건너뛸 때(lib/gen job.js nextModel) 추천과 같은 모델로 내려가게
   rows.sort((a, b) => (b.rec - a.rec) || (a.locked - b.locked) || (b.gfree - a.gfree) || (a.old - b.old) || (order[a.tier] - order[b.tier]) || (fresh(a) - fresh(b)) || (b.created - a.created) || (verOf(b.id) - verOf(a.id)) || (a.i - b.i));
   return rows.map(({ gfree, old, i, ...r }) => r);
 }
