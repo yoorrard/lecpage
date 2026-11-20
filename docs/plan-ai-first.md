@@ -97,12 +97,18 @@ inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브
 4. **조립·검수**: `assemble` → 숨은 틀에서 `inspectRendered` → 문제가 있으면 그 섹션만 한 번 고치기.
 5. **완성**: 미리보기·목록·연수 정보 확인 화면 열림.
 
-안정성 장치
-- 세 회사 모두 **스트리밍**으로 받음. 60~90초 동안 아무 글자도 안 오면 끊고 그 단계만 다시.
-- 작업 기록(약속 D)을 IndexedDB에 단계마다 저장: 새로 고침·탭 닫기·앱 새 판 뒤 "이어서 만들기"로 그 단계부터.
-- 잘린 답: 마지막 완성 태그까지 살리고 "이어서" 요청(같은 단계 안에서), 그래도 안 되면 그 단계만 다시.
-- 한도·혼잡: 기다렸다 그 단계만 다시, 무료 모델로 바꿔도 앞 단계 결과는 유지.
+안정성 장치(조사 근거: `docs/research/ai-first-2026-11.md` §1)
+- **교재 건네기**: PDF는 원본을 그대로(세 회사 모두 받음: Claude base64 요청 128MB·600쪽, OpenAI Responses `input_file` 50MB, Gemini 50MB·1,000쪽). PPTX·DOCX는 Gemini 4에 원본 그대로(쪽 그림으로 읽음), 다른 회사엔 앱이 만든 쪽 그림(긴 변 1,600px webp)과 보조 글자. HWP/HWPX·그 밖은 쪽 그림을 못 그리면 보조 글자 + 교재 속 그림, 그리고 "PDF로 저장해 넣으면 더 정확해요" 한 줄.
+- **회사별 받는 법**
+  - OpenAI: **Responses API `background:true` + `stream:true` + `store:true`**. 끊기면 `starting_after=<sequence_number>`로 이어 받고, 다 받으면 DELETE로 지움(처리방침에 적음). Chat Completions에서 옮김.
+  - Gemini: `streamGenerateContent`(SSE, 한 답 65,536 토큰) 기본. 무료 키 `store` 원칙 그대로(백그라운드는 `store:true`가 필요해 쓰지 않음).
+  - Claude: `/v1/messages` 스트리밍(최대 128K). 백그라운드가 없으니 단계를 잘게 나누고, 잘리면 "받은 부분 + 이어서" 사용자 메시지로 이어 받음(Claude 4.6+는 미리 채우기 불가).
+- 60~90초 동안 아무 글자도 안 오면 끊고 그 단계만 다시(OpenAI는 이어 받기).
+- 작업 기록(약속 D)을 IndexedDB에 단계마다 저장: 새로 고침·탭 닫기·앱 새 판 뒤 "이어서 만들기"로 그 단계부터(OpenAI는 서버에서 계속 돌던 답을 이어 받음).
+- 잘린 답: 마지막 완성 태그까지 살리고 같은 단계 안에서 이어 받기, 그래도 안 되면 그 단계만 다시.
+- 한도·혼잡: 기다렸다 그 단계만 다시, 다른 모델로 바꿔도 앞 단계 결과는 유지.
 - 앱 새 판 자동 새로 고침(`lib/fresh.jsx`)은 AI 작업 중에는 미룸.
+- 모델: 매일 갱신되는 `ai-catalog.json`의 추천(지금 GPT-6.2 Sol·Astra, Claude Opus 5.5, Gemini 4 Argon/Hydrogen·무료 키는 그 날 추천).
 
 ### 약속 D: 작업 기록
 ```js
@@ -111,7 +117,8 @@ inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브
 ```
 
 ## 7. 쓰던 AI 창(키 없이)
-- 프롬프트 한 번: "첨부한 교재 파일을 직접 읽고 … `index.html` 한 파일로(키트 표시 사용) + 맨 끝에 lecpage.json"을 주고, 강사가 **교재 원본을 그 창에 첨부**(ChatGPT·Claude·Gemini 모두 PDF 등을 직접 읽음).
+- 프롬프트 한 번: "첨부한 교재 파일을 직접 읽고 … `index.html` 한 파일로(키트 표시 사용) + 맨 끝에 lecpage.json"을 주고, 강사가 **교재 원본을 그 창에 첨부**(세 곳 모두 PDF를 직접 읽음. Claude.ai는 PPTX를 못 받고 PDF 그림은 100쪽까지 → PDF로 첨부하라고 안내).
+- 한 답 최대 길이는 세 곳 모두 공식 숫자가 없음 → 잘림을 앱이 알아보고 "이어서" 문구로 이어 붙임. 답은 코드 블록 복사나 `.html` 파일 둘 다 받음(Gemini 캔버스는 HTML 내려받기가 없어 복사).
 - 답 받기: HTML 붙여넣기 또는 내려받은 `.html` 끌어 넣기. 잘렸으면 "이어서" 문구를 주고 이어 붙임.
 - 고칠 때도 같은 창: 고칠 섹션 HTML만 담은 요청 글 → 답의 섹션만 갈아 끼움.
 
@@ -130,15 +137,19 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 - SKILL.md의 "HTML을 직접 쓰지 않는다" 원칙을 뒤집음: 에이전트가 설계자·제작자. lecpage 명령은 준비·조립·검수·배포만.
 
 ## 10. 로컬 Claude Code·Codex 연결 (이음오피스식)
-조사(`docs/research/ai-first-2026-11.md` §3) 결과로 정함. 구조 후보: 강사 PC에서 `npx lecpage` 하나로 작은 연결 프로그램이 뜨고, 앱이 그 프로그램에 일을 맡기면 프로그램이 설치된 `claude`/`codex`를 실행(내 구독 한도) → 위 Skill 흐름으로 `work/site`를 만들어 앱으로 돌려줌.
+조사 결론(`ai-first-2026-11.md` §3): **기술적으로 됨, 정책은 Claude 쪽이 회색지대** → 사용자가 켜는 선택 기능으로.
+- 구조: 강사 PC에서 연결 프로그램 하나(`npx github:yoorrard/lecpage` 또는 Skill CLI `lecpage studio`)를 띄우면, 그 프로그램이 **앱 전체를 `http://127.0.0.1:<포트>/`에서 보여 주고**(lecpage.com의 같은 판을 그대로, 같은 출처라 Chrome 권한 창·Safari 차단이 없음) 기본 브라우저로 엶. 앱의 AI 고르기에 "내 PC의 Claude Code / Codex"가 생김.
+- 일 맡기기: 연결 프로그램이 빈 임시 폴더에 교재·쪽 그림·키트 설명서·레퍼런스·작업 지시를 놓고 설치된 `claude -p --output-format stream-json`(또는 `codex exec --json`)을 실행 → 에이전트가 Skill 흐름(§9)으로 `site/`를 파일로 씀(답 길이에 안 잘림) → `check`로 검수·고침 → 앱이 결과를 받아 미리보기·편집·배포. 진행은 스트림으로 앱에 보여 줌.
+- 안전: 127.0.0.1에만 묶기, 띄울 때마다 새 토큰, Origin·Host 정확히 확인, 임시 폴더 밖 파일 접근 막는 Claude Code 설정, `ANTHROPIC_API_KEY`가 있으면 그 키로 돈다는 안내, 폴더의 훅·`.mcp.json`이 없는 빈 폴더에서만.
+- 정책 안내: Claude는 "고치지 않은 Claude Code에 자기 구독으로 로그인"은 허용, "제3자가 구독 한도를 자기 제품에 제공"은 승인 필요 → 기본 꺼짐, 켤 때 한 줄 안내, Anthropic에 문의(운영자 할 일). Codex는 로컬·오픈소스 앱 허용(Sign in with ChatGPT로 Codex 없이도 가능).
 
 ## 11. 레퍼런스
 - 예시 사이트를 템플릿 렌더러 대신 **AI가 자유롭게 만든 완성도 높은 사이트**로 새로 만듦(서로 다른 주제·교재 디자인 2~6개). 대표 예시 '기록은 쌓였는데 시간이 없다면'은 상단 여백·배치·세련됨을 다시.
 - 레퍼런스는 둘러보기 화면과 Skill `references/designs/`에. AI에게는 "참고하되 따르지 말 것"으로, 강사가 고르면 그 사이트의 분위기 설명만 붙임.
 
 ## 12. 호스팅(바로 배포)
-- 지금: 엔진 런타임과 같은 JS만 받음 → AI가 쓴 `assets/site.js`도 받도록 바꿈.
-- 안전 테두리: 서버가 정하는 CSP(`script-src 'self'`, `connect-src 'self'`+그 사이트의 참여 서버, `form-action 'none'`, `frame-src 'none'`, `worker-src 'none'`, `object-src 'none'`), 사이트마다 다른 하위 도메인, 비밀번호 칸(`type=password`) 거절, 외부 스크립트 제거, 크기 한도, 신고·가리기·보관 기간 그대로.
+- 지금: 엔진 런타임과 같은 JS만 받음 → AI가 쓴 `assets/site.js`도 받도록 바꿈(조립이 인라인 스크립트를 이 파일로 옮기므로 `script-src 'self'`로 충분).
+- 안전 테두리: 서버가 정하는 CSP(`script-src 'self'`+고정 라이브러리, `connect-src 'self'`+그 사이트의 실시간 방 주소만, `form-action 'none'`, `frame-src` 유튜브(nocookie)·비메오만, `worker-src 'none'`, `object-src 'none'`), 사이트마다 다른 출처(`s-<id>.lecpage-view.pages.dev`), 비밀번호 칸·로그인 흉내 거절, 외부 스크립트 제거, 크기 한도, 신고·가리기·보관 기간 그대로. CSP로 막을 수 없는 것(주소 이동으로 빼내기)은 신고·가리기로 대응(처리방침·SECURITY.md에 적음).
 
 ## 13. 없애는 것
 - 앱: 기본 초안·`FoundSummary`·내용 탭(설계도 칸 편집)·디자인 탭(프리셋)·설계도 기반 수정 요청·AI 없이 만들기 버튼.
@@ -149,3 +160,28 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 2. 앱 생성 파이프라인 + 앱 화면 흐름 + Skill을 동시에(약속에 맞춰).
 3. 옛 템플릿 흐름 지우기.
 4. 실제 AI로 전 과정 검증(Skill 길은 에이전트가 실제로, 키 길은 실제 키, 쓰던 AI 창 길, 로컬 연결, 먼저 해보기) + 그냥 AI 에이전트와 결과물 비교.
+
+## 15. 앱 안의 약속 (생성 ↔ 화면)
+작업자 둘(생성 파이프라인 `app/src/lib/gen/*` / 화면 흐름 `app/src/pages/*`·`components/*`)이 이 꼴로 맞물립니다.
+
+프로젝트(IndexedDB `projects`)에 더하는 칸
+```js
+{ v: 2, site: { 'index.html': '…', 'assets/style.css': '…', … },   // AI가 만든 사이트(교재 쪽 그림은 blobs 'site/material/p-NNN.webp')
+  meta: { …lecpage.json },                                          // 연수 정보·참여 기능
+  gen: { jobId, status, way, provider, model },                     // 마지막 생성 작업 요약(자세한 기록은 'jobs' 저장소)
+  versions: [{ id, at, label, site, meta }]                         // 되돌리기(최근 10판)
+}
+```
+생성 API(`app/src/lib/gen/index.js`)
+```js
+startGeneration(pid, { way:'key'|'local', provider, model, request, reference })  → jobId
+resumeGeneration(pid)            // 멈춘 작업 이어 하기(새로 고침 뒤 자동으로도)
+stopGeneration(pid)
+useGeneration(pid) → { status:'idle'|'running'|'paused'|'done'|'error', step:{ name, label_ko, index, total }, steps[], startedAt, error:{ title, body, actions[] }, preview?:{ site } }
+chatPrompt(pid, { request, reference }) → string              // 쓰던 AI 창에 붙일 글(교재 원본을 첨부하라는 안내 포함)
+acceptChatAnswer(pid, text|File) → { ok, site, meta, problems[], continuePrompt? }
+editSite(pid, { target: 'all'|sectionId, request, way }) → jobId   // 수정 요청(키·로컬) / chatEditPrompt(pid, …)로 쓰던 AI 창
+runInspect(pid) → issues[]                                    // 조립 + inspect + 숨은 틀 inspectRendered
+fixIssues(pid, issueIds) → jobId                              // 검수 문제를 AI에게
+```
+화면은 이 API만 부르고, 생성 쪽은 화면을 모름. 작업 중에는 목록·미리보기 창이 없음(진행 단계만).
