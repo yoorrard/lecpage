@@ -972,9 +972,17 @@ const commands = {
   /** 앱(웹)과 주고받기: 작업 폴더 → <연수 이름>.lecpage(앱 [저장한 파일 열기]), 앱에서 저장한 .lecpage → 작업 폴더 */
   async app() {
     const P = await imp('src/project-file.js');
+    const KC = await import('./kit-cmds.mjs');
     const src = resolve(args._[0] || 'work');
-    if (!existsSync(src)) fail(`${rel(src)}가 없어요. make로 만든 작업 폴더(work)나 앱에서 저장한 .lecpage 파일을 주세요.`);
-    return statSync(src).isFile() && !/\.json$/i.test(src) ? fromAppFile(P, src) : toAppFile(P, statSync(src).isFile() ? dirname(src) : src);
+    if (!existsSync(src)) fail(`${rel(src)}가 없어요. 작업 폴더(work)나 앱에서 저장한 .lecpage 파일을 주세요.`);
+    if (statSync(src).isFile() && !/\.json$/i.test(src)) {
+      // .lecpage: 새 판(v2, 사이트 폴더)은 사이트 그대로, 예전 판(v1, 설계도)은 지금처럼 설계도로 풂
+      const K = await imp('src/kit/index.js');
+      let o; try { o = K.openProjectFile(readFileSync(src)); } catch (e) { fail(e.friendly ? e.message : `파일을 읽지 못했어요: ${e.message}`); }
+      return o.kind === 'v2' ? KC.appUnpackV2(helpers(), o) : fromAppFile(P, src);
+    }
+    const dir = statSync(src).isFile() ? dirname(src) : src;
+    return KC.isV2Work(dir) ? KC.appPackV2(helpers(), dir) : toAppFile(P, dir);
   },
 
   /** 만든 사이트를 띄우고 '수정 요청'(펜·네모로 표시 + 글)을 work/feedback/에 모음. AI는 그 파일을 읽고 patch로 고침 */
@@ -1127,8 +1135,10 @@ const commands = {
     process.exitCode = q.ok ? 0 : 1;
   },
 
-  serve() {
+  async serve() {
     const port = +args.port || 4173;
+    const KC = await import('./kit-cmds.mjs');
+    if (KC.isV2Work(resolve(args._[0] || 'dist'))) return KC.previewCmd(helpers()); // 작업 폴더(work)면 조립해서 띄움
     if (!existsSync(join(resolve(args._[0] || 'dist'), 'index.html'))) fail(`${rel(resolve(args._[0] || 'dist'))}에 사이트가 없어요(index.html 없음). make나 build로 만든 폴더를 주세요.`);
     staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
@@ -1143,9 +1153,15 @@ const commands = {
   async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
   async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
 
-  pack() {
-    const dir = resolve(args._[0] || 'dist');
-    if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). make나 build로 먼저 만들고 그 폴더를 주세요. 예: pack dist -o site.zip`);
+  async pack() {
+    let dir = resolve(args._[0] || 'dist');
+    const KC = await import('./kit-cmds.mjs');
+    if (KC.isV2Work(dir)) { // 작업 폴더(work)면 조립한 사이트(work/dist)를 담음
+      const b = await KC.buildWorkV2(helpers(), dir);
+      if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
+      dir = b.dist;
+    }
+    if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). 작업 폴더(work)나 조립한 폴더(work/dist)를 주세요. 예: pack work -o site.zip`);
     const files = N.readAssetDir(dir, '');
     const zip = E.zipFiles(files);
     const target = args.o || 'site.zip';

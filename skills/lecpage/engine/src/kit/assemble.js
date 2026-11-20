@@ -416,7 +416,7 @@ function endedText(bp, words) {
  * @param meta lecpage.json(객체·글). 강사 칸은 opts.prev(강사 값)에서만 받음
  * @param opts { runtime:{read(path)}(필수), preview:false, target:'zip'|'hosted'|'preview', prev:null, today:'YYYY-MM-DD',
  *               material:{ pages:[{page,title,text}] }, materials:[{title,href,desc,size}] }
- * @returns { files, warnings:[{code,message_ko}], meta, collected, blueprint, csp, report }
+ * @returns { files, warnings:[{code,message_ko}], meta, collected, blueprint, csp, report, teacher:{'운영안내.md'} }
  */
 export function assemble(site, meta0, opts = {}) {
   const runtime = opts.runtime;
@@ -555,7 +555,9 @@ export function assemble(site, meta0, opts = {}) {
     survey: col.survey, materials: col.materials, tools: col.tools, liveFeatures: vb.live.features, provider: vb.live.provider, code: vb.live.code,
   };
   const report = { pages, files: Object.keys(out).length, sizeKB: Math.round(Object.values(out).reduce((a, v) => a + enc(v), 0) / 1024), live: live ? vb.live.provider : 'none', features: vb.live.features };
-  return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words };
+  // 강사용 파일(올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글). 엔진 템플릿용 DESIGN.md·설계도 사본은 넣지 않음
+  const teacher = built.teacher?.['운영안내.md'] ? { '운영안내.md': built.teacher['운영안내.md'] } : {};
+  return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words, teacher };
 }
 
 /** 쪽 하나 마무리: CSP·머리 태그·키트 CSS·'지금' 줄·키트 부품·#lp-data·런타임 */
