@@ -5,7 +5,7 @@
 // - 받는 중인 글은 몇 초마다 기록에 저장 → 새로 고쳐도 그 글부터 이어 감(OpenAI는 응답 id·순번으로)
 // - 같은 연수를 두 탭에서 동시에 돌리지 않음(Web Locks, 없으면 기록의 심장 박동)
 // - 탭이 가려진 동안 끊기면 횟수를 쓰지 않고 기다렸다가, 탭이 돌아오면(또는 망이 돌아오면) 이어 함
-import { getActiveAI, loadKey, explainError, checkKey, models as listModels, PROVIDERS } from '../ai.js';
+import { getActiveAI, loadKey, explainError, checkKey, models as listModels, rememberWorkingModel, PROVIDERS } from '../ai.js';
 import { projects, blobs } from '../db.js';
 import { uid } from '../util.js';
 import { reach } from '../netcheck.js';
@@ -133,6 +133,8 @@ export function viewOf(rec, { elsewhere = false } = {}) {
 // ── 오류 → 안내 ──
 const RETRY = ['network', 'busy', 'stall', 'empty'];
 const QUOTA = ['quota'];
+const SWAP = ['no-access', 'model', 'quota-day', 'billing', 'forbidden', 'region'];
+const ACCOUNT = ['billing', 'forbidden', 'region'];
 function errorView(e, provider) {
   const k = e?.kind;
   if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [이어서 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
@@ -145,8 +147,12 @@ function errorView(e, provider) {
   if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: '연결 프로그램을 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
   if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', actions: ['paste', 'connect'] };
   const x = explainError(e, provider);
-  return { kind: x.kind, title: x.title, body: x.body, actions: ['resume', ...x.actions.filter((a) => a !== 'pay' && a !== 'light')], link: x.link || null };
+  // 다시 눌러도 같은 답이 오는 오류(키·결제·권한·지역·한도·모델·차단)는 [이어서 만들기]를 맨 뒤로: 주 단추가 같은 실패를 되풀이하지 않게.
+  // 실제 응답(2026-11-20): 선불 크레딧이 바닥난 Gemini 키는 모든 모델이 402 → 결제·키 페이지가 먼저, 충전한 뒤에 [이어서 만들기]
+  const acts = x.actions.filter((a) => a !== 'pay' && a !== 'light');
+  return { kind: x.kind, title: x.title, body: x.body, actions: SAME_AGAIN.includes(x.kind) ? [...acts, 'resume'] : ['resume', ...acts], link: x.link || null };
 }
+const SAME_AGAIN = ['bad-key', 'billing', 'verify', 'forbidden', 'no-browser', 'workspace', 'region', 'cap', 'quota-day', 'no-access', 'model', 'blocked'];
 
 // ── AI 한 번 부르기(이어서·이어 받기·다시 하기 포함) ──
 /**
@@ -175,6 +181,8 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         onText: (t, all) => { piece = all; persist(); },
         onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
       });
+      // 바꾼 모델로 답을 받음 → 이 키는 무료 키(안 된 모델은 '유료 키 필요'로): 다음 만들기는 되는 모델로 바로 시작하고 고르는 칸도 맞게
+      if (ctx.swapped) { const why = ctx.swapped; ctx.swapped = ''; ctx.swapFrom = ''; if (why !== 'model' && why !== 'quota-day') rememberWorkingModel(rec.provider, rec.model, [...(ctx.tried || [])].filter((m) => m !== rec.model)).catch(() => { }); }
       const got = res.text; const before = acc.length;
       acc = cont ? stitch(acc, got) : got; piece = ''; token = null; cont = false;
       step.usage = res.usage || step.usage;
@@ -215,10 +223,17 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         continue;
       }
       if (e.kind === 'too-long' && ctx.level < 2) { ctx.level++; rec.level = ctx.level; await repack(ctx); acc = ''; piece = ''; token = null; continue; }
-      // Gemini 무료 키: 이 모델을 못 쓰거나 오늘 한도를 다 썼으면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
-      if (rec.provider === 'gemini' && ['no-access', 'model', 'quota-day'].includes(e.kind) && swaps < 2) {
-        const next = await nextModel(ctx).catch(() => null);
-        if (next) { swaps++; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
+      // Gemini 무료 키: 이 모델을 못 쓰거나 오늘 한도를 다 썼으면 같은 키의 다른 모델로(앞 단계 결과는 그대로).
+      // 무료 키로 유료 전용 모델(추천 첫 모델이 그럴 수 있음)을 부를 때 오는 오류는 한도 0(429)·403·402·400(FAILED_PRECONDITION)이 다 가능해 모두 받음
+      // (예전 생성 코드와 docs/research/ai-facts-2026-11-14.md가 정한 대로). 오류 답은 돈이 들지 않음
+      if (rec.provider === 'gemini' && SWAP.includes(e.kind)) {
+        // 바꾼 모델도 같은 계정 오류(결제·권한·지역)면 모델 탓이 아님(예: 선불 크레딧이 바닥나 모든 모델이 402) → 처음 모델로 되돌리고 그 안내를 보임
+        if (ctx.swapFrom && ctx.swapped === e.kind && ACCOUNT.includes(e.kind)) {
+          rec.model = ctx.swapFrom; rec.notes = (rec.notes || []).filter((n) => !n.startsWith('이 키로 쓸 수 없는 모델')); ctx.swapFrom = ''; ctx.swapped = ''; await save(rec);
+          throw e;
+        }
+        const next = swaps < 2 ? await nextModel(ctx).catch(() => null) : null;
+        if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = e.kind; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
       }
       throw e;
     }
