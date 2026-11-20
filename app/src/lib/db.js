@@ -111,6 +111,7 @@ export const projects = {
     const keys = await blobs.keys(id);
     await tx('blobs', 'readwrite', (s) => Promise.all(keys.map((k) => req(s.delete(id + ':' + k)))));
     await kv.del('undo:' + id).catch(() => { }); // 'AI로 만들기 전' 판(undo.js)
+    await import('./gen/store.js').then((m) => Promise.all([m.jobsDb.del(id), m.chatDb.del(id)])).catch(() => { }); // AI 작업 기록(lib/gen)
   },
 };
 

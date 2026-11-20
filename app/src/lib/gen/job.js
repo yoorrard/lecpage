@@ -189,9 +189,10 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         else await pause(ctx, Math.min(8000, 1000 * resumes), 'retry');
         continue;
       }
-      if (e.resumeFailed) { token = null; piece = ''; } // 이어 받을 답이 없음(지워졌거나 만료) → 처음부터
+      if (e.resumeFailed) token = null; // 이어 받을 답이 없음(지워졌거나 만료) → 받은 글로 '이어서'나 처음부터
       // 이번에 받은 글(이어서·처음)을 쌓아 둠 → 다음 요청은 '이어서'
       if (e.partial && !token) { acc = cont ? stitch(acc, e.partial) : e.partial; piece = ''; cont = false; }
+      if (e.resumeFailed) { step.attempts++; persist(); if (step.attempts > (hook().maxAttempts || 4)) throw e; continue; }
       if (RETRY.includes(e.kind)) {
         if (hidden()) { persist(); await waitVisible(ctx); continue; } // 가려진 탭에서 끊김: 횟수를 쓰지 않음
         step.attempts++; persist();
@@ -392,7 +393,9 @@ async function runFix(ctx, step) {
   const secs = extractSections(extractHtml(text).html).filter((s) => s.id && ids.includes(s.id)).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
   const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, ''));
   const { html } = replaceSections(site['index.html'], secs);
-  rec.site = { ...site, 'index.html': html, ...(c.css && !/<[a-zA-Z]/.test(c.css) ? { 'assets/style.css': `${site['assets/style.css'] || ''}\n\n/* 검수 고침 */\n${c.cut ? trimCss(c.css) : c.css}` } : {}) };
+  const cssAdd = c.css && !/<[a-zA-Z]/.test(c.css) ? `/* 검수 고침 */\n${c.cut ? trimCss(c.css) : c.css}` : '';
+  rec.site = { ...site, 'index.html': html, ...(cssAdd ? { 'assets/style.css': `${site['assets/style.css'] || ''}\n\n${cssAdd}` } : {}) };
+  rec.delta = { sections: secs, cssAdd: [rec.delta?.cssAdd, cssAdd].filter(Boolean).join('\n\n'), metaPatch: rec.delta?.metaPatch || null };
   step.output = { fixed: secs.map((s) => s.id) };
 }
 
@@ -413,8 +416,10 @@ async function runEdit(ctx, step) {
   const metaPatch = extractJson((/```json([\s\S]*?)(```|$)/i.exec(text) || [])[1] || '').value;
   if (!secs.length && !c.css && !metaPatch) throw formatError();
   const { html } = replaceSections(site['index.html'], secs);
-  const css = c.css && !/<[a-zA-Z]/.test(c.css) ? `${site['assets/style.css'] || ''}\n\n/* 수정 요청 */\n${cssCut(c.css) ? trimCss(c.css) : c.css}` : site['assets/style.css'];
+  const cssAdd = c.css && !/<[a-zA-Z]/.test(c.css) ? `/* 수정 요청 */\n${cssCut(c.css) ? trimCss(c.css) : c.css}` : '';
+  const css = cssAdd ? `${site['assets/style.css'] || ''}\n\n${cssAdd}` : site['assets/style.css'];
   rec.site = { ...site, 'index.html': html, 'assets/style.css': css };
+  rec.delta = { sections: secs, cssAdd, metaPatch: metaPatch && typeof metaPatch === 'object' ? metaPatch : null };
   const prev = rec.meta || ctx.project.meta || {};
   // 색: 덧붙인 규칙이 앞 규칙을 덮으므로(뒤가 이김) 새 CSS의 값을 먼저
   const theme = { ...(prev.theme || {}), ...themeFromCss(css), ...(c.css ? themeFromCss(c.css) : {}) };
@@ -430,13 +435,25 @@ async function finish(ctx) {
   const at = Date.now();
   const label = rec.kind === 'make' ? 'AI가 만든 판' : rec.kind === 'edit' ? 'AI가 고친 판' : 'AI가 검수 문제를 고친 판';
   const issues = rec.steps.filter((s) => s.name === 'assemble').pop()?.output?.issues || [];
-  const saved = await projects.patch(rec.pid, (cur) => ({
-    v: 2, site: rec.site, meta: rec.meta,
+  // 수정·고치기: 그동안 강사가 다른 섹션을 고쳤을 수 있어 지금 사이트에 바뀐 섹션·덧붙인 CSS만 얹음
+  const merged = (cur) => {
+    if (rec.kind === 'make' || !rec.delta || !cur.site?.['index.html']) return { site: rec.site, meta: rec.meta };
+    const d = rec.delta;
+    const site = { ...cur.site, 'index.html': replaceSections(cur.site['index.html'], d.sections || []).html, ...(d.cssAdd ? { 'assets/style.css': `${cur.site['assets/style.css'] || ''}\n\n${d.cssAdd}` } : {}) };
+    const prev = cur.meta || {};
+    const theme = { ...(prev.theme || {}), ...themeFromCss(site['assets/style.css'] || ''), ...(d.cssAdd ? themeFromCss(d.cssAdd) : {}) };
+    const meta = d.metaPatch ? readMeta({ ...prev, ...d.metaPatch, theme: { ...theme, ...(d.metaPatch.theme || {}) } }, { prev }).meta : { ...prev, theme };
+    return { site, meta };
+  };
+  let out = null;
+  const saved = await projects.patch(rec.pid, (cur) => { out = merged(cur); return {
+    v: 2, site: out.site, meta: out.meta,
     gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, at, kind: rec.kind },
-    versions: [...(Array.isArray(cur.versions) ? cur.versions : []), { id: uid(8), at, label, site: rec.site, meta: rec.meta }].slice(-10),
+    versions: [...(Array.isArray(cur.versions) ? cur.versions : []), { id: uid(8), at, label, site: out.site, meta: out.meta }].slice(-10),
     inspect: { at, issues },
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
-  }));
+  }; });
+  if (out) { rec.site = out.site; rec.meta = out.meta; }
   if (!saved) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
   notifySaved(rec.pid, saved.updatedAt);
 }

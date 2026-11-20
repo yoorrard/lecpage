@@ -48,11 +48,17 @@ export function useGeneration(pid) {
   useEffect(() => {
     if (!pid) return undefined;
     let on = true;
-    const refresh = () => currentView(pid).then((x) => { if (on) setV({ ...x, now: Date.now() }); }).catch(() => { });
+    let last = null; let n = 0;
+    const refresh = () => currentView(pid).then((x) => { last = x; if (on) setV({ ...x, now: Date.now() }); }).catch(() => { });
     refresh();
     resumeIfOrphaned(pid).then(refresh).catch(() => { });
     const off = onJobChange((id) => { if (id === pid) refresh(); });
-    const t = setInterval(() => { if (on) setV((x) => (x.status === 'running' ? { ...x, now: Date.now() } : x)); }, 1000);
+    const t = setInterval(() => {
+      if (!on) return;
+      // 다른 탭이 만들던 작업: 그 탭을 닫았으면(잠금이 풀림) 5초마다 확인해 이 탭이 이어 함
+      if (last?.status === 'running' && last.elsewhere && ++n % 5 === 0) resumeIfOrphaned(pid).then(refresh).catch(() => { });
+      setV((x) => (x.status === 'running' ? { ...x, now: Date.now() } : x));
+    }, 1000);
     return () => { on = false; off(); clearInterval(t); };
   }, [pid]);
   return v;
@@ -178,11 +184,12 @@ export async function runInspect(pid) {
   return issues;
 }
 
-/** 검수 문제를 AI에게(그 섹션만 고침). issueIds를 비우면 오류 전부 → jobId */
+/** 검수 문제를 AI에게(그 섹션만 고침). issueIds를 비우면 오류 전부 → jobId. 섹션이 정해진 문제가 없으면 '' */
 export async function fixIssues(pid, issueIds = [], { provider, model } = {}) {
   const p = await projects.get(pid);
   const all = p?.inspect?.issues || [];
-  const issues = issueIds.length ? all.filter((i) => issueIds.includes(i.id)) : all.filter((i) => i.level === 'error');
+  const issues = (issueIds.length ? all.filter((i) => issueIds.includes(i.id)) : all.filter((i) => i.level === 'error')).filter((i) => i.where?.section);
+  if (!issues.length) return '';
   const r = await startJob(pid, 'fix', { issues, provider, model });
   return r.jobId;
 }
