@@ -5,6 +5,7 @@
 // 같으면 실패한 조각 주소를 HEAD로 물어 404면 새 버전(파일이 지워짐), 그 밖은 망(잠깐 끊김)
 // 쓰는 곳: main.jsx(vite:preloadError · 화면 조각 Lazy · 띠), Start.jsx(교재 읽기·초안), AiPanel.jsx(프롬프트를 만들 교재 도구)
 import { useEffect, useState } from 'preact/hooks';
+import { isGenerating } from './gen/busy.js';
 
 const KEY = 'lecpage:fresh'; // { at, files } 이 탭에서 저절로 새로 고친 적 있음 · noted: 새로 고친 뒤 알림을 보였음
 const CHUNK = /dynamically imported module|Importing a module script failed|Unable to preload CSS|Loading (CSS )?chunk|ChunkLoadError|module script/i;
@@ -59,6 +60,8 @@ export async function chunkFailed(e, { files = false } = {}) {
 }
 
 function autoReload() {
+  // AI가 사이트를 만드는 중이면 저절로 새로 고치지 않고 띠만(받는 중인 답을 끊지 않게. 작업은 단계마다 저장돼 새로 고쳐도 이어 함)
+  if (isGenerating()) { bar = { ...bar, on: true, files: bar.files || want.files }; emit(); return false; }
   let ok = false;
   try { if (!sessionStorage.getItem(KEY)) { sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), files: want.files })); ok = true; } } catch { ok = false; } // 적지 못하면 저절로 하지 않음
   if (ok) { location.reload(); return true; }

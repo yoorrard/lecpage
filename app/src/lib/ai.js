@@ -158,7 +158,8 @@ export async function readJson(r, provider) {
   const t = await r.text();
   try { return JSON.parse(t); } catch { throw new AiError(/^\s*</.test(t) ? 'blocked' : 'other', /^\s*</.test(t) ? 'html page' : '', { status: r.status, provider }); }
 }
-async function fail(r, provider) {
+/** 실패한 응답(r.ok가 아님) → AiError를 던짐(gen/providers도 씀) */
+export async function fail(r, provider) {
   if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider });
   const j = await r.json().catch(() => ({}));
   const e = j.error || j;
