@@ -176,7 +176,10 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     const connect = / connect-src ([^;]+);/.exec(want)[1].split(' ');
     assert.deepEqual(connect, ["'self'", `${base}/live/api/${CODE}`, `${base}/live/api/${CODE}/`, `${base.replace(/^http/, 'ws')}/live/api/${CODE}/`, `${base}/api/${CODE}/files/`]);
     assert.ok(want.includes(`script-src 'self' ${LIB_SCRIPT_SOURCES.join(' ')};`) && want.includes("worker-src 'none'") && want.includes("form-action 'none'") && want.includes('frame-src https://www.youtube-nocookie.com https://player.vimeo.com;'));
-    assert.ok(dep.headers.includes(`/console\n  X-Frame-Options: DENY\n  ! Content-Security-Policy\n  Content-Security-Policy: ${auxCsp({ noFrame: true })}\n`));
+    // 강사·발표 화면은 COOP로 창 연결도 끊음(사이트 스크립트가 연 창의 관리자 키에 닿지 못하게). QR 안내문은 틀 막기만
+    assert.ok(dep.headers.includes(`/console\n  X-Frame-Options: DENY\n  Cross-Origin-Opener-Policy: same-origin\n  ! Content-Security-Policy\n  Content-Security-Policy: ${auxCsp({ noFrame: true })}\n`), dep.headers.slice(0, 2000));
+    assert.ok(dep.headers.includes(`/screen.html\n  X-Frame-Options: DENY\n  Cross-Origin-Opener-Policy: same-origin\n`));
+    assert.ok(dep.headers.includes(`/poster.html\n  X-Frame-Options: DENY\n  ! Content-Security-Policy\n`));
     // 보기(Pages 출처 = 사이트마다 다른 출처): 사이트 스크립트를 그대로 내보냄, 고정 라이브러리는 남기고 바깥 스크립트는 뺌
     const page = await get(s.url);
     assert.equal(page.status, 200); assert.equal(page.headers.get('content-security-policy'), want);

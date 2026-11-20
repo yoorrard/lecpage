@@ -12,7 +12,7 @@ import { MAX_WAIT_S, snapshotChanged } from '../../skills/lecpage/backends/cloud
 import { config, SSE_STOP_PCT } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { SqlBucket } from './live/bucket.js';
-import { HostBind, bindRoom, roomEnv, maxRetentionDays, translate, LiveError } from './live/host.js';
+import { HostBind, RoomBudget, bindRoom, roomEnv, maxRetentionDays, translate, LiveError } from './live/host.js';
 
 export { Guard, MAX_WAIT_S, snapshotChanged };
 
@@ -20,8 +20,8 @@ const DAY = 864e5;
 const MB = 1024 * 1024;
 
 /** 실시간 규칙의 오류 모양({ error, message }) */
-function liveError(status, error, message) {
-  return new Response(JSON.stringify({ error, message }), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
+function liveError(status, error, message, headers = {}) {
+  return new Response(JSON.stringify({ error, message }), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
 }
 
 export class Room extends LiveRoom {
@@ -37,6 +37,8 @@ export class Room extends LiveRoom {
     this.hostBucket = bucket;
     this.hostToken = setupToken;
     this.hostBind = new HostBind(ctx.storage.sql);
+    this.hostBudget = new RoomBudget(ctx.storage.sql); // 방마다 분·하루 요청 상한(live/host.js ROOM_CAP)
+    this.peopleN = 0;
     this.hostFull = false; // 전체 저장 공간이 찼으면 파일을 더 받지 않음
     this.awakeMs = 0; this.awakeMark = 0; // 깨어 있던 시간(SSE·방 안 긴 대기): 무료 하루 duration 몫을 Gate가 알게
   }
@@ -85,7 +87,14 @@ export class Room extends LiveRoom {
     if (!b) return liveError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
+    const wait = request.headers.has('x-lec-admin') ? 0 : await this.overBudget(b);
+    if (wait) return liveError(429, 'room_busy', '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', { 'retry-after': String(wait) });
     return super.fetch(request); // 긴 대기도 LiveRoom이 맡음
+  }
+  /** 방마다 요청 상한(live/host.js RoomBudget): 받으면 0, 넘쳤으면 기다릴 초. 참가자 수는 방의 셈(메모리, 들어올 때마다 맞춰짐)을 그대로 써서 한꺼번에 들어와도 따라감 */
+  async overBudget(b) {
+    try { this.peopleN = (await this.core()).count(b.code, 'participants'); } catch { /* 못 세면 지난 값 */ }
+    return this.hostBudget.hit({ people: this.peopleN, budget: this.hostCfg.dailyRequestBudget || 0 });
   }
 
   // ── 긴 대기(LiveRoom)에 덧붙이는 것 ─────────────────────────
@@ -171,7 +180,7 @@ export class Room extends LiveRoom {
   }
   forget() {
     this.corePromise = null; this.alarmAt = 0; this.hostFull = false;
-    this.hostBind.reset();
+    this.hostBind.reset(); this.hostBudget.reset();
     if (this.hostBucket) this.hostBucket.ready = false;
   }
 

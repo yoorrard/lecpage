@@ -204,7 +204,8 @@ function homeOnlyPreload() {
 export default defineConfig({
   base: './',
   plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload()],
-  resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
+  // @hosting: 바로 배포 서버의 거절 규칙(hosting/src/sitecheck.js)을 앱이 그대로 불러 배포 전에 같은 코드로 미리 봄(lib/host-check.js)
+  resolve: { alias: { '@engine': here('../skills/lecpage/engine'), '@hosting': here('../hosting/src') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },
   worker: { format: 'es' },

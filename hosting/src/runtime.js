@@ -3,10 +3,11 @@
 // 조각 목록은 scripts/gen-runtime.mjs가 엔진에서 뽑아 runtime-allow.js에 둡니다(길이·앞머리·SHA-256).
 import { RUNTIME_SEGMENTS } from './runtime-allow.js';
 import { sha256Hex } from './ids.js';
+import { MAX_JS_BYTES } from './paths.js';
 
 export const JOIN = '\n;\n';
-/** 런타임 스크립트는 다 합쳐도 이보다 작음. .js 파일 하나의 한도(사이트가 직접 쓴 스크립트도 같음). 넘으면 내용을 보지 않고 거절 */
-export const MAX_JS_BYTES = 1024 * 1024;
+/** 런타임 스크립트는 다 합쳐도 이보다 작음. .js 파일 하나의 한도(사이트가 직접 쓴 스크립트도 같음, paths.js). 넘으면 내용을 보지 않고 거절 */
+export { MAX_JS_BYTES };
 
 const decoder = new TextDecoder('utf-8', { fatal: true });
 

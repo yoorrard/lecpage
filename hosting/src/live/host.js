@@ -134,3 +134,51 @@ export function translate(e) {
   }
   return e;
 }
+
+// ── 방마다 요청 상한 ─────────────────────────────────────────────
+// 사이트 스크립트(AI가 쓴 코드)가 방 주소를 1초마다 직접 부르는 실수 하나가 그날 무료 예산(요청 10만)을 수십 분 만에 쓸 수 있음.
+// 그래서 방(연수 코드)마다 분·하루 요청 수를 셈. 정상 연수는 넉넉히: 참가자 한 명이 연수 내내 묻기로 받아도(긴 대기 1분 3.4번, capacity.js EST)
+// 하루 몫(1,500)이 6시간을 넘고, 1분 몫(20)은 글이 쉼 없이 올 때(12)보다 큼. 하루 상한은 하루 예산의 70%(예약 몫 BOOK_SHARE와 같음)를 넘지 않음.
+// 강사 화면(관리자 키를 붙인 요청)은 세지 않음(넘쳐도 기록을 받아 갈 수 있게). 날은 UTC 0시(무료 한도가 다시 차는 때)에 바뀜
+export const ROOM_CAP = { dayBase: 20000, dayPerPerson: 1500, dayShare: 0.7, minuteBase: 600, minutePerPerson: 20 };
+/** 참가자 수 → { day, minute }. budget: 서버의 하루 요청 예산(0이면 끔) */
+export function roomCaps(people, { budget = 0 } = {}) {
+  const n = Math.max(0, Math.min(500, Math.floor(Number(people) || 0)));
+  const day = ROOM_CAP.dayBase + ROOM_CAP.dayPerPerson * n;
+  return { day: budget > 0 ? Math.min(day, Math.max(ROOM_CAP.dayBase, Math.floor(budget * ROOM_CAP.dayShare))) : day, minute: ROOM_CAP.minuteBase + ROOM_CAP.minutePerPerson * n };
+}
+const USAGE_TABLE = 'host_usage';
+/** 방 저장소 안의 하루 요청 수(묶인 방에서만 씀). 200번마다 한 번 적어 쓰기 몫을 아낌(방이 잠들었다 깨면 그 사이 몇 번은 덜 셀 수 있음) */
+export class RoomBudget {
+  constructor(sql, { every = 200 } = {}) { this.sql = sql; this.every = every; this.reset(); }
+  reset() { this.day = ''; this.n = 0; this.saved = 0; this.minute = -1; this.m = 0; }
+  load(day) {
+    this.day = day; this.n = 0; this.saved = 0;
+    try {
+      const has = this.sql.exec(`SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = ?`, USAGE_TABLE).toArray().length > 0;
+      const row = has ? this.sql.exec(`SELECT day, n FROM ${USAGE_TABLE} WHERE id = 1`).toArray()[0] : null;
+      if (row && row.day === day) { this.n = Number(row.n) || 0; this.saved = this.n; }
+    } catch { /* 못 읽으면 0부터 */ }
+  }
+  save() {
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ${USAGE_TABLE} (id INTEGER PRIMARY KEY CHECK (id = 1), day TEXT NOT NULL, n INTEGER NOT NULL)`);
+    this.sql.exec(`INSERT INTO ${USAGE_TABLE} (id, day, n) VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET day = excluded.day, n = excluded.n`, this.day, this.n);
+    this.saved = this.n;
+  }
+  /**
+   * 요청 하나. 받으면 0, 넘쳤으면 다시 해 볼 때까지의 초
+   * @param {{ people?: number, budget?: number, now?: number }} o
+   */
+  hit({ people = 0, budget = 0, now = Date.now() } = {}) {
+    const day = new Date(now).toISOString().slice(0, 10);
+    if (day !== this.day) this.load(day);
+    const cap = roomCaps(people, { budget });
+    const minute = Math.floor(now / 60000);
+    if (minute !== this.minute) { this.minute = minute; this.m = 0; }
+    if (this.n >= cap.day) return Math.max(1, Math.ceil((Date.parse(day + 'T00:00:00Z') + 864e5 - now) / 1000));
+    if (this.m >= cap.minute) return Math.max(1, Math.ceil(((minute + 1) * 60000 - now) / 1000));
+    this.n++; this.m++;
+    if (this.n - this.saved >= this.every || this.n >= cap.day) { try { this.save(); } catch { /* 다음에 */ } }
+    return 0;
+  }
+}

@@ -1,6 +1,8 @@
 // 받는 경로와 파일 형식. 형식은 확장자로만 정하고, 응답의 Content-Type도 여기 표에서만 나옵니다.
 
 export const MAX_PATH = 200;
+/** .js 파일 하나의 한도(엔진 런타임 묶음·사이트가 직접 쓴 스크립트 같음). runtime.js·sitecheck.js가 씀(앱의 미리 검사도 sitecheck.js를 그대로 씀) */
+export const MAX_JS_BYTES = 1024 * 1024;
 export const MAX_DEPTH = 8;
 /** 엔진 조립의 자료실 파일 이름(kit/paths.js SITE_FILE의 files/…)과 같은 글자만: 영문·숫자·한글·밑줄·점·붙임표·괄호·대괄호·빈칸 */
 const SEGMENT = /^[A-Za-z0-9_가-힣ㄱ-ㅎㅏ-ㅣ.\-()[\] ]+$/;

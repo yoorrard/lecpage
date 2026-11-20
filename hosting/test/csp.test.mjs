@@ -255,3 +255,11 @@ test('신고 링크', () => {
   assert.ok(end.includes('href="/report?site=abcdefghjk"') && end.includes('@media print'));
   assert.ok(!/<script/i.test(end));
 });
+
+test('강사·발표 화면은 창 연결을 끊음(COOP same-origin, 엔진 조립의 _headers와 같음). 사이트 쪽·QR 안내문은 붙이지 않음', () => {
+  const sha = 'a'.repeat(64);
+  for (const p of ['console.html', 'screen.html']) assert.equal(fileHeaders(p, typeOf(p), sha)['cross-origin-opener-policy'], 'same-origin', p);
+  for (const p of ['index.html', 'poster.html', 'check.html']) assert.equal(fileHeaders(p, typeOf(p), sha)['cross-origin-opener-policy'], undefined, p);
+  const eng = readFileSync(join(ENGINE, 'src', 'kit', 'assemble.js'), 'utf8');
+  assert.match(eng, /console\|screen[\s\S]{0,80}Cross-Origin-Opener-Policy: same-origin/, '엔진 조립도 같은 두 쪽');
+});
