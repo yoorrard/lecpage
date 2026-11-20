@@ -18,3 +18,8 @@ skills/lecpage/backends/node-server/data/
 .claude/settings.local.json
 __pycache__/
 *.pyc
+
+# 참고 디자인 폴더에서 check·preview를 돌리면 생기는 결과물
+skills/lecpage/references/designs/*/check/
+skills/lecpage/references/designs/*/dist*/
+skills/lecpage/references/designs/*/lecpage.state.json
