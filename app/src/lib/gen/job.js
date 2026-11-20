@@ -37,7 +37,7 @@ if (bc) {
   bc.onmessage = async (e) => {
     const m = e.data; if (!m?.pid) return;
     if (m.cmd === 'stop') { if (live.get(m.pid)?.ctrl) stopJob(m.pid); return; } // 다른 탭에서 [멈추기]를 누름 → 돌리는 이 탭이 멈춤
-    const rec = await jobsDb.get(m.pid).catch(() => null); if (rec) remote.set(m.pid, rec); emit(m.pid);
+    const rec = await jobsDb.get(m.pid).catch(() => null); if (rec) remote.set(m.pid, rec); else remote.delete(m.pid); emit(m.pid);
   };
 }
 
@@ -678,6 +678,18 @@ export function stopJob(pid) {
   const L = live.get(pid);
   if (!L?.ctrl) { try { bc?.postMessage({ pid, cmd: 'stop' }); } catch { /* 알림만 못 함 */ } return false; }
   L.stopReason = 'user'; L.ctrl.abort(); autoResume.delete(pid);
+  return true;
+}
+
+/** 멈춘·실패한 작업 기록을 지움(그만두기: 받은 글·이어 할 자리도 버림). 도는 중이면 하지 않음 */
+export async function forgetJob(pid) {
+  if (live.get(pid)?.ctrl) return false;
+  const rec = await jobsDb.get(pid).catch(() => null);
+  if (rec?.status === 'running' && await heldElsewhere(pid)) return false;
+  await jobsDb.del(pid).catch(() => { });
+  live.delete(pid); remote.delete(pid); autoResume.delete(pid);
+  try { bc?.postMessage({ pid, id: rec?.id || '', at: Date.now() }); } catch { /* 알림만 못 함 */ }
+  emit(pid);
   return true;
 }
 

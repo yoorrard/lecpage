@@ -14,8 +14,9 @@ export const whoOf = (job) => (job.way === 'local' ? AGENT_NAME[job.agent] || '�
 export function fmtSec(s) { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m ? `${m}분 ${s % 60}초` : `${s}초`; }
 
 export function StepMake(props) {
-  const { p } = props;
-  if (isV2(p)) return <Studio {...props} />;
+  const { p, job } = props;
+  // 사이트가 있어도 처음부터 다시 만드는 중이면 진행 단계를(멈추거나 실패하면 완성 화면 위 띠로)
+  if (isV2(p) && !(job.kind === 'make' && job.status === 'running')) return <Studio {...props} />;
   return <Making {...props} />;
 }
 

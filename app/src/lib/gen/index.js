@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { projects } from '../db.js';
 import { uid } from '../util.js';
-import { startJob, resumeJob, stopJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, versionsAfter, settle } from './job.js';
+import { startJob, resumeJob, stopJob, forgetJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, versionsAfter, settle } from './job.js';
 import { chatDb } from './store.js';
 import * as P from './prompts.js';
 import { parseChatAnswer, extractHtml, extractSections, extractCss, replaceSections, stitch, htmlCut, trimCss } from './parse.js';
@@ -33,6 +33,8 @@ export async function startGeneration(pid, o = {}) {
 export async function resumeGeneration(pid, change = {}) { return (await resumeJob(pid, change)).jobId; }
 /** 멈추기 → status 'paused'. resumeGeneration으로 멈춘 단계부터 */
 export function stopGeneration(pid) { return stopJob(pid); }
+/** 멈추거나 실패한 작업을 그만둠(기록을 지움 → status 'idle'). 도는 중이면 하지 않음 */
+export function forgetGeneration(pid) { return forgetJob(pid); }
 
 /**
  * 진행 상태(Preact 훅). 도는 동안 1초마다 now를 넣어 다시 그림(걸린 시간).
@@ -138,11 +140,12 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
   const { html, css } = splitStyles(a.html);
   const site = { 'index.html': html, ...(css ? { 'assets/style.css': css } : {}) };
   const titleTag = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || '';
-  const raw = a.meta || { title: titleTag.trim() };
+  // 고친 사이트 전체가 왔는데 연수 정보가 없으면 지금 연수 정보를 그대로(새로 만들 때만 제목으로 시작)
+  const raw = a.meta || (edit ? { ...(p.meta || {}) } : { title: titleTag.trim() });
   if (!raw.title && titleTag) raw.title = titleTag.trim();
   const r = readMeta({ ...raw, theme: { ...(raw.theme || {}), ...themeFromCss(css) } }, { prev: p.meta });
   const problems = [
-    ...(a.meta ? [] : ['답 끝에 연수 정보(lecpage.json)가 없어 제목만 읽었어요. 연수 정보에서 확인해 주세요.']),
+    ...(a.meta || edit ? [] : ['답 끝에 연수 정보(lecpage.json)가 없어 제목만 읽었어요. 연수 정보에서 확인해 주세요.']),
     ...(r.meta.sessions?.some((s) => s?.date) ? [] : ['답에 연수 날짜가 없어요. 연수 정보에서 넣어 주세요.']),
     ...r.warnings.filter((w) => w.code !== 'teacher-value' && w.code !== 'title-empty').slice(0, 3).map((w) => w.message_ko),
   ];

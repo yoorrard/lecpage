@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
-import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, bridgeStatus } from '../../lib/studio.js';
+import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, forgetGeneration, bridgeStatus } from '../../lib/studio.js';
 import { getActiveAI, PROVIDERS, CHATBOTS, setChatbot } from '../../lib/ai.js';
 import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage, imageAt, replaceText, getVar, setVar, readCss, writeCss } from '../../lib/site-doc.js';
 import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
@@ -88,7 +88,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
         </div>
       </StepHead>
       {working && <JobBand job={job} onStop={() => stopGeneration(p.id)} />}
-      {(job.status === 'error' || job.status === 'paused') && job.kind && job.kind !== 'make' && <JobError p={p} job={job} go={go} />}
+      {(job.status === 'error' || job.status === 'paused') && job.kind && <JobError p={p} job={job} go={go} />}
       {!p.metaChecked && tab !== 'info' && <div class="ai-job" role="status"><span class="ai-job-t"><b>AI가 교재에서 찾은 연수 정보를 한 번 확인해 주세요.</b><small>QR 안내문·강사 화면·일정 파일에 쓰여요.</small></span><button type="button" class="btn btn-sm btn-primary" onClick={() => setTab('info')}>확인하기</button></div>}
       {p.notes?.length > 0 && <div class="ai-job" role="status"><span class="ai-job-t"><b>답을 받으며 알게 된 것</b><small>{p.notes.join(' ')}</small></span><button class="icon-btn" onClick={() => update({ notes: undefined })} aria-label="안내 닫기">✕</button></div>}
       <div class="workspace">
@@ -133,11 +133,14 @@ function JobBand({ job, onStop }) {
 
 /** AI가 고치다 멈춤(수정 요청·검수 고치기): 까닭과 할 일. 사이트는 그대로 */
 function JobError({ p, job, go }) {
-  // 다른 AI·쓰던 AI 창으로는 [수정 요청]에서 보낼 곳을 바꿔 다시 보냄
-  const acts = job.status === 'paused' ? [{ id: 'resume', label: '이어서 하기', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => a.id !== 'connect' && a.id !== 'paste');
+  // 고치기: 다른 AI·쓰던 AI 창으로는 [수정 요청]에서 보낼 곳을 바꿔 다시 보냄. 다시 만들기: 다른 AI 고르기·쓰던 AI 창은 교재 넣기에서
+  const make = job.kind === 'make';
+  const acts = [...(job.status === 'paused' ? [{ id: 'resume', label: '이어서 하기', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => make || (a.id !== 'connect' && a.id !== 'paste'))),
+    { id: 'forget', label: '그만두기', run: () => forgetGeneration(p.id) }];
   const e = job.error || {};
+  const what = make ? '다시 만들기' : '고치기';
   return (
-    <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.status === 'paused' ? 'AI가 고치기를 멈췄어요.' : e.title || 'AI가 고치지 못했어요.'}</b><small>{job.status === 'paused' ? '사이트는 그대로예요. [이어서 하기]를 누르면 멈춘 단계부터 해요.' : e.body || '사이트는 그대로예요.'}</small></span>
+    <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.status === 'paused' ? `AI가 ${what}를 멈췄어요.` : e.title || `AI가 ${make ? '다시 만들지' : '고치지'} 못했어요.`}</b><small>{job.status === 'paused' ? '지금 사이트는 그대로예요. [이어서 하기]를 누르면 멈춘 단계부터 해요.' : `${e.body || ''} 지금 사이트는 그대로예요.`.trim()}</small></span>
       {acts.map((a, i) => (a.href ? <a class={`btn btn-sm${i ? '' : ' btn-primary'}`} href={a.href} target="_blank" rel="noopener">{a.label}<span class="ext" aria-hidden="true">↗</span></a>
         : <button type="button" class={`btn btn-sm${i ? '' : ' btn-primary'}`} onClick={a.run}>{a.label}</button>))}
     </div>

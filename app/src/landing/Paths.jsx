@@ -35,7 +35,7 @@ export function Paths() {
       <div class="ld-skill">
         <div>
           <h3 class="ld-h3">AI 에이전트에서 쓰기</h3>
-          <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage 스킬을 한 줄로 넣어요. 에이전트가 교재를 읽고 사이트를 직접 쓰면 lecpage가 조립·검수해요. 고치거나 배포할 때는 앱에서 이어서 해요.</p>
+          <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage 스킬을 한 줄로 넣어요. AI 에이전트가 교재를 읽고 사이트를 직접 쓰면 lecpage가 조립·검수해요. 고치거나 배포할 때는 앱에서 이어서 해요.</p>
           <a class="ld-cmd-help" href="#/help/skill">AI 에이전트에서 쓰는 법</a>
         </div>
         <div class="ld-cmds">
