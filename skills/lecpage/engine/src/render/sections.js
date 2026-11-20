@@ -220,7 +220,7 @@ function hero(s, ctx) { return renderHero(s, ctx, { placeText, completionLine, j
  * 끝난 연수에는 도크가 뜨지 않음. 별명은 서버가 붙이고 창을 띄우지 않음
  */
 export function quickAttend(bp) {
-  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
+  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance') && bp.audience?.type !== 'parents';
 }
 /** 출석 칸(입실·퇴실)이 있는 연수: 연수 시간에 아직 입실하지 않았으면 도크와 첫 화면 줄의 [출석]이 입실을 바로 보냄(칸까지 내려가 찾지 않게) */
 export const dockAttend = (bp) => quickAttend(bp) || (bp.live.provider !== 'none' && bp.sections.some((s) => s.type === 'attendance'));
@@ -480,7 +480,7 @@ function board(s, ctx) {
 }
 
 function poll(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '투표') + pollBox(s.items, { live: ctx.live }));
+  return wrap(s, ctx, head(s, ctx, '투표') + pollBox(s.items, { live: ctx.live, host: ctx.words?.host }));
 }
 
 function quiz(s, ctx) {

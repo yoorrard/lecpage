@@ -1,0 +1,16 @@
+{
+  "id": "parents-briefing",
+  "title": "신입생 학부모 설명회",
+  "mood": "학교 공문·가정통신문의 신뢰감: 교표와 굵은 줄+가는 줄 장 제목, □ 표시, 회신서 절취선. 설명은 발표와 자료에 맡기고 지금 순서·자료 따라 보기·질문·입학 전 날짜와 연락처만 크게 두는 학부모용 동반자 사이트",
+  "audience": "parents",
+  "material": { "file": "material/안내자료.pdf", "pages": 15, "format": "A4 세로 설명회 자료집" },
+  "kit": ["poll", "deck", "materials", "share", "qa", "survey"],
+  "features": ["qa", "poll", "survey", "deck", "materials"],
+  "fonts": { "display": "학교안심 알림장 Bold(제목·숫자)", "body": "Pretendard GOV Variable 400–800" },
+  "colors": {
+    "light": { "paper": "#ffffff", "surf": "#f1f6f3", "ink": "#15201b", "mute": "#45534c", "accent": "#0b5e45", "warm": "#9c3f0c", "rule": "#c5d3cb" },
+    "dark": { "paper": "#0f1613", "surf": "#16201b", "ink": "#e7eeea", "mute": "#b2c0b9", "accent": "#7ed2a6", "warm": "#ffad73", "rule": "#34463c" }
+  },
+  "motion": ["첫 화면 이중선 긋기 한 번", "바로 가기로 옮긴 장 제목 잠깐 표시(기본은 다 그려진 모습, 움직임 줄이기면 없음)"],
+  "notCopy": "학교 안내 자료에 맞춘 판단이에요. 다른 설명회·행사에 공문 줄·□ 표시·절취선을 그대로 옮기지 마세요. 가져갈 것은 '내용은 자료에, 사이트는 당일과 그 뒤에 다시 찾을 것만'이라는 방법이에요."
+}

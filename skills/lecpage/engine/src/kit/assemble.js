@@ -345,7 +345,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       let id = W.kitSlug(attr(t, 'data-id'), `p${col.polls.length + 1}`); while (col.polls.some((p) => p.id === id)) id += '-' + (col.polls.length + 1);
       const item = { id, question: q || `투표 ${col.polls.length + 1}`, kind, options: kind === 'word' ? [] : options };
       col.polls.push(item);
-      return { html: W.pollBox([item], { live, list: false, ask: item.question }) };
+      return { html: W.pollBox([item], { live, list: false, ask: item.question, host: ctx.words.host }) };
     }
     case 'board': {
       const prompt = String(attr(t, 'data-prompt') || '').replace(/\s+/g, ' ').trim().slice(0, 300);
@@ -401,7 +401,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       // 첫 쪽 그림 비율이 16:9와 다르면(A4 세로 자료집·4:3 슬라이드) 키트 CSS가 그 비율로 그림 칸을 잡음(--lpk-deck-ratio)
       const dim = ctx.pageSize(list[0].page);
       if (dim && dim.w > 0 && dim.h > 0 && Math.abs(dim.w / dim.h - 16 / 9) > 0.05) col.deckRatio = `${dim.w}/${dim.h}`;
-      return { html: W.deckBox(list, { label: ctx.words.deck }) };
+      return { html: W.deckBox(list, { label: ctx.words.deck, host: ctx.words.host }) };
     }
     case 'materials': {
       const j = W.jsonAttr(attr(t, 'data-items'));
@@ -410,7 +410,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
         title: String(m.title || m.name || '').trim().slice(0, 100), href: safeHref(m.href || m.url || ''), desc: String(m.desc || '').trim().slice(0, 200), kind: String(m.kind || '').toUpperCase().slice(0, 8), size: String(m.size || '').slice(0, 20),
       })).filter((m) => m.title);
       col.materials.push(...items);
-      return { html: W.materialsBox(items, { inner }) };
+      return { html: W.materialsBox(items, { inner, host: ctx.words.host }) };
     }
     case 'join':
       return { html: W.joinBox({ live, code: ctx.code, codeWord: ctx.words.code }) };
@@ -528,7 +528,8 @@ export function assemble(site, meta0, opts = {}) {
   const words = wordsFor(v0);
   const liveOn = v0.live.provider !== 'none';
   const f = v0.live.features;
-  const quick = liveOn && f.length > 0 && !pre.attend && !f.includes('attendance');
+  // 출석 한 번 누르기: 학부모 설명회(audience parents)에는 붙이지 않음(이수가 없는데 '출석'이 보이면 꼭 눌러야 하는 줄 앎. render/sections.js quickAttend와 같은 규칙)
+  const quick = liveOn && f.length > 0 && !pre.attend && !f.includes('attendance') && meta.audience !== 'parents';
   const ctx = {
     meta, words, liveOn, code: v0.live.code, anonymous: v0.live.anonymous !== false, minor: v0.audience.minor, uploads: v0.live.uploads, provider: v0.live.provider,
     done: v0.meta.admin.kind === 'official' && !!(v0.meta.admin.completionRate || v0.meta.admin.hours), surveyUrl: meta.surveyUrl, materialPages, pageInfo,
