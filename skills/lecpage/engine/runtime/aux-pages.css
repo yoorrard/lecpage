@@ -3,6 +3,10 @@
    규칙(references/design-quality.md): 상자는 떼어 낼 수 있는 패널에만, 위계는 글자 크기·굵기·가는 선으로, 강조색 하나, 한쪽 색 띠·알약 꼬리표 없음. */
 
 /* ═══ 공통 ═══ */
+/* 모티프 장식 줄(강사 화면 들어가기·QR 안내문): 색은 theme.css 변수만 */
+.lp-motif{display:block;width:100%;height:100%}
+.lp-motif .a{fill:var(--primary)}.lp-motif .b{fill:var(--accent)}.lp-motif .c{fill:var(--accent-2)}.lp-motif .f{fill:var(--foreground)}
+.lp-mrule{width:100%;height:100%;overflow:visible}
 .lp-body-con,.lp-body-scr,.lp-body-doc,.lp-body-pst{min-height:100vh;min-height:100dvh}
 .lp-ax-bar{position:sticky;top:0;z-index:40;padding-top:env(safe-area-inset-top,0px);background:color-mix(in srgb,var(--background) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule-c)}
 .lp-ax-in{display:flex;align-items:center;gap:12px;max-width:1160px;min-height:56px;margin:0 auto;padding:6px max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px))}
