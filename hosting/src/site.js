@@ -4,21 +4,25 @@
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
 //  passet (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠. 내용은 두지 않음
 //         (작은 파일은 받을 때 메모리에만 두었다가 공개할 때 한 번에 올리고 그때 적음 → deferred)
+//  jsk    (VIEW=pages) 받은 .js가 사이트가 직접 쓴 스크립트인지(own=1) 엔진 런타임인지(0). 줄이 없으면 예전 판에서 받은 런타임
+//         내용을 두지 않으므로 공개할 때(보조 쪽 검사)·두 번째 주소로 내보낼 때(직접 쓴 스크립트는 내보내지 않음) 이 표를 봄
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
 //
 // 보기(view)는 사이트를 만들 때 정해져 바뀌지 않습니다.
-//  worker: 모든 파일을 여기 두고 Worker가 /s/<id>/로 내보냄
+//  worker: 모든 파일을 여기 두고 Worker가 /s/<id>/로 내보냄. 모든 사이트가 한 출처라 .js는 엔진 런타임만 받음
 //  pages : HTML(손보기 전 원본)과 영상·소리만 여기 두고, 나머지는 받을 때 검사한 뒤 바로 Pages에 올림.
 //          공개할 때 HTML을 손봐 올리고 브랜치 s-<id>에 배포 → https://s-<id>.<프로젝트>.pages.dev (pages-site.js)
+//          사이트마다 출처가 갈려 사이트가 직접 쓴 스크립트(assets/site.js 등)도 검사해 받음(sitecheck.js). 이 호스트 주소(/s/<id>/)로는 내보내지 않음
 import { DurableObject } from 'cloudflare:workers';
 import { config, expiryFrom, HOUR_MS, DAY_MS } from './config.js';
 import { HttpError, json, noContent, readJson, errorFrom } from './http.js';
 import { bearer, keyMatches, newDeployId, hex, SHA256_RE, DEPLOY_RE } from './ids.js';
 import { checkManifest, missingBlobs, scriptBlobs } from './manifest.js';
 import { typeOf, extOf, requestPath } from './paths.js';
-import { isRuntimeJs } from './runtime.js';
-import { SUPABASE_SDK, STATIC_RUNTIME, PAGES_RUNTIME } from './runtime-allow.js';
-import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES } from './csp.js';
+import { isRuntimeJs, looksLikeRuntime } from './runtime.js';
+import { STATIC_RUNTIME, PAGES_RUNTIME } from './runtime-allow.js';
+import { fileHeaders, etagMatches, parseRange, NO_FRAME_PAGES, declaredLive } from './csp.js';
+import { checkHtml, checkCss, checkOwnScript, pageData } from './sitecheck.js';
 import { rewriteHtml } from './rewrite.js';
 import { gonePage, removedPage, blockedPage, notFoundPage, noFilePage } from './pages.js';
 import { normCode } from './live/host.js';
@@ -57,7 +61,10 @@ CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEX
 CREATE TABLE IF NOT EXISTS passet (sha TEXT NOT NULL, ext TEXT NOT NULL, phash TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (sha, ext)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS deploy (id TEXT PRIMARY KEY, created INTEGER NOT NULL, bytes INTEGER NOT NULL, stored INTEGER NOT NULL, files TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS blob (sha TEXT NOT NULL, i INTEGER NOT NULL, total INTEGER, data BLOB NOT NULL, PRIMARY KEY (sha, i)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS jsk (sha TEXT PRIMARY KEY, own INTEGER NOT NULL) WITHOUT ROWID;
 `;
+/** 사이트 쪽 HTML에서 실시간 서버 주소를 찾아볼 쪽 수(사이트 자료 lp-data). 엔진 사이트는 6쪽 안팎 */
+const LIVE_SCAN_PAGES = 30;
 
 export class Site extends DurableObject {
   constructor(ctx, env) {
@@ -68,6 +75,8 @@ export class Site extends DurableObject {
     this.manifests = new Map(); // 배포 id → 풀어 둔 목록
     this.uploading = new Map(); // sha256 → 올리는 중인 작업
     this.jsOk = new Set(); // 런타임으로 확인한 sha256
+    this.jskMem = new Map(); // (Pages 보기) sha256 → 사이트가 직접 쓴 스크립트인지(jsk 표를 읽은 것)
+    this.liveMem = new Map(); // 배포 id → 사이트가 적은 바깥 실시간 서버 출처(csp.js declaredLive)
     this.deployTimes = [];
     this.liveTimes = [];
     this.queue = Promise.resolve();
@@ -115,6 +124,7 @@ export class Site extends DurableObject {
     if (!cols.has('view')) this.sql.exec("ALTER TABLE meta ADD COLUMN view TEXT NOT NULL DEFAULT 'worker'");
     if (!cols.has('pstate')) this.sql.exec('ALTER TABLE meta ADD COLUMN pstate TEXT');
     if (!cols.has('view') || !cols.has('pstate')) this.sql.exec(SCHEMA);
+    else this.sql.exec('CREATE TABLE IF NOT EXISTS jsk (sha TEXT PRIMARY KEY, own INTEGER NOT NULL) WITHOUT ROWID'); // 사이트 스크립트를 받기 전에 만든 사이트
   }
   /** VIEW=pages로 만든 사이트인지 */
   isPages(meta = this.load()) { return !!meta && meta.view === 'pages'; }
@@ -194,6 +204,65 @@ export class Site extends DurableObject {
     return new Map(this.sql.exec('SELECT sha, total FROM blob WHERE i = 0').toArray().map((r) => [r.sha, r.total]));
   }
   hasBlob(sha) { return this.sql.exec('SELECT 1 FROM blob WHERE sha = ? AND i = 0', sha).toArray().length > 0; }
+  /** 여기 둔 파일 내용 전부(HTML·CSS 검사, 사이트 자료 읽기) */
+  blobBytes(sha, size) {
+    const out = new Uint8Array(size); let o = 0;
+    for (const r of this.sql.exec('SELECT data FROM blob WHERE sha = ? ORDER BY i', sha)) { const u = new Uint8Array(r.data); if (o + u.length > size) break; out.set(u, o); o += u.length; }
+    if (o !== size) throw new HttpError('missing_blobs', undefined, { missing: [sha] });
+    return out;
+  }
+  /** (Pages 보기) 받은 .js가 사이트가 직접 쓴 스크립트인지. jsk에 줄이 없으면 런타임(예전 판에서 받은 것) */
+  isOwnJs(sha) {
+    if (!this.jskMem.has(sha)) this.jskMem.set(sha, this.sql.exec('SELECT own FROM jsk WHERE sha = ?', sha).toArray()[0]?.own === 1);
+    return this.jskMem.get(sha);
+  }
+  /**
+   * 받은 .js 하나 검사. 엔진 런타임 그대로면 'runtime'. 런타임처럼 시작하는데 다르면 앱과 서버의 판이 어긋났거나 손댄 것(runtime_mismatch: 앱이 새로 고친 뒤 다시).
+   * 그 밖은 사이트가 직접 쓴 스크립트: pages 보기는 검사(sitecheck.js)한 뒤 'own', worker 보기는 모든 사이트가 한 출처라 받지 않음
+   */
+  async classifyJs(meta, sha, bytes, path) {
+    if (this.jsOk.has(sha)) return 'runtime';
+    if (await isRuntimeJs(bytes)) { this.jsOk.add(sha); return 'runtime'; }
+    if (looksLikeRuntime(bytes)) throw new HttpError('runtime_mismatch', undefined, { path });
+    if (!this.isPages(meta)) throw new HttpError('script_not_allowed', `이 바로 배포 서버는 사이트가 직접 쓴 스크립트를 받지 않아요(${path}). 모든 사이트가 한 주소를 같이 써서 다른 사이트에 영향을 줄 수 있어요. 내 계정으로 배포하거나 운영자에게 알려 주세요.`, { path });
+    checkOwnScript(bytes, path);
+    return 'own';
+  }
+  /**
+   * 공개 전 검사: HTML(두 보기 모두, sitecheck.js)과 CSS(worker 보기. pages 보기는 받을 때 봄).
+   * 보조 쪽에 사이트가 직접 쓴 스크립트가 있는지·엔진 비밀번호 칸이 있는 쪽에 그런 스크립트가 있는지는 jsk 표로 앎
+   */
+  checkSite(meta, man) {
+    const pages = this.isPages(meta);
+    const isOwnScript = (p) => { const f = pages ? man.files.get(p) : null; return !!f && typeOf(p)?.kind === 'js' && this.isOwnJs(f[0]); };
+    const td = new TextDecoder();
+    for (const [path, sha, size] of man.list) {
+      const kind = typeOf(path)?.kind;
+      if (kind === 'html') checkHtml(td.decode(this.blobBytes(sha, size)), path, { isOwnScript });
+      else if (!pages && extOf(path) === 'css') checkCss(td.decode(this.blobBytes(sha, size)), path);
+    }
+  }
+  /** 사이트 자료(lp-data)에 적힌 바깥 실시간 서버(강사 계정)의 출처. 첫 화면부터 보고 처음 찾은 것. 배포마다 한 번 읽어 기억 */
+  liveOf(deployId, man, self) {
+    const k = `${deployId}|${self}`;
+    if (this.liveMem.has(k)) return this.liveMem.get(k);
+    const order = ['index.html', 'check.html', 'privacy.html', ...man.list.map(([p]) => p).filter((p) => typeOf(p)?.kind === 'html')];
+    const td = new TextDecoder(); let out = []; let n = 0;
+    for (const path of new Set(order)) {
+      const f = man.files.get(path);
+      if (!f || !this.hasBlob(f[0])) continue;
+      if (n++ >= LIVE_SCAN_PAGES) break;
+      const live = pageData(td.decode(this.blobBytes(f[0], f[1])))?.live;
+      if (live && typeof live === 'object' && live.provider) { out = declaredLive(live, self); break; }
+    }
+    if (this.liveMem.size > 8) this.liveMem.clear();
+    this.liveMem.set(k, out);
+    return out;
+  }
+  /** 사이트 쪽 CSP에 넣을 것(csp.js roomSources): 이 호스트 주소, 묶인 방 코드, 사이트 id, 보기, 바깥 실시간 서버 */
+  cspCtx(meta, deployId, man, self) {
+    return { host: self, code: meta.live_code || '', site: meta.site, pages: this.isPages(meta), live: this.liveOf(deployId, man, self) };
+  }
   /** 목록을 바꾸는 일(배포 만들기·공개·지우기·가리기)은 한 번에 하나씩 */
   exclusive(fn) {
     const run = this.queue.then(fn);
@@ -356,6 +425,7 @@ export class Site extends DurableObject {
     for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM blob').toArray()) {
       if (!keep.has(sha)) { this.sql.exec('DELETE FROM blob WHERE sha = ?', sha); this.jsOk.delete(sha); }
     }
+    for (const { sha } of this.sql.exec('SELECT sha FROM jsk').toArray()) if (!keep.has(sha)) { this.sql.exec('DELETE FROM jsk WHERE sha = ?', sha); this.jskMem.delete(sha); }
     if (this.isPages(meta)) for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM passet').toArray()) if (!keep.has(sha)) this.sql.exec('DELETE FROM passet WHERE sha = ?', sha);
     for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.bytes.length; }
   }
@@ -379,13 +449,14 @@ export class Site extends DurableObject {
       throw new HttpError(Number(declared) > size ? 'too_large' : 'bad_request', '목록에 적은 크기와 달라요.');
     }
     if (this.isPages(meta)) return this.uploadPages(request, meta, man, sha, size);
-    const job = this.receive(request, sha, size, man.js.has(sha));
+    const job = this.receive(request, sha, size, man.js.get(sha));
     this.uploading.set(sha, job);
     try { await job; } finally { if (this.uploading.get(sha) === job) this.uploading.delete(sha); }
     return noContent();
   }
 
-  async receive(request, sha, size, isScript) {
+  /** @param {string} [jsPath] 이 내용이 .js로도 나가면 그 경로(엔진 런타임인지 확인) */
+  async receive(request, sha, size, jsPath) {
     const digest = new crypto.DigestStream('SHA-256');
     const hasher = digest.getWriter();
     let first = null; let index = 0; let got = 0; let stored = 0; let wrote = false;
@@ -417,7 +488,7 @@ export class Site extends DurableObject {
       if (fill > 0 || index === 0) flush();
       await hasher.close();
       if (hex(await digest.digest) !== sha) throw new HttpError('bad_request', '파일 내용이 sha256과 달라요.');
-      if (isScript && !(await this.scriptOk(sha, first))) throw new HttpError('runtime_mismatch');
+      if (jsPath) await this.classifyJs(this.load(), sha, first, jsPath); // .js는 1MB(= 첫 줄)까지
       // 받는 동안 목록이 바뀌었거나 사이트가 지워졌을 수 있음
       const meta = this.load();
       if (!meta) throw new HttpError('not_found');
@@ -431,13 +502,6 @@ export class Site extends DurableObject {
       if (wrote && !this.hasBlob(sha)) this.sql.exec('DELETE FROM blob WHERE sha = ?', sha);
       throw e;
     }
-  }
-
-  async scriptOk(sha, bytes) {
-    if (this.jsOk.has(sha)) return true;
-    const ok = await isRuntimeJs(bytes);
-    if (ok) this.jsOk.add(sha);
-    return ok;
   }
 
   // ── VIEW=pages: 받기 ─────────────────────────────────────────
@@ -456,8 +520,13 @@ export class Site extends DurableObject {
     const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => {
       const bytes = await readAll(request, size);
       if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== sha) throw new HttpError('bad_request', '파일 내용이 sha256과 달라요.');
-      if (man.js.has(sha) && !(await this.scriptOk(sha, bytes))) throw new HttpError('runtime_mismatch');
+      // .js: 엔진 런타임 또는 검사를 마친 사이트 스크립트(표에 적어 둠). CSS: 글자 가림 검사. 걸리면 Pages에 올리지 않음
+      const jsPath = man.js.get(sha);
+      const own = jsPath ? (await this.classifyJs(meta, sha, bytes, jsPath)) === 'own' : false;
+      const cssPath = paths.find((p) => extOf(p) === 'css');
+      if (cssPath) checkCss(new TextDecoder().decode(bytes), cssPath);
       if (!this.load()) throw new HttpError('not_found'); // 받는 사이에 사이트가 지워짐
+      if (own) { this.sql.exec('INSERT OR REPLACE INTO jsk (sha, own) VALUES (?, 1)', sha); this.jskMem.set(sha, true); }
       const parts = exts.length ? base64Parts(bytes) : null;
       const items = exts.map((e) => ({ ext: e, hash: pagesHash(bytes, e, parts), parts, contentType: contentTypeOf(paths.find((p) => rawExt(p) === e)) }));
       if (needBlob && !this.hasBlob(sha)) {
@@ -495,12 +564,14 @@ export class Site extends DurableObject {
       const missing = this.missingFor(meta, man.list);
       if (missing.length) throw new HttpError('missing_blobs', undefined, { missing });
       if (this.isPages(meta)) return this.publishPages(request, meta, deployId, man);
-      // 실행 파일은 여기서 한 번 더 확인(다른 이름으로 올려 둔 내용을 .js로 돌려 쓰는 길을 막음)
+      // 실행 파일은 여기서 한 번 더 확인(다른 이름으로 올려 둔 내용을 .js로 돌려 쓰는 길을 막음). HTML·CSS 검사도 여기서
       for (const [sha, path] of man.js) {
         if (this.jsOk.has(sha)) continue;
         const row = this.sql.exec('SELECT data FROM blob WHERE sha = ? AND i = 0', sha).toArray()[0];
-        if (!row || !(await this.scriptOk(sha, new Uint8Array(row.data)))) throw new HttpError('runtime_mismatch', `lecpage 실행 파일이 아니에요: ${path}`, { path });
+        if (!row) throw new HttpError('missing_blobs', undefined, { missing: [sha] });
+        await this.classifyJs(meta, sha, new Uint8Array(row.data), path);
       }
+      this.checkSite(meta, man);
       if (this.load()?.pending !== deployId) throw new HttpError('not_found', '없는 배포예요. 목록(deploys)부터 다시 보내 주세요.');
       const now = Date.now(); const expires = expiryFrom(now, this.cfg.days); const prev = meta.current;
       this.ctx.storage.transactionSync(() => {
@@ -534,6 +605,7 @@ export class Site extends DurableObject {
       const parts = base64Parts(bytes); const hash = pagesHash(bytes, rawExt(path), parts);
       manifest[`/${path}`] = hash; extra.push({ hash, parts, contentType: contentTypeOf(path) }); paths.push(path);
     };
+    this.checkSite(meta, man); // HTML 검사(걸리면 Pages에 아무것도 올리지 않음)
     const og = this.ogImageFor(deployId, man);
     for (const [path, sha] of man.list) {
       if (isMedia(path)) { media.push(path); continue; }
@@ -558,7 +630,7 @@ export class Site extends DurableObject {
     const te = new TextEncoder();
     add('robots.txt', te.encode(ROBOTS));
     if (!man.files.has('404.html')) add('404.html', te.encode(noFileHtml()));
-    const headers = headersFile(paths, { scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [], fontsHashed: fontsHashed(man.list) });
+    const headers = headersFile(paths, { csp: this.cspCtx(meta, deployId, man, self), fontsHashed: fontsHashed(man.list) });
     const redirects = redirectsFile(media, `${self}/s/${id}/`);
     const pc = this.pc();
     const { deployment, lost } = await this.pagesCall(() => deploySite(pc, { branch: branchOf(id), manifest, extra, headers, redirects, message: `lecpage ${id}` }));
@@ -694,7 +766,7 @@ export class Site extends DurableObject {
     if (this.isPages(meta) && !(await this.wipePages(meta, expired, why))) { await this.holdWipe(meta, expired, why); return false; }
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
-    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
+    this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.jskMem.clear(); this.liveMem.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
     return true;
   }
@@ -727,12 +799,12 @@ export class Site extends DurableObject {
     w.n += 1; w.expired = !!(w.expired || expired); w.last = now; if (why) w.why = why;
     st.wiping = w;
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM passet');
+      this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM passet'); this.sql.exec('DELETE FROM jsk');
       this.sql.exec('UPDATE meta SET current = NULL, pending = NULL, bytes = 0, live_code = NULL WHERE id = 1');
       this.savePs(meta, st);
     });
     Object.assign(meta, { current: null, pending: null, bytes: 0, live_code: null });
-    this.manifests.clear(); this.jsOk.clear(); this.deferred.clear(); this.deferredBytes = 0;
+    this.manifests.clear(); this.jsOk.clear(); this.jskMem.clear(); this.liveMem.clear(); this.deferred.clear(); this.deferredBytes = 0;
     await this.ctx.storage.setAlarm(now + WIPE_RETRY_MS[Math.min(w.n, WIPE_RETRY_MS.length) - 1]);
     if (w.n === 1) { try { await this.gate('POST', 'site', { id: meta.site, bytes: 0, wiping: w.at, ...this.pagesDelta() }); } catch (e) { console.error('gate wiping update failed', e?.message); } }
   }
@@ -861,8 +933,11 @@ export class Site extends DurableObject {
     const man = meta.current ? this.manifest(meta.current) : null;
     const path = requestPath(url.searchParams.get('p'));
     if (!man) return notFoundPage(head);
-    // Pages 보기: 영상·소리만 여기서, 나머지는 Worker가 Pages에서 가져와 내보냄(학교망에서 pages.dev가 막혔을 때 쓰는 이 호스트 주소)
+    // Pages 보기: 영상·소리만 여기서, 나머지는 Worker가 Pages에서 가져와 내보냄(학교망에서 pages.dev가 막혔을 때 쓰는 이 호스트 주소).
+    // 이 주소는 모든 사이트가 같이 쓰는 출처라 사이트가 직접 쓴 스크립트는 내보내지 않음(엔진 런타임만). 못 쓰는 경로·목록에 없는 .js는 Pages에 묻지 않음
     if (this.isPages(meta) && !(path && isMedia(path) && man.files.has(path))) {
+      if (!path) return noFilePage(head);
+      if (typeOf(path)?.kind === 'js') { const f = man.files.get(path); if (!f || this.isOwnJs(f[0])) return noFilePage(head); }
       const pu = this.ps(meta).url;
       return pu ? new Response(null, { status: 204, headers: { 'x-lp-proxy': pu, 'cache-control': 'no-store' } }) : notFoundPage(head);
     }
@@ -882,7 +957,9 @@ export class Site extends DurableObject {
     }
     const tag = type.kind === 'html' ? `${String(meta.current).slice(0, 8)}${notices.length ? `.${notices.map((n) => n.id).join('.')}` : ''}` : '';
     const v = url.searchParams.get('v') || '';
-    const headers = fileHeaders(name, type, sha, { tag, immutable: status === 200 && ((v.length >= 8 && sha.startsWith(v)) || fontHashed(name, sha)), scripts: this.cfg.allowSupabaseSdk && SUPABASE_SDK ? [SUPABASE_SDK] : [] });
+    const origin = request.headers.get('x-lp-origin') || '';
+    const csp = type.kind === 'html' ? this.cspCtx(meta, meta.current, man, origin) : undefined;
+    const headers = fileHeaders(name, type, sha, { tag, immutable: status === 200 && ((v.length >= 8 && sha.startsWith(v)) || fontHashed(name, sha)), csp });
     if (status === 200 && etagMatches(request.headers.get('if-none-match'), headers.etag)) {
       delete headers['content-type'];
       return new Response(null, { status: 304, headers });
@@ -892,7 +969,7 @@ export class Site extends DurableObject {
       if (head) return new Response(null, { status, headers });
       return rewriteHtml(new Response(this.stream(sha, 0, size - 1), { status, headers }), meta.site, {
         reportLink: !NO_FRAME_PAGES.has(name), path: name, files: man.files, rt: RT, notices,
-        origin: request.headers.get('x-lp-origin') || '', ogImage: name === 'index.html' ? this.ogImageFor(meta.current, man) : '',
+        origin, ogImage: name === 'index.html' ? this.ogImageFor(meta.current, man) : '',
       });
     }
     let range = status === 200 ? parseRange(request.headers.get('range'), size) : null;

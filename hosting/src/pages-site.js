@@ -4,7 +4,7 @@
 //  - 응답 머리글은 서버가 만든 _headers로만(올라온 _headers는 쓰지 않음), 형식은 확장자 표(paths.js)로만
 //  - 영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고 Worker가 내보냄: Pages는 Range 요청에 206을 주지 않아 iPhone Safari에서 영상이 안 열릴 수 있음
 //    → _redirects로 Worker 주소(/s/<id>/…)로 넘김
-import { htmlCsp, SVG_CSP, NO_FRAME_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
+import { siteCsp, auxCsp, SVG_CSP, NO_FRAME_PAGES, AUX_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
 import { TYPES, extOf } from './paths.js';
 import { pageHtml, REMOVED } from './pages.js';
 
@@ -51,27 +51,28 @@ Disallow: /
 /** Pages _headers 규칙 수 한도(공식: 100개. 넘는 규칙은 버려짐) */
 export const PAGES_HEADER_RULES = 100;
 /**
- * 사이트의 _headers 규칙 [패턴, 머리글…]을 중요한 것부터: 모든 파일(CSP·nosniff) → 강사용 화면 틀 막기 → SVG 가둠 → 나머지(같은 출처만·내려받기) → 글꼴 캐시.
+ * 사이트의 _headers 규칙 [패턴, 머리글…]을 중요한 것부터: 모든 파일(사이트 쪽 CSP·nosniff) → 보조 쪽(예전 CSP, 강사용 화면은 틀 막기) → SVG 가둠 → 나머지(같은 출처만·내려받기) → 글꼴 캐시.
  * 사이트에 실제로 있는 확장자(대소문자 그대로, Pages 주소 맞추기는 대소문자를 가림)마다 규칙 하나. 보통 사이트는 20개 안팎이고,
  * 확장자 대소문자 모양을 수십 가지로 늘려 100개를 넘기면 site.js가 올리기 전에 거절함(보안 규칙이 버려지지 않게)
  * @param {string[]} paths 사이트 안 경로(Pages에 올리는 것)
- * @param {{ scripts?: string[], fontsHashed?: boolean }} [o] htmlCsp에 더할 스크립트 주소, fontsHashed: assets/fonts/의 파일 이름이 모두 내용 해시(fontsHashed())
+ * @param {{ csp?: object, fontsHashed?: boolean }} [o] csp: siteCsp에 넘길 값(실시간 방·영상 주소, csp.js roomSources), fontsHashed: assets/fonts/의 파일 이름이 모두 내용 해시(fontsHashed())
  * @returns {[string, string[]][]}
  */
-export function headerRules(paths, { scripts = [], fontsHashed = false } = {}) {
+export function headerRules(paths, { csp = {}, fontsHashed = false } = {}) {
   const first = []; const rest = [];
   first.push(['/*', [
     '! Access-Control-Allow-Origin',
-    `Content-Security-Policy: ${htmlCsp({ scripts })}`,
+    `Content-Security-Policy: ${siteCsp(csp)}`,
     `X-Content-Type-Options: ${BASE_HEADERS['x-content-type-options']}`,
     `Referrer-Policy: ${BASE_HEADERS['referrer-policy']}`,
     `Permissions-Policy: ${BASE_HEADERS['permissions-policy']}`,
     `X-Robots-Tag: ${BASE_HEADERS['x-robots-tag']}`,
   ]]);
-  // 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게. Pages는 /console.html을 /console로 넘기므로 둘 다
-  for (const f of [...NO_FRAME_PAGES].sort()) {
-    const bare = f.replace(/\.html$/, '');
-    for (const p of [`/${f}`, `/${bare}`]) first.push([p, ['X-Frame-Options: DENY', '! Content-Security-Policy', `Content-Security-Policy: ${htmlCsp({ noFrame: true, scripts })}`]]);
+  // 보조 쪽(엔진이 만드는 강사·발표·안내문·접속 확인·개인정보 쪽)은 예전 CSP. 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게.
+  // Pages는 /console.html을 /console로 넘기므로 둘 다
+  for (const f of [...AUX_PAGES].sort()) {
+    const bare = f.replace(/\.html$/, ''); const noFrame = NO_FRAME_PAGES.has(f);
+    for (const p of [`/${f}`, `/${bare}`]) first.push([p, [...(noFrame ? ['X-Frame-Options: DENY'] : []), '! Content-Security-Policy', `Content-Security-Policy: ${auxCsp({ noFrame })}`]]);
   }
   const exts = new Set();
   for (const p of paths) { const name = p.slice(p.lastIndexOf('/') + 1); const dot = name.lastIndexOf('.'); if (dot > 0) exts.add(name.slice(dot + 1)); }
