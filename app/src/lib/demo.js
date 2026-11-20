@@ -6,6 +6,7 @@ import { projects, blobs } from './db.js';
 import { uid } from './util.js';
 import { DEFAULT_INFO } from '@engine/src/project-file.js';
 import { copyPages } from './site-meta.js';
+import { readMeta } from '@engine/src/kit/index.js';
 
 const subs = new Map(); const runs = new Map();
 const IDLE = { status: 'idle', steps: [], step: null, startedAt: 0, error: null };
@@ -42,10 +43,14 @@ export async function startReplay(pid, { provider = '', way = 'key' } = {}) {
     const k = runs.get(pid); if (!k || k.id !== id) return;
     set({ steps: k.steps.map((s, n) => (n === i ? { ...s, status: 'done' } : s)) });
   }
-  const pages = await copyPages(pid); // 체험 교재의 쪽 그림을 사이트 자리로(녹화한 사이트가 첫 쪽 그림을 씀)
-  const { site, meta } = demoResult(pages[0]?.path || '');
+  await copyPages(pid); // 체험 교재의 쪽 그림을 사이트 자리(material/p-NNN)로(녹화한 사이트가 교재 쪽 그림을 씀)
+  const made = await demoResult();
+  const site = {};
+  for (const [k, v] of Object.entries(made.site)) { if (typeof v === 'string') site[k] = v; else await blobs.put(pid, 'site/' + k, v); }
   const cur = await projects.get(pid); if (!cur) return;
-  await projects.put({ ...cur, v: 2, site, meta: { ...meta, live: cur.meta?.live || null, access: cur.meta?.access || 'link' }, gen: { jobId: id, status: 'done', way, provider, model: '' }, versions: [{ id: uid(8), at: Date.now(), label: 'AI가 만든 판', site, meta }] });
+  // AI 답의 강사 칸(실시간 주소·공개 범위)은 버림(엔진 readMeta 규칙)
+  const meta = readMeta(made.meta, { prev: { access: cur.meta?.access || 'link', ...(cur.meta?.live ? { live: cur.meta.live } : {}) } }).meta;
+  await projects.put({ ...cur, v: 2, site, meta, gen: { jobId: id, status: 'done', way, provider, model: '' }, versions: [{ id: uid(8), at: Date.now(), label: 'AI가 만든 판', site, meta }] });
   set({ status: 'done', doneAt: Date.now() });
 }
 export function stopReplay(pid) { const j = runs.get(pid); if (j?.status === 'running') { runs.delete(pid); emit(pid); } }

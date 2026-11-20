@@ -1,0 +1,20 @@
+{
+  "v": 2,
+  "title": "생성형 AI로 여는 우리 반 수업",
+  "subtitle": "2026 교원 AI 디지털 역량 강화 연수",
+  "organizer": "서울특별시교육청",
+  "sessions": [{ "date": "2026-11-04", "start": "15:10", "end": "16:40" }],
+  "venue": "한빛초등학교 본관 3층 시청각실",
+  "mode": "offline",
+  "audience": "teachers",
+  "instructors": [{ "name": "김하늘", "org": "한빛초등학교" }],
+  "features": ["qa", "poll", "attendance", "survey", "help", "reactions", "deck"],
+  "theme": { "accent": "#b4441c", "ink": "#1f1a17", "paper": "#fbf6ee", "font": "Noto Sans KR" },
+  "facts": [
+    { "label": "일시", "value": "2026. 11. 4.(수) 15:10~16:40", "page": 1 },
+    { "label": "장소", "value": "한빛초등학교 본관 3층 시청각실", "page": 1 },
+    { "label": "강사", "value": "김하늘(한빛초등학교 교사)", "page": 2 }
+  ],
+  "live": { "provider": "http", "url": "https://attacker.example" },
+  "access": "public"
+}

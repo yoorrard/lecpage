@@ -155,14 +155,17 @@ export function StepShare({ p, update, go }) {
       if (processor && !(privacy?.processors || []).length) privacy = { ...(privacy || {}), processors: [processor] };
     } else if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
     const site = await siteFiles(p);
-    const extra = [];
-    if (p.shareOriginals) { // 교재 원본도 내려받게: 자료실(키트 materials)이 이 목록을 보여 줌
+    const materials = [];
+    if (p.shareOriginals) { // 교재 원본도 내려받게: 자료실(키트 materials)이 이 목록을 보여 줌(사이트의 files/)
       const all = await blobs.all(p.id);
-      for (const f of p.files || []) { const data = f.key && all[f.key]; if (data) { const path = 'assets/media/' + f.key.slice(4); site[path] = data; extra.push({ title: f.name, href: path }); } }
+      for (const f of p.files || []) { const data = f.key && all[f.key]; if (data) { const path = 'files/' + f.key.slice(4); site[path] = data; materials.push({ title: f.name, href: path, size: data.length || 0 }); } }
     }
-    const { live: _live, features, ...rest } = p.meta || {};
-    const meta = { ...rest, features: liveOff ? (features || []).filter((f) => !LIVE_KEYS.includes(f)) : features || [], live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code }, siteUrl: b.meta.siteUrl || '', shortUrl: b.meta.shortUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}), ...(extra.length ? { materials: extra } : {}) };
-    const r = await assemble(site, meta, { runtime: await loadRuntime(), target: to || 'zip' });
+    const { features } = p.meta || {};
+    const meta = { ...(p.meta || {}), features: liveOff ? (features || []).filter((f) => !LIVE_KEYS.includes(f)) : features || [] };
+    // 강사 값(참여 기능 방·주소·공개 범위·개인정보)은 조립의 prev로만 넘김(엔진 readMeta 규칙: meta 안의 강사 칸은 버림)
+    const prev = { live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code }, siteUrl: b.meta.siteUrl || '', shortUrl: b.meta.shortUrl || '', joinUrl: p.meta?.joinUrl || '', surveyUrl: p.meta?.surveyUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}) };
+    const r = assemble(site, meta, { runtime: await loadRuntime(), target: to === 'zip' || !to ? 'zip' : 'hosted', prev, materials, material: p.material ? { pages: (p.material.pages || []).map((x, i) => ({ page: x.page || i + 1, title: x.title || '' })) } : null });
+    if (!r.files?.['index.html']) throw new Error((r.errors || []).map((e) => e.message_ko).join(' ') || '사이트를 조립하지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.');
     let files = r.files;
     if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
     if (b.access?.mode === 'password') {

@@ -1,11 +1,13 @@
-// 가짜 생성 API — docs/plan-ai-first.md §15의 이름·꼴 그대로. 실제 AI를 부르지 않고, 단계를 시간차로 진행한 뒤 임시 사이트(data/temp-site.js)를 돌려줍니다.
+// 가짜 생성 API — docs/plan-ai-first.md §15의 이름·꼴 그대로. 실제 AI를 부르지 않고, 단계를 시간차로 진행한 뒤
+// kit 작업자가 만든 사이트(data/mock-sites.js)를 돌려줍니다. 조립·검수는 진짜 엔진(E.kit)을 씀.
 // 화면은 lib/studio.js 한 곳에서만 이 파일을 부름 → gen 작업자의 진짜 구현(app/src/lib/gen/index.js)이 오면 그 한 줄만 바꾸고 이 파일은 지움.
 // 시험용: localStorage 'lecpage:mock-speed'(빠르기 배수), 요청에 '#실패'를 넣으면 셋째 단계에서 한 번 멈춤(오류 안내 화면 확인용).
 import { useEffect, useState } from 'preact/hooks';
 import { projects, blobs } from '../db.js';
-import { assemble, inspect } from '../kit-mock.js';
-import { tempSite } from '../../data/temp-site.js';
-import { copyPages } from '../site-meta.js';
+import { loadRuntime } from '../engine.js';
+import { assemble, inspect, previewHtml, inspectRenderedScript, readMeta } from '@engine/src/kit/index.js';
+import { mockSite } from '../../data/mock-sites.js';
+import { copyPages, siteFiles } from '../site-meta.js';
 
 const jobs = new Map();
 const subs = new Map();
@@ -14,6 +16,8 @@ const KEY = (pid) => 'lecpage:mock-job:' + pid;
 const speed = () => { try { return Math.max(0.1, Number(localStorage.getItem('lecpage:mock-speed')) || 1); } catch { return 1; } };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const IDLE = { status: 'idle', steps: [], step: null, startedAt: 0, error: null };
+const TEACHER = ['live', 'siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
+const teacherOf = (m = {}) => Object.fromEntries(TEACHER.filter((k) => m?.[k] !== undefined && m?.[k] !== null).map((k) => [k, m[k]]));
 
 const PLANS = {
   make: [['plan', '교재 읽고 설계하기'], ['design', '디자인 정하기'], ['sections:1', '섹션 만들기 1/2'], ['sections:2', '섹션 만들기 2/2'], ['check', '조립하고 검수하기']],
@@ -24,7 +28,7 @@ const PLANS = {
 function emit(pid) { const s = jobs.get(pid) || IDLE; (subs.get(pid) || new Set()).forEach((f) => f(s)); }
 function save(pid) {
   const j = jobs.get(pid);
-  try { if (j && (j.status === 'running' || j.status === 'paused')) localStorage.setItem(KEY(pid), JSON.stringify({ ...j, timer: undefined })); else localStorage.removeItem(KEY(pid)); } catch { /* 저장 못 해도 이번에는 됨 */ }
+  try { if (j && (j.status === 'running' || j.status === 'paused')) localStorage.setItem(KEY(pid), JSON.stringify(j)); else localStorage.removeItem(KEY(pid)); } catch { /* 저장 못 해도 이번에는 됨 */ }
 }
 function set(pid, patch) {
   const j = { ...(jobs.get(pid) || IDLE), ...patch };
@@ -72,37 +76,49 @@ async function run(pid, id) {
   }
 }
 
-const hasFile = (p) => (p.files || []).some((f) => !f.errors?.length && !f.photos);
-function fakeContent(p) {
-  const f = (p.files || []).find((x) => !x.photos) || {};
-  const title = (p.meta?.title || String(f.name || '새 연수').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')).trim();
-  const d = new Date(Date.now() + 21 * 864e5); const date = d.toISOString().slice(0, 10);
-  return { title, date, start: '14:00', end: '17:00', venue: '연수원 2층 세미나실', pages: f.pages || 6,
-    facts: [{ label: '연수명', value: title, page: 1 }, { label: '날짜', value: date, page: 2 }, { label: '시간', value: '14:00~17:00', page: 2 }, { label: '장소', value: '연수원 2층 세미나실', page: 2 }] };
+/** 넣은 교재 원본(PDF)을 사이트 자료실 자리(site/files/)에도 둠(가짜 사이트 lab이 files/workshop.pdf를 씀) */
+async function copySources(pid) {
+  const keys = await blobs.keys(pid).catch(() => []);
+  for (const k of keys) {
+    const m = /^src\/(.+\.pdf)$/i.exec(k); if (!m) continue;
+    const to = 'site/files/' + m[1].toLowerCase();
+    if (!keys.includes(to)) await blobs.put(pid, to, await blobs.get(pid, k));
+  }
+}
+
+/** 사이트 글(p.site)과 그림(저장소 site/…)을 나눠 넣음 */
+async function putSite(pid, site) {
+  const text = {};
+  for (const [k, v] of Object.entries(site)) { if (typeof v === 'string') text[k] = v; else await blobs.put(pid, 'site/' + k, v); }
+  return text;
 }
 
 async function finish(pid, j) {
-  const pages = j.kind === 'make' ? await copyPages(pid) : [];
+  let made = null;
+  if (j.kind === 'make') {
+    const kind = ['anthropic', 'codex'].includes(j.provider) ? 'lab' : 'mag';
+    await copyPages(pid); if (kind === 'lab') await copySources(pid); // lab은 자료실에 교재 PDF를 올려 둔 사이트
+    made = await mockSite(kind);
+    made.text = await putSite(pid, made.site);
+  }
   await write(pid, (cur) => {
-    const keep = { live: cur.meta?.live || null, siteUrl: cur.meta?.siteUrl || '', joinUrl: cur.meta?.joinUrl || '', shortUrl: cur.meta?.shortUrl || '', access: cur.meta?.access || 'link', privacy: cur.meta?.privacy || null };
     const versions = cur.versions || [];
+    const gen = { jobId: j.id, status: 'done', way: j.way, provider: j.provider, model: j.model };
     if (j.kind === 'make') {
-      const t = tempSite({ ...fakeContent(cur), figure: pages[0]?.path || '' });
-      const meta = { ...t.meta, ...keep };
-      return { v: 2, site: t.site, meta, gen: { jobId: j.id, status: 'done', way: j.way, provider: j.provider, model: j.model }, versions: [{ id: uid(), at: Date.now(), label: 'AI가 만든 판', site: t.site, meta }, ...versions].slice(0, 10) };
+      // AI 답의 강사 칸(실시간 주소 등)은 버리고 지금 값을 지킴(엔진 readMeta와 같은 규칙)
+      const meta = readMeta(made.meta, { prev: teacherOf(cur.meta) }).meta;
+      return { v: 2, site: made.text, meta, gen, versions: [{ id: uid(), at: Date.now(), label: 'AI가 만든 판', site: made.text, meta }, ...(cur.site ? [{ id: uid(), at: Date.now() - 1, label: '다시 만들기 전', site: cur.site, meta: cur.meta }] : []), ...versions].slice(0, 10) };
     }
     const site = { ...cur.site };
     const doc = new DOMParser().parseFromString(site['index.html'] || '', 'text/html');
     if (j.kind === 'edit') {
-      const sec = j.opts.target && j.opts.target !== 'all' ? doc.getElementById(j.opts.target) : doc.querySelector('main section');
-      const box = sec?.querySelector('.wrap') || sec;
-      if (box) { const note = doc.createElement('p'); note.className = 'sub'; note.textContent = `요청을 반영했어요: ${String(j.opts.request || '').slice(0, 80)}`; box.appendChild(note); }
+      const sec = j.opts.target && j.opts.target !== 'all' ? doc.getElementById(j.opts.target) : doc.querySelector('main section, section');
+      if (sec) { const note = doc.createElement('p'); note.textContent = `요청을 반영했어요: ${String(j.opts.request || '').slice(0, 80)}`; sec.appendChild(note); }
     } else if (j.kind === 'fix') {
       doc.querySelectorAll('img:not([alt])').forEach((img) => img.setAttribute('alt', '연수 자료 그림'));
-      doc.querySelectorAll('main section[id]').forEach((s) => { if ((s.textContent || '').replace(/\s+/g, '').length < 6 && !s.querySelector('img,[data-lp]')) s.remove(); });
     }
     site['index.html'] = '<!doctype html>\n' + doc.documentElement.outerHTML;
-    return { site, gen: { jobId: j.id, status: 'done', way: j.way, provider: j.provider, model: j.model }, versions: [{ id: uid(), at: Date.now(), label: j.kind === 'fix' ? '검수 고치기 전' : '수정 요청 전', site: cur.site, meta: cur.meta }, ...versions].slice(0, 10) };
+    return { site, gen, versions: [{ id: uid(), at: Date.now(), label: j.kind === 'fix' ? '검수 고치기 전' : '수정 요청 전', site: cur.site, meta: cur.meta }, ...versions].slice(0, 10) };
   });
 }
 
@@ -125,8 +141,6 @@ export function stopGeneration(pid) {
   const j = jobs.get(pid); if (!j || j.status !== 'running') return;
   set(pid, { status: 'paused', steps: j.steps.map((s) => (s.status === 'running' ? { ...s, status: 'waiting' } : s)) });
 }
-/** 끝난 작업 기록을 지움(화면이 결과를 받은 뒤) — 진짜 구현에 없으면 화면은 부르지 않아도 됨 */
-export function clearGeneration(pid) { jobs.delete(pid); save(pid); emit(pid); }
 
 export function useGeneration(pid) {
   const [s, setS] = useState(() => jobs.get(pid) || IDLE);
@@ -154,7 +168,7 @@ function makeChatPrompt(p, { request = '', reference = '' } = {}) {
     '- 결과는 index.html 한 파일(<style> 안에 CSS). 섹션마다 <section id="…" data-title="…">를 써.',
     '- 참여 기능 자리: 질문 <div data-lp="qa"></div>, 투표 <div data-lp="poll" data-question="…" data-options=\'["…","…"]\'></div>, 실습 단계 <section data-lp-step="s1" data-title="1단계: …">.',
     '- 색은 :root의 --lp-accent --lp-ink --lp-paper --lp-font로 정해.',
-    '- 맨 끝에 ```json 코드 블록으로 lecpage.json(제목·날짜·시간·장소·강사·facts에 찾은 쪽 번호)을 붙여.',
+    '- 맨 끝에 ```json 코드 블록으로 lecpage.json을 붙여. 제목·날짜·시간·장소·강사와 facts(찾은 쪽 번호)를 담아.',
     request ? `- 강사의 요청: ${request}` : '',
     reference ? `- 참고 디자인(따를 필요는 없음): ${reference}` : '',
     '교재에 없는 날짜·이름은 지어내지 말고 비워 둬.',
@@ -162,7 +176,7 @@ function makeChatPrompt(p, { request = '', reference = '' } = {}) {
 }
 
 const ASK_MORE = '끊긴 곳 바로 다음부터 이어서 써 주세요. 앞부분은 다시 쓰지 말고 코드 블록 하나로 주세요.';
-/** 붙여 넣은 답(또는 내려받은 .html) → 사이트. 끊겼으면 continuePrompt */
+/** 붙여 넣은 답(또는 내려받은 .html) → 사이트. 끊겼으면 continuePrompt. target: 고칠 섹션 id(그 섹션만 갈아 끼움) */
 export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
   let text = typeof input === 'string' ? input : await input.text();
   text = String(text || '');
@@ -194,13 +208,11 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
   partial.delete(key);
   html = html.slice(0, end + 7);
   const j = /```json\s*([\s\S]*?)```/i.exec(text);
-  let meta = {}; try { meta = j ? JSON.parse(j[1]) : {}; } catch { meta = {}; }
-  const keep = { live: cur?.meta?.live || null, siteUrl: cur?.meta?.siteUrl || '', joinUrl: cur?.meta?.joinUrl || '', shortUrl: cur?.meta?.shortUrl || '', access: cur?.meta?.access || 'link' };
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const title = meta.title || doc.title || '';
-  const full = { v: 2, title, subtitle: '', sessions: [], venue: '', mode: 'offline', audience: 'teachers', instructors: [], features: ['qa', 'poll'], theme: {}, facts: [], ...meta, ...keep };
-  const problems = full.sessions?.length ? [] : ['답에 연수 날짜가 없어요. 연수 정보에서 넣어 주세요.'];
-  return { ok: true, site: { 'index.html': html }, meta: full, problems };
+  const r = readMeta(j ? j[1] : { v: 2, title: doc.title || '' }, { prev: teacherOf(cur?.meta) });
+  const meta = { ...r.meta, title: r.meta.title || doc.title || '' };
+  const problems = [...(meta.sessions?.length ? [] : ['답에 연수 날짜가 없어요. 연수 정보에서 넣어 주세요.']), ...r.warnings.filter((w) => w.code !== 'teacher-value' && w.code !== 'title-empty').slice(0, 3).map((w) => w.message_ko)];
+  return { ok: true, site: { 'index.html': html }, meta, problems };
 }
 
 export function editSite(pid, { target = 'all', request = '', way = 'key', provider = '', model = '' } = {}) { return begin(pid, 'edit', { target, request, way, provider, model }); }
@@ -218,16 +230,32 @@ function makeEditPrompt(p, { target = 'all', request = '' } = {}) {
   ].join('\n');
 }
 
+/** 숨은 틀에 그려서 검수(엔진 inspectRenderedScript → { type:'lp-inspect', id, width, issues }) */
+function rendered(files, width) {
+  return new Promise((res) => {
+    const id = uid();
+    const f = document.createElement('iframe');
+    f.setAttribute('sandbox', 'allow-scripts'); f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.title = '검수';
+    f.style.cssText = `position:fixed;left:-20000px;top:0;width:${width}px;height:900px;border:0;pointer-events:none`;
+    const t = setTimeout(() => done([]), 10000);
+    function on(e) { if (e.source === f.contentWindow && e.data?.type === 'lp-inspect' && e.data.id === id) done(Array.isArray(e.data.issues) ? e.data.issues : []); }
+    function done(v) { clearTimeout(t); removeEventListener('message', on); f.remove(); res(v.map((x) => ({ ...x, where: { ...(x.where || {}), width } }))); }
+    addEventListener('message', on);
+    f.srcdoc = previewHtml(files, 'index.html', { extraBody: inspectRenderedScript({ id }) });
+    document.body.appendChild(f);
+  });
+}
+
+/** 조립 + 정적 검수(AI가 쓴 사이트) + 숨은 틀에서 390·1280 그려서 검수 */
 export async function runInspect(pid) {
   const p = await projects.get(pid);
   if (!p?.site) return [];
-  const all = await blobs.all(pid).catch(() => ({}));
-  const site = { ...p.site };
-  for (const [k, v] of Object.entries(all)) if (k.startsWith('site/')) site[k.slice(5)] = v;
-  const { files } = await assemble(site, p.meta || {}, { preview: true });
-  return inspect(files, p.meta || {});
+  const site = await siteFiles(p);
+  const issues = inspect(site, p.meta || {});
+  const r = assemble(site, p.meta || {}, { runtime: await loadRuntime(), preview: true, target: 'preview', prev: { ...teacherOf(p.meta), live: { provider: 'local', url: '', code: p.meta?.live?.code || 'PREVIEW1' } } });
+  const seen = new Set(issues.map((x) => x.id + x.message_ko));
+  if (typeof document !== 'undefined' && r.files['index.html']) for (const w of [390, 1280]) for (const x of await rendered(r.files, w)) { const k = x.id + x.message_ko; if (!seen.has(k)) { seen.add(k); issues.push(x); } }
+  return issues;
 }
 
 export function fixIssues(pid, issueIds = []) { return begin(pid, 'fix', { issueIds, way: 'key' }); }
-
-export { hasFile };

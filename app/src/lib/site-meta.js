@@ -3,6 +3,7 @@
 // 같은 칸 이름의 '배포용 보기'(deployView)를 만들어 주고, 고친 것은 p.meta의 강사 칸(live·siteUrl·shortUrl·access·privacy)에 돌려 씀(patchDeploy).
 import { LIVE_KEYS, FEATURES } from '@engine/src/intake.js';
 import { randomCode } from '@engine/src/validate.js';
+import { keepTeacherValues } from '@engine/src/kit/index.js';
 import { blobs } from './db.js';
 
 export { LIVE_KEYS, FEATURES };
@@ -45,13 +46,8 @@ export function patchDeploy(cur, fn) {
   return { meta: m };
 }
 
-const TEACHER = ['live', 'siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
-/** AI 답·가져온 파일의 연수 정보에서 강사 칸은 버리고 지금 값(prev)을 지킴(엔진 keepTeacherLinks와 같은 규칙) */
-export function keepTeacher(next = {}, prev = {}) {
-  const m = { ...(next || {}) };
-  for (const k of TEACHER) { if (prev && prev[k] !== undefined) m[k] = prev[k]; else delete m[k]; }
-  return m;
-}
+/** AI 답·가져온 파일의 연수 정보에서 강사 칸은 버리고 지금 값(prev)을 지킴(엔진 keepTeacherValues) */
+export const keepTeacher = (next = {}, prev = {}) => keepTeacherValues(next || {}, prev || {}).meta;
 /** 예전 방식 연수를 AI로 새로 만들 때: 설계도의 배포 연결(참여 기능 방·공개 범위·짧은 주소)을 새 판 연수 정보로 옮김 */
 export function carryLegacy(cur) {
   const b = cur.blueprint; if (!b || cur.meta?.live) return {};

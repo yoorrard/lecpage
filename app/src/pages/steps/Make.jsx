@@ -8,7 +8,7 @@ import { isV2 } from '../../lib/site-meta.js';
 import { Studio } from './Studio.jsx';
 
 // 2단계: AI가 만드는 동안은 진행 단계만(목록·미리보기 없음), 다 만들면 같은 자리에서 완성 화면(Studio)으로.
-const WHO = { 'claude-code': 'Claude Code', codex: 'Codex' };
+const WHO = { claude: 'Claude Code', codex: 'Codex' };
 const who = (job) => WHO[job.provider] || PROVIDERS[job.provider]?.short || '';
 export function fmtSec(s) { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m ? `${m}분 ${s % 60}초` : `${s}초`; }
 

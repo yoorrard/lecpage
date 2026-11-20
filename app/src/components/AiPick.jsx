@@ -220,14 +220,22 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
 }
 
 const BRIDGE_CMD = 'npx github:yoorrard/lecpage';
-/** 연결 프로그램이 이 주소(127.0.0.1)에서 앱을 보여 주고 있으면 응답함. 그 밖의 주소에서는 묻지 않음 */
+const AGENT_NAME = { claude: 'Claude Code', codex: 'Codex' };
+/**
+ * 연결 프로그램(docs/plan-ai-first.md §10 HTTP 약속): 앱을 127.0.0.1에서 보여 주며 HTML에 <meta name="lecpage-bridge" content="토큰">을 넣어 줌.
+ * 그 토큰을 머리글 X-Lecpage-Bridge로 붙여 GET /bridge/status → { ok, version, agents:[{ id:'claude'|'codex', installed, version, auth }] }.
+ * 토큰이 없으면(lecpage.com 등) 묻지 않음
+ */
+export const bridgeToken = () => document.querySelector('meta[name="lecpage-bridge"]')?.getAttribute('content') || '';
 async function bridgeStatus() {
-  if (!/^(127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return null;
+  const token = bridgeToken(); if (!token) return null;
   try {
-    const r = await fetch('/bridge/status', { cache: 'no-store' });
+    const r = await fetch('/bridge/status', { cache: 'no-store', headers: { 'X-Lecpage-Bridge': token } });
     if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) return null;
     const j = await r.json();
-    return j && j.ok ? { claude: !!j.tools?.claude, codex: !!j.tools?.codex } : null;
+    if (!j?.ok) return null;
+    const agents = (Array.isArray(j.agents) ? j.agents : []).filter((a) => ['claude', 'codex'].includes(a?.id));
+    return { version: String(j.version || ''), agents: agents.map((a) => ({ id: a.id, installed: !!a.installed, version: String(a.version || ''), auth: a.auth || 'unknown' })) };
   } catch { return null; }
 }
 
@@ -249,10 +257,10 @@ function LocalWay({ p, ready, idle, go }) {
         {st ? <>
           <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>
           <div class="btn-row">
-            {st.claude && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('claude-code')}>Claude Code 쓰기</button>}
-            {st.codex && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('codex')}>Codex 쓰기</button>}
-            {!st.claude && !st.codex && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
+            {st.agents.filter((a) => a.installed).map((a) => <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run(a.id)}>{AGENT_NAME[a.id]} 쓰기</button>)}
+            {!st.agents.some((a) => a.installed) && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
           </div>
+          {st.agents.some((a) => a.installed && a.auth === 'api-key') && <p class="small warn-line">{st.agents.filter((a) => a.installed && a.auth === 'api-key').map((a) => AGENT_NAME[a.id]).join('·')}는 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
         </> : <>
           <ol class="small ai-alt-steps">
             <li>Node.js가 있는 PC의 터미널에서 아래 명령을 실행해요.</li>

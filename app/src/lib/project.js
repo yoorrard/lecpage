@@ -133,8 +133,11 @@ export async function importProjectFile(file) {
     const files = readStoredZip(buf);
     const pj = files['project.json']; if (!pj) throw bad('lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 만든 .lecpage 파일을 넣어 주세요.');
     text = new TextDecoder().decode(pj);
-    const j = JSON.parse(text); proj = j.project;
-    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || /^site\/(material|assets\/img)\/[\w.-]+\.(webp|png|jpe?g|gif)$/i.test(k))) assets[k] = v;
+    const j = JSON.parse(text);
+    // AI 에이전트(Skill `lecpage app`)가 만든 사이트 파일(.lecpage v2: project.json + site/… + src/…) → 완성 화면으로 바로
+    if (j?.format === PROJECT_FORMAT && +j.version === 2 && j.kind === 'site') return importSiteFile(files, text);
+    proj = j.project;
+    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || /^site\/(material|assets\/img|files)\/[\w.\-가-힣]+\.(webp|png|jpe?g|gif|pdf|pptx|docx|hwpx?)$/i.test(k))) assets[k] = v;
   }
   // 같은 파일을 두 번 열면 같은 이름 연수가 둘 생기지 않게 그때 연 연수를 다시 엶(따로 하나 더 쓰려면 [복제])
   const fileHash = await sha256Hex(text).catch(() => '');
@@ -157,5 +160,29 @@ export async function importProjectFile(file) {
   }
   await projects.put(p);
   for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);
+  return p;
+}
+
+/**
+ * .lecpage v2(엔진 kit/project-v2.js) → 새 판 연수. 사이트 글은 p.site, 그림·자료는 저장소 site/…, 교재 원본은 src/….
+ * 파일 안의 강사 값(공개 범위·주소·참여 서버)은 남이 준 파일일 수 있어 쓰지 않음(배포하기 화면에서 다시 정함)
+ */
+async function importSiteFile(files, text) {
+  const fileHash = await sha256Hex(text).catch(() => '');
+  const same = fileHash && (await projects.all()).find((x) => x.fileHash === fileHash);
+  if (same) return { ...same, reopened: true };
+  const { unpackProjectV2 } = await import('@engine/src/kit/project-v2.js');
+  const u = unpackProjectV2(files);
+  const id = uid(10); const site = {}; const bins = {};
+  for (const [k, v] of Object.entries(u.site)) { if (typeof v === 'string') site[k] = v; else bins['site/' + k] = v; }
+  const safe = (n) => String(n).replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
+  const srcFiles = u.originals.map((o) => ({ name: o.name, key: 'src/' + safe(o.name), size: o.bytes.length, ext: (o.name.split('.').pop() || '').toLowerCase(), pages: (u.sources.find((s) => s.name === o.name) || {}).pages || 0, errors: [] }));
+  for (const o of u.originals) bins['src/' + safe(o.name)] = o.bytes;
+  const html = site['index.html'] || '';
+  const meta = keepTeacher(u.meta, { access: 'link' });
+  const p = { id, v: 2, title: u.title || meta.title || '', createdAt: Date.now(), stage: 2, step: 2, imported: true, origin: 'skill', fileHash, files: srcFiles, info: { ...DEFAULT_INFO }, deploy: {},
+    site: { ...site, 'index.html': html }, meta, material: u.material?.pages?.length ? { pages: u.material.pages, files: [] } : null, versions: [{ id: uid(8), at: Date.now(), label: 'AI 에이전트가 만든 판', site, meta }], ...(u.note ? { notes: [u.note] } : {}) };
+  await projects.put(p);
+  for (const [k, v] of Object.entries(bins)) await blobs.put(id, k, v);
   return p;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { blobs } from '../lib/db.js';
 import { loadRuntime } from '../lib/engine.js';
-import { assemble } from '../lib/studio.js';
+import { assemble, previewHtml } from '../lib/studio.js';
 import { annotate } from '../lib/site-doc.js';
 import { siteFiles } from '../lib/site-meta.js';
 
@@ -58,33 +58,9 @@ function useBox(ref) {
   return box;
 }
 
-const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', woff2: 'font/woff2', pdf: 'application/pdf' };
-function dataUrl(path, data) {
-  const ext = (path.split('.').pop() || '').toLowerCase(); const type = MIME[ext] || 'application/octet-stream';
-  if (typeof data === 'string') return `data:${type};charset=utf-8,${encodeURIComponent(data)}`;
-  let bin = ''; const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return `data:${type};base64,${btoa(bin)}`;
-}
-const escClose = (s) => String(s).replace(/<\/(script)/gi, '<\\/$1');
-/** 조립 결과 → iframe에 넣을 한 파일 HTML(같은 사이트 안 파일은 끼워 넣음, 사이트용 CSP는 뺌) */
-export function inlinePage(files, page, extra = '') {
-  let html = files[page]; if (typeof html !== 'string') return '<p style="font:16px sans-serif;padding:24px">미리볼 화면이 없어요.</p>';
-  const rel = (p) => String(p || '').replace(/^\.\//, '').split(/[?#]/)[0];
-  html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/gi, '');
-  html = html.replace(/<link\b[^>]*rel=["']?stylesheet["']?[^>]*>/gi, (m) => { const h = /href=["']([^"']+)["']/i.exec(m)?.[1]; const f = h && files[rel(h)]; return typeof f === 'string' ? `<style>${f}</style>` : m; });
-  html = html.replace(/<script\b([^>]*)\bsrc=["']([^"']+)["']([^>]*)><\/script>/gi, (m, a, s, b) => { const f = files[rel(s)]; return typeof f === 'string' ? `<script${(a + b).replace(/\s(defer|async)\b/g, '')}>${escClose(f)}</script>` : m; });
-  let budget = 8e6;
-  html = html.replace(/\b(src|href|poster)=(["'])([^"']+)\2/gi, (m, attr, q, p) => {
-    const k = rel(p); const data = files[k];
-    if (data === undefined || /^(https?:|data:|#|mailto:)/i.test(p) || /\.(html|css|js)$/i.test(k)) return m;
-    const size = typeof data === 'string' ? data.length : data.byteLength; if (size > budget) return m; budget -= size;
-    return `${attr}=${q}${dataUrl(k, data)}${q}`;
-  });
-  html = html.replace('<body', '<body data-lp-preview="1"');
-  const at = html.lastIndexOf('</body>');
-  return at < 0 ? html + extra : html.slice(0, at) + extra + html.slice(at);
-}
+/** 미리보기는 늘 리허설: 실제 참여 기능 서버가 연결돼 있어도 이 기기 안 연습(local)으로(시험 글이 실제 참가자 기록에 섞이지 않게) */
+const TEACHER = ['siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
+export const rehearsalPrev = (m = {}) => ({ ...Object.fromEntries(TEACHER.filter((k) => m[k] !== undefined && m[k] !== null).map((k) => [k, m[k]])), live: { provider: 'local', url: '', code: m.live?.code || 'PREVIEW1' } });
 
 /** 미리보기 안 도구: 글 고치기(누르면 그 자리에서 고침 → 바뀐 글을 앱으로), 그림 누르기, 섹션으로 옮기기·반짝, 스크롤 자리 */
 const EDIT_JS = `<script>(function(){var on=false,cur=null;var st=document.createElement('style');st.textContent='html.lp-editing [data-lpe]{cursor:text}html.lp-editing [data-lpe]:hover,html.lp-editing [data-lpe]:focus-visible{outline:2px dashed #5B49B0;outline-offset:2px}html.lp-editing img[data-lpe]{cursor:pointer}[contenteditable=true]{outline:2px solid #5B49B0!important;outline-offset:2px;background:rgba(91,73,176,.06)}.lp-flash{animation:lpflash 1.4s ease}@keyframes lpflash{0%,60%{box-shadow:inset 0 0 0 4px #5B49B0}100%{box-shadow:inset 0 0 0 4px transparent}}';document.head.appendChild(st);
@@ -124,8 +100,10 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
       try {
         const site = await siteFiles(p);
         site['index.html'] = annotate(site['index.html'] || '');
-        const { files } = await assemble(site, p.meta || {}, { runtime: await loadRuntime(), preview: true, target: 'preview' });
-        setHtml(inlinePage(files, files[page] ? page : 'index.html', page === 'index.html' ? EDIT_JS : '')); setErr('');
+        const r = assemble(site, p.meta || {}, { runtime: await loadRuntime(), preview: true, target: 'preview', prev: rehearsalPrev(p.meta || {}), material: p.material ? { pages: (p.material.pages || []).map((x, i) => ({ page: x.page || i + 1, title: x.title || '', text: '' })) } : null });
+        if (!r.files?.['index.html']) { setErr((r.errors || r.warnings || []).map((x) => x.message_ko).join(' ') || '미리보기를 그리지 못했어요.'); return; }
+        const pg = r.files[page] ? page : 'index.html';
+        setHtml(previewHtml(r.files, pg, pg === 'index.html' ? { extraBody: EDIT_JS } : {})); setErr('');
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
     }, 250);
     return () => clearTimeout(t.current);
