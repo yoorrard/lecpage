@@ -44,7 +44,9 @@ export async function prepareCmd(h) {
   // 쪽 번호: 교재 여러 개면 이어서(첫 교재 1~12, 둘째 13부터). 그림은 site/material/p-NNN.webp
   const files = Object.fromEntries((m.files || []).map((f) => [f.id, f]));
   const pages = []; let images = 0;
-  m.pages.forEach((p, i) => {
+  // PPTX와 함께 준 같은 내용의 PDF(renderOf)는 쪽 그림만 그리는 데 씀 → 쪽을 두 번 세지 않음
+  const renderOnly = new Set((m.files || []).filter((f) => f.renderOf).map((f) => f.id));
+  m.pages.filter((p) => !renderOnly.has(p.file)).forEach((p, i) => {
     const n = i + 1;
     let img = '';
     if (p.image) {

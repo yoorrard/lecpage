@@ -45,3 +45,5 @@
  "facts":[{"label":"장소","value":"…","page":1}]}
 ```
 교재에 없는 값은 비우고, `facts`에 찾은 쪽을 적어요. 공개 범위·주소·참여 서버는 강사가 정해요.
+- `features`: qa·poll·board·attendance·survey·help·reactions·signal·progress·deck·materials·timer. `mode`: offline·online·blended. `audience`: teachers·students·parents·staff·other
+- 선택 칸: `subtitle`·`organizer`·`contact`·`description`, 직무연수면 `admin: {"kind":"official","hours":3,"completionRate":90}`(kind: school·official·conference·student, 교재·강사가 준 값만), `theme.font`·`theme.radius`
