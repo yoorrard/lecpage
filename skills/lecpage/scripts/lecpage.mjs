@@ -26,6 +26,9 @@
 //   validate <blueprint.json> · qa <dist> [--password 암호]
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
 //   guard <AI 답.json|txt> <material.json> [-i info.json] [-o blueprint.json]   AI 답의 교재 글을 교재대로
+//   studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]
+//        내 PC 연결 프로그램: 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
+//        (요청은 그 사람의 구독 한도에서 차감). 앱 파일은 app/dist가 있으면 그것, 없으면 lecpage.com에서 받음. 끄기: Ctrl+C (references/studio.md)
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
 //   종료 코드: 0 성공 · 1 실패(check·make·qa·patch --qa는 조립·빌드했어도 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -45,7 +48,7 @@ const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude 
 
 // ── 인자 ─────────────────────────────────────────
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤
-const VALUE_OPTS = new Set(['i', 'o', 'set', 'password', 'preset', 'presets', 'mood', 'assets', 'port', 'host', 'name', 'relay', 'features', 'today', 'access', 'work', 'out', 'size', 'skill', 'duration', 'network', 'infra']);
+const VALUE_OPTS = new Set(['i', 'o', 'set', 'password', 'preset', 'presets', 'mood', 'assets', 'port', 'host', 'name', 'relay', 'features', 'today', 'access', 'work', 'out', 'size', 'skill', 'duration', 'network', 'infra', 'dist', 'timeout']);
 const OPTS = {
   make: 'i o work preset password access today no-qa fresh reingest no-slides no-python bundle-fonts no-bundle-fonts',
   brief: '', structure: 'i today add-leftovers',
@@ -58,6 +61,7 @@ const OPTS = {
   publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
   handouts: 'o password',
   prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles', preview: 'port host today',
+  studio: 'port no-open dist remote timeout',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
@@ -126,7 +130,7 @@ if (+process.versions.node.split('.')[0] < 20) { console.error(`오류: Node.js 
 {
   const [maj, min] = process.versions.node.split('.').map(Number);
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
-  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['make', 'build', 'patch', 'publish', 'handouts', 'app'].includes(cmd) && !args.help && !parsed.problems.length) {
+  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['make', 'build', 'patch', 'publish', 'handouts', 'app', 'studio'].includes(cmd) && !args.help && !parsed.problems.length) {
     const local = 'localhost,127.0.0.1,::1';
     const np = [process.env.NO_PROXY || process.env.no_proxy, local].filter(Boolean).join(',');
     const r = spawnSync(process.execPath, [...process.execArgv, '--disable-warning=UNDICI-EHPA', ...process.argv.slice(1)], { stdio: 'inherit', env: { ...process.env, NODE_USE_ENV_PROXY: '1', NO_PROXY: np, no_proxy: np } });
@@ -1149,6 +1153,8 @@ const commands = {
   async prepare() { const { prepareCmd } = await import('./kit-cmds.mjs'); await prepareCmd(helpers()); },
   async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
   async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
+  /** 내 PC 연결 프로그램: 앱을 127.0.0.1에서 보여 주고 로컬 Claude Code·Codex에 일을 맡김(scripts/studio.mjs) */
+  async studio() { const { studioCmd } = await import('./studio.mjs'); await studioCmd(helpers()); },
 
   async pack() {
     let dir = resolve(args._[0] || 'dist');
