@@ -1,25 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { blobs } from '../lib/db.js';
-import { loadRuntime } from '../lib/engine.js';
-import { assemble, previewHtml } from '../lib/studio.js';
+import { assembleProject, previewHtml } from '../lib/studio.js';
 import { annotate } from '../lib/site-doc.js';
-import { siteFiles } from '../lib/site-meta.js';
 
 // 완성 뒤 미리보기(docs/plan-ai-first.md §8): 조립된 실제 사이트(참여 기능은 연습 모드)를 샌드박스 iframe에.
 // allow-same-origin을 주지 않아 미리보기 안 코드는 앱 저장소(키·연수)에 닿지 못함. 고른 기기의 실제 폭으로 그린 뒤 칸에 맞게 줄여 보여 줌.
 // [글 고치기]를 켜면 미리보기의 글자를 눌러 바로 고치고(번호 data-lpe로 원본의 같은 자리에 씀), 그림을 누르면 바꾸기 창이 열림.
-
-const assetCache = new Map();
-/** 교재 쪽 그림 등(assets/…): 배포 화면이 예전 연수 파일을 만들 때도 씀 */
-export async function projectAssets(pid, fresh = false) {
-  if (!fresh && assetCache.has(pid)) return assetCache.get(pid);
-  const keys = (await blobs.keys(pid)).filter((k) => k.startsWith('assets/') && (fresh || !k.startsWith('assets/files/')));
-  const a = {};
-  for (const k of keys) { const v = await blobs.get(pid, k); a[k] = v instanceof Blob ? new Uint8Array(await v.arrayBuffer()) : v; }
-  if (!fresh) assetCache.set(pid, a);
-  return a;
-}
-export function dropAssetCache(pid) { assetCache.delete(pid); }
 
 // 화면 크기(CSS 픽셀). 근거: docs/research/preview-responsive-2026-11.md
 export const DEVICES = [
@@ -58,10 +43,6 @@ function useBox(ref) {
   return box;
 }
 
-/** 미리보기는 늘 리허설: 실제 참여 기능 서버가 연결돼 있어도 이 기기 안 연습(local)으로(시험 글이 실제 참가자 기록에 섞이지 않게) */
-const TEACHER = ['siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
-export const rehearsalPrev = (m = {}) => ({ ...Object.fromEntries(TEACHER.filter((k) => m[k] !== undefined && m[k] !== null).map((k) => [k, m[k]])), live: { provider: 'local', url: '', code: m.live?.code || 'PREVIEW1' } });
-
 /** 미리보기 안 도구: 글 고치기(누르면 그 자리에서 고침 → 바뀐 글을 앱으로), 그림 누르기, 섹션으로 옮기기·반짝, 스크롤 자리 */
 const EDIT_JS = `<script>(function(){var on=false,cur=null;var st=document.createElement('style');st.textContent='html.lp-editing [data-lpe]{cursor:text}html.lp-editing [data-lpe]:hover,html.lp-editing [data-lpe]:focus-visible{outline:2px dashed #5B49B0;outline-offset:2px}html.lp-editing img[data-lpe]{cursor:pointer}[contenteditable=true]{outline:2px solid #5B49B0!important;outline-offset:2px;background:rgba(91,73,176,.06)}.lp-flash{animation:lpflash 1.4s ease}@keyframes lpflash{0%,60%{box-shadow:inset 0 0 0 4px #5B49B0}100%{box-shadow:inset 0 0 0 4px transparent}}';document.head.appendChild(st);
 function setOn(v){on=v;document.documentElement.classList.toggle('lp-editing',on);document.querySelectorAll('[data-lpe]').forEach(function(e){if(on){e.setAttribute('tabindex','0');}else{e.removeAttribute('tabindex');}});if(!on&&cur)cur.blur();}
@@ -98,9 +79,8 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     clearTimeout(t.current);
     t.current = setTimeout(async () => {
       try {
-        const site = await siteFiles(p);
-        site['index.html'] = annotate(site['index.html'] || '');
-        const r = assemble(site, p.meta || {}, { runtime: await loadRuntime(), preview: true, target: 'preview', prev: rehearsalPrev(p.meta || {}), material: p.material ? { pages: (p.material.pages || []).map((x, i) => ({ page: x.page || i + 1, title: x.title || '', text: '' })) } : null });
+        // 조립(참여 기능은 이 기기 안 연습). 글 고치기 번호(data-lpe)를 붙인 index.html로
+        const r = await assembleProject(p, { site: { ...p.site, 'index.html': annotate(p.site['index.html'] || '') } });
         if (!r.files?.['index.html']) { setErr((r.errors || r.warnings || []).map((x) => x.message_ko).join(' ') || '미리보기를 그리지 못했어요.'); return; }
         const pg = r.files[page] ? page : 'index.html';
         setHtml(previewHtml(r.files, pg, pg === 'index.html' ? { extraBody: EDIT_JS } : {})); setErr('');

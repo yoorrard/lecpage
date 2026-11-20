@@ -6,7 +6,7 @@ import { Showcase } from './Showcase.jsx';
 import { Reach } from './Reach.jsx';
 import { LiveDay } from './LiveDay.jsx';
 import { Paths } from './Paths.jsx';
-import { REFERENCES as EXAMPLES } from '../data/references.js';
+import { REFERENCES as EXAMPLES, referenceFor } from '../data/references.js';
 import '../styles/landing-more.css';
 
 // 첫 화면 아래 이야기: 왜 lecpage(한 문장·두 사이트 견주기·다른 점 넷) → 교재가 사이트가 되기까지 → 말로 고치기 → 디자인 → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·스킬) → 예시 → 마무리.
@@ -56,7 +56,7 @@ export function More({ pick, busyProps, fromExample }) {
                 <span class="tag tag-lav">{x.kind}</span>
                 <h3>{x.title}</h3>
                 <p class="small muted">{x.desc}</p>
-                <div class="btn-row"><button class="btn btn-sm btn-primary" {...busyProps(`ex-${x.id}`)} onClick={() => fromExample(x.id, x.title)}>이 디자인 참고해 만들기</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">사이트 보기</a></div>
+                <div class="btn-row"><button class="btn btn-sm btn-primary" {...busyProps(`ex-${x.id}`)} onClick={() => fromExample(referenceFor(x))}>이 디자인 참고해 만들기</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">사이트 보기</a></div>
               </div>
             </article>
           ))}

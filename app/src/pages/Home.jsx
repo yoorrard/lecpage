@@ -88,8 +88,8 @@ export function Home() {
     return () => { clearInterval(timer); removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); removeEventListener('keydown', key); };
   }, []);
   const pick = () => pickRef.current?.click();
-  // 참고 디자인으로 시작: 새 연수의 '참고 디자인'에 적어 두고 교재 넣기로(AI가 참고만 하고 따를 필요는 없음)
-  const fromExample = (id, name) => once(`ex-${id}`, async () => { const p = await newProject({ reference: name || id }); location.hash = `#/p/${p.id}/1`; });
+  // 참고 디자인으로 시작: 새 연수의 '참고 디자인'에 적어 두고 교재 넣기로(AI에게는 분위기 설명만, 따를 필요는 없음). ref: { id, name, mood }
+  const fromExample = (ref) => once(`ex-${ref.id}`, async () => { const p = await newProject({ reference: ref }); location.hash = `#/p/${p.id}/1`; });
   async function openSaved(f) {
     const m = await import('../lib/open-saved.js').catch(() => null); // 파일을 열 때만 받음(첫 화면 묶음을 가볍게)
     if (!m) { toast('파일 여는 도구를 받지 못했어요. 인터넷 연결을 확인하고 새로 고침해 주세요.'); return; }

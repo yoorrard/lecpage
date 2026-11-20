@@ -188,16 +188,16 @@ ${css ? `사이트 CSS(참고):\n\`\`\`css\n${String(css).slice(0, 20000)}\n\`\`
 요청대로 고친 섹션 전체만 \`\`\`html 코드 블록 하나로 답해 주세요(같은 id, 설명 없이). CSS를 바꿔야 하면 덧붙일 규칙만 \`\`\`css 블록으로. 교재에 없는 사실은 지어내지 마세요.`;
 }
 
-/** 단계 이름 → 화면 글 */
+/** 단계 이름 → 화면 글(단계 목록에 '끝·하는 중·기다림'과 함께 보이므로 이름꼴) */
 export function stepLabel(name, total) {
-  if (name === 'plan') return '교재를 읽고 설계하는 중';
-  if (name === 'design') return '디자인을 정하는 중';
-  if (name.startsWith('sections:')) return `섹션을 만드는 중 (${name.split(':')[1]}/${total})`;
-  if (name === 'assemble') return '조립하고 검수하는 중';
-  if (name === 'fix') return '검수에서 찾은 문제를 고치는 중';
-  if (name === 'edit') return '요청대로 고치는 중';
-  if (name === 'agent') return '내 PC의 AI에게 맡기는 중';
-  return '마무리하는 중';
+  if (name === 'plan') return '교재 읽고 설계하기';
+  if (name === 'design') return '디자인 정하기';
+  if (name.startsWith('sections:')) return `섹션 만들기 ${name.split(':')[1]}/${total}`;
+  if (name === 'assemble') return '조립하고 검수하기';
+  if (name === 'fix') return '검수에서 찾은 곳 고치기';
+  if (name === 'edit') return '요청대로 고치기';
+  if (name === 'agent') return '내 PC의 AI에게 맡기기';
+  return '마무리하기';
 }
 
 /** CSS에서 클래스 이름 목록(디자인 단계 결과 → 섹션 단계에 줌) */

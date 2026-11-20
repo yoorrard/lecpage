@@ -28,14 +28,16 @@ export function sourceFiles(project) {
 
 /**
  * 사이트용 교재 쪽 그림 준비 → { list: ['material/p-001.webp', …], from: 파일 이름 }
- * 이미 있으면 그대로. assets/slides/(교재를 넣을 때 그린 것)가 있으면 옮기고, 없으면 첫 PDF를 새로 그림(최대 400쪽).
+ * assets/slides/(교재를 넣을 때 그린 것)가 있으면 옮기고, 없으면 첫 PDF를 새로 그림(최대 400쪽).
+ * 고치기에서는 이미 있는 것을 그대로 쓰고, 새로 만들 때(refresh)는 교재를 바꿨을 수 있어 지금 교재의 쪽 그림으로 다시 옮김
  */
-export async function preparePageImages(pid, project, { signal, onProgress } = {}) {
+export async function preparePageImages(pid, project, { signal, onProgress, refresh = false } = {}) {
   const keys = await blobs.keys(pid).catch(() => []);
   const have = keys.filter((k) => k.startsWith(SITE_MATERIAL)).sort();
   const pdf = sourceFiles(project).filter((f) => f.ext === 'pdf').sort((a, b) => (b.pages || 0) - (a.pages || 0))[0];
-  if (have.length) return { list: have.map((k) => k.slice(5)), from: pdf?.name || '' };
   const slides = keys.filter((k) => /^assets\/slides\/slide-\d+\.(webp|png|jpg)$/.test(k)).sort();
+  if (refresh && slides.length && have.length) { await blobs.removePrefix(pid, SITE_MATERIAL); return preparePageImages(pid, project, { signal, onProgress }); }
+  if (have.length) return { list: have.map((k) => k.slice(5)), from: pdf?.name || '' };
   if (slides.length) {
     for (const k of slides) {
       const n = +/slide-(\d+)/.exec(k)[1]; const ext = extOf(k);

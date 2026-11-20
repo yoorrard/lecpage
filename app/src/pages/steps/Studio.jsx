@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
-import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration } from '../../lib/studio.js';
-import { getActiveAI, PROVIDERS, CHATBOTS, getChatbot, setChatbot } from '../../lib/ai.js';
+import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, bridgeStatus } from '../../lib/studio.js';
+import { getActiveAI, PROVIDERS, CHATBOTS, setChatbot } from '../../lib/ai.js';
 import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage, imageAt, replaceText, getVar, setVar, readCss, writeCss } from '../../lib/site-doc.js';
 import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
 import { blobs } from '../../lib/db.js';
 import { toast, copy, uid, isPastDate, monthDay, fmtDate } from '../../lib/util.js';
-import { fmtSec } from './Make.jsx';
+import { fmtSec, errorActions } from './Make.jsx';
+import { AGENT_NAME } from '../../lib/agent.js';
 
 // 완성 뒤 편집 화면(docs/plan-ai-first.md §8): 미리보기(조립된 실제 사이트) + 목록(섹션) + 글 바로 고치기 + 그림 바꾸기 + 색·글꼴
 // + 수정 요청(섹션 또는 전체 → AI) + 검수(문제 목록, AI에게 고쳐 달라기) + 연수 정보(AI가 찾은 쪽 번호) + 되돌리기(판 기록)
@@ -16,14 +17,14 @@ const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navi
 const undos = new Map(); // 연수마다 직접 고친 것 되돌리기(이 탭 안, 최근 30개)
 const stackOf = (pid) => { if (!undos.has(pid)) undos.set(pid, []); return undos.get(pid); };
 
-export function Studio({ p, update, go, job, adoptSite, idle }) {
+export function Studio({ p, update, go, job, idle, reload }) {
   const [tab, setTab] = useState(() => (p.metaChecked ? 'list' : 'info'));
   const [editing, setEditing] = useState(false);
   const [img, setImg] = useState(null); // 바꿀 그림 번호
   const [ver, setVer] = useState(0); // 그림 파일이 바뀌면 미리보기를 다시 읽음
   const [goto, setGoto] = useState(null);
   const [vers, setVers] = useState(false);
-  const [issues, setIssues] = useState(null);
+  const [issues, setIssues] = useState(() => p.inspect?.issues || null); // AI가 저장할 때의 검수 결과로 먼저 보여 주고 다시 검수
   const [ask, setAsk] = useState({ target: 'all', request: '' });
   const [, force] = useState(0);
   const quiet = useRef(''); const latest = useRef(p); latest.current = p;
@@ -64,13 +65,16 @@ export function Studio({ p, update, go, job, adoptSite, idle }) {
     { value: 'look', label: '색·글꼴' },
   ];
   const show = (key) => setGoto({ key, n: Date.now() });
-  const fixAll = async (ids) => {
-    const ai = await getActiveAI();
-    const list = (issues || []).filter((x) => !ids || ids.includes(x.id));
+  /** 검수에서 찾은 곳을 AI에게: 키로 연결한 AI면 그 섹션들을 바로 고치고, 아니면(쓰던 AI 창·섹션이 안 정해진 문제·체험) 수정 요청에 채워 둠 */
+  const fixAll = async (keys) => {
+    const list = (issues || []).filter((x) => !keys || keys.includes(x.key));
     if (!list.length) return;
-    if (ai && !p.demo) { await idle(); fixIssues(p.id, list.map((x) => x.id)); toast('AI에게 고쳐 달라고 보냈어요.'); return; }
-    setAsk({ target: 'all', request: `검수에서 찾은 문제를 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}` });
+    const ai = p.demo ? null : await getActiveAI();
+    if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), { way: 'key', provider: ai.provider, model: ai.model })) { toast('AI에게 고쳐 달라고 보냈어요. 끝나면 미리보기가 바뀌어요.'); return; } }
+    const secs = [...new Set(list.map((x) => x.where?.section).filter(Boolean))];
+    setAsk({ target: secs.length === 1 ? secs[0] : 'all', request: `검수에서 찾은 문제를 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}` });
     setTab('ask');
+    toast(ai ? '섹션이 정해지지 않은 문제라 수정 요청에 채워 뒀어요. 보낼 곳을 골라 보내 주세요.' : '수정 요청에 채워 뒀어요. 보낼 곳을 골라 보내 주세요.');
   };
   return (
     <>
@@ -84,7 +88,7 @@ export function Studio({ p, update, go, job, adoptSite, idle }) {
         </div>
       </StepHead>
       {working && <JobBand job={job} onStop={() => stopGeneration(p.id)} />}
-      {job.status === 'error' && job.kind && job.kind !== 'make' && <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.error?.title || 'AI가 고치지 못했어요.'}</b><small>{job.error?.body || '사이트는 그대로예요.'}</small></span></div>}
+      {(job.status === 'error' || job.status === 'paused') && job.kind && job.kind !== 'make' && <JobError p={p} job={job} go={go} />}
       {!p.metaChecked && tab !== 'info' && <div class="ai-job" role="status"><span class="ai-job-t"><b>AI가 교재에서 찾은 연수 정보를 한 번 확인해 주세요.</b><small>QR 안내문·강사 화면·일정 파일에 쓰여요.</small></span><button type="button" class="btn btn-sm btn-primary" onClick={() => setTab('info')}>확인하기</button></div>}
       {p.notes?.length > 0 && <div class="ai-job" role="status"><span class="ai-job-t"><b>답을 받으며 알게 된 것</b><small>{p.notes.join(' ')}</small></span><button class="icon-btn" onClick={() => update({ notes: undefined })} aria-label="안내 닫기">✕</button></div>}
       <div class="workspace">
@@ -99,7 +103,7 @@ export function Studio({ p, update, go, job, adoptSite, idle }) {
               onAsk={(id) => { setAsk({ target: id, request: '' }); setTab('ask'); }} editing={editing} setEditing={setEditing} />}
             {tab === 'info' && <InfoPanel p={p} change={change} update={update} />}
             {tab === 'check' && <CheckPanel issues={issues} onShow={show} onFix={fixAll} locked={working} onRecheck={recheck} />}
-            {tab === 'ask' && <AskPanel p={p} sections={sections} ask={ask} setAsk={setAsk} idle={idle} adoptSite={adoptSite} locked={working} go={go} />}
+            {tab === 'ask' && <AskPanel p={p} sections={sections} ask={ask} setAsk={setAsk} idle={idle} reload={reload} locked={working} go={go} />}
             {tab === 'look' && <LookPanel p={p} change={change} />}
           </div>
           {!!stack.length && <button type="button" class="btn btn-sm undo-float" onClick={undo}><span aria-hidden="true">↶ </span>되돌리기</button>}
@@ -121,8 +125,21 @@ function JobBand({ job, onStop }) {
   return (
     <div class="ai-job" role="status" aria-live="polite">
       <span class="ai-job-dot" aria-hidden="true" />
-      <span class="ai-job-t"><b>{job.kind === 'fix' ? 'AI가 검수 결과를 고치고 있어요' : 'AI가 요청대로 고치고 있어요'}</b><small>{job.step ? `${job.step.label_ko} (${job.step.index + 1}/${job.step.total}) · ` : ''}{fmtSec((Date.now() - job.startedAt) / 1000)} · 끝나면 미리보기가 바뀌어요.</small></span>
+      <span class="ai-job-t"><b>{job.kind === 'fix' ? 'AI가 검수 결과를 고치고 있어요' : 'AI가 요청대로 고치고 있어요'}</b><small>{job.step ? `${job.step.label_ko} (${job.step.index}/${job.step.total}) · ` : ''}{fmtSec((Date.now() - job.startedAt) / 1000)} · 끝나면 미리보기가 바뀌어요.</small></span>
       <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
+    </div>
+  );
+}
+
+/** AI가 고치다 멈춤(수정 요청·검수 고치기): 까닭과 할 일. 사이트는 그대로 */
+function JobError({ p, job, go }) {
+  // 다른 AI·쓰던 AI 창으로는 [수정 요청]에서 보낼 곳을 바꿔 다시 보냄
+  const acts = job.status === 'paused' ? [{ id: 'resume', label: '이어서 하기', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => a.id !== 'connect' && a.id !== 'paste');
+  const e = job.error || {};
+  return (
+    <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.status === 'paused' ? 'AI가 고치기를 멈췄어요.' : e.title || 'AI가 고치지 못했어요.'}</b><small>{job.status === 'paused' ? '사이트는 그대로예요. [이어서 하기]를 누르면 멈춘 단계부터 해요.' : e.body || '사이트는 그대로예요.'}</small></span>
+      {acts.map((a, i) => (a.href ? <a class={`btn btn-sm${i ? '' : ' btn-primary'}`} href={a.href} target="_blank" rel="noopener">{a.label}<span class="ext" aria-hidden="true">↗</span></a>
+        : <button type="button" class={`btn btn-sm${i ? '' : ' btn-primary'}`} onClick={a.run}>{a.label}</button>))}
     </div>
   );
 }
@@ -214,77 +231,101 @@ function InfoPanel({ p, change, update }) {
   );
 }
 
-/** 검수 결과: 깨진 곳·넘침·빈 칸·키트 표시 오류 등. 그 자리 보기, AI에게 고쳐 달라기 */
+/** 검수 결과: 깨진 곳·넘침·빈 칸·키트 표시 오류 등. 그 자리 보기, AI에게 고쳐 달라기(하나씩 고를 때는 issue.key) */
 function CheckPanel({ issues, onShow, onFix, locked, onRecheck }) {
   const [pick, setPick] = useState([]);
   if (issues === null) return <p class="muted small" aria-live="polite">검수하는 중…</p>;
   const errs = issues.filter((x) => x.level === 'error');
+  const keys = new Set(issues.map((x) => x.key));
+  const picked = pick.filter((k) => keys.has(k)); // 다시 검수해 사라진 것은 뺌
   return (
     <div class="stack">
       {issues.length ? <p class="small" role="status">고칠 곳 {issues.length}곳{errs.length ? ` · 꼭 고칠 곳 ${errs.length}곳` : ''}. 고치면 다시 검수해요.</p>
         : <Notice kind="ok"><span role="status">검수에서 찾은 문제가 없어요.</span></Notice>}
       <ul class="issues">
         {issues.map((x) => (
-          <li class={`issue is-${x.level}`}>
-            <label class="check"><input type="checkbox" checked={pick.includes(x.id)} onChange={() => setPick(pick.includes(x.id) ? pick.filter((y) => y !== x.id) : [...pick, x.id])} /><span><b>{x.level === 'error' ? '꼭 고칠 곳' : '확인할 곳'}</b> {x.message_ko}{x.fix_hint_ko && <small>{x.fix_hint_ko}</small>}</span></label>
+          <li class={`issue is-${x.level}`} key={x.key}>
+            <label class="check"><input type="checkbox" checked={picked.includes(x.key)} onChange={() => setPick(picked.includes(x.key) ? picked.filter((y) => y !== x.key) : [...picked, x.key])} /><span><b>{x.level === 'error' ? '꼭 고칠 곳' : '확인할 곳'}</b> {x.message_ko}{x.where?.width ? <small>{x.where.width <= 480 ? '휴대폰' : 'PC'} 화면({x.where.width}px)에서</small> : null}{x.fix_hint_ko && <small>{x.fix_hint_ko}</small>}</span></label>
             {x.where?.section && <button type="button" class="btn btn-sm btn-quiet" onClick={() => onShow(x.where.section)}>이 곳 보기</button>}
           </li>
         ))}
       </ul>
       <div class="btn-row">
-        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(pick.length ? pick : null)}>{pick.length ? `고른 ${pick.length}곳 고쳐 달라기` : 'AI에게 고쳐 달라기'}</button>}
+        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(picked.length ? picked : null)}>{picked.length ? `고른 ${picked.length}곳 고쳐 달라기` : 'AI에게 고쳐 달라기'}</button>}
         <button type="button" class="btn btn-quiet" onClick={onRecheck}>다시 검수</button>
       </div>
     </div>
   );
 }
 
-/** 수정 요청: 고칠 섹션(또는 전체)과 바라는 점 → 연결한 AI(키) 또는 쓰던 앱(요청 글 복사 → 답 넣기) */
-function AskPanel({ p, sections, ask, setAsk, idle, adoptSite, locked, go }) {
+/** 수정 요청: 고칠 섹션(또는 전체)과 바라는 점 → 키로 연결한 AI · 내 PC의 AI 에이전트 · 쓰던 AI 창(요청 글 복사 → 답 넣기) */
+function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
   const [conn, setConn] = useState(undefined);
+  const [agents, setAgents] = useState([]); // 연결 프로그램이 켜져 있으면 설치된 에이전트
   const [way, setWayHere] = useState('');
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { getActiveAI().then((a) => { setConn(a); setWayHere(a && !p.demo ? 'key' : 'chat'); }); }, []);
+  useEffect(() => {
+    let off = false;
+    Promise.all([p.demo ? null : getActiveAI(), p.demo ? null : bridgeStatus().catch(() => null)]).then(([a, b]) => {
+      if (off) return;
+      const ag = (b?.agents || []).filter((x) => AGENT_NAME[x?.id] && x.installed && x.ready !== false);
+      setConn(a); setAgents(ag);
+      // 처음 고를 곳: 이 사이트를 만든 길(내 PC면 그 에이전트), 아니면 연결된 키, 둘 다 없으면 쓰던 AI 창
+      const g = p.gen || {};
+      setWayHere(g.way === 'local' && ag.some((x) => x.id === g.agent) ? 'local:' + g.agent : a ? 'key' : ag.length ? 'local:' + ag[0].id : 'chat');
+    });
+    return () => { off = true; };
+  }, []);
   const target = sections.some((s) => s.id === ask.target) ? ask.target : 'all';
   const ready = ask.request.trim().length > 1;
   async function send() {
     if (!ready || locked) return;
-    if (p.demo) { toast('체험이라 AI에게 보내지 않아요. 내 교재로 시작하면 이 버튼으로 바로 고쳐요.'); return; }
-    await idle(); editSite(p.id, { target, request: ask.request.trim(), way: 'key', provider: conn.provider, model: conn.model });
+    await idle();
+    const local = way.startsWith('local:');
+    editSite(p.id, { target, request: ask.request.trim(), ...(local ? { way: 'local', agent: way.slice(6) } : { way: 'key', provider: conn.provider, model: conn.model }) });
     toast('AI에게 보냈어요. 끝나면 미리보기가 바뀌어요.'); setAsk({ ...ask, request: '' });
   }
-  async function makePrompt() { await idle(); const t = String(await chatEditPrompt(p.id, { target, request: ask.request.trim() }) || ''); setPrompt(t); return t; }
-  const bot = CHATBOTS.find((b) => b.id === getChatbot()) || CHATBOTS[0];
+  // 쓰던 AI 창에 보낼 요청 글: 고칠 곳·바라는 점이 바뀌면 잠깐 뒤 미리 만들어 둠(누르는 순간 바로 복사되게)
+  useEffect(() => {
+    setPrompt('');
+    if (way !== 'chat' || !ready) return undefined;
+    let off = false;
+    const t = setTimeout(async () => { await idle(); const v = String(await chatEditPrompt(p.id, { target, request: ask.request.trim() }) || ''); if (!off) setPrompt(v); }, 400);
+    return () => { off = true; clearTimeout(t); };
+  }, [way, target, ask.request]);
   async function take(input) {
     if (!input || busy) return; setBusy(true);
     try {
-      const r = await acceptChatAnswer(p.id, input, { target: target === 'all' ? '' : target }); setRes(r); if (r.continuePrompt) setAnswer('');
-      if (r.ok) { await adoptSite(r.site, r.meta, '쓰던 앱으로 고친 판'); setAnswer(''); setPrompt(''); setRes(null); setAsk({ ...ask, request: '' }); toast('답대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.'); }
+      await idle();
+      const r = await acceptChatAnswer(p.id, input, { target }); setRes(r); if (r.continuePrompt) setAnswer('');
+      if (r.ok) { await reload(); setAnswer(''); setPrompt(''); setRes(null); setAsk({ ...ask, request: '' }); toast('답대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.'); }
     } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
     setBusy(false);
   }
+  const ways = [...(conn ? [['key', `${PROVIDERS[conn.provider]?.short || 'AI'}로 바로`]] : []), ...agents.map((a) => ['local:' + a.id, `내 PC의 ${AGENT_NAME[a.id]}`]), ['chat', '쓰던 AI 창으로']];
   return (
     <div class="stack ask">
       <Field label="고칠 곳"><select class="input" value={target} onChange={(e) => setAsk({ ...ask, target: e.target.value })}><option value="all">사이트 전체</option>{sections.map((s) => <option value={s.id}>{s.name}</option>)}</select></Field>
       <Field label="바라는 점" hint="무엇을 어떻게 바꿀지 적어요. 예: 실습 단계를 세 개로 나누고 단계마다 걸리는 시간을 적어 줘.">
         <textarea class="input" rows={4} maxLength={1500} value={ask.request} onInput={(e) => setAsk({ ...ask, request: e.target.value })} placeholder="예: 첫 화면 제목을 더 짧게, 색은 차분하게" /></Field>
       {locked && <p class="lock-note small">AI가 고치는 중이에요. 끝나면 다시 보낼 수 있어요.</p>}
-      {conn && !p.demo && <div class="seg" role="group" aria-label="보낼 곳"><button type="button" aria-pressed={String(way === 'key')} onClick={() => setWayHere('key')}>{PROVIDERS[conn.provider]?.short || 'AI'}로 바로</button><button type="button" aria-pressed={String(way === 'chat')} onClick={() => setWayHere('chat')}>쓰던 앱으로</button></div>}
-      {way === 'key' && conn ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{conn.label}에 보내요. 고치기 전 판은 판 기록에 남아요.</span></div>
+      {p.demo && <p class="small muted">체험이라 키로 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p>}
+      {ways.length > 1 && <div class="seg" role="group" aria-label="보낼 곳">{ways.map(([v, label]) => <button type="button" aria-pressed={String(way === v)} onClick={() => setWayHere(v)}>{label}</button>)}</div>}
+      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{way === 'key' ? `${conn?.label || 'AI'}에 보내요.` : `내 PC의 ${AGENT_NAME[way.slice(6)]}에게 맡겨요.`} 고치기 전 판은 판 기록에 남아요.</span></div>
         : <ol class="chat-steps">
-          <li><b>요청 글을 복사해 쓰던 앱에 보내요</b>
+          <li><b>요청 글을 복사해 쓰던 AI 창에 보내요</b>
             <div class="btn-row">
-              {CHATBOTS.map((b) => <a class="btn btn-sm" href={b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined} onClick={async (e) => { if (!ready) { e.preventDefault(); toast('바라는 점을 먼저 적어 주세요.'); return; } const t = prompt || await makePrompt(); copy(t, `요청 글을 복사했어요. ${b.name}에 붙여 넣으세요.`); setChatbot(b.id); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>)}
+              {CHATBOTS.map((b) => <a class="btn btn-sm" href={b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined} onClick={(e) => { if (!ready || !prompt) { e.preventDefault(); toast(ready ? '요청 글을 만드는 중이에요. 잠깐 뒤 다시 눌러 주세요.' : '바라는 점을 먼저 적어 주세요.'); return; } copy(prompt, `요청 글을 복사했어요. ${b.name}에 붙여 넣으세요.`); setChatbot(b.id); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>)}
             </div>
             <p class="small muted">{target === 'all' ? '사이트 전체를 보내요. 길면 답이 끊길 수 있어 섹션을 고르는 편이 좋아요.' : '고른 섹션만 보내고, 답의 섹션만 갈아 끼워요.'}</p></li>
           <li><b>답을 넣어요</b>
-            {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}><b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 고칠 수 없어요.'}</b>{(res.problems || []).filter((x) => x !== '답이 중간에 끊겼어요.').map((x) => <span>{x}</span>)}
-              {res.continuePrompt && <div><button type="button" class="btn btn-sm btn-primary" onClick={() => copy(res.continuePrompt, '복사했어요. AI에게 보내세요.')}>이어서 요청 글 복사</button></div>}</div></Notice></div>}
+            {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}><b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 고칠 수 없어요.'}</b>{!res.continuePrompt && (res.problems || []).map((x) => <span>{x}</span>)}
+              {res.continuePrompt && <><span>[이어서 요청 글 복사]를 눌러 AI 창에 보내고, 이어진 답을 붙여 넣어요. 앞의 답은 기억해 둬요.</span><div><button type="button" class="btn btn-sm btn-primary" onClick={() => copy(res.continuePrompt, '복사했어요. AI에게 보내세요.')}>이어서 요청 글 복사</button></div></>}</div></Notice></div>}
             <textarea class="input ta-short" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="AI 답(코드 블록)을 여기에 붙여 넣어요" aria-label="AI의 답" />
-            <div class="btn-row"><button type="button" class="btn btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : '이 답으로 고치기'}</button></div></li>
+            <div class="btn-row"><button type="button" class="btn btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답 넣기' : '이 답으로 고치기'}</button></div></li>
         </ol>}
       <p class="small muted">처음부터 새로 만들고 싶으면 <button type="button" class="btn-link small" onClick={() => go(1)}>AI 다시 고르기</button></p>
     </div>

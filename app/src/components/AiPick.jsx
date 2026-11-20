@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Dialog, Notice } from './ui.jsx';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { aiStatus, getActiveAI, setActive, forgetKey, CHATBOTS, setChatbot, setWay } from '../lib/ai.js';
-import { startGeneration, chatPrompt, acceptChatAnswer } from '../lib/studio.js';
-import { startReplay } from '../lib/demo.js';
-import { SKILL_CMDS } from '../lib/agent.js';
+import { startGeneration, chatPrompt, acceptChatAnswer, bridgeStatus } from '../lib/studio.js';
+import { startDemo } from '../lib/demo.js';
+import { SKILL_CMDS, AGENT_NAME } from '../lib/agent.js';
 import { blobs } from '../lib/db.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
@@ -34,33 +34,33 @@ function copyNow(text) {
 
 /**
  * ready: 읽은 교재가 있음(없으면 카드는 보이되 누를 수 없음) · idle(): 연수를 저장소에 다 쓴 뒤(생성 쪽이 읽기 전에)
- * adoptSite(site, meta): 쓰던 앱의 답으로 받은 사이트를 연수에 넣음 · go(n): 단계 이동
+ * reload(): 생성 쪽이 저장한 연수를 다시 읽음(쓰던 앱의 답을 받은 뒤 완성 화면으로 가기 전에) · go(n): 단계 이동
  */
-export function AiPick({ p, go, idle, adoptSite, ready, update }) {
+export function AiPick({ p, go, idle, reload, ready }) {
   const [conn, setConn] = useState(null); // { openai: {model}|null, … }
   const [keyFor, setKeyFor] = useState(''); // 키 연결 창을 연 회사
   const [chat, setChat] = useState(''); // 쓰던 앱 길을 연 회사(카드 아래 펼침)
   const [swap, setSwap] = useState(''); // 연결된 키의 모델 바꾸기·끊기를 펼친 회사
   const afterKey = useRef(false);
-  const reload = () => aiStatus().then(setConn, () => setConn({}));
+  const recheck = () => aiStatus().then(setConn, () => setConn({}));
   useEffect(() => {
-    reload();
+    recheck();
     // 만드는 중 화면의 [쓰던 앱으로(키 없이)]로 왔으면 그 회사의 쓰던 앱 길을 바로 펼침
     let want = ''; try { want = sessionStorage.getItem('lecpage:open-chat') || ''; sessionStorage.removeItem('lecpage:open-chat'); } catch { }
     if (AI_CARDS.some((c) => c.id === want) && ready) openChat(want);
   }, []);
   async function make(provider, st = conn?.[provider]) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
-    if (p.demo) { toast('체험이라 녹화해 둔 결과로 보여 줘요. 키가 필요 없어요.'); startReplay(p.id, { provider }); go(2); return; }
+    if (p.demo) { toast('체험이라 키 없이, 이 교재로 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     if (!st) { afterKey.current = true; setKeyFor(provider); return; }
     await setActive(provider, {}); setWay('key');
     await idle();
     startGeneration(p.id, { way: 'key', provider, model: st.model || '', request: p.request || '', reference: p.reference || '' });
     go(2);
   }
-  function openChat(id) {
+  async function openChat(id) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
-    if (p.demo) { toast('체험이라 녹화해 둔 결과로 보여 줘요. 실제로는 쓰던 앱 창에서 답을 받아 와요.'); startReplay(p.id, { provider: id, way: 'chat' }); go(2); return; }
+    if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요. 실제로는 쓰던 앱 창에서 답을 받아 와요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     setChat(chat === id ? '' : id);
     setTimeout(() => document.getElementById('chat-way')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 40);
   }
@@ -94,12 +94,12 @@ export function AiPick({ p, go, idle, adoptSite, ready, update }) {
                 <button type="button" class="btn btn-primary ai-card-go" disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
               </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} 키로 연결해 만들기`} onClick={() => make(c.id)}>키로 연결</button>}
               <button type="button" class="btn ai-card-go" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app} 앱으로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 앱으로(키 없이)</button>
-              {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); reload(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
+              {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
             </article>
           );
         })}
       </div>
-      {card && <ChatWay key={card.id} card={card} p={p} adoptSite={adoptSite} go={go} update={update} idle={idle} onClose={() => setChat('')} />}
+      {card && <ChatWay key={card.id} card={card} p={p} go={go} reload={reload} idle={idle} onClose={() => setChat('')} />}
       <div class="ai-alts">
         <LocalWay p={p} ready={ready} idle={idle} go={go} />
         <AgentWay />
@@ -125,7 +125,7 @@ function KeySwap({ id, onDone, onNew }) {
  * 쓰던 앱(키 없이): ① 프롬프트 복사하고 앱 열기 ② 교재 원본 파일을 그 창에 첨부 ③ 답 붙여넣기 또는 .html 끌어 넣기.
  * 답이 잘렸으면 [이어서 요청 글 복사] → 이어진 답을 넣으면 앞의 답 뒤에 붙임(생성 API가 기억)
  */
-function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
+function ChatWay({ card, p, go, reload, idle, onClose }) {
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [res, setRes] = useState(null); // 받은 답 결과(끊김·문제)
@@ -164,13 +164,10 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
     if (!input || busy) return;
     setBusy(true);
     try {
+      await idle(); // 생성 쪽이 연수를 읽고 쓰기 전에 기다리던 저장을 마저 씀
       const r = await acceptChatAnswer(p.id, input);
       setRes(r); if (r.continuePrompt) setAnswer(''); // 끊긴 답은 기억해 뒀으니 칸을 비워 이어진 답을 받음
-      if (r.ok) {
-        await adoptSite(r.site, r.meta, `쓰던 ${card.app}로 만든 판`);
-        if (r.problems?.length) update({ notes: r.problems });
-        setAnswer(''); toast('답으로 사이트를 만들었어요.'); go(2);
-      }
+      if (r.ok) { await reload(); setAnswer(''); toast('답으로 사이트를 만들었어요.'); go(2); } // 생성 쪽이 저장함(판 기록·알게 된 것까지)
     } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
     setBusy(false);
   }
@@ -201,7 +198,7 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
           <p class="small">답이 다 나오면 코드 블록의 복사 버튼을 누르고 돌아와 [답 넣기]를 눌러요. 내려받은 .html 파일을 아래에 끌어다 놓아도 돼요.</p>
           {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}>
             <b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 만들 수 없어요.'}</b>
-            {(res.problems || []).filter((x) => !res.continuePrompt || x !== '답이 중간에 끊겼어요.').map((x) => <span>{x}</span>)}
+            {!res.continuePrompt && (res.problems || []).map((x) => <span>{x}</span>)}
             {res.continuePrompt && <><span>[이어서 요청 글 복사]를 눌러 {card.app}에 보내고, 이어진 답을 복사해 다시 [답 넣기]를 눌러요. 앞의 답은 기억해 둬요.</span>
               <div><button type="button" class="btn btn-sm btn-primary" onClick={() => { copy(res.continuePrompt, '복사했어요. AI에게 보내세요.'); setSent(true); }}>이어서 요청 글 복사</button></div></>}
           </div></Notice></div>}
@@ -220,34 +217,19 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
 }
 
 const BRIDGE_CMD = 'npx github:yoorrard/lecpage';
-const AGENT_NAME = { claude: 'Claude Code', codex: 'Codex' };
 /**
- * 연결 프로그램(docs/plan-ai-first.md §10 HTTP 약속): 앱을 127.0.0.1에서 보여 주며 HTML에 <meta name="lecpage-bridge" content="토큰">을 넣어 줌.
- * 그 토큰을 머리글 X-Lecpage-Bridge로 붙여 GET /bridge/status → { ok, version, agents:[{ id:'claude'|'codex', installed, version, auth }] }.
- * 토큰이 없으면(lecpage.com 등) 묻지 않음
+ * 내 PC의 Claude Code·Codex(연결 프로그램 lecpage studio, docs/plan-ai-first.md §10): 앱을 127.0.0.1에서 보여 주며 토큰을 넣어 줌.
+ * 그 창이면 GET /bridge/status → agents[{ id, name, installed, ready, auth, note_ko }]. 다른 곳(lecpage.com)에서는 띄우는 법만
  */
-export const bridgeToken = () => document.querySelector('meta[name="lecpage-bridge"]')?.getAttribute('content') || '';
-async function bridgeStatus() {
-  const token = bridgeToken(); if (!token) return null;
-  try {
-    const r = await fetch('/bridge/status', { cache: 'no-store', headers: { 'X-Lecpage-Bridge': token } });
-    if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) return null;
-    const j = await r.json();
-    if (!j?.ok) return null;
-    const agents = (Array.isArray(j.agents) ? j.agents : []).filter((a) => ['claude', 'codex'].includes(a?.id));
-    return { version: String(j.version || ''), agents: agents.map((a) => ({ id: a.id, installed: !!a.installed, version: String(a.version || ''), auth: a.auth || 'unknown' })) };
-  } catch { return null; }
-}
-
-/** 내 PC의 Claude Code·Codex: 연결 프로그램을 띄우는 법, 켜져 있으면 바로 쓰기(연결 프로그램은 따로 만들어짐) */
 function LocalWay({ p, ready, idle, go }) {
   const [st, setSt] = useState(undefined);
-  useEffect(() => { bridgeStatus().then(setSt); }, []);
-  async function run(provider) {
+  useEffect(() => { bridgeStatus().then((v) => setSt(v || null), () => setSt(null)); }, []);
+  const agents = (st?.agents || []).filter((a) => AGENT_NAME[a?.id]);
+  async function run(agent) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
-    if (p.demo) { toast('체험이라 녹화해 둔 결과로 보여 줘요.'); startReplay(p.id, { provider, way: 'local' }); go(2); return; }
+    if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     await idle();
-    startGeneration(p.id, { way: 'local', provider, request: p.request || '', reference: p.reference || '' });
+    startGeneration(p.id, { way: 'local', agent, request: p.request || '', reference: p.reference || '' });
     go(2);
   }
   return (
@@ -257,10 +239,11 @@ function LocalWay({ p, ready, idle, go }) {
         {st ? <>
           <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>
           <div class="btn-row">
-            {st.agents.filter((a) => a.installed).map((a) => <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run(a.id)}>{AGENT_NAME[a.id]} 쓰기</button>)}
-            {!st.agents.some((a) => a.installed) && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
+            {agents.filter((a) => a.installed).map((a) => <button type="button" class="btn btn-sm btn-primary" disabled={!ready || a.ready === false} onClick={() => run(a.id)}>{AGENT_NAME[a.id]} 쓰기</button>)}
+            {!agents.some((a) => a.installed) && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
           </div>
-          {st.agents.some((a) => a.installed && a.auth === 'api-key') && <p class="small warn-line">{st.agents.filter((a) => a.installed && a.auth === 'api-key').map((a) => AGENT_NAME[a.id]).join('·')}는 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
+          {agents.filter((a) => a.installed && a.ready === false && a.note_ko).map((a) => <p class="small warn-line">{a.note_ko}</p>)}
+          {agents.some((a) => a.installed && a.auth === 'api-key') && <p class="small warn-line">{agents.filter((a) => a.installed && a.auth === 'api-key').map((a) => AGENT_NAME[a.id]).join('·')}는 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
         </> : <>
           <ol class="small ai-alt-steps">
             <li>Node.js가 있는 PC의 터미널에서 아래 명령을 실행해요.</li>

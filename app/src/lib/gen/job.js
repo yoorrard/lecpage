@@ -20,7 +20,9 @@ import { extractJson, extractCss, extractHtml, extractSections, mergeSections, r
 import { inspect, readMeta, themeFromCss, issuesForAi } from './kit.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
-import { runBridgeJob, cancelBridgeJob, bridgeFiles, decodeBinary } from './local.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary } from './local.js';
+import { pushVersion, carryLegacy } from '../site-meta.js';
+import { ensureIds } from '../site-doc.js';
 
 const TAB = uid(8);
 const live = new Map(); // pid → { ctrl, rec, wait, elsewhere }
@@ -69,7 +71,6 @@ function saveSoon(rec) {
   L.saveT = setTimeout(() => { L.saveT = 0; save(rec, { quiet: true }).catch(() => { }); }, hook().saveMs || 3000);
 }
 
-export async function readJob(pid) { return live.get(pid)?.rec || (await jobsDb.get(pid).catch(() => null)) || null; }
 
 // ── 같은 연수를 두 탭에서 동시에 돌리지 않기 ──
 const lockName = (pid) => 'lecpage-gen:' + pid;
@@ -99,6 +100,7 @@ function withLock(pid, fn) {
 const STEP = (name) => ({ name, status: 'todo', attempts: 0, output: null, error: null });
 function stepsFor(kind, way) {
   if (way === 'local') return [STEP('agent'), STEP('assemble')]; // 내 PC의 에이전트가 사이트 전체를 파일로 씀 → 앱은 조립·검수만
+  // way 'demo'(먼저 해보기)는 'key'와 같은 단계(어댑터만 미리 만든 답을 흘려보냄)
   if (kind === 'make') return [STEP('plan'), STEP('design'), STEP('assemble')];
   if (kind === 'edit') return [STEP('edit'), STEP('assemble')];
   if (kind === 'fix') return [STEP('fix'), STEP('assemble')];
@@ -116,10 +118,11 @@ export function viewOf(rec, { elsewhere = false } = {}) {
   const status = rec.status === 'running' ? 'running' : rec.status === 'done' ? 'done' : rec.status === 'error' ? 'error' : 'paused';
   const L = live.get(rec.pid);
   return {
-    status, jobId: rec.id, kind: rec.kind, way: rec.way, provider: rec.provider, model: rec.model,
+    status, jobId: rec.id, kind: rec.kind, way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '',
+    // index: 지금 단계 번호(1부터, 다 끝나면 total)
     step: cur ? { name: cur.name, label_ko: cur.label || P.stepLabel(cur.name, secTotal), index: rec.status === 'done' ? total : i + 1, total, received: (cur.acc?.length || 0) + (cur.piece?.length || 0) } : null,
     steps: rec.steps.map((s) => ({ name: s.name, label_ko: s.label || P.stepLabel(s.name, secTotal), status: s.status, attempts: s.attempts })),
-    startedAt: rec.startedAt, updatedAt: rec.updatedAt,
+    startedAt: rec.startedAt, updatedAt: rec.updatedAt, endedAt: status === 'running' ? 0 : rec.updatedAt || 0,
     error: status === 'error' || status === 'paused' ? rec.error || null : null,
     wait: L?.wait || null, // { reason: 'quota'|'retry'|'hidden'|'offline', until }
     notes: rec.notes || [], elsewhere,
@@ -140,6 +143,7 @@ function errorView(e, provider) {
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
   if (k === 'local') return { kind: k, title: '내 PC의 연결 프로그램에 닿지 못했어요.', body: '연결 프로그램이 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키나 쓰던 AI 창으로도 만들 수 있어요.', actions: ['resume', 'connect', 'paste'] };
   if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: '연결 프로그램을 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
+  if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', actions: ['paste', 'connect'] };
   const x = explainError(e, provider);
   return { kind: x.kind, title: x.title, body: x.body, actions: ['resume', ...x.actions.filter((a) => a !== 'pay' && a !== 'light')], link: x.link || null };
 }
@@ -165,6 +169,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
     const key = ctx.key;
     try {
       const res = await A.stream({
+        step: { name: step.name, batch: step.batch }, // 먼저 해보기 어댑터만 씀(어느 단계의 답인지)
         key, model: rec.model, system: P.SYSTEM_GEN, parts: [...ctx.pack.parts, { kind: 'text', text: prompt }], maxTokens, signal, json,
         continueFrom, resumeToken: token, prefix: token ? piece : '',
         onText: (t, all) => { piece = all; persist(); },
@@ -382,7 +387,7 @@ async function runAssemble(ctx, step) {
   step.output = { issues };
   // 고칠 수 있는 문제(섹션이 정해진 오류)가 있으면 그 섹션만 한 번 고치기
   const fixable = issues.filter((i) => i.level === 'error' && i.where?.section);
-  if (rec.kind === 'make' && rec.way !== 'local' && fixable.length && !rec.steps.some((s) => s.name === 'fix') && !hook().noFix) {
+  if (rec.kind === 'make' && rec.way === 'key' && fixable.length && !rec.steps.some((s) => s.name === 'fix') && !hook().noFix) {
     rec.steps.push({ ...STEP('fix'), issues: fixable.slice(0, 12) }, STEP('assemble'));
   }
 }
@@ -441,10 +446,15 @@ async function runEdit(ctx, step) {
 async function runAgent(ctx, step) {
   const { rec, project } = ctx;
   const request = rec.kind === 'fix' ? `lecpage 검수에서 나온 문제를 고쳐 주세요.\n${issuesForAi(step.issues || [])}` : rec.opts.request;
+  // 교재 원본은 files로, 사이트 폴더(새로 만들 때는 교재 쪽 그림, 고칠 때는 지금 사이트 전체)는 site로(연결 프로그램이 work/site/에 그대로 둠)
+  const pack = async () => ({
+    files: await bridgeFiles(blobs, rec.pid, project),
+    site: { ...(await bridgeSite(blobs, rec.pid, rec.kind === 'make' ? (ctx.images?.list || []) : null)), ...(rec.kind !== 'make' ? rec.site || project.site || {} : {}) },
+  });
   const payload = {
-    agent: rec.model || 'claude', kind: rec.kind === 'make' ? 'make' : 'edit', request, meta: project.meta || {}, reference: rec.opts.reference || null,
-    files: step.bridgeJob ? [] : await bridgeFiles(blobs, rec.pid, project, ctx.images?.list || []),
-    ...(rec.kind !== 'make' ? { site: rec.site || project.site || {} } : {}),
+    agent: rec.agent || 'claude', kind: rec.kind === 'make' ? 'make' : 'edit', request, meta: project.meta || {}, reference: rec.opts.reference || null,
+    ...(rec.kind === 'edit' && rec.opts.target && rec.opts.target !== 'all' ? { target: rec.opts.target } : {}),
+    ...(step.bridgeJob ? { files: [] } : await pack()),
   };
   const run = (jobId) => runBridgeJob({
     payload, jobId, signal: ctx.signal,
@@ -456,14 +466,15 @@ async function runAgent(ctx, step) {
   try { res = await run(step.bridgeJob || ''); } catch (e) {
     // 연결 프로그램을 다시 켜서 하던 일이 없어짐 → 처음부터 한 번 더
     if (e?.kind !== 'gone' || !step.bridgeJob) throw e;
-    step.bridgeJob = ''; payload.files = await bridgeFiles(blobs, rec.pid, project, ctx.images?.list || []);
+    step.bridgeJob = ''; Object.assign(payload, await pack());
     res = await run('');
   }
+  // 글 파일은 사이트(p.site)로, 그림·PDF 같은 바이트 파일은 저장소 'site/…'로(교재 쪽 그림은 이미 있음)
   const site = {};
   for (const [k, v] of Object.entries(res.site || {})) {
     const path = String(k).replace(/^\.?\/+/, '').replace(/^site\//, '');
-    if (/\.(png|jpe?g|webp|gif|avif)$/i.test(path)) { if (!path.startsWith('material/') || !(ctx.images?.list || []).includes(path)) await blobs.put(rec.pid, 'site/' + path, decodeBinary(v)); }
-    else if (typeof v === 'string') site[path] = v;
+    if (typeof v === 'string' && !/\.(png|jpe?g|webp|gif|avif|pdf)$/i.test(path)) site[path] = v;
+    else if (!path.startsWith('material/') || !(ctx.images?.list || []).includes(path)) await blobs.put(rec.pid, 'site/' + path, decodeBinary(v));
   }
   if (!site['index.html']) throw new AiError('format', 'no index');
   rec.site = site;
@@ -478,7 +489,6 @@ const RUN = { plan: runPlan, design: runDesign, assemble: runAssemble, fix: runF
 async function finish(ctx) {
   const rec = ctx.rec;
   const at = Date.now();
-  const label = rec.kind === 'make' ? 'AI가 만든 판' : rec.kind === 'edit' ? 'AI가 고친 판' : 'AI가 검수 문제를 고친 판';
   const issues = rec.steps.filter((s) => s.name === 'assemble').pop()?.output?.issues || [];
   // 수정·고치기: 그동안 강사가 다른 섹션을 고쳤을 수 있어 지금 사이트에 바뀐 섹션·덧붙인 CSS만 얹음
   const merged = (cur) => {
@@ -491,16 +501,37 @@ async function finish(ctx) {
     return { site, meta };
   };
   let out = null;
-  const saved = await projects.patch(rec.pid, (cur) => { out = merged(cur); return {
+  const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); return {
     v: 2, site: out.site, meta: out.meta,
-    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, at, kind: rec.kind },
-    versions: [...(Array.isArray(cur.versions) ? cur.versions : []), { id: uid(8), at, label, site: out.site, meta: out.meta }].slice(-10),
+    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
+    versions: versionsAfter(cur, rec.kind, out, rec.way === 'chat'),
     inspect: { at, issues },
+    ...(rec.kind === 'make' ? { notes: rec.notes?.length ? rec.notes : undefined, metaChecked: false } : {}),
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
   }; });
   if (out) { rec.site = out.site; rec.meta = out.meta; }
   if (!saved) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
   notifySaved(rec.pid, saved.updatedAt);
+}
+/**
+ * 저장하기 직전 마무리: 이름표(id) 없는 섹션에 붙이고(목록·수정 요청이 가리킬 수 있게),
+ * 예전 방식(설계도) 연수였으면 그 배포 연결(참여 기능 방·공개 범위·짧은 주소)을 새 연수 정보로 옮김
+ */
+export function settle(cur, { site, meta }) {
+  const html = ensureIds(site?.['index.html'] || '');
+  const s = html && html !== site['index.html'] ? { ...site, 'index.html': html } : site;
+  return { site: s, meta: cur.blueprint ? carryLegacy({ ...cur, meta }).meta || meta : meta };
+}
+/**
+ * 판 기록(최근 10판, 새것이 앞): 새로 만들면 '다시 만들기 전'(있으면)과 'AI가 만든 판', 고치면 고치기 전 판.
+ * 직접 고친 것은 화면이 [되돌리기]로, 판 기록은 AI가 바꾸는 큰 걸음만
+ */
+export function versionsAfter(cur, kind, next, chat = false) {
+  if (kind === 'make') {
+    const before = cur.site ? pushVersion(cur, '다시 만들기 전') : cur.versions || [];
+    return pushVersion({ site: next.site, meta: next.meta, versions: before }, chat ? '쓰던 AI가 만든 판' : 'AI가 만든 판');
+  }
+  return pushVersion(cur, kind === 'fix' ? '검수 고치기 전' : chat ? '쓰던 AI로 고치기 전' : 'AI가 고치기 전');
 }
 export function notifySaved(pid, at) {
   try { if (typeof dispatchEvent === 'function') dispatchEvent(new CustomEvent('lecpage:gen-saved', { detail: { pid, at } })); } catch { /* 알림만 못 함 */ }
@@ -519,18 +550,20 @@ async function drive(pid) {
     const project = await projects.get(pid);
     if (!project) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
     ctx.project = project;
-    if (rec.way !== 'local') {
+    if (rec.way === 'key') {
       const { key } = await loadKey(rec.provider);
       if (!key) throw new AiError('no-key', 'no key', { provider: rec.provider });
       ctx.key = key;
       if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
     }
     // 학교망이 AI 회사를 막았으면 오래 기다리지 않게(처음 시작할 때만, 시험 주소면 건너뜀)
-    if (rec.way !== 'local' && !rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
+    if (rec.way === 'key' && !rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
     // 교재도 요청 글도 없으면 AI가 지어낼 것밖에 없음 → 교재를 먼저
     if (rec.kind === 'make' && !sourceFiles(project).length && !project.material && !String(rec.opts.request || '').trim()) throw new AiError('no-material', 'no material');
-    ctx.images = await preparePageImages(pid, project, { signal });
-    if (rec.way !== 'local') await repack(ctx);
+    // 새로 만들기의 첫 단계에서만 지금 교재의 쪽 그림으로 다시 옮김(이어 하기·고치기는 있던 것 그대로)
+    ctx.images = await preparePageImages(pid, project, { signal, refresh: rec.kind === 'make' && !rec.steps.some((s) => s.status === 'done') });
+    if (rec.way === 'key') await repack(ctx);
+    else ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
     for (;;) {
       const step = rec.steps.find((s) => s.status !== 'done');
       if (!step) break;
@@ -596,13 +629,16 @@ if (typeof addEventListener === 'function') {
 export async function startJob(pid, kind, opts = {}) {
   if (live.get(pid)?.ctrl) return { jobId: live.get(pid).rec.id, already: true };
   if (await heldElsewhere(pid)) return { jobId: (await jobsDb.get(pid).catch(() => null))?.id || '', elsewhere: true };
-  let provider = opts.way === 'local' ? 'local' : opts.provider; let model = opts.model || opts.agent || '';
+  const way = ['local', 'demo'].includes(opts.way) ? opts.way : 'key';
+  // 내 PC의 에이전트(agent: 'claude'|'codex')·먼저 해보기는 회사 자리에 그 길 이름
+  let provider = way === 'key' ? opts.provider : way; let model = way === 'key' ? opts.model || '' : '';
+  const agent = way === 'local' ? (['claude', 'codex'].includes(opts.agent) ? opts.agent : 'claude') : '';
   // 고치기·수정 요청은 따로 고르지 않았으면 이 사이트를 만든 AI·모델로(키가 있을 때)
-  if (!provider && kind !== 'make' && opts.way !== 'local') {
+  if (!provider && kind !== 'make') {
     const g = (await projects.get(pid).catch(() => null))?.gen;
-    if (g?.provider && g.way !== 'chat' && (await loadKey(g.provider)).key) { provider = g.provider; model = model || g.model || ''; }
+    if (g?.provider && g.way === 'key' && (await loadKey(g.provider)).key) { provider = g.provider; model = model || g.model || ''; }
   }
-  if (!provider && opts.way !== 'local') {
+  if (!provider) {
     const ai = await getActiveAI();
     if (!ai) {
       const rec0 = newRec(pid, kind, { ...opts, provider: '', model: '' });
@@ -610,14 +646,14 @@ export async function startJob(pid, kind, opts = {}) {
     }
     provider = ai.provider; model = model || ai.model;
   }
-  const rec = newRec(pid, kind, { ...opts, provider, model });
+  const rec = newRec(pid, kind, { ...opts, way, provider, model, agent });
   if (kind === 'fix') rec.steps[0].issues = opts.issues || [];
   if (kind !== 'make') { const p = await projects.get(pid); rec.site = p?.site || null; rec.meta = p?.meta || null; }
   autoResume.delete(pid);
   return launch(pid, rec);
 }
 function newRec(pid, kind, o) {
-  return { pid, id: uid(10), kind, provider: o.provider || '', model: o.model || '', way: o.way || 'key', startedAt: Date.now(), status: 'running', level: 0, notes: [],
+  return { pid, id: uid(10), kind, provider: o.provider || '', model: o.model || '', agent: o.agent || '', way: o.way || 'key', startedAt: Date.now(), status: 'running', level: 0, notes: [],
     opts: { request: o.request || '', reference: o.reference || null, target: o.target || 'all' }, steps: stepsFor(kind, o.way), site: null, meta: null, error: null };
 }
 

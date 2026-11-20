@@ -8,7 +8,6 @@ import { fmtBytes, toast } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
 import { openSaved, openFailMessage } from '../../lib/open-saved.js';
-import { dropAssetCache } from '../../components/Preview.jsx';
 import { isV2 } from '../../lib/site-meta.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
@@ -60,7 +59,6 @@ function useIngest(p, update) {
     }
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
-    dropAssetCache(p.id);
     update({ material: merged, files: [...metas, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], slidesMade });
     const bad = fileObjs.length - ok;
     const ph = photos.length ? ' 사진은 사이트를 만든 뒤 넣어요.' : '';
@@ -86,7 +84,6 @@ function useIngest(p, update) {
       const again = [];
       for (const m of rest) { const data = all[m.key]; if (data && !m.photos) again.push(new File([data], m.name)); }
       if (f.ext === 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
-      dropAssetCache(p.id);
       const keep = rest.filter((m) => m.photos).flatMap((m) => m.photos);
       if (again.length) await ingestAll(again, { replace: true, keep });
       else update({ material: null, files: rest.filter((m) => m.photos), slidesMade: 0 });
@@ -107,7 +104,7 @@ function useIngest(p, update) {
   return { busy, pct, handle, removeFile, resume, stop };
 }
 
-export function StepStart({ p, update, go, job, idle, adoptSite }) {
+export function StepStart({ p, update, go, job, idle, reload }) {
   const inp = useRef();
   const [over, setOver] = useState(false);
   const latest = useRef(p); latest.current = p;
@@ -168,9 +165,9 @@ export function StepStart({ p, update, go, job, idle, adoptSite }) {
           <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·대상을 한 줄로 적으면 AI가 반영해요.">
             <input class="input" value={p.request || ''} onInput={(e) => update({ request: e.target.value })} maxLength={300} placeholder="예: 실습 위주로, 차분한 남색, 처음 배우는 신입 직원 대상" />
           </Field>
-          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference}</b> <span class="muted">(따를 필요는 없어요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>빼기</button></p>}
+          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(따를 필요는 없어요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>빼기</button></p>}
         </section>
-        <AiPick p={p} update={update} go={go} idle={idle} adoptSite={adoptSite} ready={ready} />
+        <AiPick p={p} go={go} idle={idle} reload={reload} ready={ready} />
       </div>
     </>
   );

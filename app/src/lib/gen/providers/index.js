@@ -3,11 +3,13 @@
 import * as anthropic from './anthropic.js';
 import * as openai from './openai.js';
 import * as gemini from './gemini.js';
+import * as demo from './demo.js';
 import { AiError } from './common.js';
 
 const MODS = { anthropic, openai, gemini };
+/** demo: 먼저 해보기(레퍼런스에서 떼어 낸 답을 흘려보냄, 어디로도 보내지 않음) */
 export function adapter(provider) {
-  const m = MODS[provider];
+  const m = provider === 'demo' ? demo : MODS[provider];
   if (!m) throw new AiError('model', `이 길로는 아직 만들 수 없어요(${provider}).`, { provider });
   return m;
 }

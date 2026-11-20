@@ -4,9 +4,8 @@ import { toast, saveFile, safeName } from '../lib/util.js';
 import { makeSaver, restoreDraft, dropDraft } from '../lib/saver.js';
 import { exportProjectFile, stageOf } from '../lib/project.js';
 import { useGeneration } from '../lib/studio.js';
-import { useReplay, endDemo, openDemo } from '../lib/demo.js';
-import { isV2, isLegacy, keepTeacher, carryLegacy, pushVersion } from '../lib/site-meta.js';
-import { ensureIds } from '../lib/site-doc.js';
+import { endDemo, openDemo } from '../lib/demo.js';
+import { isV2, isLegacy } from '../lib/site-meta.js';
 import { Mascot } from '../components/Mascot.jsx';
 import { Dialog } from '../components/ui.jsx';
 import { StepStart } from './steps/Start.jsx';
@@ -14,7 +13,8 @@ import { StepMake } from './steps/Make.jsx';
 import { StepShare } from './steps/Share.jsx';
 
 // 새 흐름(docs/plan-ai-first.md §2): 교재 넣기(+AI 고르기) → 만드는 중(진행 단계만) → 완성(미리보기·목록·연수 정보·검수) → 배포.
-// AI가 만들기 전에는 목록·미리보기가 없음. 먼저 해보기는 같은 화면을 체험 연수(p.demo)로 엶(lib/demo.js).
+// AI가 만들기 전에는 목록·미리보기가 없음. 먼저 해보기는 같은 화면을 체험 연수(p.demo)로 엶(lib/demo.js, 생성도 같은 파이프라인).
+// 사이트는 생성 쪽(lib/gen)이 저장하고 'lecpage:gen-saved'로 알림 → 이 화면은 다시 읽기만 함(덮어쓰지 않게 자동 저장의 기준 판도 맞춤).
 export const STEPS = [
   { n: 1, name: '교재 넣기', C: StepStart },
   { n: 2, name: '만들고 고치기', C: StepMake },
@@ -30,13 +30,14 @@ export function Project({ id, step }) {
   const [gen, setGen] = useState(0); // 다시 불러오면 단계 화면을 새로 그림(안의 상태가 옛 판을 들고 있지 않게)
   const saver = useMemo(() => makeSaver(id, 0, (s, err) => setSt((o) => (o.s === 'changed' || o.s === 'gone' ? o : { s, err }))), [id]);
   const go = (n) => { location.hash = `#/p/${id}/${n}`; };
-  function load() {
+  /** keep: 단계 화면을 새로 그리지 않음(생성 쪽이 저장한 것을 다시 읽을 때: 열어 둔 탭·고르던 것이 그대로) */
+  function load({ keep = false } = {}) {
     return projects.get(id).then((v) => {
       if (!v) { setMissing('none'); return null; }
       const fixed = restoreDraft(v); // 새로 고침이 저장을 끊었으면 남겨 둔 임시본으로
       const cur = fixed || v;
       if (!cur.stage) cur.stage = stageOf(cur.step || 1);
-      saver.reset(v.updatedAt || 0); ref.current = cur; setP(cur); setSt({ s: 'ok' }); setGen((g) => g + 1);
+      saver.reset(v.updatedAt || 0); ref.current = cur; setP(cur); setSt({ s: 'ok' }); if (!keep) setGen((g) => g + 1);
       if (fixed) { saver.put(cur); toast('새로 고치기 전에 고친 내용을 되살렸어요.'); } else dropDraft(id);
       return cur;
     }, (e) => { setMissing(storageKind(e) || 'other'); return null; });
@@ -61,23 +62,22 @@ export function Project({ id, step }) {
   // 사이트가 처음 생기면 한 번: 브라우저가 이 연수를 지우지 않게 보호를 청함(크롬 계열은 묻지 않고 정함. 파이어폭스는 묻는 창이 떠서 설정 화면 단추로만)
   useEffect(() => { if (p?.site && !p.demo && !/Firefox\//.test(navigator.userAgent || '')) askPersist(); }, [!!p?.site]);
 
-  // AI 작업(생성 API, 체험은 녹화 다시 보기). 끝나면 생성 쪽이 저장한 사이트를 다시 읽어 완성 화면으로
-  const live = useGeneration(id); const replay = useReplay(id);
-  const job = p?.demo ? replay : live;
-  const adopted = useRef('');
+  // AI 작업(생성 API: 키·내 PC·쓰던 AI 창·체험 모두 같은 파이프라인). 생성 쪽이 저장하면 다시 읽음
+  const job = useGeneration(id);
   useEffect(() => {
-    if (job.status !== 'done' || !job.id || adopted.current === job.id) return;
-    adopted.current = job.id;
-    saver.idle().then(load).then((cur) => {
-      if (!cur?.site) return;
-      // 섹션 이름표(id)를 붙이고(목록·수정 요청이 가리킬 수 있게), 예전 방식 연수였으면 배포 연결을 옮김
-      const html = ensureIds(cur.site['index.html']);
-      const patch = { ...(html !== cur.site['index.html'] ? { site: { ...cur.site, 'index.html': html } } : {}), ...(cur.blueprint ? carryLegacy(cur) : {}) };
-      if (Object.keys(patch).length) update(patch);
-      if (job.kind === 'make' || !job.kind) { toast('다 만들었어요. 미리보기를 보며 확인해 주세요.'); if (s !== 2) go(2); }
-      else toast(job.kind === 'fix' ? '검수에서 찾은 곳을 AI가 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.');
-    });
-  }, [job.status, job.id]);
+    const on = (e) => { if (e.detail?.pid === id) saver.idle().then(() => load({ keep: true })); };
+    addEventListener('lecpage:gen-saved', on); return () => removeEventListener('lecpage:gen-saved', on);
+  }, [id, saver]);
+  // 끝난 작업 알림: 이 화면에서 도는 것을 본 작업만(다시 열었을 때 지난 작업으로 알리지 않게)
+  const seen = useRef({});
+  useEffect(() => {
+    if (!job.jobId) return;
+    if (job.status === 'running') { seen.current[job.jobId] = true; return; }
+    if (job.status !== 'done' || !seen.current[job.jobId]) return;
+    delete seen.current[job.jobId];
+    if (job.kind === 'make') { toast('다 만들었어요. 미리보기를 보며 확인해 주세요.'); if (s !== 2) go(2); }
+    else toast(job.kind === 'fix' ? '검수에서 찾은 곳을 AI가 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.');
+  }, [job.status, job.jobId]);
 
   const s = step > 3 ? stageOf(step) : Math.min(3, Math.max(1, step || p?.stage || 1));
   useEffect(() => { if (p && p.stage !== s) update({ stage: s, visited: { ...(p.visited || {}), [s]: true } }); }, [s, !!p]);
@@ -98,21 +98,6 @@ export function Project({ id, step }) {
     ref.current = next; setP(next); saver.put(next);
     if (opt?.now) saver.flush();
   }
-  /**
-   * 쓰던 AI 창의 답처럼 화면이 받은 사이트를 연수에 넣음. 생성 쪽이 이미 저장했으면 그것을 다시 읽고, 아니면 여기서 씀
-   * (강사 칸은 지금 값을 지키고, 섹션 이름표를 붙이고, 판 기록에 남김)
-   */
-  async function adoptSite(site, meta, label = 'AI가 만든 판') {
-    await saver.idle();
-    const v = await projects.get(id).catch(() => null);
-    if (v?.site && v.site['index.html'] === site['index.html']) { await load(); return; }
-    const html = ensureIds(site['index.html'] || '');
-    update((cur) => {
-      const nm = meta ? keepTeacher(meta, cur.meta || {}) : cur.meta;
-      const ns = { ...site, 'index.html': html };
-      return { v: 2, site: ns, meta: nm, versions: pushVersion({ site: ns, meta: nm, versions: cur.site ? pushVersion(cur, '바꾸기 전') : cur.versions }, label), ...(cur.blueprint ? carryLegacy({ ...cur, meta: nm }) : {}) };
-    }, { now: true });
-  }
   // 저장이 막힌 창은 위 띠(main.jsx StorageBar)가 까닭과 할 일을 알림
   if (missing) return <div class="empty"><Mascot size={84} mood="oops" /><p>{missing === 'none' ? "이 연수를 찾지 못했어요. 다른 브라우저에서 만들었다면 그 브라우저에서 '파일로 저장'한 뒤 여기서 열어 주세요." : missing === 'blocked' ? '이 창에서는 연수를 열 수 없어요.' : STORAGE_MSG[missing] || '이 브라우저의 저장소를 읽지 못했어요. 새로 고침해 주세요.'}</p><a class="btn" href="#/">처음으로</a></div>;
   if (st.s === 'gone') return <div class="empty"><Mascot size={84} mood="oops" /><p>{p?.demo ? '체험을 끝냈어요.' : '이 연수는 다른 탭에서 지웠어요.'}</p><a class="btn" href="#/">처음으로</a></div>;
@@ -131,7 +116,7 @@ export function Project({ id, step }) {
   }
   /** [파일로 저장]: 배포한 연수면 열쇠를 담을지 먼저 물음 */
   const askSave = () => (p.deploy?.lastUrl ? (setWithKeys(false), setSaveAsk(true)) : saveProjectFile());
-  const ctx = { p, update, go, job, adoptSite, reload: load, idle: () => saver.idle() };
+  const ctx = { p, update, go, job, idle: () => saver.idle(), reload: () => load({ keep: true }) };
   return (
     <div class={`wiz stage-${s}${wide ? " is-studio" : ""}`}>
       {p.demo && <DemoBar pid={id} />}
@@ -181,7 +166,7 @@ function DemoBar({ pid }) {
   return (
     <aside class="demo-bar" aria-label="체험 안내">
       <span class="demo-tag">체험</span>
-      <span class="demo-bar-t"><b>실제와 똑같은 화면이에요.</b> 예시 교재로 해 봐요. 키가 필요 없고, AI 단계는 녹화한 결과를 보여 주며, 실제로 배포하지 않아요.</span>
+      <span class="demo-bar-t"><b>실제와 똑같은 화면이에요.</b> 예시 교재로 해 봐요. 키가 필요 없고, AI 답은 이 교재로 미리 만들어 둔 것을 쓰며, 실제로 배포하지 않아요.</span>
       <button type="button" class="btn btn-sm btn-quiet" disabled={busy} onClick={again}>처음부터 다시</button>
       <a class="btn btn-sm" href="#/" onClick={() => endDemo(pid)}>체험 끝내기</a>
     </aside>

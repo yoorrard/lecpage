@@ -4,7 +4,6 @@
 import { LIVE_KEYS, FEATURES } from '@engine/src/intake.js';
 import { randomCode } from '@engine/src/validate.js';
 import { keepTeacherValues } from '@engine/src/kit/index.js';
-import { blobs } from './db.js';
 
 export { LIVE_KEYS, FEATURES };
 
@@ -66,34 +65,6 @@ export function ensureCode(cur) {
 export function toggleFeature(cur, v) {
   const f = featuresOf(cur); const next = f.includes(v) ? f.filter((x) => x !== v) : [...f, v];
   return { meta: { ...(cur.meta || {}), features: next } };
-}
-
-/** 조립에 넣을 사이트 파일: p.site(글) + 이 연수 저장소의 site/…(그림: 교재 쪽 그림·올린 사진) */
-export async function siteFiles(p) {
-  const out = { ...(p.site || {}) };
-  const keys = await blobs.keys(p.id).catch(() => []);
-  for (const k of keys) {
-    if (!k.startsWith('site/')) continue;
-    const v = await blobs.get(p.id, k);
-    out[k.slice(5)] = v instanceof Blob ? new Uint8Array(await v.arrayBuffer()) : v;
-  }
-  return out;
-}
-
-/**
- * 교재 쪽 그림(교재 넣기에서 만든 assets/slides/slide-NNN.*)을 사이트 폴더 자리(site/material/p-NNN.*)로 옮겨 둠(약속 A).
- * 가짜 생성·먼저 해보기 녹화가 씀(진짜 생성 파이프라인은 스스로 함). @returns [{ n: 쪽 번호, path: 사이트 안 경로 }]
- */
-export async function copyPages(pid) {
-  const keys = await blobs.keys(pid).catch(() => []);
-  const out = [];
-  for (const k of keys) {
-    const m = /^assets\/slides\/slide-(\d+)\.(webp|png|jpg)$/.exec(k); if (!m) continue;
-    const to = `site/material/p-${m[1]}.${m[2]}`;
-    if (!keys.includes(to)) await blobs.put(pid, to, await blobs.get(pid, k));
-    out.push({ n: +m[1], path: to.slice(5) });
-  }
-  return out.sort((a, b) => a.n - b.n);
 }
 
 /** 판 기록(되돌리기)에 지금 판을 넣은 versions(최근 10판) */
