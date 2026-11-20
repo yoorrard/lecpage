@@ -446,7 +446,7 @@ export async function validateJob(body) {
 }
 
 /** 작업 지시(TASK.md). 교재 글은 넣지 않음(파일 이름·쪽 수만) */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, prepared = pages > 0, request = '', reference = '', target = '', principles = false }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, prepared = pages > 0, request = '', reference = '', target = '', principles = false, designs = [] }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   return `# 할 일: ${edit ? '강의 사이트 고치기' : '이 교재로 강의 사이트 만들기'}
@@ -461,7 +461,7 @@ ${request.trim() || (edit ? '(따로 없음)' : '(따로 없음 — 교재에 �
 ${target ? `\n고칠 곳: \`id="${target}"\`인 섹션만 고치고 다른 곳은 그대로 둬요.\n` : ''}${reference ? `\n## 분위기 참고 (참고만, 따를 의무 없음)\n${reference.trim()}\n` : ''}
 ## 읽을 것
 ${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${pages ? `- 쪽 그림: \`work/site/material/\` (${images ? `p-001 ~ p-${pad3(pages)}${images < pages ? `, 그중 ${images}장` : ''}` : '없음 — 원본과 보조 글자로 읽어요'}) — 디자인·도표·사진은 그림을 직접 보세요.\n` : ''}${prepared ? '- 보조 글자: `work/material.md` (쪽마다 글자·발표자 노트, 표·그림 속 글은 빠질 수 있음)\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}- 키트 설명서: \`kit.md\` — 꼭 먼저 읽기(자리 표시·CSS 변수·CSP·lecpage.json)
-${principles ? '- 디자인 원칙: `design-principles.md`\n' : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : '- 강사가 이미 정한 연수 정보: `work/lecpage.json` (값이 있으면 지키기)\n'}
+${principles ? '- 디자인 원칙: `design-principles.md`\n' : ''}${designs.length ? `- 레퍼런스(참고만, 따를 의무 없음·그대로 옮기지 않기): ${designs.map((d) => `\`designs/${d}/\``).join(', ')} — README.md에 디자인 판단이 있어요(그림 파일은 뺐어요)\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : '- 강사가 이미 정한 연수 정보: `work/lecpage.json` (값이 있으면 지키기)\n'}
 ## 쓸 것
 ${edit ? `요청한 곳만 고치고 나머지(글·디자인·자리 표시·그림)는 그대로 둬요. 파일 이름도 바꾸지 않아요.
 1. \`work/site/\`의 파일을 고쳐요(새 파일은 \`work/site/assets/\` 아래에).
@@ -484,6 +484,24 @@ ${CHECK_CMD}
 ## 마치기
 다 되면 무엇을 ${edit ? '고쳤는지' : '만들었는지'} 두세 줄로 적고 끝내요.
 `;
+}
+
+/** 레퍼런스 사이트(references/designs/*)의 글 파일만 작업 폴더로(그림은 빼서 가볍게). 복사한 레퍼런스 이름 목록 */
+function copyDesigns(dst) {
+  const src = join(REF, 'designs'), names = [];
+  let total = 0;
+  const walk = (from, to) => {
+    for (const e of readdirSync(from, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue;
+      if (e.isDirectory()) { walk(join(from, e.name), join(to, e.name)); continue; }
+      if (!e.isFile() || !TEXT_EXT.test(e.name)) continue;
+      const size = statSync(join(from, e.name)).size;
+      if ((total += size) > 4 * MB) return;
+      mkdirSync(to, { recursive: true }); copyFileSync(join(from, e.name), join(to, e.name));
+    }
+  };
+  try { for (const d of readdirSync(src, { withFileTypes: true })) if (d.isDirectory() && !d.name.startsWith('.')) { walk(join(src, d.name), join(dst, d.name)); names.push(d.name); } } catch { /* 레퍼런스 없음 */ }
+  return names;
 }
 
 function readSiteDir(dir, siteFileOk) {
@@ -609,7 +627,8 @@ async function runJob(S, job) {
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md'));
     const principles = existsSync(join(REF, 'design-principles.md'));
     if (principles) copyFileSync(join(REF, 'design-principles.md'), join(ws, 'design-principles.md'));
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, prepared, request: inp.request, reference: inp.reference, target: inp.target, principles }));
+    const designs = copyDesigns(join(ws, 'designs'));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, prepared, request: inp.request, reference: inp.reference, target: inp.target, principles, designs }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 연결 프로그램이 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;

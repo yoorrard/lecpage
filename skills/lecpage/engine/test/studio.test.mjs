@@ -281,7 +281,10 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   // 가짜가 받은 것
   const run = readLog().find((l) => l.id === 'claude' && l.argv);
   assert.deepEqual(run.argv, St.agentArgs('claude', { ws: run.cwd }));
-  assert.deepEqual(run.files.sort(), ['TASK.md', 'kit.md', 'material', 'work'], '훅·.mcp.json 없는 빈 폴더');
+  assert.deepEqual(run.files.filter((f) => f !== 'designs').sort(), ['TASK.md', 'kit.md', 'material', 'work'], '훅·.mcp.json 없는 빈 폴더');
+  const hasDesigns = existsSync(join(HERE, '..', '..', 'references', 'designs'));
+  assert.equal(run.files.includes('designs'), hasDesigns, '레퍼런스 사이트(글 파일만)를 작업 폴더에');
+  if (hasDesigns) assert.match(run.task, /레퍼런스\(참고만/);
   assert.ok(run.cwd.includes(St.TMP_PREFIX));
   assert.match(run.task, /material\/연수 교재\.pdf/);
   assert.match(run.task, /따뜻한 색으로/);
