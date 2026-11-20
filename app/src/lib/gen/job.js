@@ -358,7 +358,7 @@ function metaFrom(plan, css, prev) {
 export async function inspectSite(pid, site, meta, project = null) {
   const a = await assembleSite(pid, site, meta, { project });
   const issues = inspect({ ...a.material, ...(site || {}) }, meta);
-  for (const w of [...(a.errors || []), ...(a.warnings || [])]) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
+  for (const w of [...(a.errors || []), ...(a.warnings || [])]) if (!issues.some((x) => x.id === w.code)) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
   let rendered = [];
   if (!hook().noRender && a.files && a.files['index.html']) { try { rendered = await renderIssues(a.files); } catch { rendered = []; } }
   const seen = new Set(); const out = [];
