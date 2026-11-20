@@ -11,7 +11,7 @@ export const BASES = {
 };
 
 // 시험용 손잡이: 가짜 서버(같은 PC의 http://127.0.0.1·localhost)로만 바꿀 수 있음. 실제 키가 다른 곳으로 가지 않게
-const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
+const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}(\/[\w-]+)?$/;
 const hook = () => (typeof globalThis !== 'undefined' && globalThis.__lpGenTest) || null;
 export function baseFor(provider) {
   const b = hook()?.bases?.[provider];

@@ -85,18 +85,18 @@ export async function packMaterial(pid, project, { provider, model = '', level =
       const okPages = !f.pages || f.pages <= pdfPageLimit(provider, model);
       if (level === 0 && okSize && okPages) { parts.push({ kind: 'pdf', data, name: f.name }); bytes += size; row.sent = 'original'; continue; }
       row.sent = 'images'; needImages = true;
-      if (level === 0) notes.push(`${f.name}이 커서(${Math.round(size / 1e6)}MB${f.pages ? `·${f.pages}쪽` : ''}) 쪽 그림으로 보냈어요.`);
+      notes.push(level === 0 ? `${f.name}: 파일이 커서(${Math.round(size / 1e6)}MB${f.pages ? `·${f.pages}쪽` : ''}) 쪽 그림으로 보냈어요.` : `${f.name}: AI 회사가 한 번에 받는 크기를 넘어 쪽 그림으로 보냈어요.`);
       continue;
     }
     if (OFFICE_MIME[ext]) {
       if (L.office && level <= 1 && size <= L.pdfBytes && bytes + size <= L.totalBytes) { parts.push({ kind: 'doc', data, mime: OFFICE_MIME[ext], name: f.name }); bytes += size; row.sent = 'original'; continue; }
       if (coveredByPdf.has(f.name.replace(/\.\w+$/, '').toLowerCase())) { row.sent = 'images'; needImages = true; continue; } // 같은 교재의 PDF본을 함께 넣음
       row.sent = 'text'; textFor++;
-      notes.push(`${f.name}은 글자만 보냈어요. PowerPoint·한글에서 PDF로 저장해 함께 넣으면 그림까지 읽어 더 정확해요.`);
+      notes.push(`${f.name}: 글자만 보냈어요. PowerPoint·한글에서 PDF로 저장해 함께 넣으면 그림까지 읽어 더 정확해요.`);
       continue;
     }
     row.sent = 'text'; textFor++;
-    if (/^hw/.test(ext)) notes.push(`${f.name}은 글자만 보냈어요. 한글에서 PDF로 저장해 함께 넣으면 더 정확해요.`);
+    if (/^hw/.test(ext)) notes.push(`${f.name}: 글자만 보냈어요. 한글에서 PDF로 저장해 함께 넣으면 더 정확해요.`);
   }
   // 쪽 그림: 원본을 못 보낸 PDF(또는 PDF본이 있는 PPTX)가 있을 때, 한도 안에서 쪽을 골라
   const sentPages = [];

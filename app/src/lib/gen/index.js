@@ -95,7 +95,7 @@ export async function acceptChatAnswer(pid, input) {
   const text = typeof input === 'string' ? input : input && typeof input.text === 'function' ? await input.text() : '';
   if (!String(text).trim()) return { ok: false, problems: [problem('empty', '붙여 넣은 글이 비었어요.')] };
   const p = await projects.get(pid);
-  if (!p) return { ok: false, problems: [problem('no-project', '연수를 찾지 못했어요.')] };
+  if (!p) return { ok: false, problems: [problem('no-project', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.')] };
   const st = (await chatDb.get(pid).catch(() => null)) || { pid, mode: 'make', partial: '' };
   const fresh = /<!doctype\s+html|<html[\s>]/i.test(text);
 
@@ -106,7 +106,7 @@ export async function acceptChatAnswer(pid, input) {
     const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, ''));
     const site = { ...p.site, 'index.html': replaceSections(p.site['index.html'], secs).html };
     if (c.css && !/<[a-zA-Z]/.test(c.css)) site['assets/style.css'] = `${p.site['assets/style.css'] || ''}\n\n/* 수정 요청 */\n${c.cut ? trimCss(c.css) : c.css}`;
-    const meta = { ...(p.meta || {}), theme: { ...(p.meta?.theme || {}), ...themeFromCss(site['assets/style.css'] || '') } };
+    const meta = { ...(p.meta || {}), theme: { ...(p.meta?.theme || {}), ...themeFromCss(site['assets/style.css'] || ''), ...(c.css ? themeFromCss(c.css) : {}) } };
     const saved = await saveSite(pid, site, meta, { label: 'AI가 고친 판', way: 'chat' });
     await chatDb.del(pid).catch(() => { });
     return { ok: true, site, meta, problems: saved.issues };

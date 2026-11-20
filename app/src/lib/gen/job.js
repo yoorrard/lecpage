@@ -14,7 +14,7 @@ import { markBusy } from './busy.js';
 import { adapter } from './providers/index.js';
 import { AiError, BASES, baseFor } from './providers/common.js';
 import { discard as openaiDiscard } from './providers/openai.js';
-import { preparePageImages, packMaterial } from './material.js';
+import { preparePageImages, packMaterial, sourceFiles } from './material.js';
 import * as P from './prompts.js';
 import { extractJson, extractCss, extractHtml, extractSections, mergeSections, replaceSections, stitch, balance, trimCss, cssCut, skeleton, SECTIONS_MARK } from './parse.js';
 import { assemble, inspect, readMeta, themeFromCss } from './kit.js';
@@ -30,7 +30,13 @@ export const onJobChange = (f) => { subs.add(f); return () => subs.delete(f); };
 let bc = null;
 try { bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('lecpage-gen') : null; } catch { bc = null; }
 const remote = new Map(); // 다른 탭이 알려 온 기록(pid → rec)
-if (bc) bc.onmessage = async (e) => { const m = e.data; if (!m?.pid) return; const rec = await jobsDb.get(m.pid).catch(() => null); if (rec) remote.set(m.pid, rec); emit(m.pid); };
+if (bc) {
+  bc.onmessage = async (e) => {
+    const m = e.data; if (!m?.pid) return;
+    if (m.cmd === 'stop') { if (live.get(m.pid)?.ctrl) stopJob(m.pid); return; } // 다른 탭에서 [멈추기]를 누름 → 돌리는 이 탭이 멈춤
+    const rec = await jobsDb.get(m.pid).catch(() => null); if (rec) remote.set(m.pid, rec); emit(m.pid);
+  };
+}
 
 const hook = () => (typeof globalThis !== 'undefined' && globalThis.__lpGenTest) || {};
 const sleep = (ms, signal) => new Promise((res, rej) => {
@@ -128,6 +134,7 @@ function errorView(e, provider) {
   if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect', 'paste'] };
   if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: '키를 연결한 뒤 [이어서 만들기]를 눌러 주세요.', actions: ['connect', 'paste'] };
   if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
+  if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
   if (k === 'local') return { kind: k, title: '내 PC 연결은 아직 쓸 수 없어요.', body: 'API 키나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste'] };
   const x = explainError(e, provider);
@@ -148,7 +155,8 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
   let continues = step.continues || 0; let waits = 0; let resumes = 0; let swaps = 0;
   const persist = () => { Object.assign(step, { acc, piece, cont, token, continues }); saveSoon(rec); };
   for (;;) {
-    const continueFrom = !token && acc.length >= (hook().minContinue || 1200) ? acc : '';
+    // 받은 글에 이어서: 한도에 닿아 잘렸으면 늘, 끊겼으면 받은 글이 넉넉할 때만(짧으면 처음부터가 더 깔끔)
+    const continueFrom = !token && acc && (step.wantCont || acc.length >= (hook().minContinue || 1200)) ? acc : '';
     if (!token && !continueFrom) acc = '';
     if (!token) cont = !!continueFrom; // 이어 받는 중이면 그 답이 '이어서' 요청이었는지 그대로
     const key = ctx.key;
@@ -166,9 +174,9 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
       const grew = acc.length > before;
       if ((res.stop === 'max_tokens' && continues < 3) || (res.stop !== 'max_tokens' && isCut(acc) && grew && !step.cutTry)) {
         if (res.stop !== 'max_tokens') step.cutTry = true;
-        continues++; persist(); await save(rec, { quiet: true }); continue;
+        step.wantCont = true; continues++; persist(); await save(rec, { quiet: true }); continue;
       }
-      step.cutTry = false;
+      step.cutTry = false; step.wantCont = false;
       Object.assign(step, { acc: '', piece: '', cont: false, token: null, continues: 0 });
       return acc;
     } catch (e) {
@@ -201,7 +209,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
       // Gemini 무료 키: 이 모델을 못 쓰거나 오늘 한도를 다 썼으면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
       if (rec.provider === 'gemini' && ['no-access', 'model', 'quota-day'].includes(e.kind) && swaps < 2) {
         const next = await nextModel(ctx).catch(() => null);
-        if (next) { swaps++; rec.notes = [...(rec.notes || []), `${rec.model}을 쓸 수 없어 ${next}로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
+        if (next) { swaps++; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
       }
       throw e;
     }
@@ -319,7 +327,7 @@ async function runSections(ctx, step) {
   }
   if (!got.size) throw formatError();
   step.output = { sections: specs.filter((s) => got.has(s.id)).map((s) => ({ id: s.id, html: got.get(s.id) })), css: extra.trim(), missing: specs.filter((s) => !got.has(s.id)).map((s) => s.id) };
-  if (step.output.missing.length) rec2notes(ctx.rec, [`섹션 ${step.output.missing.join(', ')}은 AI가 만들지 않아 뺐어요.`]);
+  if (step.output.missing.length) rec2notes(ctx.rec, [`AI가 만들지 않은 섹션을 뺐어요: ${step.output.missing.join(', ')}`]);
 }
 
 /** 지금까지의 단계 결과로 사이트(조립 전 AI 파일)와 연수 정보 */
@@ -408,7 +416,9 @@ async function runEdit(ctx, step) {
   const css = c.css && !/<[a-zA-Z]/.test(c.css) ? `${site['assets/style.css'] || ''}\n\n/* 수정 요청 */\n${cssCut(c.css) ? trimCss(c.css) : c.css}` : site['assets/style.css'];
   rec.site = { ...site, 'index.html': html, 'assets/style.css': css };
   const prev = rec.meta || ctx.project.meta || {};
-  rec.meta = metaPatch && typeof metaPatch === 'object' ? readMeta({ ...prev, ...metaPatch, theme: { ...(prev.theme || {}), ...(metaPatch.theme || {}), ...themeFromCss(css) } }, { prev }).meta : { ...prev, theme: { ...(prev.theme || {}), ...themeFromCss(css) } };
+  // 색: 덧붙인 규칙이 앞 규칙을 덮으므로(뒤가 이김) 새 CSS의 값을 먼저
+  const theme = { ...(prev.theme || {}), ...themeFromCss(css), ...(c.css ? themeFromCss(c.css) : {}) };
+  rec.meta = metaPatch && typeof metaPatch === 'object' ? readMeta({ ...prev, ...metaPatch, theme: { ...theme, ...(metaPatch.theme || {}) } }, { prev }).meta : { ...prev, theme };
   step.output = { changed: secs.map((s) => s.id), css: !!c.css, meta: !!metaPatch };
 }
 
@@ -427,7 +437,7 @@ async function finish(ctx) {
     inspect: { at, issues },
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
   }));
-  if (!saved) throw new AiError('other', '연수를 찾지 못했어요.');
+  if (!saved) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
   notifySaved(rec.pid, saved.updatedAt);
 }
 export function notifySaved(pid, at) {
@@ -445,7 +455,7 @@ async function drive(pid) {
   try {
     rec.status = 'running'; rec.error = null; await save(rec);
     const project = await projects.get(pid);
-    if (!project) throw new AiError('other', '연수를 찾지 못했어요.');
+    if (!project) throw new AiError('other', '연수를 찾지 못했어요. 처음 화면에서 연수를 다시 열어 주세요.');
     ctx.project = project;
     if (rec.way === 'local') throw new AiError('local', 'local');
     const { key } = await loadKey(rec.provider);
@@ -454,6 +464,8 @@ async function drive(pid) {
     if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
     // 학교망이 AI 회사를 막았으면 오래 기다리지 않게(처음 시작할 때만, 시험 주소면 건너뜀)
     if (!rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
+    // 교재도 요청 글도 없으면 AI가 지어낼 것밖에 없음 → 교재를 먼저
+    if (rec.kind === 'make' && !sourceFiles(project).length && !project.material && !String(rec.opts.request || '').trim()) throw new AiError('no-material', 'no material');
     ctx.images = await preparePageImages(pid, project, { signal });
     await repack(ctx);
     for (;;) {
@@ -521,6 +533,11 @@ export async function startJob(pid, kind, opts = {}) {
   if (live.get(pid)?.ctrl) return { jobId: live.get(pid).rec.id, already: true };
   if (await heldElsewhere(pid)) return { jobId: (await jobsDb.get(pid).catch(() => null))?.id || '', elsewhere: true };
   let provider = opts.provider; let model = opts.model || '';
+  // 고치기·수정 요청은 따로 고르지 않았으면 이 사이트를 만든 AI·모델로(키가 있을 때)
+  if (!provider && kind !== 'make' && opts.way !== 'local') {
+    const g = (await projects.get(pid).catch(() => null))?.gen;
+    if (g?.provider && g.way !== 'chat' && (await loadKey(g.provider)).key) { provider = g.provider; model = model || g.model || ''; }
+  }
   if (!provider && opts.way !== 'local') {
     const ai = await getActiveAI();
     if (!ai) {
@@ -558,7 +575,8 @@ export async function resumeJob(pid, change = {}) {
 
 /** 멈추기(받는 중인 글은 기록에 남아 이어서 만들기에 씀) */
 export function stopJob(pid) {
-  const L = live.get(pid); if (!L?.ctrl) return false;
+  const L = live.get(pid);
+  if (!L?.ctrl) { try { bc?.postMessage({ pid, cmd: 'stop' }); } catch { /* 알림만 못 함 */ } return false; }
   L.stopReason = 'user'; L.ctrl.abort(); autoResume.delete(pid);
   return true;
 }
