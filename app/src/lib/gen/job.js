@@ -183,7 +183,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
       });
       // 바꾼 모델로 답을 받음 → 이 키는 무료 키(안 된 모델은 '유료 키 필요'로): 다음 만들기는 되는 모델로 바로 시작하고 고르는 칸도 맞게
-      if (ctx.swapped) { const why = ctx.swapped; ctx.swapped = ''; ctx.swapFrom = ''; if (why !== 'model' && why !== 'quota-day') rememberWorkingModel(rec.provider, rec.model, [...(ctx.tried || [])].filter((m) => m !== rec.model)).catch(() => { }); }
+      if (ctx.swapped) { const why = ctx.swapped; ctx.swapped = ''; ctx.swapFrom = ''; if (why !== 'model' && why !== 'quota-day' && why !== 'busy') rememberWorkingModel(rec.provider, rec.model, [...(ctx.tried || [])].filter((m) => m !== rec.model)).catch(() => { }); }
       // 보이는 글 없이 한도에 닿음(생각하는 데 한도를 다 씀): '이어서'할 글이 없어 같은 요청을 되풀이하게 되고, 그러면 비용만 듦
       // (예전: 같은 요청 4번 + 형식 오류로 단계 다시 4번 = 8번). → 한도를 두 배로 한 번만 다시, 그래도 비면 멈추고 다른 모델·AI 창을 권함
       if (res.stop === 'max_tokens' && !String(res.text || '').trim()) {
@@ -220,6 +220,11 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
       if (RETRY.includes(e.kind)) {
         if (hidden()) { persist(); await waitVisible(ctx); continue; } // 가려진 탭에서 끊김: 횟수를 쓰지 않음
         step.attempts++; persist();
+        // 실제 응답(2026-11-20): Gemini는 모델 몇 개가 몇 분씩 '사용량 폭주(503)'일 때가 있음 → 두 번 붐비면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
+        if (e.kind === 'busy' && rec.provider === 'gemini' && step.attempts >= 2 && swaps < 2) {
+          const next = await nextModel(ctx).catch(() => null);
+          if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = 'busy'; rec.notes = [...(rec.notes || []), `${rec.model} 모델이 붐벼서 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
+        }
         if (step.attempts > (hook().maxAttempts || 4)) throw e;
         await pause(ctx, [2000, 6000, 15000, 30000][Math.min(3, step.attempts - 1)] * (hook().backoff ?? 1), 'retry');
         continue;
