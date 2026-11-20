@@ -179,9 +179,17 @@ export async function checkCmd(h) {
     } catch (e) { browserNote = `화면 검수를 건너뛰었어요: ${String(e.message).split('\n')[0].slice(0, 120)}`; }
     finally { await browser?.close(); server.close(); }
   } else browserNote = args['no-shots'] ? '' : '화면 검수·그림을 건너뛰었어요(Playwright 없음: npm i -g playwright && npx playwright install chromium).';
+  // 문구(살펴볼 곳만): 번역투·빈 구호·긴 버튼 이름. 교재에서 그대로 옮긴 글(material.md에 있는 글)은 세지 않음
+  const copy = [];
+  try {
+    const { lintHtml } = await import(pathToFileURL(join(HERE, 'copy-lint.mjs')).href);
+    let mat = ''; try { mat = readFileSync(join(work, 'material.md'), 'utf8'); } catch { /* 없음 */ }
+    const src = mat ? { material: { pages: [{ paragraphs: [{ text: mat }] }] } } : {};
+    for (const p of r.report.pages) if (typeof site[p] === 'string') for (const f of lintHtml(site[p], p, src).slice(0, 12)) copy.push({ id: 'copy', level: 'warn', where: { file: 'site/' + p, selector: '', section: '' }, message_ko: `문구 "${String(f.hit).slice(0, 30)}": ${f.why}`, fix_hint_ko: `${f.fix} (references/copywriting.md)` });
+  } catch { /* 문구 점검이 없으면 건너뜀 */ }
   // 같은 문제는 폭마다 한 번만
   const seen = new Set();
-  const all = [...issues, ...rendered].filter((x) => { const k = `${x.id}|${x.where.file}|${x.where.selector}|${x.message_ko.replace(/\d+(\.\d+)?/g, '#')}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  const all = [...issues, ...rendered, ...copy].filter((x) => { const k = `${x.id}|${x.where.file}|${x.where.selector}|${x.message_ko.replace(/\d+(\.\d+)?/g, '#')}`; if (seen.has(k)) return false; seen.add(k); return true; });
   const errors = all.filter((x) => x.level === 'error');
   writeFileSync(join(checkDir, 'report.json'), JSON.stringify({ summary: K.issueSummary(all), issues: all, warnings: r.warnings, report: r.report, collected: r.collected }, null, 2) + '\n');
   writeFileSync(join(checkDir, 'issues.md'), `# 검수 결과 (${K.issueSummary(all)})\n\n${K.issuesForAi(all, { max: 80 }) || '고칠 곳이 없어요.'}\n\n## 조립 알림\n${r.warnings.map((w) => `- ${w.message_ko}`).join('\n') || '- 없음'}\n`);

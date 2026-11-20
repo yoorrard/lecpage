@@ -1,4 +1,4 @@
-// 구성 신호: 교재에서 '무슨 칸이 맞는지' 알려 주는 것들(references/modules.md §1의 신호 표).
+// 구성 신호: 교재에서 '무슨 칸이 맞는지' 알려 주는 것들(예전 흐름의 구성 신호 표).
 // 교재를 묶음(unit)으로 나누고(문서는 절, 슬라이드는 쪽), 묶음마다 쓰임(kind)을 정합니다. detect()가 끝에 부르고,
 // 초안(compose.js)과 구성 결정(decide/structure.js)이 같은 결과를 씁니다. 지어내지 않고 교재의 글자만 옮깁니다.
 import { normLine, truncate, textKey } from './util.js';
