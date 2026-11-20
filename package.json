@@ -6,6 +6,16 @@
   "license": "Apache-2.0 AND MIT-0",
   "type": "module",
   "engines": { "node": ">=22" },
+  "bin": { "lecpage": "skills/lecpage/scripts/lecpage.mjs" },
+  "files": [
+    "skills/lecpage/",
+    "!skills/lecpage/engine/test/",
+    "!skills/lecpage/evals/",
+    "!**/__pycache__/",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "TRADEMARKS.md"
+  ],
   "scripts": {
     "test": "node --test \"skills/lecpage/engine/test/*.test.mjs\" \"scripts/ai-catalog/test/*.test.mjs\"",
     "ai-catalog": "node scripts/ai-catalog/refresh.mjs",
