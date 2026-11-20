@@ -51,6 +51,32 @@ export function deferFontLinks(files) {
   return files;
 }
 
+/** <link …> 태그(속성 차례·따옴표 아무렇게나) */
+const LINK_TAG = /<link\b[^>]*>\n?/gi;
+/** @import url(…) / @import "…" (뒤의 미디어 조건까지) */
+const IMPORT_RE = /@import\s+(?:url\(\s*(['"]?)[^'")]+\1\s*\)|(['"])[^'"]+\2)[^;]*;\n?/gi;
+const FONT_ORIGIN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.jsdelivr\.net|hangeul\.pstatic\.net)(\/|$)/;
+const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi;
+/** CSS 글: CSS 파일은 그대로, 쪽은 <style> 안만(본문의 코드 예시는 건드리지 않음) */
+const styleText = (p, v) => (p.endsWith('.html') ? [...v.matchAll(STYLE_RE)].map((m) => m[2]).join('\n') : v);
+/** 태그 안 속성 값(따옴표 있든 없든) */
+function attrOf(tag, name) {
+  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? '').replace(/&amp;/g, '&') : '';
+}
+/** 글꼴 스타일시트 <link>면 그 주소, 아니면 '' */
+function fontLinkUrl(tag) {
+  if (!/\brel\s*=\s*["']?[^"'>]*\bstylesheet\b/i.test(tag)) return '';
+  const u = attrOf(tag, 'href').replace(/^\/\//, 'https://');
+  return FONT_HOSTS.test(u) ? u : '';
+}
+/** 글꼴 CDN을 가리키는 @import면 그 주소, 아니면 '' */
+function importUrl(rule) {
+  const m = /@import\s+(?:url\(\s*(['"]?)([^'")]+)\1\s*\)|(['"])([^'"]+)\3)/i.exec(rule);
+  const u = m ? (m[2] || m[4] || '').replace(/&amp;/g, '&').replace(/^\/\//, 'https://') : '';
+  return FONT_HOSTS.test(u) ? u : '';
+}
+
 /** 사이트 CSS·쪽이 쓰는 굵기(font-weight·--…weight 변수·font 줄임 속성). 400·700(보통·굵게)은 늘 */
 export function usedWeights(files) {
   const set = new Set([400, 700]);
@@ -145,8 +171,11 @@ export async function bundleFonts(files, o = {}) {
   const blank = () => ({ ok: false, external: 0, bundled: 0, bytes: 0, subset: 0, saved: 0, hangul: '', preload: [], skipped: [] });
   if (typeof get !== 'function') { const report = blank(); report.skipped.push('fetch 없음'); return { files: { ...files }, report }; }
   const htmls = Object.keys(files).filter((p) => p.endsWith('.html') && typeof files[p] === 'string');
-  const linkRe = /<link rel="stylesheet" href="(https:\/\/[^"]+)" crossorigin(?: media="print" data-lp-font)?>\n?/g;
-  const sheets = [...new Set(htmls.flatMap((p) => [...files[p].matchAll(linkRe)].map((m) => m[1].replace(/&amp;/g, '&')).filter((u) => FONT_HOSTS.test(u))))];
+  // 글꼴 스타일시트: 쪽의 <link>(엔진이 쓴 꼴도, AI가 쓴 꼴 — 속성 차례·따옴표·crossorigin 아무렇게나 — 도)와 CSS의 @import(사이트 CSS 파일·쪽 안 <style>)
+  const sheets = [...new Set([
+    ...htmls.flatMap((p) => [...files[p].matchAll(LINK_TAG)].map((m) => fontLinkUrl(m[0])).filter(Boolean)),
+    ...Object.entries(files).flatMap(([p, v]) => (typeof v === 'string' && /\.(css|html)$/.test(p) && p !== 'assets/theme.css' ? [...styleText(p, v).matchAll(IMPORT_RE)].map((m) => importUrl(m[0])).filter(Boolean) : [])),
+  ])];
   const theme = typeof files['assets/theme.css'] === 'string' ? files['assets/theme.css'] : '';
   const external = sheets.length + faces(theme).filter((f) => f.urls.some((u) => FONT_HOSTS.test(u))).length;
   if (!external) return { files: { ...files }, report: { ...blank(), ok: true } };
@@ -260,16 +289,24 @@ export async function bundleFonts(files, o = {}) {
     report.preload = pre;
     // 담은 fonts.css는 바깥 글꼴처럼 media="print"로 미루지 않고 막는 스타일시트로 둠: 같은 사이트의 작은 파일이라 실제 첫 그림은 같고,
     // 첫 배치 때 @font-face를 알아야 미리 받은 글꼴로 바로 그림(미루면 기본 글꼴로 먼저 그렸다가 바뀌며 깜빡이고, 글꼴 파일 요청도 늦어짐). Lighthouse 모의 측정만 '막는 자원'으로 셈
+    // CSS의 @import(글꼴 CDN)는 빼고, 그 CSS를 쓰는 쪽은 fonts.css를 <link>로 받음
+    let imported = false;
+    for (const [p, v] of Object.entries(out)) {
+      if (typeof v !== 'string' || !/\.(css|html)$/.test(p) || p === 'assets/theme.css') continue;
+      const drop = (css) => css.replace(IMPORT_RE, (all) => (importUrl(all) ? '' : all));
+      const next = p.endsWith('.html') ? v.replace(STYLE_RE, (m, a, css, b) => a + drop(css) + b) : drop(v);
+      if (next !== v) { out[p] = next; imported = true; }
+    }
     for (const p of htmls) {
       let h = out[p], first = true;
       const up = p.includes('/') ? '../' : '';
-      h = h.replace(linkRe, (all, u) => {
-        if (!FONT_HOSTS.test(u.replace(/&amp;/g, '&'))) return all;
-        if (!first) return '';
-        first = false;
-        return pre.map((n) => `<link rel="preload" href="${up}${n}" as="font" type="font/${n.split('.').pop()}" crossorigin>\n`).join('') + `<link rel="stylesheet" href="${up}assets/fonts.css">\n`;
+      const ours = pre.map((n) => `<link rel="preload" href="${up}${n}" as="font" type="font/${n.split('.').pop()}" crossorigin>\n`).join('') + `<link rel="stylesheet" href="${up}assets/fonts.css">\n`;
+      h = h.replace(LINK_TAG, (all) => {
+        if (fontLinkUrl(all)) { if (!first) return ''; first = false; return ours; }
+        // 글꼴 서버에 미리 잇기·미리 받기는 이제 필요 없음(외부 요청 0)
+        return /\brel\s*=\s*["']?(?:preconnect|dns-prefetch|preload)\b/i.test(all) && FONT_ORIGIN.test(attrOf(all, 'href')) ? '' : all;
       });
-      h = h.replace(/<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com" crossorigin>\n?/g, '');
+      if (first && imported && /<\/head>/i.test(h) && !h.includes(`${up}assets/fonts.css`)) h = h.replace(/<\/head>/i, () => ours + '</head>');
       out[p] = h;
     }
     // 글꼴 파일 이름이 내용 해시라 1년 캐시(Cloudflare·Netlify는 _headers, Vercel은 앱이 _headers를 vercel.json으로 옮김)

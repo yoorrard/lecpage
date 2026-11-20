@@ -71,16 +71,16 @@ test('새 흐름 app: work → .lecpage v2(사이트·쪽 제목·원본, 참여
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('새 흐름 publish: 연습 모드 알림 → --live면 중계 → lecpage.teacher.json에 주소·코드 → 다시 조립 → 올림, 암호·--features는 멈춤', () => {
+test('새 흐름 publish: 연습 모드 알림 → --live면 중계 → lecpage.teacher.json에 주소·코드 → 다시 조립 → 올림, --features는 멈춤(암호는 kit-fixes 시험)', () => {
   const { dir, run } = setup();
   try {
     const dry = run(['publish', 'work', '--dry-run']);
     assert.equal(dry.code, 0, dry.out);
     assert.match(dry.out, /연습 모드라 배포한 사이트에서는 기록이 모이지 않아요/);
     assert.match(dry.out, /--assets work\/dist/);
-    assert.equal(run(['publish', 'work', '--password', '봄비연필운동장']).code, 1);
+    assert.match(run(['publish', 'work', '--dry-run', '--password', '봄비연필운동장']).out, /암호로 잠그기/);
     assert.equal(run(['publish', 'work', '--features', 'qa,poll']).code, 1);
-    const r = run(['publish', 'work', '--live', '--name', 'lec-v2', '--no-verify', '--no-handouts']);
+    const r = run(['publish', 'work', '--live', '--name', 'lec-v2', '--no-verify', '--no-handouts', '--no-bundle-fonts']);
     assert.equal(r.code, 0, r.out);
     const t = JSON.parse(readFileSync(join(dir, 'work/lecpage.teacher.json'), 'utf8'));
     assert.equal(t.live.provider, 'http');

@@ -4,8 +4,10 @@
 import { esc } from './render/html.js';
 
 export const PROTECT_ITERATIONS = 600000;
-/** 잠그는 페이지(접속 진단·개인정보 안내는 누구나 볼 수 있게 둠) */
+/** 잠그는 페이지(엔진 사이트). 키트 사이트(AI가 쓴 쪽이 여럿일 수 있음)는 맨 위 폴더의 모든 쪽을 잠그고 PUBLIC_PAGES만 둠 */
 export const PROTECTED_PAGES = ['index.html', 'console.html', 'screen.html', 'poster.html'];
+/** 누구나 볼 수 있게 두는 쪽: 접속 확인·개인정보 안내 */
+export const PUBLIC_PAGES = ['check.html', 'privacy.html'];
 
 /**
  * ③ 잠그지 않는 쪽(접속 확인·개인정보 안내)의 사이트 정보에서 참여 기능 서버 주소·연수 코드·Supabase 키를 뺌.
@@ -26,7 +28,8 @@ export function publicSiteData(d) {
   return { ...d, key: '', live: { provider, features: d.live.features, health } };
 }
 const LP_DATA = /(<script type="application\/json" id="lp-data">)([\s\S]*?)(<\/script>)/;
-const ENC_FILE = /^(?:assets\/)?(?:slides|media)\/[^"'?#]+$/;
+// 잠그는 자료: 엔진의 교재 그림·원본 자료(slides·media), 키트 사이트의 교재 쪽 그림(material/)·자료실 파일(files/)
+const ENC_FILE = /^(?:(?:assets\/)?(?:slides|media)|material|files)\/[^"'?#]+$/;
 const te = new TextEncoder();
 
 function toBytes(v) { return typeof v === 'string' ? te.encode(v) : v instanceof Uint8Array ? v : new Uint8Array(v); }
@@ -107,20 +110,33 @@ export async function protectSite(files, password, opts = {}) {
 
   const out = {};
   const encrypted = new Set();
+  // 키트 사이트(조립 결과: <html data-lpk>)는 맨 위 폴더의 모든 쪽을 잠금(접속 확인·개인정보 안내만 둠)
+  const kit = typeof files['index.html'] === 'string' && /<html\b[^>]*\sdata-lpk\b/i.test(files['index.html']);
+  const locked = kit ? Object.keys(files).filter((p) => /^[^/]+\.html$/i.test(p) && !PUBLIC_PAGES.includes(p) && typeof files[p] === 'string') : PROTECTED_PAGES;
+  // CSS가 url()로 부르는 자료는 잠그지 않음(풀린 쪽에서 unlock.js가 채우는 것은 src·href뿐이라 잠그면 그림이 깨짐)
+  const cssRefs = new Set();
+  for (const [p, v] of Object.entries(files)) {
+    if (typeof v !== 'string' || !/\.(css|html)$/i.test(p)) continue;
+    for (const m of v.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g)) cssRefs.add(m[2].replace(/^\.\//, '').replace(/^(?:\.\.\/)+/, ''));
+  }
   for (const [p, data] of Object.entries(files)) {
-    if (ENC_FILE.test(p) && !/\.(css|js)$/i.test(p)) { out[p + '.enc'] = await enc(toBytes(data)); encrypted.add(p); }
-    else if (/\.html$/i.test(p) && !PROTECTED_PAGES.includes(p) && typeof data === 'string' && LP_DATA.test(data)) {
+    if (ENC_FILE.test(p) && !/\.(css|js|html)$/i.test(p) && !cssRefs.has(p)) { out[p + '.enc'] = await enc(toBytes(data)); encrypted.add(p); }
+    else if (/\.html$/i.test(p) && !locked.includes(p) && typeof data === 'string' && LP_DATA.test(data)) {
       out[p] = data.replace(LP_DATA, (m, a, json, b) => { let d; try { d = JSON.parse(json); } catch { return m; } return a + JSON.stringify(publicSiteData(d)).replace(/</g, '\\u003c') + b; });
     } else out[p] = data;
   }
   const meta = { v: 1, salt: b64(salt), iter: iterations };
-  for (const page of PROTECTED_PAGES) {
+  const encOf = (u) => { const q = String(u).replace(/^\.\//, ''); return encrypted.has(q) ? q : ''; };
+  for (const page of locked) {
     if (typeof files[page] !== 'string') continue;
     let html = files[page];
-    // 잠근 파일을 가리키는 주소는 풀린 뒤 unlock.js가 채움
-    html = html.replace(/\s(src|href)="([^"]+)"/g, (m, attr, p) => (encrypted.has(p)
-      ? (attr === 'src' ? ` data-lp-enc-src="${p}.enc" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="` : ` data-lp-enc-href="${p}.enc" href="#"`)
-      : m));
+    // 잠근 파일을 가리키는 주소는 풀린 뒤 unlock.js가 채움(따옴표 " ' 모두, ./ 앞붙임도)
+    html = html.replace(/\s(src|href)=(["'])([^"']+)\2/g, (m, attr, qt, u) => {
+      const p = encOf(u); if (!p) return m;
+      return attr === 'src' ? ` data-lp-enc-src="${p}.enc" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="` : ` data-lp-enc-href="${p}.enc" href="#"`;
+    });
+    // srcset에 잠근 그림이 있으면 srcset은 빼고 src(풀린 뒤 채움)만
+    html = html.replace(/\ssrcset=(["'])([^"']*)\1/g, (m, qt, v) => (v.split(',').some((x) => encOf(x.trim().split(/\s+/)[0])) ? '' : m));
     // 풀린 페이지 안의 QR·공유 주소가 '#k=암호'를 붙여 바로 열리게(풀린 사람만 보는 곳이라 안전)
     const unlockMeta = `<meta name="lp-unlock" content="k=${encodeURIComponent(pw)}">`;
     html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + unlockMeta) : unlockMeta + html;

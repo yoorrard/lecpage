@@ -5,7 +5,7 @@
 .lpk{
   --_ink:var(--lp-ink,var(--lpk-ink,currentColor));
   --_ac:var(--lp-accent,var(--lpk-accent,var(--_ink)));
-  --_on:var(--lpk-on-accent,Canvas);
+  --_on:var(--lp-on-accent,var(--lpk-on-accent,Canvas));
   --_act:color-mix(in oklab,var(--_ac) 62%,var(--_ink));
   --_surf:var(--lp-paper,var(--lpk-surf,transparent));
   --_paper:var(--lp-paper,var(--lpk-paper,Canvas));
@@ -22,6 +22,14 @@
   word-break:keep-all;
   overflow-wrap:anywhere;
   -webkit-text-size-adjust:100%;
+}
+/* 강조색 위 글자(주 단추·누른 공감·고른 별점): 강조색의 밝기(WCAG 상대 휘도)로 흰색·검정을 고름 → 어두운 모드에서 --lp-accent를 밝게 바꿔도 4.5:1 이상.
+   --lp-on-accent를 주면 그 색. 상대 색 문법을 모르는 옛 브라우저는 조립이 연수 정보 theme로 정한 --lpk-on-accent */
+@supports (color:color(from red srgb-linear r g b)){
+  .lpk{
+    --_on-auto:color(from var(--lp-accent,var(--lpk-accent)) srgb-linear clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1));
+    --_on:var(--lp-on-accent,var(--_on-auto,var(--lpk-on-accent,Canvas)));
+  }
 }
 .lpk *,.lpk *::before,.lpk *::after{box-sizing:border-box}
 .lpk :where(p,h2,h3,h4,ul,ol,dl,figure,fieldset,legend,form){margin:0;padding:0}
@@ -146,6 +154,12 @@
 .lpk .lp-sv-scale label span{display:grid;gap:2px;line-height:1.25}
 .lpk .lp-sv-scale label b{font-size:1.05rem;font-variant-numeric:tabular-nums}
 .lpk .lp-sv-scale label i{font-style:normal;font-size:max(12px,.75rem)}
+/* 좁은 휴대폰(360px 이하): 다섯 칸에 '보통이에요'가 '보통이에/요'로 쪼개지지 않게 가운데 셋의 이름은 숨기고(화면 낭독기에는 그대로) 양 끝(전혀 아니에요·매우 그래요)만 */
+@media (max-width:360px){
+  .lpk .lp-sv-scale label{min-height:56px}
+  .lpk .lp-sv-scale label:not(:first-child):not(:last-child) i{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .lpk .lp-sv-scale label i{font-size:12px;line-height:1.2}
+}
 
 /* 교재 넘기기 */
 .lpk .lp-deck{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
@@ -161,13 +175,21 @@
 .lpk .lp-deck-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .lpk .lp-deck-count{font-variant-numeric:tabular-nums;font-size:.95rem}
 .lpk .lp-grow{flex:1}
-.lpk .lp-follow{display:inline-flex;align-items:center;gap:6px;font-size:.88rem}
+.lpk .lp-follow{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 6px;font-size:.88rem;cursor:pointer}
 .lpk .lp-deck-thumbs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
 .lpk .lp-deck-thumbs button{flex:none;width:112px;padding:0;border:2px solid transparent;border-radius:6px;background:none;cursor:pointer;color:inherit;overflow:hidden}
 .lpk .lp-deck-thumbs button[aria-current="true"]{border-color:var(--_ac)}
 .lpk .lp-deck-thumbs img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--_paper)}
 .lpk .lp-thumb-t{display:grid;gap:2px;padding:6px;font-size:max(12px,.75rem);text-align:start}
 .lpk .lp-thumb-t i{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 휴대폰: '전체 보기'·'전체 화면'은 그림 단추(이름은 화면 낭독기에 그대로)로 줄여 쪽 넘기기와 한 줄에, '강사 따라 넘기기'는 다음 줄에 누를 곳 크기로.
+   (칸 폭 질의(container)는 쓰지 않음: 사이트가 키트를 내용 폭 상자(flex 등)에 넣으면 폭이 0으로 줄어서) */
+@media (max-width:480px){
+  .lpk .lp-deck-bar{gap:2px}
+  .lpk .lp-deck-bar .lp-btn-sm{min-width:44px;min-height:44px;padding:0}
+  .lpk .lp-deck-bar .lp-btn-sm span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .lpk .lp-follow{flex-basis:100%}
+}
 .lpk .lp-deck:fullscreen{background:#111;color:#fff;padding:16px;align-content:center}
 .lpk .lp-deck:fullscreen .lp-slide img{max-height:calc(100vh - 140px);border:0;background:#111}
 dialog.lpk.lp-overview{width:min(1100px,calc(100% - 24px));max-height:calc(100% - 24px);padding:0;border:0;border-radius:var(--_r);background:var(--_paper);color:var(--_text);box-shadow:0 24px 64px rgba(0,0,0,.35)}
