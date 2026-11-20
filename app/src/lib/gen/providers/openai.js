@@ -75,10 +75,11 @@ export async function stream({ key, model, system, parts, maxTokens = 64000, sig
     const err = wd.wrap(e, 'openai');
     if (err instanceof AiError && id && seq >= 0 && !err.final) Object.assign(err, { resumeToken: { id, seq }, partial: text });
     else if (err instanceof AiError) err.partial = text;
+    if (id && err && typeof err === 'object') err.responseId = id; // 지울 답(실패·거절이면 job.js가 OpenAI 쪽 저장에서 지움, gen/oa-trash.js)
     throw err;
   } finally { wd.done(); }
   if (!stop) throw Object.assign(new AiError('network', 'stream ended early', { provider: 'openai' }), id ? { resumeToken: { id, seq }, partial: text } : { partial: text });
-  if (!text.trim() && refusal) throw new AiError('refusal', refusal.slice(0, 200), { provider: 'openai' });
+  if (!text.trim() && refusal) throw Object.assign(new AiError('refusal', refusal.slice(0, 200), { provider: 'openai' }), { responseId: id });
   discard(key, id); // 다 받았으면 OpenAI 쪽 저장에서 바로 지움(처리방침)
   return { text, stop, usage, resumeToken: { id, seq } };
 }

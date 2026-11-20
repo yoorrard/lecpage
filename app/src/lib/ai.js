@@ -172,8 +172,7 @@ export async function readJson(r, provider) {
 /** 실패한 응답(r.ok가 아님) → AiError를 던짐(gen/providers도 씀) */
 export async function fail(r, provider) {
   if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider });
-  const j0 = await r.json().catch(() => ({}));
-  const j = (Array.isArray(j0) ? j0[0] : j0) || {}; // Gemini는 오류를 배열([{ error }])로 주기도 함(실제 402, 2026-11-20)
+  const j = await r.json().catch(() => ({}));
   const e = j.error || j;
   const msg = (typeof e === 'string' ? e : e.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
   // 오류 코드는 회사마다 자리가 다름: Gemini status, OpenAI code·type(크레딧 없음은 code credit_balance_exhausted, type insufficient_quota), Claude type·details.error_code
@@ -311,97 +310,24 @@ export async function models(provider, key, { freeTier } = {}) {
   return list;
 }
 
-// ── 만들 수 있는지 확인(아주 작은 생성 한 번) ──
-// 모델 목록은 결제·한도와 상관없이 열려서, 선불 크레딧이 0인 키(실제 Gemini 시험 2026-11-20: 모든 생성이 402)도 '연결했어요'가 뜨고
-// 첫 생성에서야 막혔음. 그래서 고른 모델로 글자 몇 개만 받는 요청을 보내 결제·권한·한도·지역 오류를 연결할 때 알려 줌.
-// 입력은 한 글자, 출력은 16토큰까지(생각 토큰 포함 한도)라 비용은 1원도 안 됨. OpenAI·Gemini는 저장하지 않게(store:false).
-// '연결했어요'는 어느 모델이든 실제로 답(200)을 받았을 때만. 실제 무료 키 시험(2026-11-20): 추천 첫 모델(유료 전용)은 429 limit 0,
-// 몇 모델은 몇 분 동안 503(사용량 폭주), 다른 모델은 200 → 모델 탓인 오류·붐빔은 다음 모델로 넘어가 되는 모델을 고름
-const PROBE_MS = 20000;
-/** Gemini 무료 키가 유료 전용 모델을 부를 때 오는 오류들(job.js SWAP과 같음) → 이 키로 못 쓰는 모델로 기억하고 무료 모델로 */
-const PROBE_SWAP = ['no-access', 'model', 'quota-day', 'billing', 'forbidden', 'region'];
-const PROBE_ACCOUNT = ['billing', 'forbidden', 'region'];
-/** 그 모델만 지금 붐빔·잠깐 한도(키는 맞음): 그 모델은 건너뛰고 다음 모델로(기억하지 않음) */
-const PROBE_BUSY = ['busy', 'quota', 'stall'];
-const PROBE_TRIES = 4;
-function probeRequest(provider, key, model) {
-  const json = { 'content-type': 'application/json' };
-  if (provider === 'anthropic') return { url: 'https://api.anthropic.com/v1/messages', init: { headers: { ...json, ...antHeaders(key) }, body: { model, max_tokens: 8, messages: [{ role: 'user', content: '1' }] } } };
-  if (provider === 'openai') return { url: 'https://api.openai.com/v1/responses', init: { headers: { ...json, authorization: `Bearer ${key}` }, body: { model, input: '1', max_output_tokens: 16, store: false } } };
-  if (provider === 'gemini') return { url: `${GEMINI}/models/${encodeURIComponent(model)}:generateContent`, init: { headers: { ...json, 'x-goog-api-key': key }, body: { contents: [{ role: 'user', parts: [{ text: '1' }] }], generationConfig: { maxOutputTokens: 16 }, store: false } } };
-  if (provider === 'openrouter') return { url: 'https://openrouter.ai/api/v1/chat/completions', init: { headers: { ...json, authorization: `Bearer ${key}` }, body: { model, messages: [{ role: 'user', content: '1' }], max_tokens: 8 } } };
-  return null;
-}
-/** 고른 모델로 아주 작은 생성 한 번. 답(200)을 받으면 끝, 아니면 AiError(20초가 넘으면 'stall') */
-export async function probeModel(provider, key, model, { signal } = {}) {
-  const q = probeRequest(provider, key, model);
-  if (!q) return;
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), PROBE_MS);
-  const onAbort = () => ctl.abort();
-  signal?.addEventListener?.('abort', onAbort, { once: true });
-  try {
-    const go = () => send(provider, q.url, { method: 'POST', ...q.init, body: JSON.stringify(q.init.body), signal: ctl.signal });
-    await (provider === 'anthropic' ? withWorkspace(key, ctl.signal, go) : go());
-  } catch (e) {
-    if (signal?.aborted || e instanceof AiError) throw e;
-    if (e?.name === 'AbortError' || e?.name === 'TimeoutError') throw new AiError('stall', 'probe timeout', { provider });
-    throw e;
-  } finally { clearTimeout(t); signal?.removeEventListener?.('abort', onAbort); }
-}
-
 /**
- * [연결 확인]: 키가 맞는지 물어보고(모델 목록), 쓸 모델을 고른 뒤 그 모델로 아주 작은 생성을 해 봄(probeModel). 답(200)을 받은 모델이 있어야 연결.
- *  - Gemini 무료 키가 유료 전용 모델에서 막히면(429 limit 0·403·402·400) 그 모델은 '유료 키 필요'로 기억하고 무료 모델로 다시. 되면 무료 키로 적어 둠.
- *    바꾼 모델도 같은 결제·권한 오류면(선불 크레딧 0이면 모든 모델이 402) 그 오류를 알림
- *  - 붐빔(503)·잠깐 한도·시간 넘김은 키 문제가 아님: 그 모델만 건너뛰고 다음 모델로(기억하지 않음). 모두 붐비면 '키는 맞는데 붐빔'으로 알림
- *  - 키·결제·권한 같은 계정 오류(다른 회사), 망 끊김은 그대로 알림
- * @returns {Promise<{models, model, freeTier, switched?: string, why?: 'free'|'busy', busy?: string[]}>} switched: 처음 고른 모델 대신 쓰게 된 모델(why: 무료 키라서·붐벼서), busy: 붐벼서 건너뛴 모델
+ * [연결 확인]: 키가 맞는지 실제로 물어보고, 쓸 모델을 고름. 돈이 드는 생성은 하지 않음.
+ * @returns {Promise<{models, model, freeTier}>}
  */
 export async function checkKey(provider, key, { signal } = {}) {
   if (!key) throw new AiError('bad-key', 'empty', { provider });
   let freeTier = false;
   if (provider === 'openrouter') ({ freeTier } = await openRouterKeyInfo(key, signal));
   const s = await prefs();
-  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때(또는 아래 확인에서) 알게 됨(이 기기에 적어 둔 값)
-  const raw = await listRaw(provider, key, signal);
-  let list = await rank(provider, raw, freeTier);
+  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때 알게 됨(이 기기에 적어 둔 값)
+  const list = await models(provider, key, { freeTier });
   // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
   const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
   // 목록에서 고를 모델이 없을 때만 Gemini 공식 별칭(-latest: 그 계열의 최신판을 가리킴)으로
-  let model = (kept || list.find((m) => !m.locked) || {}).id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
+  const model = (kept || list.find((m) => !m.locked) || {}).id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
   if (!model) throw new AiError('model', 'no model', { provider });
-  const first = model; const perm = []; const busy = []; let permErr = null; let busyErr = null;
-  for (;;) {
-    let e = null;
-    try { await probeModel(provider, key, model, { signal }); break; } catch (x) { e = x; }
-    if (!(e instanceof AiError)) throw e;
-    if (provider === 'gemini' && PROBE_SWAP.includes(e.kind)) {
-      // 바꾼 모델도 같은 계정 오류(결제·권한·지역)면 모델 탓이 아님: 처음 오류를 알림
-      if (permErr && PROBE_ACCOUNT.includes(e.kind) && e.kind === permErr.kind) throw permErr;
-      perm.push(model); permErr = permErr || e;
-    } else if (PROBE_BUSY.includes(e.kind)) { busy.push(model); busyErr = busyErr || e; }
-    else throw e;
-    // 다음 모델: 이 키로 못 쓰는 모델이 나왔으면 무료 키로 보고 무료 모델 가운데서(추천 순)
-    const pool = perm.length ? await rank(provider, raw, true) : list;
-    const next = perm.length + busy.length < PROBE_TRIES && pool.find((m) => !m.locked && !perm.includes(m.id) && !busy.includes(m.id) && m.id !== model);
-    if (!next) {
-      if (permErr && !busy.length) throw permErr;
-      // 남은 모델이 모두 붐빔: 키는 맞음. 연결했다고 하지 않고 잠시 뒤 다시(무료 키에서 막힌 모델은 그래도 기억)
-      for (const id of perm) await markBlocked(provider, id);
-      throw Object.assign(new AiError('busy', busyErr?.message || 'busy', { provider, status: busyErr?.status || 503 }), { keyOk: true });
-    }
-    model = next.id;
-  }
-  if (perm.length) {
-    // 무료 키: 안 된 모델은 '유료 키 필요'로, 되는 모델을 쓸 모델로(강사가 직접 고른 모델이어도 그 모델은 이 키로 안 됨)
-    freeTier = true;
-    for (const id of perm) await markBlocked(provider, id);
-    list = await rank(provider, raw, true);
-  }
-  // 붐벼서 건너뛴 모델은 기억하지 않음(이 키로 되는 모델). 이번에는 답한 모델로 시작(생성 쪽도 붐빈 모델을 잠시 피함, gen/job.js busyDetour)
-  await setActive(provider, { model, freeTier, ...(perm.length ? { picked: false } : {}) });
-  return { models: list, model, freeTier, ...(model !== first ? { switched: model, why: perm.length ? 'free' : 'busy' } : {}), ...(busy.length ? { busy } : {}) };
+  await setActive(provider, { model, freeTier });
+  return { models: list, model, freeTier };
 }
 
 // ── Gemini 요청 본문 ──

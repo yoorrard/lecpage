@@ -111,7 +111,12 @@ export const projects = {
     const keys = await blobs.keys(id);
     await tx('blobs', 'readwrite', (s) => Promise.all(keys.map((k) => req(s.delete(id + ':' + k)))));
     await kv.del('undo:' + id).catch(() => { }); // 예전 판의 'AI로 만들기 전' 되돌리기(지금은 판 기록이 연수 안에 있음)
-    await import('./gen/store.js').then((m) => Promise.all([m.jobsDb.del(id), m.chatDb.del(id)])).catch(() => { }); // AI 작업 기록(lib/gen)
+    // AI 작업 기록(lib/gen). 그 작업이 OpenAI에 남긴 답(store:true)도 지움(키가 없으면 다음에 키가 있을 때, gen/oa-trash.js)
+    await import('./gen/store.js').then(async (m) => {
+      const rec = await m.jobsDb.get(id).catch(() => null);
+      if (rec?.provider === 'openai') await import('./gen/oa-trash.js').then((t) => t.trash(t.idsOf(rec))).catch(() => { });
+      await Promise.all([m.jobsDb.del(id), m.chatDb.del(id)]);
+    }).catch(() => { });
   },
 };
 

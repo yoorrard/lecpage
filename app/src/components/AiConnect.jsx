@@ -68,17 +68,12 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
     if (KEY_GUIDES[prov] && prov !== tab) { setTab(prov); setOpened(-1); }
     setStep(KEY_GUIDES[prov] ? KEY_GUIDES[prov].steps.length : last);
     try {
-      // 키 확인 + 고른 모델로 아주 작은 생성 한 번(결제·권한·한도 오류를 지금 알려 줌. 무료 키면 무료 모델로 바꿔 고름)
-      const r = await checkKey(prov, k);
+      await checkKey(prov, k);
       await saveKey(prov, k, remember);
       const a = await getActiveAI();
-      const name = r.switched ? r.models.find((m) => m.id === r.switched)?.label || r.switched : '';
-      setKey(''); setWay('key'); toast(!r.switched ? `${PROVIDERS[prov].name}에 연결했어요.` : r.why === 'free' ? `${PROVIDERS[prov].name}에 연결했어요. 무료 키라 무료로 쓸 수 있는 모델(${name})로 만들어요.` : `${PROVIDERS[prov].name}에 연결했어요. 지금 붐비는 모델을 건너뛰고 ${name}로 만들어요.`);
+      setKey(''); setWay('key'); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
       onConnected?.(a);
-    } catch (e) {
-      // 모델이 모두 붐빔(503): 키는 맞음. 연결했다고 하지 않고 잠시 뒤 다시
-      setErr(e?.keyOk ? { kind: 'busy', provider: prov, title: '키는 맞아요. 지금 이 AI의 모델이 모두 붐벼요.', body: '몇 분 뒤에 [연결]을 다시 눌러 주세요. 기다리기 어려우면 쓰던 AI 창으로 만들어도 돼요.', actions: ['paste'] } : explainError(e, prov));
-    }
+    } catch (e) { setErr(explainError(e, prov)); }
     setBusy(false);
   }
   /** 창 어디에서든 Ctrl+V로 키를 붙여 넣으면 받음(입력 칸은 제 처리대로) */
@@ -136,9 +131,8 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
         )}
       </section>
       {err && <div role="alert"><Notice kind={err.soft ? '' : 'bad'}><div class="stack" style={{ gap: '4px' }}><b>{err.title}</b>{err.body && <span>{err.body}</span>}
-        {(err.link || err.actions?.includes('billing') || (onChat && err.actions?.includes('paste'))) && <div class="btn-row">
+        {(err.link || (onChat && err.actions?.includes('paste'))) && <div class="btn-row">
           {err.link && <a class="btn btn-sm" href={err.link.href} target="_blank" rel="noopener">{err.link.label}</a>}
-          {err.actions?.includes('billing') && PROVIDERS[err.provider]?.billingUrl && <a class="btn btn-sm" href={PROVIDERS[err.provider].billingUrl} target="_blank" rel="noopener">결제 페이지 열기<span class="ext" aria-hidden="true">↗</span></a>}
           {onChat && err.actions?.includes('paste') && <button type="button" class="btn btn-sm" onClick={() => { setWay('chat'); onChat(err.provider); }}>{chatLabel(err.provider)}</button>}
         </div>}</div></Notice></div>}
       <details class="ai-tips">

@@ -287,6 +287,12 @@ export function injectToken(html, token) {
   return /<head[^>]*>/i.test(s) ? s.replace(/<head[^>]*>/i, (m) => `${m}\n${tag}`) : tag + s;
 }
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin', 'x-frame-options': 'DENY' };
+/**
+ * 참고 디자인(/examples/*, AI가 쓴 사이트 스크립트가 돎): 앱 public/_headers와 같게 sandbox로 출처를 지워서 보냄.
+ * 토큰 meta가 든 앱 화면(127.0.0.1)과 같은 출처가 되지 않게, 원격 모드에서 받은 머리글에 없어도(예비 주소 등) 늘 붙임
+ */
+export const EXAMPLES_HEADERS = { 'content-security-policy': "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads; frame-ancestors 'self'; object-src 'none'; base-uri 'self'", 'x-frame-options': 'SAMEORIGIN', 'access-control-allow-origin': '*' };
+export const isExamplePath = (p) => /^\/?examples\//.test(String(p).replace(/\\/g, '/'));
 const PASS_HEADERS = ['content-type', 'cache-control', 'content-security-policy', 'x-frame-options', 'x-content-type-options', 'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy', 'cross-origin-embedder-policy', 'cross-origin-resource-policy', 'etag', 'last-modified'];
 
 function fallbackPage(S, why) {
@@ -320,7 +326,7 @@ function serveDist(S, req, res, pathname) {
   if (!isFile(f) && isFile(f + '.html')) f += '.html';
   if (!isFile(f)) { status = 404; f = join(dir, '404.html'); if (!isFile(f)) return send(res, 404, 'not found'); }
   const shell = status === 200 && relative(dir, f) === 'index.html';
-  const h = { 'content-type': typeOf(f), ...headersFor(S.app.rules, pathname) };
+  const h = { 'content-type': typeOf(f), ...headersFor(S.app.rules, pathname), ...(isExamplePath(relative(dir, f)) ? EXAMPLES_HEADERS : {}) };
   if (shell) return send(res, 200, injectToken(readFileSync(f, 'utf8'), S.token), { ...h, 'cache-control': 'no-store' });
   const size = statSync(f).size;
   res.writeHead(status, { ...BASE_HEADERS, ...h, 'content-length': size });
@@ -352,6 +358,7 @@ async function serveRemote(S, req, res, pathname, search) {
   const body = Buffer.from(await r.arrayBuffer());
   const h = {};
   for (const k of PASS_HEADERS) { const v = r.headers.get(k); if (v) h[k] = v; }
+  if (isExamplePath(pathname)) Object.assign(h, EXAMPLES_HEADERS);
   if (shell && r.ok) return send(res, 200, injectToken(body.toString('utf8'), S.token), { ...h, 'cache-control': 'no-store' });
   if (r.ok && /^\/assets\//.test(pathname) && /immutable/.test(h['cache-control'] || '') && S.app.cacheBytes + body.length < 120 * MB) {
     S.app.cache.set(key, { status: 200, body, headers: h }); S.app.cacheBytes += body.length;

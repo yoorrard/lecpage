@@ -13,12 +13,12 @@ import { jobsDb } from './store.js';
 import { markBusy } from './busy.js';
 import { adapter } from './providers/index.js';
 import { AiError, BASES, baseFor } from './providers/common.js';
-import { discard as openaiDiscard } from './providers/openai.js';
-import { preparePageImages, packMaterial, sourceFiles, sentRecord } from './material.js';
+import * as oa from './oa-trash.js';
+import { preparePageImages, packMaterial, sourceFiles } from './material.js';
 import * as P from './prompts.js';
 import { extractJson, extractCss, extractHtml, extractSections, mergeSections, replaceSections, stitch, balance, trimCss, cssCut, skeleton, SECTIONS_MARK } from './parse.js';
-import { inspect, readMeta, themeFromCss, issuesForAi, checkFacts, materialText } from './kit.js';
-import { hostIssues } from '../host-check.js';
+import { inspect, readMeta, themeFromCss, issuesForAi } from './kit.js';
+import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
 import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary } from './local.js';
@@ -187,7 +187,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         key, model: rec.model, system: P.SYSTEM_GEN, parts: [...ctx.pack.parts, { kind: 'text', text: prompt }], maxTokens: bigger ? maxTokens * 2 : maxTokens, signal, json,
         continueFrom, resumeToken: token, prefix: token ? piece : '',
         onText: (t, all) => { piece = all; persist(); },
-        onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
+        onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; oa.track(rec, tk.id); persist(); },
       });
       // 바꾼 모델로 답을 받음 → 이 키는 무료 키(안 된 모델은 '유료 키 필요'로): 다음 만들기는 되는 모델로 바로 시작하고 고르는 칸도 맞게
       if (ctx.swapped) {
@@ -205,6 +205,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         if (bigger) throw new AiError('thinking', 'max tokens with no visible text', { provider: rec.provider });
         bigger = 1; step.attempts++; persist(); continue;
       }
+      oa.settled(rec, res.resumeToken?.id); // 다 받은 답은 어댑터가 OpenAI 쪽에서 지움
       const got = res.text; const before = acc.length;
       acc = cont ? stitch(acc, got) : got; piece = ''; token = null; cont = false;
       step.usage = res.usage || step.usage;
@@ -227,6 +228,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         else await pause(ctx, Math.min(8000, 1000 * resumes), 'retry');
         continue;
       }
+      oa.failed(rec, e); // OpenAI: 끝난 답(실패·거절)·이어 받기를 포기한 답은 OpenAI 쪽 저장에서 지움(gen/oa-trash.js)
       if (e.resumeFailed) token = null; // 이어 받을 답이 없음(지워졌거나 만료) → 받은 글로 '이어서'나 처음부터
       // 이번에 받은 글(이어서·처음)을 쌓아 둠 → 다음 요청은 '이어서'
       if (e.partial && !token) { acc = cont ? stitch(acc, e.partial) : e.partial; piece = ''; cont = false; }
@@ -281,7 +283,6 @@ async function nextModel(ctx) {
 }
 async function repack(ctx) {
   ctx.pack = await packMaterial(ctx.rec.pid, ctx.project, { provider: ctx.rec.provider, model: ctx.rec.model, level: ctx.level, siteImages: ctx.images.list, siteImagesFrom: ctx.images.from, intro: P.buildMaterialPrompt });
-  ctx.rec.sent = sentRecord(ctx.pack); // AI에게 간 교재(원본·쪽 그림·글자)를 기록에 남김(연수 gen에도)
   if (ctx.pack.notes.length) rec2notes(ctx.rec, ctx.pack.notes);
 }
 function rec2notes(rec, notes) { rec.notes = [...new Set([...(rec.notes || []), ...notes])].slice(-12); }
@@ -407,11 +408,7 @@ export async function inspectSite(pid, site, meta, project = null) {
   const a = await assembleSite(pid, site, meta, { project });
   const issues = inspect({ ...a.material, ...(site || {}) }, meta);
   for (const w of [...(a.errors || []), ...(a.warnings || [])]) if (!issues.some((x) => x.id === w.code)) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
-  // 바로 배포 서버가 거절하는 내용(비밀번호 칸·로그인 흉내·바깥 양식·서비스 워커·쿠키 쓰기): 서버와 같은 코드(hosting/src/sitecheck.js)로 미리
-  if (a.files) issues.push(...hostIssues(a.files));
-  // 교재 사실 대조(엔진에 있을 때만): 교재 글과 사이트 글의 날짜·숫자·이름이 어긋나는 곳
-  const p = project || await projects.get(pid).catch(() => null);
-  issues.push(...await checkFacts(site || {}, { materialText: materialText(p), meta }));
+  issues.push(...await extraIssues(pid, a.files, site, meta, project)); // 바로 배포 거절 규칙 미리 보기·교재 사실 대조(gen/checks.js)
   let rendered = [];
   if (!hook().noRender && a.files && a.files['index.html']) { try { rendered = await renderIssues(a.files); } catch { rendered = []; } }
   const seen = new Set(); const out = [];
@@ -557,7 +554,7 @@ async function finish(ctx) {
   let out = null;
   const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); return {
     v: 2, site: out.site, meta: out.meta,
-    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind, ...(rec.sent ? { sent: rec.sent } : {}) },
+    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
     versions: versionsAfter(cur, rec.kind, out, rec.way === 'chat'),
     inspect: { at, issues },
     ...(rec.kind === 'make' ? { notes: rec.notes?.length ? rec.notes : undefined, metaChecked: false } : {}),
@@ -608,6 +605,7 @@ async function drive(pid) {
       const { key } = await loadKey(rec.provider);
       if (!key) throw new AiError('no-key', 'no key', { provider: rec.provider });
       ctx.key = key;
+      if (rec.provider === 'openai') oa.flush(key).catch(() => { }); // 지난번에 지우지 못한 답(키가 없었을 때)을 지움
       if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
     }
     // 학교망이 AI 회사를 막았으면 오래 기다리지 않게(처음 시작할 때만, 시험 주소면 건너뜀)
@@ -617,10 +615,7 @@ async function drive(pid) {
     // 새로 만들기의 첫 단계에서만 지금 교재의 쪽 그림으로 다시 옮김(이어 하기·고치기는 있던 것 그대로)
     ctx.images = await preparePageImages(pid, project, { signal, refresh: rec.kind === 'make' && !rec.steps.some((s) => s.status === 'done') });
     if (rec.way === 'key') await repack(ctx);
-    else {
-      ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
-      if (rec.way === 'local' && rec.kind === 'make') rec.sent = sourceFiles(project).map((f) => ({ name: f.name, sent: 'original' })); // 원본과 쪽 그림을 내 PC 임시 폴더로
-    }
+    else ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
     for (;;) {
       const step = rec.steps.find((s) => s.status !== 'done');
       if (!step) break;
@@ -641,7 +636,7 @@ async function drive(pid) {
       rec.status = 'paused'; rec.error = L.stopReason === 'user' ? { kind: 'stopped', title: '멈췄어요.', body: '[이어서 만들기]를 누르면 멈춘 단계부터 이어서 만들어요.', actions: ['resume'] } : null;
       const step = rec.steps.find((s) => s.status === 'running'); if (step) step.status = 'todo';
       // 멈추기: OpenAI는 서버에서 도는 답을 취소하고 지움(받은 글은 남겨 이어서 만들기에서 '이어서'로 씀)
-      if (L.stopReason === 'user' && rec.provider === 'openai' && step?.token) { openaiDiscard(ctx.key, step.token.id, { cancel: true }); step.token = null; }
+      if (L.stopReason === 'user') oa.release(rec, ctx.key);
       if (L.stopReason === 'user' && step?.bridgeJob) { cancelBridgeJob(step.bridgeJob); step.bridgeJob = ''; }
       await save(rec).catch(() => { });
       return;
@@ -650,6 +645,8 @@ async function drive(pid) {
     const step = rec.steps.find((s) => s.status === 'running');
     if (step) { step.status = 'error'; step.error = { kind: e?.kind || 'other', message: String(e?.message || '').slice(0, 300) }; }
     rec.status = 'error'; rec.error = errorView(e, rec.provider);
+    // 실패로 멈춤: OpenAI에서 돌던 답은 취소하고 지움(받은 글은 기록에 남아 [이어서 만들기]가 '이어서'로 씀). 망 끊김은 돌아오면 그 답을 이어 받으므로 남김
+    if (!['network', 'stall', 'blocked'].includes(e?.kind)) oa.release(rec);
     await save(rec).catch(() => { });
     // 망이 끊겨 멈췄으면 망이 돌아올 때 저절로 이어 함
     if (['network', 'stall', 'blocked'].includes(e?.kind)) autoResume.add(pid);
@@ -703,6 +700,7 @@ export async function startJob(pid, kind, opts = {}) {
     }
     provider = ai.provider; model = model || ai.model;
   }
+  oa.release(await jobsDb.get(pid).catch(() => null)); // 새 작업이 기록을 덮어씀: 지난 작업의 OpenAI 답은 지움
   const rec = newRec(pid, kind, { ...opts, way, provider, model, agent });
   if (kind === 'fix') rec.steps[0].issues = opts.issues || [];
   if (kind !== 'make') { const p = await projects.get(pid); rec.site = p?.site || null; rec.meta = p?.meta || null; }
@@ -743,6 +741,7 @@ export async function forgetJob(pid) {
   if (live.get(pid)?.ctrl) return false;
   const rec = await jobsDb.get(pid).catch(() => null);
   if (rec?.status === 'running' && await heldElsewhere(pid)) return false;
+  oa.release(rec); // 그만두기: OpenAI 쪽에 남은 답도 지움
   await jobsDb.del(pid).catch(() => { });
   live.delete(pid); remote.delete(pid); autoResume.delete(pid);
   try { bc?.postMessage({ pid, id: rec?.id || '', at: Date.now() }); } catch { /* 알림만 못 함 */ }
