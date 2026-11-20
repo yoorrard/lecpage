@@ -1,6 +1,6 @@
 // 구성 정하기: 교재의 신호(+ 강사가 고른 형식, 컨셉) → 흐름 → 칸 순서 · 이유 · 권하는 기능.
 // 유형 하나를 골라 고정 순서에 끼우는 대신, 흐름이 머리·꼬리 순서를 정하고 본문은 신호가 있는 칸을 교재 순서로 놓습니다.
-// 가드레일(references/modules.md §1): 첫 화면 → 목표 → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리. 설문은 마무리 앞.
+// 가드레일(예전 흐름의 구성 표): 첫 화면 → 목표 → 준비 → 본문 → 자료·연수 후 → 강사 → 설문 → 마무리. 설문은 마무리 앞.
 // 실시간 기능은 권하기만 하고 켜지 않습니다(강사가 고를 때만 켜짐).
 //
 // 설계도 최상위 structure(초안·AI 답·앱이 같은 모양을 씀):
@@ -24,7 +24,7 @@ export const FLOW_INFO = {
   talk: { path: '핵심 메시지 → 목표 → (핵심 단계) → 차례·일정 → 본문 → 교재 보기', label: '강의', when: '메시지와 설명이 중심인 발표 자료', archetype: 'story', order: ['hero', 'message', 'goals', 'steps5', 'outline', 'schedule', '*', 'deck', 'tools', 'stations', 'prompts', 'quiz', 'glossary', 'faq', 'materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'] },
   source: { path: '(핵심 메시지) → 목표 → 수치 → 교재의 절 순서대로 본문', label: '교재 순서대로', when: '위 신호가 없는 문서 교재(한글·워드)', archetype: 'story', order: ['hero', 'message', 'goals', 'glance', 'schedule', '*', 'stations', 'prompts', 'tools', 'deck', 'quiz', 'glossary', 'faq', 'materials', 'followup', 'instructor', 'speakers', 'survey', 'closing'] },
 };
-/** 신호 표(references/modules.md §1과 같음): [교재에서 보이는 것, 맞는 칸, 자리·기능]. AI 프롬프트(prompt/bridge.js)가 같은 표를 씀 */
+/** 신호 표(예전 흐름의 구성 표): [교재에서 보이는 것, 맞는 칸, 자리·기능]. AI 프롬프트(prompt/bridge.js)가 같은 표를 씀 */
 export const SIGNAL_TABLE = [
   ['번호 단계 + 도구 주소·프롬프트가 한 쪽에', 'stations(프롬프트 원문은 prompts[], 도구는 tools, 계정·준비물은 readiness)', '목표 → 준비 → 실습을 앞쪽에. 진행 현황·도움 요청과 어울림'],
   ['번호 단계만 있고 제목이 절차·순서·대응·방법', 'procedure', '수치(glance) → 절차 → 기준표 → 역할표 → FAQ'],
@@ -170,7 +170,7 @@ export function cleanStructure(s) {
 const HEAD_TYPES = ['hero', 'message', 'goals', 'glance', 'attendance'];
 const END_TYPES = [...TAIL_TYPES, 'speakers', 'qa', 'board', 'poll', 'reflection'];
 /**
- * 순서 가드레일(references/modules.md §1) 확인. 고치지 않고 알리기만 함(강사가 일부러 옮긴 순서를 되돌리지 않음).
+ * 순서 가드레일(예전 흐름의 구성 표) 확인. 고치지 않고 알리기만 함(강사가 일부러 옮긴 순서를 되돌리지 않음).
  * @returns {Array<{path:string, kind:'order', message_ko:string}>}
  */
 export function checkOrder(sections = []) {

@@ -38,17 +38,17 @@ ONPOD_TOKEN=… node <skill>/scripts/lecpage.mjs publish work --host onpod [--na
 node <skill>/scripts/lecpage.mjs publish work                            # 다음부터: 같은 곳·같은 주소로
 ```
 `publish`가 하는 일:
-1. `dist`를 빈 임시 폴더에 복사하며 `_headers`와 점으로 시작하는 파일을 뺍니다(Onpod은 `_headers`를 읽지 않습니다 → GitHub Pages와 같이 보안은 쪽마다 있는 meta CSP가 맡고, 강사 화면을 다른 사이트 틀에 넣는 것은 `console.js`가 스스로 막습니다).
+1. `work/dist`를 빈 임시 폴더에 복사하며 `_headers`와 점으로 시작하는 파일을 뺍니다(Onpod은 `_headers`를 읽지 않습니다 → GitHub Pages와 같이 보안은 쪽마다 있는 meta CSP가 맡고, 강사 화면을 다른 사이트 틀에 넣는 것은 `console.js`가 스스로 막습니다).
 2. 검색·AI 노출을 lecpage 공개 범위대로 맞춥니다. Onpod은 사이트에 없으면 `llms.txt`·`sitemap.xml`·`robots.txt`를 자동으로 채우고 첫 화면에 JSON-LD를 넣습니다(AI-Ready).
    - 기본(`link`)·암호: 짧은 `llms.txt`와 빈 `sitemap.xml`을 함께 올려 쪽 목록(강사 화면 포함)이 나가지 않게 합니다. `robots.txt`(`Disallow: /`)는 lecpage 것이 이깁니다. 첫 화면에 들어가는 JSON-LD는 막을 수 없지만 `noindex` 쪽이라 검색에 영향이 없습니다.
    - 공개(`public`): 첫 화면만 담은 `sitemap.xml`과 `robots.txt`의 `Sitemap:` 줄을 올립니다. 연수 날짜가 있으면 lecpage가 첫 화면에 Event JSON-LD를 넣으므로 Onpod이 자기 것을 더하지 않습니다.
 3. `onpod static deploy <사본> --name <이름> --no-spa`(이미 깔린 `onpod`, 없으면 `npx --yes onpod@latest`. CDN이 최신 바이너리만 주어 버전을 고정하지 않습니다).
 4. 지난번에 Cloudflare 참여 기능 중계(`--live`)를 올렸으면 중계가 새 주소도 받게 고칩니다(Cloudflare 로그인 필요).
-5. 첫 화면·`check.html`을 열어 확인하고, 인쇄용 안내물(`QR-안내문.pdf` 등)을 `dist-강사용/`에 만듭니다.
+5. 첫 화면·`check.html`을 열어 확인하고, 인쇄용 안내물(`QR-안내문.pdf` 등)을 `work/dist-강사용/`에 만듭니다.
 
 손으로 올릴 때:
 ```bash
-cp -r dist /tmp/lec && rm /tmp/lec/_headers
+cp -r work/dist /tmp/lec && rm /tmp/lec/_headers
 ONPOD_TOKEN=… npx --yes onpod@latest static deploy /tmp/lec --name lec-20261203 --no-spa
 ```
 

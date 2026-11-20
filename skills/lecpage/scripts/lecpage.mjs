@@ -1,36 +1,33 @@
 #!/usr/bin/env node
-// lecpage CLI — Node 22 이상. qa·options·handouts는 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
+// lecpage CLI — Node 22 이상. check·handouts는 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
 // 기본 출력은 짧은 요약, --json을 붙이면 기계용 JSON.
+// 흐름: prepare → (AI 에이전트가 work/site/·work/lecpage.json을 직접 씀) → check(고치기 반복) → preview → app 또는 publish
 //
+//   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 빈 lecpage.json · 경로 요약 work/README.md
+//   check [work] [--port 0] [--no-shots]           work/site + lecpage.json(+ 강사 값 lecpage.teacher.json) 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
+//   preview [work] [--port 4173] [--host 0.0.0.0]  조립 결과를 로컬로 띄움(강사 화면·발표 화면·QR 안내문 포함, 참여 기능은 연습 모드)
+//   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 사이트 폴더·연수 정보·쪽 그림·교재 원본을 앱이 여는 파일 하나로(비밀 값은 빼요)
+//   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
+//   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts]
+//        조립해서 강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 강사 값에 중계 주소 → 다시 조립 → 올림 → 주소 확인 → 안내물
+//        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로. --dry-run: 순서와 강사가 할 일만
+//   handouts <올린 주소|work> [-o 폴더]   QR-안내문.pdf·발표화면.png(Playwright 필요)
+//   pack <work|폴더> -o site.zip · serve <work|폴더> [--port 4173] · doctor · decide-infra [-i 답.json] [--size 30 …]
+//        pack: 조립한 사이트를 ZIP으로 · doctor: 환경 점검과 설치 방법 · decide-infra: 배포할 곳 × 참여 기능 서버 추천
+//   예전 흐름(설계도 work/blueprint.json, 이어 쓸 때만. 다음 판에서 없앰):
 //   make <교재...> [-i info.json] [-o dist] [--preset id] [--password 암호] [--no-qa] [--fresh] [--bundle-fonts|--no-bundle-fonts]
 //        교재 → 해석 → 초안 → 검증 → 빌드 → 점검을 한 번에(작업 파일은 dist 옆 work/)
-//        다시 부르면 교재 해석은 재사용, 고친 설계도는 유지(--fresh: 설계도를 새 초안으로)
-//        --bundle-fonts: 글꼴 CDN이 막힌 학교망용. 쓰인 글자가 든 글꼴 조각을 사이트 안에 담음(쪽을 열 때 외부 요청 0, 다시 만들 때도 이어짐)
-//        info.json의 network가 restricted·offline이면 저절로 켜짐(앱과 같게). 끄기: --no-bundle-fonts
-//   brief [blueprint.json|material.json|work]        짧은 요약: 칸 id·개수·구성·빈칸·싣지 못한 것·주의·글꼴
-//   structure [work|blueprint.json] [-i info.json] [--add-leftovers]   구성 정하기: 흐름·이유·칸 순서·권하는 기능·싣지 못한 것
+//   brief [blueprint.json|material.json|work] · structure [work|blueprint.json] [-i info.json] [--add-leftovers] · design <blueprint.json> · presets · effects
 //   patch <blueprint.json> [patch.json|'{…}'] [--set 경로=값 …] [-i info.json] [--undo] [--no-build]
-//        일부만 고치고 검증·다시 빌드(형식: references/cli.md)
-//   options <blueprint.json> [--presets a,b,c] [--mood calm,bold]   디자인 3안 빌드 → 비교 그림 한 장(분위기: calm·warm·bold·minimal·playful·formal·tech…)
-//   doctor                                           환경 점검과 설치 방법
+//        일부만 고치고 검증·다시 빌드
+//   options <blueprint.json> [--presets a,b,c] [--mood calm,bold]   디자인 3안 빌드 → 비교 그림 한 장
 //   review <dist> [--port 4180]                      사이트를 띄우고 강사의 '수정 요청'(펜·네모 표시+글)을 work/feedback/에 모음
 //   build <blueprint.json> -o dist [--assets 폴더] [-i info.json] [--password 암호] [--bundle-fonts]
-//   validate <blueprint.json> · qa <dist> [--password 암호] · serve <dist> [--port 4173] · pack <dist> -o site.zip
+//   validate <blueprint.json> · qa <dist> [--password 암호]
 //   draft <material.json> [-i info.json] -o draft.json · prompt <material.json> -o prompt.txt
-//   guard <AI 답.json|txt> <material.json> [-i info.json] [-o blueprint.json]   AI 답의 교재 글(프롬프트·단계·일정·FAQ·목표·주소)을 교재대로
-//   design <blueprint.json>                          컨셉(한 줄·모티프·권하는 디자인)과 디자인 순위·적용된 효과
-//   decide-infra -i info.json · presets · effects
-//   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 설계도·연수 정보·교재 해석·쪽 그림을 앱이 여는 파일 하나로(비밀 값은 빼요)
-//   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
-//   publish [work] [--host cloudflare|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts]
-//        강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기: --no-bundle-fonts). --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
-//        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
-//   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·발표화면.png(Playwright 필요)
-//   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 할 일 work/README.md
-//   check [work] [--port 0] [--no-shots]           work/site + lecpage.json 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
-//   preview [work] [--port 4173] [--host 0.0.0.0]  조립 결과를 로컬로 띄움(강사 화면·발표 화면 포함)
+//   guard <AI 답.json|txt> <material.json> [-i info.json] [-o blueprint.json]   AI 답의 교재 글을 교재대로
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
-//   종료 코드: 0 성공 · 1 실패(make·qa·patch --qa는 사이트를 만들었어도 점검에 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
+//   종료 코드: 0 성공 · 1 실패(check·make·qa·patch --qa는 조립·빌드했어도 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, isAbsolute, basename } from 'node:path';
@@ -60,7 +57,7 @@ const OPTS = {
   app: 'i o force password',
   publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
   handouts: 'o password',
-  prepare: 'o today no-slides no-python', check: 'port today no-shots', preview: 'port host today',
+  prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles', preview: 'port host today',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
@@ -972,9 +969,17 @@ const commands = {
   /** 앱(웹)과 주고받기: 작업 폴더 → <연수 이름>.lecpage(앱 [저장한 파일 열기]), 앱에서 저장한 .lecpage → 작업 폴더 */
   async app() {
     const P = await imp('src/project-file.js');
+    const KC = await import('./kit-cmds.mjs');
     const src = resolve(args._[0] || 'work');
-    if (!existsSync(src)) fail(`${rel(src)}가 없어요. make로 만든 작업 폴더(work)나 앱에서 저장한 .lecpage 파일을 주세요.`);
-    return statSync(src).isFile() && !/\.json$/i.test(src) ? fromAppFile(P, src) : toAppFile(P, statSync(src).isFile() ? dirname(src) : src);
+    if (!existsSync(src)) fail(`${rel(src)}가 없어요. 작업 폴더(work)나 앱에서 저장한 .lecpage 파일을 주세요.`);
+    if (statSync(src).isFile() && !/\.json$/i.test(src)) {
+      // .lecpage: 새 판(v2, 사이트 폴더)은 사이트 그대로, 예전 판(v1, 설계도)은 지금처럼 설계도로 풂
+      const K = await imp('src/kit/index.js');
+      let o; try { o = K.openProjectFile(readFileSync(src)); } catch (e) { fail(e.friendly ? e.message : `파일을 읽지 못했어요: ${e.message}`); }
+      return o.kind === 'v2' ? KC.appUnpackV2(helpers(), o) : fromAppFile(P, src);
+    }
+    const dir = statSync(src).isFile() ? dirname(src) : src;
+    return KC.isV2Work(dir) ? KC.appPackV2(helpers(), dir) : toAppFile(P, dir);
   },
 
   /** 만든 사이트를 띄우고 '수정 요청'(펜·네모로 표시 + 글)을 work/feedback/에 모음. AI는 그 파일을 읽고 patch로 고침 */
@@ -1096,7 +1101,7 @@ const commands = {
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
       // 이미 연결해 둔 곳이 없으면: 가입 없는 길(앱의 바로 배포). skill은 바로 배포를 직접 부르지 않고 앱으로 넘김
       ![].concat(info.connected || []).length && !info.previous && info.network !== 'offline' ? '계정이 없으면 app work → 강사가 lecpage.com [저장한 파일 열기] → [배포하기]의 바로 배포(가입 없음, 60일 보관, 참여 기능 포함)' : '',
-      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live --features ${(info.features || []).join(',') || 'qa,poll'} (먼저 --dry-run)` : `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
+      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live (먼저 --dry-run)` : `참여 기능 서버 ${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 강사에게 받아 lecpage.teacher.json의 live로(예전 흐름은 info.json)` : ''}`,
     ], r);
   },
 
@@ -1127,8 +1132,10 @@ const commands = {
     process.exitCode = q.ok ? 0 : 1;
   },
 
-  serve() {
+  async serve() {
     const port = +args.port || 4173;
+    const KC = await import('./kit-cmds.mjs');
+    if (KC.isV2Work(resolve(args._[0] || 'dist'))) return KC.previewCmd(helpers()); // 작업 폴더(work)면 조립해서 띄움
     if (!existsSync(join(resolve(args._[0] || 'dist'), 'index.html'))) fail(`${rel(resolve(args._[0] || 'dist'))}에 사이트가 없어요(index.html 없음). make나 build로 만든 폴더를 주세요.`);
     staticServer(resolve(args._[0] || 'dist')).listen(port, args.host || '127.0.0.1', () => console.log(`미리보기: http://localhost:${port}/  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`));
   },
@@ -1143,9 +1150,15 @@ const commands = {
   async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
   async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
 
-  pack() {
-    const dir = resolve(args._[0] || 'dist');
-    if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). make나 build로 먼저 만들고 그 폴더를 주세요. 예: pack dist -o site.zip`);
+  async pack() {
+    let dir = resolve(args._[0] || 'dist');
+    const KC = await import('./kit-cmds.mjs');
+    if (KC.isV2Work(dir)) { // 작업 폴더(work)면 조립한 사이트(work/dist)를 담음
+      const b = await KC.buildWorkV2(helpers(), dir);
+      if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
+      dir = b.dist;
+    }
+    if (!existsSync(join(dir, 'index.html'))) fail(`${rel(dir)}에 사이트가 없어요(index.html 없음). 작업 폴더(work)나 조립한 폴더(work/dist)를 주세요. 예: pack work -o site.zip`);
     const files = N.readAssetDir(dir, '');
     const zip = E.zipFiles(files);
     const target = args.o || 'site.zip';

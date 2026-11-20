@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // lecpage 디자인 검사(design lint): 만든 쪽을 브라우저(Playwright)로 열어 'AI가 만든 티'와 읽기 문제를 셉니다.
-// 규칙은 references/design-quality.md에 있습니다. 아이디어 출처: pbakaus/impeccable(Apache-2.0)의 탐지 규칙 목록,
+// 예전 흐름(엔진 템플릿) 사이트용 검사. 원칙은 references/design-principles.md(8번 AI 티)에 있습니다. 아이디어 출처: pbakaus/impeccable(Apache-2.0)의 탐지 규칙 목록,
 // Leonxlnx/taste-skill(MIT)의 '상자 두 겹까지' 검사, Vercel Web Interface Guidelines(MIT). 코드는 새로 썼습니다.
 //
 //   모듈:  import { lintPage } from './design-lint.mjs'; const r = await lintPage(page);  // page = Playwright Page

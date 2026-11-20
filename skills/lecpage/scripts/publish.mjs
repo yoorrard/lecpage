@@ -129,12 +129,23 @@ async function ensureFonts(h, { work, dist }) {
 export async function publishCmd(h) {
   const { args, E, rel, fail, say, readJson, writeJson, loadState, saveState } = h;
   const dry = !!args['dry-run'];
+  const KC = await import('./kit-cmds.mjs');
   let work = resolve(args._[0] || 'work');
-  if (existsSync(join(work, 'index.html')) && !existsSync(join(work, 'blueprint.json'))) work = join(dirname(work), 'work'); // dist를 줬으면 옆의 work
+  // 조립·빌드한 폴더를 줬으면 그 작업 폴더(새 흐름은 work/dist의 위, 예전 흐름은 dist 옆의 work)
+  if (existsSync(join(work, 'index.html')) && !existsSync(join(work, 'blueprint.json'))) work = KC.isV2Work(dirname(work)) ? dirname(work) : join(dirname(work), 'work');
+  // 새 흐름(v2): work/site + lecpage.json(+ 강사 값 lecpage.teacher.json)을 조립해 work/dist를 올림
+  const v2 = KC.isV2Work(work);
+  let v2b = null;
+  if (v2) {
+    if (args.password) fail('사이트 폴더로 만든 사이트(새 흐름)는 아직 암호를 걸 수 없어요. 공개 범위를 link(주소를 받은 사람만, 검색 제외)로 두고 올려 주세요.');
+    if (args.features) fail('새 흐름은 참여 기능을 lecpage.json의 features와 자리 표시(data-lp)로 정해요. 그곳을 고친 뒤 --features 없이 다시 해 주세요.');
+    v2b = await KC.buildWorkV2(h, work);
+    if (!v2b.ok) fail('조립하지 못했어요: ' + v2b.errors.map((e) => e.message_ko).join(' ') + ` (check ${rel(work)}로 확인)`);
+  }
   const bpPath = join(work, 'blueprint.json');
-  if (!existsSync(bpPath)) fail(`${rel(work)}에 blueprint.json이 없어요. make로 먼저 만들어 주세요(publish work).`);
+  if (!v2 && !existsSync(bpPath)) fail(`${rel(work)}에 사이트가 없어요. prepare → site/·lecpage.json 쓰기 → check 뒤에 publish work를 해 주세요.`);
   const state = loadState(work);
-  const dist = resolve(work, state.out || '../dist');
+  const dist = v2 ? v2b.dist : resolve(work, state.out || '../dist');
   const tdir = dist + '-강사용';
   if (!existsSync(join(dist, 'index.html'))) fail(`${rel(dist)}에 사이트가 없어요. make나 patch로 먼저 빌드해 주세요.`);
   // --host가 없으면 지난번에 올린 곳(같은 주소로 다시). 처음이면 Cloudflare
@@ -143,10 +154,12 @@ export async function publishCmd(h) {
     const H = E.HOSTS[host];
     fail(`publish는 지금 Cloudflare(사이트·참여 기능을 한 계정에)와 Onpod(사이트만)에 대신 올려요. ${H?.cli ? `${H.name_ko}는 한 줄 명령으로: ${H.cli}` : ''} 안내: references/deploy/${host}.md`);
   }
-  const raw = readJson(bpPath);
-  const bp = E.validate(raw).blueprint;
-  if (host === 'onpod') return publishOnpod(h, { work, state, dist, tdir, bp, dry });
-  const infoPath = state.info ? resolve(work, state.info) : join(work, 'info.json');
+  // 새 흐름은 조립이 만든 설계도(보조 쪽용)를 씀: 연수 코드·날짜·참여 기능·보관 기간·공개 범위가 들어 있음
+  const raw = v2 ? v2b.r.blueprint : readJson(bpPath);
+  const bp = v2 ? v2b.r.blueprint : E.validate(raw).blueprint;
+  if (host === 'onpod') return publishOnpod(h, { work, state, dist, tdir, bp, dry, v2 });
+  // 강사 값: 새 흐름은 lecpage.teacher.json, 예전 흐름은 info.json
+  const infoPath = v2 ? join(work, 'lecpage.teacher.json') : state.info ? resolve(work, state.info) : join(work, 'info.json');
   const info = existsSync(infoPath) ? readJson(infoPath) : {};
   const live = !!args.live;
   // 연수 코드를 먼저 정해 둠: 중계는 이 코드만 받고(ALLOWED_CODES), 다시 빌드할 때 info.json의 live.code로 그대로 들어감
@@ -167,6 +180,9 @@ export async function publishCmd(h) {
   const want = args.features ? String(args.features).split(',').map((x) => x.trim()).filter(Boolean) : [];
   const feats = [...new Set([...(bp.live.features || []), ...(info.features || []), ...want])];
   if (live && !feats.length) warn.push('참여 기능이 꺼져 있어요. --features qa,poll을 붙이면 질문·투표 칸이 함께 생겨요(그대로 올리면 중계만 생김).');
+  // 참여 기능이 연습 모드(local)인 채로 올리면 참가자 기록(출석·질문·진행)이 모이지 않음 → 올리기 전에 알림
+  const practice = !live && bp.live?.provider === 'local';
+  if (practice) warn.push(`참여 기능(${(bp.live.features || []).join(',')})이 연습 모드라 배포한 사이트에서는 기록이 모이지 않아요(출석·질문이 각자 브라우저에만). --live를 붙여 중계를 함께 올리거나, 참여 기능 서버 주소를 강사에게 받아 ${v2 ? 'lecpage.teacher.json' : 'info.json'}의 live에 적어 주세요.`);
   const auth = process.env.CLOUDFLARE_API_TOKEN ? 'token' : process.env.LECPAGE_WRANGLER ? 'fake' : '';
   const today = new Date().toISOString().slice(0, 10);
   const relayDir = join(work, 'live-relay');
@@ -176,7 +192,7 @@ export async function publishCmd(h) {
     const W = `npx wrangler@${WRANGLER_VER}`;
     let n = 0;
     const step = (t) => `${++n} ${t}`;
-    const fontStep = fontsPlan(args, dist);
+    const fontStep = v2 ? '' : fontsPlan(args, dist); // 새 흐름은 사이트가 정한 글꼴 그대로(글꼴 파일을 사이트에 넣으려면 site/assets/에)
     say([
       `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Cloudflare · 사이트 ${name}${live ? ` · 중계 ${relayName}` : ''} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
       `인증 ${auth === 'token' ? 'CLOUDFLARE_API_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 wrangler 로그인을 확인해요'}`,
@@ -184,7 +200,7 @@ export async function publishCmd(h) {
         step(`중계 폴더 ${rel(relayDir)} ← backends/cloudflare (이름 ${relayName}, 받을 연수 코드 ${code})`),
         step(`관리자 키를 만들어 중계 비밀로(${W} secret put ADMIN_KEY, 값은 표준 입력) → ${rel(keyFile)}에만 적음(이미 있으면 그대로)`),
         step(`${W} deploy -c wrangler.toml → https://${relayName}.<계정>.workers.dev · /api/health 확인`),
-        step(`${rel(infoPath)}의 live = { provider: "http", url: <중계 주소> }${want.length ? ` · features += ${want.join(',')}` : ''} → patch -i로 다시 빌드·점검(참여 기능 ${feats.join(',') || '없음'})`),
+        step(`${rel(infoPath)}의 live = { provider: "http", url: <중계 주소>, code: "${code}" }${want.length ? ` · features += ${want.join(',')}` : ''} → ${v2 ? `다시 조립(${rel(dist)})` : 'patch -i로 다시 빌드·점검'}(참여 기능 ${feats.join(',') || '없음'})`),
       ] : []),
       fontStep ? step(fontStep) : '',
       step(`빈 임시 폴더에서 ${W} deploy --assets ${rel(dist)} --name ${name} --compatibility-date ${today}${args.temporary ? ' --temporary' : ''} → https://${name}.<계정>.workers.dev`),
@@ -224,17 +240,24 @@ export async function publishCmd(h) {
     if (!dep.ok || !relayUrl) fail(`중계를 올리지 못했어요${/onboarding|workers\.dev subdomain/i.test(dep.raw) ? '. 새 계정이면 강사가 오류에 나온 dash.cloudflare.com/…/workers/onboarding을 한 번 열어 workers.dev 이름을 정해야 해요' : ''}.\n` + lastLines(dep.out).join('\n'));
     if (!args['no-verify']) { const hc = await check(relayUrl.replace(/\/$/, '') + '/api/health'); lines.push(`중계 ${hc.ok ? '✓' : '△'} ${relayUrl}${hc.ok ? '' : ` (/api/health ${hc.status}, 몇 분 뒤 다시 확인)`}`); }
     else lines.push(`중계 ${relayUrl}`);
-    // 사이트를 중계에 이어 다시 빌드·점검(patch -i: 강사 계정에 만든 값만 info.json으로 넣는 규칙 그대로)
-    const nextInfo = { ...info, ...(want.length ? { features: [...new Set([...(info.features || []), ...want])] } : {}), live: { ...(info.live || {}), provider: 'http', url: relayUrl, code } };
-    writeJson(infoPath, nextInfo);
-    if (!state.info) h.saveState(work, { info: 'info.json' });
-    const pa = spawnSync(process.execPath, [join(HERE, 'lecpage.mjs'), 'patch', bpPath, '-i', infoPath, ...(args['no-qa'] ? [] : ['--qa']), ...(args.password ? ['--password', args.password] : [])], { encoding: 'utf8', env: process.env, maxBuffer: 32 * MiB });
-    const pl = String(pa.stdout || '').split('\n');
-    lines.push(...pl.filter((l) => /^(사이트|점검|고침)/.test(l)).map((l) => '다시 빌드 ' + l));
-    if (pa.status !== 0 && !/점검/.test(pa.stdout || '')) fail('사이트를 중계에 잇지 못했어요.\n' + lastLines(`${pa.stdout}\n${pa.stderr}`).join('\n'));
+    // 사이트를 중계에 이어 다시 빌드·점검(patch -i: 강사 계정에 만든 값만 info.json으로 넣는 규칙 그대로). 새 흐름은 lecpage.teacher.json에 적고 다시 조립
+    if (v2) {
+      writeJson(infoPath, { ...info, live: { ...(info.live || {}), provider: 'http', url: relayUrl, code } });
+      const b2 = await KC.buildWorkV2(h, work);
+      if (!b2.ok) fail('사이트를 중계에 잇지 못했어요: ' + b2.errors.map((e) => e.message_ko).join(' '));
+      lines.push(`다시 조립 ${rel(b2.dist)} · 참여 기능 ${b2.r.report.live}(${b2.r.report.features.join(',') || '없음'}) · 강사 값 ${rel(infoPath)}`);
+    } else {
+      const nextInfo = { ...info, ...(want.length ? { features: [...new Set([...(info.features || []), ...want])] } : {}), live: { ...(info.live || {}), provider: 'http', url: relayUrl, code } };
+      writeJson(infoPath, nextInfo);
+      if (!state.info) h.saveState(work, { info: 'info.json' });
+      const pa = spawnSync(process.execPath, [join(HERE, 'lecpage.mjs'), 'patch', bpPath, '-i', infoPath, ...(args['no-qa'] ? [] : ['--qa']), ...(args.password ? ['--password', args.password] : [])], { encoding: 'utf8', env: process.env, maxBuffer: 32 * MiB });
+      const pl = String(pa.stdout || '').split('\n');
+      lines.push(...pl.filter((l) => /^(사이트|점검|고침)/.test(l)).map((l) => '다시 빌드 ' + l));
+      if (pa.status !== 0 && !/점검/.test(pa.stdout || '')) fail('사이트를 중계에 잇지 못했어요.\n' + lastLines(`${pa.stdout}\n${pa.stderr}`).join('\n'));
+    }
   }
 
-  const fl = await ensureFonts(h, { work, dist });
+  const fl = v2 ? '' : await ensureFonts(h, { work, dist });
   if (fl) lines.push(fl);
 
   // 사이트 올리기: 빈 임시 폴더에서(위쪽 폴더의 wrangler.json·jsonc·toml을 읽지 않게)
@@ -266,6 +289,7 @@ export async function publishCmd(h) {
   say([
     `올렸어요 ✓ ${siteBase}`,
     ...lines,
+    ...warn.map((w) => '주의 ' + w),
     claim ? `임시 계정이에요. 60분 안에 강사가 ${claim}에서 가입해야 사이트가 남아요` : '',
     `참가자 ${siteBase} · QR 안내문 ${siteBase}poster.html · 발표 화면 ${siteBase}screen.html${existsSync(join(dist, 'console.html')) ? ` · 강사 화면 ${siteBase}console.html(도움말 칸에 연수 후 할 일)` : ''} · 접속 확인 ${siteBase}check.html`,
     ...(ho ? ho.lines : []),
@@ -311,7 +335,7 @@ export function onpodStage(dist, { publicSite, url }) {
   return { stage, added };
 }
 
-async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
+async function publishOnpod(h, { work, state, dist, tdir, bp, dry, v2 = false }) {
   const { args, rel, fail, say, saveState } = h;
   if (args.live) fail('Onpod에는 사이트만 올려요. 참여 기능 중계는 publish work --host cloudflare --live로 올리거나, Supabase·구글 시트를 연결한 뒤 --live 없이 다시 해 주세요.');
   if (args.temporary) fail('Onpod에는 가입 없이 올리는 임시 주소가 없어요. 계정 없이 먼저 보려면 --host cloudflare --temporary를 써 주세요.');
@@ -320,7 +344,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
   if (!NAME_RE.test(name)) fail(`사이트 이름은 소문자·숫자·하이픈으로 63자까지예요: ${name} (--name으로 바꿔 주세요)`);
   const siteBase = `https://${name}.onpod.ai/`;
   const publicSite = bp.access?.mode === 'public';
-  const fontLine = dry ? '' : await ensureFonts(h, { work, dist }); // 올리는 사본을 만들기 전에(사본은 dist를 그대로 복사)
+  const fontLine = dry || v2 ? '' : await ensureFonts(h, { work, dist }); // 올리는 사본을 만들기 전에(사본은 dist를 그대로 복사)
   const { stage, added } = onpodStage(dist, { publicSite, url: siteBase });
   const cleanup = () => rmSync(stage, { recursive: true, force: true });
   const st = siteStat(stage);
@@ -339,7 +363,7 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry }) {
     say([
       `배포 계획(--dry-run, 아무것도 바꾸지 않음) · Onpod · 사이트 ${name} · 파일 ${st.files}개 ${Math.round(st.bytes / 1024)}KB`,
       `인증 ${auth ? 'ONPOD_TOKEN 있음' : '환경 변수 없음 → 실제로 배포할 때 onpod whoami로 로그인을 확인해요'}`,
-      fontsPlan(args, dist) ? `먼저 ${fontsPlan(args, dist)}` : '',
+      !v2 && fontsPlan(args, dist) ? `먼저 ${fontsPlan(args, dist)}` : '',
       `1 올릴 사본(빈 임시 폴더): _headers·점 파일 빼기${added.length ? ` · 더하기 ${added.join(', ')}` : ''}(${publicSite ? '공개 연수: 첫 화면만 담은 sitemap' : '검색 제외: Onpod이 쪽 목록을 자동으로 내지 않게'})`,
       `2 onpod static deploy <사본> --name ${name} --no-spa → ${siteBase}`,
       relay ? `3 참여 기능 중계 ${relay.name}가 새 주소도 받게: wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:${allow(siteBase)}` : '',
@@ -396,7 +420,10 @@ export async function handoutsCmd(h, o = {}) {
   let out = resolve(o.out || args.o || '');
   let server = null, local = false, siteDir = '';
   if (!/^https?:\/\//i.test(target)) {
-    const dir = resolve(target);
+    let dir = resolve(target);
+    // 새 흐름 작업 폴더(work)면 조립한 사이트(work/dist)로
+    const KC = await import('./kit-cmds.mjs');
+    if (KC.isV2Work(dir)) { const b = await KC.buildWorkV2(h, dir); if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' ')); dir = b.dist; }
     siteDir = dir;
     if (!existsSync(join(dir, 'poster.html'))) fail(`${rel(dir)}에 poster.html이 없어요.`);
     if (!o.out && !args.o) out = dir + '-강사용';

@@ -25,7 +25,7 @@ sudo usermod -aG docker $USER && newgrp docker
 mkdir -p ~/lecpage && cd ~/lecpage
 # 아래 파일들을 올립니다(scp 또는 git clone):
 #   docker-compose.yml, Caddyfile, .env  ← skills/lecpage/templates/deploy/server/
-#   site/        ← lecpage 빌드 결과(dist/만. 강사용 파일 dist-강사용/은 올리지 않음)
+#   site/        ← lecpage 사이트 폴더(work/dist/만. 강사용 파일 work/dist-강사용/은 올리지 않음)
 #   node-server/ ← skills/lecpage/backends/node-server/ (빌드 없이 node:24 이미지로 실행됨)
 cp .env.example .env && nano .env      # LEC_SITE_ADDRESS=lec.example.kr
 docker compose up -d

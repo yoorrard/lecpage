@@ -22,12 +22,12 @@ https://app.netlify.com/user/applications#personal-access-tokens → **New acces
 
 ## skill: 명령으로 올리기
 ```bash
-NETLIFY_AUTH_TOKEN=… npx netlify-cli@27.16.1 deploy --dir dist --prod --no-build --site-name lec-20261111
+NETLIFY_AUTH_TOKEN=… npx netlify-cli@27.16.1 deploy --dir work/dist --prod --no-build --site-name lec-20261111
 # 다음부터: --site-name 대신 --site <Project ID 또는 이름>
 ```
 - 대화 없이 돕니다(고정한 판 netlify-cli 27.16.1의 `--help`로 플래그 확인, 2026-11-14). `--site-name`은 없는 이름이면 새로 만듭니다. 팀이 여럿이면 `--team <slug>`.
 - 올린 뒤 **강사에게 꼭 알립니다**: Netlify 프로젝트 화면에서 **Make public**을 눌러야 참가자가 봅니다(2026-07-28 이후 팀). 같은 설정은 **Project configuration → General → Visitor access → Project visibility**에 있습니다.
-- 응답 헤더는 `dist/_headers`를 그대로 읽습니다.
+- 응답 헤더는 `work/dist/_headers`를 그대로 읽습니다.
 
 ## 명령어 없이
 - **앱**: 배포하기에서 Netlify를 고르고 토큰을 붙여 넣습니다. 올린 뒤 **Make public**.

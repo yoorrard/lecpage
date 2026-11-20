@@ -25,7 +25,7 @@
 - `skills/lecpage/backends/node-server/`. Dockerfile이 없으면 `templates/deploy/server/Dockerfile.node-server`를 그 폴더에 `Dockerfile`로 복사.
 - 환경 변수(이름은 `server.mjs` 머리말 기준): `PORT=8787`, `LEC_DATA=/data`, `LEC_TRUST_PROXY=1`, `TZ=Asia/Seoul`, `LEC_ORIGINS=<사이트 주소>`(쉼표로 여러 개), `LEC_ADMIN_KEY_HASH=<해시>`.
   - 해시 만들기: `node server.mjs --hash '내관리자키'`. 비우면 첫 실행 때 키를 만들어 `data/admin-key.txt`에 둡니다(로그에는 남기지 않음). 영구 디스크가 없는 서비스라면 키를 직접 정해 해시만 넣으세요.
-- 사이트에는 빌드 결과(`dist/`)만 올립니다. 강사용 파일(`dist-강사용/`)은 올리지 않습니다.
+- 사이트에는 사이트 폴더(`work/dist/`)만 올립니다. 강사용 파일(`work/dist-강사용/`)은 올리지 않습니다.
 
 ## 따라 하기 — Fly.io
 ```bash
@@ -41,7 +41,7 @@ fly secrets set LEC_ADMIN_KEY_HASH=$(node server.mjs --hash '내관리자키')
 fly deploy --ha=false
 fly status
 ```
-- 실시간 주소 `https://lec-live-1104.fly.dev` → blueprint `live.provider: "http"`, `live.url`. CSP를 쓰면 `{{LIVE_ORIGIN}}`에 `https://…`와 `wss://…`.
+- 실시간 주소 `https://lec-live-1104.fly.dev` → `work/lecpage.teacher.json`의 `live: { "provider": "http", "url": "…" }`. CSP를 쓰면 `{{LIVE_ORIGIN}}`에 `https://…`와 `wss://…`.
 - 데이터가 기계 1대의 볼륨에 있으므로 **기계는 1대만**(`--ha=false`).
 - `auto_stop_machines`가 켜져 있어 아무도 안 쓰면 멈춥니다. 연수 10분 전에 `console.html`을 열어 깨워 두세요.
 - 되돌리기: `fly releases` → `fly deploy --image <이전 이미지>`. 전부 삭제: `fly apps destroy lec-live-1104`(볼륨·데이터 포함).
@@ -55,7 +55,7 @@ fly status
 - 되돌리기: **Deployments** → 이전 배포 **Redeploy**. 삭제: **Settings → Danger → Delete Project**(볼륨 포함).
 
 ## Render에서 다른 점
-1. 저장소 구성: `site/`(빌드 결과), `node-server/`, 맨 위 `render.yaml`(`templates/deploy/render/render.yaml`, `{{…}}` 치환). 실시간이 필요 없으면 `lecpage-live` 부분을 지웁니다.
+1. 저장소 구성: `site/`(`work/dist/`의 내용물), `node-server/`, 맨 위 `render.yaml`(`templates/deploy/render/render.yaml`, `{{…}}` 치환). 실시간이 필요 없으면 `lecpage-live` 부분을 지웁니다.
 2. https://dashboard.render.com → **New → Blueprint** → 저장소 → **Apply**.
 3. 정적 사이트 `https://lecpage-site.onrender.com`, 실시간 `https://lecpage-live.onrender.com`(유료 인스턴스 + 디스크).
 - 정적 사이트만: **New → Static Site** → 저장소 → Build Command 비움 → Publish directory `site`.

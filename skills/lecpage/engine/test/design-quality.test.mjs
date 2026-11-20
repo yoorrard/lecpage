@@ -1,4 +1,4 @@
-// 디자인 품질 규칙(references/design-quality.md)이 엔진 기본값에 들어 있는지
+// 디자인 품질 규칙(예전 흐름의 엔진 템플릿, 원칙은 references/design-principles.md)이 엔진 기본값에 들어 있는지
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
