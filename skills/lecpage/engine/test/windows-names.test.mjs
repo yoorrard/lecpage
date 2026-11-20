@@ -23,8 +23,8 @@ test('생성 사이트의 파일 이름은 윈도우에서도 풀림', () => {
 });
 
 test('저장소 파일 이름은 윈도우에서도 내려받아짐', (t) => {
-  let list;
-  try { list = execFileSync('git', ['ls-files'], { cwd: path.join(here, '../../../..'), encoding: 'utf8' }).split('\n').filter(Boolean); } catch { t.skip('git 저장소가 아님(설치본)'); return; }
+  let list; // -z: 한글 이름을 따옴표·8진수로 감싸지 않은 그대로
+  try { list = execFileSync('git', ['ls-files', '-z'], { cwd: path.join(here, '../../../..'), encoding: 'utf8' }).split('\0').filter(Boolean); } catch { t.skip('git 저장소가 아님(설치본)'); return; }
   const bad = list.filter((p) => RESERVED.test(p) || BAD_CHARS.test(p));
   assert.deepEqual(bad, [], '윈도우에서 만들 수 없는 이름');
   // 대소문자만 다른 두 파일도 윈도우·macOS에서는 하나로 겹침
