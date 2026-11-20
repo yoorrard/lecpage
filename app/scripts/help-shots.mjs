@@ -2,13 +2,14 @@
 // 쓰는 법(app 폴더에서):  npm run build && node scripts/help-shots.mjs
 //   --base=http://localhost:4174/  이미 띄워 둔 미리보기 서버를 씀(없으면 이 스크립트가 vite preview를 띄웠다가 끔)
 //   --only=start,edit              일부만 다시 찍음
-// 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI는 키 확인만 흉내 냅니다(키·교재가 어디로도 가지 않음).
+// 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI는 흉내 냅니다(키·교재가 어디로도 가지 않음):
+// 키 확인은 모델 목록으로, 만들기는 대표 레퍼런스(data-lab)에서 떼어 낸 단계별 답(src/lib/gen/demo-answers.js)을 Gemini 스트림 꼴로 돌려줌.
 // playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다(npx playwright install chromium).
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
@@ -34,8 +35,18 @@ if (!base) {
 }
 base = base.replace(/\/?$/, '/');
 
-// ── 흉내 낸 AI 응답 ──
-const EXAMPLE = JSON.parse(readFileSync(join(SKILL, 'examples', 'sel-story.blueprint.json'), 'utf8'));
+// ── 흉내 낸 AI 응답: 대표 레퍼런스 사이트를 단계별 답으로 ──
+const REF = join(SKILL, 'references', 'designs', 'data-lab');
+const { demoAnswers } = await import(pathToFileURL(join(APP, 'src', 'lib', 'gen', 'demo-answers.js')).href);
+const answer = demoAnswers({ html: readFileSync(join(REF, 'site', 'index.html'), 'utf8'), css: readFileSync(join(REF, 'site', 'assets', 'style.css'), 'utf8'), js: readFileSync(join(REF, 'site', 'assets', 'site.js'), 'utf8'), meta: JSON.parse(readFileSync(join(REF, 'lecpage.json'), 'utf8')) });
+/** Gemini streamGenerateContent 요청 → 그 단계의 답(SSE) */
+function geminiStream(body) {
+  const text = (body.contents?.[0]?.parts || []).map((x) => x.text || '').join('\n');
+  const m = /작업 단계: (plan|design|sections) ?(\d+)?/.exec(text);
+  let batch = []; try { batch = JSON.parse((/이번에 만들 섹션\(이 순서대로\):\n(\[[\s\S]*?\n\])/.exec(text) || [])[1] || '[]').map((x) => x.id); } catch { batch = []; }
+  const out = m ? answer({ name: m[1] === 'sections' ? `sections:${m[2]}` : m[1], batch }) : '';
+  return `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: out }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 } })}\r\n\r\n`;
+}
 const CORS = { 'access-control-allow-origin': '*' };
 const json = (r, body) => r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(body) });
 const FAKE_KEY = 'AIzaSyHELP_SHOTS_ONLY_0000000000000000000';
@@ -45,7 +56,7 @@ const route = async (r) => {
   const u = r.request().url();
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', supportedGenerationMethods: ['generateContent'] }] }); // 무료 등급의 지금 모델(2026-11-14)
-  if (u.includes(':generateContent')) return json(r, { candidates: [{ content: { parts: [{ text: JSON.stringify(EXAMPLE) }] }, finishReason: 'STOP' }] });
+  if (u.includes(':streamGenerateContent')) return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS, body: geminiStream(JSON.parse(r.request().postData() || '{}')) });
   // 바로 배포가 켜진 빌드(VITE_PUBLISH_API)로 찍을 때: HELP_INFO(운영 서버 /api/info를 읽어 둔 JSON 파일)로 답함 → 운영과 같은 '바로 배포' 화면
   if (process.env.HELP_INFO && /\/api\/info(\?|$)/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: readFileSync(process.env.HELP_INFO, 'utf8') });
   return r.fulfill({ status: 204, headers: CORS }); // 그 밖의 바깥 요청은 빈 응답(막으면 접속 확인이 '이 망에서 막힘'으로 보여 화면이 달라짐)
@@ -70,6 +81,7 @@ try {
   for (const [w, h, tail] of SIZES) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, locale: 'ko-KR', colorScheme: 'light', reducedMotion: 'reduce' });
     await ctx.route((u) => !u.href.startsWith(base), route);
+    await ctx.addInitScript(() => { globalThis.__lpGenTest = { noFix: true }; }); // 흉내 낸 답에는 검수 고치기 단계 답이 없어 건너뜀
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.error('화면 오류:', e.message));
     const settle = (ms = 500) => page.waitForTimeout(ms);
@@ -79,7 +91,6 @@ try {
 
     // 1. 교재 넣기 + AI 고르기: 예시 교재(엔진 시험용 파일)를 넣은 모습
     await page.goto(base + '#/', { waitUntil: 'load' });
-    await page.evaluate(() => localStorage.setItem('lecpage:mock-speed', '6')); // 가짜 생성(app/src/lib/gen/mock.js)을 빨리. 진짜 생성이 오면 이 줄은 아무 일도 안 함
     await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
     await page.waitForSelector('.ai-card .btn:not([disabled])', { timeout: 90000 });
     await page.locator('.step-head h1').click(); // 입력 칸의 초점 테두리를 뺌

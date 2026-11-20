@@ -9,14 +9,6 @@ const siteMeta = () => import('./site-meta.js');
 // .lecpage 형식(받는 자료·ZIP 읽기·연수 정보 기본값)은 skill CLI(`lecpage.mjs app`)와 함께 쓰는 엔진 규칙
 export { DEFAULT_INFO, ALLOWED_ASSET, readStoredZip };
 
-// 예시 설계도는 필요할 때만 불러옵니다(첫 화면을 가볍게)
-export async function loadExample(id) {
-  const m = id === 'sel-story'
-    ? await import('../../../skills/lecpage/examples/sel-story.blueprint.json')
-    : await import('../../../skills/lecpage/examples/data-lab.blueprint.json');
-  return JSON.parse(JSON.stringify(m.default));
-}
-
 /** 첫 화면에 놓은 교재 파일을 '교재 넣기' 화면으로 넘길 때 잠시 보관 */
 const pending = new Map();
 export function setPendingFiles(id, files) { pending.set(id, Array.from(files || [])); }
