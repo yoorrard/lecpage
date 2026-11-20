@@ -601,7 +601,7 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
     `<div class="lpk lpk-chrome">`,
     W.shareDialog({ live, code: ctx.code, codeWord: ctx.words.code }),
     live ? W.joinDialog({ anonymous: ctx.anonymous, collect: data.privacy.collect, consent: data.privacy.consent, official: ctx.done, keep: data.privacy.keep }) : '',
-    live && !col.dockPlaced ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: col.sharePlaced ? '' : `<button class="lp-fold-btn" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',
+    live && !col.dockPlaced ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: col.sharePlaced ? '' : `<button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',
     live ? '<div class="lp-reactions" data-reactions aria-hidden="true"></div>' : '',
     live && f.help ? W.helpSheet() : '',
     W.TOAST,
