@@ -134,7 +134,7 @@ export async function importProjectFile(file) {
   const same = fileHash && (await projects.all()).find((x) => x.fileHash === fileHash);
   if (same) return { ...same, reopened: true };
   // 남이 준 파일: 실시간 연결·QR 주소는 다시 정하게 비우고, 자료는 그림·문서만 받음
-  const { sanitizeImported } = await import('./blueprint.js');
+  const { sanitizeImported } = await import('@engine/src/intake.js');
   const id = uid(10);
   // 배포 정보: 열쇠를 담은 파일(carry)이어도 바로 쓰지 않고 배포하기 화면에서 강사가 고르게(남이 준 파일의 열쇠로 남의 사이트에 배포하지 않게)
   const carry = cleanCarry(proj?.carry);

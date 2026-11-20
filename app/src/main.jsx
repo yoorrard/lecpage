@@ -9,7 +9,6 @@ import { hasPendingFiles } from './lib/project.js';
 import { storageBlocked, STORAGE_MSG } from './lib/db.js';
 import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } from './lib/fresh.jsx';
 import { GalleryHead } from './pages/GalleryHead.jsx';
-import WORDS from 'virtual:lp-words';
 
 // 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임). 그 화면들의 CSS(styles/screens.css)도 함께 받음:
 // 첫 화면은 기본 CSS(app.css)만 기다려 휴대폰에서 먼저 그려짐(점검 2026-11 L6)
@@ -72,10 +71,6 @@ function App() {
   const parts = hash.replace(/^#\/?/, '').split('/');
   const [route, a, b] = parts;
   useEffect(() => {
-    if (!/[?&]code=/.test(location.search)) return; // OpenRouter 연결에서 돌아왔을 때만
-    import('./lib/ai.js').then((m) => m.openRouterFinish()).then((k) => k && toast('OpenRouter를 연결했어요.'), (e) => toast(e.message));
-  }, []);
-  useEffect(() => {
     try { const t = localStorage.getItem('lecpage:theme'); if (t) document.documentElement.dataset.theme = t; } catch { }
     const note = afterReloadNote(); if (note) setTimeout(() => toast(note), 400); // 새 배포라 저절로 새로 고친 뒤 한 번
   }, []);
@@ -85,7 +80,7 @@ function App() {
   if (route === 'p' && a) page = <Lazy key="project" name="project" id={a} step={Number(b) || 0} />;
   else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
   // 둘러보기 머리는 조각 밖에서 바로(엔진 묶음 약 480KB를 기다리지 않고 첫 글이 뜸. 조각이 오면 그 아래만 채움)
-  else if (route === 'gallery') page = <div key="gallery" class="stack gallery"><GalleryHead count={WORDS} /><Lazy name="gallery" tab={a} /></div>;
+  else if (route === 'gallery') page = <div key="gallery" class="stack gallery"><GalleryHead /><Lazy name="gallery" tab={a} /></div>;
   else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
   else if (route === 'demo') page = <Lazy key="demo" name="demo" />;
   else page = <Home />;

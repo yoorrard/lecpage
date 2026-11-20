@@ -124,7 +124,7 @@ export async function getActiveAI() {
 export class AiError extends Error {
   constructor(kind, message, { status = 0, provider = '', retryAfter = 0 } = {}) { super(message); this.kind = kind; this.status = status; this.provider = provider; this.retryAfter = retryAfter; }
 }
-/** 상태 코드·오류 코드·문구 → 오류 종류(ai-vision.js도 씀). code: 회사가 준 코드들을 이어 붙인 글 */
+/** 상태 코드·오류 코드·문구 → 오류 종류(생성 파이프라인 lib/gen도 씀). code: 회사가 준 코드들을 이어 붙인 글 */
 export function classify(status, msg, code) {
   const m = `${code || ''} ${msg || ''}`;
   if (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(m)) return 'verify'; // Gemini 무료 등급: 휴대폰 확인이 필요한 프로젝트(403)
@@ -149,7 +149,7 @@ export function classify(status, msg, code) {
 }
 /**
  * 학교·기관 망의 차단 화면: AI 회사 주소인데 JSON이 아니라 웹 페이지(HTML)가 옴(200이어도). 원문(영어 개발자 문구) 대신
- * 'blocked'(이 망에서 닿지 않음 → 쓰던 AI 창 길)로. 같은 규칙을 수정 요청(ai-vision.js)도 씀
+ * 'blocked'(이 망에서 닿지 않음 → 쓰던 AI 창 길)로. 같은 규칙을 생성 파이프라인(lib/gen)도 씀
  */
 // 5xx·429는 회사 쪽 CDN의 오류 화면일 수 있어 상태 코드대로(바쁨·한도) 둠
 export const isBlockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
@@ -203,12 +203,12 @@ export function explainError(err, provider) {
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['paste']],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
     refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI로 다시 해 보세요.', ['connect', 'paste']],
-    'too-long': ['교재가 길어 한 번에 보내지 못했어요.', "'문구만 다듬기'로 하면 훨씬 짧게 보내요.", []],
+    'too-long': ['교재가 길어 한 번에 보내지 못했어요.', '교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', ['paste', 'connect']],
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', ['paste']],
     network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 학교망이 AI 사이트를 막았다면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
     // 만들기 전에 확인했더니 이 망에서 AI 회사 API에 닿지 않음(netcheck.js): 기다리지 않고 AI 창 길로
     blocked: [`이 망에서 ${P.short || 'AI'} API에 닿지 않아요.`, '학교·기관 망이 AI 회사 주소를 막은 것 같아요. 쓰던 AI 창으로 만들면 돼요. 휴대폰 핫스팟으로 바꾸면 키로도 돼요.', ['paste']],
-    truncated: ['답이 중간에 끊겼어요.', "'문구만 다듬기'로 하면 답이 짧아 끊기지 않아요.", []],
+    truncated: ['답이 중간에 끊겼어요.', '이어서 받아 봤지만 끝나지 않았어요. 다시 해 보거나 다른 AI를 골라 주세요.', ['connect', 'paste']],
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
   }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
@@ -308,7 +308,7 @@ export async function checkKey(provider, key, { signal } = {}) {
   let freeTier = false;
   if (provider === 'openrouter') ({ freeTier } = await openRouterKeyInfo(key, signal));
   const s = await prefs();
-  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때 알게 됨(generateAuto)
+  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때 알게 됨(이 기기에 적어 둔 값)
   const list = await models(provider, key, { freeTier });
   // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
   const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
@@ -319,50 +319,9 @@ export async function checkKey(provider, key, { signal } = {}) {
   return { models: list, model, freeTier };
 }
 
-// ── Anthropic(스트리밍) ──
-// 생각하는 토큰도 max_tokens에 들어가서 넉넉히 주고, 긴 요청이 중간에 끊기지 않게 스트리밍으로 받습니다.
-// Claude 5 계열은 안전 분류기가 요청을 거절할 수 있어(보안·생물 주제 교재 등) 서버가 다른 모델로 이어받게 fallbacks를 켭니다.
-// 이 값을 받지 않는 모델·환경이면(400이나 연결 실패) 기본 요청으로 한 번 더 보냅니다.
-async function anthropic(key, model, prompt, maxTokens, signal) {
-  const base = { model, max_tokens: Math.max(maxTokens, 32000), messages: [{ role: 'user', content: prompt }], stream: true };
-  const headers = () => ({ 'content-type': 'application/json', ...antHeaders(key) });
-  const extra = /claude-(opus|sonnet|fable)-5/.test(model);
-  const call = async (plus) => {
-    let r;
-    try {
-      r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal, headers: plus ? { ...headers(), 'anthropic-beta': 'server-side-fallback-2026-07-01' } : headers(), body: JSON.stringify(plus ? { ...base, fallbacks: 'default' } : base) });
-    } catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; throw new AiError('network', e.message || 'Failed to fetch', { provider: 'anthropic' }); }
-    if (!r.ok) await fail(r, 'anthropic');
-    if (isBlockPage(r)) throw new AiError('blocked', 'html page', { status: r.status, provider: 'anthropic' }); // 망의 차단 화면(스트림 대신 웹 페이지)
-    const reader = r.body.getReader(); const dec = new TextDecoder();
-    let buf = '', text = '', stop = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let n;
-      while ((n = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, n).trim(); buf = buf.slice(n + 1);
-        if (!line.startsWith('data:')) continue;
-        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
-        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') text += ev.delta.text || '';
-        else if (ev.type === 'message_delta') stop = ev.delta?.stop_reason || stop;
-        else if (ev.type === 'error') throw new AiError(classify(ev.error?.type === 'overloaded_error' ? 529 : 0, ev.error?.message, ev.error?.type), ev.error?.message || 'stream error', { provider: 'anthropic' });
-      }
-    }
-    if (stop === 'refusal') throw new AiError('refusal', 'refusal', { provider: 'anthropic' });
-    return { text, cut: stop === 'max_tokens' };
-  };
-  return withWorkspace(key, signal, async () => {
-    if (!extra) return call(false);
-    try { return await call(true); }
-    catch (e) { if (e instanceof AiError && ((e.kind === 'other' && e.status === 400) || e.kind === 'network')) return call(false); throw e; } // 한도·Workspace 같은 400은 다시 보내도 같음
-  });
-}
-
-// ── 생성 ──
+// ── Gemini 요청 본문 ──
 /**
- * Gemini 요청 본문(ai-vision.js도 씀). 공식 문서(2026-11) 기준:
+ * Gemini 요청 본문(생성 파이프라인 lib/gen도 씀). 공식 문서(2026-11) 기준:
  *  - temperature·topP는 Gemini 3.6 이후·4에서 무시되고 경고가 오며, 앞으로 400이 됨 → 보내지 않음
  *  - maxOutputTokens는 생각하는 토큰까지 합친 한도. Gemini 4는 32,768 이상을 권함(Carbon·Argon은 스트리밍 아닌 요청 한 번에 32,768까지)
  *  - 2026-10-26 뒤에 만든 유료 프로젝트는 요청을 기록(store)하는 것이 기본 → 교재가 키 주인의 기록에 남지 않게 store: false
@@ -370,159 +329,9 @@ async function anthropic(key, model, prompt, maxTokens, signal) {
 export function geminiBody(parts, maxTokens) {
   return { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: Math.max(maxTokens, 32768) }, store: false };
 }
-/**
- * 브라우저에서 사용자 키로 바로 호출. 상태 코드별로 AiError를 던짐.
- * @returns {Promise<{text}>}
- */
-export async function generate({ provider, key, model, prompt, signal, maxTokens = 16000 }) {
-  const P = PROVIDERS[provider]; if (!P) throw new AiError('other', 'unknown provider');
-  if (!model) { const s = await prefs(); model = s.models[provider] || (await checkKey(provider, key, { signal })).model; }
-  let text = '', cut = false;
-  if (provider === 'gemini') {
-    const j = await send(provider, `${GEMINI}/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST', signal, headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(geminiBody([{ text: prompt }], maxTokens)),
-    });
-    const c = j.candidates?.[0];
-    if (!c && j.promptFeedback?.blockReason) throw new AiError('other', `차단됨(${j.promptFeedback.blockReason})`, { provider });
-    text = (c?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
-    cut = c?.finishReason === 'MAX_TOKENS';
-  } else if (provider === 'anthropic') {
-    ({ text, cut } = await anthropic(key, model, prompt, maxTokens, signal));
-  } else {
-    const openai = provider === 'openai';
-    const j = await send(provider, openai ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST', signal,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}`, ...(openai ? {} : { 'X-Title': 'lecpage' }) },
-      // OpenAI 최신 모델은 max_tokens 대신 max_completion_tokens. OpenRouter 무료 모델은 response_format을 못 받는 곳이 있어 뺌
-      body: JSON.stringify(openai
-        ? { model, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' }, max_completion_tokens: maxTokens }
-        : { model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens }),
-    });
-    const ch = j.choices?.[0];
-    if (!ch && j.error) throw new AiError(classify(+j.error.code || 0, j.error.message, [j.error.type, j.error.code].filter((x) => typeof x === 'string').join(' ')), j.error.message, { provider });
-    text = ch?.message?.content || '';
-    cut = ch?.finish_reason === 'length';
-  }
-  if (!text.trim()) throw new AiError(cut ? 'truncated' : 'empty', 'empty', { provider });
-  return { text, cut };
-}
 
-const sleep = (ms, signal) => new Promise((res, rej) => {
-  if (signal?.aborted) return rej(new DOMException('aborted', 'AbortError'));
-  const t = setTimeout(res, ms);
-  signal?.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('aborted', 'AbortError')); }, { once: true });
-});
-// 무료 한도를 넘으면: 'stop'(무료 안에서만 이어감, 기본) | 'pay'(연결해 둔 유료 키·크레딧으로 이어감)
-export function getOnLimit() { try { return localStorage.getItem('lecpage:on-limit') === 'pay' ? 'pay' : 'stop'; } catch { return 'stop'; } }
-export function setOnLimit(v) { try { localStorage.setItem('lecpage:on-limit', v === 'pay' ? 'pay' : 'stop'); } catch { /* 저장 못 해도 이번에는 기본대로 */ } }
 /** 쓴 만큼 돈이 나가는 연결인지: OpenAI·Claude 키, 충전한 OpenRouter */
 export const isPaidAI = (provider, freeTier) => provider === 'openai' || provider === 'anthropic' || (provider === 'openrouter' && !freeTier);
-const LIMIT_KINDS = ['quota', 'quota-day', 'busy', 'model', 'empty'];
-
-/**
- * generate + 한도·혼잡을 알아서 넘김(강사가 다시 누르지 않게). 순서:
- *  1) 분당 한도·서버 혼잡: 알려 준 시간(최대 60초)만큼 기다렸다 다시, 두 번까지
- *  2) 무료로 쓰는 연결(Gemini, OpenRouter 무료)이면 같은 키의 다음 모델로(무료 등급은 모델마다 한도가 따로).
- *     이 키로 못 쓰는 모델이면 아래 등급으로도 내려가고, 한도를 다 쓴 것이면 같은 등급 안에서만(더 가벼운 모델은 allowLight일 때만)
- *  3) 연결해 둔 다른 AI로. 돈이 드는 연결은 allowPaid일 때만(기본은 [설정]의 '무료 한도를 넘으면')
- * 끝까지 안 되면 처음 오류를 던지고, 건너뛴 길이 있으면 err.paidOption = { provider, label }, err.lightOption = { provider, id, label }을 붙임.
- * onStatus({ wait: 초 } | { model } | { provider, label, paid })로 지금 하는 일을 알림. 돌려주는 값에 실제로 답한 provider·model이 들어 있음.
- */
-export async function generateAuto(o, { onStatus, allowPaid = getOnLimit() === 'pay', allowLight = false } = {}) {
-  const s = await prefs();
-  let lightOption = null;
-  const attempt = async (provider, key, model0, { swap }) => {
-    let model = model0, waits = 0, swaps = 0, list = null, noAccess = false;
-    const tried = new Set();
-    for (;;) {
-      try {
-        const out = { ...(await generate({ ...o, provider, key, model })), provider, model };
-        // 무료 키로 못 쓰는 모델을 건너뛰고 됐으면 다음부터는 바로 그 모델로
-        if (noAccess && !s.picked[provider]) await setActive(provider, { model, ...(provider === 'gemini' ? { freeTier: true } : {}) }).catch(() => { });
-        return out;
-      } catch (e) {
-        if (!(e instanceof AiError)) throw e;
-        if ((e.kind === 'quota' || e.kind === 'busy') && waits < 2 && (e.retryAfter || 0) <= 60) {
-          const sec = Math.max(4, e.retryAfter || (waits ? 20 : 8)); waits++;
-          onStatus?.({ wait: sec }); await sleep(sec * 1000, o.signal); continue;
-        }
-        // 이 키로는 못 쓰는 모델. Gemini 4 Carbon·Argon은 무료 등급에서 안 됨(공식 가격표 2026-11). 그때 오는 오류 모양이 한 가지가 아니라 넓게 받음
-        const blocked = e.kind === 'no-access' || e.kind === 'model' || (provider === 'gemini' && ['forbidden', 'region', 'billing'].includes(e.kind));
-        if (!swap || !(blocked || LIMIT_KINDS.includes(e.kind)) || swaps >= (blocked ? 5 : 2)) throw e;
-        let next = null;
-        try {
-          if (!model) model = s.models[provider] || '';
-          tried.add(model);
-          // Gemini: 공식 가격표에 '무료 등급에서 안 됨'으로 적힌 모델이 막혔으면 무료 키 → 무료 등급 목록으로 다시 매긴 추천으로 바로(같은 처지의 모델을 또 써 보지 않게)
-          const freeNow = blocked && provider === 'gemini' && !s.free.gemini && geminiPaidOnly(await catalog(), model);
-          if (freeNow) { s.free.gemini = true; list = null; }
-          list = list || await models(provider, key, { freeTier: !!s.free[provider] });
-          const cur = list.find((m) => m.id === model);
-          const rest = list.filter((m) => !tried.has(m.id) && !m.locked);
-          // 한도를 다 쓴 것이면 같은 등급 이상에서만 이어감. 더 가벼운 모델은 품질이 떨어지므로 강사에게 물어봄
-          // 못 쓰는 모델이면 같은 등급의 다른 모델도 대개 못 쓰므로(무료 키) 바로 아래 등급으로
-          next = freeNow ? rest[0] : blocked ? (cur && rest.find((m) => m.tier < cur.tier)) || rest[0] : allowLight || !cur ? rest[0] : rest.find((m) => m.tier >= cur.tier);
-          if (!next && rest[0]) lightOption = lightOption || { provider, id: rest[0].id, label: rest[0].label };
-        } catch { /* 목록을 못 받으면 넘기지 않음 */ }
-        if (!next) throw e;
-        if (blocked) { noAccess = true; await markBlocked(provider, model).catch(() => { }); }
-        model = next.id; swaps++; waits = 0; onStatus?.({ model });
-      }
-    }
-  };
-  const paid0 = isPaidAI(o.provider, !!s.free[o.provider]);
-  let first;
-  try { return await attempt(o.provider, o.key, o.model, { swap: !paid0 }); }
-  catch (e) { if (!(e instanceof AiError) || !(LIMIT_KINDS.includes(e.kind) || ['no-access', 'verify', 'cap'].includes(e.kind))) throw e; first = e; }
-  // 연결해 둔 다른 AI(무료 먼저)
-  let paidOption = null;
-  const others = Object.keys(PROVIDERS).filter((x) => x !== o.provider).sort((a, b) => isPaidAI(a, !!s.free[a]) - isPaidAI(b, !!s.free[b]));
-  for (const provider of others) {
-    const { key } = await loadKey(provider);
-    if (!key) continue;
-    const paid = isPaidAI(provider, !!s.free[provider]);
-    if (paid && !allowPaid) { paidOption = paidOption || { provider, label: PROVIDERS[provider].name }; continue; }
-    onStatus?.({ provider, label: PROVIDERS[provider].name, paid });
-    try { return await attempt(provider, key, s.models[provider] || '', { swap: !paid }); }
-    catch (e) { if (e.name === 'AbortError' || e.name === 'TimeoutError') throw e; }
-  }
-  if (paidOption) first.paidOption = paidOption;
-  if (lightOption) first.lightOption = lightOption;
-  throw first;
-}
-
-// ── OpenRouter 로그인(OAuth PKCE): 버튼 한 번으로 사용자 소유 키 받기 ──
-function b64url(bytes) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-export async function openRouterStart({ remember = false } = {}) {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
-  sessionStorage.setItem('lecpage:or-verifier', verifier);
-  sessionStorage.setItem('lecpage:or-return', location.hash || '#/');
-  sessionStorage.setItem('lecpage:or-remember', remember ? '1' : '');
-  const cb = location.origin + location.pathname;
-  location.href = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(cb)}&code_challenge=${challenge}&code_challenge_method=S256`;
-}
-export async function openRouterFinish() {
-  const url = new URL(location.href);
-  const code = url.searchParams.get('code');
-  const verifier = sessionStorage.getItem('lecpage:or-verifier');
-  if (!code || !verifier) return null;
-  sessionStorage.removeItem('lecpage:or-verifier');
-  const back = sessionStorage.getItem('lecpage:or-return') || '#/';
-  history.replaceState(null, '', location.pathname + back);
-  window.dispatchEvent(new HashChangeEvent('hashchange')); // replaceState는 hashchange를 안 일으킴 → 하던 화면으로 바로 돌아가게
-  const j = await send('openrouter', 'https://openrouter.ai/api/v1/auth/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }) })
-    .catch((e) => { throw new Error('OpenRouter 연결에 실패했어요. 다시 눌러 주세요. (' + e.message + ')'); });
-  if (!j.key) throw new Error('OpenRouter 연결에 실패했어요. 다시 눌러 주세요.');
-  await saveKey('openrouter', j.key, sessionStorage.getItem('lecpage:or-remember') === '1');
-  await checkKey('openrouter', j.key).catch(() => setActive('openrouter'));
-  sessionStorage.setItem('lecpage:ai-resume', '1'); // 돌아온 화면에서 AI 창을 다시 엶
-  window.dispatchEvent(new Event('lecpage:ai-connected'));
-  return j.key;
-}
-/** OpenRouter에서 막 돌아왔으면 true(한 번만) */
-export function takeAiResume() { try { const v = sessionStorage.getItem('lecpage:ai-resume'); sessionStorage.removeItem('lecpage:ai-resume'); return v === '1'; } catch { return false; } }
 
 /**
  * AI 고르기 화면(components/AiPick.jsx): 보이는 회사마다 키가 연결돼 있는지와 고른 모델(비밀 아님 — 키 값은 돌려주지 않음)

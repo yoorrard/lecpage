@@ -195,7 +195,7 @@ export function AiStatus({ ai, onChange, onSwap, onDisconnect, swapLabel = '다�
   const list = useModels(ai, onChange);
   const cur = list?.find((m) => m.id === ai.model);
   const cost = !list ? '' : ai.provider === 'gemini' ? (ai.freeTier ? '무료' : '') : cur?.free ? '무료' : isPaidAI(ai.provider, ai.freeTier) ? (cur?.won ? `사이트 하나에 약 ${cur.won.toLocaleString('ko-KR')}원` : '쓴 만큼 결제') : '';
-  // Gemini 키가 무료인지는 처음 만들 때 알게 됨(ai.js generateAuto). 그 전에는 모델 이름을 내세우지 않음(무료 키면 바뀌므로)
+  // Gemini 키가 무료인지는 처음 만들 때 알게 됨(이 기기에 적어 둔 값, ai.js prefs().free). 그 전에는 모델 이름을 내세우지 않음(무료 키면 바뀌므로)
   const name = ai.provider === 'gemini' && !ai.freeTier ? '' : cur?.label || ai.model;
   return (
     <details class="ai-status">

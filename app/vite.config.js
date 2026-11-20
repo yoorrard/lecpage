@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -114,31 +114,6 @@ Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOT
   };
 }
 
-// 첫 화면(랜딩)이 쓰는 엔진의 사실(디자인·효과 수, 쇼케이스 디자인 이름)을 빌드 때 계산해 작은 모듈로 냅니다.
-// 첫 화면이 엔진 전체(약 370KB)를 받지 않게 하려는 것. 쓰는 곳: src/landing/facts.js (import facts from 'virtual:lp-facts')
-function landingFacts() {
-  const id = 'virtual:lp-facts', rid = '\0' + id;
-  const wid = 'virtual:lp-words', wrid = '\0' + wid; // 둘러보기 낱말 수만(첫 화면 묶음에 들어가므로 따로 작게)
-  return {
-    name: 'lecpage-landing-facts',
-    resolveId: (s) => (s === id ? rid : s === wid ? wrid : null),
-    async load(s) {
-      if (s === wrid) {
-        // 디자인 둘러보기의 낱말 수(엔진을 받기 전에 머리를 먼저 그릴 때: src/pages/GalleryHead.jsx)
-        const W = await import(pathToFileURL(here('src/design-words/words.js')).href);
-        return `export default ${W.allWords().filter((w) => !w.off).length};`;
-      }
-      if (s !== rid) return null;
-      const E = await import(pathToFileURL(here('../skills/lecpage/engine/src/index.js')).href);
-      let show = [];
-      try { show = JSON.parse(read('src/landing/shots/shots.json')).showcase || []; } catch { /* 그림이 아직 없음 */ }
-      const designs = Object.fromEntries(show.map((k) => E.getPreset(k)).filter(Boolean).map((p) => [p.id, { name: p.name_ko, desc: p.desc_ko }]));
-      const layouts = Object.values(E.BODY_VARIANTS).reduce((n, v) => n + Object.keys(v).length, 0); // 본문 배치(섹션 종류마다 다른 짜임) 수
-      return `export default ${JSON.stringify({ presets: E.PRESETS.length, fx: E.FX.length, layouts, designs })};`;
-    },
-  };
-}
-
 // 오프라인용 목록 sw-warm.json: 연수 화면(#/p)에 처음 들어가면 서비스 워커(public/sw.js)가 이 목록의 조각을 미리 받아 둡니다.
 // 첫 화면(쉘)·만들기 화면·교재 읽기·미리보기 런타임·도움말·설정과 그 조각들이 정적으로 가져오는 조각·CSS. heavy: PDF 읽기 도구(약 1.4MB, 마우스 화면에서만)
 // 첫 방문 랜딩에서는 받지 않음(휴대폰 데이터). 빌드마다 조각 이름(해시)이 바뀌므로 목록도 빌드 때 만듦
@@ -230,7 +205,7 @@ function homeOnlyPreload() {
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt(), landingFacts(), swWarm(), pdfjsAssets(), homeOnlyPreload()],
+  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload()],
   resolve: { alias: { '@engine': here('../skills/lecpage/engine') } },
   server: { fs: { allow: ['..'] } },
   build: { target: 'es2020', outDir: 'dist', assetsInlineLimit: 0, chunkSizeWarningLimit: 1600 },

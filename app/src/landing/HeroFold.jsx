@@ -56,7 +56,7 @@ export function HeroFold() {
           <b><span>데이터로 읽는</span><span>우리 반</span></b>
           <span>{EX.lead}</span>
           <i class="ld-cover-rule" />
-          <em>2026. 12. 16. · {EX.venue}</em>
+          <em>{EX.date} · {EX.venue}</em>
           <i class="ld-cover-dots" />
         </div>
         <div class="ld-flap-wrap"><i class="ld-flap" /></div>

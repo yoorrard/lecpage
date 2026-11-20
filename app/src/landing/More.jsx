@@ -1,15 +1,13 @@
 import { Mascot } from '../components/Mascot.jsx';
 import { Why } from './Why.jsx';
 import { Story } from './Story.jsx';
-import { SayDemo } from './SayDemo.jsx';
-import { Showcase } from './Showcase.jsx';
 import { Reach } from './Reach.jsx';
 import { LiveDay } from './LiveDay.jsx';
 import { Paths } from './Paths.jsx';
 import { REFERENCES as EXAMPLES, referenceFor } from '../data/references.js';
 import '../styles/landing-more.css';
 
-// 첫 화면 아래 이야기: 왜 lecpage(한 문장·두 사이트 견주기·다른 점 넷) → 교재가 사이트가 되기까지 → 말로 고치기 → 디자인 → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·스킬) → 예시 → 마무리.
+// 첫 화면 아래 이야기: 왜 lecpage(한 문장·단계마다 견주기) → 교재가 사이트가 되기까지(AI가 읽고 설계·작성, lecpage가 조립·검수) → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·스킬) → 참고 디자인 → 마무리.
 // 첫 화면(Home.jsx)이 그려진 다음 틈에 받는 묶음이라 첫 화면 JS·CSS에 들지 않아요. 구성과 근거: docs/research/landing-2026-11.md
 const DAYS = [
   ['전', '연수 전', ['안내·일정·준비물 점검', '접속 확인 페이지', 'QR 안내문 인쇄']],
@@ -39,15 +37,13 @@ export function More({ pick, busyProps, fromExample }) {
     <>
       <Why />
       <Story />
-      <SayDemo />
-      <Showcase />
       <Reach />
       <LiveDay />
       <Days />
       <Paths />
 
       <section class="ld-ex" aria-labelledby="ld-ex-h">
-        <div class="section-title"><h2 id="ld-ex-h">참고 디자인</h2><p class="muted">완성된 강의 사이트 사례예요. 고르면 AI가 분위기를 참고해 내 교재로 새로 만들어요. 고르지 않아도 돼요.</p></div>
+        <div class="section-title"><h2 id="ld-ex-h">참고 디자인</h2><p class="muted">AI가 교재를 읽고 만든 강의 사이트 사례예요. 고르면 AI에게 그 분위기 설명만 건네고, 내 교재로 새로 만들어요. 고르지 않아도 돼요.</p></div>
         <div class="grid grid-fill">
           {EXAMPLES.map((x) => (
             <article class="ex-card">
@@ -55,7 +51,7 @@ export function More({ pick, busyProps, fromExample }) {
               <div class="ex-body">
                 <span class="tag tag-lav">{x.kind}</span>
                 <h3>{x.title}</h3>
-                <p class="small muted">{x.desc}</p>
+                <p class="small muted">{x.mood}</p>
                 <div class="btn-row"><button class="btn btn-sm btn-primary" {...busyProps(`ex-${x.id}`)} onClick={() => fromExample(referenceFor(x))}>이 디자인 참고해 만들기</button><a class="btn btn-sm" href={`examples/${x.id}/index.html`} target="_blank" rel="noopener">사이트 보기</a></div>
               </div>
             </article>

@@ -10,7 +10,7 @@ const PATHS = [
   { name: 'API 키', how: '버튼 한 번으로 만들어요', cost: '사이트 하나에 몇백 원쯤, AI 회사에 직접' },
   { name: 'AI 에이전트 + lecpage 스킬', how: '만든 연수를 .lecpage 파일로 앱에서 열어요', cost: '쓰던 구독 그대로' },
 ];
-const STAGES = ['디자인', '배포', '진행', '마무리'];
+const STAGES = ['조립·검수', '배포', '진행', '마무리'];
 
 export function Paths() {
   return (
@@ -35,7 +35,7 @@ export function Paths() {
       <div class="ld-skill">
         <div>
           <h3 class="ld-h3">AI 에이전트에서 쓰기</h3>
-          <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage 스킬을 한 줄로 넣어요. 앱과 같은 엔진으로 만들고, 고치거나 배포할 때는 앱에서 이어서 해요.</p>
+          <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage 스킬을 한 줄로 넣어요. 에이전트가 교재를 읽고 사이트를 직접 쓰면 lecpage가 조립·검수해요. 고치거나 배포할 때는 앱에서 이어서 해요.</p>
           <a class="ld-cmd-help" href="#/help/skill">AI 에이전트에서 쓰는 법</a>
         </div>
         <div class="ld-cmds">
