@@ -113,6 +113,8 @@ main.page{min-height:calc(100dvh - var(--top-h,57px))}
 .grid{display:grid;gap:16px}
 .grid-3{grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))}
 .grid-fill{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+/* 참고 디자인 카드: 사례가 적어도 한 장이 화면 폭 가득 늘어나지 않게(그림이 흐려지지 않게) 칸 폭을 지킴 */
+.refs .grid-fill,.ld-ex .grid-fill{grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
 .stack{display:grid;gap:16px}
 .tag{display:inline-block;font-size:.8rem;font-weight:650;color:var(--muted)}
 .tag-lav{color:var(--lav-deep)}
