@@ -9,6 +9,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { blake3Hex } from '../src/blake3.js';
+import { freePort, releasePort } from './ports.mjs';
 
 const require = createRequire(import.meta.url);
 let wasm = null;
@@ -272,10 +273,10 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
       send(res, 404, 'fake cloudflare');
     } catch (e) { console.error('fake-cf error', e); send(res, 500, fail(500, String(e.message))); }
   });
-  return new Promise((resolve) => server.listen(port, host, () => {
+  return (port ? Promise.resolve(port) : freePort()).then((want) => new Promise((resolve) => server.listen(want, host, () => {
     const p = server.address().port;
-    resolve({ url: `http://${host}:${p}`, api: `http://${host}:${p}/client/v4`, port: p, state, deploymentsOf, stop: () => new Promise((r) => server.close(r)) });
-  }));
+    resolve({ url: `http://${host}:${p}`, api: `http://${host}:${p}/client/v4`, port: p, state, deploymentsOf, stop: () => new Promise((r) => server.close(() => { releasePort(p); r(); })) });
+  })));
 }
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {

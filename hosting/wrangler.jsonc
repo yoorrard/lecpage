@@ -53,7 +53,6 @@
     // REPORTS_PER_HOUR 5 · DAILY_REPORT_CAP 200 · REPORT_KEEP 500 · REPORT_DAYS 90 · PUBLIC_ORIGIN(내 도메인을 붙였을 때 주소 고정)
     // 실시간 방: LIVE "on"(끄려면 "off") · LIVE_UPLOADS "on" · LIVE_MAX_UPLOAD_MB 10 · LIVE_ROOM_MB 200
     // LIVE_MAX_PARTICIPANTS 300 · LIVE_SOCKETS_PER_IP 500 · DAILY_ROOM_CAP pages 보기 100(paid 1000), worker 보기 30(paid 300)
-    // ALLOW_SUPABASE_SDK "1"(Supabase 실시간을 쓰는 사이트를 받을 때만. README의 '실시간 연결' 참고)
     // 관리 화면(README §11, 내 도메인 경로 Access일 때만): ACCESS_TEAM_DOMAIN "<팀>.cloudflareaccess.com" · ACCESS_AUD "<Access 애플리케이션의 AUD 태그>"(둘 다 있어야 /admin이 열림)
     // 보기(README §4): VIEW "pages"|"worker" · SITE_DAYS(pages 기본 60) · POLL_LONG "on"(기본. 예약 어림이 긴 대기 묻기 기준, 끄려면 "off") · POLL_RELAY "auto"(유료면 Worker가 대신 기다림)
     // 알림: ALERT_AT "45,60,80,95"(하루 예산의 %, 넘침 단계와 같게) · 공지 링크 제한: NOTICE_LINK_HOSTS "github.com,내도메인" · 앱 익명 이용 합계: STATS "on"(끄려면 "off")
