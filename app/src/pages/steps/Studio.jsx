@@ -134,7 +134,8 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
   const [drag, setDrag] = useState(null); const [over, setOver] = useState(null);
   const [rename, setRename] = useState(null); const [del, setDel] = useState(null);
   const listRef = useRef();
-  const focusAt = (i) => setTimeout(() => listRef.current?.querySelectorAll('.sec2-name')[i]?.focus(), 60);
+  /** 옮긴 뒤 초점: 옮긴 섹션의 같은 단추(↑·↓를 이어 누를 수 있게). 그 단추가 꺼졌으면(맨 위·맨 아래) 이름 칸 */
+  const focusAt = (i, dir = '') => setTimeout(() => { const li = listRef.current?.querySelectorAll('.sec2')[i]; const b = dir && li?.querySelector(`button[aria-label$="${dir}"]:not([disabled])`); (b || li?.querySelector('.sec2-name'))?.focus(); }, 60);
   return (
     <div class="stack">
       <div class="sec-tools"><p class="small muted">섹션 {sections.length}개 · 끌어서 순서를 바꿔요.</p>
@@ -153,8 +154,8 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
               <button class="btn btn-sm btn-primary">바꾸기</button></form>
               : <button type="button" class="sec2-name" onClick={() => onShow(s.id)} title="미리보기에서 보기"><span class="ttl">{s.name}</span><small>{[s.hidden ? '숨김' : '', s.steps ? `실습 ${s.steps}단계` : '', ...s.kits.map((k) => KIT_KO[k] || k)].filter(Boolean).join(' · ')}</small></button>}
             <span class="sec2-acts">
-              <button type="button" class="icon-btn" disabled={locked || i === 0} aria-label={`${s.name} 위로`} title="위로" onClick={() => { onMove(s.id, i - 1); focusAt(i - 1); }}>↑</button>
-              <button type="button" class="icon-btn" disabled={locked || i === sections.length - 1} aria-label={`${s.name} 아래로`} title="아래로" onClick={() => { onMove(s.id, i + 1); focusAt(i + 1); }}>↓</button>
+              <button type="button" class="icon-btn" disabled={locked || i === 0} aria-label={`${s.name} 위로`} title="위로" onClick={() => { onMove(s.id, i - 1); focusAt(i - 1, '위로'); }}>↑</button>
+              <button type="button" class="icon-btn" disabled={locked || i === sections.length - 1} aria-label={`${s.name} 아래로`} title="아래로" onClick={() => { onMove(s.id, i + 1); focusAt(i + 1, '아래로'); }}>↓</button>
               <details class="sec2-more"><summary class="icon-btn" aria-label={`${s.name} 더 보기`} title="더 보기">…</summary>
                 <div class="sec2-menu">
                   <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setRename(s.id); }}>이름 바꾸기</button>

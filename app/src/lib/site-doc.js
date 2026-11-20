@@ -15,8 +15,16 @@ export function topSections(doc) {
 }
 const HEAD = 'h1,h2,h3,h4';
 /** 섹션 이름: data-title → 첫 제목 → aria-label */
+/** 요소 글을 사람 눈에 보이는 대로(요소 사이에 빈칸: <span>02</span>생성형 → '02 생성형') */
+function words(el) {
+  if (!el) return '';
+  const out = [];
+  const walk = (n) => { for (const c of n.childNodes) { if (c.nodeType === 3) out.push(c.textContent); else if (c.nodeType === 1 && !c.matches('script,style,[aria-hidden="true"]')) { out.push(' '); walk(c); out.push(' '); } } };
+  walk(el);
+  return out.join('').replace(/\s+/g, ' ').trim();
+}
 export function sectionName(s, i = 0) {
-  const t = s.getAttribute('data-title') || s.querySelector(HEAD)?.textContent || s.getAttribute('aria-label') || '';
+  const t = s.getAttribute('data-title') || words(s.querySelector(HEAD)) || s.getAttribute('aria-label') || '';
   return t.replace(/\s+/g, ' ').trim().slice(0, 60) || `섹션 ${i + 1}`;
 }
 
@@ -84,7 +92,17 @@ export function renameSection(html, id, name) {
     const s = byId(doc, id); if (!s) return false;
     const old = sectionName(s);
     const h = s.querySelector(HEAD);
-    if (h && h.textContent.replace(/\s+/g, ' ').trim() === old) h.textContent = v;
+    if (h && words(h) === old) {
+      if (!h.children.length) h.textContent = v;
+      else {
+        // 제목 안에 꾸밈(번호 <span> 등)이 있으면 그대로 두고 가장 긴 글 조각만 바꿈(번호를 그대로 적었으면 뗌)
+        const texts = [...h.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
+        const main = texts.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+        const keep = [...h.children].map((c) => words(c)).filter(Boolean);
+        let rest = v; for (const k of keep) if (rest.startsWith(k)) rest = rest.slice(k.length).trim();
+        if (main) main.textContent = rest; else h.textContent = v;
+      }
+    }
     if (s.hasAttribute('data-title') || !h) s.setAttribute('data-title', v);
     navLinks(doc, s.id).forEach((a) => { if (a.children.length === 0) a.textContent = v; });
     return true;
@@ -129,6 +147,7 @@ export function cleanInline(raw) {
     for (const c of [...el.childNodes]) {
       if (c.nodeType === 8) { c.remove(); continue; }
       if (c.nodeType !== 1) continue;
+      if (/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|TEMPLATE|NOSCRIPT|SVG|MATH)$/i.test(c.tagName)) { c.remove(); continue; }
       if (c.tagName === 'DIV' || c.tagName === 'P') { c.before(...c.childNodes); c.before(document.createElement('br')); c.remove(); continue; }
       if (!OK_TAGS.has(c.tagName)) { c.replaceWith(...c.childNodes); continue; }
       for (const a of [...c.attributes]) {
