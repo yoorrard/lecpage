@@ -46,6 +46,8 @@ const route = async (r) => {
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
   if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', supportedGenerationMethods: ['generateContent'] }] }); // 무료 등급의 지금 모델(2026-11-14)
   if (u.includes(':generateContent')) return json(r, { candidates: [{ content: { parts: [{ text: JSON.stringify(EXAMPLE) }] }, finishReason: 'STOP' }] });
+  // 바로 배포가 켜진 빌드(VITE_PUBLISH_API)로 찍을 때: HELP_INFO(운영 서버 /api/info를 읽어 둔 JSON 파일)로 답함 → 운영과 같은 '바로 배포' 화면
+  if (process.env.HELP_INFO && /\/api\/info(\?|$)/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: readFileSync(process.env.HELP_INFO, 'utf8') });
   return r.fulfill({ status: 204, headers: CORS }); // 그 밖의 바깥 요청은 빈 응답(막으면 접속 확인이 '이 망에서 막힘'으로 보여 화면이 달라짐)
 };
 
@@ -82,6 +84,8 @@ try {
     await page.waitForFunction(() => !document.querySelector('.drop b')?.textContent.includes('중'), null, { timeout: 90000 });
     await page.locator('.field:has-text("연수명") input').first().fill('수업에 바로 쓰는 생성형 AI');
     await page.locator('.field:has-text("장소") input').first().fill('본관 3층 컴퓨터실');
+    // 교재에 적힌 날짜는 지난 날이라 '날짜가 지났어요' 안내가 그림에 찍힘 → 2주 뒤로(찍는 날 기준)
+    await page.locator('.field:has-text("날짜") input').first().fill(new Date(Date.now() + 14 * 864e5 + 9 * 3600e3).toISOString().slice(0, 10));
     await page.locator('.step-head h1').click(); // 입력 칸의 초점 테두리를 뺌
     await settle(3000); // 알림 글이 사라진 뒤에
     await top();
@@ -106,8 +110,9 @@ try {
     await settle(1800);
     if (want('edit')) await shot('edit');
     // 좁은 화면에서는 미리보기 아래에 고치는 칸이 있어 그쪽으로 내려서 찍음
-    if (want('live')) { await page.click('[role=tab]:has-text("참여 기능")'); if (tail) await top('.ws-panel'); await shot('live'); }
-    if (want('review')) { await page.click('[role=tab]:has-text("수정 요청")'); if (tail) await top('.ws-panel'); await shot('review'); }
+    // 좁은 화면은 탭 줄이 미리보기 위, 고른 탭의 내용은 미리보기 아래(.ws-body)
+    if (want('live')) { await page.click('[role=tab]:has-text("참여 기능")'); if (tail) await top('.ws-body'); await shot('live'); }
+    if (want('review')) { await page.click('[role=tab]:has-text("수정 요청")'); if (tail) await top('.ws-body'); await shot('review'); }
 
     // 4. 배포하기
     if (want('share')) {

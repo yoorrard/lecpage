@@ -13,9 +13,15 @@ export const NETLIFY_TOKEN_URL = 'https://app.netlify.com/user/applications#pers
 
 /** 인터넷에 닿지 못한 오류(fetch가 던지는 TypeError)를 쉬운 말로 */
 const OFFLINE = '인터넷에 닿지 못했어요. 연결을 확인하고 다시 해 주세요. 학교망이 막았다면 휴대폰 핫스팟으로 바꿔 보세요.';
+// 학교·기관 망의 차단 화면: API 주소인데 웹 페이지(HTML)가 옴 → 영어·빈 값 대신 같은 안내(인터넷·핫스팟)
+const BLOCKED = '이 망에서 배포할 곳에 닿지 않아요. 학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.';
+const blockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
 async function net(url, init) {
-  try { return await fetch(url, init); }
+  let r;
+  try { r = await fetch(url, init); }
   catch (e0) { const e = new Error(OFFLINE); e.status = 0; e.cause = e0; throw e; }
+  if (blockPage(r)) { const e = new Error(BLOCKED); e.status = 0; e.blocked = true; throw e; }
+  return r;
 }
 // GitHub가 영어로 주는 오류를 강사가 고칠 수 있는 말로
 function ghError(status, msg) {
@@ -308,6 +314,7 @@ async function ip(method, path, { key, json, raw } = {}) {
   let r;
   try { r = await fetch(PUBLISH_API + path, { method, headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), ...(json ? { 'content-type': 'application/json' } : raw ? { 'content-type': 'application/octet-stream' } : {}) }, body: json ? JSON.stringify(json) : raw }); }
   catch { const e = new Error('바로 배포 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 주세요.'); e.status = 0; throw e; }
+  if (blockPage(r)) { const e = new Error('이 망에서 바로 배포 서버에 닿지 않아요. 학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.'); e.status = 0; e.blocked = true; throw e; }
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
   if (!r.ok) {
     const x = j.error || {}; const code = x.code || '';

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { buildSite, previewHtml } from '../lib/engine.js';
+import { noAssets } from '../lib/no-assets.js';
 import { labelCss } from './words.js';
 
 let LABELS = '';
@@ -19,7 +20,7 @@ export function LiveSite({ bp, title = '디자인 미리보기', focus = '' }) {
   useEffect(() => {
     let off = false; setHtml('');
     const b = { ...bp, live: { ...(bp.live || {}), provider: 'none', features: [] } };
-    buildSite(b, {}).then((r) => { if (!off && !r.errors?.length) setHtml(previewHtml(r.files, 'index.html', { tour: !focus, extraCss: labels() })); }).catch(() => { });
+    buildSite(noAssets(b), {}).then((r) => { if (!off && !r.errors?.length) setHtml(previewHtml(r.files, 'index.html', { tour: !focus, extraCss: labels() })); }).catch(() => { });
     return () => { off = true; };
   }, [bp, run]);
   const post = (m) => { try { frame.current?.contentWindow?.postMessage(m, '*'); } catch { } };

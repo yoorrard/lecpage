@@ -10,11 +10,83 @@ export function makeDraft(p, ing) {
   return applyInfo({ ...draft, _presetAuto: true }, p.info, p.material, p.blueprint);
 }
 
-export function makePrompt(p, ing) {
-  const context = p.material ? ing.materialToAIContext(p.material, { maxChars: 50000 }) : '';
+/**
+ * 쓰던 AI 창·키에 보내는 프롬프트의 전체 상한(글자). 긴 문서형 교재(해설서·자료집)는 초안 JSON이 수십만 자가 되어
+ * 쓰던 AI 창에 넣을 수 없고 키 비용도 커짐(점검 2026-11: 60장 DOCX 37.6만 자). 한글 1자 ≈ 1토큰으로 어림하면
+ * 무료·개인 요금제 AI 창의 문맥(수만 토큰)과 답(설계도 1~3만 토큰)을 함께 담는 크기. 보통 교재(1~1.5만 자)는 그대로
+ */
+export const PROMPT_MAX = 30000;
+/** 초안의 긴 글 칸을 앞부분만 보낼 때 끝에 붙이는 표시. 답에 이 표시가 남은 칸은 앱이 교재 원문으로 되돌림(restoreShrunk) */
+export const SHRUNK = '…(줄임)';
+const SHRINK_NOTE = `참고 초안에서 '${SHRUNK}'으로 끝나는 칸은 교재 글이 길어 앞부분만 보낸 것이다. 그 칸은 고쳐 쓰지 말고 '${SHRUNK}'까지 그대로 둔다(앱이 교재 원문으로 채운다).`;
+
+/** 초안 섹션의 긴 글(주소 아닌 글자) 칸을 max자 + 표시로. 원문 표(머리 → 원문)도 돌려줌 */
+function shrinkDraft(draft, max) {
+  const full = new Map();
+  const cut = (v) => {
+    if (typeof v === 'string') {
+      if (v.length <= max + SHRUNK.length || /^https?:\/\//.test(v)) return v;
+      const head = v.slice(0, max).trimEnd();
+      full.set(head, v);
+      return head + SHRUNK;
+    }
+    if (Array.isArray(v)) return v.map(cut);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cut(x)]));
+    return v;
+  };
+  return { draft: { ...draft, sections: (draft.sections || []).map(cut) }, full };
+}
+const longFields = (draft, n) => { let c = 0; const walk = (v) => { if (typeof v === 'string') { if (v.length > n) c++; } else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(draft?.sections || []); return c; };
+
+/**
+ * 프롬프트와 줄였는지. 상한(PROMPT_MAX)을 넘으면: ① 초안의 긴 글 칸을 앞부분만(긴 칸 수에 맞춰 80~300자),
+ * ② 그래도 넘으면 교재 요약을 남은 자리만큼(엔진 materialToAIContext가 쪽 단위로 줄이고 뒤쪽 제목 목록을 붙임).
+ * 교재를 막거나 '나눠 넣으세요'로 미루지 않음. 줄인 칸은 답을 받은 뒤 교재 원문으로 되돌림(guardAnswer → restoreShrunk)
+ */
+export function makePromptInfo(p, ing) {
   const info = { ...p.info }; delete info.instructorEmail;
-  const draft = p.material ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : null;
-  return E.buildPrompt({ context, info, draft, material: p.material });
+  const draft0 = p.material ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : null;
+  const ctx = (n) => (p.material ? ing.materialToAIContext(p.material, { maxChars: n }) : '');
+  const build = (context, draft) => E.buildPrompt({ context, info, draft, material: p.material });
+  let text = build(ctx(50000), draft0);
+  if (text.length <= PROMPT_MAX || !draft0) return { text, shrunk: false };
+  const n = longFields(draft0, 300);
+  const max = Math.max(80, Math.min(300, Math.floor((PROMPT_MAX * 0.35) / Math.max(1, n))));
+  const small = shrinkDraft(draft0, max).draft;
+  text = build(ctx(50000), small);
+  for (let i = 0; i < 4 && text.length > PROMPT_MAX; i++) {
+    const room = PROMPT_MAX - build('', small).length - SHRINK_NOTE.length - 300;
+    text = build(ctx(Math.max(1500, Math.floor(room * (1 - i * 0.12)))), small);
+  }
+  // 줄임 표시를 쓴 칸이 있으면 AI에게 그대로 두라고 알림(마지막 줄 PROMPT_END는 답 읽기가 쓰므로 그 앞에)
+  const end = E.PROMPT_END; const at = text.lastIndexOf(end);
+  if (at > 0) text = text.slice(0, at) + SHRINK_NOTE + '\n\n' + text.slice(at);
+  return { text, shrunk: true };
+}
+export const makePrompt = (p, ing) => makePromptInfo(p, ing).text;
+
+/**
+ * 답에 줄임 표시(SHRUNK)가 남은 글 칸을 교재 원문으로(초안 draft에서). 표시 앞 글이 보낸 앞부분과 같으면 그 원문,
+ * AI가 앞부분을 조금 고쳤으면 처음 40자로 찾음. 못 찾으면 표시만 뗌
+ */
+export function restoreShrunk(bp, draft) {
+  if (!bp || !draft || !JSON.stringify(bp.sections || []).includes(SHRUNK)) return bp;
+  const n = longFields(draft, 300);
+  const max = Math.max(80, Math.min(300, Math.floor((PROMPT_MAX * 0.35) / Math.max(1, n))));
+  const { full } = shrinkDraft(draft, max);
+  const heads = [...full.keys()];
+  const fix = (v) => {
+    if (typeof v === 'string') {
+      const i = v.indexOf(SHRUNK); if (i < 0) return v;
+      const head = v.slice(0, i).trimEnd();
+      const hit = full.get(head) || full.get(heads.find((h) => head.length >= 20 && h.startsWith(head.slice(0, 40))));
+      return hit || (head + v.slice(i + SHRUNK.length));
+    }
+    if (Array.isArray(v)) return v.map(fix);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fix(x)]));
+    return v;
+  };
+  return { ...bp, sections: fix(bp.sections) };
 }
 
 /**
@@ -35,8 +107,9 @@ const urlsIn = (v) => JSON.stringify(v || '').match(/https?:\/\/[^\s"'<>\\]+/g) 
  * assets: 이 연수 저장소의 파일 경로(blobs.keys). 주면 그곳에 없는 그림·파일 주소를 비움(dropMissing)
  * @returns {{ blueprint, restored }}
  */
-export function guardAnswer(bp, p, ing, base = null, { assets = null } = {}) {
+export function guardAnswer(bp0, p, ing, base = null, { assets = null } = {}) {
   const draft = p?.material && ing ? ing.materialToDraft(p.material, draftInfo(p.info, p.slidesMade)) : null;
+  const bp = restoreShrunk(bp0, draft); // 긴 교재라 앞부분만 보낸 칸은 교재 원문으로
   const allowUrls = [...urlsIn(p?.info), ...urlsIn(p?.blueprint)]; // 강사가 적은 접속·설문 주소, 지금 사이트에 이미 있는 주소
   const g = draft ? E.guardMaterial(bp, draft, { material: p.material, allowUrls }) : { blueprint: bp, restored: [] };
   return { blueprint: dropMissing(keepDraftParts(g.blueprint, draft || base || p?.blueprint), assets), restored: g.restored };

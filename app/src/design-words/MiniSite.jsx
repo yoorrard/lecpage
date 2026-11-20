@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { buildSite, previewHtml } from '../lib/engine.js';
+import { noAssets } from '../lib/no-assets.js';
 
 /**
  * 작은 실제 화면: 설계도를 엔진으로 그려 스크립트 없이(sandbox="") 보여 줘요. 모형이 아니라 실제 결과예요.
@@ -71,7 +72,8 @@ export function useLive(bp, on, assets) {
     let off = false;
     queue(async () => {
       if (off) return;
-      const r = await buildSite({ ...bp, live: { ...(bp.live || {}), provider: 'none', features: [] } }, assets || {});
+      const b = { ...bp, live: { ...(bp.live || {}), provider: 'none', features: [] } };
+      const r = await buildSite(assets ? b : noAssets(b), assets || {});
       if (r.errors?.length) return;
       const h = liveHtml(r.files); liveCache.delete(key); liveCache.set(key, h); if (liveCache.size > 12) liveCache.delete(liveCache.keys().next().value);
       if (!off) setHtml(h);
@@ -112,7 +114,7 @@ export function useStatic(bp, focus, on, assets, first = false) {
     let off = false;
     queue(async () => {
       if (off) return;
-      const r = await buildSite(stillBp(bp), assets || {});
+      const r = await buildSite(assets ? stillBp(bp) : noAssets(stillBp(bp)), assets || {});
       if (r.errors?.length) return;
       const h = staticHtml(r.files, focus); remember(key, h); if (!off) setHtml(h);
     }, first);

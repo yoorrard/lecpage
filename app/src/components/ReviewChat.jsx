@@ -5,7 +5,7 @@ import { visionTarget, askVision } from '../lib/ai-vision.js';
 import { explainError } from '../lib/ai.js';
 import { copy, toast, saveFile, uid, safeName } from '../lib/util.js';
 import { Dialog } from './ui.jsx';
-import { findFixes } from '../design-words/symptoms.js';
+import { findFixes, SAYINGS } from '../design-words/symptoms.js';
 import { applyWords } from '../design-words/words.js';
 import { FixCard } from '../design-words/SayFix.jsx';
 import { useBus, setTry, focusSection } from '../design-words/bus.js';
@@ -145,8 +145,9 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   const onPaste = (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.some((f) => f.type.startsWith('image/'))) { e.preventDefault(); addFiles(files); } };
 
   // ── 보내기 ──
-  async function send() {
-    const text = draft.trim();
+  /** say: 예시 말 칩을 눌렀을 때 그 말로 바로 보냄 */
+  async function send(say) {
+    const text = (typeof say === 'string' ? say : draft).trim();
     if ((!text && !atts.length) || busy) return;
     const m = { id: uid(8), role: 'user', text: text.slice(0, 2000), at: Date.now(), images: atts.map((a) => ({ id: a.id, url: a.url, w: a.w, h: a.h, viewport: a.viewport, scroll: a.scroll, sections: a.sections, notes: a.notes })), sections: [...new Set(atts.flatMap((a) => a.sections || []))] };
     add(m); setDraft(''); setAtts([]); setSay('');
@@ -265,7 +266,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
         {!!msgs?.length && <button type="button" class="btn btn-sm btn-quiet rc-clear" onClick={clearAll}>{sure ? '한 번 더 누르면 지워요' : '대화 지우기'}</button>}
       </div>
       <div class="rc-thread" ref={thread} role="log" aria-live="polite" aria-label="수정 요청 대화" tabIndex={0}>
-        {msgs && !msgs.length && <Intro />}
+        {msgs && !msgs.length && <Intro onSay={locked ? null : send} />}
         {(msgs || []).map((m) => (m.role === 'user'
           ? <UserMsg m={m} name={name} onOpen={setBig} />
           : m.kind === 'quick' ? <QuickMsg m={m} bp={p.blueprint} full={m.id === lastQuick} tried={bus.try?.key} busy={busy || locked} onApply={applyQuick} onTry={tryQuick} onUndo={revert} onAi={toAi} keyed={!!target} />
@@ -296,7 +297,7 @@ export function ReviewChat({ p, update, pushUndo, undo, undoTop, frameRef, marki
   );
 }
 
-function Intro() {
+function Intro({ onSay }) {
   return (
     <div class="rc-intro">
       <p><b>미리보기를 보며 고칠 곳을 알려 주세요.</b></p>
@@ -305,6 +306,9 @@ function Intro() {
         <li>무엇을 바꿀지 적어 보내요. '좀 답답해 보여요'처럼 디자인 느낌이면 AI 없이 바로 고칠 안이 나오고, 글·순서는 AI가 고칠 안을 만들어요.</li>
         <li><b>적용</b>하면 바로 바뀌고, 마음에 안 들면 <b>되돌리기</b>로 돌아가요.</li>
       </ol>
+      {onSay && <div class="say-chips" role="group" aria-label="보이는 느낌 예시(누르면 바로 보내요)">
+        {SAYINGS.slice(0, 6).map((s) => <button type="button" class="chip" onClick={() => onSay(s)}>{s}</button>)}
+      </div>}
     </div>
   );
 }

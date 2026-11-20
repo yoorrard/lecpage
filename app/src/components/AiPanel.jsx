@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Notice, Seg } from './ui.jsx';
 import { Mascot } from './Mascot.jsx';
 import { E } from '../lib/engine.js';
-import { makePrompt, makeDraft, looksTruncated, guardAnswer, dropMissing } from '../lib/blueprint.js';
+import { makePrompt, makeDraft, looksTruncated, guardAnswer, dropMissing, SHRUNK } from '../lib/blueprint.js';
 import { polishTargets, makePolishPrompt, applyPolish } from '../lib/polish.js';
 import { PROVIDERS, loadKey, saveKey, forgetKey, generateAuto, getActiveAI, explainError, takeAiResume, CHATBOTS, getChatbot, setChatbot, chatLabel, chatbotFor, setWay } from '../lib/ai.js';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
@@ -10,6 +10,7 @@ import { copy, toast } from '../lib/util.js';
 import { reach, netLine } from '../lib/netcheck.js';
 import { loadChunk } from '../lib/fresh.jsx';
 import { blobs } from '../lib/db.js';
+import { readAnswer } from '../lib/answer.js';
 
 /** OpenRouter 로그인에서 돌아오면 AI 창을 다시 엶 */
 export function useAiResume(open) {
@@ -80,7 +81,7 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
   function accept(raw) {
     setErr(null);
     const text = partial ? E.joinAnswer(partial, raw) : String(raw || '');
-    const r = E.readAnswer(text);
+    const r = readAnswer(text);
     if (r.kind === 'empty') { setErr({ title: '붙여 넣은 답이 없어요.', body: 'AI 답 아래의 복사 버튼을 누르고 다시 넣어 주세요.' }); return; }
     if (r.kind === 'cut') {
       setPartial(text);
@@ -90,6 +91,7 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
     if (r.kind === 'prompt') { setErr({ title: '붙여 넣은 글이 프롬프트예요.', body: 'AI가 쓴 답을 복사해 주세요. 답 아래의 복사 버튼을 누르면 돼요.' }); return; }
     if (r.kind === 'question') { setErr({ title: 'AI가 답 대신 질문을 했어요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내면 바로 써 줘요. 모르는 것은 빈칸으로 두라고 적혀 있어요.', actions: ['jsononly'] }); return; }
     if (r.kind === 'talk') { setErr({ title: 'AI가 설명만 하고 사이트 내용을 쓰지 않았어요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내 주세요.', actions: ['jsononly'] }); return; }
+    if (r.kind === 'broken') { setErr({ title: '답 모양이 조금 깨져서 읽지 못했어요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내면 다시 써 줘요. 답 아래의 복사 버튼으로 복사하면 깨지지 않아요.', actions: ['jsononly'] }); return; }
     setPartial('');
     onWait?.(null); // 답을 받았으니 'AI에게 보냄' 표시는 지움(받을 수 없는 답이면 남겨 둬서 다시 넣을 수 있게)
     const json = r.json;
@@ -99,9 +101,9 @@ export function AiPanel({ p, onBlueprint, start = null, onKey = null, head = nul
       // 문구만 다듬기는 교재 글(단계·프롬프트·일정 제목·FAQ)을 보내지 않아 바뀔 일이 없고, 강사가 고친 곳을 교재로 되돌리면 안 되므로 지킴이를 거치지 않음
       onBlueprint(dropMissing(pr.blueprint, assetKeys), { polish: true, count: pr.count, restored: [] }); return;
     }
-    if (!Array.isArray(json.sections)) { setErr({ title: '답의 형식이 달라요.', body: '프롬프트를 다시 복사해 새 대화에 붙여 넣어 주세요.' }); return; }
+    if (!Array.isArray(json.sections)) { setErr({ title: '답의 형식이 달라요.', body: '[다시 요청 글 복사]를 눌러 AI에게 보내 주세요. 그래도 같으면 프롬프트를 새 대화에 붙여 넣어 주세요.', actions: ['jsononly'] }); return; }
     const v = E.validate(json);
-    if (v.errors.length) { setErr({ title: '답에 고칠 점이 있어요.', body: v.errors.map((x) => x.message_ko).join(' ') }); return; }
+    if (v.errors.length) { setErr({ title: '답에 고칠 점이 있어요.', body: v.errors.map((x) => x.message_ko).join(' ') + ' [다시 요청 글 복사]를 눌러 AI에게 보내 주세요.', actions: ['jsononly'] }); return; }
     // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서
     const g = guardAnswer(json, p, ing, base.current, { assets: assetKeys });
     onBlueprint(g.blueprint, { polish: false, restored: g.restored });
@@ -193,7 +195,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
     if (!fresh.current || partial || !ready || !navigator.permissions?.query || !navigator.clipboard?.readText) return;
     try { if ((await navigator.permissions.query({ name: 'clipboard-read' })).state !== 'granted') return; } catch { return; }
     let v = ''; try { v = (await navigator.clipboard.readText()).trim(); } catch { return; }
-    if (E.readAnswer(v).kind !== 'ok') return;
+    if (readAnswer(v).kind !== 'ok') return;
     fresh.current = false; toast('복사해 온 답을 넣었어요.'); onApply(v);
   }
   const autoRef = useRef(tryAuto); autoRef.current = tryAuto; // 돌아옴 알림이 늘 지금 값(ready·partial)으로 읽게
@@ -213,7 +215,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
       const t = e.target;
       if (t === taRef.current || t?.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]')) return;
       const v = e.clipboardData?.getData('text'); if (!v?.trim()) return;
-      if (step === 0 && !partial && !['ok', 'cut'].includes(E.readAnswer(v).kind)) return;
+      if (step === 0 && !partial && !['ok', 'cut'].includes(readAnswer(v).kind)) return;
       e.preventDefault(); onApply(v);
     };
     document.addEventListener('paste', f); return () => document.removeEventListener('paste', f);
@@ -262,7 +264,7 @@ function Paste({ ready, prompt, dep = [], full, first, bot: want, partial, onApp
             })}
           </div>
           <div><button type="button" class="btn-link" disabled={!ready} onClick={() => { if (guard && !guard()) return; mark(bot || 'chatgpt', copyNow(textNow())); toast('복사했어요. AI 입력 칸에 붙여 넣으세요.'); setStep(1); }}>프롬프트만 복사 →</button></div>
-          {full && text.length > 30000 && <p class="small muted">교재가 길면 무료 요금제에서는 답이 중간에 끊길 수 있어요. 그러면 [이어 쓰기 요청 복사]로 이어서 받아요.</p>}
+          {full && text.includes(SHRUNK) && <p class="small muted">교재가 길어 섹션 글은 앞부분만 보내요. 답을 넣으면 교재 원문으로 다시 채워요. 답이 중간에 끊기면 [이어 쓰기 요청 복사]로 이어서 받아요.</p>}
           <p class="small muted">교재의 글이 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
         </div></div>
       ) : (

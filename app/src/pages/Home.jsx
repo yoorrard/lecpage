@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Mascot } from '../components/Mascot.jsx';
-import { projects } from '../lib/db.js';
-import { newProject, setPendingFiles, isSavedFile, openSavedFile, OPEN_FAIL } from '../lib/project.js';
+import { projects, storageKind, STORAGE_MSG } from '../lib/db.js';
+import { newProject, setPendingFiles, isSavedFile, stageOf } from '../lib/project.js';
 import { toast } from '../lib/util.js';
 import { HeroFold } from '../landing/HeroFold.jsx';
 import '../styles/landing.css';
@@ -10,6 +10,10 @@ import '../styles/landing.css';
 // 첫 화면은 엔진을 받지 않아요(숫자는 빌드 때 계산, 그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md
 // .lecpage(AI 에이전트 스킬·다른 컴퓨터에서 저장한 연수)도 같은 곳에 놓으면 열림
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
+const DAY = 864e5;
+/** 빈 연수: [교재 없이 시작하기]만 누르고 아무것도 넣지 않은 것(교재·초안·연수 정보 글이 하나도 없음) */
+const FILLED = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue', 'request', 'instructorName', 'instructorOrg', 'contact', 'surveyUrl', 'joinUrl'];
+const isBlank = (p) => !p.blueprint && !p.material && !(p.files || []).length && !p.imported && !p.origin && !p.fromExample && !FILLED.some((k) => String(p.info?.[k] || '').trim());
 
 export function Home() {
   const [list, setList] = useState(null);
@@ -18,7 +22,14 @@ export function Home() {
   const [Mine, setMine] = useState(null); // '내 연수' 목록(만든 연수가 있을 때만 받음)
   const [More, setMoreC] = useState(null); // 첫 화면 아래 이야기(늦게 받는 묶음: 첫 화면 JS를 가볍게)
   const fileRef = useRef(); const pickRef = useRef();
-  const reload = () => projects.all().then(setList, () => setList([]));
+  // 빈 연수는 쌓이지 않게: 목록에서 빼고, 하루 넘은 것은 지우고, [교재 없이 시작하기]는 남은 빈 연수를 다시 씀
+  const blankRef = useRef(null);
+  const reload = () => projects.all().then((all) => {
+    const blanks = all.filter(isBlank); const now = Date.now();
+    for (const b of blanks) if (now - (b.updatedAt || b.createdAt || 0) > DAY) projects.remove(b.id).catch(() => { });
+    blankRef.current = blanks.find((b) => now - (b.updatedAt || b.createdAt || 0) <= DAY) || null;
+    setList(all.filter((p) => !isBlank(p)));
+  }, () => setList([]));
   useEffect(() => { reload(); }, []);
   // 아래 이야기 코드는 첫 그림을 그린 다음 틈에 받음(첫 화면은 기다리지 않음)
   useEffect(() => {
@@ -45,7 +56,7 @@ export function Home() {
     running.current = true;
     const t = setTimeout(() => setBusy(key), 300);
     let ok = false;
-    try { await fn(); ok = true; } catch (e) { console.error(e); toast(fail); }
+    try { await fn(); ok = true; } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || fail); }
     clearTimeout(t); setBusy('');
     if (!ok || stay) running.current = false; // 다른 화면으로 넘어가면 이 화면은 닫히니 그대로 막아 둠
   }
@@ -54,7 +65,7 @@ export function Home() {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
     if (files.length === 1 && isSavedFile(files[0])) return openSaved(files[0]); // 저장한 연수 파일이면 교재가 아니라 연수로 열기
     return once('blank', async () => {
-      const p = await newProject('blank');
+      const p = blankRef.current || await newProject('blank'); blankRef.current = null;
       if (files.length) setPendingFiles(p.id, files);
       location.hash = `#/p/${p.id}/1`;
     });
@@ -77,9 +88,13 @@ export function Home() {
   const pick = () => pickRef.current?.click();
   const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
   async function openSaved(f) {
-    try { toast(await openSavedFile(f)); }
-    catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
+    const m = await import('../lib/open-saved.js').catch(() => null); // 파일을 열 때만 받음(첫 화면 묶음을 가볍게)
+    if (!m) { toast('파일 여는 도구를 받지 못했어요. 인터넷 연결을 확인하고 새로 고침해 주세요.'); return; }
+    try { toast(await m.openSaved(f)); }
+    catch (err) { toast(m.openFailMessage(err)); }
   }
+  // 다시 온 강사: 가장 최근에 고친 연수로 바로 이어 가는 단추(첫 화면 단추 줄, '먼저 체험해 보기' 자리). '내 연수' 목록은 아래 그대로
+  const recent = list?.[0];
   async function onImport(e) {
     const f = e.target.files?.[0]; if (!f) return;
     await openSaved(f);
@@ -98,7 +113,8 @@ export function Home() {
           </button>
           <input ref={pickRef} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { startWith(e.target.files); e.target.value = ''; }} />
           <div class="ld-hero-more">
-            <a class="btn ld-try" href="#/demo">먼저 체험해 보기<span aria-hidden="true"> →</span></a>
+            {recent ? <a class="btn ld-try ld-resume" href={`#/p/${recent.id}/${recent.stage || stageOf(recent.step || 1)}`}><span>이어서 만들기:</span><span class="ld-resume-t">{recent.title || '이름 없는 연수'}</span><span aria-hidden="true">→</span></a>
+              : <a class="btn ld-try" href="#/demo">먼저 체험해 보기<span aria-hidden="true"> →</span></a>}
             <button type="button" class="btn btn-quiet" {...busyProps('blank')} onClick={() => startWith([])}>교재 없이 시작하기</button>
             <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />

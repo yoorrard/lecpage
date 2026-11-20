@@ -7,10 +7,11 @@ import { AiConnect, AiStatus } from '../../components/AiConnect.jsx';
 import { getActiveAI, forgetKey, takeAiResume } from '../../lib/ai.js';
 import { startMakeJob, useAiJob, noteAiResult } from '../../lib/ai-job.js';
 import { pushUndoFor } from '../../lib/undo.js';
-import { blobs } from '../../lib/db.js';
+import { blobs, storageKind, STORAGE_MSG } from '../../lib/db.js';
 import { fmtBytes, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
-import { takePendingFiles, deleteProject, isSavedFile, openSavedFile, OPEN_FAIL } from '../../lib/project.js';
+import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
+import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { trainingDays, daysPatch } from '../../lib/days.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
@@ -31,6 +32,7 @@ const PHOTO_NOTE = "사진은 교재로 읽지 않아요. 사이트에 실으려
 function useIngest(p, update) {
   const [busy, setBusy] = useState('');
   const [pct, setPct] = useState(0);
+  const [stop, setStop] = useState(null); // 쪽 그림을 만드는 동안: [쪽 그림 그만 만들기](그때까지 만든 그림은 씀)
   async function ingestAll(fileObjs0, { replace = false, keep = null } = {}) {
     const photos = fileObjs0.filter((f) => PHOTO.test(f.name));
     const fileObjs = fileObjs0.filter((f) => !PHOTO.test(f.name));
@@ -44,21 +46,25 @@ function useIngest(p, update) {
     }
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
     const mats = [];
-    let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0;
+    let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0; let empty = 0; let cut = 0;
     for (const [i, f] of fileObjs.entries()) {
       if (f.size > 100e6) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] }); continue; }
       setBusy(`${f.name} 읽는 중 (${i + 1}/${fileObjs.length})`); setPct(5 + Math.round((i / fileObjs.length) * 10));
       const { material, bytes } = await ing.readFile(f);
       const ext = (f.name.split('.').pop() || '').toLowerCase();
       const errors = (material.errors || []).map((e) => e.message_ko);
-      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors });
+      // 읽었지만 알릴 것(스캔본처럼 글자가 없는 PDF·앞쪽만 읽음·숨긴 슬라이드 등): 그 파일 줄에 주황 한 줄
+      const warns = errors.length ? [] : (material.warnings || []).map((w) => w.message_ko);
+      if (!errors.length && (material.warnings || []).some((w) => w.code === 'no-text' || w.code === 'no-content')) empty++;
+      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors, ...(warns.length ? { warns } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
       if (f.size <= 100e6 && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
       if (ext === 'pdf' && !errors.length) {
         await blobs.removePrefix(p.id, 'assets/slides/');
-        const shots = await ing.renderSlides(bytes, (done, total) => { setBusy(`슬라이드 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); });
+        const ctl = new AbortController(); setStop(ctl);
+        const shots = await ing.renderSlides(bytes, (done, total) => { setBusy(`슬라이드 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); }, ctl.signal).finally(() => setStop(null));
         for (const s of shots) await blobs.put(p.id, 'assets/slides/' + ing.slideFileName(s.page, s.type), s.blob);
-        slidesMade = shots.length;
+        slidesMade = shots.length; if (ctl.signal.aborted) cut = shots.length;
       }
     }
     const prev = !replace && p.material ? [p.material] : [];
@@ -82,7 +88,8 @@ function useIngest(p, update) {
     });
     const bad = fileObjs.length - ok;
     const ph = photos.length ? ` 사진 ${photos.length}장은 자료실에 따로 넣어요.` : '';
-    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? `교재 ${ok}개를 읽었어요.${ph}` : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
+    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (empty ? (empty === ok ? `교재에서 글자를 거의 읽지 못했어요. 주황 글씨를 확인해 주세요.${ph}` : `교재 ${ok}개를 넣었어요. 글자를 못 읽은 파일이 있어요. 주황 글씨를 확인해 주세요.${ph}`) : cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
+      : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
   async function handle(list) {
     const files = Array.from(list || []); if (!files.length) return;
@@ -91,7 +98,7 @@ function useIngest(p, update) {
       console.error(e);
       // 읽기 도구를 못 받음: 새 버전이면 아래 띠·저절로 새로 고침이 알리고, 망 오류면 여기서
       if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 넣어 주세요.');
-      else if (!e.kind) toast('교재를 읽지 못했어요: ' + (e.message || e));
+      else if (!e.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 읽지 못했어요. 새로 고침한 뒤 다시 넣어 주세요.'); // 영어 원문은 보이지 않음(콘솔에만)
     }
     setBusy(''); setPct(0);
   }
@@ -112,7 +119,7 @@ function useIngest(p, update) {
       if (again.length) await ingestAll(again, { replace: true, keep });
       else update({ material: null, files: rest.filter((m) => m.photos), slidesMade: 0, summary: '' });
       toast(`뺐어요: ${f.name}`);
-    } catch (e) { toast('다시 읽지 못했어요: ' + e.message); }
+    } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0);
   }
   /** 읽는 중에 창을 닫았던 교재(목록에 '읽는 중'으로 남음): 담아 둔 원본으로 이어서 읽음 */
@@ -125,7 +132,7 @@ function useIngest(p, update) {
     try { await ingestAll(again); } catch (e) { console.error(e); }
     setBusy(''); setPct(0);
   }
-  return { busy, pct, handle, removeFile, resume };
+  return { busy, pct, handle, removeFile, resume, stop };
 }
 
 export function StepStart({ p, update, go }) {
@@ -150,16 +157,22 @@ export function StepStart({ p, update, go }) {
   const makeWithAiRef = useRef(null);
   const [confirmRemake, setConfirmRemake] = useState(false);
   const [titleErr, setTitleErr] = useState(false);
-  const { busy, pct, handle, removeFile, resume } = useIngest(p, update);
+  const { busy, pct, handle, removeFile, resume, stop } = useIngest(p, update);
   useEffect(() => { resume(); }, []);
+  // ✕로 교재를 뺀 뒤 초점: 같은 자리(없으면 앞) 파일의 ✕, 다 뺐으면 교재 넣는 칸(초점이 화면 맨 위로 사라지지 않게)
+  const listRef = useRef(); const dropRef = useRef();
+  async function remove(i) {
+    await removeFile(i);
+    setTimeout(() => { const b = listRef.current?.querySelectorAll('.icon-btn'); (b?.[i] || b?.[i - 1] || dropRef.current)?.focus(); }, 30);
+  }
   /** 교재 자리에 저장한 연수(.lecpage, AI 에이전트가 만든 것 포함)를 놓으면 교재가 아니라 그 연수로 엶. 이 연수가 아직 비어 있으면 지움 */
   async function take(list) {
     const files = Array.from(list || []);
     const saved = files.find(isSavedFile);
     if (!saved) return handle(files);
     const cur = latest.current; const empty = !cur.blueprint && !cur.files?.length && !cur.info?.title?.trim();
-    try { toast(await openSavedFile(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
-    catch (err) { toast(err.friendly ? err.message : OPEN_FAIL); }
+    try { toast(await openSaved(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
+    catch (err) { toast(openFailMessage(err)); }
   }
   const info = p.info;
   // 교재에서 채운 날짜가 오늘(한국 시각)보다 앞: 지난 연수 교재를 그대로 쓴 경우가 많음. 고치라고만 알리고 바꾸지는 않음
@@ -239,7 +252,7 @@ export function StepStart({ p, update, go }) {
       {p.blueprint && <Notice kind="ok">사이트가 있어요. 여기서 고친 정보는 바로 반영돼요.</Notice>}
       <div class={`start-grid${showMake ? ' has-make' : ''}`}>
       <section class="stack start-files" aria-label="교재 파일">
-          <div class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
+          <div ref={dropRef} class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) take(e.dataTransfer.files); }}>
@@ -250,13 +263,14 @@ export function StepStart({ p, update, go }) {
               {busy && pct > 0 && <div style={{ width: 'min(320px,80%)' }}><Progress pct={pct} /></div>}
             </>}
           </div>
+          {stop && <div><button type="button" class="btn btn-sm" onClick={() => stop.abort()}>쪽 그림 그만 만들기</button> <span class="small muted">그때까지 만든 그림은 써요.</span></div>}
           <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
           {p.files?.length > 0 && (
-            <ul class="files">
+            <ul class="files" ref={listRef}>
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}</div>
-                  <button class="icon-btn" disabled={!!busy} onClick={() => removeFile(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
+                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}{f.ext === 'pdf' && !f.errors?.length && p.slidesMade ? ` · 슬라이드 그림 ${p.slidesMade}장` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <button class="icon-btn" disabled={!!busy} onClick={() => remove(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
               ))}
             </ul>
           )}

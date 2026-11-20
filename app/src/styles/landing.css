@@ -49,6 +49,8 @@
 .ld-drop.over{border-style:solid;border-color:var(--accent);background:var(--lav-soft);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent)}
 .ld-hero-more{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
 .ld-try{font-weight:650}
+.ld-resume{max-width:100%}
+.ld-resume-t{display:inline-block;max-width:min(16em,52vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 .ld-note{margin-top:14px;font-size:.88rem;line-height:1.6;color:var(--muted);min-height:calc(1.6em * 2)}
 @media (min-width:600px){.ld-note{min-height:0}}
 .ld-later{min-height:100vh}

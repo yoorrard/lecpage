@@ -6,15 +6,21 @@ import { Toast } from './components/ui.jsx';
 import { Home } from './pages/Home.jsx';
 import { toast } from './lib/util.js';
 import { hasPendingFiles } from './lib/project.js';
+import { storageBlocked, STORAGE_MSG } from './lib/db.js';
 import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } from './lib/fresh.jsx';
+import { GalleryHead } from './pages/GalleryHead.jsx';
+import WORDS from 'virtual:lp-words';
 
-// 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임)
+// 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임). 그 화면들의 CSS(styles/screens.css)도 함께 받음:
+// 첫 화면은 기본 CSS(app.css)만 기다려 휴대폰에서 먼저 그려짐(점검 2026-11 L6)
+const screensCss = () => import('./styles/screens.js');
+const lazyPage = (load, pick) => () => Promise.all([load(), screensCss()]).then(([m]) => pick(m));
 const LOADERS = {
-  project: () => import('./pages/Project.jsx').then((m) => m.Project),
-  settings: () => import('./pages/Settings.jsx').then((m) => m.Settings),
-  gallery: () => import('./pages/Gallery.jsx').then((m) => m.Gallery),
-  help: () => import('./pages/Help.jsx').then((m) => m.Help),
-  demo: () => import('./pages/Demo.jsx').then((m) => m.Demo),
+  project: lazyPage(() => import('./pages/Project.jsx'), (m) => m.Project),
+  settings: lazyPage(() => import('./pages/Settings.jsx'), (m) => m.Settings),
+  gallery: lazyPage(() => import('./pages/Gallery.jsx'), (m) => m.Gallery),
+  help: lazyPage(() => import('./pages/Help.jsx'), (m) => m.Help),
+  demo: lazyPage(() => import('./pages/Demo.jsx'), (m) => m.Demo),
 };
 const loaded = {};
 function Lazy({ name, ...props }) {
@@ -53,6 +59,14 @@ function useHash() {
   return h;
 }
 
+/** 이 창에서 브라우저 저장소를 쓸 수 없으면(사생활 보호 창·사이트 데이터 차단·기관 정책) 만들기·설정 화면 위에 한 줄. 체험·둘러보기·도움말은 그대로 됨 */
+function StorageBar({ route }) {
+  const [off, setOff] = useState(false);
+  useEffect(() => { storageBlocked().then(setOff); }, []);
+  if (!off || ['demo', 'gallery', 'help'].includes(route)) return null;
+  return <div class="storage-bar" role="alert"><b>연수를 만들거나 열 수 없어요.</b> {STORAGE_MSG.blocked} <a href="#/demo">체험</a>과 <a href="#/gallery">디자인 둘러보기</a>는 그대로 돼요.</div>;
+}
+
 function App() {
   const hash = useHash();
   const parts = hash.replace(/^#\/?/, '').split('/');
@@ -70,7 +84,8 @@ function App() {
   // key: 화면이 바뀔 때 이전 화면 컴포넌트가 새 화면의 값을 받지 않게
   if (route === 'p' && a) page = <Lazy key="project" name="project" id={a} step={Number(b) || 0} />;
   else if (route === 'settings') page = <Lazy key="settings" name="settings" />;
-  else if (route === 'gallery') page = <Lazy key="gallery" name="gallery" tab={a} />;
+  // 둘러보기 머리는 조각 밖에서 바로(엔진 묶음 약 480KB를 기다리지 않고 첫 글이 뜸. 조각이 오면 그 아래만 채움)
+  else if (route === 'gallery') page = <div key="gallery" class="stack gallery"><GalleryHead count={WORDS} /><Lazy name="gallery" tab={a} /></div>;
   else if (route === 'help') page = <Lazy key="help" name="help" topic={a} />;
   else if (route === 'demo') page = <Lazy key="demo" name="demo" />;
   else page = <Home />;
@@ -87,7 +102,7 @@ function App() {
           <a href="#/settings" aria-current={cur('settings')}>설정</a>
         </nav>
       </div></header>
-      <main class="page" id="main" tabIndex={-1}>{page}</main>
+      <main class="page" id="main" tabIndex={-1}><StorageBar route={route || ''} />{page}</main>
       <footer class="foot"><div class="foot-in">
         <span><b class="latin">lecpage</b> · 교재를 넣으면 연수 사이트가 나와요</span>
         <span>회원가입 없음 · 교재는 이 브라우저에서 읽어요</span>
@@ -115,11 +130,17 @@ addEventListener('vite:preloadError', (e) => { if (isChunkError(e.payload)) chun
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => { });
-    // 첫 화면이 뜬 뒤 한가할 때 만들기 화면을 미리 받아 둠(다음 화면이 바로 열림). 데이터 절약 모드면 생략.
+    // 첫 화면(#/)으로 들어왔으면 한가할 때 만들기 화면을 미리 받아 둠(다음 화면이 바로 열림). 데이터 절약 모드면 생략.
+    // 둘러보기·체험·도움말로 바로 온 경우는 받지 않음(그 화면이 쓸 망·CPU를 나눠 쓰지 않게. 점검 2026-11 M6·M7)
     // 오프라인용 저장은 여기서 하지 않음(첫 방문 랜딩에서 전체 캐시 금지 → 연수 화면에 들어갈 때 warmOffline)
-    if (navigator.connection?.saveData) return;
+    if (navigator.connection?.saveData || !/^#?\/?$/.test(location.hash)) return;
+    // 받기만 하고 실행하지 않음(link rel=prefetch, 낮은 우선순위): 첫 화면 직후 휴대폰 CPU를 쓰지 않게. 목록은 빌드가 만듦(prefetch.json)
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 2500));
-    idle(() => { LOADERS.project().then(() => import('./lib/engine.js')).then((m) => m.loadRuntime()).catch(() => { }); });
+    idle(() => {
+      fetch('./prefetch.json').then((r) => r.json()).then(({ files }) => {
+        for (const f of files || []) { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = './' + f; document.head.appendChild(l); }
+      }).catch(() => { });
+    });
   });
 }
 
