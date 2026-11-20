@@ -14,10 +14,12 @@
 export const PROTOCOL = 1;
 
 export const COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
-/** Readable by anyone who knows the training code (snapshot & realtime). */
-export const PUBLIC_COLS = ['questions', 'posts', 'help', 'progress', 'polls', 'answers', 'chat'];
-/** Readable by the admin; a participant token reads only its own docs. */
-export const PRIVATE_COLS = ['participants', 'attendance', 'survey'];
+/** Readable by anyone who knows the training code (snapshot & realtime). Answers carry their value only once the
+ *  instructor reveals that poll (the 'signal' light always; a participant always sees their own). */
+export const PUBLIC_COLS = ['questions', 'posts', 'polls', 'answers', 'chat'];
+/** Readable by the admin; a participant token reads only its own docs. Help requests (seat, message) and lab progress
+ *  are the instructor's: nobody else in the room needs them. */
+export const PRIVATE_COLS = ['participants', 'attendance', 'survey', 'help', 'progress'];
 const PARTICIPANT_WRITE = new Set(['attendance', 'progress', 'help', 'questions', 'posts', 'answers', 'survey', 'chat']);
 
 export const LIMITS = {
@@ -569,6 +571,12 @@ export const SCHEMA = [
 // ---------- the core ----------
 /** Collections whose `by` (participant id) is shown to non-admins only on the reader's own docs. */
 const OWN_BY = new Set(['answers', 'progress', 'help']);
+/** Polls whose results the instructor revealed: state.ui.reveal ('a|b'), older states also pollReveal {id: true}. */
+export function revealedPolls(st) {
+  const s = new Set(String((st && st.ui && st.ui.reveal) || '').split('|').filter(Boolean));
+  for (const [k, v] of Object.entries((st && st.pollReveal) || {})) if (v) s.add(k);
+  return s;
+}
 
 /**
  * new LiveCore({ db, config }) — db: { all, get, run, tx }.
@@ -777,8 +785,9 @@ export class LiveCore {
   }
 
   // ----- doc helpers -----
-  /** viewer: the reading participant's id (public view) — answers/progress/help carry `by` only on the reader's own docs. */
-  out(col, row, admin, viewer) {
+  /** viewer: the reading participant's id (public view) — answers/progress/help carry `by` only on the reader's own docs.
+   *  shown: polls revealed to everyone (revealedPolls); other people's answers to any other poll go out sealed (no value). */
+  out(col, row, admin, viewer, shown) {
     const d = safeJson(row.data, {});
     const doc = { id: row.id, ...d, createdAt: row.created_at, updatedAt: row.updated_at };
     if (row.by && col !== 'questions' && col !== 'participants' && (admin || !OWN_BY.has(col) || (viewer && row.by === viewer))) doc.by = row.by;
@@ -787,12 +796,14 @@ export class LiveCore {
       if (col === 'questions' && doc.status === 'hidden') doc.text = '';
       if (col === 'posts' && doc.hidden) { doc.text = ''; doc.files = []; }
       if (col === 'chat' && doc.hidden) doc.text = '';
+      if (col === 'answers' && doc.poll !== 'signal' && !(viewer && row.by === viewer) && !(shown && shown.has(doc.poll))) { doc.value = ''; doc.sealed = true; }
     }
     return doc;
   }
   event(type, col, row) {
     const isPublic = PUBLIC_COLS.includes(col);
-    return { type, col, doc: this.out(col, row, true), pub: isPublic ? this.out(col, row, false) : null };
+    const shown = col === 'answers' && row.code ? revealedPolls(this.state(row.code, this.trainingOrNull(row.code))) : null;
+    return { type, col, doc: this.out(col, row, true), pub: isPublic ? this.out(col, row, false, null, shown) : null };
   }
   getRow(code, col, id) { return this.db.get(`SELECT * FROM docs WHERE code = ? AND col = ? AND id = ?`, code, col, id); }
   writeRow(code, col, row, data, now) {
@@ -985,12 +996,13 @@ export class LiveCore {
     if (!t) { out.now = this.now(); return { status: 200, body: out }; }
     out.now = this.tick(code);
     const me = !admin && cred.tokenHash ? this.participant(code, cred) : null;
+    const shown = admin ? null : revealedPolls(out.state);
     const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND updated_at > ? AND updated_at <= ? ORDER BY updated_at LIMIT 20000`, code, since, out.now);
-    for (const r of rows) if (out[r.col]) out[r.col].push(this.out(r.col, r, admin, me && me.id));
+    for (const r of rows) if (out[r.col]) out[r.col].push(this.out(r.col, r, admin, me && me.id, shown));
     if (out.chat.length > 500) out.chat = out.chat.slice(-500);
     if (me) {
-      // A participant also gets their own private docs (attendance, survey) so a reload restores them.
-      for (const c of ['attendance', 'survey']) out[c] = rows.filter((r) => r.col === c && r.by === me.id).map((r) => this.out(c, r, false, me.id));
+      // A participant also gets their own private docs (attendance, survey, help, progress) so a reload restores them.
+      for (const c of PRIVATE_COLS) if (c !== 'participants') out[c] = rows.filter((r) => r.col === c && r.by === me.id).map((r) => this.out(c, r, false, me.id));
       out.me = { id: me.id, nickname: me.nickname };
     }
     if (since) out.removed = this.db.all(`SELECT col, id FROM tombstones WHERE code = ? AND at > ? AND at <= ?`, code, since, out.now).filter((r) => cols.includes(r.col));
@@ -1009,8 +1021,9 @@ export class LiveCore {
       return { status: 200, body: rows.map((r) => this.out(col, r, false, me.id)) };
     }
     const viewer = !admin && cred.tokenHash ? (this.participant(code, cred) || {}).id : null;
+    const shown = admin || col !== 'answers' ? null : revealedPolls(this.state(code, t));
     const rows = this.db.all(`SELECT * FROM docs WHERE code = ? AND col = ? AND updated_at > ? ORDER BY updated_at LIMIT 20000`, code, col, since);
-    return { status: 200, body: rows.map((r) => this.out(col, r, admin, viewer)) };
+    return { status: 200, body: rows.map((r) => this.out(col, r, admin, viewer, shown)) };
   }
 
   add(code, col, body, cred, ip) {

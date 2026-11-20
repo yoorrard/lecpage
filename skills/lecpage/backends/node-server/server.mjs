@@ -27,6 +27,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { LiveCore, HttpError, errorBody, normCode, sha256hex, randomToken, keyProblem, isWeakKeyHash, PROTOCOL } from './lib/protocol.js';
@@ -338,6 +339,28 @@ export async function start(opts = readOptions()) {
     fs.createReadStream(file).pipe(res);
   }
 
+  // ---- 같은 와이파이 주소(H4) ----
+  /** 이 컴퓨터에서 바로 온 요청인지(프록시를 거치지 않고, 주소창도 localhost·127.x·[::1]) */
+  function fromLoopback(req) {
+    const a = String(req.socket && req.socket.remoteAddress || '');
+    if (!/^(127\.|::1$|::ffff:127\.)/.test(a) || req.headers['x-forwarded-for'] || req.headers.forwarded) return false;
+    const host = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+    return host === 'localhost' || host === '::1' || /^127\./.test(host);
+  }
+  /** 참가자가 들어올 주소: 모든 주소에서 듣고 있으면 사설망(와이파이) IPv4 주소들, 한 주소만 들으면 그 주소 */
+  function lanInfo(port) {
+    const h = String(opts.host || '0.0.0.0');
+    if (/^(127\.|localhost$|::1$)/.test(h)) return { urls: [], listen: 'local' };
+    if (h !== '0.0.0.0' && h !== '::') return { urls: [`http://${h.includes(':') ? `[${h}]` : h}:${port}/`] };
+    const priv = (ip) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+    const ips = [];
+    for (const list of Object.values(os.networkInterfaces() || {})) for (const n of list || []) {
+      if ((n.family === 'IPv4' || n.family === 4) && !n.internal && !/^169\.254\./.test(n.address)) ips.push(n.address);
+    }
+    ips.sort((a, b) => priv(b) - priv(a));
+    return { urls: [...new Set(ips)].slice(0, 3).map((ip) => `http://${ip}:${port}/`) };
+  }
+
   // ---- SSE ----
   function openSse(req, res, code, cors) {
     const c = normCode(code);
@@ -371,12 +394,27 @@ export async function start(opts = readOptions()) {
     if (!st && !path.extname(file)) { const f2 = file + '.html'; const s2 = await fsp.stat(f2).catch(() => null); if (s2) { file = f2; st = s2; } }
     if (!st || !st.isFile() || isPrivateFile(path.relative(opts.staticDir, file))) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
     const ext = path.extname(file).toLowerCase();
-    res.writeHead(200, {
-      'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': st.size, 'X-Content-Type-Options': 'nosniff',
-      'Cache-Control': ext === '.html' || ext === '.json' ? 'no-cache' : 'public, max-age=3600', 'Referrer-Policy': 'strict-origin-when-cross-origin',
-    });
+    // 캐시: 엔진이 만든 파일은 이름이 늘 같음(assets/lecpage.js …). 연수 중에 다시 배포해도 새 쪽과 옛 스크립트가 섞이지 않게
+    // 쓰기 전마다 물어봄(no-cache + ETag → 바뀌지 않았으면 304, 본문 없이). 주소에 지문(?v=)이 붙은 파일만 오래 둠
+    const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    // 지문이 붙은 것: 주소의 ?v=…, 또는 이름이 내용 해시인 담은 글꼴(assets/fonts/<16자리>.woff2)
+    const fingerprinted = /[?&]v=[\w.-]{6,}/.test(req.url || '') || /\/assets\/fonts\/[0-9a-f]{12,}\.(woff2?|ttf|otf)$/.test(pathname);
+    const h = {
+      'Content-Type': MIME[ext] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', ETag: etag, 'Last-Modified': new Date(st.mtimeMs).toUTCString(),
+      'Cache-Control': fingerprinted && ext !== '.html' ? 'public, max-age=31536000, immutable' : 'no-cache', 'Referrer-Policy': 'strict-origin-when-cross-origin',
+    };
+    // 교실 LAN용 사이트(meta CSP에 upgrade-insecure-requests가 없음)를 https로 내보낼 때(앞에 Caddy·nginx): http 주소를 https로 올려 받게
+    if ((ext === '.html' || ext === '.htm') && servedOverHttps(req)) h['Content-Security-Policy'] = 'upgrade-insecure-requests';
+    const inm = String(req.headers['if-none-match'] || '');
+    if (inm && inm.split(/\s*,\s*/).some((t) => t.replace(/^W\//, '') === etag)) { res.writeHead(304, h); return res.end(); }
+    res.writeHead(200, { ...h, 'Content-Length': st.size });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
+  }
+  /** https로 들어온 요청인지: TLS 소켓이거나, 믿기로 한 프록시(--trusted-proxies)가 X-Forwarded-Proto: https를 붙였을 때 */
+  function servedOverHttps(req) {
+    if (req.socket && req.socket.encrypted) return true;
+    return (opts.trustedProxies || 0) > 0 && /^https$/i.test(String(req.headers['x-forwarded-proto'] || '').split(',').pop().trim());
   }
 
   // ---- request handler ----
@@ -395,6 +433,8 @@ export async function start(opts = readOptions()) {
       if (!originAllowed(req) && req.method !== 'GET') throw new HttpError(403, 'origin_not_allowed', '허용되지 않은 사이트에서 온 요청입니다.');
       const parts = p.slice(5).split('/').filter(Boolean).map((s) => { try { return decodeURIComponent(s); } catch { return s; } });
       if (parts[0] === 'health' && parts.length === 1) return send(res, 200, { ok: true, version: VERSION, protocol: PROTOCOL, uploads: opts.uploads }, cors);
+      // 강사가 이 컴퓨터에서 localhost로 연 발표·강사 화면: QR에 넣을 같은 와이파이 주소(이 컴퓨터에서 온 요청에만 알려 줌)
+      if (parts[0] === 'lan' && parts.length === 1 && req.method === 'GET') return send(res, 200, fromLoopback(req) ? lanInfo(server.address().port) : { urls: [] }, { ...cors, 'Cache-Control': 'no-store' });
       if (!parts.length) throw new HttpError(404, 'not_found', '없는 주소입니다.');
       const [code, a, b] = parts;
       if (a === 'events' && parts.length === 2 && req.method === 'GET') return openSse(req, res, code, cors);
@@ -480,6 +520,14 @@ export async function start(opts = readOptions()) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(opts.port, opts.host, resolve); });
   const port = server.address().port;
   if (!opts.quiet || opts.announce) console.log(JSON.stringify({ lecpage: 'live', listening: port, static: opts.staticDir || null, uploads: opts.uploads, origins: allowAny ? '*' : opts.origins }));
+  // 사람이 읽는 안내: 참가자가 들어올 주소(같은 와이파이). localhost는 이 컴퓨터에서만 열림
+  if (!opts.quiet && opts.staticDir) {
+    const lan = lanInfo(port);
+    console.log(`\n이 컴퓨터에서: http://localhost:${port}  (강사 화면 /console.html)`);
+    if (lan.urls.length) console.log(`같은 와이파이의 참가자: ${lan.urls.join('  ')}\n  발표 화면·QR 안내문도 이 주소로 열면 QR이 맞아요. localhost로 열어도 발표 화면이 이 주소를 QR에 넣어요.`);
+    else if (lan.listen === 'local') console.log('지금은 이 컴퓨터에서만 열려요. 같은 와이파이의 참가자도 들어오게 하려면 --host 0.0.0.0 으로 다시 켜 주세요.');
+    else console.log('와이파이 주소를 찾지 못했어요. 노트북이 교실 와이파이에 이어졌는지 확인해 주세요.');
+  }
   return {
     server, port, core, url: `http://127.0.0.1:${port}`,
     async close() {

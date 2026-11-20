@@ -28,7 +28,7 @@
 [data-heading="heavy"]{--display-tracking:-.035em}
 
 *,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;overflow-x:clip} /* 안전망: 글자를 크게 키운 좁은 화면에서 한 칸이 넘쳐도 옆으로 밀리지 않게(원인은 각 칸에서 고침, sticky는 그대로) */
 /* 위 메뉴(sticky)에 가리지 않게: 옮겨 가는 곳(섹션·#주소·본문의 칸, 따라 넘기기가 옮기는 교재·실습 칸)에만 위 여백(--lp-head = 메뉴 높이 + 16px, lecpage.js).
    html의 scroll-padding-top은 쓰지 않음: 메뉴 안 단추에 초점이 가면 그 여백에 가린 것으로 보고 화면이 위로 튐 */
 :where(section[id],[id]:target,main [id],main :is(a[href],button,input,select,textarea,summary,[tabindex]),[data-deck],[data-stations]){scroll-margin-top:var(--lp-head,84px)}
@@ -49,6 +49,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lp-skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--primary);color:var(--primary-foreground);padding:8px 14px;border-radius:var(--radius-sm);text-decoration:none}
 .lp-skip:focus{top:12px}
+main[tabindex="-1"]:focus{outline:0}
+.lp-theming,.lp-theming *,.lp-theming *::before,.lp-theming *::after{transition:none!important} /* 밝게·어둡게 바꾸는 한 장면(lecpage.js) */ /* 건너뛰기 링크로 온 초점: 본문 첫머리에서 Tab이 이어지게(테두리는 그리지 않음) */
 .lp-ic{flex:none;width:1.1em;height:1.1em}
 .lp-num,.lp-idx,time{font-variant-numeric:tabular-nums}
 
@@ -56,6 +58,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-wrap{width:100%;max-width:1160px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
 .lp-sec{--band-primary:var(--primary);position:relative;padding-block:clamp(48px,5.8vw,92px);background:var(--background);color:var(--foreground);isolation:isolate}
 .lp-tinted{background:var(--surface-2)}
+/* 큰 연수(pages.js data-big): 화면 밖 칸의 배치·그리기를 미룸. 칸 안쪽(.lp-wrap)에만 걸어 칸 둘레 꾸밈은 잘리지 않게, 한 번 그린 높이는 기억(auto) */
+[data-big] main > .lp-sec:not(.lp-hero):not(.lp-bleed):not(.lp-invert) > .lp-wrap{content-visibility:auto;contain-intrinsic-size:auto 900px} /* 색 띠(bleed·invert) 칸은 그대로: 화면 밖에서도 배경 대비를 재는 도구(axe)가 헷갈리지 않게 */
 /* 섹션 머리: 번호 줄(.lp-head-k) + 제목 + 설명. 번호 줄의 모양은 프리셋마다 다릅니다(<html data-head>) */
 .lp-head{display:grid;gap:var(--sp-3);margin-bottom:clamp(24px,3.4vw,48px)}
 .lp-head > *{max-width:46rem}
@@ -182,6 +186,9 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-hero-attend svg{width:1.05em;height:1.05em}
 [data-phase="after"] .lp-hero-state i{background:var(--muted-foreground)}
 .lp-h1{font-size:var(--fs-hero,var(--fs-2xl));line-height:1.1}
+/* 긴 공식 연수명(hero.js titleLen): 한 단계·두 단계 낮춤(프리셋마다 정한 --fs-hero에 비율로, 너무 작아지지 않게 바닥) */
+.lp-h1[data-tlen="long"]{font-size:max(1.75rem,calc(var(--fs-hero,var(--fs-2xl)) * .76))}
+.lp-h1[data-tlen="xlong"]{font-size:max(1.5rem,calc(var(--fs-hero,var(--fs-2xl)) * .56));letter-spacing:-.02em}
 .lp-accent{font-style:normal;color:var(--primary)}
 .lp-hero-sub{font-size:var(--fs-lg);line-height:1.6;color:var(--muted-foreground);max-width:30em}
 .lp-ctas{display:flex;flex-wrap:wrap;gap:10px}
@@ -1038,6 +1045,8 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-deck-count{font-family:var(--font-mono);font-variant-numeric:tabular-nums;min-width:5.5em;text-align:center}
 .lp-follow{display:inline-flex;gap:6px;align-items:center;font-size:var(--fs-sm);color:var(--muted-foreground)}
 .lp-deck-thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+/* 쪽 미리보기 띠: 화면 밖(띠 안에서 옆으로 밀린) 미리보기는 그리지 않음(교재 수백 쪽에서 처음 멈춤 줄이기) */
+.lp-deck-thumbs button{content-visibility:auto;contain-intrinsic-size:112px 67px}
 .lp-deck-thumbs button{flex:none;width:112px;padding:0;border:2px solid transparent;border-radius:6px;background:var(--card);cursor:pointer;scroll-snap-align:start;overflow:hidden;font-size:var(--fs-xs);color:var(--muted-foreground)}
 .lp-deck-thumbs button[aria-current="true"]{border-color:var(--primary)}
 .lp-deck-thumbs img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
@@ -1208,7 +1217,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-tabs{display:flex;gap:var(--sp-5);flex-wrap:wrap;margin:var(--sp-6) 0 0;border-bottom:var(--rule)}
 .lp-tabs button{border:0;background:transparent;padding:10px 0;margin-bottom:-1px;font-size:var(--fs-sm);font-weight:600;cursor:pointer;color:var(--muted-foreground);border-bottom:2px solid transparent}
 .lp-tabs button:hover{color:var(--foreground)}
-.lp-tabs button[aria-selected="true"]{color:var(--foreground);border-bottom-color:var(--primary)}
+.lp-tabs button[aria-pressed="true"]{color:var(--foreground);border-bottom-color:var(--primary)}
 .lp-qa-list{list-style:none;display:grid}
 .lp-qa-item{display:grid;grid-template-columns:auto 1fr;gap:var(--sp-4);padding:var(--sp-4) 0;border-bottom:var(--rule)}
 .lp-qa-item.is-pinned{background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 9%,transparent),transparent 85%)}
@@ -1283,6 +1292,7 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-sv-list>li{padding:var(--sp-6) 0;border-top:var(--rule)}
 .lp-sv-list fieldset{border:0;margin:0;padding:0;display:grid;gap:var(--sp-3)}
 .lp-sv-list legend,.lp-sv-q{font-weight:700;font-size:var(--fs-md);display:flex;gap:var(--sp-3);align-items:baseline;margin-bottom:var(--sp-2)}
+.lp-sv-list .lp-idx{flex:none;white-space:nowrap} /* 문항 번호 '04'가 휴대폰에서 '0/4'로 쪼개지지 않게 */
 .lp-sv-text{display:grid;gap:8px}
 .lp-sv-text textarea{width:100%;border-radius:var(--radius-sm);border:var(--border-w) solid var(--border);background:var(--card);padding:10px 12px}
 .lp-sv-opts{display:flex;flex-wrap:wrap;gap:8px}
@@ -1300,13 +1310,20 @@ input,textarea,select{font-size:max(16px,1em)}
 .lp-sv-scale label:has(input:focus-visible){z-index:2;outline:2px solid var(--ring);outline-offset:2px}
 .lp-sv-scale label span{display:grid;gap:2px;line-height:1.3}
 .lp-sv-scale label b{font-family:var(--font-mono);font-size:var(--fs-md);font-variant-numeric:tabular-nums}
-.lp-sv-scale label i{font-style:normal;font-size:var(--fs-xs);overflow-wrap:anywhere}
-@media (max-width:600px){.lp-sv-scale label{min-height:64px;padding:8px 2px}} /* 휴대폰도 한 줄 다섯 칸(세로 다섯 줄로 길어지지 않게) */
+.lp-sv-scale label i{font-style:normal;font-size:var(--fs-xs);word-break:keep-all;overflow-wrap:break-word}
+/* 휴대폰도 한 줄 다섯 칸(세로 다섯 줄로 길어지지 않게). 칸이 좁아 '보통이에요'가 음절 중간에서 끊기므로 낱말은 양 끝(1·5)만 보이고 가운데는 화면 낭독기에만 */
+@media (max-width:600px){.lp-sv-scale label{min-height:64px;padding:8px 2px}.lp-sv-scale label:not(:first-child):not(:last-child) i{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+/* :has()를 모르는 브라우저(iOS 15.3 이하·예전 앱 안 브라우저): 고른 답과 초점을 글자 칸(span)에 표시 */
+@supports not selector(:has(*)){
+  .lp-sv-opts input:checked + span{font-weight:800;text-decoration:underline;text-underline-offset:3px}
+  .lp-sv-scale input:checked + span{border-radius:var(--radius-sm);background:var(--primary);color:var(--primary-foreground);box-shadow:0 0 0 6px var(--primary)}
+  .lp-sv-scale input:focus-visible + span{outline:2px solid var(--ring);outline-offset:6px}
+}
 /* QR: 둘레 여백 4칸은 그림(SVG) 안에 들어 있음. 어떤 테마에서도 흰 바탕에 검은 점 */
 .lp-qr{width:200px;aspect-ratio:1;background:#fff;border-radius:8px;padding:4px;display:grid;place-items:center}
 .lp-qr svg,.lp-qr img{width:100%;height:auto;display:block}
 .lp-qr-lg{width:min(280px,70vw);margin:0 auto}
-.lp-qr-off{font-size:.86rem;line-height:1.45;color:#333;text-align:center;padding:8px;word-break:keep-all}
+.lp-qr-off{font-size:.86rem;line-height:1.45;color:#333;text-align:center;padding:8px;word-break:keep-all;overflow-wrap:anywhere}
 /* 마무리: 화면 폭 띠에 아주 큰 문장 + 서명 줄. 프리셋의 첫 화면 표식을 한 번 더 써서 끝을 맺음(.lp-closing--구성) */
 .lp-closing{display:grid;align-content:center;min-height:min(86svh,820px);overflow:hidden;overflow:clip;padding-block:clamp(88px,12vw,176px) clamp(56px,7vw,104px)}
 .lp-closing > .lp-wrap{position:relative;display:grid;gap:var(--sp-5);justify-items:start}
@@ -1478,6 +1495,9 @@ html.lp-dock-on .lp-foot{padding-bottom:calc(var(--lp-dock-h,58px) + 48px + env(
 .lp-now-text b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .lp-now-text span{font-size:var(--fs-xs);opacity:.86;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lp-now-text b:empty,.lp-now-text span:empty{display:none}
+.lp-now.is-open .lp-now-text b{display:block;-webkit-line-clamp:unset;overflow:visible;overflow-wrap:anywhere}
+.lp-now-more{flex:none;align-self:center;min-height:40px;padding:0 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:inherit;font:inherit;font-size:var(--fs-xs);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.lp-now-more:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .lp-now-timer{flex:none;font-family:var(--font-mono);font-weight:700;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:4px;border:1.5px solid currentColor}
 .lp-now-timer.is-over{background:var(--danger);color:#fff}
 .lp-now-cta{flex:none;min-height:40px}
@@ -1944,6 +1964,8 @@ html.lp-paused *,html.lp-paused *::before,html.lp-paused *::after{animation-play
   :is(.lp-sec li,figure,tr,.lp-card,.lp-slide){break-inside:avoid}
   .lp-hero{min-height:0!important}
   html,body{background:#fff!important;color:#111}
+  /* 종이에는 누를 것을 빼고 내용만: 참여 칸의 입력·단추(질문 올리기·투표·공감·좋아요), 복사·완료·도움 요청·달력 단추 */
+  main button,main input:not([type="radio"]):not([type="checkbox"]),.lp-compose,.lp-board-bar,.lp-board-form,.lp-tabs,.lp-poll-live,.lp-live-down,.lp-cal,.lp-follow,.lp-survey-form .lp-compose-f,.lp-reflect .lp-compose-f{display:none!important}
 }
 
 

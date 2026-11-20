@@ -43,7 +43,9 @@ describe('글 칸의 마크다운', () => {
   test('표: 칸 4개까지는 휴대폰에서 줄마다 카드, 5개부터는 가로로 미는 상자(초점 받을 수 있게)', () => {
     assert.match(tableHtml({ head: ['a', 'b'], rows: [['1', '2']] }), /data-mode="cards"/);
     const wide = tableHtml({ head: ['a', 'b', 'c', 'd', 'e'], rows: [['1', '2', '3', '4', '5']], label: '차시표' });
-    assert.match(wide, /data-mode="scroll"[^>]*role="region" aria-label="차시표" tabindex="0"/);
+    // 영역 이름은 바깥 섹션(같은 제목)과 겹치지 않게(axe landmark-unique): '…표, 옆으로 밀어 보기'
+    assert.match(wide, /data-mode="scroll"[^>]*role="region" aria-label="차시표, 옆으로 밀어 보기" tabindex="0"/);
+    assert.match(tableHtml({ head: ['주차', '활동', 'c', 'd', 'e'], rows: [['1', '2', '3', '4', '5']] }), /aria-label="주차·활동 표, 옆으로 밀어 보기"/);
     assert.match(tableHtml({ head: ['구분', '기준'], rows: [['경미', '']] }), /<td role="cell" data-empty>/, '빈 칸은 카드에서 숨김');
     assert.equal(tableHtml({ head: ['a'], rows: [] }), '');
   });

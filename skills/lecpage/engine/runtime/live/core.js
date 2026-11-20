@@ -12,8 +12,9 @@
 
   var VERSION = '1.0.0';
   var COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
-  var PUBLIC_COLS = ['questions', 'posts', 'help', 'progress', 'polls', 'answers', 'chat'];
-  var PRIVATE_COLS = ['participants', 'attendance', 'survey'];
+  // 연수 코드만 알면 읽는 것(남의 투표 응답은 강사가 결과를 공개한 뒤에만 값이 옴) / 강사만 읽고 참가자는 자기 것만 읽는 것
+  var PUBLIC_COLS = ['questions', 'posts', 'polls', 'answers', 'chat'];
+  var PRIVATE_COLS = ['participants', 'attendance', 'survey', 'help', 'progress'];
   var LIMITS = {
     nickname: 20, name: 40, school: 60, question: 500, post: 1000, chat: 300, help: 300, seat: 20, id: 64, kind: 32,
     pollQuestion: 200, option: 100, answer: 200, notice: 300, timerLabel: 40, fileName: 120, files: 5, license: 40,
@@ -351,11 +352,13 @@
   function DEFAULT_BANNED() {
     return ['바보', '멍청이', '등신', '쓰레기', '죽어', '죽을래', '한남', '한녀', '틀딱', '맘충', '급식충', '김치녀', '섹스', 'sex', 'porn', '야동'];
   }
-  /** NFC, trim, lowercase latin, strip edge punctuation and one trailing particle (when ≥2 chars remain). */
+  /** NFC, trim, lowercase latin, drop tag-like bits ('<b>굵게</b>' → '굵게'), join a Hangul-only answer typed with spaces
+   *  ('맑 음' = '맑음'), strip edge punctuation and one trailing particle (when ≥2 chars remain). */
   function normWord(v) {
     if (v == null) return '';
     var s = String(v); if (s.normalize) s = s.normalize('NFC');
-    s = s.replace(CTRL, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    s = s.replace(CTRL, '').replace(/<\/?[A-Za-z][^<>]{0,40}>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (/^[가-힣ㄱ-ㅎㅏ-ㅣ ]+$/.test(s)) s = s.replace(/ /g, '');
     s = s.replace(/^[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+|[\s.,!?~…·'"“”‘’()\[\]{}<>:;-]+$/g, '');
     var c = cps(s);
     if (c.length >= 3 && PARTICLES.indexOf(c[c.length - 1]) >= 0 && KEEP_WORDS.indexOf(s) < 0) s = c.slice(0, -1).join('').trim();
@@ -597,6 +600,12 @@
       else if (self._queue.length) setTimeout(function () { self._flushQueue(); }, 300);
     };
     if (root.addEventListener) root.addEventListener('online', this._onOnline);
+    // 숨겼던 탭으로 돌아오면 기다리지 않고 바로 다시 이어 봄
+    this._onVisible = function () {
+      if (self._closed || isHidden() || self.status !== 'offline' || !self._reconnectTimer) return;
+      clearTimeout(self._reconnectTimer); self._reconnectTimer = null; self._reconnectSoon(300);
+    };
+    try { if (root.document) root.document.addEventListener('visibilitychange', this._onVisible); } catch (e) { /* 없음 */ }
     current = this;
   }
   var C = Client.prototype;
@@ -684,6 +693,10 @@
     // Servers show `by` of answers/progress/help only to their owner (and the admin); public events omit it.
     // Same id = same owner, so keep what we knew.
     if (old && old.by != null && doc.by == null) doc.by = old.by;
+    // 결과 공개 전 남의 응답은 값 없이(sealed) 옴: 이미 값을 아는 응답(내 것·공개 뒤 받은 것)을 빈 값으로 덮지 않음
+    if (col === 'answers' && doc.sealed && old && !old.sealed && old.value !== undefined) { doc.value = old.value; delete doc.sealed; }
+    // 공개되어 값이 온 응답: 화면들이 Object.assign으로 합치므로 '봉인' 표시를 분명히 거둠
+    if (col === 'answers' && old && old.sealed && !doc.sealed) doc.sealed = false;
     if (doc.cid) {
       for (var k in m) {
         if (m[k]._pending && m[k].cid === doc.cid && k !== doc.id) {
@@ -709,9 +722,28 @@
     if (this._state.updatedAt && st.updatedAt && st.updatedAt < this._state.updatedAt) return false;
     var next = assign(defaultState(), st);
     if (same(next, this._state)) return false;
+    var before = this._state;
     this._state = next;
     this._emitChange({ type: 'state', col: null, doc: next });
+    this._fetchRevealed(before, next);
     return true;
+  };
+  /** 강사가 결과를 공개한 투표가 새로 생기면 그 응답 값을 다시 받아 옴(공개 전에는 서버가 값을 보내지 않음).
+   *  같은 순간 수백 명이 한꺼번에 묻지 않게 0~1.5초 흩어서 */
+  C._fetchRevealed = function (before, next) {
+    var self = this;
+    if (this._adminKey || this.provider === 'local' || typeof this._adapter.list !== 'function') return;
+    var fresh = splitList(uiOf(next).reveal).concat(Object.keys(next.pollReveal || {}).filter(function (k) { return next.pollReveal[k]; }))
+      .filter(function (id) { return !ext.revealed(before, id); });
+    if (!fresh.length || this._revealT) return;
+    var run = function (n) {
+      self._revealT = setTimeout(function () {
+        self._revealT = 0;
+        // 못 받으면 한 번 더(8초 뒤): '결과를 불러오는 중'에 머물지 않게
+        self._call('list', ['answers', {}], { tries: 2 }).then(function (docs) { (docs || []).forEach(function (d) { self._merge('answers', d); }); }, function () { if (!n && !self._closed) run(1); });
+      }, n ? 8000 : Math.round(Math.random() * 1500));
+    };
+    run(0);
   };
   C._reset = function () {
     var self = this;
@@ -828,7 +860,7 @@
       self._reconnectTimer = null;
       if (self._closed || self.status !== 'offline') return;
       self.connect().then(function () { self._reconnectN = 0; }, function () { /* next round scheduled */ });
-    }, ms || backoff(Math.min(self._reconnectN, 5), 2000, 60000));
+    }, ms || backoff(Math.min(self._reconnectN, 5), 2000, isHidden() ? 60000 : 10000)); // 화면을 보고 있으면 10초 안에 다시(서버가 돌아오면 곧 이어짐), 숨긴 탭은 길게
   };
   /** Fetches changes since the cursor (or everything when full) and merges them. → {changes} */
   C.sync = function (full) {
@@ -871,6 +903,7 @@
     if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
     if (this._flushTimer) { clearTimeout(this._flushTimer); this._flushTimer = null; }
     if (root.removeEventListener) root.removeEventListener('online', this._onOnline);
+    try { if (root.document) root.document.removeEventListener('visibilitychange', this._onVisible); } catch (e) { /* 없음 */ }
     this._connecting = null;
     var a = this._adapter;
     this._setStatus('offline');

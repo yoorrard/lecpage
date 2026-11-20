@@ -210,14 +210,15 @@
       setStatus('connecting');
       attempt++;
       clear('reconnect');
-      timers.reconnect = setTimeout(reconnect, U.backoff(Math.min(attempt - 1, 5), 1000, 30000));
+      timers.reconnect = setTimeout(reconnect, U.backoff(Math.min(attempt - 1, 5), 1000, U.isHidden() ? 30000 : 8000));
     }
     function reconnect() {
       if (closed) return;
       openBest(false, true).then(function () { attempt = 0; ctx.emit({ type: 'resync' }); }, function () {
         if (closed) return;
         setStatus('offline');
-        timers.reconnect = setTimeout(reconnect, U.backoff(Math.min(attempt++, 5), 2000, 60000));
+        // 화면을 보고 있으면 10초 안쪽으로 다시(서버가 돌아오면 곧 이어짐), 숨긴 탭은 1분까지 늘림
+        timers.reconnect = setTimeout(reconnect, U.backoff(Math.min(attempt++, 5), 2000, U.isHidden() ? 60000 : 10000));
       });
     }
 
@@ -291,6 +292,7 @@
       if (closed || U.isHidden()) return;
       if (kind === 'poll') { if (!lpCtl) schedulePoll(50); }
       else if (kind && Date.now() - lastMsg > 60000) lost(kind);
+      else if (!kind && timers.reconnect) { clear('reconnect'); reconnect(); } // 끊긴 채 숨겼던 탭: 돌아오면 바로 다시
     }
     function onOnline() { if (!closed && a.status === 'offline') { clear('reconnect'); attempt = 0; reconnect(); } }
 

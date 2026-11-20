@@ -3,7 +3,7 @@
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
 import { esc, br, icon, koDate, host, md } from './html.js';
 import { contactHtml, boardFiles, joinName } from './sections.js';
-import { appShell, keepRule, byOperator } from './shell.js';
+import { appShell, keepRule, byOperator, servedOverLan } from './shell.js';
 import { motifFamily } from '../design/layouts.js';
 import { motifRule } from './body-graphic.js';
 import { whenText, eventDays } from '../hero-meta.js';
@@ -29,6 +29,13 @@ const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), s
  * 강사 화면 = 강사의 출발점. 들어가기 전에는 '강사용 화면이에요 → [참가자 화면으로]'와 열쇠 칸만 보이고,
  * 들어간 뒤에 위 띠에 [발표 화면 띄우기]와 [더보기](참가자 화면·QR 안내문·접속 확인·휴대폰에서 열기·도움말)가 나옴.
  */
+/** 관리자 키를 잃어버렸을 때 다시 찾는 실제 길(연결한 방식마다 한 줄). 노트북·학교 서버(Node)는 서버가 만든 키 파일,
+ *  그 밖(바로 배포·내 Cloudflare·시트·Supabase)은 배포한 브라우저의 lecpage 앱이 기억한 키, Skill로 배포했으면 강사용 폴더의 키 파일 */
+export function keyLostLine(bp) {
+  if (servedOverLan(bp)) return '키를 잃어버렸으면: 서버를 켠 컴퓨터의 data/admin-key.txt에 있어요. 서버를 켤 때 직접 정했다면 그 키예요.';
+  return '키를 잃어버렸으면: 배포한 브라우저에서 lecpage 앱의 [내 연수] → 이 연수의 [강사 화면]을 누르면 키가 복사돼요. Skill로 배포했다면 강사용 폴더의 관리자-키.txt나 옮겨 둔 비밀번호 관리 앱에 있어요.';
+}
+
 export function renderConsole(ctx) {
   const bp = ctx.bp, m = bp.meta, prov = bp.live.provider;
   const item = (href, name, sub, ic) => `<li><a href="${href}" target="_blank" rel="noopener">${icon(ic)}<span><b>${name}</b><small>${sub}</small></span></a></li>`;
@@ -66,7 +73,7 @@ ${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
 <p class="lp-con-hint" id="lp-key-hint" data-remember-hint>끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.</p>
 <p class="lp-con-msg" id="lp-key-msg" data-key-msg role="alert"></p>
 <button class="lp-btn lp-btn-primary lp-btn-lg" type="submit" data-key-go>들어가기</button>
-${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>' : ''}
+${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>' : `<p class="lp-con-hint" data-key-lost>${keyLostLine(bp)}</p>`}
 </form>
 </section>
 <main id="lp-con-main" class="lp-con-main" data-console-main hidden tabindex="-1" aria-label="연수 진행"></main>
@@ -345,7 +352,7 @@ export function renderPrivacy(ctx) {
 <h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
 <h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
 <p>사이트 파일을 보내 주는 호스팅 회사${cdns.length ? `와 글꼴·효과 파일을 보내 주는 곳(${cdns.join(', ')})` : ''}에 접속 기록(IP 주소 등)이 남을 수 있습니다.</p>
-<h2>7. 안전 조치</h2><p>${local ? '참여 기록은 이 브라우저 밖으로 나가지 않습니다.' : `${tls ? '모든 전송은 암호화(HTTPS)됩니다. ' : ''}기록은 관리자 키를 아는 강사만 볼 수 있고, 틀린 키를 여러 번 넣으면 잠시 막습니다.`} 글은 글자로만 보이고(링크·스크립트로 바뀌지 않음), 한 기기에서 너무 자주 보내면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
+<h2>7. 안전 조치</h2><p>${local ? '참여 기록은 이 브라우저 밖으로 나가지 않습니다.' : `${tls ? '모든 전송은 암호화(HTTPS)됩니다. ' : ''}참가자 명단과 출석·설문·도움 요청·실습 진행 기록은 관리자 키를 아는 강사만 볼 수 있습니다. 질문·보드 글은 함께 보도록 참가자에게 보이고, 투표 결과는 강사가 공개할 때만 보입니다. 틀린 관리자 키를 여러 번 넣으면 잠시 막습니다.`} 글은 글자로만 보이고(링크·스크립트로 바뀌지 않음), 한 기기에서 너무 자주 보내면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
 <h2>8. 이 브라우저에 저장하는 정보</h2><p>별명과 임의 번호, 화면 설정을 이 브라우저의 저장소(localStorage)에 둡니다. 쿠키와 분석 도구는 쓰지 않습니다. 브라우저의 사이트 데이터 삭제로 지울 수 있습니다.</p>
 <h2>9. 문의</h2><p>${contact}</p>
 <p>침해 신고·상담: 개인정보침해신고센터(privacy.kisa.or.kr, 118), 개인정보 분쟁조정위원회(www.kopico.go.kr, 1833-6972)</p>

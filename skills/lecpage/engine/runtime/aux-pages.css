@@ -232,7 +232,17 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-con-phone-box .lp-qr svg{width:100%;height:100%}
 .lp-con-phone-cover{display:grid;justify-items:center;gap:10px;max-width:30ch;text-align:center;font-size:var(--fs-sm);font-weight:600}
 .lp-con-phone-cover > .lp-ic{width:28px;height:28px;color:var(--muted-foreground)}
+/* 칸 이동 줄·질문 접기: 휴대폰에서만(console.js) */
+.lp-con-jump,.lp-con-fold{display:none}
 @media (max-width:640px){
+  .lp-con-jump{display:flex;gap:4px;position:sticky;top:0;z-index:30;margin:0 -16px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;background:color-mix(in srgb,var(--background) 95%,transparent);border-bottom:1px solid var(--rule-c)}
+  .lp-con-jump::-webkit-scrollbar{display:none}
+  .lp-con-jump a{flex:none;display:inline-flex;align-items:center;min-height:40px;padding:0 11px;border-radius:999px;border:1px solid var(--rule-c);background:var(--card);color:var(--card-foreground);font-size:var(--fs-sm);font-weight:700;text-decoration:none}
+  .lp-con-jump a:focus-visible{outline:2px solid var(--ring,var(--primary));outline-offset:2px}
+  .lp-con-panel{scroll-margin-top:72px}
+  .lp-con-list[data-fold] > .lp-con-item:nth-child(n+6){display:none}
+  .lp-con-fold{display:block;list-style:none}
+  .lp-con-fold .lp-btn{width:100%}
   .lp-con-bar{position:static}
   .lp-con-go{order:3;width:100%}
   .lp-con-go .lp-btn,.lp-con-more{flex:1 1 auto}
@@ -272,7 +282,8 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-scr-stage{grid-area:stage;position:relative;display:grid;align-content:start;min-width:0;min-height:0;padding:clamp(18px,3vh,48px) var(--scr-pad)}
 .lp-scr-main{display:grid;gap:clamp(12px,2.2vh,28px);align-content:start;min-width:0;min-height:0}
 .lp-scr-side{grid-area:side;display:flex;flex-direction:column;gap:clamp(12px,2vh,24px);min-width:0;min-height:0;padding:clamp(16px,2.4vh,32px) var(--scr-pad);background:var(--card);color:var(--card-foreground);border-bottom:1px solid var(--rule-c)}
-@media (min-width:900px) and (min-aspect-ratio:1/1){
+/* 프로젝터 가로 화면(옛 800×600 포함): 무대 + 오른쪽 레일, 한 화면에 다 들어가게 */
+@media (min-width:760px) and (min-aspect-ratio:1/1){
   .lp-scr{height:100vh;height:100dvh;overflow:hidden;grid-template-columns:minmax(0,1fr) clamp(280px,27vw,460px);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top top" "notice notice" "stage side"}
   .lp-scr-side{border-bottom:0;border-left:1px solid var(--rule-c);overflow:hidden}
   .lp-scr-stage{overflow:hidden}
@@ -301,6 +312,9 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 /* 크기는 레일 폭에 맞추고, 타이머·신호가 와서 넘치면 screen.js가 QR만 줄임(뒷자리용은 [QR 크게]) */
 .lp-scr-join .lp-qr{width:min(100%,clamp(170px,24vw,420px));aspect-ratio:1;border-radius:var(--radius-sm);padding:0}
 .lp-scr-join .lp-qr svg{width:100%;height:100%}
+/* localhost로 연 발표 화면(screen.js data-loop): QR 대신 바꾸는 법을 크고 분명하게(찍어도 아무도 못 들어오는 QR을 띄우지 않음) */
+.lp-qr-zoom[data-loop] .lp-qr{aspect-ratio:auto;display:grid;place-items:center;border:3px dashed var(--warning);background:var(--card)}
+.lp-qr-zoom[data-loop] .lp-qr-off{font-size:clamp(1rem,.7rem + .8vw,1.5rem);font-weight:700;line-height:1.5;color:var(--card-foreground);padding:clamp(12px,1.6vw,24px)}
 .lp-scr-side > *{flex:none}
 .lp-qr-zoom-t{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:600;color:var(--muted-foreground)}
 .lp-qr-zoom-t .lp-ic{width:14px;height:14px}
@@ -410,7 +424,7 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 @media (max-aspect-ratio:1/1){.lp-joinbig-in{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;align-content:center}.lp-joinbig .lp-qr{width:min(86vw,56vh)}}
 .lp-scr .lp-reactions{right:clamp(16px,30vw,480px);bottom:24px}
 .lp-scr .lp-reactions span{font-size:3rem}
-@media (max-width:899px),(max-aspect-ratio:1/1){
+@media (max-width:759px),(max-aspect-ratio:1/1){
   .lp-scr-join{grid-template-columns:auto minmax(0,1fr);justify-items:start;text-align:left;align-items:center;column-gap:16px}
   .lp-scr-join .lp-qr-zoom{grid-column:1;grid-row:1 / span 5;width:auto}
   .lp-scr-join > :not(.lp-qr-zoom){grid-column:2;min-width:0}
@@ -445,7 +459,8 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-pst-rule{width:28cqw;height:3cqw;margin-top:.6cqw}
 .lp-pst-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:.6cqw 4cqw;margin:0;font-size:max(12px,2.9cqw)}
 .lp-pst-meta div{display:flex;gap:1.6cqw}
-.lp-pst-meta dt{font-weight:800}
+.lp-pst-meta dt{flex:none;white-space:nowrap;font-weight:800} /* 장소가 길어도 이름표 '장소'가 세로로 끊기지 않게 */
+.lp-pst-meta dd{min-width:0}
 .lp-pst-meta dd{margin:0}
 /* QR: 높이를 먼저 정하고 너비가 따라감(글이 길면 QR만 조금 줄어 한 장에 들어감). 둘레 여백 4칸은 그림 안에 있음 */
 .lp-pst-qr{flex:0 1 58cqw;min-height:34cqw;width:auto;max-width:100%;aspect-ratio:1;margin-top:1cqw;padding:1.2cqw!important;border:.45cqw solid var(--ink);box-sizing:border-box}

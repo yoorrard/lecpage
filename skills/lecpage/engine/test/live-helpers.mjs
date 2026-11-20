@@ -11,6 +11,11 @@ export const skillDir = path.resolve(here, '../..');
 export const liveDir = path.join(skillDir, 'engine/runtime/live');
 export const nodeServerDir = path.join(skillDir, 'backends/node-server');
 
+/** 브라우저 시험에서 사이트를 교실 와이파이 주소처럼 열기: lan.lecpage.test → 127.0.0.1(localhost로 연 쪽은 QR 대신 안내가 나오므로) */
+export const LAN_HOST = 'lan.lecpage.test';
+export const LAN_ARGS = [`--host-resolver-rules=MAP ${LAN_HOST} 127.0.0.1`, `--proxy-bypass-list=${LAN_HOST};127.0.0.1;localhost`];
+export const viaLan = (u) => String(u).replace('://127.0.0.1', '://' + LAN_HOST);
+
 export function tmpDir(prefix = 'lec-live-') { return fs.mkdtempSync(path.join(os.tmpdir(), prefix)); }
 
 /** Starts the Node server in-process on a random port. */
@@ -321,7 +326,7 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.equal((await a.call('POST', '/questions', { token: p.token, body: { text: '삭제 뒤' } })).status, 401, 'old tokens are gone');
   });
 
-  test(`${name}: answers cannot change after the poll closes; \`by\` only on my own answers, progress and help`, async () => {
+  test(`${name}: answers cannot change after the poll closes; \`by\` only on my own answers; help·progress only for the instructor and their owner; answer values only after a reveal`, async () => {
     const c = fresh('L'); const a = api(c.base, c.code);
     const p1 = await joinAs(a, '하나'); const p2 = await joinAs(a, '둘');
     const poll = (await a.call('POST', '/polls', { admin: c.adminKey, body: { question: '좋았나요?', options: ['예', '아니요'], open: true } })).body;
@@ -334,14 +339,32 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     const late = await a.call('PATCH', `/answers/${a1.id}`, { token: p1.token, body: { value: '예' } });
     assert.equal(late.status, 409); assert.equal(late.body.error, 'poll_closed');
     assert.equal((await a.call('POST', '/answers', { token: p1.token, body: { poll: poll.id, value: '예' } })).status, 409);
+    await a.call('POST', '/answers', { token: p2.token, body: { poll: 'signal', value: 'red' } });
     const pub = (await a.call('GET', '/snapshot?since=0')).body;
-    for (const col of ['answers', 'progress', 'help']) assert.ok(pub[col].length && pub[col].every((d) => d.by === undefined), `${col}: no by for the public`);
+    assert.ok(pub.answers.length && pub.answers.every((d) => d.by === undefined), 'answers: no by for the public');
+    // M1: seat·message of a help request and who is stuck stay with the instructor
+    for (const col of ['progress', 'help']) assert.ok(!(pub[col] || []).length, `${col}: not in the public snapshot`);
+    assert.equal((await a.call('GET', '/help')).status, 401, 'help: no list without a token');
+    assert.deepEqual((await a.call('GET', '/help', { token: p2.token })).body, [], 'another participant sees none of mine');
+    // before the reveal other people's answers carry no value (the signal light always does)
+    const vals = (s) => s.answers.filter((d) => d.poll === poll.id).map((d) => [d.value, !!d.sealed]);
+    assert.deepEqual(vals(pub), [['', true], ['', true]], 'sealed before the reveal');
+    assert.equal(pub.answers.find((d) => d.poll === 'signal').value, 'red');
     const mine = (await a.call('GET', '/snapshot?since=0', { token: p1.token })).body;
     assert.equal(mine.answers.find((d) => d.id === a1.id).by, p1.id, 'my own answer keeps by');
+    assert.equal(mine.answers.find((d) => d.id === a1.id).value, '아니요', 'and its value');
     assert.ok(mine.answers.filter((d) => d.id !== a1.id).every((d) => d.by === undefined), 'other people\'s answers do not');
+    assert.deepEqual(mine.help.map((d) => [d.by, d.message]), [[p1.id, '막혔어요']], 'my own help request comes back (reload)');
+    assert.deepEqual(mine.progress.map((d) => [d.by, d.status]), [[p1.id, 'stuck']], 'my own progress too');
     assert.equal((await a.call('GET', '/answers', { token: p2.token })).body.find((d) => d.id === a1.id).by, undefined);
     const adm = (await a.call('GET', '/snapshot?since=0', { admin: c.adminKey })).body;
     assert.ok(adm.answers.every((d) => d.by), 'the admin sees who answered');
+    assert.ok(adm.answers.every((d) => d.value !== '' && !d.sealed), 'and every value');
+    assert.equal(adm.help[0].message, '막혔어요');
+    // after the instructor reveals the poll everyone gets the values
+    await a.call('PUT', '/state', { admin: c.adminKey, body: { ui: { reveal: poll.id } } });
+    assert.deepEqual(vals((await a.call('GET', '/snapshot?since=0')).body).map((x) => x[0]).sort(), ['아니요', '아니요']);
+    assert.ok((await a.call('GET', '/answers', { token: p2.token })).body.every((d) => !d.sealed));
   });
 
   test(`${name}: instructor locks (lockQa·lockBoard), invisible characters, formula cells with leading blanks, admin check on a new code`, async () => {

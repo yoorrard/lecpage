@@ -215,7 +215,7 @@ status                    'connecting'|'live'|'polling'|'offline'
 - **커서(`since`/`now`)는 불투명한 값**입니다. http·local·sheets는 서버의 단조 증가 ms 도장, supabase는 정수 `rev`. 모든 문서에 `updatedAt`이 있고 커서는 `updatedAt`(또는 rev) 기준이며, 지운 문서는 `removed`(tombstone)로 알립니다.
 - 강사 화면의 관리자 키 확인은 `useAdminKey(key) → true/false`: 공개 연결을 연 뒤 서버에 한 번만 묻고(틀린 키가 한 번만 세어짐), 맞으면 그 연결에만 씁니다(`setAdminKey`와 달리 저장소에 두지 않음). 키 저장은 강사 화면이 맡음: 이 탭(sessionStorage `lp-admin:<경로>:<코드>`), [이 기기에서 기억하기]를 고르면 localStorage에도, [나가기]가 둘 다 지움. 참가자 화면은 이 키를 읽지 않음.
 - 클라이언트가 지키는 규칙(서버 넷도 같은 규칙으로 거절): 한 기기 보내기 속도 `CLIENT_RATE`(넘으면 `rate_limited`, 설정 `throttle:false`면 끔 — 시험·도구용), 강사가 잠근 칸(`ui.lockQa` 새 질문·`ui.lockBoard` 새 보드 글 → `locked` 409, 읽기·쓰기 도우미 `ext.locked`·`ext.lockPatch`), 닫힌 투표(`polls` 문서 `open:false` → `poll_closed`)는 보내기 전에 거절. 대기열에 넣었던 쓰기가 나중에 거절되면 `error` 이벤트(`(err, op)`)와 함께 서버 값으로 다시 맞춤. 받은 문서도 `_maskDoc`이 보이지 않는 글자·방향 바꿈·쌓인 결합 부호를 빼고 길이를 자름. 도우미 `util.hasLink`·`util.linkless`(발표 화면이 주소를 가림)·`util.csvGuard`(받은 CSV를 칸마다 다시 수식 막기).
-- 공개 범위: 공개 컬렉션 = questions·posts·help·progress·polls·answers·chat(+state). 비공개 = participants·attendance·survey(관리자만, 참가자 토큰은 **자기 것만**). questions는 누구에게도 `by`를 주지 않습니다(익명 보장; 내 질문은 클라이언트가 id로 기억). 숨긴 글(questions `status:'hidden'`, posts·chat `hidden:true`)은 비관리자에게 `text:''`(posts는 `files:[]`)로 내려갑니다.
+- 공개 범위: 공개 컬렉션 = questions·posts·polls·answers·chat(+state). 비공개 = participants·attendance·survey·help·progress(관리자만, 참가자 토큰은 **자기 것만** — 도움 요청의 자리·글, 누가 막혔는지는 강사만). answers는 강사가 그 투표 결과를 공개하기 전에는 남의 응답 값을 비우고 `sealed:true`로 내려갑니다(수는 그대로, 신호등 `signal`과 내 응답은 값 그대로). 공개되면 클라이언트(core.js)가 응답을 한 번 다시 읽습니다. questions는 누구에게도 `by`를 주지 않습니다(익명 보장; 내 질문은 클라이언트가 id로 기억). 숨긴 글(questions `status:'hidden'`, posts·chat `hidden:true`)은 비관리자에게 `text:''`(posts는 `files:[]`)로 내려갑니다.
 - 덮어쓰기 키: progress(by+station), answers(poll+by), survey(by), attendance(by+kind). answers의 `value`는 글자·숫자 또는 그 배열(최대 5개, 워드클라우드). 서버에 같은 id의 `polls` 문서가 있고 `open:false`면 409 `poll_closed`(설계도에만 있는 투표 id도 받음).
 - 문서에 `cid`(클라이언트 작업 id, 40자 이하)를 넣으면 같은 참가자·같은 cid의 재전송은 같은 문서를 돌려줍니다.
 - 상태 `setState`: 얕은 병합, `timer`·`notice`는 통째로 교체, `null`이면 지움. 상태에 `timer.remaining`(일시정지 남은 ms)과 `ui:{키: 글자|숫자|불}`(콘솔·프로젝터 부가 설정, 20개까지, `null`이면 그 키 삭제)를 더했습니다. 모르는 키는 버립니다.
@@ -271,7 +271,7 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 - **별명**: '강사'·'운영자'·'admin'·'lecpage'는 참가자가 쓸 수 없습니다.
 - **Supabase**: 파일 버킷은 비공개, 1시간짜리 서명 주소로 제공. 지운 파일은 휴지통 표에 모았다가 콘솔이 연결될 때 Storage API로 지웁니다. 공개 Broadcast 내용(반응 수·다시 읽기 신호)은 믿지 않고 다시 읽습니다(비공개 채널은 로그인 사용자가 필요해 쓰지 않음).
 - **Apps Script**: `setup()`이 연수 코드를 고정하고 다른 코드는 거절. 파일은 게시물이 보일 때만 '링크 공유', 지우면 휴지통.
-- **글 거르기·잠그기(2026-11c, 넷 모두)**: 제어·폭 없는 공백·방향 바꿈·한글 채움(U+3164 등)·태그 문자를 빼고 결합 부호는 한 글자에 둘까지. `state.ui.lockQa`·`lockBoard`가 `true`면 참가자의 새 질문·보드 글을 409 `locked`. CSV 수식 막기는 앞 빈칸·전각 기호(＝＋－＠)도. 아직 없는 연수 코드라도 비공개 모음(명단·출석·설문)은 관리자만(틀린 키가 '빈 명단'으로 통과하지 않게).
+- **글 거르기·잠그기(2026-11c, 넷 모두)**: 제어·폭 없는 공백·방향 바꿈·한글 채움(U+3164 등)·태그 문자를 빼고 결합 부호는 한 글자에 둘까지. `state.ui.lockQa`·`lockBoard`가 `true`면 참가자의 새 질문·보드 글을 409 `locked`. CSV 수식 막기는 앞 빈칸·전각 기호(＝＋－＠)도. 아직 없는 연수 코드라도 비공개 모음(명단·출석·설문·도움 요청·실습 진행)은 관리자만(틀린 키가 '빈 명단'으로 통과하지 않게).
 
 ## 6. 빌드 결과(생성 사이트) 파일
 기준은 `engine/src/build.js`입니다.

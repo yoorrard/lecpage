@@ -102,6 +102,10 @@ test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 �
   assert.deepEqual(conn(csp(sh, 'index.html')).slice(2), ['https://script.google.com', 'https://script.googleusercontent.com']);
   const lan = E.build(bp({ provider: 'http', url: 'http://192.168.0.10:8787', code: 'CSP4', features: ['qa'] }), { runtime: nodeRuntime() }).files;
   assert.ok(conn(csp(lan, 'index.html')).includes('ws://192.168.0.10:8787')); assert.doesNotMatch(csp(lan, 'index.html'), /upgrade-insecure-requests/, '교실 LAN(http)은 올려 받지 않음');
+  // 같은 주소(url '')로 Node 서버가 사이트도 내보내는 길(README 첫 길: http://<노트북 IP>:8787): 올려 받으면 CSS·JS가 https로 바뀌어 통째로 깨짐
+  const same = E.build(bp({ provider: 'http', url: '', code: 'CSP6', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  for (const f of ['index.html', 'console.html', 'screen.html', 'poster.html', 'check.html', 'privacy.html']) assert.doesNotMatch(csp(same, f), /upgrade-insecure-requests/, f);
+  assert.deepEqual(conn(csp(same, 'index.html')), ["'self'", 'file:'], '같은 주소라 따로 열 곳 없음');
   const local = E.build(bp({ provider: 'local', code: 'CSP5', features: ['qa'] }), { runtime: nodeRuntime() }).files;
   assert.deepEqual(conn(csp(local, 'index.html')), ["'self'", 'file:']);
   // 보조 화면만 aux-pages.css, 공유 미리보기(og)는 참가자 화면에만

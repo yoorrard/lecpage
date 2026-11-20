@@ -35,7 +35,15 @@
   var form = $('[data-admin-form]'), main = $('[data-console-main]'), box = $('[data-admin-box]');
   var PREVIEW = doc.body.hasAttribute('data-lp-preview'), LOCALPAGE = /^(file|about|blob|data):$/.test(location.protocol);
   /** 이 사이트의 폴더 주소(…/). /console.html이든 /console(확장자 없는 주소)이든 같음. 파일로 열었거나 미리보기면 '' */
-  function siteDir() { return LOCALPAGE ? '' : location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, ''); }
+  // localhost·127.x로 연 강사 화면: 그 주소는 이 컴퓨터에서만 열림. 참가자·휴대폰 QR에는 Node 서버가 알려 주는 같은 와이파이 주소(/api/lan)를,
+  // 모르면 QR 자리에 바꾸는 법을 보임
+  var LOOP = !DATA.siteUrl && !LOCALPAGE && /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(location.hostname), LAN = '', onLan = [];
+  var LOOP_MSG = 'localhost 주소는 이 컴퓨터에서만 열려요. 노트북의 와이파이 주소(예: http://192.168.0.10:8787)로 이 화면을 다시 열면 참가자 QR이 나와요.';
+  function siteDir() { if (LOCALPAGE) return ''; var dir = location.pathname.replace(/[^/]*$/, ''); return LOOP ? (LAN ? LAN + dir : '') : location.origin + dir; }
+  if (LOOP && window.fetch) fetch('/api/lan', { cache: 'no-store', credentials: 'omit' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
+    var u = j && j.urls && j.urls[0];
+    if (typeof u === 'string' && /^http:\/\/[\d.]+:\d+\/?$/.test(u)) { LAN = u.replace(/\/$/, ''); onLan.forEach(function (f) { f(); }); }
+  }, function () { });
   /** 들어간 뒤에만 보이는 것(위 띠의 다른 화면·도움말): 강사용 화면에 잘못 온 참가자에게는 열쇠 칸과 [참가자 화면으로]만 */
   function showAfterLogin() { [].forEach.call(doc.querySelectorAll('[data-after-login]'), function (n) { n.hidden = false; }); }
 
@@ -371,6 +379,10 @@
     main.textContent = '';
     main.appendChild(buildNet()); paintNet();
     C.strip = el('div', 'lp-con-strip'); C.strip.setAttribute('role', 'region'); C.strip.setAttribute('aria-label', '지금 상황'); main.appendChild(C.strip);
+    // 휴대폰(교실을 돌며 한 손으로): 칸이 한 줄로 길게 늘어서므로 위에 붙는 짧은 칸 이동 줄(투표 열기·다음 쪽까지 한 번에). 넓은 화면에서는 숨김(aux.css)
+    var jump = el('nav', 'lp-con-jump'); jump.setAttribute('aria-label', '칸 바로 가기');
+    [['run', '진행'], ON.help && ['help', '도움'], ON.qa && ['qa', '질문'], ['poll', '투표'], ON.board && ['board', '보드'], ['lead', '쪽·실습'], ['data', '기록']].filter(Boolean).forEach(function (x) { var a = el('a', '', x[1]); a.href = '#lp-p-' + x[0]; jump.appendChild(a); });
+    main.appendChild(jump);
     // 오른쪽 단: 자주 누르는 공지·타이머 → 읽는 것(도움 요청·이해 신호·실습 진행) → 가끔 쓰는 폼(이끌기·자료 링크) → 기록.
     // 참가자 수·도움 요청·신호·실습 막힘은 맨 위 띠에 숫자로 먼저 보임. 왼쪽 단: 질문·투표·보드
     var a = el('div', 'lp-con-col'), b = el('div', 'lp-con-col'); main.appendChild(a); main.appendChild(b);
@@ -468,6 +480,10 @@
         a.appendChild(btn(q.status === 'hidden' ? '다시 보이기' : '숨기기', '', function () { conn.update('questions', q.id, { status: q.status === 'hidden' ? 'open' : 'hidden', pinned: false }).catch(err); }, 'hide' + q.id));
         li.appendChild(a); C.qaList.appendChild(li);
       });
+      // 휴대폰에서는 처음 5개만(질문이 몰리면 투표·진행 칸이 한참 아래로 밀리지 않게). 넓은 화면은 모두(aux.css)
+      var fold = list.length > 5;
+      C.qaList.toggleAttribute('data-fold', fold && !C.qaAll);
+      if (fold) { var fl = el('li', 'lp-con-fold'); fl.appendChild(btn(C.qaAll ? '처음 5개만 보기' : '질문 ' + list.length + '개 모두 보기', '', function () { C.qaAll = !C.qaAll; renderQA(vals('questions')); }, 'qafold')); C.qaList.appendChild(fl); }
     });
   }
 
@@ -623,7 +639,10 @@
     var r1 = el('form', 'lp-con-row'); var nt = el('input', 'lp-in'); nt.placeholder = '예: 15:10까지 실습하고 앞을 봐 주세요'; nt.maxLength = 120; nt.setAttribute('aria-label', '공지 문구');
     var nb = el('button', 'lp-btn lp-btn-primary lp-btn-sm', '공지 보내기'); nb.type = 'submit';
     r1.appendChild(nt); r1.appendChild(nb); s1.appendChild(r1);
-    r1.addEventListener('submit', function (e) { e.preventDefault(); var v = nt.value.trim(); if (!v) { nt.focus(); return; } setState({ notice: { text: v, level: 'info' } }, '공지를 보냈어요. 참가자·발표 화면 위에 보여요.').then(function () { nt.value = ''; }); });
+    // 긴 공지: 휴대폰 '지금' 줄에는 두 줄(40자쯤)까지 보이고 나머지는 [더 보기]로 펼침 → 칠 때만 한 줄 알림
+    var nh = el('p', 'lp-con-sub', '휴대폰에서는 앞 40자쯤 보이고 나머지는 [더 보기]로 펼쳐요. 중요한 말을 앞에 두세요.'); nh.hidden = true; s1.appendChild(nh);
+    nt.addEventListener('input', function () { nh.hidden = nt.value.trim().length <= 40; });
+    r1.addEventListener('submit', function (e) { e.preventDefault(); var v = nt.value.trim(); if (!v) { nt.focus(); return; } setState({ notice: { text: v, level: 'info' } }, '공지를 보냈어요. 참가자·발표 화면 위에 보여요.').then(function () { nt.value = ''; nh.hidden = true; }); });
 
     var s2 = runPart('타이머'); C.clock = el('div', 'lp-con-clock'); s2.appendChild(C.clock);
     var r2 = el('div', 'lp-con-row');
@@ -685,9 +704,12 @@
     if (C.clock.getAttribute('data-on') !== '1') {
       C.clock.setAttribute('data-on', '1'); C.clock.textContent = '';
       C.clockB = el('b'); C.clockL = el('span', 'lp-con-sub'); C.clock.appendChild(C.clockB); C.clock.appendChild(C.clockL);
-      C.clock.appendChild(btn('멈춤', '', function () { setState({ timer: null }, '타이머를 멈췄어요.'); }, 'tstop'));
+      C.clockX = btn('멈춤', '', function () { var over = !!(state.timer && state.timer.endsAt <= now()); setState({ timer: null }, over ? '타이머를 지웠어요.' : '타이머를 멈췄어요.'); }, 'tstop');
+      C.clock.appendChild(C.clockX);
     }
-    C.clockB.textContent = left <= 0 ? '0:00' : mmss(left); C.clockL.textContent = (t.label ? t.label + ' · ' : '') + (left <= 0 ? '시간이 다 됐어요' : '남은 시간');
+    // 끝난 뒤: 참가자 화면은 '끝났어요'를 잠깐 보인 뒤 지우고, 발표 화면은 0:00을 그대로 둠 → 여기서는 [지우기]
+    C.clockB.textContent = left <= 0 ? '0:00' : mmss(left); C.clockL.textContent = (t.label ? t.label + ' · ' : '') + (left <= 0 ? '시간이 다 됐어요 · 참가자 화면에서는 곧 사라져요' : '남은 시간');
+    C.clockX.textContent = left <= 0 ? '지우기' : '멈춤';
     if (left <= 0) C.clock.setAttribute('data-over', ''); else C.clock.removeAttribute('data-over');
   }
   function syncRun() {
@@ -808,20 +830,27 @@
     if (dlg) dlg.addEventListener('close', function () { del.focus(); });
     // 참여 QR: 파일로 열었거나 미리보기면 주소 대신 안내(meta.siteUrl이 있으면 그 주소). 암호 보호면 #k=를 QR에만 붙임
     var local = /^(file|about|blob|data):$/.test(location.protocol);
-    // QR에는 원래 주소만(짧은 주소는 글자로만 — 중간 화면이 있는 서비스에는 #k=가 보임). 파일로 열어 원래 주소를 모르면 짧은 주소를 글자로
-    var site = DATA.siteUrl || siteDir();
-    var u = site || (local ? DATA.shortUrl || '' : '');
-    var ul = $('meta[name="lp-unlock"]'), qu = site ? site.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
     var s3 = el('div', 'lp-con-sec'); s3.appendChild(el('h3', '', '참여 주소'));
-    var j = el('div', 'lp-con-join'); var q = el('div', 'lp-qr'); q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드'); // copy-ok: 화면 읽기 이름표는 'QR 코드'도 됨(writing.md 4절)
-    if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
-    else q.appendChild(el('span', 'lp-qr-off', '배포하면 QR이 나와요.'));
-    var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
-    var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
-    add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : '배포하면 여기에 나와요.');
-    if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
-    add((DATA.words && DATA.words.code) || '연수 코드', DATA.live.code);
-    j.appendChild(q); j.appendChild(dl); s3.appendChild(j); b.appendChild(s3);
+    var j = el('div', 'lp-con-join'); s3.appendChild(j); b.appendChild(s3);
+    // QR에는 원래 주소만(짧은 주소는 글자로만 — 중간 화면이 있는 서비스에는 #k=가 보임). 파일로 열어 원래 주소를 모르면 짧은 주소를 글자로.
+    // localhost로 열었으면 서버가 같은 와이파이 주소를 알려 줄 때 다시 그림
+    function paintJoin() {
+      var site = DATA.siteUrl || siteDir();
+      var u = site || (local ? DATA.shortUrl || '' : '');
+      var ul = $('meta[name="lp-unlock"]'), qu = site ? site.split('#')[0] + (ul && ul.getAttribute('content') ? '#' + ul.getAttribute('content') : '') : '';
+      j.textContent = '';
+      var q = el('div', 'lp-qr'); q.setAttribute('role', 'img'); q.setAttribute('aria-label', '참여 QR 코드'); // copy-ok: 화면 읽기 이름표는 'QR 코드'도 됨(writing.md 4절)
+      if (qu && window.qrcode) { try { if (qrcode.stringToBytesFuncs) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; var qq = qrcode(0, 'M'); qq.addData(qu); qq.make(); q.innerHTML = qq.createSvgTag({ cellSize: 4, margin: 16, scalable: true }); } catch (e) { } }
+      else q.appendChild(el('span', 'lp-qr-off', LOOP && !site ? 'localhost라 QR을 만들지 않았어요' : '배포하면 QR이 나와요.'));
+      var su = String(DATA.shortUrl || ''); if (!u || su.replace(/\/$/, '') === u.replace(/\/$/, '')) su = '';
+      var dl = el('dl'); var add = function (k, v) { var dv = el('div'); dv.appendChild(el('dt', '', k)); dv.appendChild(el('dd', '', v)); dl.appendChild(dv); };
+      add('참가자 주소', u ? u.replace(/^https?:\/\//, '') : LOOP ? LOOP_MSG : '배포하면 여기에 나와요.');
+      if (su) { su = su.replace(/^https?:\/\//, '').replace(/\/$/, ''); try { su = decodeURI(su); } catch (e) { } add('짧은 주소', su); }
+      add((DATA.words && DATA.words.code) || '연수 코드', DATA.live.code);
+      j.appendChild(q); j.appendChild(dl);
+      if (LOOP && site) j.appendChild(el('p', 'lp-con-sub', '이 노트북의 와이파이 주소예요. 참가자는 같은 와이파이에서 이 주소로 들어와요.'));
+    }
+    paintJoin(); onLan.push(paintJoin);
   }
   function purge() { conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); queue(); toast('모든 기록을 지웠어요.'); }, err); }
 
@@ -847,9 +876,14 @@
     var cl = $('button[value="close"]', phone); if (cl) cl.focus();
   }
   if (phone && phoneBtn) {
-    var why = LOCAL ? '리허설 설정이라 휴대폰과 이어지지 않아요. 참여 기능 서버를 연결해 다시 배포하면 쓸 수 있어요.' : !siteDir() ? '배포하면 쓸 수 있어요.' : '';
-    if (why) { $('[data-phone-lead]', phone).textContent = why; $('[data-phone-box]', phone).hidden = true; }
-    phoneBtn.addEventListener('click', function () { phoneHide(); if (phone.showModal) phone.showModal(); });
+    var lead0 = $('[data-phone-lead]', phone).textContent;
+    // 왜 못 쓰는지는 열 때마다 다시 봄(localhost면 서버가 와이파이 주소를 알려 준 뒤에는 쓸 수 있음)
+    var phoneWhy = function () {
+      var why = LOCAL ? '리허설 설정이라 휴대폰과 이어지지 않아요. 참여 기능 서버를 연결해 다시 배포하면 쓸 수 있어요.' : !siteDir() ? (LOOP ? LOOP_MSG : '배포하면 쓸 수 있어요.') : '';
+      $('[data-phone-lead]', phone).textContent = why || lead0; $('[data-phone-box]', phone).hidden = !!why;
+    };
+    phoneWhy();
+    phoneBtn.addEventListener('click', function () { phoneHide(); phoneWhy(); if (phone.showModal) phone.showModal(); });
     $('[data-phone-show]', phone).addEventListener('click', phoneShow);
     phone.addEventListener('close', function () { phoneHide(); if (moreBtn) moreBtn.focus(); });
     phone.addEventListener('click', function (e) { if (e.target === phone) phone.close(); });

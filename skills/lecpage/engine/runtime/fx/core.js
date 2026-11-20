@@ -167,6 +167,16 @@
 
   /* ---------- 웹 글꼴 기다리기(최대 1초) ---------- */
   var fontWait = null, fontGiveUp = false;
+  /* 대기 상태 붙이기 묶음: 요소마다 배치를 강제로 다시 하지 않고(큰 연수에서 수백 번 → 처음 몇 초 멈춤) 한 장면에 한 번만.
+     snap(전환 없음)이 붙은 채 대기 상태를 한 번 계산한 뒤 모두 걷어 냄 → 그 뒤 들어올 때만 전환 */
+  var snapQ = [], snapRaf = 0;
+  function unsnapNow() {
+    if (snapRaf) { (w.cancelAnimationFrame || clearTimeout)(snapRaf); snapRaf = 0; }
+    var q = snapQ; snapQ = []; if (!q.length) return;
+    void d.body.offsetWidth;
+    for (var i = 0; i < q.length; i++) q[i].removeAttribute('data-fx-snap');
+  }
+  function unsnapSoon(t) { snapQ.push(t); if (!snapRaf) snapRaf = (w.requestAnimationFrame || setTimeout)(function () { snapRaf = 0; unsnapNow(); }); }
   function fontsOk() { return fontGiveUp || !d.fonts || d.fonts.status === 'loaded'; }
   function whenFonts(cb) {
     if (!fontWait) fontWait = new Promise(function (res) {
@@ -408,9 +418,9 @@
            이미 화면에 보이는 요소(첫 화면 제목·작은 미리보기)는 움직임이 거의 보이지 않음 */
         t.setAttribute('data-fx-snap', '');
         t.setAttribute('data-fx-pre', '');
-        void t.offsetWidth;
-        t.removeAttribute('data-fx-snap');
+        unsnapSoon(t);
         var go = function () {
+          if (t.hasAttribute('data-fx-snap')) { unsnapNow(); }
           if (!t.hasAttribute('data-fx-pre')) return;
           /* 웹 글꼴이 아직이면 잠깐(최대 1초) 기다렸다 들어옴: 대체 글꼴로 들어오다 글꼴이 바뀌며 글자가 튀지 않게(첫 화면 제목) */
           if (!fontsOk()) { whenFonts(go); return; }
@@ -427,7 +437,7 @@
         ios2.push(new IntersectionObserver(function (ens) { if (ens[ens.length - 1].isIntersecting) done(); }, { rootMargin: '0px 0px -' + cut + '% 0px', threshold: 0 }));
         ios2.push(new IntersectionObserver(function (ens) { if (ens[ens.length - 1].intersectionRatio >= 0.6) done(); }, { threshold: 0.6 }));
         ios2.forEach(function (x) { x.observe(t); });
-        cl.push(function () { ios2.forEach(function (x) { x.disconnect(); }); t.removeAttribute('data-fx-pre'); });
+        cl.push(function () { ios2.forEach(function (x) { x.disconnect(); }); t.removeAttribute('data-fx-pre'); t.removeAttribute('data-fx-snap'); });
       },
       /* 그래픽 효과 공통: 꾸밈 층(aria-hidden, 클릭 통과)을 호스트 맨 앞에 넣는다 */
       layer: function (host, cls) {

@@ -417,7 +417,7 @@ html.js .lp-film-nav{visibility:visible}
 .lp-blk > li.is-now{outline:2px solid var(--primary);outline-offset:-2px}
 .lp-blk > li.is-now h3::after{content:"지금";margin-left:.6em;font-size:var(--fs-xs);color:var(--primary)}
 .lp-blk > li.is-done{opacity:.6}
-@media (max-width:520px){.lp-blk > li{grid-template-columns:3.8rem minmax(0,1fr)}.lp-blk-min{grid-column:2}}
+@media (max-width:520px){.lp-blk > li{grid-template-columns:3.8rem minmax(0,1fr)}.lp-blk-min{grid-column:2;white-space:normal}} /* 글자 200%: '이야기 · 25분'이 칸을 넘지 않게 줄바꿈 */
 
 /*@v:tools.rows*/
 /* 도구 · 줄 색인: 번호 | 큰 이름 | 설명·쪽 | 주소 */
@@ -583,7 +583,9 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 .lp-sgrid-b p{font-size:var(--fs-sm);color:var(--muted-foreground)}
 .lp-sgrid > li[data-status="now"]{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
 .lp-sgrid > li[data-status="now"] .lp-sgrid-d b{color:var(--primary)}
-.lp-sgrid > li[data-status="done"]{opacity:.62}
+/* 지난 차시: 글자는 흐리게 하지 않고(4.5:1 유지) 바탕·테두리로만 물러나 보이게 */
+.lp-sgrid > li[data-status="done"]{border-style:dashed;box-shadow:none}
+.lp-sgrid > li[data-status="done"] .lp-sgrid-d b{color:var(--muted-foreground)}
 .lp-sgrid .lp-chip{font-weight:700;color:var(--primary)}
 
 /*@v:faq.twocol*/
@@ -860,7 +862,7 @@ html:not([data-rest="0"]):not(.lp-paused) .lp-pile > li:focus-within::before{tra
 
 /*@v:deck.stage*/
 .lp-sec-deck[data-variant="stage"]{background:var(--stage);--rule-c:color-mix(in srgb,var(--on-stage) 22%,transparent)}
-.lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head{color:var(--on-stage);--primary:color-mix(in srgb,var(--on-stage) 76%,transparent)}
+.lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head{color:var(--on-stage);--primary:color-mix(in srgb,var(--on-stage) 76%,transparent);--primary-foreground:var(--stage)} /* 번호를 색 칸에 넣는 프리셋(mosaic-split 등): 밝은 칸 위에는 무대색 글자 */
 .lp-sec-deck[data-variant="stage"] > .lp-wrap > .lp-head :is(.lp-lead,.lp-src,.lp-head-k){color:color-mix(in srgb,var(--on-stage) 76%,transparent)}
 .lp-sec-deck[data-variant="stage"] :is(.lp-deck-bar,.lp-deck-count,.lp-deck-dl,.lp-deck > .lp-note,.lp-follow){color:var(--on-stage)}
 .lp-sec-deck[data-variant="stage"] .lp-deck-bar :is(.lp-btn-ghost,.lp-icon-btn){color:var(--on-stage);border-color:color-mix(in srgb,var(--on-stage) 40%,transparent);background:transparent}

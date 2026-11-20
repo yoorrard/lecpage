@@ -977,7 +977,7 @@ begin
       into j using v_code, p.id, v_cid;
     if j is not null then return j; end if;
   end if;
-  v_rev := lec_private.bump(v_code, p_col in ('help', 'questions', 'posts', 'chat', 'progress', 'answers'));
+  v_rev := lec_private.bump(v_code, p_col in ('questions', 'posts', 'chat', 'answers'));
   case p_col
     when 'attendance' then
       -- (8) a second tap keeps the first check-in and the last check-out
@@ -1116,7 +1116,7 @@ begin
     on conflict (path) do nothing;
     update lec_private.upload_tickets k set post = v_id where k.training_code = v_code and k.path in (select e ->> 'path' from jsonb_array_elements(v_files) e);
   end if;
-  v_rev := lec_private.bump(v_code, p_col not in ('participants', 'survey'));
+  v_rev := lec_private.bump(v_code, p_col not in ('participants', 'survey', 'help', 'progress'));
   case p_col
     when 'participants' then
       if 'nickname' = any (v_keys) then
@@ -1200,7 +1200,7 @@ begin
     perform lec_private.fail(404, 'unknown_collection', '없는 컬렉션입니다.');
   end if;
   v_id := lec_private.to_uuid(p_id);
-  v_rev := lec_private.bump(v_code, p_col in ('help', 'questions', 'posts', 'chat', 'progress', 'answers', 'polls'));
+  v_rev := lec_private.bump(v_code, p_col in ('questions', 'posts', 'chat', 'answers', 'polls'));
   if p_col = 'posts' then
     -- H3: the post's files go to the trash (unreadable at once; the console deletes them from Storage)
     insert into lec_private.file_trash (path, training_code)
@@ -1311,6 +1311,27 @@ $$;
 
 /* Public snapshot. SECURITY INVOKER: runs as anon, so RLS (header code) and column grants apply.
    The cursor (`now`) is read first, so rows committed meanwhile are fetched again next time, never lost. */
+/* Other people's answers carry their value only once the instructor reveals that poll (state.ui.reveal 'a|b' or an older
+   pollReveal {id: true}); the 'signal' light always. anon cannot read lec_answers.value directly, so this definer
+   function builds the list for lec_snapshot (same x-lec-code check). A participant's own answers come from lec_mine. */
+create or replace function lec_private.pub_answers(p_code text, p_since bigint)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  with st as (select coalesce((select data from public.lec_state where training_code = p_code), '{}'::jsonb) as d),
+  shown as (
+    select x as poll from st, unnest(string_to_array(coalesce(st.d -> 'ui' ->> 'reveal', ''), '|')) as x where x <> ''
+    union
+    select e.k from st, jsonb_each(case when jsonb_typeof(st.d -> 'pollReveal') = 'object' then st.d -> 'pollReveal' else '{}'::jsonb end) as e(k, v)
+     where e.v = 'true'::jsonb
+  )
+  select coalesce(jsonb_agg(
+           case when w.poll = 'signal' or w.poll in (select poll from shown)
+                then jsonb_build_object('id', w.id, 'poll', w.poll, 'value', w.value, 'createdAt', lec_private.ms(w.created_at), 'updatedAt', lec_private.ms(w.updated_at))
+                else jsonb_build_object('id', w.id, 'poll', w.poll, 'value', '', 'sealed', true, 'createdAt', lec_private.ms(w.created_at), 'updatedAt', lec_private.ms(w.updated_at)) end
+           order by w.created_at), '[]'::jsonb)
+    from public.lec_answers w
+   where w.training_code = p_code and w.rev > p_since and lec_private.req_code() is not distinct from p_code
+$$;
+
 create or replace function public.lec_snapshot(p_code text, p_since bigint default 0)
 returns jsonb language plpgsql stable security invoker set search_path = '' as $$
 declare v_code text := lec_private.code(p_code); v_rev bigint; s bigint := greatest(coalesce(p_since, 0), 0);
@@ -1336,24 +1357,18 @@ begin
     'posts', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'by', o.by, 'kind', o.kind, 'text', o.text, 'nickname', o.nickname, 'files', o.files,
         'license', o.license, 'likes', o.likes, 'hidden', o.hidden, 'cid', o.cid, 'createdAt', lec_private.ms(o.created_at), 'updatedAt', lec_private.ms(o.updated_at)) order by o.created_at)
         from public.lec_posts o where o.training_code = v_code and o.rev > s), '[]'::jsonb),
-    'help', coalesce((select jsonb_agg(jsonb_build_object('id', h.id, 'nickname', h.nickname, 'station', h.station, 'seat', h.seat, 'message', h.message,
-        'status', h.status, 'assignee', h.assignee, 'cid', h.cid, 'createdAt', lec_private.ms(h.created_at), 'updatedAt', lec_private.ms(h.updated_at)) order by h.created_at)
-        from public.lec_help h where h.training_code = v_code and h.rev > s), '[]'::jsonb),
-    'progress', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'station', g.station, 'status', g.status, 'at', lec_private.ms(g.at),
-        'createdAt', lec_private.ms(g.created_at), 'updatedAt', lec_private.ms(g.updated_at)) order by g.created_at)
-        from public.lec_progress g where g.training_code = v_code and g.rev > s), '[]'::jsonb),
+    -- help (seat, message) and lab progress are the instructor's (lec_admin_snapshot); a participant gets their own from lec_mine
+    'help', '[]'::jsonb, 'progress', '[]'::jsonb,
     'polls', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'question', l.question, 'kind', l.kind, 'options', l.options, 'open', l.open,
         'createdAt', lec_private.ms(l.created_at), 'updatedAt', lec_private.ms(l.updated_at)) order by l.created_at)
         from public.lec_polls l where l.training_code = v_code and l.rev > s), '[]'::jsonb),
-    'answers', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'poll', w.poll, 'value', w.value,
-        'createdAt', lec_private.ms(w.created_at), 'updatedAt', lec_private.ms(w.updated_at)) order by w.created_at)
-        from public.lec_answers w where w.training_code = v_code and w.rev > s), '[]'::jsonb),
+    'answers', lec_private.pub_answers(v_code, s),
     'chat', coalesce((select jsonb_agg(c.d order by c.created_at) from (
         select jsonb_build_object('id', c0.id, 'by', c0.by, 'nickname', c0.nickname, 'text', c0.text, 'hidden', c0.hidden, 'cid', c0.cid,
           'createdAt', lec_private.ms(c0.created_at), 'updatedAt', lec_private.ms(c0.updated_at)) as d, c0.created_at
         from public.lec_chat c0 where c0.training_code = v_code and c0.rev > s order by c0.created_at desc limit 500) c), '[]'::jsonb),
     'removed', case when s = 0 then '[]'::jsonb else coalesce((select jsonb_agg(jsonb_build_object('col', tb.col, 'id', tb.id))
-        from public.lec_tombstones tb where tb.training_code = v_code and tb.rev > s and tb.col in ('questions', 'posts', 'help', 'progress', 'polls', 'answers', 'chat')), '[]'::jsonb) end
+        from public.lec_tombstones tb where tb.training_code = v_code and tb.rev > s and tb.col in ('questions', 'posts', 'polls', 'answers', 'chat')), '[]'::jsonb) end
   );
 end $$;
 
@@ -1542,19 +1557,19 @@ revoke all on public.lec_participants, public.lec_attendance, public.lec_progres
   from public, anon, authenticated;
 grant select (id, training_code, text, nickname, anonymous, votes, status, pinned, cid, rev, created_at, updated_at) on public.lec_questions to anon, authenticated;
 grant select (id, training_code, by, kind, text, nickname, files, license, likes, hidden, cid, rev, created_at, updated_at) on public.lec_posts to anon, authenticated;
--- L3: who asked for help, who is stuck and who answered what stays with the instructor (no `by` for anon)
-revoke select (by) on public.lec_help, public.lec_progress, public.lec_answers from anon, authenticated;
-grant select (id, training_code, nickname, station, seat, message, status, assignee, cid, rev, created_at, updated_at) on public.lec_help to anon, authenticated;
-grant select (id, training_code, station, status, at, rev, created_at, updated_at) on public.lec_progress to anon, authenticated;
+-- L3·M1: help requests (seat, message) and lab progress stay with the instructor (admin RPCs; a participant reads their
+-- own through lec_mine). Answers: no `by`, and no value column either — values go out through pub_answers (after reveal).
+revoke select on public.lec_help, public.lec_progress from anon, authenticated;
+revoke select (by, value) on public.lec_answers from anon, authenticated;
 grant select (id, training_code, question, kind, options, open, cid, rev, created_at, updated_at) on public.lec_polls to anon, authenticated;
-grant select (id, training_code, poll, value, rev, created_at, updated_at) on public.lec_answers to anon, authenticated;
+grant select (id, training_code, poll, rev, created_at, updated_at) on public.lec_answers to anon, authenticated;
 grant select (id, training_code, by, nickname, text, hidden, cid, rev, created_at, updated_at) on public.lec_chat to anon, authenticated;
 grant select (training_code, data, rev, updated_at) on public.lec_state to anon, authenticated;
 grant select (training_code, col, id, rev) on public.lec_tombstones to anon, authenticated;
 
 -- Functions: EXECUTE is granted to PUBLIC by default — take it away everywhere, then grant only the API.
 revoke execute on all functions in schema lec_private from public, anon, authenticated;
-grant execute on function lec_private.fail(int, text, text), lec_private.ms(timestamptz), lec_private.req_code(), lec_private.code(text),
+grant execute on function lec_private.fail(int, text, text), lec_private.ms(timestamptz), lec_private.req_code(), lec_private.code(text), lec_private.pub_answers(text, bigint),
                           lec_private.cur_rev(text), lec_private.upload_allowed(text), lec_private.delete_allowed(text),
                           lec_private.upload_ok(text, jsonb), lec_private.file_readable(text), lec_private.trashed(text)
   to anon, authenticated;
@@ -1581,11 +1596,13 @@ alter table public.lec_answers enable row level security;
 alter table public.lec_chat enable row level security;
 alter table public.lec_state enable row level security;
 alter table public.lec_tombstones enable row level security;
--- participants / attendance / survey: no policy at all → unreadable through the API (admin RPCs only)
+-- participants / attendance / survey / help / progress: no policy at all → unreadable through the API (admin RPCs only)
+drop policy if exists "read by training code" on public.lec_progress;
+drop policy if exists "read by training code" on public.lec_help;
 do $$
 declare tb text;
 begin
-  foreach tb in array array['lec_progress', 'lec_help', 'lec_questions', 'lec_posts', 'lec_polls', 'lec_answers', 'lec_chat', 'lec_state', 'lec_tombstones'] loop
+  foreach tb in array array['lec_questions', 'lec_posts', 'lec_polls', 'lec_answers', 'lec_chat', 'lec_state', 'lec_tombstones'] loop
     execute format('drop policy if exists "read by training code" on public.%I', tb);
     execute format('create policy "read by training code" on public.%I for select to anon, authenticated using (training_code = (select lec_private.req_code()))', tb);
   end loop;

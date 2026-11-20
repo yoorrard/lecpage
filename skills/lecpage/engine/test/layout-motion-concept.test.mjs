@@ -129,7 +129,9 @@ test('첫 화면 밖 전 구간 연출: 단계마다(0 정적 · 1 등장과 가
 
 test('효과의 대기 상태: 곧바로 들어가고(전환 없이), 인쇄·동작 줄이기에서는 숨은 채 남지 않는다', () => {
   const rt = nodeRuntime(), core = rt.read('fx/core.js'), css = rt.read('fx/fx.css');
-  assert.match(core, /setAttribute\('data-fx-snap', ''\);\s*t\.setAttribute\('data-fx-pre', ''\);\s*void t\.offsetWidth;\s*t\.removeAttribute\('data-fx-snap'\)/);
+  // 대기 상태로 곧바로(전환 없이) 들어가되, 배치 강제는 요소마다가 아니라 한 장면에 한 번(큰 연수에서 처음 몇 초 멈추던 것)
+  assert.match(core, /setAttribute\('data-fx-snap', ''\);\s*t\.setAttribute\('data-fx-pre', ''\);\s*unsnapSoon\(t\);/);
+  assert.match(core, /function unsnapNow\(\) \{[\s\S]*?void d\.body\.offsetWidth;\s*for \(var i = 0; i < q\.length; i\+\+\) q\[i\]\.removeAttribute\('data-fx-snap'\);/);
   assert.match(css, /\[data-fx-snap\][^{]*\{ transition: none !important; \}/);
   assert.match(css, /@media print \{\s*\[data-fx-pre\], \[data-fx-pre\] :is\(\.fx-reveal-item, \.fx-wi, \.fx-c\), \.fx-wait \{ opacity: 1 !important;/);
   for (const m of E.ENTER_MODES.filter((x) => x !== 'rise')) assert.ok(css.includes(`.fx-rv-${m}[data-fx-pre]`), m);

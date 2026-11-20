@@ -95,7 +95,7 @@ test('supabase: schema loads (twice: re-runnable) and passes basic advisor check
   const badDefiner = psql(`select coalesce(json_agg(p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public', 'lec_private') and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')`, { role: null });
   assert.deepEqual(badDefiner, [], 'security definer functions pin search_path');
   const anonExec = psql(`select coalesce(json_agg(p.proname order by p.proname), '[]') from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'lec_private' and has_function_privilege('anon', p.oid, 'execute')`, { role: null });
-  assert.deepEqual(anonExec, ['code', 'cur_rev', 'delete_allowed', 'fail', 'file_readable', 'ms', 'req_code', 'trashed', 'upload_allowed', 'upload_ok']);
+  assert.deepEqual(anonExec, ['code', 'cur_rev', 'delete_allowed', 'fail', 'file_readable', 'ms', 'pub_answers', 'req_code', 'trashed', 'upload_allowed', 'upload_ok']);
   const bucket = psql(`select row_to_json(b) from storage.buckets b where id = 'lec-uploads'`, { role: null });
   assert.equal(bucket.public, false, 'private bucket: signed URLs only (H3)');
   assert.equal(bucket.file_size_limit, 20971520); assert.ok(bucket.allowed_mime_types.includes('video/mp4')); assert.ok(!bucket.allowed_mime_types.includes('image/svg+xml'));
@@ -355,7 +355,7 @@ test('supabase (M7, H3, M8): own uploads only; hidden/removed posts make files u
   assert.equal(psql(`select text from public.lec_posts where id = ${q(held.id)}`, o), '', 'held content is not readable through the API');
 });
 
-test('supabase (L1, L3, nicknames, L12): closed polls, no `by` for the public, reserved names, cheap flush', { skip }, () => {
+test('supabase (L1, L3, M1, nicknames, L12): closed polls, no `by` for the public, help·progress only for the owner, values after a reveal, reserved names, cheap flush', { skip }, () => {
   psql(`select lec_private.init_training('SUPA8', '관리자키-supa-0008')`, { role: null });
   const o = { code: 'SUPA8', xff: '10.8.0.1' }; const K = '관리자키-supa-0008';
   for (const n of ['강사', ' 운영자 ', 'Admin', 'lecpage님']) fails(() => psql(`select public.lec_join('SUPA8', ${q(n)})`, o), 'PT400', 'reserved_nickname');
@@ -367,11 +367,20 @@ test('supabase (L1, L3, nicknames, L12): closed polls, no `by` for the public, r
   psql(`select public.lec_add('SUPA8', ${q(a.token)}, 'help', ${j({ message: '도와주세요' })})`, o);
   psql(`select public.lec_update('SUPA8', null, ${q(K)}, 'polls', ${q(poll.id)}, ${j({ open: false })})`, o);
   fails(() => psql(`select public.lec_update('SUPA8', ${q(a.token)}, null, 'answers', ${q(ans.id)}, ${j({ value: '아니요' })})`, o), 'PT409', 'poll_closed');
+  psql(`select public.lec_add('SUPA8', ${q(a.token)}, 'answers', ${j({ poll: 'signal', value: 'red' })})`, o);
   const snap = psql(`select public.lec_snapshot('SUPA8', 0)`, o);
-  for (const col of ['answers', 'progress', 'help']) assert.ok(snap[col].length && snap[col].every((d) => d.by === undefined), col);
+  assert.ok(snap.answers.length && snap.answers.every((d) => d.by === undefined), 'answers: no by');
+  // M1: help (seat·message) and progress stay with the instructor; answers carry no value before the reveal (the signal light always)
+  assert.deepEqual([snap.progress, snap.help], [[], []]);
+  assert.deepEqual(snap.answers.filter((d) => d.poll === poll.id).map((d) => [d.value, d.sealed]), [['', true]]);
+  assert.equal(snap.answers.find((d) => d.poll === 'signal').value, 'red');
   for (const t of ['lec_answers', 'lec_progress', 'lec_help']) fails(() => psql(`select by from public.${t}`, o), '42501');
+  for (const s of ['select message, seat from public.lec_help', 'select status from public.lec_progress', 'select value from public.lec_answers']) fails(() => psql(s, o), '42501');
   const mine = psql(`select public.lec_mine('SUPA8', ${q(a.token)})`, o);
   assert.equal(mine.answers[0].by, a.id); assert.equal(mine.progress[0].by, a.id); assert.equal(mine.help[0].by, a.id);
+  assert.equal(mine.help[0].message, '도와주세요'); assert.equal(mine.answers.find((d) => d.poll === poll.id).value, '예');
+  psql(`select public.lec_set_state('SUPA8', ${q(K)}, ${j({ ui: { reveal: poll.id } })})`, o);
+  assert.deepEqual(psql(`select public.lec_snapshot('SUPA8', 0)`, o).answers.filter((d) => d.poll === poll.id).map((d) => [d.value, d.sealed]), [['예', undefined]], 'values after the reveal');
   // L12: nothing pending → no lock taken, nothing sent; snapshots past the cursor skip the aggregates
   spawnSync('sleep', ['2.1']); psql(`select public.lec_flush('SUPA8')`, o);
   const before = sent('lec:SUPA8').length;

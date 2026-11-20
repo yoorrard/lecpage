@@ -17,8 +17,10 @@
  */
 var VERSION = '1.0.0';
 var COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
-var PUBLIC_COLS = ['questions', 'posts', 'help', 'progress', 'polls', 'answers', 'chat'];
-var PRIVATE_COLS = ['participants', 'attendance', 'survey'];
+// Anyone with the training code reads these (other people's answers carry their value only after the instructor reveals
+// that poll; the 'signal' light always). Help requests and lab progress are the instructor's; a participant reads their own.
+var PUBLIC_COLS = ['questions', 'posts', 'polls', 'answers', 'chat'];
+var PRIVATE_COLS = ['participants', 'attendance', 'survey', 'help', 'progress'];
 var FIELDS = {
   participants: ['nickname', 'name', 'school', 'consentAt'],
   attendance: ['kind', 'at'], progress: ['station', 'status', 'at'],
@@ -427,8 +429,15 @@ function writeRow(col, doc) {
   return doc;
 }
 var OWN_BY = { answers: 1, progress: 1, help: 1 };
-/** viewer: the reading participant — answers/progress/help keep `by` only on the reader's own docs (L3). */
-function out(col, d, admin, viewer) {
+/** Polls the instructor revealed: state.ui.reveal ('a|b') or an older pollReveal {id: true}. → { id: 1 } */
+function revealedPolls(st) {
+  var s = {}; String((st && st.ui && st.ui.reveal) || '').split('|').forEach(function (x) { if (x) s[x] = 1; });
+  var pr = (st && st.pollReveal) || {}; Object.keys(pr).forEach(function (k) { if (pr[k]) s[k] = 1; });
+  return s;
+}
+/** viewer: the reading participant — answers/progress/help keep `by` only on the reader's own docs (L3).
+ *  shown: revealedPolls(); other people's answers to any other poll go out sealed (no value). */
+function out(col, d, admin, viewer, shown) {
   var o = { id: d.id, createdAt: d.createdAt, updatedAt: d.updatedAt };
   FIELDS[col].forEach(function (f) { o[f] = d[f]; });
   if (d.by && col !== 'questions' && col !== 'participants' && (admin || !OWN_BY[col] || (viewer && d.by === viewer))) o.by = d.by;
@@ -437,6 +446,7 @@ function out(col, d, admin, viewer) {
     if (col === 'questions' && o.status === 'hidden') o.text = '';
     if (col === 'posts' && o.hidden) { o.text = ''; o.files = []; }
     if (col === 'chat' && o.hidden) o.text = '';
+    if (col === 'answers' && o.poll !== 'signal' && !(viewer && d.by === viewer) && !(shown && shown[o.poll])) { o.value = ''; o.sealed = true; }
   }
   if (col === 'posts' && !o.files) o.files = [];
   if (col === 'polls' && !o.options) o.options = [];
@@ -486,7 +496,8 @@ function snapshot(b) {
     // Reads take no lock, so a write may land between reading STAMP and reading rows: the cursor handed out
     // overlaps the last 5 s (the client dedupes by id/updatedAt), so nothing is skipped.
     full = { code: code, now: Math.max(0, Number(PropertiesService.getScriptProperties().getProperty('STAMP') || 0) - 5000), cols: {}, tomb: [] };
-    (admin ? COLS : PUBLIC_COLS).forEach(function (col) { full.cols[col] = rows(col).filter(function (r) { return r.code === code; }).map(function (r) { return out(col, r, admin); }); });
+    var shown = admin ? null : revealedPolls(getState(code));
+    (admin ? COLS : PUBLIC_COLS).forEach(function (col) { full.cols[col] = rows(col).filter(function (r) { return r.code === code; }).map(function (r) { return out(col, r, admin, null, shown); }); });
     full.tomb = rows('tombstones').filter(function (t) { return t.code === code; }).map(function (t) { return { col: t.col, id: t.id, at: Number(t.at) }; });
     if (!admin) { var s = JSON.stringify(full); if (s.length < 90000) cache.put('snap', s, 4); }
   }
@@ -497,11 +508,10 @@ function snapshot(b) {
   if (!admin && b.token) {
     try {
       var me = participant(code, b.token);
-      ['attendance', 'survey'].forEach(function (col) { res[col] = rows(col).filter(function (r) { return r.code === code && r.by === me.id && r.updatedAt > since; }).map(function (r) { return out(col, r, false, me.id); }); });
-      ['answers', 'progress', 'help'].forEach(function (col) {
-        var mine = {}; rows(col).forEach(function (r) { if (r.code === code && r.by === me.id) mine[r.id] = 1; });
-        (res[col] || []).forEach(function (d) { if (mine[d.id]) d.by = me.id; });
-      });
+      ['attendance', 'survey', 'help', 'progress'].forEach(function (col) { res[col] = rows(col).filter(function (r) { return r.code === code && r.by === me.id && r.updatedAt > since; }).map(function (r) { return out(col, r, false, me.id); }); });
+      // my own answers: with `by` and their value (the shared list leaves both out before a reveal)
+      var mine = {}; rows('answers').forEach(function (r) { if (r.code === code && r.by === me.id) mine[r.id] = r; });
+      res.answers = (res.answers || []).map(function (d) { return mine[d.id] ? out('answers', mine[d.id], false, me.id) : d; });
       res.me = { id: me.id, nickname: me.nickname };
     } catch (e) { /* not joined */ }
   }

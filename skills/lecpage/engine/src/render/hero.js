@@ -90,7 +90,13 @@ function model(s, ctx, h) {
 const org = (M, cls = '') => (M.org ? `<p class="lp-hero-org${cls ? ' ' + cls : ''}">${esc(M.org)}</p>` : '');
 /** 연수 전·중·후 한 줄. 날짜가 있을 때만 두고, 참가자 화면(lecpage.js initPhase)이 글을 채워 보여 줍니다 */
 const state = (M) => (M.dp ? `<p class="lp-hero-state" data-hero-state hidden><i aria-hidden="true"></i><span data-hero-state-text></span>${M.attend ? `<button class="lp-btn lp-btn-primary lp-btn-sm lp-hero-attend" type="button" data-hero-attend hidden>${icon('check')}<span>출석</span></button>` : ''}</p>` : '');
-const h1 = (M, cls = '') => `<h1 class="lp-h1${cls ? ' ' + cls : ''}" id="${M.id}-h"${fx(M.ctx, 'hero.title')}>${titleHtml(M.title)}</h1>`;
+/**
+ * 제목 길이 단계: 교육청 직무연수처럼 공식 이름이 긴 제목은 첫 화면 제목 글자를 한 단계(아주 길면 두 단계) 낮춤(lecpage.css .lp-h1[data-tlen]).
+ * 휴대폰 첫 화면이 제목만으로 한두 장을 차지해 입장·실습 단추가 한참 아래로 밀리지 않게. 글은 그대로(교재 원문 원칙)
+ */
+export function titleLen(t) { const n = [...String(t || '').replace(/\s+/g, '')].length; return n > 48 ? 'xlong' : n > 24 ? 'long' : ''; }
+const tlen = (M) => { const v = titleLen(M.title); return v ? ` data-tlen="${v}"` : ''; };
+const h1 = (M, cls = '') => `<h1 class="lp-h1${cls ? ' ' + cls : ''}" id="${M.id}-h"${tlen(M)}${fx(M.ctx, 'hero.title')}>${titleHtml(M.title)}</h1>`;
 const sub = (M, cls = '') => (M.sub ? `<p class="lp-hero-sub${cls ? ' ' + cls : ''}">${br(M.sub)}</p>` : '');
 function ctas(M, extra = []) {
   const { s, ctx, h, m } = M;
@@ -497,7 +503,7 @@ export function streamArt(seed, attr = '') {
 C.stream = (M) => show(M, streamArt(seedOf(M), artFx(M, 'stream-lines')));
 
 // ── 배치가 다른 첫 화면 여섯 가지(가운데·오른쪽·세로쓰기·어긋난 격자·반반 화면·그림 가득) ──
-Object.assign(C, graphicHeroes({ org, state, h1, sub, ctas, metaDl, cell, numCell, pick, seeded, hashStr, seedOf, longDate, shortDate, isoDate, dialRows, artFx, fx, REST }));
+Object.assign(C, graphicHeroes({ org, state, h1, tlen, sub, ctas, metaDl, cell, numCell, pick, seeded, hashStr, seedOf, longDate, shortDate, isoDate, dialRows, artFx, fx, REST }));
 
 /** 다른 첫 화면에 꾸밈으로 얹을 때도 정지 그림을 먼저 그려 둠(효과가 꺼져도 완성된 모습) */
 const DECOR_ART = { 'orbit-3d': () => orbitArt(), 'stream-lines': (M) => streamArt(seedOf(M)) };

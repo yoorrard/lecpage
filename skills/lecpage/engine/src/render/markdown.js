@@ -49,7 +49,9 @@ export function tableHtml({ head = [], rows = [], label = '' } = {}) {
     const v = inlineMd(cell(r, i));
     return i === 0 && rowHead ? `<th role="rowheader" scope="row">${v}</th>` : `<td role="cell"${cell(r, i).trim() ? '' : ' data-empty'}>${k(i)}<span class="lp-tbl-v">${v}</span></td>`;
   }).join('')}</tr>`).join('');
-  const region = mode === 'scroll' ? ` role="region" aria-label="${esc(label || '표')}" tabindex="0"` : '';
+  // 옆으로 미는 표의 영역 이름: 바깥 섹션 영역(같은 제목)과 겹치지 않게 '… 표, 옆으로 밀어 보기'
+  const name = label || head.map((h) => String(h ?? '').replace(/[*_`[\]]/g, '').trim()).filter(Boolean).slice(0, 2).join('·');
+  const region = mode === 'scroll' ? ` role="region" aria-label="${esc(`${name ? name + (/표$/.test(name) ? '' : ' 표') : '표'}, 옆으로 밀어 보기`)}" tabindex="0"` : '';
   return `<div class="lp-tbl-wrap" data-mode="${mode}" style="--cols:${n}"${region}><table class="lp-tbl" role="table"${label ? ` aria-label="${esc(label)}"` : ''}>${thead}<tbody role="rowgroup">${body}</tbody></table></div>`;
 }
 
