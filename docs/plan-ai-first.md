@@ -33,9 +33,11 @@ site/
   assets/style.css  AI가 씀(권장, 인라인 <style>도 허용)
   assets/site.js    AI가 씀(선택, 인라인 <script>는 조립 때 이 파일로 옮김)
   assets/img/*      AI가 쓴 그림(SVG 아님: png·jpg·webp)
-  material/p-001.webp …  lecpage가 만든 교재 쪽 그림(AI가 <img>로 씀)
+  material/p-001.webp …  lecpage가 만든 교재 쪽 그림(AI가 <img>로 씀). 교재가 여러 개면 번호를 이어 매김(첫 교재 1~12, 둘째 13부터)
+  files/*           자료실 파일(강사가 올린 PDF 등, 선택)
 lecpage.json        연수 정보·참여 기능 설정(아래)
 ```
+- 쪽(.html)은 맨 위 폴더에만. `console·screen·poster·check·privacy.html`과 엔진 파일 이름(`assets/lecpage.js`·`kit.css`·`theme.css` …)은 lecpage가 만드는 이름이라 AI 파일은 뺌. SVG 파일·숨김 파일·`..` 경로도 받지 않음(`kit/paths.js` `siteFileOk`).
 
 `lecpage.json` (AI가 채우는 칸 / 강사만 정하는 칸이 나뉨)
 ```json
@@ -51,9 +53,12 @@ lecpage.json        연수 정보·참여 기능 설정(아래)
   "live": null, "siteUrl": "", "joinUrl": "", "access": "public"
 }
 ```
-- `facts`는 AI가 교재 몇 쪽에서 찾았는지(검수·확인 화면에 씀).
-- `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`는 **강사 값**: AI 답에 있어도 버림(엔진 `keepTeacherLinks`와 같은 규칙).
-- `theme`은 AI가 고른 색·글꼴. 강사 화면·발표 화면·QR 안내문이 이 색을 이어받음.
+- `facts`는 AI가 교재 몇 쪽에서 찾았는지(검수·확인 화면에 씀). 꼴이 틀린 항목은 빼고 알림.
+- **강사 값**: `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`에 더해 `surveyUrl`(기관 설문)·`privacy`(받을 정보·보관 기간)·`keepUntil`도. AI 답·남이 준 파일에 있어도 버리고 이전 값(`prev`)을 지킴(엔진 `keepTeacherLinks`와 같은 규칙, `kit/meta.js` `keepTeacherValues`). Skill은 강사 값을 `work/lecpage.teacher.json`에 따로 둠.
+- `live` 꼴은 v1과 같음: `{ provider:'local'|'http'|'supabase'|'sheets', url, code, anonKey, anonymous?, pollMs?, uploads? }`. 없으면 기능이 켜져 있을 때 `local`(이 기기 안 연습, v1과 같음).
+- 날짜 `YYYY-MM-DD`(달력에 있는 날)·시각 `HH:MM`. `2026.12.3`·`9:00`은 고쳐 받고, 틀리면 그 칸만 비우고 알림. `mode`는 `hybrid`도 `blended`로 받음.
+- 선택 칸(AI): `organizer`·`contact`·`description`·`admin{kind,hours,completionRate}`(직무연수 이수 기준)·`theme.radius`. `features`에는 `signal`·`progress`도 쓸 수 있음.
+- `theme`은 AI가 고른 색·글꼴. 강사 화면·발표 화면·QR 안내문이 이 색을 이어받음(밝은·어두운 바탕에 맞는 기본 틀 + 강조색·바탕·글자색·글꼴). `theme`이 비면 사이트 CSS의 `--lp-*` 값을 씀.
 
 ## 4. 강의 전용 기능 키트 (약속 B)
 AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리를 실제 기능으로 채웁니다. 디자인은 사이트를 따릅니다.
@@ -67,9 +72,13 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 <div data-lp="deck" data-pages="1-12"></div>      교재 넘기기(강사 따라 넘기기)
 <div data-lp="materials"></div>                   자료실(강사가 올린 파일·링크)
 <div data-lp="join"></div>                        접속 QR·코드
+<div data-lp="share"></div>                       QR 공유 단추(대화상자)
 <section data-lp-step="s1" data-title="1단계: …"> 실습 단계(진행 현황·도움 요청이 이 단계를 셈)
 ```
-- 참여 막대(도크: 출석·질문·도움 요청·반응)와 '지금' 띠(공지·타이머·투표 알림)는 `features`에 있으면 조립이 자동으로 붙임. AI가 `<div data-lp="dock">`로 자리를 정할 수도 있음.
+- 속성(조립 뒤에는 빠짐): 투표 `data-kind="choice|word|scale"`·`data-id`(강사 화면 아이디, 없으면 p1·p2…), 보드 `data-categories='["…"]'`·`data-files="0~8"`·`data-moderation`, 설문 `data-questions='[{"q","kind":"scale|choice|text","options"}]'`(없으면 기본 문항), 교재 `data-pages`(없으면 있는 쪽 전부), 자료실 `data-items='[{"title","href","desc"}]'`(+ 앱이 넘기는 `materials`).
+- 자리 표시 요소는 그대로 두고(class·id·배치는 AI 것) 안을 채움: `class="lpk lpk-w lpk-<종류>"`, 아이디가 없으면 `id="lpk-<종류>"`. 안에 쓴 글은 지움(자료실만 남김). 실습 단계에는 `class="lp-st" data-st` + `#st-<아이디>` 앵커 + 끝에 [완료 체크]·[도움 요청].
+- 투표 자리는 여럿 둘 수 있음(열린 투표는 그 문항이 적힌 자리에, 즉석 투표는 첫 자리). 보드·교재 넘기기는 실시간으로 첫 자리 하나만.
+- 참여 막대(도크: 출석·질문·도움 요청·반응)와 '지금' 띠(공지·타이머·투표 알림)는 `features`에 있으면 조립이 자동으로 붙임. AI가 `<div data-lp="dock">`·`<div data-lp="now">`로 자리를 정할 수도 있음. 저절로 붙은 '지금' 띠는 화면 아래(도크 바로 위)에 떠서 사이트 머리를 가리지 않음.
 - 키트 모양은 사이트 CSS 변수 `--lp-accent --lp-ink --lp-paper --lp-font --lp-radius`를 따름(없으면 `theme` 값, 그것도 없으면 주변 글자색·글꼴). 키트 CSS는 `.lpk` 아래에만 적용돼 AI의 CSS를 건드리지 않음.
 - 런타임(`engine/runtime/lecpage.js`·`live/*`)은 지금 것을 그대로 씀. 조립이 자리 표시를 런타임이 아는 표시(`data-qa`·`data-poll-live`·`data-dock` …)로 펼침(위젯 HTML은 지금 `render/sections.js`의 위젯 부분을 떼어 `kit/widgets.js`로).
 - 강사 화면·발표 화면은 자리 표시에서 투표·실습 단계·교재 쪽 목록을 모아 만듦(지금의 `lp-blueprint` 자리).
@@ -77,14 +86,23 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 
 ## 5. 조립·검수 (약속 C, 엔진)
 ```js
-assemble(site, meta, { runtime, preview, target }) → { files, warnings }
+assemble(site, meta, { runtime, preview, target, prev, today, material, materials }) → { files, warnings, errors, meta, collected, blueprint, csp, report }
   // site: { 'index.html': '…', 'assets/style.css': '…', … }
   // 하는 일: 인라인 <script> → assets/site.js, 자리 표시 펼치기, 키트 CSS·런타임 넣기, CSP·_headers, lp-data,
   //         강사·발표·안내문·접속 확인·개인정보 쪽, 일정 파일(.ics), favicon, robots, 쪽 그림 경로 확인, 강사 값 지키기
 inspect(files, meta) → issues[]            // 정적 검사: HTML 구조·빈 칸·깨진 경로·키트 표시 오류·금지 패턴·크기·글자 대비(CSS 변수)
 inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브라우저 숨은 틀): 390·1280 가로 넘침·겹침·안 보이는 글·잘린 글·이미지 깨짐
 // issue: { id, level:'error'|'warn', where:{ file, selector, section }, message_ko, fix_hint_ko }
+previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미리보기·숨은 틀(CSS·JS·그림을 안으로, CSP meta 뺌)
 ```
+- 구현(`engine/src/kit/`, `E.kit.*`): `prev` = 강사 값, `material.pages` = 쪽 제목(교재 넘기기 검색), `materials` = 앱 자료실 목록. `collected` = 모은 투표·실습 단계·교재 쪽 등(앱 목록 화면용).
+- 그려서 검사는 의존성 없는 함수 `inspectRendered({ doc, file })`(+ 글 `inspectRenderedSource`, 숨은 틀용 `inspectRenderedScript({ id })` → 부모에 `{type:'lp-inspect', id, width, issues}`), Playwright 도우미 `inspectPage(page, url, { widths:[390,1280], shots })`. `where.width`가 붙음.
+- 보조 쪽·`#lp-data`·`#lp-blueprint`는 연수 정보와 모은 것으로 v1 설계도를 만들어 지금 엔진(`build`)으로 그림(보조 쪽 코드를 새로 쓰지 않음).
+- CSP(AI 쪽): `script-src 'self'`+고정 라이브러리 · `style-src 'self' 'unsafe-inline'`+글꼴 CDN · `img-src 'self' data: blob:`+참여 서버(보드 사진) · `connect-src 'self'`+참여 서버 · `frame-src` youtube-nocookie·vimeo · `form-action 'none'` · `object-src`·`worker-src 'none'` · `base-uri 'none'`. `file:`은 USB·ZIP으로 열 때를 위해 엔진처럼 둠. `_headers`는 이 CSP를 AI 쪽 경로(`/`·`/index.html`·`/<쪽>`)에만 붙이고, 보조 쪽은 엔진 CSP(접속 확인은 바깥 도구를 재야 해서 `connect-src https:`)를 그대로.
+- 인라인 `<script>`는 자리를 지켜 파일로(`assets/site.js`, 다음은 `site-2.js`…, 모듈은 `site-N.module.js`, 다른 쪽은 `assets/<쪽>.js`). `onclick` 등은 `assets/site-events.js`로 옮기고 알림(늦게 붙으니 addEventListener를 권함). 허용 목록 밖 바깥 스크립트·CSS, `<base>`·`<meta refresh>`·`<object>`, `javascript:` 주소는 뺌. `youtube.com/embed`는 `youtube-nocookie.com`으로.
+
+### .lecpage v2 (저장 형식)
+무압축 ZIP: `project.json { format:'lecpage-project', version:2, kind:'site', engine, title, meta, material:{pages}, sources, createdAt }` + `site/…` + `src/…`(원본). 참여 기능 키는 담지 않음. 열 때 파일 안의 강사 값은 `meta`에 넣지 않고 `teacherInFile`로 따로 줌(남이 준 파일일 수 있어 앱이 확인받고 씀). v1(설계도) 파일은 `kind:'v1'`+'예전 판' 안내, `upgradeV1`이 연수 정보·교재 쪽 그림(`material/p-NNN`)·원본·쪽 제목을 옮기고 예전 사이트는 지금 엔진으로 빌드해 `legacy`로 줌(사이트는 AI로 새로 만듦).
 - 검수 결과는 사람(앱 화면)과 AI(고치기 요청에 그대로 붙임) 둘 다 읽는 꼴.
 - 교재 사실 대조는 AI 검수 단계로(사이트 글 + `facts` + 교재 → 틀린 날짜·지어낸 내용 목록). 코드가 교재를 해석해 고치지는 않음.
 
@@ -130,7 +148,7 @@ inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브
 ```
 lecpage prepare 교재.pdf 교재.pptx -o work   # 쪽 그림·보조 글자·work/README.md(할 일·키트·레퍼런스 안내)
 (에이전트) 쪽 그림과 원본을 직접 읽고 설계 → work/site/ 를 직접 씀 + work/lecpage.json
-lecpage check work                          # 조립 + 검수 + 390·1280 화면 그림(에이전트가 보고 고침)
+lecpage check work                          # 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/<쪽>-390.png·-1280.png, issues.md·report.json), 고칠 곳이 있으면 종료 코드 1
 lecpage preview work                        # 로컬 미리보기
 lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(.lecpage)
 ```
@@ -141,6 +159,11 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 - 구조: 강사 PC에서 연결 프로그램 하나(`npx github:yoorrard/lecpage` 또는 Skill CLI `lecpage studio`)를 띄우면, 그 프로그램이 **앱 전체를 `http://127.0.0.1:<포트>/`에서 보여 주고**(lecpage.com의 같은 판을 그대로, 같은 출처라 Chrome 권한 창·Safari 차단이 없음) 기본 브라우저로 엶. 앱의 AI 고르기에 "내 PC의 Claude Code / Codex"가 생김.
 - 일 맡기기: 연결 프로그램이 빈 임시 폴더에 교재·쪽 그림·키트 설명서·레퍼런스·작업 지시를 놓고 설치된 `claude -p --output-format stream-json`(또는 `codex exec --json`)을 실행 → 에이전트가 Skill 흐름(§9)으로 `site/`를 파일로 씀(답 길이에 안 잘림) → `check`로 검수·고침 → 앱이 결과를 받아 미리보기·편집·배포. 진행은 스트림으로 앱에 보여 줌.
 - 안전: 127.0.0.1에만 묶기, 띄울 때마다 새 토큰, Origin·Host 정확히 확인, 임시 폴더 밖 파일 접근 막는 Claude Code 설정, `ANTHROPIC_API_KEY`가 있으면 그 키로 돈다는 안내, 폴더의 훅·`.mcp.json`이 없는 빈 폴더에서만.
+- 연결 프로그램 HTTP 약속(같은 출처, 모든 요청에 머리글 `X-Lecpage-Bridge: <토큰>` — 토큰은 연결 프로그램이 앱 HTML에 `<meta name="lecpage-bridge" content="…">`로 넣어 줌):
+  - `GET /bridge/status` → `{ ok, version, agents:[{ id:'claude'|'codex', installed, version, auth:'subscription'|'api-key'|'unknown' }] }`
+  - `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site? }` → `{ jobId }`
+  - `GET /bridge/jobs/:id/events`(SSE): `{ type:'step'|'log'|'done'|'error', label_ko?, text?, error? }`
+  - `GET /bridge/jobs/:id/result` → `{ site:{…}, meta, issues }` · `DELETE /bridge/jobs/:id`
 - 정책 안내: Claude는 "고치지 않은 Claude Code에 자기 구독으로 로그인"은 허용, "제3자가 구독 한도를 자기 제품에 제공"은 승인 필요 → 기본 꺼짐, 켤 때 한 줄 안내, Anthropic에 문의(운영자 할 일). Codex는 로컬·오픈소스 앱 허용(Sign in with ChatGPT로 Codex 없이도 가능).
 
 ## 11. 레퍼런스
@@ -150,6 +173,7 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 ## 12. 호스팅(바로 배포)
 - 지금: 엔진 런타임과 같은 JS만 받음 → AI가 쓴 `assets/site.js`도 받도록 바꿈(조립이 인라인 스크립트를 이 파일로 옮기므로 `script-src 'self'`로 충분).
 - 안전 테두리: 서버가 정하는 CSP(`script-src 'self'`+고정 라이브러리, `connect-src 'self'`+그 사이트의 실시간 방 주소만, `form-action 'none'`, `frame-src` 유튜브(nocookie)·비메오만, `worker-src 'none'`, `object-src 'none'`), 사이트마다 다른 출처(`s-<id>.lecpage-view.pages.dev`), 비밀번호 칸·로그인 흉내 거절, 외부 스크립트 제거, 크기 한도, 신고·가리기·보관 기간 그대로. CSP로 막을 수 없는 것(주소 이동으로 빼내기)은 신고·가리기로 대응(처리방침·SECURITY.md에 적음).
+- 받을 JS: `assets/site*.js`·`assets/<쪽>*.js`·`*.module.js`·`assets/*-events.js`(조립이 만든 이름). 보조 쪽(`check.html`)은 바깥 도구가 열리는지 재려고 `connect-src https:`가 필요하고, 보드 사진은 `img-src`에 참여 서버가 필요함.
 
 ## 13. 없애는 것
 - 앱: 기본 초안·`FoundSummary`·내용 탭(설계도 칸 편집)·디자인 탭(프리셋)·설계도 기반 수정 요청·AI 없이 만들기 버튼.

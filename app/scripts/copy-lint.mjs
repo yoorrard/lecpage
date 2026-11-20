@@ -30,6 +30,7 @@ const DEFAULTS = [
   { dir: join(ROOT, 'app', 'src'), group: 'app', ext: /\.(jsx|js)$/ },
   { dir: join(ENGINE, 'runtime'), group: 'page', ext: /\.js$/, skip: /(^|\/)vendor\/|\/fx\/effects\/|demo-boot\.js$/ },
   { dir: join(ENGINE, 'src', 'render'), group: 'page', ext: /\.js$/ },
+  { dir: join(ENGINE, 'src', 'kit'), group: 'page', ext: /\.js$/ },
 ];
 function listFiles(dir, ext, skip) {
   const out = [];

@@ -250,14 +250,17 @@
       lb.addEventListener('click', function () { setLite(!root.classList.contains('lp-lite')); });
     }
 
-    var share = $('[data-share]'), dlg = $('[data-share-dialog]');
-    if (share && dlg) share.addEventListener('click', function () {
-      var u = pageUrl(), j = joinUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
-      if (su) su.textContent = shortShown() || u; if (off) { off.hidden = !!u; if (!u) off.textContent = offText(); } if (cb) cb.hidden = !j;
-      $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !j; if (j) needQR().then(function () { fillQR(n, j); }); });
-      openDialog(dlg, share);
+    // 공유 단추·주소 복사: 엔진 쪽은 하나씩, 키트 사이트는 접속 칸·도크·대화상자에 여럿일 수 있어 모두 이음
+    var dlg = $('[data-share-dialog]');
+    if (dlg) $$('[data-share]').forEach(function (share) {
+      share.addEventListener('click', function () {
+        var u = pageUrl(), j = joinUrl(), su = $('[data-share-url]', dlg), off = $('[data-url-off]', dlg), cb = $('[data-copy-url]', dlg);
+        if (su) su.textContent = shortShown() || u; if (off) { off.hidden = !!u; if (!u) off.textContent = offText(); } if (cb) cb.hidden = !j;
+        $$('[data-qr-self]', dlg).forEach(function (n) { n.hidden = !j; if (j) needQR().then(function () { fillQR(n, j); }); });
+        openDialog(dlg, share);
+      });
     });
-    var cu = $('[data-copy-url]'); if (cu) cu.addEventListener('click', function () { copyText(joinUrl(), '주소를 복사했어요.'); });
+    $$('[data-copy-url]').forEach(function (cu) { cu.addEventListener('click', function () { copyText(joinUrl(), '주소를 복사했어요.'); }); });
 
     // 메뉴 '더보기'(데스크톱)와 '목차' 시트(휴대폰)
     var more = $('[data-more]');
@@ -613,7 +616,7 @@
     return t;
   }
   function overview(slides, pick, opener) {
-    var ov = el('dialog', 'lp-overview'); ov.setAttribute('aria-label', '전체 쪽 보기');
+    var ov = el('dialog', 'lp-overview' + (root.hasAttribute('data-lpk') ? ' lpk' : '')); ov.setAttribute('aria-label', '전체 쪽 보기');
     var h = el('div', 'lp-overview-h'); var inp = el('input'); inp.type = 'search'; inp.placeholder = '제목·내용으로 찾기'; inp.setAttribute('aria-label', '쪽 찾기');
     var close = el('button', 'lp-btn lp-btn-ghost', '닫기'); close.type = 'button';
     h.appendChild(inp); h.appendChild(close); ov.appendChild(h);
@@ -642,8 +645,9 @@
     var arts = $$('.lp-st', shell); if (!arts.length) return;
     var links = $$('[data-st-link]', shell);
     var done = store.get('done', []), cur = -1;
-    var layout = shell.getAttribute('data-layout');
-    if (layout !== 'scroll') shell.classList.add('is-ready');
+    // 키트(data-layout="kit"): AI가 쓴 섹션이 실습 단계 — 한 칸씩 보이기(is-ready) 없이, 강사 따라가기는 그 단계로 옮기고 스크롤로 지금 단계를 셈
+    var layout = shell.getAttribute('data-layout'), kit = layout === 'kit';
+    if (layout !== 'scroll' && !kit) shell.classList.add('is-ready');
     function idOf(i) { return arts[i].getAttribute('data-st'); }
     function paint() {
       links.forEach(function (a) { a.classList.toggle('is-done', done.indexOf(a.getAttribute('data-st-link')) >= 0); });
@@ -662,7 +666,8 @@
       arts.forEach(function (a, k) { a.classList.toggle('is-active', k === i); });
       links.forEach(function (a, k) { if (k === i) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current'); });
       store.set('last', idOf(i));
-      if (scroll && layout !== 'scroll') shell.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
+      if (scroll && kit) arts[i].scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
+      else if (scroll && layout !== 'scroll') shell.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
       if (live.ready) live.progress(idOf(i), done.indexOf(idOf(i)) >= 0 ? 'done' : 'doing');
     }
     function fromHash(scroll) { var m = /^#st-(.+)$/.exec(location.hash); if (!m) return false; var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === decodeURIComponent(m[1]); }); if (i >= 0) { show(i, scroll); return true; } return false; }
@@ -689,7 +694,7 @@
       var t = (DATA.title || '연수') + ' · 나의 실습 기록\n' + new Date().toLocaleDateString('ko-KR') + '\n\n';
       arts.forEach(function (a, i) {
         var id = a.getAttribute('data-st');
-        t += (done.indexOf(id) >= 0 ? '[완료] ' : '[진행 전] ') + String(i + 1).padStart(2, '0') + ' ' + a.querySelector('h3').textContent + '\n';
+        t += (done.indexOf(id) >= 0 ? '[완료] ' : '[진행 전] ') + String(i + 1).padStart(2, '0') + ' ' + ((a.querySelector('h3,h2,h4') || {}).textContent || a.getAttribute('data-title') || id) + '\n';
         var memo = store.get('memo:' + id, ''); if (memo) t += '  메모: ' + memo.replace(/\n/g, '\n        ') + '\n';
         $$('[data-prompt]', a).forEach(function (ta) { var v = store.get('prompt:' + ta.getAttribute('data-prompt'), null); if (v !== null) t += '  고친 프롬프트: ' + v.replace(/\n/g, ' ') + '\n'; });
         t += '\n';
@@ -697,6 +702,11 @@
       download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '') + '_나의기록.txt', t, '실습 기록을 내려받았어요.');
     });
     paint();
+    // 키트: 화면 가운데를 지나는 단계가 '지금 실습'(진행 현황·도움 요청이 이 단계를 셈)
+    if (kit && 'IntersectionObserver' in window) {
+      var sio = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var i = arts.indexOf(e.target); if (i >= 0 && i !== cur) show(i, false); } }); }, { rootMargin: '-45% 0px -50% 0px' });
+      arts.forEach(function (a) { sio.observe(a); });
+    }
     stApi = { go: function (id) { var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === id; }); if (i >= 0 && i !== cur) { show(i, true); toast('강사가 보는 실습으로 이동했어요.'); } }, current: function () { return cur >= 0 ? idOf(cur) : null; }, done: function () { return done.slice(); } };
   }
 
@@ -773,7 +783,7 @@
       root.classList.toggle('lp-live-down', on);
       $$('[data-live-down]').forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
       if (!on) return;
-      [$('[data-qa]'), $('[data-board]'), $('[data-poll]')].concat($$('[data-survey]')).forEach(function (box) {
+      [$('[data-qa]'), $('[data-board]')].concat($$('[data-poll]'), $$('[data-survey]')).forEach(function (box) {
         if (!box || !box.parentNode) return;
         var n = el('p', 'lp-note lp-live-down', DOWN); n.setAttribute('data-live-down', ''); n.setAttribute('role', 'status');
         box.parentNode.insertBefore(n, box);
@@ -984,8 +994,11 @@
     });
 
     // 투표: 설계도의 문항(data-poll) + 강사 화면에서 바로 띄운 즉석 투표(polls 모음, 질문 한 줄·보기 2~5개)
-    var pollBox = $('[data-poll]'), pollDefs = [], quick = {};
-    try { pollDefs = JSON.parse(pollBox ? pollBox.getAttribute('data-poll') : '[]'); } catch (e) { }
+    // 키트 사이트는 투표 자리가 여럿일 수 있음: 문항은 모두 모으고, 열린 투표는 그 문항이 적힌 자리에 그림(즉석 투표는 첫 자리)
+    var pollBoxes = $$('[data-poll]'), pollBox = pollBoxes[0] || null, pollDefs = [], quick = {};
+    function defsOf(b) { try { return JSON.parse(b.getAttribute('data-poll') || '[]') || []; } catch (e) { return []; } }
+    pollBoxes.forEach(function (b) { pollDefs = pollDefs.concat(defsOf(b)); });
+    function boxOf(id) { return pollBoxes.filter(function (b) { return defsOf(b).some(function (x) { return x.id === id; }); })[0] || pollBoxes[0] || null; }
     function openPoll() {
       var id = state.openPoll; if (!id) return null;
       var p = pollDefs.filter(function (x) { return x.id === id; })[0]; if (p) return p;
@@ -1000,22 +1013,29 @@
       var box = el('div', 'lp-poll'); box.setAttribute('data-poll', '[]');
       var live0 = el('div', 'lp-poll-live'); live0.setAttribute('data-poll-live', ''); box.appendChild(live0);
       w.appendChild(box); s.appendChild(w);
-      var before = $('.lp-sec-closing'), main = $('main');
+      var before = $('.lp-sec-closing'), main = $('[data-lp-extra]') || $('main');
       if (before && before.parentNode) before.parentNode.insertBefore(s, before); else if (main) main.appendChild(s); else return null;
-      pollBox = box; return box;
+      pollBox = box; pollBoxes.push(box); return box;
     }
-    function pollSecId() { var s = pollBox && pollBox.closest('section'); return s ? s.id : ''; }
+    function pollSecId() { var s = pollBox && (pollBox.closest('section[id]') || pollBox.closest('[id]')); return s ? s.id : ''; }
     // 투표 칸이 화면 가운데쯤 보이는지('지금' 줄의 [투표하기]·[결과 보기]를 뺄 때)
     var pollVis = false;
     function watchPoll() {
-      if (!pollBox || pollBox._io || !('IntersectionObserver' in window)) return;
-      pollBox._io = new IntersectionObserver(function (es) { var v = es[es.length - 1].isIntersecting; if (v !== pollVis) { pollVis = v; drawNow(); } }, { rootMargin: '-25% 0px -25% 0px' });
-      pollBox._io.observe(pollBox);
+      if (!('IntersectionObserver' in window)) return;
+      pollBoxes.forEach(function (b) {
+        if (b._io) return;
+        b._io = new IntersectionObserver(function (es) { b._vis = es[es.length - 1].isIntersecting; var v = !!(pollBox && pollBox._vis); if (v !== pollVis) { pollVis = v; drawNow(); } }, { rootMargin: '-25% 0px -25% 0px' });
+        b._io.observe(b);
+      });
     }
     function drawPoll() {
       var p = openPoll();
       if (!pollBox && !p) return;
       if (!ensurePollBox()) return;
+      if (pollBoxes.length > 1) {
+        var nb = (p && boxOf(p.id)) || pollBox;
+        if (nb !== pollBox) { var oh = $('[data-poll-live]', pollBox); if (oh) { oh._ask = ''; oh.textContent = ''; oh.appendChild(el('p', 'lp-empty', '강사가 투표를 열면 여기에 나타나요.')); } pollBox = nb; pollVis = !!nb._vis; }
+      }
       watchPoll();
       var host = $('[data-poll-live]', pollBox);
       var mine = p ? store.get('ans:' + p.id, null) : null;
@@ -1323,7 +1343,7 @@
         else {
           var s = el('section', 'lp-sec lp-sec-materials'); s.id = 'live-materials'; s.setAttribute('data-layout', 'files'); s.setAttribute('data-frame', 'plain');
           var w = el('div', 'lp-wrap'), h = el('header', 'lp-head'); h.appendChild(el('h2', 'lp-h2', (DATA.words && DATA.words.materials) || '연수 자료')); w.appendChild(h); w.appendChild(box); s.appendChild(w);
-          var before = $('.lp-sec-closing'), main = $('main');
+          var before = $('.lp-sec-closing'), main = $('[data-lp-extra]') || $('main');
           if (before && before.parentNode) before.parentNode.insertBefore(s, before); else if (main) main.appendChild(s); else return;
         }
       }
@@ -1335,6 +1355,7 @@
         box.appendChild(li);
       });
       box.hidden = !list.length;
+      $$('[data-lpk-mats-empty]').forEach(function (n) { n.hidden = !!list.length; });
     }
     function floatReaction(emoji) {
       var host = $('[data-reactions]'); if (!host || RM) return;
