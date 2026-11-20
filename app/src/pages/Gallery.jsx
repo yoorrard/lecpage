@@ -3,9 +3,8 @@ import { Seg, Dialog } from '../components/ui.jsx';
 import { FxLive, FX_GROUPS } from '../components/FxGallery.jsx';
 import { E } from '../lib/engine.js';
 import { loadExample, newProject } from '../lib/project.js';
-import { projects } from '../lib/db.js';
-import { pushUndoFor } from '../lib/undo.js';
-import { copy, toast, fmtDate } from '../lib/util.js';
+import { copy, toast } from '../lib/util.js';
+import { REFERENCES } from '../data/references.js';
 import { TASTES, inTaste, mixOrder } from '../lib/tastes.js';
 import { allWords, wordById, KINDS, applyWords, addWord, sentenceOf, requestText, siteWords, presetForLayout, typeKo, LEAD_KO, MOTION_KO } from '../design-words/words.js';
 import { SayFix, changesLine } from '../design-words/SayFix.jsx';
@@ -15,8 +14,8 @@ import { LiveSite } from '../design-words/LiveSite.jsx';
 import { useBasket } from '../design-words/basket.js';
 import bodyAll from '../../../skills/lecpage/engine/test/fixtures/body-all.blueprint.json';
 
-// 디자인 둘러보기 = lecpage의 디자인 낱말 사전.
-// 낱말마다 실제 엔진이 그린 화면 조각, 언제 어울리는지 한 줄, [담기]. 담은 낱말은 내 연수에 바로 적용하거나 요청 문장으로 써요.
+// 참고 디자인 = 강의 사이트 사례(레퍼런스, data/references.js) + 디자인 낱말 사전.
+// 사례를 고르면 새 연수의 '참고 디자인'에 적고, 담은 낱말은 AI에게 보내는 요청 문장이 됨. 어느 것도 따를 의무는 없음(AI가 참고만).
 const SAMPLES = [{ value: 'sel-story', label: '사회정서학습 연수' }, { value: 'data-lab', label: '디지털 연수' }];
 const LV = ['늘 켜짐', '차분', '보통', '화려'];
 const GROUP_OF = (f) => (f.group === 'lib' ? 'scroll' : f.group);
@@ -125,7 +124,6 @@ export function Gallery({ tab: tab0 }) {
   const [big, setBig] = useState(false);
   const [ids, setIds] = useBasket();
   const [showSentence, setShowSentence] = useState(false);
-  const [pick, setPick] = useState(null); // 내 연수 고르기: null | [] | [연수…]
   useEffect(() => {
     let off = false;
     Promise.all(SAMPLES.map((s) => loadExample(s.value))).then((list) => { if (!off) setSamples(Object.fromEntries(list.map((b, i) => [SAMPLES[i].value, E.validate(b).blueprint]))); });
@@ -147,26 +145,41 @@ export function Gallery({ tab: tab0 }) {
   const has = (id) => ids.includes(id);
   const toggle = (w) => { if (has(w.id)) setIds(ids.filter((x) => x !== w.id)); else { setIds(addWord(ids, w.id)); toast(`담았어요: ${w.name}`); } };
   const composed = useMemo(() => (sample ? applyWords(sample, ids) : null), [sample, ids.join()]);
-  async function openPick() { const all = (await projects.all()).filter((x) => x.blueprint); setPick(all); }
-  /** 첫째 길: 요청 문장을 새 연수의 요청 사항에 넣고 교재 넣기로. 낱말은 연수에 함께 두어, 만든 뒤 [디자인] 탭에서 덜 맞은 것만 바로 맞춤 */
+  /** 담은 낱말: 요청 문장을 새 연수의 'AI에게 바라는 점'에 넣고 교재 넣기로 */
   async function makeNew() {
-    const p = await newProject('blank');
-    await projects.put({ ...p, info: { ...p.info, request: requestText(ids) }, designWords: ids });
+    const p = await newProject({ request: requestText(ids).slice(0, 300), designWords: ids });
     setIds([]);
-    toast('요청 사항에 넣었어요. 교재를 넣고 AI로 만들면 반영돼요.');
+    toast('바라는 점에 넣었어요. 교재를 넣고 AI를 고르면 참고해요.');
     location.hash = `#/p/${p.id}/1`;
   }
-  async function applyTo(p) {
-    pushUndoFor(p.id, '담은 낱말 적용', p);
-    await projects.put({ ...p, blueprint: applyWords(p.blueprint, ids) });
-    setIds([]); setPick(null);
-    toast('적용했어요. 마음에 안 들면 [되돌리기]를 누르세요.');
-    location.hash = `#/p/${p.id}/2`;
+  /** 사례 고르기: 새 연수의 참고 디자인으로 적고 교재 넣기로 */
+  async function chooseRef(r) {
+    const p = await newProject({ reference: r.title });
+    toast(`'${r.title}'을 참고 디자인으로 골랐어요. 교재를 넣고 AI를 골라 주세요.`);
+    location.hash = `#/p/${p.id}/1`;
   }
   const sentence = sentenceOf(ids);
   return (
     // 머리(제목·안내)는 main.jsx가 이 조각 밖에서 먼저 그려 둠(GalleryHead): 엔진을 받는 동안에도 보이고, 받은 뒤에도 같은 글이 그대로 남음
     <div class="stack">
+      <section class="refs" aria-labelledby="refs-h">
+        <div class="section-title"><h2 id="refs-h" class="h-sub">강의 사이트 사례</h2><p class="small muted">고르면 AI가 분위기만 참고해 내 교재로 새로 만들어요.</p></div>
+        <div class="grid grid-fill">
+          {REFERENCES.map((r) => (
+            <article class="ex-card">
+              <a class="ex-img" href={r.url} target="_blank" rel="noopener" aria-label={`${r.title} 사이트 새 창으로 보기`}><img src={r.img} alt="" loading="lazy" width="640" height="400" onError={(e) => { e.currentTarget.style.display = 'none'; }} /></a>
+              <div class="ex-body">
+                <span class="tag tag-lav">{r.kind}</span>
+                <h3>{r.title}</h3>
+                <p class="small muted">{r.desc}</p>
+                <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => chooseRef(r)}>이 디자인 참고해 만들기</button><a class="btn btn-sm" href={r.url} target="_blank" rel="noopener">사이트 보기</a></div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <h2 class="h-sub dict-h">디자인 낱말</h2>
+      <p class="small muted dict-lead">바라는 느낌을 낱말로 담으면 AI에게 보내는 요청 문장이 돼요.</p>
 
       <div class="dict-intro">
         <div class="dict-say">
@@ -209,15 +222,14 @@ export function Gallery({ tab: tab0 }) {
           <span class="basket-t"><b>담은 낱말 {ids.length}개</b> · {changesLine(ids)}</span>
           <span class="btn-row">
             <button type="button" class="btn btn-sm" aria-expanded={String(showSentence)} onClick={() => setShowSentence(!showSentence)}>{showSentence ? '문장 접기' : '요청 문장 보기'}</button>
-            <button type="button" class="btn btn-sm btn-primary" onClick={makeNew}>요청 사항에 넣고 만들기</button>
-            <button type="button" class="btn btn-sm" onClick={openPick}>만든 연수에 적용</button>
+            <button type="button" class="btn btn-sm btn-primary" onClick={makeNew}>바라는 점에 넣고 만들기</button>
             <button type="button" class="btn btn-sm btn-quiet" onClick={() => setIds([])}>비우기</button>
           </span>
         </div>
         {showSentence && <>
           <div class="basket-list" role="group" aria-label="담은 낱말 빼기">{ids.map((id) => <button type="button" class="chip" onClick={() => setIds(ids.filter((x) => x !== id))} aria-label={`${wordById(id)?.name} 빼기`}>{wordById(id)?.name}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>)}</div>
           <pre class="basket-sentence" aria-label="요청 문장">{sentence}</pre>
-          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">AI 도구의 lecpage 스킬에 붙여 넣어도 그대로 맞춰요.</span></div>
+          <div class="btn-row"><button type="button" class="btn btn-sm" onClick={() => copy(sentence, '요청 문장을 복사했어요.')}>문장 복사</button><span class="small muted">쓰던 앱이나 AI 에이전트에 붙여 넣어도 돼요.</span></div>
         </>}
       </aside>}
 
@@ -226,19 +238,6 @@ export function Gallery({ tab: tab0 }) {
       </Dialog>
       <Dialog open={big} onClose={() => setBig(false)} label="움직이는 모습" wide>
         {big && composed && <div class="stack"><LiveSite bp={composed} /><h2 class="h-sub">{ids.length ? '담은 낱말로 본 예시' : '예시 연수'}</h2><p class="small muted">{ids.length ? changesLine(ids) : '낱말을 담으면 이 화면이 바뀌어요.'} [배치 이름 보기]를 켜면 섹션마다 본문 배치 이름이 붙어요.</p></div>}
-      </Dialog>
-      <Dialog open={!!pick} onClose={() => setPick(null)} label="적용할 연수 고르기">
-        {pick && <div class="stack">
-          <h2 class="h-sub">어느 연수에 적용할까요?</h2>
-          {pick.length ? <>
-            <p class="small muted">{changesLine(ids)}</p>
-            <ul class="proj-pick">{pick.map((p) => <li><button type="button" onClick={() => applyTo(p)}><b>{p.title || '이름 없는 연수'}</b><small>{fmtDate(p.updatedAt)} 고침 · 디자인 {E.getPreset(p.blueprint.design?.preset).name_ko}</small></button></li>)}</ul>
-            <p class="small muted">적용한 뒤 [되돌리기]로 돌아갈 수 있어요.</p>
-          </> : <>
-            <p>아직 만든 연수가 없어요. 담은 낱말을 요청 사항에 넣고 새로 만들어요.</p>
-            <div class="btn-row"><button type="button" class="btn btn-primary" onClick={makeNew}>요청 사항에 넣고 만들기</button></div>
-          </>}
-        </div>}
       </Dialog>
     </div>
   );

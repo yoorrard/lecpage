@@ -7,6 +7,7 @@ import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
 import { reach } from '../lib/netcheck.js';
+import { deployView } from '../lib/site-meta.js';
 
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 배포)는 운영자가 켜 둔 앱에서만 보임
@@ -23,7 +24,7 @@ const ABOUT = {
   zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
-const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');
+const nameHint = (p) => 'training-' + ((deployView(p)?.meta?.date || '').replace(/-/g, '') || 'site');
 const sameUrl = (a, b) => String(a || '').replace(/^https?:\/\//, '').replace(/\/+$/, '') === String(b || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 // 바로 배포 서버가 넘길 곳(next)의 이름 → 앱의 배포할 곳. 참여 기능(liveNext)은 Cloudflare(무료)·Supabase
 const NEXT_ID = { cloudflare: 'cloudflare', vercel: 'vercel', github: 'github-pages', netlify: 'netlify' };
@@ -35,7 +36,7 @@ export const liveNames = (next) => (next || []).map((n) => LIVE_NEXT[n]).filter(
  */
 export const lecLiveOff = (p) => {
   const o = p?.deploy?.lecpage?.liveOff;
-  if (!o || o.day !== (p.blueprint?.meta?.date || '')) return null;
+  if (!o || o.day !== (deployView(p)?.meta?.date || '')) return null;
   return o.reason === 'booked' || Math.floor((o.at || 0) / 864e5) === Math.floor(Date.now() / 864e5) ? o : null;
 };
 /** 바로 배포가 참여 기능 방을 맡지 못할 때 한 줄: 사이트는 바로 배포 그대로, 참여 기능만 강사 계정으로(liveNext 순서) */
@@ -203,7 +204,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   // 붐빔 단계(서버의 capacity): 이미 배포한 사이트는 붐벼도 다시 배포가 되고, 새 사이트만 내 계정으로 넘김. 평소에는 아무 줄도 없음
   const lec = p.deploy?.lecpage;
   const hasSite = !!(lec?.id && lec.expiresAt && (instant?.keepAlive !== false || lec.expiresAt > Date.now()));
-  const gate = instant ? instantGate(instant, { hasSite, date: p.blueprint?.meta?.date || '', start: p.blueprint?.meta?.start || '', share }) : null;
+  const gate = instant ? instantGate(instant, { hasSite, date: deployView(p)?.meta?.date || '', start: deployView(p)?.meta?.start || '', share }) : null;
   const live = gate?.ok && !instantOff ? instant : null;
   const full = instantOff?.t || (instant && !gate.ok ? gate.note : '');
   // 넘길 때는 서버가 준 순서(next)로. 이미 연결해 둔 곳이 있으면 그곳이 먼저(같은 파일을 버튼 하나로)
@@ -313,7 +314,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
-  const bp = p.blueprint;
+  const bp = deployView(p);
   const liveOn = (bp.live?.features || []).length > 0;
   const lecUrl = info?.live?.url || '';
   const days = info?.capacity?.siteDays || info?.limits?.days || 30;
@@ -327,7 +328,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
-      live = { code: newCode || E.validate(bp).blueprint.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
+      live = { code: newCode || (bp.v2 ? bp.live.code : E.validate(bp).blueprint.live.code), adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
     }
     // 연수 날짜·인원: 서버가 그날 몫을 미리 셈(차면 지금 알려 줌)
     const m = bp.meta || {};
@@ -390,7 +391,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
   const [name, setName] = useState(prev?.name || '');
   const clean = vercelName(name);
   const run = () => start('vercel', async (files, onProgress) => {
-    const out = await deployVercel({ token: t.token, name: clean || slug(p.info?.date), projectId: prev?.projectId, files, onProgress });
+    const out = await deployVercel({ token: t.token, name: clean || slug(deployView(p)?.meta?.date), projectId: prev?.projectId, files, onProgress });
     done(out.url, { vercel: { projectId: out.projectId, name: out.name, url: out.url } });
     toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '배포했어요.');
   }, (e) => tokenGone(e, t, refresh));
@@ -414,7 +415,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
 function GitHub({ p, busy, start, done, bind, refresh }) {
   const t = useToken('github');
   const prev = p.deploy?.github;
-  const [repo, setRepo] = useState(prev?.repo || slug(p.info?.date));
+  const [repo, setRepo] = useState(prev?.repo || slug(deployView(p)?.meta?.date));
   const [confirm, setConfirm] = useState(false);
   const run = (allowExisting = false) => start('github-pages', async (files, onProgress) => {
     const name = repo.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || slug();
@@ -432,7 +433,7 @@ function GitHub({ p, busy, start, done, bind, refresh }) {
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
         <h2 class="h-sub">이미 있는 저장소예요</h2>
         <p>"{repo}" 저장소가 이미 있어요. 배포하면 그 안의 파일이 모두 연수 사이트 파일로 바뀌어요. 다른 이름을 쓰는 게 안전해요.</p>
-        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(p.info?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
+        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(deployView(p)?.meta?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
       </Dialog>
     </div>
   );

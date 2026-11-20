@@ -3,6 +3,8 @@ import { projects, blobs } from './db.js';
 import { uid, sha256Hex } from './util.js';
 import { zipFiles } from '@engine/src/zip-write.js';
 import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, appInfoFrom, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
+import { deployView, patchDeploy, isV2, keepTeacher } from './site-meta.js';
+import { randomCode } from '@engine/src/validate.js';
 
 // .lecpage 형식(받는 자료·ZIP 읽기·연수 정보 기본값)은 skill CLI(`lecpage.mjs app`)와 함께 쓰는 엔진 규칙
 export { DEFAULT_INFO, ALLOWED_ASSET, readStoredZip };
@@ -25,16 +27,10 @@ export const hasPendingFiles = () => [...pending.values()].some((f) => f.length 
 /** 옛 7단계 번호 → 새 3단계(교재 넣기·살펴보고 고치기·배포하기) */
 export const stageOf = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : 3);
 
-export async function newProject(kind = 'blank', exampleId = 'data-lab') {
+/** 새 연수(빈 것). 교재를 넣고 AI를 고르면 사이트(v2: site·meta)가 생김. extra: 요청 한 줄·참고 디자인 등 */
+export async function newProject(extra = {}) {
   const id = uid(10);
-  const p = { id, title: '', step: 1, stage: 1, createdAt: Date.now(), files: [], material: null, info: { ...DEFAULT_INFO }, blueprint: null, deploy: {} };
-  if (kind === 'example') {
-    const { sanitizeImported } = await import('./blueprint.js');
-    const bp = sanitizeImported(await loadExample(exampleId));
-    p.blueprint = bp;
-    p.title = bp.meta.title; p.stage = 2; p.fromExample = exampleId;
-    Object.assign(p.info, { title: bp.meta.title, subtitle: bp.meta.subtitle, organizer: bp.meta.organizer, date: bp.meta.date, start: bp.meta.start, end: bp.meta.end, venue: bp.meta.venue, size: bp.audience.size <= 30 ? 25 : bp.audience.size <= 100 ? 60 : 200, features: bp.live.features, admin: bp.meta.admin?.kind || 'school' });
-  }
+  const p = { id, title: '', step: 1, stage: 1, createdAt: Date.now(), files: [], material: null, info: { ...DEFAULT_INFO }, deploy: {}, ...(typeof extra === 'object' ? extra : {}) };
   await projects.put(p);
   return p;
 }
@@ -49,7 +45,9 @@ export async function duplicateProject(p0) {
   const p = { ...JSON.parse(JSON.stringify(p0)), id, title: (p0.title || '이름 없는 연수') + ' (사본)', createdAt: Date.now(), deploy: {}, pastDeploy: undefined, carryPending: undefined, fileHash: undefined };
   if (p.blueprint?.meta) p.blueprint.meta.title = p.title;
   if (p.info) p.info.title = p.title;
-  if (p.blueprint?.live) { const { E } = await import('./engine.js'); p.blueprint.live.code = E.randomCode(); }
+  if (p.blueprint?.live) p.blueprint.live.code = randomCode();
+  if (p.meta) { p.meta.title = p.title; p.meta.siteUrl = ''; p.meta.shortUrl = ''; if (p.meta.live) p.meta.live = { ...p.meta.live, code: randomCode() }; }
+  delete p.demo;
   await projects.put(p);
   const assets = await blobs.all(p0.id);
   for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);
@@ -70,7 +68,7 @@ export async function exportProjectFile(p, { withKeys = false } = {}) {
   const assets = await blobs.all(p.id);
   let carry;
   if (withKeys && p.deploy?.lastUrl) {
-    const live = p.blueprint?.live || {};
+    const live = deployView(p)?.live || {};
     const own = OWN_LIVE.includes(live.provider) && live.url;
     const liveAdminKey = own ? (await (await import('./ai.js')).loadKey('live-admin:' + String(live.url).replace(/\/+$/, ''))).key || '' : '';
     carry = { deploy: p.deploy, live: { provider: live.provider || 'none', url: live.url || '', anonKey: live.anonKey || '', code: live.code || '' }, liveOk: !!p.liveOk, sitePassword: p.sitePassword || '', ...(liveAdminKey ? { liveAdminKey } : {}) };
@@ -100,8 +98,8 @@ function cleanCarry(c) {
 export function carryPatch(cur) {
   const c = cur.carryPending; if (!c) return {};
   if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => m.saveKey('live-admin:' + c.live.url.replace(/\/+$/, ''), c.liveAdminKey, true)).catch(() => { });
-  const bp = cur.blueprint ? { ...cur.blueprint, live: { ...(cur.blueprint.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(cur.blueprint.meta || {}), siteUrl: c.deploy.lastUrl } } : cur.blueprint;
-  return { deploy: c.deploy, blueprint: bp, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
+  const moved = isV2(cur) || cur.blueprint ? patchDeploy(cur, (b) => ({ ...b, live: { ...(b.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(b.meta || {}), siteUrl: c.deploy.lastUrl } })) : {};
+  return { deploy: c.deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
 }
 
 /** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
@@ -136,7 +134,7 @@ export async function importProjectFile(file) {
     const pj = files['project.json']; if (!pj) throw bad('lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 만든 .lecpage 파일을 넣어 주세요.');
     text = new TextDecoder().decode(pj);
     const j = JSON.parse(text); proj = j.project;
-    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && isAllowedAsset(k)) assets[k] = v;
+    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || /^site\/(material|assets\/img)\/[\w.-]+\.(webp|png|jpe?g|gif)$/i.test(k))) assets[k] = v;
   }
   // 같은 파일을 두 번 열면 같은 이름 연수가 둘 생기지 않게 그때 연 연수를 다시 엶(따로 하나 더 쓰려면 [복제])
   const fileHash = await sha256Hex(text).catch(() => '');
@@ -147,8 +145,16 @@ export async function importProjectFile(file) {
   const id = uid(10);
   // 배포 정보: 열쇠를 담은 파일(carry)이어도 바로 쓰지 않고 배포하기 화면에서 강사가 고르게(남이 준 파일의 열쇠로 남의 사이트에 배포하지 않게)
   const carry = cleanCarry(proj?.carry);
-  const p = { ...proj, id, createdAt: Date.now(), deploy: {}, stage: proj?.blueprint ? 2 : 1, imported: true, fileHash, carry: undefined, carryPending: carry, pastDeploy: carry ? cleanPast({ ...pastOf(carry), ...(proj?.pastDeploy || {}) }) : cleanPast(proj?.pastDeploy) };
-  p.blueprint = sanitizeImported(p.blueprint);
+  const v2 = isV2(proj);
+  const p = { ...proj, id, createdAt: Date.now(), deploy: {}, stage: v2 || proj?.blueprint ? 2 : 1, imported: true, demo: undefined, fileHash, carry: undefined, carryPending: carry, pastDeploy: carry ? cleanPast({ ...pastOf(carry), ...(proj?.pastDeploy || {}) }) : cleanPast(proj?.pastDeploy) };
+  if (p.blueprint) p.blueprint = sanitizeImported(p.blueprint);
+  // 새 판: 사이트 글만 받고(그림은 위 assets), 연수 정보의 강사 칸(실시간 주소·QR 주소·공개 범위)은 비움
+  if (v2) {
+    p.v = 2;
+    p.site = Object.fromEntries(Object.entries(proj.site || {}).filter(([k, v]) => typeof v === 'string' && /^[\w./-]+\.(html|css|js|json|txt|svg)$/i.test(k) && !k.includes('..')));
+    p.meta = keepTeacher(proj.meta || {}, { access: 'link' });
+    p.versions = []; p.gen = undefined;
+  }
   await projects.put(p);
   for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);
   return p;

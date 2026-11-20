@@ -61,13 +61,13 @@ export function AiWayLine({ onSwap }) {
  * 어느 걸음에서든 키를 붙여 넣으면(Ctrl+V) 회사를 알아보고 바로 연결합니다.
  * 키는 이 브라우저에서 AI 회사로만 갑니다. onConnected(ai)로 연결된 정보를 돌려줍니다.
  */
-export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
+export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: onlyOne = false }) {
   const [key, setKey] = useState('');
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState(KEY_GUIDES[initial] ? initial : GUIDE_ORDER[0]);
-  const only = GUIDE_MORE.includes(initial); // 'Gemini 무료 키로 만들기'로 열면 그 길만(회사 고르기 없이)
+  const only = onlyOne || GUIDE_MORE.includes(initial); // AI 고르기 카드에서 열면 그 회사만(회사 고르기 없이)
   const [step, setStep] = useState(0); // 지금 보이는 걸음(마지막은 붙여넣기)
   const [opened, setOpened] = useState(-1); // 새 창으로 연 걸음 → 돌아오면 그다음 걸음으로
   const [back, setBack] = useState(false); // 키 페이지에서 돌아옴 → [붙여넣기]를 눈에 띄게
@@ -132,7 +132,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
   return (
     <div class="ai-connect stack" onPaste={onAnyPaste}>
       {!only && <div class="seg ai-tabs" role="group" aria-label="쓰는 AI">
-        {GUIDE_ORDER.map((id) => <button type="button" aria-pressed={String(tab === id)} data-free={KEY_GUIDES[id].tag === '무료' ? '' : undefined} onClick={() => pick(id)}><b>{KEY_GUIDES[id].label}</b><small>{KEY_GUIDES[id].tag}</small></button>)}
+        {GUIDE_ORDER.map((id) => <button type="button" aria-pressed={String(tab === id)} data-free={id === 'gemini' ? '' : undefined} onClick={() => pick(id)}><b>{KEY_GUIDES[id].label}</b><small>{KEY_GUIDES[id].tag}</small></button>)}
       </div>}
       <p class="ai-what">{GUIDE_MORE.includes(tab) && !only && <b>{g.label} · </b>}{g.what}</p>
       {g.more?.length > 0 && <ul class="ai-more small" aria-label="무료로 쓸 때 알아 둘 점">{g.more.map((t) => <li>{t}</li>)}</ul>}
@@ -186,7 +186,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '' }) {
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
       {<div class="btn-row">
         {!only && GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
-        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(); }}>쓰던 AI로 만들기</button>}
+        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(tab); }}>쓰던 앱으로(키 없이)</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>

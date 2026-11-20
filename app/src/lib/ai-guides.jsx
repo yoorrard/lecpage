@@ -26,7 +26,7 @@ const ENOUGH = '5달러면 사이트를 열 개 넘게 만들어요.';
  */
 export const KEY_GUIDES = {
   gemini: {
-    title: 'Google Gemini', label: 'Gemini', tag: '무료',
+    title: 'Gemini (Google)', label: 'Gemini', tag: '무료로 시작',
     what: '무료예요. 가장 좋은 모델(Gemini 4 Carbon·Argon)은 결제한 키만 돼서 구성과 문구가 단순할 수 있어요. 하루에 쓸 수 있는 횟수도 정해져 있어요.',
     steps: [
       { id: 'key', title: '키 복사하기', url: P.gemini.keyUrl, open: '구글 AI Studio 열기', skip: '이미 복사했어요',
@@ -43,7 +43,7 @@ export const KEY_GUIDES = {
     more: ['무료 키로는 Gemini 4 Hydrogen 같은 빠른 모델을 써요. 쓸 수 있는 모델은 앱이 알아서 골라요.', '하루 횟수는 구글 사정에 따라 달라질 수 있어요. 다 쓰면 앱이 기다렸다가 이어가고, 한국 시간 오후 4~5시쯤 다시 채워져요.', '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', '계정에 따라 휴대폰 확인(QR 찍기)을 요청해요. 만 18세 이상 개인 구글 계정이어야 해요.'],
   },
   openai: {
-    title: 'ChatGPT (OpenAI)', label: 'ChatGPT', tag: '유료',
+    title: 'GPT (OpenAI)', label: 'GPT', tag: '유료',
     what: '처음 한 번 결제 등록과 키 복사가 필요해요. 사이트 하나에 몇백 원쯤 들어요.',
     steps: [
       { id: 'pay', title: '크레딧 충전하기', url: P.openai.billingUrl, open: 'OpenAI 결제 페이지 열기', skip: '이미 충전했어요',
@@ -78,9 +78,9 @@ export const KEY_GUIDES = {
     more: [],
   },
 };
-// 먼저 보이는 것: ChatGPT · Claude(결과 품질 기준). Gemini 무료 키는 가장 좋은 모델(Carbon·Argon)을 못 쓰고 한도가 있어 아래 작은 버튼으로 둠
-export const GUIDE_ORDER = ['openai', 'anthropic'];
-export const GUIDE_MORE = ['gemini'];
+// 세 회사를 같은 자리·같은 위계로(AI 고르기 화면의 카드 순서와 같게). Gemini가 무료 키로 시작된다는 것은 글로만 알림
+export const GUIDE_ORDER = ['openai', 'anthropic', 'gemini'];
+export const GUIDE_MORE = [];
 
 /**
  * 열린 페이지에서 누를 곳을 보여 주는 작은 그림(주소 · 제목 · 버튼 · 키나 잔액 한 줄). 동그라미가 누를 곳입니다.

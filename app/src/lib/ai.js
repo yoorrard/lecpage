@@ -522,3 +522,13 @@ export async function openRouterFinish() {
 }
 /** OpenRouter에서 막 돌아왔으면 true(한 번만) */
 export function takeAiResume() { try { const v = sessionStorage.getItem('lecpage:ai-resume'); sessionStorage.removeItem('lecpage:ai-resume'); return v === '1'; } catch { return false; } }
+
+/**
+ * AI 고르기 화면(components/AiPick.jsx): 보이는 회사마다 키가 연결돼 있는지와 고른 모델(비밀 아님 — 키 값은 돌려주지 않음)
+ * @returns {Promise<Record<string, null|{ model: string, freeTier: boolean }>>}
+ */
+export async function aiStatus() {
+  const s = await prefs(); const out = {};
+  for (const provider of VISIBLE) { const { key } = await loadKey(provider); out[provider] = key ? { model: s.models[provider] || '', freeTier: !!s.free[provider] } : null; }
+  return out;
+}
