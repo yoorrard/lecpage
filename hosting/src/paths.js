@@ -2,7 +2,7 @@
 
 export const MAX_PATH = 200;
 export const MAX_DEPTH = 8;
-/** 엔진의 USER_ASSET과 같은 글자만: 영문·숫자·한글·밑줄·점·붙임표·괄호·대괄호·빈칸 */
+/** 엔진 조립의 자료실 파일 이름(kit/paths.js SITE_FILE의 files/…)과 같은 글자만: 영문·숫자·한글·밑줄·점·붙임표·괄호·대괄호·빈칸 */
 const SEGMENT = /^[A-Za-z0-9_가-힣ㄱ-ㅎㅏ-ㅣ.\-()[\] ]+$/;
 /** 목록에 있어도 받지 않고 넘기는 파일(응답 헤더는 서버가 정함) */
 export const IGNORED = new Set(['_headers']);
@@ -10,7 +10,7 @@ export const IGNORED = new Set(['_headers']);
 const T = (type, more = {}) => ({ type, kind: 'file', ...more });
 /**
  * 확장자 → 응답 형식. kind: html(고쳐서 보냄)·js(엔진 런타임, pages 보기는 검사한 사이트 스크립트도)·svg(가둠)·file. download: 열지 않고 내려받게.
- * 엔진 조립이 받는 사이트 파일(engine/src/kit/paths.js SITE_FILE)과 엔진 자료(USER_ASSET)의 확장자가 모두 있음(test/paths.test.mjs)
+ * 엔진 조립이 받는 사이트 파일(engine/src/kit/paths.js SITE_FILE)의 확장자가 모두 있음(test/paths.test.mjs)
  */
 export const TYPES = {
   html: T('text/html; charset=utf-8', { kind: 'html' }),
@@ -25,7 +25,7 @@ export const TYPES = {
   woff2: T('font/woff2'), woff: T('font/woff'), ttf: T('font/ttf'), otf: T('font/otf'),
   vtt: T('text/vtt; charset=utf-8'), // 영상 자막
   pdf: T('application/pdf'),
-  // 엔진이 사이트에 넣어 주는 소리·영상(engine/src/build.js의 USER_ASSET)
+  // 사이트에 넣는 소리·영상(engine/src/kit/paths.js SITE_FILE)
   mp3: T('audio/mpeg'), m4a: T('audio/mp4'), mp4: T('video/mp4'), webm: T('video/webm'),
   // 원본·내려받기 자료(assets/media, assets/files): 브라우저에서 열지 않고 내려받기만
   ppt: T('application/vnd.ms-powerpoint', { download: true }),

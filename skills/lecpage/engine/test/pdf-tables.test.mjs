@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { buildPage } from '../src/ingest/pdf.js';
-import { ingestFile, detect } from '../src/ingest/index.js';
+import { ingestFile } from '../src/ingest/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FX = join(HERE, 'fixtures');
@@ -49,10 +49,6 @@ describe('PDF 표 되살리기(pdf.js 길)', () => {
       ['3차시', '1. 13.(수)', '생활지도와 학교폭력 사안 처리', '윤가온', '사례 토의'],
     ]);
     assert.deepEqual(p.paragraphs.map((x) => x.text), ['3. 차시표', '표 아래 문단입니다. 표와 섞이지 않아야 합니다.']);
-    // 감지: 표의 차시 줄에서 제목·날짜·강사
-    const d = detect({ files: [{ id: 'deck1', type: 'pdf' }], pages: [p] }, { today: '2026-11-13' });
-    assert.deepEqual(d.sessions.map((s) => [s.no, s.date, s.title]), [[1, '2027-01-11', '학급 세우기: 첫 2주'], [2, '2027-01-12', '학부모와 만나기'], [3, '2027-01-13', '생활지도와 학교폭력 사안 처리']]);
-    assert.match(d.sessions[0].desc, /서나래/);
   });
 
   test('어절 단위로 줄바꿈된 칸은 띄어서 이음', () => {

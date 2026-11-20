@@ -7,7 +7,7 @@
 // 사이트가 직접 쓴 스크립트는 사이트마다 출처가 갈리는 pages 보기에서만 받음(site.js). 모든 사이트가 같이 쓰는 이 호스트 주소에서는 내보내지 않음
 import { ID_RE } from './ids.js';
 
-/** 엔진이 글꼴을 불러오는 곳(engine/src/render/shell.js의 cspPolicy, design/fonts.js·seeds.js). test/csp.test.mjs가 엔진과 맞는지 확인 */
+/** 엔진이 글꼴을 불러오는 곳(engine/src/render/shell.js의 cspPolicy, design/fonts.js·kit/assemble.js FONT_CSS_HOSTS). test/csp.test.mjs가 엔진과 맞는지 확인 */
 export const FONT_CSS_HOSTS = ['https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://hangeul.pstatic.net'];
 export const FONT_FILE_HOSTS = ['https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'https://hangeul.pstatic.net'];
 /** 버전까지 고정해 불러오는 라이브러리 경로(효과·Supabase). 엔진 render/shell.js의 LIB_SCRIPT_SOURCES와 같음(test/csp.test.mjs가 확인) */
@@ -16,7 +16,7 @@ export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 
 export const FRAME_HOSTS = ['https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
 /** 다른 사이트의 틀 안에 넣지 못하게 하는 강사용 화면(엔진의 _headers와 같음) */
 export const NO_FRAME_PAGES = new Set(['console.html', 'screen.html', 'poster.html']);
-/** 엔진이 만드는 보조 쪽(엔진 build.js의 auxPaths와 같음). 맨 위 폴더의 이 이름만 */
+/** 엔진이 만드는 보조 쪽(엔진 kit/aux-build.js가 만드는 쪽, kit/paths.js ENGINE_PAGES와 같음). 맨 위 폴더의 이 이름만 */
 export const AUX_PAGES = new Set([...NO_FRAME_PAGES, 'check.html', 'privacy.html']);
 
 const HOST_RE = /^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/;

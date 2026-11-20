@@ -1,15 +1,18 @@
-// 교재 글꼴 → 사이트 글꼴: 감지(PPTX 테마·글자 조각), 이름 맞추기, 빌드 반영
+// 글꼴: 교재 글꼴 세기(PPTX 테마·글자 조각 → file.fonts), 이름 맞추기, 글꼴 함께 담기·바깥 글꼴을 기다리지 않기
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync, strFromU8, strToU8 } from '../vendor/fflate.js';
-import { ingestFile, materialToDraft } from '../src/ingest/index.js';
+import { ingestFile } from '../src/ingest/index.js';
 import * as E from '../src/index.js';
 import { nodeRuntime } from '../node.js';
+import { tinySite } from './kit-site.mjs';
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+/** 바깥 글꼴(구글 글꼴)을 쓰는 작은 키트 사이트를 조립한 파일들 */
+const fontSite = () => E.assemble(tinySite('<p>가나다 연수</p>', '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">'), { v: 2, title: '가나다 연수', features: [] }, { runtime: nodeRuntime() });
 
 /** workshop.pptx의 테마 글꼴을 바꾸고, 글자 조각에 직접 적힌 글꼴은 지워 테마 글꼴을 따르게 함 */
 function pptxWithThemeFonts(major, minor) {
@@ -25,15 +28,13 @@ function pptxWithThemeFonts(major, minor) {
 test('PPTX: 테마 제목·본문 글꼴을 제목/본문 역할로 센다', async () => {
   const m = await ingestFile('deck.pptx', pptxWithThemeFonts('HY헤드라인M', '나눔고딕'));
   assert.deepEqual(m.errors, []);
-  const f = m.detected.fonts;
-  assert.equal(f.display.name, 'HY헤드라인M');
-  assert.equal(f.body.name, '나눔고딕');
-  assert.ok(f.body.share > 0.9 && f.all.length >= 2);
+  const f = m.files[0].fonts;
+  assert.equal(f.display[0].name, 'HY헤드라인M');
+  assert.equal(f.body[0].name, '나눔고딕');
 });
 
 test('PPTX: 글자 조각에 적힌 글꼴(맑은 고딕)도 센다', async () => {
   const m = await ingestFile('workshop.pptx', readFileSync(join(FX, 'workshop.pptx')));
-  assert.equal(m.detected.fonts.body.name, '맑은 고딕');
   assert.equal(m.files[0].fonts.body[0].name, '맑은 고딕');
 });
 
@@ -64,28 +65,8 @@ test('글꼴 이름 맞추기: 같은 글꼴·비슷한 무료 글꼴·기본 �
   assert.equal(E.matchFont(''), null);
 });
 
-test('빌드: 교재 글꼴이 사이트 글꼴이 되고, 기본 글꼴은 프리셋을 지킨다', async () => {
-  const m = await ingestFile('deck.pptx', pptxWithThemeFonts('HY헤드라인M', '나눔고딕'));
-  const draft = materialToDraft(m, { title: '글꼴 연수' });
-  assert.equal(draft.design.sourceFonts.display.name, 'HY헤드라인M');
-  const bp = { ...draft, design: { ...draft.design, preset: 'calm-forest' } };
-  const css = E.build(bp, { runtime: nodeRuntime() }).files['assets/theme.css'];
-  assert.match(css, /--font-display:'Black Han Sans'/);
-  assert.match(css, /--font-sans:'Nanum Gothic'/);
-  assert.match(css, /--display-weight:400/, '한 굵기뿐인 글꼴은 가짜 굵게를 쓰지 않음');
-  // 선생님이 프리셋 글꼴을 고르면 교재 글꼴을 쓰지 않음
-  const css2 = E.build({ ...bp, design: { ...bp.design, fontFrom: 'preset' } }, { runtime: nodeRuntime() }).files['assets/theme.css'];
-  assert.match(css2, /--font-display:'MaruBuri'/);
-  // 맑은 고딕(프로그램 기본)은 '고른 글꼴'이 아니므로 프리셋 제목 글꼴 유지
-  const css3 = E.build({ meta: { title: 'x' }, design: { preset: 'calm-forest', sourceFonts: { display: { name: '맑은 고딕', share: 1 }, body: { name: '맑은 고딕', share: 1 } } }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() }).files['assets/theme.css'];
-  assert.match(css3, /--font-display:'MaruBuri'/);
-  // 글꼴 파일은 무료 웹 글꼴 주소만(버전 고정 CDN·구글·네이버)
-  const r = E.build(bp, { runtime: nodeRuntime() });
-  for (const u of r.files['index.html'].match(/<link rel="stylesheet" href="https:[^"]+"/g) || []) assert.match(u, /fonts\.googleapis\.com|cdn\.jsdelivr\.net\/(gh|npm)\/[^/]+@|hangeul\.pstatic\.net/, u);
-});
-
 test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각과 한글 조각만 사이트 안으로, 쪽은 외부 글꼴 주소 대신 assets/fonts.css', async () => {
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }, { type: 'goals', items: ['가나다'] }] }, { runtime: nodeRuntime() });
+  const r = fontSite();
   assert.ok(/<link rel="stylesheet" href="https:/.test(r.files['index.html']));
   const asked = [];
   // 가짜 CDN: 스타일시트마다 한글 조각(쓰인 글자 '가') · 사이트에 없는 글자만 든 한글 조각('챗' 등) · 안 쓰는 조각(일본 가나) · 라틴 조각
@@ -119,9 +100,9 @@ test('글꼴 함께 담기(P2-4): 사이트에 쓰인 글자가 든 조각과 �
   assert.deepEqual(E.parseRange('U+AC00-D7A3, U+0041, U+4??'), [[0xac00, 0xd7a3], [0x41, 0x41], [0x400, 0x4ff]]);
 });
 
-test('바깥 글꼴 스타일시트는 첫 화면을 붙잡지 않음(media="print" → 받은 뒤 boot.js가 all로): 글꼴 CDN이 응답 없이 막힌 망에서도 쪽이 뜸', () => {
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
-  for (const page of Object.keys(r.files).filter((k) => k.endsWith('.html'))) {
+test('보조 쪽의 바깥 글꼴 스타일시트는 첫 화면을 붙잡지 않음(media="print" → 받은 뒤 boot.js가 all로): 글꼴 CDN이 응답 없이 막힌 망에서도 쪽이 뜸', () => {
+  const r = fontSite();
+  for (const page of ['check.html', 'screen.html', 'poster.html']) {
     const links = r.files[page].match(/<link rel="stylesheet" href="https:[^>]+>/g) || [];
     assert.ok(links.length, page);
     for (const l of links) assert.match(l, / media="print" data-lp-font>$/, page + ': ' + l);
@@ -131,7 +112,7 @@ test('바깥 글꼴 스타일시트는 첫 화면을 붙잡지 않음(media="pri
 });
 
 test('글꼴 함께 담기(학교망 기본값): woff2만 담고, 사이트가 쓰는 굵기로 브라우저가 고를 굵기만 남긴다(가변 굵기는 그대로)', async () => {
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  const r = fontSite();
   const w = E.usedWeights(r.files);
   assert.ok(w.includes(400) && w.includes(700));
   const asked = [];

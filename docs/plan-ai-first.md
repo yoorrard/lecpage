@@ -98,7 +98,7 @@ previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미
 ```
 - 구현(`engine/src/kit/`, `E.kit.*`): `prev` = 강사 값, `material.pages` = 쪽 제목(교재 넘기기 검색), `materials` = 앱 자료실 목록. `collected` = 모은 투표·실습 단계·교재 쪽 등(앱 목록 화면용).
 - 그려서 검사는 의존성 없는 함수 `inspectRendered({ doc, file })`(+ 글 `inspectRenderedSource`, 숨은 틀용 `inspectRenderedScript({ id })` → 부모에 `{type:'lp-inspect', id, width, issues}`), Playwright 도우미 `inspectPage(page, url, { widths:[390,1280], shots })`. `where.width`가 붙음.
-- 보조 쪽·`#lp-data`·`#lp-blueprint`는 연수 정보와 모은 것으로 v1 설계도를 만들어 지금 엔진(`build`)으로 그림(보조 쪽 코드를 새로 쓰지 않음).
+- 보조 쪽·`#lp-data`·`#lp-blueprint`는 연수 정보와 모은 것으로 보조 쪽 모양을 만들어 `kit/aux-build.js`(`normAux`·`buildAux`)가 보조 쪽 렌더러(`render/aux-pages.js`)로 그림. 처음에는 예전 엔진의 `build`를 빌려 썼고, 템플릿을 지울 때 보조 쪽에 필요한 부분만 옮김(2026-11-20).
 - CSP(AI 쪽): `script-src 'self'`+고정 라이브러리 · `style-src 'self' 'unsafe-inline'`+글꼴 CDN · `img-src 'self' data: blob:`+참여 서버(보드 사진) · `connect-src 'self'`+참여 서버 · `frame-src` youtube-nocookie·vimeo · `form-action 'none'` · `object-src`·`worker-src 'none'` · `base-uri 'none'`. `file:`은 USB·ZIP으로 열 때를 위해 엔진처럼 둠. `_headers`는 이 CSP를 AI 쪽 경로(`/`·`/index.html`·`/<쪽>`)에만 붙이고, 보조 쪽은 엔진 CSP(접속 확인은 바깥 도구를 재야 해서 `connect-src https:`)를 그대로.
 - 인라인 `<script>`는 자리를 지켜 파일로(`assets/site.js`, 다음은 `site-2.js`…, 모듈은 `site-N.module.js`, 다른 쪽은 `assets/<쪽>.js`). `onclick` 등은 `assets/site-events.js`로 옮기고 알림(늦게 붙으니 addEventListener를 권함). 허용 목록 밖 바깥 스크립트·CSS, `<base>`·`<meta refresh>`·`<object>`, `javascript:` 주소는 뺌. `youtube.com/embed`는 `youtube-nocookie.com`으로.
 
@@ -177,6 +177,7 @@ lecpage publish work | lecpage app work     # 배포 또는 앱으로 넘기기(
 - 받을 JS: `assets/site*.js`·`assets/<쪽>*.js`·`*.module.js`·`assets/*-events.js`(조립이 만든 이름). 보조 쪽(`check.html`)은 바깥 도구가 열리는지 재려고 `connect-src https:`가 필요하고, 보드 사진은 `img-src`에 참여 서버가 필요함.
 
 ## 13. 없애는 것
+> 2026-11-20에 지웠습니다(아래 목록 + `render/pages·content`, `schema/sections`, `validate`, `build`, `runtime/fx`·`runtime/review`·`body.css`, 옛 CLI 명령·검사 스크립트·예시 설계도). 남긴 것과 이유는 [architecture.md](architecture.md) §1·§4.
 - 앱: 기본 초안·`FoundSummary`·내용 탭(설계도 칸 편집)·디자인 탭(프리셋)·설계도 기반 수정 요청·AI 없이 만들기 버튼.
 - 엔진: 템플릿 생성(`ingest/detect·signals·compose·draft`, `decide/*`, `design/presets·layouts·tokens·seeds`, `render/hero*·body*·sections`의 섹션 렌더러, `prompt/bridge`, `guard`, `patch`)은 새 흐름이 검증된 뒤 지움. 교재 읽기(글자·그림·쪽 그림), 런타임, 보조 화면, 보안·글꼴·잠그기·내보내기, 배포 어댑터는 남김.
 

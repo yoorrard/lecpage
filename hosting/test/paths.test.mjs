@@ -76,22 +76,6 @@ test('엔진이 실제로 만드는 파일은 모두 받음', async () => {
   }
 });
 
-test('엔진의 USER_ASSET 확장자는 형식표에 다 있음', () => {
-  const src = readFileSync(join(ENGINE, 'src', 'build.js'), 'utf8');
-  // 확장자 목록은 USER_ASSET이 쓰는 ASSET_NAME(파일 이름 규칙) 끝에 있음
-  const m = /ASSET_NAME = "[^"]*\\\\\.\(([^)]+)\)"/.exec(src);
-  assert.ok(m, 'build.js에서 ASSET_NAME(USER_ASSET 파일 이름 규칙)을 찾지 못함');
-  // 'pptx?' → ppt, pptx / 'jpe?g' → jpg, jpeg
-  const exts = m[1].split('|').flatMap((e) => { const q = /^(.*)(.)\?(.*)$/.exec(e); return q ? [q[1] + q[3], q[1] + q[2] + q[3]] : [e]; });
-  assert.ok(exts.every((e) => /^[a-z0-9]+$/.test(e)), `USER_ASSET 확장자 모양이 바뀜: ${m[1]}`);
-  assert.deepEqual([...exts].sort(), ['avif', 'csv', 'doc', 'docx', 'gif', 'hwp', 'hwpx', 'jpeg', 'jpg', 'key', 'm4a', 'md', 'mp3', 'mp4', 'numbers', 'odp', 'ods', 'odt', 'pages', 'pdf', 'png', 'ppsx', 'ppt', 'pptx', 'txt', 'webm', 'webp', 'xls', 'xlsx', 'zip'], '엔진의 USER_ASSET 확장자가 바뀌면 src/paths.js의 TYPES도 맞춰 주세요');
-  for (const e of exts) assert.ok(Object.hasOwn(TYPES, e), `엔진이 받는 .${e}가 호스트 형식표에 없음`);
-  // 사용자 자료로 받는 형식 가운데 화면에서 바로 여는 것은 그림·소리·영상·PDF·txt뿐
-  const inline = exts.filter((e) => !TYPES[e].download).sort();
-  assert.deepEqual(inline, ['avif', 'gif', 'jpeg', 'jpg', 'm4a', 'mp3', 'mp4', 'pdf', 'png', 'txt', 'webm', 'webp']);
-  assert.ok(/\(\?:slides\|media\)/.test(src) && /files\\\\\//.test(src), 'USER_ASSET 폴더(slides·media·files)');
-});
-
 test('엔진 조립이 받는 사이트 파일(kit/paths.js SITE_FILE)의 확장자는 형식표에 다 있음', () => {
   const src = readFileSync(join(ENGINE, 'src', 'kit', 'paths.js'), 'utf8');
   const m = /export const SITE_FILE = \/(.+)\/i;/.exec(src);

@@ -1,9 +1,9 @@
-// 테스트 도우미: 엔진으로 실제 사이트 만들기, 로컬 호스트(wrangler dev) 띄우기, 앱처럼 올리기
+// 테스트 도우미: 엔진 조립으로 실제 사이트 만들기, 로컬 호스트(wrangler dev) 띄우기, 앱처럼 올리기
 import { spawn } from 'node:child_process';
 import { createHash, webcrypto } from 'node:crypto';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freePort, releasePort } from './ports.mjs';
 
@@ -17,21 +17,39 @@ const te = new TextEncoder();
 export const bytesOf = (v) => (typeof v === 'string' ? te.encode(v) : v instanceof Uint8Array ? v : new Uint8Array(v));
 export const sha256 = (v) => createHash('sha256').update(bytesOf(v)).digest('hex');
 
+/** 예전 시험 이름(예시 둘)의 참여 기능: 'sel-story'는 질문·보드·투표·반응, 'data-lab'은 도움 요청·진행·신호까지(둘 다 이 기기 안 연습) */
+const FEATURES = { 'sel-story': ['qa', 'board', 'poll', 'reactions'], 'data-lab': ['qa', 'help', 'progress', 'board', 'poll', 'reactions', 'signal'] };
 export function blueprint(name) {
-  return JSON.parse(readFileSync(join(REPO, 'skills', 'lecpage', 'examples', `${name}.blueprint.json`), 'utf8'));
+  return { live: { provider: 'local', features: [...(FEATURES[name] || FEATURES['data-lab'])] } };
+}
+const REF = join(REPO, 'skills', 'lecpage', 'references', 'designs', 'data-lab');
+/** 레퍼런스 사이트(data-lab) 폴더. 사이트가 직접 쓴 스크립트(assets/site.js)는 빼서 엔진 런타임만 도는 사이트로(worker 보기가 받는 것) */
+function refSite() {
+  const out = {};
+  const dir = join(REF, 'site');
+  const walk = (d) => { for (const n of readdirSync(d)) { const f = join(d, n); if (statSync(f).isDirectory()) walk(f); else { const k = relative(dir, f).split(sep).join('/'); out[k] = /\.(html|css|js|json)$/.test(k) ? readFileSync(f, 'utf8') : new Uint8Array(readFileSync(f)); } } };
+  walk(dir);
+  delete out['assets/site.js'];
+  out['index.html'] = out['index.html'].replace(/<script[^>]*src="assets\/site\.js"[^>]*><\/script>\s*/g, '');
+  return out;
 }
 
 /**
- * 예시 설계도를 엔진으로 빌드(= `npm run examples`가 .out/<name>에 쓰는 것과 같은 파일).
+ * 엔진이 조립한 실제 사이트(레퍼런스 사이트 + 키트 + 보조 쪽 + 런타임). name은 참여 기능 묶음(blueprint), patch(bp)로 live·access를 바꿈.
+ * assets: 더 넣을 사이트 파일(그림·자료실 파일 등), password: 암호로 잠금
  * @returns {Promise<Record<string, Uint8Array>>} 경로 → 내용
  */
 export async function buildSite(name, { assets = {}, password = '', patch = null } = {}) {
   const bp = blueprint(name);
   if (patch) patch(bp);
-  const r = E.build(bp, { runtime: N.nodeRuntime(), assets });
-  if (r.errors?.length) throw new Error(`빌드 실패: ${JSON.stringify(r.errors).slice(0, 300)}`);
+  const meta = JSON.parse(readFileSync(join(REF, 'lecpage.json'), 'utf8'));
+  meta.features = [...new Set([...bp.live.features, 'survey', 'deck', 'timer'])];
+  const lv = bp.live;
+  const prev = { live: { provider: lv.provider || 'local', url: lv.url || '', code: lv.code || '', anonKey: lv.anonKey || '' }, ...(bp.access?.mode ? { access: bp.access.mode } : {}) };
+  const r = E.assemble({ ...refSite(), ...assets }, meta, { runtime: N.nodeRuntime(), prev, today: '2026-11-20' });
+  if (r.errors?.length) throw new Error(`조립 실패: ${JSON.stringify(r.errors).slice(0, 300)}`);
   let files = r.files;
-  if (password) files = await E.protectSite(files, password, { runtime: N.nodeRuntime(), title: r.blueprint.meta.title, crypto: webcrypto, iterations: 1000 });
+  if (password) files = await E.protectSite(files, password, { runtime: N.nodeRuntime(), title: r.meta.title, crypto: webcrypto, iterations: 1000 });
   return Object.fromEntries(Object.entries(files).map(([p, v]) => [p, bytesOf(v)]));
 }
 

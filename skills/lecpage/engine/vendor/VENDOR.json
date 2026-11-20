@@ -2,9 +2,7 @@
   "note": "skill에 담아 둔 라이브러리(files)와 판을 고정해 부르는 명령(tools). 판을 바꿀 때 이 표도 함께 고치고 저장소 루트에서 node scripts/vendor-audit.mjs로 알려진 취약점(OSV)을 확인해요(CI도 돌림). 엔진 시험이 파일 해시·머리말 판과 이 표가 같은지 봐요.",
   "files": [
     { "name": "fflate", "version": "0.8.3", "license": "MIT", "path": "engine/vendor/fflate.js", "source": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz (package/esm/browser.js, 머리말 아래 그대로)", "originalSha256": "b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1", "sha256": "0ed0a9fad803e46fc096067b00952d21f2927d22289f88c63f40d628c4b7a2b5" },
-    { "name": "qrcode-generator", "version": "1.4.4", "license": "MIT", "path": "engine/runtime/vendor/qrcode.js", "source": "https://github.com/kazuhikoarase/qrcode-generator (머리말 아래 그대로, 만든 사이트의 assets/qr.js)", "sha256": "44377a74aa7168f39dad0c4856151a780db12582cbcc85c3b86db1b64c70b631" },
-    { "name": "modern-screenshot", "version": "4.7.0", "license": "MIT", "path": "engine/runtime/review/vendor/modern-screenshot.js", "source": "npm dist/index.js", "originalSha256": "bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b", "sha256": "1914599b894cbc2ab484db387413e319d06bce68b72f6ff0c81c57c1124e9652" },
-    { "name": "perfect-freehand", "version": "1.2.3", "license": "MIT", "path": "engine/runtime/review/vendor/perfect-freehand.js", "source": "npm dist/esm/index.mjs(export 줄만 바꿈)", "originalSha256": "a02e221f71a757e46915a51d8f5ffc8d1788d9134e063b3edd21f429c973d46c", "sha256": "109b6e86445aec4eb30c422346dce96392ce77e6d5c76d995f2f0b4cc3496ab0" }
+    { "name": "qrcode-generator", "version": "1.4.4", "license": "MIT", "path": "engine/runtime/vendor/qrcode.js", "source": "https://github.com/kazuhikoarase/qrcode-generator (머리말 아래 그대로, 만든 사이트의 assets/qr.js)", "sha256": "44377a74aa7168f39dad0c4856151a780db12582cbcc85c3b86db1b64c70b631" }
   ],
   "tools": [
     { "name": "wrangler", "version": "4.151.3", "where": "backends/cloudflare/package.json(publish가 이 판으로 부름)" },

@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
 import { startNodeServer, here } from './live-helpers.mjs';
+import { bpBuild, refSite } from './kit-site.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -17,19 +18,18 @@ try { ({ chromium } = require('playwright')); } catch { try { ({ chromium } = cr
 const skip = !chromium && 'playwright is not installed';
 
 const ADMIN = '보조화면-시험용-관리자키-77';
-const EX = JSON.parse(fs.readFileSync(path.join(here, '../../examples/data-lab.blueprint.json'), 'utf8'));
 let srv, browser, site;
 
-function blueprint(live) {
-  const bp = structuredClone(EX);
-  bp.live = { features: ['qa', 'help', 'progress', 'board', 'poll', 'reactions', 'signal'], ...live };
-  return bp;
-}
+/** 레퍼런스 사이트(data-lab)를 이 참여 기능 서버로 조립(kit-site.mjs) */
+const blueprint = (live) => ({ live: { features: ['qa', 'help', 'progress', 'board', 'poll', 'reactions', 'signal'], ...live } });
+/** 교재 일부만 담은 사이트(쪽 번호가 띄엄띄엄): 교재 넘기기 자리에 고른 쪽만 */
+const DECK = [1, 2, 4, 8, 9, 11, 13, 15, 18];
+const sparse = () => { const s = refSite(); s['index.html'] = s['index.html'].replace('data-lp="deck" data-pages="1-18"', `data-lp="deck" data-pages="${DECK.join(',')}"`); return s; };
 before(async () => {
   if (skip) return;
   site = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-aux-'));
   srv = await startNodeServer({ adminKey: ADMIN, staticDir: site });
-  const r = E.build(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' }), { runtime: nodeRuntime() });
+  const r = bpBuild(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' }), { site: sparse() });
   assert.deepEqual(r.errors, []);
   writeFiles(site, r.files);
   browser = await chromium.launch();
@@ -187,7 +187,7 @@ test('잠그기·즉석 투표·결과 공개·닫힌 투표에 늦은 답·CSV 
 });
 
 test('따라 넘기기: 교재 일부만 담은 사이트(1·2·4·8…쪽)도 강사 화면이 실제 쪽 번호를 보내 참가자 화면이 그 쪽으로, \'지금\' 줄 [N쪽 보기]도', { skip }, async () => {
-  const pages = EX.sections.find((s) => s.type === 'deck').slides.map((x) => x.page);
+  const pages = DECK;
   assert.deepEqual(pages.slice(0, 4), [1, 2, 4, 8], '예시 교재는 쪽 번호가 띄엄띄엄');
   const adm = await browser.newContext(); const par = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
@@ -231,7 +231,7 @@ test('접속 확인: 참여 기능 서버에 실제로 연결해 결과를 세 �
     await k.waitForFunction(() => document.querySelector('[data-verdict]').getAttribute('data-state') !== 'wait', null, { timeout: 30000 });
     assert.equal(await k.getAttribute('[data-verdict]', 'data-state'), 'fail');
     assert.match(await k.textContent('[data-list="ok"]'), /참여 기능\(질문·투표\)/);
-    assert.match(await k.textContent('[data-list="fail"]'), /Google Sheets|Gemini|Looker/);
+    assert.match(await k.textContent('[data-list="fail"]'), /gemini\.google\.com|lookerstudio\.google\.com/);
     assert.ok((await k.locator('[data-list="todo"] li').count()) >= 2);
     const pv = await open(ctx, 'privacy.html');
     const txt = await pv.textContent('main');
@@ -240,31 +240,20 @@ test('접속 확인: 참여 기능 서버에 실제로 연결해 결과를 세 �
     // 글꼴을 사이트에 담았으면(assets/fonts.css) 글꼴 CDN은 확인하지 않음: 막혀도 '글꼴이 기본 글꼴로' 경고가 없음
     assert.match(await k.textContent('[data-list="fail"]'), /글꼴/, '담기 전에는 글꼴 CDN도 확인');
     const fake = async (u) => (/\.woff2?$/.test(u) ? { ok: true, arrayBuffer: async () => new Uint8Array([7, u.length]).buffer } : { ok: true, text: async () => "@font-face{font-family:'X';src:url(./x.woff2) format('woff2');unicode-range:U+AC00-D7A3}" });
-    const fb = await E.bundleFonts(E.build(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' }), { runtime: nodeRuntime() }).files, { fetch: fake });
+    const fb = await E.bundleFonts(bpBuild(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' })).files, { fetch: fake });
     assert.ok(fb.report.ok, fb.report.skipped.join());
     writeFiles(path.join(site, 'bf'), fb.files);
     const kb = await open(ctx, 'bf/check.html');
     await kb.waitForFunction(() => document.querySelector('[data-verdict]').getAttribute('data-state') !== 'wait', null, { timeout: 30000 });
     assert.doesNotMatch(await kb.textContent('[data-list="fail"]'), /글꼴/);
-    assert.match(await kb.textContent('[data-list="fail"]'), /Google Sheets|Gemini|Looker/, '다른 바깥 주소는 그대로 확인');
+    assert.match(await kb.textContent('[data-list="fail"]'), /gemini\.google\.com|lookerstudio\.google\.com/, '다른 바깥 주소는 그대로 확인');
     assert.deepEqual(kb._errs, []);
   } finally { await ctx.close(); }
 });
 
-test('접속 확인 목록: jsDelivr가 글꼴과 움직임 효과를 함께 보내면 한 줄에 둘 다, 글꼴만 담은 뒤에는 효과 몫만', () => {
-  const bp = JSON.parse(fs.readFileSync(path.join(here, '../../examples/sel-story.blueprint.json'), 'utf8'));
-  bp.design = { preset: 'kinetic-type', motion: 3, effects: { scroll: 'smooth-scroll' } }; bp.audience = { ...(bp.audience || {}), devices: ['laptop'] };
-  const html = E.build(bp, { runtime: nodeRuntime() }).files['check.html'];
-  const items = JSON.parse(/data-items='([^']*)'/.exec(html)[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'));
-  const jd = items.find((x) => x.url.startsWith('https://cdn.jsdelivr.net/'));
-  assert.ok(jd && jd.font && /글꼴이 기본 글꼴로 보이고, 일부 움직임 효과가 빠져요/.test(jd.impact), JSON.stringify(jd));
-  assert.match(jd.fxImpact, /움직임 효과/); assert.doesNotMatch(jd.fxImpact, /글꼴/);
-  assert.equal(items.filter((x) => x.url.startsWith('https://cdn.jsdelivr.net/')).length, 1, '같은 곳은 한 번만');
-});
-
 test('리허설(local): 아무 키로 들어가고 네 화면이 오류 없이 열림, 안내문은 A4 한 장(강사 화면 주소·QR 없음)', { skip }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-aux-local-'));
-  const r = E.build(blueprint({ provider: 'local', code: 'AUXLOCAL' }), { runtime: nodeRuntime() });
+  const r = bpBuild(blueprint({ provider: 'local', code: 'AUXLOCAL' }));
   writeFiles(dir, r.files);
   const ctx = await browser.newContext();
   await ctx.route('**/*', (rt) => (/^(file:|data:|blob:)/.test(rt.request().url()) ? rt.continue() : rt.abort()));

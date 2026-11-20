@@ -331,7 +331,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
-      live = { code: newCode || (bp.v2 ? bp.live.code : E.validate(bp).blueprint.live.code), adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
+      live = { code: newCode || bp.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
     }
     // 연수 날짜·인원: 서버가 그날 몫을 미리 셈(차면 지금 알려 줌)
     const m = bp.meta || {};

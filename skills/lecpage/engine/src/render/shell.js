@@ -1,7 +1,6 @@
-// 모든 쪽이 같이 쓰는 머리(<head>)·보안 정책(CSP)·사이트 데이터. 참가자 화면(pages.js)과 보조 화면(aux-pages.js)이 함께 씁니다.
+// 보조 쪽(aux-pages.js)의 머리(<head>)·보안 정책(CSP)과 사이트 데이터(#lp-data: 키트 조립 kit/assemble.js도 씀).
 import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
-import { boardFiles } from './sections.js';
 import { eventDays } from '../hero-meta.js';
 
 import { VERSION } from '../version.js';
@@ -116,9 +115,16 @@ ${eventJsonLd(ctx, page)}
 ${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/lecpage.css">
-${ctx.hasFx && page === 'index' ? '<link rel="stylesheet" href="assets/fx.css">' : ''}
 ${extraCss.map((c) => `<link rel="stylesheet" href="${c}">`).join('\n')}
 <script src="assets/boot.js"></script>`;
+}
+
+/** 보드에 파일을 받는지: 보드가 켜 두었고, 만 14세 미만 연수가 아니고, 서버가 받음(구글 시트는 '파일 올리기 켜기'를 눌렀을 때만) */
+export function boardFiles(s, bp) {
+  if (!s?.allowFiles || !(s.maxFiles > 0)) return false;
+  if (bp?.audience?.minor) return false; // 만 14세 미만 연수는 파일을 받지 않음(보드가 파일을 켜 두었어도)
+  const up = bp?.live?.uploads;
+  return typeof up === 'boolean' ? up : bp?.live?.provider !== 'sheets';
 }
 
 export const byOperator = (bp) => (bp.privacy.processors || []).some((p) => /^lecpage 운영자/.test(p.name));

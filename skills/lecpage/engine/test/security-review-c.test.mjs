@@ -8,8 +8,8 @@ import vm from 'node:vm';
 import * as E from '../src/index.js';
 import { nodeRuntime } from '../node.js';
 import { liveDir, here } from './live-helpers.mjs';
+import { bpBuild } from './kit-site.mjs';
 
-const EX = JSON.parse(fs.readFileSync(path.join(here, '../../examples/data-lab.blueprint.json'), 'utf8'));
 const ch = (...c) => String.fromCharCode(...c);
 function client() {
   const mem = {};
@@ -89,43 +89,43 @@ test('CSV 수식 막기: = + - @ 탭·CR, 앞 빈칸·전각 기호까지. 받�
 test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 서버로만 보냄(접속 확인만 https 전체), 섞인 콘텐츠 올려 받기', () => {
   const csp = (files, f) => /Content-Security-Policy" content="([^"]+)"/.exec(files[f])[1];
   const conn = (s) => /connect-src ([^;]+)/.exec(s)[1].trim().split(/\s+/);
-  const bp = (live) => ({ ...structuredClone(EX), live });
-  const http = E.build(bp({ provider: 'http', url: 'https://live.example.workers.dev', code: 'CSP1', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const bp = (live) => ({ live });
+  const http = bpBuild(bp({ provider: 'http', url: 'https://live.example.workers.dev', code: 'CSP1', features: ['qa'] })).files;
   for (const f of ['index.html', 'console.html', 'screen.html', 'poster.html', 'privacy.html']) {
     assert.deepEqual(conn(csp(http, f)), ["'self'", 'file:', 'https://live.example.workers.dev', 'wss://live.example.workers.dev'], f);
     assert.match(csp(http, f), /upgrade-insecure-requests/);
   }
   assert.ok(conn(csp(http, 'check.html')).includes('https:'));
-  const sb = E.build(bp({ provider: 'supabase', url: 'https://abcd.supabase.co', anonKey: 'sb_publishable_x', code: 'CSP2', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const sb = bpBuild(bp({ provider: 'supabase', url: 'https://abcd.supabase.co', anonKey: 'sb_publishable_x', code: 'CSP2', features: ['qa'] })).files;
   assert.deepEqual(conn(csp(sb, 'index.html')).slice(2), ['https://abcd.supabase.co', 'wss://abcd.supabase.co']);
-  const sh = E.build(bp({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec', code: 'CSP3', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const sh = bpBuild(bp({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec', code: 'CSP3', features: ['qa'] })).files;
   assert.deepEqual(conn(csp(sh, 'index.html')).slice(2), ['https://script.google.com', 'https://script.googleusercontent.com']);
-  const lan = E.build(bp({ provider: 'http', url: 'http://192.168.0.10:8787', code: 'CSP4', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const lan = bpBuild(bp({ provider: 'http', url: 'http://192.168.0.10:8787', code: 'CSP4', features: ['qa'] })).files;
   assert.ok(conn(csp(lan, 'index.html')).includes('ws://192.168.0.10:8787')); assert.doesNotMatch(csp(lan, 'index.html'), /upgrade-insecure-requests/, '교실 LAN(http)은 올려 받지 않음');
   // 같은 주소(url '')로 Node 서버가 사이트도 내보내는 길(README 첫 길: http://<노트북 IP>:8787): 올려 받으면 CSS·JS가 https로 바뀌어 통째로 깨짐
-  const same = E.build(bp({ provider: 'http', url: '', code: 'CSP6', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const same = bpBuild(bp({ provider: 'http', url: '', code: 'CSP6', features: ['qa'] })).files;
   for (const f of ['index.html', 'console.html', 'screen.html', 'poster.html', 'check.html', 'privacy.html']) assert.doesNotMatch(csp(same, f), /upgrade-insecure-requests/, f);
   assert.deepEqual(conn(csp(same, 'index.html')), ["'self'", 'file:'], '같은 주소라 따로 열 곳 없음');
-  const local = E.build(bp({ provider: 'local', code: 'CSP5', features: ['qa'] }), { runtime: nodeRuntime() }).files;
+  const local = bpBuild(bp({ provider: 'local', code: 'CSP5', features: ['qa'] })).files;
   assert.deepEqual(conn(csp(local, 'index.html')), ["'self'", 'file:']);
-  // 보조 화면만 aux-pages.css, 공유 미리보기(og)는 참가자 화면에만
-  assert.ok(!http['index.html'].includes('assets/aux-pages.css') && http['console.html'].includes('assets/aux-pages.css'));
-  assert.ok(!http['console.html'].includes('og:title') && http['index.html'].includes('og:title'));
+  // 보조 화면만 aux-pages.css(참가자 쪽은 키트 CSS만), 보조 화면에는 공유 미리보기(og)가 없음
+  assert.ok(!http['index.html'].includes('assets/aux-pages.css') && http['index.html'].includes('assets/kit.css') && http['console.html'].includes('assets/aux-pages.css'));
+  assert.ok(!http['console.html'].includes('og:title'));
 });
 
 test('응답 헤더(_headers): HTTPS만·검색 제외·틀 넣기 금지·강사 화면 COOP, 공개(누구나)여도 강사용 쪽은 검색 제외', () => {
-  const h = E.build({ ...structuredClone(EX), live: { provider: 'local', code: 'HDR1', features: ['qa'] } }, { runtime: nodeRuntime() }).files._headers;
+  const h = bpBuild({ live: { provider: 'local', code: 'HDR1', features: ['qa'] } }).files._headers;
   assert.match(h, /^\/\*\n(?:  .*\n)*  Strict-Transport-Security: max-age=31536000\n/m);
   assert.match(h, /^\/\*\n(?:  .*\n)*  X-Robots-Tag: noindex, nofollow\n/m);
   assert.match(h, /^\/console\.html\n  Content-Security-Policy: frame-ancestors 'none'\n  X-Frame-Options: DENY\n  Cross-Origin-Opener-Policy: same-origin\n/m);
-  const pub = E.build({ ...structuredClone(EX), access: { mode: 'public' }, live: { provider: 'local', code: 'HDR2', features: ['qa'] } }, { runtime: nodeRuntime() }).files._headers;
+  const pub = bpBuild({ access: { mode: 'public' }, live: { provider: 'local', code: 'HDR2', features: ['qa'] } }).files._headers;
   assert.doesNotMatch(pub.split('\n\n')[0], /X-Robots-Tag/, '공개 사이트의 참가자 화면은 검색 허용');
   for (const p of ['/console.html', '/screen.html', '/poster.html', '/check.html', '/privacy.html']) assert.match(pub, new RegExp(`^${p.replace('.', '\\.')}\\n(?:  .*\\n)*  X-Robots-Tag: noindex, nofollow`, 'm'), p);
 });
 
-test('만 14세 미만: 설계도가 보드 파일을 켜 두어도 받지 않음(강사 화면이 서버에 uploads=false를 적음)', () => {
-  const bp = { meta: { title: 't' }, audience: { minor: true }, live: { provider: 'local', code: 'MIN1', features: ['board'] }, sections: [{ type: 'hero' }, { type: 'board', allowFiles: true, maxFiles: 3 }] };
-  const r = E.build(bp, { runtime: nodeRuntime() });
+test('만 14세 미만(학생 대상): 보드가 파일을 켜 두어도 받지 않음(강사 화면이 서버에 uploads=false를 적음)', () => {
+  const r = bpBuild({ audience: { minor: true }, live: { provider: 'local', code: 'MIN1', features: ['board'] } });
+  assert.match(r.files['index.html'], /data-lp="board"/);
   const data = JSON.parse(/<script type="application\/json" id="lp-blueprint">([\s\S]*?)<\/script>/.exec(r.files['console.html'])[1]);
   assert.equal(data.sections.find((s) => s.type === 'board').allowFiles, false);
   assert.ok(!/type="file"/.test(r.files['index.html']));
@@ -136,7 +136,7 @@ test('사이트 암호: 약한 암호를 알려 주고, 만드는 암호는 낱�
   for (const p of ['1234', '0000000', 'abcd1234', 'password', '연수1234', 'aaaaaaaaaaaa']) assert.equal(E.passwordAdvice(p).level, 'weak', p);
   assert.equal(E.passwordAdvice('숲속바다1234').level, 'fair');
   for (let i = 0; i < 20; i++) { const p = E.friendlyPassword(); assert.equal(E.passwordAdvice(p).level, 'good', p); assert.match(p, /^[가-힣]{6,}\d{4}$/); }
-  const r = E.build({ ...structuredClone(EX), access: { mode: 'password' }, live: { provider: 'local', code: 'PW1', features: ['qa'] } }, { runtime: nodeRuntime() });
+  const r = bpBuild({ access: { mode: 'password' }, live: { provider: 'local', code: 'PW1', features: ['qa'] } });
   const files = await E.protectSite(r.files, '숲속바다햇살4821', { runtime: nodeRuntime(), title: 't', iterations: 1000 });
   for (const f of ['index.html', 'console.html', 'screen.html', 'poster.html']) assert.match(files[f], /<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self'/, f);
 });

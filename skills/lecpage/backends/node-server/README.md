@@ -19,7 +19,7 @@ node --experimental-sqlite server.mjs --static ../../../../my-site
 - 사이트 파일은 쓸 때마다 바뀌었는지 물어봅니다(바뀌지 않았으면 304). 연수 중에 사이트를 다시 만들어 넣어도 새 쪽과 옛 스크립트가 섞이지 않아요.
 - 관리자 키를 정하지 않으면 첫 실행 때 만들어 **`data/admin-key.txt`(나만 읽을 수 있는 파일)** 에 둡니다. 로그에는 남기지 않아요. 키를 적어 둔 뒤 그 파일은 지워도 됩니다(해시는 `data/admin-key.sha256`).
 - 직접 정할 때는 `--admin-key '…'`: **12자 이상**, 예시 값(`change-me…` 등)이 아니어야 서버가 켜집니다. 만들기: `openssl rand -hex 12`.
-- 사이트 설정(blueprint `live`)은 `provider: "http"`, `url: ""`(같은 주소) 또는 서버 주소로 둡니다.
+- 사이트 설정(강사 값 `live`: 앱 배포하기 화면 또는 Skill `lecpage.teacher.json`)은 `provider: "http"`, `url: ""`(같은 주소) 또는 서버 주소로 둡니다.
 
 ## 2. 설정(명령줄 옵션 = 환경 변수)
 
@@ -71,7 +71,7 @@ docker compose exec live cat /data/admin-key.txt     # 처음 만든 관리자 �
 | **Railway** | 새 프로젝트 → GitHub 저장소의 이 폴더(Root Directory) → Variables에 `LEC_ADMIN_KEY` → Volume을 `/data`에 연결 | |
 | **Render** | Web Service → Docker → Root Directory 이 폴더 → Environment에 `LEC_ADMIN_KEY` → Disk를 `/data`에 연결(유료 인스턴스) | 무료 인스턴스는 디스크가 없고 15분 쉬면 잠듭니다. 연수 직전 접속해 깨우고, 끝나면 CSV를 바로 받으세요 |
 
-어디서나 HTTPS 주소(예: `https://lec-live.fly.dev`)를 blueprint `live.url`에 넣습니다. 사이트를 다른 곳(GitHub Pages 등)에 올렸다면 `LEC_ORIGINS=https://내사이트주소`를 꼭 설정하세요.
+어디서나 HTTPS 주소(예: `https://lec-live.fly.dev`)를 강사 값 `live.url`에 넣습니다. 사이트를 다른 곳(GitHub Pages 등)에 올렸다면 `LEC_ORIGINS=https://내사이트주소`를 꼭 설정하세요.
 
 ## 5. 여러 강사가 한 서버를 함께 쓸 때(공유 모드)
 

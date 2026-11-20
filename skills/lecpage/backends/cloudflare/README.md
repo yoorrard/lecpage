@@ -38,7 +38,7 @@ curl -fsS https://lecpage-live.<계정>.workers.dev/api/health   # {"ok":true,�
 - `-c wrangler.toml`을 꼭 붙입니다. 빼면 wrangler가 위쪽 폴더의 `wrangler.json`·`wrangler.jsonc`를 먼저 찾아 읽습니다(lecpage 저장소 맨 위에 앱용 `wrangler.jsonc`가 있어, 저장소 안에서 돌리면 앱이 올라갑니다. dry-run으로 확인).
 - 대화 없는 셸에서 `secret put`은 Worker가 아직 없으면 빈 Worker를 먼저 만들고 비밀을 넣습니다. 그다음 `deploy`가 코드를 올립니다(wrangler 4.151.3 소스에서 확인. 실제 계정으로 돌려 보지는 않았습니다 ⚠️).
 - 새 계정이라 `workers.dev` 주소가 없으면 `deploy`가 멈춥니다. 오류에 나온 `https://dash.cloudflare.com/<계정 ID>/workers/onboarding`을 강사가 한 번 열어 이름을 정한 뒤 다시 돌립니다.
-- 배포 주소를 `info.json`의 `live`(`provider: "http"`, `url`)에 넣고 `patch work/blueprint.json -i work/info.json`으로 다시 빌드합니다. 사이트 주소가 정해지면 `npx wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:https://<사이트 주소>`로 그 사이트만 받게 할 수 있습니다(다시 배포할 때마다 붙임).
+- 배포 주소를 `work/lecpage.teacher.json`의 `live`(`provider: "http"`, `url`, `code`)에 넣고 `check work`로 다시 조립합니다(앱에서는 배포하기 화면의 참여 기능 연결에 주소를 넣음). 사이트 주소가 정해지면 `npx wrangler deploy -c wrangler.toml --var ALLOWED_ORIGINS:https://<사이트 주소>`로 그 사이트만 받게 할 수 있습니다(다시 배포할 때마다 붙임).
 
 설정 값(`wrangler.toml`의 `[vars]`):
 

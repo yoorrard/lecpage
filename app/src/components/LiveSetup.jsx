@@ -77,7 +77,7 @@ function initSql(code, hash, bp) {
 /** prefer: 바로 배포 서버가 참여 기능을 넘기며 준 순서(liveNext: ['cloudflare', 'supabase']). 주면 그 순서로 권함 */
 export function LiveSetup({ p, update, prefer = null }) {
   const bp = deployView(p); const live = bp.live || {}; const info = p.info || {};
-  const code = bp.v2 ? live.code : E.validate(bp).blueprint.live.code;
+  const code = live.code || '';
   const reco = E.decideInfra({ size: info.size, features: featuresOf(p), skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
   // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).

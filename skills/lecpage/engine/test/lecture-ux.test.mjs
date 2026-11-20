@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
 import { startNodeServer, here, LAN_ARGS, viaLan } from './live-helpers.mjs';
+import { bpBuild } from './kit-site.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -17,8 +18,8 @@ try { ({ chromium } = require('playwright')); } catch { try { ({ chromium } = cr
 const skip = !chromium && 'playwright is not installed';
 
 const ADMIN = '화면잇기-시험용-관리자키-61';
-const EX = JSON.parse(fs.readFileSync(path.join(here, '../../examples/data-lab.blueprint.json'), 'utf8'));
-const blueprint = (live) => { const bp = structuredClone(EX); bp.live = { features: ['qa', 'help', 'poll', 'signal'], ...live }; return bp; };
+/** 레퍼런스 사이트(data-lab)를 이 참여 기능 서버로 조립(kit-site.mjs) */
+const blueprint = (live) => ({ live: { features: ['qa', 'help', 'poll', 'signal'], ...live } });
 let srv, browser, site, files;
 
 /** QR에 넣은 글자를 엿봄(qr.js의 addData를 감쌈) */
@@ -28,7 +29,7 @@ before(async () => {
   site = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-ux-'));
   srv = skip ? null : await startNodeServer({ adminKey: ADMIN, staticDir: site });
   // 교실 와이파이 주소처럼 연 사이트(localhost·127.x로 열면 QR 대신 '와이파이 주소로 다시 여세요'가 나옴 → 아래 따로 봄)
-  const r = E.build(blueprint({ provider: 'http', url: srv ? viaLan(srv.url) : 'https://live.example.com', code: 'UXJOIN' }), { runtime: nodeRuntime() });
+  const r = bpBuild(blueprint({ provider: 'http', url: srv ? viaLan(srv.url) : 'https://live.example.com', code: 'UXJOIN' }));
   assert.deepEqual(r.errors, []);
   files = r.files; writeFiles(site, r.files);
   if (!skip) browser = await chromium.launch({ args: LAN_ARGS });
@@ -167,43 +168,10 @@ test('연수가 끝나면 맨 위에 [기록·정리로], 확장자 없는 주�
   } finally { await ctx.close(); cs.close(); }
 });
 
-test('위 메뉴에 초점이 가도 화면이 위로 튀지 않고, 목차로 옮긴 섹션 제목은 머리 아래에 보임 · 어두운 화면의 벤토 차례 첫 칸은 옅게', { skip }, async () => {
-  const bp = JSON.parse(fs.readFileSync(path.join(here, '../../examples/sel-story.blueprint.json'), 'utf8'));
-  bp.sections.find((s) => s.type === 'outline').layout = 'bento';
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-ux-nav-'));
-  const r = E.build(bp, { runtime: nodeRuntime() }); assert.deepEqual(r.errors, []); writeFiles(dir, r.files);
-  const url = new URL('file://' + path.join(dir, 'index.html')).href;
-  try {
-    for (const width of [1280, 390]) {
-      const ctx = await browser.newContext({ viewport: { width, height: 800 }, reducedMotion: 'reduce' });
-      const p = await ctx.newPage(); await p.goto(url); await p.waitForTimeout(300);
-      await p.evaluate(() => scrollTo(0, 2400)); await p.waitForTimeout(100);
-      const y0 = await p.evaluate(() => scrollY);
-      await p.evaluate(() => [...document.querySelectorAll('.lp-nav a, .lp-nav button')].filter((x) => x.getClientRects().length).forEach((x) => x.focus()));
-      assert.equal(await p.evaluate(() => scrollY), y0, `${width}: 메뉴 초점에 화면이 움직이지 않음`);
-      for (const h of ['#outline', '#schedule', '#qa']) {
-        await p.evaluate((h) => { location.hash = h; }, h); await p.waitForTimeout(150);
-        const g = await p.evaluate((h) => ({ t: document.querySelector(h + ' h2').getBoundingClientRect().top, nav: document.querySelector('.lp-nav').getBoundingClientRect().bottom }), h);
-        assert.ok(g.t >= g.nav, `${width} ${h}: 제목(${g.t})이 머리(${g.nav}) 아래`);
-      }
-      await ctx.close();
-    }
-    const dark = await browser.newContext({ colorScheme: 'dark', viewport: { width: 1280, height: 800 } });
-    await dark.addInitScript(() => { try { localStorage.setItem('lp-theme', 'dark'); } catch (e) { } });
-    const d = await dark.newPage(); await d.goto(url);
-    assert.equal(await d.evaluate(() => document.documentElement.getAttribute('data-theme')), 'dark');
-    const c = await d.evaluate(() => { const li = document.querySelector('.lp-ob > li'), cs = getComputedStyle(li), tmp = document.createElement('i'); tmp.style.color = 'var(--primary)'; li.parentNode.appendChild(tmp); const prim = getComputedStyle(tmp).color; tmp.remove(); return { bg: cs.backgroundColor, prim }; });
-    assert.notEqual(c.bg, c.prim, '어두운 화면에서 첫 칸이 원색 그대로가 아님: ' + JSON.stringify(c));
-    await dark.close();
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
 test('끝난 연수: 출석 칸의 입실·퇴실 단추는 숨기고 까닭 한 줄(도크의 출석도 없음)', { skip }, async () => {
-  const bp = blueprint({ provider: 'local', code: 'UXEND', features: ['qa', 'attendance'] });
-  bp.sections.splice(bp.sections.findIndex((s) => s.type === 'closing'), 0, { id: 'att', type: 'attendance', title: '출석' });
-  bp.meta = { ...bp.meta, date: '2026-01-05', start: '09:00', end: '12:00' };
+  const bp = { ...blueprint({ provider: 'local', code: 'UXEND', features: ['qa', 'attendance'] }), meta: { date: '2026-01-05', start: '09:00', end: '12:00' } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-ux-end-'));
-  const r = E.build(bp, { runtime: nodeRuntime() }); assert.deepEqual(r.errors, []); writeFiles(dir, r.files);
+  const r = bpBuild(bp); assert.deepEqual(r.errors, []); writeFiles(dir, r.files);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(String(e)));

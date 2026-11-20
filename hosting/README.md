@@ -78,7 +78,7 @@ CLOUDFLARE_API_TOKEN=<만든 토큰> npm run setup
 - **Cloudflare가 최선인가**: 무료로 '서버 쪽 검사(올릴 때 거절 규칙·서버가 정하는 CSP) + 사이트마다 다른 주소 + 하루 한도와 무관한 보기 + 실시간 방'을 한 계정에서 다 하는 곳은 찾지 못했습니다. Workers Previews는 Worker 하나에 미리보기 100개(무료)까지라 오래된 것부터 지워지고, Pages는 미리보기 배포 개수가 무제한입니다. 근거·위험은 조사 문서.
 - 손으로 하던 길(`npx wrangler login` → `npm run deploy` → `npx wrangler secret put …`)도 그대로 됩니다. 관리 Worker는 `npm run deploy:admin`. 앱 주소 허용은 [`wrangler.jsonc`](wrangler.jsonc)의 `ALLOWED_ORIGINS`(또는 비밀 값 `APP_ORIGINS`), 내 도메인은 붙인 뒤 `PUBLIC_ORIGIN`.
 - 확인: `curl https://<호스트>/api/info` → `{"ok":true,"view":"pages",…}`
-- 자동 배포는 위 'GitHub에서 저절로 다시 배포'(Workers Builds, 명령은 그 2번). 감시 경로 `hosting/*`, `skills/lecpage/engine/runtime/*`, `skills/lecpage/engine/src/build.js`, `skills/lecpage/backends/cloudflare/src/*`.
+- 자동 배포는 위 'GitHub에서 저절로 다시 배포'(Workers Builds, 명령은 그 2번). 감시 경로 `hosting/*`, `skills/lecpage/engine/runtime/*`, `skills/lecpage/engine/src/kit/*`, `skills/lecpage/backends/cloudflare/src/*`.
 
 ### 앱에 연결
 

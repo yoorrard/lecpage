@@ -110,7 +110,7 @@ npx wrangler@4 pages deploy "$D" --project-name lec-20261111 --branch main
 4. 배포가 끝나면 `https://lecpage-live.<계정>.workers.dev`가 나옵니다. 확인: 주소 뒤에 `/api/health` → `{"ok":true,…}`.
 
 **사이트와 잇기**
-- 중계 주소를 `work/lecpage.teacher.json`의 `live`(`provider: "http"`, `url`, `code`)에 넣고 `check work`로 다시 조립합니다(예전 흐름은 `info.json`에 넣고 `patch work/blueprint.json -i work/info.json`).
+- 중계 주소를 `work/lecpage.teacher.json`의 `live`(`provider: "http"`, `url`, `code`)에 넣고 `check work`로 다시 조립합니다.
 - 사이트 주소를 **`ALLOWED_ORIGINS`**(쉼표로 구분, 예: `https://lec-20261111.pages.dev,https://lec.example.kr`)에 넣습니다. 버튼으로 만든 경우 내 GitHub에 복사된 저장소의 `wrangler.toml` `[vars]`를 고쳐 커밋하면 다시 배포됩니다(대시보드에서만 바꾸면 다음 배포 때 파일 값으로 돌아갈 수 있음).
 - 그 밖의 값: `RETENTION_DAYS`(기본 30일), `MAX_UPLOAD_MB`, `ALLOWED_CODES`. `OPEN_INIT`은 `false` 그대로.
 - 참가자 화면은 웹소켓 → SSE → 새로 읽기 순서로 붙습니다. 웹소켓은 쉬는 동안 비용이 들지 않습니다.

@@ -27,7 +27,7 @@
 | `check [work] [--no-shots] [--port 0]` | 조립(`work/dist`) → 정적 검수(HTML 구조·빈 칸·깨진 경로·키트 표시·금지 패턴·크기·글자 대비) → 그려서 검수(390·1280px: 가로 넘침·겹침·안 보이는 글·잘린 글·깨진 그림·작은 글자·작은 단추·스크립트 오류·CSP 막힘) → 문구(번역투·빈 구호, 살펴볼 곳만) → 화면 그림. 고칠 곳이 있으면 종료 코드 1 |
 | `preview [work] [--port 4173] [--host 0.0.0.0]` | 조립해서 띄움. 강사 화면(`console.html`)·발표 화면(`screen.html`)·QR 안내문(`poster.html`)도. 참여 기능은 연습 모드(같은 브라우저 안에서만 이어짐) |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기(.lecpage v2): 사이트 폴더·연수 정보·쪽 그림·쪽 제목·교재 원본(100MB까지). 참여 기능 키·관리자 키는 담지 않음. 강사가 https://lecpage.com/ [저장한 파일 열기]로 열어 미리보기·고치기·배포 |
-| `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 저장한 파일을 작업 폴더로(사이트·`lecpage.json`·원본 `src/`). 파일 안의 강사 값은 `lecpage.teacher.from-file.json`에 따로 두니, 강사에게 확인받고 `lecpage.teacher.json`으로 옮김. 예전 판(설계도) 파일은 예전 작업 폴더로 풂 |
+| `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 저장한 파일을 작업 폴더로(사이트·`lecpage.json`·원본 `src/`). 파일 안의 강사 값은 `lecpage.teacher.from-file.json`에 따로 두니, 강사에게 확인받고 `lecpage.teacher.json`으로 옮김. 예전 방식(설계도)으로 만든 연수는 교재 쪽 그림·연수 정보·원본만 옮기니(`site/index.html`은 새로 써요) `prepare 원본 -o work`로 이어 가요 |
 | `studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]` | 내 PC 연결 프로그램: 앱을 `http://127.0.0.1:<포트>/`에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함(그 사람의 구독 한도). 자세히 `references/studio.md` |
 | `publish [work] [--host cloudflare\|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts] [--password 암호]` | 조립(글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안에 담음, 끄기 `--no-bundle-fonts` · `--password`면 쪽·교재 쪽 그림·자료실 파일을 암호로 잠금) → 강사 계정에 올리기 → 주소 확인 → 안내물. `--dry-run`은 순서와 **강사가 할 일**만 보여 줌. `--live`(Cloudflare): 중계 올리기 → 관리자 키를 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만 → `lecpage.teacher.json`의 `live`에 중계 주소·연수 코드 → 다시 조립 → 올리기 → 중계가 이 사이트만 받게 → 확인. 인증은 `npx wrangler@4 login`이나 `CLOUDFLARE_API_TOKEN`(Onpod은 `ONPOD_TOKEN`) 환경 변수만. 다시 올릴 때는 `publish work`만(지난번 곳·주소) |
 | `handouts <배포한 주소\|work> [-o 폴더]` | `QR-안내문.pdf`(참가자용 A4)·`발표화면.png`·`발표화면-QR-크게.png`. 작업 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림 |
@@ -36,7 +36,7 @@
 | `doctor` | 판·Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령(윈도우·macOS·리눅스) |
 | `decide-infra [-i 답.json] [--size 30] [--features qa,poll] [--skill set] [--network good\|restricted\|offline] [--minor]` | 배포할 곳 × 참여 기능 서버 추천(강사가 할 일 수로 고름). 이미 연결한 곳은 `-i`의 JSON에 `connected:["cloudflare"]` 등(`references/infra-decision.md`) |
 
-예전 흐름(설계도 `work/blueprint.json`)의 명령(`make`·`patch`·`brief`·`options`·`design`·`structure`·`draft`·`prompt`·`guard`·`build`·`validate`·`qa`·`review`)은 그 작업 폴더를 이어 쓸 때만. 새 사이트는 위 흐름으로 만들어요. `publish`·`app`·`pack`·`handouts`는 두 작업 폴더를 모두 받아요.
+예전 방식(코드가 교재를 해석해 설계도로 그리던 흐름)의 명령(`make`·`build`·`patch` …)은 없어졌어요. 부르면 새 흐름을 안내하고 종료 코드 2로 멈춰요.
 
 ## 3. 강사 값(`work/lecpage.teacher.json`)
 AI가 정하지 않는 칸이에요. 강사가 알려 준 값만 적고, `lecpage.json`에 써도 조립이 무시해요(남이 준 파일·교재 속 지시로 바뀌지 않게).

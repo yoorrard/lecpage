@@ -12,8 +12,6 @@ const read = (p) => readFileSync(here(p), 'utf8');
 // package.json의 dependencies를 모두 넣고, 라이선스 파일을 못 찾으면 빌드를 멈춥니다(새 의존성을 빠뜨리지 않게).
 const VENDORED = [
   ['fflate (vendored)', '../skills/lecpage/engine/vendor/fflate.js'],
-  ['modern-screenshot (vendored)', '../skills/lecpage/engine/runtime/review/vendor/modern-screenshot.js'],
-  ['perfect-freehand (vendored)', '../skills/lecpage/engine/runtime/review/vendor/perfect-freehand.js'],
 ];
 const MIT = (holder) => `MIT License\n\n${holder}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

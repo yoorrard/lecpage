@@ -1,36 +1,14 @@
 // lecpage 엔진 공개 API (브라우저·Node 공통, ESM)
-export { validate, safeUrl, makeCode, randomCode } from './validate.js';
-export { build, collectEffects, icsFile } from './build.js';
-export { protectSite, unlockUrl, PROTECTED_PAGES, PUBLIC_PAGES, passwordAdvice, friendlyPassword } from './protect.js';
-export { zipFiles } from './zip-write.js';
-export { SECTION_DEFS, SECTION_TYPES, LIVE_FEATURES, LIVE_PROVIDERS, ARCHETYPES, DEPLOY_TARGETS, DEFAULT_SURVEY, TEACHER_ONLY } from './schema/sections.js';
-export { PRESETS, PRESET_IDS, getPreset, presetPlan, ENTER_MODES, nearestPresets } from './design/presets.js';
-export { BODY_VARIANTS, PRESET_BODY, MOTION_VARIANTS, variantOf, variantIds, defaultVariant, cleanLayout, bodyFingerprint, usedVariants, motifFamily, recapWords } from './design/layouts.js';
-export { parseNum, tableChart, glanceSeries } from './design/numbers.js';
-export { bundleFonts, siteCodepoints, parseRange, usedWeights, deferFontLinks } from './font-bundle.js';
-export { promptRows } from './render/sections.js';
-export { FONTS, fontAssets, fontStack, matchFont, fontsFromSource, fontFamilyName } from './design/fonts.js';
-export { themeCSS, themeTokens, htmlAttrs, presetWithOverrides } from './design/tokens.js';
-export { PALETTE_SEEDS, FONT_PAIRS, PALETTE_BY_ID, FONT_PAIR_BY_ID } from './design/seeds.js';
-export { contrast, mix, readableOn, toOklch, fromOklch, ramp12 } from './design/color.js';
-export { designTokens } from './design/dtcg.js';
-export { FX, TOPICS, TOPIC_LABELS } from './design/fx-catalog.js';
-export { rankPresets, chooseEffects, chooseFonts, resolveDesign, motionCap, fxInfo } from './decide/design.js';
-export { decideInfra, BACKENDS, HOSTS, HOST_STEPS, TEACHER_STEPS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
-export { decideArchetype } from './decide/archetype.js';
-export { decideStructure, structureFor, cleanStructure, checkOrder, linkConcept, flowGuide, FLOW_INFO, SIGNAL_TABLE, FEATURE_LABEL } from './decide/structure.js';
-export { findLeftovers, materialCoverage, leftoversToSections, leftoverAdds } from './ingest/compose.js';
-export { foundSummary } from './ingest/signals.js';
-export { syncHeroMeta, whenText, eventDays, infoDays } from './hero-meta.js';
-export { detectTopics, moodsForTopics, moodFromWords } from './decide/topic.js';
-export { deriveConcept, cleanConcept, conceptDesign, conceptKeywords, TOPIC_CONCEPTS } from './decide/concept.js';
-export { buildPrompt, extractJson, blueprintGuide, LAYOUT_KO, PROMPT_END, readAnswer, isCutAnswer, joinAnswer, answerPart, CONTINUE_ASK, JSON_ONLY_ASK } from './prompt/bridge.js';
-export { guardMaterial, undoRestore, restoredCount, dropMissingAssets } from './guard.js';
-export { applyBlueprintPatch, diffSummary, withSectionIds } from './patch.js';
-export { applyInfo, keepTeacherLinks, syncInfo, applyFeatures, sanitizeImported, draftInfo, archetypeFor, applyTeacherValues, keepDraftParts, minutesBetween, FEATURES, LIVE_KEYS, META_KEYS, UNTRUSTED_META, requestHints, setupAdvice, intakeAsks, surveyFor } from './intake.js';
-export { wordsFor } from './words.js';
-export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
-export { VERSION } from './version.js';
-// AI 중심 개편: 키트·조립·검수(약속 A~C). E.kit.assemble(…) 또는 아래 이름으로
+// AI가 사이트(HTML·CSS·JS)를 직접 쓰고, 엔진은 키트 조립·검수(kit/*), 배포 도구(잠그기·글꼴 담기·ZIP·배포할 곳 고르기)를 맡습니다.
 export * as kit from './kit/index.js';
 export { assemble, inspect, inspectRendered, readMeta as readSiteMeta } from './kit/index.js';
+export { safeUrl, randomCode, makeCode } from './util.js';
+export { protectSite, unlockUrl, PROTECTED_PAGES, PUBLIC_PAGES, passwordAdvice, friendlyPassword } from './protect.js';
+export { zipFiles } from './zip-write.js';
+export { bundleFonts, siteCodepoints, parseRange, usedWeights, deferFontLinks } from './font-bundle.js';
+export { FONTS, fontAssets, fontStack, matchFont, fontFamilyName } from './design/fonts.js';
+export { contrast, mix, readableOn, toOklch, fromOklch, ramp12 } from './design/color.js';
+export { decideInfra, BACKENDS, HOSTS, HOST_STEPS, TEACHER_STEPS, REALTIME_FEATURES, STORE_FEATURES, decideHost, checkHost } from './decide/infra.js';
+export { whenText, eventDays } from './hero-meta.js';
+export { wordsFor, surveyFor, DEFAULT_SURVEY } from './words.js';
+export { VERSION } from './version.js';

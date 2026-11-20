@@ -1,10 +1,12 @@
 # lecpage 아키텍처와 계약(Contracts)
 
-이 문서는 lecpage를 만드는 모든 작업자(사람·AI)가 같은 약속을 지키도록 정한 기준입니다. 코드를 쓰기 전에 읽고, 약속을 바꿔야 하면 이 문서를 먼저 고칩니다.
+이 문서는 lecpage를 만드는 모든 작업자(사람·AI)가 같은 약속을 지키도록 정한 기준입니다. 코드를 쓰기 전에 읽고, 약속을 바꿔야 하면 이 문서를 먼저 고칩니다. 흐름과 약속 A~D의 자세한 이유는 [AI 중심 개편 설계](plan-ai-first.md)에 있습니다.
 
 ## 0. 한 줄 요약
 
-연수 교재와 연수 정보 → **연수 설계도(blueprint JSON)** → 엔진이 **정적 연수 사이트**(HTML·CSS·JS 파일 묶음)로 조립 → 어디든 배포(GitHub Pages, Cloudflare, Vercel, Netlify, S3, 개인 서버, USB). 실시간 기능은 **어댑터**로 붙입니다(브라우저만, Supabase, Google Sheets, Cloudflare/자체 서버 HTTP).
+연수 교재 → **AI가 읽고 사이트(HTML·CSS·JS)와 연수 정보(`lecpage.json`)를 씀** → lecpage가 **쪽 그림·강의 기능 키트·조립·검수·배포**를 맡음 → 어디든 배포(바로 배포, GitHub Pages, Cloudflare, Vercel, Netlify, S3, 개인 서버, USB). 실시간 기능은 **어댑터**로 붙입니다(브라우저만, Supabase, Google Sheets, Cloudflare/자체 서버 HTTP).
+
+예전의 템플릿 흐름(교재 → 코드가 감지한 설계도 `blueprint.json` → 프리셋·섹션 렌더러)은 2026-11-20에 지웠습니다. 예전 방식의 `.lecpage` 파일은 열면 "예전 방식으로 만든 연수예요"라고 알리고 교재·연수 정보·배포 정보만 가져와 AI로 새로 만들게 합니다.
 
 ## 1. 저장소 구조
 
@@ -13,33 +15,32 @@ lecpage/
 ├─ .claude-plugin/            ← Claude Code 플러그인 마켓플레이스. `/plugin install lecpage --marketplace yoorrard/lecpage`가 skills/lecpage를 설치
 ├─ skills/lecpage/            ← Agent Skill 패키지(자체 완결). `npx skills add yoorrard/lecpage`
 │  ├─ SKILL.md
-│  ├─ references/             ← skill이 필요할 때 읽는 문서(인터뷰, 모듈, 디자인, 운영, 배포…)
+│  ├─ references/             ← skill이 필요할 때 읽는 문서(kit.md 키트, cli.md 명령, material-format.md 교재, 배포, 레퍼런스 사이트 designs/<id>/)
 │  ├─ engine/                 ← 단일 소스 엔진. Node와 브라우저(앱) 모두에서 import
-│  │  ├─ package.json         ← 판(version) 하나의 출처 + "type":"module"(위쪽 폴더가 commonjs여도 ESM으로). src/version.js는 시험이 같은 값인지 확인
+│  │  ├─ package.json         ← 판(version) 하나의 출처 + "type":"module". src/version.js는 시험이 같은 값인지 확인
 │  │  ├─ src/                 ← ESM. 의존성 없음(vendor/ 제외)
-│  │  │  ├─ schema/           ← 섹션 정의·상수(sections.js)
-│  │  │  ├─ validate.js       ← 검증·자동 보정(normalize)
-│  │  │  ├─ decide/           ← 유형·운영·디자인·효과 결정 규칙
-│  │  │  ├─ design/           ← 프리셋, 토큰→CSS, 글꼴, fx-catalog.js
-│  │  │  ├─ render/           ← 문자열 템플릿 렌더러(모듈별)
-│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF 해석(브라우저+Node)
-│  │  │  ├─ prompt/           ← AI 프롬프트 팩, JSON 추출, 수정 요청(review). AI 제공자 호출은 앱(app/src/lib/ai.js)
-│  │  │  └─ build.js          ← blueprint → 파일 묶음
-│  │  ├─ runtime/             ← 생성 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
+│  │  │  ├─ kit/              ← 조립(assemble.js)·보조 쪽(aux-build.js)·키트 위젯(widgets.js)·검수(inspect.js, inspect-rendered.js)·.lecpage v2(project-v2.js)
+│  │  │  ├─ render/           ← 보조 쪽(강사·발표·안내문·접속 확인·개인정보) 렌더러(aux-pages.js), 쪽 머리·CSP(shell.js), 이스케이프(html.js), 마크다운(markdown.js)
+│  │  │  ├─ design/           ← 보조 쪽 테마 두 가지(presets.js, tokens.js), 글꼴(fonts.js), 색(color.js)
+│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF·이미지 읽기(브라우저+Node) → 교재 글(material.md)·쪽 그림
+│  │  │  ├─ decide/infra.js   ← 올릴 곳·참여 기능 연결 고르기
+│  │  │  ├─ prompt/copy-rules.js ← 문구 검사 규칙(copy-lint가 씀)
+│  │  │  └─ protect.js · font-bundle.js · font-subset.js · zip-write.js · project-file.js · css-prune.js · util.js
+│  │  ├─ runtime/             ← 만든 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
+│  │  │  ├─ kit.css           ← 키트 위젯 모양(`.lpk` 안에서만)
 │  │  │  ├─ lecpage.css · aux-pages.css · boot.js · lecpage.js · console.js · screen.js · check.js · unlock.js
-│  │  │  ├─ fx/               ← 효과 레지스트리(core.js, fx.css, effects/*.js)
 │  │  │  ├─ live/             ← 실시간 어댑터(core.js, local.js, http.js, supabase.js, sheets.js)
-│  │  │  ├─ review/           ← 수정 요청 도구(앱 미리보기·review 서버에서만, vendor/ modern-screenshot·perfect-freehand)
 │  │  │  └─ vendor/qrcode.js  ← 만든 사이트의 assets/qr.js
 │  │  ├─ vendor/              ← 작은 MIT 라이브러리(fflate) + VENDOR.json(담아 둔 라이브러리·판을 고정한 배포 명령 표, CI가 OSV로 확인)
 │  │  ├─ scripts/site-score.mjs ← 만든 사이트 채점(점검용)
 │  │  └─ test/                ← node:test
-│  ├─ scripts/                ← CLI(lecpage.mjs·publish.mjs·review-server.mjs), 쪽 그림(render-slides.mjs, 셸 없이), 검사기(design-lint·overlap-lint·copy-lint·motion-check·body-gate·body-diversity), 파이썬 보조(ingest.py)
+│  ├─ scripts/                ← CLI(lecpage.mjs·kit-cmds.mjs·publish.mjs·studio.mjs), 쪽 그림(render-slides.mjs, 셸 없이), copy-lint.mjs, 파이썬 보조(ingest.py)
 │  ├─ evals/                  ← skill 평가 문항(evals.json·triggers.json)과 확인 스크립트
 │  ├─ backends/               ← supabase/, apps-script/, cloudflare/, node-server/
-│  ├─ templates/deploy/       ← 호스팅별 설정 파일
-│  └─ examples/               ← 예시 설계도(강의형 sel-story, 실습형 data-lab)
-├─ app/                       ← lecpage 웹앱(Vite, 정적 배포). 엔진을 상대 경로로 import
+│  └─ templates/deploy/       ← 호스팅별 설정 파일
+├─ app/                       ← lecpage 웹앱(Vite, 정적 배포). 엔진을 상대 경로로 import. AI 생성은 app/src/lib/gen/*
+├─ hosting/                   ← 바로 배포 서버(Cloudflare Worker, 선택)
+├─ scripts/check-references.mjs ← 레퍼런스 사이트를 Skill 흐름(check)으로 조립·검수(`npm run examples`)
 ├─ scripts/ai-catalog/        ← AI 모델 값표 매일 갱신(refresh.mjs, 의존성 없음) → app/public/ai-catalog.json
 ├─ scripts/vendor-audit.mjs   ← skill에 담아 둔 라이브러리·고정한 배포 명령의 알려진 취약점(OSV) 확인(CI)
 ├─ docs/                      ← 기획서, 아키텍처, 운영, 조사 자료
@@ -49,116 +50,38 @@ lecpage/
 원칙
 - **엔진은 skill 폴더 안에 하나만** 둡니다. 앱은 `../skills/lecpage/engine/src/...`를 import합니다. 복사본을 만들지 않습니다.
 - `engine/src`는 **순수 ESM, 외부 의존성 없음**. 필요한 작은 라이브러리는 `engine/vendor/`에 MIT 원본을 넣고 출처를 적습니다.
-- `engine/runtime`은 **클래식 스크립트(IIFE)**. `file://`로 열어도 동작해야 하므로 ES 모듈·빌드 도구를 쓰지 않습니다. 전역은 `window.LecPage`, `window.LecFX`, `window.LecLive` 세 개만 씁니다.
-- 생성 사이트가 실행 중에 부르는 외부 주소는 **jsDelivr(cdn.jsdelivr.net)의 버전 고정 URL**과 사용자가 고른 실시간 백엔드뿐입니다. 학교망 대비로 모든 외부 스크립트는 "실패해도 화면이 깨지지 않게" 씁니다.
-- 화면에 들어가는 모든 문자열은 렌더러에서 **이스케이프**합니다. 링크는 `http:`/`https:`/`mailto:`/`#`만 허용합니다. AI가 만든 HTML은 받지 않습니다.
+- `engine/runtime`은 **클래식 스크립트(IIFE)**. `file://`로 열어도 동작해야 하므로 ES 모듈·빌드 도구를 쓰지 않습니다. 전역은 `window.LecPage`, `window.LecLive`를 씁니다.
+- 디자인·글·화면 구성은 **AI가 씁니다**. 코드는 교재를 해석해 사이트 구성을 정하지 않습니다(교재 읽기는 글자·그림·쪽 그림을 AI에게 건네는 데까지).
+- 만든 사이트가 실행 중에 부르는 바깥 주소는 버전을 고정한 허용 목록(jsDelivr의 GSAP·Lenis·OGL, 글꼴 CDN)과 강사가 고른 실시간 백엔드뿐입니다. 학교망 대비로 바깥 스크립트는 "실패해도 화면이 깨지지 않게" 씁니다.
+- 보조 쪽·키트가 화면에 넣는 모든 문자열은 렌더러에서 **이스케이프**합니다. 링크는 `http:`/`https:`/`mailto:`/`#`만 허용합니다(`util.js` `safeUrl`).
 
-## 2. 연수 설계도(blueprint) v1
+## 2. 사이트 형식과 연수 정보 (약속 A)
 
-따로 JSON 스키마 파일은 없습니다. 기준은 `engine/src/validate.js`(검증·자동 보정)와 `engine/src/schema/sections.js`(섹션 정의)이고, 여기에는 요점만 적습니다.
+AI가 만드는 것은 **사이트 폴더**(`site/index.html`, 그 밖의 쪽, `assets/*`)와 **연수 정보**(`lecpage.json`: 제목·날짜·시간·장소·강사·대상 등) 둘입니다. 형식은 `skills/lecpage/references/kit.md`의 `lecpage.json` 절과 [plan-ai-first.md](plan-ai-first.md) §3이 기준입니다.
 
-```jsonc
-{
-  "version": 1,
-  "meta": { "title": "", "subtitle": "", "organizer": "", "date": "2026-11-04", "start": "15:10", "end": "16:40",
-            "venue": "", "mode": "offline|online|hybrid", "joinUrl": "", "shortUrl": "", "contact": "", "lang": "ko",
-            "admin": { "kind": "school|official|conference|student", "completionRate": 90, "hours": 1.5 },
-            "sessions": [ { "no": 1, "date": "", "start": "", "end": "", "title": "" } ] },
-  "audience": { "type": "teachers-elementary", "size": 28, "level": "beginner|intermediate|advanced",
-                "devices": ["laptop","chromebook","tablet","phone"], "network": "good|slow|restricted",
-                "blocked": [], "projector": true, "minor": false },
-  "archetype": { "primary": "story|lab|live|course", "mix": ["story","lab"] },
-  "design": { "preset": "night-story", "mood": ["warm","emotional"], "theme": "auto|light|dark",
-              "motion": 2, "accent": "#ff6a4d", "fonts": { "display": "", "body": "" },
-              "signature": "tone-journey", "graphic": "perspective-grid", "effects": { "<slot>": "<fx-id>" } },
-  "instructors": [ { "name": "", "role": "", "org": "", "photo": "", "bio": "", "email": "", "showEmail": true,
-                     "tags": [], "links": [ { "label": "", "url": "" } ], "timeline": [ { "group": "", "items": [ { "text": "", "year": "" } ] } ] } ],
-  "sections": [ { "id": "hero", "type": "hero", "nav": "처음", "...": "모듈별 필드" } ],
-  "live": { "provider": "none|local|supabase|sheets|http", "url": "", "anonKey": "", "code": "AB12CD",
-            "features": ["qa","help","progress","board","poll","attendance","reactions","signal"], "anonymous": true,
-            "uploads": true },  // uploads(선택): 서버가 보드 파일을 받는지. 없으면 sheets만 false(시트에서 파일 올리기를 켜야 함)
-  "privacy": { "collect": ["nickname"], "retentionDays": 30, "consent": true, "processors": [] },
-  "deploy": { "target": "github-pages|cloudflare|vercel|netlify|firebase|s3|server|zip", "base": "/" },
-  "sources": [ { "id": "deck1", "name": "교재.pptx", "pages": 124 } ]
-}
-```
+- 강사만 정하는 값(참여 기능 연결 `live`의 주소·키·연수 코드, 사이트 주소, 공개 범위)은 AI 결과에서 받지 않습니다. 앱은 프로젝트에, Skill은 `work/lecpage.teacher.json`에 따로 두고 조립 때 `prev`로 넘깁니다.
+- 교재는 원본 그대로 + 쪽 그림(`assets/slides/p-N.webp`) + 보조 글(`material.md`)로 건넵니다(`references/material-format.md`).
 
-### 2.1 섹션(모듈) 타입
-| type | 필드 요약 |
-|---|---|
-| `hero` | eyebrow, title, subtitle, ctas[{label,href}], meta[{label,value}] |
-| `goals` | items[] (연수 목표 2~4개), who (대상). 직무연수면 이수 기준 줄 자동 |
-| `glance` | items[{value,label,note}] (한눈에 보기) |
-| `message` | text, note, style: statement\|formula\|quote, parts[] (formula일 때) |
-| `steps5` | title, items[{word,desc}] (핵심 단계·키워드 나열) |
-| `outline` | title, items[{part,title,desc,tags[],target(섹션id 또는 deck:쪽)}] |
-| `schedule` | items[{start,end,title,desc,part}] |
-| `readiness` | items[{label,detail,url}], checks[{name,url}] (접속 확인) |
-| `deck` | slides[{src,page,title,text,tools[]}], download{href,size,label}, notice |
-| `stations` | layout: sidebar\|tabs, items[{id,name,title,tag,desc,steps[],prompts[{title,text}],images[{src,caption}],links[{label,url}],outcome,note,source{pages[]}}] |
-| `tools` | items[{name,url,desc,pages[],icon}] |
-| `prompts` | items[{title,text,tags[]}] |
-| `qa` | anonymous (live 필요) |
-| `board` | categories[{id,label}], allowFiles, maxFiles, moderation (live 필요, 없으면 외부 링크) |
-| `poll` | items[{id,question,kind: choice\|word\|scale,options[]}] |
-| `quiz` | items[{q,options[],answer,explain}] |
-| `materials` | items[{title,desc,href,kind,size}], notice |
-| `instructor` | (top-level instructors 사용) |
-| `survey` | url, qr, questions[{q,kind,options[]}] |
-| `closing` | lead, text, thanks |
-| `faq` · `glossary` | items[{q,a}] · items[{term,desc}] |
-| `video` · `gallery` | items[{title,url,thumb}] · items[{src,caption}] |
-| `sessions` | items[{no,date,title,desc,status,links[]}] (과정형 차시, status를 비우면 날짜로 마침·오늘·다음 자동) |
-| `followup` | items[{title,desc,url,kind: recording\|community\|next\|read\|link}], completion (연수 후 안내. 끝난 뒤 첫 화면 아래로) |
-| `speakers` | items[{name,role,org,photo,talk,time}] (행사형) |
-| `reflection` | prompts[] (나의 기록·다짐, 내려받기) |
-| `attendance` | (live 필요) 입실·퇴실 |
-| `text` | md (제한된 마크다운: 굵게, 기울임, 링크, 목록, 문단) |
+## 3. 강의 기능 키트 (약속 B)
 
-모든 섹션 공통: `id`, `type`, `title?`, `nav?`(메뉴 이름, 없으면 메뉴에 안 나옴), `tone?`(night\|dawn\|day — 톤 여정용), `source?{file,pages[]}`.
+사이트는 자리 표시(`data-lp="qa|poll|board|attend|survey|deck|materials|join|share"`, `data-lp-step`)만 넣고, 조립이 실제 기능으로 채웁니다. 목록과 속성은 `references/kit.md`가 기준입니다.
 
-## 3. 디자인 토큰(CSS 변수) — 생성 사이트
+- 키트 위젯은 `.lpk` 안에서만 꾸미고 사이트의 `--lp-accent`·`--lp-ink`·`--lp-paper`·`--lp-font`·`--lp-radius`를 따릅니다(`runtime/kit.css`, 조립이 `assets/kit.css`로).
+- 참여 막대(출석·도움 요청·질문·반응)와 '지금' 줄(공지·타이머·투표)은 저절로 붙습니다.
+- 보조 쪽(강사·발표·안내문·접속 확인·개인정보)은 사이트 디자인과 따로, 고정 테마 두 가지(밝은 `corporate-clean`, 어두운 `keynote-dark`)에 사이트의 강조색·글꼴을 덮어 그립니다(`kit/aux-build.js`, `design/presets.js`·`tokens.js`).
 
-프리셋은 아래 변수를 채웁니다. 런타임 CSS와 효과는 **이 변수만** 씁니다(색 하드코딩 금지).
-
-```
---background --foreground --card --card-foreground --muted --muted-foreground
---primary --primary-foreground --secondary --secondary-foreground
---accent --accent-2 --accent-3 --border --ring --surface-2
---success --warning --danger
---radius --radius-sm --radius-lg --border-w --shadow
---font-sans --font-display --font-mono
---ease-out --ease-in-out --dur-1 --dur-2 --dur-3 --dur-4 --dur-5 --motion-scale
---hero-from --hero-to  (히어로 배경 그라데이션 두 끝)
-```
-테마: `<html data-theme="light|dark">`. 프리셋이 두 테마 값을 모두 정의합니다.
-
-## 4. 효과(FX) 레지스트리 계약
-
-- 파일: `engine/runtime/fx/core.js`(레지스트리), `engine/runtime/fx/effects/<id>.js`(효과 1개당 1파일), `engine/runtime/fx/fx.css`.
-- 메타데이터: `engine/src/design/fx-catalog.js`가 `export const FX = [...]`로 모든 효과의 정보를 내보냅니다. 결정 규칙과 앱 갤러리가 이것을 씁니다.
+## 4. 조립·검수 (약속 C)
 
 ```js
-// effects/split-reveal.js
-LecFX.define('split-reveal', {
-  level: 2,                          // 1 차분 · 2 보통 · 3 화려
-  libs: [],                          // 필요 시 jsDelivr 버전 고정 URL. 예: 'https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js'
-  init(el, opts, ctx) {              // 요소 하나에 적용. 정리 함수를 돌려줄 수 있음
-    // ctx.reduced      동작 줄이기(true면 최종 상태만 보여 주고 끝)
-    // ctx.level        사이트 최대 강도(0~3). 효과 level이 더 크면 core가 init을 부르지 않음
-    // ctx.lowPower     저사양(코어·메모리 2 이하·절약 모드, 또는 프레임이 계속 밀림) · ctx.modest 보통 기기(코어·메모리 4 이하)
-    // ctx.fonts(cb)   웹 글꼴이 오면(최대 1초) 부름
-    // ctx.load(url)    스크립트 지연 로드(Promise). 실패해도 reject 대신 false
-    // ctx.visible(el, cb, {once, threshold})  화면에 들어올 때
-    // ctx.token(name)  CSS 변수 값 읽기
-    // ctx.onPause(cb)  사용자가 '움직임 멈춤'을 눌렀을 때
-  }
-});
+E.kit.assemble(site, meta, { runtime, preview, target, prev, today, material, materials })
+  → { files, warnings, errors, meta, collected, blueprint, csp, report, words, teacher }
+E.kit.inspect(files, meta) → issues[]          // 정적 검사
+E.kit.inspectRendered({ doc, file }) → issues[] // 그려서 검사(390·1280)
 ```
-- 적용 방법: 렌더러가 `data-fx="split-reveal"`(옵션은 `data-fx-opts='{"stagger":40}'`)를 붙입니다. `LecFX.start()`가 문서를 훑어 init합니다.
-- **쉬는 상태가 완성 상태**여야 합니다. JS가 실패해도 글은 보이고, `opacity:0`으로 숨긴 채 기다리지 않습니다(진입 애니메이션은 JS가 시작할 때 클래스를 붙여서 처리).
-- 슬롯(slot): 결정 규칙이 슬롯마다 효과를 고릅니다.
-  `hero.title` `hero.graphic` `hero.cta` `section.title` `section.enter` `divider` `cards` `list` `numbers` `message` `schedule` `gallery` `closing.title` `closing.graphic` `cursor` `scroll` `progress` `celebrate`
+- 조립이 하는 일: 인라인 `<script>` → `assets/site.js`, 자리 표시 펼치기, 키트 CSS·런타임·`#lp-data`·`#lp-blueprint`(강사·발표 화면이 읽는 기능 목록), CSP meta·`_headers`, 보조 쪽, 일정 파일(`.ics`), favicon, robots, 쪽 그림 경로 확인, 허용 목록 밖 바깥 스크립트 빼기, 강사 값 지키기.
+- 보조 쪽은 연수 정보와 모은 기능(`collected`)으로 보조 쪽 모양(`blueprint`: 이름만 예전과 같고 사람이 쓰는 파일이 아님)을 만들어 `kit/aux-build.js`의 `normAux`·`buildAux`로 그립니다. `lecpage.css`·`aux-pages.css`는 그 사이트의 보조 쪽이 실제로 쓰는 규칙만 남깁니다(`css-prune.js`).
+- 검수 결과(`{ id, level, where, message_ko, fix_hint_ko }`)는 사람(앱 화면)과 AI(고치기 요청에 그대로 붙임) 둘 다 읽습니다. Skill은 `lecpage.mjs check work`가 조립 + 정적 검수 + (Playwright가 있으면) 화면 검수를 한 번에 합니다.
+- `.lecpage` v2 저장 형식(무압축 ZIP: `project.json { format:'lecpage-project', version:2, kind:'site', … }` + `site/…` + `src/…`)은 `kit/project-v2.js`. 예전(v1) 파일은 `upgradeV1`이 교재·연수 정보만 옮깁니다.
 
 ## 5. 실시간(Live) 어댑터 계약
 
@@ -166,7 +89,7 @@ LecFX.define('split-reveal', {
 
 ```js
 LecLive.register('http', function factory(config) { return adapter; });
-const live = LecLive.create(config);   // config = blueprint.live (+ 실행 중 입력한 adminKey)
+const live = LecLive.create(config);   // config = 강사 값 live (+ 실행 중 입력한 adminKey)
 ```
 어댑터 메서드(모두 Promise, 실패 시 throw 대신 `{error}`도 허용하지 않음 — throw하고 core가 잡음):
 ```
@@ -273,35 +196,34 @@ POST   /api/:code/init                     {adminKeyHash, settings} (최초 1회
 - **Apps Script**: `setup()`이 연수 코드를 고정하고 다른 코드는 거절. 파일은 게시물이 보일 때만 '링크 공유', 지우면 휴지통.
 - **글 거르기·잠그기(2026-11c, 넷 모두)**: 제어·폭 없는 공백·방향 바꿈·한글 채움(U+3164 등)·태그 문자를 빼고 결합 부호는 한 글자에 둘까지. `state.ui.lockQa`·`lockBoard`가 `true`면 참가자의 새 질문·보드 글을 409 `locked`. CSV 수식 막기는 앞 빈칸·전각 기호(＝＋－＠)도. 아직 없는 연수 코드라도 비공개 모음(명단·출석·설문·도움 요청·실습 진행)은 관리자만(틀린 키가 '빈 명단'으로 통과하지 않게).
 
-## 6. 빌드 결과(생성 사이트) 파일
-기준은 `engine/src/build.js`입니다.
+## 6. 조립 결과(만든 사이트) 파일
+기준은 `engine/src/kit/assemble.js`와 `kit/aux-build.js`입니다.
 ```
-index.html        참가자 화면(내용이 JS 없이도 모두 보임)
+index.html · 그 밖의 쪽   AI가 쓴 참가자 화면(키트 자리 표시가 채워짐)
+assets/site.js …         인라인 스크립트를 옮긴 파일(조립이 만든 이름), AI가 쓴 assets/*
 screen.html       발표 화면(큰 QR·질문·투표·타이머·도구)
 check.html        접속 확인
 poster.html       A4 QR 안내문(인쇄용, 참가자 주소·QR만)
-console.html      강사 화면(관리자 키 입력). 참여 기능을 쓸 때만. 강사의 출발점: 발표 화면 띄우기·더보기(참가자 화면·안내문·접속 확인·휴대폰에서 열기·도움말)
+console.html      강사 화면(관리자 키 입력). 참여 기능을 쓸 때만
 privacy.html      개인정보 처리 안내. 참여 기능을 쓸 때만
 _headers          Netlify·Cloudflare용 보안 헤더(강사 화면·발표 화면·안내문 틀 넣기 금지)
 robots.txt        access.mode가 public일 때만 Allow, 그 밖에는 Disallow
-assets/theme.css · lecpage.css · boot.js · lecpage.js · screen.js · qr.js · favicon.svg
-assets/aux-pages.css · check.js 보조 화면(강사·발표·안내문·접속 확인·개인정보)의 배치 · 접속 확인 결과
+assets/kit.css · theme.css · lecpage.css · aux-pages.css · boot.js · lecpage.js · screen.js · check.js · qr.js · favicon.svg · event.ics
 assets/console.js · live.js      참여 기능을 쓸 때만
-assets/fx.js · fx.css            효과를 쓸 때만
 assets/unlock.js                 암호 보호(access.mode password)일 때만
-assets/slides/*.webp · assets/media/*
+assets/slides/*.webp · assets/media/* · assets/files/*
 ```
-- 쪽 머리·CSP는 `render/shell.js`(참가자 화면 `pages.js`와 보조 화면 `aux-pages.js`가 같이 씀). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 배포=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사·발표 화면은 COOP(강사 화면이 연 발표 창을 다시 찾을 수 있게 같은 값).
-- 보조 화면은 같은 프리셋(theme.css·lecpage.css의 `data-*`)을 이어받고 `assets/aux-pages.css`만 더 싣습니다(참가자 화면은 싣지 않음). 안내문은 A4 한 장 + 자리 카드 8장(고를 때), 강사 화면 주소·QR은 싣지 않음(참가자 손에 가는 종이). 쪽(`.lp-pst-page`)을 크기 기준(container)으로 cqw 단위라 미리보기와 인쇄가 같은 비율.
-- 강사용 파일(`DESIGN.md` · `운영안내.md` · `lecpage.blueprint.json`)은 올리는 사이트에 넣지 않습니다. `build()`가 `teacher`로 따로 돌려주고, CLI는 `<out>-강사용/`에, 앱은 따로 내려받기로 줍니다.
+- 쪽 머리·CSP는 `render/shell.js`(보조 쪽 `aux-pages.js`가 씀. 참가자 쪽 CSP는 `kit/assemble.js`가 같은 규칙에 AI 쪽 허용 목록을 더해 만듦). CSP `connect-src`는 쪽마다 연결한 참여 기능 서버만(`liveOrigins`: http·바로 배포=그 서버의 https+wss, Supabase=프로젝트 주소, 시트=Apps Script 두 주소, 교실 LAN이면 http+ws), 접속 확인 쪽만 https 전체. LAN이 아니면 `upgrade-insecure-requests`. `_headers`: nosniff·Referrer-Policy·권한 끔(카메라·마이크·위치·결제·USB)·HSTS 1년·검색 제외(`X-Robots-Tag`, 공개 사이트는 강사용 쪽만), 강사·발표 화면·안내문은 틀 넣기 금지, 강사·발표 화면은 COOP(강사 화면이 연 발표 창을 다시 찾을 수 있게 같은 값).
+- 보조 쪽은 보조 테마(theme.css·lecpage.css의 `data-*`)와 `assets/aux-pages.css`를 싣습니다. 안내문은 A4 한 장 + 자리 카드 8장(고를 때), 강사 화면 주소·QR은 싣지 않음(참가자 손에 가는 종이). 쪽(`.lp-pst-page`)을 크기 기준(container)으로 cqw 단위라 미리보기와 인쇄가 같은 비율.
+- 강사용 파일(`운영안내.md`)은 올리는 사이트에 넣지 않습니다. `assemble()`이 `teacher`로 따로 돌려주고, CLI는 `work/dist-강사용/`에, 앱은 따로 내려받기로 줍니다.
 - `access.mode`: `link`(기본, noindex + robots.txt Disallow) · `public` · `password`. `password`면 `protectSite()`가 index·console·screen(있으면 poster) 페이지와 `assets/slides|media/*`를 AES-GCM(PBKDF2-SHA256 60만 회)으로 잠가 `*.enc`로 바꾸고 `assets/unlock.js`를 넣습니다. `check.html`·`privacy.html`은 잠그지 않습니다. 대신 그 두 쪽의 사이트 정보(`lp-data`)에서는 참여 기능 서버 주소·연수 코드·Supabase 키를 빼고(`publicSiteData`), 접속 확인은 서버가 닿는지(`/api/health`)만 봅니다. 주소 끝 `#k=암호`로 자동으로 열립니다.
 
 ## 7. 작업 규칙
 - 한국어 UI 문구는 짧고 평이하게. 버튼은 동작을 그대로("복사", "완료 체크").
 - 접근성: 키보드 조작, 포커스 표시, 대비 4.5:1, `prefers-reduced-motion`, 5초 넘게 움직이면 멈춤 버튼.
-- 성능: 참가자 첫 화면이 처음 받는 자기 파일(HTML+CSS+JS, gzip) 200KB 안. `qa`가 '첫 화면 nKB'로 알려 줍니다(예시 2종 90KB 안팎). QR 코드(`qr.js`)는 공유 창을 열 때 받습니다.
-- 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`). CI(`.github/workflows/ci.yml`)는 `npm test` → `npm run examples`(예시 빌드) → 앱 빌드 → `npm audit`(앱 배포 묶음)를 돌립니다. 브라우저 테스트(`live-browser.test.mjs`)는 Playwright가 있을 때만, Supabase·Cloudflare 테스트는 PostgreSQL·`LEC_CF_URL`이 있을 때만 돌고 없으면 건너뜁니다. 앱 화면 자동 테스트는 아직 없습니다.
-- 앱 미리보기 기기 크기: 모니터 1920×1080, 노트북 1536×864, 태블릿 820×1180, 휴대폰 360×780, 맞춤. CLI `qa`도 휴대폰 360×780·태블릿 820×1180·PC 1280으로 봅니다.
+- 성능: 참가자 첫 화면이 처음 받는 자기 파일(HTML+CSS+JS, gzip) 200KB 안. `check`의 검수가 크기를 봅니다. QR 코드(`qr.js`)는 공유 창을 열 때 받습니다.
+- 테스트: `npm test`(= `node --test "skills/lecpage/engine/test/*.test.mjs"`). CI(`.github/workflows/ci.yml`)는 `npm test` → `npm run examples`(레퍼런스 사이트 조립·검수) → 앱 빌드 → `npm audit`(앱 배포 묶음)를 돌립니다. 브라우저 테스트(`live-browser.test.mjs`)는 Playwright가 있을 때만, Supabase·Cloudflare 테스트는 PostgreSQL·`LEC_CF_URL`이 있을 때만 돌고 없으면 건너뜁니다. 앱 화면 자동 테스트는 아직 없습니다.
+- 앱 미리보기 기기 크기: 모니터 1920×1080, 노트북 1536×864, 태블릿 820×1180, 휴대폰 360×780, 맞춤. CLI `check`의 화면 검수는 390·1280으로 봅니다.
 - 커밋·푸시는 통합 담당만 합니다. 병렬 작업자는 자기 디렉터리에만 씁니다.
 
 ## 8. v1.1에서 더한 계약 (2026-11-11)
@@ -311,7 +233,7 @@ assets/slides/*.webp · assets/media/*
 - `decideHost(input) → { hosts, pick, reasons, warnings }`. 입력: `skill`(`click` 앱 / `set`·`dev` skill), `commercial`, `network`, `infra[]`, `backend`, `previous`(지난번에 올린 곳), `connected[]`(연결해 둔 곳), `instant`(바로 배포를 쓸 수 있음), `keep`, `customDomain`, `siteMB`, `maxFileMB`, `files`. 규칙 순서: 인터넷 없음 → 자체 서버 → 기본(앱 Vercel, skill Cloudflare) → 강사료(Vercel 제외, Cloudflare 먼저) → 내 도메인 → 크기(25MB 넘는 파일이나 파일 수 초과(끌어 놓기 1,000개·명령 20,000개)면 GitHub Pages 먼저, 100MB 넘는 사이트는 Cloudflare 먼저·Vercel 맨 뒤) → 바로 배포 → 지난번에 올린 곳·연결해 둔 곳 먼저.
 - `checkHost(host, { bytes, files, maxFile, binaries }) → { ok, errors, warnings }`: 올리기 직전에 그곳의 한도를 확인합니다.
 - `TEACHER_STEPS[backend] = { app, skill }`: 참여 기능마다 강사가 직접 할 일 수(어림, 근거는 파일 주석). `decideInfra`는 skill(`set`·`dev`)에서 시트·Supabase가 나오면 이 수로 다시 견줘 가장 적은 곳(보통 Cloudflare 중계, 연결해 둔 곳은 0)을 고르고, 결과에 `teacherSteps`를 담습니다. 앱(`click`)은 같은 함수를 쓰고 순서는 L08·L09 그대로입니다.
-- CLI `publish work [--live]`(`skills/lecpage/scripts/publish.mjs`): Cloudflare에 사이트와 중계를 함께 올림. 중계는 `work/live-relay`(백엔드 복사, `ALLOWED_CODES`=연수 코드), 관리자 키는 `<out>-강사용/관리자-키.txt`만, 사이트는 `info.json` `live`로 다시 빌드, 마지막에 `ALLOWED_ORIGINS`=사이트 주소. `handouts <주소>`는 `poster.html`·`screen.html`을 PDF·PNG로.
+- CLI `publish work [--live]`(`skills/lecpage/scripts/publish.mjs`): Cloudflare에 사이트와 중계를 함께 올림. 중계는 `work/live-relay`(백엔드 복사, `ALLOWED_CODES`=연수 코드), 관리자 키는 `work/dist-강사용/관리자-키.txt`만, 사이트는 강사 값(`work/lecpage.teacher.json`) `live`로 다시 조립, 마지막에 `ALLOWED_ORIGINS`=사이트 주소. `handouts <주소>`는 `poster.html`·`screen.html`을 PDF·PNG로.
 
 ### 8.2 앱의 배포하기 (`app/src/lib/deploy.js`, `app/src/components/Publish.jsx`)
 - 흐름: 사이트 만들기(`buildFiles`) → `checkHost` → 올리기 → 주소 저장 → `probeSite`(사이트의 `assets/favicon.svg`를 그림으로 불러 실제로 열리는지 확인).
@@ -321,21 +243,16 @@ assets/slides/*.webp · assets/media/*
 - 프로젝트에 남는 값: `deploy = { target, lastUrl, at, vercel:{projectId,name,url}, github:{repo,url}, netlify:{siteId,url,name}, lecpage:{id,key,url,expiresAt}, cloudflare|zip:{url} }`. `.lecpage` 파일로 내보낼 때 `deploy`는 넣지 않습니다.
 - `.lecpage` 파일(무압축 ZIP: `project.json` + 자료)의 규칙은 `engine/src/project-file.js` 하나를 앱(`importProjectFile`·`exportProjectFile`)과 skill(`lecpage.mjs app`)이 함께 씁니다. 받는 자료는 `assets/slides|media`(그림·문서)·`assets/files`(자료실, `USER_ASSET`과 같은 규칙)·`src/`(교재 원본)뿐이고, 여는 쪽이 `sanitizeImported`로 실시간 연결·QR 주소를 다시 비웁니다. skill이 만든 파일은 비밀 값(관리자 키·참여 기능 키·사이트 암호)·접속 주소·내 컴퓨터 경로를 담지 않고, `project.origin: 'skill'`로 앱이 첫 안내를 보입니다.
 
-### 8.3 AI로 사이트 만들기 (`app/src/lib/ai-job.js`)
-- `startMakeJob({ getProject, update })`: 기본 초안이 보이는 상태에서 읽기 → 묻기 → 만들기 단계로 돌고, 끝나면 되돌리기 지점("AI로 만들기 전")을 쌓은 뒤 설계도를 바꿉니다. `live.url`·`live.code`·`live.anonKey`·`meta.siteUrl` 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
+### 8.3 AI로 사이트 만들기 (`app/src/lib/gen/*`)
+- 생성 과정과 화면과의 약속은 [plan-ai-first.md](plan-ai-first.md) §6·§15. `live.url`·`live.code`·`live.anonKey`·사이트 주소 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
 - 연결(`AiConnect`): 키 붙여넣기(OpenAI·Claude가 먼저, Gemini 무료 키는 작은 단추로. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) · 쓰던 AI에 복사·붙여넣기. OpenRouter는 고르는 화면에서 뺐고 저장해 둔 연결만 그대로 동작합니다. 설정의 '연결'에서 미리 해 둘 수 있습니다.
 - AI 회사 호출(키 확인·모델 고르기는 `app/src/lib/ai.js`, 생성은 `app/src/lib/gen/providers/*`가 같은 규칙을 씀): 모델은 회사의 목록 API와 OpenRouter 공개 목록의 값·출시일로 고르고 이름을 코드에 박지 않습니다. Gemini 본문(`geminiBody`)은 temperature 없이, `maxOutputTokens` 32,768 이상, `store: false`(유료 프로젝트 기본 기록 끄기). 오류는 상태 코드와 회사별 오류 코드(code·type·details.error_code)·문구로 가립니다(`classify`). 회사별 사실과 출처는 `docs/research/ai-facts-2026-11-14.md`.
 - 모델 값표(`app/src/lib/ai-catalog.js`, 등급·추천 규칙 `rankModels`도 여기): 같은 출처의 `ai-catalog.json`(GitHub Actions가 하루 한 번 `scripts/ai-catalog/refresh.mjs`로 모아 이 파일만 커밋, 검사에 걸리면 그대로) → OpenRouter 실시간 목록이 오면 덮어씀 → 둘 다 없으면 이름 규칙. Gemini 무료 키는 파일의 `geminiFree`로 유료 전용 모델을 처음부터 잠금. 어긋난 사실(문서의 모델 이름·주소·CORS)은 자동으로 고치지 않고 이슈로 알림(`docs/operations.md` §12).
 
-### 8.4 디자인 토큰 내보내기
-- `design/color.js` `ramp12(hex) → { light:[12], dark:[12] }`(OKLCH), `design/dtcg.js` `designTokens(design)` → 강사용 파일 `tokens.json`(DTCG 2025.10). 올리는 사이트에는 넣지 않습니다.
-- 디자인마다 첫 화면 구성이 다릅니다: `preset.variants.hero`(`cinema`·`worksheet`·`bento`·`poster`·`quiet`·`brief`·`masthead`·`sticker`·`board`·`spec`·`zine`·`invite`), 렌더러는 `render/hero.js`. 글꼴은 `preset.fonts`와 `preset.fontAlts`(주제·분위기에 따라 `chooseFonts`가 고름).
-
-### 8.5 요청 사항·자료 올리기 (2026-11-11)
-- 요청 사항: `info.request`(자유 글, 600자). `buildPrompt`가 연수 정보 JSON에서 빼서 "## 강사의 요청 사항" 아래에 따로 적고(규칙 10), `requestHints(text) → { mood[], accent?, theme?, motion?, format? }`가 AI 없는 기본 초안에도 분위기·색·밝기·움직임·형식을 반영합니다. 강사가 따로 고른 값(`info.mood`·`accent`·`motion`·`format`)이 언제나 먼저입니다.
+### 8.5 자료 올리기 (2026-11-11)
 - 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 배포할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 배포 때 빠집니다.
 - 연수 중 자료 링크: 강사 화면에서 `setState({ ui: { m1…m8: '<https 주소> <이름>' } })`. 서버가 원래 받는 `state.ui`(글 200자, 키 20개)에 담아 백엔드를 바꾸지 않고 다섯 가지 연결 방식에서 모두 동작합니다. 읽기·쓰기는 `LecLive.util.ext.materials / materialAdd / materialRemove`, 참가자 화면은 자료실 아래(없으면 마무리 앞)에 보여 줍니다. https 주소만 받습니다.
-- 바로 배포 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 배포할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 설계도의 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.
+- 바로 배포 + 참여 기능: 운영자 서버가 `info.live`를 알리면 앱은 배포할 때 `POST /api/sites/:id/live { code, adminKeyHash, settings }`로 방을 만들고 강사 값 `live`를 `{ provider: 'http', url }`로 맞춥니다. 관리자 키는 앱이 만들어 이 브라우저에만 두고 서버에는 해시만 보냅니다. 개인정보 안내(`privacy.processors`)에 그 서버가 적힙니다.
 
 ### 8.6 바로 배포 서버 (`hosting/`, 선택)
 운영자가 배포했을 때만 쓰이는 Cloudflare Worker입니다(Durable Objects SQLite, R2·KV 없음). 운영 안내와 전체 계약은 `hosting/README.md`.

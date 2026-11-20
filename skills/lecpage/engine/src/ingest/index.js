@@ -2,9 +2,8 @@
 //
 //   const m = await ingestFile('교재.pptx', bytes, { withImages: true });
 //   m.errors   → [{ code, message_ko }]  (예외를 던지지 않음)
-//   m.detected → 일시·프롬프트·단계·도구·부(Part)…  (detect.js)
-//   materialToDraft(m, info)        → 설계도(blueprint) 초안 (draft.js, AI 없이)
-//   materialToAIContext(m, {maxChars}) → AI 프롬프트용 요약 글 (outline.js)
+//   materialToAIContext(m, {maxChars}) → AI에게 건넬 보조 글자(쪽마다 제목·글·표·링크·노트, outline.js)
+//   교재의 뜻(일시·실습·흐름)은 AI가 원본·쪽 그림을 직접 읽고 정합니다(코드가 해석하지 않음).
 //
 // Material 모양은 skills/lecpage/references/material-format.md 에 적어 두었습니다.
 import {
@@ -19,8 +18,6 @@ import { parseHwp, isHwp } from './hwp.js';
 import { Cfb } from './cfb.js';
 import { parsePdf, loadPdfjs } from './pdf.js';
 import { parseText, parseTextFile } from './text.js';
-import { detect } from './detect.js';
-import { toolForUrl } from './tools-db.js';
 
 export const MATERIAL_VERSION = 1;
 export const ACCEPT = '.pptx,.ppsx,.potx,.pptm,.pdf,.hwpx,.docx,.dotx,.docm,.txt,.md,.markdown,.hwp,.ppt,.doc';
@@ -28,7 +25,7 @@ export const ACCEPT = '.pptx,.ppsx,.potx,.pptm,.pdf,.hwpx,.docx,.dotx,.docm,.txt
 export function emptyMaterial() {
   return {
     version: MATERIAL_VERSION, kind: 'lecpage-material', generator: 'lecpage-ingest-js/1',
-    files: [], pages: [], design: {}, meta: {}, boilerplate: [], detected: null, errors: [], warnings: [],
+    files: [], pages: [], design: {}, meta: {}, boilerplate: [], errors: [], warnings: [],
   };
 }
 
@@ -56,10 +53,8 @@ function zipType(zip, ext) {
  * @param {object} [opts]
  *   id            파일 id(기본: deck1·doc1)
  *   withImages    그림 바이트를 image.bytes(Uint8Array)로 담기
- *   detect        false면 감지 생략(여러 파일을 합칠 때)
  *   maxBytes, limits{maxUncompressed,maxEntryBytes,maxEntries,maxXmlBytes,maxPages}
  *   pdfjsLib, cMapUrl, standardFontDataUrl, password   PDF 옵션
- *   today         날짜 감지 기준일(연도 없는 날짜)
  */
 export async function ingestFile(name, bytes, opts = {}) {
   const limits = { ...DEFAULT_LIMITS, ...(opts.limits || {}) };
@@ -131,9 +126,6 @@ export async function ingestFile(name, bytes, opts = {}) {
     mat.errors.push(err);
     mat.pages = [];
   }
-  if (opts.detect !== false && mat.pages.length) {
-    try { mat.detected = detect(mat, opts); } catch (e) { mat.warnings.push(makeError('parse-failed', { detail: 'detect: ' + (e && e.message) }, fname)); }
-  }
   return mat;
 }
 
@@ -175,7 +167,7 @@ function postProcess(mat, file) {
       for (const f of findUrls(line)) {
         if (p.links.some((l) => l.url === f.url || urlKey(l.url) === urlKey(f.url))) continue;
         let label = labelBeforeUrl(line, f.raw, /^[-•·▪◦●○■□▶▷►➢➤→\d.)\s]+/);
-        if (!label || /^(step\s*\d+|\d+\s*단계|[①-⑳]|\d+[.)]?)$/i.test(label)) label = toolForUrl(f.url)?.name || '';
+        if (/^(step\s*\d+|\d+\s*단계|[①-⑳]|\d+[.)]?)$/i.test(label)) label = '';
         p.links.push({ url: f.url, label, from: 'text' });
       }
     }
@@ -224,9 +216,6 @@ export function mergeMaterials(list, opts = {}) {
   const fileOrder = new Map([...out.files].sort((a, b) => order(a) - order(b)).map((f, i) => [f.id, i]));
   out.files.sort((a, b) => fileOrder.get(a.id) - fileOrder.get(b.id));
   out.pages.sort((a, b) => (fileOrder.get(a.file) ?? 9) - (fileOrder.get(b.file) ?? 9) || a.page - b.page);
-  if (opts.detect !== false && out.pages.length) {
-    try { out.detected = detect(out, opts); } catch (e) { out.warnings.push(makeError('parse-failed', { detail: 'detect: ' + (e && e.message) })); }
-  }
   return out;
 }
 
@@ -273,7 +262,6 @@ export function ingestText(text, opts = {}) {
     postProcess(mat, mat.files[0]);
     if (!mat.pages.length) mat.errors.push(makeError('empty', {}, name));
   } catch (e) { mat.errors.push(toUserError(e, name)); }
-  if (opts.detect !== false && mat.pages.length) mat.detected = detect(mat, opts);
   return mat;
 }
 
@@ -320,13 +308,11 @@ export async function ingestUrl(url, opts = {}) {
     } catch { fetchFailed = true; }
   }
   const mat = emptyMaterial();
-  const tool = toolForUrl(u);
   const id = opts.id || 'link1';
-  const label = tool ? tool.name : hostOf(u);
+  const label = hostOf(u);
   mat.files.push({ id, name: label, type: 'link', url: u, size: 0, pages: 1, unit: 'link' });
   mat.pages.push({ file: id, page: 1, kind: 'link', title: label, paragraphs: [], notes: '', links: [{ url: u, label }], images: [], tables: [] });
   mat.warnings.push(makeError(fetchFailed ? 'link-fetch-failed' : 'link-only', {}, u));
-  if (opts.detect !== false) mat.detected = detect(mat, opts);
   return mat;
 }
 
@@ -348,25 +334,11 @@ export function materialToJSON(material, { imageSrc } = {}) {
   return copy;
 }
 
-/** 사람이 읽는 한 줄 요약 */
+/** 사람이 읽는 한 줄 요약(파일 이름과 쪽 수) */
 export function summarizeMaterial(m) {
-  const d = m.detected || {};
-  const parts = (m.files || []).map((f) => `${f.name}(${f.pages}${UNIT_KO[f.unit] || '쪽'})`);
-  const bits = [];
-  if (d.event?.date) bits.push(`일시 ${d.event.date}${d.event.start ? ' ' + d.event.start + (d.event.end ? '~' + d.event.end : '') : ''}`);
-  if (d.prompts?.length) bits.push(`프롬프트 ${d.prompts.length}개`);
-  if (d.steps?.length) bits.push(`실습 단계 ${d.steps.length}묶음`);
-  if (d.tools?.length) bits.push(`도구 ${d.tools.slice(0, 5).map((t) => t.name).join('·')}${d.tools.length > 5 ? ` 외 ${d.tools.length - 5}` : ''}`);
-  if (d.practice) bits.push(`실습 비율 ${Math.round(d.practice.ratio * 100)}%`);
-  if (d.fonts) bits.push(`글꼴 ${d.fonts.display.name}${d.fonts.body.name !== d.fonts.display.name ? '·' + d.fonts.body.name : ''}`);
-  return `${parts.join(', ')}${bits.length ? ' — ' + bits.join(', ') : ''}`;
+  return (m.files || []).map((f) => `${f.name}(${f.pages}${UNIT_KO[f.unit] || '쪽'})`).join(', ');
 }
 
-export { detect } from './detect.js';
-export { detectFonts } from './fonts.js';
-export { materialToDraft, detectedInfo, infoDays } from './draft.js';
 export { materialToAIContext } from './outline.js';
-export { TOOLS, CATEGORIES, matchToolsInText, toolForUrl, getTool, findTool } from './tools-db.js';
-export { parseKoreanDates, parseTimeRange } from './detect.js';
 export { normText, normLine, makeError, sizeLabel, DEFAULT_LIMITS, loadPdfjs };
 export { ingestPaths, runIngestCli, writeMaterial } from './cli.js';

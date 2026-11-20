@@ -33,9 +33,9 @@ test('검사가 겹친 이름을 찾음: 같은 범위의 함수 둘, var와 함
   assert.equal(nameClash('(function(){ var x = function sec(){}; function sec2(){} })();'), '');
 });
 
-test('런타임 파일(강사·발표·참가자 화면, 참여 기능, 효과)에 한 범위 안 겹친 이름이 없음', () => {
+test('런타임 파일(강사·발표·참가자 화면, 참여 기능)에 한 범위 안 겹친 이름이 없음', () => {
   const files = runtimeFiles();
-  assert.ok(files.length > 20 && files.some((f) => f.endsWith('console.js')));
+  assert.ok(files.length >= 10 && files.some((f) => f.endsWith('console.js')));
   const bad = files.map((f) => [path.relative(RUNTIME, f), nameClash(fs.readFileSync(f, 'utf8'), f)]).filter(([, e]) => e);
   assert.deepEqual(bad, []);
 });

@@ -1,6 +1,5 @@
-// 연수 날짜·장소·강사 글자를 한곳에서 계산합니다. 첫 화면(render/hero.js)·QR 안내문·바닥글·달력 파일(build.js icsFile)·
-// 연수 기간(shell.js phaseWindow)이 모두 이 함수를 써서 한 사이트에서 날짜가 둘로 갈리지 않게 합니다.
-// 초안(ingest/draft.js)과 연수 정보가 바뀌었을 때 옛 설계도의 첫 화면 줄을 다시 맞추는 일(syncHeroMeta)도 같은 모양을 씁니다.
+// 연수 날짜 글자를 한곳에서 계산합니다. QR 안내문·발표 화면·달력 파일(kit/aux-build.js icsFile)·연수 기간(shell.js phaseWindow)·
+// 앱 배포 화면이 모두 이 함수를 써서 한 사이트에서 날짜가 둘로 갈리지 않게 합니다.
 const WD = '일월화수목금토';
 const ymd = (d) => /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || '');
 const wd = (m) => WD[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
@@ -38,49 +37,4 @@ export function whenText(meta = {}, { time = true } = {}) {
   if (days.length > 1 && !sameTime && time && days.length <= 3) return days.map((d, i) => [i ? laterDay(d.date, y) : koDay(d.date), timeOf(d.start, d.end)].filter(Boolean).join(' ')).join(' · ');
   const range = days.length > 1 ? `${koDay(first.date)}~${laterDay(last.date, y)}` : koDay(first.date);
   return [range, time && sameTime ? timeOf(first.start, first.end) : ''].filter(Boolean).join(' ');
-}
-const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const HM = /^\d{1,2}:\d{2}$/;
-/**
- * 강사가 준 연수 날들 → [{date,start,end}] (날짜 순, 같은 날 한 번) 또는 null.
- * info.sessions: [{ date:'YYYY-MM-DD', start:'HH:MM', end:'HH:MM' }] (날마다 시각이 다를 때) · info.dates: ['YYYY-MM-DD', …]
- */
-export function infoDays(info = {}) {
-  const raw = Array.isArray(info.sessions) && info.sessions.length ? info.sessions : Array.isArray(info.dates) && info.dates.length ? info.dates.map((date) => ({ date })) : null;
-  if (!raw) return null;
-  const seen = new Set();
-  const out = raw.map((x) => (typeof x === 'string' ? { date: x } : x || {})).filter((x) => YMD.test(x.date || '') && !seen.has(x.date) && seen.add(x.date))
-    .map((x) => ({ date: x.date, start: HM.test(x.start || '') ? x.start : '', end: HM.test(x.end || '') ? x.end : '' })).sort((a, b) => a.date.localeCompare(b.date));
-  return out.length ? out : null;
-}
-
-/**
- * 첫날(meta.date)만 바꿨는데 그 날이 지금 차시 날짜(meta.sessions)에 없으면 예전 차시 날짜를 비움(2기로 날짜를 옮긴 경우 등):
- * 첫 화면·QR 안내문·달력이 새 날짜 하나를 따름. 날짜를 지어 옮기지는 않음. 강사가 여러 날을 다시 주면(info.dates·sessions) 그것으로
- * @param meta 바꾼 뒤 meta(이 객체를 고침)  @param prevDate 바꾸기 전 meta.date
- */
-export function alignSessions(meta, prevDate) {
-  const ses = Array.isArray(meta?.sessions) ? meta.sessions : [];
-  if (meta?.date && meta.date !== prevDate && ses.length && !ses.some((x) => x?.date === meta.date)) meta.sessions = [];
-  return meta;
-}
-export function placeText(meta = {}) { return [meta.venue, meta.mode === 'online' || meta.mode === 'hybrid' ? '온라인' : ''].filter(Boolean).join(' · '); }
-export function whoText(p) { return p?.name ? [p.name, [p.org, p.role].filter(Boolean).join(' ')].filter(Boolean).join(' · ') : ''; }
-/** 첫 화면 기본 줄의 이름표(일시·장소·강사). 설계도의 hero.meta에 이 이름표가 있으면 강사가 쓴 줄로 보고 그대로 둠 */
-export const BASE_LABELS = ['일시', '장소', '강사'];
-
-/**
- * 연수 정보가 바뀌면 hero.meta의 일시·장소·강사 줄도 따라 바꿈(초안이 만든 글자 그대로일 때만. 강사가 손으로 고친 줄은 그대로).
- * 요즘 초안은 이 줄들을 적지 않고 화면이 연수 정보에서 그리지만, 예전 설계도·AI 답에 적힌 줄을 맞추려고 둠.
- * @param before 바꾸기 전 설계도  @param after 바꾼 뒤 설계도(이 객체의 hero.meta를 고침)
- */
-export function syncHeroMeta(before, after) {
-  const hero = (after?.sections || []).find((s) => s?.type === 'hero');
-  if (!hero || !Array.isArray(hero.meta) || !hero.meta.length || !before) return after;
-  const pairs = [['일시', whenText(before.meta), whenText(after.meta)], ['장소', placeText(before.meta), placeText(after.meta)], ['강사', whoText(before.instructors?.[0]), whoText(after.instructors?.[0])]];
-  hero.meta = hero.meta.map((row) => {
-    const p = pairs.find(([label, was, now]) => row?.label === label && was !== now && row.value === was);
-    return p ? { ...row, value: p[2] } : row;
-  }).filter((row) => row && row.value);
-  return after;
 }

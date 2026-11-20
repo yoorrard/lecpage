@@ -7,7 +7,7 @@ AI가 연수 사이트 문구를 쓸 때 보는 짧은 판은 [`skills/lecpage/r
 node app/scripts/copy-lint.mjs            # 앱 화면 글 + 엔진 고정 문구(고침·살핌 목록)
 node app/scripts/copy-lint.mjs --report   # 규칙별 건수·심한 것·용어 불일치·화면별 글 양(표)
 node app/scripts/copy-lint.mjs --json     # [{ file, line, kind, text, rule, level, hit, fix, fixed }]
-node skills/lecpage/scripts/copy-lint.mjs work/blueprint.json   # AI·초안이 쓴 설계도
+node skills/lecpage/scripts/copy-lint.mjs work                  # AI 에이전트가 쓴 사이트(work/site, 교재 원문은 빼고)
 ```
 **고침**은 고칩니다. **살핌**은 아래 예외에 들면 그대로 둡니다. 그대로 둘 줄은 그 줄이나 윗줄에 `// copy-ok: 까닭`을 적습니다.
 

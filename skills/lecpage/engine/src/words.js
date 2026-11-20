@@ -1,6 +1,5 @@
 // 사이트 낱말을 대상·성격에 맞게: 교사 연수는 '연수', 학생 수업은 '수업', 설명회·컨퍼런스는 '설명회'·'행사'.
-// 연수 성격(meta.admin.kind)은 강사가 고르거나 교재에서 찾음(ingest/detect.js kindOf). 참가자가 보는 화면(참가자 화면·발표 화면·
-// QR 안내문·개인정보 안내)이 이 낱말을 씁니다. 교재·강사가 적은 칸 제목은 그대로 둡니다.
+// 연수 성격은 연수 정보(lecpage.json audience·admin.kind)에서. 키트 부품·발표 화면·QR 안내문·개인정보 안내가 이 낱말을 씁니다.
 
 /** 받침이 있는지(조사 고르기): 마지막 글자가 한글이 아니면 받침 없음으로 봄 */
 export function batchim(word) {
@@ -15,11 +14,8 @@ const T = {
   student: { goals: '수업 목표', deck: '수업 자료', materials: '수업 자료', followup: '수업 후 안내', instructor: '선생님 소개', who: '선생님', host: '선생님', code: '수업 코드' },
   event: { goals: '오늘 다룰 내용', deck: '발표 자료', materials: '자료', followup: '', instructor: '발표자 소개', who: '발표', host: '발표자', code: '' },
 };
-/** 엔진이 예전부터 칸 제목 기본값으로 적던 말(설계도에 이 말이 그대로 있으면 대상에 맞는 말로 바꿔 그림) */
-export const TEACHER_DEFAULTS = { goals: '연수 목표', deck: '연수 교재', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개' };
-
 /**
- * @param bp 설계도(검증 전이어도 됨)
+ * @param bp { meta:{ title, subtitle, admin:{kind} } }
  * @returns { kind, ev(연수·수업·설명회·행사), goals, deck, materials, followup, instructor, who, host(참가자 화면이 부르는 진행자: 강사·선생님·발표자), code, site, ended, endedOn(날짜), attendLead, attendAfter, pollWord, survey(만족도 첫 문항) }
  */
 export function wordsFor(bp) {
@@ -43,17 +39,15 @@ export function wordsFor(bp) {
   };
 }
 
-/**
- * 그리기 전에 칸 제목·메뉴 이름을 대상에 맞게(설계도는 그대로 두고 화면만): 엔진 기본값 그대로인 제목('연수 목표'·'강사 소개'…)과
- * 메뉴('연수 후'·'강사')만 바꿈. 교사 연수(school·official)는 그대로
- */
-export function localizeSections(bp, w = wordsFor(bp)) {
-  if (w.kind === 'school' || w.kind === 'official') return bp;
-  const nav = { '연수 후': `${w.ev} 후`, 강사: w.kind === 'student' ? '선생님' : '발표자' };
-  return { ...bp, sections: (bp.sections || []).map((s) => {
-    const key = Object.keys(TEACHER_DEFAULTS).find((k) => k === s.type);
-    const title = key && s.title === TEACHER_DEFAULTS[key] ? w[key] : s.title;
-    const n = nav[s.nav] || s.nav;
-    return title === s.title && n === s.nav ? s : { ...s, title, nav: n };
-  }) };
+/** 사이트 안 만족도 설문 기본 문항(교원 연수 만족도에서 흔히 묻는 다섯 문항). 첫 두 문항은 대상에 맞는 말로 */
+export const DEFAULT_SURVEY = [
+  { q: '연수에 전반적으로 만족하시나요?', kind: 'scale' },
+  { q: '배운 내용을 수업이나 업무에 쓸 수 있을 것 같나요?', kind: 'scale' },
+  { q: '진행 속도는 어땠나요?', kind: 'choice', options: ['빨랐어요', '알맞았어요', '느렸어요'] },
+  { q: '가장 도움이 된 내용은 무엇인가요?', kind: 'text' },
+  { q: '아쉬운 점이나 바라는 점을 적어 주세요.', kind: 'text' },
+];
+/** 설문 자리 표시에 문항이 없을 때 넣는 기본 문항(w = wordsFor 결과: 연수·수업·설명회) */
+export function surveyFor(w) {
+  return DEFAULT_SURVEY.map((q, i) => (i === 0 ? { ...q, q: w.survey } : i === 1 ? { ...q, q: w.apply } : { ...q }));
 }
