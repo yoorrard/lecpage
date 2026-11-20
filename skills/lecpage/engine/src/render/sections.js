@@ -9,6 +9,7 @@ import { bodyVariants, firstGlyph } from './body-variants.js';
 import { motifSvg, motifRule } from './body-graphic.js';
 import { inlineMd } from './markdown.js';
 import { wordsFor } from '../words.js';
+import { qaBox, boardBox, pollBox, attendBox, surveyForm, surveyKey } from '../kit/widgets.js'; // 참여 위젯(키트와 같은 마크업)
 
 /** 실습·질문·교재처럼 따라 하며 쓰는 칸: 움직임은 차분 단계(1)까지만 */
 export const CALM_TYPES = ['stations', 'qa', 'deck', 'board', 'poll', 'prompts'];
@@ -457,12 +458,7 @@ function prompts(s, ctx) {
 
 // ── 실시간 참여 ───────────────────────────────────────────
 function qa(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '질문') + `<div class="lp-qa" data-qa>
-<form class="lp-compose" data-qa-form><label class="lp-sr" for="${esc(s.id)}-q">질문</label><textarea id="${esc(s.id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 적어 주세요.${s.anonymous ? ' 이름은 보이지 않아요.' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
-<div class="lp-tabs" role="group" aria-label="정렬"><button type="button" aria-pressed="true" data-sort="votes">공감순</button><button type="button" aria-pressed="false" data-sort="new">최신순</button></div>
-<p class="lp-sr" role="status" data-list-news></p>
-<ul class="lp-qa-list" data-qa-list><li class="lp-empty">아직 질문이 없어요. 첫 질문을 올려 주세요.</li></ul>
-${liveOff(ctx)}</div>`);
+  return wrap(s, ctx, head(s, ctx, '질문') + qaBox({ id: s.id, anonymous: s.anonymous, live: ctx.live }));
 }
 
 /**
@@ -480,24 +476,11 @@ function board(s, ctx) {
   const cats = s.categories.length ? s.categories : [{ id: 'work', label: '결과물' }, { id: 'reflection', label: '소감' }];
   if (!ctx.live && s.externalUrl) return wrap(s, ctx, head(s, ctx, '나눔 보드') + `<p><a class="lp-btn lp-btn-primary" ${href(s.externalUrl)}>보드 열기${icon('external')}</a></p>`);
   const files = boardFiles(s, ctx.bp);
-  return wrap(s, ctx, head(s, ctx, '나눔 보드') + `<div class="lp-board" data-board data-max-files="${files ? s.maxFiles : 0}" data-moderation="${s.moderation ? 1 : 0}">
-<div class="lp-board-bar"><div class="lp-tabs" role="group" aria-label="보드 분류"><button type="button" aria-pressed="true" data-cat="">전체</button>${cats.map((c) => `<button type="button" aria-pressed="false" data-cat="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div><button class="lp-btn lp-btn-primary" type="button" data-board-write>${icon('sparkle')}<span>글 올리기</span></button></div>
-<form class="lp-compose lp-board-form" data-board-form hidden>
-  <fieldset class="lp-seg"><legend class="lp-sr">분류</legend>${cats.map((c, i) => `<label><input type="radio" name="kind" value="${esc(c.id)}"${i ? '' : ' checked'}><span>${esc(c.label)}</span></label>`).join('')}</fieldset>
-  <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
-  ${files ? `<label class="lp-file"><span>사진·PDF·음악·영상 (${s.maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
-  <label class="lp-inline"><span>이용 조건</span><select name="license"><option value="own">내가 만든 자료</option><option value="cc">CC 라이선스</option><option value="kogl">공공누리</option><option value="permitted">이용 허락 받음</option></select></label>
-  <p class="lp-small">학생 얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
-  <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>닫기</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
-</form>
-<p class="lp-sr" role="status" data-list-news></p>
-<ul class="lp-board-grid" data-board-list><li class="lp-empty">아직 올라온 글이 없어요. 첫 글을 올려 주세요.</li></ul>
-${liveOff(ctx)}${s.notice ? `<p class="lp-note">${br(s.notice)}</p>` : ''}</div>`);
+  return wrap(s, ctx, head(s, ctx, '나눔 보드') + boardBox({ cats, files, maxFiles: s.maxFiles, moderation: s.moderation, notice: s.notice, live: ctx.live }));
 }
 
 function poll(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '투표') + `<div class="lp-poll" data-poll='${esc(JSON.stringify(s.items))}'><div class="lp-poll-live" data-poll-live><p class="lp-empty">강사가 투표를 열면 여기에 나타나요.</p></div>
-<details class="lp-poll-list"><summary>준비된 질문 ${s.items.length}개 보기</summary><ol>${s.items.map((p) => `<li>${esc(p.question)}${p.options.length ? ` <small>(${p.options.map(esc).join(' / ')})</small>` : ''}</li>`).join('')}</ol></details>${liveOff(ctx)}</div>`);
+  return wrap(s, ctx, head(s, ctx, '투표') + pollBox(s.items, { live: ctx.live }));
 }
 
 function quiz(s, ctx) {
@@ -505,7 +488,7 @@ function quiz(s, ctx) {
 }
 
 function attendance(s, ctx) {
-  return wrap(s, ctx, head(s, ctx, '출석 확인') + `<div class="lp-attend" data-attend><p data-phase-hide="after">${W(ctx).attendLead}${completionLine(ctx) ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><p data-phase-show="after" hidden>${W(ctx).attendAfter}</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(ctx)}</div>`);
+  return wrap(s, ctx, head(s, ctx, '출석 확인') + attendBox({ lead: W(ctx).attendLead, after: W(ctx).attendAfter, done: !!completionLine(ctx), live: ctx.live }));
 }
 
 // ── 자료·사람 ─────────────────────────────────────────────
@@ -535,21 +518,8 @@ function sessions(s, ctx) {
   return wrap(s, ctx, head(s, ctx, '차시') + `<ol class="lp-sessions"${auto ? ' data-sessions-auto' : ''}>${s.items.map((x) => `<li id="${esc(s.id)}-${x.no}" data-status="${esc(x.status)}"${x.date ? ` data-date="${esc(x.date)}"` : ''}><span class="lp-idx">${x.no}차시</span><div><h3>${esc(x.title)}</h3>${x.date ? `<small>${esc(koDate(x.date))}</small>` : ''}${x.desc ? `<p>${esc(x.desc)}</p>` : ''}${x.links.length ? `<div class="lp-st-links">${x.links.map((l) => `<a class="lp-link" ${href(l.url)}>${esc(l.label || '열기')}${icon('arrow')}</a>`).join('')}</div>` : ''}</div><span class="lp-chip" data-session-chip${x.status ? '' : ' hidden'}>${x.status ? label[x.status] : ''}</span></li>`).join('')}</ol>`);
 }
 
-// 설문 항목 열쇠(결과 CSV의 열 이름): "1. 질문 앞부분"
-export function surveyKey(q, n) { return `${n + 1}. ${[...String(q.q || '')].slice(0, 30).join('')}`.trim(); }
-const SCALE_KO = ['전혀 아니에요', '아니에요', '보통이에요', '그래요', '매우 그래요'];
-
-function surveyForm(s) {
-  const qs = s.questions.map((q, n) => {
-    const key = esc(surveyKey(q, n)); const name = `sv-${esc(s.id)}-${n}`;
-    const qText = `<span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}`;
-    const legend = `<legend>${qText}</legend>`;
-    if (q.kind === 'text') return `<li><label class="lp-sv-text"><span class="lp-sv-q">${qText}</span><textarea name="${name}" rows="3" maxlength="1000" data-sv-key="${key}"></textarea></label></li>`;
-    const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
-    return `<li><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b><i>${esc(o)}</i>` : esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
-  }).join('');
-  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
-}
+// 설문 항목 열쇠(결과 CSV의 열 이름)·사이트 안 설문 양식은 키트와 함께 씀(kit/widgets.js)
+export { surveyKey };
 
 function survey(s, ctx) {
   const url = s.url;

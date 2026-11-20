@@ -26,6 +26,9 @@
 //        강사 Cloudflare 계정에 올리기. 글꼴은 사이트 안에 담아 올림(앱과 같게, 끄기: --no-bundle-fonts). --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 사이트를 이어 다시 빌드 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로
 //   handouts <올린 주소|dist> [-o 폴더] [--password 암호]   QR-안내문.pdf·발표화면.png(Playwright 필요)
+//   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 할 일 work/README.md
+//   check [work] [--port 0] [--no-shots]           work/site + lecpage.json 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
+//   preview [work] [--port 4173] [--host 0.0.0.0]  조립 결과를 로컬로 띄움(강사 화면·발표 화면 포함)
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
 //   종료 코드: 0 성공 · 1 실패(make·qa·patch --qa는 사이트를 만들었어도 점검에 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -57,6 +60,7 @@ const OPTS = {
   app: 'i o force password',
   publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
   handouts: 'o password',
+  prepare: 'o today no-slides no-python', check: 'port today no-shots', preview: 'port host today',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
@@ -1133,6 +1137,11 @@ const commands = {
   async publish() { const { publishCmd } = await import('./publish.mjs'); await publishCmd(helpers()); },
   /** 올린 주소 → 강사용 폴더에 QR-안내문.pdf·발표화면.png */
   async handouts() { const { handoutsCmd } = await import('./publish.mjs'); await handoutsCmd(helpers()); },
+
+  /** AI 에이전트 흐름: 준비·조립 검수·미리보기(scripts/kit-cmds.mjs) */
+  async prepare() { const { prepareCmd } = await import('./kit-cmds.mjs'); await prepareCmd(helpers()); },
+  async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
+  async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
 
   pack() {
     const dir = resolve(args._[0] || 'dist');

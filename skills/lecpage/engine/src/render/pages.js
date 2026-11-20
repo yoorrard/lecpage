@@ -14,6 +14,7 @@ import { FONTS } from '../design/fonts.js';
 import { SECTION_DEFS } from '../schema/sections.js';
 import { fxInfo } from '../decide/design.js';
 import { md } from './markdown.js';
+import { REACTIONS, nowInner, helpSheet as helpSheetHtml, shareDialog, joinDialog, dockInner, TOAST } from '../kit/widgets.js'; // 참여 위젯(키트와 같은 마크업)
 import { whenText } from '../hero-meta.js';
 
 /** 구분 띠: 첫 화면 아래에 흐르는 띠(marquee)나 선·물결 장식 */
@@ -62,28 +63,14 @@ const navLink = (s) => `<a href="#${esc(s.id)}" data-nav-link="${esc(s.id)}">${e
 /** '지금' 줄: 실시간 상태(열린 투표·공지·타이머·강사가 보는 실습/쪽)를 한 줄로. 보여 줄 게 없으면 숨김 */
 function nowBar(ctx) {
   if (!ctx.live) return '';
-  return `<div class="lp-now" data-now hidden><div class="lp-now-in" role="region" aria-label="지금 진행">
-<span class="lp-now-tag" aria-hidden="true">지금</span>
-<p class="lp-now-text" role="status"><b data-now-main></b><span data-now-sub></span></p>
-<button class="lp-now-more" type="button" data-now-more aria-expanded="false" hidden>더 보기</button>
-<span class="lp-now-timer" data-timer role="timer" hidden></span>
-<a class="lp-btn lp-btn-primary lp-btn-sm lp-now-cta" data-now-cta href="#main" hidden></a>
-</div></div>`;
+  return `<div class="lp-now" data-now hidden>${nowInner()}</div>`;
 }
 
 /** 가벼운 모드 아이콘(깃털): 움직임을 차분 단계로 낮추고 무거운 효과(WebGL·외부 라이브러리)를 끕니다 */
 const LITE_ICON = '<svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4c-7 0-12 4-12 10v2l-3 4M8 16h4c4 0 8-4 8-12M8 16l6-6"/></svg>';
 
-/** 반응 아이콘(선 그림). 실시간으로 주고받는 값은 그대로 이모지(프로토콜), 화면에는 사이트의 선 아이콘으로 보여 줌 */
-const svgIc = (p) => `<svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
-export const REACTIONS = [
-  { v: '👏', label: '박수', ic: svgIc('<path d="M8.2 12.6 5.4 9.8a1.4 1.4 0 0 1 2-2l3.4 3.4M9 9 7.2 7.2a1.4 1.4 0 0 1 2-2L13.6 9.6M11.4 7.4l-.9-.9a1.4 1.4 0 0 1 2-2l4.9 4.9a6.2 6.2 0 0 1 0 8.8l-.2.2a6.2 6.2 0 0 1-8.8 0l-3.2-3.2a1.4 1.4 0 0 1 2-2l1.7 1.7"/><path d="M17.2 2.8v2.1M20.6 4.2l-1.4 1.4M21.4 7.6h-2.1"/>') },
-  { v: '💡', label: '좋은 생각', ic: svgIc('<path d="M9.2 18h5.6M10.2 21h3.6M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>') },
-  { v: '❤️', label: '좋아요', ic: icon('heart') },
-];
-
-/** 이해 정도 신호: 도크에는 단추 하나(지금 보낸 신호), 누르면 글이 붙은 세 가지가 펼쳐짐 */
-const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
+/** 반응·이해 정도 신호(도크): 키트와 함께 씀(kit/widgets.js) */
+export { REACTIONS };
 
 function nav(ctx) {
   const links = navSections(ctx);
@@ -127,45 +114,17 @@ function tocSheet(ctx) {
 
 function helpSheet(ctx) {
   if (!ctx.live || !ctx.bp.live.features.includes('help')) return '';
-  return `<dialog class="lp-dialog lp-sheet" data-help-dialog aria-labelledby="lp-help-h"><form class="lp-dialog-in" data-help-form>
-<div class="lp-sheet-h"><h2 id="lp-help-h">도움 요청</h2><button class="lp-icon-btn" type="button" data-sheet-close aria-label="닫기">${icon('close')}</button></div>
-<p class="lp-small">자리를 적으면 강사가 찾아가요. 적은 자리는 이 기기에 저장돼요.</p>
-<label><span>자리</span><input name="seat" maxlength="20" autocomplete="off" placeholder="예: 3모둠, 창가 두 번째"></label>
-<label><span>무엇이 막혔나요? (선택)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit">${icon('hand')}<span>요청하기</span></button></div></form></dialog>`;
+  return helpSheetHtml();
 }
 
 
 function dialogs(ctx) {
-  const pv = ctx.bp.privacy;
-  const needName = pv.collect.includes('name');
-  const needSchool = pv.collect.includes('school');
-  const idWords = [needName && '이름', needSchool && '소속'].filter(Boolean).join('·');
-  // 소속은 직무연수(이수 처리에 소속이 들어감)만 꼭 받고, 교내 연수·설명회 등은 선택(이름만 적어도 입실)
-  const schoolMust = needSchool && (ctx.bp.meta.admin?.kind === 'official' || !needName);
-  return `<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
-<h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
-<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p>${ctx.live ? `<p class="lp-share-code">${esc(ctx.words?.code || '연수 코드')} <b>${esc(ctx.bp.live.code)}</b></p>` : ''}
-<p class="lp-small lp-share-scr">프로젝터에는 <a href="screen.html">발표 화면</a>을 띄워요. QR${ctx.live ? '과 질문·투표 결과가' : '이'} 크게 보여요.</p>
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
-${ctx.live ? `<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
-<h2 id="lp-join-h">참여하기</h2><p class="lp-small" data-join-lead>${ctx.bp.live.anonymous ? '보드 글에 보일 별명을 정해 주세요. 투표와 질문은 별명 없이 바로 돼요.' : '질문과 보드 글에 보일 별명을 정해 주세요.'}</p>
-<label data-join-nick><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname" aria-describedby="lp-join-err"></label>
-<p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
-${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
-${needSchool ? `<label data-join-id><span>소속(학교)${schoolMust ? '' : ' · 선택'}</span><input name="school" maxlength="40"${schoolMust ? ' required' : ''} autocomplete="organization"></label>` : ''}
-${pv.consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰고 ${keepRule(ctx.bp).short} 안에 지우는 데 동의합니다. 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit" data-join-go>참여</button></div></form></dialog>
-<aside class="lp-dock" data-dock hidden aria-label="참여 도구">
-  <span class="lp-live-dot" data-live-status title="연결 상태"></span>
-  ${dockAttend(ctx.bp) ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-attend${quickAttend(ctx.bp) ? '' : '="in"'} hidden>${icon('check')}<span>출석</span></button>` : ''}
-  ${ctx.bp.live.features.includes('help') ? `<button class="lp-btn lp-btn-dock" type="button" data-dock-help>${icon('hand')}<span>도움 요청</span></button>` : ''}
-  ${ctx.bp.live.features.includes('qa') ? `<button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa>${icon('chat')}<span>질문</span></button>` : ''}
-  ${ctx.bp.live.features.includes('signal') ? `<div class="lp-fold lp-signal"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="지금 이해 정도 보내기" title="이해 정도"><i data-signal-now aria-hidden="true"></i></button><div class="lp-fold-list" role="group" aria-label="지금 이해 정도">${SIGNALS.map((x) => `<button type="button" data-signal="${x.v}" aria-pressed="false"><i aria-hidden="true">${x.g}</i><span>${x.label}</span></button>`).join('')}</div></div>` : ''}
-  ${ctx.bp.live.features.includes('reactions') ? `<div class="lp-fold lp-react"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="반응 보내기" title="반응">${REACTIONS[0].ic}</button><div class="lp-fold-list" role="group" aria-label="반응 보내기">${REACTIONS.map((r) => `<button type="button" data-react="${r.v}" aria-label="${r.label}" title="${r.label}">${r.ic}</button>`).join('')}</div></div>` : ''}
-</aside><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
+  const pv = ctx.bp.privacy, f = ctx.bp.live.features;
+  return `${shareDialog({ live: ctx.live, code: ctx.bp.live.code, codeWord: ctx.words?.code || '연수 코드' })}
+${ctx.live ? `${joinDialog({ anonymous: ctx.bp.live.anonymous, collect: pv.collect, consent: pv.consent, official: ctx.bp.meta.admin?.kind === 'official', keep: keepRule(ctx.bp).short })}
+<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${dockInner({ attend: dockAttend(ctx.bp) && (quickAttend(ctx.bp) ? 'quick' : 'in'), help: f.includes('help'), qa: f.includes('qa'), signal: f.includes('signal'), reactions: f.includes('reactions') })}</aside><div class="lp-reactions" data-reactions aria-hidden="true"></div>` : ''}
 ${tocSheet(ctx)}${helpSheet(ctx)}
-<div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
+${TOAST}`;
 }
 
 export function renderIndex(ctx) {
