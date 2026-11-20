@@ -22,7 +22,7 @@ export const OLD_NOTE = '예전 판(설계도)으로 만든 파일이에요. 교
  */
 export function packProjectV2({ site = {}, meta = {}, material = null, sources = [], originals = [], now = Date.now() } = {}) {
   const files = {}; const dropped = [];
-  const m = readMeta(meta).meta;
+  const m = readMeta(meta, { prev: meta }).meta; // 부른 쪽(앱·CLI)이 준 강사 값은 그대로 담음
   // 강사 비밀은 담지 않음(참여 기능 키). 주소·공개 범위는 담되 여는 쪽이 강사 값으로 다시 받음
   const safeMeta = { ...m, live: m.live ? { provider: m.live.provider, url: m.live.url, code: m.live.code } : null };
   const pages = (material?.pages || []).slice(0, 2000).map((x) => ({ page: +x.page || 0, title: String(x.title || '').slice(0, 160), ...(x.text ? { text: String(x.text).slice(0, 4000) } : {}) })).filter((x) => x.page > 0);
@@ -42,8 +42,10 @@ export function unpackProjectV2(zip) {
     if (k.startsWith('site/')) { const p = k.slice(5); if (siteFileOk(p)) site[p] = /\.(html|css|m?js|json|txt|vtt)$/i.test(p) ? td.decode(v) : v; }
     else if (k.startsWith('src/') && isAllowedAsset(k)) originals.push({ key: k, name: k.slice(4), bytes: v });
   }
-  const meta = readMeta(j.meta || {}, { prev: j.meta || {} }).meta; // 파일 안의 강사 값은 여는 쪽이 다시 확인(앱: 이 기기 값과 비교)
-  return { kind: 'v2', site, meta, material: { pages: Array.isArray(j.material?.pages) ? j.material.pages : [] }, sources: Array.isArray(j.sources) ? j.sources : [], originals, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '', formatVersion: PROJECT_V2, title: String(j.title || meta.title || '') };
+  // 파일 안의 강사 값(공개 범위·주소·참여 서버)은 남이 준 파일일 수 있어 meta에 넣지 않고 따로 돌려줌(앱이 강사에게 확인받고 씀)
+  const meta = readMeta(j.meta || {}).meta;
+  const teacherInFile = readMeta(j.meta || {}, { prev: j.meta || {} }).meta;
+  return { kind: 'v2', site, meta, teacherInFile: { live: teacherInFile.live, siteUrl: teacherInFile.siteUrl, joinUrl: teacherInFile.joinUrl, shortUrl: teacherInFile.shortUrl, access: teacherInFile.access, surveyUrl: teacherInFile.surveyUrl, privacy: teacherInFile.privacy, keepUntil: teacherInFile.keepUntil }, material: { pages: Array.isArray(j.material?.pages) ? j.material.pages : [] }, sources: Array.isArray(j.sources) ? j.sources : [], originals, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '', formatVersion: PROJECT_V2, title: String(j.title || meta.title || '') };
 }
 
 /**
@@ -53,7 +55,7 @@ export function unpackProjectV2(zip) {
 export function openProjectFile(buf) {
   const zip = readStoredZip(buf);
   if (!zip['project.json']) throw bad('project.json이 없는 파일이에요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.');
-  let head; try { head = JSON.parse(td.decode(zip['project.json'])); } catch { throw bad('project.json을 읽지 못했어요.'); }
+  let head; try { head = JSON.parse(td.decode(zip['project.json'])); } catch { throw bad('project.json을 읽지 못했어요. 앱에서 다시 저장한 파일을 열어 주세요.'); }
   if (head?.format !== PROJECT_FORMAT) throw bad('lecpage 연수 파일이 아니에요.');
   const newer = (+head.version || 0) > PROJECT_V2 || (head.engine && newerVersion(head.engine, ENGINE_VERSION));
   const note = newer ? `더 새 lecpage(${head.engine || `형식 ${head.version}`})로 만든 파일이에요. 지금 판(${ENGINE_VERSION})은 새 칸·설정을 빠뜨릴 수 있어요.` : '';

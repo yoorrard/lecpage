@@ -207,7 +207,7 @@ function cleanPage(html, page, files, warn) {
         if (!handlerOk(a.value)) { warn('inline-handler-bad', `${page}: <${t.name} ${a.name}>의 코드가 문법에 맞지 않아 뺐어요.`); set[a.name] = null; continue; }
         list.push({ ev: a.name.slice(2), code: a.value }); set[a.name] = null;
       }
-      for (const a of jsUrl) { set[a.name] = a.name === 'href' ? '#' : null; warn('javascript-url', `${page}: javascript: 주소는 CSP에 막혀 뺐어요. 단추와 addEventListener로 바꿔 주세요.`); }
+      for (const a of jsUrl) { set[a.name] = a.name === 'href' ? '#' : null; warn('javascript-url', `${page}: javascript: 주소는 CSP에 막혀 뺐어요. 버튼과 addEventListener로 바꿔 주세요.`); }
       if (list.length) { nOn++; set['data-lpk-on'] = String(nOn); handlers.push({ n: nOn, tag: t.name, list }); }
       edits.push({ start: t.start, end: t.end, text: rewriteOpen(t, { set }) });
     }
@@ -265,7 +265,9 @@ function expandPage(html, page, ctx, col, warn) {
     const r = widgetFor(type, t, html.slice(el.innerStart, el.innerEnd), ctx, col, page, warn);
     if (r === null) continue;
     const id = attr(t, 'id') ? null : `lpk-${type}${col.count[type] > 1 ? '-' + col.count[type] : ''}`;
-    const open = rewriteOpen(t, { set: { 'data-lpk': type, ...(id ? { id } : {}) }, addClass: r.cls || `lpk lpk-w lpk-${type}` });
+    // 설정 속성(JSON 등)은 펼친 뒤 뺌(data-lp는 남겨 검수·앱이 자리를 찾게)
+    const strip = Object.fromEntries(['data-question', 'data-options', 'data-kind', 'data-id', 'data-prompt', 'data-categories', 'data-files', 'data-moderation', 'data-questions', 'data-pages', 'data-items'].map((a) => [a, null]));
+    const open = rewriteOpen(t, { set: { ...strip, 'data-lpk': type, ...(id ? { id } : {}) }, addClass: r.cls || `lpk lpk-w lpk-${type}` });
     edits.push({ start: t.start, end: el.end, text: `${open}${r.html}</${t.name}>` });
     covered.push([t.start, el.end]);
   }

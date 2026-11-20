@@ -29,7 +29,8 @@ function sectionMap(tags, html) {
   for (let k = 0; k < tags.length; k++) {
     const t = tags[k];
     if (t.kind === 'open') {
-      const sec = [...stack].reverse().find((x) => x.name === 'section' || hasAttr(x, 'data-lp-step'));
+      const self = t.name === 'section' || hasAttr(t, 'data-lp-step');
+      const sec = self ? t : [...stack].reverse().find((x) => x.name === 'section' || hasAttr(x, 'data-lp-step'));
       out.set(k, sec ? (attr(sec, 'id') || attr(sec, 'data-lp-step') || attr(sec, 'aria-label') || secTitle(sec)) : '');
       if (!VOID.has(t.name) && !t.selfClose && t.contentStart === undefined) stack.push(t);
     } else if (t.kind === 'close') {
@@ -112,7 +113,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
     const c = contrast(theme.ink, theme.paper);
     if (c < 4.5) add('contrast', 'error', { file: cssFiles[0] || 'lecpage.json', selector: '--lp-ink / --lp-paper' }, `글자색(${theme.ink})과 바탕(${theme.paper})의 대비가 ${c.toFixed(2)}:1이에요(4.5:1 이상이어야 읽혀요).`, '글자색을 더 진하게(밝은 바탕) 또는 더 밝게(어두운 바탕) 바꿔 주세요.');
   }
-  if (isHex(theme.accent) && isHex(theme.paper) && contrast(theme.accent, theme.paper) < 3) add('contrast-accent', 'warn', { file: cssFiles[0] || 'lecpage.json', selector: '--lp-accent' }, `강조색(${theme.accent})이 바탕(${theme.paper})과 ${contrast(theme.accent, theme.paper).toFixed(2)}:1이라 단추 테두리·막대가 잘 안 보여요.`, '강조색을 바탕과 3:1 이상 나게 골라 주세요.');
+  if (isHex(theme.accent) && isHex(theme.paper) && contrast(theme.accent, theme.paper) < 3) add('contrast-accent', 'warn', { file: cssFiles[0] || 'lecpage.json', selector: '--lp-accent' }, `강조색(${theme.accent})이 바탕(${theme.paper})과 ${contrast(theme.accent, theme.paper).toFixed(2)}:1이라 버튼 테두리·막대가 잘 안 보여요.`, '강조색을 바탕과 3:1 이상 나게 골라 주세요.');
   const rootBg = hex(ci.vars['--lp-paper'] && ci.resolve(ci.vars['--lp-paper'])) || theme.paper || '';
   for (const r of ci.rules) {
     const fg = hex(r.color); let bg = hex(r.bg);
@@ -261,6 +262,7 @@ export function issueSummary(issues = []) {
 
 /** AI에게 붙일 고치기 요청 글(한 줄에 하나) */
 export function issuesForAi(issues = [], { max = 40 } = {}) {
-  return issues.slice(0, max).map((x) => `- [${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'}] ${x.where.file}${x.where.selector ? ` ${x.where.selector}` : ''}${x.where.section ? ` (섹션 ${x.where.section})` : ''}: ${x.message_ko} → ${x.fix_hint_ko}`).join('\n');
+  const sorted = issues.filter((x) => x.level === 'error').concat(issues.filter((x) => x.level !== 'error')); // 고칠 곳 먼저
+  return sorted.slice(0, max).map((x) => `- [${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'}] ${x.where.file}${x.where.selector ? ` ${x.where.selector}` : ''}${x.where.section ? ` (섹션 ${x.where.section})` : ''}: ${x.message_ko} → ${x.fix_hint_ko}`).join('\n');
 }
 

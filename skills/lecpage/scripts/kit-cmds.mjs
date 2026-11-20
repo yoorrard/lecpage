@@ -105,7 +105,7 @@ async function assembleWork(h, work, extra = {}) {
   const { N, fail, readJson } = h;
   const K = await imp('src/kit/index.js');
   const siteDir = join(work, 'site');
-  if (!existsSync(join(siteDir, 'index.html'))) fail(`${relp(work, siteDir)}/index.html이 없어요. 에이전트가 site/index.html을 먼저 써야 해요(${join(work, 'README.md')}).`);
+  if (!existsSync(join(siteDir, 'index.html'))) fail(`${relp(work, siteDir)}/index.html이 없어요. AI 에이전트가 site/index.html을 먼저 써야 해요(${join(work, 'README.md')}).`);
   if (!existsSync(join(work, 'lecpage.json'))) fail(`${join(work, 'lecpage.json')}이 없어요. 연수 정보(v:2)를 써 주세요(references/kit.md).`);
   const site = readSite(N, siteDir);
   const metaRaw = readFileSync(join(work, 'lecpage.json'), 'utf8');

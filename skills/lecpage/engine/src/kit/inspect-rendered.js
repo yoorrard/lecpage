@@ -91,6 +91,9 @@ export function inspectRendered(opts) {
     var el = node.parentElement; if (!el || texts.indexOf(el) >= 0 || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName)) continue;
     texts.push(el); if (texts.length > 1500) break;
   }
+  // 움직이는 중인 요소(색·투명도가 바뀌는 중)는 색 검사에서 뺌: 끝난 모습이 아니라서
+  var moving = (doc.getAnimations ? doc.getAnimations() : []).filter(function (a) { return a.playState === 'running' && a.effect && a.effect.target; }).map(function (a) { return a.effect.target; });
+  function isMoving(el) { return moving.some(function (m) { return m === el || (m.contains && m.contains(el)); }); }
   var vis = texts.filter(function (el) { return visible(el); });
   var small = W <= 480;
   var seenSmall = 0;
@@ -108,7 +111,7 @@ export function inspectRendered(opts) {
     if (small && fs < 12 && !el.closest('svg,[aria-hidden="true"]') && el.textContent.trim().length > 1 && seenSmall++ < 40) add('small-text', 'warn', el, '휴대폰에서 글자가 ' + fs.toFixed(1) + 'px로 너무 작아요("' + el.textContent.trim().slice(0, 24) + '").', '휴대폰 폭에서는 글자를 12px(가능하면 14px) 이상으로 해 주세요.');
     // 안 보이는 글(글자색 ≈ 바탕)
     var fg = rgba(cs.color), bg = bgOf(el);
-    if (fg && bg && !el.closest('svg')) {
+    if (fg && bg && !el.closest('svg') && !isMoving(el)) {
       var c = ratio(over(fg, bg), bg), big = fs >= 24 || (fs >= 18.66 && +cs.fontWeight >= 700);
       if (c < 1.6) add('invisible-text', 'error', el, '"' + el.textContent.trim().slice(0, 30) + '" 글이 바탕과 거의 같은 색이라 안 보여요(' + c.toFixed(2) + ':1).', '글자색이나 바탕색을 바꿔 4.5:1 이상으로 맞춰 주세요.');
       else if (c < (big ? 3 : 4.5)) add('low-contrast', 'warn', el, '"' + el.textContent.trim().slice(0, 30) + '" 글의 대비가 ' + c.toFixed(2) + ':1이에요(' + (big ? '큰 글은 3' : '4.5') + ':1 이상).', '글자색을 더 진하게(밝은 바탕) 또는 더 밝게(어두운 바탕) 해 주세요.');
@@ -142,11 +145,11 @@ export function inspectRendered(opts) {
     var r = el.getBoundingClientRect(), cs = win.getComputedStyle(el);
     if (el.tagName === 'A' && cs.display === 'inline' && el.closest('p,li,dd,td,figcaption,blockquote')) return; // 문장 안 링크는 예외
     if (el.tagName === 'INPUT' && /^(checkbox|radio)$/.test(el.type) && el.closest('label')) return;
-    if (r.width < 24 || r.height < 24) add('small-target', 'warn', el, '누를 곳이 ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px로 작아요("' + (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 20) + '").', '단추·링크를 24×24px(휴대폰은 44px) 이상으로 해 주세요.');
+    if (r.width < 24 || r.height < 24) add('small-target', 'warn', el, '누를 곳이 ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px로 작아요("' + (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 20) + '").', '버튼·링크를 24×24px(휴대폰은 44px) 이상으로 해 주세요.');
   });
   // 빈 섹션
   Array.prototype.forEach.call(doc.querySelectorAll('section'), function (s) {
-    if (!visible(s)) return;
+    var cs = win.getComputedStyle(s); if (cs.display === 'none' || s.closest('[hidden],[aria-hidden="true"]')) return; // 높이가 0이어도 빈 섹션
     if (!s.innerText.trim() && !s.querySelector('img,video,iframe,canvas,svg,picture')) add('empty-section', 'warn', s, '화면에 아무것도 보이지 않는 섹션이에요.', '내용을 채우거나 섹션을 빼 주세요.');
   });
   return out;
