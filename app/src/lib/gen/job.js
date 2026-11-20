@@ -139,6 +139,7 @@ function errorView(e, provider) {
   const k = e?.kind;
   if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [이어서 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
   if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect', 'paste'] };
+  if (k === 'thinking') return { kind: k, title: 'AI가 생각하다가 답을 쓸 한도를 다 썼어요.', body: '같은 요청을 다시 보내면 비용만 들어서 멈췄어요. 다른 모델을 고르거나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste', 'resume'] };
   if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: '키를 연결한 뒤 [이어서 만들기]를 눌러 주세요.', actions: ['connect', 'paste'] };
   if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
@@ -165,7 +166,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
   let acc = step.acc || ''; let piece = step.piece || ''; let cont = !!step.cont; let token = step.token || null;
   // 새로 고침 뒤: OpenAI는 이어 받기, 그 밖은 받은 글이 넉넉하면 '이어서'
   if (!token && piece) { acc = cont ? stitch(acc, piece) : piece; piece = ''; cont = false; }
-  let continues = step.continues || 0; let waits = 0; let resumes = 0; let swaps = 0;
+  let continues = step.continues || 0; let waits = 0; let resumes = 0; let swaps = 0; let bigger = 0;
   const persist = () => { Object.assign(step, { acc, piece, cont, token, continues }); saveSoon(rec); };
   for (;;) {
     // 받은 글에 이어서: 한도에 닿아 잘렸으면 늘, 끊겼으면 받은 글이 넉넉할 때만(짧으면 처음부터가 더 깔끔)
@@ -176,13 +177,20 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
     try {
       const res = await A.stream({
         step: { name: step.name, batch: step.batch }, // 먼저 해보기 어댑터만 씀(어느 단계의 답인지)
-        key, model: rec.model, system: P.SYSTEM_GEN, parts: [...ctx.pack.parts, { kind: 'text', text: prompt }], maxTokens, signal, json,
+        key, model: rec.model, system: P.SYSTEM_GEN, parts: [...ctx.pack.parts, { kind: 'text', text: prompt }], maxTokens: bigger ? maxTokens * 2 : maxTokens, signal, json,
         continueFrom, resumeToken: token, prefix: token ? piece : '',
         onText: (t, all) => { piece = all; persist(); },
         onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
       });
       // 바꾼 모델로 답을 받음 → 이 키는 무료 키(안 된 모델은 '유료 키 필요'로): 다음 만들기는 되는 모델로 바로 시작하고 고르는 칸도 맞게
       if (ctx.swapped) { const why = ctx.swapped; ctx.swapped = ''; ctx.swapFrom = ''; if (why !== 'model' && why !== 'quota-day') rememberWorkingModel(rec.provider, rec.model, [...(ctx.tried || [])].filter((m) => m !== rec.model)).catch(() => { }); }
+      // 보이는 글 없이 한도에 닿음(생각하는 데 한도를 다 씀): '이어서'할 글이 없어 같은 요청을 되풀이하게 되고, 그러면 비용만 듦
+      // (예전: 같은 요청 4번 + 형식 오류로 단계 다시 4번 = 8번). → 한도를 두 배로 한 번만 다시, 그래도 비면 멈추고 다른 모델·AI 창을 권함
+      if (res.stop === 'max_tokens' && !String(res.text || '').trim()) {
+        piece = ''; token = null;
+        if (bigger) throw new AiError('thinking', 'max tokens with no visible text', { provider: rec.provider });
+        bigger = 1; step.attempts++; persist(); continue;
+      }
       const got = res.text; const before = acc.length;
       acc = cont ? stitch(acc, got) : got; piece = ''; token = null; cont = false;
       step.usage = res.usage || step.usage;
