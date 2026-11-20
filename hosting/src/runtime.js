@@ -1,11 +1,11 @@
-// 올라온 .js가 lecpage 엔진 런타임 그대로인지 확인합니다.
+// 올라온 .js가 lecpage 엔진 런타임 그대로인지 확인합니다. 그대로가 아니면 '사이트가 직접 쓴 스크립트'로 봅니다(site.js·sitecheck.js).
 // 받는 모양: 런타임 조각 하나, 또는 조각들을 '\n;\n'로 이은 것(live.js = core + 제공자, fx.js = core + 효과들 + 시작 코드).
 // 조각 목록은 scripts/gen-runtime.mjs가 엔진에서 뽑아 runtime-allow.js에 둡니다(길이·앞머리·SHA-256).
 import { RUNTIME_SEGMENTS } from './runtime-allow.js';
 import { sha256Hex } from './ids.js';
 
 export const JOIN = '\n;\n';
-/** 런타임 스크립트는 다 합쳐도 이보다 작음. 넘으면 내용을 보지 않고 거절 */
+/** 런타임 스크립트는 다 합쳐도 이보다 작음. .js 파일 하나의 한도(사이트가 직접 쓴 스크립트도 같음). 넘으면 내용을 보지 않고 거절 */
 export const MAX_JS_BYTES = 1024 * 1024;
 
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -54,4 +54,15 @@ export async function matchRuntime(input, allow = DEFAULT) {
 
 export async function isRuntimeJs(input, allow = DEFAULT) {
   return (await matchRuntime(input, allow)) !== null;
+}
+
+/**
+ * 런타임과 다르지만 런타임 파일처럼 시작하는지(앞머리가 같음): 앱과 서버의 판이 어긋났거나 런타임을 손댄 것.
+ * 이런 파일은 사이트 스크립트로 받지 않고 runtime_mismatch(앱: 새로 고친 뒤 다시)로 돌려보냄(site.js classifyJs)
+ */
+export function looksLikeRuntime(input, allow = DEFAULT) {
+  let text = input;
+  if (typeof input !== 'string') { try { text = new TextDecoder().decode(input instanceof Uint8Array ? input.subarray(0, 256) : new Uint8Array(input, 0, Math.min(256, input.byteLength))); } catch { return false; } }
+  text = text.replace(/\r\n/g, '\n');
+  return allow.some((seg) => text.startsWith(seg.head));
 }

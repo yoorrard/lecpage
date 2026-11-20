@@ -138,8 +138,6 @@ export function config(env = {}) {
     access: accessConfig(env),
     // 공지 링크가 갈 수 있는 곳(쉼표로 구분한 호스트). 비우면 https 주소면 됨
     noticeLinkHosts: String(env.NOTICE_LINK_HOSTS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
-    // 켜면 Supabase 연결을 쓰는 사이트가 엔진이 고정한 supabase-js 파일 하나를 cdn.jsdelivr.net에서 불러올 수 있음(기본은 꺼짐)
-    allowSupabaseSdk: /^(1|true|yes|on)$/i.test(String(env.ALLOW_SUPABASE_SDK ?? '').trim()),
   };
 }
 /**

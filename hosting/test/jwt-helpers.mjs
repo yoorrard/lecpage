@@ -1,6 +1,7 @@
 // 시험용 가짜 Cloudflare Access: RSA 열쇠를 만들어 JWT에 서명하고, 공개 열쇠 목록(JWKS)을 내줌
 import { webcrypto, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
+import { freePort, releasePort } from './ports.mjs';
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 
@@ -26,7 +27,8 @@ export async function startJwks(issuer) {
     if (req.url === '/cdn-cgi/access/certs') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(issuer.jwks)); return; }
     res.writeHead(404); res.end();
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = await freePort();
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
   const team = `http://127.0.0.1:${server.address().port}`;
-  return { team, stop: () => new Promise((r) => server.close(r)) };
+  return { team, stop: () => new Promise((r) => server.close(() => { releasePort(port); r(); })) };
 }

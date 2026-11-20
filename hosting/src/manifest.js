@@ -25,7 +25,7 @@ export function checkManifest(body, limits) {
     if (!v || typeof v !== 'object' || typeof v.sha256 !== 'string' || !SHA256_RE.test(v.sha256)) throw new HttpError('bad_request', `sha256이 맞지 않아요: ${path}`);
     if (!Number.isSafeInteger(v.size) || v.size < 0) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
     if (v.size > limits.maxFileBytes) throw new HttpError('too_large', `파일 하나가 너무 커요(${mb(limits.maxFileBytes)}까지): ${path}`, { path });
-    if (type.kind === 'js' && v.size > MAX_JS_BYTES) throw new HttpError('runtime_mismatch', `lecpage 실행 파일이 아니에요: ${path}`, { path });
+    if (type.kind === 'js' && v.size > MAX_JS_BYTES) throw new HttpError('too_large', `스크립트 파일 하나는 ${mb(MAX_JS_BYTES)}까지예요: ${path}`, { path });
     if (sizes.has(v.sha256) && sizes.get(v.sha256) !== v.size) throw new HttpError('bad_request', `같은 sha256인데 size가 달라요: ${path}`);
     sizes.set(v.sha256, v.size);
     bytes += v.size;
