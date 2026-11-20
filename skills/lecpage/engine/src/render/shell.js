@@ -1,4 +1,4 @@
-// 모든 쪽이 같이 쓰는 머리(<head>)·보안 정책(CSP)·사이트 데이터. 참가자 화면(pages.js)과 보조 화면(aux.js)이 함께 씁니다.
+// 모든 쪽이 같이 쓰는 머리(<head>)·보안 정책(CSP)·사이트 데이터. 참가자 화면(pages.js)과 보조 화면(aux-pages.js)이 함께 씁니다.
 import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { boardFiles } from './sections.js';
@@ -150,7 +150,7 @@ export function siteData(ctx) {
   };
 }
 
-/** 보조 화면(강사·발표·안내문·접속 확인·개인정보)의 틀: 같은 테마·글꼴·단추 모양을 이어받고, 쪽마다 aux.css를 더함 */
+/** 보조 화면(강사·발표·안내문·접속 확인·개인정보)의 틀: 같은 테마·글꼴·단추 모양을 이어받고, 쪽마다 aux-pages.css를 더함 */
 export function appShell(ctx, { title, page, bodyClass, inner, scripts = [], blueprint = false }) {
   const bp = ctx.bp;
   // pages: 교재의 실제 쪽 번호(교재 일부만 담으면 1,2,4,8…). 강사 화면은 이 번호를 보내고 참가자 화면은 같은 번호(data-page)로 찾음
@@ -158,7 +158,7 @@ export function appShell(ctx, { title, page, bodyClass, inner, scripts = [], blu
   return `<!doctype html>
 <html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-motion': '1', 'data-page': page })}>
 <head>
-${headTags(ctx, title, ['assets/aux.css'], page)}
+${headTags(ctx, title, ['assets/aux-pages.css'], page)}
 </head>
 <body class="${bodyClass}">
 ${inner}

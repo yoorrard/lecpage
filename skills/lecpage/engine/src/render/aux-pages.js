@@ -1,5 +1,5 @@
 // 보조 화면: 강사 화면(console) · 발표 화면(screen) · QR 안내문(poster) · 접속 확인(check) · 개인정보 처리 안내(privacy).
-// 모두 참가자 화면과 같은 프리셋(색·글꼴·단추·상자 모양·모티프)을 이어받고, 쪽마다 쓰임에 맞춘 배치를 assets/aux.css가 맡습니다.
+// 모두 참가자 화면과 같은 프리셋(색·글꼴·단추·상자 모양·모티프)을 이어받고, 쪽마다 쓰임에 맞춘 배치를 assets/aux-pages.css가 맡습니다.
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
 import { esc, br, icon, koDate, host, md } from './html.js';
 import { contactHtml, boardFiles, joinName } from './sections.js';
