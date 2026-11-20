@@ -130,7 +130,7 @@
 .lpk .lp-sv-list > li{padding:16px 0;border-top:1px solid var(--_line)}
 .lpk .lp-sv-list fieldset{border:0;display:grid;gap:10px;min-width:0}
 .lpk :is(.lp-sv-list legend,.lp-sv-q){display:flex;gap:10px;align-items:baseline;font-weight:700;font-size:1.02rem;margin-bottom:6px}
-.lpk .lp-idx{font-variant-numeric:tabular-nums;color:var(--_act);font-weight:800}
+.lpk .lp-idx{font-variant-numeric:tabular-nums;color:var(--_act);font-weight:800;flex:none;white-space:nowrap} /* 문항 번호 '02'가 휴대폰에서 '0/2'로 쪼개지지 않게 */
 .lpk .lp-sv-text{display:grid;gap:8px}
 .lpk .lp-sv-opts{display:flex;flex-wrap:wrap;gap:8px}
 .lpk .lp-sv-opts label{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:var(--_rs);border:1.5px solid var(--_line);background:var(--_paper);color:var(--_text);cursor:pointer}

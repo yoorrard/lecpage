@@ -222,6 +222,10 @@ test('정적 검수: 구조·키트 표시·금지 패턴·깨진 경로·대비
   // 깨끗한 사이트는 문제 없음
   const clean = K.inspect(fullSite(), META);
   assert.deepEqual(clean.filter((x) => x.level === 'error'), [], JSON.stringify(clean));
+  // 조립이 만드는 달력 파일(assets/event.ics)은 날짜가 있으면 깨진 링크가 아님(kit.md가 링크하라고 안내)
+  const ics = { 'index.html': PAGE('<a href="assets/event.ics" download>달력에 넣기</a>') };
+  assert.ok(!K.inspect(ics, META).some((x) => x.id === 'broken-link'));
+  assert.ok(K.inspect(ics, { ...META, sessions: [] }).some((x) => x.id === 'broken-link'));
 });
 
 test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀은 빼고 / v1 파일은 예전 판으로 알리고 옮김', () => {
@@ -319,6 +323,11 @@ test('브라우저: 키트 사이트(엔진 쪽 구조 없음)가 오류 없이 
     await page.waitForTimeout(300);
     const found = new Set((await page.evaluate(`${K.inspectRenderedSource}({ file: 'x.html' })`)).map((x) => x.id));
     for (const id of ['overflow-x', 'invisible-text', 'small-text', 'small-target', 'broken-image', 'overlap-text', 'empty-section']) assert.ok(found.has(id), id + ' ' + [...found]);
+    // 닫힌 접기 상자(details) 안의 글은 그려지지 않으니 겹침으로 세지 않음
+    await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body style="margin:0;background:#fff"><section><h2>세 문제</h2><details><summary>첫 문제는 무엇일까요?</summary><p>첫 답이에요. 꽤 긴 풀이 글이에요.</p></details><details><summary>둘째 문제는 무엇일까요?</summary><p>둘째 답이에요.</p></details></section></body></html>`);
+    await page.waitForTimeout(200);
+    const shut = await page.evaluate(`${K.inspectRenderedSource}({ file: 'x.html' })`);
+    assert.deepEqual(shut.filter((x) => x.id === 'overlap-text'), [], JSON.stringify(shut));
   } finally { await browser.close(); srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
