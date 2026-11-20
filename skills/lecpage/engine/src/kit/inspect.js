@@ -81,8 +81,10 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
   const material = paths.map((p) => /^material\/p-(\d{3,4})\./.exec(p)).filter(Boolean).map((m) => +m[1]);
 
   // 연수 정보
+  let icsMade = false; // 조립이 만드는 달력 파일(assets/event.ics): 날짜가 있을 때만
   if (meta) {
     const r = readMeta(meta);
+    icsMade = (r.meta?.sessions || []).some((x) => x && x.date);
     for (const e of r.errors) add(`meta-${e.code}`, 'error', { file: 'lecpage.json', selector: e.path }, e.message_ko, e.code === 'v1' ? '새 판은 사이트 폴더(site/)와 lecpage.json(v:2)으로 만들어요.' : 'lecpage.json을 고쳐 주세요(references/kit.md의 꼴).');
     for (const w of r.warnings) if (w.code !== 'teacher-value') add(`meta-${w.code}`, 'warn', { file: 'lecpage.json', selector: w.path }, w.message_ko, w.code === 'title-empty' ? '교재에 적힌 연수 이름을 title에 적어 주세요.' : 'lecpage.json의 꼴을 맞춰 주세요(날짜 YYYY-MM-DD, 시각 HH:MM).');
   }
@@ -191,7 +193,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
       if (t.name === 'a') {
         const href = attr(t, 'href');
         if (href && href.startsWith('#') && href.length > 1 && !/^#(deck-p\d+|st-)/.test(href)) { let id = href.slice(1); try { id = decodeURIComponent(id); } catch { /* 그대로 */ } if (!ids[p].has(id) && !tags.some((x) => x.kind === 'open' && attr(x, 'id') === id)) add('broken-anchor', 'warn', W(k, t), `#${id}로 가는 링크인데 그 id가 없어요.`, '섹션에 id를 달거나 링크를 고쳐 주세요.'); }
-        else if (href && !/^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(href)) { const rp = resolvePath(href, p); if (rp && !files[rp] && !['console.html', 'screen.html', 'poster.html', 'check.html', 'privacy.html'].includes(rp)) add('broken-link', 'error', W(k, t), `링크 ${href.slice(0, 70)}가 가리키는 파일이 없어요.`, '경로를 확인하거나 쪽을 만들어 주세요.'); }
+        else if (href && !/^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(href)) { const rp = resolvePath(href, p); if (rp && !files[rp] && !['console.html', 'screen.html', 'poster.html', 'check.html', 'privacy.html'].includes(rp) && !(icsMade && rp === 'assets/event.ics')) add('broken-link', 'error', W(k, t), `링크 ${href.slice(0, 70)}가 가리키는 파일이 없어요.`, '경로를 확인하거나 쪽을 만들어 주세요.'); }
       }
       // 섹션: 제목·빈 섹션
       if (t.name === 'section' || attr(t, 'data-lp-step') !== undefined) {

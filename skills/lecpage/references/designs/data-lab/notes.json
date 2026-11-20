@@ -1,0 +1,16 @@
+{
+  "id": "data-lab",
+  "title": "데이터로 읽는 우리 반",
+  "mood": "모눈 종이 위 스프레드시트와 빨간 펜: 차분한 명조 제목, 시트의 이름 상자·수식 입력줄이 지금 보는 곳을 알려 주는 연수 당일용 실습 사이트",
+  "audience": "teachers",
+  "material": { "file": "material/교재.pdf", "pages": 18, "format": "16:9 실습 교재" },
+  "kit": ["attend", "poll", "poll(word)", "step×5", "board", "deck", "qa", "survey"],
+  "features": ["qa", "poll", "board", "attendance", "survey", "help", "deck", "timer", "progress"],
+  "fonts": { "display": "Noto Serif KR 700·900", "body": "IBM Plex Sans KR 400–700", "mono": "IBM Plex Mono 400–600(시간·수식·숫자만)" },
+  "colors": {
+    "light": { "paper": "#f7f5ef", "paper2": "#efece4", "cell": "#ffffff", "ink": "#1a1d21", "pen": "#b33a1f", "mark": "#f4d85c" },
+    "dark": { "paper": "#141619", "paper2": "#1b1e22", "cell": "#202327", "ink": "#ece8df", "pen": "#f08a6c", "mark": "#5a4f22" }
+  },
+  "motion": ["첫 화면 형광펜·동그라미 한 번", "차트가 보일 때 선 긋기 한 번(Web Animations, 기본은 다 그려진 모습)"],
+  "notCopy": "시트·차트 실습 교재에 맞춘 판단이에요. 다른 연수에 수식 입력줄·모눈·빨간 펜을 그대로 옮기지 마세요."
+}

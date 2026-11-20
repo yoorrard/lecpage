@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>데이터로 읽는 우리 반 · 새온교육연수원 실습 연수</title>
+<meta name="description" content="흩어진 학습 기록을 표로 모으고, 차트로 읽고, 다음 수업을 바꾸는 3시간 교사 실습 연수. 2026년 12월 16일(수) 14:00–17:00, 새온교육연수원 3층 디지털실습실.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f5ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@700;900&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="bar" data-bar>
+  <div class="bar-in">
+    <a class="brand" href="#top" aria-label="데이터로 읽는 우리 반, 맨 위로"><span class="brand-mark" aria-hidden="true"></span><span class="brand-t">데이터로 읽는 우리 반</span></a>
+    <div class="fxbar" aria-live="polite">
+      <span class="namebox" data-namebox>흐름</span>
+      <span class="fx" aria-hidden="true">fx</span>
+      <span class="fx-t" data-fx>기록은 쌓였는데, 읽을 시간이 없다면</span>
+    </div>
+    <nav class="nav" aria-label="연수 사이트 차례">
+      <a href="#flow">흐름</a><a href="#ready">준비</a><a href="#lab">실습</a><a href="#deck">교재</a><a href="#ask">질문</a><a href="#wrap">마무리</a>
+    </nav>
+    <button class="menu-btn" type="button" data-menu aria-expanded="false" aria-controls="sheet-tabs">차례</button>
+  </div>
+  <nav class="tabs" id="sheet-tabs" aria-label="연수 사이트 차례(휴대폰)" hidden>
+    <a href="#flow"><b>1</b>흐름</a><a href="#ready"><b>2</b>준비</a><a href="#lab"><b>3</b>실습</a><a href="#deck"><b>4</b>교재</a><a href="#ask"><b>5</b>질문</a><a href="#wrap"><b>6</b>마무리</a>
+  </nav>
+</header>
+
+<main id="main">
+<div id="top"></div>
+
+<!-- 첫 화면 -->
+<section class="hero" aria-labelledby="hero-h" data-cell="흐름" data-fx-text="기록은 쌓였는데, 읽을 시간이 없다면">
+  <div class="cols" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span><span>K</span><span>L</span></div>
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <p class="org">새온교육연수원 · 디지털 수업 역량 강화 과정</p>
+      <h1 id="hero-h">기록은 쌓였는데,<br><mark class="hl">읽을 시간</mark>이 없다면</h1>
+      <p class="lead">흩어진 학습 기록을 표로 모으고, 차트로 읽고, 다음 수업을 바꾸는 3시간 실습이에요. 오늘은 이 사이트 하나로 따라와요.</p>
+      <div class="ctas">
+        <a class="btn btn-pen" href="#st-s1">실습 1 시작하기<svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg></a>
+        <a class="btn" href="#deck">교재 보기</a>
+      </div>
+    </div>
+    <figure class="readout" aria-labelledby="readout-cap">
+      <div class="readout-sheet" role="img" aria-label="학습 기록 표 예시. 7번, 12번, 21번 학생이 같은 주에 과제를 내지 않은 칸에 빨간 동그라미가 쳐져 있어요.">
+        <table class="sheet" aria-hidden="true">
+          <thead><tr><th></th><th>A 날짜</th><th>B 번호</th><th>C 활동</th><th>D 점수</th><th>E 제출</th></tr></thead>
+          <tbody>
+            <tr><td>2</td><td>12-01</td><td class="n">7</td><td>과제</td><td class="n">—</td><td class="o">아니오</td></tr>
+            <tr><td>3</td><td>12-01</td><td class="n">8</td><td>형성평가</td><td class="n">8</td><td>예</td></tr>
+            <tr><td>4</td><td>12-02</td><td class="n">12</td><td>과제</td><td class="n">—</td><td class="o">아니오</td></tr>
+            <tr><td>5</td><td>12-02</td><td class="n">15</td><td>발표</td><td class="n">6</td><td>예</td></tr>
+            <tr><td>6</td><td>12-03</td><td class="n">21</td><td>과제</td><td class="n">—</td><td class="o">아니오</td></tr>
+            <tr><td>7</td><td>12-03</td><td class="n">3</td><td>형성평가</td><td class="n">9</td><td>예</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figcaption id="readout-cap"><span class="pen-t">읽으면 보여요</span> 7 · 12 · 21번이 같은 주에 과제를 내지 않았어요.</figcaption>
+    </figure>
+
+    <dl class="facts">
+      <div><dt><i>A</i>날짜</dt><dd>2026. 12. 16.(수)</dd></div>
+      <div><dt><i>B</i>시간</dt><dd class="num">14:00–17:00</dd></div>
+      <div class="wide"><dt><i>C</i>장소</dt><dd>새온교육연수원 3층 디지털실습실</dd></div>
+      <div><dt><i>D</i>강사</dt><dd>정다온 <small>중학교 정보 교사</small></dd></div>
+      <div><dt><i>E</i>이수</dt><dd>3시간 <small>출석 80% · 설문</small></dd></div>
+    </dl>
+
+    <div class="clock" data-clock>
+      <p class="clock-now"><span><span class="dot" aria-hidden="true"></span><span data-clock-text>12월 16일(수) 14:00에 시작해요.</span></span> <a class="clock-cal" href="assets/event.ics" download>달력에 넣기</a></p>
+      <ol class="timebar" aria-label="오늘의 흐름 180분">
+        <li style="--m:15"><a href="#flow"><b>14:00</b><span>들어가며</span></a></li>
+        <li style="--m:65" class="lab"><a href="#st-s1"><b>14:15</b><span>1부 · 실습 1·2</span></a></li>
+        <li style="--m:10" class="rest"><span class="rest-in"><b>15:20</b><span>쉬는 시간</span></span></li>
+        <li style="--m:60" class="lab"><a href="#st-s3"><b>15:30</b><span>2부 · 실습 3·4</span></a></li>
+        <li style="--m:20" class="lab"><a href="#st-s5"><b>16:30</b><span>3부</span></a></li>
+        <li style="--m:10"><a href="#wrap"><b>16:50</b><span>마무리</span></a></li>
+      </ol>
+      <span class="needle" data-needle hidden aria-hidden="true"></span>
+    </div>
+  </div>
+</section>
+
+<!-- 흐름 -->
+<section class="sec" id="flow" aria-labelledby="flow-h" data-cell="흐름" data-fx-text="세 시간, 다섯 번의 실습">
+  <div class="wrap split">
+    <div class="split-a">
+      <p class="kicker">오늘의 흐름 <span>3시간 · 실습 다섯 개</span></p>
+      <h2 id="flow-h">세 시간, 다섯 번의 실습</h2>
+      <table class="sched">
+        <caption class="sr">시간표</caption>
+        <tbody>
+          <tr data-from="14:00" data-to="14:15"><th scope="row">14:00–14:15</th><td>들어가며 <small>예시 데이터 만들기 · 첫 투표</small></td><td class="d">15분</td></tr>
+          <tr data-from="14:15" data-to="15:20" class="lab"><th scope="row">14:15–15:20</th><td>1부 <a href="#st-s1">실습 1 표 정리</a> · <a href="#st-s2">실습 2 요약 함수</a></td><td class="d">65분</td></tr>
+          <tr data-from="15:20" data-to="15:30" class="rest"><th scope="row">15:20–15:30</th><td>쉬는 시간</td><td class="d">10분</td></tr>
+          <tr data-from="15:30" data-to="16:30" class="lab"><th scope="row">15:30–16:30</th><td>2부 <a href="#st-s3">실습 3 차트</a> · <a href="#st-s4">실습 4 AI와 해석</a></td><td class="d">60분</td></tr>
+          <tr data-from="16:30" data-to="16:50" class="lab"><th scope="row">16:30–16:50</th><td>3부 <a href="#st-s5">실습 5 수업 바꾸기와 나눔</a></td><td class="d">20분</td></tr>
+          <tr data-from="16:50" data-to="17:00"><th scope="row">16:50–17:00</th><td>마무리 <small>한 낱말 투표 · 만족도 조사</small></td><td class="d">10분</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="split-b">
+      <h3 class="side-h">오늘 마치면</h3>
+      <ol class="goals">
+        <li>흩어진 학습 기록을 한 표로 모을 수 있어요.</li>
+        <li>함수와 피벗 테이블로 반 전체를 숫자 몇 개로 요약할 수 있어요.</li>
+        <li>차트와 AI 해석으로 우리 반의 변화를 읽을 수 있어요.</li>
+        <li>다음 수업에서 바꿀 한 가지를 정할 수 있어요.</li>
+      </ol>
+      <p class="who"><b>이런 분께</b> 스프레드시트를 열어 본 적 있는 중·고등학교 교사. 함수는 몰라도 돼요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 준비 -->
+<section class="sec sec-tint" id="ready" aria-labelledby="ready-h" data-cell="준비" data-fx-text="세 가지만 해 두면 바로 시작해요">
+  <div class="wrap">
+    <p class="kicker">시작 전에 <span>14:00 · 5분</span></p>
+    <h2 id="ready-h">세 가지만 해 두면 바로 시작해요</h2>
+    <ol class="prep">
+      <li><h3>구글 계정으로 로그인</h3><p>학교 계정에서 막힌 기능이 있으면 개인 계정을 써도 돼요.</p></li>
+      <li><h3>예시 데이터 만들기</h3><p><a href="#st-s1">실습 1</a>의 프롬프트로 가명 예시 데이터를 만들어 시트에 붙여 넣어요.</p></li>
+      <li><h3>창 두 개를 나란히</h3><p>왼쪽에는 이 사이트, 오른쪽에는 스프레드시트를 열어 두면 편해요.</p></li>
+    </ol>
+    <div class="ready-grid">
+      <div>
+        <h3 class="side-h">오늘 여는 곳</h3>
+        <ul class="tools">
+          <li><a href="https://docs.google.com/spreadsheets/" target="_blank" rel="noopener">Google Sheets</a><code>docs.google.com/spreadsheets</code><span>실습 1·2·3</span></li>
+          <li><a href="https://lookerstudio.google.com/" target="_blank" rel="noopener">Looker Studio</a><code>lookerstudio.google.com</code><span>실습 3 · 선택</span></li>
+          <li><a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a><code>gemini.google.com</code><span>실습 1·4</span></li>
+        </ul>
+        <p class="note">열리지 않는 곳이 있으면 <a href="check.html">접속 확인</a>으로 살펴보고 강사에게 알려 주세요. 실제 학생 기록은 오늘 쓰지 않아요. 모든 실습은 가명 예시 데이터로 해요.</p>
+      </div>
+      <div class="ready-live">
+        <div class="live-block">
+          <h3 class="side-h">출석</h3>
+          <div data-lp="attend"></div>
+        </div>
+        <div class="live-block">
+          <h3 class="side-h">들어가며 한 표</h3>
+          <div data-lp="poll" data-id="first" data-question="우리 반 기록 중 가장 먼저 보고 싶은 것은?" data-options='["과제 제출","형성평가 점수","질문·발표","출결"]'></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 실습 -->
+<section class="sec lab" id="lab" aria-labelledby="lab-h" data-cell="실습" data-fx-text="실습 다섯 개를 차례로">
+  <div class="wrap">
+    <p class="kicker">실습 <span>14:15–16:50</span></p>
+    <h2 id="lab-h">실습 다섯 개를 차례로</h2>
+    <p class="sec-lead">마치면 <b>완료 체크</b>, 막히면 <b>도움 요청</b>을 눌러 주세요. 강사 화면에 바로 보여서 강사가 자리로 가요.</p>
+  </div>
+  <div class="wrap lab-grid">
+    <nav class="rail" aria-label="실습 차례">
+      <p class="rail-h">내 진행 <b data-st-count>0 / 5</b></p>
+      <progress data-st-progress max="5" value="0" aria-label="완료한 실습"></progress>
+      <ol>
+        <li class="rail-part">1부 · 14:15</li>
+        <li><a href="#st-s1" data-st-link="s1"><span class="rn">1</span>표 정리<small>30분</small></a></li>
+        <li><a href="#st-s2" data-st-link="s2"><span class="rn">2</span>요약 함수<small>35분</small></a></li>
+        <li class="rail-part">2부 · 15:30</li>
+        <li><a href="#st-s3" data-st-link="s3"><span class="rn">3</span>차트<small>30분</small></a></li>
+        <li><a href="#st-s4" data-st-link="s4"><span class="rn">4</span>AI와 해석<small>30분</small></a></li>
+        <li class="rail-part">3부 · 16:30</li>
+        <li><a href="#st-s5" data-st-link="s5"><span class="rn">5</span>수업 바꾸기<small>20분</small></a></li>
+      </ol>
+    </nav>
+
+    <div class="steps">
+      <!-- 실습 1 -->
+      <section class="step" data-lp-step="s1" data-title="실습 1: 흩어진 기록을 한 표로" aria-labelledby="s1-h" data-cell="실습 1" data-fx-text="흩어진 기록을 한 표로">
+        <header class="step-h">
+          <p class="step-k"><span class="step-n">1</span>표 정리 · 30분 · 1부</p>
+          <h3 id="s1-h">흩어진 기록을 한 표로</h3>
+          <p>과제 제출, 형성평가, 질문 기록이 서로 다른 파일에 있나요? 먼저 '한 줄에 한 번의 기록'으로 모아요. 모양이 같아야 셀 수 있어요.</p>
+        </header>
+        <div class="step-body">
+          <ol class="todo">
+            <li>아래 프롬프트로 가명 예시 데이터(30명 × 4주)를 만들어 시트에 붙여 넣어요. <a class="ext" href="https://sheets.new" target="_blank" rel="noopener">새 스프레드시트</a></li>
+            <li>열 이름을 '날짜·번호·활동·점수·제출'처럼 짧고 일정하게 맞춰요.</li>
+            <li>날짜 열을 고르고 <kbd>서식 → 숫자 → 날짜</kbd>로 바꾼 뒤, <kbd>데이터 → 필터 만들기</kbd>를 눌러요.</li>
+            <li>빈칸과 흔들린 표기('제출함', 'O')를 찾아 '예·아니오' 하나로 고쳐요.</li>
+          </ol>
+          <aside class="pages" aria-label="교재 쪽">
+            <a href="material/p-006.webp" target="_blank" rel="noopener"><img src="material/p-006.webp" alt="교재 6쪽: 옆으로 늘어난 표를 한 줄에 한 번의 기록으로 쌓는 원리" width="1467" height="825" loading="lazy"><span>교재 6쪽 · 원리</span></a>
+            <a href="material/p-007.webp" target="_blank" rel="noopener"><img src="material/p-007.webp" alt="교재 7쪽: 실습 1 따라 하기와 프롬프트" width="1467" height="825" loading="lazy"><span>교재 7쪽 · 따라 하기</span></a>
+          </aside>
+        </div>
+        <div class="prompt">
+          <div class="prompt-h"><h4>가명 예시 데이터 만들기</h4><button class="copy" type="button" data-copy="p1">프롬프트 복사</button></div>
+          <pre id="p1">중학교 2학년 한 반(30명)의 4주 학습 기록 예시를 표로 만들어 줘.
+열: 날짜, 번호(1~30), 활동(과제·형성평가·발표), 점수(0~10), 제출(예/아니오)
+조건: 실제 이름은 쓰지 말고 번호만, 행은 120개 정도, 일부 빈칸과 표기 흔들림(예: '예', 'O')을 일부러 섞어 줘.
+결과는 시트에 바로 붙여 넣을 수 있게 탭으로 구분한 표로만 답해 줘.</pre>
+        </div>
+        <dl class="step-f">
+          <div><dt>막히면</dt><dd>날짜가 칸 왼쪽에 붙어 있으면 아직 글자예요. 서식 → 숫자 → 날짜를 한 번 더 적용해요.</dd></div>
+          <div><dt>다 했으면</dt><dd>필터가 걸린 깔끔한 표 한 장</dd></div>
+        </dl>
+      </section>
+
+      <!-- 실습 2 -->
+      <section class="step" data-lp-step="s2" data-title="실습 2: 숫자 세 개로 반 전체 보기" aria-labelledby="s2-h" data-cell="실습 2" data-fx-text="숫자 세 개로 반 전체 보기">
+        <header class="step-h">
+          <p class="step-k"><span class="step-n">2</span>요약 함수 · 35분 · 1부</p>
+          <h3 id="s2-h">숫자 세 개로 반 전체 보기</h3>
+          <p>평균 하나보다 '누가, 언제, 얼마나'가 보이는 요약이 수업에 쓸모 있어요. 질문 하나에 함수 하나씩.</p>
+        </header>
+        <div class="formulas">
+          <div class="formula"><p class="fq">누가 몇 번 안 냈나?</p><code>=COUNTIFS(B:B, <em>7</em>, E:E, <em>"아니오"</em>)</code><p>번호 자리에 A2를 쓰고 아래로 끌면 30명을 한 번에 세요.</p></div>
+          <div class="formula"><p class="fq">활동마다 평균은?</p><code>=AVERAGEIFS(D:D, C:C, <em>"형성평가"</em>)</code><p>활동이 '형성평가'인 줄의 점수만 평균 내요.</p></div>
+          <div class="formula"><p class="fq">주차 × 활동으로 묶으면?</p><code class="ui">삽입 → 피벗 테이블<br>행 <em>주차</em> · 열 <em>활동</em> · 값 <em>평균</em></code><p>함수 없이 표를 묶어 요약해요.</p></div>
+        </div>
+        <ol class="todo">
+          <li>새 탭에 학생 번호를 세로로 적고, COUNTIFS로 학생별 미제출 횟수를 세요.</li>
+          <li>AVERAGEIFS로 활동별 평균 점수를 구해요.</li>
+          <li><kbd>삽입 → 피벗 테이블</kbd>로 '주차 × 활동' 평균표를 만들어요.</li>
+          <li>수식이 막히면 아래 프롬프트로 풀이를 받아요.</li>
+        </ol>
+        <div class="prompt">
+          <div class="prompt-h"><h4>수식 풀이 받기</h4><button class="copy" type="button" data-copy="p2">프롬프트 복사</button></div>
+          <pre id="p2">구글 시트에서 A열은 날짜, B열은 번호, C열은 활동, D열은 점수, E열은 제출(예/아니오)이야.
+학생 번호별로 '제출=아니오'인 횟수를 세는 수식과, 활동별 평균 점수를 구하는 수식을 알려 줘.
+각 수식이 무엇을 하는지 한 줄씩 풀어서 설명해 줘.</pre>
+        </div>
+        <dl class="step-f">
+          <div><dt>막히면</dt><dd>결과가 0이나 #N/A면 범위와 열 이름의 띄어쓰기부터 봐요. "아니오"와 "아니요"는 다른 값이에요.</dd></div>
+          <div><dt>다 했으면</dt><dd>학생별 미제출 횟수와 주차별 평균표 <a href="material/p-008.webp" target="_blank" rel="noopener">교재 8쪽</a></dd></div>
+        </dl>
+      </section>
+
+      <!-- 실습 3 -->
+      <section class="step" data-lp-step="s3" data-title="실습 3: 한눈에 보이게 그리기" aria-labelledby="s3-h" data-cell="실습 3" data-fx-text="한눈에 보이게 그리기">
+        <header class="step-h">
+          <p class="step-k"><span class="step-n">3</span>차트 · 30분 · 2부</p>
+          <h3 id="s3-h">한눈에 보이게 그리기</h3>
+          <p>차트는 질문에서 시작해요. 변화는 꺾은선, 비교는 막대, 분포는 히스토그램, 많은 칸은 색으로.</p>
+        </header>
+        <div class="step-body chart-body">
+          <ol class="todo">
+            <li>주차별 평균표를 고르고 <kbd>삽입 → 차트</kbd>에서 꺾은선 차트로 바꿔요.</li>
+            <li>학생별 미제출 열에 <kbd>서식 → 조건부 서식 → 색상 스케일</kbd>을 적용해요.</li>
+            <li>차트 제목을 '무엇을 보여 주는지' 문장으로 바꿔요. 한 화면에 모으려면 <a class="ext" href="https://lookerstudio.google.com/" target="_blank" rel="noopener">Looker Studio</a>(선택).</li>
+          </ol>
+          <figure class="chart" aria-labelledby="chart-cap">
+            <p class="chart-title" id="chart-cap">3주 차부터 형성평가 점수가 올랐어요</p>
+            <p class="chart-sub">주차별 활동 평균 · 예시 데이터 · 10점 만점</p>
+            <svg viewBox="0 0 520 250" role="img" aria-label="꺾은선 차트. 형성평가 평균은 1주 6.1, 2주 6.4, 3주 7.2, 4주 7.8점으로 3주 차부터 올랐어요. 과제는 6.7에서 7.0점 사이, 발표는 5.2에서 6.1점 사이예요." data-chart>
+              <g class="ch-grid"><line x1="44" y1="214" x2="508" y2="214"/><line x1="44" y1="158" x2="508" y2="158"/><line x1="44" y1="102" x2="508" y2="102"/><line x1="44" y1="46" x2="508" y2="46"/></g>
+              <g class="ch-axis"><text x="30" y="218" text-anchor="end">4</text><text x="30" y="162" text-anchor="end">6</text><text x="30" y="106" text-anchor="end">8</text><text x="30" y="50" text-anchor="end">10</text><text x="74" y="240" text-anchor="middle">1주</text><text x="212" y="240" text-anchor="middle">2주</text><text x="350" y="240" text-anchor="middle">3주</text><text x="488" y="240" text-anchor="middle">4주</text></g>
+              <polyline class="ch-b" points="74,128 212,127 350,133 488,130"/>
+              <polyline class="ch-c" points="74,192 212,181 350,184 488,167"/>
+              <polyline class="ch-a" points="74,155 212,147 350,124 488,107" pathLength="1"/>
+              <g class="ch-dots"><circle cx="74" cy="155" r="4.5"/><circle cx="212" cy="147" r="4.5"/><circle cx="350" cy="124" r="4.5"/><circle cx="488" cy="107" r="4.5"/></g>
+              <ellipse class="ch-ring" cx="418" cy="116" rx="94" ry="30" transform="rotate(-9 418 116)" pathLength="1"/>
+              <g class="ch-lab"><text class="a" x="488" y="84" text-anchor="end">형성평가 7.8</text><text x="500" y="150" text-anchor="end">과제</text><text x="500" y="196" text-anchor="end">발표</text></g>
+            </svg>
+          </figure>
+        </div>
+        <div class="titles">
+          <p><span>이렇게 말고</span><s>주차별 활동 평균 점수</s></p>
+          <p><span>이렇게, 본 것을 문장으로</span><b>3주 차부터 형성평가 점수가 올랐어요</b></p>
+        </div>
+        <dl class="step-f">
+          <div><dt>막히면</dt><dd>차트가 엉뚱하게 나오면 범위에 머리 줄이 들어갔는지, 주차가 글자인지 확인해요.</dd></div>
+          <div><dt>다 했으면</dt><dd>문장 제목이 달린 차트 두 개 <a href="material/p-011.webp" target="_blank" rel="noopener">교재 11쪽</a></dd></div>
+        </dl>
+      </section>
+
+      <!-- 실습 4 -->
+      <section class="step" data-lp-step="s4" data-title="실습 4: AI에게 묻고, 교사가 판단하기" aria-labelledby="s4-h" data-cell="실습 4" data-fx-text="AI에게 묻고, 교사가 판단하기">
+        <header class="step-h">
+          <p class="step-k"><span class="step-n">4</span>AI와 해석 · 30분 · 2부</p>
+          <h3 id="s4-h">AI에게 묻고, 교사가 판단하기</h3>
+          <p>AI는 질문을 넓혀 주는 동료예요. 판단은 교사의 몫이에요. 개인정보는 빼고 요약표만 보여 줘요.</p>
+        </header>
+        <div class="step-body ai-body">
+          <div class="strip">
+            <h4>보내기 전에 지울 것</h4>
+            <ul><li>이름 · 연락처</li><li>생활기록 · 상담 메모</li><li>학번처럼 알아볼 수 있는 값</li></ul>
+            <p><b>보낼 것</b> 번호와 숫자만 있는 요약표</p>
+          </div>
+          <ol class="todo">
+            <li>요약표(번호와 숫자만)를 복사해 아래 프롬프트와 함께 <a class="ext" href="https://gemini.google.com/" target="_blank" rel="noopener">AI</a>에게 보내요.</li>
+            <li>AI가 낸 해석 가운데 우리 반 사정과 맞지 않는 것을 하나 찾아 지워요.</li>
+            <li>남은 해석으로 '확인해 볼 질문' 세 개를 적어요.</li>
+          </ol>
+        </div>
+        <div class="prompt">
+          <div class="prompt-h"><h4>해석 초안과 질문 받기</h4><button class="copy" type="button" data-copy="p4">프롬프트 복사</button></div>
+          <pre id="p4">아래는 중학교 한 반의 주차별·활동별 평균과 학생 번호별 미제출 횟수야(이름 없음).
+1) 눈에 띄는 변화 세 가지를 짧게 짚어 주고,
+2) 교사가 수업에서 직접 확인해 볼 질문 세 가지를 제안해 줘.
+추측은 추측이라고 밝혀 줘.
+
+[여기에 요약표 붙여 넣기]</pre>
+        </div>
+        <div class="ai-read">
+          <p class="ai-k">AI 답을 읽는 법 · 예시</p>
+          <ol>
+            <li>3주 차부터 형성평가 평균이 6.4에서 7.2로 올랐어요.</li>
+            <li>발표 점수가 낮은 것은 발표 기회가 적었기 때문일 수 있어요(추측).</li>
+            <li class="cut"><s>과제를 내지 않은 학생들은 학습 의욕이 낮아요.</s> <em>지움 · 우리 반 사정과 맞지 않는 단정</em></li>
+          </ol>
+        </div>
+        <dl class="step-f">
+          <div><dt>막히면</dt><dd>AI가 이름을 물어도 넣지 않아요. 번호와 숫자만으로 충분해요.</dd></div>
+          <div><dt>다 했으면</dt><dd>확인해 볼 질문 세 개 <a href="material/p-013.webp" target="_blank" rel="noopener">교재 13쪽</a></dd></div>
+        </dl>
+      </section>
+
+      <!-- 실습 5 -->
+      <section class="step" data-lp-step="s5" data-title="실습 5: 다음 수업에서 바꿀 한 가지" aria-labelledby="s5-h" data-cell="실습 5" data-fx-text="다음 수업에서 바꿀 한 가지">
+        <header class="step-h">
+          <p class="step-k"><span class="step-n">5</span>수업 바꾸기와 나눔 · 20분 · 3부</p>
+          <h3 id="s5-h">다음 수업에서 바꿀 한 가지</h3>
+          <p>데이터를 읽었다면 수업 한 장면이 달라져야 해요. 작은 변화 하나를 정해 나눔 보드에 올려 주세요.</p>
+        </header>
+        <ol class="frame">
+          <li><b>본 것</b><p>7 · 12 · 21번이 3주 연속 과제를 내지 않았어요.</p></li>
+          <li><b>까닭 짐작</b><p>과제 안내가 수업 끝 1분에 몰려 있어요. 듣지 못했을 수도 있어요.</p></li>
+          <li><b>내일 해 볼 일</b><p>과제 안내를 수업 중간으로 옮기고, 첫 5분을 함께 시작해요.</p></li>
+        </ol>
+        <ol class="todo">
+          <li>차트 하나와 질문 하나를 골라 '다음 수업에서 바꿀 한 가지'를 한 문장으로 써요.</li>
+          <li>학생에게 보여 줄 피드백 카드(칭찬 하나 · 다음 걸음 하나)를 만들어요.</li>
+          <li>대시보드 주소나 한 문장을 아래 나눔 보드에 올려요.</li>
+        </ol>
+        <div class="board-wrap">
+          <h4 class="side-h">나눔 보드</h4>
+          <div data-lp="board" data-prompt="대시보드 주소나 화면 사진, 수업 변화 한 문장을 올려 주세요." data-categories='["대시보드","수업 변화"]' data-files="2"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- 교재 -->
+<section class="sec sec-tint" id="deck" aria-labelledby="deck-h" data-cell="교재" data-fx-text="교재 18쪽">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <p class="kicker">교재 <span>18쪽</span></p>
+        <h2 id="deck-h">교재를 강사와 함께 넘겨요</h2>
+      </div>
+      <p class="sec-lead">강사가 넘기면 따라 넘어가요. 놓친 쪽은 직접 넘기거나 전체 보기로 찾아요.</p>
+    </div>
+    <div data-lp="deck" data-pages="1-18"></div>
+  </div>
+</section>
+
+<!-- 질문 · 낱말 -->
+<section class="sec" id="ask" aria-labelledby="ask-h" data-cell="질문" data-fx-text="궁금한 점을 남겨 주세요">
+  <div class="wrap split">
+    <div class="split-a">
+      <p class="kicker">질문 <span>이름 없이</span></p>
+      <h2 id="ask-h">궁금한 점을 남겨 주세요</h2>
+      <p class="sec-lead">같은 궁금증에는 공감을 눌러 주세요. 공감이 많은 질문부터 쉬는 시간과 마무리에 답해요.</p>
+      <div data-lp="qa"></div>
+    </div>
+    <div class="split-b">
+      <h3 class="side-h">오늘 쓰는 말</h3>
+      <dl class="terms">
+        <div><dt>피벗 테이블</dt><dd>긴 표를 기준(예: 주차 × 활동)으로 묶어 합계·평균을 자동으로 내 주는 표</dd></div>
+        <div><dt>조건부 서식</dt><dd>값에 따라 칸 색이 저절로 바뀌게 하는 기능. 많은 숫자를 한눈에 볼 때 써요.</dd></div>
+        <div><dt>가명 처리</dt><dd>이름 대신 번호처럼 누구인지 바로 알 수 없는 값으로 바꾸는 것. AI에 보낼 때는 꼭 해요.</dd></div>
+        <div><dt>대시보드</dt><dd>중요한 숫자와 차트를 한 화면에 모아 둔 보고판</dd></div>
+      </dl>
+      <h3 class="side-h quiz-h">세 문제로 확인</h3>
+      <div class="quiz">
+        <details><summary>주마다 점수가 어떻게 변했는지 보여 줄 때 알맞은 차트는?</summary><p><b>꺾은선 차트.</b> 시간에 따른 변화는 꺾은선이 가장 잘 보여 줘요.</p></details>
+        <details><summary>AI에게 우리 반 기록을 보여 줄 때 먼저 할 일은?</summary><p><b>이름을 번호로 바꿔요.</b> 이름·연락처를 빼고 요약표만 보여 줘요.</p></details>
+        <details><summary>'한 줄에 한 번의 기록' 표가 좋은 까닭은?</summary><p><b>필터·함수·피벗을 그대로 쓸 수 있어서.</b> 같은 모양으로 쌓여야 요약과 차트가 한 번에 돼요.</p></details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 마무리 -->
+<section class="sec sec-tint" id="wrap" aria-labelledby="wrap-h" data-cell="마무리" data-fx-text="마무리와 만족도 조사">
+  <div class="wrap">
+    <p class="kicker">마무리 <span>16:50–17:00</span></p>
+    <h2 id="wrap-h">오늘 만든 다섯 가지</h2>
+    <ol class="made">
+      <li><b>실습 1</b>필터가 걸린 표 한 장</li>
+      <li><b>실습 2</b>미제출 횟수와 주차별 평균표</li>
+      <li><b>실습 3</b>문장 제목이 달린 차트 두 개</li>
+      <li><b>실습 4</b>확인해 볼 질문 세 개</li>
+      <li><b>실습 5</b>수업 변화 한 문장</li>
+    </ol>
+    <div class="wrap-grid">
+      <div>
+        <h3 class="side-h">만족도 조사 <small>다섯 문항 · 이수에 필요해요</small></h3>
+        <div data-lp="survey" data-questions='[{"q":"연수에 전반적으로 만족하시나요?","kind":"scale"},{"q":"배운 내용을 수업이나 업무에 쓸 수 있을 것 같나요?","kind":"scale"},{"q":"진행 속도는 어땠나요?","kind":"choice","options":["빨랐어요","알맞았어요","느렸어요"]},{"q":"가장 도움이 된 내용은 무엇인가요?","kind":"text"},{"q":"아쉬운 점이나 바라는 점을 적어 주세요.","kind":"text"}]'></div>
+      </div>
+      <div class="wrap-side">
+        <h3 class="side-h">오늘 실습을 한 낱말로</h3>
+        <div data-lp="poll" data-id="word" data-kind="word" data-question="오늘 실습을 한 낱말로 말하면?"></div>
+        <h3 class="side-h after-h">연수가 끝난 뒤</h3>
+        <ul class="after">
+          <li><b>후속 모임</b><span>우리 반 대시보드 고쳐 오기</span><small>2027. 1. 13.(수) 16:00 · 온라인. 오늘 만든 대시보드를 한 달 써 본 뒤 함께 고쳐요.</small></li>
+          <li><b>더 읽기</b><a href="https://support.google.com/docs/answer/1272900" target="_blank" rel="noopener">피벗 테이블 만들고 쓰기</a><small>Google 공식 도움말</small></li>
+          <li><b>더 읽기</b><a href="https://support.google.com/docs/answer/190718" target="_blank" rel="noopener">차트 종류 고르기</a><small>Google 공식 도움말</small></li>
+          <li><b>이수</b><span>출석 80% 이상과 만족도 조사를 마치면</span><small>연수원이 2주 안에 나이스에 이수를 등록해요. 이수증은 연수원 누리집에서 내려받아요.</small></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="closing" aria-labelledby="close-h" data-cell="마무리" data-fx-text="숫자는 학생을 대신하지 않아요">
+  <div class="wrap">
+    <h2 id="close-h" class="close-q"><span>숫자는 학생을 대신하지 않아요.</span> <span><mark class="hl">학생을 한 번 더 들여다보게</mark> 하는</span> <span>창일 뿐이에요.</span></h2>
+    <p>읽을 수 있을 만큼만 모으고, 바꿀 수 있는 것부터 읽어요. 세 시간 동안 함께해 주셔서 고맙습니다.</p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <p class="foot-t">데이터로 읽는 우리 반</p>
+      <p>새온교육연수원 디지털 수업 역량 강화 과정 · 2026. 12. 16.(수) 14:00–17:00 · 3층 디지털실습실</p>
+      <p>문의 새온교육연수원 연수 담당 <a href="mailto:training@saeon.example">training@saeon.example</a></p>
+    </div>
+    <ul class="foot-links">
+      <li><a href="privacy.html">개인정보 처리 안내</a></li>
+      <li><a href="check.html">접속 확인</a></li>
+      <li><a href="assets/event.ics" download>달력에 넣기</a></li>
+      <li><a href="#top">맨 위로</a></li>
+    </ul>
+    <p class="foot-note">이 사이트의 연수·기관·인물·학생 기록은 lecpage 예시를 위해 만든 가상이에요.</p>
+  </div>
+</footer>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>
