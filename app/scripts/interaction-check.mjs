@@ -7,12 +7,12 @@
 //   npm --prefix app run build && npm run examples
 //   node app/scripts/interaction-check.mjs                     미리보기 서버를 띄웠다 끔(포트 4188)
 //   node app/scripts/interaction-check.mjs --base=http://localhost:4187/   이미 띄운 서버
-//   --sites=.out   강의 페이지 예시 폴더(기본 .out, 없으면 건너뜀)   --json   결과를 JSON으로   --only=app|site
+//   --sites=.out   강의 페이지 예시 폴더(기본 .out의 <id>/dist, 없으면 건너뜀)   --json   결과를 JSON으로   --only=app|site
 // playwright는 앱 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다. 바깥 네트워크는 모두 막고 돌립니다.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,7 +40,9 @@ base = base && base.replace(/\/?$/, '/');
 const SITES = join(ROOT, arg('sites', '.out'));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.woff2': 'font/woff2' };
 let siteServer = null; let siteBase = '';
-if (ONLY !== 'app' && existsSync(join(SITES, 'sel-story', 'index.html'))) {
+// 강의 페이지 예시 = npm run examples가 조립한 레퍼런스 사이트(.out/<id>/dist/)
+const SITE_IDS = existsSync(SITES) ? readdirSync(SITES).filter((id) => existsSync(join(SITES, id, 'dist', 'index.html'))) : [];
+if (ONLY !== 'app' && SITE_IDS.length) {
   siteServer = createServer((req, res) => {
     const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
     const f = join(SITES, p.endsWith('/') || !p ? p + 'index.html' : p);
@@ -319,8 +321,8 @@ async function checkApp(browser) {
 // ── 강의 페이지 예시 ──
 async function checkSites(browser) {
   const A = 'site';
-  for (const id of ['sel-story', 'data-lab']) {
-    const url = `${siteBase}${id}/index.html`;
+  for (const id of SITE_IDS) {
+    const url = `${siteBase}${id}/dist/index.html`;
     let ctx = await newContext(browser); let page = await ctx.newPage();
     await page.goto(url); await settle(page, 1200);
     await focusWalk(page, A, `${id} 참가자 화면`, 60);

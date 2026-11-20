@@ -12,8 +12,6 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) (Mozilla Foundation) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석. NOTICE 파일은 없음 |
 | [OpenJPEG](https://github.com/uclouvain/openjpeg) | PDF.js에 포함 | BSD-2-Clause | PDF.js 워커 안의 JPEG 2000 해석기 |
 | [Wanted Sans](https://github.com/wanteddev/wanted-sans) (The Wanted Sans Project Authors) | 1.0.3 | SIL OFL 1.1 | 웹앱 글꼴. npm 패키지의 분할 woff2를 고치지 않고 그대로 실음(예약 글꼴 이름 없음) |
-| [modern-screenshot](https://github.com/qq15725/modern-screenshot) (wxm) | 4.7.0 | MIT | 수정 요청의 화면 담기, `skills/lecpage/engine/runtime/review/vendor/modern-screenshot.js` (npm `dist/index.js` 그대로, sha256 `bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b`). 앱 미리보기·로컬 검토 서버에서만 쓰고 만든 사이트에는 넣지 않음 |
-| [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (Stephen Ruiz Ltd) | 1.2.3 | MIT | 수정 요청의 펜 획, `skills/lecpage/engine/runtime/review/vendor/perfect-freehand.js` (npm `dist/esm/index.mjs` sha256 `a02e221f71a757e46915a51d8f5ffc8d1788d9134e063b3edd21f429c973d46c`의 export 줄만 바꿈). 만든 사이트에는 넣지 않음 |
 | [models.dev](https://models.dev) 공개 모델 목록 (models.dev) | 매일 받음 | MIT | 웹앱 `ai-catalog.json`(AI 모델 값·출시일 표)의 일부. OpenRouter 공개 목록에 없는 모델만 이 목록에서 채움. `scripts/ai-catalog/refresh.mjs`가 하루 한 번 받아 모델 id·숫자·날짜만 담음 |
 
 - `ai-catalog.json`의 나머지 자료는 OpenRouter 공개 모델 목록(`openrouter.ai/api/v1/models`, 키 없이 읽는 공개 API)과 Google Gemini 공식 문서(가격표·모델 문서)에서 뽑은 사실(모델 코드, 무료 등급인지)입니다. 글·설명은 옮기지 않습니다.
@@ -28,13 +26,13 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 
 ## 만든 사이트가 실행 중에 불러오는 것(CDN)
 
-lecpage가 파일을 함께 배포하지 않고, 사이트가 버전을 고정한 jsDelivr 주소에서 고치지 않은 파일을 불러옵니다. 효과나 기능을 켠 경우에만 불러옵니다.
+lecpage가 파일을 함께 배포하지 않고, 사이트가 버전을 고정한 jsDelivr 주소에서 고치지 않은 파일을 불러옵니다. GSAP·Lenis·OGL은 AI가 쓰는 사이트가 쓸 수 있는 바깥 스크립트 허용 목록이라, 사이트가 실제로 쓸 때만 불러옵니다.
 
 | 구성 요소 | 버전 | 라이선스 | 언제 |
 |---|---|---|---|
-| [GSAP](https://gsap.com) + ScrollTrigger (Webflow) | 3.15.1 | [Standard "No Charge" GSAP License](https://gsap.com/standard-license)(무료, 오픈소스 아님) | 스크롤 연출 효과 |
-| [Lenis](https://github.com/darkroomengineering/lenis) | 1.3.27 | MIT | 부드러운 스크롤 효과 |
-| [OGL](https://github.com/oframe/ogl) | 1.0.11 | Unlicense | 첫 화면 3D 그래픽 |
+| [GSAP](https://gsap.com) + ScrollTrigger (Webflow) | 3.15.1 | [Standard "No Charge" GSAP License](https://gsap.com/standard-license)(무료, 오픈소스 아님) | 사이트가 스크롤 연출에 쓸 때 |
+| [Lenis](https://github.com/darkroomengineering/lenis) | 1.3.27 | MIT | 사이트가 부드러운 스크롤에 쓸 때 |
+| [OGL](https://github.com/oframe/ogl) | 1.0.11 | Unlicense | 사이트가 3D 그래픽에 쓸 때 |
 | [supabase-js](https://github.com/supabase/supabase-js) | 2.118.0 | MIT | 참여 기능을 Supabase로 연결한 경우 |
 
 GSAP 조건(2025-04-30 시행, 2025-05-30 수정본 기준): 웹사이트에서 쓰는 것은 상업 이용까지 무료입니다. 저작권 표시를 지우거나 바꾸면 안 되고, Webflow의 시각적 애니메이션 제작 기능과 경쟁하는 "코드 없이 애니메이션을 만드는 도구"에 넣는 것은 금지입니다. lecpage는 정해 둔 효과를 켜고 끄기만 하며 애니메이션 편집 기능이 없습니다. 조건이 바뀔 수 있으니 버전을 올릴 때 다시 확인합니다.

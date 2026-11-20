@@ -307,10 +307,10 @@ const RULE_NAME = { ai: 'AI 티·상투·과장', deco: '장식(이모지·영�
 const WEIGHT = { error: 60, honor: 40, formal: 38, trans: 35, cta: 35, noun: 30, mark: 28, ai: 25, passive: 25, deco: 20, plain: 20, len: 12, term: 10 };
 const KIND_BONUS = { toast: 10, error: 10, button: 6, title: 4, label: 2, aria: -10 };
 const SCREEN = {
-  'app/src/pages/Help.jsx': '도움말', 'app/src/pages/Home.jsx': '첫 화면', 'app/src/pages/Demo.jsx': '체험하기', 'app/src/pages/Settings.jsx': '설정', 'app/src/pages/Gallery.jsx': '디자인 갤러리',
-  'app/src/pages/steps/Start.jsx': '1단계 교재 넣기', 'app/src/pages/steps/Edit.jsx': '2단계 살펴보고 고치기', 'app/src/pages/steps/Content.jsx': '2단계 › 내용', 'app/src/pages/steps/DesignPanel.jsx': '2단계 › 디자인',
-  'app/src/pages/steps/Share.jsx': '3단계 배포하기', 'app/src/components/Publish.jsx': '3단계 › 배포할 곳 연결', 'app/src/components/LiveSetup.jsx': '참여 기능 연결', 'app/src/components/ItemEditor.jsx': '2단계 › 칸 고치기',
-  'app/src/components/ReviewChat.jsx': '2단계 › 수정 요청', 'app/src/components/AiPanel.jsx': 'AI로 만들기·다듬기', 'app/src/components/AiConnect.jsx': 'AI 연결', 'app/src/lib/ai-guides.jsx': 'AI 키 만드는 법',
+  'app/src/pages/Help.jsx': '도움말', 'app/src/pages/Home.jsx': '첫 화면', 'app/src/pages/Demo.jsx': '체험하기', 'app/src/pages/Settings.jsx': '설정', 'app/src/pages/Gallery.jsx': '참고 디자인',
+  'app/src/pages/steps/Start.jsx': '1단계 교재 넣기',
+  'app/src/pages/steps/Share.jsx': '3단계 배포하기', 'app/src/components/Publish.jsx': '3단계 › 배포할 곳 연결', 'app/src/components/LiveSetup.jsx': '참여 기능 연결',
+  'app/src/components/AiConnect.jsx': 'AI 연결', 'app/src/lib/ai-guides.jsx': 'AI 키 만드는 법',
   'app/src/lib/ai.js': 'AI 오류 문구', 'app/src/lib/deploy.js': '배포 진행·오류 문구',
   'skills/lecpage/engine/src/render/aux-pages.js': '강사·발표 화면·QR 안내문·접속 확인·개인정보 안내', 'skills/lecpage/engine/src/kit/widgets.js': '키트 부품(질문·투표·보드·출석·설문)',
   'skills/lecpage/engine/runtime/console.js': '강사 화면', 'skills/lecpage/engine/runtime/screen.js': '발표 화면', 'skills/lecpage/engine/runtime/lecpage.js': '참가자 화면 동작', 'skills/lecpage/engine/runtime/live/core.js': '참여 기능(실시간)',

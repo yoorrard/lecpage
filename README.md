@@ -79,7 +79,7 @@ Claude Code는 2.1.30 이상을 권해요(스킬은 2.0.20부터, PDF를 쪽 범
 
 ```bash
 npm test                     # 엔진 테스트
-npm run examples             # 예시 사이트 2개 빌드(.out/)
+npm run examples             # 레퍼런스 사이트 조립·검수(.out/)
 npm --prefix app install
 npm run app:dev              # 웹앱 개발 서버
 ```

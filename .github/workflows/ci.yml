@@ -21,7 +21,7 @@ jobs:
       # npm audit이 보지 못하는 skill 속 라이브러리(fflate 등)와 판을 고정한 배포 명령: OSV(키 없음)에서 알려진 취약점 확인
       - name: 담아 둔 라이브러리 보안 점검
         run: node scripts/vendor-audit.mjs
-      - name: 예시 사이트 빌드
+      - name: 레퍼런스 사이트 조립·검수
         run: npm run examples
       - name: 앱 빌드
         run: npm --prefix app run build
@@ -39,7 +39,7 @@ jobs:
           npm --prefix app audit --omit=dev --audit-level=high
           npm audit --package-lock-only --audit-level=high
           (cd skills/lecpage/backends/cloudflare && npm audit --package-lock-only --audit-level=high)
-  # 윈도우: skill 명령이 셸·bash 없이 도는지(npx 찾기·교재 읽기·빌드·가짜 wrangler로 배포 순서). 쪽 그림은 LibreOffice가 없어 건너뜀
+  # 윈도우: skill 명령이 셸·bash 없이 도는지(npx 찾기·교재 읽기·레퍼런스 사이트 조립·검수·가짜 wrangler로 배포 순서). 쪽 그림은 LibreOffice가 없어 건너뜀
   windows:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -49,12 +49,13 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
-      - name: doctor·make·publish(가짜)·pack
+      - name: doctor·prepare·check·publish(가짜)·pack
         run: |
           node skills/lecpage/scripts/lecpage.mjs doctor
-          node skills/lecpage/scripts/lecpage.mjs make skills/lecpage/engine/test/fixtures/workshop.pptx skills/lecpage/engine/test/fixtures/workshop.pdf -o .out/win/dist --no-qa
-          node skills/lecpage/scripts/lecpage.mjs publish .out/win/work --no-verify --no-handouts
-          node skills/lecpage/scripts/lecpage.mjs pack .out/win/dist -o .out/win/site.zip
+          node skills/lecpage/scripts/lecpage.mjs prepare skills/lecpage/engine/test/fixtures/workshop.pptx -o .out/win/prep
+          node scripts/check-references.mjs data-lab
+          node skills/lecpage/scripts/lecpage.mjs publish .out/data-lab --no-verify --no-handouts
+          node skills/lecpage/scripts/lecpage.mjs pack .out/data-lab -o .out/win/site.zip
   # 바로 공개 서버(선택 기능): 단위 테스트 + 로컬 workerd 통합 테스트(workerd를 못 띄우면 통합 부분만 건너뜀)
   hosting:
     runs-on: ubuntu-latest

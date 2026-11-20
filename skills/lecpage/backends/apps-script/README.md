@@ -27,7 +27,7 @@
 3. 설명: `lecpage`, **다음 사용자 인증 정보로 실행: 나**, **액세스 권한이 있는 사용자: 모든 사용자** 로 고르고 **배포**.
    - "모든 사용자"여야 참가자가 로그인 없이 쓸 수 있습니다. 학교·기관 Workspace 계정은 관리자가 막아 두어 "도메인 내 모든 사용자"만 보일 수 있습니다. 그때는 개인 구글 계정으로 만들거나 기관 정보 담당자에게 문의하세요.
 4. 나온 **웹 앱 URL**(`https://script.google.com/macros/s/…/exec`)을 복사합니다.
-5. lecpage 앱(또는 blueprint)의 실시간 설정에 붙여 넣습니다: `live.provider = "sheets"`, `live.url = <웹 앱 URL>`, `live.code = <연수 코드>`.
+5. lecpage 앱(또는 Skill 작업 폴더의 `lecpage.teacher.json`)의 실시간 설정에 붙여 넣습니다: `live.provider = "sheets"`, `live.url = <웹 앱 URL>`, `live.code = <연수 코드>`.
 6. 확인: 웹 앱 URL 뒤에 `?a=ping` 을 붙여 브라우저로 열면 `{"ok":true,…}` 가 보여야 합니다.
 
 > `Code.gs`를 고친 뒤에는 **배포 → 배포 관리 → ✏️ → 버전: 새 버전 → 배포** 를 해야 반영됩니다(주소는 그대로).

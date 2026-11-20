@@ -39,7 +39,7 @@
 set -euo pipefail          # 작업 폴더에서 실행. SKILL=<skill 폴더>
 API=https://api.supabase.com/v1; H="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"; J='Content-Type: application/json'
 j() { node -p "JSON.parse(require('fs').readFileSync(0,'utf8'))$1"; }        # JSON에서 값 꺼내기
-CODE=$(node -p "require('./work/blueprint.json').live.code")                # 연수 코드(빌드가 만들어 둠)
+CODE=$(node -p "try{require('./work/lecpage.teacher.json').live.code||''}catch{''}"); [ -n "$CODE" ] || CODE=$(openssl rand -hex 5 | tr a-f A-F)   # 연수 코드(강사 값에 없으면 새로)
 ORG=$(curl -fsS -H "$H" $API/organizations | j '[0].slug')                  # 조직이 여럿이면 강사에게 묻기
 REF=$(curl -fsS -H "$H" -H "$J" $API/projects -d "{\"name\":\"lecpage-$CODE\",\"organization_slug\":\"$ORG\",\"db_pass\":\"$(openssl rand -hex 24)\",\"region_selection\":{\"type\":\"specific\",\"code\":\"ap-northeast-2\"}}" | j '.ref')
 until curl -fsS -H "$H" "$API/projects/$REF/health?services=db,rest,realtime,storage" | j '.every(s=>s.status==="ACTIVE_HEALTHY")' | grep -q true; do sleep 10; done
@@ -49,12 +49,12 @@ ADMIN=$(openssl rand -hex 12); HASH=$(printf '%s' "$ADMIN" | openssl dgst -sha25
 curl -fsS -H "$H" -H "$J" "$API/projects/$REF/database/query" -d "{\"query\":\"select lec_private.init_training_hash('$CODE','$HASH')\"}" >/dev/null
 KEY=$(curl -fsS -H "$H" "$API/projects/$REF/api-keys?reveal=true" | j '.find(k=>k.type==="publishable")?.api_key ?? ""')
 [ -n "$KEY" ] || KEY=$(curl -fsS -H "$H" -H "$J" "$API/projects/$REF/api-keys?reveal=true" -d '{"type":"publishable","name":"default"}' | j '.api_key')
-(umask 077; printf '%s\n' "$ADMIN" > dist-강사용/관리자-키.txt); unset ADMIN       # 화면에 찍지 않음
-node -e 'const f="work/info.json",fs=require("fs"),i=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};i.live={...i.live,provider:"supabase",url:`https://${process.argv[1]}.supabase.co`,anonKey:process.argv[2]};fs.writeFileSync(f,JSON.stringify(i,null,2))' "$REF" "$KEY"
+mkdir -p work/dist-강사용; (umask 077; printf '%s\n' "$ADMIN" > work/dist-강사용/관리자-키.txt); unset ADMIN       # 화면에 찍지 않음
+node -e 'const f="work/lecpage.teacher.json",fs=require("fs"),i=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};i.live={...i.live,provider:"supabase",url:`https://${process.argv[1]}.supabase.co`,anonKey:process.argv[2],code:process.argv[3]};fs.writeFileSync(f,JSON.stringify(i,null,2))' "$REF" "$KEY" "$CODE"
 ```
 
-- 그다음 `patch work/blueprint.json -i work/info.json`으로 다시 빌드하고, 사이트의 `check.html`(접속 확인)에서 실시간 연결을 봅니다.
-- **관리자 키**는 skill이 만들어 `dist-강사용/관리자-키.txt`(본인만 읽기)에 한 번 적고, 서버에는 SHA-256 해시만 보냅니다. 강사에게 파일 위치를 알리고, 비밀번호 관리 앱에 옮긴 뒤 파일을 지우게 합니다. 대화에는 키를 적지 않습니다.
+- 그다음 `check work`로 다시 조립하고(강사 값 `work/lecpage.teacher.json`의 `live`에 주소·키·코드가 들어감), 사이트의 `check.html`(접속 확인)에서 실시간 연결을 봅니다.
+- **관리자 키**는 skill이 만들어 `work/dist-강사용/관리자-키.txt`(본인만 읽기)에 한 번 적고, 서버에는 SHA-256 해시만 보냅니다. 강사에게 파일 위치를 알리고, 비밀번호 관리 앱에 옮긴 뒤 파일을 지우게 합니다. 대화에는 키를 적지 않습니다.
 - `organization_slug`·`region_selection`을 씁니다(`organization_id`·`region`은 문서에 폐지 예정으로 적혀 있음). `db_pass`는 그 자리에서 만들어 쓰고 보관하지 않습니다. lecpage는 데이터베이스에 직접 붙지 않으며, 필요하면 대시보드에서 다시 정합니다.
 - 같은 프로젝트에 다음 연수를 더할 때는 `REF`를 넣고 `ADMIN=` 줄부터 돌립니다. `schema.sql` 줄은 다시 돌려도 안전합니다.
 - 중간에 멈추면 `-fsS`를 `-sS`로 바꿔 응답 본문을 봅니다. 프로젝트가 이미 만들어졌으면 다시 만들지 말고 `REF`만 넣고 이어 갑니다.
