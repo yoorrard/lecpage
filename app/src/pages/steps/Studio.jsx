@@ -3,7 +3,7 @@ import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
 import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration } from '../../lib/studio.js';
-import { aiStatus, getActiveAI, PROVIDERS, CHATBOTS, getChatbot, setChatbot } from '../../lib/ai.js';
+import { getActiveAI, PROVIDERS, CHATBOTS, getChatbot, setChatbot } from '../../lib/ai.js';
 import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage, imageAt, replaceText, getVar, setVar, readCss, writeCss } from '../../lib/site-doc.js';
 import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
 import { blobs } from '../../lib/db.js';
@@ -54,7 +54,6 @@ export function Studio({ p, update, go, job, adoptSite, idle }) {
   const inspectT = useRef();
   const recheck = () => { clearTimeout(inspectT.current); inspectT.current = setTimeout(async () => { await idle(); try { setIssues(await runInspect(p.id)); } catch (e) { console.error(e); setIssues([]); } }, 900); };
   useEffect(() => { if (!working) recheck(); return () => clearTimeout(inspectT.current); }, [p.site, p.meta, working]);
-  const errs = (issues || []).filter((x) => x.level === 'error').length;
   const published = !!p.deploy?.lastUrl;
   const changed = published && (p.editedAt || 0) > (p.deploy.at || 0);
   const tabs = [
