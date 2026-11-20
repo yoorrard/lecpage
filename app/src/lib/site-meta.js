@@ -110,3 +110,15 @@ export function printSiteHtml(p) {
   const steps = [...doc.querySelectorAll('[data-lp-step]')].map((s) => `<section><h2>${esc(s.getAttribute('data-title') || s.querySelector('h1,h2,h3,h4')?.textContent || '실습')}</h2>${[...s.querySelectorAll('li,p,pre')].filter((e) => !e.closest('li') || e.tagName === 'LI').map((e) => (e.tagName === 'PRE' ? `<pre>${esc(e.textContent)}</pre>` : `<p>${esc(e.textContent.trim())}</p>`)).join('')}</section>`);
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(m.title)} · 실습 모음</title><style>body{font:16px/1.7 system-ui,'Malgun Gothic',sans-serif;max-width:46em;margin:32px auto;padding:0 16px;word-break:keep-all}pre{white-space:pre-wrap;background:#f3f0ee;padding:10px 12px;border-radius:8px}section{break-inside:avoid;margin-top:24px}</style><h1>${esc(m.title)}</h1>${steps.join('') || '<p>실습 단계가 없어요.</p>'}</html>`;
 }
+
+/**
+ * 배포하기 화면의 [이 주소에 이어서 배포]: 파일에 담아 온 배포 정보를 이 연수에 씀(같은 주소·같은 참여 기능 방·같은 관리자 키).
+ * @returns {object} update()에 넘길 patch
+ */
+export function carryPatch(cur) {
+  const c = cur.carryPending; if (!c) return {};
+  if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => m.saveKey('live-admin:' + c.live.url.replace(/\/+$/, ''), c.liveAdminKey, true)).catch(() => { });
+  const moved = isV2(cur) || cur.blueprint ? patchDeploy(cur, (b) => ({ ...b, live: { ...(b.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(b.meta || {}), siteUrl: c.deploy.lastUrl } })) : {};
+  return { deploy: c.deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
+}
+

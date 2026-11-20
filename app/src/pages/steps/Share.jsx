@@ -13,8 +13,8 @@ import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
-import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, toggleFeature, ensureCode, siteFiles, printSiteHtml } from '../../lib/site-meta.js';
-import { duplicateProject, carryPatch } from '../../lib/project.js';
+import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, toggleFeature, ensureCode, siteFiles, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
+import { duplicateProject } from '../../lib/project.js';
 import { whenText } from '@engine/src/hero-meta.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
