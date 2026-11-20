@@ -166,7 +166,7 @@
 .lpk .lp-deck-stage{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px;outline:none}
 .lpk .lp-deck-stage:focus-visible{outline:2px solid var(--_act);outline-offset:4px}
 .lpk .lp-slide{display:grid;gap:6px;margin:0}
-.lpk .lp-slide img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;background:var(--_paper);border:1px solid var(--_line);border-radius:var(--_rs)}
+.lpk .lp-slide img{display:block;width:100%;height:auto;aspect-ratio:var(--lp-deck-ratio,var(--lpk-deck-ratio,16/9));object-fit:contain;background:var(--_paper);border:1px solid var(--_line);border-radius:var(--_rs)}
 .lpk .lp-slide figcaption{display:flex;gap:8px;font-size:.85rem;color:color-mix(in srgb,var(--_ink) 78%,transparent)}
 .lpk .lp-slide-no{font-weight:800;font-variant-numeric:tabular-nums;color:var(--_act)}
 .lpk .lp-deck.is-ready .lp-deck-stage{display:block}
@@ -179,7 +179,7 @@
 .lpk .lp-deck-thumbs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
 .lpk .lp-deck-thumbs button{flex:none;width:112px;padding:0;border:2px solid transparent;border-radius:6px;background:none;cursor:pointer;color:inherit;overflow:hidden}
 .lpk .lp-deck-thumbs button[aria-current="true"]{border-color:var(--_ac)}
-.lpk .lp-deck-thumbs img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--_paper)}
+.lpk .lp-deck-thumbs img{display:block;width:100%;aspect-ratio:var(--lp-deck-ratio,var(--lpk-deck-ratio,16/9));object-fit:cover;background:var(--_paper)}
 .lpk .lp-thumb-t{display:grid;gap:2px;padding:6px;font-size:max(12px,.75rem);text-align:start}
 .lpk .lp-thumb-t i{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 휴대폰: '전체 보기'·'전체 화면'은 그림 단추(이름은 화면 낭독기에 그대로)로 줄여 쪽 넘기기와 한 줄에, '강사 따라 넘기기'는 다음 줄에 누를 곳 크기로.
@@ -198,7 +198,7 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 .lpk .lp-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:12px}
 .lpk .lp-overview-grid button{display:grid;gap:4px;padding:0;border:1px solid var(--_line);border-radius:6px;background:none;color:inherit;font-size:.8rem;text-align:start;cursor:pointer;overflow:hidden}
 .lpk .lp-overview-grid button span{padding:4px 6px}
-.lpk .lp-overview-grid img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.lpk .lp-overview-grid img{display:block;width:100%;aspect-ratio:var(--lp-deck-ratio,var(--lpk-deck-ratio,16/9));object-fit:cover}
 
 /* 접속 QR */
 .lpk .lp-qr{width:180px;max-width:100%;aspect-ratio:1;background:#fff;border-radius:8px;padding:4px;display:grid;place-items:center;flex:none}

@@ -182,7 +182,7 @@ export async function checkCmd(h) {
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
   const issues = K.inspect(site, metaRaw).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
   const checkDir = join(work, 'check'); rmSync(checkDir, { recursive: true, force: true }); mkdirSync(checkDir, { recursive: true });
-  const shots = [], tiles = [];
+  const shots = [], tiles = [], tileCut = [];
   let rendered = [], browserNote = '';
   const pw = args['no-shots'] ? null : await loadPlaywright();
   if (pw) {
@@ -209,6 +209,7 @@ export async function checkCmd(h) {
             await page.waitForTimeout(250);
             await K.settlePage(page); // 폭이 바뀌면 그림·움직임을 다시 다 본 모습으로(늦게 받는 그림이 비어 찍히지 않게)
             const H = await page.evaluate(() => document.documentElement.scrollHeight);
+            if (Math.ceil(H / th) > 12) tileCut.push(`${name}-${w}`); // 긴 쪽: 나눠 본 그림은 앞 12장까지 → 나머지는 전체 그림에서 보라고 알림
             for (let i = 0; i < Math.min(12, Math.ceil(H / th)); i++) {
               const f = join(checkDir, 'tiles', `${name}-${w}-${String(i + 1).padStart(2, '0')}.png`);
               await page.screenshot({ path: f, fullPage: true, animations: 'disabled', clip: { x: 0, y: i * th, width: w, height: Math.min(th, H - i * th) } });
@@ -245,7 +246,7 @@ export async function checkCmd(h) {
     all.length > 10 ? `… 나머지는 ${rel(join(checkDir, 'issues.md'))}` : '',
     r.warnings.length ? `조립 알림 ${r.warnings.length}: ${r.warnings.slice(0, 3).map((w) => w.message_ko).join(' / ')}` : '',
     shots.length ? `화면 그림 ${shots.map((s) => rel(s)).join(' · ')}(전체)` : '',
-    tiles.length ? `나눠 본 그림 ${rel(join(checkDir, 'tiles'))}/ ${tiles.length}장(<쪽>-390-01.png부터, 위에서 아래로) — 첫 장과 고친 곳 둘레를 직접 열어 봐요` : '', browserNote,
+    tiles.length ? `나눠 본 그림 ${rel(join(checkDir, 'tiles'))}/ ${tiles.length}장(<쪽>-390-01.png부터, 위에서 아래로) — 첫 장과 고친 곳 둘레를 직접 열어 봐요${tileCut.length ? ` · ${tileCut.join('·')}는 앞 12장까지만이라 그 아래(설문·마무리 등)는 전체 그림(<쪽>-390.png·-1280.png)에서 봐요` : ''}` : '', browserNote,
   ], { ok: !errors.length, dist, issues: all, warnings: r.warnings, shots, tiles, report: r.report });
   process.exitCode = errors.length ? 1 : 0;
 }

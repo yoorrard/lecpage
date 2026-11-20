@@ -20,6 +20,7 @@
 - 자리 표시 안에는 글을 쓰지 않아요(조립 때 지워짐). JSON 속성은 작은따옴표로 감싸요.
 - 실습 단계의 [완료 체크]·[도움 요청](`.lpk-step-f`)은 그 요소 안쪽 맨 끝에 붙어요. 본문 폭에 맞추려면 `data-lp-step`을 내용 상자에 달거나 `.lpk-step-f`에 여백을 줘요.
 - 실습 진행을 사이트 모양으로 보이려면(선택): 단계 주소는 `#st-s1`, 단계 링크 `<a href="#st-s1" data-st-link="s1">`(끝낸 단계 `.is-done`, 지금 단계 `aria-current="step"`), 끝낸 수 `<b data-st-count></b>`("2 / 5"), 막대 `<progress data-st-progress></progress>`. 지금 보는 단계에는 `.lp-st.is-active`가 붙어요.
+- 교재 넘기기의 그림 칸은 쪽 그림 비율을 따라요(A4 세로 자료집이면 세로로). 정하려면 `:root{--lp-deck-ratio:210/297}`. 특정 쪽으로 보내는 링크는 `#deck-p7`.
 - 조립이 만드는 것도 링크할 수 있어요: `assets/event.ics`(달력에 넣기), `screen.html`(발표 화면), `check.html`(접속 확인).
 - 복사 단추는 스크립트 없이: `<button type="button" data-copy-text="프롬프트 원문">복사</button>`(복사하고 알림을 띄워요).
 

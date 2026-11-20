@@ -25,6 +25,30 @@ export const FONT_CSS_HOSTS = ['fonts.googleapis.com', 'cdn.jsdelivr.net', 'hang
 export const FRAME_SOURCES = ['https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
 const enc = (v) => (typeof v === 'string' ? new TextEncoder().encode(v).length : v?.byteLength || 0);
 const asText = (v) => (typeof v === 'string' ? v : v instanceof Uint8Array || v instanceof ArrayBuffer ? new TextDecoder().decode(v) : '');
+/** 그림 머리만 읽어 크기(webp·png·jpeg). 모르면 null — 교재 넘기기가 A4 세로 교재를 16:9 칸에 작게 넣지 않게 비율을 알려 줌 */
+function imageSize(v) {
+  const b = v instanceof ArrayBuffer ? new Uint8Array(v) : v instanceof Uint8Array ? v : null;
+  if (!b || b.length < 30) return null;
+  const s = (i, n) => String.fromCharCode(...b.subarray(i, i + n));
+  const le = (i, n) => b.subarray(i, i + n).reduceRight((a, x) => a * 256 + x, 0);
+  if (s(0, 4) === 'RIFF' && s(8, 4) === 'WEBP') {
+    const k = s(12, 4);
+    if (k === 'VP8X') return { w: le(24, 3) + 1, h: le(27, 3) + 1 };
+    if (k === 'VP8L') { const x = le(21, 4); return { w: (x & 0x3fff) + 1, h: ((x >>> 14) & 0x3fff) + 1 }; }
+    if (k === 'VP8 ') return { w: le(26, 2) & 0x3fff, h: le(28, 2) & 0x3fff };
+    return null;
+  }
+  if (b[0] === 0x89 && s(1, 3) === 'PNG') return { w: (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) >>> 0, h: (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) >>> 0 };
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xff) return null;
+      const m = b[i + 1], len = b[i + 2] * 256 + b[i + 3];
+      if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { w: b[i + 7] * 256 + b[i + 8], h: b[i + 5] * 256 + b[i + 6] };
+      i += 2 + len;
+    }
+  }
+  return null;
+}
 
 /** 사이트 CSP(AI 쪽용). 엔진 보조 쪽은 엔진 CSP(render/shell.js cspPolicy)를 그대로 씀 */
 export function kitCsp(bp, { live = true } = {}) {
@@ -374,6 +398,9 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       const info = ctx.pageInfo;
       const list = pages.map((p) => ({ page: p, src: ctx.pageSrc(p), title: info[p]?.title || '', text: info[p]?.text || '' }));
       if (!col.deck.length) col.deck = list;
+      // 첫 쪽 그림 비율이 16:9와 다르면(A4 세로 자료집·4:3 슬라이드) 키트 CSS가 그 비율로 그림 칸을 잡음(--lpk-deck-ratio)
+      const dim = ctx.pageSize(list[0].page);
+      if (dim && dim.w > 0 && dim.h > 0 && Math.abs(dim.w / dim.h - 16 / 9) > 0.05) col.deckRatio = `${dim.w}/${dim.h}`;
       return { html: W.deckBox(list, { label: ctx.words.deck }) };
     }
     case 'materials': {
@@ -505,7 +532,7 @@ export function assemble(site, meta0, opts = {}) {
   const ctx = {
     meta, words, liveOn, code: v0.live.code, anonymous: v0.live.anonymous !== false, minor: v0.audience.minor, uploads: v0.live.uploads, provider: v0.live.provider,
     done: v0.meta.admin.kind === 'official' && !!(v0.meta.admin.completionRate || v0.meta.admin.hours), surveyUrl: meta.surveyUrl, materialPages, pageInfo,
-    pageSrc: (n) => pageFile[n] || W.pagePath(n), materials: Array.isArray(opts.materials) ? opts.materials : [],
+    pageSrc: (n) => pageFile[n] || W.pagePath(n), pageSize: (n) => (pageFile[n] ? imageSize(src[pageFile[n]]) : null), materials: Array.isArray(opts.materials) ? opts.materials : [],
     dock: { attend: (quick || pre.attend || f.includes('attendance')) && (quick ? 'quick' : 'in'), help: f.includes('help'), qa: f.includes('qa') && pre.qa, signal: f.includes('signal'), reactions: f.includes('reactions') },
     phaseText: endedText(v0, words), // 끝난 연수 줄: 자리를 정한 '지금' 줄(data-lp="now")에도 들어가게 펼치기 전에
   };
@@ -539,7 +566,7 @@ export function assemble(site, meta0, opts = {}) {
     out[p] = v;
   }
   out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme);
-  out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${read('kit.css')}`;
+  out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${col.deckRatio ? `:root{--lpk-deck-ratio:${col.deckRatio}}\n` : ''}${read('kit.css')}`;
   if (!out['assets/lecpage.js']) out['assets/lecpage.js'] = read('lecpage.js');
   if (!out['assets/qr.js']) out['assets/qr.js'] = read('vendor/qrcode.js');
   if (live && !out['assets/live.js']) warn('live-js', '참여 기능 런타임(live.js)을 만들지 못했어요.');
