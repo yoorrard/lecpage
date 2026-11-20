@@ -1,5 +1,5 @@
-// 페이지 조립: index(참가자). 보조 화면(console·screen·poster·check·privacy)은 aux.js, 같이 쓰는 머리·CSP는 shell.js
-export { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux.js';
+// 페이지 조립: index(참가자). 보조 화면(console·screen·poster·check·privacy)은 aux-pages.js, 같이 쓰는 머리·CSP는 shell.js
+export { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide } from './aux-pages.js';
 export { phaseWindow, LIB_SCRIPT_SOURCES, cspPolicy, eventJsonLd } from './shell.js';
 import { esc, br, href, icon, koDate, host } from './html.js';
 import { renderSection, contactHtml, boardFiles, quickAttend, dockAttend } from './sections.js';
@@ -7,7 +7,7 @@ export { quickAttend };
 import { heroHasBand } from './hero.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { attrs, jsonScript, headTags, siteData, phaseWindow } from './shell.js';
-import { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide, keepRule } from './aux.js';
+import { renderConsole, renderScreen, renderPoster, renderCheck, renderPrivacy, opsGuide, keepRule } from './aux-pages.js';
 import { deriveConcept } from '../decide/concept.js';
 import { getPreset, presetPlan } from '../design/presets.js';
 import { FONTS } from '../design/fonts.js';

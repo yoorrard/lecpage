@@ -320,7 +320,7 @@
   drawTimers();
 
   // 로비: 질문·투표가 없을 때(도구 결과도 없을 때) 참여 QR을 화면 높이의 절반쯤으로 크게 + 큰 연수 제목 + 세 단계.
-  // 첫 질문·투표가 오면 지금 배치(무대 + 오른쪽 레일)로. 처음 모습은 aux.js가 그려 둠(같은 꼴)
+  // 첫 질문·투표가 오면 지금 배치(무대 + 오른쪽 레일)로. 처음 모습은 aux-pages.js가 그려 둠(같은 꼴)
   function setLobby() {
     if (!scr || !mainBox) return;
     var on = !!mainBox.querySelector('.lp-scr-empty') && !(stage && !stage.hidden);

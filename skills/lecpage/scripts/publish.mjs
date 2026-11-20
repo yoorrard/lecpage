@@ -413,7 +413,8 @@ export async function handoutsCmd(h, o = {}) {
   if (!siteDir && out.endsWith('-강사용') && existsSync(join(out.slice(0, -'-강사용'.length), 'index.html'))) siteDir = out.slice(0, -'-강사용'.length);
   // 열리지 않는 주소면 브라우저를 띄우기 전에 멈춤(직접 부르면 종료 코드 1, publish 안에서는 한 줄로)
   const unreachable = `주소가 열리지 않아요: ${base}poster.html — 배포가 끝났는지(새 주소는 1~2분 걸릴 수 있어요)·주소가 맞는지 확인하고 다시 handouts를 실행해 주세요`;
-  if (!local) {
+  // 폴더를 여기서 띄운 경우만 건너뜀(127.0.0.1·localhost 주소를 준 경우도 열리는지 먼저 봄 — 브라우저가 없는 곳에서도 같은 결과)
+  if (!server) {
     const ok = await fetch(base + 'poster.html', { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) }).then((r) => r.ok).catch(() => false);
     if (!ok) { if (!o.quiet) fail(unreachable); return { lines: [`안내물 ✕ ${unreachable}`], files: [] }; }
   }

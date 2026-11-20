@@ -108,8 +108,8 @@ test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 �
   assert.deepEqual(conn(csp(same, 'index.html')), ["'self'", 'file:'], '같은 주소라 따로 열 곳 없음');
   const local = E.build(bp({ provider: 'local', code: 'CSP5', features: ['qa'] }), { runtime: nodeRuntime() }).files;
   assert.deepEqual(conn(csp(local, 'index.html')), ["'self'", 'file:']);
-  // 보조 화면만 aux.css, 공유 미리보기(og)는 참가자 화면에만
-  assert.ok(!http['index.html'].includes('assets/aux.css') && http['console.html'].includes('assets/aux.css'));
+  // 보조 화면만 aux-pages.css, 공유 미리보기(og)는 참가자 화면에만
+  assert.ok(!http['index.html'].includes('assets/aux-pages.css') && http['console.html'].includes('assets/aux-pages.css'));
   assert.ok(!http['console.html'].includes('og:title') && http['index.html'].includes('og:title'));
 });
 
