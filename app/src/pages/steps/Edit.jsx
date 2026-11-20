@@ -7,7 +7,7 @@ import { AiPanel, useAiResume, GuardNote } from '../../components/AiPanel.jsx';
 import { ReviewChat } from '../../components/ReviewChat.jsx';
 import { ContentPanel } from './Content.jsx';
 import { DesignPanel } from './DesignPanel.jsx';
-import { FEATURES, LIVE_KEYS, syncInfo, applyAnswer } from '../../lib/blueprint.js';
+import { FEATURES, LIVE_KEYS, syncInfo, applyInfo } from '../../lib/blueprint.js';
 import { toast, monthDay } from '../../lib/util.js';
 import { trainingDays, daysPatch, nextDay } from '../../lib/days.js';
 import { undoStack, pushUndoFor, popUndo, onUndoChange, loadSavedUndo } from '../../lib/undo.js';
@@ -79,7 +79,7 @@ export function StepEdit({ p, update, go }) {
   function onAi(bp, meta = {}) {
     pushUndo('AI로 다듬기');
     if (meta.polish) update({ blueprint: bp, aiMethod: 'ai' }); // 문구만 바뀜(설정·연결은 그대로)
-    else update((cur) => ({ blueprint: applyAnswer(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai' }));
+    else update((cur) => ({ blueprint: applyInfo(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai' }));
     setAi(false); toast(meta.polish ? `문구 ${meta.count}곳을 다듬었어요. 마음에 안 들면 [되돌리기]를 누르세요.` : 'AI가 다시 짠 내용으로 바꿨어요. 마음에 안 들면 [되돌리기]를 누르세요.');
     if (E.restoredCount(meta.restored)) noteAiResult(p.id, { restored: meta.restored, polish: !!meta.polish });
   }

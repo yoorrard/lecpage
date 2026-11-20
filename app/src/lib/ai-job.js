@@ -2,7 +2,7 @@
 // 교재 요약(글)과 연수 정보만 고른 AI 회사로 보냅니다. 강사 메일·실시간 연결 값·키는 보내지 않습니다.
 import { useEffect, useState } from 'preact/hooks';
 import { E } from './engine.js';
-import { makePrompt, looksTruncated, applyAnswer, guardAnswer } from './blueprint.js';
+import { makePrompt, looksTruncated, applyInfo, guardAnswer } from './blueprint.js';
 import { generateAuto, getActiveAI, explainError, PROVIDERS, AiError } from './ai.js';
 import { reach } from './netcheck.js';
 import { pushUndoFor } from './undo.js';
@@ -110,7 +110,7 @@ export async function startMakeJob({ getProject, update, allowPaid, allowLight }
     pushUndoFor(pid, 'AI로 만들기 전', cur);
     // 교재 지킴이: 프롬프트 원문·단계·일정·FAQ·목표·교재 주소는 교재대로, 교재 보기의 쪽 그림·쪽 글은 교재에서(guardAnswer)
     const g = guardAnswer(bp, cur, ing, cur.blueprint, { assets: await blobs.keys(pid).catch(() => null) }); // 저장소에 없는 그림 주소는 비움
-    update((c) => ({ blueprint: carryPicks(applyAnswer(g.blueprint, c.info, c.material, c.blueprint), before, c.blueprint?.sections), aiMethod: 'ai' }));
+    update((c) => ({ blueprint: carryPicks(applyInfo(g.blueprint, c.info, c.material, c.blueprint), before, c.blueprint?.sections), aiMethod: 'ai' }));
     set(pid, { status: 'done', phase: 'done', sections: bp.sections.length, ctrl: null, restored: g.restored, undone: [] });
     track('make', 'key');
   } catch (e) {

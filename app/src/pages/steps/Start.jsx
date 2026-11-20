@@ -16,7 +16,7 @@ import { trainingDays, daysPatch } from '../../lib/days.js';
 import { SKILL_CMDS } from '../../lib/agent.js';
 import { dropAssetCache } from '../../components/Preview.jsx';
 import { instantInfo } from '../../lib/deploy.js';
-import { FEATURES, makeDraft, syncInfo, applyAnswer, dropMissing } from '../../lib/blueprint.js';
+import { FEATURES, makeDraft, syncInfo, applyInfo, dropMissing } from '../../lib/blueprint.js';
 import { FoundSummary } from '../../components/Structure.jsx';
 
 export const SIZE = [{ value: 25, label: '30명 이하' }, { value: 60, label: '31~100명' }, { value: 200, label: '101~300명' }, { value: 500, label: '300명 넘음' }];
@@ -225,7 +225,7 @@ export function StepStart({ p, update, go }) {
   function onAi(bp, meta = {}) {
     const cur = latest.current;
     if (cur.blueprint) pushUndoFor(p.id, 'AI로 만들기 전', cur);
-    update({ blueprint: applyAnswer(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai', chatWait: null });
+    update({ blueprint: applyInfo(bp, cur.info, cur.material, cur.blueprint), aiMethod: 'ai', chatWait: null });
     setRemake(false); noteAiResult(p.id, { restored: meta.restored || [], via: '' });
     toast('AI가 짠 내용으로 만들었어요.'); go(2);
   }

@@ -11,22 +11,6 @@ export function makeDraft(p, ing) {
 }
 
 /**
- * AI 답(키 연결·쓰던 AI 창)에 강사 값을 반영(applyInfo)한 뒤, 강사가 정하지 않은 링크성 칸을 비움:
- * 설문 칸 주소(survey.url)는 강사가 적은 설문 주소(info.surveyUrl)나 지금 사이트에 이미 있던 주소만, 로고(design.logo)는 강사 값이나 지금 값만.
- * (live.*·meta.siteUrl/joinUrl/shortUrl는 applyInfo가 이미 막음. 엔진 공용 규칙이 생기면 그쪽으로 합침)
- */
-export function applyAnswer(bp, info, material, prev) {
-  const keepLogo = [info?.logo, prev?.design?.logo].filter(Boolean);
-  const okSurvey = new Set([info?.surveyUrl, ...(prev?.sections || []).filter((s) => s?.type === 'survey').map((s) => s.url)].filter(Boolean));
-  const ai = { ...bp };
-  if (ai.design?.logo && !keepLogo.includes(ai.design.logo)) { ai.design = { ...ai.design }; delete ai.design.logo; }
-  if (Array.isArray(ai.sections)) ai.sections = ai.sections.map((s) => (s?.type === 'survey' && s.url && !okSurvey.has(s.url) ? { ...s, url: '' } : s));
-  const out = applyInfo(ai, info, material, prev); // 참여 기능이 켜져 있으면 주소를 비운 설문 칸에 기본 문항을 채움
-  out.sections = (out.sections || []).filter((s) => !(s?.type === 'survey' && !s.url && !s.questions?.length)); // 주소도 문항도 없는 설문 칸은 뺌
-  return out;
-}
-
-/**
  * 쓰던 AI 창·키에 보내는 프롬프트의 전체 상한(글자). 긴 문서형 교재(해설서·자료집)는 초안 JSON이 수십만 자가 되어
  * 쓰던 AI 창에 넣을 수 없고 키 비용도 커짐(점검 2026-11: 60장 DOCX 37.6만 자). 한글 1자 ≈ 1토큰으로 어림하면
  * 무료·개인 요금제 AI 창의 문맥(수만 토큰)과 답(설계도 1~3만 토큰)을 함께 담는 크기. 보통 교재(1~1.5만 자)는 그대로
