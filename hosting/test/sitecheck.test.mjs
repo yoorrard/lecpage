@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkHtml, checkCss, checkOwnScript, scanHtml, pageData, decodeEntities, OWN_JS_MAX } from '../src/sitecheck.js';
 import { HttpError } from '../src/http.js';
+import { isRuntimeJs } from '../src/runtime.js';
 import { buildSite, aiSite, AI_SITE_JS } from './helpers.mjs';
 
 const te = new TextEncoder(); const td = new TextDecoder();
@@ -27,9 +28,12 @@ test('엔진이 만든 v1 사이트(예시 둘, 실시간 제공자 넷, 암호 
   assert.ok(pages >= 40, String(pages));
 });
 
-test('AI가 쓴 사이트(첫 화면·둘째 쪽·CSS·site.js + 엔진 보조 쪽)는 통과', async () => {
+test('AI가 쓴 사이트(엔진 조립 결과: 첫 화면·둘째 쪽·CSS·site*.js·*-events.js·*.module.js + 보조 쪽)는 통과', async () => {
   const files = await aiSite({ live: { url: 'https://lecpage-sites.example.workers.dev/live', code: 'AI2026' } });
-  const own = (p) => p === 'assets/site.js';
+  const ownSet = new Set();
+  for (const [p, bytes] of Object.entries(files)) if (p.endsWith('.js') && !(await isRuntimeJs(bytes))) { ownSet.add(p); assert.equal(js(td.decode(bytes), p), 'ok', p); }
+  assert.deepEqual([...ownSet].sort(), ['assets/about.js', 'assets/app.js', 'assets/site-2.module.js', 'assets/site-events.js', 'assets/site.js'], '조립이 옮긴 스크립트와 AI가 쓴 파일만 사이트 스크립트');
+  const own = (p) => ownSet.has(p);
   for (const [p, bytes] of Object.entries(files)) {
     if (p.endsWith('.html')) assert.equal(run(() => checkHtml(td.decode(bytes), p, { isOwnScript: own })), 'ok', p);
     if (p.endsWith('.css')) assert.equal(run(() => checkCss(td.decode(bytes), p)), 'ok', p);

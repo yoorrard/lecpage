@@ -35,7 +35,7 @@ export async function buildSite(name, { assets = {}, password = '', patch = null
   return Object.fromEntries(Object.entries(files).map(([p, v]) => [p, bytesOf(v)]));
 }
 
-/** AI가 쓴 사이트 스크립트(assets/site.js) 예: 화면만 다루고 바깥으로 보내지 않음 */
+/** AI가 따로 쓴 스크립트 파일(assets/app.js) 예: 화면만 다루고 바깥으로 보내지 않음 */
 export const AI_SITE_JS = `// AI가 쓴 사이트 스크립트
 (function () {
   'use strict';
@@ -45,53 +45,59 @@ export const AI_SITE_JS = `// AI가 쓴 사이트 스크립트
   if (window.gsap) window.gsap.from('h1', { opacity: 0, y: 12, duration: 0.6 });
 })();
 `;
-/**
- * AI가 직접 쓴 사이트(docs/plan-ai-first.md §3)를 흉내: AI가 쓴 index.html·about.html·assets/style.css·assets/site.js·쪽 그림에
- * 엔진이 조립해 넣는 것(런타임·키트 CSS·사이트 자료 lp-data·보조 쪽: 강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내)을 더함
- * @param {{ live?: { url: string, code: string } | null, index?: (html: string) => string }} [o] live: 실시간 서버, index: 첫 화면 고치기(시험용)
- * @returns {Promise<Record<string, Uint8Array>>}
- */
-export async function aiSite({ live = null, index = (h) => h } = {}) {
-  const eng = await buildSite('data-lab', live ? { patch: (bp) => { bp.live = { ...bp.live, provider: 'http', url: live.url, code: live.code }; } } : {});
-  const engIndex = new TextDecoder().decode(eng['index.html']);
-  const lpData = /<script type="application\/json" id="lp-data">[\s\S]*?<\/script>/.exec(engIndex)[0];
-  const html = `<!doctype html>
+/** AI가 조립 전에 쓰는 사이트(docs/plan-ai-first.md §3): 인라인 스크립트·모듈·onclick·유튜브 틀·고정 라이브러리·바깥 스크립트·키트 자리 표시 */
+const AI_INDEX = `<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>기록은 쌓였는데 시간이 없다면</title>
-<link rel="stylesheet" href="assets/lecpage.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js" defer></script>
 <script src="https://evil.example/track.js"></script>
-<script src="assets/boot.js"></script>
 </head>
 <body>
 <header class="hero"><p class="kicker">2026 교원 연수</p><h1>기록은 쌓였는데 시간이 없다면</h1>
 <p>와이파이: lec-guest · 비밀번호: 2026lec (비밀번호를 입력하세요)</p>
-<p><a href="https://padlet.com/example/board">패들렛 열기</a> · <a href="about.html">강사 소개</a> · <button type="button" data-tab="help">로그인 방법 보기</button></p></header>
+<p><a href="https://padlet.com/example/board">패들렛 열기</a> · <a href="about.html">강사 소개</a> · <button type="button" data-tab="help">로그인 방법 보기</button> <button type="button" class="top" onclick="window.scrollTo(0, 0)">맨 위로</button></p></header>
 <main>
 <section data-lp-step="s1" data-title="1단계: 교재 살펴보기">
 <h2>1단계</h2><img src="material/p-001.webp" alt="교재 1쪽">
-<iframe src="https://www.youtube-nocookie.com/embed/abc123" title="연수 안내 영상" allowfullscreen></iframe>
+<iframe src="https://www.youtube.com/embed/abc123def" title="연수 안내 영상" allowfullscreen></iframe>
 <pre><code>&lt;input type="password"&gt; 같은 칸은 쓰지 않아요</code></pre>
 <form class="quiz"><label>오늘 배운 낱말<input name="answer" placeholder="정답을 적어 주세요"></label><button type="submit">확인</button><output></output></form>
-<div data-lp="qa"></div>
-<div data-lp="board" data-prompt="와이파이 비밀번호를 받았나요? 한 줄로 남겨 주세요"></div>
+<div data-lp="poll" data-question="오늘 연수, 어땠나요?" data-options='["좋아요","보통이에요"]'></div>
 </section>
+<section id="q"><h2>질문</h2><div data-lp="qa"></div></section>
+<section id="b"><h2>보드</h2><div data-lp="board" data-prompt="와이파이 비밀번호를 받았나요? 한 줄로 남겨 주세요"></div></section>
 </main>
 <footer><p>문의: 연수 담당</p></footer>
-${lpData}
-<script src="assets/lecpage.js" defer></script>
-${eng['assets/live.js'] ? '<script src="assets/live.js" defer></script>\n' : ''}<script src="assets/site.js" defer></script>
+<script>document.documentElement.classList.add('js');</script>
+<script type="module">document.body.dataset.ready = '1';</script>
+<script src="assets/app.js" defer></script>
 </body>
 </html>
 `;
-  const about = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>강사 소개</title><link rel="stylesheet" href="assets/style.css"></head><body><h1>강사 소개</h1><p>디지털 기록을 연구해요.</p><script src="assets/site.js" defer></script></body></html>';
-  const css = ':root{--lp-accent:#2f6f5e;--lp-ink:#1d2321;--lp-paper:#f7f4ee}\nbody{margin:0;font-family:var(--lp-font,system-ui);background:var(--lp-paper);color:var(--lp-ink)}\n.hero{padding:clamp(24px,6vw,72px)}\niframe{width:100%;aspect-ratio:16/9;border:0}\n';
-  const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, ...new Array(40).fill(7)]);
-  return { ...eng, 'index.html': bytesOf(index(html)), 'about.html': bytesOf(about), 'assets/style.css': bytesOf(css), 'assets/site.js': bytesOf(AI_SITE_JS), 'material/p-001.webp': webp };
+/**
+ * AI가 직접 쓴 사이트를 엔진 조립(assemble, skills/lecpage/engine/src/kit)에 넣은 결과 = 앱·Skill이 바로 배포에 올리는 파일.
+ * 조립이 인라인 스크립트를 assets/site.js·site.module.js로, onclick을 assets/site-events.js로 옮기고 키트 런타임·보조 쪽을 더함
+ * @param {{ live?: { url: string, code: string } | null, index?: (html: string) => string }} [o] live: 강사가 정한 실시간 서버, index: AI가 쓴 첫 화면 고치기(시험용)
+ * @returns {Promise<Record<string, Uint8Array>>}
+ */
+export async function aiSite({ live = null, index = (h) => h } = {}) {
+  const site = {
+    'index.html': index(AI_INDEX),
+    'about.html': '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>강사 소개</title><link rel="stylesheet" href="assets/style.css"></head><body><h1>강사 소개</h1><p>디지털 기록을 연구해요.</p><script>document.title += " · 연수";</script></body></html>',
+    'assets/style.css': ':root{--lp-accent:#2f6f5e;--lp-ink:#1d2321;--lp-paper:#f7f4ee}\nbody{margin:0;font-family:var(--lp-font,system-ui);background:var(--lp-paper);color:var(--lp-ink)}\n.hero{padding:clamp(24px,6vw,72px)}\niframe{width:100%;aspect-ratio:16/9;border:0}\n',
+    'assets/app.js': AI_SITE_JS,
+    'material/p-001.webp': new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, ...new Array(40).fill(7)]),
+  };
+  // AI가 적은 실시간 주소(바깥)는 조립이 버리고 강사 값(prev)만 씀
+  const meta = { v: 2, title: '기록은 쌓였는데 시간이 없다면', sessions: [{ date: '2026-12-03', start: '14:00', end: '17:00' }], venue: '본관 3층', features: ['qa', 'board', 'poll', 'attendance', 'help', 'reactions'], theme: { accent: '#2f6f5e', ink: '#1d2321', paper: '#f7f4ee' }, live: { provider: 'http', url: 'https://attacker.example' } };
+  const prev = { access: 'link', ...(live ? { live: { provider: 'http', url: live.url, code: live.code } } : {}) };
+  const r = E.assemble(site, meta, { runtime: N.nodeRuntime(), prev, today: '2026-11-20' });
+  if (r.errors?.length) throw new Error(`조립 실패: ${JSON.stringify(r.errors).slice(0, 300)}`);
+  return Object.fromEntries(Object.entries(r.files).map(([p, v]) => [p, bytesOf(v)]));
 }
 
 export const manifestOf = (files) => Object.fromEntries(Object.entries(files).map(([p, v]) => [p, { sha256: sha256(v), size: bytesOf(v).length }]));

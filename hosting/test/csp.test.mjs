@@ -7,6 +7,14 @@ import { typeOf } from '../src/paths.js';
 import { isLocalSrc, isLibSrc, isDataScript, reportLinkHtml } from '../src/rewrite.js';
 import { SUPABASE_SDK } from '../src/runtime-allow.js';
 import { ENGINE } from './helpers.mjs';
+import { pathToFileURL } from 'node:url';
+
+const K = await import(pathToFileURL(join(ENGINE, 'src', 'kit', 'index.js')).href);
+const N = await import(pathToFileURL(join(ENGINE, 'node.js')).href);
+/** CSP 글 → { 지시어: [출처…] } */
+const parse = (csp) => Object.fromEntries(csp.split(';').map((x) => x.trim().split(/\s+/)).filter((x) => x[0]).map(([d, ...v]) => [d, v]));
+/** 출처 a가 출처 b 안에 드는지(같거나, b가 끝이 /인 경로·출처이고 a가 그 아래) */
+const within = (a, b) => a === b || (/^[a-z]+:\/\/[^/]+$/.test(b) ? a.startsWith(b + '/') : b.endsWith('/') && a.startsWith(b));
 
 const sha = 'a'.repeat(64);
 const directive = (csp, name) => (csp.split(';').map((s) => s.trim()).find((s) => s.startsWith(name + ' ')) || '').slice(name.length + 1);
@@ -29,7 +37,7 @@ test('사이트 쪽 CSP: 스크립트는 이 출처와 고정 라이브러리, �
   assert.equal(directive(csp, 'frame-src'), 'https://www.youtube-nocookie.com https://player.vimeo.com');
   assert.equal(directive(csp, 'worker-src'), "'none'");
   assert.equal(directive(csp, 'manifest-src'), "'self'");
-  assert.equal(directive(csp, 'base-uri'), "'self'");
+  assert.equal(directive(csp, 'base-uri'), "'none'");
   assert.equal(directive(csp, 'form-action'), "'none'");
   assert.equal(directive(csp, 'object-src'), "'none'");
   assert.ok(!csp.includes('frame-ancestors'), '사이트 쪽은 지금처럼 다른 사이트에 넣을 수 있음');
@@ -38,6 +46,30 @@ test('사이트 쪽 CSP: 스크립트는 이 출처와 고정 라이브러리, �
   assert.equal(directive(siteCsp(), 'img-src'), "'self' data: blob:");
   assert.equal(directive(siteCsp({ ...ROOM, pages: false }), 'media-src'), `'self' blob: ${HOST}/api/SEL2026/files/`);
   assert.equal(directive(siteCsp({ host: 'http://127.0.0.1:6401', code: 'ABC' }), 'connect-src'), "'self' http://127.0.0.1:6401/live/api/ABC http://127.0.0.1:6401/live/api/ABC/ ws://127.0.0.1:6401/live/api/ABC/ http://127.0.0.1:6401/api/ABC/files/");
+});
+
+test('엔진 조립의 CSP(kit/assemble.js kitCsp)와 어긋나지 않음: 같은 지시어·출처, 서버는 더 좁게만', () => {
+  const site = { 'index.html': '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>t</title></head><body><main><h1>t</h1><div data-lp="qa"></div><div data-lp="board"></div></main></body></html>' };
+  const meta = { v: 2, title: '시험', features: ['qa', 'board'] };
+  const cases = [
+    { name: '이 호스트의 방', live: { provider: 'http', url: `${HOST}/live`, code: 'SEL2026' }, srv: { host: HOST, code: 'SEL2026', site: 'abcdefghjk', pages: true } },
+    { name: '강사 계정 Cloudflare', live: { provider: 'http', url: 'https://lecpage-live.teacher.workers.dev', code: 'SEL2026' } },
+    { name: 'Supabase', live: { provider: 'supabase', url: 'https://abcdefghijklmnop.supabase.co', anonKey: 'k', code: 'SEL2026' } },
+    { name: '구글 시트', live: { provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec', code: 'SEL2026' } },
+  ];
+  for (const c of cases) {
+    const r = K.assemble(site, meta, { runtime: N.nodeRuntime(), prev: { live: c.live, access: 'link' }, today: '2026-11-20' });
+    assert.deepEqual(r.errors, [], c.name);
+    const eng = parse(r.csp);
+    const srv = parse(siteCsp({ ...(c.srv || { host: HOST }), live: declaredLive(c.live, HOST) }));
+    const strip = (v) => (v || []).filter((x) => x !== 'file:');
+    for (const d of ['script-src', 'style-src', 'font-src', 'frame-src', 'worker-src', 'object-src', 'base-uri', 'form-action']) assert.deepEqual(srv[d], strip(eng[d]), `${c.name}: ${d}`);
+    assert.deepEqual(srv['default-src'], ["'none'"], '서버는 default-src를 닫음(빠진 지시어가 열리지 않게)');
+    for (const d of ['img-src', 'media-src', 'connect-src']) {
+      for (const x of srv[d]) assert.ok(strip(eng[d]).some((y) => within(x, y)), `${c.name}: ${d}의 ${x}가 엔진 CSP 안에 있어야 함`);
+      for (const y of strip(eng[d])) assert.ok(srv[d].some((x) => within(x, y)), `${c.name}: 엔진 ${d}의 ${y}에 닿는 길이 서버에도 있어야 함`);
+    }
+  }
 });
 
 test('사이트 쪽 CSP에 들어가는 값은 모양을 확인함(머리글을 깨뜨리지 못함)', () => {
@@ -63,7 +95,7 @@ test('사이트가 적은 바깥 실시간 서버: 강사 계정 모양(workers.
   const csp = siteCsp({ live: declaredLive({ provider: 'supabase', url: 'https://abcdefghijklmnop.supabase.co' }) });
   assert.equal(directive(csp, 'connect-src'), "'self' https://abcdefghijklmnop.supabase.co wss://abcdefghijklmnop.supabase.co");
   assert.equal(directive(csp, 'img-src'), "'self' data: blob: https://abcdefghijklmnop.supabase.co", '보드 파일');
-  assert.equal(directive(siteCsp({ live: declaredLive({ provider: 'sheets' }) }), 'img-src'), "'self' data: blob:");
+  assert.equal(directive(siteCsp({ live: declaredLive({ provider: 'sheets' }) }), 'img-src'), "'self' data: blob: https://script.google.com https://script.googleusercontent.com https://drive.google.com https://*.googleusercontent.com", '시트 보드 사진(드라이브)');
 });
 
 test('보조 쪽 CSP: 예전 규칙 그대로 + 고정 라이브러리, 일꾼 스크립트 없음', () => {

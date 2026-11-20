@@ -236,16 +236,16 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 엔진이 만드는 비밀번호 칸 둘(강사 화면의 관리자 키, 암호 잠금 화면의 암호 칸)은 모양(속성)이 정확히 같고 그 쪽에 사이트 스크립트가 없을 때만 받습니다. HTML은 주석·인라인 `<script>`·`<textarea>` 안쪽을 태그로 읽지 않고(돌지 않거나 그려지지 않음), 속성은 브라우저처럼 읽습니다(같은 속성은 처음 것, `&#112;` 같은 문자 참조는 풂, `iframe srcdoc`도 봄).
 
-**내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다. 올라온 `_headers`·meta CSP로는 넓힐 수 없습니다(브라우저는 meta CSP를 겹쳐 더 좁게만 씀).
+**내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다. 올라온 `_headers`·meta CSP로는 넓힐 수 없습니다(브라우저는 meta CSP를 겹쳐 더 좁게만 씀). 사이트 쪽 CSP는 엔진 조립이 넣는 meta CSP(`skills/lecpage/engine/src/kit/assemble.js`의 `kitCsp`)와 지시어·출처가 같고 서버는 더 좁게만 둡니다(`default-src 'none'`, 실시간 방은 출처 전체가 아니라 그 방 경로). `test/csp.test.mjs`가 참여 서버 네 가지(이 호스트의 방·강사 계정 Cloudflare·Supabase·구글 시트)로 둘을 비교합니다.
 
 | | 사이트 쪽(첫 화면·AI가 쓴 쪽) | 보조 쪽(엔진이 만드는 강사·발표·QR 안내문·접속 확인·개인정보 쪽) |
 |---|---|---|
-| `script-src` | `'self'` + 버전을 고정한 라이브러리 경로(엔진 `render/shell.js`의 `LIB_SCRIPT_SOURCES`: gsap·lenis·ogl·supabase-js). 인라인은 막음(엔진 조립이 `assets/site.js`로 옮김) | 같음 |
+| `script-src` | `'self'` + 버전을 고정한 라이브러리 경로(엔진 `render/shell.js`의 `LIB_SCRIPT_SOURCES`: gsap·lenis·ogl·supabase-js). 인라인은 막음(엔진 조립이 인라인 `<script>`를 `assets/site.js`·`assets/<쪽>.js`·`*.module.js`로, onclick 같은 속성을 `assets/<쪽>-events.js`로 옮김) | 같음 |
 | `connect-src` | `'self'` + **그 사이트의 실시간 방 경로만**(`…/live/api/<코드>`·같은 경로의 `wss:`·보드 파일 `…/api/<코드>/files/`) + 사이트 자료에 적힌 강사 계정 서버(https의 `*.workers.dev`·`*.supabase.co`, 구글 시트는 Apps Script) | `'self' https: wss:`(접속 확인이 바깥 도구가 열리는지 잼) |
-| `img-src` / `media-src` | `'self' data: blob:` + 방의 보드 파일 / `'self' blob:` + 보드 파일 + (pages 보기) 이 호스트의 `/s/<id>/`(영상·소리) | `https:` 포함(예전 그대로) |
+| `img-src` / `media-src` | `'self' data: blob:` + 방의 보드 파일(강사 계정 서버면 그 출처, 구글 시트면 Apps Script·드라이브) / `'self' blob:` + 보드 파일 + (pages 보기) 이 호스트의 `/s/<id>/`(영상·소리) | `https:` 포함(예전 그대로) |
 | `style-src` / `font-src` | `'self' 'unsafe-inline'` + 글꼴 CSS / `'self' data:` + 글꼴 CDN | 같음 |
 | `frame-src` | `https://www.youtube-nocookie.com https://player.vimeo.com` | `'none'` |
-| 그 밖 | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'self'` `default-src 'none'` | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'none'`, 강사·발표·안내문은 `frame-ancestors 'none'` |
+| 그 밖 | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'none'` `default-src 'none'` | `worker-src 'none'` `form-action 'none'` `object-src 'none'` `base-uri 'none'`, 강사·발표·안내문은 `frame-ancestors 'none'` |
 
 - 방 코드는 강사가 [배포하기]로 방을 묶은 뒤 공개할 때 CSP에 들어갑니다(앱은 이미 이 순서). `pages` 보기는 공개할 때 만든 `_headers`로, `worker` 보기는 요청마다 지금 묶인 방으로 정합니다.
 - 형식은 확장자 표로만 정하고 `nosniff`를 붙여, `.js`가 아닌 파일은 스크립트로 읽히지 않습니다. SVG는 가둔(sandbox) 채로 내보냅니다.
@@ -323,7 +323,7 @@ CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보�
 | `GET /s/:id/…` | 사이트 파일 · 기간 끝·지움 404 · 가림 451 · `pages` 보기 사이트는 Pages에서 가져와 내보냄(두 번째 주소), 영상·소리는 여기서 |
 | `/live/api/<코드>/…` | 실시간 방(HTTP 프로토콜 v1) · `snapshot?since=&wait=` 긴 대기 · 응답 머리글 `X-Lec-Poll-Ms` |
 
-사이트를 고치는 요청에는 `Authorization: Bearer <key>`가 필요합니다. 받는 형식: html css js(엔진 런타임, `pages` 보기는 검사를 통과한 사이트 스크립트도. 1MB까지) json webmanifest txt svg png jpg jpeg webp avif gif ico woff2 pdf mp3 m4a mp4 webm, 내려받기 전용 ppt pptx ppsx doc docx xls xlsx hwp hwpx key pages numbers odt odp ods csv md zip, 암호 사이트의 `*.enc`.
+사이트를 고치는 요청에는 `Authorization: Bearer <key>`가 필요합니다. 받는 형식: html css js·mjs(엔진 런타임, `pages` 보기는 검사를 통과한 사이트 스크립트도. 1MB까지) json webmanifest txt svg png jpg jpeg webp avif gif ico woff2 woff ttf otf vtt pdf mp3 m4a mp4 webm(엔진 조립이 받는 사이트 파일 형식이 모두 들어 있음, `test/paths.test.mjs`), 내려받기 전용 ppt pptx ppsx doc docx xls xlsx hwp hwpx key pages numbers odt odp ods csv md zip, 암호 사이트의 `*.enc`.
 
 ## 9. 시험
 

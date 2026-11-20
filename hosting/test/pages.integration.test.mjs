@@ -156,15 +156,20 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(evil.headers.get('access-control-allow-origin'), null);
   });
 
-  await t.test('AI가 직접 쓴 사이트(index.html + assets/style.css + assets/site.js + 키트 런타임): 받고, CSP 연결은 그 사이트의 방만', async () => {
+  await t.test('AI가 직접 쓴 사이트(엔진 조립 결과: index.html + assets/style.css + assets/site*.js·*-events.js·*.module.js + 키트 런타임): 받고, CSP 연결은 그 사이트의 방만', async () => {
     const CODE = 'AI' + randomBytes(3).toString('hex').toUpperCase();
     const s = (await call(base, 'POST', '/api/sites', { json: { title: 'AI 사이트' } })).body;
     const ai = await aiSite({ live: { url: `${base}/live`, code: CODE } });
+    const OWN = ['assets/site.js', 'assets/site-2.module.js', 'assets/site-events.js', 'assets/about.js', 'assets/app.js']; // 조립이 옮긴 인라인 스크립트·onclick + AI가 쓴 파일
+    for (const p of OWN) assert.ok(ai[p], `조립 결과에 ${p}`);
+    // 조립을 거치지 않고 바깥 스크립트를 넣어도 서버가 뺌
+    ai['index.html'] = te.encode(new TextDecoder().decode(ai['index.html']).replace('</head>', '<script src="https://evil.example/track.js"></script></head>'));
     const bind = async () => { const b = await call(base, 'POST', `/api/sites/${s.id}/live`, { key: s.key, json: { code: CODE, adminKeyHash: sha256('ai-teacher-key-' + CODE) } }); assert.equal(b.status, 200, JSON.stringify(b.body)); };
     const r = await deploy(base, s, ai, { beforePublish: bind });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     const dep = cf.deploymentsOf(`s-${s.id}`).at(-1);
-    for (const p of ['/index.html', '/about.html', '/assets/style.css', '/assets/site.js', '/material/p-001.webp', '/assets/lecpage.js', '/console.html']) assert.ok(dep.manifest[p], p);
+    for (const p of ['/index.html', '/about.html', '/assets/style.css', '/assets/kit.css', ...OWN.map((x) => `/${x}`), '/material/p-001.webp', '/assets/lecpage.js', '/assets/live.js', '/console.html']) assert.ok(dep.manifest[p], p);
+    assert.ok(!dep.manifest['/_headers'], '조립이 만든 _headers는 쓰지 않고 서버가 정함');
     // _headers: 사이트 쪽 CSP(연결 = 이 출처 + 이 사이트의 방 경로), 보조 쪽은 예전 CSP
     const want = siteCsp({ host: base, code: CODE, site: s.id, pages: true });
     assert.ok(dep.headers.startsWith(`/*\n  ! Access-Control-Allow-Origin\n  Content-Security-Policy: ${want}\n`), dep.headers.slice(0, 900));
@@ -177,14 +182,16 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(page.status, 200); assert.equal(page.headers.get('content-security-policy'), want);
     assert.ok(page.text.includes('<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js" defer></script>'), '고정 라이브러리는 남김');
     assert.ok(!page.text.includes('evil.example'), '바깥 스크립트는 뺌');
-    assert.ok(page.text.includes('<script src="assets/site.js" defer></script>') && page.text.includes('data-host-report'));
-    const own = await get(`${s.url}assets/site.js`);
-    assert.equal(own.status, 200); assert.equal(own.text, AI_SITE_JS); assert.equal(own.headers.get('content-type'), 'text/javascript; charset=utf-8');
+    assert.ok(page.text.includes('<script src="assets/site.js"></script>') && page.text.includes('<script type="module" src="assets/site-2.module.js"></script>') && page.text.includes('data-host-report'));
+    assert.ok(page.text.includes('<iframe src="https://www.youtube-nocookie.com/embed/abc123def"'), '유튜브 틀(쿠키 없는 주소)');
+    for (const p of OWN) assert.equal((await get(s.url + p)).status, 200, p);
+    const own = await get(`${s.url}assets/app.js`);
+    assert.equal(own.text, AI_SITE_JS); assert.equal(own.headers.get('content-type'), 'text/javascript; charset=utf-8');
     assert.equal((await get(`${s.url}console`)).headers.get('content-security-policy'), auxCsp({ noFrame: true }));
     // 두 번째 주소(이 호스트, 모든 사이트가 같이 쓰는 출처): 사이트 스크립트는 내보내지 않고 엔진 런타임만
     const alt = `${base}/s/${s.id}/`;
     assert.equal((await get(alt)).status, 200);
-    for (const p of ['assets/site.js', 'assets/%73ite.js', 'assets/%2e/site.js', 'assets//site.js', 'assets/SITE.JS', 'assets/nope.js', 'x/../assets/site.js']) assert.equal((await get(alt + p)).status, 404, p);
+    for (const p of [...OWN, 'assets/%73ite.js', 'assets/%2e/site.js', 'assets//site.js', 'assets/SITE.JS', 'assets/nope.js', 'x/../assets/site.js']) assert.equal((await get(alt + p)).status, 404, p);
     const rt = await get(`${alt}assets/lecpage.js`);
     assert.equal(rt.status, 200); assert.deepEqual(te.encode(rt.text), ai['assets/lecpage.js']);
     assert.equal((await get(`${alt}assets/style.css`)).status, 200);

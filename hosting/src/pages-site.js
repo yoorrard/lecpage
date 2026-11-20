@@ -14,7 +14,7 @@ export const MEDIA_EXT = new Set(['mp3', 'm4a', 'mp4', 'webm']);
 export const isMedia = (path) => MEDIA_EXT.has(extOf(path));
 export const branchOf = (id) => `s-${id}`;
 /** 다른 출처에서 불러 쓸 일이 없는 형식(paths.js의 SAME_ORIGIN_ONLY와 같음) */
-const SAME_ORIGIN_EXT = new Set(['js', 'css', 'json', 'webmanifest', 'woff2', 'enc']);
+const SAME_ORIGIN_EXT = new Set(['js', 'mjs', 'css', 'json', 'webmanifest', 'woff2', 'woff', 'ttf', 'otf', 'vtt', 'enc']);
 
 /**
  * 사이트 주소 틀: 기본 'https://{branch}.<PAGES_HOST>/'. 시험에서는 'http://{branch}.localhost:<포트>/'

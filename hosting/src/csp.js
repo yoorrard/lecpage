@@ -24,6 +24,8 @@ const CODE_RE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
 /** 사이트가 적을 수 있는 바깥 실시간 서버: 강사 계정의 Cloudflare Worker(workers.dev)·Supabase 프로젝트. 그 밖의 주소는 연결을 열지 않음 */
 const LIVE_HOST_RE = { http: /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+workers\.dev$/, supabase: /^[a-z0-9]{8,40}\.supabase\.co$/ };
 const SHEETS = ['https://script.google.com', 'https://script.googleusercontent.com'];
+/** 구글 시트 연결의 보드 사진(드라이브). 그림으로만(엔진 kit/assemble.js kitCsp와 같음) */
+const SHEETS_IMG = ['https://drive.google.com', 'https://*.googleusercontent.com'];
 
 /**
  * 사이트 자료(lp-data)의 live 칸 → 연결을 열 바깥 실시간 서버 출처. 엔진 render/shell.js의 liveOrigins와 같은 생각이되,
@@ -49,29 +51,31 @@ export function declaredLive(live, self = '') {
  * @param {{ host?: string, code?: string, site?: string, pages?: boolean, live?: string[] }} [c]
  *   host: 이 호스트 주소, code: 묶인 방 코드, site: 사이트 id, pages: Pages 보기(사이트 출처가 이 호스트와 다름 → 영상은 이 호스트에서),
  *   live: declaredLive가 돌려준 출처들
- * @returns {{ connect: string[], files: string[], media: string[] }}
+ * @returns {{ connect: string[], img: string[], media: string[] }}
  */
 export function roomSources({ host = '', code = '', site = '', pages = false, live = [] } = {}) {
-  const connect = []; const files = []; const media = [];
+  const connect = []; const img = []; const media = [];
   if (HOST_RE.test(host)) {
     if (CODE_RE.test(code)) {
       const room = `${host}/live/api/${code}`;
-      const file = `${host}/api/${code}/files/`;
+      const file = `${host}/api/${code}/files/`; // 보드 사진·파일(live/host.js FILE_ALIAS)
       connect.push(room, `${room}/`, `${host.replace(/^http/, 'ws')}/live/api/${code}/`, file);
-      files.push(file);
+      img.push(file); media.push(file);
     }
     if (pages && ID_RE.test(site)) media.push(`${host}/s/${site}/`); // 영상·소리는 Pages가 이 호스트로 넘김(pages-site.js redirectsFile)
   }
   for (const o of live) {
     if (!/^(?:https|wss):\/\/[a-z0-9.-]+$/.test(o)) continue;
     connect.push(o);
-    if (o.startsWith('https:') && !SHEETS.includes(o)) files.push(o); // 강사 계정 서버의 보드 파일
+    if (o.startsWith('https:')) { img.push(o); media.push(o); } // 강사 계정 서버의 보드 파일
   }
-  return { connect: [...new Set(connect)], files: [...new Set(files)], media };
+  if (live.includes(SHEETS[0])) img.push(...SHEETS_IMG);
+  return { connect: [...new Set(connect)], img: [...new Set(img)], media: [...new Set(media)] };
 }
 
 /**
- * 사이트 쪽 CSP(서버가 정함). 사이트가 보낸 meta CSP는 브라우저가 이것과 겹쳐(둘 다) 적용함
+ * 사이트 쪽 CSP(서버가 정함). 엔진 조립이 넣는 meta CSP(kit/assemble.js kitCsp)는 브라우저가 이것과 겹쳐(둘 다) 적용함.
+ * 지시어와 출처는 kitCsp와 같고(test/csp.test.mjs가 비교), 서버는 더 좁게만: default-src 'none', 실시간 방은 출처 전체가 아니라 그 방 경로
  * @param {Parameters<typeof roomSources>[0]} [c]
  */
 export function siteCsp(c = {}) {
@@ -82,13 +86,13 @@ export function siteCsp(c = {}) {
     `style-src 'self' 'unsafe-inline' ${FONT_CSS_HOSTS.join(' ')}`,
     `font-src 'self' data: ${FONT_FILE_HOSTS.join(' ')}`,
     // blob: 엔진 런타임이 보드 사진을 줄일 때·암호 사이트가 풀어 낸 그림을 보일 때. 이 페이지가 만든 것만 가리켜 바깥으로 나가는 길이 아님
-    `img-src ${["'self'", 'data:', 'blob:', ...r.files].join(' ')}`,
-    `media-src ${["'self'", 'blob:', ...r.files, ...r.media].join(' ')}`,
+    `img-src ${["'self'", 'data:', 'blob:', ...r.img].join(' ')}`,
+    `media-src ${["'self'", 'blob:', ...r.media].join(' ')}`,
     `connect-src ${["'self'", ...r.connect].join(' ')}`,
     `frame-src ${FRAME_HOSTS.join(' ')}`,
     "worker-src 'none'",
     "manifest-src 'self'",
-    "base-uri 'self'",
+    "base-uri 'none'",
     "form-action 'none'",
     "object-src 'none'",
   ].join('; ');

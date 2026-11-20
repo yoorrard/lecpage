@@ -152,7 +152,7 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.equal(idx.headers.get('content-type'), 'text/html; charset=utf-8');
     const csp = idx.headers.get('content-security-policy');
     assert.equal(csp, siteCsp({ host: base }), '사이트 쪽 CSP(묶인 방이 없으면 연결은 이 출처만)');
-    assert.ok(csp.includes("default-src 'none'") && csp.includes("form-action 'none'") && csp.includes("base-uri 'self'") && csp.includes("object-src 'none'") && csp.includes("worker-src 'none'") && csp.includes("connect-src 'self';"), csp);
+    assert.ok(csp.includes("default-src 'none'") && csp.includes("form-action 'none'") && csp.includes("base-uri 'none'") && csp.includes("object-src 'none'") && csp.includes("worker-src 'none'") && csp.includes("connect-src 'self';"), csp);
     assert.ok(!csp.includes('frame-ancestors') && !csp.includes('https:;') && !csp.includes("'unsafe-inline' https://cdn.jsdelivr.net/npm"));
     assert.equal(idx.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(idx.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
@@ -278,7 +278,9 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     const ai = await aiSite();
     const r2 = await deploy(base, site, ai);
     assert.equal(r2.step, 'blobs'); assert.equal(r2.status, 422); assert.equal(code(r2), 'script_not_allowed');
-    assert.equal(r2.body.error.path, 'assets/site.js'); assert.match(r2.body.error.message_ko, /사이트가 직접 쓴 스크립트를 받지 않아요\(assets\/site\.js\)/);
+    const p2 = r2.body.error.path;
+    assert.ok(['assets/about.js', 'assets/app.js', 'assets/site.js', 'assets/site-2.module.js', 'assets/site-events.js'].includes(p2), p2);
+    assert.ok(r2.body.error.message_ko.includes(`사이트가 직접 쓴 스크립트를 받지 않아요(${p2})`), r2.body.error.message_ko);
     const d = await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifestOf(bad) } });
     const pub = await call(base, 'POST', `/api/sites/${site.id}/deploys/${d.body.deploy}/publish`, { key: site.key });
     assert.equal(pub.status, 409); assert.equal(code(pub), 'missing_blobs');
@@ -306,7 +308,7 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     const css = await deploy(base, site, { ...v2, 'assets/extra.css': te.encode('input{-webkit-text-security:disc}') });
     assert.equal(code(css), 'unsafe_site'); assert.equal(css.body.error.rule, 'masked');
     assert.ok(!(await text(site.url)).text.includes('evil.example/c'), '공개된 것은 그대로');
-    assert.equal(code(await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: { ...manifestOf(v2), 'assets/x.mjs': { sha256: sha256('x'), size: 1 } } } })), 'bad_type');
+    assert.equal(code(await call(base, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: { ...manifestOf(v2), 'assets/x.wasm': { sha256: sha256('x'), size: 1 } } } })), 'bad_type');
     await deploy(base, site, v2); // 뒤 시험을 위해 깨끗한 목록으로
   });
 
