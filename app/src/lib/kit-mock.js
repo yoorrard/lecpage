@@ -34,6 +34,7 @@ const KIT_CSS = `.lpk{font:inherit;color:var(--lp-ink,inherit);margin:16px 0}
 .lpk-done{display:inline-flex;margin-top:10px}`;
 
 /** 연습 모드 동작(이 화면에서만): 질문·투표·보드·출석·실습 완료 */
+// copy-ok: 미리보기에 넣는 스크립트(화면 글은 그 안의 짧은 안내 둘뿐)
 const KIT_JS = `(function(){function on(sel,ev,fn){document.addEventListener(ev,function(e){var t=e.target.closest&&e.target.closest(sel);if(t)fn(e,t);});}
 on('[data-lpk-send]','click',function(e,b){var box=b.closest('.lpk');var ta=box.querySelector('textarea,input');if(!ta||!ta.value.trim())return;var li=document.createElement('li');li.textContent=ta.value.trim();box.querySelector('.lpk-list').prepend(li);ta.value='';});
 on('[data-lpk-vote]','click',function(e,b){var box=b.closest('.lpk');box.querySelectorAll('[data-lpk-vote]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));x.classList.toggle('ghost',x!==b);});var n=box.querySelector('.lpk-note');if(n)n.textContent='투표했어요. 결과는 강사가 열면 보여요.';});

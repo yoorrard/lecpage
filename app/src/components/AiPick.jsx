@@ -187,12 +187,12 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
       <ol class="chat-steps">
         <li>
           <b>프롬프트를 복사하고 {card.app}를 열어요</b>
-          <div class="btn-row"><a class="btn btn-primary" href={bot.url} target="_blank" rel="noopener" aria-disabled={!prompt ? 'true' : undefined} onClick={send}>프롬프트 복사하고 {card.app} 열기<span class="ext" aria-hidden="true">↗</span></a>
+          <div class="btn-row"><a class="btn btn-primary" href={bot.url} target="_blank" rel="noopener" aria-disabled={!prompt ? 'true' : undefined} onClick={send}>복사하고 {card.app} 열기<span class="ext" aria-hidden="true">↗</span></a>
             <button type="button" class="btn-link" disabled={!prompt} onClick={() => { copyNow(prompt); setSent(true); toast('프롬프트를 복사했어요.'); }}>복사만 하기</button></div>
         </li>
         <li>
           <b>교재 원본 파일을 그 창에 첨부해 주세요</b>
-          <p class="small">AI가 교재 파일을 직접 읽어요. {files.map((f) => f.name).join(', ') || '넣은 교재'}를 입력 칸에 끌어다 놓거나 ＋(첨부) 단추로 넣고 보내세요.</p>
+          <p class="small">AI가 교재 파일을 직접 읽어요. {files.map((f) => f.name).join(', ') || '넣은 교재'}를 입력 칸에 끌어다 놓거나 ＋(첨부) 버튼으로 넣고 보내세요.</p>
           {notPdf && <p class="small warn-line">Claude는 PPT·한글 파일을 받지 못해요. PDF로 저장해 첨부해 주세요.</p>}
           {files.length > 0 && <div class="btn-row">{files.map((f) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => getFile(f)}>{f.name} 내려받기</button>)}</div>}
         </li>
@@ -249,15 +249,15 @@ function LocalWay({ p, ready, idle, go }) {
         {st ? <>
           <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>
           <div class="btn-row">
-            {st.claude && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('claude-code')}>Claude Code로 만들기</button>}
-            {st.codex && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('codex')}>Codex로 만들기</button>}
+            {st.claude && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('claude-code')}>Claude Code 쓰기</button>}
+            {st.codex && <button type="button" class="btn btn-sm btn-primary" disabled={!ready} onClick={() => run('codex')}>Codex 쓰기</button>}
             {!st.claude && !st.codex && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
           </div>
         </> : <>
           <ol class="small ai-alt-steps">
             <li>Node.js가 있는 PC의 터미널에서 아래 명령을 실행해요.</li>
             <li>브라우저에 <code>127.0.0.1</code>로 시작하는 주소의 lecpage가 열려요. 이 연수는 [파일로 저장]으로 옮겨 그 창에서 열어요.</li>
-            <li>그 창의 AI 고르기에서 [Claude Code로 만들기]나 [Codex로 만들기]를 눌러요.</li>
+            <li>그 창의 AI 고르기에서 [Claude Code 쓰기]나 [Codex 쓰기]를 눌러요.</li>
           </ol>
           <div class="agent-cmd"><code>{BRIDGE_CMD}</code><button type="button" class="btn btn-sm" aria-label="연결 프로그램 실행 명령 복사" onClick={() => copy(BRIDGE_CMD, '명령을 복사했어요.')}>복사</button></div>
         </>}
@@ -280,7 +280,7 @@ function AgentWay() {
             <button type="button" class="btn btn-sm" aria-label={`${c.for} 설치 명령 복사`} onClick={() => copy(c.cmd, '명령을 복사했어요.')}>복사</button>
           </div>
         ))}
-        <p class="small">에이전트에게 "이 교재로 lecpage 강의 사이트 만들어 줘"라고 말해요. 다 만들면 나온 .lecpage 파일을 이 화면의 교재 자리에 놓아요. 미리보기·고치기·배포를 여기서 이어서 해요. <a href="#/help/skill">도구별 설치 방법</a></p>
+        <p class="small">AI 에이전트에게 "이 교재로 lecpage 강의 사이트 만들어 줘"라고 말해요. 다 만들면 나온 .lecpage 파일을 이 화면의 교재 자리에 놓아요. 미리보기·고치기·배포를 여기서 이어서 해요. <a href="#/help/skill">도구별 설치 방법</a></p>
       </div>
     </details>
   );

@@ -579,13 +579,13 @@ function DemoPublish({ p, buildFiles }) {
   }
   return (
     <div class="stack demo-pub">
-      <p class="small">실제로는 여기서 바로 배포(가입·토큰 없음)나 내 계정(Vercel·GitHub Pages·Netlify·Cloudflare)을 골라요.</p>
+      <p class="small">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
       {st !== 'done' && <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" disabled={st === 'busy'} aria-busy={st === 'busy' ? 'true' : undefined} onClick={run}>{st === 'busy' ? '배포할 파일 만드는 중…' : '배포 연습하기'}</button><span class="small muted">체험이라 실제로 올리지는 않아요.</span></div>}
       {st === 'busy' && <Progress pct={pct} />}
       {st === 'bad' && <p class="small err" role="alert">배포할 파일을 만들지 못했어요. 새로 고침한 뒤 다시 해 주세요.</p>}
       {st === 'done' && <div class="demo-done-main" role="status">
         <Mascot size={48} mood="happy" />
-        <div class="stack"><b>여기까지가 전부예요.</b><span class="small">실제로는 이 단추를 누르면 참가자에게 보낼 주소와 QR이 바로 나와요. 이제 내 교재로 해 보세요.</span>
+        <div class="stack"><b>여기까지가 전부예요.</b><span class="small">실제로는 이 버튼을 누르면 참가자에게 보낼 주소와 QR이 바로 나와요. 이제 내 교재로 해 보세요.</span>
           <div class="btn-row"><a class="btn btn-primary" href="#/">내 교재로 시작하기</a><button type="button" class="btn btn-quiet" onClick={() => setSt('')}>한 번 더 연습</button></div></div>
       </div>}
     </div>

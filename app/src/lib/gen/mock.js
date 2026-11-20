@@ -145,8 +145,8 @@ export function useGeneration(pid) {
 }
 
 /** 쓰던 AI 창에 붙일 글(교재 원본을 첨부하라는 안내 포함) */
-export async function chatPrompt(pid, { request = '', reference = '' } = {}) {
-  const p = await projects.get(pid);
+export async function chatPrompt(pid, o = {}) { return makeChatPrompt(await projects.get(pid), o); }
+function makeChatPrompt(p, { request = '', reference = '' } = {}) {
   const names = (p?.files || []).filter((f) => !f.photos).map((f) => f.name).join(', ');
   return [
     '너는 한국의 강의·연수 사이트를 설계하고 직접 만드는 디자이너 겸 개발자야.',
@@ -205,8 +205,8 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
 
 export function editSite(pid, { target = 'all', request = '', way = 'key', provider = '', model = '' } = {}) { return begin(pid, 'edit', { target, request, way, provider, model }); }
 
-export async function chatEditPrompt(pid, { target = 'all', request = '' } = {}) {
-  const p = await projects.get(pid);
+export async function chatEditPrompt(pid, o = {}) { return makeEditPrompt(await projects.get(pid), o); }
+function makeEditPrompt(p, { target = 'all', request = '' } = {}) {
   const html = p?.site?.['index.html'] || '';
   let part = html;
   if (target && target !== 'all') { const doc = new DOMParser().parseFromString(html, 'text/html'); part = doc.getElementById(target)?.outerHTML || ''; }

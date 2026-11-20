@@ -1,4 +1,3 @@
-import { useState } from 'preact/hooks';
 import { Sheet } from '../components/ui.jsx';
 import { Mascot } from '../components/Mascot.jsx';
 import { KeyGuides } from '../lib/ai-guides.jsx';
@@ -6,7 +5,7 @@ import { geminiResetKo } from '../lib/ai.js';
 
 const REPO = 'https://github.com/yoorrard/lecpage';
 const TOPICS = [
-  ['start', '시작하기'], ['ai', 'AI 연결'], ['edit', '살펴보고 고치기'], ['live', '참여 기능 연결'], ['deploy', '배포하기·공개 범위'], ['skill', 'AI 에이전트에서 쓰기'], ['privacy', '개인정보 안내'], ['terms', '이용약관'], ['license', '오픈소스·라이선스'], ['faq', '자주 묻는 질문'],
+  ['start', '시작하기'], ['ai', 'AI 고르기'], ['edit', '살펴보고 고치기'], ['live', '참여 기능 연결'], ['deploy', '배포하기·공개 범위'], ['skill', 'AI 에이전트에서 쓰기'], ['privacy', '개인정보 안내'], ['terms', '이용약관'], ['license', '오픈소스·라이선스'], ['faq', '자주 묻는 질문'],
 ];
 
 export function Help({ topic = 'start' }) {
@@ -49,7 +48,7 @@ const ico = (d) => <svg viewBox="0 0 24 24" width="26" height="26" fill="none" s
 function Flow() {
   const steps = [
     ['교재', 'PPT·PDF·한글', ico(<><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>)],
-    ['AI', '흐름과 문구 짜기', ico(<><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 16v4M17 18h4" /></>)],
+    ['AI', '교재 읽고 사이트 만들기', ico(<><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 16v4M17 18h4" /></>)],
     ['사이트', '보면서 고치기', ico(<><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="M3 9h18M7 13h6M7 16h10" /></>)],
     ['배포', '주소와 QR', ico(<><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2M20 14v6h-4M14 20h0" /></>)],
   ];
@@ -70,41 +69,19 @@ function KeyMap() {
   );
 }
 
-/**
- * 눌러 보는 예: 도움말 안에서 예시 연수로 '말로 고치기'를 해 봄. 누를 때 엔진과 낱말을 불러옴(도움말을 처음 열 때는 받지 않음).
- * 바꾼 것은 이 화면 안에만 있고 어디에도 저장하지 않아요.
- */
-function TryWords() {
-  const [mod, setMod] = useState(null); const [bp, setBp] = useState(null); const [hist, setHist] = useState([]); const [busy, setBusy] = useState(false);
-  async function start() {
-    setBusy(true);
-    try {
-      const [m, b] = await Promise.all([Promise.all([import('../design-words/SayFix.jsx'), import('../design-words/MiniSite.jsx'), import('../design-words/words.js')]), import('../lib/project.js').then((x) => x.loadExample('data-lab'))]);
-      setMod({ SayFix: m[0].SayFix, MiniSite: m[1].MiniSite, applyWords: m[2].applyWords }); setBp(b);
-    } catch { setBusy(false); }
-  }
-  if (!mod || !bp) return <p class="help-cta"><button type="button" class="btn" disabled={busy} onClick={start}>{busy ? '불러오는 중…' : '여기서 눌러 보기'}</button><span class="small muted">예시 연수로 해 봐요. 저장하지 않아요.</span></p>;
-  const { SayFix, MiniSite, applyWords } = mod;
-  return (
-    <div class="help-try">
-      <SayFix bp={bp} hTag="h3" idp="htry" title="예시 연수: 데이터로 읽는 우리 반" desc="" onApply={(f) => { setHist([...hist, bp]); setBp(applyWords(bp, f.ids)); }} isDone={() => false} />
-      <figure class="help-try-now"><MiniSite bp={bp} eager tour /><figcaption class="small muted">지금 모습{hist.length ? ` · ${hist.length}번 바꿈` : ''}{hist.length > 0 && <> · <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setBp(hist[hist.length - 1]); setHist(hist.slice(0, -1)); }}>되돌리기</button></>}</figcaption></figure>
-    </div>
-  );
-}
-
 const BODY = {
   start: <>
     <h1 tabIndex={-1}>시작하기</h1>
-    <p>교재를 넣으면 AI가 연수 사이트를 만들고, 버튼 하나로 배포해요. 회원가입과 이용료가 없어요.</p>
+    <p>교재를 넣고 AI를 고르면 AI가 교재를 직접 읽고 강의 사이트를 만들어요. 살펴보고 고친 뒤 버튼 하나로 배포해요. 회원가입과 이용료가 없어요.</p>
     <Flow />
-    <p class="help-cta"><a class="btn btn-primary" href="#/demo">체험하기</a><span class="small muted">예시 자료로 끝까지 해 봐요. 키가 필요 없어요.</span></p>
-    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 교재 파일과 연수 정보, AI로 만들기 카드">
-      <p>PPT·PDF·한글(HWP·HWPX)·워드 파일을 놓고 연수명을 확인해요.</p>
-      <p>'AI로 만들기' 카드에서 [ChatGPT 열기]를 누르고, 답을 복사해 돌아와 [답 넣기]를 눌러요. API 키가 있으면 버튼 한 번이에요. <a href="#/help/ai">AI 연결</a></p>
+    <p class="help-cta"><a class="btn btn-primary" href="#/demo">먼저 해보기</a><span class="small muted">예시 교재로 실제와 똑같은 화면을 끝까지 해 봐요. 키가 필요 없어요.</span></p>
+    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 읽은 교재와 AI 고르기(GPT·Claude·Gemini 카드)">
+      <p>PPT·PDF·한글(HWP·HWPX)·워드 파일을 놓아요. 바라는 점은 한 줄로 적어도 되고 비워 둬도 돼요.</p>
+      <p>AI 고르기에서 GPT·Claude·Gemini 가운데 하나를 골라 [키로 연결]이나 [쓰던 앱으로(키 없이)]를 눌러요. <a href="#/help/ai">AI 고르기</a></p>
     </Task>
-    <Task n="2" title="살펴보고 고치기" shot="edit" alt="살펴보고 고치기 화면: 왼쪽에 섹션 목록, 오른쪽에 미리보기">
-      <p>미리보기를 보며 내용·디자인·참여 기능을 고쳐요. 자동으로 저장돼요. <a href="#/help/edit">고치는 법</a></p>
+    <Task n="2" title="만들고 고치기" shot="edit" alt="살펴보고 고치기 화면: 왼쪽에 섹션 목록, 오른쪽에 미리보기">
+      <p>AI가 만드는 동안은 진행 단계만 보여요. 다 만들면 미리보기와 목록이 열려요.</p>
+      <p>AI가 교재에서 찾은 연수 정보를 한 번 확인하고, 미리보기에서 글자를 눌러 바로 고쳐요. 자동으로 저장돼요. <a href="#/help/edit">고치는 법</a></p>
     </Task>
     <Task n="3" title="배포하기" shot="share" alt="배포하기 화면">
       <p>체크리스트(참여 기능 → 공개 범위 → 배포할 곳)를 따라가 [배포하기]를 누르면 주소·QR이 나와요. <a href="#/help/deploy">배포하는 법</a></p>
@@ -112,15 +89,17 @@ const BODY = {
     <p class="small muted">다른 컴퓨터에서 이어 하려면 [파일로 저장]으로 저장하고, 그 컴퓨터에서 [저장한 파일 열기]로 열어요. 배포한 연수를 같은 주소로 이어 배포하려면 저장할 때 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요.</p>
   </>,
   ai: <>
-    <h1 tabIndex={-1}>AI 연결</h1>
-    <p>AI가 교재를 읽고 연수 흐름과 문구를 짜요. 처음 한 번만 연결하면 돼요.</p>
+    <h1 tabIndex={-1}>AI 고르기</h1>
+    <p>고른 AI가 교재 파일을 직접 읽고 사이트 전체를 만들어요. GPT·Claude·Gemini 세 카드 모두 두 길이 있어요.</p>
+    <ul><li><b>키로 연결</b>: 처음 한 번 키를 붙여 넣으면 그다음부터는 버튼 한 번이에요. 만드는 과정이 화면에 보이고, 창을 닫아도 멈춘 단계부터 이어서 해요. GPT·Claude는 크레딧을 충전해 쓰고(사이트 하나에 몇백 원쯤), Gemini는 무료 키로 시작해요.</li>
+      <li><b>쓰던 앱으로(키 없이)</b>: 쓰던 ChatGPT·Claude·Gemini 창에 프롬프트를 붙여 넣고 교재 원본 파일을 첨부해요. 답을 복사해 돌아와 [답 넣기]를 누르거나 내려받은 .html 파일을 끌어 넣어요. 무료 요금제도 돼요.</li></ul>
+    <p>그 아래 두 줄은 AI 에이전트를 쓰는 분의 길이에요. <b>내 PC의 Claude Code·Codex</b>는 연결 프로그램을 띄운 창에서 바로 써요. <b>AI 에이전트(Skill)</b>는 스킬을 넣어 대화로 만들어요. <a href="#/help/skill">AI 에이전트에서 쓰기</a></p>
     <KeyMap />
-    <h2>어떤 AI를 고를까요?</h2>
-    <ul><li><b>ChatGPT·Claude</b>: 구성과 문구가 꼼꼼해요. 크레딧을 충전해 쓰고, 사이트 하나에 몇백 원쯤 들어요.</li>
-      <li><b>Gemini(무료)</b>: 돈을 들이지 않고 해 볼 때 써요. 가장 좋은 모델(Gemini 4 Carbon·Argon)은 결제한 키만 돼서 구성과 문구가 단순할 수 있어요. 하루에 쓸 수 있는 횟수도 정해져 있어요. 넣은 내용이 구글 제품 개선에 쓰일 수 있고, 계정에 따라 휴대폰 확인을 요청해요. API 키 연결 창 아래의 [무료로 하기(Gemini)]를 눌러요.</li></ul>
-    <Task n="1" title="키 페이지 열기" shot="connect" alt="AI 연결 창: 쓸 AI를 고르고 키 페이지를 여는 버튼, 누를 곳을 보여 주는 그림" w={760} h={530}>
-      <p>교재 넣기 화면의 'AI로 만들기' 카드에서 [API 키로 만들기]를 눌러요.</p>
-      <p>쓸 AI를 고르고 버튼을 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
+    <h2>Gemini 무료 키</h2>
+    <p>돈을 들이지 않고 해 볼 때 써요. 가장 좋은 모델(Gemini 4 Carbon·Argon)은 결제한 키만 돼서 결과가 단순할 수 있어요. 하루에 쓸 수 있는 횟수도 정해져 있어요. 넣은 내용이 구글 제품 개선에 쓰일 수 있고, 계정에 따라 휴대폰 확인을 요청해요.</p>
+    <Task n="1" title="키 페이지 열기" shot="connect" alt="키 연결 창: 키 페이지를 여는 버튼과 누를 곳을 보여 주는 그림" w={760} h={530}>
+      <p>AI 고르기에서 쓸 AI 카드의 [키로 연결]을 눌러요.</p>
+      <p>버튼을 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
     </Task>
     <Task n="2" title="돌아와서 붙여넣기" shot="paste" alt="AI 연결 창: 붙여넣기 버튼" w={760} h={596}>
       <p>키를 복사하고 돌아와 [붙여넣기]를 누르면 바로 연결돼요.</p>
@@ -132,45 +111,35 @@ const BODY = {
     <div class="faq">
       <details><summary>키가 맞지 않대요</summary><p>키를 끝까지 복사했는지 확인하세요. 지웠거나 오래된 키라면 새로 만들어요.</p></details>
       <details><summary>구글이 결제나 휴대폰 확인을 요구해요</summary><p>구글 클라우드를 쓰던 계정이나 학교·회사 계정에서 생겨요. 휴대폰 확인은 카메라로 QR을 찍으면 끝나요. 결제를 요구하면 다른 개인 구글 계정으로 키를 만들거나 ChatGPT·Claude 키를 쓰세요.</p></details>
-      <details><summary>크레딧이 없대요</summary><p>ChatGPT·Claude 키는 그 회사의 결제 페이지에서 크레딧을 충전해야 쓸 수 있어요. 5달러면 사이트를 열 개 넘게 만들어요. 결제 없이 만들려면 [쓰던 ChatGPT로 만들기]를 누르세요.</p></details>
+      <details><summary>크레딧이 없대요</summary><p>GPT·Claude 키는 그 회사의 결제 페이지에서 크레딧을 충전해야 쓸 수 있어요. 5달러면 사이트를 열 개 넘게 만들어요. 결제 없이 만들려면 [쓰던 앱으로(키 없이)]를 누르세요.</p></details>
       <details><summary>AI 회사에 닿지 못했대요</summary><p>학교·회사 망이 AI 사이트를 막았을 수 있어요. 휴대폰 핫스팟으로 바꿔 보세요.</p></details>
-      <details><summary>무료 횟수를 다 썼대요</summary><p>앱이 잠깐 기다렸다가 다시 하거나, 무료로 되는 다른 모델로 이어서 해요. 그래도 안 되면 한국 시간 {geminiResetKo()}쯤 다시 채워져요. 유료 키도 연결해 두었다면 유료로 이어서 할지 물어봐요.</p></details>
+      <details><summary>무료 횟수를 다 썼대요</summary><p>앱이 잠깐 기다렸다가 멈춘 단계부터 다시 해요. 그래도 안 되면 한국 시간 {geminiResetKo()}쯤 다시 채워져요. 다른 AI를 골라도 앞 단계에서 만든 것은 그대로예요.</p></details>
     </div>
     <h2>더 궁금할 때</h2>
     <div class="faq">
       <details><summary>키가 뭐예요? 안전한가요?</summary><p>API 키는 AI 회사가 내 계정에 만들어 주는 긴 암호예요. 키와 교재의 글은 이 브라우저에서 고른 AI 회사로만 가고, lecpage 운영자는 볼 수 없어요. '이 기기에서 기억하기'를 켜면 암호화해 이 기기에만 저장해요. 공용 PC에서는 꺼 주세요.</p></details>
       <details><summary>학생 정보가 든 교재를 넣어도 되나요?</summary><p>학생 이름·사진 같은 개인정보는 지우고 넣어 주세요. 교재의 글이 AI 회사로 가고, Gemini 무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요.</p></details>
-      <details><summary>모델은 어떻게 고르나요?</summary><p>고르지 않아도 돼요. 그 키로 쓸 수 있는 모델 중 품질과 값의 균형이 좋은 것을 앱이 골라 둬요. 바꾸려면 교재 넣기 화면의 '연결됨' 줄을 눌러요.</p></details>
-      <details><summary>키 없이 쓰던 AI로 만들 수 있나요?</summary><p>네. 그게 기본이에요. 교재 넣기 화면의 [ChatGPT 열기]를 누르면 보낼 글이 복사되고 창이 열려요(Claude는 입력 칸까지 채워져요. 비어 있으면 붙여 넣으세요). 답을 복사해 돌아와 [답 넣기]를 누르면 돼요. 한 번 허락하면 다음부터는 돌아올 때 답이 저절로 들어가요. Claude 입력 칸을 채우는 방식은 보낼 글이 주소에 담겨 브라우저 방문 기록에도 남아요.</p></details>
-      <details><summary>AI 답이 중간에 끊겼어요</summary><p>[이어 쓰기 요청 복사]를 눌러 AI에게 보내고, 이어진 답을 복사해 [이어진 답 넣기]를 누르세요. 앞의 답 뒤에 이어 붙여요.</p></details>
-      <details><summary>AI가 답 대신 질문만 해요</summary><p>[다시 요청 글 복사]를 눌러 보내면 바로 써 줘요.</p></details>
-      <details><summary>'교재대로 되돌렸어요'는 뭔가요?</summary><p>AI가 프롬프트 원문·실습 단계·일정·FAQ·목표·교재 주소를 바꾸거나 빼면 lecpage가 교재대로 되돌려요. [보기]에서 곳마다 견주고, 원하면 [AI 답으로 되돌리기]를 눌러요.</p></details>
-      <details><summary>ChatGPT·Claude 구독이 있는데 키가 또 필요한가요?</summary><p>구독으로 이 앱에 바로 로그인할 수는 없어요. 대신 ChatGPT Pro·Business, Claude Max·Ultra·Team 구독에는 API 크레딧이 들어 있어요. 그 회사 사이트에서 받아 쓰면 돼요. 그 밖의 구독이면 교재 넣기 화면의 [ChatGPT 열기]로 쓰던 ChatGPT·Claude를 그대로 쓰세요.</p></details>
+      <details><summary>모델은 어떻게 고르나요?</summary><p>고르지 않아도 돼요. 그 키로 쓸 수 있는 모델 중 품질과 값의 균형이 좋은 것을 앱이 골라 둬요. 바꾸려면 AI 카드의 '키 연결됨' 옆 [바꾸기]를 눌러요.</p></details>
+      <details><summary>쓰던 앱으로 만들 때 교재는 어떻게 보내요?</summary><p>[복사하고 ChatGPT 열기]처럼 생긴 버튼을 누르면 프롬프트가 복사되고 창이 열려요. 그 창에 붙여 넣고 교재 원본 파일을 첨부해 보내요. Claude는 PPT·한글 파일을 받지 못하니 PDF로 저장해 첨부해요. 첨부할 파일을 못 찾으면 같은 자리의 [내려받기]를 눌러요.</p></details>
+      <details><summary>AI 답이 중간에 끊겼어요</summary><p>[이어서 요청 글 복사]를 눌러 AI에게 보내고, 이어진 답을 복사해 [이어진 답 넣기]를 누르세요. 앞의 답 뒤에 이어 붙여요.</p></details>
+      <details><summary>만들다 멈췄어요</summary><p>앞 단계까지 만든 것은 남아 있어요. [이어서 하기]를 누르면 멈춘 단계부터 해요. 새로 고치거나 창을 닫았다가 열어도 이어서 해요. 키가 없거나 결제가 막혔으면 [쓰던 앱으로(키 없이)]로 바꿔도 돼요.</p></details>
+      <details><summary>ChatGPT·Claude 구독이 있는데 키가 또 필요한가요?</summary><p>구독으로 이 앱에 바로 로그인할 수는 없어요. 대신 ChatGPT Pro·Business, Claude Max·Ultra·Team 구독에는 API 크레딧이 들어 있어요. 그 밖의 구독이면 [쓰던 앱으로(키 없이)]를 고르거나, 내 PC의 Claude Code·Codex를 쓰세요.</p></details>
     </div>
   </>,
   edit: <>
     <h1 tabIndex={-1}>살펴보고 고치기</h1>
-    <p>왼쪽에서 고치면 오른쪽 미리보기가 바로 바뀌어요. 잘못 고쳤으면 [되돌리기]를 눌러요.</p>
-    <Task title="내용과 연수 정보" shot="edit" alt="살펴보고 고치기 화면: 내용 탭과 미리보기">
-      <p><b>내용</b>에서 섹션을 눌러 문구를 고치고, 순서를 바꾸거나 더하고 빼요. 미리보기의 [눌러서 고치기]로 칸을 바로 열 수도 있어요.</p>
-      <p><b>연수 정보</b>에서 날짜·장소·강사 소개를 고쳐요.</p>
+    <p>AI가 다 만들면 미리보기(실제로 조립한 사이트)와 목록이 열려요. 고친 내용은 자동으로 저장되고, 잘못 고쳤으면 [되돌리기]를 눌러요.</p>
+    <Task title="글 바로 고치기와 그림 바꾸기" shot="edit" alt="살펴보고 고치기 화면: 목록과 미리보기">
+      <p>미리보기 위의 [글 고치기]를 켜고 글자를 누르면 그 자리에서 고쳐요. Enter로 마치고 Esc로 그만둬요.</p>
+      <p>그림을 누르면 교재 쪽 그림이나 올린 사진으로 바꿔요. 참가자 화면·강사 화면·발표 화면·QR 안내문을 휴대폰·태블릿·PC 크기로 볼 수 있어요.</p>
     </Task>
-    <section class="help-task help-task-wide">
-      <div class="help-task-t">
-        <h2>디자인을 말로 고치기</h2>
-        <p>[디자인] 탭 맨 위 '느낌이 다른 세 안'에서 하나를 누르면 바로 바뀌어요. [크게 비교]로 나란히 볼 수 있어요.</p>
-        <p>"좀 답답해 보여요"처럼 적거나 예시를 누르면 고칠 곳을 지금 모습과 바꾼 모습으로 보여 줘요.</p>
-        <p>[적용하기]를 누르면 바로 바뀌고, [되돌리기]로 돌아가요.</p>
-        <p>디자인 낱말의 이름과 예는 <a href="#/gallery">디자인 둘러보기</a>에 있어요. 담은 낱말은 새 연수의 요청 사항이 되고, 만든 연수에는 바로 적용돼요.</p>
-      </div>
-      <TryWords />
-    </section>
-    <Task title="AI에게 고쳐 달라고 하기" shot="review" alt="수정 요청 탭: 고칠 점을 적는 대화창">
-      <p>[수정 요청]에 바라는 점을 적으면 AI가 고쳐요. 미리보기의 [✎ 표시하기]로 고칠 곳에 펜으로 표시해도 돼요.</p>
-    </Task>
-    <Task title="참여 기능 켜기" shot="live" alt="참여 기능 탭: 질문 받기, 투표, 나눔 보드 같은 기능 목록">
-      <p>질문·투표·나눔 보드처럼 참가자 휴대폰과 강사 화면을 잇는 기능이에요. <a href="#/help/live">참여 기능 연결</a></p>
-    </Task>
+    <h2>탭마다 하는 일</h2>
+    <ul><li><b>목록</b>: 사이트의 섹션이에요. 끌거나 ↑↓로 순서를 바꾸고, […]에서 이름 바꾸기·숨기기·지우기를 해요.</li>
+      <li><b>연수 정보</b>: AI가 교재 몇 쪽에서 찾았는지와 함께 제목·날짜·시간·장소·강사를 보여 줘요. 처음에 한 번 확인해요. 고치면 사이트에 같은 글자로 적힌 곳과 QR 안내문·강사 화면·일정 파일이 함께 바뀌어요.</li>
+      <li><b>검수</b>: 깨진 그림·빈 섹션·빠진 날짜 같은 문제를 찾아요. [AI에게 고쳐 달라기]를 누르면 AI가 고쳐요.</li>
+      <li><b>수정 요청</b>: 고칠 섹션(또는 사이트 전체)과 바라는 점을 적어 AI에게 보내요. 키가 없으면 요청 글을 쓰던 앱에 보내고 답을 넣어요. 답의 섹션만 갈아 끼워요.</li>
+      <li><b>색·글꼴</b>: 강조색·글자색·바탕색과 글꼴을 바꿔요. 참여 기능·QR 안내문·발표 화면도 같은 색을 써요.</li></ul>
+    <p>AI가 고치기 전의 판은 [판 기록]에 남아요(최근 10판). 처음부터 다시 만들려면 [판 기록]의 [처음부터 다시 만들기]를 눌러요.</p>
   </>,
   live: <>
     <h1 tabIndex={-1}>참여 기능 연결</h1>
@@ -186,7 +155,7 @@ const BODY = {
     <p>강사 화면의 [발표 화면 띄우기]를 누르면 프로젝터에 발표 화면이 떠요. 크롬·엣지는 화면을 고르면 바로 전체 화면이고, 그 밖의 브라우저는 새 창을 프로젝터 쪽으로 끌어다 놓아요.</p>
     <p>QR 안내문·접속 확인·휴대폰에서 열기는 [더보기]에 있어요. 휴대폰에서 열기의 QR을 찍으면 키를 치지 않고 휴대폰으로 진행해요.</p>
     <h2>자료 올리기</h2>
-    <ul><li><b>파일</b>: '내용 → 자료실'에서 [＋ 파일 올리기]. 배포한 뒤 [다시 배포하기]를 누르면 같은 주소에 반영돼요.</li>
+    <ul><li><b>교재 원본</b>: 배포하기의 공개 범위에서 '교재 원본(PPT·PDF)도 내려받게 하기'를 켜면 자료실에 함께 올라가요.</li>
       <li><b>연수 중 링크</b>: 강사 화면의 [자료 추가]에 이름과 주소를 넣으면 자료실에 바로 보여요(8개까지).</li>
       <li><b>참가자 결과물</b>: 나눔 보드에 글·사진·파일을 올려요.</li></ul>
     <p>자세한 설명: <a href={`${REPO}/tree/main/skills/lecpage/backends`} target="_blank" rel="noopener">실시간 서버 안내</a></p>
@@ -210,7 +179,7 @@ const BODY = {
     <p>앱이 멈출 걱정이 적은 곳을 먼저 권하고, 배포한 뒤 주소가 열리는지 확인해요. [설정 → 연결]에서 미리 연결해 두면 버튼 하나로 배포해요.</p>
     <div class="faq">
       <details><summary>짧은 주소와 QR</summary><ul><li>[짧은 주소 만들기]를 누르면 치기 쉬운 주소(is.gd)가 생겨요. joo.is·bit.ly 주소를 붙여 넣어도 돼요.</li><li>QR과 [주소 복사]는 늘 원래 주소예요.</li><li>짧은 주소는 짐작될 수 있어요. 지켜야 할 사이트는 공개 범위를 '암호를 아는 사람만'으로 해요.</li><li>QR은 크게 띄우거나, 그림으로 저장하거나, 안내문(A4)으로 인쇄해요.</li></ul></details>
-      <details><summary>강사용 파일</summary><p>운영 안내·디자인 규칙·설계도는 사이트에 올라가지 않아요. [강사용 파일 받기]로 따로 받아요.</p></details>
+      <details><summary>강사용 파일</summary><p>운영 안내·연수 정보·사이트 원본·인쇄본은 사이트에 올라가지 않아요. [강사용 파일 받기]로 따로 받아요.</p></details>
       <details><summary>다음 기수·사이트 내리기</summary><ul><li>같은 연수를 다음 기수로 하면 [복제]해서 날짜를 고쳐 배포해요. 새 주소·새 QR이라 지난 기록과 섞이지 않아요.</li><li>같은 주소로 다시 배포할 때 지난 참여 기록이 남아 있으면 체크리스트의 '지난 기록'에서 비울지 그대로 둘지 골라요.</li><li>바로 배포한 사이트는 [사이트 내리기]로 지워요. 확인 창에 함께 지워질 기록이 나오니 필요한 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</li></ul></details>
     </div>
     <p>자세한 단계: <a href={`${REPO}/tree/main/skills/lecpage/references/deploy`} target="_blank" rel="noopener">배포 안내 모음</a></p>
@@ -231,10 +200,10 @@ const BODY = {
     <pre class="prompt-box" tabIndex={0}>npx skills add yoorrard/lecpage</pre>
     <p>claude.ai에서는 <code>skills/lecpage</code> 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기로 넣어요.</p><p>그다음 "이 PPT로 연수 사이트 만들어 줘"라고 말해요.</p>
     <h2>앱에서 이어 하기</h2>
-    <p>디자인을 화면에서 고르거나 참여 기능·배포를 직접 하려면 AI에게 "앱에서 이어 할게"라고 말해요. AI가 건넨 <code>.lecpage</code> 파일을 첫 화면의 [저장한 파일 열기]로 열면 교재 보기 그림까지 그대로 이어져요.</p>
+    <p>미리보기·고치기·배포를 화면에서 하려면 AI에게 "앱에서 이어 할게"라고 말해요. AI가 건넨 <code>.lecpage</code> 파일을 [저장한 파일 열기]로 열어요. 교재 넣기 화면에 놓아도 완성 화면이 바로 열려요.</p>
     <p>참여 기능 연결과 사이트 암호는 옮겨 오지 않아요. 앱에서 다시 정해요.</p>
     <p>앱에서 고친 연수는 [파일로 저장]한 파일을 AI에게 주면 다시 이어 해요.</p>
-    <p>디자인은 <a href="#/gallery">디자인 둘러보기</a>에서 낱말을 담아 [요청 문장 보기]의 문장을 붙여 넣으면 그대로 맞춰요.</p>
+    <p>바라는 분위기는 <a href="#/gallery">참고 디자인</a>에서 사례나 낱말을 골라 [요청 문장 보기]의 문장을 붙여 넣어요.</p>
   </>,
   privacy: <>
     <h1 tabIndex={-1}>개인정보 안내</h1>
@@ -273,12 +242,12 @@ const BODY = {
   </>,
   faq: <>
     <h1 tabIndex={-1}>자주 묻는 질문</h1>
-    <h3>정말 무료인가요?</h3><p>네. lecpage에 내는 돈은 없어요. AI는 쓰던 ChatGPT·Claude·Gemini 창이나 Gemini 무료 키로 써요.</p><p>사이트와 참여 기능은 강사님의 무료 계정에서 돌아가요. 유료 AI 키를 쓰면 그 회사에 쓴 만큼만 내요.</p>
+    <h3>정말 무료인가요?</h3><p>네. lecpage에 내는 돈은 없어요. AI는 쓰던 ChatGPT·Claude·Gemini 앱이나 Gemini 무료 키로 써요.</p><p>사이트와 참여 기능은 강사님의 무료 계정에서 돌아가요. 유료 AI 키를 쓰면 그 회사에 쓴 만큼만 내요.</p>
     {/* copy-ok: "배포용"은 한글 프로그램의 메뉴 이름(배포용 문서로 저장하기) */}<h3>한글(HWP) 파일도 되나요?</h3><p>네, HWP와 HWPX 모두 그대로 넣으면 돼요. 암호를 걸었거나 배포용으로 저장한 문서는 원본 파일이나 PDF로 넣어 주세요.</p>
-    <h3>교재 보기에 그림이 안 나와요.</h3><p>슬라이드 그림은 PDF에서 만들어요. PPT를 PDF로도 저장해 함께 넣어 주세요.</p>
+    <h3>교재 쪽 그림이 안 나와요.</h3><p>쪽 그림은 PDF에서 만들어요. PPT를 PDF로도 저장해 함께 넣어 주세요. AI도 PDF를 가장 잘 읽어요.</p>
     <h3>참가자가 교재를 내려받지 못하게 하고 싶어요.</h3><p>교재 원본은 기본으로 사이트에 넣지 않아요. 슬라이드 그림까지 지키려면 공개 범위를 '암호를 아는 사람만'으로 해요.</p>
     <h3>다른 컴퓨터에서 이어 하고 싶어요.</h3><p>[파일로 저장]으로 저장하고, 다른 컴퓨터에서 [저장한 파일 열기]로 열어요. 기본 파일에는 배포 열쇠가 없어 남에게 줘도 되고, 그 파일로 배포하면 새 주소가 생겨요.</p><p>같은 주소로 이어 배포하려면 저장할 때 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 연 뒤에는 배포하기 화면에서 [이 주소에 이어서 배포]를 눌러요. 이 파일에는 열쇠가 들어가니 남에게 주지 마세요.</p>
-    <h3>디자인을 원하는 대로 바꾸고 싶어요.</h3><p>[디자인] 탭에 보이는 느낌을 말로 적거나, <a href="#/gallery">디자인 둘러보기</a>에서 낱말을 담아 적용해요.</p>
+    <h3>디자인을 원하는 대로 바꾸고 싶어요.</h3><p>[수정 요청]에 바라는 느낌을 적어 AI에게 보내거나 [색·글꼴]에서 바로 바꿔요. 만들기 전이면 <a href="#/gallery">참고 디자인</a>에서 사례를 골라 둬요.</p>
     <div class="row"><Mascot size={64} mood="happy" /><span>더 궁금한 점은 <a href={`${REPO}/issues`} target="_blank" rel="noopener">GitHub 이슈</a>로 남겨 주세요.</span></div>
   </>,
 };

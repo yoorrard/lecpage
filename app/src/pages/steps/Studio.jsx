@@ -232,7 +232,7 @@ function CheckPanel({ issues, onShow, onFix, locked, onRecheck }) {
         ))}
       </ul>
       <div class="btn-row">
-        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(pick.length ? pick : null)}>{pick.length ? `고른 ${pick.length}곳 AI에게 고쳐 달라기` : 'AI에게 고쳐 달라기'}</button>}
+        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(pick.length ? pick : null)}>{pick.length ? `고른 ${pick.length}곳 고쳐 달라기` : 'AI에게 고쳐 달라기'}</button>}
         <button type="button" class="btn btn-quiet" onClick={onRecheck}>다시 검수</button>
       </div>
     </div>
@@ -252,7 +252,7 @@ function AskPanel({ p, sections, ask, setAsk, idle, adoptSite, locked, go }) {
   const ready = ask.request.trim().length > 1;
   async function send() {
     if (!ready || locked) return;
-    if (p.demo) { toast('체험이라 AI에게 보내지 않아요. 내 교재로 시작하면 이 단추로 바로 고쳐요.'); return; }
+    if (p.demo) { toast('체험이라 AI에게 보내지 않아요. 내 교재로 시작하면 이 버튼으로 바로 고쳐요.'); return; }
     await idle(); editSite(p.id, { target, request: ask.request.trim(), way: 'key', provider: conn.provider, model: conn.model });
     toast('AI에게 보냈어요. 끝나면 미리보기가 바뀌어요.'); setAsk({ ...ask, request: '' });
   }
@@ -363,7 +363,7 @@ function ImageDialog({ n, p, onClose, onPick }) {
     <Dialog open={n !== null} onClose={onClose} label="그림 바꾸기" wide>
       {n !== null && <div class="stack">
         <h2 class="h-sub">그림 바꾸기</h2>
-        <Field label="그림 설명(화면 읽기 프로그램이 읽어요)"><input class="input" value={alt} onInput={(e) => setAlt(e.target.value)} maxLength={120} placeholder="예: 실습 결과 차트" /></Field>
+        <Field label="그림 설명" hint="화면 읽기 프로그램이 읽어요."><input class="input" value={alt} onInput={(e) => setAlt(e.target.value)} maxLength={120} placeholder="예: 실습 결과 차트" /></Field>
         <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => fileRef.current?.click()}>사진 올리기</button>{cur && <button type="button" class="btn btn-quiet" onClick={() => onPick(cur.src, alt)}>설명만 바꾸기</button>}</div>
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
         <b class="small">교재 쪽 그림</b>
@@ -382,7 +382,7 @@ function Versions({ p, onPick, onRemake }) {
       <h2 class="h-sub">판 기록</h2>
       <p class="small muted">AI가 만든 판과 AI가 고치기 전 판이 남아요(최근 10판). 직접 고친 것은 [되돌리기]로 하나씩 되돌려요.</p>
       {list.length ? <ul class="versions">{list.map((v) => <li><span><b>{v.label}</b><small>{fmtDate(v.at)}</small></span><button type="button" class="btn btn-sm" onClick={() => onPick(v)}>이 판으로 되돌리기</button></li>)}</ul> : <p class="muted small">아직 기록이 없어요.</p>}
-      <div class="btn-row"><button type="button" class="btn btn-quiet" onClick={onRemake}>AI로 처음부터 다시 만들기</button></div>
+      <div class="btn-row"><button type="button" class="btn btn-quiet" onClick={onRemake}>처음부터 다시 만들기</button></div>
     </div>
   );
 }
