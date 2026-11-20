@@ -4,7 +4,7 @@ import { HttpError, ERRORS, json, readJson, corsHeaders, preflight, errorFrom, w
 import { config, DEFAULTS, expiryFrom } from '../src/config.js';
 
 test('오류 모양: { error: { code, message_ko } } + 알맞은 상태 코드', async () => {
-  const want = { bad_request: 400, unauthorized: 401, not_found: 404, too_large: 413, too_many_files: 413, bad_path: 400, bad_type: 415, runtime_mismatch: 422, rate_limited: 429, full: 507, blocked: 403, missing_blobs: 409, code_taken: 409 };
+  const want = { bad_request: 400, unauthorized: 401, not_found: 404, too_large: 413, too_many_files: 413, bad_path: 400, bad_type: 415, runtime_mismatch: 422, script_not_allowed: 422, unsafe_site: 422, rate_limited: 429, full: 507, blocked: 403, missing_blobs: 409, code_taken: 409 };
   assert.deepEqual(Object.keys(ERRORS).sort(), Object.keys(want).sort());
   for (const [code, status] of Object.entries(want)) {
     const r = new HttpError(code).toResponse();
@@ -82,8 +82,7 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(d.maxTotalBytes, 4 * 1024 * 1024 * 1024);
   assert.equal(d.adminKey, '');
   assert.equal(d.reportWebhook, '');
-  assert.equal(d.allowSupabaseSdk, false);
-  const c = config({ MAX_BYTES: '1000', MAX_FILES: 5, SITE_DAYS: '7', SITES_PER_HOUR: 'abc', DAILY_SITE_CAP: '-1', MAX_TOTAL_BYTES: '', ADMIN_KEY: ' k ', REPORT_WEBHOOK: 'http://insecure.example/x', PUBLIC_ORIGIN: 'https://sites.example.com/path', ALLOW_SUPABASE_SDK: '1' });
+  const c = config({ MAX_BYTES: '1000', MAX_FILES: 5, SITE_DAYS: '7', SITES_PER_HOUR: 'abc', DAILY_SITE_CAP: '-1', MAX_TOTAL_BYTES: '', ADMIN_KEY: ' k ', REPORT_WEBHOOK: 'http://insecure.example/x', PUBLIC_ORIGIN: 'https://sites.example.com/path' });
   assert.equal(c.maxBytes, 1000); assert.equal(c.maxFiles, 5); assert.equal(c.days, 7);
   assert.equal(c.sitesPerHour, DEFAULTS.SITES_PER_HOUR, '숫자가 아니면 기본값');
   assert.equal(c.dailySiteCap, DEFAULTS.DAILY_SITE_CAP, '0 이하면 기본값');
@@ -91,7 +90,6 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(c.adminKey, 'k');
   assert.equal(c.reportWebhook, '', 'https만');
   assert.equal(c.publicOrigin, 'https://sites.example.com');
-  assert.equal(c.allowSupabaseSdk, true);
   assert.equal(config({ REPORT_WEBHOOK: 'https://hooks.example/x' }).reportWebhook, 'https://hooks.example/x');
   // 신고 알림의 '처리' 링크(관리 Worker 주소): https만, 없으면 빈 값(링크를 뺌)
   assert.equal(d.adminUrl, '');

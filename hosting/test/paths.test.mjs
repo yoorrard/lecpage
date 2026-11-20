@@ -36,7 +36,7 @@ test('형식은 확장자로만 정함', () => {
   assert.equal(typeOf('assets/files/연수_활동지_최종_.pdf').type, 'application/pdf');
   assert.equal(typeOf('assets/files/표.csv').type, 'text/csv; charset=utf-8');
   assert.equal(typeOf('assets/files/읽어 보기.md').type, 'text/markdown; charset=utf-8');
-  for (const p of ['a.php', 'a.mjs', 'a.htm', 'a.xhtml', 'a.xml', 'a.exe', 'a.wasm', 'a.rtf', 'a.dmg', 'a.apk', 'a.bat', 'a.jar', 'a', '_headers', 'a.html.bak', 'a.constructor', 'a.__proto__', 'a.toString']) assert.equal(typeOf(p), null, p);
+  for (const p of ['a.php', 'a.htm', 'a.xhtml', 'a.xml', 'a.exe', 'a.wasm', 'a.rtf', 'a.dmg', 'a.apk', 'a.bat', 'a.jar', 'a', '_headers', 'a.html.bak', 'a.constructor', 'a.__proto__', 'a.toString']) assert.equal(typeOf(p), null, p);
   // 내려받기 전용 형식은 브라우저가 문서로 열 형식(html·svg·xml·js)이 아님
   for (const [ext, t] of Object.entries(TYPES)) if (t.download) assert.ok(!/html|svg|xml(?!formats)|javascript/.test(t.type.replace('openxmlformats', '')), ext);
   // 다른 출처에서 불러 쓸 일이 없는 것만 same-origin. 그림은 앱이 "열리는지 확인"할 때 불러 감
@@ -47,7 +47,8 @@ test('형식은 확장자로만 정함', () => {
   assert.equal(typeOf('index.html').sameOrigin, false);
   // 형식표의 Content-Type에 스크립트로 읽힐 것은 js뿐
   const scripty = Object.entries(TYPES).filter(([, t]) => /javascript|ecmascript/.test(t.type)).map(([e]) => e);
-  assert.deepEqual(scripty, ['js']);
+  assert.deepEqual(scripty, ['js', 'mjs'], '스크립트로 읽히는 형식은 .js·.mjs뿐(둘 다 받기 규칙을 거침)');
+  assert.equal(typeOf('assets/app.mjs').kind, 'js');
 });
 
 test('주소 → 파일 경로', () => {
@@ -89,4 +90,17 @@ test('엔진의 USER_ASSET 확장자는 형식표에 다 있음', () => {
   const inline = exts.filter((e) => !TYPES[e].download).sort();
   assert.deepEqual(inline, ['avif', 'gif', 'jpeg', 'jpg', 'm4a', 'mp3', 'mp4', 'pdf', 'png', 'txt', 'webm', 'webp']);
   assert.ok(/\(\?:slides\|media\)/.test(src) && /files\\\\\//.test(src), 'USER_ASSET 폴더(slides·media·files)');
+});
+
+test('엔진 조립이 받는 사이트 파일(kit/paths.js SITE_FILE)의 확장자는 형식표에 다 있음', () => {
+  const src = readFileSync(join(ENGINE, 'src', 'kit', 'paths.js'), 'utf8');
+  const m = /export const SITE_FILE = \/(.+)\/i;/.exec(src);
+  assert.ok(m, 'kit/paths.js의 SITE_FILE');
+  const exts = new Set();
+  // 'jpe?g'·'woff2?' 같은 글자 하나 빼도 되는 꼴은 두 가지로 펼침
+  const expand = (e) => { const i = e.indexOf('?'); return i < 0 ? [e] : [...expand(e.slice(0, i - 1) + e.slice(i + 1)), ...expand(e.slice(0, i) + e.slice(i + 1))]; };
+  for (const g of m[1].matchAll(/\\\.\(\?:([a-z0-9|?]+)\)/g)) for (const e of g[1].split('|')) for (const x of expand(e)) exts.add(x);
+  for (const e of ['js', 'mjs', 'webp', 'jpg', 'jpeg', 'woff', 'woff2', 'vtt', 'pdf', 'pptx', 'ppt']) assert.ok(exts.has(e), `${e}: ${[...exts].join(' ')}`);
+  for (const e of exts) assert.ok(Object.hasOwn(TYPES, e), `조립이 받는 .${e}가 호스트 형식표에 없음`);
+  for (const p of ['assets/app.mjs', 'assets/fonts/a.woff', 'assets/fonts/a.ttf', 'assets/fonts/a.otf', 'assets/video/ko.vtt']) assert.ok(typeOf(p), p);
 });
