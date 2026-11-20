@@ -426,7 +426,13 @@ async function runEdit(ctx, step) {
     prompt: P.buildEditPrompt({ request: rec.opts.request, target, sections, css: site['assets/style.css'], meta: rec.meta || ctx.project.meta }), maxTokens: 48000,
     isCut: (t) => { const s = extractSections(extractHtml(t).html); return s.length > 0 && !s[s.length - 1].complete; },
   });
-  const secs = extractSections(extractHtml(text).html).filter((s) => s.id).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
+  let got = extractSections(extractHtml(text).html).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
+  // 섹션 하나를 고칠 때는 그 섹션만 바꿈(다른 섹션을 같이 돌려줘도 버림). id가 다르거나 없는 섹션 하나만 오면 그 섹션으로 봄
+  if (target !== 'all') {
+    const same = got.filter((s) => s.id === target);
+    got = same.length ? same.slice(0, 1) : got.length === 1 ? [{ id: target, html: got[0].id ? got[0].html.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${target}$2`) : got[0].html.replace(/<section\b/i, `<section id="${target}"`) }] : [];
+  }
+  const secs = got.filter((s) => s.id);
   const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, '').replace(/```json[\s\S]*?(```|$)/gi, ''));
   const metaPatch = extractJson((/```json([\s\S]*?)(```|$)/i.exec(text) || [])[1] || '').value;
   if (!secs.length && !c.css && !metaPatch) throw formatError();

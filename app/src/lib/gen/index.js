@@ -117,7 +117,11 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
     const all = extractSections(extractHtml(joined).html);
     const cut = all.length > 0 && !all[all.length - 1].complete;
     let secs = all.filter((s) => s.complete);
-    if (want !== 'all' && secs.length === 1 && secs[0].id !== want) secs = [{ ...secs[0], id: want, html: secs[0].id ? secs[0].html.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${want}$2`) : secs[0].html.replace(/<section\b/i, `<section id="${want}"`) }];
+    // 섹션 하나를 고칠 때는 그 섹션만(다른 섹션은 버림). id가 다르거나 없는 섹션 하나만 오면 그 섹션으로 봄
+    if (want !== 'all') {
+      const same = secs.filter((x) => x.id === want);
+      secs = same.length ? same.slice(0, 1) : secs.length === 1 ? [{ ...secs[0], id: want, html: secs[0].id ? secs[0].html.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${want}$2`) : secs[0].html.replace(/<section\b/i, `<section id="${want}"`) }] : [];
+    }
     secs = secs.filter((s) => s.id);
     if (cut) { await keep(joined); return { ok: false, problems: [CUT], continuePrompt: P.buildContinuePrompt(extractHtml(joined).html) }; }
     if (!secs.length) return { ok: false, problems: ['답에서 고친 섹션(<section id="…">)을 찾지 못했어요. 코드 블록 전체를 복사해 붙여 넣어 주세요.'] };
