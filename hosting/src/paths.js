@@ -8,17 +8,22 @@ const SEGMENT = /^[A-Za-z0-9_가-힣ㄱ-ㅎㅏ-ㅣ.\-()[\] ]+$/;
 export const IGNORED = new Set(['_headers']);
 
 const T = (type, more = {}) => ({ type, kind: 'file', ...more });
-/** 확장자 → 응답 형식. kind: html(고쳐서 보냄)·js(런타임만)·svg(가둠)·file. download: 열지 않고 내려받게 */
+/**
+ * 확장자 → 응답 형식. kind: html(고쳐서 보냄)·js(엔진 런타임, pages 보기는 검사한 사이트 스크립트도)·svg(가둠)·file. download: 열지 않고 내려받게.
+ * 엔진 조립이 받는 사이트 파일(engine/src/kit/paths.js SITE_FILE)과 엔진 자료(USER_ASSET)의 확장자가 모두 있음(test/paths.test.mjs)
+ */
 export const TYPES = {
   html: T('text/html; charset=utf-8', { kind: 'html' }),
   css: T('text/css; charset=utf-8'),
   js: T('text/javascript; charset=utf-8', { kind: 'js' }),
+  mjs: T('text/javascript; charset=utf-8', { kind: 'js' }), // AI가 쓴 모듈 스크립트(조립이 그대로 둠)
   json: T('application/json; charset=utf-8'),
   webmanifest: T('application/manifest+json; charset=utf-8'),
   txt: T('text/plain; charset=utf-8'),
   svg: T('image/svg+xml', { kind: 'svg' }),
   png: T('image/png'), jpg: T('image/jpeg'), jpeg: T('image/jpeg'), webp: T('image/webp'), avif: T('image/avif'), gif: T('image/gif'), ico: T('image/x-icon'),
-  woff2: T('font/woff2'),
+  woff2: T('font/woff2'), woff: T('font/woff'), ttf: T('font/ttf'), otf: T('font/otf'),
+  vtt: T('text/vtt; charset=utf-8'), // 영상 자막
   pdf: T('application/pdf'),
   // 엔진이 사이트에 넣어 주는 소리·영상(engine/src/build.js의 USER_ASSET)
   mp3: T('audio/mpeg'), m4a: T('audio/mp4'), mp4: T('video/mp4'), webm: T('video/webm'),
@@ -46,7 +51,7 @@ export const TYPES = {
   enc: T('application/octet-stream'),
 };
 /** 다른 출처에서 불러 쓸 일이 없는 형식(Cross-Origin-Resource-Policy: same-origin). 그림은 앱의 "열리는지 확인"과 미리보기 카드가 불러 감 */
-const SAME_ORIGIN_ONLY = new Set(['js', 'css', 'json', 'webmanifest', 'woff2', 'enc']);
+const SAME_ORIGIN_ONLY = new Set(['js', 'mjs', 'css', 'json', 'webmanifest', 'woff2', 'woff', 'ttf', 'otf', 'vtt', 'enc']);
 
 export function extOf(path) {
   const name = path.slice(path.lastIndexOf('/') + 1);

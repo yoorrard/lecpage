@@ -26,7 +26,8 @@ test('오류 코드', () => {
     [{ files: { ...base, 'a/.env': f('b') } }, 'bad_path/400'],
     [{ files: { ...base, 'x.php': f('b') } }, 'bad_type/415'],
     [{ files: { ...base, 'notes.rtf': f('b') } }, 'bad_type/415'],
-    [{ files: { ...base, 'assets/x.mjs': f('b') } }, 'bad_type/415'],
+    [{ files: { ...base, 'assets/x.wasm': f('b') } }, 'bad_type/415'],
+    [{ files: { ...base, 'assets/x.mjs': f('b', 1024 * 1024 + 1) } }, 'too_large/413'], // .mjs도 스크립트(1MB까지)
     [{ files: { ...base, noext: f('b') } }, 'bad_type/415'],
     [{ files: { ...base, 'a.png': { sha256: 'ABC', size: 1 } } }, 'bad_request/400'],
     [{ files: { ...base, 'a.png': { sha256: sha('A'), size: 1 } } }, 'bad_request/400'], // 대문자 16진수
@@ -37,7 +38,7 @@ test('오류 코드', () => {
     [{ files: { ...base, 'a.png': f('a', 11) } }, 'bad_request/400'], // 같은 sha256인데 크기가 다름
     [{ files: { ...base, 'a.png': f('b', L.maxFileBytes + 1) } }, 'too_large/413'],
     [{ files: { ...base, 'a.png': f('b', L.maxFileBytes), 'b.png': f('c', L.maxFileBytes), 'c.png': f('d', 1024 * 1024) } }, 'too_large/413'], // 합계
-    [{ files: { ...base, 'assets/big.js': f('b', 1024 * 1024 + 1) } }, 'runtime_mismatch/422'],
+    [{ files: { ...base, 'assets/big.js': f('b', 1024 * 1024 + 1) } }, 'too_large/413'], // .js 하나는 1MB까지(엔진 런타임·사이트 스크립트 모두)
     [{ files: Object.fromEntries([['index.html', f('a')], ...Array.from({ length: L.maxFiles }, (_, i) => [`p${i}.png`, f('b')])]) }, 'too_many_files/413'],
   ];
   for (const [body, want] of cases) assert.equal(code(() => checkManifest(body, L)), want, JSON.stringify(body).slice(0, 120));
