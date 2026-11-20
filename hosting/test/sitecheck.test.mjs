@@ -1,7 +1,7 @@
 // 올릴 때 거절하는 내용(src/sitecheck.js): 정상 사이트(엔진이 만든 v1 사이트, AI가 쓴 사이트)는 통과하고 금지 모양만 걸리는지
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkHtml, checkCss, checkOwnScript, scanHtml, pageData, decodeEntities, OWN_JS_MAX } from '../src/sitecheck.js';
+import { checkHtml, checkCss, checkOwnScript, scanHtml, pageData, decodeEntities, listProblems, OWN_JS_MAX } from '../src/sitecheck.js';
 import { HttpError } from '../src/http.js';
 import { isRuntimeJs } from '../src/runtime.js';
 import { buildSite, aiSite, AI_SITE_JS } from './helpers.mjs';
@@ -153,4 +153,39 @@ test('HTML 읽기: 브라우저처럼 속성을 읽음', () => {
   // 아주 큰 HTML도 한 번 훑음(정규식 되돌림 없음)
   const big = '<p data-a="' + 'x'.repeat(2_000_000) + '">' + '<input placeholder="이름">'.repeat(20000);
   const t0 = Date.now(); assert.equal(run(() => checkHtml(big, 'index.html')), 'ok'); assert.ok(Date.now() - t0 < 3000, `${Date.now() - t0}ms`);
+});
+
+test('쿠키 쓰기는 사이트 스크립트에서 거절(읽기·localStorage는 그대로)', () => {
+  for (const bad of ['document.cookie = "a=1; domain=lecpage-view.pages.dev"', "document.cookie='x='+'y'.repeat(4000)", 'document .cookie += "b=2"', 'document?.cookie = v', 'document["cookie"] = v', "cookieStore.set('a', '1')", 'cookieStore?.delete("a")', "Object.defineProperty(document, 'cookie', { get() { return '' } })"]) assert.equal(js(bad), 'unsafe_site/cookie', bad);
+  for (const ok of ['const c = document.cookie;', 'if (document.cookie == "") {}', 'document.cookie.split(";")', "localStorage.setItem('theme', 'dark')", '// 쿠키는 쓰지 않아요', 'const cookie = 1; cookie === 1']) assert.equal(js(ok), 'ok', ok);
+});
+
+test('listProblems: 앱이 배포 전에 서버와 같은 규칙으로 파일마다 모음(위치 at으로 섹션을 찾음)', () => {
+  const html = '<!doctype html><html><head><title>t</title></head><body><section id="intro"><p>안녕</p></section><section id="login"><input placeholder="아이디"><button>로그인</button></section></body></html>';
+  const files = {
+    'index.html': html,
+    'about.html': te.encode('<form action="https://evil.example/x"><input name="q"></form>'),
+    'assets/style.css': '.a{-webkit-text-security:disc}',
+    'assets/site.js': te.encode('document.cookie = "a=1"'),
+    'assets/lecpage.js': 'document.cookie = "a=1"', // 엔진 런타임(사이트 스크립트 아님)은 보지 않음
+    'assets/ok.js': 'console.log(1)',
+    'material/p-001.webp': new Uint8Array([1, 2, 3]),
+  };
+  const out = listProblems(files, { isOwnScript: (p) => p === 'assets/site.js' || p === 'assets/ok.js' });
+  assert.deepEqual(out.map((x) => `${x.path}:${x.rule}`).sort(), ['about.html:form', 'assets/site.js:cookie', 'assets/style.css:masked', 'index.html:login']);
+  const login = out.find((x) => x.path === 'index.html');
+  assert.ok(login.at > html.indexOf('id="login"') && login.at < html.indexOf('</section></body>'), String(login.at));
+  assert.match(login.message_ko, /로그인 화면처럼 보여요/);
+  assert.deepEqual(listProblems({ 'index.html': '<p>괜찮은 사이트</p>' }), []);
+});
+
+test('앱이 이 파일을 그대로 불러 씀: Worker 전용 모듈(런타임 목록 등)을 불러오지 않음', async () => {
+  const { readFileSync } = await import('node:fs');
+  const seen = new Set(); const todo = ['sitecheck.js'];
+  while (todo.length) {
+    const f = todo.pop(); if (seen.has(f)) continue; seen.add(f);
+    const src = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8');
+    for (const m of src.matchAll(/^import [^;]*? from '\.\/([\w/-]+\.js)';/gm)) todo.push(m[1]);
+  }
+  assert.ok(!seen.has('runtime.js') && !seen.has('runtime-allow.js'), [...seen].join(','));
 });

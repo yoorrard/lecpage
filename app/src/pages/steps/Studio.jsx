@@ -18,7 +18,8 @@ const undos = new Map(); // 연수마다 직접 고친 것 되돌리기(이 탭 
 const stackOf = (pid) => { if (!undos.has(pid)) undos.set(pid, []); return undos.get(pid); };
 
 export function Studio({ p, update, go, job, idle, reload }) {
-  const [tab, setTab] = useState(() => (p.metaChecked ? 'list' : 'info'));
+  // 배포 화면의 [검수에서 고치기]로 오면 검수 탭부터(바로 배포가 받지 않는 내용)
+  const [tab, setTab] = useState(() => { let want = ''; try { want = sessionStorage.getItem('lecpage:studio-tab') || ''; sessionStorage.removeItem('lecpage:studio-tab'); } catch { } return want === 'check' ? 'check' : p.metaChecked ? 'list' : 'info'; });
   const [editing, setEditing] = useState(false);
   const [img, setImg] = useState(null); // 바꿀 그림 번호
   const [ver, setVer] = useState(0); // 그림 파일이 바뀌면 미리보기를 다시 읽음

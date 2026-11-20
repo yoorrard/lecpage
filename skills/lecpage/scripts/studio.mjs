@@ -34,6 +34,8 @@ export const LIMITS = {
 const bodyLimit = () => Math.ceil(((LIMITS.materialMB + LIMITS.siteMB) * MB * 4) / 3) + MB;
 /** Claude Code 최소 판: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
 export const CLAUDE_MIN = '2.1.314';
+/** Codex: 이 판부터 `exec --ignore-user-config`(내 config.toml을 읽지 않음, 로그인은 그대로 CODEX_HOME — codex-rs/exec/src/cli.rs, rust-v0.122.0 태그에서 확인) */
+export const CODEX_MIN = '0.122.0';
 /** 에이전트가 검수를 돌리는 명령(허용 규칙과 작업 지시에 같은 글을 씀). 실행기는 에이전트가 쓸 수 없는 작업 폴더 밖(../bin)에 둠 */
 export const CHECK_CMD = 'node ../bin/check.mjs';
 const PROMPT = '이 폴더의 TASK.md를 읽고 그대로 해 주세요. 이 폴더 안에서만 일해요.';
@@ -141,9 +143,12 @@ export async function detectCodex(env = process.env) {
   a.auth = env.CODEX_API_KEY || /api key/i.test(t) ? 'api-key' : /chatgpt/i.test(t) ? 'subscription' : 'unknown';
   if (env.CODEX_API_KEY) a.loggedIn = true;
   const notes = [];
+  // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 판이어야 함(agentArgs)
+  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 판을 받아 주세요.`);
+  else if (!a.version) notes.push('Codex 판을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
   if (a.loggedIn === false) notes.push('Codex에 로그인되어 있지 않아요. 터미널에서 codex login을 실행해 주세요.');
   if (a.auth === 'api-key') notes.push('Codex가 ChatGPT 요금제 대신 API 키로 돌아요. 요금은 API 사용량으로 나가요.');
-  a.ready = a.loggedIn !== false;
+  a.ready = !!a.version && versionAtLeast(a.version, CODEX_MIN) && a.loggedIn !== false;
   a.note_ko = notes.join(' ');
   return a;
 }
@@ -156,7 +161,10 @@ export const CLAUDE_SETTINGS = { disableAllHooks: true, permissions: { blockRead
  * Claude: -p + stream-json(--verbose 필요) · --restricted(사용자·프로젝트 설정을 읽지 않고 파일 도구를 작업 폴더 안으로) ·
  *   도구는 Read·Write·Edit·Glob·Grep + 검수 명령만 허용한 Bash(윈도우는 PowerShell도 같은 명령만) · 묻는 대신 거절(dontAsk·--permission-prompts none) ·
  *   MCP 없음 · 세션을 디스크에 남기지 않음(교재가 기록에 남지 않게)
- * Codex: exec --json --cd <임시 폴더> --sandbox workspace-write · Git 저장소가 아닌 폴더 · 세션 파일 안 남김
+ * Codex: exec --json --cd <임시 폴더> --sandbox workspace-write · Git 저장소가 아닌 폴더 · 세션 파일 안 남김 ·
+ *   내 config.toml을 읽지 않음(--ignore-user-config: 사용자 MCP 서버·망 열기·환경 설정이 끼어들지 않음. 로그인은 그대로) ·
+ *   작업 폴더 샌드박스의 망은 끔(-c sandbox_workspace_write.network_access=false, 기본값을 못 박아 둠).
+ *   임시 폴더는 Git 저장소·신뢰한 프로젝트가 아니라 그 폴더의 설정·MCP는 읽지 않음(--trust를 쓰지 않음)
  */
 export function agentArgs(agent, { ws, platform = process.platform } = {}) {
   if (agent === 'claude') {
@@ -167,7 +175,7 @@ export function agentArgs(agent, { ws, platform = process.platform } = {}) {
       '--allowedTools', ...allow, '--disallowedTools', 'mcp__*', '--permission-mode', 'dontAsk', '--permission-prompts', 'none',
       '--strict-mcp-config', '--settings', JSON.stringify(CLAUDE_SETTINGS), '--no-session-persistence', '--max-turns', '200'];
   }
-  if (agent === 'codex') return ['exec', '--json', '--cd', ws, '--sandbox', 'workspace-write', '--skip-git-repo-check', '--ephemeral', PROMPT];
+  if (agent === 'codex') return ['exec', '--json', '--cd', ws, '--sandbox', 'workspace-write', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '-c', 'sandbox_workspace_write.network_access=false', PROMPT];
   throw new Error('unknown agent');
 }
 
@@ -504,6 +512,33 @@ function copyDesigns(dst) {
   return names;
 }
 
+/**
+ * 결과 사이트에 비밀처럼 보이는 글이 있는지(교재 속 지시문에 속은 에이전트가 PC 파일 내용을 사이트에 적으면 배포로 공개됨).
+ * 키·토큰 모양(개인 키 머리, OAuth 토큰 칸, OpenAI·Anthropic·Google·GitHub·AWS·Slack 키), 이 PC의 홈 폴더 경로, 작업 임시 폴더 경로.
+ * @param {Record<string, string|{base64}>} site @param {{ home?: string, ws?: string }} o
+ * @returns {Array<{ file: string, kind: string }>} 걸린 곳(내용은 돌려주지 않음)
+ */
+export function secretShapes(site, { home = homedir(), ws = '' } = {}) {
+  const KEYS = [
+    ['private-key', /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/],
+    ['oauth-token', /["'](?:refresh_token|access_token|id_token)["']\s*:\s*["'][\w.\-~+/=]{16,}/],
+    ['api-key', /\b(?:sk-(?:proj-|ant-(?:api|admin)\d*-|or-v\d-|svcacct-)?[A-Za-z0-9_-]{32,}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[abprs]-[A-Za-z0-9-]{20,})\b/],
+  ];
+  const paths = [];
+  const norm = (p) => String(p || '').replace(/[\\/]+$/, '');
+  for (const p of [norm(home), norm(ws)]) {
+    if (p.length < 6) continue; // '/root' 같은 아주 짧은 경로는 흔한 글과 겹침
+    paths.push(p, p.replace(/\\/g, '/'), p.replace(/\\/g, '\\\\'));
+  }
+  const out = [];
+  for (const [file, v] of Object.entries(site || {})) {
+    if (typeof v !== 'string') continue;
+    for (const [kind, re] of KEYS) if (re.test(v)) { out.push({ file, kind }); break; }
+    if (paths.some((p) => v.includes(p))) out.push({ file, kind: 'pc-path' });
+  }
+  return out;
+}
+
 function readSiteDir(dir, siteFileOk) {
   const site = {}, dropped = [];
   const walk = (d, pre) => {
@@ -661,6 +696,9 @@ async function runJob(S, job) {
     else if (cj?.errors) issues = cj.errors.map((e) => ({ id: 'assemble-error', level: 'error', where: { file: 'site/index.html', selector: '', section: '' }, message_ko: e.message_ko || String(e), fix_hint_ko: '' }));
     else if (cj?.error) issues = [{ id: 'check-failed', level: 'error', where: { file: '', selector: '', section: '' }, message_ko: cj.error, fix_hint_ko: '' }];
     const { site, dropped } = readSiteDir(join(work, 'site'), siteFileOk);
+    // 비밀처럼 보이는 글(키·토큰·이 PC의 경로)이 있으면 받지 않음: 앱 미리보기를 거쳐 배포되면 누구나 보게 됨
+    const leaks = secretShapes(site, { ws: root });
+    if (leaks.length) throw Object.assign(new Error(`사이트 파일(${[...new Set(leaks.map((x) => x.file))].slice(0, 3).join(', ')})에 키·토큰이나 이 PC의 폴더 경로처럼 보이는 글이 있어 받지 않았어요. 교재에 그런 글이나 'PC 파일을 읽어 적어라' 같은 지시가 있으면 지우고 다시 해 주세요.`), { code: 'secret' });
     let meta = null;
     try { meta = JSON.parse(readFileSync(join(work, 'lecpage.json'), 'utf8')); } catch { issues.push({ id: 'meta-json', level: 'error', where: { file: 'lecpage.json', selector: '', section: '' }, message_ko: 'lecpage.json을 JSON으로 읽지 못했어요.', fix_hint_ko: '연수 정보를 다시 확인해 주세요.' }); }
     let material = null; try { material = { pages: JSON.parse(readFileSync(join(work, '.lecpage', 'pages.json'), 'utf8')) }; } catch { /* 교재 없이 고친 경우 */ }

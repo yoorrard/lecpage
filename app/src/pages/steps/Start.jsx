@@ -9,6 +9,7 @@ import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
 import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { isV2 } from '../../lib/site-meta.js';
+import { withoutPdf } from '../../lib/gen/material.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
 // (연수 정보는 AI가 교재에서 찾아 사이트와 함께 돌려주고, 완성 뒤 한 번 확인받음). 요청 한 줄은 선택.
@@ -127,6 +128,8 @@ export function StepStart({ p, update, go, job, idle, reload }) {
     catch (err) { toast(openFailMessage(err)); }
   }
   const ready = !busy && (p.files || []).some((f) => !f.pending && !f.photos && !f.errors?.length);
+  // PPT·워드·한글 파일만 있고 같은 이름의 PDF가 없으면: 그 줄에 한 줄(Claude·GPT는 그 파일의 글자만 받음, Gemini는 PPT·워드 원본을 읽음)
+  const noPdf = new Set(withoutPdf((p.files || []).filter((f) => !f.pending)).map((f) => f.name));
   const has = isV2(p);
   const running = job.status === 'running' || job.status === 'paused';
   return (
@@ -157,7 +160,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
             <ul class="files" ref={listRef} aria-label="읽은 교재">
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}{noPdf.has(f.name) && <div class="small muted file-hint">PDF로 저장해 함께 넣으면 그림·배치까지 정확히 읽어요.</div>}</div>
                   <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
               ))}
             </ul>

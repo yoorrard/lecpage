@@ -571,6 +571,7 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-pick-head{display:grid;gap:4px}
 .ai-pick-head p{margin:0}
 .ai-pick-wait{margin:0;padding:8px 12px;border-radius:var(--r-xs);background:var(--sunk);color:var(--ink-2)}
+.ai-pick-office{margin:0;color:var(--ink-2)}
 /* 세 카드: 같은 크기·같은 위계로 한 줄(좁으면 세 줄) */
 .ai-cards{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
 @media (max-width:760px){.ai-cards{grid-template-columns:minmax(0,1fr)}}

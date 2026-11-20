@@ -6,6 +6,7 @@ import { startGeneration, chatPrompt, acceptChatAnswer, bridgeStatus } from '../
 import { startDemo } from '../lib/demo.js';
 import { SKILL_CMDS, AGENT_NAME } from '../lib/agent.js';
 import { blobs } from '../lib/db.js';
+import { withoutPdf, geminiReadsOriginal } from '../lib/gen/material.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
 // AI 고르기(docs/plan-ai-first.md §2·§7·§10): GPT·Claude·Gemini를 같은 크기·같은 위계로 한 줄(휴대폰은 세 줄).
@@ -72,6 +73,8 @@ export function AiPick({ p, go, idle, reload, ready }) {
     if (then && a) make(a.provider, st[a.provider] || { model: a.model });
   }
   const card = AI_CARDS.find((c) => c.id === chat);
+  // PPT·워드 원본만 있으면(같은 이름의 PDF 없음): Gemini는 원본 그대로 읽고, GPT·Claude는 글자만 받음(lib/gen/material.js)
+  const office = withoutPdf(p.files || []).filter((f) => geminiReadsOriginal(f.ext));
   return (
     <section class="ai-pick" aria-labelledby="ai-pick-h">
       <div class="ai-pick-head">
@@ -79,6 +82,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
         <p class="small muted">고른 AI가 교재를 직접 읽고 사이트를 만들어요. 돈을 들이지 않으려면 Gemini 키(무료로 시작)나 쓰던 앱(무료 요금제도 돼요)을 고르세요.</p>
       </div>
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 고를 수 있어요.</p>}
+      {ready && office.length > 0 && <p class="small ai-pick-office">PPT·워드 파일은 Gemini만 원본 그대로 읽어요. GPT·Claude는 그 파일의 글자만 읽으니, PDF로 저장해 함께 넣으면 그림·배치까지 정확히 읽어요.</p>}
       <div class="ai-cards" role="list">
         {AI_CARDS.map((c) => {
           const st = conn?.[c.id];

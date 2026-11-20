@@ -16,6 +16,11 @@ export const LIB_SCRIPT_SOURCES = ['https://cdn.jsdelivr.net/npm/gsap@3.15.1/', 
 export const FRAME_HOSTS = ['https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
 /** 다른 사이트의 틀 안에 넣지 못하게 하는 강사용 화면(엔진의 _headers와 같음) */
 export const NO_FRAME_PAGES = new Set(['console.html', 'screen.html', 'poster.html']);
+/**
+ * 창 사이 연결을 끊는 쪽(Cross-Origin-Opener-Policy: same-origin, 엔진 조립의 _headers와 같음): 관리자 키를 다루는 강사 화면·발표 화면.
+ * 같은 출처의 사이트 스크립트가 window.open('console.html')로 연 창의 키 입력 칸·저장소에 손대지 못하게(COOP가 없는 쪽에서 열면 창 연결이 끊김)
+ */
+export const COOP_PAGES = new Set(['console.html', 'screen.html']);
 /** 엔진이 만드는 보조 쪽(엔진 kit/aux-build.js가 만드는 쪽, kit/paths.js ENGINE_PAGES와 같음). 맨 위 폴더의 이 이름만 */
 export const AUX_PAGES = new Set([...NO_FRAME_PAGES, 'check.html', 'privacy.html']);
 
@@ -172,6 +177,7 @@ export function fileHeaders(path, type, sha, opts = {}) {
     const noFrame = NO_FRAME_PAGES.has(path);
     h['content-security-policy'] = htmlCsp(path, opts.csp);
     if (noFrame) h['x-frame-options'] = 'DENY';
+    if (COOP_PAGES.has(path)) h['cross-origin-opener-policy'] = 'same-origin';
     h['cache-control'] = 'no-cache';
   } else {
     h['cache-control'] = opts.immutable ? IMMUTABLE : SHORT;

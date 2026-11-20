@@ -312,7 +312,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
 function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
-  const [refused, setRefused] = useState(''); // 바로 배포가 거절한 까닭(서버 문구 그대로)
+  const [refused, setRefused] = useState(null); // 바로 배포가 거절한 까닭 { t: 서버 문구 그대로, pre: 올리기 전에 미리 본 것 }
   const [ask, setAsk] = useState(false); // [사이트 내리기] 확인 창
   const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
@@ -328,6 +328,9 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   // newCode: 연수 코드가 다른 사이트와 겹쳤을 때, 또는 지난 기록을 비우고 배포할 때(freshRoom) 새로 정한 코드.
   // 사이트를 그 코드로 다시 만들어 올리고 방을 새로 묶음(서버가 예전 코드의 방을 비움). 주소·관리자 키는 그대로
   const run = (newCode = freshRoom && autoLive ? E.randomCode() : '', retried = false) => start('lecpage', async (files, onProgress, rebuild) => {
+    // 서버가 거절할 내용은 올리기 전에 같은 규칙(hosting/src/sitecheck.js)으로 미리 봄: 파일을 헛되이 올리지 않고 바로 알려 줌
+    const bad = hostProblems(files);
+    if (bad.length) throw Object.assign(new Error(bad.slice(0, 2).map((x) => x.message_ko).join(' ')), { code: 'unsafe_site', pre: true });
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
@@ -349,7 +352,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   }, (e) => {
     if (e.code === 'code_taken' && !retried) { setTimeout(() => run(E.randomCode(), true), 0); return true; }
     // 받을 수 없는 내용(422 unsafe_site: 비밀번호 칸·로그인 흉내·바깥 양식 등): 서버 문구(message_ko)를 그대로 화면에 두고 고칠 길을
-    if (e.code === 'unsafe_site') { setRefused(e.message); return true; }
+    if (e.code === 'unsafe_site') { setRefused({ t: e.message, pre: !!e.pre }); return true; }
     // 사이트 스크립트를 받지 않는 보기(422 script_not_allowed): 내 계정에 배포하는 길로
     if (e.code === 'script_not_allowed') { onUnavailable?.({ t: `${e.message} 내 계정에 배포하면 그대로 올라가요.` }); return true; }
     // 붐빔(서버가 까닭을 줌: 오늘 모두 / 이 기기·이 인터넷만)·저장 공간이 참: 서버 문구 그대로 두고 내 계정에 배포하는 길로(넘길 곳은 서버가 준 순서).
@@ -375,12 +378,12 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
       {liveOn && liveOff && !own && <p class="small" role="status">{liveOffLine(liveOff)}</p>}
       {autoLive && !liveOff && !alive && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
       {refused && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
-        <b>바로 배포가 이 사이트를 받지 않았어요.</b>
-        <span>{refused}</span>
-        <span class="small">[수정 요청]으로 AI에게 그 부분을 빼 달라고 하거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
-        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`}>고치러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused('')}>닫기</button></div>
+        <b>{refused.pre ? '바로 배포가 받지 않는 내용이 있어 올리지 않았어요.' : '바로 배포가 이 사이트를 받지 않았어요.'}</b>
+        <span>{refused.t}</span>
+        <span class="small">검수에서 [AI에게 고쳐 달라기]를 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
+        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>검수에서 고치기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
       </div></div>}
-      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(''); run(); }} />
+      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); run(); }} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 내리기</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}

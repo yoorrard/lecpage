@@ -15,6 +15,21 @@ const OFFICE_MIME = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ppt: 'application/vnd.ms-powerpoint', doc: 'application/msword', odt: 'application/vnd.oasis.opendocument.text', odp: 'application/vnd.oasis.opendocument.presentation',
 };
+/** Gemini가 원본 그대로 읽는 문서 형식(그 밖의 회사는 글자만 받음) */
+export const geminiReadsOriginal = (ext) => !!OFFICE_MIME[String(ext || '').toLowerCase()];
+/**
+ * PDF로 저장해 함께 넣으면 그림·배치까지 정확히 읽는 형식(PPT·워드·한글 등). 브라우저에서 쪽 그림으로 그리는 길은 시험해 보고 쓰지 않음:
+ * PPTX 그리기(@aiden0z/pptx-renderer)는 그림으로 옮기는 단계가 Safari에서 막히고(SVG foreignObject를 canvas에 그리면 출처가 오염됨),
+ * 한글(@rhwp/core)은 실행 파일 하나가 28MB라 앱 호스팅의 파일 한도(25MiB)를 넘음(근거: 이 저장소 기록, 2026-11-20 appsec 시험)
+ */
+export const needsPdf = (ext) => /^(pptx|ppsx|ppt|docx|doc|odt|odp|hwp|hwpx)$/i.test(String(ext || ''));
+/** 교재 줄(project.files) 가운데 같은 이름의 PDF가 함께 들어 있지 않은 문서(PDF로 저장해 넣으면 더 정확한 것) */
+export function withoutPdf(files = []) {
+  const pdfs = new Set(files.filter((f) => (f.ext || extOf(f.name)) === 'pdf').map((f) => String(f.name).replace(/\.pdf$/i, '').toLowerCase()));
+  return files.filter((f) => !f.photos && !(f.errors || []).length && needsPdf(f.ext || extOf(f.name)) && !pdfs.has(String(f.name).replace(/\.\w+$/, '').toLowerCase()));
+}
+/** AI에게 간 교재 기록(작업 기록·연수 gen에 남김): [{ name, sent: 'original'|'images'|'text'|'covered', pages? }] */
+export const sentRecord = (pack) => (pack?.files || []).map((r) => ({ name: r.name, sent: r.sent, ...(r.sent === 'images' && pack.sentPages?.length ? { pages: pack.sentPages.length } : {}) }));
 export const SITE_MATERIAL = 'site/material/';
 const pageName = (n, ext = 'webp') => `p-${String(n).padStart(3, '0')}.${ext}`;
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
@@ -90,15 +105,16 @@ export async function packMaterial(pid, project, { provider, model = '', level =
       notes.push(level === 0 ? `${f.name}: 파일이 커서(${Math.round(size / 1e6)}MB${f.pages ? `·${f.pages}쪽` : ''}) 쪽 그림으로 보냈어요.` : `${f.name}: AI 회사가 한 번에 받는 크기를 넘어 쪽 그림으로 보냈어요.`);
       continue;
     }
+    // 같은 교재의 PDF본을 함께 넣었으면 그 PDF(원본이나 쪽 그림)로 읽음: 같은 내용을 두 번 보내지 않음(Gemini도)
+    if (needsPdf(ext) && coveredByPdf.has(f.name.replace(/\.\w+$/, '').toLowerCase())) { row.sent = 'covered'; continue; }
     if (OFFICE_MIME[ext]) {
       if (L.office && level <= 1 && size <= L.pdfBytes && bytes + size <= L.totalBytes) { parts.push({ kind: 'doc', data, mime: OFFICE_MIME[ext], name: f.name }); bytes += size; row.sent = 'original'; continue; }
-      if (coveredByPdf.has(f.name.replace(/\.\w+$/, '').toLowerCase())) { row.sent = 'images'; needImages = true; continue; } // 같은 교재의 PDF본을 함께 넣음
       row.sent = 'text'; textFor++;
-      notes.push(`${f.name}: 글자만 보냈어요. PowerPoint·한글에서 PDF로 저장해 함께 넣으면 그림까지 읽어 더 정확해요.`);
+      notes.push(`${f.name}: 글자만 보냈어요. PowerPoint·워드에서 PDF로 저장해 함께 넣으면 그림·배치까지 정확히 읽어요.`);
       continue;
     }
     row.sent = 'text'; textFor++;
-    if (/^hw/.test(ext)) notes.push(`${f.name}: 글자만 보냈어요. 한글에서 PDF로 저장해 함께 넣으면 더 정확해요.`);
+    if (/^hw/.test(ext)) notes.push(`${f.name}: 글자만 보냈어요. 한글에서 PDF로 저장해 함께 넣으면 그림·배치까지 정확히 읽어요.`);
   }
   // 쪽 그림: 원본을 못 보낸 PDF(또는 PDF본이 있는 PPTX)가 있을 때, 한도 안에서 쪽을 골라
   const sentPages = [];

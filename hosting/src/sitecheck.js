@@ -2,14 +2,15 @@
 //  HTML  비밀번호 칸(input type=password) · 비밀번호를 받는 칸(이름·안내 글이 '비밀번호'뿐인 칸) · 로그인 화면 흉내(아이디 칸 + '로그인' 단추)
 //        · 다른 사이트로 보내는 양식(form action·formaction이 바깥 주소) · 입력 글자 가림(-webkit-text-security)
 //        · 보조 쪽(강사 화면 등)에 사이트가 직접 쓴 스크립트
-//  사이트가 직접 쓴 스크립트(.js, 엔진 런타임이 아닌 것)  서비스 워커 등록 · 비밀번호 칸 만들기 · 글자 가림 · 크기(1MB)·UTF-8
+//  사이트가 직접 쓴 스크립트(.js, 엔진 런타임이 아닌 것)  서비스 워커 등록 · 비밀번호 칸 만들기 · 글자 가림 · 쿠키 쓰기 · 크기(1MB)·UTF-8
 //  CSS   글자 가림
 // 엔진이 만드는 비밀번호 칸 둘(강사 화면의 관리자 키, 암호 잠금 화면)은 모양이 정확히 같고 그 쪽에 사이트 스크립트가 없을 때만 받습니다.
 // CSP로 막을 수 없는 것(주소 이동으로 빼내기 등)은 이 검사로도 다 막지 못하므로 신고·가리기로 대응합니다(README §6).
+// 앱도 이 파일을 그대로 불러 배포 전에 같은 규칙으로 미리 봅니다(app/src/lib/host-check.js → listProblems). 그래서 Worker 전용 모듈은 불러오지 않음
 import { HttpError } from './http.js';
 import { isLocalSrc, isDataScript, resolveIn } from './rewrite.js';
 import { AUX_PAGES } from './csp.js';
-import { MAX_JS_BYTES } from './runtime.js';
+import { MAX_JS_BYTES } from './paths.js';
 
 /** 사이트가 직접 쓴 스크립트 파일 하나의 한도(엔진 런타임 묶음과 같음) */
 export const OWN_JS_MAX = MAX_JS_BYTES;
@@ -23,10 +24,14 @@ const MESSAGES = {
   masked: (p) => `입력한 글자를 가리는 칸(-webkit-text-security)이 있어요(${p}). 비밀번호 칸처럼 보이는 칸은 바로 배포에 올릴 수 없어요.`,
   service_worker: (p) => `서비스 워커를 등록하는 코드가 있어요(${p}). 바로 배포 사이트에서는 서비스 워커를 쓸 수 없어요. navigator.serviceWorker.register 부분을 지워 주세요.`,
   aux_script: (p, d) => `강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내 쪽(${p})에는 사이트가 직접 쓴 스크립트(${d})를 넣을 수 없어요. 이 쪽은 lecpage가 만든 그대로 두어 주세요.`,
+  cookie: (p) => `쿠키를 쓰는 코드가 있어요(${p}). 바로 배포 사이트는 여러 사이트가 한 도메인 아래에 있어 쿠키를 쓸 수 없어요. document.cookie에 값을 넣는 부분을 지우고, 기억할 값은 localStorage에 두어 주세요.`,
 };
-/** @param {keyof typeof MESSAGES} rule */
-export function unsafe(rule, path, detail = '') {
-  return new HttpError('unsafe_site', MESSAGES[rule](where(path), detail ? where(detail) : ''), { rule, path: where(path) });
+/**
+ * @param {keyof typeof MESSAGES} rule
+ * @param {number} [at] HTML 안에서 걸린 태그의 시작 위치(앱이 어느 섹션인지 찾을 때 씀)
+ */
+export function unsafe(rule, path, detail = '', at = -1) {
+  return new HttpError('unsafe_site', MESSAGES[rule](where(path), detail ? where(detail) : ''), { rule, path: where(path), ...(at >= 0 ? { at } : {}) });
 }
 
 // ── HTML 읽기 ───────────────────────────────────────────────────
@@ -198,14 +203,14 @@ export function checkHtml(html, path, { isOwnScript = () => false } = {}) {
   let account = false; let login = false;
   for (const t of tags) {
     const pw = isPasswordish(t);
-    if (pw && !(engineSecretField(path, t, page) && !own.length)) throw unsafe(pw, path);
-    if (t.name === 'form' && isExternalUrl(attr(t, 'action'))) throw unsafe('form', path, `action=${attr(t, 'action').trim().slice(0, 60)}`);
-    if (t.attrs.has('formaction') && isExternalUrl(attr(t, 'formaction'))) throw unsafe('form', path, `formaction=${attr(t, 'formaction').trim().slice(0, 60)}`);
-    if (MASK_CSS.test(attr(t, 'style'))) throw unsafe('masked', path);
-    if (!account && isAccountField(t)) account = true;
-    if (!login && isLoginControl(t, html)) login = true;
+    if (pw && !(engineSecretField(path, t, page) && !own.length)) throw unsafe(pw, path, '', t.start);
+    if (t.name === 'form' && isExternalUrl(attr(t, 'action'))) throw unsafe('form', path, `action=${attr(t, 'action').trim().slice(0, 60)}`, t.start);
+    if (t.attrs.has('formaction') && isExternalUrl(attr(t, 'formaction'))) throw unsafe('form', path, `formaction=${attr(t, 'formaction').trim().slice(0, 60)}`, t.start);
+    if (MASK_CSS.test(attr(t, 'style'))) throw unsafe('masked', path, '', t.start);
+    if (!account && isAccountField(t)) account = t;
+    if (!login && isLoginControl(t, html)) login = t;
   }
-  if (account && login) throw unsafe('login', path);
+  if (account && login) throw unsafe('login', path, '', Math.min(account.start, login.start));
   if (styles.some((s) => MASK_CSS.test(s))) throw unsafe('masked', path);
 }
 
@@ -218,6 +223,9 @@ export function checkCss(css, path) {
 const SW_RE = /serviceWorker['"`\]\s]*(?:\?\.|\.|\[\s*['"`])\s*register\b/;
 const PW_JS = [/\.type\s*=\s*['"`]\s*password\s*['"`]/i, /setAttribute\s*\(\s*['"`]type['"`]\s*,\s*['"`]\s*password\s*['"`]/i, /<input\b[^<>]{0,300}?\btype\s*=\s*\\?["'`]?\s*password\b/i];
 const MASK_JS = /-webkit-text-security\s*:\s*(?!none\b)[a-z]|webkitTextSecurity|WebkitTextSecurity/;
+// 쿠키 쓰기: 모든 바로 배포 사이트가 lecpage-view.pages.dev 아래라, 큰 쿠키를 그 도메인에 붙이면 같은 방문자에게 다른 사이트가 열리지 않을 수 있음.
+// 읽기(document.cookie를 =로 받지 않는 것)는 그대로 둠. cookieStore.set·delete도 막음
+const COOKIE_JS = [/\bdocument\s*(?:\?\.|\.)\s*cookie\s*(?:\+|\|\||&&|\?\?)?=(?!=)/, /\bdocument\s*\[\s*['"`]cookie['"`]\s*\]\s*(?:\+|\|\||&&|\?\?)?=(?!=)/, /\bcookieStore\s*(?:\?\.|\.)\s*(?:set|delete)\s*\(/, /\bdefineProperty\s*\(\s*document\s*,\s*['"`]cookie['"`]/];
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
 /**
@@ -231,5 +239,30 @@ export function checkOwnScript(bytes, path) {
   if (SW_RE.test(text)) throw unsafe('service_worker', path);
   if (PW_JS.some((re) => re.test(text))) throw unsafe('password', path);
   if (MASK_JS.test(text)) throw unsafe('masked', path);
+  if (COOKIE_JS.some((re) => re.test(text))) throw unsafe('cookie', path);
   return text;
+}
+
+/**
+ * 사이트 전체를 서버와 같은 규칙으로 미리 봄(앱이 배포 전·검수에서 씀). 서버는 처음 걸린 것에서 멈추지만 여기서는 파일마다 하나씩 모음.
+ * @param {Record<string, string|Uint8Array>} files 조립 결과(사이트 안 경로 → 내용)
+ * @param {{ isOwnScript: (path: string) => boolean }} o isOwnScript: 엔진 런타임이 아닌 .js인지
+ * @returns {Array<{ code: string, rule: string, path: string, at?: number, message_ko: string }>}
+ */
+export function listProblems(files, { isOwnScript = () => false } = {}) {
+  const out = []; const td = new TextDecoder(); const te = new TextEncoder();
+  const text = (v) => (typeof v === 'string' ? v : td.decode(v));
+  for (const [path, v] of Object.entries(files || {})) {
+    if (v == null) continue;
+    const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+    try {
+      if (ext === 'html' || ext === 'htm') checkHtml(text(v), path, { isOwnScript });
+      else if (ext === 'css') checkCss(text(v), path);
+      else if ((ext === 'js' || ext === 'mjs') && isOwnScript(path)) checkOwnScript(typeof v === 'string' ? te.encode(v) : v, path);
+    } catch (e) {
+      if (!(e instanceof HttpError)) throw e;
+      out.push({ code: e.code, rule: e.extra?.rule || e.code, path, ...(Number.isInteger(e.extra?.at) ? { at: e.extra.at } : {}), message_ko: e.message });
+    }
+  }
+  return out;
 }

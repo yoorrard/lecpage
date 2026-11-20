@@ -4,7 +4,7 @@
 //  - 응답 머리글은 서버가 만든 _headers로만(올라온 _headers는 쓰지 않음), 형식은 확장자 표(paths.js)로만
 //  - 영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고 Worker가 내보냄: Pages는 Range 요청에 206을 주지 않아 iPhone Safari에서 영상이 안 열릴 수 있음
 //    → _redirects로 Worker 주소(/s/<id>/…)로 넘김
-import { siteCsp, auxCsp, SVG_CSP, NO_FRAME_PAGES, AUX_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
+import { siteCsp, auxCsp, SVG_CSP, NO_FRAME_PAGES, AUX_PAGES, COOP_PAGES, BASE_HEADERS, IMMUTABLE } from './csp.js';
 import { TYPES, extOf } from './paths.js';
 import { pageHtml, REMOVED } from './pages.js';
 
@@ -69,10 +69,11 @@ export function headerRules(paths, { csp = {}, fontsHashed = false } = {}) {
     `X-Robots-Tag: ${BASE_HEADERS['x-robots-tag']}`,
   ]]);
   // 보조 쪽(엔진이 만드는 강사·발표·안내문·접속 확인·개인정보 쪽)은 예전 CSP. 강사용 화면은 다른 사이트의 틀 안에 넣지 못하게.
+  // 강사·발표 화면은 COOP로 창 연결도 끊음(같은 출처의 사이트 스크립트가 연 창의 관리자 키에 닿지 못하게, csp.js COOP_PAGES).
   // Pages는 /console.html을 /console로 넘기므로 둘 다
   for (const f of [...AUX_PAGES].sort()) {
     const bare = f.replace(/\.html$/, ''); const noFrame = NO_FRAME_PAGES.has(f);
-    for (const p of [`/${f}`, `/${bare}`]) first.push([p, [...(noFrame ? ['X-Frame-Options: DENY'] : []), '! Content-Security-Policy', `Content-Security-Policy: ${auxCsp({ noFrame })}`]]);
+    for (const p of [`/${f}`, `/${bare}`]) first.push([p, [...(noFrame ? ['X-Frame-Options: DENY'] : []), ...(COOP_PAGES.has(f) ? ['Cross-Origin-Opener-Policy: same-origin'] : []), '! Content-Security-Policy', `Content-Security-Policy: ${auxCsp({ noFrame })}`]]);
   }
   const exts = new Set();
   for (const p of paths) { const name = p.slice(p.lastIndexOf('/') + 1); const dot = name.lastIndexOf('.'); if (dot > 0) exts.add(name.slice(dot + 1)); }

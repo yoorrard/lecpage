@@ -14,10 +14,11 @@ import { markBusy } from './busy.js';
 import { adapter } from './providers/index.js';
 import { AiError, BASES, baseFor } from './providers/common.js';
 import { discard as openaiDiscard } from './providers/openai.js';
-import { preparePageImages, packMaterial, sourceFiles } from './material.js';
+import { preparePageImages, packMaterial, sourceFiles, sentRecord } from './material.js';
 import * as P from './prompts.js';
 import { extractJson, extractCss, extractHtml, extractSections, mergeSections, replaceSections, stitch, balance, trimCss, cssCut, skeleton, SECTIONS_MARK } from './parse.js';
-import { inspect, readMeta, themeFromCss, issuesForAi } from './kit.js';
+import { inspect, readMeta, themeFromCss, issuesForAi, checkFacts, materialText } from './kit.js';
+import { hostIssues } from '../host-check.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
 import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary } from './local.js';
@@ -262,6 +263,7 @@ async function nextModel(ctx) {
 }
 async function repack(ctx) {
   ctx.pack = await packMaterial(ctx.rec.pid, ctx.project, { provider: ctx.rec.provider, model: ctx.rec.model, level: ctx.level, siteImages: ctx.images.list, siteImagesFrom: ctx.images.from, intro: P.buildMaterialPrompt });
+  ctx.rec.sent = sentRecord(ctx.pack); // AI에게 간 교재(원본·쪽 그림·글자)를 기록에 남김(연수 gen에도)
   if (ctx.pack.notes.length) rec2notes(ctx.rec, ctx.pack.notes);
 }
 function rec2notes(rec, notes) { rec.notes = [...new Set([...(rec.notes || []), ...notes])].slice(-12); }
@@ -387,6 +389,11 @@ export async function inspectSite(pid, site, meta, project = null) {
   const a = await assembleSite(pid, site, meta, { project });
   const issues = inspect({ ...a.material, ...(site || {}) }, meta);
   for (const w of [...(a.errors || []), ...(a.warnings || [])]) if (!issues.some((x) => x.id === w.code)) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
+  // 바로 배포 서버가 거절하는 내용(비밀번호 칸·로그인 흉내·바깥 양식·서비스 워커·쿠키 쓰기): 서버와 같은 코드(hosting/src/sitecheck.js)로 미리
+  if (a.files) issues.push(...hostIssues(a.files));
+  // 교재 사실 대조(엔진에 있을 때만): 교재 글과 사이트 글의 날짜·숫자·이름이 어긋나는 곳
+  const p = project || await projects.get(pid).catch(() => null);
+  issues.push(...await checkFacts(site || {}, { materialText: materialText(p), meta }));
   let rendered = [];
   if (!hook().noRender && a.files && a.files['index.html']) { try { rendered = await renderIssues(a.files); } catch { rendered = []; } }
   const seen = new Set(); const out = [];
@@ -532,7 +539,7 @@ async function finish(ctx) {
   let out = null;
   const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); return {
     v: 2, site: out.site, meta: out.meta,
-    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
+    gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind, ...(rec.sent ? { sent: rec.sent } : {}) },
     versions: versionsAfter(cur, rec.kind, out, rec.way === 'chat'),
     inspect: { at, issues },
     ...(rec.kind === 'make' ? { notes: rec.notes?.length ? rec.notes : undefined, metaChecked: false } : {}),
@@ -592,7 +599,10 @@ async function drive(pid) {
     // 새로 만들기의 첫 단계에서만 지금 교재의 쪽 그림으로 다시 옮김(이어 하기·고치기는 있던 것 그대로)
     ctx.images = await preparePageImages(pid, project, { signal, refresh: rec.kind === 'make' && !rec.steps.some((s) => s.status === 'done') });
     if (rec.way === 'key') await repack(ctx);
-    else ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
+    else {
+      ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
+      if (rec.way === 'local' && rec.kind === 'make') rec.sent = sourceFiles(project).map((f) => ({ name: f.name, sent: 'original' })); // 원본과 쪽 그림을 내 PC 임시 폴더로
+    }
     for (;;) {
       const step = rec.steps.find((s) => s.status !== 'done');
       if (!step) break;
