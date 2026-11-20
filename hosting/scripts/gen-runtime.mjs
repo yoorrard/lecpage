@@ -49,7 +49,7 @@ function fxTrailer() {
   return m[1];
 }
 
-/** Supabase 연결이 불러오는 라이브러리 주소(runtime/live/supabase.js에 버전까지 고정돼 있음). 운영자가 ALLOW_SUPABASE_SDK를 켰을 때만 CSP에 넣음 */
+/** Supabase 연결이 불러오는 라이브러리 주소(runtime/live/supabase.js에 버전까지 고정돼 있음). test/csp.test.mjs가 src/csp.js의 고정 라이브러리 경로 안에 있는지 확인 */
 export function supabaseSdk() {
   const f = join(RUNTIME, 'live', 'supabase.js');
   const m = existsSync(f) ? /['"](https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@\d+\.\d+\.\d+\/[A-Za-z0-9_./-]+\.js)['"]/.exec(readFileSync(f, 'utf8')) : null;
