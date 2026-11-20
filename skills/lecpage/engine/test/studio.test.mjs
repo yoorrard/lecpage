@@ -110,7 +110,7 @@ test('판 비교·교재 이름·_headers·토큰 넣기', () => {
   assert.match(root['content-security-policy'], /frame-ancestors 'none'/);
   assert.equal(root['strict-transport-security'], undefined);
   assert.match(St.headersFor(rules, '/assets/app-abcdef12.js')['cache-control'], /immutable/);
-  assert.match(St.headersFor(rules, '/fx-demo/a.html')['content-security-policy'], /frame-ancestors 'self'/);
+  assert.match(St.headersFor(rules, '/examples/data-lab/index.html')['content-security-policy'], /frame-ancestors 'self'/);
   const html = St.injectToken('<html><head><meta name="lecpage-bridge" content="old"><title>t</title></head></html>', 'a'.repeat(64));
   assert.equal(html.match(/lecpage-bridge/g).length, 1);
   assert.match(html, /<head>\n<meta name="lecpage-bridge" content="a{64}">/);
