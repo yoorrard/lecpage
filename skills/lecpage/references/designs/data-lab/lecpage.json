@@ -1,13 +1,27 @@
 {
   "v": 2,
-  "title": "",
-  "subtitle": "",
-  "sessions": [],
-  "venue": "",
+  "title": "데이터로 읽는 우리 반",
+  "subtitle": "흩어진 학습 기록을 표로 모으고, 차트로 읽고, 다음 수업을 바꾸는 3시간 실습",
+  "sessions": [{ "date": "2026-12-16", "start": "14:00", "end": "17:00" }],
+  "venue": "새온교육연수원 3층 디지털실습실",
   "mode": "offline",
   "audience": "teachers",
-  "instructors": [],
-  "features": [],
-  "theme": {},
-  "facts": []
+  "instructors": [{ "name": "정다온", "org": "중학교 정보 교사" }],
+  "organizer": "새온교육연수원 디지털 수업 역량 강화 과정",
+  "contact": "새온교육연수원 연수 담당 training@saeon.example",
+  "description": "스프레드시트와 AI로 우리 반 학습 기록을 읽고 수업 개선으로 잇는 교사 실습 연수(예시용 가상 연수)",
+  "admin": { "kind": "official", "hours": 3, "completionRate": 80 },
+  "features": ["qa", "poll", "board", "attendance", "survey", "help", "deck", "timer", "progress"],
+  "theme": { "accent": "#b33a1f", "ink": "#1a1d21", "paper": "#f7f5ef", "font": "IBM Plex Sans KR", "radius": "4px" },
+  "facts": [
+    { "label": "연수 이름", "value": "데이터로 읽는 우리 반", "page": 1 },
+    { "label": "날짜", "value": "2026-12-16", "page": 1 },
+    { "label": "시간", "value": "14:00–17:00", "page": 1 },
+    { "label": "장소", "value": "새온교육연수원 3층 디지털실습실", "page": 1 },
+    { "label": "강사", "value": "정다온 · 중학교 정보 교사", "page": 1 },
+    { "label": "일정", "value": "들어가며 15분 · 1부 65분 · 쉬는 시간 10분 · 2부 60분 · 3부 20분 · 마무리 10분", "page": 3 },
+    { "label": "이수", "value": "3시간 · 출석 80% 이상 · 만족도 조사", "page": 3 },
+    { "label": "후속 모임", "value": "2027-01-13 16:00 온라인", "page": 17 },
+    { "label": "문의", "value": "training@saeon.example", "page": 17 }
+  ]
 }
