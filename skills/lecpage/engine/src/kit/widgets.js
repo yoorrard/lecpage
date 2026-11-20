@@ -52,9 +52,12 @@ export function pollBox(items, { live = true, list = true, ask = '', host = '강
 ${list ? `<details class="lp-poll-list"><summary>준비된 질문 ${items.length}개 보기</summary><ol>${items.map((p) => `<li>${esc(p.question)}${p.options.length ? ` <small>(${p.options.map(esc).join(' / ')})</small>` : ''}</li>`).join('')}</ol></details>` : ''}${liveOff(live)}</div>`;
 }
 
-/** 출석(입실·퇴실). lead·after는 대상에 맞는 낱말(words.js attendLead·attendAfter), done: 이수 기준이 있음 */
-export function attendBox({ lead, after, done = false, live = true }) {
-  return `<div class="lp-attend" data-attend><p data-phase-hide="after">${lead}${done ? ' 둘 다 눌러야 이수가 확인돼요.' : ''}</p><p data-phase-show="after" hidden>${after}</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(live)}</div>`;
+/**
+ * 출석(입실·퇴실). lead·after는 대상에 맞는 낱말(words.js attendLead·attendAfter).
+ * 이수 조건(무엇을 눌러야 이수인지)은 키트가 지어 쓰지 않음: 교재·강사가 정한 조건은 AI가 사이트 글로 씀
+ */
+export function attendBox({ lead, after, live = true }) {
+  return `<div class="lp-attend" data-attend><p data-phase-hide="after">${lead}</p><p data-phase-show="after" hidden>${after}</p><div class="lp-ctas" data-phase-hide="after"><button class="lp-btn lp-btn-primary" type="button" data-attend="in">입실 확인</button><button class="lp-btn lp-btn-ghost" type="button" data-attend="out">퇴실 확인</button></div><p class="lp-small" data-attend-state></p>${liveOff(live)}</div>`;
 }
 
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -94,8 +97,11 @@ export function shareDialog({ code = '', codeWord = '연수 코드', live = fals
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url>${icon('copy')}<span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>`;
 }
 
-/** 참여하기 대화상자(별명, 입실이면 이름·소속·동의). keep: 지우는 때(keepRule().short) */
-export function joinDialog({ anonymous = true, collect = ['nickname'], consent = true, official = false, keep = '마지막 기록 뒤 30일' } = {}) {
+/**
+ * 참여하기 대화상자(별명, 입실이면 이름·소속·동의). keep: 지우는 때(keepRule().short — 배포할 곳·참여 서버가 실제로 지우는 때),
+ * local: 연습 모드(기록이 이 브라우저에만 남음 → 지우는 날을 말하지 않음)
+ */
+export function joinDialog({ anonymous = true, collect = ['nickname'], consent = true, official = false, keep = '', local = false } = {}) {
   const needName = collect.includes('name');
   const needSchool = collect.includes('school');
   const idWords = [needName && '이름', needSchool && '소속'].filter(Boolean).join('·');
@@ -107,7 +113,7 @@ export function joinDialog({ anonymous = true, collect = ['nickname'], consent =
 <p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
 ${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
 ${needSchool ? `<label data-join-id><span>소속(학교)${schoolMust ? '' : ' · 선택'}</span><input name="school" maxlength="40"${schoolMust ? ' required' : ''} autocomplete="organization"></label>` : ''}
-${consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰고 ${keep} 안에 지우는 데 동의합니다. 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
+${consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰${local ? '는 데 동의합니다. 연습 모드라 이 브라우저에만 남아요.' : keep ? `고 ${keep} 안에 지우는 데 동의합니다.` : '는 데 동의합니다.'} 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit" data-join-go>참여</button></div></form></dialog>`;
 }
 

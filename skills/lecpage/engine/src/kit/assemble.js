@@ -6,6 +6,7 @@ import { scanTags, elementAt, rewriteOpen, applyEdits, attr, hasAttr, escAttr, e
 import { readMeta, firstSession, liveFeatures, themeFromCss, isHex, tangledTitle } from './meta.js';
 import * as W from './widgets.js';
 import { normAux, buildAux, auxLive } from './aux-build.js';
+import { preflight } from './preflight.js';
 import { makeCode } from '../util.js';
 import { siteData, LIB_SCRIPT_SOURCES, liveOrigins, servedOverLan, jsonScript, boardFiles } from '../render/shell.js';
 import { wordsFor, surveyFor } from '../words.js';
@@ -47,22 +48,44 @@ function imageSize(v) {
   return null;
 }
 
-/** 사이트 CSP(AI 쪽용). 엔진 보조 쪽은 엔진 CSP(render/shell.js cspPolicy)를 그대로 씀 */
-export function kitCsp(bp, { live = true } = {}) {
+/** 글꼴 스타일시트 곳 → 글꼴 파일 곳(font-src) */
+const FONT_FILE_HOST = { 'fonts.googleapis.com': 'fonts.gstatic.com', 'cdn.jsdelivr.net': 'cdn.jsdelivr.net', 'hangeul.pstatic.net': 'hangeul.pstatic.net' };
+/**
+ * 사이트가 실제로 부르는 바깥 곳(CSP에 이것만 엶): 허용 목록 라이브러리·글꼴 CDN·영상 틀.
+ * @param texts AI 쪽 HTML·CSS·JS 글(조립 뒤), provider: 참여 기능 방식(supabase면 런타임이 supabase-js를 부름)
+ */
+export function usedSources(texts = [], { provider = '' } = {}) {
+  const all = texts.join('\n');
+  const scripts = LIB_SCRIPT_SOURCES.filter((p) => all.includes(p) || (provider === 'supabase' && /supabase-js/.test(p)));
+  // 글꼴: <link rel=stylesheet|preload>의 곳과 CSS의 @import·url()이 가리키는 곳만(같은 CDN의 스크립트는 글꼴로 세지 않음)
+  const styleHosts = new Set();
+  for (const m of all.matchAll(/<link\b[^>]*>/gi)) {
+    if (!/\brel\s*=\s*["']?[^"'>]*(?:stylesheet|preload)/i.test(m[0])) continue;
+    const h = /\bhref\s*=\s*["']?(?:https?:)?\/\/([^/"'\s>]+)/i.exec(m[0]); if (h) styleHosts.add(h[1].toLowerCase());
+  }
+  for (const m of all.matchAll(/(?:@import\s+(?:url\(\s*)?|url\(\s*)["']?(?:https?:)?\/\/([^/"'\s)]+)/gi)) styleHosts.add(m[1].toLowerCase());
+  const fonts = FONT_CSS_HOSTS.filter((h) => styleHosts.has(h));
+  const fontFiles = [...new Set([...fonts.map((h) => FONT_FILE_HOST[h] || h), ...[...styleHosts].filter((h) => Object.values(FONT_FILE_HOST).includes(h))])];
+  const frames = FRAME_SOURCES.filter((o) => all.includes(o.replace(/^https:/, '')) || (o.includes('youtube') && /\/\/(?:www\.)?(?:youtube\.com\/embed|youtu\.be)\//.test(all)));
+  return { scripts, fonts, fontFiles, frames };
+}
+/** 사이트 CSP(AI 쪽용). 엔진 보조 쪽은 엔진 CSP(render/shell.js cspPolicy)를 그대로 씀. used(usedSources 결과)가 없으면 허용 목록 전부 */
+export function kitCsp(bp, { live = true, used = null } = {}) {
   const lan = servedOverLan(bp);
   const origins = live ? liveOrigins(bp) : [];
   const httpLive = origins.filter((x) => /^https?:/.test(x));
   const sheetsImg = bp.live?.provider === 'sheets' ? ['https://drive.google.com', 'https://*.googleusercontent.com'] : [];
-  const fonts = FONT_CSS_HOSTS.map((h) => 'https://' + h).join(' ');
+  const u = used || { scripts: LIB_SCRIPT_SOURCES, fonts: FONT_CSS_HOSTS, frames: FRAME_SOURCES };
+  const fontFiles = u.fontFiles || [...new Set(u.fonts.map((h) => FONT_FILE_HOST[h] || h))];
   const p = [
     "default-src 'self' file:",
-    `script-src 'self' file: ${LIB_SCRIPT_SOURCES.join(' ')}`,
-    `style-src 'self' file: 'unsafe-inline' ${fonts}`,
-    "font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net",
+    ['script-src', "'self'", 'file:', ...u.scripts].join(' '),
+    ['style-src', "'self'", 'file:', "'unsafe-inline'", ...u.fonts.map((h) => 'https://' + h)].join(' '),
+    ['font-src', "'self'", 'file:', 'data:', ...fontFiles.map((h) => 'https://' + h)].join(' '),
     `img-src ${["'self'", 'file:', 'data:', 'blob:', ...httpLive, ...sheetsImg].join(' ')}`,
     `media-src ${["'self'", 'file:', 'blob:', ...httpLive].join(' ')}`,
     `connect-src ${[...new Set(["'self'", 'file:', ...origins])].join(' ')}`,
-    `frame-src ${FRAME_SOURCES.join(' ')}`,
+    `frame-src ${u.frames.length ? u.frames.join(' ') : "'none'"}`,
     "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
   ];
   if (!lan) p.push('upgrade-insecure-requests');
@@ -132,7 +155,7 @@ function kitVars(theme) {
 }
 
 /** 연수 정보·모은 기능 → 보조 쪽 모양(kit/aux-build.js normAux가 다듬음). 보조 쪽·#lp-data·강사 화면 목록(#lp-blueprint)을 만들 때 씀 */
-function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} } = {}) {
+function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {}, deploy = {} } = {}) {
   const s1 = firstSession(meta);
   // 자리 표시가 있으면 그 기능은 켬. 실습 단계가 있고 참여 기능이 켜져 있으면 진행 현황도(강사 화면이 단계별 진행을 셈)
   const extra = [col.qa && 'qa', col.board.length && 'board', col.polls.length && 'poll', col.attend && 'attendance'].filter(Boolean);
@@ -147,6 +170,12 @@ function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} }
   const minor = meta.audience === 'students';
   const kind = meta.admin?.kind || (meta.audience === 'students' ? 'student' : meta.audience === 'parents' ? 'conference' : 'school');
   const collect = meta.privacy?.collect || (features.includes('attendance') && !minor ? ['nickname', 'name', 'school'] : ['nickname']);
+  // 배포할 곳(host)에 맞는 개인정보 안내: 바로 배포(lecpage)는 운영자가 강사를 대신해 저장(처리 위탁), 참여 기록은 사이트 보관 기간보다 오래 두지 않음(hosting room.js)
+  const host = deploy.host || '', days = host === 'lecpage' && +deploy.days > 0 ? +deploy.days : 0;
+  let retentionDays = meta.privacy?.retentionDays || 30;
+  if (days) retentionDays = Math.min(retentionDays, Math.max(1, Math.ceil(days)));
+  let processors = meta.privacy?.processors || [];
+  if (!processors.length && host === 'lecpage' && live.provider === 'http') processors = [lecpageProcessor(days, deploy.keepAlive)];
   const sections = [{ id: 'hero', type: 'hero', title: meta.title }];
   if (col.steps.length) sections.push({ id: 'stations', type: 'stations', layout: 'scroll', items: col.steps.map((s) => ({ id: s.id, name: s.name, title: s.title })) });
   if (col.deck.length) sections.push({ id: 'deck', type: 'deck', slides: col.deck.map((p) => ({ page: p.page, title: p.title || '' })) });
@@ -168,9 +197,14 @@ function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} }
     design: auxDesign(theme), // 연수 정보 theme + 사이트 CSS의 --lp-*(글꼴·제목 글꼴·강조색)
     instructors: meta.instructors,
     sections, live,
-    privacy: { collect, retentionDays: meta.privacy?.retentionDays || 30, consent: meta.privacy?.consent !== false, processors: meta.privacy?.processors || [], contact: meta.privacy?.contact || '' },
+    privacy: { collect, retentionDays, consent: meta.privacy?.consent !== false, processors, contact: meta.privacy?.contact || '' },
     access: { mode: meta.access || 'link' },
+    deploy: { host, days, keepAlive: !!deploy.keepAlive },
   };
+}
+/** 바로 배포 서버가 참여 기록을 맡을 때의 처리 위탁(앱 Publish.jsx와 같은 글). days: 사이트 보관 기간(/api/info limits.days) */
+export function lecpageProcessor(days = 0, keepAlive = false) {
+  return { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', purpose: `강사를 대신해 사이트와 참여 기록 저장${days ? `(사이트는 마지막 ${keepAlive ? '배포나 방문' : '배포'} 뒤 ${days}일 보관)` : ''}` };
 }
 
 // ── 쪽 하나 다듬기 ─────────────────────────────────────────
@@ -365,7 +399,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
     }
     case 'attend':
       col.attend = true;
-      return { html: W.attendBox({ lead: ctx.words.attendLead, after: ctx.words.attendAfter, done: ctx.done, live }) };
+      return { html: W.attendBox({ lead: ctx.words.attendLead, after: ctx.words.attendAfter, live }) };
     case 'survey': {
       let qs = null;
       const j = W.jsonAttr(attr(t, 'data-questions'));
@@ -381,7 +415,8 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       const id = W.kitSlug(attr(t, 'data-id'), `survey${n > 1 ? '-' + n : ''}`);
       col.survey.push({ id, questions: qs });
       if (!live) return { html: `${W.LIVE_OFF}` };
-      return { html: `${ctx.done ? '<p class="lp-note">설문을 내야 이수가 확인돼요.</p>' : ''}${W.surveyForm({ id, questions: qs })}${ctx.surveyUrl ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" href="${escAttr(ctx.surveyUrl)}" target="_blank" rel="noopener">기관 설문 열기</a></p>` : ''}` };
+      // 이수 조건(설문을 내야 이수 등)은 키트가 지어 쓰지 않음: 교재·강사가 정한 조건은 AI가 사이트 글로
+      return { html: `${W.surveyForm({ id, questions: qs })}${ctx.surveyUrl ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" href="${escAttr(ctx.surveyUrl)}" target="_blank" rel="noopener">기관 설문 열기</a></p>` : ''}` };
     }
     case 'deck': {
       const avail = ctx.materialPages;
@@ -465,8 +500,11 @@ function endedText(bp, words) {
  * @param site { 경로: 글|Uint8Array } — index.html 필수, assets/*, material/p-NNN.webp, files/*
  * @param meta lecpage.json(객체·글). 강사 칸은 opts.prev(강사 값)에서만 받음
  * @param opts { runtime:{read(path)}(필수), preview:false, target:'zip'|'hosted'|'preview', prev:null, today:'YYYY-MM-DD',
- *               material:{ pages:[{page,title,text}] }, materials:[{title,href,desc,size}] }
- * @returns { files, warnings:[{code,message_ko}], meta, collected, blueprint, csp, report, teacher:{'운영안내.md'} }
+ *               material:{ pages:[{page,title,text}] }, materials:[{title,href,desc,size}],
+ *               host: 배포할 곳(decide/infra.js HOSTS의 id: 'lecpage'(바로 배포)·'cloudflare'·'vercel'·'github-pages'·'netlify'·'onpod'·'lan'(노트북 서버)·'server'·'zip'…),
+ *               hostDays: 바로 배포 사이트 보관 기간(/api/info limits.days), keepAlive: 방문이 보관 기간을 늘리는지(/api/info keepAlive) }
+ *   host가 있으면 개인정보 안내(처리 위탁·보관 기간·국외 이전·사이트를 보내 주는 곳)와 운영안내가 그 방식에 맞게 바뀜
+ * @returns { files, warnings:[{code,message_ko}], meta, collected, blueprint, csp, report, teacher:{'운영안내.md'}, preflight:[{code,message_ko}] }
  */
 export function assemble(site, meta0, opts = {}) {
   const runtime = opts.runtime;
@@ -520,7 +558,8 @@ export function assemble(site, meta0, opts = {}) {
     if (attr(t, 'data-lp-step') !== undefined) pre.steps.push(1);
   }
   const preview = !!opts.preview || opts.target === 'preview';
-  const v0 = normAux(synthBlueprint(meta, pre, { preview, theme }));
+  const deploy = { host: typeof opts.host === 'string' ? opts.host : '', days: +opts.hostDays || 0, keepAlive: !!opts.keepAlive };
+  const v0 = normAux(synthBlueprint(meta, pre, { preview, theme, deploy }));
   const words = wordsFor(v0);
   const liveOn = v0.live.provider !== 'none';
   const f = v0.live.features;
@@ -546,13 +585,18 @@ export function assemble(site, meta0, opts = {}) {
   }
 
   // 모은 것 전부 → 보조 쪽·런타임(kit/aux-build.js)
-  const vb = normAux(synthBlueprint(meta, col, { preview, theme }));
-  const built = buildAux(vb, { runtime, today: opts.today });
+  const vb = normAux(synthBlueprint(meta, col, { preview, theme, deploy }));
+  // 배포 전 확인(운영안내.md 맨 위·check 요약): 예시 링크·지난 날짜·설문 없는 이수 조건·연습 모드·사진
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(opts.today || '') ? opts.today : new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const checks = preflight(src, meta, { today, provider: vb.live.provider, preview, surveyIn: col.survey.length > 0 }); // 사이트 안 설문이 연습 모드면 '연습 모드' 줄이 따로 알림
+  const built = buildAux(vb, { runtime, today: opts.today, preflight: checks });
   const live = auxLive(vb);
   const sctx = { bp: vb, words, design: built.design, live };
   ctx.phaseText = endedText(vb, words);
   const data = siteData(sctx);
-  const csp = kitCsp(vb, { live });
+  // CSP: 사이트가 실제로 부르는 바깥 곳만(허용 목록 라이브러리·글꼴 CDN·영상 틀)
+  const aiTexts = [...Object.values(expanded), ...Object.entries(src).filter(([p]) => /\.(css|m?js)$/.test(p)).map(([, v]) => asText(v)), ...Object.values(out).filter((v) => typeof v === 'string')];
+  const csp = kitCsp(vb, { live, used: usedSources(aiTexts, { provider: vb.live.provider }) });
   Object.assign(out, built.files);
   out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme);
   out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${col.deckRatio ? `:root{--lpk-deck-ratio:${col.deckRatio}}\n` : ''}${read('kit.css')}`;
@@ -564,8 +608,18 @@ export function assemble(site, meta0, opts = {}) {
   const noindex = meta.access !== 'public';
   for (const p of pages) out[p] = finishPage(expanded[p], p, { ctx, col, data, csp, noindex, live, meta, title: meta.title, hasIcon: false });
 
-  // 사이트 파일(쪽 말고) 그대로
-  for (const [p, v] of Object.entries(src)) if (!p.endsWith('.html') && !(p in out)) out[p] = v;
+  // 사이트 파일(쪽 말고) 그대로. 교재 쪽 그림은 쓰는 쪽만(교재 넘기기·전체 보기·<img>·링크·CSS·스크립트가 가리키는 쪽): 배포 용량·안 보여 줄 쪽을 줄임.
+  // 미리보기(앱 화면)는 그대로 다 둠. 스크립트가 쪽 그림 주소를 이어 붙여 만들면(material/p- 뒤에 숫자가 없음) 다 둠
+  const usedText = [...pages.map((p) => out[p]), ...Object.entries(src).filter(([p]) => /\.(css|m?js|json)$/.test(p)).map(([, v]) => asText(v)), ...Object.entries(out).filter(([p, v]) => typeof v === 'string' && /\.(css|m?js)$/.test(p)).map(([, v]) => v)].join('\n');
+  const keepAll = preview || /material\/p-(?!\d{3,4}\.)/.test(usedText.replace(/material\/p-NNN/g, ''));
+  const usedPages = new Set([...col.deck.map((x) => x.page), ...[...usedText.matchAll(/material\/p-(\d{3,4})\.(?:webp|png|jpe?g)/gi)].map((m) => +m[1])]);
+  const droppedPages = [];
+  for (const [p, v] of Object.entries(src)) {
+    if (p.endsWith('.html') || p in out) continue;
+    const mp = /^material\/p-(\d{3,4})\.(?:webp|png|jpe?g)$/i.exec(p);
+    if (mp && !keepAll && !usedPages.has(+mp[1])) { droppedPages.push(+mp[1]); continue; }
+    out[p] = v;
+  }
 
   // 응답 머리글·검색
   const kitPaths = pages.flatMap((p) => (p === 'index.html' ? ['/', '/index.html'] : [`/${p}`, `/${p.replace(/\.html$/, '')}`]));
@@ -598,10 +652,10 @@ export function assemble(site, meta0, opts = {}) {
     polls: col.polls, steps: col.steps.map(({ id, name, title }) => ({ id, name, title })), deck: col.deck.map((x) => x.page), untitled: col.deck.filter((x) => !x.title).map((x) => x.page), qa: col.qa, board: col.board, attend: col.attend,
     survey: col.survey, materials: col.materials, tools: col.tools, liveFeatures: vb.live.features, provider: vb.live.provider, code: vb.live.code,
   };
-  const report = { pages, files: Object.keys(out).length, sizeKB: Math.round(Object.values(out).reduce((a, v) => a + enc(v), 0) / 1024), live: live ? vb.live.provider : 'none', features: vb.live.features };
+  const report = { pages, files: Object.keys(out).length, sizeKB: Math.round(Object.values(out).reduce((a, v) => a + enc(v), 0) / 1024), live: live ? vb.live.provider : 'none', features: vb.live.features, ...(droppedPages.length ? { droppedPages: droppedPages.sort((a, b) => a - b) } : {}), host: deploy.host };
   // 강사용 파일(올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글)
   const teacher = built.teacher;
-  return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words, teacher };
+  return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words, teacher, preflight: checks };
 }
 
 /** 쪽 하나 마무리: CSP·머리 태그·키트 CSS·'지금' 줄·키트 부품·#lp-data·런타임 */
@@ -648,7 +702,7 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
   const chrome = [
     `<div class="lpk lpk-chrome">`,
     W.shareDialog({ live, code: ctx.code, codeWord: ctx.words.code }),
-    live ? W.joinDialog({ anonymous: ctx.anonymous, collect: data.privacy.collect, consent: data.privacy.consent, official: ctx.done, keep: data.privacy.keep }) : '',
+    live ? W.joinDialog({ anonymous: ctx.anonymous, collect: data.privacy.collect, consent: data.privacy.consent, official: ctx.done, keep: data.privacy.keep, local: ctx.provider === 'local' }) : '',
     live && !col.dockPlaced ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: col.sharePlaced ? '' : `<button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',
     live ? '<div class="lp-reactions" data-reactions aria-hidden="true"></div>' : '',
     live && f.help ? W.helpSheet() : '',
@@ -681,7 +735,22 @@ function dataUrl(path, data) {
   return `data:${type};base64,${btoa(bin)}`;
 }
 /**
- * 조립 결과(files) → 한 장 HTML. CSS·JS는 안으로, 그림·글꼴은 data: 주소로(maxImageBytes까지), CSP meta는 뺌(미리보기는 앱 안의 틀).
+ * 미리보기 한 장 HTML의 CSP: 밖으로 아무것도 보내지 않음(connect-src 'none', 참여 기능은 연습 모드로만), 그림·글꼴은 안에 담은 data:,
+ * 스크립트는 안에 넣은 것과 허용 목록 라이브러리, 글꼴 CDN·영상 틀만. 사이트 CSP(kitCsp)와 따로(미리보기는 앱 안의 틀이라 'self'가 없음)
+ */
+export function previewCsp() {
+  return [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' ${LIB_SCRIPT_SOURCES.join(' ')}`,
+    `style-src 'unsafe-inline' ${FONT_CSS_HOSTS.map((h) => 'https://' + h).join(' ')}`,
+    `font-src data: ${[...new Set(Object.values(FONT_FILE_HOST))].map((h) => 'https://' + h).join(' ')}`,
+    'img-src data: blob:', 'media-src data: blob:',
+    "connect-src 'none'", `frame-src ${FRAME_SOURCES.join(' ')}`,
+    "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
+  ].join('; ');
+}
+/**
+ * 조립 결과(files) → 한 장 HTML. CSS·JS는 안으로, 그림·글꼴은 data: 주소로(maxImageBytes까지), 사이트 CSP meta는 미리보기 전용 CSP(previewCsp)로 바꿈.
  * @param opts { maxImageBytes: 8e6, extraHead: '', extraBody: '' } — extraHead·extraBody: 앱이 넣을 글(예: 검수 스크립트)
  */
 export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, extraHead = '', extraBody = '' } = {}) {
@@ -722,6 +791,8 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
     if (Object.keys(set).length) edits.push({ start: t.start, end: t.end, text: rewriteOpen(t, { set }) });
   }
   html = applyEdits(html, edits);
+  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${escAttr(previewCsp())}">`;
+  html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (m) => m + cspMeta) : cspMeta + html;
   html = html.replace(/<body\b/i, '<body data-lp-preview="1"');
   if (extraHead) html = html.replace(/<\/head>/i, () => `${extraHead}</head>`);
   if (extraBody) { const i = html.toLowerCase().lastIndexOf('</body>'); html = i < 0 ? html + extraBody : html.slice(0, i) + extraBody + html.slice(i); }

@@ -70,6 +70,8 @@ export function normAux(b) {
   const privacy = { collect: strArr(pv.collect, 20).filter((c) => ['nickname', 'name', 'school', 'email'].includes(c)), retentionDays: num(pv.retentionDays, 30, 1, 365), consent: pv.consent !== false, processors: objs(pv.processors).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })), contact: str(pv.contact, 120) };
   if (!privacy.collect.length || audience.minor) privacy.collect = ['nickname']; // 만 14세 미만은 별명만
   const access = { mode: pick(b.access?.mode, ['link', 'public', 'password'], 'link') };
+  // 배포할 곳(assemble opts.host): 개인정보 안내·운영안내가 그 방식에 맞는 처리자·보관 기간을 씀. days: 바로 배포 사이트 보관 기간
+  const deploy = { host: str(b.deploy?.host, 20), days: num(b.deploy?.days, 0, 0, 3650), keepAlive: !!b.deploy?.keepAlive };
   const seen = new Set(), sections = [];
   arr(b.sections).forEach((s, i) => {
     if (!s || typeof s !== 'object' || !SECTION[s.type]) return;
@@ -80,7 +82,7 @@ export function normAux(b) {
     if (LIST[s.type] && !out[LIST[s.type]].length) return;
     sections.push(out);
   });
-  return { meta, audience, design: b.design || {}, instructors, sections, live, privacy, access };
+  return { meta, audience, design: b.design || {}, instructors, sections, live, privacy, access, deploy };
 }
 
 /**
@@ -135,10 +137,10 @@ export const auxLive = (bp) => bp.live.provider !== 'none' && (bp.live.features.
 /**
  * 보조 쪽·런타임 파일 만들기.
  * @param bp normAux 결과
- * @param opts { runtime:{read(path)}, today:'YYYY-MM-DD' }
+ * @param opts { runtime:{read(path)}, today:'YYYY-MM-DD', preflight:[{code,message_ko}](운영안내.md 맨 위 '배포 전 확인') }
  * @returns { files, teacher:{'운영안내.md'}, design, live }
  */
-export function buildAux(bp, { runtime, today } = {}) {
+export function buildAux(bp, { runtime, today, preflight = [] } = {}) {
   const read = (p) => { try { return runtime.read(p); } catch { return ''; } };
   const design = bp.design;
   const live = auxLive(bp);
@@ -150,7 +152,7 @@ export function buildAux(bp, { runtime, today } = {}) {
   const emptySurvey = (s) => s.type === 'survey' && !s.url && !(s.questions?.length && live);
   const view = bp.sections.some(emptySurvey) ? { ...bp, sections: bp.sections.filter((s) => !emptySurvey(s)) } : bp;
   const ics = icsFile(bp.meta, today);
-  const ctx = { bp: view, words: wordsFor(bp), design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], builtOn: builtOn(today) };
+  const ctx = { bp: view, words: wordsFor(bp), design, live, fontLinks: theme.fontLinks, themeColor: tok['--background'], builtOn: builtOn(today), preflight };
 
   const files = {};
   if (ics) files['assets/event.ics'] = ics;

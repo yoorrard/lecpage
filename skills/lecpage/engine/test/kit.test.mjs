@@ -121,15 +121,26 @@ test('연수 정보: 날짜·시각 꼴, facts 꼴, 예전 판(v1) 알림', () =
   assert.equal(old.old, true); assert.equal(old.errors[0].code, 'v1');
 });
 
-test('CSP·_headers: AI 쪽은 self 스크립트·form-action none·틀은 유튜브(nocookie)·비메오, 참여 서버만 연결, 보조 쪽은 엔진 머리글', () => {
+test('CSP·_headers: AI 쪽은 self 스크립트·form-action none·실제로 쓰는 바깥 곳만(라이브러리·글꼴·영상 틀), 참여 서버만 연결, 보조 쪽은 엔진 머리글', () => {
   const r = K.assemble(fullSite(), META, { runtime: rt, prev: { live: { provider: 'http', url: 'https://live.example.org', code: 'ABCD1234' } } });
   const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(r.files['index.html'])[1].replace(/&#39;|&apos;/g, "'");
   assert.equal(csp, r.csp);
   const has = (d) => assert.ok(csp.includes(d), d);
-  has("script-src 'self' file: https://cdn.jsdelivr.net/npm/gsap@3.15.1/"); has("style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com");
+  // 바깥 라이브러리·글꼴·영상을 쓰지 않는 사이트: 'self'만
+  has("script-src 'self' file:;"); has("style-src 'self' file: 'unsafe-inline';"); has("font-src 'self' file: data:;"); has("frame-src 'none'");
+  assert.ok(!/jsdelivr|googleapis|youtube|vimeo/.test(csp), csp);
   has("img-src 'self' file: data: blob: https://live.example.org"); has("connect-src 'self' file: https://live.example.org wss://live.example.org");
-  has('frame-src https://www.youtube-nocookie.com https://player.vimeo.com'); has("form-action 'none'"); has("object-src 'none'"); has("worker-src 'none'"); has("base-uri 'none'"); has('upgrade-insecure-requests');
+  has("form-action 'none'"); has("object-src 'none'"); has("worker-src 'none'"); has("base-uri 'none'"); has('upgrade-insecure-requests');
   assert.ok(!/script-src[^;]*'unsafe-inline'/.test(csp));
+  // 쓰는 것만 엶: gsap·구글 글꼴·유튜브(→ nocookie)
+  const site = fullSite();
+  site['index.html'] = site['index.html'].replace('</head>', '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum"><script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js" defer></script></head>').replace('</main>', '<iframe src="https://www.youtube.com/embed/abcdefgh" title="영상"></iframe></main>');
+  const c2 = K.assemble(site, META, { runtime: rt }).csp;
+  for (const d of ["script-src 'self' file: https://cdn.jsdelivr.net/npm/gsap@3.15.1/;", "style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com;", "font-src 'self' file: data: https://fonts.gstatic.com;", 'frame-src https://www.youtube-nocookie.com;']) assert.ok(c2.includes(d), d + ' <- ' + c2);
+  assert.ok(!/lenis@|ogl@|vimeo|hangeul/.test(c2), c2);
+  // supabase 참여 기능이면 런타임이 부르는 supabase-js만 더함
+  const c3 = K.assemble(fullSite(), META, { runtime: rt, prev: { live: { provider: 'supabase', url: 'https://abc.supabase.co', anonKey: 'k', code: 'SUPA1234' } } }).csp;
+  assert.match(c3, /script-src 'self' file: https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@[\d.]+\/;/);
   const h = r.files['_headers'];
   assert.match(h, /^\/\n  Content-Security-Policy: default-src 'self'/m);
   assert.match(h, /^\/index\.html\n  Content-Security-Policy:/m);
@@ -266,10 +277,14 @@ test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀�
   assert.equal(up.legacy, undefined, '예전 사이트는 다시 그리지 않음');
 });
 
-test('미리보기 한 장: CSS·JS·그림을 안으로, CSP meta는 빼고, 검수 스크립트를 넣을 수 있음', () => {
+test('미리보기 한 장: CSS·JS·그림을 안으로, 사이트 CSP 대신 미리보기 전용 CSP(밖으로 연결 없음), 검수 스크립트를 넣을 수 있음', () => {
   const r = K.assemble({ ...fullSite(), 'assets/style.css': ':root{--lp-accent:#b4441c} .hero{background:url(img/bg.webp)}', 'assets/img/bg.webp': IMG }, META, { runtime: rt });
   const one = K.previewHtml(r.files, 'index.html', { extraBody: K.inspectRenderedScript({ id: 'x' }) });
-  assert.ok(!/Content-Security-Policy/.test(one));
+  const metas = [...one.matchAll(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/g)].map((m) => m[1].replace(/&#39;|&apos;/g, "'"));
+  assert.equal(metas.length, 1, '사이트 CSP는 빼고 미리보기 CSP 하나만');
+  assert.equal(metas[0], K.previewCsp());
+  assert.match(metas[0], /connect-src 'none'/); assert.match(metas[0], /default-src 'none'/); assert.match(metas[0], /form-action 'none'/);
+  assert.ok(one.indexOf('Content-Security-Policy') < one.indexOf('<style'), 'CSP가 스타일·스크립트보다 먼저');
   assert.ok(!/<link rel="stylesheet" href="assets\//.test(one) && !/<script[^>]*src="assets\//.test(one));
   assert.match(one, /url\("data:image\/webp;base64,/);
   assert.match(one, /src="data:image\/webp;base64,UklGR/);

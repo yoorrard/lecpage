@@ -133,8 +133,10 @@ export const byOperator = (bp) => (bp.privacy.processors || []).some((p) => /^le
  * 서버마다 '마지막 기록 뒤 N일'이 지나면 지움(node·Cloudflare·바로 배포·Supabase pg_cron·시트 트리거). 바로 배포는 사이트를 지울 때 늦어도 함께
  */
 export function keepRule(bp) {
-  const d = bp.privacy.retentionDays;
-  return { short: `마지막 기록 뒤 ${d}일`, site: byOperator(bp) ? '사이트 보관 기간이 먼저 끝나면 사이트와 함께' : '' };
+  const d = bp.privacy.retentionDays, days = bp.deploy?.days || 0;
+  // 바로 배포: 사이트 보관 기간(마지막 배포 뒤 N일, /api/info limits.days)이 먼저 끝나면 참여 기록도 함께 지워짐(hosting room.js)
+  const siteKeep = days ? `(마지막 ${bp.deploy.keepAlive ? '배포나 방문' : '배포'} 뒤 ${days}일)` : '';
+  return { short: `마지막 기록 뒤 ${d}일`, site: byOperator(bp) ? `사이트 보관 기간${siteKeep}이 먼저 끝나면 사이트와 함께` : '' };
 }
 
 /** 연수 기간(현지 시각): 첫날 시작 ~ 마지막 날 끝. 끝난 뒤에는 참가자 화면이 '연수 후' 보기로 바뀜 */
@@ -160,7 +162,7 @@ export function siteData(ctx) {
     stations: st ? st.items.map((x) => ({ id: x.id, name: x.name })) : [],
     motion: ctx.design.motion,
     base: bp.meta.siteUrl || '',
-    // 이수 기준(출석 %): 교재·강사가 정한 값. 정하지 않았으면 0 → 강사 화면의 이수자 명단은 90%로 세고 그 사실을 적음
+    // 이수 기준(출석 %): 교재·강사가 정한 값만. 정하지 않았으면 rateSet=false → 강사 화면은 기준을 말하지 않고 이수자 명단의 이수 칸을 비움
     admin: { completionRate: bp.meta.admin?.completionRate || 90, rateSet: !!bp.meta.admin?.completionRate },
     survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
     phase: phaseWindow(bp),

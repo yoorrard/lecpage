@@ -297,7 +297,23 @@ export function defaultProcessors(bp) {
   };
   return map[bp.live.provider] || [];
 }
-/** 바로 배포 서버가 참여 기록을 맡음(앱이 처리자로 'lecpage 운영자'를 넣음): 운영자는 강사를 대신해 저장만 하는 수탁자 */
+/**
+ * 사이트 파일을 보내 주는 곳(배포할 곳 host마다, 접속 기록이 남는 곳). 국외 회사는 나라를 함께.
+ * lan·server: 강사·기관 컴퓨터(바깥 회사 없음), zip: 파일로 열면 보내 주는 서버가 없음. 모르면(host 없음) 일반 문장
+ */
+export const SITE_HOSTS = {
+  lecpage: 'lecpage 바로 배포 서버(운영자가 Cloudflare, Inc.의 미국 등 데이터센터에서 운영)', cloudflare: 'Cloudflare, Inc.(미국 등 데이터센터)', vercel: 'Vercel Inc.(미국 등)',
+  'github-pages': 'GitHub, Inc.(미국)', netlify: 'Netlify, Inc.(미국 등)', onpod: 'Onpod(한국)', firebase: 'Google LLC(미국 등)', s3: 'Amazon Web Services, Inc.(미국 등, 고른 지역)',
+};
+function privacyHostLine(bp, cdns) {
+  const h = bp.deploy?.host || '';
+  const cdn = cdns.length ? ` 글꼴·효과 파일을 보내 주는 곳(${cdns.join(', ')})에도 접속 기록이 남을 수 있습니다.` : '';
+  if (h === 'lan' || h === 'server') return `사이트 파일은 강사·기관의 컴퓨터가 보내 주며, 바깥 호스팅 회사는 없습니다.${cdn}`;
+  if (h === 'zip') return `사이트를 파일로 열면 사이트 파일을 보내 주는 서버가 없습니다.${cdn}`;
+  if (SITE_HOSTS[h]) return `사이트 파일은 ${SITE_HOSTS[h]}가 보내 주며, 그곳에 접속 기록(IP 주소 등)이 남을 수 있습니다.${cdn}`;
+  return `사이트 파일을 보내 주는 호스팅 회사${cdns.length ? `와 글꼴·효과 파일을 보내 주는 곳(${cdns.join(', ')})` : ''}에 접속 기록(IP 주소 등)이 남을 수 있습니다.`;
+}
+/** 바로 배포 서버가 참여 기록을 맡음(앱이 처리자로 'lecpage 운영자'를 넣음, 조립에 host:'lecpage'를 주면 엔진이 넣음): 운영자는 강사를 대신해 저장만 하는 수탁자 */
 export { keepRule }; // 보관 기준 한 문장(shell.js): 개인정보 안내·참여 동의·운영 안내·강사 화면이 같은 말
 
 /**
@@ -353,7 +369,7 @@ export function renderPrivacy(ctx) {
 <h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 안내·교재·실습과 질문·투표는 그대로 쓸 수 있습니다.${pv.collect.includes('name') || pv.collect.includes('school') ? ' 이름·소속을 받는 입실 기록만 남지 않습니다.' : ''}</p>
 <h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
 <h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
-<p>사이트 파일을 보내 주는 호스팅 회사${cdns.length ? `와 글꼴·효과 파일을 보내 주는 곳(${cdns.join(', ')})` : ''}에 접속 기록(IP 주소 등)이 남을 수 있습니다.</p>
+<p>${privacyHostLine(bp, cdns)}</p>
 <h2>7. 안전 조치</h2><p>${local ? '참여 기록은 이 브라우저 밖으로 나가지 않습니다.' : `${tls ? '모든 전송은 암호화(HTTPS)됩니다. ' : ''}참가자 명단과 출석·설문·도움 요청·실습 진행 기록은 관리자 키를 아는 강사만 볼 수 있습니다. 질문·보드 글은 함께 보도록 참가자에게 보이고, 투표 결과는 강사가 공개할 때만 보입니다. 틀린 관리자 키를 여러 번 넣으면 잠시 막습니다.`} 글은 글자로만 보이고(링크·스크립트로 바뀌지 않음), 한 기기에서 너무 자주 보내면 잠시 막습니다. 필요한 항목만 받고 보유 기간이 지나면 지웁니다.</p>
 <h2>8. 이 브라우저에 저장하는 정보</h2><p>별명과 임의 번호, 화면 설정을 이 브라우저의 저장소(localStorage)에 둡니다. 쿠키와 분석 도구는 쓰지 않습니다. 브라우저의 사이트 데이터 삭제로 지울 수 있습니다.</p>
 <h2>9. 문의</h2><p>${contact}</p>
@@ -397,12 +413,13 @@ export function opsGuide(ctx) {
     `참가자 명단(별명): 강사 화면의 [기록 내려받기] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
     survey,
     '질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
-    `다 받은 뒤 강사 화면의 [데이터 모두 지우기]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+    prov === 'local' ? '연습 모드 기록은 이 브라우저에만 있어요. 실제 연수 전에 강사 화면의 [데이터 모두 지우기]로 지워 두세요.'
+      : `다 받은 뒤 강사 화면의 [데이터 모두 지우기]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${keepRule(bp).site ? `(${keepRule(bp).site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
     prov === 'sheets' && '구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.',
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
   const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
-  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 배포하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
+  return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·과제·이수 처리 같은 연수 뒤 안내는 사이트에 더해 다시 배포하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
 }
 
 /** 실시간 방식(live.provider) → 운영안내.md에 쓰는 이름과 한 줄 설명 */
@@ -424,9 +441,16 @@ export function opsDoc(ctx) {
   const prov = live ? bp.live.provider : 'none';
   const name = OPS_PROVIDER_KO[prov] || prov;
   const files = ['`index.html` 참가자 화면', live && '`console.html` 강사 화면(도움말에 이 안내가 함께 있어요)', '`screen.html` 발표 화면', '`check.html` 접속 확인', '`poster.html` QR 안내문 인쇄', live && '`privacy.html` 개인정보 처리 안내'].filter(Boolean);
+  // 배포 전 확인: 조립이 자동으로 찾은 것(kit/preflight.js) — 예시 링크·지난 날짜·설문 없는 이수 조건·연습 모드·사진
+  const pf = (ctx.preflight || []).map((x) => `- [ ] ${x.message_ko}`);
+  const keep = keepRule(bp), d = bp.deploy || {};
+  const keepLine = live && prov !== 'local' ? `- 보관: 참여 기록은 ${keep.short}까지${keep.site ? `(${keep.site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}.${d.host === 'lecpage' && d.days ? ` 사이트는 마지막 ${d.keepAlive ? '배포나 방문' : '배포'} 뒤 ${d.days}일 보관돼요.` : ''}\n` : '';
   return `# 운영 안내 — ${bp.meta.title}
 
 ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.meta.end ? '~' + bp.meta.end : ''}\n` : ''}연수 코드: **${bp.live.code}** · 실시간 방식: ${live ? name : '없음'}
+
+## 배포 전 확인
+${pf.length ? pf.join('\n') : '- 자동 점검에서 걸린 것이 없어요. 날짜·장소·링크를 한 번 더 보세요.'}
 
 ## 파일
 - ${files.join(' · ')}
@@ -434,5 +458,5 @@ ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.
 ${opsGuide(ctx)}
 ## 운영 방식: ${name}
 - ${OPS_PROVIDER_WHY[prov] || ''}
-`;
+${keepLine}`;
 }

@@ -7,6 +7,7 @@ import { LIB_SCRIPT_SOURCES } from '../render/shell.js';
 import { contrast } from '../design/color.js';
 import { ENGINE_PAGES } from './paths.js';
 import { FONT_CSS_HOSTS, FRAME_SOURCES } from './assemble.js';
+import { checkFacts } from './facts.js';
 
 const ENGINE_ASSETS = /^assets\/(lecpage|live|kit|qr|boot|theme|aux-pages|screen|check|console|favicon|event|fx)\.|^assets\/site(-\d+)?-events\.js$/;
 const asText = (v) => (typeof v === 'string' ? v : v instanceof Uint8Array ? new TextDecoder().decode(v) : '');
@@ -65,9 +66,11 @@ const hex = (v) => { const s = String(v || '').trim(); if (isHex(s)) return s; c
  * 정적 검수.
  * @param files { 경로: 글|Uint8Array } — AI가 쓴 사이트 폴더(조립 전) 또는 조립 결과
  * @param meta lecpage.json(객체·글, 없어도 됨)
+ * @param opts.materialText 교재 글(material.md·앱 보조 글자). 주면 교재 사실 대조(kit/facts.js checkFacts)도 함께: 날짜·시각·숫자·주소·메일·전화·쪽 번호·
+ *        복사 단추 원문·인용·연수 정보를 교재와 맞춰 봄(fact-* 이슈). opts.known: 강사가 알려 준 글(교재처럼 봄)
  * @returns issues[]
  */
-export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
+export function inspect(files = {}, meta = null, { maxPerRule = 12, materialText = '', pages: materialPageList = null, known = [] } = {}) {
   const issues = []; const count = {};
   const add = (id, level, where, message_ko, fix_hint_ko) => {
     count[id] = (count[id] || 0) + 1;
@@ -253,6 +256,8 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
     const need = { qa: 'qa', poll: 'poll', board: 'board', survey: 'survey', deck: 'deck', materials: 'materials' };
     for (const f of m.features) if (need[f] && !slots.has(need[f])) add('kit-feature-slot', 'warn', { file: 'lecpage.json', selector: 'features' }, `features에 ${f}가 있는데 data-lp="${need[f]}" 자리 표시가 없어요.`, `알맞은 섹션에 <div data-lp="${need[f]}"></div>를 넣거나 features에서 빼 주세요.`);
   }
+  // 교재 사실 대조(교재 글을 줄 때만)
+  if (materialText || materialPageList) issues.push(...checkFacts(files, { materialText, pages: materialPageList, meta, known, maxPerRule }));
   return issues;
 }
 

@@ -47,6 +47,14 @@
  "facts":[{"label":"장소","value":"…","page":1}]}
 ```
 교재에 없는 값은 비우고, `facts`에 찾은 쪽을 적어요. 공개 범위·주소·참여 서버는 강사가 정해요.
+- 키트는 이수 조건(무엇을 눌러야·설문을 내야 이수인지)·출석 비율을 지어 쓰지 않아요. 교재에 있으면 사이트 글로 직접 쓰고, 출석 비율은 `admin.completionRate`(교재·강사 값)에만. 없으면 강사 화면 이수자 명단의 '이수' 칸은 비어요.
 - `features`: qa·poll·board·attendance·survey·help·reactions·signal·progress·deck·materials·timer. `mode`: offline·online·blended. `audience`: teachers·students·parents·staff·other
 - 선택 칸: `subtitle`·`organizer`·`contact`·`description`, 직무연수면 `admin: {"kind":"official","hours":3,"completionRate":90}`(kind: school·official·conference·student, 교재·강사가 준 값만), `theme.font`(본문)·`theme.fontHeading`(제목: 강사·발표 화면·QR 안내문 제목에도)·`theme.radius`
+- 교재 밖이지만 강사가 알려 준 사실(바뀐 날짜·기관 설문 주소 등)은 Skill이면 `lecpage.teacher.json`의 `"told": ["…"]`에 적어요. 교재 대조가 교재에 있는 것으로 봐요.
 - `pages`: 교재 넘기기 캡션·강사 화면 쪽 목록의 쪽 제목. 교재에서 뽑은 제목(material.md 머리)이 엉키거나 비었으면 쪽 그림을 보고 `[{"page":1,"title":"표지 · …"}]`로 고쳐요(쓴 쪽만 바뀜).
+
+## 교재 대조·배포 전 확인(알리기만 해요)
+`check`(앱은 검수)가 사이트 글의 날짜·시각·숫자+단위·주소·메일·전화·쪽 번호와 복사 단추 원문(`data-copy-text`·`data-copy-target`)·인용(`<blockquote>`·`<q>`·`<pre>`·“…”)을 교재 글(`material.md`)과 맞춰 봐요. 띄어쓰기·줄바꿈·따옴표 차이는 같은 것으로 봐요. 교재에 없는 사실, 교재 원문과 달라진 복사 글, 교재를 거의 다 옮긴 사이트, 휴대폰에서 10화면 넘는 쪽, 낱말 가운데서 갈린 짧은 이름표, 상자 밖으로 삐져나온 글, 바탕 상자 끝에 붙은 글은 '살펴볼 곳'으로 알려요(막거나 고치지 않아요). 예시 주소·지난 날짜·설문 없는 이수 조건·연습 모드·사진은 강사용 `운영안내.md` 맨 위 '배포 전 확인'에 적혀요.
+- 함수(앱·AI): `E.kit.checkFacts(siteFiles, { materialText, meta, known }) → issues[]`(`fact-*`, 모두 warn) · `E.kit.inspect(files, meta, { materialText, known })`가 함께 불러요.
+- 배포할 곳: `assemble(…, { host, hostDays, keepAlive })`(host: lecpage·cloudflare·vercel·github-pages·netlify·onpod·lan·zip …). 개인정보 안내의 처리자·보관 기간·사이트를 보내 주는 곳이 그 방식에 맞게 바뀌어요. Skill은 `check --host`·`publish`가 넘겨요.
+- 배포에는 교재 넘기기·`<img>`·링크·CSS가 쓰는 교재 쪽 그림만 담겨요(미리보기는 다). 사이트 CSP는 실제로 부르는 바깥 곳(허용 목록 라이브러리·글꼴 CDN·영상 틀)만 열어요.
