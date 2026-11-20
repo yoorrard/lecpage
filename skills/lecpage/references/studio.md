@@ -24,7 +24,7 @@ PC에 Claude Code나 Codex를 설치하고 로그인해 두면, lecpage 앱이 �
 ## 안전
 - `127.0.0.1`에만 묶고, 띄울 때마다 새 토큰을 앱 HTML(`<meta name="lecpage-bridge">`)에 넣어요. `/bridge/*`는 머리글 `X-Lecpage-Bridge`가 맞아야 하고, `Host`·보낸 `Origin`이 이 주소와 정확히 같아야 해요(다른 사이트·DNS 리바인딩 거절, CORS 머리글 없음).
 - 한 번에 작업 하나, 교재 파일 하나 100MB·모두 120MB·20개까지, 작업 30분 한도와 멈추기(프로세스 묶음째 끔).
-- 에이전트는 새 빈 임시 폴더(훅·`.mcp.json` 없음)에서 돌아요. Claude Code: `--restricted`, 도구는 Read·Write·Edit·Glob·Grep과 검수 명령 하나만 허용한 Bash(윈도우는 PowerShell도 같은 명령만), 작업 폴더 밖 읽기·쓰기 막기, 훅 끔, MCP 없음, 묻는 대신 거절, 세션을 디스크에 남기지 않음. 시작할 때 MCP·웹 도구가 켜져 있으면 멈춰요. Codex: `--sandbox workspace-write`, `--ephemeral`.
+- 에이전트는 새 빈 임시 폴더(훅·`.mcp.json` 없음)에서 돌아요. Claude Code: `--restricted`, 도구는 Read·Write·Edit·Glob·Grep과 검수 명령 하나만 허용한 Bash(윈도우는 PowerShell도 같은 명령만), 작업 폴더 밖 읽기·쓰기 막기, 훅 끔, MCP 없음, 묻는 대신 거절, 세션을 디스크에 남기지 않음. 시작할 때 MCP·웹 도구가 켜져 있으면 멈춰요. Codex: `--sandbox workspace-write`, `--ephemeral`. Codex는 내 설정(`~/.codex/config.toml`)의 MCP 서버를 그대로 켜요(설정을 빼면 로그인 저장 위치까지 바뀔 수 있어 빼지 않아요). MCP 도구를 부르는 순간 작업을 멈추니, Codex로 쓸 때는 설정의 MCP 서버를 꺼 두는 게 좋아요.
 - 검수 실행기(`../bin/check.mjs`)는 작업 폴더 밖에 있어 에이전트가 고칠 수 없어요. 강사 값(참여 서버·주소·공개 범위)은 에이전트에게 주지 않아요.
 - 작업이 끝나면 임시 폴더를 바로 지우고, 결과는 앱이 가져간 뒤 `DELETE`로 메모리에서도 지워요. 터미널에는 교재 내용·파일 이름·토큰을 적지 않아요.
 
