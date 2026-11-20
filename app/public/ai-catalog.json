@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "updated": "2026-11-19",
-  "checked": "2026-11-19",
+  "updated": "2026-11-20",
+  "checked": "2026-11-20",
   "about": {"note":"AI 모델 값표(입력·출력 100만 토큰당 달러, 출시일, 글 출력 여부, 문맥 길이)와 Gemini 무료 등급 목록. scripts/ai-catalog/refresh.mjs가 하루 한 번 만들어요. 손으로 고치지 마세요.","sources":{"openrouter":"https://openrouter.ai/api/v1/models","modelsdev":"https://models.dev/api.json (MIT License, Copyright (c) 2025 models.dev)","google":"https://ai.google.dev/gemini-api/docs/pricing.md.txt · models.md.txt"}},
   "models": [
     {"id":"anthropic/claude-fable-5","in":10,"out":50,"date":"2026-06-09","text":true,"ctx":1000000,"src":"or"},
@@ -130,7 +130,7 @@
     {"id":"openai/gpt-daybreak-blue-latest","in":4,"out":20,"date":"2026-08-07","text":true,"ctx":1050000,"src":"md"},
     {"id":"openai/gpt-daybreak-red-latest","in":12.5,"out":75,"date":"2026-08-07","text":true,"ctx":400000,"src":"md"},
     {"id":"openai/gpt-image-1.5","in":5,"out":10,"date":"2025-11-25","text":false,"ctx":null,"src":"md"},
-    {"id":"openai/gpt-oss-120b","in":0.15,"out":0.6,"date":"2025-08-05","text":true,"ctx":131072,"src":"or"},
+    {"id":"openai/gpt-oss-120b","in":0.09,"out":0.36,"date":"2025-08-05","text":true,"ctx":131072,"src":"or"},
     {"id":"openai/gpt-oss-20b","in":0.018,"out":0.09,"date":"2025-08-05","text":true,"ctx":131072,"src":"or"},
     {"id":"openai/gpt-oss-safeguard-20b","in":0.075,"out":0.3,"date":"2025-10-29","text":true,"ctx":131072,"src":"or"},
     {"id":"openai/gpt-realtime-2.1","in":4,"out":24,"date":"2026-07-06","text":false,"ctx":128000,"src":"md"},
@@ -157,8 +157,7 @@
     {"id":"nvidia/nemotron-3.5-lightning:free","date":"2026-08-11","text":true,"ctx":1000000},
     {"id":"nvidia/nemotron-3.5-super-vl:free","date":"2026-10-15","text":true,"ctx":1000000},
     {"id":"particle-ai/particle-1:free","date":"2026-10-28","text":true,"ctx":1048576},
-    {"id":"recursive/flint-v1.0:free","date":"2026-10-21","text":true,"ctx":262144},
-    {"id":"thinkingmachines/inkling-2-small:free","date":"2026-11-09","text":true,"ctx":1048576}
+    {"id":"recursive/flint-v1.0:free","date":"2026-10-21","text":true,"ctx":262144}
   ],
   "geminiFree": {"free":["gemini-2.5-flash","gemini-2.5-flash-lite","gemini-2.5-flash-native-audio-preview-12-2025","gemini-2.5-flash-preview-tts","gemini-2.5-pro","gemini-3-flash-preview","gemini-3.1-flash-lite","gemini-3.1-flash-live-preview","gemini-3.1-flash-tts-preview","gemini-3.5-flash-lite","gemini-3.5-live-translate-preview","gemini-3.5-transcribe","gemini-3.5-transcribe-live","gemini-3.6-flash","gemini-3.8-flash","gemini-3.8-flash-lite-tts","gemini-3.8-flash-tts","gemini-3.8-live","gemini-3.8-live-extended-thinking","gemini-4-hydrogen","gemini-decision-1","gemini-embedding-001","gemini-embedding-2","gemini-robotics-er-2-preview","gemini-robotics-er-2-streaming-preview"],"paidOnly":["gemini-2.5-flash-image","gemini-2.5-pro-preview-tts","gemini-3-pro-image","gemini-3.1-flash-image","gemini-3.1-flash-lite-image","gemini-3.1-pro-preview","gemini-3.1-pro-preview-customtools","gemini-4-argon","gemini-4-carbon","gemini-4-neon","gemini-nano-banana-2.1","gemini-omni-1.1-flash","gemini-omni-1.2-flash","lyria-3-clip-preview","lyria-3-pro-preview","lyria-3.5"]},
   "geminiDocs": {"current":["antigravity-preview-09-2026","deep-research-max-preview-04-2026","deep-research-preview-04-2026","gemini-2.5-flash","gemini-2.5-flash-image","gemini-2.5-flash-lite","gemini-2.5-flash-native-audio-preview-12-2025","gemini-2.5-flash-preview-tts","gemini-2.5-pro","gemini-2.5-pro-preview-tts","gemini-3-flash-preview","gemini-3-pro-image","gemini-3.1-flash-image","gemini-3.1-flash-lite","gemini-3.1-flash-lite-image","gemini-3.1-flash-live-preview","gemini-3.1-flash-tts-preview","gemini-3.1-pro-preview","gemini-3.5-flash-lite","gemini-3.5-live-translate-preview","gemini-3.5-transcribe","gemini-3.6-flash","gemini-3.8-flash","gemini-3.8-flash-lite-tts","gemini-3.8-flash-tts","gemini-3.8-live","gemini-3.8-live-extended-thinking","gemini-4-argon","gemini-4-carbon","gemini-4-hydrogen","gemini-4-neon","gemini-decision-1","gemini-embedding-001","gemini-embedding-2","gemini-nano-banana-2.1","gemini-omni-1.2-flash","gemini-robotics-er-2-preview","lyria-3-clip-preview","lyria-3-pro-preview","lyria-3.5","lyria-realtime-exp"],"legacy":["gemini-2.5-flash","gemini-2.5-flash-image","gemini-2.5-flash-lite","gemini-2.5-flash-native-audio-preview-12-2025","gemini-2.5-flash-preview-tts","gemini-2.5-pro","gemini-2.5-pro-preview-tts"],"previous":["gemini-2.0-flash","gemini-2.0-flash-lite","gemini-2.5-computer-use-preview-10-2025","gemini-3-pro-preview","gemini-3.1-flash-lite-preview","gemini-robotics-er-1.6-preview","imagen-4.0-generate"]}
