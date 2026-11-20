@@ -26,6 +26,8 @@ import { ensureIds } from '../site-doc.js';
 
 const TAB = uid(8);
 const live = new Map(); // pid → { ctrl, rec, wait, elsewhere }
+// 붐벼서(503) 바꾼 모델: 15분 동안은 다음 작업(수정·검수 고치기)도 처음부터 되는 모델로 → 같은 붐빔을 다시 기다리지 않음(실제 시험: 고칠 때마다 요청 4번·40초 낭비)
+let busyDetour = null; // { provider, from: Set, to, at }
 const subs = new Set();
 const emit = (pid) => subs.forEach((f) => f(pid));
 export const onJobChange = (f) => { subs.add(f); return () => subs.delete(f); };
@@ -168,6 +170,10 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
   if (!token && piece) { acc = cont ? stitch(acc, piece) : piece; piece = ''; cont = false; }
   let continues = step.continues || 0; let waits = 0; let resumes = 0; let swaps = 0; let bigger = 0;
   const persist = () => { Object.assign(step, { acc, piece, cont, token, continues }); saveSoon(rec); };
+  const d = busyDetour;
+  if (d && d.provider === rec.provider && d.from.has(rec.model) && Date.now() - d.at < 15 * 60e3 && d.to !== rec.model) {
+    rec.notes = [...(rec.notes || []), `${rec.model} 모델이 붐벼서 ${d.to} 모델로 했어요.`]; rec.model = d.to; await save(rec, { quiet: true });
+  }
   for (;;) {
     // 받은 글에 이어서: 한도에 닿아 잘렸으면 늘, 끊겼으면 받은 글이 넉넉할 때만(짧으면 처음부터가 더 깔끔)
     const continueFrom = !token && acc && (step.wantCont || acc.length >= (hook().minContinue || 1200)) ? acc : '';
@@ -183,7 +189,14 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         onToken: (tk) => { token = { id: tk.id, seq: tk.seq }; piece = tk.text; persist(); },
       });
       // 바꾼 모델로 답을 받음 → 이 키는 무료 키(안 된 모델은 '유료 키 필요'로): 다음 만들기는 되는 모델로 바로 시작하고 고르는 칸도 맞게
-      if (ctx.swapped) { const why = ctx.swapped; ctx.swapped = ''; ctx.swapFrom = ''; if (why !== 'model' && why !== 'quota-day' && why !== 'busy') rememberWorkingModel(rec.provider, rec.model, [...(ctx.tried || [])].filter((m) => m !== rec.model)).catch(() => { }); }
+      if (ctx.swapped) {
+        ctx.swapped = ''; ctx.swapFrom = '';
+        const perm = ctx.permFailed || []; const busy = ctx.busyFailed || [];
+        // 이 키로 아예 못 쓰는 모델(무료 키에 유료 전용 등)은 기억 → 다음 만들기는 되는 모델로 시작. 붐빈 모델은 잠깐 피하기만(기본 모델로는 붐볐던 그 모델을 둠: 이 키로 되는 모델이라서)
+        if (perm.length) rememberWorkingModel(rec.provider, busy[0] || rec.model, perm).catch(() => { });
+        if (busy.length) busyDetour = { provider: rec.provider, from: new Set(busy), to: rec.model, at: Date.now() };
+        ctx.permFailed = []; ctx.busyFailed = [];
+      }
       // 보이는 글 없이 한도에 닿음(생각하는 데 한도를 다 씀): '이어서'할 글이 없어 같은 요청을 되풀이하게 되고, 그러면 비용만 듦
       // (예전: 같은 요청 4번 + 형식 오류로 단계 다시 4번 = 8번). → 한도를 두 배로 한 번만 다시, 그래도 비면 멈추고 다른 모델·AI 창을 권함
       if (res.stop === 'max_tokens' && !String(res.text || '').trim()) {
@@ -223,7 +236,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         // 실제 응답(2026-11-20): Gemini는 모델 몇 개가 몇 분씩 '사용량 폭주(503)'일 때가 있음 → 두 번 붐비면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
         if (e.kind === 'busy' && rec.provider === 'gemini' && step.attempts >= 2 && swaps < 2) {
           const next = await nextModel(ctx).catch(() => null);
-          if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = 'busy'; rec.notes = [...(rec.notes || []), `${rec.model} 모델이 붐벼서 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
+          if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = 'busy'; ctx.busyFailed = [...(ctx.busyFailed || []), rec.model]; rec.notes = [...(rec.notes || []), `${rec.model} 모델이 붐벼서 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
         }
         if (step.attempts > (hook().maxAttempts || 4)) throw e;
         await pause(ctx, [2000, 6000, 15000, 30000][Math.min(3, step.attempts - 1)] * (hook().backoff ?? 1), 'retry');
@@ -246,7 +259,7 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
           throw e;
         }
         const next = swaps < 2 ? await nextModel(ctx).catch(() => null) : null;
-        if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = e.kind; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
+        if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = e.kind; if (e.kind !== 'model' && e.kind !== 'quota-day') ctx.permFailed = [...(ctx.permFailed || []), rec.model]; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
       }
       throw e;
     }
