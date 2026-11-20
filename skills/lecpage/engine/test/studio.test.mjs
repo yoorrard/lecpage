@@ -415,3 +415,42 @@ test('실제 앱 빌드(app/dist)를 보여 주고 브라우저 안에서 /bridg
     t.diagnostic(`브라우저: status ${out.status} · 작업 ${out.post} · 토큰 없이 ${out.noTok}`);
   } finally { await browser.close(); st.p.kill('SIGTERM'); }
 });
+
+test('빌드본이 없으면 앱 파일을 받아 같은 출처로(받은 HTML에 토큰·보안 머리글 그대로·같은 곳 이동만·못 받으면 안내 쪽)', { skip: !posix && 'POSIX만' }, async () => {
+  // lecpage.com 대신 이 컴퓨터의 작은 서버(포트도 6600~6649 안)
+  const up = http.createServer((q, s) => {
+    if (q.url === '/') return s.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "frame-ancestors 'none'", 'strict-transport-security': 'max-age=1', 'set-cookie': 'a=1' }).end('<!doctype html><html><head><title>원격</title></head><body><div id="app"></div></body></html>');
+    if (q.url === '/assets/app-abcdef12.js') return s.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'public, max-age=31536000, immutable' }).end('console.log(2)');
+    if (q.url === '/help') return s.writeHead(301, { location: `http://127.0.0.1:${up.address().port}/help/` }).end();
+    if (q.url === '/away') return s.writeHead(302, { location: 'https://evil.example/' }).end();
+    s.writeHead(404, { 'content-type': 'text/html' }).end('<!doctype html><title>없음</title>');
+  });
+  let upPort = 0;
+  for (let p = 6649; p >= 6600 && !upPort; p--) { try { await new Promise((ok, no) => { up.once('error', no); up.listen(p, '127.0.0.1', ok); }); upPort = p; } catch { /* 다음 */ } }
+  try {
+    const st = await launch({ LECPAGE_STUDIO_APP_URL: `http://127.0.0.1:${upPort}` }, ['--remote']);
+    assert.equal(st.app, 'remote');
+    const home = await req(st.port, 'GET', '/');
+    assert.equal(home.status, 200);
+    assert.match(home.text, /<head>\n<meta name="lecpage-bridge" content="[0-9a-f]{64}"><title>원격/);
+    assert.equal(home.headers['cache-control'], 'no-store');
+    assert.equal(home.headers['content-security-policy'], "frame-ancestors 'none'");
+    assert.equal(home.headers['strict-transport-security'], undefined);
+    assert.equal(home.headers['set-cookie'], undefined);
+    const js = await req(st.port, 'GET', '/assets/app-abcdef12.js');
+    assert.equal(js.text, 'console.log(2)'); assert.match(js.headers['cache-control'], /immutable/);
+    const mv = await req(st.port, 'GET', '/help');
+    assert.equal(mv.status, 308); assert.equal(mv.headers.location, '/help/');
+    assert.equal((await req(st.port, 'GET', '/away')).status, 502, '다른 곳으로 보내는 이동은 따르지 않음');
+    assert.equal((await req(st.port, 'GET', '/nope')).status, 404);
+    const token = home.text.match(/content="([0-9a-f]{64})"/)[1];
+    assert.equal((await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': token } })).json().app, 'remote');
+    up.closeAllConnections?.();
+    await new Promise((ok) => up.close(ok));
+    const down = await req(st.port, 'GET', '/');
+    assert.equal(down.status, 503);
+    assert.match(down.text, /앱 파일을 받지 못했어요/);
+    assert.match(down.text, /선택 기능/);
+    st.p.kill('SIGTERM');
+  } finally { if (up.listening) up.close(); }
+});

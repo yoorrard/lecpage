@@ -9,7 +9,7 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -578,7 +578,7 @@ async function runJob(S, job) {
   const stopped = () => !!job.stopReason;
   let finish = null; // 끝 알림(done·error)은 임시 폴더를 지운 뒤에 보냄(받은 쪽이 바로 확인해도 남은 것이 없게)
   try {
-    const root = mkdtempSync(join(tmpdir(), TMP_PREFIX));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), TMP_PREFIX))); // macOS /var → /private/var: 에이전트가 알리는 경로와 같게
     job.dir = root;
     const ws = join(root, 'ws'), bin = join(root, 'bin'), work = join(ws, 'work');
     mkdirSync(join(ws, 'material'), { recursive: true }); mkdirSync(bin, { recursive: true });
@@ -817,7 +817,7 @@ export async function studioCmd(h) {
   const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log });
   const { S, url, close } = st;
   const ag = await statusOf(S, true);
-  const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? '구독으로 로그인' : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
+  const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? (a.id === 'codex' ? 'ChatGPT로 로그인' : '구독으로 로그인') : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
   if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)] }));
   else console.log([
     `lecpage 연결 프로그램 ${S.version}`,
