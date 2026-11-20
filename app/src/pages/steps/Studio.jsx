@@ -261,7 +261,7 @@ function AskPanel({ p, sections, ask, setAsk, idle, adoptSite, locked, go }) {
   async function take(input) {
     if (!input || busy) return; setBusy(true);
     try {
-      const r = await acceptChatAnswer(p.id, input, { target: target === 'all' ? '' : target }); setRes(r);
+      const r = await acceptChatAnswer(p.id, input, { target: target === 'all' ? '' : target }); setRes(r); if (r.continuePrompt) setAnswer('');
       if (r.ok) { await adoptSite(r.site, r.meta, '쓰던 앱으로 고친 판'); setAnswer(''); setPrompt(''); setRes(null); setAsk({ ...ask, request: '' }); toast('답대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.'); }
     } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
     setBusy(false);

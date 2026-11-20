@@ -43,7 +43,12 @@ export function AiPick({ p, go, idle, adoptSite, ready, update }) {
   const [swap, setSwap] = useState(''); // 연결된 키의 모델 바꾸기·끊기를 펼친 회사
   const afterKey = useRef(false);
   const reload = () => aiStatus().then(setConn, () => setConn({}));
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    reload();
+    // 만드는 중 화면의 [쓰던 앱으로(키 없이)]로 왔으면 그 회사의 쓰던 앱 길을 바로 펼침
+    let want = ''; try { want = sessionStorage.getItem('lecpage:open-chat') || ''; sessionStorage.removeItem('lecpage:open-chat'); } catch { }
+    if (AI_CARDS.some((c) => c.id === want) && ready) openChat(want);
+  }, []);
   async function make(provider, st = conn?.[provider]) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 녹화해 둔 결과로 보여 줘요. 키가 필요 없어요.'); startReplay(p.id, { provider }); go(2); return; }
@@ -160,7 +165,7 @@ function ChatWay({ card, p, adoptSite, go, update, idle, onClose }) {
     setBusy(true);
     try {
       const r = await acceptChatAnswer(p.id, input);
-      setRes(r);
+      setRes(r); if (r.continuePrompt) setAnswer(''); // 끊긴 답은 기억해 뒀으니 칸을 비워 이어진 답을 받음
       if (r.ok) {
         await adoptSite(r.site, r.meta, `쓰던 ${card.app}로 만든 판`);
         if (r.problems?.length) update({ notes: r.problems });
