@@ -4,7 +4,7 @@
 import { esc, br, icon, koDate, host, md, contactHtml, joinName } from './html.js';
 import { appShell, keepRule, byOperator, servedOverLan, boardFiles } from './shell.js';
 import { whenText, eventDays } from '../hero-meta.js';
-import { wordsFor } from '../words.js';
+import { wordsFor, josa } from '../words.js';
 
 const PROVIDER_KO = { local: '리허설(이 브라우저 안에서만)', http: '참여 기능 서버', supabase: 'Supabase', sheets: '구글 시트' };
 const themeBtn = () => `<button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기">${icon('sun')}</button>`;
@@ -259,7 +259,7 @@ export function renderCheck(ctx) {
 </div>
 ${blocked.length ? `<p class="lp-chk-note"><b>연수 정보에 적어 둔 막힌 곳:</b> ${blocked.map((b) => esc(b)).join(' · ')}. 주소가 아니라 직접 확인할 수 없어요. 연수 전에 기관 정보 담당자에게 물어보세요.</p>` : ''}
 <details class="lp-chk-more"><summary>이 기기 정보</summary><p data-env></p></details>
-<p class="lp-chk-back"><a class="lp-link" href="index.html">연수 사이트로 돌아가기 ${icon('arrow')}</a></p>
+<p class="lp-chk-back"><a class="lp-link" href="index.html">${esc(ctx.words?.ev || '연수')} 사이트로 돌아가기 ${icon('arrow')}</a></p>
 </main>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>`;
   return appShell(ctx, { title: `접속 확인 · ${bp.meta.title}`, page: 'check', bodyClass: 'lp-body-doc', inner, scripts: [ctx.live && 'assets/live.js', 'assets/check.js'].filter(Boolean) });
@@ -284,7 +284,7 @@ export function activityItems(bp) {
   ].filter(Boolean);
 }
 function quickAttendOn(bp) {
-  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance');
+  return bp.live.provider !== 'none' && bp.live.features.length > 0 && !bp.sections.some((s) => s.type === 'attendance') && !bp.live.features.includes('attendance') && bp.audience?.type !== 'parents';
 }
 /** 참여 기능 서버가 Cloudflare(강사의 workers.dev 또는 바로 배포의 /live)인지. 아니면 강사·기관의 자체 서버 */
 const onCloudflare = (bp) => /(^|\.)workers\.dev$/.test(host(bp.live.url || '')) || /\/live\/?$/.test(String(bp.live.url || ''));
@@ -344,8 +344,8 @@ export function renderPrivacy(ctx) {
 <p class="lp-doc-lead">「${esc(bp.meta.title)}」 ${esc(ctx.words?.ev || '연수')}의 참여 기능(질문·투표 등)이 어떤 정보를 받고 어떻게 다루는지 적은 안내입니다.</p>
 <section class="lp-doc-sum" aria-labelledby="lp-sum-h"><h2 id="lp-sum-h">한눈에 보기</h2><dl>${sum.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
 <p><b>개인정보처리자</b> ${esc(who)}</p>
-<p>이 연수를 운영하면서 아래 개인정보만 처리합니다. ${op ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않습니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
-<h2>1. 처리 목적</h2><p>연수 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
+<p>이 ${esc(josa(ctx.words?.ev || '연수', '을', '를'))} 운영하면서 아래 개인정보만 처리합니다. ${op ? '참여 기록은 lecpage 운영자가 강사를 대신해 저장만 합니다(아래 6의 처리 위탁). 운영자는 신고 처리나 장애 대응 말고는 기록을 열어 보지 않습니다.' : '이 사이트를 만든 도구인 lecpage의 운영자는 참가자 정보를 받거나 보관하지 않습니다.'}</p>
+<h2>1. 처리 목적</h2><p>${esc(ctx.words?.ev || '연수')} 중 질문·도움 요청·결과물 공유${pv.collect.includes('name') ? ', 출석 및 이수 확인' : ''}.</p>
 <h2>2. 처리 항목</h2><p>${collect.join(', ')}, 참가자를 구분하는 임의 번호.</p>
 <p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? `\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 ${local ? '기록' : '서버'}에는 그 임의 번호와 함께 저장됩니다.</p>` : ''}
 <p>주민등록번호·전화번호·생년월일은 받지 않습니다. 질문이나 글에 본인 또는 다른 사람의 개인정보를 적지 마세요.</p>${bp.live.provider === 'http' ? '\n<p>접속할 때 IP 주소가 서버에 전달되며, 잘못된 접근과 도배를 막는 횟수 제한에만 씁니다. IP 주소는 기록으로 남기지 않습니다.</p>' : ''}${bp.audience?.minor ? '\n<p>만 14세 미만 참가자도 쓸 수 있도록 별명만 받습니다. 이름 등 다른 개인정보와 파일은 받지 않습니다.</p>' : ''}
@@ -358,8 +358,8 @@ export function renderPrivacy(ctx) {
 <h2>8. 이 브라우저에 저장하는 정보</h2><p>별명과 임의 번호, 화면 설정을 이 브라우저의 저장소(localStorage)에 둡니다. 쿠키와 분석 도구는 쓰지 않습니다. 브라우저의 사이트 데이터 삭제로 지울 수 있습니다.</p>
 <h2>9. 문의</h2><p>${contact}</p>
 <p>침해 신고·상담: 개인정보침해신고센터(privacy.kisa.or.kr, 118), 개인정보 분쟁조정위원회(www.kopico.go.kr, 1833-6972)</p>
-<p class="lp-doc-foot">${ctx.builtOn ? `시행일 ${esc(ctx.builtOn)} ` : ''}이 안내는 연수 설정에 맞춰 자동으로 만들어졌습니다. 소속 기관의 개인정보 처리방침이 따로 있으면 그 방침이 우선합니다.</p>
-<p><a class="lp-link" href="index.html">연수 사이트로 돌아가기 ${icon('arrow')}</a></p>
+<p class="lp-doc-foot">${ctx.builtOn ? `시행일 ${esc(ctx.builtOn)} ` : ''}이 안내는 ${esc(ctx.words?.ev || '연수')} 설정에 맞춰 자동으로 만들어졌습니다. 소속 기관의 개인정보 처리방침이 따로 있으면 그 방침이 우선합니다.</p>
+<p><a class="lp-link" href="index.html">${esc(ctx.words?.ev || '연수')} 사이트로 돌아가기 ${icon('arrow')}</a></p>
 </main>`;
   return appShell(ctx, { title: `개인정보 처리 안내 · ${bp.meta.title}`, page: 'privacy', bodyClass: 'lp-body-doc', inner, scripts: ['assets/check.js'] });
 }

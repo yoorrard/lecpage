@@ -77,6 +77,18 @@ test('키트: 자리 표시를 런타임이 아는 마크업으로 펼치고, �
   assert.equal(r.collected.deck.join(','), '1,2');
 });
 
+test('교재 넘기기: 쪽 그림이 16:9가 아니면(A4 세로 자료집) 키트 CSS가 그 비율로, 16:9·모르는 그림은 그대로', () => {
+  // VP8X 머리(가로 909 · 세로 1287): 너비-1·높이-1을 3바이트 little-endian으로
+  const a4 = new Uint8Array([82, 73, 70, 70, 22, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 88, 10, 0, 0, 0, 0, 0, 0, 0, 0x8c, 3, 0, 6, 5, 0]);
+  const png169 = new Uint8Array(30); png169.set([0x89, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 5, 0, 0, 0, 2, 0xd0]); // 1280×720
+  const page = (img) => ({ 'index.html': PAGE('<section id="d"><h2>교재</h2><div data-lp="deck"></div></section>'), 'material/p-001.webp': img, 'material/p-002.webp': img });
+  const css = (img) => K.assemble(page(img), META, { runtime: rt, today: '2026-11-20' }).files['assets/kit.css'];
+  assert.match(css(a4), /:root\{--lpk-deck-ratio:909\/1287\}/);
+  assert.doesNotMatch(css(png169), /--lpk-deck-ratio:\d/);
+  assert.doesNotMatch(css(IMG), /--lpk-deck-ratio:\d/);
+  assert.match(css(a4), /aspect-ratio:var\(--lp-deck-ratio,var\(--lpk-deck-ratio,16\/9\)\)/);
+});
+
 test('연수 정보: 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy)은 AI 답에서 받지 않고 이전 값을 지킴', () => {
   const ai = { ...META, live: { provider: 'http', url: 'https://evil.example', code: 'EVIL' }, siteUrl: 'https://evil.example/', joinUrl: 'https://evil.example/zoom', shortUrl: 'https://evil.example/s', access: 'public', surveyUrl: 'https://evil.example/form', privacy: { collect: ['name', 'school'], consent: false } };
   const a = K.readMeta(ai);

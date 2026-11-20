@@ -1,0 +1,226 @@
+/* 누리봄중학교 신입생 학부모 설명회 — 설명회 옆에서 쓰는 동반자 사이트
+   설명은 발표와 자료(쪽 그림)가 하고, 사이트는 지금 어디인지·자료 따라 보기·질문·집에 가서 다시 찾을 날짜와 연락처만 글로 둬요.
+   교재(A4 설명회 자료집)의 정체성: 교표, 굵은 줄+가는 줄 장 제목, □ 표시, 줄만 있는 표, 회신서 절취선.
+   제목 학교안심 알림장(교육부·KERIS 학교 글꼴), 본문 Pretendard GOV(정부 디자인 시스템 지정 서체).
+   학부모는 연령대가 넓고 휴대폰으로 봐서 본문 18px에서 시작하고 [글자 크게]로 21px. 크기는 모두 rem이라 함께 커져요. */
+
+@font-face{font-family:'Hakgyoansim Allimjang';src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-5@1.0/HakgyoansimAllimjangTTF-B.woff2') format('woff2');font-weight:700;font-display:swap}
+
+:root{
+  --paper:#ffffff;
+  --surf:#f1f6f3;
+  --surf-2:#e3eee8;
+  --ink:#15201b;
+  --mute:#45534c;
+  --acc:#0b5e45;
+  --on-acc:#ffffff;
+  --warm:#9c3f0c;
+  --rule:#c5d3cb;
+  --rule-soft:#dde7e1;
+  --f-body:'Pretendard GOV Variable','Pretendard GOV','Pretendard Variable',system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-head:'Hakgyoansim Allimjang','Pretendard GOV Variable',system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --r:6px;
+  --wide:74rem;
+  /* 키트(투표·자료 넘기기·질문·설문)가 따르는 색 */
+  --lp-accent:#0b5e45;
+  --lp-ink:#15201b;
+  --lp-paper:#ffffff;
+  --lp-font:'Pretendard GOV Variable','Pretendard GOV',system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --lp-radius:6px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0f1613;
+    --surf:#16201b;
+    --surf-2:#1d2a23;
+    --ink:#e7eeea;
+    --mute:#b2c0b9;
+    --acc:#7ed2a6;
+    --on-acc:#0b1a13;
+    --warm:#ffad73;
+    --rule:#34463c;
+    --rule-soft:#24322b;
+    --lp-accent:#7ed2a6;
+    --lp-ink:#e7eeea;
+    --lp-paper:#0f1613;
+    --lp-on-accent:#0b1a13;
+    color-scheme:dark;
+  }
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{font-size:112.5%;-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-padding-top:4.6rem}
+html.is-big{font-size:131.25%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:1rem;line-height:1.7;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased}
+a{color:var(--acc);text-underline-offset:.18em;text-decoration-thickness:.06em}
+a:hover{text-decoration-thickness:.12em}
+:focus-visible{outline:3px solid var(--acc);outline-offset:3px;border-radius:2px}
+h1,h2,h3,p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+.skip{position:absolute;left:1rem;top:-4rem;z-index:50;background:var(--acc);color:var(--on-acc);padding:.6rem 1rem;border-radius:var(--r);font-weight:700}
+.skip:focus{top:.6rem}
+.tel{font-weight:750;white-space:nowrap}
+
+/* ── 머리(학교 이름 줄) ── */
+.mast{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--rule)}
+.mast-in{max-width:var(--wide);margin:0 auto;padding:.35rem 1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-height:3.4rem}
+.mast-id{display:flex;align-items:center;gap:.55rem;color:var(--ink);text-decoration:none;min-height:2.75rem;margin-right:auto}
+.emblem{width:2rem;height:2rem;color:var(--acc);flex:none}
+.mast-t{display:grid;line-height:1.2}
+.mast-t b{font-family:var(--f-head);font-weight:700;font-size:1.05rem;color:var(--acc)}
+.mast-t small{font-size:.8334rem;color:var(--mute);font-weight:500}
+.tsize{display:inline-flex;align-items:center;gap:.4rem;min-height:2.75rem;padding:0 .8rem;border:1.5px solid var(--rule);border-radius:var(--r);background:var(--paper);color:var(--ink);font:inherit;font-size:.8889rem;font-weight:650;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tsize-g{font-family:var(--f-head);font-size:1.2em;line-height:1;color:var(--acc)}
+.tsize:hover{border-color:var(--acc)}
+.tsize[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.tsize[aria-pressed="true"] .tsize-g{color:inherit}
+
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 1rem}
+
+/* ── 첫 화면 ── */
+.hero{display:grid;grid-template-columns:minmax(0,1fr);padding:1.4rem 0 1.4rem;position:relative}
+.hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(var(--acc),var(--acc)) left top/100% 3px no-repeat,linear-gradient(var(--acc),var(--acc)) left bottom/100% 1px no-repeat;transform-origin:left}
+.hero-k{font-size:.9445rem;font-weight:600;color:var(--mute)}
+.hero-k .num{color:var(--acc);font-weight:800;margin-right:.2em}
+.hero h1{font-family:var(--f-head);font-weight:700;font-size:clamp(2.6rem,1.9rem + 3.4vw,4.75rem);line-height:1.06;letter-spacing:-.012em;margin:.35rem 0 .7rem}
+.hero-lead{font-size:1.1667rem;font-weight:500;line-height:1.55;max-width:22em}
+.hero-side{margin-top:1.2rem}
+.facts{margin:0;border-top:2px solid var(--ink)}
+.facts div{display:grid;grid-template-columns:3.4em minmax(0,1fr);gap:.6rem;padding:.65rem 0;border-bottom:1px solid var(--rule)}
+.facts dt{font-weight:800;color:var(--acc)}
+.facts dd{margin:0;font-weight:600;line-height:1.5}
+.facts dd b{white-space:nowrap}
+.now{margin-top:1rem;display:flex;align-items:center;flex-wrap:wrap;gap:.3rem .9rem;padding:.75rem 1rem;background:var(--surf);border-radius:var(--r)}
+.now-t{flex:1 1 13rem;display:flex;align-items:baseline;gap:.6rem;font-weight:650;line-height:1.5}
+.now-tag{flex:none;font-size:.8334rem;font-weight:800;color:var(--acc);border:1.5px solid currentColor;border-radius:4px;padding:.05rem .4rem;line-height:1.4}
+.now.is-live .now-tag{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.now-go{font-weight:750;min-height:2.75rem;display:inline-flex;align-items:center}
+.hero-cta{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5em),1fr));gap:.6rem;margin-top:1.2rem}
+.jump{display:flex;flex-wrap:wrap;gap:0 1.1rem;margin-top:.5rem}
+.jump a{display:inline-flex;align-items:center;min-height:2.75rem;font-weight:650;font-size:.9445rem}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:3.1rem;padding:.6rem 1rem;border:2px solid var(--acc);border-radius:var(--r);background:var(--paper);color:var(--acc);font-weight:750;line-height:1.3;text-align:center;text-decoration:none;-webkit-tap-highlight-color:transparent;transition:background-color .15s}
+.btn:hover{background:var(--surf)}
+.btn-p{background:var(--acc);color:var(--on-acc)}
+.btn-p:hover{background:var(--acc);filter:brightness(1.12)}
+
+/* ── 장 제목: 굵은 줄 + 가는 줄(공문 이중선) ── */
+.sec{padding:2.6rem 0 .4rem;min-width:0}
+.ch{padding-bottom:calc(.7rem + 8px);margin-bottom:1.1rem;background:linear-gradient(var(--acc),var(--acc)) left bottom 5px/100% 3px no-repeat,linear-gradient(var(--acc),var(--acc)) left bottom/100% 1px no-repeat}
+.ch-k{font-size:.8889rem;font-weight:800;color:var(--acc);line-height:1.4;margin-bottom:.15rem}
+.ch h2{font-family:var(--f-head);font-weight:700;font-size:clamp(1.65rem,1.3rem + 1.3vw,2.25rem);line-height:1.18;letter-spacing:-.01em}
+.sec h3{font-size:1.1112rem;font-weight:800;margin:0 0 .6rem;display:flex;flex-wrap:wrap;align-items:center;gap:.1rem .8rem}
+.hint{color:var(--mute);line-height:1.6;margin-bottom:1rem;max-width:34em}
+.src{display:inline-flex;align-items:center;gap:.3rem;min-height:2.75rem;font-size:.8889rem;font-weight:700}
+.src::before{content:"";width:.7em;height:.9em;border:1.5px solid currentColor;border-radius:1px}
+.sec .lpk.lpk-w{border-color:var(--rule)}
+
+/* ── 오늘 순서: 번호(교재 장 번호) · 시간 · 자료 쪽 ── */
+.agenda{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.agenda li{display:flex;flex-wrap:wrap;align-items:center;gap:.2rem .7rem;padding:.7rem 0;border-bottom:1px solid var(--rule)}
+.agenda li>div{flex:1 1 8.5em;min-width:0}
+.ag-no{flex:none;width:2.2rem}
+.ag-no{font-family:var(--f-head);font-weight:700;font-size:1.9rem;line-height:1;color:var(--acc);text-align:center}
+.agenda div{display:grid;line-height:1.35}
+.agenda time{font-weight:800;font-size:.8889rem;color:var(--mute)}
+.agenda strong{font-weight:750}
+.agenda span{font-size:.8889rem;color:var(--mute)}
+.agenda a{margin-left:auto;display:inline-flex;align-items:center;min-height:2.75rem;font-weight:700;font-size:.8889rem;text-align:right;max-width:7em;line-height:1.3}
+.agenda li.is-now{background:var(--surf);margin:0 -.6rem;padding-left:.6rem;padding-right:.6rem;border-radius:var(--r)}
+.agenda li.is-now time::after{content:" · 지금";color:var(--acc)}
+.agenda li.is-now .ag-no{color:var(--on-acc);background:var(--acc);border-radius:4px;padding:.3rem 0}
+.agenda li.is-past :is(.ag-no,strong){color:var(--mute)}
+.curious{margin-top:1.8rem}
+
+/* ── 설명 자료(A4 세로 쪽 그림) ── */
+/* 키트 기본(16:9 틀)이면 휴대폰에서 A4 쪽이 손톱만 해져서, 쪽 그림 비율 그대로 */
+.lpk .lp-slide img{aspect-ratio:909/1287;width:100%;max-width:40rem;margin-inline:auto;object-fit:contain}
+.lpk .lp-deck:fullscreen .lp-slide img{width:auto;max-height:calc(100vh - 140px)}
+.lpk .lp-deck-thumbs img{aspect-ratio:3/4;object-fit:cover;object-position:top}
+@media (prefers-color-scheme:dark){.lpk .lp-slide img{filter:brightness(.9)}}
+.dl{margin-top:1.4rem;display:grid;gap:1rem}
+.share-row{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1rem}
+.share-row p{flex:1 1 12rem;font-weight:600}
+.share-row .lpk-w{border:0;padding:0;background:none}
+
+/* ── 입학 전 챙길 것(체크) ── */
+.todo{list-style:none;margin:0 0 1rem;padding:0;border-top:2px solid var(--ink)}
+.todo li{border-bottom:1px solid var(--rule)}
+.todo label{display:grid;grid-template-columns:1.9rem minmax(0,1fr);column-gap:.7rem;padding:.75rem 0;cursor:pointer;line-height:1.5}
+.todo input{grid-row:1/span 2;appearance:none;-webkit-appearance:none;width:1.55rem;height:1.55rem;margin:.05rem 0 0;border:2px solid var(--acc);border-radius:3px;background:var(--paper);display:grid;place-items:center;cursor:pointer}
+.todo input::after{content:"";width:.45rem;height:.8rem;border:solid var(--on-acc);border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px);opacity:0}
+.todo input:checked{background:var(--acc)}
+.todo input:checked::after{opacity:1}
+.todo time{font-weight:800;color:var(--acc)}
+.todo b{display:block;font-weight:800}
+.todo input:checked~*{color:var(--mute)}
+.todo input:checked~span b{text-decoration:line-through;text-decoration-thickness:2px}
+.bring{position:relative;padding:.9rem 1.1rem .9rem 2.6rem;background:var(--surf);border-radius:var(--r);margin-bottom:2rem}
+.bring::before{content:"";position:absolute;left:1.1rem;top:1.35rem;width:.62em;height:.62em;border:2px solid var(--acc)}
+.bring b{color:var(--acc);font-weight:800;margin-right:.45em}
+.later{margin:0;border-top:2px solid var(--ink)}
+.later div{display:grid;grid-template-columns:6.4em minmax(0,1fr);gap:.7rem;padding:.65rem 0;border-bottom:1px solid var(--rule);line-height:1.5}
+.later dt{font-weight:800}
+.later dd{margin:0}
+.later .is-key :is(dt,dd){color:var(--warm);font-weight:750}
+
+/* ── 회신서(절취선) ── */
+.sec-reply{padding-top:3.2rem}
+.cut{position:relative;height:1px;margin:0 0 2rem;border-top:2px dashed var(--mute)}
+.cut span{position:absolute;left:0;top:-.85rem;padding-right:.6rem;background:var(--paper);font-size:.8334rem;font-weight:700;color:var(--mute);line-height:1.6}
+
+/* ── 문의 ── */
+.calls{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.calls li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.1rem 1rem;padding:.45rem 0;border-bottom:1px solid var(--rule)}
+.calls span{font-weight:700;line-height:1.4}
+.calls small{display:block;font-weight:500;font-size:.8889rem;color:var(--mute)}
+.calls .tel{display:inline-flex;align-items:center;min-height:2.75rem;font-size:1.1112rem}
+.calls li.is-key span{color:var(--acc)}
+
+/* ── 꼬리 ── */
+.foot{margin-top:4rem;border-top:3px solid var(--acc);position:relative}
+.foot::before{content:"";position:absolute;left:0;right:0;top:2px;border-top:1px solid var(--acc)}
+.foot-in{max-width:var(--wide);margin:0 auto;padding:1.6rem 1rem 6.5rem}
+.foot-id{font-size:.9445rem}
+.foot-id b{font-family:var(--f-head);font-weight:700;color:var(--acc)}
+.foot-links{list-style:none;margin:.5rem 0;padding:0;display:flex;flex-wrap:wrap;gap:0 1.2rem}
+.foot-links a{display:inline-flex;align-items:center;min-height:2.75rem;font-weight:650;font-size:.9445rem}
+.foot-note{font-size:.8334rem;color:var(--mute)}
+
+/* ── 넓은 화면: 자료는 왼쪽 크게, 순서는 그 옆에 ── */
+@media (min-width:40rem){
+  .hero-cta{display:flex;flex-wrap:wrap}
+  .hero-cta .btn{min-width:12rem}
+  .todo label{grid-template-columns:1.9rem 7.6em minmax(0,1fr)}
+  .todo input{grid-row:auto}
+}
+@media (min-width:62rem){
+  .hero{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-areas:"k side" "h side" "lead side" "cta side" "jump side";column-gap:clamp(2.5rem,6vw,6rem);padding:2.4rem 0 2.6rem;align-items:start}
+  .hero-k{grid-area:k}
+  .hero h1{grid-area:h;margin-top:.5rem}
+  .hero-lead{grid-area:lead}
+  .hero-cta{grid-area:cta;margin-top:1.6rem}
+  .jump{grid-area:jump}
+  .hero-side{grid-area:side;align-self:start;margin-top:2.3rem}
+  .grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);column-gap:clamp(2.5rem,5vw,4.5rem);align-items:start}
+  .sec-slides{grid-column:1;grid-row:1/span 2}
+  .sec-order{grid-column:2;grid-row:1}
+  .sec-ask{grid-column:2;grid-row:2}
+  .sec-ready{grid-column:1;grid-row:3}
+  .sec-contact{grid-column:2;grid-row:3}
+  .sec-reply{grid-column:1/-1;grid-row:4}
+  .sec-reply .lpk-w{max-width:44rem}
+}
+
+/* ── 움직임: 첫 화면 이중선 긋기 한 번, 바로 가기로 옮긴 장 제목 잠깐 표시. 기본은 다 그려진 모습 ── */
+@media (prefers-reduced-motion:no-preference){
+  .hero::after{animation:rule-in .9s cubic-bezier(.2,.7,.2,1) .15s both}
+  .sec:target .ch h2{animation:here 1.6s ease-out}
+  html{scroll-behavior:smooth}
+}
+@keyframes rule-in{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes here{0%{background:var(--surf-2);box-shadow:0 0 0 .3rem var(--surf-2)}100%{background:transparent;box-shadow:0 0 0 .3rem transparent}}
+
+@media print{.mast,.skip,.hero-cta,.jump{display:none!important}}

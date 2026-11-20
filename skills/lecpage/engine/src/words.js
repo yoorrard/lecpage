@@ -10,13 +10,13 @@ export function batchim(word) {
 export const josa = (w, withB, without) => `${w}${batchim(w) ? withB : without}`;
 
 const T = {
-  teacher: { goals: '연수 목표', deck: '연수 교재', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개', who: '강사', code: '연수 코드' },
-  student: { goals: '수업 목표', deck: '수업 자료', materials: '수업 자료', followup: '수업 후 안내', instructor: '선생님 소개', who: '선생님', code: '수업 코드' },
-  event: { goals: '오늘 다룰 내용', deck: '발표 자료', materials: '자료', followup: '', instructor: '발표자 소개', who: '발표', code: '' },
+  teacher: { goals: '연수 목표', deck: '연수 교재', materials: '연수 자료', followup: '연수 후 안내', instructor: '강사 소개', who: '강사', host: '강사', code: '연수 코드' },
+  student: { goals: '수업 목표', deck: '수업 자료', materials: '수업 자료', followup: '수업 후 안내', instructor: '선생님 소개', who: '선생님', host: '선생님', code: '수업 코드' },
+  event: { goals: '오늘 다룰 내용', deck: '발표 자료', materials: '자료', followup: '', instructor: '발표자 소개', who: '발표', host: '발표자', code: '' },
 };
 /**
  * @param bp { meta:{ title, subtitle, admin:{kind} } }
- * @returns { kind, ev(연수·수업·설명회·행사), goals, deck, materials, followup, instructor, who, code, site, ended, endedOn(날짜), attendLead, attendAfter, pollWord, survey(만족도 첫 문항) }
+ * @returns { kind, ev(연수·수업·설명회·행사), goals, deck, materials, followup, instructor, who, host(참가자 화면이 부르는 진행자: 강사·선생님·발표자), code, site, ended, endedOn(날짜), attendLead, attendAfter, pollWord, survey(만족도 첫 문항) }
  */
 export function wordsFor(bp) {
   const m = bp?.meta || {};
