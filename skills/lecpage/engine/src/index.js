@@ -31,3 +31,6 @@ export { applyInfo, keepTeacherLinks, syncInfo, applyFeatures, sanitizeImported,
 export { wordsFor } from './words.js';
 export { buildReviewPrompt, sanitizeReviewPatch, trimForPrompt, REVIEW_PATCH_FORMAT } from './prompt/review.js';
 export { VERSION } from './version.js';
+// AI 중심 개편: 키트·조립·검수(약속 A~C). E.kit.assemble(…) 또는 아래 이름으로
+export * as kit from './kit/index.js';
+export { assemble, inspect, inspectRendered, readMeta as readSiteMeta } from './kit/index.js';
