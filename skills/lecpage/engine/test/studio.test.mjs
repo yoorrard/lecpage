@@ -312,6 +312,8 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   assert.deepEqual(cr.argv, St.agentArgs('codex', { ws: cr.cwd }));
   assert.match(cr.task, /강의 사이트 고치기/);
   assert.match(cr.task, /id="intro"/);
+  assert.match(cr.task, /p-001 ~ p-001/, '앱이 보낸 쪽 그림도 작업 지시에');
+  assert.ok(!/material\.md/.test(cr.task), '교재 없이 고치면 보조 글자 줄 없음');
   assert.ok(!cr.files.includes('.env'));
 
   // 에이전트가 사이트를 못 쓰면 오류, 허용 밖 도구가 켜져 있으면 멈춤

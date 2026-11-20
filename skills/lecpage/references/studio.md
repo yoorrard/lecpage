@@ -42,7 +42,7 @@ PC에 Claude Code나 Codex를 설치하고 로그인해 두면, lecpage 앱이 �
 ## HTTP 약속 (앱이 부름, `docs/plan-ai-first.md` §10)
 모든 요청에 `X-Lecpage-Bridge: <토큰>`. 오류는 `{ ok:false, error, message_ko }`(401 토큰·403 출처·409 바쁨/준비 안 됨·413 너무 큼·415 JSON 아님·421 주소).
 - `GET /bridge/status` → `{ ok, version, app:'dist'|'remote', agents:[{ id, name, installed, version, auth:'subscription'|'api-key'|'unknown', loggedIn, ready, note_ko }], job, limits, policy_ko:{ claude, codex } }`
-- `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site?, target? }` → 202 `{ ok, jobId }`. `site` 값은 글 또는 `{ base64 }`.
+- `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site?, target? }` → 202 `{ ok, jobId }`. `site` 값은 글 또는 `{ base64 }`. 새로 만들 때도 앱이 그린 쪽 그림을 `site['material/p-NNN.webp']`로 보내면 써요(이 PC에 LibreOffice·pdftoppm이 없으면 연결 프로그램이 쪽 그림을 못 그려요).
 - `GET /bridge/jobs/:id/events`(SSE, `id:` 붙음, `Last-Event-ID`로 이어 받기): `{ type:'step', name, label_ko }` · `{ type:'log', text }` · `{ type:'done', label_ko, summary:{ errors, warnings, files } }` · `{ type:'error', code:'timeout'|'stopped'|'agent'|'prepare'|'unsafe'|…, error }`. 머리글이 필요해 `EventSource` 대신 `fetch`로 읽어요.
 - `GET /bridge/jobs/:id` → `{ id, agent, kind, status:'running'|'done'|'error'|'stopped', step, startedAt, endedAt, error }`
 - `GET /bridge/jobs/:id/result` → `{ site, meta, issues, warnings, material:{ pages }, dropped, agent }`. 글 파일은 글, 그림(`material/p-NNN.webp`·`assets/img/*`)은 `{ base64, type }`. `meta`에는 강사 값이 없어 앱이 지켜 둔 값을 다시 넣어요.

@@ -460,7 +460,7 @@ lecpage 앱에서 강사가 맡긴 일이에요. 당신(AI 에이전트)이 교�
 ${request.trim() || (edit ? '(따로 없음)' : '(따로 없음 — 교재에 맞게 알아서 해요)')}
 ${target ? `\n고칠 곳: \`id="${target}"\`인 섹션만 고치고 다른 곳은 그대로 둬요.\n` : ''}${reference ? `\n## 분위기 참고 (참고만, 따를 의무 없음)\n${reference.trim()}\n` : ''}
 ## 읽을 것
-${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${pages ? `- 쪽 그림: \`work/site/material/\` (${images ? `p-001 ~ p-${pad3(pages)}` : '없음'}) — 디자인·도표·사진은 그림을 직접 보세요.\n` : ''}${prepared ? '- 보조 글자: `work/material.md` (쪽마다 글자·발표자 노트, 표·그림 속 글은 빠질 수 있음)\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}- 키트 설명서: \`kit.md\` — 꼭 먼저 읽기(자리 표시·CSS 변수·CSP·lecpage.json)
+${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${pages ? `- 쪽 그림: \`work/site/material/\` (${images ? `p-001 ~ p-${pad3(pages)}${images < pages ? `, 그중 ${images}장` : ''}` : '없음 — 원본과 보조 글자로 읽어요'}) — 디자인·도표·사진은 그림을 직접 보세요.\n` : ''}${prepared ? '- 보조 글자: `work/material.md` (쪽마다 글자·발표자 노트, 표·그림 속 글은 빠질 수 있음)\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}- 키트 설명서: \`kit.md\` — 꼭 먼저 읽기(자리 표시·CSS 변수·CSP·lecpage.json)
 ${principles ? '- 디자인 원칙: `design-principles.md`\n' : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : '- 강사가 이미 정한 연수 정보: `work/lecpage.json` (값이 있으면 지키기)\n'}
 ## 쓸 것
 ${edit ? `요청한 곳만 고치고 나머지(글·디자인·자리 표시·그림)는 그대로 둬요. 파일 이름도 바꾸지 않아요.
@@ -602,8 +602,10 @@ async function runJob(S, job) {
     for (const p of inp.photos) { mkdirSync(join(work, 'site', 'assets', 'img'), { recursive: true }); writeFileSync(join(work, 'site', 'assets', 'img', p.name), p.bytes); }
     for (const [k, v] of Object.entries(inp.site)) { const f = join(work, 'site', ...k.split('/')); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, v); }
     if (!existsSync(join(work, 'lecpage.json'))) writeFileSync(join(work, 'lecpage.json'), JSON.stringify({ v: 2, title: '', sessions: [], venue: '', mode: 'offline', audience: 'teachers', instructors: [], features: [], theme: {}, facts: [] }, null, 2) + '\n');
+    // 쪽 그림: 이 PC에 LibreOffice·pdftoppm이 없으면 prepare가 못 그리므로, 앱이 그려 보낸 site['material/p-NNN.webp']도 셈
     const prepared = pages > 0;
-    if (!pages) pages = images = Object.keys(inp.site).filter((k) => k.startsWith('material/')).length;
+    try { images = readdirSync(join(work, 'site', 'material')).filter((n) => /^p-\d{3,4}\.(webp|png|jpe?g)$/i.test(n)).length; } catch { images = 0; }
+    pages = Math.max(pages, images);
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md'));
     const principles = existsSync(join(REF, 'design-principles.md'));
     if (principles) copyFileSync(join(REF, 'design-principles.md'), join(ws, 'design-principles.md'));
@@ -695,8 +697,9 @@ async function handleBridge(S, req, res, url) {
     }
     const v = await validateJob(body);
     if (v.error) return fail(res, 400, 'bad-request', v.error);
-    if ([...S.jobs.values()].some((j) => j.active)) return fail(res, 409, 'busy', '다른 작업이 돌고 있어요. 끝나거나 멈춘 뒤에 다시 해 주세요.');
-    const ag = (await statusOf(S, true))[v.agent];
+    if (S.starting || [...S.jobs.values()].some((j) => j.active)) return fail(res, 409, 'busy', '다른 작업이 돌고 있어요. 끝나거나 멈춘 뒤에 다시 해 주세요.');
+    S.starting = true; // 로그인 확인을 기다리는 동안 다른 요청이 끼어들지 않게(한 번에 작업 하나)
+    let ag; try { ag = (await statusOf(S, true))[v.agent]; } finally { S.starting = false; }
     if (!ag.installed || !ag.ready) return fail(res, 409, 'agent-not-ready', ag.note_ko || `${ag.name}를 쓸 수 없어요.`, { agent: publicAgent(ag) });
     const job = new Job(S, v);
     S.jobs.set(job.id, job);
