@@ -8,6 +8,7 @@ import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
 import { reach } from '../lib/netcheck.js';
 import { deployView, hasSiteScripts } from '../lib/site-meta.js';
+import { hostProblems } from '../lib/host-check.js';
 
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 배포)는 운영자가 켜 둔 앱에서만 보임
