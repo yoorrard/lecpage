@@ -29,6 +29,9 @@
 //   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 할 일 work/README.md
 //   check [work] [--port 0] [--no-shots]           work/site + lecpage.json 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
 //   preview [work] [--port 4173] [--host 0.0.0.0]  조립 결과를 로컬로 띄움(강사 화면·발표 화면 포함)
+//   studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]
+//        내 PC 연결 프로그램: 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
+//        (요청은 그 사람의 구독 한도에서 차감). 앱 파일은 app/dist가 있으면 그것, 없으면 lecpage.com에서 받음. 끄기: Ctrl+C (references/studio.md)
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
 //   종료 코드: 0 성공 · 1 실패(make·qa·patch --qa는 사이트를 만들었어도 점검에 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
 import { readFileSync, writeFileSync, existsSync, statSync, createReadStream, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
@@ -48,7 +51,7 @@ const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude 
 
 // ── 인자 ─────────────────────────────────────────
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤
-const VALUE_OPTS = new Set(['i', 'o', 'set', 'password', 'preset', 'presets', 'mood', 'assets', 'port', 'host', 'name', 'relay', 'features', 'today', 'access', 'work', 'out', 'size', 'skill', 'duration', 'network', 'infra']);
+const VALUE_OPTS = new Set(['i', 'o', 'set', 'password', 'preset', 'presets', 'mood', 'assets', 'port', 'host', 'name', 'relay', 'features', 'today', 'access', 'work', 'out', 'size', 'skill', 'duration', 'network', 'infra', 'dist', 'timeout']);
 const OPTS = {
   make: 'i o work preset password access today no-qa fresh reingest no-slides no-python bundle-fonts no-bundle-fonts',
   brief: '', structure: 'i today add-leftovers',
@@ -61,6 +64,7 @@ const OPTS = {
   publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
   handouts: 'o password',
   prepare: 'o today no-slides no-python', check: 'port today no-shots', preview: 'port host today',
+  studio: 'port no-open dist remote timeout',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
@@ -129,7 +133,7 @@ if (+process.versions.node.split('.')[0] < 20) { console.error(`오류: Node.js 
 {
   const [maj, min] = process.versions.node.split('.').map(Number);
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
-  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['make', 'build', 'patch', 'publish', 'handouts', 'app'].includes(cmd) && !args.help && !parsed.problems.length) {
+  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['make', 'build', 'patch', 'publish', 'handouts', 'app', 'studio'].includes(cmd) && !args.help && !parsed.problems.length) {
     const local = 'localhost,127.0.0.1,::1';
     const np = [process.env.NO_PROXY || process.env.no_proxy, local].filter(Boolean).join(',');
     const r = spawnSync(process.execPath, [...process.execArgv, '--disable-warning=UNDICI-EHPA', ...process.argv.slice(1)], { stdio: 'inherit', env: { ...process.env, NODE_USE_ENV_PROXY: '1', NO_PROXY: np, no_proxy: np } });
@@ -1142,6 +1146,8 @@ const commands = {
   async prepare() { const { prepareCmd } = await import('./kit-cmds.mjs'); await prepareCmd(helpers()); },
   async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
   async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
+  /** 내 PC 연결 프로그램: 앱을 127.0.0.1에서 보여 주고 로컬 Claude Code·Codex에 일을 맡김(scripts/studio.mjs) */
+  async studio() { const { studioCmd } = await import('./studio.mjs'); await studioCmd(helpers()); },
 
   pack() {
     const dir = resolve(args._[0] || 'dist');

@@ -576,6 +576,7 @@ async function runJob(S, job) {
   const name = agentName(job.agent);
   const timer = setTimeout(() => { job.stop('timeout'); }, S.jobMs);
   const stopped = () => !!job.stopReason;
+  let finish = null; // 끝 알림(done·error)은 임시 폴더를 지운 뒤에 보냄(받은 쪽이 바로 확인해도 남은 것이 없게)
   try {
     const root = mkdtempSync(join(tmpdir(), TMP_PREFIX));
     job.dir = root;
@@ -643,17 +644,21 @@ async function runJob(S, job) {
     try { meta = JSON.parse(readFileSync(join(work, 'lecpage.json'), 'utf8')); } catch { issues.push({ id: 'meta-json', level: 'error', where: { file: 'lecpage.json', selector: '', section: '' }, message_ko: 'lecpage.json을 JSON으로 읽지 못했어요.', fix_hint_ko: '연수 정보를 다시 확인해 주세요.' }); }
     let material = null; try { material = { pages: JSON.parse(readFileSync(join(work, '.lecpage', 'pages.json'), 'utf8')) }; } catch { /* 교재 없이 고친 경우 */ }
     const errors = issues.filter((x) => x.level === 'error').length;
-    job.result = { ok: true, site, meta, issues, warnings: cj?.warnings || [], material, dropped, agent: { id: job.agent, version: st.version, auth: st.auth, ...(sum || {}) } };
-    job.status = 'done'; job.endedAt = Date.now();
-    job.emit({ type: 'done', label_ko: job.kind === 'edit' ? '다 고쳤어요' : '다 만들었어요', summary: { errors, warnings: issues.length - errors, files: Object.keys(site).length } });
-    S.log(`작업 끝: 고칠 곳 ${errors} · 살펴볼 곳 ${issues.length - errors} · ${Math.round((job.endedAt - job.startedAt) / 1000)}초`);
+    const result = { ok: true, site, meta, issues, warnings: cj?.warnings || [], material, dropped, agent: { id: job.agent, version: st.version, auth: st.auth, ...(sum || {}) } };
+    finish = () => {
+      job.result = result; job.status = 'done'; job.endedAt = Date.now();
+      job.emit({ type: 'done', label_ko: job.kind === 'edit' ? '다 고쳤어요' : '다 만들었어요', summary: { errors, warnings: issues.length - errors, files: Object.keys(site).length } });
+      S.log(`작업 끝: 고칠 곳 ${errors} · 살펴볼 곳 ${issues.length - errors} · ${Math.round((job.endedAt - job.startedAt) / 1000)}초`);
+    };
   } catch (e) {
-    if (!stopped() || job.stopReason === 'unsafe') finishError(S, job, e.code || 'error', e.friendly || /[가-힣]/.test(e.message) ? e.message : `작업이 실패했어요: ${cut(e.message, 160)}`);
+    if (!stopped() || job.stopReason === 'unsafe') finish = () => finishError(S, job, e.code || 'error', e.friendly || /[가-힣]/.test(e.message) ? e.message : `작업이 실패했어요: ${cut(e.message, 160)}`);
   } finally {
     clearTimeout(timer);
-    if (job.stopReason && job.stopReason !== 'unsafe' && job.active) finishError(S, job, job.stopReason, job.stopReason === 'timeout' ? STOP_KO.timeout(Math.round(S.jobMs / 60000) || 1) : STOP_KO[job.stopReason] || STOP_KO.stopped);
     job.proc = null;
     job.cleanup(); // 끝난 작업의 임시 폴더는 바로 지움(결과는 메모리에, DELETE로 지움)
+    if (job.stopReason && job.stopReason !== 'unsafe') finishError(S, job, job.stopReason, job.stopReason === 'timeout' ? STOP_KO.timeout(Math.max(1, Math.round(S.jobMs / 60000))) : STOP_KO[job.stopReason] || STOP_KO.stopped);
+    else if (finish) finish();
+    else finishError(S, job, 'error', '작업이 끝나지 않았어요. 다시 해 주세요.');
   }
 }
 function finishError(S, job, code, message) {
