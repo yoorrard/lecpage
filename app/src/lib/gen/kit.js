@@ -4,7 +4,7 @@
 //   readMeta(json, { prev }) → { meta, errors, warnings, old } · keepTeacherValues · themeFromCss · issuesForAi
 import { todayKst } from '../util.js';
 import { tangledTitle } from '@engine/src/kit/index.js';
-export { assemble, previewHtml, inspect, issuesForAi, inspectRenderedScript, readMeta, keepTeacherValues, themeFromCss, TEACHER_KEYS } from '@engine/src/kit/index.js';
+export { assemble, previewHtml, inspect, issuesForAi, inspectRenderedScript, readMeta, keepTeacherValues, themeFromCss, TEACHER_KEYS, siteFileOk } from '@engine/src/kit/index.js';
 
 let rt = null;
 /** 조립에 넣을 실행 파일(엔진 runtime) — 처음 쓸 때 한 번만 받음 */

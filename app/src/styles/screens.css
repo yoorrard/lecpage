@@ -572,7 +572,7 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-pick-head p{margin:0}
 .ai-pick-wait{margin:0;padding:8px 12px;border-radius:var(--r-xs);background:var(--sunk);color:var(--ink-2)}
 /* 세 카드: 같은 크기·같은 위계로 한 줄(좁으면 세 줄) */
-.ai-cards{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.ai-cards{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:760px){.ai-cards{grid-template-columns:minmax(0,1fr)}}
 .ai-card{display:grid;grid-template-rows:auto 1fr auto auto;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper);min-width:0}
 .ai-card.is-on{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
@@ -599,6 +599,9 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-alt>summary b{color:var(--ink);font-weight:650}
 .ai-alt>summary span{font-size:.86rem;color:var(--muted)}
 .ai-alt-b{display:grid;gap:10px;padding:4px 0 10px}
+/* 첫 추천(내 PC의 Claude Code·Codex): 카드 위에 테두리 상자로 */
+.ai-alt-rec{border:1px solid var(--hair);border-radius:12px;padding:6px 14px;background:var(--card,transparent)}
+.ai-alt-rec>summary b{color:var(--accent)}
 .ai-alt-b p{margin:0}
 .ai-alt-steps{margin:0;padding-left:1.3em;display:grid;gap:2px}
 .ai-alt-steps code{font-family:var(--f-mono);font-size:.86em;padding:1px 5px;border-radius:5px;background:var(--sunk)}

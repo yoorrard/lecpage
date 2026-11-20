@@ -51,7 +51,7 @@ export function Settings() {
           <li><span>{anyAi ? <span class="small muted">다른 AI</span> : <><b>AI</b> <span class="small muted">연결 안 됨</span></>}</span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '더 연결하기' : '연결하기'}</button></li>
         </ul>
-        <p class="small muted">쓰던 AI 창(ChatGPT·Claude·Gemini)으로 만들 때는 연결하지 않아도 돼요.</p>
+        <p class="small muted">쓰던 AI 창(ChatGPT·Claude)으로 만들 때는 연결하지 않아도 돼요.</p>
         <h3 class="h-label">배포할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 옮겨요. <a href="#/help/deploy">배포하는 법</a></p>

@@ -64,6 +64,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
     k = cleanKey(k);
     const prov = detectProvider(k) || (looksLikeKey(k) ? tab : null);
     if (!prov) { setErr({ title: '키가 아닌 것 같아요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요.' }); return; }
+    if (!PROVIDERS[prov]) { setErr({ title: 'Gemini 키로는 만들지 않아요.', body: 'GPT나 Claude 키를 넣어 주세요. 내 PC의 Claude Code·Codex나 쓰던 AI 창으로도 만들어요.' }); return; }
     setErr(null); setBusy(true);
     if (KEY_GUIDES[prov] && prov !== tab) { setTab(prov); setOpened(-1); }
     setStep(KEY_GUIDES[prov] ? KEY_GUIDES[prov].steps.length : last);
@@ -88,7 +89,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
   return (
     <div class="ai-connect stack" onPaste={onAnyPaste}>
       {!only && <div class="seg ai-tabs" role="group" aria-label="쓰는 AI">
-        {GUIDE_ORDER.map((id) => <button type="button" aria-pressed={String(tab === id)} data-free={id === 'gemini' ? '' : undefined} onClick={() => pick(id)}><b>{KEY_GUIDES[id].label}</b><small>{KEY_GUIDES[id].tag}</small></button>)}
+        {GUIDE_ORDER.map((id) => <button type="button" aria-pressed={String(tab === id)} onClick={() => pick(id)}><b>{KEY_GUIDES[id].label}</b><small>{KEY_GUIDES[id].tag}</small></button>)}
       </div>}
       <p class="ai-what">{GUIDE_MORE.includes(tab) && !only && <b>{g.label} · </b>}{g.what}</p>
       {g.more?.length > 0 && <ul class="ai-more small" aria-label="무료로 쓸 때 알아 둘 점">{g.more.map((t) => <li>{t}</li>)}</ul>}
@@ -168,11 +169,8 @@ function useModels(ai, onChange) {
 function ModelPick({ ai, list, onChange }) {
   const cur = list.find((m) => m.id === ai.model);
   const pick = async (id) => { await setActive(ai.provider, { model: id, picked: true }); onChange?.({ ...ai, model: id }); };
-  // Gemini 키가 무료인지는 처음 만들 때 알게 됨. 그 전에는 '추천'을 붙이지 않음(무료 키에서는 Gemini 4 Carbon·Argon이 안 되므로)
-  const unsure = ai.provider === 'gemini' && !ai.freeTier;
   const rec = list.find((m) => m.rec);
   const hint = cur && rec && rec.id !== cur.id && cur.tier < rec.tier ? '가벼운 모델은 빠르고 싸지만 구성과 문구가 단순해져요.'
-    : ai.provider === 'gemini' ? (ai.freeTier ? '무료 키로 쓸 수 있는 모델이에요. Gemini 4 Carbon·Argon은 결제를 연결한 키만 돼요.' : '가장 좋은 모델부터 해 보고, 무료 키에서 안 되면 되는 모델로 알아서 바꿔요.')
       : cur?.free ? '무료 모델은 결과가 고르지 않아요.'
         : '추천은 품질과 값의 균형이 좋은 최신 모델이에요. 값은 사이트 하나를 만들 때의 어림이에요.';
   return (
@@ -180,7 +178,7 @@ function ModelPick({ ai, list, onChange }) {
       <span>모델</span>
       <select class="input" value={ai.model} onChange={(e) => pick(e.target.value)} aria-describedby="model-hint">
         {!cur && ai.model && <option value={ai.model}>{ai.model}</option>}
-        {list.slice(0, 30).map((m) => <option value={m.id} disabled={m.locked}>{modelText(unsure ? { ...m, rec: false } : m)}</option>)}
+        {list.slice(0, 30).map((m) => <option value={m.id} disabled={m.locked}>{modelText(m)}</option>)}
       </select>
       <small id="model-hint">{hint}</small>
     </label>
@@ -188,15 +186,14 @@ function ModelPick({ ai, list, onChange }) {
 }
 
 /**
- * 연결된 AI 한 줄: '● Google Gemini에 연결됨 · 모델 · 무료/값'. 누르면 모델 고르기와 [다른 AI 연결]·[연결 끊기]가 펼쳐집니다.
+ * 연결된 AI 한 줄: '● OpenAI에 연결됨 · 모델 · 값'. 누르면 모델 고르기와 [다른 AI 연결]·[연결 끊기]가 펼쳐집니다.
  * 모델은 앱이 가장 좋은 것으로 골라 두므로 평소에는 펼칠 일이 없습니다. children: 펼친 곳에 더 넣을 것(저장 설정 등)
  */
 export function AiStatus({ ai, onChange, onSwap, onDisconnect, swapLabel = '다른 AI 연결', children }) {
   const list = useModels(ai, onChange);
   const cur = list?.find((m) => m.id === ai.model);
-  const cost = !list ? '' : ai.provider === 'gemini' ? (ai.freeTier ? '무료' : '') : cur?.free ? '무료' : isPaidAI(ai.provider, ai.freeTier) ? (cur?.won ? `사이트 하나에 약 ${cur.won.toLocaleString('ko-KR')}원` : '쓴 만큼 결제') : '';
-  // Gemini 키가 무료인지는 처음 만들 때 알게 됨(이 기기에 적어 둔 값, ai.js prefs().free). 그 전에는 모델 이름을 내세우지 않음(무료 키면 바뀌므로)
-  const name = ai.provider === 'gemini' && !ai.freeTier ? '' : cur?.label || ai.model;
+  const cost = !list ? '' : cur?.free ? '무료' : isPaidAI(ai.provider, ai.freeTier) ? (cur?.won ? `사이트 하나에 약 ${cur.won.toLocaleString('ko-KR')}원` : '쓴 만큼 결제') : '';
+  const name = cur?.label || ai.model;
   return (
     <details class="ai-status">
       <summary>

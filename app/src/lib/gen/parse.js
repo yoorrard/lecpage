@@ -402,3 +402,48 @@ export function parseChatAnswer(text) {
   }
   return { ...h, meta: meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : null };
 }
+
+// ── 사이트 전체 답(키 길: 파일마다 코드 블록 하나, 여는 줄에 경로) ──
+const LANG_PATH = { html: 'index.html', htm: 'index.html', css: 'assets/style.css', js: 'assets/site.js', javascript: 'assets/site.js', mjs: 'assets/site.js', json: 'lecpage.json' };
+const PATHISH = /^(?:\.?\/)?([\w가-힣.\-]+\/)*[\w가-힣.\-]+\.(html?|css|m?js|json)$/i;
+/** 블록의 경로: 여는 줄(```index.html · ```html index.html · ```css:assets/a.css · ```html title="x.html") → 바로 위 줄(**index.html**, ### assets/style.css) → 말(lang) */
+function blockPath(info, before, lang) {
+  const words = String(info || '').replace(/[:=]/g, ' ').replace(/["'`]/g, ' ').split(/\s+/).filter(Boolean);
+  const hit = words.find((w) => PATHISH.test(w));
+  if (hit) return hit.replace(/^\.?\//, '');
+  const prev = (String(before || '').trimEnd().split('\n').pop() || '').replace(/[*#`>:\-\s]+/g, ' ').trim().split(' ').find((w) => PATHISH.test(w));
+  if (prev) return prev.replace(/^\.?\//, '');
+  return LANG_PATH[(lang || '').toLowerCase()] || '';
+}
+/**
+ * 사이트 전체 답 → { files: { 경로: 글 }, meta, cut, order:[경로] }.
+ * 블록이 덜 닫혔거나(잘림) index.html·CSS가 덜 끝났으면 cut. 같은 경로가 또 오면 뒤의 것(고쳐 쓴 판)
+ */
+export function parseSiteAnswer(text) {
+  const s = dropLineNumbers(clean(text));
+  const files = {}; const order = []; let meta = null; let cut = false;
+  const re = /(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*([^\n]*)\n/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const fence = m[2]; const info = m[3].trim(); const from = re.lastIndex;
+    const lang = (/^[\w.+-]+/.exec(info) || [''])[0];
+    const endRe = new RegExp(`\\n[ \\t]*${fence[0] === '`' ? '`' : '~'}{${fence.length},}[ \\t]*(?=\\n|$)`, 'g'); endRe.lastIndex = from - 1;
+    const e = endRe.exec(s);
+    const body = e ? s.slice(from, e.index) : s.slice(from);
+    if (!e) cut = true;
+    let path = blockPath(info, s.slice(Math.max(0, m.index - 200), m.index), PATHISH.test(lang) ? '' : lang);
+    // 말만 html인 블록이 둘 이상이면 문서(<!doctype)인 것만 index.html로
+    if (path === 'index.html' && !/\.html?$/i.test(info) && files['index.html'] && !/<!doctype|<html[\s>]/i.test(body)) path = '';
+    if (path) {
+      if (/^lecpage\.json$/i.test(path) || (path.endsWith('.json') && /"(title|sessions|venue)"/.test(body))) { const v = extractJson('```json\n' + body + '\n```').value; if (v && typeof v === 'object' && !Array.isArray(v)) meta = v; }
+      else { if (!(path in files)) order.push(path); files[path] = body.replace(/\s+$/, '') + '\n'; }
+    }
+    if (!e) break;
+    re.lastIndex = endRe.lastIndex;
+  }
+  // 코드 블록 없이 문서만 온 답
+  if (!Object.keys(files).length) { const h = extractHtml(s); if (h.doc) { files['index.html'] = h.html + '\n'; order.push('index.html'); cut = cut || h.cut; } }
+  if (files['index.html'] && htmlCut(files['index.html'], { doc: /<!doctype|<html[\s>]/i.test(files['index.html']) })) cut = true;
+  for (const [p, v] of Object.entries(files)) if (/\.css$/i.test(p) && cssCut(v)) cut = true;
+  return { files, meta, cut, order };
+}

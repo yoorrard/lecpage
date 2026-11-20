@@ -25,23 +25,6 @@ const ENOUGH = '5달러면 사이트를 열 개 넘게 만들어요.';
  * tips: 잘 안 될 때(접어 둠)
  */
 export const KEY_GUIDES = {
-  gemini: {
-    title: 'Gemini (Google)', label: 'Gemini', tag: '무료로 시작',
-    what: '무료예요. 가장 좋은 모델(Gemini 4 Carbon·Argon)은 결제한 키만 돼서 구성과 문구가 단순할 수 있어요. 하루에 쓸 수 있는 횟수도 정해져 있어요.',
-    steps: [
-      { id: 'key', title: '키 복사하기', url: P.gemini.keyUrl, open: '구글 AI Studio 열기', skip: '이미 복사했어요',
-        text: <>개인 구글 계정으로 로그인하고 약관에 동의하면 키가 만들어져 있어요. 키 옆의 <b>복사 버튼</b>을 눌러요.</>,
-        pic: { host: 'aistudio.google.com', head: 'API keys', button: 'Create API key', row: 'key', ring: 'copy', tip: '복사 버튼' } },
-    ],
-    tips: [
-      <>키가 안 보이면 <b>Create API key</b>를 눌러요. 구글 클라우드를 쓰던 계정은 키가 저절로 생기지 않아요.</>,
-      <><b>Set up billing</b>(결제 등록)은 누르지 않아도 돼요. 결제를 연결한 프로젝트의 키는 크레딧을 충전해야 쓸 수 있어요.</>,
-      <><b>Verification needed</b>(휴대폰 확인)가 뜨면 휴대폰 카메라로 QR을 찍어요. 전화번호는 묻지 않아요.</>,
-      <>그래도 결제를 요구하면 구글 클라우드를 쓴 적 없는 개인 구글 계정으로 해 보세요.</>,
-      <>학교 계정은 막혀 있는 경우가 많아요. 만 18세 이상 개인 계정으로 해 주세요.</>,
-    ],
-    more: ['무료 키로는 Gemini 4 Hydrogen 같은 빠른 모델을 써요. 쓸 수 있는 모델은 앱이 알아서 골라요.', '하루 횟수는 구글 사정에 따라 달라질 수 있어요. 다 쓰면 앱이 기다렸다가 이어가고, 한국 시간 오후 4~5시쯤 다시 채워져요.', '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', '계정에 따라 휴대폰 확인(QR 찍기)을 요청해요. 만 18세 이상 개인 구글 계정이어야 해요.'],
-  },
   openai: {
     title: 'GPT (OpenAI)', label: 'GPT', tag: '유료',
     what: '처음 한 번 결제 등록과 키 복사가 필요해요. 사이트 하나에 몇백 원쯤 들어요.',
@@ -78,8 +61,8 @@ export const KEY_GUIDES = {
     more: [],
   },
 };
-// 세 회사를 같은 자리·같은 위계로(AI 고르기 화면의 카드 순서와 같게). Gemini가 무료 키로 시작된다는 것은 글로만 알림
-export const GUIDE_ORDER = ['openai', 'anthropic', 'gemini'];
+// 두 회사를 같은 자리·같은 위계로(AI 고르기 화면의 카드 순서와 같게)
+export const GUIDE_ORDER = ['openai', 'anthropic'];
 export const GUIDE_MORE = [];
 
 /**

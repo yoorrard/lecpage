@@ -3,7 +3,7 @@
 //   --base=http://localhost:4174/  이미 띄워 둔 미리보기 서버를 씀(없으면 이 스크립트가 vite preview를 띄웠다가 끔)
 //   --only=start,edit              일부만 다시 찍음
 // 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI는 흉내 냅니다(키·교재가 어디로도 가지 않음):
-// 키 확인은 모델 목록으로, 만들기는 대표 레퍼런스(data-lab)에서 떼어 낸 단계별 답(src/lib/gen/demo-answers.js)을 Gemini 스트림 꼴로 돌려줌.
+// 키 확인은 모델 목록으로, 만들기는 대표 레퍼런스(data-lab)의 파일을 한 답으로(src/lib/gen/demo-answers.js) Claude 스트림 꼴로 돌려줌.
 // playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다(npx playwright install chromium).
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -39,24 +39,24 @@ base = base.replace(/\/?$/, '/');
 const REF = join(SKILL, 'references', 'designs', 'data-lab');
 const { demoAnswers } = await import(pathToFileURL(join(APP, 'src', 'lib', 'gen', 'demo-answers.js')).href);
 const answer = demoAnswers({ html: readFileSync(join(REF, 'site', 'index.html'), 'utf8'), css: readFileSync(join(REF, 'site', 'assets', 'style.css'), 'utf8'), js: readFileSync(join(REF, 'site', 'assets', 'site.js'), 'utf8'), meta: JSON.parse(readFileSync(join(REF, 'lecpage.json'), 'utf8')) });
-/** Gemini streamGenerateContent 요청 → 그 단계의 답(SSE) */
-function geminiStream(body) {
-  const text = (body.contents?.[0]?.parts || []).map((x) => x.text || '').join('\n');
-  const m = /작업 단계: (plan|design|sections) ?(\d+)?/.exec(text);
-  let batch = []; try { batch = JSON.parse((/이번에 만들 섹션\(이 순서대로\):\n(\[[\s\S]*?\n\])/.exec(text) || [])[1] || '[]').map((x) => x.id); } catch { batch = []; }
-  const out = m ? answer({ name: m[1] === 'sections' ? `sections:${m[2]}` : m[1], batch }) : '';
-  return `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: out }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 } })}\r\n\r\n`;
+/** Claude /v1/messages 요청 → 그 단계의 답(SSE) */
+function claudeStream(body) {
+  const text = (body.messages || []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).map((x) => x.text || '').join('\n');
+  const m = /작업 단계: (build)/.exec(text);
+  const out = m ? answer({ name: m[1] }) : '';
+  const ev = (type, o) => `event: ${type}\ndata: ${JSON.stringify({ type, ...o })}\n\n`;
+  return ev('message_start', { message: { usage: { input_tokens: 1 } } }) + ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: out } }) + ev('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }) + ev('message_stop', {});
 }
 const CORS = { 'access-control-allow-origin': '*' };
 const json = (r, body) => r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(body) });
-const FAKE_KEY = 'AIzaSyHELP_SHOTS_ONLY_0000000000000000000';
+const FAKE_KEY = 'sk-ant-api03-HELP_SHOTS_ONLY_000000000000000000000000';
 
 const browser = await playwright.chromium.launch({ args: ['--lang=ko-KR'] });
 const route = async (r) => {
   const u = r.request().url();
   if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...CORS, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
-  if (u.includes('generativelanguage.googleapis.com') && /\/models(\?|$)/.test(u)) return json(r, { models: [{ name: 'models/gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', supportedGenerationMethods: ['generateContent'] }] }); // 무료 등급의 지금 모델(2026-11-14)
-  if (u.includes(':streamGenerateContent')) return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS, body: geminiStream(JSON.parse(r.request().postData() || '{}')) });
+  if (/api\.anthropic\.com\/v1\/models/.test(u)) return json(r, { data: [{ id: 'claude-help-shots', display_name: 'Claude' }] });
+  if (/api\.anthropic\.com\/v1\/messages/.test(u)) return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS, body: claudeStream(JSON.parse(r.request().postData() || '{}')) });
   // 바로 배포가 켜진 빌드(VITE_PUBLISH_API)로 찍을 때: HELP_INFO(운영 서버 /api/info를 읽어 둔 JSON 파일)로 답함 → 운영과 같은 '바로 배포' 화면
   if (process.env.HELP_INFO && /\/api\/info(\?|$)/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: readFileSync(process.env.HELP_INFO, 'utf8') });
   return r.fulfill({ status: 204, headers: CORS }); // 그 밖의 바깥 요청은 빈 응답(막으면 접속 확인이 '이 망에서 막힘'으로 보여 화면이 달라짐)
@@ -98,8 +98,8 @@ try {
     await top();
     if (want('start')) await shot('start');
 
-    // 2. 키 연결 창: Gemini 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
-    await page.click('.ai-card:has(h3:text-is("Gemini")) button:has-text("키로 연결")');
+    // 2. 키 연결 창: Claude 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
+    await page.click('.ai-card:has(h3:text-is("Claude")) button:has-text("키로 연결")');
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');
     await page.click('dialog[open] .key-dots li:last-child button');

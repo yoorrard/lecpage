@@ -7,7 +7,6 @@ export { AiError };
 export const BASES = {
   anthropic: 'https://api.anthropic.com',
   openai: 'https://api.openai.com',
-  gemini: 'https://generativelanguage.googleapis.com',
 };
 
 // 시험용 손잡이: 가짜 서버(같은 PC의 http://127.0.0.1·localhost)로만 바꿀 수 있음. 실제 키가 다른 곳으로 가지 않게

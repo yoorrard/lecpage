@@ -8,13 +8,12 @@ import { SKILL_CMDS, AGENT_NAME } from '../lib/agent.js';
 import { blobs } from '../lib/db.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
-// AI 고르기(docs/plan-ai-first.md §2·§7·§10): GPT·Claude·Gemini를 같은 크기·같은 위계로 한 줄(휴대폰은 세 줄).
-// 카드마다 두 길: [키로 연결](연결돼 있으면 [이 AI로 만들기]) · [쓰던 앱으로(키 없이)].
-// 그 아래 같은 무게의 작은 줄 둘: 내 PC의 Claude Code·Codex(연결 프로그램), AI 에이전트(Skill)로 만들기.
+// AI 고르기(docs/plan-ai-first.md §2·§7·§10). 맨 위 추천: 내 PC의 Claude Code·Codex(연결 프로그램) — 에이전트가 교재를 읽고
+// 사이트를 쓰고 조립된 화면을 보며 스스로 다듬음. 그 아래 GPT·Claude 카드(같은 크기·같은 위계), 카드마다 두 길:
+// [키로 연결](연결돼 있으면 [이 AI로 만들기]) · [쓰던 앱으로(키 없이)]. 맨 아래 AI 에이전트(Skill)로 만들기.
 export const AI_CARDS = [
   { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '쓴 만큼 결제 · 사이트 하나에 몇백 원', chat: 'ChatGPT 무료 요금제도 돼요' },
   { id: 'anthropic', name: 'Claude', by: 'Anthropic', bot: 'claude', app: 'Claude', key: '쓴 만큼 결제 · 사이트 하나에 몇백 원', chat: 'Claude 무료 요금제도 돼요' },
-  { id: 'gemini', name: 'Gemini', by: 'Google', bot: 'gemini', app: 'Gemini', key: '무료 키로 시작 · 하루 쓸 수 있는 횟수가 있어요', chat: 'Gemini 무료로 돼요' },
 ];
 const touch = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
 /** 앱 옆에 AI 창을 나란히 띄울 만큼 넓은 마우스 화면인지(좁거나 터치면 새 탭·AI 앱) */
@@ -76,9 +75,10 @@ export function AiPick({ p, go, idle, reload, ready }) {
     <section class="ai-pick" aria-labelledby="ai-pick-h">
       <div class="ai-pick-head">
         <h2 class="h-sub" id="ai-pick-h">AI 고르기</h2>
-        <p class="small muted">고른 AI가 교재를 직접 읽고 사이트를 만들어요. 돈을 들이지 않으려면 Gemini 키(무료로 시작)나 쓰던 앱(무료 요금제도 돼요)을 고르세요.</p>
+        <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
       </div>
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 고를 수 있어요.</p>}
+      <LocalWay p={p} ready={ready} idle={idle} go={go} />
       <div class="ai-cards" role="list">
         {AI_CARDS.map((c) => {
           const st = conn?.[c.id];
@@ -101,7 +101,6 @@ export function AiPick({ p, go, idle, reload, ready }) {
       </div>
       {card && <ChatWay key={card.id} card={card} p={p} go={go} reload={reload} idle={idle} onClose={() => setChat('')} />}
       <div class="ai-alts">
-        <LocalWay p={p} ready={ready} idle={idle} go={go} />
         <AgentWay />
       </div>
       <p class="small muted">교재가 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요. 키는 이 브라우저에서 AI 회사로만 가요.</p>
@@ -233,8 +232,8 @@ function LocalWay({ p, ready, idle, go }) {
     go(2);
   }
   return (
-    <details class="ai-alt" open={!!st}>
-      <summary><b>내 PC의 Claude Code·Codex</b><span>설치해 둔 AI 에이전트가 내 PC에서 만들어요. 답 길이에 잘리지 않아요.</span></summary>
+    <details class="ai-alt ai-alt-rec" open={!!st}>
+      <summary><b>추천 · 내 PC의 Claude Code·Codex</b><span>내 구독의 AI 에이전트가 교재를 읽고 사이트를 쓰고, 화면을 보며 다듬어요.</span></summary>
       <div class="ai-alt-b">
         {st ? <>
           <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>

@@ -6,7 +6,7 @@ import { SKILL_CMDS } from '../lib/agent.js';
  * 설치 명령은 lib/agent.js 한 곳(교재 넣기 화면의 AI 카드와 함께 씀)
  */
 const PATHS = [
-  { name: '쓰던 ChatGPT·Claude·Gemini 창', how: '요청 글을 복사해 붙여 넣어요', cost: '추가 비용 없음' },
+  { name: '쓰던 ChatGPT·Claude 창', how: '요청 글을 복사해 붙여 넣어요', cost: '추가 비용 없음' },
   { name: 'API 키', how: '버튼 한 번으로 만들어요', cost: '사이트 하나에 몇백 원쯤, AI 회사에 직접' },
   { name: 'Claude Code·Codex 같은 AI 에이전트', how: '내 PC 연결 프로그램이나 스킬로 만들어 앱에서 이어요', cost: '쓰던 구독 그대로' },
 ];
