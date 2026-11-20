@@ -736,10 +736,14 @@
     var fresh = splitList(uiOf(next).reveal).concat(Object.keys(next.pollReveal || {}).filter(function (k) { return next.pollReveal[k]; }))
       .filter(function (id) { return !ext.revealed(before, id); });
     if (!fresh.length || this._revealT) return;
-    this._revealT = setTimeout(function () {
-      self._revealT = 0;
-      self._call('list', ['answers', {}], { tries: 2 }).then(function (docs) { (docs || []).forEach(function (d) { self._merge('answers', d); }); }, function () { /* 다음 동기화 때 */ });
-    }, Math.round(Math.random() * 1500));
+    var run = function (n) {
+      self._revealT = setTimeout(function () {
+        self._revealT = 0;
+        // 못 받으면 한 번 더(8초 뒤): '결과를 불러오는 중'에 머물지 않게
+        self._call('list', ['answers', {}], { tries: 2 }).then(function (docs) { (docs || []).forEach(function (d) { self._merge('answers', d); }); }, function () { if (!n && !self._closed) run(1); });
+      }, n ? 8000 : Math.round(Math.random() * 1500));
+    };
+    run(0);
   };
   C._reset = function () {
     var self = this;
