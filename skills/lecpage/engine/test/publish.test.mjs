@@ -9,7 +9,8 @@ import { spawnSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, '..', '..', 'scripts', 'lecpage.mjs');
-const EX = join(HERE, '..', '..', 'examples', 'data-lab.blueprint.json');
+const REF = join(HERE, '..', '..', 'references', 'designs', 'data-lab');
+const teacherPath = () => join(dir, 'work', 'lecpage.teacher.json');
 let dir, logFile;
 // 글꼴 함께 담기(publish 기본)가 바깥 글꼴 서버에 닿지 않게: 닫힌 프록시로 보내 바로 실패 → 바깥 글꼴 주소 그대로(인터넷이 막힌 곳과 같음)
 const OFFLINE = { NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: 'http://127.0.0.1:9', https_proxy: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9', http_proxy: 'http://127.0.0.1:9', NO_PROXY: '', no_proxy: '' };
@@ -21,30 +22,28 @@ const run = (args, env = {}) => {
 before(() => {
   dir = mkdtempSync(join(tmpdir(), 'lecpage-pub-test-'));
   logFile = join(dir, 'wrangler.log');
+  // 작업 폴더: 레퍼런스 사이트(AI가 쓴 site/ + lecpage.json) + 강사 값(보관 기간 21일: 서버 기본값 30과 다르게)
   mkdirSync(join(dir, 'work'));
-  const bp0 = JSON.parse(readFileSync(EX, 'utf8')); bp0.privacy.retentionDays = 21; // 서버 기본값(30)과 다르게
-  writeFileSync(join(dir, 'work', 'blueprint.json'), JSON.stringify(bp0, null, 2));
-  writeFileSync(join(dir, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json' }));
-  writeFileSync(join(dir, 'work', 'info.json'), JSON.stringify({ size: 30, skill: 'set' }));
-  const b = spawnSync(process.execPath, [CLI, 'build', 'work/blueprint.json', '-o', 'dist'], { cwd: dir, encoding: 'utf8' });
-  assert.equal(b.status, 0, b.stdout + b.stderr);
+  cpSync(join(REF, 'site'), join(dir, 'work', 'site'), { recursive: true });
+  copyFileSync(join(REF, 'lecpage.json'), join(dir, 'work', 'lecpage.json'));
+  writeFileSync(teacherPath(), JSON.stringify({ privacy: { collect: ['nickname', 'name', 'school'], retentionDays: 21 } }, null, 2));
 });
 after(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
 
 test('publish --dry-run: 순서와 강사가 할 일만 보여 주고 아무 파일도 바꾸지 않음', () => {
-  const before = readFileSync(join(dir, 'work', 'info.json'), 'utf8');
-  const r = run(['publish', 'work', '--live', '--features', 'qa,poll', '--dry-run', '--name', 'lec-test']);
+  const before = readFileSync(teacherPath(), 'utf8');
+  const r = run(['publish', 'work', '--live', '--dry-run', '--name', 'lec-test']);
   assert.equal(r.code, 0, r.out);
   for (const k of ['배포 계획', '중계', 'secret put ADMIN_KEY', 'ALLOWED_ORIGINS', '강사가 할 일', 'wrangler@4 login']) assert.ok(r.out.includes(k), `${k} 없음\n${r.out}`);
-  assert.equal(readFileSync(join(dir, 'work', 'info.json'), 'utf8'), before);
+  assert.equal(readFileSync(teacherPath(), 'utf8'), before);
   assert.ok(!existsSync(join(dir, 'work', 'live-relay')));
   assert.ok(!existsSync(logFile), '가짜 wrangler도 부르지 않음');
 });
 
-test('publish --live: 중계 → 관리자 키(강사용 파일에만) → 다시 빌드 → 사이트 → 중계가 이 사이트만 받게', () => {
-  const r = run(['publish', 'work', '--live', '--features', 'qa,poll', '--name', 'lec-test', '--no-verify', '--no-handouts', '--no-qa']);
+test('publish --live: 중계 → 관리자 키(강사용 파일에만) → 강사 값에 중계 주소 → 다시 조립 → 사이트 → 중계가 이 사이트만 받게', () => {
+  const r = run(['publish', 'work', '--live', '--name', 'lec-test', '--no-verify', '--no-handouts']);
   assert.equal(r.code, 0, r.out);
-  const keyFile = join(dir, 'dist-강사용', '관리자-키.txt');
+  const keyFile = join(dir, 'work', 'dist-강사용', '관리자-키.txt');
   assert.ok(existsSync(keyFile));
   const key = readFileSync(keyFile, 'utf8').trim();
   assert.ok(key.length >= 12);
@@ -57,18 +56,17 @@ test('publish --live: 중계 → 관리자 키(강사용 파일에만) → 다�
   assert.match(steps[2], /^deploy -c wrangler\.toml$/);
   assert.match(steps[3], /^deploy --assets .*dist --name lec-test --compatibility-date \d{4}-\d\d-\d\d$/);
   assert.match(steps[4], /ALLOWED_ORIGINS:https:\/\/lec-test\.fake-account\.workers\.dev$/);
-  const info = JSON.parse(readFileSync(join(dir, 'work', 'info.json'), 'utf8'));
+  const info = JSON.parse(readFileSync(teacherPath(), 'utf8'));
   assert.equal(info.live.provider, 'http');
   assert.equal(info.live.url, 'https://lec-test-live.fake-account.workers.dev');
-  assert.deepEqual(info.features, ['qa', 'poll']);
-  const bp = JSON.parse(readFileSync(join(dir, 'work', 'blueprint.json'), 'utf8'));
+  assert.equal(info.privacy.retentionDays, 21, '강사 값의 다른 칸은 그대로');
   const toml = readFileSync(join(dir, 'work', 'live-relay', 'wrangler.toml'), 'utf8');
   assert.match(toml, /^name = "lec-test-live"$/m);
-  assert.ok(toml.includes(`ALLOWED_CODES = "${bp.live.code}"`), '이 연수 코드만 받음');
-  assert.ok(toml.includes('RETENTION_DAYS = "21"'), '⑦ 설계도의 보관 기간(21일)이 중계로 넘어감');
-  const html = readFileSync(join(dir, 'dist', 'index.html'), 'utf8');
-  assert.ok(html.includes('lec-test-live.fake-account.workers.dev'), '사이트가 중계 주소로 다시 빌드됨');
-  assert.ok(!existsSync(join(dir, 'dist', '관리자-키.txt')));
+  assert.ok(toml.includes(`ALLOWED_CODES = "${info.live.code}"`), '이 연수 코드만 받음');
+  assert.ok(toml.includes('RETENTION_DAYS = "21"'), '⑦ 강사 값의 보관 기간(21일)이 중계로 넘어감');
+  const html = readFileSync(join(dir, 'work', 'dist', 'index.html'), 'utf8');
+  assert.ok(html.includes('lec-test-live.fake-account.workers.dev'), '사이트가 중계 주소로 다시 조립됨');
+  assert.ok(!existsSync(join(dir, 'work', 'dist', '관리자-키.txt')));
   const state = JSON.parse(readFileSync(join(dir, 'work', 'lecpage.state.json'), 'utf8'));
   assert.equal(state.deploy.url, 'https://lec-test.fake-account.workers.dev/');
   assert.ok(!JSON.stringify(state).includes(key));
@@ -76,9 +74,9 @@ test('publish --live: 중계 → 관리자 키(강사용 파일에만) → 다�
 });
 
 test('publish 다시: 중계에 관리자 키가 있으면 새로 만들지 않음', () => {
-  const keyFile = join(dir, 'dist-강사용', '관리자-키.txt');
+  const keyFile = join(dir, 'work', 'dist-강사용', '관리자-키.txt');
   const key = readFileSync(keyFile, 'utf8');
-  const r = run(['publish', 'work', '--live', '--no-verify', '--no-handouts', '--no-qa'], { FAKE_HAS_SECRET: '1' });
+  const r = run(['publish', 'work', '--live', '--no-verify', '--no-handouts'], { FAKE_HAS_SECRET: '1' });
   assert.equal(r.code, 0, r.out);
   assert.ok(r.out.includes('관리자 키 그대로'));
   assert.equal(readFileSync(keyFile, 'utf8'), key);
@@ -94,23 +92,18 @@ test('publish: 글꼴은 기본으로 담고(앱과 같게), 글꼴 서버에 �
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /글꼴을 받지 못해 CDN 주소 그대로 뒀어요/, '막힌 망: 바깥 글꼴로 돌아가고 배포는 이어짐');
   assert.match(r.out, /올렸어요 ✓/);
-  const st = () => JSON.parse(readFileSync(join(dir, 'work', 'lecpage.state.json'), 'utf8'));
-  assert.equal(st().bundleFonts, true, '다음 patch·make에도 이어짐');
   const off = run(['publish', 'work', '--no-verify', '--no-handouts', '--no-bundle-fonts']);
   assert.equal(off.code, 0, off.out);
   assert.doesNotMatch(off.out, /글꼴/);
-  assert.equal(st().bundleFonts, false);
 });
 
 test('publish: 참여 기능이 없는 사이트는 강사 화면 주소를 알리지 않음', () => {
-  const w = join(dir, 'plain'); mkdirSync(join(w, 'work'), { recursive: true });
-  const bp = JSON.parse(readFileSync(EX, 'utf8')); bp.live = { provider: 'none', features: [] }; bp.sections = bp.sections.filter((s) => !['qa', 'board', 'poll', 'attendance', 'survey'].includes(s.type));
-  writeFileSync(join(w, 'work', 'blueprint.json'), JSON.stringify(bp));
-  writeFileSync(join(w, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json' }));
-  assert.equal(spawnSync(process.execPath, [CLI, 'build', 'work/blueprint.json', '-o', 'dist'], { cwd: w, encoding: 'utf8' }).status, 0);
-  assert.ok(!existsSync(join(w, 'dist', 'console.html')));
+  const w = join(dir, 'plain'); mkdirSync(join(w, 'work', 'site'), { recursive: true });
+  writeFileSync(join(w, 'work', 'site', 'index.html'), '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>안내</title></head><body><main><h1>안내</h1><p>참여 기능 없는 사이트</p></main></body></html>');
+  writeFileSync(join(w, 'work', 'lecpage.json'), JSON.stringify({ v: 2, title: '안내', features: [] }));
   const r = spawnSync(process.execPath, [CLI, 'publish', 'work', '--name', 'lec-plain', '--no-verify', '--no-handouts', '--no-bundle-fonts'], { cwd: w, encoding: 'utf8', env: { ...process.env, ...OFFLINE, LECPAGE_WRANGLER: join(HERE, 'fixtures', 'fake-wrangler.mjs'), CLOUDFLARE_API_TOKEN: '' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!existsSync(join(w, 'work', 'dist', 'console.html')));
   assert.ok(!r.stdout.includes('console.html'), r.stdout);
 });
 
@@ -130,8 +123,7 @@ const ofresh = () => {
   odir = mkdtempSync(join(tmpdir(), 'lecpage-onpod-test-'));
   ologFile = join(odir, 'onpod.log');
   cpSync(join(dir, 'work'), join(odir, 'work'), { recursive: true, filter: (s) => !s.includes('live-relay') });
-  cpSync(join(dir, 'dist'), join(odir, 'dist'), { recursive: true });
-  writeFileSync(join(odir, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json' }));
+  writeFileSync(join(odir, 'work', 'lecpage.state.json'), JSON.stringify({ v: 2, out: 'dist' }));
 };
 after(() => { if (odir) rmSync(odir, { recursive: true, force: true }); });
 
@@ -154,7 +146,7 @@ test('publish --host onpod: _headers를 빼고 검색 제외 파일을 더한 �
   const files = log.match(/^files (.*)$/m)[1].split(',');
   for (const f of ['index.html', 'check.html', 'robots.txt', 'llms.txt', 'sitemap.xml', 'assets/lecpage.js']) assert.ok(files.includes(f), f);
   assert.ok(!files.includes('_headers'), 'Onpod은 _headers를 읽지 않아 올리지 않음');
-  assert.ok(!existsSync(join(odir, 'dist', 'llms.txt')) && existsSync(join(odir, 'dist', '_headers')), 'dist는 그대로');
+  assert.ok(!existsSync(join(odir, 'work', 'dist', 'llms.txt')) && existsSync(join(odir, 'work', 'dist', '_headers')), 'dist는 그대로');
   const state = JSON.parse(readFileSync(join(odir, 'work', 'lecpage.state.json'), 'utf8'));
   assert.deepEqual([state.deploy.host, state.deploy.name, state.deploy.url], ['onpod', 'lec-onpod', 'https://lec-onpod.onpod.ai/']);
   assert.ok(r.out.includes('올렸어요 ✓ https://lec-onpod.onpod.ai/'));
@@ -178,7 +170,7 @@ test('publish --host onpod: 로그인이 없으면 할 일을 알려 주고 멈�
 
 test('publish --host onpod: Cloudflare 참여 기능 중계가 있으면 새 주소도 받게 고침(지난 주소와 함께)', () => {
   cpSync(join(dir, 'work', 'live-relay'), join(odir, 'work', 'live-relay'), { recursive: true });
-  writeFileSync(join(odir, 'work', 'lecpage.state.json'), JSON.stringify({ out: '../dist', blueprint: 'blueprint.json', deploy: { host: 'cloudflare', name: 'lec-test', url: 'https://lec-test.fake-account.workers.dev/', relay: { name: 'lec-test-live', url: 'https://lec-test-live.fake-account.workers.dev' } } }));
+  writeFileSync(join(odir, 'work', 'lecpage.state.json'), JSON.stringify({ v: 2, out: 'dist', deploy: { host: 'cloudflare', name: 'lec-test', url: 'https://lec-test.fake-account.workers.dev/', relay: { name: 'lec-test-live', url: 'https://lec-test-live.fake-account.workers.dev' } } }));
   const r = orun(['publish', 'work', '--host', 'onpod', '--name', 'lec-moved', '--no-verify', '--no-handouts'], { ONPOD_TOKEN: 'op_u_x0000000000' });
   assert.equal(r.code, 0, r.out);
   assert.match(readFileSync(join(odir, 'wrangler.log'), 'utf8'), /ALLOWED_ORIGINS:https:\/\/lec-test\.fake-account\.workers\.dev,https:\/\/lec-moved\.onpod\.ai$/m);

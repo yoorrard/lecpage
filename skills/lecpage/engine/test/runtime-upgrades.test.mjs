@@ -7,14 +7,10 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { liveDir, skillDir, startNodeServer, api } from './live-helpers.mjs';
-import * as E from '../src/index.js';
-import { renderPoster, splitNav } from '../src/render/pages.js';
-import { themeCSS } from '../src/design/tokens.js';
-import { nodeRuntime } from '../node.js';
+import { bpBuild } from './kit-site.mjs';
 
 const protoNode = path.join(skillDir, 'backends/node-server/lib/protocol.js');
 const runtimeDir = path.join(skillDir, 'engine/runtime');
-const EX = (id) => JSON.parse(readFileSync(path.join(skillDir, 'examples', `${id}.blueprint.json`), 'utf8'));
 
 function fakeStorage() {
   const m = new Map();
@@ -166,17 +162,15 @@ test('state extensions live in state.ui and stay within the server limits', () =
   assert.equal(X.timersValue([]), null);
 });
 
-test('pages: robots meta, poster, nav split, console and screen controls', () => {
-  const bp = EX('data-lab');
-  const r = E.build(bp, { runtime: nodeRuntime() });
+test('pages: robots meta, poster, console and screen controls, participant dock', () => {
+  const r = bpBuild({ live: { provider: 'local', code: 'PAGES1', features: ['qa', 'help', 'progress', 'poll', 'signal', 'reactions'] } });
   for (const f of ['index.html', 'console.html', 'screen.html', 'check.html', 'privacy.html']) assert.match(r.files[f], /<meta name="robots" content="noindex, nofollow">/, f);
-  const pub = E.build({ ...bp, access: { mode: 'public' } }, { runtime: nodeRuntime() });
+  const pub = bpBuild({ access: { mode: 'public' }, live: { provider: 'local', code: 'PAGES2', features: ['qa'] } });
   assert.ok(!/name="robots"/.test(pub.files['index.html']), 'public participant page can be indexed');
   assert.match(pub.files['screen.html'], /noindex, nofollow/);
-  // participant page: mobile TOC sheet, 지금 bar, help sheet (no window.prompt), labelled dock
+  // participant page: 지금 bar, help sheet (no window.prompt), labelled dock
   const idx = r.files['index.html'];
-  assert.match(idx, /data-toc-open/); assert.match(idx, /data-toc-sheet/); assert.match(idx, /data-now hidden/); assert.match(idx, /data-help-dialog/);
-  assert.match(idx, /<details class="lp-more"/);
+  assert.match(idx, /data-now hidden/); assert.match(idx, /data-help-dialog/);
   // 도크: 이해 정도·반응은 단추 하나로 접고, 신호에는 글이 붙음
   assert.match(idx, /class="lp-fold lp-signal"[\s\S]*?data-signal="green"[^>]*><i aria-hidden="true">✓<\/i><span>이해했어요<\/span>/);
   assert.match(idx, /class="lp-fold lp-react"><button[^>]*data-fold-toggle/);
@@ -187,28 +181,18 @@ test('pages: robots meta, poster, nav split, console and screen controls', () =>
   // console links the poster; screen has the tools drawer
   assert.match(r.files['console.html'], /href="poster.html"/);
   assert.match(r.files['screen.html'], /data-tools-open/); assert.match(r.files['screen.html'], /href="poster.html"/);
-  // poster
-  const ctx = { bp: r.blueprint, design: r.design, live: true, fontLinks: themeCSS(r.design).fontLinks, themeColor: '#fff', hasFx: false, ogImage: '' };
-  const poster = renderPoster(ctx);
+  // poster: 참가자 손에 가는 안내문에는 강사 화면 주소·QR이 없음
+  const poster = r.files['poster.html'];
   assert.match(poster, /noindex, nofollow/); assert.match(poster, /data-qr-self/);
   assert.ok(!/console\.html|강사만|data-qr-page/.test(poster), '참가자 손에 가는 안내문에는 강사 화면 주소·QR이 없음');
-  assert.match(poster, new RegExp(r.blueprint.live.code)); assert.match(poster, /Wi-Fi/); assert.match(poster, /assets\/lecpage\.js/);
+  assert.match(poster, /PAGES1/); assert.match(poster, /Wi-Fi/); assert.match(poster, /assets\/lecpage\.js/);
   assert.ok(!/\son[a-z]+="/i.test(poster));
-  const offline = renderPoster({ ...ctx, live: false });
+  const offline = bpBuild({ live: { features: [] } }).files['poster.html'];
   assert.ok(!/console\.html/.test(offline) && !/참여 코드/.test(offline));
-  // nav: ≤6 + 더보기, keeps 실습/질문/교재
-  const L = (types) => types.map((t, i) => ({ id: t + i, type: t, nav: t }));
-  const many = L(['readiness', 'outline', 'tools', 'prompts', 'glossary', 'quiz', 'faq', 'materials', 'stations', 'deck', 'qa', 'survey']);
-  const sp = splitNav(many);
-  assert.equal(sp.shown.length, 6);
-  for (const t of ['stations', 'deck', 'qa']) assert.ok(sp.shown.some((s) => s.type === t), t);
-  assert.equal(sp.shown.length + sp.more.length, many.length);
-  assert.deepEqual(sp.shown.map((s) => s.type), ['readiness', 'outline', 'tools', 'stations', 'deck', 'qa'], 'page order');
-  assert.equal(splitNav(L(['a', 'b', 'c', 'd', 'e', 'f', 'g'])).more.length, 0);
 });
 
 test('runtime scripts parse as classic scripts', () => {
-  for (const f of ['lecpage.js', 'console.js', 'screen.js', 'live/core.js', 'live/local.js', 'live/http.js', 'live/supabase.js', 'live/sheets.js', 'fx/effects/scramble.js']) {
+  for (const f of ['lecpage.js', 'console.js', 'screen.js', 'live/core.js', 'live/local.js', 'live/http.js', 'live/supabase.js', 'live/sheets.js', 'boot.js', 'check.js', 'unlock.js']) {
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(runtimeDir, f), 'utf8'), { filename: f }), f);
   }
 });
@@ -235,16 +219,4 @@ test('board moderation: new posts stay hidden until the instructor shows them (s
   await c.setState({ ui: { moderation: true } });
   assert.equal((await c.add('posts', { text: '대기' })).hidden, true);
   await c.close();
-});
-
-test('출석: 기능만 켜고 칸이 없으면 출석 칸을 넣고, 칸이 있어도 도크 [출석]이 입실을 바로 보냄', () => {
-  const bp = EX('sel-story'); bp.live = { ...bp.live, features: [...bp.live.features, 'attendance'] };
-  bp.sections = bp.sections.filter((s) => s.type !== 'attendance');
-  const r = E.build(bp, { runtime: nodeRuntime() });
-  const types = r.blueprint.sections.map((s) => s.type);
-  assert.ok(types.includes('attendance'), '출석 칸이 들어감');
-  assert.ok(types.indexOf('attendance') < types.indexOf('outline'), '차례 앞');
-  assert.match(r.files['index.html'], /data-attend="in"/);
-  assert.match(r.files['index.html'], /data-dock-attend="in" hidden/);
-  assert.ok(r.warnings.some((w) => /출석 칸이 없어 넣었어요/.test(w.message_ko)));
 });

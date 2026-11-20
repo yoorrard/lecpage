@@ -2,9 +2,8 @@
 //   project.json { format:'lecpage-project', version:2, engine, kind:'site', title, meta, material:{pages}, sources, createdAt }
 //   site/…   AI가 쓴 사이트 파일(index.html·assets/…·material/p-NNN.webp·files/…)
 //   src/…    교재 원본(있으면)
-// v1(설계도) 파일을 열면 kind:'v1'로 알려 주고(예전 판), upgradeV1으로 연수 정보·교재 쪽 그림·원본을 v2 꼴로 옮기고
-// 예전 사이트는 지금 엔진으로 빌드해 legacy로 줍니다(AI로 새로 만들 때까지 그대로 볼 수 있게).
-// 가벼운 모듈: 열기(openProjectFile)는 엔진 빌드를 불러오지 않음. upgradeV1만 build를 받아 씀(부른 쪽이 넘김).
+// 앱이 [파일로 저장]한 파일(project.json version 1 안에 연수 하나)도 엶: 새 판 연수(사이트가 있음)는 v2와 같은 꼴로,
+// 예전 판(설계도로 만든 연수)은 kind:'v1'로 알려 주고 upgradeV1이 연수 정보·교재 쪽 그림·원본을 v2 꼴로 옮김(사이트는 AI로 새로 만듦).
 import { zipFiles } from '../zip-write.js';
 import { readStoredZip, unpackProject, PROJECT_FORMAT, ENGINE_VERSION, newerVersion, srcKey, isAllowedAsset } from '../project-file.js';
 import { readMeta } from './meta.js';
@@ -13,7 +12,7 @@ import { siteFileOk, pagePath } from './paths.js';
 export const PROJECT_V2 = 2;
 const bad = (m) => Object.assign(new Error(m), { friendly: true });
 const td = new TextDecoder();
-export const OLD_NOTE = '예전 판(설계도)으로 만든 파일이에요. 교재와 연수 정보는 그대로 가져왔어요. 사이트는 AI로 새로 만들어 주세요(예전 사이트는 그대로 볼 수 있어요).';
+export const OLD_NOTE = '예전 방식으로 만든 연수예요. 교재와 연수 정보는 그대로 가져왔어요. 사이트는 AI로 새로 만들어 주세요.';
 
 /**
  * v2 파일 만들기.
@@ -48,8 +47,22 @@ export function unpackProjectV2(zip) {
   return { kind: 'v2', site, meta, teacherInFile: { live: teacherInFile.live, siteUrl: teacherInFile.siteUrl, joinUrl: teacherInFile.joinUrl, shortUrl: teacherInFile.shortUrl, access: teacherInFile.access, surveyUrl: teacherInFile.surveyUrl, privacy: teacherInFile.privacy, keepUntil: teacherInFile.keepUntil }, material: { pages: Array.isArray(j.material?.pages) ? j.material.pages : [] }, sources: Array.isArray(j.sources) ? j.sources : [], originals, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '', formatVersion: PROJECT_V2, title: String(j.title || meta.title || '') };
 }
 
+/** 파일 안 연수 정보 → { meta(강사 값 뺌), teacherInFile(강사 값: 부른 쪽이 강사에게 확인받고 씀) } */
+function metaParts(raw) {
+  const meta = readMeta(raw || {}).meta;
+  const t = readMeta(raw || {}, { prev: raw || {} }).meta;
+  return { meta, teacherInFile: { live: t.live, siteUrl: t.siteUrl, joinUrl: t.joinUrl, shortUrl: t.shortUrl, access: t.access, surveyUrl: t.surveyUrl, privacy: t.privacy, keepUntil: t.keepUntil } };
+}
+/** 앱이 저장한 새 판 연수(project.v 2 + site) → v2 꼴. 그림·자료실 파일은 'site/…', 원본은 'src/…' */
+function fromAppProject(zip, u) {
+  const p = u.project; const site = {};
+  for (const [k, v] of Object.entries(p.site || {})) if (typeof v === 'string' && siteFileOk(k)) site[k] = v;
+  for (const [k, v] of Object.entries(zip)) if (k.startsWith('site/') && siteFileOk(k.slice(5)) && !(k.slice(5) in site)) site[k.slice(5)] = v;
+  const pages = (Array.isArray(p.material?.pages) ? p.material.pages : []).filter((x) => x && !x.file && +x.page > 0).map((x) => ({ page: +x.page, title: String(x.title || '').slice(0, 160) }));
+  return { kind: 'v2', site, ...metaParts(p.meta), material: { pages }, sources: [], originals: u.originals.map((o) => ({ key: o.key, name: o.file, bytes: o.bytes })), engine: u.engine, title: String(p.title || p.meta?.title || '').slice(0, 160) };
+}
 /**
- * .lecpage 열기(v1·v2 모두). v1이면 { kind:'v1', note, v1(unpackProject 결과) } — 부른 쪽이 upgradeV1으로 옮김
+ * .lecpage 열기(v2·앱이 저장한 파일 모두). 예전 판(설계도로 만든 연수)이면 { kind:'v1', note, v1(unpackProject 결과) } — 부른 쪽이 upgradeV1으로 옮김
  * @param buf ArrayBuffer|Uint8Array
  */
 export function openProjectFile(buf) {
@@ -60,17 +73,19 @@ export function openProjectFile(buf) {
   const newer = (+head.version || 0) > PROJECT_V2 || (head.engine && newerVersion(head.engine, ENGINE_VERSION));
   const note = newer ? `더 새 lecpage(${head.engine || `형식 ${head.version}`})로 만든 파일이에요. 지금 판(${ENGINE_VERSION})은 새 칸·설정을 빠뜨릴 수 있어요.` : '';
   if (+head.version === PROJECT_V2 && head.kind === 'site') return { ...unpackProjectV2(zip), note };
-  return { kind: 'v1', old: true, note: OLD_NOTE + (note ? ' ' + note : ''), v1: unpackProject(zip) };
+  const u = unpackProject(zip);
+  if (u.project?.v === 2 && u.project.site) return { ...fromAppProject(zip, u), note };
+  return { kind: 'v1', old: true, note: OLD_NOTE + (note ? ' ' + note : ''), v1: u };
 }
 
 /**
- * 예전 판(v1) → v2 꼴: 연수 정보(meta v2), 교재 쪽 그림(assets/slides/… → material/p-NNN.webp), 원본, 쪽 제목.
- * build를 주면 예전 사이트를 지금 엔진으로 빌드한 파일(legacy)도 줌(AI로 새로 만들기 전까지 볼 수 있게).
- * @param v1 openProjectFile(...).v1  @param opts { build, runtime, today }
- * @returns { meta, site:{ material/p-NNN.webp… }, material:{pages}, originals, legacy: files|null, warnings }
+ * 예전 판(설계도로 만든 연수) → v2 꼴: 연수 정보(meta v2), 교재 쪽 그림(assets/slides/… → material/p-NNN.webp), 자료실 파일, 원본, 쪽 제목.
+ * 사이트(index.html)는 옮기지 않음(AI로 새로 만듦).
+ * @param v1 openProjectFile(...).v1
+ * @returns { meta, site:{ material/p-NNN.webp…, files/… }, material:{pages}, originals, note }
  */
-export function upgradeV1(v1, { build = null, runtime = null, today = '' } = {}) {
-  const bp = v1.blueprint || {}; const m = bp.meta || {}; const warnings = [];
+export function upgradeV1(v1) {
+  const bp = v1.blueprint || {}; const m = bp.meta || {};
   const days = [...(Array.isArray(m.sessions) ? m.sessions : []), ...(m.date ? [{ date: m.date, start: m.start, end: m.end }] : [])];
   const feats = new Set((bp.live?.features || []).filter((f) => ['qa', 'poll', 'board', 'attendance', 'help', 'reactions', 'signal', 'progress'].includes(f)));
   for (const s of bp.sections || []) {
@@ -99,13 +114,6 @@ export function upgradeV1(v1, { build = null, runtime = null, today = '' } = {})
     pages.push({ page: n, title: String(p?.title || '').slice(0, 160), ...(p?.text ? { text: String(p.text).slice(0, 4000) } : {}) });
   }
   for (const [k, v] of Object.entries(v1.assets || {})) { const f = /^assets\/files\/(.+)$/.exec(k); if (f) site['files/' + f[1]] = v; }
-  let legacy = null;
-  if (build && runtime && v1.blueprint) {
-    try {
-      const r = build(v1.blueprint, { runtime, assets: v1.assets, today });
-      if (r.errors?.length) warnings.push(...r.errors.map((e) => e.message_ko)); else legacy = r.files;
-    } catch (e) { warnings.push(`예전 사이트를 다시 만들지 못했어요: ${String(e.message).slice(0, 80)}`); }
-  }
-  return { meta, site, material: { pages }, originals: v1.originals || [], legacy, warnings, note: OLD_NOTE };
+  return { meta, site, material: { pages }, originals: v1.originals || [], note: OLD_NOTE };
 }
 

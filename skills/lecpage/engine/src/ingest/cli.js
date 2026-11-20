@@ -53,7 +53,7 @@ async function exists(fs, p) { try { await fs.access(p); return true; } catch { 
 
 /**
  * 여러 파일(또는 https 링크)을 읽어 하나의 Material로.
- * opts: withImages, python(false면 끔), pythonBin, imagesDir(파이썬 대체 시 그림 저장), today, limits, maxBytes
+ * opts: withImages, python(false면 끔), pythonBin, imagesDir(파이썬 대체 시 그림 저장), limits, maxBytes
  */
 export async function ingestPaths(paths, opts = {}) {
   const { fs, path } = await node();
@@ -64,25 +64,25 @@ export async function ingestPaths(paths, opts = {}) {
   const nextId = (name) => { const k = /^https?:/i.test(name) ? 'link' : ['pptx', 'pdf', 'ppsx', 'potx', 'pptm', 'ppt'].includes(extOf(name)) ? 'deck' : 'doc'; counters[k]++; return k + counters[k]; };
   for (const p of paths) {
     const id = nextId(p);
-    if (/^https?:\/\//i.test(p)) { mats.push(await api.ingestUrl(p, { ...opts, id, detect: false })); continue; }
+    if (/^https?:\/\//i.test(p)) { mats.push(await api.ingestUrl(p, { ...opts, id })); continue; }
     const name = baseName(p);
     let bytes;
     try {
       const st = await fs.stat(p);
       if (!st.isFile()) throw new Error('not a file');
       if (st.size > maxBytes) {
-        const m = api.mergeMaterials([], { detect: false });
+        const m = api.mergeMaterials([]);
         m.files.push({ id, name, type: extOf(name), size: st.size, pages: 0, unit: '' });
         m.errors.push(makeError('too-large', { mb: (st.size / 1048576).toFixed(1), limitMb: Math.round(maxBytes / 1048576) }, name));
         mats.push(m); continue;
       }
       bytes = await fs.readFile(p);
     } catch (e) {
-      const m = api.mergeMaterials([], { detect: false });
+      const m = api.mergeMaterials([]);
       m.errors.push({ code: 'not-found', message_ko: `파일을 찾을 수 없어요: ${p}`, file: name });
       mats.push(m); continue;
     }
-    let m = await api.ingestFile(name, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), { ...opts, id, detect: false });
+    let m = await api.ingestFile(name, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), { ...opts, id });
     const needPy = m.errors.find((e) => e.code === 'needs-pdfjs' || (e.code === 'pdf-failed' && extOf(name) === 'pdf'));
     if (needPy && opts.python !== false) {
       const py = await ingestWithPython(path.resolve(p), { id, withImages: !!opts.withImages, python: opts.pythonBin || '' });
@@ -156,10 +156,8 @@ const HELP = `사용법: node ingest.mjs <파일 또는 링크...> -o material.j
   -o, --out <파일>        결과 Material JSON (기본: material.json)
   --images <폴더>         교재 속 그림을 꺼내 저장(image.src에 상대 경로)
   --slides <폴더>         쪽 그림 만들기(LibreOffice + pdftoppm, slide-001.webp…)
-  --draft <파일>          AI 없이 만든 설계도 초안(blueprint JSON)도 저장
-  --context <파일>        AI 프롬프트용 교재 요약 글 저장
+  --context <파일>        AI에게 건넬 보조 글자 저장
   --max-chars <수>        요약 글 길이 예산(기본 24000)
-  --today <YYYY-MM-DD>    연도 없는 날짜를 해석할 기준일
   --no-python             PDF를 파이썬으로 대신 읽지 않기
   --json                  요약 대신 결과 JSON을 화면에 출력
   -h, --help              도움말`;
@@ -168,7 +166,7 @@ const HELP = `사용법: node ingest.mjs <파일 또는 링크...> -o material.j
 export async function runIngestCli(argv = []) {
   const { fs, path } = await node();
   const api = await ingestApi();
-  const a = { files: [], out: 'material.json', images: '', slides: '', draft: '', context: '', maxChars: 24000, today: '', python: true, json: false };
+  const a = { files: [], out: 'material.json', images: '', slides: '', context: '', maxChars: 24000, python: true, json: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = () => argv[++i];
@@ -176,28 +174,25 @@ export async function runIngestCli(argv = []) {
     else if (k === '-o' || k === '--out') a.out = v();
     else if (k === '--images') a.images = v();
     else if (k === '--slides') a.slides = v();
-    else if (k === '--draft') a.draft = v();
     else if (k === '--context') a.context = v();
     else if (k === '--max-chars') a.maxChars = +v() || 24000;
-    else if (k === '--today') a.today = v();
     else if (k === '--no-python') a.python = false;
     else if (k === '--json') a.json = true;
     else if (k.startsWith('-')) { console.error(`알 수 없는 옵션: ${k}\n\n${HELP}`); return 2; }
     else a.files.push(k);
   }
   if (!a.files.length) { console.error(HELP); return 2; }
-  const opts = { withImages: !!a.images, python: a.python, today: a.today || undefined };
+  const opts = { withImages: !!a.images, python: a.python };
   const m = await ingestPaths(a.files, opts);
 
   if (a.slides) await attachSlides(m, a.slides, a.out);
   const { written } = await writeMaterial(m, a.out, { imagesDir: a.images || '' });
-  if (a.draft) await fs.writeFile(a.draft, JSON.stringify(api.materialToDraft(m, { today: a.today || undefined }), null, 2) + '\n', 'utf8');
   if (a.context) await fs.writeFile(a.context, api.materialToAIContext(m, { maxChars: a.maxChars }) + '\n', 'utf8');
 
   if (a.json) console.log(JSON.stringify(api.materialToJSON(m), null, 2));
   else {
     console.log(`교재 해석: ${api.summarizeMaterial(m)}`);
-    console.log(`→ ${a.out}${written ? ` (그림 ${written}개: ${a.images})` : ''}${a.draft ? `, 초안 ${a.draft}` : ''}${a.context ? `, 요약 ${a.context}` : ''}`);
+    console.log(`→ ${a.out}${written ? ` (그림 ${written}개: ${a.images})` : ''}${a.context ? `, 요약 ${a.context}` : ''}`);
     for (const e of m.errors) console.log(`오류 [${e.code}] ${e.file ? e.file + ': ' : ''}${e.message_ko}`);
     for (const w of m.warnings) console.log(`알림 [${w.code}] ${w.file ? w.file + ': ' : ''}${w.message_ko}`);
   }

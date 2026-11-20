@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
 import { startNodeServer, here } from './live-helpers.mjs';
+import { bpBuild } from './kit-site.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -18,16 +19,12 @@ const skip = !chromium && 'playwright is not installed';
 
 const ADMIN = '배치-시험용-관리자키-2026-48';
 const SITE = 'https://s-7k2m9x4q1z.lecpage-sites.pages.dev/'; // 바로 배포 주소 길이(36자)
-const EX = JSON.parse(fs.readFileSync(path.join(here, '../../examples/data-lab.blueprint.json'), 'utf8'));
 let srv, browser, site, files;
 
 before(async () => {
   site = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-layout-'));
   srv = skip ? null : await startNodeServer({ adminKey: ADMIN, staticDir: site });
-  const bp = structuredClone(EX);
-  bp.live = { features: ['qa', 'help', 'progress', 'poll', 'signal'], provider: 'http', url: srv ? srv.url : 'https://live.example.com', code: 'LAYOUT' };
-  bp.meta = { ...bp.meta, date: '2099-12-30', siteUrl: SITE };
-  const r = E.build(bp, { runtime: nodeRuntime() });
+  const r = bpBuild({ live: { features: ['qa', 'help', 'progress', 'poll', 'signal'], provider: 'http', url: srv ? srv.url : 'https://live.example.com', code: 'LAYOUT' }, meta: { date: '2099-12-30', start: '14:00', end: '17:00', siteUrl: SITE } });
   assert.deepEqual(r.errors, []);
   files = r.files; writeFiles(site, r.files);
   if (!skip) browser = await chromium.launch();

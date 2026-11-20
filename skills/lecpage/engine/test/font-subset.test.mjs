@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto';
 import * as E from '../src/index.js';
 import { subsetFont, readFont, readCmap, unicodeRange } from '../src/font-subset.js';
 import { nodeRuntime } from '../node.js';
+import { tinySite } from './kit-site.mjs';
+
+// 바깥 글꼴(구글 글꼴)을 쓰는 작은 키트 사이트. 보조 쪽 제목 글꼴은 사이트 제목 글꼴(마루 부리: 우리 글꼴 목록에 파일·alt가 있음)
+const fontSite = () => E.assemble(tinySite('<p>가나다 연수</p>', '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap">'), { v: 2, title: '가나다 연수', features: [], theme: { fontHeading: 'MaruBuri' } }, { runtime: nodeRuntime() });
 
 // ── 시험용 작은 TrueType 글꼴: 글자마다 세모 하나(좌표가 달라 글리프가 서로 다름) ──
 const be = (n, v) => { const a = []; for (let i = n - 1; i >= 0; i--) a.push((v >>> (i * 8)) & 255); return a; };
@@ -95,7 +99,7 @@ test('글꼴 줄이기: 남길 글자만 글자표·글리프에 남고(번호�
 });
 
 test('글꼴 함께 담기: 파일 이름은 내용 해시, 원본 뒤에 사이트 글자만 남긴 같은 글꼴, 미리 받기·1년 캐시 머리글', async () => {
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }, { type: 'goals', items: ['가나다'] }] }, { runtime: nodeRuntime() });
+  const r = fontSite();
   const font = tinyFont(['A', ...'가나다뷁똠쀍휅꿻뙠땷쏾쭯']); // 가나다만 사이트 글자
   const asked = [];
   const fakeFetch = async (url) => {
@@ -124,7 +128,7 @@ test('글꼴 함께 담기: 파일 이름은 내용 해시, 원본 뒤에 사이
   const fileOf = (b) => 'assets/' + /url\(([^)]+)\)/.exec(b)[1];
   assert.ok(files[fileOf(blocks[1])].byteLength < files[fileOf(blocks[0])].byteLength, '줄인 파일이 더 작음');
   assert.equal(blocks[0].includes('font-weight:400') && blocks[1].includes('font-weight:400'), true, '같은 굵기·같은 이름으로 선언(같은 글꼴로 이어짐)');
-  // 제목 글꼴(calm-forest는 theme.css의 마루 부리): 줄인 파일을 미리 받기. 원본 woff2를 줄였으므로 alt(woff)는 받지 않음
+  // 제목 글꼴(보조 쪽 theme.css의 마루 부리): 줄인 파일을 미리 받기. 원본 woff2를 줄였으므로 alt(woff)는 받지 않음
   assert.ok(!asked.some((u) => /MaruBuri-\w+\.woff$/.test(u)), 'brotli가 되는 곳은 woff2를 그대로 읽음(alt woff를 받지 않음)');
   assert.ok(report.preload.length >= 1 && report.preload.length <= 2);
   for (const p of report.preload) assert.ok(files[p], p);
@@ -140,7 +144,7 @@ test('글꼴 함께 담기: 파일 이름은 내용 해시, 원본 뒤에 사이
 });
 
 test('글꼴 함께 담기(brotli가 없는 브라우저): 우리 글꼴 목록의 alt(같은 글꼴로 확인한 woff)로 줄이고, 원본은 더 작은 woff2 그대로', async () => {
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  const r = fontSite();
   assert.doesNotMatch(r.files['assets/theme.css'], /MaruBuri-\w+\.woff'\)/, '쪽에는 woff2만(alt는 담을 때만 씀)');
   for (const f of Object.values(E.FONTS)) for (const x of f.face || []) if (x.alt) assert.match(x.alt, /^https:\/\/hangeul\.pstatic\.net\/.+\.woff$/, '같은 글꼴로 확인한 네이버 woff만');
   const font = tinyFont(['A', ...'가나다뷁똠쀍휅꿻뙠땷쏾쭯']);
@@ -174,7 +178,7 @@ test('라이선스: 저작권·라이선스 설명에 예약 글꼴 이름(Reser
   const free = tinyFont(chars, { copyright: 'Copyright 2026 Someone.' });
   assert.equal(await subsetFont(rfn, keep), null, '예약 글꼴 이름 → 줄이지 않음');
   assert.ok(await subsetFont(free, keep), '예약 글꼴 이름이 없으면 줄임');
-  const r = E.build({ meta: { title: '가나다 연수' }, design: { preset: 'calm-forest' }, sections: [{ type: 'hero' }] }, { runtime: nodeRuntime() });
+  const r = fontSite();
   const fakeFetch = async (url) => (/\.(woff2?|ttf)$/.test(url) ? { ok: true, arrayBuffer: async () => rfn.slice().buffer } : { ok: true, text: async () => "@font-face{font-family:'X';src:url(./x.ttf) format('truetype')}" });
   const { files, report } = await E.bundleFonts(r.files, { fetch: fakeFetch });
   assert.ok(report.ok, report.skipped.join());

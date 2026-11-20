@@ -1,11 +1,21 @@
 // 새 판(v2) 연수: AI가 만든 사이트(p.site) + 연수 정보(p.meta = lecpage.json, docs/plan-ai-first.md §3·§15).
 // 배포 화면(Share·Publish·LiveSetup·VenueCheck)은 예전 설계도(blueprint)의 칸 이름(meta·live·access·privacy)으로 짜여 있어,
 // 같은 칸 이름의 '배포용 보기'(deployView)를 만들어 주고, 고친 것은 p.meta의 강사 칸(live·siteUrl·shortUrl·access·privacy)에 돌려 씀(patchDeploy).
-import { LIVE_KEYS, FEATURES } from '@engine/src/intake.js';
-import { randomCode } from '@engine/src/validate.js';
-import { keepTeacherValues } from '@engine/src/kit/index.js';
+import { randomCode } from '@engine/src/util.js';
+import { keepTeacherValues, LIVE_FEATURE_KEYS as LIVE_KEYS } from '@engine/src/kit/index.js';
 
-export { LIVE_KEYS, FEATURES };
+export { LIVE_KEYS };
+/** 참여 기능(강사에게 보이는 이름·설명). quick=첫 화면에서 바로 고르는 세 가지 */
+export const FEATURES = [
+  { value: 'qa', label: '질문 받기', desc: '이름 없이 질문하고 공감을 눌러요. 많이 궁금한 것부터 답해요.', quick: true },
+  { value: 'help', label: '도움 요청', desc: '실습하다 막히면 버튼 하나로 자리와 함께 알려요.', quick: true },
+  { value: 'progress', label: '진행 현황', desc: '실습마다 완료를 누르면 강사 화면에 진행 현황이 보여요.', quick: true },
+  { value: 'poll', label: '투표·워드클라우드', desc: '고르기 투표와 한 낱말 답을 모아 화면에 띄워요.' },
+  { value: 'board', label: '나눔 보드', desc: '완성한 결과물과 소감을 올리고 서로 봐요.' },
+  { value: 'signal', label: '신호등', desc: '이해했어요·헷갈려요·모르겠어요를 색으로 알려요.' },
+  { value: 'attendance', label: '출석·이수 확인', desc: '입실·퇴실을 누르고, 이수자 명단(CSV)을 받아요.' },
+  { value: 'reactions', label: '박수·반응', desc: '박수와 하트가 발표 화면에 떠올라요.' },
+];
 
 /** AI가 만든 사이트가 있는 새 판 연수인지 */
 export const isV2 = (p) => !!p && (p.v === 2 || !!p.site);

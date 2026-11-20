@@ -5,7 +5,7 @@
 import { scanTags, elementAt, rewriteOpen, applyEdits, attr, hasAttr, escAttr, escHtml, textOf, resolvePath } from './html.js';
 import { readMeta, firstSession, liveFeatures, themeFromCss, isHex, tangledTitle } from './meta.js';
 import * as W from './widgets.js';
-import { normAux, buildAux, auxLive } from './aux.js';
+import { normAux, buildAux, auxLive } from './aux-build.js';
 import { makeCode } from '../util.js';
 import { siteData, LIB_SCRIPT_SOURCES, liveOrigins, servedOverLan, jsonScript, boardFiles } from '../render/shell.js';
 import { wordsFor, surveyFor } from '../words.js';
@@ -107,7 +107,7 @@ function kitVars(theme) {
   return Object.keys(v).length ? `:root{${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';')}}\n` : '';
 }
 
-/** 연수 정보·모은 기능 → 보조 쪽 모양(kit/aux.js normAux가 다듬음). 보조 쪽·#lp-data·강사 화면 목록(#lp-blueprint)을 만들 때 씀 */
+/** 연수 정보·모은 기능 → 보조 쪽 모양(kit/aux-build.js normAux가 다듬음). 보조 쪽·#lp-data·강사 화면 목록(#lp-blueprint)을 만들 때 씀 */
 function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} } = {}) {
   const s1 = firstSession(meta);
   // 자리 표시가 있으면 그 기능은 켬. 실습 단계가 있고 참여 기능이 켜져 있으면 진행 현황도(강사 화면이 단계별 진행을 셈)
@@ -517,7 +517,7 @@ export function assemble(site, meta0, opts = {}) {
     if (meta.features.includes(feat) && !has && feat !== 'attendance') warn('feature-no-slot', `features에 ${feat}가 있는데 ${label} 자리 표시(data-lp)가 없어요.`);
   }
 
-  // 모은 것 전부 → 보조 쪽·런타임(kit/aux.js)
+  // 모은 것 전부 → 보조 쪽·런타임(kit/aux-build.js)
   const vb = normAux(synthBlueprint(meta, col, { preview, theme }));
   const built = buildAux(vb, { runtime, today: opts.today });
   const live = auxLive(vb);

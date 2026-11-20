@@ -73,8 +73,6 @@ describe('HWP 5.0: 같은 교재의 HWPX와 같은 결과', () => {
     assert.equal(m.design.fonts.major.ea, '함초롬바탕');
     assert.deepEqual(shape(m), shape(x));
     assert.deepEqual(m.files[0].fonts, x.files[0].fonts, '교재 글꼴(제목·본문)도 같음');
-    assert.deepEqual(m.detected.prompts, x.detected.prompts);
-    assert.equal(m.detected.event.venue, '한빛초등학교 시청각실');
   });
 
   test('번호·글머리표·개요 제목·각주·머리말·한 칸 표·글상자·링크 필드·줄바꿈과 탭·여러 구역', async () => {
@@ -101,7 +99,6 @@ describe('HWP 5.0: 같은 교재의 HWPX와 같은 결과', () => {
     assert.ok(p3.paragraphs.some((x) => x.text === '줄 바꿈\n다음 줄과 탭'));
     assert.equal(m.pages[m.pages.length - 1].title, 'Ⅳ. 붙임');
     assert.deepEqual(m.files[0].fonts.display[0], { name: '나눔고딕', n: m.files[0].fonts.display[0].n }, '큰 제목 글꼴 = 제목 글꼴');
-    assert.equal(m.detected.instructor?.name, '나도담');
   });
 
   test('4095바이트가 넘는 문단(긴 레코드 크기)', async () => {

@@ -2,7 +2,7 @@
 import { projects, blobs } from './db.js';
 import { uid, sha256Hex } from './util.js';
 import { zipFiles } from '@engine/src/zip-write.js';
-import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, appInfoFrom, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
+import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
 // 첫 화면(Home·main.jsx)도 이 파일을 쓰므로 엔진·키트는 쓸 때만 불러옴(첫 화면 묶음을 가볍게)
 const siteMeta = () => import('./site-meta.js');
 
@@ -37,7 +37,7 @@ export async function duplicateProject(p0) {
   const p = { ...JSON.parse(JSON.stringify(p0)), id, title: (p0.title || '이름 없는 연수') + ' (사본)', createdAt: Date.now(), deploy: {}, pastDeploy: undefined, carryPending: undefined, fileHash: undefined };
   if (p.blueprint?.meta) p.blueprint.meta.title = p.title;
   if (p.info) p.info.title = p.title;
-  const { randomCode } = await import('@engine/src/validate.js');
+  const { randomCode } = await import('@engine/src/util.js');
   if (p.blueprint?.live) p.blueprint.live.code = randomCode();
   if (p.meta) { p.meta.title = p.title; p.meta.siteUrl = ''; p.meta.shortUrl = ''; if (p.meta.live) p.meta.live = { ...p.meta.live, code: randomCode() }; }
   delete p.demo;
@@ -84,6 +84,21 @@ function cleanCarry(c) {
   return { deploy: JSON.parse(JSON.stringify(c.deploy)), live: { provider: [...OWN_LIVE, 'local', 'none'].includes(l.provider) ? l.provider : 'none', url: String(l.url || '').slice(0, 300), anonKey: String(l.anonKey || '').slice(0, 400), code: String(l.code || '').slice(0, 40) },
     liveOk: !!c.liveOk, sitePassword: String(c.sitePassword || '').slice(0, 200), liveAdminKey: String(c.liveAdminKey || '').slice(0, 200) };
 }
+/**
+ * 예전 방식(설계도)으로 만든 연수를 파일에서 열 때: 사이트는 다시 그리지 않으므로(AI로 새로 만듦) 남겨 둘 것만.
+ * 제목·켠 참여 기능·받을 정보·보관 기간. 참여 기능 서버 연결·주소·공개 범위는 남이 준 파일일 수 있어 받지 않음
+ */
+async function legacyOf(bp) {
+  const { randomCode } = await import('@engine/src/util.js');
+  const f = Array.isArray(bp?.live?.features) ? bp.live.features.filter((x) => typeof x === 'string').slice(0, 12) : [];
+  const pv = bp?.privacy && typeof bp.privacy === 'object' ? bp.privacy : {};
+  return {
+    meta: { title: String(bp?.meta?.title || '').slice(0, 160) },
+    live: { provider: f.length ? 'local' : 'none', url: '', anonKey: '', code: randomCode(), features: f, anonymous: true },
+    privacy: { collect: Array.isArray(pv.collect) && pv.collect.length ? pv.collect.filter((x) => typeof x === 'string').slice(0, 4) : ['nickname'], retentionDays: Math.min(365, Math.max(1, +pv.retentionDays || 30)), consent: true, processors: [] },
+  };
+}
+
 /** 화면에 그대로 보여 줄 오류(무슨 일인지 + 할 일). 그 밖의 오류(JSON 깨짐 등)는 부른 쪽이 쉬운 말로 바꿔요 */
 const bad = (m) => Object.assign(new Error(m), { friendly: true });
 
@@ -109,8 +124,8 @@ export async function importProjectFile(file) {
     text = new TextDecoder().decode(buf);
     const j = JSON.parse(text);
     if (j.format === PROJECT_FORMAT) proj = j.project;
-    // 설계도만 받으면 연수 정보를 설계도에서 채움(연수 정보를 고칠 때 빈 칸이 설계도의 날짜·장소를 지우지 않게)
-    else { proj = { title: j.meta?.title || '', files: [], info: appInfoFrom(j && typeof j === 'object' ? j : {}), blueprint: j }; }
+    // 설계도(JSON)만 담은 파일은 예전 방식: 열지 않고 새로 만드는 길로
+    else throw bad('예전 방식의 설계도 파일이라 열 수 없어요. 교재를 넣고 AI로 새로 만들어 주세요.');
   } else {
     const files = readStoredZip(buf);
     const pj = files['project.json']; if (!pj) throw bad('lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 만든 .lecpage 파일을 넣어 주세요.');
@@ -126,14 +141,13 @@ export async function importProjectFile(file) {
   const same = fileHash && (await projects.all()).find((x) => x.fileHash === fileHash);
   if (same) return { ...same, reopened: true };
   // 남이 준 파일: 실시간 연결·QR 주소는 다시 정하게 비우고, 자료는 그림·문서만 받음
-  const { sanitizeImported } = await import('@engine/src/intake.js');
   const id = uid(10);
   // 배포 정보: 열쇠를 담은 파일(carry)이어도 바로 쓰지 않고 배포하기 화면에서 강사가 고르게(남이 준 파일의 열쇠로 남의 사이트에 배포하지 않게)
   const carry = cleanCarry(proj?.carry);
   const { isV2, keepTeacher } = await siteMeta();
   const v2 = isV2(proj);
   const p = { ...proj, id, createdAt: Date.now(), deploy: {}, stage: v2 || proj?.blueprint ? 2 : 1, imported: true, demo: undefined, fileHash, carry: undefined, carryPending: carry, pastDeploy: carry ? cleanPast({ ...pastOf(carry), ...(proj?.pastDeploy || {}) }) : cleanPast(proj?.pastDeploy) };
-  if (p.blueprint) p.blueprint = sanitizeImported(p.blueprint);
+  if (p.blueprint) p.blueprint = await legacyOf(p.blueprint);
   // 새 판: 사이트 글만 받고(그림은 위 assets), 연수 정보의 강사 칸(실시간 주소·QR 주소·공개 범위)은 비움
   if (v2) {
     p.v = 2;

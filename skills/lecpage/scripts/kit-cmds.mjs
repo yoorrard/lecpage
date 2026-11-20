@@ -11,7 +11,7 @@ const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 const TEXT = /\.(html|css|m?js|json|txt|vtt|md)$/i;
 const pad3 = (n) => String(n).padStart(3, '0');
 
-/** 새 흐름(v2) 작업 폴더인지: site/ + lecpage.json(설계도 blueprint.json은 예전 흐름) */
+/** 작업 폴더인지: site/ + lecpage.json */
 export function isV2Work(dir) {
   try { return statSync(dir).isDirectory() && existsSync(join(dir, 'lecpage.json')) && existsSync(join(dir, 'site')); } catch { return false; }
 }
@@ -327,4 +327,32 @@ export async function appUnpackV2(h, o) {
     given.length ? `파일에 강사 값이 있었어요(${given.map(([k]) => k).join('·')}) → ${rel(join(work, 'lecpage.teacher.from-file.json'))}. 강사에게 맞는지 묻고 lecpage.teacher.json으로 옮겨요` : '',
     `다음 check ${rel(work)}`,
   ], { ok: true, work, files: Object.keys(o.site).length, slides: imgs, originals: srcFiles, teacherInFile: Object.fromEntries(given) });
+}
+
+/**
+ * app 연수.lecpage(예전 방식으로 만든 연수) -o work → 교재 쪽 그림(site/material)·자료실 파일·연수 정보(lecpage.json)·쪽 제목·교재 원본(src/).
+ * 예전 사이트는 옮기지 않음: AI 에이전트가 site/index.html을 새로 씀(앱의 [AI로 새로 만들기]와 같음)
+ */
+export async function appUnpackV1(h, o) {
+  const { args, N, rel, fail, say, writeJson } = h;
+  const K = await imp('src/kit/index.js');
+  const work = resolve(args.o || 'work');
+  if ((existsSync(join(work, 'lecpage.json')) || existsSync(join(work, 'site', 'index.html'))) && !args.force) fail(`${rel(work)}에 사이트가 이미 있어요. 다른 폴더를 -o로 주거나, 덮어쓰려면 --force를 붙여 주세요.`);
+  const u = K.upgradeV1(o.v1);
+  if (args.force) rmSync(join(work, 'site'), { recursive: true, force: true });
+  mkdirSync(join(work, 'site'), { recursive: true });
+  N.writeFiles(join(work, 'site'), u.site);
+  const meta = { ...u.meta };
+  for (const k of K.TEACHER_KEYS) delete meta[k];
+  writeJson(join(work, 'lecpage.json'), meta);
+  writeJson(join(work, '.lecpage', 'pages.json'), u.material.pages.map(({ page, title, text }) => ({ page, title, text: String(text || '').slice(0, 400) })));
+  const srcFiles = [];
+  for (const x of u.originals) { N.writeFiles(join(work, 'src'), { [x.file]: x.bytes }); srcFiles.push(join(work, 'src', x.file)); }
+  writeJson(join(work, '.lecpage', 'sources.json'), srcFiles.map((f) => ({ name: basename(f), path: f })));
+  h.saveState(work, { v: 2, out: 'dist', from: 'app' });
+  const imgs = Object.keys(u.site).filter((k) => k.startsWith('material/')).length;
+  say([
+    `${o.note} → ${rel(work)} · 교재 쪽 그림 ${imgs} · 연수 정보 lecpage.json · 교재 원본 ${srcFiles.length}`,
+    srcFiles.length ? `다음 prepare ${srcFiles.map((f) => rel(f)).join(' ')} -o ${rel(work)}(쪽 그림·보조 글자를 다시 만들고 연수 정보는 그대로) → site/index.html 쓰기 → check ${rel(work)}` : `다음 site/index.html 쓰기(교재 쪽 그림은 site/material/) → check ${rel(work)}`,
+  ], { ok: true, old: true, work, slides: imgs, originals: srcFiles });
 }

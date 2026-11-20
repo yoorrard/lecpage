@@ -1,4 +1,4 @@
-// 모든 쪽이 같이 쓰는 머리(<head>)·보안 정책(CSP)·사이트 데이터. 참가자 화면(pages.js)과 보조 화면(aux-pages.js)이 함께 씁니다.
+// 보조 쪽(aux-pages.js)의 머리(<head>)·보안 정책(CSP)과 사이트 데이터(#lp-data: 키트 조립 kit/assemble.js도 씀).
 import { esc, host } from './html.js';
 import { htmlAttrs } from '../design/tokens.js';
 import { eventDays } from '../hero-meta.js';
@@ -115,7 +115,6 @@ ${eventJsonLd(ctx, page)}
 ${ctx.fontLinks.some((u) => u.includes('fonts.googleapis.com')) ? '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' : ''}${ctx.fontLinks.map((u) => `<link rel="stylesheet" href="${esc(u)}" crossorigin>`).join('\n')}
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/lecpage.css">
-${ctx.hasFx && page === 'index' ? '<link rel="stylesheet" href="assets/fx.css">' : ''}
 ${extraCss.map((c) => `<link rel="stylesheet" href="${c}">`).join('\n')}
 <script src="assets/boot.js"></script>`;
 }

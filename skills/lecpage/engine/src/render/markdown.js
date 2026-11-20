@@ -1,6 +1,6 @@
-// 제한된 마크다운 → HTML. 글 칸(text)·FAQ 답·표 칸의 칸 글이 함께 씁니다. 문법은 ../md-syntax.js.
+// 제한된 마크다운 → HTML. 강사 화면 도움말(운영 안내)이 씁니다. 문법은 ../md-syntax.js.
 // 원칙: 참가자 화면에 |---|, >, **, ``` 같은 기호가 그대로 보이지 않게 한다. 모르는 문법은 글자만 남긴다.
-import { safeUrl } from '../validate.js';
+import { safeUrl } from '../util.js';
 import { parseBlocks, CALLOUTS } from '../md-syntax.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

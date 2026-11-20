@@ -19,7 +19,7 @@
   "scripts": {
     "test": "node --test \"skills/lecpage/engine/test/*.test.mjs\" \"scripts/ai-catalog/test/*.test.mjs\"",
     "ai-catalog": "node scripts/ai-catalog/refresh.mjs",
-    "examples": "node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/sel-story.blueprint.json -o .out/sel-story && node skills/lecpage/scripts/lecpage.mjs build skills/lecpage/examples/data-lab.blueprint.json -o .out/data-lab",
+    "examples": "node scripts/check-references.mjs",
     "app:dev": "npm --prefix app run dev",
     "app:build": "npm --prefix app run build"
   },

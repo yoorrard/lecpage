@@ -1,21 +1,11 @@
-// 렌더러 공통 도구. 모든 문자열은 여기서 이스케이프합니다.
-import { safeUrl } from '../util.js';
+// 보조 쪽·키트 부품이 함께 쓰는 도구. 모든 문자열은 여기서 이스케이프합니다.
 
 export function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-export const attr = esc;
 
 /** 줄바꿈을 <br>로 */
 export function br(v) { return esc(v).replace(/\n/g, '<br>'); }
-
-/** 링크 속성: 외부 링크는 새 탭 + noopener */
-export function href(u) {
-  const s = safeUrl(u);
-  if (!s) return 'href="#"';
-  const ext = /^https?:/i.test(s);
-  return `href="${esc(s)}"${ext ? ' target="_blank" rel="noopener noreferrer"' : ''}`;
-}
 
 export function host(u) { try { return new URL(u).host.replace(/^www\./, ''); } catch { return ''; } }
 
@@ -28,16 +18,7 @@ const JOIN_NAMES = [[/(^|\.)zoom\.us$/, 'Zoom'], [/^meet\.google\.com$/, 'Google
 export function joinName(url) { const h = host(url); for (const [re, n] of JOIN_NAMES) if (re.test(h)) return n; return ''; }
 
 /** 제한된 마크다운(문단·목록·표·인용·강조 상자): render/markdown.js */
-export { md, inlineMd, tableHtml } from './markdown.js';
-
-/** 슬롯에 효과가 정해져 있으면 data-fx 속성 */
-export function fx(ctx, slot, opts) {
-  const id = ctx.design.effects?.[slot];
-  if (!id) return '';
-  return ` data-fx="${esc(id)}"${opts ? ` data-fx-opts='${esc(JSON.stringify(opts))}'` : ''}`;
-}
-
-export function pad2(n) { return String(n).padStart(2, '0'); }
+export { md } from './markdown.js';
 
 /** 아이콘(작은 인라인 SVG, stroke = currentColor) */
 const ICONS = {

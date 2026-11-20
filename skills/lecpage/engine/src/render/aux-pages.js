@@ -226,14 +226,10 @@ export function checkItems(ctx) {
   // 참여 기능 서버는 주소를 찌르지 않고 check.js가 실제로 연결해 봄(실시간·새로 읽기 중 어느 방식인지까지)
   if (ctx.live && bp.live.provider === 'supabase') add({ name: 'Supabase 연결 도구', url: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/package.json', kind: 'lib', need: 'must', impact: '참여 기능이 연결되지 않아요.', fix: '기관 정보 담당자에게 cdn.jsdelivr.net을 열어 달라고 요청하세요.' });
   for (const t of [...(bp.sections.find((s) => s.type === 'readiness')?.checks || []), ...bpTools(bp).slice(0, 12)]) add({ name: t.name, url: t.url, kind: 'tool', need: 'must', impact: `실습에서 쓰는 ${t.name}이 열리지 않아요.`, fix: '연수 전에 열어 달라고 요청하거나 대신 쓸 도구를 준비하세요.' });
-  // 글꼴 CDN·움직임 효과 라이브러리(jsDelivr). 글꼴을 사이트에 담으면(assets/fonts.css) check.js가 글꼴 몫을 빼고 효과 몫만 봄(font: true, fx*)
-  const fontHosts = new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean)), fxHosts = new Set((ctx.fxLibs || []).map((u) => host(u)).filter(Boolean));
-  const FX = { fxName: '움직임 효과 파일', fxImpact: '일부 움직임 효과(부드러운 스크롤 등)가 빠져요. 내용은 그대로예요.', fxFix: '그대로 써도 돼요.' };
-  for (const h of new Set([...fontHosts, ...fxHosts])) {
-    const font = fontHosts.has(h), fx = fxHosts.has(h), url = h === 'fonts.googleapis.com' ? 'https://fonts.googleapis.com/css2?family=Jua' : h === 'cdn.jsdelivr.net' ? 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' : `https://${h}/`;
-    const base = { url, kind: 'font', need: 'nice' };
-    if (!font) { add({ ...base, kind: 'fx', name: FX.fxName, impact: FX.fxImpact, fix: FX.fxFix }); continue; }
-    add({ ...base, font: true, name: h === 'fonts.googleapis.com' ? '구글 글꼴' : h === 'hangeul.pstatic.net' ? '네이버 글꼴' : fx ? '글꼴·효과 파일' : '글꼴 파일', impact: fx ? '글꼴이 기본 글꼴로 보이고, 일부 움직임 효과가 빠져요. 내용은 그대로예요.' : '글꼴이 기본 글꼴로 보여요. 내용은 그대로예요.', fix: '괜찮으면 그대로 써도 돼요. 꼭 같은 글꼴이 필요하면 글꼴을 함께 담아 다시 만드세요.', ...(fx ? FX : {}) });
+  // 글꼴 CDN. 글꼴을 사이트에 담으면(assets/fonts.css) check.js가 이 줄을 건너뜀(font: true)
+  for (const h of new Set(ctx.fontLinks.map((u) => host(u)).filter(Boolean))) {
+    const url = h === 'fonts.googleapis.com' ? 'https://fonts.googleapis.com/css2?family=Jua' : h === 'cdn.jsdelivr.net' ? 'https://cdn.jsdelivr.net/npm/lenis@1.3.27/package.json' : `https://${h}/`;
+    add({ url, kind: 'font', need: 'nice', font: true, name: h === 'fonts.googleapis.com' ? '구글 글꼴' : h === 'hangeul.pstatic.net' ? '네이버 글꼴' : '글꼴 파일', impact: '글꼴이 기본 글꼴로 보여요. 내용은 그대로예요.', fix: '괜찮으면 그대로 써도 돼요. 꼭 같은 글꼴이 필요하면 글꼴을 함께 담아 다시 만드세요.' });
   }
   // 연수 정보에 적어 둔 '학교에서 막힌 곳'(audience.blocked): 주소면 함께 확인
   const asUrl = (b) => { const r = /^(?:https?:\/\/)?((?:[\w-]+\.)+[a-z]{2,})(\/\S*)?$/i.exec(String(b).trim()); return r ? `https://${r[1]}${r[2] || '/'}` : ''; };
@@ -326,7 +322,7 @@ export function renderPrivacy(ctx) {
   const tls = ['supabase', 'sheets'].includes(bp.live.provider) || /^https:\/\//i.test(bp.live.url || '');
   // 접속 기록이 남을 수 있는 바깥 파일 서버: 이 사이트의 글꼴·효과가 부르는 곳만(글꼴을 사이트에 담으면 실제로는 부르지 않으니 '남을 수 있습니다'로 둠)
   const cdnName = { 'fonts.googleapis.com': 'Google Fonts', 'cdn.jsdelivr.net': 'jsDelivr', 'hangeul.pstatic.net': '네이버' };
-  const cdns = [...new Set([...ctx.fontLinks, ...(ctx.fxLibs || [])].map((u) => cdnName[host(u)] || host(u)).filter(Boolean))];
+  const cdns = [...new Set(ctx.fontLinks.map((u) => cdnName[host(u)] || host(u)).filter(Boolean))];
   const acts = activityItems(bp);
   const anonQa = bp.live.anonymous !== false && (bp.sections.some((s) => s.type === 'qa') || bp.live.features.includes('qa'));
   const who = bp.meta.organizer || bp.instructors[0]?.name || '연수 운영자';

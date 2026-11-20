@@ -7,7 +7,6 @@ JS 엔진(engine/src/ingest)과 같은 모양의 Material JSON을 만듭니다(r
     python3 ingest.py <파일> -o material.json [--images 폴더] [--id deck1]
 
 쓰는 라이브러리(있으면): PyMuPDF(pymupdf/fitz) · python-pptx · python-docx · markitdown
-감지(detected)는 비워 둡니다(null). Node CLI(scripts/ingest.mjs)가 JS 감지 규칙으로 채웁니다.
 오류는 예외 대신 errors: [{code, message_ko}] 로 돌려줍니다.
 """
 import argparse
@@ -322,7 +321,7 @@ def mime_of(name):
 
 def empty_material():
     return {'version': 1, 'kind': 'lecpage-material', 'generator': GENERATOR, 'files': [], 'pages': [], 'design': {},
-            'meta': {}, 'boilerplate': [], 'detected': None, 'errors': [], 'warnings': []}
+            'meta': {}, 'boilerplate': [], 'errors': [], 'warnings': []}
 
 
 def new_page(fid, no, kind, title=''):

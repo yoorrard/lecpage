@@ -17,10 +17,11 @@ const jsOf = (files) => Object.entries(files).filter(([p]) => p.endsWith('.js'))
 test('목록이 지금 엔진 런타임과 같음', () => {
   execFileSync(process.execPath, [join(HOSTING, 'scripts', 'gen-runtime.mjs'), '--check'], { stdio: 'pipe' });
   const cur = currentSegments();
-  assert.ok(cur.length > 40);
+  assert.ok(cur.length >= 10);
   const names = new Set(RUNTIME_SEGMENTS.map((s) => s[0]));
-  for (const n of ['boot.js', 'lecpage.js', 'screen.js', 'console.js', 'unlock.js', 'vendor/qrcode.js', 'live/core.js', 'live/local.js', 'live/http.js', 'live/supabase.js', 'live/sheets.js', 'fx/core.js', 'build.js#fx-start']) assert.ok(names.has(n), n);
-  assert.ok(![...names].some((n) => n.startsWith('review/')), '앱 미리보기용 검토 도구는 받지 않음');
+  for (const n of ['boot.js', 'lecpage.js', 'screen.js', 'console.js', 'unlock.js', 'vendor/qrcode.js', 'live/core.js', 'live/local.js', 'live/http.js', 'live/supabase.js', 'live/sheets.js']) assert.ok(names.has(n), n);
+  // 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)는 엔진에서 지웠지만, 이미 배포한 사이트를 다시 올릴 수 있게 runtime-history.json으로 받음
+  assert.ok(names.has('fx/core.js@2026-11-20') && names.has('build.js#fx-start@2026-11-20'), '예전 판 fx 조각');
 });
 
 test('엔진이 만든 사이트의 .js는 모두 통과(예시 둘, 실시간 제공자 넷, 암호 사이트)', async () => {
@@ -28,8 +29,6 @@ test('엔진이 만든 사이트의 .js는 모두 통과(예시 둘, 실시간 �
   for (const provider of ['local', 'http', 'supabase', 'sheets']) {
     sites.push(await buildSite('data-lab', { patch: (bp) => { bp.live = { ...bp.live, provider, url: provider === 'sheets' ? 'https://script.google.com/macros/s/abc/exec' : 'https://live.example.com', anonKey: 'k' }; } }));
   }
-  // 움직임을 가장 높게: CDN 라이브러리 효과까지 fx.js에 들어감
-  sites.push(await buildSite('sel-story', { patch: (bp) => { bp.design.motion = 3; bp.audience.devices = ['laptop']; bp.design.effects = { scroll: 'smooth-scroll', schedule: 'gsap-scroll', 'hero.graphic': 'three-hero' }; } }));
   let n = 0; const seenNames = new Set();
   for (const files of sites) {
     for (const [p, bytes] of jsOf(files)) {
@@ -39,12 +38,10 @@ test('엔진이 만든 사이트의 .js는 모두 통과(예시 둘, 실시간 �
     }
   }
   assert.ok(n >= 40);
-  for (const want of ['unlock.js', 'live/core.js', 'live/supabase.js', 'live/sheets.js', 'fx/core.js', 'build.js#fx-start', 'vendor/qrcode.js']) assert.ok(seenNames.has(want), want);
+  for (const want of ['unlock.js', 'live/core.js', 'live/supabase.js', 'live/sheets.js', 'vendor/qrcode.js']) assert.ok(seenNames.has(want), want);
   const live = await matchRuntime(sites[0]['assets/live.js']);
   assert.deepEqual(live, ['live/core.js', `live/${blueprint('sel-story').live.provider}.js`]);
-  const fx = await matchRuntime(sites[0]['assets/fx.js']);
-  assert.equal(fx[0], 'fx/core.js');
-  assert.equal(fx.at(-1), 'build.js#fx-start');
+  assert.ok(!sites.some((f) => f['assets/fx.js']), '조립한 사이트에는 예전 효과 묶음(fx.js)이 없음');
 });
 
 test('손댄 스크립트는 거절', async () => {
@@ -115,7 +112,7 @@ test('이전 판 기억하기(--keep): 적어 둔 예전 런타임 조각도 받
     writeFileSync(env.LECPAGE_RUNTIME_HISTORY, JSON.stringify({ segments: [{ ...old, kept: '2026-10-01' }] }));
     assert.match(run('--keep'), /runtime-history\.json: \d+개 추가/);
     const hist = JSON.parse(readFileSync(env.LECPAGE_RUNTIME_HISTORY, 'utf8')).segments;
-    assert.ok(hist.length > 40 && hist.some((s) => s.sha256 === old.sha256));
+    assert.ok(hist.length > 10 && hist.some((s) => s.sha256 === old.sha256));
     assert.match(run('--keep'), /0개 추가/, '같은 판을 두 번 적지 않음');
     const mod = await import(pathToFileURL(env.LECPAGE_RUNTIME_OUT).href);
     const allow = prepare(mod.RUNTIME_SEGMENTS);

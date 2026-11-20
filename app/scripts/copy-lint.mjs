@@ -28,7 +28,7 @@ const rel = (p) => relative(ROOT, p).split(sep).join('/');
 // ── 점검할 파일 ──
 const DEFAULTS = [
   { dir: join(ROOT, 'app', 'src'), group: 'app', ext: /\.(jsx|js)$/ },
-  { dir: join(ENGINE, 'runtime'), group: 'page', ext: /\.js$/, skip: /(^|\/)vendor\/|\/fx\/effects\/|demo-boot\.js$/ },
+  { dir: join(ENGINE, 'runtime'), group: 'page', ext: /\.js$/, skip: /(^|\/)vendor\// },
   { dir: join(ENGINE, 'src', 'render'), group: 'page', ext: /\.js$/ },
   { dir: join(ENGINE, 'src', 'kit'), group: 'page', ext: /\.js$/ },
 ];
@@ -312,9 +312,8 @@ const SCREEN = {
   'app/src/pages/steps/Share.jsx': '3단계 배포하기', 'app/src/components/Publish.jsx': '3단계 › 배포할 곳 연결', 'app/src/components/LiveSetup.jsx': '참여 기능 연결', 'app/src/components/ItemEditor.jsx': '2단계 › 칸 고치기',
   'app/src/components/ReviewChat.jsx': '2단계 › 수정 요청', 'app/src/components/AiPanel.jsx': 'AI로 만들기·다듬기', 'app/src/components/AiConnect.jsx': 'AI 연결', 'app/src/lib/ai-guides.jsx': 'AI 키 만드는 법',
   'app/src/lib/ai.js': 'AI 오류 문구', 'app/src/lib/deploy.js': '배포 진행·오류 문구',
-  'skills/lecpage/engine/src/render/pages.js': '강의 페이지 틀(머리·바닥·발표·포스터·점검)', 'skills/lecpage/engine/src/render/sections.js': '강의 페이지 섹션', 'skills/lecpage/engine/src/render/hero.js': '강의 페이지 첫 화면',
+  'skills/lecpage/engine/src/render/aux-pages.js': '강사·발표 화면·QR 안내문·접속 확인·개인정보 안내', 'skills/lecpage/engine/src/kit/widgets.js': '키트 부품(질문·투표·보드·출석·설문)',
   'skills/lecpage/engine/runtime/console.js': '강사 화면', 'skills/lecpage/engine/runtime/screen.js': '발표 화면', 'skills/lecpage/engine/runtime/lecpage.js': '참가자 화면 동작', 'skills/lecpage/engine/runtime/live/core.js': '참여 기능(실시간)',
-  'skills/lecpage/engine/runtime/fx/embed.js': '효과 견본(갤러리)', 'skills/lecpage/engine/runtime/review/annotate.js': '수정 요청 표시 도구',
 };
 export const screenOf = (file) => SCREEN[file] || file.replace(/^.*\//, '');
 const chars = (s) => [...s.replace(/\{…\}/g, '').replace(/\s+/g, '')].length;

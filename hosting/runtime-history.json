@@ -1,0 +1,439 @@
+{
+ "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 보안 문제로 막아야 하는 판은 지우세요.",
+ "segments": [
+  {
+   "name": "fx/core.js",
+   "len": 33493,
+   "head": "/*!\n * LecFX core — lecpage 효과 레",
+   "sha256": "601420f7616c297e93faa3b42977c0ea0d734d0f56bd0b58f89ea3e3266cbc25",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/demo-boot.js",
+   "len": 1318,
+   "head": "/* LecFX 견본 — 첫 줄에서 실행(깜빡임 방지). ",
+   "sha256": "c6f424410530e6ef66c32af61df99df0282d8dadbe2e3c156d27e60c849b00de",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/arc-ripple.js",
+   "len": 3408,
+   "head": "/* arc-ripple — 번지는 파문. 물결 고리 세 ",
+   "sha256": "43ea646b352e03f11a3d3a784cbb01f0e762c4f687350af33df14fdc304d48bd",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/aurora.js",
+   "len": 600,
+   "head": "/* aurora — 주 색·강조 색의 부드러운 빛띠가 아",
+   "sha256": "63e78714bd31de1515402cfe0e1fdb2222c3be06484b84a3298ea89313b3ba29",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/blobs-morph.js",
+   "len": 2451,
+   "head": "/* blobs-morph — 둥근 덩어리가 숨 쉬듯 모양",
+   "sha256": "a11513b643e5e558424f5f1a7b51476e088e26dd51cead9ca936dcdd6f8c2802",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/blueprint-grid.js",
+   "len": 1458,
+   "head": "/* blueprint-grid — 설계도 모눈(작은 칸·",
+   "sha256": "12bd8d6bb2e40e14bc7781e97219ad413cf502b4f2244b71c4e049f41770f010",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/bokeh.js",
+   "len": 972,
+   "head": "/* bokeh — 초점 밖 빛망울이 천천히 떠다니며 숨 ",
+   "sha256": "22099c8eecd0528a4d819d1ec7e9f5bc1831171053402cead063e6c5d9ead9ac",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/border-beam.js",
+   "len": 810,
+   "head": "/* border-beam — 카드·버튼 테두리를 따라 빛",
+   "sha256": "3118a060b686140aedead284bb05877744967cfadb457e6b9675c1d8b305d25e",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/chalkboard.js",
+   "len": 3516,
+   "head": "/* chalkboard — 칠판 질감(분필 가루·지운 자",
+   "sha256": "5944a0b9966eb37498718c3bddd5ac5277697215fe51be68444a8a205a87a155",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/clip-reveal.js",
+   "len": 1010,
+   "head": "/* clip-reveal — 사진이 사각·원·사선 마스크",
+   "sha256": "3c7c13f68118c83f277c43db6d99e8bd715b31441f52fdfe3e211fdbb39f9cf1",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/confetti-shapes.js",
+   "len": 2281,
+   "head": "/* confetti-shapes — 멤피스풍 도형(세모·",
+   "sha256": "0755ed7e54eb12e9407281cd0b2560942b955fa89cb80733db7fb32bb065ed5d",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/confetti.js",
+   "len": 2899,
+   "head": "/* confetti — 완료 순간에만 1초 안쪽으로 터지",
+   "sha256": "57e59e9dd61b813a4c575fd9bbba6bc0f9ea436aef8738ee4b57b79272021962",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/counter.js",
+   "len": 2570,
+   "head": "/* counter — 화면에 들어오면 숫자가 0부터 올라",
+   "sha256": "f05ba51d104dca7a3c65b01fcef7ac838d2e10c7fd6572587ea315ac1db1223c",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/cursor-follower.js",
+   "len": 1910,
+   "head": "/* cursor-follower — 작은 점과 고리가 포",
+   "sha256": "33eb9a49ebdfc9fe51ee1b4cd3501099219f26f2695ddd5fe51e4b5b3df0dfb6",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/doodle-scribbles.js",
+   "len": 9400,
+   "head": "/* doodle-scribbles — 손으로 그린 듯한 ",
+   "sha256": "675a73d5f9a0acab64ec4f5051720a8be6e7f212775e70fd4b88d06a6d6833bc",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/dot-grid.js",
+   "len": 2180,
+   "head": "/* dot-grid — 점 격자에 잔잔한 물결이 지나가고",
+   "sha256": "06548c71f41df5c3513d7469c6675a07268c7ce7e05a25bdf6fe4e59d0d8308e",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/gradient-text.js",
+   "len": 625,
+   "head": "/* gradient-text — 큰 제목 글자 안에서 주",
+   "sha256": "32d0c65590d6f59a505ce2a483664b9a1eb8206a1bb5b1c08fc7b06c931d8862",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/grain.js",
+   "len": 323,
+   "head": "/* grain — SVG feTurbulence 잡음을 ",
+   "sha256": "ca9422437e263729baec3941c7d857ab7a7f600e88dafcf7766446a598c18780",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/gsap-scroll.js",
+   "len": 2438,
+   "head": "/* gsap-scroll — GSAP ScrollTrig",
+   "sha256": "4dcfddc8802360aea4774b59609940ee8f69bc8e42ecb696eebda4134beec3dc",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/guided-progress.js",
+   "len": 2892,
+   "head": "/* guided-progress — 위쪽 진행 막대 + ",
+   "sha256": "b8c5d79a0b8a45d268d0d54fbaf4c89aa3f984dd268eee16600e7849d47ccedc",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/highlight-sweep.js",
+   "len": 744,
+   "head": "/* highlight-sweep — 형광펜이 글 아래를 ",
+   "sha256": "e3768bb65acc346821047a083bddc5217df72e7ad6c0177b83cc5e6e7358c969",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/horizontal-snap.js",
+   "len": 3442,
+   "head": "/* horizontal-snap — 목록을 가로 스냅 넘",
+   "sha256": "33e082ddce5dc6c98d9dd24bb363e54e60d65ca0cdd24f557151972a9495e479",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/kinetic-weight.js",
+   "len": 1629,
+   "head": "/* kinetic-weight — 가변 글꼴 굵기가 스크",
+   "sha256": "df9cebae1d41061dfe2a3c72782ae76b1df6e1a990a0d9e16bf8ad8c63a7f1b6",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/line-draw.js",
+   "len": 4430,
+   "head": "/* line-draw — SVG 선이 스크롤에 맞춰 그려",
+   "sha256": "8735b57d38d9ea04869def2dda577ed2c7f2143dbe89e7f2c2d9a874758caae8",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/link-underline.js",
+   "len": 266,
+   "head": "/* link-underline — 링크 밑줄이 마우스·포",
+   "sha256": "9be09063dff470bb2bfecb5a97a8b47591c2387184050e86495ea212a1a64adb",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/magnetic.js",
+   "len": 2018,
+   "head": "/* magnetic — 포인터가 가까이 오면 버튼이 살짝",
+   "sha256": "3a4aeb6d7af7d38eb41bcb0bd2f98c104cd72db75793f20a9033b1bfbfd180cd",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/marquee.js",
+   "len": 2368,
+   "head": "/* marquee — 자식 항목을 끊김 없이 흘린다. 마",
+   "sha256": "2707018aa83cde1f326dbde1b570afd465e51f96da08a5c9f3fcc1fd12bf32f9",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/mesh-gradient.js",
+   "len": 481,
+   "head": "/* mesh-gradient — 토큰 색 네 점으로 만든",
+   "sha256": "db2b9e83a4237598eb9dc3c3f3af8a9a1067e2eed45ba1a73ba10d22d013784f",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/micro-copy.js",
+   "len": 2753,
+   "head": "/* micro-copy — 복사 버튼: 누르면 \"복사됨\"",
+   "sha256": "728016a4ace9762910176d35efddc89ddec5fa9d6f7d072b7b65230324785316",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/minute-map.js",
+   "len": 2946,
+   "head": "/* minute-map — 시간 점묘. 연수의 1분이 점",
+   "sha256": "6f19f2fb76c24338ac1a6e5e9e2eb8adfb17e26605288689bc8969b0faa73276",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/noise-orb.js",
+   "len": 1284,
+   "head": "/* noise-orb — 빛나는 구(AI·미래 분위기).",
+   "sha256": "e44753f89b468de0797a680b352ffa9f1b7e82e87bf3e209b48d593d9cfe91cc",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/orbit-3d.js",
+   "len": 6247,
+   "head": "/* orbit-3d — 점으로 짠 입체 매듭(세잎 매듭 ",
+   "sha256": "63fdd69cd2e037c046d87a7f8c04f8dbfa1c8f7c182a7de1210a5b81a5cc8e3b",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/paper-stack.js",
+   "len": 1259,
+   "head": "/* paper-stack — 비스듬히 겹친 활동지 묶음 ",
+   "sha256": "902b0509f29b1717243279dd5f2fdb8d47bdca0491376ac4c8af324cb19bd64c",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/parallax-soft.js",
+   "len": 742,
+   "head": "/* parallax-soft — 스크롤 속도와 최대 10",
+   "sha256": "b0e37fef494e906377b5108d8da81935d66670db8f29610753dfb19eb37e7e5e",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/particles-network.js",
+   "len": 2604,
+   "head": "/* particles-network — 점들이 떠다니며 ",
+   "sha256": "33ef4740cdd725123640a72d41e7b3b36359faddfeb96f158bc24c8f4b818532",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/perspective-grid.js",
+   "len": 683,
+   "head": "/* perspective-grid — 밤하늘 아래 원근 ",
+   "sha256": "2774864fb1097746bb2004c034e493ccde2a348a9be0c0a8bc5358178388c858",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/reveal-up.js",
+   "len": 1231,
+   "head": "/* reveal-up — 조용한 기본값. 화면에 들어오면",
+   "sha256": "f5156a4bd147a62ddf6a78f016ce1a814cb5b879b5ff7580ed6ae5eee98dd3b5",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/ripple.js",
+   "len": 1233,
+   "head": "/* ripple — 누른 자리에서 물결이 퍼진다(버튼·링",
+   "sha256": "54e579aec19728c5414a84c91f16d1de5bd956442c91aee605d2c9db1d02c4fe",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/riso.js",
+   "len": 503,
+   "head": "/* riso — 리소그래프 인쇄 느낌: 두 잉크(주 색·",
+   "sha256": "55ab3200efdd044a6ea497ad16c95a91d7816097c8894e9ac6472053b382e061",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/schedule-dial.js",
+   "len": 5392,
+   "head": "/* schedule-dial — 하루 일정을 둥근 시계로",
+   "sha256": "f75bab053421ee1de4d302eebc07f75a2ef1ae3592b3ba485d15eed2673af8c4",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/scramble.js",
+   "len": 2618,
+   "head": "/* scramble — 왼쪽부터 차례로 제자리로(한 번,",
+   "sha256": "2429adaf74eb0e2c929f4fec6e08963382fc99f1636f230dc9ad8a09e030a4ed",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/scroll-fill.js",
+   "len": 981,
+   "head": "/* scroll-fill — 스크롤을 따라 낱말이 흐린 ",
+   "sha256": "2a96485db7ca59ffcc9d6d8ed828cf200643f629c064c8e67915a47be5106572",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/shader-gradient.js",
+   "len": 3712,
+   "head": "/* shader-gradient — WebGL 조각 셰이",
+   "sha256": "0d2d51787c12ef15d598b23fff2b99db5d0be7cb3118e8b4f7c735bbcc072716",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/slide-fan.js",
+   "len": 4333,
+   "head": "/* slide-fan — 교재 쪽을 부채처럼 펼친 3D ",
+   "sha256": "ec6eafbc7a1a7ab02cd5e6415161ee3debfc2ce0bf9e0cede48d93a7a795f509",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/smooth-scroll.js",
+   "len": 1123,
+   "head": "/* smooth-scroll — Lenis(MIT)로 휠",
+   "sha256": "9dcd2ebcb5b1a1d5f7195342ba6b471b9845203c99d17581c5403ab184547764",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/split-reveal.js",
+   "len": 1323,
+   "head": "/* split-reveal — 줄·낱말·글자를 마스크 안",
+   "sha256": "b6d0117093b28aee77f7d70a3a04223145394984d723d0ed2c6e72c8b8fb7dba",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/spotlight.js",
+   "len": 2061,
+   "head": "/* spotlight — 어두운 영역에서 포인터 둘레만 ",
+   "sha256": "fa40dbf6d1fa843c1bc0ab755545db1f339a3af1b1b46f7df4d35c7bbd9a0593",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/stack-cards.js",
+   "len": 1320,
+   "head": "/* stack-cards — 카드가 차례로 위에 붙어 쌓",
+   "sha256": "4acd4c9b7e783969144a8f970e182d0b38450dc09ba22b8e7314a379421e4914",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/starfield.js",
+   "len": 2560,
+   "head": "/* starfield — 반짝이는 별이 아주 천천히 흐르",
+   "sha256": "ee06e007137afe80958321f0ba4293a1342974617271a7e30721f6129e91ffc1",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/sticky-scrolly.js",
+   "len": 2708,
+   "head": "/* sticky-scrolly — 한쪽 그림은 고정되고,",
+   "sha256": "db92c6836ed076d81ceec41f0ec7bbeca716cdc20fce26e0a4235fc694cb5d7f",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/stream-lines.js",
+   "len": 5728,
+   "head": "/* stream-lines — 돌 두세 개를 돌아 흐르는",
+   "sha256": "6a5f35383da777d0e779ca747a924c7eab7262f79958ce07d745b368e5634f2e",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/three-hero.js",
+   "len": 4331,
+   "head": "/* three-hero — OGL(작은 WebGL 라이브",
+   "sha256": "285db2d70f24f7dfd1893ec30593041e68a1f97a158b82ee432eba5f55707bef",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/tilt.js",
+   "len": 1809,
+   "head": "/* tilt — 카드가 포인터 쪽으로 최대 6도 기울고 ",
+   "sha256": "f0a5d9b0cae0eea8ef28ffb8440f37db257c0b035269130320868df1987616bc",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/tone-journey.js",
+   "len": 4265,
+   "head": "/* tone-journey — 섹션의 data-tone(",
+   "sha256": "7cdfb77abfff7fcc5229d4b3a62cb8b3226e8b469b711988f81e7c98a26214e7",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/topo-lines.js",
+   "len": 3708,
+   "head": "/* topo-lines — 펄린 잡음 지형의 등고선(마칭",
+   "sha256": "6a531708a80336d8e1fae445b677f2ab17d3095d268d5bd8aae35059c5875e35",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/typewriter.js",
+   "len": 1819,
+   "head": "/* typewriter — 한 번만 타자. 한글은 자모를",
+   "sha256": "ce8a08b68bc22eff53c8262bf77649ab5255eef6f48fbbe4c0fa1f4c1b4fcd3b",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/view-transition.js",
+   "len": 1304,
+   "head": "/* view-transition — 이 영역 안의 탭·필",
+   "sha256": "2270370073a154b13d210b8abbb2ec1095b449f0effd3d01a6e8770d7d72c6f0",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/waves.js",
+   "len": 1131,
+   "head": "/* waves — 바닥에서 겹겹의 물결이 서로 다른 속도",
+   "sha256": "2327adbf93acb454a35bec1a4d5305bad60fdd9620ac63053d474b47f59e4f5c",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/word-rotate.js",
+   "len": 1870,
+   "head": "/* word-rotate — 한 자리에서 낱말이 차례로 ",
+   "sha256": "f8ec6864c34f06e70bb8d4b25fc92308e09bf8ef44961418b544b13145d1f0e2",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/effects/zoom-through.js",
+   "len": 1602,
+   "head": "/* zoom-through — 히어로 사진이 액자 크기에",
+   "sha256": "767bee977f368940e1fb4abd274909b0c69b5cc4f4992428407e99f13813dc1f",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "fx/embed.js",
+   "len": 33166,
+   "head": "/* LecFX 견본 스크립트(core.js 다음에 실행,",
+   "sha256": "79470c58f86f75483b2d4586d8e9dc4bd12327e2f97966faf5aee106d9164690",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "build.js#fx-start",
+   "len": 135,
+   "head": "if(window.LecFX){document.readyS",
+   "sha256": "d3ab43a33f634e087859ae170375819dc95ba4cd2903931fc7f7707e9fa0e81d",
+   "kept": "2026-11-20"
+  }
+ ]
+}

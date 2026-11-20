@@ -22,8 +22,6 @@ const HISTORY = process.env.LECPAGE_RUNTIME_HISTORY || join(HOSTING, 'runtime-hi
 // 사이트들이 같이 쓰는 런타임 파일의 정적 사본(public/rt/<sha256>.js). Worker 요청 수에 들지 않는 정적 자산으로 내보내고, 모든 사이트가 브라우저 캐시를 같이 씀
 const RT_DIR = process.env.LECPAGE_RT_DIR || join(HOSTING, 'public', 'rt');
 export const HEAD_LEN = 32;
-/** 사이트에 들어가지 않는 런타임(앱 미리보기의 검토 도구)은 받지 않음 */
-const SKIP_DIRS = new Set(['review']);
 
 const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
 /** 줄바꿈을 LF로 맞춘 뒤 잼(Windows에서 받은 저장소로 앱을 빌드해도 맞도록). src/runtime.js도 같은 정규화를 함 */
@@ -36,17 +34,9 @@ export function segment(name, text) {
 function walk(dir, out = []) {
   for (const name of readdirSync(dir).sort()) {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) { if (!SKIP_DIRS.has(name)) walk(full, out); } else if (name.endsWith('.js')) out.push(full);
+    if (statSync(full).isDirectory()) walk(full, out); else if (name.endsWith('.js')) out.push(full);
   }
   return out;
-}
-
-/** build.js가 fx.js 끝에 붙이는 시작 코드(런타임 파일이 아니라 build.js 안의 글자열) */
-function fxTrailer() {
-  const src = readFileSync(join(ENGINE, 'src', 'build.js'), 'utf8');
-  const m = /parts\.push\('(if\(window\.LecFX\)[^'\\\n]*)'\)/.exec(src);
-  if (!m) throw new Error('engine/src/build.js에서 fx.js 끝에 붙는 시작 코드를 찾지 못했어요. build.js가 바뀌었으면 scripts/gen-runtime.mjs의 fxTrailer()를 맞춰 주세요.');
-  return m[1];
 }
 
 /** Supabase 연결이 불러오는 라이브러리 주소(runtime/live/supabase.js에 버전까지 고정돼 있음). test/csp.test.mjs가 src/csp.js의 고정 라이브러리 경로 안에 있는지 확인 */
@@ -59,7 +49,6 @@ export function supabaseSdk() {
 export function currentSegments() {
   if (!existsSync(RUNTIME)) throw new Error(`엔진 런타임 폴더가 없어요: ${RUNTIME}`);
   const segs = walk(RUNTIME).map((f) => segment(relative(RUNTIME, f).split(sep).join('/'), readFileSync(f, 'utf8')));
-  segs.push(segment('build.js#fx-start', fxTrailer()));
   if (segs.some((s) => !s.len)) throw new Error('빈 런타임 파일이 있어요.');
   return segs;
 }
@@ -70,7 +59,7 @@ function readHistory() {
   return Array.isArray(j.segments) ? j.segments.filter((s) => s && typeof s.sha256 === 'string' && Number.isInteger(s.len) && typeof s.head === 'string') : [];
 }
 
-/** 엔진이 사이트에 '그대로' 넣는 런타임 파일(engine/src/build.js·protect.js). live.js는 core + 제공자 하나 */
+/** 엔진이 사이트에 '그대로' 넣는 런타임 파일(engine/src/kit/aux-build.js·protect.js). live.js는 core + 제공자 하나 */
 const WHOLE_FILES = ['boot.js', 'lecpage.js', 'screen.js', 'console.js', 'unlock.js', 'vendor/qrcode.js'];
 export function staticFiles() {
   const read = (n) => norm(readFileSync(join(RUNTIME, n), 'utf8'));

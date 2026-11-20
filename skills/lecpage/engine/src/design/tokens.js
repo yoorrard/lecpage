@@ -1,26 +1,10 @@
-// 프리셋(압축 팔레트) → 계약 §3의 CSS 변수로 펼치기
+// 보조 쪽 틀(design/presets.js 압축 팔레트) → theme.css의 CSS 변수로 펼치기
 import { mix, alpha, ensureContrast, readableOn, isHex, contrast, luminance } from './color.js';
 import { fontStack, fontAssets, fontNeeds, FONTS } from './fonts.js';
 import { getPreset } from './presets.js';
-import { PALETTE_BY_ID, FONT_PAIR_BY_ID } from './seeds.js';
 
-/** 색 조합(seeds) → 프리셋 압축 팔레트 모양 */
-function seedPalette(seed, theme) {
-  const c = seed[theme];
-  const card = theme === 'light' ? mix(c.background, '#ffffff', 0.7) : mix(c.background, c.foreground, 0.06);
-  return {
-    bg: c.background, fg: c.foreground, card, muted: mix(c.foreground, c.background, 0.38), border: c.border,
-    primary: c.primary, primaryFg: c.primaryForeground || readableOn(c.primary), accent: c.accent, accent2: c.accent2 || c.accent, accent3: c.accent3 || c.accent,
-    heroFrom: c.primary, heroTo: c.accent,
-  };
-}
-/** 디자인 설정에 색 조합이 있으면 프리셋 사본의 색을 바꿈 */
-export function presetWithOverrides(design = {}) {
-  const base = getPreset(design.preset);
-  const seed = PALETTE_BY_ID[design.palette];
-  if (!seed) return base;
-  return { ...base, light: seedPalette(seed, 'light'), dark: seedPalette(seed, 'dark') };
-}
+/** 디자인 설정(design.preset)의 틀 */
+export function presetWithOverrides(design = {}) { return getPreset(design.preset); }
 
 const SEMANTIC = {
   light: { success: '#13794a', warning: '#a15c00', danger: '#c22f3a' },
@@ -138,45 +122,27 @@ export function themeCSS(design = {}) {
   dark['--stage'] = mix(dark['--background'], '#000000', 0.45); dark['--on-stage'] = dark['--foreground'];
   // 반전 띠(.lp-invert)가 어두운 화면에서 밝은 띠로 바뀌면 눈부심 → 어두운 화면에서는 한 단 떠 있는 어두운 면
   const darkRaised = { ...dark, '--background': mix(dark['--background'], dark['--foreground'], 0.06), 'color-scheme': 'dark' };
-  // 어두운 장면이 정체인 디자인(밤하늘·유리 실험실·키노트 등)은 밝은 화면에서도 첫 화면과 마무리만 어두운 장면으로 가둠(본문은 밝게)
-  const darkScene = preset.theme === 'dark' ? block(':root[data-theme="light"] :is(.lp-hero,.lp-closing),:root[data-theme="auto"] :is(.lp-hero,.lp-closing)', { ...dark, 'color-scheme': 'dark' }) : '';
   const fonts = { ...preset.fonts, ...(opts.fonts || {}) };
-  const pair = FONT_PAIR_BY_ID[design.fontPair];
   const base = baseTokens(preset, opts);
   // 제목 굵기: 그 글꼴에 있는 굵기로(한 굵기뿐인 글꼴에 가짜 굵게가 생기지 않게). 프리셋 안 대안 글꼴(fontAlts)은 제 굵기를 가져옴
   const changed = fonts.display !== preset.fonts.display;
   const dw = FONTS[fonts.display]?.displayWeight || (changed ? design.fonts?.displayWeight || 700 : preset.fonts.displayWeight || 800);
   if (changed || FONTS[fonts.display]?.displayWeight) base['--display-weight'] = String(dw);
   // 글꼴 파일: 역할마다 실제 쓰는 굵기만(글꼴당 최대 2개)
-  let assets = fontAssets([fonts.display, fonts.body, fonts.num, fonts.mono], fontNeeds(fonts, dw));
-  if (pair) {
-    // 글꼴 짝: key가 있으면 글꼴 목록(FONTS)의 주소·굵기 파일을 쓰고, 없으면 짝에 적힌 스타일시트를 씀
-    const side = (x) => (x.key && FONTS[x.key] ? { stack: fontStack(x.key), key: x.key } : { stack: x.stack || `'${x.family}', sans-serif`, css: x.css });
-    const dsp = side(pair.display), bod = side(pair.body);
-    base['--font-display'] = dsp.stack; base['--font-sans'] = bod.stack;
-    if (fonts.num && FONTS[fonts.num]) base['--font-num'] = `'${FONTS[fonts.num].family}', ${dsp.stack}`;
-    const pw = pair.display.weight || FONTS[dsp.key]?.displayWeight || 700;
-    base['--display-weight'] = String(pw);
-    const keyed = fontAssets([dsp.key, bod.key, fonts.num, fonts.mono], fontNeeds({ display: dsp.key, body: bod.key, num: fonts.num, mono: fonts.mono }, pw));
-    assets = { faceCss: keyed.faceCss, links: [...new Set([dsp.css, bod.css, ...keyed.links].filter(Boolean))] };
-  }
+  const assets = fontAssets([fonts.display, fonts.body, fonts.num, fonts.mono], fontNeeds(fonts, dw));
   const css = [
     `/* lecpage theme: ${preset.id} */`,
     assets.faceCss.trim(),
     block(':root', base),
     // 한 굵기뿐인 장식 제목 글꼴(검은고딕·주아·도현 등)은 자간을 거의 좁히지 않음(뭉개짐 방지)
-    ['display', 'hand', 'rounded'].includes(FONTS[pair ? pair.display.key || '' : fonts.display]?.kind) || (pair && pair.display.weight && pair.display.weight <= 400) ? 'html:root{--display-tracking:-.005em}' : '',
+    ['display', 'hand', 'rounded'].includes(FONTS[fonts.display]?.kind) ? 'html:root{--display-tracking:-.005em}' : '',
     block(':root[data-theme="light"],:root[data-theme="auto"]', { ...light, 'color-scheme': 'light' }),
     block(':root[data-theme="dark"]', { ...dark, 'color-scheme': 'dark' }),
     `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"]', { ...dark, 'color-scheme': 'dark' })}}`,
-    // 톤 여정: 섹션마다 밤·새벽·낮 색을 따로 씀(밤하늘 서사 등)
-    preset.variants.tones ? block(':root[data-tones] .lp-sec[data-tone="night"]', { ...dark, 'color-scheme': 'dark' }) : '',
-    preset.variants.tones ? block(':root[data-tones] .lp-sec[data-tone="dawn"],:root[data-tones] .lp-sec[data-tone="day"]', { ...light, 'color-scheme': 'light' }) : '',
     // 반전 띠(.lp-invert): 밝은 쪽 안에서는 어두운 띠, 어두운 쪽 안에서는 한 단 떠 있는 어두운 면. 대비는 두 테마 모두 검사된 값
     block(':root[data-theme="light"] .lp-invert,:root[data-theme="auto"] .lp-invert', { ...dark, 'color-scheme': 'dark' }),
     block(':root[data-theme="dark"] .lp-invert', darkRaised),
     `@media (prefers-color-scheme: dark){${block(':root[data-theme="auto"] .lp-invert', darkRaised)}}`,
-    darkScene,
   ].filter(Boolean).join('\n');
   return { css, fontLinks: assets.links, preset };
 }

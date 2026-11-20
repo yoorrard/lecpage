@@ -1,5 +1,5 @@
 // 올라온 .js가 lecpage 엔진 런타임 그대로인지 확인합니다. 그대로가 아니면 '사이트가 직접 쓴 스크립트'로 봅니다(site.js·sitecheck.js).
-// 받는 모양: 런타임 조각 하나, 또는 조각들을 '\n;\n'로 이은 것(live.js = core + 제공자, fx.js = core + 효과들 + 시작 코드).
+// 받는 모양: 런타임 조각 하나, 또는 조각들을 '\n;\n'로 이은 것(live.js = core + 제공자. 예전 사이트의 fx.js = core + 효과들 + 시작 코드는 runtime-history.json으로).
 // 조각 목록은 scripts/gen-runtime.mjs가 엔진에서 뽑아 runtime-allow.js에 둡니다(길이·앞머리·SHA-256).
 import { RUNTIME_SEGMENTS } from './runtime-allow.js';
 import { sha256Hex } from './ids.js';

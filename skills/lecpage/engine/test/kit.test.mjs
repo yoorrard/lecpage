@@ -10,7 +10,6 @@ import { createRequire } from 'node:module';
 import * as K from '../src/kit/index.js';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
-import { packProject } from '../src/project-file.js';
 import { zipFiles } from '../src/zip-write.js';
 
 const rt = nodeRuntime();
@@ -76,15 +75,6 @@ test('키트: 자리 표시를 런타임이 아는 마크업으로 펼치고, �
   // 엔진 위젯과 같은 마크업(템플릿 렌더러와 한 벌)
   assert.ok(html.includes(K.qaBox({ id: 'lpk-qa', live: true }).slice(0, 200)));
   assert.equal(r.collected.deck.join(','), '1,2');
-});
-
-test('키트: 엔진 템플릿 사이트의 위젯 마크업은 그대로(위젯을 kit/widgets.js로 떼어 함께 씀)', () => {
-  const bp = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../examples/data-lab.blueprint.json'), 'utf8'));
-  bp.live = { provider: 'http', url: 'https://x.example', code: 'ABC', features: ['qa', 'board', 'poll', 'help', 'reactions', 'signal'] };
-  const r = E.build(bp, { runtime: rt });
-  const html = r.files['index.html'];
-  assert.ok(html.includes(K.qaBox({ id: 'qa', anonymous: true, live: true }).split('\n')[0]));
-  assert.match(html, /<aside class="lp-dock" data-dock hidden aria-label="참여 도구">\n  <span class="lp-live-dot"/);
 });
 
 test('연수 정보: 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy)은 AI 답에서 받지 않고 이전 값을 지킴', () => {
@@ -228,7 +218,7 @@ test('정적 검수: 구조·키트 표시·금지 패턴·깨진 경로·대비
   assert.ok(K.inspect(ics, { ...META, sessions: [] }).some((x) => x.id === 'broken-link'));
 });
 
-test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀은 빼고 / v1 파일은 예전 판으로 알리고 옮김', () => {
+test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀은 빼고 / 앱이 저장한 파일도 엶 / 예전 방식 연수는 교재·연수 정보만 옮김', () => {
   const site = fullSite();
   const meta = { ...META, live: { provider: 'supabase', url: 'https://p.supabase.co', anonKey: 'secret-anon', code: 'ABCD1234' } };
   const { bytes, dropped } = K.packProjectV2({ site: { ...site, 'assets/evil.svg': '<svg/>' }, meta: K.readMeta(meta, { prev: meta }).meta, material: { pages: [{ page: 1, title: '표지', text: '본문' }] }, sources: [{ name: '교재.pdf', type: 'pdf', pages: 2 }], originals: [{ name: '교재.pdf', bytes: new Uint8Array([1, 2]) }], now: 0 });
@@ -243,17 +233,25 @@ test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀�
   // 다시 조립해도 같은 결과
   const a = K.assemble(site, META, { runtime: rt, today: '2026-11-20' }), b = K.assemble(o.site, META, { runtime: rt, today: '2026-11-20' });
   assert.equal(a.files['index.html'], b.files['index.html']);
-  // v1
-  const bp = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../examples/data-lab.blueprint.json'), 'utf8'));
+  // 앱이 [파일로 저장]한 파일(project.json version 1 안에 연수 하나)
+  const appFile = (project, extra = {}) => zipFiles({ 'project.json': JSON.stringify({ format: 'lecpage-project', version: 1, engine: '1.0.0', project }), ...extra });
+  // 새 판 연수(사이트가 있음): v2와 같은 꼴로(그림은 'site/…', 원본은 'src/…')
+  const app2 = K.openProjectFile(appFile({ v: 2, title: '앱 연수', site: { 'index.html': site['index.html'] }, meta: { ...META, live: { provider: 'http', url: 'https://live.example.org', code: 'APPCODE1' } } }, { 'site/material/p-001.webp': IMG, 'src/교재.pdf': new Uint8Array([37, 80, 68, 70]) }));
+  assert.equal(app2.kind, 'v2'); assert.equal(app2.title, '앱 연수');
+  assert.equal(app2.site['index.html'], site['index.html']); assert.deepEqual([...app2.site['material/p-001.webp']], [...IMG]);
+  assert.equal(app2.meta.live, null); assert.equal(app2.teacherInFile.live.code, 'APPCODE1');
+  assert.equal(app2.originals[0].name, '교재.pdf');
+  // 예전 방식(설계도)으로 만든 연수: 예전 판으로 알리고 교재 쪽 그림·연수 정보·원본만 옮김(사이트는 AI로 새로)
+  const bp = { meta: { title: '데이터로 읽는 우리 반', date: '2026-12-16', start: '14:00', venue: '실습실' }, live: { features: ['qa', 'poll'] }, sections: [{ type: 'hero' }, { type: 'deck' }] };
   const material = { files: [{ id: 'f1', name: 'deck.pptx', type: 'pptx' }], pages: [{ file: 'f1', page: 1, title: '첫 쪽', image: 'assets/slides/slide-001.webp' }, { file: 'f1', page: 2, title: '둘째', image: 'assets/slides/slide-002.webp' }] };
-  const v1 = packProject({ blueprint: bp, material, assets: { 'assets/slides/slide-001.webp': IMG, 'assets/slides/slide-002.webp': IMG }, now: 0 });
-  const old = K.openProjectFile(zipFiles(v1.files));
-  assert.equal(old.kind, 'v1'); assert.match(old.note, /예전 판/);
-  const up = K.upgradeV1(old.v1, { build: E.build, runtime: rt });
-  assert.equal(up.meta.title, bp.meta.title);
+  const old = K.openProjectFile(appFile({ title: bp.meta.title, blueprint: bp, material }, { 'assets/slides/slide-001.webp': IMG, 'assets/slides/slide-002.webp': IMG }));
+  assert.equal(old.kind, 'v1'); assert.match(old.note, /예전 방식으로 만든 연수/);
+  const up = K.upgradeV1(old.v1);
+  assert.equal(up.meta.title, bp.meta.title); assert.equal(up.meta.sessions[0].date, '2026-12-16');
+  assert.deepEqual(up.meta.features.sort(), ['deck', 'poll', 'qa']);
   assert.deepEqual(Object.keys(up.site).sort(), ['material/p-001.webp', 'material/p-002.webp']);
   assert.deepEqual(up.material.pages.map((p) => p.title), ['첫 쪽', '둘째']);
-  assert.ok(up.legacy['index.html'] && up.legacy['console.html'], '예전 사이트를 지금 엔진으로');
+  assert.equal(up.legacy, undefined, '예전 사이트는 다시 그리지 않음');
 });
 
 test('미리보기 한 장: CSS·JS·그림을 안으로, CSP meta는 빼고, 검수 스크립트를 넣을 수 있음', () => {

@@ -396,22 +396,3 @@ export function matchFont(name, role = 'body') {
   }
   return { id, label: FONTS[id]?.label || id, exact, system: !!hit?.sys, keep, category, from };
 }
-
-/**
- * design.sourceFonts({display:{name}, body:{name}}) → 쓸 글꼴 키 {display, body} + 설명.
- * 프로그램 기본 글꼴(맑은 고딕·굴림·바탕 등)은 '고른 글꼴'이 아니므로 그 자리는 프리셋 글꼴을 그대로 둡니다.
- * 이름을 모르는 고딕, 본문 자리의 제목 전용 글꼴도 프리셋 글꼴을 지킵니다(모두 Pretendard로 덮이지 않게).
- */
-export function fontsFromSource(src) {
-  if (!src || typeof src !== 'object') return null;
-  const out = { fonts: {}, match: {} };
-  for (const role of ['display', 'body']) {
-    const name = src[role]?.name || (role === 'display' ? src.body?.name : '');
-    if (!name) continue;
-    const m = matchFont(name, role);
-    if (!m) continue;
-    out.match[role] = m;
-    if (!m.system && !m.keep) out.fonts[role] = m.id;
-  }
-  return Object.keys(out.match).length ? out : null;
-}

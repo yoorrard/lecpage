@@ -1,4 +1,4 @@
-// 통합 시험: 로컬 workerd(wrangler dev)에 실제 엔진이 만든 사이트(sel-story = `npm run examples`의 .out/sel-story와 같은 파일)를
+// 통합 시험: 로컬 workerd(wrangler dev)에 실제 엔진이 조립한 사이트(레퍼런스 data-lab + 키트·보조 쪽, test/helpers.mjs buildSite와 같은 파일)를
 // 앱과 같은 순서로 올려 봅니다. workerd를 띄울 수 없는 곳에서는 까닭을 적고 건너뜁니다.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -166,8 +166,8 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     assert.ok(STATIC_RUNTIME.includes(rtLecpage), 'lecpage.js는 정적 사본이 있음');
     assert.ok(idx.text.includes(`<script src="/rt/${rtLecpage}.js" defer></script>`), '런타임은 /rt/로');
     assert.ok(idx.text.includes(`<script src="/rt/${sha256(files['assets/live.js'])}.js" defer></script>`), 'live.js(core + http)도 /rt/로');
-    assert.ok(idx.text.includes(`<script src="assets/fx.js?v=${sha256(files['assets/fx.js']).slice(0, 12)}" defer></script>`), '효과 묶음은 지문');
-    assert.ok(idx.text.includes(`<link rel="stylesheet" href="assets/theme.css?v=${sha256(files['assets/theme.css']).slice(0, 12)}">`), 'CSS도 지문');
+    assert.ok(idx.text.includes(`<link rel="stylesheet" href="assets/kit.css?v=${sha256(files['assets/kit.css']).slice(0, 12)}">`), '키트 CSS는 지문');
+    assert.ok(idx.text.includes(`<link rel="stylesheet" href="assets/style.css?v=${sha256(files['assets/style.css']).slice(0, 12)}">`), '사이트 CSS도 지문');
     // 링크 미리보기 카드: og:url을 붙임
     assert.ok(idx.text.includes(`<meta property="og:url" content="${site.url}">`), 'og:url');
     const rt = await bin(`${base}/rt/${rtLecpage}.js`);
@@ -178,7 +178,7 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     await css1.arrayBuffer();
     const css2 = await fetch(`${site.url}assets/theme.css?v=000000000000`);
     assert.equal(css2.headers.get('cache-control'), 'public, max-age=600', '지문이 틀리면(예전 HTML) 10분'); await css2.arrayBuffer();
-    assert.ok(idx.text.includes(`<a href="/report?site=${site.id}" rel="nofollow noopener" target="_blank" data-host-report>신고</a></div>`), '바닥글에 신고 링크');
+    assert.ok(idx.text.includes(`<p data-host-report `) && idx.text.includes(`<a href="/report?site=${site.id}" rel="nofollow noopener" target="_blank" style="color:inherit">신고</a></p>`), 'AI가 쓴 쪽(엔진 바닥글 없음)은 본문 끝에 신고 링크');
     assert.equal((await text(`${site.url}index.html`)).text, idx.text);
     // 304
     const not = await fetch(site.url, { headers: { 'if-none-match': idx.headers.get('etag') } });
@@ -762,7 +762,7 @@ test('관리 화면: Access 토큰 확인·CSRF·공지·새 배포 멈춤·하�
     // 미리보기 카드 그림: 첫 화면의 큰 그림
     const big = new Uint8Array(9000); big.set(PNG);
     files['assets/media/hero.png'] = big;
-    files['index.html'] = te.encode(new TextDecoder().decode(files['index.html']).replace('</main>', '<img src="assets/media/hero.png" alt=""></main>'));
+    files['index.html'] = te.encode(new TextDecoder().decode(files['index.html']).replace(/<main[^>]*>/, (m) => `${m}<img src="assets/media/hero.png" alt="">`));
     assert.equal((await deploy(base, site, files)).status, 200);
     for (let i = 0; i < 2; i++) assert.equal((await bin(`${site.url}assets/theme.css`)).status, 200); // 두 번째는 데이터센터 캐시에서
     const con = await text(`${site.url}console.html`);

@@ -123,11 +123,12 @@ test('고정 라이브러리 = 엔진 LIB_SCRIPT_SOURCES, 런타임이 부르는
   assert.ok(m, 'render/shell.js의 LIB_SCRIPT_SOURCES');
   assert.deepEqual(JSON.parse(m[1].replace(/'/g, '"')), LIB_SCRIPT_SOURCES, '엔진 목록이 바뀌면 src/csp.js도 맞춰 주세요');
   for (const u of LIB_SCRIPT_SOURCES) assert.match(u, /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+\/$/, `버전까지 고정한 경로: ${u}`);
+  // 런타임이 부르는 CDN 파일: Supabase 연결 라이브러리(AI가 쓴 사이트는 키트 설명서의 gsap·lenis·ogl만)
   const urls = new Set([SUPABASE_SDK]);
-  for (const f of ['fx/core.js', 'fx/effects/gsap-scroll.js', 'fx/effects/smooth-scroll.js', 'fx/effects/three-hero.js']) {
+  for (const f of ['live/supabase.js', 'lecpage.js', 'console.js', 'screen.js']) {
     for (const x of readFileSync(join(ENGINE, 'runtime', f), 'utf8').matchAll(/https:\/\/cdn\.jsdelivr\.net\/npm\/[^'"\s]+/g)) urls.add(x[0]);
   }
-  assert.ok(urls.size >= 5, [...urls].join(' '));
+  assert.ok(SUPABASE_SDK && urls.size >= 1, [...urls].join(' '));
   for (const u of urls) assert.ok(isLibSrc(u), `CSP·HTML 손보기가 받는 라이브러리: ${u}`);
 });
 
@@ -145,20 +146,21 @@ test('엔진이 쓰는 글꼴 호스트가 CSP에 다 있음(엔진이 바뀌면
   // 엔진은 틀(iframe)을 쓰지 않음. AI가 쓴 사이트 쪽은 유튜브(쿠키 없는 주소)·비메오만
   assert.ok(/"frame-src 'none'"/.test(body), "엔진 cspMeta의 frame-src가 바뀌었으면 src/csp.js의 FRAME_HOSTS를 확인해 주세요");
   assert.deepEqual(FRAME_HOSTS, ['https://www.youtube-nocookie.com', 'https://player.vimeo.com']);
-  // 글꼴 CSS 주소(fonts.js, seeds.js)의 호스트
-  for (const f of ['fonts.js', 'seeds.js']) {
+  // 글꼴 CSS 주소(fonts.js)의 호스트
+  for (const f of ['fonts.js']) {
     const src = readFileSync(join(ENGINE, 'src', 'design', f), 'utf8');
     const hosts = new Set([...src.matchAll(/https:\/\/[a-z0-9.-]+/g)].map((m) => m[0]));
     assert.ok(hosts.size >= 2, f);
     for (const h of hosts) assert.ok(FONT_CSS_HOSTS.includes(h) || FONT_FILE_HOSTS.includes(h), `${f}: ${h}`);
   }
   // 엔진의 _headers가 틀에 못 넣게 하는 화면과 같음, 보조 쪽 목록도 엔진과 같음
-  const build = readFileSync(join(ENGINE, 'src', 'build.js'), 'utf8');
-  const aux = /const auxPaths = \[([^\]]+)\]/.exec(build);
-  assert.ok(aux, 'build.js의 auxPaths');
-  assert.deepEqual(aux[1].split(',').map((x) => x.trim().replace(/^'\/|'$/g, '') + '.html').sort(), [...AUX_PAGES].sort());
-  const m = /\['\/console', '\/screen', '\/poster'\]\.flatMap\(\(p\) => \[p \+ '\.html', p\]\)/.exec(build); // 엔진은 .html과 확장자 없는 주소 둘 다에 적음
-  assert.ok(m, 'build.js의 _headers 대상이 바뀌었으면 NO_FRAME_PAGES를 맞춰 주세요');
+  const paths = readFileSync(join(ENGINE, 'src', 'kit', 'paths.js'), 'utf8');
+  const aux = /export const ENGINE_PAGES = \[([^\]]+)\]/.exec(paths);
+  assert.ok(aux, 'kit/paths.js의 ENGINE_PAGES');
+  assert.deepEqual(aux[1].split(',').map((x) => x.trim().replace(/^'|'$/g, '')).sort(), [...AUX_PAGES].sort());
+  const asm = readFileSync(join(ENGINE, 'src', 'kit', 'assemble.js'), 'utf8');
+  const m = /const auxPaths = \['\/console', '\/screen', '\/poster'\]\.flatMap\(\(x\) => \[x \+ '\.html', x\]\)/.exec(asm); // 엔진은 .html과 확장자 없는 주소 둘 다에 적음
+  assert.ok(m, 'kit/assemble.js의 _headers 대상이 바뀌었으면 NO_FRAME_PAGES를 맞춰 주세요');
   assert.deepEqual([...NO_FRAME_PAGES].sort(), ['console.html', 'poster.html', 'screen.html']);
 });
 

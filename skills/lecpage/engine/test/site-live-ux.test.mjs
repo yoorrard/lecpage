@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
-import { titleLen } from '../src/render/hero.js';
+import { bpBuild } from './kit-site.mjs';
 import { startNodeServer, here, api, LAN_ARGS, viaLan } from './live-helpers.mjs';
 
 const require = createRequire(import.meta.url);
@@ -17,16 +17,16 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch { try { ({ chromium } = createRequire('/opt/node-tools/')('playwright')); } catch { /* 없음 */ } }
 const skip = !chromium && 'playwright is not installed';
 const ADMIN = '참여화면-시험용-관리자키-77';
-const SEL = JSON.parse(fs.readFileSync(path.join(here, '../../examples/sel-story.blueprint.json'), 'utf8'));
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const build = (mut = (b) => b) => { const bp = mut(structuredClone(SEL)); const r = E.build(bp, { runtime: nodeRuntime() }); assert.deepEqual(r.errors, []); return r.files; };
+/** 레퍼런스 사이트(data-lab)를 조립한 파일(kit-site.mjs) */
+const build = (bp) => { const r = bpBuild(bp); assert.deepEqual(r.errors, []); return r.files; };
 
 let srv, browser, site;
 before(async () => {
   if (skip) return;
   site = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-live-ux-'));
   srv = await startNodeServer({ adminKey: ADMIN, staticDir: site });
-  writeFiles(site, build((b) => { b.meta = { ...b.meta, date: today(), start: '00:00', end: '23:59' }; b.live = { provider: 'http', url: '', code: 'LIVEUX', features: ['qa', 'board', 'poll'] }; return b; }));
+  writeFiles(site, build({ meta: { date: today(), start: '00:00', end: '23:59' }, live: { provider: 'http', url: '', code: 'LIVEUX', features: ['qa', 'board', 'poll'] } }));
   browser = await chromium.launch({ args: LAN_ARGS });
 });
 after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmSync(site, { recursive: true, force: true }); });
@@ -126,21 +126,13 @@ test('localhost로 연 발표 화면: 같은 와이파이 주소를 알면 그 �
   } finally { await ctx.close(); await all.close(); }
 });
 
-test('만든 파일: 긴 공식 연수명은 제목 글자 한 단계, 빈 강사 칸은 메뉴에서도 빠짐, 건너뛰기 링크가 본문에 초점, 달력 파일에 주소·알림', () => {
-  const longName = '2026학년도 2학기 디지털 기반 교육혁신 역량 강화를 위한 초·중·고 교원 대상 생성형 인공지능 활용 수업 설계와 평가 혁신 실천 사례 나눔 직무연수(심화 과정)';
-  const f = build((b) => { b.live = { provider: 'http', url: 'https://live.example.kr', code: 'FILES1', features: ['qa'] }; b.meta.title = longName; const h = b.sections.find((s) => s.type === 'hero'); if (h) h.title = longName; b.instructors = []; b.meta.siteUrl = 'https://lec.example.kr/sel/'; b.meta.date = '2026-12-01'; b.meta.start = '14:00'; return b; });
-  assert.match(f['index.html'], /<h1 class="lp-h1[^"]*"[^>]*data-tlen="xlong"/);
-  assert.deepEqual([titleLen('마음이 먼저 도착하는 교실'), titleLen('2026 초등 교원 디지털 역량 강화 직무연수 심화 과정 제2기 운영'), titleLen(longName)], ['', 'long', 'xlong']);
-  assert.doesNotMatch(f['index.html'], /href="#instructor"/, '그려지지 않는 칸으로 가는 링크 없음');
-  assert.match(f['index.html'], /<main id="main" tabindex="-1">/);
+test('만든 파일: 달력 파일에 주소·알림(75바이트에서 접음), 인쇄할 때 단추는 숨김, 강사 화면에 키를 잃어버렸을 때 길', () => {
+  const f = build({ live: { provider: 'http', url: 'https://live.example.kr', code: 'FILES1', features: ['qa'] }, meta: { siteUrl: 'https://lec.example.kr/sel/' } });
   const ics = f['assets/event.ics'];
   assert.match(ics, /\r\nURL:https:\/\/lec\.example\.kr\/sel\/\r\n/); assert.match(ics, /BEGIN:VALARM\r\nACTION:DISPLAY\r\n[\s\S]*TRIGGER:-PT30M/);
   assert.ok(ics.split('\r\n').every((l) => Buffer.byteLength(l) <= 75), '75바이트에서 접음');
   assert.match(f['assets/lecpage.css'], /@media print\{[^@]*main button[^{]*\{display:none!important\}/);
   assert.match(f['console.html'], /data-key-lost>키를 잃어버렸으면: [^<]*lecpage 앱의 \[내 연수\]/);
-  const lan = build((b) => { b.live = { provider: 'http', url: '', code: 'KEYLAN', features: ['qa'] }; return b; });
+  const lan = build({ live: { provider: 'http', url: '', code: 'KEYLAN', features: ['qa'] } });
   assert.match(lan['console.html'], /data-key-lost>키를 잃어버렸으면: 서버를 켠 컴퓨터의 data\/admin-key\.txt/);
-  assert.doesNotMatch(f['index.html'], /data-big=/, '보통 연수는 그대로');
-  const big = build((b) => { const d = b.sections.find((s) => s.type === 'deck'); d.slides = Array.from({ length: 220 }, (_, i) => ({ page: i + 1, title: `${i + 1}쪽`, text: '본문 글이 깁니다. '.repeat(30) })); return b; });
-  assert.match(big['index.html'], /<html [^>]*data-big="1"/, '큰 연수는 화면 밖 칸 그리기를 미룸');
 });
