@@ -1,7 +1,7 @@
-// 만든 사이트에 쓰이지 않는 런타임 CSS 규칙 빼기(참가자는 학교망·휴대폰으로 들어오므로 가볍게).
-// 런타임 CSS(lecpage.css)는 모든 프리셋·첫 화면 구성·섹션 종류의 모양을 담고 있어, 한 사이트는 그 일부만 씁니다.
+// 만든 사이트에 쓰이지 않는 런타임 CSS 규칙 빼기(학교망·휴대폰으로 들어오므로 가볍게).
+// 보조 쪽 CSS(lecpage.css·aux-pages.css)는 모든 보조 쪽·런타임 상태의 모양을 담고 있어, 한 사이트는 그 일부만 씁니다(kit/aux-build.js).
 // 빼는 규칙: 선택자에 들어 있는 lp- 클래스가 이 사이트의 HTML·JS 어디에도 없거나,
-// 빌드 때 정해져 바뀌지 않는 <html data-*> 값(프리셋·첫 화면 구성·머리·메뉴·버튼·카드·띠·제목 모양)이 다른 규칙.
+// 조립 때 정해져 바뀌지 않는 <html data-*> 값(틀·머리·메뉴·버튼·카드·띠·제목 모양)이 다른 규칙.
 // 남기는 쪽으로 기웁니다: :not()·:is() 안의 클래스, 상태 클래스(is-…), JS가 바꾸는 data-*는 보지 않음.
 
 const FIXED_ATTRS = new Set(['data-preset', 'data-hero', 'data-head', 'data-nav', 'data-btn', 'data-card', 'data-band', 'data-heading']);
