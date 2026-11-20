@@ -13,9 +13,11 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
-      # 엔진 시험 가운데 PDF 교재를 읽는 것(prepare·check)은 앱의 pdf.js를 씀 → 앱 의존성을 먼저 설치
-      - name: 앱 의존성 설치
-        run: npm --prefix app ci
+      # 엔진 시험 가운데 PDF 교재를 읽는 것(prepare·check)은 pdf.js가 필요함(Skill 사용자 PC처럼). 엔진에서 찾을 수 있게 맨 위 폴더에 앱과 같은 판을 둠
+      - name: 앱 의존성과 PDF 읽기 도구 설치
+        run: |
+          npm --prefix app ci
+          npm install --no-save --no-audit --no-fund "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: 엔진 테스트
         run: npm test
       # npm audit이 보지 못하는 skill 속 라이브러리(fflate 등)와 판을 고정한 배포 명령: OSV(키 없음)에서 알려진 취약점 확인
