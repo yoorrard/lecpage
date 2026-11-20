@@ -1,11 +1,8 @@
 // 보조 화면: 강사 화면(console) · 발표 화면(screen) · QR 안내문(poster) · 접속 확인(check) · 개인정보 처리 안내(privacy).
 // 모두 참가자 화면과 같은 프리셋(색·글꼴·단추·상자 모양·모티프)을 이어받고, 쪽마다 쓰임에 맞춘 배치를 assets/aux-pages.css가 맡습니다.
 // 참가자가 쓴 글은 여기서 그리지 않습니다(런타임이 textContent로만 넣음).
-import { esc, br, icon, koDate, host, md } from './html.js';
-import { contactHtml, boardFiles, joinName } from './sections.js';
-import { appShell, keepRule, byOperator, servedOverLan } from './shell.js';
-import { motifFamily } from '../design/layouts.js';
-import { motifRule } from './body-graphic.js';
+import { esc, br, icon, koDate, host, md, contactHtml, joinName } from './html.js';
+import { appShell, keepRule, byOperator, servedOverLan, boardFiles } from './shell.js';
 import { whenText, eventDays } from '../hero-meta.js';
 import { wordsFor } from '../words.js';
 
@@ -22,7 +19,16 @@ ${auxId(ctx, label)}
 <div class="lp-ax-act">${backBtn()}${themeBtn()}</div>
 </div></header>`;
 }
-const motif = (ctx, seed) => motifRule(motifFamily(ctx.bp, ctx.design.preset), seed);
+// 머리 아래 장식 줄(보조 쪽 틀마다 모티프 하나: 밝은 틀은 블록, 어두운 틀은 별)
+const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const seeded = (seed) => { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+const pickC = (r, set = 'abc') => set[Math.floor(r() * set.length)];
+function motif(ctx, seed) {
+  const r = seeded(hashStr('rule' + seed)); let o = '';
+  if (ctx.design.preset === 'keynote-dark') for (let i = 0; i < 12; i++) o += `<circle class="${i % 5 === 2 ? 'a' : i % 7 === 4 ? 'b' : 'f'}" cx="${10 + i * 20}" cy="12" r="${i % 5 === 2 ? 5 : 2.4}"/>`;
+  else for (let i = 0; i < 6; i++) o += i % 2 ? `<circle class="${pickC(r)}" cx="${i * 40 + 12}" cy="12" r="11"/>` : `<path class="${pickC(r)}" d="M${i * 40} 0h24v24h-24z"/>`;
+  return `<svg class="lp-motif lp-mrule" viewBox="0 0 240 24" aria-hidden="true" focusable="false">${o}</svg>`;
+}
 
 // ── 강사 화면 ─────────────────────────────────────────────
 /**
@@ -401,4 +407,36 @@ export function opsGuide(ctx) {
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
   const list = (a, num) => a.map((t, i) => `${num ? `${i + 1}.` : '-'} ${t}`).join('\n');
   return `## 연수 전\n${list(before, true)}\n\n## 연수 중\n${list(during)}\n\n## 연수 후\n${list(after)}\n- 연수 날짜가 지나면 참가자 화면 맨 위에 '끝난 연수' 줄이 떠요. 다시 보기·이수 처리 일정은 \`연수 후 안내\` 칸에 넣어 다시 배포하세요(미리보기: 주소 끝에 \`?phase=after\`).\n`;
+}
+
+/** 실시간 방식(live.provider) → 운영안내.md에 쓰는 이름과 한 줄 설명 */
+const OPS_PROVIDER_KO = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버·Cloudflare', local: '이 컴퓨터에서만 시험', none: '없음' };
+const OPS_PROVIDER_WHY = {
+  sheets: '구글 시트(Apps Script)에 연결했습니다. 기록이 강사의 구글 시트에 쌓이고, 화면은 5~10초마다 새로 읽습니다. 50명 안팎까지 알맞습니다.',
+  supabase: 'Supabase에 연결했습니다. 질문·진행 현황이 바로 바뀌고, 기록은 강사의 Supabase 프로젝트에 쌓입니다. 80명까지 알맞습니다.',
+  http: '내 서버 또는 Cloudflare에 연결했습니다. 기록은 그 서버에 쌓입니다.',
+  local: '실시간 서버에 연결하지 않았습니다. 한 브라우저 안에서만 이어지는 시험용이라 참가자 기기끼리는 이어지지 않습니다. 연수 전에 서버를 연결하고 다시 만드세요.',
+  none: '실시간 기능을 쓰지 않습니다. 완료 체크·메모는 참가자 각자의 브라우저에 저장됩니다.',
+};
+/**
+ * 운영안내.md(강사용 폴더, 올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글). 운영 방식은 실제로 연결한 live.provider를 따릅니다.
+ * 강사 화면(console.html)은 누구나 열 수 있는 파일이라, 강사만 볼 내용은 이 문서에만 넣습니다.
+ */
+export function opsDoc(ctx) {
+  const bp = ctx.bp;
+  const live = ctx.live;
+  const prov = live ? bp.live.provider : 'none';
+  const name = OPS_PROVIDER_KO[prov] || prov;
+  const files = ['`index.html` 참가자 화면', live && '`console.html` 강사 화면(도움말에 이 안내가 함께 있어요)', '`screen.html` 발표 화면', '`check.html` 접속 확인', '`poster.html` QR 안내문 인쇄', live && '`privacy.html` 개인정보 처리 안내'].filter(Boolean);
+  return `# 운영 안내 — ${bp.meta.title}
+
+${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.meta.end ? '~' + bp.meta.end : ''}\n` : ''}연수 코드: **${bp.live.code}** · 실시간 방식: ${live ? name : '없음'}
+
+## 파일
+- ${files.join(' · ')}
+
+${opsGuide(ctx)}
+## 운영 방식: ${name}
+- ${OPS_PROVIDER_WHY[prov] || ''}
+`;
 }

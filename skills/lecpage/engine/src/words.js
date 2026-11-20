@@ -57,3 +57,16 @@ export function localizeSections(bp, w = wordsFor(bp)) {
     return title === s.title && n === s.nav ? s : { ...s, title, nav: n };
   }) };
 }
+
+/** 사이트 안 만족도 설문 기본 문항(교원 연수 만족도에서 흔히 묻는 다섯 문항). 첫 두 문항은 대상에 맞는 말로 */
+export const DEFAULT_SURVEY = [
+  { q: '연수에 전반적으로 만족하시나요?', kind: 'scale' },
+  { q: '배운 내용을 수업이나 업무에 쓸 수 있을 것 같나요?', kind: 'scale' },
+  { q: '진행 속도는 어땠나요?', kind: 'choice', options: ['빨랐어요', '알맞았어요', '느렸어요'] },
+  { q: '가장 도움이 된 내용은 무엇인가요?', kind: 'text' },
+  { q: '아쉬운 점이나 바라는 점을 적어 주세요.', kind: 'text' },
+];
+/** 설문 자리 표시에 문항이 없을 때 넣는 기본 문항(w = wordsFor 결과: 연수·수업·설명회) */
+export function surveyFor(w) {
+  return DEFAULT_SURVEY.map((q, i) => (i === 0 ? { ...q, q: w.survey } : i === 1 ? { ...q, q: w.apply } : { ...q }));
+}

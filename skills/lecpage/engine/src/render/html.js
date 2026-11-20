@@ -1,5 +1,5 @@
 // 렌더러 공통 도구. 모든 문자열은 여기서 이스케이프합니다.
-import { safeUrl } from '../validate.js';
+import { safeUrl } from '../util.js';
 
 export function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18,6 +18,14 @@ export function href(u) {
 }
 
 export function host(u) { try { return new URL(u).host.replace(/^www\./, ''); } catch { return ''; } }
+
+/** 문의 글: 이메일·전화번호만 링크로 */
+export function contactHtml(c) {
+  return esc(c).replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (e) => `<a href="mailto:${e}">${e}</a>`).replace(/(?<![\d-])(0\d{1,2}-\d{3,4}-\d{4})(?![\d-])/g, (t) => `<a href="tel:${t.replace(/-/g, '')}">${t}</a>`);
+}
+/** 온라인 입장 주소 → 서비스 이름(Zoom·Google Meet·Teams·Webex, 모르면 빈 글) */
+const JOIN_NAMES = [[/(^|\.)zoom\.us$/, 'Zoom'], [/^meet\.google\.com$/, 'Google Meet'], [/^teams\.(microsoft|live)\.com$/, 'Teams'], [/(^|\.)webex\.com$/, 'Webex']];
+export function joinName(url) { const h = host(url); for (const [re, n] of JOIN_NAMES) if (re.test(h)) return n; return ''; }
 
 /** 제한된 마크다운(문단·목록·표·인용·강조 상자): render/markdown.js */
 export { md, inlineMd, tableHtml } from './markdown.js';

@@ -5,13 +5,10 @@
 import { scanTags, elementAt, rewriteOpen, applyEdits, attr, hasAttr, escAttr, escHtml, textOf, resolvePath } from './html.js';
 import { readMeta, firstSession, liveFeatures, themeFromCss, isHex, tangledTitle } from './meta.js';
 import * as W from './widgets.js';
-import { build } from '../build.js';
-import { validate, makeCode } from '../validate.js';
-import { resolveDesign } from '../decide/design.js';
-import { siteData, LIB_SCRIPT_SOURCES, liveOrigins, servedOverLan, jsonScript, keepRule } from '../render/shell.js';
-import { boardFiles } from '../render/sections.js';
-import { wordsFor } from '../words.js';
-import { surveyFor } from '../intake.js';
+import { normAux, buildAux, auxLive } from './aux.js';
+import { makeCode } from '../util.js';
+import { siteData, LIB_SCRIPT_SOURCES, liveOrigins, servedOverLan, jsonScript, boardFiles } from '../render/shell.js';
+import { wordsFor, surveyFor } from '../words.js';
 import { contrast, readableOn, mix, ensureContrast, luminance, alpha } from '../design/color.js';
 import { matchFont } from '../design/fonts.js';
 import { VERSION } from '../version.js';
@@ -110,7 +107,7 @@ function kitVars(theme) {
   return Object.keys(v).length ? `:root{${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';')}}\n` : '';
 }
 
-/** 연수 정보·모은 기능 → 엔진 설계도(v1). 보조 쪽·#lp-data·강사 화면 목록을 지금 엔진으로 만들 때 씀 */
+/** 연수 정보·모은 기능 → 보조 쪽 모양(kit/aux.js normAux가 다듬음). 보조 쪽·#lp-data·강사 화면 목록(#lp-blueprint)을 만들 때 씀 */
 function synthBlueprint(meta, col, { preview = false, theme = meta.theme || {} } = {}) {
   const s1 = firstSession(meta);
   // 자리 표시가 있으면 그 기능은 켬. 실습 단계가 있고 참여 기능이 켜져 있으면 진행 현황도(강사 화면이 단계별 진행을 셈)
@@ -496,8 +493,7 @@ export function assemble(site, meta0, opts = {}) {
     if (attr(t, 'data-lp-step') !== undefined) pre.steps.push(1);
   }
   const preview = !!opts.preview || opts.target === 'preview';
-  const bp0 = synthBlueprint(meta, pre, { preview, theme });
-  const v0 = validate(bp0).blueprint;
+  const v0 = normAux(synthBlueprint(meta, pre, { preview, theme }));
   const words = wordsFor(v0);
   const liveOn = v0.live.provider !== 'none';
   const f = v0.live.features;
@@ -521,23 +517,15 @@ export function assemble(site, meta0, opts = {}) {
     if (meta.features.includes(feat) && !has && feat !== 'attendance') warn('feature-no-slot', `features에 ${feat}가 있는데 ${label} 자리 표시(data-lp)가 없어요.`);
   }
 
-  // 최종 설계도(모은 것 전부) → 엔진으로 보조 쪽
-  const bp = synthBlueprint(meta, col, { preview, theme });
-  const built = build(bp, { runtime, today: opts.today, preview: false });
-  if (built.errors?.length) for (const e of built.errors) warn('engine', e.message_ko);
-  const vb = built.blueprint;
-  const design = built.design || resolveDesign(vb);
-  const live = vb.live.provider !== 'none' && (vb.live.features.length > 0 || vb.sections.some((s) => ['qa', 'board', 'poll', 'attendance'].includes(s.type) || (s.type === 'survey' && s.questions?.length)));
-  const sctx = { bp: vb, words, design, live };
+  // 모은 것 전부 → 보조 쪽·런타임(kit/aux.js)
+  const vb = normAux(synthBlueprint(meta, col, { preview, theme }));
+  const built = buildAux(vb, { runtime, today: opts.today });
+  const live = auxLive(vb);
+  const sctx = { bp: vb, words, design: built.design, live };
   ctx.phaseText = endedText(vb, words);
   const data = siteData(sctx);
   const csp = kitCsp(vb, { live });
-
-  // 엔진 파일(보조 쪽·런타임)
-  for (const [p, v] of Object.entries(built.files || {})) {
-    if (p === 'index.html' || p === '_headers' || p === 'robots.txt') continue;
-    out[p] = v;
-  }
+  Object.assign(out, built.files);
   out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme);
   out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${read('kit.css')}`;
   if (!out['assets/lecpage.js']) out['assets/lecpage.js'] = read('lecpage.js');
@@ -583,8 +571,8 @@ export function assemble(site, meta0, opts = {}) {
     survey: col.survey, materials: col.materials, tools: col.tools, liveFeatures: vb.live.features, provider: vb.live.provider, code: vb.live.code,
   };
   const report = { pages, files: Object.keys(out).length, sizeKB: Math.round(Object.values(out).reduce((a, v) => a + enc(v), 0) / 1024), live: live ? vb.live.provider : 'none', features: vb.live.features };
-  // 강사용 파일(올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글). 엔진 템플릿용 DESIGN.md·설계도 사본은 넣지 않음
-  const teacher = built.teacher?.['운영안내.md'] ? { '운영안내.md': built.teacher['운영안내.md'] } : {};
+  // 강사용 파일(올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글)
+  const teacher = built.teacher;
   return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words, teacher };
 }
 
