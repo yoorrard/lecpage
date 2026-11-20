@@ -131,10 +131,11 @@ async function assembleWork(h, work, extra = {}) {
 }
 const relp = (a, b) => relative(a, b) || '.';
 
-/** 조립 결과를 work/dist에 씀. 예전 결과는 지우되 점 파일(.git 등)·CNAME은 남김(GitHub Pages로 올린 폴더) */
+/** 조립 결과를 work/dist에 씀. 예전 결과는 지우되 강사가 넣은 배포 설정(.git·.vercelignore 같은 점 파일, CNAME, vercel.json 등)은 남김 */
+const KEEP_IN_DIST = new Set(['CNAME', 'vercel.json', 'netlify.toml', 'staticwebapp.config.json', 'firebase.json']);
 function writeDist(N, work, files) {
   const dist = join(work, 'dist');
-  if (existsSync(dist)) for (const n of readdirSync(dist)) if (!n.startsWith('.') && n !== 'CNAME') rmSync(join(dist, n), { recursive: true, force: true });
+  if (existsSync(dist)) for (const n of readdirSync(dist)) if (!n.startsWith('.') && !KEEP_IN_DIST.has(n)) rmSync(join(dist, n), { recursive: true, force: true });
   N.writeFiles(dist, files);
   return dist;
 }

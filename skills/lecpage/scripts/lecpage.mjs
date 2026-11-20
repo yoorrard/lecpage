@@ -1101,7 +1101,7 @@ const commands = {
       r.alternatives.length ? `대안 ${r.alternatives.join(', ')}` : '',
       // 이미 연결해 둔 곳이 없으면: 가입 없는 길(앱의 바로 배포). skill은 바로 배포를 직접 부르지 않고 앱으로 넘김
       ![].concat(info.connected || []).length && !info.previous && info.network !== 'offline' ? '계정이 없으면 app work → 강사가 lecpage.com [저장한 파일 열기] → [배포하기]의 바로 배포(가입 없음, 60일 보관, 참여 기능 포함)' : '',
-      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live --features ${(info.features || []).join(',') || 'qa,poll'} (먼저 --dry-run)` : `설계도 live.provider=${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 info.json의 live로` : ''}`,
+      r.backend === 'cloudflare' && top?.id === 'cloudflare' ? `한 번에 publish work --live (먼저 --dry-run)` : `참여 기능 서버 ${r.liveProvider}${BACKEND[r.backend] ? ` · 만들기 backends/${BACKEND[r.backend]}/README.md · 주소·키는 강사에게 받아 lecpage.teacher.json의 live로(예전 흐름은 info.json)` : ''}`,
     ], r);
   },
 

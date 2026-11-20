@@ -29,19 +29,19 @@ Vercel 함수의 WebSocket은 최대 실행 시간(Hobby 300초)에 끊기고 �
 2. https://vercel.com/account/tokens → 이름 `lecpage` → **Scope**(내 팀) → **Expiration** → **Create**.
 3. `vcp_`로 시작하는 값은 **한 번만** 보입니다. 바로 복사합니다.
 
-skill은 토큰을 환경 변수 `VERCEL_TOKEN`으로만 넘기고 파일(설계도·info.json·`dist/`)에 적지 않습니다. 연수가 끝나면 같은 페이지에서 지웁니다.
+skill은 토큰을 환경 변수 `VERCEL_TOKEN`으로만 넘기고 파일(`lecpage*.json`·`work/dist/`)에 적지 않습니다. 연수가 끝나면 같은 페이지에서 지웁니다.
 
 ## skill: 명령으로 올리기
 ```bash
 S=<skill 폴더>/templates/deploy/vercel
-cp $S/vercel.json $S/.vercelignore dist/     # 한 번만. 다시 빌드해도 남습니다
-VERCEL_TOKEN=… npx vercel@65.8.0 deploy ./dist --prod --yes --project lec-20261111 --create-if-missing
+cp $S/vercel.json $S/.vercelignore work/dist/     # 한 번만. 다시 조립해도 남습니다
+VERCEL_TOKEN=… npx vercel@65.8.0 deploy ./work/dist --prod --yes --project lec-20261111 --create-if-missing
 ```
 - 대화 없이 돕니다(CLI 65.14.0 `--help`로 플래그 확인). 팀이 여럿이면 `--scope <팀>`.
 - **참가자 주소는 운영 주소 `https://lec-20261111.vercel.app`** 입니다. 명령이 stdout에 내는 것은 배포별 주소(`<프로젝트>-<해시>-<팀>.vercel.app`)입니다. 그 판만 가리키고 Vercel 로그인을 요구할 수 있으니 **나눠 주지 않습니다**.
 - 이름을 다른 사람이 쓰고 있으면 운영 주소가 `<프로젝트>-<팀>.vercel.app`처럼 잡힙니다. 프로젝트 **Settings → Domains**에서 확인합니다.
 - 프로젝트 이름: 소문자·숫자·`.` `_` `-`, 100자까지, `---` 금지.
-- 계정 없이 미리 보기만: `npx vercel@65.8.0 deploy ./dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
+- 계정 없이 미리 보기만: `npx vercel@65.8.0 deploy ./work/dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
 
 ## 명령어 없이
 - **앱**: 배포하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
@@ -52,7 +52,7 @@ VERCEL_TOKEN=… npx vercel@65.8.0 deploy ./dist --prod --yes --project lec-2026
 - Drop으로 만든 프로젝트(Git 연결 없음): 대시보드의 그 프로젝트 위에 폴더를 놓으면 새 운영 배포가 됩니다.
 
 ## 응답 헤더
-Vercel은 `_headers`를 읽지 않습니다. 올리는 폴더 맨 위 `vercel.json`의 `headers`가 맡습니다. 템플릿은 엔진이 만든 `dist/_headers`와 같은 규칙이라 그대로 복사합니다. CSP는 엔진이 페이지마다 `<meta>`로 넣습니다.
+Vercel은 `_headers`를 읽지 않습니다. 올리는 폴더 맨 위 `vercel.json`의 `headers`가 맡습니다. 템플릿은 조립이 만든 `work/dist/_headers`와 같은 규칙이라 그대로 복사합니다. CSP는 엔진이 페이지마다 `<meta>`로 넣습니다.
 
 ## 확인하기
 1. 로그아웃한 창(시크릿 창)에서 `https://<프로젝트>.vercel.app/check.html`을 엽니다(접속 확인).

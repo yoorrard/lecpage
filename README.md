@@ -54,7 +54,7 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 
 ### AI 에이전트에서 쓰기
 
-쓰던 AI 에이전트에 lecpage 스킬을 넣으면 쓰던 구독 그대로 앱과 같은 엔진으로 만들어요. 만든 연수는 `.lecpage` 파일로 웹앱에서 열어 고치고 배포해요.
+쓰던 AI 에이전트(Claude Code·Codex 등)에 lecpage 스킬을 넣으면, 에이전트가 교재 원본과 쪽 그림을 직접 읽고 강의 흐름·디자인·코드를 써요. lecpage는 쪽 그림 준비, 강의 기능(질문·투표·출석·실습 단계 등), 조립·검수(휴대폰·PC 화면 그림)·배포를 받쳐요. 쓰던 구독 그대로 쓰고, 만든 연수는 `.lecpage` 파일로 웹앱에서 열어 고치고 배포해요.
 
 | 도구 | 설치(한 줄) |
 |---|---|
@@ -63,6 +63,8 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 | Gemini CLI | `gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage` |
 | Cursor 등 그 밖의 도구 | `npx skills add yoorrard/lecpage`(모든 프로젝트에 쓰려면 `-g`) |
 | claude.ai | `skills/lecpage` 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기 |
+
+Claude Code는 2.1.30 이상을 권해요(스킬은 2.0.20부터, PDF를 쪽 범위로 읽기는 2.1.30부터). `claude --version`으로 확인하고 `claude update`로 올려요.
 
 그다음 "이 PPT로 연수 사이트 만들어 줘"라고 말해요. 명령과 흐름은 [SKILL.md](skills/lecpage/SKILL.md)에 있어요. 설치 근거: [Claude Code 플러그인](https://code.claude.com/docs/en/plugins/install) · [Codex 스킬](https://developers.openai.com/codex/skills) · [Gemini CLI 스킬](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills.md) · [skills CLI](https://github.com/vercel-labs/skills)
 
@@ -76,7 +78,7 @@ AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강�
 
 ## 더 알아보기
 
-- 무엇을 만들어 주나요: [기획서](docs/plan.md)(사이트 유형·섹션·강사용 화면) · [디자인 27가지와 효과](skills/lecpage/references/design.md) · 앱의 [디자인 둘러보기](https://lecpage.com/#/gallery)
+- 무엇을 만들어 주나요: [기획서](docs/plan.md)(사이트 유형·섹션·강사용 화면) · [강의 사이트 디자인 원칙](skills/lecpage/references/design-principles.md) · 앱의 [디자인 둘러보기](https://lecpage.com/#/gallery)
 - 배포와 참여 기능: [배포할 곳 안내서](skills/lecpage/references/deploy) · [참여 기능 연결 고르기](skills/lecpage/references/infra-decision.md) · [운영비와 멈추지 않기](docs/research/zero-cost-2026-11.md)
 - 개발자용: [아키텍처와 계약](docs/architecture.md) · [문구 기준](docs/writing.md) · [동작 기준](docs/interaction.md) · [웹앱 운영 안내](docs/operations.md) · [바로 배포 서버](hosting/README.md) · [조사 기록](docs/research)
 - 약속: [보안 정책](SECURITY.md) · [이용약관](docs/legal/terms.md) · [개인정보 처리방침](docs/legal/privacy.md) · [참가자 개인정보 안내 가이드(강사용)](docs/legal/participant-privacy-guide.md)

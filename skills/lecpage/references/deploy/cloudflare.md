@@ -18,7 +18,7 @@
 
 ## 비용과 한도
 - 정적 자산 요청은 **무료·무제한**입니다(Worker 코드가 도는 요청만 하루 10만). 한도를 넘으면 오류가 날 뿐 요금이 청구되지 않습니다.
-- `_headers` 규칙은 100개까지. 엔진이 만든 `dist/_headers`를 그대로 읽습니다.
+- `_headers` 규칙은 100개까지. 조립이 만든 `work/dist/_headers`를 그대로 읽습니다.
 - `workers.dev` 주소는 Cloudflare가 "개인·취미용"으로 봅니다. Browser Integrity Check를 끌 수 없습니다.
 - Workers 정적 자산은 `Range` 요청에도 파일 전체를 `200`으로 줍니다. Safari에서 사이트 안 동영상이 안 나올 수 있으니 영상은 유튜브 링크로 둡니다.
 - 'Workers Caching'과 `run_worker_first`는 켜지 않습니다. 켜면 정적 요청도 하루 10만 한도에 들어갑니다.
@@ -26,11 +26,11 @@
 - 출처: https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/ · https://developers.cloudflare.com/workers/platform/limits/ · https://developers.cloudflare.com/pages/platform/limits/ · https://developers.cloudflare.com/workers/configuration/routing/workers-dev/ · https://developers.cloudflare.com/durable-objects/platform/pricing/
 
 ## 올리기 전에
-- 빌드 결과 폴더(`dist/`, 앱에서는 "사이트 파일")만 올립니다. **강사용 파일**(`dist-강사용/`, 앱에서는 따로 받는 파일)은 올리지 않습니다.
+- 사이트 폴더(`work/dist/`, 앱에서는 "사이트 파일")만 올립니다. **강사용 파일**(`work/dist-강사용/`, 앱에서는 따로 받는 파일)은 올리지 않습니다.
 - 공개 범위(링크·공개·암호)는 빌드할 때 정합니다(`../infra-decision.md` §3.3).
 
 ## 끌어 놓기
-강사가 직접 합니다. ZIP은 앱의 "사이트 파일 받기(ZIP)"나 `pack dist -o site.zip`으로 만듭니다.
+강사가 직접 합니다. ZIP은 앱의 "사이트 파일 받기(ZIP)"나 `pack work -o site.zip`으로 만듭니다.
 1. https://dash.cloudflare.com/sign-up 에서 가입합니다(이메일만, 결제 정보 없음).
 2. 왼쪽 **Workers & Pages** → **Create application** → **Get started** → **Drag and drop your files**.
 3. 프로젝트 이름을 적습니다. 예) `lec-20261111` → 주소가 `lec-20261111.pages.dev`.
@@ -47,12 +47,12 @@ $L publish work --dry-run                          # 순서와 강사가 할 일
 $L publish work                                    # 사이트만
 $L publish work --live --features qa,poll          # 사이트 + 참여 기능(실시간 중계)을 같은 계정에
 ```
-`--live`는 아래 "실시간 중계"의 skill 순서(중계 → 관리자 키 → 사이트를 중계에 이어 다시 빌드 → 사이트 → `ALLOWED_ORIGINS` → 확인)와 인쇄용 안내물(`handouts`)까지 한 번에 합니다. 관리자 키는 `dist-강사용/관리자-키.txt`에만 적고 화면에 찍지 않습니다. 인증·`--temporary`·빈 임시 폴더에서 돌리는 까닭은 아래와 같습니다. 손으로 할 때만 아래 명령을 씁니다.
+`--live`는 아래 "실시간 중계"의 skill 순서(중계 → 관리자 키 → 사이트를 중계에 이어 다시 조립 → 사이트 → `ALLOWED_ORIGINS` → 확인)와 인쇄용 안내물(`handouts`)까지 한 번에 합니다. 관리자 키는 `dist-강사용/관리자-키.txt`에만 적고 화면에 찍지 않습니다. 인증·`--temporary`·빈 임시 폴더에서 돌리는 까닭은 아래와 같습니다. 손으로 할 때만 아래 명령을 씁니다.
 
 ## skill: wrangler로 올리기(손으로)
 ```bash
-# 작업 폴더(dist/의 위)에서. 이름은 소문자·숫자·하이픈
-D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name lec-20261111 --compatibility-date 2026-11-11)
+# work/가 있는 폴더에서. 이름은 소문자·숫자·하이픈
+D="$PWD/work/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name lec-20261111 --compatibility-date 2026-11-11)
 # → https://lec-20261111.<계정>.workers.dev
 ```
 설정 파일 없이, 대화 없이 돕니다(4.160.0에서 `--dry-run`으로 확인).
@@ -77,21 +77,21 @@ D="$PWD/dist"; (cd "$(mktemp -d)" && npx wrangler@4 deploy --assets "$D" --name 
 - claim한 뒤 고칠 때는 `npx wrangler@4 login` 다음 `--temporary` 없이 같은 명령.
 
 알아 둘 것
-- wrangler는 `dist/` 안의 숨은 폴더도 그대로 올립니다(로컬에서 확인). `dist/.git`이 있으면(GitHub Pages에 올린 적이 있으면) `<skill 폴더>/templates/deploy/cloudflare/.assetsignore`를 `dist/`에 복사합니다.
+- wrangler는 `work/dist/` 안의 숨은 폴더도 그대로 올립니다(로컬에서 확인). `work/dist/.git`이 있으면(GitHub Pages에 올린 적이 있으면) `<skill 폴더>/templates/deploy/cloudflare/.assetsignore`를 `work/dist/`에 복사합니다.
 - `/console.html`은 `/console`로 307 이동해 열립니다. 링크는 그대로 동작합니다.
 - 다시 배포: 같은 `--name`으로 같은 명령. 주소는 그대로입니다.
 - 이전 판으로: `npx wrangler@4 deployments list --name <이름>` → `npx wrangler@4 rollback <버전ID> --name <이름>`.
 
 `pages.dev` 주소로 올릴 때(내 도메인을 CNAME만으로 붙이려 할 때 등):
 ```bash
-D="$PWD/dist"; cd "$(mktemp -d)"
+D="$PWD/work/dist"; cd "$(mktemp -d)"
 npx wrangler@4 pages project create lec-20261111 --production-branch main   # 처음 한 번
 npx wrangler@4 pages deploy "$D" --project-name lec-20261111 --branch main
 ```
 
 ## GitHub 연결(Workers Builds)
 저장소에 올릴 때마다 Cloudflare가 배포합니다. 명령어는 필요 없습니다.
-1. 저장소 구성: `site/`에 `dist/`의 내용물과 `templates/deploy/cloudflare/.assetsignore`, 맨 위에 `templates/deploy/cloudflare/wrangler.jsonc`(`{{SITE_NAME}}`, `{{COMPAT_DATE}}`를 바꿔 씀).
+1. 저장소 구성: `site/`에 `work/dist/`의 내용물과 `templates/deploy/cloudflare/.assetsignore`, 맨 위에 `templates/deploy/cloudflare/wrangler.jsonc`(`{{SITE_NAME}}`, `{{COMPAT_DATE}}`를 바꿔 씀).
 2. Cloudflare → **Workers & Pages** → **Create application** → 저장소 가져오기 → Cloudflare GitHub 앱을 **이 저장소만** 허용.
 3. 이름은 `wrangler.jsonc`의 `name`과 **똑같이**(다르면 실패). Build command는 비우고 Deploy command는 `npx wrangler deploy` 그대로.
 4. 배포되면 `https://<이름>.<계정>.workers.dev`. 고칠 때는 `site/`를 고쳐 커밋합니다.
@@ -110,7 +110,7 @@ npx wrangler@4 pages deploy "$D" --project-name lec-20261111 --branch main
 4. 배포가 끝나면 `https://lecpage-live.<계정>.workers.dev`가 나옵니다. 확인: 주소 뒤에 `/api/health` → `{"ok":true,…}`.
 
 **사이트와 잇기**
-- 중계 주소를 `info.json`의 `live`(`provider: "http"`, `url`)에 넣고 `patch work/blueprint.json -i work/info.json`으로 다시 빌드합니다.
+- 중계 주소를 `work/lecpage.teacher.json`의 `live`(`provider: "http"`, `url`, `code`)에 넣고 `check work`로 다시 조립합니다(예전 흐름은 `info.json`에 넣고 `patch work/blueprint.json -i work/info.json`).
 - 사이트 주소를 **`ALLOWED_ORIGINS`**(쉼표로 구분, 예: `https://lec-20261111.pages.dev,https://lec.example.kr`)에 넣습니다. 버튼으로 만든 경우 내 GitHub에 복사된 저장소의 `wrangler.toml` `[vars]`를 고쳐 커밋하면 다시 배포됩니다(대시보드에서만 바꾸면 다음 배포 때 파일 값으로 돌아갈 수 있음).
 - 그 밖의 값: `RETENTION_DAYS`(기본 30일), `MAX_UPLOAD_MB`, `ALLOWED_CODES`. `OPEN_INIT`은 `false` 그대로.
 - 참가자 화면은 웹소켓 → SSE → 새로 읽기 순서로 붙습니다. 웹소켓은 쉬는 동안 비용이 들지 않습니다.

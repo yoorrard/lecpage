@@ -12,23 +12,23 @@
 
 | 키 | 값 | 묻는 말(강사용) | 기본값 |
 |---|---|---|---|
-| `participants` | 정수 | 참여 인원은 몇 명인가요? | blueprint `audience.size` |
-| `features` | `qa help progress poll reactions signal`(실시간) · `attendance board survey`(모으기) · `upload` | 연수 중에 질문 받기·도움 요청·진행 현황·투표·나눔 보드가 필요한가요? | blueprint `live.features` (+ `board.allowFiles`면 `upload`) |
-| `duration` | `single` · `multi`(1주 안에 여러 번) · `course`(1주 넘게 띄엄띄엄) | 한 번 하는 연수인가요, 여러 차시인가요? | `meta.sessions` 개수와 날짜 간격 |
+| `participants` | 정수 | 참여 인원은 몇 명인가요? | 강사 답(교재의 '대상 ○명') |
+| `features` | `qa help progress poll reactions signal`(실시간) · `attendance board survey`(모으기) · `upload` | 연수 중에 질문 받기·도움 요청·진행 현황·투표·나눔 보드가 필요한가요? | `lecpage.json` `features`와 자리 표시(+ 보드에 `data-files`가 있으면 `upload`) |
+| `duration` | `single` · `multi`(1주 안에 여러 번) · `course`(1주 넘게 띄엄띄엄) | 한 번 하는 연수인가요, 여러 차시인가요? | `lecpage.json` `sessions` 개수와 날짜 간격 |
 | `skill` | `click` · `basic` · `dev` | (묻지 않음) skill이 셸에서 직접 올리고 백엔드도 만들므로 `basic`(엔진 값 `set`). `click`은 앱, 또는 강사가 명령 없이 혼자 올려야 할 때만 | skill은 `basic`, 앱은 `click` |
 | `budget` | `zero` · `low`(월 1만 원 이하) · `org`(기관 예산·기관 계정) | 비용은 0원이어야 하나요? | `zero` |
-| `minor` | bool | 참여자가 학생(만 14세 미만 포함)인가요? | `audience.minor` |
-| `realName` | bool | 이름·학교를 받아야 하나요? (별명만으로 충분한가요?) | `privacy.collect`에 name/school 있으면 true |
+| `minor` | bool | 참여자가 학생(만 14세 미만 포함)인가요? | `lecpage.json` `audience`가 `students` |
+| `realName` | bool | 이름·학교를 받아야 하나요? (별명만으로 충분한가요?) | 출석을 켜면 true(`lecpage.teacher.json` `privacy.collect`에 name/school) |
 | `keepInKorea` | bool | 자료가 국내 서버에만 있어야 하나요?(기관 지침) | false |
-| `network` | `good` · `slow` · `restricted` · `offline` | 연수 장소 인터넷이 막히거나 느린 편인가요? 인터넷이 아예 없나요? | `audience.network` |
-| `blocked` | 문자열 목록 | 학교에서 막힌 사이트를 아시나요? (check.html 결과로 채움) | `audience.blocked` |
+| `network` | `good` · `slow` · `restricted` · `offline` | 연수 장소 인터넷이 막히거나 느린 편인가요? 인터넷이 아예 없나요? | 강사 답 |
+| `blocked` | 문자열 목록 | 학교에서 막힌 사이트를 아시나요? (check.html 결과로 채움) | 없음 |
 | `infra` | `github google cloudflare aws azure gcp docker-host school-server nas vps raspberry-pi laptop` | 이미 쓰는 계정·서버가 있나요?(GitHub, 구글, AWS, 학교 서버, NAS…) | `[]` |
 | `customDomain` | bool | 내 도메인(예: lec.school.kr)이 있나요? | false |
 | `previous` | 배포할 곳 id | 지난번에 올린 곳이 있나요? (같은 주소를 이어 씀) | 없음 |
 | `connected` | 배포할 곳 id 목록 | 이미 쓰는 곳이 있나요? skill은 묻기 전에 셸에서 확인: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN` | `[]` |
 | `keep` | `long` | 연수 뒤에도 오래 둘 사이트인가요? | 없음 |
 | `access` | `link` · `public` · `password` | 사이트를 누가 볼 수 있나요? 주소·QR을 받은 사람만 / 누구나(검색 허용) / 암호를 아는 사람만 | `link` |
-| `siteMB` · `files` · `maxFileMB` | 수 | (빌드 결과) 사이트 크기, 파일 수, 가장 큰 파일. 앞의 둘은 빌드 요약 줄에, 큰 파일은 `find dist -type f -size +5M`로 | 빌드 결과 |
+| `siteMB` · `files` · `maxFileMB` | 수 | (조립 결과) 사이트 크기, 파일 수, 가장 큰 파일. 앞의 둘은 `check` 요약 줄에, 큰 파일은 `find work/dist -type f -size +5M`로 | 조립 결과 |
 | `instant` | bool | (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱인지. skill은 이 값을 쓰지 않고, 계정이 없는 강사는 `app work`로 앱에 넘김 | false |
 
 파생 값
@@ -143,19 +143,19 @@ S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴�
 - `link`(기본): 모든 페이지에 `noindex`, `robots.txt`는 `Disallow: /`. 주소·QR을 받은 사람만 들어옵니다. 접근 제어는 아닙니다.
 - `public`: 검색 허용(`robots.txt` `Allow: /`). 연수 날짜가 있으면 첫 화면에 schema.org `Event` JSON-LD(이름·날짜·시각·장소·주최)를 넣습니다. `link`·`password`에는 넣지 않습니다.
 - `password`: 페이지(index·console·screen)와 교재 그림·원본 자료를 **AES-GCM**으로 암호화하고, 열쇠는 암호에서 **PBKDF2-SHA256 60만 회**로 만듭니다(StatiCrypt 방식). `check.html`·`privacy.html`은 누구나 봅니다(그 두 쪽에는 참여 기능 서버 주소·연수 코드·키를 싣지 않고, 접속 확인은 서버가 닿는지만 봄). QR에 `#k=암호`를 붙이면 찍은 사람은 저절로 열립니다. **https 주소에서만** 열리므로 LAN(http)·ZIP(file://)에는 쓰지 않습니다(G24). 암호화된 파일은 누구나 내려받을 수 있어 **약한 암호는 오프라인으로 맞혀 볼 수 있습니다**. 10자 넘게, 낱말 서너 개를 이어 쓰게 안내합니다.
-- 강사용 파일(DESIGN.md·운영안내.md·lecpage.blueprint.json)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `<out>-강사용/`, 앱은 따로 내려받기).
+- 강사용 파일(운영안내.md·관리자 키·안내물)은 어느 경우에도 사이트에 들어가지 않습니다(CLI는 `work/dist-강사용/`, 앱은 따로 내려받기).
 
 ### 3.4 skill이 올릴 때 (강사가 할 일을 가장 적게)
 skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다. 강사에게는 로그인이나 토큰만 부탁합니다. 토큰은 환경 변수로 받고 대화나 파일에 적지 않습니다.
 
 | 순서 | skill이 하는 일 |
 |---|---|
-| 1 | `info.json`에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`·`ONPOD_TOKEN`. 있는 곳을 `connected`에, 빌드 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
-| 2 | `decide-infra -i work/info.json` → 배포할 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
+| 1 | `decide-infra`에 줄 답 파일(예: `work/infra.json`)에 `skill: "set"`을 넣습니다. 셸에서 이미 연결된 곳을 봅니다: `npx wrangler@4 whoami`, `gh auth status`, `VERCEL_TOKEN`·`NETLIFY_AUTH_TOKEN`·`CLOUDFLARE_API_TOKEN`·`ONPOD_TOKEN`. 있는 곳을 `connected`에, 조립 결과를 `siteMB`·`files`·`maxFileMB`에 넣습니다 |
+| 2 | `decide-infra -i work/infra.json` → 배포할 곳 순서와 맨 앞의 한 줄 명령이 나옵니다. §4 guards를 봅니다 |
 | 3 | 연결된 곳이 없으면 Cloudflare입니다. 1,000개·파일당 5MiB 안이면 강사 동의를 받고 `--temporary`로 먼저 올린 뒤 claim 주소를 건넵니다(60분). 넘으면 `npx wrangler@4 login`을 부탁합니다 |
-| 4 | Onpod이면 `publish work --host onpod`(사이트만, 참여 기능 중계는 Cloudflare·Supabase·시트). Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → 사이트를 중계에 이어 다시 빌드·점검 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
+| 4 | Onpod이면 `publish work --host onpod`(사이트만, 참여 기능 중계는 Cloudflare·Supabase·시트). Cloudflare면 `publish work --host cloudflare [--live]` 한 번(중계 올리기 → 관리자 키를 강사용 폴더에만 → `lecpage.teacher.json`에 중계 주소를 적고 다시 조립 → 사이트 올리기 → 중계가 이 사이트만 받게 → 주소 확인 → 인쇄용 안내물). 먼저 `--dry-run`으로 순서를 봅니다. 다른 곳은 한 줄 명령(`deploy/<대상>.md`). 대화 없이 도는 명령만 씁니다 |
 | 5 | `publish`가 `<주소>/`·`check.html`·중계 `/api/health`를 확인합니다. 손으로 올렸으면 `curl -sI <주소>/ \| head -1`이 `200`인지 봅니다. Vercel은 운영 주소(`<프로젝트>.vercel.app`)로 확인합니다 |
-| 6 | 건넵니다: 참가자 주소와 `<out>-강사용/`의 `QR-안내문.pdf`·`발표화면.png`(손으로 올렸으면 `handouts <주소>`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일(강사 화면의 도움말에 있음) |
+| 6 | 건넵니다: 참가자 주소와 `work/dist-강사용/`의 `QR-안내문.pdf`·`발표화면.png`(손으로 올렸으면 `handouts <주소>`), 강사 화면 주소와 관리자 키 보관법, 연수 전날 참가자 망에서 주소 열어 보기(§9 O), 끝난 뒤 할 일(강사 화면의 도움말에 있음) |
 
 ---
 
@@ -182,7 +182,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | live `none` · `sheets` · `supabase` · `cf-relay` · `node-server`(own/school) · `node-server`(lan) | backend `none` · `sheets` · `supabase` · `cloudflare` · `server` · `lan` |
 | static `aws-s3-cloudfront` · `cloudflare`/`cloudflare-pages-drop` · `server`/`nas` | hosts `s3` · `cloudflare` · `server` |
 
-`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값은 `-i info.json`으로 줍니다. 출력에는 배포할 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다. Cloudflare 한 줄은 `deploy/cloudflare.md`에 적힌 대로 빈 임시 폴더에서 돌립니다(위쪽 폴더의 wrangler 설정을 읽지 않게).
+`decide-infra`의 명령줄 옵션은 `--size --features --skill --duration --network --infra --commercial --minor`뿐입니다. 나머지 값(`connected`·`previous`·`siteMB` 등)은 `-i <답 파일.json>`으로 줍니다. 출력에는 배포할 곳 순서, 고른 까닭, 맨 앞의 한 줄 명령과 안내 파일이 나옵니다. Cloudflare 한 줄은 `deploy/cloudflare.md`에 적힌 대로 빈 임시 폴더에서 돌립니다(위쪽 폴더의 wrangler 설정을 읽지 않게).
 
 ```json
 {
@@ -251,7 +251,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"G13","when":{"live":"supabase"},"level":"info","warn":"무료 프로젝트는 계정당 2개까지(정지된 것 제외)","fix":"연수 끝나면 데이터 지우고 프로젝트 정지·삭제"},
     {"id":"G14","when":{"live":"cf-relay","expr":"participants * (3600/pollSec) * hours > 80000"},"level":"warn","warn":"WebSocket이 막혀 새로 읽기로 돌면 Workers 무료 10만 요청/일을 넘을 수 있음(09:00 KST 초기화)","fix":"새로 읽기 간격 10~15초, 또는 node-server"},
     {"id":"G15","when":{"live":"sheets","participants":{"gt":40}},"level":"warn","warn":"Apps Script는 사용자당 동시 실행 30개. 많은 인원이 짧은 간격으로 부르면 늦어지거나 실패","fix":"새로 읽기 7~10초 유지, 반응 줄이기, 60명 넘으면 supabase"},
-    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 그래서 생성 사이트도 live.uploads가 true일 때만 나눔 보드에 파일 올리기를 보임. 켜면 보드에 보이는 동안 드라이브 '링크가 있는 모든 사용자'로 공유","fix":"시트 메뉴 '파일 올리기 켜기/끄기'로 켠 뒤 `patch … --set live.uploads=true`로 다시 빌드. 학교 계정은 외부 공유가 막힐 수 있음. 14세 미만이면 끄기"},
+    {"id":"G16","when":{"live":"sheets","features":{"any":["upload"]}},"level":"warn","warn":"Sheets 파일 올리기는 기본 꺼짐. 그래서 생성 사이트도 live.uploads가 true일 때만 나눔 보드에 파일 올리기를 보임. 켜면 보드에 보이는 동안 드라이브 '링크가 있는 모든 사용자'로 공유","fix":"시트 메뉴 '파일 올리기 켜기/끄기'로 켠 뒤 `lecpage.teacher.json`의 `live.uploads`를 true로 하고 다시 조립(check). 학교 계정은 외부 공유가 막힐 수 있음. 14세 미만이면 끄기"},
     {"id":"G17","when":{"live":"node-server","place":"lan"},"level":"warn","warn":"학교 와이파이는 기기끼리 통신을 막는 경우가 많음(AP 격리). 휴대폰 핫스폿은 동시 접속 수가 적음","fix":"전용 공유기 준비 또는 Quick Tunnel(deploy/local-lan-classroom.md)"},
     {"id":"G19","when":{"wsBlocked":true,"live":"supabase"},"level":"info","warn":"Supabase 실시간은 WebSocket이 필요. 막히면 어댑터가 7초 새로 읽기로 바뀜(반응이 늦어짐)","fix":"그대로 써도 됨. 빠른 반응이 필요하면 cf-relay/node-server(SSE)"},
     {"id":"G20","when":{"blocked":{"any":["cdn.jsdelivr.net","fonts.googleapis.com","fonts.gstatic.com"]}},"level":"warn","warn":"글꼴·라이브러리 CDN 차단","fix":"글꼴·라이브러리를 사이트 안에 포함(자체 호스팅). 시스템 글꼴로도 내용은 보임"},
@@ -401,7 +401,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 - **별명만 받기**가 기본입니다. 이름·학교는 이수 처리에 꼭 필요할 때만.
 - 만 14세 미만의 개인정보를 받으려면 법정대리인 동의가 필요합니다(개인정보 보호법). 학생 대상이면 **별명만 + 연수 뒤 즉시 삭제**. 학생 개인정보를 다루는 사이트는 교육부 '학습지원 소프트웨어' 기준과 학교운영위원회 심의 대상이 될 수 있습니다(교원 대상 연수는 해당 없음).
-- 해외 서버(Supabase 서울 외 리전, Cloudflare, Google)에 개인정보를 두면 개인정보 처리 안내(privacy.html)에 **처리 위탁·국외 이전** 사실(업체, 국가, 항목, 기간)을 적습니다. → blueprint `privacy.processors`.
+- 해외 서버(Supabase 서울 외 리전, Cloudflare, Google)에 개인정보를 두면 개인정보 처리 안내(privacy.html)에 **처리 위탁·국외 이전** 사실(업체, 국가, 항목, 기간)을 적습니다. → `lecpage.teacher.json`의 `privacy.processors`.
 - 국내 보관이 필요하면: Supabase 서울(`ap-northeast-2`), AWS Lightsail 서울, 네이버 클라우드, 학교 서버·NAS·노트북.
 - 연수가 끝나면: CSV 내보내기 → `purge()`(강사 화면의 "전부 삭제") → 프로젝트·서버 정리. Sheets·Supabase에 올라간 파일은 따로 지워야 할 수 있습니다. 각 가이드의 "연수가 끝난 뒤"를 따릅니다.
 
@@ -415,7 +415,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 > "드린 ZIP 파일을 Cloudflare라는 무료 서비스에 그대로 끌어다 놓으면 주소가 생겨요. 가입은 이메일만 있으면 되고, 참가자가 많아도 비용이 없어요. 강사님 계정이라 나중에 직접 지우실 수 있어요."
 
 **B. GitHub Pages**
-> "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줘요. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모와 설계도는 올라가지 않아요. GitHub 계정은 이메일 인증을 마친 상태여야 해요."
+> "GitHub 저장소에 사이트 파일을 올리면 GitHub가 무료로 사이트를 열어 줘요. 무료 저장소는 공개라서 사이트 파일을 누구나 내려받을 수 있어요. 교재를 아무나 보면 곤란하면 암호를 걸어 둘게요. 강사용 메모는 올라가지 않아요. GitHub 계정은 이메일 인증을 마친 상태여야 해요."
 
 **C. Google Sheets(Apps Script) 실시간**
 > "질문·도움 요청·진행 현황은 강사님 구글 시트에 쌓이게 할게요. 구글 계정만 있으면 화면 안내를 따라 10분이면 연결되고, 마지막에 '연결 확인'으로 바로 시험해 볼 수 있어요. 50명 안팎까지 잘 맞고, 화면은 7초마다 새로 읽어서 몇 초 늦게 보일 수 있어요. 끝나면 시트를 지우면 기록도 사라집니다."
@@ -460,7 +460,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 
 ## 10. 템플릿 치환 규칙 (`templates/deploy/`)
 
-빌드 결과(`dist/`)에는 이미 페이지마다 CSP `<meta>`와 기본 응답 헤더 파일 `_headers`가 들어 있습니다. 주력 네 곳은 템플릿 없이 올라갑니다(Vercel만 `vercel/vercel.json`·`.vercelignore`를 `dist/`에 복사. `{{…}}` 없음, 그대로 씀). 아래 토큰은 CSP를 **응답 헤더로도** 걸거나 그 밖의 곳에 올릴 때만 씁니다. 쓰면 `{{…}}`를 모두 채워야 합니다. 비워 두면 실시간 연결이 막힙니다.
+조립 결과(`work/dist/`)에는 이미 페이지마다 CSP `<meta>`와 기본 응답 헤더 파일 `_headers`가 들어 있습니다. 주력 네 곳은 템플릿 없이 올라갑니다(Vercel만 `vercel/vercel.json`·`.vercelignore`를 `work/dist/`에 복사. `{{…}}` 없음, 그대로 씀). 아래 토큰은 CSP를 **응답 헤더로도** 걸거나 그 밖의 곳에 올릴 때만 씁니다. 쓰면 `{{…}}`를 모두 채워야 합니다. 비워 두면 실시간 연결이 막힙니다.
 
 | 토큰 | 값 | 예 |
 |---|---|---|

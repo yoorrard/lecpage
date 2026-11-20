@@ -4,9 +4,9 @@
 
 ## 1. check.html로 먼저 확인하기
 1. 연수 장소에서, 참가자가 쓸 **같은 망**(교사용 업무망/학생 무선망 등)에 붙은 기기로 `https://<사이트>/check.html`을 엽니다.
-2. 항목별로 초록(됨)/빨강(막힘)/노랑(느림)이 나옵니다. 설계도의 `readiness.checks`(도구 사이트들)와 실시간 연결(WebSocket → SSE → 폴링)을 차례로 시험합니다 ⚠️ 세부 항목은 check.html 구현 기준.
+2. 항목별로 초록(됨)/빨강(막힘)/노랑(느림)이 나옵니다. 사이트에 링크한 바깥 도구와 실시간 연결(WebSocket → SSE → 폴링)을 차례로 시험합니다 ⚠️ 세부 항목은 check.html 구현 기준.
 3. 결과를 **복사**(또는 화면 캡처)해서 IT 담당자에게 보냅니다.
-4. 결과를 blueprint `audience.blocked`에 넣으면 skill이 대안을 다시 고릅니다(infra-decision.md 규칙 G01·G19·G20).
+4. 막힌 곳을 `decide-infra` 답 파일의 `blocked`에 넣으면 skill이 대안을 다시 고릅니다(infra-decision.md 규칙 G01·G19·G20).
 
 ## 2. 요청서 (복사해서 보내세요)
 

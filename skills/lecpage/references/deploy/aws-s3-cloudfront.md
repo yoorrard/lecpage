@@ -20,7 +20,7 @@
 - 출처: https://aws.amazon.com/cloudfront/pricing/ · https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/ · https://aws.amazon.com/amplify/pricing/ · https://docs.aws.amazon.com/amplify/latest/userguide/manual-deploys.html · https://aws.amazon.com/free/
 
 ## 올리기 전에
-- 빌드 결과 폴더(`dist/`)만 올립니다. 강사용 파일(`dist-강사용/`의 운영안내·DESIGN·설계도)은 올리지 않습니다(`deploy-s3.sh`는 `.md`도 걸러 냄).
+- 사이트 폴더(`work/dist/`)만 올립니다. 강사용 파일(`work/dist-강사용/`의 운영안내·관리자 키)은 올리지 않습니다(`deploy-s3.sh`는 `.md`도 걸러 냄).
 - 공개 범위는 빌드할 때 정합니다: 링크(기본, 검색 제외) · 공개 · 암호(페이지와 교재 그림 암호화).
 - 준비물: AWS 계정과 권한(S3, CloudFront, CloudFormation 또는 Amplify). 개발자는 AWS CLI v2(`aws --version`), `aws configure` 또는 `aws sso login`.
 
@@ -36,7 +36,7 @@ aws cloudformation deploy --region ap-northeast-2 \
 aws cloudformation describe-stacks --region ap-northeast-2 --stack-name lec-20261104 \
   --query 'Stacks[0].Outputs' --output table
 # 2) 파일 올리기 + 캐시 무효화
-BUCKET=<BucketName> DISTRIBUTION_ID=<DistributionId> ./deploy-s3.sh /path/to/dist
+BUCKET=<BucketName> DISTRIBUTION_ID=<DistributionId> ./deploy-s3.sh /path/to/work/dist
 ```
 - 스크립트는 HTML·`site.json`은 `no-cache`, 슬라이드·미디어는 1시간, 나머지는 5분 캐시로 올리고 `.md`·`.env`·`data/`는 올리지 않습니다. `DRY_RUN=1`로 미리 보기.
 - 보안 헤더(CSP 등)는 CloudFront 응답 헤더 정책이 붙입니다. 실시간 주소가 바뀌면 `LiveOrigin`만 바꿔 `deploy`를 다시 실행.

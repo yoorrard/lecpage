@@ -14,7 +14,7 @@
 - DSM 관리자 계정, **패키지 센터 → Container Manager** 설치.
 - File Station에 폴더 `docker/lecpage/` 만들고 다음을 넣기:
   - `docker-compose.yml`, `Caddyfile`, `.env`(← `templates/deploy/server/`, `.env.example`을 `.env`로)
-  - `site/`(lecpage 빌드 결과 `dist/`만. 강사용 파일 `dist-강사용/`은 넣지 않음), `node-server/`(backends/node-server)
+  - `site/`(lecpage 사이트 폴더 `work/dist/`만. 강사용 파일 `work/dist-강사용/`은 넣지 않음), `node-server/`(backends/node-server)
 - `.env`에서 **포트 바꾸기**: DSM이 80·443을 쓰므로 `LEC_HTTP_PORT=8080`, `LEC_HTTPS_PORT=8443`, `LEC_SITE_ADDRESS=:80`.
 
 ## 따라 하기 — 클릭
