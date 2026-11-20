@@ -122,7 +122,7 @@ main.page{min-height:calc(100dvh - var(--top-h,57px))}
 /* ── 입력 ── */
 .field{display:grid;gap:6px}
 .field>span{font-weight:600;font-size:.9rem;color:var(--ink-2)}
-.field small{color:var(--muted);font-size:.82rem}
+.field small,.field-hint{color:var(--muted);font-size:.82rem}
 .field input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),.field select,.field textarea{width:100%;min-height:40px;border-radius:var(--r-xs);border:1px solid var(--line);background:var(--card);padding:8px 12px;transition:border-color .15s,box-shadow .15s}
 .field input:hover,.field select:hover,.field textarea:hover{border-color:var(--line-strong)}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
@@ -266,15 +266,15 @@ details>summary{cursor:pointer}
 }
 @media (min-width: 961px){
   html.is-wide .page{padding-bottom:20px}
-  .stage-2 .step-head{grid-column:1/-1;margin-bottom:20px;align-items:center}
-  .stage-2 .step-head h1{font-size:1.35rem}
-  .stage-2 .step-head p{font-size:.9rem}
+  .is-studio .step-head{grid-column:1/-1;margin-bottom:20px;align-items:center}
+  .is-studio .step-head h1{font-size:1.35rem}
+  .is-studio .step-head p{font-size:.9rem}
   /* 왼쪽 칸의 띠: 글 아래 줄에 단추, 닫기(✕)는 띠 오른쪽 위(첫 줄 글과 같은 높이). 아래 되돌린 곳 줄은 띠 끝까지 */
-  .stage-2 .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
-  .stage-2 .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
-  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>:is(.guard-note,.rb-acts,.structure-more){flex-basis:calc(100% + 34px);margin-right:-34px}
-  .stage-2 .wiz-main>.ai-job:has(>.icon-btn)>.rb-acts{flex-basis:calc(100% + 34px + .75em)}
-  .stage-2 .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
+  .is-studio .wiz-main>.ai-job:has(>.icon-btn){position:relative;padding-right:48px}
+  .is-studio .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
+  .is-studio .wiz-main>.ai-job:has(>.icon-btn)>:is(.guard-note,.rb-acts,.structure-more){flex-basis:calc(100% + 34px);margin-right:-34px}
+  .is-studio .wiz-main>.ai-job:has(>.icon-btn)>.rb-acts{flex-basis:calc(100% + 34px + .75em)}
+  .is-studio .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
 }
 /* 좁은 화면(~960px): 미리보기 → 편집 칸으로 쌓음. 미리보기는 화면의 절반쯤만(편집 칸이 첫 화면 가까이 오게),
    [되돌리기]는 머리의 버튼이 화면 밖이면 편집 칸 아래쪽에 따라다님 */

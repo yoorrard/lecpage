@@ -7,6 +7,7 @@ import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
 import { reach } from '../lib/netcheck.js';
+import { deployView, hasSiteScripts } from '../lib/site-meta.js';
 
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 배포)는 운영자가 켜 둔 앱에서만 보임
@@ -23,7 +24,7 @@ const ABOUT = {
   zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
-const nameHint = (p) => 'training-' + ((p.info?.date || '').replace(/-/g, '') || 'site');
+const nameHint = (p) => 'training-' + ((deployView(p)?.meta?.date || '').replace(/-/g, '') || 'site');
 const sameUrl = (a, b) => String(a || '').replace(/^https?:\/\//, '').replace(/\/+$/, '') === String(b || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 // 바로 배포 서버가 넘길 곳(next)의 이름 → 앱의 배포할 곳. 참여 기능(liveNext)은 Cloudflare(무료)·Supabase
 const NEXT_ID = { cloudflare: 'cloudflare', vercel: 'vercel', github: 'github-pages', netlify: 'netlify' };
@@ -35,7 +36,7 @@ export const liveNames = (next) => (next || []).map((n) => LIVE_NEXT[n]).filter(
  */
 export const lecLiveOff = (p) => {
   const o = p?.deploy?.lecpage?.liveOff;
-  if (!o || o.day !== (p.blueprint?.meta?.date || '')) return null;
+  if (!o || o.day !== (deployView(p)?.meta?.date || '')) return null;
   return o.reason === 'booked' || Math.floor((o.at || 0) / 864e5) === Math.floor(Date.now() / 864e5) ? o : null;
 };
 /** 바로 배포가 참여 기능 방을 맡지 못할 때 한 줄: 사이트는 바로 배포 그대로, 참여 기능만 강사 계정으로(liveNext 순서) */
@@ -203,12 +204,14 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   // 붐빔 단계(서버의 capacity): 이미 배포한 사이트는 붐벼도 다시 배포가 되고, 새 사이트만 내 계정으로 넘김. 평소에는 아무 줄도 없음
   const lec = p.deploy?.lecpage;
   const hasSite = !!(lec?.id && lec.expiresAt && (instant?.keepAlive !== false || lec.expiresAt > Date.now()));
-  const gate = instant ? instantGate(instant, { hasSite, date: p.blueprint?.meta?.date || '', start: p.blueprint?.meta?.start || '', share }) : null;
-  const live = gate?.ok && !instantOff ? instant : null;
-  const full = instantOff?.t || (instant && !gate.ok ? gate.note : '');
+  const gate = instant ? instantGate(instant, { hasSite, date: deployView(p)?.meta?.date || '', start: deployView(p)?.meta?.start || '', share }) : null;
+  // 이 바로 배포 서버가 사이트 스크립트를 받지 않는데(/api/info siteScripts:false, worker 보기) AI가 쓴 사이트에 스크립트가 있으면 처음부터 내 계정 쪽으로
+  const noScripts = !!instant && instant.siteScripts === false && hasSiteScripts(p);
+  const live = gate?.ok && !instantOff && !noScripts ? instant : null;
+  const full = instantOff?.t || (noScripts ? '이 바로 배포 서버는 사이트가 직접 쓴 스크립트(움직임·탭 같은 동작)를 받지 않아요. 내 계정에 배포하면 그대로 올라가요.' : instant && !gate.ok ? gate.note : '');
   // 넘길 때는 서버가 준 순서(next)로. 이미 연결해 둔 곳이 있으면 그곳이 먼저(같은 파일을 버튼 하나로)
   const nextHosts = live ? [] : (instantOff?.next?.length ? instantOff.next : instant?.capacity?.next || []).map((h) => NEXT_ID[h]).filter(Boolean);
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: instantOff && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view, !!instantOff]);
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: (instantOff || noScripts) && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view, !!instantOff, noScripts]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 배포가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 배포한 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
@@ -309,11 +312,12 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
 function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
+  const [refused, setRefused] = useState(''); // 바로 배포가 거절한 까닭(서버 문구 그대로)
   const [ask, setAsk] = useState(false); // [사이트 내리기] 확인 창
   const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
-  const bp = p.blueprint;
+  const bp = deployView(p);
   const liveOn = (bp.live?.features || []).length > 0;
   const lecUrl = info?.live?.url || '';
   const days = info?.capacity?.siteDays || info?.limits?.days || 30;
@@ -327,7 +331,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     let live = null, adminKey = prev?.adminKey || '';
     if (autoLive) {
       if (!adminKey) adminKey = randomKey(20);
-      live = { code: newCode || E.validate(bp).blueprint.live.code, adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
+      live = { code: newCode || (bp.v2 ? bp.live.code : E.validate(bp).blueprint.live.code), adminKeyHash: await sha256Hex(adminKey), settings: liveSettings(bp) };
     }
     // 연수 날짜·인원: 서버가 그날 몫을 미리 셈(차면 지금 알려 줌)
     const m = bp.meta || {};
@@ -344,6 +348,10 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     toast(out.liveOff && !own ? '배포했어요. 참여 기능은 따로 연결해 주세요.' : prev?.id === out.id ? (newCode && !retried && freshRoom ? '지난 기록을 비우고 같은 주소에 다시 배포했어요.' : '같은 주소에 다시 배포했어요.') : prev?.id ? '보관 기간이 끝나 새 주소로 배포했어요. 새 주소와 QR을 다시 보내 주세요.' : '배포했어요.');
   }, (e) => {
     if (e.code === 'code_taken' && !retried) { setTimeout(() => run(E.randomCode(), true), 0); return true; }
+    // 받을 수 없는 내용(422 unsafe_site: 비밀번호 칸·로그인 흉내·바깥 양식 등): 서버 문구(message_ko)를 그대로 화면에 두고 고칠 길을
+    if (e.code === 'unsafe_site') { setRefused(e.message); return true; }
+    // 사이트 스크립트를 받지 않는 보기(422 script_not_allowed): 내 계정에 배포하는 길로
+    if (e.code === 'script_not_allowed') { onUnavailable?.({ t: `${e.message} 내 계정에 배포하면 그대로 올라가요.` }); return true; }
     // 붐빔(서버가 까닭을 줌: 오늘 모두 / 이 기기·이 인터넷만)·저장 공간이 참: 서버 문구 그대로 두고 내 계정에 배포하는 길로(넘길 곳은 서버가 준 순서).
     // 줄 서기(pages_api)는 deployInstant가 이미 기다렸다가 다시 했음. 까닭 없는 rate_limited(이 사이트를 너무 자주 올림)는 알림만
     if ((e.reason && e.reason !== 'pages_api') || e.code === 'full') { onUnavailable?.({ t: e.message, next: e.next }); return true; }
@@ -366,7 +374,13 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
       {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
       {liveOn && liveOff && !own && <p class="small" role="status">{liveOffLine(liveOff)}</p>}
       {autoLive && !liveOff && !alive && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
-      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => run()} />
+      {refused && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
+        <b>바로 배포가 이 사이트를 받지 않았어요.</b>
+        <span>{refused}</span>
+        <span class="small">[수정 요청]으로 AI에게 그 부분을 빼 달라고 하거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
+        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`}>고치러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused('')}>닫기</button></div>
+      </div></div>}
+      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(''); run(); }} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 내리기</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
@@ -390,7 +404,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
   const [name, setName] = useState(prev?.name || '');
   const clean = vercelName(name);
   const run = () => start('vercel', async (files, onProgress) => {
-    const out = await deployVercel({ token: t.token, name: clean || slug(p.info?.date), projectId: prev?.projectId, files, onProgress });
+    const out = await deployVercel({ token: t.token, name: clean || slug(deployView(p)?.meta?.date), projectId: prev?.projectId, files, onProgress });
     done(out.url, { vercel: { projectId: out.projectId, name: out.name, url: out.url } });
     toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '배포했어요.');
   }, (e) => tokenGone(e, t, refresh));
@@ -414,7 +428,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
 function GitHub({ p, busy, start, done, bind, refresh }) {
   const t = useToken('github');
   const prev = p.deploy?.github;
-  const [repo, setRepo] = useState(prev?.repo || slug(p.info?.date));
+  const [repo, setRepo] = useState(prev?.repo || slug(deployView(p)?.meta?.date));
   const [confirm, setConfirm] = useState(false);
   const run = (allowExisting = false) => start('github-pages', async (files, onProgress) => {
     const name = repo.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || slug();
@@ -432,7 +446,7 @@ function GitHub({ p, busy, start, done, bind, refresh }) {
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
         <h2 class="h-sub">이미 있는 저장소예요</h2>
         <p>"{repo}" 저장소가 이미 있어요. 배포하면 그 안의 파일이 모두 연수 사이트 파일로 바뀌어요. 다른 이름을 쓰는 게 안전해요.</p>
-        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(p.info?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
+        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(deployView(p)?.meta?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
       </Dialog>
     </div>
   );

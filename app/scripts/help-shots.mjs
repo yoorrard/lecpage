@@ -2,7 +2,7 @@
 // 쓰는 법(app 폴더에서):  npm run build && node scripts/help-shots.mjs
 //   --base=http://localhost:4174/  이미 띄워 둔 미리보기 서버를 씀(없으면 이 스크립트가 vite preview를 띄웠다가 끔)
 //   --only=start,edit              일부만 다시 찍음
-// 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI 응답은 예시 설계도로 흉내 냅니다(키·교재가 어디로도 가지 않음).
+// 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI는 키 확인만 흉내 냅니다(키·교재가 어디로도 가지 않음).
 // playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다(npx playwright install chromium).
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -77,51 +77,40 @@ try {
     const shot = async (name) => { await settle(); await save(name + tail, await page.screenshot()); };
     const shotOf = async (name, sel) => { await settle(); await save(name + tail, await page.locator(sel).first().screenshot()); };
 
-    // 1. 교재 넣기: 예시 교재(엔진 시험용 파일)를 넣은 모습
+    // 1. 교재 넣기 + AI 고르기: 예시 교재(엔진 시험용 파일)를 넣은 모습
     await page.goto(base + '#/', { waitUntil: 'load' });
-    await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pptx'), join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
-    await page.waitForSelector('.files li', { timeout: 60000 });
-    await page.waitForFunction(() => !document.querySelector('.drop b')?.textContent.includes('중'), null, { timeout: 90000 });
-    await page.locator('.field:has-text("연수명") input').first().fill('수업에 바로 쓰는 생성형 AI');
-    await page.locator('.field:has-text("장소") input').first().fill('본관 3층 컴퓨터실');
-    // 교재에 적힌 날짜는 지난 날이라 '날짜가 지났어요' 안내가 그림에 찍힘 → 2주 뒤로(찍는 날 기준)
-    await page.locator('.field:has-text("날짜") input').first().fill(new Date(Date.now() + 14 * 864e5 + 9 * 3600e3).toISOString().slice(0, 10));
+    await page.evaluate(() => localStorage.setItem('lecpage:mock-speed', '6')); // 가짜 생성(app/src/lib/gen/mock.js)을 빨리. 진짜 생성이 오면 이 줄은 아무 일도 안 함
+    await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
+    await page.waitForSelector('.ai-card .btn:not([disabled])', { timeout: 90000 });
     await page.locator('.step-head h1').click(); // 입력 칸의 초점 테두리를 뺌
     await settle(3000); // 알림 글이 사라진 뒤에
     await top();
     if (want('start')) await shot('start');
 
-    // 2. AI 연결 창: 키 페이지 열기 → 붙여넣기
-    // 키가 없으면 교재 넣기 화면의 AI 카드 '다른 방법'에서 [API 키로 만들기]
-    if (await page.locator('.make-card').count()) await page.click('.make-card button:has-text("API 키로 만들기")');
-    else await page.click('.make-bar .btn-primary');
+    // 2. 키 연결 창: Gemini 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
+    await page.click('.ai-card:has(h3:text-is("Gemini")) button:has-text("키로 연결")');
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');
     await page.click('dialog[open] .key-dots li:last-child button');
     if (want('paste')) await shotOf('paste', 'dialog[open] .dlg-in');
 
-    // 3. 연결하고 만들기 → 살펴보고 고치기(AI가 짠 결과)
+    // 3. 연결하면 바로 만들기 → 완성 화면(목록·미리보기)
     await page.fill('dialog[open] input[type=password]', FAKE_KEY);
     await page.click('dialog[open] .key-now button:has-text("연결")');
-    await page.waitForSelector('.ai-job.ok', { timeout: 60000 });
+    await page.waitForSelector('#panel-info button:has-text("이 정보가 맞아요")', { timeout: 90000 });
+    await page.click('#panel-info button:has-text("이 정보가 맞아요")');
+    await page.click('#tab-list');
     await page.waitForSelector('.pv-device iframe', { timeout: 30000 });
-    // 결과 띠는 닫음(그림의 왼쪽 칸에 띠 대신 고칠 목록이 보이게)
-    await page.locator('.ai-job.ok button[aria-label="닫기"]').click().catch(() => {});
-    await settle(1800);
-    if (want('edit')) await shot('edit');
-    // 좁은 화면에서는 미리보기 아래에 고치는 칸이 있어 그쪽으로 내려서 찍음
-    // 좁은 화면은 탭 줄이 미리보기 위, 고른 탭의 내용은 미리보기 아래(.ws-body)
-    if (want('live')) { await page.click('[role=tab]:has-text("참여 기능")'); if (tail) await top('.ws-body'); await shot('live'); }
-    if (want('review')) { await page.click('[role=tab]:has-text("수정 요청")'); if (tail) await top('.ws-body'); await shot('review'); }
+    await settle(2500);
+    if (want('edit')) { await top(); await shot('edit'); }
 
-    // 4. 배포하기
-    if (want('share')) {
-      await top();
-      await page.click('.head-tools .btn-primary');
-      await page.waitForFunction(() => /\/3$/.test(location.hash), null, { timeout: 10000 });
-      await settle(1500); await top();
-      await shot('share');
-    }
+    // 4. 배포하기(참여 기능 줄이 첫 줄)
+    await top();
+    await page.click('.head-tools .btn-primary');
+    await page.waitForFunction(() => /\/3$/.test(location.hash), null, { timeout: 10000 });
+    await settle(1500); await top();
+    if (want('share')) await shot('share');
+    if (want('live')) { await top('#live-setup'); await shot('live'); }
     await ctx.close();
   }
 } finally {

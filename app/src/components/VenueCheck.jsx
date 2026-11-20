@@ -4,6 +4,7 @@ import { instantStatus, PUBLISH_API } from '../lib/deploy.js';
 import { liveNames } from './Publish.jsx';
 import { venueIcs, checkUrlOf, dayBefore, kitHtml, printHtml } from '../lib/venue.js';
 import { saveFile, safeName, copy, toast, isPastDate } from '../lib/util.js';
+import { deployView, isV2, printSiteHtml } from '../lib/site-meta.js';
 
 const md = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''); return m ? `${+m[2]}월 ${+m[3]}일` : ''; };
 
@@ -32,7 +33,7 @@ export function dayLine(st, date) {
  * 연수 장소의 Wi-Fi(참가자와 같은 망)로 전날 한 번 열어 보는 것이 가장 확실함
  */
 export function VenueBody({ p, url, instantOn }) {
-  const m = p.blueprint?.meta || {};
+  const m = deployView(p)?.meta || {};
   const check = checkUrlOf(url);
   const site = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.id || '' : '';
   const [st, again] = useDayStatus({ on: instantOn, date: m.date || '', site });
@@ -76,14 +77,14 @@ export function VenueBody({ p, url, instantOn }) {
  * 아니면 사이트 ZIP을 다른 곳에 한 번 더 배포하고 주소를 적어 둠(p.deploy.second)
  */
 export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
-  const m = p.blueprint?.meta || {};
+  const bp = deployView(p) || {}; const m = bp.meta || {};
   const alt = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '';
   const [second, setSecond] = useState(p.deploy?.second || '');
-  const live = (p.blueprint?.live?.features || []).length > 0;
+  const live = (bp.live?.features || []).length > 0;
   const okSecond = !second || /^https:\/\/[^\s/]+\.[^\s]+$/.test(second.trim());
   const save = () => { if (!okSecond) return; update((cur) => ({ deploy: { ...(cur.deploy || {}), second: second.trim() } })); toast(second.trim() ? '두 번째 주소를 적어 뒀어요.' : '두 번째 주소를 지웠어요.'); };
   const kit = () => saveFile(safeName(m.title) + '_혹시안열리면.html', kitHtml({ title: m.title, siteUrl: url, shareUrl, altUrl: alt, second: (p.deploy?.second || '').trim(), live, zipName: safeName(m.title) + '.zip' }), 'text/html;charset=utf-8');
-  const print = () => saveFile(safeName(m.title) + '_실습프롬프트모음.html', printHtml(p.blueprint), 'text/html;charset=utf-8');
+  const print = () => saveFile(safeName(m.title) + '_실습프롬프트모음.html', (isV2(p) ? printSiteHtml(p) : printHtml(p.blueprint)), 'text/html;charset=utf-8');
   return (
     <details class="rescue">
       <summary><b>혹시 안 열리면</b> <span class="small muted">두 번째 주소 · 휴대폰 데이터 · USB · 인쇄본</span></summary>

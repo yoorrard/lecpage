@@ -4,6 +4,7 @@ import { Steps } from './Steps.jsx';
 import { E } from '../lib/engine.js';
 import { copy, randomKey, sha256Hex, toast } from '../lib/util.js';
 import { loadKey, saveKey } from '../lib/ai.js';
+import { deployView, patchDeploy, featuresOf } from '../lib/site-meta.js';
 
 /**
  * 한 번 연결하면 다음 연수부터 저절로: 내 서버(Cloudflare·학교 서버)는 연수 코드마다 따로 저장해 여러 연수를 한 서버가 맡으므로,
@@ -75,9 +76,9 @@ function initSql(code, hash, bp) {
 
 /** prefer: 바로 배포 서버가 참여 기능을 넘기며 준 순서(liveNext: ['cloudflare', 'supabase']). 주면 그 순서로 권함 */
 export function LiveSetup({ p, update, prefer = null }) {
-  const bp = p.blueprint; const live = bp.live || {}; const info = p.info;
-  const code = E.validate(bp).blueprint.live.code;
-  const reco = E.decideInfra({ size: info.size, features: info.features, skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
+  const bp = deployView(p); const live = bp.live || {}; const info = p.info || {};
+  const code = bp.v2 ? live.code : E.validate(bp).blueprint.live.code;
+  const reco = E.decideInfra({ size: info.size, features: featuresOf(p), skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
   // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).
   // 엔진의 클릭용 규칙(시트)은 skill 초안의 기본값이라 그대로 두고, 앱 화면에서만 내 서버(Cloudflare)를 첫째로
@@ -104,7 +105,7 @@ export function LiveSetup({ p, update, prefer = null }) {
     const next = again ? { ...live } : { ...live, provider: prov, url: url.trim().replace(/\/+$/, ''), anonKey: prov === 'supabase' ? draft.anonKey.trim() : '' };
     try {
       const msg = await pingLive(next, code);
-      update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, ...next } }, liveOk: true }));
+      update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, ...next } })), liveOk: true }));
       if (!again && next.provider === 'http') saveKey('live-server', next.url, true).catch(() => { });
       if (!again && usedKey.current) keepAdminKey(next.url, next.provider === 'supabase' && adm ? adm.key : newKey);
       if (next.provider === 'http') (usedKey.current ? Promise.resolve(newKey) : adminKeyFor(next.url)).then((k) => applyServerSettings(next.url, code, k, bp));
@@ -112,8 +113,8 @@ export function LiveSetup({ p, update, prefer = null }) {
       setState({ busy: false, msg: done, ok: true }); toast(done);
     } catch (e) { if (again) update({ liveOk: false }); if (quiet) { setState({ busy: false, msg: '', ok: false }); return; } setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }
   }
-  function useLocal() { update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, provider: 'local', url: '', anonKey: '' } }, liveOk: false })); toast('이 컴퓨터에서만 시험하는 방식으로 바꿨어요.'); }
-  function disconnect() { update((cur) => ({ blueprint: { ...cur.blueprint, live: { ...cur.blueprint.live, provider: 'local', url: '', anonKey: '' } }, liveOk: false })); setState({ busy: false, msg: '', ok: false }); }
+  function useLocal() { update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); toast('이 컴퓨터에서만 시험하는 방식으로 바꿨어요.'); }
+  function disconnect() { update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); setState({ busy: false, msg: '', ok: false }); }
   async function makeAdmin() { const k = randomKey(20); usedKey.current = true; setAdm({ key: k, hash: await sha256Hex(k) }); }
   async function copyRaw(kind) {
     const m = kind === 'gs' ? await import('../../../skills/lecpage/backends/apps-script/Code.gs?raw') : await import('../../../skills/lecpage/backends/supabase/schema.sql?raw');

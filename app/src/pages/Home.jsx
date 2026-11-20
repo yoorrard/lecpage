@@ -13,7 +13,7 @@ const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
 const DAY = 864e5;
 /** 빈 연수: [교재 없이 시작하기]만 누르고 아무것도 넣지 않은 것(교재·초안·연수 정보 글이 하나도 없음) */
 const FILLED = ['title', 'subtitle', 'organizer', 'date', 'start', 'end', 'venue', 'request', 'instructorName', 'instructorOrg', 'contact', 'surveyUrl', 'joinUrl'];
-const isBlank = (p) => !p.blueprint && !p.material && !(p.files || []).length && !p.imported && !p.origin && !p.fromExample && !FILLED.some((k) => String(p.info?.[k] || '').trim());
+const isBlank = (p) => !p.blueprint && !p.site && !p.material && !(p.files || []).length && !p.imported && !p.origin && !p.fromExample && !String(p.request || '').trim() && !FILLED.some((k) => String(p.info?.[k] || '').trim());
 
 export function Home() {
   const [list, setList] = useState(null);
@@ -24,7 +24,9 @@ export function Home() {
   const fileRef = useRef(); const pickRef = useRef();
   // 빈 연수는 쌓이지 않게: 목록에서 빼고, 하루 넘은 것은 지우고, [교재 없이 시작하기]는 남은 빈 연수를 다시 씀
   const blankRef = useRef(null);
-  const reload = () => projects.all().then((all) => {
+  const reload = () => projects.all().then((list0) => {
+    let all = list0;
+    all = all.filter((p) => !p.demo); // 체험 연수는 목록에 없음
     const blanks = all.filter(isBlank); const now = Date.now();
     for (const b of blanks) if (now - (b.updatedAt || b.createdAt || 0) > DAY) projects.remove(b.id).catch(() => { });
     blankRef.current = blanks.find((b) => now - (b.updatedAt || b.createdAt || 0) <= DAY) || null;
@@ -65,7 +67,7 @@ export function Home() {
     const files = Array.from(fileList || []); // 입력칸을 비우기 전에 먼저 복사
     if (files.length === 1 && isSavedFile(files[0])) return openSaved(files[0]); // 저장한 연수 파일이면 교재가 아니라 연수로 열기
     return once('blank', async () => {
-      const p = blankRef.current || await newProject('blank'); blankRef.current = null;
+      const p = blankRef.current || await newProject(); blankRef.current = null;
       if (files.length) setPendingFiles(p.id, files);
       location.hash = `#/p/${p.id}/1`;
     });
@@ -86,7 +88,8 @@ export function Home() {
     return () => { clearInterval(timer); removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); removeEventListener('keydown', key); };
   }, []);
   const pick = () => pickRef.current?.click();
-  const fromExample = (id) => once(`ex-${id}`, async () => { const p = await newProject('example', id); location.hash = `#/p/${p.id}/2`; });
+  // 참고 디자인으로 시작: 새 연수의 '참고 디자인'에 적어 두고 교재 넣기로(AI가 참고만 하고 따를 필요는 없음)
+  const fromExample = (id, name) => once(`ex-${id}`, async () => { const p = await newProject({ reference: name || id }); location.hash = `#/p/${p.id}/1`; });
   async function openSaved(f) {
     const m = await import('../lib/open-saved.js').catch(() => null); // 파일을 열 때만 받음(첫 화면 묶음을 가볍게)
     if (!m) { toast('파일 여는 도구를 받지 못했어요. 인터넷 연결을 확인하고 새로 고침해 주세요.'); return; }
@@ -106,7 +109,7 @@ export function Home() {
         <div class="ld-hero-t">
           <p class="ld-kicker">강의·연수용 · 무료 · 회원가입 없음</p>
           <h1 id="ld-h1"><span>교재를 넣으면</span> <span><span class="ld-hl">연수 사이트</span>가 나와요</span></h1>
-          <p class="ld-lead">쓰던 AI가 교재로 내용을 짜면, lecpage가 주제에 맞게 꾸며 배포하고 QR까지 만들어요. 질문·투표·출석도 사이트 안에서 해요.</p>
+          <p class="ld-lead">고른 AI가 교재를 직접 읽고 사이트를 만들어요. lecpage는 질문·투표·출석을 끼우고, 검수해 배포하고, QR까지 만들어요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>
@@ -114,7 +117,7 @@ export function Home() {
           <input ref={pickRef} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { startWith(e.target.files); e.target.value = ''; }} />
           <div class="ld-hero-more">
             {recent ? <a class="btn ld-try ld-resume" href={`#/p/${recent.id}/${recent.stage || stageOf(recent.step || 1)}`}><span>이어서 만들기:</span><span class="ld-resume-t">{recent.title || '이름 없는 연수'}</span><span aria-hidden="true">→</span></a>
-              : <a class="btn ld-try" href="#/demo">먼저 체험해 보기<span aria-hidden="true"> →</span></a>}
+              : <a class="btn ld-try" href="#/demo">먼저 해보기<span aria-hidden="true"> →</span></a>}
             <button type="button" class="btn btn-quiet" {...busyProps('blank')} onClick={() => startWith([])}>교재 없이 시작하기</button>
             <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />

@@ -59,12 +59,12 @@ function useHash() {
   return h;
 }
 
-/** 이 창에서 브라우저 저장소를 쓸 수 없으면(사생활 보호 창·사이트 데이터 차단·기관 정책) 만들기·설정 화면 위에 한 줄. 체험·둘러보기·도움말은 그대로 됨 */
+/** 이 창에서 브라우저 저장소를 쓸 수 없으면(사생활 보호 창·사이트 데이터 차단·기관 정책) 만들기·설정·먼저 해보기 화면 위에 한 줄. 참고 디자인·도움말은 그대로 됨 */
 function StorageBar({ route }) {
   const [off, setOff] = useState(false);
   useEffect(() => { storageBlocked().then(setOff); }, []);
-  if (!off || ['demo', 'gallery', 'help'].includes(route)) return null;
-  return <div class="storage-bar" role="alert"><b>연수를 만들거나 열 수 없어요.</b> {STORAGE_MSG.blocked} <a href="#/demo">체험</a>과 <a href="#/gallery">디자인 둘러보기</a>는 그대로 돼요.</div>;
+  if (!off || ['gallery', 'help'].includes(route)) return null;
+  return <div class="storage-bar" role="alert"><b>연수를 만들거나 열 수 없어요.</b> {STORAGE_MSG.blocked} <a href="#/gallery">참고 디자인</a>과 <a href="#/help">도움말</a>은 그대로 돼요.</div>;
 }
 
 function App() {
@@ -97,7 +97,7 @@ function App() {
         <a class="brand" href="#/" aria-label="lecpage 처음으로"><Mascot size={34} /><Wordmark /></a>
         <nav aria-label="주 메뉴">
           <a href="#/" aria-current={cur('')}>만들기</a>
-          <a href="#/gallery" aria-current={cur('gallery')}>디자인</a>
+          <a href="#/gallery" aria-current={cur('gallery')}>참고 디자인</a>
           <a href="#/help" aria-current={cur('help')}>도움말</a>
           <a href="#/settings" aria-current={cur('settings')}>설정</a>
         </nav>

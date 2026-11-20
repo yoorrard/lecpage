@@ -4,17 +4,17 @@ import { Sheet, Field, Notice, Progress, Dialog, SecretLine } from '../../compon
 import { Mascot } from '../../components/Mascot.jsx';
 import { QR, qrPng, copyQr } from '../../components/QR.jsx';
 import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
-import { projectAssets } from '../../components/Preview.jsx';
-import { buildSite, loadRuntime, E } from '../../lib/engine.js';
+import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
+import { assemble } from '../../lib/studio.js';
 import { Publish, lecLiveOff } from '../../components/Publish.jsx';
 import { probeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
-import { kitHtml, printHtml } from '../../lib/venue.js';
+import { kitHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
-import { FEATURES, LIVE_KEYS, syncInfo } from '../../lib/blueprint.js';
-import { duplicateProject, carryPatch } from '../../lib/project.js';
+import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, toggleFeature, ensureCode, siteFiles, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
+import { duplicateProject } from '../../lib/project.js';
 import { whenText } from '@engine/src/hero-meta.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -35,7 +35,7 @@ const md = (t) => new Date(t).toLocaleDateString('ko-KR', { month: 'long', day: 
 export function lecExpiry(p, info, now = Date.now()) {
   const lec = p.deploy?.lecpage; const fixed = info ? info.keepAlive === false : lec?.view === 'pages' || !!lec?.fixed;
   if (!fixed) return null;
-  const days = info?.limits?.days || 60; const end = trainingEnd(p.blueprint?.meta);
+  const days = info?.limits?.days || 60; const end = trainingEnd(deployView(p)?.meta);
   const until = lec?.expiresAt && p.deploy?.target === 'lecpage' ? lec.expiresAt : 0;
   const again = now + days * DAY;
   return { until, gone: !!until && until <= now, short: !!end && end > now && (until ? until < end : again < end), again, enough: !end || again >= end, remindAt: end ? Math.max(now, end - 14 * DAY) : 0, days, end };
@@ -43,7 +43,7 @@ export function lecExpiry(p, info, now = Date.now()) {
 
 /** 배포 전에 볼 곳(참여 기능 연결은 체크리스트 첫 줄이 맡음) */
 function checks(p, exp) {
-  const bp = p.blueprint; const v = E.validate(bp); const b = v.blueprint; const out = [];
+  const b = deployView(p); const out = [];
   // 보관 기간이 연수 날보다 먼저 끝남: 다시 배포로 닿으면 그 길을, 연수 날이 너무 멀면 언제 다시 배포할지
   if (exp?.short && !exp.gone) {
     const last = md(exp.end - DAY);
@@ -51,12 +51,10 @@ function checks(p, exp) {
       ? `지금 사이트는 ${md(exp.until)}까지라 연수 날(${last})에는 열리지 않아요. ${exp.enough ? `다시 배포하면 ${md(exp.again)}까지로 늘어나요.` : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}`
       : `바로 배포는 배포한 날부터 ${exp.days}일 보관이라 연수 날(${last})에는 지워져 있어요. ${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.` });
   }
-  if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(첫 화면·일정에 보여요).', go: 1 });
+  if (!p.metaChecked) out.push({ k: 'warn', t: 'AI가 교재에서 찾은 연수 정보(제목·날짜·장소)를 아직 확인하지 않았어요.', go: 2 });
+  if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(QR 안내문·일정 파일에 쓰여요).', go: 2 });
   // 지난 날짜(교재에 적힌 지난 연수 날짜를 그대로 쓴 경우가 많음): 고치라고만 알림(바꾸지 않음)
-  else if (isPastDate(b.meta.date)) out.push({ k: 'warn', t: `연수 날짜(${monthDay(b.meta.date)})가 지났어요. 첫 화면·일정·QR 안내문에 이 날짜가 나와요.`, go: 1 });
-  const deck = b.sections.find((s) => s.type === 'deck');
-  if (deck && deck.slides.some((s) => !s.src)) out.push({ k: 'info', t: '교재 보기에 그림이 없는 쪽이 있어요. PDF를 넣으면 그림이 생겨요.', go: 1 });
-  for (const w of v.warnings.slice(0, 5)) out.push({ k: 'info', t: w.message_ko });
+  else if (isPastDate(b.meta.date)) out.push({ k: 'warn', t: `연수 날짜(${monthDay(b.meta.date)})가 지났어요. QR 안내문·일정 파일에 이 날짜가 나와요.`, go: 2 });
   return out;
 }
 
@@ -67,7 +65,7 @@ function checks(p, exp) {
 function oldRecords(p, rec) {
   const c = rec?.counts; if (!c) return null;
   const n = (c.participants || 0) + (c.questions || 0) + (c.posts || 0) + (c.survey || 0) + (c.answers || 0);
-  const day = p.blueprint?.meta?.date;
+  const day = deployView(p)?.meta?.date;
   if (!n || !/^\d{4}-\d{2}-\d{2}$/.test(day || '') || !rec.last || rec.last >= Date.parse(`${day}T00:00:00+09:00`)) return null;
   return { line: recordsLine(rec), when: md(rec.last) };
 }
@@ -105,7 +103,7 @@ function mdToHtml(md, title) {
 }
 
 export function StepShare({ p, update, go }) {
-  const bp = p.blueprint;
+  const bp = deployView(p);
   const [busy, setBusy] = useState('');
   const [prog, setProg] = useState(null);
   const [ask, setAsk] = useState(null); // 참여 기능 미연결로 배포할 때 확인
@@ -124,7 +122,8 @@ export function StepShare({ p, update, go }) {
   const built = useRef(''); const again = useRef(null); const goNow = useRef(null);
   useEffect(() => { instantInfo().then((i) => { setAutoLive(!!i?.live?.url); setInfoSrv(i || null); }); }, []);
   const lecSite = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage : null;
-  useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, p.blueprint?.live?.code]);
+  useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, bp?.live?.code]);
+  useEffect(() => { const pt = ensureCode(p); if (pt) update(pt); }, []); // 참여 기능 방 코드(처음 한 번)
   useEffect(() => { if (goAgain) (goNow.current || again.current)?.(); }, [goAgain]);
   // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 6초까지 기다림)
   useEffect(() => {
@@ -136,7 +135,7 @@ export function StepShare({ p, update, go }) {
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
   const instantHere = target === 'lecpage' || (!target && autoLive);
   const [daySt] = useDayStatus({ on: !!bp && instantHere && !p.deploy?.lastUrl, date: bp?.meta?.date || '', site: '' });
-  if (!bp) return <><StepHead title="배포하기" /><Notice>먼저 사이트 초안을 만들어 주세요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>초안 만들러 가기</button></div></>;
+  if (!bp || !isV2(p)) return <><StepHead title="배포하기" /><Notice>AI가 사이트를 다 만든 뒤에 배포할 수 있어요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 고르기</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
   const exp = (target === 'lecpage' || (!target && autoLive) || p.deploy?.target === 'lecpage') ? lecExpiry(p, info) : null;
@@ -144,29 +143,29 @@ export function StepShare({ p, update, go }) {
   // 새 연수(새 코드)로: 복제하면 새 주소·새 QR, 기록도 따로
   const dupNew = () => duplicateProject(p).then((n) => { toast('복제했어요. 새 연수로 배포해요.'); location.hash = `#/p/${n.id}/3`; }, () => toast('복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.'));
   const liveReady = LIVE_READY(bp.live, p.liveOk);
-  const setAccess = (mode) => update((cur) => ({ blueprint: { ...cur.blueprint, access: { mode } }, sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
+  const setAccess = (mode) => update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, access: { mode } })), sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
 
+  /** 배포할 사이트 파일: AI가 만든 사이트(+교재 쪽 그림·올린 사진)를 연수 정보·배포 설정과 함께 조립(엔진 assemble) */
   async function buildFiles({ liveOff = false, live = null, processor = null, dry = false, target: to = '', view = '' } = {}) {
-    const assets = { ...(await projectAssets(p.id, true)) };
-    let b = JSON.parse(JSON.stringify(bp));
+    const b = JSON.parse(JSON.stringify(bp));
     if (!dry) built.current = b.meta?.shortUrl || ''; // 이번에 만든 사이트에 들어간 짧은 주소(배포한 뒤 달라지면 다시 배포하라고 알림)
-    // 자료실에서 뺀 파일은 배포하지 않음(이 브라우저에서도 지움)
-    const used = new Set(b.sections.filter((x) => x.type === 'materials').flatMap((x) => (x.items || []).map((it) => String(it?.href || it?.url || ''))));
-    for (const k of Object.keys(assets)) if (k.startsWith('assets/files/') && !used.has(k)) { delete assets[k]; blobs.remove(p.id, k).catch(() => { }); }
+    let privacy = b.privacy && Object.keys(b.privacy).length ? b.privacy : null;
     if (live) { // 바로 배포: 참여 기능을 배포 서버가 맡음 → 개인정보 안내에 그 서버를 적음
       b.live = { ...b.live, ...live };
-      if (processor && !(b.privacy?.processors || []).length) b.privacy = { ...(b.privacy || {}), processors: [processor] };
+      if (processor && !(privacy?.processors || []).length) privacy = { ...(privacy || {}), processors: [processor] };
+    } else if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
+    const site = await siteFiles(p);
+    const materials = [];
+    if (p.shareOriginals) { // 교재 원본도 내려받게: 자료실(키트 materials)이 이 목록을 보여 줌(사이트의 files/)
+      const all = await blobs.all(p.id);
+      for (const f of p.files || []) { const data = f.key && all[f.key]; if (data) { const path = 'files/' + f.key.slice(4); site[path] = data; materials.push({ title: f.name, href: path, size: data.length || 0 }); } }
     }
-    else if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
-    if (p.shareOriginals) {
-      const all = await blobs.all(p.id); const hrefs = {};
-      for (const f of p.files || []) { const data = f.key && all[f.key]; if (data) { const path = 'assets/media/' + f.key.slice(4); assets[path] = data; hrefs[f.name] = path; } }
-      let has = false;
-      b.sections = b.sections.map((s) => { if (s.type !== 'materials') return s; has = true; return { ...s, items: (s.items || []).map((it) => (!it.href && hrefs[it.title] ? { ...it, href: hrefs[it.title] } : it)) }; });
-      if (!has && Object.keys(hrefs).length) b.sections.splice(Math.max(0, b.sections.findIndex((s) => s.type === 'closing')), 0, { id: 'materials', type: 'materials', nav: '자료', title: '연수 자료', items: Object.entries(hrefs).map(([title, href]) => ({ title, href })) });
-    }
-    const r = await buildSite(b, assets, { ...p.info, skill: 'click' });
-    if (r.errors.length) throw new Error(r.errors.map((e) => e.message_ko).join(' '));
+    const { features } = p.meta || {};
+    const meta = { ...(p.meta || {}), features: liveOff ? (features || []).filter((f) => !LIVE_KEYS.includes(f)) : features || [] };
+    // 강사 값(참여 기능 방·주소·공개 범위·개인정보)은 조립의 prev로만 넘김(엔진 readMeta 규칙: meta 안의 강사 칸은 버림)
+    const prev = { live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code }, siteUrl: b.meta.siteUrl || '', shortUrl: b.meta.shortUrl || '', joinUrl: p.meta?.joinUrl || '', surveyUrl: p.meta?.surveyUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}) };
+    const r = assemble(site, meta, { runtime: await loadRuntime(), target: to === 'zip' || !to ? 'zip' : 'hosted', prev, materials, material: p.material ? { pages: (p.material.pages || []).map((x, i) => ({ page: x.page || i + 1, title: x.title || '' })) } : null });
+    if (!r.files?.['index.html']) throw new Error((r.errors || []).map((e) => e.message_ko).join(' ') || '사이트를 조립하지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.');
     let files = r.files;
     if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
     if (b.access?.mode === 'password') {
@@ -174,7 +173,7 @@ export function StepShare({ p, update, go }) {
       setProg({ step: '내용 잠그는 중', pct: 5 });
       files = await E.protectSite(files, p.sitePassword, { runtime: await loadRuntime(), title: b.meta.title });
     }
-    return { files, teacher: r.teacher };
+    return { files, meta };
   }
   /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 빼고 배포하기]를 골랐으면 묻지 않고 참여 기능 없이 */
   function guard(run, auto = false) {
@@ -182,9 +181,8 @@ export function StepShare({ p, update, go }) {
     if (old && !room) { setAskRoom(true); return; }
     if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
   }
-  const setInfo = (patch) => update((cur) => { const info = { ...cur.info, ...patch }; return { info, infoTouched: true, blueprint: syncInfo(cur.blueprint, info, patch) }; });
-  const feats = (p.info.features || []).filter((f) => LIVE_KEYS.includes(f));
-  const toggleFeat = (v) => setInfo({ features: (p.info.features || []).includes(v) ? (p.info.features || []).filter((x) => x !== v) : [...(p.info.features || []), v] });
+  const feats = featuresOf(p).filter((f) => LIVE_KEYS.includes(f));
+  const toggleFeat = (v) => update((cur) => toggleFeature(cur, v));
   const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); };
   async function zip(opts = {}) {
     setBusy('zip');
@@ -192,32 +190,28 @@ export function StepShare({ p, update, go }) {
     catch (e) { toast(e.message); }
     setBusy(''); setProg(null);
   }
-  /** 강사용 파일 묶음: 운영 안내(HTML·MD), 디자인 규칙(DESIGN.md), 설계도(다시 고치거나 AI에게 줄 때). 사이트에는 넣지 않음 */
+  /** 강사용 파일 묶음: 운영 안내(HTML), 연수 정보(lecpage.json), 사이트 원본(다시 고치거나 AI에게 줄 때), 인쇄본. 사이트에는 넣지 않음 */
   async function teacherDoc() {
     try {
-      const r = await buildFiles({ dry: true }); const t = r.teacher || {};
-      const files = { '운영안내.html': mdToHtml(t['운영안내.md'] || '', p.title) };
-      for (const [k, v] of Object.entries(t)) files[k] = v;
+      const m = p.meta || {};
+      const when = whenText(bp.meta);
+      const live = (bp.live?.features || []).length > 0;
+      const guide = [`# ${m.title || p.title} 운영 안내`, [when, m.venue].filter(Boolean).join(' · '),
+        '## 연수 전날', '- 연수 장소의 Wi-Fi로 사이트와 접속 확인 쪽(check.html)을 열어 봐요.\n- QR 안내문(poster.html)을 인쇄해요.',
+        '## 연수 당일', `- 발표 화면(screen.html)을 띄우면 참가자가 QR로 들어와요.${live ? '\n- 강사 화면(console.html)에서 투표를 열고 질문·도움 요청을 봐요.' : ''}`,
+        '## 연수 뒤', '- 같은 주소가 다시 보기 자리가 돼요. 고친 뒤 다시 배포하면 같은 주소에 반영돼요.'].join('\n\n');
+      const files = { '운영안내.html': mdToHtml(guide, p.title), 'lecpage.json': JSON.stringify({ ...m, live: undefined }, null, 2) };
+      for (const [k, v] of Object.entries(p.site || {})) files['사이트원본/' + k] = v;
       // 연수 당일 대비: 인터넷이 안 될 때 나눠 줄 인쇄본, 배포했으면 '혹시 안 열리면' 한 장(두 번째 주소·휴대폰 데이터·USB)
-      files['실습프롬프트모음.html'] = printHtml(bp);
+      files['실습프롬프트모음.html'] = printSiteHtml(p);
       const url = p.deploy?.lastUrl;
       if (url) {
         const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
-        files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live: (bp.live?.features || []).length > 0, zipName: safeName(p.title) + '.zip' });
+        files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live, zipName: safeName(p.title) + '.zip' });
       }
       saveFile(safeName(p.title) + '_강사용.zip', E.zipFiles(files), 'application/zip');
       toast('강사용 파일을 내려받았어요.');
     } catch (e) { toast(e.message); }
-  }
-  /** 배포한 뒤 자료 더 넣기: 자료실이 없으면 마무리 앞에 만들고, 고치기 화면에서 그 섹션을 엶 */
-  function addMaterials() {
-    let id = (bp.sections.find((x) => x.type === 'materials') || {}).id;
-    if (!id) {
-      id = 'materials';
-      update((cur) => { const secs = cur.blueprint.sections.slice(); const at = secs.findIndex((x) => x.type === 'closing'); secs.splice(at < 0 ? secs.length : at, 0, { id, type: 'materials', nav: '자료', title: '연수 자료', items: [] }); return { blueprint: { ...cur.blueprint, sections: secs } }; });
-    }
-    try { sessionStorage.setItem('lecpage:focus', id); } catch { }
-    go(2);
   }
   function done(url, patch, more) {
     setRoom('');
@@ -227,7 +221,7 @@ export function StepShare({ p, update, go }) {
     update((cur) => ({
       pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
       deploy: { ...(cur.deploy || {}), ...patch, lastUrl: url, at: Date.now(), shortLive: moved ? '' : built.current },
-      blueprint: { ...cur.blueprint, meta: { ...cur.blueprint.meta, siteUrl: url, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...cur.blueprint.live, ...more.live } } : {}) },
+      ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: url, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
       ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
     }));
   }
@@ -303,7 +297,7 @@ export function StepShare({ p, update, go }) {
   const warns = notes.filter((c) => c.k === 'warn').length;
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: warns ? 'todo' : 'note', line: warns ? `${notes.length}곳 · 배포 전에 확인해 주세요.` : `${notes.length}곳`,
     btn: [open.notes === false ? '보기' : '접기', () => setOpen((o) => ({ ...o, notes: o.notes === false }))],
-    body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li class={c.k === 'warn' ? 'is-warn' : ''}>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>고치러 가기</button></>}</li>)}</ul> });
+    body: open.notes !== false && <ul class="warnings">{notes.map((c) => <li class={c.k === 'warn' ? 'is-warn' : ''}>· {c.t}{c.go && <> <button class="btn btn-sm btn-quiet" onClick={() => go(c.go)}>확인하러 가기</button></>}</li>)}</ul> });
   if (!p.deploy?.lastUrl) rows.push({ k: 'venue', title: '연수 장소 확인', state: day?.k === 'full' ? 'todo' : 'note', line: day && day.k !== 'ok' ? '' : '배포한 뒤 연수 전날, 그곳 Wi-Fi로 열리는지 확인해요.',
     btn: day && day.k !== 'ok' ? null : [open.venue ? '접기' : '보기', () => toggle('venue')],
     body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
@@ -323,7 +317,8 @@ export function StepShare({ p, update, go }) {
   rows.push({ k: 'host', title: '배포할 곳', state: 'go', line: '',
     body: <>
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
-      <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'} />
+      {p.demo ? <DemoPublish p={p} buildFiles={buildFiles} />
+        : <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'} />}
     </> });
 
   return (
@@ -332,7 +327,7 @@ export function StepShare({ p, update, go }) {
         {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
         {!p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class="btn btn-primary" disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : document.querySelector('.publish')?.scrollIntoView({ block: 'center', behavior: 'smooth' }))}>배포하기</button>}
       </StepHead>
-      {p.deploy?.lastUrl && <Success p={p} update={update} onAddMaterials={addMaterials} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
+      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
         <div class="stack">
@@ -351,7 +346,7 @@ export function StepShare({ p, update, go }) {
             ))}
           </ol>
           <p class="small muted">배포한 내용은 <a href="#/help/terms">이용약관</a>에 따라 배포한 분이 책임져요. 교재의 저작권과 개인정보를 확인해 주세요.</p>
-          <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 받기(ZIP)</button><span class="small muted">운영 안내·디자인 규칙·설계도. 사이트에는 올라가지 않아요.</span></div>
+          {!p.demo && <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 받기(ZIP)</button><span class="small muted">운영 안내·연수 정보·사이트 원본·인쇄본. 사이트에는 올라가지 않아요.</span></div>}
         </div>
       </Sheet>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
@@ -415,7 +410,7 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
     const f = () => { if (went.current) { went.current = false; setBack(true); } };
     window.addEventListener('focus', f); return () => window.removeEventListener('focus', f);
   }, []);
-  const save = (v) => update((cur) => ({ blueprint: { ...cur.blueprint, meta: { ...cur.blueprint.meta, shortUrl: v } } }));
+  const save = (v) => update((cur) => patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, shortUrl: v } })));
   async function make(alias = '') {
     setBusy(true); setErr('');
     try { save(await shortenUrl(url, alias)); setOpen(false); setName(''); toast('짧은 주소를 만들었어요.'); }
@@ -494,21 +489,21 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
   );
 }
 
-function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
+function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
-  const pw = p.blueprint.access?.mode === 'password' ? p.sitePassword : '';
+  const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
-  const m = p.blueprint.meta || {};
+  const m = bp.meta || {};
   const short = m.shortUrl && same(m.shortUrl) !== same(url) ? m.shortUrl : '';
   const stale = /^https:/.test(url) && (short || '') !== (p.deploy.shortLive || '');
   const [big, setBig] = useState(false);
   const when = whenText(m); // 사이트 첫 화면과 같은 꼴(2026. 11. 20.(금) 14:00~17:00)
-  const liveOn = (p.blueprint.live?.features || []).length > 0;
+  const liveOn = (bp.live?.features || []).length > 0;
   // 강사 화면 관리자 키: 바로 배포는 배포할 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
   const [adminKey, setAdminKey] = useState('');
-  const liveUrl = p.blueprint.live?.url || '';
+  const liveUrl = bp.live?.url || '';
   useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
-  const feats = p.blueprint.live?.features || [];
+  const feats = bp.live?.features || [];
   // 받는 사람이 할 일 한 줄: 출석이 있으면 도착해서 [출석], 아니면 연수 중에 질문·참여
   const todo = feats.includes('attendance') ? '\n도착하면 이 사이트에서 [출석]을 눌러 주세요.' : liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : '';
   const msg = `[${m.title}] 연수 사이트예요.\n${[when, m.venue].filter(Boolean).join(' · ')}\n주소: ${shareUrl}${todo}`;
@@ -539,7 +534,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
-          {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={p.blueprint.access?.mode !== 'password' && p.blueprint.access?.mode !== 'public'} />}
+          {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
           <div class="day-kit" role="group" aria-labelledby="venue-h">
             <b class="small" id="venue-h">연수 전날 점검</b>
             <VenueBody p={p} url={url} instantOn={p.deploy.target === 'lecpage' && instantOn} />
@@ -559,7 +554,7 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
-          <p class="small">내용을 고치거나 자료를 더 넣은 뒤 다시 배포하면 같은 주소에 반영돼요. <button type="button" class="btn btn-sm btn-quiet" onClick={onAddMaterials}>자료 올리기</button></p>
+          <p class="small">내용을 고친 뒤 다시 배포하면 같은 주소에 반영돼요. 자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>고치러 가기</button></p>
         </div>
         <div class="qr-side">
           <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} alt="" /><span class="qr-zoom-t">크게 보기</span></button>
@@ -571,5 +566,31 @@ function Success({ p, update, onAddMaterials, onRepublish, busy, onZip, instantO
       </div>
       <JoinBig open={big} onClose={() => setBig(false)} qr={shareUrl} title={m.title} shown={short ? showUrl(short) : showUrl(url)} full={short ? showUrl(url) : ''} />
     </Sheet>
+  );
+}
+
+/**
+ * 체험 연수의 마지막 단추: 실제로 올리지 않음. 배포할 사이트 파일은 실제와 똑같이 만들어 보고(조립·글꼴 빼고), 다 되면 그렇다고만 알림
+ */
+function DemoPublish({ p, buildFiles }) {
+  const [st, setSt] = useState(''); // '' | 'busy' | 'done' | 'bad'
+  const [pct, setPct] = useState(0);
+  async function run() {
+    setSt('busy'); setPct(15);
+    try { const r = await buildFiles({ dry: true }); setPct(70); await new Promise((x) => setTimeout(x, 500)); setPct(100); setSt('done'); toast(`배포 연습을 마쳤어요. 파일 ${Object.keys(r.files).length}개를 만들었고, 체험이라 올리지는 않았어요.`); }
+    catch (e) { console.error(e); setSt('bad'); }
+  }
+  return (
+    <div class="stack demo-pub">
+      <p class="small">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
+      {st !== 'done' && <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" disabled={st === 'busy'} aria-busy={st === 'busy' ? 'true' : undefined} onClick={run}>{st === 'busy' ? '배포할 파일 만드는 중…' : '배포 연습하기'}</button><span class="small muted">체험이라 실제로 올리지는 않아요.</span></div>}
+      {st === 'busy' && <Progress pct={pct} />}
+      {st === 'bad' && <p class="small err" role="alert">배포할 파일을 만들지 못했어요. 새로 고침한 뒤 다시 해 주세요.</p>}
+      {st === 'done' && <div class="demo-done-main" role="status">
+        <Mascot size={48} mood="happy" />
+        <div class="stack"><b>여기까지가 전부예요.</b><span class="small">실제로는 이 버튼을 누르면 참가자에게 보낼 주소와 QR이 바로 나와요. 이제 내 교재로 해 보세요.</span>
+          <div class="btn-row"><a class="btn btn-primary" href="#/">내 교재로 시작하기</a><button type="button" class="btn btn-quiet" onClick={() => setSt('')}>한 번 더 연습</button></div></div>
+      </div>}
+    </div>
   );
 }
