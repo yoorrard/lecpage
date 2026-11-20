@@ -22,13 +22,13 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 구조 | **로컬 우선 정적 PWA**. 교재 해석·사이트 조립·ZIP 만들기를 모두 브라우저에서 | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
+| 구조 | **로컬 우선 정적 PWA**. 쪽 그림 그리기·사이트 조립·검수·미리보기·ZIP 만들기를 브라우저에서(교재 읽기와 사이트 쓰기는 사용자가 고른 AI가 하고, 교재 원본은 브라우저에서 그 AI 회사로 바로 감) | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
 | 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
 | 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |
 | 저장 | IndexedDB(프로젝트·이미지) + `.lecpage` 파일 내보내기/열기 + 저장 공간 보호(persist) | 다른 PC로 옮기기, 공용 PC 정리 |
-| AI | 사용자 키(BYOK) · 쓰던 AI에 복사·붙여넣기 · Agent Skill · AI 없는 초안 | 운영자 AI 비용 0. 구독 로그인 재사용은 약관 위반이라 구현하지 않음 |
+| AI | 사용자 키(BYOK) · 쓰던 AI 창에 복사·붙여넣기 · 내 PC의 Claude Code·Codex(연결 프로그램) · Agent Skill · 먼저 해보기(예시 교재, 키 없음) | 운영자 AI 비용 0. 구독 로그인 재사용은 약관 위반이라 구현하지 않음 |
 | 실시간 | **운영자 공용 중계 없음**. 바로 배포 사이트에 딸린 방만 맡음(§10). 강사 소유 백엔드를 쉽게: 클릭만 하는 50명 이하 연수는 Google Sheets(앱 안 안내 + 연결 확인), 가입 가능한 강사는 Deploy to Cloudflare 버튼 | 아래 §2 |
 | 생성 사이트 | 기본 공개 범위 "링크"(noindex + robots.txt Disallow). 선택: 공개·암호(AES-GCM, PBKDF2 60만 회). 강사용 파일은 올리는 사이트에서 빠짐 | 교재 저작권, GitHub Pages 무료는 공개 저장소 |
 | 분석 | **없음.** Cloudflare Workers 대시보드의 요청 수만 봄 | 쿠키·추적 없음. 처리방침이 단순해짐 |
@@ -119,7 +119,7 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 - [x] **Private vulnerability reporting**을 켠다(**Settings → Security**). `SECURITY.md`에 신고 방법과 `hello@lecpage.com`을 적는다.
 - [ ] **Secret scanning**과 push protection을 켠다(공개 저장소 무료).
 - [ ] Actions 기본 권한은 읽기 전용(**Settings → Actions → Workflow permissions**).
-- [ ] 개인정보 안내 페이지(앱 `#/help/privacy`)가 실제 동작(분석 없음, 오류 수집 없음, 사용자 키는 브라우저에서 AI 회사로 직접)과 맞는지 배포 때마다 본다.
+- [ ] 개인정보 안내 페이지(앱 `#/help/privacy`)가 실제 동작(분석 없음, 오류 수집 없음, 사용자 키와 교재 원본은 브라우저에서 AI 회사로 직접, 내 PC 연결 프로그램은 127.0.0.1)과 맞는지 배포 때마다 본다.
 
 ## 7. 정기 할 일
 
