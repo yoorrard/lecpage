@@ -65,6 +65,7 @@ export function inspectRendered(opts) {
     cs = cs || win.getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse' || +cs.opacity === 0) return false;
     if (el.closest('[hidden],[aria-hidden="true"],dialog:not([open]),template,.lp-sr,.sr-only,.visually-hidden')) return false;
+    var shut = el.closest('details:not([open])'); if (shut && !(el.closest('summary') && el.closest('summary').parentElement === shut)) return false; // 닫힌 접기 상자 안(제목줄 말고)은 그려지지 않음
     var r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false;
     for (var n = el; n && n.nodeType === 1; n = n.parentElement) { var c = win.getComputedStyle(n); if (+c.opacity === 0) return false; if (c.clip === 'rect(0px, 0px, 0px, 0px)' || c.clipPath === 'inset(50%)') return false; }
     return true;
