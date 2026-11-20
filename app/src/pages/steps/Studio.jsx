@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
-import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, forgetGeneration, bridgeStatus } from '../../lib/studio.js';
+import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, forgetGeneration, bridgeStatus, pageTitles } from '../../lib/studio.js';
 import { getActiveAI, PROVIDERS, CHATBOTS, setChatbot } from '../../lib/ai.js';
 import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage, imageAt, replaceText, getVar, setVar, readCss, writeCss } from '../../lib/site-doc.js';
 import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
@@ -372,6 +372,7 @@ function LookPanel({ p, change }) {
 function ImageDialog({ n, p, onClose, onPick }) {
   const [pages, setPages] = useState([]); const [alt, setAlt] = useState('');
   const cur = n === null ? null : imageAt(p.site?.['index.html'] || '', n);
+  const titles = pageTitles(p); // 쪽 제목(연수 정보의 pages가 있으면 그것)
   const fileRef = useRef();
   useEffect(() => {
     if (n === null) return undefined;
@@ -411,7 +412,7 @@ function ImageDialog({ n, p, onClose, onPick }) {
         <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => fileRef.current?.click()}>사진 올리기</button>{cur && <button type="button" class="btn btn-quiet" onClick={() => onPick(cur.src, alt)}>설명만 바꾸기</button>}</div>
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
         <b class="small">교재 쪽 그림</b>
-        {pages.length ? <div class="page-grid">{pages.map((pg) => <button type="button" class="page-pick" onClick={() => usePage(pg)} aria-label={`교재 ${pg.num}쪽 그림으로 바꾸기`}><img src={pg.url} alt="" /><span>{pg.num}쪽</span></button>)}</div>
+        {pages.length ? <div class="page-grid">{pages.map((pg) => <button type="button" class="page-pick" onClick={() => usePage(pg)} title={titles[pg.num] || undefined} aria-label={`교재 ${pg.num}쪽${titles[pg.num] ? `(${titles[pg.num]})` : ''} 그림으로 바꾸기`}><img src={pg.url} alt="" /><span>{pg.num}쪽</span></button>)}</div>
           : <p class="small muted">교재 쪽 그림이 없어요. PDF 교재를 넣으면 쪽마다 그림이 생겨요.</p>}
       </div>}
     </Dialog>

@@ -353,7 +353,7 @@ function siteFromSteps(ctx) {
 }
 function metaFrom(plan, css, prev) {
   const theme = { ...(plan.theme || {}), ...themeFromCss(css) };
-  return readMeta({ v: 2, title: plan.title, subtitle: plan.subtitle, organizer: plan.organizer, sessions: plan.sessions, venue: plan.venue, mode: plan.mode, audience: plan.audience, instructors: plan.instructors, features: plan.features, theme, facts: plan.facts }, { prev }).meta;
+  return readMeta({ v: 2, title: plan.title, subtitle: plan.subtitle, organizer: plan.organizer, sessions: plan.sessions, venue: plan.venue, mode: plan.mode, audience: plan.audience, instructors: plan.instructors, features: plan.features, theme, facts: plan.facts, pages: plan.pages }, { prev }).meta;
 }
 
 /**

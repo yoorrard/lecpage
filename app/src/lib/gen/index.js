@@ -16,6 +16,7 @@ import { sourceFiles } from './material.js';
 
 export { bridgeStatus } from './local.js';
 export { assembleProject } from './preview.js';
+export { pageTitles } from './kit.js';
 
 /**
  * AI로 사이트 만들기 시작. 앞 단계는 저장되며 끊겨도 resumeGeneration으로 이어 함.
