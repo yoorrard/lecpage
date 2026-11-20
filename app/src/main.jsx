@@ -100,7 +100,7 @@ function App() {
       <main class="page" id="main" tabIndex={-1}><StorageBar route={route || ''} />{page}</main>
       <footer class="foot"><div class="foot-in">
         <span><b class="latin">lecpage</b> · 교재를 넣으면 연수 사이트가 나와요</span>
-        <span>회원가입 없음 · 교재는 이 브라우저에서 읽어요</span>
+        <span>회원가입 없음 · 운영자 서버에 교재를 보내지 않아요</span>
         <span class="foot-links"><a href="#/help/privacy">개인정보 처리방침</a><a href="#/help/terms">이용약관</a><a href="#/help/license">오픈소스·라이선스</a><a href="https://github.com/yoorrard/lecpage" target="_blank" rel="noopener">GitHub</a></span>
         <span class="foot-c">© 2026 lecpage 기여자 · Apache-2.0</span>
       </div></footer>

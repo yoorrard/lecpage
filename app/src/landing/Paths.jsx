@@ -8,7 +8,7 @@ import { SKILL_CMDS } from '../lib/agent.js';
 const PATHS = [
   { name: '쓰던 ChatGPT·Claude·Gemini 창', how: '요청 글을 복사해 붙여 넣어요', cost: '추가 비용 없음' },
   { name: 'API 키', how: '버튼 한 번으로 만들어요', cost: '사이트 하나에 몇백 원쯤, AI 회사에 직접' },
-  { name: 'AI 에이전트 + lecpage 스킬', how: '만든 연수를 .lecpage 파일로 앱에서 열어요', cost: '쓰던 구독 그대로' },
+  { name: 'Claude Code·Codex 같은 AI 에이전트', how: '내 PC 연결 프로그램이나 스킬로 만들어 앱에서 이어요', cost: '쓰던 구독 그대로' },
 ];
 const STAGES = ['조립·검수', '배포', '진행', '마무리'];
 
@@ -17,7 +17,7 @@ export function Paths() {
     <section class="ld-paths" aria-labelledby="ld-paths-h">
       <header class="ld-head">
         <h2 id="ld-paths-h">쓰던 AI 그대로,<br />lecpage는 0원</h2>
-        <p class="ld-sub">회원가입도 요금도 없어요. 교재 읽기부터 사이트 조립까지 이 브라우저 안에서 해요. AI는 세 가지 중 편한 방법으로 연결해요.</p>
+        <p class="ld-sub">회원가입도 요금도 없어요. 쪽 그림 그리기부터 조립·검수·미리보기까지 이 브라우저 안에서 해요. AI는 세 가지 중 편한 방법으로 연결해요.</p>
       </header>
       <div class="ld-hub">
         <ol class="ld-hub-src">
