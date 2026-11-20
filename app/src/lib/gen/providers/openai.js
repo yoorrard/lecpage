@@ -28,7 +28,8 @@ export function discard(key, id, { cancel = false } = {}) {
   return fetch(`${base}/v1/responses/${encodeURIComponent(id)}/cancel`, { method: 'POST', headers: auth(key), keepalive: true }).catch(() => { }).then(del);
 }
 
-const errOf = (e, status = 0) => new AiError(classify(status, e?.message || '', [e?.code, e?.type].filter((x) => typeof x === 'string').join(' ')), e?.message || 'error', { provider: 'openai', status });
+// 답 안에서 온 오류(response.failed·error): 그 답은 끝난 것이라 이어 받지 않음(final)
+const errOf = (e, status = 0) => Object.assign(new AiError(classify(status, e?.message || '', [e?.code, e?.type].filter((x) => typeof x === 'string').join(' ')), e?.message || 'error', { provider: 'openai', status }), { final: true });
 
 /**
  * resumeToken: { id, seq } — 그 답을 seq 다음부터 이어 받음(prefix: 그때까지 받은 글).
@@ -62,7 +63,7 @@ export async function stream({ key, model, system, parts, maxTokens = 64000, sig
       else if (type === 'response.completed') { stop = 'end'; usage = ev.response?.usage || {}; }
       else if (type === 'response.incomplete') {
         const why = ev.response?.incomplete_details?.reason || '';
-        if (why === 'content_filter') throw new AiError('refusal', 'content_filter', { provider: 'openai' });
+        if (why === 'content_filter') throw Object.assign(new AiError('refusal', 'content_filter', { provider: 'openai' }), { final: true });
         stop = 'max_tokens'; usage = ev.response?.usage || {};
       } else if (type === 'response.failed') throw errOf(ev.response?.error, ev.response?.error?.code === 'server_error' ? 500 : 0);
       else if (type === 'response.cancelled') throw Object.assign(new DOMException('cancelled', 'AbortError'));
@@ -72,7 +73,8 @@ export async function stream({ key, model, system, parts, maxTokens = 64000, sig
     });
   } catch (e) {
     const err = wd.wrap(e, 'openai');
-    if (err instanceof AiError && id && seq >= 0) Object.assign(err, { resumeToken: { id, seq }, partial: text });
+    if (err instanceof AiError && id && seq >= 0 && !err.final) Object.assign(err, { resumeToken: { id, seq }, partial: text });
+    else if (err instanceof AiError) err.partial = text;
     throw err;
   } finally { wd.done(); }
   if (!stop) throw Object.assign(new AiError('network', 'stream ended early', { provider: 'openai' }), id ? { resumeToken: { id, seq }, partial: text } : { partial: text });

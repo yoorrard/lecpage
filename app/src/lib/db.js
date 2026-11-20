@@ -85,6 +85,26 @@ export const projects = {
     t.onerror = () => reject(thrown || t.error);
     t.onabort = () => reject(thrown || t.error);
   })),
+  /**
+   * 한 트랜잭션에서 읽고 고쳐 씀: fn(지금 판) → 바꿀 칸(동기, 없으면 쓰지 않음). 연수가 없으면 null.
+   * AI 생성(lib/gen)이 사이트·연수 정보·판 기록만 바꿀 때(다른 칸은 그대로). 다른 탭에는 'saved'로 알림
+   */
+  patch: (id, fn) => open().then((db) => new Promise((resolve, reject) => {
+    const t = db.transaction('projects', 'readwrite'); const s = t.objectStore('projects');
+    let out = null; let thrown = null;
+    const g = s.get(id);
+    g.onsuccess = () => {
+      const cur = g.result; if (!cur) return;
+      try {
+        const ch = fn(cur); if (!ch) return;
+        out = { ...cur, ...ch, id, updatedAt: Math.max(Date.now(), (cur.updatedAt || 0) + 1) };
+        s.put(out);
+      } catch (e) { thrown = e; out = null; try { t.abort(); } catch { /* 이미 끝남 */ } }
+    };
+    t.oncomplete = () => { if (out) tell({ type: 'saved', id, at: out.updatedAt }); resolve(out); };
+    t.onerror = () => reject(thrown || t.error);
+    t.onabort = () => reject(thrown || t.error);
+  })),
   remove: async (id) => {
     await tx('projects', 'readwrite', (s) => req(s.delete(id)));
     tell({ type: 'deleted', id });
