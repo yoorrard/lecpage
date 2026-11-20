@@ -122,3 +122,10 @@ export function carryPatch(cur) {
   return { deploy: c.deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
 }
 
+
+/** AI가 쓴 사이트에 사이트 스크립트가 있는지(.js 파일·인라인 <script>·onclick 같은 속성). 바로 배포 서버가 사이트 스크립트를 받지 않으면 미리 알릴 때 */
+export function hasSiteScripts(p) {
+  if (!isV2(p)) return false;
+  return Object.entries(p.site || {}).some(([k, v]) => /\.m?js$/i.test(k) || (typeof v === 'string' && /\.html$/i.test(k)
+    && (/<script\b(?![^>]*\bsrc=)(?![^>]*\btype=["']?application\/(?:ld\+)?json)[^>]*>\s*\S/i.test(v) || /<[a-z][^>]*\son[a-z]+\s*=/i.test(v))));
+}
