@@ -19,6 +19,7 @@
 - 참여 막대(출석·도움 요청·질문·반응)와 '지금' 줄(공지·타이머·투표)은 저절로 붙어요. 자리를 정하려면 `data-lp="dock"`·`data-lp="now"`.
 - 자리 표시 안에는 글을 쓰지 않아요(조립 때 지워짐). JSON 속성은 작은따옴표로 감싸요.
 - 조립이 만드는 것도 링크할 수 있어요: `assets/event.ics`(달력에 넣기), `screen.html`(발표 화면), `check.html`(접속 확인).
+- 복사 단추는 스크립트 없이: `<button type="button" data-copy-text="프롬프트 원문">복사</button>`(복사하고 알림을 띄워요).
 
 ## 색·글꼴
 키트는 `.lpk` 안에서만 꾸미고 이 변수를 따라요(`#RRGGBB`).
@@ -30,7 +31,9 @@
 ## 지킬 것(CSP)
 - 스크립트는 `assets/site.js`에, `onclick` 대신 `addEventListener`. 바깥 스크립트는 허용 목록(gsap·lenis·ogl)만, 바깥 CSS는 글꼴만.
 - 그림은 `assets/img/`(png·jpg·webp, SVG 파일 아님)와 교재 쪽 그림 `material/p-001.webp`. 바깥 그림 주소는 막혀요.
-- 영상 틀은 유튜브·비메오만. 비밀번호 칸·`<form action>` 보내기는 쓰지 않아요.
+- 틀(`iframe`)은 유튜브(`youtube-nocookie.com/embed/…`)·비메오만. 구글 설문 등 다른 서비스는 틀 대신 링크로.
+- 비밀번호 칸·로그인 화면 흉내·바깥으로 보내는 `<form action>`·글자 가림(`-webkit-text-security`)·서비스 워커는 쓰지 않아요(바로 배포가 거절해요). 참가자 이름이 필요하면 출석 키트로.
+- 강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내(`console`·`screen`·`poster`·`check`·`privacy.html`)는 lecpage가 만들어요. 그 쪽에 스크립트를 넣거나 같은 이름으로 쓰지 않아요.
 - 쪽마다 `<!doctype html>`, `lang="ko"`, `<title>`, viewport, `<h1>` 하나, 섹션마다 제목.
 
 ## lecpage.json
