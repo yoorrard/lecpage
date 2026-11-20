@@ -298,7 +298,10 @@ function expandPage(html, page, ctx, col, warn) {
       const h = /<h[1-4]\b[^>]*>([\s\S]*?)<\/h[1-4]>/i.exec(inner);
       const title = String(attr(t, 'data-title') || (h ? textOf(h[1]) : '') || `${n}단계`).replace(/\s+/g, ' ').trim().slice(0, 100);
       const name = title.replace(/^\s*\d+\s*단계\s*[:.·]\s*/, '').slice(0, 30) || title.slice(0, 30);
-      col.steps.push({ id, name, title, page });
+      // 실습 시간(분): 강사 화면의 타이머 단추로(교재에 적힌 시간만)
+      const mv = attr(t, 'data-minutes'), minutes = mv !== undefined && /^\s*\d{1,3}\s*$/.test(mv) && +mv >= 1 && +mv <= 600 ? +mv : 0;
+      if (mv !== undefined && !minutes) warn('step-minutes', `${page}: 실습 단계 "${title}"의 data-minutes는 1~600 사이 숫자(분)로 써 주세요.`);
+      col.steps.push({ id, name, title, page, ...(minutes ? { minutes } : {}) });
       const curId = attr(t, 'id');
       const set = { 'data-st': id, 'data-title': title };
       if (!curId) set.id = `st-${id}`;
@@ -313,7 +316,7 @@ function expandPage(html, page, ctx, col, warn) {
     if (r === null) continue;
     const id = attr(t, 'id') ? null : `lpk-${type}${col.count[type] > 1 ? '-' + col.count[type] : ''}`;
     // 설정 속성(JSON 등)은 펼친 뒤 뺌(data-lp는 남겨 검수·앱이 자리를 찾게)
-    const strip = Object.fromEntries(['data-question', 'data-options', 'data-kind', 'data-id', 'data-prompt', 'data-categories', 'data-files', 'data-moderation', 'data-questions', 'data-pages', 'data-items'].map((a) => [a, null]));
+    const strip = Object.fromEntries(['data-question', 'data-options', 'data-kind', 'data-id', 'data-prompt', 'data-categories', 'data-files', 'data-moderation', 'data-questions', 'data-pages', 'data-items', 'data-answer', 'data-page'].map((a) => [a, null]));
     const open = rewriteOpen(t, { set: { ...strip, 'data-lpk': type, ...(id ? { id } : {}) }, addClass: r.cls || `lpk lpk-w lpk-${type}` });
     edits.push({ start: t.start, end: el.end, text: `${open}${r.html}</${t.name}>` });
     covered.push([t.start, el.end]);
@@ -342,6 +345,15 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       let id = W.kitSlug(attr(t, 'data-id'), `p${col.polls.length + 1}`); while (col.polls.some((p) => p.id === id)) id += '-' + (col.polls.length + 1);
       const item = { id, question: q || `투표 ${col.polls.length + 1}`, kind, options: kind === 'word' ? [] : options };
       col.polls.push(item);
+      // 교재 쪽(data-page: 강사 화면이 쪽 순서로 보이고 그 쪽에서 바로 열게)·퀴즈 정답(data-answer: 보기 번호나 보기 글. 강사 화면에만 두고 공개할 때 보냄)
+      const pv = attr(t, 'data-page'), av = attr(t, 'data-answer'), extra = {};
+      if (pv !== undefined) { if (/^\s*\d{1,4}\s*$/.test(pv) && +pv >= 1) extra.page = +pv; else warn('poll-page', `${where}의 data-page는 교재 쪽 번호(숫자)로 써 주세요.`); }
+      if (av !== undefined && String(av).trim()) {
+        const a = String(av).trim(), byNo = /^\d{1,2}$/.test(a) ? +a - 1 : -1;
+        const k = kind === 'word' ? -1 : byNo >= 0 && byNo < item.options.length && !item.options.includes(a) ? byNo : item.options.indexOf(a.replace(/\s+/g, ' '));
+        if (k >= 0) extra.answer = k; else warn('poll-answer', `${where}의 data-answer "${a.slice(0, 20)}"가 보기에 없어요. 보기 번호(1부터)나 보기 글 그대로 써 주세요.`);
+      }
+      if (Object.keys(extra).length) (col.pollExtra || (col.pollExtra = {}))[id] = extra;
       return { html: W.pollBox([item], { live, list: false, ask: item.question, host: ctx.words.host }) };
     }
     case 'board': {
@@ -411,6 +423,10 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
     }
     case 'join':
       return { html: W.joinBox({ live, code: ctx.code, codeWord: ctx.words.code }) };
+    case 'notebook':
+      col.notebook = true;
+      if (n > 1) warn('notebook-many', `${where}: 모음은 한 사이트에 하나면 돼요(모두 같은 모음을 보여요).`);
+      return { html: W.notebookBox({ id: `lpk-nb${n > 1 ? '-' + n : ''}` }) };
     case 'dock':
       col.dockPlaced = true;
       return { html: ctx.liveOn ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner(ctx.dock)}</aside>` : '', cls: 'lpk lpk-dock lpk-dock--placed' };
@@ -547,6 +563,9 @@ export function assemble(site, meta0, opts = {}) {
 
   // 모은 것 전부 → 보조 쪽·런타임(kit/aux-build.js)
   const vb = normAux(synthBlueprint(meta, col, { preview, theme }));
+  // 사이트에 AI가 쓴 스크립트가 있나(엔진 런타임 밖의 JS): 있으면 강사 화면이 관리자 키를 그 탭에만 둠(같은 출처의 사이트 스크립트가 이 기기 저장소를 읽을 수 있어서)
+  const siteJs = Object.keys(src).some((p) => /\.m?js$/i.test(p)) || pages.some((p) => cleaned[p].handlers.length || scanTags(cleaned[p].html).some((t) => t.kind === 'open' && t.name === 'script' && (attr(t, 'src') !== undefined || /^(|module|text\/javascript|application\/javascript)$/i.test((attr(t, 'type') || '').trim()))));
+  kitExtras(vb, col, { siteJs, materialPages, pageSrc: ctx.pageSrc, pageInfo });
   const built = buildAux(vb, { runtime, today: opts.today });
   const live = auxLive(vb);
   const sctx = { bp: vb, words, design: built.design, live };
@@ -602,6 +621,21 @@ export function assemble(site, meta0, opts = {}) {
   // 강사용 파일(올리지 않음): 연수 전·중·후 할 일(강사 화면 도움말과 같은 글)
   const teacher = built.teacher;
   return { files: out, warnings, errors: [], meta, collected, blueprint: vb, csp, report, words, teacher };
+}
+
+/**
+ * 보조 쪽 모양(normAux가 아는 칸만 남김)에 키트가 모은 것을 더함: 투표의 교재 쪽·퀴즈 정답, 실습 시간(분),
+ * 발표 화면이 띄울 교재 쪽 그림(교재 넘기기가 있으면 그 쪽들, 없으면 교재 쪽 그림 전부), 모음 위젯·사이트 스크립트 여부.
+ * shell.js(#lp-data·#lp-blueprint)가 읽음. 정답은 강사 화면에만 실림
+ */
+function kitExtras(vb, col, { siteJs, materialPages, pageSrc, pageInfo }) {
+  const px = col.pollExtra || {};
+  for (const s of vb.sections) {
+    if (s.type === 'poll') s.items = s.items.map((p) => (px[p.id] ? { ...p, ...px[p.id] } : p));
+    if (s.type === 'stations') s.items = s.items.map((x) => { const st = col.steps.find((c) => c.id === x.id); return st?.minutes ? { ...x, minutes: st.minutes } : x; });
+  }
+  const list = col.deck.length ? col.deck.map((x) => x.page) : materialPages.slice(0, 400);
+  vb.kit = { siteJs: !!siteJs, notebook: !!col.notebook, deck: list.map((n) => [n, pageSrc(n), String(pageInfo[n]?.title || '').slice(0, 80)]) };
 }
 
 /** 쪽 하나 마무리: CSP·머리 태그·키트 CSS·'지금' 줄·키트 부품·#lp-data·런타임 */
@@ -722,6 +756,13 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
     if (Object.keys(set).length) edits.push({ start: t.start, end: t.end, text: rewriteOpen(t, { set }) });
   }
   html = applyEdits(html, edits);
+  // 발표 화면·강사 화면이 띄우는 교재 쪽 그림(#lp-blueprint deck)도 남은 크기만큼 담음(미리보기 틀에서는 상대 경로가 열리지 않음)
+  html = html.replace(/(<script type="application\/json" id="lp-blueprint">)([\s\S]*?)(<\/script>)/, (m, a, json, b) => {
+    let bp; try { bp = JSON.parse(json); } catch { return m; }
+    if (!Array.isArray(bp.deck) || !bp.deck.length) return m;
+    bp.deck = bp.deck.map((x) => { const p = Array.isArray(x) && resolvePath(String(x[1] || ''), page); const d = p && inline(p); return d ? [x[0], d, x[2]] : x; });
+    return a + JSON.stringify(bp).replace(/</g, '\\u003c') + b;
+  });
   html = html.replace(/<body\b/i, '<body data-lp-preview="1"');
   if (extraHead) html = html.replace(/<\/head>/i, () => `${extraHead}</head>`);
   if (extraBody) { const i = html.toLowerCase().lastIndexOf('</body>'); html = i < 0 ? html + extraBody : html.slice(0, i) + extraBody + html.slice(i); }

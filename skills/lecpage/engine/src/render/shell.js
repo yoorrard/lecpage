@@ -166,6 +166,9 @@ export function siteData(ctx) {
     phase: phaseWindow(bp),
     // 참가자 화면이 스스로 쓰는 낱말(끝난 연수·수업, 자료 칸, 연수·수업 코드, 진행자: 강사·선생님·발표자)
     words: ctx.words ? { ev: ctx.words.ev, ended: ctx.words.ended, materials: ctx.words.materials, code: ctx.words.code, host: ctx.words.host } : undefined,
+    // 키트: 모음 위젯이 있으면 참가자 화면이 복사한 프롬프트를 이 기기에 모음. keyTab: 사이트에 직접 쓴 스크립트가 있어 강사 화면이 관리자 키를 그 탭에만 둠
+    ...(bp.kit?.notebook ? { notebook: true } : {}),
+    ...(bp.kit?.siteJs ? { keyTab: true } : {}),
   };
 }
 
@@ -173,7 +176,10 @@ export function siteData(ctx) {
 export function appShell(ctx, { title, page, bodyClass, inner, scripts = [], blueprint = false }) {
   const bp = ctx.bp;
   // pages: 교재의 실제 쪽 번호(교재 일부만 담으면 1,2,4,8…). 강사 화면은 이 번호를 보내고 참가자 화면은 같은 번호(data-page)로 찾음
-  const bpData = blueprint ? jsonScript('lp-blueprint', { sections: bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? s.items : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, bp) : undefined })), stations: (bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title })), pages: (bp.sections.find((s) => s.type === 'deck')?.slides || []).map((x) => x.page) }) : '';
+  // 퀴즈 정답(answer)은 강사 화면에만: 발표 화면·참가자 화면은 강사가 공개할 때 상태(ui.ans)로 받음
+  const pollItems = (s) => (page === 'console' ? s.items : s.items.map(({ answer, ...p }) => p));
+  // deck: 발표 화면이 크게 띄우고 강사 화면이 미리 보는 교재 쪽 그림 [쪽, 그림 경로, 쪽 제목](교재 넘기기가 없어도 교재 쪽 그림이 있으면)
+  const bpData = blueprint ? jsonScript('lp-blueprint', { sections: bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? pollItems(s) : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, bp) : undefined })), stations: (bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title, ...(x.minutes ? { minutes: x.minutes } : {}) })), pages: (bp.sections.find((s) => s.type === 'deck')?.slides || []).map((x) => x.page), ...(bp.kit?.deck?.length ? { deck: bp.kit.deck } : {}) }) : '';
   return `<!doctype html>
 <html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-motion': '1', 'data-page': page })}>
 <head>

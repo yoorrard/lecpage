@@ -139,7 +139,7 @@ export const TOAST = '<div class="lp-toast" data-toast role="status" aria-live="
 
 // ── 키트 자리 표시 ───────────────────────────────────────────
 /** 쓸 수 있는 자리 표시(data-lp 값) */
-export const KIT_TYPES = ['qa', 'poll', 'board', 'attend', 'survey', 'deck', 'materials', 'join', 'dock', 'now', 'share'];
+export const KIT_TYPES = ['qa', 'poll', 'board', 'attend', 'survey', 'deck', 'materials', 'join', 'dock', 'now', 'share', 'notebook'];
 /** 자리 표시 → 필요한 기능(lecpage.json features) */
 export const TYPE_FEATURE = { qa: 'qa', poll: 'poll', board: 'board', attend: 'attendance', survey: 'survey', deck: 'deck', materials: 'materials' };
 
@@ -204,6 +204,17 @@ export function materialsBox(items = [], { inner = '', host = '강사' } = {}) {
 /** 실습 단계 끝: 완료 체크·도움 요청(진행 현황·도움 요청이 이 단계를 셈) */
 export function stepFooter() {
   return `<div class="lpk lpk-step-f"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false">${icon('check')}<span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden>${icon('hand')}<span>도움 요청</span></button></div>`;
+}
+
+/** 모음(이 기기에만): 사이트에서 복사한 프롬프트와 내가 적은 메모가 쌓이고 .txt로 받음. 목록은 런타임(lecpage.js initNotebook)이 그림 */
+export function notebookBox({ id = 'lpk-nb' } = {}) {
+  return `<div class="lp-nb" data-notebook>
+<p class="lp-small">이 사이트에서 복사한 프롬프트가 여기에 모여요. 이 기기에만 저장돼요.</p>
+<form class="lp-compose" data-nb-form><label class="lp-sr" for="${esc(id)}-t">메모</label><textarea id="${esc(id)}-t" name="text" rows="2" maxlength="4000" placeholder="고친 프롬프트나 메모를 적어 담아요" required></textarea><div class="lp-compose-f"><small data-nb-count></small><button class="lp-btn lp-btn-primary" type="submit">${icon('check')}<span>담기</span></button></div></form>
+<p class="lp-sr" role="status" data-nb-news></p>
+<ol class="lp-nb-list" data-nb-list><li class="lp-empty">아직 담은 글이 없어요. 프롬프트의 [복사]를 누르면 여기에 모여요.</li></ol>
+<div class="lp-ctas lp-nb-f"><button class="lp-btn lp-btn-primary" type="button" data-nb-save disabled>${icon('download')}<span>.txt로 받기</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-copy disabled>${icon('copy')}<span>모두 복사</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-clear disabled>${icon('close')}<span>모두 지우기</span></button></div>
+</div>`;
 }
 
 /** 공유 단추(QR 대화상자 열기) */

@@ -63,10 +63,10 @@ test('강사 화면 1280×750: 공지·타이머가 첫 화면 안, 도움 요�
     assert.ok((await top(c, '#lp-p-signal')) < (await top(c, '#lp-p-lead')), '읽는 것(신호) 다음에 가끔 쓰는 폼(이끌기·자료 링크)');
     assert.deepEqual(await c.locator('#lp-p-run h3').allInnerTexts(), ['공지', '타이머']);
     assert.deepEqual(await c.locator('#lp-p-lead h3').allInnerTexts(), ['이끌기', '자료 링크']);
-    // 휴대폰(한 단): 공지·타이머 → 도움 요청 → 질문·투표 → 신호·실습 진행 → 보드 → 이끌기·자료 링크 → 기록
+    // 휴대폰(한 단): 발표(쪽 넘기기 — 휴대폰을 리모컨으로)·공지·타이머 → 출석·도움 요청 → 질문·투표 → 신호·실습 진행 → 보드 → 이끌기·자료 링크 → 기록
     await c.setViewportSize({ width: 390, height: 844 }); await c.waitForTimeout(200);
     const order = await c.evaluate(() => [...document.querySelectorAll('.lp-con-panel')].map((n) => [n.getAttribute('data-area'), n.getBoundingClientRect().top]).sort((a, b) => a[1] - b[1]).map((x) => x[0]));
-    assert.deepEqual(order, ['run', 'help', 'qa', 'poll', 'signal', 'heat', 'board', 'lead', 'data']);
+    assert.deepEqual(order, ['pres', 'run', 'att', 'help', 'qa', 'poll', 'signal', 'heat', 'board', 'lead', 'data']);
     assert.match(await c.locator('.lp-con-net-ck').innerText(), /이 기기에서는 아직 접속 확인을 하지 않았어요/);
     assert.deepEqual([...c._errs, ...p._errs], []);
   } finally { await ctx.close(); await par.close(); }

@@ -434,6 +434,41 @@
    "head": "if(window.LecFX){document.readyS",
    "sha256": "d3ab43a33f634e087859ae170375819dc95ba4cd2903931fc7f7707e9fa0e81d",
    "kept": "2026-11-20"
+  },
+  {
+   "name": "console.js",
+   "len": 66064,
+   "head": "/* lecpage console — 강사 화면. 모든 화",
+   "sha256": "400203f029bc14ca128649d0908b107195a667fde84f88e87d43482ec8d60a0b",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 100902,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "3238d89b297e52fa0caed1f73876b8e5edb1ca6e2971bb3a4a29e39a0ba6e47c",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "live/core.js",
+   "len": 76907,
+   "head": "/*! lecpage live core — window.L",
+   "sha256": "3bb0405382499855137925ba196ffbb3882da4302f41770ee5ba5ff829b957ad",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "live/local.js",
+   "len": 11477,
+   "head": "/*! lecpage live — provider 'loc",
+   "sha256": "a2fdd86b7a8e7dde7cf67c4ff6d16713545e66f4d17bafdb7c1a70bbc3e43289",
+   "kept": "2026-11-20"
+  },
+  {
+   "name": "screen.js",
+   "len": 32242,
+   "head": "/* lecpage screen — 발표 화면: 참여 QR",
+   "sha256": "3aeea557625d0c30c44ff386b4dcbc1e4e107b8cdec7a66001c0a25f94a675e5",
+   "kept": "2026-11-20"
   }
  ]
 }

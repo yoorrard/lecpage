@@ -117,7 +117,22 @@
     };
     adapter.add = function (col, doc) {
       return Promise.resolve().then(function () {
-        if (L.cols.indexOf(col) < 0 || col === 'participants') throw err('unknown_collection', '없는 컬렉션이에요.', 404);
+        if (L.cols.indexOf(col) < 0) throw err('unknown_collection', '없는 컬렉션이에요.', 404);
+        // 강사 명단(실제 서버와 같은 규칙): 손으로 더한 사람, 입실·퇴실 시각 넣기·고치기
+        if (col === 'participants' || (col === 'attendance' && doc.by != null)) {
+          if (!ctx.adminKey()) throw err(col === 'participants' ? 'use_join' : 'admin_required', col === 'participants' ? '참가자는 참여하기로 만들어요.' : '관리자 키가 필요해요.', col === 'participants' ? 405 : 401);
+          var t0 = stamp();
+          if (col === 'participants') {
+            if (!doc.name) throw err('required', '이름을 적어 주세요.');
+            if (doc.consent !== true) throw err('consent_required', '이름·소속을 남기려면 개인정보 수집·이용에 동의해 주세요.');
+            return save('participants', { id: 'p' + U.uid(12), nickname: doc.nickname || String(doc.name).slice(0, 20), name: doc.name, school: doc.school || '', consentAt: t0, manual: true, createdAt: t0, updatedAt: t0 }, 'add');
+          }
+          if (!ls.get(key('participants', doc.by))) throw err('not_found', '없는 참가자예요.', 404);
+          var at = typeof doc.at === 'number' && doc.at > 0 && doc.at <= Date.now() + 60e3 ? doc.at : Date.now();
+          var prev = readCol('attendance').filter(function (x) { return x.by === doc.by && x.kind === doc.kind; })[0];
+          if (prev) return save('attendance', U.assign({}, prev, { at: at, byHost: true, updatedAt: t0 }), 'update');
+          return save('attendance', { id: 'a' + U.uid(12), by: doc.by, kind: doc.kind === 'out' ? 'out' : 'in', at: at, byHost: true, createdAt: t0, updatedAt: t0 }, 'add');
+        }
         var p = col === 'polls' ? null : me();
         var by = p ? p.id : null;
         // 리허설도 실제 서버와 같은 규칙: 강사가 잠근 칸, 닫힌 투표

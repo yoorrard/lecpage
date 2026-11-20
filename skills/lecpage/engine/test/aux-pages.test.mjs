@@ -32,6 +32,11 @@ before(async () => {
   const r = bpBuild(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' }), { site: sparse() });
   assert.deepEqual(r.errors, []);
   writeFiles(site, r.files);
+  // 사이트 스크립트가 없는 판(noscript/): 강사 화면이 '이 기기에서 기억하기'를 쓸 수 있음
+  const s2 = sparse(); delete s2['assets/site.js']; s2['index.html'] = s2['index.html'].replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
+  const r2 = bpBuild(blueprint({ provider: 'http', url: srv.url, code: 'AUXTEST' }), { site: s2 });
+  assert.deepEqual(r2.errors, []);
+  writeFiles(path.join(site, 'noscript'), r2.files);
   browser = await chromium.launch();
 });
 after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmSync(site, { recursive: true, force: true }); });
@@ -54,17 +59,28 @@ async function ask(page, text, nickname) {
   if (await dlg.count()) { await dlg.locator('input[name=nickname]').fill(nickname); await dlg.locator('[type=submit]').click(); }
 }
 
-test('강사 화면: 틀린 키는 늦추고 주소·화면에 남기지 않음, 맞는 키는 이 탭에만(기억하기를 고를 때만 이 기기에)', { skip }, async () => {
+test('강사 화면: 틀린 키는 늦추고 주소·화면에 남기지 않음, 맞는 키는 이 탭에만(기억하기를 고를 때만 이 기기에, 사이트 스크립트가 있으면 기억하기를 끔)', { skip }, async () => {
   const ctx = await browser.newContext();
   try {
-    const c = await open(ctx, 'console.html');
+    // 사이트에 직접 쓴 스크립트(assets/site.js)가 있음: 같은 주소의 스크립트가 이 기기 저장소를 읽을 수 있어 키는 이 탭에만
+    const k = await open(ctx, 'console.html');
+    assert.equal(await k.isDisabled('[data-remember]'), true);
+    assert.equal(await k.isChecked('[data-remember]'), false);
+    assert.match(await k.textContent('[data-remember-hint]'), /직접 쓴 스크립트가 있어 키를 이 탭에만/);
+    await k.evaluate(() => localStorage.setItem(Object.keys(sessionStorage)[0] || 'lp-admin:/:AUXTEST', 'old-key'));
+    await login(k, ADMIN);
+    await k.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');
+    assert.deepEqual(await k.evaluate(() => [Object.keys(sessionStorage).filter((x) => x.startsWith('lp-admin:')).length, Object.keys(localStorage).filter((x) => x.startsWith('lp-admin:')).length]), [1, 0], '예전에 이 기기에 둔 키도 지움');
+    await k.close();
+    const c = await open(ctx, 'noscript/console.html');
+    assert.equal(await c.isDisabled('[data-remember]'), false);
     for (let i = 0; i < 3; i++) { await login(c, '틀린-키-' + i + '-xxxxxxxx'); await c.waitForFunction(() => document.querySelector('[data-key-msg]').textContent.length > 0); }
     assert.match(await c.textContent('[data-key-msg]'), /관리자 키가 맞지 않아요/);
     assert.equal(await c.getAttribute('[data-key-go]', 'disabled'), '', '세 번 틀리면 잠시 기다리게 함');
     assert.match(await c.textContent('[data-key-go]'), /초 뒤에 다시/);
     assert.ok(!c.url().includes('키'), '주소에 키가 없음');
     // 새 탭에서 맞는 키(기억하기 끔): sessionStorage만
-    const d = await open(ctx, 'console.html');
+    const d = await open(ctx, 'noscript/console.html');
     await login(d, ADMIN);
     await d.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');
     const where = await d.evaluate(() => ({ s: Object.keys(sessionStorage).filter((k) => k.startsWith('lp-admin:')).length, l: Object.keys(localStorage).filter((k) => k.startsWith('lp-admin:')).length, html: document.documentElement.outerHTML }));
@@ -80,7 +96,7 @@ test('강사 화면: 틀린 키는 늦추고 주소·화면에 남기지 않음,
     await login(d, ADMIN, true);
     await d.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');
     assert.equal(await d.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('lp-admin:')).length), 1);
-    const e = await ctx.newPage(); await e.goto(srv.url + '/console.html');
+    const e = await ctx.newPage(); await e.goto(srv.url + '/noscript/console.html');
     await e.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');
     await e.click('[data-logout]');
     await e.waitForSelector('[data-admin-form]');
@@ -195,29 +211,36 @@ test('따라 넘기기: 교재 일부만 담은 사이트(1·2·4·8…쪽)도 �
     await c.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');
     const p = await open(par, 'index.html');
     await p.waitForFunction(() => ['live', 'polling'].includes(document.querySelector('[data-live-status]')?.getAttribute('data-state')), null, { timeout: 10000 });
-    const inp = c.locator('input[aria-label^="교재 쪽"]');
-    assert.equal(await inp.getAttribute('aria-label'), `교재 쪽(1~${pages[pages.length - 1]})`);
-    await c.click('[data-k="follow"]');
+    const inp = c.locator('#lp-p-pres input[aria-label^="갈 쪽"]');
+    assert.equal(await inp.getAttribute('aria-label'), `갈 쪽(1~${pages[pages.length - 1]})`);
+    // 참가자 교재 넘기기가 있으면 '강사 따라 넘기기'가 처음부터 켜짐
+    await c.waitForFunction(() => LecLive.current().state.follow === true, null, { timeout: 5000 });
+    assert.equal(await c.getAttribute('[data-k="follow"]', 'aria-checked'), 'true');
     const shown = () => p.evaluate(() => document.querySelector('.lp-slide.is-active')?.getAttribute('data-page'));
     const slide = () => c.evaluate(() => LecLive.current().state.slide);
-    // 다음 쪽: 담은 쪽 목록에서 한 칸씩(1 → 2 → 4)
+    // 다음 쪽: 시작 전(발표 화면은 참여 안내) → 담은 쪽 목록에서 한 칸씩(1 → 2 → 4)
+    assert.equal(await c.textContent('.lp-con-pageno'), '시작 전');
     for (const want of [1, 2, 4]) {
-      await c.click('button:has-text("다음 쪽")');
+      await c.click('#lp-p-pres button:has-text("다음 쪽")');
       await c.waitForFunction((w) => LecLive.current().state.slide === w, want, { timeout: 5000 });
       await p.waitForFunction((w) => document.querySelector('.lp-slide.is-active')?.getAttribute('data-page') === String(w), want, { timeout: 10000 });
     }
     assert.match(await p.textContent('[data-now-main]'), /교재 4쪽/);
     assert.equal(await p.getAttribute('[data-now-cta]', 'href'), '#deck-p4');
-    await c.click('button:has-text("앞 쪽")');
+    await c.click('#lp-p-pres button:has-text("앞 쪽")');
     await p.waitForFunction(() => document.querySelector('.lp-slide.is-active')?.getAttribute('data-page') === '2', null, { timeout: 10000 });
-    // 이 쪽 보내기: 교재에 있는 쪽은 그대로, 없는 쪽(5)은 가장 가까운 쪽(4)
-    await inp.fill('8'); await c.click('button:has-text("이 쪽 보내기")');
+    // 쪽 번호로 가기: 교재에 있는 쪽은 그대로, 없는 쪽(5)은 가장 가까운 쪽(4)
+    await inp.fill('8'); await c.click('#lp-p-pres button:has-text("가기")');
     await p.waitForFunction(() => document.querySelector('.lp-slide.is-active')?.getAttribute('data-page') === '8', null, { timeout: 10000 });
-    await inp.fill('5'); await c.click('button:has-text("이 쪽 보내기")');
+    await inp.fill('5'); await c.click('#lp-p-pres button:has-text("가기")');
     await c.waitForFunction(() => LecLive.current().state.slide === 4, null, { timeout: 5000 });
     assert.equal(await slide(), 4); assert.equal(await shown(), '4');
     assert.match(await p.textContent('.lp-deck-count'), new RegExp(`^4 / ${pages[pages.length - 1]}$`), '쪽 표시는 실제 쪽 / 끝 쪽');
+    // 끄면 다시 들어와도 켜지지 않음(강사가 끈 것을 기억)
     await c.click('[data-k="follow"]');
+    await c.waitForFunction(() => LecLive.current().state.follow === false && LecLive.current().state.ui.followOff === true, null, { timeout: 5000 });
+    await c.click('[data-k="follow"]');
+    await c.waitForFunction(() => LecLive.current().state.follow === true, null, { timeout: 5000 });
     assert.deepEqual([...c._errs, ...p._errs], []);
   } finally { await adm.close(); await par.close(); }
 });

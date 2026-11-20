@@ -90,7 +90,7 @@ test('M5: 모르는 옵션은 비슷한 이름과 함께 멈추고, 값 옵션�
   const port = run(['serve', 'work', '--port', 'abc']);
   assert.equal(port.code, 2); assert.match(port.out, /--port는 숫자/);
   const other = run(['check', 'work', '--live']);
-  assert.equal(other.code, 2); assert.match(other.out, /publish 명령의 옵션/);
+  assert.equal(other.code, 2); assert.match(other.out, /publish[^)]*명령의 옵션/);
   const typo = run(['prepar', 'x.md']);
   assert.equal(typo.code, 2); assert.match(typo.out, /혹시 prepare/);
   for (const r of [t1, pw, short, port, other, typo]) assert.doesNotMatch(r.out, STACK);

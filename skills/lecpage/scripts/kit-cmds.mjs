@@ -255,6 +255,7 @@ export async function checkCmd(h) {
 export async function previewCmd(h) {
   const { args, staticServer, say } = h;
   const work = resolve(args._[0] || 'work');
+  if (args.live) return liveServe(h, work);
   const { r, dist } = await buildWorkV2(h, work);
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
   const port = +args.port || 4173;
@@ -262,6 +263,39 @@ export async function previewCmd(h) {
   staticServer(dist).listen(port, args.host || '127.0.0.1', () => {
     say([`미리보기: ${u}  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`, `${existsSync(join(dist, 'console.html')) ? `강사 화면 ${u}console.html · ` : ''}발표 화면 ${u}screen.html · QR 안내문 ${u}poster.html`, r.report.live === 'local' ? '참여 기능은 연습 모드예요(이 브라우저 안에서만 이어져요).' : '', r.warnings.length ? `조립 알림 ${r.warnings.length}개 — check로 자세히` : ''], { ok: true, url: u, dist });
   });
+}
+
+/**
+ * serve work --live: 노트북 한 대로 교실 와이파이 연수. 참여 기능 서버(backends/node-server)를 켜고 사이트도 같은 주소로 내보냄.
+ * 조립은 참여 기능 서버를 '같은 주소'(provider http, url '')로 해서 work/.lecpage/live-site에(올리는 work/dist는 그대로),
+ * 기록·관리자 키는 work/dist-강사용/live-data에(다시 켜도 이어짐). 같은 와이파이 주소·QR은 서버가 알려 줌(/api/lan)
+ */
+async function liveServe(h, work) {
+  const { args, say, readJson, N } = h;
+  const { spawn } = await import('node:child_process');
+  const prevPath = join(work, 'lecpage.teacher.json');
+  const teacher = existsSync(prevPath) ? readJson(prevPath) : {};
+  const prev = { ...teacher, live: { provider: 'http', url: '', code: teacher?.live?.code || '' } };
+  const a = await assembleWork(h, work, { prev });
+  if (a.r.errors?.length) { say(a.r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: a.r.errors }); process.exit(1); }
+  if (a.r.report.live === 'none') { say(['이 사이트는 참여 기능(질문·투표·출석 …)이 꺼져 있어요. lecpage.json의 features나 자리 표시(data-lp)를 넣은 뒤 다시 해 주세요. 사이트만 보려면 --live 없이 serve work.'], { ok: false }); process.exit(1); }
+  const siteDir = join(work, '.lecpage', 'live-site'), dataDir = join(work, 'dist-강사용', 'live-data');
+  rmSync(siteDir, { recursive: true, force: true }); N.writeFiles(siteDir, a.r.files); mkdirSync(dataDir, { recursive: true });
+  const port = +args.port || 8787, host = args.host || '0.0.0.0';
+  const server = join(HERE, '..', 'backends', 'node-server', 'server.mjs');
+  const [maj, min] = process.versions.node.split('.').map(Number);
+  const flags = [...(maj === 22 && min < 13 ? ['--experimental-sqlite'] : []), '--disable-warning=ExperimentalWarning']; // node:sqlite: 22.13부터 그대로(시험판 알림은 숨김)
+  const keyFile = join(dataDir, 'admin-key.txt');
+  say([
+    `교실 참여 서버를 켜요(연수 코드 ${a.r.collected.code}). 끝내려면 Ctrl+C`,
+    `관리자 키: ${relative(process.cwd(), keyFile) || keyFile} (처음 켤 때 만들어요. 강사 화면에 넣어요)`,
+    '참가자는 같은 와이파이에서 아래 주소로 들어와요. 발표 화면·강사 화면은 이 노트북에서 열어도 QR에 와이파이 주소가 들어가요.',
+    '교실 와이파이가 기기끼리 막혀 있으면(학교망 격리) 휴대폰 핫스팟에 노트북과 참가자가 함께 들어오게 해요.',
+  ], { ok: true, live: true, code: a.r.collected.code, port, site: siteDir, data: dataDir });
+  const child = spawn(process.execPath, [...flags, server, '--static', siteDir, '--data', dataDir, '--port', String(port), '--host', host], { stdio: 'inherit' });
+  const stop = () => { try { child.kill('SIGINT'); } catch { /* 이미 끝남 */ } };
+  process.on('SIGINT', stop); process.on('SIGTERM', stop);
+  await new Promise((res) => child.on('exit', (code) => { process.exitCode = code || 0; res(); }));
 }
 
 // ── 앱과 주고받기(.lecpage v2) ─────────────────────────

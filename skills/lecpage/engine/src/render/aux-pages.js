@@ -117,8 +117,13 @@ export function renderScreen(ctx) {
   const bp = ctx.bp, m = bp.meta, live = ctx.live;
   const signal = live && bp.live.features.includes('signal');
   const code = live ? `<p class="lp-scr-code">${esc(ctx.words?.code || '연수 코드')} <b>${esc(bp.live.code)}</b></p>` : '';
+  // 교재 쪽 그림이 있으면 발표 화면이 강의의 주 화면: 쪽을 크게(강사 화면·참가자 화면과 같은 쪽), 키 하나로 겹쳐 띄우기(screen.js)
+  const deck = (bp.kit?.deck || []).length > 0;
+  const keys = [['→ · PageDown · Space', '다음 쪽'], ['← · PageUp', '앞 쪽'], ['숫자 + Enter', '그 쪽으로'], live && ['J', '참여 QR 크게'], live && ['V', '투표'], live && ['Q', '질문'], ['T', '큰 타이머'], live && ['N', '공지 크게'], ['B · 마침표', '화면 가리기'], ['Esc', deck ? '겹친 화면 닫기(교재로)' : '겹친 화면 닫기'], ['F · F5', '전체 화면']].filter((x) => x && (deck || !/쪽/.test(x[1])));
   const inner = `<aside class="lp-scr-for" aria-label="참가자 안내"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></aside>
 <div class="lp-scr" data-screen data-lobby${live ? '' : ' data-offline'}>
+${deck ? `<section class="lp-scr-deck" data-scr-deck aria-label="교재" hidden><img data-scr-img alt="" decoding="async"><p class="lp-scr-dnotice" data-scr-dnotice hidden role="status"></p><p class="lp-scr-chip" data-scr-chip hidden role="timer"></p><p class="lp-scr-pg" data-scr-pg></p></section>` : ''}
+<div class="lp-scr-ov" data-scr-ov hidden aria-live="polite"></div>
 <header class="lp-scr-top">
 <h1 class="lp-scr-title"><span class="lp-brand-dot" aria-hidden="true"></span><span>${esc(m.title)}</span></h1>
 ${live ? '<p class="lp-scr-conn" data-conn data-state="idle"><i aria-hidden="true"></i><span data-conn-text>연결하는 중…</span></p>' : ''}
@@ -126,6 +131,7 @@ ${live ? '<p class="lp-scr-conn" data-conn data-state="idle"><i aria-hidden="tru
 <button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-join-open>${icon('qr')}<span>QR 크게</span></button>
 <button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-fullscreen aria-pressed="false">${icon('expand')}<span>전체 화면</span></button>
 <button class="lp-btn lp-btn-ghost lp-btn-sm lp-tools-btn" type="button" data-tools-open aria-expanded="false" aria-controls="lp-tools">${icon('tools')}<span>도구</span></button>
+<button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-keys-open aria-haspopup="dialog">${icon('more')}<span>단축키</span></button>
 ${themeBtn()}
 </div>
 </header>
@@ -153,6 +159,11 @@ ${signal ? '<div class="lp-scr-signal" data-screen-signal hidden role="region" a
 <div class="lp-qr" data-qr-big role="img" aria-label="참여 QR 코드"></div>
 <div class="lp-joinbig-t"><h2 id="lp-joinbig-h">휴대폰 카메라로 QR을 찍어 주세요</h2><p class="lp-joinbig-url" data-join-url></p><p class="lp-joinbig-full" data-join-full hidden></p>${code}</div>
 <button class="lp-btn lp-btn-ghost lp-joinbig-x" value="close">${icon('close')}<span>닫기</span></button></form></dialog>
+<dialog class="lp-dialog lp-scr-keys" data-keys-dialog aria-labelledby="lp-keys-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-keys-h">발표 화면 단축키</h2>
+<dl class="lp-scr-keyl">${keys.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+<p class="lp-small" data-keys-mode>${live ? '강사 화면의 [발표 화면 띄우기]로 열면 여기서 넘긴 쪽과 띄운 것이 강사 화면·참가자 화면에도 가요. 발표용 리모컨도 그대로 써요.' : '발표용 리모컨도 그대로 써요.'}</p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
 <dialog class="lp-dialog lp-scr-go" data-fs-dialog aria-labelledby="lp-fs-h"><form method="dialog" class="lp-dialog-in">
 <h2 id="lp-fs-h">프로젝터에 띄워요</h2>
 <p>이 창을 프로젝터 화면으로 끌어다 놓고 [전체 화면]을 누르세요. 노트북 화면이 프로젝터에 그대로 비치면 바로 누르면 돼요.</p>
@@ -372,6 +383,7 @@ export function opsGuide(ctx) {
   const sv = bp.sections.find((s) => s.type === 'survey' && !s.hidden);
   const svIn = live && sv?.questions?.length;
   const attendSec = bp.sections.some((s) => s.type === 'attendance') || bp.live.features.includes('attendance');
+  const deckOn = (bp.kit?.deck || []).length > 0;
   const wake = { supabase: 'Supabase 무료 프로젝트는 7일 동안 쓰지 않으면 멈춰요. 연수 하루 전에 접속 확인(`check.html`)을 열어 깨워 두세요.', sheets: '구글 시트의 Apps Script 배포 주소가 바뀌지 않았는지 접속 확인(`check.html`)으로 확인하세요.', http: '참여 기능 서버가 켜져 있는지 접속 확인(`check.html`)으로 확인하세요.', local: '지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.' }[prov];
   const before = [
     '사이트를 배포하면 주소와 QR이 나와요. 현장에 붙일 안내문은 QR 안내문(`poster.html`)을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.',
@@ -382,15 +394,15 @@ export function opsGuide(ctx) {
   ].filter(Boolean);
   const during = live ? [
     '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 강사 화면 위 [발표 화면 띄우기]를 누르면 크롬·엣지는 프로젝터를 고르는 창이 떠요. 그 창이 없으면 새 창이 열리니 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르세요.',
-    '발표 화면에는 질문과 투표 결과가 크게 보여요. 강사 화면의 [참여 QR 크게]를 켜면 발표 화면에 QR이 화면 가득 떠요.',
+    deckOn ? '발표 화면은 교재 쪽을 크게 띄우고 강사 화면과 같이 넘어가요(발표용 리모컨·PageDown도). 참여 QR·투표·질문·큰 타이머·공지는 강사 화면 [발표] 칸이나 발표 화면의 키 하나(J·V·Q·T·N, 가리기 B, 교재로 Esc)로 겹쳐 띄워요.' : '발표 화면에는 질문과 투표 결과가 크게 보여요. 강사 화면의 [참여 QR 크게]를 켜면 발표 화면에 QR이 화면 가득 떠요.',
     '교실을 돌며 쓰려면 [더보기] → [휴대폰에서 열기]의 QR을 휴대폰으로 찍어요. 그 QR에는 관리자 키가 들어 있으니 프로젝터에 비치지 않을 때만 보이세요.',
     '교탁 컴퓨터만 있으면 짧은 주소로 들어가 위 메뉴의 QR 버튼 → [발표 화면]을 누르고, 강사 화면은 휴대폰으로 열어요.',
     '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
-    '타이머·공지를 보내면 참가자 화면과 발표 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 지금 실습·쪽으로 참가자 화면이 움직여요.',
+    '타이머·공지를 보내면 참가자 화면과 발표 화면 위에 나타나요. "강사 따라 넘기기"를 켜면 참가자 교재가 같은 쪽으로 넘어가요. 교재 넘기기가 있으면 처음부터 켜져 있어요.',
     '질문이나 보드 글이 지나치게 몰리면 [질문 받기]·[새 글 받기]를 꺼서 잠시 잠그고, 맞지 않는 글은 [숨기기]로 가려요.',
     '모두 들어왔으면 진행 칸의 [참여 받기]를 꺼 두세요. 낯선 기기가 더 들어오지 않고, 이미 들어온 사람은 그대로 써요.',
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
-    attendSec ? '출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요).' : '연수를 시작할 때 참가자 첫 화면이나 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
+    attendSec ? `출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요).${['http', 'local'].includes(prov) ? ' 휴대폰이 없는 분은 강사 화면 [출석 명단]에서 추가하고, 빠뜨린 퇴실·잘못 누른 시각은 그 명단에서 고쳐요.' : ''}` : '연수를 시작할 때 참가자 첫 화면이나 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
   ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
   const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [기록 내려받기] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
   const after = live ? [
