@@ -70,8 +70,9 @@ export async function prepareCmd(h) {
   writeFileSync(join(work, 'README.md'), readmeText({ work, pages, images, originals }));
   say([
     `준비 ${rel(work)}: 교재 ${pages.length}쪽 · 쪽 그림 ${images}장(site/material/) · 보조 글자 material.md`,
-    images < pages.length && !args['no-slides'] ? `주의 쪽 그림을 ${pages.length - images}쪽 만들지 못했어요(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
-    ...(m.warnings || []).slice(0, 3).map((w) => `주의 ${w.message_ko}`),
+    images < pages.length && !args['no-slides'] && !(m.warnings || []).some((w) => w.code === 'render-failed') ? `주의 쪽 그림을 ${pages.length - images}쪽 만들지 못했어요(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
+    images < pages.length && images ? `쪽 그림이 없는 쪽은 material.md의 글로 읽어요(${pages.filter((p) => !p.image).map((p) => p.page).slice(0, 3).join('·')}${pages.filter((p) => !p.image).length > 3 ? '…' : ''}쪽).` : '',
+    ...(m.warnings || []).filter((w) => w.code !== 'python-fallback').slice(0, 3).map((w) => `주의 ${w.file ? `${w.file}: ` : ''}${w.message_ko}`),
     `다음 교재·쪽 그림 읽기 → ${rel(join(work, 'site'))}/index.html·${rel(join(work, 'lecpage.json'))} 쓰기 → check ${rel(work)} (이 작업의 경로 요약: ${rel(join(work, 'README.md'))})`,
   ], { ok: true, work, pages: pages.length, images, readme: join(work, 'README.md') });
 }
@@ -158,7 +159,7 @@ export async function checkCmd(h) {
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
   const issues = K.inspect(site, metaRaw).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
   const checkDir = join(work, 'check'); rmSync(checkDir, { recursive: true, force: true }); mkdirSync(checkDir, { recursive: true });
-  const shots = [];
+  const shots = [], tiles = [];
   let rendered = [], browserNote = '';
   const pw = args['no-shots'] ? null : await loadPlaywright();
   if (pw) {
@@ -176,6 +177,21 @@ export async function checkCmd(h) {
         const name = p.replace(/\.html$/, '');
         const found = await K.inspectPage(page, base + p, { file: 'site/' + p, shots: (w) => { const f = join(checkDir, `${name}-${w}.png`); shots.push(f); return f; } });
         rendered.push(...found);
+        // 나눠 본 그림: 전체 그림은 너무 길어 줄여 보면 글이 안 읽힘 → 화면 높이쯤으로 잘라 둠(앞에서부터 12장까지)
+        if (!args['no-tiles']) {
+          mkdirSync(join(checkDir, 'tiles'), { recursive: true });
+          for (const w of [390, 1280]) {
+            const th = w < 600 ? 1200 : 900;
+            await page.setViewportSize({ width: w, height: th });
+            await page.waitForTimeout(250);
+            const H = await page.evaluate(() => document.documentElement.scrollHeight);
+            for (let i = 0; i < Math.min(12, Math.ceil(H / th)); i++) {
+              const f = join(checkDir, 'tiles', `${name}-${w}-${String(i + 1).padStart(2, '0')}.png`);
+              await page.screenshot({ path: f, fullPage: true, clip: { x: 0, y: i * th, width: w, height: Math.min(th, H - i * th) } });
+              tiles.push(f);
+            }
+          }
+        }
         for (const e of [...new Set(errs)].slice(0, 6)) rendered.push({ id: /Content Security Policy|Refused/.test(e) ? 'csp-blocked' : 'page-error', level: 'error', where: { file: 'site/' + p, selector: '', section: '' }, message_ko: `${/Content Security Policy|Refused/.test(e) ? 'CSP가 막은 것' : '스크립트 오류'}: ${e}`, fix_hint_ko: /Refused/.test(e) ? '허용되지 않은 바깥 주소·인라인 코드를 빼 주세요(references/kit.md CSP).' : 'site/assets/의 스크립트를 고쳐 주세요(브라우저 콘솔과 같은 오류).' });
         await page.close();
       }
@@ -204,8 +220,9 @@ export async function checkCmd(h) {
     ...[...errors, ...all.filter((x) => x.level !== 'error')].slice(0, 10).map(line),
     all.length > 10 ? `… 나머지는 ${rel(join(checkDir, 'issues.md'))}` : '',
     r.warnings.length ? `조립 알림 ${r.warnings.length}: ${r.warnings.slice(0, 3).map((w) => w.message_ko).join(' / ')}` : '',
-    shots.length ? `화면 그림 ${shots.map((s) => rel(s)).join(' · ')}` : '', browserNote,
-  ], { ok: !errors.length, dist, issues: all, warnings: r.warnings, shots, report: r.report });
+    shots.length ? `화면 그림 ${shots.map((s) => rel(s)).join(' · ')}(전체)` : '',
+    tiles.length ? `나눠 본 그림 ${rel(join(checkDir, 'tiles'))}/ ${tiles.length}장(<쪽>-390-01.png부터, 위에서 아래로) — 첫 장과 고친 곳 둘레를 직접 열어 봐요` : '', browserNote,
+  ], { ok: !errors.length, dist, issues: all, warnings: r.warnings, shots, tiles, report: r.report });
   process.exitCode = errors.length ? 1 : 0;
 }
 

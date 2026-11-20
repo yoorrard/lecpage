@@ -180,6 +180,9 @@ export async function publishCmd(h) {
   const want = args.features ? String(args.features).split(',').map((x) => x.trim()).filter(Boolean) : [];
   const feats = [...new Set([...(bp.live.features || []), ...(info.features || []), ...want])];
   if (live && !feats.length) warn.push('참여 기능이 꺼져 있어요. --features qa,poll을 붙이면 질문·투표 칸이 함께 생겨요(그대로 올리면 중계만 생김).');
+  // 참여 기능이 연습 모드(local)인 채로 올리면 참가자 기록(출석·질문·진행)이 모이지 않음 → 올리기 전에 알림
+  const practice = !live && bp.live?.provider === 'local';
+  if (practice) warn.push(`참여 기능(${(bp.live.features || []).join(',')})이 연습 모드라 배포한 사이트에서는 기록이 모이지 않아요(출석·질문이 각자 브라우저에만). --live를 붙여 중계를 함께 올리거나, 참여 기능 서버 주소를 강사에게 받아 ${v2 ? 'lecpage.teacher.json' : 'info.json'}의 live에 적어 주세요.`);
   const auth = process.env.CLOUDFLARE_API_TOKEN ? 'token' : process.env.LECPAGE_WRANGLER ? 'fake' : '';
   const today = new Date().toISOString().slice(0, 10);
   const relayDir = join(work, 'live-relay');
@@ -286,6 +289,7 @@ export async function publishCmd(h) {
   say([
     `올렸어요 ✓ ${siteBase}`,
     ...lines,
+    ...warn.map((w) => '주의 ' + w),
     claim ? `임시 계정이에요. 60분 안에 강사가 ${claim}에서 가입해야 사이트가 남아요` : '',
     `참가자 ${siteBase} · QR 안내문 ${siteBase}poster.html · 발표 화면 ${siteBase}screen.html${existsSync(join(dist, 'console.html')) ? ` · 강사 화면 ${siteBase}console.html(도움말 칸에 연수 후 할 일)` : ''} · 접속 확인 ${siteBase}check.html`,
     ...(ho ? ho.lines : []),

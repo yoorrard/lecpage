@@ -191,7 +191,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
       if (t.name === 'a') {
         const href = attr(t, 'href');
         if (href && href.startsWith('#') && href.length > 1 && !/^#(deck-p\d+|st-)/.test(href)) { let id = href.slice(1); try { id = decodeURIComponent(id); } catch { /* 그대로 */ } if (!ids[p].has(id) && !tags.some((x) => x.kind === 'open' && attr(x, 'id') === id)) add('broken-anchor', 'warn', W(k, t), `#${id}로 가는 링크인데 그 id가 없어요.`, '섹션에 id를 달거나 링크를 고쳐 주세요.'); }
-        else if (href && !/^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(href)) { const rp = resolvePath(href, p); if (rp && !files[rp] && !['console.html', 'screen.html', 'poster.html', 'check.html', 'privacy.html'].includes(rp)) add('broken-link', 'error', W(k, t), `링크 ${href.slice(0, 70)}가 가리키는 파일이 없어요.`, '경로를 확인하거나 쪽을 만들어 주세요.'); }
+        else if (href && !/^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(href)) { const rp = resolvePath(href, p); if (rp && !files[rp] && !ENGINE_PAGES.includes(rp) && rp !== 'assets/event.ics') add('broken-link', 'error', W(k, t), `링크 ${href.slice(0, 70)}가 가리키는 파일이 없어요.`, '경로를 확인하거나 쪽을 만들어 주세요.'); }
       }
       // 섹션: 제목·빈 섹션
       if (t.name === 'section' || attr(t, 'data-lp-step') !== undefined) {

@@ -57,7 +57,7 @@ const OPTS = {
   app: 'i o force password',
   publish: 'host live features name relay dry-run temporary no-handouts no-verify no-bundle-fonts no-qa password',
   handouts: 'o password',
-  prepare: 'o today no-slides no-python', check: 'port today no-shots', preview: 'port host today',
+  prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles', preview: 'port host today',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
