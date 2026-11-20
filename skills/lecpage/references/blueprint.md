@@ -1,7 +1,7 @@
 # 설계도(blueprint) 작성 안내
 
 완성 예시: `examples/sel-story.blueprint.json`(강의형), `examples/data-lab.blueprint.json`(실습형). 먼저 하나를 열어 모양을 익힌다.
-전체 계약: 저장소 `docs/architecture.md` §2. 엔진의 `validate`가 빠진 값을 채우고 위험한 값을 걸러 낸다.
+칸 종류·필드 전체: `engine/src/schema/sections.js`, 검증·보정 규칙: `engine/src/validate.js`(빠진 값을 채우고 위험한 값을 걸러 냄).
 
 ## 1. 순서
 1. `meta`: 연수명(교재 표지), 부제(핵심 메시지 한 줄), 주최·주관, 날짜(YYYY-MM-DD), 시작·끝(HH:MM), 장소, 형태(`mode`), 온라인 회의 주소(`joinUrl`), 문의처(`contact`, 한 줄: "연수 담당 김하나 02-123-4567"), 연수 성격(`admin.kind`·`hours`·`completionRate`).
@@ -9,7 +9,7 @@
 2. `audience`, `archetype`: 인터뷰 답으로 채운다. `archetype`은 흐름에서 따라 나온다.
 3. `instructors`: 교재의 강사 소개 쪽에서. 이메일은 `showEmail`로 공개 여부를 묻고 정한다.
 4. `structure`·`sections`: 흐름과 신호 표(`references/modules.md` §1)로 칸을 정한다. `structure: { flow, reasons[], suggested[{feature,label,reason}], leftovers{count,items[]}, source }` — `flow`와 왜 그렇게 구성했는지(`reasons`, 한 줄씩)는 정하는 쪽이 쓰고, `suggested`·`leftovers`는 엔진이 채운다. 빈 섹션은 넣지 않는다.
-5. `design`은 6단계, `live`·`privacy`는 7단계, `access`는 8단계에서 채운다(`SKILL.md` 작업 흐름). `access.mode`는 `link`(기본, 검색 제외)·`public`·`password`(빌드할 때 `--password`로 암호를 주면 페이지와 교재 그림까지 잠금). 암호 자체는 설계도에 쓰지 않는다.
+5. `design`은 5단계(컨셉·디자인), `live`·`privacy`·`access`는 6단계(배포·참여 기능)에서 채운다(`SKILL.md` 작업 흐름). `access.mode`는 `link`(기본, 검색 제외)·`public`·`password`(빌드할 때 `--password`로 암호를 주면 페이지와 교재 그림까지 잠금). 암호 자체는 설계도에 쓰지 않는다.
 
 ## 2. 섹션별 요령
 - **hero**: `title`은 연수명 그대로(줄바꿈 `\n`으로 리듬을 줄 수 있음). 구호로 연수명을 바꾸지 않는다. `subtitle`은 연수가 약속하는 것 한 문장. 버튼(`ctas`) 2개까지: 첫째는 가장 중요한 행동(실습 시작·교재 보기). 온라인·혼합이면 "Zoom 입장" 같은 버튼이 `meta.joinUrl`로 맨 앞에 자동으로 붙는다. `eyebrow`는 주최 이름(없으면 비움). 일시·장소·강사 줄은 `meta`(연수 정보)에서 화면이 그리므로 적지 않는다(날짜를 고치면 첫 화면·QR 안내문·달력이 함께 바뀜). `meta[]`에는 덧붙일 줄만(발표·대상·주차 등). 항목에 `url`을 주면 링크가 된다(예: 장소 → 지도). `일시`·`장소`·`강사` 줄을 직접 적으면 그 줄이 기본 줄을 대신한다.
@@ -32,7 +32,7 @@
 - **survey**: 실시간 기능을 쓰면 `questions`(`{q, kind: scale|choice|text, options}`)로 사이트 안에서 바로 받고 강사 화면에서 CSV로 내려받는다(기본 문항: 엔진의 `DEFAULT_SURVEY`, 대상에 맞는 말로). 기관 설문 주소(`info.json` `surveyUrl`)를 주면 그 설문 하나만 싣는다(사이트 기본 문항과 둘이 되지 않게). 교재 속 실습 제출용 폼(모둠 결과 올리기 등)은 설문 후보가 아니라 실습 링크.
 - **숨기기**: 섹션에 `"hidden": true`를 두면 내용은 설계도에 남기고 사이트에서만 뺀다.
 - **closing**: 교재 마지막 메시지(`lead`는 그 문장의 이름표, 예: "핵심"). 짧을수록 크게 보인다. 교재에 없는 인사말·서명("○○○ 드림")은 강사가 원할 때만. 설문(survey)은 closing 앞에 둔다.
-- 문구는 `references/copywriting.md`를 따르고, 다 쓰면 `node $SKILL/scripts/copy-lint.mjs work/blueprint.json`으로 점검한다.
+- 문구는 `references/copywriting.md`를 따르고, 다 쓰면 `node $SKILL/scripts/copy-lint.mjs work/blueprint.json`으로 점검한다(옆의 `work/material.json`을 읽어 교재에서 그대로 온 글은 세지 않으니, 나온 것만 고친다).
 
 ## 3. 톤 여정(밤하늘 서사 프리셋)
 섹션마다 `tone`을 `night`·`dawn`·`day`로 두면 배경이 밤→새벽→밤으로 흐른다. 보통: 도입·메시지 night → 도구·보드·자료 dawn → 강사·마무리 night.

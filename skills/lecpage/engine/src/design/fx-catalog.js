@@ -13,16 +13,7 @@
 //  weightKB 효과 파일 크기(KB, 압축 전). fx.css 몫은 별도
 //  surface  'dark'면 영역을 어두운 바탕으로 바꾼다(opts.surface:"keep"으로 끔)
 
-export const SLOTS = [
-  'hero.title', 'hero.graphic', 'hero.cta', 'section.title', 'section.enter', 'divider', 'cards', 'list', 'numbers',
-  'message', 'schedule', 'gallery', 'closing.title', 'closing.graphic', 'cursor', 'scroll', 'progress', 'celebrate'
-];
-
 export const MOODS = ['calm', 'warm', 'emotional', 'playful', 'energetic', 'tech', 'futuristic', 'editorial', 'formal', 'natural', 'retro', 'minimal', 'bold', 'handmade'];
-export const MOOD_LABELS = {
-  calm: '차분한', warm: '따뜻한', emotional: '감성적인', playful: '발랄한', energetic: '활기찬', tech: '기술적인', futuristic: '미래적인',
-  editorial: '잡지 같은', formal: '격식 있는', natural: '자연스러운', retro: '복고풍', minimal: '미니멀', bold: '대담한', handmade: '손맛 나는'
-};
 
 export const TOPICS = ['sel', 'counseling', 'ai', 'edutech', 'coding', 'maker', 'science', 'math', 'korean', 'reading', 'art', 'music', 'pe', 'english', 'history', 'environment', 'career', 'safety', 'policy', 'admin', 'parent', 'general'];
 export const TOPIC_LABELS = {
@@ -30,8 +21,6 @@ export const TOPIC_LABELS = {
   korean: '국어', reading: '독서', art: '미술', music: '음악', pe: '체육', english: '영어', history: '역사·사회', environment: '환경·생태',
   career: '진로', safety: '안전', policy: '정책 설명', admin: '행정·업무', parent: '학부모', general: '일반'
 };
-
-export const GROUPS = { text: '글자', scroll: '스크롤·배치', interaction: '상호작용', graphic: '그래픽 배경', lib: '라이브러리(스크롤 연출)' };
 
 const MIT = 'MIT-0(lecpage)'; // lecpage 런타임 코드의 라이선스. 바깥 라이브러리는 제 라이선스를 따로 적음
 
@@ -398,11 +387,3 @@ export const FX = [
 ];
 
 export const FX_BY_ID = Object.fromEntries(FX.map((f) => [f.id, f]));
-
-/** 슬롯에 맞는 효과 목록(강도 상한·분위기·주제로 거른 뒤 점수 순) */
-export function fxForSlot(slot, { level = 2, moods = [], topics = [] } = {}) {
-  return FX.filter((f) => f.slots.includes(slot) && f.level <= level)
-    .map((f) => ({ f, s: moods.filter((m) => f.moods.includes(m)).length * 2 + topics.filter((t) => f.topics.includes(t)).length + (f.trend === 'up' ? 0.5 : f.trend === 'warn' ? -1 : 0) }))
-    .sort((a, b) => b.s - a.s)
-    .map((x) => x.f);
-}

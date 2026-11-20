@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // 움직임 점검: 효과·첫 화면 그림·본문 등장이 '실제로' 움직이는지 시간과 스크롤에 따라 재요(Playwright).
-//   첫 화면: 가만히 둔 채(웹 글꼴을 최대 0.9초 기다린 뒤) 0.1~5.6초 사이 몇 장을 찍어 바뀐 화소 비율을 잼 → 계속 움직임(loop) · 들어오고 멈춤(enter) · 정지(still)
-//            끝없이 도는 그림이 켜졌는데 정지면 'hero-still', 움직임 단계인데 첫 화면이 그대로면 'hero-no-motion', 효과가 단계 2 이상 자리에서 건너뛰거나 실패하면 'fx-skipped'·'fx-failed'
+//   첫 화면: 시각·화소가 아니라 '사건'으로 판정(부하로 측정이 늦어져도 같은 결과). 쪽을 열기 전부터 첫 화면 안의 CSS 애니메이션·전환 시작(animationstart·transitionrun),
+//            el.animate(), 캔버스 그리기, 글·스타일 바뀜을 기록하고, 등장이 끝날 때까지(효과 준비·글꼴·진행 중인 등장) 기다린 뒤 1.6초 동안 계속 바뀌는지 봄
+//            → 계속 움직임(loop) · 들어오고 멈춤(enter) · 정지(still). 판정은 judgeHero(브라우저 없이 시험)
+//            끝없이 도는 그림이 켜졌는데 계속 바뀌는 기록이 없으면 'hero-still', 움직임 단계인데 첫 화면에 움직임 사건이 하나도 없으면 'hero-no-motion', 효과가 단계 2 이상 자리에서 건너뛰거나 실패하면 'fx-skipped'·'fx-failed'
 //   본문: 한 화면씩 내려가며 화면 가운데 띠에 온전히 들어온 글이 흐리거나 숨은 채인지('dim-in-view'), 다 내려간 뒤 대기 상태로 남은 것('stuck-pre'),
 //         CSS 스크롤 타임라인이 스크롤에 따라 값이 바뀌는지('scroll-dead'), 화면 밖으로 나간 꾸밈 층('offscreen-art')
 //   동작 줄이기(--rm): 첫 화면 그림이 비거나(빈 캔버스·숨은 정지 그림) 제목·단추가 숨은 채인지('rm-incomplete')
@@ -87,6 +89,11 @@ function viewCheck() {
   return out;
 }
 
+/** 브라우저 안: 본문에서 끝이 있는 움직임(등장)이 다 끝났는지 */
+function mainSettled() {
+  return !document.getAnimations().some((a) => { const t = a.effect && a.effect.target; if (!t || !t.closest || !t.closest('main')) return false; const tm = a.effect.getComputedTiming(); return tm.iterations !== Infinity && a.timeline === document.timeline && (a.playState === 'running' || a.pending); });
+}
+
 /** 브라우저 안: 다 내려간 뒤에도 대기 상태(data-fx-pre)로 남은 것 */
 function preLeft() {
   const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; };
@@ -121,40 +128,95 @@ export async function cssMoving(page, within = '') {
 export const LOOP_FX = new Set(['arc-ripple', 'aurora', 'blobs-morph', 'bokeh', 'border-beam', 'dot-grid', 'gradient-text', 'marquee', 'mesh-gradient', 'noise-orb', 'orbit-3d', 'particles-network', 'perspective-grid', 'shader-gradient', 'starfield', 'stream-lines', 'three-hero', 'topo-lines', 'waves', 'word-rotate']);
 
 /**
- * 한 페이지 점검. page는 막 연 상태(goto 직후, waitUntil 'domcontentloaded' 권장)
- * @returns {{hero:{kind,diffs,loops,state}, fx, scroll:{seen,moved}, findings:[{rule,sample}]}}
+ * 브라우저 안(쪽을 열기 전에 심음): 첫 화면(.lp-hero) 안의 움직임 사건 기록 → window.__lpMotion
+ *  ev: [종류, 시각, 이름, 길이ms] (animationstart·transitionrun·animationiteration, el.animate) · draws: 캔버스 그린 시각 · muts: 글·스타일 바뀐 시각 · fxReadyAt: 효과 준비(html.fx-ready)
  */
-export async function checkPage(page, { shots = '', tag = 'page', rm = false, frames = [120, 450, 900, 1600, 2600, 4000, 5600], step = 0.8, settle = 650 } = {}) {
+export function motionRecorder() {
+  if (window.__lpMotion) return;
+  const R = window.__lpMotion = { ev: [], draws: [], muts: [], fxReadyAt: 0 };
+  const now = () => Math.round(performance.now());
+  const inHero = (n) => { try { const el = n && n.nodeType === 1 ? n : n && n.parentElement; return !!(el && el.closest && el.closest('.lp-hero')); } catch (e) { return false; } };
+  const push = (list, v) => { list.push(v); if (list.length > 4000) list.splice(0, 1000); };
+  const dur = (t, name, prop) => { try { const a = t.getAnimations().find((x) => (name && x.animationName === name) || (prop && x.transitionProperty === prop)); const d = a && a.effect && a.effect.getComputedTiming().duration; return typeof d === 'number' ? Math.round(d) : 0; } catch (e) { return 0; } };
+  const onEv = (e) => { if (inHero(e.target)) push(R.ev, [e.type, now(), e.animationName || e.propertyName || '', dur(e.target, e.animationName, e.propertyName)]); };
+  for (const k of ['animationstart', 'animationiteration', 'transitionrun']) document.addEventListener(k, onEv, true);
+  const animate = Element.prototype.animate;
+  if (animate) Element.prototype.animate = function () { const a = animate.apply(this, arguments); if (inHero(this)) { let d = 0; try { d = Math.round(a.effect.getComputedTiming().duration) || 0; } catch (e) { /* 없음 */ } push(R.ev, ['animate', now(), '', d]); } return a; };
+  const tag = (proto, names) => { if (!proto) return; for (const n of names) { const f = proto[n]; if (typeof f !== 'function') continue; proto[n] = function () { if (this.canvas && inHero(this.canvas)) { const t = now(); if (R.draws[R.draws.length - 1] !== t) push(R.draws, t); } return f.apply(this, arguments); }; } };
+  tag(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype, ['clearRect', 'fillRect', 'fill', 'stroke', 'drawImage', 'putImageData', 'fillText']);
+  tag(window.WebGLRenderingContext && WebGLRenderingContext.prototype, ['drawArrays', 'drawElements']);
+  tag(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype, ['drawArrays', 'drawElements']);
+  new MutationObserver((list) => {
+    for (const m of list) {
+      if (m.target === document.documentElement) { if (!R.fxReadyAt && document.documentElement.classList.contains('fx-ready')) R.fxReadyAt = now(); continue; }
+      if (inHero(m.target)) { push(R.muts, now()); break; }
+    }
+  }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'd', 'transform', 'points', 'data-fx-pre'] });
+}
+
+/** 등장이 다 끝났는지(브라우저 안): 쪽 다 읽음 · 효과 준비 · 글꼴(효과는 최대 1초 기다림) · 첫 화면의 끝이 있는 움직임이 다 끝남 · 보이는 대기 상태 없음 */
+function heroSettled() {
+  const R = window.__lpMotion; if (!R || document.readyState !== 'complete') return false;
+  const hero = document.querySelector('main > .lp-hero') || document.querySelector('.lp-hero');
+  if (document.querySelector('[data-fx]') && window.LecFX && !R.fxReadyAt) return false;
+  if (R.fxReadyAt && document.fonts && document.fonts.status !== 'loaded' && performance.now() - R.fxReadyAt < 1300) return false;
+  if (!hero) return true;
+  const busy = document.getAnimations().some((a) => { const t = a.effect && a.effect.target; if (!t || !hero.contains(t)) return false; const it = a.effect.getComputedTiming().iterations; return it !== Infinity && (a.playState === 'running' || a.pending); });
+  if (busy) return false;
+  return ![...hero.querySelectorAll('[data-fx-pre]')].some((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < innerHeight; });
+}
+
+/** 첫 화면 안에서 끝없이 도는 CSS·WAAPI 애니메이션 수(브라우저 안) */
+function heroInfinite() {
+  const hero = document.querySelector('main > .lp-hero') || document.querySelector('.lp-hero'); if (!hero) return 0;
+  return document.getAnimations().filter((a) => { const t = a.effect && a.effect.target; return t && hero.contains(t) && a.playState === 'running' && a.effect.getComputedTiming().iterations === Infinity; }).length;
+}
+
+/** 보이는 움직임으로 칠 길이(ms): 동작 줄이기용 0.01ms 같은 '없는 셈' 애니메이션은 빼고 */
+export const MIN_MOTION_MS = 80;
+/**
+ * 첫 화면 판정(브라우저 없이 시험): 기록 → { kind, findings }
+ * @param {{ ev:Array, late:{draws:number, muts:number, infinite:number, css:number}, fx:Array, motion:string|number, rm:boolean }} o
+ *   ev: 등장까지의 사건 [종류, 시각, 이름, 길이ms] · late: 등장이 끝난 뒤 1.6초 사이 바뀐 수 · fx: fxState()
+ */
+export function judgeHero({ ev = [], late = {}, fx = [], motion = 0, rm = false } = {}) {
+  const findings = [];
+  const add = (rule, sample) => findings.push({ rule, sample: String(sample).slice(0, 140) });
+  const heroLoops = fx.filter((f) => f.hero && f.inView && LOOP_FX.has(f.id)); // 화면 밖(좁은 화면에서 첫 화면 아래로 밀린 띠 등)은 쉬는 것이 맞음
+  const moving = (late.draws || 0) >= 3 || (late.muts || 0) >= 2 || (late.infinite || 0) > 0 || (late.css || 0) > 0;
+  const entered = ev.filter((e) => e[0] === 'animationiteration' || (e[3] || 0) >= MIN_MOTION_MS);
+  const kind = moving ? 'loop' : entered.length ? 'enter' : 'still';
+  const summary = `사건 ${entered.length}·뒤 1.6초 그리기 ${late.draws || 0}·바뀜 ${late.muts || 0}·도는 CSS ${late.infinite || 0}`;
+  if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop') add('hero-still', `${heroLoops.map((f) => f.id).join(',')} 켜졌는데 등장 뒤 계속 바뀌는 기록이 없음(${kind})`);
+  // 첫 화면 제목은 효과 스크립트보다 먼저 그려지면 그대로 둠(core shownTitle, 휴대폰 LCP): 그때 첫 화면이 그대로인 것은 문제가 아님
+  if (!rm && +motion >= 1 && kind === 'still' && !fx.some((f) => f.hero && f.st === 'shown')) add('hero-no-motion', `움직임 ${motion}단계인데 첫 화면에 움직임 사건(애니메이션·전환·그리기)이 하나도 없음`);
+  return { kind, findings, loops: heroLoops.map((f) => `${f.id}:${f.st}`), summary };
+}
+
+/**
+ * 한 페이지 점검. page는 막 연 상태(goto 직후, waitUntil 'domcontentloaded' 권장). 사건 기록기(motionRecorder)가 없으면 심고 다시 엶
+ * @returns {{hero:{kind,summary,loops,state}, fx, scroll:{seen,moved}, findings:[{rule,sample}]}}
+ */
+export async function checkPage(page, { shots = '', tag = 'page', rm = false, step = 0.8, settle = 650 } = {}) {
   const res = { tag, hero: null, fx: [], findings: [] };
   const add = (rule, sample) => res.findings.push({ rule, sample: String(sample).slice(0, 140) });
-  // 화면 비교용 빈 쪽: browser.newPage()로 연 쪽(qa)은 그 맥락에 쪽을 더 열 수 없어 브라우저에서 따로 엶
-  const helper = await page.context().newPage().catch(() => page.context().browser().newPage());
-  await helper.goto('about:blank');
-  // 첫 화면: 가만히 둔 채 몇 장
+  if (!(await page.evaluate(() => !!window.__lpMotion).catch(() => false))) { await page.addInitScript(motionRecorder); await page.reload({ waitUntil: 'domcontentloaded' }); }
+  // 등장이 끝날 때까지(시각이 아니라 상태로). 부하가 커도 늦어질 뿐 판정은 같음
+  await page.waitForFunction(heroSettled, null, { timeout: 20000, polling: 150 }).catch(() => {});
   const vh = page.viewportSize().height, vw = page.viewportSize().width;
-  const clip = { x: 0, y: 0, width: vw, height: vh };
-  // 화면 찍기는 CDP로(page.screenshot은 웹 글꼴을 기다려 첫 장이 1초 넘게 늦어져 등장 움직임을 놓침)
-  const cdp = await page.context().newCDPSession(page);
-  const snap = async () => Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: 1 } })).data, 'base64');
-  // 웹 글꼴(최대 0.9초)까지 기다린 뒤부터 잼: 효과도 첫 화면 등장을 글꼴이 올 때까지(최대 1초) 미룸(core.js enter)
-  await page.evaluate(() => Promise.race([document.fonts ? document.fonts.ready : null, new Promise((r) => setTimeout(r, 900))])).catch(() => {});
-  const imgs = []; const t0 = Date.now();
-  for (const at of frames) { const wait = at - (Date.now() - t0); if (wait > 0) await page.waitForTimeout(wait); const b = await snap(); imgs.push(b); if (shots) { mkdirSync(shots, { recursive: true }); writeFileSync(join(shots, `${tag}-t${String(at).padStart(4, '0')}.png`), b); } }
-  await cdp.detach().catch(() => {});
-  const diffs = [];
-  for (let i = 1; i < imgs.length; i++) diffs.push(+(await helper.evaluate(diffInPage, [imgs[i - 1].toString('base64'), imgs[i].toString('base64')])).toFixed(4));
-  await helper.close();
+  if (shots) { mkdirSync(shots, { recursive: true }); await page.screenshot({ path: join(shots, `${tag}-hero.png`), clip: { x: 0, y: 0, width: vw, height: vh } }).catch(() => {}); }
+  // 등장 뒤 1.6초: 계속 바뀌는지(도는 그림)
+  const count = () => page.evaluate(() => ({ draws: window.__lpMotion.draws.length, muts: window.__lpMotion.muts.length, lastD: window.__lpMotion.draws.at(-1) || 0, lastM: window.__lpMotion.muts.at(-1) || 0 }));
+  const c0 = await count(); await page.waitForTimeout(1600); const c1 = await count();
+  const rec = await page.evaluate(() => window.__lpMotion.ev);
+  const late = { draws: Math.max(0, c1.draws - c0.draws) || (c1.lastD > c0.lastD ? 1 : 0), muts: Math.max(0, c1.muts - c0.muts) || (c1.lastM > c0.lastM ? 1 : 0), infinite: await page.evaluate(heroInfinite), css: 0 };
   res.fx = await page.evaluate(fxState);
-  const heroLoops = res.fx.filter((f) => f.hero && f.inView && LOOP_FX.has(f.id)); // 화면 밖(좁은 화면에서 첫 화면 아래로 밀린 띠 등)은 쉬는 것이 맞음
-  // 끝없이 도는 그림은 별처럼 작은 점만 바뀌기도 해서 더 작은 변화도 '계속 움직임'으로 봄
-  const late = diffs.slice(-2), early = diffs.slice(0, 3), lt = heroLoops.length ? 0.0004 : 0.0015;
-  let kind = late.every((d) => d > lt) ? 'loop' : early.some((d) => d > 0.0015) ? 'enter' : diffs.some((d) => d > 0.0015) ? 'late' : 'still';
+  const motion = await page.evaluate(() => document.documentElement.getAttribute('data-motion'));
+  if (!rm && !late.infinite && late.draws < 3 && late.muts < 2 && res.fx.some((f) => f.hero && f.inView && f.st === 'on' && LOOP_FX.has(f.id))) late.css = await cssMoving(page, '.lp-hero'); // 화소로도 사건으로도 안 잡히는 부드러운 흐름(배경 위치 등)
+  const j = judgeHero({ ev: rec, late, fx: res.fx, motion, rm });
   const state = await page.evaluate(() => (window.LecFX ? window.LecFX.state() : null));
-  res.hero = { kind, diffs, loops: heroLoops.map((f) => `${f.id}:${f.st}`), state, motion: await page.evaluate(() => document.documentElement.getAttribute('data-motion')) };
-  if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop' && await cssMoving(page, '.lp-hero')) res.hero.kind = kind = 'loop'; // 화소로는 안 잡히는 부드러운 흐름(오로라 등)
-  if (!rm && heroLoops.some((f) => f.st === 'on') && kind !== 'loop') add('hero-still', `${heroLoops.map((f) => f.id).join(',')} 켜졌는데 ${kind}(${diffs.join(' ')})`);
-  // 첫 화면 제목은 효과 스크립트보다 먼저 그려지면 그대로 둠(core shownTitle, 휴대폰 LCP): 그때 첫 화면이 그대로인 것은 문제가 아님
-  if (!rm && +res.hero.motion >= 1 && kind === 'still' && !res.fx.some((f) => f.hero && f.st === 'shown')) add('hero-no-motion', `움직임 ${res.hero.motion}단계인데 첫 화면이 처음부터 그대로`);
+  res.hero = { kind: j.kind, summary: j.summary, loops: j.loops, state, motion, events: rec.length };
+  res.findings.push(...j.findings);
   for (const f of res.fx) {
     if (f.st === 'failed') add('fx-failed', `${f.id} @${f.sec}`);
     if (f.st === 'skipped' && !rm && f.lv >= 2) add('fx-skipped', `${f.id} @${f.sec}${f.hero ? '(첫 화면)' : ''} 그 자리 단계 ${f.lv}`);
@@ -172,12 +234,12 @@ export async function checkPage(page, { shots = '', tag = 'page', rm = false, fr
     lastSample = s;
     await page.waitForTimeout(settle);
     let v = await page.evaluate(viewCheck);
-    if (v.dim.length) { await page.waitForTimeout(1000); v = await page.evaluate(viewCheck); } // 차례로 들어오는 중이면 조금 더 기다려 봄
+    if (v.dim.length) { await page.waitForFunction(mainSettled, null, { timeout: 6000, polling: 150 }).catch(() => {}); v = await page.evaluate(viewCheck); } // 차례로 들어오는 중이면 그 움직임이 끝날 때까지
     for (const d of v.dim) dims.add(d); for (const o of v.offArt) offs.add(o);
   }
   // 맨 끝까지(글꼴·그림으로 쪽이 길어졌을 수 있음): 마지막 칸이 들어왔는지
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
-  await page.waitForTimeout(1300);
+  await page.waitForTimeout(400); await page.waitForFunction(mainSettled, null, { timeout: 6000, polling: 150 }).catch(() => {});
   const pre = await page.evaluate(preLeft);
   const vb = await page.evaluate(viewCheck); for (const d of vb.dim) dims.add(d);
   await page.evaluate(() => scrollTo(0, 0));
@@ -206,6 +268,7 @@ export const RULES = {
 /** scripts/lecpage.mjs qa가 부르는 검사(PC 화면에서 한 번): 페이지를 다시 열어 처음부터 잼. 실패·숨은 채 남음은 고칠 곳, 나머지는 살필 곳 */
 export async function lintPage(page, { view } = {}) {
   if (view && view !== 'desktop') return [];
+  await page.addInitScript(motionRecorder);
   await page.reload({ waitUntil: 'domcontentloaded' });
   const r = await checkPage(page, { tag: view || 'page', step: 1, settle: 450 });
   return r.findings.map((f) => ({ level: f.rule === 'fx-failed' || f.rule === 'stuck-pre' ? 'error' : 'warn', rule: f.rule, message: `${RULES[f.rule] || f.rule} ${f.sample}` }));
@@ -304,6 +367,7 @@ async function main() {
     for (let j; (j = queue.shift());) {
       const ctx = await browser.newContext({ viewport: { width: j.w, height: j.w < 700 ? 780 : 900 }, deviceScaleFactor: 1, colorScheme: j.theme, reducedMotion: rm ? 'reduce' : 'no-preference', hasTouch: j.w < 700, isMobile: false, ignoreHTTPSErrors: !!proxy });
       if (device !== 'auto') { const [c, m] = device === 'fast' ? [8, 8] : [2, 2]; await ctx.addInitScript(([c, m]) => { Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => c }); Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => m }); }, [c, m]); }
+      await ctx.addInitScript(motionRecorder); // 첫 화면 사건 기록(판정은 사건으로)
       const page = await ctx.newPage(), errs = [];
       page.on('pageerror', (e) => errs.push(String(e.message).slice(0, 100)));
       page.on('console', (m) => { if (m.type() === 'error' && !/net::ERR|Failed to load resource/.test(m.text())) errs.push(m.text().slice(0, 100)); });
@@ -320,7 +384,7 @@ async function main() {
   }));
   await browser.close(); srv.close(); rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${Math.round((Date.now() - t0) / 1000)}초`);
-  for (const r of results) console.log(`${r.tag.padEnd(48)} 첫화면 ${String(r.hero?.kind).padEnd(5)} [${(r.hero?.diffs || []).map((d) => d.toFixed(3)).join(' ')}] ${r.hero?.loops?.join(' ') || ''} 단계${r.hero?.state?.level ?? '-'}${r.hero?.state?.lowPower ? '(저사양)' : ''} 스크롤 ${r.scroll?.moved ?? '-'}/${r.scroll?.seen ?? '-'}${r.findings.length ? '\n    ' + r.findings.map((f) => `${f.rule}: ${f.sample}`).join('\n    ') : ''}`);
+  for (const r of results) console.log(`${r.tag.padEnd(48)} 첫화면 ${String(r.hero?.kind).padEnd(5)} [${r.hero?.summary || ''}] ${r.hero?.loops?.join(' ') || ''} 단계${r.hero?.state?.level ?? '-'}${r.hero?.state?.lowPower ? '(저사양)' : ''} 스크롤 ${r.scroll?.moved ?? '-'}/${r.scroll?.seen ?? '-'}${r.findings.length ? '\n    ' + r.findings.map((f) => `${f.rule}: ${f.sample}`).join('\n    ') : ''}`);
   if (out) writeFileSync(out, JSON.stringify(results, null, 1));
   const bad = results.filter((r) => r.findings.length);
   console.log(`문제 있는 곳 ${bad.length}/${results.length}`);

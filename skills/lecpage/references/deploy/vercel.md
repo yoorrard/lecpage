@@ -35,13 +35,13 @@ skill은 토큰을 환경 변수 `VERCEL_TOKEN`으로만 넘기고 파일(설계
 ```bash
 S=<skill 폴더>/templates/deploy/vercel
 cp $S/vercel.json $S/.vercelignore dist/     # 한 번만. 다시 빌드해도 남습니다
-VERCEL_TOKEN=… npx vercel@latest deploy ./dist --prod --yes --project lec-20261111 --create-if-missing
+VERCEL_TOKEN=… npx vercel@65.8.0 deploy ./dist --prod --yes --project lec-20261111 --create-if-missing
 ```
 - 대화 없이 돕니다(CLI 65.14.0 `--help`로 플래그 확인). 팀이 여럿이면 `--scope <팀>`.
 - **참가자 주소는 운영 주소 `https://lec-20261111.vercel.app`** 입니다. 명령이 stdout에 내는 것은 배포별 주소(`<프로젝트>-<해시>-<팀>.vercel.app`)입니다. 그 판만 가리키고 Vercel 로그인을 요구할 수 있으니 **나눠 주지 않습니다**.
 - 이름을 다른 사람이 쓰고 있으면 운영 주소가 `<프로젝트>-<팀>.vercel.app`처럼 잡힙니다. 프로젝트 **Settings → Domains**에서 확인합니다.
 - 프로젝트 이름: 소문자·숫자·`.` `_` `-`, 100자까지, `---` 금지.
-- 계정 없이 미리 보기만: `npx vercel@latest deploy ./dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
+- 계정 없이 미리 보기만: `npx vercel@65.8.0 deploy ./dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
 
 ## 명령어 없이
 - **앱**: 배포하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
@@ -70,7 +70,7 @@ Vercel은 `_headers`를 읽지 않습니다. 올리는 폴더 맨 위 `vercel.js
 | 특정 통신사·학교에서만 안 열림 | 2024-05에 국내 통신사 DNS에서 `*.vercel.app`이 안 열린다는 보고가 있었음(지금도 그런지는 모름 ⚠️) → 내 도메인(`custom-domain-and-short-url.md`) |
 
 ## 되돌리기·정리
-- 이전 판으로: 대시보드 프로젝트 → **Deployments** → 이전 배포 **⋯ → Promote to Production**. 명령은 `npx vercel@latest rollback <배포 주소>`.
+- 이전 판으로: 대시보드 프로젝트 → **Deployments** → 이전 배포 **⋯ → Promote to Production**. 명령은 `npx vercel@65.8.0 rollback <배포 주소>`.
 - 삭제: 프로젝트 **Settings → General → Delete Project**. 토큰도 토큰 페이지에서 지웁니다.
 
 ## 연수가 끝난 뒤

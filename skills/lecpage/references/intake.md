@@ -36,7 +36,7 @@
 | 분위기·움직임 | 교재 주제로 추론, 움직임 2(직무연수는 1). 5단계에서 3안 미리보기로 고른다(`mood`, `motion`) |
 | 운영 숙련도·서버 | 6단계에서 정한다. 네가 직접 올리고 연결하므로 `skill`은 `set`(강사가 서버를 가졌으면 `infra`에 적음) |
 | 사이트 유지 기간 | 연수가 끝나면 사이트가 저절로 '연수 후' 보기로 바뀌므로 묻지 않는다(`duration` day) |
-| 형식 | 교재의 실습 비중으로 추론(`format` practice·lecture·conference·course) |
+| 형식 | 교재의 실습 비중으로 추론(`format`은 위 질문표와 같은 값 lecture·practice·workshop·course, 인원이 많은 행사면 conference) |
 | 요청 사항 | 강사가 따로 부탁한 말은 그대로 `request`에 적는다(구성·강조할 내용·분위기·색·대상). 초안은 여기서 분위기·색·밝기·움직임·형식을 읽고, 나머지는 네가 설계도를 다듬을 때 반영한다 |
 
 기본값(사용자가 "알아서"라고 할 때): admin은 교재에서 찾은 값(없으면 school), size 30, features [qa, help, progress](직무연수면 attendance도 — 이수 기준에 출석이 있으면 사이트에서 입실·퇴실을 받아야 이수자 명단이 나옴), devices [laptop], network good. 무엇을 가정했는지 한 줄로 알린다.

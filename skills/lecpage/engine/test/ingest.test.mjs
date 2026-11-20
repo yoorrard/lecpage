@@ -560,10 +560,10 @@ describe('CLI', () => {
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
 
-  test('render_slides.sh: PDF → slide-001.*', { skip: spawnSync('sh', ['-c', 'command -v pdftoppm'], { encoding: 'utf8' }).status !== 0 && 'pdftoppm 없음' }, () => {
+  test('render-slides.mjs(셸 없이): PDF → slide-001.*', { skip: spawnSync('pdftoppm', ['-v'], { encoding: 'utf8' }).error && 'pdftoppm 없음' }, () => {
     const tmp = mkdtempSync(join(tmpdir(), 'lecpage-render-'));
     try {
-      const r = spawnSync('bash', [join(SCRIPTS, 'render_slides.sh'), join(FX, 'workshop.pdf'), tmp, '40'], { encoding: 'utf8' });
+      const r = spawnSync(process.execPath, [join(SCRIPTS, 'render-slides.mjs'), join(FX, 'workshop.pdf'), tmp, '40'], { encoding: 'utf8' });
       assert.equal(r.status, 0, r.stderr);
       const files = readdirSync(tmp).sort();
       assert.equal(files.length, 13);

@@ -129,7 +129,6 @@ export const BODY_VARIANTS = {
   poll: { panel: TOOL('판', '기본', 'calm formal'), split: TOOL('질문 목록 곁들임', '준비된 질문을 옆에 보일 때', 'tech editorial'), stage: TOOL('가운데 무대', '한 질문을 크게 띄울 때', 'bold warm playful') },
   gallery: { grid: V('고른 격자', 'figure', '', '.lp-gallery > li', undefined, '기본', '', '', 'calm formal'), mosaic: V('크기가 다른 모자이크', 'figure', 'full', '.lp-gallery > li', undefined, '사진이 5장 넘을 때', '', 'scale', 'bold playful') },
 };
-export const VARIANT_TYPES = Object.keys(BODY_VARIANTS);
 export const variantIds = (type) => Object.keys(BODY_VARIANTS[type] || {});
 export const defaultVariant = (type) => variantIds(type)[0] || '';
 /** 연수 후 안내는 자료와 같은 배치를 씀 */

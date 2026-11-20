@@ -48,6 +48,12 @@ export const TAIL_TYPES = ['materials', 'followup', 'instructor', 'survey', 'clo
 export const DEPLOY_TARGETS = ['github-pages', 'cloudflare', 'vercel', 'netlify', 'firebase', 's3', 'server', 'lan', 'zip'];
 
 // 기본 만족도 설문(교원 연수 만족도에서 흔히 묻는 다섯 문항). 실시간 기능이 켜져 있으면 사이트 안에서 바로 모읍니다.
+/**
+ * 강사만 정하는 값(보호 목록 한 벌). 패치(patch.js)·AI 답·가져온 파일·교재로는 바꾸지 못하고 강사가 준 info·CLI 옵션으로만 넣음(intake.js).
+ * whole: 통째로 · meta·live: 그 안의 키
+ */
+export const TEACHER_ONLY = { whole: ['access'], meta: ['siteUrl', 'joinUrl', 'shortUrl'], live: ['url', 'code', 'anonKey'] };
+
 export const DEFAULT_SURVEY = [
   { q: '연수에 전반적으로 만족하시나요?', kind: 'scale' },
   { q: '배운 내용을 수업이나 업무에 쓸 수 있을 것 같나요?', kind: 'scale' },

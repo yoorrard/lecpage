@@ -104,8 +104,8 @@ test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 �
   assert.ok(conn(csp(lan, 'index.html')).includes('ws://192.168.0.10:8787')); assert.doesNotMatch(csp(lan, 'index.html'), /upgrade-insecure-requests/, '교실 LAN(http)은 올려 받지 않음');
   const local = E.build(bp({ provider: 'local', code: 'CSP5', features: ['qa'] }), { runtime: nodeRuntime() }).files;
   assert.deepEqual(conn(csp(local, 'index.html')), ["'self'", 'file:']);
-  // 보조 화면만 aux.css, 공유 미리보기(og)는 참가자 화면에만
-  assert.ok(!http['index.html'].includes('assets/aux.css') && http['console.html'].includes('assets/aux.css'));
+  // 보조 화면만 aux-pages.css, 공유 미리보기(og)는 참가자 화면에만
+  assert.ok(!http['index.html'].includes('assets/aux-pages.css') && http['console.html'].includes('assets/aux-pages.css'));
   assert.ok(!http['console.html'].includes('og:title') && http['index.html'].includes('og:title'));
 });
 

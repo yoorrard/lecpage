@@ -101,8 +101,3 @@ export function conceptDesign(concept) {
   return { ...(concept.preset ? { preset: concept.preset } : {}), ...(moods.length ? { mood: moods } : {}), ...(concept.motion !== undefined ? { motion: concept.motion } : {}) };
 }
 
-/** 강사·문서에 보여 줄 한 줄: "컨셉 — 모티프" */
-export function conceptLine(concept) {
-  if (!concept?.idea) return '';
-  return `${concept.idea}${concept.motif ? ` — 모티프: ${concept.motif}` : ''}`;
-}

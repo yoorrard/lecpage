@@ -15,17 +15,28 @@ export function scriptPath(name) {
   return new URL(rel, here);
 }
 
+/** 이 컴퓨터의 파이썬 3: python3 → python → (윈도우) py -3. → [명령, 앞 인자] | null */
+let pyFound;
+export async function findPython() {
+  if (pyFound !== undefined) return pyFound;
+  const { cp } = await node();
+  const list = [['python3', []], ['python', []], ...(process.platform === 'win32' ? [['py', ['-3']]] : [])];
+  pyFound = list.find(([c, pre]) => cp.spawnSync(c, [...pre, '-c', 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)'], { timeout: 20000, windowsHide: true }).status === 0) || null;
+  return pyFound;
+}
 /** 파이썬 보조 스크립트(scripts/ingest.py)로 해석 → Material | null */
-export async function ingestWithPython(file, { python = 'python3', id, withImages = true, timeoutMs = 300000 } = {}) {
+export async function ingestWithPython(file, { python = '', id, withImages = true, timeoutMs = 300000 } = {}) {
   const { fs, path, url, cp, os } = await node();
+  const py = python ? [python, []] : await findPython();
+  if (!py) return null;
   const script = url.fileURLToPath(scriptPath('ingest.py'));
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'lecpage-ingest-'));
   const out = path.join(tmp, 'material.json');
   const imgDir = path.join(tmp, 'img');
-  const args = ['-I', script, file, '-o', out];
+  const args = [...py[1], '-I', script, file, '-o', out];
   if (withImages) args.push('--images', imgDir);
   if (id) args.push('--id', id);
-  const r = cp.spawnSync(python, args, { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 });
+  const r = cp.spawnSync(py[0], args, { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, windowsHide: true });
   try {
     if (r.status !== 0 && !(await exists(fs, out))) return null;
     const m = JSON.parse(await fs.readFile(out, 'utf8'));
@@ -74,7 +85,7 @@ export async function ingestPaths(paths, opts = {}) {
     let m = await api.ingestFile(name, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), { ...opts, id, detect: false });
     const needPy = m.errors.find((e) => e.code === 'needs-pdfjs' || (e.code === 'pdf-failed' && extOf(name) === 'pdf'));
     if (needPy && opts.python !== false) {
-      const py = await ingestWithPython(path.resolve(p), { id, withImages: !!opts.withImages, python: opts.pythonBin || 'python3' });
+      const py = await ingestWithPython(path.resolve(p), { id, withImages: !!opts.withImages, python: opts.pythonBin || '' });
       if (py && py.pages?.length) { py.warnings = [...(py.warnings || []), { code: 'python-fallback', message_ko: 'PDF는 파이썬 보조 스크립트로 읽었어요.', file: name }]; m = py; }
       else if (needPy.code === 'needs-pdfjs') needPy.message_ko += ' (파이썬 보조 스크립트도 실행하지 못했어요: python3와 PyMuPDF 설치를 확인해 주세요.)';
     }
@@ -106,34 +117,28 @@ export async function writeMaterial(material, outPath, { imagesDir } = {}) {
   return { written, path: outPath };
 }
 
-/** scripts/render_slides.sh로 쪽 그림 만들기 → 성공한 그림 경로 목록 */
-export async function renderSlides(file, outDir, { dpi = 110, timeoutMs = 600000 } = {}) {
-  const { fs, url, cp, path } = await node();
-  const script = url.fileURLToPath(scriptPath('render_slides.sh'));
-  await fs.mkdir(outDir, { recursive: true });
-  const r = cp.spawnSync('bash', [script, file, outDir, String(dpi)], { encoding: 'utf8', timeout: timeoutMs });
-  const files = r.status === 0 ? (await fs.readdir(outDir)).filter((f) => /^slide-\d{3,}\.(webp|png)$/.test(f)).sort().map((f) => path.join(outDir, f)) : [];
-  if (!files.length) {
-    await fs.rmdir(outDir).catch(() => {}); // 실패하면 빈 폴더를 남기지 않음(비어 있을 때만 지워짐)
-    const msg = (r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' ');
-    return { ok: false, files: [], message: msg || '그림이 한 장도 나오지 않았어요.' };
-  }
-  return { ok: true, files };
+/** scripts/render-slides.mjs(셸 없이 LibreOffice·pdftoppm을 부름)로 쪽 그림 만들기 → 성공한 그림 경로 목록 */
+export async function renderSlides(file, outDir, opts = {}) {
+  const { fs } = await node();
+  const { renderSlides: render } = await nodeImport(scriptPath('render-slides.mjs').href);
+  const r = await render(file, outDir, opts);
+  if (!r.ok) await fs.rmdir(outDir).catch(() => {}); // 실패하면 빈 폴더를 남기지 않음(비어 있을 때만 지워짐)
+  return r.ok ? { ok: true, files: r.files } : { ok: false, files: [], message: r.message || '그림이 한 장도 나오지 않았어요.' };
 }
 
 /**
- * 쪽 그림을 만들어 material에 붙임(pages[].image, files[].rendered). 실패는 warnings에 남김.
+ * 쪽 그림을 만들어 material에 붙임(pages[].image, files[].rendered). 실패는 warnings에 남김. onProgress(그린 쪽, 모든 쪽, 단계, 파일 이름)
  * PPTX에 짝 PDF(renderSource)가 있으면 그 PDF로 그림(글꼴이 원본과 같아 더 정확)
  * @param {object} m Material  @param {string} slidesDir 그림 폴더  @param {string} outPath material.json 경로(상대 경로 기준)
  */
-export async function attachSlides(m, slidesDir, outPath) {
+export async function attachSlides(m, slidesDir, outPath, { onProgress } = {}) {
   const { path } = await node();
   const outDir = path.dirname(path.resolve(outPath));
   for (const f of m.files) {
     if (!f.path || f.renderOf || !['pptx', 'pdf', 'docx', 'hwpx'].includes(f.type)) continue;
     const srcFile = f.renderSource ? m.files.find((x) => x.id === f.renderSource) : null;
     const dir = m.files.filter((x) => !x.renderOf).length > 1 ? path.join(slidesDir, f.id) : slidesDir;
-    const r = await renderSlides((srcFile && srcFile.path) || f.path, dir);
+    const r = await renderSlides((srcFile && srcFile.path) || f.path, dir, { pages: m.pages.filter((p) => p.file === f.id).length, onProgress: onProgress && ((d, t, st) => onProgress(d, t, st, f.name)) });
     if (!r.ok) { m.warnings.push({ code: 'render-failed', message_ko: `쪽 그림을 만들지 못했어요(LibreOffice·pdftoppm 확인): ${r.message || ''}`.trim(), file: f.name }); continue; }
     const rel = (img) => path.relative(outDir, img).split(path.sep).join('/');
     if (f.unit === 'section') { f.pageImages = r.files.map(rel); f.rendered = r.files.length; continue; } // 문서형: 실제 쪽 ≠ 절
