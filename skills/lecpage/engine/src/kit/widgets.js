@@ -2,6 +2,7 @@
 // 위젯 HTML은 엔진 템플릿(render/sections.js·pages.js)과 이 파일이 함께 씁니다(템플릿 렌더러를 지워도 위젯은 남음).
 // 키트 사이트에서는 펼친 위젯을 class="lpk"로 감싸고 모양은 runtime/kit.css(.lpk 아래만)가 맡습니다.
 import { esc, br, icon } from '../render/html.js';
+import { josa } from '../words.js';
 
 // ── 엔진·키트 공용 위젯 ──────────────────────────────────────
 /** 반응 아이콘(선 그림). 실시간으로 주고받는 값은 그대로 이모지(프로토콜), 화면에는 선 아이콘 */
@@ -46,8 +47,8 @@ ${liveOff(live)}${notice ? `<p class="lp-note">${br(notice)}</p>` : ''}</div>`;
 }
 
 /** 투표: items([{id,question,kind,options}])는 강사 화면에서 열고 닫음. list: 준비된 질문 목록(엔진 투표 칸), ask: 자리 표시 하나의 질문(키트) */
-export function pollBox(items, { live = true, list = true, ask = '' } = {}) {
-  return `<div class="lp-poll" data-poll='${esc(JSON.stringify(items))}'>${ask ? `<p class="lpk-poll-q">${esc(ask)}</p>` : ''}<div class="lp-poll-live" data-poll-live><p class="lp-empty">강사가 투표를 열면 여기에 나타나요.</p></div>
+export function pollBox(items, { live = true, list = true, ask = '', host = '강사' } = {}) {
+  return `<div class="lp-poll" data-poll='${esc(JSON.stringify(items))}'>${ask ? `<p class="lpk-poll-q">${esc(ask)}</p>` : ''}<div class="lp-poll-live" data-poll-live><p class="lp-empty">${esc(josa(host, '이', '가'))} 투표를 열면 여기에 나타나요.</p></div>
 ${list ? `<details class="lp-poll-list"><summary>준비된 질문 ${items.length}개 보기</summary><ol>${items.map((p) => `<li>${esc(p.question)}${p.options.length ? ` <small>(${p.options.map(esc).join(' / ')})</small>` : ''}</li>`).join('')}</ol></details>` : ''}${liveOff(live)}</div>`;
 }
 
@@ -172,7 +173,7 @@ export function optionList(v) {
 }
 
 /** 교재 쪽 넘기기(강사 따라 넘기기). pages: [{ page, src, title, text }] */
-export function deckBox(pages, { label = '교재' } = {}) {
+export function deckBox(pages, { label = '교재', host = '강사' } = {}) {
   const last = Math.max(...pages.map((x) => +x.page || 0), pages.length);
   const slides = pages.map((sl, i) => `<figure class="lp-slide" id="deck-p${sl.page}" data-page="${sl.page}" data-title="${esc(sl.title || '')}" data-text="${esc((sl.text || '').slice(0, 400))}"><img src="${esc(sl.src)}" alt="${esc(`${label} ${sl.page}쪽${sl.title ? ': ' + sl.title : ''}`)}" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async"><figcaption><span class="lp-slide-no">${sl.page}</span>${esc(sl.title || '')}</figcaption></figure>`).join('\n');
   return `<div class="lp-deck" data-deck>
@@ -184,7 +185,7 @@ export function deckBox(pages, { label = '교재' } = {}) {
     <span class="lp-grow"></span>
     <button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-deck-overview>${icon('grid')}<span>전체 보기</span></button>
     <button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-deck-full>${icon('expand')}<span>전체 화면</span></button>
-    <label class="lp-follow" hidden><input type="checkbox" data-deck-follow checked> 강사 따라 넘기기</label>
+    <label class="lp-follow" hidden><input type="checkbox" data-deck-follow checked> ${esc(host)} 따라 넘기기</label>
   </div>
 </div>`;
 }
@@ -195,9 +196,9 @@ export function joinBox({ live = false, code = '', codeWord = '연수 코드' } 
 }
 
 /** 자료실: items([{title, href, desc, kind, size}]) + 강사가 연수 중에 더한 링크(data-live-materials, 런타임이 채움) */
-export function materialsBox(items = [], { inner = '' } = {}) {
+export function materialsBox(items = [], { inner = '', host = '강사' } = {}) {
   const row = (m) => { const ext = /^https?:/.test(m.href); return `<li><span class="lp-file-kind">${esc(m.kind || (ext ? '링크' : 'FILE'))}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" href="${esc(m.href)}"${ext ? ' target="_blank" rel="noopener"' : ' download'}>${icon(ext ? 'external' : 'download')}<span>${ext ? '열기' : '내려받기'}</span></a>` : ''}</li>`; };
-  return `${inner}${items.length ? `<ul class="lp-materials">${items.map(row).join('')}</ul>` : ''}<ul class="lp-materials lp-materials-live" data-live-materials aria-label="강사가 추가한 자료" hidden></ul>${items.length || inner.trim() ? '' : '<p class="lpk-empty" data-lpk-mats-empty>강사가 자료를 올리면 여기에 보여요.</p>'}`;
+  return `${inner}${items.length ? `<ul class="lp-materials">${items.map(row).join('')}</ul>` : ''}<ul class="lp-materials lp-materials-live" data-live-materials aria-label="${esc(josa(host, '이', '가'))} 추가한 자료" hidden></ul>${items.length || inner.trim() ? '' : `<p class="lpk-empty" data-lpk-mats-empty>${esc(josa(host, '이', '가'))} 자료를 올리면 여기에 보여요.</p>`}`;
 }
 
 /** 실습 단계 끝: 완료 체크·도움 요청(진행 현황·도움 요청이 이 단계를 셈) */

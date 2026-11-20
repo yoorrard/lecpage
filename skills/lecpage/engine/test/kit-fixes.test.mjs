@@ -110,6 +110,23 @@ test('키트 CSS: 강조색 위 글자는 강조색 밝기로(상대 색), --lp-
   for (const k of ['data-st-link', 'data-st-count', 'data-st-progress', '.lp-st.is-active', '--lp-on-accent', 'fontHeading', '"pages"'.replace(/"/g, '')]) assert.ok(kit.includes(k), k);
 });
 
+test('학부모 설명회(audience parents): 참가자 화면이 진행자를 "발표자"로 부르고, 이수가 없으니 도크에 출석 한 번 누르기를 붙이지 않음', () => {
+  const site = { 'index.html': PAGE('<section><h2>순서</h2><div data-lp="poll" data-question="가장 궁금한 것은?" data-options=\'["평가","학교생활"]\'></div></section><section><h2>질문</h2><div data-lp="qa"></div></section><section><h2>자료</h2><div data-lp="materials"></div></section>') };
+  const meta = { ...META, title: '신입생 학부모 설명회', audience: 'parents', features: ['qa', 'poll', 'materials'] };
+  const files = K.assemble(site, meta, { runtime: rt }).files;
+  const html = files['index.html'];
+  assert.match(files['privacy.html'], /이 설명회를 운영하면서[\s\S]*설명회 중 질문[\s\S]*설명회 사이트로 돌아가기/);
+  assert.doesNotMatch(files['privacy.html'], /연수(를|를 운영| 중| 사이트| 설정)/);
+  assert.match(html, /발표자가 투표를 열면/);
+  assert.match(html, /"host":"발표자"/);
+  assert.doesNotMatch(html, /강사가 (투표|자료)/);
+  assert.doesNotMatch(html, /data-dock-attend/);
+  // 교사 연수는 그대로(강사·출석 한 번 누르기)
+  const t = K.assemble(site, { ...meta, title: '시험 연수', audience: 'teachers' }, { runtime: rt }).files['index.html'];
+  assert.match(t, /강사가 투표를 열면/);
+  assert.match(t, /data-dock-attend/);
+});
+
 test('브라우저: 어두운 모드에서 강조색을 밝게 바꿔도 주 단추 글자 4.5:1 이상, 실습 진행 막대 최대=단계 수, 390에서 교재·설문 위젯이 겹침·작은 누를 곳 없음', { skip }, async () => {
   const site = {
     'index.html': PAGE(`<nav><p>내 진행 <b data-st-count></b></p><progress data-st-progress aria-label="완료한 실습"></progress><a href="#st-s1" data-st-link="s1">1</a> <a href="#st-s2" data-st-link="s2">2</a></nav>

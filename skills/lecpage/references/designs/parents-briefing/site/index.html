@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>신입생 학부모 설명회 · 누리봄중학교</title>
-<meta name="description" content="누리봄중학교 2027학년도 신입생 학부모 설명회. 2027년 2월 18일(목) 19:00~20:30, 본관 2층 누리홀. 교육과정·평가·디지털 기기·학교생활 안내와 이름 없이 질문하기.">
+<meta name="description" content="누리봄중학교 2027학년도 신입생 학부모 설명회. 2027년 2월 18일(목) 19:00~20:30, 본관 2층 누리홀. 설명 자료 따라 보기, 이름 없이 질문하기, 입학 전 챙길 날짜와 연락처.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1613" media="(prefers-color-scheme: dark)">
@@ -18,19 +18,16 @@
 
 <header class="mast">
   <div class="mast-in">
-    <a class="mast-id" href="#top" aria-label="누리봄중학교 신입생 학부모 설명회, 맨 위로">
+    <div class="mast-id">
       <svg class="emblem" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M24 36.5V21" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M23.6 24.2C17 24.2 13 20 13 13.6c6.6 0 10.6 4.2 10.6 10.6z" fill="currentColor"/><path d="M24.4 21.6c0-6.4 4-10.6 10.6-10.6 0 6.4-4 10.6-10.6 10.6z" fill="currentColor"/></svg>
       <span class="mast-t"><b>누리봄중학교</b><small>신입생 학부모 설명회</small></span>
-    </a>
-    <div class="mast-tools">
-      <button class="tsize" type="button" data-tsize aria-pressed="false"><span class="tsize-g" aria-hidden="true">가</span><span>글자 크게</span></button>
-      <a class="mast-toc" href="#toc">차례</a>
     </div>
+    <button class="tsize" type="button" data-tsize aria-pressed="false"><span class="tsize-g" aria-hidden="true">가</span><span>글자 크게</span></button>
   </div>
 </header>
 
 <main id="main">
-<div class="layout">
+<div class="wrap">
 
 <!-- 첫 화면: 무엇·언제·어디서·지금 -->
 <section class="hero" id="top" aria-labelledby="hero-h">
@@ -49,419 +46,81 @@
     </div>
   </div>
   <div class="hero-cta">
-    <a class="btn btn-p" href="#ask">이름 없이 질문하기</a>
-    <a class="btn" href="#slides">자료 크게 보기</a>
+    <a class="btn btn-p" href="#slides">자료 따라 보기</a>
+    <a class="btn" href="#ask">이름 없이 질문하기</a>
   </div>
+  <nav class="jump" aria-label="바로 가기">
+    <a href="#order">오늘 순서</a><a href="#ready">입학 전 챙길 것</a><a href="#reply">회신서</a><a href="#contact">문의</a>
+  </nav>
 </section>
 
-<!-- 차례: 휴대폰은 첫 화면 바로 아래, PC는 왼쪽에 붙어 있음 -->
-<nav class="toc" id="toc" aria-labelledby="toc-h">
-  <h2 class="toc-h" id="toc-h">차례</h2>
-  <ol class="toc-main">
-    <li><a href="#order" data-toc-for="order"><b>0</b><span>오늘 순서<small>인사말 · 가장 궁금한 것</small></span></a></li>
-    <li><a href="#year" data-toc-for="year course"><b>1</b><span>교육과정<small>한 해 흐름 · 과목 · 자유학기</small></span></a></li>
-    <li><a href="#grade" data-toc-for="grade"><b>2</b><span>평가<small>성취평가제 · 시험 · 결과 확인</small></span></a></li>
-    <li><a href="#digital" data-toc-for="digital"><b>3</b><span>디지털 기기<small>태블릿 · 휴대폰</small></span></a></li>
-    <li><a href="#life" data-toc-for="life ready"><b>4</b><span>학교생활<small>하루 일과 · 입학 준비</small></span></a></li>
-    <li><a href="#faq" data-toc-for="faq"><b>?</b><span>자주 묻는 질문</span></a></li>
-  </ol>
-  <ul class="toc-more">
-    <li><a href="#ask" data-toc-for="ask">질문하기</a></li>
-    <li><a href="#slides" data-toc-for="slides">자료 보기·받기</a></li>
-    <li><a href="#reply" data-toc-for="reply">회신서</a></li>
-    <li><a href="#contact" data-toc-for="contact">문의</a></li>
-  </ul>
-</nav>
+<div class="grid">
 
-<div class="body">
-
-<!-- 0. 오늘 순서 -->
-<section class="sec" id="order" aria-labelledby="order-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">0</span>
-    <p class="ch-k">들어가며</p>
-    <h2 id="order-h">오늘 순서</h2>
-    <a class="ch-src" href="material/p-002.webp">자료 2쪽</a>
-  </header>
-  <blockquote class="greet">
-    <p>과목이 늘고, 선생님이 과목마다 바뀌고, 처음으로 성적표를 받게 됩니다. 오늘은 그 변화를 하나씩 풀어 드리려고 합니다.</p>
-    <footer>교장 한서윤</footer>
-  </blockquote>
+<!-- 오늘 순서: 자료 쪽과 이어진 지도 -->
+<section class="sec sec-order" id="order" aria-labelledby="order-h">
+  <header class="ch"><p class="ch-k">90분</p><h2 id="order-h">오늘 순서</h2></header>
   <ol class="agenda" data-agenda>
-    <li data-from="19:00" data-to="19:10"><time class="num">19:00</time><div><b>여는 말 · 학교 소개</b><span>교장 한서윤</span></div></li>
-    <li data-from="19:10" data-to="19:30" data-go="year"><time class="num">19:10</time><div><b>1. 교육과정과 자유학기</b><span>교무기획부장 오준호</span></div><a href="#year" aria-label="교육과정 내용 보기">보기</a></li>
-    <li data-from="19:30" data-to="19:50" data-go="grade"><time class="num">19:30</time><div><b>2. 평가</b><span>학업성적 담당 박세아</span></div><a href="#grade" aria-label="평가 내용 보기">보기</a></li>
-    <li data-from="19:50" data-to="20:05" data-go="digital"><time class="num">19:50</time><div><b>3. 디지털 기기와 휴대폰</b><span>정보부장 이도현</span></div><a href="#digital" aria-label="디지털 기기 내용 보기">보기</a></li>
-    <li data-from="20:05" data-to="20:15" data-go="life"><time class="num">20:05</time><div><b>4. 학교생활과 입학 준비</b><span>1학년부장 김하린</span></div><a href="#life" aria-label="학교생활 내용 보기">보기</a></li>
-    <li data-from="20:15" data-to="20:30" data-go="ask"><time class="num">20:15</time><div><b>묻고 답하기</b><span>발표 선생님 모두</span></div><a href="#ask" aria-label="질문하기로 가기">질문</a></li>
+    <li data-from="19:00" data-to="19:10" data-page="1"><b class="ag-no" aria-hidden="true">0</b><div><time class="num">19:00</time><strong>여는 말 · 학교 소개</strong><span>교장 한서윤</span></div><a href="#deck-p2">자료 2~3쪽</a></li>
+    <li data-from="19:10" data-to="19:30" data-page="4"><b class="ag-no" aria-hidden="true">1</b><div><time class="num">19:10</time><strong>교육과정과 자유학기</strong><span>교무기획부장 오준호</span></div><a href="#deck-p4">자료 4~6쪽</a></li>
+    <li data-from="19:30" data-to="19:50" data-page="7"><b class="ag-no" aria-hidden="true">2</b><div><time class="num">19:30</time><strong>평가</strong><span>학업성적 담당 박세아</span></div><a href="#deck-p7">자료 7~9쪽</a></li>
+    <li data-from="19:50" data-to="20:05" data-page="10"><b class="ag-no" aria-hidden="true">3</b><div><time class="num">19:50</time><strong>디지털 기기와 휴대폰</strong><span>정보부장 이도현</span></div><a href="#deck-p10">자료 10~11쪽</a></li>
+    <li data-from="20:05" data-to="20:15" data-page="12"><b class="ag-no" aria-hidden="true">4</b><div><time class="num">20:05</time><strong>학교생활과 입학 준비</strong><span>1학년부장 김하린</span></div><a href="#deck-p12">자료 12~13쪽</a></li>
+    <li data-from="20:15" data-to="20:30" data-page="14" data-ask><b class="ag-no" aria-hidden="true">?</b><div><time class="num">20:15</time><strong>묻고 답하기</strong><span>발표 선생님 모두</span></div><a href="#deck-p14">자주 묻는 질문 14쪽</a></li>
   </ol>
-  <p class="agenda-end"><time class="num">20:30</time> 마침</p>
-
-  <div class="ask-first">
-    <h3>시작하기 전에, 하나만 골라 주세요</h3>
-    <p>가장 궁금한 것을 고르면 발표 선생님이 결과를 보고 그 부분을 더 자세히 설명해요.</p>
+  <div class="curious">
+    <h3>시작 전에, 가장 궁금한 것 하나</h3>
     <div data-lp="poll" data-id="curious" data-question="오늘 가장 궁금한 것은 무엇인가요?" data-options='["교육과정·자유학기","평가·시험","태블릿·휴대폰","학교생활·입학 준비"]'></div>
   </div>
 </section>
 
-<!-- 1. 교육과정: 한 해 -->
-<section class="sec" id="year" aria-labelledby="year-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">1</span>
-    <p class="ch-k">교육과정</p>
-    <h2 id="year-h">1학년의 한 해</h2>
-    <a class="ch-src" href="material/p-004.webp">자료 4쪽</a>
-  </header>
-  <p class="lead">1학기는 시험 없이 활동으로 배우는 자유학기예요. 중간·기말고사는 2학기부터 봐요.</p>
-
-  <div class="terms" aria-label="1학년 학사 일정">
-    <ol class="months" aria-hidden="true"><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li><li>11</li><li>12</li><li>1</li></ol>
-    <article class="term term-1" aria-labelledby="t1-h">
-      <h3 id="t1-h"><small>1학기 · 3월~7월</small>자유학기</h3>
-      <p class="term-key">중간·기말고사 없음</p>
-      <ul class="dates">
-        <li><time class="num">3. 2.(화)</time><span>입학식 10:00, 강당</span></li>
-        <li><time class="num">3. 8.(월)~</time><span>자유학기 주제 선택 활동 신청</span></li>
-        <li><time class="num">3. 22.~26.</time><span>학부모 상담 주간(방문·전화)</span></li>
-        <li><time class="num">5. 14.(금)</time><span>1학년 현장체험학습</span></li>
-        <li><time class="num">7. 20.(화)</time><span>여름방학식</span></li>
-      </ul>
-    </article>
-    <article class="term term-2" aria-labelledby="t2-h">
-      <h3 id="t2-h"><small>2학기 · 8월~이듬해 1월</small>지필평가 시작</h3>
-      <p class="term-key">첫 시험 <b class="num">10. 13.(수)</b></p>
-      <ul class="dates">
-        <li><time class="num">8. 17.(화)</time><span>2학기 개학</span></li>
-        <li class="is-key"><time class="num">10. 13.~15.</time><span>중간고사 · 중학교 첫 지필평가</span></li>
-        <li class="is-key"><time class="num">12. 8.~10.</time><span>기말고사</span></li>
-        <li><time class="num">2028. 1. 7.(금)</time><span>종업식 · 겨울방학</span></li>
-      </ul>
-    </article>
-  </div>
-  <p class="fine">학교 사정으로 날짜가 바뀌면 가정통신문으로 먼저 알려 드려요. 연간 학사 일정은 3월 첫 주 학교 누리집에 올려요.</p>
-</section>
-
-<!-- 1. 교육과정: 과목·자유학기 -->
-<section class="sec" id="course" aria-labelledby="course-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">1</span>
-    <p class="ch-k">교육과정</p>
-    <h2 id="course-h">배우는 과목과 자유학기</h2>
-    <a class="ch-src" href="material/p-005.webp">자료 5·6쪽</a>
-  </header>
-  <p class="lead">담임 선생님 한 분 대신, 과목마다 다른 선생님이 들어와요. 1학기는 일주일에 34시간이에요.</p>
-
-  <div class="split">
-    <div>
-      <h3>1학기 일주일 시간</h3>
-      <table class="hours">
-        <caption class="sr">1학년 1학기 과목별 일주일 수업 시간</caption>
-        <tbody>
-          <tr><th scope="row">국어 · 수학</th><td class="num">각 4</td></tr>
-          <tr><th scope="row">영어</th><td class="num">3</td></tr>
-          <tr><th scope="row">사회 · 과학</th><td class="num">각 3</td></tr>
-          <tr><th scope="row">기술·가정</th><td class="num">2</td></tr>
-          <tr><th scope="row">체육 · 음악 · 미술</th><td class="num">각 2</td></tr>
-          <tr class="is-free"><th scope="row">자유학기 활동<small>주제 선택 4 · 진로 탐색 2</small></th><td class="num">6</td></tr>
-          <tr><th scope="row">창의적 체험활동<small>자율·자치 · 동아리 · 진로</small></th><td class="num">3</td></tr>
-        </tbody>
-        <tfoot><tr><th scope="row">합계</th><td class="num">34</td></tr></tfoot>
-      </table>
-      <ul class="sq">
-        <li><b>정보</b>와 <b>도덕</b>은 2학년부터 배워요.</li>
-        <li><b>2학기</b>에는 자유학기 활동 6시간이 교과 수업으로 바뀌어요.</li>
-        <li><b>동아리</b>는 3월 셋째 주에 고르고, 격주 목요일 6교시에 해요.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>자유학기 주제 선택 활동</h3>
-      <p>여섯 가지 가운데 하나를 골라 한 학기 동안 해요. 3월 8일(월)부터 학생이 태블릿으로 1~3순위를 고르고, 사람이 많으면 추첨해요.</p>
-      <ul class="prog">
-        <li><b>우리 동네 지도 만들기</b><span>사회 · 정보</span></li>
-        <li><b>생활 속 과학 실험실</b><span>과학</span></li>
-        <li><b>그림책 함께 쓰기</b><span>국어 · 미술</span></li>
-        <li><b>몸으로 푸는 수학</b><span>수학 · 체육</span></li>
-        <li><b>영어 그림 연극</b><span>영어</span></li>
-        <li><b>블록 코딩으로 문제 풀기</b><span>기술·가정</span></li>
-      </ul>
-      <h3>진로 탐색 활동</h3>
-      <ul class="sq">
-        <li>나를 알아보는 진로 검사(3월)와 결과 상담</li>
-        <li>직업인 인터뷰: 보호자·지역 일터의 어른을 만나 묻고 기록</li>
-        <li>가까운 고등학교·대학교 학과 체험(5~6월)</li>
-      </ul>
-    </div>
-  </div>
-  <aside class="home" aria-label="가정에서">
-    <p><b>가정에서</b> 과목마다 공책·준비물이 달라요. 첫 주에 자녀가 적어 온 준비물을 주말에 함께 챙겨 주세요. 직업인 인터뷰에 함께해 주실 보호자는 3월 중 가정통신문으로 신청을 받아요.</p>
-  </aside>
-</section>
-
-<!-- 2. 평가 -->
-<section class="sec" id="grade" aria-labelledby="grade-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">2</span>
-    <p class="ch-k">평가</p>
-    <h2 id="grade-h">등수가 아니라 성취 수준으로</h2>
-    <a class="ch-src" href="material/p-007.webp">자료 7쪽</a>
-  </header>
-  <p class="lead">다른 학생과 비교한 등수를 매기지 않아요. 정해진 기준에 얼마나 이르렀는지를 A부터 E까지 다섯 단계로 알려 드려요.</p>
-
-  <ol class="scale" aria-label="일반 과목 성취도 기준">
-    <li><b>A</b><span><i class="num">90</i>점 이상</span></li>
-    <li><b>B</b><span><i class="num">80</i>점 이상</span></li>
-    <li><b>C</b><span><i class="num">70</i>점 이상</span></li>
-    <li><b>D</b><span><i class="num">60</i>점 이상</span></li>
-    <li><b>E</b><span><i class="num">60</i>점 미만</span></li>
-  </ol>
-  <p class="fine">국어·수학·영어·사회·과학·기술·가정 등 일반 과목 기준이에요. 체육·음악·미술은 A·B·C 세 단계예요. A를 받는 사람 수는 정해져 있지 않아 기준에 이르면 모두 A예요.</p>
-
-  <div class="versus">
-    <div>
-      <p class="vs-k">1학기 · 자유학기</p>
-      <h3>성취도를 매기지 않아요</h3>
-      <p>중간·기말고사가 없어요. 수업 시간의 활동·발표·결과물을 보고, 무엇을 할 수 있게 되었는지를 생활기록부에 문장으로 적어요.</p>
-    </div>
-    <div>
-      <p class="vs-k">2학기부터</p>
-      <h3>A~E 성취도가 나와요</h3>
-      <p>지필평가(중간·기말)와 수행평가 점수를 합쳐 성취도를 정해요. 과목마다 원점수와 평균도 함께 적혀요.</p>
-    </div>
-  </div>
-
-  <h3 class="h3-gap">지필평가와 수행평가 <a class="h3-src" href="material/p-008.webp">자료 8쪽</a></h3>
-  <dl class="two-tests">
-    <div>
-      <dt>지필평가<small>종이 시험 · 2학기 2번</small></dt>
-      <dd><ul class="sq"><li>중간고사 <b class="num">10. 13.~10. 15.</b></li><li>기말고사 <b class="num">12. 8.~12. 10.</b></li><li>시험 범위는 2주 전에 알려 드려요.</li></ul></dd>
-    </div>
-    <div>
-      <dt>수행평가<small>수업 시간 안에서</small></dt>
-      <dd><ul class="sq"><li>발표·실험·글쓰기·만들기처럼 수업 중 활동으로 평가해요.</li><li><b>집에서 해 오는 수행평가 과제는 내지 않아요.</b></li></ul></dd>
-    </div>
-  </dl>
-
-  <table class="ratio">
-    <caption>2학기 반영 비율(예정)</caption>
-    <thead><tr><th scope="col">과목</th><th scope="col">지필</th><th scope="col">수행</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">국어 · 영어 · 사회 · 과학</th><td class="num">50%</td><td class="num">50%</td></tr>
-      <tr><th scope="row">수학</th><td class="num">60%</td><td class="num">40%</td></tr>
-      <tr><th scope="row">기술·가정</th><td class="num">40%</td><td class="num">60%</td></tr>
-      <tr><th scope="row">체육 · 음악 · 미술</th><td>없음</td><td class="num">100%</td></tr>
-    </tbody>
-  </table>
-  <p class="fine">확정한 비율과 수행평가 일정은 학기 초 '평가 계획'으로 학교 누리집에 올리고, 수업 첫 시간에 학생에게도 안내해요.</p>
-
-  <h3 class="h3-gap">결과는 이렇게 확인해요 <a class="h3-src" href="material/p-009.webp">자료 9쪽</a></h3>
-  <ol class="steps">
-    <li><b>수행평가 점수 확인</b><span>채점이 끝나면 수업 시간에 학생이 자기 점수와 채점 기준을 확인해요.</span></li>
-    <li><b>지필평가 답안 확인</b><span>시험 뒤 정해진 날 학생이 답안지를 보고 점수를 확인해요.</span></li>
-    <li><b>이의 신청</b><span>점수가 이상하면 확인한 날부터 3일 안에 담당 선생님께 말해요. 보호자가 담임 선생님께 전화하셔도 돼요.</span></li>
-    <li><b>학기 말 통지</b><span>7월과 이듬해 1월에 성적·출결·생활 내용을 통지표로 보내 드려요. 나이스 학부모서비스에서도 볼 수 있어요(3월에 가입 안내).</span></li>
-  </ol>
-
-  <figure class="report">
-    <figcaption>2학기 통지표에는 이렇게 적혀요 <small>예시</small></figcaption>
-    <table>
-      <thead><tr><th scope="col">과목</th><th scope="col">원점수</th><th scope="col">과목 평균<small>(표준편차)</small></th><th scope="col">성취도<small>(수강자 수)</small></th></tr></thead>
-      <tbody>
-        <tr><th scope="row">국어</th><td class="num">87</td><td class="num">78.4<small>(12.1)</small></td><td class="num"><b>B</b><small>(182)</small></td></tr>
-        <tr><th scope="row">수학</th><td class="num">93</td><td class="num">71.9<small>(18.6)</small></td><td class="num"><b>A</b><small>(182)</small></td></tr>
-        <tr><th scope="row">체육</th><td>—</td><td>—</td><td class="num"><b>A</b><small>(182)</small></td></tr>
-      </tbody>
-    </table>
-  </figure>
-  <p class="fine">생활기록부에는 과목별 성취도와 선생님이 관찰한 배움(세부능력 및 특기사항), 출결, 창의적 체험활동, 행동 특성이 적혀요. 학교 밖 수상·학원·사교육 활동은 적지 않아요.</p>
-  <aside class="home" aria-label="가정에서">
-    <p><b>가정에서</b> 수행평가 날짜를 자녀와 함께 달력에 적어 두면 한꺼번에 몰리는 주를 미리 알 수 있어요.</p>
-  </aside>
-</section>
-
-<!-- 3. 디지털 기기 -->
-<section class="sec" id="digital" aria-labelledby="digital-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">3</span>
-    <p class="ch-k">디지털 기기</p>
-    <h2 id="digital-h">1인 1태블릿과 휴대폰</h2>
-    <a class="ch-src" href="material/p-010.webp">자료 10·11쪽</a>
-  </header>
-  <p class="lead">태블릿은 수업 도구라 평소에는 학교에 둬요. 휴대폰은 아침 조회 때 보관함에 넣고 종례 때 돌려받아요.</p>
-
-  <h3>1인 1태블릿</h3>
-  <dl class="rows">
-    <div><dt>받는 날</dt><dd>3월 둘째 주, 반별로 받아요. 3학년 졸업 때 돌려줘요.</dd></div>
-    <div><dt>쓰는 때</dt><dd>수업 시간(자유학기 활동·과학·기술·가정 등). 쉬는 시간에는 쓰지 않아요.</dd></div>
-    <div><dt>두는 곳</dt><dd>교실 충전 보관함. 매일 종례 때 넣어요.</dd></div>
-    <div><dt>집에 가져갈 때</dt><dd>과제·원격 수업처럼 필요한 날만, 담임 선생님이 확인한 뒤 가져가요.</dd></div>
-    <div><dt>고장·파손</dt><dd>바로 담임 선생님께 알려요. 실수로 망가진 것은 학교가 고쳐요. 일부러 망가뜨렸다면 수리비 일부를 가정에서 내실 수 있어요.</dd></div>
-    <div><dt>학습 계정</dt><dd>학교가 만든 계정으로만 로그인해요. 계정 안내문은 3월에 따로 보내 드려요.</dd></div>
-  </dl>
-  <p class="fine">학교 태블릿에는 학습에 필요한 앱만 설치되고, 학교 망과 기기 모두에서 유해 사이트를 막아요. 게임·영상 앱은 학생이 설치할 수 없어요.</p>
-
-  <h3 class="h3-gap">휴대폰</h3>
-  <ul class="sq">
-    <li><b>급한 연락</b>은 담임 선생님 또는 교무실(<a class="tel" href="tel:031-000-2100">031-000-2100</a>)로 해 주세요. 바로 자녀에게 전해 드려요.</li>
-    <li>몸이 아파 보건실에 가거나 조퇴할 때는 담임 선생님이 보호자께 먼저 연락해요.</li>
-  </ul>
-
-  <h3 class="h3-gap">가정에서 함께 정해 주세요</h3>
-  <dl class="promise">
-    <div><dt>잠자기 전</dt><dd>잠들기 1시간 전에는 휴대폰을 거실에 두기</dd></div>
-    <div><dt>단체 대화방</dt><dd>밤 10시 뒤에는 쉬기, 친구 사진은 올리기 전에 묻기</dd></div>
-    <div><dt>결제·앱 설치</dt><dd>보호자와 함께 확인한 뒤에 하기</dd></div>
-    <div><dt>모르는 연락</dt><dd>모르는 사람의 친구 신청·링크는 열지 않고 보호자에게 보여 주기</dd></div>
-  </dl>
-
-  <div class="help-line">
-    <h3>온라인에서 괴롭힘을 겪으면</h3>
-    <ol class="steps">
-      <li><b>지우지 말고 화면을 저장해요</b><span>대화 내용·날짜가 보이게 저장해 두세요.</span></li>
-      <li><b>담임 선생님이나 Wee클래스에 알려요</b><span>학교가 바로 사실을 확인하고 도와요.</span></li>
-      <li><b>밤이나 주말에는 117</b><span>학교폭력 신고·상담 전화예요. 문자 #0117로도 돼요.</span></li>
-    </ol>
-    <a class="btn btn-call" href="tel:117">117 전화하기</a>
+<!-- 설명 자료 -->
+<section class="sec sec-slides" id="slides" aria-labelledby="slides-h">
+  <header class="ch"><p class="ch-k">설명 자료 15쪽</p><h2 id="slides-h">앞 화면과 같은 쪽을 손안에서</h2></header>
+  <p class="hint">두 손가락으로 벌리면 더 크게 보여요. 앞에서 쪽을 넘기면 함께 넘어가요.</p>
+  <div data-lp="deck" data-pages="1-15"></div>
+  <div class="dl">
+    <div data-lp="materials" data-items='[{"title":"설명회 자료 15쪽(PDF)","href":"files/안내자료.pdf","desc":"오늘 나눠 드린 인쇄본과 같아요.","kind":"PDF"}]'></div>
+    <div class="share-row"><p>함께 오지 못한 가족에게도 보내 주세요.</p><div data-lp="share"></div></div>
   </div>
 </section>
 
-<!-- 4. 학교생활 -->
-<section class="sec" id="life" aria-labelledby="life-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">4</span>
-    <p class="ch-k">학교생활</p>
-    <h2 id="life-h">하루 일과와 학교생활</h2>
-    <a class="ch-src" href="material/p-003.webp">자료 3·12쪽</a>
-  </header>
-  <p class="lead">아침 8시 30분까지 등교해요. 수업은 한 교시 45분, 월·화·목·금은 7교시예요.</p>
-
-  <ol class="day" aria-label="하루 일과">
-    <li><time class="num">07:50</time><span>교문 열림</span></li>
-    <li class="is-key"><time class="num">08:30</time><span>등교 마감 · 아침 조회</span></li>
-    <li><time class="num">08:40</time><span>1~4교시</span></li>
-    <li><time class="num">12:10</time><span>점심시간</span></li>
-    <li><time class="num">13:00</time><span>5~7교시</span></li>
-    <li class="is-key"><time class="num">15:35</time><span>종례 · 하교<small>수요일은 14:40</small></span></li>
-    <li><time class="num">16:00</time><span>방과후 학교<small>신청한 학생</small></span></li>
-  </ol>
-
-  <div class="grid-2">
-    <div>
-      <h3>결석·지각·조퇴</h3>
-      <ul class="sq">
-        <li>아침 <b class="num">8시 20분</b> 전에 담임 선생님께 문자나 전화로 알려 주세요.</li>
-        <li>병원에 다녀왔다면 진료확인서나 처방전을 다시 등교한 날부터 <b>5일 안에</b> 내요.</li>
-        <li>가족 행사·체험학습으로 빠질 때는 <b>3일 전까지</b> 신청서를 내요.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>급식</h3>
-      <ul class="sq">
-        <li>한 달 식단표는 전달 마지막 주에 학교 누리집에 올려요.</li>
-        <li>음식 알레르기는 입학식 날 받는 건강 조사서에 꼭 적어 주세요.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>상담</h3>
-      <ul class="sq">
-        <li><b>Wee클래스</b>(본관 1층)에 상담 선생님이 계세요. 학생도 보호자도 예약하고 찾아올 수 있어요.</li>
-        <li>담임 선생님과는 상담 주간(3. 22.~3. 26.) 말고도 미리 연락해 시간을 정해요.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>오가는 길</h3>
-      <ul class="sq">
-        <li>정문 앞 도로는 차를 세울 수 없어요. 차로 데려다줄 때는 후문 쪽 승하차 구역을 써 주세요.</li>
-        <li>방과후 학교는 3월 둘째 주에 신청서를 보내 드려요.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- 4. 입학 준비 -->
-<section class="sec" id="ready" aria-labelledby="ready-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">4</span>
-    <p class="ch-k">입학 준비</p>
-    <h2 id="ready-h">3월 2일까지 할 일</h2>
-    <a class="ch-src" href="material/p-013.webp">자료 13쪽</a>
-  </header>
-  <p class="lead">날짜 순서대로 하나씩 챙기면 돼요. 끝낸 일에 표시해 두세요(이 휴대폰에만 남아요).</p>
-  <ul class="todo" data-todo>
-    <li><label><input type="checkbox" data-todo-id="class"><span class="todo-d num">2. 22.(월)</span><span class="todo-t"><b>반 배정 발표</b>오전 10시, 학교 누리집과 문자로 알려 드려요.</span></label></li>
-    <li><label><input type="checkbox" data-todo-id="uniform"><span class="todo-d num">2. 23.(화)~24.(수)</span><span class="todo-t"><b>교복 치수 재기</b>본관 1층 다목적실, 10:00~17:00. 교복은 시의 지원으로 무료예요.</span></label></li>
-    <li><label><input type="checkbox" data-todo-id="care"><span class="todo-d num">2. 26.(금)까지</span><span class="todo-t"><b>방과후·돌봄이 필요하면 연락</b>1학년부(<a class="tel" href="tel:031-000-2140">031-000-2140</a>)로 미리 알려 주세요.</span></label></li>
-    <li><label><input type="checkbox" data-todo-id="day"><span class="todo-d num">3. 2.(화)</span><span class="todo-t"><b>입학식</b>학생은 09:30까지 배정받은 반 교실로, 보호자는 10:00 강당으로 와요. 11시쯤 끝나요.</span></label></li>
-    <li><label><input type="checkbox" data-todo-id="papers"><span class="todo-d num">3. 5.(금)까지</span><span class="todo-t"><b>서류 내기</b>입학식 날 나눠 드리는 학생 기초 조사서·건강·알레르기 조사서·개인정보 수집·이용 동의서를 담임 선생님께 내요.</span></label></li>
-  </ul>
-  <p class="bring"><b>입학식 날 학생이 가져올 것</b> 실내화, 필기도구, 개인 물병. 체육복은 3월 둘째 주에 받아요.</p>
-</section>
-
-<!-- 자주 묻는 질문 -->
-<section class="sec" id="faq" aria-labelledby="faq-h">
-  <header class="ch">
-    <span class="ch-no" aria-hidden="true">?</span>
-    <p class="ch-k">묻고 답하기</p>
-    <h2 id="faq-h">자주 묻는 질문</h2>
-    <a class="ch-src" href="material/p-014.webp">자료 14쪽</a>
-  </header>
-  <div class="faq">
-    <details><summary>자유학기에는 정말 시험이 없나요?</summary><p>네, 1학기에는 중간·기말고사가 없어요. 수업 시간의 활동과 결과물로 배움을 살피고, 생활기록부에 문장으로 적어요.</p></details>
-    <details><summary>첫 시험은 언제인가요?</summary><p>2학기 중간고사, 10월 13일(수)부터 3일 동안이에요. 시험 범위는 2주 전에 알려 드려요.</p></details>
-    <details><summary>학원에 다니지 않으면 수행평가가 불리하지 않나요?</summary><p>수행평가는 수업 시간에 배운 것을 수업 안에서 해요. 집에서 해 오는 과제는 내지 않아요.</p></details>
-    <details><summary>태블릿을 집에 가져와도 되나요?</summary><p>과제·원격 수업처럼 필요한 날만, 담임 선생님이 확인한 뒤 가져가요. 평소에는 교실 충전 보관함에 둬요.</p></details>
-    <details><summary>휴대폰을 꼭 내야 하나요?</summary><p>네, 아침 조회 때 내고 종례 때 돌려받아요. 급한 연락은 교무실(<a class="tel" href="tel:031-000-2100">031-000-2100</a>)로 해 주세요.</p></details>
-    <details><summary>맞벌이라 상담 주간에 학교에 가기 어려워요.</summary><p>전화 상담도 돼요. 상담 신청서에 편한 시간과 방법을 적어 주세요. 저녁 시간도 맞춰 드려요.</p></details>
-    <details><summary>아이가 친구를 잘 사귈지 걱정돼요.</summary><p>3월 첫 두 주는 반마다 친구 사귀기 활동을 해요. 걱정되는 점은 상담 주간에 담임 선생님께 말씀해 주세요.</p></details>
-    <details><summary>교복은 언제 받나요?</summary><p>2월 23일(화)~24일(수)에 치수를 재고, 입학 전 주에 집으로 보내 드려요. 시의 지원으로 무료예요.</p></details>
-    <details><summary>방과후 학교는 언제 신청하나요?</summary><p>3월 둘째 주에 신청서를 보내 드려요. 수강료는 과목마다 달라 신청서에 적어 드려요.</p></details>
-  </div>
-  <p class="faq-more">여기 없는 질문은 <a href="#ask">이름 없이 질문하기</a>에 남겨 주세요.</p>
-</section>
-
-<!-- 질문하기 -->
-<section class="sec sec-live" id="ask" aria-labelledby="ask-h">
-  <header class="ch ch-plain">
-    <p class="ch-k">묻고 답하기 · <span class="num">20:15~20:30</span></p>
-    <h2 id="ask-h">이름 없이 질문하기</h2>
-  </header>
-  <p class="lead">손 들기 어려운 질문도 괜찮아요. 묻고 답하기 시간에 답해 드려요. 같은 궁금증이 있으면 새로 쓰지 말고 공감을 눌러 주세요.</p>
+<!-- 질문 -->
+<section class="sec sec-ask" id="ask" aria-labelledby="ask-h">
+  <header class="ch"><p class="ch-k">묻고 답하기 · <span class="num">20:15~20:30</span></p><h2 id="ask-h">이름 없이 질문하기</h2></header>
+  <p class="hint">손 들기 어려운 질문도 괜찮아요. 같은 궁금증이면 새로 쓰지 말고 공감을 눌러 주세요.</p>
   <div data-lp="qa"></div>
 </section>
 
-<!-- 자료 -->
-<section class="sec" id="slides" aria-labelledby="slides-h">
-  <header class="ch ch-plain">
-    <p class="ch-k">자료</p>
-    <h2 id="slides-h">설명 자료 크게 보기</h2>
-  </header>
-  <p class="lead">앞 화면과 같은 쪽을 휴대폰으로 크게 봐요. 두 손가락으로 벌리면 더 크게 보여요.</p>
-  <div data-lp="deck" data-pages="1-15"></div>
-  <h3 class="h3-gap">내려받기</h3>
-  <div data-lp="materials" data-items='[{"title":"설명회 자료 15쪽(PDF)","href":"files/안내자료.pdf","desc":"오늘 나눠 드린 인쇄본과 같아요."}]'></div>
-  <div class="share-row">
-    <p>함께 오지 못한 가족에게 이 사이트를 보내 주세요.</p>
-    <div data-lp="share"></div>
-  </div>
+<!-- 집에 가서 다시 찾을 것: 날짜·준비물 -->
+<section class="sec sec-ready" id="ready" aria-labelledby="ready-h">
+  <header class="ch"><p class="ch-k">자료 13쪽 · 끝낸 일은 표시해 두세요</p><h2 id="ready-h">입학 전 챙길 것</h2></header>
+  <ul class="todo" data-todo>
+    <li><label><input type="checkbox" data-todo-id="class"><time class="num">2. 22.(월)</time><span><b>반 배정 발표</b>오전 10시, 학교 누리집과 문자로</span></label></li>
+    <li><label><input type="checkbox" data-todo-id="uniform"><time class="num">2. 23.~24.</time><span><b>교복 치수 재기</b>본관 1층 다목적실, 10:00~17:00(무료)</span></label></li>
+    <li><label><input type="checkbox" data-todo-id="care"><time class="num">2. 26.(금)까지</time><span><b>방과후·돌봄이 필요하면 연락</b>1학년부 <a class="tel" href="tel:031-000-2140">031-000-2140</a></span></label></li>
+    <li><label><input type="checkbox" data-todo-id="day"><time class="num">3. 2.(화)</time><span><b>입학식</b>학생은 09:30까지 반 교실로, 보호자는 10:00 강당으로</span></label></li>
+    <li><label><input type="checkbox" data-todo-id="papers"><time class="num">3. 5.(금)까지</time><span><b>서류 내기</b>입학식 날 받는 조사서·동의서 3가지를 담임 선생님께</span></label></li>
+  </ul>
+  <p class="bring"><b>입학식 날 가져올 것</b> 실내화 · 필기도구 · 개인 물병</p>
+  <h3>그 뒤 꼭 알아 둘 날짜 <a class="src" href="#deck-p4">자료 4쪽</a></h3>
+  <dl class="later">
+    <div><dt class="num">3. 22.~26.</dt><dd>학부모 상담 주간(방문·전화)</dd></div>
+    <div class="is-key"><dt class="num">10. 13.~15.</dt><dd>첫 지필평가(2학기 중간고사). 1학기는 시험 없는 자유학기예요.</dd></div>
+    <div class="is-key"><dt class="num">12. 8.~10.</dt><dd>2학기 기말고사</dd></div>
+  </dl>
 </section>
 
 <!-- 회신서 -->
 <section class="sec sec-reply" id="reply" aria-labelledby="reply-h">
   <div class="cut" aria-hidden="true"><span>자르는 선</span></div>
-  <header class="ch ch-plain">
-    <p class="ch-k">회신서</p>
-    <h2 id="reply-h">설명회는 어떠셨나요?</h2>
-  </header>
-  <p class="lead">종이 회신서와 같은 내용이에요. 이름 없이 내고, 둘 중 하나만 내 주세요.</p>
+  <header class="ch"><p class="ch-k">회신서 · 자료 15쪽과 같은 내용</p><h2 id="reply-h">설명회는 어떠셨나요?</h2></header>
+  <p class="hint">이름 없이 내요. 종이와 휴대폰 가운데 하나로만 내 주세요.</p>
   <div data-lp="survey" data-questions='[{"q":"오늘 설명이 이해하기 쉬웠나요?","kind":"scale"},{"q":"더 자세히 알고 싶은 것은 무엇인가요?","kind":"choice","options":["교육과정","평가","디지털 기기","학교생활"]},{"q":"학교에 바라는 점이나 하고 싶은 말","kind":"text"}]'></div>
 </section>
 
 <!-- 문의 -->
-<section class="sec" id="contact" aria-labelledby="contact-h">
-  <header class="ch ch-plain">
-    <p class="ch-k">문의</p>
-    <h2 id="contact-h">궁금할 때는 여기로</h2>
-  </header>
-  <p class="lead">전화는 평일 <span class="num">08:30~16:30</span>에 받아요. 번호를 누르면 바로 걸려요.</p>
+<section class="sec sec-contact" id="contact" aria-labelledby="contact-h">
+  <header class="ch"><p class="ch-k">평일 <span class="num">08:30~16:30</span> · 누르면 바로 걸려요</p><h2 id="contact-h">궁금할 때는 여기로</h2></header>
   <ul class="calls">
     <li><span>교육과정 · 자유학기<small>교무기획부</small></span><a class="tel num" href="tel:031-000-2110">031-000-2110</a></li>
     <li><span>평가 · 성적<small>학업성적 담당</small></span><a class="tel num" href="tel:031-000-2120">031-000-2120</a></li>
@@ -470,11 +129,12 @@
     <li><span>상담<small>Wee클래스</small></span><a class="tel num" href="tel:031-000-2150">031-000-2150</a></li>
     <li><span>교복 · 급식비 · 방과후 수강료<small>행정실</small></span><a class="tel num" href="tel:031-000-2160">031-000-2160</a></li>
     <li class="is-key"><span>그 밖의 것 · 급한 연락<small>교무실</small></span><a class="tel num" href="tel:031-000-2100">031-000-2100</a></li>
+    <li><span>밤·주말 학교폭력 신고·상담<small>문자 #0117도 돼요</small></span><a class="tel num" href="tel:117">117</a></li>
   </ul>
 </section>
 
-</div><!-- /.body -->
-</div><!-- /.layout -->
+</div><!-- /.grid -->
+</div><!-- /.wrap -->
 </main>
 
 <footer class="foot">

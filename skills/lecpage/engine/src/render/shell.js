@@ -158,8 +158,8 @@ export function siteData(ctx) {
     admin: { completionRate: bp.meta.admin?.completionRate || 90, rateSet: !!bp.meta.admin?.completionRate },
     survey: ctx.live ? bp.sections.filter((s) => s.type === 'survey').reduce((n, s) => n + (s.questions?.length || 0), 0) : 0,
     phase: phaseWindow(bp),
-    // 참가자 화면이 스스로 쓰는 낱말(끝난 연수·수업, 자료 칸, 연수·수업 코드)
-    words: ctx.words ? { ev: ctx.words.ev, ended: ctx.words.ended, materials: ctx.words.materials, code: ctx.words.code } : undefined,
+    // 참가자 화면이 스스로 쓰는 낱말(끝난 연수·수업, 자료 칸, 연수·수업 코드, 진행자: 강사·선생님·발표자)
+    words: ctx.words ? { ev: ctx.words.ev, ended: ctx.words.ended, materials: ctx.words.materials, code: ctx.words.code, host: ctx.words.host } : undefined,
   };
 }
 
