@@ -94,6 +94,17 @@ async function markBlocked(provider, id) {
   const s = await prefs(); const list = s.blocked[provider] || [];
   if (!list.includes(id)) { s.blocked[provider] = [...list, id].slice(-20); await kv.set('ai-prefs', s); }
 }
+/**
+ * 생성(gen/job.js)에서 처음 모델이 이 키로 안 돼(무료 키에 유료 전용 모델 등) 바꾼 모델로 답을 받았을 때: 안 된 모델은 '유료 키 필요'로 기억하고,
+ * Gemini는 무료 키로 적어 둠(checkKey·고르는 칸이 이 값을 씀 → 다음 만들기는 되는 모델로 바로 시작). 강사가 직접 고른 모델·지금 고른 회사는 그대로
+ */
+export async function rememberWorkingModel(provider, model, failed = []) {
+  for (const id of failed) await markBlocked(provider, id);
+  const s = await prefs();
+  if (!s.picked[provider] && model) s.models[provider] = model;
+  if (provider === 'gemini') s.free.gemini = true;
+  await kv.set('ai-prefs', s);
+}
 /** picked: 강사가 직접 고른 모델인지(true면 추천이 바뀌어도 그대로 둠) */
 export async function setActive(provider, { model, freeTier, picked } = {}) {
   const s = await prefs(); s.active = provider;
