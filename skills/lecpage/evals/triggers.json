@@ -5,7 +5,7 @@
   { "query": "turn my workshop slides into a website attendees can follow along on their phones", "should_trigger": true },
   { "query": "학부모 설명회 안내 페이지 만들어 줄래? 일정이랑 자료 내려받기 있으면 좋겠어", "should_trigger": true },
   { "query": "한글 파일(hwpx)로 된 연수 계획서가 있는데 이걸로 참가자용 사이트 만들 수 있어?", "should_trigger": true },
-  { "query": "지난번에 만든 연수 사이트에서 장소만 바꿔 줘 (work/blueprint.json 있음)", "should_trigger": true },
+  { "query": "지난번에 만든 연수 사이트에서 장소만 바꿔 줘 (work/site, work/lecpage.json 있음)", "should_trigger": true },
   { "query": "컨퍼런스 세션 페이지에 투표랑 만족도 설문 붙여서 배포까지 해 줘", "should_trigger": true },
   { "query": "이 PPT 슬라이드 디자인 좀 예쁘게 다듬어서 pptx로 다시 줘", "should_trigger": false },
   { "query": "오늘 연수 결과 보고서를 한글 문서로 써 줘", "should_trigger": false },
