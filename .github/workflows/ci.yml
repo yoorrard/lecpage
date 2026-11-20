@@ -13,6 +13,9 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
+      # 엔진 시험 가운데 PDF 교재를 읽는 것(prepare·check)은 앱의 pdf.js를 씀 → 앱 의존성을 먼저 설치
+      - name: 앱 의존성 설치
+        run: npm --prefix app ci
       - name: 엔진 테스트
         run: npm test
       # npm audit이 보지 못하는 skill 속 라이브러리(fflate 등)와 판을 고정한 배포 명령: OSV(키 없음)에서 알려진 취약점 확인
@@ -21,7 +24,7 @@ jobs:
       - name: 예시 사이트 빌드
         run: npm run examples
       - name: 앱 빌드
-        run: npm --prefix app ci && npm --prefix app run build
+        run: npm --prefix app run build
       # 사용자 약속: 앱 문구는 해요체·번역투 없음(docs/writing.md). 고칠 곳이 하나라도 있으면 실패
       - name: 앱 문구 검사(copy-lint)
         run: node app/scripts/copy-lint.mjs
