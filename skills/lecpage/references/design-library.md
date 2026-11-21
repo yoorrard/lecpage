@@ -1,49 +1,44 @@
 # 디자인 서재
 
-필요할 때 꺼내 쓰는 낱말과 기법 모음이에요. **규칙이 아니고 따를 의무도 없어요.** 출발점은 지금 연수의 컨셉(주제·대상·분위기)이에요. 교재 디자인은 참고만 하고, 교재가 평범해도 그 컨셉에 맞는 결·글꼴·움직임을 골라 교재보다 한 차원 높은 웹 디자인을 새로 만들어요. 여기 있는 결을 섞어도 되고, 여기 없는 방식을 써도 돼요. 아래 코드 조각은 lecpage 사이트의 보안 정책(CSP) 안에서 그대로 돌아가요.
+필요할 때 꺼내 쓰는 낱말과 기법 모음이에요. **규칙이 아니고 따를 의무도 없어요.** 출발점은 지금 연수의 컨셉(주제·대상·분위기)이고, 여기 있는 것을 섞어도 되고 여기 없는 방식을 써도 돼요. 아래 코드 조각은 lecpage 사이트의 보안 정책(CSP) 안에서 그대로 돌아가요.
 
-- 보안 정책 요약: 스크립트는 사이트 안(인라인도 조립이 파일로 옮김)과 jsDelivr의 `gsap@3.15.1`·`lenis@1.3.27`·`ogl@1.0.11`만. 바깥 CSS는 글꼴(fonts.googleapis.com·cdn.jsdelivr.net·hangeul.pstatic.net)만. 그림은 사이트 안 파일·교재 쪽 그림·`data:`·인라인 `<svg>`·canvas. Web Worker는 막혀 있어요.
+**노릴 수준**: 들어오자마자 '이건 공들여 만든 최신 사이트다'라고 느끼는 첫 화면. lecpage 견본 셋이 바닥 기준이에요 — 교재 표지의 신경망을 WebGL로 살려 신호가 흐르는 첫 화면과 접혀 오르는 제목(neo-teach), 펼침면을 3D로 넘기는 그림책(picture-heart), 하루 1,440분 격자가 채워지는 첫 화면(data-pulse). 이것을 베끼지 말고, 지금 교재의 컨셉에서만 나올 수 있는 장면으로 이보다 한 단계 위를 노려요. 교재가 평범하거나 딱딱해도 사이트까지 차분한 문서처럼 만들 이유는 없어요.
 
-## 1. 결(아트 디렉션)
+- 보안 정책 요약: 스크립트는 사이트 안(인라인도 조립이 파일로 옮김)과 jsDelivr의 `gsap@3.15.1`·`lenis@1.3.27`·`ogl@1.0.11`만. 바깥 CSS는 글꼴(fonts.googleapis.com·cdn.jsdelivr.net·hangeul.pstatic.net)만. 그림은 사이트 안 파일·교재 쪽 그림·`data:`·인라인 `<svg>`·canvas(WebGL 포함). Web Worker는 막혀 있어요.
 
-연수의 주제와 분위기에서 하나를 고르거나 둘을 섞어요(바탕 결 하나 + 강조 결 한 점). 결은 첫 화면 한 장면과 반복되는 모티프 두세 개로 드러나면 충분해요.
+## 1. 컨셉에서 장면으로
 
-| 결 | 어울리는 주제 | 대표 기법 | 함정 |
-|---|---|---|---|
-| 편집·잡지 | 이야기·인문·성찰·독서 | 큰 명조 제목과 가는 본문, 비대칭 2단, 넉넉한 여백, 굵은 선·가는 선 장 구분, 번호 붙인 장, 쪽 그림 캡션, 드롭캡 | 본문 글자가 작아짐, 장식 명조를 본문에 |
-| 스위스 격자 | 행정·정책·데이터·안내 | 12칸 격자, 왼쪽 정렬, 굵은 그로테스크, 아주 큰 숫자, 강조색 하나, 선으로만 구분 | 차갑기만 함, 모든 정보가 같은 무게 |
-| 리소그래프·인쇄 | 예술·지역·워크숍·청소년 | 별색 두세 개를 `mix-blend-mode: multiply`로 겹침, 1~2px 어긋난 판, 망점·그레인, 거친 종이 | 글자 대비 부족, 글자에도 질감 |
-| 손그림 공책 | 교사 실습·초등·성찰·상담 | 줄 공책 바탕, 손글씨 메모, 빨간 펜 동그라미·밑줄(선 그리기), 붙임쪽지, 연필 | 손글씨를 본문에, 귀엽기만 함 |
-| 설계도·기술 도면 | 공학·코딩·과학·메이커 | 모눈, 치수선·지시선 SVG, 고정폭 숫자, 청사진 남색, 부품 번호 | 어두운 화면 일색, 작은 글자 |
-| 데이터 시각화 | 통계·평가·데이터 리터러시 | 길이에 비례한 막대, 손으로 그린 차트 SVG, 아주 큰 자릿수 고정 숫자, 작은 꺾은선 | 장식용 가짜 차트, 근거 없는 숫자 |
-| 포스터·글자 | 특강·행사·캠페인·축제 | 화면을 채우는 큰 글자(`clamp()` + `vw`), 좁고 굵은 제목체, 강한 색 면, 기운 띠 | 정보가 안 보임, 읽기 어려움 |
-| 콜라주·스크랩북 | 지역·역사·프로젝트 수업 | 오려 붙인 쪽 그림(`clip-path`·기울기), 테이프·스티커, 겹친 종이 그림자 | 어수선함, 그림 위 글자 대비 |
-| 레트로 아케이드·픽셀 | 게임 기반 학습·코딩·초등 | 픽셀 글꼴, 점수판·체력 막대로 진행 표시, 격자 `rect`로 그린 8비트 그림, 깜빡이는 커서 | 가독성, 유치함 |
-| 네온·유리(밤) | 디지털·미래·AI·사회정서(밤하늘 은유) | 어두운 바탕, 빛나는 선 그림(SVG + `drop-shadow`), `backdrop-filter` 유리 막대, 원근 격자, 그라데이션 제목 한 곳 | 모든 곳에 빛, 대비 부족, 무거움 |
-| 따뜻한 미니멀 | 학부모 설명회·상담·복지·돌봄 | 미색 바탕, 큰 여백, 둥근 고딕, 따뜻한 색 하나, 작은 선화 | 너무 밋밋함 |
-| 공문·기관 | 직무연수·행정·설명회 | 교표·이중선 장 제목, □ 표시, 줄만 있는 표, 회신서 절취선 | 딱딱함(숨 쉬는 그림 한 점이 풀어 줌) |
-| 칠판·교실 | 수업 기술·교과 연수 | 칠판 녹색, 분필 글씨, 지우개 자국(필터), 자석 꼬리표 | 어두운 바탕의 긴 글 |
-| 자연·계절 | 환경·생태·숲 교육 | 유기적 곡선(근거 있는 모양), 잎·물결 선화, 계절 색 이동 | 의미 없는 덩어리(blob) |
-| 어두운 키노트 | 기술 발표·리더십 특강 | 한 화면 한 문장, 아주 큰 숫자, 스크롤에 따라 바뀌는 장 | 정보 찾기 어려움 |
-| 지도·답사 | 현장 체험·답사·진로 | 길 선(SVG path)이 스크롤 따라 그려짐, 지점 번호, 범례 | 길이 내용과 무관 |
+1. 컨셉을 눈에 보이는 은유 하나로 줄여요. 교재 장르(슬라이드·공문·보고서)가 아니라 그 연수가 다루는 변화나 행동에서 찾아요.
+2. 그 은유를 첫 화면에서 살아 움직이는 장면 하나로 만들어요(셰이더·캔버스 생성 그림·SVG·3D CSS·움직이는 글자 중 어울리는 것).
+3. 장면의 모티프를 사이트 문법으로 이어요: '지금' 표시, 진행 막대, 장 바뀜, 버튼 반응.
+
+| 컨셉(예) | 장면 | 이어지는 문법 |
+|---|---|---|
+| 질문이 먼저, AI는 그다음 | 다섯 노드 신경망 위로 신호가 흐르는 WebGL, 커서가 탐침 | 교사 노드 색 = 주 버튼, 실습 머리의 노드 사슬 |
+| 그림책 한 장, 마음 한 뼘 | 찢은 종이 네 색 콜라주, 3D로 넘기는 펼침면 | 마음 색 = 실습 도구 색 |
+| 학교 데이터로 수업 바꾸기 | 1,440칸 격자가 지금 시각까지 채워짐, 아주 큰 좁은 숫자 | 신호색 하나로 '지금'만 |
+| 숲·생태 교육 | 바람에 흔들리는 생성 풀숲(캔버스), 스크롤 따라 계절 색 이동 | 잎맥 선 그리기로 진행 표시 |
+| 코딩·메이커 | 글자가 쳐지며 회로·도면이 그려지는 장면, 모눈 위 치수선 | 줄 번호 콘솔, 단계 = 부품 번호 |
+| 리더십·특강 | 화면을 채우는 한 문장이 스크롤 따라 굵기·크기가 바뀜 | 장마다 한 문장, 큰 숫자 |
+
+결(아트 디렉션)은 바탕 하나 + 강조 한 점으로 섞어요: 편집·잡지(큰 명조, 비대칭 2단) · 스위스 격자(아주 큰 숫자, 강조색 하나) · 포스터·움직이는 글자(화면을 채우는 가변 글꼴) · 리소그래프(별색 겹침 `mix-blend-mode`, 어긋난 판, 그레인) · 셰이더 빛·유체(흐르는 색 면) · 네온·유리(어두운 바탕, 빛나는 선, 원근 격자) · 3D 공간(원근·겹친 종이·넘기는 쪽) · 생성 예술(씨앗 있는 무작위 패턴) · 손그림 공책 · 설계도 · 데이터 시각화 · 콜라주 · 픽셀 아케이드 · 칠판 · 지도·답사 · 따뜻한 미니멀. 결마다 함정: 글자 대비 부족, 장식이 정보를 가림, 모든 곳에 같은 효과.
 
 ## 2. 한국어 글꼴 짝(무료, 위 CSP 호스트)
 
-구글 폰트는 `https://fonts.googleapis.com/css2?family=이름:wght@…&display=swap`(확인함: 아래 구글 폰트 전부 200). 제목 전용 글꼴은 `&text=쓴글자`로 그 글자만 받으면 가벼워요. 줄바꿈은 `word-break: keep-all; overflow-wrap: break-word;`, 제목은 `text-wrap: balance`.
+구글 폰트는 `https://fonts.googleapis.com/css2?family=이름:wght@…&display=swap`(확인함: 아래 구글 폰트 전부 200). 가변 글꼴은 범위로 받아요(`Hahmlet:wght@100..900`) — 굵기·폭을 움직이는 글자 장면에 써요. 제목 전용 글꼴은 `&text=쓴글자`로 그 글자만 받으면 가벼워요. 줄바꿈은 `word-break: keep-all; overflow-wrap: break-word;`, 제목은 `text-wrap: balance`.
 
-| 결 | 제목 | 본문 | 숫자·영문 |
+| 느낌 | 제목 | 본문 | 숫자·영문 |
 |---|---|---|---|
-| 편집 | Noto Serif KR · Hahmlet | Asta Sans · IBM Plex Sans KR | Fraunces · Instrument Serif |
+| 편집 | Noto Serif KR · Hahmlet(가변) | Asta Sans(가변) · IBM Plex Sans KR | Fraunces(가변) · Instrument Serif |
 | 편지·성찰 | Gowun Batang · Diphylleia | Gowun Dodum | Instrument Serif |
-| 포스터 | Black Han Sans · Gasoek One | Gothic A1 · 프리젠테이션 | Anton |
-| 무대·특강 | 페이퍼로지 800 | Asta Sans | Bricolage Grotesque |
-| 기술·도면 | IBM Plex Sans KR 700 | IBM Plex Sans KR | IBM Plex Mono |
+| 포스터·움직이는 글자 | Black Han Sans · Gasoek One · Pretendard Variable 900 | Gothic A1 · 프리젠테이션 | Anton · Anybody(폭 가변) · Big Shoulders Display |
+| 무대·특강 | 페이퍼로지 800 | Asta Sans | Bricolage Grotesque(가변) · Unbounded |
+| 기술·도면 | IBM Plex Sans KR 700 | IBM Plex Sans KR | IBM Plex Mono · Space Grotesk |
 | 공책·손그림 | 제목은 Gowun Batang, 메모는 Gaegu · Nanum Pen Script | Gowun Dodum | Caveat |
 | 둥근·친근 | Jua · Do Hyeon | Gowun Dodum · Pretendard | Bricolage Grotesque |
-| 미래 | Orbit | Asta Sans | Space Grotesk |
+| 미래 | Orbit | Asta Sans | Space Grotesk · Syne |
 | 고전·인문 | Song Myung · Nanum Myeongjo | Nanum Myeongjo · Gowun Batang | Fraunces |
 | 픽셀 | Galmuri11 | Pretendard | Galmuri |
-| 공문 | Gothic A1 800 | Pretendard | IBM Plex Sans KR |
 
 jsDelivr(버전 고정, 확인함):
 - Pretendard `https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css`
@@ -53,61 +48,83 @@ jsDelivr(버전 고정, 확인함):
 
 숫자: `font-variant-numeric: tabular-nums;`. 제목 자간은 -0.02~-0.04em이 한글 큰 글자에서 단단해 보여요.
 
-## 3. 움직임과 그림 기법
+## 3. 첫 화면 장면과 움직임
 
-움직임은 의미 있는 순간 한두 곳에 몰아요(첫 화면 장면, 대표 그림 하나). 실습·복사·질문 자리는 가만히 둬요. 쉬는 모습이 완성된 모습이게: JS가 없거나 움직임을 줄인 사람에게도 내용이 처음부터 다 보여요.
+움직임은 첫 화면 장면과 장이 바뀌는 순간에 크게 쓰고, 실습·복사·질문·키트 자리는 읽고 누르기 편하게 차분히 둬요. 쉬는 모습이 완성된 모습이게: JS가 없거나 움직임을 줄인 사람에게도 내용이 처음부터 다 보여요. `transform`·`opacity`·셰이더만 움직이면 휴대폰에서도 부드러워요.
 
-**SVG 선 그리기** (빨간 펜 동그라미, 지도 위 길, 설계도 선)
+**셰이더 배경(WebGL, 라이브러리 없이)** — 흐르는 색 면·빛·물결. `fs`의 식과 두 색을 컨셉에 맞게 바꿔요.
 ```html
-<svg viewBox="0 0 200 80"><path class="draw" pathLength="1" d="M10 40 C 60 0, 140 80, 190 40" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+<canvas id="fx" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:-1"></canvas>
 ```
-```css
-.draw{stroke-dasharray:1;stroke-dashoffset:0}
-@media (prefers-reduced-motion:no-preference){.draw{animation:draw 1.2s .3s ease-out both}@keyframes draw{from{stroke-dashoffset:1}}}
+```js
+const cv=document.getElementById('fx'),gl=cv.getContext('webgl',{antialias:false});
+if(gl){
+  const fs=`precision mediump float;uniform vec2 r;uniform float t;uniform vec2 m;
+  void main(){vec2 p=(gl_FragCoord.xy-.5*r)/r.y;float v=0.;
+    for(float i=1.;i<5.;i++){p+=.35/i*vec2(sin(i*p.y+t*.4+m.x*3.),cos(i*p.x-t*.3+m.y*3.));v+=sin(p.x*i)*cos(p.y*i)/i;}
+    vec3 a=vec3(.07,.08,.12),b=vec3(1.,.42,.2);gl_FragColor=vec4(mix(a,b,smoothstep(-.1,1.1,v)),1.);}`;
+  const sh=(k,s)=>{const o=gl.createShader(k);gl.shaderSource(o,s);gl.compileShader(o);return o;};
+  const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  const U=(k)=>gl.getUniformLocation(pr,k),still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let mx=0,my=0,on=true,raf=0;
+  const fit=()=>{const d=Math.min(1.5,devicePixelRatio||1)*.6;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;gl.viewport(0,0,cv.width,cv.height);};
+  const draw=(ms)=>{gl.uniform2f(U('r'),cv.width,cv.height);gl.uniform1f(U('t'),ms/1000);gl.uniform2f(U('m'),mx,my);gl.drawArrays(gl.TRIANGLES,0,3);};
+  const loop=(ms)=>{draw(ms);raf=on&&!still&&!document.hidden?requestAnimationFrame(loop):0;};
+  const kick=()=>{if(!raf)raf=requestAnimationFrame(loop);};
+  addEventListener('resize',()=>{fit();draw(performance.now());});addEventListener('pointermove',(e)=>{mx=e.clientX/innerWidth-.5;my=.5-e.clientY/innerHeight;},{passive:true});
+  new IntersectionObserver(([e])=>{on=e.isIntersecting;if(on)kick();}).observe(cv);document.addEventListener('visibilitychange',kick);
+  fit();kick();
+}
 ```
+WebGL이 없으면 캔버스 뒤 CSS 그라데이션이 그대로 보이게 둬요. 점·선·메시가 필요하면 OGL(`await import('https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm')`).
 
-**스크롤에 묶인 등장·진행**(지원하는 브라우저만, 나머지는 정지 모습)
-```css
-@supports (animation-timeline: view()){@media (prefers-reduced-motion:no-preference){
-  .rise{animation:rise linear both;animation-timeline:view();animation-range:entry 0% cover 30%}
-  @keyframes rise{from{opacity:.0;transform:translateY(24px)}}
-  .progress{position:fixed;inset:0 0 auto;height:3px;transform-origin:left;animation:grow linear;animation-timeline:scroll(root)}
-  @keyframes grow{from{transform:scaleX(0)}}
-}}
-```
-
-**JS로 한 번 등장**(모든 브라우저): 처음부터 숨기지 말고 `document.documentElement.classList.add('js')`를 붙인 뒤 `.js .rv{opacity:0}` → `IntersectionObserver`로 `.in`. 스크롤 동작이 `smooth`여도 동작하게 `rootMargin`을 넉넉히.
-
-**View Transitions**(탭·단계 바꾸기): `if (document.startViewTransition) document.startViewTransition(() => show(next)); else show(next);` + `::view-transition-old(root),::view-transition-new(root){animation-duration:.25s}`.
-
-**모양 바꾸기(morph)**: 점 개수가 같은 두 `d`를 SMIL로 `<animate attributeName="d" dur="3s" repeatCount="indefinite" values="M…;M…;M…"/>`. 반복은 멈출 수 있게(5초 넘으면 정지 단추나 화면 밖에서 멈춤).
-
-**캔버스 입자·생성 그림**(별자리, 데이터 점, 꽃가루)
+**캔버스 생성 그림**(별자리, 데이터 점, 풀숲, 입자 글자)
 ```js
 const c=document.querySelector('canvas'),x=c.getContext('2d'),dpr=Math.min(2,devicePixelRatio||1);
 let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647; // 늘 같은 그림
 const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-function frame(t){/* 그리기 */ if(!still&&!document.hidden&&visible) requestAnimationFrame(frame);}
+function frame(t){/* 그리기: 손끝(pointermove) 가까운 점이 밀려나거나 이어지면 살아 있는 느낌 */ if(!still&&!document.hidden&&visible) requestAnimationFrame(frame);}
 ```
 화면 밖이면 멈추고(`IntersectionObserver`), 움직임을 줄이면 한 장면만 그려요.
 
-**질감**: 그레인·종이 결은 `data:` SVG 필터로 그림 없이.
-```css
-.grain::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.18;mix-blend-mode:multiply;
-background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+**움직이는 글자**: 낱말 단위로 감싸 줄바꿈을 지키고, 글자마다 `--i`를 줘 차례로 접혀 오르게.
+```js
+document.documentElement.classList.add('js');
+for(const h of document.querySelectorAll('.kt')){const s=h.textContent.trim();h.setAttribute('aria-label',s);let i=0;
+  h.innerHTML=s.split(' ').map((w)=>`<span class="w" aria-hidden="true">${[...w].map((ch)=>`<span style="--i:${i++}">${ch}</span>`).join('')}</span>`).join(' ');}
 ```
-손그림 떨림: SVG `<filter><feTurbulence baseFrequency="0.02" numOctaves="2"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter>`를 선에.
+```css
+.kt .w{display:inline-block;white-space:nowrap}.kt .w span{display:inline-block}
+@media (prefers-reduced-motion:no-preference){.js .kt .w span{animation:fold .9s cubic-bezier(.2,.8,.2,1) calc(var(--i)*35ms) both}
+@keyframes fold{from{opacity:0;transform:translateY(.5em) rotateX(-85deg);font-weight:200}}}
+```
+가변 굵기·폭이 손끝 거리에 따라 바뀌는 제목(`font-variation-settings`/`font-weight`를 `pointermove`로), 화면을 가로지르는 띠 글자(`@keyframes`로 `translateX(-50%)` 무한), 줄 단위 가려 올리기, 타자 커서(`steps()`), 형광펜 칠하기(`background-size:0 40%→100% 40%`).
 
-**빛·유리·원근**: 빛나는 선 `filter:drop-shadow(0 0 6px var(--glow))`(한두 곳만). 유리 `background:rgb(255 255 255/.08);backdrop-filter:blur(14px) saturate(1.3);border:1px solid rgb(255 255 255/.15)`(떠 있는 막대에만). 원근 격자 `transform:perspective(700px) rotateX(62deg)` + `repeating-linear-gradient` 선, `background-position`을 천천히 움직이면 앞으로 나아가는 느낌.
+**스크롤 이야기**: 핀으로 한 장면을 붙잡고 스크롤에 따라 장면을 바꿔요(GSAP는 학교·회사 망에서 막혀도 내용이 보이게).
+```html
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/ScrollTrigger.min.js"></script>
+```
+```js
+if(window.gsap&&window.ScrollTrigger){gsap.registerPlugin(ScrollTrigger);
+  gsap.matchMedia().add('(prefers-reduced-motion: no-preference)',()=>{
+    gsap.timeline({scrollTrigger:{trigger:'.story',start:'top top',end:'+=150%',pin:true,scrub:.6}})
+      .from('.story .one',{scale:.7,opacity:0}).to('.story .track',{xPercent:-60}).from('.story .two',{clipPath:'inset(0 100% 0 0)'});
+  });}
+```
+라이브러리 없이: `@supports (animation-timeline: view())` 안에서 `animation-timeline:view(); animation-range:entry 0% cover 40%`(등장), `animation-timeline:scroll(root)`(맨 위 진행선, 스크롤 따라 바뀌는 바탕색).
 
-**글자 장면**: 줄 단위로 가려 올리기(`overflow:hidden` 안쪽 `translateY(100%)→0`), 타자 커서(`steps()`), 형광펜 칠하기(`background-size:0 40%→100% 40%`).
+**3D 공간**: `perspective:900px` 무대 + `transform-style:preserve-3d` 종이·쪽·카드. 손끝 기울기는 `pointermove`로 `--rx`·`--ry`를 바꿔 `rotateX(var(--rx)) rotateY(var(--ry))`(가는 포인터에서만). 넘기는 쪽은 `rotateY(-180deg)` + `backface-visibility:hidden`.
 
-**라이브러리**(쓰면 무거워지니 꼭 필요할 때만, 학교·회사 망에서 막히면 정지 모습이 되게)
-- GSAP + ScrollTrigger: `https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js`, `…/ScrollTrigger.min.js` — 핀 + scrub 장면. `gsap.matchMedia()`로 움직임 줄이기 분기.
-- Lenis: `https://cdn.jsdelivr.net/npm/lenis@1.3.27/dist/lenis.min.js` — 무게감 있는 휠 스크롤. 터치·움직임 줄이기에서는 켜지 않기, 앵커 링크 확인.
-- OGL(WebGL): `await import('https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm')` — 셰이더 배경 한 장면. 절반 해상도·초당 30회면 충분.
+**쪽 사이 이음**: 여러 쪽이면 CSS에 `@view-transition{navigation:auto}`와 같은 요소에 같은 `view-transition-name`을 주면 쪽을 옮길 때 제목·그림이 이어져 움직여요. 한 쪽 안의 탭·단계는 `document.startViewTransition(() => show(next))`.
 
-움직임 줄이기: `@media (prefers-reduced-motion: reduce)`에서 반복·시차·스크롤 연출을 끄고, JS는 `matchMedia('(prefers-reduced-motion: reduce)').matches`로 확인. `transform`·`opacity`만 움직이면 휴대폰에서도 부드러워요.
+**선과 모양**: SVG 선 그리기(`pathLength="1"`, `stroke-dasharray:1`, `dashoffset 1→0`), 점 수가 같은 `d`끼리 SMIL morph, 손그림 떨림(`feTurbulence` + `feDisplacementMap`).
+
+**질감·빛**: 그레인은 `data:` SVG(`feTurbulence`)를 `::after`에 `mix-blend-mode:multiply`. 빛나는 선 `filter:drop-shadow(0 0 6px var(--glow))`, 유리 `backdrop-filter:blur(14px) saturate(1.3)`(떠 있는 막대에), 원근 격자 `perspective(700px) rotateX(62deg)` + `repeating-linear-gradient`. 무게감 있는 휠 스크롤은 Lenis(`lenis@1.3.27`, 터치·움직임 줄이기에서는 끄고 앵커 링크 확인).
+
+움직임 줄이기: `@media (prefers-reduced-motion: reduce)`에서 반복·시차·스크롤 연출을 끄고, JS는 `matchMedia('(prefers-reduced-motion: reduce)').matches`로 확인.
 
 ## 4. 강의 사이트에서 자주 쓰는 무늬
 
@@ -133,6 +150,7 @@ background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' wid
 - 뜻 없는 3D 덩어리·구체·물방울, 그라데이션 글자 남발
 - 시스템 글꼴·Inter 한 벌, 제목 위 영어 대문자 꼬리말
 - 모든 섹션이 같은 리듬(작은 머리말 → 제목 → 설명 → 카드)
+- 안전하게만 고른 지면: 미색 바탕에 줄과 상자뿐, 첫 화면에 움직이는 장면이 없음, 교재 장르(공문·보고서·슬라이드)를 그대로 흉내 냄
 - "함께 성장하는" 같은 빈 구호, 가짜 수치·가짜 후기
 
-사람이 만든 티: 교재에서 나온 구체적인 제목·숫자·말, 주제를 상징하는 직접 그린 그림 한 점, 크기 차이가 큰 위계, 비대칭과 리듬 있는 여백, 실제 쪽 그림, 대담한 결정 하나.
+사람이 만든 티: 교재에서 나온 구체적인 제목·숫자·말, 컨셉에서만 나올 수 있는 살아 있는 첫 화면 장면, 크기 차이가 큰 위계, 비대칭과 리듬 있는 여백, 실제 쪽 그림, 대담한 결정 하나.
