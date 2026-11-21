@@ -24,7 +24,7 @@ import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
 import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary, chatgptModels } from './local.js';
-import { pushVersion, carryLegacy } from '../site-meta.js';
+import { carryLegacy, recordVersion, aiVersionLabel, addChat, aiReply } from '../site-meta.js';
 import { ensureIds } from '../site-doc.js';
 
 const TAB = uid(8);
@@ -468,10 +468,11 @@ async function finish(ctx) {
     return { site, meta };
   };
   let out = null;
-  const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); return {
+  const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); const versions = versionsAfter(cur, rec.kind, out, rec.way === 'chat', rec.opts?.request); return {
     v: 2, site: out.site, meta: out.meta,
     gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
-    versions: versionsAfter(cur, rec.kind, out, rec.way === 'chat'),
+    versions,
+    ...(rec.kind !== 'make' ? { chat: replyChat(cur, rec.kind, rec.way, out, versions) } : {}),
     inspect: { at, issues },
     ...(rec.kind === 'make' ? { notes: rec.notes?.length ? rec.notes : undefined, metaChecked: false } : {}),
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
@@ -490,15 +491,24 @@ export function settle(cur, { site, meta }) {
   return { site: s, meta: cur.blueprint ? carryLegacy({ ...cur, meta }).meta || meta : meta };
 }
 /**
- * 판 기록(최근 10판, 새것이 앞): 새로 만들면 '다시 만들기 전'(있으면)과 'AI가 만든 판', 고치면 고치기 전 판.
- * 직접 고친 것은 화면이 [되돌리기]로, 판 기록은 AI가 바꾸는 큰 걸음만
+ * 버전 기록(lib/versions.js, 최근 20개, 새것이 앞): AI가 만들거나 고친 뒤의 사이트를 맨 위에. 지금 사이트가 기록에 없으면 먼저 '이전 상태'로 남김.
+ * 직접 수정·연수 정보 수정·복원은 화면(Studio)이 같은 함수로 남김
  */
-export function versionsAfter(cur, kind, next, chat = false) {
-  if (kind === 'make') {
-    const before = cur.site ? pushVersion(cur, '다시 만들기 전') : cur.versions || [];
-    return pushVersion({ site: next.site, meta: next.meta, versions: before }, chat ? '쓰던 AI가 만든 버전' : 'AI가 만든 버전');
-  }
-  return pushVersion(cur, kind === 'fix' ? '검수 수정 전' : chat ? '쓰던 AI로 수정 전' : 'AI 수정 전');
+export function versionsAfter(cur, kind, next, chat = false, request = '') {
+  return recordVersion(cur, next, { kind: kind === 'make' ? 'make' : kind === 'fix' ? 'fix' : chat ? 'chat' : 'ai', label: aiVersionLabel(kind, { chat, request }) });
+}
+/** 고친 뒤 바뀐 곳: 섹션(id·이름) + 다른 쪽(.html) 파일 */
+export function changedSections(a = {}, b = {}) {
+  const before = new Map(extractSections(a['index.html'] || '').map((s) => [s.id || s.title, s.html]));
+  const out = [];
+  for (const s of extractSections(b['index.html'] || '')) { const k = s.id || s.title; if (before.get(k) !== s.html) out.push({ id: s.id || '', name: String(s.title || s.id || '').slice(0, 40) }); }
+  for (const k of Object.keys(b)) if (k !== 'index.html' && /\.html?$/i.test(k) && a[k] !== b[k]) out.push({ id: '', name: k });
+  return out.filter((x) => x.name);
+}
+/** AI가 고친 뒤 대화에 붙일 답(무엇을 했고 어디가 바뀌었는지, 그 결과 버전) */
+export function replyChat(cur, kind, way, next, versions) {
+  const css = (site) => Object.keys(site || {}).filter((k) => /\.css$/i.test(k)).map((k) => site[k]).join('\n');
+  return addChat(cur, aiReply({ kind, way, versionId: versions?.[0]?.id || '', changed: changedSections(cur.site || {}, next.site || {}), design: css(cur.site) !== css(next.site), meta: JSON.stringify(cur.meta?.sessions || null) !== JSON.stringify(next.meta?.sessions || null) || (cur.meta?.title || '') !== (next.meta?.title || '') }));
 }
 export function notifySaved(pid, at) {
   try { if (typeof dispatchEvent === 'function') dispatchEvent(new CustomEvent('lecpage:gen-saved', { detail: { pid, at } })); } catch { /* 알림만 못 함 */ }

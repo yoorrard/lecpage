@@ -12,8 +12,8 @@ async function openShare(p) {
   await p.click('.ai-nokey button:has-text("쓰던 ChatGPT로")');
   await p.fill('#chat-way textarea', ANSWER);
   await p.click('#chat-way button:has-text("이 답으로 만들기")');
-  await p.waitForSelector('#panel-info button:has-text("이 정보가 맞아요")', { timeout: 30000 });
-  await p.click('#panel-info button:has-text("이 정보가 맞아요")');
+  await p.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 30000 });
+  await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")');
   await p.waitForSelector('.publish', { timeout: 30000 });
 }

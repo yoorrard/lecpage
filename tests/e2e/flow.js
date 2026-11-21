@@ -1,5 +1,5 @@
 // 새 흐름 e2e(PC 1366): 교재 넣기 → AI 고르기(Claude 키, 진짜 생성 파이프라인 + 가짜 Claude 스트림) → 만드는 중(목록·미리보기 없음) → 완성
-// → 연수 정보 확인·글 고치기·섹션 순서(↓·끌기)·숨기기·그림 바꾸기·수정 요청·검수·되돌리기·판 기록 → 배포(가짜 Vercel)
+// → 한 화면(연수 정보 확인·글 고치기·섹션 순서(↓·끌기)·숨기기·그림 바꾸기·AI 수정 대화·되돌리기·버전 기록) → 배포(가짜 Vercel)
 const L = require('./lib.js');
 const H = require('./h2.js');
 const W = Number(process.env.W || 1366), HH = Number(process.env.H || 860);
@@ -39,19 +39,20 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   // ④ 완성
   await L.waitStudio(p);
   const pid = L.pidOf(p);
-  L.ok('studio: opened on info tab (confirm once)', await p.locator('#tab-info[aria-selected="true"]').count() === 1);
+  L.ok('studio: one screen (info card + files + chat composer, no tabs)', await p.locator('.st-info.is-todo').count() === 1 && await p.locator('.st-files').count() === 1 && await p.locator('.st-compose textarea').count() === 1 && await p.locator('[role=tablist]').count() === 0);
   await noScroll(p, 'studio');
   await p.screenshot({ path: L.OUT + `${tag}-03-studio.png` });
   const frame = p.frameLocator('.pv-device iframe');
   L.ok('studio: preview shows assembled site with kit', await frame.locator('.lpk').count() >= 3, String(await frame.locator('.lpk').count()));
   // 연수 정보: 제목 바꾸면 사이트 글도
-  const t0 = await p.inputValue('#panel-info .form-grid input.input >> nth=0');
-  await p.fill('#panel-info .form-grid input.input >> nth=0', '우리 반 데이터 연수'); await p.keyboard.press('Tab');
+  await p.click('.st-info .st-card-h button:has-text("수정")');
+  const t0 = await p.inputValue('.st-info-form .form-grid input.input >> nth=0');
+  await p.fill('.st-info-form .form-grid input.input >> nth=0', '우리 반 데이터 연수'); await p.keyboard.press('Tab');
   await p.waitForTimeout(900);
   let pr0 = await L.readProject(p, pid);
   L.ok('info: title change updates meta + same text in site', pr0.meta.title === '우리 반 데이터 연수' && /<title>우리 반 데이터 연수<\/title>/.test(pr0.site['index.html']), t0);
-  L.ok('info: fact page shown', /쪽에서 찾았어요/.test(await p.locator('#panel-info').innerText()));
-  await p.click('#panel-info button:has-text("이 정보가 맞아요")');
+  L.ok('info: fact page shown', /쪽에서 찾았어요/.test(await p.locator('.st-info').innerText()));
+  await p.click('.st-info button:has-text("이 정보가 맞아요")');
   // 글 고치기(미리보기에서 바로)
   await p.click('.pv-bar button:has-text("글 수정")');
   await frame.locator('main p[data-lpe]').first().click(); await p.keyboard.press('End'); await p.keyboard.type(' 함께 해요.'); await p.keyboard.press('Enter');
@@ -71,7 +72,7 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   } else L.ok('image: site has an image', false);
   await p.click('.pv-bar button:has-text("글 수정 중")');
   // 목록: ↓, 끌기, 숨기기
-  await p.click('#tab-list');
+  await p.click('.st-fold summary:has-text("섹션")');
   const names = async () => p.locator('.sec2-name .ttl').allInnerTexts();
   const n0 = await names();
   await p.click('.sec2 >> nth=1 >> button[aria-label$="아래로"]'); await p.waitForTimeout(300);
@@ -91,23 +92,19 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   pr = await L.readProject(p, pid);
   L.ok('undo: hide reverted', hiddenN(pr.site['index.html']) === h0);
   // 수정 요청(키): 섹션 하나
-  await p.click('#tab-ask');
-  await p.selectOption('#panel-ask select', 'hero'); const askId = await p.inputValue('#panel-ask select');
-  await p.fill('#panel-ask textarea', '카드마다 예시 한 줄을 더해 줘');
-  await p.click('#panel-ask button:has-text("AI로 수정")');
-  await p.waitForSelector('.ai-job:has-text("요청대로 고치고")', { timeout: 10000 });
+  await p.selectOption('.st-compose select[aria-label="고칠 곳"]', 'hero'); const askId = await p.inputValue('.st-compose select[aria-label="고칠 곳"]');
+  await p.fill('.st-compose textarea', '카드마다 예시 한 줄을 더해 줘');
+  await p.click('.st-compose button:has-text("보내기")');
+  await p.waitForSelector('.st-bubble.is-working', { timeout: 10000 });
   await p.screenshot({ path: L.OUT + `${tag}-06-ask-running.png` });
   await H.toastHas(p, /요청한 대로 고쳤어요/, 30000); await p.waitForTimeout(1200);
   L.ok('ask: section edited by AI (가짜 Claude의 수정 답)', (await frame.locator('#' + askId).innerText()).includes('제미나이로 20분 만에'), askId);
-  // 검수
-  await p.click('#tab-check'); await p.waitForSelector('#panel-check .issues, #panel-check .notice', { timeout: 15000 });
-  await p.screenshot({ path: L.OUT + `${tag}-07-check.png` });
-  const ni = await p.locator('#panel-check .issue').count();
-  console.log('issues:', ni, (await p.locator('#panel-check .issue').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ')).join(' | '));
-  L.ok('check: ran inspect', ni >= 0);
+  L.ok('ask: reply in conversation with changed section', /요청대로 고쳤어요/.test(await p.locator('.st-msg.is-ai').last().innerText()) && /첫 화면/.test(await p.locator('.st-msg.is-ai').last().innerText()));
+  L.ok('check: no inspection tab, only serious issues line', await p.locator('#tab-check, #panel-check').count() === 0);
+  await p.screenshot({ path: L.OUT + `${tag}-07-chat.png` });
   // 판 기록
   await p.click('.head-tools button:has-text("버전 기록")'); await p.waitForSelector('dialog[open] .versions li');
-  L.ok('versions: AI made + before edit', (await p.locator('dialog[open] .versions li').count()) >= 2);
+  L.ok('versions: AI made + edits listed, newest first', (await p.locator('dialog[open] .versions li').count()) >= 3 && /AI로 수정/.test(await p.locator('dialog[open] .versions li').first().innerText()));
   await p.screenshot({ path: L.OUT + `${tag}-08-versions.png` });
   await p.keyboard.press('Escape');
   // 미리보기 다른 화면: QR 안내문

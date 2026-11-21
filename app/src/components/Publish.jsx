@@ -405,8 +405,8 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
       {refused && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
         <b>{refused.pre ? '바로 배포가 받지 않는 내용이 있어 올리지 않았어요.' : '바로 배포가 이 사이트를 받지 않았어요.'}</b>
         <span>{refused.t}</span>
-        <span class="small">검수에서 [AI로 수정]을 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
-        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>검수에서 수정</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
+        <span class="small">수정 화면의 꼭 고칠 곳에서 [AI로 수정]을 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
+        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>수정하러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
       </div></div>}
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); run(); }} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}

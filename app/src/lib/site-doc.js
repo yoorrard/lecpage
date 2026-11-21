@@ -2,6 +2,8 @@
 // 목록 = 사이트의 맨 바깥 <section>(순서·숨기기·지우기·이름), 글 고치기 = 미리보기에서 누른 글(번호로 찾음), 그림 바꾸기, 색·글꼴(--lp-* 변수).
 // 미리보기에는 원본 사본에 번호(data-lpe 글, data-lps 섹션)를 붙여 조립하고, 고친 내용은 같은 순서로 걸어 원본의 같은 자리에 씀.
 
+import { parseIso, swapDate, swapTimeRange } from './date-text.js';
+
 export const parse = (html) => new DOMParser().parseFromString(String(html || ''), 'text/html');
 export function serialize(doc) {
   const dt = doc.doctype ? '<!doctype html>\n' : '';
@@ -185,6 +187,45 @@ export function replaceText(html, from, to) {
     for (let t = w.nextNode(); t; t = w.nextNode()) {
       if (t.parentElement?.closest('script,style')) continue;
       if (t.textContent.includes(a)) { t.textContent = t.textContent.split(a).join(b); n++; }
+    }
+    return n > 0;
+  });
+}
+
+/**
+ * 연수 날짜·시간을 바꾸면 사이트에 적힌 같은 날짜·시간도 같은 꼴로(date-text.js): 쪽(.html)의 글과 datetime·data-* 같은 속성,
+ * 스크립트(인라인·.js 파일)의 2026-12-03·2026/12/03 꼴(남은 날 세기 같은 코드). before·after: { date, start, end }. 바뀐 것이 없으면 site 그대로
+ */
+export function replaceSchedule(site, before = {}, after = {}) {
+  const dateOn = !!(parseIso(before.date) && parseIso(after.date) && before.date !== after.date);
+  const timeOn = !!(before.start && before.end && after.start && after.end && (before.start !== after.start || before.end !== after.end));
+  if (!site || (!dateOn && !timeOn)) return site;
+  const txt = (s) => { let v = s; if (dateOn) v = swapDate(v, before.date, after.date); if (timeOn) v = swapTimeRange(v, [before.start, before.end], [after.start, after.end]); return v; };
+  const slash = (d) => d.replace(/-/g, '/');
+  const iso = (s) => (dateOn ? String(s).split(before.date).join(after.date).split(slash(before.date)).join(slash(after.date)) : s);
+  let out = site;
+  for (const [k, v] of Object.entries(site)) {
+    if (typeof v !== 'string') continue;
+    const n = /\.html?$/i.test(k) ? scheduleDoc(v, txt, iso) : /\.m?js$/i.test(k) ? iso(v) : v;
+    if (n !== v) { if (out === site) out = { ...site }; out[k] = n; }
+  }
+  return out;
+}
+const ATTR_DATE = /^(datetime|content|title|aria-label|alt|value|data-[\w-]+)$/i;
+function scheduleDoc(html, txt, iso) {
+  return edit(html, (doc) => {
+    let n = 0;
+    const w = doc.createTreeWalker(doc.documentElement, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) {
+      if (t.parentElement?.closest('style')) continue;
+      const v = t.parentElement?.closest('script') ? iso(t.textContent) : txt(t.textContent);
+      if (v !== t.textContent) { t.textContent = v; n++; }
+    }
+    for (const el of doc.querySelectorAll('*')) {
+      for (const a of [...el.attributes]) {
+        if (!ATTR_DATE.test(a.name)) continue;
+        const v = txt(a.value); if (v !== a.value) { el.setAttribute(a.name, v); n++; }
+      }
     }
     return n > 0;
   });

@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { projects } from '../db.js';
 import { uid } from '../util.js';
-import { startJob, resumeJob, stopJob, forgetJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, versionsAfter, settle } from './job.js';
+import { startJob, resumeJob, stopJob, forgetJob, currentView, liveView, onJobChange, resumeIfOrphaned, inspectSite, notifySaved, versionsAfter, replyChat, settle } from './job.js';
 import { chatDb } from './store.js';
 import * as P from './prompts.js';
 import { parseChatAnswer, extractHtml, extractSections, extractCss, replaceSections, stitch, htmlCut, trimCss } from './parse.js';
@@ -109,7 +109,7 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
   // 받는 중이던 조각은 같은 일(새로 만들기 / 같은 곳 고치기)의 것만 이어 붙임
   const st = (edit ? st0.mode === 'edit' && (st0.target || 'all') === want : st0.mode !== 'edit') ? st0 : { pid, partial: '' };
   const fresh = /<!doctype\s+html|<html[\s>]/i.test(text);
-  const keep = (partial) => chatDb.put({ pid, mode: edit ? 'edit' : 'make', target: want, partial, at: Date.now() }).catch(() => { });
+  const keep = (partial) => chatDb.put({ pid, mode: edit ? 'edit' : 'make', target: want, request: st0.request || '', partial, at: Date.now() }).catch(() => { });
 
   // 수정 요청의 답: 섹션만 갈아 끼움(문서 전체가 오면 아래 '새 사이트'로 받되 고치기 전 판을 남김)
   if (edit && !(fresh && !st.partial)) {
@@ -129,7 +129,7 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
     const site = { ...p.site, 'index.html': replaceSections(p.site['index.html'], secs).html };
     if (c.css && !/<[a-zA-Z]/.test(c.css)) site['assets/style.css'] = `${p.site['assets/style.css'] || ''}\n\n/* 수정 요청 */\n${c.cut ? trimCss(c.css) : c.css}`;
     const meta = { ...(p.meta || {}), theme: { ...(p.meta?.theme || {}), ...themeFromCss(site['assets/style.css'] || ''), ...(c.css ? themeFromCss(c.css) : {}) } };
-    const saved = await saveSite(pid, site, meta, 'edit');
+    const saved = await saveSite(pid, site, meta, 'edit', [], st0.request);
     await chatDb.del(pid).catch(() => { });
     return { ok: true, site: saved.site, meta: saved.meta, problems: [], issues: saved.issues };
   }
@@ -146,8 +146,8 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
   // 고친 사이트 전체가 오면 지금 사이트의 다른 파일(JS·다른 쪽)은 그대로 두고 받은 것만 바꿈
   const site = { ...(edit ? p.site : {}), 'index.html': html, ...(css ? { 'assets/style.css': css } : {}) };
   const titleTag = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || '';
-  // 고친 사이트 전체가 왔는데 연수 정보가 없으면 지금 연수 정보를 그대로(새로 만들 때만 제목으로 시작)
-  const raw = a.meta || (edit ? { ...(p.meta || {}) } : { title: titleTag.trim() });
+  // 고친 사이트 전체가 오면 지금 연수 정보가 먼저(강사가 연수 정보에서 고친 날짜·장소를 AI 답이 덮지 않게). 새로 만들 때는 답의 것(없으면 제목으로 시작)
+  const raw = edit ? { ...(a.meta || {}), ...(p.meta || {}) } : a.meta || { title: titleTag.trim() };
   if (!raw.title && titleTag) raw.title = titleTag.trim();
   const r = readMeta({ ...raw, theme: { ...(raw.theme || {}), ...themeFromCss(css) } }, { prev: p.meta });
   const problems = [
@@ -156,26 +156,27 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
     ...r.warnings.filter((w) => w.code !== 'teacher-value' && w.code !== 'title-empty').slice(0, 3).map((w) => w.message_ko),
   ];
   if (!edit) await preparePageImages(pid, p, {}).catch(() => null); // 답이 교재 쪽 그림(material/p-NNN.webp)을 쓸 수 있게
-  const saved = await saveSite(pid, site, r.meta, edit ? 'edit' : 'make', problems);
+  const saved = await saveSite(pid, site, r.meta, edit ? 'edit' : 'make', problems, st0.request);
   await chatDb.del(pid).catch(() => { });
   return { ok: true, site: saved.site, meta: saved.meta, problems, issues: saved.issues };
 }
 
 /** 쓰던 AI 창의 답으로 받은 사이트를 저장(판 기록·검수 결과와 함께) → { issues } */
-async function saveSite(pid, site0, meta0, kind, notes = []) {
+async function saveSite(pid, site0, meta0, kind, notes = [], request = '') {
   const p = await projects.get(pid);
   const { site, meta } = settle(p || {}, { site: site0, meta: meta0 });
   const { issues } = await inspectSite(pid, site, meta, p);
   remember(pid, issues);
   const at = Date.now();
-  const out = await projects.patch(pid, (cur) => ({
+  const out = await projects.patch(pid, (cur) => { const versions = versionsAfter(cur, kind, { site, meta }, true, request); return {
     v: 2, site, meta,
     gen: { jobId: 'chat-' + uid(6), status: 'done', way: 'chat', provider: '', model: '', at, kind },
-    versions: versionsAfter(cur, kind, { site, meta }, true),
+    versions,
+    ...(kind !== 'make' ? { chat: replyChat(cur, kind, 'chat', { site, meta }, versions) } : {}),
     inspect: { at, issues },
     ...(kind === 'make' ? { notes: notes.length ? notes : undefined, metaChecked: false } : {}),
     ...(cur.stage === 1 || !cur.stage ? { stage: 2 } : {}),
-  }));
+  }; });
   if (out) notifySaved(pid, out.updatedAt);
   return { site, meta, issues };
 }
@@ -195,7 +196,7 @@ export async function chatEditPrompt(pid, { target = 'all', request = '' } = {})
   const html = p?.site?.['index.html'] || '';
   const all = extractSections(html);
   if (!all.length && !html) return '';
-  await chatDb.put({ pid, mode: 'edit', target, partial: '', at: Date.now() }).catch(() => { });
+  await chatDb.put({ pid, mode: 'edit', target, request: String(request || '').slice(0, 400), partial: '', at: Date.now() }).catch(() => { });
   return P.buildChatEditPrompt({ request, target, site: p?.site || {} });
 }
 

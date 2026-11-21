@@ -23,7 +23,7 @@ async function aiAnswer(body) {
   let text = '';
   if (step === 'build') text = SITE.buildAnswer();
   else if (step === 'fix') text = SITE.fixAnswer([...new Set([...all.matchAll(/<section id="([\w-]+)"/g)].map((x) => x[1]))]);
-  else if (step === 'edit') text = /lecpage 검수에서/.test(all) ? SITE.fixAnswer([...new Set([...all.matchAll(/<section id="([\w-]+)"/g)].map((x) => x[1]))]) : SITE.editAnswer();
+  else if (step === 'edit') text = /lecpage 검수에서/.test(all) ? SITE.fixAnswer([...new Set([...all.matchAll(/<section id="([\w-]+)"/g)].map((x) => x[1]))]) : SITE.editAnswer((/강사 요청:\n([^\n]+)/.exec(all) || [])[1] || '');
   const ev = (type, o) => `event: ${type}\ndata: ${JSON.stringify({ type, ...o })}\n\n`;
   return ev('message_start', { message: { usage: { input_tokens: 1 } } }) + ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text } }) + ev('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }) + ev('message_stop', {});
 }
@@ -83,7 +83,7 @@ async function connectAi(p) {
 const connectGemini = connectAi;
 
 /** 만드는 중 화면이 끝나고 완성 화면(목록)이 열릴 때까지 */
-async function waitStudio(p, timeout = 60000) { await p.waitForSelector('.workspace .ws-panel [role=tablist]', { timeout }); await p.waitForSelector('.pv-device iframe', { timeout: 30000 }); await p.waitForTimeout(600); }
+async function waitStudio(p, timeout = 60000) { await p.waitForSelector('.st .st-panel .st-info', { timeout }); if ((p.viewportSize()?.width || 1366) > 960) await p.waitForSelector('.pv-device iframe', { timeout: 30000 }); await p.waitForTimeout(600); }
 
 /** IndexedDB의 그 연수 */
 async function readProject(p, id) {

@@ -128,8 +128,21 @@ async function assembleWork(h, work, extra = {}) {
   const prevPath = join(work, 'lecpage.teacher.json'); // 강사 값(공개 범위·주소·참여 서버): CLI가 따로 둠
   const prev = existsSync(prevPath) ? readJson(prevPath) : null;
   let material = null; try { material = { pages: JSON.parse(readFileSync(join(work, '.lecpage', 'pages.json'), 'utf8')) }; } catch { /* 없음 */ }
-  const r = K.assemble(site, metaRaw, { runtime: N.nodeRuntime(), prev, today: h.args.today, material, ...(extra.host ? { host: extra.host } : {}) });
+  const r = K.assemble(site, metaRaw, { runtime: N.nodeRuntime(), prev, today: h.args.today, material, materials: unlistedFiles(site), ...(extra.host ? { host: extra.host } : {}) });
   return { K, site, metaRaw, prev, r };
+}
+/**
+ * site/files/(또는 assets/files/)에 넣었는데 사이트 어디에도 걸지 않은 파일 → 자료실 목록(앱의 [자료 추가]와 같음).
+ * 자료실 자리 표시(data-lp="materials")가 있으면 거기에, 없으면 키트가 첫 쪽 끝에 자료 칸을 붙여 참가자가 받을 수 있게 함
+ */
+export function unlistedFiles(site = {}) {
+  const used = Object.entries(site).filter(([, v]) => typeof v === 'string').map(([, v]) => v).join('\n');
+  const kb = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1e3))}KB`);
+  return Object.keys(site).filter((p) => /^(assets\/)?files\/[^/]+$/.test(p) && !used.includes(p) && !used.includes(encodeURI(p))).sort().map((p) => {
+    const name = p.split('/').pop(); const ext = (/\.([a-z0-9]+)$/i.exec(name) || [])[1] || '';
+    const v = site[p];
+    return { title: name.replace(/\.[^.]+$/, ''), href: p, kind: ext.toUpperCase(), size: kb(typeof v === 'string' ? v.length : v?.byteLength || v?.length || 0) };
+  });
 }
 const relp = (a, b) => relative(a, b) || '.';
 

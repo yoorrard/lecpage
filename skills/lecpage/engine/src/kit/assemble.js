@@ -450,9 +450,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
     case 'materials': {
       const j = W.jsonAttr(attr(t, 'data-items'));
       if (j.error) warn('materials-json', `${where}의 data-items를 JSON으로 읽지 못했어요(${j.error}).`);
-      const items = [...(Array.isArray(j.value) ? j.value : []), ...(n === 1 ? ctx.materials : [])].filter((m) => m && typeof m === 'object').slice(0, 60).map((m) => ({
-        title: String(m.title || m.name || '').trim().slice(0, 100), href: safeHref(m.href || m.url || ''), desc: String(m.desc || '').trim().slice(0, 200), kind: String(m.kind || '').toUpperCase().slice(0, 8), size: String(m.size || '').slice(0, 20),
-      })).filter((m) => m.title);
+      const items = normMaterials([...(Array.isArray(j.value) ? j.value : []), ...(n === 1 ? ctx.materials : [])]);
       col.materials.push(...items);
       return { html: W.materialsBox(items, { inner, host: ctx.words.host }) };
     }
@@ -475,10 +473,17 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
   }
 }
 /** 자료 주소: http(s)·사이트 안 상대 경로만 */
+/** 자료실 목록 꼴 맞추기: [{ title, href, desc, kind, size }] (60개까지, 이름 없는 것 빼기) */
+function normMaterials(list = []) {
+  return list.filter((m) => m && typeof m === 'object').slice(0, 60).map((m) => ({
+    title: String(m.title || m.name || '').trim().slice(0, 100), href: safeHref(m.href || m.url || ''), desc: String(m.desc || '').trim().slice(0, 200), kind: String(m.kind || '').toUpperCase().slice(0, 8), size: String(m.size || '').slice(0, 20),
+  })).filter((m) => m.title);
+}
 function safeHref(v) {
   const s = String(v || '').trim();
   if (/^https?:\/\//i.test(s)) { try { return new URL(s).href; } catch { return ''; } }
-  if (/^(?:assets\/)?files\/[^\s"'<>]+$/.test(s) && !s.includes('..')) return s;
+  // 자료실 파일: 이름의 빈칸은 %20으로(활동지 1.pdf처럼 강사가 올린 이름 그대로 받게)
+  if (/^(?:assets\/)?files\/[^"'<>\n\r\t]+$/.test(s) && !s.includes('..')) return s.replace(/ /g, '%20');
   return '';
 }
 function nowHtml(ctx) {
@@ -594,6 +599,15 @@ export function assemble(site, meta0, opts = {}) {
   const expanded = {};
   for (const p of pages) expanded[p] = expandPage(cleaned[p].html, p, ctx, col, warn);
   col.tools = externalTools(Object.values(expanded));
+  // 강사가 올린 자료(opts.materials: 앱의 [자료 추가]·교재 원본)인데 사이트에 자료실 자리 표시가 없으면: 첫 쪽 <main> 끝에 자료실 칸을 붙임
+  // (참가자가 꼭 받을 수 있게. 자리를 옮기려면 AI가 <div data-lp="materials"></div>를 원하는 곳에 넣으면 그 자리로 감). 런타임이 연수 중 더한 자료도 이 칸 아래에 그림
+  if (ctx.materials.length && !col.count.materials && pages.includes('index.html')) {
+    const items = normMaterials(ctx.materials);
+    if (items.length) {
+      col.materials.push(...items);
+      col.autoMaterials = `<section class="lp-sec lp-sec-materials" id="lpk-files" data-layout="files" data-frame="plain"><div class="lp-wrap"><header class="lp-head"><h2 class="lp-h2">${escHtml(words.materials || '자료')}</h2></header>${W.materialsBox(items, { host: words.host })}</div></section>`;
+    }
+  }
 
   // 기능과 자리 표시가 맞는지
   for (const [feat, has, label] of [['qa', col.qa, '질문'], ['board', col.board.length, '보드'], ['survey', col.survey.length, '설문'], ['deck', col.deck.length, '교재 넘기기'], ['attendance', col.attend, '출석']]) {
@@ -731,7 +745,7 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
     edits.push({ start: body.start, end: body.end, text: (Object.keys(set).length ? rewriteOpen(body, { set }) : s.slice(body.start, body.end)) + (col.nowPlaced ? '' : `\n<div class="lpk lpk-now">${nowHtml(ctx)}</div>`) });
   }
   // 키트가 연수 중에 더하는 칸 자리: <main> 끝(없으면 키트 부품 앞)
-  const extra = '<div class="lpk lpk-extra" data-lp-extra></div>';
+  const extra = `<div class="lpk lpk-extra" data-lp-extra>${page === 'index.html' && col.autoMaterials ? col.autoMaterials : ''}</div>`;
   if (mainEnd) edits.push({ start: mainEnd.start, end: mainEnd.start, text: extra });
   const f = ctx.dock;
   const chrome = [

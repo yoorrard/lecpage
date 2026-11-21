@@ -29,7 +29,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('demo: reference site shown', /기록은 쌓였는데|생성형 AI로|질문이 먼저/.test(await fr.locator('h1').first().innerText()));
   L.ok('demo: page image used', await fr.locator('img[src^="data:image"]').count() >= 1);
   await p.screenshot({ path: L.OUT + `${tag}-demo-03-studio.png` });
-  await p.click('#panel-info button:has-text("이 정보가 맞아요")');
+  await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")');
   await p.waitForSelector('.demo-pub button:has-text("배포 연습하기")', { timeout: 20000 });
   L.ok('demo: real share checklist kept', await p.locator('.ready-i').count() >= 3);
@@ -60,13 +60,16 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('chat: sections got ids', /id="hello"/.test(pr.site['index.html']));
   await p.screenshot({ path: L.OUT + `${tag}-chat-03-studio.png` });
   // 수정 요청(쓰던 앱): 요청 글 → 답의 섹션만 갈아 끼움
-  await p.click('#tab-ask');
-  await p.selectOption('#panel-ask select', { label: '질문' });
-  await p.fill('#panel-ask textarea', '질문 칸 위에 안내 한 줄을 더해 줘');
-  if (await p.locator('#panel-ask .seg button:has-text("쓰던 AI로")').count()) await p.click('#panel-ask .seg button:has-text("쓰던 AI로")');
-  await p.fill('#panel-ask textarea[aria-label="AI의 답"]', '```html\n<section id="ask" data-title="질문"><h2>질문</h2><p>편하게 물어보세요.</p><div data-lp="qa"></div></section>\n```');
-  await p.click('#panel-ask button:has-text("이 답으로 수정")'); await p.waitForTimeout(1200);
-  L.ok('chat edit: section replaced', /편하게 물어보세요/.test((await L.readProject(p, pid)).site['index.html']));
+  await p.selectOption('.st-compose select[aria-label="고칠 곳"]', { label: '질문' });
+  if (await p.locator('.st-compose select[aria-label="보낼 곳"]').count()) await p.selectOption('.st-compose select[aria-label="보낼 곳"]', 'chat');
+  await p.fill('.st-compose textarea', '질문 칸 위에 안내 한 줄을 더해 줘');
+  await p.click('.st-compose button:has-text("보내기")');
+  await p.waitForSelector('.st-chatway textarea[aria-label="AI의 답"]', { timeout: 10000 });
+  await p.fill('.st-chatway textarea[aria-label="AI의 답"]', '```html\n<section id="ask" data-title="질문"><h2>질문</h2><p>편하게 물어보세요.</p><div data-lp="qa"></div></section>\n```');
+  await p.click('.st-chatway button:has-text("이 답으로 수정")'); await p.waitForTimeout(1500);
+  const prc = await L.readProject(p, pid);
+  L.ok('chat edit: section replaced', /편하게 물어보세요/.test(prc.site['index.html']));
+  L.ok('chat edit: request and reply kept in conversation', (prc.chat || []).length === 2 && prc.chat[0].role === 'user' && prc.chat[1].role === 'ai' && await p.locator('.st-log .st-msg').count() === 2, JSON.stringify((prc.chat || []).map((m) => m.role)));
 
   // ── C. 실패 안내 → 이어서 하기 ──
   await L.startWithFile(p);
@@ -110,9 +113,9 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   await q.waitForSelector('dialog[open] .consent', { timeout: 5000 });
   L.ok('local: consent says where it goes', /lecpage 커넥트에서 Anthropic으로/.test(await q.locator('dialog[open] .consent').innerText()));
   L.ok('local: consent once before first use', await L.consent(q));
-  await q.waitForSelector('.making, .workspace', { timeout: 20000 });
+  await q.waitForSelector('.making, .st', { timeout: 20000 });
   L.ok('local: token header sent', bridgeHdr === 'tok-123');
-  L.ok('local: generation via local agent', /Claude Code/.test(await q.locator('.step-head').innerText()) || await q.locator('.workspace').count() === 1);
+  L.ok('local: generation via local agent', /Claude Code/.test(await q.locator('.step-head').innerText()) || await q.locator('.st').count() === 1);
   L.ok('local: no page errors', e2.length === 0, JSON.stringify(e2));
 
   // ── D2. Claude 계정 연결(터미널 없이): 두 로그인 버튼은 같은 모양 · 세 단계 안내(설치 진행 막대 → 브라우저 로그인 → 코드 칸) → 연결되면 바로 만들기 ──
@@ -145,9 +148,9 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   await u.fill('.setup-code input', 'abcd1234#efgh5678');
   await u.screenshot({ path: L.OUT + `${tag}-claude-login.png`, fullPage: true });
   await u.click('.setup-code button:has-text("연결")');
-  await u.waitForSelector('.making, .workspace, .ai-sub button:has-text("Claude로 만들기")', { timeout: 20000 });
+  await u.waitForSelector('.making, .st, .ai-sub button:has-text("Claude로 만들기")', { timeout: 20000 });
   L.ok('claude: code sent to lecpage 커넥트', gotCode === 'abcd1234#efgh5678');
-  L.ok('claude: connected → starts making', await u.locator('.making, .workspace').count() > 0 || await u.locator('.ai-sub button:has-text("Claude로 만들기")').count() === 1);
+  L.ok('claude: connected → starts making', await u.locator('.making, .st').count() > 0 || await u.locator('.ai-sub button:has-text("Claude로 만들기")').count() === 1);
   L.ok('claude: no page errors', e4.length === 0, JSON.stringify(e4));
   await c4.close();
 

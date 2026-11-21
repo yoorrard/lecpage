@@ -5,6 +5,7 @@
 //   새로 고침이 IndexedDB 쓰기를 끊어도 고친 글이 남음. 교재 해석(material)은 크고 교재를 넣을 때만 바뀌어(그때는 몇 초 걸려 다 씀) 뺌
 // docs/interaction.md 9절(자동 저장)
 import { projects } from './db.js';
+import { mergeVersions } from './versions.js';
 
 const KEY = (id) => 'lecpage:unsaved:' + id;
 const DAY = 864e5;
@@ -20,7 +21,9 @@ export function restoreDraft(v) {
   const d = readDraft(v.id);
   if (!d || !d.p) return null;
   if ((v.updatedAt || 0) > (d.base || 0) || Date.now() - (d.at || 0) > 7 * DAY) { dropDraft(v.id); return null; }
-  return { ...v, ...d.p, id: v.id, material: v.material, updatedAt: v.updatedAt };
+  // 버전 기록은 임시본에 맨 위 몇 개만(사이트 전체가 버전마다 있어 크면 localStorage에 못 씀): 저장소의 기록과 합침
+  const { vtop, ...p } = d.p;
+  return { ...v, ...p, ...(vtop ? { versions: mergeVersions(vtop, v.versions) } : {}), id: v.id, material: v.material, updatedAt: v.updatedAt };
 }
 
 /**
@@ -57,7 +60,8 @@ export function makeSaver(id, base, onState) {
     /** 떠날 때: 아직 다 쓰지 못했으면 지금 판의 임시본(동기). cur: 지금 판 전체 */
     stash(cur) {
       if (!dirty || stop || !cur) return;
-      const { material, ...light } = cur;
+      const { material, versions, ...light } = cur;
+      if (Array.isArray(versions)) light.vtop = versions.slice(0, 3);
       try { localStorage.setItem(KEY(id), JSON.stringify({ base, at: Date.now(), p: light })); } catch { /* 저장 공간이 없거나 막힘: 그때는 안내 띠가 이미 떠 있음 */ }
     },
     /** 다른 탭이 고쳤거나 지웠다고 들었을 때: 더 쓰지 않음 */
