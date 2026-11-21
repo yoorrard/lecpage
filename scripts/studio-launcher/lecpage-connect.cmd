@@ -94,6 +94,6 @@ try {
 } catch {
   Say ''
   Say "문제가 생겼어요: $($_.Exception.Message)"
-  Say '인터넷 연결을 확인하고 이 파일을 다시 실행해 주세요. 계속 안 되면 lecpage.com 도움말의 [쓰던 AI로]로 만들 수 있어요.'
+  Say "인터넷 연결을 확인하고 이 파일을 다시 실행해 주세요. 계속 안 되면 lecpage.com의 '다른 방법'(API 키)으로 만들 수 있어요."
   exit 1
 }

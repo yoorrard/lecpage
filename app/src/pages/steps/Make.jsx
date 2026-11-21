@@ -29,7 +29,7 @@ function useNow(on) {
 /** 오류 안내의 단추(생성 쪽 error.actions) → 할 일. 예전에 저장된 'paste'(쓰던 AI 창, 지금은 없음)는 보이지 않음 */
 export function errorActions(p, job, go) {
   const prov = PROVIDERS[job.provider] || {};
-  const LABEL = { resume: '계속 만들기', connect: '다른 AI 선택', key: '키 페이지 열기', billing: '결제 페이지 열기', link: job.error?.link?.label || '확인 페이지 열기' };
+  const LABEL = { resume: job.error?.kind === 'gone' ? '다시 만들기' : '계속 만들기', connect: '다른 AI 선택', key: '키 페이지 열기', billing: '결제 페이지 열기', link: job.error?.link?.label || '확인 페이지 열기' };
   const HREF = { key: prov.keyUrl, billing: prov.billingUrl, link: job.error?.link?.href };
   const run = (id) => (id === 'resume' ? resumeGeneration(p.id) : go(1));
   return (job.error?.actions || []).filter((id) => LABEL[id] && (!(id in HREF) || HREF[id])).map((id) => ({ id, label: LABEL[id], href: HREF[id] || '', run: () => run(id) }));

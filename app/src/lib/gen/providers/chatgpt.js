@@ -7,12 +7,18 @@ import { AiError, watchdog, readSSE } from './common.js';
 import { openaiContent } from './openai.js';
 import { bridgeRaw } from '../local.js';
 
-/** PC 프로그램·OpenAI의 거절 → AiError. 요금제 오류 코드는 공식 문서의 회복 방법대로 */
+/**
+ * PC 프로그램·OpenAI의 거절 → AiError. 요금제 오류 코드는 공식 문서의 회복 방법대로.
+ * lecpage 커넥트 자신의 거절(짝 맞춤 토큰이 다름 401 'token' · 새 판으로 바꾸는 중 503 'updating')은 ChatGPT 로그인과 나눔:
+ * '다시 로그인'은 커넥트가 not-connected라고 하거나 OpenAI가 401을 줄 때만
+ */
 export function chatgptError(status, j = {}) {
   const code = String(j.code || j.error || '');
   const msg = String(j.message_ko || j.message || j.detail || code || `http ${status}`).slice(0, 300);
   let kind;
-  if (code === 'subscription_sharing_usage_limit_exceeded') kind = 'chatgpt-limit'; // 다시 보내지 않음(사용량 화면 안내)
+  if (code === 'token' && status === 401) kind = 'pc-pair';
+  else if (code === 'updating') kind = 'updating';
+  else if (code === 'subscription_sharing_usage_limit_exceeded') kind = 'chatgpt-limit'; // 다시 보내지 않음(사용량 화면 안내)
   else if (code === 'subscription_sharing_user_not_eligible' || code === 'no-plan-scope') kind = 'chatgpt-plan';
   else if (code === 'not-connected' || code === 'subscription_sharing_invalid_user' || status === 401) kind = 'chatgpt-login';
   else if (/^subscription_sharing_(usage|user)_unavailable$/.test(code) || code === 'refresh' || status === 503) kind = 'busy';

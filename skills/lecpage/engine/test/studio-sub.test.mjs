@@ -290,3 +290,101 @@ test('터미널 창을 못 열면(화면 없는 리눅스) 이 프로그램 안�
     } finally { await st.close(); }
   });
 });
+
+test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.com·예비 주소)로만 보내고 토큰은 # 뒤 · 틀·fetch는 거절 · 예비 주소 출처도 /bridge/*(토큰은 그대로)', async () => {
+  const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 'pair2-')) });
+  const pair = (app, headers = {}) => req(st.port, 'GET', '/pair' + (app === undefined ? '' : '?app=' + encodeURIComponent(app)), { headers });
+  const nav = { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'cross-site' };
+  const frag = `#pair=${st.S.token}&port=${st.port}`;
+  try {
+    assert.ok(St.APP_ORIGINS.includes('https://yoorrard.github.io') && St.allowedOrigins('http://127.0.0.1:6600').has('https://yoorrard.github.io'));
+    assert.ok(!St.allowedOrigins('http://127.0.0.1:6600').has('http://yoorrard.github.io'));
+    const r = await pair('https://lecpage.com/', nav);
+    assert.equal(r.status, 302); assert.equal(r.headers.location, `https://lecpage.com/${frag}`);
+    assert.equal(r.headers['access-control-allow-origin'], undefined, 'CORS 없음(다른 사이트가 이동할 곳을 읽지 못함)'); assert.equal(r.headers['cache-control'], 'no-store'); assert.equal(r.headers['referrer-policy'], 'no-referrer');
+    assert.equal((await pair('https://yoorrard.github.io/lecpage/', nav)).headers.location, `https://yoorrard.github.io/lecpage/${frag}`);
+    assert.equal((await pair(undefined)).headers.location, `https://lecpage.com/${frag}`, '앱 주소가 없으면 켤 때 여는 곳');
+    for (const bad of ['https://evil.example/', 'http://yoorrard.github.io/lecpage/', `http://127.0.0.1:${st.port}/`, 'https://lecpage.com.evil.example/', 'https://u:p@lecpage.com/', 'javascript:alert(1)']) assert.equal((await pair(bad, nav)).status, 400, bad);
+    assert.equal((await pair('https://lecpage.com/', { 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate' })).status, 403, '틀 안에서는 안 됨');
+    assert.equal((await pair('https://lecpage.com/', { 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors', origin: 'https://lecpage.com' })).status, 403, 'fetch로는 안 됨');
+    assert.equal((await pair('https://lecpage.com/', { ...nav, host: `evil.example:${st.port}` })).status, 421, 'DNS 리바인딩');
+    const s = await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': st.S.token, origin: 'https://yoorrard.github.io', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(s.status, 200); assert.equal(s.headers['access-control-allow-origin'], 'https://yoorrard.github.io');
+    assert.equal(s.json().limits.twinPdf, true);
+    // 짝 없는 브라우저: 토큰 없이 부르면 401 token(허용한 출처는 읽을 수 있게 CORS) → 앱의 [이 브라우저와 연결]이 이것으로 포트를 찾음
+    const u = await req(st.port, 'GET', '/bridge/status', { headers: { origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(u.status, 401); assert.equal(u.json().error, 'token'); assert.equal(u.headers['access-control-allow-origin'], 'https://lecpage.com'); assert.ok(!u.text.includes(st.S.token));
+  } finally { await st.close(); }
+});
+
+test('짝 맞출 앱 주소: lecpage.com이 안 열리고 예비 주소는 열리면 예비 주소 · 둘 다 안 되면(망이 막힘) 그대로 · 평소에는 예비 주소를 묻지 않음', async () => {
+  const asked = [];
+  const fake = (down) => async (u) => { asked.push(String(u)); if (down.includes(new URL(u).host)) throw new TypeError('fetch failed'); return new Response(null, { status: 200 }); };
+  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake([]) }), 'https://lecpage.com');
+  assert.deepEqual(asked, ['https://lecpage.com/']);
+  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake(['lecpage.com']) }), St.MIRROR_APP_URL);
+  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake(['lecpage.com', 'yoorrard.github.io']) }), 'https://lecpage.com');
+  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: async (u) => new Response(null, { status: /github/.test(u) ? 200 : 530 }) }), St.MIRROR_APP_URL, '5xx도 안 열림');
+  assert.equal(await St.pickAppUrl('http://localhost:5173', { fetchImpl: () => assert.fail('묻지 않음') }), 'http://localhost:5173');
+});
+
+test('교재 개수: 원본과 같은 이름의 PDF는 하나로(PPTX 11개 + 만든 PDF 11개 = 11개) · 다른 교재는 20개까지', async () => {
+  const f = (n) => ({ name: n, type: 'application/octet-stream', base64: 'JVBERi0x' });
+  const twins = []; for (let i = 1; i <= 11; i++) twins.push(f(`강의${i}.pptx`), f(`강의${i}.pdf`));
+  const ok = await St.validateJob({ agent: 'claude', files: twins });
+  assert.equal(ok.error, undefined, ok.error); assert.equal(ok.materials.length, 22);
+  const many = []; for (let i = 1; i <= 21; i++) many.push(f(`교재${i}.pdf`));
+  assert.match((await St.validateJob({ agent: 'claude', files: many })).error, /20개까지/);
+  const raw = []; for (let i = 1; i <= 41; i++) raw.push(f(`a${i}.pdf`));
+  assert.match((await St.validateJob({ agent: 'claude', files: raw })).error, /20개까지/);
+  assert.equal(St.materialItems(['a.pptx', 'A.pdf', 'b.docx']), 2);
+});
+
+test('ChatGPT 모델 목록: OpenAI가 잠깐 안 되면(5xx·429) 502·503(다시 로그인 아님) · 401은 한 번 새로 받아 보고도 안 될 때만 not-connected', async () => {
+  const home = mkdtempSync(join(T, 'models-'));
+  const credit = () => writeFileSync(join(home, 'chatgpt.json'), JSON.stringify({ email: 't@example.com', client_id: 'oaiapp_x', access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600, saved_at: new Date().toISOString(), scopes: ['chatgpt.tokens.use.direct'] }));
+  credit();
+  let models = 503; let refresh = 400; const hits = [];
+  const fetchImpl = async (url) => {
+    const u = String(url); hits.push(new URL(u).pathname);
+    if (u.endsWith('/v1/models')) return new Response(models === 200 ? JSON.stringify({ models: [{ slug: 'm1', display_name: 'M1' }] }) : '{}', { status: models, headers: { 'content-type': 'application/json' } });
+    if (u.endsWith('/oauth/token')) return refresh === 200 ? new Response(JSON.stringify({ access_token: 'at-2', refresh_token: 'rt-2', expires_in: 3600 }), { status: 200 }) : new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 });
+    return new Response('', { status: 404 });
+  };
+  const st = await St.startStudio({ port: 0, dist: DIST, home, fetchImpl });
+  const L = { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' };
+  const get = () => req(st.port, 'GET', '/bridge/chatgpt/models', { headers: L });
+  try {
+    let r = await get(); assert.equal(r.status, 503); assert.equal(r.json().error, 'models-unavailable'); assert.match(r.json().message_ko, /잠시 뒤/);
+    models = 429; r = await get(); assert.equal(r.status, 503);
+    models = 404; r = await get(); assert.equal(r.status, 502); assert.equal(r.json().error, 'models-unavailable');
+    models = 200; r = await get(); assert.equal(r.status, 200); assert.deepEqual(r.json().models, [{ id: 'm1', label: 'M1' }]);
+    // 401: 새로 받기(refresh)를 한 번 해 보고, 그것도 안 되면(invalid_grant) not-connected
+    const sw = createSiwc({ home, port: 1, fetchImpl: (u) => { models = 401; return fetchImpl(u); } });
+    hits.length = 0;
+    assert.equal(await sw.models(), null); assert.ok(hits.includes('/api/accounts/oauth/token'), '한 번 새로 받아 봄');
+    // 401인데 새로 받으면 됨 → 다시 불러 목록
+    credit(); refresh = 200; let n = 0;
+    const sw2 = createSiwc({ home, port: 1, fetchImpl: async (url) => { const u = String(url); if (u.endsWith('/v1/models')) return new Response(++n === 1 ? '{}' : JSON.stringify({ models: [{ slug: 'm2' }] }), { status: n === 1 ? 401 : 200 }); return fetchImpl(url); } });
+    assert.deepEqual(await sw2.models(), [{ id: 'm2', label: 'm2' }]);
+  } finally { await st.close(); }
+});
+
+test('Codex가 lecpage가 쓰기엔 예전 판(need install): [업데이트]는 공식 설치 명령으로 새 판 + 로그인(로그인만 하지 않음)', { skip: !posix && 'POSIX만', timeout: 60000 }, async () => {
+  const term = join(T, 'term-codex.log');
+  const fakeTerm = join(T, 'fake-term-codex'); writeFileSync(fakeTerm, `#!/bin/sh\nprintf '%s\\n---\\n' "$1" >> "${term}"\n`); chmodSync(fakeTerm, 0o755);
+  const bin = join(T, 'bin-codex-old'); mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, 'codex'), `#!/bin/sh\nexec "${process.execPath}" "${join(HERE, 'fixtures', 'fake-agent.mjs')}" codex "$@"\n`); chmodSync(join(bin, 'codex'), 0o755);
+  await withEnv({ PATH: `${bin}:/usr/bin:/bin`, LECPAGE_STUDIO_TERMINAL: fakeTerm, FAKE_CODEX_VERSION: '0.100.0', HOME: mkdtempSync(join(T, 'h-cx-')), LOCALAPPDATA: '', APPDATA: '' }, async () => {
+    const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 'cx-old-')) });
+    const H = { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com' };
+    try {
+      const cx = (await req(st.port, 'GET', '/bridge/status?fresh', { headers: H })).json().agents.find((a) => a.id === 'codex');
+      assert.deepEqual([cx.installed, cx.need, cx.ready], [true, 'install', false]); assert.match(cx.note_ko, /\[업데이트\]/);
+      const r = (await req(st.port, 'POST', '/bridge/agents/codex/install', { headers: H, body: {} })).json();
+      assert.equal(r.action, 'install');
+      await new Promise((ok) => setTimeout(ok, 400));
+      assert.match(readFileSync(term, 'utf8'), /curl -fsSL https:\/\/chatgpt\.com\/codex\/install\.sh \| sh && .*codex" login/);
+    } finally { await st.close(); }
+  });
+});
