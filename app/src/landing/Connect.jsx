@@ -1,5 +1,6 @@
 import { useRef } from 'preact/hooks';
 import { useInView } from './motion.js';
+import { Ic } from './icons.jsx';
 
 /**
  * 구독 계정 연결: lecpage.com ⇄ PC 프로그램 ⇄ ChatGPT·Claude 계정. 화면에 들어오면 선을 따라 신호가 흐르고 짝 맞춤·로그인 표시가 켜져요.
@@ -16,11 +17,11 @@ export function Connect() {
         <p>API 키를 따로 만들지 않아요. 작은 프로그램 lecpage 커넥트가 lecpage.com과 저절로 짝을 맞춰요. 내 계정으로 로그인하면 끝이에요. 사용량은 그 계정의 요금제에서 써요.</p>
       </header>
       <div class="ld-conn-map" ref={box}>
-        <div class="ld-node ld-node-web"><span class="ld-node-ic" aria-hidden="true"><i /><i /><i /></span><b>lecpage.com</b><small>교재 넣기 · 미리보기 · 배포</small></div>
+        <div class="ld-node ld-node-web"><span class="ld-node-ic"><Ic n="web" /></span><b>lecpage.com</b><small>교재 넣기 · 미리보기 · 배포</small></div>
         <i class="ld-wire" aria-hidden="true" />
-        <div class="ld-node ld-node-pc"><span class="ld-node-ic" aria-hidden="true" /><b>lecpage 커넥트</b><small class="ld-pair">짝 맞춤 완료</small></div>
+        <div class="ld-node ld-node-pc"><span class="ld-node-ic"><Ic n="plug" /></span><b>lecpage 커넥트</b><small class="ld-pair">짝 맞춤 완료</small></div>
         <i class="ld-wire" aria-hidden="true" />
-        <div class="ld-node ld-node-ai"><b>ChatGPT · Claude</b><small class="ld-login">내 계정으로 로그인</small></div>
+        <div class="ld-node ld-node-ai"><span class="ld-node-ic"><Ic n="user" /></span><b>ChatGPT · Claude</b><small class="ld-login">내 계정으로 로그인</small></div>
       </div>
       <ol class="ld-conn-steps">
         <li><b>lecpage 커넥트 실행</b><span>Windows·Mac·Linux에서 한 번 받아 실행해요.</span></li>

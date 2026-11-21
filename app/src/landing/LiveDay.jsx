@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { isReduced } from './motion.js';
 import { SLIDES, shot } from './showcases.js';
 import { QR, qrPath } from './qr.js';
+import { Ic } from './icons.jsx';
 
 // 강의 당일 장면(대표 사례 '질문이 먼저, AI는 그다음'의 교재 쪽·투표·확인 문제·일정 그대로). pg: SLIDES 순번, ov: 발표 화면에 겹칠 것
 const SCENES = [{ pg: 0, ov: 'qr', att: 6 }, { pg: 1, ov: '', att: 21 }, { pg: 2, ov: 'poll', att: 27 }, { pg: 3, ov: 'timer', att: 28 }, { pg: 5, ov: 'quiz', att: 28 }, { pg: 6, ov: 'notice', att: 28 }];
@@ -88,6 +89,7 @@ export function LiveDay() {
                         : <p class="ld-part-ok">출석했어요 · 13:58</p>}
                 <p class="ld-ask">강사에게 질문하기…</p>
               </div>
+              <p class="ld-part-dock"><span><Ic n="hand" />도움 요청</span><span><Ic n="chat" />질문</span></p>
             </div>
           </figure>
         </div>
