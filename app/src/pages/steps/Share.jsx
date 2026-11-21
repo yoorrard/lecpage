@@ -123,7 +123,7 @@ export function StepShare({ p, update, go }) {
   // 배포할 곳 칸이 화면에 보이는지: 보이면 맨 위 [배포하기]는 강조하지 않음(그 칸의 버튼이 누를 곳), 안 보이면 그 칸으로 데려가는 길이라 강조
   const [hostSeen, setHostSeen] = useState(false);
   useEffect(() => {
-    const el = document.querySelector('.publish'); if (!el || typeof IntersectionObserver !== 'function') return undefined;
+    const el = document.querySelector('.publish .btn-primary.btn-lg') || document.querySelector('.publish'); if (!el || typeof IntersectionObserver !== 'function') return undefined;
     const io = new IntersectionObserver(([e]) => setHostSeen(e.isIntersecting)); io.observe(el); return () => io.disconnect();
   });
   useEffect(() => { instantInfo().then((i) => { setAutoLive(!!i?.live?.url); setInfoSrv(i || null); }); }, []);
@@ -352,7 +352,7 @@ export function StepShare({ p, update, go }) {
     <>
       <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [배포하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'}>
         {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
-        {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${goNow.current || !hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
+        {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${!hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
       {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
@@ -550,7 +550,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
   return (
     <Sheet class="success">
       <div class="success-in">
-        <div class="stack">
+        <div class="stack success-top">
           <div class="row"><Mascot size={48} mood="happy" /><h2 class="h-sub">참가자에게 보낼 주소가 생겼어요</h2></div>
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
           {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{exp?.until ? `${md(exp.until)}까지 열려 있어요. 다시 배포하면 그날부터 ${exp.days}일로 늘어나요.` : `방문이 있는 동안은 계속 열려 있어요. ${days}일 동안 아무도 오지 않으면 지워져요.`}</p> : <OpenState url={url} at={p.deploy.at} />}
@@ -562,6 +562,15 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
+        </div>
+        <div class="qr-side">
+          <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} alt="" /><span class="qr-zoom-t">크게 보기</span></button>
+          <div class="btn-row">
+            <button class="btn btn-sm" onClick={async () => saveFile(safeName(m.title) + '_QR.png', await qrPng(shareUrl), 'image/png')}>QR 저장</button>
+            <button class="btn btn-sm" onClick={async () => toast(await copyQr(shareUrl) ? 'QR 그림을 복사했어요. 발표 자료에 붙여 넣으세요.' : '이 브라우저에서는 그림 복사가 안 돼요. [QR 저장]을 눌러 주세요.')}>QR 복사</button>
+          </div>
+        </div>
+        <div class="stack success-rest">
           <Sites p={p} onPrimary={onPrimary} busy={busy} />
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
           <div class="day-kit" role="group" aria-labelledby="venue-h">
@@ -584,13 +593,6 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
           <p class="small">내용을 고친 뒤 다시 배포하면 같은 주소에 반영돼요. 자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>수정하러 가기</button></p>
-        </div>
-        <div class="qr-side">
-          <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} alt="" /><span class="qr-zoom-t">크게 보기</span></button>
-          <div class="btn-row">
-            <button class="btn btn-sm" onClick={async () => saveFile(safeName(m.title) + '_QR.png', await qrPng(shareUrl), 'image/png')}>QR 저장</button>
-            <button class="btn btn-sm" onClick={async () => toast(await copyQr(shareUrl) ? 'QR 그림을 복사했어요. 발표 자료에 붙여 넣으세요.' : '이 브라우저에서는 그림 복사가 안 돼요. [QR 저장]을 눌러 주세요.')}>QR 복사</button>
-          </div>
         </div>
       </div>
       <JoinBig open={big} onClose={() => setBig(false)} qr={shareUrl} title={m.title} shown={short ? showUrl(short) : showUrl(url)} full={short ? showUrl(url) : ''} />

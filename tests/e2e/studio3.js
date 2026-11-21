@@ -31,7 +31,7 @@ const shot = async (p, name, o = {}) => { if (!o.fullPage && p.viewportSize().wi
   const frame = p.frameLocator('.pv-device iframe');
   await shot(p, '1280-01-panel.png');
   // ── 연수 정보: 속성 줄 ──
-  L.ok('info: always-visible rows, no edit toggle', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 0);
+  L.ok('info: always-visible rows, no edit toggle, confirm in the card header', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 1 && await p.locator('.st-info .st-card-h button:has-text("이 정보가 맞아요")').isVisible());
   L.ok('info: found-in-textbook hint shown before confirming', /쪽에서 찾았어요/.test(await p.locator('.st-info').innerText()));
   const venue0 = await p.inputValue('#prop-venue');
   await p.click('#prop-venue'); await p.fill('#prop-venue', '아무 데나'); await p.keyboard.press('Escape'); await p.waitForTimeout(400);

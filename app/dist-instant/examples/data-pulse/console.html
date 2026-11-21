@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko" data-preset="corporate-clean" data-theme="light" data-motion="1" data-hero="panel" data-card="paper" data-nav="bar" data-btn="pill" data-heading="heavy" data-head="chapter" data-band="tint" data-page="console">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: https://cdn.jsdelivr.net/npm/gsap@3.15.1/ https://cdn.jsdelivr.net/npm/lenis@1.3.27/ https://cdn.jsdelivr.net/npm/ogl@1.0.11/ https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; img-src 'self' file: data: blob: https:; media-src 'self' file: blob: https:; connect-src 'self' file:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>강사 화면 · 학교 데이터로 수업 바꾸기</title>
+<meta name="description" content="학교에 쌓인 기록을 읽고 차트로 말하고 AI와 함께 해석해 다음 수업을 고치는 교사 데이터 리터러시 연수(예시용 가상 연수)">
+
+<meta name="theme-color" content="#ffffff">
+<meta name="generator" content="lecpage 1.1.0">
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" crossorigin media="print" data-lp-font>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;700&amp;display=swap" crossorigin media="print" data-lp-font>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" crossorigin media="print" data-lp-font>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/lecpage.css">
+<link rel="stylesheet" href="assets/aux-pages.css">
+<script src="assets/boot.js"></script>
+</head>
+<body class="lp-body-con">
+<a class="lp-skip" href="#lp-con-main">본문 바로 가기</a>
+<div class="lp-con" data-console data-provider="local">
+<header class="lp-con-bar"><div class="lp-con-bar-in">
+<div class="lp-con-id"><span class="lp-brand-dot" aria-hidden="true"></span><h1><small>강사 화면</small><span>학교 데이터로 수업 바꾸기</span></h1></div>
+<p class="lp-con-conn" data-conn data-state="idle" role="status" hidden><i aria-hidden="true"></i><span data-conn-text>연결하는 중…</span></p>
+<nav class="lp-con-go" aria-label="다른 화면" data-after-login hidden>
+<button class="lp-btn lp-btn-primary lp-btn-sm" type="button" data-screen-open><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>발표 화면 띄우기</span></button>
+<div class="lp-con-more" data-more>
+<button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-more-btn aria-expanded="false" aria-controls="lp-con-menu"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>더보기</span></button>
+<ul class="lp-con-menu" id="lp-con-menu" data-more-menu hidden>
+<li hidden><button type="button" data-screen-window><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span><b>발표 화면 새 창</b><small>이 노트북에서 창으로 열어요</small></span></button></li>
+<li><a href="index.html" target="_blank" rel="noopener"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span><b>참가자 화면</b><small>참가자가 보는 사이트</small></span></a></li>
+<li><a href="poster.html" target="_blank" rel="noopener"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><rect x="7" y="14" width="10" height="6"/></svg><span><b>QR 안내문</b><small>A4로 인쇄해 붙여요</small></span></a></li>
+<li><a href="check.html" target="_blank" rel="noopener"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9a13 13 0 0 1 18 0M6 12.5a8.5 8.5 0 0 1 12 0M9 16a4 4 0 0 1 6 0"/><circle cx="12" cy="19" r=".9"/></svg><span><b>접속 확인</b><small>전날, 연수 장소 Wi-Fi로</small></span></a></li>
+<li><button type="button" data-phone-open><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg><span><b>휴대폰에서 열기</b><small>교실을 돌며 이 화면을 써요</small></span></button></li>
+<li><button type="button" data-help-open><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span><b>도움말</b><small>연수 전·중·후에 할 일</small></span></button></li>
+</ul>
+</div>
+</nav>
+<div class="lp-con-me"><button class="lp-icon-btn" type="button" data-theme-toggle aria-label="밝게·어둡게 바꾸기"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-logout hidden><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg><span>나가기</span></button></div>
+</div></header>
+<section class="lp-con-login" data-admin-box aria-labelledby="lp-login-h">
+<form class="lp-card lp-con-login-card" data-admin-form novalidate>
+<p class="lp-con-for"><span>강사용 화면이에요. 참가자라면</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로<svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+<div class="lp-con-login-mark" aria-hidden="true"><svg class="lp-motif lp-mrule" viewBox="0 0 240 24" aria-hidden="true" focusable="false"><path class="a" d="M0 0h24v24h-24z"/><circle class="a" cx="52" cy="12" r="11"/><path class="b" d="M80 0h24v24h-24z"/><circle class="c" cx="132" cy="12" r="11"/><path class="c" d="M160 0h24v24h-24z"/><circle class="b" cx="212" cy="12" r="11"/></svg></div>
+<h2 id="lp-login-h">관리자 키</h2>
+<p class="lp-con-login-lead">배포할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
+<label class="lp-con-field" for="lp-key">관리자 키</label>
+<div class="lp-con-keyrow"><input id="lp-key" type="password" name="key" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="200" required aria-describedby="lp-key-msg lp-key-hint"><button class="lp-icon-btn" type="button" data-key-show aria-pressed="false" aria-label="키 보이기"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+<label class="lp-con-check"><input type="checkbox" name="remember" data-remember><span>이 기기에서 기억하기</span></label>
+<p class="lp-con-hint" id="lp-key-hint" data-remember-hint>끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.</p>
+<p class="lp-con-msg" id="lp-key-msg" data-key-msg role="alert"></p>
+<button class="lp-btn lp-btn-primary lp-btn-lg" type="submit" data-key-go>들어가기</button>
+<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>
+</form>
+</section>
+<main id="lp-con-main" class="lp-con-main" data-console-main hidden tabindex="-1" aria-label="연수 진행"></main>
+<details class="lp-con-help" id="lp-con-help" data-console-help data-after-login hidden><summary>도움말 · 연수 전·중·후에 할 일</summary><div class="lp-prose"><h3>연수 전</h3>
+<ol><li>사이트를 배포하면 주소와 QR이 나와요. 현장에 붙일 안내문은 QR 안내문(<code>poster.html</code>)을 인쇄하세요(자리마다 놓을 카드 8장도 함께 인쇄할 수 있어요). 짧은 주소를 따로 만들어도 QR에는 원래 주소가 들어가요.</li><li>연수 장소의 Wi-Fi로 접속 확인(<code>check.html</code>)을 열어 막힌 곳이 없는지 확인하세요.</li><li>관리자 키로 강사 화면에 들어가 참가자 화면과 함께 리허설하세요. 다른 기기로 질문을 올리고 즉석 투표를 띄워 보면 돼요. 강사 화면 위 [더보기]에 참가자 화면·QR 안내문·접속 확인이 모여 있어요.</li><li>지금은 리허설 설정이라 참여 기록이 이 브라우저에만 남아요. 실제 연수 전에 참여 기능 서버를 연결해 다시 배포하세요.</li></ol>
+<h3>연수 중</h3>
+<ul><li>프로젝터에는 발표 화면(<code>screen.html</code>)을 띄워요. 강사 화면 위 [발표 화면 띄우기]를 누르면 크롬·엣지는 프로젝터를 고르는 창이 떠요. 그 창이 없으면 새 창이 열리니 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르세요.</li><li>발표 화면은 교재 쪽을 크게 띄우고 강사 화면과 같이 넘어가요(발표용 리모컨·PageDown도). 참여 QR·투표·질문·큰 타이머·공지는 강사 화면 [발표] 칸이나 발표 화면의 키 하나(J·V·Q·T·N, 화면 숨기기 B, 교재로 Esc)로 겹쳐 띄워요.</li><li>교실을 돌며 쓰려면 [더보기] → [휴대폰에서 열기]의 QR을 휴대폰으로 찍어요. 그 QR에는 관리자 키가 들어 있으니 프로젝터에 비치지 않을 때만 보이세요.</li><li>교탁 컴퓨터만 있으면 짧은 주소로 들어가 위 메뉴의 QR 버튼 → [발표 화면]을 누르고, 강사 화면은 휴대폰으로 열어요.</li><li>즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.</li><li>타이머·공지를 보내면 참가자 화면과 발표 화면 위에 나타나요. &quot;강사 따라 넘기기&quot;를 켜면 참가자 교재가 같은 쪽으로 넘어가요. 교재 넘기기가 있으면 처음부터 켜져 있어요.</li><li>질문이나 보드 글이 지나치게 몰리면 [질문 받기]·[새 글 받기]를 꺼서 잠시 잠그고, 맞지 않는 글은 [숨기기]로 가려요.</li><li>모두 들어왔으면 진행 칸의 [참여 받기]를 꺼 두세요. 낯선 기기가 더 들어오지 않고, 이미 들어온 사람은 그대로 써요.</li><li>도움 요청은 [갈게요] → [해결]로 처리해요.</li><li>출석 칸의 [입실 확인]·[퇴실 확인]을 언제 누를지 참가자에게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요). 휴대폰이 없는 분은 강사 화면 [출석 명단]에서 추가하고, 빠뜨린 퇴실·잘못 누른 시각은 그 명단에서 고쳐요.</li></ul>
+<h3>연수 후</h3>
+<ul><li>참가자 명단(별명): 강사 화면의 [CSV 다운로드] → [참가자]. 입실·퇴실 시각은 [출석]에 있어요.</li><li>설문 결과: 강사 화면의 [CSV 다운로드] → [설문 응답].</li><li>질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.</li><li>연습 모드 기록은 이 브라우저에만 있어요. 실제 연수 전에 강사 화면의 [모든 데이터 삭제]로 지워 두세요.</li><li>공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.</li><li>연수 날짜가 지나면 참가자 화면 맨 위에 &#39;끝난 연수&#39; 줄이 떠요. 다시 보기·과제·이수 처리 같은 연수 뒤 안내는 사이트에 더해 다시 배포하세요(미리보기: 주소 끝에 <code>?phase=after</code>).</li></ul></div></details>
+<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialog aria-labelledby="lp-phone-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-phone-h">휴대폰에서 열기</h2>
+<p data-phone-lead>휴대폰 카메라로 QR을 찍으면 관리자 키를 넣지 않아도 강사 화면이 열려요. 교실을 돌며 질문·투표·타이머를 다뤄요.</p>
+<div class="lp-con-phone-box" data-phone-box>
+<div class="lp-qr" data-phone-qr role="img" aria-label="휴대폰용 강사 화면 QR 코드" hidden></div>
+<div class="lp-con-phone-cover" data-phone-cover><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><p>관리자 키가 든 QR이에요. 프로젝터나 화면 공유에 이 창이 비치지 않을 때 보이세요.</p><button type="button" class="lp-btn lp-btn-primary lp-btn-sm" data-phone-show><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>QR 보이기</span></button></div>
+</div>
+<p class="lp-con-sub" data-phone-left></p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="close">닫기</button></div>
+</form></dialog>
+<dialog class="lp-dialog lp-con-dlg" data-purge-dialog aria-labelledby="lp-purge-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-purge-h">모든 기록을 지울까요?</h2>
+<p>참가자 명단·출석·질문·투표 응답·보드 글과 올린 파일·도움 요청·설문 응답이 서버에서 지워져요. 지운 뒤에는 되돌릴 수 없어요.</p>
+<p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 내려받으세요.</p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="cancel">닫기</button><button class="lp-btn lp-btn-danger" type="button" data-purge-go><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span>모두 삭제</span></button></div>
+</form></dialog>
+<noscript><p class="lp-con-noscript">강사 화면은 자바스크립트를 켜야 쓸 수 있어요.</p></noscript>
+<div class="lp-toast" data-toast role="status" aria-live="polite"></div>
+</div>
+<script type="application/json" id="lp-data">{"v":"1.1.0","title":"학교 데이터로 수업 바꾸기","date":"2026-12-10","start":"14:30","end":"17:30","siteUrl":"","keepUntil":"","shortUrl":"","key":"lp-EXAMPLE1","live":{"provider":"local","url":"","anonKey":"","code":"EXAMPLE1","features":["qa","help","progress","board","poll","attendance","reactions"],"anonymous":true,"pollMs":7000},"privacy":{"collect":["nickname","name","school"],"consent":true,"retentionDays":30,"keep":"마지막 기록 뒤 30일"},"stations":[{"id":"s1","name":"실습 1: 데이터 읽기"},{"id":"s2","name":"실습 2: 차트 만들기"},{"id":"s3","name":"실습 3: 프롬프트 쓰기"}],"motion":0,"base":"","admin":{"completionRate":90,"rateSet":true},"survey":3,"phase":{"start":"2026-12-10T14:30","end":"2026-12-10T17:30"},"words":{"ev":"연수","ended":"끝난 연수","materials":"연수 자료","code":"연수 코드","host":"강사"},"notebook":true,"keyTab":true}</script>
+<script type="application/json" id="lp-blueprint">{"sections":[{"id":"hero","type":"hero","title":"학교 데이터로 수업 바꾸기"},{"id":"stations","type":"stations","title":""},{"id":"deck","type":"deck","title":"","slides":16},{"id":"poll","type":"poll","title":"투표","items":[{"id":"first","question":"우리 학교에서 가장 많이 쌓이는데 가장 덜 읽는 기록은?","kind":"choice","options":["출결","과제 제출","형성평가","수업 중 질문","상담 기록"],"page":2},{"id":"q-mean","question":"평균 72점인 반, 60점 미만 학생은 몇 명일까요?","kind":"choice","options":["0~2명","3~5명","6~8명","9명 이상"],"page":5,"answer":3},{"id":"q1","question":"'7주차에 무슨 일이 있었나?'에 가장 알맞은 차트는?","kind":"choice","options":["막대","꺾은선","원","표"],"page":14,"answer":1},{"id":"q2","question":"평균 72점·중앙값 78.5점인 반에서 알 수 있는 것은?","kind":"choice","options":["낮은 점수 쪽에 학생 몇 명이 떨어져 있다","모두 70점대다","시험이 쉬웠다"],"page":14,"answer":0},{"id":"q3","question":"AI에 학생 기록을 넣기 전에 할 일은?","kind":"choice","options":["이름·학번을 번호로 바꾸기","파일을 압축하기","차트로 바꾸기"],"page":14,"answer":0}]},{"id":"qa","type":"qa","title":""},{"id":"board","type":"board","title":"","moderation":false,"allowFiles":true},{"id":"attendance","type":"attendance","title":""},{"id":"survey","type":"survey","title":"만족도 조사"},{"id":"materials","type":"materials","title":""}],"stations":[{"id":"s1","name":"실습 1: 데이터 읽기","title":"실습 1: 데이터 읽기","minutes":25},{"id":"s2","name":"실습 2: 차트 만들기","title":"실습 2: 차트 만들기","minutes":30},{"id":"s3","name":"실습 3: 프롬프트 쓰기","title":"실습 3: 프롬프트 쓰기","minutes":25}],"pages":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],"deck":[[1,"material/p-001.webp","표지 · 학교 데이터로 수업 바꾸기"],[2,"material/p-002.webp","들어가며 · 한 학기, 한 반에 쌓이는 기록 1,440칸"],[3,"material/p-003.webp","오늘의 흐름 · 세 시간, 세 번의 실습"],[4,"material/p-004.webp","시작 전에 · 세 가지만 해 두면 바로 시작해요"],[5,"material/p-005.webp","1부 · 데이터 읽기"],[6,"material/p-006.webp","1부 · 평균 72점의 반"],[7,"material/p-007.webp","1부 · 12주의 맥박"],[8,"material/p-008.webp","실습 1 · 데이터 읽기"],[9,"material/p-009.webp","2부 · 차트 만들기"],[10,"material/p-010.webp","2부 · 질문 → 차트"],[11,"material/p-011.webp","실습 2 · 차트 만들기"],[12,"material/p-012.webp","3부 · AI와 함께 해석하기"],[13,"material/p-013.webp","실습 3 · 프롬프트 쓰기"],[14,"material/p-014.webp","확인 퀴즈 · 세 문제로 확인"],[15,"material/p-015.webp","과제 · 데이터 한 장 보고서"],[16,"material/p-016.webp","마무리 · 숫자는 학생을 대신하지 않아요"]]}</script>
+<script src="assets/qr.js" defer></script>
+<script src="assets/live.js" defer></script>
+<script src="assets/console.js" defer></script>
+</body>
+</html>
