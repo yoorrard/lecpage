@@ -1,0 +1,20 @@
+{
+  "id": "neo-teach",
+  "title": "질문이 먼저, AI는 그다음",
+  "mood": "어두운 회로판 위 신경망: 교사가 정하는 노드는 불씨 주황, AI가 돕는 연결은 하늘색 신호. 첫 화면은 마우스와 스크롤에 반응하는 WebGL 망과 접혀 올라오는 큰 제목, 실습은 줄 번호가 있는 프롬프트 콘솔로 차분하게",
+  "audience": "teachers",
+  "material": { "file": "material/교재.pdf", "pages": 17, "format": "16:9 어두운 슬라이드 교재" },
+  "kit": ["attend", "poll", "poll(quiz×3, data-answer)", "poll(word)", "step×3", "board", "deck", "qa", "survey", "materials", "notebook"],
+  "features": ["qa", "poll", "board", "attendance", "survey", "help", "reactions", "deck", "materials", "timer", "progress"],
+  "fonts": { "display": "Pretendard Variable 800–850(가변 굵기)", "body": "Pretendard Variable 400–750", "num": "Space Grotesk 500–700(시간·숫자)", "mono": "JetBrains Mono 400–500(프롬프트의 영문·기호만)" },
+  "colors": {
+    "dark": { "bg": "#05060a", "panel": "#0e1119", "ink": "#eef0f6", "ink2": "#bfc5d3", "ember": "#ff6a3d", "ion": "#52d9ff", "kitPaper": "#0b0d14" }
+  },
+  "motion": [
+    "첫 화면 WebGL 신경망: 층별로 그려지는 등장, 연결선 위 신호, 마우스 탐침, 스크롤 카메라(움직임 줄이기면 한 장면)",
+    "제목 글자 접혀 오르기 + 'AI' 기호 풀림 + 커서 둘레 가변 굵기",
+    "1부 노드 그래프: 스크롤 따라 신호가 내려가며 노드가 켜짐, 3D 기울기",
+    "교재 쪽 3D 고리(스크롤 회전), 맺음말 낱말 켜짐, 흐르는 노드 띠, 자석 단추·빛 상자·커서 고리"
+  ],
+  "notCopy": "AI 시대 수업 설계 교재의 신경망 은유에 맞춘 판단이에요. 다른 연수에 WebGL 망·주황/하늘색 문법을 그대로 옮기지 마세요."
+}
