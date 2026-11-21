@@ -54,7 +54,7 @@ export function preflight(src = {}, meta = {}, { today = '', provider = 'none', 
     else if (days.includes(t)) out.push({ code: 'date-today', message_ko: `연수 날짜(${t})가 오늘이에요. 교재의 날짜를 그대로 옮긴 것은 아닌지 확인하세요.` });
   }
   // 3) 이수 조건이 있는데 설문 주소 없음(예시 주소뿐이어도)
-  // 이수 조건에 설문이 들어 있음(교재 사실·사이트 글에서 '이수'와 '설문'이 가까이): 출석만으로 이수면 묻지 않음
+  // 이수 조건에 설문이 들어 있음(사이트 글에서 '이수'와 '설문'이 가까이): 출석만으로 이수면 묻지 않음
   const near = /이수[^\n]{0,80}설문|설문[^\n]{0,80}이수/;
   const rule = (meta.facts || []).some((f) => near.test(`${f.label} ${f.value}`)) || near.test(siteText.replace(/\s+/g, ' '));
   const realSurvey = surveys.some((u) => !PLACEHOLDER_URL.test(u.replace(/^https?:\/\//i, '')));

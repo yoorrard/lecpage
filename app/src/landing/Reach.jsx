@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView } from './motion.js';
 import { useSeen } from './motion-more.js';
-import { shot, shotSize } from './facts.js';
+import { shot, shotSize } from './shots.js';
 
 /**
  * 배포하면 주소와 QR: 진짜로 찍히는 QR(이 앱에 들어 있는 예시 사이트로 감)과, 휴대폰 안에서 천천히 내려가는 참가자 화면(실제 예시 사이트를 찍은 그림).

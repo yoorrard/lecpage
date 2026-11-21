@@ -11,7 +11,7 @@ const PATHS = [
   { name: 'Claude·GPT API 키', how: '키를 넣으면 앱이 교재를 AI에 바로 보내요', cost: '쓴 만큼 AI 회사에 직접' },
   { name: '쓰던 AI', how: '요청 글을 복사해 붙여 넣고 교재를 첨부해요', cost: '추가 비용 없음' },
 ];
-const STAGES = ['참여 기능', '교재 대조', '배포', '진행'];
+const STAGES = ['참여 기능', '화면 살펴보기', '배포', '진행'];
 const STUDIO_CMD = 'npx -y github:yoorrard/lecpage studio';
 
 export function Paths() {
@@ -19,7 +19,7 @@ export function Paths() {
     <section class="ld-paths" aria-labelledby="ld-paths-h">
       <header class="ld-head">
         <h2 id="ld-paths-h">쓰던 AI 그대로,<br />lecpage는 0원</h2>
-        <p class="ld-sub">회원가입도 요금도 없어요. 쪽 그림 그리기부터 교재 대조·미리보기까지 이 브라우저 안에서 해요. AI는 세 가지 중 편한 방법으로 연결해요.</p>
+        <p class="ld-sub">회원가입도 요금도 없어요. 쪽 그림 그리기부터 검수·미리보기까지 이 브라우저 안에서 해요. AI는 세 가지 중 편한 방법으로 연결해요.</p>
       </header>
       <div class="ld-hub">
         <ol class="ld-hub-src">

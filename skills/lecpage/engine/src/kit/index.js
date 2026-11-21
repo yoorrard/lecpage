@@ -2,7 +2,6 @@
 export { readMeta, keepTeacherValues, defaultMeta, normDate, normTime, isDate, isTime, cleanFacts, cleanPages, tangledTitle, themeFromCss, firstSession, liveFeatures, META_VERSION, KIT_FEATURES, LIVE_FEATURE_KEYS, TEACHER_KEYS, MODES, AUDIENCES } from './meta.js';
 export { KIT_TYPES, TYPE_FEATURE, parsePages, kitSlug, qaBox, boardBox, pollBox, attendBox, surveyForm, deckBox, joinBox, materialsBox, dockInner, shareDialog, joinDialog, helpSheet, nowInner } from './widgets.js';
 export { assemble, previewHtml, previewCsp, kitCsp, usedSources, lecpageProcessor, FONT_CSS_HOSTS, FRAME_SOURCES } from './assemble.js';
-export { checkFacts, factStats, materialPages, normFact } from './facts.js';
 export { preflight, PLACEHOLDER_URL } from './preflight.js';
 export { ENGINE_PAGES, ENGINE_FILES, SITE_FILE, siteFileOk, pagePath } from './paths.js';
 export { inspect, issueSummary, issuesForAi, selectorOf } from './inspect.js';
