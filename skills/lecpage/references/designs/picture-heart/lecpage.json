@@ -11,7 +11,7 @@
   "contact": "책갈피숲교육연수원 연수 담당 picturebook@bookmark-forest.example",
   "description": "그림책 한 권으로 질문 세 층, 마음 이름 카드, 그림책 수업 한 장을 만드는 초등 교사 사회정서학습 실습 연수(예시용 가상 연수)",
   "admin": { "kind": "official", "hours": 3, "completionRate": 90 },
-  "features": ["qa", "poll", "board", "attendance", "survey", "help", "reactions", "deck", "timer", "progress"],
+  "features": ["qa", "poll", "board", "attendance", "survey", "help", "reactions", "deck", "materials", "timer", "progress"],
   "theme": { "accent": "#a93b24", "ink": "#2a2320", "paper": "#f4ecdc", "font": "Pretendard", "fontHeading": "Song Myung", "radius": "8px" },
   "facts": [
     { "label": "연수 이름", "value": "그림책 한 장, 마음 한 뼘", "page": 1 },

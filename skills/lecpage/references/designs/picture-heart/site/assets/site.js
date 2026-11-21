@@ -183,12 +183,12 @@
   // ── 지금 시각: 첫 화면 글·주 단추·차례 표시 ───────
   var DAY = '2026-12-09';
   var SCHED = [
-    ['14:30', '14:45', '들어가며 · 마음 체크인', '#checkin', '출석하기'],
-    ['14:45', '15:15', '1부 · 그림책이 마음을 여는 까닭', '#part1', '다섯 역량 보기'],
-    ['15:15', '15:50', '실습 1 · 함께 읽기 질문 세 층', '#st-s1', '실습 1 보기'],
+    ['14:30', '14:45', '들어가며 · 마음 체크인', '#join', '출석하기'],
+    ['14:45', '15:15', '1부 · 그림책이 마음을 여는 까닭', '#deck', '교재 넘기기'],
+    ['15:15', '15:50', '실습 1 · 함께 읽기 질문 세 층', '#st-s1', '실습 1 열기'],
     ['15:50', '16:00', '쉬는 시간', '#st-s2', '실습 2 미리 보기'],
-    ['16:00', '16:30', '실습 2 · 마음 이름 카드', '#st-s2', '실습 2 보기'],
-    ['16:30', '17:10', '실습 3 · 그림책 수업 한 장', '#st-s3', '실습 3 보기'],
+    ['16:00', '16:30', '실습 2 · 마음 이름 카드', '#st-s2', '실습 2 열기'],
+    ['16:30', '17:10', '실습 3 · 그림책 수업 한 장', '#st-s3', '실습 3 열기'],
     ['17:10', '17:30', '마무리 · 과제와 만족도 조사', '#wrap', '설문 열기']
   ];
   var mins = function (hm) { var p = hm.split(':'); return +p[0] * 60 + +p[1]; };
@@ -196,13 +196,14 @@
     var now = new Date(), y = now.getFullYear(), mo = String(now.getMonth() + 1).padStart(2, '0'), d = String(now.getDate()).padStart(2, '0');
     var today = y + '-' + mo + '-' + d, m = now.getHours() * 60 + now.getMinutes();
     var txt = $('[data-clock-text]'), cta = $('[data-cta]'), ctaT = $('[data-cta-t]');
-    var cur = -1, msg = '', href = '#flow', label = '오늘의 차례 보기';
-    if (today < DAY) msg = '12월 9일(수) 14:30에 시작해요.';
-    else if (today > DAY) { msg = '연수가 끝났어요. 과제 마감은 12월 23일(수)이에요.'; href = '#wrap'; label = '과제 보기'; }
-    else if (m < mins('14:30')) { msg = '오늘 14:30에 시작해요. 출석부터 해요.'; href = '#checkin'; label = '출석하기'; }
-    else if (m >= mins('17:30')) { msg = '오늘 연수를 마쳤어요. 만족도 조사를 내 주세요.'; href = '#wrap'; label = '설문 열기'; }
-    else SCHED.forEach(function (s, i) { if (m >= mins(s[0]) && m < mins(s[1])) { cur = i; msg = '지금 ' + s[2] + ' · ' + s[1] + '까지'; href = s[3]; label = s[4]; } });
+    var cur = -1, msg = '', nxt = '', href = '#flow', label = '오늘의 흐름 보기';
+    if (today < DAY) { msg = '12월 9일(수) 14:30에 시작해요.'; nxt = '오면 출석하고 지금 마음의 색을 골라요.'; }
+    else if (today > DAY) { msg = '연수가 끝났어요. 과제 마감은 12월 23일(수)이에요.'; nxt = '수업 한 장과 마음 낱말 세 개를 나눔 보드에 올려요.'; href = '#wrap'; label = '과제 보기'; }
+    else if (m < mins('14:30')) { msg = '오늘 14:30에 시작해요.'; nxt = '오면 출석하고 지금 마음의 색을 골라요.'; href = '#join'; label = '출석하기'; }
+    else if (m >= mins('17:30')) { msg = '오늘 연수를 마쳤어요.'; nxt = '만족도 조사를 내야 이수돼요.'; href = '#wrap'; label = '설문 열기'; }
+    else SCHED.forEach(function (s, i) { if (m >= mins(s[0]) && m < mins(s[1])) { cur = i; msg = '지금 ' + s[2] + ' · ' + s[1] + '까지'; nxt = SCHED[i + 1] ? '다음 ' + SCHED[i + 1][0] + ' ' + SCHED[i + 1][2] : '끝나면 만족도 조사를 내요.'; href = s[3]; label = s[4]; } });
     if (txt && msg) txt.textContent = msg;
+    var nx = $('[data-clock-next]'); if (nx && nxt) nx.textContent = nxt;
     if (cta) { cta.setAttribute('href', href); if (ctaT) ctaT.textContent = label; }
     $$('.toc li').forEach(function (li, i) { li.classList.toggle('is-now', i === cur); });
     var needle = $('[data-needle]');
@@ -213,47 +214,16 @@
   }
   tick(); setInterval(tick, 30000);
 
-  // ── 실습: 휴대폰에서는 한 번에 하나(진행 표시가 탭) ──
-  var tabs = $('[data-tabs]');
-  if (tabs) {
-    var stepEls = $$('.step', tabs);
-    var openStep = function (id) {
-      stepEls.forEach(function (s) { s.classList.toggle('is-open', s.getAttribute('data-lp-step') === id); });
-      $$('[data-st-link]').forEach(function (a) { a.classList.toggle('is-tab', a.getAttribute('data-st-link') === id); });
-    };
-    var fromHash = function (h) { var m = /^#st-(s\d)\b/.exec(h || ''); return m ? m[1] : ''; };
-    var stepNow = function () {
-      var now = new Date(), t = now.getHours() * 60 + now.getMinutes();
-      var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-      if (today !== DAY) return '';
-      return t >= mins('16:30') ? 's3' : t >= mins('15:50') ? 's2' : 's1';
-    };
-    openStep(fromHash(location.hash) || stepNow() || 's1');
-    tabs.classList.add('is-tabbed');
-    document.addEventListener('click', function (e) { var a = e.target.closest && e.target.closest('a[href^="#st-"]'); if (a) { var id = fromHash(a.getAttribute('href')); if (id) openStep(id); } }, true);
-    window.addEventListener('hashchange', function () { var id = fromHash(location.hash); if (id) openStep(id); });
-  }
-
   // ── 그림책 넘기기 ─────────────────────────────────
   var bookEl = $('[data-book]');
   if (bookEl) {
     var pages = $('[data-pages]', bookEl), spreads = $$('.pb-spread', bookEl), cur = 0, busy = false;
     var prev = $('[data-prev]', bookEl), next = $('[data-next]', bookEl), count = $('[data-cur]', bookEl);
-    var birds = {};
-    spreads.forEach(function (s, i) {
-      s.setAttribute('aria-hidden', i ? 'true' : 'false'); if (i) s.inert = true;
-      var b = $('.bird', s); if (b) birds[i] = Bird(b);
-    });
-    var mood = function (i) {
-      // 2장: 부풀고, 부풀고, 또 부풀었어요 / 3장: 숨 넷에 맞춰 가라앉음
-      var b = birds[i]; if (!b || still) return;
-      if (i === 1) { b.setPuff(0); b.face('upset'); setTimeout(function () { b.to(0.4, 380, function () { setTimeout(function () { b.to(0.7, 380, function () { setTimeout(function () { b.to(1, 420); }, 260); }); }, 260); }); }, 350); }
-      if (i === 2) { b.setPuff(0.6); b.to(0, 3800); }
-    };
+    spreads.forEach(function (s, i) { s.setAttribute('aria-hidden', i ? 'true' : 'false'); if (i) s.inert = true; });
     var show = function (n) {
       spreads.forEach(function (s, i) { var on = i === n; s.classList.toggle('is-cur', on); s.setAttribute('aria-hidden', on ? 'false' : 'true'); s.inert = !on; });
       cur = n; count.textContent = n + 1; prev.disabled = n === 0; next.disabled = n === spreads.length - 1;
-      mood(n);
+      $$('[data-st-link]').forEach(function (a) { a.classList.toggle('is-tab', a.getAttribute('data-st-link') === spreads[n].getAttribute('data-lp-step')); });
     };
     var wide = function () { return window.matchMedia('(min-width: 900px)').matches; };
     var go = function (n) {
@@ -266,7 +236,7 @@
       var f = document.createElement('div'), b = document.createElement('div'); f.className = 'lf-f'; b.className = 'lf-b';
       leaf.appendChild(f); leaf.appendChild(b);
       var top = fr.top - pr.top, left = fr.left - pr.left, W = fr.width, H = fr.height;
-      var art = function (s) { return $('.pb-art', s); }, text = function (s) { return $('.pb-text', s); };
+      var art = function (s) { return $('.pb-l', s); }, text = function (s) { return $('.pb-r', s); };
       var put = function (box, el, r) { var c = el.cloneNode(true); c.style.cssText = 'position:absolute;left:' + (r.left - (box.left)) + 'px;top:' + (r.top - box.top) + 'px;width:' + r.width + 'px;height:' + r.height + 'px;margin:0'; return c; };
       var half = wide();
       // 받침: 새 장을 밑에 깔고, 옛 장은 넘어가지 않는 쪽만 보이게
@@ -316,7 +286,24 @@
     var sx = 0, sy2 = 0;
     pages.addEventListener('pointerdown', function (e) { sx = e.clientX; sy2 = e.clientY; });
     pages.addEventListener('pointerup', function (e) { var dx = e.clientX - sx, dy = e.clientY - sy2; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) go(cur + (dx < 0 ? 1 : -1)); });
-    show(0);
+    // 실습 고르기(#st-s2 링크·주소·지금 시각)
+    var idx = function (h) { var m = /^#st-(s\d)\b/.exec(h || ''); if (!m) return -1; for (var i = 0; i < spreads.length; i++) if (spreads[i].getAttribute('data-lp-step') === m[1]) return i; return -1; };
+    var stepNow = function () {
+      var now = new Date(), t = now.getHours() * 60 + now.getMinutes();
+      var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      if (today !== DAY) return 0;
+      return t >= mins('16:30') ? 2 : t >= mins('15:50') ? 1 : 0;
+    };
+    var first = idx(location.hash); show(first >= 0 ? first : stepNow());
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="#st-"]'); if (!a) return;
+      var n = idx(a.getAttribute('href')); if (n < 0) return;
+      e.preventDefault();
+      bookEl.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+      if (n !== cur) setTimeout(function () { go(n); }, still ? 0 : 350);
+      if (history.replaceState) history.replaceState(null, '', a.getAttribute('href'));
+    });
+    window.addEventListener('hashchange', function () { var n = idx(location.hash); if (n >= 0 && n !== cur) show(n); });
   }
 
   // ── 마음 이름 카드 ─────────────────────────────────
