@@ -1,11 +1,12 @@
 // 첫 화면(랜딩)·참고 디자인에 넣는 실제 사이트 그림을 다시 찍습니다.
 //   src/landing/shots/pc-<id>.webp · pc-<id>-s.webp : PC 화면(1280×800) 첫 화면 — 첫 화면 노트북 틀(넓은 화면·좁은 화면)
-//   src/landing/shots/m-<id>.webp                   : 휴대폰 화면(390×844) 첫 화면 — 첫 화면 휴대폰 틀
-//   src/landing/shots/tall-<id>.webp                : PC 화면 긴 그림 — 사례 카드(마우스를 올리면 아래로 흘러감)
-//   src/landing/shots/slide-<n>.webp                : 대표 사례(neo-teach) 교재 쪽 그림 — 교재가 사이트가 되는 장면·발표 화면
+//   src/landing/shots/m-<id>.webp                   : 휴대폰 화면(390×844, 2배로 찍어 폭 450) 첫 화면 — 첫 화면 휴대폰 틀(PC 그림을 자른 것이 아님)
+//   src/landing/shots/tall-<id>.webp                : PC 화면 긴 그림(폭 900) — 사례 카드(마우스를 올리면 아래로 흘러감)
+//   src/landing/shots/slide-<n>.webp                : 대표 사례(neo-teach) 교재 쪽 그림(폭 1000) — 교재가 사이트가 되는 장면·발표 화면·강의 엔진 칸
 //   src/landing/shots/shots.json                    : 크기 기록(자리 밀림 없게 width·height로 씀)
 //   public/img/ref-<id>.webp                        : 참고 디자인 카드(레퍼런스마다)
 // 쓰는 법(app 폴더에서): node scripts/prepare.mjs 다음에  node scripts/landing-shots.mjs
+//   일부만 다시 찍기: node scripts/landing-shots.mjs m tall slide   (pc · m · tall · slide 중에서. 나머지 그림과 크기 기록은 그대로 둠)
 // 그림은 public/examples/<id>/(prepare가 엔진 키트로 조립한 레퍼런스 사이트)를 그대로 찍어요(모형이 아님). 레퍼런스가 바뀌면 다시 돌리세요.
 // 움직이는 첫 화면(WebGL·글자 등장)은 다 그려진 뒤에 찍어요. playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다.
 import { createRequire } from 'node:module';
@@ -23,6 +24,9 @@ const IMG = join(APP, 'public', 'img');
 const IDS = ['neo-teach', 'picture-heart', 'data-pulse']; // 첫 화면 순서(src/landing/showcases.js와 같게)
 const MAIN = IDS[0];
 const SLIDES = [1, 3, 5, 8, 10, 12, 15]; // 대표 사례 교재에서 쓰는 쪽(src/landing/showcases.js SLIDES와 같게)
+const KINDS = ['pc', 'm', 'tall', 'slide'];
+const ONLY = process.argv.slice(2).filter((a) => KINDS.includes(a));
+const want = (k) => !ONLY.length || ONLY.includes(k);
 
 let playwright;
 try { playwright = createRequire(import.meta.url)('playwright'); }
@@ -42,7 +46,9 @@ const base = `http://127.0.0.1:${srv.address().port}/`;
 
 const browser = await playwright.chromium.launch({ args: ['--lang=ko-KR', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const conv = await browser.newPage();
-const manifest = {};
+// 일부만 찍을 때는 예전 크기 기록을 이어 씀
+let manifest = {};
+if (ONLY.length) try { manifest = JSON.parse(readFileSync(join(OUT, 'shots.json'), 'utf8')); } catch { manifest = {}; }
 /** PNG(또는 WebP) → WebP(브라우저 캔버스로. 그림 도구를 따로 깔지 않게). w: 줄여 저장할 폭, h: 위에서부터 자를 높이(줄인 뒤 기준) */
 async function save(file, png, { q = 0.74, w = 0, h = 0, key = '', mime = 'image/png' } = {}) {
   const [data, W, H] = await conv.evaluate(async ({ data, q, w, h, mime }) => {
@@ -77,21 +83,27 @@ async function shoot(id, { width = 1280, height = 800, dpr = 1, full = 0, wait =
 }
 
 mkdirSync(OUT, { recursive: true }); mkdirSync(IMG, { recursive: true });
-for (const f of readdirSync(OUT)) if (/\.webp$/.test(f)) rmSync(join(OUT, f)); // 예전 그림(다른 사례·견주기) 지움
-for (const f of readdirSync(IMG)) if (/^ref-.+\.webp$/.test(f) && !IDS.includes(f.slice(4, -5))) rmSync(join(IMG, f));
+if (!ONLY.length) {
+  for (const f of readdirSync(OUT)) if (/\.webp$/.test(f)) rmSync(join(OUT, f)); // 예전 그림(다른 사례·견주기) 지움
+  for (const f of readdirSync(IMG)) if (/^ref-.+\.webp$/.test(f) && !IDS.includes(f.slice(4, -5))) rmSync(join(IMG, f));
+}
 try {
   for (const id of IDS) {
-    const pc = await shoot(id);
-    // 첫 화면 노트북 틀: 넓은 화면 1120(고해상도 화면에서 또렷하게) · 좁은 화면 440(src/landing/Hero.jsx의 picture 경계와 함께)
-    await save(join(OUT, `pc-${id}.webp`), pc, { q: id === MAIN ? 0.68 : 0.64, w: 1120, key: `pc-${id}` });
-    await save(join(OUT, `pc-${id}-s.webp`), pc, { q: 0.6, w: 440, key: `pc-${id}-s` });
-    await save(join(IMG, `ref-${id}.webp`), pc, { q: 0.72, w: 640 });
-    await save(join(OUT, `m-${id}.webp`), await shoot(id, { width: 390, height: 844, dpr: 2 }), { q: 0.66, w: 300, key: `m-${id}` });
-    await save(join(OUT, `tall-${id}.webp`), await shoot(id, { full: 3000 }), { q: 0.6, w: 560, key: `tall-${id}` });
+    if (want('pc')) {
+      const pc = await shoot(id);
+      // 첫 화면 노트북 틀: 넓은 화면 1120(고해상도 화면에서 또렷하게) · 좁은 화면 440(src/landing/Hero.jsx의 picture 경계와 함께)
+      await save(join(OUT, `pc-${id}.webp`), pc, { q: id === MAIN ? 0.68 : 0.64, w: 1120, key: `pc-${id}` });
+      await save(join(OUT, `pc-${id}-s.webp`), pc, { q: 0.6, w: 440, key: `pc-${id}-s` });
+      await save(join(IMG, `ref-${id}.webp`), pc, { q: 0.72, w: 640 });
+    }
+    // 휴대폰 틀: 휴대폰 폭(390)으로 찍은 사이트(고해상도 휴대폰에서도 또렷하게 450)
+    if (want('m')) await save(join(OUT, `m-${id}.webp`), await shoot(id, { width: 390, height: 844, dpr: 2 }), { q: 0.7, w: 450, key: `m-${id}` });
+    // 사례 카드의 긴 그림: 넓은 칸(약 450px)이 고해상도 화면에서도 또렷하게 900
+    if (want('tall')) await save(join(OUT, `tall-${id}.webp`), await shoot(id, { full: 3000 }), { q: 0.6, w: 900, key: `tall-${id}` });
   }
-  for (const n of SLIDES) {
+  if (want('slide')) for (const n of SLIDES) {
     const src = join(EXAMPLES, MAIN, 'material', `p-${String(n).padStart(3, '0')}.webp`);
-    await save(join(OUT, `slide-${n}.webp`), readFileSync(src), { q: 0.7, w: 640, key: `slide-${n}`, mime: 'image/webp' });
+    await save(join(OUT, `slide-${n}.webp`), readFileSync(src), { q: 0.72, w: 1000, key: `slide-${n}`, mime: 'image/webp' });
   }
   manifest.made = new Date().toISOString().slice(0, 10);
   writeFileSync(join(OUT, 'shots.json'), JSON.stringify(manifest, null, 1) + '\n');

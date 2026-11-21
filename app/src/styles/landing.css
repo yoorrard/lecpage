@@ -10,6 +10,7 @@
 .ld p,.ld li,.ld h3{word-break:keep-all;overflow-wrap:anywhere}
 .ld-kicker{display:flex;align-items:center;gap:10px;margin:0;font-size:.86rem;font-weight:700;letter-spacing:.01em;color:var(--lav-deep)}
 .ld-kicker::before{content:"";flex:none;width:22px;height:2px;border-radius:2px;background:currentColor}
+.ld :where(ul,ol){list-style:none;margin:0;padding:0}
 .ld-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .ld>section+section,.ld>.ld-mine+section{margin-top:var(--ld-gap)}
 /* 색 띠(시간과 토큰·강의 당일)는 화면 끝까지: 잘라 내는 곳을 .ld(본문 폭) 대신 화면 폭으로. :has를 모르는 브라우저는 본문 폭에서 잘림 */
@@ -50,15 +51,17 @@
 .ld-note{margin-top:14px;font-size:.88rem;line-height:1.6;color:var(--muted)}
 .ld-later{min-height:100vh}
 
-/* 무대: 노트북 + 휴대폰. 뒤 빛은 사례의 대표색 둘, 그 뒤에 가는 점 격자 */
-.ld-stage::before{content:"";position:absolute;inset:-14% -12px -4% -14%;z-index:-2;pointer-events:none;background:radial-gradient(circle,var(--line-strong) 1px,transparent 1.5px) 0 0/22px 22px;opacity:.5;
+/* 무대: 노트북 + 휴대폰. 뒤 빛은 사례의 대표색 둘(화면에서 번지는 빛처럼 노트북 뒤에만), 그 뒤에 가는 점 격자.
+   겹침 규칙: 노트북은 제 층(isolation) 안에서 그림을 바꾸고, 휴대폰은 늘 그 위(z-index 2). 휴대폰은 노트북 테두리에만 살짝 걸쳐
+   두 화면의 내용이 서로 가리지 않아요(노트북 화면 오른쪽 끝 여백만 닿음). 휴대폰 둘레의 바탕색 테와 그림자가 둘을 떼어 보여 줘요. */
+.ld-stage::before{content:"";position:absolute;inset:-14% -12px -4% -14%;z-index:-2;pointer-events:none;background:radial-gradient(circle,var(--line-strong) 1px,transparent 1.5px) 0 0/22px 22px;opacity:.45;
   -webkit-mask:radial-gradient(50% 50% at 50% 45%,#000 30%,transparent 80%);mask:radial-gradient(50% 50% at 50% 45%,#000 30%,transparent 80%)}
-.ld-stage{position:relative;min-width:0;margin-top:40px;--rx:0deg;--ry:0deg}
-.ld-glow{position:absolute;inset:-8% -12px 2% -8%;z-index:-1;pointer-events:none;opacity:.8;filter:blur(34px);
-  background:radial-gradient(42% 46% at 28% 42%,color-mix(in srgb,var(--c1) 60%,transparent),transparent 72%),radial-gradient(40% 44% at 76% 66%,color-mix(in srgb,var(--c2) 52%,transparent),transparent 72%);
+.ld-stage{position:relative;isolation:isolate;min-width:0;margin-top:40px;--rx:0deg;--ry:0deg}
+.ld-glow{position:absolute;inset:-6% 8% 8% -6%;z-index:-1;pointer-events:none;opacity:.55;filter:blur(40px);
+  background:radial-gradient(46% 50% at 40% 46%,color-mix(in srgb,var(--c1) 55%,transparent),transparent 72%),radial-gradient(40% 44% at 78% 70%,color-mix(in srgb,var(--c2) 45%,transparent),transparent 72%);
   transition:--c1 1s ease,--c2 1s ease}
-.ld-devices{position:relative;padding:0 13% 7% 0;transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry));transition:transform .6s var(--ease)}
-.ld-laptop{position:relative;padding:2.1% 2.1% 2.6%;border-radius:clamp(10px,1.6vw,18px) clamp(10px,1.6vw,18px) 5px 5px;background:linear-gradient(160deg,#2c2b31,var(--ld-bezel) 40%);
+.ld-devices{--ph:21%;position:relative;padding:0 calc(var(--ph) - 1.6%) 7% 0;transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry));transition:transform .6s var(--ease)}
+.ld-laptop{position:relative;z-index:1;isolation:isolate;padding:2.1% 2.1% 2.6%;border-radius:clamp(10px,1.6vw,18px) clamp(10px,1.6vw,18px) 5px 5px;background:linear-gradient(160deg,#2c2b31,var(--ld-bezel) 40%);
   box-shadow:0 0 0 1px rgba(255,255,255,.06) inset,0 40px 80px -36px rgba(20,16,40,.55),0 12px 24px -16px rgba(20,16,40,.35)}
 .ld-laptop::before{content:"";position:absolute;top:.9%;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#3b3a41}
 .ld-laptop::after{content:"";position:absolute;left:-5.5%;right:-5.5%;top:100%;height:clamp(8px,1.4vw,16px);border-radius:0 0 50% 50%/0 0 100% 100%;background:linear-gradient(#e2e0e6,#b3b0ba 70%,#8f8c96);box-shadow:0 22px 34px -14px rgba(20,16,40,.4)}
@@ -66,19 +69,20 @@
 .ld-screen>picture{position:absolute;inset:0;z-index:1;clip-path:inset(0 0 0 100%);transition:clip-path 0s linear .95s}
 .ld-screen>picture.is-on{z-index:2;clip-path:inset(0);transition:clip-path .95s cubic-bezier(.75,0,.2,1)}
 .ld-screen img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
-.ld-phone{position:absolute;right:0;bottom:0;width:23%;aspect-ratio:9/19;padding:1.35%;border-radius:clamp(14px,2.4vw,30px);background:var(--ld-bezel);
-  box-shadow:0 0 0 1.5px #403f46 inset,0 0 0 1px rgba(0,0,0,.4),0 34px 60px -24px rgba(20,16,40,.6)}
-.ld-phone-screen{position:relative;height:100%;overflow:hidden;border-radius:clamp(10px,1.9vw,24px);background:#0b0d14}
+/* 휴대폰: 휴대폰 폭(390)으로 찍은 사이트 그림(PC 그림을 자른 것이 아님). 화면 비율 390:844에 맞춘 틀 */
+.ld-phone{position:absolute;z-index:2;right:0;bottom:0;width:var(--ph);aspect-ratio:9/19.1;padding:clamp(3px,.55vw,7px);border-radius:clamp(16px,2.6vw,32px);background:var(--ld-bezel);
+  box-shadow:0 0 0 1.5px #403f46 inset,0 0 0 clamp(3px,.42vw,6px) var(--bg),0 36px 60px -22px rgba(20,16,40,.6),0 14px 24px -14px rgba(20,16,40,.4)}
+.ld-phone-screen{position:relative;height:100%;overflow:hidden;border-radius:clamp(12px,2.05vw,25px);background:#0b0d14}
 .ld-phone-screen img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;opacity:0;transition:opacity .7s .3s}
 .ld-phone-screen img.is-on{opacity:1}
 /* 처음 열 때 틀이 한 번 자리 잡고(글자·그림은 처음부터 보여서 첫 그림이 늦지 않게 transform만), 아래로 내리면 휴대폰이 노트북보다 조금 빨리 올라가요 */
 .ld-devices{animation:ld-in 1.2s cubic-bezier(.2,.8,.2,1) both}
 @keyframes ld-in{from{translate:0 26px;scale:.97}}
 .ld-phone{animation:ld-pop 1.4s .25s cubic-bezier(.2,.8,.2,1) both}
-@keyframes ld-pop{from{translate:16% 8%;rotate:5deg}}
+@keyframes ld-pop{from{translate:14% 10%;rotate:4deg}}
 @supports (animation-timeline: view()){
   .ld-phone{animation:ld-pop 1.4s .25s cubic-bezier(.2,.8,.2,1) both,ld-rise linear both;animation-timeline:auto,view();animation-range:normal,exit 0% exit 100%}
-  @keyframes ld-rise{to{transform:translateY(-14%)}}
+  @keyframes ld-rise{to{transform:translateY(-10%)}}
 }
 .ld-stage-foot{display:grid;gap:10px;margin-top:clamp(18px,2.4vw,28px)}
 .ld-picks{display:flex;align-items:stretch;gap:4px 18px;flex-wrap:wrap}
@@ -104,6 +108,7 @@
   .ld-stage{margin-top:clamp(28px,3vw,44px)}
 }
 @media (max-width:759.98px){
+  .ld-devices{--ph:25%}
   .ld-drop{padding:12px}
   .ld-drop-btn{width:100%;justify-content:center}
   .ld-stage{margin-top:36px}
