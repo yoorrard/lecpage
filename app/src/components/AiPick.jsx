@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Dialog, Notice } from './ui.jsx';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { aiStatus, getActiveAI, setActive, forgetKey, CHATBOTS, setChatbot, setWay } from '../lib/ai.js';
-import { startGeneration, chatPrompt, acceptChatAnswer, bridgeStatus } from '../lib/studio.js';
+import { startGeneration, chatPrompt, acceptChatAnswer } from '../lib/studio.js';
+import { SubscriptionWay, ConnBadge, CodexRow } from './PcConnect.jsx';
+import { setPreferred } from '../lib/connection.js';
 import { startDemo } from '../lib/demo.js';
-import { SKILL_CMDS, AGENT_NAME } from '../lib/agent.js';
+import { SKILL_CMDS } from '../lib/agent.js';
 import { blobs } from '../lib/db.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
-// AI 고르기(docs/plan-ai-first.md §2·§7·§10). 맨 위 추천: 내 PC의 Claude Code·Codex(연결 프로그램) — 에이전트가 교재를 읽고
-// 사이트를 쓰고 조립된 화면을 보며 스스로 다듬음. 그 아래 GPT·Claude 카드(같은 크기·같은 위계), 카드마다 두 길:
-// [키로 연결](연결돼 있으면 [이 AI로 만들기]) · [쓰던 앱으로(키 없이)]. 맨 아래 AI 에이전트(Skill)로 만들기.
+// AI 선택(docs/plan-ai-first.md §2·§7·§10). 모두에게 첫째: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천 — PC 프로그램, PcConnect.jsx).
+// 그 아래: 설치 없이 하려면 쓰던 AI로(복사·붙여넣기, 학교 PC 등). 접힌 '다른 방법': API 키(GPT·Claude 카드)·Codex·AI 에이전트(Skill).
 export const AI_CARDS = [
   { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'ChatGPT 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
   { id: 'anthropic', name: 'Claude', by: 'Anthropic', bot: 'claude', app: 'Claude', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'Claude 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
@@ -52,7 +53,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 키 없이, 이 교재로 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     if (!st) { afterKey.current = true; setKeyFor(provider); return; }
-    await setActive(provider, {}); setWay('key');
+    await setActive(provider, {}); setWay('key'); setPreferred('key');
     await idle();
     startGeneration(p.id, { way: 'key', provider, model: st.model || '', request: p.request || '', reference: p.reference || '' });
     go(2);
@@ -76,34 +77,37 @@ export function AiPick({ p, go, idle, reload, ready }) {
       <div class="ai-pick-head">
         <h2 class="h-sub" id="ai-pick-h">AI 선택</h2>
         <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
+        <ConnBadge demo={!!p.demo} />
       </div>
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
-      <LocalWay p={p} ready={ready} idle={idle} go={go} />
-      <div class="ai-cards" role="list">
-        {AI_CARDS.map((c) => {
-          const st = conn?.[c.id];
-          return (
-            <article class={`ai-card${st ? ' is-on' : ''}${chat === c.id ? ' is-open' : ''}`} role="listitem" aria-labelledby={`ai-${c.id}-h`} key={c.id}>
-              <div class="ai-card-t"><h3 id={`ai-${c.id}-h`}>{c.name}</h3><span class="ai-card-by">{c.by}</span></div>
-              <dl class="ai-card-facts">
-                <div><dt>API 키</dt><dd>{c.key}</dd></div>
-                <div><dt>쓰던 AI</dt><dd>{c.chat}</dd></div>
-              </dl>
-              {st ? <>
-                <p class="ai-card-on small"><span class="dot-ok" aria-hidden="true" />키 연결됨 <button type="button" class="btn-link small" aria-expanded={String(swap === c.id)} onClick={() => setSwap(swap === c.id ? '' : c.id)}>바꾸기</button></p>
-                <button type="button" class="btn btn-primary ai-card-go" disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
-              </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} API 키 연결해 만들기`} onClick={() => make(c.id)}>API 키 연결</button>}
-              <button type="button" class="btn ai-card-go" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app}로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 AI로(키 없이)</button>
-              {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
-            </article>
-          );
-        })}
+      <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
+      <div class="ai-nokey">
+        <div><b>설치 없이 하려면: 쓰던 AI로</b> <span class="small muted">복사·붙여넣기로 해요. 학교 PC처럼 설치가 안 될 때, 무료 요금제도 돼요.</span></div>
+        <div class="btn-row">{AI_CARDS.map((c) => <button type="button" class="btn btn-sm" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app}로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 {c.app}로</button>)}</div>
       </div>
       {card && <ChatWay key={card.id} card={card} p={p} go={go} reload={reload} idle={idle} onClose={() => setChat('')} />}
-      <div class="ai-alts">
-        <AgentWay />
-      </div>
-      <p class="small muted">교재가 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요. 키는 이 브라우저에서 AI 회사로만 가요.</p>
+      <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
+        <summary><b>다른 방법</b><span class="small muted">API 키 · Codex · AI 에이전트(Skill)</span></summary>
+        <div class="ai-cards" role="list">
+          {AI_CARDS.map((c) => {
+            const st = conn?.[c.id];
+            return (
+              <article class={`ai-card${st ? ' is-on' : ''}`} role="listitem" aria-labelledby={`ai-${c.id}-h`} key={c.id}>
+                <div class="ai-card-t"><h3 id={`ai-${c.id}-h`}>{c.name}</h3><span class="ai-card-by">{c.by}</span></div>
+                <dl class="ai-card-facts"><div><dt>API 키</dt><dd>{c.key}</dd></div></dl>
+                {st ? <>
+                  <p class="ai-card-on small"><span class="dot-ok" aria-hidden="true" />키 연결됨 <button type="button" class="btn-link small" aria-expanded={String(swap === c.id)} onClick={() => setSwap(swap === c.id ? '' : c.id)}>바꾸기</button></p>
+                  <button type="button" class="btn btn-primary ai-card-go" disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
+                </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} API 키 연결해 만들기`} onClick={() => make(c.id)}>API 키 연결</button>}
+                {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
+              </article>
+            );
+          })}
+        </div>
+        <CodexRow p={p} ready={ready} idle={idle} go={go} />
+        <div class="ai-alts"><AgentWay /></div>
+      </details>
+      <p class="small muted">교재가 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요. API 키는 이 브라우저에서, 계정 연결은 이 PC에서 AI 회사로만 가요.</p>
       <Dialog open={!!keyFor} onClose={() => { setKeyFor(''); afterKey.current = false; }} label={`${AI_CARDS.find((c) => c.id === keyFor)?.name || ''} API 키 연결`} wide>
         {keyFor && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{AI_CARDS.find((c) => c.id === keyFor)?.name} API 키 연결 <span class="small muted">처음 한 번만</span></h2>
           <AiConnect initial={keyFor} only onConnected={connected} onChat={(prov) => { setKeyFor(''); afterKey.current = false; openChat(prov || keyFor); }} /></div>}
@@ -212,51 +216,6 @@ function ChatWay({ card, p, go, reload, idle, onClose }) {
         </li>
       </ol>
     </section>
-  );
-}
-
-const BRIDGE_CMD = 'npx -y github:yoorrard/lecpage studio';
-/**
- * 내 PC의 Claude Code·Codex(연결 프로그램 lecpage studio, docs/plan-ai-first.md §10): 앱을 127.0.0.1에서 보여 주며 토큰을 넣어 줌.
- * 그 창이면 GET /bridge/status → agents[{ id, name, installed, ready, auth, note_ko }]. 다른 곳(lecpage.com)에서는 띄우는 법만
- */
-function LocalWay({ p, ready, idle, go }) {
-  const [st, setSt] = useState(undefined);
-  useEffect(() => { bridgeStatus().then((v) => setSt(v || null), () => setSt(null)); }, []);
-  const agents = (st?.agents || []).filter((a) => AGENT_NAME[a?.id]);
-  async function run(agent) {
-    if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
-    if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
-    await idle();
-    startGeneration(p.id, { way: 'local', agent, request: p.request || '', reference: p.reference || '' });
-    go(2);
-  }
-  return (
-    <details class="ai-alt ai-alt-rec" open={!!st}>
-      <summary><b>추천 · 내 PC의 Claude Code·Codex</b><span>내 Claude·ChatGPT 구독으로 AI 에이전트가 만들고 화면을 보며 다듬어요. PC에 한 번 설치해요.</span></summary>
-      <div class="ai-alt-b">
-        {st ? <>
-          <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>
-          <div class="btn-row">
-            {agents.filter((a) => a.installed).map((a) => <button type="button" class="btn btn-sm btn-primary" disabled={!ready || a.ready === false} onClick={() => run(a.id)}>{AGENT_NAME[a.id]} 쓰기</button>)}
-            {!agents.some((a) => a.installed) && <span class="small muted">이 PC에서 Claude Code나 Codex를 찾지 못했어요. 설치한 뒤 연결 프로그램을 다시 띄워 주세요.</span>}
-          </div>
-          {agents.filter((a) => a.installed && a.ready === false && a.note_ko).map((a) => <p class="small warn-line">{a.note_ko}</p>)}
-          {agents.some((a) => a.installed && a.auth === 'api-key') && <p class="small warn-line">{agents.filter((a) => a.installed && a.auth === 'api-key').map((a) => AGENT_NAME[a.id]).join('·')}는 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
-        </> : <>
-          <ol class="small ai-alt-steps">
-            <li><b>Node.js</b>(22 이상)를 설치해요. <a href="https://nodejs.org/ko" target="_blank" rel="noopener">nodejs.org</a>에서 LTS를 받아요.</li>
-            <li><b>Claude Code</b>(<a href="https://code.claude.com/docs/ko/setup" target="_blank" rel="noopener">설치 안내</a>)를 깔고 <code>claude auth login</code>으로 로그인해요.</li>
-            <li>또는 <b>Codex</b>를 <code>npm i -g @openai/codex</code>로 깔고 <code>codex login</code>으로 로그인해요.</li>
-            <li>터미널을 열어요(Windows는 PowerShell, Mac은 터미널). 아래 명령을 붙여 넣고 Enter를 눌러요.
-              <div class="agent-cmd"><code>{BRIDGE_CMD}</code><button type="button" class="btn btn-sm" aria-label="연결 프로그램 실행 명령 복사" onClick={() => copy(BRIDGE_CMD, '명령을 복사했어요. 터미널에 붙여 넣고 Enter를 눌러요.')}>복사</button></div></li>
-            <li>브라우저에 <code>127.0.0.1</code>로 시작하는 lecpage가 열려요. 이 연수를 [파일로 저장]하고, 그 창에서 [저장한 파일 열기]로 열어요.</li>
-            <li>그 창의 AI 선택에서 [Claude Code 쓰기]나 [Codex 쓰기]를 눌러요.</li>
-          </ol>
-        </>}
-        <p class="small muted">Claude Code는 내 Claude 구독으로 로그인한 그대로 써요. ANTHROPIC_API_KEY가 설정돼 있으면 그 키로 비용이 나가요. 교재와 작업 파일은 내 PC의 빈 임시 폴더에서만 다뤄요.</p>
-      </div>
-    </details>
   );
 }
 

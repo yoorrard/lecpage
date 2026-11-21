@@ -16,7 +16,7 @@
 //   handouts <올린 주소|work> [-o 폴더]   QR-안내문.pdf·발표화면.png(Playwright 필요)
 //   pack <work|폴더> -o site.zip [--bundle-fonts] [--password 암호] [--host 배포할 곳] · serve <work|폴더> [--port 4173] [--live] · doctor · decide-infra [-i 답.json] [--size 30 …]
 //        pack: 조립한 사이트를 ZIP으로 · doctor: 환경 점검과 설치 방법 · decide-infra: 배포할 곳 × 참여 기능 서버 추천
-//   studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]
+//   studio [--port 6600] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist app/dist] [--remote] [--timeout 30]
 //        내 PC 연결 프로그램: 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
 //        (요청은 그 사람의 구독 한도에서 차감). 앱 파일은 app/dist가 있으면 그것, 없으면 lecpage.com에서 받음. 끄기: Ctrl+C (references/studio.md)
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
@@ -37,7 +37,7 @@ const UPDATE_HOW = '새 버전 받기: claude plugin update lecpage@lecpage(Clau
 
 // ── 인자 ─────────────────────────────────────────
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤
-const VALUE_OPTS = new Set(['i', 'o', 'password', 'port', 'host', 'name', 'relay', 'features', 'today', 'size', 'skill', 'duration', 'network', 'infra', 'dist', 'timeout']);
+const VALUE_OPTS = new Set(['i', 'o', 'password', 'port', 'host', 'name', 'relay', 'features', 'today', 'size', 'skill', 'duration', 'network', 'infra', 'dist', 'timeout', 'open']);
 const OPTS = {
   doctor: '', serve: 'port host live', pack: 'o bundle-fonts password host',
   'decide-infra': 'i size features skill duration network infra commercial minor',
@@ -45,7 +45,7 @@ const OPTS = {
   publish: 'host live name relay dry-run temporary no-handouts no-verify no-bundle-fonts password',
   handouts: 'o password',
   prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles host no-python', preview: 'port host today live',
-  studio: 'port no-open dist remote timeout',
+  studio: 'port no-open open autostart new-token dist remote timeout',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;

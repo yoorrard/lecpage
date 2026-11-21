@@ -23,7 +23,7 @@ import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.
 import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
-import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary } from './local.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary, chatgptModels } from './local.js';
 import { pushVersion, carryLegacy } from '../site-meta.js';
 import { ensureIds } from '../site-doc.js';
 
@@ -139,8 +139,14 @@ const QUOTA = ['quota'];
 // 이 모델만 안 되는 오류: 같은 키의 다른 모델로 이어서(앞 단계 결과는 그대로). 결제·권한·지역 같은 계정 오류는 모델을 바꿔도 같아 바꾸지 않음
 const SWAP = ['no-access', 'model', 'quota-day'];
 const ACCOUNT = ['billing', 'forbidden', 'region'];
+const USAGE_URL = 'https://chatgpt.com/settings/usage';
 function errorView(e, provider) {
-  const k = e?.kind;
+  const k = e?.off && (e?.kind === 'network' || e?.kind === 'local') ? 'pc-off' : e?.kind;
+  // 구독 연결(PC 프로그램): 꺼짐·ChatGPT 계정
+  if (k === 'pc-off') return { kind: k, title: 'PC 프로그램이 꺼져 있어요.', body: 'PC 프로그램을 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume', 'paste'] };
+  if (k === 'chatgpt-login') return { kind: k, title: 'ChatGPT 계정 연결이 풀렸어요.', body: 'AI 선택에서 [ChatGPT 계정으로 로그인]을 다시 누르면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'resume'] };
+  if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 무료 요금제는 [쓰던 AI로]로 만들어요.', actions: ['paste', 'connect'] };
+  if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'paste', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };
   if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [계속 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
   if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect', 'paste'] };
   if (k === 'thinking') return { kind: k, title: 'AI가 생각하다가 답을 쓸 한도를 다 썼어요.', body: '같은 요청을 다시 보내면 비용만 들어서 멈췄어요. 다른 모델을 고르거나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste', 'resume'] };
@@ -276,7 +282,7 @@ async function waitVisible(ctx) {
 }
 async function nextModel(ctx) {
   const tried = new Set([...(ctx.tried || []), ctx.rec.model]); ctx.tried = tried;
-  const list = await listModels(ctx.rec.provider, ctx.key, {});
+  const list = ctx.rec.provider === 'chatgpt' ? await chatgptModels() : await listModels(ctx.rec.provider, ctx.key, {});
   return (list.find((m) => !m.locked && !tried.has(m.id)) || {}).id || null;
 }
 async function repack(ctx) {
@@ -518,13 +524,17 @@ async function drive(pid) {
       if (rec.provider === 'openai') oa.flush(key).catch(() => { }); // 지난번에 지우지 못한 답(키가 없었을 때)을 지움
       if (!rec.model) { rec.model = (await checkKey(rec.provider, key, { signal })).model; await save(rec); }
     }
+    if (rec.way === 'chatgpt') { // ChatGPT 계정: 토큰은 PC 프로그램에. 모델은 그 계정의 목록 첫째(서버 순서)
+      ctx.key = '';
+      if (!rec.model) { const list = await chatgptModels(); if (!list.length) throw new AiError('chatgpt-login', 'no models', { provider: 'chatgpt' }); rec.model = list[0].id; await save(rec); }
+    }
     // 학교망이 AI 회사를 막았으면 오래 기다리지 않게(처음 시작할 때만, 시험 주소면 건너뜀)
     if (rec.way === 'key' && !rec.steps.some((s) => s.status === 'done') && baseFor(rec.provider) === BASES[rec.provider] && await reach('ai:' + rec.provider) === 'blocked') throw new AiError('blocked', 'blocked', { provider: rec.provider });
     // 교재도 요청 글도 없으면 AI가 지어낼 것밖에 없음 → 교재를 먼저
     if (rec.kind === 'make' && !sourceFiles(project).length && !project.material && !String(rec.opts.request || '').trim()) throw new AiError('no-material', 'no material');
     // 새로 만들기의 첫 단계에서만 지금 교재의 쪽 그림으로 다시 옮김(이어 하기·고치기는 있던 것 그대로)
     ctx.images = await preparePageImages(pid, project, { signal, refresh: rec.kind === 'make' && !rec.steps.some((s) => s.status === 'done') });
-    if (rec.way === 'key') await repack(ctx);
+    if (rec.way === 'key' || rec.way === 'chatgpt') await repack(ctx);
     else ctx.pack = { parts: [] }; // 내 PC 에이전트는 교재 파일을 따로 받고, 먼저 해보기는 어디로도 보내지 않음
     for (;;) {
       const step = rec.steps.find((s) => s.status !== 'done');
@@ -559,7 +569,8 @@ async function drive(pid) {
     if (!['network', 'stall', 'blocked'].includes(e?.kind)) oa.release(rec);
     await save(rec).catch(() => { });
     // 망이 끊겨 멈췄으면 망이 돌아올 때 저절로 이어 함
-    if (['network', 'stall', 'blocked'].includes(e?.kind)) autoResume.add(pid);
+    // (구독 연결인 ChatGPT 계정은 사람이 누를 때만 부름: 저절로 이어 하지 않음)
+    if (['network', 'stall', 'blocked'].includes(e?.kind) && rec.way !== 'chatgpt') autoResume.add(pid);
   } finally {
     if (beat) clearInterval(beat);
     const cur = live.get(pid); if (cur?.saveT) { clearTimeout(cur.saveT); cur.saveT = 0; }
@@ -593,9 +604,9 @@ if (typeof addEventListener === 'function') {
 export async function startJob(pid, kind, opts = {}) {
   if (live.get(pid)?.ctrl) return { jobId: live.get(pid).rec.id, already: true };
   if (await heldElsewhere(pid)) return { jobId: (await jobsDb.get(pid).catch(() => null))?.id || '', elsewhere: true };
-  const way = ['local', 'demo'].includes(opts.way) ? opts.way : 'key';
+  const way = ['local', 'demo', 'chatgpt'].includes(opts.way) ? opts.way : 'key';
   // 내 PC의 에이전트(agent: 'claude'|'codex')·먼저 해보기는 회사 자리에 그 길 이름
-  let provider = way === 'key' ? opts.provider : way; let model = way === 'key' ? opts.model || '' : '';
+  let provider = way === 'key' ? opts.provider : way; let model = way === 'key' || way === 'chatgpt' ? opts.model || '' : '';
   const agent = way === 'local' ? (['claude', 'codex'].includes(opts.agent) ? opts.agent : 'claude') : '';
   // 고치기·수정 요청은 따로 고르지 않았으면 이 사이트를 만든 AI·모델로(키가 있을 때)
   if (!provider && kind !== 'make') {
@@ -665,6 +676,12 @@ export async function resumeIfOrphaned(pid) {
   const rec = await jobsDb.get(pid).catch(() => null);
   if (!rec || rec.status !== 'running') return false;
   if (await heldElsewhere(pid)) { remote.set(pid, rec); emit(pid); return false; }
+  // ChatGPT 계정(구독): 새로 고침 뒤 저절로 다시 부르지 않음 → 멈춘 상태로 두고 [계속 만들기]를 기다림(받은 글은 기록에 있음)
+  if (rec.way === 'chatgpt') {
+    for (const s of rec.steps) if (s.status === 'running') s.status = 'todo';
+    rec.status = 'paused'; rec.error = { kind: 'stopped', title: '새로 고침해서 멈췄어요.', body: '[계속 만들기]를 누르면 받은 데부터 이어서 만들어요.', actions: ['resume'] };
+    await save(rec).catch(() => { }); emit(pid); return false;
+  }
   const r = await resumeJob(pid);
   return !!r.run;
 }

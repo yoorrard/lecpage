@@ -10,7 +10,7 @@ import { Studio } from './Studio.jsx';
 // 2단계: AI가 만드는 동안은 진행 단계만(목록·미리보기 없음), 다 만들면 같은 자리에서 완성 화면(Studio)으로.
 // job: 생성 API useGeneration(lib/gen/index.js)의 상태. step.index는 1부터
 /** 지금 작업을 맡은 AI 이름 */
-export const whoOf = (job) => (job.way === 'local' ? AGENT_NAME[job.agent] || '내 PC의 AI' : job.way === 'demo' ? '' : PROVIDERS[job.provider]?.short || '');
+export const whoOf = (job) => (job.way === 'local' ? (job.agent === 'claude' ? 'Claude 계정' : AGENT_NAME[job.agent] || '내 PC의 AI') : job.way === 'chatgpt' ? 'ChatGPT 계정' : job.way === 'demo' ? '' : PROVIDERS[job.provider]?.short || '');
 export function fmtSec(s) { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m ? `${m}분 ${s % 60}초` : `${s}초`; }
 
 export function StepMake(props) {
@@ -57,7 +57,7 @@ function Making({ p, job, go }) {
   return (
     <>
       <StepHead title={job.status === 'error' ? 'AI가 만들다 멈췄어요' : job.status === 'paused' ? '만들기를 멈췄어요' : 'AI가 사이트를 만들고 있어요'}
-        desc={job.way === 'demo' ? '체험: 이 교재로 미리 만든 AI 답을 진짜 만드는 과정 그대로 보여 줘요.' : [name && `${name}${job.model ? ` · ${job.model}` : ''}`, job.way === 'local' ? '내 PC에서' : ''].filter(Boolean).join(' · ') || '고른 AI가 교재를 직접 읽고 있어요.'} />
+        desc={job.way === 'demo' ? '체험: 이 교재로 미리 만든 AI 답을 진짜 만드는 과정 그대로 보여 줘요.' : [name && `${name}${job.model ? ` · ${job.model}` : ''}`, job.way === 'local' ? (job.agent === 'claude' ? 'Claude Code로 내 PC에서' : '내 PC에서') : ''].filter(Boolean).join(' · ') || '고른 AI가 교재를 직접 읽고 있어요.'} />
       <section class="making" aria-labelledby="making-h">
         <div class="making-top">
           <Mascot size={72} mood={job.status === 'error' ? 'oops' : 'think'} look={running} />

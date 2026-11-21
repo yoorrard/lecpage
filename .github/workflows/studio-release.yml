@@ -1,0 +1,56 @@
+# lecpage PC 프로그램(lecpage studio)을 GitHub 릴리스 하나(studio-latest)로 늘 최신으로. 운영 비용 0원(GitHub 저장소·릴리스만 씀).
+# 올리는 것: lecpage-studio.cmd(Windows, 두 번 눌러 실행) · lecpage-studio.sh / .command(macOS·Linux, 터미널 한 줄) ·
+#   lecpage-studio.zip / .tar.gz(+ .sha256, 실행 파일이 받아 확인 후 씀) · VERSION(새 판 확인용)
+# 실행 파일은 Node.js가 없으면 nodejs.org의 LTS를 사용자 폴더에 받고(SHA-256 확인), 이 묶음을 받아 `node lecpage.mjs studio`로 켬.
+name: studio-release
+on:
+  push:
+    branches: [main]
+    paths: ['skills/lecpage/**', 'scripts/studio-launcher/**', '.github/workflows/studio-release.yml']
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: studio-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: PC 프로그램 시험
+        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs
+      - name: 묶기
+        run: |
+          set -eu
+          V="$(node -p "require('./skills/lecpage/engine/package.json').version")-$(git rev-parse --short HEAD)"
+          mkdir -p out/pkg
+          cp -r skills out/pkg/
+          rm -rf out/pkg/skills/lecpage/engine/test out/pkg/skills/lecpage/evals
+          find out/pkg -name __pycache__ -type d -prune -exec rm -rf {} +
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES.md TRADEMARKS.md out/pkg/
+          printf '%s\n' "$V" > out/pkg/VERSION
+          printf '%s\n' "$V" > out/VERSION
+          (cd out/pkg && zip -qr ../lecpage-studio.zip . && tar -czf ../lecpage-studio.tar.gz .)
+          (cd out && sha256sum lecpage-studio.zip | cut -d' ' -f1 > lecpage-studio.zip.sha256 && sha256sum lecpage-studio.tar.gz | cut -d' ' -f1 > lecpage-studio.tar.gz.sha256)
+          sed 's/\r$//; s/$/\r/' scripts/studio-launcher/lecpage-studio.cmd > out/lecpage-studio.cmd   # Windows 배치 파일은 CRLF
+          cp scripts/studio-launcher/lecpage-studio.sh out/lecpage-studio.sh
+          cp scripts/studio-launcher/lecpage-studio.sh out/lecpage-studio.command
+          ls -la out
+      - name: studio-latest 릴리스 갱신
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          git tag -f studio-latest
+          git push -f origin refs/tags/studio-latest
+          if ! gh release view studio-latest >/dev/null 2>&1; then
+            gh release create studio-latest --title "lecpage PC 프로그램(최신)" --latest=false \
+              --notes "Windows: lecpage-studio.cmd를 받아 두 번 눌러 실행해요(경고 창이 뜨면 [추가 정보] → [실행]). macOS: 터미널에 curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.sh | bash. 켜지면 lecpage.com이 열리고 이 PC와 저절로 연결돼요. 이 릴리스는 main에 바뀐 것이 있을 때마다 새로 올라가요."
+          fi
+          gh release upload studio-latest out/lecpage-studio.cmd out/lecpage-studio.sh out/lecpage-studio.command \
+            out/lecpage-studio.zip out/lecpage-studio.zip.sha256 out/lecpage-studio.tar.gz out/lecpage-studio.tar.gz.sha256 out/VERSION --clobber

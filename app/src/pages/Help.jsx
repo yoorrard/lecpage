@@ -74,9 +74,9 @@ const BODY = {
     <p>교재를 넣고 AI를 고르면 AI가 교재 원본을 직접 읽고 강의 사이트를 만들어요. 교재를 받아쓴 글이 아니라, 강의 날 참가자 곁에서 쓰는 동반자 사이트예요. 완성 화면에서 살펴보고 고친 뒤 버튼 하나로 배포해요. 회원가입과 이용료가 없어요.</p>
     <Flow />
     <p class="help-cta"><a class="btn btn-primary" href="#/demo">먼저 해보기</a><span class="small muted">예시 교재로 실제와 똑같은 화면을 끝까지 해 봐요. 키가 필요 없어요.</span></p>
-    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 읽은 교재와 AI 선택(내 PC의 AI 에이전트, GPT·Claude 카드)">
+    <Task n="1" title="교재 넣기" shot="start" alt="교재 넣기 화면: 읽은 교재와 AI 선택(구독으로 연결, 쓰던 AI로, 다른 방법)">
       <p>PPT·PDF·한글(HWP·HWPX)·워드 파일을 놓아요. PDF가 가장 정확해서, PPT는 PDF로도 저장해 함께 넣으면 좋아요. 바라는 점은 한 줄로 적어도 되고 비워 둬도 돼요.</p>
-      <p>AI 선택에서 내 PC의 Claude Code·Codex를 써요. GPT·Claude 카드의 [API 키 연결]이나 [쓰던 AI로(키 없이)]로도 돼요. <a href="#/help/ai">AI 선택</a></p>
+      <p>AI 선택에서 [ChatGPT·Claude 계정으로 연결]을 눌러요. PC 프로그램을 한 번 받아 실행하면 쓰던 ChatGPT(Plus·Pro)나 Claude 계정으로 이 화면에서 바로 만들어요. 설치가 안 되는 PC는 [쓰던 ChatGPT로]·[쓰던 Claude로]로 해요. <a href="#/help/ai">AI 선택</a></p>
     </Task>
     <Task n="2" title="만드는 중">
       <p>AI가 만드는 동안은 진행 단계만 보여요. 창을 닫거나 다른 일을 해도 되고, 멈추면 [계속 만들기]로 멈춘 단계부터 이어서 해요.</p>
@@ -93,21 +93,22 @@ const BODY = {
   ai: <>
     <h1 tabIndex={-1}>AI 선택</h1>
     <p>고른 AI가 교재 원본 파일을 직접 읽고 디자인부터 코드까지 사이트 전체를 써요. lecpage는 AI의 디자인에 끼어들지 않고, 미리보기·참여 기능·강사 화면·QR·배포를 받쳐 줘요.</p>
-    <ul><li><b>내 PC의 Claude Code·Codex(추천)</b>: 구독 중인 Claude·ChatGPT로 AI 에이전트가 만들고 다듬어요. 교재는 내 PC의 임시 폴더에서만 다뤄요. PC에 한 번 설치해요.
-        <ol><li><a href="https://nodejs.org/ko" target="_blank" rel="noopener">Node.js</a>(22 이상)를 설치해요.</li>
-          <li>Claude Code는 <a href="https://code.claude.com/docs/ko/setup" target="_blank" rel="noopener">설치 안내</a>를 따라 깔고 <code>claude auth login</code>을 실행해요.</li>
-          <li>Codex를 쓰려면 <code>npm i -g @openai/codex</code>로 깔고 <code>codex login</code>을 실행해요.</li>
-          <li>터미널을 열어요(Windows는 PowerShell, Mac은 터미널). <code>npx -y github:yoorrard/lecpage studio</code>를 붙여 넣고 Enter를 눌러요.</li>
-          <li><code>127.0.0.1</code>로 시작하는 lecpage가 열려요. 이 연수를 [파일로 저장]하고, 그 창에서 [저장한 파일 열기]로 열어요.</li>
-          <li>그 창의 AI 선택에서 [Claude Code 쓰기]나 [Codex 쓰기]를 눌러요.</li></ol></li>
-      <li><b>API 키 연결(GPT·Claude)</b>: 처음 한 번 키를 붙여 넣으면 그다음부터는 버튼 한 번이에요. 교재 원본과 짧은 요청을 한 번에 보내고, AI가 사이트 전체를 한 답으로 돌려줘요. 끊겨도 받은 데부터 이어서 해요. 크레딧을 충전해 써요(사이트 하나에 몇백 원쯤).</li>
-      <li><b>쓰던 AI로(키 없이)</b>: 쓰던 ChatGPT·Claude 창에 프롬프트를 붙여 넣고 교재 원본 파일을 첨부해요. 답을 복사해 돌아와 [답 붙여넣기]를 누르거나 내려받은 .html 파일을 끌어 넣어요. 무료 요금제도 돼요.</li>
-      <li><b>AI 에이전트(Skill)로 만들기</b>: 스킬을 넣고 대화로 만든 뒤, 나온 .lecpage 파일을 교재 자리에 놓아요. <a href="#/help/skill">AI 에이전트에서 쓰기</a></li></ul>
+    <ul><li><b>ChatGPT·Claude 구독으로 연결(추천, API 키 없이)</b>: 쓰고 있는 계정으로 이 화면에서 바로 만들어요. ChatGPT는 Plus·Pro 요금제에서 돼요. 사용량은 그 계정의 요금제에서 차감되고 따로 결제하지 않아요. PC 프로그램을 한 번 설치해요.
+        <ol><li>AI 선택에서 [ChatGPT·Claude 계정으로 연결] → [PC 프로그램 다운로드]를 눌러요. Mac은 [Mac 설치 명령 복사]를 눌러 터미널에 붙여 넣어요.</li>
+          <li>받은 lecpage-studio.cmd를 두 번 눌러 실행해요. "Windows의 PC 보호" 창이 뜨면 [추가 정보] → [실행]을 눌러요. 처음 한 번 Node.js(무료)를 함께 받아요.</li>
+          <li>PC 프로그램이 lecpage.com을 다시 열며 이 PC와 연결해요. Chrome·Edge가 "로컬 네트워크" 접근을 물으면 [허용]을 눌러요.</li>
+          <li>[ChatGPT 계정으로 로그인]이나 [Claude 계정으로 로그인]을 눌러요. 로그인이 끝나면 바로 만들기 시작해요. Claude는 처음이면 Claude Code 설치와 로그인이 터미널 창에서 이어져요.</li></ol>
+        다음부터는 PC 프로그램을 켜 두면 저절로 이어져요. Windows에서는 [컴퓨터를 켤 때 PC 프로그램도 켜기]를 고를 수 있어요.</li>
+      <li><b>설치 없이 하려면: 쓰던 AI로</b>: 쓰던 ChatGPT·Claude 창에 프롬프트를 붙여 넣고 교재 원본 파일을 첨부해요. 답을 복사해 돌아와 [답 붙여넣기]를 누르거나 내려받은 .html 파일을 끌어 넣어요. 학교 PC처럼 설치가 안 될 때, 무료 요금제도 돼요.</li>
+      <li><b>다른 방법</b>(AI 선택 아래에 접혀 있어요)
+        <ul><li><b>API 키 연결(GPT·Claude)</b>: 처음 한 번 키를 붙여 넣으면 그다음부터는 버튼 한 번이에요. 끊겨도 받은 데부터 이어서 해요. 크레딧을 충전해 써요(사이트 하나에 몇백 원쯤).</li>
+          <li><b>Codex</b>: PC에 Codex를 설치해 두었다면 그것으로도 만들어요. ChatGPT 계정 연결이 있으면 없어도 돼요.</li>
+          <li><b>AI 에이전트(Skill)로 만들기</b>: 스킬을 넣고 대화로 만든 뒤, 나온 .lecpage 파일을 교재 자리에 놓아요. <a href="#/help/skill">AI 에이전트에서 쓰기</a></li></ul></li></ul>
     <p>어느 길이든 끝은 이 앱이에요. 미리보기·수정·배포는 같은 화면에서 해요.</p>
     <p>AI는 참고 디자인의 분위기를 참고만 해요. 그대로 따라 만들지는 않아요. 교재 원본 중에는 PDF가 가장 정확하게 읽혀요.</p>
     <KeyMap />
     <Task n="1" title="키 페이지 열기" shot="connect" alt="키 연결 창: 키 페이지를 여는 버튼과 누를 곳을 보여 주는 그림" w={760} h={530}>
-      <p>AI 선택에서 쓸 AI 카드의 [API 키 연결]을 눌러요.</p>
+      <p>AI 선택 아래의 [다른 방법]을 펼치고 쓸 AI 카드의 [API 키 연결]을 눌러요.</p>
       <p>버튼을 누르면 그 회사의 키 페이지가 새 창으로 열려요. 그림의 동그라미가 누를 곳이에요.</p>
     </Task>
     <Task n="2" title="돌아와서 붙여넣기" shot="paste" alt="AI 연결 창: 붙여넣기 버튼" w={760} h={596}>
@@ -118,6 +119,9 @@ const BODY = {
     <KeyGuides />
     <h2>잘 안 될 때</h2>
     <div class="faq">
+      <details><summary>"PC 프로그램을 켜 주세요"라고 나와요</summary><p>받은 lecpage-studio 파일을 두 번 눌러 실행해요. 켜지면 이 화면과 저절로 연결돼요. 켰는데도 그대로면 브라우저 주소창 왼쪽 아이콘 → 사이트 설정에서 "로컬 네트워크" 접근을 허용으로 바꾸고 새로 고침해요.</p></details>
+      <details><summary>Safari에서는 연결이 안 돼요</summary><p>Safari는 lecpage.com에서 PC 프로그램에 바로 닿지 못해요. AI 선택의 [PC 프로그램 화면 열기]로 127.0.0.1 화면을 열어요. 연수는 [파일로 저장]한 뒤 그 화면의 [저장한 파일 열기]로 옮겨요. Chrome이나 Edge에서는 이 과정이 없어요.</p></details>
+      <details><summary>ChatGPT 사용 한도에 닿았대요</summary><p>ChatGPT 요금제의 사용량을 다 쓴 거예요. 한도가 다시 차면 [계속 만들기]를 눌러요. 사용량은 ChatGPT 설정 → 사용량에서 봐요. Plus의 5시간 한도는 다른 앱과 함께 써요.</p></details>
       <details><summary>키가 맞지 않대요</summary><p>키를 끝까지 복사했는지 확인하세요. 지웠거나 오래된 키라면 새로 만들어요.</p></details>
       <details><summary>크레딧이 없대요</summary><p>GPT·Claude 키는 그 회사의 결제 페이지에서 크레딧을 충전해야 쓸 수 있어요. 5달러면 사이트를 열 개 넘게 만들어요. 결제 없이 만들려면 [쓰던 AI로(키 없이)]를 누르세요.</p></details>
       <details><summary>AI 회사에 닿지 못했대요</summary><p>학교·회사 망이 AI 사이트를 막았을 수 있어요. 휴대폰 핫스팟으로 바꿔 보세요.</p></details>
@@ -125,6 +129,7 @@ const BODY = {
     </div>
     <h2>더 궁금할 때</h2>
     <div class="faq">
+      <details><summary>PC 프로그램은 안전한가요?</summary><p>PC 프로그램은 이 PC 안(127.0.0.1)에서만 열리고, lecpage.com 화면이 짝 맞춤 암호를 보낼 때만 답해요. ChatGPT 로그인 정보는 이 PC의 사용자 폴더에만 두고 브라우저·lecpage 운영자에게 보내지 않아요. Claude Code·Codex의 로그인 파일은 읽지 않아요. 요청은 [만들기]·[AI로 수정]을 누를 때만 이 PC에서 AI 회사로 바로 가요. 소스는 GitHub에 공개돼 있어요.</p></details>
       <details><summary>키가 뭐예요? 안전한가요?</summary><p>API 키는 AI 회사가 내 계정에 만들어 주는 긴 암호예요. 키와 교재는 이 브라우저에서 고른 AI 회사로만 가고, lecpage 운영자는 볼 수 없어요. '이 기기에서 기억하기'를 켜면 암호화해 이 기기에만 저장해요. 공용 PC에서는 꺼 주세요.</p></details>
       <details><summary>학생 정보가 든 교재를 넣어도 되나요?</summary><p>학생 이름·사진 같은 개인정보는 지우고 넣어 주세요. 교재 원본이 고른 AI 회사로 가요.</p></details>
       <details><summary>모델은 어떻게 고르나요?</summary><p>고르지 않아도 돼요. 그 키로 쓸 수 있는 모델 중 품질과 값의 균형이 좋은 것을 앱이 골라 둬요. 바꾸려면 AI 카드의 '키 연결됨' 옆 [바꾸기]를 눌러요.</p></details>
@@ -233,7 +238,7 @@ const BODY = {
     <ul><li>lecpage 웹앱은 무료이고 회원가입이 없어요. 있는 그대로 제공하며, 오류나 끊김이 없다고 보증하지 않아요.</li>
       <li>넣은 교재와 만든 사이트는 쓰는 분의 것이에요. 연수는 이 브라우저에만 저장되니 [파일로 저장]으로 보관해 주세요.</li>
       <li>교재·사진·글꼴의 저작권과 초상권, 자료 속 개인정보는 쓰는 분이 확인해요. 사이트는 고른 AI가 만들고, AI가 쓴 코드를 포함한 결과는 배포 전에 쓰는 분이 확인해요.</li>
-      <li>내 PC 연결 프로그램으로 연 화면(127.0.0.1)과 lecpage.com은 저장소가 따로예요. 옮길 때는 [파일로 저장]을 써요.</li>
+      <li>PC 프로그램은 lecpage.com 화면과 바로 이어져서 연수가 그대로예요. Safari처럼 PC 프로그램 화면(127.0.0.1)에서 쓸 때만 저장소가 따로라 [파일로 저장]으로 옮겨요.</li>
       <li>바로 배포는 비밀번호 칸·로그인 흉내·바깥으로 보내는 양식·서비스 워커가 있는 사이트를 받지 않아요.</li>
       <li>참여 기능으로 받은 참가자 정보의 개인정보처리자는 강사·기관이에요.</li>
       <li>불법 정보, 권리 침해, 피싱·사칭, 동의 없는 개인정보 수집에는 쓸 수 없어요.</li>
