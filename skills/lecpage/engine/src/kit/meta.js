@@ -81,7 +81,9 @@ function teacherPart(src = {}) {
     processors: (Array.isArray(pv.processors) ? pv.processors : []).filter(isObj).slice(0, 10).map((x) => ({ name: str(x.name, 60), contact: str(x.contact, 120), country: str(x.country, 40), purpose: str(x.purpose, 120) })).filter((x) => x.name),
     contact: str(pv.contact, 120),
   } : null;
-  if (privacy && !privacy.collect.length) privacy.collect = ['nickname'];
+  // 받을 정보를 정하지 않은 개인정보 칸(바로 배포가 처리 위탁 서버만 적어 넘김 등)은 조립의 기본(출석이 켜져 있으면 이름·소속)을 따름.
+  // 비워 둔 목록([])을 일부러 넘겼을 때만 별명만(미리보기와 배포한 사이트의 입실 창이 달라지지 않게)
+  if (privacy && !privacy.collect.length) { if (Array.isArray(pv.collect)) privacy.collect = ['nickname']; else delete privacy.collect; }
   return {
     live, siteUrl: httpUrl(src.siteUrl), joinUrl: httpUrl(src.joinUrl), shortUrl: httpUrl(src.shortUrl),
     access: ['link', 'public', 'password'].includes(src.access) ? src.access : isObj(src.access) && ['link', 'public', 'password'].includes(src.access.mode) ? src.access.mode : 'link',

@@ -121,6 +121,18 @@ test('연수 정보: 날짜·시각 꼴, facts 꼴, 예전 판(v1) 알림', () =
   assert.equal(old.old, true); assert.equal(old.errors[0].code, 'v1');
 });
 
+// 실제 실행(2026-11-21): 바로 배포는 개인정보 칸에 처리 위탁 서버만 적어 넘김(받을 정보 없음) → 배포한 사이트만 입실 창에서 이름·소속을 묻지 않았음
+test('개인정보 칸에 받을 정보가 없으면 조립 기본(출석이면 이름·소속)을 따름 · 빈 목록을 일부러 주면 별명만', () => {
+  const live = { provider: 'http', url: 'https://live.example.org', code: 'PRIV1234' };
+  const proc = { name: 'lecpage 운영자(바로 배포)', contact: 'hello@lecpage.com', country: '미국', purpose: '참여 기능 저장' };
+  const withProc = lpData(K.assemble(fullSite(), META, { runtime: rt, prev: { live, privacy: { processors: [proc] } } }).files['index.html']);
+  const preview = lpData(K.assemble(fullSite(), META, { runtime: rt, preview: true }).files['index.html']);
+  assert.equal(withProc.privacy.collect.join(','), 'nickname,name,school');
+  assert.equal(withProc.privacy.collect.join(','), preview.privacy.collect.join(','), '미리보기와 배포한 사이트가 같게');
+  const nick = lpData(K.assemble(fullSite(), META, { runtime: rt, prev: { live, privacy: { collect: [], processors: [proc] } } }).files['index.html']);
+  assert.equal(nick.privacy.collect.join(','), 'nickname');
+});
+
 test('CSP·_headers: AI 쪽은 self 스크립트·form-action none·실제로 쓰는 바깥 곳만(라이브러리·글꼴·영상 틀), 참여 서버만 연결, 보조 쪽은 엔진 머리글', () => {
   const r = K.assemble(fullSite(), META, { runtime: rt, prev: { live: { provider: 'http', url: 'https://live.example.org', code: 'ABCD1234' } } });
   const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(r.files['index.html'])[1].replace(/&#39;|&apos;/g, "'");
