@@ -13,7 +13,7 @@ import { hostProblems } from '../lib/host-check.js';
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 배포)는 운영자가 켜 둔 앱에서만 보임
 export const TARGETS = ['lecpage', 'vercel', 'github-pages', 'cloudflare', 'netlify', 'zip'];
-const LABEL = { lecpage: '바로 배포', vercel: 'Vercel', 'github-pages': 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cloudflare', zip: '파일로 받기' };
+const LABEL = { lecpage: '바로 배포', vercel: 'Vercel', 'github-pages': 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cloudflare', zip: 'ZIP 다운로드' };
 export const KIND = { vercel: 'vercel', 'github-pages': 'github', netlify: 'netlify' };
 // 고른 곳마다 한 줄 소개(lead)와 알아 둘 점(care). 숫자·약관 근거: docs/research/hosting-2026-11.md, 2026-11-12에 공식 문서로 다시 확인
 const ABOUT = {
@@ -119,10 +119,10 @@ function Connect({ t, kind, onConnected, onChange }) {
     catch { setErr('입력 칸을 누르고 Ctrl+V(맥은 ⌘V)로 붙여 넣어 주세요.'); return; }
     take(text);
   }
-  if (t.saved) return <p class="small conn-line"><span class="ok-dot" aria-hidden="true" />{g.name}에 연결돼 있어요. <button type="button" class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 끊기</button></p>;
+  if (t.saved) return <p class="small conn-line"><span class="ok-dot" aria-hidden="true" />{g.name}에 연결돼 있어요. <button type="button" class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 해제</button></p>;
   const steps = [
     { t: `${g.site} 가입하기`, next: '이미 가입했어요',
-      body: <p><a class="btn btn-sm" href={g.signup} target="_blank" rel="noopener" onClick={() => setAt(1)}>가입 페이지 열기</a> {g.join}</p> },
+      body: <p><a class="btn btn-sm btn-primary" href={g.signup} target="_blank" rel="noopener" onClick={() => setAt(1)}>가입 페이지 열기</a> {g.join}</p> },
     { t: '토큰 만들기', next: false,
       body: <>
         <p>{g.make}</p>
@@ -366,7 +366,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   bind(() => run());
   async function remove() {
     setAsk(false);
-    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 내렸어요.'); }
+    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 삭제했어요.'); }
     catch (e) { toast('내리지 못했어요. ' + e.message); }
   }
   const askRemove = () => { setRec(records || null); setAsk(true); instantRecords(prev).then((r) => r && setRec(r)); };
@@ -381,21 +381,21 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
       {refused && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
         <b>{refused.pre ? '바로 배포가 받지 않는 내용이 있어 올리지 않았어요.' : '바로 배포가 이 사이트를 받지 않았어요.'}</b>
         <span>{refused.t}</span>
-        <span class="small">검수에서 [AI에게 고쳐 달라기]를 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
-        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>검수에서 고치기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
+        <span class="small">검수에서 [AI로 수정]을 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
+        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>검수에서 수정</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
       </div></div>}
       <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); run(); }} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
-      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 내리기</button></p>}
+      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 삭제</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
-      <Dialog open={ask} onClose={() => setAsk(false)} label="사이트 내리기 확인">
-        <h2 class="h-sub">사이트를 내릴까요?</h2>
+      <Dialog open={ask} onClose={() => setAsk(false)} label="사이트 삭제 확인">
+        <h2 class="h-sub">사이트를 삭제할까요?</h2>
         <p>주소와 QR이 바로 끊기고 되돌릴 수 없어요. 참가자에게는 '강사가 사이트를 내렸어요'가 보여요.</p>
         {hasRoom && <p>참가자가 남긴 기록{recLine ? `(${recLine})` : '(출석·질문·보드·설문)'}도 함께 지워져요. 이수 처리에 쓸 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</p>}
         <div class="btn-row">
           <button class="btn btn-quiet" data-autofocus onClick={() => setAsk(false)}>닫기</button>
           {hasRoom && <a class="btn" href={siteUrl + 'console.html'} target="_blank" rel="noopener" onClick={() => prev.adminKey && copy(prev.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
-          <button class="btn btn-danger" onClick={remove}>사이트 내리기</button>
+          <button class="btn btn-danger" onClick={remove}>사이트 삭제</button>
         </div>
       </Dialog>
     </div>
@@ -423,7 +423,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
       {t.saved && <>
         {!prev && <AddrName optional pre="https://" post=".vercel.app" value={name} onInput={(v) => setName(cleanName(v))} placeholder={nameHint(p)} hint="영문 소문자·숫자·하이픈. 짧을수록 치기 쉬워요. 비워 두면 자동으로 정해요." />}
         <Go on={busy === 'vercel'} busy={busy} again={!!prev} onClick={run} />
-        {prev && <p class="small muted">주소를 열면 Vercel 로그인 창이 뜨나요? <button type="button" class="btn btn-sm btn-quiet" onClick={unlock}>로그인 없이 열리게 하기</button></p>}
+        {prev && <p class="small muted">주소를 열면 Vercel 로그인 창이 뜨나요? <button type="button" class="btn btn-sm btn-quiet" onClick={unlock}>배포 보호 끄기</button></p>}
       </>}
     </div>
   );
@@ -450,7 +450,7 @@ function GitHub({ p, busy, start, done, bind, refresh }) {
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
         <h2 class="h-sub">이미 있는 저장소예요</h2>
         <p>"{repo}" 저장소가 이미 있어요. 배포하면 그 안의 파일이 모두 연수 사이트 파일로 바뀌어요. 다른 이름을 쓰는 게 안전해요.</p>
-        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(deployView(p)?.meta?.date)); }}>다른 이름 쓰기</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>그래도 바꾸기</button></div>
+        <div class="btn-row"><button class="btn" data-autofocus onClick={() => { setConfirm(false); setRepo(slug(deployView(p)?.meta?.date)); }}>다른 이름 사용</button><button class="btn btn-danger" onClick={() => { setConfirm(false); run(true); }}>덮어쓰기</button></div>
       </Dialog>
     </div>
   );
@@ -486,8 +486,8 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const [at, setAt] = useState(0);
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
   const cf = kind === 'cloudflare';
-  const get = { t: '사이트 파일 받기', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 파일 받기(ZIP)'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+  const get = { t: '사이트 파일 다운로드', next: false,
+    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
   const save = { t: prev ? '배포한 주소 확인하기' : '배포한 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '배포한 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
@@ -528,7 +528,7 @@ export function HostConnect({ kind, onChange }) {
   return (
     <li>
       <span><b>{g.name}</b> <span class="small muted">{t.saved ? (t.remember ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만') : '연결 안 됨'}</span></span>
-      {t.saved ? <button class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 끊기</button> : <button class="btn btn-sm" onClick={() => setOpen(true)}>연결하기</button>}
+      {t.saved ? <button class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 해제</button> : <button class="btn btn-sm" onClick={() => setOpen(true)}>연결</button>}
       <Dialog open={open} onClose={() => setOpen(false)} label={`${g.name} 연결`}>
         <div class="stack">
           <h2 class="h-sub">{g.name} 연결</h2>

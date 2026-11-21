@@ -46,12 +46,12 @@ export function Settings() {
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
             <li><span><b>{v.name}</b> <span class="small muted">{keys[id].remembered ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만'}</span></span>
-              <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 끊었어요.'); }}>연결 끊기</button></li>
+              <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 해제했어요.'); }}>연결 해제</button></li>
           ))}
           <li><span>{anyAi ? <span class="small muted">다른 AI</span> : <><b>AI</b> <span class="small muted">연결 안 됨</span></>}</span>
-            <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '더 연결하기' : '연결하기'}</button></li>
+            <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : '연결'}</button></li>
         </ul>
-        <p class="small muted">쓰던 AI 창(ChatGPT·Claude)으로 만들 때는 연결하지 않아도 돼요.</p>
+        <p class="small muted">쓰던 AI(ChatGPT·Claude)로 만들 때는 연결하지 않아도 돼요.</p>
         <h3 class="h-label">배포할 곳</h3>
         <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 옮겨요. <a href="#/help/deploy">배포하는 법</a></p>
@@ -63,9 +63,9 @@ export function Settings() {
         <h2 class="h-sub">저장 공간</h2>
         {st && <p>사용 {fmtBytes(st.usage)}{st.quota ? ` / 약 ${fmtBytes(st.quota)}` : ''} · {st.persisted ? '브라우저가 지우지 않도록 보호 중' : '보호 안 됨(공간이 부족하면 브라우저가 지울 수 있어요)'}</p>}
         <div class="btn-row">
-          {st && !st.persisted && <button class="btn btn-sm" onClick={async () => { const ok = await askPersist(); setSt(await storageInfo()); toast(ok ? '저장 공간을 보호했어요.' : '브라우저가 허락하지 않았어요.'); }}>저장 공간 보호하기</button>}
+          {st && !st.persisted && <button class="btn btn-sm" onClick={async () => { const ok = await askPersist(); setSt(await storageInfo()); toast(ok ? '저장 공간을 보호했어요.' : '브라우저가 허락하지 않았어요.'); }}>저장 공간 보호</button>}
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
-          <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 지우기' : '모든 데이터 지우기'}</button>
+          <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
         </div>
         <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>

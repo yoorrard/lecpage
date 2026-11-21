@@ -12,8 +12,8 @@ import { copy, toast, saveFile } from '../lib/util.js';
 // 사이트를 쓰고 조립된 화면을 보며 스스로 다듬음. 그 아래 GPT·Claude 카드(같은 크기·같은 위계), 카드마다 두 길:
 // [키로 연결](연결돼 있으면 [이 AI로 만들기]) · [쓰던 앱으로(키 없이)]. 맨 아래 AI 에이전트(Skill)로 만들기.
 export const AI_CARDS = [
-  { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '쓴 만큼 결제 · 사이트 하나에 몇백 원', chat: 'ChatGPT 무료 요금제도 돼요' },
-  { id: 'anthropic', name: 'Claude', by: 'Anthropic', bot: 'claude', app: 'Claude', key: '쓴 만큼 결제 · 사이트 하나에 몇백 원', chat: 'Claude 무료 요금제도 돼요' },
+  { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'ChatGPT 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
+  { id: 'anthropic', name: 'Claude', by: 'Anthropic', bot: 'claude', app: 'Claude', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'Claude 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
 ];
 const touch = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
 /** 앱 옆에 AI 창을 나란히 띄울 만큼 넓은 마우스 화면인지(좁거나 터치면 새 탭·AI 앱) */
@@ -59,7 +59,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
   }
   async function openChat(id) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
-    if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요. 실제로는 쓰던 앱 창에서 답을 받아 와요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
+    if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요. 실제로는 쓰던 AI 창에서 답을 받아 와요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     setChat(chat === id ? '' : id);
     setTimeout(() => document.getElementById('chat-way')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 40);
   }
@@ -74,10 +74,10 @@ export function AiPick({ p, go, idle, reload, ready }) {
   return (
     <section class="ai-pick" aria-labelledby="ai-pick-h">
       <div class="ai-pick-head">
-        <h2 class="h-sub" id="ai-pick-h">AI 고르기</h2>
+        <h2 class="h-sub" id="ai-pick-h">AI 선택</h2>
         <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
       </div>
-      {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 고를 수 있어요.</p>}
+      {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
       <LocalWay p={p} ready={ready} idle={idle} go={go} />
       <div class="ai-cards" role="list">
         {AI_CARDS.map((c) => {
@@ -86,14 +86,14 @@ export function AiPick({ p, go, idle, reload, ready }) {
             <article class={`ai-card${st ? ' is-on' : ''}${chat === c.id ? ' is-open' : ''}`} role="listitem" aria-labelledby={`ai-${c.id}-h`} key={c.id}>
               <div class="ai-card-t"><h3 id={`ai-${c.id}-h`}>{c.name}</h3><span class="ai-card-by">{c.by}</span></div>
               <dl class="ai-card-facts">
-                <div><dt>키로</dt><dd>{c.key}</dd></div>
-                <div><dt>쓰던 앱으로</dt><dd>{c.chat}</dd></div>
+                <div><dt>API 키</dt><dd>{c.key}</dd></div>
+                <div><dt>쓰던 AI</dt><dd>{c.chat}</dd></div>
               </dl>
               {st ? <>
                 <p class="ai-card-on small"><span class="dot-ok" aria-hidden="true" />키 연결됨 <button type="button" class="btn-link small" aria-expanded={String(swap === c.id)} onClick={() => setSwap(swap === c.id ? '' : c.id)}>바꾸기</button></p>
                 <button type="button" class="btn btn-primary ai-card-go" disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
-              </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} 키로 연결해 만들기`} onClick={() => make(c.id)}>키로 연결</button>}
-              <button type="button" class="btn ai-card-go" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app} 앱으로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 앱으로(키 없이)</button>
+              </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} API 키 연결해 만들기`} onClick={() => make(c.id)}>API 키 연결</button>}
+              <button type="button" class="btn ai-card-go" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app}로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 AI로(키 없이)</button>
               {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
             </article>
           );
@@ -104,8 +104,8 @@ export function AiPick({ p, go, idle, reload, ready }) {
         <AgentWay />
       </div>
       <p class="small muted">교재가 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요. 키는 이 브라우저에서 AI 회사로만 가요.</p>
-      <Dialog open={!!keyFor} onClose={() => { setKeyFor(''); afterKey.current = false; }} label={`${AI_CARDS.find((c) => c.id === keyFor)?.name || ''} 키 연결`} wide>
-        {keyFor && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{AI_CARDS.find((c) => c.id === keyFor)?.name} 키 연결 <span class="small muted">처음 한 번만</span></h2>
+      <Dialog open={!!keyFor} onClose={() => { setKeyFor(''); afterKey.current = false; }} label={`${AI_CARDS.find((c) => c.id === keyFor)?.name || ''} API 키 연결`} wide>
+        {keyFor && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{AI_CARDS.find((c) => c.id === keyFor)?.name} API 키 연결 <span class="small muted">처음 한 번만</span></h2>
           <AiConnect initial={keyFor} only onConnected={connected} onChat={(prov) => { setKeyFor(''); afterKey.current = false; openChat(prov || keyFor); }} /></div>}
       </Dialog>
     </section>
@@ -117,7 +117,7 @@ function KeySwap({ id, onDone, onNew }) {
   const [ai, setAi] = useState(null);
   useEffect(() => { getActiveAI().then(async (a) => { if (a?.provider !== id) { await setActive(id, {}); a = await getActiveAI(); } setAi(a); }); }, [id]);
   if (!ai) return <p class="small muted">확인하는 중…</p>;
-  return <div class="ai-card-swap"><AiStatus ai={ai} onChange={setAi} onSwap={onNew} swapLabel="다른 키 쓰기" onDisconnect={async () => { await forgetKey(id); toast('연결을 끊었어요.'); onDone(); }} /></div>;
+  return <div class="ai-card-swap"><AiStatus ai={ai} onChange={setAi} onSwap={onNew} swapLabel="키 변경" onDisconnect={async () => { await forgetKey(id); toast('연결을 해제했어요.'); onDone(); }} /></div>;
 }
 
 /**
@@ -184,27 +184,27 @@ function ChatWay({ card, p, go, reload, idle, onClose }) {
         <li>
           <b>프롬프트를 복사하고 {card.app}를 열어요</b>
           <div class="btn-row"><a class="btn btn-primary" href={bot.url} target="_blank" rel="noopener" aria-disabled={!prompt ? 'true' : undefined} onClick={send}>복사하고 {card.app} 열기<span class="ext" aria-hidden="true">↗</span></a>
-            <button type="button" class="btn-link" disabled={!prompt} onClick={() => { copyNow(prompt); setSent(true); toast('프롬프트를 복사했어요.'); }}>복사만 하기</button></div>
+            <button type="button" class="btn-link" disabled={!prompt} onClick={() => { copyNow(prompt); setSent(true); toast('프롬프트를 복사했어요.'); }}>프롬프트 복사</button></div>
         </li>
         <li>
           <b>교재 원본 파일을 그 창에 첨부해 주세요</b>
           <p class="small">AI가 교재 파일을 직접 읽어요. {files.map((f) => f.name).join(', ') || '넣은 교재'}를 입력 칸에 끌어다 놓거나 ＋(첨부) 버튼으로 넣고 보내세요.</p>
           {notPdf && <p class="small warn-line">Claude는 PPT·한글 파일을 받지 못해요. PDF로 저장해 첨부해 주세요.</p>}
-          {files.length > 0 && <div class="btn-row">{files.map((f) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => getFile(f)}>{f.name} 내려받기</button>)}</div>}
+          {files.length > 0 && <div class="btn-row">{files.map((f) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => getFile(f)}>{f.name} 다운로드</button>)}</div>}
         </li>
         <li>
           <b>답을 넣어요</b>
-          <p class="small">답이 다 나오면 코드 블록의 복사 버튼을 누르고 돌아와 [답 넣기]를 눌러요. 내려받은 .html 파일을 아래에 끌어다 놓아도 돼요.</p>
+          <p class="small">답이 다 나오면 코드 블록의 복사 버튼을 누르고 돌아와 [답 붙여넣기]를 눌러요. 내려받은 .html 파일을 아래에 끌어다 놓아도 돼요.</p>
           {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}>
             <b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 만들 수 없어요.'}</b>
             {!res.continuePrompt && (res.problems || []).map((x) => <span>{x}</span>)}
-            {res.continuePrompt && <><span>[이어서 요청 글 복사]를 눌러 {card.app}에 보내고, 이어진 답을 복사해 다시 [답 넣기]를 눌러요. 앞의 답은 기억해 둬요.</span>
-              <div><button type="button" class="btn btn-sm btn-primary" onClick={() => { copy(res.continuePrompt, '복사했어요. AI에게 보내세요.'); setSent(true); }}>이어서 요청 글 복사</button></div></>}
+            {res.continuePrompt && <><span>[이어쓰기 프롬프트 복사]를 눌러 {card.app}에 보내고, 이어진 답을 복사해 다시 [답 붙여넣기]를 눌러요. 앞의 답은 기억해 둬요.</span>
+              <div><button type="button" class="btn btn-sm btn-primary" onClick={() => { copy(res.continuePrompt, '복사했어요. AI에게 보내세요.'); setSent(true); }}>이어쓰기 프롬프트 복사</button></div></>}
           </div></Notice></div>}
           <div class={`chat-drop${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); const f = [...(e.dataTransfer.files || [])].find((x) => /\.html?$/i.test(x.name)); if (f) take(f); else toast('.html 파일을 놓아 주세요.'); }}>
-            <div class="btn-row"><button ref={pasteRef} type="button" class={`btn btn-primary${sent ? ' nudge' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={pasteAnswer}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답 넣기' : '답 넣기'}</button>
-              <button type="button" class="btn" onClick={() => fileRef.current?.click()}>.html 파일 고르기</button></div>
+            <div class="btn-row"><button ref={pasteRef} type="button" class={`btn btn-primary${sent ? ' nudge' : ''}`} disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={pasteAnswer}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답 붙여넣기' : '답 붙여넣기'}</button>
+              <button type="button" class="btn" onClick={() => fileRef.current?.click()}>.html 파일 선택</button></div>
             <input ref={fileRef} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) take(f); e.target.value = ''; }} />
             <textarea class="input ta-short" rows={2} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="또는 여기에 직접 붙여넣기" aria-label={`${card.app}의 답`} />
             {answer.trim() && <div><button type="button" class="btn btn-primary" disabled={busy} onClick={() => take(answer)}>이 답으로 만들기</button></div>}
@@ -215,7 +215,7 @@ function ChatWay({ card, p, go, reload, idle, onClose }) {
   );
 }
 
-const BRIDGE_CMD = 'npx github:yoorrard/lecpage';
+const BRIDGE_CMD = 'npx -y github:yoorrard/lecpage studio';
 /**
  * 내 PC의 Claude Code·Codex(연결 프로그램 lecpage studio, docs/plan-ai-first.md §10): 앱을 127.0.0.1에서 보여 주며 토큰을 넣어 줌.
  * 그 창이면 GET /bridge/status → agents[{ id, name, installed, ready, auth, note_ko }]. 다른 곳(lecpage.com)에서는 띄우는 법만
@@ -233,7 +233,7 @@ function LocalWay({ p, ready, idle, go }) {
   }
   return (
     <details class="ai-alt ai-alt-rec" open={!!st}>
-      <summary><b>추천 · 내 PC의 Claude Code·Codex</b><span>내 구독의 AI 에이전트가 교재를 읽고 사이트를 쓰고, 화면을 보며 다듬어요.</span></summary>
+      <summary><b>추천 · 내 PC의 Claude Code·Codex</b><span>내 Claude·ChatGPT 구독으로 AI 에이전트가 만들고 화면을 보며 다듬어요. PC에 한 번 설치해요.</span></summary>
       <div class="ai-alt-b">
         {st ? <>
           <p class="small"><span class="dot-ok" aria-hidden="true" /> 연결 프로그램이 켜져 있어요.</p>
@@ -245,11 +245,14 @@ function LocalWay({ p, ready, idle, go }) {
           {agents.some((a) => a.installed && a.auth === 'api-key') && <p class="small warn-line">{agents.filter((a) => a.installed && a.auth === 'api-key').map((a) => AGENT_NAME[a.id]).join('·')}는 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
         </> : <>
           <ol class="small ai-alt-steps">
-            <li>Node.js가 있는 PC의 터미널에서 아래 명령을 실행해요.</li>
-            <li>브라우저에 <code>127.0.0.1</code>로 시작하는 주소의 lecpage가 열려요. 이 연수는 [파일로 저장]으로 옮겨 그 창에서 열어요.</li>
-            <li>그 창의 AI 고르기에서 [Claude Code 쓰기]나 [Codex 쓰기]를 눌러요.</li>
+            <li><b>Node.js</b>(22 이상)를 설치해요. <a href="https://nodejs.org/ko" target="_blank" rel="noopener">nodejs.org</a>에서 LTS를 받아요.</li>
+            <li><b>Claude Code</b>(<a href="https://code.claude.com/docs/ko/setup" target="_blank" rel="noopener">설치 안내</a>)를 깔고 <code>claude auth login</code>으로 로그인해요.</li>
+            <li>또는 <b>Codex</b>를 <code>npm i -g @openai/codex</code>로 깔고 <code>codex login</code>으로 로그인해요.</li>
+            <li>터미널을 열어요(Windows는 PowerShell, Mac은 터미널). 아래 명령을 붙여 넣고 Enter를 눌러요.
+              <div class="agent-cmd"><code>{BRIDGE_CMD}</code><button type="button" class="btn btn-sm" aria-label="연결 프로그램 실행 명령 복사" onClick={() => copy(BRIDGE_CMD, '명령을 복사했어요. 터미널에 붙여 넣고 Enter를 눌러요.')}>복사</button></div></li>
+            <li>브라우저에 <code>127.0.0.1</code>로 시작하는 lecpage가 열려요. 이 연수를 [파일로 저장]하고, 그 창에서 [저장한 파일 열기]로 열어요.</li>
+            <li>그 창의 AI 선택에서 [Claude Code 쓰기]나 [Codex 쓰기]를 눌러요.</li>
           </ol>
-          <div class="agent-cmd"><code>{BRIDGE_CMD}</code><button type="button" class="btn btn-sm" aria-label="연결 프로그램 실행 명령 복사" onClick={() => copy(BRIDGE_CMD, '명령을 복사했어요.')}>복사</button></div>
         </>}
         <p class="small muted">Claude Code는 내 Claude 구독으로 로그인한 그대로 써요. ANTHROPIC_API_KEY가 설정돼 있으면 그 키로 비용이 나가요. 교재와 작업 파일은 내 PC의 빈 임시 폴더에서만 다뤄요.</p>
       </div>
@@ -270,7 +273,7 @@ function AgentWay() {
             <button type="button" class="btn btn-sm" aria-label={`${c.for} 설치 명령 복사`} onClick={() => copy(c.cmd, '명령을 복사했어요.')}>복사</button>
           </div>
         ))}
-        <p class="small">AI 에이전트에게 "이 교재로 lecpage 강의 사이트 만들어 줘"라고 말해요. 다 만들면 나온 .lecpage 파일을 이 화면의 교재 자리에 놓아요. 미리보기·고치기·배포를 여기서 이어서 해요. <a href="#/help/skill">도구별 설치 방법</a></p>
+        <p class="small">AI 에이전트에게 "이 교재로 lecpage 강의 사이트 만들어 줘"라고 말해요. 다 만들면 나온 .lecpage 파일을 이 화면의 교재 자리에 놓아요. 미리보기·수정·배포를 여기서 이어서 해요. <a href="#/help/skill">도구별 설치 방법</a></p>
       </div>
     </details>
   );

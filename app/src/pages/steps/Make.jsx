@@ -29,7 +29,7 @@ function useNow(on) {
 /** 오류 안내의 단추(생성 쪽 error.actions) → 할 일 */
 export function errorActions(p, job, go) {
   const prov = PROVIDERS[job.provider] || {};
-  const LABEL = { resume: '이어서 만들기', connect: '다른 AI 고르기', paste: '쓰던 AI 창으로(키 없이)', key: '키 페이지 열기', billing: '결제 페이지 열기', link: job.error?.link?.label || '확인 페이지 열기' };
+  const LABEL = { resume: '계속 만들기', connect: '다른 AI 선택', paste: '쓰던 AI로(키 없이)', key: '키 페이지 열기', billing: '결제 페이지 열기', link: job.error?.link?.label || '확인 페이지 열기' };
   const HREF = { key: prov.keyUrl, billing: prov.billingUrl, link: job.error?.link?.href };
   const toChat = () => { try { sessionStorage.setItem('lecpage:open-chat', PROVIDERS[job.provider] ? job.provider : 'openai'); } catch { /* 저장이 막힌 창: 교재 넣기 화면에서 고름 */ } go(1); };
   const run = (id) => (id === 'resume' ? resumeGeneration(p.id) : id === 'paste' ? toChat() : go(1));
@@ -44,8 +44,8 @@ function Making({ p, job, go }) {
   if (job.status === 'idle' || !job.steps?.length) {
     return (
       <>
-        <StepHead title="AI가 만들기" desc="교재를 넣고 AI를 고르면 여기서 만드는 과정을 보여 줘요." />
-        <div class="making-empty"><Mascot size={84} mood="idle" /><p>아직 만들지 않았어요.</p><button type="button" class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 고르기</button></div>
+        <StepHead title="AI가 만들기" desc="교재를 넣고 AI를 선택하면 여기서 만드는 과정을 보여 줘요." />
+        <div class="making-empty"><Mascot size={84} mood="idle" /><p>아직 만들지 않았어요.</p><button type="button" class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 선택</button></div>
       </>
     );
   }
@@ -79,12 +79,12 @@ function Making({ p, job, go }) {
           {acts.map((a, i) => (a.href ? <a class={`btn btn-sm${i ? '' : ' btn-primary'}`} href={a.href} target="_blank" rel="noopener">{a.label}<span class="ext" aria-hidden="true">↗</span></a>
             : <button type="button" class={`btn btn-sm${i ? '' : ' btn-primary'}`} onClick={a.run}>{a.label}</button>))}
           {e.kind === 'no-material' ? <button type="button" class="btn btn-sm btn-primary" onClick={() => go(1)}>교재 넣기</button>
-            : !acts.some((a) => a.id === 'resume') && <button type="button" class={`btn btn-sm${acts.length ? '' : ' btn-primary'}`} onClick={() => resumeGeneration(p.id)}>다시 해 보기</button>}
+            : !acts.some((a) => a.id === 'resume') && <button type="button" class={`btn btn-sm${acts.length ? '' : ' btn-primary'}`} onClick={() => resumeGeneration(p.id)}>다시 시도</button>}
         </div>}
         <div class="btn-row">
-          {running && <button type="button" class="btn" onClick={() => stopGeneration(p.id)}>멈추기</button>}
-          {job.status === 'paused' && <button type="button" class="btn btn-primary" onClick={() => resumeGeneration(p.id)}>이어서 만들기</button>}
-          {(job.status === 'paused' || (job.status === 'error' && !acts.some((a) => a.id === 'connect'))) && <button type="button" class="btn btn-quiet" onClick={() => go(1)}>다른 AI 고르기</button>}
+          {running && <button type="button" class="btn" onClick={() => stopGeneration(p.id)}>중지</button>}
+          {job.status === 'paused' && <button type="button" class="btn btn-primary" onClick={() => resumeGeneration(p.id)}>계속 만들기</button>}
+          {(job.status === 'paused' || (job.status === 'error' && !acts.some((a) => a.id === 'connect'))) && <button type="button" class="btn btn-quiet" onClick={() => go(1)}>다른 AI 선택</button>}
         </div>
         <p class="small muted">{p.demo ? '체험이라 키가 필요 없고 어디로도 보내지 않아요.' : '창을 닫거나 다른 일을 해도 돼요. 다시 열면 멈춘 단계부터 이어서 해요. 다 만들면 미리보기와 목록이 열려요.'}</p>
       </section>

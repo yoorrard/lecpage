@@ -204,7 +204,7 @@ export function LiveSetup({ p, update, prefer = null }) {
         <Seg label="연결 방법" value={method} onChange={(v) => { setMethod(v); setAt(0); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' }); }} options={order.map((v) => ({ value: v, label: NAME[v] }))} />
         {B?.atLimit_ko && <p class="small muted">{B.atLimit_ko}</p>}
         <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
-        <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={useLocal}>이 컴퓨터에서만 시험하기</button></div>
+        <div class="btn-row"><button class="btn btn-sm btn-quiet" onClick={useLocal}>이 컴퓨터에서 테스트</button></div>
       </>}
       <p class="small muted">연수 코드 <span class="mono">{code}</span> · 기록은 강사님 계정에만 쌓이고 lecpage 운영자는 볼 수 없어요. 연수가 끝나면 강사 화면에서 내려받고 지워 주세요.</p>
     </div>
