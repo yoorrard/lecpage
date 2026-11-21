@@ -23,7 +23,18 @@ export const RULES = `배포 조건(이것만은 꼭)
 export const KIT = `강의 기능(쓰고 싶을 때만): 자리 표시를 넣으면 lecpage가 실제 기능으로 채우고 강사 화면·QR도 만들어요.
 <div data-lp="qa"></div> 질문 · <div data-lp="poll" data-question="…" data-options='["…","…"]'></div> 투표 · <div data-lp="board" data-prompt="…"></div> 보드 · <div data-lp="attend"></div> 출석 · <div data-lp="survey"></div> 설문 · <div data-lp="deck" data-pages="1-12"></div> 교재 넘기기 · 실습 단계 <section data-lp-step="s1" data-title="…">. 자리 표시 안은 비워 둬요. 기능의 색은 :root의 --lp-accent·--lp-ink·--lp-paper(#RRGGBB)를 따라요.`;
 
-const META_FORM = '{"title":"…","sessions":[{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}],"venue":"…","instructors":[{"name":"…","org":"…"}]}';
+/**
+ * 디자인 서재(짧은 판): skills/lecpage/references/design-library.md를 줄인 것. 고를 수 있는 낱말·기법을 넓혀 줄 뿐 규칙이 아님.
+ * 에이전트 길(연결 프로그램·Skill)은 전체 파일을 작업 폴더에 둠
+ */
+export const LIBRARY = `디자인 서재(필요하면 참고, 따를 의무 없음. 교재와 연수가 먼저고, 섞거나 여기 없는 방식을 써도 돼요)
+- 결: 편집·잡지(큰 명조 제목, 비대칭 2단, 선으로 장 구분) · 스위스 격자(왼쪽 정렬, 아주 큰 숫자, 강조색 하나) · 리소그래프(별색 겹침 mix-blend-mode, 어긋난 판, 망점) · 손그림 공책(줄 바탕, 손글씨 메모, 빨간 펜 동그라미) · 설계도(모눈, 치수선, 고정폭 숫자) · 데이터 시각화(길이에 비례한 막대, 손으로 그린 차트) · 포스터(화면을 채우는 큰 글자) · 콜라주(오려 붙인 쪽 그림, 테이프) · 픽셀 아케이드(점수판 진행 표시) · 네온·유리(어두운 바탕, 빛나는 선 그림, 유리 막대, 원근 격자) · 따뜻한 미니멀 · 공문(교표, 이중선, □ 표시) · 칠판 · 자연·계절 · 지도·답사(스크롤 따라 그려지는 길).
+- 한글 글꼴 짝(구글 폰트 css2, 확인함): Noto Serif KR·Hahmlet + Asta Sans(편집) · Gowun Batang + Gowun Dodum(편지) · Black Han Sans·Gasoek One + Gothic A1(포스터) · IBM Plex Sans KR + IBM Plex Mono(기술) · Gaegu·Nanum Pen Script 메모(손그림) · Jua·Do Hyeon(친근) · Orbit(미래) · Song Myung·Nanum Myeongjo(인문). 숫자·영문: Fraunces·Instrument Serif·Bricolage Grotesque·Anton·Caveat. Pretendard는 jsDelivr(orioncactus/pretendard@v1.3.9). word-break:keep-all, 제목 text-wrap:balance.
+- 움직임·그림: SVG 선 그리기(pathLength="1", stroke-dasharray:1, dashoffset 1→0) · CSS 스크롤 연동(@supports (animation-timeline: view()) 안에서 animation-range: entry) · View Transitions(document.startViewTransition) · SMIL morph(점 수가 같은 d) · 캔버스 입자·생성 그림(씨앗 있는 무작위, 화면 밖·숨김이면 멈춤) · 그레인(data: SVG feTurbulence) · 손그림 떨림(feDisplacementMap) · 유리(backdrop-filter, 떠 있는 것에만) · 원근 격자(perspective + repeating-linear-gradient) · 줄 단위 가려 올리기·형광펜 칠하기. 라이브러리가 꼭 필요하면 jsDelivr의 gsap@3.15.1(+ScrollTrigger)·lenis@1.3.27·ogl@1.0.11(+esm). 움직임은 한두 곳에 몰고, prefers-reduced-motion이면 끄고, JS 없이도 내용이 처음부터 다 보이게.
+- 강의 무늬: 길이에 비례한 시간 막대와 '지금' 표시 · 실습 레일 · 원문 + 복사 버튼(data-copy-text) 프롬프트 카드와 조립기 · '교재 N쪽' 꼬리표(#deck-pN) · 나쁜 예/좋은 예 · 체크리스트 · 타이머 · 실습이 길면 쪽 나누기.
+- AI 티(무심코 나왔다면 교재에서 나온 결정으로): 보라→파랑 그라데이션 · 가운데 정렬 제목 + 버튼 둘 + 같은 카드 세 장 · 같은 크기 카드 격자·상자 속 상자 · 이모지 아이콘 · 알약 꼬리표 남발 · 모든 섹션이 떠오르는 등장 · 곳곳의 glow·뜻 없는 3D 덩어리 · 시스템 글꼴 한 벌 · 모든 섹션 같은 리듬 · 빈 구호·가짜 수치. 사람이 만든 티: 교재에서 나온 구체적인 말·숫자, 주제를 상징하는 직접 그린 그림 한 점, 큰 크기 대비, 비대칭과 리듬 있는 여백, 대담한 결정 하나.`;
+
+const META_FORM ='{"title":"…","sessions":[{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}],"venue":"…","instructors":[{"name":"…","org":"…"}]}';
 
 /** 답하는 꼴(파일마다 코드 블록 하나, 여는 줄에 경로) */
 const FORMAT = `답하는 꼴(lecpage가 읽어요): 파일마다 코드 블록 하나로, 여는 줄에 경로를 적어요. 설명 글은 쓰지 않아요.
@@ -77,6 +88,8 @@ ${GOAL}
 ${askOf({ request, reference, info })}
 
 ${KIT}
+
+${LIBRARY}
 
 ${RULES}
 

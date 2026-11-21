@@ -287,7 +287,9 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   const run = readLog().find((l) => l.id === 'claude' && l.argv);
   assert.deepEqual(run.argv, St.agentArgs('claude', { ws: run.cwd }));
   // 끼어들지 않음: 작업 폴더에는 할 일·키트 설명·교재·작업 폴더만(디자인 원칙·레퍼런스 사이트를 넣지 않음)
-  assert.deepEqual(run.files.sort(), ['TASK.md', 'kit.md', 'material', 'work'].sort(), '훅·.mcp.json 없는 빈 폴더');
+  const library = existsSync(join(HERE, '..', '..', 'references', 'design-library.md')) ? ['design-library.md'] : []; // 디자인 서재(필요하면 참고)
+  assert.deepEqual(run.files.sort(), ['TASK.md', 'kit.md', ...library, 'material', 'work'].sort(), '훅·.mcp.json 없는 빈 폴더');
+  if (library.length) assert.match(run.task, /design-library\.md.*따를 의무 없음/);
   assert.ok(run.cwd.includes(St.TMP_PREFIX));
   assert.match(run.task, /material\/연수 교재\.pdf/);
   assert.match(run.task, /따뜻한 색으로/);
