@@ -2,7 +2,7 @@
 
 API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.com 화면에서 바로 사이트를 만들게 하는 작은 PC 프로그램 **lecpage 커넥트**예요(예전 이름 lecpage studio, CLI는 `connect`·`studio` 둘 다). 사용량은 그 계정의 요금제에서 차감돼요.
 - **ChatGPT 계정**: lecpage 커넥트가 [Sign in with ChatGPT](https://developers.openai.com/siwc)(오픈소스·로컬 앱의 ChatGPT 요금제 사용)로 로그인하고, 이 PC에서 OpenAI Responses API를 바로 불러요. Codex 설치가 필요 없어요.
-- **Claude 계정**: PC에 설치·로그인한 Claude Code를 고치지 않고 빈 임시 폴더에서 실행해요. 없으면 [설치]·[로그인] 버튼이 공식 명령을 보이는 터미널 창에서 돌려요.
+- **Claude 계정**: PC에 설치·로그인한 Claude Code를 고치지 않고 빈 임시 폴더에서 실행해요. [Claude 계정으로 로그인]을 누르면 터미널 없이 이어져요: 없으면 공식 설치 명령을 창 없이 돌리고(받는 파일 크기로 진행 막대), 이어서 `claude auth login`을 돌려 Claude가 여는 브라우저 창에서 승인하면 끝나요(창이 안 열리면 앱의 [로그인 창 열기]와 코드 칸). Claude 데스크톱 앱이 있으면 그 안의 Claude Code를 써서 설치를 건너뛰어요. 공식 명령을 보이는 터미널 창에서 하는 길은 앱의 '다른 방법'에 있어요.
 - **Codex**(선택): 설치·로그인한 Codex도 같은 방식으로 써요.
 
 ## 설치·띄우기
@@ -43,9 +43,9 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 |---|---|
 | lecpage.com이 lecpage 커넥트를 켜 달라고 해요 | 받은 `lecpage-connect.cmd`를 두 번 누르거나(Windows) 터미널 한 줄을 다시(macOS·Linux). 켰는데도 그대로면 주소창 왼쪽 아이콘 → 사이트 설정에서 "로컬 네트워크"를 허용 |
 | "짝이 맞지 않아요" | lecpage 커넥트를 끄고 다시 켜기(lecpage.com이 다시 열리며 짝을 맞춤) |
-| "이 PC에 Claude Code가 없어요" | 앱의 [Claude 계정으로 로그인]이 설치와 로그인을 터미널 창에서 이어서 해요 |
+| "이 PC에 Claude Code가 없어요" | 앱의 [Claude 계정으로 로그인]이 설치(창 없이)와 로그인(브라우저)을 이어서 해요. 보안 프로그램·회사 네트워크가 막으면 claude.ai·downloads.claude.ai를 허용하거나 '다른 방법'의 [터미널 창에서 하기] |
 | "로그인되어 있지 않아요" | 앱의 [Claude 계정으로 로그인] (또는 `claude auth login` / `codex login`) |
-| "2.1.314 이상이 필요해요" | 앱의 [Claude Code 업데이트] (또는 `claude update`) |
+| "2.1.314 이상이 필요해요" | 앱의 [Claude 계정으로 로그인](공식 설치 명령으로 새 버전) 또는 `claude update` |
 | "ChatGPT 요금제 사용을 허락하지 않았어요" | [ChatGPT 계정으로 로그인]을 다시 눌러 동의 화면에서 허락 |
 | "ChatGPT 사용 한도에 닿았어요" | 한도가 차면 [계속 만들기]. 사용량: chatgpt.com/settings/usage |
 | `npm error … git … enoent` | Git이 없어요 → 위의 codeload 주소로 |
@@ -59,6 +59,7 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - `POST /bridge/chatgpt/login` `{ open?, reconsent? }` → `{ ok, url }`(OpenAI 로그인 주소. `open`이면 lecpage 커넥트가 기본 브라우저로 엶) · `GET /auth/callback`(토큰 없음, state 확인) · `GET /bridge/chatgpt` → 위 `chatgpt` · `DELETE /bridge/chatgpt` → `{ revoked, … }` · `POST /bridge/chatgpt/welcome` · `GET /bridge/chatgpt/models` → `{ models:[{ id, label }] }`
 - `POST /bridge/chatgpt/responses` (Responses 요청 본문: `model`·`instructions`·`input`·`text`·`reasoning`만 씀) → OpenAI SSE 그대로. 거절은 `{ ok:false, error, code, status, message, message_ko }`(예: 429 `subscription_sharing_usage_limit_exceeded`, 403 `subscription_sharing_user_not_eligible`, 401 `not-connected`)
 - `POST /bridge/agents/:id/install|login|update` (id: `claude`·`codex`) → `{ ok:true, action, how }`(터미널 창을 엶: `powershell`·`terminal`·리눅스 터미널 이름) 또는 `{ ok:false, action, how:'inline', command, message_ko }`(창을 못 열어 lecpage 커넥트 안에서 돌림). 이미 설치돼 있으면 install은 login(또는 update)으로
+- `POST /bridge/agents/claude/setup` → `{ ok, setup }`(터미널 없이 연결 시작, 하는 중이면 그것) · `GET /bridge/setup` → `{ setup:null|{ step:check|install|login|done|error|stopped, running, install:''|run|done|skip, progress:{ phase:download|setup|done, done, total }, loginUrl, waitingCode, codeSent, from:''|desktop, error:{ code:offline|blocked|cancelled|timeout|bad-code|memory|install-failed|login-failed|missing|old, at, title_ko, message_ko }, tail? } }` · `POST /bridge/setup/code` `{ code }`(가운데 # 포함, Claude Code 표준 입력으로만, 기록 안 함. 400 bad-code · 409 not-waiting) · `DELETE /bridge/setup`(취소). `/bridge/status`의 `setup`(tail 없이)으로 새로 고쳐도 이어 그림
 - `GET /bridge/term` → `{ term:null|{ agent, action, running, code, output, startedAt } }`(창 없이 돌린 설치·로그인의 출력, 뒤 16KB, 색 코드 뺌) · `POST /bridge/term/input` `{ text }`(한 줄 보냄: 로그인 코드 붙여 넣기, 409 돌고 있지 않음) · `DELETE /bridge/term`(멈춤)
 - `GET·POST /bridge/autostart` `{ on }` → `{ available, on }`(Windows·macOS·Linux, 받은 실행 파일로 켰을 때만. 아니면 409)
 - `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site?, target? }` → 202 `{ ok, jobId }`. `site` 값은 글 또는 `{ base64 }`. 새로 만들 때도 앱이 그린 쪽 그림을 `site['material/p-NNN.webp']`로 보내면 써요(이 PC에 LibreOffice·pdftoppm이 없으면 lecpage 커넥트가 쪽 그림을 못 그려요).

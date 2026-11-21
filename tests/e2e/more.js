@@ -115,6 +115,42 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('local: generation via local agent', /Claude Code/.test(await q.locator('.step-head').innerText()) || await q.locator('.workspace').count() === 1);
   L.ok('local: no page errors', e2.length === 0, JSON.stringify(e2));
 
+  // ── D2. Claude 계정 연결(터미널 없이): 두 로그인 버튼은 같은 모양 · 세 단계 안내(설치 진행 막대 → 브라우저 로그인 → 코드 칸) → 연결되면 바로 만들기 ──
+  const c4 = await b.newContext({ viewport: { width: W, height: HH } });
+  await L.mockAi(c4);
+  await c4.addInitScript(() => { const add = () => { const m = document.createElement('meta'); m.name = 'lecpage-bridge'; m.content = 'tok-123'; document.head.appendChild(m); }; if (document.head) add(); else document.addEventListener('DOMContentLoaded', add); });
+  let connected = false; let polls = 0; let gotCode = '';
+  const sv = (o) => ({ agent: 'claude', running: true, startedAt: 1, install: '', progress: null, loginUrl: '', waitingCode: false, codeSent: false, from: '', error: null, ...o });
+  const view = () => (connected ? sv({ step: 'done', running: false, install: 'done' }) : polls < 3 ? sv({ step: 'install', install: 'run', progress: { phase: 'download', done: 60e6, total: 120e6 } }) : sv({ step: 'login', install: 'done', loginUrl: base2 + '#claude-login', waitingCode: true }));
+  await c4.route(/\/bridge\/status(\?fresh)?$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, version: '0.1.0', chatgpt: { connected: false }, agents: [connected ? { id: 'claude', installed: true, version: '2.1.330', auth: 'subscription', loggedIn: true, ready: true } : { id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) }));
+  await c4.route(/\/bridge\/agents\/claude\/setup$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, setup: sv({ step: 'check' }) }) }));
+  await c4.route(/\/bridge\/setup$/, (r) => { polls++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, setup: view() }) }); });
+  await c4.route(/\/bridge\/setup\/code$/, (r) => { gotCode = JSON.parse(r.request().postData() || '{}').code || ''; connected = true; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
+  const u = await c4.newPage(); const e4 = L.watch(u);
+  await u.goto(base2, { waitUntil: 'load' });
+  await u.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+  await u.waitForSelector('.ai-sub button:has-text("Claude 계정으로 로그인")', { timeout: 90000 });
+  L.ok('claude: same button style as ChatGPT', await u.locator('.ai-sub-row button.btn-primary:has-text("ChatGPT 계정으로 로그인")').count() === 1 && await u.locator('.ai-sub-row button.btn-primary:has-text("Claude 계정으로 로그인")').count() === 1);
+  L.ok('claude: no terminal needed (hint)', /자동으로 설치/.test(await u.locator('.ai-sub').innerText()));
+  L.ok('claude: terminal way only under other ways', await u.locator('.ai-sub button:has-text("터미널 창에서 하기")').count() === 0 && await u.locator('details.ai-more .ai-alt-row:has-text("Claude Code 터미널로") button:has-text("터미널 창에서 하기")').count() === 1);
+  await u.click('.ai-sub button:has-text("Claude 계정으로 로그인")');
+  L.ok('claude: consent once', await L.consent(u));
+  await u.waitForSelector('.setup .setup-bar[aria-valuenow="50"]', { timeout: 10000 });
+  L.ok('claude: 3-step guide + install progress', await u.locator('.setup-step').count() === 3 && /50%/.test(await u.locator('.setup-step').first().innerText()));
+  await u.screenshot({ path: L.OUT + `${tag}-claude-install.png`, fullPage: true });
+  await u.waitForSelector('.setup-step.is-now:has-text("브라우저에서 로그인")', { timeout: 10000 });
+  const [pop] = await Promise.all([c4.waitForEvent('page', { timeout: 5000 }).catch(() => null), u.click('.setup-login a:has-text("로그인 창 열기")')]);
+  if (pop) await pop.close();
+  await u.waitForSelector('.setup-code input', { timeout: 5000 });
+  await u.fill('.setup-code input', 'abcd1234#efgh5678');
+  await u.screenshot({ path: L.OUT + `${tag}-claude-login.png`, fullPage: true });
+  await u.click('.setup-code button:has-text("연결")');
+  await u.waitForSelector('.making, .workspace, .ai-sub button:has-text("Claude로 만들기")', { timeout: 20000 });
+  L.ok('claude: code sent to lecpage 커넥트', gotCode === 'abcd1234#efgh5678');
+  L.ok('claude: connected → starts making', await u.locator('.making, .workspace').count() > 0 || await u.locator('.ai-sub button:has-text("Claude로 만들기")').count() === 1);
+  L.ok('claude: no page errors', e4.length === 0, JSON.stringify(e4));
+  await c4.close();
+
   // ── E. lecpage 커넥트 받기: 지금 운영체제 방법 하나만, 나머지는 [다른 운영체제]에 ──
   for (const [os, ua] of [['win', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'], ['mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36']]) {
     const c3 = await b.newContext({ viewport: { width: W, height: HH }, userAgent: ua });

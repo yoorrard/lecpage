@@ -8,7 +8,8 @@
 //   GET /bridge/jobs/:id/events (SSE) { type:'step'|'log'|'done'|'error', label_ko?, text?, error? }
 //   GET /bridge/jobs/:id/result → { site, meta, issues } · DELETE /bridge/jobs/:id
 //   POST /bridge/chatgpt/login → { url } · DELETE /bridge/chatgpt · GET /bridge/chatgpt/models · POST /bridge/chatgpt/responses(SSE 중계)
-//   POST /bridge/agents/:id/install|login|update(보이는 터미널 창에서 공식 명령) · GET·POST /bridge/autostart
+//   POST /bridge/agents/claude/setup(터미널 없이 설치·로그인) · GET·DELETE /bridge/setup · POST /bridge/setup/code { code }
+//   POST /bridge/agents/:id/install|login|update(보이는 터미널 창에서 공식 명령, 다른 방법) · GET·POST /bridge/autostart
 // 에이전트는 PC에서 계속 돌므로 진행 연결이 끊기거나 새로 고쳐도 같은 jobId로 다시 붙음.
 import { AiError, readSSE, toBase64 } from './providers/common.js';
 
@@ -97,6 +98,12 @@ export const chatgptWelcomeSeen = () => postJson('/bridge/chatgpt/welcome').catc
 export async function chatgptModels() { try { return (await (await call('/bridge/chatgpt/models')).json()).models || []; } catch { return []; } }
 /** Claude Code·Codex: install(설치 + 로그인)|login|update → 보이는 터미널 창. { ok, action, command? } */
 export const agentAction = (id, action) => postJson(`/bridge/agents/${encodeURIComponent(id)}/${action}`);
+/** Claude 계정 연결(터미널 없이): 없으면 창 없이 설치 → Claude Code 로그인(브라우저). { ok, setup:{ step, running, progress, loginUrl, waitingCode, error } } */
+export const agentSetup = (id) => postJson(`/bridge/agents/${encodeURIComponent(id)}/setup`);
+export const setupStatus = () => call('/bridge/setup').then((r) => r.json()).then((j) => j.setup || null);
+/** 로그인 화면에 나온 코드(가운데 # 포함)를 Claude Code에 넘김(lecpage 커넥트도 기록하지 않음) */
+export const setupCode = (code) => postJson('/bridge/setup/code', { code });
+export const setupCancel = () => call('/bridge/setup', { method: 'DELETE' }).then((r) => r.json());
 export const autostart = (on) => (on === undefined ? call('/bridge/autostart').then((r) => r.json()) : postJson('/bridge/autostart', { on: !!on }));
 
 /**
