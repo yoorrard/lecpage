@@ -119,8 +119,10 @@ export function Home() {
           <div class="ld-hero-more">
             {recent ? <a class="btn ld-try ld-resume" href={`#/p/${recent.id}/${recent.stage || stageOf(recent.step || 1)}`}><span>계속 만들기:</span><span class="ld-resume-t">{recent.title || '이름 없는 연수'}</span><span aria-hidden="true">→</span></a>
               : <a class="btn ld-try" href="#/demo">먼저 해보기<span aria-hidden="true"> →</span></a>}
-            <button type="button" class="btn btn-quiet" {...busyProps('blank')} onClick={() => startWith([])}>교재 없이 시작하기</button>
-            <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
+            <span class="ld-hero-quiet">
+              <button type="button" class="btn btn-quiet" {...busyProps('blank')} onClick={() => startWith([])}>교재 없이 시작하기</button>
+              <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
+            </span>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks';
 import { useProgress } from './motion.js';
 import { SLIDES, shot } from './showcases.js';
+import { lightBar, StatusIcons } from './devices.jsx';
 
 // 다섯 단계(대표 사례 '질문이 먼저, AI는 그다음'의 실제 교재 쪽과 사이트 그림으로)
 const STEPS = [
@@ -25,7 +26,7 @@ const FAN = [[-6, 4, -8, -32, -21, -2], [-3, 2, -4, -4, -11, 1.5], [0, 0, 0, -32
 export function Story() {
   const sec = useRef();
   useProgress(sec, '--t', { scale: 4 });
-  const pc = shot('pc-neo-teach'), m = shot('m-neo-teach');
+  const pc = shot('pc-neo-teach'), m = shot('ph-neo-teach'), bar = m.bar || '#0b0d14';
   return (
     <section class="ld-story" aria-labelledby="ld-story-h">
       <header class="ld-story-head">
@@ -40,9 +41,9 @@ export function Story() {
               <i class="ld-st-scan" />
             </div>
             <ul class="ld-st-facts">{FACTS.map(([k, v, pg], i) => <li style={{ '--k': i }}><small>{k}</small><b>{v}</b><em>교재 {pg}쪽</em></li>)}</ul>
-            <div class="ld-st-pc"><img src={pc.src} width={pc.w} height={pc.h} alt="" loading="lazy" decoding="async" /></div>
+            <div class="ld-laptop ld-st-pc"><div class="ld-lid"><div class="ld-screen"><img src={pc.src} width={pc.w} height={pc.h} alt="" loading="lazy" decoding="async" /></div></div><div class="ld-base" /></div>
             <ul class="ld-st-tags">{DESIGN.map((t, i) => <li style={{ '--k': i }}>{t}</li>)}</ul>
-            <div class="ld-st-m"><img src={m.src} width={m.w} height={m.h} alt="" loading="lazy" decoding="async" /><i class="ld-st-edit"><span>글 수정</span></i></div>
+            <div class={`ld-phone ld-st-m${lightBar(bar) ? ' is-light' : ''}`} style={{ '--bar': bar }}><div class="ld-phone-screen"><div class="ld-phone-bar"><span>13:50</span><i class="ld-phone-cam" /><StatusIcons /></div><div class="ld-phone-view"><img class="is-on" src={m.src} width={m.w} height={m.h} alt="" loading="lazy" decoding="async" /><i class="ld-st-edit"><span>글 수정</span></i></div></div></div>
             <ul class="ld-st-kit">{KIT.map((t, i) => <li style={{ '--k': i }}>{t}</li>)}</ul>
             <ul class="ld-st-dev"><li>휴대폰</li><li>태블릿</li><li>PC</li></ul>
           </div>

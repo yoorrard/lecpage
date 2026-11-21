@@ -151,17 +151,16 @@
 .ld-st-facts small{color:var(--muted);font-size:.86em;font-weight:650}
 .ld-st-facts b{font-weight:760;color:var(--ink)}
 .ld-st-facts em{font-style:normal;font-size:.82em;font-weight:700;color:var(--lav-deep)}
-.ld-st-pc{position:absolute;left:5cqw;top:12cqh;width:66cqw;padding:1.1cqw 1.1cqw 1.4cqw;border-radius:1.6cqw 1.6cqw .6cqw .6cqw;background:var(--ld-bezel);box-shadow:0 3cqw 6cqw -3cqw rgba(15,10,35,.6);
+/* 노트북·휴대폰 틀은 첫 화면과 같은 공통 틀(.ld-laptop·.ld-phone, landing.css)이고 여기서는 크기·자리·나타나는 움직임만 정해요 */
+.ld-st-pc{--L:66cqw;--o:calc(var(--L) * .034);position:absolute;left:calc(5cqw + var(--o));top:12cqh;margin:0;
   opacity:var(--b);transform:translateY(calc((1 - var(--b)) * 6cqh)) scale(calc(.88 + var(--b) * .12));transform-origin:50% 0;z-index:3}
-.ld-st-pc img{width:100%;height:auto;border-radius:.5cqw}
+.ld-st-pc .ld-screen img{width:100%;height:100%}
 .ld-st-tags{position:absolute;left:7cqw;bottom:7cqh;display:flex;flex-wrap:wrap;gap:1cqw;width:62cqw;z-index:4}
 .ld-st-tags li{padding:.8cqw 1.6cqw;border-radius:1cqw;background:var(--ink);color:var(--bg);font-size:clamp(9px,1.9cqw,13px);font-weight:700;white-space:nowrap;
   opacity:calc(clamp(0,calc((var(--t) - 1.65 - var(--k) * .15) * 5),1) * (1 - clamp(0,calc((var(--t) - 2.35) * 4),1)));transform:translateY(calc((1 - clamp(0,calc((var(--t) - 1.65 - var(--k) * .15) * 5),1)) * 2cqh))}
-.ld-st-m{position:absolute;right:6cqw;bottom:5cqh;width:21cqw;aspect-ratio:9/19;padding:.9cqw;border-radius:3.4cqw;background:var(--ld-bezel);box-shadow:0 0 0 .3cqw #3d3c44 inset,0 3cqw 6cqw -2cqw rgba(15,10,35,.6);
-  opacity:var(--c);transform:translateY(calc((1 - var(--c)) * 30cqh));z-index:5}
-.ld-st-m img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:2.6cqw}
-.ld-st-edit{position:absolute;left:6%;right:6%;top:17%;height:15%;border:.35cqw dashed var(--accent);border-radius:1cqw;opacity:var(--d);transform:scale(calc(1.08 - var(--d) * .08))}
-.ld-st-edit span{position:absolute;left:-.4cqw;top:-3.2cqw;padding:.4cqw 1cqw;border-radius:.7cqw;background:var(--accent);color:var(--on-accent);font-size:clamp(8px,1.6cqw,12px);font-weight:750;white-space:nowrap}
+.ld-st-m{--P:21cqw;right:6cqw;bottom:5cqh;animation:none;opacity:var(--c);transform:translateY(calc((1 - var(--c)) * 30cqh));z-index:5}
+.ld-st-edit{position:absolute;left:6%;right:6%;top:14%;height:15%;border:max(1px,1.7cqw) dashed var(--accent);border-radius:5cqw;opacity:var(--d);transform:scale(calc(1.08 - var(--d) * .08))}
+.ld-st-edit span{position:absolute;left:-2cqw;top:-15cqw;padding:2cqw 5cqw;border-radius:3.5cqw;background:var(--accent);color:var(--on-accent);font-size:clamp(7px,7.4cqw,12px);font-weight:750;white-space:nowrap}
 .ld-st-kit{position:absolute;left:7cqw;bottom:7cqh;display:flex;flex-wrap:wrap;gap:1cqw;width:62cqw;z-index:6}
 .ld-st-kit li{padding:.8cqw 1.6cqw;border-radius:1cqw;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 .8cqw 2cqw -1cqw rgba(15,10,35,.4);font-size:clamp(9px,1.9cqw,13px);font-weight:700;color:var(--ink);white-space:nowrap;
   opacity:clamp(0,calc((var(--t) - 2.5 - var(--k) * .1) * 5),1);transform:translateY(calc((1 - clamp(0,calc((var(--t) - 2.5 - var(--k) * .1) * 5),1)) * 2cqh))}
