@@ -18,7 +18,7 @@ function blocked() {
 
 /**
  * @param {'open'|'make'|'publish'} e
- * @param {string} [k] make: 'key'|'chat', publish: 'instant'|'vercel'|'github'|'netlify'
+ * @param {string} [k] make: 'key'|'local'|'chatgpt', publish: 'instant'|'vercel'|'github'|'netlify'
  */
 export function track(e, k = '') {
   try {

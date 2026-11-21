@@ -3,21 +3,25 @@
 //   이 브라우저에 { token, port }를 기억해 http://127.0.0.1:<포트>/bridge/*를 직접 부름(CORS. Chrome·Edge는 처음 한 번 '로컬 네트워크 접근'을 물음).
 //   (2) 대신 — Safari처럼 그 길이 막힌 브라우저는 PC 프로그램이 보여 주는 http://127.0.0.1:<포트>/ 화면(같은 출처, 앱 HTML의 <meta name="lecpage-bridge">).
 // 모든 요청에 머리글 X-Lecpage-Bridge: <토큰>. 토큰·ChatGPT 로그인 정보는 PC 프로그램 안에 있고, 이 앱은 토큰(짝 맞춤용)만 압니다.
-//   GET /bridge/status → { ok, version, platform, agents:[{ id, installed, version, auth, ready, need, note_ko }], chatgpt:{ connected, plan, email, welcome }, autostart }
+//   GET /bridge/status → { ok, version, build, caps:[…], update:{ can, state, latest, available, error_ko }, platform, agents:[{ id, installed, version, auth, ready, need, note_ko }], chatgpt:{ connected, plan, email, welcome }, autostart }
+//     caps가 없거나 필요한 것이 빠졌으면 이 화면보다 예전 판(앱이 '새 버전으로 바꿔야 해요'를 보여 줌). 예전 판의 없는 경로는 404 not-found
 //   POST /bridge/jobs { agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site? } → { jobId }
 //   GET /bridge/jobs/:id/events (SSE) { type:'step'|'log'|'done'|'error', label_ko?, text?, error? }
 //   GET /bridge/jobs/:id/result → { site, meta, issues } · DELETE /bridge/jobs/:id
 //   POST /bridge/chatgpt/login → { url } · DELETE /bridge/chatgpt · GET /bridge/chatgpt/models · POST /bridge/chatgpt/responses(SSE 중계)
 //   POST /bridge/agents/claude/setup(터미널 없이 설치·로그인) · GET·DELETE /bridge/setup · POST /bridge/setup/code { code }
 //   POST /bridge/agents/:id/install|login|update(보이는 터미널 창에서 공식 명령, 다른 방법) · GET·POST /bridge/autostart
+//   GET·POST /bridge/update(새 판으로 바꾸고 같은 포트·토큰으로 다시 켬)
 // 에이전트는 PC에서 계속 돌므로 진행 연결이 끊기거나 새로 고쳐도 같은 jobId로 다시 붙음.
 import { AiError, readSSE, toBase64 } from './providers/common.js';
 
 function metaToken() {
   try { return (typeof document !== 'undefined' && document.querySelector('meta[name="lecpage-bridge"]')?.getAttribute('content')) || ''; } catch { return ''; }
 }
-import { pairing, capturePairing, forgetPairing, justPaired } from '../pair.js';
+import { pairing, capturePairing, forgetPairing, justPaired, movePairing, PC_PORTS } from '../pair.js';
 export { pairing, capturePairing, forgetPairing, justPaired };
+/** 예전 판 lecpage 커넥트(이 화면이 부르는 경로가 없음)일 때 보이는 말 */
+export const OLD_PC = 'lecpage 커넥트를 새 버전으로 바꿔야 해요.';
 function config() {
   const t = metaToken();
   if (t) return { base: '', token: t, same: true };
@@ -56,7 +60,8 @@ async function call(path, init = {}) {
   const r = await bridgeRaw(path, init);
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
-    // PC 프로그램의 거절은 { ok:false, error:'코드', message_ko }(scripts/studio.mjs fail)
+    // PC 프로그램의 거절은 { ok:false, error:'코드', message_ko }(scripts/studio.mjs fail). 경로가 없음(not-found) = 이 화면보다 예전 판
+    if (r.status === 404 && j.error === 'not-found') throw Object.assign(new AiError('gone', OLD_PC, { provider: 'local', status: 404 }), { old: true });
     throw new AiError(r.status === 404 ? 'gone' : r.status === 401 || r.status === 403 ? 'local' : r.status >= 500 ? 'busy' : 'other', j.message_ko || j.error?.message || j.error || `bridge ${r.status}`, { provider: 'local', status: r.status });
   }
   return r;
@@ -84,11 +89,26 @@ export async function pcStatus({ fresh = false, signal } = {}) {
     return { state: 'on', status: await r.json(), permission };
   } catch (e) {
     if (signal?.aborted) throw e;
+    // 기억한 포트에 없음: 다른 포트에서 켜졌을 수 있음(다른 창이 그 포트를 쓰던 때 켬 등) → 같은 토큰으로 가까운 포트를 살펴 옮김
+    if (!c.same && e?.off && permission !== 'prompt') { const port = await findPc(c); if (port) { movePairing(port); return pcStatus({ fresh, signal }); } }
     if (!c.same && isSafari()) return { state: 'blocked', reason: 'safari', permission };
     if (!c.same && (await lnaPermission()) === 'denied') return { state: 'blocked', reason: 'denied', permission: 'denied' };
     if (e?.status === 401) return { state: 'off', reason: 'token', permission };
     return { state: 'off', permission };
   } finally { clearTimeout(t); signal?.removeEventListener('abort', stop); }
+}
+let probedAt = 0;
+/** 같은 토큰으로 답하는 lecpage 커넥트의 포트(없으면 0). 15초에 한 번만 */
+async function findPc(c) {
+  if (Date.now() - probedAt < 15000) return 0;
+  probedAt = Date.now();
+  const ports = PC_PORTS.filter((p) => p !== c.port);
+  return Promise.any(ports.map(async (p) => {
+    const r = await fetch(`http://127.0.0.1:${p}/bridge/status`, { headers: { 'X-Lecpage-Bridge': c.token }, cache: 'no-store', mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback', signal: AbortSignal.timeout(1500) });
+    const j = r.ok ? await r.json() : null;
+    if (!j?.ok || !Array.isArray(j.agents)) throw new Error('no');
+    return p;
+  })).catch(() => 0);
 }
 const postJson = (path, body = {}) => call(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
 /** ChatGPT 계정으로 로그인: 로그인 주소(OpenAI). open이면 PC 프로그램이 기본 브라우저로 엶 */
@@ -104,6 +124,8 @@ export const setupStatus = () => call('/bridge/setup').then((r) => r.json()).the
 /** 로그인 화면에 나온 코드(가운데 # 포함)를 Claude Code에 넘김(lecpage 커넥트도 기록하지 않음) */
 export const setupCode = (code) => postJson('/bridge/setup/code', { code });
 export const setupCancel = () => call('/bridge/setup', { method: 'DELETE' }).then((r) => r.json());
+/** 새 판으로 바꾸기: 202 { update:{ state } }(받는 중 → 다시 켬) | 200 { upToDate } */
+export const updateStart = () => postJson('/bridge/update');
 export const autostart = (on) => (on === undefined ? call('/bridge/autostart').then((r) => r.json()) : postJson('/bridge/autostart', { on: !!on }));
 
 /**

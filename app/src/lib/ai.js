@@ -13,29 +13,6 @@ export const PROVIDERS = {
 /** 고르는 화면에 보이는 회사(이 순서대로) */
 export const VISIBLE = ['openai', 'anthropic'].filter((id) => PROVIDERS[id] && !PROVIDERS[id].hidden);
 
-// ── 만드는 길: 쓰던 AI 창(chat) · 키 연결(key). 한 번 고른 길을 이 브라우저에 기억해 다음에는 바로 그 길로 ──
-const WAY = 'lecpage:ai-way';
-export function getWay() { try { const v = localStorage.getItem(WAY); return v === 'chat' || v === 'key' ? v : ''; } catch { return ''; } }
-export function setWay(v) { try { if (v === 'chat' || v === 'key') localStorage.setItem(WAY, v); else localStorage.removeItem(WAY); } catch { /* 저장 못 해도 이번에는 고른 대로 */ } }
-
-/**
- * 쓰던 AI 창. prefill: 프롬프트를 입력 칸에 채운 채 여는 주소(공식 문서가 있는 Claude만, 그 길이 안일 때만).
- * Claude 문서(support.claude.com 'Open Claude Desktop with a link', 2026-11)는 q 값을 약 14,000자에서 자른다고 함 → 그보다 짧을 때만 씀.
- * ChatGPT ?q=는 공식 문서가 없어 쓰지 않음. 어느 쪽이든 프롬프트는 늘 클립보드에도 복사함(채워지지 않으면 붙여 넣으면 됨)
- */
-export const PREFILL_MAX = 13900;
-export const CHATBOTS = [
-  { id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com/' },
-  { id: 'claude', name: 'Claude', url: 'https://claude.ai/new', prefill: (t) => (t && t.length <= PREFILL_MAX ? `https://claude.ai/new?q=${encodeURIComponent(t)}` : '') },
-];
-const BOT = 'lecpage:chatbot';
-export function getChatbot() { try { const v = localStorage.getItem(BOT) || ''; return CHATBOTS.some((b) => b.id === v) ? v : ''; } catch { return ''; } }
-export function setChatbot(id) { try { localStorage.setItem(BOT, id); } catch { /* 저장 못 해도 됨 */ } }
-/** 오류에서 AI 창 길로 넘어가는 버튼 이름: 그 회사의 AI 이름으로(결제 없음 → '쓰던 ChatGPT로 만들기') */
-export function chatLabel(provider) { return provider === 'openai' ? '쓰던 ChatGPT로 만들기' : provider === 'anthropic' ? '쓰던 Claude로 만들기' : '쓰던 AI로 만들기'; }
-/** 오류에서 넘어갈 때 먼저 내세울 AI 창 */
-export const chatbotFor = (provider) => ({ openai: 'chatgpt', anthropic: 'claude' }[provider] || '');
-
 /** 붙여 넣은 키의 앞부분으로 어느 회사 키인지 알아냄 */
 export function detectProvider(key) {
   const k = String(key || '').trim();
@@ -152,7 +129,7 @@ export function classify(status, msg, code) {
 }
 /**
  * 학교·기관 망의 차단 화면: AI 회사 주소인데 JSON이 아니라 웹 페이지(HTML)가 옴(200이어도). 원문(영어 개발자 문구) 대신
- * 'blocked'(이 망에서 닿지 않음 → 쓰던 AI 창 길)로. 같은 규칙을 생성 파이프라인(lib/gen)도 씀
+ * 'blocked'(이 망에서 닿지 않음)로. 같은 규칙을 생성 파이프라인(lib/gen)도 씀
  */
 // 5xx·429는 회사 쪽 CDN의 오류 화면일 수 있어 상태 코드대로(바쁨·한도) 둠
 export const isBlockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
@@ -183,34 +160,34 @@ async function send(provider, url, init) {
 
 /**
  * 오류 → 강사에게 보여 줄 안내. actions: pay(연결해 둔 유료 AI로 이어서) · connect(다른 AI 연결) · key(키 페이지) · billing(결제 페이지)
- * · link(돌려준 link.href 열기) · paste(쓰던 AI로 만들기. 버튼 이름은 chatLabel(provider)). 맨 앞 동작을 주 버튼으로 보여 줌
+ * · link(돌려준 link.href 열기). 맨 앞 동작을 주 버튼으로 보여 줌
  */
 export function explainError(err, provider) {
   const P = PROVIDERS[provider] || {};
   const k = err?.kind || (err?.name === 'TimeoutError' ? 'busy' : 'other');
   const paid = provider === 'openai' || provider === 'anthropic';
   const T = {
-    'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지웠거나 오래된 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 주세요.`, ['key', 'paste']],
+    'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지웠거나 오래된 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 주세요.`, ['key', 'connect']],
     forbidden: ['이 계정으로는 쓸 수 없어요.', '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
-    'no-browser': ['이 계정은 브라우저에서 바로 쓸 수 없어요.', '조직 설정이 막아 두었어요. 개인 계정으로 만든 키를 쓰거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
+    'no-browser': ['이 계정은 브라우저에서 바로 쓸 수 없어요.', '조직 설정이 막아 두었어요. 개인 계정으로 만든 키를 쓰거나 다른 AI를 연결해 주세요.', ['connect']],
     workspace: ['Workspace를 고르지 않고 만든 키예요.', 'Claude 키 페이지에서 키를 새로 만들 때 Workspace를 골라 주세요.', ['key']],
-    region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    billing: ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 지금은 쓰던 ${provider === 'openai' ? 'ChatGPT' : 'Claude'} 창으로 만들 수 있어요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['paste', 'billing']],
-    'quota-day': ['오늘 쓸 수 있는 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 돼요. 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
-    model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['paste']],
+    region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect']],
+    billing: ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 구독으로 만들려면 ChatGPT·Claude 계정으로 연결해 주세요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['connect', 'billing']],
+    'quota-day': ['오늘 쓸 수 있는 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 돼요. 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect']],
+    quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect']],
+    cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect']],
+    model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['connect']],
     'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '다른 모델로 바꿔 주세요.', []],
-    refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI로 다시 해 보세요.', ['connect', 'paste']],
-    'too-long': ['교재가 길어 한 번에 보내지 못했어요.', '교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', ['paste', 'connect']],
-    busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', ['paste']],
-    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 기관·회사 망이 AI 사이트를 막았다면 휴대폰 핫스팟으로 바꿔 주세요.', ['paste']],
-    // 만들기 전에 확인했더니 이 망에서 AI 회사 API에 닿지 않음(netcheck.js): 기다리지 않고 AI 창 길로
-    blocked: [`이 망에서 ${P.short || 'AI'} API에 닿지 않아요.`, '학교·기관 망이 AI 회사 주소를 막은 것 같아요. 쓰던 AI 창으로 만들면 돼요. 휴대폰 핫스팟으로 바꾸면 키로도 돼요.', ['paste']],
-    truncated: ['답이 중간에 끊겼어요.', '이어서 받아 봤지만 끝나지 않았어요. 다시 해 보거나 다른 AI를 골라 주세요.', ['connect', 'paste']],
+    refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI로 다시 해 보세요.', ['connect']],
+    'too-long': ['교재가 길어 한 번에 보내지 못했어요.', '교재를 나눠 넣거나 다른 AI로 만들어 주세요.', ['connect']],
+    busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 누르거나 다른 AI를 골라 주세요.', ['connect']],
+    network: ['AI 회사에 닿지 못했어요.', '인터넷 연결을 확인해 주세요. 기관·회사 망이 AI 사이트를 막았다면 휴대폰 핫스팟으로 바꿔 주세요.', []],
+    // 만들기 전에 확인했더니 이 망에서 AI 회사 API에 닿지 않음(netcheck.js): 기다리지 않고 알려 줌
+    blocked: [`이 망에서 ${P.short || 'AI'} API에 닿지 않아요.`, '기관·회사 망이 AI 회사 주소를 막은 것 같아요. 휴대폰 핫스팟으로 바꾸거나 ChatGPT·Claude 계정으로 연결해 주세요.', ['connect']],
+    truncated: ['답이 중간에 끊겼어요.', '이어서 받아 봤지만 끝나지 않았어요. 다시 해 보거나 다른 AI를 골라 주세요.', ['connect']],
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요.', []],
-    other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
-  }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
+    other: ['AI가 답하지 못했어요.', err?.message || '', ['connect']],
+  }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['connect']];
   const link = null;
   if (err?.paidOption || err?.lightOption) {
     const ways = [err.paidOption && `연결해 둔 ${err.paidOption.label}(유료)`, err.lightOption && `가벼운 모델(${err.lightOption.label})`].filter(Boolean).join('이나 ');

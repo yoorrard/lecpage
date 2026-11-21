@@ -22,7 +22,6 @@
 .input:hover{border-color:var(--line-strong)}
 .input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 textarea.input{min-height:120px;resize:vertical;line-height:1.6}
-textarea.input.ta-short{min-height:68px}
 textarea.code{font-family:var(--f-mono);font-size:.84rem}
 .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px;align-items:start}
 .check{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
@@ -549,8 +548,6 @@ textarea.prop-in{resize:none;overflow:hidden}
 .st-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:inherit;font:inherit;font-size:.8rem;cursor:pointer}
 button.st-tag:hover{border-color:var(--accent);color:var(--lav-ink)}
 .st-ver{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--muted)}
-.st-chatway .chat-steps>li::before{background:var(--ink-2)}
-.st-chatway .chat-steps>li>span{font-weight:600}
 /* 입력 칸 */
 .st-compose{display:grid;gap:6px}
 .st-compose-opts{display:flex;gap:6px;min-width:0}
@@ -863,8 +860,6 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .conn-badge{margin:0;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .conn-badge.is-on{color:var(--ok);font-weight:600}
 .dot-off{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
-/* 설치 없이: 쓰던 AI로 */
-.ai-nokey{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;padding:12px 14px;border:1px solid var(--hair);border-radius:var(--r-xs)}
 /* 다른 방법(접힘): API 키·Codex·AI 에이전트 */
 .ai-more{display:grid;gap:10px;font-size:.95rem}
 .ai-more>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;cursor:pointer;padding:6px 0;min-height:32px}
@@ -873,16 +868,6 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-alt-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:10px 0;border-top:1px solid var(--hair)}
 .ai-alt-steps{margin:0;padding-left:1.3em;display:grid;gap:2px}
 .ai-alt-steps code{font-family:var(--f-mono);font-size:.86em;padding:1px 5px;border-radius:5px;background:var(--sunk)}
-/* 쓰던 앱(키 없이): 세 걸음 */
-.chat-way{display:grid;gap:12px;padding:16px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:var(--r-sm);background:var(--lav-soft);scroll-margin-top:80px}
-.chat-way .h-sub{margin:0}
-.chat-steps{margin:0;padding:0;list-style:none;display:grid;gap:14px;counter-reset:cs}
-.chat-steps>li{display:grid;gap:8px;padding-left:36px;position:relative;counter-increment:cs}
-.chat-steps>li::before{content:counter(cs);position:absolute;left:0;top:-1px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:.86rem}
-.chat-steps>li>b{font-weight:650;color:var(--ink)}
-.chat-steps p{margin:0}
-.chat-drop{display:grid;gap:8px;padding:10px;border:1.5px dashed var(--line-strong);border-radius:var(--r-xs);background:var(--paper)}
-.chat-drop.over{border-color:var(--accent);background:var(--lav-soft)}
 /* 2단계: 만드는 중(진행 단계만) */
 .making{display:grid;gap:16px;max-width:44em;padding:20px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--shadow-sm)}
 .making-top{display:flex;align-items:center;gap:14px}

@@ -4,7 +4,7 @@
 // 앱 전체를 http://127.0.0.1:<포트>/에서도 보여 줌(같은 출처).
 // /bridge/*로 할 수 있는 것: ChatGPT 계정으로 연결(Sign in with ChatGPT, 이 PC에서 OpenAI로 바로) · 이 PC에 설치·로그인된 Claude Code·Codex에
 // 사이트 만들기를 맡김(요청은 그 사람의 구독 한도에서 차감) · Claude 계정 연결을 터미널 없이(공식 설치 명령을 창 없이 + Claude Code 로그인, studio-setup.mjs) ·
-// Claude Code·Codex 공식 설치·로그인 명령을 보이는 터미널 창에서 실행(다른 방법).
+// Claude Code·Codex 공식 설치·로그인 명령을 보이는 터미널 창에서 실행(다른 방법) · 켜 둔 채로 새 판으로 바꾸기(studio-update.mjs).
 // 근거: docs/research/ai-first-2026-11.md §3 · 쓰는 법: references/studio.md
 //
 // 안전: 127.0.0.1에만 묶음 · 짝 맞춤 토큰(이 PC 사용자 폴더에 저장, 앱은 머리글 X-Lecpage-Bridge로만 보냄) ·
@@ -22,6 +22,7 @@ import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'nod
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSiwc, callbackPage } from './studio-siwc.mjs';
 import { createSetup, SETUP_AGENTS } from './studio-setup.mjs';
+import { RELEASE, RESTART_CODE, readBuild, installedPackage, latestBuild, applyUpdate, restartArgv, supervise } from './studio-update.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, 'lecpage.mjs');
@@ -29,6 +30,13 @@ const ENGINE = join(HERE, '..', 'engine');
 const REF = join(HERE, '..', 'references');
 const REPO_DIST = join(HERE, '..', '..', '..', 'app', 'dist');
 const VERSION = (() => { try { return JSON.parse(readFileSync(join(ENGINE, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
+/** 받은 묶음의 맨 위(VERSION·skills/·lecpage-connect.sh). 저장소에서 켜면 저장소 맨 위(VERSION 없음 → 스스로 바꾸지 않음) */
+const ROOT = resolve(HERE, '..', '..', '..');
+/**
+ * 이 판이 할 수 있는 것(앱이 /bridge/status의 caps로 보고, 없으면 '새 판으로 바꿔야 해요'를 보여 줌). 새 길을 더하면 여기에도 더함.
+ * 이 목록이 없는 예전 판은 status-caps 이전 판(앱은 claude-setup·update가 없는 것으로 봄)
+ */
+export const CAPS = ['status-caps', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update'];
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 
 const MB = 1024 * 1024;
@@ -1003,13 +1011,64 @@ async function statusOf(S, fresh) {
 }
 const publicAgent = ({ file, ...a }) => a; // 실행 파일 경로(사용자 이름이 들어감)는 앱에 주지 않음
 
+// ── 새 판으로 바꾸기(켜 둔 채로): 확인 → 받기(SHA-256) → 갈아 끼우기 → 같은 포트·토큰으로 다시 켜기(S.onRestart) ──
+const UPDATING = new Set(['download', 'install', 'restart']);
+const UPDATE_ERRORS = {
+  unavailable: '이 lecpage 커넥트는 스스로 바꿀 수 없어요. lecpage 커넥트를 끄고 다시 켜 주세요.',
+  busy: '만드는 중이거나 연결하는 중이에요. 끝난 뒤에 바꿔요.',
+  network: '새 판을 받지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.',
+  sha256: '받은 파일 확인(SHA-256)에 실패했어요. 잠시 뒤 다시 시도해 주세요.',
+  files: '파일을 바꾸지 못했어요. lecpage 커넥트를 끄고 다시 켜 주세요(켤 때 새 판을 받아요).',
+};
+const updateView = (S) => ({ can: S.canUpdate, build: S.build, latest: S.upd.latest, available: !!S.upd.latest && S.upd.latest !== S.build, state: S.upd.state, to: S.upd.to || '', ...(S.upd.state === 'error' ? { error: S.upd.error, error_ko: UPDATE_ERRORS[S.upd.error] || UPDATE_ERRORS.network } : {}) });
+/** 지금 무언가 돌고 있는지(작업·연결·설치·ChatGPT 요청·교재 바꾸기) */
+const busyNow = (S) => S.starting || [...S.jobs.values()].some((j) => j.active) || !!S.setup?.view().running || !!S.term?.view?.().running || S.inflight > 0;
+async function checkLatest(S, { force = false } = {}) {
+  if (!force && S.upd.latest && Date.now() - S.upd.checkedAt < 10 * 60e3) return S.upd.latest;
+  const v = await latestBuild({ base: S.release.base, fetchImpl: S.release.fetchImpl });
+  S.upd.latest = v; S.upd.checkedAt = Date.now();
+  return v;
+}
+/** → { started } | { upToDate } | { error } */
+async function startUpdate(S, { auto = false } = {}) {
+  if (!S.canUpdate) return { error: 'unavailable' };
+  if (UPDATING.has(S.upd.state)) return { started: true };
+  if (busyNow(S)) return { error: 'busy' };
+  let latest; try { latest = await checkLatest(S, { force: true }); } catch { S.upd = { ...S.upd, state: 'error', error: 'network' }; return { error: 'network' }; }
+  if (latest === S.build) { S.upd = { ...S.upd, state: 'idle', error: '' }; return { upToDate: true }; }
+  if (busyNow(S)) return { error: 'busy' };
+  S.upd = { ...S.upd, state: 'download', error: '', to: latest };
+  S.log(`lecpage 커넥트 새 판(${latest})을 받아요${auto ? '(쓰지 않는 동안 저절로)' : ''}`);
+  applyUpdate({ root: S.root, base: S.release.base, fetchImpl: S.release.fetchImpl, onStage: (st) => { S.upd.state = st; } }).then((r) => {
+    S.upd = { ...S.upd, state: 'restart', to: r.to };
+    S.log(`새 판(${r.to})으로 바꿨어요. 같은 주소로 다시 켜요(짝은 그대로)`);
+    setTimeout(() => { Promise.resolve(S.onRestart?.(r)).catch((e) => S.log(`다시 켜지 못했어요: ${cut(e?.message || e, 200)}`)); }, 400); // 앱이 'restart'를 한 번 볼 틈
+  }, (e) => {
+    const code = e.code === 'sha256' ? 'sha256' : /^E[A-Z]+$/.test(e.code || '') && e.syscall === 'rename' ? 'files' : 'network';
+    S.upd = { ...S.upd, state: 'error', error: code, to: '' };
+    S.log(`새 판으로 바꾸지 못했어요(${cut(e.message, 160)}). 있던 판 그대로 써요`);
+  });
+  return { started: true };
+}
+
 async function handleBridge(S, req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // ['status'] | ['jobs', id, 'events']
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
     const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
-    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
+  // ── 새 판으로 바꾸기: GET(새 판이 있는지) · POST(받아서 바꾸고 같은 포트·토큰으로 다시 켬. 앱은 /bridge/status의 build가 바뀔 때까지 기다림) ──
+  if (parts[0] === 'update' && parts.length === 1) {
+    if (req.method === 'GET') { await checkLatest(S, { force: url.searchParams.has('fresh') }).catch(() => ''); return sendJson(res, 200, { ok: true, update: updateView(S) }); }
+    if (req.method === 'POST') {
+      const r = await startUpdate(S);
+      if (r.error) return fail(res, r.error === 'unavailable' ? 409 : r.error === 'busy' ? 409 : 502, r.error === 'busy' ? 'busy' : `update-${r.error}`, UPDATE_ERRORS[r.error], { update: updateView(S) });
+      return sendJson(res, r.started ? 202 : 200, { ok: true, upToDate: !!r.upToDate, update: updateView(S) });
+    }
+    return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
+  }
+  if (UPDATING.has(S.upd.state)) return fail(res, 503, 'updating', 'lecpage 커넥트를 새 판으로 바꾸는 중이에요. 잠깐 뒤에 다시 해 주세요.', { update: updateView(S) });
   // ── ChatGPT 계정(Sign in with ChatGPT). 토큰은 이 프로그램 안에만: 앱에는 연결 여부·이메일·모델 목록만 ──
   if (parts[0] === 'chatgpt') {
     const sub = parts[1] || '';
@@ -1174,6 +1233,9 @@ async function handle(S, req, res) {
   if (bridge) {
     const o = req.headers.origin;
     if (o && o !== S.origin) for (const [k, v] of Object.entries(corsHeaders(o))) res.setHeader(k, v); // 허용한 출처(lecpage.com)에만
+    // 쓰는 중인지(저절로 새 판으로 바꿀 때 봄): 상태 확인 말고 사람이 한 요청의 때 · 오래 걸리는 요청(ChatGPT 요청·교재 바꾸기·작업 진행)은 끝날 때까지 셈
+    if (!(req.method === 'GET' && /^\/bridge\/(status|update)$/.test(url.pathname))) S.lastUse = Date.now();
+    if (/^\/bridge\/(chatgpt\/responses|convert|jobs)/.test(url.pathname) && req.method !== 'GET' || /\/events$/.test(url.pathname)) { S.inflight++; res.once('close', () => { S.inflight--; }); }
     return handleBridge(S, req, res, url);
   }
   // ChatGPT 로그인에서 돌아오는 곳(OpenAI가 보내는 최상위 이동이라 토큰 없음. state로 확인)
@@ -1196,12 +1258,14 @@ function listenOn(server, port) {
 }
 
 /** 띄우기(시험에서도 씀): { url, port, close } */
-export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl, installer } = {}) {
+export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl, installer, root = ROOT, release, onRestart, autoUpdate = false, retryPort = false } = {}) {
   // 지난번에 꺼지며 남은 임시 폴더(6시간 넘은 것)
   try { for (const n of readdirSync(tmpdir())) if (n.startsWith(TMP_PREFIX)) { const p = join(tmpdir(), n); if (Date.now() - statSync(p).mtimeMs > 6 * 3600e3) rmSync(p, { recursive: true, force: true }); } } catch { /* 못 지워도 됨 */ }
   // 짝 맞춤 토큰·ChatGPT 자격은 이 PC 사용자 폴더에(persist: 실제 실행). 시험은 home을 따로 주거나 이번 실행만(임시 폴더)
   const dirHome = home ? resolve(home) : persist ? studioHome() : mkdtempSync(join(tmpdir(), TMP_PREFIX + 'home-'));
   const S = { version: VERSION, home: dirHome, token: persist || home ? pairToken(dirHome, { fresh: newToken }) : randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log, installer, fetchImpl };
+  // 판 이름(받은 묶음의 VERSION, 저장소에서 켜면 <엔진 판>-dev) · 스스로 바꿀 수 있는지 · 받는 곳(고정 https, 시험만 가짜 릴리스)
+  Object.assign(S, { root: resolve(root), build: readBuild(root) || `${VERSION}-dev`, canUpdate: installedPackage(root), release: { base: RELEASE, fetchImpl: globalThis.fetch, ...(release || {}) }, upd: { state: 'idle', latest: '', checkedAt: 0, error: '', to: '' }, onRestart, inflight: 0, lastUse: 0 });
   const dir = dist ? resolve(dist) : !remote && isFile(join(REPO_DIST, 'index.html')) ? REPO_DIST : null;
   if (dist && !isFile(join(dir, 'index.html'))) throw Object.assign(new Error(`${dir}에 앱 빌드본(index.html)이 없어요. cd app && npm run build로 먼저 만들어 주세요.`), { friendly: true });
   S.app = dir
@@ -1209,8 +1273,18 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
     : { mode: 'remote', url: (appUrl || process.env.LECPAGE_STUDIO_APP_URL || 'https://lecpage.com').replace(/\/+$/, ''), cache: new Map(), cacheBytes: 0 };
   const server = createServer((req, res) => { handle(S, req, res).catch((e) => { if (!res.headersSent) fail(res, 500, 'internal', `lecpage 커넥트 오류예요: ${cut(e.message, 120)}`); else res.destroy(); }); });
   server.requestTimeout = 10 * 60000; // 큰 교재 받기
-  if (port) await listenOn(server, port);
-  else {
+  let moved = false;
+  if (port && retryPort) {
+    // 새 판으로 다시 켤 때: 예전 판이 포트를 놓을 때까지 잠깐 기다림. 끝내 안 되면 다른 포트(앱과는 브라우저로 다시 짝)
+    for (let i = 0; ; i++) {
+      try { await listenOn(server, port); break; } catch (e) {
+        if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e;
+        if (i >= 40) { port = 0; moved = true; break; }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+  } else if (port) await listenOn(server, port);
+  if (!port) {
     let ok = false;
     for (let p = PORT_RANGE[0]; p <= PORT_RANGE[1] && !ok; p++) { try { await listenOn(server, p); ok = true; } catch (e) { if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e; } }
     if (!ok) throw Object.assign(new Error(`포트 ${PORT_RANGE[0]}~${PORT_RANGE[1]}이 모두 쓰이고 있어요. 다른 lecpage 커넥트 창이 켜져 있으면 그 주소를 쓰거나, --port로 다른 번호를 주세요.`), { friendly: true });
@@ -1230,7 +1304,16 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
       j.cleanup();
     }
   });
+  // 저절로 새 판으로(받은 묶음에서 켰을 때만): 켜고 2분 뒤 한 번, 그다음 3시간마다. 10분 넘게 아무 요청이 없고 돌고 있는 것이 없을 때만
+  const autoTick = async () => {
+    if (!S.canUpdate || UPDATING.has(S.upd.state) || busyNow(S) || Date.now() - S.lastUse < 10 * 60e3) return;
+    const latest = await checkLatest(S, { force: true }).catch(() => '');
+    if (latest && latest !== S.build && latest !== process.env.LECPAGE_CONNECT_SKIP && Date.now() - S.lastUse >= 10 * 60e3) await startUpdate(S, { auto: true });
+  };
+  const timers = autoUpdate && S.canUpdate ? [setTimeout(autoTick, 2 * 60e3), setInterval(autoTick, 3 * 3600e3)] : [];
+  for (const t of timers) t.unref?.();
   const close = async () => {
+    for (const t of timers) clearTimeout(t);
     if (S.term) await S.term.stop();
     if (S.setup) await S.setup.stop();
     for (const j of S.jobs.values()) if (j.active) await j.stop('shutdown');
@@ -1242,7 +1325,7 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   if (!home && !persist) { const h = S.home; process.on('exit', () => { try { rmSync(h, { recursive: true, force: true }); } catch { /* 넘김 */ } }); }
   // lecpage.com에서 짝 맞추기: 토큰은 주소의 # 뒤(서버로 가지 않음). 앱이 읽고 바로 주소에서 지움
   const pairUrl = `${S.appUrl}/#pair=${S.token}&port=${S.port}`;
-  return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close };
+  return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close, moved };
 }
 
 /**
@@ -1277,16 +1360,20 @@ export async function studioCmd(h) {
   const json = !!args.json;
   const log = (m) => { if (!json) console.log(m.startsWith('  ') ? m : `[${hhmm()}] ${m}`); };
   if (args.timeout !== undefined && !(+args.timeout > 0)) h.fail('--timeout은 분 단위 숫자예요. 예: --timeout 30');
-  const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log, persist: true, newToken: !!args['new-token'] });
-  const { S, url, pairUrl, close } = st;
-  // 어디를 열지: 기본은 lecpage.com(짝 맞추기). 이 컴퓨터 빌드본(--dist)이면 그 주소. 로그인할 때 켜진 경우(--autostart)는 열지 않음
-  const open = args['no-open'] || args.autostart ? '' : args.open === 'local' || (args.dist && args.open !== 'lecpage') ? url : pairUrl;
+  // 새 판으로 바꾼 뒤 다시 켠 것(감독이 띄움): 같은 포트를 기다려 받고, 브라우저는 열지 않음(앱이 저절로 다시 붙음)
+  const restarted = process.env.LECPAGE_CONNECT_RESTARTED === '1';
+  let restart = null;
+  const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log, persist: true, newToken: !!args['new-token'], autoUpdate: true, retryPort: restarted, onRestart: (r) => restart?.(r) });
+  const { S, url, pairUrl, close, moved } = st;
+  // 어디를 열지: 기본은 lecpage.com(짝 맞추기). 이 컴퓨터 빌드본(--dist)이면 그 주소. 로그인할 때 켜진 경우(--autostart)는 열지 않음.
+  // 다시 켤 때 포트를 못 받아 옮겼으면 lecpage.com을 새 포트로 다시 열어 짝을 맞춤
+  const open = moved ? pairUrl : args['no-open'] || args.autostart ? '' : args.open === 'local' || (args.dist && args.open !== 'lecpage') ? url : pairUrl;
   const ag = await statusOf(S, true);
   const cg = S.siwc.status();
   const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? (a.id === 'codex' ? 'ChatGPT로 로그인' : '구독으로 로그인') : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
   if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: { connected: cg.connected, plan: cg.plan } }));
   else console.log([
-    `lecpage 커넥트 ${S.version}`,
+    `lecpage 커넥트 ${S.build}${restarted ? ' (새 판으로 다시 켰어요)' : ''}`,
     open === pairUrl ? `  lecpage.com을 열어 이 PC와 짝을 맞춰요. 브라우저가 열리지 않으면 lecpage.com에서 [ChatGPT·Claude 계정으로 연결]을 눌러요.` : open ? `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)` : `  켜져 있어요. lecpage.com에서 이어서 해요.`,
     `  Safari 등에서 lecpage.com이 이 PC에 닿지 않으면 이 주소에서 써요: ${url}`,
     `  ChatGPT 계정 ${cg.connected ? `연결됨${cg.plan ? '' : '(요금제 사용 허락 없음)'}` : '연결 안 됨'} / ${line(ag.claude)} / ${line(ag.codex)}`,
@@ -1299,6 +1386,15 @@ export async function studioCmd(h) {
   if (open && !(await openBrowser(open)) && !json) console.log(`  브라우저를 열지 못했어요. 이 주소를 브라우저에 붙여 넣어 주세요: ${open}`);
   let closing = false;
   const bye = async () => { if (closing) return; closing = true; log('끄는 중…'); await close(); process.exit(0); };
-  process.on('SIGINT', bye); process.on('SIGTERM', bye); process.on('SIGHUP', bye);
+  const SIGS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  for (const sig of SIGS) process.on(sig, bye);
+  // 새 판으로 바꿨으면: 이 판을 닫고(포트를 놓음) 같은 인자·같은 포트로 새 판을 띄움. 감독 아래에서 돌면 종료 코드로 알리고, 아니면 이 프로세스가 감독이 됨
+  restart = async () => {
+    if (closing) return; closing = true;
+    for (const sig of SIGS) process.off(sig, bye);
+    await close();
+    if (process.env.LECPAGE_CONNECT_CHILD === '1') process.exit(RESTART_CODE);
+    supervise({ cli: CLI, argv: restartArgv(process.argv.slice(2), S.port), root: S.root, log });
+  };
   await new Promise(() => {}); // Ctrl+C까지
 }

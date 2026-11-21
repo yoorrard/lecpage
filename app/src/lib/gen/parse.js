@@ -323,28 +323,6 @@ export function replaceSections(html, sections) {
   }
   return { html: s, replaced, added };
 }
-/**
- * 쓰던 AI 창의 답(사이트 전체): HTML 문서 + 맨 끝 lecpage.json(```json 블록이나 <script type="application/json" id="lecpage">)
- * @returns {{ html, doc, cut, meta: object|null }}
- */
-export function parseChatAnswer(text) {
-  const s = clean(text);
-  const h = extractHtml(s);
-  let meta = null;
-  // 문서 안에 넣은 JSON(<script type="application/json" id="lecpage…">)은 빼서 meta로
-  const inDoc = /<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*id=["']lecpage[\w-]*["'][^>]*>([\s\S]*?)<\/script>|<script[^>]*id=["']lecpage[\w-]*["'][^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/i.exec(h.html);
-  if (inDoc) { const j = extractJson(inDoc[1] || inDoc[2]).value; if (j) meta = j; h.html = h.html.replace(inDoc[0], ''); }
-  if (!meta) {
-    const end = s.search(/<\/html\s*>/i);
-    const after = end >= 0 ? s.slice(end) : '';
-    const blocks = extractBlocks(after || s).filter((b) => /^(json|jsonc|)$/.test(b.lang) && /^\s*\{/.test(b.body));
-    const b = blocks[blocks.length - 1];
-    if (b) meta = extractJson('```json\n' + b.body + '\n```').value;
-    else if (after) meta = extractJson(after, { prefer: 'title' }).value;
-  }
-  return { ...h, meta: meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : null };
-}
-
 // ── 사이트 전체 답(키 길: 파일마다 코드 블록 하나, 여는 줄에 경로) ──
 const LANG_PATH = { html: 'index.html', htm: 'index.html', css: 'assets/style.css', js: 'assets/site.js', javascript: 'assets/site.js', mjs: 'assets/site.js', json: 'lecpage.json' };
 const PATHISH = /^(?:\.?\/)?([\w가-힣.\-]+\/)*[\w가-힣.\-]+\.(html?|css|m?js|json)$/i;

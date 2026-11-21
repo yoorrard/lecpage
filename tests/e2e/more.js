@@ -1,21 +1,23 @@
-// 새 흐름 e2e: 먼저 해보기(같은 화면), 쓰던 앱(끊긴 답 이어 붙이기), 실패 안내와 이어 하기, 내 PC 연결 프로그램 감지, 예전 방식 연수
+// 새 흐름 e2e: 먼저 해보기(같은 화면), AI 답의 강사 값은 받지 않기, 실패 안내와 이어 하기, 내 PC 연결 프로그램 감지, 예전 방식 연수,
+// lecpage 커넥트: Claude 계정 연결(터미널 없이) · 예전 판이면 원문 오류 대신 새 판 안내 · [새 버전으로 바꾸기] → 다시 붙어 이어 하기
 const L = require('./lib.js');
 const W = Number(process.env.W || 1366), HH = Number(process.env.H || 860);
 const tag = process.env.TAG || String(W);
-const CUT1 = '좋아요. 교재를 읽고 만들었어요.\n```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>쓰던 앱 연수</title><style>:root{--lp-accent:#9a3412;--lp-ink:#1f1a17;--lp-paper:#fff7ed}body{font-family:sans-serif;background:var(--lp-paper);color:var(--lp-ink)}</style></head><body><main>\n<section id="hello" data-title="첫 화면"><h1>쓰던 앱으로 만든 연수</h1><p>교재를 바탕으로 만들었어요.</p></section>\n<section id="ask" data-title="질문"><h2>질문</h2>';
-const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n```json\n{"v":2,"title":"쓰던 앱으로 만든 연수","sessions":[{"date":"2027-01-15","start":"10:00","end":"12:00"}],"venue":"강당","features":["qa"],"facts":[{"label":"장소","value":"강당","page":2}],"live":{"provider":"http","url":"https://evil.example"}}\n```';
+const CUT1 = '좋아요. 교재를 읽고 만들었어요.\n```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>정해 둔 답 연수</title><style>:root{--lp-accent:#9a3412;--lp-ink:#1f1a17;--lp-paper:#fff7ed}body{font-family:sans-serif;background:var(--lp-paper);color:var(--lp-ink)}</style></head><body><main>\n<section id="hello" data-title="첫 화면"><h1>정해 둔 답으로 만든 연수</h1><p>교재를 바탕으로 만들었어요.</p></section>\n<section id="ask" data-title="질문"><h2>질문</h2>';
+const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n```json\n{"v":2,"title":"정해 둔 답으로 만든 연수","sessions":[{"date":"2027-01-15","start":"10:00","end":"12:00"}],"venue":"강당","features":["qa"],"facts":[{"label":"장소","value":"강당","page":2}],"live":{"provider":"http","url":"https://evil.example"}}\n```';
 (async () => {
   const b = await L.chromium.launch();
   const ctx = await b.newContext({ viewport: { width: W, height: HH }, deviceScaleFactor: 1 });
   await L.mockAi(ctx);
-  await ctx.addInitScript(() => { window.open = () => null; }); // 쓰던 앱 창은 열지 않음(복사만 확인)
+  await ctx.addInitScript(() => { window.open = () => null; }); // 새 창은 열지 않음
   const p = await ctx.newPage(); const errs = L.watch(p);
 
   // ── A. 먼저 해보기: 같은 연수 화면 ──
   await p.goto(L.BASE + '#/demo', { waitUntil: 'load' });
   await p.waitForSelector('.demo-bar', { timeout: 20000 });
   await p.waitForFunction(() => /(17|18|30)쪽/.test(document.querySelector('.files')?.textContent || ''), null, { timeout: 90000 });
-  await p.waitForSelector('.ai-nokey .btn:not([disabled])');
+  await L.aiReady(p);
+  L.ok('demo: one primary button (체험 시작), connect is secondary', await p.locator('.coach .btn-primary:has-text("체험 시작")').count() === 1 && await p.locator('.ai-sub .btn-primary').count() === 0 && await p.locator('.ai-sub button:has-text("ChatGPT·Claude 계정으로 연결")').count() === 1);
   L.ok('demo: same Project screen (stepper 3 + AI pick + files)', await p.locator('.wiz .stepper li').count() === 3 && await p.locator('.ai-pick .ai-card').count() === 2 && await p.locator('.files li').count() === 1);
   L.ok('demo: no separate mini screen', await p.locator('.demo-ai, .demo-tip').count() === 0);
   await p.screenshot({ path: L.OUT + `${tag}-demo-01-start.png`, fullPage: true });
@@ -40,36 +42,17 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   await p.goto(L.BASE, { waitUntil: 'load' }); await p.waitForTimeout(1500);
   L.ok('demo: not in my list', !/체험 연수|데이터로 읽는|생성형 AI로 수업|질문이 먼저/.test(await p.locator('.ld-mine').innerText().catch(() => '')));
 
-  // ── B. 쓰던 앱(키 없이): 프롬프트 복사 → 첨부 안내 → 끊긴 답 → 이어진 답 ──
+  // ── B. 복사·붙여넣기 길은 없음 · AI 답에 든 강사 값(live 등)은 받지 않음 ──
   await L.startWithFile(p);
-  await p.click('.ai-nokey button:has-text("쓰던 Claude로")');
-  await p.waitForSelector('#chat-way');
-  L.ok('chat: attach original file guide', /교재 원본 파일을 그 창에 첨부/.test(await p.locator('#chat-way').innerText()));
-  await p.waitForFunction(() => !document.querySelector('#chat-way .btn-link')?.disabled);
-  await p.click('#chat-way button:has-text("프롬프트 복사")');
-  await p.screenshot({ path: L.OUT + `${tag}-chat-01.png`, fullPage: true });
-  await p.fill('#chat-way textarea', CUT1); await p.click('#chat-way button:has-text("이 답으로 만들기")');
-  await p.waitForSelector('#chat-way button:has-text("이어쓰기 프롬프트 복사")', { timeout: 10000 });
-  L.ok('chat: cut answer → continue prompt', /중간에 끊겼어요/.test(await p.locator('#chat-way [role=alert]').innerText()));
-  await p.screenshot({ path: L.OUT + `${tag}-chat-02-cut.png`, fullPage: true });
-  await p.fill('#chat-way textarea', CUT2); await p.click('#chat-way button:has-text("이 답으로 만들기")');
+  L.ok('no copy-paste way: one primary action to connect a subscription', await p.locator('.ai-nokey, #chat-way').count() === 0 && !/쓰던 (AI|ChatGPT|Claude)/.test(await p.locator('.ai-pick').innerText()) && await p.locator('.ai-sub .btn-primary').count() === 1 && await p.locator('.ai-sub .btn-primary:has-text("ChatGPT·Claude 계정으로 연결")').count() === 1);
+  await L.makeWith(p, CUT1 + CUT2);
   await L.waitStudio(p);
   const pid = L.pidOf(p); const pr = await L.readProject(p, pid);
-  L.ok('chat: joined answer became site', /쓰던 앱으로 만든 연수/.test(pr.site['index.html']) && /data-lp="qa"/.test(pr.site['index.html']));
-  L.ok('chat: teacher values not taken from answer', !pr.meta.live || !/evil/.test(JSON.stringify(pr.meta.live)), JSON.stringify(pr.meta.live));
-  L.ok('chat: sections got ids', /id="hello"/.test(pr.site['index.html']));
-  await p.screenshot({ path: L.OUT + `${tag}-chat-03-studio.png` });
-  // 수정 요청(쓰던 앱): 요청 글 → 답의 섹션만 갈아 끼움
-  await p.selectOption('.st-compose select[aria-label="고칠 곳"]', { label: '질문' });
-  if (await p.locator('.st-compose select[aria-label="보낼 곳"]').count()) await p.selectOption('.st-compose select[aria-label="보낼 곳"]', 'chat');
-  await p.fill('.st-compose textarea', '질문 칸 위에 안내 한 줄을 더해 줘');
-  await p.click('.st-compose button:has-text("보내기")');
-  await p.waitForSelector('.st-chatway textarea[aria-label="AI의 답"]', { timeout: 10000 });
-  await p.fill('.st-chatway textarea[aria-label="AI의 답"]', '```html\n<section id="ask" data-title="질문"><h2>질문</h2><p>편하게 물어보세요.</p><div data-lp="qa"></div></section>\n```');
-  await p.click('.st-chatway button:has-text("이 답으로 수정")'); await p.waitForTimeout(1500);
-  const prc = await L.readProject(p, pid);
-  L.ok('chat edit: section replaced', /편하게 물어보세요/.test(prc.site['index.html']));
-  L.ok('chat edit: request and reply kept in conversation', (prc.chat || []).length === 2 && prc.chat[0].role === 'user' && prc.chat[1].role === 'ai' && await p.locator('.st-log .st-msg').count() === 2, JSON.stringify((prc.chat || []).map((m) => m.role)));
+  L.ok('answer: became site', /정해 둔 답으로 만든 연수/.test(pr.site['index.html']) && /data-lp="qa"/.test(pr.site['index.html']));
+  L.ok('answer: teacher values not taken from answer', !pr.meta.live || !/evil/.test(JSON.stringify(pr.meta.live)), JSON.stringify(pr.meta.live));
+  L.ok('answer: sections got ids', /id="hello"/.test(pr.site['index.html']));
+  L.ok('edit: no copy-paste way in AI 수정', await p.locator('.st-chatway').count() === 0 && !(await p.locator('.st-compose select[aria-label="보낼 곳"] option[value="chat"]').count()));
+  await p.screenshot({ path: L.OUT + `${tag}-answer-studio.png` });
 
   // ── C. 실패 안내 → 이어서 하기 ──
   await L.startWithFile(p);
@@ -125,7 +108,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   let connected = false; let polls = 0; let gotCode = '';
   const sv = (o) => ({ agent: 'claude', running: true, startedAt: 1, install: '', progress: null, loginUrl: '', waitingCode: false, codeSent: false, from: '', error: null, ...o });
   const view = () => (connected ? sv({ step: 'done', running: false, install: 'done' }) : polls < 3 ? sv({ step: 'install', install: 'run', progress: { phase: 'download', done: 60e6, total: 120e6 } }) : sv({ step: 'login', install: 'done', loginUrl: base2 + '#claude-login', waitingCode: true }));
-  await c4.route(/\/bridge\/status(\?fresh)?$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, version: '0.1.0', chatgpt: { connected: false }, agents: [connected ? { id: 'claude', installed: true, version: '2.1.330', auth: 'subscription', loggedIn: true, ready: true } : { id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) }));
+  await c4.route(/\/bridge\/status(\?fresh)?$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, version: '0.1.0', build: '1.1.0-new', caps: ['status-caps', 'claude-setup', 'update'], update: { can: true, state: 'idle' }, chatgpt: { connected: false }, agents: [connected ? { id: 'claude', installed: true, version: '2.1.330', auth: 'subscription', loggedIn: true, ready: true } : { id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) }));
   await c4.route(/\/bridge\/agents\/claude\/setup$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, setup: sv({ step: 'check' }) }) }));
   await c4.route(/\/bridge\/setup$/, (r) => { polls++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, setup: view() }) }); });
   await c4.route(/\/bridge\/setup\/code$/, (r) => { gotCode = JSON.parse(r.request().postData() || '{}').code || ''; connected = true; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
@@ -134,7 +117,8 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   await u.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
   await u.waitForSelector('.ai-sub button:has-text("Claude 계정으로 로그인")', { timeout: 90000 });
   L.ok('claude: same button style as ChatGPT', await u.locator('.ai-sub-row button.btn-primary:has-text("ChatGPT 계정으로 로그인")').count() === 1 && await u.locator('.ai-sub-row button.btn-primary:has-text("Claude 계정으로 로그인")').count() === 1);
-  L.ok('claude: no terminal needed (hint)', /자동으로 설치/.test(await u.locator('.ai-sub').innerText()));
+  L.ok('claude: short install hint', /처음 한 번 Claude Code를 자동으로 설치해요\(1~3분\)\./.test(await u.locator('.ai-sub').innerText()) && !/터미널은 쓰지 않아요/.test(await u.locator('.ai-sub').innerText()));
+  L.ok('claude: no update notice on a current 커넥트', await u.locator('.connect-old').count() === 0);
   L.ok('claude: terminal way only under other ways', await u.locator('.ai-sub button:has-text("터미널 창에서 하기")').count() === 0 && await u.locator('details.ai-more .ai-alt-row:has-text("Claude Code 터미널로") button:has-text("터미널 창에서 하기")').count() === 1);
   await u.click('.ai-sub button:has-text("Claude 계정으로 로그인")');
   L.ok('claude: consent once', await L.consent(u));
@@ -153,6 +137,62 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('claude: connected → starts making', await u.locator('.making, .st').count() > 0 || await u.locator('.ai-sub button:has-text("Claude로 만들기")').count() === 1);
   L.ok('claude: no page errors', e4.length === 0, JSON.stringify(e4));
   await c4.close();
+
+  // ── D3. 예전 판 lecpage 커넥트: caps가 없으면 [로그인] 대신 다시 켜는 법 · caps는 있어도 그 경로가 404면 원문('없는 주소예요') 대신 같은 안내 ──
+  const bridgeCtx = async (status, routes = {}) => {
+    const c = await b.newContext({ viewport: { width: W, height: HH }, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' });
+    await L.mockAi(c);
+    await c.addInitScript(() => { try { Object.defineProperty(navigator, 'userAgentData', { get: () => undefined }); } catch { } const add = () => { const m = document.createElement('meta'); m.name = 'lecpage-bridge'; m.content = 'tok-123'; document.head.appendChild(m); }; if (document.head) add(); else document.addEventListener('DOMContentLoaded', add); });
+    await c.route(/\/bridge\/status(\?fresh)?$/, (r) => { const v = status(); return v ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(v) }) : r.abort(); });
+    for (const [re, f] of Object.entries(routes)) await c.route(new RegExp(re), f);
+    const pg = await c.newPage();
+    await pg.goto(base2, { waitUntil: 'load' });
+    await pg.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await L.aiReady(pg);
+    return { c, pg, errs: L.watch(pg) };
+  };
+  const AG = [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }];
+  {
+    const { c, pg } = await bridgeCtx(() => ({ ok: true, version: '1.1.0', chatgpt: { connected: false }, agents: AG }));
+    await pg.waitForSelector('.ai-sub .connect-old', { timeout: 20000 });
+    const t = await pg.locator('.ai-sub').innerText();
+    L.ok('old 커넥트 (no caps): update guidance instead of login', /lecpage 커넥트를 새 버전으로 바꿔야 해요/.test(t) && /창\(작업 표시줄\)을 닫고/.test(t) && await pg.locator('.ai-sub button:has-text("Claude 계정으로 로그인")').count() === 0);
+    L.ok('old 커넥트: ChatGPT login still offered', await pg.locator('.ai-sub button:has-text("ChatGPT 계정으로 로그인")').count() === 1);
+    await pg.screenshot({ path: L.OUT + `${tag}-connect-old.png`, fullPage: true });
+    await c.close();
+  }
+  {
+    const { c, pg } = await bridgeCtx(() => ({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup'], chatgpt: { connected: false }, agents: AG }), {
+      '/bridge/agents/claude/setup$': (r) => r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'not-found', message_ko: '없는 주소예요.' }) }),
+    });
+    await pg.click('.ai-sub button:has-text("Claude 계정으로 로그인")');
+    await L.consent(pg);
+    await pg.waitForSelector('.ai-sub .connect-old', { timeout: 10000 });
+    L.ok('old route 404: guidance, never the raw message', !/없는 주소예요/.test(await pg.locator('body').innerText()) && /새 버전으로 바꿔야 해요/.test(await pg.locator('.ai-sub').innerText()));
+    await c.close();
+  }
+
+  // ── D4. [새 버전으로 바꾸기]: 커넥트가 받아 바꾸고 다시 켜지는 동안(잠깐 닿지 않음) '꺼짐'으로 그리지 않고, 새 판이 답하면 [Claude 계정으로 로그인]으로 ──
+  {
+    let phase = 'old'; let posted = 0; let gap = 0;
+    const st = () => {
+      if (phase === 'restart' && gap++ < 2) return null; // 다시 켜는 중: 닿지 않음
+      const fresh = phase !== 'old';
+      return { ok: true, version: '1.1.0', build: fresh ? '1.1.0-new' : '1.1.0-old', caps: fresh ? ['status-caps', 'claude-setup', 'update'] : ['status-caps', 'update'], update: { can: true, state: 'idle' }, chatgpt: { connected: false }, agents: AG };
+    };
+    const { c, pg, errs: e5 } = await bridgeCtx(st, { '/bridge/update$': (r) => { if (r.request().method() === 'POST') { posted++; phase = 'restart'; } return r.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true, update: { can: true, state: 'download' } }) }); } });
+    await pg.waitForSelector('.ai-sub .connect-old button.btn-primary:has-text("새 버전으로 바꾸기")', { timeout: 20000 });
+    L.ok('update: one primary button, no login yet', await pg.locator('.ai-sub button:has-text("Claude 계정으로 로그인")').count() === 0);
+    await pg.click('.ai-sub button:has-text("새 버전으로 바꾸기")');
+    await pg.waitForSelector('.ai-sub button:has-text("바꾸는 중")', { timeout: 5000 }).catch(() => {});
+    let flippedOff = false;
+    for (let i = 0; i < 40 && !(await pg.locator('.ai-sub button:has-text("Claude 계정으로 로그인")').count()); i++) { if (await pg.locator('.ai-sub-off').count()) flippedOff = true; await pg.waitForTimeout(250); }
+    L.ok('update: POST /bridge/update once', posted === 1);
+    L.ok('update: not drawn as off while restarting', !flippedOff);
+    L.ok('update: new build → Claude login offered', await pg.locator('.ai-sub button:has-text("Claude 계정으로 로그인")').count() === 1 && await pg.locator('.connect-old').count() === 0);
+    L.ok('update: no page errors', e5.length === 0, JSON.stringify(e5));
+    await c.close();
+  }
 
   // ── E. lecpage 커넥트 받기: 지금 운영체제 방법 하나만, 나머지는 [다른 운영체제]에 ──
   for (const [os, ua] of [['win', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'], ['mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36']]) {

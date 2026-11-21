@@ -143,20 +143,20 @@ const USAGE_URL = 'https://chatgpt.com/settings/usage';
 function errorView(e, provider) {
   const k = e?.off && (e?.kind === 'network' || e?.kind === 'local') ? 'pc-off' : e?.kind;
   // 구독 연결(PC 프로그램): 꺼짐·ChatGPT 계정
-  if (k === 'pc-off') return { kind: k, title: 'lecpage 커넥트가 꺼져 있어요.', body: 'lecpage 커넥트를 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume', 'paste'] };
+  if (k === 'pc-off') return { kind: k, title: 'lecpage 커넥트가 꺼져 있어요.', body: 'lecpage 커넥트를 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume'] };
   if (k === 'chatgpt-login') return { kind: k, title: 'ChatGPT 계정 연결이 풀렸어요.', body: 'AI 선택에서 [ChatGPT 계정으로 로그인]을 다시 누르면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'resume'] };
-  if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 무료 요금제는 [쓰던 AI로]로 만들어요.', actions: ['paste', 'connect'] };
-  if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'paste', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };
-  if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [계속 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
-  if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect', 'paste'] };
-  if (k === 'thinking') return { kind: k, title: 'AI가 생각하다가 답을 쓸 한도를 다 썼어요.', body: '같은 요청을 다시 보내면 비용만 들어서 멈췄어요. 다른 모델을 고르거나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste', 'resume'] };
-  if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: '키를 연결한 뒤 [계속 만들기]를 눌러 주세요.', actions: ['connect', 'paste'] };
-  if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
+  if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 다른 AI를 고르거나 요금제를 바꾼 뒤 다시 로그인해 주세요.', actions: ['connect'] };
+  if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };
+  if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [계속 만들기]를 눌러 주세요.', actions: ['resume', 'connect'] };
+  if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect'] };
+  if (k === 'thinking') return { kind: k, title: 'AI가 생각하다가 답을 쓸 한도를 다 썼어요.', body: '같은 요청을 다시 보내면 비용만 들어서 멈췄어요. 다른 모델이나 다른 AI를 골라 주세요.', actions: ['connect', 'resume'] };
+  if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: 'AI를 연결한 뒤 [계속 만들기]를 눌러 주세요.', actions: ['connect'] };
+  if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect'] };
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
-  if (k === 'local') return { kind: k, title: '내 PC의 lecpage 커넥트에 닿지 못했어요.', body: 'lecpage 커넥트가 켜져 있는지, lecpage 커넥트가 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키나 쓰던 AI 창으로도 만들 수 있어요.', actions: ['resume', 'connect', 'paste'] };
-  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: 'lecpage 커넥트를 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
-  if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', actions: ['paste', 'connect'] };
+  if (k === 'local') return { kind: k, title: '내 PC의 lecpage 커넥트에 닿지 못했어요.', body: 'lecpage 커넥트가 켜져 있는지, lecpage 커넥트가 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키로도 만들 수 있어요.', actions: ['resume', 'connect'] };
+  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: 'lecpage 커넥트를 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect'] };
+  if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나 다른 AI로 만들어 주세요.', actions: ['connect'] };
   const x = explainError(e, provider);
   // 다시 눌러도 같은 답이 오는 오류(키·결제·권한·지역·한도·모델·차단)는 [이어서 만들기]를 맨 뒤로: 주 단추가 같은 실패를 되풀이하지 않게.
   const acts = x.actions.filter((a) => a !== 'pay' && a !== 'light');
@@ -468,7 +468,7 @@ async function finish(ctx) {
     return { site, meta };
   };
   let out = null;
-  const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); const versions = versionsAfter(cur, rec.kind, out, rec.way === 'chat', rec.opts?.request); return {
+  const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); const versions = versionsAfter(cur, rec.kind, out, rec.opts?.request); return {
     v: 2, site: out.site, meta: out.meta,
     gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
     versions,
@@ -494,8 +494,8 @@ export function settle(cur, { site, meta }) {
  * 버전 기록(lib/versions.js, 최근 20개, 새것이 앞): AI가 만들거나 고친 뒤의 사이트를 맨 위에. 지금 사이트가 기록에 없으면 먼저 '이전 상태'로 남김.
  * 직접 수정·연수 정보 수정·복원은 화면(Studio)이 같은 함수로 남김
  */
-export function versionsAfter(cur, kind, next, chat = false, request = '') {
-  return recordVersion(cur, next, { kind: kind === 'make' ? 'make' : kind === 'fix' ? 'fix' : chat ? 'chat' : 'ai', label: aiVersionLabel(kind, { chat, request }) });
+export function versionsAfter(cur, kind, next, request = '') {
+  return recordVersion(cur, next, { kind: kind === 'make' ? 'make' : kind === 'fix' ? 'fix' : 'ai', label: aiVersionLabel(kind, { request }) });
 }
 /** 고친 뒤 바뀐 곳: 섹션(id·이름) + 다른 쪽(.html) 파일 */
 export function changedSections(a = {}, b = {}) {

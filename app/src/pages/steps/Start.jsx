@@ -215,7 +215,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
           </Field>
           <DesignPicks p={p} update={update} />
         </section>
-        <AiPick p={p} go={go} idle={idle} reload={reload} ready={ready} />
+        <AiPick p={p} go={go} idle={idle} ready={ready} />
       </div>
     </>
   );

@@ -1,26 +1,23 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { Notice } from '../../../components/ui.jsx';
 import { ConnBadge } from '../../../components/PcConnect.jsx';
-import { chatEditPrompt, acceptChatAnswer, resumeGeneration, forgetGeneration, stopGeneration } from '../../../lib/studio.js';
-import { CHATBOTS, setChatbot } from '../../../lib/ai.js';
+import { resumeGeneration, forgetGeneration, stopGeneration } from '../../../lib/studio.js';
 import { useConnection } from '../../../lib/connection.js';
-import { toast, copy } from '../../../lib/util.js';
 import { fmtSec, errorActions } from '../Make.jsx';
 import { verTime } from './Parts.jsx';
 
 // AI 수정 대화: 요청 → AI의 답(무엇을 했고 어디가 바뀌었는지) → 그 결과 버전. 연수마다 p.chat에 남아 새로 고쳐도 이어짐.
-// 보내는 곳: 연결한 AI(계정·API 키·내 PC의 AI 에이전트)는 바로 고치고 답이 대화에 붙음(gen/job.js finish),
-// 쓰던 AI로는 대화 안에서 프롬프트 복사 → 답 붙여 넣기(gen/index.js acceptChatAnswer가 답을 대화에 붙임).
+// 보내는 곳: 연결한 AI(계정·API 키·내 PC의 AI 에이전트)가 바로 고치고 답이 대화에 붙음(gen/job.js finish).
+// 연결한 AI가 없으면(체험·연결 전) 보내지 않고 연결하는 곳을 알려 줌. 예전 복사·붙여넣기 길로 만든 연수도 그대로 열림
 
-/** 보낼 곳: 이 사이트를 만든 연결이 지금 되면 그것, 아니면 고른 연결, 둘 다 없으면 쓰던 AI로 */
+/** 보낼 곳: 이 사이트를 만든 연결이 지금 되면 그것, 아니면 고른 연결(없으면 '') */
 export function useWay(p) {
   const { list, conn: pick, loading } = useConnection({ demo: !!p.demo });
   const [way, setWay] = useState('');
   useEffect(() => {
-    if (loading || (way && (way === 'chat' || list.some((c) => c.id === way)))) return;
+    if (loading || (way && list.some((c) => c.id === way))) return;
     const g = p.gen || {};
     const made = g.way === 'chatgpt' ? 'chatgpt' : g.way === 'local' ? g.agent : g.way === 'key' ? 'key' : '';
-    setWay(list.some((c) => c.id === made) ? made : pick?.id || 'chat');
+    setWay(list.some((c) => c.id === made) ? made : pick?.id || '');
   }, [loading, list.map((c) => c.id).join()]);
   return { list, way, setWay, cur: list.find((c) => c.id === way) || null };
 }
@@ -29,7 +26,7 @@ const EXAMPLES = ['첫 화면 제목을 더 짧고 힘 있게', '실습마다 �
 const isPending = (m) => m?.role === 'user' && !m.cancelled;
 
 /** 대화 기록(스크롤 칸 안) */
-export function ChatLog({ p, update, job, go, idle, reload, versions, onShow, onVersion, onRestore, onPick, onResend, onPreview }) {
+export function ChatLog({ p, update, job, go, versions, onShow, onVersion, onRestore, onPick, onResend, onPreview }) {
   const chat = Array.isArray(p.chat) ? p.chat : [];
   const last = chat[chat.length - 1];
   const pending = isPending(last) ? last : null;
@@ -64,10 +61,8 @@ export function ChatLog({ p, update, job, go, idle, reload, versions, onShow, on
       </ol>
       {working && <Working job={job} onStop={() => stopGeneration(p.id)} />}
       {failed && <Failed p={p} job={job} go={go} />}
-      {pending && !working && !failed && (pending.way === 'chat'
-        ? <ChatWay p={p} m={pending} idle={idle} reload={reload} onCancel={cancel} />
-        : !arriving && <div class="st-msg is-ai"><div class="st-bubble is-quiet"><span>답을 받지 못했어요. 중지했거나 창을 닫았을 수 있어요.</span>
-          <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => onResend(pending)}>다시 보내기</button><button type="button" class="btn btn-sm btn-quiet" onClick={cancel}>취소</button></div></div></div>)}
+      {pending && !working && !failed && !arriving && <div class="st-msg is-ai"><div class="st-bubble is-quiet"><span>답을 받지 못했어요. 중지했거나 창을 닫았을 수 있어요.</span>
+        <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => onResend(pending)}>다시 보내기</button><button type="button" class="btn btn-sm btn-quiet" onClick={cancel}>취소</button></div></div></div>}
       <span ref={endRef} class="st-end" aria-hidden="true" />
     </section>
   );
@@ -109,7 +104,7 @@ function Working({ job, onStop }) {
 
 /** AI가 고치다 멈춤: 까닭과 할 일(계속·키 페이지 등·취소). 지금 사이트는 그대로 */
 function Failed({ p, job, go }) {
-  const acts = [...(job.status === 'paused' ? [{ id: 'resume', label: '계속', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => a.id !== 'connect' && a.id !== 'paste')),
+  const acts = [...(job.status === 'paused' ? [{ id: 'resume', label: '계속', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => a.id !== 'connect')),
     { id: 'forget', label: '취소', run: () => forgetGeneration(p.id) }];
   const e = job.error || {};
   return (
@@ -122,54 +117,17 @@ function Failed({ p, job, go }) {
   );
 }
 
-/** 쓰던 AI로: 프롬프트 복사 → 쓰던 AI에 보내기 → 답 붙여 넣기(대화 안에서) */
-function ChatWay({ p, m, idle, reload, onCancel }) {
-  const [prompt, setPrompt] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [res, setRes] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const target = m.target || 'all';
-  useEffect(() => {
-    let off = false; setPrompt('');
-    (async () => { await idle(); const v = String(await chatEditPrompt(p.id, { target, request: m.text }) || ''); if (!off) setPrompt(v); })();
-    return () => { off = true; };
-  }, [m.id]);
-  async function take(input) {
-    if (!input || busy) return; setBusy(true);
-    try {
-      await idle();
-      const r = await acceptChatAnswer(p.id, input, { target }); setRes(r); if (r.continuePrompt) setAnswer('');
-      if (r.ok) { await reload(); setAnswer(''); setRes(null); toast('답대로 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.'); }
-    } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
-    setBusy(false);
-  }
-  return (
-    <div class="st-msg is-ai"><div class="st-bubble st-chatway">
-      <b>쓰던 AI에 보내고 답을 넣어 주세요</b>
-      <ol class="chat-steps">
-        <li><span>프롬프트를 복사해 쓰던 AI에 붙여 넣어요</span>
-          <div class="btn-row">{CHATBOTS.map((b) => <a class="btn btn-sm" href={b.url} target="_blank" rel="noopener" onClick={(e) => { if (!prompt) { e.preventDefault(); toast('프롬프트를 만드는 중이에요. 잠깐 뒤 다시 눌러 주세요.'); return; } copy(prompt, `프롬프트를 복사했어요. ${b.name}에 붙여 넣으세요.`); setChatbot(b.id); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>)}</div>
-          <small class="muted">{target === 'all' ? '사이트 전체를 보내요. 길면 답이 끊길 수 있어 고칠 곳(섹션)을 고르는 편이 좋아요.' : '고른 섹션만 보내고, 답의 섹션만 갈아 끼워요.'}</small></li>
-        <li><span>AI 답을 넣어요</span>
-          {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}><b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 고칠 수 없어요.'}</b>{!res.continuePrompt && (res.problems || []).map((x) => <span>{x}</span>)}
-            {res.continuePrompt && <><span>[이어쓰기 프롬프트 복사]를 눌러 AI에 보내고, 이어진 답을 붙여 넣어요. 앞의 답은 기억해 둬요.</span><div><button type="button" class="btn btn-sm btn-primary" onClick={() => copy(res.continuePrompt, '복사했어요. AI에게 보내세요.')}>이어쓰기 프롬프트 복사</button></div></>}</div></Notice></div>}
-          <textarea class="input ta-short" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="AI 답(코드 블록)을 여기에 붙여 넣어요" aria-label="AI의 답" />
-          <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답으로 수정' : '이 답으로 수정'}</button><button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>취소</button></div></li>
-      </ol>
-    </div></div>
-  );
-}
-
 /** 입력 칸(아래에 고정): 고칠 곳 · 보낼 곳 · 바라는 점 → [보내기]. Enter로 보내고 Shift+Enter로 줄 바꿈 */
-export function Composer({ p, sections, ask, setAsk, ways, way, setWay, locked, onSend }) {
+export function Composer({ p, sections, ask, setAsk, ways, way, setWay, locked, onSend, onConnect }) {
   const ta = useRef();
   const target = sections.some((s) => s.id === ask.target) ? ask.target : 'all';
-  const ready = ask.request.trim().length > 1 && !locked;
+  const none = !ways.length; // 보낼 AI가 없음(체험이거나 아직 연결 전)
+  const ready = ask.request.trim().length > 1 && !locked && !none;
   useEffect(() => { if (ask.n) { ta.current?.focus(); ta.current?.setSelectionRange?.(ask.request.length, ask.request.length); } }, [ask.n]);
   // 쓴 만큼 늘어남(6줄까지)
   useLayoutEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }, [ask.request]);
   const send = () => { if (ready) onSend(ask.request.trim(), target); };
-  const opts = [...ways.map((c) => [c.id, c.label]), ['chat', '쓰던 AI로']];
+  const opts = ways.map((c) => [c.id, c.label]);
   return (
     <div class="st-compose">
       <div class="st-compose-opts">
@@ -179,13 +137,15 @@ export function Composer({ p, sections, ask, setAsk, ways, way, setWay, locked, 
           <select class="input" value={way} onChange={(e) => setWay(e.target.value)} aria-label="보낼 곳">{opts.map(([v, label]) => <option value={v}>{label}</option>)}</select></label>}
       </div>
       <div class="st-compose-row">
-        <textarea ref={ta} class="input" rows={1} maxLength={1500} value={ask.request} disabled={locked}
-          placeholder={locked ? 'AI가 고치는 중이에요. 끝나면 이어서 보낼 수 있어요.' : '무엇을 바꿀까요? 예: 실습 단계를 세 개로 나눠 줘'} aria-label="AI에게 보낼 수정 요청"
+        <textarea ref={ta} class="input" rows={1} maxLength={1500} value={ask.request} disabled={locked || none}
+          placeholder={none ? (p.demo ? '체험에서는 AI에게 보내지 않아요.' : 'AI를 연결하면 바꿀 점을 보낼 수 있어요.') : locked ? 'AI가 고치는 중이에요. 끝나면 이어서 보낼 수 있어요.' : '무엇을 바꿀까요? 예: 실습 단계를 세 개로 나눠 줘'} aria-label="AI에게 보낼 수정 요청"
           onInput={(e) => setAsk({ ...ask, request: e.target.value })}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); } }} />
         <button type="button" class="btn btn-primary st-send" disabled={!ready} onClick={send} aria-label="보내기">보내기</button>
       </div>
-      {p.demo ? <p class="small muted">체험이라 연결한 AI에는 보내지 않아요. 쓰던 AI로는 실제처럼 해 볼 수 있어요.</p> : way !== 'chat' && <ConnBadge hint={false} />}
+      {p.demo ? <p class="small muted">체험이라 AI에게는 보내지 않아요. 직접 수정과 버전 기록은 그대로 해 볼 수 있어요.</p>
+        : none ? <p class="small st-noai">연결한 AI가 없어요. <button type="button" class="btn btn-sm btn-primary" onClick={onConnect}>AI 연결하기</button></p>
+        : <ConnBadge hint={false} />}
     </div>
   );
 }

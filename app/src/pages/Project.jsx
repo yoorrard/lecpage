@@ -63,7 +63,7 @@ export function Project({ id, step }) {
   // 사이트가 처음 생기면 한 번: 브라우저가 이 연수를 지우지 않게 보호를 청함(크롬 계열은 묻지 않고 정함. 파이어폭스는 묻는 창이 떠서 설정 화면 단추로만)
   useEffect(() => { if (p?.site && !p.demo && !/Firefox\//.test(navigator.userAgent || '')) askPersist(); }, [!!p?.site]);
 
-  // AI 작업(생성 API: 키·내 PC·쓰던 AI 창·체험 모두 같은 파이프라인). 생성 쪽이 저장하면 다시 읽음
+  // AI 작업(생성 API: 키·내 PC·체험 모두 같은 파이프라인). 생성 쪽이 저장하면 다시 읽음
   const job = useGeneration(id);
   useEffect(() => {
     const on = (e) => { if (e.detail?.pid === id) saver.idle().then(() => load({ keep: true })); };

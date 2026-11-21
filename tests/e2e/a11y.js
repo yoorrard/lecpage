@@ -1,4 +1,4 @@
-// 새 흐름 접근성: axe(WCAG 2.1 AA)로 교재 넣기·쓰던 앱·만드는 중·완성 화면 탭마다·배포 화면을 밝게/어둡게, PC/휴대폰에서. 가로 넘침도.
+// 새 흐름 접근성: axe(WCAG 2.1 AA)로 교재 넣기·만드는 중·완성 화면 탭마다·배포 화면을 밝게/어둡게, PC/휴대폰에서. 가로 넘침도.
 // + 키보드: Tab으로 AI 카드 단추에 닿고 초점이 보이는지, 목록의 ↑↓가 키보드로 되는지
 const L = require('./lib.js');
 const axeSrc = L.fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
@@ -22,8 +22,6 @@ async function check(p, label) {
     process.env.SPEED = '0.6';
     await L.startWithFile(p);
     await check(p, `${tag} start`);
-    await p.click('.ai-nokey button:has-text("쓰던 ChatGPT로")'); await p.waitForSelector('#chat-way');
-    await check(p, `${tag} start + chat way`);
     await p.click('details.ai-more:not([open]) > summary').catch(() => {}); await p.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
     await p.waitForSelector('dialog[open] .consent'); await check(p, `${tag} consent dialog`); await L.consent(p);
     await p.waitForSelector('dialog[open] .ai-connect');

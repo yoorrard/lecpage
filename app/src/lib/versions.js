@@ -47,13 +47,12 @@ export function recordVersion(cur, next, { kind = 'edit', label = '', at = Date.
   return [snap(next, label, kind, at), ...list].slice(0, MAX_VERSIONS);
 }
 
-/** AI 작업이 끝난 뒤의 버전 이름 */
-export function aiVersionLabel(kind, { chat = false, request = '' } = {}) {
-  if (kind === 'make') return chat ? '쓰던 AI가 만든 버전' : 'AI가 만든 버전';
+/** AI 작업이 끝난 뒤의 버전 이름(예전 복사·붙여넣기 길로 남은 버전은 저장된 이름 그대로 보임) */
+export function aiVersionLabel(kind, { request = '' } = {}) {
+  if (kind === 'make') return 'AI가 만든 버전';
   if (kind === 'fix') return 'AI로 꼭 고칠 곳 수정';
   const r = String(request || '').replace(/\s+/g, ' ').trim();
-  const head = chat ? '쓰던 AI로 수정' : 'AI로 수정';
-  return r ? `${head} · ${r.length > 40 ? r.slice(0, 39) + '…' : r}` : head;
+  return r ? `AI로 수정 · ${r.length > 40 ? r.slice(0, 39) + '…' : r}` : 'AI로 수정';
 }
 
 /** 복원한 버전의 이름(복원을 거듭해도 '복원 · 복원 · …'이 되지 않게) */

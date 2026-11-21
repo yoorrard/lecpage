@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Notice } from './ui.jsx';
-import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI, setWay, chatLabel } from '../lib/ai.js';
+import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI } from '../lib/ai.js';
 import { KEY_GUIDES, GUIDE_ORDER, GUIDE_MORE, KeyPic } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
 import { askConsent } from '../lib/connection.js';
@@ -18,7 +18,7 @@ const NO_COPY = '키 옆의 복사 버튼을 누르고 돌아와 다시 눌러 �
  * 어느 걸음에서든 키를 붙여 넣으면(Ctrl+V) 회사를 알아보고 바로 연결합니다.
  * 키는 이 브라우저에서 AI 회사로만 갑니다. onConnected(ai)로 연결된 정보를 돌려줍니다.
  */
-export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: onlyOne = false }) {
+export function AiConnect({ onConnected, onCancel, initial = '', only: onlyOne = false }) {
   const [key, setKey] = useState('');
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -29,7 +29,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
   const [opened, setOpened] = useState(-1); // 새 창으로 연 걸음 → 돌아오면 그다음 걸음으로
   const [back, setBack] = useState(false); // 키 페이지에서 돌아옴 → [붙여넣기]를 눈에 띄게
   const inputRef = useRef(); const pasteRef = useRef();
-  // 고른 회사의 API가 이 망에서 열리는지(요청 한 번, 잠깐 기억). 막혔으면 키를 만들기 전에 알려 쓰던 AI 창 길로
+  // 고른 회사의 API가 이 망에서 열리는지(요청 한 번, 잠깐 기억). 막혔으면 키를 만들기 전에 알려 줌
   const [netBad, setNetBad] = useState('');
   useEffect(() => { let off = false; setNetBad(''); reach('ai:' + tab).then((s) => { if (!off && s === 'blocked') setNetBad(tab); }); return () => { off = true; }; }, [tab]);
   const g = KEY_GUIDES[tab]; const last = g.steps.length; const cur = g.steps[step];
@@ -65,7 +65,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
     k = cleanKey(k);
     const prov = detectProvider(k) || (looksLikeKey(k) ? tab : null);
     if (!prov) { setErr({ title: '키가 아닌 것 같아요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요.' }); return; }
-    if (!PROVIDERS[prov]) { setErr({ title: '이 키로는 만들 수 없어요.', body: 'OpenAI(GPT)나 Anthropic(Claude)에서 받은 키를 넣어 주세요. 키 없이 쓰던 AI로도 만들 수 있어요.' }); return; }
+    if (!PROVIDERS[prov]) { setErr({ title: '이 키로는 만들 수 없어요.', body: 'OpenAI(GPT)나 Anthropic(Claude)에서 받은 키를 넣어 주세요.' }); return; }
     if (!await askConsent(`key:${prov}`)) return; // 처음 한 번(설정에서 바로 연결할 때)
     setErr(null); setBusy(true);
     if (KEY_GUIDES[prov] && prov !== tab) { setTab(prov); setOpened(-1); }
@@ -74,7 +74,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
       await checkKey(prov, k);
       await saveKey(prov, k, remember);
       const a = await getActiveAI();
-      setKey(''); setWay('key'); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
+      setKey(''); toast(`${PROVIDERS[prov].name}에 연결했어요.`);
       onConnected?.(a);
     } catch (e) { setErr(explainError(e, prov)); }
     setBusy(false);
@@ -97,8 +97,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
       {g.more?.length > 0 && <ul class="ai-more small" aria-label="무료로 쓸 때 알아 둘 점">{g.more.map((t) => <li>{t}</li>)}</ul>}
       {netBad === tab && <div role="status"><Notice kind="bad"><div class="stack" style={{ gap: '4px' }}>
         <b>이 망에서 {g.label} API에 닿지 않아요.</b>
-        <span>학교·기관 망이 막은 것 같아요. 여기서는 키로 만들 수 없어요. 쓰던 AI로 만들거나, 휴대폰 핫스팟으로 바꾼 뒤 다시 열어 주세요.</span>
-        {onChat && <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => { setWay('chat'); onChat(tab); }}>{chatLabel(tab)}</button></div>}
+        <span>기관·회사 망이 막은 것 같아요. 여기서는 키로 만들 수 없어요. ChatGPT·Claude 계정으로 연결하거나, 휴대폰 핫스팟으로 바꾼 뒤 다시 열어 주세요.</span>
       </div></Notice></div>}
       <section class="key-card" aria-label={`${g.label} 연결 순서`}>
         <ol class="key-dots" aria-label="순서">
@@ -134,10 +133,7 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
         )}
       </section>
       {err && <div role="alert"><Notice kind={err.soft ? '' : 'bad'}><div class="stack" style={{ gap: '4px' }}><b>{err.title}</b>{err.body && <span>{err.body}</span>}
-        {(err.link || (onChat && err.actions?.includes('paste'))) && <div class="btn-row">
-          {err.link && <a class="btn btn-sm" href={err.link.href} target="_blank" rel="noopener">{err.link.label}</a>}
-          {onChat && err.actions?.includes('paste') && <button type="button" class="btn btn-sm" onClick={() => { setWay('chat'); onChat(err.provider); }}>{chatLabel(err.provider)}</button>}
-        </div>}</div></Notice></div>}
+        {err.link && <div class="btn-row"><a class="btn btn-sm" href={err.link.href} target="_blank" rel="noopener">{err.link.label}</a></div>}</div></Notice></div>}
       <details class="ai-tips">
         <summary class="small">잘 안 되나요?</summary>
         <ul class="small">{g.tips.map((t) => <li>{t}</li>)}</ul>
@@ -145,7 +141,6 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
       {<div class="btn-row">
         {!only && GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].label} 키 연결({KEY_GUIDES[id].tag})</button>)}
-        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(tab); }}>쓰던 AI로(키 없이)</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>

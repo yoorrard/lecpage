@@ -27,7 +27,7 @@ export const KIT = `연수 기능(필요한 자리에 넣어요): 자리 표시�
 
 /**
  * 디자인 서재(짧은 판): skills/lecpage/references/design-library.md를 줄인 것. 고를 수 있는 낱말·기법을 넓혀 줄 뿐 규칙이 아님.
- * 키 길·쓰던 AI 창의 만들기와 고치기에 모두 넣음. 에이전트 길(lecpage 커넥트·Skill)은 전체 파일을 작업 폴더에 둠
+ * 키 길의 만들기와 고치기에 모두 넣음. 에이전트 길(lecpage 커넥트·Skill)은 전체 파일을 작업 폴더에 둠
  */
 export const LIBRARY = `디자인 서재(필요하면 참고, 따를 의무 없음. 이 연수의 컨셉이 먼저고, 섞거나 여기 없는 방식을 써도 돼요)
 - 노릴 수준: 들어오자마자 공들인 최신 사이트로 느끼는 첫 화면. lecpage 견본(교재 표지의 신경망을 WebGL로 살린 첫 화면, 3D로 넘기는 그림책, 하루 1,440분 격자가 채워지는 첫 화면)이 바닥 기준이에요. 베끼지 말고, 지금 교재의 컨셉에서만 나올 장면으로 그보다 한 단계 위를 노려요. 교재가 평범하거나 딱딱해도 사이트까지 차분한 문서처럼 만들 이유는 없어요.
@@ -141,50 +141,6 @@ ${RULES}
 /** 검수 결과 → 고치기 요청 글([AI에게 고쳐 달라기]) */
 export function fixRequest(issuesText) {
   return `lecpage 검수에서 아래 문제가 나왔어요. 디자인은 그대로 두고 이 문제만 고쳐 주세요.\n${issuesText}`;
-}
-
-/** 쓰던 AI 창(키 없이): 한 번에 index.html 한 파일(CSS·JS는 안에) + 맨 끝 lecpage.json */
-export function buildChatPrompt({ request, reference, info, files = [] } = {}) {
-  const names = files.map((f) => f.name).filter(Boolean);
-  return `${GOAL}
-이 대화에 교재 파일${names.length ? `(${names.join(', ')})` : ''}을 첨부했어요. 첨부한 교재를 직접 읽고 만들어 주세요. 교재 파일이 첨부되지 않았으면 만들지 말고 "교재 파일(PDF)을 첨부해 주세요."라고만 답해 주세요.
-오늘 날짜: ${today()}
-
-강사 요청:
-${askOf({ request, reference, info })}
-
-${KIT}
-
-${LIBRARY}
-
-${RULES}
-
-답하는 꼴(lecpage에 붙여 넣어요): 설명 없이 코드 블록 두 개.
-1) \`\`\`html — index.html 한 파일(<!DOCTYPE html>부터 </html>까지, CSS는 <style>, JS는 <script>로 안에)
-2) 바로 이어서 \`\`\`json — 교재에서 찾은 연수 정보만: ${META_FORM}
-답이 길어 중간에 끊기면, 제가 "이어서"라고 하면 끊긴 바로 다음 글자부터 이어 써 주세요.`;
-}
-
-/** 쓰던 AI 창: 잘린 답 이어서 */
-export function buildContinuePrompt(tail) {
-  const last = String(tail || '').replace(/\s+$/, '').split('\n').slice(-3).join('\n').slice(-300);
-  return `앞 답이 중간에 끊겼어요. 끊긴 바로 다음 글자부터 이어서 써 주세요. 앞부분을 되풀이하지 말고, 설명 없이 \`\`\`html 코드 블록 하나로만요. 끝에 연수 정보(\`\`\`json)도 잊지 마세요.
-앞 답의 마지막 부분:
-${last}`;
-}
-
-/** 쓰던 AI 창: 수정 요청(지금 사이트 전체 + 요청 → 고친 index.html 전체) */
-export function buildChatEditPrompt({ request, target, site }) {
-  const where = target && target !== 'all' ? `\n고칠 곳: id="${target}"인 부분. 다른 곳은 그대로 둬요.` : '';
-  return `제가 만든 강의 사이트를 고치고 싶어요. 요청과 상관없는 곳은 그대로 둬 주세요.
-요청: ${String(request || '').trim().slice(0, 4000)}${where}
-
-지금 사이트 파일:
-${siteBlocks(site, { max: 120000 })}
-
-${LIBRARY}
-
-고친 사이트를 index.html 한 파일(CSS·JS는 안에)로, 설명 없이 \`\`\`html 코드 블록 하나로 답해 주세요. 교재에 없는 사실은 지어내지 마세요.`;
 }
 
 /** 단계 이름 → 화면 글(단계 목록에 '끝·하는 중·기다림'과 함께 보이므로 이름꼴) */
