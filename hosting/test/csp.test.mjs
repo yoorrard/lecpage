@@ -63,7 +63,13 @@ test('엔진 조립의 CSP(kit/assemble.js kitCsp)와 어긋나지 않음: 같�
     const eng = parse(r.csp);
     const srv = parse(siteCsp({ ...(c.srv || { host: HOST }), live: declaredLive(c.live, HOST) }));
     const strip = (v) => (v || []).filter((x) => x !== 'file:');
-    for (const d of ['script-src', 'style-src', 'font-src', 'frame-src', 'worker-src', 'object-src', 'base-uri', 'form-action']) assert.deepEqual(srv[d], strip(eng[d]), `${c.name}: ${d}`);
+    // 엔진은 사이트가 실제로 부르는 바깥 곳만 meta CSP에 엶(usedSources). 서버 머리글은 사이트 내용을 모르니 엔진이 열 수 있는 허용 목록 전부(kitCsp 기본)와 같고,
+    // 브라우저는 머리글과 meta 둘 다 지키므로 실제로는 더 좁은 엔진 쪽이 적용됨
+    const full = parse(K.kitCsp(r.blueprint, { live: true }));
+    for (const d of ['script-src', 'style-src', 'font-src', 'frame-src', 'worker-src', 'object-src', 'base-uri', 'form-action']) {
+      assert.deepEqual(srv[d], strip(full[d]), `${c.name}: ${d}`);
+      for (const y of strip(eng[d])) assert.ok(srv[d].includes(y) || y === "'none'", `${c.name}: 엔진 ${d}의 ${y}가 서버에도 있어야 함`);
+    }
     assert.deepEqual(srv['default-src'], ["'none'"], '서버는 default-src를 닫음(빠진 지시어가 열리지 않게)');
     for (const d of ['img-src', 'media-src', 'connect-src']) {
       for (const x of srv[d]) assert.ok(strip(eng[d]).some((y) => within(x, y)), `${c.name}: ${d}의 ${x}가 엔진 CSP 안에 있어야 함`);

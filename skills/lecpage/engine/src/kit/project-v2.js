@@ -19,13 +19,15 @@ export const OLD_NOTE = '예전 방식으로 만든 연수예요. 교재와 연�
  * @param p { site:{경로:글|bytes}, meta(lecpage.json 객체), material:{pages:[{page,title,text}]}|null, sources:[{name,type,pages,size}], originals:[{name,bytes}], now }
  * @returns { bytes: Uint8Array(zip), files, dropped:[경로] }
  */
-export function packProjectV2({ site = {}, meta = {}, material = null, sources = [], originals = [], now = Date.now() } = {}) {
+export function packProjectV2({ site = {}, meta = {}, material = null, sources = [], originals = [], deploy = null, now = Date.now() } = {}) {
   const files = {}; const dropped = [];
   const m = readMeta(meta, { prev: meta }).meta; // 부른 쪽(앱·CLI)이 준 강사 값은 그대로 담음
   // 강사 비밀은 담지 않음(참여 기능 키). 주소·공개 범위는 담되 여는 쪽이 강사 값으로 다시 받음
   const safeMeta = { ...m, live: m.live ? { provider: m.live.provider, url: m.live.url, code: m.live.code } : null };
   const pages = (material?.pages || []).slice(0, 2000).map((x) => ({ page: +x.page || 0, title: String(x.title || '').slice(0, 160), ...(x.text ? { text: String(x.text).slice(0, 4000) } : {}) })).filter((x) => x.page > 0);
-  const project = { format: PROJECT_FORMAT, version: PROJECT_V2, engine: ENGINE_VERSION, kind: 'site', title: m.title, meta: safeMeta, material: { pages }, sources: sources.slice(0, 40).map((s) => ({ name: String(s.name || '').slice(0, 160), type: String(s.type || '').slice(0, 12), pages: +s.pages || 0, size: +s.size || 0 })), createdAt: now };
+  const project = { format: PROJECT_FORMAT, version: PROJECT_V2, engine: ENGINE_VERSION, kind: 'site', title: m.title, meta: safeMeta, material: { pages }, sources: sources.slice(0, 40).map((s) => ({ name: String(s.name || '').slice(0, 160), type: String(s.type || '').slice(0, 12), pages: +s.pages || 0, size: +s.size || 0 })), createdAt: now,
+    // 지난번 배포한 곳(조립 opts.host: 개인정보 안내·운영안내가 그 방식에 맞게). 여는 쪽이 배포할 곳을 고를 때 처음 값으로 씀
+    ...(deploy && typeof deploy.host === 'string' && /^[a-z-]{2,20}$/.test(deploy.host) ? { deploy: { host: deploy.host } } : {}) };
   files['project.json'] = JSON.stringify(project, null, 2);
   for (const [k, v] of Object.entries(site)) { if (siteFileOk(k)) files['site/' + k] = v; else dropped.push(k); }
   for (const o of originals) { const k = srcKey(o.name); if (isAllowedAsset(k) && !files[k]) files[k] = o.bytes; else dropped.push(o.name); }
@@ -44,7 +46,7 @@ export function unpackProjectV2(zip) {
   // 파일 안의 강사 값(공개 범위·주소·참여 서버)은 남이 준 파일일 수 있어 meta에 넣지 않고 따로 돌려줌(앱이 강사에게 확인받고 씀)
   const meta = readMeta(j.meta || {}).meta;
   const teacherInFile = readMeta(j.meta || {}, { prev: j.meta || {} }).meta;
-  return { kind: 'v2', site, meta, teacherInFile: { live: teacherInFile.live, siteUrl: teacherInFile.siteUrl, joinUrl: teacherInFile.joinUrl, shortUrl: teacherInFile.shortUrl, access: teacherInFile.access, surveyUrl: teacherInFile.surveyUrl, privacy: teacherInFile.privacy, keepUntil: teacherInFile.keepUntil }, material: { pages: Array.isArray(j.material?.pages) ? j.material.pages : [] }, sources: Array.isArray(j.sources) ? j.sources : [], originals, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '', formatVersion: PROJECT_V2, title: String(j.title || meta.title || '') };
+  return { kind: 'v2', site, meta, teacherInFile: { live: teacherInFile.live, siteUrl: teacherInFile.siteUrl, joinUrl: teacherInFile.joinUrl, shortUrl: teacherInFile.shortUrl, access: teacherInFile.access, surveyUrl: teacherInFile.surveyUrl, privacy: teacherInFile.privacy, keepUntil: teacherInFile.keepUntil }, material: { pages: Array.isArray(j.material?.pages) ? j.material.pages : [] }, sources: Array.isArray(j.sources) ? j.sources : [], originals, engine: typeof j.engine === 'string' ? j.engine.slice(0, 20) : '', formatVersion: PROJECT_V2, title: String(j.title || meta.title || ''), deploy: typeof j.deploy?.host === 'string' && /^[a-z-]{2,20}$/.test(j.deploy.host) ? { host: j.deploy.host } : null };
 }
 
 /** 파일 안 연수 정보 → { meta(강사 값 뺌), teacherInFile(강사 값: 부른 쪽이 강사에게 확인받고 씀) } */

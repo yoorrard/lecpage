@@ -87,11 +87,12 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 
 ## 5. 조립·검수 (약속 C, 엔진)
 ```js
-assemble(site, meta, { runtime, preview, target, prev, today, material, materials }) → { files, warnings, errors, meta, collected, blueprint, csp, report }
+assemble(site, meta, { runtime, preview, target, prev, today, material, materials, host, hostDays, keepAlive }) → { files, warnings, errors, meta, collected, blueprint, csp, report, teacher, preflight }
   // site: { 'index.html': '…', 'assets/style.css': '…', … }
   // 하는 일: 인라인 <script> → assets/site.js, 자리 표시 펼치기, 키트 CSS·런타임 넣기, CSP·_headers, lp-data,
   //         강사·발표·안내문·접속 확인·개인정보 쪽, 일정 파일(.ics), favicon, robots, 쪽 그림 경로 확인, 강사 값 지키기
-inspect(files, meta) → issues[]            // 정적 검사: HTML 구조·빈 칸·깨진 경로·키트 표시 오류·금지 패턴·크기·글자 대비(CSS 변수)
+inspect(files, meta, { materialText, known }) → issues[]   // 정적 검사: HTML 구조·빈 칸·깨진 경로·키트 표시 오류·금지 패턴·크기·글자 대비(CSS 변수) + 교재 글을 주면 교재 사실 대조
+checkFacts(siteFiles, { materialText, meta, known }) → issues[]  // 교재 사실 대조(kit/facts.js, fact-*, 모두 살펴볼 곳)
 inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브라우저 숨은 틀): 390·1280 가로 넘침·겹침·안 보이는 글·잘린 글·이미지 깨짐
 // issue: { id, level:'error'|'warn', where:{ file, selector, section }, message_ko, fix_hint_ko }
 previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미리보기·숨은 틀(CSS·JS·그림을 안으로, CSP meta 뺌)
@@ -105,7 +106,8 @@ previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미
 ### .lecpage v2 (저장 형식)
 무압축 ZIP: `project.json { format:'lecpage-project', version:2, kind:'site', engine, title, meta, material:{pages}, sources, createdAt }` + `site/…` + `src/…`(원본). 참여 기능 키는 담지 않음. 열 때 파일 안의 강사 값은 `meta`에 넣지 않고 `teacherInFile`로 따로 줌(남이 준 파일일 수 있어 앱이 확인받고 씀). v1(설계도) 파일은 `kind:'v1'`+'예전 판' 안내, `upgradeV1`이 연수 정보·교재 쪽 그림(`material/p-NNN`)·원본·쪽 제목을 옮기고 예전 사이트는 지금 엔진으로 빌드해 `legacy`로 줌(사이트는 AI로 새로 만듦).
 - 검수 결과는 사람(앱 화면)과 AI(고치기 요청에 그대로 붙임) 둘 다 읽는 꼴.
-- 교재 사실 대조는 AI 검수 단계로(사이트 글 + `facts` + 교재 → 틀린 날짜·지어낸 내용 목록). 코드가 교재를 해석해 고치지는 않음.
+- 교재 사실 대조(`kit/facts.js`, 2026-11-20): 사이트 글·복사 단추 원문·인용·연수 정보의 날짜·시각·숫자+단위·주소·메일·전화·쪽 번호를 교재 글과 글자로 맞춰 '교재에 없는 사실'·'원문과 달라진 복사 글'·'받아쓰기'를 알림(가장 가까운 교재 글과 쪽을 함께). 코드가 교재를 해석하거나 고치지 않고, 막지도 않음(살펴볼 곳). 조립은 AI의 HTML·CSS에 디자인용 글을 넣지 않음.
+- 배포할 곳(`host`)에 맞는 개인정보 안내(처리자·보관 기간·사이트를 보내 주는 곳), 운영안내.md '배포 전 확인'(`kit/preflight.js`: 예시 주소·지난 날짜·설문 없는 이수 조건·연습 모드·사진), 배포에는 쓰는 교재 쪽 그림만, 사이트 CSP는 쓰는 바깥 곳만, 미리보기 한 장은 전용 CSP(`connect-src 'none'`).
 
 ## 6. 앱에서 AI가 만드는 과정 (키 연결)
 나눠 만들고, 단계마다 저장해, 끊겨도 그 자리부터 이어 합니다.

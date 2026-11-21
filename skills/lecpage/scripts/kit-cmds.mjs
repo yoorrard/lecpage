@@ -28,6 +28,43 @@ function pageText(p) {
   return [...(p.paragraphs || []).map((x) => (typeof x === 'string' ? x : x?.text || '')), ...tables].filter(Boolean).join('\n');
 }
 
+/**
+ * ingest 결과 → 쪽 목록(교재 여러 개면 번호를 이어서: 첫 교재 1~12, 둘째 13부터). PPTX와 함께 준 같은 내용의 PDF(renderOf)는 쪽 그림만 그리는 데 써서 쪽을 두 번 세지 않음.
+ * image(n, p): 그 쪽 그림 경로를 돌려줌(prepare가 그림을 옮김), 없으면 ''
+ */
+function ingestPages(m, image = () => '') {
+  const files = Object.fromEntries((m.files || []).map((f) => [f.id, f]));
+  const renderOnly = new Set((m.files || []).filter((f) => f.renderOf).map((f) => f.id));
+  return m.pages.filter((p) => !renderOnly.has(p.file)).map((p, i) => {
+    const title = String(p.title || '').trim();
+    return { page: i + 1, file: files[p.file]?.name || '', filePage: p.page, title, text: pageText(p), notes: String(p.notes || '').trim(), image: image(i + 1, p) };
+  });
+}
+/** 보조 글자(material.md): 쪽마다 머리(## p-001 · 파일 쪽 · 제목)와 글·발표자 노트. 교재 사실 대조(check)도 이 글을 읽음 */
+function materialMd(m, pages) {
+  return [`# 교재 보조 글자`, '', `쪽 그림(site/material/p-NNN.webp)과 교재 원본이 먼저예요. 이 글은 찾기·옮겨 적기용이라 표·그림 속 글은 빠질 수 있어요.`, '',
+    `교재: ${(m.files || []).filter((f) => !f.renderOf).map((f) => `${f.name}(${f.pages || '?'}쪽)`).join(', ')}`, '',
+    ...pages.flatMap((p) => [`## p-${pad3(p.page)} · ${p.file} ${p.filePage}쪽${p.title ? ` · ${p.title}` : ''}${p.image ? '' : ' (쪽 그림 없음)'}`, '', p.text || '(글자 없음)', ...(p.notes ? ['', `> 발표자 노트: ${p.notes.replace(/\n/g, ' ')}`] : []), ''])].join('\n');
+}
+/**
+ * 교재 사실 대조에 쓸 교재 글: work/material.md(prepare가 만든 보조 글자). 없으면(앱에서 가져온 작업 폴더 등) 교재 원본(.lecpage/sources.json)을
+ * 다시 읽어 같은 꼴로 만들고 material.md로 남김. 원본도 없으면 ''
+ */
+export async function materialTextFor(h, work) {
+  try { return readFileSync(join(work, 'material.md'), 'utf8'); } catch { /* 없음 */ }
+  let sources = []; try { sources = JSON.parse(readFileSync(join(work, '.lecpage', 'sources.json'), 'utf8')); } catch { /* 없음 */ }
+  const paths = sources.filter((x) => x.path && !x.renderOf && existsSync(x.path)).map((x) => x.path);
+  if (!paths.length) return '';
+  try {
+    const C = await imp('src/ingest/cli.js');
+    const m = await C.ingestPaths(paths, { withImages: false, python: !h.args['no-python'] });
+    if (!m.pages?.length) return '';
+    const md = materialMd(m, ingestPages(m, (n) => (existsSync(join(work, 'site', 'material', `p-${pad3(n)}.webp`)) ? `material/p-${pad3(n)}.webp` : '')));
+    writeFileSync(join(work, 'material.md'), md);
+    return md;
+  } catch { return ''; }
+}
+
 /** prepare <교재…> -o work */
 export async function prepareCmd(h) {
   const { args, rel, fail, say, writeJson } = h;
@@ -43,31 +80,23 @@ export async function prepareCmd(h) {
   if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => e.message_ko))].join(' '));
   if (!args['no-slides']) await C.attachSlides(m, tmp, join(work, '.lecpage', 'material.json'), { onProgress: (d, t) => { if (Date.now() - t0 > 8000 && d % 10 === 0) console.error(`… 쪽 그림 ${d}${t ? '/' + t : ''}`); } });
   // 쪽 번호: 교재 여러 개면 이어서(첫 교재 1~12, 둘째 13부터). 그림은 site/material/p-NNN.webp
-  const files = Object.fromEntries((m.files || []).map((f) => [f.id, f]));
-  const pages = []; let images = 0;
-  // PPTX와 함께 준 같은 내용의 PDF(renderOf)는 쪽 그림만 그리는 데 씀 → 쪽을 두 번 세지 않음
-  const renderOnly = new Set((m.files || []).filter((f) => f.renderOf).map((f) => f.id));
-  m.pages.filter((p) => !renderOnly.has(p.file)).forEach((p, i) => {
-    const n = i + 1;
-    let img = '';
-    if (p.image) {
-      const from = join(work, '.lecpage', p.image);
-      const ext = (extname(p.image) || '.webp').toLowerCase().replace('.jpeg', '.jpg');
-      if (existsSync(from)) { img = `material/p-${pad3(n)}${ext}`; copyFileSync(from, join(siteDir, img)); images++; }
-    }
-    const title = String(p.title || '').trim();
-    pages.push({ page: n, file: files[p.file]?.name || '', filePage: p.page, title: tangledTitle(title) ? '' : title, text: pageText(p), notes: String(p.notes || '').trim(), image: img });
-  });
+  let images = 0;
+  const pages = ingestPages(m, (n, p) => {
+    if (!p.image) return '';
+    const from = join(work, '.lecpage', p.image);
+    const ext = (extname(p.image) || '.webp').toLowerCase().replace('.jpeg', '.jpg');
+    if (!existsSync(from)) return '';
+    const img = `material/p-${pad3(n)}${ext}`; copyFileSync(from, join(siteDir, img)); images++;
+    return img;
+  }).map((p) => ({ ...p, title: tangledTitle(p.title) ? '' : p.title }));
   rmSync(join(work, '.lecpage', 'slides'), { recursive: true, force: true });
   writeJson(join(work, '.lecpage', 'pages.json'), pages.map(({ page, title, text }) => ({ page, title, text: text.slice(0, 400) })));
   // 교재 목록(앱으로 넘길 때 원본을 함께 담으려고 경로도 적음. 이 컴퓨터 안에서만 씀)
   writeJson(join(work, '.lecpage', 'sources.json'), (m.files || []).filter((f) => f.path).map((f) => ({ name: f.name, type: f.type, pages: f.pages || 0, size: f.size || 0, path: f.path, ...(f.renderOf ? { renderOf: true } : {}) })));
   h.saveState(work, { v: 2, out: 'dist' });
-  // 보조 글자: 쪽 그림과 원본이 먼저, 이 글은 찾기·옮겨 적기용
-  const md = [`# 교재 보조 글자`, '', `쪽 그림(site/material/p-NNN.webp)과 교재 원본이 먼저예요. 이 글은 찾기·옮겨 적기용이라 표·그림 속 글은 빠질 수 있어요.`, '',
-    `교재: ${(m.files || []).filter((f) => !f.renderOf).map((f) => `${f.name}(${f.pages || '?'}쪽)`).join(', ')}`, '',
-    ...pages.flatMap((p) => [`## p-${pad3(p.page)} · ${p.file} ${p.filePage}쪽${p.title ? ` · ${p.title}` : ''}${p.image ? '' : ' (쪽 그림 없음)'}`, '', p.text || '(글자 없음)', ...(p.notes ? ['', `> 발표자 노트: ${p.notes.replace(/\n/g, ' ')}`] : []), ''])].join('\n');
-  writeFileSync(join(work, 'material.md'), md);
+  // 보조 글자: 쪽 그림과 원본이 먼저, 이 글은 찾기·옮겨 적기용. 쪽 글에 '프롬프트' 같은 꼬리표는 붙이지 않음
+  // (나쁜 예·반례까지 복사 단추가 될 수 있어서: 무엇이 원문인지는 AI가 쪽 그림과 문맥으로 판단)
+  writeFileSync(join(work, 'material.md'), materialMd(m, pages));
   const metaPath = join(work, 'lecpage.json');
   if (!existsSync(metaPath)) writeJson(metaPath, { v: 2, title: '', subtitle: '', sessions: [], venue: '', mode: 'offline', audience: 'teachers', instructors: [], features: [], theme: {}, facts: [] });
   const originals = inputs.filter((p) => !/^https?:/i.test(p));
@@ -129,7 +158,7 @@ async function assembleWork(h, work, extra = {}) {
   const prevPath = join(work, 'lecpage.teacher.json'); // 강사 값(공개 범위·주소·참여 서버): CLI가 따로 둠
   const prev = existsSync(prevPath) ? readJson(prevPath) : null;
   let material = null; try { material = { pages: JSON.parse(readFileSync(join(work, '.lecpage', 'pages.json'), 'utf8')) }; } catch { /* 없음 */ }
-  const r = K.assemble(site, metaRaw, { runtime: N.nodeRuntime(), prev, today: h.args.today, material, ...extra });
+  const r = K.assemble(site, metaRaw, { runtime: N.nodeRuntime(), prev, today: h.args.today, material, ...(extra.host ? { host: extra.host } : {}) });
   return { K, site, metaRaw, prev, r };
 }
 const relp = (a, b) => relative(a, b) || '.';
@@ -147,10 +176,11 @@ function writeDist(N, work, files) {
  * v2 작업 폴더 조립 → work/dist(올릴 사이트) + work/dist-강사용/운영안내.md(올리지 않음). publish·pack·app·serve·handouts가 함께 씀
  * @param o.fonts 글꼴 함께 담기(사이트가 쓰는 글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안으로: 학교망이 CDN을 막아도 같은 글꼴, 못 받으면 CDN 그대로)
  * @param o.password 암호로 잠그기(쪽·교재 쪽 그림·자료실 파일, 접속 확인·개인정보 안내만 열어 둠). 공개 범위가 password인데 암호가 없으면 오류
+ * @param o.host 배포할 곳(decide/infra.js HOSTS id: cloudflare·onpod·vercel·github-pages·netlify·lan·zip …). 개인정보 안내·운영안내가 그 방식에 맞게
  * @returns { ok, errors, dist, tdir, r(assemble 결과), K, site, metaRaw, notes:[한 줄], access }
  */
-export async function buildWorkV2(h, work, { fonts = false, password = '' } = {}) {
-  const a = await assembleWork(h, work);
+export async function buildWorkV2(h, work, { fonts = false, password = '', host = '' } = {}) {
+  const a = await assembleWork(h, work, { host });
   if (a.r.errors?.length) return { ok: false, errors: a.r.errors, ...a };
   if (a.r.meta.access === 'password' && !password) return { ok: false, errors: [{ code: 'password', message_ko: '공개 범위가 암호(lecpage.teacher.json access: password)예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.' }], ...a };
   let files = a.r.files;
@@ -178,9 +208,14 @@ export async function buildWorkV2(h, work, { fonts = false, password = '' } = {}
 export async function checkCmd(h) {
   const { args, N, rel, say, loadPlaywright, staticServer } = h;
   const work = resolve(args._[0] || 'work');
-  const { K, site, metaRaw, r, dist } = await buildWorkV2(h, work);
+  // 배포할 곳: --host, 없으면 지난번에 배포한 곳(개인정보 안내·운영안내가 그 방식에 맞게)
+  const st = h.loadState(work);
+  const host = String(args.host || st.deploy?.host || st.hostHint || '');
+  const { K, site, metaRaw, r, dist, prev } = await buildWorkV2(h, work, { host });
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
-  const issues = K.inspect(site, metaRaw).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
+  // 교재 사실 대조: 교재 글(material.md, 없으면 원본을 다시 읽음)과 강사 값(lecpage.teacher.json, told: 강사가 알려 준 교재 밖 사실)
+  const materialText = await materialTextFor(h, work);
+  const issues = K.inspect(site, metaRaw, { materialText, known: prev || [] }).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
   const checkDir = join(work, 'check'); rmSync(checkDir, { recursive: true, force: true }); mkdirSync(checkDir, { recursive: true });
   const shots = [], tiles = [], tileCut = [];
   let rendered = [], browserNote = '';
@@ -227,7 +262,7 @@ export async function checkCmd(h) {
   const copy = [];
   try {
     const { lintHtml } = await import(pathToFileURL(join(HERE, 'copy-lint.mjs')).href);
-    let mat = ''; try { mat = readFileSync(join(work, 'material.md'), 'utf8'); } catch { /* 없음 */ }
+    const mat = materialText;
     const src = mat ? { material: { pages: [{ paragraphs: [{ text: mat }] }] } } : {};
     for (const p of r.report.pages) if (typeof site[p] === 'string') for (const f of lintHtml(site[p], p, src).slice(0, 12)) copy.push({ id: 'copy', level: 'warn', where: { file: 'site/' + p, selector: '', section: '' }, message_ko: `문구 "${String(f.hit).slice(0, 30)}": ${f.why}`, fix_hint_ko: `${f.fix} (references/copywriting.md)` });
   } catch { /* 문구 점검이 없으면 건너뜀 */ }
@@ -235,13 +270,15 @@ export async function checkCmd(h) {
   const seen = new Set();
   const all = [...issues, ...rendered, ...copy].filter((x) => { const k = `${x.id}|${x.where.file}|${x.where.selector}|${x.message_ko.replace(/\d+(\.\d+)?/g, '#')}`; if (seen.has(k)) return false; seen.add(k); return true; });
   const errors = all.filter((x) => x.level === 'error');
-  writeFileSync(join(checkDir, 'report.json'), JSON.stringify({ summary: K.issueSummary(all), issues: all, warnings: r.warnings, report: r.report, collected: r.collected }, null, 2) + '\n');
-  writeFileSync(join(checkDir, 'issues.md'), `# 검수 결과 (${K.issueSummary(all)})\n\n${K.issuesForAi(all, { max: 80 }) || '고칠 곳이 없어요.'}\n\n## 조립 알림\n${r.warnings.map((w) => `- ${w.message_ko}`).join('\n') || '- 없음'}\n`);
+  const facts = all.filter((x) => x.id.startsWith('fact-'));
+  writeFileSync(join(checkDir, 'report.json'), JSON.stringify({ summary: K.issueSummary(all), issues: all, warnings: r.warnings, preflight: r.preflight || [], report: r.report, collected: r.collected }, null, 2) + '\n');
+  writeFileSync(join(checkDir, 'issues.md'), `# 검수 결과 (${K.issueSummary(all)})\n\n${K.issuesForAi(all, { max: 80 }) || '고칠 곳이 없어요.'}\n\n## 배포 전 확인(강사용 운영안내.md에도)\n${(r.preflight || []).map((x) => `- ${x.message_ko}`).join('\n') || '- 없음'}\n\n## 조립 알림\n${r.warnings.map((w) => `- ${w.message_ko}`).join('\n') || '- 없음'}\n`);
   const line = (x) => `${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'} ${x.where.file}${x.where.selector ? ' ' + x.where.selector : ''}${x.where.width ? ` (${x.where.width}px)` : ''}: ${x.message_ko}`;
   say([
     `조립 ${rel(dist)}: 쪽 ${r.report.pages.length} · 파일 ${r.report.files}개 · ${r.report.sizeKB}KB · 참여 기능 ${r.report.live === 'none' ? '없음' : `${r.report.live}(${r.report.features.join(',')})`}`,
     r.collected ? `키트 투표 ${r.collected.polls.length} · 실습 단계 ${r.collected.steps.length} · 교재 쪽 ${r.collected.deck.length}${r.collected.untitled?.length ? `(제목 없는 쪽 ${r.collected.untitled.length}: ${r.collected.untitled.slice(0, 6).join('·')}${r.collected.untitled.length > 6 ? '…' : ''} → 필요하면 lecpage.json pages)` : ''} · 질문 ${r.collected.qa ? '있음' : '없음'} · 보드 ${r.collected.board.length} · 설문 ${r.collected.survey.length}` : '',
-    `검수 ${K.issueSummary(all)}`,
+    `검수 ${K.issueSummary(all)}${materialText ? ` · 교재 대조 ${facts.length ? `살펴볼 곳 ${facts.length}건(알리기만 해요)` : '어긋난 사실 없음'}` : ' · 교재 대조 건너뜀(material.md·교재 원본 없음)'}${r.report.droppedPages?.length ? ` · 안 쓰는 교재 쪽 그림 ${r.report.droppedPages.length}장은 배포에서 뺌` : ''}`,
+    ...(r.preflight || []).map((x) => `배포 전 확인 ${x.message_ko}`),
     ...[...errors, ...all.filter((x) => x.level !== 'error')].slice(0, 10).map(line),
     all.length > 10 ? `… 나머지는 ${rel(join(checkDir, 'issues.md'))}` : '',
     r.warnings.length ? `조립 알림 ${r.warnings.length}: ${r.warnings.slice(0, 3).map((w) => w.message_ko).join(' / ')}` : '',
@@ -288,7 +325,8 @@ export async function appPackV2(h, work) {
     if (statSync(s.path).size > MB100) { big.push(s.name); continue; }
     originals.push({ name: s.name || basename(s.path), bytes: new Uint8Array(readFileSync(s.path)) });
   }
-  const r = K.packProjectV2({ site, meta, material: { pages }, sources: sources.map(({ path, renderOf, ...x }) => x), originals });
+  const host = h.loadState(work).deploy?.host || ''; // 지난번 배포한 곳: 앱이 배포할 곳을 고를 때 처음 값(조립 opts.host)
+  const r = K.packProjectV2({ site, meta, material: { pages }, sources: sources.map(({ path, renderOf, ...x }) => x), originals, deploy: host ? { host } : null });
   const out = resolve(args.o || join(dirname(work), P.projectFileName(meta.title)));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, r.bytes);
@@ -320,7 +358,7 @@ export async function appUnpackV2(h, o) {
   const t = o.teacherInFile || {};
   const given = Object.entries(t).filter(([k, v]) => v && !(k === 'access' && v === 'link') && !(typeof v === 'object' && !Object.values(v).some(Boolean)));
   if (given.length) writeJson(join(work, 'lecpage.teacher.from-file.json'), Object.fromEntries(given));
-  h.saveState(work, { v: 2, out: 'dist', from: 'app' });
+  h.saveState(work, { v: 2, out: 'dist', from: 'app', ...(o.deploy?.host ? { hostHint: o.deploy.host } : {}) }); // hostHint: check의 배포할 곳 처음 값
   const imgs = Object.keys(o.site).filter((k) => k.startsWith('material/')).length;
   say([
     `앱에서 저장한 연수 ✓ 「${String(o.title || meta.title || '이름 없음').slice(0, 40)}」 → ${rel(work)} · 사이트 파일 ${Object.keys(o.site).length - imgs}개 · 교재 쪽 그림 ${imgs} · 교재 원본 ${srcFiles.length}`,

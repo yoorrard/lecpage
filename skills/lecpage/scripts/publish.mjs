@@ -118,14 +118,14 @@ export async function publishCmd(h) {
   if (!KC.isV2Work(work)) fail(`${rel(work)}에 사이트가 없어요. prepare → site/·lecpage.json 쓰기 → check 뒤에 publish work를 해 주세요.`);
   // work/site + lecpage.json(+ 강사 값 lecpage.teacher.json)을 조립해 work/dist를 올림.
   // 글꼴 함께 담기(앱과 같게 기본으로 켬, --no-bundle-fonts면 끔)·암호 잠그기(--password 또는 LECPAGE_PASSWORD)를 조립 결과에
-  const v2opts = { fonts: !args['no-bundle-fonts'] && !dry, password: dry ? '' : String(args.password || process.env.LECPAGE_PASSWORD || '') };
+  const state = loadState(work);
+  // --host가 없으면 지난번에 올린 곳(같은 주소로 다시). 처음이면 Cloudflare. 조립에도 넘겨 개인정보 안내·운영안내가 이 곳에 맞게(사이트를 보내 주는 곳·처리자)
+  const host = String(args.host || state.deploy?.host || 'cloudflare');
+  const v2opts = { fonts: !args['no-bundle-fonts'] && !dry, password: dry ? '' : String(args.password || process.env.LECPAGE_PASSWORD || ''), host };
   let v2b = await KC.buildWorkV2(h, work, v2opts);
   if (!v2b.ok) fail('조립하지 못했어요: ' + v2b.errors.map((e) => e.message_ko).join(' ') + ` (check ${rel(work)}로 확인)`);
-  const state = loadState(work);
   const dist = v2b.dist;
   const tdir = dist + '-강사용';
-  // --host가 없으면 지난번에 올린 곳(같은 주소로 다시). 처음이면 Cloudflare
-  const host = String(args.host || state.deploy?.host || 'cloudflare');
   if (host !== 'cloudflare' && host !== 'onpod') {
     const H = E.HOSTS[host];
     fail(`publish는 지금 Cloudflare(사이트·참여 기능을 한 계정에)와 Onpod(사이트만)에 대신 올려요. ${H?.cli ? `${H.name_ko}는 한 줄 명령으로: ${H.cli}` : ''} 안내: references/deploy/${host}.md`);

@@ -802,6 +802,12 @@
       return '"' + n.replace(/"/g, '""') + '"' + line.slice(c);
     }).join('\n');
   }
+  /** 이수 기준(출석 %)을 교재·강사가 정했는지(siteData admin.rateSet) */
+  function rateOn() { var a = DATA.admin || {}; return a.rateSet !== false && a.completionRate > 0; }
+  /** 기준이 없을 때 이수자 명단의 '이수' 칸(O·X·확인 필요)을 비움: 도구가 정한 비율로 판정하지 않게 */
+  function noVerdict(csv) {
+    return String(csv || '').split('\n').map(function (line, i) { return i ? line.replace(/,(?:O|X|확인 필요)(\r?)$/, ',$1') : line.replace(/,이수(\r?)$/, ',이수(기준 없음)$1'); }).join('\n');
+  }
   function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
   function buildData() {
     var b = P.data.body;
@@ -811,14 +817,16 @@
       g.appendChild(btn(x[1], '', function () {
         conn.exportCsv(x[0], x[0] === 'completion' ? completionOpts() : undefined).then(function (csv) {
           if (x[0] === 'answers') csv = pollNames(csv);
+          if (x[0] === 'completion' && !rateOn()) csv = noVerdict(csv);
           save((DATA.title || 'lecpage').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) + '_' + x[1].replace(/[·\s]/g, '') + '.csv', U.csvGuard ? U.csvGuard(csv || '') : csv || '');
           toast(x[1] + ' 기록을 내려받았어요.');
         }, err);
       }, 'dl' + x[0]));
     });
     s1.appendChild(g);
-    var rate = (DATA.admin || {}).completionRate || 90, rateSet = (DATA.admin || {}).rateSet !== false;
-    s1.appendChild(el('p', 'lp-con-sub', '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + rate + '%' + (rateSet ? '' : '(이수 기준을 정하지 않아 기본값)') + ' 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'));
+    // 이수 기준(출석 비율)은 교재·강사가 정한 값(lecpage.json admin.completionRate)만. 없으면 규칙을 지어 쓰지 않고 '이수' 칸을 비움
+    s1.appendChild(el('p', 'lp-con-sub', rateOn() ? '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + DATA.admin.completionRate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'
+      : '이수자 명단: 사람마다 입실·퇴실 시각, 머문 시간, 실습 완료, 설문 제출을 적어요. 이수 기준(출석 비율)이 연수 정보에 없어 \'이수\' 칸은 비워 둬요. 기관 기준으로 판단해 주세요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '지우기'));
     s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [데이터 모두 지우기]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 지우기를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));

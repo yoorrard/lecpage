@@ -4,7 +4,8 @@
 // 흐름: prepare → (AI 에이전트가 work/site/·work/lecpage.json을 직접 씀) → check(고치기 반복) → preview → app 또는 publish
 //
 //   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 빈 lecpage.json · 경로 요약 work/README.md
-//   check [work] [--port 0] [--no-shots]           work/site + lecpage.json(+ 강사 값 lecpage.teacher.json) 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
+//   check [work] [--port 0] [--no-shots] [--host 배포할 곳]  work/site + lecpage.json(+ 강사 값 lecpage.teacher.json) 조립(work/dist) + 검수 + 교재 사실 대조(material.md) + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
+//        --host(cloudflare·vercel·github-pages·netlify·onpod·lan·zip …, 없으면 지난번 배포한 곳): 개인정보 안내·운영안내를 그 배포 방식에 맞게
 //   preview [work] [--port 4173] [--host 0.0.0.0]  조립 결과를 로컬로 띄움(강사 화면·발표 화면·QR 안내문 포함, 참여 기능은 연습 모드)
 //   app [work] [-o 연수.lecpage]                   앱(웹)으로 넘기기: 사이트 폴더·연수 정보·쪽 그림·교재 원본을 앱이 여는 파일 하나로(비밀 값은 빼요)
 //   app 연수.lecpage [-o work] [--force]            앱에서 [파일로 저장]한 연수를 작업 폴더로 풀어 이어서 작업
@@ -12,7 +13,7 @@
 //        조립해서 강사 Cloudflare 계정에 올리기. --live: 참여 기능 중계도 같은 계정에(관리자 키는 강사용 폴더에만) → 강사 값에 중계 주소 → 다시 조립 → 올림 → 주소 확인 → 안내물
 //        --host onpod: Onpod(한국 서비스)에 사이트만(ONPOD_TOKEN). --host를 빼면 지난번에 올린 곳에 같은 주소로. --dry-run: 순서와 강사가 할 일만
 //   handouts <올린 주소|work> [-o 폴더]   QR-안내문.pdf·발표화면.png(Playwright 필요)
-//   pack <work|폴더> -o site.zip [--bundle-fonts] [--password 암호] · serve <work|폴더> [--port 4173] · doctor · decide-infra [-i 답.json] [--size 30 …]
+//   pack <work|폴더> -o site.zip [--bundle-fonts] [--password 암호] [--host 배포할 곳] · serve <work|폴더> [--port 4173] · doctor · decide-infra [-i 답.json] [--size 30 …]
 //        pack: 조립한 사이트를 ZIP으로 · doctor: 환경 점검과 설치 방법 · decide-infra: 배포할 곳 × 참여 기능 서버 추천
 //   studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]
 //        내 PC 연결 프로그램: 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
@@ -37,12 +38,12 @@ const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude 
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤
 const VALUE_OPTS = new Set(['i', 'o', 'password', 'port', 'host', 'name', 'relay', 'features', 'today', 'size', 'skill', 'duration', 'network', 'infra', 'dist', 'timeout']);
 const OPTS = {
-  doctor: '', serve: 'port host', pack: 'o bundle-fonts password',
+  doctor: '', serve: 'port host', pack: 'o bundle-fonts password host',
   'decide-infra': 'i size features skill duration network infra commercial minor',
   app: 'o force',
   publish: 'host live name relay dry-run temporary no-handouts no-verify no-bundle-fonts password',
   handouts: 'o password',
-  prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles', preview: 'port host today',
+  prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles host no-python', preview: 'port host today',
   studio: 'port no-open dist remote timeout',
 };
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
@@ -250,7 +251,7 @@ const commands = {
     const KC = await import('./kit-cmds.mjs');
     let notes = [];
     if (KC.isV2Work(dir)) { // 작업 폴더(work)면 조립한 사이트(work/dist)를 담음(--bundle-fonts: 글꼴 함께 담기, --password: 암호로 잠그기)
-      const b = await KC.buildWorkV2(helpers(), dir, { fonts: !!args['bundle-fonts'], password: String(args.password || process.env.LECPAGE_PASSWORD || '') });
+      const b = await KC.buildWorkV2(helpers(), dir, { fonts: !!args['bundle-fonts'], password: String(args.password || process.env.LECPAGE_PASSWORD || ''), host: String(args.host || '') });
       if (!b.ok) fail(b.errors.map((e) => e.message_ko).join(' '));
       dir = b.dist; notes = b.notes;
     }

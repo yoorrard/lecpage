@@ -157,6 +157,94 @@ export function inspectRendered(opts) {
     if (el.tagName === 'INPUT' && /^(checkbox|radio)$/.test(el.type) && el.closest('label')) { var lb = el.closest('label').getBoundingClientRect(); if (lb.width >= 24 && lb.height >= 24) return; r = lb; }
     if (r.width < 24 || r.height < 24) add('small-target', 'warn', el, '누를 곳이 ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px로 작아요("' + (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 20) + '").', '버튼·링크를 24×24px(휴대폰은 44px) 이상으로 해 주세요.');
   });
+  // ── 글 모양(실제 AI 사이트에서 찾은 흠) ──
+  // 요소가 직접 가진 글자 조각들의 화면 위치(자식 요소의 글은 그 요소가 따로 셈)
+  function ownTextRects(el) {
+    var out = [], rg = doc.createRange();
+    for (var c = el.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType !== 3 || !c.nodeValue.trim()) continue;
+      rg.selectNodeContents(c); var rs = rg.getClientRects();
+      for (var i = 0; i < rs.length; i++) if (rs[i].width > 0.5 && rs[i].height > 0.5) out.push(rs[i]);
+    }
+    return out;
+  }
+  function union(rs) { var u = null; rs.forEach(function (r) { u = u ? { left: Math.min(u.left, r.left), top: Math.min(u.top, r.top), right: Math.max(u.right, r.right), bottom: Math.max(u.bottom, r.bottom) } : { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; }); return u; }
+  // 바탕이 보이는 상자: 칠한 바탕이 뒤(부모 쪽 바탕)와 다르거나 그림 바탕
+  function paintedBox(n, cs) {
+    // 그림·그러데이션 바탕: 상자를 덮는 층(auto·cover·contain·가로세로 50% 넘음)만. 밑줄처럼 얇게 깐 그러데이션은 상자가 아님
+    if (cs.backgroundImage && cs.backgroundImage !== 'none' && !/^(html|body)$/i.test(n.tagName) && cs.backgroundSize.split(',').some(function (z) { z = z.trim(); var m = /^(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/.exec(z); return /^(auto|auto auto|cover|contain)$/.test(z) || (m && +m[1] >= 50 && +m[2] >= 50); })) return true;
+    var c = rgba(cs.backgroundColor); if (!c || c[3] < 0.3) return false;
+    var behind = n.parentElement ? bgOf(n.parentElement) : [255, 255, 255, 1]; if (!behind) return true;
+    var mine = over(c, behind);
+    return Math.max(Math.abs(mine[0] - behind[0]), Math.abs(mine[1] - behind[1]), Math.abs(mine[2] - behind[2])) >= 20; // 아주 옅은 물빛은 상자로 보지 않음
+  }
+  function bordered(cs, side) { var w = parseFloat(cs['border' + side + 'Width']) || 0, c = rgba(cs['border' + side + 'Color']); return w >= 1 && c && c[3] > 0.3 && cs['border' + side + 'Style'] !== 'none'; }
+  var gluedBoxes = [], seenSplit = 0, seenOut = 0;
+  vis.forEach(function (el) {
+    if (el.closest('svg,.lpk-chrome,.lpk-now,[aria-hidden="true"]')) return;
+    var cs = win.getComputedStyle(el), fs = parseFloat(cs.fontSize) || 16;
+    if (cs.position === 'fixed' || !/^horizontal/.test(cs.writingMode || 'horizontal-tb')) return;
+    var own = ownTextRects(el); if (!own.length) return;
+    var t = el.textContent.replace(/\s+/g, ' ').trim();
+    // (a) 짧은 이름표(메뉴·단추·배지, 12자 이하)가 낱말 가운데서 두 줄로 갈림: "연수 안/내"
+    var n = t.replace(/\s/g, '').length;
+    if (n >= 2 && n <= 12 && seenSplit < 80) {
+      seenSplit++;
+      var cut = midWordBreak(el);
+      if (cut) add('label-split', 'warn', el, '이름표 "' + t + '"의 줄이 낱말 가운데서 바뀌어요(' + cut + ').', '짧은 이름표는 한 줄에 두세요. 칸을 넓히거나 글을 줄이고 word-break:keep-all(낱말째 넘김)이나 white-space:nowrap을 주세요. 메뉴가 많으면 휴대폰에서는 접는 메뉴로.');
+    }
+    // (b) 고정 크기 상자(원형 배지 등) 밖으로 삐져나온 글: 넘침을 가리지 않아 잘려 보이거나 바탕 밖에서 안 보임
+    if (seenOut < 40 && /visible/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis' && !/^(inline|contents)$/.test(cs.display) && (paintedBox(el, cs) || bordered(cs, 'Left') || bordered(cs, 'Top'))) {
+      var r = el.getBoundingClientRect(), u = union(own);
+      var dx = Math.max(r.left - u.left, u.right - r.right), dy = Math.max(r.top - u.top, u.bottom - r.bottom);
+      if (dx > 2 || dy > Math.max(4, fs * 0.35)) { seenOut++; add('text-out-of-box', 'warn', el, '"' + t.slice(0, 30) + '": 글이 상자(' + Math.round(r.width) + '×' + Math.round(r.height) + 'px) 밖으로 ' + Math.round(Math.max(dx, dy)) + 'px 삐져나와 잘려 보여요.', '상자의 고정 width·height를 빼고 min-width·padding으로 글에 맞춰 주세요. 원형 배지에는 짧은 글만, 긴 글은 상자 옆자리로.'); }
+    }
+    // (c) 바탕·테두리가 있는 상자의 가장자리에 글이 붙음(안쪽 여백 0): 가장 가까운 칠한 상자의 왼쪽(오른쪽 정렬이면 오른쪽) 안쪽 끝과 글 사이
+    for (var b = el; b && b !== doc.body && b !== root; b = b.parentElement) {
+      var bc = win.getComputedStyle(b);
+      if (/^(inline|contents)$/.test(bc.display)) continue;
+      var painted = paintedBox(b, bc);
+      if (!painted && !bordered(bc, 'Left') && !bordered(bc, 'Right')) continue;
+      if (gluedBoxes.indexOf(b) >= 0) break;
+      var br = b.getBoundingClientRect(), u2 = union(own);
+      var right = /^(right|end)$/.test(cs.textAlign);
+      var gap = right ? (br.right - (parseFloat(bc.borderRightWidth) || 0)) - u2.right : u2.left - (br.left + (parseFloat(bc.borderLeftWidth) || 0));
+      var sideOk = right ? (painted || bordered(bc, 'Right')) : (painted || bordered(bc, 'Left'));
+      if (sideOk && gap < 1.5 && gap > -1 && br.width > u2.right - u2.left + 4) { gluedBoxes.push(b); add('text-glued', 'warn', el, '"' + t.slice(0, 30) + '": 글이 ' + (painted ? '바탕색 상자' : '테두리 상자') + '의 ' + (right ? '오른쪽' : '왼쪽') + ' 끝에 붙어 있어요(안쪽 여백 0).', '그 상자(' + sel(b) + ')에 padding(예: 1rem 1.25rem)을 주세요. 바탕을 화면 끝까지 칠하려면 바탕은 바깥 상자에, 글은 여백이 있는 안쪽 상자에.'); }
+      break;
+    }
+  });
+  /** 줄이 바뀐 곳이 낱말 가운데인지: 글자마다 위치를 재서 새 줄의 첫 글자와 앞 글자 사이에 빈칸·끊어도 되는 문장 부호가 없으면 "앞/뒤" */
+  function midWordBreak(el) {
+    var rg = doc.createRange(), chars = [], gapBefore = false, tw2 = doc.createTreeWalker(el, 4, null), tn;
+    while ((tn = tw2.nextNode())) {
+      var v = tn.nodeValue;
+      // 다른 글자 조각(다른 요소)으로 넘어가는 자리는 디자인이 나눈 줄일 수 있어 세지 않음: 같은 글자 조각 안에서만(node)
+      for (var i = 0; i < v.length; i++) {
+        if (/\s/.test(v[i])) { gapBefore = true; continue; }
+        rg.setStart(tn, i); rg.setEnd(tn, i + 1); var rr = rg.getClientRects();
+        if (!rr.length || rr[0].width === 0) { continue; }
+        chars.push({ ch: v[i], top: rr[0].top, h: rr[0].height, gap: gapBefore, node: tn }); gapBefore = false;
+      }
+      if (chars.length > 40) break;
+    }
+    for (var k = 1; k < chars.length; k++) {
+      var a = chars[k - 1], c = chars[k];
+      if (c.top <= a.top + a.h * 0.6 || c.node !== a.node) continue; // 같은 줄, 또는 다른 요소의 글
+      if (c.gap || /[·\/\-–—,~:;)\]」』>]/.test(a.ch) || /[(\[「『<]/.test(c.ch)) continue; // 빈칸·끊어도 되는 자리
+      if (!/[가-힣A-Za-z0-9]/.test(a.ch) || !/[가-힣A-Za-z0-9]/.test(c.ch)) continue;
+      var txt = function (list) { return list.map(function (x, i) { return (i && x.gap ? ' ' : '') + x.ch; }).join(''); };
+      return '"' + txt(chars.slice(Math.max(0, k - 3), k)) + '/' + txt(chars.slice(k, k + 3)) + '"';
+    }
+    return '';
+  }
+  // (d) 휴대폰에서 너무 긴 쪽(강의 기능 키트 칸을 빼고 10화면 넘게): 교재를 옮겨 적은 사이트(디자인 원칙 2번)
+  if (small && H > 200) {
+    var docH = Math.max(root.scrollHeight, doc.body ? doc.body.scrollHeight : 0), kitH = 0;
+    Array.prototype.forEach.call(doc.querySelectorAll('.lpk-w,.lpk-step-f'), function (k) { if (!k.parentElement.closest('.lpk-w')) kitH += k.getBoundingClientRect().height; });
+    var own = docH - kitH;
+    if (own > H * 10) add('page-long', 'warn', doc.body, '사이트가 길어요: 휴대폰에서 강의 기능 칸을 빼고도 약 ' + Math.round(own / H) + '화면(전체 ' + Math.round(docH) + 'px)이에요. 참가자는 실습 중에 곁눈질로 찾아요.', '설명은 쪽 그림(교재 넘기기·교재 N쪽)과 강사에게 맡겨요. 할 일·복사할 원문·다시 찾을 정보만 남겨 10화면 안으로 줄여 주세요(디자인 원칙 2번).');
+  }
   // 빈 섹션
   Array.prototype.forEach.call(doc.querySelectorAll('section'), function (s) {
     var cs = win.getComputedStyle(s); if (cs.display === 'none' || s.closest('[hidden],[aria-hidden="true"]')) return; // 높이가 0이어도 빈 섹션
