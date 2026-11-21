@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { clearCart } from '../lib/design-cart.js';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
 import { ConsentHost } from '../components/Consent.jsx';
@@ -30,7 +31,7 @@ export function Settings() {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
     for (const p of await projects.all()) await projects.remove(p.id);
     for (const k of [...Object.keys(PROVIDERS), ...Object.values(KIND).map((x) => 'deploy-' + x)]) await forgetKey(k);
-    forgetConsents();
+    forgetConsents(); clearCart();
     toast('이 브라우저의 lecpage 데이터를 모두 지웠어요.'); setConfirmDel(false); setSt(await storageInfo());
   }
   return (

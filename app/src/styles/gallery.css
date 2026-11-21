@@ -1,0 +1,85 @@
+/* 참고 디자인 화면: 완성 견본 줄 + 디자인 사전(pages/Gallery.jsx · GalleryDict.jsx) */
+.refs .section-title,.dd .section-title{margin-top:28px}
+/* 휴대폰: 견본 셋은 옆으로 넘기는 줄(사전이 너무 아래로 밀리지 않게) */
+@media (max-width: 720px){
+  .refs-row{display:flex!important;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:16px;gap:12px;margin:0 -16px;padding:0 16px 6px;scrollbar-width:none}
+  .refs-row::-webkit-scrollbar{display:none}
+  .refs-row>.ex-card{flex:0 0 84%;scroll-snap-align:start}
+}
+
+/* ── 찾기·분류 띠(위에 붙음) ── */
+.dd-bar{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:12;margin:0 -16px 16px;padding:10px 16px 8px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--hair)}
+.dd-bar-in{display:flex;gap:8px;align-items:center}
+.dd-q{flex:1;min-width:0}
+.dd-cart-btn{flex:none;gap:.5em}
+.dd-n{display:inline-grid;place-items:center;min-width:1.6em;height:1.6em;padding:0 .4em;border-radius:99px;background:var(--sunk);color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+.dd-cart-btn.has .dd-n{background:var(--accent);color:var(--on-accent)}
+.dd-cats{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-top:8px;padding-bottom:2px}
+.dd-cats::-webkit-scrollbar{display:none}
+.dd-cats button{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--hair);background:var(--paper);color:var(--ink-2);font:inherit;font-size:.86rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.dd-cats button span{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums;font-size:.8rem}
+.dd-cats button:hover{border-color:var(--line-strong)}
+.dd-cats button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.dd-cats button[aria-pressed="true"] span{color:inherit;opacity:.7}
+.dd-cats button:disabled{opacity:.4;cursor:default}
+
+/* ── 카드 ── */
+.dd-grid{display:grid;gap:22px 18px;grid-template-columns:repeat(auto-fill,minmax(min(100%,264px),1fr))}
+@media (max-width: 560px){.dd-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}}
+.dd-card{display:grid;align-content:start;gap:10px;min-width:0}
+.dd-pv{display:block;position:relative;border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;background:var(--sunk);aspect-ratio:4/3;width:100%;transition:border-color .15s,box-shadow .2s,transform .2s var(--ease)}
+.dd-pv:hover{border-color:var(--line-strong);box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.dd-pv:has(.dd-hit:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.dd-lazy,.dd-box{position:absolute;inset:0;overflow:hidden}
+.dd-pv .dd-if{pointer-events:none}
+.dd-hit{position:absolute;inset:0;z-index:1;width:100%;height:100%;padding:0;border:0;background:transparent;cursor:zoom-in}
+.dd-hit:focus-visible{outline:none}
+.dd-if{display:block;border:0;transform-origin:0 0;background:transparent}
+.dd-ph{position:absolute;inset:0;display:grid;place-items:center;padding:12px;text-align:center;color:var(--muted);font-size:.8rem;letter-spacing:.02em}
+.dd-meta{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:2px;align-items:start}
+.dd-meta h3{font-size:1rem;letter-spacing:-.015em;grid-column:1}
+.dd-en{grid-column:1;margin:0;color:var(--muted);font-size:.8rem;line-height:1.35}
+.dd-desc{grid-column:1/-1;margin:4px 0 0;color:var(--ink-2);font-size:.86rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dd-meta .dd-add{grid-column:2;grid-row:1/3;align-self:center}
+.dd-add.is-on{background:var(--lav-soft);border-color:color-mix(in srgb,var(--accent) 40%,var(--hair));color:var(--lav-deep)}
+@media (max-width: 560px){
+  .dd-meta{grid-template-columns:minmax(0,1fr)}
+  .dd-meta .dd-add{grid-column:1;grid-row:auto;justify-self:start;margin-top:6px}
+  .dd-desc{display:none}
+  .dd-meta h3{font-size:.95rem}
+}
+.dd-empty{padding:28px 0;color:var(--muted)}
+
+/* ── 크게 보기 ── */
+dialog.dd-dlg{width:min(1120px,calc(100% - 24px));max-height:calc(100dvh - 24px);overflow:auto}
+.dd-dlg-in{position:relative;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:24px;padding:20px}
+.dd-stage{position:relative;aspect-ratio:16/11;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--hair);background:var(--sunk);align-self:start}
+.dd-info{display:grid;gap:10px;align-content:start;padding-top:24px;min-width:0}
+.dd-info h2{font-size:1.5rem;letter-spacing:-.025em}
+.dd-info .dd-en{font-size:.9rem;margin-top:-6px}
+.dd-cat{margin:0;font-size:.8rem;font-weight:650;color:var(--lav-deep)}
+.dd-dl{margin:4px 0 0;display:grid;gap:4px}
+.dd-dl dt{font-size:.8rem;font-weight:700;color:var(--muted);margin-top:6px}
+.dd-dl dd{margin:0}
+.dd-tech{font-family:var(--f-mono);font-size:.84rem;line-height:1.55;background:var(--sunk);border-radius:var(--r-xs);padding:8px 10px;overflow-wrap:anywhere}
+.dd-tags{display:flex;flex-wrap:wrap;gap:4px 10px;margin:0;color:var(--muted);font-size:.84rem}
+.dd-acts{justify-content:space-between;margin-top:6px}
+.dd-nav{display:inline-flex;gap:2px}
+.dd-code summary{cursor:pointer;color:var(--ink-2);font-weight:600;font-size:.9rem}
+.dd-code b{display:block;margin:10px 0 4px;font-size:.75rem;color:var(--muted);letter-spacing:.06em}
+.dd-code pre{margin:0;max-height:220px;overflow:auto;padding:10px 12px;border-radius:var(--r-xs);background:var(--sunk);font-size:.74rem;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+@media (max-width: 860px){
+  .dd-dlg-in{grid-template-columns:minmax(0,1fr);gap:14px;padding:14px}
+  .dd-stage{aspect-ratio:4/3;margin-top:34px}
+  .dd-info{padding-top:0}
+}
+
+/* ── 담은 디자인 ── */
+dialog.dd-cart{width:min(520px,calc(100% - 24px))}
+.dd-cart h2{font-size:1.2rem}
+.dd-cart-list{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--hair);max-height:50vh;overflow:auto}
+.dd-cart-list li{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--hair)}
+.dd-cart-name{flex:1;min-width:0;display:grid;gap:1px;text-align:left;background:none;border:0;padding:4px 0;font:inherit;color:inherit;cursor:pointer}
+.dd-cart-name .muted{font-size:.82rem}
+.dd-cart-name:hover b{text-decoration:underline}
+.dd-cart-acts{justify-content:flex-end}

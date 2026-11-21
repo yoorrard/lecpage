@@ -3,6 +3,7 @@ import { StepHead } from '../Project.jsx';
 import { Progress, Field, Notice } from '../../components/ui.jsx';
 import { Mascot } from '../../components/Mascot.jsx';
 import { AiPick } from '../../components/AiPick.jsx';
+import { DesignPicks } from '../../components/DesignPicks.jsx';
 import { blobs, storageKind, STORAGE_MSG } from '../../lib/db.js';
 import { fmtBytes, toast } from '../../lib/util.js';
 import { loadChunk } from '../../lib/fresh.jsx';
@@ -168,7 +169,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
           <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·대상을 한 줄로 적으면 AI가 반영해요.">
             <input class="input" value={p.request || ''} onInput={(e) => update({ request: e.target.value })} maxLength={300} placeholder="예: 실습 위주로, 차분한 남색, 처음 배우는 신입 직원 대상" />
           </Field>
-          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(이 분위기를 내 교재에 맞게 살려요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>삭제</button></p>}
+          <DesignPicks p={p} update={update} />
         </section>
         <AiPick p={p} go={go} idle={idle} reload={reload} ready={ready} />
       </div>

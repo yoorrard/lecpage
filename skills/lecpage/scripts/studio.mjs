@@ -688,6 +688,8 @@ export async function validateJob(body) {
 
 /** 강사가 고른 분위기(앱이 { title, mood }나 글로 보냄) → 한 줄. 강사 요청의 일부로만 넣음 */
 const moodOf = (ref) => { const t = String(ref || '').trim(); if (!t) return ''; try { const j = JSON.parse(t); return String(j?.mood || j?.desc || '').trim(); } catch { return t; } };
+/** 강사가 참고 디자인에서 담은 디자인({ picks: [{ ko, en, desc, tech }] }) → 짧은 목록(앱 app/src/lib/gen/prompts.js picksText와 같은 꼴) */
+const picksOf = (ref) => { let j = null; try { j = JSON.parse(String(ref || '')); } catch { return ''; } const l = (Array.isArray(j?.picks) ? j.picks : []).filter((x) => x?.ko).slice(0, 10); const c = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n); return l.length ? `강사가 고른 디자인 참고(이 연수에 맞게 녹여 써요):\n${l.map((x) => `- ${c(x.ko, 30)}${x.en ? `(${c(x.en, 40)})` : ''} — ${c(x.desc, 70)} — ${c(x.tech, 70)}`).join('\n')}` : ''; };
 
 /**
  * 작업 지시(TASK.md). 교재 글은 넣지 않음(파일 이름·쪽 수만). material.md는 PDF가 아닌 교재가 있을 때만 prepare가 둠(PDF는 원본을 직접 읽음)
@@ -698,7 +700,7 @@ export function taskText({ kind, materials, photos = [], pages = 0, images = 0, 
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const mood = moodOf(reference);
-  const ask = [request.trim(), mood ? `분위기: ${mood}` : ''].filter(Boolean).join('\n');
+  const ask = [request.trim(), mood ? `분위기: ${mood}` : '', picksOf(reference)].filter(Boolean).join('\n');
   return `# 할 일: ${edit ? '강의 사이트 고치기' : '이 교재로 강의 사이트 만들기'}
 
 ${edit ? '강사가 lecpage 앱에서 만든 강의 사이트를 아래 요청대로 고쳐 주세요. 요청과 상관없는 곳은 그대로 둬요.' : `연수 당일 참가자가 휴대폰에 열어 두고 쓰는 강의 사이트를 만들어 주세요.
