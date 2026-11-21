@@ -13,11 +13,18 @@ import { startDemo } from '../../lib/demo.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
 // (연수 정보는 AI가 교재에서 찾아 사이트와 함께 돌려주고, 완성 뒤 한 번 확인받음). 요청 한 줄은 선택.
-const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
+const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.key,.lecpage';
 const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 // 사진은 교재로 읽지 않음: 빨간 오류 대신 실제로 넣는 곳을 한 줄로(여러 장이어도 한 줄)
 const PHOTO = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
 const PHOTO_NOTE = '사진은 교재로 읽지 않아요. 사이트에 실으려면 사이트를 만든 뒤 미리보기의 그림을 눌러 바꿔요.';
+// 쪽 그림을 만들지 못하고 글자만 읽은 교재(한글·예전 형식, 커넥트 없음): PDF로 저장하는 법을 그 줄에서 바로
+const TEXT_ONLY_NOTE = '글자만 읽었어요. PDF로 저장해 함께 올리면 그림·디자인까지 읽어 더 정확해요.';
+const HOWTO = {
+  ppt: [['PowerPoint', '파일 → 내보내기 → PDF/XPS 문서 만들기'], ['Keynote', '파일 → 내보내기 → PDF'], ['구글 프레젠테이션', '파일 → 다운로드 → PDF 문서']],
+  doc: [['Word', '파일 → 다른 이름으로 저장 → 파일 형식에서 PDF'], ['구글 문서', '파일 → 다운로드 → PDF 문서']],
+  hwp: [['한글', '파일 → PDF로 저장하기']],
+};
 
 /** 교재 파일 읽기(브라우저 안): 원본은 src/에 보관(AI에게 원본 그대로 건넴), 쪽 수·보조 글자(material)·쪽 그림(assets/slides/) */
 function useIngest(p, update) {
@@ -37,33 +44,67 @@ function useIngest(p, update) {
     }
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
     const mats = [];
-    let slidesMade = replace ? 0 : p.slidesMade || 0; let ok = 0; let empty = 0; let cut = 0;
+    let slidesMade = replace ? 0 : p.slidesMade || 0; let slidesFrom = replace ? '' : p.slidesFrom || ''; let ok = 0; let cut = 0;
+    // 같은 이름의 PDF를 함께 넣은 PPT·워드·한글은 쪽 그림을 그 PDF에서(더 정확). 그 파일은 PDF로 바꾸거나 따로 그리지 않음
+    const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
+    const pdfs = new Set([...fileObjs, ...metas].map((f) => f.name).filter((n) => /\.pdf$/i.test(n)).map(base));
     for (const [i, f] of fileObjs.entries()) {
       if (f.size > 100e6) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] }); continue; }
       setBusy(`${f.name} 읽는 중 (${i + 1}/${fileObjs.length})`); setPct(5 + Math.round((i / fileObjs.length) * 10));
-      const { material, bytes } = await ing.readFile(f);
+      let { material, bytes } = await ing.readFile(f);
       const ext = (f.name.split('.').pop() || '').toLowerCase();
+      const twin = ext !== 'pdf' && pdfs.has(base(f.name));
+      // PDF가 아닌 교재: lecpage 커넥트가 켜져 있으면 이 PC의 PowerPoint·한글·Keynote 등으로 PDF를 만들어 씀(쪽 그림 + AI에게 건넬 PDF)
+      let conv = null;
+      if (ext !== 'pdf' && !twin && ing.CONVERTIBLE.has(ext)) {
+        const ckey = 'conv/' + safe(f.name.replace(/\.[^.]+$/, '')) + '.pdf';
+        const old = (p.files || []).find((m) => m.name === f.name && m.pdf?.key === ckey);
+        const had = old && await blobs.get(p.id, ckey).catch(() => null); // 교재 하나를 빼서 다시 읽을 때는 전에 만든 PDF를 그대로
+        if (had) conv = { ok: true, pdf: had instanceof Blob ? new Uint8Array(await had.arrayBuffer()) : had, via: old.pdf.via, app: old.pdf.app };
+        else {
+          setBusy(`${f.name}: 이 PC의 프로그램으로 PDF 만드는 중`);
+          conv = await ing.convertWithConnect(f.name, bytes).catch(() => null);
+          if (conv?.ok) await blobs.put(p.id, ckey, conv.pdf);
+        }
+        if (conv?.ok) {
+          conv.key = ckey;
+          // 엔진이 바로 읽지 못하는 형식(.ppt·.key·.doc·배포용 한글 등)은 만든 PDF로 글자를 읽음
+          if ((material.errors || []).length) { material = await ing.readBytes(f.name.replace(/\.[^.]+$/, '') + '.pdf', conv.pdf.slice()); for (const mf of material.files || []) mf.name = f.name; }
+        }
+      }
       const errors = (material.errors || []).map((e) => e.message_ko);
-      // 읽었지만 알릴 것(스캔본처럼 글자가 없는 PDF·앞쪽만 읽음·숨긴 슬라이드 등): 그 파일 줄에 주황 한 줄
-      const warns = errors.length ? [] : (material.warnings || []).map((w) => w.message_ko);
-      if (!errors.length && (material.warnings || []).some((w) => w.code === 'no-text' || w.code === 'no-content')) empty++;
-      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || 0, errors, ...(warns.length ? { warns } : {}) });
+      // 쪽 그림(교재 넘기기·AI에게 보낼 그림): PDF·커넥트가 만든 PDF는 pdf.js로, PPTX·DOCX는 브라우저 안에서 그림
+      const pdfBytes = errors.length ? null : ext === 'pdf' ? bytes : conv?.ok ? conv.pdf : null;
+      let shots = [];
+      if (pdfBytes || (!errors.length && !twin && ing.canRenderDoc(f.name))) {
+        if (ext === 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
+        const ctl = new AbortController(); setStop(ctl);
+        const prog = (done, total) => { setBusy(`쪽 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); };
+        shots = await (pdfBytes ? ing.renderSlides(pdfBytes.slice(), prog, ctl.signal) : ing.renderDoc(f.name, bytes, prog, ctl.signal)).catch(() => []).finally(() => setStop(null));
+        if (shots.length) {
+          if (ext !== 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
+          for (const s of shots) await blobs.put(p.id, 'assets/slides/' + ing.slideFileName(s.page, s.type), s.blob);
+          slidesMade = shots.length; slidesFrom = f.name; if (ctl.signal.aborted) cut = shots.length;
+        } else if (ext === 'pdf') { slidesMade = 0; slidesFrom = ''; }
+      }
+      // 읽었지만 알릴 것(앞쪽만 읽음·숨긴 슬라이드 등): 그 파일 줄에 주황 한 줄.
+      // 글자 대신 그림으로 된 PDF(스캔본 등)·그림 위주 교재는 쪽 그림이 있으면 알리지 않음: AI가 원본 PDF·쪽 그림을 직접 읽음
+      const quiet = (w) => w.code === 'no-text' || (w.code === 'no-content' && (shots.length || conv?.ok));
+      const warns = errors.length ? [] : (material.warnings || []).filter((w) => !quiet(w)).map((w) => w.message_ko);
+      // 그림 없이 글자만 읽은 PPT·워드·한글: PDF로 저장해 올리는 법을 그 줄에서 바로
+      const textOnly = !errors.length && ext !== 'pdf' && !twin && !shots.length && !conv?.ok && /^(ppt|pps|pot|doc|hwp|odp|odt|key)/.test(ext);
+      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || shots.length || 0, errors, ...(warns.length ? { warns } : {}),
+        ...(conv?.ok ? { pdf: { key: conv.key, via: conv.via || '', app: conv.app || '' }, note: `${conv.app || '이 PC의 프로그램'}로 PDF를 만들어 썼어요.` } : {}),
+        ...(textOnly ? { note: TEXT_ONLY_NOTE, howto: /^hw/.test(ext) ? 'hwp' : /^(doc|odt)/.test(ext) ? 'doc' : 'ppt' } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
       if (f.size <= 100e6 && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
-      if (ext === 'pdf' && !errors.length) {
-        await blobs.removePrefix(p.id, 'assets/slides/');
-        const ctl = new AbortController(); setStop(ctl);
-        const shots = await ing.renderSlides(bytes, (done, total) => { setBusy(`쪽 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); }, ctl.signal).finally(() => setStop(null));
-        for (const s of shots) await blobs.put(p.id, 'assets/slides/' + ing.slideFileName(s.page, s.type), s.blob);
-        slidesMade = shots.length; if (ctl.signal.aborted) cut = shots.length;
-      }
     }
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
-    update({ material: merged, files: [...metas, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], slidesMade });
+    update({ material: merged, files: [...metas, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], slidesMade, slidesFrom });
     const bad = fileObjs.length - ok;
     const ph = photos.length ? ' 사진은 사이트를 만든 뒤 넣어요.' : '';
-    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (empty ? (empty === ok ? `교재에서 글자를 거의 읽지 못했어요. 주황 글씨를 확인해 주세요.${ph}` : `교재 ${ok}개를 넣었어요. 글자를 못 읽은 파일이 있어요. 주황 글씨를 확인해 주세요.${ph}`) : cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
+    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
       : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
   async function handle(list) {
@@ -81,13 +122,14 @@ function useIngest(p, update) {
     setBusy('교재 목록을 다시 읽는 중…'); setPct(5);
     try {
       if (f.key) await blobs.remove?.(p.id, f.key);
+      if (f.pdf?.key) await blobs.remove?.(p.id, f.pdf.key); // 커넥트로 만든 PDF
       const all = await blobs.all(p.id);
       const again = [];
       for (const m of rest) { const data = all[m.key]; if (data && !m.photos) again.push(new File([data], m.name)); }
-      if (f.ext === 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
+      if (f.ext === 'pdf' || f.name === p.slidesFrom) await blobs.removePrefix(p.id, 'assets/slides/');
       const keep = rest.filter((m) => m.photos).flatMap((m) => m.photos);
       if (again.length) await ingestAll(again, { replace: true, keep });
-      else update({ material: null, files: rest.filter((m) => m.photos), slidesMade: 0 });
+      else update({ material: null, files: rest.filter((m) => m.photos), slidesMade: 0, slidesFrom: '' });
       toast(`뺐어요: ${f.name}`);
     } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0);
@@ -160,7 +202,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
             <ul class="files" ref={listRef} aria-label="읽은 교재">
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.howto && HOWTO[f.howto] && <details class="small file-howto"><summary>PDF로 저장하는 법</summary><ul>{HOWTO[f.howto].map(([app, how]) => <li><b>{app}</b>: {how}</li>)}</ul></details>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
                   <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 삭제`} title="삭제">✕</button></li>
               ))}
             </ul>

@@ -147,12 +147,20 @@ export async function runBridgeJob({ payload, jobId = '', signal, onJobId, onSte
 /** 멈추기: 연결 프로그램에 그 일을 그만두라고(지움) */
 export function cancelBridgeJob(jobId) { return jobId ? call(`/bridge/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => { }) : Promise.resolve(); }
 
-/** 보낼 교재 원본(src/*) → files:[{ name, type, base64 }] */
+const DOC_MIME = { pdf: 'application/pdf', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', doc: 'application/msword', hwp: 'application/x-hwp', hwpx: 'application/hwp+zip', txt: 'text/plain', md: 'text/markdown' };
+/** 보낼 교재 원본(src/*) → files:[{ name, type, base64 }]. 커넥트가 이 PC의 프로그램으로 만든 PDF(conv/*)도 같은 이름의 .pdf로 함께(에이전트가 그림·글을 그대로 읽게) */
 export async function bridgeFiles(blobs, pid, project) {
   const out = [];
-  for (const f of (project.files || []).filter((x) => x.key && !x.photos)) {
-    const v = await blobs.get(pid, f.key).catch(() => null);
-    if (v) out.push({ name: f.name, type: f.ext === 'pdf' ? 'application/pdf' : 'application/octet-stream', base64: await toBase64(v) });
+  const list = (project.files || []).filter((x) => x.key && !x.photos);
+  const names = new Set(list.map((f) => f.name.toLowerCase()));
+  for (const f of list) {
+    const v = DOC_MIME[f.ext] && await blobs.get(pid, f.key).catch(() => null); // 커넥트가 받는 형식만(키노트 등은 만든 PDF로)
+    if (v) out.push({ name: f.name, type: DOC_MIME[f.ext], base64: await toBase64(v) });
+    const pdfName = f.name.replace(/\.[^.]+$/, '') + '.pdf';
+    if (f.pdf?.key && f.ext !== 'pdf' && !names.has(pdfName.toLowerCase())) {
+      const c = await blobs.get(pid, f.pdf.key).catch(() => null);
+      if (c) { out.push({ name: pdfName, type: 'application/pdf', base64: await toBase64(c) }); names.add(pdfName.toLowerCase()); }
+    }
   }
   return out;
 }

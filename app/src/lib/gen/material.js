@@ -1,7 +1,8 @@
 // 교재 건네기: AI가 원본을 직접 읽게.
 // - PDF: 원본 파일(blobs 'src/*')을 그대로(두 회사 모두 받음)
-// - PPTX·DOCX: 쪽 그림(같은 교재의 PDF본이 있으면) + 보조 글자
-// - HWP/HWPX·글 파일: 보조 글자 + "PDF로 저장해 넣으면 더 정확해요"
+// - PPT·워드·한글·키노트: lecpage 커넥트가 이 PC의 프로그램(PowerPoint·한글·Keynote·LibreOffice)으로 만든 PDF가 있으면 그 PDF를 원본처럼(blobs 'conv/*')
+//   없으면 브라우저 안에서 그린 쪽 그림(PPTX·DOCX, render-doc.js) + 보조 글자, 그것도 없으면 보조 글자 + "PDF로 저장해 넣으면 더 정확해요"
+// - 같은 이름의 PDF를 함께 넣은 PPT·워드·한글: 그 PDF가 원본으로 감(발표자 노트만 보조 글자로)
 // - 보조 글자: 코드가 뽑은 글. 원본을 보내지 못한 교재의 쪽만 담음(원본으로 보낸 PDF의 글은 넣지 않음: 원본과 어긋난 글이 섞이지 않게)
 // - 회사별 크기 한도를 넘으면 쪽을 골라 그림으로 담고 알림(level이 오를수록 더 작게: 'too-long' 오류가 오면 job이 level을 올려 다시)
 // 사이트용 교재 쪽 그림은 blobs 'site/material/p-NNN.webp'(이미 만든 assets/slides/*를 옮기거나 PDF에서 새로 그림, 긴 변 1,600px)
@@ -9,7 +10,8 @@ import { blobs } from '../db.js';
 import { materialToAIContext } from '@engine/src/ingest/outline.js';
 import { LIMITS, pdfPageLimit } from './providers/index.js';
 
-const OFFICE = new Set(['pptx', 'ppsx', 'docx', 'ppt', 'doc', 'odt', 'odp']);
+const OFFICE = new Set(['pptx', 'ppsx', 'docx', 'ppt', 'doc', 'odt', 'odp', 'key']);
+const baseOf = (name) => String(name || '').replace(/\.[^.]+$/, '').toLowerCase();
 export const SITE_MATERIAL = 'site/material/';
 const pageName = (n, ext = 'webp') => `p-${String(n).padStart(3, '0')}.${ext}`;
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
@@ -29,10 +31,12 @@ export function sourceFiles(project) {
 export async function preparePageImages(pid, project, { signal, onProgress, refresh = false } = {}) {
   const keys = await blobs.keys(pid).catch(() => []);
   const have = keys.filter((k) => k.startsWith(SITE_MATERIAL)).sort();
-  const pdf = sourceFiles(project).filter((f) => f.ext === 'pdf').sort((a, b) => (b.pages || 0) - (a.pages || 0))[0];
+  // 새로 그릴 때 쓸 PDF: 교재 PDF 또는 커넥트가 만든 PDF(쪽 수가 가장 많은 것)
+  const pdf = sourceFiles(project).map((f) => (f.ext === 'pdf' ? f : f.pdf?.key ? { ...f, key: f.pdf.key } : null)).filter(Boolean).sort((a, b) => (b.pages || 0) - (a.pages || 0))[0];
+  const from = project.slidesFrom || pdf?.name || '';
   const slides = keys.filter((k) => /^assets\/slides\/slide-\d+\.(webp|png|jpg)$/.test(k)).sort();
   if (refresh && slides.length && have.length) { await blobs.removePrefix(pid, SITE_MATERIAL); return preparePageImages(pid, project, { signal, onProgress }); }
-  if (have.length) return { list: have.map((k) => k.slice(5)), from: pdf?.name || '' };
+  if (have.length) return { list: have.map((k) => k.slice(5)), from };
   if (slides.length) {
     for (const k of slides) {
       const n = +/slide-(\d+)/.exec(k)[1]; const ext = extOf(k);
@@ -61,6 +65,16 @@ export function helperText(material, names, maxChars) {
   try { return materialToAIContext({ ...material, files, pages: (material.pages || []).filter((p) => ids.has(p.file)) }, { maxChars, header: false }); } catch { return ''; }
 }
 
+/** names 교재의 발표자 노트만(교재 자체는 PDF로 보냈을 때: 노트는 PDF에 없음) */
+export function notesText(material, names, maxChars) {
+  if (!material || !names.length) return '';
+  const want = new Set(names.map((n) => String(n).toLowerCase()));
+  const ids = new Map((material.files || []).filter((f) => want.has(String(f.name || '').toLowerCase())).map((f) => [f.id, f.name]));
+  const out = [];
+  for (const p of material.pages || []) if (ids.has(p.file) && String(p.notes || '').trim()) out.push(`- ${ids.get(p.file)} ${p.page}쪽 발표자 노트: ${String(p.notes).trim().replace(/\s+/g, ' ')}`);
+  return out.join('\n').slice(0, maxChars);
+}
+
 /** 쪽 고르기: 앞쪽(표지·목차)과 끝쪽을 넣고 나머지는 고르게 */
 export function pickPages(total, max) {
   if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
@@ -78,33 +92,31 @@ export async function packMaterial(pid, project, { provider, model = '', level =
   const L = LIMITS[provider] || LIMITS.openai;
   const notes = []; const files = []; const parts = []; let bytes = 0; let images = 0;
   const src = sourceFiles(project);
-  const coveredByPdf = new Set(src.filter((f) => f.ext === 'pdf').map((f) => f.name.replace(/\.pdf$/i, '').toLowerCase()));
+  const pdfNames = new Set(src.filter((f) => f.ext === 'pdf').map((f) => baseOf(f.name)));
   let needImages = false;
   for (const f of src) {
     const ext = f.ext || extOf(f.name);
-    const data = await blobs.get(pid, f.key).catch(() => null);
+    const conv = ext !== 'pdf' && f.pdf?.key ? f.pdf : null; // 커넥트가 이 PC의 프로그램으로 만든 PDF
+    const data = await blobs.get(pid, conv ? conv.key : f.key).catch(() => null);
     const size = sizeOf(data);
-    const row = { name: f.name, pages: f.pages || 0, ext, sent: 'none' };
+    const row = { name: f.name, pages: f.pages || 0, ext, sent: 'none', ...(conv ? { via: conv.app || '변환기' } : {}) };
     files.push(row);
     if (!data || !size) { row.sent = 'text'; continue; }
-    if (ext === 'pdf') {
+    if (ext === 'pdf' || conv) {
       const okSize = size <= L.pdfBytes && bytes + size <= L.totalBytes;
       const okPages = !f.pages || f.pages <= pdfPageLimit(provider, model);
-      if (level === 0 && okSize && okPages) { parts.push({ kind: 'pdf', data, name: f.name }); bytes += size; row.sent = 'original'; continue; }
+      if (level === 0 && okSize && okPages) { parts.push({ kind: 'pdf', data, name: conv ? f.name.replace(/\.[^.]+$/, '') + '.pdf' : f.name }); bytes += size; row.sent = 'original'; continue; }
       row.sent = 'images'; needImages = true;
       notes.push(level === 0 ? `${f.name}: 파일이 커서(${Math.round(size / 1e6)}MB${f.pages ? `·${f.pages}쪽` : ''}) 쪽 그림으로 보냈어요.` : `${f.name}: AI 회사가 한 번에 받는 크기를 넘어 쪽 그림으로 보냈어요.`);
       continue;
     }
-    if (OFFICE.has(ext)) {
-      if (coveredByPdf.has(f.name.replace(/\.\w+$/, '').toLowerCase())) { row.sent = 'images'; needImages = true; continue; } // 같은 교재의 PDF본을 함께 넣음
-      row.sent = 'text';
-      notes.push(`${f.name}: 글자만 보냈어요. PowerPoint·한글에서 PDF로 저장해 함께 넣으면 그림까지 읽어 더 정확해요.`);
-      continue;
-    }
+    if (pdfNames.has(baseOf(f.name))) { row.sent = 'twin'; continue; } // 같은 교재의 PDF본이 원본(또는 쪽 그림)으로 감
+    // 브라우저 안에서 그린 쪽 그림(PPTX·DOCX)이 이 교재의 것이면 그 그림 + 보조 글자
+    if (siteImages.length && siteImagesFrom && siteImagesFrom === f.name) { row.sent = 'images'; needImages = true; continue; }
     row.sent = 'text';
-    if (/^hw/.test(ext)) notes.push(`${f.name}: 글자만 보냈어요. 한글에서 PDF로 저장해 함께 넣으면 더 정확해요.`);
+    if (OFFICE.has(ext) || /^hw/.test(ext)) notes.push(`${f.name}: 글자만 보냈어요. PDF로 저장해 함께 넣으면 그림까지 읽어 더 정확해요.`);
   }
-  // 쪽 그림: 원본을 못 보낸 PDF(또는 PDF본이 있는 PPTX)가 있을 때, 한도 안에서 쪽을 골라
+  // 쪽 그림: 원본을 못 보낸 PDF나 브라우저 안에서 그린 PPTX·DOCX가 있을 때, 한도 안에서 쪽을 골라
   const sentPages = [];
   if (needImages && siteImages.length) {
     const cap = Math.min(L.images, level >= 2 ? 12 : 60);
@@ -122,7 +134,10 @@ export async function packMaterial(pid, project, { provider, model = '', level =
     for (const r of files) if (r.sent === 'images') r.sent = 'text';
   }
   // 보조 글자: 원본을 보내지 못한 교재(쪽 그림으로 보낸 PDF·PPTX, 글만 보낸 HWP 등)의 쪽만. 원본으로 보낸 교재는 AI가 원본을 읽음
-  const text = helperText(project.material, files.filter((r) => r.sent !== 'original').map((r) => r.name), level >= 2 ? 12000 : 40000);
+  // 원본처럼 보낸 PPT(커넥트가 만든 PDF)·PDF본과 짝인 교재는 PDF에 없는 발표자 노트만
+  const max = level >= 2 ? 12000 : 40000;
+  const text = [helperText(project.material, files.filter((r) => r.sent === 'images' || r.sent === 'text' || r.sent === 'none').map((r) => r.name), max),
+    notesText(project.material, files.filter((r) => r.sent === 'twin' || (r.sent === 'original' && r.ext !== 'pdf')).map((r) => r.name), Math.round(max / 4))].filter(Boolean).join('\n\n');
   const pack = { parts, files, siteImages, siteImagesFrom, sentPages, text, notes, level, bytes, images };
   // 교재 앞부분 글(단계마다 같음) → 마지막에 캐시 표시
   if (intro) parts.push({ kind: 'text', text: intro(pack), cache: true });
