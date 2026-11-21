@@ -1,22 +1,72 @@
 {
   "id": "picture-heart",
   "title": "그림책 한 장, 마음 한 뼘",
-  "mood": "펼친 그림책과 찢은 종이 콜라주: 송명 제목과 감자꽃 손글씨, 표지가 넘어가며 열리는 첫 화면, 스크롤에 깃털을 부풀리는 참새, 넘겨 읽는 그림책과 뒤집는 마음 이름 카드가 있는 일러스트 편집형 연수 동반자",
+  "mood": "펼친 그림책과 찢은 종이 콜라주: 송명 제목과 감자꽃 손글씨, 표지가 넘어가며 열리는 첫 화면, 스크롤에 깃털을 부풀리는 참새. 구성은 당일 쓰임 순서(지금·출석·교재·실습·질문·자료·과제·다시 찾기)이고, 실습은 도구가 달린 펼침면을 3D로 넘기는 책",
   "audience": "teachers",
-  "material": { "file": "material/교재.pdf", "pages": 16, "format": "A4 가로 그림책 교재" },
-  "kit": ["attend", "poll(마음 색)", "poll(퀴즈, data-answer)", "poll(word)", "step×3", "board(분류·사진 2)", "notebook", "deck(A4 가로)", "qa", "survey(5문항)"],
-  "features": ["qa", "poll", "board", "attendance", "survey", "help", "reactions", "deck", "timer", "progress"],
-  "fonts": { "display": "Song Myung 400(제목·그림책 본문)", "hand": "Gamja Flower(메모·질문 쪽지)", "body": "Pretendard Variable 400–700", "num": "Fraunces italic 500(쪽·숫자 몇 곳)" },
+  "material": {
+    "file": "material/교재.pdf",
+    "pages": 16,
+    "format": "A4 가로 그림책 교재"
+  },
+  "kit": [
+    "attend",
+    "poll(마음 색)",
+    "poll(퀴즈, data-answer)",
+    "poll(word)",
+    "step×3(펼침면)",
+    "board(분류·사진 2)",
+    "materials(교재 쪽 5)",
+    "notebook",
+    "deck(A4 가로)",
+    "qa",
+    "survey(5문항)"
+  ],
+  "features": [
+    "qa",
+    "poll",
+    "board",
+    "attendance",
+    "survey",
+    "help",
+    "reactions",
+    "deck",
+    "materials",
+    "timer",
+    "progress"
+  ],
+  "fonts": {
+    "display": "Song Myung 400(제목·그림책 본문)",
+    "hand": "Gamja Flower(메모·질문 쪽지)",
+    "body": "Pretendard Variable 400–700",
+    "num": "Fraunces italic 500(쪽·숫자 몇 곳)"
+  },
   "colors": {
-    "light": { "paper": "#f4ecdc", "paper2": "#ece1cb", "page": "#fcf6ea", "ink": "#2a2320", "accent": "#a93b24", "yellow": "#f5d78f", "blue": "#bcd2e8", "red": "#f3b4a0", "purple": "#cfbde0", "night": "#212943" },
-    "dark": { "paper": "#1c1916", "paper2": "#231f1b", "page": "#29241f", "ink": "#f1e7d7", "accent": "#f39a7d" }
+    "light": {
+      "paper": "#f4ecdc",
+      "paper2": "#ece1cb",
+      "page": "#fcf6ea",
+      "ink": "#2a2320",
+      "accent": "#a93b24",
+      "yellow": "#f5d78f",
+      "blue": "#bcd2e8",
+      "red": "#f3b4a0",
+      "purple": "#cfbde0",
+      "night": "#212943"
+    },
+    "dark": {
+      "paper": "#1c1916",
+      "paper2": "#231f1b",
+      "page": "#29241f",
+      "ink": "#f1e7d7",
+      "accent": "#f39a7d"
+    }
   },
   "motion": [
     "처음 한 번 표지가 넘어가고 콜라주 조각이 차례로 놓이며 참새 윤곽을 선으로 그림",
     "첫 화면 층별 시차(마우스·스크롤, 화면 밖이면 멈춤)",
     "참새를 누르면 마음 낱말과 함께 깃털이 부푸는 모양 바꾸기(계산된 윤곽)",
     "머리 막대의 참새가 빠른 스크롤에 깃털을 부풀리고 섹션마다 표정이 바뀜, 연필 선 스크롤 진행",
-    "그림책 쪽 넘기기(3D 접힘), 마음 이름 카드 뒤집기·뽑기"
+    "실습 펼침면 3D 넘기기, 마음 이름 카드 뒤집기·뽑기"
   ],
   "notCopy": "그림책 한 권으로 하는 마음 수업 연수에 맞춘 판단이에요. 다른 연수에 참새·찢은 종이·네 마음 색·밤 책상을 그대로 옮기지 마세요."
 }
