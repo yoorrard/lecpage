@@ -59,14 +59,14 @@ export function Mine({ list, once, busyProps, reload }) {
               {tag?.gone && <div class="proj-day"><a class="btn btn-sm" href={`#/p/${p.id}/3`}>다시 배포하기</a><span class="small muted">새 주소로 열려요.</span></div>}
               <div class="proj-actions">
                 <button class="btn btn-sm btn-quiet" {...busyProps(`dup-${p.id}`, '복제 중…')} onClick={() => once(`dup-${p.id}`, async () => { await duplicateProject(p); toast('복제했어요.'); reload(); }, { stay: true, fail: '복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.' })}>복제</button>
-                <button class="btn btn-sm btn-quiet" onClick={() => setDel(p)}>지우기</button>
+                <button class="btn btn-sm btn-quiet" onClick={() => setDel(p)}>삭제</button>
               </div>
             </div>
           );
         })}
       </div>
-      <Dialog open={!!del} onClose={() => setDel(null)} label="연수 지우기 확인">
-        <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 지울까요?</h2>
+      <Dialog open={!!del} onClose={() => setDel(null)} label="연수 삭제 확인">
+        <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 삭제할까요?</h2>
         {live
           ? <>
             <p>이 브라우저에 있는 교재·그림·고친 내용과 배포 열쇠가 지워져요. 배포한 사이트는 {delTag.until ? `${delTag.until}까지` : '그대로'} 열려 있지만, 이 기기에서는 더 고치거나 다시 배포하거나 내릴 수 없어요.</p>
@@ -75,7 +75,7 @@ export function Mine({ list, once, busyProps, reload }) {
           : <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 필요하면 먼저 파일로 저장해 두세요.</p>}
         <div class="btn-row">
           {live && <button class="btn" onClick={async () => { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('열쇠까지 담아 저장했어요. 남에게 주지 마세요.'); }}>열쇠까지 파일로 저장</button>}
-          <button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('지웠어요.'); reload(); }}>지우기</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
+          <button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('삭제했어요.'); reload(); }}>삭제</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
         </div>
       </Dialog>
     </section>

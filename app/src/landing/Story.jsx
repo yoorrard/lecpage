@@ -1,80 +1,54 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { useInView, useReduced } from './motion.js';
-import { EX, shot, shotSize } from './shots.js';
+import { useRef } from 'preact/hooks';
+import { useProgress } from './motion.js';
+import { SLIDES, shot } from './showcases.js';
+
+// 다섯 단계(대표 사례 '질문이 먼저, AI는 그다음'의 실제 교재 쪽과 사이트 그림으로)
+const STEPS = [
+  { k: '교재 넣기', h: '쓰던 교재를 그대로 넣어요', p: 'PPT·PDF·한글·워드 파일을 놓으면 쪽 그림을 이 브라우저에서 바로 만들어요.' },
+  { k: 'AI가 읽기', h: 'AI가 교재 원본을 직접 읽어요', p: '날짜·장소·정답 같은 사실은 원문 그대로 옮기고, 찾은 쪽 번호를 함께 보여 줘요.' },
+  { k: '디자인', h: '이 강의만의 디자인이 나와요', p: '교재의 색과 모티프를 사이트 문법으로 옮겨요. WebGL 첫 화면, SVG 애니메이션, 스크롤 연출까지 강의마다 달라요.' },
+  { k: '강의 기능', h: '강의 기능이 제자리에 들어가요', p: '교재 넘기기·출석·질문·투표·퀴즈·실습 단계·자료실·만족도 조사를 강의 흐름에 맞춰 끼워요.' },
+  { k: '미리보기·수정', h: '보면서 바로 고쳐요', p: '휴대폰·태블릿·PC 화면으로 미리 보고 글자를 눌러 바로 고쳐요. 넘치거나 낱말이 갈리는 곳은 lecpage가 그려 보고 알려 줘요.' },
+];
+// 교재에서 찾은 사실(그 사례 lecpage.json facts의 값과 쪽)
+const FACTS = [['일시', '2026. 12. 9.(수) 14:00', 1], ['장소', '누리솔교육연수원 2층', 1], ['확인 문제 정답', '② 질문', 15]];
+const DESIGN = ['WebGL 신경망', '접혀 오르는 제목', '유리 띠'];
+const KIT = ['출석', '교재 넘기기', '질문', '투표', '퀴즈', '실습 단계'];
+// 슬라이드 다섯 장: 처음엔 부채처럼 겹침(x0·y0·r0) → 읽을 때 펼침(x1·y1·r1). 단위는 무대 폭·높이의 %(cqw·cqh)
+const FAN = [[-6, 4, -8, -27, -18, -4], [-3, 2, -4, 0, -22, 2], [0, 0, 0, 27, -17, 5], [3, -2, 4, -14, 20, 3], [6, -4, 8, 14, 22, -3]];
 
 /**
- * 붙박이 장면: 왼쪽 글(단계 넷)을 읽어 내려가는 동안 오른쪽 그림이 그 단계로 바뀌어요. 단계 번호를 잇는 선은 스크롤한 만큼 차올라요(CSS 스크롤 타임라인).
- * 넣어요(파일이 들어옴) → 읽어요(AI가 교재 쪽에서 찾은 것이 떠오름) → 만들어요(교재 원본과 목표 한 문장을 한 번에 건네면 AI가 사이트 전체를) → 살펴봐요(참여 기능을 끼우고 교재와 맞춰 본 사이트).
- * lecpage는 AI의 디자인·구성에 끼어들지 않아요(만들기 흐름: docs/plan-ai-first.md).
- * 그림의 사이트는 대표 레퍼런스(AI가 이 교재로 만든 사이트)를 찍은 것. 글은 늘 제자리(겹치지 않음), 움직이는 것은 그림뿐.
- * 휴대폰은 그림이 위에 붙고 글이 아래로 지나가요. 동작 줄이기: 붙박이 없이 완성된 그림 한 장 + 글.
+ * 교재가 사이트가 되기까지(스크롤에 묶인 한 장면): 왼쪽(휴대폰은 위)에 붙은 무대가 --t(0~4)를 따라 바뀌어요.
+ * 0 교재 쪽이 부채처럼 → 1 펼쳐 읽고 사실을 뽑음 → 2 노트북 화면으로 빨려 들어가 사이트가 됨 → 3 휴대폰과 강의 기능 → 4 글 수정.
+ * 값 하나(--t)만 바꾸고 나머지는 CSS가 계산해요. 동작 줄이기면 붙지 않고 끝 모습(--t:4) + 단계 글 목록.
  */
-const STEPS = [
-  { k: '넣어요', h: '교재 파일을 놓아요', p: ['PPT·PDF·한글(HWP·HWPX)·워드를 놓아요. 여러 파일을 함께 넣어도 돼요.', '쪽 그림은 이 브라우저에서 그려요. 교재 원본은 고른 AI로만 가고, lecpage 서버는 거치지 않아요.'] },
-  { k: '읽어요', h: 'AI가 교재를 직접 읽어요', p: ['AI가 교재의 내용과 흐름, 색과 모양까지 처음부터 끝까지 읽어요.', '연수명·날짜·장소 같은 연수 정보도 AI가 교재에서 찾아 돌려줘요.'] },
-  { k: '만들어요', h: 'AI가 사이트 전체를 만들어요', p: ['교재 원본과 목표 한 문장을 한 번에 건네요. 참가자가 곁에 두고 쓰는 사이트, 주제를 그린 첫 화면을 바란다는 짧은 요청이에요.', 'lecpage는 디자인과 구성에 끼어들지 않아요. 같은 AI의 실력이 그대로 나와요.'] },
-  { k: '살펴봐요', h: '강의 기능을 끼우고 교재와 맞춰 봐요', p: ['질문·투표·출석 같은 참여 기능을 끼우고, 사이트의 날짜·숫자·주소와 복사할 문구를 교재와 맞춰 봐요. 휴대폰과 PC 화면의 낱말 갈림·넘침도 알려 줘요.', '알림은 참고용이에요. 고칠지는 강사가 정하고, 미리보기에서 글자를 눌러 바로 고쳐요.'] },
-];
-const TAGS = [['연수명', EX.title], ['날짜', EX.when], ['장소', EX.venue], ['강사', EX.instructor], ['실습', '5개'], ['찾은 곳', '교재 1쪽']];
-const MAKING = ['교재 원본 건네기', '목표 한 문장 추가', 'AI가 사이트 전체 쓰기', 'lecpage가 참여 기능 끼우기', '교재와 맞춰 보기', '화면 그려 살펴보기'];
-
 export function Story() {
-  const root = useRef(); const stage = useRef();
-  const [step, setStep] = useState(0);
-  const reduced = useReduced();
-  const on = useInView(stage, { margin: '-10% 0px' });
-  useEffect(() => {
-    if (reduced) return;
-    const steps = [...root.current.querySelectorAll('.ld-step')];
-    // 화면의 가로 띠(PC: 가운데, 휴대폰: 그림 아래 글이 보이는 곳)를 지나는 단계가 지금 단계
-    const narrow = matchMedia('(max-width: 899px)').matches;
-    const io = new IntersectionObserver((es) => {
-      for (const e of es) if (e.isIntersecting) setStep(steps.indexOf(e.target));
-    }, { rootMargin: narrow ? '-72% 0px -26% 0px' : '-50% 0px -49% 0px' });
-    steps.forEach((s) => io.observe(s));
-    return () => io.disconnect();
-  }, [reduced]);
-  const cur = reduced ? 3 : step;
-  const sz = shotSize('site-data-lab');
+  const sec = useRef();
+  useProgress(sec, '--t', { scale: 4 });
+  const pc = shot('pc-neo-teach'), m = shot('m-neo-teach');
   return (
-    <section class={`ld-story${reduced ? ' is-still' : ''}`} ref={root} aria-labelledby="ld-story-h">
-      <header class="ld-head">
-        <h2 id="ld-story-h">교재가 연수 사이트가<br />되기까지</h2>
+    <section class="ld-story" aria-labelledby="ld-story-h">
+      <header class="ld-story-head">
+        <p class="ld-kicker">교재에서 사이트까지</p>
+        <h2 id="ld-story-h">교재 한 부가 강의 사이트가 되기까지</h2>
       </header>
-      <div class="ld-story-grid">
-        <div class="ld-story-vis">
-          <div class={`ld-stage${on ? ' is-on' : ''}`} data-step={cur + 1} ref={stage} aria-hidden="true">
-            <div class="ld-tray"><span>여기에 놓기</span></div>
-            <div class="ld-file"><b>PDF</b><span><em>{EX.file}</em><small>{EX.pages}쪽</small></span></div>
-            <div class="ld-sheet ld-page">
-              <small>교재 5쪽</small>
-              {/* copy-ok: 교재 쪽 제목 원문(교재 인용) */}
-              <b><mark>1부 · 한 줄에 한 번의 기록</mark></b>
-              <i class="ld-page-table">{['날짜', '번호', '활동', '점수', '제출'].map((x) => <u>{x}</u>)}{Array.from({ length: 10 }, () => <u />)}</i>
+      <div class="ld-story-body" ref={sec}>
+        <div class="ld-st-pin">
+          <div class="ld-st-vis" aria-hidden="true">
+            <div class="ld-st-slides">
+              {SLIDES.slice(0, 5).map((n, k) => { const s = shot(`slide-${n}`); const f = FAN[k]; return <img src={s.src} width={s.w} height={s.h} alt="" loading="lazy" decoding="async" style={{ '--x0': f[0], '--y0': f[1], '--r0': f[2], '--x1': f[3], '--y1': f[4], '--r1': f[5], '--k': k }} />; })}
+              <i class="ld-st-scan" />
             </div>
-            <ul class="ld-tags">{TAGS.map(([a, b], i) => <li style={{ '--i': i }}><small>{a}</small><b>{b}</b></li>)}</ul>
-            <div class="ld-concept">
-              <small>AI에게는 한 번에</small>
-              <ol class="ld-mk">{MAKING.map((t, i) => <li style={{ '--i': i }}><i />{t}</li>)}</ol>
-              <span class="ld-concept-foot"><i>디자인은 AI가</i><i>lecpage는 끼어들지 않아요</i></span>
-            </div>
-            <figure class="ld-site">
-              <i class="ld-bar"><b /><b /><b /></i>
-              <img src={shot('site-data-lab')} alt="" width={sz.w} height={sz.h} loading="lazy" decoding="async" />
-            </figure>
-            <ol class="ld-toc">{EX.stations.map(([t, pg], i) => <li style={{ '--i': i }}><span>실습 {i + 1}</span><b>{t}</b><small>교재 {pg}</small></li>)}</ol>
+            <ul class="ld-st-facts">{FACTS.map(([k, v, pg], i) => <li style={{ '--k': i }}><small>{k}</small><b>{v}</b><em>교재 {pg}쪽</em></li>)}</ul>
+            <div class="ld-st-pc"><img src={pc.src} width={pc.w} height={pc.h} alt="" loading="lazy" decoding="async" /></div>
+            <ul class="ld-st-tags">{DESIGN.map((t, i) => <li style={{ '--k': i }}>{t}</li>)}</ul>
+            <div class="ld-st-m"><img src={m.src} width={m.w} height={m.h} alt="" loading="lazy" decoding="async" /><i class="ld-st-edit"><span>글 수정</span></i></div>
+            <ul class="ld-st-kit">{KIT.map((t, i) => <li style={{ '--k': i }}>{t}</li>)}</ul>
+            <ul class="ld-st-dev"><li>휴대폰</li><li>태블릿</li><li>PC</li></ul>
           </div>
         </div>
-        <ol class="ld-steps">
-          {STEPS.map((s, i) => (
-            <li class={`ld-step${cur === i ? ' is-cur' : ''}`}>
-              <div class="ld-step-in">
-                <p class="ld-step-k"><span aria-hidden="true">{i + 1}</span>{s.k}</p>
-                <h3>{s.h}</h3>
-                {s.p.map((t) => <p>{t}</p>)}
-              </div>
-            </li>
-          ))}
+        <ol class="ld-st-steps">
+          {STEPS.map((s, i) => <li style={{ '--k': i }}><span class="ld-st-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><small>{s.k}</small><h3>{s.h}</h3><p>{s.p}</p></li>)}
         </ol>
       </div>
     </section>

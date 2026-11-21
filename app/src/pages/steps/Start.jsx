@@ -168,7 +168,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
           <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·대상을 한 줄로 적으면 AI가 반영해요.">
             <input class="input" value={p.request || ''} onInput={(e) => update({ request: e.target.value })} maxLength={300} placeholder="예: 실습 위주로, 차분한 남색, 처음 배우는 신입 직원 대상" />
           </Field>
-          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(따를 필요는 없어요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>삭제</button></p>}
+          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(이 분위기를 내 교재에 맞게 살려요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>삭제</button></p>}
         </section>
         <AiPick p={p} go={go} idle={idle} reload={reload} ready={ready} />
       </div>

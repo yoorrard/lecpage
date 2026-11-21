@@ -2,12 +2,17 @@ import { newProject } from '../lib/project.js';
 import { toast } from '../lib/util.js';
 import { REFERENCES, referenceFor } from '../data/references.js';
 
-// 참고 디자인(docs/plan-ai-first.md §11): AI가 교재를 읽고 자유롭게 만든 강의 사이트 사례(skills/lecpage/references/designs).
+// 참고 디자인(docs/plan-ai-first.md §11): AI가 교재 원본을 읽고 만든 강의 운영 사이트 사례(skills/lecpage/references/designs).
 // 사이트는 빌드 때 엔진으로 조립해 둔 것(public/examples/<id>/)이라 참가자·강사·발표 화면과 QR 안내문까지 실제로 열어 볼 수 있어요.
-// 고르면 새 연수의 '참고 디자인'에 적고, AI에게는 분위기 설명(mood)만 건넴(따를 의무 없음).
+// 고르면 새 연수의 '참고 디자인'에 적고, AI에게 그 분위기 설명(mood)을 건네 내 교재에 맞게 옮기게 함.
 const PAGES = [['index.html', '참가자 화면'], ['console.html', '강사 화면'], ['screen.html', '발표 화면'], ['poster.html', 'QR 안내문']];
-const KIT_KO = { attend: '출석', poll: '투표', 'poll(word)': '낱말 투표', board: '보드', deck: '교재 넘기기', qa: '질문', survey: '설문', materials: '자료실', join: '접속 QR' };
-const kitLine = (kit = []) => kit.map((k) => { const m = /^step×(\d+)$/.exec(k); return m ? `실습 ${m[1]}단계` : KIT_KO[k] || ''; }).filter(Boolean).join(' · ');
+const KIT_KO = { attend: '출석', poll: '투표', quiz: '퀴즈', word: '낱말 투표', board: '나눔 보드', deck: '교재 넘기기', qa: '질문', survey: '만족도 조사', materials: '자료실', notebook: '모음', join: '접속 QR' };
+/** notes.json의 kit(예: 'poll(quiz×3, data-answer)', 'step×3(펼침면)') → '출석 · 퀴즈 · 실습 3단계 · …'(같은 이름은 한 번) */
+const kitLine = (kit = []) => [...new Set(kit.map((k) => {
+  const st = /^step×(\d+)/.exec(k); if (st) return `실습 ${st[1]}단계`;
+  const base = (/^\w+/.exec(k) || [''])[0], inner = (/\((\w+)/.exec(k) || [])[1];
+  return base === 'poll' && KIT_KO[inner] ? KIT_KO[inner] : KIT_KO[base] || '';
+}).filter(Boolean))].join(' · ');
 
 export function Gallery() {
   /** 사례 고르기: 새 연수의 참고 디자인으로 적고 교재 넣기로 */
@@ -28,7 +33,7 @@ export function Gallery() {
               <h3>{r.title}</h3>
               {r.desc && <p class="small">{r.desc}</p>}
               <p class="small muted"><b>AI에게 건넬 분위기</b> {r.mood}</p>
-              {r.kit.length > 0 && <p class="small muted">참여 기능: {kitLine(r.kit)}</p>}
+              {r.kit.length > 0 && <p class="small muted">강의 기능: {kitLine(r.kit)}</p>}
               <p class="small ref-pages">{PAGES.map(([pg, label], i) => <>{i ? ' · ' : ''}<a href={r.url.replace(/index\.html$/, pg)} target="_blank" rel="noopener">{label}<span class="ext" aria-hidden="true">↗</span></a></>)}</p>
               <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => chooseRef(r)}>이 디자인 참고해 만들기</button><a class="btn btn-sm" href={r.url} target="_blank" rel="noopener">사이트 보기</a></div>
             </div>

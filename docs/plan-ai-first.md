@@ -226,4 +226,4 @@ assembleProject(p, { site, meta, target:'preview'|'zip'|'hosted', prev, extra, m
 ```
 - 생성 쪽은 저장한 뒤 창에 `lecpage:gen-saved`({ pid, at })를 보냄 → 연수 화면(Project.jsx)은 기다리던 자동 저장을 마저 쓰고 다시 읽음(단계 화면은 새로 그리지 않음). 생성 쪽은 화면을 모름.
 - 작업 중에는 목록·미리보기 창이 없음(진행 단계만). 만들기 단계 이름은 실제 파이프라인 그대로(교재 읽고 설계하기 → 디자인 정하기 → 섹션 만들기 n/N → 조립하고 검수하기 → (검수에서 찾은 곳 고치기)).
-- 먼저 해보기는 같은 파이프라인을 `way:'demo'`로 돌림: 체험 교재 PDF(`app/src/data/demo/ai-lesson.pdf`, 가상의 교원 연수)를 실제로 읽고, AI 답 자리만 같은 교재로 키 길에서 실제로 받은 답(`app/src/data/demo/answer.txt`)으로 채움(어디로도 보내지 않음). 상태(2026-11-21): 예전에는 레퍼런스(data-lab) 사이트에서 떼어 낸 글이었어요.
+- 먼저 해보기는 같은 파이프라인을 `way:'demo'`로 돌림: 체험 교재 PDF(`app/src/data/demo/neo-teach.pdf`, 참고 디자인 `neo-teach`의 교재 17쪽)를 실제로 읽고, AI 답 자리는 같은 사례의 사이트 글 파일(index.html·lab.html·CSS·JS)과 lecpage.json을 키 길의 한 번 답 꼴(파일마다 코드 블록, `lib/gen/demo-answers.js`)로 묶어 채움(어디로도 보내지 않음, `app/src/data/demo-run.js`). 상태(2026-11-21): 예전 체험 교재(ai-lesson)와 받은 답(answer.txt)은 새 사례로 바꾸며 뺌.

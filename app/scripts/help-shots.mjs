@@ -3,11 +3,11 @@
 //   --base=http://localhost:4174/  이미 띄워 둔 미리보기 서버를 씀(없으면 이 스크립트가 vite preview를 띄웠다가 끔)
 //   --only=start,edit              일부만 다시 찍음
 // 화면이 바뀌면 다시 돌리면 됩니다. 찍는 동안 바깥 네트워크는 모두 막고, AI는 흉내 냅니다(키·교재가 어디로도 가지 않음):
-// 키 확인은 모델 목록으로, 만들기는 대표 레퍼런스(data-lab)의 파일을 한 답으로(src/lib/gen/demo-answers.js) Claude 스트림 꼴로 돌려줌.
+// 키 확인은 모델 목록으로, 만들기는 대표 레퍼런스(neo-teach, 먼저 해보기와 같음)의 글 파일을 한 답으로(src/lib/gen/demo-answers.js) Claude 스트림 꼴로 돌려줌.
 // playwright는 앱의 의존성이 아닙니다. 개발 환경에 설치된 것을 씁니다(npx playwright install chromium).
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -36,9 +36,11 @@ if (!base) {
 base = base.replace(/\/?$/, '/');
 
 // ── 흉내 낸 AI 응답: 대표 레퍼런스 사이트를 단계별 답으로 ──
-const REF = join(SKILL, 'references', 'designs', 'data-lab');
+const REF = join(SKILL, 'references', 'designs', 'neo-teach');
 const { demoAnswers } = await import(pathToFileURL(join(APP, 'src', 'lib', 'gen', 'demo-answers.js')).href);
-const answer = demoAnswers({ html: readFileSync(join(REF, 'site', 'index.html'), 'utf8'), css: readFileSync(join(REF, 'site', 'assets', 'style.css'), 'utf8'), js: readFileSync(join(REF, 'site', 'assets', 'site.js'), 'utf8'), meta: JSON.parse(readFileSync(join(REF, 'lecpage.json'), 'utf8')) });
+const SITE = join(REF, 'site');
+const siteText = (d, pre = '') => readdirSync(join(SITE, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? siteText(join(d, e.name), `${pre}${e.name}/`) : /\.(html?|css|m?js)$/i.test(e.name) ? [[pre + e.name, readFileSync(join(SITE, d, e.name), 'utf8')]] : []));
+const answer = demoAnswers({ files: Object.fromEntries(siteText('')), meta: JSON.parse(readFileSync(join(REF, 'lecpage.json'), 'utf8')) });
 /** Claude /v1/messages 요청 → 그 단계의 답(SSE) */
 function claudeStream(body) {
   const text = (body.messages || []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).map((x) => x.text || '').join('\n');
@@ -92,13 +94,14 @@ try {
     // 1. 교재 넣기 + AI 고르기: 예시 교재(엔진 시험용 파일)를 넣은 모습
     await page.goto(base + '#/', { waitUntil: 'load' });
     await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
-    await page.waitForSelector('.ai-card .btn:not([disabled])', { timeout: 90000 });
+    await page.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 90000 }); // 교재를 다 읽으면 AI 선택 단추가 켜짐
     await page.locator('.step-head h1').click(); // 입력 칸의 초점 테두리를 뺌
     await settle(3000); // 알림 글이 사라진 뒤에
     await top();
     if (want('start')) await shot('start');
 
     // 2. 키 연결 창: Claude 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
+    await page.click('details.ai-more:not([open]) > summary').catch(() => { }); // API 키는 [다른 방법] 안에
     await page.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');

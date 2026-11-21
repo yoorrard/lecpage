@@ -57,9 +57,9 @@ jobs:
         run: |
           node skills/lecpage/scripts/lecpage.mjs doctor
           node skills/lecpage/scripts/lecpage.mjs prepare skills/lecpage/engine/test/fixtures/workshop.pptx -o .out/win/prep
-          node scripts/check-references.mjs data-lab
-          node skills/lecpage/scripts/lecpage.mjs publish .out/data-lab --no-verify --no-handouts
-          node skills/lecpage/scripts/lecpage.mjs pack .out/data-lab -o .out/win/site.zip
+          node scripts/check-references.mjs neo-teach
+          node skills/lecpage/scripts/lecpage.mjs publish .out/neo-teach --no-verify --no-handouts
+          node skills/lecpage/scripts/lecpage.mjs pack .out/neo-teach -o .out/win/site.zip
   # 바로 공개 서버(선택 기능): 단위 테스트 + 로컬 workerd 통합 테스트(workerd를 못 띄우면 통합 부분만 건너뜀)
   hosting:
     runs-on: ubuntu-latest
