@@ -1,5 +1,5 @@
 /* 학교 데이터로 수업 바꾸기 — 그림·움직임·실습 도구. 강의 기능(출석·투표·질문·교재 넘기기…)은 lecpage 키트가 붙여요.
-   데이터는 모두 교재에 실린 연수용 가상 예시예요. 움직임을 줄인 사람에게는 처음부터 다 그려진 모습을 보여 줘요. */
+   데이터는 모두 교재에 실린 연수용 가상 예시예요. 설명은 교재 쪽 그림과 강사에게 맡기고, 여기엔 당일 쓰는 도구만. 움직임을 줄인 사람에게는 처음부터 다 그려진 모습을 보여 줘요. */
 (function () {
   'use strict';
   var d = document, root = d.documentElement;
@@ -135,178 +135,8 @@
     });
   }
 
-  /* ── 오늘의 흐름: 지금 시각 ── */
-  function gantt() {
-    var g = $('.gantt'); if (!g) return;
-    onSeen(g, function () { g.classList.add('in'); }, '0px 0px -8% 0px');
-    var items = $$('li', g), box = $('.gantt-now', g), from = g.dataset.from.split(':'), start = +from[0] * 60 + +from[1];
-    function two(n) { return (n < 10 ? '0' : '') + n; }
-    function tick() {
-      var now = new Date(), ymd = now.getFullYear() + '-' + two(now.getMonth() + 1) + '-' + two(now.getDate()), m = now.getHours() * 60 + now.getMinutes() - start;
-      items.forEach(function (li) { li.classList.remove('is-now'); });
-      if (ymd !== g.dataset.day || m < 0 || m >= 180) { g.classList.remove('is-live'); if (box) box.hidden = true; return; }
-      g.style.setProperty('--now', (m / 180).toFixed(4)); g.classList.add('is-live');
-      var cur = items.filter(function (li) { var s = +li.style.getPropertyValue('--s'), len = +li.style.getPropertyValue('--m'); return m >= s && m < s + len; })[0];
-      if (cur) cur.classList.add('is-now');
-      if (box) { box.hidden = false; $('[data-now-t]', box).textContent = '지금 ' + two(now.getHours()) + ':' + two(now.getMinutes()); $('[data-now-l]', box).textContent = cur ? $('b', cur).textContent : ''; }
-    }
-    tick(); setInterval(tick, 30000);
-  }
-
-  /* ── 1부 이야기: 스크롤에 따라 바뀌는 점 그래프 ── */
-  function story() {
-    var fig = $('.sfig'), stage = fig && $('[data-swarm]', fig); if (!stage) return;
-    var steps = $$('.steps li'), state = 0, dots = [], geo = null;
-    function build() {
-      var W = stage.clientWidth, H = stage.clientHeight; if (!W || !H) return;
-      stage.textContent = '';
-      var svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, 'aria-hidden': 'true' }, stage);
-      var L = 6, R = W - 6, T = 30, B = H - 28, r = clamp((R - L) / 64, 4.5, 10.5);
-      var x = function (v) { return L + (v - 30) / 70 * (R - L); };
-      var yS = function (v) { return B - 6 - (v - 30) / 70 * (B - T - 6); };
-      S('rect', { 'class': 'sw-zone', x: L, y: T - 14, width: x(60) - L, height: B - T + 14 }, svg);
-      var zl = S('text', { 'class': 'sw-zlab', x: L + 8, y: T + 4 }, svg); zl.textContent = '60점 미만 9명';
-      var ax = S('g', { 'class': 'sw-ax' }, svg);
-      S('line', { x1: L, x2: R, y1: B, y2: B, 'stroke-width': 1.5 }, ax);
-      for (var v = 30; v <= 100; v += 10) { S('line', { x1: x(v), x2: x(v), y1: B, y2: B + 5 }, ax); var t = S('text', { x: x(v), y: B + 20, 'text-anchor': v === 30 ? 'start' : v === 100 ? 'end' : 'middle' }, ax); t.textContent = v; }
-      // 번호순일 때 높이 길잡이
-      [60, 80].forEach(function (v) { var gl = S('g', { 'class': 'sw-n' }, svg); S('line', { x1: L, x2: R, y1: yS(v), y2: yS(v), stroke: '#cbc8bd', 'stroke-dasharray': '3 4' }, gl); var tt = S('text', { x: R, y: yS(v) - 6, 'text-anchor': 'end' }, gl); tt.textContent = v + '점'; });
-      [['mean', MEAN, '평균 72', 'end', -8], ['median', MEDIAN, '중앙값 78.5', 'start', 8]].forEach(function (m) {
-        S('line', { 'class': 'sw-line ' + m[0], x1: x(m[1]), x2: x(m[1]), y1: T - 6, y2: B }, svg);
-        var lt = S('text', { 'class': 'sw-lab', x: x(m[1]) + m[4], y: T - 12, 'text-anchor': m[3] }, svg); lt.textContent = m[2];
-      });
-      var order = SCORES.map(function (v, i) { return { v: v, i: i }; }).sort(function (a, b) { return a.v - b.v; });
-      var ks = swarmY(order.map(function (o) { return x(o.v); }), r), sw = [];
-      order.forEach(function (o, j) { sw[o.i] = { x: x(o.v), y: B - r - 3 - ks[j] * (r * 2 + 1.5) }; });
-      dots = SCORES.map(function (v, i) {
-        var c = S('circle', { 'class': 'sw-dot', cx: 0, cy: 0, r: r }, svg);
-        c.style.transitionDelay = (i * 14) + 'ms';
-        return { el: c, v: v, a: { x: L + r + (i + .5) / 30 * (R - L - r * 2), y: yS(v) }, b: sw[i] };
-      });
-      geo = { svg: svg };
-      apply(true);
-    }
-    function apply(now) {
-      fig.setAttribute('data-state', state);
-      dots.forEach(function (o) {
-        if (now) o.el.style.transition = 'none';
-        var p = state === 0 ? o.a : o.b; tr(o.el, p.x, p.y);
-        o.el.style.fill = state === 3 && o.v < 60 ? 'var(--sig)' : 'var(--ink)';
-        if (now) { void o.el.getBoundingClientRect(); o.el.style.transition = ''; }
-      });
-      steps.forEach(function (li, i) { li.classList.toggle('on', i === state); });
-    }
-    var list = $('.steps'), pager = $$('.pager i');
-    function across() { return list && list.scrollWidth > list.clientWidth + 4; } // 휴대폰: 옆으로 넘기는 칸
-    function pick() {
-      var s = 0;
-      if (across()) {
-        var lb = list.getBoundingClientRect().left + parseFloat(getComputedStyle(list).paddingLeft), best = 1e9;
-        steps.forEach(function (li, i) { var dx = Math.abs(li.getBoundingClientRect().left - lb); if (dx < best) { best = dx; s = i; } });
-      } else {
-        var line = innerHeight * .6;
-        steps.forEach(function (li, i) { var p = $('p', li).getBoundingClientRect(); if (p.top < line) s = i; });
-      }
-      pager.forEach(function (b, i) { b.classList.toggle('on', i === s); });
-      if (s !== state) { state = s; apply(false); }
-    }
-    build(); onResize(stage, build);
-    var raf = 0, later = function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(pick); };
-    addEventListener('scroll', later, { passive: true });
-    if (list) list.addEventListener('scroll', later, { passive: true });
-    steps.forEach(function (li) { li.addEventListener('click', function () { if (across()) list.scrollTo({ left: li.offsetLeft - list.offsetLeft - parseFloat(getComputedStyle(list).paddingLeft), behavior: still() ? 'auto' : 'smooth' }); }); });
-    pick();
-  }
-
-  /* ── 12주의 맥박: 짐작해 그리기 ── */
-  function drawIt() {
-    var stage = $('[data-draw]'); if (!stage) return;
-    var say = $('#draw-say'), btnShow = $('[data-draw-show]'), btnReset = $('[data-draw-reset]');
-    var guess = [], shown = false, cur = 6, last = null, g = null;
-    function build() {
-      var W = stage.clientWidth, H = stage.clientHeight; if (!W || !H) return;
-      stage.textContent = '';
-      var svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, 'aria-hidden': 'true' }, stage);
-      var L = 40, R = W - (W < 500 ? 34 : 56), T = 14, B = H - 30;
-      var x = function (i) { return L + i * (R - L) / 11; }, y = function (v) { return B - (v - 30) / 60 * (B - T); };
-      var ax = S('g', { 'class': 'dr-ax' }, svg);
-      [30, 50, 70, 90].forEach(function (v) { S('line', { x1: L, x2: R, y1: y(v), y2: y(v) }, ax); var t = S('text', { x: L - 8, y: y(v) + 4, 'text-anchor': 'end' }, ax); t.textContent = v + '%'; });
-      for (var i = 0; i < 12; i++) { var t = S('text', { x: x(i), y: B + 22, 'text-anchor': 'middle', 'class': i === 6 ? 'wk7' : null }, ax); t.textContent = i + 1; }
-      var u = S('text', { x: R + 8, y: B + 22 }, ax); u.textContent = '주';
-      var zone = S('rect', { 'class': 'dr-zone', x: x(5.5), y: T, width: R - x(5.5) + 6, height: B - T }, svg);
-      var hint = S('text', { 'class': 'dr-hint', x: (x(5.5) + R) / 2, y: y(86), 'text-anchor': 'middle' }, svg); hint.textContent = '여기에 그려 보세요';
-      var all = S('path', { 'class': 'dr-all', d: RATEALL.map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ') }, svg);
-      S('path', { 'class': 'dr-known', d: RATE3.slice(0, 6).map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ') }, svg);
-      var known = S('circle', { 'class': 'dr-tdot', cx: x(5), cy: y(63), r: 5, fill: '#f2f1ec' }, svg); known.style.fill = 'var(--paper)';
-      var truth = S('path', { 'class': 'dr-true', pathLength: 1, d: RATE3.slice(5).map(function (v, i) { return (i ? 'L' : 'M') + x(i + 5).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ') }, svg);
-      var tdots = S('g', {}, svg);
-      [[6, 41, '41%'], [11, 73, '73%']].forEach(function (p) { S('circle', { 'class': 'dr-tdot', cx: x(p[0]), cy: y(p[1]), r: 7 }, tdots); var lt = S('text', { 'class': 'dr-tl', x: x(p[0]) + (p[0] === 11 ? -10 : 12), y: y(p[1]) + (p[0] === 11 ? -14 : 26), 'text-anchor': p[0] === 11 ? 'end' : 'start' }, tdots); lt.textContent = p[2]; });
-      var allLab = S('text', { 'class': 'dr-sl', x: L + 6, y: T + 14 }, svg); allLab.textContent = '점선 · 2학년 평균';
-      var gpath = S('path', { 'class': 'dr-guess' }, svg), gdots = S('g', {}, svg), ring = S('circle', { 'class': 'dr-cur', r: 11 }, svg);
-      g = { svg: svg, x: x, y: y, L: L, R: R, T: T, B: B, zone: zone, hint: hint, truth: truth, tdots: tdots, all: all, allLab: allLab, gpath: gpath, gdots: gdots, ring: ring };
-      render(true);
-    }
-    function filled() { // 짐작한 곳까지 빈 주차는 앞뒤로 이어 채움
-      var out = RATE3.slice(0, 6), lastI = -1;
-      for (var i = 6; i < 12; i++) if (guess[i] != null) lastI = i;
-      for (var j = 6; j <= lastI; j++) {
-        if (guess[j] != null) { out[j] = guess[j]; continue; }
-        var k = j + 1; while (k <= lastI && guess[k] == null) k++;
-        out[j] = out[j - 1] + (guess[k] - out[j - 1]) / (k - j + 1);
-      }
-      return out;
-    }
-    function render(now) {
-      if (!g) return;
-      var f = filled(), pts = f.slice(5);
-      g.gpath.setAttribute('d', pts.length > 1 ? pts.map(function (v, i) { return (i ? 'L' : 'M') + g.x(i + 5).toFixed(1) + ' ' + g.y(v).toFixed(1); }).join(' ') : '');
-      g.gdots.textContent = '';
-      for (var i = 6; i < f.length; i++) if (guess[i] != null) S('circle', { 'class': 'dr-gdot', cx: g.x(i), cy: g.y(guess[i]), r: 4 }, g.gdots);
-      g.hint.style.opacity = f.length > 6 || shown ? 0 : 1;
-      var focused = d.activeElement === stage && !shown;
-      g.ring.style.display = focused ? '' : 'none';
-      if (focused) { g.ring.setAttribute('cx', g.x(cur)); g.ring.setAttribute('cy', g.y(guess[cur] != null ? guess[cur] : (f[cur] != null ? f[cur] : f[f.length - 1]))); }
-      var t = g.truth;
-      t.style.strokeDasharray = '1'; t.style.transition = now || still() ? 'none' : 'stroke-dashoffset 1.4s cubic-bezier(.6,.1,.3,1)';
-      t.style.strokeDashoffset = shown ? '0' : '1';
-      [g.tdots, g.all, g.allLab].forEach(function (el) { el.style.transition = now || still() ? 'none' : 'opacity .5s 1.1s'; el.style.opacity = shown ? 1 : 0; });
-      g.zone.style.opacity = shown ? .35 : 1;
-    }
-    function setAt(i, v) {
-      v = clamp(Math.round(v), 30, 90);
-      if (last != null && Math.abs(i - last.i) > 1) { var a = last, s = i > a.i ? 1 : -1; for (var k = a.i + s; k !== i; k += s) guess[k] = Math.round(a.v + (v - a.v) * (k - a.i) / (i - a.i)); }
-      guess[i] = v; last = { i: i, v: v }; cur = i;
-      say.textContent = (i + 1) + '주차 짐작 ' + v + '%';
-      render();
-    }
-    function fromEvent(e) {
-      var b = stage.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-      var i = clamp(Math.round((px - g.L) / (g.R - g.L) * 11), 6, 11), v = 30 + (g.B - py) / (g.B - g.T) * 60;
-      setAt(i, v);
-    }
-    var down = false;
-    stage.addEventListener('pointerdown', function (e) { if (shown || !g) return; down = true; last = null; try { stage.setPointerCapture(e.pointerId); } catch (_) { } fromEvent(e); e.preventDefault(); });
-    stage.addEventListener('pointermove', function (e) { if (down && !shown) fromEvent(e); });
-    ['pointerup', 'pointercancel'].forEach(function (n) { stage.addEventListener(n, function () { down = false; last = null; }); });
-    stage.addEventListener('keydown', function (e) {
-      if (shown) return;
-      var f = filled(), k = e.key, step = e.shiftKey ? 5 : 1;
-      if (k === 'ArrowRight' || k === 'ArrowLeft') { cur = clamp(cur + (k === 'ArrowRight' ? 1 : -1), 6, 11); say.textContent = (cur + 1) + '주차' + (guess[cur] != null ? ' 짐작 ' + guess[cur] + '%' : ''); render(); e.preventDefault(); }
-      else if (k === 'ArrowUp' || k === 'ArrowDown') { var base = guess[cur] != null ? guess[cur] : (f[cur] != null ? f[cur] : f[f.length - 1]); last = null; setAt(cur, base + (k === 'ArrowUp' ? step : -step)); e.preventDefault(); }
-      else if (k === 'Enter') { reveal(); e.preventDefault(); }
-    });
-    stage.addEventListener('focus', function () { render(); });
-    stage.addEventListener('blur', function () { render(); });
-    function reveal() {
-      shown = true; render();
-      var n = 0, sum = 0; for (var i = 6; i < 12; i++) if (guess[i] != null) { n++; sum += Math.abs(guess[i] - RATE3[i]); }
-      say.textContent = n ? '내 짐작과 실제의 차이는 평균 ' + r1(sum / n) + '%p예요. 7주차 실제 정답률은 41%였어요.' : '짐작 없이 정답을 봤어요. 7주차에 41%로 떨어졌다가 12주차에 73%로 돌아왔어요.';
-      btnShow.disabled = true;
-    }
-    btnShow.addEventListener('click', reveal);
-    btnReset.addEventListener('click', function () { guess = []; shown = false; cur = 6; btnShow.disabled = false; say.textContent = '7주차부터 그어 보세요.'; render(true); });
-    build(); onResize(stage, build);
-  }
+  /* ── 오늘의 흐름: 막대가 시간 길이만큼 자람 ── */
+  function gantt() { var g = $('.gantt'); if (g) onSeen(g, function () { g.classList.add('in'); }, '0px 0px -8% 0px'); }
 
   /* ── 실습 1: 기준 점수 실험 ── */
   function threshold() {
@@ -438,23 +268,48 @@
 
   /* ── 위 막대: 지금 보는 곳 ── */
   function nav() {
-    var map = [['#flow', ['#flow']], ['#read', ['#read', '#story', '#pulse', '[data-lp-step="s1"]']], ['#make', ['#make', '#forms', '[data-lp-step="s2"]']], ['#ai', ['#ai', '[data-lp-step="s3"]']], ['#deck', ['#deck']], ['#qa', ['#quiz', '#qa']], ['#task', ['#task', '#end']]];
-    var links = map.map(function (m) { return { a: $('.bar nav a[href="' + m[0] + '"]'), els: m[1].map(function (s) { return $(s); }).filter(Boolean) }; }).filter(function (o) { return o.a && o.els.length; });
+    var links = $$('.bar nav a[href^="#"]').filter(function (a) { return !a.hasAttribute('data-st-link'); })
+      .map(function (a) { return { a: a, el: d.getElementById(a.getAttribute('href').slice(1)) }; }).filter(function (o) { return o.el; });
+    if (!links.length) return;
     var navBox = $('.bar nav'), cur = null;
     function pick() {
       var line = innerHeight * .35, hit = null;
-      links.forEach(function (o) { o.els.forEach(function (el) { var b = el.getBoundingClientRect(); if (b.top < line && b.bottom > line) hit = o; }); });
+      links.forEach(function (o) { var r = o.el.getBoundingClientRect(); if (r.top < line && r.bottom > line) hit = o; });
       if (hit === cur) return; cur = hit;
       links.forEach(function (o) { if (o === hit) o.a.setAttribute('aria-current', 'true'); else o.a.removeAttribute('aria-current'); });
-      if (hit && navBox && navBox.scrollWidth > navBox.clientWidth) { var l = hit.a.offsetLeft - 40; navBox.scrollTo({ left: Math.max(0, l), behavior: still() ? 'auto' : 'smooth' }); }
+      if (hit && navBox && navBox.scrollWidth > navBox.clientWidth) navBox.scrollTo({ left: Math.max(0, hit.a.offsetLeft - 40), behavior: still() ? 'auto' : 'smooth' });
     }
     var raf = 0; addEventListener('scroll', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(pick); }, { passive: true });
     pick();
+  }
+
+  /* ── 첫 화면 '지금' 칸: 연수 전·중·후에 할 일 하나 ── */
+  function nowCard() {
+    var box = $('[data-hub]'), g = $('.gantt'); if (!box || !g) return;
+    var K = $('[data-hub-k]', box), T = $('[data-hub-t]', box), Lb = $('[data-hub-l]', box), A = $('[data-hub-a]', box);
+    var items = $$('li', g), day = g.dataset.day.split('-'), from = g.dataset.from.split(':'), start = +from[0] * 60 + +from[1];
+    var LABEL = { '#join': '입장하기', 'practice.html#st-s1': '실습 1로', 'practice.html#st-s2': '실습 2로', 'practice.html#st-s3': '실습 3으로', '#talk': '퀴즈 풀기', '#end': '설문 쓰기' };
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    function set(k, t, l, href) { K.textContent = k; T.textContent = t; Lb.textContent = l; if (href) { A.hidden = false; A.setAttribute('href', href); A.textContent = LABEL[href] || '과제 보기'; } else A.hidden = true; }
+    function tick() {
+      var n = new Date(), today = new Date(n.getFullYear(), n.getMonth(), n.getDate()), on = new Date(+day[0], +day[1] - 1, +day[2]);
+      var days = Math.round((on - today) / 864e5), m = n.getHours() * 60 + n.getMinutes() - start;
+      g.classList.remove('is-live'); items.forEach(function (li) { li.classList.remove('is-now'); });
+      if (days > 0 || (days === 0 && m < 0)) { set(days > 0 ? 'D-' + days + ' · 시작' : '오늘 시작', '12. 10.(목) 14:30', '들어가며 · 출석과 첫 투표부터 해요', '#join'); return; }
+      if (days === 0 && m < 180) {
+        g.style.setProperty('--now', (m / 180).toFixed(4)); g.classList.add('is-live');
+        var cur = items.filter(function (li) { var s0 = +li.style.getPropertyValue('--s'), len = +li.style.getPropertyValue('--m'); return m >= s0 && m < s0 + len; })[0];
+        if (cur) { cur.classList.add('is-now'); set('지금', two(n.getHours()) + ':' + two(n.getMinutes()), $('b', cur).textContent + ' · ' + (cur.dataset.say || ''), cur.dataset.go || ''); }
+        return;
+      }
+      set('연수가 끝났어요 · 과제 마감', '12. 17.(목) 18:00', '데이터 한 장 보고서를 과제 보드에 올려요', '#task');
+    }
+    tick(); setInterval(tick, 30000);
   }
 
   /* ── 마무리 문장 ── */
   function endQuote() { var q = $('.end .quote'); if (q) onSeen(q, function () { q.classList.add('in'); }, '0px 0px -18% 0px'); }
 
   function run(fn) { try { fn(); } catch (e) { if (window.console) console.warn(e); } }
-  [hero, pulse, counters, gantt, story, drawIt, threshold, morph, checks, nav, endQuote].forEach(run);
+  [hero, pulse, counters, gantt, nowCard, threshold, morph, checks, nav, endQuote].forEach(run);
 })();
