@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>lecpage · 교재로 연수 사이트 만들기</title>
-<meta name="description" content="강의·연수 교재(PPT·PDF·한글·워드)를 넣으면 연수 사이트가 나와요. 내용은 쓰던 AI가 짜고, 디자인·배포·QR·질문과 투표는 lecpage가 해요. 무료이고 회원가입이 없어요.">
+<meta name="description" content="강의·연수 교재(PPT·PDF·한글·워드)를 넣으면 AI가 원본을 직접 읽고 이 강의만의 디자인으로 연수 사이트를 만들어요. 발표 화면·강사 화면·출석·질문·투표, 바로 배포와 QR까지. 무료 오픈소스이고 회원가입이 없어요.">
 <meta name="theme-color" content="#FBFAF9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="lecpage">
@@ -16,9 +16,9 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<!-- 첫 화면 그림(넓은 화면에서 가장 큰 그림이라 일찍 받음). 좁은 화면은 글 아래에 조금 걸치는 가벼운 판을 받음(HeroFold.jsx의 picture와 같은 경계) -->
-<link rel="preload" as="image" href="/src/landing/shots/hero-data-lab.webp" type="image/webp" media="(min-width: 980px)" fetchpriority="high">
-<link rel="preload" as="image" href="/src/landing/shots/hero-data-lab-s.webp" type="image/webp" media="(max-width: 979.98px)">
+<!-- 첫 화면 무대의 첫 사례 그림(넓은 화면에서 가장 큰 그림이라 일찍 받음). 좁은 화면은 글 아래에 놓이는 가벼운 판(landing/Hero.jsx의 picture와 같은 경계) -->
+<link rel="preload" as="image" href="/src/landing/shots/pc-neo-teach.webp" type="image/webp" media="(min-width: 760px)" fetchpriority="high">
+<link rel="preload" as="image" href="/src/landing/shots/pc-neo-teach-s.webp" type="image/webp" media="(max-width: 759.98px)">
 </head>
 <body>
 <div id="app"></div>

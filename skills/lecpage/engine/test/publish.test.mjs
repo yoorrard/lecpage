@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, '..', '..', 'scripts', 'lecpage.mjs');
-const REF = join(HERE, '..', '..', 'references', 'designs', 'data-lab');
+const REF = join(HERE, 'fixtures', 'ref-site');
 const teacherPath = () => join(dir, 'work', 'lecpage.teacher.json');
 let dir, logFile;
 // 글꼴 함께 담기(publish 기본)가 바깥 글꼴 서버에 닿지 않게: 닫힌 프록시로 보내 바로 실패 → 바깥 글꼴 주소 그대로(인터넷이 막힌 곳과 같음)

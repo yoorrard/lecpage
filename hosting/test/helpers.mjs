@@ -22,7 +22,7 @@ const FEATURES = { 'sel-story': ['qa', 'board', 'poll', 'reactions'], 'data-lab'
 export function blueprint(name) {
   return { live: { provider: 'local', features: [...(FEATURES[name] || FEATURES['data-lab'])] } };
 }
-const REF = join(REPO, 'skills', 'lecpage', 'references', 'designs', 'data-lab');
+const REF = join(REPO, 'skills', 'lecpage', 'engine', 'test', 'fixtures', 'ref-site');
 /** 레퍼런스 사이트(data-lab) 폴더. 사이트가 직접 쓴 스크립트(assets/site.js)는 빼서 엔진 런타임만 도는 사이트로(worker 보기가 받는 것) */
 function refSite() {
   const out = {};

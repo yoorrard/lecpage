@@ -18,7 +18,7 @@ import { nodeRuntime, writeFiles } from '../node.js';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const SKILL = path.join(HERE, '..', '..');
 const CLI = path.join(SKILL, 'scripts', 'lecpage.mjs');
-const REF = path.join(SKILL, 'references', 'designs', 'data-lab');
+const REF = path.join(SKILL, 'engine', 'test', 'fixtures', 'ref-site');
 const rt = nodeRuntime();
 const WEBP = fs.readFileSync(path.join(REF, 'site', 'material', 'p-001.webp'));
 const PAGE = (body, head = '') => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>시험 연수</title>${head}</head><body><main><h1>시험 연수</h1>${body}</main></body></html>`;

@@ -1,11 +1,11 @@
-// 시험용 키트 사이트: 레퍼런스(references/designs/data-lab)를 조립해 보조 쪽·런타임·참가자 쪽을 만듦.
+// 시험용 키트 사이트: 시험용 레퍼런스 사이트(test/fixtures/ref-site)를 조립해 보조 쪽·런타임·참가자 쪽을 만듦.
 // 런타임(lecpage.js·console.js·screen.js·live/*)과 보조 쪽을 시험하는 파일이 함께 씀.
 import fs from 'node:fs';
 import path from 'node:path';
 import * as K from '../src/kit/index.js';
 import { nodeRuntime } from '../node.js';
 
-export const REF = path.join(import.meta.dirname, '../../references/designs/data-lab');
+export const REF = path.join(import.meta.dirname, 'fixtures/ref-site');
 const TEXT = /\.(html|css|m?js|json|txt)$/i;
 
 /** 레퍼런스 사이트 폴더 → { 경로: 글|bytes } */

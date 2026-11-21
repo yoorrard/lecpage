@@ -3,11 +3,12 @@ import { Mascot } from '../components/Mascot.jsx';
 import { projects, storageKind, STORAGE_MSG } from '../lib/db.js';
 import { newProject, setPendingFiles, isSavedFile, stageOf } from '../lib/project.js';
 import { toast } from '../lib/util.js';
-import { HeroFold } from '../landing/HeroFold.jsx';
+import { HeroStage } from '../landing/Hero.jsx';
 import '../styles/landing.css';
 
-// 첫 화면: 교재를 넣으면 연수 사이트가 나와요 → 왜 lecpage(내용은 쓰던 AI, 나머지는 lecpage) → 교재 한 장이 사이트가 되고, 참가자 휴대폰에 닿고, 연수 후까지 이어지는 이야기.
-// 첫 화면은 엔진을 받지 않아요(숫자는 빌드 때 계산, 그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md
+// 첫 화면: 교재를 넣으면 연수 사이트가 나와요(AI가 교재로 만든 실제 사이트 셋을 노트북·휴대폰 틀에) → 아래 이야기(landing/More.jsx):
+// 노하우(요청 설계·디자인 라이브러리·강의 엔진) → 교재가 사이트가 되기까지 → 강의 당일 세 화면 → 구독 계정 연결 → 배포·QR → 참고 디자인 → 무료·오픈 소스.
+// 첫 화면은 엔진을 받지 않아요(그림은 미리 찍은 것). 구성과 근거: docs/research/landing-2026-11.md 10장
 // .lecpage(AI 에이전트 스킬·다른 컴퓨터에서 저장한 연수)도 같은 곳에 놓으면 열림
 const ACCEPT = '.pptx,.ppsx,.pdf,.hwpx,.docx,.txt,.md,.hwp,.ppt,.doc,.lecpage';
 const DAY = 864e5;
@@ -88,7 +89,7 @@ export function Home() {
     return () => { clearInterval(timer); removeEventListener('dragenter', enter); removeEventListener('dragleave', leave); removeEventListener('dragover', over); removeEventListener('drop', drop); removeEventListener('keydown', key); };
   }, []);
   const pick = () => pickRef.current?.click();
-  // 참고 디자인으로 시작: 새 연수의 '참고 디자인'에 적어 두고 교재 넣기로(AI에게는 분위기 설명만, 따를 필요는 없음). ref: { id, name, mood }
+  // 참고 디자인으로 시작: 새 연수의 '참고 디자인'에 적어 두고 교재 넣기로(AI가 그 분위기를 내 교재에 맞게 옮김). ref: { id, name, mood }
   const fromExample = (ref) => once(`ex-${ref.id}`, async () => { const p = await newProject({ reference: ref }); location.hash = `#/p/${p.id}/1`; });
   async function openSaved(f) {
     const m = await import('../lib/open-saved.js').catch(() => null); // 파일을 열 때만 받음(첫 화면 묶음을 가볍게)
@@ -106,10 +107,10 @@ export function Home() {
   return (
     <div class="ld">
       <section class="ld-hero" aria-labelledby="ld-h1">
+        <p class="ld-kicker">강의·연수용 · 무료 · 오픈소스 · 회원가입 없음</p>
+        <h1 id="ld-h1"><span>교재를 넣으면</span> <span><em>연수 사이트</em>가 나와요</span></h1>
         <div class="ld-hero-t">
-          <p class="ld-kicker">강의·연수용 · 무료 · 회원가입 없음</p>
-          <h1 id="ld-h1"><span>교재를 넣으면</span> <span><span class="ld-hl">연수 사이트</span>가 나와요</span></h1>
-          <p class="ld-lead">고른 AI가 교재를 직접 읽고 사이트를 만들어요. lecpage는 질문·투표·출석을 끼우고, 검수해 배포하고, QR까지 만들어요.</p>
+          <p class="ld-lead">AI가 교재 원본을 직접 읽고, 이 강의만의 디자인으로 사이트를 만들어요. 참가자는 휴대폰으로 교재를 따라 넘기며 출석·질문·투표·실습을 하고, 강사는 발표 화면과 강사 화면으로 진행해요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>
@@ -124,7 +125,7 @@ export function Home() {
           </div>
           <p class="ld-note">교재는 이 브라우저에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.</p>
         </div>
-        <HeroFold />
+        <HeroStage />
       </section>
 
       {/* '내 연수'와 아래 이야기는 함께 넣어 위쪽이 밀리지 않게(아래 이야기 코드를 받지 못해도 '내 연수'는 보임) */}
