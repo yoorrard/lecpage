@@ -116,7 +116,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     <div class={`preview${full ? ' full' : ''}`} role={full ? 'dialog' : undefined} aria-modal={full ? 'true' : undefined} aria-label={full ? '크게 보기' : undefined}>
       <div class="pv-bar">
         <div class="pv-actions">
-          {editable && <button type="button" class={`btn btn-sm${editing ? ' btn-ink' : ''}`} aria-pressed={String(!!editing)} onClick={() => { setEditing(!editing); if (!editing) setFocusable(true); }} title="미리보기의 글자를 눌러 바로 고쳐요. 그림을 누르면 바꿀 수 있어요."><Icon name="pen" size={16} /> {editing ? '글 고치는 중' : '글 고치기'}</button>}
+          {editable && <button type="button" class={`btn btn-sm${editing ? ' btn-ink' : ''}`} aria-pressed={String(!!editing)} onClick={() => { setEditing(!editing); if (!editing) setFocusable(true); }} title="미리보기의 글자를 눌러 바로 고쳐요. 그림을 누르면 바꿀 수 있어요."><Icon name="pen" size={16} /> {editing ? '글 수정 중' : '글 수정'}</button>}
         </div>
         <label class="pv-page"><span class="sr">미리볼 화면</span>
           <select value={page} onChange={(e) => { setPage(e.target.value); }}>{PAGES.map((x) => <option value={x.value}>{x.label}</option>)}</select>

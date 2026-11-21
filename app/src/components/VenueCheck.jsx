@@ -59,7 +59,7 @@ export function VenueBody({ p, url, instantOn }) {
             <p class="small mono venue-url">{check.replace(/^https:\/\//, '')}</p>
             <div class="btn-row">
               <a class="btn btn-sm" href={check} target="_blank" rel="noopener">접속 확인 열기</a>
-              <button type="button" class="btn btn-sm" disabled={!dayBefore(m.date) || past} onClick={ics}>전날 점검 달력에 넣기</button>
+              <button type="button" class="btn btn-sm" disabled={!dayBefore(m.date) || past} onClick={ics}>전날 점검 캘린더에 추가</button>
               <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(check, '접속 확인 주소를 복사했어요.')}>주소 복사</button>
             </div>
             {!dayBefore(m.date) && <p class="small muted">연수 날짜를 넣으면 전날 점검 일정을 만들 수 있어요.</p>}
@@ -91,9 +91,9 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
       <div class="stack rescue-b">
         {alt ? null
           : <div class="stack" style={{ gap: '6px' }}>
-            <p class="small">두 번째 주소를 만들어 두면 첫 주소가 막힌 곳에서도 열려요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 배포하고 주소를 적어 두세요.</p>
+            <p class="small">두 번째 주소를 만들어 두면 첫 주소가 막힌 곳에서도 열려요. 사이트 ZIP을 다른 곳(예: Cloudflare에 끌어 놓기)에 한 번 더 배포하고 주소를 저장해 두세요.</p>
             <div class="row token-row"><input class="input" value={second} onInput={(e) => setSecond(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} placeholder="https://" inputMode="url" autoComplete="off" spellcheck={false} aria-label="두 번째 주소" aria-invalid={okSecond ? undefined : 'true'} />
-              <button type="button" class="btn btn-sm" disabled={!okSecond} onClick={save}>적어 두기</button></div>
+              <button type="button" class="btn btn-sm" disabled={!okSecond} onClick={save}>저장</button></div>
             {!okSecond && <p class="small err">https://로 시작하는 주소를 넣어 주세요.</p>}
           </div>}
         <ul class="small rescue-list">
@@ -102,9 +102,9 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
           {live && <li>참여 기능만 안 되면 질문은 손을 들어 받아요. 참가자 화면에는 차분한 한 줄이 뜨고, 교재·실습은 그대로예요.</li>}
         </ul>
         <div class="btn-row">
-          <button type="button" class="btn btn-sm btn-primary" onClick={kit}>안내 한 장 받기</button>
-          <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onZip}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 받기'}</button>
-          <button type="button" class="btn btn-sm" onClick={print}>실습·프롬프트 인쇄본</button>
+          <button type="button" class="btn btn-sm btn-primary" onClick={kit}>대비 안내 다운로드</button>
+          <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onZip}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button>
+          <button type="button" class="btn btn-sm" onClick={print}>실습·프롬프트 인쇄</button>
           {!alt && <a class="btn btn-sm btn-quiet" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/create" target="_blank" rel="noopener">Cloudflare 열기</a>}
         </div>
       </div>

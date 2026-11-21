@@ -141,10 +141,10 @@ const SWAP = ['no-access', 'model', 'quota-day'];
 const ACCOUNT = ['billing', 'forbidden', 'region'];
 function errorView(e, provider) {
   const k = e?.kind;
-  if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [이어서 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
+  if (k === 'stall') return { kind: k, title: 'AI 답이 오래 멈췄어요.', body: '몇 번 다시 해 봤지만 이어지지 않았어요. 인터넷 연결을 확인하고 [계속 만들기]를 눌러 주세요.', actions: ['resume', 'paste'] };
   if (k === 'format') return { kind: k, title: 'AI 답에서 사이트를 꺼내지 못했어요.', body: '다시 해 보거나 다른 모델을 골라 주세요.', actions: ['resume', 'connect', 'paste'] };
   if (k === 'thinking') return { kind: k, title: 'AI가 생각하다가 답을 쓸 한도를 다 썼어요.', body: '같은 요청을 다시 보내면 비용만 들어서 멈췄어요. 다른 모델을 고르거나 쓰던 AI 창으로 만들어 주세요.', actions: ['connect', 'paste', 'resume'] };
-  if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: '키를 연결한 뒤 [이어서 만들기]를 눌러 주세요.', actions: ['connect', 'paste'] };
+  if (k === 'no-ai') return { kind: k, title: 'AI가 연결되어 있지 않아요.', body: '키를 연결한 뒤 [계속 만들기]를 눌러 주세요.', actions: ['connect', 'paste'] };
   if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
@@ -490,9 +490,9 @@ export function settle(cur, { site, meta }) {
 export function versionsAfter(cur, kind, next, chat = false) {
   if (kind === 'make') {
     const before = cur.site ? pushVersion(cur, '다시 만들기 전') : cur.versions || [];
-    return pushVersion({ site: next.site, meta: next.meta, versions: before }, chat ? '쓰던 AI가 만든 판' : 'AI가 만든 판');
+    return pushVersion({ site: next.site, meta: next.meta, versions: before }, chat ? '쓰던 AI가 만든 버전' : 'AI가 만든 버전');
   }
-  return pushVersion(cur, kind === 'fix' ? '검수 고치기 전' : chat ? '쓰던 AI로 고치기 전' : 'AI가 고치기 전');
+  return pushVersion(cur, kind === 'fix' ? '검수 수정 전' : chat ? '쓰던 AI로 수정 전' : 'AI 수정 전');
 }
 export function notifySaved(pid, at) {
   try { if (typeof dispatchEvent === 'function') dispatchEvent(new CustomEvent('lecpage:gen-saved', { detail: { pid, at } })); } catch { /* 알림만 못 함 */ }
@@ -543,7 +543,7 @@ async function drive(pid) {
     rec.status = 'done'; await save(rec);
   } catch (e) {
     if (e?.name === 'AbortError' || signal.aborted) {
-      rec.status = 'paused'; rec.error = L.stopReason === 'user' ? { kind: 'stopped', title: '멈췄어요.', body: '[이어서 만들기]를 누르면 멈춘 단계부터 이어서 만들어요.', actions: ['resume'] } : null;
+      rec.status = 'paused'; rec.error = L.stopReason === 'user' ? { kind: 'stopped', title: '멈췄어요.', body: '[계속 만들기]를 누르면 멈춘 단계부터 이어서 만들어요.', actions: ['resume'] } : null;
       const step = rec.steps.find((s) => s.status === 'running'); if (step) step.status = 'todo';
       // 멈추기: OpenAI는 서버에서 도는 답을 취소하고 지움(받은 글은 남겨 이어서 만들기에서 '이어서'로 씀)
       if (L.stopReason === 'user') oa.release(rec, ctx.key);

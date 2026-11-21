@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 문구 검사: 앱 화면 글(app/src)과 강의 페이지의 고정 문구(engine/runtime, engine/src/render)를 뽑아
 // 문구 규칙(skills/lecpage/engine/src/prompt/copy-rules.js)과 용어 통일 표(docs/writing.md 4절)로 점검합니다.
+// 앱 화면의 버튼·탭·제목 이름은 APP_TERMS(아래)로 큰 서비스가 쓰는 표준 이름인지도 봅니다(~달라기·지우기·이어서 하기 같은 말은 고침).
 //
 // 쓰는 법(저장소 어디서든):
 //   node app/scripts/copy-lint.mjs                 요약과 고칠 곳 목록
@@ -280,12 +281,55 @@ export function extract(source, file = 'x.jsx') {
 
 // ── 점검 ──
 const LINT_KIND = { button: 'button', title: 'title', label: 'label', toast: 'toast', error: 'error', confirm: 'text', status: 'text', aria: 'aria', placeholder: 'placeholder', text: 'text', doc: 'doc' };
+
+// ── 앱 화면 이름(버튼·탭·제목·이름표)의 표준 용어(docs/writing.md 4절 "버튼·탭·제목 이름: 큰 서비스가 쓰는 말") ──
+// 지어낸 말·풀어 쓴 말을 Google·Microsoft·Notion·Canva 같은 큰 서비스의 한국어 화면이 쓰는 말로. 앱(group 'app')에만, 고침(error).
+// at: 'name'이면 버튼·탭·제목·이름표·화면 읽기 이름에서만, 'all'이면 문장 속 [버튼 이름] 인용까지(대괄호 안만 봄), 'any'면 문장 어디서나(제품 용어)
+export const APP_TERMS = [
+  { re: /달라기/, to: 'AI로 수정·수정 요청 등 표준 이름', why: '지어낸 말(~달라기)', at: 'all' },
+  { re: /(?<=[가-힣])\s?주기$/, to: '동작 이름(예: 수정·만들기·복사)', why: '"~해 주기" 꼴 버튼', at: 'button' },
+  { re: /이어서\s?(?:하기|만들기)/, to: '계속 · 계속 만들기', why: '풀어 쓴 말(이어서 하기)', at: 'all' },
+  { re: /지우기/, to: '삭제', why: '풀어 쓴 말(지우기)', at: 'all' },
+  { re: /내려받기|(?:파일|ZIP)\s?받기|자료\s?받기/, to: '다운로드', why: '풀어 쓴 말(받기)', at: 'all' },
+  { re: /다시\s?해\s?보기/, to: '다시 시도', why: '풀어 쓴 말(다시 해 보기)', at: 'all' },
+  { re: /연결\s?끊기/, to: '연결 해제', why: '풀어 쓴 말(연결 끊기)', at: 'all' },
+  { re: /멈추기|그만두기|그만\s?만들기/, to: '중지 · 취소', why: '풀어 쓴 말(멈추기)', at: 'all' },
+  { re: /(?<![가-힣])판\s?기록|이\s?판으로|만든\s?판$/, to: '버전 기록 · 이 버전으로 복원', why: '지어낸 말(판)', at: 'all' },
+  { re: /되돌리기/, to: '실행 취소(직접 고친 것) · 복원(버전) · 취소(고른 것)', why: '풀어 쓴 말(되돌리기)', at: 'all' },
+  { re: /고르기/, to: '선택', why: '풀어 쓴 말(고르기)', at: 'name' },
+  { re: /고치기|고치러/, to: '수정', why: '풀어 쓴 말(고치기)', at: 'all' },
+  { re: /쓰던\s?앱/, to: '쓰던 AI', why: '용어(쓰던 AI)', at: 'any' },
+  { re: /다시\s?보이기/, to: '숨기기 취소', why: '풀어 쓴 말(다시 보이기)', at: 'all' },
+  { re: /가리기/, to: '숨기기', why: '풀어 쓴 말(가리기)', at: 'name' },
+  { re: /(?<![가-힣])빼기$/, to: '삭제', why: '풀어 쓴 말(빼기)', at: 'button' },
+  { re: /달력에\s?넣기/, to: '캘린더에 추가', why: '풀어 쓴 말(달력에 넣기)', at: 'all' },
+  { re: /시험하기/, to: '테스트', why: '풀어 쓴 말(시험하기)', at: 'all' },
+  { re: /요청\s?글/, to: '프롬프트', why: '풀어 쓴 말(요청 글)', at: 'all' },
+  { re: /사이트\s?내리기/, to: '사이트 삭제', why: '풀어 쓴 말(사이트 내리기)', at: 'all' },
+  { re: /(?<![가-힣])키로\s?연결/, to: 'API 키 연결', why: '용어(API 키)', at: 'all' },
+];
+const NAME_KINDS = new Set(['button', 'title', 'label', 'aria']);
+// 첫 화면(app/src/landing)은 담당이 따로 바꿈: 그때까지 살핌으로만 알림(바꾼 뒤 이 줄을 /^$/로)
+const APP_TERMS_SOFT = /^app\/src\/landing\//;
+// 앱에서는 표준 용어가 엔진 용어 표(지우기·내려받기·다시 하기)보다 앞섬: 그 살핌은 앱 글에서 빼고 위 표로 봄
+const APP_OVERRIDES = (f) => f.rule === 'term' && (/^용어: (지우기|내려받기)$/.test(f.why) || (/^용어: 오류 · 다시 하기$/.test(f.why) && /다시\s?시도/.test(f.hit)));
+/** 앱 화면 이름의 표준 용어 점검 → lintText와 같은 꼴 */
+export function appTermHits(text, kind) {
+  const out = []; const named = NAME_KINDS.has(kind);
+  const quoted = [...text.matchAll(/\[([^\]\n]{1,30})\]/g)].map((m) => m[1]); // 문장 속 [버튼 이름]
+  for (const t of APP_TERMS) {
+    const where = t.at === 'any' ? [text] : t.at === 'button' ? (kind === 'button' ? [text] : []) : t.at === 'name' ? (named ? [text] : quoted) : named ? [text] : quoted;
+    for (const w of where) { const m = t.re.exec(w); if (m) { out.push({ id: 'term', level: 'error', why: `앱 용어: ${t.why}`, fix: `"${t.to}"`, hit: m[0] }); break; } }
+  }
+  return out;
+}
 export function lintUnits(units) {
   const out = [];
   for (const u of units) {
     const text = u.text.replace(/\{…\}/g, '○');
     const kind = LINT_KIND[u.kind] || 'text'; const opts = { terms: 'all', group: u.group };
-    const found = lintText(text, kind, opts);
+    let found = lintText(text, kind, opts);
+    if (u.group === 'app' && kind !== 'doc') found = [...found.filter((f) => !APP_OVERRIDES({ rule: f.id, why: f.why, hit: f.hit })), ...appTermHits(text, kind).map((f) => (APP_TERMS_SOFT.test(u.file) ? { ...f, level: 'warn' } : f))];
     const fixed = found.length ? suggestFix(text, kind, opts).replace(/○/g, '{…}') : '';
     for (const f of found) out.push({ file: u.file, line: u.line, kind: u.kind, text: u.text, rule: f.id, why: f.why, level: f.level, hit: f.hit, fix: f.fix, fixed, group: u.group });
   }

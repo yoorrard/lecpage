@@ -142,8 +142,8 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
       </details>
       <p class="ai-trust small muted">키는 이 브라우저에서 AI 회사로만 가요. lecpage 운영자는 볼 수 없어요. <a href="#/help/ai" target="_blank" rel="noopener">자세히</a></p>
       {<div class="btn-row">
-        {!only && GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].tag}로 하기({KEY_GUIDES[id].label})</button>)}
-        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(tab); }}>쓰던 앱으로(키 없이)</button>}
+        {!only && GUIDE_MORE.filter((id) => id !== tab).map((id) => <button type="button" class="btn btn-sm btn-quiet" onClick={() => pick(id)}>{KEY_GUIDES[id].label} 키 연결({KEY_GUIDES[id].tag})</button>)}
+        {onChat && <button type="button" class="btn btn-sm btn-quiet" onClick={() => { setWay('chat'); onChat(tab); }}>쓰던 AI로(키 없이)</button>}
         {onCancel && <button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>닫기</button>}
       </div>}
     </div>
@@ -206,7 +206,7 @@ export function AiStatus({ ai, onChange, onSwap, onDisconnect, swapLabel = '다�
         {children}
         <div class="btn-row">
           {onSwap && <button type="button" class="btn btn-sm" onClick={onSwap}>{swapLabel}</button>}
-          {onDisconnect && <button type="button" class="btn btn-sm btn-quiet" onClick={onDisconnect}>연결 끊기</button>}
+          {onDisconnect && <button type="button" class="btn btn-sm btn-quiet" onClick={onDisconnect}>연결 해제</button>}
         </div>
       </div>
     </details>

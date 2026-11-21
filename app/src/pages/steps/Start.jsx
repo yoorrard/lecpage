@@ -9,6 +9,7 @@ import { loadChunk } from '../../lib/fresh.jsx';
 import { takePendingFiles, deleteProject, isSavedFile } from '../../lib/project.js';
 import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { isV2 } from '../../lib/site-meta.js';
+import { startDemo } from '../../lib/demo.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
 // (연수 정보는 AI가 교재에서 찾아 사이트와 함께 돌려주고, 완성 뒤 한 번 확인받음). 요청 한 줄은 선택.
@@ -131,41 +132,43 @@ export function StepStart({ p, update, go, job, idle, reload }) {
   const running = job.status === 'running' || job.status === 'paused';
   return (
     <>
-      <StepHead title={has ? '교재와 AI' : '교재를 넣고 AI를 골라요'} desc="PPT·PDF·한글(HWP·HWPX)·워드 파일을 이 브라우저 안에서 읽고, 고른 AI가 교재를 직접 읽어 사이트를 만들어요.">
+      <StepHead title={has ? '교재와 AI' : '교재를 넣고 AI를 선택해요'} desc="PPT·PDF·한글(HWP·HWPX)·워드 파일을 이 브라우저 안에서 읽고, 고른 AI가 교재를 직접 읽어 사이트를 만들어요.">
         {!has && !p.files?.length && !p.demo && <a class="btn btn-sm" href="#/demo">먼저 해보기</a>}
-        {has && <button type="button" class="btn btn-primary" onClick={() => go(2)}>만들고 고치기 →</button>}
+        {has && <button type="button" class="btn btn-primary" onClick={() => go(2)}>미리보기·수정 →</button>}
       </StepHead>
       {running && <div class="ai-job" role="status"><span class="ai-job-dot" aria-hidden="true" /><span class="ai-job-t"><b>AI가 사이트를 만들고 있어요.</b><small>{job.step?.label_ko || ''}</small></span><button type="button" class="btn btn-sm" onClick={() => go(2)}>진행 보기</button></div>}
-      {has && !running && <Notice>사이트가 있어요. 여기서 AI를 다시 고르면 처음부터 새로 만들어요. 지금 사이트는 판 기록에 남아요.</Notice>}
+      {has && !running && <Notice>사이트가 있어요. 여기서 AI를 다시 선택하면 처음부터 새로 만들어요. 지금 사이트는 버전 기록에 남아요.</Notice>}
+      {p.demo && ready && !has && !running && <div class="coach"><p class="small"><b>체험은 키가 필요 없어요.</b> 예시 교재로 미리 만든 AI 답을 써서, 실제와 같은 과정으로 만들어요. 아래 AI 선택의 어느 버튼을 눌러도 같아요.</p>
+        <button type="button" class="btn btn-primary" data-coach data-coach-room onClick={async () => { await idle(); startDemo(p.id, { request: p.request || '' }); go(2); }}>체험 시작</button></div>}
       <div class="start-flow">
         <section class="stack start-files" aria-labelledby="files-h">
           <h2 class="h-sub" id="files-h">교재</h2>
-          <div ref={dropRef} class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 고르기"
+          <div ref={dropRef} class={`drop${over ? ' over' : ''}${p.files?.length && !busy ? ' drop-more' : ''}`} role="button" tabIndex={0} aria-label="교재 파일 선택"
             onClick={() => !busy && inp.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !busy && inp.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) take(e.dataTransfer.files); }}>
-            {p.files?.length && !busy ? <b aria-live="polite">＋ 교재 더 넣기</b> : <>
+            {p.files?.length && !busy ? <b aria-live="polite">＋ 교재 추가</b> : <>
               <Mascot size={72} mood={busy ? 'think' : over ? 'wow' : 'idle'} look={!!busy} />
-              <b aria-live="polite">{busy || '여기에 교재 파일을 놓거나 눌러서 고르세요'}</b>
+              <b aria-live="polite">{busy || '여기에 교재 파일을 놓거나 눌러서 선택하세요'}</b>
               <span class="small muted">여러 개도 돼요. 저장한 연수(.lecpage)를 놓으면 그 연수를 열어요.</span>
               {busy && pct > 0 && <div style={{ width: 'min(320px,80%)' }}><Progress pct={pct} /></div>}
             </>}
           </div>
-          {stop && <div><button type="button" class="btn btn-sm" onClick={() => stop.abort()}>쪽 그림 그만 만들기</button> <span class="small muted">그때까지 만든 그림은 써요.</span></div>}
+          {stop && <div><button type="button" class="btn btn-sm" onClick={() => stop.abort()}>쪽 그림 만들기 중지</button> <span class="small muted">그때까지 만든 그림은 써요.</span></div>}
           <input ref={inp} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
           {p.files?.length > 0 && (
             <ul class="files" ref={listRef} aria-label="읽은 교재">
               {p.files.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
                   <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
-                  <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 빼기`} title="빼기">✕</button></li>
+                  <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 삭제`} title="삭제">✕</button></li>
               ))}
             </ul>
           )}
           <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·대상을 한 줄로 적으면 AI가 반영해요.">
             <input class="input" value={p.request || ''} onInput={(e) => update({ request: e.target.value })} maxLength={300} placeholder="예: 실습 위주로, 차분한 남색, 처음 배우는 신입 직원 대상" />
           </Field>
-          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(따를 필요는 없어요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>빼기</button></p>}
+          {p.reference && <p class="small ref-line">참고 디자인: <b>{p.reference.name || p.reference}</b> <span class="muted">(따를 필요는 없어요)</span> <button type="button" class="btn btn-sm btn-quiet" onClick={() => update({ reference: '' })}>삭제</button></p>}
         </section>
         <AiPick p={p} go={go} idle={idle} reload={reload} ready={ready} />
       </div>

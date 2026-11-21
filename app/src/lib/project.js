@@ -178,7 +178,7 @@ async function importSiteFile(files, text) {
   const html = site['index.html'] || '';
   const meta = (await siteMeta()).keepTeacher(u.meta, { access: 'link' });
   const p = { id, v: 2, title: u.title || meta.title || '', createdAt: Date.now(), stage: 2, step: 2, imported: true, origin: 'skill', fileHash, files: srcFiles, info: { ...DEFAULT_INFO }, deploy: {},
-    site: { ...site, 'index.html': html }, meta, material: u.material?.pages?.length ? { pages: u.material.pages, files: [] } : null, versions: [{ id: uid(8), at: Date.now(), label: 'AI 에이전트가 만든 판', site, meta }], ...(u.note ? { notes: [u.note] } : {}) };
+    site: { ...site, 'index.html': html }, meta, material: u.material?.pages?.length ? { pages: u.material.pages, files: [] } : null, versions: [{ id: uid(8), at: Date.now(), label: 'AI 에이전트가 만든 버전', site, meta }], ...(u.note ? { notes: [u.note] } : {}) };
   await projects.put(p);
   for (const [k, v] of Object.entries(bins)) await blobs.put(id, k, v);
   return p;

@@ -99,7 +99,7 @@ try {
     if (want('start')) await shot('start');
 
     // 2. 키 연결 창: Claude 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
-    await page.click('.ai-card:has(h3:text-is("Claude")) button:has-text("키로 연결")');
+    await page.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');
     await page.click('dialog[open] .key-dots li:last-child button');

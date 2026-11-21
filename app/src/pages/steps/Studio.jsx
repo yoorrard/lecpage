@@ -18,13 +18,21 @@ const undos = new Map(); // 연수마다 직접 고친 것 되돌리기(이 탭 
 const stackOf = (pid) => { if (!undos.has(pid)) undos.set(pid, []); return undos.get(pid); };
 
 export function Studio({ p, update, go, job, idle, reload }) {
-  // 배포 화면의 [검수에서 고치기]로 오면 검수 탭부터(바로 배포가 받지 않는 내용)
+  // 배포 화면의 [검수에서 수정]로 오면 검수 탭부터(바로 배포가 받지 않는 내용)
   const [tab, setTab] = useState(() => { let want = ''; try { want = sessionStorage.getItem('lecpage:studio-tab') || ''; sessionStorage.removeItem('lecpage:studio-tab'); } catch { } return want === 'check' ? 'check' : p.metaChecked ? 'list' : 'info'; });
   const [editing, setEditing] = useState(false);
   const [img, setImg] = useState(null); // 바꿀 그림 번호
   const [ver, setVer] = useState(0); // 그림 파일이 바뀌면 미리보기를 다시 읽음
   const [goto, setGoto] = useState(null);
   const [vers, setVers] = useState(false);
+  const [nudge, setNudge] = useState(false); // 연수 정보를 확인한 뒤 [배포하기]를 잠깐 강조
+  const [guideOff, setGuideOff] = useState(guideClosed);
+  // 휴대폰: 미리보기에서 고치다 보면 맨 위 [배포하기]가 화면 밖 → 그때만 아래에 같은 버튼을 띄움(눌러야 할 곳이 늘 보이게)
+  const headRef = useRef(null); const [headOff, setHeadOff] = useState(false);
+  useEffect(() => {
+    const el = headRef.current; if (!el || typeof IntersectionObserver !== 'function') return undefined;
+    const io = new IntersectionObserver(([e]) => setHeadOff(!e.isIntersecting)); io.observe(el); return () => io.disconnect();
+  }, []);
   const [issues, setIssues] = useState(() => p.inspect?.issues || null); // AI가 저장할 때의 검수 결과로 먼저 보여 주고 다시 검수
   const [ask, setAsk] = useState({ target: 'all', request: '' });
   const [, force] = useState(0);
@@ -49,7 +57,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
   }, []);
   const html = p.site?.['index.html'] || '';
   const sections = useMemo(() => listSections(html), [html]);
-  const onText = useCallback((n, raw) => change('글 고치기', (cur) => { const h = setText(cur.site['index.html'], n, raw); if (h === cur.site['index.html']) return null; quiet.current = h; return { site: { ...cur.site, 'index.html': h } }; }), [change]);
+  const onText = useCallback((n, raw) => change('글 수정', (cur) => { const h = setText(cur.site['index.html'], n, raw); if (h === cur.site['index.html']) return null; quiet.current = h; return { site: { ...cur.site, 'index.html': h } }; }), [change]);
   const onImage = useCallback((n) => setImg(n), []);
   const setHtml = (label, fn) => change(label, (cur) => { const h = fn(cur.site['index.html']); return h === cur.site['index.html'] ? null : { site: { ...cur.site, 'index.html': h } }; });
   // 검수: 고친 뒤 잠깐 멈추면 다시(조립 + 정적 검사). 생성 쪽이 저장소의 연수를 읽으므로 먼저 다 씀
@@ -71,7 +79,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
     const list = (issues || []).filter((x) => !keys || keys.includes(x.key));
     if (!list.length) return;
     const ai = p.demo ? null : await getActiveAI();
-    if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), { way: 'key', provider: ai.provider, model: ai.model })) { toast('AI에게 고쳐 달라고 보냈어요. 끝나면 미리보기가 바뀌어요.'); return; } }
+    if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), { way: 'key', provider: ai.provider, model: ai.model })) { toast('AI에게 수정을 맡겼어요. 끝나면 미리보기가 바뀌어요.'); return; } }
     const secs = [...new Set(list.map((x) => x.where?.section).filter(Boolean))];
     setAsk({ target: secs.length === 1 ? secs[0] : 'all', request: `검수에서 찾은 문제를 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}` });
     setTab('ask');
@@ -79,18 +87,19 @@ export function Studio({ p, update, go, job, idle, reload }) {
   };
   return (
     <>
-      <StepHead title="살펴보고 고치기" desc="미리보기에서 글자를 눌러 바로 고치고, 목록에서 섹션을 정리해요. 고친 내용은 자동으로 저장돼요.">
-        <div class="btn-row head-tools">
-          <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `되돌리기: ${stack[stack.length - 1].label} (${UNDO_KEY})` : '되돌릴 것이 없어요'}>되돌리기</button>
-          <button class="btn btn-sm btn-quiet" onClick={() => setVers(true)} aria-haspopup="dialog">판 기록</button>
-          {!published ? <button class="btn btn-primary" onClick={() => go(3)}>배포하기 →</button>
+      <StepHead title="미리보기·수정" desc="미리보기에서 글자를 눌러 바로 고치고, 목록에서 섹션을 정리해요. 고친 내용은 자동으로 저장돼요.">
+        <div class="btn-row head-tools" ref={headRef}>
+          <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `실행 취소: ${stack[stack.length - 1].label} (${UNDO_KEY})` : '실행 취소할 것이 없어요'}>실행 취소</button>
+          <button class="btn btn-sm btn-quiet" onClick={() => setVers(true)} aria-haspopup="dialog">버전 기록</button>
+          {!published ? <button class={`btn${p.metaChecked ? ' btn-primary' : ''}${nudge ? ' nudge' : ''}`} data-coach={p.demo && p.metaChecked ? '' : undefined} data-coach-room={p.demo && p.metaChecked ? '' : undefined} onClick={() => go(3)}>배포하기 →</button>
             : changed ? <button class="btn btn-primary" onClick={() => { try { sessionStorage.setItem('lecpage:republish', p.id); } catch { } go(3); }}>다시 배포하기</button>
               : <button class="btn" onClick={() => go(3)}>주소·QR 보기 →</button>}
         </div>
       </StepHead>
+      {!published && !guideOff && <FirstGuide p={p} onInfo={() => { setTab('info'); setTimeout(() => document.querySelector('.ws-panel [role=tablist]')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50); }} onClose={() => setGuideOff(true)} />}
       {working && <JobBand job={job} onStop={() => stopGeneration(p.id)} />}
       {(job.status === 'error' || job.status === 'paused') && job.kind && <JobError p={p} job={job} go={go} />}
-      {!p.metaChecked && tab !== 'info' && <div class="ai-job" role="status"><span class="ai-job-t"><b>AI가 교재에서 찾은 연수 정보를 한 번 확인해 주세요.</b><small>QR 안내문·강사 화면·일정 파일에 쓰여요.</small></span><button type="button" class="btn btn-sm btn-primary" onClick={() => setTab('info')}>확인하기</button></div>}
+      {!p.metaChecked && tab !== 'info' && (guideOff || published) && <div class="ai-job" role="status"><span class="ai-job-t"><b>AI가 교재에서 찾은 연수 정보를 한 번 확인해 주세요.</b><small>QR 안내문·강사 화면·일정 파일에 쓰여요.</small></span><button type="button" class="btn btn-sm btn-primary" onClick={() => setTab('info')}>확인하기</button></div>}
       {p.notes?.length > 0 && <div class="ai-job" role="status"><span class="ai-job-t"><b>답을 받으며 알게 된 것</b><small>{p.notes.join(' ')}</small></span><button class="icon-btn" onClick={() => update({ notes: undefined })} aria-label="안내 닫기">✕</button></div>}
       <div class="workspace">
         <div class="ws-panel">
@@ -98,22 +107,25 @@ export function Studio({ p, update, go, job, idle, reload }) {
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} class="ws-body">
             {tab === 'list' && <SectionsPanel sections={sections} locked={working} onShow={show}
               onMove={(id, to) => setHtml('순서 바꾸기', (h) => moveSection(h, id, to))}
-              onHide={(id, v) => setHtml(v ? '섹션 숨기기' : '섹션 보이기', (h) => setHidden(h, id, v))}
-              onRemove={(id) => setHtml('섹션 지우기', (h) => removeSection(h, id))}
+              onHide={(id, v) => setHtml(v ? '섹션 숨기기' : '섹션 숨기기 취소', (h) => setHidden(h, id, v))}
+              onRemove={(id) => setHtml('섹션 삭제', (h) => removeSection(h, id))}
               onRename={(id, name) => setHtml('이름 바꾸기', (h) => renameSection(h, id, name))}
               onAsk={(id) => { setAsk({ target: id, request: '' }); setTab('ask'); }} editing={editing} setEditing={setEditing} />}
-            {tab === 'info' && <InfoPanel p={p} change={change} update={update} />}
+            {tab === 'info' && <InfoPanel p={p} change={change} update={update} onDone={() => { scrollTo({ top: 0, behavior: 'smooth' }); setNudge(true); setTimeout(() => setNudge(false), 2600); }} />}
             {tab === 'check' && <CheckPanel issues={issues} onShow={show} onFix={fixAll} locked={working} onRecheck={recheck} />}
             {tab === 'ask' && <AskPanel p={p} sections={sections} ask={ask} setAsk={setAsk} idle={idle} reload={reload} locked={working} go={go} />}
             {tab === 'look' && <LookPanel p={p} change={change} />}
           </div>
-          {!!stack.length && <button type="button" class="btn btn-sm undo-float" onClick={undo}><span aria-hidden="true">↶ </span>되돌리기</button>}
+          {!!stack.length && <button type="button" class="btn btn-sm undo-float" onClick={undo}><span aria-hidden="true">↶ </span>실행 취소</button>}
         </div>
         <SitePreview p={p} ver={ver} editing={editing && !working} setEditing={working ? null : setEditing} onText={onText} onImage={onImage} quiet={quiet} goto={goto} />
       </div>
+      {!published && p.metaChecked && headOff && <div class="ws-next">
+        {!!stack.length && <button type="button" class="btn btn-sm" onClick={undo}><span aria-hidden="true">↶ </span>실행 취소</button>}
+        <button type="button" class="btn btn-primary" onClick={() => go(3)}>배포하기 →</button></div>}
       <ImageDialog n={img} p={p} onClose={() => setImg(null)} onPick={(src, alt) => { setHtml('그림 바꾸기', (h) => setImage(h, img, src, alt)); setImg(null); setVer((v) => v + 1); toast('그림을 바꿨어요.'); }} />
-      <Dialog open={vers} onClose={() => setVers(false)} label="판 기록">
-        {vers && <Versions p={p} onPick={(v) => { quiet.current = ''; update((cur) => ({ site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta), versions: pushVersion(cur, '되돌리기 전') })); setVers(false); toast(`되돌렸어요: ${v.label}`); }} onRemake={() => { setVers(false); go(1); }} />}
+      <Dialog open={vers} onClose={() => setVers(false)} label="버전 기록">
+        {vers && <Versions p={p} onPick={(v) => { quiet.current = ''; update((cur) => ({ site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta), versions: pushVersion(cur, '복원 전') })); setVers(false); toast(`복원했어요: ${v.label}`); }} onRemake={() => { setVers(false); go(1); }} />}
       </Dialog>
     </>
   );
@@ -127,7 +139,7 @@ function JobBand({ job, onStop }) {
     <div class="ai-job" role="status" aria-live="polite">
       <span class="ai-job-dot" aria-hidden="true" />
       <span class="ai-job-t"><b>{job.kind === 'fix' ? 'AI가 검수 결과를 고치고 있어요' : 'AI가 요청대로 고치고 있어요'}</b><small>{job.step ? `${job.step.label_ko} (${job.step.index}/${job.step.total}) · ` : ''}{fmtSec((Date.now() - job.startedAt) / 1000)} · 끝나면 미리보기가 바뀌어요.</small></span>
-      <button class="btn btn-sm btn-quiet" onClick={onStop}>멈추기</button>
+      <button class="btn btn-sm btn-quiet" onClick={onStop}>중지</button>
     </div>
   );
 }
@@ -136,14 +148,33 @@ function JobBand({ job, onStop }) {
 function JobError({ p, job, go }) {
   // 고치기: 다른 AI·쓰던 AI 창으로는 [수정 요청]에서 보낼 곳을 바꿔 다시 보냄. 다시 만들기: 다른 AI 고르기·쓰던 AI 창은 교재 넣기에서
   const make = job.kind === 'make';
-  const acts = [...(job.status === 'paused' ? [{ id: 'resume', label: '이어서 하기', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => make || (a.id !== 'connect' && a.id !== 'paste'))),
-    { id: 'forget', label: '그만두기', run: () => forgetGeneration(p.id) }];
+  const acts = [...(job.status === 'paused' ? [{ id: 'resume', label: '계속', run: () => resumeGeneration(p.id) }] : errorActions(p, job, go).filter((a) => make || (a.id !== 'connect' && a.id !== 'paste'))),
+    { id: 'forget', label: '취소', run: () => forgetGeneration(p.id) }];
   const e = job.error || {};
-  const what = make ? '다시 만들기' : '고치기';
+  const what = make ? '다시 만들기를' : '수정을';
   return (
-    <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.status === 'paused' ? `AI가 ${what}를 멈췄어요.` : e.title || `AI가 ${make ? '다시 만들지' : '고치지'} 못했어요.`}</b><small>{job.status === 'paused' ? '지금 사이트는 그대로예요. [이어서 하기]를 누르면 멈춘 단계부터 해요.' : `${e.body || ''} 지금 사이트는 그대로예요.`.trim()}</small></span>
+    <div class="ai-job bad" role="alert"><span class="ai-job-t"><b>{job.status === 'paused' ? `AI가 ${what} 멈췄어요.` : e.title || `AI가 ${make ? '다시 만들지' : '고치지'} 못했어요.`}</b><small>{job.status === 'paused' ? '지금 사이트는 그대로예요. [계속]을 누르면 멈춘 단계부터 해요.' : `${e.body || ''} 지금 사이트는 그대로예요.`.trim()}</small></span>
       {acts.map((a, i) => (a.href ? <a class={`btn btn-sm${i ? '' : ' btn-primary'}`} href={a.href} target="_blank" rel="noopener">{a.label}<span class="ext" aria-hidden="true">↗</span></a>
         : <button type="button" class={`btn btn-sm${i ? '' : ' btn-primary'}`} onClick={a.run}>{a.label}</button>))}
+    </div>
+  );
+}
+
+/** 처음 안내: 이 화면에서 누를 차례(연수 정보 확인 → 미리보기 살펴보기 → 배포하기). ✕로 닫으면 이 기기에서 다시 보이지 않음 */
+const GUIDE_KEY = 'lecpage:guide-studio';
+const guideClosed = () => { try { return localStorage.getItem(GUIDE_KEY) === '1'; } catch { return false; } };
+function FirstGuide({ p, onInfo, onClose }) {
+  const at = p.metaChecked ? 2 : 0;
+  const items = [
+    <><button type="button" class="btn-link" onClick={onInfo}>연수 정보</button> 확인</>,
+    <>미리보기에서 글자를 눌러 수정 <span class="muted">(필요하면)</span></>,
+    <>[배포하기] 누르기</>,
+  ];
+  return (
+    <div class="first-guide" role="note" aria-label="처음 안내">
+      <b class="small">이 순서로 해요</b>
+      <ol class="small">{items.map((x, i) => { const done = i === 0 && p.metaChecked; return <li class={done ? 'is-done' : i === at ? 'is-now' : ''} aria-current={i === at ? 'step' : undefined}><span class="n" aria-hidden="true">{done ? '✓' : i + 1}</span>{x}</li>; })}</ol>
+      <button type="button" class="icon-btn" aria-label="처음 안내 닫기" title="닫기" onClick={() => { try { localStorage.setItem(GUIDE_KEY, '1'); } catch { } onClose(); }}>✕</button>
     </div>
   );
 }
@@ -159,7 +190,7 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
   return (
     <div class="stack">
       <div class="sec-tools"><p class="small muted">섹션 {sections.length}개 · 끌어서 순서를 바꿔요.</p>
-        <button type="button" class={`btn btn-sm${editing ? ' btn-ink' : ''}`} aria-pressed={String(!!editing)} disabled={locked} onClick={() => setEditing(!editing)}>{editing ? '글 고치는 중' : '미리보기에서 글 고치기'}</button></div>
+        <button type="button" class={`btn btn-sm${editing ? ' btn-ink' : ''}`} aria-pressed={String(!!editing)} disabled={locked} onClick={() => setEditing(!editing)}>{editing ? '글 수정 중' : '미리보기에서 글 수정'}</button></div>
       {locked && <p class="lock-note small">AI가 고치는 동안에는 바꿀 수 없어요.</p>}
       <ol class="sec2-list" ref={listRef} aria-label="섹션 목록">
         {sections.map((s, i) => (
@@ -179,18 +210,18 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
               <details class="sec2-more"><summary class="icon-btn" aria-label={`${s.name} 더 보기`} title="더 보기">…</summary>
                 <div class="sec2-menu">
                   <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setRename(s.id); }}>이름 바꾸기</button>
-                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onHide(s.id, !s.hidden); }}>{s.hidden ? '다시 보이기' : '숨기기'}</button>
-                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onAsk(s.id); }}>AI에게 고쳐 달라기</button>
-                  <button type="button" class="btn btn-sm btn-quiet sec2-del" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setDel(s); }}>지우기</button>
+                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onHide(s.id, !s.hidden); }}>{s.hidden ? '숨기기 취소' : '숨기기'}</button>
+                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onAsk(s.id); }}>AI로 수정</button>
+                  <button type="button" class="btn btn-sm btn-quiet sec2-del" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setDel(s); }}>삭제</button>
                 </div></details>
             </span>
           </li>
         ))}
       </ol>
       {!sections.length && <p class="muted small">섹션(&lt;section&gt;)이 없는 사이트예요. 수정 요청으로 AI에게 섹션을 나눠 달라고 할 수 있어요.</p>}
-      <Dialog open={!!del} onClose={() => setDel(null)} label="섹션 지우기 확인">
-        {del && <><h2 class="h-sub">'{del.name}' 섹션을 지울까요?</h2><p>숨기기는 사이트에서 감추기만 해요. 지운 것은 [되돌리기]나 [판 기록]으로 되살릴 수 있어요.</p>
-          <div class="btn-row"><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button><button class="btn" onClick={() => { onHide(del.id, true); setDel(null); }}>숨기기</button><button class="btn btn-danger" onClick={() => { onRemove(del.id); setDel(null); toast(`지웠어요: ${del.name}`); }}>지우기</button></div></>}
+      <Dialog open={!!del} onClose={() => setDel(null)} label="섹션 삭제 확인">
+        {del && <><h2 class="h-sub">'{del.name}' 섹션을 삭제할까요?</h2><p>숨기기는 사이트에서 감추기만 해요. 삭제한 것은 [실행 취소]나 [버전 기록]으로 되살릴 수 있어요.</p>
+          <div class="btn-row"><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button><button class="btn" onClick={() => { onHide(del.id, true); setDel(null); }}>숨기기</button><button class="btn btn-danger" onClick={() => { onRemove(del.id); setDel(null); toast(`삭제했어요: ${del.name}`); }}>삭제</button></div></>}
       </Dialog>
     </div>
   );
@@ -198,7 +229,7 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
 
 const FACT_OF = { title: ['연수명', '제목', '연수 제목'], date: ['날짜', '일시', '연수 날짜'], time: ['시간', '시각', '일시'], venue: ['장소'], instructor: ['강사', '강사명'] };
 /** 연수 정보(meta): 제목·날짜·시간·장소·강사. AI가 찾은 쪽 번호를 보여 주고, 고치면 사이트 글(같은 글자)과 QR 안내문 등에 반영 */
-function InfoPanel({ p, change, update }) {
+function InfoPanel({ p, change, update, onDone }) {
   const m = p.meta || {}; const s0 = firstSession(m); const inst = (m.instructors || [])[0] || {};
   const facts = m.facts || [];
   const page = (k) => { const f = facts.find((x) => FACT_OF[k].includes(String(x.label || '').trim())); return f?.page ? `교재 ${f.page}쪽에서 찾았어요` : f ? 'AI가 교재에서 찾았어요' : ''; };
@@ -207,15 +238,16 @@ function InfoPanel({ p, change, update }) {
     if (fromTo) html = replaceText(html, fromTo[0], fromTo[1]);
     return { meta, ...(html !== cur.site['index.html'] ? { site: { ...cur.site, 'index.html': html } } : {}) };
   });
-  const setSession = (k, v) => setMeta('연수 정보 고치기', (mm) => { const ses = [...(mm.sessions || [])]; ses[0] = { ...(ses[0] || { date: '', start: '', end: '' }), [k]: v }; return { ...mm, sessions: ses }; });
+  const setSession = (k, v) => setMeta('연수 정보 수정', (mm) => { const ses = [...(mm.sessions || [])]; ses[0] = { ...(ses[0] || { date: '', start: '', end: '' }), [k]: v }; return { ...mm, sessions: ses }; });
   // 글자 칸은 칸을 떠날 때 한 번(사이트 글 바꾸기는 다 쓴 값으로)
   const textField = (k, label, val, max, set, hint) => <Field label={label} hint={hint}><input class="input" defaultValue={val} key={val} maxLength={max} onChange={(e) => set(e.target.value.trim())} /></Field>;
   const others = facts.filter((f) => !Object.values(FACT_OF).flat().includes(String(f.label || '').trim()));
   return (
     <div class="stack">
+      {!p.metaChecked && <div class="btn-row confirm-bar"><button type="button" class="btn btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onDone?.(); }}>이 정보가 맞아요</button><span class="small muted">틀린 곳은 아래 칸에서 고쳐요.</span></div>}
       <p class="small muted">AI가 교재에서 찾은 값이에요. 고치면 사이트에 같은 글자로 적힌 곳과 QR 안내문·강사 화면·일정 파일이 함께 바뀌어요.</p>
       <div class="form-grid">
-        {textField('title', '연수명', m.title || '', 160, (v) => v && v !== m.title && setMeta('연수명 고치기', (mm) => ({ ...mm, title: v }), [m.title, v]), page('title'))}
+        {textField('title', '연수명', m.title || '', 160, (v) => v && v !== m.title && setMeta('연수명 수정', (mm) => ({ ...mm, title: v }), [m.title, v]), page('title'))}
         <Field label="날짜" hint={isPastDate(s0.date) ? <span class="warn-line" role="status">{monthDay(s0.date)}은 지난 날짜예요. 이번 연수 날짜로 고쳐 주세요.</span> : page('date') || (!s0.date ? <span class="warn-line">날짜를 넣어 주세요.</span> : '')}><input type="date" class="input" value={s0.date || ''} onChange={(e) => setSession('date', e.target.value)} /></Field>
         <div class="stack" style={{ gap: '4px' }}>
           <div class="pair">
@@ -224,13 +256,12 @@ function InfoPanel({ p, change, update }) {
           </div>
           {page('time') && <small class="field-hint">{page('time')}</small>}
         </div>
-        {textField('venue', '장소', m.venue || '', 120, (v) => v !== (m.venue || '') && setMeta('장소 고치기', (mm) => ({ ...mm, venue: v }), [m.venue, v]), page('venue'))}
-        {textField('inst', '강사', inst.name || '', 40, (v) => v !== (inst.name || '') && setMeta('강사 고치기', (mm) => ({ ...mm, instructors: [{ ...inst, name: v }, ...(mm.instructors || []).slice(1)].filter((x) => x.name) }), [inst.name, v]), page('instructor'))}
-        {textField('org', '강사 소속', inst.org || '', 80, (v) => v !== (inst.org || '') && setMeta('강사 소속 고치기', (mm) => ({ ...mm, instructors: [{ ...inst, org: v }, ...(mm.instructors || []).slice(1)] }), [inst.org, v]))}
+        {textField('venue', '장소', m.venue || '', 120, (v) => v !== (m.venue || '') && setMeta('장소 수정', (mm) => ({ ...mm, venue: v }), [m.venue, v]), page('venue'))}
+        {textField('inst', '강사', inst.name || '', 40, (v) => v !== (inst.name || '') && setMeta('강사 수정', (mm) => ({ ...mm, instructors: [{ ...inst, name: v }, ...(mm.instructors || []).slice(1)].filter((x) => x.name) }), [inst.name, v]), page('instructor'))}
+        {textField('org', '강사 소속', inst.org || '', 80, (v) => v !== (inst.org || '') && setMeta('강사 소속 수정', (mm) => ({ ...mm, instructors: [{ ...inst, org: v }, ...(mm.instructors || []).slice(1)] }), [inst.org, v]))}
       </div>
       {others.length > 0 && <div class="facts"><b class="small">AI가 교재에서 찾은 다른 사실</b><ul class="small">{others.map((f) => <li>{f.label}: {f.value}{f.page ? <span class="muted"> · {f.page}쪽</span> : ''}</li>)}</ul></div>}
-      {!p.metaChecked ? <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => { update({ metaChecked: true }); toast('확인했어요.'); }}>이 정보가 맞아요</button></div>
-        : <p class="small muted">확인했어요. 고쳐도 다시 확인할 필요는 없어요.</p>}
+      {p.metaChecked && <p class="small muted">확인했어요. 고쳐도 다시 확인할 필요는 없어요.</p>}
     </div>
   );
 }
@@ -255,7 +286,7 @@ function CheckPanel({ issues, onShow, onFix, locked, onRecheck }) {
         ))}
       </ul>
       <div class="btn-row">
-        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(picked.length ? picked : null)}>{picked.length ? `고른 ${picked.length}곳 고쳐 달라기` : 'AI에게 고쳐 달라기'}</button>}
+        {issues.length > 0 && <button type="button" class="btn btn-primary" disabled={locked} onClick={() => onFix(picked.length ? picked : null)}>{picked.length ? `고른 ${picked.length}곳 AI로 수정` : 'AI로 수정'}</button>}
         <button type="button" class="btn btn-quiet" onClick={onRecheck}>다시 검수</button>
       </div>
     </div>
@@ -305,33 +336,33 @@ function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
     try {
       await idle();
       const r = await acceptChatAnswer(p.id, input, { target }); setRes(r); if (r.continuePrompt) setAnswer('');
-      if (r.ok) { await reload(); setAnswer(''); setPrompt(''); setRes(null); setAsk({ ...ask, request: '' }); toast('답대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.'); }
+      if (r.ok) { await reload(); setAnswer(''); setPrompt(''); setRes(null); setAsk({ ...ask, request: '' }); toast('답대로 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.'); }
     } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
     setBusy(false);
   }
-  const ways = [...(conn ? [['key', `${PROVIDERS[conn.provider]?.short || 'AI'}로 바로`]] : []), ...agents.map((a) => ['local:' + a.id, `내 PC의 ${AGENT_NAME[a.id]}`]), ['chat', '쓰던 AI 창으로']];
+  const ways = [...(conn ? [['key', `${PROVIDERS[conn.provider]?.short || 'AI'}로 바로`]] : []), ...agents.map((a) => ['local:' + a.id, `내 PC의 ${AGENT_NAME[a.id]}`]), ['chat', '쓰던 AI로']];
   return (
     <div class="stack ask">
       <Field label="고칠 곳"><select class="input" value={target} onChange={(e) => setAsk({ ...ask, target: e.target.value })}><option value="all">사이트 전체</option>{sections.map((s) => <option value={s.id}>{s.name}</option>)}</select></Field>
       <Field label="바라는 점" hint="무엇을 어떻게 바꿀지 적어요. 예: 실습 단계를 세 개로 나누고 단계마다 걸리는 시간을 적어 줘.">
         <textarea class="input" rows={4} maxLength={1500} value={ask.request} onInput={(e) => setAsk({ ...ask, request: e.target.value })} placeholder="예: 첫 화면 제목을 더 짧게, 색은 차분하게" /></Field>
       {locked && <p class="lock-note small">AI가 고치는 중이에요. 끝나면 다시 보낼 수 있어요.</p>}
-      {p.demo && <p class="small muted">체험이라 키로 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p>}
+      {p.demo && <p class="small muted">체험이라 API 키로 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p>}
       {ways.length > 1 && <div class="seg" role="group" aria-label="보낼 곳">{ways.map(([v, label]) => <button type="button" aria-pressed={String(way === v)} onClick={() => setWayHere(v)}>{label}</button>)}</div>}
-      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{way === 'key' ? `${conn?.label || 'AI'}에 보내요.` : `내 PC의 ${AGENT_NAME[way.slice(6)]}에게 맡겨요.`} 고치기 전 판은 판 기록에 남아요.</span></div>
+      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{way === 'key' ? `${conn?.label || 'AI'}에 보내요.` : `내 PC의 ${AGENT_NAME[way.slice(6)]}에게 맡겨요.`} 수정 전 버전은 버전 기록에 남아요.</span></div>
         : <ol class="chat-steps">
-          <li><b>요청 글을 복사해 쓰던 AI 창에 보내요</b>
+          <li><b>프롬프트를 복사해 쓰던 AI에 보내요</b>
             <div class="btn-row">
-              {CHATBOTS.map((b) => <a class="btn btn-sm" href={b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined} onClick={(e) => { if (!ready || !prompt) { e.preventDefault(); toast(ready ? '요청 글을 만드는 중이에요. 잠깐 뒤 다시 눌러 주세요.' : '바라는 점을 먼저 적어 주세요.'); return; } copy(prompt, `요청 글을 복사했어요. ${b.name}에 붙여 넣으세요.`); setChatbot(b.id); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>)}
+              {CHATBOTS.map((b) => <a class="btn btn-sm" href={b.url} target="_blank" rel="noopener" aria-disabled={!ready ? 'true' : undefined} onClick={(e) => { if (!ready || !prompt) { e.preventDefault(); toast(ready ? '프롬프트를 만드는 중이에요. 잠깐 뒤 다시 눌러 주세요.' : '바라는 점을 먼저 적어 주세요.'); return; } copy(prompt, `프롬프트를 복사했어요. ${b.name}에 붙여 넣으세요.`); setChatbot(b.id); }}>{b.name} 열기<span class="ext" aria-hidden="true">↗</span></a>)}
             </div>
             <p class="small muted">{target === 'all' ? '사이트 전체를 보내요. 길면 답이 끊길 수 있어 섹션을 고르는 편이 좋아요.' : '고른 섹션만 보내고, 답의 섹션만 갈아 끼워요.'}</p></li>
           <li><b>답을 넣어요</b>
             {res && !res.ok && <div role="alert"><Notice kind="bad"><div class="stack" style={{ gap: '6px' }}><b>{res.continuePrompt ? '답이 중간에 끊겼어요.' : '이 답으로는 고칠 수 없어요.'}</b>{!res.continuePrompt && (res.problems || []).map((x) => <span>{x}</span>)}
-              {res.continuePrompt && <><span>[이어서 요청 글 복사]를 눌러 AI 창에 보내고, 이어진 답을 붙여 넣어요. 앞의 답은 기억해 둬요.</span><div><button type="button" class="btn btn-sm btn-primary" onClick={() => copy(res.continuePrompt, '복사했어요. AI에게 보내세요.')}>이어서 요청 글 복사</button></div></>}</div></Notice></div>}
+              {res.continuePrompt && <><span>[이어쓰기 프롬프트 복사]를 눌러 AI에 보내고, 이어진 답을 붙여 넣어요. 앞의 답은 기억해 둬요.</span><div><button type="button" class="btn btn-sm btn-primary" onClick={() => copy(res.continuePrompt, '복사했어요. AI에게 보내세요.')}>이어쓰기 프롬프트 복사</button></div></>}</div></Notice></div>}
             <textarea class="input ta-short" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="AI 답(코드 블록)을 여기에 붙여 넣어요" aria-label="AI의 답" />
-            <div class="btn-row"><button type="button" class="btn btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답 넣기' : '이 답으로 고치기'}</button></div></li>
+            <div class="btn-row"><button type="button" class="btn btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답으로 수정' : '이 답으로 수정'}</button></div></li>
         </ol>}
-      <p class="small muted">처음부터 새로 만들고 싶으면 <button type="button" class="btn-link small" onClick={() => go(1)}>AI 다시 고르기</button></p>
+      <p class="small muted">처음부터 새로 만들고 싶으면 <button type="button" class="btn-link small" onClick={() => go(1)}>AI 다시 선택</button></p>
     </div>
   );
 }
@@ -410,7 +441,7 @@ function ImageDialog({ n, p, onClose, onPick }) {
       {n !== null && <div class="stack">
         <h2 class="h-sub">그림 바꾸기</h2>
         <Field label="그림 설명" hint="화면 읽기 프로그램이 읽어요."><input class="input" value={alt} onInput={(e) => setAlt(e.target.value)} maxLength={120} placeholder="예: 실습 결과 차트" /></Field>
-        <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => fileRef.current?.click()}>사진 올리기</button>{cur && <button type="button" class="btn btn-quiet" onClick={() => onPick(cur.src, alt)}>설명만 바꾸기</button>}</div>
+        <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => fileRef.current?.click()}>사진 업로드</button>{cur && <button type="button" class="btn btn-quiet" onClick={() => onPick(cur.src, alt)}>설명만 바꾸기</button>}</div>
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
         <b class="small">교재 쪽 그림</b>
         {pages.length ? <div class="page-grid">{pages.map((pg) => <button type="button" class="page-pick" onClick={() => usePage(pg)} title={titles[pg.num] || undefined} aria-label={`교재 ${pg.num}쪽${titles[pg.num] ? `(${titles[pg.num]})` : ''} 그림으로 바꾸기`}><img src={pg.url} alt="" /><span>{pg.num}쪽</span></button>)}</div>
@@ -425,9 +456,9 @@ function Versions({ p, onPick, onRemake }) {
   const list = p.versions || [];
   return (
     <div class="stack">
-      <h2 class="h-sub">판 기록</h2>
-      <p class="small muted">AI가 만든 판과 AI가 고치기 전 판이 남아요(최근 10판). 직접 고친 것은 [되돌리기]로 하나씩 되돌려요.</p>
-      {list.length ? <ul class="versions">{list.map((v) => <li><span><b>{v.label}</b><small>{fmtDate(v.at)}</small></span><button type="button" class="btn btn-sm" onClick={() => onPick(v)}>이 판으로 되돌리기</button></li>)}</ul> : <p class="muted small">아직 기록이 없어요.</p>}
+      <h2 class="h-sub">버전 기록</h2>
+      <p class="small muted">AI가 만든 버전과 AI가 수정하기 전 버전이 남아요(최근 10개). 직접 고친 것은 [실행 취소]로 하나씩 되돌려요.</p>
+      {list.length ? <ul class="versions">{list.map((v) => <li><span><b>{v.label}</b><small>{fmtDate(v.at)}</small></span><button type="button" class="btn btn-sm" onClick={() => onPick(v)}>이 버전으로 복원</button></li>)}</ul> : <p class="muted small">아직 기록이 없어요.</p>}
       <div class="btn-row"><button type="button" class="btn btn-quiet" onClick={onRemake}>처음부터 다시 만들기</button></div>
     </div>
   );
