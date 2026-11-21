@@ -1,5 +1,5 @@
 // 작업 기록 저장소(약속 D): IndexedDB 'lecpage-gen' 데이터베이스의 'jobs'(연수마다 마지막 작업 하나, 열쇠 pid)와
-// 'chat'(쓰던 AI 창에서 받는 중인 답 조각). 앱 저장소('lecpage')와 따로 둔 까닭: 판 번호를 올리면 예전 판을 연 탭이
+// 'chat'(예전 복사·붙여넣기 길이 남긴 답 조각: 지금은 연수를 지울 때 함께 지우기만 함). 앱 저장소('lecpage')와 따로 둔 까닭: 판 번호를 올리면 예전 판을 연 탭이
 // 새 탭의 열기를 막아(onversionchange가 없던 판) 앱이 멈출 수 있어서. 키·비밀 값은 담지 않음.
 const NAME = 'lecpage-gen';
 let dbp = null;

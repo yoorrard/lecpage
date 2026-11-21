@@ -27,11 +27,9 @@ async function run(b, width) {
   const p = await ctx.newPage(); const errs = L.watch(p);
   await p.goto(BASE, { waitUntil: 'load' });
   await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
-  await p.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 90000 });
+  await L.aiReady(p);
   L.ok(`[${tag}] original-download option`, await p.locator('text=교재 원본도 참가자가 내려받게').count() === 1);
-  await p.click('.ai-nokey button:has-text("쓰던 ChatGPT로")');
-  await p.fill('#chat-way textarea', ANSWER); await p.click('#chat-way button:has-text("이 답으로 만들기")');
-  await p.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 30000 }); await p.click('.st-info button:has-text("이 정보가 맞아요")');
+  await L.makeWith(p, ANSWER); await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
   // 3) 바로 배포: 큰 단추 두 개(바로 배포 · 다른 곳에 배포)
   L.ok(`[${tag}] two mode buttons`, await p.locator('.pub-mode').count() === 2 && /바로 배포/.test(await p.locator('.pub-mode').first().innerText()) && /다른 곳에 배포/.test(await p.locator('.pub-mode').nth(1).innerText()));

@@ -1,7 +1,7 @@
 // AI 연결을 한 곳에서: lecpage 커넥트 상태(켜짐·꺼짐·브라우저가 막음) + 지금 쓸 연결(ChatGPT 계정 · Claude 계정 · Codex · API 키).
 // [만들기]·[AI로 수정]·검수의 [AI로 수정]이 모두 여기서 고른 연결을 씀. 화면 위의 한 줄 표시("ChatGPT 계정 연결됨 · lecpage 커넥트 켜짐")도 여기서.
 import { useEffect, useState } from 'preact/hooks';
-import { pcStatus, bridgeAvailable, bridgeSameOrigin, pairing } from './gen/local.js';
+import { pcStatus, bridgeAvailable, bridgeSameOrigin, pairing, updateStart } from './gen/local.js';
 import { getActiveAI, PROVIDERS } from './ai.js';
 
 const PREF = 'lecpage:conn'; // 'chatgpt' | 'claude' | 'codex' | 'key'
@@ -36,7 +36,10 @@ export function pcNow() { return pc; }
 /** 다시 확인(fresh: 에이전트 설치·로그인을 새로 살핌) */
 export function refreshPc({ fresh = false } = {}) {
   if (inflight && !fresh) return inflight;
-  const run = pcStatus({ fresh }).catch(() => ({ state: 'off' })).then((v) => { pc = v; at = Date.now(); notify(); return v; });
+  const run = pcStatus({ fresh }).catch(() => ({ state: 'off' })).then((v) => {
+    if (upd.state === 'run' && v.state !== 'on') return pc; // 새 판으로 다시 켜지는 동안 잠깐 꺼진 것은 그리지 않음
+    pc = v; at = Date.now(); notify(); return v;
+  });
   inflight = run;
   run.finally(() => { if (inflight === run) inflight = null; });
   return run;
@@ -52,6 +55,40 @@ export function usePc() {
     return () => { subs.delete(setV); removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
   }, []);
   return v;
+}
+
+// ── 예전 판 lecpage 커넥트: 이 화면이 쓰는 기능(caps)이 없으면 새 판으로 바꾸게(바꿀 수 있으면 버튼 하나, 아니면 다시 켜는 법) ──
+/** 켜진 lecpage 커넥트가 이 기능을 아는지(caps가 없는 판은 모름) */
+export const pcCan = (p, cap) => p.state === 'on' && (p.status?.caps || []).includes(cap);
+/** 스스로 새 판으로 바꿀 수 있는 판인지(받은 실행 파일로 켰을 때) */
+export const pcCanUpdate = (p) => pcCan(p, 'update') && !!p.status?.update?.can;
+let upd = { state: '' }; // '' | 'run'(받아서 바꾸고 다시 켜는 중) | 'error' | 'manual'(다시 켜는 법을 보여 줌)
+const updSubs = new Set();
+function setUpd(v) { upd = v; for (const f of updSubs) f(upd); return v; }
+export function usePcUpdate() {
+  const [v, setV] = useState(upd);
+  useEffect(() => { updSubs.add(setV); setV(upd); return () => { updSubs.delete(setV); }; }, []);
+  return v;
+}
+/** [새 버전으로 바꾸기]: 커넥트가 받아 바꾸고 같은 포트·토큰으로 다시 켤 때까지(보통 10초 안, 길어도 2분) → 'done' | 'error' | 'manual' */
+export async function updatePc() {
+  if (upd.state === 'run') return 'run';
+  if (!pcCanUpdate(pc)) return setUpd({ state: 'manual' }).state;
+  const before = pc.status?.build || '';
+  setUpd({ state: 'run' });
+  try {
+    const r = await updateStart();
+    if (r.upToDate) return setUpd({ state: 'error', error: '새 버전을 준비하는 중이에요. 잠시 뒤 다시 눌러 주세요.' }).state;
+  } catch (e) { return setUpd({ state: 'error', error: e?.message || 'lecpage 커넥트에 닿지 못했어요.' }).state; }
+  for (const end = Date.now() + 120e3; Date.now() < end;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const v = await pcStatus().catch(() => ({ state: 'off' }));
+    if (v.state !== 'on') continue;
+    const u = v.status?.update || {};
+    if (u.state === 'error') { pc = v; notify(); return setUpd({ state: 'error', error: u.error_ko || '' }).state; }
+    if (v.status?.build && v.status.build !== before && u.state !== 'restart') { setUpd({ state: '' }); await refreshPc({ fresh: true }); return 'done'; }
+  }
+  return setUpd({ state: 'manual' }).state;
 }
 
 /** 지금 쓸 수 있는 연결들 */

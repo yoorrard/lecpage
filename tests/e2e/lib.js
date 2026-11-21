@@ -24,9 +24,14 @@ async function aiAnswer(body) {
   if (step === 'build') text = SITE.buildAnswer();
   else if (step === 'fix') text = SITE.fixAnswer([...new Set([...all.matchAll(/<section id="([\w-]+)"/g)].map((x) => x[1]))]);
   else if (step === 'edit') text = /lecpage 검수에서/.test(all) ? SITE.fixAnswer([...new Set([...all.matchAll(/<section id="([\w-]+)"/g)].map((x) => x[1]))]) : SITE.editAnswer((/강사 요청:\n([^\n]+)/.exec(all) || [])[1] || '');
+  return sse(text);
+}
+/** 가짜 Claude 스트림 한 번(답 글 그대로) */
+function sse(text) {
   const ev = (type, o) => `event: ${type}\ndata: ${JSON.stringify({ type, ...o })}\n\n`;
   return ev('message_start', { message: { usage: { input_tokens: 1 } } }) + ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text } }) + ev('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }) + ev('message_stop', {});
 }
+const MODELS = JSON.stringify({ data: [{ id: 'claude-test-1', display_name: 'Claude (시험)' }] });
 /** AI 회사 API를 가짜로 답함: 키 확인·모델 목록 + Claude 생성 스트림(실제 AI 호출 없음). 재시도 기다림은 짧게(시험 손잡이) */
 async function mockAi(ctx, extra, { fallback = false } = {}) {
   await ctx.addInitScript(() => { globalThis.__lpGenTest = { backoff: 0.01, saveMs: 300 }; });
@@ -41,7 +46,7 @@ async function mockAi(ctx, extra, { fallback = false } = {}) {
         : r.fulfill({ status: 200, contentType: 'text/event-stream', headers: cors, body: sse });
     }
     if (/api\.openai\.com\/healthz|api\.anthropic\.com\/api\/hello/.test(u)) return r.fulfill({ status: 200, headers: cors, body: '' });
-    if (/api\.anthropic\.com\/v1\/models/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ data: [{ id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' }] }) });
+    if (/api\.anthropic\.com\/v1\/models/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: MODELS });
     if (fallback) return r.fallback();
     return r.abort();
   });
@@ -60,7 +65,31 @@ async function startWithFile(p, files = [FIX + '/workshop.pdf']) {
   await p.setInputFiles('.ld-hero input[type=file][multiple]', files);
   await p.waitForSelector('.files li', { timeout: 60000 });
   await p.waitForFunction(() => !document.querySelector('.drop b')?.textContent.includes('중') && !document.querySelector('.files')?.textContent.includes('읽는 중'), null, { timeout: 90000 });
-  await p.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 30000 });
+  await aiReady(p, 30000);
+}
+/** 교재를 다 읽어 AI 선택을 누를 수 있게 됨('교재를 넣으면 선택할 수 있어요'가 사라짐) */
+async function aiReady(p, timeout = 90000) {
+  await p.waitForFunction(() => !!document.querySelector('.ai-pick') && !document.querySelector('.ai-pick-wait'), null, { timeout });
+}
+/**
+ * 정해 둔 답(```html 문서 + ```json 연수 정보)으로 사이트 만들기: API 키(가짜)로 연결하면 가짜 Claude가 이 답을 줌 → 완성 화면까지.
+ * 배포·화면 시험이 같은 사이트에서 시작하게(예전에는 복사·붙여넣기 길로 넣던 답)
+ */
+async function makeWith(p, answer, timeout = 60000) {
+  const RE = /^https:\/\/api\.anthropic\.com\//;
+  const h = (r) => {
+    const u = r.request().url(); const m = r.request().method();
+    if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+    if (/\/v1\/models/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: MODELS });
+    if (/\/v1\/messages/.test(u) && m === 'POST') return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: cors, body: sse(answer) });
+    return r.fulfill({ status: 200, headers: cors, body: '' });
+  };
+  await p.context().route(RE, h);
+  try {
+    await aiReady(p);
+    await connectAi(p);
+    await p.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout });
+  } finally { await p.context().unroute(RE, h); } // 그 뒤의 요청은 원래 가짜(mockAi 등)가 받음
 }
 
 /** 처음 연결하는 길이면 동의 창(체크 하나 + [연결])에 동의함. 이미 동의했으면 그냥 지나감 */
@@ -91,4 +120,4 @@ async function readProject(p, id) {
 }
 const pidOf = (p) => (/#\/p\/([^/]+)/.exec(p.url()) || [])[1];
 
-module.exports = { consent, chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, connectGemini, connectAi, waitStudio, readProject, pidOf, cors };
+module.exports = { consent, chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, aiReady, makeWith, connectGemini, connectAi, waitStudio, readProject, pidOf, cors };

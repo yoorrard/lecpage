@@ -126,18 +126,18 @@ export function Studio({ p, update, go, job, idle, reload }) {
     kitAdd: (page, id, type, attrs) => { const label = KIT_LABEL[type] || type; setHtml(`${label} 추가`, (h) => addKit(h, id, type, attrs), page); toast(`넣었어요: ${label}`); if (!narrow()) setGoto({ page, key: id, after: true, n: Date.now() }); },
   };
   const fill = (request, target = ask.target) => { setAsk({ target, request, n: Date.now() }); setView('edit'); };
-  /** AI에게 보냄: 대화에 요청을 남기고(쓰던 AI로면 대화 안에서 프롬프트 복사·답 넣기), 연결한 AI면 바로 고침 */
+  /** AI에게 보냄: 대화에 요청을 남기고 연결한 AI가 바로 고침(다시 보내기는 그때 연결, 없으면 지금 고른 연결로) */
   async function send(text, target, again = null) {
-    const way = again?.way || ways.way;
-    const c = ways.list.find((x) => x.id === way);
-    if (way !== 'chat') { if (!c) { toast('보낼 곳을 골라 주세요.'); return; } if (!await askConsent(consentId(c))) return; setPreferred(c.id); }
+    const c = ways.list.find((x) => x.id === (again?.way || ways.way)) || ways.cur;
+    if (!c) { toast(p.demo ? '체험에서는 AI에게 보내지 않아요.' : '보낼 AI를 먼저 연결해 주세요.'); return; }
+    if (!await askConsent(consentId(c))) return;
+    setPreferred(c.id);
     const targetName = target !== 'all' ? sections.find((s) => s.id === target)?.name || '' : '';
-    if (!again) { update((cur) => ({ chat: addChat(cur, { role: 'user', text, target, targetName, way: way === 'chat' ? 'chat' : c.id, wayName: way === 'chat' ? '쓰던 AI로' : c.label }) })); setAsk({ target, request: '', n: 0 }); }
-    if (way === 'chat') return;
+    if (!again) { update((cur) => ({ chat: addChat(cur, { role: 'user', text, target, targetName, way: c.id, wayName: c.label }) })); setAsk({ target, request: '', n: 0 }); }
     await idle();
     editSite(p.id, { target, request: text, ...jobOpts(c) });
   }
-  /** 꼭 고칠 곳을 AI에게: 연결한 AI면 바로 고치고, 아니면(쓰던 AI 창·체험) 입력 칸에 채워 둠 */
+  /** 꼭 고칠 곳을 AI에게: 연결한 AI면 바로 고치고, 아니면(연결 전·체험) 입력 칸에 채워 둠 */
   async function fixSerious() {
     const list = serious; if (!list.length) return;
     const ai = p.demo ? null : pickConnection(available(pcNow(), await getActiveAI()));
@@ -149,7 +149,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
     }
     const secs = [...new Set(list.map((x) => x.where?.section).filter(Boolean))];
     fill(`꼭 고칠 곳을 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}`, secs.length === 1 ? secs[0] : 'all');
-    toast('AI 수정 칸에 채워 뒀어요. [보내기]를 눌러 주세요.');
+    toast(p.demo ? '체험이라 AI에게는 보내지 않아요. AI 수정 칸에 채워 뒀어요.' : ways.list.length ? 'AI 수정 칸에 채워 뒀어요. [보내기]를 눌러 주세요.' : 'AI 수정 칸에 채워 뒀어요. AI를 연결하면 보낼 수 있어요.');
   }
   const confirmed = () => { scrollTo({ top: 0, behavior: 'smooth' }); setNudge(true); setTimeout(() => setNudge(false), 2600); };
   const nextBtn = !published ? <button class={`btn${p.metaChecked ? ' btn-primary' : ''}${nudge ? ' nudge' : ''}`} data-coach={p.demo && p.metaChecked ? '' : undefined} data-coach-room={p.demo && p.metaChecked ? '' : undefined} onClick={() => go(3)}>배포하기 →</button>
@@ -188,12 +188,12 @@ export function Studio({ p, update, go, job, idle, reload }) {
                 <LookPanel p={p} change={change} />
               </details>
             </section>
-            <ChatLog p={p} update={update} job={job} go={go} idle={idle} reload={reload} versions={p.versions || []}
+            <ChatLog p={p} update={update} job={job} go={go} versions={p.versions || []}
               onShow={show} onVersion={(id) => setVers({ focus: id })} onRestore={restore} onPick={(t) => fill(t)} onPreview={() => setView('preview')}
               onResend={(m) => send(m.text, m.target || 'all', m)} />
           </div>
           <div class="st-composer">
-            <Composer p={p} sections={sections} ask={ask} setAsk={setAsk} ways={ways.list} way={ways.way} setWay={ways.setWay} locked={working} onSend={(t, target) => send(t, target)} />
+            <Composer p={p} sections={sections} ask={ask} setAsk={setAsk} ways={ways.list} way={ways.way} setWay={ways.setWay} locked={working} onSend={(t, target) => send(t, target)} onConnect={() => go(1)} />
           </div>
         </aside>
       </div>

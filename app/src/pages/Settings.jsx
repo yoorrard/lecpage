@@ -53,7 +53,7 @@ export function Settings() {
           <li><span><b>API 키</b> <span class="small muted">{anyAi ? '다른 회사 키' : '연결 안 됨'}</span></span>
             <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : 'API 키 연결'}</button></li>
         </ul>
-        <p class="small muted">ChatGPT·Claude 계정 연결은 연수 화면의 AI 선택에서 해요. 쓰던 AI로 만들 때는 연결하지 않아도 돼요.</p>
+        <p class="small muted">ChatGPT·Claude 계정 연결은 연수 화면의 AI 선택에서 해요.</p>
         <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Vercel · GitHub Pages · Netlify</span></summary>
           <p class="small muted">바로 배포는 연결 없이 돼요. 내 계정의 다른 곳에 배포할 때만 연결해요. <a href="#/help/deploy">배포하는 법</a></p>
           <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>

@@ -3,7 +3,7 @@ import { startGeneration } from '../lib/studio.js';
 import { startDemo } from '../lib/demo.js';
 import { chatgptLogin, chatgptLogout, chatgptWelcomeSeen, agentAction, agentSetup, setupStatus, setupCode, setupCancel, autostart, lnaPermission, pcOrigin, isSafari } from '../lib/gen/local.js';
 import { Notice } from './ui.jsx';
-import { useConnection, refreshPc, setPreferred, jobOpts, connLine, DOWNLOAD, osName, waitForPairing, preferred, askConsent, hasConsent, consentId } from '../lib/connection.js';
+import { useConnection, refreshPc, setPreferred, jobOpts, connLine, DOWNLOAD, osName, waitForPairing, preferred, askConsent, hasConsent, consentId, pcCan, pcCanUpdate, usePcUpdate, updatePc } from '../lib/connection.js';
 import { exportProjectFile } from '../lib/project.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
@@ -13,6 +13,7 @@ import { copy, toast, saveFile } from '../lib/util.js';
 // Claude: 터미널 없이 — lecpage 커넥트가 Claude Code를 창 없이 설치(진행 막대)하고 로그인을 띄움 → 브라우저에서 승인 → 연결(ClaudeSetup, 세 단계 그림 안내).
 //   Claude 데스크톱 앱이 있으면 그 안의 Claude Code를 써서 설치를 건너뜀. 공식 명령을 터미널 창에서 하는 길은 '다른 방법'에만(ClaudeTermRow)
 // 다음부터: lecpage 커넥트가 켜져 있으면 저절로 다시 붙음. 꺼져 있으면 "lecpage 커넥트를 켜 주세요" 한 줄
+// lecpage 커넥트가 이 화면보다 예전 판(caps에 claude-setup이 없거나 경로가 404)이면 [로그인] 대신 새 판으로 바꾸기(ConnectUpdate)
 const fileName = (p) => `${String(p.title || '연수').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) || '연수'}.lecpage`;
 
 /** 한 줄 표시: "ChatGPT 계정 연결됨 · lecpage 커넥트 켜짐" */
@@ -32,12 +33,15 @@ export function SubscriptionWay({ p, ready, idle, go }) {
   const [perm, setPerm] = useState('');
   const [welcome, setWelcome] = useState(false);
   const [setup, setSetup] = useState(null); // Claude 계정 연결 진행(lecpage 커넥트의 GET /bridge/setup)
+  const [old, setOld] = useState(false); // 눌러 보니 lecpage 커넥트가 예전 판(그 경로가 없음)
   const s = pc.state === 'on' ? pc.status || {} : {};
   const ag = Object.fromEntries((s.agents || []).map((a) => [a.id, a]));
   const cg = s.chatgpt || {};
   const has = (id) => list.some((c) => c.id === id);
   // 두 계정이 다 연결됐으면 고른 쪽(없으면 ChatGPT)만 강조: 누를 곳 하나
   const main = has(preferred()) && (preferred() === 'chatgpt' || preferred() === 'claude') ? preferred() : has('chatgpt') ? 'chatgpt' : 'claude';
+  const claudeOld = pc.state === 'on' && (old || !pcCan(pc, 'claude-setup'));
+  useEffect(() => { setOld(false); }, [s.build]); // 다른 판으로 다시 켰으면 새로 봄
 
   // Claude 계정 연결: 새로 고쳐도 하는 중이면 이어 그림 · 1초마다 진행을 받고, 끝나면 연결을 다시 살펴 바로 만들기(위 pending 흐름)
   useEffect(() => { if (!setup && s.setup?.running) setSetup(s.setup); }, [s.setup?.startedAt]);
@@ -106,7 +110,7 @@ export function SubscriptionWay({ p, ready, idle, go }) {
   /** [Claude 계정으로 로그인]: 처음 한 번 동의 → lecpage 커넥트가 설치(없으면)·로그인을 뒤에서. 화면은 세 단계 안내 */
   async function connectClaude() {
     if (!await askConsent('claude')) return;
-    try { const r = await agentSetup('claude'); setCmd(''); setSetup(r.setup || null); } catch (e) { toast(e?.message || 'lecpage 커넥트에 닿지 못했어요. lecpage 커넥트가 켜져 있는지 확인해 주세요.'); refreshPc(); }
+    try { const r = await agentSetup('claude'); setCmd(''); setSetup(r.setup || null); } catch (e) { if (e?.old) { setOld(true); return; } toast(e?.message || 'lecpage 커넥트에 닿지 못했어요. lecpage 커넥트가 켜져 있는지 확인해 주세요.'); refreshPc(); }
   }
   async function cancelSetup() {
     try { await setupCancel(); } catch { /* 이미 끝남 */ }
@@ -140,10 +144,11 @@ export function SubscriptionWay({ p, ready, idle, go }) {
         <div class="ai-sub-row">
           <div class="ai-sub-name"><b>Claude 계정</b>{has('claude') ? <span class="small"><span class="dot-ok" aria-hidden="true" /> 연결됨 · {ag.claude?.from === 'desktop' ? 'Claude 데스크톱 앱' : 'Claude Code'}</span> : <span class="small muted">Pro·Max 요금제</span>}</div>
           {has('claude') ? <div class="btn-row"><button type="button" class={`btn${main === 'claude' ? ' btn-primary' : ''}`} disabled={!ready && !p.demo} onClick={() => make(list.find((c) => c.id === 'claude'))}>Claude로 만들기</button></div>
+            : claudeOld && !setup ? <ConnectUpdate pc={pc} onDone={() => setOld(false)} />
             : setup ? <ClaudeSetup s={setup} onRetry={connectClaude} onCancel={cancelSetup} onTerminal={() => { setSetup(null); loginAgent('claude'); }} onCode={async (code) => { await setupCode(code); setSetup((v) => (v ? { ...v, codeSent: true } : v)); }} />
             : <div class="btn-row">
               <button type="button" class={`btn${has('chatgpt') ? '' : ' btn-primary'}`} onClick={connectClaude}>Claude 계정으로 로그인</button>
-              <span class="small muted">{!ag.claude?.installed ? '처음 한 번 Claude Code를 자동으로 설치해요(1~3분). 터미널은 쓰지 않아요.' : ag.claude.need === 'update' ? 'Claude Code를 새 버전으로 바꾸고 로그인해요.' : ag.claude.from === 'desktop' ? 'Claude 데스크톱 앱이 있어 설치 없이 로그인만 해요.' : '브라우저에서 로그인만 하면 돼요.'}</span>
+              <span class="small muted">{!ag.claude?.installed ? '처음 한 번 Claude Code를 자동으로 설치해요(1~3분).' : ag.claude.need === 'update' ? 'Claude Code를 새 버전으로 바꾸고 로그인해요.' : ag.claude.from === 'desktop' ? 'Claude 데스크톱 앱이 있어 설치 없이 로그인만 해요.' : '브라우저에서 로그인만 하면 돼요.'}</span>
               {pending === 'claude' && <span class="small muted" role="status">터미널 창에서 진행해 주세요. 끝나면 바로 만들기 시작해요.</span>}
             </div>}
           {ag.claude?.installed && ag.claude.auth === 'api-key' && <p class="small warn-line">Claude Code가 구독 대신 API 키로 돌아요. 쓴 만큼 비용이 나가요.</p>}
@@ -164,11 +169,34 @@ export function SubscriptionWay({ p, ready, idle, go }) {
       : pc.state === 'unknown' ? <p class="small muted" role="status">lecpage 커넥트를 찾는 중…{perm === 'prompt' && <b> 브라우저가 묻는 창에서 [허용]을 눌러 주세요.</b>}</p>
 
       : <div class="stack" style={{ gap: '8px' }}>
-        {!open ? <div class="btn-row"><button type="button" class="btn btn-primary" onClick={() => (p.demo ? make({ id: 'demo', label: '' }) : setOpen(true))}>ChatGPT·Claude 계정으로 연결</button><span class="small muted">작은 프로그램 lecpage 커넥트를 한 번 설치해요.</span></div> : download}
+        {!open ? <div class="btn-row"><button type="button" class={`btn${p.demo ? '' : ' btn-primary'}`} onClick={() => (p.demo ? make({ id: 'demo', label: '' }) : setOpen(true))}>ChatGPT·Claude 계정으로 연결</button><span class="small muted">작은 프로그램 lecpage 커넥트를 한 번 설치해요.</span></div> : download}
         {isSafari() && <p class="small muted">Safari는 lecpage 커넥트가 여는 화면(127.0.0.1)에서 이어서 해요.</p>}
       </div>}
       {welcome && <div class="notice" role="status"><b>ChatGPT 요금제를 쓰고 있어요.</b> lecpage에서 보내는 요청은 ChatGPT 요금제 사용량에 들어가요. 사용량과 앱 연결은 ChatGPT 설정에서 관리해요. <button type="button" class="btn btn-sm" onClick={() => setWelcome(false)}>닫기</button></div>}
     </article>
+  );
+}
+
+/** lecpage 커넥트가 이 화면보다 예전 판: 스스로 바꿀 수 있으면 버튼 하나(받아 바꾸고 같은 연결로 다시 켜짐), 아니면 다시 켜는 법 */
+function ConnectUpdate({ pc, onDone }) {
+  const u = usePcUpdate();
+  async function run() { if (await updatePc() === 'done') { toast('lecpage 커넥트를 새 버전으로 바꿨어요.'); onDone?.(); } }
+  if (!pcCanUpdate(pc) || u.state === 'manual') {
+    const win = osName() === 'win';
+    return (
+      <div class="stack connect-old" style={{ gap: '6px' }} role="status">
+        <p class="small"><b>lecpage 커넥트를 새 버전으로 바꿔야 해요.</b> {win ? 'lecpage 커넥트 창(작업 표시줄)을 닫고, 받은 lecpage-connect 파일을 다시 두 번 눌러요.' : 'lecpage 커넥트 터미널 창이 있으면 닫고, 받을 때 쓴 한 줄을 터미널에 다시 붙여 넣어요.'} 켤 때 새 버전을 받고 이 화면과 다시 연결돼요.</p>
+        {win ? <div class="btn-row"><a class="btn btn-sm" href={DOWNLOAD.win} download>파일 다시 받기</a></div>
+          : <div class="agent-cmd"><code>{DOWNLOAD.sh}</code><button type="button" class="btn btn-sm" onClick={() => copy(DOWNLOAD.sh, '복사했어요. 터미널에 붙여 넣고 Enter를 눌러요.')}>복사</button></div>}
+      </div>
+    );
+  }
+  return (
+    <div class="stack connect-old" style={{ gap: '6px' }}>
+      <p class="small"><b>lecpage 커넥트를 새 버전으로 바꿔야 해요.</b> <span class="muted">누르면 바로 바꿔요(10초쯤). 연결은 그대로예요.</span></p>
+      <div class="btn-row"><button type="button" class="btn btn-primary" disabled={u.state === 'run'} aria-busy={u.state === 'run' ? 'true' : undefined} onClick={run}>{u.state === 'run' ? '새 버전으로 바꾸는 중…' : '새 버전으로 바꾸기'}</button></div>
+      {u.state === 'error' && <p class="small warn-line" role="alert">{u.error}</p>}
+    </div>
   );
 }
 
@@ -304,7 +332,7 @@ function GetConnect({ onGet }) {
   return (
     <div class="stack" style={{ gap: '10px' }}>
       <p class="small">lecpage 커넥트는 이 PC에서 ChatGPT·Claude 계정을 lecpage에 이어 주는 작은 프로그램이에요.</p>
-      {here ? <OsWay os={here} onGet={onGet} /> : <p class="small warn-line">lecpage 커넥트는 PC(Windows·Mac·Linux)에 설치해요. 휴대폰에서는 아래 [쓰던 ChatGPT로]·[쓰던 Claude로]로 만들어요.</p>}
+      {here ? <OsWay os={here} onGet={onGet} /> : <p class="small warn-line">lecpage 커넥트는 PC(Windows·Mac·Linux)에 설치해요. 휴대폰에서는 아래 [다른 방법]의 API 키로 만들어요.</p>}
       <p class="small muted">켜지면 이 화면과 저절로 연결돼요. 그다음 아래에서 계정으로 로그인해요. 처음 한 번 Node.js(무료)를 함께 받아요.{here && here !== 'win' ? ' 쓰는 동안 터미널 창은 열어 두세요.' : ''}</p>
       <details class="connect-os"><summary class="small">다른 운영체제</summary>
         {Object.keys(OS_NAME).filter((k) => k !== here).map((k) => <div class="stack" style={{ gap: '4px' }}><b class="small">{OS_NAME[k]}</b><OsWay os={k} onGet={onGet} main={false} /></div>)}

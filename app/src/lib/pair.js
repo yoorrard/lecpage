@@ -17,6 +17,13 @@ export function capturePairing() {
     return true;
   } catch { return false; }
 }
+/** lecpage 커넥트가 켜지는 포트(scripts/studio.mjs PORT_RANGE의 앞쪽). 기억한 포트에 없을 때 살펴봄 */
+export const PC_PORTS = Array.from({ length: 10 }, (_, i) => 6600 + i);
+/** 같은 짝(토큰)인데 포트만 바뀜 */
+export function movePairing(port) {
+  const p = pairing(); if (!p || !(port >= 1024 && port <= 65535)) return;
+  try { localStorage.setItem(PAIR, JSON.stringify({ token: p.token, port: +port, at: Date.now() })); } catch { /* 저장 못 하면 이번만 */ }
+}
 export function forgetPairing() { try { localStorage.removeItem(PAIR); } catch { /* 없음 */ } }
 /** 방금(이 탭에서) 짝을 맞췄는지 → 화면이 'PC 프로그램과 연결했어요'·권한 안내를 한 번 보여 줌 */
 export function justPaired() { try { const v = sessionStorage.getItem('lecpage:paired') === '1'; sessionStorage.removeItem('lecpage:paired'); return v; } catch { return false; } }

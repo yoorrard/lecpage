@@ -25,10 +25,7 @@ async function server(ctx, { siteScripts, unsafe }) {
 async function seed(p, script) {
   await p.goto(BASE, { waitUntil: 'load' });
   await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
-  await p.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 90000 });
-  await p.click('.ai-nokey button:has-text("쓰던 ChatGPT로")');
-  await p.fill('#chat-way textarea', ANSWER(script)); await p.click('#chat-way button:has-text("이 답으로 만들기")');
-  await p.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 30000 }); await p.click('.st-info button:has-text("이 정보가 맞아요")');
+  await L.makeWith(p, ANSWER(script)); await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
 }
 (async () => {

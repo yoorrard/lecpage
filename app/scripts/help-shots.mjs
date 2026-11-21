@@ -94,7 +94,7 @@ try {
     // 1. 교재 넣기 + AI 고르기: 예시 교재(엔진 시험용 파일)를 넣은 모습
     await page.goto(base + '#/', { waitUntil: 'load' });
     await page.setInputFiles('.ld-hero input[type=file][multiple]', [join(SKILL, 'engine', 'test', 'fixtures', 'workshop.pdf')]);
-    await page.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 90000 }); // 교재를 다 읽으면 AI 선택 단추가 켜짐
+    await page.waitForFunction(() => !!document.querySelector('.ai-pick') && !document.querySelector('.ai-pick-wait'), null, { timeout: 90000 }); // 교재를 다 읽으면 AI 선택을 누를 수 있음
     await page.locator('.step-head h1').click(); // 입력 칸의 초점 테두리를 뺌
     await settle(3000); // 알림 글이 사라진 뒤에
     await top();

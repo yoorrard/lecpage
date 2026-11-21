@@ -129,7 +129,6 @@ main.page{min-height:calc(100dvh - var(--top-h,57px))}
 .field input:hover,.field select:hover,.field textarea:hover{border-color:var(--line-strong)}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .field textarea{min-height:120px;resize:vertical;line-height:1.6}
-.field textarea.ta-short{min-height:68px}
 ::placeholder{color:color-mix(in srgb,var(--muted) 80%,transparent)}
 .hero .btn-row{margin-top:24px}
 .section-title{display:grid;gap:4px;margin:48px 0 16px}
