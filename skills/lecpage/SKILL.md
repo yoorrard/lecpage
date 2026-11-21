@@ -25,7 +25,7 @@ L="node <이 SKILL.md가 있는 폴더>/scripts/lecpage.mjs"
 7. **배포**
    - 계정이 없으면(대부분): `$L app work` → `<연수>.lecpage` → 강사가 lecpage.com [저장한 파일 열기] → [배포하기](가입 없음, 참여 기능 서버 포함).
    - Cloudflare: `$L publish work --dry-run`으로 순서와 강사가 할 일을 보이고, 로그인 뒤 `$L publish work --live`(참여 기능을 켰으면 `--live`가 있어야 출석·질문 기록이 모임). 그 밖의 곳: `references/infra-decision.md`.
-   - 인터넷이 없는 교실: `$L pack work -o site.zip`.
+   - 인터넷이 없는 교실: `$L pack work -o site.zip`. 노트북 한 대로 교실 와이파이 참여까지: `$L serve work --live`(참여 기능 서버를 이 노트북에서, QR은 와이파이 주소, 관리자 키는 `work/dist-강사용/live-data/admin-key.txt`).
    - 건넬 것: 참가자 주소, `work/dist-강사용/`의 QR-안내문.pdf·발표화면.png·운영안내.md, 참여 기능을 켰으면 강사 화면(`console.html`) 주소와 관리자 키 보관법.
 
 앱에서 저장한 `.lecpage`를 이어서 고치려면 `$L app 연수.lecpage -o work` → `site/` 고치기 → `check`.

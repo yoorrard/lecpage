@@ -32,7 +32,7 @@
 | `publish [work] [--host cloudflare\|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts] [--password 암호]` | 조립(글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안에 담음, 끄기 `--no-bundle-fonts` · `--password`면 쪽·교재 쪽 그림·자료실 파일을 암호로 잠금) → 강사 계정에 올리기 → 주소 확인 → 안내물. `--dry-run`은 순서와 **강사가 할 일**만 보여 줌. `--live`(Cloudflare): 중계 올리기 → 관리자 키를 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만 → `lecpage.teacher.json`의 `live`에 중계 주소·연수 코드 → 다시 조립 → 올리기 → 중계가 이 사이트만 받게 → 확인. 인증은 `npx wrangler@4 login`이나 `CLOUDFLARE_API_TOKEN`(Onpod은 `ONPOD_TOKEN`) 환경 변수만. 다시 올릴 때는 `publish work`만(지난번 곳·주소) |
 | `handouts <배포한 주소\|work> [-o 폴더]` | `QR-안내문.pdf`(참가자용 A4)·`발표화면.png`·`발표화면-QR-크게.png`. 작업 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림 |
 | `pack [work\|work/dist] -o site.zip [--bundle-fonts] [--password 암호]` | 조립한 사이트를 ZIP 하나로(USB·교실 LAN). 강사용 폴더는 담지 않음. 인터넷이 막힌 교실이면 `--bundle-fonts` |
-| `serve [work\|폴더] [--port 4173]` | 작업 폴더면 `preview`와 같음, 다른 폴더는 그대로 띄움 |
+| `serve [work\|폴더] [--port 4173] [--live]` | 작업 폴더면 `preview`와 같음, 다른 폴더는 그대로 띄움. `--live`(작업 폴더, 포트 기본 8787): 노트북이 참여 기능 서버(`backends/node-server`)까지 맡아 교실 와이파이의 여러 기기가 실제로 참여(QR은 와이파이 주소, 기록·관리자 키는 `dist-강사용/live-data/`, 올리는 `dist`는 그대로) |
 | `doctor` | 판·Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령(윈도우·macOS·리눅스) |
 | `decide-infra [-i 답.json] [--size 30] [--features qa,poll] [--skill set] [--network good\|restricted\|offline] [--minor]` | 배포할 곳 × 참여 기능 서버 추천(강사가 할 일 수로 고름). 이미 연결한 곳은 `-i`의 JSON에 `connected:["cloudflare"]` 등(`references/infra-decision.md`) |
 

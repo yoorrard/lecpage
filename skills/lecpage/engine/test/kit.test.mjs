@@ -385,3 +385,45 @@ test('CLI: prepare(쪽 그림 없이) → 에이전트가 쓴 사이트 → chec
     assert.ok(last(bad).issues.some((x) => x.id === 'password-field'));
   } finally { fs.rmSync(work, { recursive: true, force: true }); }
 });
+
+test('강의 진행 키트: 교재 쪽에 묶은 투표·퀴즈 정답(강사 화면에만), 실습 시간(분), 발표 화면 교재 쪽, 모음, 사이트 스크립트가 있으면 관리자 키는 탭에만', () => {
+  const site = {
+    'index.html': PAGE(`
+<section data-lp-step="s1" data-title="실습 1: 표 정리" data-minutes="30"><h2>실습 1</h2><p>따라 해요.</p><button type="button" data-copy-text="표를 정리해 줘">복사</button></section>
+<section data-lp-step="s2" data-minutes="여섯"><h2>실습 2</h2><p>만들어요.</p></section>
+<section id="quiz"><h2>퀴즈</h2><div data-lp="poll" data-id="chart" data-page="2" data-answer="꺾은선" data-question="변화를 보여 줄 차트는?" data-options='["막대","꺾은선","원"]'></div>
+<div data-lp="poll" data-id="n" data-answer="2" data-question="둘째?" data-options='["가","나"]'></div><div data-lp="poll" data-id="bad" data-answer="없음" data-question="틀린 정답" data-options='["가","나"]'></div></section>
+<section id="nb"><h2>모음</h2><div data-lp="notebook"></div></section>`),
+    'material/p-001.webp': IMG, 'material/p-002.webp': IMG, 'material/p-003.webp': IMG,
+  };
+  const r = K.assemble(site, { ...META, features: ['qa', 'poll', 'attendance'] }, { runtime: rt, today: '2026-11-20' });
+  assert.deepEqual(r.errors, []);
+  const codes = r.warnings.map((w) => w.code);
+  assert.ok(codes.includes('step-minutes') && codes.includes('poll-answer'), codes.join(','));
+  // 정답은 참가자 쪽(HTML·#lp-data·data-poll)과 발표 화면에 없음, 강사 화면 목록에만(보기 번호)
+  assert.ok(!/data-answer|data-page="2"/.test(r.files['index.html']));
+  const con = lpBlueprint(r.files['console.html']), scr = lpBlueprint(r.files['screen.html']);
+  const cp = con.sections.find((s) => s.type === 'poll').items;
+  assert.deepEqual(cp.map((p) => [p.id, p.page, p.answer]), [['chart', 2, 1], ['n', undefined, 1], ['bad', undefined, undefined]]);
+  assert.ok(!JSON.stringify(scr).includes('"answer"'));
+  assert.deepEqual(con.stations.map((s) => s.minutes), [30, undefined]);
+  // 교재 넘기기 자리가 없어도 발표 화면은 교재 쪽 그림을 띄움
+  assert.deepEqual(scr.deck.map((x) => x[0]), [1, 2, 3]); assert.equal(scr.deck[0][1], 'material/p-001.webp');
+  assert.match(r.files['screen.html'], /data-scr-deck aria-label="교재" hidden>/, '시작 전에는 참여 안내(로비), 넘기면 교재(screen.js)'); assert.match(r.files['screen.html'], /data-keys-dialog/);
+  // 앱 미리보기(한 장 HTML)에서도 발표 화면의 교재 쪽 그림이 열림
+  assert.match(lpBlueprint(K.previewHtml(r.files, 'screen.html')).deck[0][1], /^data:image\/webp;base64,/);
+  // 모음 위젯과 표시, 사이트 스크립트가 없으면 keyTab 없음
+  assert.match(r.files['index.html'], /data-notebook/); assert.equal(lpData(r.files['index.html']).notebook, true);
+  assert.equal(lpData(r.files['console.html']).keyTab, undefined);
+  // 사이트 스크립트(assets/*.js·인라인·옮긴 onclick)가 하나라도 있으면 강사 화면은 관리자 키를 그 탭에만
+  const variants = [{ 'assets/site.js': 'console.log(1)' }, { 'index.html': site['index.html'].replace('</body>', '<script>window.x=1</script></body>') }, { 'index.html': site['index.html'].replace('<h2>모음</h2>', '<h2 onclick="x()">모음</h2>') }];
+  for (const extra of variants) {
+    const r2 = K.assemble({ ...site, ...extra }, { ...META, features: ['qa', 'poll'] }, { runtime: rt, today: '2026-11-20' });
+    assert.equal(lpData(r2.files['console.html']).keyTab, true, JSON.stringify(Object.keys(extra)));
+  }
+  // 강사·발표 화면은 다른 창이 가로채지 못하게(COOP)
+  for (const pth of ['/console.html', '/screen.html']) {
+    const block = r.files._headers.split('\n\n').find((b) => b.startsWith(pth + '\n'));
+    assert.match(block, /Cross-Origin-Opener-Policy: same-origin/); assert.match(block, /X-Frame-Options: DENY/);
+  }
+});

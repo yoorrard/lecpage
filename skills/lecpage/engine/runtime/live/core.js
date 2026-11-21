@@ -266,8 +266,8 @@
     switch (kind) {
       case 'participants': return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: P.map(function (p) { return [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]; }) };
       case 'attendance': {
-        var m = {}; (data.attendance || []).forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); var at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); });
-        return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt)]; }) };
+        var m = {}; (data.attendance || []).forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); var at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); if (a.byHost) r[a.kind + 'Host'] = true; });
+        return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·')]; }) };
       }
       case 'progress': {
         var pr = data.progress || []; var st = uniq(pr.map(function (x) { return x.station; })); var mm = {}; var order = [];
@@ -409,6 +409,17 @@
       var list = splitList(uiOf(st).reveal).filter(function (x) { return x !== id; });
       if (on) list.push(id);
       return { ui: { reveal: joinList(list) || null } };
+    },
+    /** 퀴즈 정답(강사가 공개할 때만 보냄): ui.ans = 'p1:2|p3:0'(투표 id:보기 번호, 0부터) → 번호, 없으면 -1 */
+    answerOf: function (st, id) {
+      var hit = splitList(uiOf(st).ans).filter(function (x) { return x.slice(0, x.lastIndexOf(':')) === id; })[0];
+      var n = hit ? +hit.slice(hit.lastIndexOf(':') + 1) : -1;
+      return n >= 0 && n < 100 ? n : -1;
+    },
+    answerPatch: function (st, id, idx) {
+      var list = splitList(uiOf(st).ans).filter(function (x) { return x.slice(0, x.lastIndexOf(':')) !== id; });
+      if (idx >= 0) list.push(String(id).replace(/[|:]/g, '-') + ':' + Math.floor(idx));
+      return { ui: { ans: joinList(list) || null } };
     },
     signalReset: function (st) { return Math.max(+(st && st.signalReset) || 0, +uiOf(st).signalReset || 0); },
     hiddenWords: function (st) { return (st && Array.isArray(st.hiddenWords) ? st.hiddenWords : []).concat(splitList(uiOf(st).hiddenWords)); },
@@ -1118,8 +1129,10 @@
     if (COLS.indexOf(col) < 0) return Promise.reject(LiveError('unknown_collection', '없는 컬렉션: ' + col, { status: 400, retryable: false }));
     var d = this._prepare(col, doc || {});
     var cid = d.cid || uid(16); delete d.cid;
-    var op = { op: 'add', col: col, doc: d, cid: cid, at: Date.now(), admin: col === 'polls' };
-    if (col === 'polls') return this._exec(op);
+    // 강사 명단: 휴대폰 없는 사람을 손으로 더하기(participants)·입실·퇴실 시각 넣기·고치기(attendance에 by) — 관리자만, 대기열 없이 바로
+    var roster = !!this._adminKey && (col === 'participants' || (col === 'attendance' && d.by != null));
+    var op = { op: 'add', col: col, doc: d, cid: cid, at: Date.now(), admin: col === 'polls' || roster };
+    if (op.admin) return this._exec(op);
     if (!this._adminKey) {
       // 강사가 잠근 칸·닫은 투표는 보내기 전에 알려 줌(연결이 끊겨 대기열에 넣었다가 나중에 조용히 버려지지 않게). 서버도 같은 규칙으로 거절
       var lock = col === 'questions' ? 'qa' : col === 'posts' ? 'board' : '';

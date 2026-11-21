@@ -1,4 +1,5 @@
-/* lecpage screen — 발표 화면: 참여 QR, 공지, 큰 타이머, 신호등, 인기 질문, 투표 결과, 반응.
+/* lecpage screen — 발표 화면: 교재 쪽(강사 화면·참가자 화면과 같은 쪽, 리모컨·키보드로 넘김), 키 하나로 겹쳐 띄우기
+ * (J 참여 QR · V 투표 · Q 질문 · T 큰 타이머 · N 공지 · B 가리기 · Esc 교재로), 참여 QR, 공지, 큰 타이머, 신호등, 인기 질문, 투표 결과, 반응.
  * 프로젝터·뒷자리에서 읽히게 크게, 넓은 화면에서는 한 화면에 들어가게(넘치는 질문은 개수로만 알림).
  * 참가자가 쓴 글은 textContent로만 넣고, 글 속 주소는 '(링크)'로 가림(프로젝터에 비친 주소가 공식 안내처럼 보이지 않게).
  * '도구'(이름 뽑기·모둠 만들기·타이머 여러 개)는 실시간 연결 없이도 이 화면 안에서 동작합니다(기록은 이 기기에만). */
@@ -48,7 +49,7 @@
   var idleT = 0;
   function idle() {
     if (!scr) return; clearTimeout(idleT); scr.removeAttribute('data-idle');
-    if (scr.hasAttribute('data-full')) idleT = setTimeout(function () { scr.setAttribute('data-idle', ''); }, 2500);
+    if (scr.hasAttribute('data-full') || scr.getAttribute('data-view') === 'deck') idleT = setTimeout(function () { scr.setAttribute('data-idle', ''); }, 2500);
   }
   ['mousemove', 'pointerdown', 'keydown'].forEach(function (t) { doc.addEventListener(t, idle, { passive: true }); });
   // 강사 화면의 [발표 화면 띄우기]로 연 쪽
@@ -337,6 +338,140 @@
     }
     setLobby();
   }
+  // ── 교재 쪽(발표)·겹쳐 띄우기 ──
+  // 쪽: 상태 slide(강사 화면·참가자 화면과 같은 번호). 겹쳐 띄우기: 상태 ui.ov('' 교재 · poll · qa · timer · notice · blank), 참여 QR은 ui.qrBig.
+  // 이 화면에서 넘기거나 띄우면 관리자 키가 있을 때(강사 화면이 연 창) 상태로 보내고, 없으면 이 화면에서만 바뀜
+  var DECK = (Array.isArray(BP.deck) ? BP.deck : []).filter(function (x) { return Array.isArray(x) && +x[0] > 0 && typeof x[1] === 'string'; });
+  var deckEl = $('[data-scr-deck]'), dImg = deckEl && $('[data-scr-img]', deckEl), dPg = deckEl && $('[data-scr-pg]', deckEl), ovEl = $('[data-scr-ov]');
+  var cur = 0, started = false, ov = '', force = '', rSlide = null, rOv = null, slideAt = 0, ovAt = 0, resyncT = 0, jumpBuf = '', jumpT = 0, ovT = 0, warned = false;
+  if (!DECK.length && deckEl) deckEl.hidden = true;
+  function st0() { return typeof state === 'object' && state ? state : {}; }
+  function push(patch) {
+    if (!(conn && canWrite)) { if (DATA.live && !warned) { warned = true; toast('이 화면에서만 바뀌어요. 강사 화면의 [발표 화면 띄우기]로 열면 함께 바뀌어요.'); } return; }
+    conn.setState(patch).catch(function () { toast('보내지 못했어요. 이 화면에서만 바뀌어요.'); });
+  }
+  function showPage(i, send) {
+    if (!DECK.length) return;
+    cur = Math.max(0, Math.min(DECK.length - 1, i));
+    var d = DECK[cur];
+    if (dImg && dImg.getAttribute('src') !== d[1]) { dImg.src = d[1]; dImg.alt = '교재 ' + d[0] + '쪽' + (d[2] ? ': ' + d[2] : ''); }
+    if (dPg) dPg.textContent = d[0] + ' / ' + DECK[DECK.length - 1][0];
+    [cur + 1, cur - 1].forEach(function (k) { if (DECK[k]) { var im = new Image(); im.decoding = 'async'; im.src = DECK[k][1]; } });
+    if (send) { started = true; slideAt = Date.now(); rSlide = +d[0]; var pt = { slide: +d[0] }; if (ov) { pt.ui = { ov: null }; } push(pt); }
+  }
+  function pageIndex(n) { var b = 0; DECK.forEach(function (x, k) { if (Math.abs(+x[0] - n) < Math.abs(+DECK[b][0] - n)) b = k; }); return b; }
+  function step(d) {
+    if (ov) { setOv('', true); return; } // 겹쳐 띄운 것이 있으면 먼저 교재로(리모컨의 다음 단추로도 닫힘)
+    if (big && big.open) { closeQr(); return; }
+    if (!started) { if (d > 0) { showPage(0, true); applyOv(); } return; } // 시작 전(참여 안내) → 첫 쪽부터
+    showPage(cur + d, true);
+  }
+  // 첫 쪽을 넘기기 전(상태 slide 0)에는 참여 안내(로비: 큰 QR·제목)를 보이고, 넘기기 시작하면 교재
+  function viewOf() { return ov === 'poll' || ov === 'qa' || !DECK.length || !started ? 'live' : 'deck'; }
+  /** 겹쳐 띄우기 그리기: 투표·질문은 참여 화면(무대+QR 레일)을, 큰 타이머·공지·가림은 덮개를 */
+  function applyOv() {
+    force = ov === 'poll' || ov === 'qa' ? ov : '';
+    if (scr) { scr.setAttribute('data-view', viewOf()); if (ov) scr.setAttribute('data-ov', ov); else scr.removeAttribute('data-ov'); }
+    if (deckEl) deckEl.hidden = viewOf() !== 'deck';
+    clearInterval(ovT);
+    if (ovEl) {
+      var cover = ov === 'timer' || ov === 'notice' || ov === 'blank';
+      ovEl.hidden = !cover; ovEl.className = 'lp-scr-ov' + (cover ? ' is-' + ov : ''); ovEl.textContent = '';
+      if (ov === 'timer') { ovEl.appendChild(el('p', 'lp-scr-ov-h')); ovEl.appendChild(el('p', 'lp-scr-ov-n')); bigTick(); ovT = setInterval(bigTick, 500); }
+      else if (ov === 'notice') { var nt = st0().notice && st0().notice.text; ovEl.appendChild(el('p', nt ? 'lp-scr-ov-t' : 'lp-scr-ov-h', nt || '보낸 공지가 없어요. 강사 화면의 [공지]에서 보내요.')); }
+    }
+    idle(); if (draw.last) draw(); else drawChrome();
+  }
+  function setOv(v, send) {
+    v = v || ''; if (v === ov && v) v = '';
+    ov = v; rOv = v; ovAt = Date.now(); applyOv();
+    if (send) push({ ui: { ov: v || null, qrBig: null } });
+  }
+  function timerNow() { var t = st0().timer; return t && t.running && t.endsAt ? t : null; }
+  function bigTick() {
+    if (!ovEl || ov !== 'timer') return;
+    var t = timerNow(), h = $('.lp-scr-ov-h', ovEl), n = $('.lp-scr-ov-n', ovEl); if (!h || !n) return;
+    if (!t) { h.textContent = '돌아가는 타이머가 없어요'; n.textContent = '--:--'; ovEl.removeAttribute('data-over'); return; }
+    var l = t.endsAt - tNow(); h.textContent = l <= 0 ? '시간이 다 됐어요' : (t.label ? t.label + ' · 남은 시간' : '남은 시간'); n.textContent = l <= 0 ? '0:00' : mmss(l);
+    if (l <= 0) ovEl.setAttribute('data-over', ''); else ovEl.removeAttribute('data-over');
+  }
+  /** 교재 위의 작은 것: 공지 띠, 오른쪽 아래 타이머 */
+  function drawChrome() {
+    if (!deckEl) return;
+    var nEl = $('[data-scr-dnotice]', deckEl), cEl = $('[data-scr-chip]', deckEl), sn = st0().notice;
+    if (nEl) { nEl.hidden = !(sn && sn.text); nEl.textContent = sn && sn.text ? sn.text : ''; }
+    if (cEl) {
+      var t = timerNow(); cEl.hidden = !t;
+      if (t) { var l = t.endsAt - tNow(); cEl.textContent = (t.label ? t.label + ' ' : '') + (l <= 0 ? '끝' : mmss(l)); cEl.toggleAttribute('data-over', l <= 0); }
+    }
+  }
+  setInterval(function () { if (viewOf() === 'deck') drawChrome(); }, 1000);
+  /** 상태가 바뀌면(강사 화면·다른 화면에서 넘김) 따라감. 방금 이 화면에서 누른 것은 늦게 온 옛 상태로 되돌리지 않음 */
+  function syncDeck() {
+    var s1 = st0(), now = Date.now(), freshS = now - slideAt < 800, freshO = now - ovAt < 800, later = false;
+    var wasStarted = started;
+    if (DECK.length && s1.slide > 0 && +s1.slide !== rSlide) { if (freshS) later = true; else { rSlide = +s1.slide; started = true; showPage(pageIndex(+s1.slide)); } }
+    if (started !== wasStarted) { rOv = (s1.ui || {}).ov || ''; ov = rOv; applyOv(); return true; }
+    var o = (s1.ui || {}).ov || '';
+    // 방금 이 화면에서 바꾼 것은 잠깐 지킴(늦게 온 옛 상태로 되돌지 않게). 그사이 온 다른 변화는 조금 뒤 다시 맞춤
+    if (o !== rOv && freshO) later = true;
+    if (later) { clearTimeout(resyncT); resyncT = setTimeout(function () { if (draw.last) draw(); else syncDeck(); }, 850); }
+    if (o !== rOv && !freshO) { rOv = o; ov = o; applyOv(); return true; }
+    if (ov === 'notice' && ovEl) { var tx = $('.lp-scr-ov-t, .lp-scr-ov-h', ovEl), nt = s1.notice && s1.notice.text; if (tx && nt && tx.textContent !== nt) applyOv(); }
+    drawChrome();
+    return false;
+  }
+  function closeQr() { if (DATA.live && conn && canWrite && (st0().ui || {}).qrBig) push({ ui: { qrBig: null } }); else if (big && big.open) big.close(); }
+  function toggleQr() {
+    if (!qrMarkup) return toast(LOOP ? LOOP_MSG : '배포하면 QR이 나와요.');
+    if (big && big.open) return closeQr();
+    if (conn && canWrite) push({ ui: { qrBig: true, ov: null } }); else openBig();
+  }
+  if (DECK.length) showPage(0);
+  // 위 띠가 보이는 동안 교재 위 공지 띠를 그 아래로(띠 높이는 글꼴·폭에 따라 바뀜)
+  var topEl = $('.lp-scr-top');
+  if (deckEl && topEl && scr && window.ResizeObserver) new ResizeObserver(function () { scr.style.setProperty('--scr-top-h', topEl.offsetHeight + 'px'); }).observe(topEl);
+  applyOv();
+  // 키(발표용 리모컨: PageDown·PageUp·→·←, 가리기 'B'·'.', 시작 F5)
+  doc.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = (t && t.tagName) || '';
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (t && t.isContentEditable)) return;
+    if (drawer && !drawer.hidden) return;
+    var k = e.key, onCtl = /^(BUTTON|A|SUMMARY)$/.test(tag) && !(t.closest && t.closest('[data-scr-deck]'));
+    var keysDlg = $('[data-keys-dialog]');
+    if (doc.querySelector('dialog[open]:not([data-joinbig])')) return; // 단축키 안내·전체 화면 안내가 열려 있으면 그 창이 먼저
+    if (/^[0-9]$/.test(k) && DECK.length) { jumpBuf = (jumpBuf + k).slice(-4); toast(jumpBuf + '쪽으로 가려면 Enter'); clearTimeout(jumpT); jumpT = setTimeout(function () { jumpBuf = ''; }, 2500); e.preventDefault(); return; }
+    if (k === 'Enter' && jumpBuf) { var n = +jumpBuf; jumpBuf = ''; if (ov) setOv('', true); showPage(pageIndex(n), true); applyOv(); e.preventDefault(); return; }
+    var go = null;
+    switch (k) {
+      case 'PageDown': case 'ArrowRight': case 'ArrowDown': go = 1; break;
+      case ' ': case 'Enter': if (!onCtl) go = 1; break;
+      case 'PageUp': case 'ArrowLeft': case 'ArrowUp': case 'Backspace': go = -1; break;
+      case 'Home': if (DECK.length) { showPage(0, true); applyOv(); e.preventDefault(); } return;
+      case 'End': if (DECK.length) { showPage(DECK.length - 1, true); applyOv(); e.preventDefault(); } return;
+      case 'j': case 'J': if (DATA.live) { toggleQr(); e.preventDefault(); } return;
+      case 'v': case 'V': if (DATA.live) { setOv('poll', true); e.preventDefault(); } return;
+      case 'q': case 'Q': if (DATA.live) { setOv('qa', true); e.preventDefault(); } return;
+      case 't': case 'T': setOv('timer', true); e.preventDefault(); return;
+      case 'n': case 'N': if (DATA.live) { setOv('notice', true); e.preventDefault(); } return;
+      case 'b': case 'B': case '.': setOv('blank', true); e.preventDefault(); return;
+      case 'Escape': if (big && big.open) return; if (ov) { setOv('', true); e.preventDefault(); } return;
+      case 'f': case 'F': case 'F5': if (doc.documentElement.requestFullscreen) { if (doc.fullscreenElement) doc.exitFullscreen(); else goFull(); } e.preventDefault(); return;
+      case '?': case 'h': case 'H': if (keysDlg && keysDlg.showModal) keysDlg.showModal(); e.preventDefault(); return;
+      default: return;
+    }
+    if (go !== null && (DECK.length || ov || (big && big.open))) { e.preventDefault(); step(go); }
+  });
+  // 태블릿: 교재를 밀어 넘기기
+  if (deckEl) {
+    var sx = null;
+    deckEl.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+    deckEl.addEventListener('touchend', function (e) { if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1); });
+  }
+  var ko = $('[data-keys-open]'), kd = $('[data-keys-dialog]');
+  if (ko && kd && kd.showModal) ko.addEventListener('click', function () { kd.showModal(); }); else if (ko) ko.hidden = true;
+
   function draw() { draw.last = true; }
   if (!DATA.live || !window.LecLive) return;
 
@@ -399,11 +534,22 @@
   });
   draw = function () {
     draw.last = true;
-    syncBig();
+    if (syncDeck()) return; // 겹쳐 띄우기가 바뀌었으면 applyOv가 다시 그림
+    syncBig(); bigTick();
     var n = $('[data-notice]'); if (state.notice && state.notice.text) { n.hidden = false; n.textContent = state.notice.text; } else n.hidden = true;
     drawTimer(); drawSignal(); fitRail();
-    var p = openPoll();
+    var p = force === 'qa' ? null : openPoll();
     var arr = Object.keys(qs).map(function (k) { return qs[k]; }).filter(function (x) { return x.status === 'open' || (x.pinned && x.status !== 'hidden'); }).sort(function (a, b) { return (!!b.pinned - !!a.pinned) || (b.votes || 0) - (a.votes || 0) || (a.createdAt || 0) - (b.createdAt || 0); });
+    // V(투표)를 눌렀는데 열린 투표가 없음
+    if (force === 'poll' && !p) { mainBox.textContent = ''; setLobby(); var m0 = el('div', 'lp-scr-msg'); m0.appendChild(el('h2', '', '열린 투표가 없어요')); m0.appendChild(el('p', '', '강사 화면에서 투표를 열면 여기에 나와요. Esc를 누르면 교재로 돌아가요.')); mainBox.appendChild(m0); return fit(); }
+    // 강사가 고른 질문 하나를 크게(강사 화면의 [발표 화면에 크게])
+    var sq = force === 'qa' && (state.ui || {}).q ? qs[state.ui.q] : null;
+    if (sq && sq.status !== 'hidden') {
+      mainBox.textContent = ''; setLobby();
+      var sp = el('div', 'lp-scr-spot'); sp.appendChild(el('p', 'lp-scr-spot-k', '강사가 고른 질문'));
+      sp.appendChild(el('p', 'lp-scr-spot-t', shown(sq.text, 280))); sp.appendChild(el('p', 'lp-scr-pmeta', '공감 ' + (sq.votes || 0)));
+      mainBox.appendChild(sp); return fit();
+    }
     if (!p && !arr.length) { lobbyStage(); return; }
     mainBox.textContent = ''; setLobby();
     if (p) {
@@ -423,10 +569,10 @@
       } else {
         var tally = X.tally(list); // 응답자당 한 표(강사·참가자 화면과 같은 수)
         var opts = (p.options.length ? p.options : Object.keys(tally)).slice(0, 8), best = 0; opts.forEach(function (o) { best = Math.max(best, tally[o] || 0); });
-        var bars = el('ol', 'lp-scr-bars');
+        var bars = el('ol', 'lp-scr-bars'), ai = X.answerOf ? X.answerOf(state, p.id) : -1, right = ai >= 0 ? p.options[ai] : undefined;
         opts.forEach(function (o) {
-          var c = tally[o] || 0, pct = Math.round(c / Math.max(total, 1) * 100), r = el('li', 'lp-scr-bar' + (c && c === best ? ' is-top' : ''));
-          r.appendChild(el('span', '', shown(o, 60))); var b = el('b', '', pct + '%'); b.appendChild(el('small', '', c + '명')); r.appendChild(b);
+          var c = tally[o] || 0, pct = Math.round(c / Math.max(total, 1) * 100), r = el('li', 'lp-scr-bar' + (right !== undefined ? (o === right ? ' is-answer' : '') : c && c === best ? ' is-top' : ''));
+          var lb = el('span', '', shown(o, 60)); if (o === right) lb.appendChild(el('em', 'lp-scr-ans', '정답')); r.appendChild(lb); var b = el('b', '', pct + '%'); b.appendChild(el('small', '', c + '명')); r.appendChild(b);
           var tr = el('i'); tr.setAttribute('aria-hidden', 'true'); tr.style.setProperty('--w', pct + '%'); r.appendChild(tr); bars.appendChild(r);
         });
         mainBox.appendChild(bars);

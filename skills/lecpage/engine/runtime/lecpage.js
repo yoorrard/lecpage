@@ -321,12 +321,83 @@
       var b = e.target.closest && e.target.closest('[data-copy]');
       if (b) {
         var box = b.closest('.lp-prompt'); var ta = box && box.querySelector('textarea');
-        if (ta) copyText(ta.value, '복사했어요. AI 도구에 붙여 넣으세요.', ta).then(function (ok) { if (ok) { b.classList.add('is-copied'); var s = b.querySelector('span'); var o = s && s.textContent; if (s) s.textContent = '복사됨'; setTimeout(function () { b.classList.remove('is-copied'); if (s) s.textContent = o; }, 1600); } });
+        if (ta) copyText(ta.value, notebook.add(ta.value, labelOf(b)) ? '복사했어요. 모음에도 담았어요.' : '복사했어요. AI 도구에 붙여 넣으세요.', ta).then(function (ok) { if (ok) { b.classList.add('is-copied'); var s = b.querySelector('span'); var o = s && s.textContent; if (s) s.textContent = '복사됨'; setTimeout(function () { b.classList.remove('is-copied'); if (s) s.textContent = o; }, 1600); } });
+        // 사이트 스크립트가 복사하는 단추(data-copy="글 상자 id"): 복사는 사이트가, 모음에 담기만 여기서
+        else { var src = b.getAttribute('data-copy'), pre = src && /^[A-Za-z][\w-]*$/.test(src) ? doc.getElementById(src) : null; if (pre && notebook.add(pre.value !== undefined ? pre.value : pre.textContent, labelOf(b))) toast('모음에도 담았어요.'); }
         return;
       }
       var c = e.target.closest && e.target.closest('[data-copy-text]');
-      if (c) copyText(c.getAttribute('data-copy-text'), '복사했어요.');
+      if (c) { var tx = c.getAttribute('data-copy-text'); copyText(tx, notebook.add(tx, labelOf(c)) ? '복사했어요. 모음에도 담았어요.' : '복사했어요.'); }
     });
+  }
+
+  /* ── 모음(data-lp="notebook"): 복사한 프롬프트·내 메모를 이 기기에 모으고 .txt로 받기 ── */
+  // 사이트에 모음 칸이 있을 때만(어느 쪽이든) 복사할 때마다 담음. 사이트 스크립트는 LecPage.notebook.add(글, 제목)로 더함
+  var NB_MAX = 200;
+  function nbList() { var a = store.get('nb', []); return Array.isArray(a) ? a.filter(function (x) { return x && typeof x.t === 'string'; }) : []; }
+  /** 복사 단추의 이름: 단추·감싼 칸의 data-title, 아니면 그 앞의 가장 가까운 제목 */
+  function labelOf(el) {
+    var own = el.getAttribute('data-title'); if (own) return own.slice(0, 60);
+    for (var n = el.parentElement, i = 0; n && i < 7; n = n.parentElement, i++) {
+      var dt = n.getAttribute && n.getAttribute('data-title'); if (dt) return dt.slice(0, 60);
+      var hs = n.querySelectorAll ? n.querySelectorAll('h1,h2,h3,h4,h5,figcaption,legend') : [];
+      for (var k = hs.length - 1; k >= 0; k--) if (hs[k].compareDocumentPosition(el) & 4) return hs[k].textContent.replace(/\s+/g, ' ').trim().slice(0, 60);
+    }
+    return '';
+  }
+  var notebook = {
+    on: function () { return !!DATA.notebook; },
+    list: function () { return nbList().map(function (x) { return { text: x.t, title: x.s || '', at: x.at || 0 }; }); },
+    /** 담으면 true(같은 글이 이미 있으면 맨 아래로 옮기기만) */
+    add: function (text, title) {
+      if (!DATA.notebook) return false;
+      var t = String(text == null ? '' : text).replace(/\r\n?/g, '\n').trim(); if (!t) return false;
+      t = t.slice(0, 4000);
+      var a = nbList().filter(function (x) { return x.t !== t; });
+      a.push({ t: t, s: String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60), at: Date.now() });
+      store.set('nb', a.slice(-NB_MAX)); drawNotebook(true); return true;
+    }
+  };
+  window.LecPage.notebook = notebook;
+  function nbText() {
+    var t = (DATA.title || '연수') + ' · 모음\n' + new Date().toLocaleDateString('ko-KR') + '\n';
+    nbList().forEach(function (x, i) { t += '\n■ ' + String(i + 1).padStart(2, '0') + (x.s ? ' ' + x.s : '') + '\n' + x.t + '\n'; });
+    return t;
+  }
+  function drawNotebook(added) {
+    var a = nbList();
+    $$('[data-notebook]').forEach(function (box) {
+      var ul = $('[data-nb-list]', box); if (!ul) return;
+      ul.textContent = '';
+      if (!a.length) ul.appendChild(el('li', 'lp-empty', '아직 담은 글이 없어요. 프롬프트의 [복사]를 누르면 여기에 모여요.'));
+      a.forEach(function (x, i) {
+        var li = el('li');
+        if (x.s) li.appendChild(el('span', 'lp-nb-src', x.s));
+        li.appendChild(el('pre', 'lp-nb-t', x.t));
+        var act = el('div', 'lp-nb-a');
+        var cp = el('button', 'lp-btn lp-btn-ghost lp-btn-sm', '복사'); cp.type = 'button'; cp.setAttribute('aria-label', (i + 1) + '번째 글 복사');
+        cp.addEventListener('click', function () { copyText(x.t, '복사했어요.'); });
+        var out = el('button', 'lp-btn lp-btn-ghost lp-btn-sm', '빼기'); out.type = 'button'; out.setAttribute('aria-label', (i + 1) + '번째 글 빼기');
+        out.addEventListener('click', function () { store.set('nb', nbList().filter(function (y) { return y.t !== x.t; })); drawNotebook(); var f = $('[data-nb-form] textarea', box); if (f) f.focus(); toast('모음에서 뺐어요.'); });
+        act.appendChild(cp); act.appendChild(out); li.appendChild(act); ul.appendChild(li);
+      });
+      ['[data-nb-save]', '[data-nb-copy]', '[data-nb-clear]'].forEach(function (q) { var b = $(q, box); if (b) b.disabled = !a.length; });
+      var c = $('[data-nb-count]', box); if (c) c.textContent = a.length ? '담은 글 ' + a.length + '개' : '';
+      var nw = $('[data-nb-news]', box); if (nw && added) nw.textContent = '모음에 담았어요. 모두 ' + a.length + '개';
+    });
+  }
+  function initNotebook() {
+    var boxes = $$('[data-notebook]'); if (!boxes.length) return;
+    boxes.forEach(function (box) {
+      var f = $('[data-nb-form]', box);
+      if (f) f.addEventListener('submit', function (e) { e.preventDefault(); var ta = f.querySelector('textarea'); if (notebook.add(ta.value, '내 메모')) { ta.value = ''; toast('모음에 담았어요.'); } });
+      var sv = $('[data-nb-save]', box); if (sv) sv.addEventListener('click', function () { download((DATA.title || '연수').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) + '_모음.txt', nbText(), '모음을 .txt로 받았어요.'); });
+      var cp = $('[data-nb-copy]', box); if (cp) cp.addEventListener('click', function () { copyText(nbText(), '모음을 모두 복사했어요.'); });
+      var cl = $('[data-nb-clear]', box); if (cl) cl.addEventListener('click', function () { if (!window.confirm('모음을 모두 지울까요? 이 기기에서만 지워져요.')) return; store.del('nb'); drawNotebook(); toast('모음을 비웠어요.'); });
+    });
+    // 다른 탭(사이트의 다른 쪽)에서 담으면 여기도
+    window.addEventListener('storage', function (e) { if (e.key === KEY + ':nb') drawNotebook(); });
+    drawNotebook();
   }
 
   /* ── 일정: 지금 순서 ─────────────────────── */
@@ -607,13 +678,10 @@
     function fromHash() { var m = /^#deck-p(\d+)$/.exec(location.hash); if (!m) return false; var i = slides.findIndex(function (s) { return s.getAttribute('data-page') === m[1]; }); if (i >= 0) { go(i); deck.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); } return true; }
     window.addEventListener('hashchange', fromHash);
     if (!fromHash()) go(0, { quiet: true });
-    deckApi = { go: function (page, move) {
+    deckApi = { go: function (page) {
       var i = slides.findIndex(function (s) { return +s.getAttribute('data-page') === +page; }); if (i < 0 || i === cur) return;
+      // 쪽만 맞추고 화면은 옮기지 않음(발표 내내 따라 넘기기가 켜져 있어 다른 칸을 읽는 사람을 끌어오지 않게). 교재가 화면 밖이면 '지금' 줄에 [N쪽 보기]
       go(i);
-      if (!move) return;
-      var a = doc.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !deck.contains(a), r = deck.getBoundingClientRect();
-      if (!typing && (r.bottom < 80 || r.top > innerHeight * 0.6)) { deck.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); toast('' + HOST_GA + ' 보는 ' + page + '쪽으로 옮겼어요.'); }
-      else if (typing) toast('' + HOST_GA + ' ' + page + '쪽을 보고 있어요.');
     }, has: function (page) { return slides.some(function (s) { return +s.getAttribute('data-page') === +page; }); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
   }
   // 글만 있는 쪽의 작은 미리보기: 쪽 번호 + 제목(표지·부 시작은 큰 슬라이드와 같은 바탕)
@@ -1078,7 +1146,17 @@
           if (!words.length) cl.appendChild(el('p', 'lp-small', '아직 보여 줄 낱말이 없어요.'));
           host.appendChild(cl);
         }
-        else { var bars = el('div', 'lp-bars'); (p.options.length ? p.options : Object.keys(tally)).forEach(function (o) { var n = tally[o] || 0; var row = el('div', 'lp-bar'); row.appendChild(el('span', '', o + ' · ' + n + '명')); var tr = el('div', 'lp-bar-track'); var fi = el('div', 'lp-bar-fill'); fi.style.setProperty('--w', Math.round(n / total * 100) + '%'); tr.appendChild(fi); row.appendChild(tr); bars.appendChild(row); }); host.appendChild(bars); }
+        else {
+          // 퀴즈: 강사가 정답을 공개하면(ui.ans) 그 보기에 '정답'과 내 답이 맞았는지
+          var ai = X.answerOf ? X.answerOf(state, p.id) : -1, right = ai >= 0 ? p.options[ai] : undefined;
+          if (right !== undefined) host.appendChild(el('p', 'lp-quiz-me', mine === right ? '맞았어요.' : '정답은 ‘' + right + '’이에요.'));
+          var bars = el('div', 'lp-bars');
+          (p.options.length ? p.options : Object.keys(tally)).forEach(function (o) {
+            var n = tally[o] || 0; var row = el('div', 'lp-bar' + (o === right ? ' is-answer' : '')); var lb = el('span', '', o + ' · ' + n + '명'); if (o === right) lb.appendChild(el('b', 'lp-bar-tag', '정답')); row.appendChild(lb);
+            var tr = el('div', 'lp-bar-track'); var fi = el('div', 'lp-bar-fill'); fi.style.setProperty('--w', Math.round(n / total * 100) + '%'); tr.appendChild(fi); row.appendChild(tr); bars.appendChild(row);
+          });
+          host.appendChild(bars);
+        }
       }
     }
     function answer(p, v, done) {
@@ -1312,14 +1390,12 @@
       });
       window.addEventListener('hashchange', function () { setTimeout(drawNow, 0); });
     }
-    var seenState = false;
     function applyState(s) {
       state = s || {};
       if (state.follow) {
         if (state.step && stApi) stApi.go(state.step);
-        if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide, seenState); // 처음 열 때는 쪽만 맞추고 화면은 옮기지 않음
+        if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide);
       }
-      seenState = true;
       checkSignalReset(); drawPoll(); drawMats(); drawNow(); drawLocks();
     }
     // 강사가 질문·보드를 잠그면 쓰는 칸을 막고 까닭을 보임(서버도 같은 규칙으로 거절)
@@ -1458,7 +1534,7 @@
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
     $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
-    drawQRs(); initChrome(); initCal(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initPoster(); initLive();
+    drawQRs(); initChrome(); initCal(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initNotebook(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

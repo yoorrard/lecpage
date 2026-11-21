@@ -462,6 +462,37 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.equal(rows.length, 1, csv); assert.match(rows[0], /^먼저옴 \/ 휴대폰2,홍길동,한빛초,/);
   });
 
+  test(`${name}: instructor roster — add someone without a phone (consent), set or fix check-in·check-out for anyone, fix name·school; admin only; marked in the CSV`, async () => {
+    const c = fresh('R'); const a = api(c.base, c.code);
+    const p = await joinAs(a, '휴대폰');
+    // 참가자는 명단에 사람을 더하거나 남의 시각을 넣을 수 없음
+    assert.equal((await a.call('POST', '/participants', { token: p.token, body: { name: '박세나', consent: true } })).status, 405);
+    assert.equal((await a.call('POST', '/attendance', { token: p.token, body: { by: p.id, kind: 'in', at: Date.now() - 3600e3 } })).body.at > Date.now() - 60e3, true, 'a participant cannot backdate: by·at are ignored');
+    const noConsent = await a.call('POST', '/participants', { admin: c.adminKey, body: { name: '박세나', school: '새온초' } });
+    assert.equal(noConsent.status, 400); assert.equal(noConsent.body.error, 'consent_required');
+    const added = await a.call('POST', '/participants', { admin: c.adminKey, body: { name: '박세나', school: '새온초', consent: true } });
+    assert.equal(added.status, 201); assert.equal(added.body.manual, true); assert.equal(added.body.name, '박세나'); assert.ok(added.body.consentAt > 0);
+    const at = Date.now() - 30 * 60e3;
+    const in1 = await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: added.body.id, kind: 'in', at } });
+    assert.equal(in1.status, 201); assert.equal(in1.body.at, at); assert.equal(in1.body.byHost, true); assert.equal(in1.body.by, added.body.id);
+    // 고치기: 같은 사람·같은 종류는 덮어씀(첫 입실을 지키는 참가자 규칙과 달리 강사가 적은 시각 그대로)
+    const in2 = await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: added.body.id, kind: 'in', at: at + 5 * 60e3 } });
+    assert.equal(in2.status, 200); assert.equal(in2.body.id, in1.body.id); assert.equal(in2.body.at, at + 5 * 60e3);
+    // 휴대폰으로 입실한 사람의 빠뜨린 퇴실
+    await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } });
+    assert.equal((await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: p.id, kind: 'out' } })).status, 201);
+    assert.equal((await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: 'p_nobody', kind: 'out' } })).status, 404);
+    assert.equal((await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: p.id, kind: 'out', at: Date.now() + 3600e3 } })).status, 400, 'never ahead');
+    // 이름·소속 고치기: 동의한 사람만
+    assert.equal((await a.call('PATCH', `/participants/${added.body.id}`, { admin: c.adminKey, body: { name: '박세나', school: '새온중' } })).body.school, '새온중');
+    assert.equal((await a.call('PATCH', `/participants/${p.id}`, { admin: c.adminKey, body: { name: '홍길동' } })).body.error, 'consent_required');
+    const csv = await (await a.call('GET', '/export.csv?kind=attendance', { admin: c.adminKey, raw: true })).text();
+    assert.match(csv.split('\r\n')[0], /강사 입력$/);
+    assert.match(csv, /박세나,박세나,새온중,[^,]+,,[^,]+,명단·입실/); assert.match(csv, /휴대폰,,,[^,]+,[^,]+,,퇴실/);
+    // 지우기는 예전처럼(관리자)
+    assert.equal((await a.call('DELETE', `/participants/${added.body.id}`, { admin: c.adminKey })).status, 200);
+  });
+
   if (uploads) test(`${name}: board files — only my own uploads; hide, remove and uploads=false take effect on the server`, async () => {
     const c = fresh('F'); const a = api(c.base, c.code);
     const p1 = await joinAs(a, '하나'); const p2 = await joinAs(a, '둘');

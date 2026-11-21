@@ -127,6 +127,22 @@
 .lpk .lp-cloud span:nth-child(2n){color:var(--_ink)}
 .lpk .lp-poll-list{font-size:.9rem}
 
+/* 퀴즈(정답 공개 뒤) */
+.lpk .lp-bar.is-answer > span{font-weight:800}
+.lpk .lp-bar.is-answer .lp-bar-fill{background:var(--_act)}
+.lpk .lp-bar-tag{display:inline-block;margin-inline-start:.4em;padding:0 .45em;border-radius:4px;background:var(--_ac);color:var(--_on);font-size:.78rem;font-weight:800}
+.lpk .lp-quiz-me{font-weight:700}
+
+/* 모음(이 기기에만) */
+.lpk .lp-nb{display:grid;gap:12px}
+.lpk .lp-nb-list{display:grid;counter-reset:nb}
+.lpk .lp-nb-list > li:not(.lp-empty){display:grid;gap:6px;padding:12px 0;border-top:1px solid var(--_line)}
+.lpk .lp-nb-list > li:last-child{border-bottom:1px solid var(--_line)}
+.lpk .lp-nb-src{font-size:.8rem;font-weight:700;color:color-mix(in srgb,var(--_ink) 72%,transparent)}
+.lpk .lp-nb-t{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.93rem;line-height:1.55;max-height:9.5em;overflow:auto}
+.lpk .lp-nb-a{display:flex;gap:6px;justify-content:flex-end}
+.lpk .lp-nb-list > .lp-empty{padding:8px 0}
+
 /* 출석 */
 .lpk .lp-attend{display:grid;gap:12px;justify-items:start}
 .lpk .lp-ctas{display:flex;gap:8px;flex-wrap:wrap}

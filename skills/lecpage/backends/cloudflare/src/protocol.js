@@ -294,7 +294,8 @@ const OWNER_PATCH = {
   questions: ['text'], posts: ['kind', 'text', 'files', 'license'], answers: ['value'], survey: ['answers'],
 };
 const ADMIN_PATCH = {
-  participants: ['nickname'], help: ['status', 'assignee'], questions: ['status', 'pinned', 'text'],
+  // name·school: the instructor fixes a typo on the roster (only once that person consented, see update())
+  participants: ['nickname', 'name', 'school'], help: ['status', 'assignee'], questions: ['status', 'pinned', 'text'],
   posts: ['hidden', 'text'], polls: ['question', 'kind', 'options', 'open'], chat: ['hidden'], progress: ['status'],
 };
 /** Validates a PATCH body for a role. Unknown fields are ignored; nothing allowed → 400. */
@@ -427,8 +428,9 @@ export function exportTable(kind, data, timeZone, opts) {
       return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: data.participants.map((p) => [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]) };
     case 'attendance': {
       const m = new Map();
-      for (const a of data.attendance || []) { const r = m.get(a.by) || {}; const at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); m.set(a.by, r); }
-      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'], rows: data.participants.map((p) => { const r = m.get(p.id) || {}; return [p.nickname, p.name, p.school, t(r.in), t(r.out), t(p.consentAt)]; }) };
+      for (const a of data.attendance || []) { const r = m.get(a.by) || {}; const at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); if (a.byHost) r[a.kind + 'Host'] = true; m.set(a.by, r); }
+      // 강사 입력: 강사 화면에서 손으로 더한 사람(명단)·강사가 넣거나 고친 시각(입실·퇴실)
+      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력'], rows: data.participants.map((p) => { const r = m.get(p.id) || {}; return [p.nickname, p.name, p.school, t(r.in), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·')]; }) };
     }
     case 'progress': {
       const stations = [...new Set((data.progress || []).map((x) => x.station))];
@@ -1026,10 +1028,54 @@ export class LiveCore {
     return { status: 200, body: rows.map((r) => this.out(col, r, admin, viewer, shown)) };
   }
 
+  /** The instructor's roster (attendance list on the console): someone without a phone is added by hand (name·school,
+   *  consent asked in person), and a check-in or check-out time is set or corrected for anyone. Admin only. */
+  adminRoster(code, col, body, t) {
+    if (!isObj(body)) throw bad('invalid_body', '본문이 JSON 객체가 아닙니다.');
+    this.limit('admin', 'admin:' + code, null);
+    const now = this.tick(code);
+    if (col === 'participants') {
+      const name = cleanText(body.name, LIMITS.name, 'name', { required: true });
+      const school = cleanText(body.school, LIMITS.school, 'school');
+      if (body.consent !== true) throw bad('consent_required', '이름·소속을 남기려면 개인정보 수집에 동의해야 합니다.');
+      if (this.count(code, 'participants') >= this.cfg.maxParticipants) throw new HttpError(403, 'room_full', `참가 인원이 가득 찼어요(최대 ${this.cfg.maxParticipants}명).`);
+      const id = 'p' + randomId(9);
+      const data = { nickname: cleanText(body.nickname, LIMITS.nickname, 'nickname') || name.slice(0, LIMITS.nickname), name, school, consentAt: now, manual: true };
+      this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, 'participants', ?, ?, NULL, NULL, ?, ?, ?)`, code, id, id, JSON.stringify(data), now, now);
+      this.bumpCount(code, 'participants', 1);
+      this.touch(t);
+      const row = this.getRow(code, 'participants', id);
+      return { status: 201, body: this.out(col, row, true), events: [this.event('add', 'participants', row)] };
+    }
+    // attendance { by, kind, at }: the time given replaces the recorded one (a correction), up to a week back and never ahead
+    const by = cleanId(body.by, 'by');
+    if (!this.getRow(code, 'participants', by)) throw new HttpError(404, 'not_found', '없는 참가자입니다.');
+    const kind = cleanEnum(body.kind, ['in', 'out'], 'kind');
+    const at = body.at == null ? now : cleanNum(body.at, 'at', now - 86400e3 * 7, now + 60e3, { int: true });
+    const k = by + '|' + kind;
+    let row; let type = 'add';
+    this.db.tx(() => {
+      const existing = this.db.get(`SELECT * FROM docs WHERE code = ? AND col = 'attendance' AND k = ?`, code, k);
+      if (existing) {
+        const data = { ...safeJson(existing.data, {}), kind, at, byHost: true };
+        row = this.writeRow(code, 'attendance', existing, data, now); type = 'update';
+      } else {
+        if (this.count(code, 'attendance') >= this.cfg.maxDocs) throw new HttpError(409, 'collection_full', '이 연수에 쌓인 글이 너무 많아요.');
+        const id = 'a' + randomId(9); const data = { kind, at, byHost: true };
+        this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, 'attendance', ?, ?, ?, NULL, ?, ?, ?)`, code, id, by, k, JSON.stringify(data), now, now);
+        row = { code, col: 'attendance', id, by, k, cid: null, data: JSON.stringify(data), created_at: now, updated_at: now };
+      }
+    });
+    if (type === 'add') this.bumpCount(code, 'attendance', 1);
+    this.touch(t);
+    return { status: type === 'add' ? 201 : 200, body: this.out('attendance', row, true), events: [this.event(type, 'attendance', row)] };
+  }
+
   add(code, col, body, cred, ip) {
-    if (col === 'participants') throw new HttpError(405, 'use_join', '참가자는 /join으로 만듭니다.');
     let t = this.training(code);
     const admin = this.isAdmin(t, cred);
+    if (admin && (col === 'participants' || (col === 'attendance' && isObj(body) && body.by != null))) { t = t || this.training(code, true); return this.adminRoster(code, col, body, t); }
+    if (col === 'participants') throw new HttpError(405, 'use_join', '참가자는 /join으로 만듭니다.');
     let me = null;
     if (col === 'polls') { this.requireAdmin(t, cred); this.limit('admin', 'admin:' + code, null); t = t || this.training(code, true); }
     else if (PARTICIPANT_WRITE.has(col)) {
