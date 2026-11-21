@@ -48,7 +48,7 @@ export async function bridgeRaw(path, init = {}) {
     return await fetch(c.base + path, { ...init, headers: { ...(init.headers || {}), 'X-Lecpage-Bridge': c.token }, cache: 'no-store', ...(c.base ? { mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback' } : {}) });
   } catch (e) {
     if (e?.name === 'AbortError') throw e;
-    throw Object.assign(new AiError('network', c.base ? 'PC 프로그램이 꺼져 있거나 이 브라우저가 막았어요.' : e?.message || 'bridge', { provider: 'local' }), { off: true });
+    throw Object.assign(new AiError('network', c.base ? 'lecpage 커넥트가 꺼져 있거나 이 브라우저가 막았어요.' : e?.message || 'bridge', { provider: 'local' }), { off: true });
   }
 }
 async function call(path, init = {}) {

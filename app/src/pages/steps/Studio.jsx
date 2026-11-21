@@ -9,7 +9,7 @@ import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
 import { blobs } from '../../lib/db.js';
 import { toast, copy, uid, isPastDate, monthDay, fmtDate } from '../../lib/util.js';
 import { fmtSec, errorActions } from './Make.jsx';
-import { useConnection, available, pickConnection, jobOpts, pcNow, setPreferred } from '../../lib/connection.js';
+import { useConnection, available, pickConnection, jobOpts, pcNow, setPreferred, askConsent, consentId } from '../../lib/connection.js';
 import { ConnBadge } from '../../components/PcConnect.jsx';
 
 // 완성 뒤 편집 화면(docs/plan-ai-first.md §8): 미리보기(조립된 실제 사이트) + 목록(섹션) + 글 바로 고치기 + 그림 바꾸기 + 색·글꼴
@@ -72,7 +72,6 @@ export function Studio({ p, update, go, job, idle, reload }) {
     { value: 'info', label: '연수 정보', badge: p.metaChecked ? '' : '확인' },
     { value: 'check', label: '검수', badge: issues?.length ? String(issues.length) : '' },
     { value: 'ask', label: '수정 요청' },
-    { value: 'look', label: '색·글꼴' },
   ];
   const show = (key) => setGoto({ key, n: Date.now() });
   /** 검수에서 찾은 곳을 AI에게: 연결한 AI(계정·API 키)면 바로 고치고, 아니면(쓰던 AI 창·섹션이 안 정해진 문제·체험) 수정 요청에 채워 둠 */
@@ -80,6 +79,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
     const list = (issues || []).filter((x) => !keys || keys.includes(x.key));
     if (!list.length) return;
     const ai = p.demo ? null : pickConnection(available(pcNow(), await getActiveAI()));
+    if (ai && !await askConsent(consentId(ai))) return;
     if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), jobOpts(ai))) { toast(`${ai.ro} 수정을 맡겼어요. 끝나면 미리보기가 바뀌어요.`); return; } }
     const secs = [...new Set(list.map((x) => x.where?.section).filter(Boolean))];
     setAsk({ target: secs.length === 1 ? secs[0] : 'all', request: `검수에서 찾은 문제를 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}` });
@@ -88,7 +88,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
   };
   return (
     <>
-      <StepHead title="미리보기·수정" desc="미리보기에서 글자를 눌러 바로 고치고, 목록에서 섹션을 정리해요. 고친 내용은 자동으로 저장돼요.">
+      <StepHead title="미리보기·수정" desc="미리보기에서 글자를 눌러 바로 고쳐요. 고친 내용은 자동으로 저장돼요.">
         <div class="btn-row head-tools" ref={headRef}>
           <button class="btn btn-sm btn-quiet" disabled={!stack.length} onClick={undo} title={stack.length ? `실행 취소: ${stack[stack.length - 1].label} (${UNDO_KEY})` : '실행 취소할 것이 없어요'}>실행 취소</button>
           <button class="btn btn-sm btn-quiet" onClick={() => setVers(true)} aria-haspopup="dialog">버전 기록</button>
@@ -111,11 +111,10 @@ export function Studio({ p, update, go, job, idle, reload }) {
               onHide={(id, v) => setHtml(v ? '섹션 숨기기' : '섹션 숨기기 취소', (h) => setHidden(h, id, v))}
               onRemove={(id) => setHtml('섹션 삭제', (h) => removeSection(h, id))}
               onRename={(id, name) => setHtml('이름 바꾸기', (h) => renameSection(h, id, name))}
-              onAsk={(id) => { setAsk({ target: id, request: '' }); setTab('ask'); }} editing={editing} setEditing={setEditing} />}
+              onAsk={(id) => { setAsk({ target: id, request: '' }); setTab('ask'); }} />}
             {tab === 'info' && <InfoPanel p={p} change={change} update={update} onDone={() => { scrollTo({ top: 0, behavior: 'smooth' }); setNudge(true); setTimeout(() => setNudge(false), 2600); }} />}
             {tab === 'check' && <CheckPanel issues={issues} onShow={show} onFix={fixAll} locked={working} onRecheck={recheck} />}
-            {tab === 'ask' && <AskPanel p={p} sections={sections} ask={ask} setAsk={setAsk} idle={idle} reload={reload} locked={working} go={go} />}
-            {tab === 'look' && <LookPanel p={p} change={change} />}
+            {tab === 'ask' && <AskPanel p={p} sections={sections} ask={ask} setAsk={setAsk} idle={idle} reload={reload} locked={working} go={go} change={change} />}
           </div>
           {!!stack.length && <button type="button" class="btn btn-sm undo-float" onClick={undo}><span aria-hidden="true">↶ </span>실행 취소</button>}
         </div>
@@ -182,7 +181,7 @@ function FirstGuide({ p, onInfo, onClose }) {
 
 const KIT_KO = { qa: '질문', poll: '투표', board: '보드', attend: '출석', survey: '설문', deck: '교재', materials: '자료실', join: '접속 QR' };
 /** 목록: 사이트의 섹션. 끌어서(또는 ↑↓) 순서, 숨기기, 지우기, 이름 바꾸기, 누르면 미리보기가 그 섹션으로 */
-function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onRename, onAsk, editing, setEditing }) {
+function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onRename, onAsk }) {
   const [drag, setDrag] = useState(null); const [over, setOver] = useState(null);
   const [rename, setRename] = useState(null); const [del, setDel] = useState(null);
   const listRef = useRef();
@@ -190,8 +189,7 @@ function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onR
   const focusAt = (i, dir = '') => setTimeout(() => { const li = listRef.current?.querySelectorAll('.sec2')[i]; const b = dir && li?.querySelector(`button[aria-label$="${dir}"]:not([disabled])`); (b || li?.querySelector('.sec2-name'))?.focus(); }, 60);
   return (
     <div class="stack">
-      <div class="sec-tools"><p class="small muted">섹션 {sections.length}개 · 끌어서 순서를 바꿔요.</p>
-        <button type="button" class={`btn btn-sm${editing ? ' btn-ink' : ''}`} aria-pressed={String(!!editing)} disabled={locked} onClick={() => setEditing(!editing)}>{editing ? '글 수정 중' : '미리보기에서 글 수정'}</button></div>
+      <div class="sec-tools"><p class="small muted">섹션 {sections.length}개 · 끌어서 순서를 바꿔요. 글은 미리보기의 [글 수정]으로 고쳐요.</p></div>
       {locked && <p class="lock-note small">AI가 고치는 동안에는 바꿀 수 없어요.</p>}
       <ol class="sec2-list" ref={listRef} aria-label="섹션 목록">
         {sections.map((s, i) => (
@@ -261,7 +259,7 @@ function InfoPanel({ p, change, update, onDone }) {
         {textField('inst', '강사', inst.name || '', 40, (v) => v !== (inst.name || '') && setMeta('강사 수정', (mm) => ({ ...mm, instructors: [{ ...inst, name: v }, ...(mm.instructors || []).slice(1)].filter((x) => x.name) }), [inst.name, v]), page('instructor'))}
         {textField('org', '강사 소속', inst.org || '', 80, (v) => v !== (inst.org || '') && setMeta('강사 소속 수정', (mm) => ({ ...mm, instructors: [{ ...inst, org: v }, ...(mm.instructors || []).slice(1)] }), [inst.org, v]))}
       </div>
-      {others.length > 0 && <div class="facts"><b class="small">AI가 교재에서 찾은 다른 사실</b><ul class="small">{others.map((f) => <li>{f.label}: {f.value}{f.page ? <span class="muted"> · {f.page}쪽</span> : ''}</li>)}</ul></div>}
+      {others.length > 0 && <details class="facts"><summary class="small"><b>AI가 교재에서 찾은 다른 내용 {others.length}개</b></summary><ul class="small">{others.map((f) => <li>{f.label}: {f.value}{f.page ? <span class="muted"> · {f.page}쪽</span> : ''}</li>)}</ul></details>}
       {p.metaChecked && <p class="small muted">확인했어요. 고쳐도 다시 확인할 필요는 없어요.</p>}
     </div>
   );
@@ -295,7 +293,7 @@ function CheckPanel({ issues, onShow, onFix, locked, onRecheck }) {
 }
 
 /** 수정 요청: 고칠 섹션(또는 전체)과 바라는 점 → 키로 연결한 AI · 내 PC의 AI 에이전트 · 쓰던 AI 창(요청 글 복사 → 답 넣기) */
-function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
+function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go, change }) {
   const { list, conn: pick, loading } = useConnection({ demo: !!p.demo }); // AI 연결 한 곳(lib/connection.js)
   const [way, setWayHere] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -315,6 +313,7 @@ function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
     if (!ready || locked) return;
     await idle();
     const c = list.find((x) => x.id === way); if (!c) return;
+    if (!await askConsent(consentId(c))) return;
     setPreferred(c.id);
     editSite(p.id, { target, request: ask.request.trim(), ...jobOpts(c) });
     toast('AI에게 보냈어요. 끝나면 미리보기가 바뀌어요.'); setAsk({ ...ask, request: '' });
@@ -346,7 +345,7 @@ function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
       {locked && <p class="lock-note small">AI가 고치는 중이에요. 끝나면 다시 보낼 수 있어요.</p>}
       {p.demo ? <p class="small muted">체험이라 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p> : <ConnBadge />}
       {ways.length > 1 && <div class="seg" role="group" aria-label="보낼 곳">{ways.map(([v, label]) => <button type="button" aria-pressed={String(way === v)} onClick={() => setWayHere(v)}>{label}</button>)}</div>}
-      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{cur ? `${cur.ro} 보내요.` : ''} 수정 전 버전은 버전 기록에 남아요.</span></div>
+      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI로 수정</button><span class="small muted">{cur ? `${cur.ro} 보내요.` : ''} 수정 전 버전은 버전 기록에 남아요.</span></div>
         : <ol class="chat-steps">
           <li><b>프롬프트를 복사해 쓰던 AI에 보내요</b>
             <div class="btn-row">
@@ -359,6 +358,8 @@ function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
             <textarea class="input ta-short" rows={3} value={answer} onInput={(e) => setAnswer(e.target.value)} placeholder="AI 답(코드 블록)을 여기에 붙여 넣어요" aria-label="AI의 답" />
             <div class="btn-row"><button type="button" class="btn btn-primary" disabled={busy || !answer.trim()} onClick={() => take(answer)}>{busy ? '읽는 중…' : res?.continuePrompt ? '이어진 답으로 수정' : '이 답으로 수정'}</button></div></li>
         </ol>}
+      {/* 색·글꼴은 드물게 써서 접어 둠(AI에게 "색은 차분하게"라고 해도 됨) */}
+      <details class="look-more"><summary class="small"><b>색·글꼴 직접 바꾸기</b></summary><LookPanel p={p} change={change} /></details>
       <p class="small muted">처음부터 새로 만들고 싶으면 <button type="button" class="btn-link small" onClick={() => go(1)}>AI 다시 선택</button></p>
     </div>
   );
@@ -384,7 +385,7 @@ function LookPanel({ p, change }) {
   return (
     <div class="stack look">
       <p class="small muted">바꾸면 사이트와 참여 기능·QR 안내문·발표 화면이 같은 색을 써요.</p>
-      {!uses && <Notice><span>이 사이트는 색 변수(--lp-*)를 거의 쓰지 않아 일부만 바뀔 수 있어요. 수정 요청으로 AI에게 색을 바꿔 달라고 해도 돼요.</span></Notice>}
+      {!uses && <Notice><span>이 사이트는 일부만 바뀔 수 있어요. 위의 바라는 점에 적어 AI에게 색을 바꿔 달라고 해도 돼요.</span></Notice>}
       <div class="look-colors">
         {[['accent', '강조색'], ['ink', '글자색'], ['paper', '바탕색']].map(([k, label]) => <label class="look-color"><input type="color" value={cur[k] || '#333333'} onChange={(e) => set(k, e.target.value)} /><span>{label}<small class="mono">{cur[k] || '정하지 않음'}</small></span></label>)}
       </div>

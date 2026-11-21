@@ -143,7 +143,7 @@ const USAGE_URL = 'https://chatgpt.com/settings/usage';
 function errorView(e, provider) {
   const k = e?.off && (e?.kind === 'network' || e?.kind === 'local') ? 'pc-off' : e?.kind;
   // 구독 연결(PC 프로그램): 꺼짐·ChatGPT 계정
-  if (k === 'pc-off') return { kind: k, title: 'PC 프로그램이 꺼져 있어요.', body: 'PC 프로그램을 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume', 'paste'] };
+  if (k === 'pc-off') return { kind: k, title: 'lecpage 커넥트가 꺼져 있어요.', body: 'lecpage 커넥트를 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume', 'paste'] };
   if (k === 'chatgpt-login') return { kind: k, title: 'ChatGPT 계정 연결이 풀렸어요.', body: 'AI 선택에서 [ChatGPT 계정으로 로그인]을 다시 누르면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'resume'] };
   if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 무료 요금제는 [쓰던 AI로]로 만들어요.', actions: ['paste', 'connect'] };
   if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'paste', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };

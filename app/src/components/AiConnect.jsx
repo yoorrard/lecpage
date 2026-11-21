@@ -3,6 +3,7 @@ import { Notice } from './ui.jsx';
 import { PROVIDERS, saveKey, checkKey, getActiveAI, detectProvider, explainError, models, modelText, setActive, isPaidAI, setWay, chatLabel } from '../lib/ai.js';
 import { KEY_GUIDES, GUIDE_ORDER, GUIDE_MORE, KeyPic } from '../lib/ai-guides.jsx';
 import { toast } from '../lib/util.js';
+import { askConsent } from '../lib/connection.js';
 import { reach } from '../lib/netcheck.js';
 
 /** 키처럼 생긴 글인지(한 덩어리, 20자 이상). 처음 보는 모양의 키도 고른 회사 키로 확인해 볼 수 있게 */
@@ -64,7 +65,8 @@ export function AiConnect({ onConnected, onChat, onCancel, initial = '', only: o
     k = cleanKey(k);
     const prov = detectProvider(k) || (looksLikeKey(k) ? tab : null);
     if (!prov) { setErr({ title: '키가 아닌 것 같아요.', body: '키를 처음부터 끝까지 복사했는지 확인해 주세요.' }); return; }
-    if (!PROVIDERS[prov]) { setErr({ title: 'Gemini 키로는 만들지 않아요.', body: 'GPT나 Claude 키를 넣어 주세요. 내 PC의 Claude Code·Codex나 쓰던 AI 창으로도 만들어요.' }); return; }
+    if (!PROVIDERS[prov]) { setErr({ title: '이 키로는 만들 수 없어요.', body: 'OpenAI(GPT)나 Anthropic(Claude)에서 받은 키를 넣어 주세요. 키 없이 쓰던 AI로도 만들 수 있어요.' }); return; }
+    if (!await askConsent(`key:${prov}`)) return; // 처음 한 번(설정에서 바로 연결할 때)
     setErr(null); setBusy(true);
     if (KEY_GUIDES[prov] && prov !== tab) { setTab(prov); setOpened(-1); }
     setStep(KEY_GUIDES[prov] ? KEY_GUIDES[prov].steps.length : last);

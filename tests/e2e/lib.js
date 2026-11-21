@@ -63,9 +63,18 @@ async function startWithFile(p, files = [FIX + '/workshop.pdf']) {
   await p.waitForSelector('.ai-nokey .btn:not([disabled])', { timeout: 30000 });
 }
 
-/** Claude 카드의 [키로 연결] → 가짜 키 → 연결되면 바로 만들기 시작(예전 이름 connectGemini도 같은 함수) */
+/** 처음 연결하는 길이면 동의 창(체크 하나 + [연결])에 동의함. 이미 동의했으면 그냥 지나감 */
+async function consent(p, timeout = 3000) {
+  const on = await p.waitForSelector('dialog[open] .consent', { timeout }).then(() => true, () => false);
+  if (!on) return false;
+  await p.check('dialog[open] .consent input[type=checkbox]');
+  await p.click('dialog[open] .consent button:has-text("연결")');
+  return true;
+}
+/** Claude 카드의 [키로 연결] → (처음이면 동의) → 가짜 키 → 연결되면 바로 만들기 시작(예전 이름 connectGemini도 같은 함수) */
 async function connectAi(p) {
   await p.click('details.ai-more:not([open]) > summary').catch(() => {}); await p.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
+  await consent(p);
   await p.waitForSelector('dialog[open] .ai-connect');
   await p.click('dialog[open] .key-dots li:last-child button');
   await p.fill('dialog[open] input[type=password]', 'sk-ant-api03-FAKEKEY_1234567890abcdefghijklmnopqrstuvwxyz');
@@ -82,4 +91,4 @@ async function readProject(p, id) {
 }
 const pidOf = (p) => (/#\/p\/([^/]+)/.exec(p.url()) || [])[1];
 
-module.exports = { chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, connectGemini, connectAi, waitStudio, readProject, pidOf, cors };
+module.exports = { consent, chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, connectGemini, connectAi, waitStudio, readProject, pidOf, cors };

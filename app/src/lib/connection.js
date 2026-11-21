@@ -1,19 +1,33 @@
-// AI 연결을 한 곳에서: PC 프로그램 상태(켜짐·꺼짐·브라우저가 막음) + 지금 쓸 연결(ChatGPT 계정 · Claude 계정 · Codex · API 키).
-// [만들기]·[AI로 수정]·검수의 [AI로 수정]이 모두 여기서 고른 연결을 씀. 화면 위의 한 줄 표시("ChatGPT 계정 연결됨 · PC 프로그램 켜짐")도 여기서.
+// AI 연결을 한 곳에서: lecpage 커넥트 상태(켜짐·꺼짐·브라우저가 막음) + 지금 쓸 연결(ChatGPT 계정 · Claude 계정 · Codex · API 키).
+// [만들기]·[AI로 수정]·검수의 [AI로 수정]이 모두 여기서 고른 연결을 씀. 화면 위의 한 줄 표시("ChatGPT 계정 연결됨 · lecpage 커넥트 켜짐")도 여기서.
 import { useEffect, useState } from 'preact/hooks';
 import { pcStatus, bridgeAvailable, bridgeSameOrigin, pairing } from './gen/local.js';
 import { getActiveAI, PROVIDERS } from './ai.js';
 
 const PREF = 'lecpage:conn'; // 'chatgpt' | 'claude' | 'codex' | 'key'
+/** lecpage 커넥트(이 PC에서 ChatGPT·Claude 계정을 lecpage.com에 이어 주는 작은 프로그램) 받는 곳 한 곳. 예전 이름(lecpage-studio.*)도 그대로 받아짐 */
+const REL = 'https://github.com/yoorrard/lecpage/releases';
 export const DOWNLOAD = {
-  win: 'https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.cmd',
-  mac: 'curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.sh | bash',
-  page: 'https://github.com/yoorrard/lecpage/releases/tag/studio-latest',
+  win: `${REL}/download/studio-latest/lecpage-connect.cmd`, // Windows: 받아서 두 번 누름
+  sh: `curl -fsSL ${REL}/download/studio-latest/lecpage-connect.sh | bash`, // Mac·Linux: 터미널에 한 줄
+  page: `${REL}/tag/studio-latest`,
 };
+DOWNLOAD.mac = DOWNLOAD.sh; DOWNLOAD.linux = DOWNLOAD.sh;
+/** 지금 기기의 운영체제: 'win' | 'mac' | 'linux' | 'mobile'(휴대폰·태블릿: 커넥트를 깔 수 없음) */
+export function osName() {
+  try {
+    const n = navigator; const ua = n.userAgent || ''; const pf = String(n.userAgentData?.platform || n.platform || '');
+    if (n.userAgentData?.mobile || /Android|iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(pf + ua) && n.maxTouchPoints > 1)) return 'mobile';
+    if (/Win/i.test(pf) || /Windows/i.test(ua)) return 'win';
+    if (/Mac/i.test(pf) || /Macintosh|Mac OS X/i.test(ua)) return 'mac';
+    if (/Linux|X11|CrOS|Chrome OS/i.test(pf + ua)) return 'linux';
+  } catch { /* 모름 */ }
+  return 'win';
+}
 export function preferred() { try { return localStorage.getItem(PREF) || ''; } catch { return ''; } }
 export function setPreferred(v) { try { if (v) localStorage.setItem(PREF, v); else localStorage.removeItem(PREF); } catch { /* 저장 못 해도 이번엔 고른 대로 */ } notify(); }
 
-// ── PC 프로그램 상태(탭 하나에 하나, 여러 화면이 같이 봄) ──
+// ── lecpage 커넥트 상태(탭 하나에 하나, 여러 화면이 같이 봄) ──
 let pc = { state: bridgeAvailable() ? 'unknown' : 'none' };
 let at = 0; let inflight = null;
 const subs = new Set();
@@ -27,7 +41,7 @@ export function refreshPc({ fresh = false } = {}) {
   run.finally(() => { if (inflight === run) inflight = null; });
   return run;
 }
-/** 화면이 그릴 PC 프로그램 상태. 그릴 때·창으로 돌아올 때 확인(5초 안에 본 것은 그대로) */
+/** 화면이 그릴 lecpage 커넥트 상태. 그릴 때·창으로 돌아올 때 확인(5초 안에 본 것은 그대로) */
 export function usePc() {
   const [v, setV] = useState(pc);
   useEffect(() => {
@@ -58,7 +72,7 @@ export function pickConnection(list) {
 }
 export const jobOpts = (c) => (c ? (c.way === 'local' ? { way: 'local', agent: c.agent } : c.way === 'chatgpt' ? { way: 'chatgpt', provider: 'chatgpt' } : { way: 'key', provider: c.provider, model: c.model || '' }) : null);
 
-/** 연결 하나 + PC 프로그램 상태(화면용 훅). keyAi는 API 키로 연결한 AI(있으면) */
+/** 연결 하나 + lecpage 커넥트 상태(화면용 훅). keyAi는 API 키로 연결한 AI(있으면) */
 export function useConnection({ demo = false } = {}) {
   const p = usePc();
   const [keyAi, setKeyAi] = useState(undefined);
@@ -67,7 +81,7 @@ export function useConnection({ demo = false } = {}) {
   return { pc: p, list, conn: pickConnection(list), loading: keyAi === undefined || p.state === 'unknown' };
 }
 
-// ── 짝 맞추기: PC 프로그램이 새 탭으로 lecpage.com#pair=…를 엶 → 기다리던 탭(받기 안내를 연 탭)이 있으면 그 탭에서 이어 하고 새 탭은 닫음 ──
+// ── 짝 맞추기: lecpage 커넥트가 새 탭으로 lecpage.com#pair=…를 엶 → 기다리던 탭(받기 안내를 연 탭)이 있으면 그 탭에서 이어 하고 새 탭은 닫음 ──
 const CH = 'lecpage-pc';
 let waiting = 0;
 /** 받기 안내를 보는 동안 켜 둠(새 탭이 짝을 맞추면 이 탭이 받음) */
@@ -94,10 +108,54 @@ export function announcePairing() {
   });
 }
 
+// ── 연결 동의: 길(ChatGPT 계정·Claude 계정·Codex·API 키)마다 처음 연결할 때 한 번. 이 브라우저에 기억하고, 안내 글이 바뀌면 다시 물음 ──
+const CONSENT = 'lecpage:consent';
+const WAYS = {
+  chatgpt: { title: 'ChatGPT 계정 연결', to: 'OpenAI로', from: '이 PC의 lecpage 커넥트', at: '이 PC', bill: '사용량은 내 ChatGPT 요금제에서 차감돼요.', login: '로그인 정보' },
+  claude: { title: 'Claude 계정 연결', to: 'Anthropic으로', from: '이 PC의 lecpage 커넥트', at: '이 PC', bill: '사용량은 Claude Code에 로그인한 내 계정에서 차감돼요.', login: '로그인 정보' },
+  codex: { title: 'Codex 연결', to: 'OpenAI로', from: '이 PC의 lecpage 커넥트', at: '이 PC', bill: '사용량은 Codex에 로그인한 내 계정에서 차감돼요.', login: '로그인 정보' },
+  'key:openai': { title: 'GPT API 키 연결', to: 'OpenAI로', from: '이 브라우저', at: '이 브라우저', bill: '쓴 만큼 내 API 키로 요금이 청구돼요.', login: 'API 키' },
+  'key:anthropic': { title: 'Claude API 키 연결', to: 'Anthropic으로', from: '이 브라우저', at: '이 브라우저', bill: '쓴 만큼 내 API 키로 요금이 청구돼요.', login: 'API 키' },
+};
+/** 연결 → 동의 길 이름('key'는 회사별) */
+export const consentId = (c) => (!c ? '' : c.id === 'key' || c.way === 'key' ? `key:${c.provider}` : c.id);
+/** 동의 창에 보일 제목과 세 줄(무엇을·언제 / 어디로·비용 / 로그인 정보) */
+export function consentText(id) {
+  const w = WAYS[id]; if (!w) return null;
+  return { title: w.title, lines: [
+    '[만들기]나 [AI로 수정]을 누를 때만 교재·사이트와 요청 글을 보내요.',
+    `${w.from}에서 ${w.to} 바로 가요. ${w.bill}`,
+    `${w.login}는 ${w.at}에만 있고, lecpage 운영자에게는 가지 않아요.`,
+  ] };
+}
+const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+const sig = (id) => { const t = consentText(id); return t ? hash(t.title + t.lines.join('\n')) : ''; };
+function consents() { try { return JSON.parse(localStorage.getItem(CONSENT) || '{}') || {}; } catch { return {}; } }
+/** 이 길에 지금 안내 글로 동의했는지 */
+export function hasConsent(id) { return !WAYS[id] || consents()[id] === sig(id); }
+let asking = null; const askSubs = new Set();
+/** 처음이면 동의 창을 띄우고 답을 기다림(동의 → true). 이미 동의했으면 바로 true. 창은 ConsentHost가 그림 */
+export function askConsent(id) {
+  if (hasConsent(id)) return Promise.resolve(true);
+  return new Promise((ok) => { asking?.ok(false); asking = { id, ok }; for (const f of askSubs) f(asking); });
+}
+export function answerConsent(yes) {
+  const a = asking; if (!a) return; asking = null;
+  if (yes) { try { localStorage.setItem(CONSENT, JSON.stringify({ ...consents(), [a.id]: sig(a.id) })); } catch { /* 저장 못 해도 이번엔 동의한 대로 */ } }
+  for (const f of askSubs) f(null);
+  a.ok(!!yes);
+}
+export function useConsentAsk() {
+  const [v, setV] = useState(asking);
+  useEffect(() => { askSubs.add(setV); setV(asking); return () => { askSubs.delete(setV); }; }, []);
+  return v;
+}
+export function forgetConsents() { try { localStorage.removeItem(CONSENT); } catch { /* 없음 */ } }
+
 /** 한 줄 표시 글 */
 export function connLine(p, conn) {
-  const pcText = p.state === 'on' ? 'PC 프로그램 켜짐' : p.state === 'off' ? 'PC 프로그램 꺼짐' : p.state === 'blocked' ? '이 브라우저는 PC 프로그램에 닿지 못해요' : '';
+  const pcText = p.state === 'on' ? 'lecpage 커넥트 켜짐' : p.state === 'off' ? 'lecpage 커넥트 꺼짐' : p.state === 'blocked' ? '이 브라우저는 lecpage 커넥트에 닿지 못해요' : '';
   const c = conn ? `${conn.label} 연결됨` : p.state === 'on' ? '계정 연결 전' : 'AI 연결 안 됨';
-  return [c, pcText].filter(Boolean).join(' · ');
+  return [pcText, c].filter(Boolean).join(' · ');
 }
 export { bridgeAvailable, bridgeSameOrigin, pairing };
