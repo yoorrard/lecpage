@@ -7,8 +7,8 @@ import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
 import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { assembleProject } from '../../lib/studio.js';
-import { Publish, lecLiveOff } from '../../components/Publish.jsx';
-import { probeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
+import { Publish, lecLiveOff, LABEL as SITE_LABEL } from '../../components/Publish.jsx';
+import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml } from '../../lib/venue.js';
@@ -222,14 +222,28 @@ export function StepShare({ p, update, go }) {
   function done(url, patch, more) {
     setRoom('');
     // 주소가 바뀌면(다른 곳에 올림·내림) 예전 짧은 주소는 옛 사이트를 가리키므로 지움
-    const moved = !url || (!!p.deploy?.lastUrl && same(url) !== same(p.deploy.lastUrl));
+    // 대표 주소(lastUrl)는 여러 곳에 배포한 기록(sites)을 합쳐 정함: 다른 곳에 다시 배포해도 대표는 그대로, 새로 배포한 곳은 대표가 됨
+    const nx = mergeSite(p.deploy, url, patch?.target || p.deploy?.target || '');
+    const moved = !nx.lastUrl || (!!p.deploy?.lastUrl && same(nx.lastUrl) !== same(p.deploy.lastUrl));
     if (moved && bp.meta?.shortUrl) toast('사이트 주소가 바뀌어 짧은 주소를 지웠어요. 다시 만들어 주세요.');
+    update((cur) => {
+      const m = mergeSite(cur.deploy, url, patch?.target || cur.deploy?.target || '');
+      return {
+        pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
+        deploy: { ...(cur.deploy || {}), ...patch, sites: m.sites, lastUrl: m.lastUrl, target: m.target, at: m.at, shortLive: moved ? '' : built.current },
+        ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: m.lastUrl, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
+        ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
+      };
+    });
+  }
+  /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
+  function setPrimary(t) {
+    const s = p.deploy?.sites?.[t]; if (!s?.url || t === p.deploy?.target) return;
     update((cur) => ({
-      pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
-      deploy: { ...(cur.deploy || {}), ...patch, lastUrl: url, at: Date.now(), shortLive: moved ? '' : built.current },
-      ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: url, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
-      ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
+      deploy: { ...(cur.deploy || {}), lastUrl: s.url, target: t, at: s.at || Date.now(), shortLive: '' },
+      ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: s.url, shortUrl: '' } })),
     }));
+    toast(`대표 주소를 ${SITE_LABEL[t] || t}로 바꿨어요. QR과 강사 화면이 이 주소를 따라요.${bp.meta?.shortUrl ? ' 예전 짧은 주소는 지웠어요.' : ''}`);
   }
   /** 완료 카드의 [다시 배포하기]: 지난번에 배포한 곳이 연결돼 있으면 바로 배포하고, 아니면 배포할 곳으로 내려감 */
   function republish() {
@@ -341,11 +355,11 @@ export function StepShare({ p, update, go }) {
         {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${goNow.current || !hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
-      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
+      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
         <div class="stack">
-          <h2 class="h-sub">{p.deploy?.lastUrl ? '다시 배포' : '배포 준비'}</h2>
+          <h2 class="h-sub" id="pub-h">{p.deploy?.lastUrl ? '다시 배포 · 다른 곳에도 배포' : '배포 준비'}</h2>
           <ol class="ready" aria-label="배포 준비">
             {rows.map((r, i) => (
               <li class={`ready-i is-${r.state}`} id={r.id} key={r.k}>
@@ -503,7 +517,7 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
   );
 }
 
-function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
+function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
   const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
@@ -548,6 +562,7 @@ function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, f
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>
           </div>
+          <Sites p={p} onPrimary={onPrimary} busy={busy} />
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
           <div class="day-kit" role="group" aria-labelledby="venue-h">
             <b class="small" id="venue-h">연수 전날 점검</b>
@@ -580,6 +595,35 @@ function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, f
       </div>
       <JoinBig open={big} onClose={() => setBig(false)} qr={shareUrl} title={m.title} shown={short ? showUrl(short) : showUrl(url)} full={short ? showUrl(url) : ''} />
     </Sheet>
+  );
+}
+
+/** 배포한 곳: 곳마다 주소를 기억해 두고, 참가자에게 알릴 대표 주소를 고르고, 다른 곳에도 배포하러 감 */
+function Sites({ p, onPrimary, busy }) {
+  const d = p.deploy || {};
+  const sites = d.sites && Object.keys(d.sites).length ? d.sites : { [d.target || 'lecpage']: { url: d.lastUrl, at: d.at } };
+  const rows = Object.entries(sites).filter(([, s]) => s?.url).sort((a, b) => (a[0] === d.target ? -1 : b[0] === d.target ? 1 : (b[1].at || 0) - (a[1].at || 0)));
+  const ask = (to) => window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: to }));
+  return (
+    <div class="sites" role="group" aria-labelledby="sites-h">
+      <b class="small" id="sites-h">배포한 곳</b>
+      <ul class="sites-list">
+        {rows.map(([t, s]) => {
+          const main = t === d.target;
+          return (
+            <li class={main ? 'is-main' : ''} key={t}>
+              <span class="sites-t"><b>{SITE_LABEL[t] || t}</b>{main && <em>대표 주소</em>}</span>
+              <a class="sites-u small" href={s.url} target="_blank" rel="noopener">{showUrl(s.url)}</a>
+              {!main && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => onPrimary(t)} aria-label={`${SITE_LABEL[t] || t} 주소를 대표 주소로 쓰기`}>대표 주소로 쓰기</button>}
+            </li>
+          );
+        })}
+      </ul>
+      <div class="btn-row">
+        {!sites.lecpage && PUBLISH_API && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('lecpage')}>바로 배포로도 배포</button>}
+        <button type="button" class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => ask('other')}>다른 곳에도 배포</button>
+      </div>
+    </div>
   );
 }
 

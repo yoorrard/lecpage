@@ -165,6 +165,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
               ))}
             </ul>
           )}
+          {p.files?.some((f) => f.key && !f.photos && !f.errors?.length) && <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본도 참가자가 내려받게 <span class="small muted">(사이트의 files/에 담겨요. 저작권을 먼저 확인해 주세요)</span></span></label>}
           <Field label="AI에게 바라는 점 (선택)" hint="구성·분위기·대상을 한 줄로 적으면 AI가 반영해요.">
             <input class="input" value={p.request || ''} onInput={(e) => update({ request: e.target.value })} maxLength={300} placeholder="예: 실습 위주로, 차분한 남색, 처음 배우는 신입 직원 대상" />
           </Field>

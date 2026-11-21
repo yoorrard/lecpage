@@ -3,7 +3,7 @@ const { chromium, fs, ROOT, BASE, mockAll, openShare, connect, publish, toastHas
 const OUT = require('path').resolve(__dirname, '../../.out/verify/shots/hosts') + '/'; fs.mkdirSync(OUT, { recursive: true });
 const ok = (name, cond, extra = '') => console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? ' :: ' + extra : ''}`);
 // 올릴 곳 목록은 지금 화면에서 [다른 곳에 올리기]를 눌러야 펼쳐짐(예전 화면은 늘 펼쳐 있음)
-const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) && await p.locator('.pub-now button').count()) await p.click('.pub-now button'); await p.click(`.pub-opt:has-text("${label}")`); };
+const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) && await p.locator('.pub-mode').count()) await p.click('.pub-mode:has-text("다른 곳에 배포")'); await p.click(`.pub-opt:has-text("${label}")`); };
 (async () => {
   const b = await chromium.launch();
   // ── GitHub Pages ──

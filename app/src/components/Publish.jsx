@@ -13,7 +13,7 @@ import { hostProblems } from '../lib/host-check.js';
 const DOCS = 'https://github.com/yoorrard/lecpage/blob/main/skills/lecpage/references/deploy';
 // 앱에서 고를 수 있는 곳(엔진 HOSTS의 id). 'lecpage'(바로 배포)는 운영자가 켜 둔 앱에서만 보임
 export const TARGETS = ['lecpage', 'vercel', 'github-pages', 'cloudflare', 'netlify', 'zip'];
-const LABEL = { lecpage: '바로 배포', vercel: 'Vercel', 'github-pages': 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cloudflare', zip: 'ZIP 다운로드' };
+export const LABEL = { lecpage: '바로 배포', vercel: 'Vercel', 'github-pages': 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cloudflare', zip: 'ZIP 다운로드' };
 export const KIND = { vercel: 'vercel', 'github-pages': 'github', netlify: 'netlify' };
 // 고른 곳마다 한 줄 소개(lead)와 알아 둘 점(care). 숫자·약관 근거: docs/research/hosting-2026-11.md, 2026-11-12에 공식 문서로 다시 확인
 const ABOUT = {
@@ -224,6 +224,19 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const [picked, setPicked] = useState(''); // 강사가 직접 고른 곳(망 확인·늦은 답으로 바꾸지 않음)
   const [more, setMore] = useState(false); // 다른 곳에 배포하기(배포할 곳 목록 펼치기)
   const chosen = picked && order.includes(picked) ? picked : best;
+  // 완료 카드의 [다른 곳에도 배포]·[바로 배포로도 배포]: 배포할 곳을 바꿔 이 칸으로 내려옴(이미 배포한 곳이 아닌 곳을 먼저)
+  const ev = useRef(); ev.current = { order, sites: p.deploy?.sites || {}, live: !!live };
+  useEffect(() => {
+    const on = (e) => {
+      const { order: o, sites } = ev.current;
+      const others = o.filter((h) => h !== 'lecpage');
+      const to = e.detail === 'lecpage' ? (o.includes('lecpage') ? 'lecpage' : '') : (others.find((h) => !sites[h]) || others[0] || '');
+      if (to) { setPicked(to); setMore(to !== 'lecpage'); }
+      setTimeout(() => document.getElementById('pub-h')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 30);
+    };
+    window.addEventListener('lp-pub-pick', on);
+    return () => window.removeEventListener('lp-pub-pick', on);
+  }, []);
   const target = online ? chosen : 'zip'; // 끊긴 동안은 사이트 파일 받기만 됨
   useEffect(() => { if (!infoWait) onTarget?.(target); }, [target, infoWait]);
   const skipped = !picked && order[0] !== best && netBad[order[0]] ? order[0] : ''; // 막혀서 건너뛴 첫째 곳
@@ -281,14 +294,22 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   }
   return (
     <div class="stack publish">
-      <div class="pub-now">
-        <span class="pub-now-t"><b>{LABEL[target]}</b>{target === best && <em>추천</em>}{connected.includes(target) && <i>연결됨</i>}</span>
-        <button type="button" class="btn btn-sm btn-quiet" aria-expanded={String(more)} aria-controls="pub-pick" onClick={() => setMore(!more)}>{more ? '접기' : '다른 곳에 배포하기'}</button>
-      </div>
-      {more && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="배포할 곳">
-        {order.map((id) => (
-          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { setPicked(id); setMore(false); }} />
-            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
+      {live && order.includes('lecpage')
+        ? <div class="pub-now pub-modes" role="group" aria-label="배포 방법">
+          <button type="button" class={`pub-mode pub-mode-main${target === 'lecpage' ? ' is-on' : ''}`} aria-pressed={String(target === 'lecpage')} onClick={() => { setPicked('lecpage'); setMore(false); }}>
+            <span class="pub-mode-h"><b>바로 배포</b>{best === 'lecpage' && <em>추천</em>}</span>
+            <small>가입 없이 · 참여 기능까지 바로 켜져요</small>
+          </button>
+          <button type="button" class={`pub-mode${target !== 'lecpage' ? ' is-on' : ''}`} aria-pressed={String(target !== 'lecpage')} aria-expanded={String(more || target !== 'lecpage')} aria-controls="pub-pick" onClick={() => { if (target === 'lecpage') { setPicked(order.find((h) => h !== 'lecpage') || ''); } setMore(true); }}>
+            <span class="pub-mode-h"><b>다른 곳에 배포</b></span>
+            <small>{order.filter((h) => h !== 'lecpage').map((h) => LABEL[h]).join(' · ')}</small>
+          </button>
+        </div>
+        : <p class="pub-now"><span class="pub-now-t"><b>배포할 곳</b></span></p>}
+      {(more || target !== 'lecpage' || !(live && order.includes('lecpage'))) && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="배포할 곳">
+        {order.filter((id) => id !== 'lecpage' || !live).map((id) => (
+          <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { setPicked(id); }} />
+            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{p.deploy?.sites?.[id] && <i>배포함</i>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
       {/* 같은 곳에 다시 배포할 때는 소개·한도·알아 둘 점을 되풀이하지 않음(처음 배포할 때 봤고, 보관 기간은 위 완료 카드에 있음) */}

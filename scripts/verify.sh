@@ -59,6 +59,10 @@ if [ $E2E = 1 ]; then
     BASE2=http://localhost:4182/ OUT="$O/shots/" timeout 300 node instant.js > "$O/log-e2e-instant.txt" 2>&1
     f=$(grep -c "^FAIL" "$O/log-e2e-instant.txt"); p=$(grep -c "^PASS" "$O/log-e2e-instant.txt")
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-instant.txt"; then echo "e2e instant: ok ($p pass)"; else echo "e2e instant: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-instant.txt"; fi
+    # 바로 배포 → 다른 곳 배포 → 대표 주소 바꾸기
+    BASE2=http://localhost:4182/ BASE=http://localhost:4182/ OUT="$O/shots/" timeout 400 node flow2.js > "$O/log-e2e-flow2.txt" 2>&1
+    f=$(grep -c "^FAIL" "$O/log-e2e-flow2.txt"); p=$(grep -c "^PASS" "$O/log-e2e-flow2.txt")
+    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-flow2.txt"; then echo "e2e flow2: ok ($p pass)"; else echo "e2e flow2: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-flow2.txt"; fi
     pkill -f "vite preview --outDir dist-instant"
   else echo "app build (instant): FAIL"; fi
 fi

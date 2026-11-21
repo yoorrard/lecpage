@@ -199,6 +199,24 @@ html.pv-lock{overflow:hidden}
 .pub-now-t b{font-weight:700}
 .pub-now-t em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--lav-deep)}
 .pub-now-t i{font-style:normal;font-size:.76rem;font-weight:600;color:var(--ok)}
+.pub-modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
+.pub-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:72px;padding:14px 16px;border:1.5px solid var(--line-strong);border-radius:var(--r-sm,12px);background:var(--card);color:var(--ink);font:inherit;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
+.pub-mode:hover{border-color:var(--accent)}
+.pub-mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pub-mode-h{display:inline-flex;align-items:baseline;gap:8px;font-size:1.06rem}
+.pub-mode-h b{font-weight:700}
+.pub-mode-h em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--lav-deep)}
+.pub-mode small{font-size:.84rem;color:var(--muted);line-height:1.4}
+.pub-mode.is-on{border-color:var(--accent);background:var(--lav-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.pub-mode-main.is-on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.pub-mode-main.is-on small,.pub-mode-main.is-on .pub-mode-h em{color:var(--on-accent);opacity:.92}
+@media (max-width:560px){.pub-modes{grid-template-columns:1fr}}
+.sites{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm,12px);background:var(--card)}
+.sites-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sites-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.sites-t{display:inline-flex;align-items:baseline;gap:8px;min-width:96px}
+.sites-t em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--ok)}
+.sites-u{overflow-wrap:anywhere;flex:1 1 180px}
 
 /* 배포 준비 체크리스트: 줄마다 번호(끝나면 ✓)·이름·지금 상태 한 줄·[바꾸기]. 할 일이 남은 줄만 펼쳐 둠 */
 .ready{list-style:none;margin:0;padding:0;display:grid}
@@ -739,3 +757,10 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 @media (max-width: 960px){
   .workspace:has(.confirm-bar) .preview{order:0}
 }
+.pdf-hint{margin:0;color:var(--ink-2)}
+.pdf-guide{display:grid;gap:10px}
+.pdf-guide p{margin:0}
+.pdf-how{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 20px}
+.pdf-how>li{display:grid;gap:2px;font-size:.9rem}
+.pdf-steps{margin:0;padding-left:1.3em;color:var(--ink-2)}
+.pdf-more summary{cursor:pointer;font-size:.88rem;color:var(--muted);margin-bottom:6px}

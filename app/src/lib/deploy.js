@@ -580,3 +580,27 @@ export function siteStat(files) {
   for (const k of names) { const n = typeof files[k] === 'string' ? new TextEncoder().encode(files[k]).length : files[k].byteLength ?? files[k].length ?? 0; bytes += n; if (n > maxFile) maxFile = n; if (!isText(k)) binaries++; }
   return { bytes, maxFile, files: names.length, binaries };
 }
+
+/**
+ * 여러 곳에 배포한 기록 합치기(순수 함수). deploy.lastUrl·target은 '지금 대표 주소와 그 곳'이라는 뜻 그대로,
+ * deploy.sites = { 곳: { url, at } }는 곳마다 마지막 주소. QR·강사 화면은 lastUrl을 따름.
+ * - 새로 배포(url 있음): 그곳이 대표가 됨. 이미 있던 다른 곳에 다시 배포하면 대표는 그대로
+ * - 삭제(url ''): 그곳 기록을 지우고, 대표였으면 가장 최근에 배포한 다른 곳이 대표(없으면 비움)
+ * @returns {{ sites, lastUrl, target, at }}
+ */
+export function mergeSite(d = {}, url, target, now = Date.now()) {
+  const sites = { ...(d.sites || {}) };
+  if (!d.sites && d.lastUrl && d.target) sites[d.target] = { url: d.lastUrl, at: d.at || 0 }; // 예전 기록 옮기기
+  let lastUrl = url; let tgt = target; let at = now;
+  if (url) {
+    const had = !!sites[target];
+    sites[target] = { url, at: now };
+    if (had && d.lastUrl && d.target && d.target !== target && sites[d.target]) { lastUrl = d.lastUrl; tgt = d.target; at = d.at || now; }
+  } else {
+    delete sites[target];
+    const rest = Object.entries(sites).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
+    if (d.target === target || !d.lastUrl) { if (rest) { lastUrl = rest[1].url; tgt = rest[0]; at = rest[1].at || now; } else { lastUrl = ''; tgt = target; } }
+    else { lastUrl = d.lastUrl; tgt = d.target; at = d.at || now; }
+  }
+  return { sites, lastUrl, target: tgt, at };
+}
