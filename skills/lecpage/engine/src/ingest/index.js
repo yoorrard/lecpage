@@ -2,7 +2,7 @@
 //
 //   const m = await ingestFile('교재.pptx', bytes, { withImages: true });
 //   m.errors   → [{ code, message_ko }]  (예외를 던지지 않음)
-//   materialToAIContext(m, {maxChars}) → AI에게 건넬 보조 글자(쪽마다 제목·글·표·링크·노트, outline.js)
+//   materialToAIContext(m, {maxChars}) → 원본을 건넬 수 없는 교재의 보조 글자(쪽마다 제목·글·표·링크·노트, outline.js)
 //   교재의 뜻(일시·실습·흐름)은 AI가 원본·쪽 그림을 직접 읽고 정합니다(코드가 해석하지 않음).
 //
 // Material 모양은 skills/lecpage/references/material-format.md 에 적어 두었습니다.
@@ -20,7 +20,6 @@ import { parsePdf, loadPdfjs } from './pdf.js';
 import { parseText, parseTextFile } from './text.js';
 
 export const MATERIAL_VERSION = 1;
-export const ACCEPT = '.pptx,.ppsx,.potx,.pptm,.pdf,.hwpx,.docx,.dotx,.docm,.txt,.md,.markdown,.hwp,.ppt,.doc';
 
 export function emptyMaterial() {
   return {
@@ -30,7 +29,6 @@ export function emptyMaterial() {
 }
 
 const PREFIX = { pptx: 'deck', pdf: 'deck', docx: 'doc', hwp: 'doc', hwpx: 'doc', txt: 'doc', md: 'doc', link: 'link' };
-const UNIT_KO = { slide: '장', page: '쪽', section: '절', link: '개' };
 
 function zipType(zip, ext) {
   const mt = zip.has('mimetype') ? (zip.text('mimetype') || '').trim() : '';
@@ -334,11 +332,6 @@ export function materialToJSON(material, { imageSrc } = {}) {
   return copy;
 }
 
-/** 사람이 읽는 한 줄 요약(파일 이름과 쪽 수) */
-export function summarizeMaterial(m) {
-  return (m.files || []).map((f) => `${f.name}(${f.pages}${UNIT_KO[f.unit] || '쪽'})`).join(', ');
-}
-
 export { materialToAIContext } from './outline.js';
 export { normText, normLine, makeError, sizeLabel, DEFAULT_LIMITS, loadPdfjs };
-export { ingestPaths, runIngestCli, writeMaterial } from './cli.js';
+export { ingestPaths } from './cli.js';

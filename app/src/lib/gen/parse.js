@@ -1,8 +1,7 @@
 // AI 답에서 HTML·CSS·JSON 꺼내기. 답에는 코드 블록 표시(```), 앞뒤 설명, 잘림, 덜 닫힌 태그가 섞여 옵니다.
 // - 꺼내기: extractBlocks · extractHtml · extractCss · extractJson · extractSections
-// - 잘림: htmlCut(끝이 덜 됨) · jsonCut · trimToComplete(마지막 완성 태그까지) · stitch(이어 받은 글 이어 붙이기)
-// - 합치기: mergeSections(틀 + 섹션) · replaceSections(id로 갈아 끼우기) · balance(덜 닫힌 태그 닫기)
-// - 지도: siteMap(사이트 파일·섹션·키트 표시·깨진 경로)
+// - 잘림: htmlCut(끝이 덜 됨) · trimToComplete(마지막 완성 태그까지) · stitch(이어 받은 글 이어 붙이기)
+// - 합치기: replaceSections(고친 섹션을 id로 갈아 끼우기) · balance(덜 닫힌 태그 닫기)
 // DOM이 없는 곳(Node 시험)에서도 돌게 정규식·태그 훑기로만 씁니다.
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr', 'param']);
@@ -302,22 +301,15 @@ export function stitch(prev, next) {
   return a + b;
 }
 
-export const SECTIONS_MARK = '<!-- lp:sections -->';
-
-/** 틀 HTML(디자인 단계) + 섹션들 → 문서. 표시가 없으면 <main> 안 끝, main도 없으면 </body> 앞 */
-export function mergeSections(shell, sectionsHtml) {
+/** 섹션들을 문서의 <main> 안 끝에(main이 없으면 </body> 앞에) 덧붙임 */
+function appendSections(html, sectionsHtml) {
   const body = (Array.isArray(sectionsHtml) ? sectionsHtml.join('\n\n') : String(sectionsHtml || '')).trim();
-  let s = String(shell || '').trim();
-  if (!s) s = skeleton();
-  if (s.includes(SECTIONS_MARK)) return s.replace(SECTIONS_MARK, () => body);
+  const s = String(html || '').trim();
   const mainEnd = s.search(/<\/main\s*>/i);
   if (mainEnd >= 0) return s.slice(0, mainEnd) + body + '\n' + s.slice(mainEnd);
   const bodyEnd = s.search(/<\/body\s*>/i);
   if (bodyEnd >= 0) return s.slice(0, bodyEnd) + `<main>\n${body}\n</main>\n` + s.slice(bodyEnd);
   return s + `\n<main>\n${body}\n</main>`;
-}
-export function skeleton(title = '') {
-  return `<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${String(title).replace(/</g, '&lt;')}</title>\n<link rel="stylesheet" href="assets/style.css">\n</head>\n<body>\n<main>\n${SECTIONS_MARK}\n</main>\n</body>\n</html>`;
 }
 
 /** 문서 속 섹션을 id로 갈아 끼움. 없는 id는 main 끝에 덧붙임. 돌려줌: { html, replaced:[id], added:[id] } */
@@ -327,60 +319,10 @@ export function replaceSections(html, sections) {
   for (const sec of sections) {
     const cur = extractSections(s).find((x) => x.id && x.id === sec.id);
     if (cur) { const at = s.indexOf(cur.html); s = s.slice(0, at) + sec.html + s.slice(at + cur.html.length); replaced.push(sec.id); }
-    else { s = mergeSections(s.includes(SECTIONS_MARK) ? s : s, [sec.html]); added.push(sec.id); }
+    else { s = appendSections(s, [sec.html]); added.push(sec.id); }
   }
   return { html: s, replaced, added };
 }
-/** 섹션 빼기(id) */
-export function removeSection(html, id) {
-  const cur = extractSections(html).find((x) => x.id === id);
-  if (!cur) return html;
-  const at = html.indexOf(cur.html);
-  return html.slice(0, at) + html.slice(at + cur.html.length);
-}
-
-const KIT_RE = /\bdata-lp\s*=\s*["']([\w-]+)["']/g;
-const REF_RE = /\b(?:src|href|poster|data-src)\s*=\s*["']([^"'#?]+)[^"']*["']|url\(\s*["']?([^"')?#]+)[^)]*\)/gi;
-
-/**
- * 사이트 파일 지도: files(경로 → 글·바이트) + 교재 쪽 그림 목록 → { files:[{ path, kind, bytes }], pages:[html 경로],
- * sections:[{ file, id, title, kit:[…], steps:n }], kit:{ 종류: 수 }, refs:[{ from, ref }], missing:[{ from, ref }] }
- */
-export function siteMap(site = {}, { material = [] } = {}) {
-  const enc = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
-  const size = (v) => (typeof v === 'string' ? (enc ? enc.encode(v).length : v.length) : v?.byteLength ?? v?.size ?? 0);
-  const kindOf = (p) => (/\.html?$/i.test(p) ? 'html' : /\.css$/i.test(p) ? 'css' : /\.m?js$/i.test(p) ? 'js' : /^material\//.test(p) ? 'material' : /\.(png|jpe?g|webp|gif|avif)$/i.test(p) ? 'image' : /\.json$/i.test(p) ? 'json' : 'other');
-  const have = new Set([...Object.keys(site), ...material]);
-  const files = Object.keys(site).sort().map((path) => ({ path, kind: kindOf(path), bytes: size(site[path]) }));
-  for (const m of material) if (!site[m]) files.push({ path: m, kind: 'material', bytes: 0 });
-  const sections = []; const kit = {}; const refs = []; const missing = [];
-  for (const [path, v] of Object.entries(site)) {
-    if (typeof v !== 'string') continue;
-    const k = kindOf(path);
-    if (k !== 'html' && k !== 'css') continue;
-    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
-    for (const m of v.matchAll(REF_RE)) {
-      const ref = (m[1] || m[2] || '').trim();
-      if (!ref || /^(https?:|data:|mailto:|tel:|javascript:|\/\/|#)/i.test(ref)) continue;
-      const abs = resolveRef(dir, ref);
-      refs.push({ from: path, ref: abs });
-      if (!have.has(abs)) missing.push({ from: path, ref: abs });
-    }
-    if (k !== 'html') continue;
-    for (const m of v.matchAll(KIT_RE)) kit[m[1]] = (kit[m[1]] || 0) + 1;
-    for (const sec of extractSections(v)) {
-      const types = [...sec.html.matchAll(KIT_RE)].map((m) => m[1]);
-      sections.push({ file: path, id: sec.id, title: sec.title, kit: [...new Set(types)], steps: (sec.html.match(/data-lp-step\s*=/g) || []).length });
-    }
-  }
-  return { files, pages: files.filter((f) => f.kind === 'html').map((f) => f.path), sections, kit, refs, missing };
-}
-function resolveRef(dir, ref) {
-  const parts = (dir + ref.replace(/^\.\//, '')).split('/'); const out = [];
-  for (const p of parts) { if (p === '..') out.pop(); else if (p && p !== '.') out.push(p); }
-  return decodeURI(out.join('/'));
-}
-
 /**
  * 쓰던 AI 창의 답(사이트 전체): HTML 문서 + 맨 끝 lecpage.json(```json 블록이나 <script type="application/json" id="lecpage">)
  * @returns {{ html, doc, cut, meta: object|null }}

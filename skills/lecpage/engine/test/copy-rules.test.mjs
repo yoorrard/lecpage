@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { lintText, suggestFix, maskFixed, FIXED_TERMS, TERM_RULES, copyRulesPrompt } from '../src/prompt/copy-rules.js';
+import { lintText, suggestFix, maskFixed, FIXED_TERMS, TERM_RULES } from '../src/prompt/copy-rules.js';
 
 const ids = (t, k, o) => lintText(t, k, o).map((f) => f.id);
 const has = (t, id, k, o) => ids(t, k, o).includes(id);
@@ -144,11 +144,6 @@ describe('고친 안(suggestFix)', () => {
     assert.equal(suggestFix('개인정보를 처리합니다.', 'doc'), '', '문서');
     assert.equal(suggestFix('저장했어요.'), '');
   });
-});
-
-test('AI 프롬프트에 해요체·능동·가벼운 높임·정해진 용어 안내가 들어감', () => {
-  const p = copyRulesPrompt();
-  for (const w of ['해요체', '저장했어요', '할까요', '직무연수', '이수 기준', '다음 할 일']) assert.ok(p.includes(w), w);
 });
 
 // 앱 화면 글 검사(app/scripts/copy-lint.mjs). JSX를 읽는 @babel/parser가 app/node_modules에 있을 때만

@@ -20,16 +20,6 @@ const json = (...a) => { const r = run(...a, '--json'); return { code: r.code, d
 before(() => { dir = mkdtempSync(join(tmpdir(), 'lecpage-cli-')); });
 after(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
 
-test('문구 검사: 교재에서 그대로 옮긴 글(보조 글자 material.md에 있는 글)은 고칠 곳으로 세지 않음', async () => {
-  const { lintHtml } = await import('../../scripts/copy-lint.mjs');
-  const line = '스프레드시트에서 학생 이름 열을 고정합니다. 다음으로 점수 열을 선택합니다.';
-  const html = `<main><h1>실습</h1><p>${line}</p></main>`;
-  const raw = lintHtml(html, 'index.html');
-  assert.ok(raw.some((f) => /합니다체/.test(f.why)), '합니다체가 있는 견본');
-  const kept = lintHtml(html, 'index.html', { material: { pages: [{ paragraphs: [{ text: `## p-003\n${line}` }] }] } });
-  assert.ok(!kept.some((f) => /합니다/.test(f.hit)), JSON.stringify(kept));
-});
-
 test('decide-infra: 연결해 둔 곳이 없으면 가입 없는 길(app work → 앱의 바로 배포)을 한 줄로', () => {
   writeFileSync(join(dir, 'i0.json'), JSON.stringify({ skill: 'set', size: 30, features: [], connected: [] }));
   assert.match(run('decide-infra', '-i', 'i0.json').out, /계정이 없으면 app work → .*lecpage\.com \[저장한 파일 열기\] → \[배포하기\]/);

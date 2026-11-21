@@ -47,14 +47,14 @@
  "features":["qa","poll","attendance","help","reactions"],"theme":{"accent":"#…","ink":"#…","paper":"#…"},
  "facts":[{"label":"장소","value":"…","page":1}]}
 ```
-교재에 없는 값은 비우고, `facts`에 찾은 쪽을 적어요. 공개 범위·주소·참여 서버는 강사가 정해요.
+교재에 없는 값은 비워요. `facts`(선택)에 찾은 쪽을 적으면 앱의 연수 정보 확인에 'N쪽에서 찾았어요'로 보여요. 공개 범위·주소·참여 서버는 강사가 정해요.
 - 키트는 이수 조건(무엇을 눌러야·설문을 내야 이수인지)·출석 비율을 지어 쓰지 않아요. 교재에 있으면 사이트 글로 직접 쓰고, 출석 비율은 `admin.completionRate`(교재·강사 값)에만. 없으면 강사 화면 이수자 명단의 '이수' 칸은 비어요.
 - `features`: qa·poll·board·attendance·survey·help·reactions·signal·progress·deck·materials·timer. `mode`: offline·online·blended. `audience`: teachers·students·parents·staff·other
 - 선택 칸: `subtitle`·`organizer`·`contact`·`description`, 직무연수면 `admin: {"kind":"official","hours":3,"completionRate":90}`(kind: school·official·conference·student, 교재·강사가 준 값만), `theme.font`(본문)·`theme.fontHeading`(제목: 강사·발표 화면·QR 안내문 제목에도)·`theme.radius`
-- `pages`: 교재 넘기기 캡션·강사 화면 쪽 목록의 쪽 제목. 교재에서 뽑은 제목(material.md 머리)이 엉키거나 비었으면 쪽 그림을 보고 `[{"page":1,"title":"표지 · …"}]`로 고쳐요(쓴 쪽만 바뀜).
+- `pages`: 교재 넘기기 캡션·강사 화면 쪽 목록의 쪽 제목. 코드가 뽑은 제목이 비었거나 엉킨 쪽(`check`가 '제목 없는 쪽'으로 알려 줌)은 쪽 그림을 보고 `[{"page":1,"title":"표지 · …"}]`로 고쳐요(쓴 쪽만 바뀜).
 
 ## 검수·배포 전 확인(알리기만 해요)
-AI가 교재 원본을 직접 읽고 사실은 원문 그대로 옮겨요. 코드는 교재 글과 맞춰 보지 않아요. `check`(앱은 검수)는 휴대폰에서 10화면 넘는 쪽, 낱말 가운데서 갈린 짧은 이름표, 상자 밖으로 삐져나온 글, 바탕 상자 끝에 붙은 글을 '살펴볼 곳'으로 알려요(막거나 고치지 않아요). 예시 주소·지난 날짜·설문 없는 이수 조건·연습 모드·사진은 강사용 `운영안내.md` 맨 위 '배포 전 확인'에 적혀요.
+AI가 교재 원본을 직접 읽고 사실은 원문 그대로 옮겨요. 코드는 교재 글·문구와 맞춰 보지 않아요. `check`(앱은 검수)는 배포에서 막히는 것과 화면이 깨지는 것(넘침·겹침·잘림·안 보이는 글·깨진 그림·스크립트 오류)을 알려 줄 뿐 사이트를 고치지 않아요. 예시 주소·지난 날짜·설문 없는 이수 조건·연습 모드·사진은 강사용 `운영안내.md` 맨 위 '배포 전 확인'에 적혀요.
 - 함수(앱·AI): `E.kit.inspect(files, meta)`.
 - 배포할 곳: `assemble(…, { host, hostDays, keepAlive })`(host: lecpage·cloudflare·vercel·github-pages·netlify·onpod·lan·zip …). 개인정보 안내의 처리자·보관 기간·사이트를 보내 주는 곳이 그 방식에 맞게 바뀌어요. Skill은 `check --host`·`publish`가 넘겨요.
 - 배포에는 교재 넘기기·`<img>`·링크·CSS가 쓰는 교재 쪽 그림만 담겨요(미리보기는 다). 사이트 CSP는 실제로 부르는 바깥 곳(허용 목록 라이브러리·글꼴 CDN·영상 틀)만 열어요.

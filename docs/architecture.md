@@ -15,16 +15,16 @@ lecpage/
 ├─ .claude-plugin/            ← Claude Code 플러그인 마켓플레이스. `/plugin install lecpage --marketplace yoorrard/lecpage`가 skills/lecpage를 설치
 ├─ skills/lecpage/            ← Agent Skill 패키지(자체 완결). `npx skills add yoorrard/lecpage`
 │  ├─ SKILL.md
-│  ├─ references/             ← skill이 필요할 때 읽는 문서(kit.md 키트, cli.md 명령, material-format.md 교재, 배포, 레퍼런스 사이트 designs/<id>/)
+│  ├─ references/             ← skill이 필요할 때 읽는 문서(kit.md 키트, cli.md 명령, 배포, 디자인 서재, 레퍼런스 사이트 designs/<id>/, 개발용 material-format.md)
 │  ├─ engine/                 ← 단일 소스 엔진. Node와 브라우저(앱) 모두에서 import
 │  │  ├─ package.json         ← 판(version) 하나의 출처 + "type":"module". src/version.js는 시험이 같은 값인지 확인
 │  │  ├─ src/                 ← ESM. 의존성 없음(vendor/ 제외)
 │  │  │  ├─ kit/              ← 조립(assemble.js)·보조 쪽(aux-build.js)·키트 위젯(widgets.js)·검수(inspect.js, inspect-rendered.js)·.lecpage v2(project-v2.js)
 │  │  │  ├─ render/           ← 보조 쪽(강사·발표·안내문·접속 확인·개인정보) 렌더러(aux-pages.js), 쪽 머리·CSP(shell.js), 이스케이프(html.js), 마크다운(markdown.js)
 │  │  │  ├─ design/           ← 보조 쪽 테마 두 가지(presets.js, tokens.js), 글꼴(fonts.js), 색(color.js)
-│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF·이미지 읽기(브라우저+Node) → 교재 글(material.md)·쪽 그림
+│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF·이미지 읽기(브라우저+Node) → 쪽 그림·쪽 제목, 원본을 못 건넨 교재의 보조 글자
 │  │  │  ├─ decide/infra.js   ← 올릴 곳·참여 기능 연결 고르기
-│  │  │  ├─ prompt/copy-rules.js ← 문구 검사 규칙(copy-lint가 씀)
+│  │  │  ├─ prompt/copy-rules.js ← 앱·고정 문구 검사 규칙(app/scripts/copy-lint.mjs가 씀)
 │  │  │  └─ protect.js · font-bundle.js · font-subset.js · zip-write.js · project-file.js · css-prune.js · util.js
 │  │  ├─ runtime/             ← 만든 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
 │  │  │  ├─ kit.css           ← 키트 위젯 모양(`.lpk` 안에서만)
@@ -34,7 +34,7 @@ lecpage/
 │  │  ├─ vendor/              ← 작은 MIT 라이브러리(fflate) + VENDOR.json(담아 둔 라이브러리·판을 고정한 배포 명령 표, CI가 OSV로 확인)
 │  │  ├─ scripts/site-score.mjs ← 만든 사이트 채점(점검용)
 │  │  └─ test/                ← node:test
-│  ├─ scripts/                ← CLI(lecpage.mjs·kit-cmds.mjs·publish.mjs·studio.mjs), 쪽 그림(render-slides.mjs, 셸 없이), copy-lint.mjs, 파이썬 보조(ingest.py)
+│  ├─ scripts/                ← CLI(lecpage.mjs·kit-cmds.mjs·publish.mjs·studio.mjs), 쪽 그림(render-slides.mjs, 셸 없이), 파이썬 보조(ingest.py)
 │  ├─ evals/                  ← skill 평가 문항(evals.json·triggers.json)과 확인 스크립트
 │  ├─ backends/               ← supabase/, apps-script/, cloudflare/, node-server/
 │  └─ templates/deploy/       ← 호스팅별 설정 파일
@@ -60,7 +60,7 @@ lecpage/
 AI가 만드는 것은 **사이트 폴더**(`site/index.html`, 그 밖의 쪽, `assets/*`)와 **연수 정보**(`lecpage.json`: 제목·날짜·시간·장소·강사·대상 등) 둘입니다. 형식은 `skills/lecpage/references/kit.md`의 `lecpage.json` 절과 [plan-ai-first.md](plan-ai-first.md) §3이 기준입니다.
 
 - 강사만 정하는 값(참여 기능 연결 `live`의 주소·키·연수 코드, 사이트 주소, 공개 범위)은 AI 결과에서 받지 않습니다. 앱은 프로젝트에, Skill은 `work/lecpage.teacher.json`에 따로 두고 조립 때 `prev`로 넘깁니다.
-- 교재는 원본 그대로 + 쪽 그림(`assets/slides/p-N.webp`) + 보조 글(`material.md`)로 건넵니다(`references/material-format.md`).
+- 교재는 원본 그대로 + 쪽 그림(`site/material/p-NNN.webp`)으로 건넵니다. 코드가 뽑은 보조 글자는 원본을 건넬 수 없는 교재(PPTX·HWP·HWPX·DOCX의 발표자 노트·그림이 없는 쪽, 키 길에서 원본을 못 보낸 교재)에만 씁니다.
 
 ## 3. 강의 기능 키트 (약속 B)
 

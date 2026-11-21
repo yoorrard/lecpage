@@ -1,12 +1,8 @@
-// 문구 규칙(한 곳에서 관리). 같은 목록을 쓰는 곳:
-//   AI 프롬프트(bridge.js) · 설계도와 만든 사이트 점검(scripts/copy-lint.mjs) · 앱 화면 글과 엔진 고정 문구 점검(app/scripts/copy-lint.mjs)
-//   기준 문서: references/copywriting.md(강의 페이지), docs/writing.md(앱·공통)
+// 문구 규칙(한 곳에서 관리): 앱 화면 글과 엔진 고정 문구 점검(app/scripts/copy-lint.mjs)이 씀. 기준 문서: docs/writing.md.
+//   AI가 쓰는 강의 사이트 글에는 쓰지 않음(문구·말투는 AI가 교재와 연수에 맞게 정함)
 // level: error = 고침(AI 티·장식·틀린 말) / warn = 살핌(대개 고치는 게 낫지만 예외가 있음)
 // id:    ai 상투·과장 · deco 장식 · plain 풀어쓰기 · formal 합니다체 · honor 과한 높임 · passive 수동 · noun 명사 나열
 //        trans 번역투·공문투 · error 오류문 · mark 문장부호 · cta 버튼 이름 · len 길이 · term 용어
-
-/** 그대로 쓰는 흔한 용어(풀어 쓰지 않음) */
-export const PLAIN_TERMS = ['QR', 'URL', 'CSV', 'PDF', 'Wi-Fi', '로그인', '프롬프트', 'AI', 'PPT', 'FAQ', '링크', '앱', '크롬북', 'Zoom'];
 
 /**
  * 정해진 용어: 교육 행정 용어와 화면·기능 이름. 명사가 나란히 있어도 풀어 쓰지 않습니다(명사 나열·공문투 점검에서 뺌).
@@ -226,16 +222,4 @@ export function suggestFix(text, kind = 'text', opts = {}) {
     s = s.replace(new RegExp(`(?:${t.re.source})(?<pp>을|를|이|가|은|는|과|와)?(?![가-힣])`, 'g'), (...a) => { const p = a[a.length - 1].pp; return t.to + (p ? pick(last, ...PARTICLE[p]) : ''); });
   }
   return s !== src ? s : '';
-}
-
-/** AI 프롬프트에 넣을 짧은 규칙 문단 */
-export function copyRulesPrompt() {
-  return [
-    '문구 규칙(참가자 화면):',
-    '- 해요체, 짧게. 한 문장 한 가지, 70자 안. 버튼·메뉴는 동사나 명사 하나(메뉴 2~4자, 버튼 12자 안).',
-    `- 흔한 용어는 그대로 쓴다: ${PLAIN_TERMS.join(', ')}. 교육 행정 용어(직무연수, 이수 기준, 출석 확인, 차시)도 풀어 쓰지 않는다.`,
-    '- 능동으로, 높임은 가볍게: "저장되었습니다" → "저장했어요", "~하시겠어요?" → "~할까요?". 안 되는 일은 무엇이 안 됐는지와 다음 할 일을 함께.',
-    '- 쓰지 않는 말: "~를 통해", "~할 수 있습니다", "함께 ~해 보아요", "알아볼까요/알아보겠습니다", "~하는 시간을 가져요", "여정", "탐험", "핵심 포인트", "꿀팁", "혁신적인·놀라운·완벽한", 느낌표, 이모지, 제목 위 영어 대문자 장식(DATE, SPEAKER, TODAY 등).',
-    '- 줄일 말: "다양한", "효과적으로", "여러분", "활용하여", "~하기 위해서는", "~것입니다", "~를 위한", "~에 대해", "~에 의해", "~하는 것이 좋습니다", "어디서 하는 ~든".',
-  ].join('\n');
 }

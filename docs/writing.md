@@ -1,13 +1,12 @@
 # lecpage 문구 기준
 
-앱 화면(교재 넣기·고치기·배포하기)과 lecpage가 만드는 연수 사이트(참가자 화면·강사 화면·발표 화면)의 글에 같이 씁니다.
-AI가 연수 사이트 문구를 쓸 때 보는 짧은 판은 [`skills/lecpage/references/copywriting.md`](../skills/lecpage/references/copywriting.md), 검사는 `engine/src/prompt/copy-rules.js` 한 곳에 있습니다.
+앱 화면(교재 넣기·고치기·배포하기)과 lecpage가 고정으로 만드는 글(키트·강사 화면·발표 화면·안내문)에 씁니다. 검사는 `engine/src/prompt/copy-rules.js` 한 곳에 있습니다.
+AI가 쓰는 연수 사이트 본문에는 이 기준을 강요하지 않아요(말투·문구는 AI가 교재와 연수에 맞게 정함).
 
 ```bash
 node app/scripts/copy-lint.mjs            # 앱 화면 글 + 엔진 고정 문구(고침·살핌 목록)
 node app/scripts/copy-lint.mjs --report   # 규칙별 건수·심한 것·용어 불일치·화면별 글 양(표)
 node app/scripts/copy-lint.mjs --json     # [{ file, line, kind, text, rule, level, hit, fix, fixed }]
-node skills/lecpage/scripts/copy-lint.mjs work                  # AI 에이전트가 쓴 사이트(work/site, 교재 원문은 빼고)
 ```
 **고침**은 고칩니다. **살핌**은 아래 예외에 들면 그대로 둡니다. 그대로 둘 줄은 그 줄이나 윗줄에 `// copy-ok: 까닭`을 적습니다.
 
@@ -54,7 +53,6 @@ node skills/lecpage/scripts/copy-lint.mjs work                  # AI 에이전�
 | 개인정보 | 어디로 가는지 실제 이름으로(“AI 회사” 말고 "Google"). 보내기 직전 화면에 한 줄 | "만들 때 교재의 글이 Claude로 가요." |
 | 비용 | 돈이 드는 버튼·선택지는 이름에 **유료**·금액을 쓴다. 무료 한도·만료를 미리 알린다 | 유료로 이어서 하기 · 크레딧 충전하기 |
 
-강의 페이지(참가자 화면)는 AI가 쓰는 문구가 더 많습니다. 칸별 길이와 금지 표현은 `copywriting.md`가 기준입니다.
 
 ## 3. 쓰지 않는 표현
 

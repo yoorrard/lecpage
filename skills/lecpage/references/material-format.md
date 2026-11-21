@@ -1,36 +1,9 @@
-# 교재 해석 결과(Material JSON) 형식
+# 교재 해석 결과(Material JSON) 형식 — 개발용
 
-교재 파일(PPTX·PDF·HWP·HWPX·DOCX·TXT·MD)이나 링크를 읽은 결과입니다. `prepare`가 이 JSON으로 쪽 그림(`site/material/p-NNN.webp`)과 보조 글자(`material.md`)를 만들고, 앱은 AI에게 건넬 보조 글자(`materialToAIContext`)를 만듭니다.
-교재의 뜻(일시·실습·흐름)은 코드가 해석하지 않습니다. AI가 원본·쪽 그림을 직접 읽어요. 이 JSON은 글자·표·링크·노트·그림을 쪽마다 담을 뿐이에요.
-JS 엔진(`engine/src/ingest`, 브라우저·Node 공통)과 파이썬 보조 스크립트(`scripts/ingest.py`)가 **같은 모양**을 만듭니다.
+엔진(`engine/src/ingest`, 브라우저·Node 공통)과 파이썬 보조(`scripts/ingest.py`, pdf.js가 없을 때 PDF용)가 만드는 같은 모양이에요. `prepare`가 이것으로 쪽 그림(`site/material/p-NNN.webp`)과 PDF가 아닌 교재의 보조 글자(`material.md`)를, 앱이 원본을 보내지 못한 교재의 보조 글자를 만들어요.
+교재의 뜻은 코드가 해석하지 않아요. AI는 원본·쪽 그림을 직접 읽어요(이 문서는 AI 에이전트가 읽을 필요가 없어요).
 
-## 1. 만들기
-
-보통은 `lecpage.mjs prepare 교재… -o work`가 해석·쪽 그림을 한 번에 하고 `work/material.md`(쪽마다 글자·발표자 노트)와 `work/.lecpage/material.json`을 남깁니다. JSON은 크므로(교재 13쪽에 4만 자 안팎) 통째로 읽지 말고 `material.md`와 쪽 그림을 봅니다.
-
-```bash
-# Node(권장): 여러 파일을 한 번에. PDF는 pdfjs-dist가 있으면 JS로, 없으면 자동으로 파이썬(PyMuPDF)으로 읽음
-node $SKILL/scripts/ingest.mjs 교재.pptx 교재.pdf 안내.hwpx -o work/material.json \
-     --images work/assets/media --slides work/assets/slides \
-     --context work/material.txt
-
-# 파이썬만(파일 하나)
-python3 $SKILL/scripts/ingest.py 교재.pdf -o work/material.json --images work/assets/media
-
-# 쪽 그림만(LibreOffice + pdftoppm → slide-001.webp …, 셸 없이 Node로 — 윈도우도 같음)
-node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
-```
-
-| 옵션 | 뜻 |
-|---|---|
-| `--images 폴더` | 교재 속 그림을 `<그림 id>.<확장자>`로 저장하고 `images[].src`에 material.json 기준 상대 경로를 넣음 |
-| `--slides 폴더` | 쪽 그림을 만들고 `pages[].image`에 경로를 넣음. PPTX와 그 PDF본을 함께 주면 PDF로 그림(원본 글꼴 그대로) |
-| `--context 파일` | AI에게 건넬 보조 글자(쪽 번호·원문 그대로, 반복 문구는 한 번) |
-| `--max-chars 수` | 보조 글자 길이 예산(기본 24000자) |
-
-브라우저(웹앱)에서는 파일을 서버로 올리지 않고 `ingestFile(이름, File)`로 바로 읽습니다. PDF는 앱이 불러 둔 `globalThis.pdfjsLib`(jsDelivr 버전 고정)을 쓰고, 쪽 그림은 `render-pdf-browser.js`의 `renderPdfPages()`로 그립니다.
-
-## 2. 전체 모양
+## 1. 전체 모양
 
 ```jsonc
 {
@@ -47,7 +20,7 @@ node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
 }
 ```
 
-## 3. 파일(`files[]`)
+## 2. 파일(`files[]`)
 
 | 필드 | 뜻 |
 |---|---|
@@ -62,7 +35,7 @@ node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
 | `renderOf` / `renderSource` | 같은 교재의 PDF본을 함께 올리면 PDF에 `renderOf:"deck1"`, PPTX에 `renderSource:"deck2"`. PDF본은 **보조 글자에서 빠지고 쪽 그림 원본으로만** 씀 |
 | `path`, `rendered`, `pageImages` | CLI 전용: 원본 경로, 만든 쪽 그림 수, 문서형의 실제 쪽 그림 목록 |
 
-## 4. 쪽(`pages[]`)
+## 3. 쪽(`pages[]`)
 
 ```jsonc
 {
@@ -101,7 +74,7 @@ node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
 
 그림(`images[]`): `bytes`(Uint8Array)는 `withImages` 옵션일 때만 메모리에 있고 JSON에는 쓰지 않습니다. `repeated:true`는 여러 쪽에 반복되는 로고 등, `web:false`는 EMF·WMF처럼 웹에서 바로 안 보이는 형식, `link`는 그림에 걸린 링크(영상 등)입니다.
 
-## 5. 디자인 단서(`design`)
+## 4. 디자인 단서(`design`)
 
 ```jsonc
 {
@@ -116,7 +89,7 @@ node $SKILL/scripts/render-slides.mjs 교재.pptx work/assets/slides
 ```
 HWP·HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed`를, PDF는 `slideSize`만 채웁니다.
 
-## 6. 오류 코드(`errors[].code`)
+## 5. 오류 코드(`errors[].code`)
 
 예외를 던지지 않고 이 목록으로 돌려줍니다. 화면에는 `message_ko`를 그대로 보여 주면 됩니다(개발용 `detail`은 보여 주지 않음).
 
@@ -132,10 +105,3 @@ HWP·HWPX는 `fonts`에 한글 기본 글꼴(예: 함초롬바탕)과 `fontsUsed
 | `pdf-failed` · `bad-url` | PDF 해석 실패 · 잘못된 주소 |
 
 경고(`warnings[].code`): `no-text`(스캔 PDF), `no-content`, `hidden-slides`, `too-many-pages`(1000쪽 넘으면 앞부분만), `images-unsupported`(EMF·WMF), `link-only`·`link-fetch-failed`(링크만 받음), `python-fallback`, `render-failed`.
-
-## 7. 쓸 때 지킬 것
-
-- **프롬프트·실습 단계는 원문 그대로** 사이트에 옮깁니다. 고쳐 쓰지 않습니다.
-- `notes`(발표자 노트)와 강사 이메일은 개인적인 내용일 수 있어 사이트에 그대로 싣지 않습니다.
-- 날짜·장소·강사는 교재에서 찾은 것을 `lecpage.json`의 `facts`(쪽 번호와 함께)로 적고, 확신이 없으면 강사에게 묻습니다.
-- 글이 거의 없는 PDF(`no-text`)는 쪽 그림만 쓰고 내용은 사용자에게 받습니다.

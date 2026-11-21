@@ -1,13 +1,13 @@
 // 교재 해석을 브라우저 안에서: pdf.js는 앱에 함께 묶어(외부 CDN 없이) 학교망에서도 동작
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ingestFile, mergeMaterials, materialToJSON, summarizeMaterial, materialToAIContext, ACCEPT } from '@engine/src/ingest/index.js';
+import { ingestFile, mergeMaterials, materialToJSON } from '@engine/src/ingest/index.js';
 import { renderPdfPages, slideFileName } from '@engine/src/ingest/render-pdf-browser.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 globalThis.pdfjsLib = pdfjsLib;
 
-export { ACCEPT, mergeMaterials, materialToJSON, summarizeMaterial, materialToAIContext, slideFileName };
+export { mergeMaterials, materialToJSON, slideFileName };
 
 // 글꼴을 담지 않은 한글 PDF(공문·예전 PDF)용 CMap·표준 글꼴: 빌드가 같은 출처 pdfjs/ 아래에 둠(vite.config.js pdfjsAssets). 그런 PDF를 열 때만 받음
 const PDF_ASSETS = (() => {

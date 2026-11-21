@@ -1,5 +1,5 @@
-// 세 회사 어댑터를 한 꼴로: stream({ key, model, system, parts, maxTokens, signal, onText, onEvent, … }) → { text, stop, usage, resumeToken? }
-// parts: [{ kind: 'pdf'|'doc'|'image'|'text', mime, name, data, text, cache }]
+// 두 회사 어댑터를 한 꼴로: stream({ key, model, system, parts, maxTokens, signal, onText, onEvent, … }) → { text, stop, usage, resumeToken? }
+// parts: [{ kind: 'pdf'|'image'|'text', mime, name, data, text, cache }]
 import * as anthropic from './anthropic.js';
 import * as openai from './openai.js';
 import * as demo from './demo.js';
@@ -20,8 +20,8 @@ export const GEN_PROVIDERS = Object.keys(MODS);
  */
 export const LIMITS = {
   // Claude는 요청 128MB·600쪽이지만 쪽마다 글+그림 토큰이 들어가 빽빽한 교재는 문맥이 먼저 참 → 1M 문맥 300쪽, 그 밖 60쪽에서 쪽 그림으로 바꿈
-  anthropic: { pdfBytes: 90e6, totalBytes: 90e6, pdfPages: 300, smallPdfPages: 60, images: 100, office: false },
-  openai: { pdfBytes: 48e6, totalBytes: 48e6, pdfPages: 1000, smallPdfPages: 1000, images: 200, office: false },
+  anthropic: { pdfBytes: 90e6, totalBytes: 90e6, pdfPages: 300, smallPdfPages: 60, images: 100 },
+  openai: { pdfBytes: 48e6, totalBytes: 48e6, pdfPages: 1000, smallPdfPages: 1000, images: 200 },
 };
 /** 문맥 1M 모델이면 Claude PDF 300쪽, 아니면 60쪽(넘으면 쪽 그림으로) */
 export function pdfPageLimit(provider, model = '') {

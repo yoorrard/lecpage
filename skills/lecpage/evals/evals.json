@@ -9,13 +9,13 @@
       "expected_output": "prepare로 쪽 그림을 만들고, 교재와 쪽 그림을 직접 읽은 뒤 확실하지 않은 것만 한 번 묻는다. work/site/와 lecpage.json을 직접 쓰고 check가 고칠 곳 0이 될 때까지 고치며 화면 그림을 직접 본다. 구성·켠 기능·다음 할 일(앱으로 넘기기 또는 배포)을 짧게 알린다.",
       "expectations": [
         "scripts/lecpage.mjs prepare를 실행했다(교재.pptx와 교재.pdf를 함께)",
-        "material.md와 쪽 그림 몇 장(표지·실습 쪽)을 직접 읽었고, 조립 결과(work/dist)의 HTML을 통째로 읽지 않았다",
+        "교재 원본(PDF)을 직접 읽었고(쪽 그림·material.md는 보조), 조립 결과(work/dist)의 HTML을 통째로 읽지 않았다",
         "work/site/index.html·assets/style.css와 work/lecpage.json을 직접 썼고 강의 기능은 자리 표시(data-lp, data-lp-step)로 넣었다",
         "질문은 고르기형으로 한 번(많아야 6개)이고, 교재에 있는 날짜·장소·강사와 디자인은 묻지 않았다",
         "사이트의 실습 프롬프트가 교재 원문('이 영상을 한국어로 요약해줘')과 같고 복사 단추가 있다",
         "교재에 없는 날짜·장소·인원·도구를 지어내지 않았다",
-        "check를 고칠 곳 0까지 다시 돌렸고, work/check/tiles/의 화면 그림을 직접 열어 보고 다듬었다",
-        "교재의 색·글꼴 느낌을 이어받았고 디자인 원칙의 'AI 티'(보라 그라데이션·알약 꼬리표·이모지 아이콘 등)가 없다",
+        "check를 돌려 고칠 곳(배포에서 막히거나 화면이 깨지는 것)이 0이다",
+        "교재의 색·글꼴 느낌을 이어받았고 흔한 'AI 티'(보라 그라데이션·알약 꼬리표·이모지 아이콘 등)가 없다",
         "lecpage.teacher.json에 강사가 말하지 않은 값(공개 범위·주소·참여 서버)을 쓰지 않았다",
         "구성·켠 기능과 다음 할 일(app work → lecpage.com, 또는 publish work --dry-run)을 짧게 알렸다"
       ]

@@ -238,13 +238,6 @@ export function inspectRendered(opts) {
     }
     return '';
   }
-  // (d) 휴대폰에서 너무 긴 쪽(강의 기능 키트 칸을 빼고 10화면 넘게): 교재를 옮겨 적은 사이트(디자인 원칙 2번)
-  if (small && H > 200) {
-    var docH = Math.max(root.scrollHeight, doc.body ? doc.body.scrollHeight : 0), kitH = 0;
-    Array.prototype.forEach.call(doc.querySelectorAll('.lpk-w,.lpk-step-f'), function (k) { if (!k.parentElement.closest('.lpk-w')) kitH += k.getBoundingClientRect().height; });
-    var own = docH - kitH;
-    if (own > H * 10) add('page-long', 'warn', doc.body, '사이트가 길어요: 휴대폰에서 강의 기능 칸을 빼고도 약 ' + Math.round(own / H) + '화면(전체 ' + Math.round(docH) + 'px)이에요. 참가자는 실습 중에 곁눈질로 찾아요.', '설명은 쪽 그림(교재 넘기기·교재 N쪽)과 강사에게 맡겨요. 할 일·복사할 원문·다시 찾을 정보만 남겨 10화면 안으로 줄여 주세요(디자인 원칙 2번).');
-  }
   // 빈 섹션
   Array.prototype.forEach.call(doc.querySelectorAll('section'), function (s) {
     var cs = win.getComputedStyle(s); if (cs.display === 'none' || s.closest('[hidden],[aria-hidden="true"]')) return; // 높이가 0이어도 빈 섹션
