@@ -239,7 +239,7 @@ test('띄우기 → 앱 파일(토큰 넣기·_headers·경로 막기) → 거�
   assert.deepEqual([cl.installed, cl.version, cl.auth, cl.loggedIn, cl.ready], [true, '2.1.320', 'subscription', true, true]);
   assert.deepEqual([cx.installed, cx.version, cx.auth, cx.ready], [true, '0.130.0', 'subscription', true]);
   assert.equal(cl.file, undefined, '실행 파일 경로(사용자 이름)는 앱에 주지 않음');
-  assert.match(sj.policy_ko.claude, /선택 기능/);
+  assert.match(sj.policy_ko.claude, /Claude Code를 그대로/);
   // 잘못된 작업 요청
   const bad = async (body) => (await req(port, 'POST', '/bridge/jobs', { headers: O, body })).json();
   assert.match((await bad({ agent: 'gpt' })).message_ko, /claude/);
@@ -471,7 +471,7 @@ test('빌드본이 없으면 앱 파일을 받아 같은 출처로(받은 HTML�
     const down = await req(st.port, 'GET', '/');
     assert.equal(down.status, 503);
     assert.match(down.text, /앱 파일을 받지 못했어요/);
-    assert.match(down.text, /선택 기능/);
+    assert.match(down.text, /Claude Code를 그대로/);
     st.p.kill('SIGTERM');
   } finally { if (up.listening) up.close(); }
 });

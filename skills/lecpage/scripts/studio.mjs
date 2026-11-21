@@ -54,10 +54,10 @@ const typeOf = (p) => TYPES[extname(p).toLowerCase()] || 'application/octet-stre
 
 /** 사용자에게 보이는 정책 안내(해요체). 앱도 /bridge/status의 policy_ko로 받아 그릴 수 있음 */
 export const POLICY_KO = {
-  claude: 'Claude 구독: 내 구독으로 로그인한 Claude Code를 고치지 않고 쓰는 것은 허용되지만, 다른 제품이 구독 한도를 쓰게 하는 것은 Anthropic 승인이 필요해서, 이 연결은 켜는 사람이 직접 고르는 선택 기능이에요.',
+  claude: 'Claude: 이 PC에 로그인한 Claude Code를 그대로 써요. 요청은 이 PC에서 Anthropic으로 바로 가요.',
   codex: 'Codex: OpenAI는 내 PC에서 도는 오픈소스 앱이 Codex 로그인을 쓰는 것을 허용해요.',
   apiKey: 'ANTHROPIC_API_KEY가 설정돼 있어서 Claude Code가 구독 대신 이 키로 돌고, 요금은 API 사용량으로 나가요. 구독으로 쓰려면 이 창을 닫고 키를 지운 뒤 다시 켜 주세요.',
-  chatgpt: 'ChatGPT: OpenAI는 오픈소스·로컬 앱이 Sign in with ChatGPT로 Plus·Pro 요금제를 쓰는 것을 열어 두었어요. 로그인 정보는 이 PC에만 두고, 요청은 이 PC에서 OpenAI로 바로 가요.',
+  chatgpt: 'ChatGPT: 로그인 정보는 이 PC에만 두고, 요청은 이 PC에서 OpenAI로 바로 가요.',
 };
 
 // ── 이 PC 사용자 폴더(짝 맞춤 토큰·ChatGPT 자격) ──────────────────────────
