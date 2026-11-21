@@ -181,9 +181,9 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 ## 12. AI 정보 매일 갱신 (자동, 2026-11-14부터)
 
-모델 값·출시일·무료 등급은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
+모델 값·출시일은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
 
-- **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 값이 바뀌면 커밋하고, 값이 그대로면 '네 출처를 모두 받은 날'(`checked`)만 이틀에 한 번 새로 적어 커밋합니다(날마다 배포가 생기지 않게). 검사(급감·값이 한꺼번에 1/5~5배 밖·앞 판에 있던 추천이 빔·형식)에 하나라도 걸리면 그 파일도 그대로 둡니다.
+- **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 값이 바뀌면 커밋하고, 값이 그대로면 '두 출처(OpenRouter·models.dev)를 모두 받은 날'(`checked`)만 이틀에 한 번 새로 적어 커밋합니다(날마다 배포가 생기지 않게). 검사(급감·값이 한꺼번에 1/5~5배 밖·앞 판에 있던 추천이 빔·형식)에 하나라도 걸리면 그 파일도 그대로 둡니다.
 - **멈춤 감지**: 바로 배포 서버의 하루 점검이 `https://lecpage.com/ai-catalog.json`의 `checked`가 3일 넘게 묵으면 웹훅으로 알립니다(예약이 꺼졌거나 실패가 이어질 때도). 출처를 3일 넘게 다 받지 못하면 이슈에도 '모두 받은 마지막 날(N일 전)'이 사람이 볼 일로 올라옵니다.
 - **배포**: 봇 커밋도 Cloudflare Workers Builds가 다시 배포합니다(`app/*` 감시 경로, 하루 1번 이하라 무료 빌드 시간 월 3,000분 중 한 달 60분 안팎). GitHub Actions의 토큰으로 올린 커밋은 다른 워크플로를 깨우지 않아 GitHub Pages 미러는 다음 사람 커밋 때 함께 반영됩니다(미러는 예비용이라 괜찮음).
 - **권한**: 저장소 기본 권한이 읽기 전용(§6)이어도, 이 워크플로는 필요한 권한(`contents: write`·`issues: write`)만 스스로 적어 두어 동작합니다.
@@ -197,7 +197,6 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 |---|---|---|
 | 문서·코드에 적힌 모델 이름이 지금 목록에 없어요 | 화면 안내·주석에 적힌 모델이 사라졌거나 이름이 바뀜 | 적힌 파일:줄의 문구를 지금 이름으로. 일부러 옛 이름을 둘 줄에는 `ai-catalog-ok` 주석 |
 | … 추천이 바뀌었어요: A → B | 앱이 고르는 모델이 바뀜(앱은 알아서 따라감) | 안내 문구에 옛 추천 이름이 있으면 고침. 그 회사 공식 문서의 권장과 맞는지 한 번 봄 |
-| Gemini 무료 등급 목록이 바뀌었어요 | 무료 키로 되는 모델이 늘거나 줄었음 | 할 일 없음. 만들기에서 Gemini를 뺐어요(2026-11-21). 카탈로그 수집을 줄일 때 함께 정리 |
 | … 브라우저에서 바로 부를 수 없게 바뀌었어요 | 그 회사 API가 lecpage.com의 CORS 사전 요청을 거절 | 그 회사 키 연결이 안 됨. 공식 문서를 확인하고 `ai.js`(머리글)·안내를 고치거나, 그동안 키 연결 창에서 그 회사를 뒤로 |
 | 앱이 여는 주소가 열리지 않아요(404) | 키·결제 화면, 쓰던 AI 창 주소가 바뀜 | `ai.js`의 `PROVIDERS`(keyUrl·billingUrl)·`CHATBOTS` 주소와 키 안내 |
 | …을 받지 못했어요(404 등) · 표가 검사에 걸려 앞 판 값을 썼어요 | 출처 주소나 문서 형식이 바뀜 | `scripts/ai-catalog/lib.mjs`의 `SOURCES`·해석 함수를 고치고 `node --test "scripts/ai-catalog/test/*.test.mjs"` |

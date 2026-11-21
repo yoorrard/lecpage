@@ -15,16 +15,16 @@ lecpage/
 ├─ .claude-plugin/            ← Claude Code 플러그인 마켓플레이스. `/plugin install lecpage --marketplace yoorrard/lecpage`가 skills/lecpage를 설치
 ├─ skills/lecpage/            ← Agent Skill 패키지(자체 완결). `npx skills add yoorrard/lecpage`
 │  ├─ SKILL.md
-│  ├─ references/             ← skill이 필요할 때 읽는 문서(kit.md 키트, cli.md 명령, material-format.md 교재, 배포, 레퍼런스 사이트 designs/<id>/)
+│  ├─ references/             ← skill이 필요할 때 읽는 문서(kit.md 키트, cli.md 명령, 배포, 디자인 서재, 레퍼런스 사이트 designs/<id>/, 개발용 material-format.md)
 │  ├─ engine/                 ← 단일 소스 엔진. Node와 브라우저(앱) 모두에서 import
 │  │  ├─ package.json         ← 판(version) 하나의 출처 + "type":"module". src/version.js는 시험이 같은 값인지 확인
 │  │  ├─ src/                 ← ESM. 의존성 없음(vendor/ 제외)
 │  │  │  ├─ kit/              ← 조립(assemble.js)·보조 쪽(aux-build.js)·키트 위젯(widgets.js)·검수(inspect.js, inspect-rendered.js)·.lecpage v2(project-v2.js)
 │  │  │  ├─ render/           ← 보조 쪽(강사·발표·안내문·접속 확인·개인정보) 렌더러(aux-pages.js), 쪽 머리·CSP(shell.js), 이스케이프(html.js), 마크다운(markdown.js)
 │  │  │  ├─ design/           ← 보조 쪽 테마 두 가지(presets.js, tokens.js), 글꼴(fonts.js), 색(color.js)
-│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF·이미지 읽기(브라우저+Node) → 교재 글(material.md)·쪽 그림
+│  │  │  ├─ ingest/           ← PPTX·DOCX·HWP·HWPX·PDF·이미지 읽기(브라우저+Node) → 쪽 그림·쪽 제목, 원본을 못 건넨 교재의 보조 글자
 │  │  │  ├─ decide/infra.js   ← 올릴 곳·참여 기능 연결 고르기
-│  │  │  ├─ prompt/copy-rules.js ← 문구 검사 규칙(copy-lint가 씀)
+│  │  │  ├─ prompt/copy-rules.js ← 앱·고정 문구 검사 규칙(app/scripts/copy-lint.mjs가 씀)
 │  │  │  └─ protect.js · font-bundle.js · font-subset.js · zip-write.js · project-file.js · css-prune.js · util.js
 │  │  ├─ runtime/             ← 만든 사이트에 복사되는 클래식 스크립트(빌드 도구 없음)
 │  │  │  ├─ kit.css           ← 키트 위젯 모양(`.lpk` 안에서만)
@@ -34,7 +34,7 @@ lecpage/
 │  │  ├─ vendor/              ← 작은 MIT 라이브러리(fflate) + VENDOR.json(담아 둔 라이브러리·판을 고정한 배포 명령 표, CI가 OSV로 확인)
 │  │  ├─ scripts/site-score.mjs ← 만든 사이트 채점(점검용)
 │  │  └─ test/                ← node:test
-│  ├─ scripts/                ← CLI(lecpage.mjs·kit-cmds.mjs·publish.mjs·studio.mjs), 쪽 그림(render-slides.mjs, 셸 없이), copy-lint.mjs, 파이썬 보조(ingest.py)
+│  ├─ scripts/                ← CLI(lecpage.mjs·kit-cmds.mjs·publish.mjs·studio.mjs), 쪽 그림(render-slides.mjs, 셸 없이), 파이썬 보조(ingest.py)
 │  ├─ evals/                  ← skill 평가 문항(evals.json·triggers.json)과 확인 스크립트
 │  ├─ backends/               ← supabase/, apps-script/, cloudflare/, node-server/
 │  └─ templates/deploy/       ← 호스팅별 설정 파일
@@ -60,7 +60,7 @@ lecpage/
 AI가 만드는 것은 **사이트 폴더**(`site/index.html`, 그 밖의 쪽, `assets/*`)와 **연수 정보**(`lecpage.json`: 제목·날짜·시간·장소·강사·대상 등) 둘입니다. 형식은 `skills/lecpage/references/kit.md`의 `lecpage.json` 절과 [plan-ai-first.md](plan-ai-first.md) §3이 기준입니다.
 
 - 강사만 정하는 값(참여 기능 연결 `live`의 주소·키·연수 코드, 사이트 주소, 공개 범위)은 AI 결과에서 받지 않습니다. 앱은 프로젝트에, Skill은 `work/lecpage.teacher.json`에 따로 두고 조립 때 `prev`로 넘깁니다.
-- 교재는 원본 그대로 + 쪽 그림(`assets/slides/p-N.webp`) + 보조 글(`material.md`)로 건넵니다(`references/material-format.md`).
+- 교재는 원본 그대로 + 쪽 그림(`site/material/p-NNN.webp`)으로 건넵니다. 코드가 뽑은 보조 글자는 원본을 건넬 수 없는 교재(PPTX·HWP·HWPX·DOCX의 발표자 노트·그림이 없는 쪽, 키 길에서 원본을 못 보낸 교재)에만 씁니다.
 
 ## 3. 강의 기능 키트 (약속 B)
 
@@ -245,9 +245,9 @@ assets/slides/*.webp · assets/media/* · assets/files/*
 
 ### 8.3 AI로 사이트 만들기 (`app/src/lib/gen/*`)
 - 생성 과정과 화면과의 약속은 [plan-ai-first.md](plan-ai-first.md) §6·§15. `live.url`·`live.code`·`live.anonKey`·사이트 주소 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
-- 연결(`AiConnect`): 추천 순서는 내 PC의 Claude Code·Codex(연결 프로그램) → 키 붙여넣기(Claude·OpenAI. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) → 쓰던 AI에 복사·붙여넣기. Gemini 키는 만들기에 쓰지 않습니다(2026-11-21). OpenRouter는 고르는 화면에서 뺐고 저장해 둔 연결만 그대로 동작합니다. 설정의 '연결'에서 미리 해 둘 수 있습니다.
-- AI 회사 호출(키 확인·모델 고르기는 `app/src/lib/ai.js`, 생성은 `app/src/lib/gen/providers/*`가 같은 규칙을 씀): 모델은 회사의 목록 API와 OpenRouter 공개 목록의 값·출시일로 고르고 이름을 코드에 박지 않습니다. Gemini 본문(`geminiBody`)은 temperature 없이, `maxOutputTokens` 32,768 이상, `store: false`(유료 프로젝트 기본 기록 끄기). 오류는 상태 코드와 회사별 오류 코드(code·type·details.error_code)·문구로 가립니다(`classify`). 회사별 사실과 출처는 `docs/research/ai-facts-2026-11-14.md`.
-- 모델 값표(`app/src/lib/ai-catalog.js`, 등급·추천 규칙 `rankModels`도 여기): 같은 출처의 `ai-catalog.json`(GitHub Actions가 하루 한 번 `scripts/ai-catalog/refresh.mjs`로 모아 이 파일만 커밋, 검사에 걸리면 그대로) → OpenRouter 실시간 목록이 오면 덮어씀 → 둘 다 없으면 이름 규칙. Gemini 무료 키는 파일의 `geminiFree`로 유료 전용 모델을 처음부터 잠금. 어긋난 사실(문서의 모델 이름·주소·CORS)은 자동으로 고치지 않고 이슈로 알림(`docs/operations.md` §12).
+- 연결(`AiConnect`): 추천 순서는 내 PC의 Claude Code·Codex(연결 프로그램) → 키 붙여넣기(Claude·OpenAI. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) → 쓰던 AI에 복사·붙여넣기. Gemini·OpenRouter 키는 만들기에 쓰지 않습니다(붙여 넣으면 알려 주고 다른 회사로 보내지 않음). 설정의 '연결'에서 미리 해 둘 수 있습니다.
+- AI 회사 호출(키 확인·모델 고르기는 `app/src/lib/ai.js`, 생성은 `app/src/lib/gen/providers/*`가 같은 규칙을 씀): 모델은 회사의 목록 API와 OpenRouter 공개 목록의 값·출시일로 고르고 이름을 코드에 박지 않습니다. 오류는 상태 코드와 회사별 오류 코드(code·type·details.error_code)·문구로 가립니다(`classify`). 회사별 사실과 출처는 `docs/research/ai-facts-2026-11-14.md`.
+- 모델 값표(`app/src/lib/ai-catalog.js`, 등급·추천 규칙 `rankModels`도 여기): 같은 출처의 `ai-catalog.json`(GitHub Actions가 하루 한 번 `scripts/ai-catalog/refresh.mjs`로 모아 이 파일만 커밋, 검사에 걸리면 그대로) → OpenRouter 실시간 목록이 오면 덮어씀 → 둘 다 없으면 이름 규칙. 값표에는 만들기에 쓰는 두 회사(OpenAI·Claude) 모델만 담고, 이 키로 안 된 모델은 기억해 잠금(`markBlocked`). 어긋난 사실(문서의 모델 이름·주소·CORS)은 자동으로 고치지 않고 이슈로 알림(`docs/operations.md` §12).
 
 ### 8.5 자료 올리기 (2026-11-11)
 - 자료 파일: 앱이 `assets/files/<이름>`으로 이 브라우저에 두고(자료실 항목의 `href`), 배포할 때만 사이트에 넣습니다. 엔진의 `USER_ASSET`이 `slides|media|files` 폴더와 문서·그림·소리·영상·압축 형식만 받습니다(스크립트·SVG·HTML 금지). 자료실에서 뺀 파일은 다음 배포 때 빠집니다.

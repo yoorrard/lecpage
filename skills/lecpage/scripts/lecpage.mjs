@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // lecpage CLI — Node 22 이상. check·handouts는 Playwright를 쓰고, 없으면 그 단계만 건너뜁니다.
 // 기본 출력은 짧은 요약, --json을 붙이면 기계용 JSON.
-// 흐름: prepare → (AI 에이전트가 work/site/·work/lecpage.json을 직접 씀) → check(고치기 반복) → preview → app 또는 publish
+// 흐름: prepare → (AI 에이전트가 교재 원본을 읽고 work/site/·work/lecpage.json을 직접 씀) → check → preview → app 또는 publish
 //
-//   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 보조 글자 work/material.md · 빈 lecpage.json · 경로 요약 work/README.md
+//   prepare <교재...> [-o work]                    AI 에이전트가 사이트를 직접 쓸 준비: 쪽 그림 work/site/material/p-NNN.webp · 빈 lecpage.json · 경로 요약 work/README.md · PDF가 아닌 교재면 보조 글자 work/material.md
 //   check [work] [--port 0] [--no-shots] [--host 배포할 곳]  work/site + lecpage.json(+ 강사 값 lecpage.teacher.json) 조립(work/dist) + 검수 + 390·1280 화면 그림(work/check/*.png). 고칠 곳이 있으면 종료 코드 1
 //        --host(cloudflare·vercel·github-pages·netlify·onpod·lan·zip …, 없으면 지난번 배포한 곳): 개인정보 안내·운영안내를 그 배포 방식에 맞게
 //   preview [work] [--port 4173] [--host 0.0.0.0] [--live]  조립 결과를 로컬로 띄움(강사 화면·발표 화면·QR 안내문 포함, 참여 기능은 연습 모드)
@@ -33,7 +33,7 @@ const ENGINE = join(HERE, '..', 'engine');
 const DEBUG = !!process.env.LECPAGE_DEBUG;
 // 판은 engine/package.json 하나에서(엔진 코드의 VERSION은 시험이 같은지 확인)
 const SKILL_VERSION = (() => { try { return JSON.parse(readFileSync(join(ENGINE, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
-const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude Code 플러그인) · npx skills update(npx skills로 설치) · 그 밖에는 설치한 명령을 다시';
+const UPDATE_HOW = '새 버전 받기: claude plugin update lecpage@lecpage(Claude Code 플러그인) · npx skills update(npx skills로 설치) · 그 밖에는 설치한 명령을 다시';
 
 // ── 인자 ─────────────────────────────────────────
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤

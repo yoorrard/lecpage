@@ -11,8 +11,8 @@
 | `work/site/material/p-NNN.webp` | prepare | 교재 쪽 그림(여러 교재는 번호를 이어 매김) | 쓴 것만 의미 있음 |
 | `work/lecpage.json` | 에이전트 | 연수 정보·참여 기능·색(`references/kit.md`) | 조립에 씀 |
 | `work/lecpage.teacher.json` | 강사 값 | `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`·`surveyUrl`·`privacy`·`keepUntil`. 강사가 알려 준 값만. `publish --live`가 `live`를 적음 | 조립에 씀 |
-| `work/material.md` | prepare | 쪽마다 글자·발표자 노트(찾기·옮겨 적기용) | 안 올림 |
-| `work/README.md` | prepare | 이 작업의 경로 요약(교재 원본·쪽 범위·키트 설명서) | 안 올림 |
+| `work/material.md` | prepare | PDF가 아닌 교재(PPTX·HWP·HWPX·DOCX)에서 코드가 뽑은 쪽마다 글자·발표자 노트. 쪽 그림과 다르면 쪽 그림이 맞음(PDF는 원본을 직접 읽어 두지 않음) | 안 올림 |
+| `work/README.md` | prepare | 이 작업의 경로 요약(교재 원본·쪽 범위·키트 설명서·확인 명령) | 안 올림 |
 | `work/dist/` | check·preview·publish | 조립 결과(참가자 사이트 + 강사 화면·발표 화면·안내문·접속 확인·개인정보 안내·`_headers`) | **이것을 올림** |
 | `work/dist-강사용/` | 조립·publish | `운영안내.md`, `publish --live` 뒤 `관리자-키.txt`(본인만 읽기), `QR-안내문.pdf`·`발표화면.png` | **안 올림** |
 | `work/check/` | check | `issues.md`(고칠 곳, AI가 읽기 좋은 꼴)·`report.json`·`<쪽>-390.png`·`-1280.png` | 안 올림 |
@@ -23,8 +23,8 @@
 ## 2. 명령
 | 명령 | 하는 일 |
 |---|---|
-| `prepare <교재...> [-o work] [--no-slides]` | 교재(PDF·PPTX·HWP·HWPX·DOCX·https 주소)를 읽어 쪽 그림·`material.md`·빈 `lecpage.json`·`README.md`. PPTX와 같은 내용의 PDF를 함께 주면 쪽 그림이 원본 글꼴. 쪽 그림이 모자라면 `doctor`의 LibreOffice·pdftoppm. 100쪽이 넘으면 진행 줄이 stderr에 나옴(멈춘 것 아님) |
-| `check [work] [--no-shots] [--port 0]` | 조립(`work/dist`) → 정적 검수(HTML 구조·빈 칸·깨진 경로·키트 표시·금지 패턴·크기·글자 대비) → 그려서 검수(390·1280px: 가로 넘침·겹침·안 보이는 글·잘린 글·깨진 그림·작은 글자·작은 단추·스크립트 오류·CSP 막힘) → 문구(번역투·빈 구호, 살펴볼 곳만) → 화면 그림. 고칠 곳이 있으면 종료 코드 1 |
+| `prepare <교재...> [-o work] [--no-slides]` | 교재(PDF·PPTX·HWP·HWPX·DOCX·https 주소)를 읽어 쪽 그림·빈 `lecpage.json`·`README.md`(PDF가 아닌 교재가 있으면 `material.md`도). PPTX와 같은 내용의 PDF를 함께 주면 쪽 그림이 원본 글꼴. 쪽 그림이 모자라면 `doctor`의 LibreOffice·pdftoppm. 100쪽이 넘으면 진행 줄이 stderr에 나옴(멈춘 것 아님) |
+| `check [work] [--no-shots] [--port 0]` | 조립(`work/dist`) → 정적 검수(HTML 구조·빈 칸·깨진 경로·키트 표시·금지 패턴·크기·글자 대비) → 그려서 검수(390·1280px: 가로 넘침·겹침·안 보이는 글·잘린 글·깨진 그림·작은 글자·작은 단추·스크립트 오류·CSP 막힘) → 화면 그림. 고칠 곳이 있으면 종료 코드 1 |
 | `preview [work] [--port 4173] [--host 0.0.0.0]` | 조립해서 띄움. 강사 화면(`console.html`)·발표 화면(`screen.html`)·QR 안내문(`poster.html`)도. 참여 기능은 연습 모드(같은 브라우저 안에서만 이어짐) |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기(.lecpage v2): 사이트 폴더·연수 정보·쪽 그림·쪽 제목·교재 원본(100MB까지). 참여 기능 키·관리자 키는 담지 않음. 강사가 https://lecpage.com/ [저장한 파일 열기]로 열어 미리보기·고치기·배포 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 저장한 파일을 작업 폴더로(사이트·`lecpage.json`·원본 `src/`). 파일 안의 강사 값은 `lecpage.teacher.from-file.json`에 따로 두니, 강사에게 확인받고 `lecpage.teacher.json`으로 옮김. 예전 방식(설계도)으로 만든 연수는 교재 쪽 그림·연수 정보·원본만 옮기니(`site/index.html`은 새로 써요) `prepare 원본 -o work`로 이어 가요 |

@@ -311,8 +311,8 @@ export const APP_TERMS = [
 const NAME_KINDS = new Set(['button', 'title', 'label', 'aria']);
 // 첫 화면(app/src/landing)은 담당이 따로 바꿈: 그때까지 살핌으로만 알림(바꾼 뒤 이 줄을 /^$/로)
 const APP_TERMS_SOFT = /^app\/src\/landing\//;
-// 앱에서는 표준 용어가 엔진 용어 표(지우기·내려받기·다시 하기)보다 앞섬: 그 살핌은 앱 글에서 빼고 위 표로 봄
-const APP_OVERRIDES = (f) => f.rule === 'term' && (/^용어: (지우기|내려받기)$/.test(f.why) || (/^용어: 오류 · 다시 하기$/.test(f.why) && /다시\s?시도/.test(f.hit)));
+// 엔진 용어 표(TERM_RULES)도 같은 표준 이름(삭제·다운로드·다시 시도·중지·숨기기 취소)을 씀: 앱 글에서는 같은 것을 위 표가 고침으로 보므로 엔진 살핌은 겹쳐 세지 않음
+const APP_OVERRIDES = (f) => f.rule === 'term' && /^용어: (삭제|다운로드|다시 시도|중지|숨기기 취소)$/.test(f.why);
 /** 앱 화면 이름의 표준 용어 점검 → lintText와 같은 꼴 */
 export function appTermHits(text, kind) {
   const out = []; const named = NAME_KINDS.has(kind);

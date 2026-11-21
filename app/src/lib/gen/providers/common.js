@@ -1,4 +1,4 @@
-// 세 회사 어댑터가 함께 쓰는 것: 주소, SSE 읽기, 글자가 안 오면 끊는 감시, 오류 모양(ai.js의 AiError·classify를 그대로 씀), base64.
+// 두 회사 어댑터가 함께 쓰는 것: 주소, SSE 읽기, 글자가 안 오면 끊는 감시, 오류 모양(ai.js의 AiError·classify를 그대로 씀), base64.
 // 근거: docs/research/ai-first-2026-11.md §1(CORS·스트리밍·이어 받기), docs/plan-ai-first.md §6(60~90초 감시)
 import { AiError, fail, isBlockPage } from '../../ai.js';
 
@@ -136,7 +136,7 @@ export async function toBase64(data) {
   });
 }
 
-/** 이어 쓰기 요청 글(세 회사 공통, 사용자 메시지). Claude 공식 복구 문구를 따름(streaming.md "Error recovery") */
+/** 이어 쓰기 요청 글(두 회사 공통, 사용자 메시지). Claude 공식 복구 문구를 따름(streaming.md "Error recovery") */
 export function continueText(partial) {
   return `Your previous response was interrupted and ended with:\n<previous_response>\n${partial}\n</previous_response>\nContinue from where you left off. 바로 다음 글자부터 이어서 쓰고, 앞부분을 되풀이하거나 설명을 붙이지 마세요.`;
 }

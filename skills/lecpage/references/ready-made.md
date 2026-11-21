@@ -12,9 +12,9 @@
 | 프롬프트 복사 단추 | 키트 런타임 | `<button type="button" data-copy-text="프롬프트 원문">복사</button>`(복사하고 알림을 띄움) |
 | QR 안내문(인쇄)·발표 화면 접속 안내 | `poster.html`·`screen.html` | 배포 뒤 `handouts <주소>` → `QR-안내문.pdf`·`발표화면.png`(`publish`가 자동으로 함) |
 | 사이트 안 QR·공유 | 접속 QR·공유 단추 자리 표시 | `data-lp="join"`·`data-lp="share"` |
-| 강사만 보는 화면 | `console.html`(관리자 키) | 참가자·도움 요청·진행·투표·질문·공지·타이머·자료 링크·기록 CSV·데이터 지우기, [발표 화면 띄우기] |
+| 강사만 보는 화면 | `console.html`(관리자 키) | 참가자·도움 요청·진행·투표·질문·공지·타이머·자료 링크·[CSV 다운로드]·[모든 데이터 삭제], [발표 화면 띄우기] |
 | 강사용 연수 전·중·후 안내 | 강사 화면 도움말 + `work/dist-강사용/운영안내.md` | 따로 잠근 쪽을 만들지 않음 |
-| 명단·설문·투표 CSV | 강사 화면 [기록 내려받기(CSV)] | 직무연수 이수자 명단은 `attendance` 기능 |
+| 명단·설문·투표 CSV | 강사 화면 [CSV 다운로드] | 직무연수 이수자 명단은 `attendance` 기능 |
 | 달력에 넣기 | `assets/event.ics` | 사이트에서 링크만(`lecpage.json` `sessions`로 만듦) |
 | 접속 확인(학교망) | `check.html` | 연수 전날 참가자 망에서 열기 |
 | 개인정보 안내 | `privacy.html` | 켠 기능에 맞춰 조립이 씀 |

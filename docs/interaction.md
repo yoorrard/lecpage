@@ -1,6 +1,6 @@
 # lecpage 동작 기준(누름·기다림·실패·초점·움직임)
 
-앱 화면과 lecpage가 만드는 연수 사이트에 같이 씁니다. 글은 [writing.md](writing.md), 화면 배치 원칙은 `skills/lecpage/references/design-principles.md`.
+앱 화면과 lecpage가 고정으로 만드는 화면(키트·강사 화면·발표 화면)에 씁니다. 글은 [writing.md](writing.md).
 **[검사]** 표시는 `node app/scripts/interaction-check.mjs`가 확인합니다(앱 첫 화면·1~3단계·도움말·설정·갤러리, 강의 페이지 예시(레퍼런스 사이트 조립본), 휴대폰 흉내 포함). 나머지는 화면을 고칠 때 눈으로 봅니다.
 
 ```bash

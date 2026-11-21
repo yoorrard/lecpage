@@ -157,6 +157,8 @@ test('에이전트 인자: 공식 옵션 이름(Claude: 도구·검수 명령만
   const t = St.taskText({ kind: 'make', materials: ['교재.pdf'], pages: 3, images: 3, request: '따뜻하게' });
   assert.ok(t.includes('```\n' + St.CHECK_CMD + '\n```'), '작업 지시의 검수 명령 = 허용 규칙');
   assert.match(t, /p-001 ~ p-003/);
+  assert.ok(!/material\.md/.test(t), 'PDF 교재면 코드가 뽑은 글자를 알리지 않음(원본을 직접 읽음)');
+  assert.match(St.taskText({ kind: 'make', materials: ['교재.hwpx'], pages: 2, images: 0, md: true }), /work\/material\.md/);
 });
 
 test('단계 줄이기: claude stream-json·codex JSONL → 사람이 읽을 단계(같은 단계는 한 번), 허용 밖 도구는 멈춤', () => {
@@ -286,12 +288,13 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   // 가짜가 받은 것
   const run = readLog().find((l) => l.id === 'claude' && l.argv);
   assert.deepEqual(run.argv, St.agentArgs('claude', { ws: run.cwd }));
-  // 끼어들지 않음: 작업 폴더에는 할 일·키트 설명·교재·작업 폴더만(디자인 원칙·레퍼런스 사이트를 넣지 않음)
+  // 끼어들지 않음: 작업 폴더에는 할 일·키트 설명·교재·작업 폴더만(디자인 규칙·레퍼런스 사이트를 넣지 않음)
   const library = existsSync(join(HERE, '..', '..', 'references', 'design-library.md')) ? ['design-library.md'] : []; // 디자인 서재(필요하면 참고)
   assert.deepEqual(run.files.sort(), ['TASK.md', 'kit.md', ...library, 'material', 'work'].sort(), '훅·.mcp.json 없는 빈 폴더');
   if (library.length) assert.match(run.task, /design-library\.md.*따를 의무 없음/);
   assert.ok(run.cwd.includes(St.TMP_PREFIX));
   assert.match(run.task, /material\/연수 교재\.pdf/);
+  assert.ok(!/material\.md/.test(run.task), 'PDF 교재면 보조 글자 줄 없음');
   assert.match(run.task, /따뜻한 색으로/);
   assert.match(run.task, /차분함/);
   assert.ok(!/supabase|anonKey|a\.example/.test(run.task));

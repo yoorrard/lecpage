@@ -1,4 +1,4 @@
-// Node 전용(Agent Skill CLI): 파일 경로로 교재 해석 → material.json 쓰기 → (선택) 설계도 초안·AI 요약·쪽 그림.
+// Node 전용(Agent Skill CLI, prepare가 씀): 파일 경로로 교재 해석 → Material, 쪽 그림 붙이기.
 // 브라우저 번들에 node: 모듈이 끌려 들어가지 않도록 모두 동적 import(변수 지정자)로 불러옵니다.
 import { DEFAULT_LIMITS, makeError, extOf, baseName, sizeLabel, pagesForImages } from './util.js';
 
@@ -41,7 +41,7 @@ export async function ingestWithPython(file, { python = '', id, withImages = tru
     if (r.status !== 0 && !(await exists(fs, out))) return null;
     const m = JSON.parse(await fs.readFile(out, 'utf8'));
     if (!m || m.kind !== 'lecpage-material') return null;
-    // 파이썬이 임시 폴더에 쓴 그림을 바이트로 다시 읽어(쓰기는 writeMaterial이 한 곳에서)
+    // 파이썬이 임시 폴더에 쓴 그림을 바이트로 다시 읽음
     for (const p of m.pages || []) for (const im of p.images || []) {
       if (im.src) { try { im.bytes = new Uint8Array(await fs.readFile(path.join(tmp, im.src))); } catch { /* 없음 */ } }
       delete im.src;
@@ -95,28 +95,6 @@ export async function ingestPaths(paths, opts = {}) {
   return api.mergeMaterials(mats, opts);
 }
 
-/** Material을 JSON으로 저장. imagesDir가 있으면 그림 바이트를 파일로 쓰고 image.src에 상대 경로를 넣습니다. */
-export async function writeMaterial(material, outPath, { imagesDir } = {}) {
-  const { fs, path } = await node();
-  const api = await ingestApi();
-  const outDir = path.dirname(path.resolve(outPath));
-  let written = 0;
-  if (imagesDir) {
-    await fs.mkdir(imagesDir, { recursive: true });
-    for (const p of material.pages || []) for (const im of p.images || []) {
-      if (!im.bytes) continue;
-      const file = path.join(imagesDir, api.imageFileName(im));
-      await fs.writeFile(file, im.bytes);
-      im.src = path.relative(outDir, file).split(path.sep).join('/');
-      written++;
-    }
-  }
-  const json = api.materialToJSON(material);
-  await fs.mkdir(outDir, { recursive: true });
-  await fs.writeFile(outPath, JSON.stringify(json, null, 2) + '\n', 'utf8');
-  return { written, path: outPath };
-}
-
 /** scripts/render-slides.mjs(셸 없이 LibreOffice·pdftoppm을 부름)로 쪽 그림 만들기 → 성공한 그림 경로 목록 */
 export async function renderSlides(file, outDir, opts = {}) {
   const { fs } = await node();
@@ -149,55 +127,6 @@ export async function attachSlides(m, slidesDir, outPath, { onProgress } = {}) {
   }
   if (!m.files.some((f) => f.rendered)) await (await node()).fs.rmdir(slidesDir).catch(() => {});
   return m;
-}
-
-const HELP = `사용법: node ingest.mjs <파일 또는 링크...> -o material.json [옵션]
-
-  -o, --out <파일>        결과 Material JSON (기본: material.json)
-  --images <폴더>         교재 속 그림을 꺼내 저장(image.src에 상대 경로)
-  --slides <폴더>         쪽 그림 만들기(LibreOffice + pdftoppm, slide-001.webp…)
-  --context <파일>        AI에게 건넬 보조 글자 저장
-  --max-chars <수>        요약 글 길이 예산(기본 24000)
-  --no-python             PDF를 파이썬으로 대신 읽지 않기
-  --json                  요약 대신 결과 JSON을 화면에 출력
-  -h, --help              도움말`;
-
-/** CLI 진입점. 종료 코드를 돌려줍니다(0 성공, 1 모든 파일 실패, 2 잘못된 사용). */
-export async function runIngestCli(argv = []) {
-  const { fs, path } = await node();
-  const api = await ingestApi();
-  const a = { files: [], out: 'material.json', images: '', slides: '', context: '', maxChars: 24000, python: true, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    const v = () => argv[++i];
-    if (k === '-h' || k === '--help') { console.log(HELP); return 0; }
-    else if (k === '-o' || k === '--out') a.out = v();
-    else if (k === '--images') a.images = v();
-    else if (k === '--slides') a.slides = v();
-    else if (k === '--context') a.context = v();
-    else if (k === '--max-chars') a.maxChars = +v() || 24000;
-    else if (k === '--no-python') a.python = false;
-    else if (k === '--json') a.json = true;
-    else if (k.startsWith('-')) { console.error(`알 수 없는 옵션: ${k}\n\n${HELP}`); return 2; }
-    else a.files.push(k);
-  }
-  if (!a.files.length) { console.error(HELP); return 2; }
-  const opts = { withImages: !!a.images, python: a.python };
-  const m = await ingestPaths(a.files, opts);
-
-  if (a.slides) await attachSlides(m, a.slides, a.out);
-  const { written } = await writeMaterial(m, a.out, { imagesDir: a.images || '' });
-  if (a.context) await fs.writeFile(a.context, api.materialToAIContext(m, { maxChars: a.maxChars }) + '\n', 'utf8');
-
-  if (a.json) console.log(JSON.stringify(api.materialToJSON(m), null, 2));
-  else {
-    console.log(`교재 해석: ${api.summarizeMaterial(m)}`);
-    console.log(`→ ${a.out}${written ? ` (그림 ${written}개: ${a.images})` : ''}${a.context ? `, 요약 ${a.context}` : ''}`);
-    for (const e of m.errors) console.log(`오류 [${e.code}] ${e.file ? e.file + ': ' : ''}${e.message_ko}`);
-    for (const w of m.warnings) console.log(`알림 [${w.code}] ${w.file ? w.file + ': ' : ''}${w.message_ko}`);
-  }
-  const ok = m.pages.length > 0;
-  return ok ? 0 : 1;
 }
 
 export { sizeLabel };

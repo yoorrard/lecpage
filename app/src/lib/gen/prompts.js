@@ -64,16 +64,15 @@ function askOf({ request, reference, info } = {}) {
 }
 
 /**
- * 교재 앞부분 글(요청마다 같음): 무엇을 첨부했는지, 사이트에 쓸 수 있는 쪽 그림. 원본을 못 보낸 형식이면 코드가 뽑은 글자도
+ * 교재 앞부분 글(요청마다 같음): 무엇을 첨부했는지, 사이트에 쓸 수 있는 쪽 그림. 원본을 못 보낸 교재가 있으면 그 교재에서 코드가 뽑은 글자도
  * pack: material.js packMaterial 결과
  */
 export function buildMaterialPrompt(pack) {
   const files = pack.files.map((f) => `- ${f.name}${f.pages ? ` (${f.pages}쪽)` : ''}: ${f.sent === 'original' ? '원본 그대로 첨부' : f.sent === 'images' ? '쪽 그림으로 첨부' : f.sent === 'text' ? '글자만(원본을 보낼 수 없는 형식)' : '보내지 못함'}`).join('\n');
   const imgs = pack.siteImages.length ? `사이트에 쓸 수 있는 교재 쪽 그림: material/p-001.webp ~ material/p-${String(pack.siteImages.length).padStart(3, '0')}.webp (번호 = 교재 쪽 번호${pack.siteImagesFrom ? `, ${pack.siteImagesFrom}` : ''})` : '교재 쪽 그림은 없어요.';
   const shots = pack.sentPages.length ? `\n쪽 그림으로 함께 보낸 쪽: ${pack.sentPages.join(', ')}` : '';
-  // 원본을 다 보냈으면 AI가 원본을 읽음 → 코드가 뽑은 글자는 넣지 않음(원본을 못 보낸 것이 있을 때만)
-  const needText = pack.files.some((f) => f.sent !== 'original');
-  const text = pack.text && needText ? `\n\n[교재에서 뽑은 글자 — 원본을 보내지 못한 부분을 위한 참고용이에요]\n${pack.text}` : '';
+  // 코드가 뽑은 글자는 원본을 보내지 못한 교재의 쪽만(material.js packMaterial). 원본으로 보낸 교재의 글은 넣지 않음
+  const text = pack.text ? `\n\n[원본을 보내지 못한 교재에서 코드가 뽑은 글자 — 틀릴 수 있어요. 쪽 그림과 다르면 쪽 그림이 맞아요]\n${pack.text}` : '';
   const note = pack.notes.length ? `\n참고: ${pack.notes.join(' ')}` : '';
   return `[교재]\n${files}${shots}\n${imgs}${note}${text}`;
 }

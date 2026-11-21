@@ -309,25 +309,6 @@ describe('글자 정리', () => {
 
 // ── CLI ───────────────────────────────────────────────
 describe('CLI', () => {
-  test('scripts/ingest.mjs: material.json·보조 글자·그림 쓰기', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'lecpage-cli-'));
-    try {
-      const out = join(tmp, 'material.json');
-      const r = spawnSync(process.execPath, [join(SCRIPTS, 'ingest.mjs'), join(FX, 'workshop.pptx'), join(FX, 'plan.hwpx'), '-o', out, '--images', join(tmp, 'media'), '--context', join(tmp, 'ctx.txt')], { encoding: 'utf8' });
-      assert.equal(r.status, 0, r.stderr + r.stdout);
-      assert.match(r.stdout, /교재 해석: workshop\.pptx\(13장\)/);
-      const m = JSON.parse(readFileSync(out, 'utf8'));
-      assert.deepEqual(m.files.map((f) => f.id), ['deck1', 'doc1']);
-      assert.equal(m.pages.find((p) => p.file === 'deck1' && p.page === 8).images[0].src, 'media/deck1-p8-1.png');
-      assert.ok(existsSync(join(tmp, 'media', 'deck1-p8-1.png')));
-      assert.ok(readdirSync(join(tmp, 'media')).includes('doc1-img1.png'));
-      assert.match(readFileSync(join(tmp, 'ctx.txt'), 'utf8'), /\[쪽별 내용\]/);
-      const bad = spawnSync(process.execPath, [join(SCRIPTS, 'ingest.mjs'), join(tmp, '없는파일.pptx'), '-o', join(tmp, 'x.json')], { encoding: 'utf8' });
-      assert.equal(bad.status, 1);
-      assert.match(bad.stdout, /not-found/);
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
-  });
-
   test('render-slides.mjs(셸 없이): PDF → slide-001.*', { skip: spawnSync('pdftoppm', ['-v'], { encoding: 'utf8' }).error && 'pdftoppm 없음' }, () => {
     const tmp = mkdtempSync(join(tmpdir(), 'lecpage-render-'));
     try {

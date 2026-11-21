@@ -4,8 +4,6 @@
 //   readMeta(json, { prev }) → { meta, errors, warnings, old } · keepTeacherValues · themeFromCss · issuesForAi
 import { todayKst } from '../util.js';
 import { tangledTitle } from '@engine/src/kit/index.js';
-import * as KIT from '@engine/src/kit/index.js';
-import { materialToAIContext } from '@engine/src/ingest/outline.js';
 export { assemble, previewHtml, inspect, issuesForAi, inspectRenderedScript, readMeta, keepTeacherValues, themeFromCss, TEACHER_KEYS, siteFileOk } from '@engine/src/kit/index.js';
 
 let rt = null;

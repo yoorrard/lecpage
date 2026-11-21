@@ -366,9 +366,11 @@ test('CLI: prepare(쪽 그림 없이) → 에이전트가 쓴 사이트 → chec
     const p = run('prepare', path.join(import.meta.dirname, 'fixtures/workshop.pdf'), '-o', work, '--no-slides');
     assert.equal(p.status, 0, p.stderr + p.stdout);
     assert.equal(last(p).pages, 13);
-    for (const f of ['README.md', 'material.md', 'lecpage.json']) assert.ok(fs.existsSync(path.join(work, f)), f);
+    for (const f of ['README.md', 'lecpage.json']) assert.ok(fs.existsSync(path.join(work, f)), f);
     assert.match(fs.readFileSync(path.join(work, 'README.md'), 'utf8'), /references\/kit\.md/);
-    assert.match(fs.readFileSync(path.join(work, 'material.md'), 'utf8'), /## p-008 · workshop\.pdf 8쪽 · 실습 1\./);
+    // PDF만 주면 보조 글자를 두지 않음(에이전트가 원본을 직접 읽음: 코드가 뽑은 글을 원본 대신 믿지 않게)
+    assert.ok(!fs.existsSync(path.join(work, 'material.md')), 'PDF만이면 material.md 없음');
+    assert.doesNotMatch(fs.readFileSync(path.join(work, 'README.md'), 'utf8'), /material\.md/);
     // 사이트가 없으면 알려 줌
     assert.equal(run('check', work, '--no-shots').status, 1);
     fs.mkdirSync(path.join(work, 'site'), { recursive: true });

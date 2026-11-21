@@ -73,7 +73,7 @@ export function openProjectFile(buf) {
   let head; try { head = JSON.parse(td.decode(zip['project.json'])); } catch { throw bad('project.json을 읽지 못했어요. 앱에서 다시 저장한 파일을 열어 주세요.'); }
   if (head?.format !== PROJECT_FORMAT) throw bad('lecpage 연수 파일이 아니에요.');
   const newer = (+head.version || 0) > PROJECT_V2 || (head.engine && newerVersion(head.engine, ENGINE_VERSION));
-  const note = newer ? `더 새 lecpage(${head.engine || `형식 ${head.version}`})로 만든 파일이에요. 지금 판(${ENGINE_VERSION})은 새 칸·설정을 빠뜨릴 수 있어요.` : '';
+  const note = newer ? `더 새 lecpage(${head.engine || `형식 ${head.version}`})로 만든 파일이에요. 지금 버전(${ENGINE_VERSION})은 새 칸·설정을 빠뜨릴 수 있어요.` : '';
   if (+head.version === PROJECT_V2 && head.kind === 'site') return { ...unpackProjectV2(zip), note };
   const u = unpackProject(zip);
   if (u.project?.v === 2 && u.project.site) return { ...fromAppProject(zip, u), note };

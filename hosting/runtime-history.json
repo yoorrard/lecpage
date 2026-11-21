@@ -476,6 +476,20 @@
    "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
    "sha256": "9d086248f59a90a1ddcf83628a22cdeef3339135656fed01954a66950c30bbab",
    "kept": "2026-11-21"
+  },
+  {
+   "name": "console.js",
+   "len": 87096,
+   "head": "/* lecpage console — 강사 화면. 모든 화",
+   "sha256": "a451e8cec4c51296310222a8f2b7a0935930ed7ba2fa3f20a0da7ed6931889d0",
+   "kept": "2026-11-21"
+  },
+  {
+   "name": "screen.js",
+   "len": 42974,
+   "head": "/* lecpage screen — 발표 화면: 교재 쪽(",
+   "sha256": "1505c691da0eea31a7ee766b2b95089a6b31e23c2a52a4919a3bfea6f4acdd8c",
+   "kept": "2026-11-21"
   }
  ]
 }

@@ -32,9 +32,9 @@ export const LIMITS = {
   siteMB: 40, siteFiles: 3000, request: 20000, reference: 4000,
 };
 const bodyLimit = () => Math.ceil(((LIMITS.materialMB + LIMITS.siteMB) * MB * 4) / 3) + MB;
-/** Claude Code 최소 판: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
+/** Claude Code 최소 버전: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
 export const CLAUDE_MIN = '2.1.314';
-/** Codex: 이 판부터 `exec --ignore-user-config`(내 config.toml을 읽지 않음, 로그인은 그대로 CODEX_HOME — codex-rs/exec/src/cli.rs, rust-v0.122.0 태그에서 확인) */
+/** Codex: 이 버전부터 `exec --ignore-user-config`(내 config.toml을 읽지 않음, 로그인은 그대로 CODEX_HOME — codex-rs/exec/src/cli.rs, rust-v0.122.0 태그에서 확인) */
 export const CODEX_MIN = '0.122.0';
 /** 에이전트가 검수를 돌리는 명령(허용 규칙과 작업 지시에 같은 글을 씀). 실행기는 에이전트가 쓸 수 없는 작업 폴더 밖(../bin)에 둠 */
 export const CHECK_CMD = 'node ../bin/check.mjs';
@@ -87,7 +87,7 @@ export function versionAtLeast(v, min) {
   return true;
 }
 
-/** 짧은 명령(판·로그인 확인). 출력은 기록하지 않음 */
+/** 짧은 명령(버전·로그인 확인). 출력은 기록하지 않음 */
 function runQuick(file, args, { env = process.env, timeout = 15000 } = {}) {
   return new Promise((ok) => {
     let spec; try { spec = launchSpec(file, args); } catch (e) { ok({ code: -1, out: '', err: e.message }); return; }
@@ -109,7 +109,7 @@ const AGENTS = {
 export const agentName = (id) => AGENTS[id]?.name || id;
 const jsonIn = (s) => { const a = String(s).indexOf('{'), b = String(s).lastIndexOf('}'); if (a < 0 || b < a) return null; try { return JSON.parse(String(s).slice(a, b + 1)); } catch { return null; } };
 
-/** Claude Code: 판·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
+/** Claude Code: 버전·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
 export async function detectClaude(env = process.env) {
   const file = findExecutable('claude', { env, extra: AGENTS.claude.extra(homedir()) });
   const a = { id: 'claude', name: 'Claude Code', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
@@ -122,8 +122,8 @@ export async function detectClaude(env = process.env) {
   a.auth = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || m === 'api_key' || m === 'api_key_helper' ? 'api-key' : m === 'claude.ai' || m === 'oauth_token' ? 'subscription' : 'unknown';
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) a.loggedIn = true;
   const notes = [];
-  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 claude update로 새 판을 받아 주세요.`);
-  else if (!a.version) notes.push('Claude Code 판을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
+  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 claude update로 새 버전을 받아 주세요.`);
+  else if (!a.version) notes.push('Claude Code 버전을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
   if (a.loggedIn === false) notes.push('Claude Code에 로그인되어 있지 않아요. 터미널에서 claude auth login을 실행해 주세요.');
   if (a.auth === 'api-key') notes.push(POLICY_KO.apiKey);
   if (m === 'third_party') notes.push('Claude Code가 클라우드 회사 계정(Bedrock 등)으로 돌아요. 요금은 그 계정으로 나가요.');
@@ -131,7 +131,7 @@ export async function detectClaude(env = process.env) {
   a.note_ko = notes.join(' ');
   return a;
 }
-/** Codex: 판·로그인 방식(codex login status). 출력에 가린 키가 섞일 수 있어 어디에도 적지 않음 */
+/** Codex: 버전·로그인 방식(codex login status). 출력에 가린 키가 섞일 수 있어 어디에도 적지 않음 */
 export async function detectCodex(env = process.env) {
   const file = findExecutable('codex', { env, extra: AGENTS.codex.extra(homedir()) });
   const a = { id: 'codex', name: 'Codex', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
@@ -143,9 +143,9 @@ export async function detectCodex(env = process.env) {
   a.auth = env.CODEX_API_KEY || /api key/i.test(t) ? 'api-key' : /chatgpt/i.test(t) ? 'subscription' : 'unknown';
   if (env.CODEX_API_KEY) a.loggedIn = true;
   const notes = [];
-  // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 판이어야 함(agentArgs)
-  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 판을 받아 주세요.`);
-  else if (!a.version) notes.push('Codex 판을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
+  // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 버전이어야 함(agentArgs)
+  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 버전을 받아 주세요.`);
+  else if (!a.version) notes.push('Codex 버전을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
   if (a.loggedIn === false) notes.push('Codex에 로그인되어 있지 않아요. 터미널에서 codex login을 실행해 주세요.');
   if (a.auth === 'api-key') notes.push('Codex가 ChatGPT 요금제 대신 API 키로 돌아요. 요금은 API 사용량으로 나가요.');
   a.ready = !!a.version && versionAtLeast(a.version, CODEX_MIN) && a.loggedIn !== false;
@@ -469,11 +469,11 @@ export async function validateJob(body) {
 const moodOf = (ref) => { const t = String(ref || '').trim(); if (!t) return ''; try { const j = JSON.parse(t); return String(j?.mood || j?.desc || '').trim(); } catch { return t; } };
 
 /**
- * 작업 지시(TASK.md). 교재 글은 넣지 않음(파일 이름·쪽 수만).
+ * 작업 지시(TASK.md). 교재 글은 넣지 않음(파일 이름·쪽 수만). material.md는 PDF가 아닌 교재가 있을 때만 prepare가 둠(PDF는 원본을 직접 읽음)
  * 원칙: 디자인·구성·읽는 법·확인 방법은 에이전트가 정함. lecpage는 목표 한 줄, 강사 요청, 배포에 꼭 필요한 조건,
  * 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 확인 명령만 알려 줌(앱의 키 경로 지시 app/src/lib/gen/prompts.js와 같은 뜻)
  */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, prepared = pages > 0, request = '', reference = '', target = '', library = false }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const mood = moodOf(reference);
@@ -490,7 +490,7 @@ ${edit ? '강사가 lecpage 앱에서 만든 강의 사이트를 아래 요청�
 ${ask || '(따로 없음)'}
 ${target ? `\n고칠 곳: \`id="${target}"\`인 부분만 고치고 다른 곳은 그대로 둬요.\n` : ''}
 ## 폴더
-${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${images ? `- 교재 쪽 그림: \`work/site/material/\` (p-001 ~ p-${pad3(pages)}${images < pages ? `, 그중 ${images}장` : ''}, .webp) — 사이트에 그대로 써도 돼요(\`material/p-001.webp\`)\n` : ''}${prepared ? '- 교재에서 뽑은 글자(참고용): `work/material.md`\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : `- 쓸 곳: \`work/site/\` (첫 쪽은 \`index.html\`, 나머지 파일 구성은 자유)
+${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${images ? `- 교재 쪽 그림: \`work/site/material/\` (p-001 ~ p-${pad3(pages)}${images < pages ? `, 그중 ${images}장` : ''}, .webp) — 사이트에 그대로 써도 돼요(\`material/p-001.webp\`)\n` : ''}${md ? '- PDF가 아닌 교재에서 코드가 뽑은 글자·발표자 노트: `work/material.md` (쪽 그림에 없는 것만 찾아요. 쪽 그림과 다르면 쪽 그림이 맞아요)\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : `- 쓸 곳: \`work/site/\` (첫 쪽은 \`index.html\`, 나머지 파일 구성은 자유)
 - 연수 정보: \`work/lecpage.json\` — 다 만든 뒤 교재에서 찾은 것만 채워요(제목 title, 날짜·시간 sessions [{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}], 장소 venue, 강사 instructors [{"name","org"}]). 이미 적힌 값은 강사가 정한 거라 지켜요.
 `}${library ? '- 디자인 서재: `design-library.md` — 결·글꼴 짝·움직임 기법·AI 티 점검표. 필요하면 참고(따를 의무 없음)\n' : ''}
 ## 배포 조건 (이것만은 꼭)
@@ -658,13 +658,13 @@ async function runJob(S, job) {
     for (const [k, v] of Object.entries(inp.site)) { const f = join(work, 'site', ...k.split('/')); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, v); }
     if (!existsSync(join(work, 'lecpage.json'))) writeFileSync(join(work, 'lecpage.json'), JSON.stringify({ v: 2, title: '', sessions: [], venue: '', mode: 'offline', audience: 'teachers', instructors: [], features: [], theme: {}, facts: [] }, null, 2) + '\n');
     // 쪽 그림: 이 PC에 LibreOffice·pdftoppm이 없으면 prepare가 못 그리므로, 앱이 그려 보낸 site['material/p-NNN.webp']도 셈
-    const prepared = pages > 0;
+    const md = existsSync(join(work, 'material.md')); // PDF가 아닌 교재가 있을 때만(prepare)
     try { images = readdirSync(join(work, 'site', 'material')).filter((n) => /^p-\d{3,4}\.(webp|png|jpe?g)$/i.test(n)).length; } catch { images = 0; }
     pages = Math.max(pages, images);
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, prepared, request: inp.request, reference: inp.reference, target: inp.target, library }));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, md, request: inp.request, reference: inp.reference, target: inp.target, library }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 연결 프로그램이 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;
@@ -883,7 +883,7 @@ export async function studioCmd(h) {
   else console.log([
     `lecpage 연결 프로그램 ${S.version}`,
     `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)`,
-    `  앱 ${S.app.mode === 'dist' ? `이 컴퓨터의 빌드본(${relative(process.cwd(), S.app.dir) || '.'})` : `${S.app.url}에서 받은 판`}`,
+    `  앱 ${S.app.mode === 'dist' ? `이 컴퓨터의 빌드본(${relative(process.cwd(), S.app.dir) || '.'})` : `${S.app.url}에서 받은 버전`}`,
     `  ${line(ag.claude)} / ${line(ag.codex)}`,
     ...[ag.claude, ag.codex].filter((a) => a.installed && a.note_ko).map((a) => `  주의 ${a.note_ko}`),
     `  안내 ${POLICY_KO.claude}`,

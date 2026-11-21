@@ -218,11 +218,3 @@ test('M2: 오래 걸리는 prepare는 stderr에 진행 줄(요약·--json은 그
   assert.equal(r.status, 0); assert.doesNotThrow(() => JSON.parse(r.stdout));
 });
 
-test('copy-lint 단독 실행: 작업 폴더면 보조 글자(material.md)에 있는 교재 원문(실습 단계·프롬프트)은 세지 않음', () => {
-  const work = join(dir, 'lint'); mkdirSync(join(work, 'site'), { recursive: true });
-  writeFileSync(join(work, 'site', 'index.html'), '<main><h1>실습</h1><ol><li>결과에서 사실과 다른 숫자가 없는지 확인합니다.</li></ol></main>');
-  const lint = (args) => spawnSync(process.execPath, [join(SKILL, 'scripts', 'copy-lint.mjs'), ...args], { encoding: 'utf8' });
-  assert.match(lint([work]).stdout, /합니다체/); // 보조 글자가 없으면 셈
-  writeFileSync(join(work, 'material.md'), '## p-003\n결과에서 사실과 다른 숫자가 없는지 확인합니다.\n');
-  assert.match(lint([work]).stdout, /고칠 곳이 없어요/);
-});

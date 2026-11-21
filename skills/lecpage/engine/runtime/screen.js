@@ -1,5 +1,5 @@
 /* lecpage screen — 발표 화면: 교재 쪽(강사 화면·참가자 화면과 같은 쪽, 리모컨·키보드로 넘김), 키 하나로 겹쳐 띄우기
- * (J 참여 QR · V 투표 · Q 질문 · T 큰 타이머 · N 공지 · B 가리기 · Esc 교재로), 참여 QR, 공지, 큰 타이머, 신호등, 인기 질문, 투표 결과, 반응.
+ * (J 참여 QR · V 투표 · Q 질문 · T 큰 타이머 · N 공지 · B 화면 숨기기 · Esc 교재로), 참여 QR, 공지, 큰 타이머, 신호등, 인기 질문, 투표 결과, 반응.
  * 프로젝터·뒷자리에서 읽히게 크게, 넓은 화면에서는 한 화면에 들어가게(넘치는 질문은 개수로만 알림).
  * 참가자가 쓴 글은 textContent로만 넣고, 글 속 주소는 '(링크)'로 가림(프로젝터에 비친 주소가 공식 안내처럼 보이지 않게).
  * '도구'(이름 뽑기·모둠 만들기·타이머 여러 개)는 실시간 연결 없이도 이 화면 안에서 동작합니다(기록은 이 기기에만). */
@@ -233,7 +233,7 @@
           saveTimers(true);
         }));
         li.appendChild(btn('처음으로', '', function () { t.running = false; t.remaining = t.dur; overSaid[t.id] = 0; saveTimers(true); }));
-        var rm = btn('지우기', '', function () { timers = timers.filter(function (x) { return x !== t; }); saveTimers(true); }); rm.setAttribute('aria-label', t.label + ' 지우기'); li.appendChild(rm);
+        var rm = btn('삭제', '', function () { timers = timers.filter(function (x) { return x !== t; }); saveTimers(true); }); rm.setAttribute('aria-label', t.label + ' 삭제'); li.appendChild(rm);
         tList.appendChild(li);
       });
     }
@@ -432,7 +432,7 @@
   var topEl = $('.lp-scr-top');
   if (deckEl && topEl && scr && window.ResizeObserver) new ResizeObserver(function () { scr.style.setProperty('--scr-top-h', topEl.offsetHeight + 'px'); }).observe(topEl);
   applyOv();
-  // 키(발표용 리모컨: PageDown·PageUp·→·←, 가리기 'B'·'.', 시작 F5)
+  // 키(발표용 리모컨: PageDown·PageUp·→·←, 화면 숨기기 'B'·'.', 시작 F5)
   doc.addEventListener('keydown', function (e) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     var t = e.target, tag = (t && t.tagName) || '';

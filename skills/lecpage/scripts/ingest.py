@@ -28,7 +28,7 @@ MESSAGES = {
     'empty': '파일이 비어 있어요. 내용이 있는 파일을 다시 올려 주세요.',
     'too-large': '파일이 너무 커요. 100MB 이하로 줄이거나, 그림을 압축하거나, PDF로 저장해 올려 주세요.',
     'legacy-hwp': '한글 97 이전에 만든 아주 예전 한글 파일이라 바로 읽을 수 없어요. 한글에서 [파일 → 다른 이름으로 저장하기]를 눌러 HWP·HWPX·PDF 가운데 하나로 저장한 뒤 올려 주세요.',
-    'hwp-use-node': '한글 파일(.hwp)은 node scripts/ingest.mjs로 읽어요(이 파이썬 보조 스크립트는 주로 PDF용이에요).',
+    'hwp-use-node': '한글 파일(.hwp)은 node scripts/lecpage.mjs prepare로 읽어요(이 파이썬 보조 스크립트는 주로 PDF용이에요).',
     'legacy-ppt': '예전 파워포인트 파일(.ppt)은 바로 읽을 수 없어요. 파워포인트에서 [다른 이름으로 저장]을 눌러 "PowerPoint 프레젠테이션(.pptx)" 또는 "PDF"로 저장한 뒤 올려 주세요.',
     'legacy-doc': '예전 워드 파일(.doc)은 바로 읽을 수 없어요. 워드에서 [다른 이름으로 저장]을 눌러 "Word 문서(.docx)" 또는 "PDF"로 저장한 뒤 올려 주세요.',
     'legacy-office': '예전 형식의 오피스 파일이라 바로 읽을 수 없어요. PPTX·DOCX·PDF 가운데 하나로 다시 저장해 올려 주세요.',

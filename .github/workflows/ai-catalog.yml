@@ -1,4 +1,4 @@
-# AI 정보 매일 갱신: 모델 값·출시일·Gemini 무료 등급을 공개 목록에서 모아 app/public/ai-catalog.json을 새로 쓰고,
+# AI 정보 매일 갱신: 만들기에 쓰는 OpenAI·Claude 모델 값·출시일을 공개 목록에서 모아 app/public/ai-catalog.json을 새로 쓰고,
 # 앱이 기대는 사실(문서·코드의 모델 이름, 키 화면 주소, 브라우저 직접 호출)이 어긋나면 이슈 하나로 알립니다.
 # 자동으로 바꾸는 것은 이 데이터 파일 하나뿐입니다(검사에 걸리면 그것도 그대로). 안내 문구·정책 설명은 사람이 고칩니다.
 # 할 일과 끄는 법: docs/operations.md §12
@@ -24,7 +24,7 @@ jobs:
       - name: 모으기·검사·점검
         id: r
         run: node scripts/ai-catalog/refresh.mjs --report "$RUNNER_TEMP/ai-report.md"
-      # updated: 값이 바뀜 · checked: 값은 그대로, '네 출처를 모두 받은 날'만 새로 적음(이틀에 한 번. 바로 배포 서버의 하루 점검이 이 날짜로 갱신 멈춤을 봄)
+      # updated: 값이 바뀜 · checked: 값은 그대로, '두 출처를 모두 받은 날'만 새로 적음(이틀에 한 번. 바로 배포 서버의 하루 점검이 이 날짜로 갱신 멈춤을 봄)
       - name: AI 단위 시험(바뀐 파일을 앱 규칙으로 읽어 봄)
         if: steps.r.outputs.status == 'updated' || steps.r.outputs.status == 'checked'
         run: node --test "scripts/ai-catalog/test/*.test.mjs"

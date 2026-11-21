@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AI 정보 매일 갱신: 공개 목록에서 모델 값·출시일과 Gemini 무료 등급을 모아 app/public/ai-catalog.json을 새로 쓰고,
+// AI 정보 매일 갱신: 공개 목록에서 OpenAI·Claude 모델 값·출시일을 모아 app/public/ai-catalog.json을 새로 쓰고,
 // 앱이 기대는 사실(문서·코드에 적힌 모델 이름, 키 화면 주소, 브라우저 직접 호출)을 점검해 사람이 볼 일을 모읍니다.
 // 의존성 없음(Node 22의 fetch). GitHub Actions(.github/workflows/ai-catalog.yml)가 하루 한 번 돌립니다.
 //
@@ -8,13 +8,13 @@
 //   --no-check        주소·CORS 점검을 건너뜀(모으기·검사·이름 점검만)
 // 바꾸는 파일은 app/public/ai-catalog.json 하나뿐이고, 검사에 하나라도 걸리면 그 파일도 그대로 둡니다.
 // GITHUB_OUTPUT이 있으면 status(updated|checked|unchanged|rejected)·problems(사람이 볼 일 수)를 적습니다.
-// checked: 값은 그대로인데 '네 출처를 모두 받은 날'(checked)만 새로 적음(이틀에 한 번). 바로 배포 서버의 하루 점검이 이 날짜로 갱신이 멈췄는지 봄
+// checked: 값은 그대로인데 '두 출처를 모두 받은 날'(checked)만 새로 적음(이틀에 한 번). 바로 배포 서버의 하루 점검이 이 날짜로 갱신이 멈췄는지 봄
 import { readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  SOURCES, GOOGLE_HOSTS, ORIGIN, CORS_TARGETS, parseOpenRouter, parseModelsDev, parseGooglePricing, parseGoogleModels, buildCatalog, validateCatalog,
-  checkGemini, serialize, sameData, scanNames, missingNames, simulateRecs, preflight, checkLink, appUrls, renderReport, countModels, dayOf,
+  SOURCES, ORIGIN, CORS_TARGETS, parseOpenRouter, parseModelsDev, buildCatalog, validateCatalog,
+  serialize, sameData, scanNames, missingNames, simulateRecs, preflight, checkLink, appUrls, renderReport, countModels, dayOf,
   CHECK_EVERY_DAYS, STALE_DAYS, REC_NAMES, daysBetween,
 } from './lib.mjs';
 
@@ -77,7 +77,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   const failed = (label, e) => (e?.hard || e instanceof SyntaxError || e?.shape ? problems : notes).push(`${label} 받지 못했어요(${why(e)}). 앞 판 값을 그대로 써요.`);
 
   // 1) 모으기
-  const got = {}; const ok = { openrouter: false, modelsdev: false, googlePricing: false, googleModels: false };
+  const got = {}; const ok = { openrouter: false, modelsdev: false };
   let orHeaders = null;
   try {
     const r = await fetchBody(fetchFn, SOURCES.openrouter, { json: true, headers: { origin: ORIGIN }, pause });
@@ -88,28 +88,10 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
     const r = await fetchBody(fetchFn, SOURCES.modelsdev, { json: true, pause });
     got.md = parseModelsDev(r.body, today); ok.modelsdev = true;
   } catch (e) { if (/회사 목록/.test(e.message)) e.shape = true; failed('models.dev 목록을', e); delete got.md; }
-  const google = async (urls, parse, label, key) => {
-    let lastErr;
-    for (const u of urls) {
-      try {
-        const r = await fetchBody(fetchFn, u, { pause });
-        const host = new URL(r.url).host;
-        if (!GOOGLE_HOSTS.includes(host)) { const e = new Error(`다른 곳(${host})으로 넘어감`); e.hard = true; throw e; }
-        got[key] = parse(r.body); ok[label] = true; return;
-      } catch (e) { lastErr = e; }
-    }
-    failed(label === 'googlePricing' ? 'Gemini 가격표를' : 'Gemini 모델 문서를', lastErr);
-  };
-  await google(SOURCES.googlePricing, parseGooglePricing, 'googlePricing', 'pricing');
-  await google(SOURCES.googleModels, parseGoogleModels, 'googleModels', 'docs');
-
   // 2) 새 판 만들기와 검사
   const { catalog, kept } = buildCatalog(got, prev, today);
-  if (got.pricing && kept.includes('Gemini 무료 등급')) problems.push(`Gemini 가격표를 읽었지만 무료 등급 표가 검사에 걸려 앞 판 값을 썼어요: ${checkGemini({ free: got.pricing.free, paidOnly: got.pricing.paidOnly }, prev?.geminiFree).join(' / ')}. 표 모양이 바뀌었는지 scripts/ai-catalog/lib.mjs의 parseGooglePricing을 봐 주세요.`);
-  if (got.docs && kept.includes('Gemini 모델 문서')) problems.push('Gemini 모델 문서를 읽었지만 모델 코드를 거의 찾지 못해 앞 판 값을 썼어요. 문서 모양이 바뀌었는지 parseGoogleModels를 봐 주세요.');
-  if (got.pricing?.unknown?.length) notes.push(`Gemini 가격표에서 무료 여부를 읽지 못한 모델: ${got.pricing.unknown.join(', ')}`);
   const errs = validateCatalog(catalog, prev, today);
-  // 확인한 날(checked): 네 출처를 모두 받은 날. 값이 같으면 이틀에 한 번만 새로 적음(커밋·앱 배포가 날마다 생기지 않게)
+  // 확인한 날(checked): 두 출처를 모두 받은 날. 값이 같으면 이틀에 한 번만 새로 적음(커밋·앱 배포가 날마다 생기지 않게)
   const allOk = Object.values(ok).every(Boolean);
   const lastAll = typeof prev?.checked === 'string' ? prev.checked : '';
   const checked = allOk ? today : lastAll || undefined;
@@ -122,8 +104,8 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   // 출처를 오래 다 받지 못함: 날 수가 보이게. 3일 넘으면 사람이 볼 일(그동안 앱은 앞 판 값으로 동작)
   if (!allOk && lastAll) {
     const n = daysBetween(lastAll, today);
-    const miss = [['OpenRouter 모델 목록', ok.openrouter], ['models.dev', ok.modelsdev], ['Gemini 가격표', ok.googlePricing], ['Gemini 모델 문서', ok.googleModels]].filter(([, v]) => !v).map(([k]) => k).join(', ');
-    (n > STALE_DAYS ? problems : notes).push(`네 출처를 모두 받은 마지막 날이 ${lastAll}(${n}일 전)이에요. 받지 못한 곳: ${miss}.${n > STALE_DAYS ? ' 앞 판 값으로 버티는 중이니 출처 주소·형식이 바뀌었는지 scripts/ai-catalog/lib.mjs의 SOURCES와 해석 함수를 봐 주세요.' : ''}`);
+    const miss = [['OpenRouter 모델 목록', ok.openrouter], ['models.dev', ok.modelsdev]].filter(([, v]) => !v).map(([k]) => k).join(', ');
+    (n > STALE_DAYS ? problems : notes).push(`두 출처를 모두 받은 마지막 날이 ${lastAll}(${n}일 전)이에요. 받지 못한 곳: ${miss}.${n > STALE_DAYS ? ' 앞 판 값으로 버티는 중이니 출처 주소·형식이 바뀌었는지 scripts/ai-catalog/lib.mjs의 SOURCES와 해석 함수를 봐 주세요.' : ''}`);
   }
   const text = serialize(final || catalog);
   if ((status === 'updated' || status === 'checked') && write) writeFileSync(outPath, text);
@@ -132,7 +114,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   const view = final || catalog; // 거부됐으면 앞 판 기준(앞 판도 없으면 새 판)
   const facts = repo || repoFacts(root);
   for (const m of missingNames(scanNames(facts.files), view)) {
-    problems.push(`문서·코드에 적힌 모델 이름이 지금 목록에 없어요${m.previous ? '(Gemini 문서의 이전 모델로 옮겨짐)' : ''}: \`${m.id}\` — ${m.where.join(', ')}. 이름이 바뀌었으면 안내 문구와 주석을 고쳐 주세요.`);
+    problems.push(`문서·코드에 적힌 모델 이름이 지금 목록에 없어요: \`${m.id}\` — ${m.where.join(', ')}. 이름이 바뀌었으면 안내 문구와 주석을 고쳐 주세요.`);
   }
   const recs = simulateRecs(view, now.getTime());
   // 어제 앞 판으로 본 추천과 견줌: 자료가 바뀐 것과 '나온 지 2주' 창이 지난 것 모두 알림
@@ -141,12 +123,6 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   for (const k of Object.keys(RN)) {
     if (!recs[k]) problems.push(`${RN[k]}: 앱이 추천할 모델을 값표에서 찾지 못해요(고품질·표준 등급 모델이 없음). 값표와 ai-catalog.js의 rankModels를 봐 주세요.`);
     else if (before && before[k] && before[k] !== recs[k]) problems.push(`${RN[k]} 추천이 바뀌었어요: ${before[k]} → ${recs[k]}. 앱은 알아서 따라가요. 문서(ai-facts)의 추천 이름과 안내 문구를 확인해 주세요.`);
-  }
-  const pg = prev?.geminiFree, ng = view.geminiFree;
-  if (pg && ng && [pg.free, pg.paidOnly, ng.free, ng.paidOnly].every(Array.isArray)) {
-    const add = ng.free.filter((c) => !pg.free.includes(c)), del = pg.free.filter((c) => !ng.free.includes(c));
-    const addP = ng.paidOnly.filter((c) => !pg.paidOnly.includes(c)), delP = pg.paidOnly.filter((c) => !ng.paidOnly.includes(c));
-    if (add.length || del.length || addP.length || delP.length) problems.push(`Gemini 무료 등급 목록이 바뀌었어요(무료 +${add.join(',') || '없음'} −${del.join(',') || '없음'} · 유료 전용 +${addP.join(',') || '없음'} −${delP.join(',') || '없음'}). 앱은 알아서 따라가요. 키 연결 창의 Gemini 안내(ai-guides.jsx·AiConnect.jsx)가 맞는지 봐 주세요.`);
   }
   if (prev && status === 'updated') {
     const old = new Set(prev.models.map((m) => m.id));
@@ -174,7 +150,7 @@ export async function run({ fetchFn = globalThis.fetch, root = ROOT, repo, prevT
   } else notes.push('주소·CORS 점검을 건너뛰었어요(--no-check).');
 
   const c = countModels(view.models || []);
-  const report = renderReport({ status, today, counts: { ...c, free: (view.free || []).length }, sources: ok, kept, recs, geminiFree: view.geminiFree, problems, notes, rejected: errs, checked: (final || catalog).checked || '' });
+  const report = renderReport({ status, today, counts: c, sources: ok, kept, recs, problems, notes, rejected: errs, checked: (final || catalog).checked || '' });
   return { status, catalog: final || catalog, text, report: report.text, digest: report.digest, problems, notes, errors: errs };
 }
 

@@ -102,8 +102,9 @@ test('prepare: PPTX와 같은 내용의 PDF를 함께 주면 쪽을 두 번 세�
     const r = spawnSync(process.execPath, [CLI, 'prepare', join(FX, 'workshop.pptx'), join(FX, 'workshop.pdf'), '-o', join(dir, 'work'), '--no-slides', '--json'], { encoding: 'utf8', env: { ...process.env, ...OFFLINE } });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout.trim().split('\n').pop()).pages, 13);
-    const md = readFileSync(join(dir, 'work/material.md'), 'utf8');
+    const md = readFileSync(join(dir, 'work/material.md'), 'utf8'); // PPTX(발표자 노트)는 보조 글자를 둠. 같은 내용의 PDF는 쪽 그림용이라 세지 않음
     assert.equal((md.match(/^## p-/gm) || []).length, 13);
+    assert.ok(!/workshop\.pdf/.test(md.split('\n').filter((l) => l.startsWith('## p-')).join('\n')), 'PDF 쪽은 보조 글자에 없음');
     const src = JSON.parse(readFileSync(join(dir, 'work/.lecpage/sources.json'), 'utf8'));
     assert.deepEqual(src.map((s) => s.name), ['workshop.pptx', 'workshop.pdf']);
     assert.ok(src.every((s) => s.path && existsSync(s.path)));
@@ -113,10 +114,11 @@ test('prepare: PPTX와 같은 내용의 PDF를 함께 주면 쪽을 두 번 세�
 test('Skill 문서: SKILL.md가 가리키는 references가 모두 있고, 지운 설계도·템플릿 문서를 가리키지 않음', () => {
   const skill = readFileSync(join(SKILL, 'SKILL.md'), 'utf8');
   const refs = [...new Set([...skill.matchAll(/references\/([\w./<>-]+\.md|designs\/)/g)].map((m) => m[1]).filter((x) => !x.includes('<')))];
-  assert.ok(refs.length >= 8, refs.join(','));
+  assert.ok(refs.length >= 6, refs.join(','));
   for (const r of refs) assert.ok(existsSync(join(SKILL, 'references', r)), r);
   for (const old of ['blueprint.md', 'modules.md', 'concept.md', 'design-quality.md', 'references/design.md', ' make ', 'patch ']) assert.ok(!skill.includes(old), old);
   const refDir = readdirSync(join(SKILL, 'references'));
-  for (const gone of ['blueprint.md', 'modules.md', 'design.md', 'concept.md', 'design-quality.md']) assert.ok(!refDir.includes(gone), gone);
+  for (const gone of ['blueprint.md', 'modules.md', 'design.md', 'concept.md', 'design-quality.md', 'design-principles.md', 'copywriting.md', 'qa-checklist.md']) assert.ok(!refDir.includes(gone), gone);
+  for (const gone of ['design-principles', 'copywriting', 'qa-checklist']) assert.ok(!skill.includes(gone), gone); // 디자인·문구 규칙과 점검표를 꼭 읽게 하지 않음(AI가 정함)
   assert.ok(skill.length < 7000, `SKILL.md ${skill.length}자`);
 });
