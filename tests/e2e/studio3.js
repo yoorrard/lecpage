@@ -46,7 +46,8 @@ const shot = async (p, name, o = {}) => { if (!o.fullPage && p.viewportSize().wi
   const frame = p.frameLocator('.pv-device iframe');
   await shot(p, '1280-01-panel.png');
   // ── 연수 정보: 속성 줄 ──
-  L.ok('info: rows shown when opened, one fold toggle + confirm in the card header', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 2 && await p.locator('.st-info .st-card-h .st-fold-t').count() === 1 && await p.locator('.st-info .st-card-h button:has-text("이 정보가 맞아요")').isVisible());
+  // 확인 전에는 [이 정보가 맞아요]가 머리 줄 바로 아래(머리 줄은 접기 버튼 하나라 요약이 다 보임)
+  L.ok('info: rows shown when opened, one fold toggle in the header + confirm right below', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 1 && await p.locator('.st-info .st-card-h .st-fold-t').count() === 1 && await p.locator('.st-info > .confirm-bar button:has-text("이 정보가 맞아요")').isVisible());
   L.ok('info: found-in-textbook hint shown before confirming', /쪽에서 찾았어요/.test(await p.locator('.st-info').innerText()));
   const venue0 = await p.inputValue('#prop-venue');
   await p.click('#prop-venue'); await p.fill('#prop-venue', '아무 데나'); await p.keyboard.press('Escape'); await p.waitForTimeout(400);

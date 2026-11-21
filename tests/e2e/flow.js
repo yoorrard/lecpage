@@ -127,7 +127,9 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   await p.waitForSelector('.success .big-url', { timeout: 60000 });
   const files = (st.deployBody?.files || []).map((f) => f.file);
   console.log('deployed files:', files.join(', '));
-  L.ok('share: deployed assembled site', ['index.html', 'poster.html', 'screen.html', 'console.html', 'check.html', 'assets/style.css', 'assets/lecpage.js', 'assets/kit.css'].every((f) => files.includes(f)));
+  L.ok('share: deployed assembled site', ['index.html', 'poster.html', 'screen.html', 'check.html', 'assets/style.css', 'assets/lecpage.js', 'assets/kit.css'].every((f) => files.includes(f)));
+  // 사이트에 질문·투표 자리가 있는데 참여 기능 서버 없이 Vercel에 배포하면 먼저 묻고 '참여 기능 없이'로 나감(예전에는 기록이 각자 기기에만 남는 연습 모드로 나갔음)
+  L.ok('share: Vercel without a participation server goes out without participation (not rehearsal)', !files.includes('console.html') && !files.includes('assets/live.js'), files.filter((f) => /console|live/.test(f)).join(','));
   const idx = st.site['index.html'] ? st.site['index.html'].toString() : '';
   L.ok('share: deployed html has edits, no preview markers', idx.includes('제미나이로 20분 만에') && idx.includes('우리 반 데이터 연수') && !/data-lpe|data-lp-preview/.test(idx));
   await p.waitForTimeout(800); await p.evaluate(() => scrollTo(0, 0));
