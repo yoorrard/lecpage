@@ -5,7 +5,7 @@ export default [
   {
     id: 'grain', ko: '그레인·종이 결', en: 'Grain / Noise Texture',
     desc: '화면 전체에 아주 고운 잡티를 얹어 디지털의 매끈함을 덜고 인쇄물 같은 온기를 줘요.',
-    fit: '편집·리소·손그림 결의 바탕. 그림 파일 없이 SVG 필터로 만들어 가벼워요.',
+    fit: '편집·리소·손그림 스타일의 바탕. 그림 파일 없이 SVG 필터로 만들어 가벼워요.',
     tech: "data: SVG feTurbulence 잡티를 ::after로 덮고 opacity .15~.3 + mix-blend-mode:multiply",
     tags: ['잡티', 'feTurbulence', '질감', '인쇄'],
     f: ['Noto Serif KR:wght@900'],
@@ -112,10 +112,10 @@ export default [
   },
   {
     id: 'halftone', ko: '망점', en: 'Halftone Dots',
-    desc: '크기가 다른 점으로 명암을 표현하는 인쇄 기법. 만화·신문 같은 결을 줘요.',
-    fit: '리소·포스터·레트로 결의 그림자, 배경 무늬.',
-    tech: 'radial-gradient 점 무늬 + mask-image 그라데이션으로 점 크기가 줄어드는 것처럼',
-    tags: ['점', '인쇄', '만화', '무늬'],
+    desc: '크기가 다른 점으로 명암을 표현하는 인쇄 기법. 만화·신문 같은 느낌을 줘요.',
+    fit: '리소·포스터·레트로 스타일의 그림자, 배경 패턴.',
+    tech: 'radial-gradient 점 패턴 + mask-image 그라데이션으로 점 크기가 줄어드는 것처럼',
+    tags: ['점', '인쇄', '만화', '패턴'],
     f: ['Black Han Sans'],
     css: `body{background:#fff6e5}
 .ht{position:absolute;inset:0;background:radial-gradient(circle,#ff3d68 34%,transparent 36%) 0 0/3.2vmin 3.2vmin;-webkit-mask:radial-gradient(circle at 70% 40%,#000 0,transparent 70%);mask:radial-gradient(circle at 70% 40%,#000 0,transparent 70%);animation:p 4s ease-in-out infinite alternate}
@@ -155,7 +155,7 @@ export default [
   },
   {
     id: 'dither', ko: '디더링', en: 'Dithering',
-    desc: '몇 가지 색의 점만으로 명암을 흉내 내는 옛 컴퓨터 그래픽 기법. 요즘 다시 유행하는 결.',
+    desc: '몇 가지 색의 점만으로 명암을 흉내 내는 옛 컴퓨터 그래픽 기법. 요즘 다시 유행하는 스타일.',
     fit: '레트로·픽셀·데이터 주제의 대표 그림 한 점.',
     tech: 'canvas에 그린 그라데이션을 Bayer 4×4 행렬로 문턱값 비교 → 두 색 점으로 다시 칠함(image-rendering:pixelated)',
     tags: ['픽셀', '레트로', 'canvas', '2색'],
@@ -176,11 +176,11 @@ pre{position:absolute;inset:0;margin:0;display:grid;place-content:center;font:2.
     js: `var p=document.querySelector('pre'),C=' .:-=+*#%@',W=46,H=28;function f(t){var a=(t||0)/900,s='';for(var j=0;j<H;j++){for(var i=0;i<W;i++){var u=(i-W/2)/(W/2),v=(j-H/2)/(H/2)*1.1,r=Math.sqrt(u*u+v*v),z=Math.cos(r*6-a*2)*.5+.5;z*=Math.max(0,1-r);var x=u*Math.cos(a)-v*Math.sin(a);z+=Math.max(0,.6-Math.abs(x))*.4*(1-r);s+=C[Math.max(0,Math.min(C.length-1,Math.floor(z*C.length)))]}s+='\\n'}p.textContent=s;if(!RM)setTimeout(function(){requestAnimationFrame(f)},50)}f(0);`,
   },
   {
-    id: 'css-patterns', ko: '그라데이션 무늬', en: 'CSS Background Patterns',
-    desc: '그림 파일 없이 그라데이션만으로 줄무늬·점·체크·물결 무늬를 만들어요.',
-    fit: '쉬는 시간 빗금, 섹션 바탕의 은은한 무늬, 손그림 공책 줄.',
+    id: 'css-patterns', ko: '그라데이션 패턴', en: 'CSS Background Patterns',
+    desc: '그림 파일 없이 그라데이션만으로 줄무늬·점·체크·물결 패턴을 만들어요.',
+    fit: '쉬는 시간 빗금, 섹션 바탕의 은은한 패턴, 손그림 공책 줄.',
     tech: 'repeating-linear-gradient(빗금) · radial-gradient(점) · conic-gradient(체크) + background-size',
-    tags: ['무늬', '그라데이션', '빗금', '가벼움'],
+    tags: ['패턴', '그라데이션', '빗금', '가벼움'],
     css: `body{background:#fff;font-family:system-ui}
 .w{position:absolute;inset:4vmin;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:2vmin}
 .w div{border-radius:1.8vmin;display:grid;place-items:end start;padding:1.4vmin;font:600 2.2vmin system-ui;color:#333;animation:sl 8s linear infinite}

@@ -352,7 +352,7 @@ mark.p{background-image:linear-gradient(transparent 55%,#ffb3c7 55%,#ffb3c7 92%,
   {
     id: 'spring', ko: '스프링·탄성 곡선', en: 'Spring Easing (linear())',
     desc: '목표를 살짝 지나쳤다 되돌아오는 탄성 있는 움직임. 물건처럼 무게감이 느껴져요.',
-    fit: '버튼·꼬리표·알림이 튀어나올 때. 큰 면에는 부드러운 곡선이 더 나아요.',
+    fit: '버튼·태그·알림이 튀어나올 때. 큰 면에는 부드러운 곡선이 더 나아요.',
     tech: 'CSS linear() 이징으로 스프링 곡선 흉내(또는 cubic-bezier(.3,1.6,.5,1)) — 같은 거리, 다른 성격 비교',
     tags: ['이징', 'linear()', '탄성', '곡선'],
     css: `body{background:#fafaf7;font-family:system-ui}

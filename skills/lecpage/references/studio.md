@@ -26,7 +26,7 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - **Claude 구독**: 이 PC에 로그인한 Claude Code를 고치지 않고 그대로 실행해요. 요청은 이 PC에서 Anthropic으로 바로 가고, 로그인 정보는 읽거나 옮기지 않아요.
 - **Codex**: OpenAI는 내 PC에서 도는 오픈소스 앱이 Codex 로그인을 쓰는 것을 허용해요.
 - Claude Code·Codex의 로그인 정보(키체인·`~/.claude/.credentials.json`·`~/.codex/auth.json`)는 읽지도 옮기지도 않아요. 설치·로그인은 공식 명령(`irm https://claude.ai/install.ps1 | iex` · `curl -fsSL https://claude.ai/install.sh | bash` · `claude auth login` · `irm https://chatgpt.com/codex/install.ps1 | iex` · `curl -fsSL https://chatgpt.com/codex/install.sh | sh` · `codex login`)을 **보이는 터미널 창**에서 돌려요(Windows 새 PowerShell 창 · macOS Terminal(`.command` 파일을 `open -a Terminal`로, Apple 이벤트 권한을 묻지 않음) · Linux `x-terminal-emulator` → `gnome-terminal` → `konsole` → `xfce4-terminal` → `mate-terminal` → `xterm`). 창을 못 열면(화면 없는 Linux 등) 같은 명령을 lecpage 커넥트 안에서 돌리고 출력을 앱(`GET /bridge/term`)과 lecpage 커넥트 창에 보여 줘요. 브라우저는 Windows `rundll32 url.dll`(= start) · macOS `open` · Linux `xdg-open` → `gio open` → `sensible-browser` → `x-www-browser`(WSL은 `wslview`)로 열고, 못 열면 주소를 창에 적어요.
-- 구독은 사람이 누른 요청([만들기]·[AI로 수정]·검수의 [AI로 수정])으로만 써요. ChatGPT 계정 작업은 새로 고침·망 복구 뒤 저절로 다시 부르지 않고 [계속 만들기]를 기다려요.
+- 구독은 사람이 누른 요청([만들기]·[AI로 수정]·꼭 고칠 곳의 [AI로 수정])으로만 써요. ChatGPT 계정 작업은 새로 고침·망 복구 뒤 저절로 다시 부르지 않고 [계속 만들기]를 기다려요.
 - `ANTHROPIC_API_KEY`가 있으면 Claude Code가 구독 대신 그 키로 돌아요(lecpage 커넥트가 알려 줘요, 지우지는 않아요).
 
 ## 안전
@@ -35,7 +35,7 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - 한 번에 작업 하나, 교재 파일 하나 100MB·모두 120MB·20개까지, 작업 30분 한도와 멈추기(프로세스 묶음째 끔).
 - 에이전트는 새 빈 임시 폴더(훅·`.mcp.json` 없음)에서 돌아요. Claude Code: `--restricted`, 도구는 Read·Write·Edit·Glob·Grep과 검수 명령 하나만 허용한 Bash(윈도우는 PowerShell도 같은 명령만), 작업 폴더 밖 읽기·쓰기 막기, 훅 끔, MCP 없음, 묻는 대신 거절, 세션을 디스크에 남기지 않음. 시작할 때 MCP·웹 도구가 켜져 있으면 멈춰요. Codex: `--sandbox workspace-write`, `--ephemeral`. Codex는 내 설정(`~/.codex/config.toml`)의 MCP 서버를 그대로 켜요(설정을 빼면 로그인 저장 위치까지 바뀔 수 있어 빼지 않아요). MCP 도구를 부르는 순간 작업을 멈추니, Codex로 쓸 때는 설정의 MCP 서버를 꺼 두는 게 좋아요.
 - 검수 실행기(`../bin/check.mjs`)는 작업 폴더 밖에 있어요. Claude Code에는 그 폴더를 `--add-dir`로 더해 검수 명령을 실행할 수 있게 하고(더하지 않으면 경로 검사가 검수 명령까지 막아요), 파일 도구로 고치는 것은 `Write`·`Edit` 거절 규칙으로 막아요. 강사 값(참여 서버·주소·공개 범위)은 에이전트에게 주지 않아요.
-- 작업 지시(TASK.md)는 짧게: 목표 한 줄(강의 동반자 사이트), 강사 요청, 배포 조건, 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 검수 명령. 읽는 법·디자인·화면 확인과 다듬기는 에이전트가 정해요(디자인 규칙·레퍼런스 사이트는 넣지 않아요).
+- 작업 지시(TASK.md)는 짧게: 목표(강의 진행 사이트), 강사 요청과 참고 디자인에서 담은 디자인 목록, 배포 조건, 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 검수 명령. 디자인 서재(`design-library.md`)는 작업 폴더에 두고 필요하면 참고하게 해요(따를 의무 없음). 읽는 법·디자인·화면 확인과 다듬기는 에이전트가 정해요(디자인 규칙·레퍼런스 사이트는 넣지 않아요).
 - 작업이 끝나면 임시 폴더를 바로 지우고, 결과는 앱이 가져간 뒤 `DELETE`로 메모리에서도 지워요. 터미널에는 교재 내용·파일 이름·토큰을 적지 않아요.
 
 ## 문제 해결

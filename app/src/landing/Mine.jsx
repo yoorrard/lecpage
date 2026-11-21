@@ -4,9 +4,9 @@ import { Dialog } from '../components/ui.jsx';
 import { copy, fmtDate, toast, saveFile, safeName } from '../lib/util.js';
 
 // 첫 화면의 '내 연수' 목록. 만든 연수가 있을 때만 받아요(처음 오는 사람의 첫 화면을 가볍게).
-const STAGE = ['', '교재 넣기', '살펴보고 고치기', '배포하기'];
+const STAGE = ['', '교재 넣기', '만들기·수정', '배포하기'];
 const md = (t) => new Date(t).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-/** 배포 상태 꼬리표: 보관 기간이 정해진 바로 배포(마지막 배포 뒤 N일)는 그날까지, 지났으면 '보관 기간 끝' */
+/** 배포 상태 태그: 보관 기간이 정해진 바로 배포(마지막 배포 뒤 N일)는 그날까지, 지났으면 '보관 기간 끝' */
 function deployTag(p) {
   const lec = p.deploy?.target === 'lecpage' ? p.deploy.lecpage : null;
   if ((lec?.view === 'pages' || lec?.fixed) && lec.expiresAt) return lec.expiresAt <= Date.now() ? { t: '보관 기간 끝', gone: true } : { t: `배포됨 · ${md(lec.expiresAt)}까지`, until: md(lec.expiresAt) };

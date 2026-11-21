@@ -176,6 +176,13 @@
   .lpk .lp-sv-scale label:not(:first-child):not(:last-child) i{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lpk .lp-sv-scale label i{font-size:12px;line-height:1.2}
 }
+/* 화면은 넓어도 사이트가 설문을 카드 안에 넣어 다섯 칸이 좁을 때(휴대폰 390px에 카드 두 겹이면 칸 57px): 같은 규칙을 설문 너비로 */
+.lpk .lp-sv-scale .lp-sv-opts{container-type:inline-size}
+@container (max-width:21rem){
+  .lpk .lp-sv-scale label{min-height:56px}
+  .lpk .lp-sv-scale label:not(:first-child):not(:last-child) i{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .lpk .lp-sv-scale label i{font-size:12px;line-height:1.2}
+}
 
 /* 교재 넘기기 */
 .lpk .lp-deck{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}

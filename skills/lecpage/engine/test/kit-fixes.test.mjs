@@ -104,6 +104,8 @@ test('키트 CSS: 강조색 위 글자는 강조색 밝기로(상대 색), --lp-
   assert.match(css, /@supports \(color:color\(from red srgb-linear r g b\)\)\{\s*\.lpk\{\s*--_on-auto:color\(from var\(--lp-accent,var\(--lpk-accent\)\) srgb-linear clamp\(0,\(\.1791 - /);
   assert.match(css, /--_on:var\(--lp-on-accent,var\(--_on-auto,var\(--lpk-on-accent,Canvas\)\)\)/);
   assert.match(css, /\.lpk \.lp-follow\{[^}]*min-height:44px/);
+  // 만족도 다섯 칸: 화면이 넓어도 카드 안에서 칸이 좁으면 '보통이에/요'로 쪼개지지 않게 설문 너비로도 가운데 이름을 숨김
+  assert.match(css, /\.lpk \.lp-sv-scale \.lp-sv-opts\{container-type:inline-size\}\s*@container \(max-width:21rem\)\{[^@]*label:not\(:first-child\):not\(:last-child\) i\{position:absolute/);
   const r = K.assemble({ 'index.html': PAGE('<section><h2>질문</h2><div data-lp="qa"></div></section>') }, { ...META, theme: { accent: '#f08a6c' } }, { runtime: rt });
   assert.match(r.files['assets/kit.css'], /--lpk-on-accent:#000000/, '밝은 강조색이면 검정');
   const kit = fs.readFileSync(path.join(SKILL, 'references', 'kit.md'), 'utf8');

@@ -4,7 +4,7 @@ import { Ic } from './icons.jsx';
 
 /**
  * 구독 계정 연결: lecpage.com ⇄ PC 프로그램 ⇄ ChatGPT·Claude 계정. 화면에 들어오면 선을 따라 신호가 흐르고 짝 맞춤·로그인 표시가 켜져요.
- * 그 밖의 길(쓰던 AI로 · API 키 · Claude Code·Codex · AI 에이전트 Skill)은 아래 두 칸. 동작 줄이기면 다 켜진 정지 모습.
+ * 그 밖의 길(API 키 · Claude Code·Codex · AI 에이전트 Skill)은 아래 한 칸. 동작 줄이기면 다 켜진 정지 모습.
  */
 export function Connect() {
   const box = useRef();
@@ -29,7 +29,6 @@ export function Connect() {
         <li><b>계정으로 로그인</b><span>로그인하면 바로 만들기가 시작돼요.</span></li>
       </ol>
       <div class="ld-conn-more">
-        <article><h3>설치 없이: 쓰던 AI로</h3><p>프롬프트를 복사해 쓰던 AI 창에 붙여 넣고 교재를 첨부해요. 답을 붙여 넣으면 사이트가 돼요.</p></article>
         <article><h3>다른 방법</h3><p>API 키 연결, PC의 Claude Code·Codex, AI 에이전트에 넣는 lecpage Skill로도 만들어요. 어느 길이든 끝은 같은 앱이에요.</p></article>
       </div>
     </section>

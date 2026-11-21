@@ -12,7 +12,7 @@ export function Showcase({ busyProps, fromExample }) {
     <section class="ld-ex" aria-labelledby="ld-ex-h">
       <header class="ld-ex-head">
         <h2 id="ld-ex-h"><span class="ld-kicker">참고 디자인</span>교재가 다르면 사이트도 달라요</h2>
-        <p>셋 다 AI가 교재 원본을 읽고 만든 강의 사이트예요. 참가자·강사·발표 화면과 QR 안내문까지 실제로 열어 볼 수 있어요. 마음에 드는 분위기를 고르면 내 교재로 그 결을 살려 만들어요.</p>
+        <p>셋 다 AI가 교재 원본을 읽고 만든 강의 사이트예요. 참가자·강사·발표 화면과 QR 안내문까지 실제로 열어 볼 수 있어요. 마음에 드는 분위기를 고르면 내 교재로 그 스타일을 살려 만들어요.</p>
       </header>
       <ul class="ld-ex-row">
         {list.map((x, k) => {

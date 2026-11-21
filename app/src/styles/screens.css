@@ -449,7 +449,7 @@ textarea.prop-in{resize:none;overflow:hidden}
 .sec2[draggable="true"]>.sec2-row{cursor:grab}
 .sec2-row:hover{background:var(--sunk)}
 .sec2.is-sel>.sec2-row{background:var(--lav-soft);box-shadow:inset 2px 0 0 var(--accent)}
-.sec2.is-hidden>.sec2-row .ttl{opacity:.5}
+.sec2.is-hidden>.sec2-row .ttl{color:var(--muted)}
 .sec2-grip{color:var(--line-strong);font-size:.8rem;letter-spacing:-2px;padding-left:4px;user-select:none}
 .sec2-tw{display:grid;place-items:center;width:26px;height:34px;padding:0;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer}
 .sec2-tw:hover{color:var(--ink)}
@@ -568,7 +568,7 @@ button.st-tag:hover{border-color:var(--accent);color:var(--lav-ink)}
 .ver-t{display:grid;gap:1px;min-width:0}
 .ver-t b{font-weight:600;overflow-wrap:anywhere}
 .ver-t small{color:var(--muted)}
-.ver-kind{font-size:.72rem;font-weight:700;padding:3px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.ver-kind{min-width:3.4em;text-align:center;font-size:.72rem;font-weight:700;padding:3px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .ver-kind.k-make,.ver-kind.k-ai,.ver-kind.k-chat,.ver-kind.k-fix{background:var(--lav-soft);color:var(--lav-ink)}
 .ver-kind.k-info{background:var(--butter);color:var(--butter-ink)}
 .ver-kind.k-restore{background:var(--mint);color:var(--mint-ink)}

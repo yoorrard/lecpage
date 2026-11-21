@@ -11,7 +11,7 @@ import { siteFileOk } from '@engine/src/kit/paths.js';
 export const MAX_FILE = 20e6;
 export const MAX_ALL = 30e6; // 자료 모두(사이트 글·교재 쪽 그림이 들어갈 자리를 남김: 바로 배포는 사이트 하나 40MB)
 const sizeText = (n) => (!(n > 0) ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1e3))}KB`);
-const TYPES = 'PDF·한글·워드·PPT·엑셀·CSV·TXT·ZIP·그림·소리·영상';
+const TYPES = 'PDF·한글·워드·PPT·엑셀·CSV·TXT·ZIP·그림·소리·영상'; // 화면에는 가운뎃점 뒤에서만 줄을 바꿈(앞은 낱말 이음표 U+2060, 뒤는 <wbr>): 줄 첫머리에 '·'가 오지 않게
 
 /** 사이트에 쓸 파일 이름: 쓸 수 있는 글자만(엔진 SITE_FILE·바로 배포 경로 규칙), 같은 이름이 있으면 ' (2)' */
 export function fileName(name, taken = new Set()) {
@@ -86,7 +86,7 @@ export function FilesCard({ p, update, hasSlot, onAskSlot, locked }) {
         </li>))}</ol> : null}
       <button type="button" class={`st-drop${over ? ' over' : ''}`} disabled={busy || locked} onClick={() => input.current?.click()}>
         <b>{list.length ? '자료 더 추가' : '활동지·참고 자료를 올려요'}</b>
-        <small>끌어다 놓거나 눌러서 골라요 · 파일 하나 20MB까지 · {TYPES}</small>
+        <small>끌어다 놓거나 눌러서 골라요 · 파일 하나 20MB까지 · {TYPES.split('·').map((t, i) => (i ? <>{'\u2060·'}<wbr />{t}</> : t))}</small>
       </button>
       {list.length > 0 && <p class="small muted">{hasSlot ? '사이트의 자료실에서 참가자가 다운로드해요.' : <>사이트 맨 아래 자료 칸에서 참가자가 다운로드해요. <button type="button" class="btn-link small" disabled={locked} onClick={onAskSlot}>AI로 자리 옮기기</button></>}</p>}
       <Dialog open={!!del} onClose={() => setDel(null)} label="자료 삭제 확인">

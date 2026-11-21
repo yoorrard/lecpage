@@ -1,4 +1,4 @@
-// ⑧ 강의 사이트 무늬: 강의 당일 참가자가 실제로 쓰는 화면 조각. lecpage의 참여 기능(data-lp)과 함께 쓰면 좋은 것들
+// ⑧ 강의 사이트 패턴: 강의 당일 참가자가 실제로 쓰는 화면 조각. lecpage의 참여 기능(data-lp)과 함께 쓰면 좋은 것들
 const F = ['IBM Plex Sans KR:wght@400;600;700'];
 const BODY = `body{background:#f6f4ef;color:#1c1b1a;font-family:'IBM Plex Sans KR',system-ui,sans-serif}`;
 
@@ -110,7 +110,7 @@ small{font-size:2.4vmin;color:#aaa}
   {
     id: 'deck-strip', ko: '교재 쪽 띠', en: 'Slide Strip / Follow Along',
     desc: '교재 쪽 그림을 띠로 늘어놓고 강사가 설명하는 쪽을 따라 표시가 움직여요.',
-    fit: "교재 넘기기와 함께: '교재 8쪽' 꼬리표를 누르면 그 쪽으로, 강사 따라가기를 켜면 저절로.",
+    fit: "교재 넘기기와 함께: '교재 8쪽' 태그를 누르면 그 쪽으로, 강사 따라가기를 켜면 저절로.",
     tech: '쪽 그림 가로 띠(scroll-snap) + 지금 쪽 테두리·확대 + scrollIntoView({inline:"center"}) + "교재 N쪽" 꼬리표 링크',
     tags: ['교재', '쪽 그림', '따라가기', '띠'],
     f: F,
