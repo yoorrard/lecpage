@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>학교 데이터로 수업 바꾸기 · 가온시교육연수원 직무연수</title>
-<meta name="description" content="출결·과제·형성평가 기록을 읽고, 차트로 말하고, 다음 수업을 고치는 3시간 교사 연수. 학교·기관·인물·수치는 연수용 가상 예시예요.">
+<meta name="description" content="2026. 12. 10.(목) 14:30~17:30 교사 데이터 리터러시 연수의 참가자 사이트. 학교·기관·인물·수치는 연수용 가상 예시예요.">
 <meta name="theme-color" content="#0e0e0e">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,11 +24,10 @@
     <nav aria-label="바로 가기">
       <ul>
         <li><a href="#flow">흐름</a></li>
-        <li><a href="#read">읽기</a></li>
-        <li><a href="#make">차트</a></li>
-        <li><a href="#ai">AI</a></li>
+        <li><a href="#join">입장</a></li>
         <li><a href="#deck">교재</a></li>
-        <li><a href="#qa">질문</a></li>
+        <li><a href="practice.html">실습</a></li>
+        <li><a href="#talk">질문</a></li>
         <li><a href="#task">과제</a></li>
       </ul>
     </nav>
@@ -38,12 +37,26 @@
 <div class="hairs" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
 
 <main>
-<!-- 첫 화면: 기록 1,440칸과 3반의 12주 선 -->
+<!-- 첫 화면: 무슨 연수인지·언제·어디서·지금 -->
 <section class="hero ink" id="top" aria-labelledby="t">
   <div class="wrap hero-g">
     <p class="hero-org">가온시교육연수원 2026 직무연수 · 3시간</p>
     <h1 id="t" class="kin"><span class="ln"><span>학교 데이터로</span></span> <span class="ln"><span>수업 바꾸기</span></span></h1>
     <p class="hero-sub">출결·과제·형성평가 기록을 읽고, 차트로 말하고, 다음 수업을 고치는 3시간</p>
+
+    <dl class="meta">
+      <div><dt>일시</dt><dd>2026. 12. 10.(목) 14:30~17:30</dd></div>
+      <div><dt>장소</dt><dd>가온시교육연수원 본관 4층 데이터실습실</dd></div>
+      <div><dt>강사</dt><dd>모해온 · 중학교 수학 교사</dd></div>
+      <div><dt>대상</dt><dd>중·고등학교 교사, 학교 데이터 담당 교직원</dd></div>
+    </dl>
+
+    <div class="now" data-hub>
+      <p class="now-k" data-hub-k>시작</p>
+      <p class="now-t" data-hub-t>12. 10.(목) 14:30</p>
+      <p class="now-l" data-hub-l>들어가며 · 출석과 첫 투표부터 해요</p>
+      <a class="now-a" href="#join" data-hub-a>입장하기</a>
+    </div>
 
     <figure class="field">
       <p class="field-n"><b class="num" data-count="1440">1,440</b><span>칸</span></p>
@@ -63,45 +76,31 @@
       <b class="pulse-dot" aria-hidden="true"></b>
       <p class="pulse-tag"><b>41%</b><span>7주차 정답률</span></p>
       </div>
-      <figcaption>3반 주차별 형성평가 정답률 · 점선은 2학년 평균(가상 데이터)</figcaption>
+      <figcaption>교재 표지의 선 · 3반 주차별 형성평가 정답률(가상 데이터)</figcaption>
     </figure>
-
-    <dl class="meta">
-      <div><dt>일시</dt><dd>2026. 12. 10.(목) 14:30~17:30</dd></div>
-      <div><dt>장소</dt><dd>가온시교육연수원 본관 4층 데이터실습실</dd></div>
-      <div><dt>강사</dt><dd>모해온 · 중학교 수학 교사</dd></div>
-      <div><dt>대상</dt><dd>중·고등학교 교사, 학교 데이터 담당 교직원</dd></div>
-    </dl>
   </div>
 </section>
 
-<div class="band ink" aria-hidden="true">
-  <p class="band-t"><span>평균 72점</span><span>중앙값 78.5점</span><span class="hot">60점 미만 9명</span><span>7주차 41%</span><span>12주차 73%</span><span>평균 72점</span><span>중앙값 78.5점</span><span class="hot">60점 미만 9명</span><span>7주차 41%</span><span>12주차 73%</span></p>
-</div>
-
-<!-- 들어가며: 일정·목표·준비 -->
+<!-- 오늘의 흐름: 지금 어디인지 -->
 <section class="sec paper" id="flow" aria-labelledby="flow-h">
   <div class="wrap">
-    <header class="sh">
-      <p class="sh-k">들어가며 · 14:30 · 교재 3쪽</p>
-      <h2 id="flow-h">세 시간, 세 번의 실습</h2>
+    <header class="sh sh-row">
+      <h2 id="flow-h">오늘의 흐름</h2>
+      <p class="sh-d">14:30~17:30 · 지금 하는 순서에 빨간 선이 서요. <a href="#deck-p3">교재 3쪽 보기</a></p>
     </header>
-
     <div class="flow-g">
       <div class="gantt" data-day="2026-12-10" data-from="14:30" data-to="17:30">
         <div class="gantt-scale" aria-hidden="true"><div><span>14:30</span><span>15:30</span><span>16:30</span><span>17:30</span></div></div>
         <ol>
-          <li style="--s:0;--m:15"><time>14:30</time><p><b>들어가며</b><span>15분 · 출석·첫 투표</span></p><i></i></li>
-          <li class="main" style="--s:15;--m:45"><time>14:45</time><p><a href="#read"><b>1부 데이터 읽기</b></a><span>45분 · 실습 1(25분)</span></p><i></i></li>
-          <li class="brk" style="--s:60;--m:10"><time>15:30</time><p><b>쉬는 시간</b><span>10분</span></p><i></i></li>
-          <li class="main" style="--s:70;--m:45"><time>15:40</time><p><a href="#make"><b>2부 차트 만들기</b></a><span>45분 · 실습 2(30분)</span></p><i></i></li>
-          <li class="main" style="--s:115;--m:40"><time>16:25</time><p><a href="#ai"><b>3부 AI와 함께 해석하기</b></a><span>40분 · 실습 3(25분)</span></p><i></i></li>
-          <li style="--s:155;--m:15"><time>17:05</time><p><b>확인 퀴즈 · 과제 안내</b><span>15분</span></p><i></i></li>
-          <li style="--s:170;--m:10"><time>17:20</time><p><b>마무리 · 만족도 조사</b><span>10분</span></p><i></i></li>
+          <li style="--s:0;--m:15" data-go="#join" data-say="출석과 첫 투표부터 해요"><time>14:30</time><p><a href="#join"><b>들어가며</b></a><span>15분 · 출석·첫 투표</span></p><i></i></li>
+          <li class="main" style="--s:15;--m:45" data-go="practice.html#st-s1" data-say="실습 1 데이터 읽기(25분)"><time>14:45</time><p><a href="#deck-p5"><b>1부 데이터 읽기</b></a><span>45분 · 실습 1(25분)</span></p><i></i></li>
+          <li class="brk" style="--s:60;--m:10" data-say="15:40에 2부를 시작해요"><time>15:30</time><p><b>쉬는 시간</b><span>10분</span></p><i></i></li>
+          <li class="main" style="--s:70;--m:45" data-go="practice.html#st-s2" data-say="실습 2 차트 만들기(30분)"><time>15:40</time><p><a href="#deck-p9"><b>2부 차트 만들기</b></a><span>45분 · 실습 2(30분)</span></p><i></i></li>
+          <li class="main" style="--s:115;--m:40" data-go="practice.html#st-s3" data-say="실습 3 프롬프트 쓰기(25분)"><time>16:25</time><p><a href="#deck-p12"><b>3부 AI와 함께 해석하기</b></a><span>40분 · 실습 3(25분)</span></p><i></i></li>
+          <li style="--s:155;--m:15" data-go="#talk" data-say="세 문제로 확인하고 과제를 받아요"><time>17:05</time><p><a href="#talk"><b>확인 퀴즈 · 과제 안내</b></a><span>15분</span></p><i></i></li>
+          <li style="--s:170;--m:10" data-go="#end" data-say="만족도 조사를 내고 마쳐요"><time>17:20</time><p><a href="#end"><b>마무리 · 만족도 조사</b></a><span>10분</span></p><i></i></li>
         </ol>
-        <p class="gantt-now" hidden><b data-now-t></b><span data-now-l></span></p>
       </div>
-
       <div class="goals">
         <h3>오늘의 목표</h3>
         <ol>
@@ -113,262 +112,88 @@
         <p class="goals-c">3시간 직무연수 · 출석 90% 이상 · 과제 제출</p>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="ready">
-      <div class="ready-t">
-        <h3>세 가지만 해 두면 바로 시작해요</h3>
-        <ol class="ready-l">
-          <li><b>출석</b><span>연수 사이트 QR로 들어와 [입실]을 눌러요.</span></li>
-          <li><b>예시 데이터</b><span>아래 '자료'에서 두 파일을 받아 스프레드시트(구글 시트·엑셀 무엇이든)로 열어요.</span></li>
-          <li><b>AI 하나</b><span>평소 쓰던 AI 창을 하나 열어 둬요. 실습 3에서 써요.</span></li>
-        </ol>
+<!-- 입장: 출석·준비·첫 투표 -->
+<section class="sec paper2" id="join" aria-labelledby="join-h">
+  <div class="wrap">
+    <header class="sh sh-row">
+      <h2 id="join-h">입장</h2>
+      <p class="sh-d">세 가지만 해 두면 바로 시작해요. <a href="#deck-p4">교재 4쪽 보기</a></p>
+    </header>
+    <div class="join-g">
+      <ol class="ready-l">
+        <li><b>출석</b><span>[입실]을 눌러요. 끝나면 [퇴실]도요.</span><div data-lp="attend"></div></li>
+        <li><b>예시 데이터</b><span>두 파일을 받아 스프레드시트(구글 시트·엑셀 무엇이든)로 열어요.</span><div data-lp="materials" data-items='[{"title":"가상-2학년3반-형성평가.csv","href":"files/가상-2학년3반-형성평가.csv"},{"title":"가상-2학년-주차별-기록.csv","href":"files/가상-2학년-주차별-기록.csv"}]'></div></li>
+        <li><b>AI 하나</b><span>평소 쓰던 AI 창을 하나 열어 둬요. 실습 3에서 써요.</span></li>
+      </ol>
+      <div class="join-k">
         <p class="note">오늘은 실제 학생 기록을 쓰지 않아요. 가상 예시 데이터로만 실습해요.</p>
-        <div data-lp="materials" data-items='[{"title":"가상-2학년3반-형성평가.csv","href":"files/가상-2학년3반-형성평가.csv"},{"title":"가상-2학년-주차별-기록.csv","href":"files/가상-2학년-주차별-기록.csv"}]'></div>
-      </div>
-      <div class="ready-k">
-        <div data-lp="attend"></div>
         <div data-lp="poll" data-id="first" data-page="2" data-question="우리 학교에서 가장 많이 쌓이는데 가장 덜 읽는 기록은?" data-options='["출결","과제 제출","형성평가","수업 중 질문","상담 기록"]'></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 1부 -->
-<section class="part ink" id="read" aria-labelledby="read-h">
-  <div class="wrap part-g">
-    <p class="part-n" aria-hidden="true"><span>1</span></p>
-    <div class="part-t">
-      <p class="sh-k">1부 · 14:45 · 45분</p>
-      <h2 id="read-h">데이터 읽기</h2>
-      <p class="part-lead">평균은 이야기의 시작일 뿐이에요</p>
-    </div>
-    <div class="part-k">
-      <div data-lp="poll" data-id="q-mean" data-page="5" data-answer="4" data-question="평균 72점인 반, 60점 미만 학생은 몇 명일까요?" data-options='["0~2명","3~5명","6~8명","9명 이상"]'></div>
-    </div>
-  </div>
-</section>
-
-<section class="sec paper story" id="story" aria-labelledby="story-h">
-  <div class="wrap">
-    <header class="sh">
-      <p class="sh-k">교재 6쪽 · 3반 중간 형성평가 30명(가상 데이터)</p>
-      <h2 id="story-h">평균 72점의 반</h2>
-    </header>
-    <div class="scrolly">
-      <figure class="sfig" data-state="0">
-        <div class="sfig-stage" data-swarm></div>
-        <div class="sfig-stats">
-          <p data-on="2"><b>72</b><span>평균(점)</span></p>
-          <p data-on="2"><b>78.5</b><span>중앙값(점)</span></p>
-          <p data-on="3" class="hot"><b>9</b><span>60점 미만(명)</span></p>
-        </div>
-        <figcaption class="sr-only">2학년 3반 30명의 형성평가 점수를 점 하나씩 그린 그래프. 평균 72점, 중앙값 78.5점, 60점 미만 9명(가상 데이터).</figcaption>
-      </figure>
-      <ol class="steps">
-        <li data-s="0"><p><b>30명의 점수예요.</b> 번호순으로 늘어놓으면 점 하나가 학생 한 명이에요.</p></li>
-        <li data-s="1"><p><b>점수대로 줄을 세우면</b> 모양이 보여요. 80점대에 몰려 있고, 낮은 쪽에 몇 명이 떨어져 있어요.</p></li>
-        <li data-s="2"><p><b>평균은 72점, 중앙값은 78.5점.</b> 떨어진 점수 몇 개가 평균을 끌어내려요.</p></li>
-        <li data-s="3"><p><b>60점 미만은 9명.</b> 평균만 보면 보이지 않는 학생들이에요.</p></li>
-      </ol>
-      <div class="pager" aria-hidden="true"><i></i><i></i><i></i><i></i><span>옆으로 넘겨 보세요</span></div>
-    </div>
-  </div>
-</section>
-
-<section class="sec ink draw" id="pulse" aria-labelledby="pulse-h">
-  <div class="wrap draw-g">
-    <header class="sh">
-      <p class="sh-k">교재 7쪽 · 3반 주차별 정답률(가상 데이터)</p>
-      <h2 id="pulse-h">12주의 맥박</h2>
-      <p class="sh-d">7~12주차를 짐작해서 그어 보세요.</p>
-    </header>
-    <figure class="dfig">
-      <div class="dfig-stage" data-draw tabindex="0" role="group" aria-label="7~12주차 짐작 그리기. 왼쪽·오른쪽 화살표로 주차를 고르고 위·아래 화살표로 정답률을 바꿔요." aria-describedby="draw-say"></div>
-      <div class="dfig-ctl">
-        <button type="button" class="btn" data-draw-show>정답 보기</button>
-        <button type="button" class="btn ghost" data-draw-reset>다시 그리기</button>
-        <p id="draw-say" class="dfig-say" aria-live="polite">7주차부터 그어 보세요.</p>
-      </div>
-      <figcaption class="sr-only">2학년 3반 주차별 정답률이에요(가상 데이터). 1~6주차는 78, 76, 81, 74, 70, 63%. 7~12주차는 41, 55, 59, 66, 71, 73%. 2학년 평균은 62~79%예요.</figcaption>
-    </figure>
-    <ul class="dnotes">
-      <li><b>7주차</b>'일차함수의 그래프' 정답률 41%</li>
-      <li><b>8주차</b>모둠별로 그래프를 직접 그리는 수업으로 다시 가르쳤어요</li>
-      <li><b>12주차</b>73%로 돌아왔어요</li>
-    </ul>
-    <p class="draw-q">한 번의 시험 점수보다, 주마다 이어진 선이 수업을 말해 줘요.</p>
-  </div>
-</section>
-
-<section class="sec paper step" data-lp-step="s1" data-title="실습 1: 데이터 읽기" data-minutes="25" aria-labelledby="s1-h">
-  <div class="wrap step-g">
-    <header class="step-h">
-      <p class="sh-k">실습 1 · 25분 · 교재 8쪽</p>
-      <h2 id="s1-h"><span class="step-n">1</span>데이터 읽기</h2>
-    </header>
-    <ol class="todo">
-      <li><p>「가상-2학년3반-형성평가」 시트에서 평균과 중앙값을 구해요.</p>
-        <div class="fx"><code>=AVERAGE(B2:B31)</code><button type="button" class="copy" data-copy-text="=AVERAGE(B2:B31)">복사</button></div>
-        <div class="fx"><code>=MEDIAN(B2:B31)</code><button type="button" class="copy" data-copy-text="=MEDIAN(B2:B31)">복사</button></div></li>
-      <li><p>기준 점수를 정하고 그보다 낮은 학생 수를 세요.</p>
-        <div class="fx"><code>=COUNTIF(B2:B31,"&lt;60")</code><button type="button" class="copy" data-copy-text='=COUNTIF(B2:B31,"&lt;60")'>복사</button></div></li>
-      <li><p>기준을 60에서 70으로 바꾸면 몇 명이 되는지 봐요.</p></li>
-      <li><p>이 데이터로 던질 수업 질문 하나를 한 문장으로 적어요.</p><p class="eg">예) 7주차에 무슨 일이 있었나?</p></li>
-    </ol>
-    <figure class="thr">
-      <div class="thr-top">
-        <p class="thr-n"><b data-thr-n>9</b><span>명</span></p>
-        <p class="thr-say" aria-live="polite"><span data-thr-say>60점 미만</span></p>
-      </div>
-      <div class="thr-chart" data-thr-chart></div>
-      <div class="thr-ctl">
-        <label for="thr">기준 점수 <b data-thr-v>60</b>점</label>
-        <div class="seg" role="group" aria-label="함께 볼 기준선">
-          <button type="button" aria-pressed="true" data-line="mean">평균 72</button>
-          <button type="button" aria-pressed="false" data-line="median">중앙값 78.5</button>
-        </div>
-        <input id="thr" type="range" min="40" max="90" step="5" value="60" data-thr>
-      </div>
-      <figcaption>기준 점수를 옮기면 그보다 낮은 학생이 빨갛게 바뀌어요. 2학년 3반 30명(가상 데이터).</figcaption>
-    </figure>
-    <p class="ok">확인 · 평균 72, 중앙값 78.5, 60점 미만 9명이 나오면 맞아요.</p>
-  </div>
-</section>
-
-<!-- 2부 -->
-<section class="part ink" id="make" aria-labelledby="make-h">
-  <div class="wrap part-g">
-    <p class="part-n" aria-hidden="true"><span>2</span></p>
-    <div class="part-t">
-      <p class="sh-k">2부 · 15:40 · 45분</p>
-      <h2 id="make-h">차트 만들기</h2>
-      <p class="part-lead">질문이 모양을 정해요</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec paper forms" id="forms" aria-labelledby="forms-h">
-  <div class="wrap">
-    <header class="sh">
-      <p class="sh-k">교재 10쪽 · 네 반의 12주 과제 제출률(가상 데이터)</p>
-      <h2 id="forms-h">질문 → 차트</h2>
-    </header>
-    <div class="morph">
-      <fieldset class="qs">
-        <legend class="sr-only">질문 고르기</legend>
-        <label><input type="radio" name="form" value="bar"><b>비교</b><span>어느 반이 가장 높을까?</span><i>막대</i></label>
-        <label><input type="radio" name="form" value="line" checked><b>변화</b><span>언제 달라졌을까?</span><i>꺾은선</i></label>
-        <label><input type="radio" name="form" value="dot"><b>분포</b><span>얼마나 퍼져 있을까?</span><i>점</i></label>
-      </fieldset>
-      <figure class="mfig">
-        <div class="mfig-stage" data-morph></div>
-        <figcaption><span data-morph-say aria-live="polite">선으로 보면 7주차가 보여요. 3반만 70%로 떨어져요.</span> <span class="mfig-src">12주 평균 1반 93.6% · 2반 87.3% · 3반 86.3% · 4반 82%</span></figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<section class="sec paper step" data-lp-step="s2" data-title="실습 2: 차트 만들기" data-minutes="30" aria-labelledby="s2-h">
-  <div class="wrap step-g">
-    <header class="step-h">
-      <p class="sh-k">실습 2 · 30분 · 교재 11쪽</p>
-      <h2 id="s2-h"><span class="step-n">2</span>차트 만들기</h2>
-    </header>
-    <ol class="todo">
-      <li><p>실습 1에서 적은 질문을 골라요.</p></li>
-      <li><p>질문에 맞는 차트 모양을 골라 그려요(시트의 차트 삽입).</p></li>
-      <li><p>강조색은 하나만: 말하고 싶은 선·막대 하나에만 색을 넣고 나머지는 회색으로.</p></li>
-      <li><p>차트 제목을 문장으로 바꿔요.</p><p class="eg">예) 3반 정답률은 7주차에 41%로 떨어졌다가 12주차에 73%로 돌아왔다</p></li>
-    </ol>
-    <div class="checks">
-      <h3>점검표</h3>
-      <ul data-checks="s2">
-        <li><label><input type="checkbox" value="zero"><span>막대는 0에서 시작</span></label></li>
-        <li><label><input type="checkbox" value="unit"><span>단위(%·점) 표시</span></label></li>
-        <li><label><input type="checkbox" value="src"><span>출처·기간 표시</span></label></li>
-        <li><label><input type="checkbox" value="one"><span>색은 하나만 강조</span></label></li>
-      </ul>
-      <p class="checks-n">표시는 이 기기에만 남아요.</p>
-    </div>
-    <p class="ok">확인 · 제목만 읽어도 무슨 일이 있었는지 아는 차트 한 장</p>
-  </div>
-</section>
-
-<!-- 3부 -->
-<section class="part ink" id="ai" aria-labelledby="ai-h">
-  <div class="wrap part-g">
-    <p class="part-n" aria-hidden="true"><span>3</span></p>
-    <div class="part-t">
-      <p class="sh-k">3부 · 16:25 · 40분</p>
-      <h2 id="ai-h">AI와 함께 해석하기</h2>
-      <p class="part-lead">AI는 계산하고, 판단은 교사가 해요</p>
-    </div>
-  </div>
-</section>
-
-<section class="sec paper step" data-lp-step="s3" data-title="실습 3: 프롬프트 쓰기" data-minutes="25" aria-labelledby="s3-h">
-  <div class="wrap">
-    <header class="step-h">
-      <p class="sh-k">실습 3 · 25분 · 교재 13쪽</p>
-      <h2 id="s3-h"><span class="step-n">3</span>프롬프트 쓰기</h2>
-    </header>
-    <p class="warn"><b>먼저</b>학생 이름·학번·연락처는 지우고 번호로 바꿔서 넣어요.</p>
-    <ol class="prompts">
-      <li><h3><span>1</span>정리</h3><p class="pr">너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.</p><button type="button" class="copy" data-copy-text="너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.">프롬프트 1 복사</button></li>
-      <li><h3><span>2</span>차트 제안</h3><p class="pr">이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.</p><button type="button" class="copy" data-copy-text="이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.">프롬프트 2 복사</button></li>
-      <li><h3><span>3</span>해석 검증</h3><p class="pr">네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.</p><button type="button" class="copy" data-copy-text="네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.">프롬프트 3 복사</button></li>
-    </ol>
-    <p class="ok">확인 · AI 답 가운데 '교실에서 직접 확인할 질문' 세 가지</p>
-    <div class="nb">
-      <p class="nb-t">복사한 프롬프트는 이 기기의 모음에 쌓여요. .txt로 받아 두세요.</p>
-      <div data-lp="notebook"></div>
-    </div>
-  </div>
-</section>
-
-<!-- 교재 -->
-<section class="sec paper2 kitsec" id="deck" aria-labelledby="deck-h">
+<!-- 교재: 쪽 그림과 부마다 한 줄 -->
+<section class="sec paper" id="deck" aria-labelledby="deck-h">
   <div class="wrap">
     <header class="sh sh-row">
-      <h2 id="deck-h">교재 넘기기</h2>
+      <h2 id="deck-h">교재</h2>
       <p class="sh-d">강사 화면과 함께 넘어가요. 놓친 쪽은 직접 넘겨 봐요.</p>
     </header>
-    <div data-lp="deck" data-pages="1-16"></div>
-  </div>
-</section>
-
-<!-- 확인 퀴즈 -->
-<section class="sec paper kitsec" id="quiz" aria-labelledby="quiz-h">
-  <div class="wrap">
-    <header class="sh sh-row">
-      <h2 id="quiz-h">세 문제로 확인</h2>
-      <p class="sh-d">교재 14쪽 · 정답은 강사가 공개해요.</p>
-    </header>
-    <div class="quiz-g">
-      <div data-lp="poll" data-id="q1" data-page="14" data-answer="2" data-question="'7주차에 무슨 일이 있었나?'에 가장 알맞은 차트는?" data-options='["막대","꺾은선","원","표"]'></div>
-      <div data-lp="poll" data-id="q2" data-page="14" data-answer="1" data-question="평균 72점·중앙값 78.5점인 반에서 알 수 있는 것은?" data-options='["낮은 점수 쪽에 학생 몇 명이 떨어져 있다","모두 70점대다","시험이 쉬웠다"]'></div>
-      <div data-lp="poll" data-id="q3" data-page="14" data-answer="1" data-question="AI에 학생 기록을 넣기 전에 할 일은?" data-options='["이름·학번을 번호로 바꾸기","파일을 압축하기","차트로 바꾸기"]'></div>
+    <div class="deck-g">
+      <div data-lp="deck" data-pages="1-16"></div>
+      <ol class="parts">
+        <li><b class="pn">1</b><p><strong>데이터 읽기</strong><span>평균은 이야기의 시작일 뿐이에요</span></p><a href="#deck-p5">5쪽</a></li>
+        <li><b class="pn">2</b><p><strong>차트 만들기</strong><span>질문이 모양을 정해요</span></p><a href="#deck-p9">9쪽</a></li>
+        <li><b class="pn">3</b><p><strong>AI와 함께 해석하기</strong><span>AI는 계산하고, 판단은 교사가 해요</span></p><a href="#deck-p12">12쪽</a></li>
+      </ol>
     </div>
   </div>
 </section>
 
-<!-- 질문 -->
-<section class="sec paper kitsec" id="qa" aria-labelledby="qa-h">
-  <div class="wrap qa-g">
-    <header class="sh">
-      <h2 id="qa-h">질문</h2>
-      <p class="sh-d">이름 없이 올라가요. 같은 궁금증이면 공감을 눌러 주세요.</p>
+<!-- 실습: 실습 쪽으로 -->
+<section class="sec ink" id="practice" aria-labelledby="pr-h">
+  <div class="wrap">
+    <header class="sh sh-row">
+      <h2 id="pr-h">실습</h2>
+      <p class="sh-d">실습마다 단계·복사할 원문·확인 도구를 따로 모았어요.</p>
     </header>
-    <div data-lp="qa"></div>
+    <ol class="rail">
+      <li><a href="practice.html#st-s1" data-st-link="s1"><b class="pn">1</b><span><strong>데이터 읽기</strong><em>25분 · 평균·중앙값·기준 아래 학생 수</em></span></a></li>
+      <li><a href="practice.html#st-s2" data-st-link="s2"><b class="pn">2</b><span><strong>차트 만들기</strong><em>30분 · 질문에 맞는 차트 한 장</em></span></a></li>
+      <li><a href="practice.html#st-s3" data-st-link="s3"><b class="pn">3</b><span><strong>프롬프트 쓰기</strong><em>25분 · 프롬프트 원문 세 개</em></span></a></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 질문·투표 -->
+<section class="sec paper" id="talk" aria-labelledby="talk-h">
+  <div class="wrap">
+    <header class="sh sh-row">
+      <h2 id="talk-h">질문 · 퀴즈</h2>
+      <p class="sh-d">질문은 이름 없이 올라가요. 퀴즈 정답은 강사가 공개해요. <a href="#deck-p14">교재 14쪽 보기</a></p>
+    </header>
+    <div class="talk-g">
+      <div data-lp="qa"></div>
+      <div class="quiz">
+        <div data-lp="poll" data-id="q-mean" data-page="5" data-answer="4" data-question="평균 72점인 반, 60점 미만 학생은 몇 명일까요?" data-options='["0~2명","3~5명","6~8명","9명 이상"]'></div>
+        <div data-lp="poll" data-id="q1" data-page="14" data-answer="2" data-question="'7주차에 무슨 일이 있었나?'에 가장 알맞은 차트는?" data-options='["막대","꺾은선","원","표"]'></div>
+        <div data-lp="poll" data-id="q2" data-page="14" data-answer="1" data-question="평균 72점·중앙값 78.5점인 반에서 알 수 있는 것은?" data-options='["낮은 점수 쪽에 학생 몇 명이 떨어져 있다","모두 70점대다","시험이 쉬웠다"]'></div>
+        <div data-lp="poll" data-id="q3" data-page="14" data-answer="1" data-question="AI에 학생 기록을 넣기 전에 할 일은?" data-options='["이름·학번을 번호로 바꾸기","파일을 압축하기","차트로 바꾸기"]'></div>
+      </div>
+    </div>
   </div>
 </section>
 
 <!-- 과제 -->
 <section class="sec paper task" id="task" aria-labelledby="task-h">
   <div class="wrap">
-    <header class="sh">
-      <p class="sh-k">과제 · 교재 15쪽</p>
-      <h2 id="task-h">데이터 한 장 보고서</h2>
+    <header class="sh sh-row">
+      <h2 id="task-h">과제 · 데이터 한 장 보고서</h2>
+      <p class="sh-d"><a href="#deck-p15">교재 15쪽 보기</a></p>
     </header>
     <div class="task-g">
       <div class="task-l">
@@ -397,20 +222,26 @@
   </div>
 </section>
 
-<!-- 마무리 -->
+<!-- 마무리: 설문·다시 찾기 -->
 <section class="sec ink end" id="end" aria-labelledby="end-h">
   <div class="wrap">
-    <h2 id="end-h" class="sr-only">마무리</h2>
-    <p class="quote kin"><span class="ln"><span>숫자는 학생을</span></span> <span class="ln"><span>대신하지 않아요.</span></span> <span class="ln"><span class="hot">숫자는 더 좋은 질문을</span></span> <span class="ln"><span class="hot">하게 해 줘요.</span></span></p>
+    <p class="quote kin"><span class="ln"><span>숫자는 학생을 대신하지 않아요.</span></span> <span class="ln"><span class="hot">숫자는 더 좋은 질문을 하게 해 줘요.</span></span></p>
     <div class="end-g">
       <div class="end-s">
-        <h3>만족도 조사</h3>
+        <h2 id="end-h">만족도 조사</h2>
         <div data-lp="survey" data-questions='[{"q":"오늘 연수가 수업에 도움이 될까요?","kind":"scale"},{"q":"가장 쓸모 있었던 실습은?","kind":"choice","options":["실습 1 데이터 읽기","실습 2 차트 만들기","실습 3 프롬프트 쓰기"]},{"q":"다음에 더 다뤘으면 하는 것","kind":"text"}]'></div>
       </div>
       <div class="end-c">
+        <h3>다시 찾기</h3>
+        <ul class="find">
+          <li><a href="files/가상-2학년3반-형성평가.csv" download>형성평가 CSV</a></li>
+          <li><a href="files/가상-2학년-주차별-기록.csv" download>주차별 기록 CSV</a></li>
+          <li><a href="practice.html">실습 쪽</a></li>
+          <li><a href="#deck">교재 넘기기</a></li>
+          <li><a href="assets/event.ics">달력에 담기</a></li>
+        </ul>
         <h3>문의</h3>
         <p>가온시교육연수원 수업혁신과 연수 담당<br><span class="mail">data-class@gaon-edu.example</span></p>
-        <p class="end-l"><a href="assets/event.ics">달력에 담기</a><a href="#top">맨 위로</a></p>
       </div>
     </div>
   </div>

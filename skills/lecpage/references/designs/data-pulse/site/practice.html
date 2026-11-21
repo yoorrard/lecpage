@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실습 · 학교 데이터로 수업 바꾸기</title>
+<meta name="description" content="실습 세 가지의 단계, 복사할 수식·프롬프트 원문, 확인 도구. 학교·기관·인물·수치는 연수용 가상 예시예요.">
+<meta name="theme-color" content="#0e0e0e">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body class="pg-practice">
+<a class="skip" href="#st-s1">본문으로 건너뛰기</a>
+<div class="progress" aria-hidden="true"></div>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <a class="brand" href="index.html"><svg viewBox="0 0 44 18" aria-hidden="true"><path d="M1 7 5 6.5 9 5.5 13 7.5 17 9 21 11 25 16 29 12.5 33 11 37 9 41 7.5 43 7"/></svg><span>학교 데이터로 수업 바꾸기</span></a>
+    <nav aria-label="바로 가기">
+      <ul>
+        <li><a href="index.html">오늘</a></li>
+        <li><a href="#st-s1" data-st-link="s1">실습 1</a></li>
+        <li><a href="#st-s2" data-st-link="s2">실습 2</a></li>
+        <li><a href="#st-s3" data-st-link="s3">실습 3</a></li>
+        <li><a href="index.html#deck">교재</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<div class="hairs" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+
+<main>
+<section class="phead ink" aria-labelledby="t">
+  <div class="wrap phead-g">
+    <div>
+      <p class="sh-k">학교 데이터로 수업 바꾸기 · 실습 세 가지</p>
+      <h1 id="t">실습</h1>
+    </div>
+    <div class="phead-r">
+      <p class="phead-n"><b data-st-count>0 / 3</b><span>끝냄</span></p>
+      <progress data-st-progress max="3" value="0">끝낸 실습</progress>
+    </div>
+    <p class="phead-d">예시 데이터 <a href="files/가상-2학년3반-형성평가.csv" download>형성평가 CSV</a> · <a href="files/가상-2학년-주차별-기록.csv" download>주차별 기록 CSV</a></p>
+  </div>
+</section>
+
+<!-- 실습 1 -->
+<section class="sec paper step" data-lp-step="s1" data-title="실습 1: 데이터 읽기" data-minutes="25" aria-labelledby="s1-h">
+  <div class="wrap step-g">
+    <header class="step-h">
+      <p class="sh-k">14:45 1부 안 · 25분 · <a href="index.html#deck-p8">교재 8쪽 보기</a></p>
+      <h2 id="s1-h"><span class="step-n">1</span>데이터 읽기</h2>
+      <p class="step-key">평균은 이야기의 시작일 뿐이에요.</p>
+    </header>
+    <ol class="todo">
+      <li><p>「가상-2학년3반-형성평가」 시트에서 평균과 중앙값을 구해요.</p>
+        <div class="fx"><code>=AVERAGE(B2:B31)</code><button type="button" class="copy" data-copy-text="=AVERAGE(B2:B31)">복사</button></div>
+        <div class="fx"><code>=MEDIAN(B2:B31)</code><button type="button" class="copy" data-copy-text="=MEDIAN(B2:B31)">복사</button></div></li>
+      <li><p>기준 점수를 정하고 그보다 낮은 학생 수를 세요.</p>
+        <div class="fx"><code>=COUNTIF(B2:B31,"&lt;60")</code><button type="button" class="copy" data-copy-text='=COUNTIF(B2:B31,"&lt;60")'>복사</button></div></li>
+      <li><p>기준을 60에서 70으로 바꾸면 몇 명이 되는지 봐요.</p></li>
+      <li><p>이 데이터로 던질 수업 질문 하나를 한 문장으로 적어요.</p><p class="eg">예) 7주차에 무슨 일이 있었나?</p></li>
+    </ol>
+    <figure class="thr">
+      <p class="tool-k">확인 도구 · 시트에서 센 수와 맞는지 봐요</p>
+      <div class="thr-top">
+        <p class="thr-n"><b data-thr-n>9</b><span>명</span></p>
+        <p class="thr-say" aria-live="polite"><span data-thr-say>60점 미만</span></p>
+      </div>
+      <div class="thr-chart" data-thr-chart></div>
+      <div class="thr-ctl">
+        <label for="thr">기준 점수 <b data-thr-v>60</b>점</label>
+        <div class="seg" role="group" aria-label="함께 볼 기준선">
+          <button type="button" aria-pressed="true" data-line="mean">평균 72</button>
+          <button type="button" aria-pressed="false" data-line="median">중앙값 78.5</button>
+        </div>
+        <input id="thr" type="range" min="40" max="90" step="5" value="60" data-thr>
+      </div>
+      <figcaption>점 하나가 학생 한 명이에요. 2학년 3반 30명(가상 데이터).</figcaption>
+    </figure>
+    <p class="ok">확인 · 평균 72, 중앙값 78.5, 60점 미만 9명이 나오면 맞아요.</p>
+  </div>
+</section>
+
+<!-- 실습 2 -->
+<section class="sec paper2 step" data-lp-step="s2" data-title="실습 2: 차트 만들기" data-minutes="30" aria-labelledby="s2-h">
+  <div class="wrap step-g">
+    <header class="step-h">
+      <p class="sh-k">15:40 2부 안 · 30분 · <a href="index.html#deck-p11">교재 11쪽 보기</a></p>
+      <h2 id="s2-h"><span class="step-n">2</span>차트 만들기</h2>
+      <p class="step-key">질문이 모양을 정해요.</p>
+    </header>
+    <div class="step-l">
+      <ol class="todo">
+        <li><p>실습 1에서 적은 질문을 골라요.</p></li>
+        <li><p>질문에 맞는 차트 모양을 골라 그려요(시트의 차트 삽입).</p></li>
+        <li><p>강조색은 하나만: 말하고 싶은 선·막대 하나에만 색을 넣고 나머지는 회색으로.</p></li>
+        <li><p>차트 제목을 문장으로 바꿔요.</p><p class="eg">예) 3반 정답률은 7주차에 41%로 떨어졌다가 12주차에 73%로 돌아왔다</p></li>
+      </ol>
+      <div class="checks">
+        <h3>점검표</h3>
+        <ul data-checks="s2">
+          <li><label><input type="checkbox" value="zero"><span>막대는 0에서 시작</span></label></li>
+          <li><label><input type="checkbox" value="unit"><span>단위(%·점) 표시</span></label></li>
+          <li><label><input type="checkbox" value="src"><span>출처·기간 표시</span></label></li>
+          <li><label><input type="checkbox" value="one"><span>색은 하나만 강조</span></label></li>
+        </ul>
+        <p class="checks-n">표시는 이 기기에만 남아요.</p>
+      </div>
+    </div>
+    <figure class="mfig">
+      <p class="tool-k">고르기 도구 · 2단계에서 질문에 맞는 모양을 미리 봐요(교재 10쪽, 주차별 기록 CSV)</p>
+      <fieldset class="qs">
+        <legend class="sr-only">질문 고르기</legend>
+        <label><input type="radio" name="form" value="bar"><b>비교</b><span>어느 반이 가장 높을까?</span><i>막대</i></label>
+        <label><input type="radio" name="form" value="line" checked><b>변화</b><span>언제 달라졌을까?</span><i>꺾은선</i></label>
+        <label><input type="radio" name="form" value="dot"><b>분포</b><span>얼마나 퍼져 있을까?</span><i>점</i></label>
+      </fieldset>
+      <div class="mfig-stage" data-morph></div>
+      <figcaption><span data-morph-say aria-live="polite">선으로 보면 7주차가 보여요. 3반만 70%로 떨어져요.</span> <span class="mfig-src">네 반의 12주 과제 제출률(가상 데이터)</span></figcaption>
+    </figure>
+    <p class="ok">확인 · 제목만 읽어도 무슨 일이 있었는지 아는 차트 한 장</p>
+  </div>
+</section>
+
+<!-- 실습 3 -->
+<section class="sec paper step" data-lp-step="s3" data-title="실습 3: 프롬프트 쓰기" data-minutes="25" aria-labelledby="s3-h">
+  <div class="wrap">
+    <header class="step-h">
+      <p class="sh-k">16:25 3부 안 · 25분 · <a href="index.html#deck-p13">교재 13쪽 보기</a></p>
+      <h2 id="s3-h"><span class="step-n">3</span>프롬프트 쓰기</h2>
+      <p class="step-key">AI는 계산하고, 판단은 교사가 해요.</p>
+    </header>
+    <p class="warn"><b>먼저</b>학생 이름·학번·연락처는 지우고 번호로 바꿔서 넣어요.</p>
+    <ol class="prompts">
+      <li><h3><span>1</span>정리</h3><p class="pr">너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.</p><button type="button" class="copy" data-copy-text="너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.">프롬프트 1 복사</button></li>
+      <li><h3><span>2</span>차트 제안</h3><p class="pr">이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.</p><button type="button" class="copy" data-copy-text="이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.">프롬프트 2 복사</button></li>
+      <li><h3><span>3</span>해석 검증</h3><p class="pr">네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.</p><button type="button" class="copy" data-copy-text="네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.">프롬프트 3 복사</button></li>
+    </ol>
+    <p class="ok">확인 · AI 답 가운데 '교실에서 직접 확인할 질문' 세 가지</p>
+    <div class="nb">
+      <p class="nb-t">복사한 수식·프롬프트는 이 기기의 모음에 쌓여요. .txt로 받아 두세요.</p>
+      <div data-lp="notebook"></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot ink">
+  <div class="wrap foot-in">
+    <p><a href="index.html">오늘 쪽으로</a> · <a href="index.html#talk">질문하기</a> · <a href="index.html#task">과제</a></p>
+    <p>이 사이트의 학교·기관·인물·수치는 모두 연수용 가상 예시예요.</p>
+  </div>
+</footer>
+</body>
+</html>

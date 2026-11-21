@@ -1,13 +1,62 @@
 {
   "id": "data-pulse",
   "title": "학교 데이터로 수업 바꾸기",
-  "mood": "스위스 격자 위 데이터 이야기: 잉크·종이 두 색에 신호색 하나, 아주 큰 좁은 숫자, 스크롤과 손으로 그려지는 차트가 교재의 그림을 직접 만지게 하는 연수 당일용 사이트",
+  "mood": "스위스 격자 위 연수 당일 도구: 잉크·종이 두 색에 신호색 하나, 아주 큰 좁은 숫자, 첫 화면의 지금 칸과 기록 1,440칸. 교재 설명은 쪽 그림에 맡기고 실습 도구만 직접 만지게",
   "audience": "teachers",
-  "material": { "file": "material/교재.pdf", "pages": 16, "format": "16:9 실습 교재" },
-  "kit": ["attend", "poll", "poll(quiz)×4", "step×3", "materials", "notebook", "deck", "qa", "board", "survey"],
-  "features": ["qa", "poll", "board", "attendance", "survey", "help", "reactions", "deck", "materials", "timer", "progress"],
-  "fonts": { "display": "Pretendard 800", "body": "Pretendard 400–700", "numbers": "Archivo 62% 폭 800(숫자만)" },
-  "colors": { "light": { "paper": "#f2f1ec", "paper2": "#e7e5de", "ink": "#0e0e0e", "signal": "#f2441a", "signalText": "#c2370f", "line": "#cbc8bd" } },
-  "motion": ["첫 화면: 기록 1,440칸 채우기·숫자 세기·12주 선 긋기", "스크롤 이야기: 점 30개가 네 단계로 옮겨 감(sticky, 휴대폰은 옆으로 넘김)", "짐작해 그리기·기준 점수 밀대·차트 모양 바꾸기", "CSS 스크롤 타임라인: 진행 막대·숫자 띠·부 번호", "모두 prefers-reduced-motion이면 정지 모습"],
-  "notCopy": "숫자로 말하는 데이터 교재에 맞춘 판단이에요. 다른 연수에 신호색·좁은 숫자·벌떼 그림을 그대로 옮기지 마세요."
+  "material": {
+    "file": "material/교재.pdf",
+    "pages": 16,
+    "format": "16:9 실습 교재"
+  },
+  "kit": [
+    "attend",
+    "materials",
+    "poll",
+    "poll(quiz)×4",
+    "deck",
+    "step×3",
+    "notebook",
+    "qa",
+    "board",
+    "survey"
+  ],
+  "features": [
+    "qa",
+    "poll",
+    "board",
+    "attendance",
+    "survey",
+    "help",
+    "reactions",
+    "deck",
+    "materials",
+    "timer",
+    "progress"
+  ],
+  "fonts": {
+    "display": "Pretendard 800",
+    "body": "Pretendard 400–700",
+    "numbers": "Archivo 62% 폭 800(숫자만)"
+  },
+  "colors": {
+    "light": {
+      "paper": "#f2f1ec",
+      "paper2": "#e7e5de",
+      "ink": "#0e0e0e",
+      "signal": "#f2441a",
+      "signalText": "#c2370f",
+      "line": "#cbc8bd"
+    }
+  },
+  "motion": [
+    "첫 화면: 제목 가려 올리기·지금 칸 펼치기·기록 1,440칸 채우기·12주 선 긋기",
+    "CSS 스크롤 타임라인 진행 막대",
+    "실습 도구: 기준 점수 밀대·차트 모양 고르기(점 48개가 옮겨 감)",
+    "모두 prefers-reduced-motion이면 정지 모습"
+  ],
+  "notCopy": "숫자로 말하는 데이터 교재에 맞춘 판단이에요. 다른 연수에 신호색·좁은 숫자·벌떼 그림을 그대로 옮기지 마세요.",
+  "pages": [
+    "index.html(오늘)",
+    "practice.html(실습)"
+  ]
 }
