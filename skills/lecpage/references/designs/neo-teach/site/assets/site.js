@@ -62,7 +62,8 @@
     });
     if (!fine) return;
     // 굵기 숨쉬기(가변 글꼴): 커서에 가까운 글자는 가늘게
-    var hero = $('[data-hero]'), mx = -1e4, my = -1e4, rects = [], cur = cs.map(function () { return 820; }), on = false, raf = 0;
+    var hero = h.closest('section') || $('[data-hero]'), mx = -1e4, my = -1e4, rects = [], cur = cs.map(function () { return 820; }), on = false, raf = 0;
+    if (!hero) return;
     function measure() { rects = cs.map(function (c) { var r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2 + scrollY]; }); }
     function frame() {
       raf = 0; var moving = false;
@@ -267,129 +268,24 @@
     start();
   }
 
-  /* ── 다섯 노드 그래프(SVG, 위에서 아래로): 스크롤 따라 신호가 내려가며 노드가 켜짐 ── */
-  var graph = null;
-  function buildGraph() {
-    var svg = $('[data-graph]'); if (!svg) return;
-    var NS = 'http://www.w3.org/2000/svg', R = rng(77), names = ['질문', '목표', '증거', '경험', '성찰'];
-    function el(n, a, p) { var e = d.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); (p || svg).appendChild(e); return e; }
-    var layers = names.map(function (nm, i) {
-      var y = 62 + i * 129, arr = [{ x: 260, y: y, main: 1 }];
-      var cnt = [4, 5, 6, 5, 4][i];
-      for (var k = 0; k < cnt; k++) { var side = k % 2 ? 1 : -1; arr.push({ x: 260 + side * (70 + R() * 150), y: y + (R() - .5) * 64, main: 0 }); }
-      return arr;
-    });
-    var ge = el('g', {}), gn = el('g', {}), edges = [], sats = [];
-    for (var i = 0; i < 4; i++) {
-      layers[i].forEach(function (a) {
-        var k = a.main ? 3 : 2;
-        for (var j = 0; j < k; j++) {
-          var b = layers[i + 1][1 + Math.floor(R() * (layers[i + 1].length - 1))], my = (a.y + b.y) / 2;
-          edges.push({ el: el('path', { class: 'e', d: 'M' + a.x.toFixed(1) + ' ' + a.y.toFixed(1) + ' C ' + a.x.toFixed(1) + ' ' + my.toFixed(1) + ', ' + b.x.toFixed(1) + ' ' + my.toFixed(1) + ', ' + b.x.toFixed(1) + ' ' + b.y.toFixed(1) }, ge), l: i });
-        }
-      });
-    }
-    var spineD = 'M260 62' + [1, 2, 3, 4].map(function (i) { var y0 = 62 + (i - 1) * 129, y1 = 62 + i * 129; return ' C 230 ' + (y0 + 50) + ', 290 ' + (y1 - 50) + ', 260 ' + y1; }).join('');
-    var spines = [1, 2, 3, 4].map(function (i) { var y0 = 62 + (i - 1) * 129, y1 = 62 + i * 129; return el('path', { class: 'sp', d: 'M260 ' + y0 + ' C 230 ' + (y0 + 50) + ', 290 ' + (y1 - 50) + ', 260 ' + y1 }, ge); });
-    var spineAll = el('path', { d: spineD, fill: 'none', stroke: 'none' }, ge), len = spineAll.getTotalLength();
-    layers.forEach(function (arr, i) { arr.slice(1).forEach(function (s) { sats.push({ el: el('circle', { class: 's', cx: s.x.toFixed(1), cy: s.y.toFixed(1), r: 5 + (R() * 2.5) }, gn), l: i }); }); });
-    var mains = layers.map(function (arr, i) {
-      var g = el('g', { class: 'm' }, gn);
-      el('circle', { class: 'halo', cx: 260, cy: arr[0].y, r: 54 }, g);
-      el('circle', { class: 'core', cx: 260, cy: arr[0].y, r: 31 }, g);
-      var t = el('text', { x: 260, y: arr[0].y }, g); t.textContent = names[i];
-      return g;
-    });
-    var sig = el('circle', { class: 'sig', r: 5, cx: 260, cy: 62 }, gn);
-    graph = { set: function (p) {
-      // p: -1(아직) … 0~4(노드 사이 연속값) … 5(지나감)
-      var act = Math.floor(p + .5);
-      mains.forEach(function (g, i) { g.classList.toggle('on', i <= act); g.classList.toggle('cur', i === act); });
-      spines.forEach(function (s, i) { s.classList.toggle('on', i < p); });
-      edges.forEach(function (e) { e.el.classList.toggle('on', e.l < act); });
-      sats.forEach(function (s) { s.el.classList.toggle('on', s.l < act); });
-      var q = clamp(p, 0, 4) / 4, pt = spineAll.getPointAtLength(len * q);
-      sig.setAttribute('cx', pt.x.toFixed(1)); sig.setAttribute('cy', pt.y.toFixed(1)); sig.style.opacity = p < 0 || p > 4.6 ? 0 : 1;
-    } };
-    graph.set(-1);
-    // 마우스로 살짝 기울이기
-    var stage = $('.stage');
-    if (stage && fine && !reduce) {
-      stage.parentNode.addEventListener('pointermove', function (e) {
-        var r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-        svg.style.setProperty('--ry', (-10 + x * 16).toFixed(2) + 'deg'); svg.style.setProperty('--rx', (8 - y * 10).toFixed(2) + 'deg');
-      });
-    }
-  }
-
-  /* ── 스크롤 하나로: 머리 막대 진행·첫 화면 카메라·노드 신호·교재 고리·맺음말 낱말·흐르는 띠 ── */
+  /* ── 스크롤: 머리 막대 진행선·첫 화면 카메라 ── */
   function scrollFx() {
-    var nav = $('[data-nav]'), hero = $('[data-hero]'), nl = $('[data-nlist]'), items = $$('[data-ni]'), ring = $('[data-ring]'), ringSec = $('[data-deck-sec]');
-    var quote = $('[data-quote]'), qWords = [], marquee = $('[data-marquee]');
-    if (quote) { splitWords($('blockquote p', quote), false); qWords = $$('.w', quote); }
-    if (ring) $$('img', ring).forEach(function (im, i, all) { im.style.transform = 'rotateY(' + (i * 360 / all.length) + 'deg) translateZ(var(--rad))'; });
-    var tick = false, lastY = scrollY, vel = 0, mx = 0, mW = 0;
+    var nav = $('[data-nav]'), hero = $('[data-hero]'), tick = false;
     function update() {
       tick = false;
-      var y = scrollY, vh = innerHeight, docH = de.scrollHeight - vh;
+      var y = scrollY, docH = de.scrollHeight - innerHeight;
       if (nav) nav.style.setProperty('--sp', docH > 0 ? clamp(y / docH, 0, 1).toFixed(4) : 0);
       if (hero && neural.setScroll) neural.setScroll(clamp(y / (hero.offsetHeight || 1), 0, 1));
-      // 노드: 화면 가운데에 가장 가까운 항목
-      if (nl && items.length) {
-        var c = vh * .5, p = -1, r0 = items[0].getBoundingClientRect(), rl = items[items.length - 1].getBoundingClientRect();
-        if (r0.top + r0.height / 2 > c) p = -1 + clamp(1 - (r0.top + r0.height / 2 - c) / (vh * .4), 0, 1) * .6;
-        else if (rl.top + rl.height / 2 < c) p = 4 + clamp((c - rl.top - rl.height / 2) / (vh * .5), 0, 1);
-        else for (var i = 0; i < items.length - 1; i++) {
-          var a = items[i].getBoundingClientRect(), b = items[i + 1].getBoundingClientRect(), ca = a.top + a.height / 2, cb = b.top + b.height / 2;
-          if (c >= ca && c < cb) { p = i + (c - ca) / (cb - ca); break; }
-        }
-        var act = Math.floor(p + .5);
-        items.forEach(function (it, k) { it.classList.toggle('on', k <= act && p > -.5); });
-        if (graph) graph.set(p);
-      }
-      // 교재 고리
-      if (ring && ringSec && !reduce) {
-        var rr = ringSec.getBoundingClientRect();
-        if (rr.bottom > 0 && rr.top < vh) ring.style.setProperty('--rot', (-((vh - rr.top) / (vh + rr.height)) * 150).toFixed(2) + 'deg');
-      }
-      // 맺음말: 화면 안에 있을 때만 낱말이 차례로 켜짐(밖에서는 늘 다 켜진 모습)
-      if (quote && qWords.length && !reduce) {
-        var qr = quote.getBoundingClientRect();
-        if (qr.bottom > 0 && qr.top < vh) {
-          var k = clamp((vh * .82 - qr.top) / (qr.height + vh * .3), 0, 1) * qWords.length * 1.15;
-          qWords.forEach(function (w, n) { w.style.opacity = n < k ? '' : '.2'; });
-        } else qWords.forEach(function (w) { w.style.opacity = ''; });
-      }
-      vel = lerp(vel, y - lastY, .3); lastY = y;
     }
     function onScroll() { if (!tick) { tick = true; requestAnimationFrame(update); } }
     addEventListener('scroll', onScroll, { passive: true }); addEventListener('resize', onScroll); update();
-    // 흐르는 띠: 늘 천천히, 스크롤하면 그 방향으로 빨라짐
-    if (marquee && !reduce) {
-      var mVisible = true, mLast = 0;
-      mW = marquee.scrollWidth / 2;
-      addEventListener('resize', function () { mW = marquee.scrollWidth / 2; });
-      if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { mVisible = es[0].isIntersecting; if (mVisible) requestAnimationFrame(mloop); }, { rootMargin: '60px' }).observe(marquee.parentNode);
-      var dir = 1;
-      function mloop(now) {
-        if (!mVisible || d.hidden) { mLast = 0; return; }
-        var dt = mLast ? Math.min(50, now - mLast) : 16; mLast = now;
-        if (Math.abs(vel) > .5) dir = vel > 0 ? 1 : -1;
-        mx -= (0.035 * dir + vel * .02) * dt;
-        vel = lerp(vel, 0, .05);
-        if (mW) { if (mx <= -mW) mx += mW; if (mx > 0) mx -= mW; }
-        marquee.style.transform = 'translate3d(' + mx.toFixed(2) + 'px,0,0)';
-        requestAnimationFrame(mloop);
-      }
-      requestAnimationFrame(mloop);
-    }
   }
 
   /* ── 머리 막대: 지금 보는 곳 ── */
   function navSpy() {
     var menu = $('[data-menu]'); if (!menu || !('IntersectionObserver' in window)) return;
     var pill = $('.menu-pill', menu), links = $$('a', menu);
-    var map = { flow: 'flow', ready: 'flow', nodes: 'nodes', lab: 'lab', safe: 'lab', deck: 'deck', quiz: 'ask', ask: 'ask', wrap: 'wrap' };
+    var map = { now: 'now', start: 'now', deck: 'deck', lab: 'deck', join: 'join', after: 'after' };
     function set(id) {
       links.forEach(function (a) {
         var on = a.getAttribute('href') === '#' + id;
@@ -413,28 +309,33 @@
     hs.forEach(function (h) { io.observe(h); });
   }
 
-  /* ── 지금 상태: 연수 전(남은 날)·중(지금 순서)·후(과제 마감) ── */
+  /* ── 지금 상태: 연수 전(남은 날)·중(지금 순서와 그 할 일로 가는 단추)·후(과제 마감) ── */
   function now() {
-    var chip = $('[data-now-chip]'), txt = $('[data-now-text]'), bar = $('[data-tbar]'), needle = $('[data-tbar-now]');
-    var rows = $$('.sched li'), dots = $$('[data-k-at]');
+    var chip = $('[data-now-chip]'), txt = $('[data-now-text]'), go = $('[data-now-go]'), bar = $('[data-tbar]'), needle = $('[data-tbar-now]');
+    var rows = $$('.sched li'), dots = $$('[data-k-at]'), cards = $$('[data-lab-at]');
     var DAY = '2026-12-09';
-    var names = { '14:00': '들어가며 · 출석과 첫 투표', '14:15': '1부 · 다섯 노드', '14:45': '실습 1 · 질문 노드', '15:25': '쉬는 시간', '15:35': '실습 2 · 증거 노드', '16:15': '실습 3 · 연결', '16:45': '마무리 · 확인 문제와 만족도 조사' };
     function kst(t) { return new Date(DAY + 'T' + t + ':00+09:00').getTime(); }
     function run() {
-      var n = Date.now(), s = kst('14:00'), e = kst('17:00');
-      rows.forEach(function (r) { r.classList.toggle('is-now', n >= kst(r.dataset.at) && n < kst(r.dataset.to)); });
-      dots.forEach(function (k) { k.classList.toggle('is-now', n >= kst(k.dataset.kAt) && n < kst(k.dataset.kTo)); });
-      if (bar) { var live = n >= s && n < e; bar.classList.toggle('is-live', live); if (live && needle) needle.style.setProperty('--now', ((n - s) / (e - s) * 100).toFixed(2) + '%'); }
+      var n = Date.now(), s0 = kst('14:00'), e = kst('17:00');
+      var on = function (a, b) { return n >= kst(a) && n < kst(b); };
+      rows.forEach(function (r) { r.classList.toggle('is-now', on(r.dataset.at, r.dataset.to)); });
+      dots.forEach(function (k) { k.classList.toggle('is-now', on(k.dataset.kAt, k.dataset.kTo)); });
+      cards.forEach(function (c) { c.classList.toggle('is-now', on(c.dataset.labAt, c.dataset.labTo)); });
+      if (bar) { var live = n >= s0 && n < e; bar.classList.toggle('is-live', live); if (live && needle) needle.style.setProperty('--now', ((n - s0) / (e - s0) * 100).toFixed(2) + '%'); }
       if (!txt) return;
       chip.classList.remove('is-live');
-      if (n < s) {
+      if (n < s0) {
         var today = new Date(n + 9 * 3600e3).toISOString().slice(0, 10), days = Math.round((Date.parse(DAY) - Date.parse(today)) / 864e5);
         txt.textContent = days > 0 ? 'D-' + days + ' · 12월 9일(수) 14:00 시작' : '오늘 14:00 시작';
       } else if (n < e) {
         var cur = rows.filter(function (r) { return r.classList.contains('is-now'); })[0];
         chip.classList.add('is-live');
-        txt.textContent = cur ? '지금 · ' + (names[cur.dataset.at] || '') + ' · ' + cur.dataset.to + '까지' : '연수 중이에요';
-      } else txt.textContent = '연수가 끝났어요 · 과제는 12월 23일(수)까지';
+        txt.textContent = cur ? '지금 · ' + $('.t', cur).textContent : '연수 중이에요';
+        if (go && cur && cur.dataset.go) { go.removeAttribute('download'); go.setAttribute('href', cur.dataset.go); go.textContent = '지금 할 일'; }
+      } else {
+        txt.textContent = '연수가 끝났어요 · 과제는 12월 23일(수)까지';
+        if (go) { go.removeAttribute('download'); go.setAttribute('href', '#after'); go.textContent = '과제 보기'; }
+      }
     }
     run(); setInterval(run, 30000);
   }
@@ -517,7 +418,6 @@
   function go() {
     kinetic();
     try { neural(); } catch (e) { var h = $('[data-hero]'); if (h) h.classList.add('no-gl'); de.classList.remove('gl-on'); }
-    buildGraph();
     scrollFx();
     navSpy();
     headings();

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>실습 · 질문이 먼저, AI는 그다음</title>
+<meta name="description" content="실습 세 가지의 할 일과 복사할 프롬프트. 질문 노드·증거 노드·연결.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05060a">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body class="p-lab">
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<div class="aura" aria-hidden="true"></div>
+<div class="cursor" aria-hidden="true"><i class="cursor-ring"></i><i class="cursor-dot"></i></div>
+
+<header class="nav" data-nav>
+  <div class="nav-in">
+    <a class="brand" href="index.html" aria-label="질문이 먼저, AI는 그다음 · 첫 화면으로">
+      <svg class="glyph" viewBox="0 0 30 20" aria-hidden="true"><path d="M5 10 C 12 10, 14 4, 24 4 M5 10 C 12 10, 14 16, 24 16" fill="none" stroke="#52d9ff" stroke-width="1.4" stroke-dasharray="2.4 2.4"/><circle cx="5" cy="10" r="3.6" fill="#ff6a3d"/><circle cx="24.5" cy="4" r="2.6" fill="#05060a" stroke="#a8ecff" stroke-width="1.4"/><circle cx="24.5" cy="16" r="2.6" fill="#05060a" stroke="#a8ecff" stroke-width="1.4"/></svg>
+      <span class="brand-t">질문이 먼저</span>
+    </a>
+    <nav class="menu" aria-label="연수 사이트 차례" data-menu>
+      <span class="menu-pill" aria-hidden="true"></span>
+      <a href="index.html#now">지금</a><a href="index.html#deck">교재</a><a href="lab.html" aria-current="page">실습</a><a href="index.html#join">참여</a><a href="index.html#after">자료</a>
+    </nav>
+  </div>
+  <span class="nav-progress" aria-hidden="true"></span>
+</header>
+
+<main id="main">
+<section class="lab-top" aria-labelledby="lab-h">
+  <div class="wrap">
+    <p class="hero-org"><span class="beacon" aria-hidden="true"></span><span class="num">14:45~16:45</span> · <a class="pg" href="index.html#deck-p8">교재 8–13쪽 보기</a></p>
+    <h1 id="lab-h" class="kin kin-sm" data-kin><span class="kin-l1">세 번의 실습,</span> <span class="kin-l2">세 개의 노드</span></h1>
+    <p class="safe"><span class="k-dot ion" aria-hidden="true"></span>프롬프트를 복사해 [ ] 자리만 바꿔요. AI에 학생 이름·성적·상담 내용은 넣지 않아요. <a class="pg" href="index.html#deck-p14">교재 14쪽 보기</a></p>
+    <nav class="rail" aria-label="실습 진행">
+      <a href="#st-s1" data-st-link="s1"><i aria-hidden="true"></i><b>실습 1</b><span>질문 노드</span></a>
+      <a href="#st-s2" data-st-link="s2"><i aria-hidden="true"></i><b>실습 2</b><span>증거 노드</span></a>
+      <a href="#st-s3" data-st-link="s3"><i aria-hidden="true"></i><b>실습 3</b><span>연결</span></a>
+      <p class="rail-c"><span><b class="num" data-st-count>0 / 3</b> 완료</span><progress data-st-progress max="3" value="0">0 / 3</progress></p>
+    </nav>
+  </div>
+</section>
+
+<div class="wrap">
+  <!-- 실습 1 -->
+  <section class="step" data-lp-step="s1" data-title="실습 1: 질문 노드 · 핵심 질문 만들기" data-minutes="40" aria-labelledby="s1-h">
+    <div class="step-grid">
+      <div class="step-l">
+        <span class="chain" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i></span>
+        <p class="step-k"><span class="num">14:45</span> · 실습 1 · 질문 노드 · 40분 · <a class="pg" href="index.html#deck-p8">교재 8쪽</a></p>
+        <h2 id="s1-h" class="step-h">핵심 질문 만들기</h2>
+        <p class="done"><b>결과</b>고쳐 쓴 핵심 질문 한 문장</p>
+        <ol class="todo">
+          <li>가져온 성취기준 하나를 프롬프트의 [성취기준] 자리에 붙여 넣어요.</li>
+          <li>AI가 낸 질문 10개를 세 기준으로 걸러요.</li>
+          <li>남은 질문 하나를 골라 내 말로 고쳐 써요.</li>
+          <li>짝과 바꿔 읽고, 짝의 질문에 첫 답을 달아 봐요.</li>
+        </ol>
+        <p class="crit"><b>거르는 기준</b>답이 하나로 정해지지 않는가 · 학생이 일상에서 쓰는 낱말인가 · 한 차시 안에 씨름할 수 있는 크기인가</p>
+      </div>
+      <div class="step-r">
+        <figure class="prompt spot">
+          <figcaption><span class="p-t">프롬프트 1 · 질문 후보 열 개 뽑기</span><a class="pg" href="index.html#deck-p9">교재 9쪽</a><button type="button" class="copy mag" data-copy-text="너는 [과목] 수업을 함께 설계하는 동료 교사야.
+성취기준: [성취기준 원문]
+학생: [학년], [우리 반 특징 한 줄]
+이 성취기준으로 학생이 한 차시 내내 붙잡고 씨름할 핵심 질문 10개를 만들어 줘.
+조건
+- 정답이 하나로 정해지지 않는 질문
+- 학생의 일상에서 쓰는 낱말로
+- 한 문장, 40자 안
+- 표로: 질문 / 학생이 처음 내놓을 법한 답 / 이 질문이 여는 개념">복사</button></figcaption>
+          <code class="code"><span class="l">너는 <i>[과목]</i> 수업을 함께 설계하는 동료 교사야.</span><span class="l">성취기준: <i>[성취기준 원문]</i></span><span class="l">학생: <i>[학년]</i>, <i>[우리 반 특징 한 줄]</i></span><span class="l">이 성취기준으로 학생이 한 차시 내내 붙잡고 씨름할 핵심 질문 10개를 만들어 줘.</span><span class="l">조건</span><span class="l">- 정답이 하나로 정해지지 않는 질문</span><span class="l">- 학생의 일상에서 쓰는 낱말로</span><span class="l">- 한 문장, 40자 안</span><span class="l">- 표로: 질문 / 학생이 처음 내놓을 법한 답 / 이 질문이 여는 개념</span></code>
+        </figure>
+        <div class="board" id="board">
+          <h3 class="h4">보드 · 다 했으면 핵심 질문을 올려요</h3>
+          <div data-lp="board" data-prompt="실습 1의 핵심 질문, 실습 3의 AI 사용 카드를 올려요."></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="break"><span class="num">15:25</span>쉬는 시간 10분</p>
+
+  <!-- 실습 2 -->
+  <section class="step" data-lp-step="s2" data-title="실습 2: 증거 노드 · 평가 과제와 루브릭" data-minutes="40" aria-labelledby="s2-h">
+    <div class="step-grid">
+      <div class="step-l">
+        <span class="chain" aria-hidden="true"><i></i><i></i><i class="on"></i><i></i><i></i></span>
+        <p class="step-k"><span class="num">15:35</span> · 실습 2 · 증거 노드 · 40분 · <a class="pg" href="index.html#deck-p10">교재 10쪽</a></p>
+        <h2 id="s2-h" class="step-h">평가 과제와 루브릭</h2>
+        <p class="done"><b>결과</b>수행 과제 한 개와 3수준 루브릭 한 장</p>
+        <ol class="todo">
+          <li>실습 1의 핵심 질문과 목표를 프롬프트에 넣어요.</li>
+          <li>AI가 낸 과제가 20분 안에 끝나는 크기인지 봐요.</li>
+          <li>점검 프롬프트로 초안의 약점을 묻고 루브릭을 고쳐요.</li>
+          <li>[AI 가능] 표시를 보고, 그 부분을 수업에서 어떻게 볼지 정해요.</li>
+        </ol>
+        <p class="crit"><b>마지막 확인</b>평가 요소 세 개가 모두 목표에서 나왔나 · '보통'과 '잘함'의 차이를 학생이 말할 수 있나 · AI 없이도 이 과제를 해낼 수 있나 · 점수는 내가 매기나</p>
+      </div>
+      <div class="step-r">
+        <figure class="prompt spot">
+          <figcaption><span class="p-t">프롬프트 2 · 과제와 루브릭 설계</span><a class="pg" href="index.html#deck-p10">교재 10쪽</a><button type="button" class="copy mag" data-copy-text="아래 핵심 질문과 목표로 수행 과제 하나와 루브릭을 설계해 줘.
+핵심 질문: [실습 1에서 고른 질문]
+목표: 학생은 [할 수 있게 될 일]
+조건
+- 수업 시간 안에 20분이면 끝나는 과제
+- 루브릭은 잘함·보통·노력 필요 3수준, 평가 요소 3개
+- 수준 설명은 학생이 읽고 알아들을 말로
+- AI가 대신 해 줄 수 있는 부분이 있으면 [AI 가능]이라고 표시">복사</button></figcaption>
+          <code class="code"><span class="l">아래 핵심 질문과 목표로 수행 과제 하나와 루브릭을 설계해 줘.</span><span class="l">핵심 질문: <i>[실습 1에서 고른 질문]</i></span><span class="l">목표: 학생은 <i>[할 수 있게 될 일]</i></span><span class="l">조건</span><span class="l">- 수업 시간 안에 20분이면 끝나는 과제</span><span class="l">- 루브릭은 잘함·보통·노력 필요 3수준, 평가 요소 3개</span><span class="l">- 수준 설명은 학생이 읽고 알아들을 말로</span><span class="l">- AI가 대신 해 줄 수 있는 부분이 있으면 [AI 가능]이라고 표시</span></code>
+        </figure>
+        <figure class="prompt spot">
+          <figcaption><span class="p-t">프롬프트 2-1 · 깐깐한 동료의 눈</span><a class="pg" href="index.html#deck-p11">교재 11쪽</a><button type="button" class="copy mag" data-copy-text="방금 만든 루브릭을 깐깐한 동료 교사의 눈으로 다시 봐 줘.
+1. 두 수준의 차이가 흐릿한 칸
+2. 학생이 AI 답을 옮겨 써도 '잘함'을 받을 수 있는 칸
+3. 목표와 이어지지 않는 평가 요소
+세 가지를 찾아 표로 보여 주고, 고친 문장을 제안해 줘.">복사</button></figcaption>
+          <code class="code"><span class="l">방금 만든 루브릭을 깐깐한 동료 교사의 눈으로 다시 봐 줘.</span><span class="l">1. 두 수준의 차이가 흐릿한 칸</span><span class="l">2. 학생이 AI 답을 옮겨 써도 '잘함'을 받을 수 있는 칸</span><span class="l">3. 목표와 이어지지 않는 평가 요소</span><span class="l">세 가지를 찾아 표로 보여 주고, 고친 문장을 제안해 줘.</span></code>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 실습 3 -->
+  <section class="step" data-lp-step="s3" data-title="실습 3: 연결 · AI 사용 카드 만들기" data-minutes="30" aria-labelledby="s3-h">
+    <div class="step-grid">
+      <div class="step-l">
+        <span class="chain link" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+        <p class="step-k"><span class="num">16:15</span> · 실습 3 · 연결 · 30분 · <a class="pg" href="index.html#deck-p12">교재 12쪽</a></p>
+        <h2 id="s3-h" class="step-h">AI 사용 카드 만들기</h2>
+        <p class="done"><b>결과</b>학생에게 나눠 줄 AI 사용 카드 한 장</p>
+        <ol class="todo">
+          <li>장면 하나(도입·전개·정리 중)와 역할 하나를 골라요.</li>
+          <li>카드에 옮기지 않는 장치와 개인정보 안내가 있는지 봐요.</li>
+          <li>보드에 카드를 올리고 다른 선생님 카드 두 장을 읽어요.</li>
+        </ol>
+        <p class="crit"><b>AI 역할</b>질문 상대 · 반론 제기자 · 피드백 도우미 · 자료 정리자 <a class="pg" href="index.html#deck-p13">예시 카드 교재 13쪽</a></p>
+      </div>
+      <div class="step-r">
+        <figure class="prompt spot">
+          <figcaption><span class="p-t">프롬프트 3 · AI 사용 카드 초안</span><a class="pg" href="index.html#deck-p13">교재 13쪽</a><button type="button" class="copy mag" data-copy-text="내 수업에서 학생이 AI를 쓰는 장면을 하나만 설계해 줘.
+수업 흐름: 도입 [한 줄] / 전개 [한 줄] / 정리 [한 줄]
+AI 역할: [질문 상대·반론 제기자·피드백 도우미·자료 정리자 중 하나]
+조건
+- 학생이 AI에게 보낼 첫 문장 예시 하나
+- AI 답을 그대로 옮기지 못하게 하는 장치 하나
+- &quot;이름·학교·연락처는 넣지 않아요&quot; 안내 한 줄
+학생에게 나눠 줄 'AI 사용 카드'를 5줄로 만들어 줘.">복사</button></figcaption>
+          <code class="code"><span class="l">내 수업에서 학생이 AI를 쓰는 장면을 하나만 설계해 줘.</span><span class="l">수업 흐름: 도입 <i>[한 줄]</i> / 전개 <i>[한 줄]</i> / 정리 <i>[한 줄]</i></span><span class="l">AI 역할: <i>[질문 상대·반론 제기자·피드백 도우미·자료 정리자 중 하나]</i></span><span class="l">조건</span><span class="l">- 학생이 AI에게 보낼 첫 문장 예시 하나</span><span class="l">- AI 답을 그대로 옮기지 못하게 하는 장치 하나</span><span class="l">- "이름·학교·연락처는 넣지 않아요" 안내 한 줄</span><span class="l">학생에게 나눠 줄 'AI 사용 카드'를 5줄로 만들어 줘.</span></code>
+        </figure>
+        <p class="next"><a class="pg" href="#board">보드에 올리기</a></p>
+      </div>
+    </div>
+  </section>
+
+  <nav class="after-lab" aria-label="실습 다음">
+    <p><span class="num">16:45</span> 다음 순서는 확인 문제와 만족도 조사예요.</p>
+    <a class="btn btn-ember mag" href="index.html#join"><span class="btn-t">확인 문제로</span><svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg></a>
+  </nav>
+</div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p class="foot-b"><svg class="glyph" viewBox="0 0 30 20" aria-hidden="true"><path d="M5 10 C 12 10, 14 4, 24 4 M5 10 C 12 10, 14 16, 24 16" fill="none" stroke="#52d9ff" stroke-width="1.4" stroke-dasharray="2.4 2.4"/><circle cx="5" cy="10" r="3.6" fill="#ff6a3d"/><circle cx="24.5" cy="4" r="2.6" fill="#05060a" stroke="#a8ecff" stroke-width="1.4"/><circle cx="24.5" cy="16" r="2.6" fill="#05060a" stroke="#a8ecff" stroke-width="1.4"/></svg>질문이 먼저, AI는 그다음</p>
+    <p class="foot-l"><a href="index.html">첫 화면</a><a href="files/실습프롬프트모음.txt" download>프롬프트 모음 받기</a><a href="privacy.html">개인정보 안내</a></p>
+    <p class="foot-s">예시용 가상 연수예요. 기관·강사·연락처는 실제가 아니에요.</p>
+  </div>
+</footer>
+</body>
+</html>
