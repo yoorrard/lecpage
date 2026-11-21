@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// lecpage 교재 쪽 그림 만들기: PPTX·HWPX·DOCX(…) → PDF(LibreOffice) → PNG(pdftoppm) → WebP(cwebp, 없으면 PIL, 그것도 없으면 PNG).
+// lecpage 교재 쪽 그림 만들기: PPTX·HWPX·DOCX(…) → PDF(LibreOffice, 없으면 이 PC의 PowerPoint·Keynote·Word·한글: studio-convert.mjs) → PNG(pdftoppm) → WebP(cwebp, 없으면 PIL, 그것도 없으면 PNG).
 // 셸·bash 없이 Node에서 프로그램을 바로 부름(윈도우·macOS·리눅스 같게). make가 부르고, 혼자도 돌림:
 //
 //   node render-slides.mjs <교재 파일> <출력 폴더> [dpi=110]
 //
 // 결과: <출력 폴더>/slide-001.webp, slide-002.webp …  환경 변수: KEEP_PDF=1(바꾼 PDF를 slides.pdf로 남김), WEBP_QUALITY(기본 82)
 // 필요: pdftoppm(poppler), PDF가 아니면 soffice(LibreOffice). 한글 글꼴이 깔려 있어야 쪽 그림의 글자가 깨지지 않아요.
-import { existsSync, mkdirSync, mkdtempSync, copyFileSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join, extname, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, copyFileSync, readdirSync, rmSync, statSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, extname, resolve, basename } from 'node:path';
 import { tmpdir, availableParallelism } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -62,9 +62,15 @@ export async function renderSlides(file, outDir, { dpi = 110, timeoutMs = 600000
     const ext = extname(file).slice(1).toLowerCase();
     let pdf = join(tmp, 'input.pdf');
     if (ext === 'pdf') copyFileSync(file, pdf);
-    else {
+    else if (!sofficePath() || process.env.LECPAGE_OFFICE_FIRST === '1') {
+      // LibreOffice가 없으면(보통의 윈도우·맥) 이 PC의 PowerPoint·Keynote·Word·한글로 PDF를 만듦(lecpage 커넥트와 같은 코드)
+      onProgress?.(0, pages, 'pdf');
+      const { convertToPdf } = await import('./studio-convert.mjs');
+      const r = await convertToPdf(basename(file), readFileSync(file));
+      if (!r.ok) return fail(r.error === 'no-app' ? `${r.message_ko} LibreOffice를 설치하거나, 교재를 PDF로 저장해 그 PDF를 함께 주세요.` : r.message_ko);
+      writeFileSync(pdf, r.pdf);
+    } else {
       const soffice = sofficePath();
-      if (!soffice) return fail('LibreOffice(soffice)가 없어요. 설치하거나, 교재를 PDF로 저장해 그 PDF를 함께 주세요.');
       const src = join(tmp, 'input.' + ext); copyFileSync(file, src);
       onProgress?.(0, pages, 'pdf');
       // 다른 LibreOffice와 부딪치지 않게 임시 프로필

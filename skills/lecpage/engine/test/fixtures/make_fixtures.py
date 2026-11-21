@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """lecpage ingest 테스트용 교재 견본 만들기.
 
-    python3 make_fixtures.py            # 이 폴더에 workshop.pptx, workshop.pdf, guide.docx, plan.hwpx, notes.md 생성
+    python3 make_fixtures.py            # 이 폴더에 workshop.pptx, workshop.pdf, guide.docx, plan.hwpx, notes.md, ko-cid.pdf, scan.pdf 생성
 
-필요: python-pptx, python-docx, Pillow, (PDF) LibreOffice soffice
+필요: python-pptx, python-docx, Pillow, (PDF) LibreOffice soffice, (ko-cid.pdf) reportlab
 내용은 모두 지어낸 것(가상의 학교·강사)입니다.
 """
 import io
@@ -406,6 +406,36 @@ MD = '''# 실습 메모
 '''
 
 
+def make_cid_pdf(path):
+    """글꼴을 담지 않은 한글 PDF(HYSMyeongJo-Medium, UniKS-UCS2-H): 공문·예전 PDF처럼 글자를 읽으려면 pdf.js가 한국어 CMap을 받아야 함"""
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    pdfmetrics.registerFont(UnicodeCIDFont('HYSMyeongJo-Medium'))
+    c = canvas.Canvas(path, pagesize=(960, 540), invariant=1)
+    for title, lines in [('생성형 AI로 수업 설계하기', ['2026 교원 직무연수 3차시', '강사 김하늘']),
+                         ('오늘의 순서', ['1. 생성형 AI 이해하기', '2. 프롬프트 실습', '3. 수업 지도안 만들기']),
+                         ('실습: 좋은 질문 만들기', ['아래 문장을 복사해 AI에게 물어보세요.', '결과를 모둠 보드에 올려 주세요.'])]:
+        c.setFont('HYSMyeongJo-Medium', 40); c.drawString(50, 440, title)
+        c.setFont('HYSMyeongJo-Medium', 24)
+        for i, line in enumerate(lines):
+            c.drawString(60, 360 - i * 46, line)
+        c.showPage()
+    c.save()
+
+
+def make_scan_pdf(path):
+    """글자 없이 쪽마다 그림 한 장인 PDF(스캔본): 글자는 그림 속에만 있음"""
+    pages = []
+    for title, color in [('스캔한 교재 1쪽', (11, 31, 75)), ('스캔한 교재 2쪽', (255, 107, 74))]:
+        im = Image.new('RGB', (480, 270), (250, 247, 240))
+        d = ImageDraw.Draw(im)
+        d.rectangle([0, 0, 480, 60], fill=color)
+        d.rectangle([30, 100, 300, 120], fill=(60, 60, 60)); d.rectangle([30, 140, 380, 156], fill=(120, 120, 120))
+        pages.append(im)
+    pages[0].save(path, save_all=True, append_images=pages[1:], resolution=72)
+
+
 def main():
     pptx = os.path.join(HERE, 'workshop.pptx')
     make_pptx(pptx)
@@ -413,6 +443,8 @@ def main():
     make_hwpx(os.path.join(HERE, 'plan.hwpx'))
     with open(os.path.join(HERE, 'notes.md'), 'w', encoding='utf-8') as f:
         f.write(MD)
+    make_cid_pdf(os.path.join(HERE, 'ko-cid.pdf'))
+    make_scan_pdf(os.path.join(HERE, 'scan.pdf'))
     soffice = shutil.which('soffice') or shutil.which('libreoffice')
     if soffice:
         with tempfile.TemporaryDirectory() as tmp:

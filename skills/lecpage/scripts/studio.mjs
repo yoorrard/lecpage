@@ -1100,6 +1100,7 @@ async function handleBridge(S, req, res, url) {
       return r.available ? sendJson(res, r.ok ? 200 : 500, { ...r, ...(await autostartState()) }) : fail(res, 409, 'unavailable', '받은 lecpage 커넥트 실행 파일로 켰을 때만 쓸 수 있어요.');
     }
   }
+  if (parts[0] === 'convert' && parts.length === 1) return (await import('./studio-convert.mjs')).handleConvert(S, req, res, url, { readBody, sendJson, fail }); // 깔린 PowerPoint·한글·Keynote·LibreOffice로 교재 → PDF
   if (parts[0] !== 'jobs') return fail(res, 404, 'not-found', '없는 주소예요.');
   if (parts.length === 1 && req.method === 'POST') {
     if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) return fail(res, 415, 'content-type', '본문은 application/json이어야 해요.');

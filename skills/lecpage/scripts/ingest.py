@@ -39,7 +39,7 @@ MESSAGES = {
     'unsupported': '이 형식은 아직 읽을 수 없어요. PPTX·PDF·HWP·HWPX·DOCX·TXT 가운데 하나로 저장해 올려 주세요.',
     'pdf-encrypted': '암호가 걸린 PDF예요. 암호를 해제한 PDF로 다시 저장해 올려 주세요.',
     'pdf-failed': 'PDF를 읽다가 문제가 생겼어요. 다른 프로그램에서 PDF로 다시 저장하거나 원본(PPTX·HWP·HWPX)을 올려 주세요.',
-    'no-text': '글자를 읽을 수 없는 PDF예요(스캔본이나 그림으로 된 PDF). 쪽 그림은 쓸 수 있지만, 내용은 직접 적어 주시거나 원본 파일을 올려 주세요.',
+    'no-text': '글자가 그림으로 들어 있는 PDF예요(스캔본 등). AI가 쪽 그림을 보고 읽어요.',
     'needs-library': '이 형식을 읽는 파이썬 라이브러리가 없어요. pip install pymupdf python-pptx python-docx 로 설치해 주세요.',
     'parse-failed': '파일 내용을 읽다가 문제가 생겼어요. 원본 프로그램에서 다시 저장해 올려 주세요. 계속 안 되면 PDF로 올려 주세요.',
     'not-found': '파일을 찾을 수 없어요.',
@@ -588,7 +588,14 @@ def columns(parts):
 
 def tangled_title(t):
     """뽑은 제목이 엉켰는지: 한 글자짜리 영문·숫자 낱말이 셋 이상(표 머리 A B C 등이 섞임). 엔진 kit/meta.js tangledTitle과 같은 규칙"""
-    return sum(1 for w in str(t or '').split() if re.match(r'^[A-Za-z0-9]$', w)) >= 3
+    s = str(t or '').strip()
+    if sum(1 for w in s.split() if re.match(r'^[A-Za-z0-9]$', w)) >= 3:
+        return True
+    chars = re.sub(r'\s', '', s)
+    if chars and not any(c.isalpha() for c in chars) and re.search(r'[^\d.]', chars):
+        return True
+    odd = len(re.findall(r'[!"#$%&*+<=>?@\[\\\]^_`{|}~]', chars))
+    return odd >= 3 and odd / len(chars) > 0.4
 
 
 def parse_pdf(path, fid, sink, warnings):

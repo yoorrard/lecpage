@@ -75,16 +75,22 @@ function licensesTxt() {
   return {
     name: 'lecpage-licenses',
     apply: 'build',
-    generateBundle() {
+    generateBundle(_, bundle) {
       const app = JSON.parse(read('package.json'));
       const out = [`lecpage web app — notices and third-party licenses
 This file carries the lecpage NOTICE and the copyright notices and license texts of the third-party code and fonts bundled in this build.
 lecpage license (Apache-2.0): https://github.com/yoorrard/lecpage/blob/main/LICENSE — the same Apache License 2.0 text is reproduced in the pdfjs-dist section below.
 Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOTICES.md`, `NOTICE\n\n${read('../NOTICE').trim()}`];
-      for (const name of Object.keys(app.dependencies || {})) {
+      // 직접 의존성 + 번들에 실제로 들어간 하위 패키지(교재 그리기 도구가 묶는 jszip·echarts 등). 번들 조각의 모듈 경로로 찾음
+      const inBundle = new Set();
+      for (const c of Object.values(bundle)) for (const id of Object.keys(c.modules || {})) { const m = /node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(id.replace(/\\/g, '/')); if (m) inBundle.add(m[1]); }
+      if (inBundle.has('jszip')) for (const n of ['pako', 'lie', 'immediate', 'setimmediate']) inBundle.add(n); // jszip 배포본(dist) 안에 함께 묶여 있음
+      for (const name of [...new Set([...Object.keys(app.dependencies || {}), ...[...inBundle].sort()])]) {
         const dir = `node_modules/${name}`;
+        if (!existsSync(here(`${dir}/package.json`))) continue;
         const pkg = JSON.parse(read(`${dir}/package.json`));
-        const file = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'fonts/OFL.txt', 'OFL.txt'].map((f) => `${dir}/${f}`).find((p) => existsSync(here(p)));
+        const named = readdirSync(here(dir)).find((f) => /^(licen[cs]e|copying)(\.(md|txt|markdown))?$/i.test(f));
+        const file = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'fonts/OFL.txt', 'OFL.txt', ...(named ? [named] : [])].map((f) => `${dir}/${f}`).find((p) => existsSync(here(p)));
         let text = file ? read(file).trim() : '';
         // 라이선스 파일에 저작권 줄이 없으면(pdf.js) 본체 머리말에서, 파일이 아예 없으면(qrcode-generator) 머리말로 MIT 전문을 만듭니다
         const main = pkg.main && existsSync(here(`${dir}/${pkg.main}`)) ? read(`${dir}/${pkg.main}`).slice(0, 4000) : '';

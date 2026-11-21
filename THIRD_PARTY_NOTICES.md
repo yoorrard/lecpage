@@ -11,6 +11,11 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [Preact](https://github.com/preactjs/preact) | 10.26.4 | MIT | 웹앱 |
 | [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) (Mozilla Foundation) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석. NOTICE 파일은 없음 |
 | [OpenJPEG](https://github.com/uclouvain/openjpeg) | PDF.js에 포함 | BSD-2-Clause | PDF.js 워커 안의 JPEG 2000 해석기 |
+| [pptx-renderer](https://github.com/aiden0z/pptx-renderer) (aiden0z) | 1.4.0 | Apache-2.0 | 웹앱: PPTX 교재를 브라우저 안에서 쪽 그림으로(PPTX를 넣을 때만 받음) |
+| [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) | 0.4.1 | Apache-2.0 | 웹앱: DOCX 교재를 브라우저 안에서 쪽 그림으로(DOCX를 넣을 때만 받음) |
+| [snapDOM](https://github.com/zumerlab/snapdom) (zumerlab) | 3.8.2 | MIT | 웹앱: 그린 슬라이드·쪽을 그림 파일로 |
+| [JSZip](https://github.com/Stuk/jszip) (pako·lie·immediate 포함) | 3.10.2 | MIT(MIT 또는 GPLv3 가운데 MIT로 씀) | 위 두 도구의 zip 읽기 |
+| [Apache ECharts](https://github.com/apache/echarts)·[ZRender](https://github.com/ecomfe/zrender)·[tslib](https://github.com/microsoft/tslib) | 6.1.0·6.1.0·2.3.0 | Apache-2.0·BSD-3-Clause·0BSD | pptx-renderer가 PPTX 속 차트를 그릴 때 |
 | [Wanted Sans](https://github.com/wanteddev/wanted-sans) (The Wanted Sans Project Authors) | 1.0.3 | SIL OFL 1.1 | 웹앱 글꼴. npm 패키지의 분할 woff2를 고치지 않고 그대로 실음(예약 글꼴 이름 없음) |
 | [models.dev](https://models.dev) 공개 모델 목록 (models.dev) | 매일 받음 | MIT | 웹앱 `ai-catalog.json`(AI 모델 값·출시일 표)의 일부. OpenRouter 공개 목록에 없는 모델만 이 목록에서 채움. `scripts/ai-catalog/refresh.mjs`가 하루 한 번 받아 모델 id·숫자·날짜만 담음 |
 

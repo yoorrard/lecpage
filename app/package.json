@@ -12,6 +12,9 @@
     "predev": "node scripts/prepare.mjs"
   },
   "dependencies": {
+    "@aiden0z/pptx-renderer": "1.4.0",
+    "@zumer/snapdom": "3.8.2",
+    "docx-preview": "0.4.1",
     "pdfjs-dist": "4.10.38",
     "preact": "10.26.4",
     "qrcode-generator": "1.4.4",

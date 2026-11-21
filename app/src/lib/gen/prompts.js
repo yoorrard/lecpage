@@ -83,7 +83,7 @@ function askOf({ request, reference, info } = {}) {
  * pack: material.js packMaterial 결과
  */
 export function buildMaterialPrompt(pack) {
-  const files = pack.files.map((f) => `- ${f.name}${f.pages ? ` (${f.pages}쪽)` : ''}: ${f.sent === 'original' ? '원본 그대로 첨부' : f.sent === 'images' ? '쪽 그림으로 첨부' : f.sent === 'text' ? '글자만(원본을 보낼 수 없는 형식)' : '보내지 못함'}`).join('\n');
+  const files = pack.files.map((f) => `- ${f.name}${f.pages ? ` (${f.pages}쪽)` : ''}: ${f.sent === 'original' ? (f.ext === 'pdf' || !f.via ? '원본 그대로 첨부' : `${f.via}로 만든 PDF로 첨부`) : f.sent === 'twin' ? '같은 이름의 PDF로 함께 첨부' : f.sent === 'images' ? '쪽 그림으로 첨부' : f.sent === 'text' ? '글자만(원본을 보낼 수 없는 형식)' : '보내지 못함'}`).join('\n');
   const imgs = pack.siteImages.length ? `사이트에 쓸 수 있는 교재 쪽 그림: material/p-001.webp ~ material/p-${String(pack.siteImages.length).padStart(3, '0')}.webp (번호 = 교재 쪽 번호${pack.siteImagesFrom ? `, ${pack.siteImagesFrom}` : ''})` : '교재 쪽 그림은 없어요.';
   const shots = pack.sentPages.length ? `\n쪽 그림으로 함께 보낸 쪽: ${pack.sentPages.join(', ')}` : '';
   // 코드가 뽑은 글자는 원본을 보내지 못한 교재의 쪽만(material.js packMaterial). 원본으로 보낸 교재의 글은 넣지 않음

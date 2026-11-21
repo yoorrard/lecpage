@@ -118,10 +118,17 @@ export function themeFromCss(css = '') {
 
 /**
  * 교재에서 뽑은 쪽 제목이 엉켰는지: 제목 줄에 표 머리(열 글자 A B C …)·번호 조각이 섞이면 한 글자짜리 영문·숫자 낱말이 셋 이상 생김.
+ * 글자 코드표가 없는 PDF는 한글이 ASCII 기호로 나옴(글자 없는 제목·기호가 4할 넘는 제목).
  * 엉킨 제목보다 빈 제목이 나음(교재 넘기기 캡션·강사 화면 쪽 목록). ingest(pdf.js·ingest.py)와 조립이 같은 규칙
  */
 export function tangledTitle(t) {
-  return String(t || '').trim().split(/\s+/).filter((w) => /^[A-Za-z0-9]$/.test(w)).length >= 3;
+  const s = String(t || '').trim();
+  if (s.split(/\s+/).filter((w) => /^[A-Za-z0-9]$/.test(w)).length >= 3) return true;
+  // 글자 코드표(ToUnicode)가 없는 PDF(예전 한글·일부 변환기)에서 한글이 기호로 바뀐 제목(",-", ":0;<=", "AI >?/@"): 글자가 없거나 드문 기호가 4할 넘음
+  const chars = s.replace(/\s/g, '');
+  if (chars && !/[\p{L}]/u.test(chars) && /[^\d.]/.test(chars)) return true;
+  const odd = (chars.match(/[!"#$%&*+<=>?@[\\\]^_`{|}~]/g) || []).length;
+  return odd >= 3 && odd / chars.length > 0.4;
 }
 
 /**

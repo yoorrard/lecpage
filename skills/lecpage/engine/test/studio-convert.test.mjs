@@ -1,0 +1,75 @@
+// lecpage 커넥트의 교재 → PDF(/bridge/convert): 프로그램 고르는 순서, 운영 체제별 부르는 꼴(가짜 실행), 실제 LibreOffice(있을 때), 경로의 짝 맞춤 확인
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as C from '../../scripts/studio-convert.mjs';
+import { startStudio } from '../../scripts/studio.mjs';
+import { sofficePath } from '../../scripts/render-slides.mjs';
+
+const FX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+const isPdf = (b) => Buffer.from(b).subarray(0, 5).toString('latin1') === '%PDF-';
+
+test('형식마다 그 형식을 만든 프로그램을 먼저(없는 프로그램은 빼고)', () => {
+  assert.deepEqual(C.appsFor('pptx', C.ORDER.win32), ['powerpoint', 'libreoffice']);
+  assert.deepEqual(C.appsFor('key', C.ORDER.darwin), ['keynote', 'libreoffice']);
+  assert.deepEqual(C.appsFor('pptx', C.ORDER.darwin), ['powerpoint', 'keynote', 'libreoffice']);
+  assert.deepEqual(C.appsFor('hwpx', C.ORDER.win32), ['hwp']);
+  assert.deepEqual(C.appsFor('docx', ['pages', 'libreoffice']), ['pages', 'libreoffice']);
+  assert.deepEqual(C.appsFor('pdf', C.ORDER.win32), []);
+});
+
+test('설치 확인: 윈도우는 COM 등록(reg query), macOS는 /Applications', () => {
+  const asked = [];
+  const win = C.detectApps({ platform: 'win32', fresh: true, soffice: () => '', run: (cmd, args) => { asked.push(args[1]); return { status: /PowerPoint|HWPFrame/.test(args[1]) ? 0 : 1 }; } });
+  assert.deepEqual(win, ['powerpoint', 'hwp']);
+  assert.ok(asked.includes('HKCR\\PowerPoint.Application\\CLSID'));
+  const mac = C.detectApps({ platform: 'darwin', fresh: true, home: '/Users/t', soffice: () => '/x/soffice', exists: (p) => /Keynote\.app$/.test(p) || p === '/Users/t/Applications/Microsoft Word.app' });
+  assert.deepEqual(mac, ['keynote', 'word', 'libreoffice']);
+  C.detectApps({ fresh: true }); // 다음 시험을 위해 이 PC 값으로 되돌림
+});
+
+test('윈도우: PowerShell -EncodedCommand + 경로는 환경 변수로(한글·따옴표가 명령 글에 섞이지 않게)', async () => {
+  let call = null;
+  const r = await C.convertWith('powerpoint', '교재 "1".pptx', new Uint8Array([1, 2]), { platform: 'win32', runImpl: async (cmd, args, o) => { call = { cmd, args, env: o.env }; writeFileSync(o.env.LP_OUT, '%PDF-1.4\n'); return { code: 0, out: '' }; } });
+  assert.ok(r.ok && isPdf(r.pdf));
+  assert.equal(call.cmd, 'powershell.exe');
+  const script = Buffer.from(call.args[call.args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+  assert.match(script, /PowerPoint\.Application/); assert.match(script, /SaveAs\(\$env:LP_OUT, 32\)/);
+  assert.match(script, /Presentations\.Count -eq 0/); // 사람이 열어 둔 발표는 닫지 않음
+  assert.match(call.env.LP_IN, /input\.pptx$/);
+});
+
+test('macOS: osascript에 경로를 인자로, 실패하면 다음 프로그램', async () => {
+  const calls = [];
+  const runImpl = async (cmd, args) => { calls.push(args[1]); if (/Keynote/.test(args[1])) writeFileSync(args[3], '%PDF-1.4\n'); return { code: /Keynote/.test(args[1]) ? 0 : 1, out: 'no' }; };
+  const r = await C.convertToPdf('a.pptx', new Uint8Array([1]), { platform: 'darwin', ids: ['powerpoint', 'keynote'], runImpl, home: '/nonexistent-home' });
+  assert.equal(r.ok, true); assert.equal(r.via, 'keynote'); assert.equal(r.tried.length, 2);
+  assert.match(calls[0], /Microsoft PowerPoint/); assert.match(calls[1], /export d to/);
+  const none = await C.convertToPdf('a.hwp', new Uint8Array([1]), { platform: 'darwin', ids: ['keynote'] });
+  assert.equal(none.error, 'no-app'); assert.match(none.message_ko, /찾지 못했어요/);
+});
+
+test('LibreOffice로 실제 변환(PPTX·DOCX → PDF)', { skip: !sofficePath() && 'LibreOffice 없음', timeout: 300000 }, async () => {
+  for (const f of ['workshop.pptx', 'guide.docx']) {
+    const r = await C.convertToPdf(f, readFileSync(join(FX, f)), { platform: 'linux', ids: ['libreoffice'] });
+    assert.ok(r.ok, f + ' ' + JSON.stringify(r.tried)); assert.ok(isPdf(r.pdf)); assert.equal(r.via, 'libreoffice');
+  }
+});
+
+test('/bridge/convert: 짝 토큰 확인 · 목록 · 받지 않는 형식', async () => {
+  const st = await startStudio({ remote: true, appUrl: 'http://127.0.0.1:9' });
+  try {
+    const base = st.url + 'bridge/convert'; const h = { 'x-lecpage-bridge': st.S.token, origin: st.S.origin };
+    assert.equal((await fetch(base, { headers: { origin: st.S.origin } })).status, 401);
+    const g = await (await fetch(base, { headers: h })).json();
+    assert.equal(g.ok, true); assert.ok(Array.isArray(g.apps)); assert.equal(typeof g.exts, 'object');
+    const bad = await fetch(base + '?name=a.exe', { method: 'POST', headers: { ...h, 'content-type': 'application/octet-stream' }, body: new Uint8Array([1]) });
+    assert.equal(bad.status, 400);
+    if (!sofficePath()) {
+      const r = await fetch(base + '?name=a.pptx', { method: 'POST', headers: { ...h, 'content-type': 'application/octet-stream' }, body: new Uint8Array([1]) });
+      assert.equal(r.status, 422); assert.equal((await r.json()).error, 'no-app');
+    }
+  } finally { await st.close(); }
+});
