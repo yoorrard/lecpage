@@ -15,7 +15,7 @@
 | 엔진 위치 | **skills/lecpage/engine 하나**를 skill과 웹앱이 함께 씀 | `npx skills add`로 받은 skill이 자체 완결, 복사본 없음 |
 | 실시간 | **어댑터 5종**(브라우저 미리보기·Supabase·Sheets·Cloudflare·자체 서버) + 공통 HTTP 프로토콜 | 인원·인프라·인터넷 없는 교실까지 대응 |
 | 참가자 로그인 | **로그인 없음, 참여 토큰** | Supabase 익명 로그인은 IP당 시간당 30회라 한 학교(공인 IP 하나)에서 31번째부터 막힘 |
-| AI 연결 | 키 붙여넣기(OpenAI · Claude, Gemini 무료 키는 보조) · 쓰던 AI 창에 복사·붙여넣기 · 로컬 에이전트 · skill | 구독 계정 로그인을 앱이 빌려 쓰지 않음 |
+| AI 연결 | 내 PC의 Claude Code·Codex(첫 추천) · 키 붙여넣기(Claude · OpenAI) · 쓰던 AI 창에 복사·붙여넣기 · skill. Gemini는 만들기에서 뺌(2026-11-21) | 구독 계정 로그인을 앱이 빌려 쓰지 않음 |
 | 웹앱 운영 | **로컬 우선 정적 PWA**, 로그인·운영자 DB 없음, Cloudflare Workers 정적 자산 + lecpage.com, GitHub Pages는 미러 | 운영비 0원(도메인 값만) |
 
 ## 3. 운영 방식 결정

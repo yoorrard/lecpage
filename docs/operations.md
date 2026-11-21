@@ -22,13 +22,13 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 구조 | **로컬 우선 정적 PWA**. 쪽 그림 그리기·사이트 조립·검수·미리보기·ZIP 만들기를 브라우저에서(교재 읽기와 사이트 쓰기는 사용자가 고른 AI가 하고, 교재 원본은 브라우저에서 그 AI 회사로 바로 감) | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
+| 구조 | **로컬 우선 정적 PWA**. 쪽 그림 그리기·사이트 조립·검수·교재 대조·미리보기·ZIP 만들기를 브라우저에서(교재 읽기와 사이트 쓰기는 사용자가 고른 AI가 교재 원본과 짧은 요청 한 번으로 하고, lecpage는 디자인·구성에 끼어들지 않음. 교재 원본은 고른 AI로만 감) | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
 | 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
 | 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |
 | 저장 | IndexedDB(프로젝트·이미지) + `.lecpage` 파일 내보내기/열기 + 저장 공간 보호(persist) | 다른 PC로 옮기기, 공용 PC 정리 |
-| AI | 사용자 키(BYOK) · 쓰던 AI 창에 복사·붙여넣기 · 내 PC의 Claude Code·Codex(연결 프로그램) · Agent Skill · 먼저 해보기(예시 교재, 키 없음) | 운영자 AI 비용 0. 구독 로그인 재사용은 약관 위반이라 구현하지 않음 |
+| AI | 추천 순서: 내 PC의 Claude Code·Codex(연결 프로그램 `npx -y github:yoorrard/lecpage studio`) → Claude·GPT 키(BYOK) → 쓰던 AI에 복사·붙여넣기. 그 밖에 Agent Skill, 먼저 해보기(같은 교재로 실제로 받은 답을 다시 보여 줌, 키 없음). Gemini는 만들기에서 뺌(2026-11-21) | 운영자 AI 비용 0. 앱이 구독 로그인을 대신 쓰는 것은 구현하지 않음(연결 프로그램은 강사가 직접 켜고 강사 PC의 Claude Code·Codex를 그대로 부름) |
 | 실시간 | **운영자 공용 중계 없음**. 바로 배포 사이트에 딸린 방만 맡음(§10). 강사 소유 백엔드를 쉽게: 클릭만 하는 50명 이하 연수는 Google Sheets(앱 안 안내 + 연결 확인), 가입 가능한 강사는 Deploy to Cloudflare 버튼 | 아래 §2 |
 | 생성 사이트 | 기본 공개 범위 "링크"(noindex + robots.txt Disallow). 선택: 공개·암호(AES-GCM, PBKDF2 60만 회). 강사용 파일은 올리는 사이트에서 빠짐 | 교재 저작권, GitHub Pages 무료는 공개 저장소 |
 | 분석 | **없음.** Cloudflare Workers 대시보드의 요청 수만 봄 | 쿠키·추적 없음. 처리방침이 단순해짐 |
@@ -181,7 +181,7 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 ## 12. AI 정보 매일 갱신 (자동, 2026-11-14부터)
 
-모델 값·출시일·Gemini 무료 등급은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
+모델 값·출시일·무료 등급은 몇 주마다 바뀝니다. 그래서 GitHub Actions의 'AI catalog' 워크플로([`.github/workflows/ai-catalog.yml`](../.github/workflows/ai-catalog.yml))가 **매일 한국 시간 새벽 4시 43분쯤** 공개 목록을 모아 `app/public/ai-catalog.json` 하나만 고쳐 `main`에 올립니다. 앱은 이 파일을 먼저 읽고 OpenRouter 실시간 목록이 오면 덮어씁니다. 근거와 설계: [AI 사실 문서 §7](research/ai-facts-2026-11-14.md).
 
 - **자동으로 바뀌는 것**: `ai-catalog.json`뿐. 값이 바뀌면 커밋하고, 값이 그대로면 '네 출처를 모두 받은 날'(`checked`)만 이틀에 한 번 새로 적어 커밋합니다(날마다 배포가 생기지 않게). 검사(급감·값이 한꺼번에 1/5~5배 밖·앞 판에 있던 추천이 빔·형식)에 하나라도 걸리면 그 파일도 그대로 둡니다.
 - **멈춤 감지**: 바로 배포 서버의 하루 점검이 `https://lecpage.com/ai-catalog.json`의 `checked`가 3일 넘게 묵으면 웹훅으로 알립니다(예약이 꺼졌거나 실패가 이어질 때도). 출처를 3일 넘게 다 받지 못하면 이슈에도 '모두 받은 마지막 날(N일 전)'이 사람이 볼 일로 올라옵니다.
@@ -197,7 +197,7 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 |---|---|---|
 | 문서·코드에 적힌 모델 이름이 지금 목록에 없어요 | 화면 안내·주석에 적힌 모델이 사라졌거나 이름이 바뀜 | 적힌 파일:줄의 문구를 지금 이름으로. 일부러 옛 이름을 둘 줄에는 `ai-catalog-ok` 주석 |
 | … 추천이 바뀌었어요: A → B | 앱이 고르는 모델이 바뀜(앱은 알아서 따라감) | 안내 문구에 옛 추천 이름이 있으면 고침. 그 회사 공식 문서의 권장과 맞는지 한 번 봄 |
-| Gemini 무료 등급 목록이 바뀌었어요 | 무료 키로 되는 모델이 늘거나 줄었음 | `ai-guides.jsx`(Gemini 한 줄·무료로 쓸 때)와 `AiConnect.jsx` 무료 키 안내가 맞는지 |
+| Gemini 무료 등급 목록이 바뀌었어요 | 무료 키로 되는 모델이 늘거나 줄었음 | 할 일 없음. 만들기에서 Gemini를 뺐어요(2026-11-21). 카탈로그 수집을 줄일 때 함께 정리 |
 | … 브라우저에서 바로 부를 수 없게 바뀌었어요 | 그 회사 API가 lecpage.com의 CORS 사전 요청을 거절 | 그 회사 키 연결이 안 됨. 공식 문서를 확인하고 `ai.js`(머리글)·안내를 고치거나, 그동안 키 연결 창에서 그 회사를 뒤로 |
 | 앱이 여는 주소가 열리지 않아요(404) | 키·결제 화면, 쓰던 AI 창 주소가 바뀜 | `ai.js`의 `PROVIDERS`(keyUrl·billingUrl)·`CHATBOTS` 주소와 키 안내 |
 | …을 받지 못했어요(404 등) · 표가 검사에 걸려 앞 판 값을 썼어요 | 출처 주소나 문서 형식이 바뀜 | `scripts/ai-catalog/lib.mjs`의 `SOURCES`·해석 함수를 고치고 `node --test "scripts/ai-catalog/test/*.test.mjs"` |
