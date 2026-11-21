@@ -103,6 +103,11 @@ try {
     // 2. 키 연결 창: Claude 카드의 [키로 연결] → 키 페이지 열기 → 붙여넣기
     await page.click('details.ai-more:not([open]) > summary').catch(() => { }); // API 키는 [다른 방법] 안에
     await page.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
+    // 길마다 처음 한 번 연결 동의(체크 + [연결]) 뒤에 키 연결 창
+    if (await page.waitForSelector('dialog[open] .consent', { timeout: 5000 }).then(() => true, () => false)) {
+      await page.check('dialog[open] .consent input[type=checkbox]');
+      await page.click('dialog[open] .consent button:has-text("연결")');
+    }
     await page.waitForSelector('dialog[open] .ai-connect');
     if (want('connect')) await shotOf('connect', 'dialog[open] .dlg-in');
     await page.click('dialog[open] .key-dots li:last-child button');
@@ -113,7 +118,7 @@ try {
     await page.click('dialog[open] .key-now button:has-text("연결")');
     await page.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 90000 });
     await page.click('.st-info button:has-text("이 정보가 맞아요")');
-    await page.waitForSelector('.pv-device iframe', { timeout: 30000 });
+    if (!tail) await page.waitForSelector('.pv-device iframe', { timeout: 30000 }); // 좁은 화면은 [수정] 쪽이 먼저라 미리보기를 그리지 않음
     await settle(2500);
     if (want('edit')) { await top(); await shot('edit'); }
 

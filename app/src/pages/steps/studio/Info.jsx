@@ -9,7 +9,7 @@ import { focusIn } from './Outline.jsx';
 // 고칠 때마다 버전 기록에 남음(change의 kind 'info', 잇따른 수정은 하나로). 일정·강사가 여럿이면 줄도 여럿.
 
 const FACT_OF = { title: ['연수명', '제목', '연수 제목'], date: ['날짜', '일시', '연수 날짜'], time: ['시간', '시각', '일시'], venue: ['장소'], instructor: ['강사', '강사명'], subtitle: ['부제', '부제목'], organizer: ['주최', '주관', '주최·주관'], contact: ['문의', '연락처', '문의처'] };
-const OPTIONAL = [['subtitle', '부제', 400, true], ['organizer', '주최', 120], ['contact', '문의', 120]];
+const OPTIONAL = [['subtitle', '부제', 400, true], ['organizer', '주최', 120, true], ['contact', '문의', 120, true]];
 const DAY = '일월화수목금토';
 const dayOf = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ''); return m ? DAY[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()] : ''; };
 /** 일시 한 줄: '12월 24일(목) 14:00~17:00' */
