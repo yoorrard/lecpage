@@ -21,7 +21,7 @@ const ABOUT = {
   vercel: { lead: '토큰 하나로 배포하고, 다시 배포해도 주소가 그대로예요.' },
   'github-pages': { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '저장소가 공개돼서 사이트 파일을 누구나 볼 수 있어요.' },
   cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.' },
-  netlify: { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '2026년 7월 28일 뒤에 가입했다면 배포한 뒤 Netlify에서 Make public을 눌러야 열려요. 무료는 한 달에 20번쯤 배포할 수 있어요.' },
+  netlify: { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '첫 배포 때 Netlify 팀의 로그인 보호를 자동으로 풀어 참가자가 바로 열어요. 무료는 한 달에 20번쯤 배포할 수 있어요.' },
   zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
@@ -467,7 +467,7 @@ function Netlify({ p, busy, start, done, bind, refresh }) {
   const run = () => start('netlify', async (files, onProgress) => {
     const out = await deployNetlify({ token: t.token, siteId: prev?.siteId, name: prev ? '' : name, zip: E.zipFiles(files), onProgress });
     done(out.url, { netlify: { siteId: out.siteId, url: out.url, name } });
-    toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소가 열리지 않으면 Netlify에서 Make public을 눌러 주세요.');
+    toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소에 로그인 창이 뜨면 Netlify 프로젝트의 접근 보호를 꺼 주세요.');
   }, (e) => { if (!/must be unique|already/i.test(e.message)) return tokenGone(e, t, refresh); toast('이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.'); return true; });
   bind(t.saved && nameOk ? run : null);
   return (

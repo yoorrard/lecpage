@@ -188,19 +188,19 @@ const BODY = {
       <li><b>Vercel</b>: 토큰을 한 번 붙여 넣어요. 다시 배포해도 주소가 그대로예요.</li>
       <li><b>GitHub Pages</b>: 토큰으로 배포해요. 사이트 파일이 저장소에 공개되고, 방문이 많아도 바로 멈추지 않아요.</li>
       <li><b>Cloudflare</b>: 받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.</li>
-      <li><b>Netlify</b>: 토큰으로 배포해요. 무료는 한 달 20번쯤이에요. 2026. 7. 28. 뒤 가입했다면 Make public을 눌러요.</li>
-      <li><b>ZIP 다운로드</b>: 기관 서버·NAS·USB로 나눌 때.</li></ul>
+      <li><b>Netlify</b>: 토큰으로 배포해요. 무료는 한 달 20번쯤이에요. 첫 배포 때 팀의 로그인 보호를 자동으로 풀어 참가자가 바로 열어요.</li>
+      <li><b>ZIP 다운로드</b>: 바로 내려받아요. 기관 서버·NAS·USB로 나눌 때.</li></ul>
     <p>앱이 멈출 걱정이 적은 곳을 먼저 권하고, 배포한 뒤 주소가 열리는지 확인해요. [설정 → 연결]에서 미리 연결해 두면 버튼 하나로 배포해요.</p>
     <div class="faq">
       <details><summary>짧은 주소와 QR</summary><ul><li>[짧은 주소 만들기]를 누르면 치기 쉬운 주소(is.gd)가 생겨요. joo.is·bit.ly 주소를 붙여 넣어도 돼요.</li><li>QR과 [주소 복사]는 늘 원래 주소예요.</li><li>짧은 주소는 짐작될 수 있어요. 지켜야 할 사이트는 공개 범위를 '암호를 아는 사람만'으로 해요.</li><li>QR은 크게 띄우거나, 그림으로 저장하거나, 안내문(A4)으로 인쇄해요.</li></ul></details>
       <details><summary>강사용 파일</summary><p>운영 안내·연수 정보·사이트 원본·인쇄본은 사이트에 올라가지 않아요. [강사용 파일 다운로드]로 따로 받아요.</p></details>
-      <details><summary>다음 기수·사이트 삭제</summary><ul><li>같은 연수를 다음 기수로 하면 복제해서 날짜를 고쳐 배포해요. 새 주소·새 QR이라 지난 기록과 섞이지 않아요.</li><li>같은 주소로 다시 배포할 때 지난 참여 기록이 남아 있으면 체크리스트의 '지난 기록'에서 비울지 그대로 둘지 골라요.</li><li>바로 배포한 사이트는 [사이트 삭제]로 지워요. 확인 창에 함께 지워질 기록이 나오니 필요한 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</li></ul></details>
+      <details><summary>다음 기수·사이트 삭제</summary><ul><li>같은 연수를 다음 기수로 하면 복제해서 날짜를 고쳐 배포해요. 새 주소·새 QR이라 지난 기록과 섞이지 않아요.</li><li>같은 주소로 다시 배포할 때 지난 참여 기록이 남아 있으면 체크리스트의 '지난 기록'에서 비울지 그대로 둘지 골라요.</li><li>바로 배포한 사이트는 [사이트 삭제]로 지워요. 지우거나 기간이 끝나면 예전 주소는 모두 안내 쪽으로 바뀌어요. 확인 창에 함께 지워질 기록이 나오니 필요한 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</li></ul></details>
     </div>
     <p>자세한 단계: <a href={`${REPO}/tree/main/skills/lecpage/references/deploy`} target="_blank" rel="noopener">배포 안내 모음</a></p>
   </>,
   skill: <>
     <h1 tabIndex={-1}>AI 에이전트에서 쓰기</h1>
-    <p>Claude Code·Codex·Cursor·Gemini CLI에 lecpage를 설치하면 대화로 만들어요.</p><p>쓰던 구독 그대로라 키가 필요 없어요.</p>
+    <p>Claude Code·Codex·Cursor 같은 AI 에이전트에 lecpage를 설치하면 대화로 만들어요.</p><p>쓰던 구독 그대로라 키가 필요 없어요.</p>
     <h2>설치 명령 한 줄</h2>
     <p><b>Claude Code</b> 대화창에서</p>
     <pre class="prompt-box" tabIndex={0}>/plugin install lecpage --marketplace yoorrard/lecpage</pre>
@@ -208,8 +208,6 @@ const BODY = {
     <p class="small muted">터미널에서는 <code>claude plugin install lecpage --marketplace yoorrard/lecpage</code>를 써요. 나눠 하려면 <code>/plugin marketplace add yoorrard/lecpage</code> 다음 <code>/plugin install lecpage@lecpage</code>예요.</p>
     <p><b>Codex</b> 대화창에서</p>
     <pre class="prompt-box" tabIndex={0}>$skill-installer https://github.com/yoorrard/lecpage/tree/main/skills/lecpage</pre>
-    <p><b>Gemini CLI</b> 터미널에서</p>
-    <pre class="prompt-box" tabIndex={0}>gemini skills install https://github.com/yoorrard/lecpage.git --path skills/lecpage</pre>
     <p><b>Cursor 등 그 밖의 도구</b> 터미널에서(위 도구에도 돼요)</p>
     <pre class="prompt-box" tabIndex={0}>npx skills add yoorrard/lecpage</pre>
     <p>claude.ai에서는 <code>skills/lecpage</code> 폴더를 ZIP으로 묶어 설정 → 기능 → 스킬 올리기로 넣어요.</p><p>그다음 "이 PPT로 연수 사이트 만들어 줘"라고 말해요.</p>

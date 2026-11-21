@@ -44,7 +44,7 @@ VERCEL_TOKEN=… npx vercel@65.8.0 deploy ./work/dist --prod --yes --project lec
 - 계정 없이 미리 보기만: `npx vercel@65.8.0 deploy ./work/dist --temporary`. 임시 주소이고, 화면에 나오는 시간 안에 **Claim Project**를 해야 남습니다. 연수 주소로 쓰지 않습니다.
 
 ## 명령어 없이
-- **앱**: 배포하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
+- **앱**: 배포하기에서 Vercel을 고르고 토큰을 붙여 넣은 뒤 [주소 만들기]. 첫 배포 때 앱이 계정의 배포 보호(Vercel Authentication)를 자동으로 끕니다. 앱이 `_headers`를 `vercel.json`으로 바꿔 올립니다.
 - **Vercel Drop**: https://vercel.com/drop 에 폴더나 ZIP을 놓고, 로그인해 팀과 프로젝트 이름을 고른 다음 **Deploy**. 헤더를 붙이려면 폴더 맨 위에 `vercel.json`을 넣어 둡니다. 계정 없이 올리면 임시 주소입니다(파일당 100MB·합계 1GB, **Claim Project**를 눌러야 남음).
 
 ## 다시 배포
@@ -62,7 +62,7 @@ Vercel은 `_headers`를 읽지 않습니다. 올리는 폴더 맨 위 `vercel.js
 ## 자주 막히는 곳
 | 증상 | 원인 → 대처 |
 |---|---|
-| 운영 주소에 Vercel 로그인 창(401) | 팀 기본값이 모든 배포 보호(All Deployments). 프로젝트 **Settings → Deployment Protection**에서 **Vercel Authentication**을 끕니다. 명령으로는 `curl -X PATCH "https://api.vercel.com/v9/projects/<프로젝트>" -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" -d '{"ssoProtection":null}'`(Full Account 토큰으로 팀 프로젝트를 고칠 때는 `?teamId=…`). 끄면 예전 배포 주소도 모두 공개됩니다 |
+| 운영 주소에 Vercel 로그인 창(401) | (앱 배포는 첫 배포 때 자동으로 끔) 팀 기본값이 모든 배포 보호(All Deployments). 프로젝트 **Settings → Deployment Protection**에서 **Vercel Authentication**을 끕니다. 명령으로는 `curl -X PATCH "https://api.vercel.com/v9/projects/<프로젝트>" -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" -d '{"ssoProtection":null}'`(Full Account 토큰으로 팀 프로젝트를 고칠 때는 `?teamId=…`). 끄면 예전 배포 주소도 모두 공개됩니다 |
 | 참가자만 로그인 창을 봄 | 배포별 주소를 나눠 줌 → 운영 주소로 다시 안내 |
 | "The token in VERCEL_TOKEN is not valid", 403 | 토큰이 틀렸거나 만료됐거나 범위 밖 → 새 토큰 |
 | 429 | 하루 100배포·업로드 5,000개를 넘음 → 다음 날. 급하면 다른 곳에 올림 |

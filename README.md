@@ -15,7 +15,7 @@
 |---|---|
 | **무엇** | PPT·PDF·한글(HWP·HWPX)·워드 교재로, 참가자가 강의 당일 휴대폰에 열어 두고 쓰는 그 강의의 사이트를 만들어요. 교재 넘기기·출석·질문·투표·퀴즈·나눔 보드·실습 단계, 강사 화면·발표 화면, 바로 배포와 QR 안내문까지 들어 있어요 |
 | **누가** | 강의·연수·워크숍을 하는 강사와 연수 담당자(학교·기업·공공기관·학원 등) |
-| **어떻게** | 고른 AI(ChatGPT·Claude 구독 계정, 쓰던 AI, API 키, AI 에이전트)가 교재 원본을 직접 읽고 사이트 전체를 만들어요. lecpage는 강의 사이트용 요청 설계와 디자인 라이브러리를 함께 건네 이 강의만의 디자인을 끌어내고, 강의 엔진으로 참여 기능·강사 화면·발표 화면·배포를 맡아요 |
+| **어떻게** | 고른 AI(ChatGPT·Claude 구독 계정, 쓰던 AI, API 키, AI 에이전트)가 교재 원본을 직접 읽고 강의 진행용 사이트 전체를 만들어요. 참고용 디자인 라이브러리는 선택이고, lecpage는 강의 엔진으로 참여 기능·강사 화면·발표 화면·배포를 맡아요 |
 
 ## 누구나 만들 수 있지만, 잘 만들어 나누려면 노하우가 필요합니다
 
@@ -53,17 +53,17 @@ lecpage는 그 노하우를 세 가지로 담아 AI에게 함께 건네요.
 
 1. **교재 넣기**: 교재 파일을 놓고, 바라는 점을 한 줄 적어요(선택).
 2. **AI 선택**: 추천 순서는 셋이에요.
-   - **ChatGPT·Claude 구독으로 연결(API 키 없이)**: [ChatGPT·Claude 계정으로 연결] → PC 프로그램을 한 번 받아 실행(Windows는 [`lecpage-studio.cmd`](https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.cmd)를 두 번 누름, macOS는 터미널에 `curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.sh | bash`) → lecpage.com이 다시 열리며 이 PC와 연결 → [ChatGPT 계정으로 로그인]이나 [Claude 계정으로 로그인]. 로그인하면 바로 만들기 시작하고, 사용량은 그 계정의 요금제에서 차감돼요. ChatGPT는 [Sign in with ChatGPT](https://developers.openai.com/siwc)(Plus·Pro)로 PC에서 OpenAI를 바로 부르고, Claude는 PC의 Claude Code를 써요(없으면 공식 설치 명령을 터미널 창에서 돌려 줘요). 로그인 정보는 PC에만 있어요. 자세히: [references/studio.md](skills/lecpage/references/studio.md)
+   - **ChatGPT·Claude 구독으로 연결(API 키 없이)**: [ChatGPT·Claude 계정으로 연결] → **lecpage 커넥트**를 한 번 받아 켜요(Windows는 [`lecpage-connect.cmd`](https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-connect.cmd)를 내려받아 두 번 누르고, macOS·Linux는 화면에 보이는 한 줄을 터미널에 붙여 넣어요: `curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-connect.sh | bash`) → lecpage.com이 다시 열리며 이 PC와 저절로 연결 → [ChatGPT 계정으로 로그인]이나 [Claude 계정으로 로그인]. 처음 연결할 때는 안내를 확인하고 체크한 뒤 [연결]을 눌러요. 로그인하면 바로 만들기 시작하고, 사용량은 그 계정의 요금제에서 차감돼요. ChatGPT는 [Sign in with ChatGPT](https://developers.openai.com/siwc)(Plus·Pro, Codex 설치 없이)로 PC에서 OpenAI를 바로 부르고, Claude는 PC에 설치한 Claude Code를 써요(설치·로그인 버튼이 화면에 있어요). 로그인 정보는 이 PC에만 있고, 요청은 이 PC에서 AI 회사로 바로 가요. 자세히: [references/studio.md](skills/lecpage/references/studio.md)
    - **설치 없이: 쓰던 AI로**: 프롬프트를 복사해 쓰던 ChatGPT·Claude 앱에 붙여 넣고 교재를 첨부해요. 답을 복사해 돌아와 붙여 넣어요. 무료 요금제도 돼요.
-   - **다른 방법**: Claude·GPT API 키(쓴 만큼 AI 회사에 직접 내요), PC의 Claude Code·Codex, AI 에이전트(Skill).
-3. **만들기·수정**: 교재 원본과 요청을 한 번에 보내면 AI가 사이트 전체를 만들어요. AI가 교재 원본을 직접 읽고 사실은 원문 그대로 옮기며, 찾은 쪽 번호를 함께 보여 줘요. lecpage는 참여 기능을 끼우고 휴대폰·PC 화면을 그려 넘치거나 낱말이 갈리는 곳을 알려 줘요. 미리보기에서 글자를 눌러 바로 고치거나 AI에게 수정을 요청해요(바뀐 파일만 받아요).
-4. **배포하기**: 가입 없이 바로 배포하거나 내 계정으로 배포해요. 배포 전에 예시 주소·지난 날짜 같은 것을 알려 주고, 주소·QR 안내문·카톡 안내 문구가 나와요. 연수 당일에는 강사 화면에서 발표 화면을 프로젝터에 띄워 교재 쪽을 함께 넘기고, 출석 명단을 고쳐요.
+   - **다른 방법**(접혀 있어요): Claude·GPT API 키(쓴 만큼 AI 회사에 직접 내요), Codex, AI 에이전트(Skill).
+3. **만들기·수정**: 교재 원본과 요청을 한 번에 보내면 AI가 사이트 전체를 만들어요. AI가 교재 원본을 직접 읽고 강의 진행 사이트를 만들어요. 교재 내용은 교재 넘기기와 강사의 강의로 전하고, 사이트에는 핵심 한두 줄만 담아요. 첫 쪽은 짧게, 긴 실습은 따로 쪽을 나눠 담을 수 있어요. lecpage는 참여 기능을 끼우고 휴대폰·PC 화면을 그려 넘치거나 낱말이 갈리는 곳을 알려 줘요. 미리보기에서 글자를 눌러 바로 고치거나 AI에게 수정을 요청해요(바뀐 파일만 받아요).
+4. **배포하기**: 가입 없이 바로 배포하거나 내 계정으로 배포해요(Vercel·Netlify는 첫 배포 때 계정의 기본 보호 설정을 자동으로 풀어 참가자가 바로 열어요. ZIP은 바로 내려받아요). 사이트를 지우거나 기간이 끝나면 예전 주소는 모두 안내 쪽으로 바뀌어요. 배포 전에 예시 주소·지난 날짜 같은 것을 알려 주고, 주소·QR 안내문·카톡 안내 문구가 나와요. 연수 당일에는 강사 화면에서 발표 화면을 프로젝터에 띄워 교재 쪽을 함께 넘기고, 출석 명단을 고쳐요.
 
 화면별 안내는 앱의 [도움말](https://lecpage.com/#/help/start)에 있어요.
 
 ### AI 에이전트에서 쓰기
 
-웹앱에서 만들 때 가장 쉬운 길은 위의 구독으로 연결(PC 프로그램)이에요. 대화창에서 바로 만들고 싶으면 쓰던 AI 에이전트(Claude Code·Codex 등)에 lecpage 스킬을 넣어요. 에이전트가 교재 원본을 직접 읽고 스킬의 요청 설계·디자인 라이브러리·레퍼런스로 사이트를 쓰고, lecpage는 쪽 그림 준비, 강의 기능(질문·투표·출석·실습 단계 등), 화면 살펴보기·배포를 맡아요. 쓰던 구독 그대로 쓰고, 만든 연수는 `.lecpage` 파일로 웹앱에서 열어 고치고 배포해요. 인터넷 배포 없이 노트북 한 대로 교실 와이파이 참여까지 하려면 스킬의 `serve work --live`를 써요([SKILL.md](skills/lecpage/SKILL.md)).
+웹앱에서 만들 때 가장 쉬운 길은 위의 구독으로 연결(lecpage 커넥트)예요. 대화창에서 바로 만들고 싶으면 쓰던 AI 에이전트(Claude Code·Codex 등)에 lecpage 스킬을 넣어요. 에이전트가 교재 원본을 직접 읽고 스킬의 요청 설계·디자인 라이브러리·레퍼런스로 사이트를 쓰고, lecpage는 쪽 그림 준비, 강의 기능(질문·투표·출석·실습 단계 등), 화면 살펴보기·배포를 맡아요. 쓰던 구독 그대로 쓰고, 만든 연수는 `.lecpage` 파일로 웹앱에서 열어 고치고 배포해요. 인터넷 배포 없이 노트북 한 대로 교실 와이파이 참여까지 하려면 스킬의 `serve work --live`를 써요([SKILL.md](skills/lecpage/SKILL.md)).
 
 | 도구 | 설치(한 줄) |
 |---|---|

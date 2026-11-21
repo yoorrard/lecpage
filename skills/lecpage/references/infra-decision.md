@@ -2,7 +2,7 @@
 
 > skill이 "배포·실시간" 단계에서 읽는 문서입니다. 순서: **1. 입력 모으기 → 2. `decide-infra` 실행(§4 규칙과 같은 결과) → 3. 경고 확인(§4 guards) → 4. 강사에게 설명(§9) → 5. 해당 `deploy/*.md`대로 올리기**.
 > 숫자는 2026-11-11에 공식 문서에서 다시 확인했습니다(`docs/research/hosting-2026-11.md`, §11 출처). 확인 못 한 값은 ⚠️ 표시.
-> 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교망에서 끊겨도 화면은 살아 있게**.
+> 원칙: **강사가 직접 소유**(강사 계정·강사 서버), **비용 0원에 가깝게**, **학교·회사 망에서 끊겨도 화면은 살아 있게**.
 > 배포할 곳의 기본값은 쓰는 사람에 따라 다릅니다. **앱(브라우저만, `skill: click`)은 Vercel**, **skill(명령 가능)은 Cloudflare Workers 정적 자산**.
 > skill이 만드는 사이트의 실시간은 언제나 **강사 소유 백엔드**입니다. 아무나 쓰는 공용 실시간 중계는 없습니다(이유: `docs/operations.md`). '바로 배포'(운영자가 켠 앱에서 가입 없이 올리는 선택 기능, 60일 보관. 그렇게 올린 사이트의 참여 기능까지 운영자 서버가 맡음)는 **skill이 직접 부르지 않고 앱으로 넘깁니다**: 강사에게 배포할 곳 계정이 없으면 `app work`로 `.lecpage` 파일을 만들고, 강사가 lecpage.com [저장한 파일 열기] → [배포하기]에서 가입 없이 배포합니다.
 
@@ -55,7 +55,7 @@
 | **skill(명령 가능)** | **Cloudflare Workers 정적 자산**(`wrangler deploy --assets`, 계정이 없으면 `--temporary`) · Vercel(`VERCEL_TOKEN`) · GitHub Pages(`gh`) · Netlify | `deploy/cloudflare.md` |
 | 25MB 넘는 파일이 있음, 또는 파일이 Cloudflare 한도(끌어 놓기 1,000개 · 명령으로 올리면 20,000개)를 넘음 | GitHub Pages (파일 하나 100MB까지). Cloudflare는 맨 뒤 | `deploy/github-pages.md` |
 | 사이트가 100MB를 넘음(위에 해당하지 않을 때) | Cloudflare (Vercel은 한 번에 100MB까지라 맨 뒤) | `deploy/cloudflare.md` |
-| 내 도메인을 붙일 계획, (skill) 학교망이 엄격함 | Cloudflare | `deploy/custom-domain-and-short-url.md` |
+| 내 도메인을 붙일 계획, (skill) 학교·회사 망이 엄격함 | Cloudflare | `deploy/custom-domain-and-short-url.md` |
 | 지난번에 올린 곳, 이미 연결해 둔 곳이 있음 | 그곳 먼저(Netlify는 이때만 앞에 옴) | 해당 가이드 |
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
@@ -260,7 +260,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     {"id":"G23","when":{"skill":"click","live":["supabase","cf-relay"]},"level":"info","warn":"클릭만 하는 강사에게 회원가입이 필요한 방법이 나옴(50명 초과)","fix":"supabase는 단계별 안내, cf-relay는 Deploy to Cloudflare 버튼(GitHub·GitLab 계정도 필요). 가입이 어렵다면 sheets로 줄이기(새로 읽기 10초, 반응 끄기)"},
     {"id":"G24","when":{"access":"password","static":["lan","zip"]},"level":"block","warn":"암호 보호는 https 주소에서만 열림(LAN http·file://에서는 내용이 안 보임)","fix":"access=link로 빌드. 인터넷에 올릴 때만 password"},
     {"id":"G25","when":{"static":"github-pages","access":["link","public"]},"level":"info","warn":"무료 GitHub Pages는 공개 저장소라 사이트 파일(교재 그림·원본 포함)을 누구나 내려받을 수 있음","fix":"교재 원본은 빼거나 access=password(파일까지 암호화)"},
-    {"id":"G26","when":{"static":"netlify"},"level":"warn","warn":"2026-07-28 이후 만든 Netlify 팀은 새 프로젝트가 비공개로 시작해 참가자가 못 봄","fix":"올린 뒤 강사가 프로젝트 화면에서 Make public. 로그아웃한 창에서 열리는지 확인"},
+    {"id":"G26","when":{"static":"netlify"},"level":"warn","warn":"2026-07-28 이후 만든 Netlify 팀은 새 프로젝트가 비공개로 시작해 참가자가 못 봄","fix":"앱은 첫 배포 때 보호를 자동으로 풂. 명령으로 올렸으면 로그아웃한 창에서 열리는지 확인하고 로그인 창이 뜨면 강사가 Visitor access에서 보호를 끔"},
     {"id":"G27","engine":true,"when":{"static":"vercel","siteMB":{"gt":100}},"level":"block","warn":"Vercel Hobby는 한 번에 올리는 파일 합계 100MB까지","fix":"github-pages. 파일이 25MB 이하이면 cloudflare도 됨"},
     {"id":"G28","engine":true,"when":{"static":"vercel","$or":[{"files":{"gt":4000}},{"expr":"participants * files * 3 > 800000"}]},"level":"warn","warn":"Vercel Hobby는 파일 업로드 하루 5,000개, CDN 요청 월 100만(엔진은 파일 수만 봄)","fix":"슬라이드 수·화질 줄이기 또는 cloudflare(요청 무제한)"},
     {"id":"G29","engine":true,"when":{"static":["cloudflare","cloudflare-pages-drop"],"maxFileMB":{"gt":25}},"level":"block","warn":"Cloudflare는 파일 하나 25MiB까지","fix":"영상은 유튜브 링크로, 또는 github-pages(파일 100MiB)"},
@@ -276,7 +276,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "cloudflare":   {"target":"cloudflare","guide":"deploy/cloudflare.md","template":"templates/deploy/cloudflare/(GitHub 연결·내 도메인 때만)","headers":"_headers","cost":"0","limits":"2만 파일·25MiB/파일, 정적 요청 무료·무제한. --temporary는 1,000파일·5MiB/파일, 60분 안에 claim","domain":"*.workers.dev"},
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
-    "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작 → Make public","domain":"*.netlify.app"},
+    "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작(앱 배포는 자동으로 보호를 풂)","domain":"*.netlify.app"},
     "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 `app work`로 넘김). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 60일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
@@ -313,7 +313,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | **Cloudflare Workers 정적 자산** | 정적 요청 무료·무제한, 2만 파일·파일당 25MiB(`--temporary`는 1,000파일·5MiB) | ✓ / 자동(도메인이 Cloudflare 영역이어야 함) | ★(skill이 wrangler로) | `Range` 요청에 전체를 200으로 줌(Safari 영상), 임시 계정은 60분 안에 claim | `deploy/cloudflare.md` |
 | **Cloudflare Pages(끌어 놓기)** | 정적 요청 무료·무제한, ZIP 그대로, 1,000파일·파일당 25MiB | ✓(하위 도메인은 CNAME만) / 자동 | ★ | 끌어 놓기로 만든 프로젝트는 나중에 Git 연결로 못 바꿈 | `deploy/cloudflare.md` |
 | **GitHub Pages** | 사이트 1GB, 파일 100MiB, 월 100GB(권고), 시간당 10빌드(권고) | ✓ / 자동 | ★★ | 공개 저장소만, 이메일 인증한 계정만 게시, 헤더 설정 불가(CSP는 meta), 그림이 많으면 API 제한 | `deploy/github-pages.md` |
-| **Netlify Free** | 월 300크레딧(배포 1회 15 → 한 달 20번, GB당 20) | ✓ / 자동 | ★ | **새 팀은 비공개로 시작(Make public)**, 크레딧 소진 시 계정의 모든 사이트 정지, 배지 | `deploy/netlify.md` |
+| **Netlify Free** | 월 300크레딧(배포 1회 15 → 한 달 20번, GB당 20) | ✓ / 자동 | ★ | **새 팀은 비공개로 시작(앱 배포는 첫 배포 때 자동으로 풂)**, 크레딧 소진 시 계정의 모든 사이트 정지, 배지 | `deploy/netlify.md` |
 | **Firebase Hosting(Spark)** | 저장 10GB, **전송 월 10GB** | ✓ / 자동 | ★★★ | 넘으면 다음 달 1일까지 사이트가 꺼짐 | `deploy/firebase.md` |
 | **AWS S3+CloudFront** | CloudFront 종량제 상시 무료 월 1TB·요청 1천만 ⚠️(요청 수는 2차 출처) | ✓ / ACM | ★★★ | 신규 계정 무료 플랜은 6개월 뒤 닫힘, 설정 실수로 과금 | `deploy/aws-s3-cloudfront.md` |
 | **AWS Amplify Hosting** | 신규 계정은 크레딧, 이후 GB당 $0.15 | ✓ / 자동 | ★★ | 트래픽 많으면 S3+CF보다 비쌈 | `deploy/aws-s3-cloudfront.md` |
@@ -387,7 +387,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 | GitHub Pages에 올렸는데 게시되지 않음 | 이메일 인증을 안 마친 계정 | 올리기 전에 인증 확인 | 인증 뒤 다시 push |
 | 글꼴이 깨지거나 효과가 안 나옴 | jsDelivr·Google Fonts 차단 | 글꼴 자체 호스팅 | 시스템 글꼴로도 내용은 보임(설계 원칙) |
 | 사이트가 "Site not available"(Netlify) | 월 크레딧 소진 → 계정 전체 정지 | 배포 횟수 줄이기, 큰 사이트는 Cloudflare | 다른 호스팅에 즉시 재배포(5분) |
-| 참가자에게 권한 없음 화면(Netlify) | 2026-07-28 이후 만든 팀은 새 프로젝트가 비공개 | 올린 뒤 **Make public**, 로그아웃한 창에서 확인 | Make public. 계정 없이 올린 Drop이면 claim부터 |
+| 참가자에게 권한 없음 화면(Netlify) | 2026-07-28 이후 만든 팀은 새 프로젝트가 비공개 | 앱 배포는 자동으로 풂. 명령·Drop은 **Visitor access**에서 보호 끄기, 로그아웃한 창에서 확인 | 보호 끄기. 계정 없이 올린 Drop이면 claim부터 |
 | 사이트가 꺼짐(Firebase) | 월 10GB 초과 → 다음 달 1일까지 비활성 | 큰 사이트는 Cloudflare | Blaze로 올리거나 다른 호스팅에 재배포 |
 | Vercel에서 한도 초과(429) | 하루 100배포·업로드 5,000개, 월 한도는 대개 30일 대기 | 큰 사이트는 Cloudflare | 다른 호스팅 |
 | 노트북 서버에 아무도 못 붙음 | 와이파이 AP 격리, 방화벽 | 전용 공유기, 방화벽 허용 | 노트북을 핫스폿으로(10명 안팎) 또는 Quick Tunnel |
@@ -442,7 +442,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
 > "기관 AWS 계정에 사이트를 올리는 설정 파일과 명령어를 드릴게요. 한 달 1TB까지는 전송 비용이 무료라 보통 0원이고, 저장 비용은 몇십 원 수준입니다. 연수 뒤에 지우는 명령어도 같이 드릴게요."
 
 **K. Netlify(이미 쓰시는 분)**
-> "쓰시던 Netlify에 올릴게요. 올린 뒤에 Netlify 화면에서 'Make public'을 한 번 눌러 주셔야 참가자가 볼 수 있어요. 무료는 한 달에 20번쯤만 올릴 수 있어서, 고칠 것은 모아서 한 번에 올릴게요."
+> "쓰시던 Netlify에 올릴게요. 앱으로 올리면 참가자가 바로 볼 수 있게 첫 배포 때 로그인 보호를 풀어 드려요. 무료는 한 달에 20번쯤만 올릴 수 있어서, 고칠 것은 모아서 한 번에 올릴게요."
 
 **L. 공개 범위 고르기**
 > "기본은 '링크를 받은 사람만'이에요. 검색에는 안 나오지만 주소를 아는 사람은 들어올 수 있어요. 교재를 꼭 지켜야 하면 '암호'를 고르세요. 연수장 QR로 들어오면 저절로 열리고, 주소만 전달받은 사람은 암호를 물어봐요. 암호는 낱말 서너 개를 이어 길게 정해 주세요."

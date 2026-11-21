@@ -245,7 +245,7 @@ assets/slides/*.webp · assets/media/* · assets/files/*
 
 ### 8.3 AI로 사이트 만들기 (`app/src/lib/gen/*`)
 - 생성 과정과 화면과의 약속은 [plan-ai-first.md](plan-ai-first.md) §6·§15. `live.url`·`live.code`·`live.anonKey`·사이트 주소 등 강사만 정하는 값은 AI 결과에서 받지 않습니다.
-- 연결(`AiConnect`): 추천 순서는 내 PC의 Claude Code·Codex(연결 프로그램) → 키 붙여넣기(Claude·OpenAI. 회사 자동 인식, `checkKey`. 한 번에 한 단계씩 안내) → 쓰던 AI에 복사·붙여넣기. Gemini·OpenRouter 키는 만들기에 쓰지 않습니다(붙여 넣으면 알려 주고 다른 회사로 보내지 않음). 설정의 '연결'에서 미리 해 둘 수 있습니다.
+- 연결(`AiConnect`): 추천 순서는 구독 계정(lecpage 커넥트: ChatGPT 로그인·Claude Code) → 설치 없이 쓰던 AI에 복사·붙여넣기 → 접힌 '다른 방법'(키 붙여넣기: Claude·OpenAI. 회사 자동 인식, `checkKey`, Codex, Skill). 길마다 처음 연결할 때 한 번 동의를 받아요(`askConsent`). Gemini·OpenRouter 키는 만들기에 쓰지 않습니다(붙여 넣으면 알려 주고 다른 회사로 보내지 않음). 설정의 '연결'에서 미리 해 둘 수 있습니다.
 - AI 회사 호출(키 확인·모델 고르기는 `app/src/lib/ai.js`, 생성은 `app/src/lib/gen/providers/*`가 같은 규칙을 씀): 모델은 회사의 목록 API와 OpenRouter 공개 목록의 값·출시일로 고르고 이름을 코드에 박지 않습니다. 오류는 상태 코드와 회사별 오류 코드(code·type·details.error_code)·문구로 가립니다(`classify`). 회사별 사실과 출처는 `docs/research/ai-facts-2026-11-14.md`.
 - 모델 값표(`app/src/lib/ai-catalog.js`, 등급·추천 규칙 `rankModels`도 여기): 같은 출처의 `ai-catalog.json`(GitHub Actions가 하루 한 번 `scripts/ai-catalog/refresh.mjs`로 모아 이 파일만 커밋, 검사에 걸리면 그대로) → OpenRouter 실시간 목록이 오면 덮어씀 → 둘 다 없으면 이름 규칙. 값표에는 만들기에 쓰는 두 회사(OpenAI·Claude) 모델만 담고, 이 키로 안 된 모델은 기억해 잠금(`markBlocked`). 어긋난 사실(문서의 모델 이름·주소·CORS)은 자동으로 고치지 않고 이슈로 알림(`docs/operations.md` §12).
 
