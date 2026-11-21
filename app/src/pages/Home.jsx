@@ -110,7 +110,7 @@ export function Home() {
         <p class="ld-kicker">강의·연수용 · 무료 · 오픈소스 · 회원가입 없음</p>
         <h1 id="ld-h1"><span>교재를 넣으면</span> <span><em>연수 사이트</em>가 나와요</span></h1>
         <div class="ld-hero-t">
-          <p class="ld-lead">AI가 교재 원본을 직접 읽고, 이 강의만의 디자인으로 사이트를 만들어요. 참가자는 휴대폰으로 교재를 따라 넘기며 출석·질문·투표·실습을 하고, 강사는 발표 화면과 강사 화면으로 진행해요.</p>
+          <p class="ld-lead">AI가 교재 원본을 직접 읽고, 이 강의만의 디자인으로 사이트를 만들어요. 참가자는 교재를 따라 넘기며 출석·질문·투표·실습을 하고, 강사는 발표 화면과 강사 화면으로 진행해요.</p>
           <button type="button" class={`ld-drop${drag ? ' over' : ''}`} onClick={pick} aria-describedby="ld-drop-sub">
             <span class="ld-drop-btn">교재 넣고 시작하기</span>
             <span class="ld-drop-sub" id="ld-drop-sub"><span><span class="on-mouse">파일을 여기에 놓거나 눌러서 골라요</span><span class="on-touch">눌러서 교재 파일을 골라요</span></span><span>PPT·PDF·한글(HWP·HWPX)·워드</span></span>
@@ -123,7 +123,6 @@ export function Home() {
             <button type="button" class="btn btn-quiet" onClick={() => fileRef.current?.click()}>저장한 파일 열기</button>
             <input ref={fileRef} type="file" accept=".lecpage,.zip,.json" hidden onChange={onImport} />
           </div>
-          <p class="ld-note">교재는 이 브라우저에서 읽고, AI를 쓸 때만 연결한 AI 회사로 보내요.</p>
         </div>
         <HeroStage />
       </section>
