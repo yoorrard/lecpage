@@ -1,31 +1,33 @@
-# PC 프로그램 (lecpage studio) — ChatGPT·Claude 구독으로 연결
+# lecpage 커넥트 (lecpage Connect) — ChatGPT·Claude 구독으로 연결
 
-API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.com 화면에서 바로 사이트를 만들게 하는 작은 PC 프로그램이에요. 사용량은 그 계정의 요금제에서 차감돼요.
-- **ChatGPT 계정**: PC 프로그램이 [Sign in with ChatGPT](https://developers.openai.com/siwc)(오픈소스·로컬 앱의 ChatGPT 요금제 사용)로 로그인하고, 이 PC에서 OpenAI Responses API를 바로 불러요. Codex 설치가 필요 없어요.
+API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.com 화면에서 바로 사이트를 만들게 하는 작은 PC 프로그램 **lecpage 커넥트**예요(예전 이름 lecpage studio, CLI는 `connect`·`studio` 둘 다). 사용량은 그 계정의 요금제에서 차감돼요.
+- **ChatGPT 계정**: lecpage 커넥트가 [Sign in with ChatGPT](https://developers.openai.com/siwc)(오픈소스·로컬 앱의 ChatGPT 요금제 사용)로 로그인하고, 이 PC에서 OpenAI Responses API를 바로 불러요. Codex 설치가 필요 없어요.
 - **Claude 계정**: PC에 설치·로그인한 Claude Code를 고치지 않고 빈 임시 폴더에서 실행해요. 없으면 [설치]·[로그인] 버튼이 공식 명령을 보이는 터미널 창에서 돌려요.
 - **Codex**(선택): 설치·로그인한 Codex도 같은 방식으로 써요.
 
 ## 설치·띄우기
-- **Windows(초보자)**: lecpage.com의 AI 선택 → [ChatGPT·Claude 계정으로 연결] → [PC 프로그램 다운로드] → 받은 `lecpage-studio.cmd`를 두 번 눌러 실행. 경고 창이 뜨면 [추가 정보] → [실행].
-- **macOS**: 터미널에 한 줄: `curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.sh | bash`
-- 실행 파일은 Node.js 22가 없으면 nodejs.org의 LTS를 사용자 폴더에 받고(SHA-256 확인, 관리자 권한 없음), GitHub 릴리스 `studio-latest`의 묶음을 받아(새 판이 있을 때만, SHA-256 확인) `node lecpage.mjs studio`로 켜요. 릴리스는 `.github/workflows/studio-release.yml`이 main에 바뀐 것이 있을 때마다 갱신해요.
-- 개발자: `npx -y github:yoorrard/lecpage studio`(Git 필요) · Skill을 설치했으면 `node <skill>/scripts/lecpage.mjs studio`
+- **Windows**: lecpage.com의 AI 선택 → [ChatGPT·Claude 계정으로 연결] → 다운로드 → 받은 `lecpage-connect.cmd`를 두 번 눌러 실행. 경고 창이 뜨면 [추가 정보] → [실행].
+- **macOS·Linux(기본 길)**: 터미널에 한 줄: `curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-connect.sh | bash`. 이 길을 기본으로 둔 까닭: 브라우저로 받은 `.command`·`.sh`는 실행 권한이 빠져 두 번 눌러도 돌지 않고, 서명 없는 파일은 Gatekeeper가 막아요. `curl`로 받은 파일에는 격리 표시가 붙지 않아 경고 창이 하나도 뜨지 않아요(Node.js도 같은 길로 받음).
+- **macOS 앱(선택)**: `lecpage-connect-mac.zip`을 풀어 `lecpage Connect.app`을 두 번 누르면 Terminal 창에서 위와 같은 실행 파일이 돌아요. 서명이 없어 처음에 막히면 시스템 설정 → 개인정보 보호 및 보안 → [그래도 열기].
+- 예전 이름(`lecpage-studio.cmd`·`.sh`·`.command`·`.zip`·`.tar.gz`)도 같은 내용으로 계속 올라가요(예전 링크·이미 깔린 실행 파일·켜 둔 자동 시작이 그 이름을 받음).
+- 실행 파일은 Node.js 22가 없으면 nodejs.org의 LTS(Windows zip · macOS·Linux tar.gz, x64·arm64)를 사용자 폴더(`%LOCALAPPDATA%\lecpage` · `~/Library/Application Support/lecpage` · `~/.local/share/lecpage`)에 받고(SHA-256 확인, 관리자 권한 없음. macOS·Linux는 가장 새 LTS가 그 컴퓨터에서 돌지 않으면 그다음 LTS로), GitHub 릴리스 `studio-latest`의 묶음(`lecpage-connect.zip`·`.tar.gz`)을 받아(새 판이 있을 때만, SHA-256 확인. 못 받으면 있던 판으로) `node lecpage.mjs studio`로 켜요. 릴리스는 `.github/workflows/studio-release.yml`이 main에 바뀐 것이 있을 때마다 갱신하고, 묶기는 `scripts/studio-launcher/package.sh`(내 컴퓨터에서도 같은 결과)예요. 점검: `LECPAGE_DRY_RUN=1`이면 켜기 직전에 멈춰요.
+- 개발자: `npx -y github:yoorrard/lecpage connect`(Git 필요) · Skill을 설치했으면 `node <skill>/scripts/lecpage.mjs connect`(`studio`도 같은 명령)
 
 켜면 기본 브라우저로 `https://lecpage.com/#pair=<토큰>&port=<포트>`를 열어 짝을 맞춰요. 앱이 토큰·포트를 이 브라우저에 기억하고 주소에서 바로 지워요. 받기 안내를 연 lecpage 탭이 있으면 그 탭이 이어 받고 새 탭은 닫혀요. 그다음부터 lecpage.com 화면이 `http://127.0.0.1:<포트>/bridge/*`를 직접 불러요(연수는 lecpage.com 저장소 그대로). Chrome·Edge는 처음 한 번 "로컬 네트워크" 접근을 물어요([허용]). 짝 맞춤 토큰은 이 PC 사용자 폴더(`%APPDATA%\lecpage` · `~/Library/Application Support/lecpage` · `~/.config/lecpage`)의 `studio.json`에 두어 다시 켜도 저절로 다시 붙어요.
 
-**Safari**는 https 화면에서 `http://127.0.0.1` 요청을 막아요(WebKit 171934). 그래서 PC 프로그램은 앱 전체를 `http://127.0.0.1:<포트>/`에서도 보여 줘요(같은 출처, 토큰은 앱 HTML의 `<meta name="lecpage-bridge">`). 이 화면은 저장소가 따로라 연수는 [파일로 저장] → [저장한 파일 열기]로 옮겨요. 바로 배포 서버는 `http://127.0.0.1:6600~6602`도 허용해요.
+**Safari**는 https 화면에서 `http://127.0.0.1` 요청을 막아요(WebKit 171934). 그래서 lecpage 커넥트는 앱 전체를 `http://127.0.0.1:<포트>/`에서도 보여 줘요(같은 출처, 토큰은 앱 HTML의 `<meta name="lecpage-bridge">`). 이 화면은 저장소가 따로라 연수는 [파일로 저장] → [저장한 파일 열기]로 옮겨요. 바로 배포 서버는 `http://127.0.0.1:6600~6602`도 허용해요.
 
-옵션: `--port 6600`(기본은 6600~6649 중 빈 곳) · `--no-open` · `--open lecpage|local` · `--autostart`(로그인할 때 켜짐: 창을 열지 않음) · `--new-token`(짝을 새로) · `--dist app/dist`(이 빌드본을 보여 주고 그 주소를 엶) · `--remote` · `--timeout 30`. 환경 변수: `LECPAGE_STUDIO_APP_URL`(짝 맞출 앱 주소) · `LECPAGE_STUDIO_ORIGINS`(더 받을 출처, 쉼표) · `LECPAGE_STUDIO_HOME`(토큰·자격 폴더).
+옵션: `--port 6600`(기본은 6600~6649 중 빈 곳) · `--no-open` · `--open lecpage|local` · `--autostart`(컴퓨터를 켤 때 켜짐: 브라우저를 열지 않음) · `--new-token`(짝을 새로) · `--dist app/dist`(이 빌드본을 보여 주고 그 주소를 엶) · `--remote` · `--timeout 30`. 환경 변수: `LECPAGE_STUDIO_APP_URL`(짝 맞출 앱 주소) · `LECPAGE_STUDIO_ORIGINS`(더 받을 출처, 쉼표) · `LECPAGE_STUDIO_HOME`(토큰·자격 폴더).
 
-Windows에서 받은 파일로 켰으면 앱에 [컴퓨터를 켤 때 PC 프로그램도 켜기]가 보여요(`HKCU\…\Run`에 `cmd /c start /min …lecpage-studio.cmd --autostart`, 작업 표시줄에 작게). macOS의 로그인 항목은 아직 없어요.
+받은 실행 파일(`lecpage-connect.cmd`·`.sh`)로 켰으면 앱에 [컴퓨터를 켤 때 켜기]가 보여요(실행 파일이 사용자 폴더에 둔 자기 복사본을 `LECPAGE_LAUNCHER`로 알려 줄 때만). Windows: `HKCU\…\Run`의 `lecpage-studio` 값에 `cmd /c start /min …lecpage-connect.cmd --autostart`(작업 표시줄에 작게) · macOS: `~/Library/LaunchAgents/com.lecpage.connect.plist`(RunAtLoad) · Linux: `~/.config/autostart/lecpage-connect.desktop`(XDG). macOS·Linux는 창 없이 뒤에서 켜지고 기록은 사용자 폴더의 `connect.log`예요. 켤 때마다 실행 파일이 새 판을 확인해요.
 
 ## 정책
-- **ChatGPT 계정**(공식 문서 developers.openai.com/siwc, 2026-11-21에 다시 읽음): "ChatGPT plan usage is available to all open-source partners", 이 문서는 "open-source and locally hosted apps"용. 요금제가 있는 원격 호스팅 앱은 관심 신청서가 따로 필요 → lecpage.com이 아니라 **오픈소스 PC 프로그램이** 로그인·요청을 맡아요. Plus·Pro만 대상(무료 요금제는 [쓰던 AI로]). Plus의 5시간 한도는 다른 앱과 함께 써요. 지킨 조건: `client_id=dynamic_agent_client`로 처음 등록하고 받은 client_id를 저장, `ext_agent_host_id`(`urn:uuid:`, PC마다 하나), 콜백 `http://127.0.0.1:<포트>/auth/callback`, PKCE S256·state·nonce, ID 토큰 RS256(JWKS)·iss·aud·exp·nonce 확인, scope에 `chatgpt.tokens.use.direct`가 있어야 요청, 요청은 `store:false`·`stream:true`이고 `background`·`max_output_tokens`·`previous_response_id`·`temperature` 등은 뺌(PC 프로그램이 한 번 더 걸러 냄), 갱신은 한 번에 하나(돌아가며 바뀌는 refresh 토큰), 연결 해제는 refresh 토큰 취소 뒤 토큰만 지움(등록·host ID는 남김). 서버에서 이어 받기(background)가 없어서, 끊기거나 길이에 닿으면 앱이 받은 글로 '이어서'를 사용자 메시지로 다시 보내요.
+- **ChatGPT 계정**(공식 문서 developers.openai.com/siwc, 2026-11-21에 다시 읽음): "ChatGPT plan usage is available to all open-source partners", 이 문서는 "open-source and locally hosted apps"용. 요금제가 있는 원격 호스팅 앱은 관심 신청서가 따로 필요 → lecpage.com이 아니라 **오픈소스 PC 프로그램인 lecpage 커넥트가** 로그인·요청을 맡아요. Plus·Pro만 대상(무료 요금제는 [쓰던 AI로]). Plus의 5시간 한도는 다른 앱과 함께 써요. 지킨 조건: `client_id=dynamic_agent_client`로 처음 등록하고 받은 client_id를 저장, `ext_agent_host_id`(`urn:uuid:`, PC마다 하나), 콜백 `http://127.0.0.1:<포트>/auth/callback`, PKCE S256·state·nonce, ID 토큰 RS256(JWKS)·iss·aud·exp·nonce 확인, scope에 `chatgpt.tokens.use.direct`가 있어야 요청, 요청은 `store:false`·`stream:true`이고 `background`·`max_output_tokens`·`previous_response_id`·`temperature` 등은 뺌(lecpage 커넥트가 한 번 더 걸러 냄), 갱신은 한 번에 하나(돌아가며 바뀌는 refresh 토큰), 연결 해제는 refresh 토큰 취소 뒤 토큰만 지움(등록·host ID는 남김). 서버에서 이어 받기(background)가 없어서, 끊기거나 길이에 닿으면 앱이 받은 글로 '이어서'를 사용자 메시지로 다시 보내요.
 - **Claude 구독**: 이 PC에 로그인한 Claude Code를 고치지 않고 그대로 실행해요. 요청은 이 PC에서 Anthropic으로 바로 가고, 로그인 정보는 읽거나 옮기지 않아요.
 - **Codex**: OpenAI는 내 PC에서 도는 오픈소스 앱이 Codex 로그인을 쓰는 것을 허용해요.
-- Claude Code·Codex의 로그인 정보(키체인·`~/.claude/.credentials.json`·`~/.codex/auth.json`)는 읽지도 옮기지도 않아요. 설치·로그인은 공식 명령(`irm https://claude.ai/install.ps1 | iex` · `curl -fsSL https://claude.ai/install.sh | bash` · `claude auth login` · `irm https://chatgpt.com/codex/install.ps1 | iex` · `curl -fsSL https://chatgpt.com/codex/install.sh | sh` · `codex login`)을 **보이는 터미널 창**에서만 돌려요(윈도우 새 PowerShell 창, macOS Terminal). 터미널 창을 못 열면 명령을 앱에 보여 줘요.
+- Claude Code·Codex의 로그인 정보(키체인·`~/.claude/.credentials.json`·`~/.codex/auth.json`)는 읽지도 옮기지도 않아요. 설치·로그인은 공식 명령(`irm https://claude.ai/install.ps1 | iex` · `curl -fsSL https://claude.ai/install.sh | bash` · `claude auth login` · `irm https://chatgpt.com/codex/install.ps1 | iex` · `curl -fsSL https://chatgpt.com/codex/install.sh | sh` · `codex login`)을 **보이는 터미널 창**에서 돌려요(Windows 새 PowerShell 창 · macOS Terminal(`.command` 파일을 `open -a Terminal`로, Apple 이벤트 권한을 묻지 않음) · Linux `x-terminal-emulator` → `gnome-terminal` → `konsole` → `xfce4-terminal` → `mate-terminal` → `xterm`). 창을 못 열면(화면 없는 Linux 등) 같은 명령을 lecpage 커넥트 안에서 돌리고 출력을 앱(`GET /bridge/term`)과 lecpage 커넥트 창에 보여 줘요. 브라우저는 Windows `rundll32 url.dll`(= start) · macOS `open` · Linux `xdg-open` → `gio open` → `sensible-browser` → `x-www-browser`(WSL은 `wslview`)로 열고, 못 열면 주소를 창에 적어요.
 - 구독은 사람이 누른 요청([만들기]·[AI로 수정]·검수의 [AI로 수정])으로만 써요. ChatGPT 계정 작업은 새로 고침·망 복구 뒤 저절로 다시 부르지 않고 [계속 만들기]를 기다려요.
-- `ANTHROPIC_API_KEY`가 있으면 Claude Code가 구독 대신 그 키로 돌아요(연결 프로그램이 알려 줘요, 지우지는 않아요).
+- `ANTHROPIC_API_KEY`가 있으면 Claude Code가 구독 대신 그 키로 돌아요(lecpage 커넥트가 알려 줘요, 지우지는 않아요).
 
 ## 안전
 - `127.0.0.1`에만 묶어요. 모든 요청의 `Host`가 `127.0.0.1:<포트>`와 정확히 같아야 해요(DNS 리바인딩 거절). `/bridge/*`는 머리글 `X-Lecpage-Bridge`(짝 맞춤 토큰, 쿠키·주소에 넣지 않음)가 맞고, `Origin`이 이 주소나 허용 목록(`https://lecpage.com`·`https://www.lecpage.com`·개발 주소 `http://localhost:5173`·`:4173`·`LECPAGE_STUDIO_ORIGINS`)과 정확히 같아야 해요. CORS(`Access-Control-Allow-Origin`은 그 출처만, `Vary: Origin`)와 사설망 머리글(`Access-Control-Allow-Private-Network: true`)은 허용한 출처에만 붙여요.
@@ -39,26 +41,27 @@ Windows에서 받은 파일로 켰으면 앱에 [컴퓨터를 켤 때 PC 프로�
 ## 문제 해결
 | 증상 | 할 일 |
 |---|---|
-| "PC 프로그램을 켜 주세요" | 받은 파일을 두 번 눌러 실행. 켰는데도 그대로면 주소창 왼쪽 아이콘 → 사이트 설정에서 "로컬 네트워크"를 허용 |
-| "짝이 맞지 않아요" | PC 프로그램을 끄고 다시 켜기(lecpage.com이 다시 열리며 짝을 맞춤) |
+| lecpage.com이 lecpage 커넥트를 켜 달라고 해요 | 받은 `lecpage-connect.cmd`를 두 번 누르거나(Windows) 터미널 한 줄을 다시(macOS·Linux). 켰는데도 그대로면 주소창 왼쪽 아이콘 → 사이트 설정에서 "로컬 네트워크"를 허용 |
+| "짝이 맞지 않아요" | lecpage 커넥트를 끄고 다시 켜기(lecpage.com이 다시 열리며 짝을 맞춤) |
 | "이 PC에 Claude Code가 없어요" | 앱의 [Claude 계정으로 로그인]이 설치와 로그인을 터미널 창에서 이어서 해요 |
 | "로그인되어 있지 않아요" | 앱의 [Claude 계정으로 로그인] (또는 `claude auth login` / `codex login`) |
 | "2.1.314 이상이 필요해요" | 앱의 [Claude Code 업데이트] (또는 `claude update`) |
 | "ChatGPT 요금제 사용을 허락하지 않았어요" | [ChatGPT 계정으로 로그인]을 다시 눌러 동의 화면에서 허락 |
 | "ChatGPT 사용 한도에 닿았어요" | 한도가 차면 [계속 만들기]. 사용량: chatgpt.com/settings/usage |
 | `npm error … git … enoent` | Git이 없어요 → 위의 codeload 주소로 |
-| 포트가 모두 쓰임 | 켜 둔 다른 연결 프로그램 창을 쓰거나 `--port`로 다른 번호 |
+| 포트가 모두 쓰임 | 켜 둔 다른 lecpage 커넥트 창(또는 자동 시작으로 켜진 것)을 쓰거나 `--port`로 다른 번호 |
 | 127.0.0.1 화면에서 지난 작업이 안 보임 | 그 화면의 저장소는 주소(포트 포함)마다 따로예요. lecpage.com 화면(Chrome·Edge)에서 쓰거나 [파일로 저장] → [저장한 파일 열기] |
 | "앱 파일을 받지 못했어요" | 인터넷 확인. 저장소를 받았으면 `cd app && npm run build` 뒤 `--dist app/dist` |
 
 ## HTTP 약속 (앱이 부름, `docs/plan-ai-first.md` §10)
 모든 요청에 `X-Lecpage-Bridge: <토큰>`. 오류는 `{ ok:false, error, message_ko }`(401 토큰·403 출처·409 바쁨/준비 안 됨·413 너무 큼·415 JSON 아님·421 주소·429 연달아 누름).
-- `GET /bridge/status` → `{ ok, version, app:'dist'|'remote', platform, port, agents:[{ id, name, installed, version, auth:'subscription'|'api-key'|'unknown', loggedIn, ready, need:''|'install'|'login'|'update', note_ko }], chatgpt:{ connected, plan, email, pending, welcome, needsLogin, usageUrl }, autostart:{ available, on }, job, limits, policy_ko:{ claude, codex, chatgpt } }` (`?fresh`면 에이전트를 새로 살핌)
-- `POST /bridge/chatgpt/login` `{ open?, reconsent? }` → `{ ok, url }`(OpenAI 로그인 주소. `open`이면 PC 프로그램이 기본 브라우저로 엶) · `GET /auth/callback`(토큰 없음, state 확인) · `GET /bridge/chatgpt` → 위 `chatgpt` · `DELETE /bridge/chatgpt` → `{ revoked, … }` · `POST /bridge/chatgpt/welcome` · `GET /bridge/chatgpt/models` → `{ models:[{ id, label }] }`
+- `GET /bridge/status` → `{ ok, version, app:'dist'|'remote', platform, port, agents:[{ id, name, installed, version, auth:'subscription'|'api-key'|'unknown', loggedIn, ready, need:''|'install'|'login'|'update', note_ko }], chatgpt:{ connected, plan, email, pending, welcome, needsLogin, usageUrl }, autostart:{ available, on }, term:null|{ agent, action, running, code, startedAt }, job, limits, policy_ko:{ claude, codex, chatgpt } }` (`?fresh`면 에이전트를 새로 살핌)
+- `POST /bridge/chatgpt/login` `{ open?, reconsent? }` → `{ ok, url }`(OpenAI 로그인 주소. `open`이면 lecpage 커넥트가 기본 브라우저로 엶) · `GET /auth/callback`(토큰 없음, state 확인) · `GET /bridge/chatgpt` → 위 `chatgpt` · `DELETE /bridge/chatgpt` → `{ revoked, … }` · `POST /bridge/chatgpt/welcome` · `GET /bridge/chatgpt/models` → `{ models:[{ id, label }] }`
 - `POST /bridge/chatgpt/responses` (Responses 요청 본문: `model`·`instructions`·`input`·`text`·`reasoning`만 씀) → OpenAI SSE 그대로. 거절은 `{ ok:false, error, code, status, message, message_ko }`(예: 429 `subscription_sharing_usage_limit_exceeded`, 403 `subscription_sharing_user_not_eligible`, 401 `not-connected`)
-- `POST /bridge/agents/:id/install|login|update` (id: `claude`·`codex`) → `{ ok, action }` 또는 `{ ok:false, command, message_ko }`(터미널 창을 못 엶). 이미 설치돼 있으면 install은 login(또는 update)으로
-- `GET·POST /bridge/autostart` `{ on }` → `{ available, on }`(Windows, 받은 파일로 켰을 때만)
-- `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site?, target? }` → 202 `{ ok, jobId }`. `site` 값은 글 또는 `{ base64 }`. 새로 만들 때도 앱이 그린 쪽 그림을 `site['material/p-NNN.webp']`로 보내면 써요(이 PC에 LibreOffice·pdftoppm이 없으면 연결 프로그램이 쪽 그림을 못 그려요).
+- `POST /bridge/agents/:id/install|login|update` (id: `claude`·`codex`) → `{ ok:true, action, how }`(터미널 창을 엶: `powershell`·`terminal`·리눅스 터미널 이름) 또는 `{ ok:false, action, how:'inline', command, message_ko }`(창을 못 열어 lecpage 커넥트 안에서 돌림). 이미 설치돼 있으면 install은 login(또는 update)으로
+- `GET /bridge/term` → `{ term:null|{ agent, action, running, code, output, startedAt } }`(창 없이 돌린 설치·로그인의 출력, 뒤 16KB, 색 코드 뺌) · `POST /bridge/term/input` `{ text }`(한 줄 보냄: 로그인 코드 붙여 넣기, 409 돌고 있지 않음) · `DELETE /bridge/term`(멈춤)
+- `GET·POST /bridge/autostart` `{ on }` → `{ available, on }`(Windows·macOS·Linux, 받은 실행 파일로 켰을 때만. 아니면 409)
+- `POST /bridge/jobs` `{ agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site?, target? }` → 202 `{ ok, jobId }`. `site` 값은 글 또는 `{ base64 }`. 새로 만들 때도 앱이 그린 쪽 그림을 `site['material/p-NNN.webp']`로 보내면 써요(이 PC에 LibreOffice·pdftoppm이 없으면 lecpage 커넥트가 쪽 그림을 못 그려요).
 - `GET /bridge/jobs/:id/events`(SSE, `id:` 붙음, `Last-Event-ID`로 이어 받기): `{ type:'step', name, label_ko }` · `{ type:'log', text }` · `{ type:'done', label_ko, summary:{ errors, warnings, files } }` · `{ type:'error', code:'timeout'|'stopped'|'agent'|'prepare'|'unsafe'|…, error }`. 머리글이 필요해 `EventSource` 대신 `fetch`로 읽어요.
 - `GET /bridge/jobs/:id` → `{ id, agent, kind, status:'running'|'done'|'error'|'stopped', step, startedAt, endedAt, error }`
 - `GET /bridge/jobs/:id/result` → `{ site, meta, issues, warnings, material:{ pages }, dropped, agent }`. 글 파일은 글, 그림(`material/p-NNN.webp`·`assets/img/*`)은 `{ base64, type }`. `meta`에는 강사 값이 없어 앱이 지켜 둔 값을 다시 넣어요.

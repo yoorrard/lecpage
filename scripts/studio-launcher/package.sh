@@ -1,0 +1,71 @@
+#!/bin/sh
+# lecpage 커넥트 릴리스 파일 묶기. .github/workflows/studio-release.yml이 부르고, 내 컴퓨터에서도 같은 결과(올리지는 않음).
+#   sh scripts/studio-launcher/package.sh [out 폴더(기본 out)]
+# 만드는 것(out/):
+#   lecpage-connect.cmd(Windows, CRLF) · lecpage-connect.sh / .command(macOS·Linux) ·
+#   lecpage-connect.zip / .tar.gz(+ .sha256: 실행 파일이 받아 확인 후 씀) · lecpage-connect-mac.zip(+ .sha256, 선택: lecpage Connect.app) · VERSION
+#   예전 이름 lecpage-studio.{cmd,sh,command,zip,tar.gz}(+ .sha256)도 같은 내용으로(예전 링크·이미 깔린 실행 파일이 받는 이름)
+# 묶음에는 skills/(시험·평가 제외)와 알림 파일, 실행 파일(lecpage-connect.sh: 자동 시작이 부르는 복사본의 원본)을 넣음.
+set -eu
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$ROOT"
+OUT="${1:-out}"
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+
+SEMVER=$(node -p "require('./skills/lecpage/engine/package.json').version")
+V="$SEMVER-$(git rev-parse --short HEAD 2>/dev/null || echo local)"
+rm -rf "$OUT"
+mkdir -p "$OUT/pkg"
+# 저장소에 있는(또는 .gitignore에 걸리지 않은) 파일만: 내 컴퓨터의 node_modules·임시 파일이 섞이지 않게
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  git -c core.quotePath=false ls-files -co --exclude-standard -- skills | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done | tar -cf - -T - | tar -xf - -C "$OUT/pkg"
+else
+  cp -r skills "$OUT/pkg/"
+fi
+rm -rf "$OUT/pkg/skills/lecpage/engine/test" "$OUT/pkg/skills/lecpage/evals"
+find "$OUT/pkg" -name __pycache__ -type d -prune -exec rm -rf {} +
+cp LICENSE NOTICE THIRD_PARTY_NOTICES.md TRADEMARKS.md "$OUT/pkg/"
+cp scripts/studio-launcher/lecpage-connect.sh "$OUT/pkg/lecpage-connect.sh"
+chmod 755 "$OUT/pkg/lecpage-connect.sh"
+printf '%s\n' "$V" > "$OUT/pkg/VERSION"
+printf '%s\n' "$V" > "$OUT/VERSION"
+(cd "$OUT/pkg" && zip -qr ../lecpage-connect.zip . && tar -czf ../lecpage-connect.tar.gz .)
+
+# 실행 파일: Windows 배치 파일은 CRLF, macOS·Linux는 그대로(실행 비트)
+sed 's/\r$//; s/$/\r/' scripts/studio-launcher/lecpage-connect.cmd > "$OUT/lecpage-connect.cmd"
+cp scripts/studio-launcher/lecpage-connect.sh "$OUT/lecpage-connect.sh"
+cp scripts/studio-launcher/lecpage-connect.sh "$OUT/lecpage-connect.command"
+chmod 755 "$OUT/lecpage-connect.sh" "$OUT/lecpage-connect.command"
+
+# macOS 앱(선택, 서명 없음): 두 번 누르면 Terminal 창에서 lecpage-connect.sh를 켬. zip이 실행 비트를 지켜 줌
+APPC="$OUT/mac/lecpage Connect.app/Contents"
+mkdir -p "$APPC/MacOS" "$APPC/Resources"
+cp scripts/studio-launcher/mac-app-run.sh "$APPC/MacOS/lecpage-connect"
+cp scripts/studio-launcher/lecpage-connect.sh "$APPC/Resources/lecpage-connect.sh"
+chmod 755 "$APPC/MacOS/lecpage-connect" "$APPC/Resources/lecpage-connect.sh"
+cat > "$APPC/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key><string>lecpage-connect</string>
+  <key>CFBundleIdentifier</key><string>com.lecpage.connect.app</string>
+  <key>CFBundleName</key><string>lecpage Connect</string>
+  <key>CFBundleDisplayName</key><string>lecpage Connect</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$SEMVER</string>
+  <key>CFBundleVersion</key><string>$SEMVER</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSUIElement</key><true/>
+</dict>
+</plist>
+EOF
+(cd "$OUT/mac" && zip -qry ../lecpage-connect-mac.zip "lecpage Connect.app")
+
+# 예전 이름도 같은 내용으로
+for x in cmd sh command zip tar.gz; do cp -p "$OUT/lecpage-connect.$x" "$OUT/lecpage-studio.$x"; done
+for f in lecpage-connect.zip lecpage-connect.tar.gz lecpage-connect-mac.zip lecpage-studio.zip lecpage-studio.tar.gz; do
+  sha "$OUT/$f" > "$OUT/$f.sha256"
+done
+rm -rf "$OUT/pkg" "$OUT/mac"
+ls -la "$OUT"

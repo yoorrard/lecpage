@@ -76,7 +76,7 @@ const ERR_KO = {
 };
 
 /**
- * home: 자격 파일을 둘 폴더(OS 사용자 폴더) · port: 연결 프로그램 포트(콜백 주소) · fetchImpl: 시험용
+ * home: 자격 파일을 둘 폴더(OS 사용자 폴더) · port: lecpage 커넥트 포트(콜백 주소) · fetchImpl: 시험용
  */
 export function createSiwc({ home, port, fetchImpl = globalThis.fetch, log = () => {}, env = process.env } = {}) {
   const AUTH = pick(env.LECPAGE_SIWC_AUTH_BASE, SIWC.auth);
