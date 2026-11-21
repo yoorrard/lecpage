@@ -1,0 +1,43 @@
+// lib/site-doc.js 단위 확인(브라우저에서 개발 서버의 모듈을 바로 불러 씀)
+const L = require('./lib.js');
+(async () => {
+  const b = await L.chromium.launch(); const p = await b.newPage();
+  await p.goto(L.BASE, { waitUntil: 'load' });
+  const r = await p.evaluate(async () => {
+    const D = await import('/src/lib/site-doc.js');
+    const html = '<!doctype html><html><head><title>연수</title><style>:root{--lp-accent:#112233}</style></head><body><nav><ul><li><a href="#a">가</a></li><li><a href="#b">나</a></li><li><a href="#c">다</a></li></ul></nav><main><section id="a"><h2><span>01</span>첫 섹션</h2><p>안녕 <b>하세요</b></p></section><section id="b" data-title="둘째"><h2>둘</h2><section data-lp-step="s1"><h3>단계</h3></section></section><section><h2>셋째</h2><img src="x.png"></section></main></body></html>';
+    const out = {};
+    const h1 = D.ensureIds(html);
+    out.list = D.listSections(h1).map((s) => `${s.id}:${s.name}:${s.steps}`);
+    out.moved = D.listSections(D.moveSection(h1, 'a', 2)).map((s) => s.id).join(',');
+    out.navMoved = /href="#b"[\s\S]*href="#a"/.test(D.moveSection(h1, 'a', 2)) ? 'nav reordered' : 'nav same';
+    const hid = D.setHidden(h1, 'b', true);
+    out.hidden = D.listSections(hid).find((s) => s.id === 'b').hidden + ' / nav li hidden ' + /<li hidden=""><a href="#b"/.test(hid);
+    out.removed = D.listSections(D.removeSection(h1, 'b')).length + ' / nav ' + !/href="#b"/.test(D.removeSection(h1, 'b'));
+    const rn = D.renameSection(h1, 'a', '01 바꾼 이름');
+    out.renamed = D.listSections(rn)[0].name + ' | ' + /<span>01<\/span>바꾼 이름/.test(rn) + ' | nav ' + /href="#a">01 바꾼 이름/.test(rn);
+    const ann = D.annotate(h1);
+    out.annotated = (ann.match(/data-lpe=/g) || []).length + ' lpe, lps ' + (ann.match(/data-lps=/g) || []).length;
+    const pIdx = [...new DOMParser().parseFromString(ann, 'text/html').querySelectorAll('[data-lpe]')].findIndex((e) => e.tagName === 'P');
+    out.setText = /<p>안녕 <b>반가워요<\/b><\/p>/.test(D.setText(h1, pIdx, '안녕 <b onclick="x()">반가워요</b><script>x</script>'));
+    const iIdx = [...new DOMParser().parseFromString(ann, 'text/html').querySelectorAll('[data-lpe]')].findIndex((e) => e.tagName === 'IMG');
+    out.setImage = /<img src="material\/p-002\.webp" alt="교재 2쪽">/.test(D.setImage(h1, iIdx, 'material/p-002.webp', '교재 2쪽'));
+    out.replaceText = /<title>새 연수<\/title>/.test(D.replaceText(h1, '연수', '새 연수'));
+    out.css = D.getVar(D.setVar(':root{--lp-accent:#112233}', 'accent', '#abcdef'), 'accent') + ' ' + /--lp-ink:#000/.test(D.setVar('body{}', 'ink', '#000'));
+    out.cleanInline = D.cleanInline('<div>a</div><a href="javascript:x">b</a><i>c</i>');
+    return out;
+  });
+  console.log(JSON.stringify(r, null, 1));
+  L.ok('ids + names (heading spans spaced)', r.list.join('|') === 'a:01 첫 섹션:0|b:둘째:1|lp-s3:셋째:0', r.list.join('|'));
+  L.ok('move + nav reorder', r.moved === 'b,lp-s3,a' && r.navMoved === 'nav reordered');
+  L.ok('hide + nav', r.hidden === 'true / nav li hidden true');
+  L.ok('remove + nav', r.removed === '2 / nav true');
+  L.ok('rename keeps number span + nav', r.renamed === '01 바꾼 이름 | true | nav true', r.renamed);
+  L.ok('annotate', /lps 3$/.test(r.annotated), r.annotated);
+  L.ok('setText sanitizes', r.setText === true);
+  L.ok('setImage', r.setImage === true);
+  L.ok('replaceText', r.replaceText === true);
+  L.ok('css vars', r.css === '#abcdef true');
+  L.ok('cleanInline drops js link + block', !/javascript|div/.test(r.cleanInline), r.cleanInline);
+  await b.close(); process.exit(L.summary() ? 1 : 0);
+})();

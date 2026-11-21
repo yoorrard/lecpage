@@ -21,7 +21,9 @@
     "ai-catalog": "node scripts/ai-catalog/refresh.mjs",
     "examples": "node scripts/check-references.mjs",
     "app:dev": "npm --prefix app run dev",
-    "app:build": "npm --prefix app run build"
+    "app:build": "npm --prefix app run build",
+    "verify": "bash scripts/verify.sh",
+    "verify:full": "bash scripts/verify.sh --e2e --hosting"
   },
   "devDependencies": {
     "wrangler": "4.158.0"
