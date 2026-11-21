@@ -3,7 +3,8 @@
 // (앱이 http://127.0.0.1:<포트>/bridge/*를 직접 부름: CORS + Chrome 로컬 네트워크 접근 권한). Safari처럼 그 길이 막힌 브라우저를 위해
 // 앱 전체를 http://127.0.0.1:<포트>/에서도 보여 줌(같은 출처).
 // /bridge/*로 할 수 있는 것: ChatGPT 계정으로 연결(Sign in with ChatGPT, 이 PC에서 OpenAI로 바로) · 이 PC에 설치·로그인된 Claude Code·Codex에
-// 사이트 만들기를 맡김(요청은 그 사람의 구독 한도에서 차감) · Claude Code·Codex 공식 설치·로그인 명령을 보이는 터미널 창에서 실행.
+// 사이트 만들기를 맡김(요청은 그 사람의 구독 한도에서 차감) · Claude 계정 연결을 터미널 없이(공식 설치 명령을 창 없이 + Claude Code 로그인, studio-setup.mjs) ·
+// Claude Code·Codex 공식 설치·로그인 명령을 보이는 터미널 창에서 실행(다른 방법).
 // 근거: docs/research/ai-first-2026-11.md §3 · 쓰는 법: references/studio.md
 //
 // 안전: 127.0.0.1에만 묶음 · 짝 맞춤 토큰(이 PC 사용자 폴더에 저장, 앱은 머리글 X-Lecpage-Bridge로만 보냄) ·
@@ -20,6 +21,7 @@ import { tmpdir, homedir } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSiwc, callbackPage } from './studio-siwc.mjs';
+import { createSetup, SETUP_AGENTS } from './studio-setup.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, 'lecpage.mjs');
@@ -320,12 +322,52 @@ const AGENTS = {
 export const agentName = (id) => AGENTS[id]?.name || id;
 const jsonIn = (s) => { const a = String(s).indexOf('{'), b = String(s).lastIndexOf('}'); if (a < 0 || b < a) return null; try { return JSON.parse(String(s).slice(a, b + 1)); } catch { return null; } };
 
+/**
+ * Claude 데스크톱 앱에 든 Claude Code(설치 없이 쓰는 길): 판 번호 폴더 중 가장 새것. 공식 문서에 적힌 자리가 아니라 없으면 조용히 넘어감.
+ * macOS ~/Library/Application Support/Claude/claude-code/<판>/claude.app/Contents/MacOS/claude(예전 <판>/claude) ·
+ * Windows %APPDATA%\Claude\claude-code\<판>\claude.exe(Microsoft Store 판은 %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\…) ·
+ * Linux ~/.config/Claude/claude-code/<판>/claude. 고치지 않은 Anthropic 실행 파일을 그대로 부르고, 데스크톱 앱의 로그인 정보는 읽지 않음(로그인은 Claude Code 공식 흐름으로)
+ */
+export function desktopClaude({ platform = process.platform, env = process.env, home = homedir(), list = (d) => readdirSync(d), exists = isFile } = {}) {
+  const P = platform === 'win32' ? path.win32 : path.posix;
+  const roots = [];
+  if (platform === 'darwin') roots.push(P.join(home, 'Library', 'Application Support', 'Claude', 'claude-code'));
+  else if (platform === 'win32') {
+    if (env.APPDATA) roots.push(P.join(env.APPDATA, 'Claude', 'claude-code'));
+    if (env.LOCALAPPDATA) { try { for (const n of list(P.join(env.LOCALAPPDATA, 'Packages'))) if (/^Claude_/i.test(n)) roots.push(P.join(env.LOCALAPPDATA, 'Packages', n, 'LocalCache', 'Roaming', 'Claude', 'claude-code')); } catch { /* 없음 */ } }
+  } else roots.push(P.join(env.XDG_CONFIG_HOME || P.join(home, '.config'), 'Claude', 'claude-code'));
+  const bins = platform === 'darwin' ? [['claude.app', 'Contents', 'MacOS', 'claude'], ['claude']] : [[platform === 'win32' ? 'claude.exe' : 'claude']];
+  let best = null;
+  for (const r of roots) {
+    let names = []; try { names = list(r); } catch { continue; }
+    for (const n of names) {
+      if (!/^\d+\.\d+\.\d+/.test(n) || (best && versionAtLeast(best.v, n))) continue;
+      const f = bins.map((b) => P.join(r, n, ...b)).find((x) => exists(x));
+      if (f) best = { v: n, f };
+    }
+  }
+  return best?.f || null;
+}
+/** Claude Code가 있을 수 있는 곳: PATH(+흔한 자리) · 공식 설치 자리(~/.local/bin) · Claude 데스크톱 앱. 앞에서부터 쓸 만한 판(CLAUDE_MIN 이상)을 고름 */
+export function claudeCandidates(env = process.env, { platform = process.platform, home = homedir() } = {}) {
+  const native = join(home, '.local', 'bin', platform === 'win32' ? 'claude.exe' : 'claude');
+  const desk = desktopClaude({ platform, env, home });
+  return { list: [...new Set([findExecutable('claude', { env, platform, extra: AGENTS.claude.extra(home) }), isFile(native) ? native : null, desk].filter(Boolean))], desk };
+}
 /** Claude Code: 버전·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
 export async function detectClaude(env = process.env) {
-  const file = findExecutable('claude', { env, extra: AGENTS.claude.extra(homedir()) });
-  const a = { id: 'claude', name: 'Claude Code', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, need: '', note_ko: '', file };
-  if (!file) return { ...a, need: 'install', note_ko: '이 PC에 Claude Code가 없어요. [설치]를 누르면 공식 설치 명령이 터미널 창에서 돌고, 이어서 Claude 계정으로 로그인해요.' };
-  a.version = ((await runQuick(file, ['--version'], { env })).out.match(/\d+\.\d+\.\d+/) || [''])[0];
+  const { list, desk } = claudeCandidates(env);
+  const a = { id: 'claude', name: 'Claude Code', installed: list.length > 0, version: '', auth: 'unknown', loggedIn: null, ready: false, need: '', note_ko: '', from: '', file: list[0] || null };
+  if (!list.length) return { ...a, need: 'install', note_ko: '이 PC에 Claude Code가 없어요. [Claude 계정으로 로그인]을 누르면 공식 설치 명령으로 자동 설치하고 이어서 로그인해요.' };
+  for (const f of list) {
+    const ver = ((await runQuick(f, ['--version'], { env })).out.match(/\d+\.\d+\.\d+/) || [''])[0];
+    if (!a.version && ver) { a.version = ver; a.file = f; }
+    if (ver && versionAtLeast(ver, CLAUDE_MIN)) { a.version = ver; a.file = f; break; }
+  }
+  // 데스크톱 앱 안의 것만 있고 버전도 못 읽으면(앱이 업데이트 중 등) 없는 것으로: 공식 설치로
+  if (!a.version && list.every((f) => f === desk)) return { ...a, installed: false, file: null, need: 'install', note_ko: '이 PC에 Claude Code가 없어요. [Claude 계정으로 로그인]을 누르면 공식 설치 명령으로 자동 설치하고 이어서 로그인해요.' };
+  const file = a.file;
+  if (file === desk) a.from = 'desktop';
   const r = await runQuick(file, ['auth', 'status'], { env });
   const st = jsonIn(r.out);
   const m = st?.authMethod || '';
@@ -333,9 +375,9 @@ export async function detectClaude(env = process.env) {
   a.auth = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || m === 'api_key' || m === 'api_key_helper' ? 'api-key' : m === 'claude.ai' || m === 'oauth_token' ? 'subscription' : 'unknown';
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) a.loggedIn = true;
   const notes = [];
-  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) { notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). [업데이트]를 눌러 주세요.`); a.need = 'update'; }
+  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) { notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). [Claude 계정으로 로그인]을 누르면 새 버전으로 바꿔요.`); a.need = 'update'; }
   else if (!a.version) notes.push('Claude Code 버전을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
-  if (a.loggedIn === false) { notes.push('Claude 계정으로 로그인되어 있지 않아요. [로그인]을 눌러 주세요.'); a.need ||= 'login'; }
+  if (a.loggedIn === false) { notes.push('Claude 계정으로 로그인되어 있지 않아요. [Claude 계정으로 로그인]을 눌러 주세요.'); a.need ||= 'login'; }
   if (a.auth === 'api-key') notes.push(POLICY_KO.apiKey);
   if (m === 'third_party') notes.push('Claude Code가 클라우드 회사 계정(Bedrock 등)으로 돌아요. 요금은 그 계정으로 나가요.');
   a.ready = !!a.version && versionAtLeast(a.version, CLAUDE_MIN) && a.loggedIn !== false;
@@ -964,7 +1006,7 @@ async function handleBridge(S, req, res, url) {
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
     const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
-    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
   // ── ChatGPT 계정(Sign in with ChatGPT). 토큰은 이 프로그램 안에만: 앱에는 연결 여부·이메일·모델 목록만 ──
   if (parts[0] === 'chatgpt') {
@@ -988,6 +1030,31 @@ async function handleBridge(S, req, res, url) {
       try { body = JSON.parse((await readBody(req, bodyLimit())).toString('utf8')); } catch (e) { return e.status === 413 ? fail(res, 413, 'too-large', '교재가 너무 커요.') : fail(res, 400, 'bad-json', '요청 본문을 JSON으로 읽지 못했어요.'); }
       if (!body || typeof body !== 'object' || typeof body.model !== 'string' || !Array.isArray(body.input)) return fail(res, 400, 'bad-request', 'model과 input이 있어야 해요.');
       return S.siwc.responses(body, req, res, { ...BASE_HEADERS, ...(res.cors || {}) });
+    }
+    return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
+  }
+  // ── Claude 계정 연결(터미널 없이): 없으면 공식 설치 명령을 창 없이 → Claude Code 로그인(브라우저) → 확인. 앱은 GET /bridge/setup으로 그림 ──
+  if (parts[0] === 'agents' && parts.length === 3 && parts[2] === 'setup' && req.method === 'POST') {
+    const id = parts[1];
+    if (!SETUP_AGENTS.includes(id)) return fail(res, 404, 'not-found', '없는 프로그램이에요.');
+    if (S.setup?.view().running) return sendJson(res, 200, { ok: true, setup: S.setup.view() }); // 이미 하는 중이면 그것을
+    S.log(`${agentName(id)}: Claude 계정 연결을 시작해요(터미널 창 없이)`);
+    S.setup = createSetup({
+      agent: id, official: OFFICIAL[id], launchSpec, kill: killTree, installer: S.installer || null,
+      has: (n) => !!findExecutable(n), fetchImpl: S.fetchImpl || globalThis.fetch,
+      detect: async () => (await statusOf(S, true))[id],
+      onLine: (l) => S.log(`  │ ${cut(l, 300)}`),
+    });
+    return sendJson(res, 200, { ok: true, setup: S.setup.view() });
+  }
+  if (parts[0] === 'setup' && parts.length <= 2) {
+    if (parts.length === 1 && req.method === 'GET') return sendJson(res, 200, { ok: true, setup: S.setup ? S.setup.view({ tail: true }) : null });
+    if (parts.length === 1 && req.method === 'DELETE') { if (S.setup) { await S.setup.stop(); S.statusAt = 0; } return sendJson(res, 200, { ok: true, setup: S.setup ? S.setup.view() : null }); }
+    if (parts[1] === 'code' && req.method === 'POST') {
+      let o = {}; try { o = JSON.parse((await readBody(req, 4096)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
+      const r = S.setup ? S.setup.input(o.code) : { ok: false, error: 'not-waiting' }; // 받은 코드는 기록하지 않음
+      if (r.ok) return sendJson(res, 200, { ok: true });
+      return r.error === 'bad-code' ? fail(res, 400, 'bad-code', '코드를 # 앞뒤까지 모두 복사해 붙여 넣어 주세요.') : fail(res, 409, 'not-waiting', '로그인을 기다리고 있지 않아요. [다시 시도]를 눌러 주세요.');
     }
     return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
   }
@@ -1126,12 +1193,12 @@ function listenOn(server, port) {
 }
 
 /** 띄우기(시험에서도 씀): { url, port, close } */
-export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl } = {}) {
+export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl, installer } = {}) {
   // 지난번에 꺼지며 남은 임시 폴더(6시간 넘은 것)
   try { for (const n of readdirSync(tmpdir())) if (n.startsWith(TMP_PREFIX)) { const p = join(tmpdir(), n); if (Date.now() - statSync(p).mtimeMs > 6 * 3600e3) rmSync(p, { recursive: true, force: true }); } } catch { /* 못 지워도 됨 */ }
   // 짝 맞춤 토큰·ChatGPT 자격은 이 PC 사용자 폴더에(persist: 실제 실행). 시험은 home을 따로 주거나 이번 실행만(임시 폴더)
   const dirHome = home ? resolve(home) : persist ? studioHome() : mkdtempSync(join(tmpdir(), TMP_PREFIX + 'home-'));
-  const S = { version: VERSION, home: dirHome, token: persist || home ? pairToken(dirHome, { fresh: newToken }) : randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log };
+  const S = { version: VERSION, home: dirHome, token: persist || home ? pairToken(dirHome, { fresh: newToken }) : randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log, installer, fetchImpl };
   const dir = dist ? resolve(dist) : !remote && isFile(join(REPO_DIST, 'index.html')) ? REPO_DIST : null;
   if (dist && !isFile(join(dir, 'index.html'))) throw Object.assign(new Error(`${dir}에 앱 빌드본(index.html)이 없어요. cd app && npm run build로 먼저 만들어 주세요.`), { friendly: true });
   S.app = dir
@@ -1154,7 +1221,7 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   try { S.origins.add(new URL(S.appUrl).origin); } catch { /* 잘못된 주소 */ }
   // 갑자기 꺼질 때(오류·창 닫기): 돌던 에이전트를 끄고 임시 폴더를 지움
   process.on('exit', () => {
-    S.term?.killNow();
+    S.term?.killNow(); S.setup?.killNow();
     for (const j of S.jobs.values()) {
       if (j.proc && j.proc.exitCode === null) { try { if (process.platform === 'win32') j.proc.kill(); else process.kill(-j.proc.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ } }
       j.cleanup();
@@ -1162,6 +1229,7 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   });
   const close = async () => {
     if (S.term) await S.term.stop();
+    if (S.setup) await S.setup.stop();
     for (const j of S.jobs.values()) if (j.active) await j.stop('shutdown');
     for (let i = 0; i < 60 && [...S.jobs.values()].some((j) => j.active); i++) await new Promise((r) => setTimeout(r, 50));
     for (const j of S.jobs.values()) j.cleanup();

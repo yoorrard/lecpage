@@ -3,7 +3,7 @@ import { Dialog, Notice } from './ui.jsx';
 import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { aiStatus, getActiveAI, setActive, forgetKey, CHATBOTS, setChatbot, setWay } from '../lib/ai.js';
 import { startGeneration, chatPrompt, acceptChatAnswer } from '../lib/studio.js';
-import { SubscriptionWay, ConnBadge, CodexRow } from './PcConnect.jsx';
+import { SubscriptionWay, ConnBadge, CodexRow, ClaudeTermRow } from './PcConnect.jsx';
 import { setPreferred, askConsent } from '../lib/connection.js';
 import { startDemo } from '../lib/demo.js';
 import { SKILL_CMDS } from '../lib/agent.js';
@@ -11,7 +11,7 @@ import { blobs } from '../lib/db.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
 // AI 선택(docs/plan-ai-first.md §2·§7·§10). 모두에게 첫째: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천 — lecpage 커넥트, PcConnect.jsx).
-// 그 아래: 설치 없이 하려면 쓰던 AI로(복사·붙여넣기, 학교 PC 등). 접힌 '다른 방법': API 키(GPT·Claude 카드)·Codex·AI 에이전트(Skill).
+// 그 아래: 설치 없이 하려면 쓰던 AI로(복사·붙여넣기, 학교 PC 등). 접힌 '다른 방법': API 키(GPT·Claude 카드)·Claude Code 터미널(공식 명령)·Codex·AI 에이전트(Skill).
 export const AI_CARDS = [
   { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'ChatGPT 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
   { id: 'anthropic', name: 'Claude', by: 'Anthropic', bot: 'claude', app: 'Claude', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'Claude 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
@@ -88,7 +88,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
       </div>
       {card && <ChatWay key={card.id} card={card} p={p} go={go} reload={reload} idle={idle} onClose={() => setChat('')} />}
       <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
-        <summary><b>다른 방법</b><span class="small muted">API 키 · Codex · AI 에이전트(Skill)</span></summary>
+        <summary><b>다른 방법</b><span class="small muted">API 키 · 터미널 · Codex · AI 에이전트(Skill)</span></summary>
         <div class="ai-cards" role="list">
           {AI_CARDS.map((c) => {
             const st = conn?.[c.id];
@@ -105,6 +105,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
             );
           })}
         </div>
+        <ClaudeTermRow />
         <CodexRow p={p} ready={ready} idle={idle} go={go} />
         <div class="ai-alts"><AgentWay /></div>
       </details>

@@ -616,6 +616,28 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-sub-off{padding:8px 12px;border-radius:var(--r-xs);background:var(--sunk)}
 .ai-sub .notice{display:grid;gap:6px}
 .ai-sub .check{display:flex;align-items:center;gap:8px}
+/* Claude 계정 연결(터미널 없이): 세 단계 그림 안내 + 진행 막대 */
+.setup{display:grid;gap:10px;padding:12px;border-radius:var(--r-xs);background:var(--sunk)}
+.setup-steps{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.setup-step{display:grid;grid-template-columns:38px minmax(0,1fr);column-gap:10px;row-gap:2px;align-items:center}
+.setup-step>b{font-size:.95rem}
+.setup-step>.small,.setup-step>.setup-bar{grid-column:2}
+.setup-ico{grid-row:span 2;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1.5px solid var(--line);color:var(--muted);transition:background .3s var(--ease),border-color .3s var(--ease),color .3s var(--ease)}
+.setup-ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.setup-step.is-now .setup-ico{border-color:var(--accent);color:var(--accent);animation:setup-pulse 1.8s var(--ease) infinite}
+.setup-step.is-done .setup-ico{background:var(--ok);border-color:var(--ok);color:var(--on-accent)}
+.setup-step.is-bad .setup-ico{border-color:var(--bad);color:var(--bad)}
+.setup-step.is-wait{opacity:.62}
+.setup-bar{height:8px;margin-top:4px}
+.setup-bar.is-busy i{width:38%;border-radius:999px;animation:setup-slide 1.4s var(--ease) infinite}
+@keyframes setup-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 16%,transparent)}}
+@keyframes setup-slide{from{transform:translateX(-100%)}to{transform:translateX(265%)}}
+@media (prefers-reduced-motion:reduce){.setup-step.is-now .setup-ico,.setup-bar.is-busy i{animation:none}.setup-bar.is-busy i{width:100%;opacity:.45}}
+.setup-login{display:grid;gap:8px}
+.setup-code{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.setup-code label{flex-basis:100%}
+.setup-code .input{flex:1 1 14em;min-width:0;font-family:var(--f-mono)}
+.setup-tail{margin:6px 0 0;max-height:11em;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--f-mono);font-size:.78rem;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--card) 70%,transparent)}
 .conn-badge{margin:0;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .conn-badge.is-on{color:var(--ok);font-weight:600}
 .dot-off{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}

@@ -4,7 +4,7 @@
 // -p / exec이면 stream-json(JSONL)을 내며 TASK.md를 읽고 work/site에 그럴듯한 사이트를 쓰고 검수 명령을 실제로 돌립니다.
 // TASK.md에 [fake:hang]이 있으면 끝나지 않고(시간 한도·멈추기 시험), [fake:nosite]면 사이트를 쓰지 않고 실패,
 // [fake:mcp]면 init에 MCP 도구가 켜진 것처럼 알림.
-// 설치·로그인 버튼 시험: FAKE_LOGIN_FILE이 있으면 그 파일이 있을 때만 로그인된 것으로. `claude auth login`은 코드 한 줄을 받은 뒤 그 파일을 만듦.
+// 설치·로그인 버튼 시험: FAKE_LOGIN_FILE이 있으면 그 파일이 있을 때만 로그인된 것으로. `claude auth login`은 코드 한 줄을 받은 뒤(또는 FAKE_LOGIN_AUTO_MS 뒤) 그 파일을 만듦.
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -14,18 +14,24 @@ const log = (o) => { if (process.env.FAKE_AGENT_LOG) appendFileSync(process.env.
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 
 if (id === 'claude' && argv[0] === 'auth' && argv[1] === 'login') {
-  console.log('Opening browser to sign in to Claude…');
+  // 실제 2.1.330과 같은 글: 브라우저를 열고(여기선 안 엶), 직접 여는 주소와 코드 칸. 틀린 코드면 "Couldn't log in"으로 1
+  console.log('Opening browser to sign in…');
+  console.log("If the browser didn't open, visit:");
+  console.log('https://claude.ai/oauth/authorize?z-fakecode');
   process.stdout.write('Paste code here if prompted > ');
-  let got = '';
+  const ok = (v) => { if (process.env.FAKE_LOGIN_FILE) writeFileSync(process.env.FAKE_LOGIN_FILE, v); console.log('\nLogin successful.'); process.exit(0); };
   const t = setTimeout(() => { console.log('\nfake claude: 코드를 받지 못했어요'); process.exit(1); }, 20000);
+  // FAKE_LOGIN_AUTO_MS: 브라우저에서 로그인해 이 PC의 localhost로 돌아온 것처럼 저절로 끝남 · FAKE_LOGIN_CANCEL_MS: 브라우저에서 취소
+  if (process.env.FAKE_LOGIN_AUTO_MS) setTimeout(() => ok('browser'), +process.env.FAKE_LOGIN_AUTO_MS);
+  if (process.env.FAKE_LOGIN_CANCEL_MS) setTimeout(() => { console.log("\nCouldn't log in: access_denied (sign-in was cancelled)"); process.exit(1); }, +process.env.FAKE_LOGIN_CANCEL_MS);
+  let got = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (d) => {
     got += d;
     if (!got.includes('\n')) return;
     clearTimeout(t);
-    if (process.env.FAKE_LOGIN_FILE) writeFileSync(process.env.FAKE_LOGIN_FILE, got.trim());
-    console.log('\nLogin successful.');
-    process.exit(0);
+    if (/bad/.test(got)) { console.log("\nCouldn't log in: That code wasn't accepted. It may be incomplete, expired, already used, or from an earlier sign-in attempt. Sign in again to get a new code."); process.exit(1); }
+    ok(got.trim());
   });
   await new Promise(() => {}); // 코드를 받거나 시간이 다 될 때까지(위에서 끝냄)
 }
