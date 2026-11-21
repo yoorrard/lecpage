@@ -426,7 +426,8 @@ export class Stager {
   }
   command(cmd) {
     const c = String(cmd || '');
-    if (/check\.mjs/.test(c)) { this.checked = true; this.step('check'); this.log('검수 실행'); return; }
+    // 쓰기 전에 돌린 검수(빈 폴더 살펴보기)는 '고치는 중'의 기준이 아님: 그 뒤 첫 쓰기는 '사이트 쓰는 중'
+    if (/check\.mjs/.test(c)) { if (this.wrote) this.checked = true; this.step('check'); this.log('검수 실행'); return; }
     if (!this.wrote) this.step('read');
     this.log(`명령: ${cut(c, 120)}`);
   }

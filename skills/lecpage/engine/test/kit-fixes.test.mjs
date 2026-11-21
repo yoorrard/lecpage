@@ -291,3 +291,12 @@ test('브라우저: 말줄임(…)으로 줄인 글은 보이는 부분으로 �
     assert.ok(found.some((x) => x.id === 'small-target' && /작은 이름표|input/.test(x.message_ko + x.where.selector)), JSON.stringify(found));
   });
 });
+
+// 실제 실행(2026-11-21, 회사 신입 온보딩 교재)에서 본 것: 입실 창이 '소속(학교)'라 학교 밖 연수에 맞지 않음 → 어느 연수에나 맞게 '소속'
+test('입실 창의 소속 칸: 학교로 못 박지 않음(회사·기관 연수에도)', async () => {
+  const { joinDialog } = await import('../src/kit/widgets.js');
+  const html = joinDialog({ collect: ['nickname', 'name', 'school'], official: true });
+  assert.match(html, /<span>소속<\/span><input name="school"/);
+  assert.ok(!html.includes('(학교)'));
+  assert.match(joinDialog({ collect: ['nickname', 'name', 'school'] }), /<span>소속 · 선택<\/span>/);
+});

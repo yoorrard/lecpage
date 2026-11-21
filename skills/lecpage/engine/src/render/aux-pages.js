@@ -343,7 +343,7 @@ export function eraseFacts(bp) {
 
 export function renderPrivacy(ctx) {
   const bp = ctx.bp, pv = bp.privacy, local = bp.live.provider === 'local';
-  const items = { nickname: '별명', name: '이름', school: '소속(학교)', email: '이메일' };
+  const items = { nickname: '별명', name: '이름', school: '소속', email: '이메일' };
   const procs = local ? [] : (pv.processors.length ? pv.processors : defaultProcessors(bp));
   const keep = keepRule(bp);
   const tls = ['supabase', 'sheets'].includes(bp.live.provider) || /^https:\/\//i.test(bp.live.url || '');

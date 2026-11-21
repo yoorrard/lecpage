@@ -112,7 +112,7 @@ export function joinDialog({ anonymous = true, collect = ['nickname'], consent =
 <label data-join-nick><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname" aria-describedby="lp-join-err"></label>
 <p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
 ${needName ? '<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>' : ''}
-${needSchool ? `<label data-join-id><span>소속(학교)${schoolMust ? '' : ' · 선택'}</span><input name="school" maxlength="40"${schoolMust ? ' required' : ''} autocomplete="organization"></label>` : ''}
+${needSchool ? `<label data-join-id><span>소속${schoolMust ? '' : ' · 선택'}</span><input name="school" maxlength="40"${schoolMust ? ' required' : ''} autocomplete="organization"></label>` : ''}
 ${consent && (needName || needSchool) ? `<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>${idWords}을 출석 확인에만 쓰${local ? '는 데 동의합니다. 연습 모드라 이 브라우저에만 남아요.' : keep ? `고 ${keep} 안에 지우는 데 동의합니다.` : '는 데 동의합니다.'} 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>` : ''}
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit" data-join-go>참여</button></div></form></dialog>`;
 }

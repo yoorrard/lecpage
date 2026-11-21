@@ -187,6 +187,14 @@ test('단계 줄이기: claude stream-json·codex JSONL → 사람이 읽을 단
   c.codex({ type: 'turn.failed', error: { message: '한도' } });
   assert.deepEqual(ce.filter((e) => e.type === 'step').map((e) => e.name), ['read', 'meta', 'check']);
   assert.equal(c.summary.ok, false);
+  // 실제 실행(2026-11-21)에서 본 순서: 쓰기 전에 검수부터 돌려 본 뒤 사이트를 씀 → '검수 결과대로 고치는 중'이 아니라 '사이트 쓰는 중'
+  const pe = [];
+  const pre = new St.Stager((e) => pe.push(e), { agent: 'claude', ws: '/w' });
+  pre.command(St.CHECK_CMD);
+  pre.write('/w/work/site/index.html');
+  pre.command(St.CHECK_CMD);
+  pre.write('/w/work/site/index.html');
+  assert.deepEqual(pe.filter((e) => e.type === 'step').map((e) => e.name), ['check', 'write', 'check', 'fix']);
 });
 
 // ── 띄워서 끝까지 ─────────────────────────────────────────────────────────
