@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { assembleProject, previewHtml } from '../lib/studio.js';
-import { annotate } from '../lib/site-doc.js';
+import { annotate, htmlPages } from '../lib/site-doc.js';
 
 // 완성 뒤 미리보기(docs/plan-ai-first.md §8): 조립된 실제 사이트(참여 기능은 연습 모드)를 샌드박스 iframe에.
 // allow-same-origin을 주지 않아 미리보기 안 코드는 앱 저장소(키·연수)에 닿지 못함. 고른 기기의 실제 폭으로 그린 뒤 칸에 맞게 줄여 보여 줌.
 // [글 고치기]를 켜면 미리보기의 글자를 눌러 바로 고치고(번호 data-lpe로 원본의 같은 자리에 씀), 그림을 누르면 바꾸기 창이 열림.
+// 사이트 구성과 서로 가리킴(SEL_JS): 줄에 마우스를 올리면 그 섹션·항목(data-lps·data-lpi)에 테두리, 고르면 그 자리로 옮겨 반짝,
+// 미리보기의 내용(링크·버튼·입력 칸 말고)을 누르면 사이트 구성이 그 줄을 고름(lp-pick).
 
 // 화면 크기(CSS 픽셀). 근거: docs/research/preview-responsive-2026-11.md
 export const DEVICES = [
@@ -87,8 +89,8 @@ try{var base=new URL(document.baseURI),t=new URL(u);if(t.origin===base.origin){e
 send({type:'lp-ready'});
 })();<\/script>`;
 
-/** 미리보기 안 도구: 글 고치기(누르면 그 자리에서 고침 → 바뀐 글을 앱으로), 그림 누르기, 섹션으로 옮기기·반짝, 스크롤 자리 */
-const EDIT_JS = `<script>(function(){var on=false,cur=null;var st=document.createElement('style');st.textContent='html.lp-editing [data-lpe]{cursor:text}html.lp-editing [data-lpe]:hover,html.lp-editing [data-lpe]:focus-visible{outline:2px dashed #5B49B0;outline-offset:2px}html.lp-editing img[data-lpe]{cursor:pointer}[contenteditable=true]{outline:2px solid #5B49B0!important;outline-offset:2px;background:rgba(91,73,176,.06)}.lp-flash{animation:lpflash 1.4s ease}@keyframes lpflash{0%,60%{box-shadow:inset 0 0 0 4px #5B49B0}100%{box-shadow:inset 0 0 0 4px transparent}}';document.head.appendChild(st);
+/** 미리보기 안 도구: 글 고치기(누르면 그 자리에서 고침 → 바뀐 글을 앱으로), 그림 누르기, 스크롤 자리 */
+const EDIT_JS = `<script>(function(){var on=false,cur=null;var st=document.createElement('style');st.textContent='html.lp-editing [data-lpe]{cursor:text}html.lp-editing [data-lpe]:hover,html.lp-editing [data-lpe]:focus-visible{outline:2px dashed #5B49B0;outline-offset:2px}html.lp-editing img[data-lpe]{cursor:pointer}[contenteditable=true]{outline:2px solid #5B49B0!important;outline-offset:2px;background:rgba(91,73,176,.06)}';document.head.appendChild(st);
 function setOn(v){on=v;document.documentElement.classList.toggle('lp-editing',on);document.querySelectorAll('[data-lpe]').forEach(function(e){if(on){e.setAttribute('tabindex','0');}else{e.removeAttribute('tabindex');}});if(!on&&cur)cur.blur();}
 function send(m){parent.postMessage(m,'*');}
 function start(el){if(el.tagName==='IMG'){send({type:'lp-img',n:+el.getAttribute('data-lpe')});return;}if(cur===el)return;cur=el;var before=el.innerHTML;el.setAttribute('contenteditable','true');el.focus();try{var r=document.createRange();r.selectNodeContents(el);r.collapse(false);var s=getSelection();s.removeAllRanges();s.addRange(r);}catch(x){}
@@ -97,14 +99,26 @@ function key(ev){if(ev.key==='Escape'){el.innerHTML=before;el.blur();}else if(ev
 el.addEventListener('blur',done);el.addEventListener('keydown',key);}
 document.addEventListener('click',function(e){if(!on)return;var el=e.target.closest&&e.target.closest('[data-lpe]');if(!el){var a=e.target.closest&&e.target.closest('a,button,form');if(a)e.preventDefault();return;}e.preventDefault();e.stopPropagation();start(el);},true);
 document.addEventListener('keydown',function(e){if(!on||cur)return;var el=e.target.closest&&e.target.closest('[data-lpe]');if(el&&(e.key==='Enter'||e.key==='F2')){e.preventDefault();start(el);}},true);
-addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type==='lp-edit')setOn(!!d.on);if(d.type==='lp-goto'&&typeof d.y==='number')scrollTo(0,d.y);if(d.type==='lp-scroll'&&typeof d.key==='string'){var t=document.querySelector('[data-lps="'+(window.CSS&&CSS.escape?CSS.escape(d.key):d.key)+'"]');if(t){t.scrollIntoView({block:'start'});t.classList.remove('lp-flash');void t.offsetWidth;t.classList.add('lp-flash');}}});
+addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type==='lp-edit')setOn(!!d.on);if(d.type==='lp-goto'&&typeof d.y==='number')scrollTo(0,d.y);});
 var tm=0;addEventListener('scroll',function(){clearTimeout(tm);tm=setTimeout(function(){send({type:'lp-y',y:scrollY});},120);},{passive:true});})();<\/script>`;
+
+/** 사이트 구성과 잇기(모든 쪽): 섹션(data-lps)·항목(data-lpi)으로 옮기기·반짝(lp-scroll: 틀 안만 스크롤, 앱 화면은 그대로), 테두리(lp-hl), 누른 곳 알리기(lp-pick) */
+const SEL_JS = `<script>(function(){var st=document.createElement('style');st.textContent='.lp-flash{animation:lpflash 1.4s ease}@keyframes lpflash{0%,60%{box-shadow:inset 0 0 0 4px #5B49B0}100%{box-shadow:inset 0 0 0 4px transparent}}[data-lp-hl]{outline:2px solid #5B49B0!important;outline-offset:-2px}@media (prefers-reduced-motion:reduce){.lp-flash{animation:none}}';document.head.appendChild(st);
+function q(v){return window.CSS&&CSS.escape?CSS.escape(String(v)):String(v).replace(/"/g,'')}
+function find(d){var t=null;if(typeof d.item==='number')t=document.querySelector('[data-lpi="'+d.item+'"]');if(!t&&d.key)t=document.querySelector('[data-lps="'+q(d.key)+'"]');return t}
+var hl=null;function light(t){if(hl)hl.removeAttribute('data-lp-hl');hl=t||null;if(hl)hl.setAttribute('data-lp-hl','')}
+addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};
+if(d.type==='lp-scroll'){var t=find(d);if(t){var r=t.getBoundingClientRect();scrollTo(0,Math.max(0,r.top+scrollY-(typeof d.item==='number'?Math.max(0,(innerHeight-r.height)/2):0)));t.classList.remove('lp-flash');void t.offsetWidth;t.classList.add('lp-flash')}}
+if(d.type==='lp-hl')light(d.key||typeof d.item==='number'?find(d):null)});
+document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||document.documentElement.classList.contains('lp-editing'))return;var x=e.target;if(!x||!x.closest||x.closest('a,button,input,select,textarea,label,summary,video,audio,iframe,[contenteditable],[role=button],[tabindex]'))return;
+var s=x.closest('[data-lps]'),k=x.closest('[data-lpi]');if(!s&&!k)return;try{parent.postMessage({type:'lp-pick',key:s?s.getAttribute('data-lps'):'',item:k?+k.getAttribute('data-lpi'):null},'*')}catch(_){}})})();<\/script>`;
 
 /**
  * p: 연수(site·meta), ver: 그림이 바뀌거나 실행 취소·복원하면 올림(미리보기 틀을 새로 읽음: 글자가 같아도 다시 그림), editing·setEditing: 글 고치기,
- * onText(n, html)·onImage(n): 미리보기에서 고친 글·누른 그림, quiet: 미리보기를 다시 그리지 않을 index.html(방금 미리보기에서 고친 글), goto: { key, n } 섹션으로
+ * onText(n, html)·onImage(n): 미리보기에서 고친 글·누른 그림, quiet: 미리보기를 다시 그리지 않을 index.html(방금 미리보기에서 고친 글),
+ * goto: { page, key, item, after, n } 그 쪽의 섹션·항목으로(after: 고친 뒤 다시 그린 다음에), bus: 사이트 구성이 부르는 { hl }, onPick({ page, key, item }): 미리보기에서 누른 곳
  */
-export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, quiet, goto }) {
+export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, quiet, goto, bus, onPick }) {
   const [device, setDeviceRaw] = useState(() => store.get('device2', typeof innerWidth === 'number' && innerWidth < 700 ? 'phone' : 'laptop'));
   const [land, setLand] = useState(false);
   const [full, setFull] = useState(false);
@@ -114,7 +128,8 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
   const [focusable, setFocusable] = useState(false);
   const frame = useRef(); const canvas = useRef(); const y = useRef(0); const t = useRef();
   const files = useRef({}); const hash = useRef(''); const [note, setNote] = useState(''); const [extra, setExtra] = useState([]);
-  const ready = useRef(false); const [reload, setReload] = useState(0); const drawnVer = useRef(ver);
+  const ready = useRef(0); const loads = useRef(0); const [reload, setReload] = useState(0); const drawnVer = useRef(ver);
+  const want = useRef(null); const wantT = useRef(); const pageRef = useRef(page); pageRef.current = page;
   const box = useBox(canvas);
   const setDevice = (v) => { setDeviceRaw(v); store.set('device2', v); };
   const post = (msg) => { try { frame.current?.contentWindow?.postMessage(msg, '*'); } catch { } };
@@ -126,13 +141,15 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     t.current = setTimeout(async () => {
       try {
         // 조립(참여 기능은 이 기기 안 연습). 글 고치기 번호(data-lpe)를 붙인 index.html로
-        const r = await assembleProject(p, { site: { ...p.site, 'index.html': annotate(p.site['index.html'] || '') } });
+        // 사이트 구성과 잇는 번호(data-lps 섹션·data-lpi 항목)는 모든 쪽에
+        const draw = { ...p.site }; for (const k of htmlPages(p.site)) draw[k] = annotate(p.site[k] || '', { text: k === 'index.html' });
+        const r = await assembleProject(p, { site: draw });
         if (!r.files?.['index.html']) { setErr((r.errors || r.warnings || []).map((x) => x.message_ko).join(' ') || '미리보기를 그리지 못했어요.'); return; }
         files.current = r.files;
         const more = Object.keys(r.files).filter((k) => /\.html?$/i.test(k) && !ENGINE_HTML.has(k) && !k.includes('/')).sort();
         setExtra((x) => (x.join() === more.join() ? x : more));
         const pg = r.files[page] ? page : 'index.html';
-        setHtml(previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + NAV_JS })); setErr('');
+        setHtml(previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + SEL_JS + NAV_JS })); setErr('');
         // 실행 취소·복원: 미리보기에서 고친 글은 틀 안에만 있고 그린 글(html)은 고치기 전 그대로라, 되돌린 글이 같으면 srcdoc가 안 바뀜 → 틀을 새로 읽음
         if (drawnVer.current !== ver) { drawnVer.current = ver; setReload((k) => k + 1); }
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
@@ -152,17 +169,28 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     const f = (e) => {
       if (e.source !== frame.current?.contentWindow) return;
       const d = e.data || {};
-      if (d.type === 'lp-ready') ready.current = true;
+      if (d.type === 'lp-ready') ready.current += 1;
       else if (d.type === 'lp-y' && typeof d.y === 'number') y.current = d.y;
       else if (d.type === 'lp-text' && Number.isInteger(d.n) && typeof d.html === 'string') onText?.(d.n, d.html.slice(0, 20000));
       else if (d.type === 'lp-img' && Number.isInteger(d.n)) { setFull(false); onImage?.(d.n); }
       else if (d.type === 'lp-nav' && typeof d.path === 'string') openPath(d.path, typeof d.hash === 'string' ? d.hash : '');
       else if (d.type === 'lp-open' && typeof d.url === 'string' && /^data:/.test(d.url)) openBlob(dataBlob(d.url));
+      else if (d.type === 'lp-pick' && typeof d.key === 'string') onPick?.({ page, key: d.key.slice(0, 200), item: Number.isInteger(d.item) ? d.item : null });
     };
     addEventListener('message', f); return () => removeEventListener('message', f);
-  }, [onText, onImage, page]);
+  }, [onText, onImage, onPick, page]);
   useEffect(() => { post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); }, [editing, page]);
-  useEffect(() => { if (goto?.key) { if (page !== 'index.html') setPage('index.html'); else post({ type: 'lp-scroll', key: goto.key }); } }, [goto?.n]);
+  // 섹션·항목으로: 다른 쪽이면 그 쪽을 그린 뒤, 고친 뒤면(after) 다시 그린 다음에(늦으면 1.5초 뒤 바로)
+  useEffect(() => {
+    if (!goto?.n || (!goto.key && !Number.isInteger(goto.item))) return;
+    const msg = { type: 'lp-scroll', key: goto.key || '', item: Number.isInteger(goto.item) ? goto.item : null };
+    const pg = goto.page || 'index.html';
+    clearTimeout(wantT.current);
+    if (pg !== page) { want.current = msg; setPage(pg); return; }
+    if (goto.after) { want.current = msg; wantT.current = setTimeout(() => { if (want.current === msg) { want.current = null; post(msg); } }, 1500); return; }
+    post(msg);
+  }, [goto?.n]);
+  if (bus) bus.current = { hl: (s) => post({ type: 'lp-hl', ...(s && s.page === pageRef.current ? { key: s.key || '', item: Number.isInteger(s.item) ? s.item : null } : { key: '', item: null }) }) };
   useEffect(() => {
     if (!full) return undefined;
     const k = (e) => { if (e.key === 'Escape') setFull(false); };
@@ -200,8 +228,11 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
             <div class={`pv-device is-${fit ? 'fit' : d.icon}${turned ? ' is-land' : ''}`} style={fit ? undefined : { width: `${Math.round(vw * scale)}px`, height: `${Math.round(vh * scale)}px`, '--s': scale }}>
               <iframe key={reload} ref={frame} onLoad={() => {
                 // 사이트 스크립트가 주소를 바꿔(location.href=…) 미리보기 문서를 떠났으면(길찾기 스크립트의 신호가 없음) 같은 화면으로 되돌림
-                setTimeout(() => { if (!ready.current) { setReload((k) => k + 1); setNote('미리보기에서는 이 이동을 따라갈 수 없어 처음 화면으로 돌아왔어요. 배포한 사이트에서는 그대로 움직여요.'); setTimeout(() => setNote(''), 5000); } ready.current = false; }, 900);
-                post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); if (hash.current) { post({ type: 'lp-hash', id: hash.current }); hash.current = ''; } else if (y.current && page === 'index.html') post({ type: 'lp-goto', y: y.current }); }}
+                // 읽을 때마다 하나씩 세어 비교(잇따라 다시 그려도 앞 읽기의 신호를 뒤 것으로 잘못 보지 않게)
+                const my = ++loads.current;
+                setTimeout(() => { if (loads.current !== my) return; if (ready.current < my) { ready.current = my; setReload((k) => k + 1); setNote('미리보기에서는 이 이동을 따라갈 수 없어 처음 화면으로 돌아왔어요. 배포한 사이트에서는 그대로 움직여요.'); setTimeout(() => setNote(''), 5000); } else ready.current = my; }, 900);
+                post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); if (hash.current) { post({ type: 'lp-hash', id: hash.current }); hash.current = ''; } else if (y.current && page === 'index.html') post({ type: 'lp-goto', y: y.current });
+                if (want.current) { const m = want.current; want.current = null; clearTimeout(wantT.current); setTimeout(() => post(m), 60); } }}
                 title="연수 사이트 미리보기" tabIndex={focusable ? 0 : -1}
                 sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals" srcdoc={html}
                 style={fit ? undefined : { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` }} />

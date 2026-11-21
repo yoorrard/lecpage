@@ -1,5 +1,5 @@
 // 2. 만들기·수정 한 화면 e2e(가짜 AI): 만들기 → 한 화면에서 AI로 세 번 이어서 수정(대화가 남고 새로 고쳐도 이어짐)
-// → 연수 정보의 날짜 바꾸기(사이트 글·발표 화면·QR 안내문·일정 파일) → 버전 기록(새것이 앞, 바뀔 때마다)과 복원
+// → 연수 정보의 일시 줄에서 날짜 바꾸기(사이트 글·발표 화면·QR 안내문·일정 파일) → 버전 기록(새것이 앞, 바뀔 때마다)과 복원
 // → 자료 2개 추가(사이트 자료실) → 배포(가짜 Vercel)한 사이트에 다운로드 링크와 파일. 1280·390 화면 그림
 const L = require('./lib.js');
 const H = require('./h2.js');
@@ -32,7 +32,7 @@ async function sendEdit(p, text) {
   // ── 1280: 전체 흐름 ──
   const { ctx, st, p, errs, pid } = await build(b, 1280, 860);
   L.ok('one screen: preview + panel side by side, no tabs', await p.locator('[role=tablist]').count() === 0 && await p.evaluate(() => { const a = document.querySelector('.st .preview').getBoundingClientRect(), c = document.querySelector('.st-panel').getBoundingClientRect(); return a.right <= c.left + 1 && a.width > c.width; }));
-  L.ok('one screen: info · files · sections · chat in one panel, composer pinned', await p.locator('.st-scroll .st-info').count() === 1 && await p.locator('.st-scroll .st-files').count() === 1 && await p.locator('.st-scroll .st-fold').count() === 2 && await p.locator('.st-scroll .st-chat').count() === 1 && await p.locator('.st-composer .st-compose textarea').count() === 1);
+  L.ok('one screen: info · site outline · files · look · chat in one panel, composer pinned', await p.locator('.st-scroll .st-info').count() === 1 && await p.locator('.st-scroll .st-outline').count() === 1 && await p.locator('.st-scroll .st-files').count() === 1 && await p.locator('.st-scroll .st-fold').count() === 1 && await p.locator('.st-scroll .st-chat').count() === 1 && await p.locator('.st-composer .st-compose textarea').count() === 1);
   await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await noScroll(p, 'studio 1280');
   await p.screenshot({ path: OUT + '1280-01-studio.png' });
@@ -48,14 +48,14 @@ async function sendEdit(p, text) {
   await p.reload({ waitUntil: 'load' }); await L.waitStudio(p);
   L.ok('chat: history survives refresh', await p.locator('.st-log .st-msg').count() === 6 && /세 번째 요청/.test(await p.locator('.st-log').innerText()));
   // 연수 정보: 날짜
-  await p.click('.st-info .st-card-h button:has-text("수정")');
-  await p.fill('.st-info-form input[type=date]', '2026-12-22'); await p.waitForTimeout(1500);
+  await p.click('.st-info [data-k="when-0"] .prop-v');
+  await p.fill('.st-info .prop-when input[type=date]', '2026-12-22'); await p.waitForTimeout(1500);
   pr = await L.readProject(p, pid);
   const idx = pr.site['index.html'];
   L.ok('date: meta changed', pr.meta.sessions?.[0]?.date === '2026-12-22', JSON.stringify(pr.meta.sessions));
   L.ok('date: same date in site text changed (format kept, weekday fixed)', /2026년 12월 22일\(화\)/.test(idx) && !/12월 3일/.test(idx), (idx.match(/2026년 12월 \d+일[^<]{0,6}/g) || []).join(' | '));
-  await p.click('.st-info .st-card-h button:has-text("접기")');
-  L.ok('date: summary line shows new date', /12월 22일\(화\)/.test(await p.locator('.st-info').innerText()));
+  await p.click('.st-info .prop-when button:has-text("완료")');
+  L.ok('date: info row shows new date', /12월 22일\(화\)/.test(await p.locator('.st-info').innerText()));
   const frame = p.frameLocator('.pv-device iframe');
   for (const [pg, name] of [['screen.html', 'presenter'], ['poster.html', 'poster'], ['console.html', 'console']]) {
     await p.selectOption('.pv-page select', pg); await p.waitForTimeout(1300);

@@ -1,5 +1,6 @@
 // 2. 만들기·수정 한 화면의 바탕(되풀이 시험): 버전 기록(바뀔 때마다·새것이 앞·복원), 연수 날짜·시간을 사이트 글에 같은 꼴로,
-// 강사가 올린 자료(자료실 자리 표시가 없으면 키트가 자료 칸을 붙임), Skill의 site/files/ 자료
+// 강사가 올린 자료(자료실 자리 표시가 없으면 키트가 자료 칸을 붙임), Skill의 site/files/ 자료,
+// 사이트 구성의 항목 설정(lib/kit-fields.js: 속성 ↔ 입력 값, 조립이 읽는 규칙과 같게)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { recordVersion, sameState, mergeVersions, restoreLabel, aiVersionLabel, addChat, aiReply, MAX_VERSIONS } from '../../../../app/src/lib/versions.js';
@@ -7,6 +8,7 @@ import { swapDate, swapTimeRange, parseIso } from '../../../../app/src/lib/date-
 import * as K from '../src/kit/index.js';
 import { nodeRuntime } from '../node.js';
 import { unlistedFiles } from '../../scripts/kit-cmds.mjs';
+import { readKit, writeKit, checkKit, kitSummary, optionsOf } from '../../../../app/src/lib/kit-fields.js';
 
 const S = (n) => ({ 'index.html': `<!doctype html><title>t</title><p>${n}</p>` });
 
@@ -101,4 +103,52 @@ test('Skill: site/files/에 넣고 걸지 않은 파일은 자료실 목록으�
   assert.deepEqual(unlistedFiles(site), [{ title: '활동지', href: 'files/활동지.hwpx', kind: 'HWPX', size: '3KB' }]);
   const r = K.assemble(site, { v: 2, title: '시험' }, { runtime: rt, target: 'zip', materials: unlistedFiles(site) });
   assert.match(r.files['index.html'], /id="lpk-files"[\s\S]*files\/활동지\.hwpx/);
+});
+
+// ── 사이트 구성의 항목 설정(속성 ↔ 입력 값) ──
+const attrsOf = (patch, base = {}) => { const a = { ...base }; for (const [k, v] of Object.entries(patch)) { if (v === null) delete a[k]; else if (v !== undefined) a[k] = v; } return a; };
+const tagOf = (type, a) => `<div data-lp="${type}"${Object.entries(a).map(([k, v]) => ` ${k}='${String(v).replace(/'/g, '&#39;')}'`).join('')}></div>`;
+
+test('항목 설정: 투표(질문·보기·정답)를 고쳐 쓰면 조립이 같은 투표로 읽음', () => {
+  const a0 = { 'data-question': '먼저 해 볼 것은?', 'data-options': '["학습지","평가 문항","가정통신문"]', 'data-answer': '2' };
+  const v = readKit('poll', a0);
+  assert.deepEqual(v, { question: '먼저 해 볼 것은?', kind: 'choice', options: ['학습지', '평가 문항', '가정통신문'], answer: 1 });
+  // 보기를 하나 더하고 정답을 셋째로
+  const patch = writeKit('poll', { ...v, options: [...v.options, '수업 슬라이드'], answer: 2 }, a0);
+  const a1 = attrsOf(patch, a0);
+  assert.equal(a1['data-answer'], '가정통신문', '정답은 보기 글로(보기에 숫자가 있어도 헷갈리지 않게)');
+  assert.equal(readKit('poll', a1).answer, 2);
+  const r = K.assemble({ 'index.html': PAGE(tagOf('poll', a1)) }, { v: 2, title: '시험' }, { runtime: rt, target: 'zip' });
+  const poll = r.collected.polls[0];
+  assert.deepEqual(poll.options, ['학습지', '평가 문항', '가정통신문', '수업 슬라이드']);
+  assert.equal(r.blueprint.sections.find((x) => x.type === 'poll').items.find((x) => x.id === poll.id).answer, 2, '강사 화면의 정답');
+  assert.ok(!(r.warnings || []).some((w) => /poll/.test(w.code || '')), JSON.stringify(r.warnings));
+  // 낱말로 바꾸면 보기·정답은 빠지고, 점수는 처음부터 점수였을 때만 이름표를 지킴
+  assert.deepEqual(writeKit('poll', { ...v, kind: 'word' }, a0), { 'data-question': '먼저 해 볼 것은?', 'data-kind': 'word', 'data-answer': null, 'data-options': null });
+  assert.equal(writeKit('poll', { ...v, kind: 'scale' }, { ...a0, 'data-kind': 'scale' })['data-options'], undefined);
+  assert.equal(checkKit('poll', { question: '', kind: 'choice', options: ['a', 'b'] }), '질문을 적어 주세요.');
+  assert.match(checkKit('poll', { question: 'q', kind: 'choice', options: ['a', ''] }), /2~6개/);
+  assert.equal(checkKit('poll', { question: 'q', kind: 'word', options: [] }), '');
+  assert.deepEqual(optionsOf('예|아니요'), ['예', '아니요'], "엔진처럼 '|'로 나눈 보기도 읽음");
+});
+
+test('항목 설정: 설문 문항·교재 쪽·실습 단계·자료 링크·보드 안내 글', () => {
+  const sv = writeKit('survey', { custom: true, questions: [{ q: '어땠나요?', kind: 'scale' }, { q: '쓸 수 있나요?', kind: 'choice', options: ['네', '아니요'] }, { q: '', kind: 'text' }] });
+  assert.deepEqual(JSON.parse(sv['data-questions']), [{ q: '어땠나요?', kind: 'scale' }, { q: '쓸 수 있나요?', kind: 'choice', options: ['네', '아니요'] }]);
+  assert.deepEqual(readKit('survey', sv).questions.map((q) => q.q), ['어땠나요?', '쓸 수 있나요?']);
+  assert.deepEqual(writeKit('survey', { custom: false }), { 'data-questions': null }, '기본 문항으로');
+  assert.match(checkKit('survey', { custom: true, questions: [{ q: '골라요', kind: 'choice', options: ['하나'] }] }), /두 개 이상/);
+  const r = K.assemble({ 'index.html': PAGE(tagOf('survey', sv)) }, { v: 2, title: '시험' }, { runtime: rt, target: 'zip' });
+  assert.equal(r.collected.survey[0].questions.length, 2);
+  assert.equal(checkKit('deck', { pages: '1-12, 15' }), '');
+  assert.match(checkKit('deck', { pages: '처음부터' }), /1-12/);
+  assert.deepEqual(writeKit('deck', { pages: '' }), { 'data-pages': null }, '비우면 모든 쪽');
+  assert.deepEqual(writeKit('step', { title: '1단계: 접속', minutes: '15' }), { 'data-title': '1단계: 접속', 'data-minutes': '15' });
+  assert.match(checkKit('step', { title: '접속', minutes: '900' }), /1~600/);
+  assert.equal(kitSummary('step', { 'data-title': '접속', 'data-minutes': '10' }), '접속 · 10분');
+  assert.match(checkKit('materials', { items: [{ title: '안내', href: 'javascript:alert(1)' }] }), /https:\/\//);
+  assert.equal(checkKit('materials', { items: [{ title: '', href: '' }] }), '', '빈 줄은 무시');
+  assert.deepEqual(JSON.parse(writeKit('materials', { items: [{ title: '활동지', href: 'files/a.pdf' }, { title: '', href: '' }] })['data-items']), [{ title: '활동지', href: 'files/a.pdf' }]);
+  assert.deepEqual(writeKit('board', { prompt: '  사진을   올려요 ' }), { 'data-prompt': '사진을 올려요' });
+  assert.equal(kitSummary('poll', { 'data-question': '무엇?', 'data-kind': 'word' }), '무엇? · 낱말 모으기');
 });

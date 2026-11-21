@@ -36,8 +36,8 @@ async function check(p, label) {
     await p.click('.making button:has-text("계속 만들기")');
     await L.waitStudio(p);
     await p.waitForTimeout(1800); await check(p, `${tag} studio`);
-    await p.click('.st-info button:has-text("수정")'); await p.waitForTimeout(300); await check(p, `${tag} studio info form`);
-    if (w > 900) { await p.click('.st-fold summary:has-text("섹션")'); await p.waitForTimeout(300); await check(p, `${tag} studio sections`); }
+    await p.click('.st-info [data-k="when-0"] .prop-v'); await p.waitForTimeout(300); await check(p, `${tag} studio info when`); await p.keyboard.press('Escape');
+    if (w > 900) { await p.click('.sec2 >> nth=4 >> .sec2-tw'); await p.click('.sec2 >> nth=4 >> .kit-row >> nth=0'); await p.waitForTimeout(300); await check(p, `${tag} studio outline + item form`); await p.keyboard.press('Escape'); await p.click('.sec2 >> nth=4 >> .sec2-tw'); }
     else { await p.click('.st-switch button:has-text("미리보기")'); await p.waitForTimeout(800); await check(p, `${tag} studio preview`); await p.click('.st-switch button:has-text("수정")'); }
     if (w > 900 && scheme === 'light') {
       // 키보드: 목록의 ↑↓

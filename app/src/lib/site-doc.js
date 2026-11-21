@@ -1,5 +1,6 @@
 // 완성 뒤 편집(docs/plan-ai-first.md §8): AI가 만든 사이트 HTML을 DOM으로 직접 고치고 site['index.html']로 다시 씀(파서는 DOMParser).
-// 목록 = 사이트의 맨 바깥 <section>(순서·숨기기·지우기·이름), 글 고치기 = 미리보기에서 누른 글(번호로 찾음), 그림 바꾸기, 색·글꼴(--lp-* 변수).
+// 사이트 구성 = 쪽마다 맨 바깥 <section>(순서·숨기기·삭제·이름)과 그 안의 항목(참여 기능 자리 표시·실습 단계의 설정, lib/kit-fields.js),
+// 글 고치기 = 미리보기에서 누른 글(번호로 찾음), 그림 바꾸기, 색·글꼴(--lp-* 변수).
 // 미리보기에는 원본 사본에 번호(data-lpe 글, data-lps 섹션)를 붙여 조립하고, 고친 내용은 같은 순서로 걸어 원본의 같은 자리에 씀.
 
 import { parseIso, swapDate, swapTimeRange } from './date-text.js';
@@ -43,11 +44,69 @@ export function ensureIds(html) {
   return changed ? serialize(doc) : html;
 }
 
-/** 목록: [{ id, name, hidden, steps }] */
-export function listSections(html) {
+/** 목록: [{ id, name, hidden, steps, kits, items }] */
+export const listSections = (html) => outlineOf(html).sections;
+
+// ── 사이트 구성의 항목: 참여 기능 자리 표시(data-lp)와 실습 단계(data-lp-step). 문서 순서의 번호(n)로 가리킴(미리보기 data-lpi와 같은 순서) ──
+const KIT_SEL = '[data-lp],[data-lp-step]';
+/** 항목 요소(자리 표시 안의 자리 표시는 조립이 펼치지 않으므로 뺌) */
+const kitEls = (doc) => (doc.body ? [...doc.body.querySelectorAll(KIT_SEL)].filter((el) => !el.parentElement?.closest('[data-lp]')) : []);
+const kitType = (el) => (el.hasAttribute('data-lp') ? String(el.getAttribute('data-lp') || '').trim() : 'step');
+const stepTitle = (el) => el.getAttribute('data-title') || words(el.querySelector(HEAD)) || '';
+/**
+ * 사이트 구성: 섹션마다 항목을 담고, 섹션 밖 항목은 loose로.
+ * 항목: { n, type(poll·qa·…·step), attrs: { data-…: 값 } } — 실습 단계는 data-title이 없으면 첫 제목 글
+ */
+export function outlineOf(html) {
   const doc = parse(html);
-  return topSections(doc).map((s, i) => ({ id: s.id || `#${i}`, name: sectionName(s, i), hidden: s.hasAttribute('hidden'), steps: s.querySelectorAll('[data-lp-step]').length, kits: [...s.querySelectorAll('[data-lp]')].map((e) => e.getAttribute('data-lp')) }));
+  const secs = topSections(doc);
+  const sections = secs.map((s, i) => ({ id: s.id || `#${i}`, name: sectionName(s, i), hidden: s.hasAttribute('hidden'), steps: s.querySelectorAll('[data-lp-step]').length, kits: [...s.querySelectorAll('[data-lp]')].map((e) => e.getAttribute('data-lp')), items: [] }));
+  const loose = [];
+  kitEls(doc).forEach((el, n) => {
+    const type = kitType(el);
+    const attrs = Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-')).map((a) => [a.name, a.value]));
+    if (type === 'step') attrs['data-title'] = stepTitle(el);
+    const k = secs.findIndex((s) => s.contains(el));
+    (k >= 0 ? sections[k].items : loose).push({ n, type, attrs });
+  });
+  return { sections, loose };
 }
+/** n번째 항목의 속성을 바꿈(patch: { data-…: 글 | null(뺌) }). 실습 단계 이름을 바꾸면 보이는 제목도(옛 이름 그대로일 때) */
+export function setKit(html, n, patch = {}) {
+  return edit(html, (doc) => {
+    const el = kitEls(doc)[n]; if (!el) return false;
+    const step = kitType(el) === 'step'; const old = step ? stepTitle(el) : '';
+    let changed = false;
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined || !/^data-[\w-]+$/.test(k) || k === 'data-lp' || k === 'data-lp-step') continue;
+      if (v === null) { if (el.hasAttribute(k)) { el.removeAttribute(k); changed = true; } } else if (el.getAttribute(k) !== String(v)) { el.setAttribute(k, String(v)); changed = true; }
+    }
+    const t = patch['data-title'];
+    if (step && t && old && t !== old && retitle(el, old, t)) changed = true;
+    return changed;
+  });
+}
+/** n번째 참여 기능을 뺌(실습 단계는 내용이 있어 빼지 않음) */
+export function removeKit(html, n) {
+  return edit(html, (doc) => { const el = kitEls(doc)[n]; if (!el || kitType(el) === 'step') return false; el.remove(); return true; });
+}
+/** 섹션 끝(제목이 든 내용 상자 안)에 참여 기능 자리 표시를 넣음 */
+export function addKit(html, id, type, attrs = {}) {
+  if (!/^[a-z]+$/.test(String(type || ''))) return html;
+  return edit(html, (doc) => {
+    const s = byId(doc, id); if (!s) return false;
+    const el = doc.createElement('div'); el.setAttribute('data-lp', type);
+    for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined && /^data-[\w-]+$/.test(k) && k !== 'data-lp') el.setAttribute(k, String(v));
+    let box = s.querySelector(HEAD)?.parentElement || s;
+    if (box !== s && box.matches('header,hgroup,a,span,label')) box = box.parentElement || s;
+    (s.contains(box) ? box : s).append(el);
+    return true;
+  });
+}
+/** 사이트가 만든 쪽(.html): 첫 쪽이 앞. 강사 화면·발표 화면 등 lecpage가 만드는 쪽은 뺌 */
+const ENGINE_PAGES = /^(console|screen|poster|check|privacy)\.html$/i;
+export const htmlPages = (site = {}) => Object.keys(site || {}).filter((k) => /\.html?$/i.test(k) && !k.includes('/') && typeof site[k] === 'string' && !ENGINE_PAGES.test(k))
+  .sort((a, b) => (a === 'index.html' ? -1 : b === 'index.html' ? 1 : a.localeCompare(b)));
 const byId = (doc, id) => topSections(doc).find((s, i) => s.id === id || `#${i}` === id);
 /** 그 섹션을 가리키는 바로 가기 링크(머리 메뉴 등) */
 const navLinks = (doc, id) => (id ? [...doc.querySelectorAll(`a[href="#${CSS.escape(id)}"]`)] : []);
@@ -92,23 +151,23 @@ export function renameSection(html, id, name) {
   const v = String(name || '').trim(); if (!v) return html;
   return edit(html, (doc) => {
     const s = byId(doc, id); if (!s) return false;
-    const old = sectionName(s);
-    const h = s.querySelector(HEAD);
-    if (h && words(h) === old) {
-      if (!h.children.length) h.textContent = v;
-      else {
-        // 제목 안에 꾸밈(번호 <span> 등)이 있으면 그대로 두고 가장 긴 글 조각만 바꿈(번호를 그대로 적었으면 뗌)
-        const texts = [...h.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
-        const main = texts.sort((a, b) => b.textContent.length - a.textContent.length)[0];
-        const keep = [...h.children].map((c) => words(c)).filter(Boolean);
-        let rest = v; for (const k of keep) if (rest.startsWith(k)) rest = rest.slice(k.length).trim();
-        if (main) main.textContent = rest; else h.textContent = v;
-      }
-    }
-    if (s.hasAttribute('data-title') || !h) s.setAttribute('data-title', v);
+    retitle(s, sectionName(s), v);
+    if (s.hasAttribute('data-title') || !s.querySelector(HEAD)) s.setAttribute('data-title', v);
     navLinks(doc, s.id).forEach((a) => { if (a.children.length === 0) a.textContent = v; });
     return true;
   });
+}
+/** 상자의 첫 제목 글이 옛 이름(old) 그대로면 새 이름으로. 제목 안에 꾸밈(번호 <span> 등)이 있으면 그대로 두고 가장 긴 글 조각만 바꿈(번호를 그대로 적었으면 뗌) */
+function retitle(box, old, v) {
+  const h = box.querySelector(HEAD);
+  if (!h || words(h) !== old) return false;
+  if (!h.children.length) { h.textContent = v; return true; }
+  const texts = [...h.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
+  const main = texts.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+  const keep = [...h.children].map((c) => words(c)).filter(Boolean);
+  let rest = v; for (const k of keep) if (rest.startsWith(k)) rest = rest.slice(k.length).trim();
+  if (main) main.textContent = rest; else h.textContent = v;
+  return true;
 }
 export function sectionHtml(html, id) { const s = byId(parse(html), id); return s ? s.outerHTML : ''; }
 
@@ -133,11 +192,12 @@ function editables(doc) {
   if (doc.body) walk(doc.body, false);
   return out;
 }
-/** 미리보기용 사본: 글 칸·그림에 data-lpe, 맨 바깥 섹션에 data-lps(=섹션 id) */
-export function annotate(html) {
+/** 미리보기용 사본: 글 칸·그림에 data-lpe(text: 글 수정을 하는 첫 쪽만), 맨 바깥 섹션에 data-lps(=섹션 id), 항목에 data-lpi(=번호) */
+export function annotate(html, { text = true } = {}) {
   const doc = parse(html);
-  editables(doc).forEach((el, i) => el.setAttribute('data-lpe', String(i)));
+  if (text) editables(doc).forEach((el, i) => el.setAttribute('data-lpe', String(i)));
   topSections(doc).forEach((s, i) => s.setAttribute('data-lps', s.id || `#${i}`));
+  kitEls(doc).forEach((el, n) => el.setAttribute('data-lpi', String(n)));
   return serialize(doc);
 }
 

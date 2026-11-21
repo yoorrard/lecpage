@@ -45,9 +45,8 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   const frame = p.frameLocator('.pv-device iframe');
   L.ok('studio: preview shows assembled site with kit', await frame.locator('.lpk').count() >= 3, String(await frame.locator('.lpk').count()));
   // 연수 정보: 제목 바꾸면 사이트 글도
-  await p.click('.st-info .st-card-h button:has-text("수정")');
-  const t0 = await p.inputValue('.st-info-form .form-grid input.input >> nth=0');
-  await p.fill('.st-info-form .form-grid input.input >> nth=0', '우리 반 데이터 연수'); await p.keyboard.press('Tab');
+  const t0 = await p.inputValue('#prop-title');
+  await p.fill('#prop-title', '우리 반 데이터 연수'); await p.keyboard.press('Tab');
   await p.waitForTimeout(900);
   let pr0 = await L.readProject(p, pid);
   L.ok('info: title change updates meta + same text in site', pr0.meta.title === '우리 반 데이터 연수' && /<title>우리 반 데이터 연수<\/title>/.test(pr0.site['index.html']), t0);
@@ -72,7 +71,6 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   } else L.ok('image: site has an image', false);
   await p.click('.pv-bar button:has-text("글 수정 중")');
   // 목록: ↓, 끌기, 숨기기
-  await p.click('.st-fold summary:has-text("섹션")');
   const names = async () => p.locator('.sec2-name .ttl').allInnerTexts();
   const n0 = await names();
   await p.click('.sec2 >> nth=1 >> button[aria-label$="아래로"]'); await p.waitForTimeout(300);
