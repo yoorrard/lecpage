@@ -105,11 +105,31 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   await q.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
   await q.waitForSelector('.ai-sub button:has-text("Claude로 만들기"):not([disabled])', { timeout: 90000 });
   await q.screenshot({ path: L.OUT + `${tag}-local.png`, fullPage: true });
+  L.ok('local: badge names lecpage 커넥트', /lecpage 커넥트 켜짐/.test(await q.locator('.ai-pick .conn-badge').first().innerText()));
   await q.click('.ai-sub button:has-text("Claude로 만들기")');
+  await q.waitForSelector('dialog[open] .consent', { timeout: 5000 });
+  L.ok('local: consent says where it goes', /lecpage 커넥트에서 Anthropic으로/.test(await q.locator('dialog[open] .consent').innerText()));
+  L.ok('local: consent once before first use', await L.consent(q));
   await q.waitForSelector('.making, .workspace', { timeout: 20000 });
   L.ok('local: token header sent', bridgeHdr === 'tok-123');
   L.ok('local: generation via local agent', /Claude Code/.test(await q.locator('.step-head').innerText()) || await q.locator('.workspace').count() === 1);
   L.ok('local: no page errors', e2.length === 0, JSON.stringify(e2));
+
+  // ── E. lecpage 커넥트 받기: 지금 운영체제 방법 하나만, 나머지는 [다른 운영체제]에 ──
+  for (const [os, ua] of [['win', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'], ['mac', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36']]) {
+    const c3 = await b.newContext({ viewport: { width: W, height: HH }, userAgent: ua });
+    await c3.addInitScript(() => { try { Object.defineProperty(navigator, 'userAgentData', { get: () => undefined }); } catch { } });
+    const r = await c3.newPage();
+    await r.goto(L.BASE, { waitUntil: 'load' });
+    await r.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await r.click('.ai-sub button:has-text("ChatGPT·Claude 계정으로 연결")');
+    const way = r.locator('.ai-sub .connect-way').first();
+    if (os === 'win') L.ok('connect win: one download button', await way.locator('a:has-text("lecpage 커넥트 받기 (Windows)")').count() === 1 && /lecpage-connect\.cmd$/.test(await way.locator('a').getAttribute('href')));
+    else L.ok('connect mac: one terminal line + 3 steps', /lecpage-connect\.sh \| bash/.test(await way.locator('code').innerText()) && await way.locator('li').count() === 3 && /터미널/.test(await way.innerText()));
+    L.ok(`connect ${os}: other OS folded`, await r.locator('.ai-sub details.connect-os:not([open])').count() === 1);
+    await r.screenshot({ path: L.OUT + `${tag}-connect-${os}.png` });
+    await c3.close();
+  }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

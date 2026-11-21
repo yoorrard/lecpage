@@ -24,7 +24,9 @@ async function check(p, label) {
     await check(p, `${tag} start`);
     await p.click('.ai-nokey button:has-text("쓰던 ChatGPT로")'); await p.waitForSelector('#chat-way');
     await check(p, `${tag} start + chat way`);
-    await p.click('details.ai-more:not([open]) > summary').catch(() => {}); await p.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")'); await p.waitForSelector('dialog[open] .ai-connect');
+    await p.click('details.ai-more:not([open]) > summary').catch(() => {}); await p.click('.ai-card:has(h3:text-is("Claude")) button:has-text("API 키 연결")');
+    await p.waitForSelector('dialog[open] .consent'); await check(p, `${tag} consent dialog`); await L.consent(p);
+    await p.waitForSelector('dialog[open] .ai-connect');
     await check(p, `${tag} key dialog`);
     await p.click('dialog[open] .key-dots li:last-child button');
     await p.fill('dialog[open] input[type=password]', 'AIzaSyFAKEKEY_1234567890abcdefghijklmnopq');
@@ -33,7 +35,7 @@ async function check(p, label) {
     await check(p, `${tag} making (paused)`);
     await p.click('.making button:has-text("계속 만들기")');
     await L.waitStudio(p);
-    for (const t of ['info', 'list', 'check', 'ask', 'look']) { await p.click(`#tab-${t}`); await p.waitForTimeout(t === 'check' ? 1800 : 300); await check(p, `${tag} studio ${t}`); }
+    for (const t of ['info', 'list', 'check', 'ask']) { await p.click(`#tab-${t}`); await p.waitForTimeout(t === 'check' ? 1800 : 300); await check(p, `${tag} studio ${t}`); }
     if (w > 900 && scheme === 'light') {
       // 키보드: 목록의 ↑↓
       await p.click('#tab-list');

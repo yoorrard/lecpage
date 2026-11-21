@@ -13,17 +13,17 @@ export function Connect() {
       <header class="ld-conn-head">
         <p class="ld-kicker">AI 연결</p>
         <h2 id="ld-conn-h">쓰던 ChatGPT·Claude 구독으로 바로 만들어요</h2>
-        <p>API 키를 따로 만들지 않아요. 작은 PC 프로그램이 lecpage.com과 저절로 짝을 맞추고, 내 계정으로 로그인하면 끝이에요. 사용량은 그 계정의 요금제에서 써요.</p>
+        <p>API 키를 따로 만들지 않아요. 작은 프로그램 lecpage 커넥트가 lecpage.com과 저절로 짝을 맞춰요. 내 계정으로 로그인하면 끝이에요. 사용량은 그 계정의 요금제에서 써요.</p>
       </header>
       <div class="ld-conn-map" ref={box}>
         <div class="ld-node ld-node-web"><span class="ld-node-ic" aria-hidden="true"><i /><i /><i /></span><b>lecpage.com</b><small>교재 넣기 · 미리보기 · 배포</small></div>
         <i class="ld-wire" aria-hidden="true" />
-        <div class="ld-node ld-node-pc"><span class="ld-node-ic" aria-hidden="true" /><b>PC 프로그램</b><small class="ld-pair">짝 맞춤 완료</small></div>
+        <div class="ld-node ld-node-pc"><span class="ld-node-ic" aria-hidden="true" /><b>lecpage 커넥트</b><small class="ld-pair">짝 맞춤 완료</small></div>
         <i class="ld-wire" aria-hidden="true" />
         <div class="ld-node ld-node-ai"><b>ChatGPT · Claude</b><small class="ld-login">내 계정으로 로그인</small></div>
       </div>
       <ol class="ld-conn-steps">
-        <li><b>PC 프로그램 실행</b><span>Windows·Mac에서 한 번 받아 실행해요.</span></li>
+        <li><b>lecpage 커넥트 실행</b><span>Windows·Mac·Linux에서 한 번 받아 실행해요.</span></li>
         <li><b>저절로 짝 맞춤</b><span>lecpage.com이 다시 열리며 이 PC와 연결돼요.</span></li>
         <li><b>계정으로 로그인</b><span>로그인하면 바로 만들기가 시작돼요.</span></li>
       </ol>

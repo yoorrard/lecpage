@@ -94,7 +94,7 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   await p.click('#tab-ask');
   await p.selectOption('#panel-ask select', 'hero'); const askId = await p.inputValue('#panel-ask select');
   await p.fill('#panel-ask textarea', '카드마다 예시 한 줄을 더해 줘');
-  await p.click('#panel-ask button:has-text("AI에게 보내기")');
+  await p.click('#panel-ask button:has-text("AI로 수정")');
   await p.waitForSelector('.ai-job:has-text("요청대로 고치고")', { timeout: 10000 });
   await p.screenshot({ path: L.OUT + `${tag}-06-ask-running.png` });
   await H.toastHas(p, /요청한 대로 고쳤어요/, 30000); await p.waitForTimeout(1200);

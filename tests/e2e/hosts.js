@@ -85,7 +85,7 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     ok(`${w} live bad url → plain message`, /script\.google\.com/.test(await p.locator('#live-setup .notice.bad').innerText()));
     // 설정 → 연결 창
     await p.goto(BASE + '#/settings'); await p.waitForTimeout(500);
-    await p.click('.list-rows li:has-text("GitHub Pages") button:text-is("연결")'); await p.waitForSelector('dialog[open] .walk');
+    await p.click('.set-more:not([open]) > summary').catch(() => {}); await p.click('.list-rows li:has-text("GitHub Pages") button:text-is("연결")'); await p.waitForSelector('dialog[open] .walk');
     await p.click('dialog[open] .walk-b button:has-text("이미 가입했어요")'); await p.waitForTimeout(150);
     await p.screenshot({ path: OUT + `${w}-settings-connect.png` });
     await connect(p, 'github_pat_FAKE_TOKEN_1234567890', 'dialog[open]');

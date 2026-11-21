@@ -12,7 +12,7 @@ import { GalleryHead } from './pages/GalleryHead.jsx';
 import { capturePairing } from './lib/pair.js';
 
 // PC 프로그램이 연 주소(#pair=…)면 짝을 기억하고 주소에서 지움(라우터가 읽기 전에). 기다리던 lecpage 탭이 있으면 이 탭은 닫힘
-if (capturePairing()) import('./lib/connection.js').then((m) => m.announcePairing()).then((here) => { if (!here) toast('PC 프로그램과 연결했어요. 교재를 넣고 AI 선택에서 계정으로 로그인해요.'); }).catch(() => { });
+if (capturePairing()) import('./lib/connection.js').then((m) => m.announcePairing()).then((here) => { if (!here) toast('lecpage 커넥트와 연결했어요. 교재를 넣고 AI 선택에서 계정으로 로그인해요.'); }).catch(() => { });
 
 // 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임). 그 화면들의 CSS(styles/screens.css)도 함께 받음:
 // 첫 화면은 기본 CSS(app.css)만 기다려 휴대폰에서 먼저 그려짐(점검 2026-11 L6)
