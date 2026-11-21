@@ -27,7 +27,7 @@ export function DesignPicks({ p, update }) {
         <div class="picks-line">
           <p class="small picks-head">
             <button type="button" class="btn btn-sm" ref={btn} onClick={() => setOpen(true)} aria-haspopup="dialog">디자인 기법 둘러보기</button>
-            <span class="muted">{cart.length ? <><b>담은 디자인 {cart.length}개</b> · AI가 이 연수에 맞게 녹여 써요.</> : '선택 · 마음에 드는 기법을 담아 두면 AI가 참고해요.'}</span>
+            <span class="muted">{cart.length ? <><b>담은 디자인 {cart.length}개</b> · AI가 이 연수에 맞게 녹여 써요.</> : '(선택) 마음에 드는 기법을 담아 두면 AI가 참고해요.'}</span>
           </p>
           {cart.length > 0 && (
             <ul class="picks" aria-label="담은 디자인">

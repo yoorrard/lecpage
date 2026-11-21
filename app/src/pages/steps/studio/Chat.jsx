@@ -138,13 +138,13 @@ export function Composer({ p, sections, ask, setAsk, ways, way, setWay, locked, 
       </div>
       <div class="st-compose-row">
         <textarea ref={ta} class="input" rows={1} maxLength={1500} value={ask.request} disabled={locked || none}
-          placeholder={none ? (p.demo ? '체험에서는 AI에게 보내지 않아요.' : 'AI를 연결하면 바꿀 점을 보낼 수 있어요.') : locked ? 'AI가 고치는 중이에요. 끝나면 이어서 보낼 수 있어요.' : '무엇을 바꿀까요? 예: 실습 단계를 세 개로 나눠 줘'} aria-label="AI에게 보낼 수정 요청"
+          placeholder={none ? (p.demo ? '체험에서는 AI에게 보내지 않아요.' : 'AI를 연결하면 바꿀 점을 보낼 수 있어요.') : locked ? 'AI가 고치는 중이에요. 끝나면 이어서 보낼 수 있어요.' : '예: 실습 단계를 세 개로 나눠 줘'} aria-label="AI에게 보낼 수정 요청"
           onInput={(e) => setAsk({ ...ask, request: e.target.value })}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); } }} />
         <button type="button" class="btn btn-primary st-send" disabled={!ready} onClick={send} aria-label="보내기">보내기</button>
       </div>
       {p.demo ? <p class="small muted">체험이라 AI에게는 보내지 않아요. 직접 수정과 버전 기록은 그대로 해 볼 수 있어요.</p>
-        : none ? <p class="small st-noai">연결한 AI가 없어요. <button type="button" class="btn btn-sm btn-primary" onClick={onConnect}>AI 연결하기</button></p>
+        : none ? <p class="small st-noai">연결한 AI가 없어요. <button type="button" class="btn btn-sm btn-primary" onClick={onConnect}>AI 연결</button></p>
         : <ConnBadge hint={false} />}
     </div>
   );

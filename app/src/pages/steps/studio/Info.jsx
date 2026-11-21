@@ -51,9 +51,9 @@ export function InfoCard({ p, change, update, onConfirmed, open = true, onToggle
   const others = facts.filter((f) => !Object.values(FACT_OF).flat().includes(String(f.label || '').trim()));
   return (
     <section class={`st-card st-info${checked ? '' : ' is-todo'}`} aria-labelledby="st-info-h">
-      <FoldHead id="st-info" title="연수 정보" open={open} onToggle={onToggle} summary={sum} warn={past}>
-        {!checked && <div class="confirm-bar"><button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button></div>}
-      </FoldHead>
+      <FoldHead id="st-info" title="연수 정보" open={open} onToggle={onToggle} summary={sum} warn={past} />
+      {/* 확인 전: 접힌 줄의 요약(일시·장소·강사)을 두 줄까지 다 보이게 하고, 버튼은 그 아래 줄에(값을 보고 누르게) */}
+      {!checked && <div class="confirm-bar"><button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button></div>}
       <div class="st-fold-b" id="st-info-b" hidden={!open}>
       <dl class="props">
         <TextProp k="title" label="연수명" value={m.title || ''} max={160} multiline placeholder="연수명을 넣어 주세요" hint={found('title')}

@@ -52,7 +52,7 @@ export function AiPick({ p, go, idle, ready }) {
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
       <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
       <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
-        <summary><b>다른 방법</b><span class="small muted">API 키 · 터미널 · Codex · AI 에이전트(Skill)</span></summary>
+        <summary><b>다른 방법</b><span class="small muted">API 키 · AI 에이전트(Skill)</span></summary>
         <div class="ai-cards" role="list">
           {AI_CARDS.map((c) => {
             const st = conn?.[c.id];

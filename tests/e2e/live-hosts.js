@@ -40,7 +40,7 @@ async function run(b, width) {
   await p.locator('.pub-live').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + `live-hosts-notice-${tag}.png` });
   // ZIP도 같은 안내
   await p.click('.pub-opt:has-text("ZIP")'); await p.waitForTimeout(200);
-  L.ok(`[${tag}] ZIP gets the notice too`, /ZIP에서는 참여 기능을/.test(await p.locator('.pub-live').innerText().catch(() => '')));
+  L.ok(`[${tag}] ZIP gets the notice too`, /ZIP으로 직접 올리면 참여 기능을/.test(await p.locator('.pub-live').innerText().catch(() => '')));
   // [바로 배포로 바꾸기] → 바로 배포(참여 기능 방까지)
   await p.click('.pub-live button:has-text("바로 배포로 바꾸기")'); await p.waitForTimeout(300);
   L.ok(`[${tag}] switched to 바로 배포`, await p.locator('.pub-mode-main.is-on').count() === 1 && await p.locator('.pub-live').count() === 0);
@@ -72,8 +72,28 @@ async function run(b, width) {
   L.ok(`[${tag}] no page errors`, errs.length === 0, JSON.stringify(errs).slice(0, 200));
   await ctx.close();
 }
+// AI가 lecpage.json에 features를 적지 않아도(실제 AI 답이 대개 그럼) 사이트의 자리 표시(질문·투표·출석)를 보고 참여 기능을 켜서, 바로 배포에 방을 붙임
+async function noFeatures(b) {
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  await H.mockAll(ctx); await instantServer(ctx);
+  const p = await ctx.newPage(); const errs = L.watch(p);
+  await p.goto(BASE, { waitUntil: 'load' });
+  await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+  await L.aiReady(p);
+  await L.makeWith(p, ANSWER.replace(',"features":["qa","poll","attendance"]', '')); await p.click('.st-info button:has-text("이 정보가 맞아요")');
+  const pid = L.pidOf(p);
+  await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1200);
+  const row = await p.locator('#live-setup .ready-s').innerText().catch(() => '');
+  L.ok('[no features] placeholders turn participation on', !/꺼져 있어요/.test(row) && /질문 받기/.test(row) && /바로 배포하면 함께 켜져요/.test(row), row);
+  await H.publish(p);
+  await p.waitForSelector('.success .big-url', { timeout: 60000 });
+  const pr = await L.readProject(p, pid);
+  L.ok('[no features] 바로 배포 attached the instant room', pr?.meta?.live?.url === LIVE && pr?.meta?.live?.provider === 'http', JSON.stringify(pr?.meta?.live || {}).slice(0, 120));
+  L.ok('[no features] no page errors', errs.length === 0, JSON.stringify(errs).slice(0, 200));
+  await ctx.close();
+}
 (async () => {
   const b = await L.chromium.launch();
-  try { for (const w of [1280, 390]) await run(b, w); } catch (e) { console.log('SCRIPT ERROR', e.message); }
+  try { for (const w of [1280, 390]) await run(b, w); await noFeatures(b); } catch (e) { console.log('SCRIPT ERROR', e.message); }
   await b.close();
 })();

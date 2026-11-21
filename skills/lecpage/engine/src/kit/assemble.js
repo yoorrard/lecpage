@@ -366,11 +366,11 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
   const where = `${page}: data-lp="${type}"`;
   switch (type) {
     case 'qa':
-      if (!live) return { html: W.LIVE_OFF }; // 참여 기능 없이: 보내지지 않는 입력 칸을 두지 않음
+      if (!live) return { html: W.liveOffNote('qa') }; // 참여 기능 없이: 보내지지 않는 입력 칸을 두지 않음
       col.qa = true;
       return { html: W.qaBox({ id: `lpk-qa${n > 1 ? '-' + n : ''}`, anonymous: ctx.anonymous, live }) };
     case 'poll': {
-      if (!live) return { html: W.LIVE_OFF };
+      if (!live) return { html: W.liveOffNote('poll') };
       const q = String(attr(t, 'data-question') || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       const kind = ['choice', 'word', 'scale'].includes(attr(t, 'data-kind')) ? attr(t, 'data-kind') : 'choice';
       const o = W.optionList(attr(t, 'data-options'));
@@ -393,7 +393,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       return { html: W.pollBox([item], { live, list: false, ask: item.question, host: ctx.words.host }) };
     }
     case 'board': {
-      if (!live) return { html: W.LIVE_OFF };
+      if (!live) return { html: W.liveOffNote('board') };
       const prompt = String(attr(t, 'data-prompt') || '').replace(/\s+/g, ' ').trim().slice(0, 300);
       let cats = W.DEFAULT_BOARD_CATS;
       const cv = attr(t, 'data-categories');
@@ -413,7 +413,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       return { html: `${prompt ? `<p class="lpk-prompt">${escHtml(prompt)}</p>` : ''}${W.boardBox({ cats, files, maxFiles, moderation, live })}` };
     }
     case 'attend':
-      if (!live) return { html: W.LIVE_OFF };
+      if (!live) return { html: W.liveOffNote('attend') };
       col.attend = true;
       return { html: W.attendBox({ lead: ctx.words.attendLead, after: ctx.words.attendAfter, live }) };
     case 'survey': {
@@ -430,7 +430,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       if (!qs) qs = surveyFor(ctx.words).map((q) => ({ ...q, options: q.options || [] }));
       const id = W.kitSlug(attr(t, 'data-id'), `survey${n > 1 ? '-' + n : ''}`);
       col.survey.push({ id, questions: qs });
-      if (!live) return { html: `${W.LIVE_OFF}` };
+      if (!live) return { html: W.liveOffNote('survey') };
       // 이수 조건(설문을 내야 이수 등)은 키트가 지어 쓰지 않음: 교재·강사가 정한 조건은 AI가 사이트 글로
       return { html: `${W.surveyForm({ id, questions: qs })}${ctx.surveyUrl ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" href="${escAttr(ctx.surveyUrl)}" target="_blank" rel="noopener">기관 설문 열기</a></p>` : ''}` };
     }

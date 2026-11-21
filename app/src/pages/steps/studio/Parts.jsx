@@ -36,10 +36,11 @@ export function FoldHead({ id, title, count, open, onToggle, summary, warn, chil
         <button type="button" class="st-fold-t" aria-expanded={String(!!open)} aria-controls={`${id}-b`} onClick={onToggle}>
           <span class="st-fold-n">{title}{count ? <span class="st-count">{count}</span> : null}</span>
           {!open && summary ? <span class={`st-fold-s${warn ? ' is-warn' : ''}`}>{summary}</span> : null}
-          <i class="st-chev" aria-hidden="true" />
         </button>
       </h2>
       {children}
+      {/* 화살표는 늘 줄 오른쪽 끝(머리 버튼이 있는 줄도 같은 열). 마우스로 눌러도 접고 펼침, 키보드는 제목 버튼으로 */}
+      <span class="st-chev-w" aria-hidden="true" onClick={onToggle}><i class={`st-chev${open ? ' is-open' : ''}`} /></span>
     </div>
   );
 }

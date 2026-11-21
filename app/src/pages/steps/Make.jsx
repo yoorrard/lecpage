@@ -85,7 +85,7 @@ function Making({ p, job, go }) {
           {job.status === 'paused' && <button type="button" class="btn btn-primary" onClick={() => resumeGeneration(p.id)}>계속 만들기</button>}
           {(job.status === 'paused' || (job.status === 'error' && !acts.some((a) => a.id === 'connect'))) && <button type="button" class="btn btn-quiet" onClick={() => go(1)}>다른 AI 선택</button>}
         </div>
-        <p class="small muted">{p.demo ? '체험이라 키가 필요 없고 어디로도 보내지 않아요.' : '창을 닫거나 다른 일을 해도 돼요. 다시 열면 멈춘 단계부터 이어서 해요. 다 만들면 미리보기와 목록이 열려요.'}</p>
+        <p class="small muted">{p.demo ? '체험이라 키가 필요 없고 어디로도 보내지 않아요.' : '창을 닫거나 다른 일을 해도 돼요. 다시 열면 멈춘 단계부터 이어서 해요. 다 만들면 미리보기와 수정 화면이 열려요.'}</p>
       </section>
     </>
   );

@@ -8,7 +8,7 @@ import { demoAnswers } from '../lib/gen/demo-answers.js';
 import meta from '../../../skills/lecpage/references/designs/neo-teach/lecpage.json';
 import pdf from './demo/neo-teach.pdf?url';
 
-const RAW = import.meta.glob('../../../skills/lecpage/references/designs/neo-teach/site/**/*.{html,css,js}', { query: '?raw', import: 'default', eager: true });
+const RAW = import.meta.glob('../../../skills/lecpage/references/designs/neo-teach/site/**/*.{html,css,js,txt}', { query: '?raw', import: 'default', eager: true });
 const files = Object.fromEntries(Object.entries(RAW).map(([k, v]) => [k.replace(/^.*\/neo-teach\/site\//, ''), v]));
 
 export const DEMO_FILE = { name: '질문이 먼저, AI는 그다음_교재.pdf', url: pdf };

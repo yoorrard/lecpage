@@ -69,8 +69,8 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     await openShare(p);
     if (w === 390) { ok('no overflow @390 before publish', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))); await p.locator('h2:has-text("어디에 공개할까요?"), .ready-t:has-text("올릴 곳"), .ready-t:has-text("배포할 곳")').first().evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.waitForTimeout(200); await p.screenshot({ path: OUT + '390-where.png' }); await p.click('.publish .walk-b button:has-text("이미 가입했어요")'); await p.locator('.publish .walk').evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.screenshot({ path: OUT + '390-token.png' }); }
     if (await p.locator('#live-setup > summary').count()) await p.click('#live-setup > summary'); // 지금 화면은 체크리스트 첫 줄에 펼쳐 있음
-    // 다른 곳에 배포할 때는 배포할 곳 바로 아래 안내가 할 일을 알려 주고 이 줄은 접혀 있음 → [연결하기]로 펼침
-    if (await p.locator('#live-setup .ready-h button:has-text("연결하기")').count()) await p.click('#live-setup .ready-h button:has-text("연결하기")');
+    // 다른 곳에 배포할 때는 배포할 곳 바로 아래 안내가 할 일을 알려 주고 이 줄은 접혀 있음 → [연결]로 펼침
+    if (await p.locator('#live-setup .ready-h button:text-is("연결")').count()) await p.click('#live-setup .ready-h button:text-is("연결")');
     for (const m of ['구글 시트', 'Supabase', '내 서버·Cloudflare']) {
       await p.click(`#live-setup .seg button:has-text("${m}")`); await p.waitForTimeout(200);
       const n = await p.locator('#live-setup .walk > li').count();

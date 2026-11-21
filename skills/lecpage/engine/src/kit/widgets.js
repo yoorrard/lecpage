@@ -16,7 +16,10 @@ export const REACTIONS = [
 export const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
 
 // 참여 기능 없이 배포한 사이트(강사가 '참여 기능 없이 배포'를 고름): 누를 수 없는 칸 대신 참가자에게 한 줄
-export const LIVE_OFF = '<p class="lp-note" data-live-off>이 사이트에서는 이 기능을 쓰지 않아요. 궁금한 점은 연수 중에 강사에게 직접 이야기해 주세요.</p>';
+/** 참여 기능 없이 배포한 사이트: 보내지지 않는 입력 칸 대신 그 자리에 맞는 한 줄(AI가 쓴 안내 '출석을 눌러 주세요' 등과 부딪히지 않게 할 일로) */
+export const LIVE_OFF_KO = { qa: '궁금한 점은 연수 중에 강사에게 물어봐 주세요.', poll: '투표는 연수 중에 강사 안내에 따라 해요.', board: '결과물 나눔은 연수 중에 강사 안내에 따라 해요.', attend: '출석은 강사 안내에 따라 확인해요.', survey: '설문은 강사가 따로 안내해요.' };
+export const liveOffNote = (kind) => `<p class="lp-note" data-live-off>${LIVE_OFF_KO[kind] || LIVE_OFF_KO.qa}</p>`;
+export const LIVE_OFF = liveOffNote('qa');
 const liveOff = (live) => (live ? '' : LIVE_OFF);
 
 /** 질문 받기(공감순·최신순) */

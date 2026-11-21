@@ -45,7 +45,7 @@ export function VenueBody({ p, url, instantOn }) {
   const liveDenied = bk?.liveDenied ? `${md(bk.date) || '그날'}은 바로 배포의 참여 기능 방이 다 찼어요. 참여 기능을 내 ${liveNames(bk.liveNext)}로 연결하고 다시 배포해 주세요.` : '';
   const ics = () => {
     const t = venueIcs({ title: m.title, date: m.date, siteUrl: url, altUrl: p.deploy?.lecpage?.altUrl || p.deploy?.second || '', venue: m.venue || '' });
-    saveFile(safeName(m.title) + '_전날점검.ics', t, 'text/calendar;charset=utf-8'); toast('달력 일정을 내려받았어요. 열면 달력 앱에 들어가요.');
+    saveFile(safeName(m.title) + '_전날점검.ics', t, 'text/calendar;charset=utf-8'); toast('전날 점검 일정을 다운로드했어요. 열면 캘린더에 추가돼요.');
   };
   return (
     <div class="stack venue">

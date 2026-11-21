@@ -24,7 +24,31 @@ export const isV2 = (p) => !!p && (p.v === 2 || !!p.site);
 export const isLegacy = (p) => !!p?.blueprint && !isV2(p);
 
 export const firstSession = (m = {}) => (m.sessions || []).find((s) => s?.date) || (m.sessions || [])[0] || { date: '', start: '', end: '' };
-export const featuresOf = (p) => (isV2(p) ? p.meta?.features || [] : p.info?.features || []);
+/**
+ * 켜진 참여 기능: 연수 정보의 features + 사이트에 AI가 넣은 자리 표시(질문·투표·보드·출석, 실습 단계가 있으면 진행 현황).
+ * 엔진 조립(kit/assemble.js synthBlueprint)이 자리 표시가 있으면 그 기능을 켜는 규칙과 같게 셈 → AI가 lecpage.json에 features를 적지 않아도
+ * 배포 화면이 참여 기능을 알아보고 바로 배포 방을 붙임(안 그러면 입력칸은 있는데 기록이 각자 기기에만 남는 연습 모드로 나감)
+ */
+export const featuresOf = (p) => {
+  if (!isV2(p)) return p?.info?.features || [];
+  const own = p.meta?.features || [], site = siteFeatures(p.site);
+  return site.every((f) => own.includes(f)) ? own : [...own, ...site.filter((f) => !own.includes(f))];
+};
+const SITE_FEAT = { qa: 'qa', poll: 'poll', board: 'board', attend: 'attendance' };
+const siteFeatMemo = new WeakMap();
+/** 사이트 글의 참여 기능 자리 표시 → 기능 키(엔진 live.features 꼴) */
+export function siteFeatures(site) {
+  if (!site || typeof site !== 'object') return [];
+  if (siteFeatMemo.has(site)) return siteFeatMemo.get(site);
+  const f = new Set(); let steps = false;
+  for (const [k, v] of Object.entries(site)) {
+    if (!/\.html?$/i.test(k) || typeof v !== 'string') continue;
+    for (const m of v.matchAll(/<[a-z][^>]*\sdata-lp\s*=\s*["'](qa|poll|board|attend)["']/gi)) f.add(SITE_FEAT[m[1].toLowerCase()]);
+    if (!steps && /<[a-z][^>]*\sdata-lp-step\s*=/i.test(v)) steps = true;
+  }
+  if (steps && f.size) f.add('progress');
+  const out = [...f]; siteFeatMemo.set(site, out); return out;
+}
 
 /** 배포용 보기: 예전 설계도와 같은 칸 이름. 새 판이 아니면 설계도 그대로 */
 export function deployView(p) {
@@ -33,7 +57,7 @@ export function deployView(p) {
   return {
     v2: true,
     meta: { title: m.title || p.title || '', subtitle: m.subtitle || '', date: s0.date || '', start: s0.start || '', end: s0.end || '', sessions: (m.sessions || []).filter((s) => s?.date), venue: m.venue || '', siteUrl: m.siteUrl || '', shortUrl: m.shortUrl || '', admin: m.admin || null, organizer: m.organizer || '' },
-    live: { provider: lv.provider || 'local', url: lv.url || '', anonKey: lv.anonKey || '', code: lv.code || '', anonymous: lv.anonymous !== false, features: (m.features || []).filter((f) => LIVE_KEYS.includes(f)), ...(typeof lv.uploads === 'boolean' ? { uploads: lv.uploads } : {}) },
+    live: { provider: lv.provider || 'local', url: lv.url || '', anonKey: lv.anonKey || '', code: lv.code || '', anonymous: lv.anonymous !== false, features: featuresOf(p).filter((f) => LIVE_KEYS.includes(f)), ...(typeof lv.uploads === 'boolean' ? { uploads: lv.uploads } : {}) },
     access: { mode: m.access || 'link' },
     privacy: m.privacy || {},
     audience: { size: p.info?.size || 30, minor: m.audience === 'students' && !!p.info?.minor },

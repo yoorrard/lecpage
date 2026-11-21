@@ -54,7 +54,7 @@ export function Tabs({ tabs, value, onChange, label }) {
   );
 }
 
-export function Progress({ pct }) { return <div class="progress" role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }
+export function Progress({ pct, label = '진행률' }) { return <div class="progress" role="progressbar" aria-label={label} aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }
 
 export function Notice({ kind = '', children }) { return <div class={`notice ${kind}`}>{children}</div>; }
 

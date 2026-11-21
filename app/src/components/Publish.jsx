@@ -309,7 +309,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       {(more || target !== 'lecpage' || !(live && order.includes('lecpage'))) && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="배포할 곳">
         {order.filter((id) => id !== 'lecpage' || !live).map((id) => (
           <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} onChange={() => { setPicked(id); }} />
-            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{p.deploy?.sites?.[id] && <i>배포함</i>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
+            <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{p.deploy?.sites?.[id] && <i>배포됨</i>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
       {target !== 'lecpage' && liveNote && <LiveNote note={liveNote} where={target} instant={!!(live && order.includes('lecpage'))} onInstant={() => { setPicked('lecpage'); setMore(false); }} />}
@@ -345,23 +345,35 @@ const siteDir = (u) => {
 /**
  * 다른 곳(Vercel·GitHub Pages·Netlify·Cloudflare·ZIP)에 배포할 때 참여 기능 안내: 배포할 곳을 고른 바로 그 자리에서.
  * 이런 곳은 사이트 파일만 올려 주므로 질문·투표·출석의 답을 모을 서버를 따로 연결해야 함(바로 배포는 lecpage 서버가 맡음).
- * 할 일은 셋: 바로 배포로 바꾸기(가장 쉬움) · 참여 기능 연결하기 · 참여 기능 없이 배포
+ * 할 일은 셋: 바로 배포로 바꾸기(가장 쉬움) · 참여 기능 연결 · 참여 기능 없이 배포
  */
 function LiveNote({ note, where, instant, onInstant }) {
-  const name = where === 'zip' ? 'ZIP' : LABEL[where] || where;
-  if (note.skip) return <p class="small pub-live-skip" role="status">참여 기능 없이 배포해요. <button type="button" class="btn-link small" onClick={note.onUnskip}>다시 켜기</button></p>;
-  if (!note.need) return null;
+  const zip = where === 'zip', name = LABEL[where] || where;
+  const box = useRef(null), was = useRef(note.skip);
+  // [참여 기능 없이 배포]·[다시 켜기]를 누르면 그 버튼이 사라지므로 초점을 바뀐 자리로 옮김(키보드·화면 읽기 프로그램)
+  useEffect(() => {
+    if (was.current === note.skip) return; was.current = note.skip;
+    const a = document.activeElement; if (a && a !== document.body && box.current?.contains(a)) return;
+    box.current?.querySelector(note.skip ? '.pub-live-skip button' : '#pub-live-h')?.focus();
+  }, [note.skip]);
+  const title = note.lecOnly ? `${zip ? 'ZIP으로 직접 올린' : name} 사이트에서는 참여 기능이 꺼져요`
+    : zip ? 'ZIP으로 직접 올리면 참여 기능을 따로 연결해야 해요' : `${name}에서는 참여 기능을 따로 연결해야 해요`;
   return (
-    <div class="pub-live" role="note" aria-labelledby="pub-live-h">
-      <b id="pub-live-h">{note.lecOnly ? `${name} 사이트에서는 참여 기능이 꺼져요` : `${name}에서는 참여 기능을 따로 연결해야 해요`}</b>
-      <p class="small">{note.lecOnly
-        ? '참여 기능은 바로 배포한 사이트에서만 돼요. 참가자에게는 지금처럼 바로 배포 주소를 알려 주세요.'
-        : `연결하지 않으면 질문·투표·출석이 모이지 않아요.${instant ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}`}</p>
-      <div class="btn-row">
-        {instant && !note.lecOnly && <button type="button" class="btn btn-sm" onClick={onInstant}>바로 배포로 바꾸기</button>}
-        <button type="button" class="btn btn-sm" onClick={note.onConnect}>참여 기능 연결하기</button>
-        <button type="button" class="btn btn-sm btn-quiet" onClick={note.onSkip}>참여 기능 없이 배포</button>
-      </div>
+    <div ref={box} aria-live="polite">
+      {note.skip ? <p class="small pub-live-skip" role="status">참여 기능 없이 배포해요. <button type="button" class="btn-link small" onClick={note.onUnskip}>다시 켜기</button></p>
+        : note.need && (
+          <div class="pub-live" role="note" aria-labelledby="pub-live-h">
+            <b id="pub-live-h" tabIndex={-1}>{title}</b>
+            <p class="small">{note.lecOnly
+              ? '참여 기능은 바로 배포한 사이트에서만 돼요. 참가자에게는 지금처럼 바로 배포 주소를 알려 주세요.'
+              : `연결하지 않으면 질문·투표·출석이 모이지 않아요.${instant ? ' 바로 배포는 연결하지 않아도 돼요.' : ''}`}</p>
+            <div class="btn-row">
+              {instant && !note.lecOnly && <button type="button" class="btn btn-sm" onClick={onInstant}>바로 배포로 바꾸기</button>}
+              <button type="button" class="btn btn-sm" onClick={note.onConnect}>참여 기능 연결</button>
+              <button type="button" class="btn btn-sm btn-quiet" onClick={note.onSkip}>참여 기능 없이 배포</button>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

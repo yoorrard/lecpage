@@ -13,7 +13,7 @@ import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
-import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, toggleFeature, ensureCode, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
+import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, siteFeatures, toggleFeature, ensureCode, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
 import { duplicateProject } from '../../lib/project.js';
 import { whenText } from '@engine/src/hero-meta.js';
 
@@ -201,7 +201,7 @@ export function StepShare({ p, update, go }) {
     }
     return { files, meta };
   }
-  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 빼고 배포하기]를 골랐으면 묻지 않고 참여 기능 없이. kind 'zip': 사이트 ZIP 다운로드 */
+  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 없이 배포]를 골랐으면 묻지 않고 참여 기능 없이. kind 'zip': 사이트 ZIP 다운로드 */
   function guard(run, auto = false, kind = '') {
     // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
     // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
@@ -209,7 +209,12 @@ export function StepShare({ p, update, go }) {
     if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
   }
   const feats = featuresOf(p).filter((f) => LIVE_KEYS.includes(f));
-  const toggleFeat = (v) => update((cur) => toggleFeature(cur, v));
+  // 칩을 누르면 그 줄은 펼친 채로(켜자마자 접혀 나머지 칩이 사라지지 않게). 사이트에 자리가 있는 기능은 여기서 끌 수 없어 알려 줌
+  const toggleFeat = (v) => {
+    setOpen((o) => ({ ...o, live: true }));
+    if (siteFeatures(p.site).includes(v)) { toast(`사이트에 ${FEATURES.find((x) => x.value === v)?.label || '이 기능'} 자리가 있어 켜 두었어요. 빼려면 AI로 수정에서 요청해 주세요.`); return; }
+    update((cur) => toggleFeature(cur, v));
+  };
   const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => document.getElementById('live-setup')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); };
   async function zip(opts = {}) {
     setBusy('zip');
@@ -290,8 +295,8 @@ export function StepShare({ p, update, go }) {
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
   const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
-  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
-  // 꺼져 있으면 고를 기능을 바로 보여 줌. 다른 곳에 배포할 때 연결 전이면 배포할 곳 바로 아래 안내가 할 일을 알려 주므로 이 줄은 접어 둠([연결하기]로 펼침)
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: p.deploy?.sites?.lecpage ? `${featLine} · 바로 배포한 사이트에서 켜져 있어요.` : `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
+  // 꺼져 있으면 고를 기능을 바로 보여 줌. 다른 곳에 배포할 때 연결 전이면 배포할 곳 바로 아래 안내가 할 일을 알려 주므로 이 줄은 접어 둠([연결]로 펼침)
   const elsewhere = !!target && target !== 'lecpage';
   const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
@@ -318,14 +323,14 @@ export function StepShare({ p, update, go }) {
         body: open.past && <p class="small">처음 배포한 기기에서 [파일로 저장]을 누르고 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 그 파일을 여기서 열어 주세요. 새 주소로 배포하면 인쇄한 QR과 보낸 주소도 새것으로 바꿔야 해요.</p> });
   }
   rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' || (liveState === 'off' && official) ? 'todo' : liveState === 'off' || liveState === 'demo' ? 'note' : 'done', line: liveLine,
-    btn: liveState === 'todo' ? (elsewhere ? [open.live ? '접기' : '연결하기', () => toggle('live')] : null) : liveState === 'off' ? null : liveState === 'skip' ? ['변경', () => setSkipLive(false)] : [open.live ? '접기' : liveState === 'demo' ? '보기' : '바꾸기', () => toggle('live')],
+    btn: liveState === 'todo' ? (elsewhere ? [open.live ? '접기' : '연결', () => toggle('live')] : null) : liveState === 'off' ? null : liveState === 'skip' ? ['변경', () => setSkipLive(false)] : [open.live ? '접기' : liveState === 'demo' ? '보기' : '바꾸기', () => toggle('live')],
     body: liveBody && <>
       <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
         {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
       </div>
       {liveOn && !autoHere && <LiveSetup p={p} update={update} prefer={liveOffHere?.next} />}
       {liveOn && autoLive && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
-      {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 빼고 배포하기</button></div>}
+      {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 없이 배포</button></div>}
     </> });
   rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 다운로드' : ''}`,
     btn: needPw ? null : [open.access ? '접기' : '바꾸기', () => toggle('access')],
@@ -382,7 +387,7 @@ export function StepShare({ p, update, go }) {
   };
   return (
     <>
-      <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [배포하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'}>
+      <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : `아래 순서대로 확인하고 ${p.demo ? '[배포 연습하기]' : '[배포하기]'}를 누르면 참가자에게 보낼 주소와 QR이 나와요.`}>
         {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
         {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${!hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
@@ -426,16 +431,16 @@ export function StepShare({ p, update, go }) {
           : '이대로 배포하면 질문·투표·출석이 모이지 않아요.'}{autoLive && elsewhere && !lecOnly ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}</p>
         <div class="btn-row">
           {autoLive && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
-          <button class={`btn${autoLive && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결하기</button>
+          <button class={`btn${autoLive && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결</button>
           <button class="btn btn-quiet" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포</button>
         </div>
       </Dialog>
       <Dialog open={!!askMain} onClose={() => setAskMain('')} label="대표 주소 확인">
         <h2 class="h-sub">이 주소에는 참여 기능이 없어요</h2>
-        <p>대표 주소로 바꾸면 QR과 강사 화면이 이 주소로 바뀌어, 참가자가 질문·투표·출석을 할 수 없어요.</p>
+        <p>이 주소를 대표로 쓰면 QR과 강사 화면이 이 주소를 가리켜서, 참가자가 질문·투표·출석을 할 수 없어요.</p>
         <div class="btn-row">
           <button class="btn btn-primary" data-autofocus onClick={() => setAskMain('')}>그대로 두기</button>
-          <button class="btn" onClick={() => { const t = askMain; setAskMain(''); setPrimary(t, true); }}>그래도 바꾸기</button>
+          <button class="btn" onClick={() => { const t = askMain; setAskMain(''); setPrimary(t, true); }}>대표 주소로 쓰기</button>
         </div>
       </Dialog>
     </>
@@ -641,7 +646,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
-          <p class="small">내용을 고친 뒤 다시 배포하면 같은 주소에 반영돼요. 자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>수정하러 가기</button></p>
+          <p class="small">자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>수정하러 가기</button></p>
         </div>
       </div>
       <JoinBig open={big} onClose={() => setBig(false)} qr={shareUrl} title={m.title} shown={short ? showUrl(short) : showUrl(url)} full={short ? showUrl(url) : ''} />
