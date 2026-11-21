@@ -132,9 +132,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
         const more = Object.keys(r.files).filter((k) => /\.html?$/i.test(k) && !ENGINE_HTML.has(k) && !k.includes('/')).sort();
         setExtra((x) => (x.join() === more.join() ? x : more));
         const pg = r.files[page] ? page : 'index.html';
-        // <base href="about:srcdoc">: 스크립트가 쓰는 상대 주소('#섹션'·pushState)가 앱 주소가 아니라 이 미리보기 문서를 기준으로 풀리게(미리보기 CSP의 base-uri보다 앞에 둠)
-        const one = previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + NAV_JS }).replace(/<head\b[^>]*>/i, (m) => m + '<base href="about:srcdoc">');
-        setHtml(one); setErr('');
+        setHtml(previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + NAV_JS })); setErr('');
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
     }, 250);
     return () => clearTimeout(t.current);
