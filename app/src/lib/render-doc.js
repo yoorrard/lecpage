@@ -1,13 +1,16 @@
-// 브라우저 안에서 PPTX·DOCX → 쪽 그림(WebP, 긴 변 1,600px). lecpage 커넥트(이 PC의 PowerPoint 등으로 PDF)가 없을 때 씀.
+// 브라우저 안에서 PPTX·DOCX·한글(HWP·HWPX) → 쪽 그림(WebP, 긴 변 1,600px). lecpage 커넥트(이 PC의 PowerPoint 등으로 PDF)가 없을 때 씀.
 // - PPTX: @aiden0z/pptx-renderer(Apache-2.0)가 슬라이드를 HTML·SVG로 그림 → @zumer/snapdom(MIT)이 캔버스로 옮김
 // - DOCX: docx-preview(Apache-2.0)가 쪽(구역)을 그림 → 쪽 높이로 잘라 옮김
+// - HWP·HWPX: @rhwp/core(MIT, Rust+WebAssembly)가 쪽마다 캔버스에 바로 그림
 // 실측(2026-11, Chromium·Firefox): 색 배경·도형·사진·표·차트·그라데이션이 LibreOffice로 바꾼 PDF와 거의 같음(r100/doc-render).
+// 한글은 정부 보도자료 4건(HWP 2·HWPX 3, 표·사진·색 상자·2~11쪽)을 한컴이 만든 PDF와 견줘 쪽 수·줄바꿈·표·그림이 같음(r100/hwp).
 // 그림이 모두 한 가지 색이면(브라우저가 그리지 못함) []를 돌려줌 → 앱은 글자만 보내고 'PDF로 저장해 올리면 더 정확해요'를 보여 줌
 import { snapdom } from '@zumer/snapdom';
+import { version as RHWP_VER } from '@rhwp/core/package.json';
 
 const MAX_W = 1600;
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
-export const RENDERABLE = new Set(['pptx', 'ppsx', 'potx', 'pptm', 'docx', 'docm']);
+export const RENDERABLE = new Set(['pptx', 'ppsx', 'potx', 'pptm', 'docx', 'docm', 'hwp', 'hwpx']);
 export const canRenderDoc = (name) => RENDERABLE.has(extOf(name));
 
 /** 화면 밖 무대(그려야 캔버스로 옮길 수 있어 display:none은 안 됨) */
@@ -50,7 +53,8 @@ export async function renderDocPages(name, bytes, { onProgress, signal, maxPages
   if (!RENDERABLE.has(ext) || typeof document === 'undefined') return [];
   const host = stage();
   try {
-    const shots = /^p/.test(ext) ? await pptxPages(bytes, host, { onProgress, signal, maxPages }) : await docxPages(bytes, host, { onProgress, signal, maxPages });
+    const draw = /^p/.test(ext) ? pptxPages : /^hw/.test(ext) ? hwpPages : docxPages;
+    const shots = await draw(bytes, host, { onProgress, signal, maxPages });
     if (shots.length && shots.every((s) => s.isBlank)) return [];
     return shots.map(({ page, blob }) => ({ page, blob, type: blob.type || 'image/png' }));
   } catch (e) {
@@ -118,4 +122,53 @@ async function docxPages(bytes, host, { onProgress, signal, maxPages }) {
     onProgress?.(i + 1, total);
   }
   return out;
+}
+
+// 한글(HWP·HWPX): rhwp 본체(WebAssembly 27.9MB, 받을 때 약 8.5MB)는 앱 배포의 한 파일 한도(25MiB)를 넘어 jsDelivr에서 같은 판(@rhwp/core 판 고정)을 받음.
+// 받은 바이트의 SHA-256이 빌드 때 잰 값(설치한 @rhwp/core의 rhwp_bg.wasm, vite.config.js)과 같을 때만 씀.
+// 못 받음·시간 초과·값이 다름·해석 실패면 [] → 앱은 글자만 보내고 'PDF로 저장해 올리면 더 정확해요'를 보여 줌
+const RHWP_WASM = `https://cdn.jsdelivr.net/npm/@rhwp/core@${RHWP_VER}/rhwp_bg.wasm`;
+const RHWP_WAIT = 90000; // 받기 한도(1Mbps 남짓인 망에서도 받는 길이)
+let rhwpReady = null;
+const hex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+function loadRhwp(signal) {
+  if (!rhwpReady) {
+    rhwpReady = (async () => {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), RHWP_WAIT);
+      const stop = () => ctl.abort(); signal?.addEventListener('abort', stop);
+      try {
+        const [m, bin] = await Promise.all([import('@rhwp/core'), fetch(RHWP_WASM, { signal: ctl.signal, credentials: 'omit' }).then((r) => {
+          if (!r.ok) throw new Error(`rhwp: HTTP ${r.status}`);
+          return r.arrayBuffer();
+        })]);
+        if (hex(await crypto.subtle.digest('SHA-256', bin)) !== __RHWP_WASM_SHA256__) throw new Error('rhwp: 받은 파일의 SHA-256이 다름');
+        await m.default({ module_or_path: bin });
+        return m;
+      } finally { clearTimeout(t); signal?.removeEventListener('abort', stop); }
+    })();
+    rhwpReady.catch(() => { rhwpReady = null; }); // 실패는 기억하지 않음(다음 한글 파일 때 다시 받음)
+  }
+  return rhwpReady;
+}
+
+async function hwpPages(bytes, _host, { onProgress, signal, maxPages }) {
+  const m = await loadRhwp(signal);
+  if (signal?.aborted) return [];
+  const doc = new m.HwpDocument(bytes.slice());
+  try {
+    const total = Math.min(maxPages, doc.pageCount());
+    const out = [];
+    for (let i = 0; i < total; i++) {
+      if (signal?.aborted) break;
+      let w = 794; try { w = JSON.parse(doc.getPageInfo(i)).width || w; } catch { /* A4 */ }
+      const canvas = document.createElement('canvas');
+      doc.renderPageToCanvas(i, canvas, Math.min(2, 1240 / w)); // A4 150dpi 너비쯤(DOCX와 같게)
+      const isBlank = blank(canvas); const blob = await toBlob(canvas);
+      canvas.width = canvas.height = 0;
+      if (blob) out.push({ page: i + 1, blob, isBlank });
+      onProgress?.(i + 1, total);
+      await frame(); // 쪽 사이에 화면이 숨 돌리게
+    }
+    return out;
+  } finally { try { doc.free(); } catch { /* 넘김 */ } }
 }

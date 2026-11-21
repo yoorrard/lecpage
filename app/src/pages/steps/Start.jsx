@@ -19,7 +19,7 @@ const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 // 사진은 교재로 읽지 않음: 빨간 오류 대신 실제로 넣는 곳을 한 줄로(여러 장이어도 한 줄)
 const PHOTO = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
 const PHOTO_NOTE = '사진은 교재로 읽지 않아요. 사이트에 실으려면 사이트를 만든 뒤 미리보기의 그림을 눌러 바꿔요.';
-// 쪽 그림을 만들지 못하고 글자만 읽은 교재(한글·예전 형식, 커넥트 없음): PDF로 저장하는 법을 그 줄에서 바로
+// 쪽 그림을 만들지 못하고 글자만 읽은 교재(예전 형식, 그리기 도구를 못 받은 한글 등, 커넥트 없음): PDF로 저장하는 법을 그 줄에서 바로
 const TEXT_ONLY_NOTE = '글자만 읽었어요. PDF로 저장해 함께 올리면 그림·디자인까지 읽어 더 정확해요.';
 const HOWTO = {
   ppt: [['PowerPoint', '파일 → 내보내기 → PDF/XPS 문서 만들기'], ['Keynote', '파일 → 내보내기 → PDF'], ['구글 프레젠테이션', '파일 → 다운로드 → PDF 문서']],
@@ -74,18 +74,19 @@ function useIngest(p, update) {
         }
       }
       const errors = (material.errors || []).map((e) => e.message_ko);
-      // 쪽 그림(교재 넘기기·AI에게 보낼 그림): PDF·커넥트가 만든 PDF는 pdf.js로, PPTX·DOCX는 브라우저 안에서 그림
+      // 쪽 그림(교재 넘기기·AI에게 보낼 그림): PDF·커넥트가 만든 PDF는 pdf.js로, PPTX·DOCX·한글은 브라우저 안에서 그림
       const pdfBytes = errors.length ? null : ext === 'pdf' ? bytes : conv?.ok ? conv.pdf : null;
-      let shots = [];
+      let shots = []; let whole = false; // whole: 끝까지 그림(중지 없이)
       if (pdfBytes || (!errors.length && !twin && ing.canRenderDoc(f.name))) {
         if (ext === 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
         const ctl = new AbortController(); setStop(ctl);
+        setBusy(`${f.name}: 쪽 그림 만드는 중`); // 첫 쪽 전에 그리기 도구를 받는 동안(한글은 몇 초)
         const prog = (done, total) => { setBusy(`쪽 그림 만드는 중 ${done}/${total}`); setPct(15 + Math.round((done / total) * 80)); };
         shots = await (pdfBytes ? ing.renderSlides(pdfBytes.slice(), prog, ctl.signal) : ing.renderDoc(f.name, bytes, prog, ctl.signal)).catch(() => []).finally(() => setStop(null));
         if (shots.length) {
           if (ext !== 'pdf') await blobs.removePrefix(p.id, 'assets/slides/');
           for (const s of shots) await blobs.put(p.id, 'assets/slides/' + ing.slideFileName(s.page, s.type), s.blob);
-          slidesMade = shots.length; slidesFrom = f.name; if (ctl.signal.aborted) cut = shots.length;
+          slidesMade = shots.length; slidesFrom = f.name; if (ctl.signal.aborted) cut = shots.length; else whole = true;
         } else if (ext === 'pdf') { slidesMade = 0; slidesFrom = ''; }
       }
       // 읽었지만 알릴 것(앞쪽만 읽음·숨긴 슬라이드 등): 그 파일 줄에 주황 한 줄.
@@ -94,7 +95,7 @@ function useIngest(p, update) {
       const warns = errors.length ? [] : (material.warnings || []).filter((w) => !quiet(w)).map((w) => w.message_ko);
       // 그림 없이 글자만 읽은 PPT·워드·한글: PDF로 저장해 올리는 법을 그 줄에서 바로
       const textOnly = !errors.length && ext !== 'pdf' && !twin && !shots.length && !conv?.ok && /^(ppt|pps|pot|doc|hwp|odp|odt|key)/.test(ext);
-      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: material.files?.[0]?.pages || shots.length || 0, errors, ...(warns.length ? { warns } : {}),
+      metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: (whole && /^hw/.test(ext) && shots.length) || material.files?.[0]?.pages || shots.length || 0, errors, ...(warns.length ? { warns } : {}),
         ...(conv?.ok ? { pdf: { key: conv.key, via: conv.via || '', app: conv.app || '' }, note: `${conv.app || '이 PC의 프로그램'}로 PDF를 만들어 썼어요.` } : {}),
         ...(textOnly ? { note: TEXT_ONLY_NOTE, howto: /^hw/.test(ext) ? 'hwp' : /^(doc|odt)/.test(ext) ? 'doc' : 'ppt' } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
