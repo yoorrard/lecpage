@@ -469,6 +469,13 @@
    "head": "/* lecpage screen — 발표 화면: 참여 QR",
    "sha256": "3aeea557625d0c30c44ff386b4dcbc1e4e107b8cdec7a66001c0a25f94a675e5",
    "kept": "2026-11-20"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 105999,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "9d086248f59a90a1ddcf83628a22cdeef3339135656fed01954a66950c30bbab",
+   "kept": "2026-11-21"
   }
  ]
 }

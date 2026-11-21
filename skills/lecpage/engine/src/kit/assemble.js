@@ -786,9 +786,9 @@ export function previewCsp() {
 }
 /**
  * 조립 결과(files) → 한 장 HTML. CSS·JS는 안으로, 그림·글꼴은 data: 주소로(maxImageBytes까지), 사이트 CSP meta는 미리보기 전용 CSP(previewCsp)로 바꿈.
- * @param opts { maxImageBytes: 8e6, extraHead: '', extraBody: '' } — extraHead·extraBody: 앱이 넣을 글(예: 검수 스크립트)
+ * @param opts { maxImageBytes: 8e6, extraHead: '', extraBody: '', phase: '' } — extraHead·extraBody: 앱이 넣을 글(예: 검수 스크립트), phase: 연수 전·중·후 모습(before|during|after)
  */
-export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, extraHead = '', extraBody = '' } = {}) {
+export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, extraHead = '', extraBody = '', phase = '' } = {}) {
   let html = asText(files[page]);
   if (!html) return '<!doctype html><meta charset="utf-8"><p>미리볼 쪽이 없어요.</p>';
   let budget = maxImageBytes;
@@ -841,6 +841,8 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
   const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${escAttr(previewCsp())}">`;
   html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (m) => m + cspMeta) : cspMeta + html;
   html = html.replace(/<body\b/i, '<body data-lp-preview="1"');
+  // phase(before·during·after): 연수 전·중·후 모습으로 미리 보기(런타임이 <html data-lp-phase>를 ?phase=처럼 씀)
+  if (/^(before|during|after)$/.test(phase)) html = html.replace(/<html\b/i, `<html data-lp-phase="${phase}"`);
   if (extraHead) html = html.replace(/<\/head>/i, () => `${extraHead}</head>`);
   if (extraBody) { const i = html.toLowerCase().lastIndexOf('</body>'); html = i < 0 ? html + extraBody : html.slice(0, i) + extraBody + html.slice(i); }
   return html;

@@ -499,7 +499,8 @@
 
   /* ── 연수 전·중·후: 끝난 뒤에는 '연수 후 안내'를 첫 화면 아래로 올리고 회의 입장 버튼을 숨김(?phase=after로 미리 보기) ──
      열어 둔 화면도 시각이 지나면 바뀌게 30초마다(그리고 화면으로 돌아올 때) 다시 셈. 단계가 바뀌면 'lp:phase' 알림(참여 기능이 도크·출석·'지금' 줄을 맞춤) */
-  var PHASE_Q = /[?&]phase=(before|during|after)\b/.exec(location.search);
+  // 앱 미리보기(한 장 HTML)는 주소에 ?phase를 붙일 수 없어 <html data-lp-phase>로 받음(예: 먼저 해보기의 지난 날짜 견본을 '연수 전'으로)
+  var PHASE_Q = /[?&]phase=(before|during|after)\b/.exec(location.search) || /^(before|during|after)$/.exec(doc.documentElement.getAttribute('data-lp-phase') || '');
   /** 지금 단계와 오늘의 연수 시간(여러 날이면 그날, 없으면 다음 날) */
   function phaseNow() {
     var w = DATA.phase; if (!w || !w.end) return null;
