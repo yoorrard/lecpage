@@ -16,12 +16,12 @@
     "@zumer/snapdom": "3.8.2",
     "docx-preview": "0.4.1",
     "pdfjs-dist": "4.10.38",
-    "preact": "10.26.4",
-    "qrcode-generator": "1.4.4",
+    "preact": "10.29.8",
+    "qrcode-generator": "1.5.2",
     "wanted-sans": "1.0.3"
   },
   "devDependencies": {
-    "@preact/preset-vite": "2.10.1",
+    "@preact/preset-vite": "2.10.6",
     "vite": "6.4.6"
   }
 }
