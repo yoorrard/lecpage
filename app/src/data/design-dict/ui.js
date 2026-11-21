@@ -1,4 +1,4 @@
-// ③ UI 무늬·부품
+// ③ UI 패턴·부품
 const SANS = ['IBM Plex Sans KR:wght@400;600;700'];
 const BODY = `body{background:#f5f4f1;color:#1b1b1f;font-family:'IBM Plex Sans KR',system-ui,sans-serif}`;
 
@@ -215,10 +215,10 @@ tr{transition:background .2s}tbody tr:hover{background:#f7f6ff}
   },
   {
     id: 'badge', ko: '배지·상태 표시', en: 'Badge / Status Indicator',
-    desc: '작은 꼬리표로 상태·개수·분류를 알려 주는 표시. 색과 글자를 함께 써요.',
+    desc: '작은 태그로 상태·개수·분류를 알려 주는 표시. 색과 글자를 함께 써요.',
     fit: '진행 중·마감·새 질문 수처럼 한눈에 알아야 할 상태. 남발하면 효과가 사라져요.',
-    tech: '작은 둥근 꼬리표 + 상태 점(진행 중은 깜빡임) + 색만으로 구분하지 않게 글자 함께',
-    tags: ['꼬리표', '상태', '개수', '색'],
+    tech: '작은 둥근 태그 + 상태 점(진행 중은 깜빡임) + 색만으로 구분하지 않게 글자 함께',
+    tags: ['태그', '상태', '개수', '색'],
     f: SANS,
     css: `${BODY}
 .w{position:absolute;inset:0;display:grid;place-content:center;gap:2.4vmin}

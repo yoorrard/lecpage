@@ -10,7 +10,7 @@ const on = (bg) => (ratio(bg, '#ffffff') >= ratio(bg, '#111111') ? '#ffffff' : '
 // [id, 이름, 영어, { bg, ink, acc, acc2?, acc3?, soft }, 어울릴 때, 태그, 한 줄]
 const PAL = [
   ['pal-hanji', '먹과 한지', 'Ink & Hanji', { bg: '#f3eee3', ink: '#1d1b18', acc: '#b23a2b', soft: '#e4dccb' }, '전통·역사·인문 강의. 인주 빨강은 지금·중요 표시에만.', ['전통', '미색', '빨강'], '한지 미색 바탕에 먹색 글자, 도장 빨강 한 점.'],
-  ['pal-dancheong', '단청', 'Dancheong Palette', { bg: '#f5efe2', ink: '#1f2a2a', acc: '#c8442f', acc2: '#1f6b57', acc3: '#e2a92b', soft: '#e7dcc6' }, '한국 문화·지역 축제. 넓은 면은 바탕색, 단청색은 작게.', ['전통', '오방색', '축제'], '단청의 주홍·녹청·황색을 절제해 쓴 짝.'],
+  ['pal-dancheong', '단청', 'Dancheong Palette', { bg: '#f5efe2', ink: '#1f2a2a', acc: '#c8442f', acc2: '#1f6b57', acc3: '#e2a92b', soft: '#e7dcc6' }, '한국 문화·지역 축제. 넓은 면은 바탕색, 단청색은 작게.', ['전통', '오방색', '축제'], '단청의 주홍·녹청·황색을 절제해 쓴 세트.'],
   ['pal-navy', '남색 교실', 'Navy Classroom', { bg: '#0f1f3d', ink: '#f2f4f8', acc: '#ffb547', soft: '#1b2f56' }, '직무연수·기관 행사처럼 신뢰가 필요하면서 어둡게 보는 발표 화면.', ['남색', '신뢰', '어두운 바탕'], '깊은 남색 바탕과 호박색 강조.'],
   ['pal-forest', '숲', 'Forest', { bg: '#e8eedf', ink: '#1e3b2f', acc: '#a8641a', soft: '#d3dfc3' }, '환경·생태·숲 교육, 차분한 성찰 연수.', ['자연', '초록', '흙색'], '이끼 초록 바탕에 짙은 숲색 글자, 흙빛 강조.'],
   ['pal-ocean', '바다와 산호', 'Ocean & Coral', { bg: '#e9f3f5', ink: '#0b3954', acc: '#e4572e', soft: '#cde4ea' }, '과학·해양·여름 캠프처럼 시원한 강의.', ['바다', '파랑', '산호'], '맑은 물빛 바탕, 깊은 바다 글자, 산호 강조.'],

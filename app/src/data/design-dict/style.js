@@ -1,10 +1,10 @@
-// ① 결·스타일(아트 디렉션). 미리보기는 400×300 안팎에서 잘 보이게 vmin 단위로, 크게 보기에서도 같은 비율로 커짐
+// ① 스타일(아트 디렉션). 미리보기는 400×300 안팎에서 잘 보이게 vmin 단위로, 크게 보기에서도 같은 비율로 커짐
 import { GRAIN, grainCss } from './parts.js';
 
 export default [
   {
     id: 'editorial', ko: '편집·잡지', en: 'Editorial',
-    desc: '큰 명조 제목과 비대칭 단, 가는 선으로 장을 나누는 잡지 같은 결.',
+    desc: '큰 명조 제목과 비대칭 단, 가는 선으로 장을 나누는 잡지 같은 스타일.',
     fit: '인문·독서·성찰 연수처럼 읽는 맛이 중요한 강의의 첫 화면.',
     tech: '큰 명조 제목 + 비대칭 2단 grid + 굵은 선/가는 선 + ::first-letter 드롭캡',
     tags: ['명조', '비대칭', '드롭캡', '여백'],
@@ -77,7 +77,7 @@ h2{font:900 7.2vmin/1.08 'Gothic A1';margin:2vmin 0 3.2vmin;letter-spacing:-.04e
   },
   {
     id: 'glassmorphism', ko: '글래스모피즘', en: 'Glassmorphism',
-    desc: '흐린 유리판 너머로 뒤의 색이 은은하게 비치는 결.',
+    desc: '흐린 유리판 너머로 뒤의 색이 은은하게 비치는 스타일.',
     fit: '어두운 바탕의 디지털·미래 주제 강의에서 지금 순서 같은 떠 있는 정보 한 곳.',
     tech: 'background:rgb(255 255 255/.12) + backdrop-filter:blur(18px) saturate(1.5) + 1px 밝은 테두리',
     tags: ['유리', 'backdrop-filter', '블러', '어두운 바탕'],
@@ -97,7 +97,7 @@ b{display:block;font-size:6.2vmin;line-height:1.15;margin:1.4vmin 0 3vmin;letter
   },
   {
     id: 'liquid-glass', ko: '리퀴드 글래스', en: 'Liquid Glass',
-    desc: '물방울처럼 두툼한 유리가 가장자리에서 빛을 받아 반짝이며 떠다니는 결.',
+    desc: '물방울처럼 두툼한 유리가 가장자리에서 빛을 받아 반짝이며 떠다니는 스타일.',
     fit: '떠 있는 메뉴·지금 보기 버튼처럼 콘텐츠 위에 얹히는 작은 조작부.',
     tech: 'backdrop-filter:blur(2px) saturate(1.9) + inset 하이라이트/그늘 box-shadow 여러 겹 + 알약 모양',
     tags: ['유리', '반사광', '떠 있는 버튼', '2025'],
@@ -111,7 +111,7 @@ b{display:block;font-size:6.2vmin;line-height:1.15;margin:1.4vmin 0 3vmin;letter
   },
   {
     id: 'neumorphism', ko: '뉴모피즘', en: 'Neumorphism / Soft UI',
-    desc: '바탕과 같은 색의 판이 밝은 그림자와 어두운 그림자로 볼록·오목하게 솟은 결.',
+    desc: '바탕과 같은 색의 판이 밝은 그림자와 어두운 그림자로 볼록·오목하게 솟은 스타일.',
     fit: '타이머·스위치처럼 조작부가 몇 개뿐인 차분한 도구 화면. 글이 많은 곳에는 대비가 약해요.',
     tech: '같은 바탕색 + box-shadow 두 겹(오른쪽 아래 어둡게, 왼쪽 위 밝게), 눌린 상태는 inset',
     tags: ['소프트 UI', '그림자', '스위치', '저대비'],
@@ -192,7 +192,7 @@ small{opacity:.6}
   },
   {
     id: 'risograph', ko: '리소그래프', en: 'Risograph Print',
-    desc: '별색 두세 개를 곱하기로 겹치고, 판이 살짝 어긋나고, 망점과 잡티가 남은 인쇄 결.',
+    desc: '별색 두세 개를 곱하기로 겹치고, 판이 살짝 어긋나고, 망점과 잡티가 남은 인쇄 스타일.',
     fit: '예술·지역·워크숍 강의, 손으로 만든 느낌이 필요한 자료집 표지.',
     tech: 'mix-blend-mode:multiply 별색 겹침 + 1~2px 어긋난 판(text-shadow) + radial-gradient 망점 + 그레인',
     tags: ['인쇄', '별색', '망점', '그레인'],
@@ -240,7 +240,7 @@ text{fill:#eaf2ff;font:500 11px 'IBM Plex Mono',monospace}`,
     html: `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet"><rect class="s" pathLength="1" x="70" y="60" width="260" height="170"/><g class="s s2"><rect pathLength="1" x="100" y="160" width="40" height="22"/><rect pathLength="1" x="150" y="160" width="40" height="22"/><rect pathLength="1" x="210" y="160" width="40" height="22"/><rect pathLength="1" x="260" y="160" width="40" height="22"/><rect pathLength="1" x="100" y="196" width="40" height="22"/><rect pathLength="1" x="150" y="196" width="40" height="22"/><rect pathLength="1" x="210" y="196" width="40" height="22"/><rect pathLength="1" x="260" y="196" width="40" height="22"/></g><g class="s s3"><path pathLength="1" d="M150 84 h100 v28 h-100 z M70 248 h260 M70 242 v12 M330 242 v12 M352 60 v170 M346 60 h12 M346 230 h12"/></g><text x="168" y="102">강사석</text><text x="172" y="266">9.0 m</text><text x="356" y="150">6.0 m</text><text x="74" y="50">A-01 교실 배치</text><text x="100" y="154">모둠 1</text><text x="210" y="154">모둠 2</text></svg>`,
   },
   {
-    id: 'dataviz', ko: '데이터 시각화 결', en: 'Data-viz Aesthetic',
+    id: 'dataviz', ko: '데이터 시각화 스타일', en: 'Data-viz Aesthetic',
     desc: '아주 큰 고정폭 숫자와 길이에 정확히 비례한 막대. 숫자가 주인공인 화면.',
     fit: '통계·평가·데이터 리터러시 강의, 설문 결과를 보여 주는 마무리.',
     tech: 'font-variant-numeric:tabular-nums 거대 숫자 + 값에 비례한 width 막대 + scaleX 등장',
@@ -261,7 +261,7 @@ text{fill:#eaf2ff;font:500 11px 'IBM Plex Mono',monospace}`,
   },
   {
     id: 'dark-tech', ko: '다크 테크', en: 'Dark Tech / Terminal',
-    desc: '거의 검은 바탕, 고정폭 글자, 가는 격자와 호박색 강조 하나. 기계실 같은 결.',
+    desc: '거의 검은 바탕, 고정폭 글자, 가는 격자와 호박색 강조 하나. 기계실 같은 스타일.',
     fit: '개발·데이터·보안 강의에서 명령어를 따라 치는 실습 안내.',
     tech: '#07090c 바탕 + 고정폭 글꼴 + 1px 격자 + 타자 효과 + 강조색 하나(호박색)',
     tags: ['어두운 바탕', '고정폭', '터미널', '타자'],
@@ -279,7 +279,7 @@ text{fill:#eaf2ff;font:500 11px 'IBM Plex Mono',monospace}`,
   },
   {
     id: 'minimal', ko: '따뜻한 미니멀', en: 'Warm Minimalism',
-    desc: '미색 바탕, 넉넉한 여백, 작은 글과 따뜻한 색 한 점. 덜어 내서 또렷한 결.',
+    desc: '미색 바탕, 넉넉한 여백, 작은 글과 따뜻한 색 한 점. 덜어 내서 또렷한 스타일.',
     fit: '학부모 설명회·상담·복지처럼 차분하고 신뢰가 필요한 강의.',
     tech: '미색 바탕(#f6f2ea) + 넓은 여백 + 가는 명조 제목 + 강조색 점 하나 + 아주 느린 숨쉬기 움직임',
     tags: ['여백', '미색', '절제', '차분'],
@@ -296,7 +296,7 @@ h2{font:300 7.2vmin/1.3 'Noto Serif KR',serif;margin:2vmin 0 0;letter-spacing:-.
   },
   {
     id: 'maximal', ko: '맥시멀·도파민', en: 'Maximalism / Dopamine Design',
-    desc: '쨍한 색끼리 부딪치고, 글자는 크고 겹치고, 스티커와 무늬가 가득한 결.',
+    desc: '쨍한 색끼리 부딪치고, 글자는 크고 겹치고, 스티커와 패턴이 가득한 스타일.',
     fit: '축제·캠프·시상식처럼 들뜬 기분을 한 장면에 담을 때. 정보 화면에는 한두 곳만.',
     tech: '보색 단색 면 + 굵은 외곽선 글자(-webkit-text-stroke + 평면 text-shadow) + 회전하는 스티커',
     tags: ['쨍한 색', '스티커', '겹침', '축제'],
@@ -312,7 +312,7 @@ h2{font:300 7.2vmin/1.3 'Noto Serif KR',serif;margin:2vmin 0 0;letter-spacing:-.
   },
   {
     id: 'collage', ko: '콜라주·스크랩북', en: 'Collage / Scrapbook',
-    desc: '오려 붙인 종이, 테이프, 기울어진 사진과 손글씨 꼬리표.',
+    desc: '오려 붙인 종이, 테이프, 기울어진 사진과 손글씨 태그.',
     fit: '지역·역사 탐구 수업처럼 모은 자료를 펼쳐 보이는 강의.',
     tech: 'clip-path 찢은 가장자리 + 기울인 카드 + 반투명 테이프 띠 + 겹친 종이 그림자',
     tags: ['종이', '테이프', '기울기', '손글씨'],
@@ -388,7 +388,7 @@ th,td{border-bottom:1px solid #999;padding:1.1vmin 1vmin;text-align:left}th{widt
     id: 'nature', ko: '자연·계절', en: 'Organic / Nature',
     desc: '잎·물결 같은 선화와 흙빛 바탕, 바람에 흔들리는 작은 움직임.',
     fit: '환경·생태·숲 교육, 계절 행사 안내.',
-    tech: 'SVG 선화 + transform-origin:bottom 흔들림 + 물결 path 반복 이동 + 흙·잎 색 짝',
+    tech: 'SVG 선화 + transform-origin:bottom 흔들림 + 물결 path 반복 이동 + 흙·잎 색 세트',
     tags: ['선화', '잎', '물결', '계절'],
     f: ['Gowun Batang:wght@700', 'Gowun Dodum'],
     css: `body{background:#eef0e2;color:#24361f}
@@ -441,7 +441,7 @@ svg{position:absolute;inset:0;width:100%;height:100%}
   },
   {
     id: 'poster', ko: '포스터·글자', en: 'Typographic Poster',
-    desc: '화면을 꽉 채우는 거대한 글자와 기운 띠. 글자가 곧 그림인 결.',
+    desc: '화면을 꽉 채우는 거대한 글자와 기운 띠. 글자가 곧 그림인 스타일.',
     fit: '특강·행사·캠페인의 첫 화면, 발표 화면의 표지.',
     tech: 'clamp()+vw로 화면을 채우는 제목 + 좁고 굵은 제목체 + 기울인 띠 안의 흐르는 글자',
     tags: ['큰 글자', '포스터', '띠', '강한 색'],
@@ -457,7 +457,7 @@ svg{position:absolute;inset:0;width:100%;height:100%}
   },
   {
     id: 'bauhaus', ko: '바우하우스', en: 'Bauhaus',
-    desc: '빨강·파랑·노랑과 원·네모·세모. 기하학 도형이 질서 있게 맞물리는 결.',
+    desc: '빨강·파랑·노랑과 원·네모·세모. 기하학 도형이 질서 있게 맞물리는 스타일.',
     fit: '디자인·미술·수학 강의, 구조와 원리를 보여 주는 표지.',
     tech: '삼원색 + 원/사각형/clip-path 삼각형 + 굵은 검은 막대 + 도형끼리 이어지는 안무(keyframes)',
     tags: ['기하학', '삼원색', '도형', '구성'],
@@ -475,7 +475,7 @@ svg{position:absolute;inset:0;width:100%;height:100%}
   },
   {
     id: 'skeuomorphism', ko: '스큐어모피즘', en: 'Skeuomorphism / Tactile Realism',
-    desc: '금속 다이얼, 불 켜지는 표시등처럼 실제 물건의 재질과 손맛을 그대로 옮긴 결.',
+    desc: '금속 다이얼, 불 켜지는 표시등처럼 실제 물건의 재질과 손맛을 그대로 옮긴 스타일.',
     fit: '음악·과학 실험·장비 사용법처럼 손으로 조작하는 감각을 살리고 싶을 때.',
     tech: 'conic-gradient 헤어라인 금속 + 여러 겹 box-shadow 입체 + 회전 다이얼 + 빛나는 표시등',
     tags: ['재질', '금속', '다이얼', '촉감'],

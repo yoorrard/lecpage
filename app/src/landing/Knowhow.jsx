@@ -8,7 +8,7 @@ export const ASK = '누구나 만들 수 있지만, 잘 만들어 나누려면 �
 // copy-ok: 운영자가 정한 카피(글자 그대로 씀). 해요체 예외
 export const SAVE = '바쁜 강사님의 시간과 토큰을 아껴드립니다';
 
-// 디자인 라이브러리의 결 16가지(skills/lecpage/references/design-library.md 1절 '결' 목록 그대로)
+// 디자인 라이브러리의 스타일 16가지(skills/lecpage/references/design-library.md 1절 '결' 목록 그대로)
 const LOOKS = ['편집·잡지', '스위스 격자', '포스터·움직이는 글자', '리소그래프', '셰이더 빛·유체', '네온·유리', '3D 공간', '생성 예술',
   '손그림 공책', '설계도', '데이터 시각화', '콜라주', '픽셀 아케이드', '칠판', '지도·답사', '따뜻한 미니멀'];
 // 강의 엔진이 사이트에 끼우는 것(engine/src/kit)과 함께 만드는 화면. 아이콘은 icons.jsx
@@ -74,7 +74,7 @@ function EngineDemo() {
 
 /**
  * 노하우: 운영자 문장 → lecpage가 AI에게 함께 건네는 세 가지(요청 설계 · 디자인 라이브러리 · 강의 엔진) → 시간과 토큰.
- * 크기가 다른 세 칸(요청서 · 흐르는 결 이름 · 넓은 강의 엔진: 기능 목록 + 실제 기능 미리보기). 동작 줄이기면 다 켜진 글과 멈춘 줄.
+ * 크기가 다른 세 칸(요청서 · 흐르는 스타일 이름 · 넓은 강의 엔진: 기능 목록 + 실제 기능 미리보기). 동작 줄이기면 다 켜진 글과 멈춘 줄.
  */
 export function Knowhow() {
   const say = useRef(); const grid = useRef(); const save = useRef();
@@ -91,22 +91,22 @@ export function Knowhow() {
             <h3><span aria-hidden="true">01</span>요청 설계</h3>
             <p>목적은 ‘강의를 운영하는 사이트’예요. 당일 할 일과 디자인 기준을 담아 교재 원본과 한 번에 건네요.</p>
             <dl class="ld-brief" aria-label="요청 설계에 담기는 것">
-              <div><dt>목적</dt><dd>참가자가 강의 당일 휴대폰에 열어 두는 사이트</dd></div>
+              <div><dt>목적</dt><dd>참가자가 강의 당일 열어 두고 쓰는 사이트</dd></div>
               <div><dt>할 일</dt><dd>지금 순서 · 출석 · 교재 보기 · 실습 원문 · 질문과 투표</dd></div>
               <div><dt>교재</dt><dd>원본 파일 그대로, 사실은 원문 그대로</dd></div>
-              <div><dt>디자인</dt><dd>주제를 상징하는 직접 그린 그래픽과 절제된 움직임</dd></div>
+              <div><dt>디자인</dt><dd>컨셉을 상징하는 살아 움직이는 첫 화면 장면과 스크롤 연출</dd></div>
             </dl>
           </article>
           <article class="ld-k ld-k-lib">
             <h3><span aria-hidden="true">02</span>디자인 라이브러리</h3>
-            <p>결 16가지와 한글 글꼴 짝, 움직임 기법, 강의 사이트 구성법, ‘AI 티’ 점검표로 템플릿 같지 않은 디자인을 끌어내요.</p>
+            <p>컨셉을 첫 화면 장면으로 바꾸는 법, 스타일 16가지, 한글 글꼴 세트, ‘AI 티’ 점검표를 담았어요. 템플릿 같지 않은 디자인을 끌어내요.</p>
             {/* 넓은 칸은 두 줄(줄마다 8개), 좁은 칸(넓은 화면의 오른쪽 칸)은 세 줄: 한 줄 안에서 같은 이름이 한꺼번에 보이지 않게 */}
             {[[LOOKS.slice(0, 8), LOOKS.slice(8)], [LOOKS.slice(0, 6), LOOKS.slice(6, 11), LOOKS.slice(11)]].map((rows) => (
               <div class={`ld-marq ld-marq-${rows.length}`} aria-hidden="true">
                 {rows.map((row, r) => <div class={`ld-marq-row${r % 2 ? ' is-rev' : ''}`}><span>{row.map((x) => <i>{x}</i>)}</span><span>{row.map((x) => <i>{x}</i>)}</span></div>)}
               </div>
             ))}
-            <p class="ld-sr">결 16가지: {LOOKS.join(', ')}</p>
+            <p class="ld-sr">스타일 16가지: {LOOKS.join(', ')}</p>
           </article>
           <article class="ld-k ld-k-engine">
             <div class="ld-eng-t">

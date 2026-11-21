@@ -621,7 +621,7 @@ function Sites({ p, onPrimary, busy }) {
       </ul>
       <div class="btn-row">
         {!sites.lecpage && PUBLISH_API && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('lecpage')}>바로 배포로도 배포</button>}
-        <button type="button" class="btn btn-sm btn-primary" disabled={!!busy} onClick={() => ask('other')}>다른 곳에도 배포</button>
+        <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('other')}>다른 곳에도 배포</button>
       </div>
     </div>
   );

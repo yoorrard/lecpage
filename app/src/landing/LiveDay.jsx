@@ -47,7 +47,7 @@ export function LiveDay() {
         <header class="ld-day-head">
           <p class="ld-kicker">강의 당일</p>
           <h2 id="ld-day-h">세 화면이 한 쪽씩 함께 넘어가요</h2>
-          <p>강사가 강사 화면에서 쪽을 넘기면 발표 화면과 참가자 휴대폰이 함께 넘어가요. 출석 QR·투표 결과·타이머·공지는 발표 화면 위에 바로 띄워요.</p>
+          <p>강사가 강사 화면에서 쪽을 넘기면 발표 화면과 참가자 화면이 함께 넘어가요. 출석 QR·투표 결과·타이머·공지는 발표 화면 위에 바로 띄워요.</p>
         </header>
         <div class="ld-day-stage" ref={box} role="group" aria-label="강의 당일 화면 예시">
           <figure class="ld-proj">
@@ -77,7 +77,7 @@ export function LiveDay() {
             </div>
           </figure>
           <figure class="ld-part">
-            <figcaption>참가자 휴대폰</figcaption>
+            <figcaption>참가자 화면</figcaption>
             <div class="ld-part-scr">
               <p class="ld-part-top">질문이 먼저</p>
               <div class="ld-part-deck">{img('ld-mini')}<p><span>강사 따라 넘기기</span><b>{n} / {TOTAL}</b></p></div>
@@ -96,7 +96,7 @@ export function LiveDay() {
         <ul class="ld-day-list">
           <li><h3>발표 화면</h3><p>교재 쪽을 크게 띄우고 강사 화면과 함께 넘겨요. 출석 QR·투표 결과·타이머·공지를 그 위에 띄워요.</p></li>
           <li><h3>강사 화면</h3><p>출석 명단을 실시간으로 보고, 퀴즈 정답을 띄우고, 실습 타이머를 돌려요.</p></li>
-          <li><h3>참가자 휴대폰</h3><p>교재를 따라 넘기며 출석·질문·투표·퀴즈·나눔 보드에 바로 참여해요.</p></li>
+          <li><h3>참가자 화면</h3><p>교재를 따라 넘기며 출석·질문·투표·퀴즈·나눔 보드에 바로 참여해요.</p></li>
           <li><h3>노트북 한 대로도</h3><p>노트북 한 대로 강의실 Wi-Fi에서 질문·투표·출석을 받을 수 있어요.</p></li>
         </ul>
       </div>

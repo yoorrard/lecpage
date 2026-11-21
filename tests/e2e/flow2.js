@@ -40,6 +40,7 @@ async function run(b, width) {
   await p.waitForSelector('.success .big-url', { timeout: 60000 });
   L.ok(`[${tag}] instant address`, /s-site1\.example\.pages\.dev/.test(await p.locator('.success .big-url').innerText()));
   L.ok(`[${tag}] sites list shows 바로 배포 as 대표`, /바로 배포[\s\S]*대표 주소/.test(await p.locator('.sites').innerText()));
+  L.ok(`[${tag}] one primary action in the done card (주소 복사)`, await p.locator('.success .btn-primary:visible').count() === 1 && /주소 복사/.test(await p.locator('.success .btn-primary:visible').innerText()), (await p.locator('.success .btn-primary:visible').allInnerTexts()).join(','));
   await shot(p, `r100-success-${tag}`, '.sites');
   // 4) 다른 곳(Vercel)에도 배포
   await p.click('.sites button:has-text("다른 곳에도 배포")');

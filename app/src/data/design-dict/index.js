@@ -12,14 +12,14 @@ import EFFECT from './effect.js';
 import LECTURE from './lecture.js';
 
 export const CATEGORIES = [
-  { id: 'style', ko: '결·스타일', en: 'Art direction', items: STYLE },
+  { id: 'style', ko: '스타일', en: 'Art direction', items: STYLE },
   { id: 'layout', ko: '레이아웃·구성', en: 'Layout', items: LAYOUT },
-  { id: 'ui', ko: 'UI 무늬·부품', en: 'UI patterns', items: UI },
+  { id: 'ui', ko: 'UI 패턴·부품', en: 'UI patterns', items: UI },
   { id: 'motion', ko: '움직임·상호작용', en: 'Motion', items: MOTION },
   { id: 'type', ko: '글꼴·타이포그래피', en: 'Typography', items: TYPE },
   { id: 'color', ko: '색', en: 'Color', items: COLOR },
   { id: 'effect', ko: '효과·질감', en: 'Effects', items: EFFECT },
-  { id: 'lecture', ko: '강의 사이트 무늬', en: 'Lecture patterns', items: LECTURE },
+  { id: 'lecture', ko: '강의 사이트 패턴', en: 'Lecture patterns', items: LECTURE },
 ];
 export const ITEMS = CATEGORIES.flatMap((c) => c.items.map((it) => ({ ...it, cat: c.id })));
 export const catOf = (id) => CATEGORIES.find((c) => c.id === id);

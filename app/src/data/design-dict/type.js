@@ -1,23 +1,23 @@
-// ⑤ 글꼴·타이포그래피. 글꼴 짝은 데이터로 만들고(실제 그 글꼴로 그림), 기법은 손으로 만든 미리보기
+// ⑤ 글꼴·타이포그래피. 글꼴 세트는 데이터로 만들고(실제 그 글꼴로 그림), 기법은 손으로 만든 미리보기
 const PD = 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css';
 const PL = 'https://cdn.jsdelivr.net/gh/ayaan-fonts/Paperlogy@1.001-ko/fonts/webfonts/Paperlogy-dynamic-subset.css';
 
-// [id, 이름, 결, 제목 글꼴(구글 이름|CSS 이름), 제목 굵기, 본문 글꼴, 본문 굵기, 숫자·영문 글꼴, 바탕, 글자, 강조, 제목 예, 어울릴 때, 태그]
+// [id, 이름, 스타일, 제목 글꼴(구글 이름|CSS 이름), 제목 굵기, 본문 글꼴, 본문 굵기, 숫자·영문 글꼴, 바탕, 글자, 강조, 제목 예, 어울릴 때, 태그]
 const PAIRS = [
-  ['pair-editorial', '편집 명조 짝', '편집·잡지', 'Noto Serif KR', 900, 'IBM Plex Sans KR', 400, 'Fraunces', '#f3eee4', '#1d1a16', '#b5432b', '질문이 수업을 바꾼다', '읽는 맛이 중요한 인문·성찰 강의의 제목과 본문.', ['명조', '편집', '세리프']],
-  ['pair-letter', '편지 짝', '편지·성찰', 'Gowun Batang', 700, 'Gowun Dodum', 400, 'Instrument Serif', '#fbf6ee', '#3a2f28', '#c46a4a', '마음을 여는 첫 문장', '상담·학부모·성찰처럼 따뜻하고 조용한 강의.', ['바탕', '돋움', '따뜻함']],
-  ['pair-poster', '포스터 짝', '포스터·행사', 'Black Han Sans', 400, 'Gothic A1', 400, 'Anton', '#111111', '#f5f5f0', '#ffd400', '말하기 특강', '특강·행사·캠페인의 큰 제목.', ['굵은 제목', '포스터', '고딕']],
-  ['pair-heavy', '두꺼운 표지 짝', '표지·발표', 'Gasoek One', 400, 'Gothic A1', 400, 'Bricolage Grotesque', '#e9f0ff', '#101a33', '#2f5bff', '데이터로 말해요', '발표 화면 표지처럼 한 낱말을 크게 세울 때.', ['두꺼운', '표지', '그로테스크']],
-  ['pair-tech', '기술 짝', '기술·도면', 'IBM Plex Sans KR', 700, 'IBM Plex Sans KR', 400, 'IBM Plex Mono', '#0f1720', '#e6edf3', '#58a6ff', '코드로 그리는 그림', '코딩·데이터·공학 실습, 명령어가 나오는 안내.', ['고정폭', '기술', '코딩']],
-  ['pair-note', '공책 손글씨 짝', '공책·손그림', 'Gaegu', 700, 'Gowun Dodum', 400, 'Caveat', '#fffdf3', '#24365c', '#e5484d', '오늘 꼭 할 것', '교사 실습·초등·성찰. 손글씨는 짧은 메모에만.', ['손글씨', '메모', '친근']],
-  ['pair-brush', '붓글씨 짝', '전통·서예', 'Nanum Brush Script', 400, 'Nanum Myeongjo', 400, 'Fraunces', '#f1ebdd', '#1a1714', '#a82c1e', '배움의 길', '역사·전통문화·인문 강의의 표지 한 줄.', ['붓글씨', '전통', '명조']],
-  ['pair-round', '둥근 친근 짝', '친근·초등', 'Jua', 400, 'Gowun Dodum', 400, 'Bricolage Grotesque', '#fff1e0', '#3b2516', '#ff7a45', '함께 만드는 교실', '초등·학부모·가족 행사처럼 말랑한 분위기.', ['둥근', '귀여움', '친근']],
-  ['pair-future', '미래 짝', '미래·AI', 'Orbit', 400, 'Noto Sans KR', 400, 'Space Grotesk', '#0b0f1f', '#e8ecff', '#7c8cff', 'AI와 일하는 법', '디지털·AI·미래 주제의 첫 화면.', ['미래', '기하학', 'AI']],
-  ['pair-classic', '고전 인문 짝', '고전·인문', 'Song Myung', 400, 'Nanum Myeongjo', 400, 'Fraunces', '#f7f2e8', '#2b2118', '#7b3f2a', '고전을 다시 읽다', '고전 읽기·철학·역사처럼 깊이 있는 강의.', ['명조', '고전', '인문']],
+  ['pair-editorial', '편집 명조 세트', '편집·잡지', 'Noto Serif KR', 900, 'IBM Plex Sans KR', 400, 'Fraunces', '#f3eee4', '#1d1a16', '#b5432b', '질문이 수업을 바꾼다', '읽는 맛이 중요한 인문·성찰 강의의 제목과 본문.', ['명조', '편집', '세리프']],
+  ['pair-letter', '편지 세트', '편지·성찰', 'Gowun Batang', 700, 'Gowun Dodum', 400, 'Instrument Serif', '#fbf6ee', '#3a2f28', '#c46a4a', '마음을 여는 첫 문장', '상담·학부모·성찰처럼 따뜻하고 조용한 강의.', ['바탕', '돋움', '따뜻함']],
+  ['pair-poster', '포스터 세트', '포스터·행사', 'Black Han Sans', 400, 'Gothic A1', 400, 'Anton', '#111111', '#f5f5f0', '#ffd400', '말하기 특강', '특강·행사·캠페인의 큰 제목.', ['굵은 제목', '포스터', '고딕']],
+  ['pair-heavy', '두꺼운 표지 세트', '표지·발표', 'Gasoek One', 400, 'Gothic A1', 400, 'Bricolage Grotesque', '#e9f0ff', '#101a33', '#2f5bff', '데이터로 말해요', '발표 화면 표지처럼 한 낱말을 크게 세울 때.', ['두꺼운', '표지', '그로테스크']],
+  ['pair-tech', '기술 세트', '기술·도면', 'IBM Plex Sans KR', 700, 'IBM Plex Sans KR', 400, 'IBM Plex Mono', '#0f1720', '#e6edf3', '#58a6ff', '코드로 그리는 그림', '코딩·데이터·공학 실습, 명령어가 나오는 안내.', ['고정폭', '기술', '코딩']],
+  ['pair-note', '공책 손글씨 세트', '공책·손그림', 'Gaegu', 700, 'Gowun Dodum', 400, 'Caveat', '#fffdf3', '#24365c', '#e5484d', '오늘 꼭 할 것', '교사 실습·초등·성찰. 손글씨는 짧은 메모에만.', ['손글씨', '메모', '친근']],
+  ['pair-brush', '붓글씨 세트', '전통·서예', 'Nanum Brush Script', 400, 'Nanum Myeongjo', 400, 'Fraunces', '#f1ebdd', '#1a1714', '#a82c1e', '배움의 길', '역사·전통문화·인문 강의의 표지 한 줄.', ['붓글씨', '전통', '명조']],
+  ['pair-round', '둥근 친근 세트', '친근·초등', 'Jua', 400, 'Gowun Dodum', 400, 'Bricolage Grotesque', '#fff1e0', '#3b2516', '#ff7a45', '함께 만드는 교실', '초등·학부모·가족 행사처럼 말랑한 분위기.', ['둥근', '귀여움', '친근']],
+  ['pair-future', '미래 세트', '미래·AI', 'Orbit', 400, 'Noto Sans KR', 400, 'Space Grotesk', '#0b0f1f', '#e8ecff', '#7c8cff', 'AI와 일하는 법', '디지털·AI·미래 주제의 첫 화면.', ['미래', '기하학', 'AI']],
+  ['pair-classic', '고전 인문 세트', '고전·인문', 'Song Myung', 400, 'Nanum Myeongjo', 400, 'Fraunces', '#f7f2e8', '#2b2118', '#7b3f2a', '고전을 다시 읽다', '고전 읽기·철학·역사처럼 깊이 있는 강의.', ['명조', '고전', '인문']],
   ['pair-hahmlet', '함렛 굵기 대비', '현대 명조', 'Hahmlet', 800, 'Hahmlet', 300, 'Fraunces', '#eef1ec', '#16231a', '#2f7a4b', '가는 선과 굵은 선', '한 가족 글꼴의 굵기 대비만으로 위계를 만들 때.', ['가변', '명조', '굵기 대비']],
-  ['pair-diphylleia', '꽃잎 명조 짝', '섬세·예술', 'Diphylleia', 400, 'Gowun Dodum', 400, 'Instrument Serif', '#fdf3f5', '#3d2330', '#c2416b', '그림책 한 장의 마음', '그림책·예술·감성 수업의 제목.', ['섬세', '예술', '감성']],
+  ['pair-diphylleia', '꽃잎 명조 세트', '섬세·예술', 'Diphylleia', 400, 'Gowun Dodum', 400, 'Instrument Serif', '#fdf3f5', '#3d2330', '#c2416b', '그림책 한 장의 마음', '그림책·예술·감성 수업의 제목.', ['섬세', '예술', '감성']],
   ['pair-pretendard', '프리텐다드 한 벌', '작업 도구·정보', 'Pretendard Variable', 800, 'Pretendard Variable', 400, 'Bricolage Grotesque', '#f6f6f4', '#17171a', '#ff5a1f', '오늘의 흐름', '정보가 많은 안내·자료실처럼 또렷함이 먼저일 때.', ['고딕', '본문', '가독성'], [PD]],
-  ['pair-paperlogy', '페이퍼로지 무대 짝', '무대·특강', 'Paperlogy', 800, 'Pretendard Variable', 400, 'Bricolage Grotesque', '#101010', '#f4f4f0', '#c6ff3d', '리더의 세 가지 질문', '리더십·기술 특강처럼 무대 위 큰 제목.', ['무대', '특강', '굵은 제목'], [PL, PD]],
+  ['pair-paperlogy', '페이퍼로지 무대 세트', '무대·특강', 'Paperlogy', 800, 'Pretendard Variable', 400, 'Bricolage Grotesque', '#101010', '#f4f4f0', '#c6ff3d', '리더의 세 가지 질문', '리더십·기술 특강처럼 무대 위 큰 제목.', ['무대', '특강', '굵은 제목'], [PL, PD]],
 ];
 const ONE = ['Instrument Serif', 'Anton']; // 굵기가 하나뿐인 숫자·영문 글꼴
 /** 구글 폰트 요청(같은 글꼴은 굵기를 모아 한 번에). jsDelivr 글꼴(Pretendard·Paperlogy)은 links로 */
@@ -29,10 +29,10 @@ function famsOf(list) {
 
 const pair = ([id, ko, mood, dn, dw, bn, bw, ln, bg, ink, acc, title, fit, tags, links]) => { const lw = ONE.includes(ln) ? 400 : 600; return {
   id, ko, en: `${dn} + ${bn}`,
-  desc: `${mood} 결에 맞는 제목·본문·숫자 글꼴 짝. 모두 무료 웹 글꼴이에요.`,
+  desc: `${mood} 스타일에 맞는 제목·본문·숫자 글꼴 세트. 모두 무료 웹 글꼴이에요.`,
   fit,
   tech: `제목 ${dn} ${dw} · 본문 ${bn} ${bw} · 숫자·영문 ${ln} (word-break:keep-all, 제목 text-wrap:balance, 자간 -0.03em)`,
-  tags: ['글꼴 짝', ...tags],
+  tags: ['글꼴 세트', ...tags],
   f: famsOf([[dn, dw], [bn, bw], [ln, lw]]),
   links,
   css: `body{background:${bg};color:${ink}}
@@ -166,7 +166,7 @@ small{display:block;margin-top:2vmin;font:2.2vmin ui-monospace,monospace;color:#
     id: 'clip-text', ko: '그림 채운 글자', en: 'Background-clip: text',
     desc: '글자 모양대로 그림·그라데이션이 비쳐 보이게 오려 내는 기법.',
     fit: '제목 한 곳에만. 여러 곳에 쓰면 AI가 만든 티가 나요.',
-    tech: 'background:(그라데이션·무늬); -webkit-background-clip:text; color:transparent + background-position 이동',
+    tech: 'background:(그라데이션·패턴); -webkit-background-clip:text; color:transparent + background-position 이동',
     tags: ['background-clip', '제목', '그라데이션', '한 곳만'],
     f: ['Black Han Sans'],
     css: `body{background:#fdfaf3}
