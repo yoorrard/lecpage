@@ -1,6 +1,6 @@
 # AI 중심 개편 설계 (2026-11-20)
 
-> **지금 상태(2026-11-21)**: 아래 설계에서 더 줄였어요. lecpage는 **AI 연결만** 하고 디자인·구성에 끼어들지 않아요. 교재 원본과 짧은 요청 하나(목표 한 문장: 참가자가 곁에 두고 쓰는 사이트, 교재를 옮겨 적지 않는 동반자, 주제를 상징하는 직접 그린 그래픽이 있는 인상적인 첫 화면)를 한 번에 보내면 AI가 사이트 전체를 만들어요. 설계 JSON·여러 단계 만들기·디자인 규칙·자동 고치기는 지웠고, 검수·교재 대조는 참고로만 보이며 고치기는 강사가 고를 때만 해요. 연결 순서는 내 PC의 Claude Code·Codex(첫 추천) → Claude·GPT 키 → 쓰던 AI이고, **Gemini는 만들기에서 뺐어요.** 같은 교재·같은 AI로 그냥 맡길 때와 견준 결과: [benchmark-2026-11 7장](research/benchmark-2026-11.md#compare). 아래 본문 가운데 6장(나눠 만들기)과 Gemini 관련 줄은 지난 설계 기록이에요.
+> **지금 상태(2026-11-21)**: 아래 설계에서 더 줄였어요. lecpage는 **AI 연결만** 하고 디자인·구성에 끼어들지 않아요. 교재 원본과 짧은 요청 하나(목표 한 문장: 참가자가 곁에 두고 쓰는 사이트, 교재를 옮겨 적지 않는 동반자, 주제를 상징하는 직접 그린 그래픽이 있는 인상적인 첫 화면)를 한 번에 보내면 AI가 사이트 전체를 만들어요. 설계 JSON·여러 단계 만들기·디자인 규칙·자동 고치기는 지웠고, 검수는 참고로만 보이며 고치기는 강사가 고를 때만 해요. 연결 순서는 내 PC의 Claude Code·Codex(첫 추천) → Claude·GPT 키 → 쓰던 AI이고, **Gemini는 만들기에서 뺐어요.** 같은 교재·같은 AI로 그냥 맡길 때와 견준 결과: [benchmark-2026-11 7장](research/benchmark-2026-11.md#compare). 아래 본문 가운데 6장(나눠 만들기)과 Gemini 관련 줄은 지난 설계 기록이에요.
 
 이 문서는 lecpage를 "코드가 교재를 해석해 템플릿에 끼우는 도구"에서 "AI가 교재를 직접 읽고 사이트를 설계·작성하고, lecpage는 그 제작을 받쳐 주는 작업대"로 바꾸는 설계입니다. 작업자들이 동시에 일할 수 있도록 서로 맞물리는 약속(키트 표시법, 조립·검수 함수, 저장 형식, 작업 기록 형식)을 먼저 정합니다. 외부 사실(브라우저 직접 호출, 파일 입력, 스트리밍, 로컬 에이전트 연결 정책)은 `docs/research/ai-first-2026-11.md`에 있습니다.
 
@@ -17,7 +17,7 @@
 | 강의 흐름·페이지 구성·필요한 기능 결정 | 강의 전용 기능 모음(키트): 질문·투표·보드·출석·설문·도움 요청·반응·타이머·공지·교재 넘기기·자료실·접속 QR |
 | 디자인·HTML·CSS·JS 작성, 고치기 | 조립: 키트 끼우기·보안 정책(CSP)·응답 머리글·강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내·일정 파일 |
 | (선택) 레퍼런스에서 영감 | 레퍼런스: 완성도 높은 강의 사이트 사례(참고용, 따를 의무 없음) |
-| 검수 결과를 보고 스스로 고침 | 검수: 깨진 곳·넘침·대비·빈 칸·키트 표시 오류·교재 사실 대조 → AI에게 돌려줌 |
+| 검수 결과를 보고 스스로 고침 | 검수: 깨진 곳·넘침·대비·빈 칸·키트 표시 오류 → AI에게 돌려줌 |
 | | 미리보기·편집(목록·글·이미지)·수정 요청 창구·배포 |
 
 ## 2. 전체 흐름 (앱·Skill 공통)
@@ -93,8 +93,7 @@ assemble(site, meta, { runtime, preview, target, prev, today, material, material
   // site: { 'index.html': '…', 'assets/style.css': '…', … }
   // 하는 일: 인라인 <script> → assets/site.js, 자리 표시 펼치기, 키트 CSS·런타임 넣기, CSP·_headers, lp-data,
   //         강사·발표·안내문·접속 확인·개인정보 쪽, 일정 파일(.ics), favicon, robots, 쪽 그림 경로 확인, 강사 값 지키기
-inspect(files, meta, { materialText, known }) → issues[]   // 정적 검사: HTML 구조·빈 칸·깨진 경로·키트 표시 오류·금지 패턴·크기·글자 대비(CSS 변수) + 교재 글을 주면 교재 사실 대조
-checkFacts(siteFiles, { materialText, meta, known }) → issues[]  // 교재 사실 대조(kit/facts.js, fact-*, 모두 살펴볼 곳)
+inspect(files, meta) → issues[]   // 정적 검사: HTML 구조·빈 칸·깨진 경로·키트 표시 오류·금지 패턴·크기·글자 대비(CSS 변수)
 inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브라우저 숨은 틀): 390·1280 가로 넘침·겹침·안 보이는 글·잘린 글·이미지 깨짐
 // issue: { id, level:'error'|'warn', where:{ file, selector, section }, message_ko, fix_hint_ko }
 previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미리보기·숨은 틀(CSS·JS·그림을 안으로, CSP meta 뺌)
@@ -108,7 +107,7 @@ previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미
 ### .lecpage v2 (저장 형식)
 무압축 ZIP: `project.json { format:'lecpage-project', version:2, kind:'site', engine, title, meta, material:{pages}, sources, createdAt }` + `site/…` + `src/…`(원본). 참여 기능 키는 담지 않음. 열 때 파일 안의 강사 값은 `meta`에 넣지 않고 `teacherInFile`로 따로 줌(남이 준 파일일 수 있어 앱이 확인받고 씀). v1(설계도) 파일은 `kind:'v1'`+'예전 판' 안내, `upgradeV1`이 연수 정보·교재 쪽 그림(`material/p-NNN`)·원본·쪽 제목을 옮기고 예전 사이트는 지금 엔진으로 빌드해 `legacy`로 줌(사이트는 AI로 새로 만듦).
 - 검수 결과는 사람(앱 화면)과 AI(고치기 요청에 그대로 붙임) 둘 다 읽는 꼴.
-- 교재 사실 대조(`kit/facts.js`, 2026-11-20): 사이트 글·복사 단추 원문·인용·연수 정보의 날짜·시각·숫자+단위·주소·메일·전화·쪽 번호를 교재 글과 글자로 맞춰 '교재에 없는 사실'·'원문과 달라진 복사 글'·'받아쓰기'를 알림(가장 가까운 교재 글과 쪽을 함께). 코드가 교재를 해석하거나 고치지 않고, 막지도 않음(살펴볼 곳). 조립은 AI의 HTML·CSS에 디자인용 글을 넣지 않음.
+- ~~교재 사실 대조(`kit/facts.js`, 2026-11-20)~~: 2026-11-21 뺌. AI가 원본을 직접 읽어 더 정확하고, 코드로 뽑은 글(pdf.js 등)과의 대조는 순서가 섞이거나 깨진 글 때문에 오탐 위험이 있어요.
 - 배포할 곳(`host`)에 맞는 개인정보 안내(처리자·보관 기간·사이트를 보내 주는 곳), 운영안내.md '배포 전 확인'(`kit/preflight.js`: 예시 주소·지난 날짜·설문 없는 이수 조건·연습 모드·사진), 배포에는 쓰는 교재 쪽 그림만, 사이트 CSP는 쓰는 바깥 곳만, 미리보기 한 장은 전용 CSP(`connect-src 'none'`).
 
 ## 6. 앱에서 AI가 만드는 과정 (키 연결)

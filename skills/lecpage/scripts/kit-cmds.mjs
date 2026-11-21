@@ -40,14 +40,14 @@ function ingestPages(m, image = () => '') {
     return { page: i + 1, file: files[p.file]?.name || '', filePage: p.page, title, text: pageText(p), notes: String(p.notes || '').trim(), image: image(i + 1, p) };
   });
 }
-/** 보조 글자(material.md): 쪽마다 머리(## p-001 · 파일 쪽 · 제목)와 글·발표자 노트. 교재 사실 대조(check)도 이 글을 읽음 */
+/** 보조 글자(material.md): 쪽마다 머리(## p-001 · 파일 쪽 · 제목)와 글·발표자 노트. */
 function materialMd(m, pages) {
   return [`# 교재 보조 글자`, '', `쪽 그림(site/material/p-NNN.webp)과 교재 원본이 먼저예요. 이 글은 찾기·옮겨 적기용이라 표·그림 속 글은 빠질 수 있어요.`, '',
     `교재: ${(m.files || []).filter((f) => !f.renderOf).map((f) => `${f.name}(${f.pages || '?'}쪽)`).join(', ')}`, '',
     ...pages.flatMap((p) => [`## p-${pad3(p.page)} · ${p.file} ${p.filePage}쪽${p.title ? ` · ${p.title}` : ''}${p.image ? '' : ' (쪽 그림 없음)'}`, '', p.text || '(글자 없음)', ...(p.notes ? ['', `> 발표자 노트: ${p.notes.replace(/\n/g, ' ')}`] : []), ''])].join('\n');
 }
 /**
- * 교재 사실 대조에 쓸 교재 글: work/material.md(prepare가 만든 보조 글자). 없으면(앱에서 가져온 작업 폴더 등) 교재 원본(.lecpage/sources.json)을
+ * 문구 점검에서 교재 원문을 거르는 데 쓸 교재 글: work/material.md(prepare가 만든 보조 글자). 없으면(앱에서 가져온 작업 폴더 등) 교재 원본(.lecpage/sources.json)을
  * 다시 읽어 같은 꼴로 만들고 material.md로 남김. 원본도 없으면 ''
  */
 export async function materialTextFor(h, work) {
@@ -211,11 +211,11 @@ export async function checkCmd(h) {
   // 배포할 곳: --host, 없으면 지난번에 배포한 곳(개인정보 안내·운영안내가 그 방식에 맞게)
   const st = h.loadState(work);
   const host = String(args.host || st.deploy?.host || st.hostHint || '');
-  const { K, site, metaRaw, r, dist, prev } = await buildWorkV2(h, work, { host });
+  const { K, site, metaRaw, r, dist } = await buildWorkV2(h, work, { host });
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
-  // 교재 사실 대조: 교재 글(material.md, 없으면 원본을 다시 읽음)과 강사 값(lecpage.teacher.json, told: 강사가 알려 준 교재 밖 사실)
+  // 문구 점검용 교재 글(material.md, 없으면 원본을 다시 읽음)
   const materialText = await materialTextFor(h, work);
-  const issues = K.inspect(site, metaRaw, { materialText, known: prev || [] }).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
+  const issues = K.inspect(site, metaRaw).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
   const checkDir = join(work, 'check'); rmSync(checkDir, { recursive: true, force: true }); mkdirSync(checkDir, { recursive: true });
   const shots = [], tiles = [], tileCut = [];
   let rendered = [], browserNote = '';
@@ -270,14 +270,13 @@ export async function checkCmd(h) {
   const seen = new Set();
   const all = [...issues, ...rendered, ...copy].filter((x) => { const k = `${x.id}|${x.where.file}|${x.where.selector}|${x.message_ko.replace(/\d+(\.\d+)?/g, '#')}`; if (seen.has(k)) return false; seen.add(k); return true; });
   const errors = all.filter((x) => x.level === 'error');
-  const facts = all.filter((x) => x.id.startsWith('fact-'));
   writeFileSync(join(checkDir, 'report.json'), JSON.stringify({ summary: K.issueSummary(all), issues: all, warnings: r.warnings, preflight: r.preflight || [], report: r.report, collected: r.collected }, null, 2) + '\n');
   writeFileSync(join(checkDir, 'issues.md'), `# 검수 결과 (${K.issueSummary(all)})\n\n${K.issuesForAi(all, { max: 80 }) || '고칠 곳이 없어요.'}\n\n## 배포 전 확인(강사용 운영안내.md에도)\n${(r.preflight || []).map((x) => `- ${x.message_ko}`).join('\n') || '- 없음'}\n\n## 조립 알림\n${r.warnings.map((w) => `- ${w.message_ko}`).join('\n') || '- 없음'}\n`);
   const line = (x) => `${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'} ${x.where.file}${x.where.selector ? ' ' + x.where.selector : ''}${x.where.width ? ` (${x.where.width}px)` : ''}: ${x.message_ko}`;
   say([
     `조립 ${rel(dist)}: 쪽 ${r.report.pages.length} · 파일 ${r.report.files}개 · ${r.report.sizeKB}KB · 참여 기능 ${r.report.live === 'none' ? '없음' : `${r.report.live}(${r.report.features.join(',')})`}`,
     r.collected ? `키트 투표 ${r.collected.polls.length} · 실습 단계 ${r.collected.steps.length} · 교재 쪽 ${r.collected.deck.length}${r.collected.untitled?.length ? `(제목 없는 쪽 ${r.collected.untitled.length}: ${r.collected.untitled.slice(0, 6).join('·')}${r.collected.untitled.length > 6 ? '…' : ''} → 필요하면 lecpage.json pages)` : ''} · 질문 ${r.collected.qa ? '있음' : '없음'} · 보드 ${r.collected.board.length} · 설문 ${r.collected.survey.length}` : '',
-    `검수 ${K.issueSummary(all)}${materialText ? ` · 교재 대조 ${facts.length ? `살펴볼 곳 ${facts.length}건(알리기만 해요)` : '어긋난 사실 없음'}` : ' · 교재 대조 건너뜀(material.md·교재 원본 없음)'}${r.report.droppedPages?.length ? ` · 안 쓰는 교재 쪽 그림 ${r.report.droppedPages.length}장은 배포에서 뺌` : ''}`,
+    `검수 ${K.issueSummary(all)}${r.report.droppedPages?.length ? ` · 안 쓰는 교재 쪽 그림 ${r.report.droppedPages.length}장은 배포에서 뺌` : ''}`,
     ...(r.preflight || []).map((x) => `배포 전 확인 ${x.message_ko}`),
     ...[...errors, ...all.filter((x) => x.level !== 'error')].slice(0, 10).map(line),
     all.length > 10 ? `… 나머지는 ${rel(join(checkDir, 'issues.md'))}` : '',

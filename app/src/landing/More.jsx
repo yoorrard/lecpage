@@ -7,7 +7,7 @@ import { Paths } from './Paths.jsx';
 import { REFERENCES as EXAMPLES, referenceFor } from '../data/references.js';
 import '../styles/landing-more.css';
 
-// 첫 화면 아래 이야기: 왜 lecpage(한 문장·같은 교재로 견준 실제 결과·단계마다 견주기) → 교재가 사이트가 되기까지(AI가 한 번에 사이트 전체, lecpage는 참여 기능·교재 대조) → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·연결 프로그램·스킬) → 참고 디자인 → 마무리.
+// 첫 화면 아래 이야기: 왜 lecpage(한 문장·같은 교재로 견준 실제 결과·단계마다 견주기) → 교재가 사이트가 되기까지(AI가 한 번에 사이트 전체, lecpage는 참여 기능·화면 살펴보기) → 배포 → 연수 당일 → 연수 전·중·후 → 쓰던 AI 그대로(0원·연결 프로그램·스킬) → 참고 디자인 → 마무리.
 // 첫 화면(Home.jsx)이 그려진 다음 틈에 받는 묶음이라 첫 화면 JS·CSS에 들지 않아요. 구성과 근거: docs/research/landing-2026-11.md
 const DAYS = [
   ['전', '연수 전', ['안내·일정·준비물 점검', '접속 확인 페이지', 'QR 안내문 인쇄']],

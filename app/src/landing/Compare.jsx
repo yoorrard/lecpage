@@ -1,4 +1,4 @@
-import { shot, shotSize } from './facts.js';
+import { shot, shotSize } from './shots.js';
 
 /**
  * 같은 교재·같은 AI로 견준 실제 결과(2026-11-21 측정). 왜 lecpage(Why.jsx) 머리 아래, 장부 앞에 놓여요.

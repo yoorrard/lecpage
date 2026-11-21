@@ -35,22 +35,3 @@ export const rehearsalPrev = (m = {}) => ({ ...Object.fromEntries(TEACHER.filter
 export async function assembleOpts(project, { target = 'preview', prev = null, materials } = {}) {
   return { runtime: await kitRuntime(), preview: target === 'preview', target, prev, today: todayKst(), material: { pages: materialPages(project) }, materials: Array.isArray(materials) ? materials : Array.isArray(project?.materials) ? project.materials : [] };
 }
-
-/** 교재 글(pdf.js 등으로 이미 뽑은 project.material) → 사실 대조에 넘길 글. 숨긴 쪽은 빼고 쪽 번호와 함께 */
-export function materialText(project) {
-  if (!project?.material) return '';
-  try { return materialToAIContext(project.material, { maxChars: 400000, header: false, notes: false }); } catch { return ''; }
-}
-/**
- * 교재 사실 대조(엔진 kit.checkFacts — 정확성 작업이 더함). 엔진에 아직 없으면 []. 돌려준 문제는 검수 문제 꼴(issue)로 맞춤
- * @returns {Promise<issue[]>}
- */
-export async function checkFacts(siteFiles, { materialText: text = '', meta = {} } = {}) {
-  const fn = KIT.checkFacts;
-  if (typeof fn !== 'function' || !text) return [];
-  try {
-    const r = await fn(siteFiles, { materialText: text, meta });
-    const list = Array.isArray(r) ? r : Array.isArray(r?.issues) ? r.issues : [];
-    return list.filter((i) => i && typeof i.message_ko === 'string').map((i) => ({ level: 'warn', fix_hint_ko: '', ...i, id: i.id || 'facts', where: { file: '', selector: '', section: '', ...(i.where || {}) } }));
-  } catch (e) { console.error('[facts]', e); return []; }
-}

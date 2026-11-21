@@ -343,7 +343,7 @@ export async function inspectSite(pid, site, meta, project = null) {
   const a = await assembleSite(pid, site, meta, { project });
   const issues = inspect({ ...a.material, ...(site || {}) }, meta);
   for (const w of [...(a.errors || []), ...(a.warnings || [])]) if (!issues.some((x) => x.id === w.code)) issues.push({ id: 'assemble-' + w.code, level: (a.errors || []).includes(w) ? 'error' : 'warn', where: { file: '', selector: '', section: '' }, message_ko: w.message_ko, fix_hint_ko: '' });
-  issues.push(...await extraIssues(pid, a.files, site, meta, project)); // 바로 배포 거절 규칙 미리 보기·교재 사실 대조(gen/checks.js)
+  issues.push(...await extraIssues(pid, a.files, site, meta, project)); // 바로 배포 거절 규칙 미리 보기(gen/checks.js)
   let rendered = [];
   if (!hook().noRender && a.files && a.files['index.html']) { try { rendered = await renderIssues(a.files); } catch { rendered = []; } }
   const seen = new Set(); const out = [];

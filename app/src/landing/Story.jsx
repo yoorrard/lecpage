@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useInView, useReduced } from './motion.js';
-import { EX, shot, shotSize } from './facts.js';
+import { EX, shot, shotSize } from './shots.js';
 
 /**
  * 붙박이 장면: 왼쪽 글(단계 넷)을 읽어 내려가는 동안 오른쪽 그림이 그 단계로 바뀌어요. 단계 번호를 잇는 선은 스크롤한 만큼 차올라요(CSS 스크롤 타임라인).

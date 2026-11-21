@@ -22,7 +22,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 구조 | **로컬 우선 정적 PWA**. 쪽 그림 그리기·사이트 조립·검수·교재 대조·미리보기·ZIP 만들기를 브라우저에서(교재 읽기와 사이트 쓰기는 사용자가 고른 AI가 교재 원본과 짧은 요청 한 번으로 하고, lecpage는 디자인·구성에 끼어들지 않음. 교재 원본은 고른 AI로만 감) | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
+| 구조 | **로컬 우선 정적 PWA**. 쪽 그림 그리기·사이트 조립·검수·미리보기·ZIP 만들기를 브라우저에서(교재 읽기와 사이트 쓰기는 사용자가 고른 AI가 교재 원본과 짧은 요청 한 번으로 하고, lecpage는 디자인·구성에 끼어들지 않음. 교재 원본은 고른 AI로만 감) | 서버가 없으면 운영비·장애·개인정보 책임이 사라짐 |
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
 | 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
