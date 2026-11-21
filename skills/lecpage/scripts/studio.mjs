@@ -473,7 +473,7 @@ const moodOf = (ref) => { const t = String(ref || '').trim(); if (!t) return '';
  * 원칙: 디자인·구성·읽는 법·확인 방법은 에이전트가 정함. lecpage는 목표 한 줄, 강사 요청, 배포에 꼭 필요한 조건,
  * 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 확인 명령만 알려 줌(앱의 키 경로 지시 app/src/lib/gen/prompts.js와 같은 뜻)
  */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, prepared = pages > 0, request = '', reference = '', target = '' }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, prepared = pages > 0, request = '', reference = '', target = '', library = false }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const mood = moodOf(reference);
@@ -492,7 +492,7 @@ ${target ? `\n고칠 곳: \`id="${target}"\`인 부분만 고치고 다른 곳�
 ## 폴더
 ${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${images ? `- 교재 쪽 그림: \`work/site/material/\` (p-001 ~ p-${pad3(pages)}${images < pages ? `, 그중 ${images}장` : ''}, .webp) — 사이트에 그대로 써도 돼요(\`material/p-001.webp\`)\n` : ''}${prepared ? '- 교재에서 뽑은 글자(참고용): `work/material.md`\n' : ''}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : `- 쓸 곳: \`work/site/\` (첫 쪽은 \`index.html\`, 나머지 파일 구성은 자유)
 - 연수 정보: \`work/lecpage.json\` — 다 만든 뒤 교재에서 찾은 것만 채워요(제목 title, 날짜·시간 sessions [{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}], 장소 venue, 강사 instructors [{"name","org"}]). 이미 적힌 값은 강사가 정한 거라 지켜요.
-`}
+`}${library ? '- 디자인 서재: `design-library.md` — 결·글꼴 짝·움직임 기법·AI 티 점검표. 필요하면 참고(따를 의무 없음)\n' : ''}
 ## 배포 조건 (이것만은 꼭)
 - 스크립트는 사이트 안 파일로(인라인도 돼요). 바깥 스크립트는 jsDelivr의 gsap@3.15.1·lenis@1.3.27·ogl@1.0.11만, 바깥 CSS는 웹 글꼴만.
 - 그림은 사이트 폴더 안 png·jpg·webp·gif와 교재 쪽 그림, 또는 HTML 안 \`<svg>\`·CSS·canvas로. 바깥 그림 주소와 .svg 파일은 막혀요.
@@ -503,7 +503,7 @@ ${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\`
 자리 표시를 넣으면 lecpage가 실제 기능으로 채우고 강사 화면·QR도 만들어요: \`<div data-lp="qa"></div>\`(질문) · \`poll\`(투표, data-question·data-options) · \`board\` · \`attend\` · \`survey\` · \`deck\`(교재 넘기기) · 실습 단계 \`data-lp-step\`. 자세한 꼴은 \`kit.md\`.
 
 ## 조립된 화면 보기 (원하면)
-lecpage가 조립한 모습(강의 기능 포함)과 배포에 막히는 곳을 볼 수 있어요. 이 폴더에서 아래 명령을 글자 그대로 실행해요.
+lecpage가 조립한 모습(강의 기능 포함)과 배포에 막히는 곳을 볼 수 있어요. 이 폴더에서 아래 명령을 글자 그대로 실행해요. 셸 명령은 이것 하나만 열려 있어요(ls·cat 같은 다른 명령은 막히지만 이 명령은 돼요. 파일은 Read·Glob으로 봐요).
 \`\`\`
 ${CHECK_CMD}
 \`\`\`
@@ -662,7 +662,9 @@ async function runJob(S, job) {
     try { images = readdirSync(join(work, 'site', 'material')).filter((n) => /^p-\d{3,4}\.(webp|png|jpe?g)$/i.test(n)).length; } catch { images = 0; }
     pages = Math.max(pages, images);
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, prepared, request: inp.request, reference: inp.reference, target: inp.target }));
+    const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
+    if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, prepared, request: inp.request, reference: inp.reference, target: inp.target, library }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 연결 프로그램이 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;

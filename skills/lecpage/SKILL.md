@@ -43,7 +43,7 @@ L="node <이 SKILL.md가 있는 폴더>/scripts/lecpage.mjs"
 - **CSP 때문에**: 스크립트는 `assets/*.js`에 쓰고 `addEventListener`로(인라인 `onclick` 금지). 바깥 스크립트는 허용 목록만, 바깥 CSS는 글꼴만. 그림은 사이트 안 png·jpg·webp(SVG 파일은 안 됨, 인라인 `<svg>`는 됨). 영상 틀은 유튜브·비메오만. `<form action>`·비밀번호 칸은 쓰지 않는다.
 
 ## 디자인
-참가자가 들어오자마자 '잘 만들었다'고 느낄 만큼 완성도 높게: 연수 주제를 상징하는 직접 그린 그래픽(인라인 SVG·캔버스)과 절제된 움직임으로 이 연수만의 첫 화면을 만들고, 흔한 카드·상자 나열은 피한다. 교재 고유의 디자인 정체성(색·글꼴 느낌·모티프·사진 톤)을 이어받는다. 교재가 밋밋하면 주제와 대상에 맞게 정한다. 레퍼런스(`references/designs/`)는 영감일 뿐 따라 하지 않는다. 판단 기준은 `references/design-principles.md`(틀이 아님), 문구는 `references/copywriting.md`.
+참가자가 들어오자마자 '잘 만들었다'고 느낄 만큼 완성도 높게: 연수 주제를 상징하는 직접 그린 그래픽(인라인 SVG·캔버스)과 절제된 움직임으로 이 연수만의 첫 화면을 만들고, 흔한 카드·상자 나열은 피한다. 교재 고유의 디자인 정체성(색·글꼴 느낌·모티프·사진 톤)을 이어받는다. 교재가 밋밋하면 주제와 대상에 맞게 정한다. 레퍼런스(`references/designs/`)는 영감일 뿐 따라 하지 않는다. 판단 기준은 `references/design-principles.md`(틀이 아님), 문구는 `references/copywriting.md`. 결·한글 글꼴 짝·움직임 기법·AI 티 점검표가 필요하면 `references/design-library.md`(필요하면 참고, 따를 의무 없음).
 
 ## 물어볼 것
 교재를 읽은 뒤 확실하지 않은 것만, 고르기형으로 **한 번에** 묻는다(보통 2~4문항). 교재에서 알아낸 것은 한 줄로 알리고 묻지 않는다. "알아서"이거나 답을 기다릴 수 없으면 기본값으로 만들고 가정을 한 줄로 알린다. 무엇을 묻고 어디에 적는지: `references/intake.md`.
@@ -52,7 +52,7 @@ L="node <이 SKILL.md가 있는 폴더>/scripts/lecpage.mjs"
 | 이럴 때 | 읽을 것 |
 |---|---|
 | 사이트를 쓰기 전(꼭) | references/kit.md |
-| 디자인·문구 | references/design-principles.md · references/copywriting.md · references/designs/ |
+| 디자인·문구 | references/design-principles.md · references/design-library.md · references/copywriting.md · references/designs/ |
 | 강사에게 물을 때 | references/intake.md |
 | 명령 옵션·작업 폴더·오류 | references/cli.md |
 | 출석·이수·학생 대상·개인정보 | references/privacy-admin.md |
