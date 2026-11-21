@@ -1,18 +1,25 @@
-// lecpage studio — 내 PC 연결 프로그램(docs/plan-ai-first.md §10). Node 22 이상, 외부 의존성 없음.
-// 앱 전체를 http://127.0.0.1:<포트>/에서 보여 주고(같은 출처라 Safari 차단·Chrome 권한 창이 없음),
-// /bridge/*로 이 PC에 설치·로그인된 Claude Code·Codex에 사이트 만들기를 맡깁니다(요청은 그 사람의 구독 한도에서 차감).
+// lecpage studio — 내 PC 연결 프로그램(PC 프로그램, docs/plan-ai-first.md §10). Node 22 이상, 외부 의존성 없음.
+// 켜면 기본 브라우저로 https://lecpage.com/#pair=<토큰>&port=<포트>를 열어 짝을 맞추고, 강사는 lecpage.com 화면 그대로 씀
+// (앱이 http://127.0.0.1:<포트>/bridge/*를 직접 부름: CORS + Chrome 로컬 네트워크 접근 권한). Safari처럼 그 길이 막힌 브라우저를 위해
+// 앱 전체를 http://127.0.0.1:<포트>/에서도 보여 줌(같은 출처).
+// /bridge/*로 할 수 있는 것: ChatGPT 계정으로 연결(Sign in with ChatGPT, 이 PC에서 OpenAI로 바로) · 이 PC에 설치·로그인된 Claude Code·Codex에
+// 사이트 만들기를 맡김(요청은 그 사람의 구독 한도에서 차감) · Claude Code·Codex 공식 설치·로그인 명령을 보이는 터미널 창에서 실행.
 // 근거: docs/research/ai-first-2026-11.md §3 · 쓰는 법: references/studio.md
 //
-// 안전: 127.0.0.1에만 묶음 · 띄울 때마다 새 토큰(앱 HTML의 <meta name="lecpage-bridge">) · /bridge/*는 머리글 X-Lecpage-Bridge 확인 ·
-// 모든 요청의 Host, 보낸 Origin이 이 주소와 정확히 같은지 · 한 번에 작업 하나 · 교재 크기 한도 · 작업 시간 한도(기본 30분)와 멈추기 ·
-// 에이전트는 훅·.mcp.json이 없는 빈 임시 폴더에서, 그 폴더 밖은 막는 설정으로 · 터미널 기록에 교재 내용·파일 이름·토큰을 남기지 않음
+// 안전: 127.0.0.1에만 묶음 · 짝 맞춤 토큰(이 PC 사용자 폴더에 저장, 앱은 머리글 X-Lecpage-Bridge로만 보냄) ·
+// 모든 요청의 Host가 이 주소와 정확히 같은지 · /bridge/*는 Origin이 이 주소나 lecpage.com(허용 목록)과 정확히 같을 때만, CORS도 그 출처에만 ·
+// 한 번에 작업 하나 · 교재 크기 한도 · 작업 시간 한도(기본 30분)와 멈추기 · 에이전트는 훅·.mcp.json이 없는 빈 임시 폴더에서 ·
+// ChatGPT 토큰·Claude·Codex 자격 파일은 앱(브라우저)·터미널 기록에 내보내지 않고, Claude·Codex 자격 파일은 읽지도 않음 ·
+// 구독은 사람이 누른 요청([만들기]·[AI로 수정])으로만(이 프로그램이 스스로 부르지 않음)
+
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createSiwc, callbackPage } from './studio-siwc.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, 'lecpage.mjs');
@@ -50,7 +57,100 @@ export const POLICY_KO = {
   claude: 'Claude 구독: 내 구독으로 로그인한 Claude Code를 고치지 않고 쓰는 것은 허용되지만, 다른 제품이 구독 한도를 쓰게 하는 것은 Anthropic 승인이 필요해서, 이 연결은 켜는 사람이 직접 고르는 선택 기능이에요.',
   codex: 'Codex: OpenAI는 내 PC에서 도는 오픈소스 앱이 Codex 로그인을 쓰는 것을 허용해요.',
   apiKey: 'ANTHROPIC_API_KEY가 설정돼 있어서 Claude Code가 구독 대신 이 키로 돌고, 요금은 API 사용량으로 나가요. 구독으로 쓰려면 이 창을 닫고 키를 지운 뒤 다시 켜 주세요.',
+  chatgpt: 'ChatGPT: OpenAI는 오픈소스·로컬 앱이 Sign in with ChatGPT로 Plus·Pro 요금제를 쓰는 것을 열어 두었어요. 로그인 정보는 이 PC에만 두고, 요청은 이 PC에서 OpenAI로 바로 가요.',
 };
+
+// ── 이 PC 사용자 폴더(짝 맞춤 토큰·ChatGPT 자격) ──────────────────────────
+/** 윈도우 %APPDATA%\lecpage · macOS ~/Library/Application Support/lecpage · 그 밖 ~/.config/lecpage. 시험은 LECPAGE_STUDIO_HOME */
+export function studioHome(env = process.env, platform = process.platform, home = homedir()) {
+  if (env.LECPAGE_STUDIO_HOME) return resolve(env.LECPAGE_STUDIO_HOME);
+  if (platform === 'win32') return join(env.APPDATA || join(home, 'AppData', 'Roaming'), 'lecpage');
+  if (platform === 'darwin') return join(home, 'Library', 'Application Support', 'lecpage');
+  return join(env.XDG_CONFIG_HOME || join(home, '.config'), 'lecpage');
+}
+/** 짝 맞춤 토큰: 한 번 만들어 이 PC 사용자 폴더에 둠(다시 켜도 lecpage.com이 저절로 다시 붙게). --new-token이면 새로 */
+export function pairToken(home, { fresh = false } = {}) {
+  const f = join(home, 'studio.json');
+  let j = null; try { j = JSON.parse(readFileSync(f, 'utf8')); } catch { /* 처음 */ }
+  if (!fresh && typeof j?.token === 'string' && /^[0-9a-f]{64}$/.test(j.token)) return j.token;
+  const token = randomBytes(32).toString('hex');
+  try {
+    mkdirSync(home, { recursive: true });
+    const tmp = `${f}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ ...(j || {}), token, created_at: new Date().toISOString() }, null, 2) + '\n', { mode: 0o600 });
+    try { chmodSync(tmp, 0o600); } catch { /* 윈도우 */ }
+    renameSync(tmp, f);
+  } catch { /* 저장 못 하면 이번 실행만 */ }
+  return token;
+}
+/** /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표) */
+export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'http://localhost:5173', 'http://localhost:4173'];
+export function allowedOrigins(self, env = process.env) {
+  const extra = String(env.LECPAGE_STUDIO_ORIGINS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter((x) => /^https?:\/\/[^/\s]+$/.test(x));
+  return new Set([self, ...APP_ORIGINS, ...extra]);
+}
+
+// ── 보이는 터미널 창에서 공식 명령 실행(설치·로그인) ────────────────────────
+/** 공식 문서의 명령 그대로(2026-11-21 확인: code.claude.com/docs/en/setup, learn.chatgpt.com/docs/cli·auth) */
+export const OFFICIAL = {
+  claude: { win: 'irm https://claude.ai/install.ps1 | iex', unix: 'curl -fsSL https://claude.ai/install.sh | bash', winBin: '$env:USERPROFILE\\.local\\bin\\claude.exe', unixBin: '$HOME/.local/bin/claude', login: ['auth', 'login'], update: ['update'] },
+  codex: { win: 'irm https://chatgpt.com/codex/install.ps1 | iex', unix: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', winBin: '$env:LOCALAPPDATA\\Programs\\OpenAI\\Codex\\bin\\codex.exe', unixBin: '$HOME/.local/bin/codex', login: ['login'], update: null },
+};
+const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+/**
+ * 터미널에 넣을 글. action: install(설치 + 이어서 로그인) · login · update(새 판 + 로그인 필요하면 로그인)
+ * file: 이미 찾은 실행 파일(새로 연 창은 PATH가 예전일 수 있어 경로로 부름). 사용자 입력은 들어가지 않음(고정 명령 + 찾은 경로)
+ */
+export function terminalScript(agent, action, { platform = process.platform, file = '', needLogin = true } = {}) {
+  const o = OFFICIAL[agent]; if (!o) throw new Error('unknown agent');
+  const win = platform === 'win32';
+  const name = agentName(agent);
+  const fresh = win ? `& "${o.winBin}"` : `"${o.unixBin}"`; // 방금 설치한 곳
+  const bin = file ? (win ? `& ${psq(file)}` : shq(file)) : fresh;
+  const say = (t) => (win ? `Write-Host ${psq(t)}` : `echo ${shq(t)}`);
+  const steps = [];
+  if (action === 'install') steps.push(say(`lecpage: ${name}를 공식 설치 명령으로 설치해요.`), win ? o.win : o.unix);
+  if (action === 'update' && o.update) steps.push(say(`lecpage: ${name}를 새 판으로 바꿔요.`), `${bin} ${o.update.join(' ')}`);
+  if (action === 'login' || action === 'install' || (action === 'update' && needLogin)) steps.push(say(`lecpage: ${name}에 내 계정으로 로그인해요. 열리는 브라우저 창에서 로그인해 주세요.`), `${action === 'install' ? fresh : bin} ${o.login.join(' ')}`);
+  return `${steps.join(win ? '; ' : ' && ')}; ${say('lecpage: 다 됐어요. 이 창을 닫고 lecpage 화면으로 돌아가요(저절로 알아봐요).')}`;
+}
+/** 보이는 터미널 창을 띄움 → { ok, how } | { ok:false, command }. 시험: LECPAGE_STUDIO_TERMINAL=<프로그램>(글을 인자로 받음) */
+export function openTerminal(script, { platform = process.platform, env = process.env, spawnImpl = spawn } = {}) {
+  const run = (cmd, args, opts = {}) => { const p = spawnImpl(cmd, args, { stdio: 'ignore', detached: true, windowsHide: false, ...opts }); p.on?.('error', () => {}); p.unref?.(); return p; };
+  try {
+    if (env.LECPAGE_STUDIO_TERMINAL) { run(env.LECPAGE_STUDIO_TERMINAL, [script], { cwd: tmpdir() }); return { ok: true, how: 'test' }; }
+    // 윈도우: detached면 새 콘솔 창이 생김(Node child_process 문서). 창은 열어 둠(-NoExit). 따옴표·한글이 깨지지 않게 -EncodedCommand(UTF-16LE base64)
+    if (platform === 'win32') { run('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { cwd: homedir() }); return { ok: true, how: 'powershell' }; }
+    if (platform === 'darwin') {
+      const as = script.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      run('osascript', ['-e', 'tell application "Terminal" to activate', '-e', `tell application "Terminal" to do script "${as}"`]);
+      return { ok: true, how: 'terminal' };
+    }
+    const keep = `${script}; exec bash`;
+    for (const [t, a] of [['x-terminal-emulator', ['-e', 'bash', '-lc', keep]], ['gnome-terminal', ['--', 'bash', '-lc', keep]], ['konsole', ['-e', 'bash', '-lc', keep]], ['xfce4-terminal', ['-x', 'bash', '-lc', keep]], ['xterm', ['-e', 'bash', '-lc', keep]]]) {
+      if (findExecutable(t, { env })) { run(t, a, { cwd: homedir() }); return { ok: true, how: t }; }
+    }
+  } catch { /* 아래로 */ }
+  return { ok: false, command: script };
+}
+
+// ── 윈도우: 로그인할 때 PC 프로그램 켜기(선택) ─────────────────────────────
+const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const RUN_NAME = 'lecpage-studio';
+/** 받은 파일(lecpage-studio.cmd)로 켰을 때만: 그 파일이 LECPAGE_LAUNCHER로 자기 복사본 경로를 알려 줌. 작업 표시줄에 최소화한 창으로 */
+export function autostartCommand(launcher) { return `cmd.exe /c start "lecpage" /min "${launcher}" --autostart`; }
+export async function autostartState(env = process.env, platform = process.platform) {
+  if (platform !== 'win32' || !env.LECPAGE_LAUNCHER) return { available: false, on: false };
+  const r = await runQuick('reg', ['query', RUN_KEY, '/v', RUN_NAME], { env });
+  return { available: true, on: r.code === 0 && r.out.includes(RUN_NAME) };
+}
+export async function setAutostart(on, env = process.env, platform = process.platform) {
+  if (platform !== 'win32' || !env.LECPAGE_LAUNCHER) return { ok: false, available: false, on: false };
+  const r = on ? await runQuick('reg', ['add', RUN_KEY, '/v', RUN_NAME, '/t', 'REG_SZ', '/d', autostartCommand(env.LECPAGE_LAUNCHER), '/f'], { env })
+    : await runQuick('reg', ['delete', RUN_KEY, '/v', RUN_NAME, '/f'], { env });
+  return { ok: r.code === 0 || !on, available: true, on: on && r.code === 0 };
+}
 
 // ── 실행 파일 찾기(윈도우: PATHEXT, npm .cmd 심) ─────────────────────────
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -103,8 +203,8 @@ function runQuick(file, args, { env = process.env, timeout = 15000 } = {}) {
 
 // ── 에이전트 찾기·로그인 방식 ────────────────────────────────────────────
 const AGENTS = {
-  claude: { name: 'Claude Code', extra: (h) => [join(h, '.local', 'bin'), join(h, '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin'] },
-  codex: { name: 'Codex', extra: (h) => [join(h, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', ...(process.env.APPDATA ? [join(process.env.APPDATA, 'npm')] : [])] },
+  claude: { name: 'Claude Code', extra: (h) => [join(h, '.local', 'bin'), join(h, '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin'] }, // 공식 설치(윈도우도) ~/.local/bin
+  codex: { name: 'Codex', extra: (h) => [join(h, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', ...(process.env.LOCALAPPDATA ? [join(process.env.LOCALAPPDATA, 'Programs', 'OpenAI', 'Codex', 'bin')] : []), ...(process.env.APPDATA ? [join(process.env.APPDATA, 'npm')] : [])] },
 };
 export const agentName = (id) => AGENTS[id]?.name || id;
 const jsonIn = (s) => { const a = String(s).indexOf('{'), b = String(s).lastIndexOf('}'); if (a < 0 || b < a) return null; try { return JSON.parse(String(s).slice(a, b + 1)); } catch { return null; } };
@@ -112,8 +212,8 @@ const jsonIn = (s) => { const a = String(s).indexOf('{'), b = String(s).lastInde
 /** Claude Code: 판·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
 export async function detectClaude(env = process.env) {
   const file = findExecutable('claude', { env, extra: AGENTS.claude.extra(homedir()) });
-  const a = { id: 'claude', name: 'Claude Code', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
-  if (!file) return { ...a, note_ko: 'Claude Code가 이 PC에 없어요. 설치하고 터미널에서 claude auth login으로 로그인한 뒤 연결 프로그램을 다시 켜 주세요(https://code.claude.com/docs/ko/setup).' };
+  const a = { id: 'claude', name: 'Claude Code', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, need: '', note_ko: '', file };
+  if (!file) return { ...a, need: 'install', note_ko: '이 PC에 Claude Code가 없어요. [설치]를 누르면 공식 설치 명령이 터미널 창에서 돌고, 이어서 Claude 계정으로 로그인해요.' };
   a.version = ((await runQuick(file, ['--version'], { env })).out.match(/\d+\.\d+\.\d+/) || [''])[0];
   const r = await runQuick(file, ['auth', 'status'], { env });
   const st = jsonIn(r.out);
@@ -122,9 +222,9 @@ export async function detectClaude(env = process.env) {
   a.auth = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || m === 'api_key' || m === 'api_key_helper' ? 'api-key' : m === 'claude.ai' || m === 'oauth_token' ? 'subscription' : 'unknown';
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) a.loggedIn = true;
   const notes = [];
-  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 claude update로 새 판을 받아 주세요.`);
+  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) { notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). [업데이트]를 눌러 주세요.`); a.need = 'update'; }
   else if (!a.version) notes.push('Claude Code 판을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
-  if (a.loggedIn === false) notes.push('Claude Code에 로그인되어 있지 않아요. 터미널에서 claude auth login을 실행해 주세요.');
+  if (a.loggedIn === false) { notes.push('Claude 계정으로 로그인되어 있지 않아요. [로그인]을 눌러 주세요.'); a.need ||= 'login'; }
   if (a.auth === 'api-key') notes.push(POLICY_KO.apiKey);
   if (m === 'third_party') notes.push('Claude Code가 클라우드 회사 계정(Bedrock 등)으로 돌아요. 요금은 그 계정으로 나가요.');
   a.ready = !!a.version && versionAtLeast(a.version, CLAUDE_MIN) && a.loggedIn !== false;
@@ -134,8 +234,8 @@ export async function detectClaude(env = process.env) {
 /** Codex: 판·로그인 방식(codex login status). 출력에 가린 키가 섞일 수 있어 어디에도 적지 않음 */
 export async function detectCodex(env = process.env) {
   const file = findExecutable('codex', { env, extra: AGENTS.codex.extra(homedir()) });
-  const a = { id: 'codex', name: 'Codex', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
-  if (!file) return { ...a, note_ko: 'Codex가 이 PC에 없어요. 설치(npm i -g @openai/codex)하고 터미널에서 codex login으로 로그인한 뒤 연결 프로그램을 다시 켜 주세요.' };
+  const a = { id: 'codex', name: 'Codex', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, need: '', note_ko: '', file };
+  if (!file) return { ...a, need: 'install', note_ko: '이 PC에 Codex가 없어요. [설치]를 누르면 공식 설치 명령이 터미널 창에서 돌고, 이어서 ChatGPT 계정으로 로그인해요.' };
   a.version = ((await runQuick(file, ['--version'], { env })).out.match(/\d+\.\d+\.\d+/) || [''])[0];
   const r = await runQuick(file, ['login', 'status'], { env });
   const t = `${r.out}\n${r.err}`;
@@ -144,9 +244,9 @@ export async function detectCodex(env = process.env) {
   if (env.CODEX_API_KEY) a.loggedIn = true;
   const notes = [];
   // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 판이어야 함(agentArgs)
-  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 판을 받아 주세요.`);
+  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) { notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). [업데이트]를 눌러 주세요.`); a.need = 'install'; }
   else if (!a.version) notes.push('Codex 판을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
-  if (a.loggedIn === false) notes.push('Codex에 로그인되어 있지 않아요. 터미널에서 codex login을 실행해 주세요.');
+  if (a.loggedIn === false) { notes.push('Codex에 로그인되어 있지 않아요. [로그인]을 눌러 주세요.'); a.need ||= 'login'; }
   if (a.auth === 'api-key') notes.push('Codex가 ChatGPT 요금제 대신 API 키로 돌아요. 요금은 API 사용량으로 나가요.');
   a.ready = !!a.version && versionAtLeast(a.version, CODEX_MIN) && a.loggedIn !== false;
   a.note_ko = notes.join(' ');
@@ -376,18 +476,27 @@ function tokenOk(got, want) {
   if (typeof got !== 'string' || got.length !== want.length) return false;
   return timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
-/** 모든 요청: Host가 127.0.0.1:<포트>와 정확히 같은지(DNS 리바인딩). /bridge/*는 Origin·토큰까지 */
-export function checkRequest(req, { hostPort, origin, token }, { bridge }) {
-  if (req.headers.host !== hostPort) return { status: 421, error: 'host', message_ko: `이 연결 프로그램은 http://${hostPort}/ 주소로만 열려요.` };
+/**
+ * 모든 요청: Host가 127.0.0.1:<포트>와 정확히 같은지(DNS 리바인딩). /bridge/*는 Origin·토큰까지.
+ * Origin은 이 주소(같은 출처)나 허용 목록(lecpage.com)과 정확히 같아야 함. 허용한 출처의 사전 요청(OPTIONS)은 { preflight }로 돌려줌(토큰 없이)
+ */
+export function checkRequest(req, { hostPort, origin, token, origins }, { bridge }) {
+  if (req.headers.host !== hostPort) return { status: 421, error: 'host', message_ko: `이 PC 프로그램은 http://${hostPort}/ 주소로만 열려요.` };
   if (!bridge) return null;
-  if (req.method === 'OPTIONS') return { status: 403, error: 'origin', message_ko: '다른 사이트에서 온 요청은 받지 않아요.' };
+  const allow = origins || new Set([origin]);
   const o = req.headers.origin;
-  if (o !== undefined && o !== origin) return { status: 403, error: 'origin', message_ko: '다른 사이트에서 온 요청은 받지 않아요.' };
+  const refuse = { status: 403, error: 'origin', message_ko: '다른 사이트에서 온 요청은 받지 않아요.' };
+  if (req.method === 'OPTIONS') return o && allow.has(o) && o !== origin ? { status: 204, preflight: true, origin: o } : refuse;
+  if (o !== undefined && !allow.has(o)) return refuse;
   if (o === undefined && !['GET', 'HEAD'].includes(req.method)) return { status: 403, error: 'origin', message_ko: '이 요청에는 Origin 머리글이 있어야 해요.' };
   const sfs = req.headers['sec-fetch-site'];
-  if (sfs && sfs !== 'same-origin' && sfs !== 'none') return { status: 403, error: 'origin', message_ko: '다른 사이트에서 온 요청은 받지 않아요.' };
-  if (!tokenOk(req.headers['x-lecpage-bridge'], token)) return { status: 401, error: 'token', message_ko: '연결 토큰이 맞지 않아요. 연결 프로그램이 연 창(새로 고침)에서 다시 해 주세요.' };
+  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && !(o && o !== origin && allow.has(o))) return refuse;
+  if (!tokenOk(req.headers['x-lecpage-bridge'], token)) return { status: 401, error: 'token', message_ko: 'PC 프로그램과 짝이 맞지 않아요. PC 프로그램을 끄고 다시 켜 주세요(lecpage가 저절로 다시 짝을 맞춰요).' };
   return null;
+}
+/** 다른 출처(lecpage.com)에서 온 요청의 CORS 머리글. 사설망 접근(Chrome)도 허락 */
+export function corsHeaders(o) {
+  return { 'access-control-allow-origin': o, vary: 'Origin', 'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS', 'access-control-allow-headers': 'Content-Type, X-Lecpage-Bridge, Last-Event-ID', 'access-control-allow-private-network': 'true', 'access-control-max-age': '600' };
 }
 
 function readBody(req, limit) {
@@ -741,8 +850,56 @@ async function handleBridge(S, req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // ['status'] | ['jobs', id, 'events']
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
-    const ag = await statusOf(S, url.searchParams.has('fresh'));
-    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex } });
+    const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
+    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+  }
+  // ── ChatGPT 계정(Sign in with ChatGPT). 토큰은 이 프로그램 안에만: 앱에는 연결 여부·이메일·모델 목록만 ──
+  if (parts[0] === 'chatgpt') {
+    const sub = parts[1] || '';
+    if (!sub && req.method === 'GET') return sendJson(res, 200, { ok: true, ...S.siwc.status() });
+    if (!sub && req.method === 'DELETE') return sendJson(res, 200, { ...(await S.siwc.logout()), ...S.siwc.status() });
+    if (sub === 'login' && req.method === 'POST') {
+      let o = {}; try { o = JSON.parse((await readBody(req, 4096)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
+      const { url: to } = S.siwc.startLogin({ reconsent: !!o.reconsent });
+      if (o.open) openBrowser(to); // 앱이 새 창을 못 연 경우(팝업 막힘): 이 PC의 기본 브라우저로
+      return sendJson(res, 200, { ok: true, url: to });
+    }
+    if (sub === 'welcome' && req.method === 'POST') { S.siwc.ackWelcome(); return sendJson(res, 200, { ok: true }); }
+    if (sub === 'models' && req.method === 'GET') {
+      const m = await S.siwc.models().catch(() => null);
+      return m ? sendJson(res, 200, { ok: true, models: m }) : fail(res, 401, 'not-connected', 'ChatGPT 계정이 연결되어 있지 않거나 모델 목록을 받지 못했어요.');
+    }
+    if (sub === 'responses' && req.method === 'POST') {
+      if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) return fail(res, 415, 'content-type', '본문은 application/json이어야 해요.');
+      let body;
+      try { body = JSON.parse((await readBody(req, bodyLimit())).toString('utf8')); } catch (e) { return e.status === 413 ? fail(res, 413, 'too-large', '교재가 너무 커요.') : fail(res, 400, 'bad-json', '요청 본문을 JSON으로 읽지 못했어요.'); }
+      if (!body || typeof body !== 'object' || typeof body.model !== 'string' || !Array.isArray(body.input)) return fail(res, 400, 'bad-request', 'model과 input이 있어야 해요.');
+      return S.siwc.responses(body, req, res, { ...BASE_HEADERS, ...(res.cors || {}) });
+    }
+    return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
+  }
+  // ── Claude Code·Codex 설치·로그인: 공식 명령을 보이는 터미널 창에서(사람이 누를 때만) ──
+  if (parts[0] === 'agents' && parts.length === 3 && req.method === 'POST' && ['install', 'login', 'update'].includes(parts[2])) {
+    const id = parts[1];
+    if (!OFFICIAL[id]) return fail(res, 404, 'not-found', '없는 프로그램이에요.');
+    if (S.termAt && Date.now() - S.termAt < 3000) return fail(res, 429, 'busy', '터미널 창을 여는 중이에요. 잠깐 뒤에 다시 눌러 주세요.');
+    const ag = (await statusOf(S, true))[id];
+    const action = parts[2] === 'install' && ag.installed ? (ag.need === 'update' ? 'update' : 'login') : parts[2];
+    const script = terminalScript(id, action, { file: action === 'install' ? '' : ag.file || '', needLogin: ag.loggedIn !== true });
+    S.termAt = Date.now();
+    const r = openTerminal(script);
+    S.log(`${agentName(id)} ${action === 'install' ? '설치' : action === 'update' ? '업데이트' : '로그인'} 창을 열었어요`);
+    S.statusAt = 0;
+    return sendJson(res, 200, r.ok ? { ok: true, action } : { ok: false, action, command: r.command, message_ko: '터미널 창을 열지 못했어요. 아래 명령을 터미널에 붙여 넣어 주세요.' });
+  }
+  // ── 윈도우: 로그인할 때 PC 프로그램 켜기(선택, 받은 파일로 켰을 때만) ──
+  if (parts[0] === 'autostart' && parts.length === 1) {
+    if (req.method === 'GET') return sendJson(res, 200, { ok: true, ...(await autostartState()) });
+    if (req.method === 'POST') {
+      let o = {}; try { o = JSON.parse((await readBody(req, 1024)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
+      const r = await setAutostart(!!o.on);
+      return r.available ? sendJson(res, r.ok ? 200 : 500, { ...r, ...(await autostartState()) }) : fail(res, 409, 'unavailable', '받은 PC 프로그램 파일(Windows)로 켰을 때만 쓸 수 있어요.');
+    }
   }
   if (parts[0] !== 'jobs') return fail(res, 404, 'not-found', '없는 주소예요.');
   if (parts.length === 1 && req.method === 'POST') {
@@ -805,12 +962,25 @@ async function handle(S, req, res) {
   let url; try { url = new URL(req.url, `http://${S.hostPort}`); } catch { return send(res, 400, 'bad request'); }
   const bridge = url.pathname === '/bridge' || url.pathname.startsWith('/bridge/');
   const bad = checkRequest(req, S, { bridge });
+  if (bad?.preflight) { res.writeHead(204, { ...BASE_HEADERS, ...corsHeaders(bad.origin) }); return res.end(); }
   if (bad) {
     // localhost로 연 경우 같은 컴퓨터의 127.0.0.1 주소로 보냄(저장된 작업이 출처마다 따로라 한 주소로 모음)
     if (bad.error === 'host' && !bridge && req.method === 'GET' && req.headers.host === `localhost:${S.port}`) { res.writeHead(307, { ...BASE_HEADERS, location: `${S.origin}${url.pathname}${url.search}` }); return res.end(); }
+    // 허용한 출처(lecpage.com)인데 토큰만 틀림: 앱이 '짝이 맞지 않아요'를 읽을 수 있게 CORS를 붙임(다른 출처에는 붙이지 않음)
+    const o = req.headers.origin;
+    if (bridge && bad.error === 'token' && o && o !== S.origin && S.origins?.has(o)) for (const [k, v] of Object.entries(corsHeaders(o))) res.setHeader(k, v);
     return bridge ? fail(res, bad.status, bad.error, bad.message_ko) : send(res, bad.status, bad.message_ko, { 'content-type': 'text/plain; charset=utf-8' });
   }
-  if (bridge) return handleBridge(S, req, res, url);
+  if (bridge) {
+    const o = req.headers.origin;
+    if (o && o !== S.origin) for (const [k, v] of Object.entries(corsHeaders(o))) res.setHeader(k, v); // 허용한 출처(lecpage.com)에만
+    return handleBridge(S, req, res, url);
+  }
+  // ChatGPT 로그인에서 돌아오는 곳(OpenAI가 보내는 최상위 이동이라 토큰 없음. state로 확인)
+  if (url.pathname === '/auth/callback' && req.method === 'GET') {
+    const r = await S.siwc.callback(url.searchParams);
+    return send(res, r.status || 200, callbackPage(r), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed');
   if (S.app.mode === 'dist') return serveDist(S, req, res, url.pathname);
   return serveRemote(S, req, res, url.pathname, url.search);
@@ -826,10 +996,12 @@ function listenOn(server, port) {
 }
 
 /** 띄우기(시험에서도 씀): { url, port, close } */
-export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {} } = {}) {
+export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl } = {}) {
   // 지난번에 꺼지며 남은 임시 폴더(6시간 넘은 것)
   try { for (const n of readdirSync(tmpdir())) if (n.startsWith(TMP_PREFIX)) { const p = join(tmpdir(), n); if (Date.now() - statSync(p).mtimeMs > 6 * 3600e3) rmSync(p, { recursive: true, force: true }); } } catch { /* 못 지워도 됨 */ }
-  const S = { version: VERSION, token: randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log };
+  // 짝 맞춤 토큰·ChatGPT 자격은 이 PC 사용자 폴더에(persist: 실제 실행). 시험은 home을 따로 주거나 이번 실행만(임시 폴더)
+  const dirHome = home ? resolve(home) : persist ? studioHome() : mkdtempSync(join(tmpdir(), TMP_PREFIX + 'home-'));
+  const S = { version: VERSION, home: dirHome, token: persist || home ? pairToken(dirHome, { fresh: newToken }) : randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log };
   const dir = dist ? resolve(dist) : !remote && isFile(join(REPO_DIST, 'index.html')) ? REPO_DIST : null;
   if (dist && !isFile(join(dir, 'index.html'))) throw Object.assign(new Error(`${dir}에 앱 빌드본(index.html)이 없어요. cd app && npm run build로 먼저 만들어 주세요.`), { friendly: true });
   S.app = dir
@@ -846,6 +1018,10 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   S.port = server.address().port;
   S.hostPort = `127.0.0.1:${S.port}`;
   S.origin = `http://${S.hostPort}`;
+  S.origins = allowedOrigins(S.origin);
+  S.siwc = createSiwc({ home: S.home, port: S.port, log, ...(fetchImpl ? { fetchImpl } : {}) });
+  S.appUrl = (appUrl || process.env.LECPAGE_STUDIO_APP_URL || 'https://lecpage.com').replace(/\/+$/, '');
+  try { S.origins.add(new URL(S.appUrl).origin); } catch { /* 잘못된 주소 */ }
   // 갑자기 꺼질 때(오류·창 닫기): 돌던 에이전트를 끄고 임시 폴더를 지움
   process.on('exit', () => {
     for (const j of S.jobs.values()) {
@@ -860,7 +1036,10 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
     server.closeAllConnections?.();
     await new Promise((r) => server.close(() => r()));
   };
-  return { S, server, port: S.port, url: `${S.origin}/`, close };
+  if (!home && !persist) { const h = S.home; process.on('exit', () => { try { rmSync(h, { recursive: true, force: true }); } catch { /* 넘김 */ } }); }
+  // lecpage.com에서 짝 맞추기: 토큰은 주소의 # 뒤(서버로 가지 않음). 앱이 읽고 바로 주소에서 지움
+  const pairUrl = `${S.appUrl}/#pair=${S.token}&port=${S.port}`;
+  return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close };
 }
 
 function openBrowser(url) {
@@ -868,30 +1047,33 @@ function openBrowser(url) {
   try { const p = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }); p.on('error', () => {}); p.unref(); } catch { /* 주소를 직접 열면 됨 */ }
 }
 
-/** CLI: lecpage studio [--port n] [--no-open] [--dist 폴더] [--remote] [--timeout 분] */
+/** CLI: lecpage studio [--port n] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist 폴더] [--remote] [--timeout 분] */
 export async function studioCmd(h) {
   const { args } = h;
   const hhmm = () => new Date().toTimeString().slice(0, 5);
   const json = !!args.json;
   const log = (m) => { if (!json) console.log(m.startsWith('  ') ? m : `[${hhmm()}] ${m}`); };
   if (args.timeout !== undefined && !(+args.timeout > 0)) h.fail('--timeout은 분 단위 숫자예요. 예: --timeout 30');
-  const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log });
-  const { S, url, close } = st;
+  const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log, persist: true, newToken: !!args['new-token'] });
+  const { S, url, pairUrl, close } = st;
+  // 어디를 열지: 기본은 lecpage.com(짝 맞추기). 이 컴퓨터 빌드본(--dist)이면 그 주소. 로그인할 때 켜진 경우(--autostart)는 열지 않음
+  const open = args['no-open'] || args.autostart ? '' : args.open === 'local' || (args.dist && args.open !== 'lecpage') ? url : pairUrl;
   const ag = await statusOf(S, true);
+  const cg = S.siwc.status();
   const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? (a.id === 'codex' ? 'ChatGPT로 로그인' : '구독으로 로그인') : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
-  if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)] }));
+  if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: { connected: cg.connected, plan: cg.plan } }));
   else console.log([
-    `lecpage 연결 프로그램 ${S.version}`,
-    `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)`,
-    `  앱 ${S.app.mode === 'dist' ? `이 컴퓨터의 빌드본(${relative(process.cwd(), S.app.dir) || '.'})` : `${S.app.url}에서 받은 판`}`,
-    `  ${line(ag.claude)} / ${line(ag.codex)}`,
+    `lecpage PC 프로그램 ${S.version}`,
+    open === pairUrl ? `  lecpage.com을 열어 이 PC와 짝을 맞춰요. 브라우저가 열리지 않으면 lecpage.com에서 [ChatGPT·Claude 계정으로 연결]을 눌러요.` : open ? `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)` : `  켜져 있어요. lecpage.com에서 이어서 해요.`,
+    `  Safari 등에서 lecpage.com이 이 PC에 닿지 않으면 이 주소에서 써요: ${url}`,
+    `  ChatGPT 계정 ${cg.connected ? `연결됨${cg.plan ? '' : '(요금제 사용 허락 없음)'}` : '연결 안 됨'} / ${line(ag.claude)} / ${line(ag.codex)}`,
     ...[ag.claude, ag.codex].filter((a) => a.installed && a.note_ko).map((a) => `  주의 ${a.note_ko}`),
+    `  안내 ${POLICY_KO.chatgpt}`,
     `  안내 ${POLICY_KO.claude}`,
-    `  안내 ${POLICY_KO.codex}`,
     '  교재는 이 PC의 임시 폴더에서만 다루고, 작업이 끝나면 지워요.',
     '  끝내려면 이 창에서 Ctrl+C를 눌러요(창을 닫아도 꺼져요).',
   ].join('\n'));
-  if (!args['no-open']) openBrowser(url);
+  if (open) openBrowser(open);
   let closing = false;
   const bye = async () => { if (closing) return; closing = true; log('끄는 중…'); await close(); process.exit(0); };
   process.on('SIGINT', bye); process.on('SIGTERM', bye); process.on('SIGHUP', bye);

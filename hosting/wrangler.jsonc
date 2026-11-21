@@ -39,7 +39,7 @@
   // 사이트 보기 설정(VIEW, CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_HOST, PAGES_TOKEN, APP_ORIGINS)은 npm run setup이 비밀 값으로 넣습니다(다시 배포해도 남음).
   "vars": {
     // 바로 배포를 부를 수 있는 앱 주소(쉼표로 구분). 앱을 내 도메인에 올렸으면 그 주소를 더하세요.
-    "ALLOWED_ORIGINS": "https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173",
+    "ALLOWED_ORIGINS": "https://lecpage.com,https://www.lecpage.com,https://yoorrard.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:6600,http://127.0.0.1:6601,http://127.0.0.1:6602",
     // 신고 알림의 '처리' 링크가 가리킬 관리 화면(관리 Worker lecpage-admin). 포크는 자기 주소로 바꾸거나 지우세요(없으면 링크를 뺌)
     "ADMIN_URL": "https://lecpage-admin.lecpage.workers.dev/admin/",
     // 하루 점검이 '며칠째 그대로인지' 볼 AI 정보 파일(앱의 ai-catalog.json). 포크는 자기 앱 주소로 바꾸거나 지우세요(없으면 그 점검만 건너뜀)

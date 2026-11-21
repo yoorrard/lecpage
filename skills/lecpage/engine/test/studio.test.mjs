@@ -39,7 +39,8 @@ after(() => { for (const p of procs) { try { p.kill('SIGTERM'); } catch { /* 끝
 /** 연결 프로그램 띄우기 → { port, url, p } */
 async function launch(env = {}, args = ['--dist', DIST]) {
   // NODE_USE_ENV_PROXY: 프록시 환경에서 CLI가 자기를 다시 띄우지 않게(시험이 끄는 프로세스 = 연결 프로그램)
-  const p = spawn(process.execPath, [CLI, 'studio', '--no-open', '--json', ...args], { env: { ...process.env, NODE_USE_ENV_PROXY: '1', PATH: `${BIN}:${process.env.PATH}`, FAKE_AGENT_LOG: LOG, LECPAGE_STUDIO_SHOTS: '0', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // 짝 맞춤 토큰·ChatGPT 자격 폴더는 띄울 때마다 새 임시 폴더(실제 사용자 폴더를 건드리지 않게)
+  const p = spawn(process.execPath, [CLI, 'studio', '--no-open', '--json', ...args], { env: { ...process.env, NODE_USE_ENV_PROXY: '1', PATH: `${BIN}:${process.env.PATH}`, FAKE_AGENT_LOG: LOG, LECPAGE_STUDIO_SHOTS: '0', LECPAGE_STUDIO_HOME: mkdtempSync(join(T, 'home-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   procs.push(p);
   let err = '';
   p.stderr.on('data', (d) => { err += d; });
@@ -212,7 +213,14 @@ test('띄우기 → 앱 파일(토큰 넣기·_headers·경로 막기) → 거�
   const H = { 'x-lecpage-bridge': token };
   assert.equal((await req(port, 'GET', '/bridge/status')).status, 401);
   assert.equal((await req(port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': 'f'.repeat(64) } })).status, 401);
-  assert.equal((await req(port, 'GET', '/bridge/status', { headers: { ...H, origin: 'https://lecpage.com' } })).status, 403);
+  // lecpage.com(허용 목록)은 받음 + 그 출처에만 CORS. 다른 사이트는 거절(CORS 머리글 없음)
+  const fromSite = await req(port, 'GET', '/bridge/status', { headers: { ...H, origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
+  assert.equal(fromSite.status, 200); assert.equal(fromSite.headers['access-control-allow-origin'], 'https://lecpage.com'); assert.equal(fromSite.headers.vary, 'Origin');
+  assert.equal((await req(port, 'GET', '/bridge/status', { headers: { origin: 'https://lecpage.com' } })).status, 401, 'lecpage.com이어도 토큰은 있어야 함');
+  const evil = await req(port, 'GET', '/bridge/status', { headers: { ...H, origin: 'https://lecpage.com.evil.example' } });
+  assert.equal(evil.status, 403); assert.equal(evil.headers['access-control-allow-origin'], undefined);
+  const pre = await req(port, 'OPTIONS', '/bridge/chatgpt/responses', { headers: { origin: 'https://lecpage.com', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type,x-lecpage-bridge', 'access-control-request-private-network': 'true' } });
+  assert.equal(pre.status, 204); assert.equal(pre.headers['access-control-allow-origin'], 'https://lecpage.com'); assert.equal(pre.headers['access-control-allow-private-network'], 'true'); assert.match(pre.headers['access-control-allow-headers'], /X-Lecpage-Bridge/);
   assert.equal((await req(port, 'GET', '/bridge/status', { headers: { ...H, 'sec-fetch-site': 'cross-site' } })).status, 403);
   assert.equal((await req(port, 'GET', '/bridge/status', { headers: H, host: 'localhost:' + port })).status, 421);
   assert.equal((await req(port, 'OPTIONS', '/bridge/jobs', { headers: { origin: 'http://evil.example', 'access-control-request-method': 'POST' } })).status, 403);

@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { StepHead } from '../Project.jsx';
 import { Field, Tabs, Dialog, Notice } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
-import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, forgetGeneration, bridgeStatus, pageTitles } from '../../lib/studio.js';
-import { getActiveAI, PROVIDERS, CHATBOTS, setChatbot } from '../../lib/ai.js';
+import { editSite, chatEditPrompt, acceptChatAnswer, runInspect, fixIssues, stopGeneration, resumeGeneration, forgetGeneration, pageTitles } from '../../lib/studio.js';
+import { getActiveAI, CHATBOTS, setChatbot } from '../../lib/ai.js';
 import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage, imageAt, replaceText, getVar, setVar, readCss, writeCss } from '../../lib/site-doc.js';
 import { firstSession, keepTeacher, pushVersion } from '../../lib/site-meta.js';
 import { blobs } from '../../lib/db.js';
 import { toast, copy, uid, isPastDate, monthDay, fmtDate } from '../../lib/util.js';
 import { fmtSec, errorActions } from './Make.jsx';
-import { AGENT_NAME } from '../../lib/agent.js';
+import { useConnection, available, pickConnection, jobOpts, pcNow, setPreferred } from '../../lib/connection.js';
+import { ConnBadge } from '../../components/PcConnect.jsx';
 
 // 완성 뒤 편집 화면(docs/plan-ai-first.md §8): 미리보기(조립된 실제 사이트) + 목록(섹션) + 글 바로 고치기 + 그림 바꾸기 + 색·글꼴
 // + 수정 요청(섹션 또는 전체 → AI) + 검수(문제 목록, AI에게 고쳐 달라기) + 연수 정보(AI가 찾은 쪽 번호) + 되돌리기(판 기록)
@@ -74,12 +75,12 @@ export function Studio({ p, update, go, job, idle, reload }) {
     { value: 'look', label: '색·글꼴' },
   ];
   const show = (key) => setGoto({ key, n: Date.now() });
-  /** 검수에서 찾은 곳을 AI에게: 키로 연결한 AI면 그 섹션들을 바로 고치고, 아니면(쓰던 AI 창·섹션이 안 정해진 문제·체험) 수정 요청에 채워 둠 */
+  /** 검수에서 찾은 곳을 AI에게: 연결한 AI(계정·API 키)면 바로 고치고, 아니면(쓰던 AI 창·섹션이 안 정해진 문제·체험) 수정 요청에 채워 둠 */
   const fixAll = async (keys) => {
     const list = (issues || []).filter((x) => !keys || keys.includes(x.key));
     if (!list.length) return;
-    const ai = p.demo ? null : await getActiveAI();
-    if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), { way: 'key', provider: ai.provider, model: ai.model })) { toast('AI에게 수정을 맡겼어요. 끝나면 미리보기가 바뀌어요.'); return; } }
+    const ai = p.demo ? null : pickConnection(available(pcNow(), await getActiveAI()));
+    if (ai) { await idle(); if (await fixIssues(p.id, list.map((x) => x.key), jobOpts(ai))) { toast(`${ai.ro} 수정을 맡겼어요. 끝나면 미리보기가 바뀌어요.`); return; } }
     const secs = [...new Set(list.map((x) => x.where?.section).filter(Boolean))];
     setAsk({ target: secs.length === 1 ? secs[0] : 'all', request: `검수에서 찾은 문제를 고쳐 주세요.\n${list.map((x) => `- ${x.message_ko}${x.fix_hint_ko ? ` (${x.fix_hint_ko})` : ''}`).join('\n')}` });
     setTab('ask');
@@ -295,32 +296,27 @@ function CheckPanel({ issues, onShow, onFix, locked, onRecheck }) {
 
 /** 수정 요청: 고칠 섹션(또는 전체)과 바라는 점 → 키로 연결한 AI · 내 PC의 AI 에이전트 · 쓰던 AI 창(요청 글 복사 → 답 넣기) */
 function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
-  const [conn, setConn] = useState(undefined);
-  const [agents, setAgents] = useState([]); // 연결 프로그램이 켜져 있으면 설치된 에이전트
+  const { list, conn: pick, loading } = useConnection({ demo: !!p.demo }); // AI 연결 한 곳(lib/connection.js)
   const [way, setWayHere] = useState('');
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  // 처음 고를 곳: 이 사이트를 만든 연결이 지금 되면 그것, 아니면 고른 연결, 둘 다 없으면 쓰던 AI 창
   useEffect(() => {
-    let off = false;
-    Promise.all([p.demo ? null : getActiveAI(), p.demo ? null : bridgeStatus().catch(() => null)]).then(([a, b]) => {
-      if (off) return;
-      const ag = (b?.agents || []).filter((x) => AGENT_NAME[x?.id] && x.installed && x.ready !== false);
-      setConn(a); setAgents(ag);
-      // 처음 고를 곳: 이 사이트를 만든 길(내 PC면 그 에이전트), 아니면 연결된 키, 둘 다 없으면 쓰던 AI 창
-      const g = p.gen || {};
-      setWayHere(g.way === 'local' && ag.some((x) => x.id === g.agent) ? 'local:' + g.agent : a ? 'key' : ag.length ? 'local:' + ag[0].id : 'chat');
-    });
-    return () => { off = true; };
-  }, []);
+    if (loading || (way && (way === 'chat' || list.some((c) => c.id === way)))) return;
+    const g = p.gen || {};
+    const made = g.way === 'chatgpt' ? 'chatgpt' : g.way === 'local' ? g.agent : g.way === 'key' ? 'key' : '';
+    setWayHere(list.some((c) => c.id === made) ? made : pick?.id || 'chat');
+  }, [loading, list.map((c) => c.id).join()]);
   const target = sections.some((s) => s.id === ask.target) ? ask.target : 'all';
   const ready = ask.request.trim().length > 1;
   async function send() {
     if (!ready || locked) return;
     await idle();
-    const local = way.startsWith('local:');
-    editSite(p.id, { target, request: ask.request.trim(), ...(local ? { way: 'local', agent: way.slice(6) } : { way: 'key', provider: conn.provider, model: conn.model }) });
+    const c = list.find((x) => x.id === way); if (!c) return;
+    setPreferred(c.id);
+    editSite(p.id, { target, request: ask.request.trim(), ...jobOpts(c) });
     toast('AI에게 보냈어요. 끝나면 미리보기가 바뀌어요.'); setAsk({ ...ask, request: '' });
   }
   // 쓰던 AI 창에 보낼 요청 글: 고칠 곳·바라는 점이 바뀌면 잠깐 뒤 미리 만들어 둠(누르는 순간 바로 복사되게)
@@ -340,16 +336,17 @@ function AskPanel({ p, sections, ask, setAsk, idle, reload, locked, go }) {
     } catch (e) { console.error(e); setRes({ ok: false, problems: ['답을 읽지 못했어요. AI 답의 코드 블록을 다시 복사해 주세요.'] }); }
     setBusy(false);
   }
-  const ways = [...(conn ? [['key', `${PROVIDERS[conn.provider]?.short || 'AI'}로 바로`]] : []), ...agents.map((a) => ['local:' + a.id, `내 PC의 ${AGENT_NAME[a.id]}`]), ['chat', '쓰던 AI로']];
+  const ways = [...list.map((c) => [c.id, c.ro]), ['chat', '쓰던 AI로']];
+  const cur = list.find((c) => c.id === way);
   return (
     <div class="stack ask">
       <Field label="고칠 곳"><select class="input" value={target} onChange={(e) => setAsk({ ...ask, target: e.target.value })}><option value="all">사이트 전체</option>{sections.map((s) => <option value={s.id}>{s.name}</option>)}</select></Field>
       <Field label="바라는 점" hint="무엇을 어떻게 바꿀지 적어요. 예: 실습 단계를 세 개로 나누고 단계마다 걸리는 시간을 적어 줘.">
         <textarea class="input" rows={4} maxLength={1500} value={ask.request} onInput={(e) => setAsk({ ...ask, request: e.target.value })} placeholder="예: 첫 화면 제목을 더 짧게, 색은 차분하게" /></Field>
       {locked && <p class="lock-note small">AI가 고치는 중이에요. 끝나면 다시 보낼 수 있어요.</p>}
-      {p.demo && <p class="small muted">체험이라 API 키로 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p>}
+      {p.demo ? <p class="small muted">체험이라 연결한 AI에는 보내지 않아요. 쓰던 AI 창으로는 실제처럼 해 볼 수 있어요.</p> : <ConnBadge />}
       {ways.length > 1 && <div class="seg" role="group" aria-label="보낼 곳">{ways.map(([v, label]) => <button type="button" aria-pressed={String(way === v)} onClick={() => setWayHere(v)}>{label}</button>)}</div>}
-      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{way === 'key' ? `${conn?.label || 'AI'}에 보내요.` : `내 PC의 ${AGENT_NAME[way.slice(6)]}에게 맡겨요.`} 수정 전 버전은 버전 기록에 남아요.</span></div>
+      {way !== 'chat' && way ? <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready || locked} onClick={send}>AI에게 보내기</button><span class="small muted">{cur ? `${cur.ro} 보내요.` : ''} 수정 전 버전은 버전 기록에 남아요.</span></div>
         : <ol class="chat-steps">
           <li><b>프롬프트를 복사해 쓰던 AI에 보내요</b>
             <div class="btn-row">

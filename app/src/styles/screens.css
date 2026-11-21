@@ -603,6 +603,31 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .ai-alt-rec{border:1px solid var(--hair);border-radius:12px;padding:6px 14px;background:var(--card,transparent)}
 .ai-alt-rec>summary b{color:var(--accent)}
 .ai-alt-b p{margin:0}
+/* 구독으로 연결(API 키 없이, 추천): 모두에게 첫째 카드 */
+.ai-sub{display:grid;gap:10px;padding:16px;border:1.5px solid color-mix(in srgb,var(--accent) 55%,var(--line));border-radius:var(--r-sm);background:var(--paper);min-width:0}
+.ai-sub.is-on{border-color:color-mix(in srgb,var(--ok) 55%,var(--line))}
+.ai-sub p{margin:0}
+.ai-sub-t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ai-sub-t h3{margin:0;font-size:1.18rem;letter-spacing:-.01em}
+.ai-sub-tag{font-size:.78rem;font-weight:700;color:var(--accent);padding:1px 8px;border-radius:999px;background:var(--lav-soft)}
+.ai-sub-rows{display:grid;gap:10px}
+.ai-sub-row{display:grid;gap:8px;padding:12px;border:1px solid var(--hair);border-radius:var(--r-xs);background:var(--card)}
+.ai-sub-name{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.ai-sub-name .small{display:inline-flex;align-items:center;gap:6px}
+.ai-sub-off{padding:8px 12px;border-radius:var(--r-xs);background:var(--sunk)}
+.ai-sub .notice{display:grid;gap:6px}
+.ai-sub .check{display:flex;align-items:center;gap:8px}
+.conn-badge{margin:0;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.conn-badge.is-on{color:var(--ok);font-weight:600}
+.dot-off{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+/* 설치 없이: 쓰던 AI로 */
+.ai-nokey{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;padding:12px 14px;border:1px solid var(--hair);border-radius:var(--r-xs)}
+/* 다른 방법(접힘): API 키·Codex·AI 에이전트 */
+.ai-more{display:grid;gap:10px;font-size:.95rem}
+.ai-more>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;cursor:pointer;padding:6px 0;min-height:32px}
+.ai-more[open]>summary{margin-bottom:8px}
+.ai-more>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.ai-alt-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:10px 0;border-top:1px solid var(--hair)}
 .ai-alt-steps{margin:0;padding-left:1.3em;display:grid;gap:2px}
 .ai-alt-steps code{font-family:var(--f-mono);font-size:.86em;padding:1px 5px;border-radius:5px;background:var(--sunk)}
 /* 쓰던 앱(키 없이): 세 걸음 */
