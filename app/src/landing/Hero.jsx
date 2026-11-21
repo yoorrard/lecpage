@@ -8,8 +8,13 @@ import { isFine, isReduced } from './motion.js';
  *   화면 밖이거나 탭이 숨으면 막대도 멈춤. 동작 줄이기면 자동으로 넘기지 않고 바로 바뀜.
  * - 뒤 빛은 사례의 대표색 둘(--c1·--c2, @property로 부드럽게 바뀜). 섬세한 포인터에서는 틀이 마우스 쪽으로 조금 기울어요.
  * - 첫 사례 그림만 먼저 받고(가장 큰 그림), 나머지는 첫 그림을 그린 뒤 틈에 받아요.
+ * - 틀은 CSS로만 그려요(기기 그림·상표 모양 없음). 노트북 = 뚜껑(얇은 검은 테·카메라) + 알루미늄 바닥판,
+ *   휴대폰 = 금속 띠 + 얇은 검은 테 + 화면(19.5:9). 휴대폰 화면 위 상태 표시줄은 사이트 맨 윗줄 색(shots.json의 bar)으로 이어 칠하고,
+ *   사이트 그림은 그 아래(390×795)에 그대로 놓아 카메라 구멍이 사이트 내용을 가리지 않게 해요.
  * 틀과 그림은 꾸밈(aria-hidden)이고, 같은 내용을 아래 한 줄(사이트 이름·교재 쪽수·사이트 열기)로 읽어 줘요.
  */
+/** 상태 표시줄 바탕이 밝으면 어두운 글자로 */
+const lightBar = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150; };
 export function HeroStage() {
   const box = useRef();
   const [i, setI] = useState(0);
@@ -39,6 +44,7 @@ export function HeroStage() {
     };
   }, []);
   const s = SHOWCASES[i];
+  const bar = shot(`ph-${s.id}`).bar || '#0b0d14';
   const next = () => setI((k) => (k + 1) % SHOWCASES.length);
   const pick = (k) => { setI(k); setPlay(false); };
   const running = play && all && seen;
@@ -47,26 +53,40 @@ export function HeroStage() {
       <div class="ld-glow" aria-hidden="true" />
       <div class="ld-devices" aria-hidden="true">
         <div class="ld-laptop">
-          <div class="ld-screen">
-            {SHOWCASES.map((x, k) => {
-              if (k && !all) return null;
-              const big = shot(`pc-${x.id}`), small = shot(`pc-${x.id}-s`);
-              return (
-                <picture class={k === i ? 'is-on' : ''} key={x.id}>
-                  <source media="(max-width: 759.98px)" srcset={small.src} width={small.w} height={small.h} />
-                  <img src={big.src} width={big.w} height={big.h} alt="" decoding="async" fetchpriority={k ? undefined : 'high'} />
-                </picture>
-              );
-            })}
+          <div class="ld-lid">
+            <div class="ld-screen">
+              {SHOWCASES.map((x, k) => {
+                if (k && !all) return null;
+                const big = shot(`pc-${x.id}`), small = shot(`pc-${x.id}-s`);
+                return (
+                  <picture class={k === i ? 'is-on' : ''} key={x.id}>
+                    <source media="(max-width: 759.98px)" srcset={small.src} width={small.w} height={small.h} />
+                    <img src={big.src} width={big.w} height={big.h} alt="" decoding="async" fetchpriority={k ? undefined : 'high'} />
+                  </picture>
+                );
+              })}
+            </div>
           </div>
+          <div class="ld-base" />
         </div>
-        <div class="ld-phone">
+        <div class={`ld-phone${lightBar(bar) ? ' is-light' : ''}`} style={{ '--bar': bar }}>
           <div class="ld-phone-screen">
-            {SHOWCASES.map((x, k) => {
-              if (k && !all) return null;
-              const m = shot(`m-${x.id}`);
-              return <img class={k === i ? 'is-on' : ''} key={x.id} src={m.src} width={m.w} height={m.h} alt="" decoding="async" loading={k ? 'lazy' : undefined} />;
-            })}
+            <div class="ld-phone-bar">
+              <span>13:50</span>
+              <i class="ld-phone-cam" />
+              <svg viewBox="0 0 66 12">
+                <rect x="0" y="7.5" width="3" height="4" rx=".8" /><rect x="4.4" y="5.5" width="3" height="6" rx=".8" /><rect x="8.8" y="3.2" width="3" height="8.3" rx=".8" /><rect x="13.2" y=".8" width="3" height="10.7" rx=".8" />
+                <circle cx="27" cy="10" r="1.5" /><path class="ld-wifi" d="M23.9 7.1a4.4 4.4 0 0 1 6.2 0M20.9 4.1a8.6 8.6 0 0 1 12.2 0" />
+                <rect class="ld-batt" x="38.5" y="1.5" width="23" height="9.5" rx="2.8" /><rect x="40.6" y="3.6" width="16.4" height="5.3" rx="1.4" /><rect class="ld-batt-nub" x="62.6" y="4.6" width="1.8" height="3.3" rx=".9" />
+              </svg>
+            </div>
+            <div class="ld-phone-view">
+              {SHOWCASES.map((x, k) => {
+                if (k && !all) return null;
+                const m = shot(`ph-${x.id}`);
+                return <img class={k === i ? 'is-on' : ''} key={x.id} src={m.src} width={m.w} height={m.h} alt="" decoding="async" loading={k ? 'lazy' : undefined} />;
+              })}
+            </div>
           </div>
         </div>
       </div>
