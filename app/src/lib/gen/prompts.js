@@ -53,12 +53,25 @@ ${META_FORM}
 /** 시스템 글(짧게): 모든 요청이 같은 글을 써서 회사들의 프롬프트 캐시가 교재를 다시 읽는 값을 줄임 */
 export const SYSTEM_GEN = '당신은 교재를 직접 읽고 웹사이트를 디자인해 코드까지 쓰는 사람이에요. 사이트 글은 한국어로 써요.';
 
-/** 강사 요청(+ 강사가 고른 참고 분위기, 강사가 직접 적은 연수 정보) */
+/**
+ * 강사가 참고 디자인에서 담은 디자인(lib/design-cart.js → p.reference.picks) → 짧은 목록. 강사가 고른 것이라 강사 요청의 일부로 넣음
+ * 내 PC의 AI(skills/lecpage/scripts/studio.mjs picksText)도 같은 꼴
+ */
+export function picksText(picks) {
+  const list = (Array.isArray(picks) ? picks : []).filter((x) => x && x.ko).slice(0, 10);
+  if (!list.length) return '';
+  const c = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  return `강사가 고른 디자인 참고(이 연수에 맞게 녹여 써요):\n${list.map((x) => `- ${c(x.ko, 30)}${x.en ? `(${c(x.en, 40)})` : ''} — ${c(x.desc, 70)} — ${c(x.tech, 70)}`).join('\n')}`;
+}
+
+/** 강사 요청(+ 강사가 고른 참고 분위기·담은 디자인, 강사가 직접 적은 연수 정보) */
 function askOf({ request, reference, info } = {}) {
   const out = [];
   if (request && String(request).trim()) out.push(String(request).trim().slice(0, 4000));
   const mood = typeof reference === 'string' ? reference : reference?.mood || reference?.desc || '';
   if (mood && String(mood).trim()) out.push(`분위기: ${String(mood).trim().slice(0, 600)}`);
+  const picks = picksText(reference?.picks);
+  if (picks) out.push(picks);
   const pairs = Object.entries(info || {}).filter(([, v]) => v && (typeof v === 'string' || typeof v === 'number'));
   if (pairs.length) out.push(`강사가 적은 연수 정보(교재보다 우선): ${pairs.map(([k, v]) => `${k}=${String(v).slice(0, 120)}`).join(', ')}`);
   return out.length ? out.join('\n') : '(따로 없음)';

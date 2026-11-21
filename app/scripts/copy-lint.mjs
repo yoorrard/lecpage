@@ -78,6 +78,9 @@ const DOC_FN = /^(renderPrivacy|eraseFacts|defaultProcessors|activityItems|desig
 const PROMPT_FN = /^(make\w*Prompt|promptFor|build\w*Prompt)$/;
 const PROMPT_VAR = /^(RULES|PROMPT|SYSTEM|INSTR)/;
 const DOC_VAR = /^PROVIDER_WHY$/; // 운영 안내(opsDoc)에만 들어가는 설명
+// 디자인 사전(참고 디자인)의 미리보기 견본 코드: 작은 데모 페이지의 css·html·js라 앱 화면 글로 보지 않음
+const SAMPLE_FILE = /(^|\/)app\/src\/data\/design-dict\//;
+const SAMPLE_KEYS = new Set(['css', 'html', 'js', 'tech']); // tech: CSS·JS 기법 표기(화면에 고정폭으로 보임)
 
 const nameOf = (n) => !n ? '' : n.type === 'JSXIdentifier' || n.type === 'Identifier' ? n.name : n.type === 'JSXMemberExpression' ? `${nameOf(n.object)}.${nameOf(n.property)}` : n.type === 'StringLiteral' ? n.value : '';
 const calleeName = (c) => !c ? '' : c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' || c.type === 'OptionalMemberExpression' ? nameOf(c.property) : '';
@@ -202,6 +205,7 @@ export function extract(source, file = 'x.jsx') {
       case 'ObjectProperty': case 'Property': {
         if (n.computed) visit(n.key, n, { ...ctx, skip: true });
         const key = nameOf(n.key);
+        if (SAMPLE_FILE.test(file) && SAMPLE_KEYS.has(key)) return; // 디자인 사전 미리보기의 견본 코드와 기법 표기(이름·설명은 봄)
         visit(n.value, n, { ...ctx, kind: PROP_KIND[key] || (ctx.kind && ctx.kind !== 'text' && !PROP_KIND[key] ? ctx.kind : 'text'), where: ctx.where || key });
         return;
       }

@@ -9,6 +9,7 @@ import { hasPendingFiles } from './lib/project.js';
 import { storageBlocked, STORAGE_MSG } from './lib/db.js';
 import { FreshBar, chunkFailed, isChunkError, afterReloadNote, useInlineFresh } from './lib/fresh.jsx';
 import { GalleryHead } from './pages/GalleryHead.jsx';
+import { CartBadge } from './components/CartBadge.jsx';
 import { capturePairing } from './lib/pair.js';
 
 // PC 프로그램이 연 주소(#pair=…)면 짝을 기억하고 주소에서 지움(라우터가 읽기 전에). 기다리던 lecpage 탭이 있으면 이 탭은 닫힘
@@ -96,7 +97,7 @@ function App() {
         <a class="brand" href="#/" aria-label="lecpage 처음으로"><Mascot size={34} /><Wordmark /></a>
         <nav aria-label="주 메뉴">
           <a href="#/" aria-current={cur('')}>만들기</a>
-          <a href="#/gallery" aria-current={cur('gallery')}>참고 디자인</a>
+          <a href="#/gallery" aria-current={cur('gallery')}>참고 디자인<CartBadge /></a>
           <a href="#/help" aria-current={cur('help')}>도움말</a>
           <a href="#/settings" aria-current={cur('settings')}>설정</a>
         </nav>
