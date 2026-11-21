@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import * as St from '../../scripts/studio.mjs';
@@ -269,8 +269,11 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   const R = res.json();
   assert.match(R.site['index.html'], /data-lp="qa"/);
   assert.equal(typeof R.site['assets/style.css'], 'string');
-  assert.ok(R.site['material/p-001.webp']?.base64, '쪽 그림은 base64');
-  assert.equal(R.site['material/p-001.webp'].type, 'image/webp');
+  // 쪽 그림은 pdftoppm(poppler)이 있을 때만 그려짐(없으면 그 단계만 건너뜀, SKILL.md compatibility)
+  if (!spawnSync('pdftoppm', ['-v'], { encoding: 'utf8' }).error) {
+    assert.ok(R.site['material/p-001.webp']?.base64, '쪽 그림은 base64');
+    assert.equal(R.site['material/p-001.webp'].type, 'image/webp');
+  }
   assert.equal(R.meta.title, '시험 연수');
   assert.equal(R.meta.venue, '본관');
   assert.equal(R.meta.live, undefined, '강사 값(참여 서버)은 에이전트에게 주지 않음');
