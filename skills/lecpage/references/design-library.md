@@ -102,7 +102,7 @@ background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' wid
 
 **글자 장면**: 줄 단위로 가려 올리기(`overflow:hidden` 안쪽 `translateY(100%)→0`), 타자 커서(`steps()`), 형광펜 칠하기(`background-size:0 40%→100% 40%`).
 
-**라이브러리**(쓰면 무거워지니 꼭 필요할 때만, 학교망에서 막히면 정지 모습이 되게)
+**라이브러리**(쓰면 무거워지니 꼭 필요할 때만, 학교·회사 망에서 막히면 정지 모습이 되게)
 - GSAP + ScrollTrigger: `https://cdn.jsdelivr.net/npm/gsap@3.15.1/dist/gsap.min.js`, `…/ScrollTrigger.min.js` — 핀 + scrub 장면. `gsap.matchMedia()`로 움직임 줄이기 분기.
 - Lenis: `https://cdn.jsdelivr.net/npm/lenis@1.3.27/dist/lenis.min.js` — 무게감 있는 휠 스크롤. 터치·움직임 줄이기에서는 켜지 않기, 앵커 링크 확인.
 - OGL(WebGL): `await import('https://cdn.jsdelivr.net/npm/ogl@1.0.11/+esm')` — 셰이더 배경 한 장면. 절반 해상도·초당 30회면 충분.

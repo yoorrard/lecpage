@@ -16,7 +16,7 @@
 | 강사용 연수 전·중·후 안내 | 강사 화면 도움말 + `work/dist-강사용/운영안내.md` | 따로 잠근 쪽을 만들지 않음 |
 | 명단·설문·투표 CSV | 강사 화면 [CSV 다운로드] | 직무연수 이수자 명단은 `attendance` 기능 |
 | 달력에 넣기 | `assets/event.ics` | 사이트에서 링크만(`lecpage.json` `sessions`로 만듦) |
-| 접속 확인(학교망) | `check.html` | 연수 전날 참가자 망에서 열기 |
+| 접속 확인(학교·회사 망) | `check.html` | 연수 전날 참가자 망에서 열기 |
 | 개인정보 안내 | `privacy.html` | 켠 기능에 맞춰 조립이 씀 |
 | 앱에서 이어 하기 | `app work` | `.lecpage` 파일 하나 |
 

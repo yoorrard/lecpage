@@ -154,8 +154,8 @@ function errorView(e, provider) {
   if (k === 'no-key') return { kind: k, title: '키를 다시 넣어 주세요.', body: '새로 고침하면 이 기기에 저장하지 않은 키는 지워져요. 키를 다시 넣으면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'paste'] };
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
-  if (k === 'local') return { kind: k, title: '내 PC의 연결 프로그램에 닿지 못했어요.', body: '연결 프로그램이 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키나 쓰던 AI 창으로도 만들 수 있어요.', actions: ['resume', 'connect', 'paste'] };
-  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: '연결 프로그램을 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
+  if (k === 'local') return { kind: k, title: '내 PC의 lecpage 커넥트에 닿지 못했어요.', body: 'lecpage 커넥트가 켜져 있는지, lecpage 커넥트가 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키나 쓰던 AI 창으로도 만들 수 있어요.', actions: ['resume', 'connect', 'paste'] };
+  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: 'lecpage 커넥트를 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect', 'paste'] };
   if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', actions: ['paste', 'connect'] };
   const x = explainError(e, provider);
   // 다시 눌러도 같은 답이 오는 오류(키·결제·권한·지역·한도·모델·차단)는 [이어서 만들기]를 맨 뒤로: 주 단추가 같은 실패를 되풀이하지 않게.

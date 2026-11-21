@@ -4,19 +4,20 @@
 
 ## 구조(어디를 고치나)
 - `app/` 앱. 만들기 흐름 `src/lib/gen/`(job.js 실행·이어 받기, prompts.js 요청문, providers/ 회사별), 연결 `src/lib/connection.js`·`components/AiPick.jsx`, 미리보기 `components/Preview.jsx`, 랜딩 `src/landing/`, 도움말 `pages/Help.jsx`, 먼저 해보기 `src/data/demo/`.
-- `skills/lecpage/` Skill. `SKILL.md`, `references/`(kit.md 키트 자리 표시, design-library.md 디자인 서재, designs/ 견본 셋: neo-teach·picture-heart·data-pulse), `scripts/`(lecpage.mjs CLI, studio.mjs PC 프로그램 다리, studio-siwc.mjs ChatGPT 로그인), `engine/`(src/kit 조립·검수, runtime/ 참가자·강사·발표 화면 JS).
+- `skills/lecpage/` Skill. `SKILL.md`, `references/`(kit.md 키트 자리 표시, design-library.md 디자인 서재, designs/ 견본 셋: neo-teach·picture-heart·data-pulse), `scripts/`(lecpage.mjs CLI, studio.mjs lecpage 커넥트 다리(파일 lecpage-connect.cmd/.sh, 예전 이름 lecpage-studio.*는 별칭), studio-siwc.mjs ChatGPT 로그인), `engine/`(src/kit 조립·검수, runtime/ 참가자·강사·발표 화면 JS).
 - `hosting/` 바로 배포. 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep` → `hosting/runtime-history.json`에 바뀌는 조각만 남기고 note는 원문 유지.
 - 문서: `docs/legal/{privacy,terms}.md`, `SECURITY.md`, `README.md`, `docs/operations.md`, `docs/writing.md`(문구·용어표 4절), 조사 기록 `docs/research/`(기록이라 고치지 않음).
 
 ## 사용자(운영자)가 정한 원칙 — 어기지 말 것
-1. **AI 중심, 코드는 간섭 금지.** AI에게 교재 원본 + 짧은 목적 요청(강의 진행 사이트) + 선택 참고 디자인 서재 + 배포 조건만. 단계 나누기·부품 제한·디자인 규칙·자동 고치기·코드로 교재 해석/사실 대조는 넣지 않음(전에 넣었다가 결과가 그냥 에이전트보다 나빠져 모두 뺌).
-2. **강의 사이트 = 강의 운영·참여 도구.** 교재 내용은 교재 넘기기(쪽 그림, `data-lp="deck"`)와 강사의 강의로 전해짐. 사이트에는 지금 순서·출석·교재 보기·실습 안내와 복사할 원문·질문/투표/보드·자료·과제/설문, 교재 내용은 핵심 한두 줄만. 한 쪽/여러 쪽은 AI가 정함.
+1. **AI 중심, 코드는 간섭 금지.** AI에게 교재 원본 + 짧은 목적 요청(강의 진행 사이트) + 선택 참고 디자인 서재 + 배포 조건만. 단계 나누기·부품 제한·디자인 규칙·자동 고치기·코드로 교재 해석·대조는 넣지 않음(전에 넣었다가 결과가 그냥 에이전트보다 나빠져 모두 뺌).
+2. **강의 사이트 = 강의 운영·참여 도구.** 교재 내용은 교재 넘기기(쪽 그림, `data-lp="deck"`)와 강사의 강의로 전해짐. 첫 쪽은 짧게, 긴 실습은 따로 쪽으로 나눌 수 있음. 사이트에는 지금 순서·출석·교재 보기·실습 안내와 복사할 원문·질문/투표/보드·자료·과제/설문, 교재 내용은 핵심 한두 줄만. 한 쪽/여러 쪽은 AI가 정함.
 3. 디자인은 그냥 에이전트보다 확실히 나아야 함(기준: 화려하고 세련된 최신 기법·모션, 교재 정체성, AI 티 없음). 새 기능·문구는 **실제 AI로 A/B 실측**해 나아질 때만 남김.
-4. AI 연결: **구독 계정 우선**(PC 프로그램 → lecpage.com과 자동 짝 → ChatGPT로 로그인(SIWC)·Claude Code), 설치 없이 '쓰던 AI로'(복사·붙여넣기), 접힌 '다른 방법'(API 키·Codex·Skill). Gemini는 만들기에서 뺐음. 정책은 보수적으로 잡지 않고 편의 우선(Claude 구독도 기본 허용).
-5. 강사가 준 교재·사진은 임의로 빼지 않음. 교재에 없는 사실은 지어내지 않음. 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy·keepUntil)은 강사에게서만.
-6. 사용자는 앱에서 돈을 내지 않음(AI 비용은 각자 구독·키). 운영비 ≈ 0. 비밀값은 저장소·대화·로그에 남기지 않음(키는 request_credential).
-7. 초보자 기준 UX: 화면마다 누를 곳 하나가 분명하게, 과한 기능 노출 없이.
-8. 랜딩·문서는 강점만(한계·"AI 자유도 보장"·시간 비교 같은 말 금지), 사실만.
+4. AI 연결: **구독 계정 우선**(**lecpage 커넥트**: Windows는 받아 두 번 누르고 Mac·Linux는 터미널 한 줄 → lecpage.com과 자동 짝 → ChatGPT로 로그인(SIWC, Codex 설치 불필요)·설치한 Claude Code), 설치 없이 '쓰던 AI로'(복사·붙여넣기), 접힌 '다른 방법'(API 키·Codex·Skill). Gemini는 만들기에서 뺐음. 길(ChatGPT·Claude 계정·Codex·API 키)마다 처음 한 번 **연결 동의**(체크+[연결], 세 줄 안내; 이 브라우저에 길별로 기억, 글이 바뀌면 다시, [모든 데이터 삭제]로 지움). 정책은 보수적으로 잡지 않고 편의 우선(Claude 구독도 기본 허용).
+5. 배포: 바로 배포는 가입 없이, 사이트를 지우거나 기간이 끝나면 예전 주소 전부를 안내 쪽으로 덮음. Vercel·Netlify는 첫 배포 때 계정 기본 보호(Vercel 배포 보호·Netlify 팀 로그인)를 앱이 자동으로 풂(Make public 안내 금지). ZIP은 바로 내려받음.
+6. 강사가 준 교재·사진은 임의로 빼지 않음. 교재에 없는 사실은 지어내지 않음. 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy·keepUntil)은 강사에게서만.
+7. 사용자는 앱에서 돈을 내지 않음(AI 비용은 각자 구독·키). 운영비 ≈ 0. 비밀값은 저장소·대화·로그에 남기지 않음(키는 request_credential).
+8. 초보자 기준 UX: 화면마다 누를 곳 하나가 분명하게, 과한 기능 노출 없이.
+9. 랜딩·문서는 강점만(한계·AI 자유도·시간 비교 같은 말 금지), 사실만. 학교 전용 말투 금지(학교·회사·기관 모두에 맞게, 학교 얘기일 때만 학교).
 
 ## 말투·용어
 해요체(법률 문서는 그 문서 말투), 번역투 금지, 간결한 표준 용어(`docs/writing.md` 4절: AI로 수정·버전 기록·실행 취소·삭제·다운로드·다시 시도·중지·연결 해제·API 키 연결·쓰던 AI로 …). '배포'(공개는 '공개 범위'·'결과 공개'에만), 'AI'(챗봇 아님), 'AI 에이전트'는 Claude Code·Codex 같은 것만. 랜딩 고정 문장 두 개는 글자 그대로: "누구나 만들 수 있지만, 잘 만들어 나누려면 노하우가 필요합니다" / "바쁜 강사님의 시간과 토큰을 아껴드립니다".
@@ -30,8 +31,8 @@
 ## 토큰 아끼기(작업 방식)
 - 큰 파일은 통째로 읽지 말고 grep·부분 읽기. 그림은 꼭 볼 것만.
 - 일을 나눌 때는 파일 소유를 겹치지 않게, 기계적인 일은 가벼운 모델로. 검증은 합칠 때 한 번.
-- 실제 AI 실측은 이 컨테이너의 `claude -p`(PC 프로그램 길)로 1~2회만.
+- 실제 AI 실측은 이 컨테이너의 `claude -p`(lecpage 커넥트 길)로 1~2회만.
 - 긴 세션이 되면 새 세션으로 옮기고 이 파일을 갱신.
 
 ## 아직 사람이 확인할 것
-실제 ChatGPT 계정 로그인(SIWC), 실제 윈도우·맥에서 PC 프로그램 실행·경고 창·자동 시작.
+실제 ChatGPT 계정 로그인(SIWC), 실제 윈도우·맥에서 lecpage 커넥트 실행·경고 창·자동 시작.
