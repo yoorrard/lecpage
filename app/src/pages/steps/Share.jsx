@@ -120,6 +120,12 @@ export function StepShare({ p, update, go }) {
   const [goAgain, setGoAgain] = useState(0); // 확인 창에서 고른 뒤 다시 배포(고른 값이 반영된 다음 그림의 배포 함수로)
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const built = useRef(''); const again = useRef(null); const goNow = useRef(null);
+  // 배포할 곳 칸이 화면에 보이는지: 보이면 맨 위 [배포하기]는 강조하지 않음(그 칸의 버튼이 누를 곳), 안 보이면 그 칸으로 데려가는 길이라 강조
+  const [hostSeen, setHostSeen] = useState(false);
+  useEffect(() => {
+    const el = document.querySelector('.publish'); if (!el || typeof IntersectionObserver !== 'function') return undefined;
+    const io = new IntersectionObserver(([e]) => setHostSeen(e.isIntersecting)); io.observe(el); return () => io.disconnect();
+  });
   useEffect(() => { instantInfo().then((i) => { setAutoLive(!!i?.live?.url); setInfoSrv(i || null); }); }, []);
   const lecSite = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage : null;
   useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, bp?.live?.code]);
@@ -135,7 +141,7 @@ export function StepShare({ p, update, go }) {
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
   const instantHere = target === 'lecpage' || (!target && autoLive);
   const [daySt] = useDayStatus({ on: !!bp && instantHere && !p.deploy?.lastUrl, date: bp?.meta?.date || '', site: '' });
-  if (!bp || !isV2(p)) return <><StepHead title="배포하기" /><Notice>AI가 사이트를 다 만든 뒤에 배포할 수 있어요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 고르기</button></div></>;
+  if (!bp || !isV2(p)) return <><StepHead title="배포하기" /><Notice>AI가 사이트를 다 만든 뒤에 배포할 수 있어요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 선택</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
   const exp = (target === 'lecpage' || (!target && autoLive) || p.deploy?.target === 'lecpage') ? lecExpiry(p, info) : null;
@@ -237,10 +243,10 @@ export function StepShare({ p, update, go }) {
   // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있으면 참여 기능은 강사 계정으로 연결(서버가 준 순서: Cloudflare → Supabase)
   const liveOffHere = lecLiveOff(p);
   const autoHere = autoLive && target === 'lecpage' && !liveOffHere;
-  const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : 'todo';
+  const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
   const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
-  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
   const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
@@ -257,7 +263,7 @@ export function StepShare({ p, update, go }) {
         body: <>
           <p class="small">이 파일에 그 사이트의 열쇠가 들어 있어요. 내가 저장한 파일이면 같은 주소·같은 QR로 이어서 배포해요. 남에게 받은 파일이면 [새 주소로 배포]를 골라 주세요.</p>
           <div class="btn-row">
-            <button type="button" class="btn btn-sm btn-primary" onClick={() => { update((cur) => carryPatch(cur)); toast('같은 주소에 이어서 배포할 수 있어요.'); }}>이 주소에 이어서 배포</button>
+            <button type="button" class="btn btn-sm btn-primary" onClick={() => { update((cur) => carryPatch(cur)); toast('같은 주소로 배포할 수 있어요.'); }}>같은 주소로 배포</button>
             <button type="button" class="btn btn-sm" onClick={() => update({ carryPending: undefined })}>새 주소로 배포</button>
           </div>
         </> }
@@ -265,8 +271,8 @@ export function StepShare({ p, update, go }) {
         btn: [open.past ? '접기' : '같은 주소로 하려면', () => toggle('past')],
         body: open.past && <p class="small">처음 배포한 기기에서 [파일로 저장]을 누르고 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 그 파일을 여기서 열어 주세요. 새 주소로 배포하면 인쇄한 QR과 보낸 주소도 새것으로 바꿔야 해요.</p> });
   }
-  rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' || (liveState === 'off' && official) ? 'todo' : liveState === 'off' ? 'note' : 'done', line: liveLine,
-    btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['되돌리기', () => setSkipLive(false)] : [open.live ? '접기' : '바꾸기', () => toggle('live')],
+  rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' || (liveState === 'off' && official) ? 'todo' : liveState === 'off' || liveState === 'demo' ? 'note' : 'done', line: liveLine,
+    btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['변경', () => setSkipLive(false)] : [open.live ? '접기' : liveState === 'demo' ? '보기' : '바꾸기', () => toggle('live')],
     body: liveBody && <>
       <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
         {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
@@ -275,7 +281,7 @@ export function StepShare({ p, update, go }) {
       {liveOn && autoLive && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
       {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 빼고 배포하기</button></div>}
     </> });
-  rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 내려받기' : ''}`,
+  rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 다운로드' : ''}`,
     btn: needPw ? null : [open.access ? '접기' : '바꾸기', () => toggle('access')],
     body: (open.access || needPw) && <>
       <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
@@ -286,12 +292,12 @@ export function StepShare({ p, update, go }) {
       {access === 'password' && (
         <div class="row" style={{ alignItems: 'end' }}>
           <Field label="암호(4자 이상, 길수록 안전해요)"><input type={showPw ? 'text' : 'password'} value={p.sitePassword || ''} onInput={(e) => update({ sitePassword: e.target.value })} autoComplete="new-password" /></Field>
-          <button class="btn btn-sm btn-quiet" onClick={() => setShowPw(!showPw)}>{showPw ? '가리기' : '보기'}</button>
+          <button class="btn btn-sm btn-quiet" onClick={() => setShowPw(!showPw)}>{showPw ? '숨기기' : '표시'}</button>
           <button class="btn btn-sm" onClick={() => update({ sitePassword: friendlyPassword() })}>새로 만들기</button>
         </div>
       )}
       {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
-      <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF)도 내려받게 하기 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
+      <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF) 다운로드 허용 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
     </> });
   const warns = notes.filter((c) => c.k === 'warn').length;
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: warns ? 'todo' : 'note', line: warns ? `${notes.length}곳 · 배포 전에 확인해 주세요.` : `${notes.length}곳`,
@@ -302,13 +308,13 @@ export function StepShare({ p, update, go }) {
     body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
   if (old) rows.push({ k: 'room', title: '지난 기록', state: room ? 'done' : 'todo',
     line: room === 'fresh' ? '비우고 배포해요. 주소·QR·관리자 키는 그대로예요.' : room === 'keep' ? '그대로 두고 배포해요.' : `${old.when}까지 남긴 기록(${old.line})이 그대로 있어요. 다시 배포해도 새 참가자에게 보여요.`,
-    btn: room ? ['되돌리기', () => setRoom('')] : null,
+    btn: room ? ['변경', () => setRoom('')] : null,
     body: !room && <>
       <p class="small">필요한 기록은 먼저 강사 화면에서 CSV로 받아 두세요. 비우면 되돌릴 수 없어요.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-sm" onClick={() => setRoom('fresh')}>기록 비우고 배포</button>
         <button type="button" class="btn btn-sm" onClick={() => setRoom('keep')}>그대로 두기</button>
-        <button type="button" class="btn btn-sm btn-quiet" onClick={dupNew}>복제해서 새 연수로</button>
+        <button type="button" class="btn btn-sm btn-quiet" onClick={dupNew}>새 연수로 복제</button>
         {lecSite?.adminKey && <a class="btn btn-sm btn-quiet" href={String(p.deploy.lastUrl).replace(/\/?$/, '/') + 'console.html'} target="_blank" rel="noopener" onClick={() => copy(lecSite.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
       </div>
       <p class="small muted">복제하면 새 주소·새 QR로 따로 배포해요.</p>
@@ -316,16 +322,24 @@ export function StepShare({ p, update, go }) {
   rows.push({ k: 'host', title: '배포할 곳', state: 'go', line: '',
     body: <>
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
-      {p.demo ? <DemoPublish p={p} buildFiles={buildFiles} />
+      {p.demo ? <p class="small muted">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
         : <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'} />}
     </> });
 
+  /** 배포할 곳 칸으로 내려가 지금 누를 버튼(주 버튼)을 잠깐 강조 */
+  const toNext = () => {
+    const box = document.querySelector('.publish, .demo-pub'); if (!box) return;
+    box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const b = box.querySelector('.btn-primary:not([disabled])'); if (!b) return;
+    b.classList.add('nudge'); b.focus({ preventScroll: true }); setTimeout(() => b.classList.remove('nudge'), 2600);
+  };
   return (
     <>
       <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : '아래 순서대로 확인하고 [배포하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.'}>
         {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
-        {!p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class="btn btn-primary" disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : document.querySelector('.publish')?.scrollIntoView({ block: 'center', behavior: 'smooth' }))}>배포하기</button>}
+        {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${goNow.current || !hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
+      {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
       {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
@@ -345,7 +359,7 @@ export function StepShare({ p, update, go }) {
             ))}
           </ol>
           <p class="small muted">배포한 내용은 <a href="#/help/terms">이용약관</a>에 따라 배포한 분이 책임져요. 교재의 저작권과 개인정보를 확인해 주세요.</p>
-          {!p.demo && <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 받기(ZIP)</button><span class="small muted">운영 안내·연수 정보·사이트 원본·인쇄본. 사이트에는 올라가지 않아요.</span></div>}
+          {!p.demo && <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 다운로드</button><span class="small muted">운영 안내·연수 정보·사이트 원본·인쇄본. 사이트에는 올라가지 않아요.</span></div>}
         </div>
       </Sheet>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
@@ -363,7 +377,7 @@ export function StepShare({ p, update, go }) {
         <h2 class="h-sub">참여 기능이 아직 연결되지 않았어요</h2>
         <p>지금 배포하면 질문·투표 같은 기능이 참가자끼리 이어지지 않아요. 나중에 연결하고 다시 배포해도 돼요.</p>
         <div class="btn-row">
-          <button class="btn btn-primary" onClick={() => { setAsk(null); goLive(); }}>먼저 연결할게요</button>
+          <button class="btn btn-primary" onClick={() => { setAsk(null); goLive(); }}>먼저 연결</button>
           <button class="btn" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포하기</button>
         </div>
       </Dialog>
@@ -459,10 +473,10 @@ function ShortLink({ url, short, stale, update, onRepublish, busy: pubBusy, link
         <div class="short-line">
           <span class="short-k">만든 주소 넣기</span>
           <input class="input" value={text} onInput={(e) => { setText(e.target.value); setErr(''); }} onPaste={(e) => { const x = e.clipboardData?.getData('text'); if (x) { e.preventDefault(); take(x); } }} onKeyDown={(e) => e.key === 'Enter' && text && take(text)} placeholder="joo.is/우리연수" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} aria-label="다른 서비스에서 만든 짧은 주소" />
-          {text ? <button type="button" class="btn btn-sm" onClick={() => take(text)}>넣기</button>
+          {text ? <button type="button" class="btn btn-sm" onClick={() => take(text)}>저장</button>
             : <button type="button" class={`btn btn-sm${back ? ' btn-primary attn' : ''}`} onClick={paste}>붙여넣기</button>}
         </div>
-        {short && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { save(''); setOpen(false); setErr(''); toast('짧은 주소를 지웠어요.'); }}>짧은 주소 지우기</button></div>}
+        {short && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { save(''); setOpen(false); setErr(''); toast('짧은 주소를 삭제했어요.'); }}>짧은 주소 삭제</button></div>}
       </div>}
     </div>
   );
@@ -553,7 +567,7 @@ function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, f
               : <p class="small">강사 화면에는 참여 기능을 연결할 때 정한 관리자 키로 들어가요.</p>)}
           </div>
           <RescueKit p={p} update={update} url={url} shareUrl={shareUrl} onZip={onZip} busy={busy} />
-          <p class="small">내용을 고친 뒤 다시 배포하면 같은 주소에 반영돼요. 자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>고치러 가기</button></p>
+          <p class="small">내용을 고친 뒤 다시 배포하면 같은 주소에 반영돼요. 자료는 강사 화면의 자료실에서 올려요. <button type="button" class="btn btn-sm btn-quiet" onClick={onEdit}>수정하러 가기</button></p>
         </div>
         <div class="qr-side">
           <button type="button" class="qr-box qr-zoom" onClick={() => setBig(true)} aria-haspopup="dialog" aria-label="QR 코드 크게 보기"><QR text={shareUrl} size={180} alt="" /><span class="qr-zoom-t">크게 보기</span></button>
@@ -581,8 +595,7 @@ function DemoPublish({ p, buildFiles }) {
   }
   return (
     <div class="stack demo-pub">
-      <p class="small">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
-      {st !== 'done' && <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" disabled={st === 'busy'} aria-busy={st === 'busy' ? 'true' : undefined} onClick={run}>{st === 'busy' ? '배포할 파일 만드는 중…' : '배포 연습하기'}</button><span class="small muted">체험이라 실제로 올리지는 않아요.</span></div>}
+      {st !== 'done' && <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" data-coach={st ? undefined : ''} data-coach-room={st ? undefined : ''} disabled={st === 'busy'} aria-busy={st === 'busy' ? 'true' : undefined} onClick={run}>{st === 'busy' ? '배포할 파일 만드는 중…' : '배포 연습하기'}</button><span class="small muted">체험이라 실제로 올리지는 않아요.</span></div>}
       {st === 'busy' && <Progress pct={pct} />}
       {st === 'bad' && <p class="small err" role="alert">배포할 파일을 만들지 못했어요. 새로 고침한 뒤 다시 해 주세요.</p>}
       {st === 'done' && <div class="demo-done-main" role="status">

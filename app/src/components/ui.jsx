@@ -66,8 +66,8 @@ export function SecretLine({ label, value, copied = '복사했어요.' }) {
   const [show, setShow] = useState(false);
   return (
     <p class="small secret-line">{label}{' '}
-      {show ? <b class="mono">{value}</b> : <b class="mono secret-dots" role="img" aria-label="가려 둠">{'•'.repeat(10)}</b>}{' '}
-      <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(show)} onClick={() => setShow(!show)}>{show ? '가리기' : '보기'}</button>
+      {show ? <b class="mono">{value}</b> : <b class="mono secret-dots" role="img" aria-label="숨김">{'•'.repeat(10)}</b>}{' '}
+      <button type="button" class="btn btn-sm btn-quiet" aria-pressed={String(show)} onClick={() => setShow(!show)}>{show ? '숨기기' : '표시'}</button>
       <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(value, copied)}>복사</button>
     </p>
   );

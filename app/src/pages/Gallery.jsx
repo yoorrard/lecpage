@@ -13,7 +13,7 @@ export function Gallery() {
   /** 사례 고르기: 새 연수의 참고 디자인으로 적고 교재 넣기로 */
   async function chooseRef(r) {
     const p = await newProject({ reference: referenceFor(r) });
-    toast(`'${r.title}'을 참고 디자인으로 골랐어요. 교재를 넣고 AI를 골라 주세요.`);
+    toast(`'${r.title}'을 참고 디자인으로 골랐어요. 교재를 넣고 AI를 선택해 주세요.`);
     location.hash = `#/p/${p.id}/1`;
   }
   // 머리(제목·안내)는 main.jsx가 이 조각 밖에서 먼저 그려 둠(GalleryHead)

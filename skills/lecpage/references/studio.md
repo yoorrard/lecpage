@@ -11,7 +11,7 @@ PC에 Claude Code나 Codex를 설치하고 로그인해 두면, lecpage 앱이 �
    ```
    - Git이 없는 PC: `npx -y https://codeload.github.com/yoorrard/lecpage/tar.gz/refs/heads/main studio`
    - Skill을 설치했으면: `node <skill>/scripts/lecpage.mjs studio`
-4. 앱의 AI 고르기에서 "내 PC의 Claude Code / Codex"를 골라요. 끝내려면 터미널에서 Ctrl+C.
+4. 앱의 AI 선택에서 "내 PC의 Claude Code·Codex"를 골라요. 끝내려면 터미널에서 Ctrl+C.
 
 옵션: `--port 6600`(기본은 6600~6649 중 빈 곳, 같은 포트여야 지난 작업이 보여요) · `--no-open` · `--dist app/dist`(이 빌드본을 보여 줌, 없으면 저장소의 `app/dist` → 그것도 없으면 lecpage.com에서 받음) · `--remote`(늘 lecpage.com에서) · `--timeout 30`(작업 한도, 분).
 

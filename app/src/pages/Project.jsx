@@ -17,7 +17,7 @@ import { StepShare } from './steps/Share.jsx';
 // 사이트는 생성 쪽(lib/gen)이 저장하고 'lecpage:gen-saved'로 알림 → 이 화면은 다시 읽기만 함(덮어쓰지 않게 자동 저장의 기준 판도 맞춤).
 export const STEPS = [
   { n: 1, name: '교재 넣기', C: StepStart },
-  { n: 2, name: '만들고 고치기', C: StepMake },
+  { n: 2, name: '만들기·수정', C: StepMake },
   { n: 3, name: '배포하기', C: StepShare },
 ];
 
@@ -76,7 +76,7 @@ export function Project({ id, step }) {
     if (job.status !== 'done' || !seen.current[job.jobId]) return;
     delete seen.current[job.jobId];
     if (job.kind === 'make') { toast('다 만들었어요. 미리보기를 보며 확인해 주세요.'); if (s !== 2) go(2); }
-    else toast(job.kind === 'fix' ? '검수에서 찾은 곳을 AI가 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [판 기록]에서 되돌려요.');
+    else toast(job.kind === 'fix' ? '검수에서 찾은 곳을 AI가 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.');
   }, [job.status, job.jobId]);
 
   const s = step > 3 ? stageOf(step) : Math.min(3, Math.max(1, step || p?.stage || 1));
@@ -100,14 +100,14 @@ export function Project({ id, step }) {
   }
   // 저장이 막힌 창은 위 띠(main.jsx StorageBar)가 까닭과 할 일을 알림
   if (missing) return <div class="empty"><Mascot size={84} mood="oops" /><p>{missing === 'none' ? "이 연수를 찾지 못했어요. 다른 브라우저에서 만들었다면 그 브라우저에서 '파일로 저장'한 뒤 여기서 열어 주세요." : missing === 'blocked' ? '이 창에서는 연수를 열 수 없어요.' : STORAGE_MSG[missing] || '이 브라우저의 저장소를 읽지 못했어요. 새로 고침해 주세요.'}</p><a class="btn" href="#/">처음으로</a></div>;
-  if (st.s === 'gone') return <div class="empty"><Mascot size={84} mood="oops" /><p>{p?.demo ? '체험을 끝냈어요.' : '이 연수는 다른 탭에서 지웠어요.'}</p><a class="btn" href="#/">처음으로</a></div>;
+  if (st.s === 'gone') return <div class="empty"><Mascot size={84} mood="oops" /><p>{p?.demo ? '체험을 종료했어요.' : '이 연수는 다른 탭에서 삭제했어요.'}</p><a class="btn" href="#/">처음으로</a></div>;
   if (!p) return <p class="muted">불러오는 중…</p>;
   const cur = STEPS.find((x) => x.n === s) || STEPS[0];
   const hasSite = isV2(p); const legacy = isLegacy(p);
   const working = job.status === 'running' || job.status === 'paused' || job.status === 'error';
   const open = (n) => n === 1 || (n === 2 ? hasSite || legacy || working : hasSite || legacy);
   const done = (n) => (n === 1 ? hasSite : n === 2 ? hasSite && !!p.visited?.[3] : !!p.deploy?.lastUrl);
-  const closed = (n) => (n === 2 ? '먼저 교재를 넣고 AI를 골라 주세요.' : 'AI가 사이트를 다 만든 뒤에 배포할 수 있어요.');
+  const closed = (n) => (n === 2 ? '먼저 교재를 넣고 AI를 선택해 주세요.' : 'AI가 사이트를 다 만든 뒤에 배포할 수 있어요.');
   // 배포한 연수면 한 번 물음: 남에게 줄 파일(기본, 열쇠 없음) / 내 다른 기기에서 같은 주소로 이어 배포(열쇠 포함)
   async function saveProjectFile(keys = false) {
     setSaveAsk(false);
@@ -168,7 +168,7 @@ function DemoBar({ pid }) {
       <span class="demo-tag">체험</span>
       <span class="demo-bar-t"><b>실제와 똑같은 화면이에요.</b> 예시 교재로 해 봐요. 키가 필요 없고, AI 답은 이 교재로 미리 만들어 둔 것을 쓰며, 실제로 배포하지 않아요.</span>
       <button type="button" class="btn btn-sm btn-quiet" disabled={busy} onClick={again}>처음부터 다시</button>
-      <a class="btn btn-sm" href="#/" onClick={() => endDemo(pid)}>체험 끝내기</a>
+      <a class="btn btn-sm" href="#/" onClick={() => endDemo(pid)}>체험 종료</a>
     </aside>
   );
 }
@@ -186,7 +186,7 @@ function LegacyNote({ p, go }) {
           <button type="button" class="btn btn-primary" onClick={() => go(1)}>AI로 새로 만들기</button>
           {url && <a class="btn" href={url} target="_blank" rel="noopener">배포한 사이트 열기</a>}
         </div>
-        {!(p.files || []).length && <p class="small muted">이 연수에는 교재 파일이 없어요. 교재 넣기에서 교재를 넣은 뒤 AI를 골라 주세요.</p>}
+        {!(p.files || []).length && <p class="small muted">이 연수에는 교재 파일이 없어요. 교재 넣기에서 교재를 넣은 뒤 AI를 선택해 주세요.</p>}
       </section>
     </>
   );

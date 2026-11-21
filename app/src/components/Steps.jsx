@@ -1,11 +1,20 @@
+import { useEffect, useRef } from 'preact/hooks';
+
 /**
  * 한 번에 한 단계만 펼쳐 보이는 순서(올릴 곳 연결·참여 기능 연결에 씀).
  * 지난 단계는 ✓, 다음 단계는 제목만. 제목을 누르면 그 단계로 가요.
  * steps: [{ t: '짧은 제목', body: 내용, next?: false(다음 버튼 숨김) | '버튼 글' }]
  */
 export function Steps({ steps, at, onAt, label }) {
+  // 다음 단계로 넘어가면 그 단계가 화면 밖이어도 보이게(새 창에서 돌아와 누를 곳을 찾지 않게). 처음 그릴 때는 그대로
+  const box = useRef(null); const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const b = box.current?.querySelector('.walk-b'); if (!b) return;
+    const r = b.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) b.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [at]);
   return (
-    <ol class="walk" role="list" aria-label={label}>
+    <ol class="walk" role="list" aria-label={label} ref={box}>
       {steps.map((s, i) => {
         const on = i === at;
         return (
