@@ -4,7 +4,8 @@ import { Dialog } from '../../components/ui.jsx';
 import { SitePreview } from '../../components/Preview.jsx';
 import { editSite, runInspect, fixIssues, resumeGeneration, forgetGeneration } from '../../lib/studio.js';
 import { getActiveAI } from '../../lib/ai.js';
-import { listSections, moveSection, setHidden, removeSection, renameSection, setText, setImage } from '../../lib/site-doc.js';
+import { outlineOf, htmlPages, moveSection, setHidden, removeSection, renameSection, setText, setImage, setKit, removeKit, addKit } from '../../lib/site-doc.js';
+import { wordsFor, surveyFor } from '@engine/src/words.js';
 import { keepTeacher, recordVersion, restoreLabel, addChat } from '../../lib/site-meta.js';
 import { toast } from '../../lib/util.js';
 import { errorActions } from './Make.jsx';
@@ -12,15 +13,19 @@ import { available, pickConnection, jobOpts, pcNow, setPreferred, askConsent, co
 import { InfoCard } from './studio/Info.jsx';
 import { FilesCard } from './studio/Files.jsx';
 import { ChatLog, Composer, useWay } from './studio/Chat.jsx';
-import { SectionsPanel, LookPanel, ImageDialog, Versions, IssueLine, seriousOf } from './studio/Parts.jsx';
+import { LookPanel, ImageDialog, Versions, IssueLine, seriousOf } from './studio/Parts.jsx';
+import { Outline } from './studio/Outline.jsx';
+import { KIT_LABEL } from '../../lib/kit-fields.js';
 
-// 완성 뒤 한 화면(2. 만들기·수정): 미리보기(넓게) + 오른쪽 한 칸(이어서 내려 봄) — 연수 정보 요약 · 꼭 고칠 곳 한 줄 · 자료 · 섹션·색(접음) · AI 수정 대화,
-// 입력 칸은 칸 아래에 고정. 휴대폰(~960px)은 한 줄로 쌓고 [수정 | 미리보기]로 바꿔 봄.
+// 완성 뒤 한 화면(2. 만들기·수정): 미리보기(넓게) + 오른쪽 한 칸(이어서 내려 봄) — 연수 정보(속성 줄, 바로 고침) · 꼭 고칠 곳 한 줄 ·
+// 사이트 구성(섹션 목록 + 항목 설정, 미리보기와 서로 가리킴) · 자료 · 색·글꼴(접음) · AI 수정 대화, 입력 칸은 칸 아래에 고정.
+// 휴대폰(~960px)은 한 줄로 쌓고 [수정 | 미리보기]로 바꿔 봄.
 // 바뀌는 것은 모두 버전 기록에 남음(lib/versions.js): AI 수정(생성 쪽이 저장할 때)·직접 수정·연수 정보 수정(change)·실행 취소·복원.
 const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘Z' : 'Ctrl+Z';
 const undos = new Map(); // 연수마다 직접 고친 것 되돌리기(이 탭 안, 최근 30개)
 const stackOf = (pid) => { if (!undos.has(pid)) undos.set(pid, []); return undos.get(pid); };
 const SLOT = /data-lp\s*=\s*["']?materials\b/;
+const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 960px)').matches;
 
 export function Studio({ p, update, go, job, idle, reload }) {
   const [view, setViewRaw] = useState('edit'); // 휴대폰: 수정 칸 | 미리보기
@@ -30,6 +35,9 @@ export function Studio({ p, update, go, job, idle, reload }) {
   const [img, setImg] = useState(null); // 바꿀 그림 번호
   const [ver, setVer] = useState(0); // 그림 파일이 바뀌거나 실행 취소·복원하면 미리보기를 다시 읽음
   const [goto, setGoto] = useState(null);
+  const [sel, setSel] = useState(null); // 사이트 구성에서 고른 것: { page, key, item }
+  const [reveal, setReveal] = useState(null); // 미리보기에서 고른 것을 사이트 구성에 보임
+  const bus = useRef(null); // 미리보기에 바로 보내기(줄에 마우스를 올리면 그 자리 테두리)
   const [vers, setVers] = useState(null); // 버전 기록 창: { focus }
   const [nudge, setNudge] = useState(false); // 연수 정보를 확인한 뒤 [배포하기]를 잠깐 강조
   const [flash, setFlash] = useState(false);
@@ -79,12 +87,13 @@ export function Studio({ p, update, go, job, idle, reload }) {
     update((cur) => { const next = { site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta) }; mine.current = next.site; return { ...next, versions: recordVersion(cur, next, { kind: 'restore', label: restoreLabel(v) }) }; });
     stack.length = 0; force((x) => x + 1); setVers(null); toast(`복원했어요: ${v.label}`);
   };
-  const html = p.site?.['index.html'] || '';
-  const sections = useMemo(() => listSections(html), [html]);
+  const outlines = useMemo(() => htmlPages(p.site).map((pg) => ({ page: pg, label: pg === 'index.html' ? '참가자 화면' : `사이트 · ${pg}`, ...outlineOf(p.site[pg]) })), [p.site]);
+  const sections = outlines.find((o) => o.page === 'index.html')?.sections || [];
+  const surveyDefaults = useMemo(() => surveyFor(wordsFor({ meta: p.meta || {} })), [p.meta?.admin?.kind, p.meta?.title]);
   const hasSlot = useMemo(() => Object.entries(p.site || {}).some(([k, v]) => /\.html?$/i.test(k) && typeof v === 'string' && SLOT.test(v)), [p.site]);
   const onText = useCallback((n, raw) => change('글 수정', (cur) => { const h = setText(cur.site['index.html'], n, raw); if (h === cur.site['index.html']) return null; quiet.current = h; return { site: { ...cur.site, 'index.html': h } }; }), [change]);
   const onImage = useCallback((n) => setImg(n), []);
-  const setHtml = (label, fn) => change(label, (cur) => { const h = fn(cur.site['index.html']); return h === cur.site['index.html'] ? null : { site: { ...cur.site, 'index.html': h } }; });
+  const setHtml = (label, fn, page = 'index.html') => change(label, (cur) => { const h0 = cur.site?.[page]; if (typeof h0 !== 'string') return null; const h = fn(h0); return h === h0 ? null : { site: { ...cur.site, [page]: h } }; });
   // 꼭 고칠 곳: 고친 뒤 잠깐 멈추면 다시 검사(조립 + 정적 검사). 생성 쪽이 저장소의 연수를 읽으므로 먼저 다 씀
   const inspectT = useRef();
   useEffect(() => {
@@ -101,7 +110,21 @@ export function Studio({ p, update, go, job, idle, reload }) {
   }, []);
   const published = !!p.deploy?.lastUrl;
   const changed = published && (p.editedAt || 0) > (p.deploy.at || 0);
-  const show = (key) => { setView('preview'); setGoto({ key, n: Date.now() }); };
+  const show = (key) => { setView('preview'); setGoto({ key, page: 'index.html', n: Date.now() }); };
+  /** 사이트 구성에서 고름: 넓은 화면은 미리보기가 그 자리로(휴대폰은 수정 칸에 머묾) */
+  const select = (s) => { setSel(s); if (!narrow()) setGoto({ ...s, n: Date.now() }); };
+  const onPick = useCallback((s) => { setSel(s); setReveal({ ...s, n: Date.now() }); }, []);
+  const hover = (page, key, item) => bus.current?.hl(page ? { page, key, item } : null);
+  const act = {
+    move: (page, id, to) => setHtml('순서 바꾸기', (h) => moveSection(h, id, to), page),
+    hide: (page, id, v) => setHtml(v ? '섹션 숨기기' : '섹션 숨기기 취소', (h) => setHidden(h, id, v), page),
+    remove: (page, id) => setHtml('섹션 삭제', (h) => removeSection(h, id), page),
+    rename: (page, id, name) => setHtml('이름 바꾸기', (h) => renameSection(h, id, name), page),
+    ask: (page, id, name) => (page === 'index.html' ? fill('', id) : fill(`${page}의 '${name}' 섹션에서 `, 'all')),
+    kitSave: (page, n, patch, label, key) => { setHtml(`${label} 수정`, (h) => setKit(h, n, patch), page); toast(`저장했어요: ${label}`); if (!narrow()) setGoto({ page, key, item: n, after: true, n: Date.now() }); },
+    kitRemove: (page, n, label) => { setHtml(`${label} 삭제`, (h) => removeKit(h, n), page); setSel(null); toast(`삭제했어요: ${label}. [실행 취소]로 되살릴 수 있어요.`); },
+    kitAdd: (page, id, type, attrs) => { const label = KIT_LABEL[type] || type; setHtml(`${label} 추가`, (h) => addKit(h, id, type, attrs), page); toast(`넣었어요: ${label}`); if (!narrow()) setGoto({ page, key: id, after: true, n: Date.now() }); },
+  };
   const fill = (request, target = ask.target) => { setAsk({ target, request, n: Date.now() }); setView('edit'); };
   /** AI에게 보냄: 대화에 요청을 남기고(쓰던 AI로면 대화 안에서 프롬프트 복사·답 넣기), 연결한 AI면 바로 고침 */
   async function send(text, target, again = null) {
@@ -152,22 +175,14 @@ export function Studio({ p, update, go, job, idle, reload }) {
           {headOff && (stack.length ? <button type="button" class="btn btn-sm btn-quiet" onClick={undo}>실행 취소</button> : null)}
           {headOff && p.metaChecked && nextBtn}
         </div>
-        <SitePreview p={p} ver={ver} editing={editing && !working} setEditing={working ? null : setEditing} onText={onText} onImage={onImage} quiet={quiet} goto={goto} />
+        <SitePreview p={p} ver={ver} editing={editing && !working} setEditing={working ? null : setEditing} onText={onText} onImage={onImage} quiet={quiet} goto={goto} bus={bus} onPick={onPick} />
         <aside class="st-panel" aria-label="수정">
           <div class="st-scroll">
             <InfoCard p={p} change={change} update={update} onConfirmed={confirmed} />
             <IssueLine issues={serious} locked={working} flash={flash} onShow={show} onFix={fixSerious} />
+            <Outline outlines={outlines} locked={working} sel={sel} reveal={reveal} act={act} onSelect={select} onHover={hover} surveyDefaults={surveyDefaults} />
             <FilesCard p={p} update={update} hasSlot={hasSlot} locked={working} onAskSlot={() => fill('참가자가 자료를 다운로드하는 자료실 칸을 사이트에 어울리는 자리에 넣어 줘. 자리 표시는 <div data-lp="materials"></div>예요.', 'all')} />
-            <section class="st-card st-tools" aria-label="직접 수정">
-              <details class="st-fold">
-                <summary><b>섹션</b><small>{sections.length}개 · 순서·숨기기·이름</small></summary>
-                <SectionsPanel sections={sections} locked={working} onShow={show}
-                  onMove={(id, to) => setHtml('순서 바꾸기', (h) => moveSection(h, id, to))}
-                  onHide={(id, v) => setHtml(v ? '섹션 숨기기' : '섹션 숨기기 취소', (h) => setHidden(h, id, v))}
-                  onRemove={(id) => setHtml('섹션 삭제', (h) => removeSection(h, id))}
-                  onRename={(id, name) => setHtml('이름 바꾸기', (h) => renameSection(h, id, name))}
-                  onAsk={(id) => fill('', id)} />
-              </details>
+            <section class="st-card st-tools" aria-label="색·글꼴">
               <details class="st-fold">
                 <summary><b>색·글꼴</b><small>강조색·글자색·바탕색</small></summary>
                 <LookPanel p={p} change={change} />

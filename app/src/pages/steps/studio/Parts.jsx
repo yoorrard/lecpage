@@ -6,53 +6,7 @@ import { sameState } from '../../../lib/site-meta.js';
 import { blobs } from '../../../lib/db.js';
 import { toast, uid } from '../../../lib/util.js';
 
-// 완성 화면(Studio)의 작은 부품: 섹션 목록·색·글꼴·그림 바꾸기·버전 기록·꼭 고칠 곳 한 줄
-const KIT_KO = { qa: '질문', poll: '투표', board: '보드', attend: '출석', survey: '설문', deck: '교재', materials: '자료실', join: '접속 QR' };
-/** 목록: 사이트의 섹션. 끌어서(또는 ↑↓) 순서, 숨기기, 지우기, 이름 바꾸기, 누르면 미리보기가 그 섹션으로 */
-export function SectionsPanel({ sections, locked, onShow, onMove, onHide, onRemove, onRename, onAsk }) {
-  const [drag, setDrag] = useState(null); const [over, setOver] = useState(null);
-  const [rename, setRename] = useState(null); const [del, setDel] = useState(null);
-  const listRef = useRef();
-  /** 옮긴 뒤 초점: 옮긴 섹션의 같은 단추(↑·↓를 이어 누를 수 있게). 그 단추가 꺼졌으면(맨 위·맨 아래) 이름 칸 */
-  const focusAt = (i, dir = '') => setTimeout(() => { const li = listRef.current?.querySelectorAll('.sec2')[i]; const b = dir && li?.querySelector(`button[aria-label$="${dir}"]:not([disabled])`); (b || li?.querySelector('.sec2-name'))?.focus(); }, 60);
-  return (
-    <div class="stack">
-      <p class="small muted">끌어서 순서를 바꾸고, 누르면 미리보기가 그 섹션으로 가요. 글은 미리보기의 [글 수정]으로 고쳐요.</p>
-      {locked && <p class="lock-note small">AI가 고치는 동안에는 바꿀 수 없어요.</p>}
-      <ol class="sec2-list" ref={listRef} aria-label="섹션 목록">
-        {sections.map((s, i) => (
-          <li class={`sec2${s.hidden ? ' is-hidden' : ''}${over === i ? ' is-over' : ''}`} key={s.id} draggable={!locked && rename !== s.id}
-            onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', s.id); } catch { } }}
-            onDragOver={(e) => { if (drag === null) return; e.preventDefault(); setOver(i); }} onDragLeave={() => setOver(null)}
-            onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) { onMove(sections[drag].id, i); toast(`옮겼어요: ${sections[drag].name}`); } setDrag(null); setOver(null); }}
-            onDragEnd={() => { setDrag(null); setOver(null); }}>
-            <span class="sec2-grip" aria-hidden="true">⋮⋮</span>
-            {rename === s.id ? <form class="sec2-rename" onSubmit={(e) => { e.preventDefault(); const v = e.currentTarget.elements.n.value.trim(); if (v) onRename(s.id, v); setRename(null); focusAt(i); }}>
-              <input name="n" class="input" defaultValue={s.name} maxLength={60} aria-label={`${s.name} 새 이름`} ref={(el) => el && setTimeout(() => el.focus(), 0)} onKeyDown={(e) => e.key === 'Escape' && (setRename(null), focusAt(i))} />
-              <button class="btn btn-sm btn-primary">바꾸기</button></form>
-              : <button type="button" class="sec2-name" onClick={() => onShow(s.id)} title="미리보기에서 보기"><span class="ttl">{s.name}</span><small>{[s.hidden ? '숨김' : '', s.steps ? `실습 ${s.steps}단계` : '', ...s.kits.map((k) => KIT_KO[k] || k)].filter(Boolean).join(' · ')}</small></button>}
-            <span class="sec2-acts">
-              <button type="button" class="icon-btn" disabled={locked || i === 0} aria-label={`${s.name} 위로`} title="위로" onClick={() => { onMove(s.id, i - 1); focusAt(i - 1, '위로'); }}>↑</button>
-              <button type="button" class="icon-btn" disabled={locked || i === sections.length - 1} aria-label={`${s.name} 아래로`} title="아래로" onClick={() => { onMove(s.id, i + 1); focusAt(i + 1, '아래로'); }}>↓</button>
-              <details class="sec2-more"><summary class="icon-btn" aria-label={`${s.name} 더 보기`} title="더 보기">…</summary>
-                <div class="sec2-menu">
-                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setRename(s.id); }}>이름 바꾸기</button>
-                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onHide(s.id, !s.hidden); }}>{s.hidden ? '숨기기 취소' : '숨기기'}</button>
-                  <button type="button" class="btn btn-sm btn-quiet" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; onAsk(s.id); }}>AI로 수정</button>
-                  <button type="button" class="btn btn-sm btn-quiet sec2-del" disabled={locked} onClick={(e) => { e.currentTarget.closest('details').open = false; setDel(s); }}>삭제</button>
-                </div></details>
-            </span>
-          </li>
-        ))}
-      </ol>
-      {!sections.length && <p class="muted small">섹션(&lt;section&gt;)이 없는 사이트예요. 아래 AI 수정 칸에서 섹션을 나눠 달라고 할 수 있어요.</p>}
-      <Dialog open={!!del} onClose={() => setDel(null)} label="섹션 삭제 확인">
-        {del && <><h2 class="h-sub">'{del.name}' 섹션을 삭제할까요?</h2><p>숨기기는 사이트에서 감추기만 해요. 삭제한 것은 [실행 취소]나 [버전 기록]으로 되살릴 수 있어요.</p>
-          <div class="btn-row"><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button><button class="btn" onClick={() => { onHide(del.id, true); setDel(null); }}>숨기기</button><button class="btn btn-danger" onClick={() => { onRemove(del.id); setDel(null); toast(`삭제했어요: ${del.name}`); }}>삭제</button></div></>}
-      </Dialog>
-    </div>
-  );
-}
+// 완성 화면(Studio)의 작은 부품: 색·글꼴·그림 바꾸기·버전 기록·꼭 고칠 곳 한 줄(사이트 구성은 Outline.jsx)
 const FONTS = [{ value: '', label: '사이트 그대로' }, { value: '"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif', label: '고딕' }, { value: '"Noto Serif KR","Nanum Myeongjo","AppleMyungjo",serif', label: '명조' }, { value: '"Nanum Square Round","Apple SD Gothic Neo","Malgun Gothic",sans-serif', label: '둥근 고딕' }];
 function lum(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return null; const v = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
 const ratio = (a, b) => { const x = lum(a), y = lum(b); if (x === null || y === null) return 0; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
