@@ -5,10 +5,8 @@ import { kv } from './db.js';
 import { TIER_KO, catalogLoader, rankModels } from './ai-catalog.js';
 
 // 사이트 만들기에 쓰는 AI: OpenAI(GPT) · Claude. 값·주소·오류 모양은 각 회사 공식 문서와 맞춰 봄(2026-11-14, 근거는 docs/research/ai-facts-2026-11-14.md).
-// Gemini는 뺐습니다(무료 가벼운 모델로는 사이트 품질이 모자라고, 유료 모델은 확인하지 못함). 하루 한 번 모으는 값표(ai-catalog.json)의 Gemini 자료는 남아 있지만 앱에서는 쓰지 않음.
-// OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
+// Gemini·OpenRouter 키로는 만들지 않음(만드는 길이 없음): 붙여 넣으면 연결 화면이 알려 줌(detectProvider), 다른 회사로 보내지 않음
 export const PROVIDERS = {
-  openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', oauth: true, images: true },
   openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
   anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
 };
@@ -41,7 +39,7 @@ export const chatbotFor = (provider) => ({ openai: 'chatgpt', anthropic: 'claude
 /** 붙여 넣은 키의 앞부분으로 어느 회사 키인지 알아냄 */
 export function detectProvider(key) {
   const k = String(key || '').trim();
-  if (/^sk-or-/.test(k)) return 'openrouter';
+  if (/^sk-or-/.test(k)) return 'openrouter-unsupported'; // OpenRouter 키: OpenAI로 보내지 않음
   if (/^sk-ant-/.test(k)) return 'anthropic';
   if (/^(AIza|AQ\.)/.test(k)) return 'gemini-unsupported'; // Gemini 키: 사이트 만들기에는 쓰지 않음(연결 화면이 알려 줌)
   if (/^sk-/.test(k)) return 'openai';
@@ -88,7 +86,7 @@ export async function forgetKey(provider) {
 
 // 고른 회사·모델(비밀 아님)
 async function prefs() { const s = (await kv.get('ai-prefs').catch(() => null)) || {}; return { active: s.active || '', models: s.models || {}, free: s.free || {}, picked: s.picked || {}, blocked: s.blocked || {} }; }
-/** 이 키로는 못 쓰는 모델로 확인된 것(예: Gemini 무료 등급에서 Gemini 4 Carbon·Argon). 고르는 칸에서 '유료 키 필요'로 보임 */
+/** 이 키로는 못 쓰는 모델로 확인된 것. 고르는 칸에서 '유료 키 필요'로 보임 */
 async function markBlocked(provider, id) {
   const s = await prefs(); const list = s.blocked[provider] || [];
   if (!list.includes(id)) { s.blocked[provider] = [...list, id].slice(-20); await kv.set('ai-prefs', s); }
@@ -124,7 +122,7 @@ export async function getActiveAI() {
     if (!key) continue;
     const freeTier = !!s.free[provider];
     const model = s.models[provider] || '';
-    return { provider, key, model, label: PROVIDERS[provider].name, freeTier, supportsImages: provider === 'openrouter' ? !freeTier : PROVIDERS[provider].images };
+    return { provider, key, model, label: PROVIDERS[provider].name, freeTier, supportsImages: PROVIDERS[provider].images };
   }
   return null;
 }
@@ -141,16 +139,13 @@ export function classify(status, msg, code) {
   // 이번 달 쓸 수 있는 금액을 다 씀. Claude: 등급 한도 429(enforced_spend_limit_reached)·직접 정한 한도 400("You have reached your specified API usage limits")
   // OpenAI: 직접 정한 한도·OpenAI가 정한 한도 429(organization_/project_spend_limit_exceeded, organization_usage_limit_exceeded)
   if (/API usage limits|monthly API usage|enforced_spend_limit_reached|spend_limit_exceeded|usage_limit_exceeded/i.test(m)) return 'cap';
-  if (status === 401 || /API_KEY_INVALID|API key not valid|invalid.?x-api-key|Incorrect API key|invalid_api_key|No auth credentials|User not found|authentication_error/i.test(m)) return 'bad-key';
-  if (/location is not supported|unsupported_country|not available in your (country|region)|FAILED_PRECONDITION/i.test(m)) return 'region';
-  // Gemini 한도 초과(429 RESOURCE_EXHAUSTED) 문구에는 "check your plan and billing details"가 들어 있어 결제 문제로 잘못 읽지 않게 뺌
-  const gQuota = status === 429 && /RESOURCE_EXHAUSTED/.test(m);
-  if (status === 402 || (!gQuota && /insufficient_quota|credit_balance_exhausted|credit balance is too low|Insufficient credits|billing|payment/i.test(m))) return 'billing'; // OpenAI 크레딧 없음은 429 credit_balance_exhausted(2026-11)
-  if (status === 429 && /limit:\s*0\b/.test(m)) return 'no-access'; // 무료 키로는 못 쓰는 모델(한도 0)
-  if (status === 429 && /per.?day|free-models-per-day|PerDay|daily|\bquota_exceeded\b/i.test(m)) return 'quota-day';
-  if (status === 429 || /RESOURCE_EXHAUSTED|rate.?limit/i.test(m)) return 'quota';
+  if (status === 401 || /invalid.?x-api-key|Incorrect API key|invalid_api_key|authentication_error/i.test(m)) return 'bad-key';
+  if (/unsupported_country|not available in your (country|region)/i.test(m)) return 'region';
+  if (status === 402 || /insufficient_quota|credit_balance_exhausted|credit balance is too low|billing|payment/i.test(m)) return 'billing'; // OpenAI 크레딧 없음은 429 credit_balance_exhausted(2026-11)
+  if (status === 429 && /per.?day|daily|\bquota_exceeded\b/i.test(m)) return 'quota-day';
+  if (status === 429 || /rate.?limit/i.test(m)) return 'quota';
   if (status === 403) return 'forbidden';
-  if (status === 404 || /model.*(not found|does not exist)|No endpoints found/i.test(m)) return 'model';
+  if (status === 404 || /model.*(not found|does not exist)/i.test(m)) return 'model';
   if (status === 413 || /context length|too long|maximum context|token count/i.test(m)) return 'too-long';
   if (status >= 500 || status === 529 || /overloaded/i.test(m)) return 'busy';
   return 'other';
@@ -172,11 +167,10 @@ export async function fail(r, provider) {
   const j = await r.json().catch(() => ({}));
   const e = j.error || j;
   const msg = (typeof e === 'string' ? e : e.message) || `${PROVIDERS[provider]?.short || provider} 오류 ${r.status}`;
-  // 오류 코드는 회사마다 자리가 다름: Gemini status, OpenAI code·type(크레딧 없음은 code credit_balance_exhausted, type insufficient_quota), Claude type·details.error_code
-  const code = [e.status, e.code, e.type, e.details?.error_code].filter((x) => typeof x === 'string').join(' ');
-  // 얼마 뒤에 다시 하라는지: retry-after 헤더, Gemini의 RetryInfo("retryDelay":"34s")나 문구("retry in 34.2s")
-  const d = (Array.isArray(e.details) ? e.details : []).map((x) => x && x.retryDelay).find(Boolean);
-  const retryAfter = Math.ceil(+r.headers.get('retry-after') || parseFloat(d) || +(/retry in ([\d.]+)\s*s/i.exec(msg) || [])[1] || 0);
+  // 오류 코드는 회사마다 자리가 다름: OpenAI code·type(크레딧 없음은 code credit_balance_exhausted, type insufficient_quota), Claude type·details.error_code
+  const code = [e.code, e.type, e.details?.error_code].filter((x) => typeof x === 'string').join(' ');
+  // 얼마 뒤에 다시 하라는지: retry-after 헤더나 문구("retry in 34.2s")
+  const retryAfter = Math.ceil(+r.headers.get('retry-after') || +(/retry in ([\d.]+)\s*s/i.exec(msg) || [])[1] || 0);
   throw new AiError(classify(r.status, msg, code), msg, { status: r.status, provider, retryAfter });
 }
 async function send(provider, url, init) {
@@ -201,9 +195,8 @@ export function explainError(err, provider) {
     'no-browser': ['이 계정은 브라우저에서 바로 쓸 수 없어요.', '조직 설정이 막아 두었어요. 개인 계정으로 만든 키를 쓰거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     workspace: ['Workspace를 고르지 않고 만든 키예요.', 'Claude 키 페이지에서 키를 새로 만들 때 Workspace를 골라 주세요.', ['key']],
     region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    billing: provider === 'openrouter' ? ['크레딧이 없어요.', '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 다른 AI를 연결해 주세요.', ['connect']]
-        : ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 지금은 쓰던 ${provider === 'openai' ? 'ChatGPT' : 'Claude'} 창으로 만들 수 있어요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['paste', 'billing']],
-    'quota-day': ['오늘 쓸 수 있는 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'openrouter' ? '한국 시간 오전 9시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    billing: ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 지금은 쓰던 ${provider === 'openai' ? 'ChatGPT' : 'Claude'} 창으로 만들 수 있어요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['paste', 'billing']],
+    'quota-day': ['오늘 쓸 수 있는 횟수를 다 썼어요.', '다른 모델로도 해 봤어요. 내일 다시 돼요. 지금 이어서 하려면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['paste']],
@@ -257,40 +250,29 @@ async function listRaw(provider, key, signal) {
     const j = await send(provider, 'https://api.openai.com/v1/models', { signal, headers: { authorization: `Bearer ${key}` } });
     return (j.data || []).map((m) => ({ id: m.id, label: m.id }));
   }
-  const j = await send(provider, 'https://openrouter.ai/api/v1/models', { signal });
-  return (j.data || []).map((m) => ({ id: m.id, label: m.name || m.id, free: /:free$/.test(m.id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0) }));
+  throw new AiError('model', `이 길로는 만들 수 없어요(${provider}).`, { provider });
 }
 // ── 모델 등급과 추천 ──
-// 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Astra·GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5·Sonnet 5.5·Haiku 5.5,
-// Gemini 4 Carbon·Argon·Hydrogen — Gemini 4부터는 Pro·Flash라는 이름이 없음). 이름으로 고르면 금방 틀리므로 값과 출시일로 등급을 매깁니다.
+// 모델 이름은 몇 달마다 바뀝니다(2026-11: OpenAI GPT-6 Astra·GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5·Sonnet 5.5·Haiku 5.5).
+// 이름으로 고르면 금방 틀리므로 값과 출시일로 등급을 매깁니다.
 // 값표(카탈로그)와 규칙은 ai-catalog.js 한 곳: 같은 출처의 ai-catalog.json(하루 한 번 자동으로 모음, scripts/ai-catalog) → OpenRouter 공개 목록이 오면 덮어씀
 // → 둘 다 없으면 이름으로 어림. 키와 교재는 보내지 않음.
 //   추천 = 고품질 등급에서 가장 새 모델(나온 지 2주가 안 된 것은 뒤로). 교재를 읽고 연수 흐름을 짜는 일은 가벼운 모델에서 결과가 눈에 띄게 단순해짐
-//   공식 문서와 맞춰 봄(2026-11-14): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5",
-//   Google: Gemini 4 Carbon·Argon은 무료 등급에서 안 되고 4 Hydrogen(2026-11-12 출시)·3.8 Flash 등은 됨. 어느 모델이 무료 등급에서 되는지는
-//   공식 가격표에서 매일 모은 목록(ai-catalog.json의 geminiFree)을 씀 → 무료 키로 알게 되면 안 되는 모델을 써 보기 전부터 '유료 키 필요'로.
-//   한 번 실패한 모델을 기억하는 것(markBlocked)은 두 번째 안전망
+//   공식 문서와 맞춰 봄(2026-11-14): OpenAI "지능과 비용의 균형은 GPT-6.1 Sol"(Astra는 5배 값의 최상위), Anthropic "잘 모르겠으면 Claude Opus 5.5".
+//   한 번 실패한 모델은 기억해(markBlocked) 다음부터 '유료 키 필요'로
 export { TIER_KO };
 const catalog = catalogLoader();
-async function rank(provider, list, freeTier) {
-  return rankModels(provider, list, { cat: await catalog(), freeTier, blocked: (await prefs()).blocked[provider] || [] });
+async function rank(provider, list) {
+  return rankModels(provider, list, { cat: await catalog(), blocked: (await prefs()).blocked[provider] || [] });
 }
 /** 고르는 칸에 보일 이름: '모델 · 추천 · 약 220원' */
 export function modelText(m) {
-  return `${m.label}${m.rec ? ' · 추천' : m.free ? ' · 무료' : ` · ${TIER_KO[m.tier]}`}${m.won ? ` · 약 ${m.won.toLocaleString('ko-KR')}원` : ''}${m.locked ? ' · 유료 키 필요' : ''}`;
+  return `${m.label}${m.rec ? ' · 추천' : ` · ${TIER_KO[m.tier]}`}${m.won ? ` · 약 ${m.won.toLocaleString('ko-KR')}원` : ''}${m.locked ? ' · 유료 키 필요' : ''}`;
 }
 
-/** OpenRouter 키 정보(무료 계정인지 등) */
-async function openRouterKeyInfo(key, signal) {
-  const j = await send('openrouter', 'https://openrouter.ai/api/v1/key', { signal, headers: { authorization: `Bearer ${key}` } });
-  const d = j.data || {};
-  return { freeTier: d.is_free_tier === true, label: d.label || '' }; // 한 번도 충전하지 않은 계정 = 무료 모델만
-}
-
-export async function models(provider, key, { freeTier } = {}) {
-  const list = await rank(provider, await listRaw(provider, key), freeTier);
-  if (provider === 'openrouter' && freeTier && !list.some((m) => m.id === 'openrouter/free')) list.unshift({ id: 'openrouter/free', label: '무료 모델 자동 선택', tier: 0, rec: false, won: 0, locked: false, free: true });
-  return list;
+/** 고르는 칸의 모델 목록(두 번째 인자 뒤의 옵션은 예전 호출과 맞추려고 받기만 함) */
+export async function models(provider, key) {
+  return rank(provider, await listRaw(provider, key));
 }
 
 /**
@@ -299,10 +281,9 @@ export async function models(provider, key, { freeTier } = {}) {
  */
 export async function checkKey(provider, key, { signal } = {}) {
   if (!key) throw new AiError('bad-key', 'empty', { provider });
-  let freeTier = false;
-  if (provider === 'openrouter') ({ freeTier } = await openRouterKeyInfo(key, signal));
+  const freeTier = false; // 무료 등급이 있는 연결은 없음(화면은 이 값을 그대로 받음)
   const s = await prefs();
-  const list = await models(provider, key, { freeTier });
+  const list = await rank(provider, await listRaw(provider, key, signal));
   // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
   const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
   const model = (kept || list.find((m) => !m.locked) || {}).id || '';
@@ -311,8 +292,8 @@ export async function checkKey(provider, key, { signal } = {}) {
   return { models: list, model, freeTier };
 }
 
-/** 쓴 만큼 돈이 나가는 연결인지: OpenAI·Claude 키, 충전한 OpenRouter */
-export const isPaidAI = (provider, freeTier) => provider === 'openai' || provider === 'anthropic' || (provider === 'openrouter' && !freeTier);
+/** 쓴 만큼 돈이 나가는 연결인지: OpenAI·Claude 키 */
+export const isPaidAI = (provider) => provider === 'openai' || provider === 'anthropic';
 
 /**
  * AI 고르기 화면(components/AiPick.jsx): 보이는 회사마다 키가 연결돼 있는지와 고른 모델(비밀 아님 — 키 값은 돌려주지 않음)

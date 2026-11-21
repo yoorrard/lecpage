@@ -1,11 +1,5 @@
 // AI 키 만드는 법(연결 창과 도움말이 함께 씀). 버튼 이름은 각 사이트 화면에 나오는 그대로(영문) 적습니다.
 // 각 회사 공식 문서와 맞춰 본 날: 2026-11-14(자세한 근거·출처: docs/research/ai-facts-2026-11-14.md)
-//  Gemini — ai.google.dev/gemini-api/docs/{models,pricing,rate-limits,api-key,billing,verification,troubleshoot-ai-studio,changelog}
-//    · 새 계정은 무료 등급에서 시작하고, 약관에 동의하면 기본 프로젝트와 키가 저절로 만들어짐(결제 등록 없이 됨)
-//    · 구글 클라우드를 쓰던 계정은 기본 키가 안 만들어져 프로젝트를 불러와야 하고, 그 프로젝트는 휴대폰 확인(QR)이나 결제가 필요할 수 있음
-//    · 결제를 연결한 프로젝트는 선불(Prepay) 크레딧이 있어야 응답함(최소 5달러, 없으면 402). 무료 등급만 쓰는 계정은 할 일이 없음
-//    · Gemini 4부터 이름이 Carbon·Argon·Hydrogen(Pro·Flash라는 이름 없음). 무료 등급: 4 Hydrogen(2026-11-12 출시)·3.8 Flash·3.6 Flash·Flash-Lite 등.
-//      4 Carbon·Argon은 유료 등급만 · 넣은 내용이 제품 개선에 쓰임 · 하루 횟수는 태평양 시간 자정에 다시 채워짐(숫자는 공개하지 않고 AI Studio에서 봄) · 만 18세 이상
 //  OpenAI — developers.openai.com/api/docs/{models,quickstart,guides/rate-limits,guides/error-codes,guides/chatgpt-api-credits}
 //    · 키: platform.openai.com/api-keys · 결제: platform.openai.com/settings/organization/billing/overview(선불 크레딧, 5달러를 사면 Build 등급)
 //    · ChatGPT Pro·Business 구독은 매달 API 크레딧(최대 500달러)을 받을 수 있음(무료·Go·Plus는 해당 없음, 2026-10-28부터)

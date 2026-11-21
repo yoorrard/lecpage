@@ -8,8 +8,6 @@ const SPOTS = {
   // 키 없이 200(빈 본문). CORS 머리글은 없어 no-cors로 물음(필터 차단 화면은 실제로 키를 넣을 때 오류로 드러남)
   'ai:openai': { name: 'OpenAI API', url: 'https://api.openai.com/healthz', cors: false },
   'ai:anthropic': { name: 'Claude API', url: 'https://api.anthropic.com/api/hello', cors: false }, // 키 없이 200. 브라우저 허용 머리글 없이는 CORS 머리글을 주지 않음
-  // 공개 API 설명서(키 없이 200, 출처를 그대로 CORS로 줌). 머리글만 받고 끊음
-  'ai:openrouter': { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1/models?limit=1', cors: true },
   'host:vercel': { name: 'Vercel', url: 'https://api.vercel.com/v2/user', cors: true },
   'host:github-pages': { name: 'GitHub', url: 'https://api.github.com/zen', cors: true },
   'host:netlify': { name: 'Netlify', url: 'https://api.netlify.com/api/v1/user', cors: true },

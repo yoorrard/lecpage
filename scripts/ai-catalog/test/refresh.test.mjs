@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  parseOpenRouter, parseModelsDev, mergeModels, parseGooglePricing, parseGoogleModels, buildCatalog, validateCatalog, serialize, sameData,
+  parseOpenRouter, parseModelsDev, mergeModels, buildCatalog, validateCatalog, serialize, sameData,
   scanNames, missingNames, simulateRecs, preflight, checkLink, appUrls, renderReport, SOURCES, CORS_TARGETS,
 } from '../lib.mjs';
 import { run } from '../refresh.mjs';
@@ -14,22 +14,20 @@ const TODAY = '2026-11-14';
 const NOW = new Date('2026-11-14T03:00:00Z');
 const OR = JSON.parse(raw('openrouter.json'));
 const MD = JSON.parse(raw('modelsdev.json'));
-const GP = raw('google-pricing.md');
-const GM = raw('google-models.md');
-const got = () => ({ or: parseOpenRouter(OR, TODAY), md: parseModelsDev(MD, TODAY), pricing: parseGooglePricing(GP), docs: parseGoogleModels(GM) });
+const got = () => ({ or: parseOpenRouter(OR, TODAY), md: parseModelsDev(MD, TODAY) });
 const good = () => buildCatalog(got(), null, TODAY).catalog;
 
-test('OpenRouter: 큰 세 회사 모델과 무료 모델만, 변형·이상한 줄은 뺌', () => {
+test('OpenRouter: 만들기에 쓰는 두 회사(OpenAI·Claude) 모델만, 변형·이상한 줄은 뺌', () => {
   const r = parseOpenRouter(OR, TODAY);
   const ids = r.models.map((m) => m.id);
-  assert.ok(ids.includes('openai/gpt-6.1-sol') && ids.includes('anthropic/claude-opus-5.5') && ids.includes('google/gemini-4-hydrogen'));
-  assert.ok(!ids.some((x) => x.includes(':')), ':batch 변형은 빠짐');
-  assert.ok(!ids.includes('openrouter/auto'), '큰 세 회사가 아니고 값이 -1');
-  assert.deepEqual(r.free.map((m) => m.id).sort(), ['google/gemma-4-31b-it:free', 'meta-llama/llama-5-70b:free']);
+  assert.ok(ids.includes('openai/gpt-6.1-sol') && ids.includes('anthropic/claude-opus-5.5'));
+  assert.ok(!ids.some((x) => x.startsWith('google/')), 'Gemini는 만들기에 쓰지 않아 담지 않음');
+  assert.ok(!ids.some((x) => x.includes(':')), ':free·:batch 변형은 빠짐');
+  assert.ok(!ids.includes('openrouter/auto'), '두 회사가 아니고 값이 -1');
+  assert.equal(r.free, undefined, '무료 모델 목록은 담지 않음');
   assert.equal(r.dropped, 2, '대문자·빈칸 id, 숫자가 아닌 값');
   const sol = r.models.find((m) => m.id === 'openai/gpt-6.1-sol');
   assert.deepEqual(sol, { id: 'openai/gpt-6.1-sol', in: 2, out: 10, date: '2026-09-29', text: true, ctx: 400000, src: 'or' });
-  assert.equal(r.models.find((m) => m.id === 'google/gemini-3.8-flash').in, 0.83, '값은 소수 넷째 자리까지');
   assert.equal(r.models.find((m) => m.id === 'openai/gpt-5-image').text, false, '그림을 내는 모델은 text:false');
   assert.ok(!JSON.stringify(r).includes('<b>'), '설명 글(HTML)은 담지 않음');
   assert.throws(() => parseOpenRouter({ models: [] }, TODAY), /data 배열/);
@@ -47,28 +45,13 @@ test('models.dev: 값이 있는 모델만, OpenRouter에 이미 있는 모델은
   assert.deepEqual(merged.map((m) => m.id), [...merged.map((m) => m.id)].sort(), 'id 순서');
 });
 
-test('Gemini 가격표: 무료 등급 칸으로 무료·유료 전용을 가림(Markdoc 표·옛 파이프 표·여러 코드 한 절)', () => {
-  const p = parseGooglePricing(GP);
-  assert.deepEqual(p.free, ['gemini-3.1-flash-live-preview', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.8-live', 'gemini-4-hydrogen']);
-  assert.deepEqual(p.paidOnly, ['gemini-3.1-pro-preview', 'gemini-3.1-pro-preview-customtools', 'gemini-4-carbon']);
-  assert.deepEqual(p.unknown, ['gemini-mystery-1'], '읽지 못한 칸은 어느 쪽에도 넣지 않음');
-  assert.deepEqual(parseGooglePricing('# nothing here\n'), { free: [], paidOnly: [], unknown: [] });
-});
-
-test('Gemini 모델 문서: 지금 모델·옛 모델(폐기 예정·써 본 사용자만)·종료', () => {
-  const d = parseGoogleModels(GM);
-  assert.deepEqual(d.current, ['gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-argon', 'gemini-4-carbon', 'gemini-4-hydrogen']);
-  assert.deepEqual(d.legacy, ['gemini-2.5-flash-lite', 'gemini-2.5-pro']);
-  assert.deepEqual(d.previous, ['gemini-2.0-flash', 'imagen-4.0-generate']);
-});
-
 test('새 판: 검사 통과·한 줄에 모델 하나·같은 내용이면 같은 글', () => {
   const c = good();
   assert.deepEqual(validateCatalog(c, null, TODAY), []);
   const text = serialize(c);
   assert.ok(text.length < 20000);
   assert.ok(/\n {4}\{"id":"anthropic\/claude-fable-5\.2",/.test(text));
-  assert.deepEqual(JSON.parse(text).geminiFree.paidOnly, ['gemini-3.1-pro-preview', 'gemini-3.1-pro-preview-customtools', 'gemini-4-carbon']);
+  assert.deepEqual(Object.keys(JSON.parse(text)), ['schema', 'updated', 'about', 'models'], 'Gemini·무료 칸 없음');
   assert.ok(sameData(c, { ...JSON.parse(text), updated: '2020-01-01' }), 'updated만 다르면 같은 내용');
   assert.equal(serialize(JSON.parse(text)), text);
 });
@@ -83,9 +66,7 @@ test('검사: 깨진 자료는 거부', () => {
   assert.match(bad((c) => { c.models[0].date = '2099-01-01'; }).join(), /모양이 이상/);
   assert.match(bad((c) => { c.models.push({ ...c.models[0] }); }).join(), /두 번/);
   assert.match(bad((c) => { c.models = c.models.filter((m) => !m.id.startsWith('anthropic/')); }).join(), /anthropic 모델이 0개/);
-  assert.match(bad((c) => { c.geminiFree.free = ['gemini-4-hydrogen']; }).join(), /무료 등급 모델이 1개/);
-  assert.match(bad((c) => { c.geminiFree.free.push('gemini-4-carbon'); }).join(), /같은 모델/);
-  assert.match(bad((c) => { c.geminiDocs = { current: [] }; }).join(), /모델 문서/);
+  assert.match(bad((c) => { c.models[0].id = 'google/gemini-4-carbon'; }).join(), /모양이 이상/);
   assert.match(bad((c) => { c.schema = 2; }).join(), /schema/);
 });
 
@@ -102,33 +83,26 @@ test('검사: 한 번에 30% 넘게 사라지면 거부(급감)', () => {
   const small = JSON.parse(serialize(prev));
   small.models = small.models.filter((m) => m.id !== 'openai/gpt-4o');
   assert.ok(!/사라졌어요/.test(validateCatalog(small, prev, TODAY).join()));
-  // Gemini 무료 목록이 반 넘게 사라져도 거부
-  const g = JSON.parse(serialize(prev));
-  g.geminiFree.free = ['gemini-4-hydrogen', 'gemini-new-1'];
-  assert.match(validateCatalog(g, prev, TODAY).join(), /한 번에 사라졌어요/);
 });
 
 test('못 받은 출처는 앞 판의 그 몫을 그대로(하루 끊겨도 모델이 사라지지 않음)', () => {
   const prev = good();
-  const { catalog, kept } = buildCatalog({ md: parseModelsDev(MD, TODAY), docs: parseGoogleModels(GM) }, prev, TODAY);
-  assert.deepEqual(kept, ['OpenRouter 모델', 'Gemini 무료 등급']);
+  const { catalog, kept } = buildCatalog({ md: parseModelsDev(MD, TODAY) }, prev, TODAY);
+  assert.deepEqual(kept, ['OpenRouter 모델']);
   assert.ok(sameData(catalog, prev));
-  // 가격표를 받았지만 표가 깨짐(무료 0개) → 그 칸만 앞 판
-  const broken = buildCatalog({ ...got(), pricing: { free: [], paidOnly: [], unknown: [] } }, prev, TODAY);
-  assert.deepEqual(broken.kept, ['Gemini 무료 등급']);
-  assert.deepEqual(broken.catalog.geminiFree, prev.geminiFree);
 });
 
 test('이름 점검: id와 화면 이름(가운뎃점 목록 포함)을 찾고, 목록에 없는 것만 알림', () => {
   const found = scanNames([
-    { path: 'a.jsx', text: 'Gemini 4 Carbon·Argon은 결제한 키만. 무료는 Gemini 3.8 Flash까지.\n// GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5\n' },
-    { path: 'b.js', text: "const x = 'gemini-9-zircon'; // 새 모델\nconst y = 'claude-opus-4-1'; // ai-catalog-ok: 일부러 옛 이름\nGemini 4는 이름이 바뀜" },
+    { path: 'a.jsx', text: 'Gemini 4 Carbon·Argon은 만들기에 쓰지 않아요.\n// GPT-6.1 Sol·Terra·GPT-6 Luna, Claude Fable 5.2·Opus 5.5\n' },
+    { path: 'b.js', text: "const x = 'gpt-9-zircon'; // 새 모델\nconst y = 'claude-opus-4-1'; // ai-catalog-ok: 일부러 옛 이름\nconst z = 'gemini-4-carbon';" },
   ]);
   const ids = found.map((f) => f.id);
-  for (const id of ['gemini-4-carbon', 'gemini-4-argon', 'gemini-3.8-flash', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna', 'claude-fable-5.2', 'claude-opus-5.5', 'gemini-9-zircon']) assert.ok(ids.includes(id), id);
+  for (const id of ['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna', 'claude-fable-5.2', 'claude-opus-5.5', 'gpt-9-zircon']) assert.ok(ids.includes(id), id);
   assert.ok(!ids.includes('claude-opus-4-1'), 'ai-catalog-ok 줄은 건너뜀');
+  assert.ok(!ids.some((x) => x.startsWith('gemini')), 'Gemini 이름은 값표와 견주지 않음(만들기에 쓰지 않음)');
   const miss = missingNames(found, good());
-  assert.deepEqual(miss.map((m) => m.id), ['gemini-9-zircon']);
+  assert.deepEqual(miss.map((m) => m.id), ['gpt-9-zircon']);
   assert.deepEqual(miss[0].where, ['b.js:1']);
 });
 
@@ -136,9 +110,7 @@ test('추천 어림: 앱과 같은 규칙(rankModels)으로', () => {
   const r = simulateRecs(good(), NOW.getTime());
   assert.equal(r.openai, 'gpt-6.1-sol');
   assert.equal(r.anthropic, 'claude-opus-5.5');
-  assert.equal(r.gemini, 'gemini-4-argon', 'Carbon은 나온 지 2주가 안 됨');
-  assert.equal(r.geminiFree, 'gemini-3.8-flash', '무료 등급 목록 안에서, Hydrogen은 2주가 안 됨');
-  assert.equal(simulateRecs(good(), Date.parse('2026-11-27T00:00:00Z')).geminiFree, 'gemini-4-hydrogen');
+  assert.deepEqual(Object.keys(r), ['openai', 'anthropic']);
 });
 
 // ── 주소·CORS ──
@@ -168,14 +140,14 @@ function fakeNet({ or = OR, orStatus = 200, cors = 'ok', link = 200, fail = [] }
     calls.push(`${init.method || 'GET'} ${url}`);
     if (fail.some((f) => url.includes(f))) throw new TypeError('fetch failed');
     if (init.method === 'OPTIONS') return cors === 'ok' ? res(204, { 'access-control-allow-origin': 'https://lecpage.com', 'access-control-allow-headers': CORS_TARGETS.flatMap((t) => t.headers).join(',') }) : res(204, {});
-    const body = url === SOURCES.openrouter ? (orStatus === 200 ? JSON.stringify(or) : 'no') : url === SOURCES.modelsdev ? JSON.stringify(MD) : url === SOURCES.googlePricing[0] ? GP : url === SOURCES.googleModels[0] ? GM : null;
+    const body = url === SOURCES.openrouter ? (orStatus === 200 ? JSON.stringify(or) : 'no') : url === SOURCES.modelsdev ? JSON.stringify(MD) : null;
     if (body !== null) { const r = new Response(body, { status: url === SOURCES.openrouter ? orStatus : 200, headers: { 'access-control-allow-origin': '*' } }); return r; }
     return res(link);
   };
   fn.calls = calls;
   return fn;
 }
-const repo = (extra = '') => ({ files: [{ path: 'app/src/x.jsx', text: `Gemini 4 Carbon·Argon은 결제한 키만 돼요. ${extra}` }], urls: ['https://aistudio.example/apikey'] });
+const repo = (extra = '') => ({ files: [{ path: 'app/src/x.jsx', text: `GPT-6.1 Sol·Terra로 만들어요. ${extra}` }], urls: ['https://platform.example/apikey'] });
 
 test('run: 처음 → 갱신함, 같은 자료로 다시 → 바뀐 것 없음(문제 0)', async () => {
   const a = await run({ fetchFn: fakeNet(), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
@@ -210,28 +182,30 @@ test('run: 받기 실패 — 연결 실패는 참고, 404는 사람이 볼 일. 
 });
 
 test('run: 이름·CORS·주소 점검이 어긋나면 사람이 볼 일로(같은 문제면 digest가 같음)', async () => {
-  const a = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gemini-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
-  assert.ok(a.problems.some((p) => /gemini-9-zircon/.test(p)));
+  const a = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gpt-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
+  assert.ok(a.problems.some((p) => /gpt-9-zircon/.test(p)));
   assert.ok(a.problems.some((p) => /Claude 만들기.*허용 출처가 없음/.test(p)));
-  assert.ok(a.problems.some((p) => /열리지 않아요\(404\): https:\/\/aistudio\.example\/apikey/.test(p)));
-  const b = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gemini-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
+  assert.ok(!a.problems.some((p) => /Gemini|OpenRouter 만들기/.test(p)), '만들기에 쓰지 않는 곳은 점검하지 않음');
+  assert.ok(a.problems.some((p) => /열리지 않아요\(404\): https:\/\/platform\.example\/apikey/.test(p)));
+  const b = await run({ fetchFn: fakeNet({ cors: 'bad', link: 404 }), repo: repo('새 모델 gpt-9-zircon'), prevText: '', now: NOW, write: false, pause: 1 });
   assert.equal(a.digest, b.digest);
   const blocked = await run({ fetchFn: fakeNet({ link: 403 }), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
   assert.deepEqual(blocked.problems, [], '봇 막기(403)는 참고로만');
 });
 
-test('run: 추천·Gemini 무료 목록이 바뀌면 한 번 알림', async () => {
+test('run: 추천이 바뀌면 한 번 알림', async () => {
   const a = await run({ fetchFn: fakeNet(), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
   const prev = JSON.parse(a.text);
-  prev.geminiFree.free = prev.geminiFree.free.filter((c) => c !== 'gemini-3.8-live');
-  const b = await run({ fetchFn: fakeNet(), repo: repo(), prevText: serialize(prev), now: new Date('2026-11-26T12:00:00Z'), write: false, pause: 1 });
-  assert.ok(b.problems.some((p) => /Gemini 무료 키 추천이 바뀌었어요: gemini-3\.8-flash → gemini-4-hydrogen/.test(p)), b.problems.join('\n'));
-  assert.ok(b.problems.some((p) => /Gemini 무료 등급 목록이 바뀌었어요\(무료 \+gemini-3\.8-live/.test(p)));
+  prev.models = prev.models.filter((m) => m.id !== 'anthropic/claude-opus-5.5');
+  const b = await run({ fetchFn: fakeNet(), repo: repo(), prevText: serialize(prev), now: new Date('2026-11-15T03:00:00Z'), write: false, pause: 1 });
+  assert.ok(b.problems.some((p) => /Claude 추천이 바뀌었어요: claude-opus-5 → claude-opus-5\.5/.test(p)), b.problems.join('\n'));
+  assert.ok(!b.problems.some((p) => /OpenAI 추천이 바뀌었어요/.test(p)));
 });
 
 test('보고서: 문제가 없으면 사람이 볼 일 칸이 없음', () => {
-  const r = renderReport({ status: 'unchanged', today: TODAY, counts: { openai: 1, anthropic: 1, google: 1, free: 0 }, sources: {}, kept: [], recs: {}, geminiFree: null, problems: [], notes: [] });
+  const r = renderReport({ status: 'unchanged', today: TODAY, counts: { openai: 1, anthropic: 1 }, sources: {}, kept: [], recs: {}, problems: [], notes: [] });
   assert.ok(!/사람이 볼 일/.test(r.text));
+  assert.ok(!/Gemini|Google/.test(r.text));
 });
 
 // ── 값 급변·빈 추천·확인한 날 ──
@@ -254,7 +228,7 @@ test('검사: 앞 판에는 있던 추천이 비면 거부(모든 모델이 그�
   assert.match(errs, /Claude: 앞 판에는/);
 });
 
-test('run: 값이 같아도 네 출처를 모두 받았으면 이틀에 한 번 확인한 날(checked)을 적음(하루 점검이 갱신 멈춤을 봄). 3일 넘게 다 못 받으면 사람이 볼 일로', async () => {
+test('run: 값이 같아도 두 출처를 모두 받았으면 이틀에 한 번 확인한 날(checked)을 적음(하루 점검이 갱신 멈춤을 봄). 3일 넘게 다 못 받으면 사람이 볼 일로', async () => {
   const a = await run({ fetchFn: fakeNet(), repo: repo(), prevText: '', now: NOW, write: false, pause: 1 });
   assert.equal(JSON.parse(a.text).checked, TODAY);
   const day = (n) => new Date(NOW.getTime() + n * 86400000);
@@ -265,12 +239,12 @@ test('run: 값이 같아도 네 출처를 모두 받았으면 이틀에 한 번 
   const cj = JSON.parse(c.text);
   assert.deepEqual([cj.updated, cj.checked], [TODAY, '2026-11-16'], '값의 날짜(updated)는 그대로, 확인한 날만');
   assert.match(c.report, /결과: 값은 그대로\(확인한 날만 새로 적음\)/);
-  assert.match(c.report, /네 출처를 모두 받은 마지막 날: 2026-11-16\(오늘\)/);
+  assert.match(c.report, /두 출처를 모두 받은 마지막 날: 2026-11-16\(오늘\)/);
   assert.deepEqual(c.problems, []);
   // 출처 하나가 계속 끊김: 3일까지는 참고, 넘으면 사람이 볼 일(날 수가 보임)
   const d = await run({ fetchFn: fakeNet({ fail: ['models.dev'] }), repo: repo(), prevText: a.text, now: day(3), write: false, pause: 1 });
   assert.equal(d.status, 'unchanged'); assert.deepEqual(d.problems, []);
-  assert.ok(d.notes.some((n) => /네 출처를 모두 받은 마지막 날이 2026-11-14\(3일 전\)이에요\. 받지 못한 곳: models\.dev/.test(n)), d.notes.join('\n'));
+  assert.ok(d.notes.some((n) => /두 출처를 모두 받은 마지막 날이 2026-11-14\(3일 전\)이에요\. 받지 못한 곳: models\.dev/.test(n)), d.notes.join('\n'));
   const e = await run({ fetchFn: fakeNet({ fail: ['models.dev'] }), repo: repo(), prevText: a.text, now: day(4), write: false, pause: 1 });
   assert.ok(e.problems.some((p) => /2026-11-14\(4일 전\).*받지 못한 곳: models\.dev.*SOURCES/.test(p)), e.problems.join('\n'));
   assert.equal(JSON.parse(e.text).checked, TODAY, '다 받지 못한 날은 확인한 날을 바꾸지 않음');
