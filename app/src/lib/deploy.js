@@ -111,14 +111,23 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
   onProgress({ step: '처리 중', pct: 70 });
   const site = siteId || j.site_id || j.id;
   const deployId = j.deploy_id || j.id;
+  // 팀 기본값에 따라 새 사이트에 'Netlify 팀 로그인' 보호(sso_login)가 걸려 참가자에게 로그인 창(401)이 뜸(2026-11 실계정 확인)
+  // → 처음 만들 때만 참가자가 열 수 있게 풂(Vercel의 배포 보호 풀기와 같은 뜻)
+  let opened = false;
+  if (!siteId && site) {
+    try {
+      const info = j.sso_login !== undefined ? j : await fetch(`https://api.netlify.com/api/v1/sites/${site}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json());
+      if (info.sso_login) { const p = await fetch(`https://api.netlify.com/api/v1/sites/${site}`, { method: 'PATCH', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ sso_login: false }) }); opened = p.ok; }
+    } catch { /* 풀지 못하면 배포 화면이 주소 확인을 권함 */ }
+  }
   for (let i = 0; i < 30; i++) {
     await sleep(2000);
     const s = await fetch(`https://api.netlify.com/api/v1/sites/${site}/deploys/${deployId}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json()).catch(() => ({}));
-    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); track('publish', 'netlify'); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site }; }
+    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); track('publish', 'netlify'); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site, opened }; }
     if (s.state === 'error') throw new Error(s.error_message || 'Netlify에서 사이트를 만들지 못했어요. 잠시 뒤 다시 해 주세요.');
   }
   track('publish', 'netlify');
-  return { url: j.ssl_url || j.url, siteId: site };
+  return { url: j.ssl_url || j.url, siteId: site, opened };
 }
 
 // ── Vercel: 토큰 하나로 파일을 올리고 프로젝트 주소(<이름>.vercel.app)에 배포. 다시 배포하면 같은 주소 ──
