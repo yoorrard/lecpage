@@ -259,6 +259,23 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.match((await get(s4.altUrl)).text, /강사가 사이트를 내렸어요/, '두 번째 주소도');
   });
 
+  await t.test('지우면 사이트에 있던 경로도 안내 화면으로 덮음(Pages가 남겨 둔 예전 그림·스크립트가 나오지 않게)', async () => {
+    cf.state.preserve = true;
+    try {
+      const s5 = (await call(base, 'POST', '/api/sites', { json: { title: '남은 파일 시험' } })).body;
+      const files = await buildSite('data-lab');
+      assert.equal((await deploy(base, s5, files)).status, 200);
+      const asset = Object.keys(files).find((f) => /\.(css|js|png|webp|svg)$/.test(f) && !f.includes(' '));
+      assert.ok(asset, '확인할 파일');
+      const before = await get(new URL(asset, s5.url).href);
+      assert.equal(before.status, 200);
+      assert.equal((await call(base, 'DELETE', `/api/sites/${s5.id}`, { key: s5.key })).status, 204);
+      const after = await get(new URL(asset, s5.url).href);
+      assert.notEqual(after.text, before.text, '지운 사이트의 파일이 나오지 않음');
+      assert.match(after.text, /강사가 사이트를 내렸어요/);
+    } finally { cf.state.preserve = false; cf.state.preserved.clear(); }
+  });
+
   await t.test('예약·상태 API·긴 대기(학교망 묻기 줄이기)', async () => {
     const kst = (n) => new Date(Date.now() + 9 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
     const booking = { date: kst(5), start: '10:00', end: '12:00', people: 40, live: true, network: 'restricted' };
@@ -360,8 +377,12 @@ test('VIEW=pages: 보관 기간이 끝나면 배포를 모두 지우고 그 주�
   for (let i = 0; i < 90 && (left.length !== 1 || left[0].id === before[0].id); i++) { await new Promise((res) => setTimeout(res, 500)); left = cf.deploymentsOf(`s-${site.id}`); }
   assert.equal(left.length, 1, '안내 화면 배포 하나만 남음');
   assert.notEqual(left[0].id, before[0].id, '사이트 배포는 지움');
-  assert.deepEqual(Object.keys(left[0].manifest).sort(), ['/404.html', '/index.html']);
+  // 안내 화면 한 장이 첫 화면·404와 사이트에 있던 경로를 모두 덮음(Pages가 남겨 둔 예전 파일이 나오지 않게)
+  const man = left[0].manifest;
+  assert.ok(['/404.html', '/index.html', '/assets/lecpage.js'].every((x) => x in man), Object.keys(man).join());
+  assert.equal(new Set(Object.values(man)).size, 1, '모두 같은 안내 화면');
   assert.match((await get(site.url)).text, /이 사이트는 보관 기간이 끝났어요/);
-  assert.equal((await get(`${site.url}assets/lecpage.js`)).status, 404, '사이트 파일은 열리지 않음');
+  const js = await get(`${site.url}assets/lecpage.js`);
+  assert.match(js.text, /이 사이트는 보관 기간이 끝났어요/, '사이트 파일 대신 안내 화면'); assert.match(js.headers.get('content-type') || '', /text\/html/);
   assert.equal((await get(site.altUrl)).status, 404, '두 번째 주소도 없음');
 });

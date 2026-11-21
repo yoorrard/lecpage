@@ -490,6 +490,13 @@
    "head": "/* lecpage screen — 발표 화면: 교재 쪽(",
    "sha256": "1505c691da0eea31a7ee766b2b95089a6b31e23c2a52a4919a3bfea6f4acdd8c",
    "kept": "2026-11-21"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 106189,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "39636fa620a47201bccf9b34bf480d2a88457841243b6acfb11e2648d9db45a9",
+   "kept": "2026-11-21"
   }
  ]
 }

@@ -180,10 +180,11 @@ export function StepShare({ p, update, go }) {
     }
     return { files, meta };
   }
-  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 빼고 배포하기]를 골랐으면 묻지 않고 참여 기능 없이 */
-  function guard(run, auto = false) {
-    // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음)
-    if (old && !room) { setAskRoom(true); return; }
+  /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 빼고 배포하기]를 골랐으면 묻지 않고 참여 기능 없이. kind 'zip': 사이트 ZIP 다운로드 */
+  function guard(run, auto = false, kind = '') {
+    // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
+    // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
+    if (old && !room && kind !== 'zip') { setAskRoom(true); return; }
     if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
   }
   const feats = featuresOf(p).filter((f) => LIVE_KEYS.includes(f));
@@ -340,7 +341,7 @@ export function StepShare({ p, update, go }) {
         {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${goNow.current || !hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
-      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o))} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
+      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
         <div class="stack">
@@ -540,7 +541,7 @@ function Success({ p, bp, update, onEdit, onRepublish, busy, onZip, instantOn, f
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
           {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{exp?.until ? `${md(exp.until)}까지 열려 있어요. 다시 배포하면 그날부터 ${exp.days}일로 늘어나요.` : `방문이 있는 동안은 계속 열려 있어요. ${days}일 동안 아무도 오지 않으면 지워져요.`}</p> : <OpenState url={url} at={p.deploy.at} />}
           {exp?.short && exp.until && <p class="small venue-day is-full" role="alert">{`연수 날(${md(exp.end - DAY)})에는 지워져 있어요. `}{exp.enough ? <>지금 다시 배포하면 {md(exp.again)}까지 열려요. <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포해 늘리기</button></> : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}</p>}
-          {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">학교망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
+          {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">기관·회사 망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           {fontNote && <p class="small" role="status">{fontNote}</p>}
           <div class="btn-row">

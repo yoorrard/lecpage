@@ -46,6 +46,8 @@ const DEFER_TOTAL = 16 * 1024 * 1024;
 const PAGES_SKIP = new Set(['robots.txt']);
 /** 공개 한 번에 드는 Pages API 어림(토큰·확인·올리기·열쇠 적기·배포·준비 확인·지난 배포 지우기) */
 const PUBLISH_CALLS = 7;
+/** 예전 배포에만 있던 경로를 적어 두는 수(안내 화면 배포가 덮음. Pages 배포 한 번의 파일 수 한도보다 훨씬 작게) */
+const PAST_PATHS = 2000;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
@@ -128,11 +130,11 @@ export class Site extends DurableObject {
   }
   /** VIEW=pages로 만든 사이트인지 */
   isPages(meta = this.load()) { return !!meta && meta.view === 'pages'; }
-  /** Pages 상태: { url, self(이 호스트 주소), deps: [배포 id…], man: { manifest, headers, redirects } | null(가림을 풀 때 다시 배포), hold: [안내 화면·못 지운 배포 id…] } */
+  /** Pages 상태: { url, self(이 호스트 주소), deps: [배포 id…], man: { manifest, headers, redirects } | null(가림을 풀 때 다시 배포), hold: [안내 화면·못 지운 배포 id…], past: [예전 배포에만 있던 경로…](안내 화면이 덮음) } */
   ps(meta = this.load()) {
     let v = null;
     try { v = meta?.pstate ? JSON.parse(meta.pstate) : null; } catch { v = null; }
-    return { url: '', deps: [], man: null, hold: [], ...(v || {}) };
+    return { url: '', deps: [], man: null, hold: [], past: [], ...(v || {}) };
   }
   savePs(meta, st) { const j = JSON.stringify(st); this.sql.exec('UPDATE meta SET pstate = ? WHERE id = 1', j); meta.pstate = j; }
   /** 지우는 중이면 { at, n, expired }(Pages 배포를 다 못 지워 알람으로 다시 하는 중), 아니면 null */
@@ -644,6 +646,8 @@ export class Site extends DurableObject {
     const now = Date.now(); const expires = expiryFrom(now, this.cfg.days); const prev = meta.current;
     const st = this.ps(meta);
     const old = [...st.deps, ...st.hold];
+    // 예전 배포에만 있던 경로도 적어 둠: 지우거나 가릴 때 안내 화면이 그 주소까지 덮게(Pages가 남겨 둔 예전 파일이 나오지 않게, placeholder)
+    st.past = [...new Set([...(st.past || []), ...Object.keys(st.man?.manifest || {})])].filter((x) => !(x in manifest)).slice(-PAST_PATHS);
     st.url = url; st.self = self; st.deps = [deployment.id]; st.hold = []; st.man = { manifest, headers, redirects };
     const kept = this.keptBytes(meta, man.list);
     this.ctx.storage.transactionSync(() => {
@@ -690,15 +694,22 @@ export class Site extends DurableObject {
     for (const d of ids) { try { await this.pc().deleteDeployment(d, true); } catch (e) { if (e?.status !== 404) { left.push(d); console.error('pages delete failed', e?.step, e?.status, e?.code); } } }
     return left;
   }
-  /** 브랜치에 안내 화면 하나만 배포(가림·지움). 배포 id */
+  /**
+   * 브랜치에 안내 화면 하나만 배포(가림·지움). 배포 id.
+   * 사이트에 있던 경로(지금·예전 배포)를 모두 안내 화면으로 채움: Pages는 지금 배포에 없는 경로를 예전에 내보낸 파일로 답해 줌
+   * (데이터센터마다 최대 7일, 'asset preservation'). 경로가 있으면 그 파일(안내 화면)을 내보내므로 지운 사이트의 그림·스크립트가 나오지 않음
+   */
   async placeholder(meta, html) {
-    const { deployment } = await this.pagesCall(() => this.noticeDeploy(branchOf(meta.site), html, 'lecpage notice'));
+    const st = this.ps(meta);
+    const paths = [...Object.keys(st.man?.manifest || {}), ...(st.past || [])];
+    const { deployment } = await this.pagesCall(() => this.noticeDeploy(branchOf(meta.site), html, 'lecpage notice', paths));
     return deployment.id;
   }
-  /** 안내 화면 한 장(index.html = 404.html)만 있는 배포 */
-  noticeDeploy(branch, html, message) {
+  /** 안내 화면 한 장(index.html = 404.html)만 있는 배포. paths: 같은 안내 화면으로 채울 경로('/…') */
+  noticeDeploy(branch, html, message, paths = []) {
     const bytes = new TextEncoder().encode(html); const parts = base64Parts(bytes); const hash = pagesHash(bytes, 'html', parts);
-    return deploySite(this.pc(), { branch, manifest: { '/index.html': hash, '/404.html': hash }, extra: [{ hash, parts, contentType: contentTypeOf('index.html') }], headers: NOTICE_HEADERS, message });
+    const manifest = Object.fromEntries([...paths, '/index.html', '/404.html'].map((x) => [x, hash]));
+    return deploySite(this.pc(), { branch, manifest, extra: [{ hash, parts, contentType: contentTypeOf('index.html') }], headers: NOTICE_HEADERS, message });
   }
   /**
    * Pages 프로젝트의 첫 주소(…pages.dev 뿌리)에 본 배포(production)가 없으면 '보관 기간이 끝났어요' 안내 화면을 올림.

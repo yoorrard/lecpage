@@ -72,6 +72,9 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     jwtExpired: false, // 시험: 다음 assets 요청을 401로
     loseAssets: false, // 시험: check-missing이 모든 열쇠를 없다고 답함(Pages가 지운 것 흉내)
     failDeleteLatest: false, // 시험: 가장 최근 배포는 지우지 못함
+    // 시험: Pages의 'asset preservation' 흉내(지금 배포에 없는 경로를 예전에 내보낸 파일로 답함. 실제는 데이터센터마다 최대 7일).
+    // 켜면 브랜치+경로마다 마지막으로 내보낸 파일 열쇠를 기억함
+    preserve: false, preserved: new Map(),
     badHash: [], // manifest 열쇠가 내용과 안 맞은 경로
     // 설정 스크립트용
     accounts: [{ id: ACCOUNT, name: '운영 계정' }],
@@ -248,11 +251,14 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     if (p.endsWith('.html') && hit(p)) { const bare = p === '/index.html' ? '/' : p.replace(/(index)?\.html$/, ''); return send(res, 308, '', { location: prefix + bare }); }
     if (p.endsWith('/')) file = hit(`${p}index.html`) ? `${p}index.html` : null;
     else file = hit(p) ? p : hit(`${p}.html`) ? `${p}.html` : null;
-    if (!file) { file = hit('/404.html') ? '/404.html' : hit('/index.html') ? '/index.html' : null; status = file === '/404.html' ? 404 : 200; }
+    let key = file ? d.manifest[file] : null;
+    if (file && state.preserve) state.preserved.set(`${branch}${p}`, key);
+    else if (!file && state.preserve && state.preserved.has(`${branch}${p}`)) { key = state.preserved.get(`${branch}${p}`); file = p; }
+    if (!file) { file = hit('/404.html') ? '/404.html' : hit('/index.html') ? '/index.html' : null; status = file === '/404.html' ? 404 : 200; key = file ? d.manifest[file] : null; }
     if (!file) return send(res, 404, 'not found');
-    const a = state.assets.get(d.manifest[file]);
+    const a = state.assets.get(key);
     const hs = applyHeaders(d.headers, p);
-    const out = { 'content-type': a.contentType || 'application/octet-stream', 'cache-control': 'public, max-age=0, must-revalidate', 'access-control-allow-origin': '*', 'x-robots-tag': 'noindex', etag: `"${d.manifest[file]}"` };
+    const out = { 'content-type': a.contentType || 'application/octet-stream', 'cache-control': 'public, max-age=0, must-revalidate', 'access-control-allow-origin': '*', 'x-robots-tag': 'noindex', etag: `"${key}"` };
     for (const [k, v] of hs) out[k] = v;
     if (!hs.has('access-control-allow-origin') && /! Access-Control-Allow-Origin/i.test(d.headers)) delete out['access-control-allow-origin'];
     res.writeHead(status, out);

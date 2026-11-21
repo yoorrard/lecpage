@@ -63,7 +63,7 @@ function Making({ p, job, go }) {
           <Mascot size={72} mood={job.status === 'error' ? 'oops' : 'think'} look={running} />
           <div class="stack" style={{ gap: '2px' }}>
             <h2 class="h-sub" id="making-h" aria-live="polite">{job.step ? `${job.step.label_ko} (${job.step.index}/${job.step.total})` : '마무리하는 중'}</h2>
-            <p class="small muted making-time"><span>걸린 시간 {fmtSec(spent)}</span>{job.step?.received > 0 && running ? <span> · 받은 글 {job.step.received.toLocaleString('ko-KR')}자</span> : ''}{job.way === 'demo' ? '' : <span> · 보통 3~6분 걸려요</span>}</p>
+            <p class="small muted making-time"><span>걸린 시간 {fmtSec(spent)}</span>{job.step?.received > 0 && running ? <span> · 받은 글 {job.step.received.toLocaleString('ko-KR')}자</span> : ''}{job.way === 'demo' ? '' : <span> · 교재 길이에 따라 3~10분 걸려요</span>}</p>
           </div>
         </div>
         <ol class="making-steps" aria-label="만드는 단계">

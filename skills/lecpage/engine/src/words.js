@@ -31,7 +31,8 @@ export function wordsFor(bp) {
     site: `${ev} 사이트`,
     ended: `끝난 ${ev}`,
     endedOn: (day) => `${day}에 끝난 ${josa(ev, '이에요', '예요')}.`,
-    attendLead: `${josa(ev, '을', '를')} 시작할 때와 마칠 때 한 번씩 눌러 주세요.`,
+    // 몇 번·언제 누를지는 교재·강사가 정함(오전·오후 두 번 등). 키트는 규칙을 적지 않음
+    attendLead: '입실·퇴실할 때 눌러 주세요.',
     attendAfter: `끝난 ${josa(ev, '이라', '라')} 출석은 받지 않아요.`,
     pollWord: `오늘 ${josa(ev, '을', '를')} 한 낱말로 말하면?`,
     survey: kind === 'student' ? '오늘 수업은 어땠나요?' : `${ev}에 전반적으로 만족하시나요?`,

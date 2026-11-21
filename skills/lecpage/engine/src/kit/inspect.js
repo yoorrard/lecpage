@@ -95,7 +95,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
   for (const p of paths) {
     const n = size(files[p]); total += n;
     if (/\.svg$/i.test(p)) add('svg-file', 'warn', { file: p }, `SVG 파일(${p})은 사이트에 넣지 않아요.`, '그림은 png·jpg·webp로, 아이콘은 HTML 안에 <svg>로 바로 써 주세요.');
-    if (/\.html$/.test(p) && n > 400 * KB) add('file-size', 'warn', { file: p }, `${p}가 ${Math.round(n / KB)}KB로 커요. 휴대폰·학교망에서 느려요.`, '긴 글은 나누고, 그림은 HTML 안(data:)이 아니라 파일로 두세요.');
+    if (/\.html$/.test(p) && n > 400 * KB) add('file-size', 'warn', { file: p }, `${p}가 ${Math.round(n / KB)}KB로 커요. 휴대폰이나 느린 망에서 느려요.`, '긴 글은 나누고, 그림은 HTML 안(data:)이 아니라 파일로 두세요.');
     else if (/\.(png|jpe?g|webp|gif|avif)$/i.test(p) && n > 1.5 * MB) add('file-size', 'warn', { file: p }, `그림 ${p}가 ${(n / MB).toFixed(1)}MB예요.`, '1600px 폭 안팎의 webp로 줄여 주세요.');
     else if (/\.(css|m?js)$/.test(p) && !ENGINE_ASSETS.test(p) && n > 300 * KB) add('file-size', 'warn', { file: p }, `${p}가 ${Math.round(n / KB)}KB예요.`, '쓰지 않는 규칙·코드를 빼 주세요.');
     if (n > 15 * MB) add('file-too-big', 'error', { file: p }, `${p}가 ${(n / MB).toFixed(1)}MB라 배포할 수 없어요.`, '15MB 아래로 줄이거나 바깥 주소(영상 서비스 등)로 이어 주세요.');
