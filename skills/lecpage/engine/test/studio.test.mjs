@@ -270,9 +270,11 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   assert.match(R.site['index.html'], /data-lp="qa"/);
   assert.equal(typeof R.site['assets/style.css'], 'string');
   // 쪽 그림은 pdftoppm(poppler)이 있을 때만 그려짐(없으면 그 단계만 건너뜀, SKILL.md compatibility)
+  // webp로 바꿀 도구(cwebp·PIL)가 없는 PC에서는 png로 남음(render-slides.mjs)
   if (!spawnSync('pdftoppm', ['-v'], { encoding: 'utf8' }).error) {
-    assert.ok(R.site['material/p-001.webp']?.base64, '쪽 그림은 base64');
-    assert.equal(R.site['material/p-001.webp'].type, 'image/webp');
+    const pg = R.site['material/p-001.webp'] || R.site['material/p-001.png'];
+    assert.ok(pg?.base64, '쪽 그림은 base64');
+    assert.match(pg.type, /^image\/(webp|png)$/);
   }
   assert.equal(R.meta.title, '시험 연수');
   assert.equal(R.meta.venue, '본관');
@@ -303,7 +305,7 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
 
   // Codex로 고치기(교재 없이 지금 사이트만)
   rmSync(LOG, { force: true });
-  const site = { 'index.html': R.site['index.html'], 'assets/style.css': R.site['assets/style.css'], 'material/p-001.webp': R.site['material/p-001.webp'], 'console.html': 'x', '.env': 'x' };
+  const site = { 'index.html': R.site['index.html'], 'assets/style.css': R.site['assets/style.css'], 'material/p-001.webp': R.site['material/p-001.webp'] || R.site['material/p-001.png'] || { base64: 'UklGRg==', type: 'image/webp' }, 'console.html': 'x', '.env': 'x' };
   const e = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'codex', kind: 'edit', request: '맨 아래에 섹션을 하나 더해 주세요', target: 'intro', meta: R.meta, site } });
   assert.equal(e.status, 202, e.text);
   const ev2 = await events(port, token, e.json().jobId);
