@@ -1268,7 +1268,10 @@ async function handleBridge(S, req, res, url) {
 export function pairTarget(S, raw) {
   let u; try { u = new URL(String(raw || S.appUrl || '')); } catch { return null; }
   if (u.username || u.password || u.origin === S.origin || !S.origins?.has(u.origin)) return null;
-  const path = /^\/[\w\-./]*$/.test(u.pathname) && !u.pathname.includes('..') ? u.pathname.replace(/\/*$/, '/') : '/';
+  let path = /^\/[\w\-./]*$/.test(u.pathname) && !u.pathname.includes('..') ? u.pathname.replace(/\/*$/, '/') : '/';
+  // 예비 주소 출처(yoorrard.github.io)는 같은 계정의 다른 GitHub Pages와 함께 쓰므로 토큰은 lecpage 자리로만
+  const mirror = new URL(MIRROR_APP_URL);
+  if (u.origin === mirror.origin) path = `${mirror.pathname.replace(/\/*$/, '')}/`;
   return `${u.origin}${path}#pair=${S.token}&port=${S.port}`;
 }
 function pairRedirect(S, req, res, url) {

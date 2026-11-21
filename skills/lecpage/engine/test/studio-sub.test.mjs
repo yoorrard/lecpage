@@ -303,6 +303,7 @@ test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.
     assert.equal(r.status, 302); assert.equal(r.headers.location, `https://lecpage.com/${frag}`);
     assert.equal(r.headers['access-control-allow-origin'], undefined, 'CORS 없음(다른 사이트가 이동할 곳을 읽지 못함)'); assert.equal(r.headers['cache-control'], 'no-store'); assert.equal(r.headers['referrer-policy'], 'no-referrer');
     assert.equal((await pair('https://yoorrard.github.io/lecpage/', nav)).headers.location, `https://yoorrard.github.io/lecpage/${frag}`);
+    assert.equal((await pair('https://yoorrard.github.io/other-site/', nav)).headers.location, `https://yoorrard.github.io/lecpage/${frag}`, '예비 주소 출처의 다른 사이트로는 토큰을 보내지 않음');
     assert.equal((await pair(undefined)).headers.location, `https://lecpage.com/${frag}`, '앱 주소가 없으면 켤 때 여는 곳');
     for (const bad of ['https://evil.example/', 'http://yoorrard.github.io/lecpage/', `http://127.0.0.1:${st.port}/`, 'https://lecpage.com.evil.example/', 'https://u:p@lecpage.com/', 'javascript:alert(1)']) assert.equal((await pair(bad, nav)).status, 400, bad);
     assert.equal((await pair('https://lecpage.com/', { 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate' })).status, 403, '틀 안에서는 안 됨');
