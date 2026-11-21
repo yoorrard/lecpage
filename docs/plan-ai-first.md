@@ -122,7 +122,7 @@ previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미
 5. **완성**: 미리보기·목록·연수 정보 확인 화면 열림.
 
 안정성 장치(조사 근거: `docs/research/ai-first-2026-11.md` §1)
-- **교재 건네기**: PDF는 원본을 그대로(세 회사 모두 받음: Claude base64 요청 128MB·600쪽, OpenAI Responses `input_file` 50MB, Gemini 50MB·1,000쪽). PPTX·DOCX는 Gemini 4에 원본 그대로(쪽 그림으로 읽음), 다른 회사엔 앱이 만든 쪽 그림(긴 변 1,600px webp)과 보조 글자. HWP/HWPX·그 밖은 쪽 그림을 못 그리면 보조 글자 + 교재 속 그림, 그리고 "PDF로 저장해 넣으면 더 정확해요" 한 줄.
+- **교재 건네기**: PDF는 원본을 그대로(세 회사 모두 받음: Claude base64 요청 128MB·600쪽, OpenAI Responses `input_file` 50MB, Gemini 50MB·1,000쪽). PPTX·DOCX는 Gemini 4에 원본 그대로(쪽 그림으로 읽음), 다른 회사엔 앱이 만든 쪽 그림(긴 변 1,600px webp)과 보조 글자. HWP/HWPX도 앱이 쪽 그림을 그리고(@rhwp/core), 그 밖이나 쪽 그림을 못 그리면 보조 글자 + 교재 속 그림, 그리고 "PDF로 저장해 넣으면 더 정확해요" 한 줄.
 - **회사별 받는 법**
   - OpenAI: **Responses API `background:true` + `stream:true` + `store:true`**. 끊기면 `starting_after=<sequence_number>`로 이어 받고, 다 받으면 DELETE로 지움(처리방침에 적음). Chat Completions에서 옮김.
   - Gemini: `streamGenerateContent`(SSE, 한 답 65,536 토큰) 기본. 무료 키 `store` 원칙 그대로(백그라운드는 `store:true`가 필요해 쓰지 않음).

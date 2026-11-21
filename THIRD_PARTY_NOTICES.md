@@ -14,6 +14,7 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [pptx-renderer](https://github.com/aiden0z/pptx-renderer) (aiden0z) | 1.4.0 | Apache-2.0 | 웹앱: PPTX 교재를 브라우저 안에서 쪽 그림으로(PPTX를 넣을 때만 받음) |
 | [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) | 0.4.1 | Apache-2.0 | 웹앱: DOCX 교재를 브라우저 안에서 쪽 그림으로(DOCX를 넣을 때만 받음) |
 | [snapDOM](https://github.com/zumerlab/snapdom) (zumerlab) | 3.8.2 | MIT | 웹앱: 그린 슬라이드·쪽을 그림 파일로 |
+| [rhwp (@rhwp/core)](https://github.com/edwardkim/rhwp) (Edward Kim) | 0.9.1 | MIT | 웹앱: 한글(HWP·HWPX) 교재를 브라우저 안에서 쪽 그림으로(한글 파일을 넣을 때만 받음). 번들에는 JS 연결 코드만 넣고, WebAssembly 본체 `rhwp_bg.wasm`(27.9MB, 배포 한 파일 한도 초과)은 jsDelivr의 같은 판(`cdn.jsdelivr.net/npm/@rhwp/core@0.9.1/rhwp_bg.wasm`)에서 고치지 않은 파일을 받아 빌드 때 잰 SHA-256과 같을 때만 씀. 본체에 든 Rust 크레이트·글꼴 자료(MIT·Apache-2.0·BSD·Zlib·OFL 등 허용 라이선스)의 고지는 패키지의 `notices/THIRD_PARTY_LICENSES.md` |
 | [JSZip](https://github.com/Stuk/jszip) (pako·lie·immediate 포함) | 3.10.2 | MIT(MIT 또는 GPLv3 가운데 MIT로 씀) | 위 두 도구의 zip 읽기 |
 | [Apache ECharts](https://github.com/apache/echarts)·[ZRender](https://github.com/ecomfe/zrender)·[tslib](https://github.com/microsoft/tslib) | 6.1.0·6.1.0·2.3.0 | Apache-2.0·BSD-3-Clause·0BSD | pptx-renderer가 PPTX 속 차트를 그릴 때 |
 | [Wanted Sans](https://github.com/wanteddev/wanted-sans) (The Wanted Sans Project Authors) | 1.0.3 | SIL OFL 1.1 | 웹앱 글꼴. npm 패키지의 분할 woff2를 고치지 않고 그대로 실음(예약 글꼴 이름 없음) |

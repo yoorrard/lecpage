@@ -47,8 +47,8 @@ export async function readBytes(name, bytes) {
 // PDF가 아닌 교재의 쪽 그림: 커넥트(이 PC의 PowerPoint 등으로 PDF) → 브라우저 안 그리기 → 없음(글자만)
 export { convertWithConnect, CONVERTIBLE } from './convert.js';
 /** 브라우저 안에서 그릴 수 있는 형식(render-doc.js RENDERABLE과 같게) */
-export const canRenderDoc = (name) => /\.(pptx|ppsx|potx|pptm|docx|docm)$/i.test(String(name || ''));
-/** PPTX·DOCX를 브라우저 안에서 쪽 그림으로(그리기 도구는 그때 받음) */
+export const canRenderDoc = (name) => /\.(pptx|ppsx|potx|pptm|docx|docm|hwp|hwpx)$/i.test(String(name || ''));
+/** PPTX·DOCX·한글을 브라우저 안에서 쪽 그림으로(그리기 도구는 그때 받음) */
 export async function renderDoc(name, bytes, onProgress, signal) {
   const { renderDocPages } = await import('./render-doc.js');
   return renderDocPages(name, bytes, { onProgress, signal });

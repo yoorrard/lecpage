@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const read = (p) => readFileSync(here(p), 'utf8');
@@ -207,9 +208,31 @@ function homeOnlyPreload() {
 }
 
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
+// 한글(HWP·HWPX) 그리기 도구 @rhwp/core: 본체 rhwp_bg.wasm(27.9MB)은 배포 한 파일 한도(25MiB)를 넘어 싣지 않고
+// 앱이 jsDelivr의 같은 판에서 받음(src/lib/render-doc.js). 받은 파일을 믿을 기준으로 설치한 판의 SHA-256을 빌드 때 넣음
+const RHWP_WASM = 'node_modules/@rhwp/core/rhwp_bg.wasm';
+const rhwpSha256 = () => createHash('sha256').update(readFileSync(here(RHWP_WASM))).digest('hex');
+// 글루 코드(rhwp.js)의 기본 본체 주소 new URL('rhwp_bg.wasm', import.meta.url)를 지움: 두면 Vite가 27.9MB 파일을 배포본에 넣어 배포가 막힘
+function rhwpNoWasmAsset() {
+  const LINE = "new URL('rhwp_bg.wasm', import.meta.url)";
+  return {
+    name: 'lecpage-rhwp-no-wasm',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/node_modules[\\/]@rhwp[\\/]core[\\/]rhwp\.js$/.test(id.split('?')[0])) return null;
+      if (!code.includes(LINE)) this.error('rhwp.js에서 본체 주소 줄을 찾지 못했습니다(@rhwp/core 판을 올렸으면 vite.config.js를 확인하세요).');
+      return { code: code.replace(LINE, "(() => { throw new Error('rhwp: 본체는 render-doc.js가 받아 넘김'); })()"), map: null };
+    },
+    generateBundle(_, bundle) {
+      for (const f of Object.keys(bundle)) if (/\.wasm$/.test(f) && bundle[f].source?.length > 25 * 1024 * 1024) this.error(`${f}: 배포 한 파일 한도(25MiB)를 넘습니다.`);
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload()],
+  define: { __RHWP_WASM_SHA256__: JSON.stringify(rhwpSha256()) },
+  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload(), rhwpNoWasmAsset()],
   // @hosting: 바로 배포 서버의 거절 규칙(hosting/src/sitecheck.js)을 앱이 그대로 불러 배포 전에 같은 코드로 미리 봄(lib/host-check.js)
   resolve: { alias: { '@engine': here('../skills/lecpage/engine'), '@hosting': here('../hosting/src') } },
   server: { fs: { allow: ['..'] } },

@@ -61,7 +61,7 @@ AI가 만드는 것은 **사이트 폴더**(`site/index.html`, 그 밖의 쪽, `
 
 - 강사만 정하는 값(참여 기능 연결 `live`의 주소·키·연수 코드, 사이트 주소, 공개 범위)은 AI 결과에서 받지 않습니다. 앱은 프로젝트에, Skill은 `work/lecpage.teacher.json`에 따로 두고 조립 때 `prev`로 넘깁니다.
 - 교재는 원본 그대로 + 쪽 그림(`site/material/p-NNN.webp`)으로 건넵니다. 코드가 뽑은 보조 글자는 원본을 건넬 수 없는 교재(PPTX·HWP·HWPX·DOCX의 발표자 노트·그림이 없는 쪽, 키 길에서 원본을 못 보낸 교재)에만 씁니다.
-- PDF가 아닌 교재의 쪽 그림은 이 순서로 만듭니다: lecpage 커넥트가 켜져 있으면 그 PC의 PowerPoint·한글·Keynote·Word·LibreOffice로 PDF를 만들어(`scripts/studio-convert.mjs`, `/bridge/convert`) 그 PDF를 원본처럼 건넴 → 없으면 브라우저 안에서 PPTX·DOCX를 그림(`app/src/lib/render-doc.js`: pptx-renderer·docx-preview·snapDOM) → 그것도 안 되면(HWP·HWPX 등) 글자만 보내고 교재 줄에 'PDF로 저장하는 법'을 보여 줌. 그림으로 된 PDF(스캔본)는 경고 없이 원본 그대로 건넵니다(AI가 쪽마다 그림으로 읽음).
+- PDF가 아닌 교재의 쪽 그림은 이 순서로 만듭니다: lecpage 커넥트가 켜져 있으면 그 PC의 PowerPoint·한글·Keynote·Word·LibreOffice로 PDF를 만들어(`scripts/studio-convert.mjs`, `/bridge/convert`) 그 PDF를 원본처럼 건넴 → 없으면 브라우저 안에서 PPTX·DOCX·HWP·HWPX를 그림(`app/src/lib/render-doc.js`: pptx-renderer·docx-preview·snapDOM, 한글은 @rhwp/core. 한글 그리기 도구 본체(WebAssembly 27.9MB)는 배포 한 파일 한도를 넘어 jsDelivr의 고정 판에서 받아 빌드 때 잰 SHA-256과 같을 때만 쓰고, 그래서 앱 CSP에 `'wasm-unsafe-eval'`이 있음) → 그것도 안 되면(예전 형식, 그리기 도구를 못 받은 한글 등) 글자만 보내고 교재 줄에 'PDF로 저장하는 법'을 보여 줌. 그림으로 된 PDF(스캔본)는 경고 없이 원본 그대로 건넵니다(AI가 쪽마다 그림으로 읽음).
 
 ## 3. 강의 기능 키트 (약속 B)
 
