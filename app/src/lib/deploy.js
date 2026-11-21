@@ -12,7 +12,7 @@ export const VERCEL_TOKEN_URL = 'https://vercel.com/account/tokens';
 export const NETLIFY_TOKEN_URL = 'https://app.netlify.com/user/applications#personal-access-tokens';
 
 /** 인터넷에 닿지 못한 오류(fetch가 던지는 TypeError)를 쉬운 말로 */
-const OFFLINE = '인터넷에 닿지 못했어요. 연결을 확인하고 다시 해 주세요. 학교망이 막았다면 휴대폰 핫스팟으로 바꿔 보세요.';
+const OFFLINE = '인터넷에 닿지 못했어요. 연결을 확인하고 다시 해 주세요. 기관·회사 망이 막았다면 휴대폰 핫스팟으로 바꿔 보세요.';
 // 학교·기관 망의 차단 화면: API 주소인데 웹 페이지(HTML)가 옴 → 영어·빈 값 대신 같은 안내(인터넷·핫스팟)
 const BLOCKED = '이 망에서 배포할 곳에 닿지 않아요. 학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.';
 const blockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
@@ -520,7 +520,7 @@ export const shortName = (v) => String(v || '').toLowerCase().replace(/[\s-]+/g,
 async function isgd(target, alias) {
   let r;
   try { r = await fetch(`${ISGD}?format=json&url=${encodeURIComponent(target)}${alias ? `&shorturl=${encodeURIComponent(alias)}` : ''}`, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined }); }
-  catch { const e = new Error('is.gd에 닿지 못했어요. 학교망이 막았을 수 있어요. 다른 서비스로 만들어 붙여 넣어 주세요.'); e.code = 'network'; throw e; }
+  catch { const e = new Error('is.gd에 닿지 못했어요. 기관·회사 망이 막았을 수 있어요. 다른 서비스로 만들어 붙여 넣어 주세요.'); e.code = 'network'; throw e; }
   const j = await r.json().catch(() => ({}));
   if (/^https:\/\/is\.gd\/\w{3,40}$/.test(String(j.shorturl || ''))) return j.shorturl;
   const e = new Error({ 1: 'is.gd가 이 주소를 받지 않아요. 다른 서비스로 만들어 붙여 넣어 주세요.', 3: '지금은 요청이 많아요. 잠시 뒤 다시 해 주세요.' }[j.errorcode] || 'is.gd가 잠시 쉬고 있어요. 잠시 뒤 다시 하거나 다른 서비스로 만들어 주세요.');

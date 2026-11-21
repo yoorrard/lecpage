@@ -173,7 +173,7 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
 
 /**
  * 배포하기: 배포할 곳을 추천해 고르고, 버튼 하나로 배포합니다.
- * buildFiles(opts) → { files }, guard(run): 참여 기능 연결 전이면 먼저 물어봄, done(url, patch): 주소 저장.
+ * buildFiles(opts) → { files }, guard(run, auto, kind): 참여 기능 연결 전이면 먼저 물어봄(kind 'zip': 사이트 ZIP 다운로드), done(url, patch): 주소 저장.
  * again: { current } 지난번에 배포한 곳에 바로 다시 배포하는 함수를 여기에 걸어 둠(성공 카드의 [다시 배포하기]가 부름). 못 하면 null
  */
 export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom }) {
@@ -212,7 +212,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const full = instantOff?.t || (noScripts ? '이 바로 배포 서버는 사이트가 직접 쓴 스크립트(움직임·탭 같은 동작)를 받지 않아요. 내 계정에 배포하면 그대로 올라가요.' : instant && !gate.ok ? gate.note : '');
   // 넘길 때는 서버가 준 순서(next)로. 이미 연결해 둔 곳이 있으면 그곳이 먼저(같은 파일을 버튼 하나로)
   const nextHosts = live ? [] : (instantOff?.next?.length ? instantOff.next : instant?.capacity?.next || []).map((h) => NEXT_ID[h]).filter(Boolean);
-  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: (instantOff || noScripts) && p.deploy?.target === 'lecpage' ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, connected.join(), live?.plan, live?.view, !!instantOff, noScripts]);
+  // previous: 지난번에 배포한 곳(사이트를 삭제했으면 없음: '다시 배포하면 주소가 그대로'가 맞지 않음)
+  const rec = useMemo(() => E.decideHost({ skill: 'click', commercial: p.info?.commercial, network: p.info?.network, previous: !p.deploy?.lastUrl || ((instantOff || noScripts) && p.deploy?.target === 'lecpage') ? '' : p.deploy?.target, connected, instant: live ? (live.view === 'pages' ? 'pages' : live.plan === 'paid' ? 'stable' : 'limited') : false, size: p.info?.size }), [p.info?.commercial, p.info?.network, p.info?.size, p.deploy?.target, !!p.deploy?.lastUrl, connected.join(), live?.plan, live?.view, !!instantOff, noScripts]);
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 배포가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 배포한 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
@@ -226,6 +227,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const target = online ? chosen : 'zip'; // 끊긴 동안은 사이트 파일 받기만 됨
   useEffect(() => { if (!infoWait) onTarget?.(target); }, [target, infoWait]);
   const skipped = !picked && order[0] !== best && netBad[order[0]] ? order[0] : ''; // 막혀서 건너뛴 첫째 곳
+  // 바로 배포를 못 쓰는 까닭(full)은 그 대신 저절로 고른 곳(내 계정에 배포)에서만: 직접 고른 곳·ZIP·지난번에 배포한 곳에 다시 배포할 때는 상관없음
+  const fullHere = !picked && target !== 'zip' && !(p.deploy?.lastUrl && target === p.deploy?.target);
   const moved = skipped ? `이 망에서 ${LABEL[skipped]}에 닿지 않아 ${LABEL[best]}로 바꿨어요. 휴대폰 핫스팟으로 바꾸면 ${LABEL[skipped]}에도 배포할 수 있어요.` : '';
   // 고른 곳의 API가 이 망에서 막혔는지(요청 한 번). 막혔으면 추천이 다음 곳으로 비켜 감. 핫스팟으로 바꾸면 3분 뒤 다시 확인
   useEffect(() => {
@@ -296,7 +299,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
         </dl>}
       </div>}
-      {full && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
+      {full && fullHere && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
@@ -314,7 +317,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
 function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   const [refused, setRefused] = useState(null); // 바로 배포가 거절한 까닭 { t: 서버 문구 그대로, pre: 올리기 전에 미리 본 것 }
-  const [ask, setAsk] = useState(false); // [사이트 내리기] 확인 창
+  const [ask, setAsk] = useState(false); // [사이트 삭제] 확인 창
   const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
@@ -367,7 +370,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   async function remove() {
     setAsk(false);
     try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 삭제했어요.'); }
-    catch (e) { toast('내리지 못했어요. ' + e.message); }
+    catch (e) { toast('삭제하지 못했어요. ' + e.message); }
   }
   const askRemove = () => { setRec(records || null); setAsk(true); instantRecords(prev).then((r) => r && setRec(r)); };
   const recLine = recordsLine(rec);
@@ -464,7 +467,7 @@ function Netlify({ p, busy, start, done, bind, refresh }) {
   const run = () => start('netlify', async (files, onProgress) => {
     const out = await deployNetlify({ token: t.token, siteId: prev?.siteId, name: prev ? '' : name, zip: E.zipFiles(files), onProgress });
     done(out.url, { netlify: { siteId: out.siteId, url: out.url, name } });
-    toast(prev ? '같은 주소에 다시 배포했어요.' : '배포했어요. 주소가 열리지 않으면 Netlify에서 Make public을 눌러 주세요.');
+    toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소가 열리지 않으면 Netlify에서 Make public을 눌러 주세요.');
   }, (e) => { if (!/must be unique|already/i.test(e.message)) return tokenGone(e, t, refresh); toast('이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.'); return true; });
   bind(t.saved && nameOk ? run : null);
   return (
@@ -487,7 +490,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
   const cf = kind === 'cloudflare';
   const get = { t: '사이트 파일 다운로드', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); })}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); }, false, 'zip')}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
   const save = { t: prev ? '배포한 주소 확인하기' : '배포한 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '배포한 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
@@ -495,7 +498,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
         <button class="btn btn-sm btn-primary" disabled={!ok} onClick={() => { done(url.trim().replace(/\/?$/, '/'), { [kind]: { url: url.trim() } }); toast('주소를 저장했어요.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>주소 저장</button></div>
     </> };
   const steps = !cf ? [get,
-    { t: '폴더째 옮기기', body: <p>쓸 곳에 폴더째 옮겨요. <span class="links"><a href={`${DOCS}/own-server-nginx-caddy.md`} target="_blank" rel="noopener">학교·기관 서버</a><a href={`${DOCS}/nas-synology.md`} target="_blank" rel="noopener">NAS</a><a href={`${DOCS}/local-lan-classroom.md`} target="_blank" rel="noopener">인터넷 없는 교실</a><a href={`${DOCS}/zip-usb-offline.md`} target="_blank" rel="noopener">USB</a></span></p> },
+    { t: '폴더째 옮기기', body: <p>쓸 곳에 폴더째 옮겨요. <span class="links"><a href={`${DOCS}/own-server-nginx-caddy.md`} target="_blank" rel="noopener">학교·기관 서버</a><a href={`${DOCS}/nas-synology.md`} target="_blank" rel="noopener">NAS</a><a href={`${DOCS}/local-lan-classroom.md`} target="_blank" rel="noopener">인터넷 없는 강의실</a><a href={`${DOCS}/zip-usb-offline.md`} target="_blank" rel="noopener">USB</a></span></p> },
     save]
     : prev ? [get,
       { t: '새 ZIP 놓기', body: <p><a class="btn btn-sm" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noopener" onClick={() => setAt(2)}>Cloudflare 열기</a> 그 프로젝트에서 <b>Create a new deployment</b>를 누르고 새 ZIP을 놓아요. 주소는 그대로예요.</p> },

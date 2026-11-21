@@ -83,7 +83,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
       <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
       <div class="ai-nokey">
-        <div><b>설치 없이 하려면: 쓰던 AI로</b> <span class="small muted">복사·붙여넣기로 해요. 학교 PC처럼 설치가 안 될 때, 무료 요금제도 돼요.</span></div>
+        <div><b>설치 없이 하려면: 쓰던 AI로</b> <span class="small muted">복사·붙여넣기로 해요. 기관·회사 PC처럼 설치가 안 될 때, 무료 요금제도 돼요.</span></div>
         <div class="btn-row">{AI_CARDS.map((c) => <button type="button" class="btn btn-sm" disabled={!ready} aria-expanded={String(chat === c.id)} aria-controls={chat === c.id ? 'chat-way' : undefined} aria-label={`쓰던 ${c.app}로 만들기(키 없이)`} onClick={() => openChat(c.id)}>쓰던 {c.app}로</button>)}</div>
       </div>
       {card && <ChatWay key={card.id} card={card} p={p} go={go} reload={reload} idle={idle} onClose={() => setChat('')} />}
@@ -108,7 +108,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
         <CodexRow p={p} ready={ready} idle={idle} go={go} />
         <div class="ai-alts"><AgentWay /></div>
       </details>
-      <p class="small muted">교재는 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
+      <p class="small muted">교재는 고른 AI 회사로 가요. 참가자 이름 같은 개인정보는 지우고 넣어 주세요.</p>
       <Dialog open={!!keyFor} onClose={() => { setKeyFor(''); afterKey.current = false; }} label={`${AI_CARDS.find((c) => c.id === keyFor)?.name || ''} API 키 연결`} wide>
         {keyFor && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{AI_CARDS.find((c) => c.id === keyFor)?.name} API 키 연결 <span class="small muted">처음 한 번만</span></h2>
           <AiConnect initial={keyFor} only onConnected={connected} onChat={(prov) => { setKeyFor(''); afterKey.current = false; openChat(prov || keyFor); }} /></div>}

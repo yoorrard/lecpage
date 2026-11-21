@@ -12,10 +12,20 @@
   var KEY = DATA.key || 'lp';
   var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // 저장 공간을 못 쓰는 곳(앱 미리보기의 샌드박스·막힌 브라우저·가득 참)에서는 화면이 열린 동안 메모리에 둠(연습 출석 시각 등이 사라지지 않게)
+  var mem = {};
+  var memGet = function (key, d) { return Object.prototype.hasOwnProperty.call(mem, key) ? JSON.parse(mem[key]) : d; };
   var store = {
-    get: function (k, d) { try { var v = localStorage.getItem(KEY + ':' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set: function (k, v) { try { localStorage.setItem(KEY + ':' + k, JSON.stringify(v)); } catch (e) { } },
-    del: function (k) { try { localStorage.removeItem(KEY + ':' + k); } catch (e) { } }
+    get: function (k, d) { var key = KEY + ':' + k; try { var v = localStorage.getItem(key); return v === null ? memGet(key, d) : JSON.parse(v); } catch (e) { return memGet(key, d); } },
+    set: function (k, v) { var key = KEY + ':' + k, s = JSON.stringify(v); try { localStorage.setItem(key, s); delete mem[key]; } catch (e) { mem[key] = s; } },
+    del: function (k) { var key = KEY + ':' + k; delete mem[key]; try { localStorage.removeItem(key); } catch (e) { } },
+    /** 이 연수의 열쇠 이름들(앞의 KEY: 를 뗀 것). 저장 공간과 메모리 둘 다 */
+    keys: function () {
+      var pre = KEY + ':', out = [], k;
+      try { for (var i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (k && k.indexOf(pre) === 0) out.push(k.slice(pre.length)); } } catch (e) { }
+      for (k in mem) if (k.indexOf(pre) === 0 && out.indexOf(k.slice(pre.length)) < 0) out.push(k.slice(pre.length));
+      return out;
+    }
   };
   var toastTimer;
   function toast(msg) {
@@ -1454,9 +1464,7 @@
     // 서버의 참가자 명단도 지워졌으니 이 기기의 참여 정보도 비워, 다음에 참여할 때 별명(입실이면 이름·소속)을 새로 받음
     function onReset() {
       [qs, posts, answers, quick, voted, lastProg].forEach(function (b) { for (var k in b) delete b[k]; });
-      var pre = KEY + ':', gone = [];
-      try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0 && /^(ans|like|att|survey):|^(voted|signal)$/.test(k.slice(pre.length))) gone.push(k.slice(pre.length)); } } catch (e) { }
-      gone.forEach(store.del);
+      store.keys().filter(function (k) { return /^(ans|like|att|survey):|^(voted|signal)$/.test(k); }).forEach(store.del);
       me = null; store.del('me'); if (conn.leave) conn.leave();
       mySignal = null; paintSignal();
       paintAttend();

@@ -97,7 +97,7 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
             {!okSecond && <p class="small err">https://로 시작하는 주소를 넣어 주세요.</p>}
           </div>}
         <ul class="small rescue-list">
-          <li>참가자에게 Wi-Fi를 끄고 휴대폰 데이터로 QR을 찍게 하면 학교 Wi-Fi 필터와 상관없이 열려요. 강사 PC는 휴대폰 핫스팟에 이으세요.</li>
+          <li>참가자에게 Wi-Fi를 끄고 휴대폰 데이터로 QR을 찍게 하면 기관·회사 Wi-Fi 필터와 상관없이 열려요. 강사 PC는 휴대폰 핫스팟에 이으세요.</li>
           <li>인터넷이 아예 안 되면 사이트 ZIP을 USB에 담아 강사 PC에서 index.html을 열어요. 교재·실습·프롬프트 복사는 그대로 돼요.</li>
           {live && <li>참여 기능만 안 되면 질문은 손을 들어 받아요. 참가자 화면에는 차분한 한 줄이 뜨고, 교재·실습은 그대로예요.</li>}
         </ul>

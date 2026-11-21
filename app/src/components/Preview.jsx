@@ -101,7 +101,7 @@ addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data|
 var tm=0;addEventListener('scroll',function(){clearTimeout(tm);tm=setTimeout(function(){send({type:'lp-y',y:scrollY});},120);},{passive:true});})();<\/script>`;
 
 /**
- * p: 연수(site·meta), ver: 그림이 바뀌면 올림(다시 읽기), editing·setEditing: 글 고치기,
+ * p: 연수(site·meta), ver: 그림이 바뀌거나 실행 취소·복원하면 올림(미리보기 틀을 새로 읽음: 글자가 같아도 다시 그림), editing·setEditing: 글 고치기,
  * onText(n, html)·onImage(n): 미리보기에서 고친 글·누른 그림, quiet: 미리보기를 다시 그리지 않을 index.html(방금 미리보기에서 고친 글), goto: { key, n } 섹션으로
  */
 export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, quiet, goto }) {
@@ -114,7 +114,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
   const [focusable, setFocusable] = useState(false);
   const frame = useRef(); const canvas = useRef(); const y = useRef(0); const t = useRef();
   const files = useRef({}); const hash = useRef(''); const [note, setNote] = useState(''); const [extra, setExtra] = useState([]);
-  const ready = useRef(false); const [reload, setReload] = useState(0);
+  const ready = useRef(false); const [reload, setReload] = useState(0); const drawnVer = useRef(ver);
   const box = useBox(canvas);
   const setDevice = (v) => { setDeviceRaw(v); store.set('device2', v); };
   const post = (msg) => { try { frame.current?.contentWindow?.postMessage(msg, '*'); } catch { } };
@@ -133,6 +133,8 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
         setExtra((x) => (x.join() === more.join() ? x : more));
         const pg = r.files[page] ? page : 'index.html';
         setHtml(previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + NAV_JS })); setErr('');
+        // 실행 취소·복원: 미리보기에서 고친 글은 틀 안에만 있고 그린 글(html)은 고치기 전 그대로라, 되돌린 글이 같으면 srcdoc가 안 바뀜 → 틀을 새로 읽음
+        if (drawnVer.current !== ver) { drawnVer.current = ver; setReload((k) => k + 1); }
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
     }, 250);
     return () => clearTimeout(t.current);

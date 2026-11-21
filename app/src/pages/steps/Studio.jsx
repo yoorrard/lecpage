@@ -23,7 +23,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
   const [tab, setTab] = useState(() => { let want = ''; try { want = sessionStorage.getItem('lecpage:studio-tab') || ''; sessionStorage.removeItem('lecpage:studio-tab'); } catch { } return want === 'check' ? 'check' : p.metaChecked ? 'list' : 'info'; });
   const [editing, setEditing] = useState(false);
   const [img, setImg] = useState(null); // 바꿀 그림 번호
-  const [ver, setVer] = useState(0); // 그림 파일이 바뀌면 미리보기를 다시 읽음
+  const [ver, setVer] = useState(0); // 그림 파일이 바뀌거나 실행 취소·복원하면 미리보기를 다시 읽음
   const [goto, setGoto] = useState(null);
   const [vers, setVers] = useState(false);
   const [nudge, setNudge] = useState(false); // 연수 정보를 확인한 뒤 [배포하기]를 잠깐 강조
@@ -46,7 +46,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
     stack.push({ label, site: cur.site, meta: cur.meta }); if (stack.length > 30) stack.shift(); force((x) => x + 1);
     update(next);
   }, [p.id]);
-  const undo = () => { const s = stack.pop(); if (!s) { toast('되돌릴 것이 없어요.'); return; } quiet.current = ''; update({ site: s.site, meta: s.meta }); force((x) => x + 1); toast(`되돌렸어요: ${s.label}`); };
+  const undo = () => { const s = stack.pop(); if (!s) { toast('되돌릴 것이 없어요.'); return; } quiet.current = ''; update({ site: s.site, meta: s.meta }); setVer((v) => v + 1); force((x) => x + 1); toast(`되돌렸어요: ${s.label}`); };
   const undoRef = useRef(undo); undoRef.current = undo;
   useEffect(() => {
     const k = (e) => {
@@ -125,7 +125,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
         <button type="button" class="btn btn-primary" onClick={() => go(3)}>배포하기 →</button></div>}
       <ImageDialog n={img} p={p} onClose={() => setImg(null)} onPick={(src, alt) => { setHtml('그림 바꾸기', (h) => setImage(h, img, src, alt)); setImg(null); setVer((v) => v + 1); toast('그림을 바꿨어요.'); }} />
       <Dialog open={vers} onClose={() => setVers(false)} label="버전 기록">
-        {vers && <Versions p={p} onPick={(v) => { quiet.current = ''; update((cur) => ({ site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta), versions: pushVersion(cur, '복원 전') })); setVers(false); toast(`복원했어요: ${v.label}`); }} onRemake={() => { setVers(false); go(1); }} />}
+        {vers && <Versions p={p} onPick={(v) => { quiet.current = ''; setVer((n) => n + 1); update((cur) => ({ site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta), versions: pushVersion(cur, '복원 전') })); setVers(false); toast(`복원했어요: ${v.label}`); }} onRemake={() => { setVers(false); go(1); }} />}
       </Dialog>
     </>
   );

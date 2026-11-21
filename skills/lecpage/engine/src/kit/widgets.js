@@ -38,7 +38,7 @@ export function boardBox({ cats = DEFAULT_BOARD_CATS, files = false, maxFiles = 
   <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
   ${files ? `<label class="lp-file"><span>사진·PDF·음악·영상 (${maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
   <label class="lp-inline"><span>이용 조건</span><select name="license"><option value="own">내가 만든 자료</option><option value="cc">CC 라이선스</option><option value="kogl">공공누리</option><option value="permitted">이용 허락 받음</option></select></label>
-  <p class="lp-small">학생 얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
+  <p class="lp-small">얼굴·이름 등 개인정보가 드러나는 자료는 올리지 말아 주세요.</p>
   <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-board-cancel>닫기</button><button class="lp-btn lp-btn-primary" type="submit">올리기</button></div>
 </form>
 <p class="lp-sr" role="status" data-list-news></p>
