@@ -36,3 +36,16 @@
 
 ## 아직 사람이 확인할 것
 실제 ChatGPT 계정 로그인(SIWC), 실제 PC의 Claude 브라우저 로그인, 실제 윈도우·맥에서 lecpage 커넥트 실행·경고 창·자동 시작·스스로 새 판 바꾸기(백신이 파일을 잡을 때)·매크로 끈 채 Office·한글 교재 변환(한글 COM·맥 AppleScript 쪽 매크로 설정은 아직 못 끔), 실제 Vercel·Netlify 계정으로 참여 기능(구글 시트·Supabase) 연결 후 배포한 사이트에서 질문·투표 전송, 실제 윈도우·맥 글꼴로 본 한글(HWP) 쪽 그림, Safari·Firefox에서 PPTX·한글 쪽 그림, 휴대폰 실기기에서 랜딩·사이트 스크롤 연출. 요청문 변경(디자인 수준)은 교재 둘에서 한 번씩만 실측함.
+
+## 다음 세션에 넘긴 일(2026-11-21, 끝나면 이 절을 지우거나 줄일 것)
+런타임(`skills/lecpage/engine/runtime/`)을 바꾸면 먼저 `node hosting/scripts/gen-runtime.mjs --keep`.
+1. 참가자 사이트: 참여 기능 서버에 닿지 않을 때 "참여 기능 서버에 지금 닿지 않아요…"가 위젯마다(최대 4번, 모두 role=status) 붙음 → 한 곳에만(`runtime/lecpage.js` setDown).
+2. 강사 화면 로그인: 사이트 스크립트가 있으면(거의 늘) 꺼진 '이 기기에서 기억하기'와 "직접 쓴 스크립트가 있어…" 문구가 나옴 → 그때는 체크박스를 숨기고 "보안을 위해 관리자 키는 이 탭에만 둬요. 탭을 닫으면 다시 넣어 주세요."
+3. 참여 기능 없이 배포한 사이트의 안내 한 줄(`data-live-off`)이 AI가 만든 카드 안에서 회색 상자로 한 번 더 감싸임 → 바탕·안쪽 여백 없이(`runtime/kit.css`).
+4. 커넥트 짝 덮어쓰기: 아무 사이트나 `lecpage.com/#pair=<가짜>`로 짝을 덮어 연결을 끊을 수 있음(새는 것은 없음) → 새 짝은 `/bridge/status`가 맞을 때만 기존 짝을 바꿈(`app/src/lib/pair.js` capturePairing). [모든 데이터 삭제] 때 커넥트 토큰도 새로(`--new-token`과 같게) 바꾸는 것 검토.
+5. 앱 CSP: `script-src 'unsafe-inline'`을 빌드본 인라인 스크립트 해시로, jsDelivr는 쓰는 패키지 경로로 좁히기(`app/index.html`·`public/_headers`). 미리보기 틀의 `allow-popups-to-escape-sandbox` 필요한지 검토. DOCX 미리 그리기(docx-preview, CSS를 이스케이프하지 않음)를 sandbox 틀 안으로(`app/src/lib/render-doc.js`). 커넥트 첫 화면에 `Cross-Origin-Resource-Policy: same-origin`.
+6. 교재 변환 매크로: 한글(COM) 매크로 보안 설정, 맥 Office(AppleScript)로 옛 형식을 열 때 매크로 끄기(지금은 Keynote·Pages·LibreOffice를 먼저 쓰고 Office는 마지막) — 못 하면 그 길을 빼는 것 검토(`skills/lecpage/scripts/studio-convert.mjs`).
+7. 커넥트 새 판 서명: 묶음에 ed25519 서명 + 공개 키를 실행 파일·`studio-update.mjs`에 박아 확인. 서명 키는 운영자가 GitHub Actions 비밀로 등록해야 함(키를 대화·저장소에 두지 말 것, 운영자에게 할 일 안내).
+8. 앞서 남긴 것: 바로 배포 서버 Retry-After(운영자 수동 배포 필요), 자기 도메인 참여 기능 서버 + 바로 배포(바로 배포 CSP가 막음 → 안내 또는 허용), 커넥트를 두 번 켤 때, 받은 파일 경고(Mark-of-the-Web).
+9. 경험 점검에서 미룬 것: 교재 넣기의 '교재 원본도 참가자가 내려받게'와 공개 범위의 같은 설정 중복(원칙 8: 한 곳에), 교재를 다 읽을 때 화면 밀림(CLS 0.06~0.12), 연결 동의 창의 "[만들기]·요청 글" 문구(바꾸면 모두 다시 동의하게 되니 그 영향까지 판단).
+10. 예비 주소(yoorrard.github.io)에서는 커넥트가 연결되지 않음(다른 Pages와 출처 공유라 뺌). 필요하면 전용 출처로 옮기는 방법을 운영자에게 제안.
