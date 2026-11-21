@@ -18,10 +18,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      # 액션은 CI와 같은 커밋 SHA로 고정
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
+      # 시험이 교재 PDF를 읽으므로 CI와 같은 PDF 도구(pdf.js·poppler)를 둠
+      - name: PDF 읽기 도구 설치
+        run: |
+          sudo apt-get install -y --no-install-recommends poppler-utils > /dev/null
+          npm install --no-save --no-audit --no-fund "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: PC 프로그램 시험
         run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs
       - name: 묶기
@@ -46,10 +52,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          git tag -f studio-latest
-          git push -f origin refs/tags/studio-latest
+          # 태그는 처음 한 번만 만들고(강제로 옮기지 않음) 파일만 바꿔 올림
           if ! gh release view studio-latest >/dev/null 2>&1; then
-            gh release create studio-latest --title "lecpage PC 프로그램(최신)" --latest=false \
+            gh release create studio-latest --target "$GITHUB_SHA" --title "lecpage PC 프로그램(최신)" --latest=false \
               --notes "Windows: lecpage-studio.cmd를 받아 두 번 눌러 실행해요(경고 창이 뜨면 [추가 정보] → [실행]). macOS: 터미널에 curl -fsSL https://github.com/yoorrard/lecpage/releases/download/studio-latest/lecpage-studio.sh | bash. 켜지면 lecpage.com이 열리고 이 PC와 저절로 연결돼요. 이 릴리스는 main에 바뀐 것이 있을 때마다 새로 올라가요."
           fi
           gh release upload studio-latest out/lecpage-studio.cmd out/lecpage-studio.sh out/lecpage-studio.command \
