@@ -147,6 +147,11 @@ export const kv = {
   del: (k) => tx('kv', 'readwrite', (s) => req(s.delete(k))),
 };
 
+/** [모든 데이터 삭제]: 이 브라우저의 lecpage 저장소를 통째로 비움(AI 키·배포 토큰·참여 기능 관리자 키·기억한 서버·암호화 열쇠·남은 파일까지) */
+export async function wipeStores() {
+  for (const name of ['projects', 'blobs', 'kv']) await tx(name, 'readwrite', (s) => req(s.clear()));
+}
+
 export async function storageInfo() {
   let persisted = false, usage = 0, quota = 0;
   try { persisted = await navigator.storage?.persisted?.(); } catch { }

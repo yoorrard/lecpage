@@ -22,7 +22,7 @@ main() {
   esac
   mkdir -p "$LP"
   case " $* " in
-    *" --autostart "*) [ -f "$LP/connect.log" ] && mv -f "$LP/connect.log" "$LP/connect.log.1"; exec >"$LP/connect.log" 2>&1 ;;
+    *" --autostart "*) [ -f "$LP/connect.log" ] && mv -f "$LP/connect.log" "$LP/connect.log.1"; exec >"$LP/connect.log" 2>&1; chmod 600 "$LP/connect.log" "$LP/connect.log.1" 2>/dev/null ;; # 기록은 이 사용자만 읽게
   esac
   if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
     say "파일을 받을 curl(또는 wget)이 없어요. 먼저 설치해 주세요(예: sudo apt install curl)."; exit 1

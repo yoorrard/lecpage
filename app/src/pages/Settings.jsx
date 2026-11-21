@@ -3,8 +3,8 @@ import { clearCart } from '../lib/design-cart.js';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
 import { ConsentHost } from '../components/Consent.jsx';
-import { PROVIDERS, loadKey, forgetKey } from '../lib/ai.js';
-import { storageInfo, askPersist, projects } from '../lib/db.js';
+import { PROVIDERS, loadKey, forgetKey, forgetAllKeys } from '../lib/ai.js';
+import { storageInfo, askPersist, projects, wipeStores } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
 import { HostConnect, KIND } from '../components/Publish.jsx';
@@ -42,6 +42,10 @@ export function Settings() {
     const pc = bridgeAvailable() ? await logoutPc() : '';
     forgetPairing(); setPreferred(''); refreshPc();
     forgetConsents(); clearCart();
+    // 남은 것까지: 참여 기능 관리자 키·기억한 서버·고른 모델·암호화 열쇠·쓰다 만 글·미리보기 상태(화면 밝기·익명 통계 끄기만 남김)
+    await wipeStores().catch(() => { }); forgetAllKeys();
+    const keep = new Set(['lecpage:theme', 'lecpage:stats-off']);
+    for (const st of [localStorage, sessionStorage]) { try { for (const k of Object.keys(st)) if (/^(lecpage[:-]|lp-)/.test(k) && !keep.has(k)) st.removeItem(k); } catch { } }
     toast(pc === 'off' ? '모두 지웠어요. 커넥트가 꺼져 있어 ChatGPT 연결은 확인하지 못했어요. 공용 PC라면 커넥트를 켜고 연결을 해제해 주세요.'
       : pc === 'chatgpt' ? '모두 지웠어요. lecpage 커넥트의 ChatGPT 연결도 해제했어요.' : '이 브라우저의 lecpage 데이터를 모두 지웠어요.');
     setConfirmDel(false); setSt(await storageInfo());

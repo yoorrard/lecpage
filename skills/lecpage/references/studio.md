@@ -14,7 +14,7 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - 켜 둔 동안에도 새 판으로 바꿔요(`scripts/studio-update.mjs`): 앱의 [새 버전으로 바꾸기](`POST /bridge/update`)나, 10분 넘게 쓰지 않고 돌고 있는 일이 없을 때 저절로(켜고 2분 뒤, 그다음 3시간마다). 같은 릴리스의 `lecpage-connect.tar.gz`를 받아 `.sha256`으로 확인한 뒤에만 옆 폴더에 풀어 갈아 끼우고(예전 판은 `studio.old`), 같은 인자·같은 포트·같은 짝 맞춤 토큰으로 다시 켜요(처음 바꿀 때 켜 둔 프로세스가 감독이 되어 새 판을 같은 창에서 띄움). 새 판이 바로 꺼지면 예전 판으로 되돌려요. 받은 실행 파일로 켠 묶음에서만 하고, 저장소·Skill에서 직접 켠 것은 끄고 다시 켜요.
 - 개발자: `npx -y github:yoorrard/lecpage connect`(Git 필요) · Skill을 설치했으면 `node <skill>/scripts/lecpage.mjs connect`(`studio`도 같은 명령)
 
-켜면 기본 브라우저로 `https://lecpage.com/#pair=<토큰>&port=<포트>`를 열어 짝을 맞춰요. 앱이 토큰·포트를 이 브라우저에 기억하고 주소에서 바로 지워요. 받기 안내를 연 lecpage 탭이 있으면 그 탭이 이어 받고 새 탭은 닫혀요. 그다음부터 lecpage.com 화면이 `http://127.0.0.1:<포트>/bridge/*`를 직접 불러요(연수는 lecpage.com 저장소 그대로). Chrome·Edge는 처음 한 번 "로컬 네트워크" 접근을 물어요([허용]). 받기를 누른 브라우저가 기본 브라우저가 아니면 받기 안내의 [이 브라우저와 연결]이 켜진 커넥트를 찾아 `GET /pair`로 그 브라우저와도 짝을 맞춰요. lecpage.com이 열리지 않고 예비 주소(`https://yoorrard.github.io/lecpage/`)는 열리면 예비 주소로도 짝 맞추기 창을 열어요(허용 출처에 정확히 그 주소만 더함). 짝 맞춤 토큰은 이 PC 사용자 폴더(`%APPDATA%\lecpage` · `~/Library/Application Support/lecpage` · `~/.config/lecpage`)의 `studio.json`에 두어 다시 켜도 저절로 다시 붙어요.
+켜면 기본 브라우저로 `https://lecpage.com/#pair=<토큰>&port=<포트>`를 열어 짝을 맞춰요. 앱이 토큰·포트를 이 브라우저에 기억하고 주소에서 바로 지워요. 받기 안내를 연 lecpage 탭이 있으면 그 탭이 이어 받고 새 탭은 닫혀요. 그다음부터 lecpage.com 화면이 `http://127.0.0.1:<포트>/bridge/*`를 직접 불러요(연수는 lecpage.com 저장소 그대로). Chrome·Edge는 처음 한 번 "로컬 네트워크" 접근을 물어요([허용]). 받기를 누른 브라우저가 기본 브라우저가 아니면 받기 안내의 [이 브라우저와 연결]이 켜진 커넥트를 찾아 `GET /pair`로 그 브라우저와도 짝을 맞춰요. 예비 주소(`https://yoorrard.github.io/lecpage/`)와는 짝을 맞추지 않아요(같은 계정의 다른 GitHub Pages 사이트와 출처를 함께 써서). 장애 때 예비 주소에서는 API 키로 연결해요. 짝 맞춤 토큰은 이 PC 사용자 폴더(`%APPDATA%\lecpage` · `~/Library/Application Support/lecpage` · `~/.config/lecpage`)의 `studio.json`에 두어 다시 켜도 저절로 다시 붙어요.
 
 **Safari**는 https 화면에서 `http://127.0.0.1` 요청을 막아요(WebKit 171934). 그래서 lecpage 커넥트는 앱 전체를 `http://127.0.0.1:<포트>/`에서도 보여 줘요(같은 출처, 토큰은 앱 HTML의 `<meta name="lecpage-bridge">`). 이 화면은 저장소가 따로라 연수는 [파일로 저장] → [저장한 파일 열기]로 옮겨요. 바로 배포 서버는 `http://127.0.0.1:6600~6602`도 허용해요.
 
@@ -31,12 +31,13 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - `ANTHROPIC_API_KEY`가 있으면 Claude Code가 구독 대신 그 키로 돌아요(lecpage 커넥트가 알려 줘요, 지우지는 않아요).
 
 ## 안전
-- `127.0.0.1`에만 묶어요. 모든 요청의 `Host`가 `127.0.0.1:<포트>`와 정확히 같아야 해요(DNS 리바인딩 거절). `/bridge/*`는 머리글 `X-Lecpage-Bridge`(짝 맞춤 토큰, 쿠키·주소에 넣지 않음)가 맞고, `Origin`이 이 주소나 허용 목록(`https://lecpage.com`·`https://www.lecpage.com`·예비 주소 `https://yoorrard.github.io`·개발 주소 `http://localhost:5173`·`:4173`·`LECPAGE_STUDIO_ORIGINS`)과 정확히 같아야 해요. CORS(`Access-Control-Allow-Origin`은 그 출처만, `Vary: Origin`)와 사설망 머리글(`Access-Control-Allow-Private-Network: true`)은 허용한 출처에만 붙여요.
+- `127.0.0.1`에만 묶어요. 모든 요청의 `Host`가 `127.0.0.1:<포트>`와 정확히 같아야 해요(DNS 리바인딩 거절). `/bridge/*`는 머리글 `X-Lecpage-Bridge`(짝 맞춤 토큰, 쿠키·주소에 넣지 않음)가 맞고, `Origin`이 이 주소나 허용 목록(`https://lecpage.com`·`https://www.lecpage.com`·개발 주소 `http://localhost:5173`·`:4173`·`LECPAGE_STUDIO_ORIGINS`, 예비 주소는 넣지 않음)과 정확히 같아야 해요. CORS(`Access-Control-Allow-Origin`은 그 출처만, `Vary: Origin`)와 사설망 머리글(`Access-Control-Allow-Private-Network: true`)은 허용한 출처에만 붙여요.
 - ChatGPT 토큰은 이 PC 사용자 폴더의 `chatgpt.json`(0600, 원자적 쓰기)에만 두고, 앱에는 연결 여부·이메일·모델 목록만 줘요. 터미널 기록에도 남기지 않아요. `/auth/callback`은 OpenAI가 보내는 최상위 이동이라 토큰 대신 state로 확인해요.
 - 한 번에 작업 하나, 교재 파일 하나 100MB·모두 120MB·20개까지, 작업 30분 한도와 멈추기(프로세스 묶음째 끔).
 - 에이전트는 새 빈 임시 폴더(훅·`.mcp.json` 없음)에서 돌아요. Claude Code: `--restricted`, 도구는 Read·Write·Edit·Glob·Grep과 검수 명령 하나만 허용한 Bash(윈도우는 PowerShell도 같은 명령만), 작업 폴더 밖 읽기·쓰기 막기, 훅 끔, MCP 없음, 묻는 대신 거절, 세션을 디스크에 남기지 않음. 시작할 때 MCP·웹 도구가 켜져 있으면 멈춰요. Codex: `--sandbox workspace-write`, `--ephemeral`. Codex는 내 설정(`~/.codex/config.toml`)의 MCP 서버를 그대로 켜요(설정을 빼면 로그인 저장 위치까지 바뀔 수 있어 빼지 않아요). MCP 도구를 부르는 순간 작업을 멈추니, Codex로 쓸 때는 설정의 MCP 서버를 꺼 두는 게 좋아요.
 - 검수 실행기(`../bin/check.mjs`)는 작업 폴더 밖에 있어요. Claude Code에는 그 폴더를 `--add-dir`로 더해 검수 명령을 실행할 수 있게 하고(더하지 않으면 경로 검사가 검수 명령까지 막아요), 파일 도구로 고치는 것은 `Write`·`Edit` 거절 규칙으로 막아요. 강사 값(참여 서버·주소·공개 범위)은 에이전트에게 주지 않아요.
 - 작업 지시(TASK.md)는 짧게: 목표(강의 진행 사이트), 강사 요청과 참고 디자인에서 담은 디자인 목록, 배포 조건, 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 검수 명령. 디자인 서재(`design-library.md`)는 작업 폴더에 두고 필요하면 참고하게 해요(따를 의무 없음). 읽는 법·디자인·화면 확인과 다듬기는 에이전트가 정해요(디자인 규칙·레퍼런스 사이트는 넣지 않아요).
+- 결과에 키·토큰·이 PC의 폴더 경로처럼 보이는 글이 있으면 받지 않아요. 문서·묶음 파일(PDF·PPT·한글·워드·엑셀·ZIP 등)은 강사가 준 파일과 똑같을 때만, 그림·글꼴·소리·영상은 그 형식이 맞을 때만 받고 나머지는 빼요(교재 속 지시문에 속은 에이전트가 이 PC 파일을 사이트에 넣지 않게).
 - 작업이 끝나면 임시 폴더를 바로 지우고, 결과는 앱이 가져간 뒤 `DELETE`로 메모리에서도 지워요. 터미널에는 교재 내용·파일 이름·토큰을 적지 않아요.
 
 ## 문제 해결

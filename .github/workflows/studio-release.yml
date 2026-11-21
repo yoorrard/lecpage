@@ -12,12 +12,13 @@ on:
     tags: ['v*']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: studio-release
   cancel-in-progress: false
 jobs:
-  release:
+  # 시험은 읽기 권한만 가진 작업에서(바깥 패키지 pdf.js를 받아 돌림). 묶기·올리기 작업은 바깥 패키지를 받지 않음
+  test:
     runs-on: ubuntu-latest
     steps:
       # 액션은 CI와 같은 커밋 SHA로 고정
@@ -25,13 +26,25 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
-      # 시험이 교재 PDF를 읽으므로 CI와 같은 PDF 도구(pdf.js·poppler)를 둠
+      # 시험이 교재 PDF를 읽으므로 CI와 같은 PDF 도구(pdf.js·poppler)를 둠. 설치 스크립트는 돌리지 않음
       - name: PDF 읽기 도구 설치
         run: |
           sudo apt-get install -y --no-install-recommends poppler-utils > /dev/null
-          npm install --no-save --no-audit --no-fund "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
+          npm install --no-save --no-audit --no-fund --ignore-scripts "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: lecpage 커넥트 시험
         run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs
+  release:
+    needs: test
+    # main과 v 태그에서만 올림(다른 브랜치에서 손으로 돌려도 올리지 않음)
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
       - name: 묶기
         run: sh scripts/studio-launcher/package.sh out
       - name: studio-latest 릴리스 갱신

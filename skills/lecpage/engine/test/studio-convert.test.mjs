@@ -18,6 +18,11 @@ test('형식마다 그 형식을 만든 프로그램을 먼저(없는 프로그�
   assert.deepEqual(C.appsFor('hwpx', C.ORDER.win32), ['hwp']);
   assert.deepEqual(C.appsFor('docx', ['pages', 'libreoffice']), ['pages', 'libreoffice']);
   assert.deepEqual(C.appsFor('pdf', C.ORDER.win32), []);
+  // macOS: 매크로를 담을 수 있는 옛 형식은 매크로를 끌 수 있는 프로그램 먼저, Office는 마지막(Windows는 그대로: 매크로를 끄고 엶)
+  assert.deepEqual(C.appsFor('ppt', C.ORDER.darwin, 'darwin'), ['keynote', 'libreoffice', 'powerpoint']);
+  assert.deepEqual(C.appsFor('doc', C.ORDER.darwin, 'darwin'), ['pages', 'libreoffice', 'word']);
+  assert.deepEqual(C.appsFor('pptx', C.ORDER.darwin, 'darwin'), ['powerpoint', 'keynote', 'libreoffice']);
+  assert.deepEqual(C.appsFor('ppt', C.ORDER.win32, 'win32'), ['powerpoint', 'libreoffice']);
 });
 
 test('설치 확인: 윈도우는 COM 등록(reg query), macOS는 /Applications', () => {

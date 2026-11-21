@@ -56,6 +56,9 @@ export async function loadKey(provider) {
     return { key, remembered: true };
   } catch { return { key: '', remembered: false }; }
 }
+/** [모든 데이터 삭제] 뒤: 탭 메모리의 키와 암호화 열쇠도 버림(저장소를 비운 뒤 예전 열쇠로 다시 잠그지 않게) */
+export function forgetAllKeys() { mem.clear(); cryptoKeyP = null; }
+
 export async function forgetKey(provider) {
   mem.delete(provider); await kv.del('ai:' + provider);
   if (PROVIDERS[provider]) { const s = await prefs(); delete s.models[provider]; delete s.picked[provider]; delete s.free[provider]; delete s.blocked[provider]; if (s.active === provider) s.active = ''; await kv.set('ai-prefs', s); }

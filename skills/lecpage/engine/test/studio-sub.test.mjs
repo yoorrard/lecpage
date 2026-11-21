@@ -291,42 +291,30 @@ test('터미널 창을 못 열면(화면 없는 리눅스) 이 프로그램 안�
   });
 });
 
-test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.com·예비 주소)로만 보내고 토큰은 # 뒤 · 틀·fetch는 거절 · 예비 주소 출처도 /bridge/*(토큰은 그대로)', async () => {
+test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.com)로만 보내고 토큰은 # 뒤 · 틀·fetch는 거절 · 예비 주소(다른 GitHub Pages와 같은 출처)는 믿지 않음', async () => {
   const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 'pair2-')) });
   const pair = (app, headers = {}) => req(st.port, 'GET', '/pair' + (app === undefined ? '' : '?app=' + encodeURIComponent(app)), { headers });
   const nav = { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'cross-site' };
   const frag = `#pair=${st.S.token}&port=${st.port}`;
   try {
-    assert.ok(St.APP_ORIGINS.includes('https://yoorrard.github.io') && St.allowedOrigins('http://127.0.0.1:6600').has('https://yoorrard.github.io'));
-    assert.ok(!St.allowedOrigins('http://127.0.0.1:6600').has('http://yoorrard.github.io'));
+    assert.ok(!St.APP_ORIGINS.includes('https://yoorrard.github.io') && !St.allowedOrigins('http://127.0.0.1:6600').has('https://yoorrard.github.io'));
     const r = await pair('https://lecpage.com/', nav);
     assert.equal(r.status, 302); assert.equal(r.headers.location, `https://lecpage.com/${frag}`);
     assert.equal(r.headers['access-control-allow-origin'], undefined, 'CORS 없음(다른 사이트가 이동할 곳을 읽지 못함)'); assert.equal(r.headers['cache-control'], 'no-store'); assert.equal(r.headers['referrer-policy'], 'no-referrer');
-    assert.equal((await pair('https://yoorrard.github.io/lecpage/', nav)).headers.location, `https://yoorrard.github.io/lecpage/${frag}`);
-    assert.equal((await pair('https://yoorrard.github.io/other-site/', nav)).headers.location, `https://yoorrard.github.io/lecpage/${frag}`, '예비 주소 출처의 다른 사이트로는 토큰을 보내지 않음');
     assert.equal((await pair(undefined)).headers.location, `https://lecpage.com/${frag}`, '앱 주소가 없으면 켤 때 여는 곳');
-    for (const bad of ['https://evil.example/', 'http://yoorrard.github.io/lecpage/', `http://127.0.0.1:${st.port}/`, 'https://lecpage.com.evil.example/', 'https://u:p@lecpage.com/', 'javascript:alert(1)']) assert.equal((await pair(bad, nav)).status, 400, bad);
+    for (const bad of ['https://evil.example/', 'https://yoorrard.github.io/lecpage/', 'https://yoorrard.github.io/other-site/', 'http://yoorrard.github.io/lecpage/', `http://127.0.0.1:${st.port}/`, 'https://lecpage.com.evil.example/', 'https://u:p@lecpage.com/', 'javascript:alert(1)']) assert.equal((await pair(bad, nav)).status, 400, bad);
     assert.equal((await pair('https://lecpage.com/', { 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate' })).status, 403, '틀 안에서는 안 됨');
     assert.equal((await pair('https://lecpage.com/', { 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors', origin: 'https://lecpage.com' })).status, 403, 'fetch로는 안 됨');
     assert.equal((await pair('https://lecpage.com/', { ...nav, host: `evil.example:${st.port}` })).status, 421, 'DNS 리바인딩');
-    const s = await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': st.S.token, origin: 'https://yoorrard.github.io', 'sec-fetch-site': 'cross-site' } });
-    assert.equal(s.status, 200); assert.equal(s.headers['access-control-allow-origin'], 'https://yoorrard.github.io');
+    const m = await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': st.S.token, origin: 'https://yoorrard.github.io', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(m.status, 403, '토큰이 맞아도 예비 주소 출처는 거절'); assert.equal(m.headers['access-control-allow-origin'], undefined);
+    const s = await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(s.status, 200); assert.equal(s.headers['access-control-allow-origin'], 'https://lecpage.com');
     assert.equal(s.json().limits.twinPdf, true);
     // 짝 없는 브라우저: 토큰 없이 부르면 401 token(허용한 출처는 읽을 수 있게 CORS) → 앱의 [이 브라우저와 연결]이 이것으로 포트를 찾음
     const u = await req(st.port, 'GET', '/bridge/status', { headers: { origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
     assert.equal(u.status, 401); assert.equal(u.json().error, 'token'); assert.equal(u.headers['access-control-allow-origin'], 'https://lecpage.com'); assert.ok(!u.text.includes(st.S.token));
   } finally { await st.close(); }
-});
-
-test('짝 맞출 앱 주소: lecpage.com이 안 열리고 예비 주소는 열리면 예비 주소 · 둘 다 안 되면(망이 막힘) 그대로 · 평소에는 예비 주소를 묻지 않음', async () => {
-  const asked = [];
-  const fake = (down) => async (u) => { asked.push(String(u)); if (down.includes(new URL(u).host)) throw new TypeError('fetch failed'); return new Response(null, { status: 200 }); };
-  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake([]) }), 'https://lecpage.com');
-  assert.deepEqual(asked, ['https://lecpage.com/']);
-  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake(['lecpage.com']) }), St.MIRROR_APP_URL);
-  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: fake(['lecpage.com', 'yoorrard.github.io']) }), 'https://lecpage.com');
-  assert.equal(await St.pickAppUrl('https://lecpage.com', { fetchImpl: async (u) => new Response(null, { status: /github/.test(u) ? 200 : 530 }) }), St.MIRROR_APP_URL, '5xx도 안 열림');
-  assert.equal(await St.pickAppUrl('http://localhost:5173', { fetchImpl: () => assert.fail('묻지 않음') }), 'http://localhost:5173');
 });
 
 test('교재 개수: 원본과 같은 이름의 PDF는 하나로(PPTX 11개 + 만든 PDF 11개 = 11개) · 다른 교재는 20개까지', async () => {
@@ -388,4 +376,19 @@ test('Codex가 lecpage가 쓰기엔 예전 판(need install): [업데이트]는 
       assert.match(readFileSync(term, 'utf8'), /curl -fsSL https:\/\/chatgpt\.com\/codex\/install\.sh \| sh && .*codex" login/);
     } finally { await st.close(); }
   });
+});
+
+test('결과 바이너리: 문서·묶음은 강사가 준 파일과 같을 때만, 그림·글꼴·소리는 그 형식일 때만(이 PC 파일이 이름만 바꿔 사이트에 실리지 않게)', () => {
+  const b64 = (b) => ({ base64: Buffer.from(b).toString('base64') });
+  const sha = (b) => createHash('sha256').update(Buffer.from(b)).digest('hex');
+  const given = Buffer.from('%PDF-1.7 강사 교재'); const photo = Buffer.from('not really a jpeg but the teacher gave it');
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]), Buffer.alloc(20)]);
+  const key = Buffer.from('-----BEGIN OPENSSH PRIVATE KEY-----\nabc');
+  const site = {
+    'index.html': '<p>hi</p>',
+    'files/교재.pdf': b64(given), 'assets/img/photo.jpg': b64(photo), 'assets/chart.png': b64(png), 'material/p-001.webp': b64(Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')])),
+    'files/secret.pdf': b64(Buffer.from('%PDF-1.4 PC 문서')), 'files/keys.zip': b64(Buffer.from('PK\x03\x04...')), 'assets/x.png': b64(key), 'assets/f.woff2': b64(key), 'files/x.mp3': b64(key),
+  };
+  const out = St.foreignBinaries(site, new Set([sha(given), sha(photo)])).sort();
+  assert.deepEqual(out, ['assets/f.woff2', 'assets/x.png', 'files/keys.zip', 'files/secret.pdf', 'files/x.mp3']);
 });

@@ -15,7 +15,7 @@
 
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
@@ -93,10 +93,12 @@ export function pairToken(home, { fresh = false } = {}) {
   } catch { /* 저장 못 하면 이번 실행만 */ }
   return token;
 }
-/** 예비 주소(GitHub Pages 미러, docs/operations.md): lecpage.com 장애 때 안내하는 곳. 출처는 https://yoorrard.github.io 정확히 하나 */
-export const MIRROR_APP_URL = 'https://yoorrard.github.io/lecpage';
-/** /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 예비 주소 + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표) */
-export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', new URL(MIRROR_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
+/**
+ * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표).
+ * 예비 주소(https://yoorrard.github.io/lecpage/)는 넣지 않음: 그 출처를 같은 계정의 다른 GitHub Pages 사이트와 함께 써서,
+ * 그중 한 곳만 뚫려도 짝 맞춤 토큰을 읽고 이 PC에 닿을 수 있음. 장애 때 예비 주소에서는 API 키로 연결해요(docs/operations.md)
+ */
+export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'http://localhost:5173', 'http://localhost:4173'];
 export function allowedOrigins(self, env = process.env) {
   const extra = String(env.LECPAGE_STUDIO_ORIGINS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter((x) => /^https?:\/\/[^/\s]+$/.test(x));
   return new Set([self, ...APP_ORIGINS, ...extra]);
@@ -822,6 +824,34 @@ export function secretShapes(site, { home = homedir(), ws = '' } = {}) {
   return out;
 }
 
+/**
+ * 결과 사이트의 바이너리 중 받지 않을 것(교재 속 지시문에 속은 에이전트가 이 PC 파일을 사이트에 넣으면 배포로 공개됨. 글 파일은 secretShapes가 봄).
+ * 문서·묶음(PDF·PPT·한글·워드·엑셀·ZIP 등)은 강사가 준 파일(교재·사진·고칠 때 받은 사이트 파일)과 똑같을 때만,
+ * 그림·글꼴·소리·영상은 그 형식의 앞머리가 맞을 때만 받음(이름만 바꾼 다른 파일을 막음). 강사가 준 파일과 똑같으면 늘 받음.
+ * @param {Record<string, string|{base64}>} site @param {Set<string>} known 강사가 준 파일의 SHA-256(hex) @returns {string[]} 뺄 경로
+ */
+const DOC_EXT = /\.(pdf|pptx?|ppsx|docx?|hwpx?|xlsx?|zip|key|pages|numbers|odt|odp|ods)$/i;
+const sha256 = (b) => createHash('sha256').update(b).digest('hex');
+const MAGIC = (() => {
+  const at = (b, off, sig) => b.length >= off + sig.length && sig.every((x, i) => b[off + i] === (typeof x === 'string' ? x.charCodeAt(0) : x));
+  const str = (t) => [...t];
+  const image = (b) => at(b, 0, [0x89, 0x50, 0x4e, 0x47]) || at(b, 0, [0xff, 0xd8, 0xff]) || at(b, 0, str('GIF8')) || (at(b, 0, str('RIFF')) && at(b, 8, str('WEBP'))) || at(b, 4, str('ftyp'));
+  const font = (b) => at(b, 0, str('wOFF')) || at(b, 0, str('wOF2')) || at(b, 0, str('OTTO')) || at(b, 0, [0, 1, 0, 0]) || at(b, 0, str('true')) || at(b, 0, str('ttcf'));
+  const media = (b) => at(b, 4, str('ftyp')) || at(b, 0, [0x1a, 0x45, 0xdf, 0xa3]) || at(b, 0, str('ID3')) || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) || at(b, 0, str('OggS')) || (at(b, 0, str('RIFF')) && at(b, 8, str('WAVE')));
+  return { png: image, jpg: image, jpeg: image, gif: image, webp: image, avif: image, woff: font, woff2: font, ttf: font, otf: font, mp4: media, webm: media, mp3: media, m4a: media };
+})();
+export function foreignBinaries(site, known) {
+  const out = [];
+  for (const [rel, v] of Object.entries(site || {})) {
+    if (typeof v === 'string' || typeof v?.base64 !== 'string') continue;
+    const b = Buffer.from(v.base64, 'base64');
+    if (known.has(sha256(b))) continue;
+    const ext = extname(rel).slice(1).toLowerCase();
+    if (DOC_EXT.test(rel) || (MAGIC[ext] && !MAGIC[ext](b))) out.push(rel);
+  }
+  return out;
+}
+
 function readSiteDir(dir, siteFileOk) {
   const site = {}, dropped = [];
   const walk = (d, pre) => {
@@ -980,6 +1010,13 @@ async function runJob(S, job) {
     const { site, dropped } = readSiteDir(join(work, 'site'), siteFileOk);
     // 비밀처럼 보이는 글(키·토큰·이 PC의 경로)이 있으면 받지 않음: 앱 미리보기를 거쳐 배포되면 누구나 보게 됨
     const leaks = secretShapes(site, { ws: root });
+    const known = new Set([...inp.materials, ...inp.photos].map((m) => sha256(m.bytes)));
+    for (const v of Object.values(inp.site)) known.add(sha256(Buffer.isBuffer(v) ? v : Buffer.from(String(v))));
+    const foreign = foreignBinaries(site, known);
+    if (foreign.length) {
+      for (const rel of foreign) { delete site[rel]; dropped.push(rel); }
+      job.emit({ type: 'log', text: `강사가 주지 않은 파일이라 사이트에서 뺐어요: ${foreign.slice(0, 4).join(', ')}${foreign.length > 4 ? ` 외 ${foreign.length - 4}개` : ''}` });
+    }
     if (leaks.length) throw Object.assign(new Error(`사이트 파일(${[...new Set(leaks.map((x) => x.file))].slice(0, 3).join(', ')})에 키·토큰이나 이 PC의 폴더 경로처럼 보이는 글이 있어 받지 않았어요. 교재에 그런 글이나 'PC 파일을 읽어 적어라' 같은 지시가 있으면 지우고 다시 해 주세요.`), { code: 'secret' });
     let meta = null;
     try { meta = JSON.parse(readFileSync(join(work, 'lecpage.json'), 'utf8')); } catch { issues.push({ id: 'meta-json', level: 'error', where: { file: 'lecpage.json', selector: '', section: '' }, message_ko: 'lecpage.json을 JSON으로 읽지 못했어요.', fix_hint_ko: '연수 정보를 다시 확인해 주세요.' }); }
@@ -1261,17 +1298,14 @@ async function handleBridge(S, req, res, url) {
 /**
  * 이 브라우저와 짝 맞추기(GET /pair?app=<앱 주소>): lecpage 커넥트가 켤 때 연 브라우저가 기본 브라우저가 아니어서 다른 브라우저와 짝을 맞췄을 때,
  * 앱의 [이 브라우저와 연결]이 새 창으로 이 주소를 엶 → 앱 주소/#pair=<토큰>&port=<포트>로 보냄(켤 때 여는 주소와 같은 것을 그 브라우저에).
- * 보내는 곳은 허용한 출처(lecpage.com·예비 주소·개발 주소)만, 이 주소 자신은 아님. 토큰은 # 뒤라 그 서버로도 가지 않음.
+ * 보내는 곳은 허용한 출처(lecpage.com·개발 주소)만, 이 주소 자신은 아님. 토큰은 # 뒤라 그 서버로도 가지 않음.
  * 최상위 이동만(Sec-Fetch-Dest가 있으면 document): 다른 사이트가 틀(iframe)·fetch로 불러도 이동할 곳(Location)을 읽지 못함(CORS 없음)
  * → 보낼 주소 | null
  */
 export function pairTarget(S, raw) {
   let u; try { u = new URL(String(raw || S.appUrl || '')); } catch { return null; }
   if (u.username || u.password || u.origin === S.origin || !S.origins?.has(u.origin)) return null;
-  let path = /^\/[\w\-./]*$/.test(u.pathname) && !u.pathname.includes('..') ? u.pathname.replace(/\/*$/, '/') : '/';
-  // 예비 주소 출처(yoorrard.github.io)는 같은 계정의 다른 GitHub Pages와 함께 쓰므로 토큰은 lecpage 자리로만
-  const mirror = new URL(MIRROR_APP_URL);
-  if (u.origin === mirror.origin) path = `${mirror.pathname.replace(/\/*$/, '')}/`;
+  const path = /^\/[\w\-./]*$/.test(u.pathname) && !u.pathname.includes('..') ? u.pathname.replace(/\/*$/, '/') : '/';
   return `${u.origin}${path}#pair=${S.token}&port=${S.port}`;
 }
 function pairRedirect(S, req, res, url) {
@@ -1328,7 +1362,7 @@ function listenOn(server, port) {
 /** 띄우기(시험에서도 씀): { url, port, close } */
 export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () => {}, persist = false, home, newToken = false, fetchImpl, installer, root = ROOT, release, onRestart, autoUpdate = false, retryPort = false } = {}) {
   // 지난번에 꺼지며 남은 임시 폴더(6시간 넘은 것)
-  try { for (const n of readdirSync(tmpdir())) if (n.startsWith(TMP_PREFIX)) { const p = join(tmpdir(), n); if (Date.now() - statSync(p).mtimeMs > 6 * 3600e3) rmSync(p, { recursive: true, force: true }); } } catch { /* 못 지워도 됨 */ }
+  try { for (const n of readdirSync(tmpdir())) if (n.startsWith(TMP_PREFIX) || n.startsWith('lecpage-convert-')) { const p = join(tmpdir(), n); if (Date.now() - statSync(p).mtimeMs > 6 * 3600e3) rmSync(p, { recursive: true, force: true }); } } catch { /* 못 지워도 됨 */ }
   // 짝 맞춤 토큰·ChatGPT 자격은 이 PC 사용자 폴더에(persist: 실제 실행). 시험은 home을 따로 주거나 이번 실행만(임시 폴더)
   const dirHome = home ? resolve(home) : persist ? studioHome() : mkdtempSync(join(tmpdir(), TMP_PREFIX + 'home-'));
   const S = { version: VERSION, home: dirHome, token: persist || home ? pairToken(dirHome, { fresh: newToken }) : randomBytes(32).toString('hex'), jobs: new Map(), agents: null, statusAt: 0, jobMs: jobMs || num(process.env.LECPAGE_STUDIO_JOB_MS, 30 * 60000), log, installer, fetchImpl };
@@ -1397,17 +1431,6 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
 }
 
 /**
- * 짝 맞출 앱 주소: 기본(lecpage.com)이 이 PC에서 열리지 않고(망 오류·5xx) 예비 주소(GitHub Pages)는 열리면 예비 주소(장애 때, docs/operations.md).
- * 예비 주소는 lecpage.com이 안 열릴 때만 물어봄. 둘 다 안 열리면(이 PC의 망·프록시가 막음 등) 그대로. 직접 정한 주소(LECPAGE_STUDIO_APP_URL)도 그대로
- */
-export async function pickAppUrl(appUrl, { fetchImpl = globalThis.fetch, ms = 5000 } = {}) {
-  if (appUrl !== 'https://lecpage.com') return appUrl;
-  const up = async (u) => { try { const r = await fetchImpl(u, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(ms) }); return r.status > 0 && r.status < 500; } catch { return false; } };
-  if (await up(`${appUrl}/`)) return appUrl;
-  return (await up(`${MIRROR_APP_URL}/`)) ? MIRROR_APP_URL : appUrl;
-}
-
-/**
  * 기본 브라우저로 열기 후보: Windows rundll32 url.dll(= start, 셸을 거치지 않아 주소의 &·#이 그대로) · macOS open ·
  * Linux xdg-open → gio open → sensible-browser → x-www-browser(화면이 있을 때만: 없으면 글자 브라우저가 이 창을 붙잡지 않게) · WSL wslview
  */
@@ -1463,14 +1486,6 @@ export async function studioCmd(h) {
     args.autostart && process.platform !== 'win32' ? '  컴퓨터를 켤 때 창 없이 켜졌어요(기록은 lecpage 폴더의 connect.log). 그만 켜려면 lecpage 화면에서 자동 시작을 꺼요.' : '  끝내려면 이 창에서 Ctrl+C를 눌러요(창을 닫아도 꺼져요).',
   ].join('\n'));
   if (open && !(await openBrowser(open)) && !json) console.log(`  브라우저를 열지 못했어요. 이 주소를 브라우저에 붙여 넣어 주세요: ${open}`);
-  // lecpage.com이 이 PC에서 열리지 않고 예비 주소는 열리면(장애 때) 예비 주소로도 짝 맞추기를 엶(평소에는 lecpage.com만 한 번 확인)
-  if (open === pairUrl && !json) {
-    pickAppUrl(S.appUrl).then((base) => {
-      if (base === S.appUrl) return;
-      log(`lecpage.com이 열리지 않아 예비 주소(${base}/)에서도 열어요.`);
-      openBrowser(`${base}/#pair=${S.token}&port=${S.port}`);
-    }).catch(() => {});
-  }
   let closing = false;
   const bye = async () => { if (closing) return; closing = true; log('끄는 중…'); await close(); process.exit(0); };
   const SIGS = ['SIGINT', 'SIGTERM', 'SIGHUP'];

@@ -244,7 +244,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   {
     const TOKEN = 'b'.repeat(64); const PORT = 6612; let logout = 0;
     const c = await b.newContext({ viewport: { width: W, height: HH } });
-    await c.addInitScript(([tk, port]) => { try { if (!sessionStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify({ token: tk, port, at: Date.now() })); localStorage.setItem('lecpage:conn', 'chatgpt'); sessionStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ } }, [TOKEN, PORT]);
+    await c.addInitScript(([tk, port]) => { try { if (!sessionStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify({ token: tk, port, at: Date.now() })); localStorage.setItem('lecpage:conn', 'chatgpt'); localStorage.setItem('lecpage:unsaved:p1', '{}'); localStorage.setItem('lecpage:theme', 'dark'); localStorage.setItem('lecpage:stats-off', '1'); sessionStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ } }, [TOKEN, PORT]);
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     await c.route(new RegExp(`^http://127\\.0\\.0\\.1:${PORT}/`), (r) => {
       const u = new URL(r.request().url()); const m = r.request().method();
@@ -258,11 +258,20 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     const pg = await c.newPage(); const e7 = L.watch(pg);
     await pg.goto(L.BASE + '#/settings', { waitUntil: 'load' });
     await pg.waitForSelector('.settings button:has-text("모든 데이터 삭제")', { timeout: 20000 });
+    // 참여 기능 관리자 키·기억한 서버가 남지 않아야 함(공용 PC): 저장소에 하나 넣어 둠
+    const kvCount = () => pg.evaluate(() => new Promise((res) => { const o = indexedDB.open('lecpage'); o.onsuccess = () => { try { const q = o.result.transaction('kv').objectStore('kv').count(); q.onsuccess = () => res(q.result); q.onerror = () => res(-1); } catch { res(-1); } }; o.onerror = () => res(-1); }));
+    await pg.evaluate(() => new Promise((res) => { const o = indexedDB.open('lecpage'); o.onsuccess = () => { const t = o.result.transaction('kv', 'readwrite'); t.objectStore('kv').put('x', 'live-admin:https://live.example.test#c1'); t.oncomplete = res; t.onerror = res; }; o.onerror = res; }));
+    const kvBefore = await kvCount();
     await pg.click('.settings button:has-text("모든 데이터 삭제")');
     await pg.click('.settings button:has-text("한 번 더 눌러 삭제")');
     await pg.waitForFunction(() => !localStorage.getItem('lecpage:pc'), null, { timeout: 15000 }).catch(() => {});
     const left = await pg.evaluate(() => ({ pc: localStorage.getItem('lecpage:pc'), conn: localStorage.getItem('lecpage:conn') }));
     L.ok('wipe: forgets 커넥트 pairing and chosen connection', !left.pc && !left.conn, JSON.stringify(left));
+    await pg.waitForTimeout(300);
+    const rest = await pg.evaluate(() => ({ unsaved: localStorage.getItem('lecpage:unsaved:p1'), theme: localStorage.getItem('lecpage:theme'), statsOff: localStorage.getItem('lecpage:stats-off') }));
+    const kvAfter = await kvCount();
+    L.ok('wipe: clears every stored key (admin keys, remembered server) and drafts', kvBefore > 0 && kvAfter === 0 && !rest.unsaved, `kv ${kvBefore}→${kvAfter} ${JSON.stringify(rest)}`);
+    L.ok('wipe: keeps only the theme and the stats opt-out', rest.theme === 'dark' && rest.statsOff === '1', JSON.stringify(rest));
     L.ok('wipe: disconnects ChatGPT in the 커넥트', logout === 1, `logout=${logout}`);
     L.ok('wipe: no page errors', e7.length === 0, JSON.stringify(e7));
     await c.close();

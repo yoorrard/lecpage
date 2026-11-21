@@ -57,8 +57,19 @@ export function detectApps({ platform = process.platform, env = process.env, hom
   return ids;
 }
 
-/** 확장자 → 시도할 프로그램(있는 것만, 순서대로) */
-export function appsFor(ext, ids) { return ids.filter((id) => APPS[id]?.exts.includes(String(ext).toLowerCase())); }
+/**
+ * 확장자 → 시도할 프로그램(있는 것만, 순서대로).
+ * macOS의 Office는 AppleScript로 열 때 매크로를 끌 수 없어서(Windows는 AutomationSecurity로 끔), 매크로를 담을 수 있는 옛 형식(.ppt·.pps·.doc)은
+ * 매크로가 없는 Keynote·Pages·LibreOffice(매크로 끈 새 프로필)를 먼저 쓰고 Office는 마지막에
+ */
+const LEGACY_EXTS = ['ppt', 'pps', 'doc'];
+export function appsFor(ext, ids, platform = process.platform) {
+  const e = String(ext).toLowerCase();
+  const list = ids.filter((id) => APPS[id]?.exts.includes(e));
+  if (platform !== 'darwin' || !LEGACY_EXTS.includes(e)) return list;
+  const office = (id) => id === 'powerpoint' || id === 'word';
+  return [...list.filter((id) => !office(id)), ...list.filter(office)];
+}
 
 function run(cmd, args, { timeoutMs = TIMEOUT_MS, env } = {}) {
   return new Promise((ok) => {
@@ -192,7 +203,7 @@ export async function convertWith(id, name, bytes, { platform = process.platform
 export async function convertToPdf(name, bytes, { platform = process.platform, ids, log = () => {}, ...o } = {}) {
   const ext = (extname(name).slice(1) || '').toLowerCase();
   if (MACRO_EXTS.includes(ext)) return { ok: false, error: 'macro', message_ko: MACRO_KO, tried: [] };
-  const list = appsFor(ext, ids || detectApps({ platform }));
+  const list = appsFor(ext, ids || detectApps({ platform }), platform);
   if (!list.length) return { ok: false, error: 'no-app', message_ko: noAppKo(ext, platform), tried: [] };
   const tried = [];
   for (const id of list) {
