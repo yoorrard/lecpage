@@ -48,6 +48,7 @@ const L = require('./lib.js');
     await p.click('dialog.dd-cart[open] button:has-text("담은 디자인으로 만들기")');
     await p.waitForSelector('.picks li', { timeout: 15000 });
     L.ok(`${w} start: picks chips`, await p.locator('.picks li').count() === 2 && /담은 디자인 2개/.test(await p.locator('.picks-line').innerText()));
+    L.ok(`${w} start: [디자인 기법 둘러보기] button next to chips (sheet: tests/e2e/start-dict.js)`, await p.locator('.picks-line button:has-text("디자인 기법 둘러보기")').count() === 1);
     await p.screenshot({ path: L.OUT + `${w}-start-picks.png` });
     // 완성 견본으로 시작(예전 흐름 그대로)
     await p.goto(L.BASE + '#/gallery', { waitUntil: 'load' }); await p.waitForSelector('.refs .ex-card');

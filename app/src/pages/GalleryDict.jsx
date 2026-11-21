@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { createContext } from 'preact';
+import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { CATEGORIES, ITEMS, catOf, searchItems, srcdocOf } from '../data/design-dict/index.js';
 import { useCart, toggleCart, removeFromCart, clearCart, inCart, CART_MAX } from '../lib/design-cart.js';
 import { newProject } from '../lib/project.js';
 import { toast } from '../lib/util.js';
+import '../styles/gallery.css'; // 교재 넣기 화면의 시트에서도 쓰므로 여기서도 불러와요
 
 // 디자인 사전(참고 디자인 화면 아래): 실제로 돌아가는 미리보기 + 검색·분류 + 크게 보기 + 담기(lib/design-cart.js).
 // 미리보기는 화면에 들어올 때만 iframe을 만들고(나가면 없앰), 카드에서는 누를 수 없게(손가락 스크롤을 막지 않게) 해 두고 크게 보기에서 직접 만져 봐요.
@@ -13,14 +15,18 @@ const docs = new Map();
 const docOf = (it) => { if (!docs.has(it.id)) docs.set(it.id, srcdocOf(it)); return docs.get(it.id); };
 
 // 화면에 들어온 카드만 미리보기를 만듦(하나의 IntersectionObserver). 빨리 훑고 지나가는 카드는 만들지 않게 잠깐 기다림
+// 시트(components/DesignSheet.jsx)처럼 따로 스크롤하는 칸 안에서는 그 칸을 root로 삼음(root마다 하나)
 const subs = new Map();
-let io = null;
-function watch(el, cb) {
+const ios = new Map();
+function watch(el, cb, root = null) {
   if (!('IntersectionObserver' in window)) { cb(true); return () => {}; }
-  io = io || new IntersectionObserver((es) => es.forEach((e) => subs.get(e.target)?.(e.isIntersecting)), { rootMargin: '240px 0px' });
+  let io = ios.get(root);
+  if (!io) { io = new IntersectionObserver((es) => es.forEach((e) => subs.get(e.target)?.(e.isIntersecting)), { root, rootMargin: '240px 0px' }); ios.set(root, io); }
   subs.set(el, cb); io.observe(el);
   return () => { io.unobserve(el); subs.delete(el); };
 }
+/** 쓰는 곳이 알려 주는 것: root(스크롤 칸을 돌려주는 함수), notify(꽉 찼을 때 안내를 어디에 띄울지) */
+const Ctx = createContext({ root: null, notify: (m) => toast(m) });
 
 /** 미리보기 틀: 칸 크기를 재서 400보다 좁으면 줄여 그림 */
 function Frame({ it, live = false, title }) {
@@ -48,20 +54,22 @@ function Frame({ it, live = false, title }) {
 function LazyFrame({ it }) {
   const ref = useRef(null);
   const [on, setOn] = useState(false);
+  const { root } = useContext(Ctx);
   useEffect(() => {
     let t = 0;
-    const off = watch(ref.current, (vis) => { clearTimeout(t); if (vis) t = setTimeout(() => setOn(true), 90); else setOn(false); });
+    const off = watch(ref.current, (vis) => { clearTimeout(t); if (vis) t = setTimeout(() => setOn(true), 90); else setOn(false); }, root ? root() : null);
     return () => { clearTimeout(t); off(); };
   }, []);
   return <div class="dd-lazy" ref={ref}>{on ? <Frame it={it} /> : <span class="dd-ph" aria-hidden="true">{it.en}</span>}</div>;
 }
 
 function AddBtn({ it, cart, big = false }) {
+  const { notify } = useContext(Ctx);
   const on = inCart(it.id, cart);
   return (
     <button type="button" class={`btn ${big ? '' : 'btn-sm '}dd-add${on ? ' is-on' : ''}${big && !on ? ' btn-primary' : ''}`} aria-pressed={String(on)}
       aria-label={`${it.ko} 담기`}
-      onClick={() => { if (!toggleCart(it)) toast(`${CART_MAX}개까지 담을 수 있어요. 담은 디자인에서 하나를 삭제해 주세요.`); }}>
+      onClick={() => { if (!toggleCart(it)) notify(`${CART_MAX}개까지 담을 수 있어요. 담은 디자인에서 하나를 삭제해 주세요.`); }}>
       {on ? '✓ 담음' : '＋ 담기'}
     </button>
   );
@@ -163,7 +171,8 @@ function CartPanel({ cart, onClose, onOpen }) {
   );
 }
 
-export function GalleryDict({ open: first = '' }) {
+/** compact: 시트 안(제목·담은 디자인 버튼 없음, 찾기 줄은 시트 스크롤 칸 맨 위에 붙음). root·notify는 시트가 건네요. */
+export function GalleryDict({ open: first = '', compact = false, root = null, notify = null }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [openId, setOpenId] = useState(() => (ITEMS.some((x) => x.id === first) ? first : ''));
@@ -172,13 +181,15 @@ export function GalleryDict({ open: first = '' }) {
   const list = useMemo(() => searchItems(q, cat), [q, cat]);
   const counts = useMemo(() => Object.fromEntries(CATEGORIES.map((c) => [c.id, searchItems(q, c.id).length])), [q]);
   const total = CATEGORIES.reduce((n, c) => n + counts[c.id], 0);
+  const ctx = useMemo(() => ({ root, notify: notify || ((m) => toast(m)) }), [root, notify]);
   return (
-    <section class="dd" aria-labelledby="dd-h">
-      <div class="section-title"><h2 id="dd-h">디자인 사전</h2><p>웹 디자인 용어·형식·움직임·글꼴·색 {ITEMS.length}가지를 실제로 움직이는 미리보기로 모았어요. 눌러서 크게 보고, 마음에 들면 담아 두세요. 강의 사이트를 만들 때 AI가 참고해요.</p></div>
+    <Ctx.Provider value={ctx}>
+    <section class={`dd${compact ? ' dd-compact' : ''}`} aria-labelledby={compact ? undefined : 'dd-h'} aria-label={compact ? '디자인 사전' : undefined}>
+      {!compact && <div class="section-title"><h2 id="dd-h">디자인 사전</h2><p>웹 디자인 용어·형식·움직임·글꼴·색 {ITEMS.length}가지를 실제로 움직이는 미리보기로 모았어요. 눌러서 크게 보고, 마음에 들면 담아 두세요. 강의 사이트를 만들 때 AI가 참고해요.</p></div>}
       <div class="dd-bar">
         <div class="dd-bar-in">
           <input class="input dd-q" type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="찾기: 유리, 스크롤, 명조, 타이머…" aria-label="디자인 찾기" />
-          <button type="button" class={`btn dd-cart-btn${cart.length ? ' has' : ''}`} onClick={() => setCartOpen(true)} aria-label={`담은 디자인 ${cart.length}개 보기`}>담은 디자인 <b class="dd-n">{cart.length}</b></button>
+          {!compact && <button type="button" class={`btn dd-cart-btn${cart.length ? ' has' : ''}`} onClick={() => setCartOpen(true)} aria-label={`담은 디자인 ${cart.length}개 보기`}>담은 디자인 <b class="dd-n">{cart.length}</b></button>}
         </div>
         <div class="dd-cats" role="group" aria-label="분류">
           <button type="button" aria-pressed={String(!cat)} onClick={() => setCat('')}>전체 <span>{total}</span></button>
@@ -191,5 +202,6 @@ export function GalleryDict({ open: first = '' }) {
       {openId && <Detail key="detail" id={openId} list={list.some((x) => x.id === openId) ? list : ITEMS} cart={cart} onClose={() => setOpenId('')} onMove={setOpenId} />}
       {cartOpen && <CartPanel cart={cart} onClose={() => setCartOpen(false)} onOpen={(id) => { setCartOpen(false); setQ(''); setCat(''); setOpenId(id); }} />}
     </section>
+    </Ctx.Provider>
   );
 }
