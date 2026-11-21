@@ -35,7 +35,10 @@ export async function preparePageImages(pid, project, { signal, onProgress, refr
   const pdf = sourceFiles(project).map((f) => (f.ext === 'pdf' ? f : f.pdf?.key ? { ...f, key: f.pdf.key } : null)).filter(Boolean).sort((a, b) => (b.pages || 0) - (a.pages || 0))[0];
   const from = project.slidesFrom || pdf?.name || '';
   const slides = keys.filter((k) => /^assets\/slides\/slide-\d+\.(webp|png|jpg)$/.test(k)).sort();
-  if (refresh && slides.length && have.length) { await blobs.removePrefix(pid, SITE_MATERIAL); return preparePageImages(pid, project, { signal, onProgress }); }
+  // 새로 만들 때: 지금 교재(쪽 그림이나 PDF)로 다시 옮김. 교재를 PDF로 바꿨으면 assets/slides가 비어 있어 예전 쪽 그림이 남던 것도 함께.
+  // 지금 교재에서 쪽 그림을 만들 수 없고 예전 그림을 만든 교재도 빠졌으면 예전 그림을 비움(다른 교재의 쪽이 사이트에 들어가지 않게)
+  if (refresh && have.length && (slides.length || pdf)) { await blobs.removePrefix(pid, SITE_MATERIAL); return preparePageImages(pid, project, { signal, onProgress }); }
+  if (refresh && have.length && project.slidesFrom && !sourceFiles(project).some((f) => f.name === project.slidesFrom)) { await blobs.removePrefix(pid, SITE_MATERIAL); return { list: [], from: '' }; }
   if (have.length) return { list: have.map((k) => k.slice(5)), from };
   if (slides.length) {
     for (const k of slides) {

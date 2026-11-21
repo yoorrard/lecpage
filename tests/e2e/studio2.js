@@ -32,7 +32,7 @@ async function sendEdit(p, text) {
   // ── 1280: 전체 흐름 ──
   const { ctx, st, p, errs, pid } = await build(b, 1280, 860);
   L.ok('one screen: preview + panel side by side, no tabs', await p.locator('[role=tablist]').count() === 0 && await p.evaluate(() => { const a = document.querySelector('.st .preview').getBoundingClientRect(), c = document.querySelector('.st-panel').getBoundingClientRect(); return a.right <= c.left + 1 && a.width > c.width; }));
-  L.ok('one screen: info · site outline · files · look · chat in one panel, composer pinned', await p.locator('.st-scroll .st-info').count() === 1 && await p.locator('.st-scroll .st-outline').count() === 1 && await p.locator('.st-scroll .st-files').count() === 1 && await p.locator('.st-scroll .st-fold').count() === 1 && await p.locator('.st-scroll .st-chat').count() === 1 && await p.locator('.st-composer .st-compose textarea').count() === 1);
+  L.ok('one screen: info · site outline · files · look · chat in one panel, composer pinned', await p.locator('.st-scroll .st-info').count() === 1 && await p.locator('.st-scroll .st-outline').count() === 1 && await p.locator('.st-scroll .st-files').count() === 1 && await p.locator('.st-scroll .st-tools .st-fold-t').count() === 1 && await p.locator('.st-scroll .st-chat').count() === 1 && await p.locator('.st-composer .st-compose textarea').count() === 1);
   await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await noScroll(p, 'studio 1280');
   await p.screenshot({ path: OUT + '1280-01-studio.png' });

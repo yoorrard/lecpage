@@ -15,7 +15,8 @@ export const REACTIONS = [
 /** 이해 정도 신호: 도크에는 단추 하나(지금 보낸 신호), 누르면 글이 붙은 세 가지가 펼쳐짐 */
 export const SIGNALS = [{ v: 'green', g: '✓', label: '이해했어요' }, { v: 'yellow', g: '?', label: '조금 헷갈려요' }, { v: 'red', g: '!', label: '모르겠어요' }];
 
-export const LIVE_OFF = '<p class="lp-note" data-live-off>참여 기능을 켜면 여기서 쓸 수 있어요.</p>';
+// 참여 기능 없이 배포한 사이트(강사가 '참여 기능 없이 배포'를 고름): 누를 수 없는 칸 대신 참가자에게 한 줄
+export const LIVE_OFF = '<p class="lp-note" data-live-off>이 사이트에서는 이 기능을 쓰지 않아요. 궁금한 점은 연수 중에 강사에게 직접 이야기해 주세요.</p>';
 const liveOff = (live) => (live ? '' : LIVE_OFF);
 
 /** 질문 받기(공감순·최신순) */

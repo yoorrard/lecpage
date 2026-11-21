@@ -18,7 +18,22 @@ async function build(b, w, h) {
   const p = await ctx.newPage(); const errs = L.watch(p);
   await L.startWithFile(p);
   await L.connectAi(p);
-  await L.waitStudio(p, 90000);
+  await L.waitStudio(p, 90000, { folds: false });
+  // 처음에는 연수 정보·사이트 구성·자료·색·글꼴이 접혀 있고 AI 수정 대화가 보임. 접힌 줄에도 요약과 [이 정보가 맞아요]
+  const folds = await p.$$eval('.st-panel .st-fold-t', (b) => b.map((x) => [x.getAttribute('aria-expanded'), x.querySelector('.st-fold-s')?.textContent || '']));
+  L.ok(`[${w}] folds: 4 sections start folded with a summary`, folds.length === 4 && folds.every(([e, sum]) => e === 'false' && sum.length > 0), JSON.stringify(folds).slice(0, 160));
+  L.ok(`[${w}] folds: confirm button visible while folded`, await p.locator('.st-info button:has-text("이 정보가 맞아요")').isVisible());
+  L.ok(`[${w}] folds: chat composer visible`, w < 960 || await p.locator('.st-composer textarea').isVisible());
+  // 미리보기에서 섹션을 누르면 사이트 구성이 저절로 펼쳐짐
+  if (w > 960) {
+    await p.frameLocator('.pv-device iframe').locator('section').first().click({ position: { x: 20, y: 20 } }).catch(() => { });
+    await p.waitForTimeout(500);
+    L.ok(`[${w}] folds: picking in the preview opens 사이트 구성`, await p.getAttribute('#st-outline-h .st-fold-t', 'aria-expanded') === 'true');
+  }
+  await L.openFolds(p);
+  // 펼친 칸은 이 탭에서 기억(새로 고쳐도 펼친 채)
+  await p.reload({ waitUntil: 'load' }); await L.waitStudio(p, 90000, { folds: false });
+  L.ok(`[${w}] folds: opened sections stay open after reload`, await p.locator('.st-panel .st-fold-t[aria-expanded="false"]').count() === 0);
   return { ctx, p, errs, pid: L.pidOf(p) };
 }
 const html = async (p, pid) => (await L.readProject(p, pid)).site['index.html'];
@@ -31,7 +46,7 @@ const shot = async (p, name, o = {}) => { if (!o.fullPage && p.viewportSize().wi
   const frame = p.frameLocator('.pv-device iframe');
   await shot(p, '1280-01-panel.png');
   // ── 연수 정보: 속성 줄 ──
-  L.ok('info: always-visible rows, no edit toggle, confirm in the card header', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 1 && await p.locator('.st-info .st-card-h button:has-text("이 정보가 맞아요")').isVisible());
+  L.ok('info: rows shown when opened, one fold toggle + confirm in the card header', await p.locator('.st-info .prop').count() >= 4 && await p.locator('.st-info .st-card-h button').count() === 2 && await p.locator('.st-info .st-card-h .st-fold-t').count() === 1 && await p.locator('.st-info .st-card-h button:has-text("이 정보가 맞아요")').isVisible());
   L.ok('info: found-in-textbook hint shown before confirming', /쪽에서 찾았어요/.test(await p.locator('.st-info').innerText()));
   const venue0 = await p.inputValue('#prop-venue');
   await p.click('#prop-venue'); await p.fill('#prop-venue', '아무 데나'); await p.keyboard.press('Escape'); await p.waitForTimeout(400);

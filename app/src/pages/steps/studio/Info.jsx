@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { replaceText, replaceSchedule } from '../../../lib/site-doc.js';
 import { toast, isPastDate, monthDay } from '../../../lib/util.js';
 import { focusIn } from './Outline.jsx';
+import { FoldHead } from './Parts.jsx';
 
 // 연수 정보(p.meta): 늘 보이는 속성 줄(이름 | 값). 값을 누르면 그 자리에서 고침(Notion·Linear의 속성 칸처럼).
 // 글자 칸은 칸을 떠나거나 Enter로 한 번 반영, Esc는 취소. 일시는 누르면 날짜·시작·끝 칸이 열림(다 쓴 값만 반영: WhenInput).
@@ -16,7 +17,7 @@ const dayOf = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ''); retu
 export const whenLine = (s = {}) => [s.date ? `${monthDay(s.date)}(${dayOf(s.date)})` : '', s.start ? `${s.start}${s.end ? `~${s.end}` : ''}` : ''].filter(Boolean).join(' ');
 const NOTE = 'st-info-note';
 
-export function InfoCard({ p, change, update, onConfirmed }) {
+export function InfoCard({ p, change, update, onConfirmed, open = true, onToggle }) {
   const m = p.meta || {};
   const checked = !!p.metaChecked;
   const [more, setMore] = useState(false);
@@ -43,10 +44,17 @@ export function InfoCard({ p, change, update, onConfirmed }) {
   const hiddenOpt = OPTIONAL.filter(([k]) => !m[k]);
   const firstHidden = useRef('');
   useEffect(() => { if (more && firstHidden.current) focusIn(document.getElementById(`prop-${firstHidden.current}`)); }, [more]);
+  // 접혔을 때 한 줄: 일시 · 장소 · 강사(지난 날짜면 그 알림을 먼저)
+  const first = sessions.find((x) => x?.date) || sessions[0] || {};
+  const past = isPastDate(first.date);
+  const sum = past ? `${monthDay(first.date)}은 지난 날짜예요. 이번 연수 날짜로 고쳐 주세요.` : [whenLine(first), m.venue, insts[0]?.name].filter(Boolean).join(' · ') || '날짜·장소를 넣어 주세요';
   const others = facts.filter((f) => !Object.values(FACT_OF).flat().includes(String(f.label || '').trim()));
   return (
     <section class={`st-card st-info${checked ? '' : ' is-todo'}`} aria-labelledby="st-info-h">
-      <div class="st-card-h"><h2 id="st-info-h" class="st-h">연수 정보</h2>{!checked && <div class="confirm-bar"><button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button></div>}</div>
+      <FoldHead id="st-info" title="연수 정보" open={open} onToggle={onToggle} summary={sum} warn={past}>
+        {!checked && <div class="confirm-bar"><button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button></div>}
+      </FoldHead>
+      <div class="st-fold-b" id="st-info-b" hidden={!open}>
       <dl class="props">
         <TextProp k="title" label="연수명" value={m.title || ''} max={160} multiline placeholder="연수명을 넣어 주세요" hint={found('title')}
           onCommit={(v) => v && v !== m.title && setMeta('연수명', (mm) => ({ ...mm, title: v }), [m.title, v])} />
@@ -69,6 +77,7 @@ export function InfoCard({ p, change, update, onConfirmed }) {
       {!checked && <div class="st-info-ask">
         <p class="small">AI가 교재에서 찾은 값이에요. 틀린 곳은 눌러서 바로 고쳐요. 고치면 사이트 글과 QR 안내문·강사 화면·일정 파일도 함께 바뀌어요.</p>
       </div>}
+      </div>
     </section>
   );
 }

@@ -366,9 +366,11 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
   const where = `${page}: data-lp="${type}"`;
   switch (type) {
     case 'qa':
+      if (!live) return { html: W.LIVE_OFF }; // 참여 기능 없이: 보내지지 않는 입력 칸을 두지 않음
       col.qa = true;
       return { html: W.qaBox({ id: `lpk-qa${n > 1 ? '-' + n : ''}`, anonymous: ctx.anonymous, live }) };
     case 'poll': {
+      if (!live) return { html: W.LIVE_OFF };
       const q = String(attr(t, 'data-question') || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       const kind = ['choice', 'word', 'scale'].includes(attr(t, 'data-kind')) ? attr(t, 'data-kind') : 'choice';
       const o = W.optionList(attr(t, 'data-options'));
@@ -391,6 +393,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       return { html: W.pollBox([item], { live, list: false, ask: item.question, host: ctx.words.host }) };
     }
     case 'board': {
+      if (!live) return { html: W.LIVE_OFF };
       const prompt = String(attr(t, 'data-prompt') || '').replace(/\s+/g, ' ').trim().slice(0, 300);
       let cats = W.DEFAULT_BOARD_CATS;
       const cv = attr(t, 'data-categories');
@@ -410,6 +413,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       return { html: `${prompt ? `<p class="lpk-prompt">${escHtml(prompt)}</p>` : ''}${W.boardBox({ cats, files, maxFiles, moderation, live })}` };
     }
     case 'attend':
+      if (!live) return { html: W.LIVE_OFF };
       col.attend = true;
       return { html: W.attendBox({ lead: ctx.words.attendLead, after: ctx.words.attendAfter, live }) };
     case 'survey': {

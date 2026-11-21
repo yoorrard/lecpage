@@ -26,13 +26,13 @@ const filesCache = new Map(); // pid → Map(저장소 키 → 바이트)
  * extra: 덧붙일 파일(교재 원본을 자료실에), materials: 자료실 목록
  * @returns {Promise<{ files, warnings, errors, meta, collected, … , material }>}
  */
-export async function assembleProject(p, { site, meta, target = 'preview', prev, extra = null, materials } = {}) {
+export async function assembleProject(p, { site, meta, target = 'preview', prev, extra = null, materials, host = '' } = {}) {
   const mat = await materialFiles(p.id);
   const m = meta || p.meta || {};
   // 자료실: 강사가 [자료 추가]로 올린 것(p.materials, 파일은 저장소 'site/files/…') + 부른 쪽이 더한 것(배포 화면의 교재 원본)
   const own = ownMaterials(p, mat);
   const more = (Array.isArray(materials) ? materials : []).filter((x) => x && !own.some((o) => o.href === x.href)).map((x) => (typeof x.size === 'number' ? { ...x, size: sizeText(x.size) } : x));
-  const r = assemble({ ...mat, ...(site || p.site || {}), ...(extra || {}) }, m, await assembleOpts(p, { target, prev: prev === undefined ? (target === 'preview' ? rehearsalPrev(m) : m) : prev, materials: [...own, ...more] }));
+  const r = assemble({ ...mat, ...(site || p.site || {}), ...(extra || {}) }, m, await assembleOpts(p, { target, host, prev: prev === undefined ? (target === 'preview' ? rehearsalPrev(m) : m) : prev, materials: [...own, ...more] }));
   return { ...r, material: mat };
 }
 

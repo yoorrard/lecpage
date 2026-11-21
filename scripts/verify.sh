@@ -2,7 +2,7 @@
 # 합치기 전 검증을 한 번에. 지금 git 인덱스(스테이징한 상태)를 그대로 떠서 검사하고, 결과는 요약 줄만 찍습니다.
 # 사용: bash scripts/verify.sh [--e2e] [--hosting]     (npm run verify / npm run verify:full)
 #   기본: 엔진 테스트 · 예시 빌드 · 앱 빌드
-#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름(flow·more·share-flow·hosts·studio2·studio3·doc-render·instant·flow2). tests/e2e/ 는 작업 폴더의 것을 씁니다
+#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름(flow·more·share-flow·hosts·studio2·studio3·doc-render·start-dict·instant·flow2·live-hosts). tests/e2e/ 는 작업 폴더의 것을 씁니다
 #   --hosting: 바로 공개 서버 테스트
 # 환경변수: VERIFY_DIR(검사용 복사본 위치) · OUT_DIR(로그·스크린샷, 기본 .out/verify)
 # 자세한 기록: .out/verify/log-*.txt, 스크린샷: .out/verify/shots/
@@ -63,6 +63,10 @@ if [ $E2E = 1 ]; then
     BASE2=http://localhost:4182/ BASE=http://localhost:4182/ OUT="$O/shots/" timeout 400 node flow2.js > "$O/log-e2e-flow2.txt" 2>&1
     f=$(grep -c "^FAIL" "$O/log-e2e-flow2.txt"); p=$(grep -c "^PASS" "$O/log-e2e-flow2.txt")
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-flow2.txt"; then echo "e2e flow2: ok ($p pass)"; else echo "e2e flow2: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-flow2.txt"; fi
+    # 참여 기능 × 배포할 곳: 다른 곳 안내, 바로 배포 방을 다른 곳 사이트에 넣지 않음, 대표 주소 지킴
+    BASE2=http://localhost:4182/ BASE=http://localhost:4182/ OUT="$O/shots/" timeout 400 node live-hosts.js > "$O/log-e2e-live-hosts.txt" 2>&1
+    f=$(grep -c "^FAIL" "$O/log-e2e-live-hosts.txt"); p=$(grep -c "^PASS" "$O/log-e2e-live-hosts.txt")
+    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-live-hosts.txt"; then echo "e2e live-hosts: ok ($p pass)"; else echo "e2e live-hosts: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-live-hosts.txt"; fi
     pkill -f "vite preview --outDir dist-instant"
   else echo "app build (instant): FAIL"; fi
 fi

@@ -7,7 +7,7 @@ import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
 import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { assembleProject } from '../../lib/studio.js';
-import { Publish, lecLiveOff, LABEL as SITE_LABEL } from '../../components/Publish.jsx';
+import { Publish, lecLiveOff, instantLiveOk, LABEL as SITE_LABEL } from '../../components/Publish.jsx';
 import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
@@ -20,6 +20,14 @@ import { whenText } from '@engine/src/hero-meta.js';
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const LIVE_READY = (live, ok) => ['sheets', 'supabase', 'http'].includes(live?.provider) && live?.url && ok;
 const LIVE_NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버' };
+const originOf = (u) => { try { return new URL(u).origin; } catch { return ''; } };
+/**
+ * 바로 배포 서버가 맡은 참여 기능 방인지. 그 방은 바로 배포한 사이트 주소에서 온 요청만 받음(hosting/src/live/host.js liveOriginOk):
+ * Vercel·GitHub Pages·Netlify·Cloudflare·ZIP으로 올린 사이트에 넣으면 질문·투표·출석이 보내지지 않음
+ */
+export const lecOnlyLive = (live, srvLiveUrl = '') => live?.provider === 'http' && !!live.url && !!originOf(live.url) && [originOf(srvLiveUrl), originOf(PUBLISH_API)].includes(originOf(live.url));
+/** 대표 주소의 사이트에 참여 기능이 들어갔는지(배포할 때 적어 둔 표시. 예전 기록은 바로 배포 방이 있었으면 들어간 것으로) */
+export const siteHasLive = (d, t = d?.target) => { const s = d?.sites?.[t]; return s?.live === true || (s?.live === undefined && t === 'lecpage' && !!d?.lecpage?.adminKey); };
 
 const DAY = 864e5;
 /** 연수 마지막 날이 끝나는 때(한국 시간 다음 날 0시). 차시 날짜가 있으면 마지막 차시. 날짜가 없으면 0 */
@@ -118,6 +126,8 @@ export function StepShare({ p, update, go }) {
   const [room, setRoom] = useState(''); // 지난 기록을 어떻게 할지: 'fresh'(비우고 배포) | 'keep'(그대로) | ''(아직)
   const [askRoom, setAskRoom] = useState(null); // 고르지 않고 다시 배포할 때 확인
   const [goAgain, setGoAgain] = useState(0); // 확인 창에서 고른 뒤 다시 배포(고른 값이 반영된 다음 그림의 배포 함수로)
+  const [askMain, setAskMain] = useState(''); // 참여 기능이 없는 곳을 대표 주소로 바꿀 때 확인
+  const builtLive = useRef(null); // 이번에 배포한 사이트에 참여 기능이 들어갔는지(배포한 곳마다 적어 둠)
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const built = useRef(''); const again = useRef(null); const goNow = useRef(null);
   // 배포할 곳 칸이 화면에 보이는지: 보이면 맨 위 [배포하기]는 강조하지 않음(그 칸의 버튼이 누를 곳), 안 보이면 그 칸으로 데려가는 길이라 강조
@@ -148,7 +158,11 @@ export function StepShare({ p, update, go }) {
   const old = p.deploy?.lastUrl ? oldRecords(p, records) : null;
   // 새 연수(새 코드)로: 복제하면 새 주소·새 QR, 기록도 따로
   const dupNew = () => duplicateProject(p).then((n) => { toast('복제했어요. 새 연수로 배포해요.'); location.hash = `#/p/${n.id}/3`; }, () => toast('복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.'));
-  const liveReady = LIVE_READY(bp.live, p.liveOk);
+  // 바로 배포 서버의 방은 바로 배포한 사이트에서만 열림: 다른 곳에 배포할 때는 '연결 전'으로 봄(그대로 넣으면 질문·투표·출석이 보내지지 않음)
+  const lecOnly = lecOnlyLive(bp.live, info?.live?.url);
+  // 이 컴퓨터(localhost)에서 켠 서버는 참가자 기기에서 닿지 않음: 파일로 받는 ZIP(교실 노트북) 말고는 '연결 전'으로
+  const loopLive = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(bp.live?.url || '');
+  const liveReady = LIVE_READY(bp.live, p.liveOk) && !(lecOnly && target !== 'lecpage') && !(loopLive && !!target && target !== 'zip');
   const setAccess = (mode) => update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, access: { mode } })), sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
 
   /** 배포할 사이트 파일: AI가 만든 사이트(+교재 쪽 그림·올린 사진)를 연수 정보·배포 설정과 함께 조립(엔진 assemble) */
@@ -156,10 +170,14 @@ export function StepShare({ p, update, go }) {
     const b = JSON.parse(JSON.stringify(bp));
     if (!dry) built.current = b.meta?.shortUrl || ''; // 이번에 만든 사이트에 들어간 짧은 주소(배포한 뒤 달라지면 다시 배포하라고 알림)
     let privacy = b.privacy && Object.keys(b.privacy).length ? b.privacy : null;
+    // 바로 배포 서버의 방은 다른 곳에 올린 사이트에서 쓸 수 없음 → 그곳에는 참여 기능을 빼고 올림(눌러도 보내지지 않는 버튼이 남지 않게)
+    const lecElsewhere = !live && !!to && to !== 'lecpage' && lecOnlyLive(b.live, info?.live?.url);
+    if (lecElsewhere) liveOff = true;
     if (live) { // 바로 배포: 참여 기능을 배포 서버가 맡음 → 개인정보 안내에 그 서버를 적음
       b.live = { ...b.live, ...live };
       if (processor && !(privacy?.processors || []).length) privacy = { ...(privacy || {}), processors: [processor] };
     } else if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
+    if (!dry) builtLive.current = (b.live?.features || []).length > 0 && !liveOff && (!!live || LIVE_READY(b.live, p.liveOk));
     const extra = {}; const materials = [];
     if (p.shareOriginals) { // 교재 원본도 내려받게: 자료실(키트 materials)이 이 목록을 보여 줌(사이트의 files/)
       const all = await blobs.all(p.id);
@@ -167,9 +185,12 @@ export function StepShare({ p, update, go }) {
     }
     const { features } = p.meta || {};
     const meta = { ...(p.meta || {}), features: liveOff ? (features || []).filter((f) => !LIVE_KEYS.includes(f)) : features || [] };
+    // 올리는 곳(바로 배포·Vercel·GitHub·Netlify·Cloudflare)에는 대표 주소를 박지 않음: 사이트가 열린 자기 주소로 QR·발표 화면·QR 안내문을 그림
+    // (박아 두면 보관 기간이 끝나 새 주소로 다시 배포했거나 다른 곳에 올린 사이트의 QR이 옛 주소·다른 곳을 가리킴). 파일로 받는 ZIP만 대표 주소를 넣음
+    const hostedTo = !!to && to !== 'zip';
     // 강사 값(참여 기능 방·주소·공개 범위·개인정보)은 조립의 prev로만 넘김(엔진 readMeta 규칙: meta 안의 강사 칸은 버림)
-    const prev = { live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code }, siteUrl: b.meta.siteUrl || '', shortUrl: b.meta.shortUrl || '', joinUrl: p.meta?.joinUrl || '', surveyUrl: p.meta?.surveyUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}) };
-    const r = await assembleProject(p, { meta, target: to === 'zip' || !to ? 'zip' : 'hosted', prev, extra, materials });
+    const prev = { live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code, ...(typeof b.live.uploads === 'boolean' ? { uploads: b.live.uploads } : {}) }, siteUrl: hostedTo ? '' : b.meta.siteUrl || '', shortUrl: hostedTo && to !== p.deploy?.target ? '' : b.meta.shortUrl || '', joinUrl: p.meta?.joinUrl || '', surveyUrl: p.meta?.surveyUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}) };
+    const r = await assembleProject(p, { meta, target: to === 'zip' || !to ? 'zip' : 'hosted', prev, extra, materials, host: hostedTo ? to : '' });
     if (!r.files?.['index.html']) throw new Error((r.errors || []).map((e) => e.message_ko).join(' ') || '사이트를 조립하지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.');
     let files = r.files;
     if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
@@ -184,7 +205,7 @@ export function StepShare({ p, update, go }) {
   function guard(run, auto = false, kind = '') {
     // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
     // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
-    if (old && !room && kind !== 'zip') { setAskRoom(true); return; }
+    if (old && !room && kind !== 'zip' && target === 'lecpage') { setAskRoom(true); return; } // 지난 기록은 바로 배포 방에만 있음(다른 곳에 배포할 때는 묻지 않음)
     if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
   }
   const feats = featuresOf(p).filter((f) => LIVE_KEYS.includes(f));
@@ -223,11 +244,16 @@ export function StepShare({ p, update, go }) {
     setRoom('');
     // 주소가 바뀌면(다른 곳에 올림·내림) 예전 짧은 주소는 옛 사이트를 가리키므로 지움
     // 대표 주소(lastUrl)는 여러 곳에 배포한 기록(sites)을 합쳐 정함: 다른 곳에 다시 배포해도 대표는 그대로, 새로 배포한 곳은 대표가 됨
-    const nx = mergeSite(p.deploy, url, patch?.target || p.deploy?.target || '');
+    // 참여 기능이 들어간 대표 주소가 있는데 새로 배포한 곳에는 참여 기능이 없으면 대표 주소는 그대로(QR·강사 화면이 참여 기능 없는 곳을 가리키지 않게)
+    const to = patch?.target || p.deploy?.target || '';
+    const siteLive = url ? builtLive.current : null; builtLive.current = null;
+    const keepMain = siteLive === false && !!p.deploy?.lastUrl && p.deploy?.target !== to && siteHasLive(p.deploy);
+    const lock = url ? { mode: bp.access?.mode || 'link', pw: bp.access?.mode === 'password' ? p.sitePassword || '' : '' } : null;
+    const nx = mergeSite(p.deploy, url, to, { live: siteLive, keepMain, lock });
     const moved = !nx.lastUrl || (!!p.deploy?.lastUrl && same(nx.lastUrl) !== same(p.deploy.lastUrl));
     if (moved && bp.meta?.shortUrl) toast('사이트 주소가 바뀌어 짧은 주소를 지웠어요. 다시 만들어 주세요.');
     update((cur) => {
-      const m = mergeSite(cur.deploy, url, patch?.target || cur.deploy?.target || '');
+      const m = mergeSite(cur.deploy, url, patch?.target || cur.deploy?.target || '', { live: siteLive, keepMain, lock });
       return {
         pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
         deploy: { ...(cur.deploy || {}), ...patch, sites: m.sites, lastUrl: m.lastUrl, target: m.target, at: m.at, shortLive: moved ? '' : built.current },
@@ -237,8 +263,9 @@ export function StepShare({ p, update, go }) {
     });
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
-  function setPrimary(t) {
+  function setPrimary(t, sure = false) {
     const s = p.deploy?.sites?.[t]; if (!s?.url || t === p.deploy?.target) return;
+    if (!sure && s.live === false && liveOn && siteHasLive(p.deploy)) { setAskMain(t); return; } // 참여 기능 없는 곳으로 바꾸기 전에 확인
     update((cur) => ({
       deploy: { ...(cur.deploy || {}), lastUrl: s.url, target: t, at: s.at || Date.now(), shortLive: '' },
       ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: s.url, shortUrl: '' } })),
@@ -257,12 +284,16 @@ export function StepShare({ p, update, go }) {
   const featLine = names.length > 3 ? `${names.slice(0, 3).join('·')} 외 ${names.length - 3}개` : names.join('·');
   // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있으면 참여 기능은 강사 계정으로 연결(서버가 준 순서: Cloudflare → Supabase)
   const liveOffHere = lecLiveOff(p);
-  const autoHere = autoLive && target === 'lecpage' && !liveOffHere;
+  // 강사가 따로 연결해 둔 서버(시트·Supabase·내 서버)가 있으면 바로 배포에서도 그 서버를 씀(Publish.jsx Instant와 같은 규칙)
+  const ownLive = instantLiveOk(bp.live) && !lecOnly;
+  const autoHere = autoLive && target === 'lecpage' && !liveOffHere && !ownLive;
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
   const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
-  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: `${featLine} · 아직 연결 전이에요.` }[liveState];
-  const liveBody = open.live || liveState === 'todo' || liveState === 'off'; // 꺼져 있으면 고를 기능을 바로 보여 줌
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
+  // 꺼져 있으면 고를 기능을 바로 보여 줌. 다른 곳에 배포할 때 연결 전이면 배포할 곳 바로 아래 안내가 할 일을 알려 주므로 이 줄은 접어 둠([연결하기]로 펼침)
+  const elsewhere = !!target && target !== 'lecpage';
+  const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const needPw = access === 'password' && !p.sitePassword;
   const notes = checks(p, target === 'lecpage' || (!target && autoLive) ? exp : null); // 보관 기간 알림은 바로 배포에 배포할 때만
@@ -287,7 +318,7 @@ export function StepShare({ p, update, go }) {
         body: open.past && <p class="small">처음 배포한 기기에서 [파일로 저장]을 누르고 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 그 파일을 여기서 열어 주세요. 새 주소로 배포하면 인쇄한 QR과 보낸 주소도 새것으로 바꿔야 해요.</p> });
   }
   rows.push({ k: 'live', id: 'live-setup', title: '참여 기능', state: liveState === 'todo' || (liveState === 'off' && official) ? 'todo' : liveState === 'off' || liveState === 'demo' ? 'note' : 'done', line: liveLine,
-    btn: liveState === 'todo' || liveState === 'off' ? null : liveState === 'skip' ? ['변경', () => setSkipLive(false)] : [open.live ? '접기' : liveState === 'demo' ? '보기' : '바꾸기', () => toggle('live')],
+    btn: liveState === 'todo' ? (elsewhere ? [open.live ? '접기' : '연결하기', () => toggle('live')] : null) : liveState === 'off' ? null : liveState === 'skip' ? ['변경', () => setSkipLive(false)] : [open.live ? '접기' : liveState === 'demo' ? '보기' : '바꾸기', () => toggle('live')],
     body: liveBody && <>
       <div class="chips feat-chips" role="group" aria-label="켤 참여 기능">
         {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
@@ -321,7 +352,7 @@ export function StepShare({ p, update, go }) {
   if (!p.deploy?.lastUrl) rows.push({ k: 'venue', title: '연수 장소 확인', state: day?.k === 'full' ? 'todo' : 'note', line: day && day.k !== 'ok' ? '' : '배포한 뒤 연수 전날, 그곳 Wi-Fi로 열리는지 확인해요.',
     btn: day && day.k !== 'ok' ? null : [open.venue ? '접기' : '보기', () => toggle('venue')],
     body: (open.venue || (day && day.k !== 'ok')) && <VenueBody p={p} url="" instantOn={instantHere} /> });
-  if (old) rows.push({ k: 'room', title: '지난 기록', state: room ? 'done' : 'todo',
+  if (old && target === 'lecpage') rows.push({ k: 'room', title: '지난 기록', state: room ? 'done' : 'todo',
     line: room === 'fresh' ? '비우고 배포해요. 주소·QR·관리자 키는 그대로예요.' : room === 'keep' ? '그대로 두고 배포해요.' : `${old.when}까지 남긴 기록(${old.line})이 그대로 있어요. 다시 배포해도 새 참가자에게 보여요.`,
     btn: room ? ['변경', () => setRoom('')] : null,
     body: !room && <>
@@ -338,7 +369,8 @@ export function StepShare({ p, update, go }) {
     body: <>
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
       {p.demo ? <p class="small muted">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
-        : <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'} />}
+        : <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'}
+          liveNote={liveOn && !p.demo ? { need: !liveReady && !skipLive, skip: !liveReady && skipLive, lecOnly, feats: featLine, onConnect: goLive, onSkip: () => setSkipLive(true), onUnskip: () => setSkipLive(false) } : null} />}
     </> });
 
   /** 배포할 곳 칸으로 내려가 지금 누를 버튼(주 버튼)을 잠깐 강조 */
@@ -389,11 +421,21 @@ export function StepShare({ p, update, go }) {
         </div>
       </Dialog>
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
-        <h2 class="h-sub">참여 기능이 아직 연결되지 않았어요</h2>
-        <p>지금 배포하면 질문·투표 같은 기능이 참가자끼리 이어지지 않아요. 나중에 연결하고 다시 배포해도 돼요.</p>
+        <h2 class="h-sub">{lecOnly ? `${SITE_LABEL[target] || '이곳'} 사이트에는 참여 기능이 켜지지 않아요` : '참여 기능이 아직 연결되지 않았어요'}</h2>
+        <p>{lecOnly ? '질문·투표·출석은 바로 배포한 사이트에서만 돼요. 이대로 배포하면 이 사이트는 참여 기능 없이 올라가고, 참가자에게 알릴 대표 주소는 바로 배포 주소 그대로예요.'
+          : '질문·투표·출석은 참가자의 답을 모아 둘 서버가 있어야 돼요. 연결하지 않고 배포하면 강의 당일 답이 모이지 않아요.'}{autoLive && elsewhere && !lecOnly ? ' 바로 배포는 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
         <div class="btn-row">
-          <button class="btn btn-primary" onClick={() => { setAsk(null); goLive(); }}>먼저 연결</button>
-          <button class="btn" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포하기</button>
+          {autoLive && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
+          <button class={`btn${autoLive && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결하기</button>
+          <button class="btn btn-quiet" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포</button>
+        </div>
+      </Dialog>
+      <Dialog open={!!askMain} onClose={() => setAskMain('')} label="대표 주소 확인">
+        <h2 class="h-sub">이 주소에는 참여 기능이 없어요</h2>
+        <p>{SITE_LABEL[askMain] || askMain} 사이트는 참여 기능 없이 배포했어요. 대표 주소로 바꾸면 QR·강사 화면이 이 주소를 따라가서, 참가자가 질문·투표·출석을 할 수 없어요.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" data-autofocus onClick={() => setAskMain('')}>그대로 두기</button>
+          <button class="btn" onClick={() => { const t = askMain; setAskMain(''); setPrimary(t, true); }}>그래도 바꾸기</button>
         </div>
       </Dialog>
     </>
@@ -519,18 +561,24 @@ function JoinBig({ open, onClose, qr, title, shown, full }) {
 
 function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, instantOn, fontNote, exp, days = 30 }) {
   const url = p.deploy.lastUrl.replace(/\/?$/, '/');
-  const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
+  // 대표 주소의 사이트에 실제로 걸린 공개 범위·암호(배포할 때 적어 둔 것). 배포한 뒤 바꿨으면 다시 배포할 때까지 QR·주소는 지금 사이트 기준
+  const lock = p.deploy.sites?.[p.deploy.target]?.lock;
+  const mode = bp.access?.mode || 'link';
+  const pw = (lock ? lock.mode : mode) === 'password' ? (lock ? lock.pw : p.sitePassword) : '';
+  const lockStale = !!lock && (lock.mode !== mode || (mode === 'password' && lock.pw !== (p.sitePassword || '')));
   const shareUrl = pw ? E.unlockUrl(url, pw) : url;
   const m = bp.meta || {};
   const short = m.shortUrl && same(m.shortUrl) !== same(url) ? m.shortUrl : '';
   const stale = /^https:/.test(url) && (short || '') !== (p.deploy.shortLive || '');
   const [big, setBig] = useState(false);
   const when = whenText(m); // 사이트 첫 화면과 같은 꼴(2026. 11. 20.(금) 14:00~17:00)
-  const liveOn = (bp.live?.features || []).length > 0;
+  // 대표 주소의 사이트에 참여 기능이 없으면(참여 기능 없이 배포한 곳) 강사 화면·참여 안내를 보이지 않음
+  const liveOn = (bp.live?.features || []).length > 0 && p.deploy?.sites?.[p.deploy?.target]?.live !== false;
   // 강사 화면 관리자 키: 바로 배포는 배포할 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
   const [adminKey, setAdminKey] = useState('');
   const liveUrl = bp.live?.url || '';
-  useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
+  // 바로 배포 방의 키. 바로 배포 사이트를 강사 서버로 바꿨으면 그 서버의 키
+  useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey && (lecOnlyLive(bp.live) || !p.liveOk)) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl, bp.live?.code || '').then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
   const feats = bp.live?.features || [];
   // 받는 사람이 할 일 한 줄: 출석이 있으면 도착해서 [출석], 아니면 연수 중에 질문·참여
   const todo = feats.includes('attendance') ? '\n도착하면 이 사이트에서 [출석]을 눌러 주세요.' : liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : '';
@@ -571,6 +619,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           </div>
         </div>
         <div class="stack success-rest">
+          {lockStale && <p class="small short-stale" role="status"><span>공개 범위나 암호를 바꿨어요. 다시 배포해야 사이트에 반영돼요. 그 전까지 QR·주소는 지금 배포된 사이트 그대로예요.</span> <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포하기</button></p>}
           <Sites p={p} onPrimary={onPrimary} busy={busy} />
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
           <div class="day-kit" role="group" aria-labelledby="venue-h">
@@ -603,6 +652,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
 /** 배포한 곳: 곳마다 주소를 기억해 두고, 참가자에게 알릴 대표 주소를 고르고, 다른 곳에도 배포하러 감 */
 function Sites({ p, onPrimary, busy }) {
   const d = p.deploy || {};
+  const liveOn = (deployView(p)?.live?.features || []).length > 0;
   const sites = d.sites && Object.keys(d.sites).length ? d.sites : { [d.target || 'lecpage']: { url: d.lastUrl, at: d.at } };
   const rows = Object.entries(sites).filter(([, s]) => s?.url).sort((a, b) => (a[0] === d.target ? -1 : b[0] === d.target ? 1 : (b[1].at || 0) - (a[1].at || 0)));
   const ask = (to) => window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: to }));
@@ -614,13 +664,14 @@ function Sites({ p, onPrimary, busy }) {
           const main = t === d.target;
           return (
             <li class={main ? 'is-main' : ''} key={t}>
-              <span class="sites-t"><b>{SITE_LABEL[t] || t}</b>{main && <em>대표 주소</em>}</span>
+              <span class="sites-t"><b>{t === 'zip' ? '직접 올린 곳' : SITE_LABEL[t] || t}</b>{main && <em>대표 주소</em>}{liveOn && s.live === false && <i class="sites-nolive">참여 기능 없음</i>}</span>
               <a class="sites-u small" href={s.url} target="_blank" rel="noopener">{showUrl(s.url)}</a>
               {!main && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => onPrimary(t)} aria-label={`${SITE_LABEL[t] || t} 주소를 대표 주소로 쓰기`}>대표 주소로 쓰기</button>}
             </li>
           );
         })}
       </ul>
+      {liveOn && rows.some(([t, s]) => s.live === false && t !== d.target) && siteHasLive(d) && <p class="small muted">참여 기능은 대표 주소의 사이트에서만 돼요. 참가자에게는 대표 주소와 QR을 알려 주세요.</p>}
       <div class="btn-row">
         {!sites.lecpage && PUBLISH_API && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('lecpage')}>바로 배포로도 배포</button>}
         <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('other')}>다른 곳에도 배포</button>

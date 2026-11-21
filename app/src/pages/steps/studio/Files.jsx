@@ -3,6 +3,7 @@ import { Dialog } from '../../../components/ui.jsx';
 import { blobs } from '../../../lib/db.js';
 import { toast, uid } from '../../../lib/util.js';
 import { siteFileOk } from '@engine/src/kit/paths.js';
+import { FoldHead } from './Parts.jsx';
 
 // 자료(교재 말고 강의에 쓰는 파일): [자료 추가](끌어다 놓기도)로 올리면 사이트의 files/에 들어가고 참가자가 사이트의 자료실에서 받음.
 // 파일은 이 연수 저장소 'site/files/…'(조립이 사이트 파일로 넣음), 목록·이름·설명·순서는 p.materials(조립의 자료실 목록, lib/gen/preview.js ownMaterials).
@@ -24,7 +25,7 @@ export function fileName(name, taken = new Set()) {
   return out;
 }
 
-export function FilesCard({ p, update, hasSlot, onAskSlot, locked }) {
+export function FilesCard({ p, update, hasSlot, onAskSlot, locked, open = true, onToggle, onOpen }) {
   const list = Array.isArray(p.materials) ? p.materials : [];
   const [over, setOver] = useState(false); const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState(null); const [del, setDel] = useState(null);
@@ -46,7 +47,7 @@ export function FilesCard({ p, update, hasSlot, onAskSlot, locked }) {
       const ext = (/\.([a-z0-9]+)$/i.exec(name) || [])[1] || '';
       out.push({ id: uid(8), title: name.replace(/\.[^.]+$/, ''), desc: '', href, size: f.size, kind: ext.toUpperCase(), at: Date.now() });
     }
-    if (out.length) { save((cur) => [...cur, ...out]); toast(`자료 ${out.length}개를 추가했어요. 참가자가 사이트에서 받아요.`); }
+    if (out.length) { save((cur) => [...cur, ...out]); onOpen?.(); toast(`자료 ${out.length}개를 추가했어요. 참가자가 사이트에서 받아요.`); }
     if (bad.length) toast(bad.slice(0, 2).join(' '));
     setBusy(false);
   }
@@ -63,11 +64,11 @@ export function FilesCard({ p, update, hasSlot, onAskSlot, locked }) {
       onDragOver={(e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); setOver(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); }}
       onDrop={(e) => { if (!e.dataTransfer?.files?.length) return; e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}>
-      <div class="st-card-h">
-        <h2 id="st-files-h" class="st-h">자료{list.length ? <span class="st-count">{list.length}</span> : null}</h2>
+      <FoldHead id="st-files" title="자료" count={list.length} open={open} onToggle={onToggle} summary={list.length ? `참가자가 받는 파일 · ${sizeText(total)}` : '활동지·참고 파일을 올리면 참가자가 받아요'}>
         <button type="button" class="btn btn-sm" disabled={busy || locked} onClick={() => input.current?.click()}>{busy ? '추가하는 중…' : '자료 추가'}</button>
-      </div>
+      </FoldHead>
       <input ref={input} type="file" multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
+      <div class="st-fold-b" id="st-files-b" hidden={!open}>
       {list.length ? <ol class="st-files-list" aria-label="자료 목록">{list.map((x, i) => (
         <li key={x.id}>
           {edit?.id === x.id ? <form class="st-file-edit" onSubmit={(e) => { e.preventDefault(); const t = edit.title.trim(); save((cur) => cur.map((y) => (y.id === x.id ? { ...y, title: t || y.title, desc: edit.desc.trim() } : y))); setEdit(null); }}>
@@ -93,6 +94,7 @@ export function FilesCard({ p, update, hasSlot, onAskSlot, locked }) {
         {del && <><h2 class="h-sub">'{del.title}' 자료를 삭제할까요?</h2><p>사이트의 자료실에서도 빠져요. 이미 배포했으면 다시 배포해야 사이트에서 빠져요.</p>
           <div class="btn-row"><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button><button class="btn btn-danger" onClick={() => remove(del)}>삭제</button></div></>}
       </Dialog>
+      </div>
     </section>
   );
 }

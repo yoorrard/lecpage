@@ -107,6 +107,8 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
   const url = siteId ? `https://api.netlify.com/api/v1/sites/${siteId}/deploys` : `https://api.netlify.com/api/v1/sites${name ? `?name=${encodeURIComponent(name)}` : ''}`;
   const r = await net(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/zip' }, body: zip });
   const j = await r.json().catch(() => ({}));
+  // 지난번 사이트를 Netlify에서 지웠거나 다른 계정 토큰으로 바꿨으면(404) 새 사이트로 만듦(계속 'Not Found'로 막히지 않게)
+  if (siteId && r.status === 404) return deployNetlify({ token, siteId: '', zip, name, onProgress });
   if (!r.ok) { const e = new Error(/must be unique|already/i.test(j.message || '') ? j.message : NF_ERR[r.status] || j.message || `Netlify 오류 ${r.status}`); e.status = r.status; throw e; }
   onProgress({ step: '처리 중', pct: 70 });
   const site = siteId || j.site_id || j.id;
@@ -207,6 +209,8 @@ export async function deployVercel({ token, name, projectId, files, onProgress =
     onProgress({ step: round ? '사이트 만들기' : '바뀐 파일 확인', pct: round ? 72 : 6 });
     try { d = await vc(token, 'POST', '/v13/deployments?skipAutoDetectionConfirmation=1', body); }
     catch (e) {
+      // 지난번 프로젝트를 Vercel에서 지웠거나 다른 계정 토큰이면(404) 새 프로젝트로 다시(계속 'Not Found'로 막히지 않게)
+      if (projectId && e.status === 404 && e.code !== 'missing_files') return deployVercel({ token, name: name || wanted, projectId: '', files, onProgress });
       if (e.code !== 'missing_files' || !e.missing.length || round >= 2) throw e;
       const need = [...new Set(e.missing)].filter((sha) => blobs.has(sha)); let done = 0;
       await pool(need, 6, async (sha) => {
@@ -588,14 +592,19 @@ export function siteStat(files) {
  * - 삭제(url ''): 그곳 기록을 지우고, 대표였으면 가장 최근에 배포한 다른 곳이 대표(없으면 비움)
  * @returns {{ sites, lastUrl, target, at }}
  */
-export function mergeSite(d = {}, url, target, now = Date.now()) {
+export function mergeSite(d = {}, url, target, opts = {}) {
+  // opts: { live: 이 사이트에 참여 기능이 들어갔는지(true·false, 모르면 null), keepMain: 대표 주소를 그대로 둘지, now }
+  if (typeof opts === 'number') opts = { now: opts }; // 예전 호출(now만 넘김)
+  const now = opts.now || Date.now();
   const sites = { ...(d.sites || {}) };
   if (!d.sites && d.lastUrl && d.target) sites[d.target] = { url: d.lastUrl, at: d.at || 0 }; // 예전 기록 옮기기
   let lastUrl = url; let tgt = target; let at = now;
   if (url) {
     const had = !!sites[target];
-    sites[target] = { url, at: now };
-    if (had && d.lastUrl && d.target && d.target !== target && sites[d.target]) { lastUrl = d.lastUrl; tgt = d.target; at = d.at || now; }
+    const live = typeof opts.live === 'boolean' ? opts.live : sites[target]?.live; // 모르면(주소만 다시 저장) 지난 표시 그대로
+    const lock = opts.lock || sites[target]?.lock; // 배포할 때의 공개 범위·암호(배포한 뒤 바꾸면 다시 배포할 때까지 사이트는 그대로)
+    sites[target] = { url, at: now, ...(typeof live === 'boolean' ? { live } : {}), ...(lock ? { lock } : {}) };
+    if ((had || opts.keepMain) && d.lastUrl && d.target && d.target !== target && sites[d.target]) { lastUrl = d.lastUrl; tgt = d.target; at = d.at || now; }
   } else {
     delete sites[target];
     const rest = Object.entries(sites).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];

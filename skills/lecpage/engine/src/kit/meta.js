@@ -11,7 +11,7 @@ export const LIVE_FEATURE_KEYS = ['qa', 'help', 'progress', 'board', 'poll', 'at
 export const TEACHER_KEYS = ['live', 'siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
 export const MODES = ['offline', 'online', 'blended'];
 export const AUDIENCES = ['teachers', 'students', 'parents', 'staff', 'other'];
-const PROVIDERS = ['local', 'http', 'supabase', 'sheets'];
+const PROVIDERS = ['local', 'http', 'supabase', 'sheets', 'none']; // none: 강사가 '참여 기능 없이'를 고름(연습 모드로 바꾸지 않음)
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 export function str(v, max = 400) {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Dialog } from '../../../components/ui.jsx';
 import { KIT_LABEL, SETTABLE, INSERTABLE, POLL_KINDS, SURVEY_KINDS, LIMIT, readKit, writeKit, checkKit, kitSummary, splitList } from '../../../lib/kit-fields.js';
 import { toast } from '../../../lib/util.js';
+import { FoldHead } from './Parts.jsx';
 
 // 사이트 구성: 쪽마다 섹션 목록(Webflow Navigator·Framer Layers처럼) + 섹션 안의 항목(참여 기능·실습 단계, GrapesJS Traits·Puck Fields처럼 그 자리에서 설정).
 // 섹션: 끌기(또는 ↑↓·Alt+↑↓)로 순서, 눈 버튼으로 숨기기, 두 번 누르기(또는 F2)로 이름 바꾸기, […]에서 AI로 수정·삭제. 누르면 미리보기가 그 섹션으로.
@@ -32,7 +33,7 @@ const secSum = (s) => [s.hidden ? '숨김' : '', s.steps ? `실습 ${s.steps}단
  * outlines: [{ page, label, sections, loose }] · sel: { page, key, item } · reveal: 미리보기에서 고른 것({ page, key, item, n })
  * act: move·hide·remove·rename·ask(섹션), kitSave·kitRemove·kitAdd(항목) · onSelect·onHover: 미리보기와 잇기
  */
-export function Outline({ outlines, locked, sel, reveal, act, onSelect, onHover, surveyDefaults }) {
+export function Outline({ outlines, locked, sel, reveal, act, onSelect, onHover, surveyDefaults, open: shown = true, onToggle }) {
   const [open, setOpen] = useState(() => new Set());
   const [form, setForm] = useState(''); // 열린 항목 설정 칸: 'page:n:type' 또는 새 항목 'new:page#id:type'
   const [rename, setRename] = useState(''); const [del, setDel] = useState(null);
@@ -41,6 +42,10 @@ export function Outline({ outlines, locked, sel, reveal, act, onSelect, onHover,
   const root = useRef();
   const total = outlines.reduce((a, o) => a + o.sections.length, 0);
   const multi = outlines.length > 1;
+  // 접혔을 때 한 줄: 쪽·섹션·참여 기능 수
+  const kits = outlines.reduce((a, o) => a + o.sections.reduce((b, x) => b + x.items.length, 0) + (o.loose || []).length, 0);
+  const outSum = total ? [outlines.length > 1 ? `${outlines.length}쪽` : '', `섹션 ${total}개`, kits ? `참여 기능·실습 ${kits}개` : ''].filter(Boolean).join(' · ') : '섹션이 없어요';
+
   const toggle = (k, on) => setOpen((s) => { const n = new Set(s); if (on ?? !n.has(k)) n.add(k); else n.delete(k); return n; });
   const focusSec = (page, i, dir = '') => setTimeout(() => {
     const li = root.current?.querySelectorAll(`.sec2-list[data-page="${CSS.escape(page)}"] > .sec2`)[i];
@@ -114,7 +119,8 @@ export function Outline({ outlines, locked, sel, reveal, act, onSelect, onHover,
   };
   return (
     <section class="st-card st-outline" aria-labelledby="st-outline-h" ref={root} onKeyDown={escMenu}>
-      <div class="st-card-h"><h2 id="st-outline-h" class="st-h">사이트 구성{total ? <span class="st-count">{total}</span> : null}</h2></div>
+      <FoldHead id="st-outline" title="사이트 구성" count={total} open={shown} onToggle={onToggle} summary={outSum} />
+      <div class="st-fold-b" id="st-outline-b" hidden={!shown}>
       <p class="small muted st-outline-tip">끌어서 순서를 바꾸고, 펼쳐서 항목을 바로 고쳐요.</p>
       {locked && <p class="lock-note small">AI가 고치는 동안에는 바꿀 수 없어요.</p>}
       {outlines.map((o) => (
@@ -175,6 +181,7 @@ export function Outline({ outlines, locked, sel, reveal, act, onSelect, onHover,
         {del && <><h2 class="h-sub">'{del.s.name}' 섹션을 삭제할까요?</h2><p>숨기기는 사이트에서 감추기만 해요. 삭제한 것은 [실행 취소]나 [버전 기록]으로 되살릴 수 있어요.</p>
           <div class="btn-row"><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button><button class="btn" onClick={() => { act.hide(del.page, del.s.id, true); setDel(null); }}>숨기기</button><button class="btn btn-danger" onClick={() => { act.remove(del.page, del.s.id); setDel(null); toast(`삭제했어요: ${del.s.name}`); focusSec(del.page, Math.max(0, del.i - 1)); }}>삭제</button></div></>}
       </Dialog>
+      </div>
     </section>
   );
 }

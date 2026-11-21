@@ -176,7 +176,7 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
  * buildFiles(opts) → { files }, guard(run, auto, kind): 참여 기능 연결 전이면 먼저 물어봄(kind 'zip': 사이트 ZIP 다운로드), done(url, patch): 주소 저장.
  * again: { current } 지난번에 배포한 곳에 바로 다시 배포하는 함수를 여기에 걸어 둠(성공 카드의 [다시 배포하기]가 부름). 못 하면 null
  */
-export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom }) {
+export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom, liveNote }) {
   const [connected, setConnected] = useState([]);
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
@@ -312,6 +312,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
             <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{p.deploy?.sites?.[id] && <i>배포함</i>}{connected.includes(id) && <i>연결됨</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
+      {target !== 'lecpage' && liveNote && <LiveNote note={liveNote} where={target} instant={!!(live && order.includes('lecpage'))} onInstant={() => { setPicked('lecpage'); setMore(false); }} />}
       {/* 같은 곳에 다시 배포할 때는 소개·한도·알아 둘 점을 되풀이하지 않음(처음 배포할 때 봤고, 보관 기간은 위 완료 카드에 있음) */}
       {!(p.deploy?.lastUrl && target === p.deploy?.target) && <div class="pub-about">
         <p>{lead}</p>
@@ -334,6 +335,49 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   );
 }
 
+/** 직접 올린 곳의 주소 → 사이트 폴더 주소(…/index.html처럼 파일로 끝나면 그 폴더. QR·강사 화면 주소가 '…/index.html/'이 되지 않게) */
+const siteDir = (u) => {
+  const t = String(u || '').trim().split('#')[0].split('?')[0];
+  try { const x = new URL(t); if (/\/[^/]+\.[a-z0-9]{2,5}$/i.test(x.pathname)) { x.pathname = x.pathname.replace(/[^/]*$/, ''); return x.href; } } catch { /* 주소 모양이 아니면 그대로 */ }
+  return t.replace(/\/?$/, '/');
+};
+
+/**
+ * 다른 곳(Vercel·GitHub Pages·Netlify·Cloudflare·ZIP)에 배포할 때 참여 기능 안내: 배포할 곳을 고른 바로 그 자리에서.
+ * 이런 곳은 사이트 파일만 올려 주므로 질문·투표·출석의 답을 모을 서버를 따로 연결해야 함(바로 배포는 lecpage 서버가 맡음).
+ * 할 일은 셋: 바로 배포로 바꾸기(가장 쉬움) · 참여 기능 연결하기 · 참여 기능 없이 배포
+ */
+function LiveNote({ note, where, instant, onInstant }) {
+  const place = where === 'zip' ? '사이트 파일(ZIP)로 직접 올리면' : `${LABEL[where] || where}에 배포하면`;
+  if (note.skip) return <p class="small pub-live-skip" role="status">참여 기능({note.feats}) 없이 배포해요. <button type="button" class="btn-link small" onClick={note.onUnskip}>다시 켜기</button></p>;
+  if (!note.need) return null;
+  return (
+    <div class="pub-live" role="note" aria-labelledby="pub-live-h">
+      <b id="pub-live-h">{note.lecOnly ? `${LABEL[where] || where} 사이트에서는 참여 기능이 켜지지 않아요` : `${place} 참여 기능은 따로 연결해야 해요`}</b>
+      <p class="small">{note.lecOnly
+        ? '질문·투표·출석은 바로 배포한 사이트에서만 돼요. 이대로 배포하면 이 사이트는 참여 기능 없이 올라가고, 참가자에게 알릴 대표 주소는 바로 배포 주소 그대로예요.'
+        : `질문·투표·출석 같은 참여 기능은 참가자의 답을 모아 둘 서버가 있어야 돼요. 이런 곳은 사이트 파일만 올려 줘서, 연결하지 않으면 강의 당일 답이 모이지 않아요.${instant ? ' 바로 배포는 lecpage 서버가 맡아 따로 할 일이 없어요.' : ''}`}</p>
+      <div class="btn-row">
+        {instant && !note.lecOnly && <button type="button" class="btn btn-sm" onClick={onInstant}>바로 배포로 바꾸기</button>}
+        <button type="button" class="btn btn-sm" onClick={note.onConnect}>참여 기능 연결하기</button>
+        <button type="button" class="btn btn-sm btn-quiet" onClick={note.onSkip}>참여 기능 없이 배포</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 강사가 연결한 참여 기능 서버를 바로 배포한 사이트에서도 쓸 수 있는지. 바로 배포 서버의 사이트 CSP는 강사 계정 서버 모양만 열어 줌
+ * (hosting/src/csp.js declaredLive: https의 *.workers.dev·*.supabase.co, 구글 시트). 그 밖의 주소(자기 도메인 Node 서버 등)는 연결이 막힘
+ */
+export function instantLiveOk(live) {
+  if (!live?.url || !['sheets', 'supabase', 'http'].includes(live.provider)) return false;
+  if (live.provider === 'sheets') return /^https:\/\/script\.google\.com\//.test(live.url);
+  let u; try { u = new URL(live.url); } catch { return false; }
+  if (u.protocol !== 'https:' || u.port || u.username) return false;
+  return live.provider === 'supabase' ? /^[a-z0-9]{8,40}\.supabase\.co$/.test(u.hostname) : /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+workers\.dev$/.test(u.hostname);
+}
+
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
 function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
@@ -346,10 +390,12 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   const liveOn = (bp.live?.features || []).length > 0;
   const lecUrl = info?.live?.url || '';
   const days = info?.capacity?.siteDays || info?.limits?.days || 30;
-  // 강사가 따로 연결한 참여 기능 서버(이 바로 배포 서버가 아닌 것)
-  const own = ['sheets', 'supabase', 'http'].includes(bp.live?.provider) && !!bp.live?.url && !!p.liveOk && !sameUrl(bp.live.url, lecUrl);
+  // 강사가 따로 연결한 참여 기능 서버(이 바로 배포 서버가 아닌 것). 한 번 확인에 실패했어도(liveOk) 강사가 고른 연결은 덮어쓰지 않음.
+  // 바로 배포한 사이트가 실제로 닿을 수 있는 서버(hosting/src/csp.js declaredLive와 같은 규칙)일 때만 그 서버를 씀
+  const own = instantLiveOk(bp.live) && !sameUrl(bp.live.url, lecUrl);
   const liveOff = lecLiveOff(p); // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있음 → 강사가 연결한 서버가 있으면 그것으로
-  const autoLive = liveOn && !!lecUrl && !(liveOff && own); // 참여 기능을 이 서버가 맡음(방이 차면 서버가 알려 주고 뺌)
+  // 참여 기능을 이 서버가 맡음(방이 차면 서버가 알려 주고 뺌). 강사가 따로 연결한 서버가 있으면 그것을 그대로 씀(연결을 바로 배포 방으로 덮어쓰지 않게)
+  const autoLive = liveOn && !!lecUrl && !own;
   // newCode: 연수 코드가 다른 사이트와 겹쳤을 때, 또는 지난 기록을 비우고 배포할 때(freshRoom) 새로 정한 코드.
   // 사이트를 그 코드로 다시 만들어 올리고 방을 새로 묶음(서버가 예전 코드의 방을 비움). 주소·관리자 키는 그대로
   const run = (newCode = freshRoom && autoLive ? E.randomCode() : '', retried = false) => start('lecpage', async (files, onProgress, rebuild) => {
@@ -369,7 +415,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     const lecLive = autoLive && !out.liveOff;
     const off = out.liveOff ? { ...out.liveOff, at: Date.now() } : !lecLive && liveOff && own ? liveOff : null; // 연결한 서버로 넘긴 동안은 그대로 기억
     const wasLec = bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl);
-    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(lecLive ? { adminKey } : {}), ...(info?.keepAlive === false ? { fixed: true } : {}), // fixed: 보관 기간이 정해진 서버(방문으로 늘지 않음)
+    done(out.url, { lecpage: { id: out.id, key: out.key, url: out.url, expiresAt: out.expiresAt, ...(out.altUrl ? { altUrl: out.altUrl, view: out.view } : {}), ...(lecLive ? { adminKey } : prev?.adminKey ? { adminKey: prev.adminKey } : {}), ...(info?.keepAlive === false ? { fixed: true } : {}), // fixed: 보관 기간이 정해진 서버(방문으로 늘지 않음)
       ...(off ? { liveOff: off } : {}), ...(out.advice || (prev?.longTerm && prev.id === out.id) ? { longTerm: true } : {}) } },
     lecLive ? { live: { provider: 'http', url: out.liveUrl || lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, liveOk: true }
       : out.liveOff && wasLec ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null);
@@ -390,7 +436,7 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   bind(() => run());
   async function remove() {
     setAsk(false);
-    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 삭제했어요.'); }
+    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey && bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl) ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 삭제했어요.'); }
     catch (e) { toast('삭제하지 못했어요. ' + e.message); }
   }
   const askRemove = () => { setRec(records || null); setAsk(true); instantRecords(prev).then((r) => r && setRec(r)); };
@@ -434,7 +480,7 @@ function Vercel({ p, busy, start, done, bind, refresh }) {
   const run = () => start('vercel', async (files, onProgress) => {
     const out = await deployVercel({ token: t.token, name: clean || slug(deployView(p)?.meta?.date), projectId: prev?.projectId, files, onProgress });
     done(out.url, { vercel: { projectId: out.projectId, name: out.name, url: out.url } });
-    toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '배포했어요.');
+    toast(prev && prev.url && out.url !== prev.url ? '지난 프로젝트가 Vercel에 없어 새 주소로 배포했어요. 새 주소와 QR을 다시 알려 주세요.' : prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Vercel의 배포 보호를 껐어요.' : '배포했어요.');
   }, (e) => tokenGone(e, t, refresh));
   bind(t.saved ? run : null);
   async function unlock() {
@@ -486,9 +532,9 @@ function Netlify({ p, busy, start, done, bind, refresh }) {
   const [name, setName] = useState(prev?.name || '');
   const nameOk = !name || /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(name);
   const run = () => start('netlify', async (files, onProgress) => {
-    const out = await deployNetlify({ token: t.token, siteId: prev?.siteId, name: prev ? '' : name, zip: E.zipFiles(files), onProgress });
-    done(out.url, { netlify: { siteId: out.siteId, url: out.url, name } });
-    toast(prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소에 로그인 창이 뜨면 Netlify 프로젝트의 접근 보호를 꺼 주세요.');
+    const out = await deployNetlify({ token: t.token, siteId: prev?.siteId, name: prev ? prev.name || '' : name, zip: E.zipFiles(files), onProgress });
+    done(out.url, { netlify: { siteId: out.siteId, url: out.url, name: prev ? prev.name || name : name } });
+    toast(prev && prev.url && out.url !== prev.url ? '지난 사이트가 Netlify에 없어 새 주소로 배포했어요. 새 주소와 QR을 다시 알려 주세요.' : prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소에 로그인 창이 뜨면 Netlify 프로젝트의 접근 보호를 꺼 주세요.');
   }, (e) => { if (!/must be unique|already/i.test(e.message)) return tokenGone(e, t, refresh); toast('이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.'); return true; });
   bind(t.saved && nameOk ? run : null);
   return (
@@ -516,7 +562,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '배포한 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
       <div class="row token-row"><input class="input" value={url} onInput={(e) => setUrl(e.target.value)} placeholder="https://" inputMode="url" autoComplete="off" spellcheck={false} aria-label="배포한 사이트 주소" />
-        <button class="btn btn-sm btn-primary" disabled={!ok} onClick={() => { done(url.trim().replace(/\/?$/, '/'), { [kind]: { url: url.trim() } }); toast('주소를 저장했어요.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>주소 저장</button></div>
+        <button class="btn btn-sm btn-primary" disabled={!ok} onClick={() => { done(siteDir(url), { [kind]: { url: url.trim() } }); toast('주소를 저장했어요.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>주소 저장</button></div>
     </> };
   const steps = !cf ? [get,
     { t: '폴더째 옮기기', body: <p>쓸 곳에 폴더째 옮겨요. <span class="links"><a href={`${DOCS}/own-server-nginx-caddy.md`} target="_blank" rel="noopener">학교·기관 서버</a><a href={`${DOCS}/nas-synology.md`} target="_blank" rel="noopener">NAS</a><a href={`${DOCS}/local-lan-classroom.md`} target="_blank" rel="noopener">인터넷 없는 강의실</a><a href={`${DOCS}/zip-usb-offline.md`} target="_blank" rel="noopener">USB</a></span></p> },

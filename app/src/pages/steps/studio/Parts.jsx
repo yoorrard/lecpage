@@ -6,7 +6,43 @@ import { sameState } from '../../../lib/site-meta.js';
 import { blobs } from '../../../lib/db.js';
 import { toast, uid } from '../../../lib/util.js';
 
-// 완성 화면(Studio)의 작은 부품: 색·글꼴·그림 바꾸기·버전 기록·꼭 고칠 곳 한 줄(사이트 구성은 Outline.jsx)
+// 완성 화면(Studio)의 작은 부품: 접는 칸 머리·색·글꼴·그림 바꾸기·버전 기록·꼭 고칠 곳 한 줄(사이트 구성은 Outline.jsx)
+
+/**
+ * 수정 칸의 접는 칸(연수 정보·사이트 구성·자료·색·글꼴): 처음에는 모두 접혀 있고 AI 수정 대화가 먼저 보임.
+ * 펼친 칸은 이 탭이 열려 있는 동안만 기억(sessionStorage): 단계를 오가거나 새로 고쳐도 그대로, 새로 열면 다시 접힌 채로 시작
+ */
+const FOLD_KEY = 'lecpage:studio-fold';
+const foldState = () => { try { const v = JSON.parse(sessionStorage.getItem(FOLD_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+export function useFolds() {
+  const [s, set] = useState(foldState);
+  const setFold = (k, v) => set((cur) => {
+    const on = typeof v === 'function' ? v(!!cur[k]) : !!v;
+    if (on === !!cur[k]) return cur;
+    const n = { ...cur, [k]: on };
+    try { sessionStorage.setItem(FOLD_KEY, JSON.stringify(n)); } catch { /* 저장이 막힌 창: 이번 화면에서만 */ }
+    return n;
+  });
+  return [s, setFold];
+}
+/**
+ * 접는 칸 머리(WAI-ARIA 아코디언: 제목 안의 버튼 하나가 펼치고 접음). 접혔을 때는 제목 옆에 한 줄 요약.
+ * children: 칸을 펼치지 않고도 바로 누르는 단추(예: [이 정보가 맞아요]·[자료 추가])
+ */
+export function FoldHead({ id, title, count, open, onToggle, summary, warn, children }) {
+  return (
+    <div class="st-card-h st-fold-h">
+      <h2 class="st-h" id={`${id}-h`}>
+        <button type="button" class="st-fold-t" aria-expanded={String(!!open)} aria-controls={`${id}-b`} onClick={onToggle}>
+          <span class="st-fold-n">{title}{count ? <span class="st-count">{count}</span> : null}</span>
+          {!open && summary ? <span class={`st-fold-s${warn ? ' is-warn' : ''}`}>{summary}</span> : null}
+          <i class="st-chev" aria-hidden="true" />
+        </button>
+      </h2>
+      {children}
+    </div>
+  );
+}
 const FONTS = [{ value: '', label: '사이트 그대로' }, { value: '"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif', label: '고딕' }, { value: '"Noto Serif KR","Nanum Myeongjo","AppleMyungjo",serif', label: '명조' }, { value: '"Nanum Square Round","Apple SD Gothic Neo","Malgun Gothic",sans-serif', label: '둥근 고딕' }];
 function lum(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return null; const v = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
 const ratio = (a, b) => { const x = lum(a), y = lum(b); if (x === null || y === null) return 0; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
@@ -40,6 +76,19 @@ export function LookPanel({ p, change }) {
   );
 }
 
+/** 색·글꼴 칸(접는 칸): 접혔을 때는 지금 색 세 가지 견본 */
+export function LookCard({ p, change, open, onToggle }) {
+  const { css } = readCss(p.site || {});
+  const sw = ['accent', 'ink', 'paper'].map((k) => hex6(getVar(css, k)) || p.meta?.theme?.[k] || '').filter(Boolean);
+  const summary = sw.length ? <span class="look-sw">{sw.map((c) => <i key={c} style={{ background: c }} />)}<span class="sr">강조색·글자색·바탕색</span></span> : '강조색·글자색·바탕색';
+  return (
+    <section class="st-card st-tools" aria-labelledby="st-look-h">
+      <FoldHead id="st-look" title="색·글꼴" open={open} onToggle={onToggle} summary={summary} />
+      <div class="st-fold-b" id="st-look-b" hidden={!open}><LookPanel p={p} change={change} /></div>
+    </section>
+  );
+}
+
 /** 그림 바꾸기: 교재 쪽 그림 또는 올린 사진 */
 export function ImageDialog({ n, p, onClose, onPick }) {
   const [pages, setPages] = useState([]); const [alt, setAlt] = useState('');
@@ -54,8 +103,10 @@ export function ImageDialog({ n, p, onClose, onPick }) {
       const list = keys.filter((k) => /^(assets\/slides\/|site\/material\/)/.test(k) && /\.(webp|png|jpe?g)$/i.test(k));
       const seen = new Set(); const out = [];
       for (const k of list.sort()) {
+        if (off) break; // 창을 닫았으면 그만(닫은 뒤에 만든 주소는 정리되지 않으므로 더 만들지 않음)
         const num = +(/(\d+)\.\w+$/.exec(k)?.[1] || 0); if (seen.has(num)) continue; seen.add(num);
-        const v = await blobs.get(p.id, k); const u = URL.createObjectURL(v instanceof Blob ? v : new Blob([v])); urls.push(u);
+        const v = await blobs.get(p.id, k); if (off) break;
+        const u = URL.createObjectURL(v instanceof Blob ? v : new Blob([v])); urls.push(u);
         out.push({ key: k, num, url: u });
       }
       if (!off) setPages(out);

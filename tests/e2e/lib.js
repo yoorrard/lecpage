@@ -111,8 +111,14 @@ async function connectAi(p) {
 }
 const connectGemini = connectAi;
 
-/** 만드는 중 화면이 끝나고 완성 화면(목록)이 열릴 때까지 */
-async function waitStudio(p, timeout = 60000) { await p.waitForSelector('.st .st-panel .st-info', { timeout }); if ((p.viewportSize()?.width || 1366) > 960) await p.waitForSelector('.pv-device iframe', { timeout: 30000 }); await p.waitForTimeout(600); }
+/** 수정 칸의 접는 칸(연수 정보·사이트 구성·자료·색·글꼴)을 모두 펼침. 이 탭에 기억되어 새로 고쳐도 펼친 채 */
+async function openFolds(p) {
+  const closed = p.locator('.st-panel .st-fold-t[aria-expanded="false"]');
+  for (let i = await closed.count(); i > 0; i--) await closed.first().click();
+  await p.waitForTimeout(100);
+}
+/** 만드는 중 화면이 끝나고 완성 화면(목록)이 열릴 때까지. folds: 접는 칸을 펼쳐 둠(처음에는 접혀 있음. 접힌 모습을 볼 때만 false) */
+async function waitStudio(p, timeout = 60000, { folds = true } = {}) { await p.waitForSelector('.st .st-panel .st-info', { timeout }); if ((p.viewportSize()?.width || 1366) > 960) await p.waitForSelector('.pv-device iframe', { timeout: 30000 }); await p.waitForTimeout(600); if (folds) await openFolds(p); }
 
 /** IndexedDB의 그 연수 */
 async function readProject(p, id) {
@@ -120,4 +126,4 @@ async function readProject(p, id) {
 }
 const pidOf = (p) => (/#\/p\/([^/]+)/.exec(p.url()) || [])[1];
 
-module.exports = { consent, chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, aiReady, makeWith, connectGemini, connectAi, waitStudio, readProject, pidOf, cors };
+module.exports = { consent, chromium, fs, BASE, S, OUT, FIX, ok, summary, mockAi, geminiFails, watch, startWithFile, aiReady, makeWith, connectGemini, connectAi, waitStudio, openFolds, readProject, pidOf, cors };

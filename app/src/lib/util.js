@@ -42,7 +42,7 @@ export function saveFile(name, data, type = 'application/octet-stream') {
   const blob = data instanceof Blob ? data : new Blob([data], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000); // 큰 ZIP은 받기가 늦게 시작하는 브라우저(Safari 등)가 있어 넉넉히
 }
 
 export function randomKey(len = 20) {

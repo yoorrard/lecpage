@@ -33,12 +33,26 @@ export function deployView(p) {
   return {
     v2: true,
     meta: { title: m.title || p.title || '', subtitle: m.subtitle || '', date: s0.date || '', start: s0.start || '', end: s0.end || '', sessions: (m.sessions || []).filter((s) => s?.date), venue: m.venue || '', siteUrl: m.siteUrl || '', shortUrl: m.shortUrl || '', admin: m.admin || null, organizer: m.organizer || '' },
-    live: { provider: lv.provider || 'local', url: lv.url || '', anonKey: lv.anonKey || '', code: lv.code || '', anonymous: lv.anonymous !== false, features: (m.features || []).filter((f) => LIVE_KEYS.includes(f)) },
+    live: { provider: lv.provider || 'local', url: lv.url || '', anonKey: lv.anonKey || '', code: lv.code || '', anonymous: lv.anonymous !== false, features: (m.features || []).filter((f) => LIVE_KEYS.includes(f)), ...(typeof lv.uploads === 'boolean' ? { uploads: lv.uploads } : {}) },
     access: { mode: m.access || 'link' },
     privacy: m.privacy || {},
     audience: { size: p.info?.size || 30, minor: m.audience === 'students' && !!p.info?.minor },
-    sections: [],
+    // 새 판은 설계도 섹션이 없음: 참여 기능 방 설정(파일 올리기·사전 검토, LiveSetup liveSettings)은 사이트 글의 보드 자리 표시에서 읽음
+    sections: siteBoards(p.site),
   };
+}
+/** 사이트 글의 보드 자리 표시(data-lp="board") → [{ type:'board', allowFiles, moderation }]. 엔진 조립과 같은 규칙: data-files가 없으면 4개, 0이면 끔 */
+export function siteBoards(site) {
+  for (const [k, v] of Object.entries(site || {})) {
+    if (!/\.html?$/i.test(k) || typeof v !== 'string') continue;
+    const tag = /<[a-z][^>]*\sdata-lp\s*=\s*["']board["'][^>]*>/i.exec(v)?.[0];
+    if (!tag) continue;
+    const a = (n) => new RegExp(`\\s${n}\\s*=\\s*["']([^"']*)["']`, 'i').exec(tag)?.[1];
+    const want = a('data-files');
+    const max = want === undefined ? 4 : Math.max(0, Math.min(8, Math.round(+want || 0)));
+    return [{ type: 'board', allowFiles: max > 0, moderation: /^(1|true|yes|on)$/i.test(a('data-moderation') || '') }];
+  }
+  return [];
 }
 
 /** 배포용 보기를 고친 함수(fn: view → view)를 연수 patch로. update((cur) => patchDeploy(cur, fn)) */
@@ -47,7 +61,7 @@ export function patchDeploy(cur, fn) {
   const before = deployView(cur); const b = fn(before); const m = { ...(cur.meta || {}) };
   if (b.live !== before.live) {
     const l = b.live || {};
-    m.live = { provider: l.provider || 'local', url: l.url || '', anonKey: l.anonKey || '', code: l.code || m.live?.code || randomCode(), ...(l.anonymous === false ? { anonymous: false } : {}) };
+    m.live = { provider: l.provider || 'local', url: l.url || '', anonKey: l.anonKey || '', code: l.code || m.live?.code || randomCode(), ...(l.anonymous === false ? { anonymous: false } : {}), ...(typeof l.uploads === 'boolean' && l.provider !== 'local' ? { uploads: l.uploads } : {}) };
     if (Array.isArray(l.features) && l.features !== before.live.features) m.features = [...(m.features || []).filter((f) => !LIVE_KEYS.includes(f)), ...l.features];
   }
   if (b.access !== before.access) m.access = b.access?.mode || 'link';
@@ -101,7 +115,7 @@ export function printSiteHtml(p) {
  */
 export function carryPatch(cur) {
   const c = cur.carryPending; if (!c) return {};
-  if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => m.saveKey('live-admin:' + c.live.url.replace(/\/+$/, ''), c.liveAdminKey, true)).catch(() => { });
+  if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => { const slot = 'live-admin:' + c.live.url.replace(/\/+$/, ''); m.saveKey(slot, c.liveAdminKey, true); if (c.live.code) m.saveKey(slot + '#' + c.live.code, c.liveAdminKey, true); }).catch(() => { });
   const moved = isV2(cur) || cur.blueprint ? patchDeploy(cur, (b) => ({ ...b, live: { ...(b.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(b.meta || {}), siteUrl: c.deploy.lastUrl } })) : {};
   return { deploy: c.deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
 }

@@ -40,6 +40,14 @@ export async function duplicateProject(p0) {
   const { randomCode } = await import('@engine/src/util.js');
   if (p.blueprint?.live) p.blueprint.live.code = randomCode();
   if (p.meta) { p.meta.title = p.title; p.meta.siteUrl = ''; p.meta.shortUrl = ''; if (p.meta.live) p.meta.live = { ...p.meta.live, code: randomCode() }; }
+  // 참여 기능 연결은 연수 코드마다 따로라 사본(새 코드)에는 그대로 쓸 수 없음: 바로 배포 방은 원래 사이트의 것이라 빼고,
+  // 강사가 연결한 서버(시트·Supabase·내 서버)는 남겨 두되 '연결 전'으로(배포하기 화면에서 [다시 확인]으로 새 코드를 등록)
+  const { PUBLISH_API } = await import('./publish-api.js');
+  const origin = (u) => { try { return new URL(u).origin; } catch { return ''; } };
+  for (const lv of [p.meta?.live, p.blueprint?.live].filter(Boolean)) {
+    if (lv.provider === 'http' && PUBLISH_API && origin(lv.url) === origin(PUBLISH_API)) Object.assign(lv, { provider: 'local', url: '', anonKey: '' });
+  }
+  p.liveOk = false;
   delete p.demo;
   await projects.put(p);
   const assets = await blobs.all(p0.id);
@@ -63,7 +71,8 @@ export async function exportProjectFile(p, { withKeys = false } = {}) {
   if (withKeys && p.deploy?.lastUrl) {
     const live = (await siteMeta()).deployView(p)?.live || {};
     const own = OWN_LIVE.includes(live.provider) && live.url;
-    const liveAdminKey = own ? (await (await import('./ai.js')).loadKey('live-admin:' + String(live.url).replace(/\/+$/, ''))).key || '' : '';
+    const slot = 'live-admin:' + String(live.url).replace(/\/+$/, ''); const ai = own ? await import('./ai.js') : null; // 관리자 키: 연수 코드로 기억한 것 먼저(LiveSetup adminKeyFor와 같은 규칙)
+    const liveAdminKey = own ? (live.code && (await ai.loadKey(slot + '#' + live.code).catch(() => ({}))).key) || (await ai.loadKey(slot).catch(() => ({}))).key || '' : '';
     carry = { deploy: p.deploy, live: { provider: live.provider || 'none', url: live.url || '', anonKey: live.anonKey || '', code: live.code || '' }, liveOk: !!p.liveOk, sitePassword: p.sitePassword || '', ...(liveAdminKey ? { liveAdminKey } : {}) };
   }
   const project = { ...p, deploy: undefined, sitePassword: undefined, carry: undefined, carryPending: undefined, fileHash: undefined, pastDeploy: pastOf(p) || p.pastDeploy || undefined, ...(carry ? { carry } : {}) };

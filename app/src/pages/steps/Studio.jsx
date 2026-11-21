@@ -13,7 +13,7 @@ import { available, pickConnection, jobOpts, pcNow, setPreferred, askConsent, co
 import { InfoCard } from './studio/Info.jsx';
 import { FilesCard } from './studio/Files.jsx';
 import { ChatLog, Composer, useWay } from './studio/Chat.jsx';
-import { LookPanel, ImageDialog, Versions, IssueLine, seriousOf } from './studio/Parts.jsx';
+import { LookCard, ImageDialog, Versions, IssueLine, seriousOf, useFolds } from './studio/Parts.jsx';
 import { Outline } from './studio/Outline.jsx';
 import { KIT_LABEL } from '../../lib/kit-fields.js';
 
@@ -28,6 +28,7 @@ const SLOT = /data-lp\s*=\s*["']?materials\b/;
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 960px)').matches;
 
 export function Studio({ p, update, go, job, idle, reload }) {
+  const [fold, setFold] = useFolds(); // 오른쪽 칸의 접는 칸(처음에는 모두 접힘: AI 수정 대화가 먼저)
   const [view, setViewRaw] = useState('edit'); // 휴대폰: 수정 칸 | 미리보기
   // 휴대폰에서 보기를 바꾸면 그 보기의 맨 위부터(아래로 내려 둔 자리에서 미리보기 도구가 화면 밖에 있지 않게)
   const setView = (v) => { setViewRaw((o) => { if (o !== v && typeof matchMedia === 'function' && matchMedia('(max-width: 960px)').matches) requestAnimationFrame(() => { const el = document.querySelector('.st'); if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: 'start' }); }); return v; }); };
@@ -113,7 +114,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
   const show = (key) => { setView('preview'); setGoto({ key, page: 'index.html', n: Date.now() }); };
   /** 사이트 구성에서 고름: 넓은 화면은 미리보기가 그 자리로(휴대폰은 수정 칸에 머묾) */
   const select = (s) => { setSel(s); if (!narrow()) setGoto({ ...s, n: Date.now() }); };
-  const onPick = useCallback((s) => { setSel(s); setReveal({ ...s, n: Date.now() }); }, []);
+  const onPick = useCallback((s) => { setSel(s); setFold('outline', true); setReveal({ ...s, n: Date.now() }); }, []); // 미리보기에서 고르면 접힌 사이트 구성도 펼침
   const hover = (page, key, item) => bus.current?.hl(page ? { page, key, item } : null);
   const act = {
     move: (page, id, to) => setHtml('순서 바꾸기', (h) => moveSection(h, id, to), page),
@@ -178,16 +179,11 @@ export function Studio({ p, update, go, job, idle, reload }) {
         <SitePreview p={p} ver={ver} editing={editing && !working} setEditing={working ? null : setEditing} onText={onText} onImage={onImage} quiet={quiet} goto={goto} bus={bus} onPick={onPick} />
         <aside class="st-panel" aria-label="수정">
           <div class="st-scroll">
-            <InfoCard p={p} change={change} update={update} onConfirmed={confirmed} />
+            <InfoCard p={p} change={change} update={update} onConfirmed={confirmed} open={!!fold.info} onToggle={() => setFold('info', (v) => !v)} />
             <IssueLine issues={serious} locked={working} flash={flash} onShow={show} onFix={fixSerious} />
-            <Outline outlines={outlines} locked={working} sel={sel} reveal={reveal} act={act} onSelect={select} onHover={hover} surveyDefaults={surveyDefaults} />
-            <FilesCard p={p} update={update} hasSlot={hasSlot} locked={working} onAskSlot={() => fill('참가자가 자료를 다운로드하는 자료실 칸을 사이트에 어울리는 자리에 넣어 줘. 자리 표시는 <div data-lp="materials"></div>예요.', 'all')} />
-            <section class="st-card st-tools" aria-label="색·글꼴">
-              <details class="st-fold">
-                <summary><b>색·글꼴</b><small>강조색·글자색·바탕색</small></summary>
-                <LookPanel p={p} change={change} />
-              </details>
-            </section>
+            <Outline outlines={outlines} locked={working} sel={sel} reveal={reveal} act={act} onSelect={select} onHover={hover} surveyDefaults={surveyDefaults} open={!!fold.outline} onToggle={() => setFold('outline', (v) => !v)} />
+            <FilesCard p={p} update={update} hasSlot={hasSlot} locked={working} open={!!fold.files} onToggle={() => setFold('files', (v) => !v)} onOpen={() => setFold('files', true)} onAskSlot={() => fill('참가자가 자료를 다운로드하는 자료실 칸을 사이트에 어울리는 자리에 넣어 줘. 자리 표시는 <div data-lp="materials"></div>예요.', 'all')} />
+            <LookCard p={p} change={change} open={!!fold.look} onToggle={() => setFold('look', (v) => !v)} />
             <ChatLog p={p} update={update} job={job} go={go} versions={p.versions || []}
               onShow={show} onVersion={(id) => setVers({ focus: id })} onRestore={restore} onPick={(t) => fill(t)} onPreview={() => setView('preview')}
               onResend={(m) => send(m.text, m.target || 'all', m)} />

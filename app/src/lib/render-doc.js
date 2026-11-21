@@ -74,6 +74,7 @@ async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
   const total = Math.min(maxPages, viewer.slideCount - hidden.size);
   const out = [];
   const scale = Math.min(3, MAX_W / W);
+  try { // 중간에 실패해도 뷰어가 만든 것(그림 주소 등)은 정리
   for (let i = 0, n = 0; i < viewer.slideCount && n < total; i++) {
     if (signal?.aborted) break;
     if (hidden.has(i)) continue;
@@ -88,7 +89,7 @@ async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
     } finally { try { handle?.dispose?.(); } catch { /* 넘김 */ } box.remove(); }
     onProgress?.(n, total);
   }
-  try { viewer.destroy?.(); } catch { /* 넘김 */ }
+  } finally { try { viewer.destroy?.(); } catch { /* 넘김 */ } }
   return out;
 }
 

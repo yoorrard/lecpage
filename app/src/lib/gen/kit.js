@@ -30,6 +30,7 @@ export function pageTitles(project) {
 const TEACHER = ['siteUrl', 'joinUrl', 'shortUrl', 'access', 'surveyUrl', 'privacy', 'keepUntil'];
 export const rehearsalPrev = (m = {}) => ({ ...Object.fromEntries(TEACHER.filter((k) => m[k] !== undefined && m[k] !== null).map((k) => [k, m[k]])), live: { provider: 'local', url: '', code: m.live?.code || 'PREVIEW1' } });
 /** 조립 옵션(앱 공통): 강사 값(prev), 오늘 날짜는 한국 시각, 교재 쪽 제목, 자료실 목록 */
-export async function assembleOpts(project, { target = 'preview', prev = null, materials } = {}) {
-  return { runtime: await kitRuntime(), preview: target === 'preview', target, prev, today: todayKst(), material: { pages: materialPages(project) }, materials: Array.isArray(materials) ? materials : Array.isArray(project?.materials) ? project.materials : [] };
+export async function assembleOpts(project, { target = 'preview', prev = null, materials, host = '' } = {}) {
+  // host: 배포할 곳(vercel·github-pages·netlify·cloudflare·lecpage). 개인정보 안내가 사이트를 보내 주는 회사를 그대로 적음
+  return { runtime: await kitRuntime(), preview: target === 'preview', target, prev, ...(host ? { host } : {}), today: todayKst(), material: { pages: materialPages(project) }, materials: Array.isArray(materials) ? materials : Array.isArray(project?.materials) ? project.materials : [] };
 }

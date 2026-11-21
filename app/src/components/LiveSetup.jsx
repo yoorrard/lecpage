@@ -12,8 +12,10 @@ import { deployView, patchDeploy, featuresOf } from '../lib/site-meta.js';
  * 관리자 키는 앱이 만들어 복사해 주고(강사가 짓지 않게), 연결한 주소별로 이 기기에 기억해 연수 당일 배포 완료 화면에 보여 줌.
  */
 export const rememberedServer = () => loadKey('live-server').then((r) => (r.key && /^https:\/\//.test(r.key) ? r.key : ''), () => '');
-export const adminKeyFor = (url) => (url ? loadKey('live-admin:' + String(url).replace(/\/+$/, '')).then((r) => r.key || '', () => '') : Promise.resolve(''));
-const keepAdminKey = (url, key) => saveKey('live-admin:' + String(url).replace(/\/+$/, ''), key, true).catch(() => { });
+// 관리자 키는 서버 주소와 연수 코드로 기억(Supabase 프로젝트 하나에 연수 여럿이면 연수마다 키가 다름). 예전에 주소로만 기억한 키도 그대로 찾음
+const adminSlot = (url, code = '') => 'live-admin:' + String(url).replace(/\/+$/, '') + (code ? '#' + code : '');
+export const adminKeyFor = (url, code = '') => (url ? loadKey(adminSlot(url, code)).then((r) => r.key || (code ? loadKey(adminSlot(url)).then((x) => x.key || '', () => '') : ''), () => '') : Promise.resolve(''));
+const keepAdminKey = (url, key, code = '') => { saveKey(adminSlot(url), key, true).catch(() => { }); if (code) saveKey(adminSlot(url, code), key, true).catch(() => { }); };
 
 const REPO = 'https://github.com/yoorrard/lecpage/tree/main/skills/lecpage';
 const CF_DEPLOY = 'https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare';
@@ -44,6 +46,8 @@ export async function pingLive(live, code) {
   }
   const r = await fetch(url + '/api/health', { signal: t }); const j = await r.json().catch(() => null);
   if (!j || j.ok !== true) throw new Error('서버가 답하지 않아요. 주소와 서버가 켜져 있는지 확인해 주세요.');
+  // 파일을 받는 서버인지(Cloudflare 서버에 R2를 붙이지 않았으면 false): 사이트가 보드의 파일 칸을 이에 맞춰 보이거나 숨김
+  if (typeof j.uploads === 'boolean') live.uploads = j.uploads;
   return '서버와 연결했어요.';
 }
 
@@ -92,7 +96,7 @@ export function LiveSetup({ p, update, prefer = null }) {
   const [remembered, setRemembered] = useState(''); // 이 기기에 기억한 내 서버 주소
   // 지난번에 연결한 내 서버가 있으면 확인만 하고 바로 씀(다음 연수부터 할 일 0)
   useEffect(() => {
-    if (connected) return;
+    if (connected || (live.provider !== 'local' && live.provider !== 'none' && live.url)) return; // 강사가 고른 연결이 있으면(확인에 한 번 실패했어도) 바꾸지 않음
     rememberedServer().then((url) => { if (!url) return; setRemembered(url); setMethod('http'); test(false, url, 'http', true); });
   }, []);
   const copyKey = (msg) => { usedKey.current = true; copy(newKey, msg); };
@@ -107,8 +111,8 @@ export function LiveSetup({ p, update, prefer = null }) {
       const msg = await pingLive(next, code);
       update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, ...next } })), liveOk: true }));
       if (!again && next.provider === 'http') saveKey('live-server', next.url, true).catch(() => { });
-      if (!again && usedKey.current) keepAdminKey(next.url, next.provider === 'supabase' && adm ? adm.key : newKey);
-      if (next.provider === 'http') (usedKey.current ? Promise.resolve(newKey) : adminKeyFor(next.url)).then((k) => applyServerSettings(next.url, code, k, bp));
+      if (!again && usedKey.current) keepAdminKey(next.url, next.provider === 'supabase' && adm ? adm.key : newKey, code);
+      if (next.provider === 'http') (usedKey.current ? Promise.resolve(newKey) : adminKeyFor(next.url, code)).then((k) => applyServerSettings(next.url, code, k, bp));
       const done = quiet ? '지난번에 연결한 내 서버에 연결했어요.' : msg;
       setState({ busy: false, msg: done, ok: true }); toast(done);
     } catch (e) { if (again) update({ liveOk: false }); if (quiet) { setState({ busy: false, msg: '', ok: false }); return; } setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }
