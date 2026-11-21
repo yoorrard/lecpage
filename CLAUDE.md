@@ -1,0 +1,37 @@
+# lecpage — 작업 메모(새 세션이 먼저 읽음)
+
+강사가 교재(PDF·PPT·HWP·워드)를 넣으면 AI가 **강의 당일 참가자가 휴대폰에 열어 두고 쓰는 강의 사이트**를 만들고, lecpage가 참여 기능·강사/발표 화면·QR·배포를 더하는 도구. 앱 https://lecpage.com(로컬 우선 Vite+Preact), Skill(`skills/lecpage/`), 바로 배포 서버(`hosting/`, Cloudflare Worker).
+
+## 구조(어디를 고치나)
+- `app/` 앱. 만들기 흐름 `src/lib/gen/`(job.js 실행·이어 받기, prompts.js 요청문, providers/ 회사별), 연결 `src/lib/connection.js`·`components/AiPick.jsx`, 미리보기 `components/Preview.jsx`, 랜딩 `src/landing/`, 도움말 `pages/Help.jsx`, 먼저 해보기 `src/data/demo/`.
+- `skills/lecpage/` Skill. `SKILL.md`, `references/`(kit.md 키트 자리 표시, design-library.md 디자인 서재, designs/ 견본 셋: neo-teach·picture-heart·data-pulse), `scripts/`(lecpage.mjs CLI, studio.mjs PC 프로그램 다리, studio-siwc.mjs ChatGPT 로그인), `engine/`(src/kit 조립·검수, runtime/ 참가자·강사·발표 화면 JS).
+- `hosting/` 바로 배포. 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep` → `hosting/runtime-history.json`에 바뀌는 조각만 남기고 note는 원문 유지.
+- 문서: `docs/legal/{privacy,terms}.md`, `SECURITY.md`, `README.md`, `docs/operations.md`, `docs/writing.md`(문구·용어표 4절), 조사 기록 `docs/research/`(기록이라 고치지 않음).
+
+## 사용자(운영자)가 정한 원칙 — 어기지 말 것
+1. **AI 중심, 코드는 간섭 금지.** AI에게 교재 원본 + 짧은 목적 요청(강의 진행 사이트) + 선택 참고 디자인 서재 + 배포 조건만. 단계 나누기·부품 제한·디자인 규칙·자동 고치기·코드로 교재 해석/사실 대조는 넣지 않음(전에 넣었다가 결과가 그냥 에이전트보다 나빠져 모두 뺌).
+2. **강의 사이트 = 강의 운영·참여 도구.** 교재 내용은 교재 넘기기(쪽 그림, `data-lp="deck"`)와 강사의 강의로 전해짐. 사이트에는 지금 순서·출석·교재 보기·실습 안내와 복사할 원문·질문/투표/보드·자료·과제/설문, 교재 내용은 핵심 한두 줄만. 한 쪽/여러 쪽은 AI가 정함.
+3. 디자인은 그냥 에이전트보다 확실히 나아야 함(기준: 화려하고 세련된 최신 기법·모션, 교재 정체성, AI 티 없음). 새 기능·문구는 **실제 AI로 A/B 실측**해 나아질 때만 남김.
+4. AI 연결: **구독 계정 우선**(PC 프로그램 → lecpage.com과 자동 짝 → ChatGPT로 로그인(SIWC)·Claude Code), 설치 없이 '쓰던 AI로'(복사·붙여넣기), 접힌 '다른 방법'(API 키·Codex·Skill). Gemini는 만들기에서 뺐음. 정책은 보수적으로 잡지 않고 편의 우선(Claude 구독도 기본 허용).
+5. 강사가 준 교재·사진은 임의로 빼지 않음. 교재에 없는 사실은 지어내지 않음. 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy·keepUntil)은 강사에게서만.
+6. 사용자는 앱에서 돈을 내지 않음(AI 비용은 각자 구독·키). 운영비 ≈ 0. 비밀값은 저장소·대화·로그에 남기지 않음(키는 request_credential).
+7. 초보자 기준 UX: 화면마다 누를 곳 하나가 분명하게, 과한 기능 노출 없이.
+8. 랜딩·문서는 강점만(한계·"AI 자유도 보장"·시간 비교 같은 말 금지), 사실만.
+
+## 말투·용어
+해요체(법률 문서는 그 문서 말투), 번역투 금지, 간결한 표준 용어(`docs/writing.md` 4절: AI로 수정·버전 기록·실행 취소·삭제·다운로드·다시 시도·중지·연결 해제·API 키 연결·쓰던 AI로 …). '배포'(공개는 '공개 범위'·'결과 공개'에만), 'AI'(챗봇 아님), 'AI 에이전트'는 Claude Code·Codex 같은 것만. 랜딩 고정 문장 두 개는 글자 그대로: "누구나 만들 수 있지만, 잘 만들어 나누려면 노하우가 필요합니다" / "바쁜 강사님의 시간과 토큰을 아껴드립니다".
+
+## 검증(합치기 전 한 번)
+- `npm test`(엔진·카탈로그) · `npm run examples`(견본 조립·검수) · `npm --prefix app run build` · `node app/scripts/copy-lint.mjs`(고칠 곳 0) · `npm --prefix hosting test`
+- 앱 흐름 e2e·가짜 AI: `bash scripts/verify.sh [--e2e] [--hosting]`(포트 4175·4182 — 동시에 두 개 돌리지 말 것)
+- 가끔 부하 때문에 시간 초과로 실패하는 엔진 시험(리허설·'지금' 띠·따라 넘기기)은 단독으로 다시 돌려 확인
+- 커밋 꼬리말: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + 세션 줄. 코드·문서·커밋에 모델 이름 금지. main에 push 전 `git fetch && git merge origin/main`(AI 카탈로그 봇이 매일 커밋).
+
+## 토큰 아끼기(작업 방식)
+- 큰 파일은 통째로 읽지 말고 grep·부분 읽기. 그림은 꼭 볼 것만.
+- 일을 나눌 때는 파일 소유를 겹치지 않게, 기계적인 일은 가벼운 모델로. 검증은 합칠 때 한 번.
+- 실제 AI 실측은 이 컨테이너의 `claude -p`(PC 프로그램 길)로 1~2회만.
+- 긴 세션이 되면 새 세션으로 옮기고 이 파일을 갱신.
+
+## 아직 사람이 확인할 것
+실제 ChatGPT 계정 로그인(SIWC), 실제 윈도우·맥에서 PC 프로그램 실행·경고 창·자동 시작.
