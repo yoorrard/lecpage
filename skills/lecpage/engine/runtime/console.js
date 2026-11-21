@@ -201,7 +201,7 @@
     }
   })();
   var show = $('[data-key-show]');
-  if (show && keyIn) show.addEventListener('click', function () { var on = keyIn.type === 'password'; keyIn.type = on ? 'text' : 'password'; show.setAttribute('aria-pressed', String(on)); show.setAttribute('aria-label', on ? '키 가리기' : '키 보이기'); keyIn.focus(); });
+  if (show && keyIn) show.addEventListener('click', function () { var on = keyIn.type === 'password'; keyIn.type = on ? 'text' : 'password'; show.setAttribute('aria-pressed', String(on)); show.setAttribute('aria-label', on ? '키 숨기기' : '키 표시'); keyIn.focus(); });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var k = String(keyIn.value || '').trim();
@@ -502,7 +502,7 @@
         if (q.status !== 'hidden') a.appendChild(btn(spot ? '발표 화면에서 내리기' : '발표 화면에 크게', spot ? 'lp-btn-primary' : '', function () { setState(spot ? { ui: { q: null, ov: null } } : { ui: { q: q.id, ov: 'qa', qrBig: null } }, spot ? '발표 화면에서 질문을 내렸어요.' : '발표 화면에 이 질문을 크게 띄웠어요.'); }, 'spot' + q.id));
         a.appendChild(btn(q.pinned ? '고정 풀기' : '고정', '', function () { conn.update('questions', q.id, { pinned: !q.pinned }).catch(err); }, 'pin' + q.id));
         if (q.status !== 'hidden') a.appendChild(btn(q.status === 'answered' ? '다시 열기' : '답변 완료', '', function () { conn.update('questions', q.id, { status: q.status === 'answered' ? 'open' : 'answered' }).catch(err); }, 'ans' + q.id));
-        a.appendChild(btn(q.status === 'hidden' ? '다시 보이기' : '숨기기', '', function () { conn.update('questions', q.id, { status: q.status === 'hidden' ? 'open' : 'hidden', pinned: false }).catch(err); }, 'hide' + q.id));
+        a.appendChild(btn(q.status === 'hidden' ? '숨기기 취소' : '숨기기', '', function () { conn.update('questions', q.id, { status: q.status === 'hidden' ? 'open' : 'hidden', pinned: false }).catch(err); }, 'hide' + q.id));
         li.appendChild(a); C.qaList.appendChild(li);
       });
       // 휴대폰에서는 처음 5개만(질문이 몰리면 투표·진행 칸이 한참 아래로 밀리지 않게). 넓은 화면은 모두(aux.css)
@@ -583,7 +583,7 @@
         words.slice(0, 24).forEach(function (w) {
           var off = hidden.indexOf(w.word) >= 0, chip = el('span', 'lp-con-word' + (off ? ' is-off' : ''));
           chip.appendChild(el('span', '', w.word + ' ' + w.count));
-          chip.appendChild(btn(off ? '보이기' : '숨기기', '', function () { setState(X.hiddenPatch(state, w.word, !off)); }, 'w' + w.word));
+          chip.appendChild(btn(off ? '숨기기 취소' : '숨기기', '', function () { setState(X.hiddenPatch(state, w.word, !off)); }, 'w' + w.word));
           wl.appendChild(chip);
         });
         if (!words.length) wl.appendChild(el('p', 'lp-con-sub', '아직 낱말이 없어요.'));
@@ -637,7 +637,7 @@
         if (p.hidden) m.appendChild(el('em', '', MODERATE ? '확인 기다림' : '숨김')); if (U.hasLink && U.hasLink(p.text)) m.appendChild(el('em', '', '링크 있음'));
         li.appendChild(m);
         var a = el('div', 'lp-con-a');
-        a.appendChild(btn(p.hidden ? (MODERATE ? '보드에 올리기' : '다시 보이기') : '숨기기', p.hidden && MODERATE ? 'lp-btn-primary' : '', function () { conn.update('posts', p.id, { hidden: !p.hidden }).catch(err); }, 'ph' + p.id));
+        a.appendChild(btn(p.hidden ? (MODERATE ? '보드에 올리기' : '숨기기 취소') : '숨기기', p.hidden && MODERATE ? 'lp-btn-primary' : '', function () { conn.update('posts', p.id, { hidden: !p.hidden }).catch(err); }, 'ph' + p.id));
         li.appendChild(a); C.bList.appendChild(li);
       });
     });
@@ -744,9 +744,9 @@
       C.clockX = btn('멈춤', '', function () { var over = !!(state.timer && state.timer.endsAt <= now()); setState({ timer: null }, over ? '타이머를 지웠어요.' : '타이머를 멈췄어요.'); }, 'tstop');
       C.clock.appendChild(C.clockX);
     }
-    // 끝난 뒤: 참가자 화면은 '끝났어요'를 잠깐 보인 뒤 지우고, 발표 화면은 0:00을 그대로 둠 → 여기서는 [지우기]
+    // 끝난 뒤: 참가자 화면은 '끝났어요'를 잠깐 보인 뒤 지우고, 발표 화면은 0:00을 그대로 둠 → 여기서는 [삭제]
     C.clockB.textContent = left <= 0 ? '0:00' : mmss(left); C.clockL.textContent = (t.label ? t.label + ' · ' : '') + (left <= 0 ? '시간이 다 됐어요 · 참가자 화면에서는 곧 사라져요' : '남은 시간');
-    C.clockX.textContent = left <= 0 ? '지우기' : '멈춤';
+    C.clockX.textContent = left <= 0 ? '삭제' : '멈춤';
     if (left <= 0) C.clock.setAttribute('data-over', ''); else C.clock.removeAttribute('data-over');
   }
   function syncRun() {
@@ -765,7 +765,7 @@
       C.mats.textContent = '';
       X.materials(state).forEach(function (m) {
         var li = el('li'); var a = el('a', '', m.title); a.href = m.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; li.appendChild(a);
-        li.appendChild(btn('지우기', '', function () { setState(X.materialRemove(m.slot), '자료를 지웠어요.'); }, 'mat' + m.slot));
+        li.appendChild(btn('삭제', '', function () { setState(X.materialRemove(m.slot), '자료를 지웠어요.'); }, 'mat' + m.slot));
         C.mats.appendChild(li);
       });
     });
@@ -786,7 +786,7 @@
     conn.setState(Object.assign({ slide: p }, ui ? { ui: ui } : {})).then(function (st) { if (st) { state = st; queue(); } if (say) toast(say); }, err);
   }
   function stepPage(d) { var c0 = curPage(); if (!c0) { if (d > 0) goPage(PAGES[0]); return; } var i = PAGES.indexOf(c0); goPage(PAGES[Math.max(0, Math.min(PAGES.length - 1, i + d))]); }
-  var OVS = [['', '교재'], ['join', '참여 QR'], ['poll', '투표'], ['qa', '질문'], ['timer', '타이머'], ['notice', '공지'], ['blank', '가리기']];
+  var OVS = [['', '교재'], ['join', '참여 QR'], ['poll', '투표'], ['qa', '질문'], ['timer', '타이머'], ['notice', '공지'], ['blank', '화면 숨기기']];
   function ovNow() { return qrBig() ? 'join' : (state.ui || {}).ov || ''; }
   /** 발표 화면에 겹쳐 띄우기: 같은 것을 다시 누르면 내림. 참여 QR은 예전 'QR 크게'(ui.qrBig)와 같은 값 */
   function setOv(v) {
@@ -828,7 +828,7 @@
       bt.addEventListener('click', function () { setOv(x[0]); }); C.ovBtn[x[0]] = bt; C.ovRow.appendChild(bt);
     });
     s.appendChild(C.ovRow);
-    s.appendChild(el('p', 'lp-con-sub', PAGES.length ? '리모컨이나 PageDown·PageUp으로도 넘겨요(입력 칸 밖에서). 발표 화면에서 넘겨도 여기와 참가자 화면이 함께 바뀌어요.' : '발표 화면에서는 키 하나로도 띄워요: J 참여 QR · V 투표 · Q 질문 · T 타이머 · N 공지 · B 가리기.'));
+    s.appendChild(el('p', 'lp-con-sub', PAGES.length ? '리모컨이나 PageDown·PageUp으로도 넘겨요(입력 칸 밖에서). 발표 화면에서 넘겨도 여기와 참가자 화면이 함께 바뀌어요.' : '발표 화면에서는 키 하나로도 띄워요: J 참여 QR · V 투표 · Q 질문 · T 타이머 · N 공지 · B 화면 숨기기.'));
     b.appendChild(s);
   }
   function renderPres() {
@@ -1041,7 +1041,7 @@
     hb.appendChild(el('p', 'lp-con-sub', '초록 완료 · 강조색 하는 중 · 빨강 막힘. 참가자 ' + parts.length + '명 기준이에요.'));
   }
 
-  // 기록·정리: CSV(칸마다 수식 막기를 한 번 더), 데이터 모두 지우기(확인 창), 참여 QR
+  // 기록·정리: CSV(칸마다 수식 막기를 한 번 더), 모든 데이터 삭제(확인 창), 참여 QR
   var KINDS = [
     ['participants', '참가자', true], ['attendance', '출석', true], ['completion', '이수자 명단', true], ['progress', '실습 진행', ON.progress],
     ['questions', '질문', ON.qa], ['posts', '보드 글', ON.board], ['help', '도움 요청', ON.help], ['answers', '투표·신호 응답', true], ['survey', '설문 응답', ON.survey],
@@ -1064,7 +1064,7 @@
   function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
   function buildData() {
     var b = P.data.body;
-    var s1 = el('div', 'lp-con-sec'); s1.style.borderTop = '0'; s1.style.paddingTop = '0'; s1.appendChild(el('h3', '', '기록 내려받기(CSV)'));
+    var s1 = el('div', 'lp-con-sec'); s1.style.borderTop = '0'; s1.style.paddingTop = '0'; s1.appendChild(el('h3', '', 'CSV 다운로드'));
     var g = el('div', 'lp-con-dl');
     KINDS.filter(function (k) { return k[2]; }).forEach(function (x) {
       g.appendChild(btn(x[1], '', function () {
@@ -1081,10 +1081,10 @@
     s1.appendChild(el('p', 'lp-con-sub', rateOn() ? '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + DATA.admin.completionRate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'
       : '이수자 명단: 사람마다 입실·퇴실 시각, 머문 시간, 실습 완료, 설문 제출을 적어요. 이수 기준(출석 비율)이 연수 정보에 없어 \'이수\' 칸은 비워 둬요. 기관 기준으로 판단해 주세요.'));
     b.appendChild(s1);
-    var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '지우기'));
-    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [데이터 모두 지우기]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 지우기를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
+    var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '삭제'));
+    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [모든 데이터 삭제]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 삭제를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
     var dlg = $('[data-purge-dialog]');
-    var del = btn('데이터 모두 지우기', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
+    var del = btn('모든 데이터 삭제', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
     var r = el('div', 'lp-con-row'); r.appendChild(del); s2.appendChild(r); b.appendChild(s2);
     var goP = dlg && $('[data-purge-go]', dlg);
     if (goP) goP.addEventListener('click', function () { dlg.close(); purge(); });

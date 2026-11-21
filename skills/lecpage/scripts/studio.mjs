@@ -32,9 +32,9 @@ export const LIMITS = {
   siteMB: 40, siteFiles: 3000, request: 20000, reference: 4000,
 };
 const bodyLimit = () => Math.ceil(((LIMITS.materialMB + LIMITS.siteMB) * MB * 4) / 3) + MB;
-/** Claude Code 최소 판: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
+/** Claude Code 최소 버전: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
 export const CLAUDE_MIN = '2.1.314';
-/** Codex: 이 판부터 `exec --ignore-user-config`(내 config.toml을 읽지 않음, 로그인은 그대로 CODEX_HOME — codex-rs/exec/src/cli.rs, rust-v0.122.0 태그에서 확인) */
+/** Codex: 이 버전부터 `exec --ignore-user-config`(내 config.toml을 읽지 않음, 로그인은 그대로 CODEX_HOME — codex-rs/exec/src/cli.rs, rust-v0.122.0 태그에서 확인) */
 export const CODEX_MIN = '0.122.0';
 /** 에이전트가 검수를 돌리는 명령(허용 규칙과 작업 지시에 같은 글을 씀). 실행기는 에이전트가 쓸 수 없는 작업 폴더 밖(../bin)에 둠 */
 export const CHECK_CMD = 'node ../bin/check.mjs';
@@ -87,7 +87,7 @@ export function versionAtLeast(v, min) {
   return true;
 }
 
-/** 짧은 명령(판·로그인 확인). 출력은 기록하지 않음 */
+/** 짧은 명령(버전·로그인 확인). 출력은 기록하지 않음 */
 function runQuick(file, args, { env = process.env, timeout = 15000 } = {}) {
   return new Promise((ok) => {
     let spec; try { spec = launchSpec(file, args); } catch (e) { ok({ code: -1, out: '', err: e.message }); return; }
@@ -109,7 +109,7 @@ const AGENTS = {
 export const agentName = (id) => AGENTS[id]?.name || id;
 const jsonIn = (s) => { const a = String(s).indexOf('{'), b = String(s).lastIndexOf('}'); if (a < 0 || b < a) return null; try { return JSON.parse(String(s).slice(a, b + 1)); } catch { return null; } };
 
-/** Claude Code: 판·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
+/** Claude Code: 버전·로그인 방식(claude auth status의 authMethod). ANTHROPIC_API_KEY가 있으면 -p는 늘 그 키로 돎 */
 export async function detectClaude(env = process.env) {
   const file = findExecutable('claude', { env, extra: AGENTS.claude.extra(homedir()) });
   const a = { id: 'claude', name: 'Claude Code', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
@@ -122,8 +122,8 @@ export async function detectClaude(env = process.env) {
   a.auth = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || m === 'api_key' || m === 'api_key_helper' ? 'api-key' : m === 'claude.ai' || m === 'oauth_token' ? 'subscription' : 'unknown';
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) a.loggedIn = true;
   const notes = [];
-  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 claude update로 새 판을 받아 주세요.`);
-  else if (!a.version) notes.push('Claude Code 판을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
+  if (a.version && !versionAtLeast(a.version, CLAUDE_MIN)) notes.push(`Claude Code ${CLAUDE_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 claude update로 새 버전을 받아 주세요.`);
+  else if (!a.version) notes.push('Claude Code 버전을 읽지 못했어요. 터미널에서 claude --version이 되는지 확인해 주세요.');
   if (a.loggedIn === false) notes.push('Claude Code에 로그인되어 있지 않아요. 터미널에서 claude auth login을 실행해 주세요.');
   if (a.auth === 'api-key') notes.push(POLICY_KO.apiKey);
   if (m === 'third_party') notes.push('Claude Code가 클라우드 회사 계정(Bedrock 등)으로 돌아요. 요금은 그 계정으로 나가요.');
@@ -131,7 +131,7 @@ export async function detectClaude(env = process.env) {
   a.note_ko = notes.join(' ');
   return a;
 }
-/** Codex: 판·로그인 방식(codex login status). 출력에 가린 키가 섞일 수 있어 어디에도 적지 않음 */
+/** Codex: 버전·로그인 방식(codex login status). 출력에 가린 키가 섞일 수 있어 어디에도 적지 않음 */
 export async function detectCodex(env = process.env) {
   const file = findExecutable('codex', { env, extra: AGENTS.codex.extra(homedir()) });
   const a = { id: 'codex', name: 'Codex', installed: !!file, version: '', auth: 'unknown', loggedIn: null, ready: false, note_ko: '', file };
@@ -143,9 +143,9 @@ export async function detectCodex(env = process.env) {
   a.auth = env.CODEX_API_KEY || /api key/i.test(t) ? 'api-key' : /chatgpt/i.test(t) ? 'subscription' : 'unknown';
   if (env.CODEX_API_KEY) a.loggedIn = true;
   const notes = [];
-  // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 판이어야 함(agentArgs)
-  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 판을 받아 주세요.`);
-  else if (!a.version) notes.push('Codex 판을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
+  // 내 Codex 설정(MCP 서버·망 열기 등)을 읽지 않고 돌리려면 --ignore-user-config가 있는 버전이어야 함(agentArgs)
+  if (a.version && !versionAtLeast(a.version, CODEX_MIN)) notes.push(`Codex ${CODEX_MIN} 이상이 필요해요(지금 ${a.version}). 터미널에서 npm i -g @openai/codex로 새 버전을 받아 주세요.`);
+  else if (!a.version) notes.push('Codex 버전을 읽지 못했어요. 터미널에서 codex --version이 되는지 확인해 주세요.');
   if (a.loggedIn === false) notes.push('Codex에 로그인되어 있지 않아요. 터미널에서 codex login을 실행해 주세요.');
   if (a.auth === 'api-key') notes.push('Codex가 ChatGPT 요금제 대신 API 키로 돌아요. 요금은 API 사용량으로 나가요.');
   a.ready = !!a.version && versionAtLeast(a.version, CODEX_MIN) && a.loggedIn !== false;
@@ -883,7 +883,7 @@ export async function studioCmd(h) {
   else console.log([
     `lecpage 연결 프로그램 ${S.version}`,
     `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)`,
-    `  앱 ${S.app.mode === 'dist' ? `이 컴퓨터의 빌드본(${relative(process.cwd(), S.app.dir) || '.'})` : `${S.app.url}에서 받은 판`}`,
+    `  앱 ${S.app.mode === 'dist' ? `이 컴퓨터의 빌드본(${relative(process.cwd(), S.app.dir) || '.'})` : `${S.app.url}에서 받은 버전`}`,
     `  ${line(ag.claude)} / ${line(ag.codex)}`,
     ...[ag.claude, ag.codex].filter((a) => a.installed && a.note_ko).map((a) => `  주의 ${a.note_ko}`),
     `  안내 ${POLICY_KO.claude}`,

@@ -33,7 +33,7 @@ const ENGINE = join(HERE, '..', 'engine');
 const DEBUG = !!process.env.LECPAGE_DEBUG;
 // 판은 engine/package.json 하나에서(엔진 코드의 VERSION은 시험이 같은지 확인)
 const SKILL_VERSION = (() => { try { return JSON.parse(readFileSync(join(ENGINE, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
-const UPDATE_HOW = '새 판 받기: claude plugin update lecpage@lecpage(Claude Code 플러그인) · npx skills update(npx skills로 설치) · 그 밖에는 설치한 명령을 다시';
+const UPDATE_HOW = '새 버전 받기: claude plugin update lecpage@lecpage(Claude Code 플러그인) · npx skills update(npx skills로 설치) · 그 밖에는 설치한 명령을 다시';
 
 // ── 인자 ─────────────────────────────────────────
 // 명령마다 받는 옵션. 모르는 옵션은 가까운 이름과 함께 멈추고(조용히 넘기지 않게), 값을 받는 옵션에 값이 없으면 멈춤

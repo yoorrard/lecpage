@@ -98,7 +98,7 @@ ${ctx.live ? `<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialo
 <h2 id="lp-purge-h">모든 기록을 지울까요?</h2>
 <p>참가자 명단·출석·질문·투표 응답·보드 글과 올린 파일·도움 요청·설문 응답이 서버에서 지워져요. 지운 뒤에는 되돌릴 수 없어요.</p>
 <p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 내려받으세요.${prov === 'sheets' ? ' 구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.' : ''}</p>
-<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="cancel">닫기</button><button class="lp-btn lp-btn-danger" type="button" data-purge-go>${icon('close')}<span>모두 지우기</span></button></div>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="cancel">닫기</button><button class="lp-btn lp-btn-danger" type="button" data-purge-go>${icon('close')}<span>모두 삭제</span></button></div>
 </form></dialog>
 <noscript><p class="lp-con-noscript">강사 화면은 자바스크립트를 켜야 쓸 수 있어요.</p></noscript>
 <div class="lp-toast" data-toast role="status" aria-live="polite"></div>
@@ -119,7 +119,7 @@ export function renderScreen(ctx) {
   const code = live ? `<p class="lp-scr-code">${esc(ctx.words?.code || '연수 코드')} <b>${esc(bp.live.code)}</b></p>` : '';
   // 교재 쪽 그림이 있으면 발표 화면이 강의의 주 화면: 쪽을 크게(강사 화면·참가자 화면과 같은 쪽), 키 하나로 겹쳐 띄우기(screen.js)
   const deck = (bp.kit?.deck || []).length > 0;
-  const keys = [['→ · PageDown · Space', '다음 쪽'], ['← · PageUp', '앞 쪽'], ['숫자 + Enter', '그 쪽으로'], live && ['J', '참여 QR 크게'], live && ['V', '투표'], live && ['Q', '질문'], ['T', '큰 타이머'], live && ['N', '공지 크게'], ['B · 마침표', '화면 가리기'], ['Esc', deck ? '겹친 화면 닫기(교재로)' : '겹친 화면 닫기'], ['F · F5', '전체 화면']].filter((x) => x && (deck || !/쪽/.test(x[1])));
+  const keys = [['→ · PageDown · Space', '다음 쪽'], ['← · PageUp', '앞 쪽'], ['숫자 + Enter', '그 쪽으로'], live && ['J', '참여 QR 크게'], live && ['V', '투표'], live && ['Q', '질문'], ['T', '큰 타이머'], live && ['N', '공지 크게'], ['B · 마침표', '화면 숨기기'], ['Esc', deck ? '겹친 화면 닫기(교재로)' : '겹친 화면 닫기'], ['F · F5', '전체 화면']].filter((x) => x && (deck || !/쪽/.test(x[1])));
   const inner = `<aside class="lp-scr-for" aria-label="참가자 안내"><span>프로젝터에 띄우는 발표 화면이에요.</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></aside>
 <div class="lp-scr" data-screen data-lobby${live ? '' : ' data-offline'}>
 ${deck ? `<section class="lp-scr-deck" data-scr-deck aria-label="교재" hidden><img data-scr-img alt="" decoding="async"><p class="lp-scr-dnotice" data-scr-dnotice hidden role="status"></p><p class="lp-scr-chip" data-scr-chip hidden role="timer"></p><p class="lp-scr-pg" data-scr-pg></p></section>` : ''}
@@ -328,7 +328,7 @@ function privacyHostLine(bp, cdns) {
 export { keepRule }; // 보관 기준 한 문장(shell.js): 개인정보 안내·참여 동의·운영 안내·강사 화면이 같은 말
 
 /**
- * ⑦ [데이터 모두 지우기]가 실제로 얼마나 지우는지, 참여 기능을 맡은 곳마다 사실대로(‘복구할 수 없게’는 그런 곳에만).
+ * ⑦ [모든 데이터 삭제]가 실제로 얼마나 지우는지, 참여 기능을 맡은 곳마다 사실대로(‘복구할 수 없게’는 그런 곳에만).
  * 자체 서버(Node): 지운 칸을 0으로 덮고 로그(WAL)도 비움. Cloudflare(workers.dev·바로 배포): 저장소의 '시점 복원'용 기록이 30일 남음.
  * Supabase: 요금제의 백업 보관 기간 동안 백업에 남을 수 있음. 구글 시트: 행을 지워도 시트의 버전 기록에 남아 파일째 지워야 함.
  */
@@ -362,7 +362,7 @@ export function renderPrivacy(ctx) {
     ['받는 정보', `${collect.join('·')}${pv.collect.includes('name') ? '' : ' (이름·연락처는 받지 않음)'}`],
     ['보관', local ? '이 브라우저 안에만(리허설)' : keep.short],
     ['맡기는 곳', local ? '없음' : procs.length ? procs.map((p) => esc(p.name.replace(/\(.*\)$/, '').trim())).join(', ') : '없음'],
-    ['지우기', local ? '브라우저의 사이트 데이터 삭제' : '강사가 강사 화면에서 바로 지울 수 있음'],
+    ['삭제', local ? '브라우저의 사이트 데이터 삭제' : '강사가 강사 화면에서 바로 지울 수 있음'],
     ['문의', contactRaw ? contactHtml(contactRaw) : esc(who)],
   ];
   const inner = `${auxBar(ctx, '개인정보 처리 안내')}
@@ -410,7 +410,7 @@ export function opsGuide(ctx) {
   ].filter(Boolean);
   const during = live ? [
     '프로젝터에는 발표 화면(`screen.html`)을 띄워요. 강사 화면 위 [발표 화면 띄우기]를 누르면 크롬·엣지는 프로젝터를 고르는 창이 떠요. 그 창이 없으면 새 창이 열리니 프로젝터 쪽으로 끌어다 놓고 [전체 화면]을 누르세요.',
-    deckOn ? '발표 화면은 교재 쪽을 크게 띄우고 강사 화면과 같이 넘어가요(발표용 리모컨·PageDown도). 참여 QR·투표·질문·큰 타이머·공지는 강사 화면 [발표] 칸이나 발표 화면의 키 하나(J·V·Q·T·N, 가리기 B, 교재로 Esc)로 겹쳐 띄워요.' : '발표 화면에는 질문과 투표 결과가 크게 보여요. 강사 화면의 [참여 QR 크게]를 켜면 발표 화면에 QR이 화면 가득 떠요.',
+    deckOn ? '발표 화면은 교재 쪽을 크게 띄우고 강사 화면과 같이 넘어가요(발표용 리모컨·PageDown도). 참여 QR·투표·질문·큰 타이머·공지는 강사 화면 [발표] 칸이나 발표 화면의 키 하나(J·V·Q·T·N, 화면 숨기기 B, 교재로 Esc)로 겹쳐 띄워요.' : '발표 화면에는 질문과 투표 결과가 크게 보여요. 강사 화면의 [참여 QR 크게]를 켜면 발표 화면에 QR이 화면 가득 떠요.',
     '교실을 돌며 쓰려면 [더보기] → [휴대폰에서 열기]의 QR을 휴대폰으로 찍어요. 그 QR에는 관리자 키가 들어 있으니 프로젝터에 비치지 않을 때만 보이세요.',
     '교탁 컴퓨터만 있으면 짧은 주소로 들어가 위 메뉴의 QR 버튼 → [발표 화면]을 누르고, 강사 화면은 휴대폰으로 열어요.',
     '즉석 투표: 강사 화면의 투표 칸에 질문 한 줄과 보기를 2~5개 적고 [바로 띄우기]를 눌러요. [결과 공개]를 누르면 참가자 화면에도 막대로 보여요.',
@@ -420,13 +420,13 @@ export function opsGuide(ctx) {
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
     attendSec ? `출석 칸의 입실·퇴실을 연수 시작과 끝에 한 번씩 누르게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요).${['http', 'local'].includes(prov) ? ' 휴대폰이 없는 분은 강사 화면 [출석 명단]에서 추가하고, 빠뜨린 퇴실·잘못 누른 시각은 그 명단에서 고쳐요.' : ''}` : '연수를 시작할 때 참가자 첫 화면이나 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
   ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
-  const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [기록 내려받기] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
+  const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [CSV 다운로드] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
   const after = live ? [
-    `참가자 명단(별명): 강사 화면의 [기록 내려받기] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
+    `참가자 명단(별명): 강사 화면의 [CSV 다운로드] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
     survey,
     '질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
-    prov === 'local' ? '연습 모드 기록은 이 브라우저에만 있어요. 실제 연수 전에 강사 화면의 [데이터 모두 지우기]로 지워 두세요.'
-      : `다 받은 뒤 강사 화면의 [데이터 모두 지우기]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${keepRule(bp).site ? `(${keepRule(bp).site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+    prov === 'local' ? '연습 모드 기록은 이 브라우저에만 있어요. 실제 연수 전에 강사 화면의 [모든 데이터 삭제]로 지워 두세요.'
+      : `다 받은 뒤 강사 화면의 [모든 데이터 삭제]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${keepRule(bp).site ? `(${keepRule(bp).site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 삭제를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
     prov === 'sheets' && '구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.',
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];
@@ -456,7 +456,7 @@ export function opsDoc(ctx) {
   // 배포 전 확인: 조립이 자동으로 찾은 것(kit/preflight.js) — 예시 링크·지난 날짜·설문 없는 이수 조건·연습 모드·사진
   const pf = (ctx.preflight || []).map((x) => `- [ ] ${x.message_ko}`);
   const keep = keepRule(bp), d = bp.deploy || {};
-  const keepLine = live && prov !== 'local' ? `- 보관: 참여 기록은 ${keep.short}까지${keep.site ? `(${keep.site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 지우기를 켜 둔 경우)' : ''}.${d.host === 'lecpage' && d.days ? ` 사이트는 마지막 ${d.keepAlive ? '배포나 방문' : '배포'} 뒤 ${d.days}일 보관돼요.` : ''}\n` : '';
+  const keepLine = live && prov !== 'local' ? `- 보관: 참여 기록은 ${keep.short}까지${keep.site ? `(${keep.site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 삭제를 켜 둔 경우)' : ''}.${d.host === 'lecpage' && d.days ? ` 사이트는 마지막 ${d.keepAlive ? '배포나 방문' : '배포'} 뒤 ${d.days}일 보관돼요.` : ''}\n` : '';
   return `# 운영 안내 — ${bp.meta.title}
 
 ${bp.meta.date ? `연수일: ${koDate(bp.meta.date)} ${bp.meta.start || ''}${bp.meta.end ? '~' + bp.meta.end : ''}\n` : ''}연수 코드: **${bp.live.code}** · 실시간 방식: ${live ? name : '없음'}

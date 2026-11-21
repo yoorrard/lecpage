@@ -150,8 +150,8 @@ export function readMeta(input, { prev = null } = {}) {
   if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch (e) { errors.push({ path: '', code: 'json', message_ko: `lecpage.json을 JSON으로 읽지 못했어요(${String(e.message).slice(0, 80)}).` }); raw = {}; } }
   if (!isObj(raw)) { if (!errors.length) errors.push({ path: '', code: 'shape', message_ko: 'lecpage.json은 { … } 꼴의 객체여야 해요.' }); raw = {}; }
   const old = raw.version === 1 || Array.isArray(raw.sections) && isObj(raw.meta);
-  if (old) errors.push({ path: 'v', code: 'v1', message_ko: '예전 판(설계도 v1) 파일이에요. 새 판(v2)은 사이트 폴더와 lecpage.json으로 만들어요.' });
-  else if (raw.v !== undefined && raw.v !== 2) warn('v', 'version', `판 번호가 ${str(raw.v, 8)}이라 2로 읽었어요.`);
+  if (old) errors.push({ path: 'v', code: 'v1', message_ko: '예전 버전(설계도 v1) 파일이에요. 새 버전(v2)은 사이트 폴더와 lecpage.json으로 만들어요.' });
+  else if (raw.v !== undefined && raw.v !== 2) warn('v', 'version', `버전 번호가 ${str(raw.v, 8)}이라 2로 읽었어요.`);
 
   const title = str(raw.title, 160);
   if (!title && !old) warn('title', 'title-empty', '제목(title)이 비었어요. QR 안내문·강사 화면·일정 파일에 쓰여요.');
