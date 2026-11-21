@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>lecpage · 교재로 연수 사이트 만들기</title>
+<meta name="description" content="강의·연수 교재(PPT·PDF·한글·워드)를 넣으면 AI가 원본을 직접 읽고 이 강의만의 디자인으로 연수 사이트를 만들어요. 발표 화면·강사 화면·출석·질문·투표, 바로 배포와 QR까지. 무료 오픈소스이고 회원가입이 없어요.">
+<meta name="theme-color" content="#FBFAF9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="lecpage">
+<meta property="og:description" content="교재를 넣으면 연수 사이트가 나와요">
+<meta property="og:image" content="https://lecpage.com/og.png">
+<meta property="og:url" content="https://lecpage.com/">
+<!-- 'wasm-unsafe-eval': 한글 교재 그리기 도구(WebAssembly)를 컴파일하는 것만 허용(eval·new Function은 그대로 막힘). 본체는 SHA-256을 확인한 뒤에만 씀(src/lib/render-doc.js) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' data: blob: https: http://127.0.0.1:*; frame-src 'self' blob: data: about:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- 첫 화면 무대의 첫 사례 그림(넓은 화면에서 가장 큰 그림이라 일찍 받음). 좁은 화면은 글 아래에 놓이는 가벼운 판(landing/Hero.jsx의 picture와 같은 경계) -->
+  <script type="module" crossorigin src="./assets/index-2Ws2Z7qr.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C48SpJZ7.css">
+<script>(function(){if(location.hash&&!/^#\/?$/.test(location.hash))return;[["./assets/pc-neo-teach-0dJufY7r.webp","(min-width: 760px)","high"],["./assets/pc-neo-teach-s-DIgOJr4e.webp","(max-width: 759.98px)",""]].forEach(function(x){var l=document.createElement('link');l.rel='preload';l.as='image';l.type='image/webp';l.href=x[0];if(x[1])l.media=x[1];if(x[2])l.setAttribute('fetchpriority',x[2]);document.head.appendChild(l);});})();</script>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:24px;font-family:sans-serif">lecpage는 브라우저에서 동작하는 도구라 자바스크립트가 필요해요.</p></noscript>
+</body>
+</html>

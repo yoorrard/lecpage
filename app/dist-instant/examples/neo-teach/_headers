@@ -1,0 +1,66 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000
+
+/
+  Content-Security-Policy: default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file:; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+
+/index.html
+  Content-Security-Policy: default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file:; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+
+/lab.html
+  Content-Security-Policy: default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file:; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+
+/lab
+  Content-Security-Policy: default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file:; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+
+/console.html
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+
+/console
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+
+/screen.html
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+
+/screen
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+
+/poster.html
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+
+/poster
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+
+/check
+  X-Robots-Tag: noindex, nofollow
+
+/check.html
+  X-Robots-Tag: noindex, nofollow
+
+/privacy
+  X-Robots-Tag: noindex, nofollow
+
+/privacy.html
+  X-Robots-Tag: noindex, nofollow
+
+/assets/*
+  X-Content-Type-Options: nosniff

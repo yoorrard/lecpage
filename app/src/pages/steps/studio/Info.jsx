@@ -46,7 +46,7 @@ export function InfoCard({ p, change, update, onConfirmed }) {
   const others = facts.filter((f) => !Object.values(FACT_OF).flat().includes(String(f.label || '').trim()));
   return (
     <section class={`st-card st-info${checked ? '' : ' is-todo'}`} aria-labelledby="st-info-h">
-      <div class="st-card-h"><h2 id="st-info-h" class="st-h">연수 정보</h2></div>
+      <div class="st-card-h"><h2 id="st-info-h" class="st-h">연수 정보</h2>{!checked && <div class="confirm-bar"><button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button></div>}</div>
       <dl class="props">
         <TextProp k="title" label="연수명" value={m.title || ''} max={160} multiline placeholder="연수명을 넣어 주세요" hint={found('title')}
           onCommit={(v) => v && v !== m.title && setMeta('연수명', (mm) => ({ ...mm, title: v }), [m.title, v])} />
@@ -68,9 +68,6 @@ export function InfoCard({ p, change, update, onConfirmed }) {
       {others.length > 0 && <details class="facts"><summary class="small"><b>AI가 교재에서 찾은 다른 내용 {others.length}개</b></summary><ul class="small">{others.map((f) => <li>{f.label}: {f.value}{f.page ? <span class="muted"> · {f.page}쪽</span> : ''}</li>)}</ul></details>}
       {!checked && <div class="st-info-ask">
         <p class="small">AI가 교재에서 찾은 값이에요. 틀린 곳은 눌러서 바로 고쳐요. 고치면 사이트 글과 QR 안내문·강사 화면·일정 파일도 함께 바뀌어요.</p>
-        <div class="btn-row confirm-bar">
-          <button type="button" class="btn btn-sm btn-primary" data-coach={p.demo ? '' : undefined} data-coach-room={p.demo ? '' : undefined} onClick={() => { update({ metaChecked: true }); toast('확인했어요. 미리보기를 살펴본 뒤 [배포하기]를 눌러요.'); onConfirmed?.(); }}>이 정보가 맞아요</button>
-        </div>
       </div>}
     </section>
   );

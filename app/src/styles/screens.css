@@ -157,7 +157,8 @@ html.pv-lock{overflow:hidden}
 .radio-card small{color:var(--muted)}
 .success{background:var(--mint);border-color:color-mix(in srgb,var(--mint-ink) 22%,transparent);color:var(--mint-ink)}
 .success .big-url{color:var(--ink)}
-.success-in{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center}
+.success-in{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start}
+.success-rest{grid-column:1/-1}
 .big-url{font-size:clamp(1.05rem,2.4vw,1.4rem);font-weight:700;letter-spacing:-.02em;word-break:break-all;color:var(--ink)}
 .qr-box{background:#fff;padding:10px;border-radius:var(--r-sm);border:1px solid var(--line)}
 .qr{display:block;image-rendering:pixelated}
@@ -931,6 +932,7 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 .coach{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 14px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--hair));border-radius:var(--r-sm);background:var(--lav-soft);color:var(--lav-ink)}
 .coach p{margin:0;flex:1;min-width:min(100%,220px)}
 .confirm-bar{padding:2px 0 4px}
+.st-card-h .confirm-bar{padding:0}
 .pdf-hint{margin:0;color:var(--ink-2)}
 .pdf-guide{display:grid;gap:10px}
 .pdf-guide p{margin:0}

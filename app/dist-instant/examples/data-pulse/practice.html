@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ko" class="no-js" data-lpk="1">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' file: data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file:; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="generator" content="lecpage 1.1.0">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실습 · 학교 데이터로 수업 바꾸기</title>
+<meta name="description" content="실습 세 가지의 단계, 복사할 수식·프롬프트 원문, 확인 도구. 학교·기관·인물·수치는 연수용 가상 예시예요.">
+<meta name="theme-color" content="#0e0e0e">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/kit.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body class="pg-practice" data-stations="kit" data-layout="kit">
+<div class="lpk lpk-now"><div class="lp-now" data-now hidden><div class="lp-now-in" role="region" aria-label="지금 진행">
+<span class="lp-now-tag" aria-hidden="true">지금</span>
+<p class="lp-now-text" role="status"><b data-now-main></b><span data-now-sub></span></p>
+<button class="lp-now-more" type="button" data-now-more aria-expanded="false" hidden>더 보기</button>
+<span class="lp-now-timer" data-timer role="timer" hidden></span>
+<a class="lp-btn lp-btn-primary lp-btn-sm lp-now-cta" data-now-cta href="#main" hidden></a>
+</div></div><div class="lp-now lp-phase" data-phase-bar hidden><div class="lp-now-in" role="region" aria-label="안내"><span class="lp-now-tag" aria-hidden="true">종료</span><p class="lp-now-text"><b>2026. 12. 10.에 끝난 연수예요.</b></p></div></div></div>
+<a class="skip" href="#st-s1">본문으로 건너뛰기</a>
+<div class="progress" aria-hidden="true"></div>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <a class="brand" href="index.html"><svg viewBox="0 0 44 18" aria-hidden="true"><path d="M1 7 5 6.5 9 5.5 13 7.5 17 9 21 11 25 16 29 12.5 33 11 37 9 41 7.5 43 7"/></svg><span>학교 데이터로 수업 바꾸기</span></a>
+    <nav aria-label="바로 가기">
+      <ul>
+        <li><a href="index.html">오늘</a></li>
+        <li><a href="#st-s1" data-st-link="s1">실습 1</a></li>
+        <li><a href="#st-s2" data-st-link="s2">실습 2</a></li>
+        <li><a href="#st-s3" data-st-link="s3">실습 3</a></li>
+        <li><a href="index.html#deck">교재</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<div class="hairs" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+
+<main>
+<section class="phead ink" aria-labelledby="t">
+  <div class="wrap phead-g">
+    <div>
+      <p class="sh-k">학교 데이터로 수업 바꾸기 · 실습 세 가지</p>
+      <h1 id="t">실습</h1>
+    </div>
+    <div class="phead-r">
+      <p class="phead-n"><b data-st-count>0 / 3</b><span>끝냄</span></p>
+      <progress data-st-progress max="3" value="0">끝낸 실습</progress>
+    </div>
+    <p class="phead-d">예시 데이터 <a href="files/가상-2학년3반-형성평가.csv" download>형성평가 CSV</a> · <a href="files/가상-2학년-주차별-기록.csv" download>주차별 기록 CSV</a></p>
+  </div>
+</section>
+
+<!-- 실습 1 -->
+<section class="sec paper step lp-st" data-lp-step="s1" data-title="실습 1: 데이터 읽기" data-minutes="25" aria-labelledby="s1-h" data-st="s1" id="st-s1">
+  <div class="wrap step-g">
+    <header class="step-h">
+      <p class="sh-k">14:45 1부 안 · 25분 · <a href="index.html#deck-p8">교재 8쪽 보기</a></p>
+      <h2 id="s1-h"><span class="step-n">1</span>데이터 읽기</h2>
+      <p class="step-key">평균은 이야기의 시작일 뿐이에요.</p>
+    </header>
+    <ol class="todo">
+      <li><p>「가상-2학년3반-형성평가」 시트에서 평균과 중앙값을 구해요.</p>
+        <div class="fx"><code>=AVERAGE(B2:B31)</code><button type="button" class="copy" data-copy-text="=AVERAGE(B2:B31)">복사</button></div>
+        <div class="fx"><code>=MEDIAN(B2:B31)</code><button type="button" class="copy" data-copy-text="=MEDIAN(B2:B31)">복사</button></div></li>
+      <li><p>기준 점수를 정하고 그보다 낮은 학생 수를 세요.</p>
+        <div class="fx"><code>=COUNTIF(B2:B31,"&lt;60")</code><button type="button" class="copy" data-copy-text='=COUNTIF(B2:B31,"&lt;60")'>복사</button></div></li>
+      <li><p>기준을 60에서 70으로 바꾸면 몇 명이 되는지 봐요.</p></li>
+      <li><p>이 데이터로 던질 수업 질문 하나를 한 문장으로 적어요.</p><p class="eg">예) 7주차에 무슨 일이 있었나?</p></li>
+    </ol>
+    <figure class="thr">
+      <p class="tool-k">확인 도구 · 시트에서 센 수와 맞는지 봐요</p>
+      <div class="thr-top">
+        <p class="thr-n"><b data-thr-n>9</b><span>명</span></p>
+        <p class="thr-say" aria-live="polite"><span data-thr-say>60점 미만</span></p>
+      </div>
+      <div class="thr-chart" data-thr-chart></div>
+      <div class="thr-ctl">
+        <label for="thr">기준 점수 <b data-thr-v>60</b>점</label>
+        <div class="seg" role="group" aria-label="함께 볼 기준선">
+          <button type="button" aria-pressed="true" data-line="mean">평균 72</button>
+          <button type="button" aria-pressed="false" data-line="median">중앙값 78.5</button>
+        </div>
+        <input id="thr" type="range" min="40" max="90" step="5" value="60" data-thr>
+      </div>
+      <figcaption>점 하나가 학생 한 명이에요. 2학년 3반 30명(가상 데이터).</figcaption>
+    </figure>
+    <p class="ok">확인 · 평균 72, 중앙값 78.5, 60점 미만 9명이 나오면 맞아요.</p>
+  </div>
+<div class="lpk lpk-step-f"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 6 17l-2.3-3.6a1.5 1.5 0 0 1 2.4-1.8L7 13"/></svg><span>도움 요청</span></button></div></section>
+
+<!-- 실습 2 -->
+<section class="sec paper2 step lp-st" data-lp-step="s2" data-title="실습 2: 차트 만들기" data-minutes="30" aria-labelledby="s2-h" data-st="s2" id="st-s2">
+  <div class="wrap step-g">
+    <header class="step-h">
+      <p class="sh-k">15:40 2부 안 · 30분 · <a href="index.html#deck-p11">교재 11쪽 보기</a></p>
+      <h2 id="s2-h"><span class="step-n">2</span>차트 만들기</h2>
+      <p class="step-key">질문이 모양을 정해요.</p>
+    </header>
+    <div class="step-l">
+      <ol class="todo">
+        <li><p>실습 1에서 적은 질문을 골라요.</p></li>
+        <li><p>질문에 맞는 차트 모양을 골라 그려요(시트의 차트 삽입).</p></li>
+        <li><p>강조색은 하나만: 말하고 싶은 선·막대 하나에만 색을 넣고 나머지는 회색으로.</p></li>
+        <li><p>차트 제목을 문장으로 바꿔요.</p><p class="eg">예) 3반 정답률은 7주차에 41%로 떨어졌다가 12주차에 73%로 돌아왔다</p></li>
+      </ol>
+      <div class="checks">
+        <h3>점검표</h3>
+        <ul data-checks="s2">
+          <li><label><input type="checkbox" value="zero"><span>막대는 0에서 시작</span></label></li>
+          <li><label><input type="checkbox" value="unit"><span>단위(%·점) 표시</span></label></li>
+          <li><label><input type="checkbox" value="src"><span>출처·기간 표시</span></label></li>
+          <li><label><input type="checkbox" value="one"><span>색은 하나만 강조</span></label></li>
+        </ul>
+        <p class="checks-n">표시는 이 기기에만 남아요.</p>
+      </div>
+    </div>
+    <figure class="mfig">
+      <p class="tool-k">고르기 도구 · 2단계에서 질문에 맞는 모양을 미리 봐요(교재 10쪽, 주차별 기록 CSV)</p>
+      <fieldset class="qs">
+        <legend class="sr-only">질문 고르기</legend>
+        <label><input type="radio" name="form" value="bar"><b>비교</b><span>어느 반이 가장 높을까?</span><i>막대</i></label>
+        <label><input type="radio" name="form" value="line" checked><b>변화</b><span>언제 달라졌을까?</span><i>꺾은선</i></label>
+        <label><input type="radio" name="form" value="dot"><b>분포</b><span>얼마나 퍼져 있을까?</span><i>점</i></label>
+      </fieldset>
+      <div class="mfig-stage" data-morph></div>
+      <figcaption><span data-morph-say aria-live="polite">선으로 보면 7주차가 보여요. 3반만 70%로 떨어져요.</span> <span class="mfig-src">네 반의 12주 과제 제출률(가상 데이터)</span></figcaption>
+    </figure>
+    <p class="ok">확인 · 제목만 읽어도 무슨 일이 있었는지 아는 차트 한 장</p>
+  </div>
+<div class="lpk lpk-step-f"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 6 17l-2.3-3.6a1.5 1.5 0 0 1 2.4-1.8L7 13"/></svg><span>도움 요청</span></button></div></section>
+
+<!-- 실습 3 -->
+<section class="sec paper step lp-st" data-lp-step="s3" data-title="실습 3: 프롬프트 쓰기" data-minutes="25" aria-labelledby="s3-h" data-st="s3" id="st-s3">
+  <div class="wrap">
+    <header class="step-h">
+      <p class="sh-k">16:25 3부 안 · 25분 · <a href="index.html#deck-p13">교재 13쪽 보기</a></p>
+      <h2 id="s3-h"><span class="step-n">3</span>프롬프트 쓰기</h2>
+      <p class="step-key">AI는 계산하고, 판단은 교사가 해요.</p>
+    </header>
+    <p class="warn"><b>먼저</b>학생 이름·학번·연락처는 지우고 번호로 바꿔서 넣어요.</p>
+    <ol class="prompts">
+      <li><h3><span>1</span>정리</h3><p class="pr">너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.</p><button type="button" class="copy" data-copy-text="너는 중학교 수학 교사의 데이터 분석 도우미야. 아래 표는 우리 반 학생 30명의 형성평가 점수야(이름은 번호로 바꿨어). 1) 평균·중앙값·최솟값·최댓값을 구하고 2) 점수 분포에서 눈에 띄는 점을 세 줄로 알려 줘. 3) 네가 확신하지 못하는 부분은 따로 표시해 줘.">프롬프트 1 복사</button></li>
+      <li><h3><span>2</span>차트 제안</h3><p class="pr">이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.</p><button type="button" class="copy" data-copy-text="이 데이터로 '7주차에 무슨 일이 있었나?'라는 질문에 답하려고 해. 어떤 차트가 알맞은지 두 가지를 제안하고, 각각 가로축·세로축·강조할 부분을 표로 정리해 줘.">프롬프트 2 복사</button></li>
+      <li><h3><span>3</span>해석 검증</h3><p class="pr">네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.</p><button type="button" class="copy" data-copy-text="네가 내린 해석 가운데 데이터만으로는 확인할 수 없는 것을 골라 줘. 교사가 교실에서 직접 확인해야 할 질문 세 가지로 바꿔 줘.">프롬프트 3 복사</button></li>
+    </ol>
+    <p class="ok">확인 · AI 답 가운데 '교실에서 직접 확인할 질문' 세 가지</p>
+    <div class="nb">
+      <p class="nb-t">복사한 수식·프롬프트는 이 기기의 모음에 쌓여요. .txt로 받아 두세요.</p>
+      <div data-lp="notebook" data-lpk="notebook" id="lpk-notebook" class="lpk lpk-w lpk-notebook"><div class="lp-nb" data-notebook>
+<p class="lp-small">이 사이트에서 복사한 프롬프트가 여기에 모여요. 이 기기에만 저장돼요.</p>
+<form class="lp-compose" data-nb-form><label class="lp-sr" for="lpk-nb-t">메모</label><textarea id="lpk-nb-t" name="text" rows="2" maxlength="4000" placeholder="고친 프롬프트나 메모를 적어 담아요" required></textarea><div class="lp-compose-f"><small data-nb-count></small><button class="lp-btn lp-btn-primary" type="submit"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>담기</span></button></div></form>
+<p class="lp-sr" role="status" data-nb-news></p>
+<ol class="lp-nb-list" data-nb-list><li class="lp-empty">아직 담은 글이 없어요. 프롬프트의 [복사]를 누르면 여기에 모여요.</li></ol>
+<div class="lp-ctas lp-nb-f"><button class="lp-btn lp-btn-primary" type="button" data-nb-save disabled><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>.txt 다운로드</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-copy disabled><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>모두 복사</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-clear disabled><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span>모두 삭제</span></button></div>
+</div></div>
+    </div>
+  </div>
+<div class="lpk lpk-step-f"><button class="lp-btn lp-btn-check" type="button" data-done aria-pressed="false"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>완료 체크</span></button><button class="lp-btn lp-btn-ghost" type="button" data-stuck hidden><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 6 17l-2.3-3.6a1.5 1.5 0 0 1 2.4-1.8L7 13"/></svg><span>도움 요청</span></button></div></section>
+<div class="lpk lpk-extra" data-lp-extra></div></main>
+
+<footer class="foot ink">
+  <div class="wrap foot-in">
+    <p><a href="index.html">오늘 쪽으로</a> · <a href="index.html#talk">질문하기</a> · <a href="index.html#task">과제</a></p>
+    <p>이 사이트의 학교·기관·인물·수치는 모두 연수용 가상 예시예요.</p>
+  </div>
+</footer>
+
+<div class="lpk lpk-chrome">
+<dialog class="lp-dialog" data-share-dialog aria-labelledby="lp-share-h"><form method="dialog" class="lp-dialog-in">
+<h2 id="lp-share-h">사이트 공유</h2><div class="lp-qr lp-qr-lg" data-qr-self role="img" aria-label="이 페이지 QR 코드"></div>
+<p class="lp-share-url" data-share-url></p><p class="lp-share-full" data-url-full hidden></p><p class="lp-small lp-share-off" data-url-off hidden>배포하면 여기에 참가자 주소와 QR이 나와요.</p><p class="lp-share-code">연수 코드 <b>EXAMPLE1</b></p>
+<p class="lp-small lp-share-scr">프로젝터에는 <a href="screen.html">발표 화면</a>을 띄워요. QR과 질문·투표 결과가 크게 보여요.</p>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-copy-url><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>주소 복사</span></button><button class="lp-btn lp-btn-primary" value="close">닫기</button></div></form></dialog>
+<dialog class="lp-dialog" data-join-dialog aria-labelledby="lp-join-h"><form class="lp-dialog-in" data-join-form>
+<h2 id="lp-join-h">참여하기</h2><p class="lp-small" data-join-lead>보드 글에 보일 별명을 정해 주세요. 투표와 질문은 별명 없이 바로 돼요.</p>
+<label data-join-nick><span>별명</span><input name="nickname" maxlength="20" required autocomplete="nickname" aria-describedby="lp-join-err"></label>
+<p class="lp-small" id="lp-join-err" data-join-err role="alert" style="color:var(--danger);font-weight:600" hidden></p>
+<label data-join-id><span>이름</span><input name="name" maxlength="20" required autocomplete="name"></label>
+<label data-join-id><span>소속</span><input name="school" maxlength="40" required autocomplete="organization"></label>
+<label class="lp-consent" data-join-id><input type="checkbox" name="consent" required><span>이름·소속을 출석 확인에만 쓰는 데 동의합니다. 연습 모드라 이 브라우저에만 남아요. 동의하지 않으면 입실 기록만 남지 않아요(질문·투표는 그대로). <a href="privacy.html" target="_blank">자세히</a></span></label>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-join-cancel>나중에</button><button class="lp-btn lp-btn-primary" type="submit" data-join-go>참여</button></div></form></dialog>
+<aside class="lp-dock" data-dock hidden aria-label="참여 도구">
+  <span class="lp-live-dot" data-live-status title="연결 상태"></span>
+  <button class="lp-btn lp-btn-dock" type="button" data-dock-attend="in" hidden><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>출석</span></button>
+  <button class="lp-btn lp-btn-dock" type="button" data-dock-help><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 6 17l-2.3-3.6a1.5 1.5 0 0 1 2.4-1.8L7 13"/></svg><span>도움 요청</span></button>
+  <button class="lp-btn lp-btn-dock lp-btn-dock-2" type="button" data-dock-qa><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>질문</span></button>
+  
+  <div class="lp-fold lp-react"><button type="button" class="lp-fold-btn" data-fold-toggle aria-expanded="false" aria-label="반응 보내기" title="반응"><svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 12.6 5.4 9.8a1.4 1.4 0 0 1 2-2l3.4 3.4M9 9 7.2 7.2a1.4 1.4 0 0 1 2-2L13.6 9.6M11.4 7.4l-.9-.9a1.4 1.4 0 0 1 2-2l4.9 4.9a6.2 6.2 0 0 1 0 8.8l-.2.2a6.2 6.2 0 0 1-8.8 0l-3.2-3.2a1.4 1.4 0 0 1 2-2l1.7 1.7"/><path d="M17.2 2.8v2.1M20.6 4.2l-1.4 1.4M21.4 7.6h-2.1"/></svg></button><div class="lp-fold-list" role="group" aria-label="반응 보내기"><button type="button" data-react="👏" aria-label="박수" title="박수"><svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 12.6 5.4 9.8a1.4 1.4 0 0 1 2-2l3.4 3.4M9 9 7.2 7.2a1.4 1.4 0 0 1 2-2L13.6 9.6M11.4 7.4l-.9-.9a1.4 1.4 0 0 1 2-2l4.9 4.9a6.2 6.2 0 0 1 0 8.8l-.2.2a6.2 6.2 0 0 1-8.8 0l-3.2-3.2a1.4 1.4 0 0 1 2-2l1.7 1.7"/><path d="M17.2 2.8v2.1M20.6 4.2l-1.4 1.4M21.4 7.6h-2.1"/></svg></button><button type="button" data-react="💡" aria-label="좋은 생각" title="좋은 생각"><svg class="lp-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 18h5.6M10.2 21h3.6M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/></svg></button><button type="button" data-react="❤️" aria-label="좋아요" title="좋아요"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></button></div></div><button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/></svg></button>
+</aside>
+<div class="lp-reactions" data-reactions aria-hidden="true"></div>
+<dialog class="lp-dialog lp-sheet" data-help-dialog aria-labelledby="lp-help-h"><form class="lp-dialog-in" data-help-form>
+<div class="lp-sheet-h"><h2 id="lp-help-h">도움 요청</h2><button class="lp-icon-btn" type="button" data-sheet-close aria-label="닫기"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<p class="lp-small">자리를 적으면 강사가 찾아가요. 적은 자리는 이 기기에 저장돼요.</p>
+<label><span>자리</span><input name="seat" maxlength="20" autocomplete="off" placeholder="예: 3모둠, 창가 두 번째"></label>
+<label><span>무엇이 막혔나요? (선택)</span><textarea name="message" rows="2" maxlength="300"></textarea></label>
+<div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" type="button" data-sheet-close>닫기</button><button class="lp-btn lp-btn-primary" type="submit"><svg class="lp-ic " viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 6 17l-2.3-3.6a1.5 1.5 0 0 1 2.4-1.8L7 13"/></svg><span>요청하기</span></button></div></form></dialog>
+<div class="lp-toast" data-toast role="status" aria-live="polite"></div>
+</div>
+<script type="application/json" id="lp-data">{"v":"1.1.0","title":"학교 데이터로 수업 바꾸기","date":"2026-12-10","start":"14:30","end":"17:30","siteUrl":"","keepUntil":"","shortUrl":"","key":"lp-EXAMPLE1","live":{"provider":"local","url":"","anonKey":"","code":"EXAMPLE1","features":["qa","help","progress","board","poll","attendance","reactions"],"anonymous":true,"pollMs":7000},"privacy":{"collect":["nickname","name","school"],"consent":true,"retentionDays":30,"keep":"마지막 기록 뒤 30일"},"stations":[{"id":"s1","name":"실습 1: 데이터 읽기"},{"id":"s2","name":"실습 2: 차트 만들기"},{"id":"s3","name":"실습 3: 프롬프트 쓰기"}],"motion":0,"base":"","admin":{"completionRate":90,"rateSet":true},"survey":3,"phase":{"start":"2026-12-10T14:30","end":"2026-12-10T17:30"},"words":{"ev":"연수","ended":"끝난 연수","materials":"연수 자료","code":"연수 코드","host":"강사"},"notebook":true,"keyTab":true}</script>
+<script src="assets/live.js" defer></script>
+<script src="assets/lecpage.js" defer></script>
+</body>
+</html>
