@@ -34,13 +34,13 @@ async function run(b, width) {
   await p.click('.pub-mode:has-text("다른 곳에 배포")'); await p.waitForTimeout(300);
   await p.click('.pub-opt:has-text("Vercel")'); await p.waitForTimeout(300);
   const note = await p.locator('.pub-live').innerText().catch(() => '');
-  L.ok(`[${tag}] notice right under the host choice`, /Vercel에 배포하면 참여 기능은 따로 연결해야 해요/.test(note) && /답이 모이지 않아요/.test(note), note.replace(/\s+/g, ' ').slice(0, 80));
+  L.ok(`[${tag}] notice right under the host choice`, /Vercel에서는 참여 기능을 따로 연결해야 해요/.test(note) && /질문·투표·출석이 모이지 않아요/.test(note), note.replace(/\s+/g, ' ').slice(0, 80));
   L.ok(`[${tag}] three actions`, await p.locator('.pub-live button').count() === 3);
   L.ok(`[${tag}] checklist row says what is needed`, /Vercel에 배포하려면 연결해야 해요/.test(await p.locator('#live-setup .ready-s').innerText()));
   await p.locator('.pub-live').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + `live-hosts-notice-${tag}.png` });
   // ZIP도 같은 안내
   await p.click('.pub-opt:has-text("ZIP")'); await p.waitForTimeout(200);
-  L.ok(`[${tag}] ZIP gets the notice too`, /ZIP\)로 직접 올리면/.test(await p.locator('.pub-live').innerText().catch(() => '')));
+  L.ok(`[${tag}] ZIP gets the notice too`, /ZIP에서는 참여 기능을/.test(await p.locator('.pub-live').innerText().catch(() => '')));
   // [바로 배포로 바꾸기] → 바로 배포(참여 기능 방까지)
   await p.click('.pub-live button:has-text("바로 배포로 바꾸기")'); await p.waitForTimeout(300);
   L.ok(`[${tag}] switched to 바로 배포`, await p.locator('.pub-mode-main.is-on').count() === 1 && await p.locator('.pub-live').count() === 0);
@@ -49,7 +49,7 @@ async function run(b, width) {
   // 2) 바로 배포한 뒤 다른 곳(Vercel)에도: 바로 배포 방은 그곳에서 안 되므로 그렇게 알리고, 참여 기능 없이 올림
   await p.click('.sites button:has-text("다른 곳에도 배포")'); await p.waitForTimeout(400);
   await p.click('.pub-opt:has-text("Vercel")'); await p.waitForTimeout(300);
-  L.ok(`[${tag}] instant room: notice says it works only on the instant site`, /Vercel 사이트에서는 참여 기능이 켜지지 않아요/.test(await p.locator('.pub-live').innerText().catch(() => '')));
+  L.ok(`[${tag}] instant room: notice says it works only on the instant site`, /Vercel 사이트에서는 참여 기능이 꺼져요/.test(await p.locator('.pub-live').innerText().catch(() => '')));
   await p.click('.pub-live button:has-text("참여 기능 없이 배포")');
   L.ok(`[${tag}] skip line with undo`, /없이 배포해요/.test(await p.locator('.pub-live-skip').innerText().catch(() => '')));
   await p.click('.publish .walk-b button:has-text("이미 가입했어요")').catch(() => { });
@@ -61,7 +61,7 @@ async function run(b, width) {
   const index = String(st.site['index.html'] || '');
   L.ok(`[${tag}] Vercel site has no instant-room address`, index.length > 0 && !index.includes(LIVE) && !Object.values(st.site).some((v) => String(v).includes(LIVE)), `${index.length}B`);
   L.ok(`[${tag}] 대표 stays on 바로 배포 (it has participation)`, /s-site1\.example\.pages\.dev/.test(await p.locator('.success .big-url').innerText()));
-  L.ok(`[${tag}] Vercel row tagged 참여 기능 없음 + note`, /참여 기능 없음/.test(await p.locator('.sites li:has-text("Vercel")').innerText()) && /대표 주소의 사이트에서만/.test(await p.locator('.sites').innerText()));
+  L.ok(`[${tag}] Vercel row tagged 참여 기능 없음 + note`, /참여 기능 없음/.test(await p.locator('.sites li:has-text("Vercel")').innerText()) && /대표 주소에서만/.test(await p.locator('.sites').innerText()));
   await p.locator('.sites').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + `live-hosts-sites-${tag}.png` });
   // 3) 참여 기능 없는 곳을 대표로 바꾸려 하면 확인(기본은 그대로 두기)
   await p.click('.sites li:has-text("Vercel") button:has-text("대표 주소로 쓰기")');

@@ -348,15 +348,15 @@ const siteDir = (u) => {
  * 할 일은 셋: 바로 배포로 바꾸기(가장 쉬움) · 참여 기능 연결하기 · 참여 기능 없이 배포
  */
 function LiveNote({ note, where, instant, onInstant }) {
-  const place = where === 'zip' ? '사이트 파일(ZIP)로 직접 올리면' : `${LABEL[where] || where}에 배포하면`;
-  if (note.skip) return <p class="small pub-live-skip" role="status">참여 기능({note.feats}) 없이 배포해요. <button type="button" class="btn-link small" onClick={note.onUnskip}>다시 켜기</button></p>;
+  const name = where === 'zip' ? 'ZIP' : LABEL[where] || where;
+  if (note.skip) return <p class="small pub-live-skip" role="status">참여 기능 없이 배포해요. <button type="button" class="btn-link small" onClick={note.onUnskip}>다시 켜기</button></p>;
   if (!note.need) return null;
   return (
     <div class="pub-live" role="note" aria-labelledby="pub-live-h">
-      <b id="pub-live-h">{note.lecOnly ? `${LABEL[where] || where} 사이트에서는 참여 기능이 켜지지 않아요` : `${place} 참여 기능은 따로 연결해야 해요`}</b>
+      <b id="pub-live-h">{note.lecOnly ? `${name} 사이트에서는 참여 기능이 꺼져요` : `${name}에서는 참여 기능을 따로 연결해야 해요`}</b>
       <p class="small">{note.lecOnly
-        ? '질문·투표·출석은 바로 배포한 사이트에서만 돼요. 이대로 배포하면 이 사이트는 참여 기능 없이 올라가고, 참가자에게 알릴 대표 주소는 바로 배포 주소 그대로예요.'
-        : `질문·투표·출석 같은 참여 기능은 참가자의 답을 모아 둘 서버가 있어야 돼요. 이런 곳은 사이트 파일만 올려 줘서, 연결하지 않으면 강의 당일 답이 모이지 않아요.${instant ? ' 바로 배포는 lecpage 서버가 맡아 따로 할 일이 없어요.' : ''}`}</p>
+        ? '참여 기능은 바로 배포한 사이트에서만 돼요. 참가자에게는 지금처럼 바로 배포 주소를 알려 주세요.'
+        : `연결하지 않으면 질문·투표·출석이 모이지 않아요.${instant ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}`}</p>
       <div class="btn-row">
         {instant && !note.lecOnly && <button type="button" class="btn btn-sm" onClick={onInstant}>바로 배포로 바꾸기</button>}
         <button type="button" class="btn btn-sm" onClick={note.onConnect}>참여 기능 연결하기</button>

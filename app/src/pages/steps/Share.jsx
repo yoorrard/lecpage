@@ -421,9 +421,9 @@ export function StepShare({ p, update, go }) {
         </div>
       </Dialog>
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
-        <h2 class="h-sub">{lecOnly ? `${SITE_LABEL[target] || '이곳'} 사이트에는 참여 기능이 켜지지 않아요` : '참여 기능이 아직 연결되지 않았어요'}</h2>
-        <p>{lecOnly ? '질문·투표·출석은 바로 배포한 사이트에서만 돼요. 이대로 배포하면 이 사이트는 참여 기능 없이 올라가고, 참가자에게 알릴 대표 주소는 바로 배포 주소 그대로예요.'
-          : '질문·투표·출석은 참가자의 답을 모아 둘 서버가 있어야 돼요. 연결하지 않고 배포하면 강의 당일 답이 모이지 않아요.'}{autoLive && elsewhere && !lecOnly ? ' 바로 배포는 따로 연결할 것 없이 함께 켜져요.' : ''}</p>
+        <h2 class="h-sub">{lecOnly ? `${target === 'zip' ? 'ZIP' : SITE_LABEL[target] || '이곳'} 사이트에서는 참여 기능이 꺼져요` : '참여 기능이 아직 연결되지 않았어요'}</h2>
+        <p>{lecOnly ? '참여 기능은 바로 배포한 사이트에서만 돼요. 참가자에게는 지금처럼 바로 배포 주소를 알려 주세요.'
+          : '이대로 배포하면 질문·투표·출석이 모이지 않아요.'}{autoLive && elsewhere && !lecOnly ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}</p>
         <div class="btn-row">
           {autoLive && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
           <button class={`btn${autoLive && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결하기</button>
@@ -432,7 +432,7 @@ export function StepShare({ p, update, go }) {
       </Dialog>
       <Dialog open={!!askMain} onClose={() => setAskMain('')} label="대표 주소 확인">
         <h2 class="h-sub">이 주소에는 참여 기능이 없어요</h2>
-        <p>{SITE_LABEL[askMain] || askMain} 사이트는 참여 기능 없이 배포했어요. 대표 주소로 바꾸면 QR·강사 화면이 이 주소를 따라가서, 참가자가 질문·투표·출석을 할 수 없어요.</p>
+        <p>대표 주소로 바꾸면 QR과 강사 화면이 이 주소로 바뀌어, 참가자가 질문·투표·출석을 할 수 없어요.</p>
         <div class="btn-row">
           <button class="btn btn-primary" data-autofocus onClick={() => setAskMain('')}>그대로 두기</button>
           <button class="btn" onClick={() => { const t = askMain; setAskMain(''); setPrimary(t, true); }}>그래도 바꾸기</button>
@@ -619,7 +619,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           </div>
         </div>
         <div class="stack success-rest">
-          {lockStale && <p class="small short-stale" role="status"><span>공개 범위나 암호를 바꿨어요. 다시 배포해야 사이트에 반영돼요. 그 전까지 QR·주소는 지금 배포된 사이트 그대로예요.</span> <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포하기</button></p>}
+          {lockStale && <p class="small short-stale" role="status"><span>공개 범위나 암호를 바꿨어요. 다시 배포해야 사이트에 반영돼요.</span> <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포하기</button></p>}
           <Sites p={p} onPrimary={onPrimary} busy={busy} />
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
           <div class="day-kit" role="group" aria-labelledby="venue-h">
@@ -671,7 +671,7 @@ function Sites({ p, onPrimary, busy }) {
           );
         })}
       </ul>
-      {liveOn && rows.some(([t, s]) => s.live === false && t !== d.target) && siteHasLive(d) && <p class="small muted">참여 기능은 대표 주소의 사이트에서만 돼요. 참가자에게는 대표 주소와 QR을 알려 주세요.</p>}
+      {liveOn && rows.some(([t, s]) => s.live === false && t !== d.target) && siteHasLive(d) && <p class="small muted">참여 기능은 대표 주소에서만 돼요. 참가자에게는 대표 주소와 QR을 알려 주세요.</p>}
       <div class="btn-row">
         {!sites.lecpage && PUBLISH_API && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('lecpage')}>바로 배포로도 배포</button>}
         <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => ask('other')}>다른 곳에도 배포</button>
