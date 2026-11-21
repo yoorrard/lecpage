@@ -4,10 +4,10 @@
 
 /* 화면 가까이 온 섹션만 배치·그리기(content-visibility:auto). 아래 이야기(DOM 900여 개)를 한꺼번에 넣어도 휴대폰에서 긴 작업이 생기지 않게.
    자리 높이는 잰 값(390px·1440px 폭)이고{content-visibility:auto;contain-intrinsic-size:auto var(--ld-ih,800px)}
-.ld>.ld-why{--ld-ih:3100px}.ld>.ld-story{--ld-ih:2700px}.ld>.ld-reach{--ld-ih:1350px}
+.ld>.ld-why{--ld-ih:3450px}.ld>.ld-story{--ld-ih:2700px}.ld>.ld-reach{--ld-ih:1350px}
 .ld>.ld-live{--ld-ih:1020px}.ld>.ld-days{--ld-ih:610px}.ld>.ld-paths{--ld-ih:1200px}.ld>.ld-ex{--ld-ih:860px}.ld>.ld-end{--ld-ih:290px}
 @media (min-width:900px){
-  .ld>.ld-why{--ld-ih:1810px}.ld>.ld-story{--ld-ih:3090px}.ld>.ld-reach{--ld-ih:540px}
+  .ld>.ld-why{--ld-ih:2320px}.ld>.ld-story{--ld-ih:3090px}.ld>.ld-reach{--ld-ih:540px}
   .ld>.ld-live{--ld-ih:680px}.ld>.ld-days{--ld-ih:440px}.ld>.ld-paths{--ld-ih:900px}.ld>.ld-ex{--ld-ih:630px}.ld>.ld-end{--ld-ih:300px}
 }
 
@@ -44,6 +44,30 @@
 }
 @keyframes ld-ink{from{color:var(--muted)}}
 @keyframes ld-mark{from{background-size:0% 100%}}
+
+/* 같은 교재·같은 AI로 견준 실제 결과(Compare.jsx): 두 첫 화면 그림을 나란히(휴대폰은 390px 그림 두 장) + 견준 값 표.
+   그림 틀은 움직이지 않아요. 왼쪽 회색은 그냥 맡길 때, 오른쪽 보라는 lecpage(칸마다 이름이 있어 색만으로 가르지 않음) */
+.ld-cmp{display:grid;gap:16px;margin-top:clamp(36px,5vw,64px)}
+.ld-cmp-sub{max-width:44em;font-size:1rem;line-height:1.65;color:var(--ink-2)}
+.ld-cmp-shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:6px}
+.ld-cmp-shot{display:grid;gap:8px;min-width:0;margin:0}
+.ld-cmp-shot.is-lp .ld-lane{color:var(--lav-deep)}
+.ld-cmp-frame{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--paper);box-shadow:var(--shadow)}
+.ld-cmp-shot.is-lp .ld-cmp-frame{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.ld-cmp-frame img{display:block;width:100%;height:auto}
+.ld-cmp-t{width:100%;margin-top:6px;border-collapse:collapse;font-size:.9rem;line-height:1.45;table-layout:fixed}
+.ld-cmp-t th,.ld-cmp-t td{padding:10px 8px;border-bottom:1px solid var(--hair);text-align:left;vertical-align:top;word-break:keep-all;overflow-wrap:anywhere}
+.ld-cmp-t thead th{font-size:.76rem;font-weight:700;color:var(--muted)}
+.ld-cmp-t thead th:last-child{color:var(--lav-deep)}
+.ld-cmp-t tbody th{font-weight:650;color:var(--ink-2)}
+.ld-cmp-t td:last-child{font-weight:650;color:var(--ink);background:color-mix(in srgb,var(--lav-soft) 70%,transparent)}
+.ld-led-title{margin-top:clamp(48px,7vw,96px)}
+@media (min-width:700px){
+  .ld-cmp-shots{gap:24px}
+  .ld-cmp-t{font-size:.96rem}
+  .ld-cmp-t th,.ld-cmp-t td{padding:12px 16px}
+  .ld-cmp-t th:first-child{width:28%}
+}
 
 /* 장부: 단계 다섯. 휴대폰은 단계마다 그냥 맡길 때 → lecpage를 위아래로, 넓은 화면은 단계 이름 · 그냥 맡길 때 · lecpage 세 칸 */
 .ld-led{position:relative;margin-top:clamp(36px,5vw,64px)}

@@ -4,7 +4,7 @@
 // 근거: Claude Code 플러그인 code.claude.com/docs/en/plugins/install · skills CLI github.com/vercel-labs/skills
 export const SKILL_CMDS = [
   { for: 'Claude Code', where: '대화창에서', cmd: '/plugin install lecpage --marketplace yoorrard/lecpage' },
-  { for: 'Codex·Cursor·Gemini CLI 등', where: '터미널에서', cmd: 'npx skills add yoorrard/lecpage' },
+  { for: 'Codex·Cursor 등', where: '터미널에서', cmd: 'npx skills add yoorrard/lecpage' },
 ];
 /** 내 PC의 연결 프로그램(lecpage studio)이 맡기는 AI 에이전트 이름(생성 작업의 agent) */
 export const AGENT_NAME = { claude: 'Claude Code', codex: 'Codex' };

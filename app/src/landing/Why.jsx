@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useReduced } from './motion.js';
 import { useInk, useTween } from './motion-more.js';
 import { BENCH, benchItems, fmt } from './Bench.jsx';
+import { Compare } from './Compare.jsx';
 
 /**
- * 왜 lecpage(스크롤텔링 한 구간): 문제 한 줄 → 단계마다 '그냥 AI 에이전트'와 lecpage를 견주는 장부 → 결론 한 줄.
- * 장부: 단계 다섯(교재 읽기·화면 검수·배포·질문·투표 준비·연수 당일과 연수 후)을 내려가면, 화면 아래에 붙은 합계 줄에서
+ * 왜 lecpage(스크롤텔링 한 구간): 문제 한 줄 → 같은 교재·같은 AI로 견준 실제 결과(Compare.jsx) → 단계마다 '그냥 AI 에이전트'와 lecpage를 견주는 장부 → 결론 한 줄.
+ * 장부: 단계 다섯(교재 대조·화면 살펴보기·배포·질문·투표 준비·연수 당일과 연수 후)을 내려가면, 화면 아래에 붙은 합계 줄에서
  *   그냥 맡길 때는 강사가 할 일 칸이 차고, lecpage 쪽 칸은 비어 있어요. 장부 끝에서 합계 줄이 제자리에 내려앉아요.
  * 할 일 열두 가지는 측정 기록의 실제 목록이고, 그 수는 src/data/benchmark.json(재는 방법: docs/research/benchmark-2026-11.md)에서 읽어요.
  * 움직임: 제목 잉크·형광펜은 CSS 스크롤 타임라인(지원하지 않는 브라우저는 화면에 들어올 때 한 번, motion-more.js useInk),
@@ -22,11 +23,11 @@ const DEPLOY = ['ZIP 압축 풀기', '배포할 곳에 로그인', '폴더 끌�
 const VOTE = ['투표 서비스 가입', '행사 만들기', '투표 문항 넣기', '링크 넣고 다시 배포', '발표 모드 켜기', '투표 시작하기'];
 // 단계마다: 그냥 맡길 때(base)와 lecpage(lp)
 const ROWS = [
-  { k: '교재 읽기', base: 'AI가 교재로 사이트를 써요. 날짜·장소가 교재와 같은지는 강사가 하나씩 맞춰 봐요.', lp: 'AI가 교재 원본을 직접 읽고 써요. 연수명·날짜·장소는 찾은 쪽 번호와 함께 보여 줘서 한 번에 확인해요.' },
-  { k: '화면 검수', base: '휴대폰에서 넘치거나 깨진 곳은 강사가 열어 보고 다시 요청해요.', lp: '휴대폰과 PC 화면에서 넘치거나 깨진 곳을 lecpage가 찾아 AI에게 돌려주고, AI가 그 섹션만 고쳐요.' },
+  { k: '교재 대조', base: 'AI가 쓴 날짜·숫자·주소가 교재와 같은지 강사가 하나씩 맞춰 봐요.', lp: '사이트의 날짜·숫자·주소와 복사할 문구를 교재 원본과 자동으로 맞춰 보고, 다른 곳만 알려 줘요.' },
+  { k: '화면 살펴보기', base: '휴대폰에서 낱말이 갈리거나 글이 넘치는 곳은 강사가 열어 봐야 알아요.', lp: '휴대폰과 PC 화면을 그려 보고 낱말 갈림·넘침을 알려 줘요. 알림은 참고용이고, 고칠지는 강사가 정해요.' },
   { k: '배포', tasks: DEPLOY, done: '앱이 해요' },
   { k: '질문·투표 준비', tasks: VOTE, base: '참가자는 사이트 밖 서비스에서 투표해요.', done: '사이트에 들어 있어요' },
-  { k: '연수 당일·연수 후', base: '고칠 때마다 다시 요청하고 다시 배포해요. 명단은 설문을 새로 만들어 받아요.', lp: '연수가 끝나면 강사 화면에서 명단을 CSV로 받아요.' },
+  { k: '연수 당일·연수 후', base: '교재 화면과 사이트를 번갈아 띄워요. 출석과 명단은 설문을 새로 만들어 받아요.', lp: '발표 화면이 교재 쪽을 크게 띄우고 강사 화면과 함께 넘겨요. 출석 명단은 강사 화면에서 고치고 CSV로 받아요.' },
 ];
 const TASK_N = ROWS.reduce((a, r) => a + (r.tasks?.length || 0), 0);
 
@@ -116,8 +117,10 @@ export function Why() {
       <header class="ld-head ld-why-head">
         <p class="ld-kicker">왜 lecpage인가요</p>
         <h2 id="ld-why-h" class="ld-ink" ref={head}><span class="ld-ink-l"><Words text={`${l1},`} /></span>{' '}<span class="ld-ink-l"><Words text={l2} keys={['노하우가']} from={l1.split(' ').length} /></span></h2>
-        <p class="ld-sub">AI 에이전트에 맡겨도 사이트는 나와요. 그다음 단계마다 강사가 할 일이 달라요.</p>
+        <p class="ld-sub">AI 에이전트에 맡겨도 사이트는 나와요. lecpage는 같은 AI의 디자인을 그대로 살리고, 강의 기능·배포·QR·강사 화면·발표 화면과 교재 대조를 더해요.</p>
       </header>
+      <Compare />
+      <h3 class="ld-h3 ld-led-title">만든 다음, 단계마다 강사가 할 일</h3>
       <div class="ld-led" ref={led}>
         <p class="ld-led-head" aria-hidden="true"><span /><span class="is-base">{base}</span><span class="is-lp">lecpage</span></p>
         <ol class="ld-rows">{ROWS.map((r, i) => <Row r={r} i={i} on={rows[i]} base={base} />)}</ol>

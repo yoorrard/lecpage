@@ -25,11 +25,12 @@ export function Reach() {
         <header class="ld-head">
           <h2 id="ld-reach-h">배포하면 바로<br />주소와 QR이 나와요</h2>
         </header>
-        <p class="ld-sub">배포할 곳은 lecpage가 골라 줘요. [배포하기]를 누르면 카톡 안내 문구도 함께 나오고, 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
+        <p class="ld-sub">배포할 곳은 lecpage가 골라 줘요. 배포하면 QR 안내문과 카톡 안내 문구가 함께 나오고, 주소가 실제로 열리는지도 확인해요. 참가자는 회원가입 없이 QR로 들어와요.</p>
         <dl class="ld-facts">
-          <div><dt>배포할 곳</dt><dd>Vercel·GitHub Pages·Netlify는 앱에서 바로 배포하고, 기관 서버·USB에는 ZIP으로 옮겨요.</dd></div>
+          <div><dt>배포할 곳</dt><dd>가입 없이 바로 배포해요(마지막 배포 뒤 60일 보관). 내 Vercel·GitHub Pages·Netlify 계정으로도 되고, 기관 서버·USB에는 ZIP으로 옮겨요.</dd></div>
           <div><dt>공개 범위</dt><dd>주소를 받은 사람만(기본) · 암호를 아는 사람만 · 누구나</dd></div>
-          <div><dt>다시 배포</dt><dd>고친 뒤 [다시 배포하기]를 한 번 눌러요. 주소는 그대로예요.</dd></div>
+          <div><dt>배포 전 확인</dt><dd>예시 주소나 지난 날짜가 남아 있으면 배포 전에 알려 줘요. 개인정보 안내는 배포할 곳에 맞게 들어가요.</dd></div>
+          <div><dt>다시 배포</dt><dd>고친 뒤 다시 배포해도 주소는 그대로예요.</dd></div>
         </dl>
       </div>
       <div class="ld-reach-vis">

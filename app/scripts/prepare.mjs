@@ -1,8 +1,8 @@
-// 빌드 전 준비: 참고 디자인(레퍼런스 사이트, skills/lecpage/references/designs/<id>/)을 엔진 키트 assemble로 조립해 public/examples/<id>/에,
-// 먼저 해보기 교재(대표 레퍼런스의 material/*.pdf)를 public/demo/<id>.pdf에 넣습니다.
+// 빌드 전 준비: 참고 디자인(레퍼런스 사이트, skills/lecpage/references/designs/<id>/)을 엔진 키트 assemble로 조립해 public/examples/<id>/에 넣습니다.
+// 먼저 해보기 교재는 src/data/demo/에 있어 빌드가 함께 내보내요(예전 public/demo/ 자리는 지우기만).
 // 레퍼런스 폴더: site/(AI가 쓴 사이트) · lecpage.json(연수 정보·쪽 제목 pages) · notes.json(분위기 설명) · material/(교재 원본)
 // 참여 기능은 이 기기 안 연습(local)이라 서버 없이 둘러볼 수 있어요. 앱은 data/references.js가 notes.json을 읽어 목록을 만듦.
-import { readFileSync, rmSync, mkdirSync, existsSync, readdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, rmSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -15,7 +15,7 @@ const TEXT = /\.(html|css|m?js|json|txt|vtt|md)$/i;
 const readJson = (p, d = null) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return d; } };
 
 rmSync(join(PUB, 'examples'), { recursive: true, force: true });
-rmSync(join(PUB, 'demo'), { recursive: true, force: true });
+rmSync(join(PUB, 'demo'), { recursive: true, force: true }); // 예전 먼저 해보기 교재 자리
 const ids = existsSync(DESIGNS) ? readdirSync(DESIGNS, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(DESIGNS, d.name, 'site', 'index.html'))).map((d) => d.name).sort() : [];
 for (const id of ids) {
   const dir = join(DESIGNS, id);
@@ -27,8 +27,6 @@ for (const id of ids) {
   const out = join(PUB, 'examples', id);
   mkdirSync(out, { recursive: true });
   N.writeFiles(out, r.files);
-  const pdf = existsSync(join(dir, 'material')) ? readdirSync(join(dir, 'material')).find((n) => /\.pdf$/i.test(n)) : '';
-  if (pdf) { mkdirSync(join(PUB, 'demo'), { recursive: true }); copyFileSync(join(dir, 'material', pdf), join(PUB, 'demo', `${id}.pdf`)); }
-  console.log(`참고 디자인 ${id}: 파일 ${Object.keys(r.files).length}개${r.warnings?.length ? `, 알림 ${r.warnings.length}개` : ''}${pdf ? ', 교재 PDF' : ''}`);
+  console.log(`참고 디자인 ${id}: 파일 ${Object.keys(r.files).length}개${r.warnings?.length ? `, 알림 ${r.warnings.length}개` : ''}`);
 }
 rmSync(join(PUB, 'fx-demo'), { recursive: true, force: true }); // 예전 효과 미리보기(둘러보기 낱말 사전) 자리 — 이제 쓰지 않음

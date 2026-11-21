@@ -1,4 +1,4 @@
-// 먼저 해보기의 'AI': 어디로도 보내지 않고, 레퍼런스 사이트에서 떼어 낸 답(data/demo-run.js)을 단계마다 조금씩 흘려보냄.
+// 먼저 해보기의 'AI': 어디로도 보내지 않고, 같은 교재로 실제로 받은 답(data/demo-run.js)을 조금씩 흘려보냄.
 // 다른 회사 어댑터와 같은 꼴(stream → { text, stop, usage })이라 파이프라인(job.js)은 실제와 똑같이 받아 나누고 합침.
 const sleep = (ms, signal) => new Promise((res, rej) => {
   if (signal?.aborted) return rej(new DOMException('aborted', 'AbortError'));
