@@ -206,8 +206,10 @@ export function buildAnswer({ broken = false } = {}) {
   return broken ? `사이트를 만들었어요.\n\n${out.slice(0, out.lastIndexOf('```'))}` : out;
 }
 export function fixAnswer(ids) { return '```html\n' + ids.map((id) => SECTIONS[id] || '').join('\n\n') + '\n```'; }
-export function editAnswer() {
-  return '```html\n' + SECTIONS.hero.replace('제미나이와 클로드로 30분 만에', '제미나이로 20분 만에') + '\n```\n```css\n:root { --lp-accent: #2a5f8f; }\n```\n```json\n{"subtitle":"제미나이로 20분 만에 학습지 완성"}\n```';
+export function editAnswer(request = '') {
+  // 요청 글을 첫 섹션에 한 줄로 남김(연속 수정마다 사이트가 달라져 버전이 하나씩 쌓이는지 볼 수 있게)
+  const note = request ? `<p class="req-note">요청 반영: ${String(request).replace(/[<>&]/g, '')}</p>\n</section>` : '</section>';
+  return '```html\n' + SECTIONS.hero.replace('제미나이와 클로드로 30분 만에', '제미나이로 20분 만에').replace(/<\/section>\s*$/, note) + '\n```\n```css\n:root { --lp-accent: #2a5f8f; }\n```\n```json\n{"subtitle":"제미나이로 20분 만에 학습지 완성"}\n```';
 }
 /** 쓰던 AI 창 답: 한 파일 index.html(인라인 style) + lecpage.json */
 export function chatAnswer() {

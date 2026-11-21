@@ -177,7 +177,13 @@ async function importSiteFile(files, text) {
   for (const o of u.originals) bins['src/' + safe(o.name)] = o.bytes;
   const html = site['index.html'] || '';
   const meta = (await siteMeta()).keepTeacher(u.meta, { access: 'link' });
-  const p = { id, v: 2, title: u.title || meta.title || '', createdAt: Date.now(), stage: 2, step: 2, imported: true, origin: 'skill', fileHash, files: srcFiles, info: { ...DEFAULT_INFO }, deploy: {},
+  // AI 에이전트가 site/files/에 넣고 어디에도 걸지 않은 자료 → 완성 화면의 자료 목록(Skill 조립 kit-cmds unlistedFiles와 같은 규칙)
+  const used = Object.values(site).join('\n');
+  const materials = Object.keys(u.site).filter((k) => /^(assets\/)?files\/[^/]+$/.test(k) && !used.includes(k) && !used.includes(encodeURI(k))).sort().map((k) => {
+    const name = k.split('/').pop(); const v = u.site[k];
+    return { id: uid(8), title: name.replace(/\.[^.]+$/, ''), desc: '', href: k, size: typeof v === 'string' ? v.length : v?.byteLength || v?.length || 0, kind: ((/\.([a-z0-9]+)$/i.exec(name) || [])[1] || '').toUpperCase(), at: Date.now() };
+  });
+  const p = { id, v: 2, ...(materials.length ? { materials } : {}), title: u.title || meta.title || '', createdAt: Date.now(), stage: 2, step: 2, imported: true, origin: 'skill', fileHash, files: srcFiles, info: { ...DEFAULT_INFO }, deploy: {},
     site: { ...site, 'index.html': html }, meta, material: u.material?.pages?.length ? { pages: u.material.pages, files: [] } : null, versions: [{ id: uid(8), at: Date.now(), label: 'AI 에이전트가 만든 버전', site, meta }], ...(u.note ? { notes: [u.note] } : {}) };
   await projects.put(p);
   for (const [k, v] of Object.entries(bins)) await blobs.put(id, k, v);

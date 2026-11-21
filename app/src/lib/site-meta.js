@@ -3,6 +3,7 @@
 // 같은 칸 이름의 '배포용 보기'(deployView)를 만들어 주고, 고친 것은 p.meta의 강사 칸(live·siteUrl·shortUrl·access·privacy)에 돌려 씀(patchDeploy).
 import { randomCode } from '@engine/src/util.js';
 import { keepTeacherValues, LIVE_FEATURE_KEYS as LIVE_KEYS } from '@engine/src/kit/index.js';
+import { MAX_VERSIONS as MAX_V } from './versions.js';
 
 export { LIVE_KEYS };
 /** 참여 기능(강사에게 보이는 이름·설명). quick=첫 화면에서 바로 고르는 세 가지 */
@@ -77,10 +78,12 @@ export function toggleFeature(cur, v) {
   return { meta: { ...(cur.meta || {}), features: next } };
 }
 
-/** 판 기록(되돌리기)에 지금 판을 넣은 versions(최근 10판) */
+// 버전 기록·AI 수정 대화: lib/versions.js(바뀐 뒤의 사이트를 맨 위에 남김)
+export { recordVersion, sameState, aiVersionLabel, restoreLabel, addChat, aiReply, MAX_VERSIONS } from './versions.js';
+/** 버전 기록에 지금 판을 그대로 넣은 versions(최근 20개). 새 기록은 recordVersion(바뀐 뒤의 판) */
 export function pushVersion(cur, label) {
   if (!cur.site) return cur.versions || [];
-  return [{ id: Math.random().toString(36).slice(2, 10), at: Date.now(), label, site: cur.site, meta: cur.meta }, ...(cur.versions || [])].slice(0, 10);
+  return [{ id: Math.random().toString(36).slice(2, 10), at: Date.now(), label, site: cur.site, meta: cur.meta }, ...(cur.versions || [])].slice(0, MAX_V);
 }
 
 /** 사이트의 실습 단계 글(인쇄본: 인터넷이 안 될 때 나눠 줄 실습 프롬프트 모음) */

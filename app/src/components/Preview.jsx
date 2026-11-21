@@ -138,7 +138,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
     }, 250);
     return () => clearTimeout(t.current);
-  }, [p.site, p.meta, page, ver]);
+  }, [p.site, p.meta, p.materials, page, ver]);
   // 미리보기 안에서 누른 사이트 주소: 다른 쪽이면 그 쪽으로, 파일이면 새 탭에서
   const openPath = (path, h) => {
     const f = files.current || {};

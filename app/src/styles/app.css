@@ -266,11 +266,6 @@ details>summary{cursor:pointer}
   .is-studio .wiz-main>.ai-job>.icon-btn{position:absolute;top:6px;right:6px}
   .is-studio .wiz-main>.ai-job>.ai-job-t+.btn-quiet{margin-left:calc(-1 * var(--px))}
 }
-/* 좁은 화면(~960px): 미리보기 → 편집 칸으로 쌓음. 미리보기는 화면의 절반쯤만(편집 칸이 첫 화면 가까이 오게),
-   [되돌리기]는 머리의 버튼이 화면 밖이면 편집 칸 아래쪽에 따라다님 */
-@media (max-width: 960px){
-  .workspace>.ws-panel>.tabs{order:-2}
-}
 @media (max-width: 560px){
   .top-in{gap:8px}
   .top nav{gap:0}

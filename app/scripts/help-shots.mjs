@@ -111,9 +111,8 @@ try {
     // 3. 연결하면 바로 만들기 → 완성 화면(목록·미리보기)
     await page.fill('dialog[open] input[type=password]', FAKE_KEY);
     await page.click('dialog[open] .key-now button:has-text("연결")');
-    await page.waitForSelector('#panel-info button:has-text("이 정보가 맞아요")', { timeout: 90000 });
-    await page.click('#panel-info button:has-text("이 정보가 맞아요")');
-    await page.click('#tab-list');
+    await page.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 90000 });
+    await page.click('.st-info button:has-text("이 정보가 맞아요")');
     await page.waitForSelector('.pv-device iframe', { timeout: 30000 });
     await settle(2500);
     if (want('edit')) { await top(); await shot('edit'); }

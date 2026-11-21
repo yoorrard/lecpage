@@ -77,7 +77,7 @@ export function Project({ id, step }) {
     if (job.status !== 'done' || !seen.current[job.jobId]) return;
     delete seen.current[job.jobId];
     if (job.kind === 'make') { toast('다 만들었어요. 미리보기를 보며 확인해 주세요.'); if (s !== 2) go(2); }
-    else toast(job.kind === 'fix' ? '검수에서 찾은 곳을 AI가 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.');
+    else toast(job.kind === 'fix' ? '꼭 고칠 곳을 AI가 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.' : '요청한 대로 고쳤어요. 마음에 안 들면 [버전 기록]에서 복원해요.');
   }, [job.status, job.jobId]);
 
   const s = step > 3 ? stageOf(step) : Math.min(3, Math.max(1, step || p?.stage || 1));

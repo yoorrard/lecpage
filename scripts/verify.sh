@@ -2,7 +2,7 @@
 # 합치기 전 검증을 한 번에. 지금 git 인덱스(스테이징한 상태)를 그대로 떠서 검사하고, 결과는 요약 줄만 찍습니다.
 # 사용: bash scripts/verify.sh [--e2e] [--hosting]     (npm run verify / npm run verify:full)
 #   기본: 엔진 테스트 · 예시 빌드 · 앱 빌드
-#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름 5종(flow·more·share-flow·hosts·instant). tests/e2e/ 는 작업 폴더의 것을 씁니다
+#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름 6종(flow·more·share-flow·hosts·studio2·instant). tests/e2e/ 는 작업 폴더의 것을 씁니다
 #   --hosting: 바로 공개 서버 테스트
 # 환경변수: VERIFY_DIR(검사용 복사본 위치) · OUT_DIR(로그·스크린샷, 기본 .out/verify)
 # 자세한 기록: .out/verify/log-*.txt, 스크린샷: .out/verify/shots/
@@ -45,7 +45,7 @@ if [ $E2E = 1 ]; then
   (npx vite preview --host 127.0.0.1 --port 4175 --strictPort > /dev/null 2>&1 &)
   sleep 4
   cd "$R/tests/e2e"
-  for t in flow more share-flow hosts; do
+  for t in flow more share-flow hosts studio2; do
     BASE=http://localhost:4175/ OUT="$O/shots/" timeout 600 node "$t.js" > "$O/log-e2e-$t.txt" 2>&1
     f=$(grep -c "^FAIL" "$O/log-e2e-$t.txt"); p=$(grep -c "^PASS" "$O/log-e2e-$t.txt")
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "TimeoutError\|pageerror\|SCRIPT ERROR" "$O/log-e2e-$t.txt"; then echo "e2e $t: ok ($p pass)"; else echo "e2e $t: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-$t.txt"; fi

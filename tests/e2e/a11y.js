@@ -35,10 +35,12 @@ async function check(p, label) {
     await check(p, `${tag} making (paused)`);
     await p.click('.making button:has-text("계속 만들기")');
     await L.waitStudio(p);
-    for (const t of ['info', 'list', 'check', 'ask']) { await p.click(`#tab-${t}`); await p.waitForTimeout(t === 'check' ? 1800 : 300); await check(p, `${tag} studio ${t}`); }
+    await p.waitForTimeout(1800); await check(p, `${tag} studio`);
+    await p.click('.st-info button:has-text("수정")'); await p.waitForTimeout(300); await check(p, `${tag} studio info form`);
+    if (w > 900) { await p.click('.st-fold summary:has-text("섹션")'); await p.waitForTimeout(300); await check(p, `${tag} studio sections`); }
+    else { await p.click('.st-switch button:has-text("미리보기")'); await p.waitForTimeout(800); await check(p, `${tag} studio preview`); await p.click('.st-switch button:has-text("수정")'); }
     if (w > 900 && scheme === 'light') {
       // 키보드: 목록의 ↑↓
-      await p.click('#tab-list');
       const before = await p.locator('.sec2-name .ttl').allInnerTexts();
       await p.focus('.sec2 >> nth=1 >> button[aria-label$="아래로"]'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
       const after = await p.locator('.sec2-name .ttl').allInnerTexts();

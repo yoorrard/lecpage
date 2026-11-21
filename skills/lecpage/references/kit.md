@@ -18,6 +18,7 @@
 | `<section data-lp-step="s1" data-title="1단계: …" data-minutes="30">` | 실습 단계([완료 체크]·[도움 요청]). `data-minutes`: 교재의 실습 시간(타이머 단추) |
 
 - 참여 막대(출석·도움 요청·질문·반응)와 '지금' 줄(공지·타이머·투표)은 저절로 붙어요. 자리를 정하려면 `data-lp="dock"`·`"now"`.
+- 강사가 준 자료(활동지·참고 파일)는 `work/site/files/`에 이름 그대로 넣어요(PDF·한글·워드·PPT·엑셀·ZIP 등, 파일 하나 20MB·사이트 40MB까지). 어디에도 걸지 않은 파일은 조립이 자료실 목록에 넣고, 자료실 자리 표시가 없으면 첫 쪽 끝에 자료 칸을 붙여 참가자가 받게 해요. 원하는 자리에 두려면 `<div data-lp="materials"></div>`만 넣으면 돼요.
 - 자리 표시 안에는 글을 쓰지 않아요(조립 때 지워짐). JSON 속성은 작은따옴표로.
 - [완료 체크]·[도움 요청](`.lpk-step-f`)은 단계 요소 안쪽 끝에 붙어요. 폭은 `data-lp-step`을 내용 상자에 달거나 `.lpk-step-f` 여백으로.
 - 실습 진행 표시(선택): 단계 주소 `#st-s1`, 링크 `<a href="#st-s1" data-st-link="s1">`(끝냄 `.is-done`, 지금 `aria-current="step"`), 끝낸 수 `<b data-st-count></b>`, 막대 `<progress data-st-progress></progress>`. 지금 단계는 `.lp-st.is-active`.
