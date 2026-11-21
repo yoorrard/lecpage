@@ -159,8 +159,9 @@
 .ld-st-tags li{padding:.8cqw 1.6cqw;border-radius:1cqw;background:var(--ink);color:var(--bg);font-size:clamp(9px,1.9cqw,13px);font-weight:700;white-space:nowrap;
   opacity:calc(clamp(0,calc((var(--t) - 1.65 - var(--k) * .15) * 5),1) * (1 - clamp(0,calc((var(--t) - 2.35) * 4),1)));transform:translateY(calc((1 - clamp(0,calc((var(--t) - 1.65 - var(--k) * .15) * 5),1)) * 2cqh))}
 .ld-st-m{--P:21cqw;right:6cqw;bottom:5cqh;animation:none;opacity:var(--c);transform:translateY(calc((1 - var(--c)) * 30cqh));z-index:5}
-.ld-st-edit{position:absolute;left:6%;right:6%;top:14%;height:15%;border:max(1px,1.7cqw) dashed var(--accent);border-radius:5cqw;opacity:var(--d);transform:scale(calc(1.08 - var(--d) * .08))}
-.ld-st-edit span{position:absolute;left:-2cqw;top:-15cqw;padding:2cqw 5cqw;border-radius:3.5cqw;background:var(--accent);color:var(--on-accent);font-size:clamp(7px,7.4cqw,12px);font-weight:750;white-space:nowrap}
+/* 휴대폰 그림(ph-neo-teach, 사이트 390×795)의 첫 제목 글자 상자(x16–232, y139–246)에 7px 여백. 그림을 다시 찍어 제목 자리가 바뀌면 같이 맞춤 */
+.ld-st-edit{position:absolute;left:2.4%;width:59%;top:16.7%;height:15%;border:max(1px,1.7cqw) dashed var(--accent);border-radius:5cqw;opacity:var(--d);transform:scale(calc(1.08 - var(--d) * .08))}
+.ld-st-edit span{position:absolute;left:calc(100% + 3cqw);top:-1.5cqw;padding:2cqw 5cqw;border-radius:3.5cqw;background:var(--accent);color:var(--on-accent);font-size:clamp(7px,7.4cqw,12px);font-weight:750;white-space:nowrap}
 .ld-st-kit{position:absolute;left:7cqw;bottom:7cqh;display:flex;flex-wrap:wrap;gap:1cqw;width:62cqw;z-index:6}
 .ld-st-kit li{padding:.8cqw 1.6cqw;border-radius:1cqw;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 .8cqw 2cqw -1cqw rgba(15,10,35,.4);font-size:clamp(9px,1.9cqw,13px);font-weight:700;color:var(--ink);white-space:nowrap;
   opacity:clamp(0,calc((var(--t) - 2.5 - var(--k) * .1) * 5),1);transform:translateY(calc((1 - clamp(0,calc((var(--t) - 2.5 - var(--k) * .1) * 5),1)) * 2cqh))}
