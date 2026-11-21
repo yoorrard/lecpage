@@ -1,5 +1,5 @@
-// PC 프로그램(lecpage studio)의 "구독으로 연결"(2026-11-21) 시험: lecpage.com 짝(CORS·토큰) · ChatGPT 계정(가짜 OpenAI, fixtures/fake-siwc.mjs) ·
-// Claude Code·Codex 설치·로그인 창(가짜 터미널) · 공식 명령 · 시작 프로그램 명령. 실제 계정·실제 터미널은 쓰지 않음.
+// lecpage 커넥트(lecpage Connect, 예전 이름 lecpage studio)의 "구독으로 연결"(2026-11-21) 시험: lecpage.com 짝(CORS·토큰) · ChatGPT 계정(가짜 OpenAI, fixtures/fake-siwc.mjs) ·
+// Claude Code·Codex 설치·로그인 창(가짜 터미널, 창이 없으면 이 프로그램 안에서) · 공식 명령 · 컴퓨터를 켤 때 켜기(Windows·macOS·Linux) · 브라우저 열기. 실제 계정·실제 터미널은 쓰지 않음.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, chmodSync, statSync } from 'node:fs';
@@ -40,7 +40,7 @@ function withEnv(vars, fn) {
   return Promise.resolve().then(fn).finally(back);
 }
 
-test('짝 맞춤 토큰(이 PC 사용자 폴더에 한 번) · 허용 출처·사전 요청 · 공식 설치·로그인 명령 · 터미널 창 · 시작 프로그램 명령', () => {
+test('짝 맞춤 토큰(이 PC 사용자 폴더에 한 번) · 허용 출처·사전 요청 · 공식 설치·로그인 명령 · 터미널 창(Windows·macOS·Linux) · 자동 시작 파일 · 브라우저 열기', async () => {
   const h = mkdtempSync(join(T, 'pair-'));
   const a = St.pairToken(h); assert.match(a, /^[0-9a-f]{64}$/);
   assert.equal(St.pairToken(h), a, '다시 켜도 같은 토큰(lecpage.com이 저절로 다시 붙음)');
@@ -69,14 +69,63 @@ test('짝 맞춤 토큰(이 PC 사용자 폴더에 한 번) · 허용 출처·�
   assert.match(St.terminalScript('codex', 'install', { platform: 'linux' }), /curl -fsSL https:\/\/chatgpt\.com\/codex\/install\.sh \| sh/);
   assert.match(St.terminalScript('claude', 'update', { platform: 'darwin', file: '/u/claude', needLogin: false }), /'\/u\/claude' update; echo/);
   assert.equal(St.autostartCommand('C:\\Users\\a\\AppData\\Local\\lecpage\\lecpage-studio.cmd'), 'cmd.exe /c start "lecpage" /min "C:\\Users\\a\\AppData\\Local\\lecpage\\lecpage-studio.cmd" --autostart');
-  // 터미널 창: 윈도우는 새 콘솔(detached)의 PowerShell, mac은 Terminal(osascript), 터미널이 없으면 명령을 돌려줌
+  // 터미널 창: 윈도우는 새 콘솔(detached)의 PowerShell, mac은 .command 파일을 Terminal로, 리눅스는 화면이 있을 때 차례대로. 못 열면 명령을 돌려줌
   const calls = []; const spawnImpl = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { on() {}, unref() {} }; };
-  assert.equal(St.openTerminal('echo hi', { platform: 'win32', env: {}, spawnImpl }).how, 'powershell');
+  assert.equal((await St.openTerminal('echo hi', { platform: 'win32', env: {}, spawnImpl, waitMs: 5 })).how, 'powershell');
   assert.equal(calls[0].cmd, 'powershell.exe'); assert.ok(calls[0].args.includes('-NoExit') && calls[0].opts.detached && calls[0].opts.windowsHide === false);
   assert.equal(Buffer.from(calls[0].args.at(-1), 'base64').toString('utf16le'), 'echo hi', '-EncodedCommand로 따옴표·한글을 그대로');
-  St.openTerminal('echo "hi"', { platform: 'darwin', env: {}, spawnImpl });
-  assert.equal(calls[1].cmd, 'osascript'); assert.match(calls[1].args.join(' '), /do script "echo \\"hi\\""/);
-  assert.deepEqual(St.openTerminal('x', { platform: 'linux', env: { PATH: '' }, spawnImpl }), { ok: false, command: 'x' });
+  assert.equal((await St.openTerminal('echo "hi"', { platform: 'darwin', env: {}, spawnImpl, waitMs: 5 })).how, 'terminal');
+  assert.deepEqual(calls[1].args.slice(0, 2), ['-a', 'Terminal']); assert.equal(calls[1].cmd, 'open');
+  const cmdFile = calls[1].args[2]; assert.match(cmdFile, /lecpage-connect-[0-9a-f]+\.command$/);
+  assert.equal(readFileSync(cmdFile, 'utf8'), '#!/bin/bash\nrm -f "$0"\necho "hi"\nexec "${SHELL:-/bin/zsh}" -l\n', '따옴표를 고치지 않고 파일에 그대로');
+  if (posix) assert.equal(statSync(cmdFile).mode & 0o777, 0o700); rmSync(cmdFile, { force: true });
+  assert.deepEqual(await St.openTerminal('x', { platform: 'linux', env: { PATH: '' }, spawnImpl }), { ok: false, command: 'x' });
+  if (posix) {
+    // 리눅스: 화면이 없으면 터미널을 찾지 않음 · 있으면 x-terminal-emulator부터, 곧바로 실패하면(0이 아닌 코드) 다음 것
+    const tb = mkdtempSync(join(T, 'terms-'));
+    for (const t of ['x-terminal-emulator', 'konsole', 'xterm']) { writeFileSync(join(tb, t), '#!/bin/sh\n'); chmodSync(join(tb, t), 0o755); }
+    assert.equal((await St.openTerminal('x', { platform: 'linux', env: { PATH: tb }, spawnImpl })).ok, false, 'DISPLAY·WAYLAND_DISPLAY가 없으면 창을 열지 않음');
+    const tried = [];
+    const quitFirst = (cmd, args) => { tried.push(cmd); const fail = cmd === 'x-terminal-emulator'; return { on(ev, f) { if (ev === 'exit' && fail) setTimeout(() => f(1), 5); }, unref() {} }; };
+    const r = await St.openTerminal('echo 안녕', { platform: 'linux', env: { PATH: tb, DISPLAY: ':0' }, spawnImpl: quitFirst, waitMs: 60 });
+    assert.deepEqual(r, { ok: true, how: 'konsole' }); assert.deepEqual(tried, ['x-terminal-emulator', 'konsole']);
+    assert.deepEqual(St.LINUX_TERMINALS.map(([t]) => t).filter((t) => ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'].includes(t)), ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'], '정한 차례');
+  }
+  // 컴퓨터를 켤 때 켜기: macOS LaunchAgent plist · Linux XDG autostart .desktop(경로의 특수 문자는 명세대로)
+  assert.equal(St.autostartFile({ HOME: '/Users/a' }, 'darwin'), '/Users/a/Library/LaunchAgents/com.lecpage.connect.plist');
+  assert.equal(St.autostartFile({ HOME: '/home/a' }, 'linux'), '/home/a/.config/autostart/lecpage-connect.desktop');
+  assert.equal(St.autostartFile({ HOME: '/home/a', XDG_CONFIG_HOME: '/x/cfg' }, 'linux'), '/x/cfg/autostart/lecpage-connect.desktop');
+  const plist = St.autostartEntry('/Users/a/Library/Application Support/lecpage/lecpage-connect.sh', 'darwin', '/Users/a');
+  assert.match(plist, /<key>Label<\/key><string>com\.lecpage\.connect<\/string>/);
+  assert.match(plist, /<array><string>\/bin\/sh<\/string><string>\/Users\/a\/Library\/Application Support\/lecpage\/lecpage-connect\.sh<\/string><string>--autostart<\/string><\/array>/);
+  assert.match(plist, /<key>RunAtLoad<\/key><true\/>/); assert.match(plist, /\/Users\/a\/\.local\/bin:\/opt\/homebrew\/bin/);
+  assert.match(St.autostartEntry('/u/a&b<c>.sh', 'darwin', '/u'), /\/u\/a&amp;b&lt;c&gt;\.sh/);
+  const desk = St.autostartEntry('/home/a b/.local/share/lecpage/lecpage-connect.sh', 'linux');
+  assert.match(desk, /^\[Desktop Entry\]\nType=Application\n/); assert.match(desk, /\nName=lecpage 커넥트\n/); assert.match(desk, /\nTerminal=false\n/);
+  assert.match(desk, /\nExec=\/bin\/sh "\/home\/a b\/\.local\/share\/lecpage\/lecpage-connect\.sh" --autostart\n/);
+  assert.ok(St.autostartEntry('/h/$x"y`z%.sh', 'linux').includes('Exec=/bin/sh "/h/\\$x\\"y\\`z%%.sh" --autostart'));
+  assert.deepEqual(await St.autostartState({}, 'linux'), { available: false, on: false }, '받은 실행 파일로 켰을 때만');
+  if (posix) {
+    const home = mkdtempSync(join(T, 'auto-')); const env = { HOME: home, LECPAGE_LAUNCHER: join(home, 'lecpage-connect.sh') };
+    for (const plat of ['linux', 'darwin']) {
+      const f = St.autostartFile(env, plat);
+      assert.deepEqual(await St.autostartState(env, plat), { available: true, on: false });
+      assert.deepEqual(await St.setAutostart(true, env, plat), { ok: true, available: true, on: true });
+      assert.ok(readFileSync(f, 'utf8').includes(env.LECPAGE_LAUNCHER)); assert.deepEqual(await St.autostartState(env, plat), { available: true, on: true });
+      assert.deepEqual(await St.setAutostart(false, env, plat), { ok: true, available: true, on: false });
+      assert.throws(() => statSync(f), /ENOENT/, '끄면 파일을 지움');
+    }
+  }
+  // 브라우저: Windows rundll32(= start) · macOS open · Linux xdg-open부터(화면이 있을 때만) · WSL wslview
+  const u = 'https://lecpage.com/#pair=ab&port=6600';
+  assert.deepEqual(St.browserCommands(u, { platform: 'win32', env: {} }), [['rundll32', ['url.dll,FileProtocolHandler', u]]]);
+  assert.deepEqual(St.browserCommands(u, { platform: 'darwin', env: {} }), [['open', [u]]]);
+  assert.deepEqual(St.browserCommands(u, { platform: 'linux', env: {} }), [], '화면이 없으면 열지 않고 주소를 보여 줌');
+  assert.deepEqual(St.browserCommands(u, { platform: 'linux', env: { DISPLAY: ':0' } }).map(([c]) => c), ['xdg-open', 'gio', 'sensible-browser', 'x-www-browser']);
+  assert.equal(St.browserCommands(u, { platform: 'linux', env: { WSL_DISTRO_NAME: 'Ubuntu' } })[0][0], 'wslview');
+  const opened = []; const sp = (cmd, args) => { opened.push([cmd, ...args]); return { on() {}, unref() {} }; };
+  assert.equal(await St.openBrowser(u, { platform: 'darwin', env: {}, spawnImpl: sp, waitMs: 5 }), true); assert.deepEqual(opened[0], ['open', u]);
+  assert.equal(await St.openBrowser(u, { platform: 'linux', env: { PATH: '' }, spawnImpl: sp, waitMs: 5 }), false);
 });
 
 test('ChatGPT 요청 본문은 store:false·stream:true(금지 칸 뺌) · ID 토큰 확인(RS256·iss·aud·nonce·서명)', async () => {
@@ -135,7 +184,7 @@ test('ChatGPT 계정으로 연결(가짜 OpenAI): lecpage.com에서 로그인 �
       const rec = JSON.parse(readFileSync(file, 'utf8'));
       assert.equal(rec.client_id, 'oaiapp_test123'); assert.ok(rec.access_token && rec.refresh_token && rec.id_token && rec.scopes.includes('chatgpt.tokens.use.direct'));
       assert.deepEqual((await req(port, 'GET', '/bridge/chatgpt/models', { headers: L })).json().models, [{ id: 'gpt-test', label: 'GPT 시험' }]);
-      // 답 중계: 앱이 넣은 금지 칸은 PC 프로그램이 뺌
+      // 답 중계: 앱이 넣은 금지 칸은 lecpage 커넥트가 뺌
       const r1 = await req(port, 'POST', '/bridge/chatgpt/responses', { headers: L, body: { model: 'gpt-test', instructions: 'x', input: [{ role: 'user', content: [{ type: 'input_text', text: 'hi' }] }], max_output_tokens: 1000, background: true, temperature: 0.2 } });
       assert.equal(r1.status, 200); assert.match(r1.headers['content-type'], /text\/event-stream/); assert.match(r1.text, /response\.completed/); assert.equal(r1.headers['access-control-allow-origin'], 'https://lecpage.com'); noSecret(r1.text);
       const sent = f.st.calls.at(-1);
@@ -191,7 +240,7 @@ test('설치·로그인 버튼: 공식 명령을 보이는 터미널 창에서(�
     try {
       const cx = (await req(st.port, 'GET', '/bridge/status?fresh', { headers: H })).json().agents.find((a) => a.id === 'codex');
       assert.equal(cx.installed, false); assert.equal(cx.need, 'install'); assert.equal(cx.file, undefined, '실행 파일 경로는 앱에 주지 않음');
-      assert.deepEqual((await req(st.port, 'POST', '/bridge/agents/codex/install', { headers: H, body: {} })).json(), { ok: true, action: 'install' });
+      assert.deepEqual((await req(st.port, 'POST', '/bridge/agents/codex/install', { headers: H, body: {} })).json(), { ok: true, action: 'install', how: 'test' });
       await new Promise((r) => setTimeout(r, 400));
       assert.match(readFileSync(term, 'utf8'), /curl -fsSL https:\/\/chatgpt\.com\/codex\/install\.sh \| sh && .*codex" login/);
       assert.equal((await req(st.port, 'POST', '/bridge/agents/claude/login', { headers: H, body: {} })).status, 429, '3초 안에 또 누르면 기다리게');
@@ -201,7 +250,43 @@ test('설치·로그인 버튼: 공식 명령을 보이는 터미널 창에서(�
       assert.ok(readFileSync(term, 'utf8').includes(`'${join(bin, 'claude')}' auth login`));
       assert.equal((await req(st.port, 'POST', '/bridge/agents/evil/install', { headers: H, body: {} })).status, 404);
       assert.equal((await req(st.port, 'POST', '/bridge/agents/claude/login', { headers: { origin: 'https://lecpage.com' }, body: {} })).status, 401, '토큰 없이는 창을 못 엶');
-      assert.equal((await req(st.port, 'GET', '/bridge/autostart', { headers: H })).json().available, false, '받은 파일(Windows)로 켰을 때만');
+      assert.equal((await req(st.port, 'GET', '/bridge/autostart', { headers: H })).json().available, false, '받은 실행 파일로 켰을 때만');
+      assert.equal((await req(st.port, 'POST', '/bridge/autostart', { headers: H, body: { on: true } })).status, 409);
+    } finally { await st.close(); }
+  });
+});
+
+test('터미널 창을 못 열면(화면 없는 리눅스) 이 프로그램 안에서 돌리고 출력·입력을 앱으로 · 받은 실행 파일로 켰으면 자동 시작 켜고 끄기', { skip: process.platform !== 'linux' && '리눅스만', timeout: 60000 }, async () => {
+  const bin = join(T, 'bin-inline'); mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${join(HERE, 'fixtures', 'fake-agent.mjs')}" claude "$@"\n`); chmodSync(join(bin, 'claude'), 0o755);
+  const home = mkdtempSync(join(T, 'h-inline-')); const loginFile = join(home, 'logged-in');
+  await withEnv({ PATH: `${bin}:/usr/bin:/bin`, LECPAGE_STUDIO_TERMINAL: '', DISPLAY: '', WAYLAND_DISPLAY: '', HOME: home, XDG_CONFIG_HOME: '', LECPAGE_LAUNCHER: join(home, 'lecpage-connect.sh'), FAKE_LOGIN_FILE: loginFile }, async () => {
+    const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 'inline-')) });
+    const H = { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com' };
+    try {
+      const before = (await req(st.port, 'GET', '/bridge/status?fresh', { headers: H })).json();
+      assert.equal(before.agents.find((a) => a.id === 'claude').loggedIn, false); assert.equal(before.term, null);
+      const r = (await req(st.port, 'POST', '/bridge/agents/claude/login', { headers: H, body: {} })).json();
+      assert.equal(r.ok, false); assert.equal(r.how, 'inline'); assert.equal(r.action, 'login'); assert.match(r.message_ko, /lecpage 커넥트 안에서 Claude Code 로그인을 해요/); assert.match(r.command, /auth login/);
+      let t = null;
+      for (let i = 0; i < 100 && !/Paste code/.test(t?.output || ''); i++) { await new Promise((ok) => setTimeout(ok, 100)); t = (await req(st.port, 'GET', '/bridge/term', { headers: H })).json().term; }
+      assert.equal(t.running, true); assert.equal(t.agent, 'claude'); assert.match(t.output, /lecpage: Claude Code에 내 계정으로 로그인해요/); assert.match(t.output, /Paste code here if prompted/);
+      assert.equal((await req(st.port, 'GET', '/bridge/status', { headers: H })).json().term.running, true, '상태에도 돌고 있는지(출력은 /bridge/term에서만)');
+      assert.equal((await req(st.port, 'POST', '/bridge/term/input', { headers: { origin: 'https://lecpage.com' }, body: { text: 'x' } })).status, 401, '토큰 없이는 입력 못 함');
+      assert.equal((await req(st.port, 'POST', '/bridge/term/input', { headers: H, body: { text: 'code-123' } })).json().ok, true);
+      for (let i = 0; i < 100 && t.running; i++) { await new Promise((ok) => setTimeout(ok, 100)); t = (await req(st.port, 'GET', '/bridge/term', { headers: H })).json().term; }
+      assert.equal(t.code, 0); assert.match(t.output, /Login successful/); assert.match(t.output, /다 됐어요/);
+      assert.equal(readFileSync(loginFile, 'utf8'), 'code-123');
+      assert.equal((await req(st.port, 'GET', '/bridge/status?fresh', { headers: H })).json().agents.find((a) => a.id === 'claude').loggedIn, true, '끝나면 저절로 알아봄');
+      assert.equal((await req(st.port, 'POST', '/bridge/term/input', { headers: H, body: { text: 'again' } })).status, 409, '끝난 뒤에는 입력 없음');
+      // 자동 시작(리눅스 ~/.config/autostart): 켜기 → 파일 → 끄기 → 지움
+      const f = join(home, '.config', 'autostart', 'lecpage-connect.desktop');
+      assert.deepEqual((await req(st.port, 'GET', '/bridge/autostart', { headers: H })).json(), { ok: true, available: true, on: false });
+      assert.deepEqual((await req(st.port, 'POST', '/bridge/autostart', { headers: H, body: { on: true } })).json(), { ok: true, available: true, on: true });
+      assert.ok(readFileSync(f, 'utf8').includes(`Exec=/bin/sh "${join(home, 'lecpage-connect.sh')}" --autostart`));
+      assert.equal((await req(st.port, 'GET', '/bridge/status', { headers: H })).json().autostart.on, true);
+      assert.deepEqual((await req(st.port, 'POST', '/bridge/autostart', { headers: H, body: { on: false } })).json(), { ok: true, available: true, on: false });
+      assert.throws(() => statSync(f), /ENOENT/);
     } finally { await st.close(); }
   });
 });

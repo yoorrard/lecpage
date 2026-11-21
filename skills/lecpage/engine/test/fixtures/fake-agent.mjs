@@ -1,9 +1,10 @@
-// 시험용 가짜 claude·codex: 실제 AI에 닿지 않고 연결 프로그램(studio)이 기대하는 흐름을 흉내 냅니다.
+// 시험용 가짜 claude·codex: 실제 AI에 닿지 않고 lecpage 커넥트(studio)가 기대하는 흐름을 흉내 냅니다.
 // 쓰는 법: 시험이 PATH 앞 폴더에 `claude`·`codex` 실행 파일을 두고 `node fake-agent.mjs <claude|codex> "$@"`로 부름.
 // 받은 인자·작업 폴더·폴더 안 파일을 FAKE_AGENT_LOG에 JSON 한 줄로 적고(시험이 옵션 이름을 확인),
 // -p / exec이면 stream-json(JSONL)을 내며 TASK.md를 읽고 work/site에 그럴듯한 사이트를 쓰고 검수 명령을 실제로 돌립니다.
 // TASK.md에 [fake:hang]이 있으면 끝나지 않고(시간 한도·멈추기 시험), [fake:nosite]면 사이트를 쓰지 않고 실패,
 // [fake:mcp]면 init에 MCP 도구가 켜진 것처럼 알림.
+// 설치·로그인 버튼 시험: FAKE_LOGIN_FILE이 있으면 그 파일이 있을 때만 로그인된 것으로. `claude auth login`은 코드 한 줄을 받은 뒤 그 파일을 만듦.
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -12,9 +13,26 @@ const [id, ...argv] = process.argv.slice(2);
 const log = (o) => { if (process.env.FAKE_AGENT_LOG) appendFileSync(process.env.FAKE_AGENT_LOG, JSON.stringify(o) + '\n'); };
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 
+if (id === 'claude' && argv[0] === 'auth' && argv[1] === 'login') {
+  console.log('Opening browser to sign in to Claude…');
+  process.stdout.write('Paste code here if prompted > ');
+  let got = '';
+  const t = setTimeout(() => { console.log('\nfake claude: 코드를 받지 못했어요'); process.exit(1); }, 20000);
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (d) => {
+    got += d;
+    if (!got.includes('\n')) return;
+    clearTimeout(t);
+    if (process.env.FAKE_LOGIN_FILE) writeFileSync(process.env.FAKE_LOGIN_FILE, got.trim());
+    console.log('\nLogin successful.');
+    process.exit(0);
+  });
+  await new Promise(() => {}); // 코드를 받거나 시간이 다 될 때까지(위에서 끝냄)
+}
+if (id === 'claude' && argv[0] === 'update') { console.log('Claude Code is up to date.'); process.exit(0); }
 if (argv[0] === '--version') { console.log(id === 'claude' ? `${process.env.FAKE_CLAUDE_VERSION || '2.1.320'} (Claude Code)` : 'codex-cli 0.130.0'); process.exit(0); }
 if (id === 'claude' && argv[0] === 'auth' && argv[1] === 'status') {
-  const m = process.env.ANTHROPIC_API_KEY ? 'api_key' : process.env.FAKE_LOGGED_OUT ? 'none' : 'claude.ai';
+  const m = process.env.ANTHROPIC_API_KEY ? 'api_key' : process.env.FAKE_LOGGED_OUT || (process.env.FAKE_LOGIN_FILE && !existsSync(process.env.FAKE_LOGIN_FILE)) ? 'none' : 'claude.ai';
   console.log(JSON.stringify({ loggedIn: m !== 'none', authMethod: m, apiProvider: 'firstParty' }, null, 2));
   process.exit(m === 'none' ? 1 : 0);
 }

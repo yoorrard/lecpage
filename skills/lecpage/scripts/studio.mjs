@@ -1,4 +1,4 @@
-// lecpage studio — 내 PC 연결 프로그램(PC 프로그램, docs/plan-ai-first.md §10). Node 22 이상, 외부 의존성 없음.
+// lecpage 커넥트(lecpage Connect, 예전 이름 lecpage studio) — 이 PC와 lecpage.com을 잇는 프로그램(docs/plan-ai-first.md §10). Node 22 이상, 외부 의존성 없음.
 // 켜면 기본 브라우저로 https://lecpage.com/#pair=<토큰>&port=<포트>를 열어 짝을 맞추고, 강사는 lecpage.com 화면 그대로 씀
 // (앱이 http://127.0.0.1:<포트>/bridge/*를 직접 부름: CORS + Chrome 로컬 네트워크 접근 권한). Safari처럼 그 길이 막힌 브라우저를 위해
 // 앱 전체를 http://127.0.0.1:<포트>/에서도 보여 줌(같은 출처).
@@ -115,38 +115,149 @@ export function terminalScript(agent, action, { platform = process.platform, fil
   if (action === 'login' || action === 'install' || (action === 'update' && needLogin)) steps.push(say(`lecpage: ${name}에 내 계정으로 로그인해요. 열리는 브라우저 창에서 로그인해 주세요.`), `${action === 'install' ? fresh : bin} ${o.login.join(' ')}`);
   return `${steps.join(win ? '; ' : ' && ')}; ${say('lecpage: 다 됐어요. 이 창을 닫고 lecpage 화면으로 돌아가요(저절로 알아봐요).')}`;
 }
-/** 보이는 터미널 창을 띄움 → { ok, how } | { ok:false, command }. 시험: LECPAGE_STUDIO_TERMINAL=<프로그램>(글을 인자로 받음) */
-export function openTerminal(script, { platform = process.platform, env = process.env, spawnImpl = spawn } = {}) {
+/** 띄운 창 프로그램이 곧바로 실패(실행 못 함·0이 아닌 코드로 끝남)하지 않았는지 잠깐 봄. 계속 돌거나 0으로 끝나면(창을 넘겨줌) 성공 */
+function launched(p, ms) {
+  return new Promise((ok) => {
+    let done = false;
+    const fin = (v) => { if (!done) { done = true; clearTimeout(t); ok(v); } };
+    const t = setTimeout(() => fin(true), ms);
+    if (typeof p?.on !== 'function') { fin(true); return; }
+    p.on('error', () => fin(false));
+    p.on('exit', (code) => fin(code === 0));
+  });
+}
+/** 리눅스 터미널(차례대로 찾음). 화면(DISPLAY·WAYLAND_DISPLAY)이 없으면 건너뛰고 lecpage 커넥트 안에서 실행(runInline) */
+export const LINUX_TERMINALS = [
+  ['x-terminal-emulator', (k) => ['-e', 'bash', '-lc', k]],
+  ['gnome-terminal', (k) => ['--', 'bash', '-lc', k]],
+  ['konsole', (k) => ['-e', 'bash', '-lc', k]],
+  ['xfce4-terminal', (k) => ['-x', 'bash', '-lc', k]],
+  ['mate-terminal', (k) => ['-x', 'bash', '-lc', k]],
+  ['xterm', (k) => ['-e', 'bash', '-lc', k]],
+];
+/**
+ * 보이는 터미널 창을 띄움 → { ok, how } | { ok:false, command }(창을 못 엶: 부르는 쪽이 runInline으로 이 프로그램 안에서 돌림).
+ * Windows 새 PowerShell 창 · macOS Terminal(.command 파일을 open -a Terminal로: Apple 이벤트 권한을 묻지 않음) · Linux 위 목록.
+ * 시험: LECPAGE_STUDIO_TERMINAL=<프로그램>(글을 인자로 받음)
+ */
+export async function openTerminal(script, { platform = process.platform, env = process.env, spawnImpl = spawn, waitMs = 700 } = {}) {
   const run = (cmd, args, opts = {}) => { const p = spawnImpl(cmd, args, { stdio: 'ignore', detached: true, windowsHide: false, ...opts }); p.on?.('error', () => {}); p.unref?.(); return p; };
   try {
     if (env.LECPAGE_STUDIO_TERMINAL) { run(env.LECPAGE_STUDIO_TERMINAL, [script], { cwd: tmpdir() }); return { ok: true, how: 'test' }; }
     // 윈도우: detached면 새 콘솔 창이 생김(Node child_process 문서). 창은 열어 둠(-NoExit). 따옴표·한글이 깨지지 않게 -EncodedCommand(UTF-16LE base64)
-    if (platform === 'win32') { run('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { cwd: homedir() }); return { ok: true, how: 'powershell' }; }
-    if (platform === 'darwin') {
-      const as = script.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      run('osascript', ['-e', 'tell application "Terminal" to activate', '-e', `tell application "Terminal" to do script "${as}"`]);
-      return { ok: true, how: 'terminal' };
+    if (platform === 'win32') {
+      if (await launched(run('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { cwd: homedir() }), Math.min(waitMs, 300))) return { ok: true, how: 'powershell' };
+      return { ok: false, command: script };
     }
-    const keep = `${script}; exec bash`;
-    for (const [t, a] of [['x-terminal-emulator', ['-e', 'bash', '-lc', keep]], ['gnome-terminal', ['--', 'bash', '-lc', keep]], ['konsole', ['-e', 'bash', '-lc', keep]], ['xfce4-terminal', ['-x', 'bash', '-lc', keep]], ['xterm', ['-e', 'bash', '-lc', keep]]]) {
-      if (findExecutable(t, { env })) { run(t, a, { cwd: homedir() }); return { ok: true, how: t }; }
+    if (platform === 'darwin') {
+      // 이 프로그램이 만든 파일이라 격리 표시가 없어 Gatekeeper가 묻지 않음. 파일은 열리자마자 스스로 지우고, 끝나면 셸을 남겨 창이 열려 있게
+      const f = join(tmpdir(), `lecpage-connect-${randomBytes(6).toString('hex')}.command`);
+      writeFileSync(f, `#!/bin/bash\nrm -f "$0"\n${script}\nexec "\${SHELL:-/bin/zsh}" -l\n`, { mode: 0o700 });
+      try { chmodSync(f, 0o700); } catch { /* 넘김 */ }
+      if (await launched(run('open', ['-a', 'Terminal', f]), waitMs)) return { ok: true, how: 'terminal' };
+      rmSync(f, { force: true });
+      return { ok: false, command: script };
+    }
+    if (env.DISPLAY || env.WAYLAND_DISPLAY) {
+      const keep = `${script}; exec bash`;
+      for (const [t, a] of LINUX_TERMINALS) {
+        if (findExecutable(t, { env, platform }) && await launched(run(t, a(keep), { cwd: homedir() }), waitMs)) return { ok: true, how: t };
+      }
     }
   } catch { /* 아래로 */ }
   return { ok: false, command: script };
 }
+/** 터미널 색·커서 코드를 빼고 진행 막대의 \r은 줄바꿈으로(앱에 글로 보이게) */
+const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]/g, '').replace(/\r(?!\n)/g, '\n');
+/**
+ * 터미널 창을 못 열 때(화면 없는 리눅스 등): 같은 명령을 이 프로그램 안에서 돌리고 출력을 앱(GET /bridge/term)과 이 창(onLine)에 보여 줌.
+ * 입력이 필요하면(로그인 코드 붙여 넣기) 앱이 POST /bridge/term/input으로 한 줄 보냄. → { view(), input(text), stop() }
+ */
+export function runInline(script, { platform = process.platform, env = process.env, onLine = () => {}, agent = '', action = '' } = {}) {
+  const win = platform === 'win32';
+  const [cmd, args] = win ? ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]]
+    : [findExecutable('bash', { env, platform }) ? 'bash' : 'sh', ['-c', script]];
+  const t = { agent, action, running: true, code: null, output: '', startedAt: Date.now() };
+  const add = (d) => { const s = stripAnsi(d); t.output = (t.output + s).slice(-16000); for (const l of s.split('\n')) if (l.trim()) onLine(l.trimEnd()); };
+  let p = null;
+  try { p = spawn(cmd, args, { cwd: homedir(), env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: !win }); } catch (e) { add(`${e.message}\n`); t.running = false; t.code = -1; }
+  if (p) {
+    p.stdout.setEncoding('utf8'); p.stderr.setEncoding('utf8');
+    p.stdout.on('data', add); p.stderr.on('data', add);
+    p.stdin.on('error', () => {});
+    p.on('error', (e) => { add(`${e.message}\n`); t.running = false; t.code = -1; });
+    p.on('close', (code) => { t.running = false; t.code = code; });
+  }
+  return {
+    view: () => ({ agent: t.agent, action: t.action, running: t.running, code: t.code, output: t.output, startedAt: t.startedAt }),
+    input: (text) => { if (!t.running || !p?.stdin?.writable) return false; p.stdin.write(String(text).replace(/[\r\n]+/g, ' ').slice(0, 2000) + '\n'); return true; },
+    stop: () => killTree(p),
+    /** 갑자기 꺼질 때(process 'exit'): 기다리지 않고 묶음째 끔 */
+    killNow: () => { if (p && p.exitCode === null && p.signalCode === null) { try { if (win) p.kill(); else process.kill(-p.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ } } },
+  };
+}
 
-// ── 윈도우: 로그인할 때 PC 프로그램 켜기(선택) ─────────────────────────────
+// ── 컴퓨터를 켤 때(로그인할 때) lecpage 커넥트 켜기(선택, 받은 실행 파일로 켰을 때만) ─────────
+// 실행 파일(lecpage-connect.cmd·.sh)이 자기 복사본 경로를 LECPAGE_LAUNCHER로 알려 줌. 그 파일이 켤 때마다 새 판을 받아 줌.
+// Windows: HKCU\…\Run 값(작업 표시줄에 최소화한 창) · macOS: ~/Library/LaunchAgents/com.lecpage.connect.plist · Linux: ~/.config/autostart/lecpage-connect.desktop
+// macOS·Linux는 창 없이 뒤에서 켜지고 기록은 lecpage 폴더의 connect.log(실행 파일이 --autostart일 때 그리로 보냄)
 const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
-const RUN_NAME = 'lecpage-studio';
-/** 받은 파일(lecpage-studio.cmd)로 켰을 때만: 그 파일이 LECPAGE_LAUNCHER로 자기 복사본 경로를 알려 줌. 작업 표시줄에 최소화한 창으로 */
+const RUN_NAME = 'lecpage-studio'; // 예전 이름 그대로: 이미 켜 둔 값을 알아보고 같은 자리에 씀
+export const AUTOSTART_LABEL = 'com.lecpage.connect';
 export function autostartCommand(launcher) { return `cmd.exe /c start "lecpage" /min "${launcher}" --autostart`; }
+/** macOS·Linux 자동 시작 파일 경로(Windows는 레지스트리라 '') */
+export function autostartFile(env = process.env, platform = process.platform, home = env.HOME || homedir()) {
+  if (platform === 'win32') return '';
+  if (platform === 'darwin') return join(home, 'Library', 'LaunchAgents', `${AUTOSTART_LABEL}.plist`);
+  return join(env.XDG_CONFIG_HOME || join(home, '.config'), 'autostart', 'lecpage-connect.desktop');
+}
+const xmlEsc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+/** .desktop Exec 인자: 큰따옴표로 감싸고 " ` $ \ 앞에 \(명세: 문자열 규칙이 먼저라 \는 넷), %는 %% */
+const desktopArg = (s) => `"${String(s).replace(/\\/g, '\\\\\\\\').replace(/["`$]/g, (c) => `\\${c}`).replace(/%/g, '%%')}"`;
+/** 자동 시작 파일 내용(macOS LaunchAgent plist · Linux XDG autostart .desktop) */
+export function autostartEntry(launcher, platform = process.platform, home = homedir()) {
+  if (platform === 'darwin') {
+    const path = [join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(':');
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${AUTOSTART_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/sh</string><string>${xmlEsc(launcher)}</string><string>--autostart</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>${xmlEsc(path)}</string></dict>
+</dict>
+</plist>
+`;
+  }
+  return `[Desktop Entry]
+Type=Application
+Name=lecpage 커넥트
+Name[en]=lecpage Connect
+Comment=lecpage.com과 이 PC를 이어요
+Exec=/bin/sh ${desktopArg(launcher)} --autostart
+Terminal=false
+X-GNOME-Autostart-enabled=true
+`;
+}
 export async function autostartState(env = process.env, platform = process.platform) {
-  if (platform !== 'win32' || !env.LECPAGE_LAUNCHER) return { available: false, on: false };
+  if (!env.LECPAGE_LAUNCHER) return { available: false, on: false };
+  if (platform !== 'win32') return { available: true, on: existsSync(autostartFile(env, platform)) };
   const r = await runQuick('reg', ['query', RUN_KEY, '/v', RUN_NAME], { env });
   return { available: true, on: r.code === 0 && r.out.includes(RUN_NAME) };
 }
 export async function setAutostart(on, env = process.env, platform = process.platform) {
-  if (platform !== 'win32' || !env.LECPAGE_LAUNCHER) return { ok: false, available: false, on: false };
+  if (!env.LECPAGE_LAUNCHER) return { ok: false, available: false, on: false };
+  if (platform !== 'win32') {
+    const f = autostartFile(env, platform);
+    try {
+      if (on) { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, autostartEntry(env.LECPAGE_LAUNCHER, platform, env.HOME || homedir()), { mode: 0o644 }); }
+      else rmSync(f, { force: true });
+      return { ok: true, available: true, on };
+    } catch { return { ok: false, available: true, on: existsSync(f) }; }
+  }
   const r = on ? await runQuick('reg', ['add', RUN_KEY, '/v', RUN_NAME, '/t', 'REG_SZ', '/d', autostartCommand(env.LECPAGE_LAUNCHER), '/f'], { env })
     : await runQuick('reg', ['delete', RUN_KEY, '/v', RUN_NAME, '/f'], { env });
   return { ok: r.code === 0 || !on, available: true, on: on && r.code === 0 };
@@ -402,9 +513,9 @@ const PASS_HEADERS = ['content-type', 'cache-control', 'content-security-policy'
 
 function fallbackPage(S, why) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>lecpage 연결 프로그램</title>
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>lecpage 커넥트</title>
 <style>body{font:16px/1.6 system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 20px;color:#1f1a17;background:#fbfaf9}code{background:#eee;padding:1px 5px;border-radius:4px}p.s{color:#555;font-size:14px}</style></head>
-<body><h1>lecpage 연결 프로그램이 켜져 있어요</h1><p>${esc(why)}</p><p>인터넷 연결을 확인하고 이 창을 새로 고쳐 주세요. 계속 안 되면 터미널에서 연결 프로그램을 끄고(Ctrl+C) 다시 켜 주세요.</p>
+<body><h1>lecpage 커넥트가 켜져 있어요</h1><p>${esc(why)}</p><p>인터넷 연결을 확인하고 이 창을 새로 고쳐 주세요. 계속 안 되면 터미널에서 lecpage 커넥트를 끄고(Ctrl+C) 다시 켜 주세요.</p>
 <p class="s">${esc(POLICY_KO.claude)}</p><p class="s">${esc(POLICY_KO.codex)}</p><p class="s">lecpage ${esc(S.version)}</p></body></html>`;
 }
 
@@ -481,7 +592,7 @@ function tokenOk(got, want) {
  * Origin은 이 주소(같은 출처)나 허용 목록(lecpage.com)과 정확히 같아야 함. 허용한 출처의 사전 요청(OPTIONS)은 { preflight }로 돌려줌(토큰 없이)
  */
 export function checkRequest(req, { hostPort, origin, token, origins }, { bridge }) {
-  if (req.headers.host !== hostPort) return { status: 421, error: 'host', message_ko: `이 PC 프로그램은 http://${hostPort}/ 주소로만 열려요.` };
+  if (req.headers.host !== hostPort) return { status: 421, error: 'host', message_ko: `이 lecpage 커넥트는 http://${hostPort}/ 주소로만 열려요.` };
   if (!bridge) return null;
   const allow = origins || new Set([origin]);
   const o = req.headers.origin;
@@ -491,7 +602,7 @@ export function checkRequest(req, { hostPort, origin, token, origins }, { bridge
   if (o === undefined && !['GET', 'HEAD'].includes(req.method)) return { status: 403, error: 'origin', message_ko: '이 요청에는 Origin 머리글이 있어야 해요.' };
   const sfs = req.headers['sec-fetch-site'];
   if (sfs && sfs !== 'same-origin' && sfs !== 'none' && !(o && o !== origin && allow.has(o))) return refuse;
-  if (!tokenOk(req.headers['x-lecpage-bridge'], token)) return { status: 401, error: 'token', message_ko: 'PC 프로그램과 짝이 맞지 않아요. PC 프로그램을 끄고 다시 켜 주세요(lecpage가 저절로 다시 짝을 맞춰요).' };
+  if (!tokenOk(req.headers['x-lecpage-bridge'], token)) return { status: 401, error: 'token', message_ko: 'lecpage 커넥트와 짝이 맞지 않아요. lecpage 커넥트를 끄고 다시 켜 주세요(lecpage가 저절로 다시 짝을 맞춰요).' };
   return null;
 }
 /** 다른 출처(lecpage.com)에서 온 요청의 CORS 머리글. 사설망 접근(Chrome)도 허락 */
@@ -733,7 +844,7 @@ class Job {
 const STOP_KO = {
   stopped: '작업을 멈췄어요.',
   timeout: (m) => `${m}분이 지나 작업을 멈췄어요. 교재를 줄이거나 요청을 나눠 다시 해 주세요.`,
-  shutdown: '연결 프로그램이 꺼져 작업을 멈췄어요.',
+  shutdown: 'lecpage 커넥트가 꺼져 작업을 멈췄어요.',
 };
 
 async function runJob(S, job) {
@@ -776,7 +887,7 @@ async function runJob(S, job) {
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
     writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pages, images, md, request: inp.request, reference: inp.reference, target: inp.target, library }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
-    writeFileSync(join(bin, 'check.mjs'), `// lecpage 연결 프로그램이 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
+    writeFileSync(join(bin, 'check.mjs'), `// lecpage 커넥트가 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;
 
     // 에이전트 실행
@@ -852,7 +963,7 @@ async function handleBridge(S, req, res, url) {
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
     const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
-    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    return sendJson(res, 200, { ok: true, version: S.version, app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
   // ── ChatGPT 계정(Sign in with ChatGPT). 토큰은 이 프로그램 안에만: 앱에는 연결 여부·이메일·모델 목록만 ──
   if (parts[0] === 'chatgpt') {
@@ -862,7 +973,7 @@ async function handleBridge(S, req, res, url) {
     if (sub === 'login' && req.method === 'POST') {
       let o = {}; try { o = JSON.parse((await readBody(req, 4096)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
       const { url: to } = S.siwc.startLogin({ reconsent: !!o.reconsent });
-      if (o.open) openBrowser(to); // 앱이 새 창을 못 연 경우(팝업 막힘): 이 PC의 기본 브라우저로
+      if (o.open) openBrowser(to).then((ok) => { if (!ok) S.log('브라우저를 열지 못했어요. lecpage 화면에서 팝업을 허용하고 [ChatGPT 계정으로 로그인]을 다시 눌러 주세요.'); }); // 앱이 새 창을 못 연 경우(팝업 막힘): 이 PC의 기본 브라우저로
       return sendJson(res, 200, { ok: true, url: to });
     }
     if (sub === 'welcome' && req.method === 'POST') { S.siwc.ackWelcome(); return sendJson(res, 200, { ok: true }); }
@@ -879,27 +990,44 @@ async function handleBridge(S, req, res, url) {
     }
     return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
   }
-  // ── Claude Code·Codex 설치·로그인: 공식 명령을 보이는 터미널 창에서(사람이 누를 때만) ──
+  // ── Claude Code·Codex 설치·로그인: 공식 명령을 보이는 터미널 창에서(사람이 누를 때만). 창을 못 열면 이 프로그램 안에서 돌리고 출력을 앱에 ──
   if (parts[0] === 'agents' && parts.length === 3 && req.method === 'POST' && ['install', 'login', 'update'].includes(parts[2])) {
     const id = parts[1];
     if (!OFFICIAL[id]) return fail(res, 404, 'not-found', '없는 프로그램이에요.');
     if (S.termAt && Date.now() - S.termAt < 3000) return fail(res, 429, 'busy', '터미널 창을 여는 중이에요. 잠깐 뒤에 다시 눌러 주세요.');
+    S.termAt = Date.now();
     const ag = (await statusOf(S, true))[id];
     const action = parts[2] === 'install' && ag.installed ? (ag.need === 'update' ? 'update' : 'login') : parts[2];
     const script = terminalScript(id, action, { file: action === 'install' ? '' : ag.file || '', needLogin: ag.loggedIn !== true });
-    S.termAt = Date.now();
-    const r = openTerminal(script);
-    S.log(`${agentName(id)} ${action === 'install' ? '설치' : action === 'update' ? '업데이트' : '로그인'} 창을 열었어요`);
+    const what = `${agentName(id)} ${action === 'install' ? '설치' : action === 'update' ? '업데이트' : '로그인'}`;
+    const eul = action === 'login' ? '을' : '를';
+    const r = await openTerminal(script);
     S.statusAt = 0;
-    return sendJson(res, 200, r.ok ? { ok: true, action } : { ok: false, action, command: r.command, message_ko: '터미널 창을 열지 못했어요. 아래 명령을 터미널에 붙여 넣어 주세요.' });
+    if (r.ok) { S.log(`${what} 창을 열었어요`); return sendJson(res, 200, { ok: true, action, how: r.how }); }
+    if (S.term) await S.term.stop();
+    S.log(`터미널 창을 열 수 없어 ${what}${eul} 이 창에서 해요(출력은 lecpage 화면에도 보여요)`);
+    S.term = runInline(script, { agent: id, action, onLine: (l) => S.log(`  │ ${cut(l, 300)}`) });
+    return sendJson(res, 200, { ok: false, action, how: 'inline', command: script, message_ko: `터미널 창을 열 수 없어 lecpage 커넥트 안에서 ${what}${eul} 해요. 진행 내용은 이 화면과 lecpage 커넥트 창에 보여요.` });
   }
-  // ── 윈도우: 로그인할 때 PC 프로그램 켜기(선택, 받은 파일로 켰을 때만) ──
+  // ── 터미널 창 없이 돌린 설치·로그인(runInline)의 출력·입력·멈춤 ──
+  if (parts[0] === 'term' && parts.length <= 2) {
+    if (parts.length === 1 && req.method === 'GET') return sendJson(res, 200, { ok: true, term: S.term ? S.term.view() : null });
+    if (parts.length === 1 && req.method === 'DELETE') { if (S.term) await S.term.stop(); return sendJson(res, 200, { ok: true, term: S.term ? S.term.view() : null }); }
+    if (parts[1] === 'input' && req.method === 'POST') {
+      let o = {}; try { o = JSON.parse((await readBody(req, 4096)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
+      if (typeof o.text !== 'string') return fail(res, 400, 'bad-request', 'text가 있어야 해요.');
+      return S.term?.input(o.text) ? sendJson(res, 200, { ok: true }) : fail(res, 409, 'not-running', '돌고 있는 설치·로그인이 없어요.');
+    }
+    return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
+  }
+  // ── 컴퓨터를 켤 때 lecpage 커넥트 켜기(선택, 받은 실행 파일로 켰을 때만. Windows·macOS·Linux) ──
   if (parts[0] === 'autostart' && parts.length === 1) {
     if (req.method === 'GET') return sendJson(res, 200, { ok: true, ...(await autostartState()) });
     if (req.method === 'POST') {
       let o = {}; try { o = JSON.parse((await readBody(req, 1024)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
       const r = await setAutostart(!!o.on);
-      return r.available ? sendJson(res, r.ok ? 200 : 500, { ...r, ...(await autostartState()) }) : fail(res, 409, 'unavailable', '받은 PC 프로그램 파일(Windows)로 켰을 때만 쓸 수 있어요.');
+      if (r.available) S.log(r.ok ? (o.on ? '컴퓨터를 켤 때 lecpage 커넥트도 켜요' : '컴퓨터를 켤 때 lecpage 커넥트를 켜지 않아요') : '자동 시작을 바꾸지 못했어요');
+      return r.available ? sendJson(res, r.ok ? 200 : 500, { ...r, ...(await autostartState()) }) : fail(res, 409, 'unavailable', '받은 lecpage 커넥트 실행 파일로 켰을 때만 쓸 수 있어요.');
     }
   }
   if (parts[0] !== 'jobs') return fail(res, 404, 'not-found', '없는 주소예요.');
@@ -928,7 +1056,7 @@ async function handleBridge(S, req, res, url) {
     return sendJson(res, 202, { ok: true, jobId: job.id });
   }
   const job = S.jobs.get(parts[1] || '');
-  if (!job) return fail(res, 404, 'no-job', '그 작업이 없어요(끝나서 지웠거나 연결 프로그램을 다시 켰어요).');
+  if (!job) return fail(res, 404, 'no-job', '그 작업이 없어요(끝나서 지웠거나 lecpage 커넥트를 다시 켰어요).');
   if (parts.length === 2 && req.method === 'GET') return sendJson(res, 200, { ok: true, ...job.snapshot() });
   if (parts.length === 2 && req.method === 'DELETE') {
     const was = job.active;
@@ -1008,13 +1136,13 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   S.app = dir
     ? { mode: 'dist', dir, rules: isFile(join(dir, '_headers')) ? parseHeadersFile(readFileSync(join(dir, '_headers'), 'utf8')) : [] }
     : { mode: 'remote', url: (appUrl || process.env.LECPAGE_STUDIO_APP_URL || 'https://lecpage.com').replace(/\/+$/, ''), cache: new Map(), cacheBytes: 0 };
-  const server = createServer((req, res) => { handle(S, req, res).catch((e) => { if (!res.headersSent) fail(res, 500, 'internal', `연결 프로그램 오류예요: ${cut(e.message, 120)}`); else res.destroy(); }); });
+  const server = createServer((req, res) => { handle(S, req, res).catch((e) => { if (!res.headersSent) fail(res, 500, 'internal', `lecpage 커넥트 오류예요: ${cut(e.message, 120)}`); else res.destroy(); }); });
   server.requestTimeout = 10 * 60000; // 큰 교재 받기
   if (port) await listenOn(server, port);
   else {
     let ok = false;
     for (let p = PORT_RANGE[0]; p <= PORT_RANGE[1] && !ok; p++) { try { await listenOn(server, p); ok = true; } catch (e) { if (e.code !== 'EADDRINUSE' && e.code !== 'EACCES') throw e; } }
-    if (!ok) throw Object.assign(new Error(`포트 ${PORT_RANGE[0]}~${PORT_RANGE[1]}이 모두 쓰이고 있어요. 다른 연결 프로그램 창이 켜져 있으면 그 주소를 쓰거나, --port로 다른 번호를 주세요.`), { friendly: true });
+    if (!ok) throw Object.assign(new Error(`포트 ${PORT_RANGE[0]}~${PORT_RANGE[1]}이 모두 쓰이고 있어요. 다른 lecpage 커넥트 창이 켜져 있으면 그 주소를 쓰거나, --port로 다른 번호를 주세요.`), { friendly: true });
   }
   S.port = server.address().port;
   S.hostPort = `127.0.0.1:${S.port}`;
@@ -1025,12 +1153,14 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   try { S.origins.add(new URL(S.appUrl).origin); } catch { /* 잘못된 주소 */ }
   // 갑자기 꺼질 때(오류·창 닫기): 돌던 에이전트를 끄고 임시 폴더를 지움
   process.on('exit', () => {
+    S.term?.killNow();
     for (const j of S.jobs.values()) {
       if (j.proc && j.proc.exitCode === null) { try { if (process.platform === 'win32') j.proc.kill(); else process.kill(-j.proc.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ } }
       j.cleanup();
     }
   });
   const close = async () => {
+    if (S.term) await S.term.stop();
     for (const j of S.jobs.values()) if (j.active) await j.stop('shutdown');
     for (let i = 0; i < 60 && [...S.jobs.values()].some((j) => j.active); i++) await new Promise((r) => setTimeout(r, 50));
     for (const j of S.jobs.values()) j.cleanup();
@@ -1043,12 +1173,32 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close };
 }
 
-function openBrowser(url) {
-  const [cmd, args] = process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
-  try { const p = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }); p.on('error', () => {}); p.unref(); } catch { /* 주소를 직접 열면 됨 */ }
+/**
+ * 기본 브라우저로 열기 후보: Windows rundll32 url.dll(= start, 셸을 거치지 않아 주소의 &·#이 그대로) · macOS open ·
+ * Linux xdg-open → gio open → sensible-browser → x-www-browser(화면이 있을 때만: 없으면 글자 브라우저가 이 창을 붙잡지 않게) · WSL wslview
+ */
+export function browserCommands(url, { platform = process.platform, env = process.env } = {}) {
+  if (platform === 'win32') return [['rundll32', ['url.dll,FileProtocolHandler', url]]];
+  if (platform === 'darwin') return [['open', [url]]];
+  const list = [];
+  if (env.WSL_DISTRO_NAME) list.push(['wslview', [url]]);
+  if (env.DISPLAY || env.WAYLAND_DISPLAY) list.push(['xdg-open', [url]], ['gio', ['open', url]], ['sensible-browser', [url]], ['x-www-browser', [url]]);
+  return list;
+}
+/** → true(연 것 같음) | false(열 방법이 없음: 부르는 쪽이 주소를 보여 줌) */
+export async function openBrowser(url, { platform = process.platform, env = process.env, spawnImpl = spawn, waitMs = 1500 } = {}) {
+  for (const [cmd, args] of browserCommands(url, { platform, env })) {
+    if (platform !== 'win32' && cmd !== 'open' && !findExecutable(cmd, { env, platform })) continue;
+    try {
+      const p = spawnImpl(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true });
+      p.on?.('error', () => {}); p.unref?.();
+      if (await launched(p, waitMs)) return true;
+    } catch { /* 다음 */ }
+  }
+  return false;
 }
 
-/** CLI: lecpage studio [--port n] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist 폴더] [--remote] [--timeout 분] */
+/** CLI: lecpage connect(= studio, 예전 이름) [--port n] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist 폴더] [--remote] [--timeout 분] */
 export async function studioCmd(h) {
   const { args } = h;
   const hhmm = () => new Date().toTimeString().slice(0, 5);
@@ -1064,7 +1214,7 @@ export async function studioCmd(h) {
   const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? (a.id === 'codex' ? 'ChatGPT로 로그인' : '구독으로 로그인') : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
   if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: { connected: cg.connected, plan: cg.plan } }));
   else console.log([
-    `lecpage PC 프로그램 ${S.version}`,
+    `lecpage 커넥트 ${S.version}`,
     open === pairUrl ? `  lecpage.com을 열어 이 PC와 짝을 맞춰요. 브라우저가 열리지 않으면 lecpage.com에서 [ChatGPT·Claude 계정으로 연결]을 눌러요.` : open ? `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)` : `  켜져 있어요. lecpage.com에서 이어서 해요.`,
     `  Safari 등에서 lecpage.com이 이 PC에 닿지 않으면 이 주소에서 써요: ${url}`,
     `  ChatGPT 계정 ${cg.connected ? `연결됨${cg.plan ? '' : '(요금제 사용 허락 없음)'}` : '연결 안 됨'} / ${line(ag.claude)} / ${line(ag.codex)}`,
@@ -1072,9 +1222,9 @@ export async function studioCmd(h) {
     `  안내 ${POLICY_KO.chatgpt}`,
     `  안내 ${POLICY_KO.claude}`,
     '  교재는 이 PC의 임시 폴더에서만 다루고, 작업이 끝나면 지워요.',
-    '  끝내려면 이 창에서 Ctrl+C를 눌러요(창을 닫아도 꺼져요).',
+    args.autostart && process.platform !== 'win32' ? '  컴퓨터를 켤 때 창 없이 켜졌어요(기록은 lecpage 폴더의 connect.log). 그만 켜려면 lecpage 화면에서 자동 시작을 꺼요.' : '  끝내려면 이 창에서 Ctrl+C를 눌러요(창을 닫아도 꺼져요).',
   ].join('\n'));
-  if (open) openBrowser(open);
+  if (open && !(await openBrowser(open)) && !json) console.log(`  브라우저를 열지 못했어요. 이 주소를 브라우저에 붙여 넣어 주세요: ${open}`);
   let closing = false;
   const bye = async () => { if (closing) return; closing = true; log('끄는 중…'); await close(); process.exit(0); };
   process.on('SIGINT', bye); process.on('SIGTERM', bye); process.on('SIGHUP', bye);

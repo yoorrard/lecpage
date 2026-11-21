@@ -16,8 +16,8 @@
 //   handouts <올린 주소|work> [-o 폴더]   QR-안내문.pdf·발표화면.png(Playwright 필요)
 //   pack <work|폴더> -o site.zip [--bundle-fonts] [--password 암호] [--host 배포할 곳] · serve <work|폴더> [--port 4173] [--live] · doctor · decide-infra [-i 답.json] [--size 30 …]
 //        pack: 조립한 사이트를 ZIP으로 · doctor: 환경 점검과 설치 방법 · decide-infra: 배포할 곳 × 참여 기능 서버 추천
-//   studio [--port 6600] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist app/dist] [--remote] [--timeout 30]
-//        내 PC 연결 프로그램: 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
+//   connect · studio [--port 6600] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist app/dist] [--remote] [--timeout 30]
+//        lecpage 커넥트(studio는 예전 이름, 같은 명령): 앱을 http://127.0.0.1:<포트>/에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함
 //        (요청은 그 사람의 구독 한도에서 차감). 앱 파일은 app/dist가 있으면 그것, 없으면 lecpage.com에서 받음. 끄기: Ctrl+C (references/studio.md)
 //   공통: --json(기계용 JSON) · <명령> --help(그 명령 도움말만, 실행하지 않음) · --version(판) · LECPAGE_DEBUG=1(오류 때 자세한 기록)
 //   종료 코드: 0 성공 · 1 실패(check는 조립했어도 고칠 곳이 있으면 1) · 2 명령·옵션을 잘못 씀
@@ -47,6 +47,7 @@ const OPTS = {
   prepare: 'o today no-slides no-python', check: 'port today no-shots no-tiles host no-python', preview: 'port host today live',
   studio: 'port no-open open autostart new-token dist remote timeout',
 };
+OPTS.connect = OPTS.studio; // lecpage 커넥트: connect = studio(예전 이름도 그대로)
 const optList = (c) => [...(OPTS[c] || '').split(' ').filter(Boolean), 'json', 'help'];
 const flag = (k) => (k.length === 1 ? '-' : '--') + k;
 /** 글자 거리(오타 제안용) */
@@ -109,7 +110,7 @@ if (+process.versions.node.split('.')[0] < 20) { console.error(`오류: Node.js 
 {
   const [maj, min] = process.versions.node.split('.').map(Number);
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
-  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['prepare', 'publish', 'handouts', 'pack', 'studio'].includes(cmd) && !args.help && !parsed.problems.length) {
+  if (proxy && !process.env.NODE_USE_ENV_PROXY && !process.execArgv.includes('--use-env-proxy') && (maj >= 24 || (maj === 22 && min >= 21)) && ['prepare', 'publish', 'handouts', 'pack', 'studio', 'connect'].includes(cmd) && !args.help && !parsed.problems.length) {
     const local = 'localhost,127.0.0.1,::1';
     const np = [process.env.NO_PROXY || process.env.no_proxy, local].filter(Boolean).join(',');
     const r = spawnSync(process.execPath, [...process.execArgv, '--disable-warning=UNDICI-EHPA', ...process.argv.slice(1)], { stdio: 'inherit', env: { ...process.env, NODE_USE_ENV_PROXY: '1', NO_PROXY: np, no_proxy: np } });
@@ -245,7 +246,7 @@ const commands = {
   async prepare() { const { prepareCmd } = await import('./kit-cmds.mjs'); await prepareCmd(helpers()); },
   async check() { const { checkCmd } = await import('./kit-cmds.mjs'); await checkCmd(helpers()); },
   async preview() { const { previewCmd } = await import('./kit-cmds.mjs'); await previewCmd(helpers()); },
-  /** 내 PC 연결 프로그램: 앱을 127.0.0.1에서 보여 주고 로컬 Claude Code·Codex에 일을 맡김(scripts/studio.mjs) */
+  /** lecpage 커넥트(connect = studio): 앱을 127.0.0.1에서 보여 주고 로컬 Claude Code·Codex에 일을 맡김(scripts/studio.mjs) */
   async studio() { const { studioCmd } = await import('./studio.mjs'); await studioCmd(helpers()); },
 
   async pack() {
@@ -267,6 +268,7 @@ const commands = {
   },
 };
 commands['decide-infra'] = commands.decideInfra;
+commands.connect = commands.studio;
 delete commands.decideInfra;
 
 /** 도움말: 이 파일 머리 주석. 명령을 주면 그 명령 줄과 이어지는 설명만 */
