@@ -46,6 +46,9 @@
 .ld-drop.over{border-style:solid;border-color:var(--accent);background:var(--lav-soft);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent)}
 .ld-hero-more{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
 .ld-try{font-weight:650}
+.ld-hero-quiet{display:flex;align-items:center;gap:4px}
+/* 좁은 화면에서 둘째 줄로 내려가도 글자가 본문 왼쪽 끝에 맞게(버튼 안쪽 여백만큼 당김) */
+@media (max-width:560px){.ld-hero-quiet{margin-left:-14px}}
 .ld-resume{max-width:100%}
 .ld-resume-t{display:inline-block;max-width:min(16em,52vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 .ld-later{min-height:100vh}
@@ -62,48 +65,45 @@
 .ld-glow{position:absolute;top:-4cqw;left:-4cqw;width:90cqw;height:52cqw;z-index:-1;pointer-events:none;opacity:.5;filter:blur(40px);
   background:radial-gradient(48% 52% at 38% 48%,color-mix(in srgb,var(--c1) 55%,transparent),transparent 72%),radial-gradient(40% 46% at 80% 52%,color-mix(in srgb,var(--c2) 45%,transparent),transparent 72%);
   transition:--c1 1s ease,--c2 1s ease}
-.ld-devices{
-  --P:20.5cqw;                       /* 휴대폰 폭 */
-  --rim:max(1px,.14cqw);             /* 뚜껑 금속 가장자리 */
-  --bz:max(3px,1.15cqw);             /* 화면 둘레 검은 유리(위·옆) */
-  --chin:max(4px,1.6cqw);            /* 화면 아래 턱 */
-  --lr:max(7px,1.9cqw);              /* 뚜껑 위 모서리 */
-  --v:calc(var(--rim) + var(--bz) * .7);                 /* 휴대폰이 뚜껑 오른쪽 테에 걸치는 폭 */
-  --L:calc((100cqw - var(--P) + var(--v)) / 1.034);      /* 뚜껑 폭: 바닥판(양옆 3.4% 더 넓음) 왼쪽 끝이 무대 왼쪽에 맞게 */
-  --o:calc(var(--L) * .034);
-  --bh:max(5px,1.5cqw);              /* 바닥판 앞면 높이 */
-  --pb:max(1px,.3cqw);               /* 휴대폰 금속 띠 */
-  --pz:max(1.5px,.42cqw);            /* 휴대폰 검은 테 */
-  --pr:calc(var(--P) * .145);        /* 휴대폰 몸 모서리 */
-  --drop:4.6cqw;                     /* 휴대폰이 노트북보다 앞(아래)에 서 있게 */
+/* 기기 틀(노트북·휴대폰) 공통: 색 토큰은 기기가 놓이는 곳(.ld-devices 첫 화면, .ld-st-vis 이야기 장면)마다 같이 쓰고, 크기는 틀마다 --L(노트북 폭)·--P(휴대폰 폭)로만 정해요. 두께·모서리는 그 폭에서 계산(--u) */
+.ld-devices,.ld-st-vis{
   --rim-c:linear-gradient(180deg,#f1f2f4,#c3c6cc 38%,#8e9299);
   --deck:linear-gradient(180deg,#fbfbfc 0,#eceef1 14%,#d8dbe0 46%,#bcc0c6 82%,#a2a6ad);
   --notch:linear-gradient(180deg,#a9adb4,#cdd0d5 70%,#dadde1);
   --band:linear-gradient(135deg,#f3f4f6 0%,#b4b7bd 18%,#e3e5e8 38%,#999ca3 60%,#d4d6da 80%,#8b8e95);
   --btn:#a7aab0;
   --sh1:rgba(22,18,40,.16);--sh2:rgba(22,18,40,.24);--sh3:rgba(22,18,40,.22);--edge:rgba(20,16,36,.22);
-  position:relative;padding-bottom:var(--drop);transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry));transition:transform .6s var(--ease)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ld-devices{
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is(.ld-devices,.ld-st-vis){
   --rim-c:linear-gradient(180deg,#8d8e94,#4a4b51 38%,#2c2d31);
   --deck:linear-gradient(180deg,#9a9ba1 0,#5d5e64 14%,#45464c 46%,#323338 82%,#26272b);
   --notch:linear-gradient(180deg,#1e1f22,#36373c 70%,#414248);
   --band:linear-gradient(135deg,#9a9ba1 0%,#45464b 18%,#74757b 38%,#323337 60%,#5d5e64 80%,#2a2b2f);
   --btn:#55565c;
   --sh1:rgba(0,0,0,.4);--sh2:rgba(0,0,0,.5);--sh3:rgba(0,0,0,.5);--edge:rgba(0,0,0,.5)}}
-:root[data-theme="dark"] .ld-devices{
+:root[data-theme="dark"] :is(.ld-devices,.ld-st-vis){
   --rim-c:linear-gradient(180deg,#8d8e94,#4a4b51 38%,#2c2d31);
   --deck:linear-gradient(180deg,#9a9ba1 0,#5d5e64 14%,#45464c 46%,#323338 82%,#26272b);
   --notch:linear-gradient(180deg,#1e1f22,#36373c 70%,#414248);
   --band:linear-gradient(135deg,#9a9ba1 0%,#45464b 18%,#74757b 38%,#323337 60%,#5d5e64 80%,#2a2b2f);
   --btn:#55565c;
   --sh1:rgba(0,0,0,.4);--sh2:rgba(0,0,0,.5);--sh3:rgba(0,0,0,.5);--edge:rgba(0,0,0,.5)}
+.ld-devices{
+  --P:20.5cqw;                       /* 휴대폰 폭 */
+  --v:calc(.945cqw);                 /* 휴대폰이 뚜껑 오른쪽 테에 걸치는 폭(금속 가장자리 + 검은 유리 70%) */
+  --L:calc((100cqw - var(--P) + var(--v)) / 1.034);      /* 뚜껑 폭: 바닥판(양옆 3.4% 더 넓음) 왼쪽 끝이 무대 왼쪽에 맞게 */
+  --o:calc(var(--L) * .034);
+  --drop:4.6cqw;                     /* 휴대폰이 노트북보다 앞(아래)에 서 있게 */
+  position:relative;padding-bottom:var(--drop);transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry));transition:transform .6s var(--ease)}
+
 /* 노트북: 뚜껑(검은 유리 + 금속 가장자리 + 카메라 + 아주 옅은 유리 반사) */
-.ld-laptop{position:relative;z-index:1;isolation:isolate;width:var(--L);margin-left:var(--o)}
-.ld-lid{position:relative;padding:var(--bz) var(--bz) var(--chin);border:var(--rim) solid transparent;border-radius:var(--lr) var(--lr) max(3px,.45cqw) max(3px,.45cqw);
+.ld-laptop{--u:calc(var(--L) / 78);--rim:max(1px,calc(var(--u)*.14));--bz:max(3px,calc(var(--u)*1.15));--chin:max(4px,calc(var(--u)*1.6));--lr:max(7px,calc(var(--u)*1.9));--bh:max(5px,calc(var(--u)*1.5));
+  position:relative;z-index:1;isolation:isolate;width:var(--L);margin-left:var(--o)}
+.ld-lid{position:relative;padding:var(--bz) var(--bz) var(--chin);border:var(--rim) solid transparent;border-radius:var(--lr) var(--lr) max(3px,calc(var(--u)*.45)) max(3px,calc(var(--u)*.45));
   background:linear-gradient(180deg,#151519,#08080a 22%) padding-box,var(--rim-c) border-box;
-  box-shadow:0 0 0 .5px var(--edge),0 1.6cqw 3.2cqw -2cqw var(--sh2)}
-.ld-lid::before{content:"";position:absolute;top:calc(var(--bz) / 2);left:50%;width:max(2px,.4cqw);aspect-ratio:1;border-radius:50%;translate:-50% -50%;
-  background:radial-gradient(circle at 36% 34%,#5d6c8c 0 16%,#1a1e28 42%,#050507 72%);box-shadow:0 0 0 max(.5px,.08cqw) #1d1d22}
+  box-shadow:0 0 0 .5px var(--edge),0 calc(var(--u)*1.6) calc(var(--u)*3.2) calc(var(--u)*-2) var(--sh2)}
+.ld-lid::before{content:"";position:absolute;top:calc(var(--bz) / 2);left:50%;width:max(2px,calc(var(--u)*.4));aspect-ratio:1;border-radius:50%;translate:-50% -50%;
+  background:radial-gradient(circle at 36% 34%,#5d6c8c 0 16%,#1a1e28 42%,#050507 72%);box-shadow:0 0 0 max(.5px,calc(var(--u)*.08)) #1d1d22}
 .ld-lid::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:calc(var(--lr) - var(--rim)) calc(var(--lr) - var(--rim)) 0 0;
   background:linear-gradient(112deg,rgba(255,255,255,.075),rgba(255,255,255,.02) 34%,rgba(255,255,255,0) 50%)}
 .ld-screen{position:relative;aspect-ratio:16/10;overflow:hidden;border-radius:max(1px,calc(var(--lr) - var(--rim) - var(--bz))) max(1px,calc(var(--lr) - var(--rim) - var(--bz))) 1px 1px;background:#0b0d14}
@@ -111,22 +111,23 @@
 .ld-screen>picture.is-on{z-index:2;clip-path:inset(0);transition:clip-path .95s cubic-bezier(.75,0,.2,1)}
 .ld-screen img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
 /* 바닥판: 뚜껑보다 양옆으로 조금 넓은 얇은 알루미늄. 맨 위 빛 받는 모서리 → 아래로 어두워지는 앞면, 뚜껑이 드리운 그늘, 가운데 손가락 홈, 바닥에 닿는 그림자 */
-.ld-base{position:relative;height:var(--bh);margin:0 calc(-1 * var(--o));border-radius:max(1px,.3cqw) max(1px,.3cqw) 1.6cqw 1.6cqw/max(1px,.3cqw) max(1px,.3cqw) 100% 100%;
+.ld-base{position:relative;height:var(--bh);margin:0 calc(-1 * var(--o));border-radius:max(1px,calc(var(--u)*.3)) max(1px,calc(var(--u)*.3)) calc(var(--u)*1.6) calc(var(--u)*1.6)/max(1px,calc(var(--u)*.3)) max(1px,calc(var(--u)*.3)) 100% 100%;
   background:linear-gradient(90deg,rgba(0,0,0,.16),rgba(0,0,0,0) 1.6%,rgba(0,0,0,0) 98.4%,rgba(0,0,0,.16)),
     linear-gradient(180deg,rgba(0,0,0,.3),rgba(0,0,0,0)) 50% 0/93.5% 30% no-repeat,var(--deck);
-  box-shadow:0 0 0 .5px var(--edge),0 max(1px,.14cqw) max(1px,.2cqw) var(--sh2)}
-.ld-base::before{content:"";position:absolute;top:0;left:50%;width:11%;height:44%;translate:-50% 0;border-radius:0 0 1cqw 1cqw/0 0 100% 100%;background:var(--notch);
-  box-shadow:inset 0 max(.5px,.1cqw) max(.5px,.14cqw) rgba(0,0,0,.28)}
+  box-shadow:0 0 0 .5px var(--edge),0 max(1px,calc(var(--u)*.14)) max(1px,calc(var(--u)*.2)) var(--sh2)}
+.ld-base::before{content:"";position:absolute;top:0;left:50%;width:11%;height:44%;translate:-50% 0;border-radius:0 0 calc(var(--u)*1) calc(var(--u)*1)/0 0 100% 100%;background:var(--notch);
+  box-shadow:inset 0 max(.5px,calc(var(--u)*.1)) max(.5px,calc(var(--u)*.14)) rgba(0,0,0,.28)}
 /* 바닥에 닿는 그림자: 바로 밑은 짙고 좁게, 그 아래로 넓고 옅게 */
-.ld-base::after{content:"";position:absolute;z-index:-1;left:-1%;right:-1%;top:45%;height:max(12px,3.6cqw);pointer-events:none;
-  background:radial-gradient(50% 32% at 50% 0,var(--sh2),transparent),radial-gradient(50% 100% at 50% 0,var(--sh3),transparent);filter:blur(max(1.5px,.35cqw))}
+.ld-base::after{content:"";position:absolute;z-index:-1;left:-1%;right:-1%;top:45%;height:max(12px,calc(var(--u)*3.6));pointer-events:none;
+  background:radial-gradient(50% 32% at 50% 0,var(--sh2),transparent),radial-gradient(50% 100% at 50% 0,var(--sh3),transparent);filter:blur(max(1.5px,calc(var(--u)*.35)))}
 /* 휴대폰: 금속 띠(border) + 검은 테(padding) + 화면. 화면 = 상태 표시줄(사이트 맨 윗줄 색) + 휴대폰 폭으로 찍은 사이트 그림(390×795) */
-.ld-phone{position:absolute;z-index:2;right:0;bottom:0;width:var(--P);padding:var(--pz);border:var(--pb) solid transparent;border-radius:var(--pr);
+.ld-phone{--u:calc(var(--P) / 20.5);--pb:max(1px,calc(var(--u)*.3));--pz:max(1.5px,calc(var(--u)*.42));--pr:calc(var(--P) * .145);
+  position:absolute;z-index:2;right:0;bottom:0;width:var(--P);padding:var(--pz);border:var(--pb) solid transparent;border-radius:var(--pr);
   background:linear-gradient(#030304,#030304) padding-box,var(--band) border-box;
-  box-shadow:0 0 0 .5px var(--edge),0 .3cqw .5cqw -.1cqw var(--sh1),0 1.4cqw 2.4cqw -1cqw var(--sh2),0 4cqw 6cqw -3cqw var(--sh3)}
-.ld-phone::before,.ld-phone::after{content:"";position:absolute;width:max(1px,.24cqw);background:var(--btn);pointer-events:none}
-.ld-phone::before{left:calc(-1 * var(--pb) - max(1px,.24cqw));top:22%;height:7.5%;border-radius:2px 0 0 2px;box-shadow:0 calc(var(--P) * .2) 0 var(--btn)}
-.ld-phone::after{right:calc(-1 * var(--pb) - max(1px,.24cqw));top:28%;height:11%;border-radius:0 2px 2px 0}
+  box-shadow:0 0 0 .5px var(--edge),0 calc(var(--u)*.3) calc(var(--u)*.5) calc(var(--u)*-.1) var(--sh1),0 calc(var(--u)*1.4) calc(var(--u)*2.4) calc(var(--u)*-1) var(--sh2),0 calc(var(--u)*4) calc(var(--u)*6) calc(var(--u)*-3) var(--sh3)}
+.ld-phone::before,.ld-phone::after{content:"";position:absolute;width:max(1px,calc(var(--u)*.24));background:var(--btn);pointer-events:none}
+.ld-phone::before{left:calc(-1 * var(--pb) - max(1px,calc(var(--u)*.24)));top:22%;height:7.5%;border-radius:2px 0 0 2px;box-shadow:0 calc(var(--P) * .2) 0 var(--btn)}
+.ld-phone::after{right:calc(-1 * var(--pb) - max(1px,calc(var(--u)*.24)));top:28%;height:11%;border-radius:0 2px 2px 0}
 .ld-phone-screen{position:relative;container-type:inline-size;aspect-ratio:390/845;overflow:hidden;border-radius:max(2px,calc(var(--pr) - var(--pb) - var(--pz)));background:var(--bar)}
 .ld-phone-screen::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06);
   background:linear-gradient(118deg,rgba(255,255,255,.09),rgba(255,255,255,.02) 32%,rgba(255,255,255,0) 46%)}

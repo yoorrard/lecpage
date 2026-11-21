@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { SHOWCASES, shot, siteUrl } from './showcases.js';
 import { isFine, isReduced } from './motion.js';
+import { lightBar, StatusIcons } from './devices.jsx';
 
 /**
  * 첫 화면 무대: AI가 교재로 만든 실제 사이트 셋을 노트북·휴대폰 틀에 띄워 번갈아 보여 줘요(그림은 실제 사이트를 찍은 것).
@@ -13,8 +14,6 @@ import { isFine, isReduced } from './motion.js';
  *   사이트 그림은 그 아래(390×795)에 그대로 놓아 카메라 구멍이 사이트 내용을 가리지 않게 해요.
  * 틀과 그림은 꾸밈(aria-hidden)이고, 같은 내용을 아래 한 줄(사이트 이름·교재 쪽수·사이트 열기)로 읽어 줘요.
  */
-/** 상태 표시줄 바탕이 밝으면 어두운 글자로 */
-const lightBar = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150; };
 export function HeroStage() {
   const box = useRef();
   const [i, setI] = useState(0);
@@ -74,11 +73,7 @@ export function HeroStage() {
             <div class="ld-phone-bar">
               <span>13:50</span>
               <i class="ld-phone-cam" />
-              <svg viewBox="0 0 66 12">
-                <rect x="0" y="7.5" width="3" height="4" rx=".8" /><rect x="4.4" y="5.5" width="3" height="6" rx=".8" /><rect x="8.8" y="3.2" width="3" height="8.3" rx=".8" /><rect x="13.2" y=".8" width="3" height="10.7" rx=".8" />
-                <circle cx="27" cy="10" r="1.5" /><path class="ld-wifi" d="M23.9 7.1a4.4 4.4 0 0 1 6.2 0M20.9 4.1a8.6 8.6 0 0 1 12.2 0" />
-                <rect class="ld-batt" x="38.5" y="1.5" width="23" height="9.5" rx="2.8" /><rect x="40.6" y="3.6" width="16.4" height="5.3" rx="1.4" /><rect class="ld-batt-nub" x="62.6" y="4.6" width="1.8" height="3.3" rx=".9" />
-              </svg>
+              <StatusIcons />
             </div>
             <div class="ld-phone-view">
               {SHOWCASES.map((x, k) => {
