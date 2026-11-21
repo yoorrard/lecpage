@@ -2,18 +2,18 @@
 // 키와 교재는 운영자 서버로 가지 않고, 브라우저에서 AI 회사로 바로 갑니다.
 // 공개 API(다른 화면도 씀): PROVIDERS, loadKey, saveKey, forgetKey, models, generate, getActiveAI, detectProvider, checkKey
 import { kv } from './db.js';
-import { TIER_KO, catalogLoader, rankModels, geminiPaidOnly } from './ai-catalog.js';
+import { TIER_KO, catalogLoader, rankModels } from './ai-catalog.js';
 
-// 화면에 먼저 보이는 것: ChatGPT(OpenAI) · Claude. Gemini(무료 등급)는 작은 버튼으로 — ai-guides.jsx의 GUIDE_ORDER·GUIDE_MORE. 값·주소·오류 모양은 각 회사 공식 문서와 맞춰 봄(2026-11-14, 근거는 docs/research/ai-facts-2026-11-14.md).
+// 사이트 만들기에 쓰는 AI: OpenAI(GPT) · Claude. 값·주소·오류 모양은 각 회사 공식 문서와 맞춰 봄(2026-11-14, 근거는 docs/research/ai-facts-2026-11-14.md).
+// Gemini는 뺐습니다(무료 가벼운 모델로는 사이트 품질이 모자라고, 유료 모델은 확인하지 못함). 하루 한 번 모으는 값표(ai-catalog.json)의 Gemini 자료는 남아 있지만 앱에서는 쓰지 않음.
 // OpenRouter는 고르는 화면에서 뺐습니다(hidden). 저장해 둔 연결과 붙여 넣은 sk-or- 키, 로그인에서 돌아오는 처리는 그대로 동작합니다.
 export const PROVIDERS = {
-  gemini: { name: 'Google Gemini', short: 'Gemini', free: true, keyUrl: 'https://aistudio.google.com/apikey', billingUrl: 'https://aistudio.google.com/billing', note: '무료 키로 넣은 내용은 구글 제품 개선에 쓰일 수 있어요. 학생 개인정보는 넣지 마세요.', images: true },
   openrouter: { name: 'OpenRouter', short: 'OpenRouter', hidden: true, free: true, keyUrl: 'https://openrouter.ai/settings/keys', billingUrl: 'https://openrouter.ai/settings/credits', note: '무료 모델은 하루 50번까지예요. 무료 모델 중에는 넣은 내용을 학습에 쓰는 곳도 있어요.', oauth: true, images: true },
   openai: { name: 'OpenAI', short: 'OpenAI', free: false, keyUrl: 'https://platform.openai.com/api-keys', billingUrl: 'https://platform.openai.com/settings/organization/billing/overview', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
   anthropic: { name: 'Anthropic Claude', short: 'Claude', free: false, keyUrl: 'https://platform.claude.com/settings/keys', billingUrl: 'https://platform.claude.com/settings/billing', note: '쓴 만큼 충전한 크레딧에서 나가요.', images: true },
 };
 /** 고르는 화면에 보이는 회사(이 순서대로) */
-export const VISIBLE = ['openai', 'anthropic', 'gemini'].filter((id) => PROVIDERS[id] && !PROVIDERS[id].hidden);
+export const VISIBLE = ['openai', 'anthropic'].filter((id) => PROVIDERS[id] && !PROVIDERS[id].hidden);
 
 // ── 만드는 길: 쓰던 AI 창(chat) · 키 연결(key). 한 번 고른 길을 이 브라우저에 기억해 다음에는 바로 그 길로 ──
 const WAY = 'lecpage:ai-way';
@@ -29,22 +29,21 @@ export const PREFILL_MAX = 13900;
 export const CHATBOTS = [
   { id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com/' },
   { id: 'claude', name: 'Claude', url: 'https://claude.ai/new', prefill: (t) => (t && t.length <= PREFILL_MAX ? `https://claude.ai/new?q=${encodeURIComponent(t)}` : '') },
-  { id: 'gemini', name: 'Gemini', url: 'https://gemini.google.com/app' },
 ];
 const BOT = 'lecpage:chatbot';
 export function getChatbot() { try { const v = localStorage.getItem(BOT) || ''; return CHATBOTS.some((b) => b.id === v) ? v : ''; } catch { return ''; } }
 export function setChatbot(id) { try { localStorage.setItem(BOT, id); } catch { /* 저장 못 해도 됨 */ } }
 /** 오류에서 AI 창 길로 넘어가는 버튼 이름: 그 회사의 AI 이름으로(결제 없음 → '쓰던 ChatGPT로 만들기') */
-export function chatLabel(provider) { return provider === 'openai' ? '쓰던 ChatGPT로 만들기' : provider === 'anthropic' ? '쓰던 Claude로 만들기' : provider === 'gemini' ? '쓰던 Gemini로 만들기' : '쓰던 AI로 만들기'; }
+export function chatLabel(provider) { return provider === 'openai' ? '쓰던 ChatGPT로 만들기' : provider === 'anthropic' ? '쓰던 Claude로 만들기' : '쓰던 AI로 만들기'; }
 /** 오류에서 넘어갈 때 먼저 내세울 AI 창 */
-export const chatbotFor = (provider) => ({ openai: 'chatgpt', anthropic: 'claude', gemini: 'gemini' }[provider] || '');
+export const chatbotFor = (provider) => ({ openai: 'chatgpt', anthropic: 'claude' }[provider] || '');
 
 /** 붙여 넣은 키의 앞부분으로 어느 회사 키인지 알아냄 */
 export function detectProvider(key) {
   const k = String(key || '').trim();
   if (/^sk-or-/.test(k)) return 'openrouter';
   if (/^sk-ant-/.test(k)) return 'anthropic';
-  if (/^(AIza|AQ\.)/.test(k)) return 'gemini';
+  if (/^(AIza|AQ\.)/.test(k)) return 'gemini-unsupported'; // Gemini 키: 사이트 만들기에는 쓰지 않음(연결 화면이 알려 줌)
   if (/^sk-/.test(k)) return 'openai';
   return null;
 }
@@ -95,14 +94,13 @@ async function markBlocked(provider, id) {
   if (!list.includes(id)) { s.blocked[provider] = [...list, id].slice(-20); await kv.set('ai-prefs', s); }
 }
 /**
- * 생성(gen/job.js)에서 처음 모델이 이 키로 안 돼(무료 키에 유료 전용 모델 등) 바꾼 모델로 답을 받았을 때: 안 된 모델은 '유료 키 필요'로 기억하고,
- * Gemini는 무료 키로 적어 둠(checkKey·고르는 칸이 이 값을 씀 → 다음 만들기는 되는 모델로 바로 시작). 강사가 직접 고른 모델·지금 고른 회사는 그대로
+ * 생성(gen/job.js)에서 처음 모델이 이 키로 안 돼 바꾼 모델로 답을 받았을 때: 안 된 모델은 '쓸 수 없음'으로 기억하고
+ * 다음 만들기는 되는 모델로 바로 시작. 강사가 직접 고른 모델·지금 고른 회사는 그대로
  */
 export async function rememberWorkingModel(provider, model, failed = []) {
   for (const id of failed) await markBlocked(provider, id);
   const s = await prefs();
   if (!s.picked[provider] && model) s.models[provider] = model;
-  if (provider === 'gemini') s.free.gemini = true;
   await kv.set('ai-prefs', s);
 }
 /** picked: 강사가 직접 고른 모델인지(true면 추천이 바뀌어도 그대로 둠) */
@@ -138,7 +136,6 @@ export class AiError extends Error {
 /** 상태 코드·오류 코드·문구 → 오류 종류(생성 파이프라인 lib/gen도 씀). code: 회사가 준 코드들을 이어 붙인 글 */
 export function classify(status, msg, code) {
   const m = `${code || ''} ${msg || ''}`;
-  if (/FREE_TIER_VERIFICATION_REQUIRED|must be verified before/i.test(m)) return 'verify'; // Gemini 무료 등급: 휴대폰 확인이 필요한 프로젝트(403)
   if (/CORS requests are not allowed/i.test(m)) return 'no-browser'; // Claude: 브라우저에서 바로 부르지 못하게 막아 둔 조직(401)
   if (/anthropic-workspace-id|workspace ID|specify (a|the) workspace/i.test(m)) return 'workspace'; // Claude: Workspace를 고르지 않고 만든 키
   // 이번 달 쓸 수 있는 금액을 다 씀. Claude: 등급 한도 429(enforced_spend_limit_reached)·직접 정한 한도 400("You have reached your specified API usage limits")
@@ -200,19 +197,17 @@ export function explainError(err, provider) {
   const paid = provider === 'openai' || provider === 'anthropic';
   const T = {
     'bad-key': ['키가 맞지 않아요.', `키를 끝까지 복사했는지 확인해 주세요. 지웠거나 오래된 키라면 ${P.short || ''} 키 페이지에서 새로 만들어 주세요.`, ['key', 'paste']],
-    verify: ['구글이 휴대폰 확인을 요청했어요.', '확인 페이지에서 휴대폰 카메라로 QR을 찍으면 무료로 쓸 수 있어요. 어려우면 다른 AI를 연결하거나 쓰던 AI 창으로 만들어 주세요.', ['link', 'connect', 'paste']],
-    forbidden: ['이 계정으로는 쓸 수 없어요.', provider === 'gemini' ? '학교·기관 구글 계정은 관리자가 막아 둔 경우가 많아요. 개인 구글 계정으로 키를 만들어 주세요.' : '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
+    forbidden: ['이 계정으로는 쓸 수 없어요.', '계정 권한이나 지역 제한일 수 있어요. 다른 계정의 키를 쓰거나 다른 AI를 연결해 주세요.', ['key', 'connect']],
     'no-browser': ['이 계정은 브라우저에서 바로 쓸 수 없어요.', '조직 설정이 막아 두었어요. 개인 계정으로 만든 키를 쓰거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     workspace: ['Workspace를 고르지 않고 만든 키예요.', 'Claude 키 페이지에서 키를 새로 만들 때 Workspace를 골라 주세요.', ['key']],
     region: ['이 지역이나 계정에서는 쓸 수 없어요.', '만 18세 이상 개인 계정인지 확인해 주세요. 안 되면 다른 AI를 연결해 주세요.', ['connect', 'paste']],
-    billing: provider === 'gemini' ? ['결제가 연결된 프로젝트의 키예요.', '구글 AI Studio에서 크레딧을 충전해야 쓸 수 있어요. 결제를 연결하지 않은 프로젝트에서 키를 새로 만들면 무료로 쓸 수 있어요.', ['billing', 'key', 'connect', 'paste']]
-      : provider === 'openrouter' ? ['크레딧이 없어요.', '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 다른 AI를 연결해 주세요.', ['connect']]
+    billing: provider === 'openrouter' ? ['크레딧이 없어요.', '무료 모델은 크레딧 없이 쓸 수 있어요. 다시 해도 안 되면 다른 AI를 연결해 주세요.', ['connect']]
         : ['API 크레딧이 없어요.', `${provider === 'openai' ? 'ChatGPT' : 'Claude'} 구독과 API 결제는 따로예요. 지금은 쓰던 ${provider === 'openai' ? 'ChatGPT' : 'Claude'} 창으로 만들 수 있어요. 키로 하려면 결제 페이지에서 크레딧을 충전해 주세요. 5달러면 사이트를 열 개 넘게 만들어요.`, ['paste', 'billing']],
-    'quota-day': ['오늘 쓸 수 있는 무료 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'gemini' ? `한국 시간 ${geminiResetKo()}쯤 다시 채워져요.` : provider === 'openrouter' ? '한국 시간 오전 9시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
+    'quota-day': ['오늘 쓸 수 있는 횟수를 다 썼어요.', `다른 모델로도 해 봤어요. ${provider === 'openrouter' ? '한국 시간 오전 9시쯤 다시 채워져요.' : '내일 다시 돼요.'} 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     quota: [paid ? '요청이 몰려 잠시 막혔어요.' : '무료 한도를 넘었어요.', '기다렸다가 다시 해 봤지만 안 됐어요. 몇 분 뒤에 다시 누르거나 다른 AI를 연결해 주세요.', ['connect', 'paste']],
     cap: ['이번 달에 쓸 수 있는 금액을 다 썼어요.', `다음 달에 다시 돼요. ${P.short || ''} 사이트에서 한도를 올릴 수도 있어요. 지금 이어서 하려면 다른 AI를 연결해 주세요.`, ['connect', 'paste']],
     model: ['고른 모델을 쓸 수 없어요.', '모델을 바꾸거나, 연결을 끊고 다시 연결해 주세요.', ['paste']],
-    'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '무료 키로 쓸 수 있는 모델로 바꿔 주세요.', []],
+    'no-access': ['이 모델은 지금 키로 쓸 수 없어요.', '다른 모델로 바꿔 주세요.', []],
     refusal: ['AI가 이 내용은 만들지 않겠다고 했어요.', '교재에 민감한 주제(보안·생물 실험 등)가 있으면 그럴 수 있어요. 다른 AI로 다시 해 보세요.', ['connect', 'paste']],
     'too-long': ['교재가 길어 한 번에 보내지 못했어요.', '교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', ['paste', 'connect']],
     busy: ['AI 서버가 바빠요.', '잠시 뒤에 다시 눌러 주세요.', ['paste']],
@@ -223,19 +218,12 @@ export function explainError(err, provider) {
     empty: ['AI가 빈 답을 보냈어요.', '다시 눌러 주세요.', []],
     other: ['AI가 답하지 못했어요.', err?.message || '', ['paste']],
   }[k] || ['AI가 답하지 못했어요.', err?.message || '', ['paste']];
-  // 휴대폰 확인: 구글이 오류 문구에 넣어 준 확인 주소만 씀(다른 주소는 열지 않음)
-  const link = k === 'verify' ? { href: (/https:\/\/aistudio\.google\.com\/verify\?project=\d+/.exec(err?.message || '') || ['https://aistudio.google.com/projects'])[0], label: '확인 페이지 열기' } : null;
+  const link = null;
   if (err?.paidOption || err?.lightOption) {
     const ways = [err.paidOption && `연결해 둔 ${err.paidOption.label}(유료)`, err.lightOption && `가벼운 모델(${err.lightOption.label})`].filter(Boolean).join('이나 ');
-    return { kind: k, provider, link, title: k === 'verify' || k === 'cap' ? T[0] : '오늘 이 모델의 무료 한도를 다 썼어요.', body: `${ways}로 이어서 할 수 있어요.${err.lightOption ? ' 가벼운 모델은 구성과 문구가 단순해질 수 있어요.' : ''}`, actions: [err.paidOption && 'pay', err.lightOption && 'light', 'connect'].filter(Boolean), raw: err?.message || '' };
+    return { kind: k, provider, link, title: k === 'cap' ? T[0] : '오늘 이 모델의 한도를 다 썼어요.', body: `${ways}로 이어서 할 수 있어요.${err.lightOption ? ' 가벼운 모델은 구성과 문구가 단순해질 수 있어요.' : ''}`, actions: [err.paidOption && 'pay', err.lightOption && 'light', 'connect'].filter(Boolean), raw: err?.message || '' };
   }
   return { kind: k, provider, link, title: T[0], body: T[1], actions: T[2], raw: err?.message || '' };
-}
-/** Gemini 무료 횟수(하루 요청 수)는 미국 태평양 시간 자정에 다시 채워짐(공식 문서 Rate limits) → 한국 시간으로 여름 '오후 4시', 겨울 '오후 5시'. OpenRouter 무료 모델은 UTC 자정(한국 오전 9시) */
-export function geminiResetKo(now = new Date()) {
-  let h = 5;
-  try { if (/PDT|GMT-7/.test(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).format(now))) h = 4; } catch { /* 시간대를 모르면 겨울 기준 */ }
-  return `오후 ${h}시`;
 }
 
 // ── Claude: Workspace를 고르지 않고 만든 키 ──
@@ -260,12 +248,7 @@ export async function withWorkspace(key, signal, fn) {
 }
 
 // ── 모델 목록·고르기(모델 이름을 코드에 박지 않고, 그때그때 목록에서 고름) ──
-const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 async function listRaw(provider, key, signal) {
-  if (provider === 'gemini') {
-    const j = await send(provider, `${GEMINI}/models?pageSize=200`, { signal, headers: { 'x-goog-api-key': key } });
-    return (j.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name }));
-  }
   if (provider === 'anthropic') {
     const j = await withWorkspace(key, signal, () => send(provider, 'https://api.anthropic.com/v1/models?limit=100', { signal, headers: antHeaders(key) }));
     return (j.data || []).map((m) => ({ id: m.id, label: m.display_name || m.id }));
@@ -319,26 +302,13 @@ export async function checkKey(provider, key, { signal } = {}) {
   let freeTier = false;
   if (provider === 'openrouter') ({ freeTier } = await openRouterKeyInfo(key, signal));
   const s = await prefs();
-  if (provider === 'gemini') freeTier = !!s.free.gemini; // 무료 키인지는 처음 만들 때 알게 됨(이 기기에 적어 둔 값)
   const list = await models(provider, key, { freeTier });
   // 강사가 직접 고른 모델이 아직 있으면 그대로, 아니면 추천 모델
   const kept = s.picked[provider] && list.find((m) => m.id === s.models[provider] && !m.locked);
-  // 목록에서 고를 모델이 없을 때만 Gemini 공식 별칭(-latest: 그 계열의 최신판을 가리킴)으로
-  const model = (kept || list.find((m) => !m.locked) || {}).id || (provider === 'gemini' ? 'gemini-flash-latest' : '');
+  const model = (kept || list.find((m) => !m.locked) || {}).id || '';
   if (!model) throw new AiError('model', 'no model', { provider });
   await setActive(provider, { model, freeTier });
   return { models: list, model, freeTier };
-}
-
-// ── Gemini 요청 본문 ──
-/**
- * Gemini 요청 본문(생성 파이프라인 lib/gen도 씀). 공식 문서(2026-11) 기준:
- *  - temperature·topP는 Gemini 3.6 이후·4에서 무시되고 경고가 오며, 앞으로 400이 됨 → 보내지 않음
- *  - maxOutputTokens는 생각하는 토큰까지 합친 한도. Gemini 4는 32,768 이상을 권함(Carbon·Argon은 스트리밍 아닌 요청 한 번에 32,768까지)
- *  - 2026-10-26 뒤에 만든 유료 프로젝트는 요청을 기록(store)하는 것이 기본 → 교재가 키 주인의 기록에 남지 않게 store: false
- */
-export function geminiBody(parts, maxTokens) {
-  return { contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: Math.max(maxTokens, 32768) }, store: false };
 }
 
 /** 쓴 만큼 돈이 나가는 연결인지: OpenAI·Claude 키, 충전한 OpenRouter */

@@ -1,5 +1,7 @@
-// AI 작업 실행기: 나눠 만들고, 단계마다 저장해, 끊겨도 그 자리부터 이어 합니다(docs/plan-ai-first.md §6, 약속 D).
-// 단계: plan → design → sections:1..n → assemble(조립+검수) → fix(문제가 있으면 한 번) → 끝
+// AI 작업 실행기: 단계마다 저장해, 끊겨도 그 자리부터 이어 합니다(docs/plan-ai-first.md §6, 약속 D).
+// 단계: build(교재 원본 + 짧은 요청 하나 → AI가 사이트 전체를 한 답으로) → assemble(조립 + 검수) → 끝.
+// lecpage는 AI의 디자인·구성에 끼어들지 않음: 검수 결과는 강사에게 참고로만 보이고, 고치기는 강사가 [AI에게 고쳐 달라기]를 누를 때만(fix).
+// 고치기(edit·fix): 지금 사이트 전체 + 요청 → AI가 바뀐 파일만
 // - 망·5xx·감시 끊김: 그 단계만 다시(받은 글이 넉넉하면 '이어서'로). OpenAI는 서버에서 계속 도는 답을 이어 받음(starting_after)
 // - 한도(429): 알려 준 시간만큼 기다렸다 그 단계만 다시. 잘림: 같은 단계 안에서 '이어서'(세 번까지)
 // - 받는 중인 글은 몇 초마다 기록에 저장 → 새로 고쳐도 그 글부터 이어 감(OpenAI는 응답 id·순번으로)
@@ -16,8 +18,8 @@ import { AiError, BASES, baseFor } from './providers/common.js';
 import * as oa from './oa-trash.js';
 import { preparePageImages, packMaterial, sourceFiles } from './material.js';
 import * as P from './prompts.js';
-import { extractJson, extractCss, extractHtml, extractSections, mergeSections, replaceSections, stitch, balance, trimCss, cssCut, skeleton, SECTIONS_MARK } from './parse.js';
-import { inspect, readMeta, themeFromCss, issuesForAi } from './kit.js';
+import { extractSections, replaceSections, stitch, balance, trimCss, cssCut, parseSiteAnswer } from './parse.js';
+import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.js';
 import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
@@ -104,12 +106,11 @@ const STEP = (name) => ({ name, status: 'todo', attempts: 0, output: null, error
 function stepsFor(kind, way) {
   if (way === 'local') return [STEP('agent'), STEP('assemble')]; // 내 PC의 에이전트가 사이트 전체를 파일로 씀 → 앱은 조립·검수만
   // way 'demo'(먼저 해보기)는 'key'와 같은 단계(어댑터만 미리 만든 답을 흘려보냄)
-  if (kind === 'make') return [STEP('plan'), STEP('design'), STEP('assemble')];
+  if (kind === 'make') return [STEP('build'), STEP('assemble')];
   if (kind === 'edit') return [STEP('edit'), STEP('assemble')];
   if (kind === 'fix') return [STEP('fix'), STEP('assemble')];
   return [];
 }
-const sectionSteps = (rec) => rec.steps.filter((s) => s.name.startsWith('sections:')).length;
 
 /** 화면에 보일 상태(약속 §15 useGeneration 꼴) */
 export function viewOf(rec, { elsewhere = false } = {}) {
@@ -117,14 +118,13 @@ export function viewOf(rec, { elsewhere = false } = {}) {
   const total = rec.steps.length;
   const i = Math.max(0, rec.steps.findIndex((s) => s.status !== 'done'));
   const cur = rec.status === 'done' ? rec.steps[total - 1] : rec.steps[i];
-  const secTotal = sectionSteps(rec);
   const status = rec.status === 'running' ? 'running' : rec.status === 'done' ? 'done' : rec.status === 'error' ? 'error' : 'paused';
   const L = live.get(rec.pid);
   return {
     status, jobId: rec.id, kind: rec.kind, way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '',
     // index: 지금 단계 번호(1부터, 다 끝나면 total)
-    step: cur ? { name: cur.name, label_ko: cur.label || P.stepLabel(cur.name, secTotal), index: rec.status === 'done' ? total : i + 1, total, received: (cur.acc?.length || 0) + (cur.piece?.length || 0) } : null,
-    steps: rec.steps.map((s) => ({ name: s.name, label_ko: s.label || P.stepLabel(s.name, secTotal), status: s.status, attempts: s.attempts })),
+    step: cur ? { name: cur.name, label_ko: cur.label || P.stepLabel(cur.name), index: rec.status === 'done' ? total : i + 1, total, received: (cur.acc?.length || 0) + (cur.piece?.length || 0) } : null,
+    steps: rec.steps.map((s) => ({ name: s.name, label_ko: s.label || P.stepLabel(s.name), status: s.status, attempts: s.attempts })),
     startedAt: rec.startedAt, updatedAt: rec.updatedAt, endedAt: status === 'running' ? 0 : rec.updatedAt || 0,
     error: status === 'error' || status === 'paused' ? rec.error || null : null,
     wait: L?.wait || null, // { reason: 'quota'|'retry'|'hidden'|'offline', until }
@@ -136,7 +136,8 @@ export function viewOf(rec, { elsewhere = false } = {}) {
 // ── 오류 → 안내 ──
 const RETRY = ['network', 'busy', 'stall', 'empty'];
 const QUOTA = ['quota'];
-const SWAP = ['no-access', 'model', 'quota-day', 'billing', 'forbidden', 'region'];
+// 이 모델만 안 되는 오류: 같은 키의 다른 모델로 이어서(앞 단계 결과는 그대로). 결제·권한·지역 같은 계정 오류는 모델을 바꿔도 같아 바꾸지 않음
+const SWAP = ['no-access', 'model', 'quota-day'];
 const ACCOUNT = ['billing', 'forbidden', 'region'];
 function errorView(e, provider) {
   const k = e?.kind;
@@ -152,7 +153,6 @@ function errorView(e, provider) {
   if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나, 쓰던 AI 창에 교재를 첨부해 만들어 주세요.', actions: ['paste', 'connect'] };
   const x = explainError(e, provider);
   // 다시 눌러도 같은 답이 오는 오류(키·결제·권한·지역·한도·모델·차단)는 [이어서 만들기]를 맨 뒤로: 주 단추가 같은 실패를 되풀이하지 않게.
-  // 실제 응답(2026-11-20): 선불 크레딧이 바닥난 Gemini 키는 모든 모델이 402 → 결제·키 페이지가 먼저, 충전한 뒤에 [이어서 만들기]
   const acts = x.actions.filter((a) => a !== 'pay' && a !== 'light');
   return { kind: x.kind, title: x.title, body: x.body, actions: SAME_AGAIN.includes(x.kind) ? [...acts, 'resume'] : ['resume', ...acts], link: x.link || null };
 }
@@ -236,8 +236,8 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
       if (RETRY.includes(e.kind)) {
         if (hidden()) { persist(); await waitVisible(ctx); continue; } // 가려진 탭에서 끊김: 횟수를 쓰지 않음
         step.attempts++; persist();
-        // 실제 응답(2026-11-20): Gemini는 모델 몇 개가 몇 분씩 '사용량 폭주(503)'일 때가 있음 → 두 번 붐비면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
-        if (e.kind === 'busy' && rec.provider === 'gemini' && step.attempts >= 2 && swaps < 2) {
+        // 모델이 몇 분씩 붐빌 때(503·529)가 있음 → 두 번 붐비면 같은 키의 다른 모델로(앞 단계 결과는 그대로)
+        if (e.kind === 'busy' && step.attempts >= 2 && swaps < 2) {
           const next = await nextModel(ctx).catch(() => null);
           if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = 'busy'; ctx.busyFailed = [...(ctx.busyFailed || []), rec.model]; rec.notes = [...(rec.notes || []), `${rec.model} 모델이 붐벼서 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
         }
@@ -252,15 +252,13 @@ async function askStep(ctx, step, { prompt, maxTokens, json = false, isCut = () 
         continue;
       }
       if (e.kind === 'too-long' && ctx.level < 2) { ctx.level++; rec.level = ctx.level; await repack(ctx); acc = ''; piece = ''; token = null; continue; }
-      // Gemini 무료 키: 이 모델을 못 쓰거나 오늘 한도를 다 썼으면 같은 키의 다른 모델로(앞 단계 결과는 그대로).
-      // 무료 키로 유료 전용 모델(추천 첫 모델이 그럴 수 있음)을 부를 때 오는 오류는 한도 0(429)·403·402·400(FAILED_PRECONDITION)이 다 가능해 모두 받음
-      // (예전 생성 코드와 docs/research/ai-facts-2026-11-14.md가 정한 대로). 오류 답은 돈이 들지 않음
-      if (rec.provider === 'gemini' && SWAP.includes(e.kind)) {
-        // 바꾼 모델도 같은 계정 오류(결제·권한·지역)면 모델 탓이 아님(예: 선불 크레딧이 바닥나 모든 모델이 402) → 처음 모델로 되돌리고 그 안내를 보임
-        if (ctx.swapFrom && ctx.swapped === e.kind && ACCOUNT.includes(e.kind)) {
-          rec.model = ctx.swapFrom; rec.notes = (rec.notes || []).filter((n) => !n.startsWith('이 키로 쓸 수 없는 모델')); ctx.swapFrom = ''; ctx.swapped = ''; await save(rec);
-          throw e;
-        }
+      // 이 모델만 안 됨(없어진 모델·이 키로 못 쓰는 모델·오늘 이 모델의 한도): 같은 키의 다른 모델로(앞 단계 결과는 그대로). 오류 답은 돈이 들지 않음
+      // 바꾼 모델에서 계정 오류(결제·권한·지역)가 오면 모델 탓이 아님 → 처음 모델로 되돌리고 그 안내를 보임
+      if (ctx.swapFrom && ACCOUNT.includes(e.kind)) {
+        rec.model = ctx.swapFrom; rec.notes = (rec.notes || []).filter((n) => !n.startsWith('이 키로 쓸 수 없는 모델')); ctx.swapFrom = ''; ctx.swapped = ''; await save(rec);
+        throw e;
+      }
+      if (SWAP.includes(e.kind)) {
         const next = swaps < 2 ? await nextModel(ctx).catch(() => null) : null;
         if (next) { swaps++; ctx.swapFrom = ctx.swapFrom || rec.model; ctx.swapped = e.kind; if (e.kind !== 'model' && e.kind !== 'quota-day') ctx.permFailed = [...(ctx.permFailed || []), rec.model]; rec.notes = [...(rec.notes || []), `이 키로 쓸 수 없는 모델(${rec.model})이라 ${next} 모델로 이어서 했어요.`]; rec.model = next; await save(rec); continue; }
       }
@@ -278,7 +276,7 @@ async function waitVisible(ctx) {
 }
 async function nextModel(ctx) {
   const tried = new Set([...(ctx.tried || []), ctx.rec.model]); ctx.tried = tried;
-  const list = await listModels('gemini', ctx.key, { freeTier: true });
+  const list = await listModels(ctx.rec.provider, ctx.key, {});
   return (list.find((m) => !m.locked && !tried.has(m.id)) || {}).id || null;
 }
 async function repack(ctx) {
@@ -289,115 +287,52 @@ function rec2notes(rec, notes) { rec.notes = [...new Set([...(rec.notes || []), 
 
 // ── 단계 실행 ──
 const formatError = () => new AiError('format', 'format');
-const planOf = (rec) => rec.steps.find((s) => s.name === 'plan')?.output || null;
-const designOf = (rec) => rec.steps.find((s) => s.name === 'design')?.output || null;
 
-function cleanPlan(v) {
-  if (!v || typeof v !== 'object' || !Array.isArray(v.sections) || !v.sections.length) return null;
-  const seen = new Set();
-  v.sections = v.sections.filter((s) => s && typeof s === 'object').slice(0, 16).map((s, i) => {
-    let id = String(s.id || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || `s${i + 1}`;
-    if (/^\d/.test(id)) id = 's-' + id;
-    while (seen.has(id)) id += '-2';
-    seen.add(id);
-    return { ...s, id, title: String(s.title || id).slice(0, 80) };
-  });
-  return v;
-}
-/** 섹션 묶음: 2~3개씩(첫 화면은 한 묶음에 둘까지) */
-export function batchSections(sections) {
-  const out = []; let i = 0;
-  if (sections.length) { out.push(sections.slice(0, 2)); i = 2; }
-  while (i < sections.length) { const left = sections.length - i; const n = left === 4 ? 2 : Math.min(3, left); out.push(sections.slice(i, i + n)); i += n; }
-  return out;
-}
-
-async function runPlan(ctx, step) {
-  const project = ctx.project;
-  const text = await askStep(ctx, step, {
-    prompt: P.buildPlanPrompt({ request: ctx.rec.opts.request, reference: ctx.rec.opts.reference, info: infoOf(project), prevMeta: project.meta }),
-    maxTokens: 24000, json: ctx.rec.provider !== 'anthropic',
-    isCut: (t) => { const r = extractJson(t, { prefer: 'sections' }); return !r.value && r.cut; },
-  });
-  const plan = cleanPlan(extractJson(text, { prefer: 'sections' }).value);
-  if (!plan) throw formatError();
-  step.output = plan;
-  // 섹션 단계 끼워 넣기(조립 앞)
-  ctx.rec.steps = ctx.rec.steps.filter((s) => !s.name.startsWith('sections:'));
-  const at = ctx.rec.steps.findIndex((s) => s.name === 'assemble');
-  const batches = batchSections(plan.sections);
-  ctx.rec.steps.splice(at, 0, ...batches.map((_, i) => ({ ...STEP(`sections:${i + 1}`), batch: batches[i].map((s) => s.id) })));
-}
 function infoOf(p) {
   const i = p.info || {}; const keep = {};
   for (const k of ['title', 'subtitle', 'date', 'start', 'end', 'venue', 'organizer']) if (i[k] && !(p.autoFilled && p.autoFilled[k] === i[k])) keep[k] = i[k];
   return keep; // 교재에서 저절로 채운 값(코드 추측)은 빼고 강사가 직접 적은 값만
 }
-
-async function runDesign(ctx, step) {
-  const plan = planOf(ctx.rec);
-  const isCut = (t) => { const c = extractCss(t); const h = extractHtml(t.slice(Math.max(0, t.search(/```html/i)))); return !c.css || c.cut || (/```html/i.test(t) && h.cut); };
-  const text = await askStep(ctx, step, { prompt: P.buildDesignPrompt({ plan }), maxTokens: 32000, isCut });
-  let { css, cut } = extractCss(text);
-  if (cut) css = trimCss(css);
-  if (!css || css.length < 200) throw formatError();
-  const blocks = text.split(/```css[\s\S]*?```/i).join('\n');
-  let { html: shell, doc, cut: hcut } = extractHtml(blocks);
-  if (!doc) shell = skeleton(plan.title);
-  if (hcut) shell = balance(shell);
-  if (!shell.includes(SECTIONS_MARK)) shell = /<main[\s>][\s\S]*?<\/main>/i.test(shell) ? shell.replace(/(<main[^>]*>)([\s\S]*?)(<\/main>)/i, `$1\n${SECTIONS_MARK}\n$3`) : mergeSections(shell, SECTIONS_MARK);
-  step.output = { css, shell };
-}
-
-async function runSections(ctx, step) {
-  const plan = planOf(ctx.rec); const design = designOf(ctx.rec);
-  const ids = step.batch || [];
-  const specs = ids.map((id) => plan.sections.find((s) => s.id === id)).filter(Boolean);
-  const k = +step.name.split(':')[1]; const total = sectionSteps(ctx.rec);
-  const doneIds = ctx.rec.steps.filter((s) => s.name.startsWith('sections:') && s.status === 'done').flatMap((s) => (s.output?.sections || []).map((x) => x.id));
-  const classes = P.cssClasses(design.css);
-  const got = new Map(); let extra = '';
-  let want = specs;
-  for (let round = 0; round < 2 && want.length; round++) {
-    const text = await askStep(ctx, step, {
-      prompt: P.buildSectionsPrompt({ plan, classes, batch: want, index: k, total, done: doneIds }), maxTokens: 48000,
-      isCut: (t) => { const secs = extractSections(extractHtml(t).html); return secs.length > 0 && !secs[secs.length - 1].complete; },
-    });
-    const { html } = extractHtml(text);
-    const secs = extractSections(html);
-    secs.forEach((s, i) => {
-      const id = s.id && want.some((w) => w.id === s.id) ? s.id : (want[i] && !got.has(want[i].id) ? want[i].id : s.id);
-      if (!id) return;
-      let h = s.complete ? s.html : balance(s.html);
-      if (!s.id) h = h.replace(/<section\b/i, `<section id="${id}"`);
-      else if (s.id !== id) h = h.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${id}$2`);
-      if (!/data-title=/.test(h.slice(0, 300))) { const sp = want.find((w) => w.id === id); if (sp) h = h.replace(/<section\b/i, `<section data-title="${String(sp.title).replace(/"/g, '&quot;')}"`); }
-      got.set(id, h);
-    });
-    const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, ''));
-    if (c.css && !/<[a-zA-Z]/.test(c.css)) extra += '\n' + (c.cut ? trimCss(c.css) : c.css);
-    want = specs.filter((s) => !got.has(s.id));
+/** 사이트의 CSS 전부(CSS 파일 + 쪽 안 <style>): 강의 기능 색(--lp-*)을 읽을 때 */
+export function allCss(site = {}) {
+  const parts = [];
+  for (const [k, v] of Object.entries(site)) {
+    if (typeof v !== 'string') continue;
+    if (/\.css$/i.test(k)) parts.push(v);
+    else if (/\.html?$/i.test(k)) for (const m of v.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) parts.push(m[1]);
   }
-  if (!got.size) throw formatError();
-  step.output = { sections: specs.filter((s) => got.has(s.id)).map((s) => ({ id: s.id, html: got.get(s.id) })), css: extra.trim(), missing: specs.filter((s) => !got.has(s.id)).map((s) => s.id) };
-  if (step.output.missing.length) rec2notes(ctx.rec, [`AI가 만들지 않은 섹션을 뺐어요: ${step.output.missing.join(', ')}`]);
+  return parts.join('\n');
+}
+/** AI가 답 끝에 준 연수 정보(교재에서 찾은 것) → 연수 정보. 제목이 없으면 <title> */
+function metaOf(raw, site, prev) {
+  const r = raw && typeof raw === 'object' ? { ...raw } : {};
+  if (!r.title) r.title = ((/<title>([^<]*)<\/title>/i.exec(site['index.html'] || '') || [])[1] || '').trim();
+  return readMeta({ v: 2, ...r, theme: { ...(r.theme || {}), ...themeFromCss(allCss(site)) } }, { prev }).meta;
+}
+/** 다 받지 못한 파일 살리기(이어서도 끝나지 않았을 때): HTML은 덜 닫힌 태그를 닫고, CSS는 마지막 온전한 규칙까지 */
+const salvage = (path, v) => (/\.html?$/i.test(path) ? balance(v) : /\.css$/i.test(path) && cssCut(v) ? trimCss(v) : v);
+/** 답의 파일 중 사이트에 넣을 수 있는 것만(엔진 kit/paths.js 규칙: SVG 파일·엔진 파일 이름·숨김 파일 빼기) */
+function siteFiles(a, rec) {
+  const out = {}; const dropped = [];
+  for (const [k, v] of Object.entries(a.files)) { if (siteFileOk(k)) out[k] = a.cut ? salvage(k, v) : v; else dropped.push(k); }
+  if (dropped.length) rec2notes(rec, [`사이트에 넣을 수 없는 파일을 뺐어요: ${dropped.slice(0, 6).join(', ')}`]);
+  if (a.cut) rec2notes(rec, ['AI 답이 끝까지 오지 않아 받은 데까지 썼어요. 미리보기로 확인해 주세요.']);
+  return out;
 }
 
-/** 지금까지의 단계 결과로 사이트(조립 전 AI 파일)와 연수 정보 */
-function siteFromSteps(ctx) {
-  const plan = planOf(ctx.rec); const design = designOf(ctx.rec);
-  const secs = ctx.rec.steps.filter((s) => s.name.startsWith('sections:')).flatMap((s) => s.output?.sections || []);
-  const extra = ctx.rec.steps.filter((s) => s.name.startsWith('sections:')).map((s) => s.output?.css || '').filter(Boolean);
-  const order = plan.sections.map((s) => s.id);
-  secs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-  let html = mergeSections(design.shell, secs.map((s) => s.html));
-  if (plan.title && /<title>\s*<\/title>/i.test(html)) html = html.replace(/<title>\s*<\/title>/i, `<title>${plan.title.replace(/</g, '&lt;')}</title>`);
-  const css = [design.css, ...extra.map((c) => `/* 섹션 덧붙임 */\n${c}`)].join('\n\n');
-  return { 'index.html': html, 'assets/style.css': css };
-}
-function metaFrom(plan, css, prev) {
-  const theme = { ...(plan.theme || {}), ...themeFromCss(css) };
-  return readMeta({ v: 2, title: plan.title, subtitle: plan.subtitle, organizer: plan.organizer, sessions: plan.sessions, venue: plan.venue, mode: plan.mode, audience: plan.audience, instructors: plan.instructors, features: plan.features, theme, facts: plan.facts, pages: plan.pages }, { prev }).meta;
+/** 새로 만들기: 교재 원본 + 짧은 요청 하나 → AI가 사이트 전체(파일마다 코드 블록)와 끝의 연수 정보를 한 답으로 */
+async function runBuild(ctx, step) {
+  const { rec, project } = ctx;
+  const text = await askStep(ctx, step, {
+    prompt: P.buildBuildPrompt({ request: rec.opts.request, reference: rec.opts.reference, info: infoOf(project) }),
+    maxTokens: 64000, isCut: (t) => parseSiteAnswer(t).cut,
+  });
+  const a = parseSiteAnswer(text);
+  const site = siteFiles(a, rec);
+  if (!site['index.html']) throw formatError();
+  rec.site = site;
+  rec.meta = metaOf(a.meta, site, project.meta);
+  step.output = { files: Object.keys(site), cut: a.cut, meta: !!a.meta };
 }
 
 /**
@@ -420,77 +355,52 @@ export async function inspectSite(pid, site, meta, project = null) {
   return { issues: out, warnings: a.warnings || [], collected: a.collected || null };
 }
 
+/** 조립 + 검수. 결과는 강사에게 참고로만 보임(고치기는 강사가 고를 때만) */
 async function runAssemble(ctx, step) {
   const rec = ctx.rec;
-  let site; let meta;
-  if (rec.kind === 'make' && rec.way !== 'local' && !rec.steps.some((s) => s.name === 'fix' && s.status === 'done')) {
-    site = siteFromSteps(ctx);
-    meta = metaFrom(planOf(rec), site['assets/style.css'], ctx.project.meta);
-  } else { site = rec.site; meta = rec.meta; }
-  const { issues } = await inspectSite(rec.pid, site, meta, ctx.project);
-  rec.site = site; rec.meta = meta;
+  if (!rec.site) { rec.site = ctx.project.site || null; rec.meta = rec.meta || ctx.project.meta || null; }
+  if (!rec.site?.['index.html']) throw new AiError('no-site', 'no site');
+  const { issues } = await inspectSite(rec.pid, rec.site, rec.meta, ctx.project);
   step.output = { issues };
-  // 고칠 수 있는 문제(섹션이 정해진 오류)가 있으면 그 섹션만 한 번 고치기
-  const fixable = issues.filter((i) => i.level === 'error' && i.where?.section);
-  if (rec.kind === 'make' && rec.way === 'key' && fixable.length && !rec.steps.some((s) => s.name === 'fix') && !hook().noFix) {
-    rec.steps.push({ ...STEP('fix'), issues: fixable.slice(0, 12) }, STEP('assemble'));
+}
+
+/**
+ * 고친 파일 하나 받기. 문서였던 쪽에 문서가 아닌 조각(<section …>)만 오면 그 섹션만 갈아 끼움,
+ * 긴 CSS 대신 아주 짧은 CSS가 오면(바뀐 규칙만 보낸 것) 뒤에 덧붙임
+ */
+export function mergeFile(path, cur, next) {
+  if (typeof cur !== 'string' || !cur) return next;
+  if (/\.html?$/i.test(path) && /<!doctype|<html[\s>]/i.test(cur) && !/<!doctype|<html[\s>]/i.test(next)) {
+    const secs = extractSections(next).filter((s) => s.id && s.complete);
+    return secs.length ? replaceSections(cur, secs).html : cur;
   }
+  if (/\.css$/i.test(path) && cur.length > 3000 && next.length < cur.length * 0.4) return `${cur}\n\n/* 고친 규칙 */\n${next}`;
+  return next;
 }
 
-async function runFix(ctx, step) {
-  const rec = ctx.rec;
-  const issues = step.issues || [];
-  const site = rec.site || ctx.project.site;
-  if (!site?.['index.html']) throw new AiError('no-site', 'no site');
-  const all = extractSections(site['index.html']);
-  const ids = [...new Set(issues.map((i) => i.where?.section).filter(Boolean))].slice(0, 4);
-  const targets = all.filter((s) => ids.includes(s.id));
-  if (!targets.length) { step.output = { skipped: true }; return; }
-  const text = await askStep(ctx, step, {
-    prompt: P.buildFixPrompt({ issuesText: issuesForAi(issues.filter((i) => ids.includes(i.where?.section))), sections: targets, classes: P.cssClasses(site['assets/style.css']) }), maxTokens: 32000,
-    isCut: (t) => { const s = extractSections(extractHtml(t).html); return s.length > 0 && !s[s.length - 1].complete; },
-  });
-  const secs = extractSections(extractHtml(text).html).filter((s) => s.id && ids.includes(s.id)).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
-  const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, ''));
-  const { html } = replaceSections(site['index.html'], secs);
-  const cssAdd = c.css && !/<[a-zA-Z]/.test(c.css) ? `/* 검수 고침 */\n${c.cut ? trimCss(c.css) : c.css}` : '';
-  rec.site = { ...site, 'index.html': html, ...(cssAdd ? { 'assets/style.css': `${site['assets/style.css'] || ''}\n\n${cssAdd}` } : {}) };
-  rec.delta = { sections: secs, cssAdd: [rec.delta?.cssAdd, cssAdd].filter(Boolean).join('\n\n'), metaPatch: rec.delta?.metaPatch || null };
-  step.output = { fixed: secs.map((s) => s.id) };
-}
-
+/** 고치기(수정 요청·[AI에게 고쳐 달라기]): 지금 사이트 전체 + 요청 → AI가 바뀐 파일만(파일 전체) */
 async function runEdit(ctx, step) {
   const rec = ctx.rec;
   const site = rec.site || ctx.project.site;
   if (!site?.['index.html']) throw new AiError('no-site', 'no site');
-  const target = rec.opts.target || 'all';
-  const all = extractSections(site['index.html']);
-  const sections = target === 'all' ? all : all.filter((s) => s.id === target);
-  if (!sections.length) throw new AiError('no-site', 'no section');
+  const fix = rec.kind === 'fix';
+  const request = fix ? P.fixRequest(issuesForAi(step.issues || [])) : rec.opts.request;
   const text = await askStep(ctx, step, {
-    prompt: P.buildEditPrompt({ request: rec.opts.request, target, sections, css: site['assets/style.css'], meta: rec.meta || ctx.project.meta }), maxTokens: 48000,
-    isCut: (t) => { const s = extractSections(extractHtml(t).html); return s.length > 0 && !s[s.length - 1].complete; },
+    prompt: P.buildEditPrompt({ request, target: fix ? '' : rec.opts.target, site, meta: rec.meta || ctx.project.meta }),
+    maxTokens: 64000, isCut: (t) => parseSiteAnswer(t).cut,
   });
-  let got = extractSections(extractHtml(text).html).map((s) => ({ id: s.id, html: s.complete ? s.html : balance(s.html) }));
-  // 섹션 하나를 고칠 때는 그 섹션만 바꿈(다른 섹션을 같이 돌려줘도 버림). id가 다르거나 없는 섹션 하나만 오면 그 섹션으로 봄
-  if (target !== 'all') {
-    const same = got.filter((s) => s.id === target);
-    got = same.length ? same.slice(0, 1) : got.length === 1 ? [{ id: target, html: got[0].id ? got[0].html.replace(/(<section\b[^>]*\bid\s*=\s*)(["'])[^"']*\2/i, `$1$2${target}$2`) : got[0].html.replace(/<section\b/i, `<section id="${target}"`) }] : [];
-  }
-  const secs = got.filter((s) => s.id);
-  const c = extractCss(text.replace(/```html[\s\S]*?(```|$)/gi, '').replace(/```json[\s\S]*?(```|$)/gi, ''));
-  const metaPatch = extractJson((/```json([\s\S]*?)(```|$)/i.exec(text) || [])[1] || '').value;
-  if (!secs.length && !c.css && !metaPatch) throw formatError();
-  const { html } = replaceSections(site['index.html'], secs);
-  const cssAdd = c.css && !/<[a-zA-Z]/.test(c.css) ? `/* 수정 요청 */\n${cssCut(c.css) ? trimCss(c.css) : c.css}` : '';
-  const css = cssAdd ? `${site['assets/style.css'] || ''}\n\n${cssAdd}` : site['assets/style.css'];
-  rec.site = { ...site, 'index.html': html, 'assets/style.css': css };
-  rec.delta = { sections: secs, cssAdd, metaPatch: metaPatch && typeof metaPatch === 'object' ? metaPatch : null };
+  const a = parseSiteAnswer(text);
+  const got = siteFiles(a, rec);
+  const files = {};
+  for (const [k, v] of Object.entries(got)) files[k] = mergeFile(k, site[k], v);
+  if (!Object.keys(files).length && !a.meta) throw formatError();
+  rec.site = { ...site, ...files };
+  const metaPatch = a.meta && typeof a.meta === 'object' ? a.meta : null;
+  rec.delta = { files, metaPatch };
   const prev = rec.meta || ctx.project.meta || {};
-  // 색: 덧붙인 규칙이 앞 규칙을 덮으므로(뒤가 이김) 새 CSS의 값을 먼저
-  const theme = { ...(prev.theme || {}), ...themeFromCss(css), ...(c.css ? themeFromCss(c.css) : {}) };
-  rec.meta = metaPatch && typeof metaPatch === 'object' ? readMeta({ ...prev, ...metaPatch, theme: { ...theme, ...(metaPatch.theme || {}) } }, { prev }).meta : { ...prev, theme };
-  step.output = { changed: secs.map((s) => s.id), css: !!c.css, meta: !!metaPatch };
+  const theme = { ...(prev.theme || {}), ...themeFromCss(allCss(rec.site)) };
+  rec.meta = metaPatch ? readMeta({ ...prev, ...metaPatch, theme: { ...theme, ...(metaPatch.theme || {}) } }, { prev }).meta : { ...prev, theme };
+  step.output = { changed: Object.keys(files), meta: !!metaPatch };
 }
 
 /** 내 PC의 Claude Code·Codex(연결 프로그램)에게 맡김: 사이트 파일 전체를 받아 옴(그림은 blobs 'site/…') */
@@ -534,20 +444,20 @@ async function runAgent(ctx, step) {
   step.bridgeJob = '';
 }
 
-const RUN = { plan: runPlan, design: runDesign, assemble: runAssemble, fix: runFix, edit: runEdit, agent: runAgent };
+const RUN = { build: runBuild, assemble: runAssemble, fix: runEdit, edit: runEdit, agent: runAgent };
 
 /** 끝: 연수에 site·meta·versions·gen 저장 */
 async function finish(ctx) {
   const rec = ctx.rec;
   const at = Date.now();
   const issues = rec.steps.filter((s) => s.name === 'assemble').pop()?.output?.issues || [];
-  // 수정·고치기: 그동안 강사가 다른 섹션을 고쳤을 수 있어 지금 사이트에 바뀐 섹션·덧붙인 CSS만 얹음
+  // 수정·고치기: 그동안 강사가 다른 파일을 고쳤을 수 있어 지금 사이트에 AI가 바꾼 파일만 얹음
   const merged = (cur) => {
     if (rec.kind === 'make' || !rec.delta || !cur.site?.['index.html']) return { site: rec.site, meta: rec.meta };
     const d = rec.delta;
-    const site = { ...cur.site, 'index.html': replaceSections(cur.site['index.html'], d.sections || []).html, ...(d.cssAdd ? { 'assets/style.css': `${cur.site['assets/style.css'] || ''}\n\n${d.cssAdd}` } : {}) };
+    const site = { ...cur.site, ...(d.files || {}) };
     const prev = cur.meta || {};
-    const theme = { ...(prev.theme || {}), ...themeFromCss(site['assets/style.css'] || ''), ...(d.cssAdd ? themeFromCss(d.cssAdd) : {}) };
+    const theme = { ...(prev.theme || {}), ...themeFromCss(allCss(site)) };
     const meta = d.metaPatch ? readMeta({ ...prev, ...d.metaPatch, theme: { ...theme, ...(d.metaPatch.theme || {}) } }, { prev }).meta : { ...prev, theme };
     return { site, meta };
   };
@@ -620,7 +530,7 @@ async function drive(pid) {
       const step = rec.steps.find((s) => s.status !== 'done');
       if (!step) break;
       step.status = 'running'; step.startedAt = step.startedAt || Date.now(); step.error = null; await save(rec);
-      const fn = step.name.startsWith('sections:') ? runSections : RUN[step.name];
+      const fn = RUN[step.name];
       try { await fn(ctx, step); } catch (e) {
         if (e?.name === 'AbortError' || signal.aborted) throw e;
         // 형식 오류는 그 단계를 한 번 더(처음부터)

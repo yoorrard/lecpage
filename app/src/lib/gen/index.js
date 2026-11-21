@@ -12,7 +12,7 @@ import { chatDb } from './store.js';
 import * as P from './prompts.js';
 import { parseChatAnswer, extractHtml, extractSections, extractCss, replaceSections, stitch, htmlCut, trimCss } from './parse.js';
 import { readMeta, themeFromCss } from './kit.js';
-import { sourceFiles } from './material.js';
+import { sourceFiles, preparePageImages } from './material.js';
 
 export { bridgeStatus } from './local.js';
 export { assembleProject } from './preview.js';
@@ -143,7 +143,8 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
     return { ok: false, problems: [CUT], continuePrompt: P.buildContinuePrompt(a.html) };
   }
   const { html, css } = splitStyles(a.html);
-  const site = { 'index.html': html, ...(css ? { 'assets/style.css': css } : {}) };
+  // 고친 사이트 전체가 오면 지금 사이트의 다른 파일(JS·다른 쪽)은 그대로 두고 받은 것만 바꿈
+  const site = { ...(edit ? p.site : {}), 'index.html': html, ...(css ? { 'assets/style.css': css } : {}) };
   const titleTag = (/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || '';
   // 고친 사이트 전체가 왔는데 연수 정보가 없으면 지금 연수 정보를 그대로(새로 만들 때만 제목으로 시작)
   const raw = a.meta || (edit ? { ...(p.meta || {}) } : { title: titleTag.trim() });
@@ -154,6 +155,7 @@ export async function acceptChatAnswer(pid, input, { target = '' } = {}) {
     ...(r.meta.sessions?.some((s) => s?.date) ? [] : ['답에 연수 날짜가 없어요. 연수 정보에서 넣어 주세요.']),
     ...r.warnings.filter((w) => w.code !== 'teacher-value' && w.code !== 'title-empty').slice(0, 3).map((w) => w.message_ko),
   ];
+  if (!edit) await preparePageImages(pid, p, {}).catch(() => null); // 답이 교재 쪽 그림(material/p-NNN.webp)을 쓸 수 있게
   const saved = await saveSite(pid, site, r.meta, edit ? 'edit' : 'make', problems);
   await chatDb.del(pid).catch(() => { });
   return { ok: true, site: saved.site, meta: saved.meta, problems, issues: saved.issues };
@@ -192,9 +194,9 @@ export async function chatEditPrompt(pid, { target = 'all', request = '' } = {})
   const p = await projects.get(pid);
   const html = p?.site?.['index.html'] || '';
   const all = extractSections(html);
-  const sections = target === 'all' ? all : all.filter((s) => s.id === target);
+  if (!all.length && !html) return '';
   await chatDb.put({ pid, mode: 'edit', target, partial: '', at: Date.now() }).catch(() => { });
-  return P.buildChatEditPrompt({ request, target, sections, css: target === 'all' ? '' : p?.site?.['assets/style.css'] || '' });
+  return P.buildChatEditPrompt({ request, target, site: p?.site || {} });
 }
 
 // 마지막 검수 결과(이 탭): fixIssues가 key로 찾음
@@ -209,15 +211,15 @@ export async function runInspect(pid) {
 }
 
 /**
- * 검수 문제를 AI에게. ids: issue.key(하나) 또는 issue.id(그 종류 전부), 비우면 꼭 고칠 곳 전부.
- * 키로 연결한 AI는 섹션이 정해진 문제만 그 섹션을 고치고(없으면 '' → 화면이 수정 요청으로), 내 PC의 에이전트는 사이트 전체에서 고침
+ * 검수 문제를 AI에게([AI에게 고쳐 달라기]를 누를 때만). ids: issue.key(하나) 또는 issue.id(그 종류 전부), 비우면 꼭 고칠 곳 전부.
+ * AI가 지금 사이트 전체와 문제 목록을 보고 바뀐 파일만 돌려줌(키·내 PC 모두)
  * @returns {Promise<string>} jobId 또는 ''
  */
 export async function fixIssues(pid, ids = [], { way = 'key', provider, model, agent } = {}) {
   const p = await projects.get(pid);
   const all = lastIssues.get(pid) || p?.inspect?.issues || [];
   const picked = ids.length ? all.filter((i) => ids.includes(i.key) || ids.includes(i.id)) : all.filter((i) => i.level === 'error');
-  const issues = way === 'local' ? picked : picked.filter((i) => i.where?.section);
+  const issues = picked;
   if (!issues.length) return '';
   const r = await startJob(pid, 'fix', { issues, way, provider, model, agent });
   return r.jobId;

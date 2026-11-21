@@ -9,7 +9,6 @@ const SPOTS = {
   'ai:openai': { name: 'OpenAI API', url: 'https://api.openai.com/healthz', cors: false },
   'ai:anthropic': { name: 'Claude API', url: 'https://api.anthropic.com/api/hello', cors: false }, // 키 없이 200. 브라우저 허용 머리글 없이는 CORS 머리글을 주지 않음
   // 공개 API 설명서(키 없이 200, 출처를 그대로 CORS로 줌). 머리글만 받고 끊음
-  'ai:gemini': { name: 'Gemini API', url: 'https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta', cors: true },
   'ai:openrouter': { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1/models?limit=1', cors: true },
   'host:vercel': { name: 'Vercel', url: 'https://api.vercel.com/v2/user', cors: true },
   'host:github-pages': { name: 'GitHub', url: 'https://api.github.com/zen', cors: true },
