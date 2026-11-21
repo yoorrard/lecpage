@@ -190,7 +190,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
             {DEVICES.map((x) => <button type="button" aria-pressed={String(d.value === x.value)} onClick={() => setDevice(x.value)} title={x.w ? `${x.label} ${x.w}×${x.h}` : '미리보기 크기 그대로'}><Icon name={x.icon} /><span class="pv-label">{x.label}</span></button>)}
           </div>
           <button type="button" class="icon-btn" disabled={!d.rotate} aria-pressed={String(!!turned)} onClick={() => setLand(!land)} aria-label="가로로 돌리기" title={d.rotate ? (turned ? '세로로 보기' : '가로로 보기') : '태블릿·휴대폰에서 돌려 볼 수 있어요'}><Icon name="rotate" /></button>
-          <span class="pv-size">{vw ? `${vw} × ${vh}` : ''}{box.w ? <span class="pv-zoom"> · {Math.round(scale * 100)}%</span> : ''}</span>
+          <span class="pv-size" aria-hidden="true" />
           <button type="button" class="icon-btn pv-full" aria-pressed={String(full)} onClick={() => setFull(!full)} aria-label={full ? '작게 보기' : '크게 보기'} title={full ? '작게 보기(Esc)' : '크게 보기'}><Icon name={full ? 'shrink' : 'expand'} /></button>
         </div>
         <div class={`pv-canvas ${fit ? 'is-fit' : ''}`} ref={canvas}>

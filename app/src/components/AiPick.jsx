@@ -4,13 +4,13 @@ import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { aiStatus, getActiveAI, setActive, forgetKey, CHATBOTS, setChatbot, setWay } from '../lib/ai.js';
 import { startGeneration, chatPrompt, acceptChatAnswer } from '../lib/studio.js';
 import { SubscriptionWay, ConnBadge, CodexRow } from './PcConnect.jsx';
-import { setPreferred } from '../lib/connection.js';
+import { setPreferred, askConsent } from '../lib/connection.js';
 import { startDemo } from '../lib/demo.js';
 import { SKILL_CMDS } from '../lib/agent.js';
 import { blobs } from '../lib/db.js';
 import { copy, toast, saveFile } from '../lib/util.js';
 
-// AI 선택(docs/plan-ai-first.md §2·§7·§10). 모두에게 첫째: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천 — PC 프로그램, PcConnect.jsx).
+// AI 선택(docs/plan-ai-first.md §2·§7·§10). 모두에게 첫째: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천 — lecpage 커넥트, PcConnect.jsx).
 // 그 아래: 설치 없이 하려면 쓰던 AI로(복사·붙여넣기, 학교 PC 등). 접힌 '다른 방법': API 키(GPT·Claude 카드)·Codex·AI 에이전트(Skill).
 export const AI_CARDS = [
   { id: 'openai', name: 'GPT', by: 'OpenAI', bot: 'chatgpt', app: 'ChatGPT', key: '키를 한 번 붙여 넣어요. 쓴 만큼 결제(사이트 하나에 몇백 원)', chat: 'ChatGPT 창에 붙여 넣고 답을 가져와요. 무료 요금제도 돼요' },
@@ -52,6 +52,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
   async function make(provider, st = conn?.[provider]) {
     if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 키 없이, 이 교재로 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
+    if (!await askConsent(`key:${provider}`)) return; // 처음 한 번: 동의 → 바로 키 넣기
     if (!st) { afterKey.current = true; setKeyFor(provider); return; }
     await setActive(provider, {}); setWay('key'); setPreferred('key');
     await idle();
@@ -77,7 +78,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
       <div class="ai-pick-head">
         <h2 class="h-sub" id="ai-pick-h">AI 선택</h2>
         <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
-        <ConnBadge demo={!!p.demo} />
+        <ConnBadge demo={!!p.demo} hint={false} />
       </div>
       {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
       <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
@@ -107,7 +108,7 @@ export function AiPick({ p, go, idle, reload, ready }) {
         <CodexRow p={p} ready={ready} idle={idle} go={go} />
         <div class="ai-alts"><AgentWay /></div>
       </details>
-      <p class="small muted">교재가 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요. API 키는 이 브라우저에서, 계정 연결은 이 PC에서 AI 회사로만 가요.</p>
+      <p class="small muted">교재는 고른 AI 회사로 가요. 학생 이름 같은 개인정보는 지우고 넣어 주세요.</p>
       <Dialog open={!!keyFor} onClose={() => { setKeyFor(''); afterKey.current = false; }} label={`${AI_CARDS.find((c) => c.id === keyFor)?.name || ''} API 키 연결`} wide>
         {keyFor && <div class="stack"><h2 class="h-sub" tabIndex={-1} data-autofocus>{AI_CARDS.find((c) => c.id === keyFor)?.name} API 키 연결 <span class="small muted">처음 한 번만</span></h2>
           <AiConnect initial={keyFor} only onConnected={connected} onChat={(prov) => { setKeyFor(''); afterKey.current = false; openChat(prov || keyFor); }} /></div>}

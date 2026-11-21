@@ -8,6 +8,7 @@ import { endDemo, openDemo } from '../lib/demo.js';
 import { isV2, isLegacy } from '../lib/site-meta.js';
 import { Mascot } from '../components/Mascot.jsx';
 import { Dialog } from '../components/ui.jsx';
+import { ConsentHost } from '../components/Consent.jsx';
 import { StepStart } from './steps/Start.jsx';
 import { StepMake } from './steps/Make.jsx';
 import { StepShare } from './steps/Share.jsx';
@@ -151,6 +152,7 @@ export function Project({ id, step }) {
         <div class="btn-row"><button class="btn btn-primary" data-autofocus onClick={() => saveProjectFile(withKeys)}>저장</button><button class="btn btn-quiet" onClick={() => setSaveAsk(false)}>닫기</button></div>
       </Dialog>
       <div class="wiz-main">{legacy && s > 1 ? <LegacyNote p={p} go={go} /> : <cur.C key={gen} {...ctx} />}</div>
+      <ConsentHost />
     </div>
   );
 }

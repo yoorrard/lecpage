@@ -1,4 +1,4 @@
-// 내 PC 연결 프로그램(lecpage studio, scripts/studio.mjs) 시험.
+// lecpage 커넥트(lecpage Connect, 예전 이름 lecpage studio, scripts/studio.mjs) 시험.
 // 진짜 claude·codex 대신 PATH 앞에 둔 가짜(fixtures/fake-agent.mjs)로 끝까지: 띄우기 → 토큰·Origin·Host 거절 → status →
 // jobs(교재 PDF) → events → result(site·meta·issues) → DELETE·임시 폴더 지움 → 시간 한도·멈추기. 포트는 6600~6649만 씀.
 import { test, before, after } from 'node:test';
@@ -36,11 +36,11 @@ before(() => {
 });
 after(() => { for (const p of procs) { try { p.kill('SIGTERM'); } catch { /* 끝남 */ } } rmSync(T, { recursive: true, force: true }); });
 
-/** 연결 프로그램 띄우기 → { port, url, p } */
-async function launch(env = {}, args = ['--dist', DIST]) {
-  // NODE_USE_ENV_PROXY: 프록시 환경에서 CLI가 자기를 다시 띄우지 않게(시험이 끄는 프로세스 = 연결 프로그램)
+/** lecpage 커넥트 띄우기 → { port, url, p }. cmd: connect(새 이름) 또는 studio(예전 이름) */
+async function launch(env = {}, args = ['--dist', DIST], cmd = 'studio') {
+  // NODE_USE_ENV_PROXY: 프록시 환경에서 CLI가 자기를 다시 띄우지 않게(시험이 끄는 프로세스 = lecpage 커넥트)
   // 짝 맞춤 토큰·ChatGPT 자격 폴더는 띄울 때마다 새 임시 폴더(실제 사용자 폴더를 건드리지 않게)
-  const p = spawn(process.execPath, [CLI, 'studio', '--no-open', '--json', ...args], { env: { ...process.env, NODE_USE_ENV_PROXY: '1', PATH: `${BIN}:${process.env.PATH}`, FAKE_AGENT_LOG: LOG, LECPAGE_STUDIO_SHOTS: '0', LECPAGE_STUDIO_HOME: mkdtempSync(join(T, 'home-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const p = spawn(process.execPath, [CLI, cmd, '--no-open', '--json', ...args], { env: { ...process.env, NODE_USE_ENV_PROXY: '1', PATH: `${BIN}:${process.env.PATH}`, FAKE_AGENT_LOG: LOG, LECPAGE_STUDIO_SHOTS: '0', LECPAGE_STUDIO_HOME: mkdtempSync(join(T, 'home-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   procs.push(p);
   let err = '';
   p.stderr.on('data', (d) => { err += d; });
@@ -198,8 +198,8 @@ test('단계 줄이기: claude stream-json·codex JSONL → 사람이 읽을 단
 });
 
 // ── 띄워서 끝까지 ─────────────────────────────────────────────────────────
-test('띄우기 → 앱 파일(토큰 넣기·_headers·경로 막기) → 거절(토큰·Origin·Host) → status', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만' }, async () => {
-  const st = await launch();
+test('띄우기(새 이름 connect) → 앱 파일(토큰 넣기·_headers·경로 막기) → 거절(토큰·Origin·Host) → status', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만' }, async () => {
+  const st = await launch({}, ['--dist', DIST], 'connect');
   const { port } = st;
   assert.equal(st.app, 'dist');
   assert.equal(st.url, `http://127.0.0.1:${port}/`);

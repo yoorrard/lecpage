@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Seg, Dialog } from '../components/ui.jsx';
 import { AiConnect } from '../components/AiConnect.jsx';
+import { ConsentHost } from '../components/Consent.jsx';
 import { PROVIDERS, loadKey, forgetKey } from '../lib/ai.js';
 import { storageInfo, askPersist, projects } from '../lib/db.js';
 import { exportProjectFile } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
 import { HostConnect, KIND } from '../components/Publish.jsx';
 import { StatsSetting } from '../components/StatsSetting.jsx';
+import { ConnBadge } from '../components/PcConnect.jsx';
+import { forgetConsents, bridgeAvailable } from '../lib/connection.js';
 
 export function Settings() {
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('lecpage:theme') || 'auto'; } catch { return 'auto'; } });
@@ -16,8 +19,6 @@ export function Settings() {
   const [ai, setAi] = useState(false);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
   const anyAi = Object.values(keys).some((k) => k?.key);
-  const [adv, setAdv] = useState(() => { try { return localStorage.getItem('lecpage:advanced') === '1'; } catch { return false; } });
-  const toggleAdv = (v) => { setAdv(v); try { localStorage.setItem('lecpage:advanced', v ? '1' : '0'); } catch { } toast(v ? '고급 기능을 켰어요.' : '고급 기능을 껐어요.'); };
   useEffect(() => { (async () => { await reloadKeys(); setSt(await storageInfo()); })(); window.addEventListener('lecpage:ai-connected', reloadKeys); return () => window.removeEventListener('lecpage:ai-connected', reloadKeys); }, []);
   const applyTheme = (t) => { setTheme(t); document.documentElement.dataset.theme = t; try { localStorage.setItem('lecpage:theme', t); } catch { } };
   async function exportAll() {
@@ -29,6 +30,7 @@ export function Settings() {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
     for (const p of await projects.all()) await projects.remove(p.id);
     for (const k of [...Object.keys(PROVIDERS), ...Object.values(KIND).map((x) => 'deploy-' + x)]) await forgetKey(k);
+    forgetConsents();
     toast('이 브라우저의 lecpage 데이터를 모두 지웠어요.'); setConfirmDel(false); setSt(await storageInfo());
   }
   return (
@@ -37,24 +39,24 @@ export function Settings() {
       <section>
         <h2 class="h-sub">화면</h2>
         <Seg label="화면 밝기" value={theme} onChange={applyTheme} options={[{ value: 'auto', label: '기기 설정' }, { value: 'light', label: '밝게' }, { value: 'dark', label: '어둡게' }]} />
-        <label class="check"><input type="checkbox" checked={adv} onChange={(e) => toggleAdv(e.target.checked)} /><span>고급 기능 보기 <span class="small muted">섹션 내용을 JSON으로 고치기, 효과 이름 보기 등</span></span></label>
       </section>
       <section>
         <h2 class="h-sub">연결</h2>
-        <p class="small muted">한 번 연결해 두면 버튼 하나로 만들고 배포해요.</p>
         <h3 class="h-label">AI</h3>
+        {bridgeAvailable() && <ConnBadge />}
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
             <li><span><b>{v.name}</b> <span class="small muted">{keys[id].remembered ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만'}</span></span>
               <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 해제했어요.'); }}>연결 해제</button></li>
           ))}
-          <li><span>{anyAi ? <span class="small muted">다른 AI</span> : <><b>AI</b> <span class="small muted">연결 안 됨</span></>}</span>
-            <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : '연결'}</button></li>
+          <li><span><b>API 키</b> <span class="small muted">{anyAi ? '다른 회사 키' : '연결 안 됨'}</span></span>
+            <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : 'API 키 연결'}</button></li>
         </ul>
-        <p class="small muted">쓰던 AI(ChatGPT·Claude)로 만들 때는 연결하지 않아도 돼요.</p>
-        <h3 class="h-label">배포할 곳</h3>
-        <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
-        <p class="small muted">Cloudflare와 기관 서버는 토큰 없이 파일을 옮겨요. <a href="#/help/deploy">배포하는 법</a></p>
+        <p class="small muted">ChatGPT·Claude 계정 연결은 연수 화면의 AI 선택에서 해요. 쓰던 AI로 만들 때는 연결하지 않아도 돼요.</p>
+        <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Vercel · GitHub Pages · Netlify</span></summary>
+          <p class="small muted">바로 배포는 연결 없이 돼요. 내 계정의 다른 곳에 배포할 때만 연결해요. <a href="#/help/deploy">배포하는 법</a></p>
+          <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
+        </details>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>
         <div class="stack"><h2 class="h-sub">AI 연결</h2>{ai && <AiConnect onConnected={async () => { setAi(false); await reloadKeys(); }} />}</div>
@@ -70,6 +72,7 @@ export function Settings() {
         <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
+      <ConsentHost />
     </div>
   );
 }

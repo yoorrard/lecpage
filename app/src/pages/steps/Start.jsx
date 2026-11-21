@@ -132,7 +132,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
   const running = job.status === 'running' || job.status === 'paused';
   return (
     <>
-      <StepHead title={has ? '교재와 AI' : '교재를 넣고 AI를 선택해요'} desc="PPT·PDF·한글(HWP·HWPX)·워드 파일을 이 브라우저 안에서 읽고, 고른 AI가 교재를 직접 읽어 사이트를 만들어요.">
+      <StepHead title={has ? '교재와 AI' : '교재를 넣고 AI를 선택해요'} desc="PPT·PDF·한글(HWP·HWPX)·워드 파일을 넣고, 아래에서 사이트를 만들 AI를 골라요.">
         {!has && !p.files?.length && !p.demo && <a class="btn btn-sm" href="#/demo">먼저 해보기</a>}
         {has && <button type="button" class="btn btn-primary" onClick={() => go(2)}>미리보기·수정 →</button>}
       </StepHead>
