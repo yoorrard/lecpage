@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { startGeneration } from '../lib/studio.js';
 import { startDemo } from '../lib/demo.js';
-import { chatgptLogin, chatgptLogout, chatgptWelcomeSeen, agentAction, agentSetup, setupStatus, setupCode, setupCancel, autostart, lnaPermission, pcOrigin, isSafari } from '../lib/gen/local.js';
+import { chatgptLogin, chatgptLogout, chatgptWelcomeSeen, agentAction, agentSetup, setupStatus, setupCode, setupCancel, autostart, lnaPermission, pcOrigin, isSafari, findUnpairedPc, pairPageUrl } from '../lib/gen/local.js';
 import { Notice } from './ui.jsx';
 import { useConnection, refreshPc, setPreferred, jobOpts, connLine, DOWNLOAD, osName, waitForPairing, preferred, askConsent, hasConsent, consentId, pcCan, pcCanUpdate, usePcUpdate, updatePc } from '../lib/connection.js';
 import { exportProjectFile } from '../lib/project.js';
@@ -170,11 +170,39 @@ export function SubscriptionWay({ p, ready, idle, go }) {
 
       : <div class="stack" style={{ gap: '8px' }}>
         {!open ? <div class="btn-row"><button type="button" class={`btn${p.demo ? '' : ' btn-primary'}`} onClick={() => (p.demo ? make({ id: 'demo', label: '' }) : setOpen(true))}>ChatGPT·Claude 계정으로 연결</button><span class="small muted">작은 프로그램 lecpage 커넥트를 한 번 설치해요.</span></div> : download}
-        {isSafari() && <p class="small muted">Safari는 lecpage 커넥트가 여는 화면(127.0.0.1)에서 이어서 해요.</p>}
+        {isSafari() ? <p class="small muted">Safari는 lecpage 커넥트가 여는 화면(127.0.0.1)에서 이어서 해요.</p> : open && <PairHere />}
       </div>}
       {welcome && <div class="notice" role="status"><b>ChatGPT 요금제를 쓰고 있어요.</b> lecpage에서 보내는 요청은 ChatGPT 요금제 사용량에 들어가요. 사용량과 앱 연결은 ChatGPT 설정에서 관리해요. <button type="button" class="btn btn-sm" onClick={() => setWelcome(false)}>닫기</button></div>}
     </article>
   );
+}
+
+/**
+ * 받기 안내를 연 뒤 이 화면이 그대로일 때(15초 뒤 한 줄): 커넥트가 연 브라우저가 기본 브라우저가 아니면 다른 브라우저와 짝을 맞춤 →
+ * [이 브라우저와 연결]: 이 PC에 켜진 커넥트를 찾아(누를 때만: Chrome이 로컬 네트워크 접근을 물을 수 있음) 새 창으로 커넥트의 /pair를 엶 →
+ * 그 창이 짝을 기억하고 닫히며 이 탭이 이어 받음(waitForPairing)
+ */
+function PairHere() {
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setShow(true), 15000); return () => clearTimeout(t); }, []);
+  if (!show) return null;
+  async function pairHere() {
+    let w = null; try { w = window.open('', '_blank'); } catch { w = null; } // 누른 순간 새 창(팝업 막힘 피하기), 주소는 찾은 뒤에
+    if (!w) { toast('새 창이 막혔어요. 주소창에서 팝업을 허용하고 다시 눌러 주세요.'); return; }
+    setBusy(true);
+    const perm = await lnaPermission();
+    const port = perm === 'denied' ? 0 : await findUnpairedPc({ wait: perm === 'prompt' ? 60e3 : 1500 });
+    setBusy(false);
+    if (!port) {
+      try { w.close(); } catch { /* 넘김 */ }
+      toast(perm === 'denied' ? '이 브라우저가 로컬 네트워크 접근을 막았어요. 사이트 설정에서 허용해 주세요.' : 'lecpage 커넥트를 찾지 못했어요. 켜져 있는지 확인해 주세요.');
+      return;
+    }
+    try { w.opener = null; } catch { /* 넘김 */ }
+    w.location.href = pairPageUrl(port);
+  }
+  return <p class="small muted pair-here">lecpage 커넥트를 켰는데 이 화면이 그대로인가요? 다른 브라우저에 lecpage가 열렸다면 그 창에서 이어서 하거나, <button type="button" class="btn-link small" disabled={busy} aria-busy={busy ? 'true' : undefined} onClick={pairHere}>이 브라우저와 연결</button>을 눌러요.</p>;
 }
 
 /** lecpage 커넥트가 이 화면보다 예전 판: 스스로 바꿀 수 있으면 버튼 하나(받아 바꾸고 같은 연결로 다시 켜짐), 아니면 다시 켜는 법 */
@@ -380,6 +408,7 @@ export function CodexRow({ p, ready, idle, go }) {
   if (pc.state !== 'on') return null;
   const a = (pc.status?.agents || []).find((x) => x.id === 'codex') || {};
   const c = list.find((x) => x.id === 'codex');
+  const old = !!a.installed && a.need === 'install'; // 깔려 있지만 lecpage가 쓰기엔 예전 판
   async function act() {
     if (c && !ready) { toast('교재를 먼저 넣어 주세요.'); return; }
     if (!p.demo && !await askConsent('codex')) return;
@@ -387,12 +416,13 @@ export function CodexRow({ p, ready, idle, go }) {
       setPreferred('codex');
       await idle(); startGeneration(p.id, { ...jobOpts(c), request: p.request || '', reference: p.reference || '' }); go(2); return;
     }
-    try { const r = await agentAction('codex', !a.installed ? 'install' : 'login'); toast(r.ok ? '터미널 창에서 진행해 주세요. 끝나면 [Codex로 만들기]가 켜져요.' : r.message_ko || ''); setTimeout(() => refreshPc({ fresh: true }), 4000); } catch (e) { toast(e?.message || 'lecpage 커넥트에 닿지 못했어요. lecpage 커넥트가 켜져 있는지 확인해 주세요.'); }
+    // 너무 예전 판(need 'install'): Codex는 따로 업데이트 명령이 없어 공식 설치 명령으로 새 판을 받음(lecpage 커넥트가 설치 + 로그인)
+    try { const r = await agentAction('codex', !a.installed || old ? 'install' : 'login'); toast(r.ok ? '터미널 창에서 진행해 주세요. 끝나면 [Codex로 만들기]가 켜져요.' : r.message_ko || ''); setTimeout(() => refreshPc({ fresh: true }), 4000); } catch (e) { toast(e?.message || 'lecpage 커넥트에 닿지 못했어요. lecpage 커넥트가 켜져 있는지 확인해 주세요.'); }
   }
   return (
     <div class="ai-alt-row">
-      <div><b>Codex</b> <span class="small muted">{c ? '연결됨' : a.installed ? '로그인이 필요해요' : 'ChatGPT 계정으로 충분해서 없어도 돼요'}</span></div>
-      <button type="button" class="btn btn-sm" disabled={!!c && !ready} onClick={act}>{c ? 'Codex로 만들기' : a.installed ? 'Codex 로그인' : 'Codex 설치'}</button>
+      <div><b>Codex</b> <span class="small muted">{c ? '연결됨' : old ? '새 버전이 필요해요' : a.installed ? '로그인이 필요해요' : 'ChatGPT 계정으로 충분해서 없어도 돼요'}</span></div>
+      <button type="button" class="btn btn-sm" disabled={!!c && !ready} onClick={act}>{c ? 'Codex로 만들기' : old ? '업데이트' : a.installed ? 'Codex 로그인' : 'Codex 설치'}</button>
     </div>
   );
 }

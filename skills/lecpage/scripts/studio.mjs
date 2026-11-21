@@ -93,8 +93,10 @@ export function pairToken(home, { fresh = false } = {}) {
   } catch { /* 저장 못 하면 이번 실행만 */ }
   return token;
 }
-/** /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표) */
-export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'http://localhost:5173', 'http://localhost:4173'];
+/** 예비 주소(GitHub Pages 미러, docs/operations.md): lecpage.com 장애 때 안내하는 곳. 출처는 https://yoorrard.github.io 정확히 하나 */
+export const MIRROR_APP_URL = 'https://yoorrard.github.io/lecpage';
+/** /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 예비 주소 + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표) */
+export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', new URL(MIRROR_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
 export function allowedOrigins(self, env = process.env) {
   const extra = String(env.LECPAGE_STUDIO_ORIGINS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter((x) => /^https?:\/\/[^/\s]+$/.test(x));
   return new Set([self, ...APP_ORIGINS, ...extra]);
@@ -683,6 +685,8 @@ export function safeName(name) {
   if (/^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(n)) n = '_' + n;
   return n;
 }
+/** 교재 개수(한도용): 이름이 같은 원본과 PDF(예: 강의.pptx + 이 PC의 PowerPoint로 만든 강의.pdf)는 하나 */
+export const materialItems = (names) => new Set(names.map((n) => String(n).normalize('NFC').replace(/\.[^.]+$/, '').toLowerCase())).size;
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const b64 = (s) => Buffer.from(String(s || '').replace(/^data:[^,]*,/, ''), 'base64');
 
@@ -698,7 +702,9 @@ export async function validateJob(body) {
   if (request.length > LIMITS.request) return bad(`요청 글이 너무 길어요(${LIMITS.request}자까지).`);
   const reference = typeof body.reference === 'string' ? body.reference : body.reference ? JSON.stringify(body.reference) : '';
   const files = Array.isArray(body.files) ? body.files : [];
-  if (files.length > LIMITS.files) return bad(`교재는 한 번에 ${LIMITS.files}개까지 넣을 수 있어요.`);
+  // 교재 개수: 원본과 커넥트가 만든 같은 이름의 PDF(앱이 함께 보냄)는 하나로 셈(아래 items). 받는 파일 수 자체는 그 두 배까지
+  const tooMany = () => bad(`교재는 한 번에 ${LIMITS.files}개까지 넣을 수 있어요.`);
+  if (files.length > LIMITS.files * 2) return tooMany();
   const materials = [], photos = [], used = new Set(); let total = 0;
   for (const f of files) {
     if (!isObj(f) || typeof f.base64 !== 'string') return bad('files의 항목은 { name, type, base64 }예요.');
@@ -714,6 +720,7 @@ export async function validateJob(body) {
     if (PHOTO_EXT.has(ext.slice(1).toLowerCase())) photos.push({ name: n.replace(/[^\w가-힣.\-() ]/g, '-'), bytes }); // 사이트 그림 이름 규칙(kit/paths.js)
     else materials.push({ name: n, bytes });
   }
+  if (materialItems(materials.map((m) => m.name)) + photos.length > LIMITS.files) return tooMany();
   if (kind === 'make' && !materials.length) return bad('교재 파일(PDF·PPTX·HWP 등)을 하나 이상 넣어 주세요.');
   const { siteFileOk } = await imp('src/kit/paths.js');
   const site = {};
@@ -1018,25 +1025,52 @@ const UPDATE_ERRORS = {
   busy: '만드는 중이거나 연결하는 중이에요. 끝난 뒤에 바꿔요.',
   network: '새 판을 받지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.',
   sha256: '받은 파일 확인(SHA-256)에 실패했어요. 잠시 뒤 다시 시도해 주세요.',
+  package: '받은 새 판 파일이 올바르지 않아요. 잠시 뒤 다시 시도해 주세요.',
+  disk: '저장 공간이 부족해 새 판을 풀지 못했어요. 공간을 비운 뒤 다시 시도해 주세요.',
   files: '파일을 바꾸지 못했어요. lecpage 커넥트를 끄고 다시 켜 주세요(켤 때 새 판을 받아요).',
 };
+/** 새 판 받기·바꾸기 실패 → UPDATE_ERRORS의 이름. 망(받기·HTTP·시간 초과) · SHA-256 · 묶음이 이상함 · 저장 공간 · 파일 바꾸기(이 PC 파일 오류) */
+export function updateErrorCode(e) {
+  const c = String(e?.code ?? '');
+  if (c === 'sha256') return 'sha256';
+  if (['tar', 'package', 'size', 'version'].includes(c) || /^(Z_|ERR_BUFFER|ERR_OUT_OF_RANGE)/.test(c)) return 'package';
+  if (c === 'ENOSPC') return 'disk';
+  if (/^E[A-Z]+$/.test(c) && e?.syscall) return 'files';
+  return 'network';
+}
 const updateView = (S) => ({ can: S.canUpdate, build: S.build, latest: S.upd.latest, available: !!S.upd.latest && S.upd.latest !== S.build, state: S.upd.state, to: S.upd.to || '', ...(S.upd.state === 'error' ? { error: S.upd.error, error_ko: UPDATE_ERRORS[S.upd.error] || UPDATE_ERRORS.network } : {}) });
-/** 지금 무언가 돌고 있는지(작업·연결·설치·ChatGPT 요청·교재 바꾸기) */
-const busyNow = (S) => S.starting || [...S.jobs.values()].some((j) => j.active) || !!S.setup?.view().running || !!S.term?.view?.().running || S.inflight > 0;
+/** 끝났는데 앱이 결과를 아직 받아 가지 않은 작업(6시간 안). 다시 켜면 메모리의 결과가 없어짐 */
+const UNCOLLECTED_MS = 6 * 3600e3;
+const uncollected = (S) => [...S.jobs.values()].some((j) => !j.active && j.result && !j.collected && Date.now() - (j.endedAt || 0) < UNCOLLECTED_MS);
+/**
+ * 지금 무언가 돌고 있는지(작업·연결·설치·ChatGPT 요청·교재 바꾸기). results: 받아 가지 않은 결과도 셈(저절로 바꿀 때:
+ * 앱이 닫혀 있는 동안 끝난 작업의 결과를 다시 켜며 잃지 않게. 사람이 누른 [새 버전으로 바꾸기]는 그대로 바꿈)
+ */
+const busyNow = (S, { results = false } = {}) => S.starting || [...S.jobs.values()].some((j) => j.active) || !!S.setup?.view().running || !!S.term?.view?.().running || S.inflight > 0 || (results && uncollected(S));
 async function checkLatest(S, { force = false } = {}) {
   if (!force && S.upd.latest && Date.now() - S.upd.checkedAt < 10 * 60e3) return S.upd.latest;
   const v = await latestBuild({ base: S.release.base, fetchImpl: S.release.fetchImpl });
   S.upd.latest = v; S.upd.checkedAt = Date.now();
   return v;
 }
-/** → { started } | { upToDate } | { error } */
-async function startUpdate(S, { auto = false } = {}) {
+/**
+ * → { started } | { upToDate } | { error }. 한 번에 하나: 확인하는 동안(await) 또 부르면(저절로 + 사람이 누름, 두 번 누름) 같은 약속을 돌려줌
+ * (둘 다 받아 바꾸면 두 번째가 예전 판 보관(<폴더>.old)을 새 판으로 덮어 되돌리기가 깨짐)
+ */
+function startUpdate(S, o = {}) {
+  if (S.updStarting) return S.updStarting;
+  const p = startUpdateOnce(S, o);
+  S.updStarting = p;
+  p.then(() => { if (S.updStarting === p) S.updStarting = null; }, () => { if (S.updStarting === p) S.updStarting = null; });
+  return p;
+}
+async function startUpdateOnce(S, { auto = false } = {}) {
   if (!S.canUpdate) return { error: 'unavailable' };
   if (UPDATING.has(S.upd.state)) return { started: true };
-  if (busyNow(S)) return { error: 'busy' };
-  let latest; try { latest = await checkLatest(S, { force: true }); } catch { S.upd = { ...S.upd, state: 'error', error: 'network' }; return { error: 'network' }; }
+  if (busyNow(S, { results: auto })) return { error: 'busy' };
+  let latest; try { latest = await checkLatest(S, { force: true }); } catch (e) { const code = updateErrorCode(e); S.upd = { ...S.upd, state: 'error', error: code }; return { error: code }; }
   if (latest === S.build) { S.upd = { ...S.upd, state: 'idle', error: '' }; return { upToDate: true }; }
-  if (busyNow(S)) return { error: 'busy' };
+  if (busyNow(S, { results: auto })) return { error: 'busy' };
   S.upd = { ...S.upd, state: 'download', error: '', to: latest };
   S.log(`lecpage 커넥트 새 판(${latest})을 받아요${auto ? '(쓰지 않는 동안 저절로)' : ''}`);
   applyUpdate({ root: S.root, base: S.release.base, fetchImpl: S.release.fetchImpl, onStage: (st) => { S.upd.state = st; } }).then((r) => {
@@ -1044,7 +1078,7 @@ async function startUpdate(S, { auto = false } = {}) {
     S.log(`새 판(${r.to})으로 바꿨어요. 같은 주소로 다시 켜요(짝은 그대로)`);
     setTimeout(() => { Promise.resolve(S.onRestart?.(r)).catch((e) => S.log(`다시 켜지 못했어요: ${cut(e?.message || e, 200)}`)); }, 400); // 앱이 'restart'를 한 번 볼 틈
   }, (e) => {
-    const code = e.code === 'sha256' ? 'sha256' : /^E[A-Z]+$/.test(e.code || '') && e.syscall === 'rename' ? 'files' : 'network';
+    const code = updateErrorCode(e);
     S.upd = { ...S.upd, state: 'error', error: code, to: '' };
     S.log(`새 판으로 바꾸지 못했어요(${cut(e.message, 160)}). 있던 판 그대로 써요`);
   });
@@ -1056,7 +1090,7 @@ async function handleBridge(S, req, res, url) {
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
     const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
-    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, twinPdf: true, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
   // ── 새 판으로 바꾸기: GET(새 판이 있는지) · POST(받아서 바꾸고 같은 포트·토큰으로 다시 켬. 앱은 /bridge/status의 build가 바뀔 때까지 기다림) ──
   if (parts[0] === 'update' && parts.length === 1) {
@@ -1082,8 +1116,13 @@ async function handleBridge(S, req, res, url) {
     }
     if (sub === 'welcome' && req.method === 'POST') { S.siwc.ackWelcome(); return sendJson(res, 200, { ok: true }); }
     if (sub === 'models' && req.method === 'GET') {
-      const m = await S.siwc.models().catch(() => null);
-      return m ? sendJson(res, 200, { ok: true, models: m }) : fail(res, 401, 'not-connected', 'ChatGPT 계정이 연결되어 있지 않거나 모델 목록을 받지 못했어요.');
+      // 연결 안 됨(401)과 잠깐 받지 못함(망·OpenAI 혼잡 → 502·503)을 나눔: 앱이 앞의 것만 '다시 로그인'으로
+      let m;
+      try { m = await S.siwc.models(); } catch (e) {
+        return e?.temp ? fail(res, 503, 'refresh', 'ChatGPT 연결을 새로 하지 못했어요. 잠시 뒤에 다시 해 주세요.')
+          : fail(res, e?.status >= 500 || e?.status === 429 ? 503 : 502, 'models-unavailable', 'ChatGPT 모델 목록을 받지 못했어요. 인터넷 연결을 확인하고 잠시 뒤 다시 해 주세요.');
+      }
+      return m ? sendJson(res, 200, { ok: true, models: m }) : fail(res, 401, 'not-connected', 'ChatGPT 계정 연결이 풀렸어요. [ChatGPT 계정으로 로그인]을 다시 눌러 주세요.');
     }
     if (sub === 'responses' && req.method === 'POST') {
       if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) return fail(res, 415, 'content-type', '본문은 application/json이어야 해요.');
@@ -1126,7 +1165,8 @@ async function handleBridge(S, req, res, url) {
     if (S.termAt && Date.now() - S.termAt < 3000) return fail(res, 429, 'busy', '터미널 창을 여는 중이에요. 잠깐 뒤에 다시 눌러 주세요.');
     S.termAt = Date.now();
     const ag = (await statusOf(S, true))[id];
-    const action = parts[2] === 'install' && ag.installed ? (ag.need === 'update' ? 'update' : 'login') : parts[2];
+    // 이미 있으면: 새 판이 필요하면 update(Claude Code) · 다시 설치(Codex는 따로 업데이트 명령이 없어 공식 설치 명령으로 새 판, need 'install') · 아니면 로그인만
+    const action = parts[2] === 'install' && ag.installed ? (ag.need === 'update' ? 'update' : ag.need === 'install' ? 'install' : 'login') : parts[2];
     const script = terminalScript(id, action, { file: action === 'install' ? '' : ag.file || '', needLogin: ag.loggedIn !== true });
     const what = `${agentName(id)} ${action === 'install' ? '설치' : action === 'update' ? '업데이트' : '로그인'}`;
     const eul = action === 'login' ? '을' : '를';
@@ -1212,9 +1252,33 @@ async function handleBridge(S, req, res, url) {
   if (parts.length === 3 && parts[2] === 'result' && req.method === 'GET') {
     if (job.active) return fail(res, 409, 'running', '아직 만드는 중이에요.');
     if (!job.result) return fail(res, 409, job.status, job.error?.message_ko || '결과가 없어요.', { status: job.status });
+    job.collected = true; // 앱이 받아 감(이제 저절로 새 판으로 바꿔도 잃을 것 없음)
     return sendJson(res, 200, job.result);
   }
   return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
+}
+
+/**
+ * 이 브라우저와 짝 맞추기(GET /pair?app=<앱 주소>): lecpage 커넥트가 켤 때 연 브라우저가 기본 브라우저가 아니어서 다른 브라우저와 짝을 맞췄을 때,
+ * 앱의 [이 브라우저와 연결]이 새 창으로 이 주소를 엶 → 앱 주소/#pair=<토큰>&port=<포트>로 보냄(켤 때 여는 주소와 같은 것을 그 브라우저에).
+ * 보내는 곳은 허용한 출처(lecpage.com·예비 주소·개발 주소)만, 이 주소 자신은 아님. 토큰은 # 뒤라 그 서버로도 가지 않음.
+ * 최상위 이동만(Sec-Fetch-Dest가 있으면 document): 다른 사이트가 틀(iframe)·fetch로 불러도 이동할 곳(Location)을 읽지 못함(CORS 없음)
+ * → 보낼 주소 | null
+ */
+export function pairTarget(S, raw) {
+  let u; try { u = new URL(String(raw || S.appUrl || '')); } catch { return null; }
+  if (u.username || u.password || u.origin === S.origin || !S.origins?.has(u.origin)) return null;
+  const path = /^\/[\w\-./]*$/.test(u.pathname) && !u.pathname.includes('..') ? u.pathname.replace(/\/*$/, '/') : '/';
+  return `${u.origin}${path}#pair=${S.token}&port=${S.port}`;
+}
+function pairRedirect(S, req, res, url) {
+  const dest = req.headers['sec-fetch-dest']; const mode = req.headers['sec-fetch-mode'];
+  if ((dest && dest !== 'document') || (mode && mode !== 'navigate')) return send(res, 403, '브라우저 주소창(새 창)에서만 열 수 있어요.', { 'content-type': 'text/plain; charset=utf-8' });
+  const to = pairTarget(S, url.searchParams.get('app'));
+  if (!to) return send(res, 400, 'lecpage 화면에서 [이 브라우저와 연결]을 눌러 열어 주세요.', { 'content-type': 'text/plain; charset=utf-8' });
+  S.log('다른 브라우저에서 짝 맞추기를 열었어요');
+  res.writeHead(302, { ...BASE_HEADERS, location: to, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+  return res.end();
 }
 
 async function handle(S, req, res) {
@@ -1243,6 +1307,7 @@ async function handle(S, req, res) {
     const r = await S.siwc.callback(url.searchParams);
     return send(res, r.status || 200, callbackPage(r), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
   }
+  if (url.pathname === '/pair' && req.method === 'GET') return pairRedirect(S, req, res, url);
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed');
   if (S.app.mode === 'dist') return serveDist(S, req, res, url.pathname);
   return serveRemote(S, req, res, url.pathname, url.search);
@@ -1304,9 +1369,9 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
       j.cleanup();
     }
   });
-  // 저절로 새 판으로(받은 묶음에서 켰을 때만): 켜고 2분 뒤 한 번, 그다음 3시간마다. 10분 넘게 아무 요청이 없고 돌고 있는 것이 없을 때만
+  // 저절로 새 판으로(받은 묶음에서 켰을 때만): 켜고 2분 뒤 한 번, 그다음 3시간마다. 10분 넘게 아무 요청이 없고 돌고 있는 것·받아 가지 않은 결과가 없을 때만
   const autoTick = async () => {
-    if (!S.canUpdate || UPDATING.has(S.upd.state) || busyNow(S) || Date.now() - S.lastUse < 10 * 60e3) return;
+    if (!S.canUpdate || UPDATING.has(S.upd.state) || busyNow(S, { results: true }) || Date.now() - S.lastUse < 10 * 60e3) return;
     const latest = await checkLatest(S, { force: true }).catch(() => '');
     if (latest && latest !== S.build && latest !== process.env.LECPAGE_CONNECT_SKIP && Date.now() - S.lastUse >= 10 * 60e3) await startUpdate(S, { auto: true });
   };
@@ -1325,7 +1390,18 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   if (!home && !persist) { const h = S.home; process.on('exit', () => { try { rmSync(h, { recursive: true, force: true }); } catch { /* 넘김 */ } }); }
   // lecpage.com에서 짝 맞추기: 토큰은 주소의 # 뒤(서버로 가지 않음). 앱이 읽고 바로 주소에서 지움
   const pairUrl = `${S.appUrl}/#pair=${S.token}&port=${S.port}`;
-  return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close, moved };
+  return { S, server, port: S.port, url: `${S.origin}/`, pairUrl, close, moved, autoTick };
+}
+
+/**
+ * 짝 맞출 앱 주소: 기본(lecpage.com)이 이 PC에서 열리지 않고(망 오류·5xx) 예비 주소(GitHub Pages)는 열리면 예비 주소(장애 때, docs/operations.md).
+ * 예비 주소는 lecpage.com이 안 열릴 때만 물어봄. 둘 다 안 열리면(이 PC의 망·프록시가 막음 등) 그대로. 직접 정한 주소(LECPAGE_STUDIO_APP_URL)도 그대로
+ */
+export async function pickAppUrl(appUrl, { fetchImpl = globalThis.fetch, ms = 5000 } = {}) {
+  if (appUrl !== 'https://lecpage.com') return appUrl;
+  const up = async (u) => { try { const r = await fetchImpl(u, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(ms) }); return r.status > 0 && r.status < 500; } catch { return false; } };
+  if (await up(`${appUrl}/`)) return appUrl;
+  return (await up(`${MIRROR_APP_URL}/`)) ? MIRROR_APP_URL : appUrl;
 }
 
 /**
@@ -1384,6 +1460,14 @@ export async function studioCmd(h) {
     args.autostart && process.platform !== 'win32' ? '  컴퓨터를 켤 때 창 없이 켜졌어요(기록은 lecpage 폴더의 connect.log). 그만 켜려면 lecpage 화면에서 자동 시작을 꺼요.' : '  끝내려면 이 창에서 Ctrl+C를 눌러요(창을 닫아도 꺼져요).',
   ].join('\n'));
   if (open && !(await openBrowser(open)) && !json) console.log(`  브라우저를 열지 못했어요. 이 주소를 브라우저에 붙여 넣어 주세요: ${open}`);
+  // lecpage.com이 이 PC에서 열리지 않고 예비 주소는 열리면(장애 때) 예비 주소로도 짝 맞추기를 엶(평소에는 lecpage.com만 한 번 확인)
+  if (open === pairUrl && !json) {
+    pickAppUrl(S.appUrl).then((base) => {
+      if (base === S.appUrl) return;
+      log(`lecpage.com이 열리지 않아 예비 주소(${base}/)에서도 열어요.`);
+      openBrowser(`${base}/#pair=${S.token}&port=${S.port}`);
+    }).catch(() => {});
+  }
   let closing = false;
   const bye = async () => { if (closing) return; closing = true; log('끄는 중…'); await close(); process.exit(0); };
   const SIGS = ['SIGINT', 'SIGTERM', 'SIGHUP'];

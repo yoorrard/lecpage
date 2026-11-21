@@ -14,15 +14,21 @@ const MB = 1024 * 1024;
 export const CONVERT_LIMIT_MB = 100;
 const TIMEOUT_MS = 4 * 60000;
 
-/** 프로그램마다 여는 형식 */
+/**
+ * 프로그램마다 여는 형식. 매크로를 담는 형식(pptm·ppsm·potm·docm·dotm 등)은 받지 않음(앱은 그 파일을 글자로만 읽음).
+ * 다른 형식도 매크로가 돌지 않게 엶: Office는 AutomationSecurity=3(모두 끔)·읽기 전용, LibreOffice는 매크로 끈 새 프로필
+ */
 export const APPS = {
-  powerpoint: { name: 'PowerPoint', exts: ['pptx', 'ppt', 'ppsx', 'pps', 'pptm', 'potx', 'odp'] },
+  powerpoint: { name: 'PowerPoint', exts: ['pptx', 'ppt', 'ppsx', 'pps', 'potx', 'odp'] },
   keynote: { name: 'Keynote', exts: ['key', 'pptx', 'ppt', 'ppsx'] },
-  word: { name: 'Word', exts: ['docx', 'doc', 'docm', 'odt', 'rtf'] },
+  word: { name: 'Word', exts: ['docx', 'doc', 'odt', 'rtf'] },
   pages: { name: 'Pages', exts: ['docx', 'doc'] },
   hwp: { name: '한글', exts: ['hwp', 'hwpx', 'hwt'] },
-  libreoffice: { name: 'LibreOffice', exts: ['pptx', 'ppt', 'ppsx', 'pps', 'pptm', 'potx', 'odp', 'key', 'docx', 'doc', 'docm', 'odt', 'rtf', 'hwp'] },
+  libreoffice: { name: 'LibreOffice', exts: ['pptx', 'ppt', 'ppsx', 'pps', 'potx', 'odp', 'key', 'docx', 'doc', 'odt', 'rtf', 'hwp'] },
 };
+/** 매크로를 담는 Office 형식(바꾸지 않음) */
+export const MACRO_EXTS = ['pptm', 'ppsm', 'potm', 'ppam', 'docm', 'dotm', 'xlsm', 'xltm', 'xlam'];
+const MACRO_KO = '매크로가 든 파일(.pptm·.docm 등)은 안전을 위해 이 PC의 프로그램으로 열지 않아요. 그 프로그램에서 PDF나 .pptx·.docx로 저장해 올려 주세요.';
 /** 운영 체제별 시도 순서 */
 export const ORDER = {
   win32: ['powerpoint', 'word', 'hwp', 'libreoffice'],
@@ -67,17 +73,28 @@ function run(cmd, args, { timeoutMs = TIMEOUT_MS, env } = {}) {
 }
 
 // 경로는 환경 변수로 넘김(따옴표·한글 이름이 명령 글에 섞이지 않게). 사람이 열어 둔 다른 문서는 닫지 않음(우리가 연 것만 닫고, 남은 문서가 없을 때만 끝냄)
+// 매크로: 프로그램으로 연 Office는 AutomationSecurity가 기본 '낮음'(매크로가 그냥 돎)이라 열기 전에 3(msoAutomationSecurityForceDisable, 모두 끔)으로.
+// Word는 자동 매크로(AutoOpen 등)도 끔(DisableAutoMacros). 읽기 전용으로 열고, 끝나면 예전 값으로 되돌림(켜 둔 PowerPoint를 함께 쓸 수 있어서)
 export const PS = {
   powerpoint: `$ErrorActionPreference='Stop'
 $app = New-Object -ComObject PowerPoint.Application
-$p = $app.Presentations.Open($env:LP_IN, -1, 0, 0)
-try { $p.SaveAs($env:LP_OUT, 32) } finally { $p.Close() }
+$sec = $app.AutomationSecurity
+$app.AutomationSecurity = 3
+try {
+  $p = $app.Presentations.Open($env:LP_IN, -1, 0, 0)
+  try { $p.SaveAs($env:LP_OUT, 32) } finally { $p.Close() }
+} finally { try { $app.AutomationSecurity = $sec } catch {} }
 if ($app.Presentations.Count -eq 0) { $app.Quit() }`,
   word: `$ErrorActionPreference='Stop'
 $w = New-Object -ComObject Word.Application
 $w.DisplayAlerts = 0
-$d = $w.Documents.Open($env:LP_IN, $false, $true, $false)
-try { $d.ExportAsFixedFormat($env:LP_OUT, 17) } finally { $d.Close(0) }
+$sec = $w.AutomationSecurity
+$w.AutomationSecurity = 3
+try { [void]$w.WordBasic.GetType().InvokeMember('DisableAutoMacros', [Reflection.BindingFlags]::InvokeMethod, $null, $w.WordBasic, @(1)) } catch {}
+try {
+  $d = $w.Documents.Open($env:LP_IN, $false, $true, $false)
+  try { $d.ExportAsFixedFormat($env:LP_OUT, 17) } finally { $d.Close(0) }
+} finally { try { $w.AutomationSecurity = $sec } catch {} }
 if ($w.Documents.Count -eq 0) { $w.Quit() }`,
   // 한글: 보안 모듈(FilePathCheckerModule)이 등록돼 있지 않으면 한글이 '파일에 접근하려는 시도' 창을 띄움 → 사람이 [모두 허용]을 누르면 이어짐
   hwp: `$ErrorActionPreference='Stop'
@@ -131,6 +148,16 @@ end tell
 end run`,
 };
 const MAC_CONTAINER = { powerpoint: 'com.microsoft.Powerpoint', word: 'com.microsoft.Word' };
+/**
+ * LibreOffice: 바꿀 때마다 새 프로필(-env:UserInstallation)에 이 설정을 먼저 둠 → 매크로 보안 '매우 높음'(3) + 매크로 실행 끔.
+ * (머리 없는 변환은 새 프로필의 기본값도 서명 없는 매크로를 막지만, 문서 속 매크로·이벤트 스크립트가 돌지 않게 못 박아 둠)
+ */
+export const LO_REGISTRY = `<?xml version="1.0" encoding="UTF-8"?>
+<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item>
+<item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="DisableMacrosExecution" oor:op="fuse"><value>true</value></prop></item>
+</oor:items>
+`;
 
 /** 일할 폴더: macOS Office는 그 앱 컨테이너 안(없으면 보통 임시 폴더) */
 function workDir(id, platform, home) {
@@ -148,7 +175,10 @@ export async function convertWith(id, name, bytes, { platform = process.platform
     writeFileSync(src, bytes);
     let r;
     if (id === 'libreoffice') {
-      r = await runImpl(sofficePath(), [`-env:UserInstallation=${pathToFileURL(join(dir, 'profile')).href}`, '--headless', '--norestore', '--nolockcheck', '--convert-to', 'pdf', '--outdir', dir, src]);
+      const prof = join(dir, 'profile');
+      mkdirSync(join(prof, 'user'), { recursive: true });
+      writeFileSync(join(prof, 'user', 'registrymodifications.xcu'), LO_REGISTRY);
+      r = await runImpl(sofficePath(), [`-env:UserInstallation=${pathToFileURL(prof).href}`, '--headless', '--norestore', '--nolockcheck', '--convert-to', 'pdf', '--outdir', dir, src]);
       const lo = join(dir, 'input.pdf'); if (existsSync(lo)) writeFileSync(out, readFileSync(lo));
     } else if (platform === 'win32') r = await runImpl('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(PS[id], 'utf16le').toString('base64')], { env: { LP_IN: src, LP_OUT: out } });
     else if (platform === 'darwin') r = await runImpl('osascript', ['-e', OSA[id], src, out]);
@@ -161,6 +191,7 @@ export async function convertWith(id, name, bytes, { platform = process.platform
 /** 있는 프로그램을 순서대로 시도 → { ok, via, app, pdf } | { ok:false, error, message_ko, tried } */
 export async function convertToPdf(name, bytes, { platform = process.platform, ids, log = () => {}, ...o } = {}) {
   const ext = (extname(name).slice(1) || '').toLowerCase();
+  if (MACRO_EXTS.includes(ext)) return { ok: false, error: 'macro', message_ko: MACRO_KO, tried: [] };
   const list = appsFor(ext, ids || detectApps({ platform }));
   if (!list.length) return { ok: false, error: 'no-app', message_ko: noAppKo(ext, platform), tried: [] };
   const tried = [];
@@ -195,6 +226,7 @@ export async function handleConvert(S, req, res, url, h) {
   if (req.method !== 'POST') return h.fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
   const name = String(url.searchParams.get('name') || '').split(/[\\/]/).pop().slice(0, 200);
   const ext = (extname(name).slice(1) || '').toLowerCase();
+  if (MACRO_EXTS.includes(ext)) return h.fail(res, 400, 'macro', MACRO_KO);
   if (!ext || !Object.values(APPS).some((a) => a.exts.includes(ext))) return h.fail(res, 400, 'type', 'PDF로 바꿀 수 있는 형식(PPT·워드·한글·키노트)이 아니에요.');
   let bytes;
   try { bytes = await h.readBody(req, CONVERT_LIMIT_MB * MB); } catch (e) { return e.status === 413 ? h.fail(res, 413, 'too-large', `파일이 너무 커요(${CONVERT_LIMIT_MB}MB까지).`) : h.fail(res, 400, 'body', '파일을 받지 못했어요.'); }

@@ -23,7 +23,7 @@ import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.
 import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
-import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary, chatgptModels } from './local.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary, chatgptModels, bridgeStatus } from './local.js';
 import { carryLegacy, recordVersion, aiVersionLabel, addChat, aiReply } from '../site-meta.js';
 import { ensureIds } from '../site-doc.js';
 
@@ -134,7 +134,7 @@ export function viewOf(rec, { elsewhere = false } = {}) {
 }
 
 // ── 오류 → 안내 ──
-const RETRY = ['network', 'busy', 'stall', 'empty'];
+const RETRY = ['network', 'busy', 'stall', 'empty', 'updating']; // updating: lecpage 커넥트가 새 판으로 다시 켜지는 중(보통 10초 안)
 const QUOTA = ['quota'];
 // 이 모델만 안 되는 오류: 같은 키의 다른 모델로 이어서(앞 단계 결과는 그대로). 결제·권한·지역 같은 계정 오류는 모델을 바꿔도 같아 바꾸지 않음
 const SWAP = ['no-access', 'model', 'quota-day'];
@@ -144,6 +144,9 @@ function errorView(e, provider) {
   const k = e?.off && (e?.kind === 'network' || e?.kind === 'local') ? 'pc-off' : e?.kind;
   // 구독 연결(PC 프로그램): 꺼짐·ChatGPT 계정
   if (k === 'pc-off') return { kind: k, title: 'lecpage 커넥트가 꺼져 있어요.', body: 'lecpage 커넥트를 켜고 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요.', actions: ['resume'] };
+  if (k === 'updating') return { kind: k, title: 'lecpage 커넥트를 새 버전으로 바꾸는 중이에요.', body: '잠시 뒤 다시 해 주세요. [계속 만들기]를 누르면 받은 글은 그대로 이어서 써요.', actions: ['resume'] };
+  if (k === 'pc-pair') return { kind: k, title: 'lecpage 커넥트와 짝이 맞지 않아요.', body: 'lecpage 커넥트를 끄고 다시 켜면 이 화면과 다시 짝을 맞춰요. 그다음 [계속 만들기]를 눌러 주세요.', actions: ['resume'] };
+  if (k === 'too-big') return { kind: k, title: '교재가 커서 lecpage 커넥트로 보내지 못했어요.', body: e?.message || '교재를 줄이거나 나눠 주세요.', actions: ['connect'] };
   if (k === 'chatgpt-login') return { kind: k, title: 'ChatGPT 계정 연결이 풀렸어요.', body: 'AI 선택에서 [ChatGPT 계정으로 로그인]을 다시 누르면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'resume'] };
   if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 다른 AI를 고르거나 요금제를 바꾼 뒤 다시 로그인해 주세요.', actions: ['connect'] };
   if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };
@@ -155,7 +158,8 @@ function errorView(e, provider) {
   if (k === 'no-material') return { kind: k, title: '교재가 없어요.', body: '교재 파일을 넣거나 만들 사이트를 글로 적어 주세요.', actions: [] };
   if (k === 'no-site') return { kind: k, title: '고칠 사이트가 없어요.', body: '먼저 사이트를 만들어 주세요.', actions: [] };
   if (k === 'local') return { kind: k, title: '내 PC의 lecpage 커넥트에 닿지 못했어요.', body: 'lecpage 커넥트가 켜져 있는지, lecpage 커넥트가 연 주소(127.0.0.1)에서 앱을 열었는지 확인해 주세요. API 키로도 만들 수 있어요.', actions: ['resume', 'connect'] };
-  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: 'lecpage 커넥트를 다시 켰다면 처음부터 다시 만들어 주세요.', actions: ['connect'] };
+  // 저절로 다시 보내지 않음(구독 사용량은 사람이 누를 때만): [계속 만들기]를 누르면 처음부터 다시 보냄(runAgent가 그 일의 자리를 비워 둠)
+  if (k === 'gone') return { kind: k, title: '내 PC에서 하던 일을 찾지 못했어요.', body: 'lecpage 커넥트가 다시 켜지면서(새 버전으로 바꾸기 등) 하던 일이 없어졌어요. [계속 만들기]를 누르면 처음부터 다시 만들어요.', actions: ['resume', 'connect'] };
   if (k === 'too-long') return { kind: k, title: '교재가 길어 한 번에 보내지 못했어요.', body: '쪽 그림을 줄여 다시 보내 봤지만 넘쳤어요. 교재를 나눠 넣거나 다른 AI로 만들어 주세요.', actions: ['connect'] };
   const x = explainError(e, provider);
   // 다시 눌러도 같은 답이 오는 오류(키·결제·권한·지역·한도·모델·차단)는 [이어서 만들기]를 맨 뒤로: 주 단추가 같은 실패를 되풀이하지 않게.
@@ -415,7 +419,7 @@ async function runAgent(ctx, step) {
   const request = rec.kind === 'fix' ? `lecpage 검수에서 나온 문제를 고쳐 주세요.\n${issuesForAi(step.issues || [])}` : rec.opts.request;
   // 교재 원본은 files로, 사이트 폴더(새로 만들 때는 교재 쪽 그림, 고칠 때는 지금 사이트 전체)는 site로(연결 프로그램이 work/site/에 그대로 둠)
   const pack = async () => ({
-    files: await bridgeFiles(blobs, rec.pid, project),
+    files: await bridgeFiles(blobs, rec.pid, project, (await bridgeStatus().catch(() => null))?.limits || null), // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림)
     site: { ...(await bridgeSite(blobs, rec.pid, rec.kind === 'make' ? (ctx.images?.list || []) : null)), ...(rec.kind !== 'make' ? rec.site || project.site || {} : {}) },
   });
   const payload = {
@@ -431,10 +435,10 @@ async function runAgent(ctx, step) {
   });
   let res;
   try { res = await run(step.bridgeJob || ''); } catch (e) {
-    // 연결 프로그램을 다시 켜서 하던 일이 없어짐 → 처음부터 한 번 더
-    if (e?.kind !== 'gone' || !step.bridgeJob) throw e;
-    step.bridgeJob = ''; Object.assign(payload, await pack());
-    res = await run('');
+    // 연결 프로그램을 다시 켜서(새 판으로 바꾸기 등) 하던 일이 없어짐: 저절로 다시 보내지 않고 멈춤(구독 사용량은 사람이 누를 때만).
+    // 그 일의 자리를 비워 두어 [계속 만들기]를 누르면 처음부터 보냄
+    if (e?.kind === 'gone') step.bridgeJob = '';
+    throw e;
   }
   // 글 파일은 사이트(p.site)로, 그림·PDF 같은 바이트 파일은 저장소 'site/…'로(교재 쪽 그림은 이미 있음)
   const site = {};

@@ -143,6 +143,77 @@ test('SHA-256이 다르면 아무것도 바꾸지 않음 · 이미 새 판이면
   } finally { await same.close(); }
 });
 
+test('두 번 동시에 눌러도(저절로 + 사람이 누름) 한 번만 받아 바꿈: 예전 판 보관(.old)이 새 판으로 덮이지 않음', async () => {
+  const gz = pkg('1.2.0-new');
+  const rel = await release({ VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` });
+  const root = fakeRoot('1.1.0-old');
+  let restarts = 0;
+  try {
+    await studio({ root, release: { base: rel.base }, onRestart: () => { restarts++; } }, async (st, H) => {
+      const [a, b] = await Promise.all([req(st.port, 'POST', '/bridge/update', { headers: H, body: {} }), req(st.port, 'POST', '/bridge/update', { headers: H, body: {} })]);
+      assert.deepEqual([a.status, b.status], [202, 202]);
+      await until(st.port, H, (s) => s.update.state === 'restart');
+      for (let i = 0; i < 40 && !restarts; i++) await new Promise((r) => setTimeout(r, 50));
+      assert.equal(rel.hits.filter((h) => h === '/lecpage-connect.tar.gz').length, 1, '묶음은 한 번만 받음');
+      assert.equal(restarts, 1);
+      assert.equal(readFileSync(join(`${root}.old`, 'VERSION'), 'utf8').trim(), '1.1.0-old', '되돌릴 예전 판이 그대로');
+      assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.2.0-new');
+    });
+  } finally { await rel.close(); }
+});
+
+test('저절로 바꾸기: 끝났는데 앱이 받아 가지 않은 결과가 있으면 기다림(다시 켜면 결과를 잃음) · 받아 간 뒤에는 바꿈 · 사람이 누르면 그대로', async () => {
+  const gz = pkg('1.2.0-new');
+  const rel = await release({ VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` });
+  const root = fakeRoot('1.1.0-old');
+  try {
+    await studio({ root, release: { base: rel.base }, onRestart: () => {} }, async (st, H) => {
+      const job = { id: 'j1', active: false, status: 'done', result: { ok: true, site: {} }, endedAt: Date.now(), collected: false, cleanup() {} };
+      st.S.jobs.set(job.id, job); st.S.lastUse = 0;
+      await st.autoTick();
+      assert.equal(st.S.upd.state, 'idle'); assert.deepEqual(rel.hits, [], '받아 가지 않은 결과가 있으면 확인도 하지 않음');
+      const got = await req(st.port, 'GET', '/bridge/jobs/j1/result', { headers: H });
+      assert.equal(got.status, 200); assert.equal(job.collected, true, '앱이 결과를 받아 감');
+      st.S.jobs.set('j0', { id: 'j0', active: false, status: 'done', result: { ok: true }, endedAt: Date.now() - 7 * 3600e3, cleanup() {} }); // 6시간 넘은 결과는 기다리지 않음
+      st.S.lastUse = 0; // (결과를 받아 간 요청도 '쓰는 중'으로 셈) 10분 넘게 쓰지 않은 것처럼
+      await st.autoTick();
+      assert.ok(['download', 'install', 'restart'].includes(st.S.upd.state), st.S.upd.state);
+      await until(st.port, H, (s) => s.update.state === 'restart');
+    });
+  } finally { await rel.close(); }
+  const rel2 = await release({ VERSION: '1.3.0-new\n' });
+  const root2 = fakeRoot('1.1.0-old');
+  try {
+    await studio({ root: root2, release: { base: rel2.base }, onRestart: () => {} }, async (st, H) => {
+      st.S.jobs.set('j2', { id: 'j2', active: false, status: 'done', result: { ok: true }, endedAt: Date.now(), cleanup() {} });
+      const r = await req(st.port, 'POST', '/bridge/update', { headers: H, body: {} });
+      assert.equal(r.status, 202, '사람이 누른 [새 버전으로 바꾸기]는 받아 가지 않은 결과로 막지 않음');
+    });
+  } finally { await rel2.close(); }
+});
+
+test('바꾸기 실패는 까닭대로: 망 · SHA-256 · 묶음이 이상함 · 저장 공간 · 파일 바꾸기', async () => {
+  assert.equal(St.updateErrorCode(new TypeError('fetch failed')), 'network');
+  assert.equal(St.updateErrorCode(Object.assign(new Error('HTTP 404'), { code: 'http', status: 404 })), 'network');
+  assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code: 'sha256' })), 'sha256');
+  for (const code of ['tar', 'package', 'size', 'version', 'Z_DATA_ERROR']) assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code })), 'package', code);
+  assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code: 'ENOSPC', syscall: 'write' })), 'disk');
+  assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code: 'EACCES', syscall: 'mkdir' })), 'files');
+  assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code: 'EPERM', syscall: 'rename' })), 'files');
+  // 실제로: 묶음에 lecpage 커넥트가 없으면 'package'(망 탓이 아님)
+  const gz = tarGz([['./VERSION', '1.2.0-bad\n']]);
+  const rel = await release({ VERSION: '1.2.0-bad\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` });
+  const root = fakeRoot('1.1.0-old');
+  try {
+    await studio({ root, release: { base: rel.base }, onRestart: () => assert.fail('다시 켜면 안 됨') }, async (st, H) => {
+      assert.equal((await req(st.port, 'POST', '/bridge/update', { headers: H, body: {} })).status, 202);
+      const s = await until(st.port, H, (x) => x.update.state === 'error');
+      assert.equal(s.update.error, 'package'); assert.match(s.update.error_ko, /올바르지 않아요/);
+      assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.1.0-old');
+    });
+  } finally { await rel.close(); }
+});
+
 test('받는 곳은 https(시험만 127.0.0.1) · 묶음 밖 경로·링크는 풀지 않음', async () => {
   await assert.rejects(U.latestBuild({ base: 'http://example.com/x', fetchImpl: async () => assert.fail('부르면 안 됨') }), (e) => e.code === 'url');
   const redirected = async () => ({ ok: true, url: 'http://evil.example/VERSION', headers: new Headers(), arrayBuffer: async () => new ArrayBuffer(0) });

@@ -218,12 +218,19 @@ export function createSiwc({ home, port, fetchImpl = globalThis.fetch, log = () 
     return { ok: true, revoked };
   }
 
+  /**
+   * 그 계정이 쓸 수 있는 모델 목록. null = 연결 안 됨(토큰 없음, 갱신해도 OpenAI가 401). 그 밖의 실패(망·429·5xx·잠깐 갱신 못 함)는
+   * { status } 오류를 던짐 → 앱이 '다시 로그인' 대신 '잠시 뒤 다시'를 보여 줌
+   */
   async function models() {
     if (modelsCache && now() - modelsCache.at < 10 * 60e3) return modelsCache.v;
     const t = await accessToken();
     if (!t) return null;
-    const r = await fetchImpl(`${API}/v1/models`, { headers: { authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return null;
+    const get = (tok) => fetchImpl(`${API}/v1/models`, { headers: { authorization: `Bearer ${tok}` }, signal: AbortSignal.timeout(20000) });
+    let r = await get(t);
+    if (r.status === 401) { await r.body?.cancel().catch(() => {}); const t2 = await accessToken({ force: true }); if (!t2) return null; r = await get(t2); }
+    if (r.status === 401) return null;
+    if (!r.ok) throw Object.assign(new Error(`models ${r.status}`), { status: r.status });
     const j = await r.json().catch(() => ({}));
     const v = (Array.isArray(j.models) ? j.models : []).filter((m) => m && m.slug && (m.visibility === undefined || m.visibility === 'list')).map((m) => ({ id: String(m.slug), label: String(m.display_name || m.slug) }));
     modelsCache = { at: now(), v };

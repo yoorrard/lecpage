@@ -36,7 +36,7 @@ if (id === 'claude' && argv[0] === 'auth' && argv[1] === 'login') {
   await new Promise(() => {}); // 코드를 받거나 시간이 다 될 때까지(위에서 끝냄)
 }
 if (id === 'claude' && argv[0] === 'update') { console.log('Claude Code is up to date.'); process.exit(0); }
-if (argv[0] === '--version') { console.log(id === 'claude' ? `${process.env.FAKE_CLAUDE_VERSION || '2.1.320'} (Claude Code)` : 'codex-cli 0.130.0'); process.exit(0); }
+if (argv[0] === '--version') { console.log(id === 'claude' ? `${process.env.FAKE_CLAUDE_VERSION || '2.1.320'} (Claude Code)` : `codex-cli ${process.env.FAKE_CODEX_VERSION || '0.130.0'}`); process.exit(0); }
 if (id === 'claude' && argv[0] === 'auth' && argv[1] === 'status') {
   const m = process.env.ANTHROPIC_API_KEY ? 'api_key' : process.env.FAKE_LOGGED_OUT || (process.env.FAKE_LOGIN_FILE && !existsSync(process.env.FAKE_LOGIN_FILE)) ? 'none' : 'claude.ai';
   console.log(JSON.stringify({ loggedIn: m !== 'none', authMethod: m, apiProvider: 'firstParty' }, null, 2));

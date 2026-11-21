@@ -1,5 +1,6 @@
 // 새 흐름 e2e: 먼저 해보기(같은 화면), AI 답의 강사 값은 받지 않기, 실패 안내와 이어 하기, 내 PC 연결 프로그램 감지, 예전 방식 연수,
-// lecpage 커넥트: Claude 계정 연결(터미널 없이) · 예전 판이면 원문 오류 대신 새 판 안내 · [새 버전으로 바꾸기] → 다시 붙어 이어 하기
+// lecpage 커넥트: Claude 계정 연결(터미널 없이) · 예전 판이면 원문 오류 대신 새 판 안내 · [새 버전으로 바꾸기] → 다시 붙어 이어 하기 ·
+// 하던 일이 없어지면 저절로 다시 보내지 않음 · 모델 목록 실패는 까닭대로 · [모든 데이터 삭제]가 짝·ChatGPT 연결도 지움 · [이 브라우저와 연결] · 기억한 포트에 다른 프로그램
 const L = require('./lib.js');
 const W = Number(process.env.W || 1366), HH = Number(process.env.H || 860);
 const tag = process.env.TAG || String(W);
@@ -191,6 +192,133 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     L.ok('update: not drawn as off while restarting', !flippedOff);
     L.ok('update: new build → Claude login offered', await pg.locator('.ai-sub button:has-text("Claude 계정으로 로그인")').count() === 1 && await pg.locator('.connect-old').count() === 0);
     L.ok('update: no page errors', e5.length === 0, JSON.stringify(e5));
+    await c.close();
+  }
+
+  // ── D5. 내 PC에서 하던 일이 없어짐(커넥트를 다시 켬): 저절로 다시 보내지 않고 [계속 만들기]로 · ChatGPT 모델 목록 실패는 까닭대로 ──
+  {
+    const c = await b.newContext({ viewport: { width: W, height: HH } });
+    await L.mockAi(c);
+    await c.addInitScript(() => { const add = () => { const m = document.createElement('meta'); m.name = 'lecpage-bridge'; m.content = 'tok-123'; document.head.appendChild(m); }; if (document.head) add(); else document.addEventListener('DOMContentLoaded', add); });
+    let posts = 0; let models = null;
+    await c.route(/\/bridge\/status(\?fresh)?$/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: true, plan: true, email: 't@example.com' }, agents: [{ id: 'claude', installed: true, version: '2.1.330', auth: 'subscription', loggedIn: true, ready: true }, { id: 'codex', installed: false, ready: false }], limits: { files: 20, materialMB: 120, fileMB: 100, twinPdf: true } }) }));
+    await c.route(/\/bridge\/jobs$/, (r) => { posts++; return r.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true, jobId: 'job-1' }) }); });
+    await c.route(/\/bridge\/jobs\/job-1(\/.*)?$/, (r) => r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'no-job', message_ko: '그 작업이 없어요(끝나서 지웠거나 lecpage 커넥트를 다시 켰어요).' }) }));
+    await c.route(/\/bridge\/chatgpt\/models$/, (r) => (models ? r.fulfill({ status: models.status, contentType: 'application/json', body: JSON.stringify(models.body) }) : r.abort()));
+    const pg = await c.newPage(); const e6 = L.watch(pg);
+    await pg.goto(base2, { waitUntil: 'load' });
+    await pg.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await pg.waitForSelector('.ai-sub button:has-text("Claude로 만들기"):not([disabled])', { timeout: 90000 });
+    await pg.click('.ai-sub button:has-text("Claude로 만들기")'); await L.consent(pg);
+    await pg.waitForSelector('.making .ai-job.bad', { timeout: 30000 });
+    await pg.waitForTimeout(1500); // 저절로 다시 보내는지 잠깐 지켜봄
+    const t = await pg.locator('.making .ai-job.bad').innerText();
+    L.ok('gone: stops with [계속 만들기], no automatic re-send', posts === 1 && /하던 일을 찾지 못했어요/.test(t) && /처음부터 다시 만들어요/.test(t) && await pg.locator('.making .ai-job.bad button:has-text("계속 만들기")').count() === 1, `posts=${posts} ${t}`);
+    await pg.click('.making .ai-job.bad button:has-text("계속 만들기")');
+    for (let i = 0; i < 40 && posts < 2; i++) await pg.waitForTimeout(250);
+    await pg.waitForSelector('.making .ai-job.bad', { timeout: 30000 }); await pg.waitForTimeout(800);
+    L.ok('gone: one click → one send', posts === 2, `posts=${posts}`);
+    await pg.screenshot({ path: L.OUT + `${tag}-local-gone.png`, fullPage: true });
+    // ChatGPT로 만들기: 모델 목록을 받지 못한 까닭마다 맞는 안내('연결이 풀렸어요'는 진짜로 풀렸을 때만)
+    const cases = [
+      [null, /lecpage 커넥트가 꺼져 있어요/, 'off'],
+      [{ status: 503, body: { ok: false, error: 'updating', message_ko: 'lecpage 커넥트를 새 판으로 바꾸는 중이에요.' } }, /새 버전으로 바꾸는 중이에요/, 'updating'],
+      [{ status: 401, body: { ok: false, error: 'token', message_ko: 'lecpage 커넥트와 짝이 맞지 않아요.' } }, /짝이 맞지 않아요/, 'token'],
+      [{ status: 503, body: { ok: false, error: 'models-unavailable', message_ko: 'ChatGPT 모델 목록을 받지 못했어요.' } }, /^(?![\s\S]*연결이 풀렸어요)/, '5xx'],
+      [{ status: 401, body: { ok: false, error: 'not-connected', message_ko: 'ChatGPT 계정 연결이 풀렸어요.' } }, /ChatGPT 계정 연결이 풀렸어요/, 'not-connected'],
+    ];
+    for (const [ans, re, name] of cases) {
+      models = ans;
+      await pg.click('.making button:has-text("다른 AI 선택")');
+      await pg.waitForSelector('.ai-sub button:has-text("ChatGPT로 만들기"):not([disabled])', { timeout: 20000 });
+      await pg.click('.ai-sub button:has-text("ChatGPT로 만들기")'); await L.consent(pg, 1500);
+      await pg.waitForSelector('.making .ai-job.bad', { timeout: 60000 });
+      const msg = await pg.locator('.making .ai-job.bad').innerText();
+      L.ok(`chatgpt models ${name}: right message`, re.test(msg), msg.replace(/\s+/g, ' ').slice(0, 120));
+    }
+    L.ok('gone/chatgpt: no page errors', e6.length === 0, JSON.stringify(e6));
+    await c.close();
+  }
+
+  // ── D6. [모든 데이터 삭제]: 이 브라우저의 커넥트 짝·고른 연결을 지우고, 커넥트의 ChatGPT 연결도 해제(공용 PC) ──
+  {
+    const TOKEN = 'b'.repeat(64); const PORT = 6612; let logout = 0;
+    const c = await b.newContext({ viewport: { width: W, height: HH } });
+    await c.addInitScript(([tk, port]) => { try { if (!sessionStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify({ token: tk, port, at: Date.now() })); localStorage.setItem('lecpage:conn', 'chatgpt'); sessionStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ } }, [TOKEN, PORT]);
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    await c.route(new RegExp(`^http://127\\.0\\.0\\.1:${PORT}/`), (r) => {
+      const u = new URL(r.request().url()); const m = r.request().method();
+      if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+      const json = (o) => r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify(o) });
+      if (r.request().headers()['x-lecpage-bridge'] !== TOKEN) return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token"}' });
+      if (u.pathname === '/bridge/status') return json({ ok: true, version: '1.1.0', caps: ['status-caps'], chatgpt: { connected: logout === 0, plan: true }, agents: [{ id: 'claude', installed: false }, { id: 'codex', installed: false }] });
+      if (u.pathname === '/bridge/chatgpt' && m === 'DELETE') { logout++; return json({ ok: true, revoked: true, connected: false }); }
+      return r.abort();
+    });
+    const pg = await c.newPage(); const e7 = L.watch(pg);
+    await pg.goto(L.BASE + '#/settings', { waitUntil: 'load' });
+    await pg.waitForSelector('.settings button:has-text("모든 데이터 삭제")', { timeout: 20000 });
+    await pg.click('.settings button:has-text("모든 데이터 삭제")');
+    await pg.click('.settings button:has-text("한 번 더 눌러 삭제")');
+    await pg.waitForFunction(() => !localStorage.getItem('lecpage:pc'), null, { timeout: 15000 }).catch(() => {});
+    const left = await pg.evaluate(() => ({ pc: localStorage.getItem('lecpage:pc'), conn: localStorage.getItem('lecpage:conn') }));
+    L.ok('wipe: forgets 커넥트 pairing and chosen connection', !left.pc && !left.conn, JSON.stringify(left));
+    L.ok('wipe: disconnects ChatGPT in the 커넥트', logout === 1, `logout=${logout}`);
+    L.ok('wipe: no page errors', e7.length === 0, JSON.stringify(e7));
+    await c.close();
+  }
+
+  // ── D7. 커넥트가 다른 브라우저와 짝을 맞춤(기본 브라우저가 다름): 받기 안내에서 [이 브라우저와 연결] → 켜진 커넥트를 찾아 /pair → 이 탭이 이어 받음 ──
+  {
+    const TOKEN = 'c'.repeat(64); const PORT = 6603; let probed = 0;
+    const c = await b.newContext({ viewport: { width: W, height: HH } });
+    await L.mockAi(c);
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    await c.route(/^http:\/\/127\.0\.0\.1:66\d\d\//, (r) => {
+      const u = new URL(r.request().url());
+      if (+u.port !== PORT) return r.abort();
+      if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+      if (u.pathname === '/pair') return r.fulfill({ status: 302, headers: { location: `${u.searchParams.get('app')}#pair=${TOKEN}&port=${PORT}` } });
+      if (u.pathname !== '/bridge/status') return r.abort();
+      if (r.request().headers()['x-lecpage-bridge'] !== TOKEN) { probed++; return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}' }); }
+      return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: false }, agents: [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) });
+    });
+    const pg = await c.newPage(); const e8 = L.watch(pg);
+    await pg.goto(L.BASE, { waitUntil: 'load' });
+    await pg.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await pg.click('.ai-sub button:has-text("ChatGPT·Claude 계정으로 연결")');
+    L.ok('pair here: hint waits (one action while downloading)', await pg.locator('.pair-here').count() === 0);
+    await pg.waitForSelector('.pair-here button:has-text("이 브라우저와 연결")', { timeout: 25000 });
+    const [pop] = await Promise.all([c.waitForEvent('page', { timeout: 10000 }).catch(() => null), pg.click('.pair-here button:has-text("이 브라우저와 연결")')]);
+    await pg.waitForSelector('.ai-sub button:has-text("ChatGPT 계정으로 로그인")', { timeout: 20000 }).catch(() => {});
+    L.ok('pair here: found the running 커넥트 without a token, then paired this browser', probed >= 1 && !!pop && await pg.locator('.ai-sub button:has-text("ChatGPT 계정으로 로그인")').count() === 1, `probed=${probed} pop=${!!pop}`);
+    L.ok('pair here: token kept in this browser only', await pg.evaluate((tk) => JSON.parse(localStorage.getItem('lecpage:pc') || '{}').token === tk, TOKEN));
+    L.ok('pair here: no page errors', e8.length === 0, JSON.stringify(e8));
+    await c.close();
+  }
+
+  // ── D8. 기억한 포트에 다른 프로그램이 답함(커넥트가 아님): '꺼짐'에 머물지 않고 같은 토큰으로 가까운 포트를 찾아 옮김 ──
+  {
+    const TOKEN = 'd'.repeat(64);
+    const c = await b.newContext({ viewport: { width: W, height: HH } });
+    await L.mockAi(c);
+    await c.addInitScript((tk) => { try { if (!sessionStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify({ token: tk, port: 6605, at: Date.now() })); sessionStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ } }, TOKEN);
+    // 이미 '로컬 네트워크 접근'을 허락한 브라우저처럼(묻는 중에는 다른 포트를 살피지 않음)
+    await c.addInitScript(() => { const q = navigator.permissions.query.bind(navigator.permissions); navigator.permissions.query = (d) => (/network/.test(d?.name || '') ? Promise.resolve({ state: 'granted' }) : q(d)); });
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    await c.route(/^http:\/\/127\.0\.0\.1:66\d\d\//, (r) => {
+      const u = new URL(r.request().url());
+      if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+      if (+u.port === 6605) return r.fulfill({ status: 200, contentType: 'text/html', headers: cors, body: '<!doctype html><title>다른 프로그램</title>' });
+      if (+u.port !== 6603 || r.request().headers()['x-lecpage-bridge'] !== TOKEN) return r.abort();
+      return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: false }, agents: [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) });
+    });
+    const pg = await c.newPage(); const e9 = L.watch(pg);
+    await pg.goto(L.BASE, { waitUntil: 'load' });
+    await pg.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await pg.waitForSelector('.ai-sub button:has-text("ChatGPT 계정으로 로그인")', { timeout: 30000 }).catch(() => {});
+    L.ok('foreign server on remembered port: moved to the 커넥트 port', await pg.locator('.ai-sub button:has-text("ChatGPT 계정으로 로그인")').count() === 1 && await pg.evaluate(() => JSON.parse(localStorage.getItem('lecpage:pc') || '{}').port) === 6603);
+    L.ok('foreign server: no page errors', e9.length === 0, JSON.stringify(e9));
     await c.close();
   }
 

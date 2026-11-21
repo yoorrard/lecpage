@@ -10,7 +10,14 @@ import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
 import { HostConnect, KIND } from '../components/Publish.jsx';
 import { StatsSetting } from '../components/StatsSetting.jsx';
 import { ConnBadge } from '../components/PcConnect.jsx';
-import { forgetConsents, bridgeAvailable } from '../lib/connection.js';
+import { forgetConsents, bridgeAvailable, setPreferred, refreshPc } from '../lib/connection.js';
+import { forgetPairing, bridgeStatus, chatgptLogout } from '../lib/gen/local.js';
+
+/** [모든 데이터 삭제] 전에 lecpage 커넥트의 ChatGPT 계정 연결 해제 → 'chatgpt'(해제함) | ''(연결 없음) | 'off'(커넥트에 닿지 못함). 5초까지만 기다림 */
+async function logoutPc() {
+  const run = (async () => { const s = await bridgeStatus(); if (!s?.chatgpt?.connected) return ''; await chatgptLogout(); return 'chatgpt'; })();
+  return Promise.race([run, new Promise((ok) => setTimeout(() => ok('off'), 5000))]).catch(() => 'off');
+}
 
 export function Settings() {
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('lecpage:theme') || 'auto'; } catch { return 'auto'; } });
@@ -31,8 +38,13 @@ export function Settings() {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
     for (const p of await projects.all()) await projects.remove(p.id);
     for (const k of [...Object.keys(PROVIDERS), ...Object.values(KIND).map((x) => 'deploy-' + x)]) await forgetKey(k);
+    // lecpage 커넥트: ChatGPT 계정 연결이 있으면 해제하고(공용 PC에서 다음 사람이 강사 구독을 쓰지 않게) 이 브라우저의 짝·고른 연결도 지움
+    const pc = bridgeAvailable() ? await logoutPc() : '';
+    forgetPairing(); setPreferred(''); refreshPc();
     forgetConsents(); clearCart();
-    toast('이 브라우저의 lecpage 데이터를 모두 지웠어요.'); setConfirmDel(false); setSt(await storageInfo());
+    toast(pc === 'off' ? '모두 지웠어요. 커넥트가 꺼져 있어 ChatGPT 연결은 확인하지 못했어요. 공용 PC라면 커넥트를 켜고 연결을 해제해 주세요.'
+      : pc === 'chatgpt' ? '모두 지웠어요. lecpage 커넥트의 ChatGPT 연결도 해제했어요.' : '이 브라우저의 lecpage 데이터를 모두 지웠어요.');
+    setConfirmDel(false); setSt(await storageInfo());
   }
   return (
     <div class="settings">
@@ -70,7 +82,7 @@ export function Settings() {
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
           <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
         </div>
-        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정 포함)도 해제해요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
       <ConsentHost />
