@@ -881,7 +881,13 @@
   function atOf(hm, base) { var m = /^(\d{1,2}):(\d{2})$/.exec(hm || ''); if (!m) return 0; var d = base ? new Date(base) : new Date(); d.setHours(+m[1], +m[2], 0, 0); return d.getTime(); }
   function roster() {
     var m = {};
-    vals('attendance').forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); r[a.kind === 'out' ? 'out' : 'in'] = a; });
+    // 여러 날 연수의 연수 날에는 오늘의 입실·퇴실을 보임(날짜별 값이 있는 기록만. 없으면 예전처럼 전체의 첫 입실·마지막 퇴실)
+    var today = MULTI && window.LecLive ? LecLive.util.dayKey(Date.now(), 'Asia/Seoul') : '';
+    if (today && !DAYS.some(function (d) { return d.start.slice(0, 10) === today; })) today = '';
+    vals('attendance').forEach(function (a) {
+      if (today && a.days && typeof a.days === 'object') { if (!a.days[today]) return; a = LecLive.util.assign({}, a, { at: a.days[today] }); }
+      var r = m[a.by] || (m[a.by] = {}); r[a.kind === 'out' ? 'out' : 'in'] = a;
+    });
     return vals('participants').filter(function (p) { return p.name || m[p.id]; }).map(function (p) { var r = m[p.id] || {}; return { p: p, i: r['in'], o: r.out }; })
       .sort(function (a, b) { var x = a.p.name || a.p.nickname || '', y = b.p.name || b.p.nickname || ''; return x.localeCompare(y, 'ko'); });
   }
@@ -1062,7 +1068,10 @@
   function noVerdict(csv) {
     return String(csv || '').split('\n').map(function (line, i) { return i ? line.replace(/,(?:O|X|확인 필요)(\r?)$/, ',$1') : line.replace(/,이수(\r?)$/, ',이수(기준 없음)$1'); }).join('\n');
   }
-  function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length }; }
+  // 여러 날 연수: 날마다의 연수 시간(DATA.phase.days)을 함께 보냄 → 서버가 날마다 머문 시간을 더해 판정(모르는 예전 서버는 첫날 기준 그대로)
+  var DAYS = ((DATA.phase && DATA.phase.days) || []).filter(function (d) { return /^\d{4}-\d{2}-\d{2}T\d{1,2}:\d{2}$/.test(d.start || '') && /T\d{1,2}:\d{2}$/.test(d.end || ''); });
+  var MULTI = DAYS.length >= 2;
+  function completionOpts() { return { date: DATA.date || '', start: DATA.start || '', end: DATA.end || '', rate: (DATA.admin || {}).completionRate, survey: (DATA.survey || 0) > 0, stations: stations.length, days: MULTI ? DAYS.map(function (d) { return d.start + '/' + d.end.slice(11); }).join(',') : '' }; }
   function buildData() {
     var b = P.data.body;
     var s1 = el('div', 'lp-con-sec'); s1.style.borderTop = '0'; s1.style.paddingTop = '0'; s1.appendChild(el('h3', '', 'CSV 다운로드'));
@@ -1079,7 +1088,7 @@
     });
     s1.appendChild(g);
     // 이수 기준(출석 비율)은 교재·강사가 정한 값(lecpage.json admin.completionRate)만. 없으면 규칙을 지어 쓰지 않고 '이수' 칸을 비움
-    s1.appendChild(el('p', 'lp-con-sub', rateOn() ? '이수자 명단: 연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')의 ' + DATA.admin.completionRate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'
+    s1.appendChild(el('p', 'lp-con-sub', rateOn() ? '이수자 명단: ' + (MULTI ? '연수 날마다 정한 시간(' + DAYS.length + '일)을 합한 것' : '연수 시간(' + (DATA.start || '?') + '~' + (DATA.end || '?') + ')') + '의 ' + DATA.admin.completionRate + '% 이상 머물렀고' + ((DATA.survey || 0) > 0 ? ' 설문을 낸' : '') + ' 사람을 O로 적어요. 입실·퇴실 기록이 없으면 \'확인 필요\'예요.'
       : '이수자 명단: 사람마다 입실·퇴실 시각, 머문 시간, 실습 완료, 설문 제출을 적어요. 이수 기준(출석 비율)이 연수 정보에 없어 \'이수\' 칸은 비워 둬요. 기관 기준으로 판단해 주세요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '삭제'));

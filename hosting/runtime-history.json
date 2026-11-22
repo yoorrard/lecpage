@@ -1,5 +1,5 @@
 {
- "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 보안 문제로 막아야 하는 판은 지우세요.",
+ "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 보안 문제로 막아야 하는 판은 지우세요.",
  "segments": [
   {
    "name": "fx/core.js",
@@ -524,6 +524,34 @@
    "len": 22374,
    "head": "/*! lecpage live — provider 'htt",
    "sha256": "e66327d850ad3b652ff192970ed99e8c1e33e82043412d35fbdf93d8cf456e1d",
+   "kept": "2026-11-22"
+  },
+  {
+   "name": "console.js",
+   "len": 87285,
+   "head": "/* lecpage console — 강사 화면. 모든 화",
+   "sha256": "fffa63614adc6a0aaba02517f4cd16ab75562214e8bf80531ff70b22b7f388c0",
+   "kept": "2026-11-22"
+  },
+  {
+   "name": "live/core.js",
+   "len": 77995,
+   "head": "/*! lecpage live core — window.L",
+   "sha256": "cad1f5c45174e2d4372e0c3b8828ca881622e5b9b9c69d8e8a70fa5f44952d4f",
+   "kept": "2026-11-22"
+  },
+  {
+   "name": "live/http.js",
+   "len": 22557,
+   "head": "/*! lecpage live — provider 'htt",
+   "sha256": "fec12525637d4cf71c4e68b3857a41679a10c54338e1c80bdb7b12454675e01d",
+   "kept": "2026-11-22"
+  },
+  {
+   "name": "live/local.js",
+   "len": 12898,
+   "head": "/*! lecpage live — provider 'loc",
+   "sha256": "0d6e78ea79e4469a46b1dafbabefb015fd59c54dcfa97feb985f796b3b487046",
    "kept": "2026-11-22"
   }
  ]

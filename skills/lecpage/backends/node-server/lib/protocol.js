@@ -430,7 +430,11 @@ export function exportTable(kind, data, timeZone, opts) {
       const m = new Map();
       for (const a of data.attendance || []) { const r = m.get(a.by) || {}; const at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); if (a.byHost) r[a.kind + 'Host'] = true; m.set(a.by, r); }
       // 강사 입력: 강사 화면에서 손으로 더한 사람(명단)·강사가 넣거나 고친 시각(입실·퇴실)
-      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력'], rows: data.participants.map((p) => { const r = m.get(p.id) || {}; return [p.nickname, p.name, p.school, t(r.in), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·')]; }) };
+      // 여러 날에 걸친 기록이 있으면 날마다의 입실·퇴실을 끝 칸에(예전 기록은 at 하나로)
+      const per = new Map(); let multi = false;
+      for (const a of data.attendance || []) { const r = per.get(a.by) || {}; for (const [d, v] of Object.entries(seedDays({ at: a.at || a.createdAt, days: a.days }, timeZone))) { (r[d] = r[d] || {})[a.kind] = v; } per.set(a.by, r); if (Object.keys(r).length > 1) multi = true; }
+      const dayText = (id) => Object.entries(per.get(id) || {}).sort(([x], [y]) => (x < y ? -1 : 1)).map(([d, v]) => `${d.slice(5)} ${v.in ? fmtTime(v.in, timeZone).slice(11, 16) : '-'}~${v.out ? fmtTime(v.out, timeZone).slice(11, 16) : '-'}`).join(' · ');
+      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력', ...(multi ? ['날짜별 입실·퇴실'] : [])], rows: data.participants.map((p) => { const r = m.get(p.id) || {}; return [p.nickname, p.name, p.school, t(r.in), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·'), ...(multi ? [dayText(p.id)] : [])]; }) };
     }
     case 'progress': {
       const stations = [...new Set((data.progress || []).map((x) => x.station))];
@@ -457,11 +461,38 @@ export function exportTable(kind, data, timeZone, opts) {
 }
 export const EXPORT_KINDS = ['attendance', 'progress', 'questions', 'survey', 'participants', 'posts', 'help', 'chat', 'answers', 'completion'];
 
+// ---------- attendance per day (여러 날 연수) ----------
+/** 그 시각의 현지 날짜 'YYYY-MM-DD' */
+export function dayKey(ms, timeZone = 'Asia/Seoul') { return fmtTime(ms, timeZone).slice(0, 10); }
+/** 출석 기록의 날짜별 값 { 'YYYY-MM-DD': ms }: 입실은 그날 가장 이른 시각, 퇴실은 가장 늦은 시각(replace면 그날 값을 바꿈, 강사 고치기). 최근 31일만 */
+export function attDays(prev, kind, at, timeZone, replace = false) {
+  const days = isObj(prev) ? { ...prev } : {};
+  const d = dayKey(at, timeZone); const cur = days[d];
+  days[d] = replace || !cur ? at : kind === 'in' ? Math.min(cur, at) : Math.max(cur, at);
+  const keys = Object.keys(days).sort();
+  while (keys.length > 31) delete days[keys.shift()];
+  return days;
+}
+/** 날짜별 값이 없는 예전 기록은 at 하나로 시작(그날 값) */
+export function seedDays(doc, timeZone) {
+  if (isObj(doc?.days)) return doc.days;
+  return doc?.at ? { [dayKey(doc.at, timeZone)]: doc.at } : {};
+}
+/** 'YYYY-MM-DDTHH:MM/HH:MM,…' → [{ date, start, end }](여러 날 연수의 날마다 연수 시간, 강사 화면이 보냄) */
+export function parseDays(v) {
+  if (Array.isArray(v)) return v.filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '')).slice(0, 31);
+  return String(v || '').split(',').slice(0, 31).map((x) => /^(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})\/(\d{1,2}:\d{2})$/.exec(x.trim())).filter(Boolean).map((m) => ({ date: m[1], start: m[2], end: m[3] }));
+}
+
 // ---------- completion (이수 확인): one row per participant. Same rule as engine/runtime/live/core.js ----------
+// 여러 날 연수(opts.days 2일 이상): 날마다 그날 연수 시간 안에 머문 분을 더해 전체 연수 시간의 rate% 이상이면 O. 어떤 날 입실만·퇴실만 있으면 '확인 필요'.
+// 이름·소속이 같은 여러 참가자는 한 줄(두 기기·다시 참여)로 합치되, 둘 이상이 각자 입실했으면 다른 사람일 수 있어 '확인 필요'와 '확인할 점'.
 // opts: { date:'YYYY-MM-DD', start:'HH:MM', end:'HH:MM', rate: 0~100, survey: bool (site has survey questions), stations: n }
 // 이수 = O when minutes present (clipped to the schedule) ≥ rate% of the scheduled minutes, and a survey was sent if the site has one.
 // Missing check-in/out or schedule → '확인 필요'. Only nickname, name and school: never NEIS or phone numbers.
-export const COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '이수'];
+export const COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '확인할 점', '이수'];
+/** 여러 날 연수일 때 '이수' 앞에 더하는 칸(날마다 머문 분) */
+export const COMPLETION_DAYS_COL = '날짜별 머문 시간(분)';
 function tzOffset(ms, timeZone) {
   try {
     const p = {};
@@ -480,11 +511,14 @@ export function zonedMs(date, hm, timeZone = 'Asia/Seoul') {
 export function completionTable(data, opts, timeZone) {
   const o = opts || {}; const tz = timeZone || 'Asia/Seoul';
   const rate = typeof o.rate === 'number' && o.rate >= 0 && o.rate <= 100 ? o.rate : 90;
+  const sessions = parseDays(o.days); const multi = sessions.length >= 2;
   const att = new Map(); const done = new Map(); const sv = new Set(); const stations = new Set();
-  // earliest check-in and latest check-out per participant
+  // earliest check-in and latest check-out per participant (+ per day: days)
   for (const a of data.attendance || []) {
-    const r = att.get(a.by) || {}; const at = a.at || a.createdAt;
-    if (a.kind === 'in') r.in = r.in ? Math.min(r.in, at) : at; else if (a.kind === 'out') r.out = r.out ? Math.max(r.out, at) : at;
+    const r = att.get(a.by) || { inDays: {}, outDays: {} }; const at = a.at || a.createdAt;
+    const dd = seedDays({ at, days: a.days }, tz);
+    if (a.kind === 'in') { r.in = r.in ? Math.min(r.in, at) : at; for (const [d, v] of Object.entries(dd)) r.inDays[d] = r.inDays[d] ? Math.min(r.inDays[d], v) : v; }
+    else if (a.kind === 'out') { r.out = r.out ? Math.max(r.out, at) : at; for (const [d, v] of Object.entries(dd)) r.outDays[d] = Math.max(r.outDays[d] || 0, v); }
     att.set(a.by, r);
   }
   for (const x of data.progress || []) { stations.add(x.station); if (x.status === 'done') { const r = done.get(x.by) || new Set(); r.add(x.station); done.set(x.by, r); } }
@@ -492,33 +526,56 @@ export function completionTable(data, opts, timeZone) {
   const total = o.stations > 0 ? Math.floor(o.stations) : stations.size;
   // One row per person: entries with the same name and school (a second phone, a re-join) are merged —
   // nicknames joined, earliest check-in, latest check-out, finished stations together, survey sent by any of them.
+  // 둘 이상이 각자 입실했으면 같은 이름·소속의 다른 사람일 수 있음 → 판정하지 않고 '확인 필요'(출석 CSV로 따로 확인)
   const groups = new Map();
   for (const p of [...(data.participants || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))) {
     const key = p.name ? 'n:' + p.name + '|' + (p.school || '') : 'id:' + p.id;
-    const g = groups.get(key) || { nick: [], name: p.name, school: p.school, in: 0, out: 0, done: new Set(), survey: false };
+    const g = groups.get(key) || { nick: [], name: p.name, school: p.school, in: 0, out: 0, inDays: {}, outDays: {}, done: new Set(), survey: false, ids: 0, checkedIn: 0 };
     if (p.nickname && !g.nick.includes(p.nickname)) g.nick.push(p.nickname);
-    const r = att.get(p.id) || {};
+    const r = att.get(p.id) || { inDays: {}, outDays: {} };
+    g.ids++; if (r.in) g.checkedIn++;
     if (r.in) g.in = g.in ? Math.min(g.in, r.in) : r.in;
     if (r.out) g.out = Math.max(g.out, r.out);
+    for (const [d, v] of Object.entries(r.inDays)) g.inDays[d] = g.inDays[d] ? Math.min(g.inDays[d], v) : v;
+    for (const [d, v] of Object.entries(r.outDays)) g.outDays[d] = Math.max(g.outDays[d] || 0, v);
     for (const st of done.get(p.id) || []) g.done.add(st);
     if (sv.has(p.id)) g.survey = true;
     groups.set(key, g);
   }
   const rows = [...groups.values()].map((g) => {
     const inAt = g.in || 0; const outAt = g.out || 0;
-    const day = o.date || (inAt ? fmtTime(inAt, tz).slice(0, 10) : '');
-    const s0 = zonedMs(day, o.start, tz); const s1 = zonedMs(day, o.end, tz);
-    const sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
-    let mins = '';
-    if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
+    let mins = ''; let sched = 0; let perDay = ''; let partial = false;
+    if (multi) {
+      // 날마다: 그날 연수 시간 안에서 그날 첫 입실 ~ 마지막 퇴실. 그날 기록이 한쪽만 있으면 셀 수 없음
+      let sum = 0; let any = false; const parts = [];
+      for (const ss of sessions) {
+        const s0 = zonedMs(ss.date, ss.start, tz); const s1 = zonedMs(ss.date, ss.end, tz);
+        if (s0 == null || s1 == null || s1 <= s0) continue;
+        sched += s1 - s0;
+        const i = g.inDays[ss.date] || 0; const x = g.outDays[ss.date] || 0;
+        let m = 0;
+        if (i && x && x >= i) { m = Math.max(0, Math.round((Math.min(x, s1) - Math.max(i, s0)) / 60000)); any = true; }
+        else if (i || x) { partial = true; any = true; }
+        sum += m; parts.push(`${ss.date.slice(5)} ${i && !x ? '퇴실 없음' : !i && x ? '입실 없음' : m + '분'}`);
+      }
+      mins = any ? sum : ''; perDay = parts.join(' · ');
+    } else {
+      const day = o.date || (inAt ? fmtTime(inAt, tz).slice(0, 10) : '');
+      const s0 = zonedMs(day, o.start, tz); const s1 = zonedMs(day, o.end, tz);
+      sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
+      if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
+    }
     const n = g.done.size;
+    const twins = g.ids > 1 && g.checkedIn > 1;
     let verdict = '확인 필요';
-    if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!o.survey || g.survey) ? 'O' : 'X';
-    return [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', o.survey ? (g.survey ? 'O' : 'X') : '해당 없음', verdict];
+    if (mins !== '' && sched && !partial && !twins) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!o.survey || g.survey) ? 'O' : 'X';
+    const note = [twins ? `이름·소속이 같은 ${g.ids}명을 한 줄로 합쳤어요. 다른 사람이면 출석 CSV로 따로 확인해 주세요.` : '', partial ? '입실이나 퇴실 기록이 없는 날이 있어요.' : ''].filter(Boolean).join(' ');
+    return [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, ...(multi ? [perDay] : []), total ? Math.min(n, total) + ' / ' + total : '해당 없음', o.survey ? (g.survey ? 'O' : 'X') : '해당 없음', note, verdict];
   });
-  return { columns: [...COMPLETION_COLS], rows };
+  const columns = [...COMPLETION_COLS];
+  if (multi) columns.splice(6, 0, COMPLETION_DAYS_COL);
+  return { columns, rows };
 }
-/** Reads completion options from export.csv query parameters (?date=&start=&end=&rate=&survey=1&stations=). */
 export function completionOpts(query) {
   const g = (k) => (query && typeof query.get === 'function' ? query.get(k) : null);
   const o = {};
@@ -528,6 +585,7 @@ export function completionOpts(query) {
   const rate = Number(g('rate')); if (g('rate') != null && g('rate') !== '' && rate >= 0 && rate <= 100) o.rate = rate;
   const st = Number(g('stations')); if (Number.isInteger(st) && st > 0 && st <= 500) o.stations = st;
   o.survey = g('survey') === '1' || g('survey') === 'true';
+  const days = parseDays(g('days')); if (days.length >= 2) o.days = days;
   return o;
 }
 
@@ -1057,11 +1115,14 @@ export class LiveCore {
     this.db.tx(() => {
       const existing = this.db.get(`SELECT * FROM docs WHERE code = ? AND col = 'attendance' AND k = ?`, code, k);
       if (existing) {
-        const data = { ...safeJson(existing.data, {}), kind, at, byHost: true };
+        const prev = safeJson(existing.data, {});
+        const days = attDays(seedDays(prev, this.cfg.timeZone), kind, at, this.cfg.timeZone, true);
+        const vals = Object.values(days);
+        const data = { ...prev, kind, at: kind === 'in' ? Math.min(...vals) : Math.max(...vals), days, byHost: true };
         row = this.writeRow(code, 'attendance', existing, data, now); type = 'update';
       } else {
         if (this.count(code, 'attendance') >= this.cfg.maxDocs) throw new HttpError(409, 'collection_full', '이 연수에 쌓인 글이 너무 많아요.');
-        const id = 'a' + randomId(9); const data = { kind, at, byHost: true };
+        const id = 'a' + randomId(9); const data = { kind, at, days: attDays(null, kind, at, this.cfg.timeZone), byHost: true };
         this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, 'attendance', ?, ?, ?, NULL, ?, ?, ?)`, code, id, by, k, JSON.stringify(data), now, now);
         row = { code, col: 'attendance', id, by, k, cid: null, data: JSON.stringify(data), created_at: now, updated_at: now };
       }
@@ -1100,7 +1161,7 @@ export class LiveCore {
     const nickname = me ? me.nickname : '강사';
     let k = null;
     switch (col) {
-      case 'attendance': k = by + '|' + data.kind; data.at = now; break;
+      case 'attendance': k = by + '|' + data.kind; data.at = now; data.days = attDays(null, data.kind, now, this.cfg.timeZone); break;
       case 'progress': k = by + '|' + data.station; data.at = now; break;
       case 'answers': {
         k = data.poll + '|' + by;
@@ -1132,6 +1193,8 @@ export class LiveCore {
         const merged = { ...prev, ...data };
         // ⑧ a second tap keeps the first check-in and the last check-out
         if (col === 'attendance' && prev.at) merged.at = data.kind === 'in' ? Math.min(prev.at, data.at) : Math.max(prev.at, data.at);
+        // 여러 날 연수: 날마다 그날의 첫 입실·마지막 퇴실을 따로 남김(at은 예전처럼 전체의 첫 입실·마지막 퇴실)
+        if (col === 'attendance') merged.days = attDays(seedDays(prev, this.cfg.timeZone), data.kind, data.at, this.cfg.timeZone);
         this.db.run(`UPDATE docs SET data = ?, updated_at = ?, cid = ? WHERE code = ? AND col = ? AND id = ?`, JSON.stringify(merged), now, cid, code, col, existing.id);
         row = { ...existing, data: JSON.stringify(merged), updated_at: now, cid };
         type = 'update';

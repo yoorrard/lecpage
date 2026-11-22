@@ -323,7 +323,11 @@ test('core (②⑧): one vote per respondent on every screen; completion merges 
   const s = P.exportTable('completion', data, 'Asia/Seoul', opts); const c = LecLive.util.exportTable('completion', data, 'Asia/Seoul', opts);
   assert.equal(LecLive.util.toCsv(c.columns, c.rows), P.toCsv(s.columns, s.rows), 'client and server agree');
   assert.equal(s.rows.length, 3, 'same name·school on two devices → one row; another school stays separate');
-  assert.deepEqual(s.rows[0], ['폰 / 노트북', '홍길동', '한빛초', '2026-11-13 09:05:00', '2026-11-13 15:00:00', 355, '2 / 2', 'O', 'O']);
+  // 두 기기가 각자 입실했으면 같은 이름·소속의 다른 사람일 수 있어 판정하지 않고 '확인 필요' + 확인할 점(한 사람이 입실을 한 기기에서만 했으면 그대로 판정)
+  assert.deepEqual(s.rows[0].slice(0, 8), ['폰 / 노트북', '홍길동', '한빛초', '2026-11-13 09:05:00', '2026-11-13 15:00:00', 355, '2 / 2', 'O']);
+  assert.match(s.rows[0][8], /이름·소속이 같은 2명을 한 줄로 합쳤어요/); assert.equal(s.rows[0][9], '확인 필요');
+  const one = { ...data, attendance: data.attendance.filter((x) => !(x.by === 'p2' && x.kind === 'in')) };
+  assert.deepEqual(P.exportTable('completion', one, 'Asia/Seoul', opts).rows[0].slice(8), ['', 'O'], 'only one device checked in → merged as before');
 });
 
 test('protect (③): the pages left open carry no live url, code or key; check only probes /api/health', async () => {

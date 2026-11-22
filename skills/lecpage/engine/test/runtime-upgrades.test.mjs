@@ -50,23 +50,23 @@ const OPTS = { date: DAY, start: '15:30', end: '17:00', rate: 90, survey: true, 
 test('completion: rule, columns and parity between the client core and the server protocol', async () => {
   const P = await import(protoNode);
   const L = core();
-  assert.deepEqual([...L.util.completionColumns], ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '이수']);
+  assert.deepEqual([...L.util.completionColumns], ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '확인할 점', '이수']);
   const c = L.util.exportTable('completion', DATA, undefined, OPTS);
   const s = P.exportTable('completion', DATA, undefined, OPTS);
   assert.equal(L.util.toCsv(c.columns, c.rows), P.toCsv(s.columns, s.rows));
   const by = Object.fromEntries(s.rows.map((r) => [r[0], r]));
-  assert.deepEqual(by['숲'].slice(5), [90, '2 / 4', 'O', 'O']);
+  assert.deepEqual(by['숲'].slice(5), [90, '2 / 4', 'O', '', 'O']);
   assert.equal(by['숲'][3], '2027-04-22 15:20:00');
-  assert.deepEqual(by['=bad'].slice(5), [70, '0 / 4', 'O', 'X']);
-  assert.deepEqual(by['바람'].slice(5), ['', '0 / 4', 'X', '확인 필요']);
-  assert.deepEqual(by['나무'].slice(5), ['', '0 / 4', 'X', '확인 필요']);
-  assert.deepEqual(by['늦게'].slice(5), [81, '0 / 4', 'X', 'X'], 'enough minutes but no survey');
+  assert.deepEqual(by['=bad'].slice(5), [70, '0 / 4', 'O', '', 'X']);
+  assert.deepEqual(by['바람'].slice(5), ['', '0 / 4', 'X', '', '확인 필요']);
+  assert.deepEqual(by['나무'].slice(5), ['', '0 / 4', 'X', '', '확인 필요']);
+  assert.deepEqual(by['늦게'].slice(5), [81, '0 / 4', 'X', '', 'X'], 'enough minutes but no survey');
   // without survey questions the survey column is '-' and does not block
   const noSurvey = P.exportTable('completion', DATA, undefined, { ...OPTS, survey: false });
-  assert.deepEqual(noSurvey.rows.find((r) => r[0] === '늦게').slice(7), ['해당 없음', 'O']);
+  assert.deepEqual(noSurvey.rows.find((r) => r[0] === '늦게').slice(7), ['해당 없음', '', 'O']);
   // no schedule → 확인 필요 for everyone; date falls back to the check-in day
-  assert.ok(P.exportTable('completion', DATA).rows.every((r) => r[8] === '확인 필요'));
-  assert.equal(P.exportTable('completion', DATA, undefined, { start: '15:30', end: '17:00', rate: 90 }).rows[0][8], 'O');
+  assert.ok(P.exportTable('completion', DATA).rows.every((r) => r.at(-1) === '확인 필요'));
+  assert.equal(P.exportTable('completion', DATA, undefined, { start: '15:30', end: '17:00', rate: 90 }).rows[0].at(-1), 'O');
   // formula injection guard and no personal numbers
   assert.match(P.toCsv(s.columns, s.rows), /'=bad/);
   assert.ok(!/NEIS|전화|휴대폰|phone/i.test(s.columns.join()));
@@ -83,7 +83,7 @@ test('completion: local adapter passes options; core builds it from the admin st
   await a.add('attendance', { kind: 'in' }); await a.add('attendance', { kind: 'out' });
   const csv = await a.exportCsv('completion', { date: '2000-01-01', start: '09:00', end: '10:00', rate: 90 });
   const row = csv.trim().split('\r\n')[1].split(',');
-  assert.equal(row[0], '참가'); assert.equal(row[8], 'X', 'checked in/out outside the schedule → 0 minutes');
+  assert.equal(row[0], '참가'); assert.equal(row.at(-1), 'X', 'checked in/out outside the schedule → 0 minutes');
   await a.close();
   // an older server: exportCsv('completion') → 400 bad_kind
   L.register('old', () => ({
@@ -94,7 +94,7 @@ test('completion: local adapter passes options; core builds it from the admin st
   const o = L.create({ provider: 'old', code: 'OLD1', adminKey: 'k' });
   await o.connect();
   const out = await o.exportCsv('completion', { start: '09:00', end: '10:00' });
-  assert.match(out, /^﻿별명,이름,소속/); assert.match(out, /옛,,,,,,해당 없음,해당 없음,확인 필요/);
+  assert.match(out, /^﻿별명,이름,소속/); assert.match(out, /옛,,,,,,해당 없음,해당 없음,,확인 필요/);
   await o.close();
 });
 
@@ -104,15 +104,18 @@ test('completion: node server reads the options from export.csv query parameters
     const a = api(srv.url, 'CMPL1');
     const p = (await a.call('POST', '/join', { body: { nickname: '서버' } })).body;
     await a.call('POST', '/join', { body: { nickname: '없음' } });
-    assert.equal((await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } })).status, 201);
+    const ci = await a.call('POST', '/attendance', { token: p.token, body: { kind: 'in' } });
+    assert.equal(ci.status, 201);
+    // 여러 날 연수: 서버가 그날 값(days)을 함께 둠
+    assert.deepEqual(Object.values(ci.body.days || {}), [ci.body.at], JSON.stringify(ci.body));
     await a.call('POST', '/attendance', { token: p.token, body: { kind: 'out' } });
     const plain = await a.call('GET', '/export.csv?kind=completion', { admin: 'admin-key-0001' });
     assert.equal(plain.status, 200);
     assert.ok(plain.body.split('\r\n').slice(1, 3).every((l) => l.endsWith('확인 필요')));
     const q = await a.call('GET', '/export.csv?kind=completion&date=2000-01-01&start=09:00&end=10:00&rate=90&survey=1&stations=3', { admin: 'admin-key-0001' });
     const lines = q.body.trim().split('\r\n');
-    assert.match(lines[1], /^서버,,,.+,0,0 \/ 3,X,X$/);
-    assert.match(lines[2], /^없음,,,,,,0 \/ 3,X,확인 필요$/);
+    assert.match(lines[1], /^서버,,,.+,0,0 \/ 3,X,,X$/);
+    assert.match(lines[2], /^없음,,,,,,0 \/ 3,X,,확인 필요$/);
     assert.equal((await a.call('GET', '/export.csv?kind=completion', {})).status, 401);
   } finally { await srv.close(); }
 });
@@ -219,4 +222,45 @@ test('board moderation: new posts stay hidden until the instructor shows them (s
   await c.setState({ ui: { moderation: true } });
   assert.equal((await c.add('posts', { text: '대기' })).hidden, true);
   await c.close();
+});
+
+// 여러 날 연수(점검에서 찾은 것): 날마다 입실·퇴실을 따로 두고(days), 이수는 날마다 머문 시간의 합으로. 하루만 온 사람이 O가 되지 않음
+test('completion: multi-day trainings count each day; one-day attendance is not enough; old records fall back to 확인 필요', async () => {
+  const P = await import(protoNode);
+  const L = core();
+  const D1 = '2027-05-10', D2 = '2027-05-11';
+  const both = (by, kind, d1, d2) => ({ by, kind, at: kind === 'in' ? KST(D1, d1) : KST(D2, d2), days: { [D1]: KST(D1, d1), [D2]: KST(D2, d2) } });
+  const data = {
+    participants: ['갑', '을', '병', '무', '옛'].map((n, i) => ({ id: 'p' + i, nickname: n, name: n, school: '본사', createdAt: i + 1 })),
+    attendance: [
+      { by: 'p0', kind: 'in', at: KST(D1, '09:00'), days: { [D1]: KST(D1, '09:00') } }, { by: 'p0', kind: 'out', at: KST(D1, '18:00'), days: { [D1]: KST(D1, '18:00') } },
+      { by: 'p1', kind: 'in', at: KST(D2, '09:00'), days: { [D2]: KST(D2, '09:00') } }, { by: 'p1', kind: 'out', at: KST(D2, '18:00'), days: { [D2]: KST(D2, '18:00') } },
+      both('p2', 'in', '09:00', '09:00'), { ...both('p2', 'out', '18:00', '18:00'), at: KST(D2, '18:00'), days: { [D1]: KST(D1, '18:00'), [D2]: KST(D2, '18:00') } },
+      { by: 'p3', kind: 'in', at: KST(D1, '09:00'), days: { [D1]: KST(D1, '09:00'), [D2]: KST(D2, '09:00') } }, { by: 'p3', kind: 'out', at: KST(D1, '18:00'), days: { [D1]: KST(D1, '18:00') } },
+      { by: 'p4', kind: 'in', at: KST(D1, '09:00') }, { by: 'p4', kind: 'out', at: KST(D2, '18:00') }, // 예전 기록(days 없음): 첫 입실·마지막 퇴실만
+    ],
+    progress: [], survey: [],
+  };
+  const opts = { rate: 80, days: `${D1}T09:00/18:00,${D2}T09:00/18:00` };
+  const s = P.exportTable('completion', data, 'Asia/Seoul', opts), c = L.util.exportTable('completion', data, 'Asia/Seoul', opts);
+  assert.equal(L.util.toCsv(c.columns, c.rows), P.toCsv(s.columns, s.rows), 'client and server agree');
+  assert.deepEqual(s.columns.slice(6, 7), ['날짜별 머문 시간(분)']); assert.equal(s.columns.at(-1), '이수', '이수는 늘 마지막 칸(강사 화면 noVerdict)');
+  const v = Object.fromEntries(s.rows.map((r) => [r[1], [r[5], r[6], r.at(-1)]]));
+  assert.deepEqual(v['갑'], [540, '05-10 540분 · 05-11 0분', 'X'], '첫날만 → X');
+  assert.deepEqual(v['을'], [540, '05-10 0분 · 05-11 540분', 'X'], '둘째 날만 → X');
+  assert.deepEqual(v['병'], [1080, '05-10 540분 · 05-11 540분', 'O']);
+  assert.deepEqual(v['무'], [540, '05-10 540분 · 05-11 퇴실 없음', '확인 필요']);
+  assert.equal(v['옛'][2], '확인 필요', '날짜별 값이 없는 예전 기록은 판정하지 않음');
+  // 하루짜리(days 없음)는 예전과 같은 판정
+  assert.equal(P.exportTable('completion', data, 'Asia/Seoul', { rate: 80, date: D1, start: '09:00', end: '18:00' }).rows.find((r) => r[1] === '갑').at(-1), 'O');
+  // 서버 쓰기 도우미: 그날의 첫 입실·마지막 퇴실, 강사 고치기는 그날 값을 바꿈
+  let d = P.attDays(null, 'in', KST(D1, '09:10'), 'Asia/Seoul'); d = P.attDays(d, 'in', KST(D1, '09:00'), 'Asia/Seoul'); d = P.attDays(d, 'in', KST(D2, '09:20'), 'Asia/Seoul');
+  assert.deepEqual(d, { [D1]: KST(D1, '09:00'), [D2]: KST(D2, '09:20') });
+  assert.equal(P.attDays(d, 'in', KST(D1, '10:00'), 'Asia/Seoul', true)[D1], KST(D1, '10:00'));
+  assert.deepEqual(P.seedDays({ at: KST(D2, '18:00') }, 'Asia/Seoul'), { [D2]: KST(D2, '18:00') });
+  assert.deepEqual(P.completionOpts(new URLSearchParams({ days: opts.days, rate: '80' })).days, [{ date: D1, start: '09:00', end: '18:00' }, { date: D2, start: '09:00', end: '18:00' }]);
+  // 출석 CSV: 여러 날 기록이 있으면 날짜별 칸
+  const a = P.exportTable('attendance', data, 'Asia/Seoul'), ac = L.util.exportTable('attendance', data, 'Asia/Seoul');
+  assert.equal(a.columns.at(-1), '날짜별 입실·퇴실'); assert.equal(L.util.toCsv(ac.columns, ac.rows), P.toCsv(a.columns, a.rows));
+  assert.equal(a.rows.find((r) => r[1] === '병').at(-1), '05-10 09:00~18:00 · 05-11 09:00~18:00');
 });

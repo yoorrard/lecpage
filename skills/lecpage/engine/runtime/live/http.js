@@ -355,7 +355,7 @@
     };
     a.exportCsv = function (kindName, opts) {
       var q = '?kind=' + encodeURIComponent(kindName);
-      if (kindName === 'completion' && opts) ['date', 'start', 'end', 'rate', 'stations'].forEach(function (k) { if (opts[k] != null && opts[k] !== '') q += '&' + k + '=' + encodeURIComponent(opts[k]); });
+      if (kindName === 'completion' && opts) ['date', 'start', 'end', 'rate', 'stations', 'days'].forEach(function (k) { if (opts[k] != null && opts[k] !== '') q += '&' + k + '=' + encodeURIComponent(opts[k]); });
       if (kindName === 'completion' && opts && opts.survey) q += '&survey=1';
       return request('GET', '/export.csv' + q, { text: true });
     };

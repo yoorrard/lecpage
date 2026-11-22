@@ -267,7 +267,15 @@
       case 'participants': return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: P.map(function (p) { return [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]; }) };
       case 'attendance': {
         var m = {}; (data.attendance || []).forEach(function (a) { var r = m[a.by] || (m[a.by] = {}); var at = a.at || a.createdAt; r[a.kind] = !r[a.kind] ? at : a.kind === 'in' ? Math.min(r[a.kind], at) : Math.max(r[a.kind], at); if (a.byHost) r[a.kind + 'Host'] = true; });
-        return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·')]; }) };
+        var per = {}, multi = false;
+        (data.attendance || []).forEach(function (a) { var r = per[a.by] || (per[a.by] = {}); var dd = seedDays({ at: a.at || a.createdAt, days: a.days }, tz); for (var d in dd) (r[d] = r[d] || {})[a.kind] = dd[d]; if (Object.keys(r).length > 1) multi = true; });
+        var dayText = function (id) { var r = per[id] || {}; return Object.keys(r).sort().map(function (d) { var v = r[d]; return d.slice(5) + ' ' + (v['in'] ? fmtTime(v['in'], tz).slice(11, 16) : '-') + '~' + (v.out ? fmtTime(v.out, tz).slice(11, 16) : '-'); }).join(' · '); };
+        var base = (function () {
+          return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각', '강사 입력'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt), [p.manual && '명단', r.inHost && '입실', r.outHost && '퇴실'].filter(Boolean).join('·')]; }) };
+
+        })();
+        if (multi) { base.columns.push('날짜별 입실·퇴실'); base.rows.forEach(function (row, k) { row.push(dayText(P[k].id)); }); }
+        return base;
       }
       case 'progress': {
         var pr = data.progress || []; var st = uniq(pr.map(function (x) { return x.station; })); var mm = {}; var order = [];
@@ -305,44 +313,74 @@
     return off2 === off ? ms : guess - off2;
   }
   function dayOf(ms, tz) { return fmtTime(ms, tz).slice(0, 10); }
-  var COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '이수'];
+  var COMPLETION_COLS = ['별명', '이름', '소속', '입실', '퇴실', '머문 시간(분)', '실습 완료(n/전체)', '설문 제출', '확인할 점', '이수'];
+  var COMPLETION_DAYS_COL = '날짜별 머문 시간(분)';
+  // 여러 날 연수(protocol.js와 같은 규칙): 출석 기록의 날짜별 값 days { 'YYYY-MM-DD': ms }, 없으면(예전 기록·시트·Supabase) at 하나로
+  function seedDays(a, tz) { if (a && a.days && typeof a.days === 'object' && !Array.isArray(a.days)) return a.days; var o = {}; if (a && a.at) o[dayOf(a.at, tz)] = a.at; return o; }
+  /** 'YYYY-MM-DDTHH:MM/HH:MM,…' → [{ date, start, end }] */
+  function parseDays(v) {
+    if (Array.isArray(v)) return v.filter(function (x) { return x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || ''); }).slice(0, 31);
+    return String(v || '').split(',').slice(0, 31).map(function (x) { return /^(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})\/(\d{1,2}:\d{2})$/.exec(x.trim()); }).filter(Boolean).map(function (m) { return { date: m[1], start: m[2], end: m[3] }; });
+  }
   function completionTable(data, opts, tz) {
     opts = opts || {}; tz = tz || 'Asia/Seoul';
     var rate = typeof opts.rate === 'number' && opts.rate >= 0 && opts.rate <= 100 ? opts.rate : 90;
+    var sessions = parseDays(opts.days), multi = sessions.length >= 2;
     var att = {}, done = {}, sv = {}, seen = {}, stations = [];
-    // earliest check-in and latest check-out per participant
+    // earliest check-in and latest check-out per participant (+ per day)
     (data.attendance || []).forEach(function (a) {
-      var r = att[a.by] || (att[a.by] = {}); var at = a.at || a.createdAt;
-      if (a.kind === 'in') r['in'] = r['in'] ? Math.min(r['in'], at) : at; else if (a.kind === 'out') r.out = r.out ? Math.max(r.out, at) : at;
+      var r = att[a.by] || (att[a.by] = { inDays: {}, outDays: {} }); var at = a.at || a.createdAt; var dd = seedDays({ at: at, days: a.days }, tz), d;
+      if (a.kind === 'in') { r['in'] = r['in'] ? Math.min(r['in'], at) : at; for (d in dd) r.inDays[d] = r.inDays[d] ? Math.min(r.inDays[d], dd[d]) : dd[d]; }
+      else if (a.kind === 'out') { r.out = r.out ? Math.max(r.out, at) : at; for (d in dd) r.outDays[d] = Math.max(r.outDays[d] || 0, dd[d]); }
     });
     (data.progress || []).forEach(function (x) { if (!seen[x.station]) { seen[x.station] = 1; stations.push(x.station); } if (x.status === 'done') (done[x.by] || (done[x.by] = {}))[x.station] = 1; });
     (data.survey || []).forEach(function (s) { if (s.by) sv[s.by] = 1; });
     var total = opts.stations > 0 ? Math.floor(opts.stations) : stations.length;
-    // one row per person: the same name and school on two devices (or a re-join) is merged
+    // one row per person: the same name and school on two devices (or a re-join) is merged; 둘 이상이 각자 입실했으면 '확인 필요'
     var groups = {}, order = [];
     (data.participants || []).slice().sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }).forEach(function (p) {
       var key = p.name ? 'n:' + p.name + '|' + (p.school || '') : 'id:' + p.id;
-      var g = groups[key]; if (!g) { g = groups[key] = { nick: [], name: p.name, school: p.school, inAt: 0, outAt: 0, done: {}, survey: false }; order.push(g); }
+      var g = groups[key]; if (!g) { g = groups[key] = { nick: [], name: p.name, school: p.school, inAt: 0, outAt: 0, inDays: {}, outDays: {}, done: {}, survey: false, ids: 0, checkedIn: 0 }; order.push(g); }
       if (p.nickname && g.nick.indexOf(p.nickname) < 0) g.nick.push(p.nickname);
-      var r = att[p.id] || {};
+      var r = att[p.id] || { inDays: {}, outDays: {} }, d;
+      g.ids++; if (r['in']) g.checkedIn++;
       if (r['in']) g.inAt = g.inAt ? Math.min(g.inAt, r['in']) : r['in'];
       if (r.out) g.outAt = Math.max(g.outAt, r.out);
+      for (d in r.inDays) g.inDays[d] = g.inDays[d] ? Math.min(g.inDays[d], r.inDays[d]) : r.inDays[d];
+      for (d in r.outDays) g.outDays[d] = Math.max(g.outDays[d] || 0, r.outDays[d]);
       for (var st in (done[p.id] || {})) g.done[st] = 1;
       if (sv[p.id]) g.survey = true;
     });
     var rows = order.map(function (g) {
-      var inAt = g.inAt || 0, outAt = g.outAt || 0;
-      var day = opts.date || (inAt ? dayOf(inAt, tz) : '');
-      var s0 = zonedMs(day, opts.start, tz), s1 = zonedMs(day, opts.end, tz);
-      var sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
-      var mins = '';
-      if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
-      var n = Object.keys(g.done).length;
+      var inAt = g.inAt || 0, outAt = g.outAt || 0, mins = '', sched = 0, perDay = '', partial = false;
+      if (multi) {
+        var sum = 0, any = false, parts = [];
+        sessions.forEach(function (ss) {
+          var s0 = zonedMs(ss.date, ss.start, tz), s1 = zonedMs(ss.date, ss.end, tz);
+          if (s0 == null || s1 == null || s1 <= s0) return;
+          sched += s1 - s0;
+          var i = g.inDays[ss.date] || 0, x = g.outDays[ss.date] || 0, m = 0;
+          if (i && x && x >= i) { m = Math.max(0, Math.round((Math.min(x, s1) - Math.max(i, s0)) / 60000)); any = true; }
+          else if (i || x) { partial = true; any = true; }
+          sum += m; parts.push(ss.date.slice(5) + ' ' + (i && !x ? '퇴실 없음' : !i && x ? '입실 없음' : m + '분'));
+        });
+        mins = any ? sum : ''; perDay = parts.join(' · ');
+      } else {
+        var day = opts.date || (inAt ? dayOf(inAt, tz) : '');
+        var s0 = zonedMs(day, opts.start, tz), s1 = zonedMs(day, opts.end, tz);
+        sched = s0 != null && s1 != null && s1 > s0 ? s1 - s0 : 0;
+        if (inAt && outAt && outAt >= inAt) mins = Math.max(0, Math.round((Math.min(outAt, sched ? s1 : outAt) - Math.max(inAt, sched ? s0 : inAt)) / 60000));
+      }
+      var n = Object.keys(g.done).length, twins = g.ids > 1 && g.checkedIn > 1;
       var verdict = '확인 필요';
-      if (mins !== '' && sched) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!opts.survey || g.survey) ? 'O' : 'X';
-      return [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins, total ? Math.min(n, total) + ' / ' + total : '해당 없음', opts.survey ? (g.survey ? 'O' : 'X') : '해당 없음', verdict];
+      if (mins !== '' && sched && !partial && !twins) verdict = mins >= Math.ceil(sched / 60000 * rate / 100) && (!opts.survey || g.survey) ? 'O' : 'X';
+      var note = [twins ? '이름·소속이 같은 ' + g.ids + '명을 한 줄로 합쳤어요. 다른 사람이면 출석 CSV로 따로 확인해 주세요.' : '', partial ? '입실이나 퇴실 기록이 없는 날이 있어요.' : ''].filter(Boolean).join(' ');
+      var row = [g.nick.join(' / '), g.name, g.school, fmtTime(inAt, tz), fmtTime(outAt, tz), mins];
+      if (multi) row.push(perDay);
+      return row.concat([total ? Math.min(n, total) + ' / ' + total : '해당 없음', opts.survey ? (g.survey ? 'O' : 'X') : '해당 없음', note, verdict]);
     });
-    return { columns: COMPLETION_COLS.slice(), rows: rows };
+    var columns = COMPLETION_COLS.slice(); if (multi) columns.splice(6, 0, COMPLETION_DAYS_COL);
+    return { columns: columns, rows: rows };
   }
 
   // ---------------------------------------------------------------- word cloud cleaning
@@ -1259,7 +1297,7 @@
       uid: uid, sleep: sleep, jitter: jitter, backoff: backoff, assign: assign, clone: clone, sha256: sha256, sha256sync: function (s) { return sha256js(utf8(String(s))); },
       loadScript: loadScript, cleanText: cleanText, toCsv: toCsv, csvGuard: csvGuard, hasLink: hasLink, linkless: linkless, exportTable: exportTable, fmtTime: fmtTime, Emitter: Emitter,
       storage: { local: local, session: session }, isHidden: isHidden, pollDelay: pollDelay, normCode: normCode, defaultState: defaultState, hashStr: hashStr,
-      fields: FIELDS, normWord: normWord, wordCloud: wordCloud, banned: makeBanned, zonedMs: zonedMs, completionColumns: COMPLETION_COLS.slice(), ext: ext,
+      fields: FIELDS, normWord: normWord, wordCloud: wordCloud, banned: makeBanned, zonedMs: zonedMs, dayKey: dayOf, seedDays: seedDays, completionColumns: COMPLETION_COLS.slice(), ext: ext,
     },
   };
   root.LecLive = api;

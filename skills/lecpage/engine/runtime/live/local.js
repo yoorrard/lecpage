@@ -130,8 +130,15 @@
           if (!ls.get(key('participants', doc.by))) throw err('not_found', '없는 참가자예요.', 404);
           var at = typeof doc.at === 'number' && doc.at > 0 && doc.at <= Date.now() + 60e3 ? doc.at : Date.now();
           var prev = readCol('attendance').filter(function (x) { return x.by === doc.by && x.kind === doc.kind; })[0];
-          if (prev) return save('attendance', U.assign({}, prev, { at: at, byHost: true, updatedAt: t0 }), 'update');
-          return save('attendance', { id: 'a' + U.uid(12), by: doc.by, kind: doc.kind === 'out' ? 'out' : 'in', at: at, byHost: true, createdAt: t0, updatedAt: t0 }, 'add');
+          // 강사 고치기: 그날 값을 바꾸고 at은 날짜별 값에서 다시(여러 날 연수, protocol.js와 같음)
+          var dk = U.dayKey(at, 'Asia/Seoul'), days1 = {};
+          if (prev) {
+            days1 = U.assign({}, U.seedDays(prev, 'Asia/Seoul')); days1[dk] = at;
+            var vs = Object.keys(days1).map(function (k) { return days1[k]; });
+            return save('attendance', U.assign({}, prev, { at: prev.kind === 'out' ? Math.max.apply(null, vs) : Math.min.apply(null, vs), days: days1, byHost: true, updatedAt: t0 }), 'update');
+          }
+          days1[dk] = at;
+          return save('attendance', { id: 'a' + U.uid(12), by: doc.by, kind: doc.kind === 'out' ? 'out' : 'in', at: at, days: days1, byHost: true, createdAt: t0, updatedAt: t0 }, 'add');
         }
         var p = col === 'polls' ? null : me();
         var by = p ? p.id : null;
@@ -157,6 +164,12 @@
         if (col === 'help') U.assign(d, { nickname: p.nickname, status: 'open', assignee: '' });
         if (col === 'polls') d.open = !!d.open;
         var old = match ? readCol(col).filter(match)[0] : null;
+        if (col === 'attendance') {
+          // 날짜별 값(여러 날 연수): 그날의 첫 입실·마지막 퇴실
+          var dd = U.assign({}, old ? U.seedDays(old, 'Asia/Seoul') : {}), dk2 = U.dayKey(d.at, 'Asia/Seoul');
+          dd[dk2] = !dd[dk2] ? d.at : d.kind === 'in' ? Math.min(dd[dk2], d.at) : Math.max(dd[dk2], d.at);
+          d.days = dd;
+        }
         if (old && col === 'attendance' && old.at) d.at = d.kind === 'in' ? Math.min(old.at, d.at) : Math.max(old.at, d.at); // the first check-in stays
         if (old) { d = U.assign({}, old, d, { id: old.id, createdAt: old.createdAt }); return save(col, d, 'update'); }
         d.id = col.charAt(0) + U.uid(12);
