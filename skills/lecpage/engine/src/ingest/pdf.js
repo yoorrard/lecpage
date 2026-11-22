@@ -12,6 +12,7 @@ export async function loadPdfjs(opts = {}) {
   if (opts.pdfjsLib) return opts.pdfjsLib;
   if (globalThis.pdfjsLib && typeof globalThis.pdfjsLib.getDocument === 'function') return globalThis.pdfjsLib;
   if (isNode) {
+    if (process.env.LECPAGE_NO_PDFJS === '1') return null; // 시험: pdf.js가 없는 PC(예전 커넥트 묶음)를 흉내 냄
     try {
       const spec = PDFJS_NODE;
       const mod = await import(/* @vite-ignore */ spec);

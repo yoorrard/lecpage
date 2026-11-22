@@ -48,6 +48,13 @@ jobs:
         with: { node-version: 22 }
       - name: 묶기
         run: sh scripts/studio-launcher/package.sh out
+      # 강사 PC처럼 묶음만으로(따로 설치한 pdf.js·파이썬 없이) PDF 교재를 읽는지: 못 읽으면 올리지 않음
+      - name: 묶음만으로 PDF 읽기 확인
+        run: |
+          mkdir -p "$RUNNER_TEMP/pc"
+          tar -xzf out/lecpage-connect.tar.gz -C "$RUNNER_TEMP/pc"
+          test -f "$RUNNER_TEMP/pc/node_modules/pdfjs-dist/legacy/build/pdf.mjs"
+          node "$RUNNER_TEMP/pc/skills/lecpage/scripts/lecpage.mjs" prepare skills/lecpage/engine/test/fixtures/ko-cid.pdf -o "$RUNNER_TEMP/pc-work" --json --no-python --no-slides 2>/dev/null | tail -1 | grep -q '"ok":true'
       # 서명(ed25519, Node.js 내장 crypto만). 비밀 키는 이 단계에만 넘김(올리기 단계·다른 작업에는 없음).
       # 공개 키를 아직 넣지 않았고 비밀도 없으면 건너뜀. 공개 키가 들어 있는데 비밀이 없거나 맞지 않으면 실패(서명 없는 묶음은 실행 파일이 받지 않음)
       - name: 서명

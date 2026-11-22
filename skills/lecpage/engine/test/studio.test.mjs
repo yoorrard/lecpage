@@ -276,6 +276,25 @@ test('두 번 켜면(같은 사용자): 둘째는 켜진 커넥트를 알려 주
   } finally { first.p.kill('SIGTERM'); }
 });
 
+// 구독 계정 길에서 PDF 교재로 만들 때 이 PC에 PDF 읽기 도구가 없어 작업이 멈추던 것(실제 사용자 신고, 2026-11-22):
+// 커넥트 묶음에 pdf.js를 넣었고(package.sh), 그래도 미리 읽기가 안 되면 원본 PDF·앱이 그린 쪽 그림으로 멈추지 않고 이어 감
+test('jobs: PDF 읽기 도구가 없는 PC에서도 PDF 교재로 만들기가 멈추지 않음(원본·앱 쪽 그림으로 이어 감, 어려운 말 없음)', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만', timeout: 180000 }, async () => {
+  rmSync(LOG, { force: true });
+  const st = await launch({ LECPAGE_NO_PDFJS: '1', LECPAGE_NO_PYTHON: '1' }); // pdf.js도 파이썬 보조 도구도 없는 PC
+  const { port } = st;
+  const token = await tokenOf(port);
+  const O = { 'x-lecpage-bridge': token, origin: `http://127.0.0.1:${port}` };
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const body = { agent: 'claude', kind: 'make', request: '', meta: { title: '' }, files: [{ name: '연수 교재.pdf', type: 'application/pdf', base64: readFileSync(PDF).toString('base64') }], site: { 'material/p-001.png': { base64: png.toString('base64') } } };
+  const r = await req(port, 'POST', '/bridge/jobs', { headers: O, body });
+  assert.equal(r.status, 202, r.text);
+  const evs = await events(port, token, r.json().jobId);
+  const last = evs.at(-1);
+  assert.equal(last.type, 'done', JSON.stringify(evs.filter((e) => e.type !== 'log').slice(-3)));
+  assert.ok(evs.some((e) => e.type === 'log' && /미리 읽기를 건너뛰었어요/.test(e.text)), '건너뛴 까닭은 기록에만 ' + JSON.stringify(evs.map((e) => e.type === 'log' ? 'log:' + e.text.slice(0, 80) : e.type + ':' + (e.name || ''))));
+  assert.ok(!evs.some((e) => /pdfjs|npm i|PyMuPDF|python/i.test(JSON.stringify(e.type === 'log' ? '' : e))), '사용자에게 보이는 단계·결과에 개발자 말이 없음');
+});
+
 test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issues) → DELETE, 에이전트는 빈 임시 폴더·옵션 그대로·검수 명령 실행', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만', timeout: 180000 }, async () => {
   rmSync(LOG, { force: true });
   const st = await launch();

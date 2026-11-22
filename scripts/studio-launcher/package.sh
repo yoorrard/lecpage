@@ -26,6 +26,23 @@ fi
 rm -rf "$OUT/pkg/skills/lecpage/engine/test" "$OUT/pkg/skills/lecpage/evals"
 find "$OUT/pkg" -name __pycache__ -type d -prune -exec rm -rf {} +
 cp LICENSE NOTICE THIRD_PARTY_NOTICES.md TRADEMARKS.md "$OUT/pkg/"
+# PDF 읽기 도구(pdf.js): 커넥트가 PDF 교재를 읽어 쪽 수·글을 셀 때 씀(engine/src/ingest/pdf.js가 node_modules/pdfjs-dist를 찾음).
+# 강사 PC에 설치할 것이 없게 묶음에 넣음. 앱과 같은 판(app/package.json)을 받아 app/package-lock.json의 sha512와 맞을 때만 쓰고,
+# Node에서 쓰는 것만(legacy/build의 pdf.mjs·pdf.worker.mjs, 한글 CMap, 표준 글꼴, 라이선스). 그림 그리기용 선택 모듈(@napi-rs/canvas)은 넣지 않음(글 읽기에 필요 없음)
+PDFJS_VER=$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")
+PDFJS_SRI=$(node -p "require('./app/package-lock.json').packages['node_modules/pdfjs-dist'].integrity")
+mkdir -p "$OUT/pdfjs"
+(cd "$OUT/pdfjs" && npm pack --silent "pdfjs-dist@$PDFJS_VER" > /dev/null)
+TGZ=$(ls "$OUT/pdfjs"/pdfjs-dist-*.tgz)
+GOT="sha512-$(node -e "process.stdout.write(require('crypto').createHash('sha512').update(require('fs').readFileSync(process.argv[1])).digest('base64'))" "$TGZ")"
+if [ "$GOT" != "$PDFJS_SRI" ]; then echo "pdfjs-dist $PDFJS_VER 확인(sha512)에 실패했어요" >&2; exit 1; fi
+tar -xzf "$TGZ" -C "$OUT/pdfjs"
+P="$OUT/pkg/node_modules/pdfjs-dist"
+mkdir -p "$P/legacy/build"
+cp "$OUT/pdfjs/package/package.json" "$OUT/pdfjs/package/LICENSE" "$P/"
+cp "$OUT/pdfjs/package/legacy/build/pdf.mjs" "$OUT/pdfjs/package/legacy/build/pdf.worker.mjs" "$P/legacy/build/"
+cp -r "$OUT/pdfjs/package/cmaps" "$OUT/pdfjs/package/standard_fonts" "$P/"
+rm -rf "$OUT/pdfjs"
 # 실행 파일: Windows 배치 파일은 CRLF, macOS·Linux는 그대로(실행 비트)
 sed 's/\r$//; s/$/\r/' scripts/studio-launcher/lecpage-connect.cmd > "$OUT/lecpage-connect.cmd"
 cp "$OUT/lecpage-connect.cmd" "$OUT/pkg/lecpage-connect.cmd"

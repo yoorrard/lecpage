@@ -978,9 +978,17 @@ async function runJob(S, job) {
       const r = await runChild(job, process.execPath, [CLI, 'prepare', ...paths, '-o', work, '--json'], { cwd: ws });
       if (stopped()) return;
       const j = lastJson(r.out);
-      if (r.code !== 0 || !j?.ok) throw Object.assign(new Error(j?.error || '교재를 읽지 못했어요. 다른 파일(PDF로 저장한 것)로 다시 해 주세요.'), { code: 'prepare' });
-      pages = j.pages || 0; images = j.images || 0;
-      rmSync(join(work, 'README.md'), { force: true }); // prepare 안내는 이 폴더 밖 경로를 가리켜 TASK.md로 대신함
+      if (r.code !== 0 || !j?.ok) {
+        // 미리 읽기(쪽 수·글·쪽 그림)가 안 돼도 멈추지 않음: AI 에이전트는 교재 원본(PDF)을 직접 읽고, 앱이 그려 보낸 쪽 그림(site/material)도 있음.
+        // 그것도 없을 때만(예: 읽지 못한 PPT 하나뿐) 강사가 알아들을 말로 알림. 개발자용 까닭은 기록에만
+        const appImages = Object.keys(inp.site).some((k) => /^material\/p-\d{3,4}\.(webp|png|jpe?g)$/i.test(k));
+        const pdf = inp.materials.some((m) => /\.pdf$/i.test(m.name));
+        job.emit({ type: 'log', text: `교재 미리 읽기를 건너뛰었어요: ${String(j?.error || r.out || '').slice(-300)}` });
+        if (!appImages && !pdf) throw Object.assign(new Error('교재를 읽지 못했어요. 그 파일을 PDF로 저장해 다시 넣어 주세요.'), { code: 'prepare' });
+      } else {
+        pages = j.pages || 0; images = j.images || 0;
+        rmSync(join(work, 'README.md'), { force: true }); // prepare 안내는 이 폴더 밖 경로를 가리켜 TASK.md로 대신함
+      }
     }
     for (const p of inp.photos) { mkdirSync(join(work, 'site', 'assets', 'img'), { recursive: true }); writeFileSync(join(work, 'site', 'assets', 'img', p.name), p.bytes); }
     for (const [k, v] of Object.entries(inp.site)) { const f = join(work, 'site', ...k.split('/')); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, v); }

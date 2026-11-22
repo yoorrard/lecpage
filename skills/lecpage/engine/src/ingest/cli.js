@@ -84,7 +84,7 @@ export async function ingestPaths(paths, opts = {}) {
     }
     let m = await api.ingestFile(name, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), { ...opts, id });
     const needPy = m.errors.find((e) => e.code === 'needs-pdfjs' || (e.code === 'pdf-failed' && extOf(name) === 'pdf'));
-    if (needPy && opts.python !== false) {
+    if (needPy && opts.python !== false && process.env.LECPAGE_NO_PYTHON !== '1') { // LECPAGE_NO_PYTHON: 시험이 파이썬 보조 도구도 없는 PC를 흉내 냄
       const py = await ingestWithPython(path.resolve(p), { id, withImages: !!opts.withImages, python: opts.pythonBin || '' });
       if (py && py.pages?.length) { py.warnings = [...(py.warnings || []), { code: 'python-fallback', message_ko: 'PDF는 파이썬 보조 스크립트로 읽었어요.', file: name }]; m = py; }
       else if (needPy.code === 'needs-pdfjs') needPy.message_ko += ' (파이썬 보조 스크립트도 실행하지 못했어요: python3와 PyMuPDF 설치를 확인해 주세요.)';

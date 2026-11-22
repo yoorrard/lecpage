@@ -9,7 +9,7 @@ lecpage에 함께 들어 있거나(번들·벤더), 만든 사이트가 실행 �
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (Kazuhiko Arase) | 1.4.4 | MIT | 만든 사이트의 `assets/qr.js`(원본 `skills/lecpage/engine/runtime/vendor/qrcode.js`, 머리말 고지 유지), 웹앱 QR |
 | [fflate](https://github.com/101arrowz/fflate) (Arjun Barrett) | 0.8.3 | MIT | 교재 해석(zip 읽기, 한글 HWP 압축 풀기)·ZIP 쓰기, `skills/lecpage/engine/vendor/fflate.js` (npm `esm/browser.js` 그대로, sha256 `b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1`. 0.8.2의 GHSA-px8p-9vwx-vf98을 고친 판) |
 | [Preact](https://github.com/preactjs/preact) | 10.26.4 | MIT | 웹앱 |
-| [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) (Mozilla Foundation) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석. NOTICE 파일은 없음 |
+| [PDF.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) (Mozilla Foundation) | 4.10.38 | Apache-2.0 | 웹앱 PDF 해석, lecpage 커넥트 묶음의 PDF 읽기(node_modules/pdfjs-dist에 라이선스와 함께). NOTICE 파일은 없음 |
 | [OpenJPEG](https://github.com/uclouvain/openjpeg) | PDF.js에 포함 | BSD-2-Clause | PDF.js 워커 안의 JPEG 2000 해석기 |
 | [pptx-renderer](https://github.com/aiden0z/pptx-renderer) (aiden0z) | 1.4.0 | Apache-2.0 | 웹앱: PPTX 교재를 브라우저 안에서 쪽 그림으로(PPTX를 넣을 때만 받음) |
 | [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) | 0.4.1 | Apache-2.0 | 웹앱: DOCX 교재를 브라우저 안에서 쪽 그림으로(DOCX를 넣을 때만 받음) |
