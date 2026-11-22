@@ -1,7 +1,7 @@
 // AI 연결을 한 곳에서: lecpage 커넥트 상태(켜짐·꺼짐·브라우저가 막음) + 지금 쓸 연결(ChatGPT 계정 · Claude 계정 · Codex · API 키).
 // [만들기]·[AI로 수정]·검수의 [AI로 수정]이 모두 여기서 고른 연결을 씀. 화면 위의 한 줄 표시("ChatGPT 계정 연결됨 · lecpage 커넥트 켜짐")도 여기서.
 import { useEffect, useState } from 'preact/hooks';
-import { pcStatus, bridgeAvailable, bridgeSameOrigin, pairing, updateStart } from './gen/local.js';
+import { pcStatus, bridgeAvailable, bridgeSameOrigin, pairing, updateStart, checkPairing } from './gen/local.js';
 import { getActiveAI, PROVIDERS } from './ai.js';
 
 const PREF = 'lecpage:conn'; // 'chatgpt' | 'claude' | 'codex' | 'key'
@@ -29,14 +29,16 @@ export function setPreferred(v) { try { if (v) localStorage.setItem(PREF, v); el
 
 // ── lecpage 커넥트 상태(탭 하나에 하나, 여러 화면이 같이 봄) ──
 let pc = { state: bridgeAvailable() ? 'unknown' : 'none' };
-let at = 0; let inflight = null;
+let at = 0; let inflight = null; let seq = 0;
 const subs = new Set();
 function notify() { for (const f of subs) f(pc); }
 export function pcNow() { return pc; }
 /** 다시 확인(fresh: 에이전트 설치·로그인을 새로 살핌) */
 export function refreshPc({ fresh = false } = {}) {
   if (inflight && !fresh) return inflight;
+  const my = ++seq;
   const run = pcStatus({ fresh }).catch(() => ({ state: 'off' })).then((v) => {
+    if (my !== seq) return pc; // 뒤에 시작한 확인이 있음(짝을 바꾼 뒤 등): 예전 짝으로 본 결과는 그리지 않음
     if (upd.state === 'run' && v.state !== 'on') return pc; // 새 판으로 다시 켜지는 동안 잠깐 꺼진 것은 그리지 않음
     pc = v; at = Date.now(); notify(); return v;
   });
@@ -132,6 +134,18 @@ if (typeof BroadcastChannel !== 'undefined') {
       if (waiting > 0) { bc.postMessage({ type: 'here' }); try { window.focus(); } catch { /* 브라우저가 막음 */ } }
     };
   } catch { /* 없음 */ }
+}
+/**
+ * main.jsx가 주소의 #pair=…를 읽은 뒤(capturePairing의 답 kind): 'saved'는 바로, 'check'(쓰던 짝과 다른 토큰)는 커넥트가 새 토큰에 답할 때만 짝을 바꾸고 알림.
+ * 바뀐 짝만 다른 탭에 알림(announcePairing). → 'paired'(이 탭에서 이어 함) | 'moved'(기다리던 탭이 이어 받고 이 탭은 닫힘) | 'kept'(확인하지 못해 쓰던 짝 그대로) | 'denied'(브라우저가 로컬 네트워크 접근을 막음)
+ */
+export async function finishPairing(kind) {
+  if (kind === 'check') {
+    const r = await checkPairing();
+    if (r !== 'ok') return r === 'denied' ? 'denied' : 'kept';
+    refreshPc({ fresh: true });
+  }
+  return (await announcePairing()) ? 'moved' : 'paired';
 }
 /** 방금 짝을 맞춘 새 탭: 기다리던 탭이 있으면 닫힘(기록이 한 쪽뿐인 탭이라 스크립트로 닫을 수 있음). 없으면 이 탭에서 이어 함 */
 export function announcePairing() {

@@ -317,6 +317,123 @@ test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.
   } finally { await st.close(); }
 });
 
+test('lecpage.com 짝 맞춤(app/src/lib/pair.js): 쓰던 짝은 다른 토큰의 #pair=로 바로 덮지 않음(확인 뒤에만) · 처음·같은 토큰·답한 적 없는 짝은 바로 · 주소에서는 늘 지움', async () => {
+  const mk = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
+  const store = new Map(); const sess = new Map(); const loc = { hash: '', pathname: '/', search: '' };
+  const G = { localStorage: mk(store), sessionStorage: mk(sess), location: loc, history: { replaceState: (_s, _t, u) => { loc.hash = u.slice(u.indexOf('#')); } } };
+  const saved = Object.fromEntries(Object.keys(G).map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  for (const [k, v] of Object.entries(G)) Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  try {
+    const P = await import('../../../../app/src/lib/pair.js');
+    const A = 'a'.repeat(64), B = 'b'.repeat(64);
+    const go = (h) => { loc.hash = h; const r = P.capturePairing(); assert.equal(loc.hash, h ? '#/' : h, '주소에서 바로 지움'); return r; };
+    assert.equal(go(''), '');
+    assert.equal(go(`#pair=${A}&port=6600`), 'saved', '처음 짝');
+    assert.deepEqual(P.pairing(), { token: A, port: 6600, ok: false }); assert.equal(sess.get('lecpage:paired'), '1');
+    assert.equal(go(`#pair=${B}&port=6601`), 'saved', '아직 답한 적 없는 짝은 바로 바뀜(끊길 연결이 없음, Safari 포함)');
+    assert.equal(P.pairing().token, B);
+    go(`#pair=${A}&port=6600`);
+    P.confirmPairing(B); assert.equal(P.pairing().ok, false, '다른 토큰의 답은 표시하지 않음');
+    P.confirmPairing(A); assert.deepEqual(P.pairing(), { token: A, port: 6600, ok: true });
+    sess.clear();
+    assert.equal(go(`#pair=${B}&port=6601`), 'check', '쓰던 짝 + 다른 토큰: 확인 뒤에만');
+    assert.deepEqual(P.pairing(), { token: A, port: 6600, ok: true }, '쓰던 짝 그대로');
+    assert.deepEqual(P.pendingPairing(), { token: B, port: 6601 }); assert.equal(sess.get('lecpage:paired'), undefined, '바뀌지 않았으니 방금 짝 맞춤 아님');
+    assert.equal(go(`#pair=${A}&port=6602`), 'saved', '같은 토큰은 포트만 바뀜');
+    assert.deepEqual(P.pairing(), { token: A, port: 6602, ok: true });
+    assert.equal(P.acceptPairing(P.pendingPairing()), true, '커넥트가 새 토큰에 답함 → 바꿈');
+    assert.deepEqual(P.pairing(), { token: B, port: 6601, ok: true }); assert.equal(P.pendingPairing(), null);
+    P.movePairing(6605, A); assert.equal(P.pairing().port, 6601, '그사이 바뀐 짝은 예전 토큰의 포트로 옮기지 않음');
+    P.movePairing(6605, B); assert.equal(P.pairing().port, 6605);
+    assert.equal(go(`#pair=${A}&port=99999`), '', '포트가 이상하면 기억하지 않음(주소에서는 지움)');
+    loc.hash = '#pair=zz&port=6600'; assert.equal(P.capturePairing(), '', '짝 꼴이 아니면 그대로(앱 주소로 읽음)');
+    P.forgetPairing(); assert.equal(P.pairing(), null);
+  } finally {
+    for (const [k, d] of Object.entries(saved)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
+  }
+});
+
+test('두 번 켤 때: 같은 토큰으로 켜진 커넥트를 찾아 그것으로 lecpage.com을 엶(둘째를 띄우지 않음) · 다른 프로그램에는 토큰을 보내지 않음 · --new-token은 거절 · 예전 판은 스스로 바꾸게', { timeout: 60000 }, async () => {
+  const home = mkdtempSync(join(T, 'again-'));
+  assert.equal(St.savedToken(home), '', '토큰이 없으면 만들지 않음');
+  assert.throws(() => statSync(join(home, 'studio.json')), /ENOENT/);
+  assert.equal(await St.studioAgain({ home }), false, '토큰이 없으면 찾지 않고 새로 켬');
+  // 범위 안의 다른 프로그램: 토큰을 받으면 안 됨
+  let leaked = 0;
+  const other = http.createServer((q, s) => { if (q.headers['x-lecpage-bridge']) leaked++; s.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>다른 프로그램</title>'); });
+  let otherPort = 0;
+  for (let p = 6649; p >= 6600 && !otherPort; p--) { try { await new Promise((ok, no) => { other.once('error', no); other.listen(p, '127.0.0.1', ok); }); otherPort = p; } catch { /* 다음 */ } }
+  const st = await St.startStudio({ port: 0, dist: DIST, home });
+  try {
+    const token = St.savedToken(home);
+    assert.equal(token, st.S.token, '켜진 커넥트가 쓰는 토큰');
+    const found = await St.findRunning(token);
+    assert.equal(found?.port, st.port); assert.equal(found.status.build, st.S.build);
+    assert.equal(await St.findRunning('f'.repeat(64), { ports: [st.port, otherPort] }), null, '다른 토큰(다른 사용자)이면 못 찾음 → 새로 켬');
+    assert.equal(leaked, 0, '토큰 없이 먼저 물어 lecpage 커넥트처럼 답하는 곳에만 토큰을 보냄');
+    const run = async (args) => { const opened = [], logs = [], fails = []; const r = await St.studioAgain({ home, args, root: st.S.root, open: async (u) => { opened.push(u); return true; }, log: (m) => logs.push(m), fail: (m) => fails.push(m) }); return { r, opened, logs, fails }; };
+    let o = await run({});
+    assert.equal(o.r, true, '켜진 것을 씀');
+    assert.equal(o.opened.length, 1); assert.ok(o.opened[0].endsWith(`/#pair=${token}&port=${st.port}`), o.opened[0]);
+    assert.match(o.logs.join('\n'), /이미 켜져 있어요/);
+    o = await run({ autostart: true }); assert.equal(o.r, true); assert.deepEqual(o.opened, [], '자동 시작은 브라우저를 열지 않음');
+    o = await run({ 'no-open': true }); assert.deepEqual(o.opened, []);
+    o = await run({ open: 'local' }); assert.deepEqual(o.opened, [`http://127.0.0.1:${st.port}/`]);
+    o = await run({ 'new-token': true }); assert.match(o.fails.join(), /이미 켜져 있어요.*--new-token/, '켜진 것은 예전 토큰을 계속 받으니 먼저 닫게'); assert.deepEqual(o.opened, []);
+    assert.equal((await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': token } })).status, 200, '켜진 커넥트는 그대로');
+    // 실행 파일이 새 판을 받았는데 켜진 것이 스스로 바꿀 수 없는 판(저장소에서 켬): 지금처럼 새 판을 따로 켬
+    const newer = mkdtempSync(join(T, 'root-')); writeFileSync(join(newer, 'VERSION'), 'zz-new\n');
+    const logs = [];
+    assert.equal(await St.studioAgain({ home, root: newer, log: (m) => logs.push(m), open: async () => true }), false);
+    assert.match(logs.join(), /예전 판/);
+  } finally { await st.close(); other.close(); }
+  // 켜진 것이 예전 판이고 스스로 바꿀 수 있으면: 새 판으로 바꾸게 하고(같은 토큰으로 다시 켜짐) 다시 켜진 것을 씀
+  const h2 = mkdtempSync(join(T, 'again2-')); const tk = St.pairToken(h2);
+  const root = mkdtempSync(join(T, 'root2-')); writeFileSync(join(root, 'VERSION'), 'b2\n');
+  const seen = []; let n = 0;
+  const statusOf = (build, state) => ({ ok: true, build, caps: ['status-caps', 'update'], update: { can: true, state }, agents: [] });
+  const find = async (t) => { assert.equal(t, tk); n++; return n === 1 ? { port: 6611, status: statusOf('b1', 'idle') } : n === 2 ? null : n === 3 ? { port: 6611, status: statusOf('b1', 'restart') } : { port: 6611, status: statusOf('b2', 'idle') }; };
+  const ask = async (port, o) => { seen.push([port, o.method, o.path, o.headers.origin, o.headers['x-lecpage-bridge'] === tk]); return { status: 202, json: { ok: true } }; };
+  const opened = [];
+  assert.equal(await St.studioAgain({ home: h2, root, find, ask, wait: async () => {}, open: async (u) => { opened.push(u); return true; }, log: () => {} }), true);
+  assert.deepEqual(seen, [[6611, 'POST', '/bridge/update', 'http://127.0.0.1:6611', true]], '켜진 것에게 새 판으로 바꾸라고(같은 출처·토큰)');
+  assert.equal(n, 4, '다시 켜져 새 판으로 답할 때까지 기다림');
+  assert.ok(opened[0].endsWith(`#pair=${tk}&port=6611`));
+  // 만드는 중이라 못 바꿈(409 busy): 켜진 판 그대로 씀
+  n = 0; const busy = await St.studioAgain({ home: h2, root, find: async () => ({ port: 6611, status: statusOf('b1', 'idle') }), ask: async () => ({ status: 409, json: { error: 'busy' } }), open: async () => true, log: () => {} });
+  assert.equal(busy, true);
+});
+
+test('보안 머리글: 이 주소의 화면·글은 Cross-Origin-Resource-Policy: same-origin(토큰이 든 첫 화면 포함) · /bridge/*·앱 부품·참고 디자인은 그대로(CORS·미리보기 틀)', async () => {
+  const dist = mkdtempSync(join(T, 'corp-'));
+  mkdirSync(join(dist, 'assets')); mkdirSync(join(dist, 'examples', 'x'), { recursive: true });
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><html><head><title>앱</title></head><body></body></html>');
+  writeFileSync(join(dist, 'help.html'), '<!doctype html><title>도움말</title>');
+  writeFileSync(join(dist, 'assets', 'a.js'), 'console.log(1)');
+  writeFileSync(join(dist, 'examples', 'x', 'index.html'), '<!doctype html><title>예시</title>');
+  writeFileSync(join(dist, 'examples', 'x', 'p.png'), 'x');
+  const st = await St.startStudio({ port: 0, dist, home: mkdtempSync(join(T, 'corp-h-')) });
+  const corp = async (path, o) => (await req(st.port, 'GET', path, o)).headers['cross-origin-resource-policy'];
+  try {
+    const home = await req(st.port, 'GET', '/');
+    assert.equal(home.headers['cross-origin-resource-policy'], 'same-origin'); assert.equal(home.headers['cache-control'], 'no-store');
+    assert.equal(home.headers['x-frame-options'], 'DENY'); assert.equal(home.headers['x-content-type-options'], 'nosniff');
+    assert.equal(await corp('/help.html'), 'same-origin');
+    const nf = await req(st.port, 'GET', '/nope');
+    assert.equal(nf.status, 404); assert.match(nf.headers['content-type'], /text\/plain/); assert.equal(nf.headers['cross-origin-resource-policy'], 'same-origin');
+    assert.equal(await corp('/', { headers: { host: `evil.example:${st.port}` } }), 'same-origin', '421 안내 글도');
+    assert.equal(await corp('/assets/a.js'), undefined, '앱 부품은 미리보기 틀(불투명 출처)이 받음');
+    assert.equal(await corp('/examples/x/'), undefined, '참고 디자인(sandbox)');
+    assert.equal(await corp('/examples/x/p.png'), undefined);
+    const b = await req(st.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(b.status, 200); assert.equal(b.headers['access-control-allow-origin'], 'https://lecpage.com'); assert.equal(b.headers['cross-origin-resource-policy'], undefined, 'lecpage.com이 CORS로 부르는 길은 그대로');
+    const u = await req(st.port, 'GET', '/bridge/status', { headers: { origin: 'https://lecpage.com', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(u.status, 401); assert.equal(u.headers['access-control-allow-origin'], 'https://lecpage.com');
+    assert.deepEqual(St.pageCorp({ 'content-type': 'application/json' }), { 'content-type': 'application/json' });
+    assert.equal(St.pageCorp({ 'content-type': 'text/html', 'access-control-allow-origin': '*' })['cross-origin-resource-policy'], undefined);
+  } finally { await st.close(); }
+});
+
 test('교재 개수: 원본과 같은 이름의 PDF는 하나로(PPTX 11개 + 만든 PDF 11개 = 11개) · 다른 교재는 20개까지', async () => {
   const f = (n) => ({ name: n, type: 'application/octet-stream', base64: 'JVBERi0x' });
   const twins = []; for (let i = 1; i <= 11; i++) twins.push(f(`강의${i}.pptx`), f(`강의${i}.pdf`));

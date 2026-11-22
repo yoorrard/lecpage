@@ -13,7 +13,7 @@
 // ChatGPT 토큰·Claude·Codex 자격 파일은 앱(브라우저)·터미널 기록에 내보내지 않고, Claude·Codex 자격 파일은 읽지도 않음 ·
 // 구독은 사람이 누른 요청([만들기]·[AI로 수정])으로만(이 프로그램이 스스로 부르지 않음)
 
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
@@ -22,7 +22,7 @@ import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'nod
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSiwc, callbackPage } from './studio-siwc.mjs';
 import { createSetup, SETUP_AGENTS } from './studio-setup.mjs';
-import { RELEASE, RESTART_CODE, readBuild, installedPackage, latestBuild, applyUpdate, restartArgv, supervise } from './studio-update.mjs';
+import { RELEASE, RESTART_CODE, readBuild, installedPackage, latestBuild, applyUpdate, restartArgv, supervise, refreshLauncher } from './studio-update.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, 'lecpage.mjs');
@@ -92,6 +92,10 @@ export function pairToken(home, { fresh = false } = {}) {
     renameSync(tmp, f);
   } catch { /* 저장 못 하면 이번 실행만 */ }
   return token;
+}
+/** 이 PC 사용자 폴더에 둔 짝 맞춤 토큰(없으면 ''). 새로 만들지 않음(이미 켜진 lecpage 커넥트를 찾을 때) */
+export function savedToken(home) {
+  try { const t = JSON.parse(readFileSync(join(home, 'studio.json'), 'utf8'))?.token; return typeof t === 'string' && /^[0-9a-f]{64}$/.test(t) ? t : ''; } catch { return ''; }
 }
 /**
  * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표).
@@ -558,6 +562,16 @@ export function injectToken(html, token) {
   return /<head[^>]*>/i.test(s) ? s.replace(/<head[^>]*>/i, (m) => `${m}\n${tag}`) : tag + s;
 }
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin', 'x-frame-options': 'DENY' };
+/** 토큰이 든 앱 첫 화면: 다른 출처가 불러 쓰지 못하게(원격 모드에서 받은 머리글이 무엇이든) */
+const SHELL_HEADERS = { 'cache-control': 'no-store', 'cross-origin-resource-policy': 'same-origin' };
+/**
+ * 이 주소의 화면·글(HTML·글자) 응답에 Cross-Origin-Resource-Policy: same-origin: 다른 사이트가 <img>·<script> 등으로 불러
+ * 그 내용을 자기 프로세스에 올리지 못하게. 뺌: /bridge/*(JSON, lecpage.com이 CORS로 부름) · 참고 디자인(sandbox라 불투명 출처가 부품을 받음, CORS *) ·
+ * 앱 부품(JS·CSS·그림·글꼴: 미리보기 틀(sandbox)이 불투명 출처로 받음)
+ */
+export function pageCorp(h) {
+  return h['access-control-allow-origin'] || h['cross-origin-resource-policy'] || !/^text\/(html|plain)/i.test(String(h['content-type'] || '')) ? h : { ...h, 'cross-origin-resource-policy': 'same-origin' };
+}
 /**
  * 참고 디자인(/examples/*, AI가 쓴 사이트 스크립트가 돎): 앱 public/_headers와 같게 sandbox로 출처를 지워서 보냄.
  * 토큰 meta가 든 앱 화면(127.0.0.1)과 같은 출처가 되지 않게, 원격 모드에서 받은 머리글에 없어도(예비 주소 등) 늘 붙임
@@ -576,7 +590,9 @@ function fallbackPage(S, why) {
 
 function send(res, status, body, headers = {}) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
-  res.writeHead(status, { ...BASE_HEADERS, 'content-length': buf.length, ...headers });
+  const h = { ...BASE_HEADERS, 'content-length': buf.length, ...headers };
+  if (!h['content-type'] && typeof body === 'string') h['content-type'] = 'text/plain; charset=utf-8'; // 짧은 안내 글('not found' 등)
+  res.writeHead(status, pageCorp(h));
   res.end(res.req?.method === 'HEAD' ? undefined : buf);
 }
 const sendJson = (res, status, obj) => send(res, status, JSON.stringify(obj), { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -598,9 +614,9 @@ function serveDist(S, req, res, pathname) {
   if (!isFile(f)) { status = 404; f = join(dir, '404.html'); if (!isFile(f)) return send(res, 404, 'not found'); }
   const shell = status === 200 && relative(dir, f) === 'index.html';
   const h = { 'content-type': typeOf(f), ...headersFor(S.app.rules, pathname), ...(isExamplePath(relative(dir, f)) ? EXAMPLES_HEADERS : {}) };
-  if (shell) return send(res, 200, injectToken(readFileSync(f, 'utf8'), S.token), { ...h, 'cache-control': 'no-store' });
+  if (shell) return send(res, 200, injectToken(readFileSync(f, 'utf8'), S.token), { ...h, ...SHELL_HEADERS });
   const size = statSync(f).size;
-  res.writeHead(status, { ...BASE_HEADERS, ...h, 'content-length': size });
+  res.writeHead(status, pageCorp({ ...BASE_HEADERS, ...h, 'content-length': size }));
   if (req.method === 'HEAD') return res.end();
   createReadStream(f).on('error', () => res.destroy()).pipe(res);
 }
@@ -630,7 +646,7 @@ async function serveRemote(S, req, res, pathname, search) {
   const h = {};
   for (const k of PASS_HEADERS) { const v = r.headers.get(k); if (v) h[k] = v; }
   if (isExamplePath(pathname)) Object.assign(h, EXAMPLES_HEADERS);
-  if (shell && r.ok) return send(res, 200, injectToken(body.toString('utf8'), S.token), { ...h, 'cache-control': 'no-store' });
+  if (shell && r.ok) return send(res, 200, injectToken(body.toString('utf8'), S.token), { ...h, ...SHELL_HEADERS });
   if (r.ok && /^\/assets\//.test(pathname) && /immutable/.test(h['cache-control'] || '') && S.app.cacheBytes + body.length < 120 * MB) {
     S.app.cache.set(key, { status: 200, body, headers: h }); S.app.cacheBytes += body.length;
   }
@@ -1455,6 +1471,85 @@ export async function openBrowser(url, { platform = process.platform, env = proc
   return false;
 }
 
+// ── 두 번 켤 때(실행 파일을 다시 두 번 누름·자동 시작으로 켜진 뒤 또 켬): 둘째를 다른 포트에 띄우지 않고 켜진 것을 씀 ──
+// 둘이 함께 돌면 같은 ChatGPT 자격 파일을 둘이 갱신하고(한쪽 로그인이 풀림), 쓰지 않는 쪽이 저절로 새 판으로 바꾸며 묶음 폴더를 갈아 끼움
+/** 이 컴퓨터(127.0.0.1)의 그 포트에 요청 하나(프록시를 거치지 않게 node:http로) → { status, json } */
+function askLocal(port, { method = 'GET', path = '/bridge/status', headers = {}, body, ms = 1500, signal } = {}) {
+  return new Promise((ok, no) => {
+    const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
+    const r = httpRequest({ host: '127.0.0.1', port, method, path, timeout: ms, signal, headers: { ...headers, ...(data ? { 'content-type': 'application/json', 'content-length': data.length } : {}) } }, (res) => {
+      const ch = []; let n = 0;
+      res.on('data', (c) => { n += c.length; if (n > MB) r.destroy(new Error('too large')); else ch.push(c); });
+      res.on('end', () => { let json = null; try { json = JSON.parse(Buffer.concat(ch).toString('utf8')); } catch { /* lecpage 커넥트가 아님 */ } ok({ status: res.statusCode, json }); });
+      res.on('error', no);
+    });
+    r.on('timeout', () => r.destroy(new Error('timeout')));
+    r.on('error', no);
+    r.end(data || undefined);
+  });
+}
+/**
+ * 이미 켜진 lecpage 커넥트(같은 사용자 = 같은 토큰) → { port, status } | null. 포트 범위를 한꺼번에 살핌.
+ * 먼저 토큰 없이 물어 lecpage 커넥트처럼 답하는 포트(401 token)에만 토큰을 보냄(그 범위의 다른 프로그램에 토큰을 보내지 않게).
+ * 상태 답은 Claude Code·Codex를 살피느라 늦을 수 있어 길게 기다림
+ */
+export async function findRunning(token, { ports, ms = 1200, statusMs = 20000 } = {}) {
+  if (!/^[0-9a-f]{64}$/.test(token || '')) return null;
+  const list = ports || Array.from({ length: PORT_RANGE[1] - PORT_RANGE[0] + 1 }, (_, i) => PORT_RANGE[0] + i);
+  const ctl = new AbortController(); const { signal } = ctl;
+  try {
+    return await Promise.any(list.map(async (port) => {
+      const a = await askLocal(port, { ms, signal });
+      if (a.status !== 401 || a.json?.error !== 'token') throw new Error('no');
+      const b = await askLocal(port, { headers: { 'x-lecpage-bridge': token }, ms: statusMs, signal });
+      if (b.status !== 200 || !b.json?.ok || !Array.isArray(b.json.agents)) throw new Error('no');
+      return { port, status: b.json };
+    }));
+  } catch { return null; } finally { ctl.abort(); } // 찾았으면 남은 물음은 끊음(끝날 때까지 이 프로세스가 남지 않게)
+}
+/** Windows 실행 파일(lecpage-connect.cmd)로 켰으면 끝날 때 창이 저절로 닫힘(자동 시작은 안내를 보지 않음) */
+const launcherCloses = (args = {}) => process.platform === 'win32' && !!process.env.LECPAGE_LAUNCHER && !args.autostart;
+/**
+ * 켜진 lecpage 커넥트가 있으면 그것을 씀 → true(이 프로세스는 끝냄) | false(새로 켬).
+ * 켜진 것이 이 파일보다 예전 판(실행 파일이 그사이 새 판을 받음)이면: 스스로 바꿀 수 있는 판은 바꾸게 하고(같은 포트·토큰으로 다시 켜짐) 그것을 씀,
+ * 스스로 바꿀 수 없는 아주 예전 판이면 지금처럼 새 판을 다른 포트에 켬(앱은 새 포트로 다시 짝).
+ * 브라우저는 켤 때처럼 lecpage.com/#pair=…(같은 토큰이라 앱이 그대로 받음)로 엶. 자동 시작(--autostart)·--no-open이면 열지 않음
+ */
+export async function studioAgain({ args = {}, home = studioHome(), root = ROOT, log = () => {}, json = false, closes = launcherCloses(args), open: openImpl = openBrowser, fail = (m) => { throw new Error(m); }, wait = (ms) => new Promise((r) => setTimeout(r, ms)), find = findRunning, ask = askLocal } = {}) {
+  const token = savedToken(home);
+  let run = await find(token);
+  if (!run) return false;
+  if (args['new-token']) { fail(`lecpage 커넥트가 이미 켜져 있어요(http://127.0.0.1:${run.port}/). 켜진 창을 닫은 뒤 다시 --new-token으로 켜 주세요.`); return true; }
+  const mine = readBuild(root) || `${VERSION}-dev`;
+  if (run.status.build && run.status.build !== mine) {
+    const can = (run.status.caps || []).includes('update') && run.status.update?.can;
+    if (!can) { log(`예전 판 lecpage 커넥트가 켜져 있어요(http://127.0.0.1:${run.port}/). 그 창은 닫아도 돼요. 새 판을 따로 켜요.`); return false; }
+    const r = await ask(run.port, { method: 'POST', path: '/bridge/update', headers: { 'x-lecpage-bridge': token, origin: `http://127.0.0.1:${run.port}` }, body: {}, ms: 60000 }).catch(() => null);
+    if (r?.status === 202) {
+      log('켜져 있던 lecpage 커넥트를 새 판으로 바꾸는 중이에요(10초쯤)…');
+      const before = run.status.build; run = null;
+      for (let i = 0; i < 120 && !run; i++) {
+        await wait(1000);
+        const v = await find(token);
+        const u = v?.status.update || {};
+        if (v && (u.state === 'error' || (v.status.build !== before && u.state !== 'restart'))) run = v;
+      }
+      if (!run) return false; // 다시 켜지지 않음: 이 판을 켬
+    } // 만드는 중(busy)·받지 못함: 켜진 판 그대로 씀
+  }
+  const url = `http://127.0.0.1:${run.port}/`;
+  const appUrl = (process.env.LECPAGE_STUDIO_APP_URL || 'https://lecpage.com').replace(/\/+$/, '');
+  const pairUrl = `${appUrl}/#pair=${token}&port=${run.port}`;
+  const to = args['no-open'] || args.autostart ? '' : args.open === 'local' ? url : pairUrl;
+  if (json) console.log(JSON.stringify({ ok: true, running: true, url, port: run.port }));
+  else log([
+    `  lecpage 커넥트가 이미 켜져 있어요(${run.status.build || run.status.version || ''}, 주소 ${url}).`,
+    `  ${to === pairUrl ? '켜져 있는 커넥트로 lecpage.com을 열어요.' : to ? `주소 ${url}을 열어요.` : '하나만 켜 두면 돼요. lecpage.com에서 이어서 해요.'} ${closes ? '이 창은 잠시 뒤 저절로 닫혀요.' : '이 창은 닫아도 돼요.'}`,
+  ].join('\n'));
+  if (to && !(await openImpl(to)) && !json) log(`  브라우저를 열지 못했어요. 이 주소를 브라우저에 붙여 넣어 주세요: ${to}`);
+  return true;
+}
+
 /** CLI: lecpage connect(= studio, 예전 이름) [--port n] [--no-open] [--open lecpage|local] [--autostart] [--new-token] [--dist 폴더] [--remote] [--timeout 분] */
 export async function studioCmd(h) {
   const { args } = h;
@@ -1464,9 +1559,16 @@ export async function studioCmd(h) {
   if (args.timeout !== undefined && !(+args.timeout > 0)) h.fail('--timeout은 분 단위 숫자예요. 예: --timeout 30');
   // 새 판으로 바꾼 뒤 다시 켠 것(감독이 띄움): 같은 포트를 기다려 받고, 브라우저는 열지 않음(앱이 저절로 다시 붙음)
   const restarted = process.env.LECPAGE_CONNECT_RESTARTED === '1';
+  // 이미 켜져 있으면 그것을 씀(새 판으로 다시 켜는 것·포트·빌드본을 정해 켜는 것은 그대로 새로)
+  if (!restarted && !args.port && !args.dist && !args.remote && await studioAgain({ args, log, json, fail: h.fail })) {
+    if (launcherCloses(args) && !json) await new Promise((r) => setTimeout(r, 4000)); // 창이 바로 닫히기 전에 안내를 읽을 틈
+    return;
+  }
   let restart = null;
   const st = await startStudio({ port: args.port ? +args.port : 0, dist: args.dist, remote: !!args.remote, jobMs: args.timeout ? +args.timeout * 60000 : 0, log, persist: true, newToken: !!args['new-token'], autoUpdate: true, retryPort: restarted, onRestart: (r) => restart?.(r) });
   const { S, url, pairUrl, close, moved } = st;
+  // Windows 자동 시작 사본(예전 실행 파일)을 확인한 묶음의 .cmd로 바꾸고 다운로드 표시를 지움(받은 실행 파일로 켰을 때만, 실패해도 그대로 켬)
+  if (S.canUpdate) { try { refreshLauncher({ root: S.root }); } catch { /* 다음에 켤 때 다시 */ } }
   // 어디를 열지: 기본은 lecpage.com(짝 맞추기). 이 컴퓨터 빌드본(--dist)이면 그 주소. 로그인할 때 켜진 경우(--autostart)는 열지 않음.
   // 다시 켤 때 포트를 못 받아 옮겼으면 lecpage.com을 새 포트로 다시 열어 짝을 맞춤
   const open = moved ? pairUrl : args['no-open'] || args.autostart ? '' : args.open === 'local' || (args.dist && args.open !== 'lecpage') ? url : pairUrl;

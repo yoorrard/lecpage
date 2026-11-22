@@ -16,9 +16,13 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 
 켜면 기본 브라우저로 `https://lecpage.com/#pair=<토큰>&port=<포트>`를 열어 짝을 맞춰요. 앱이 토큰·포트를 이 브라우저에 기억하고 주소에서 바로 지워요. 받기 안내를 연 lecpage 탭이 있으면 그 탭이 이어 받고 새 탭은 닫혀요. 그다음부터 lecpage.com 화면이 `http://127.0.0.1:<포트>/bridge/*`를 직접 불러요(연수는 lecpage.com 저장소 그대로). Chrome·Edge는 처음 한 번 "로컬 네트워크" 접근을 물어요([허용]). 받기를 누른 브라우저가 기본 브라우저가 아니면 받기 안내의 [이 브라우저와 연결]이 켜진 커넥트를 찾아 `GET /pair`로 그 브라우저와도 짝을 맞춰요. 예비 주소(`https://yoorrard.github.io/lecpage/`)와는 짝을 맞추지 않아요(같은 계정의 다른 GitHub Pages 사이트와 출처를 함께 써서). 장애 때 예비 주소에서는 API 키로 연결해요. 짝 맞춤 토큰은 이 PC 사용자 폴더(`%APPDATA%\lecpage` · `~/Library/Application Support/lecpage` · `~/.config/lecpage`)의 `studio.json`에 두어 다시 켜도 저절로 다시 붙어요.
 
+이미 쓰던 짝(커넥트가 답한 적 있는 토큰)은 다른 토큰의 `#pair=` 주소로 바로 바뀌지 않아요. 그 포트의 커넥트가 새 토큰에 답할 때만 바꿔요(다른 사이트가 건 주소로 연결이 끊기지 않게). `--new-token`으로 다시 켠 커넥트는 새 토큰에 답하므로 그대로 다시 짝이 맞아요. 처음 짝·같은 토큰(포트만 바뀜)·아직 답한 적 없는 짝(Safari 포함)은 바로 바뀌어요.
+
+이미 켜져 있는데 또 켜면(실행 파일을 다시 두 번 누름·자동 시작 뒤 또 켬) 둘째는 다른 포트에 띄우지 않아요. 6600~6649를 살펴(토큰 없이 먼저 물어 커넥트처럼 답하는 곳에만 토큰을 보냄) 켜진 커넥트를 찾으면 그것으로 lecpage.com을 열고 끝나요(`--autostart`·`--no-open`이면 열지 않음). 켜진 것이 예전 판이면 새 판으로 바꾸게 하고 그것을 써요. 스스로 바꿀 수 없는 아주 예전 판이면 새 판을 따로 켜요. `--port`·`--dist`·`--remote`로 켜거나 새 판으로 다시 켤 때는 찾지 않아요.
+
 **Safari**는 https 화면에서 `http://127.0.0.1` 요청을 막아요(WebKit 171934). 그래서 lecpage 커넥트는 앱 전체를 `http://127.0.0.1:<포트>/`에서도 보여 줘요(같은 출처, 토큰은 앱 HTML의 `<meta name="lecpage-bridge">`). 이 화면은 저장소가 따로라 연수는 [파일로 저장] → [저장한 파일 열기]로 옮겨요. 바로 배포 서버는 `http://127.0.0.1:6600~6602`도 허용해요.
 
-옵션: `--port 6600`(기본은 6600~6649 중 빈 곳) · `--no-open` · `--open lecpage|local` · `--autostart`(컴퓨터를 켤 때 켜짐: 브라우저를 열지 않음) · `--new-token`(짝을 새로) · `--dist app/dist`(이 빌드본을 보여 주고 그 주소를 엶) · `--remote` · `--timeout 30`. 환경 변수: `LECPAGE_STUDIO_APP_URL`(짝 맞출 앱 주소) · `LECPAGE_STUDIO_ORIGINS`(더 받을 출처, 쉼표) · `LECPAGE_STUDIO_HOME`(토큰·자격 폴더).
+옵션: `--port 6600`(기본은 6600~6649 중 빈 곳) · `--no-open` · `--open lecpage|local` · `--autostart`(컴퓨터를 켤 때 켜짐: 브라우저를 열지 않음) · `--new-token`(짝을 새로, 켜진 커넥트가 없을 때만) · `--dist app/dist`(이 빌드본을 보여 주고 그 주소를 엶) · `--remote` · `--timeout 30`. 환경 변수: `LECPAGE_STUDIO_APP_URL`(짝 맞출 앱 주소) · `LECPAGE_STUDIO_ORIGINS`(더 받을 출처, 쉼표) · `LECPAGE_STUDIO_HOME`(토큰·자격 폴더).
 
 받은 실행 파일(`lecpage-connect.cmd`·`.sh`)로 켰으면 앱에 [컴퓨터를 켤 때 켜기]가 보여요(실행 파일이 사용자 폴더에 둔 자기 복사본을 `LECPAGE_LAUNCHER`로 알려 줄 때만). Windows: `HKCU\…\Run`의 `lecpage-studio` 값에 `cmd /c start /min …lecpage-connect.cmd --autostart`(작업 표시줄에 작게) · macOS: `~/Library/LaunchAgents/com.lecpage.connect.plist`(RunAtLoad) · Linux: `~/.config/autostart/lecpage-connect.desktop`(XDG). macOS·Linux는 창 없이 뒤에서 켜지고 기록은 사용자 폴더의 `connect.log`예요. 켤 때마다 실행 파일이 새 판을 확인해요.
 
@@ -31,6 +35,7 @@ API 키 없이, 쓰고 있는 ChatGPT(Plus·Pro)나 Claude 계정으로 lecpage.
 - `ANTHROPIC_API_KEY`가 있으면 Claude Code가 구독 대신 그 키로 돌아요(lecpage 커넥트가 알려 줘요, 지우지는 않아요).
 
 ## 안전
+- 커넥트가 보여 주는 화면·글(토큰이 든 첫 화면 포함)에는 `Cross-Origin-Resource-Policy: same-origin`을 붙여요. `/bridge/*`(CORS)·앱 부품(JS·CSS·그림·글꼴)·참고 디자인(`/examples/*`)에는 붙이지 않아요.
 - `127.0.0.1`에만 묶어요. 모든 요청의 `Host`가 `127.0.0.1:<포트>`와 정확히 같아야 해요(DNS 리바인딩 거절). `/bridge/*`는 머리글 `X-Lecpage-Bridge`(짝 맞춤 토큰, 쿠키·주소에 넣지 않음)가 맞고, `Origin`이 이 주소나 허용 목록(`https://lecpage.com`·`https://www.lecpage.com`·개발 주소 `http://localhost:5173`·`:4173`·`LECPAGE_STUDIO_ORIGINS`, 예비 주소는 넣지 않음)과 정확히 같아야 해요. CORS(`Access-Control-Allow-Origin`은 그 출처만, `Vary: Origin`)와 사설망 머리글(`Access-Control-Allow-Private-Network: true`)은 허용한 출처에만 붙여요.
 - ChatGPT 토큰은 이 PC 사용자 폴더의 `chatgpt.json`(0600, 원자적 쓰기)에만 두고, 앱에는 연결 여부·이메일·모델 목록만 줘요. 터미널 기록에도 남기지 않아요. `/auth/callback`은 OpenAI가 보내는 최상위 이동이라 토큰 대신 state로 확인해요.
 - 한 번에 작업 하나, 교재 파일 하나 100MB·모두 120MB·20개까지, 작업 30분 한도와 멈추기(프로세스 묶음째 끔).

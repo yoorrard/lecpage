@@ -12,8 +12,16 @@ import { GalleryHead } from './pages/GalleryHead.jsx';
 import { CartBadge } from './components/CartBadge.jsx';
 import { capturePairing } from './lib/pair.js';
 
-// PC 프로그램이 연 주소(#pair=…)면 짝을 기억하고 주소에서 지움(라우터가 읽기 전에). 기다리던 lecpage 탭이 있으면 이 탭은 닫힘
-if (capturePairing()) import('./lib/connection.js').then((m) => m.announcePairing()).then((here) => { if (!here) toast('lecpage 커넥트와 연결했어요. 교재를 넣고 AI 선택에서 계정으로 로그인해요.'); }).catch(() => { });
+// PC 프로그램이 연 주소(#pair=…)면 짝을 기억하고 주소에서 지움(라우터가 읽기 전에). 기다리던 lecpage 탭이 있으면 이 탭은 닫힘.
+// 쓰던 짝과 토큰이 다르면 그 커넥트가 새 토큰에 답할 때만 바꿈(다른 사이트가 건 주소로 연결이 끊기지 않게, lib/pair.js)
+const pairKind = capturePairing();
+if (pairKind) {
+  import('./lib/connection.js').then((m) => m.finishPairing(pairKind)).then((r) => {
+    if (r === 'paired') toast('lecpage 커넥트와 연결했어요. 교재를 넣고 AI 선택에서 계정으로 로그인해요.');
+    else if (r === 'kept') toast('새 연결을 확인하지 못해 원래 연결을 그대로 뒀어요. 커넥트가 켜져 있는지 확인해 주세요.');
+    else if (r === 'denied') toast('이 브라우저가 로컬 네트워크 접근을 막았어요. 사이트 설정에서 허용해 주세요.');
+  }).catch(() => { });
+}
 
 // 첫 화면 밖의 화면은 들어갈 때 불러옵니다(처음 여는 시간을 줄임). 그 화면들의 CSS(styles/screens.css)도 함께 받음:
 // 첫 화면은 기본 CSS(app.css)만 기다려 휴대폰에서 먼저 그려짐(점검 2026-11 L6)

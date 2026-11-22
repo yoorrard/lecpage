@@ -18,7 +18,7 @@ import { AiError, readSSE, toBase64 } from './providers/common.js';
 function metaToken() {
   try { return (typeof document !== 'undefined' && document.querySelector('meta[name="lecpage-bridge"]')?.getAttribute('content')) || ''; } catch { return ''; }
 }
-import { pairing, capturePairing, forgetPairing, justPaired, movePairing, PC_PORTS } from '../pair.js';
+import { pairing, capturePairing, forgetPairing, justPaired, movePairing, confirmPairing, pendingPairing, acceptPairing, PC_PORTS } from '../pair.js';
 export { pairing, capturePairing, forgetPairing, justPaired };
 /** 예전 판 lecpage 커넥트(이 화면이 부르는 경로가 없음)일 때 보이는 말 */
 export const OLD_PC = 'lecpage 커넥트를 새 버전으로 바꿔야 해요.';
@@ -100,17 +100,25 @@ export async function pcStatus({ fresh = false, signal } = {}) {
     const r = await call(`/bridge/status${fresh ? '?fresh' : ''}`, { signal: ctl.signal });
     const status = await r.json().catch(() => null);
     if (!status?.ok || !Array.isArray(status.agents)) throw Object.assign(new AiError('network', 'not a lecpage 커넥트', { provider: 'local' }), { off: true }); // 그 포트에 다른 프로그램
+    if (!c.same) confirmPairing(c.token); // 이 토큰에 답함: 이제 다른 토큰의 #pair=로 바로 덮지 않음
     return { state: 'on', status, permission };
   } catch (e) {
     if (signal?.aborted) throw e;
     // 기억한 포트에 없음(꺼짐·그 포트에 다른 프로그램이 답함): 다른 포트에서 켜졌을 수 있음(다른 창이 그 포트를 쓰던 때 켬 등) → 같은 토큰으로 가까운 포트를 살펴 옮김
     const elsewhere = e?.off || (e instanceof AiError && e.status && !e.pcReply);
-    if (!c.same && elsewhere && permission !== 'prompt') { const port = await findPc(c); if (port) { movePairing(port); return pcStatus({ fresh, signal }); } }
+    if (!c.same && elsewhere && permission !== 'prompt') { const port = await findPc(c); if (port) { movePairing(port, c.token); return pcStatus({ fresh, signal }); } }
     if (!c.same && isSafari()) return { state: 'blocked', reason: 'safari', permission };
     if (!c.same && (await lnaPermission()) === 'denied') return { state: 'blocked', reason: 'denied', permission: 'denied' };
     if (e?.status === 401) return { state: 'off', reason: 'token', permission };
     return { state: 'off', permission };
   } finally { clearTimeout(t); signal?.removeEventListener('abort', stop); }
+}
+/** 그 포트의 lecpage 커넥트가 이 토큰에 답하는지(답하면 상태, 아니면 throw) */
+async function askPc(port, token, ms) {
+  const r = await fetch(`http://127.0.0.1:${port}/bridge/status`, { headers: { 'X-Lecpage-Bridge': token }, cache: 'no-store', mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback', signal: AbortSignal.timeout(ms) });
+  const j = r.ok ? await r.json().catch(() => null) : null;
+  if (!j?.ok || !Array.isArray(j.agents)) throw new Error('no');
+  return j;
 }
 let probedAt = 0;
 /** 같은 토큰으로 답하는 lecpage 커넥트의 포트(없으면 0). 15초에 한 번만 */
@@ -118,12 +126,20 @@ async function findPc(c) {
   if (Date.now() - probedAt < 15000) return 0;
   probedAt = Date.now();
   const ports = PC_PORTS.filter((p) => p !== c.port);
-  return Promise.any(ports.map(async (p) => {
-    const r = await fetch(`http://127.0.0.1:${p}/bridge/status`, { headers: { 'X-Lecpage-Bridge': c.token }, cache: 'no-store', mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback', signal: AbortSignal.timeout(1500) });
-    const j = r.ok ? await r.json() : null;
-    if (!j?.ok || !Array.isArray(j.agents)) throw new Error('no');
-    return p;
-  })).catch(() => 0);
+  return Promise.any(ports.map((p) => askPc(p, c.token, 1500).then(() => p))).catch(() => 0);
+}
+/**
+ * 쓰던 짝과 다른 토큰의 #pair=…(capturePairing이 'check'): 그 포트의 lecpage 커넥트가 새 토큰에 답할 때만 짝을 바꿈
+ * (아무 사이트나 lecpage.com/#pair=<가짜>로 짝을 덮어 연결을 끊지 못하게). --new-token으로 다시 켠 커넥트는 새 토큰에 답하므로 그대로 바뀜.
+ * Chrome·Edge가 '로컬 네트워크 접근'을 물으면 사람이 답할 때까지 기다림. → 'ok'(바꿈) | 'denied'(브라우저가 막음) | 'fail'(꺼짐·토큰이 다름: 쓰던 짝 그대로)
+ */
+export async function checkPairing() {
+  const p = pendingPairing();
+  if (!p) return 'fail';
+  const permission = await lnaPermission();
+  if (permission === 'denied') return 'denied';
+  try { await askPc(p.port, p.token, permission === 'prompt' ? 120e3 : 6000); } catch { return (await lnaPermission()) === 'denied' ? 'denied' : 'fail'; }
+  return acceptPairing(p) ? 'ok' : 'fail';
 }
 /**
  * 이 브라우저와 짝이 없을 때 이 PC에 켜진 lecpage 커넥트의 포트(없으면 0). 토큰 없이 부르면 커넥트는 401 { error:'token' }을 줌(허용한 출처면 CORS가 붙어 읽힘).

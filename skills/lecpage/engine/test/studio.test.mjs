@@ -210,6 +210,8 @@ test('띄우기(새 이름 connect) → 앱 파일(토큰 넣기·_headers·경�
   assert.equal(home.headers['cache-control'], 'no-store');
   assert.equal(home.headers['x-frame-options'], 'DENY');
   assert.match(home.headers['content-security-policy'], /frame-ancestors 'none'/);
+  assert.equal(home.headers['cross-origin-resource-policy'], 'same-origin', '토큰이 든 첫 화면은 다른 출처가 불러 쓰지 못하게');
+  assert.equal(home.headers['cross-origin-opener-policy'], 'same-origin');
   const token = await tokenOf(port);
   assert.equal(await tokenOf(port), token, '한 번 띄운 동안은 같은 토큰');
   if (firstToken) assert.notEqual(token, firstToken, '띄울 때마다 새 토큰'); else firstToken = token;
@@ -255,6 +257,23 @@ test('띄우기(새 이름 connect) → 앱 파일(토큰 넣기·_headers·경�
   assert.match((await bad({ agent: 'claude', files: [{ name: 'x.exe', base64: 'AA==' }] })).message_ko, /받지 않는 파일/);
   assert.match((await bad({ agent: 'claude', kind: 'edit', site: {} })).message_ko, /index\.html/);
   st.p.kill('SIGTERM');
+});
+
+test('두 번 켜면(같은 사용자): 둘째는 켜진 커넥트를 알려 주고 끝남(다른 포트에 또 띄우지 않음) · 새 판으로 다시 켜는 것(감독)은 그대로 새로', { skip: !posix && 'POSIX만', timeout: 60000 }, async () => {
+  const home = mkdtempSync(join(T, 'twice-'));
+  const env = { LECPAGE_STUDIO_HOME: home };
+  const first = await launch(env, []);
+  try {
+    const second = await launch(env, []);
+    assert.equal(second.running, true, JSON.stringify(second));
+    assert.equal(second.port, first.port, '켜진 것의 주소');
+    assert.equal(await new Promise((ok) => (second.p.exitCode !== null ? ok(second.p.exitCode) : second.p.on('exit', ok))), 0, '둘째는 바로 끝남');
+    assert.equal((await req(first.port, 'GET', '/bridge/status', { headers: { 'x-lecpage-bridge': await tokenOf(first.port) } })).status, 200, '첫째는 그대로');
+    // 포트를 정해 켜는 것(새 판으로 다시 켤 때 감독이 쓰는 꼴: --port <같은 포트>, LECPAGE_CONNECT_RESTARTED=1)은 찾지 않고 새로 켬
+    const other = await launch({ ...env, LECPAGE_CONNECT_RESTARTED: '1' }, ['--port', String(first.port + 1 <= 6649 ? first.port + 1 : first.port - 1)]);
+    assert.notEqual(other.running, true); assert.notEqual(other.port, first.port);
+    other.p.kill('SIGTERM');
+  } finally { first.p.kill('SIGTERM'); }
 });
 
 test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issues) → DELETE, 에이전트는 빈 임시 폴더·옵션 그대로·검수 명령 실행', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만', timeout: 180000 }, async () => {
@@ -466,6 +485,7 @@ test('빌드본이 없으면 앱 파일을 받아 같은 출처로(받은 HTML�
     assert.equal(home.headers['content-security-policy'], "frame-ancestors 'none'");
     assert.equal(home.headers['strict-transport-security'], undefined);
     assert.equal(home.headers['set-cookie'], undefined);
+    assert.equal(home.headers['cross-origin-resource-policy'], 'same-origin', '받은 머리글에 없어도 첫 화면에는 늘');
     const js = await req(st.port, 'GET', '/assets/app-abcdef12.js');
     assert.equal(js.text, 'console.log(2)'); assert.match(js.headers['cache-control'], /immutable/);
     const mv = await req(st.port, 'GET', '/help');

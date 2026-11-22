@@ -40,6 +40,89 @@ const html = async (p, pid) => (await L.readProject(p, pid)).site['index.html'];
 const sec = (id) => `.st-outline .sec2[data-sec="${id}"]`;
 const shot = async (p, name, o = {}) => { if (!o.fullPage && p.viewportSize().width > 960) await p.evaluate(() => scrollTo(0, 0)); await p.waitForTimeout(150); await p.screenshot({ path: OUT + name, ...o }); };
 
+/**
+ * lecpage 커넥트 짝(lecpage.com/#pair=<토큰>&port=<포트>, app/src/lib/pair.js): 쓰던 짝(커넥트가 답한 적 있음)은 다른 토큰의 주소로 바로 덮지 않음 —
+ * 다른 사이트가 건 주소로 연결이 끊기지 않게. 그 포트의 커넥트가 새 토큰에 답할 때만 바꿈(--new-token으로 다시 켠 경우). 처음 짝·같은 토큰·Safari는 그대로
+ */
+async function pairing(b) {
+  const A = 'a'.repeat(64), B = 'b'.repeat(64);
+  const STATUS = JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: false }, agents: [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] });
+  // seed: 이 브라우저에 기억한 짝 · live: 포트 → 그 포트의 가짜 커넥트가 답하는 토큰(없으면 꺼짐) · perm: 로컬 네트워크 접근 권한
+  async function open({ seed = null, live = {}, perm = 'granted', ua = '' } = {}) {
+    const c = await b.newContext({ viewport: { width: 1280, height: 860 }, ...(ua ? { userAgent: ua } : {}) });
+    await c.addInitScript(([s, pm]) => {
+      try { if (s && !localStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify(s)); localStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ }
+      const q = navigator.permissions.query.bind(navigator.permissions);
+      navigator.permissions.query = (d) => (/network/.test(d?.name || '') ? Promise.resolve({ state: pm }) : q(d));
+      window.__toasts = []; window.__bc = [];
+      new MutationObserver(() => { const t = document.querySelector('.toast.on')?.textContent; if (t && window.__toasts[window.__toasts.length - 1] !== t) window.__toasts.push(t); }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
+      try { new BroadcastChannel('lecpage-pc').onmessage = (e) => window.__bc.push(e.data?.type); } catch { /* 없음 */ }
+    }, [seed, perm]);
+    await c.route(/^http:\/\/127\.0\.0\.1:66\d\d\//, (r) => {
+      const u = new URL(r.request().url()); const tk = live[+u.port];
+      if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: L.cors });
+      if (!tk) return r.abort();
+      if (r.request().headers()['x-lecpage-bridge'] !== tk) return r.fulfill({ status: 401, contentType: 'application/json', headers: L.cors, body: '{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}' });
+      return r.fulfill({ status: 200, contentType: 'application/json', headers: L.cors, body: STATUS });
+    });
+    return c;
+  }
+  async function visit(c, token, port, until) {
+    const p = await c.newPage(); const errs = L.watch(p);
+    await p.goto(`${L.BASE}#pair=${token}&port=${port}`, { waitUntil: 'load' });
+    if (until) await p.waitForFunction((re) => window.__toasts.some((t) => new RegExp(re).test(t)), until, { timeout: 15000 }).catch(() => { });
+    else await p.waitForTimeout(1500);
+    const st = await p.evaluate(() => ({ pc: JSON.parse(localStorage.getItem('lecpage:pc') || 'null'), hash: location.hash, toasts: window.__toasts, bc: window.__bc }));
+    return { p, errs, ...st };
+  }
+  const has = (v, t, p, ok) => !!v.pc && v.pc.token === t && v.pc.port === p && (ok === undefined || v.pc.ok === ok);
+  let c = await open({ live: { 6620: A } });
+  let v = await visit(c, A, 6620, '연결했어요');
+  L.ok('pair: first pairing saved, address cleared, toast', has(v, A, 6620) && v.hash === '#/' && v.toasts.some((t) => /연결했어요/.test(t)), JSON.stringify([v.pc, v.hash, v.toasts]));
+  await c.close();
+  // 다른 사이트가 건 주소(커넥트는 쓰던 토큰에만 답함): 쓰던 짝 그대로, '연결했어요'·다른 탭 알림 없음
+  c = await open({ seed: { token: A, port: 6620, ok: true }, live: { 6620: A } });
+  v = await visit(c, B, 6620, '확인하지 못해');
+  L.ok('pair: link with another token keeps the working pairing', has(v, A, 6620, true) && v.hash === '#/', JSON.stringify(v.pc));
+  L.ok('pair: no "connected" toast or broadcast for a rejected link', !v.toasts.some((t) => /연결했어요/.test(t)) && v.toasts.some((t) => /원래 연결을 그대로/.test(t)) && !v.bc.includes('paired'), JSON.stringify([v.toasts, v.bc]));
+  L.ok('pair: rejected link: no page errors', v.errs.length === 0, JSON.stringify(v.errs));
+  await c.close();
+  c = await open({ seed: { token: A, port: 6620, ok: true }, live: {} });
+  v = await visit(c, B, 6621, '확인하지 못해');
+  L.ok('pair: connect off (link with another token) keeps the pairing', has(v, A, 6620, true), JSON.stringify(v.pc));
+  await c.close();
+  // --new-token으로 다시 켠 커넥트(새 토큰에 답함): 바뀜 + 알림
+  c = await open({ seed: { token: A, port: 6620, ok: true }, live: { 6621: B } });
+  v = await visit(c, B, 6621, '연결했어요');
+  L.ok('pair: re-pair after a new token (connect answers it) replaces the pairing', has(v, B, 6621, true) && v.toasts.some((t) => /연결했어요/.test(t)) && v.bc.includes('paired'), JSON.stringify([v.pc, v.toasts, v.bc]));
+  await c.close();
+  // 같은 토큰(커넥트를 다시 켬·두 번 켬): 포트만 바뀌고 그대로 알림
+  c = await open({ seed: { token: A, port: 6620, ok: true }, live: { 6622: A } });
+  v = await visit(c, A, 6622, '연결했어요');
+  L.ok('pair: same token moves the port', has(v, A, 6622, true), JSON.stringify(v.pc));
+  await c.close();
+  // 브라우저가 로컬 네트워크 접근을 막음: 확인할 수 없으니 그대로 + 할 일
+  c = await open({ seed: { token: A, port: 6620, ok: true }, live: { 6621: B }, perm: 'denied' });
+  v = await visit(c, B, 6621, '막았어요');
+  L.ok('pair: blocked local network access keeps the pairing and says what to do', has(v, A, 6620, true) && v.toasts.some((t) => /사이트 설정에서 허용/.test(t)), JSON.stringify([v.pc, v.toasts]));
+  await c.close();
+  // 예전에 기억한 짝(ok 표시 없음)은 커넥트가 답하면 쓰던 짝이 되고, 그 뒤에는 덮이지 않음
+  c = await open({ seed: { token: A, port: 6620 }, live: { 6620: A } });
+  const p0 = await c.newPage();
+  await p0.goto(L.BASE, { waitUntil: 'load' });
+  await p0.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+  await p0.waitForFunction(() => JSON.parse(localStorage.getItem('lecpage:pc') || '{}').ok === true, null, { timeout: 30000 }).catch(() => { });
+  L.ok('pair: an older pairing becomes protected once the connect answers', await p0.evaluate(() => JSON.parse(localStorage.getItem('lecpage:pc') || '{}').ok === true));
+  v = await visit(c, B, 6620, '확인하지 못해');
+  L.ok('pair: ...and a later link with another token does not replace it', has(v, A, 6620, true), JSON.stringify(v.pc));
+  await c.close();
+  // Safari(lecpage.com에서 커넥트에 닿지 못해 짝이 '답한 적 있음'이 되지 않음): 커넥트가 연 주소대로 바뀜(커넥트 화면 주소가 맞게)
+  c = await open({ seed: { token: A, port: 6620 }, live: {}, ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15' });
+  v = await visit(c, B, 6621);
+  L.ok('pair: Safari follows the link from the connect', has(v, B, 6621), JSON.stringify(v.pc));
+  await c.close();
+}
+
 (async () => {
   const b = await L.chromium.launch();
   const { ctx, p, errs, pid } = await build(b, 1280, 860);
@@ -189,6 +272,8 @@ const shot = async (p, name, o = {}) => { if (!o.fullPage && p.viewportSize().wi
   await q.click(`${sec('share')} .kit-form button:has-text("취소")`);
   await shot(q, '390-03-full.png', { fullPage: true });
   L.ok('390: no page errors', m.errs.length === 0, JSON.stringify(m.errs));
+  await m.ctx?.close?.();
+  await pairing(b);
   await b.close();
   process.exit(L.summary() ? 1 : 0);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });
