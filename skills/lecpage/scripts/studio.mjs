@@ -99,10 +99,11 @@ export function savedToken(home) {
 }
 /**
  * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표).
- * 예비 주소(https://yoorrard.github.io/lecpage/)는 넣지 않음: 그 출처를 같은 계정의 다른 GitHub Pages 사이트와 함께 써서,
- * 그중 한 곳만 뚫려도 짝 맞춤 토큰을 읽고 이 PC에 닿을 수 있음. 장애 때 예비 주소에서는 API 키로 연결해요(docs/operations.md)
+ * 예비 주소는 lecpage 전용 출처 https://lecpage.github.io(GitHub 조직 lecpage, 다른 Pages 사이트를 두지 않음)만 넣음.
+ * 예전 예비 주소(https://yoorrard.github.io/lecpage/)는 넣지 않음: 그 출처를 같은 계정의 다른 GitHub Pages 사이트와 함께 써서,
+ * 그중 한 곳만 뚫려도 짝 맞춤 토큰을 읽고 이 PC에 닿을 수 있음(docs/operations.md 16절)
  */
-export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'http://localhost:5173', 'http://localhost:4173'];
+export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'https://lecpage.github.io', 'http://localhost:5173', 'http://localhost:4173'];
 export function allowedOrigins(self, env = process.env) {
   const extra = String(env.LECPAGE_STUDIO_ORIGINS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter((x) => /^https?:\/\/[^/\s]+$/.test(x));
   return new Set([self, ...APP_ORIGINS, ...extra]);

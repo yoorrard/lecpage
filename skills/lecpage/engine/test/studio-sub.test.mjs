@@ -298,6 +298,7 @@ test('다른 브라우저와 짝 맞추기(/pair): 허용한 앱 주소(lecpage.
   const frag = `#pair=${st.S.token}&port=${st.port}`;
   try {
     assert.ok(!St.APP_ORIGINS.includes('https://yoorrard.github.io') && !St.allowedOrigins('http://127.0.0.1:6600').has('https://yoorrard.github.io'));
+    assert.ok(St.allowedOrigins('http://127.0.0.1:6600').has('https://lecpage.github.io'), '전용 예비 주소는 믿음');
     const r = await pair('https://lecpage.com/', nav);
     assert.equal(r.status, 302); assert.equal(r.headers.location, `https://lecpage.com/${frag}`);
     assert.equal(r.headers['access-control-allow-origin'], undefined, 'CORS 없음(다른 사이트가 이동할 곳을 읽지 못함)'); assert.equal(r.headers['cache-control'], 'no-store'); assert.equal(r.headers['referrer-policy'], 'no-referrer');

@@ -11,7 +11,8 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 서비스 | 주소 | 배포 방법 | 비용 |
 |---|---|---|---|
 | 웹앱(Worker `lecpage`, 정적 자산) | https://lecpage.com | 자동: Workers Builds(저장소 맨 위) | 0원 |
-| 웹앱 예비 주소(GitHub Pages) | https://yoorrard.github.io/lecpage/ | 자동: Actions `pages.yml` | 0원 |
+| 웹앱 예비 주소(GitHub Pages, lecpage 전용) | https://lecpage.github.io/ | 자동: 조직 저장소 `lecpage/lecpage.github.io`의 `mirror.yml`(2시간마다 이 저장소 main을 빌드) | 0원 |
+| 예전 예비 주소(GitHub Pages) | https://yoorrard.github.io/lecpage/ | 자동: Actions `pages.yml` | 0원 |
 | 바로 배포 서버(Worker `lecpage-sites`) | https://lecpage-sites.lecpage.workers.dev | 자동: Workers Builds(root `hosting`) | 0원(무료 요금제, `PLAN` free) |
 | 바로 배포 사이트 보기(Pages `lecpage-view`) | `https://s-<id>.lecpage-view.pages.dev` | 서버가 배포마다 올림. 마지막 배포 뒤 60일 보관 | 0원 |
 | 관리 화면(Worker `lecpage-admin`) | https://lecpage-admin.lecpage.workers.dev/admin/ | `npm run setup`이 배포. 자동 배포는 Workers Builds 연결 한 번(§14), 그 전에는 바꿀 때 `npm run deploy:admin`. Cloudflare Access, 메일 일회용 번호 | 0원(Zero Trust Free) |
@@ -213,11 +214,11 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 ## 13. 장애·복구
 
-먼저 사용자 쪽은 이미 버티게 되어 있습니다: 앱은 PWA라 다녀간 사람에게는 캐시로 열리고, 예비 주소 `https://yoorrard.github.io/lecpage/`는 다른 회사(GitHub)라 장애 영역이 다르며, 강사 자료는 강사 브라우저(IndexedDB)와 `.lecpage` 파일에 있어 어디로든 다시 배포할 수 있습니다. 공지는 관리 화면 팝업 공지(앱·강사 화면)나, 그것도 안 되면 GitHub 저장소 README 맨 위·고정 이슈로 합니다.
+먼저 사용자 쪽은 이미 버티게 되어 있습니다: 앱은 PWA라 다녀간 사람에게는 캐시로 열리고, 예비 주소 `https://lecpage.github.io/`(커넥트도 됨)는 다른 회사(GitHub)라 장애 영역이 다르며, 강사 자료는 강사 브라우저(IndexedDB)와 `.lecpage` 파일에 있어 어디로든 다시 배포할 수 있습니다. 공지는 관리 화면 팝업 공지(앱·강사 화면)나, 그것도 안 되면 GitHub 저장소 README 맨 위·고정 이슈로 합니다.
 
 | 상황 | 사용자에게 보이는 것 | 운영자 할 일 | 공지 문구(예) |
 |---|---|---|---|
-| Cloudflare 계정 잠금·정지(바로 배포 사이트 신고로 계정 조치 등) | lecpage.com 첫 방문이 안 열림(다녀간 사람은 열림), hello@ 메일이 오지 않음, 바로 배포·관리 화면·Pages 사이트 멈춤 | ① 예비 주소를 README 맨 위·고정 이슈로 공지 ② 문의는 GitHub 이슈, 보안 신고는 Private vulnerability reporting으로 받기 ③ 대시보드 Support로 이의 제기 ④ 강사에게 예비 주소의 '내 계정에 배포'(같은 파일)를 안내. 예방: 바로 배포를 두 번째 계정으로(§14), 알림 'Trust and Safety: New Blocks' | "lecpage.com이 잠시 열리지 않아요. https://yoorrard.github.io/lecpage/ 에서 그대로 쓸 수 있어요. 바로 배포 대신 '내 계정에 배포'를 써 주세요." |
+| Cloudflare 계정 잠금·정지(바로 배포 사이트 신고로 계정 조치 등) | lecpage.com 첫 방문이 안 열림(다녀간 사람은 열림), hello@ 메일이 오지 않음, 바로 배포·관리 화면·Pages 사이트 멈춤 | ① 예비 주소를 README 맨 위·고정 이슈로 공지 ② 문의는 GitHub 이슈, 보안 신고는 Private vulnerability reporting으로 받기 ③ 대시보드 Support로 이의 제기 ④ 강사에게 예비 주소의 '내 계정에 배포'(같은 파일)를 안내. 예방: 바로 배포를 두 번째 계정으로(§14), 알림 'Trust and Safety: New Blocks' | "lecpage.com이 잠시 열리지 않아요. https://lecpage.github.io/ 에서 그대로 쓸 수 있어요. 바로 배포 대신 '내 계정에 배포'를 써 주세요." |
 | 도메인 만료·결제 실패 | lecpage.com이 열리지 않음(예비 주소는 열림) | Registrar → Manage domain에서 결제 수단을 고치고 갱신(만료 뒤에도 유예 기간 안에는 되살릴 수 있으나 값이 더 들 수 있음). 예방: 자동 갱신 + 몇 년치 미리 갱신(§14), 10월 점검(§7) | 위와 같음 |
 | Pages 프로젝트(`lecpage-view`)가 지워짐·고장 | 바로 배포 사이트 주소가 모두 열리지 않음(두 번째 주소도 Pages에서 가져오므로 같음, 영상·소리만 열림) | `cd hosting && npm run setup -- --skip-deploy`로 프로젝트·토큰을 다시 만듦 → 관리 화면 공지로 강사에게 [다시 배포]를 안내(서버에는 HTML 원본·영상만 있어 혼자 되살릴 수 없음, 강사 앱이 같은 파일을 다시 올림). 프로젝트 이름이 바뀌면 사이트 주소도 바뀌니 QR을 다시 뽑도록 함 | "바로 배포 사이트가 잠시 열리지 않았어요. 앱에서 [다시 배포]를 한 번 눌러 주세요. 주소가 바뀌었으면 QR을 다시 받아 주세요." |
 | 바로 배포 Worker를 잘못 배포함 | 앱 배포 화면이 "바로 배포 서버에 지금 닿지 않아요" → 내 계정 배포로 안내. Pages 사이트는 그대로 열림 | Cloudflare → `lecpage-sites` → Deployments에서 앞 판으로 Rollback, 또는 문제 커밋을 `git revert`해 push | 보통 필요 없음 |
@@ -275,14 +276,10 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 
 **키가 샜다고 의심되면**: 새 키를 만들고(`new --out …-2.pem`) 바로 `remove <예전 공개 키>`, 비밀을 새 키 하나로 바꾼 뒤 커밋·push합니다. 예전 목록만 가진 커넥트는 새 판을 받지 못하니(일부러 막음) 관리 화면 팝업 공지로 "lecpage 커넥트를 lecpage.com에서 다시 받아 켜 주세요"를 알립니다. 브라우저로 받는 `.cmd`와 `curl | bash`로 도는 `.sh` 자체는 서명으로 지키지 못하니 GitHub 계정 보안(§6 2단계 인증)이 지킵니다.
 
-## 16. 예비 주소를 전용 출처로 옮기기 (제안, 운영자가 정함)
+## 16. 예비 주소 https://lecpage.github.io (lecpage 전용 출처, 2026-11-22)
 
-지금 예비 주소 `https://yoorrard.github.io/lecpage/`는 같은 계정의 다른 GitHub Pages 사이트와 출처(`https://yoorrard.github.io`)를 함께 씁니다. 그 사이트의 스크립트가 같은 출처의 저장소를 읽을 수 있어서, lecpage 커넥트는 이 출처를 믿지 않습니다(`skills/lecpage/scripts/studio.mjs` `APP_ORIGINS`에 없음). 그래서 예비 주소에서는 커넥트가 연결되지 않고 API 키·내 계정 배포만 됩니다. lecpage.com이 멈췄을 때도 커넥트까지 쓰려면 lecpage만 쓰는 출처가 필요합니다.
-
-**제안: 무료 GitHub 조직 `lecpage`의 `https://lecpage.github.io`**(2026-11-22 확인: `lecpage` 이름은 비어 있음. 0원, Cloudflare와 다른 장애 영역 그대로)
-1. 이름부터 잡기: GitHub → New organization → Free → 이름 `lecpage`. 다른 사람이 먼저 만들면 이 길은 쓸 수 없습니다.
-2. 둘 중 하나로 Pages를 그 출처에 둡니다.
-   - (간단) 이 저장소를 조직으로 옮기기: 저장소 Settings → Transfer → `lecpage`. 예비 주소가 `https://lecpage.github.io/lecpage/`가 되고, GitHub가 예전 저장소·릴리스 주소를 새 주소로 넘겨 줍니다. 그래도 코드·문서의 `yoorrard/lecpage`(커넥트 릴리스 주소 `studio-update.mjs` `RELEASE`·실행 파일·README)는 다음 작업에서 새 이름으로 바꿉니다.
-   - (저장소 그대로) 조직에 빈 저장소 `lecpage.github.io`를 만들고, `pages.yml`이 빌드 결과를 그 저장소로 올리게 합니다(그 저장소의 배포 키를 이 저장소 Actions 비밀로). 예비 주소는 `https://lecpage.github.io/`.
-3. 조직에는 다른 Pages 사이트를 만들지 않습니다(출처를 lecpage 혼자 쓰게).
-4. 끝나면 다음 작업에 알려 주세요. 그때 그 출처를 커넥트 `APP_ORIGINS`·바로 배포 `ALLOWED_ORIGINS`(hosting/src/config.js)·`OPERATOR_HOSTS`(app/src/lib/publish-api.js)·처리방침의 예비 주소에 함께 넣습니다. **출처를 만들기 전에는 코드에 넣지 않습니다**(그 이름을 남이 가지면 남의 페이지를 믿게 됨).
+예전 예비 주소 `https://yoorrard.github.io/lecpage/`는 같은 계정의 다른 GitHub Pages 사이트와 출처를 함께 써서 lecpage 커넥트가 믿지 않습니다. 그래서 GitHub 조직 `lecpage`의 `https://lecpage.github.io`를 lecpage 전용 예비 주소로 씁니다. 커넥트(`studio.mjs` `APP_ORIGINS`)·바로 배포(`ALLOWED_ORIGINS`)·앱(`OPERATOR_HOSTS`)이 이 출처를 믿습니다.
+- 만드는 법: 조직 저장소 `lecpage/lecpage.github.io`의 `.github/workflows/mirror.yml`이 2시간마다(그리고 Actions에서 직접 실행할 때) 공개 저장소 `yoorrard/lecpage`의 main을 받아 앱을 빌드해 그 조직의 Pages로 올립니다. 비밀 값은 없습니다. 올린 판은 `mirror.txt`에 적어 커밋합니다(저장소에 활동이 있어야 GitHub가 예약 실행을 60일 뒤에 끄지 않음).
+- 저장소 Settings → Pages → Source는 **GitHub Actions**여야 합니다.
+- **조직에는 다른 Pages 사이트(다른 저장소의 Pages)를 만들지 않습니다.** 같은 출처를 쓰게 되어 커넥트 짝 맞춤 토큰이 위험해집니다.
+- 빌드 변수 `LECPAGE_SHEET_TEMPLATE`(구글 시트 틀)는 예비 주소에 넣지 않았습니다(없으면 시트 연결에 코드 붙여넣기 단계가 하나 더 있음). 넣으려면 조직 저장소 Settings → Secrets and variables → Actions → Variables에 같은 이름으로 넣고 `mirror.yml`의 빌드 단계에 `env`로 넘깁니다.

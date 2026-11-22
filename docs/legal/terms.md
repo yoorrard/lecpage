@@ -2,7 +2,7 @@
 
 시행일: 2026-11-22
 
-lecpage 운영자 유영재(이하 '운영자')가 제공하는 lecpage 웹앱(https://lecpage.com/, 예비 주소 https://yoorrard.github.io/lecpage/)을 쓸 때 적용되는 약관이에요. 웹앱을 쓰면 이 약관이 적용돼요.
+lecpage 운영자 유영재(이하 '운영자')가 제공하는 lecpage 웹앱(https://lecpage.com/, 예비 주소 https://lecpage.github.io/ · https://yoorrard.github.io/lecpage/)을 쓸 때 적용되는 약관이에요. 웹앱을 쓰면 이 약관이 적용돼요.
 
 ## 1. 서비스
 
@@ -92,6 +92,7 @@ lecpage 운영자 유영재(이하 '운영자')가 제공하는 lecpage 웹앱(h
 | 2026-11-21 | 구독으로 연결(lecpage 커넥트): ChatGPT 계정·Claude 계정 요청은 누를 때만 PC에서 각 회사로 바로 가고, 로그인 정보는 PC에만 둔다는 것과 lecpage.com 화면이 lecpage 커넥트에 바로 이어진다는 것을 1·3번에 적음. 쓰는 분의 권리·의무는 그대로라 바로 시행 |
 | 2026-11-21 | 길(ChatGPT 계정·Claude 계정·Codex·API 키)마다 처음 연결할 때 한 번 받는 연결 동의(체크 하나와 [연결])를 1번에 적음. 쓰는 분의 권리·의무는 그대로라 바로 시행 |
 | 2026-11-22 | 만든 사이트의 참가자 화면에 붙는 'Made with Lecpage' 표시(누르면 lecpage.com, 닫을 수 있음)를 3번에 적음. 쓰는 분의 권리·의무는 그대로라 바로 시행 |
+| 2026-11-22 | 웹앱 예비 주소에 https://lecpage.github.io/ 를 더함(같은 웹앱, lecpage 전용 GitHub 조직). 쓰는 분의 권리·의무는 그대로라 바로 시행 |
 
 ---
 
