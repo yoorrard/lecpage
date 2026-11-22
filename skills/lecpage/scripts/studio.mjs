@@ -1126,7 +1126,8 @@ async function startUpdateOnce(S, { auto = false } = {}) {
   if (busyNow(S, { results: auto })) return { error: 'busy' };
   S.upd = { ...S.upd, state: 'download', error: '', to: latest };
   S.log(`lecpage 커넥트 새 판(${latest})을 받아요${auto ? '(쓰지 않는 동안 저절로)' : ''}`);
-  applyUpdate({ root: S.root, base: S.release.base, fetchImpl: S.release.fetchImpl, onStage: (st) => { S.upd.state = st; } }).then((r) => {
+  // keys: 시험이 가짜 릴리스를 시험용 키로 서명할 때만 넘김(실제로는 늘 코드에 박은 SIGNING_KEYS)
+  applyUpdate({ root: S.root, base: S.release.base, fetchImpl: S.release.fetchImpl, ...(Array.isArray(S.release.keys) ? { keys: S.release.keys } : {}), onStage: (st) => { S.upd.state = st; } }).then((r) => {
     S.upd = { ...S.upd, state: 'restart', to: r.to };
     S.log(`새 판(${r.to})으로 바꿨어요. 같은 주소로 다시 켜요(짝은 그대로)`);
     setTimeout(() => { Promise.resolve(S.onRestart?.(r)).catch((e) => S.log(`다시 켜지 못했어요: ${cut(e?.message || e, 200)}`)); }, 400); // 앱이 'restart'를 한 번 볼 틈

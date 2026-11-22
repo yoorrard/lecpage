@@ -48,7 +48,9 @@ function fakeRoot(ver) {
   return root;
 }
 /** 가짜 릴리스: VERSION · lecpage-connect.tar.gz · .sha256 */
-async function release(files) {
+async function release(files, autoSign = true) {
+  // 커넥트 새 판 시험: 묶음에 .sig가 없으면 시험용 키(TK)로 서명해 둠(실제 공개 키가 들어 있어도 같은 길을 시험). 서명 자체를 시험할 때는 autoSign=false
+  if (autoSign && files['lecpage-connect.tar.gz'] && files['lecpage-connect.tar.gz.sig'] === undefined) files['lecpage-connect.tar.gz.sig'] = sigOf(files['lecpage-connect.tar.gz'], TK.privateKey);
   const hits = [];
   const srv = http.createServer((q, s) => { hits.push(q.url); const f = files[q.url.slice(1)]; if (f === undefined) { s.writeHead(404); return s.end(); } s.writeHead(200, { 'content-type': 'application/octet-stream' }); s.end(f); });
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -58,6 +60,7 @@ const sha = (b) => createHash('sha256').update(b).digest('hex');
 /** 시험 때만 만드는 서명 키(저장소·릴리스와 무관) */
 function keyPair() { const { publicKey, privateKey } = generateKeyPairSync('ed25519'); return { x: publicKey.export({ format: 'jwk' }).x, privateKey }; }
 const sigOf = (buf, privateKey) => `${edSign(null, buf, privateKey).toString('base64')}\n`;
+const TK = keyPair();
 function req(port, method, path, { headers = {}, body } = {}) {
   return new Promise((ok, no) => {
     const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
@@ -69,7 +72,7 @@ function req(port, method, path, { headers = {}, body } = {}) {
 }
 async function studio(opts, fn) {
   const lines = [];
-  const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 's-')), log: (l) => lines.push(l), ...opts });
+  const st = await St.startStudio({ port: 0, dist: DIST, home: mkdtempSync(join(T, 's-')), log: (l) => lines.push(l), ...opts, ...(opts.release ? { release: { keys: [TK.x], ...opts.release } } : {}) });
   const H = { 'x-lecpage-bridge': st.S.token, origin: 'https://lecpage.com' };
   try { await fn(st, H, lines); } finally { await st.close(); }
 }
@@ -275,7 +278,7 @@ test('묶음 받기: 공개 키가 없으면 지금처럼 SHA-256만(.sig를 받
   const a = keyPair(); const b = keyPair();
   const gz = pkg('1.2.0-new');
   const files = { VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` };
-  const rel = await release(files);
+  const rel = await release(files, false);
   const sigErr = (re) => (e) => e.code === 'package' && e.reason === 'signature' && re.test(e.message) && St.updateErrorCode(e) === 'package';
   try {
     assert.ok((await U.downloadVerified({ base: rel.base, keys: [] })).equals(gz));
@@ -302,7 +305,7 @@ test('새 판으로 바꾸기(applyUpdate): 서명이 없거나 맞지 않으면
   const a = keyPair(); const b = keyPair();
   const gz = pkg('1.2.0-new');
   const files = { VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` };
-  const rel = await release(files);
+  const rel = await release(files, false);
   const root = fakeRoot('1.1.0-old');
   const untouched = () => {
     assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.1.0-old');
