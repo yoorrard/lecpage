@@ -349,7 +349,7 @@ export function StepShare({ p, update, go }) {
         </div>
       )}
       {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
-      {originals && <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF) 다운로드 허용 <span class="small muted">(사이트 자료실에 담겨요. 저작권을 먼저 확인해 주세요)</span></span></label>}
+      {originals && <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본 다운로드 허용 <span class="small muted">(넣은 교재 파일이 그대로 사이트 자료실에 담겨요. 저작권을 먼저 확인해 주세요)</span></span></label>}
     </> });
   const warns = notes.filter((c) => c.k === 'warn').length;
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: warns ? 'todo' : 'note', line: warns ? `${notes.length}곳 · 배포 전에 확인해 주세요.` : `${notes.length}곳`,

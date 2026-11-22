@@ -86,6 +86,7 @@ export class Gate extends DurableObject {
         case 'POST site': return json(this.siteUpdate(body));
         case 'POST forget': return json(this.forget(body));
         case 'POST room': return json(this.room(body));
+        case 'POST room-undo': return json(this.roomUndo(body));
         case 'POST book': return json(this.book(body));
         case 'GET day': return json(this.dayStatus(url.searchParams.get('date'), url.searchParams.get('site')));
         case 'GET usage': return json({ ...this.usage(), paused: this.paused() });
@@ -549,6 +550,17 @@ export class Gate extends DurableObject {
       this.bump(k, (day + 1) * DAY_MS);
       this.addDay({ room: 1 }, now);
       if (id && typeof code === 'string' && code) this.sql.exec('UPDATE sites SET code = ? WHERE id = ?', code.slice(0, 40), id);
+    });
+    return { ok: true, day };
+  }
+  /** 방 묶기가 실패했을 때(이미 쓰는 코드 등) room()이 센 하루 개수를 돌려놓음: 실패를 되풀이해 모두의 하루 방 몫을 다 쓰지 못하게 */
+  roomUndo({ day } = {}) {
+    if (!Number.isSafeInteger(day)) return { ok: false };
+    const k = `room:all:${day}`;
+    if (this.count(k) <= 0) return { ok: true };
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec('UPDATE rl SET n = n - 1 WHERE k = ? AND n > 0', k);
+      if ((this.dayData(day).room || 0) > 0) this.addDay({ room: -1 }, day * DAY_MS);
     });
     return { ok: true };
   }

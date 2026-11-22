@@ -69,7 +69,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
 export function surveyKey(q, n) { return `${n + 1}. ${[...String(q.q || '')].slice(0, 30).join('')}`.trim(); }
 export const SCALE_KO = ['전혀 아니에요', '아니에요', '보통이에요', '그래요', '매우 그래요'];
 /** 사이트 안 설문(별점·객관식·주관식). s: { id, questions:[{q,kind,options}] } */
-export function surveyForm(s) {
+export function surveyForm(s, { named = false } = {}) {
   const qs = s.questions.map((q, n) => {
     const key = esc(surveyKey(q, n)); const name = `sv-${esc(s.id)}-${n}`;
     const qText = `<span class="lp-idx">${pad2(n + 1)}</span>${esc(q.q)}`;
@@ -78,7 +78,7 @@ export function surveyForm(s) {
     const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
     return `<li><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b><i>${esc(o)}</i>` : esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
   }).join('');
-  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. 별명으로만 모여요.</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
+  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. ${named ? '입실할 때 적은 이름·소속과 함께 강사에게 모여요.' : '별명으로만 모여요.'}</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
 }
 
 /** '지금' 줄: 실시간 상태(열린 투표·공지·타이머·강사가 보는 실습/쪽). 보여 줄 게 없으면 숨김 */

@@ -34,7 +34,7 @@ async function run(b, width) {
   await L.makeWith(p, ANSWER); await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
   await p.click('.ready-i:has(.ready-t:has-text("공개 범위")) button:has-text("바꾸기")');
-  L.ok(`[${tag}] original-download option in 공개 범위`, await p.locator('.ready-i label:has-text("교재 원본(PPT·PDF) 다운로드 허용") input[type=checkbox]').count() === 1);
+  L.ok(`[${tag}] original-download option in 공개 범위`, await p.locator('.ready-i label:has-text("교재 원본 다운로드 허용") input[type=checkbox]').count() === 1);
   await p.check('.ready-i label:has-text("교재 원본") input[type=checkbox]');
   L.ok(`[${tag}] 공개 범위 line shows original download`, /교재 원본도 다운로드/.test(await p.locator('.ready-i:has(.ready-t:has-text("공개 범위"))').innerText()));
   await p.click('.ready-i:has(.ready-t:has-text("공개 범위")) button:has-text("접기")');

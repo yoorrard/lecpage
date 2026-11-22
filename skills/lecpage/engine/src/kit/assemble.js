@@ -432,7 +432,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       col.survey.push({ id, questions: qs });
       if (!live) return { html: W.liveOffNote('survey') };
       // 이수 조건(설문을 내야 이수 등)은 키트가 지어 쓰지 않음: 교재·강사가 정한 조건은 AI가 사이트 글로
-      return { html: `${W.surveyForm({ id, questions: qs })}${ctx.surveyUrl ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" href="${escAttr(ctx.surveyUrl)}" target="_blank" rel="noopener">기관 설문 열기</a></p>` : ''}` };
+      return { html: `${W.surveyForm({ id, questions: qs }, { named: ctx.named })}${ctx.surveyUrl ? `<p class="lp-small">기관 설문도 있어요. <a class="lp-link" href="${escAttr(ctx.surveyUrl)}" target="_blank" rel="noopener">기관 설문 열기</a></p>` : ''}` };
     }
     case 'deck': {
       const avail = ctx.materialPages;
@@ -488,6 +488,8 @@ function safeHref(v) {
   if (/^https?:\/\//i.test(s)) { try { return new URL(s).href; } catch { return ''; } }
   // 자료실 파일: 이름의 빈칸은 %20으로(활동지 1.pdf처럼 강사가 올린 이름 그대로 받게)
   if (/^(?:assets\/)?files\/[^"'<>\n\r\t]+$/.test(s) && !s.includes('..')) return s.replace(/ /g, '%20');
+  // 교재 쪽 그림(material/p-011.webp 등): 자료실에서 그 쪽을 크게 열거나 받게
+  if (/^material\/p-\d{3,4}\.(?:webp|png|jpe?g)$/i.test(s)) return s;
   return '';
 }
 function nowHtml(ctx) {
@@ -591,7 +593,7 @@ export function assemble(site, meta0, opts = {}) {
   // 출석 한 번 누르기: 학부모 설명회(audience parents)에는 붙이지 않음(이수가 없는데 '출석'이 보이면 꼭 눌러야 하는 줄 앎. render/aux-pages.js quickAttendOn과 같은 규칙)
   const quick = liveOn && f.length > 0 && !pre.attend && !f.includes('attendance') && meta.audience !== 'parents';
   const ctx = {
-    meta, words, liveOn, code: v0.live.code, anonymous: v0.live.anonymous !== false, minor: v0.audience.minor, uploads: v0.live.uploads, provider: v0.live.provider,
+    meta, words, liveOn, code: v0.live.code, anonymous: v0.live.anonymous !== false, named: (v0.privacy?.collect || []).some((c) => c === 'name' || c === 'school'), minor: v0.audience.minor, uploads: v0.live.uploads, provider: v0.live.provider,
     done: v0.meta.admin.kind === 'official' && !!(v0.meta.admin.completionRate || v0.meta.admin.hours), surveyUrl: meta.surveyUrl, materialPages, pageInfo,
     pageSrc: (n) => pageFile[n] || W.pagePath(n), pageSize: (n) => (pageFile[n] ? imageSize(src[pageFile[n]]) : null), materials: Array.isArray(opts.materials) ? opts.materials : [],
     dock: { attend: (quick || pre.attend || f.includes('attendance')) && (quick ? 'quick' : 'in'), help: f.includes('help'), qa: f.includes('qa') && pre.qa, signal: f.includes('signal'), reactions: f.includes('reactions') },

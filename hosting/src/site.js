@@ -376,7 +376,7 @@ export class Site extends DurableObject {
       if (!this.alive(meta)) throw new HttpError('not_found');
       const prev = meta.live_code || null;
       // 이 사이트의 첫 방일 때만 하루 개수에 셈(코드를 바꾸는 것은 방 하나를 갈아 끼우는 것). Gate가 이때 코드도 적음(따로 부르지 않음)
-      if (!prev) await this.gate('POST', 'room', { id: meta.site, code });
+      const counted = prev ? null : await this.gate('POST', 'room', { id: meta.site, code });
       // 사이트에 먼저 적고 방을 묶음: 중간에 끊겨도 "사이트가 모르는 방"이 남지 않음(방은 기간 끝에 사이트에 물어보고 스스로 비움)
       const setCode = (c) => { this.sql.exec('UPDATE meta SET live_code = ? WHERE id = 1', c); meta.live_code = c; };
       if (prev !== code) setCode(code);
@@ -385,7 +385,10 @@ export class Site extends DurableObject {
         out = await this.room(code, 'bind', { site: meta.site, code, adminKeyHash, settings: body.settings, expires: meta.expires, blocked: !!meta.blocked });
       } catch (e) {
         if (prev !== code) setCode(prev);
-        if (!prev) { try { await this.gate('POST', 'site', { id: meta.site, code: '' }); } catch { /* 관리 화면 숫자만 어긋남 */ } }
+        if (!prev) {
+          try { await this.gate('POST', 'site', { id: meta.site, code: '' }); } catch { /* 관리 화면 숫자만 어긋남 */ }
+          if (Number.isSafeInteger(counted?.day)) { try { await this.gate('POST', 'room-undo', { day: counted.day }); } catch { /* 하루 몫 하나만 어긋남 */ } }
+        }
         throw e;
       }
       // 코드를 바꿨으면 예전 방은 비우고 Gate에 새 코드를 적음

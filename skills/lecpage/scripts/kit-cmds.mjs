@@ -295,13 +295,16 @@ async function liveServe(h, work) {
   const [maj, min] = process.versions.node.split('.').map(Number);
   const flags = [...(maj === 22 && min < 13 ? ['--experimental-sqlite'] : []), '--disable-warning=ExperimentalWarning']; // node:sqlite: 22.13부터 그대로(시험판 알림은 숨김)
   const keyFile = join(dataDir, 'admin-key.txt');
+  // 개인정보 안내·참여 동의에 적은 보관 기간(마지막 기록 뒤 N일)을 서버도 지키게(없으면 서버 기본 30일)
+  const days = Math.round(+a.r.blueprint?.privacy?.retentionDays || 0);
+  const keep = days > 0 ? ['--retention-days', String(days)] : [];
   say([
     `교실 참여 서버를 켜요(연수 코드 ${a.r.collected.code}). 끝내려면 Ctrl+C`,
     `관리자 키: ${relative(process.cwd(), keyFile) || keyFile} (처음 켤 때 만들어요. 강사 화면에 넣어요)`,
     '참가자는 같은 와이파이에서 아래 주소로 들어와요. 발표 화면·강사 화면은 이 노트북에서 열어도 QR에 와이파이 주소가 들어가요.',
     '교실 와이파이가 기기끼리 막혀 있으면(학교망 격리) 휴대폰 핫스팟에 노트북과 참가자가 함께 들어오게 해요.',
   ], { ok: true, live: true, code: a.r.collected.code, port, site: siteDir, data: dataDir });
-  const child = spawn(process.execPath, [...flags, server, '--static', siteDir, '--data', dataDir, '--port', String(port), '--host', host], { stdio: 'inherit' });
+  const child = spawn(process.execPath, [...flags, server, '--static', siteDir, '--data', dataDir, '--port', String(port), '--host', host, ...keep], { stdio: 'inherit' });
   const stop = () => { try { child.kill('SIGINT'); } catch { /* 이미 끝남 */ } };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
   await new Promise((res) => child.on('exit', (code) => { process.exitCode = code || 0; res(); }));
