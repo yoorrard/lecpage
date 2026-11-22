@@ -212,8 +212,11 @@ function pollHint(cfg, pct = budgetPct) {
   if (!cfg.dailyRequestBudget) return 5000;
   return pct >= 80 ? 20000 : pct >= 50 ? 10000 : 5000;
 }
-/** VIEW=pages 사이트(다른 출처)가 방을 부를 때 붙이는 CORS 머리글. 그 밖의 출처에는 붙이지 않음 */
-const LIVE_CORS_BASE = { 'access-control-allow-methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Filename', 'access-control-max-age': '86400', vary: 'Origin' };
+/**
+ * VIEW=pages 사이트(다른 출처)가 방을 부를 때 붙이는 CORS 머리글. 그 밖의 출처에는 붙이지 않음.
+ * 런타임이 읽는 머리글(Retry-After: 429에서 기다릴 초, X-Lec-Poll-Ms: 묻기 간격 권고)은 모든 응답에서 읽게 함(backends/cloudflare의 corsHeaders와 같음)
+ */
+const LIVE_CORS_BASE = { 'access-control-allow-methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Filename', 'access-control-expose-headers': 'Retry-After, X-Lec-Poll-Ms', 'access-control-max-age': '86400', vary: 'Origin' };
 function liveCors(origin, cfg) {
   return origin && cfg.siteOriginRe && cfg.siteOriginRe.test(origin) ? { ...LIVE_CORS_BASE, 'access-control-allow-origin': origin } : null;
 }
@@ -241,7 +244,7 @@ async function live(request, env, url, cfg) {
     const res = longPoll ? await relayWait(env, fwd, t.code, Number(url.searchParams.get('wait'))) : await roomStub(env, t.code).fetch(fwd);
     // 묻기 간격 권고(런타임이 따르면): 하루 예산을 많이 쓸수록 길게
     // (방이 붙인 간격 대신 이 호스트의 하루 예산에 따른 간격을 씀)
-    if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)), ...(cors ? { 'access-control-expose-headers': 'X-Lec-Poll-Ms' } : {}) }));
+    if (t.op === 'snapshot' && request.method === 'GET' && res.status === 200) return done(withHeaders(res, { 'x-lec-poll-ms': String(pollHint(cfg)) }));
     return done(res);
   } catch (e) {
     if (e instanceof LiveError) return done(liveJson(e.status, { error: e.code, message: e.message }));
@@ -291,7 +294,8 @@ async function route(request, env, ctx, url, cfg, self) {
       ok: true, v: 1, plan: cfg.plan, accepting, ...(paused ? { paused } : {}), ...(s?.capacity ? { capacity: s.capacity } : {}),
       // view: 사이트를 내보내는 곳(pages: 사이트마다 다른 주소, 방문이 하루 한도에 들지 않음). keepAlive: 방문이 있으면 보관 기간을 다시 채우는지
       // siteScripts: 사이트가 직접 쓴 스크립트(assets/site.js 등)를 받는지(pages 보기만. README §6)
-      view: cfg.view, keepAlive: cfg.keepAlive, siteScripts: cfg.view === 'pages',
+      // ownLive: 사이트가 적은 자기 도메인의 https 참여 기능 서버도 사이트 CSP에 엶(csp.js liveKind 'own'). 앱은 이 값이 있을 때만 그 서버를 그대로 씀
+      view: cfg.view, keepAlive: cfg.keepAlive, siteScripts: cfg.view === 'pages', ownLive: true,
       limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
       report: `${self}/report`,
       ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),

@@ -1,5 +1,6 @@
 // 브라우저에서 바로 배포(사용자 토큰). 토큰은 이 브라우저에서 배포할 곳으로만 갑니다. '기억하기'를 켜면 암호화해 이 기기에 둡니다.
 import { PUBLISH_API } from './publish-api.js';
+import { liveKind } from '@hosting/csp.js';
 import { track } from './stats.js';
 import { koTime } from './util.js';
 
@@ -263,6 +264,20 @@ export function instantInfo(fresh = false) {
   }
   return infoP;
 }
+/**
+ * 강사가 연결한 참여 기능 서버를 바로 배포한 사이트에서도 쓸 수 있는지: 바로 배포 서버가 사이트 CSP에 그 서버를 여는지(hosting/src/csp.js liveKind와 같은 코드).
+ * 강사 계정 서버 모양(https의 *.workers.dev·*.supabase.co, 구글 시트)은 늘, 자기 도메인의 https 참여 기능 서버(node-server·cloudflare)는
+ * 그것을 여는 서버(info.ownLive)일 때만. 예전 서버는 자기 도메인을 막으므로 그때는 바로 배포의 참여 기능 방을 씀
+ * @param {{ provider?: string, url?: string }} live 연수의 참여 기능 연결
+ * @param {{ ownLive?: boolean }|null} [info] instantInfo() 결과
+ */
+export function instantLiveOk(live, info = null) {
+  if (!live?.url) return false;
+  if (live.provider === 'sheets') return /^https:\/\/script\.google\.com\//.test(live.url);
+  const kind = liveKind(live);
+  return kind === 'account' || (kind === 'own' && !!info?.ownLive);
+}
+
 /** 앱이 알아듣는 것: 'split' = 그날 참여 기능 방이 차면 사이트는 받고 참여 기능만 강사 계정으로 넘기기 */
 const CAPS = ['split'];
 const DAY = 864e5;

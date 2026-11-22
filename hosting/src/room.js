@@ -19,9 +19,9 @@ export { Guard, MAX_WAIT_S, snapshotChanged };
 const DAY = 864e5;
 const MB = 1024 * 1024;
 
-/** 실시간 규칙의 오류 모양({ error, message }) */
-function liveError(status, error, message, headers = {}) {
-  return new Response(JSON.stringify({ error, message }), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
+/** 실시간 규칙의 오류 모양({ error, message }). extra: 본문에 덧붙일 값(429의 retryAfter: 머리글을 못 읽는 곳에서도 런타임이 기다릴 초를 앎) */
+function liveError(status, error, message, headers = {}, extra = {}) {
+  return new Response(JSON.stringify({ error, message, ...extra }), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } });
 }
 
 export class Room extends LiveRoom {
@@ -88,7 +88,7 @@ export class Room extends LiveRoom {
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
     const wait = request.headers.has('x-lec-admin') ? 0 : await this.overBudget(b);
-    if (wait) return liveError(429, 'room_busy', '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', { 'retry-after': String(wait) });
+    if (wait) return liveError(429, 'room_busy', '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', { 'retry-after': String(wait) }, { retryAfter: wait });
     return super.fetch(request); // 긴 대기도 LiveRoom이 맡음
   }
   /** 방마다 요청 상한(live/host.js RoomBudget): 받으면 0, 넘쳤으면 기다릴 초. 참가자 수는 방의 셈(메모리, 들어올 때마다 맞춰짐)을 그대로 써서 한꺼번에 들어와도 따라감 */

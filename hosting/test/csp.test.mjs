@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { htmlCsp, siteCsp, auxCsp, roomSources, declaredLive, fileHeaders, etagOf, etagMatches, parseRange, SVG_CSP, NOTICE_CSP, FONT_CSS_HOSTS, FONT_FILE_HOSTS, FRAME_HOSTS, LIB_SCRIPT_SOURCES, NO_FRAME_PAGES, AUX_PAGES, BASE_HEADERS } from '../src/csp.js';
+import { htmlCsp, siteCsp, auxCsp, roomSources, declaredLive, liveKind, fileHeaders, etagOf, etagMatches, parseRange, SVG_CSP, NOTICE_CSP, FONT_CSS_HOSTS, FONT_FILE_HOSTS, FRAME_HOSTS, LIB_SCRIPT_SOURCES, NO_FRAME_PAGES, AUX_PAGES, BASE_HEADERS } from '../src/csp.js';
 import { typeOf } from '../src/paths.js';
 import { isLocalSrc, isLibSrc, isDataScript, reportLinkHtml } from '../src/rewrite.js';
 import { SUPABASE_SDK } from '../src/runtime-allow.js';
@@ -54,6 +54,8 @@ test('엔진 조립의 CSP(kit/assemble.js kitCsp)와 어긋나지 않음: 같�
   const cases = [
     { name: '이 호스트의 방', live: { provider: 'http', url: `${HOST}/live`, code: 'SEL2026' }, srv: { host: HOST, code: 'SEL2026', site: 'abcdefghjk', pages: true } },
     { name: '강사 계정 Cloudflare', live: { provider: 'http', url: 'https://lecpage-live.teacher.workers.dev', code: 'SEL2026' } },
+    { name: '자기 도메인 참여 기능 서버', live: { provider: 'http', url: 'https://live.school.example.kr', code: 'SEL2026' } },
+    { name: '자기 도메인 참여 기능 서버(포트)', live: { provider: 'http', url: 'https://live.school.example.kr:8443/', code: 'SEL2026' } },
     { name: 'Supabase', live: { provider: 'supabase', url: 'https://abcdefghijklmnop.supabase.co', anonKey: 'k', code: 'SEL2026' } },
     { name: '구글 시트', live: { provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec', code: 'SEL2026' } },
   ];
@@ -83,21 +85,35 @@ test('사이트 쪽 CSP에 들어가는 값은 모양을 확인함(머리글을 
     assert.deepEqual(roomSources(bad).connect, [], JSON.stringify(bad));
   }
   assert.deepEqual(roomSources({ host: HOST, site: '../x', pages: true }).media, []);
-  assert.deepEqual(roomSources({ live: ['https://evil.example/x', "https://a.example 'unsafe-inline'", 'https:', 'data:', 'https://ok.workers.dev'] }).connect, ['https://ok.workers.dev']);
+  assert.deepEqual(roomSources({ live: ['https://evil.example/x', "https://a.example 'unsafe-inline'", 'https:', 'data:', 'https://*.example.kr', 'wss://a.example:99999x', 'https://ok.workers.dev', 'wss://live.school.kr:8443'] }).connect, ['https://ok.workers.dev', 'wss://live.school.kr:8443']);
   const csp = siteCsp({ host: 'https://h.example; script-src *', code: 'X;Y' });
   assert.ok(!csp.includes('script-src *') && csp.split(';').length === 13, csp);
 });
 
-test('사이트가 적은 바깥 실시간 서버: 강사 계정 모양(workers.dev·supabase.co·Apps Script)만, 이 호스트는 빼고', () => {
+test('사이트가 적은 바깥 실시간 서버: 강사 계정 모양(workers.dev·supabase.co·Apps Script)과 자기 도메인의 https 참여 기능 서버, 이 호스트는 빼고', () => {
   assert.deepEqual(declaredLive({ provider: 'http', url: 'https://lecpage-live.teacher.workers.dev/' }), ['https://lecpage-live.teacher.workers.dev', 'wss://lecpage-live.teacher.workers.dev']);
   assert.deepEqual(declaredLive({ provider: 'http', health: 'https://a.b.workers.dev/api/health' }), ['https://a.b.workers.dev', 'wss://a.b.workers.dev'], '암호 사이트의 공개 자료(health)');
   assert.deepEqual(declaredLive({ provider: 'supabase', url: 'https://abcdefghijklmnop.supabase.co' }), ['https://abcdefghijklmnop.supabase.co', 'wss://abcdefghijklmnop.supabase.co']);
   assert.deepEqual(declaredLive({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec' }), ['https://script.google.com', 'https://script.googleusercontent.com']);
   assert.deepEqual(declaredLive({ provider: 'http', url: `${HOST}/live` }, HOST), [], '이 호스트의 방은 묶인 코드로만');
-  for (const bad of [{ provider: 'http', url: 'https://evil.example' }, { provider: 'http', url: 'http://a.workers.dev' }, { provider: 'http', url: 'https://a.workers.dev:8443' }, { provider: 'http', url: 'https://u:p@a.workers.dev' },
-    { provider: 'http', url: 'https://workers.dev.evil.example' }, { provider: 'supabase', url: 'https://abc.supabase.co.evil.example' }, { provider: 'supabase', url: 'https://a.workers.dev' }, { provider: 'local', url: 'https://a.workers.dev' }, { provider: 'http', url: 'not a url' }, null, 'x']) {
+  for (const bad of [{ provider: 'http', url: 'http://a.workers.dev' }, { provider: 'http', url: 'https://u:p@a.workers.dev' }, { provider: 'http', url: 'http://live.school.kr' },
+    { provider: 'supabase', url: 'https://abc.supabase.co.evil.example' }, { provider: 'supabase', url: 'https://a.workers.dev' }, { provider: 'supabase', url: 'https://db.school.kr' }, { provider: 'local', url: 'https://a.workers.dev' }, { provider: 'http', url: 'not a url' }, null, 'x',
+    // 자기 도메인: IP 주소·localhost·사내 이름·점 없는 이름은 받지 않음
+    ...['https://10.0.0.5', 'https://192.168.0.10:8787', 'https://[::1]', 'https://[fd00::1]:8443', 'https://localhost', 'https://srv.localhost', 'https://teacher-pc', 'https://srv.local', 'https://live.corp', 'https://x.internal', 'https://a.home.arpa', 'https://evil.example', 'https://workers.dev.evil.example'].map((url) => ({ provider: 'http', url }))]) {
     assert.deepEqual(declaredLive(bad), [], JSON.stringify(bad));
   }
+  // 자기 도메인(backends/node-server·cloudflare를 강사 도메인에): 그 출처 하나와 같은 호스트의 wss만(포트도 그대로)
+  assert.deepEqual(declaredLive({ provider: 'http', url: 'https://Live.School.kr/' }), ['https://live.school.kr', 'wss://live.school.kr']);
+  assert.deepEqual(declaredLive({ provider: 'http', url: 'https://live.school.kr:8443/api' }), ['https://live.school.kr:8443', 'wss://live.school.kr:8443']);
+  assert.deepEqual(declaredLive({ provider: 'http', url: 'https://참여.학교.한국' }), ['https://xn--9i5b58i.xn--9d0b527e.xn--3e0b707e', 'wss://xn--9i5b58i.xn--9d0b527e.xn--3e0b707e'], '한글 도메인은 퓨니코드로');
+  assert.equal(liveKind({ provider: 'http', url: 'https://live.school.kr' }), 'own');
+  assert.equal(liveKind({ provider: 'http', url: 'https://a.b.workers.dev' }), 'account');
+  assert.equal(liveKind({ provider: 'sheets' }), 'account');
+  assert.equal(liveKind({ provider: 'http', url: 'https://10.0.0.5' }), '');
+  const own = siteCsp({ live: declaredLive({ provider: 'http', url: 'https://live.school.kr' }) });
+  assert.equal(directive(own, 'connect-src'), "'self' https://live.school.kr wss://live.school.kr");
+  assert.equal(directive(own, 'img-src'), "'self' data: blob: https://live.school.kr", '보드 파일');
+  assert.ok(!own.includes('*'), '와일드카드 없음');
   const csp = siteCsp({ live: declaredLive({ provider: 'supabase', url: 'https://abcdefghijklmnop.supabase.co' }) });
   assert.equal(directive(csp, 'connect-src'), "'self' https://abcdefghijklmnop.supabase.co wss://abcdefghijklmnop.supabase.co");
   assert.equal(directive(csp, 'img-src'), "'self' data: blob: https://abcdefghijklmnop.supabase.co", '보드 파일');
@@ -268,4 +284,15 @@ test('강사·발표 화면은 창 연결을 끊음(COOP same-origin, 엔진 조
   for (const p of ['index.html', 'poster.html', 'check.html']) assert.equal(fileHeaders(p, typeOf(p), sha)['cross-origin-opener-policy'], undefined, p);
   const eng = readFileSync(join(ENGINE, 'src', 'kit', 'assemble.js'), 'utf8');
   assert.match(eng, /console\|screen[\s\S]{0,80}Cross-Origin-Opener-Policy: same-origin/, '엔진 조립도 같은 두 쪽');
+});
+
+test('앱이 이 파일을 그대로 불러 씀(app/src/lib/deploy.js instantLiveOk): 브라우저에서 도는 작은 모듈만 불러옴', () => {
+  const seen = new Set(); const todo = ['csp.js'];
+  while (todo.length) {
+    const f = todo.pop(); if (seen.has(f)) continue; seen.add(f);
+    const src = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8');
+    assert.ok(!/^import [^;]*? from '(?!\.\/)/m.test(src), `${f}: 바깥 모듈을 불러오지 않음`);
+    for (const m of src.matchAll(/^import [^;]*? from '\.\/([\w/-]+\.js)';/gm)) todo.push(m[1]);
+  }
+  assert.deepEqual([...seen].sort(), ['csp.js', 'ids.js']);
 });

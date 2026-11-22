@@ -26,28 +26,51 @@ export const AUX_PAGES = new Set([...NO_FRAME_PAGES, 'check.html', 'privacy.html
 
 const HOST_RE = /^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/;
 const CODE_RE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
-/** 사이트가 적을 수 있는 바깥 실시간 서버: 강사 계정의 Cloudflare Worker(workers.dev)·Supabase 프로젝트. 그 밖의 주소는 연결을 열지 않음 */
+/** 사이트가 적을 수 있는 바깥 실시간 서버(강사 계정 서버 모양): Cloudflare Worker(workers.dev)·Supabase 프로젝트 */
 const LIVE_HOST_RE = { http: /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+workers\.dev$/, supabase: /^[a-z0-9]{8,40}\.supabase\.co$/ };
+/**
+ * 강사가 자기 도메인에 둔 참여 기능 서버(backends/node-server·cloudflare, provider 'http'): 점이 있는 공개 도메인 이름만.
+ * 마지막 이름이 글자로 시작해야 해서 IP 주소는 빠지고(IPv6는 URL 모양에서 빠짐), localhost·사내 이름(.local·.internal 등)도 뺌.
+ * 그 사이트의 CSP에 그 출처 하나만 들어가므로(와일드카드 없음) 강사 계정 workers.dev 주소와 열리는 범위가 같음
+ */
+const OWN_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const PRIVATE_NAME_RE = /(?:^|\.)(?:localhost|local|localdomain|internal|intranet|lan|home|corp|private|test|example|invalid|onion|home\.arpa)$/;
 const SHEETS = ['https://script.google.com', 'https://script.googleusercontent.com'];
+
+/**
+ * 사이트 자료(lp-data)의 live 칸이 가리키는 바깥 실시간 서버의 갈래(앱의 바로 배포 화면도 같은 코드로 판단: app/src/lib/deploy.js instantLiveOk).
+ * 'account': 강사 계정 서버 모양(https의 workers.dev·supabase.co, 구글 시트) | 'own': 자기 도메인의 참여 기능 서버(https, provider 'http') | '': 열지 않음
+ * @param {any} live { provider, url?, health? }
+ * @param {string} [self] 이 호스트 주소(이 호스트의 방은 묶인 코드로 따로 넣으므로 뺌)
+ * @returns {'account'|'own'|''}
+ */
+export function liveKind(live, self = '') {
+  if (!live || typeof live !== 'object') return '';
+  if (live.provider === 'sheets') return 'account';
+  if (!LIVE_HOST_RE[live.provider]) return '';
+  let u;
+  try { u = new URL(String(live.url || live.health || '')); } catch { return ''; }
+  if (u.protocol !== 'https:' || u.username || u.password || u.origin === self) return '';
+  if (!u.port && LIVE_HOST_RE[live.provider].test(u.hostname)) return 'account';
+  if (live.provider === 'http' && OWN_HOST_RE.test(u.hostname) && !PRIVATE_NAME_RE.test(u.hostname)) return 'own';
+  return '';
+}
 /** 구글 시트 연결의 보드 사진(드라이브). 그림으로만(엔진 kit/assemble.js kitCsp와 같음) */
 const SHEETS_IMG = ['https://drive.google.com', 'https://*.googleusercontent.com'];
 
 /**
  * 사이트 자료(lp-data)의 live 칸 → 연결을 열 바깥 실시간 서버 출처. 엔진 render/shell.js의 liveOrigins와 같은 생각이되,
- * 주소는 강사 계정 서버 모양(https의 workers.dev·supabase.co·Apps Script)만 받음. 이 호스트의 방은 묶인 코드로 따로 넣으므로 뺌
+ * 주소는 liveKind가 받는 것(강사 계정 서버 모양, 자기 도메인의 https 참여 기능 서버)만. 출처 하나와 같은 호스트의 wss
  * @param {any} live { provider, url?, health? }
  * @param {string} [self] 이 호스트 주소
  * @returns {string[]}
  */
 export function declaredLive(live, self = '') {
-  if (!live || typeof live !== 'object') return [];
+  const kind = liveKind(live, self);
+  if (!kind) return [];
   if (live.provider === 'sheets') return [...SHEETS];
-  const re = LIVE_HOST_RE[live.provider];
-  if (!re) return [];
-  let u;
-  try { u = new URL(String(live.url || live.health || '')); } catch { return []; }
-  if (u.protocol !== 'https:' || u.port || u.username || u.password || !re.test(u.hostname) || u.origin === self) return [];
-  return [u.origin, `wss://${u.hostname}`];
+  const u = new URL(String(live.url || live.health));
+  return [u.origin, `wss://${u.host}`];
 }
 
 /**
@@ -70,7 +93,7 @@ export function roomSources({ host = '', code = '', site = '', pages = false, li
     if (pages && ID_RE.test(site)) media.push(`${host}/s/${site}/`); // 영상·소리는 Pages가 이 호스트로 넘김(pages-site.js redirectsFile)
   }
   for (const o of live) {
-    if (!/^(?:https|wss):\/\/[a-z0-9.-]+$/.test(o)) continue;
+    if (!/^(?:https|wss):\/\/[a-z0-9.-]+(?::\d{1,5})?$/.test(o)) continue;
     connect.push(o);
     if (o.startsWith('https:')) { img.push(o); media.push(o); } // 강사 계정 서버의 보드 파일
   }

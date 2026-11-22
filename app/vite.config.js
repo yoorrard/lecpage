@@ -83,7 +83,8 @@ This file carries the lecpage NOTICE and the copyright notices and license texts
 lecpage license (Apache-2.0): https://github.com/yoorrard/lecpage/blob/main/LICENSE — the same Apache License 2.0 text is reproduced in the pdfjs-dist section below.
 Overview (Korean): https://github.com/yoorrard/lecpage/blob/main/THIRD_PARTY_NOTICES.md`, `NOTICE\n\n${read('../NOTICE').trim()}`];
       // 직접 의존성 + 번들에 실제로 들어간 하위 패키지(교재 그리기 도구가 묶는 jszip·echarts 등). 번들 조각의 모듈 경로로 찾음
-      const inBundle = new Set();
+      // DOCX 틀 코드(docxFrame)는 글 한 덩어리로 들어가 번들 조각에 모듈이 보이지 않으므로 그 묶음의 패키지도 더함
+      const inBundle = new Set(FRAME_PKGS);
       for (const c of Object.values(bundle)) for (const id of Object.keys(c.modules || {})) { const m = /node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(id.replace(/\\/g, '/')); if (m) inBundle.add(m[1]); }
       if (inBundle.has('jszip')) for (const n of ['pako', 'lie', 'immediate', 'setimmediate']) inBundle.add(n); // jszip 배포본(dist) 안에 함께 묶여 있음
       for (const name of [...new Set([...Object.keys(app.dependencies || {}), ...[...inBundle].sort()])]) {
@@ -207,6 +208,62 @@ function homeOnlyPreload() {
   };
 }
 
+// DOCX 쪽 그림 틀의 코드: build/docx-frame.js + docx-preview + snapdom을 한 덩어리(IIFE, 전역 lpDocxFrame) 글로 묶어
+// virtual:lecpage-docx-frame의 기본 내보내기로 줌. src/lib/render-doc.js가 출처 없는 sandbox 틀(srcdoc)에 이 글을 넣어 돌림
+// (교재가 넣는 CSS가 앱 화면·저장소에 닿지 않게). 틀은 다른 출처라 모듈 스크립트·앱 조각을 받을 수 없어(CORS) 코드를 통째로 넘김
+const DOCX_FRAME = 'virtual:lecpage-docx-frame';
+const DOCX_FRAME_SRC = 'build/docx-frame.js';
+const FRAME_PKGS = new Set(); // 그 묶음에 들어간 패키지(licenses.txt)
+async function bundleDocxFrame() {
+  const { build } = await import('vite');
+  const r = await build({
+    configFile: false, root: here('.'), publicDir: false, logLevel: 'warn', mode: 'production',
+    define: { 'process.env.NODE_ENV': '"production"' },
+    build: {
+      write: false, target: 'es2020', minify: true, sourcemap: false, emptyOutDir: false, reportCompressedSize: false,
+      lib: { entry: here(DOCX_FRAME_SRC), name: 'lpDocxFrame', formats: ['iife'], fileName: () => 'docx-frame.js' },
+      rollupOptions: { output: { inlineDynamicImports: true } },
+    },
+  });
+  const chunks = (Array.isArray(r) ? r : [r]).flatMap((x) => x.output).filter((c) => c.type === 'chunk');
+  if (chunks.length !== 1 || !/\blpDocxFrame\b/.test(chunks[0].code)) throw new Error('docx-frame: 틀 코드를 한 덩어리로 묶지 못했습니다.');
+  for (const id of Object.keys(chunks[0].modules || {})) { const m = /node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(id.replace(/\\/g, '/')); if (m) FRAME_PKGS.add(m[1]); }
+  return chunks[0].code;
+}
+function docxFrame() {
+  let code = null;
+  return {
+    name: 'lecpage-docx-frame',
+    resolveId(id) { return id === DOCX_FRAME ? '\0' + DOCX_FRAME : null; },
+    async load(id) {
+      if (id !== '\0' + DOCX_FRAME) return null;
+      this.addWatchFile(here(DOCX_FRAME_SRC));
+      if (!code) code = bundleDocxFrame().catch((e) => { code = null; throw e; });
+      return `export default ${JSON.stringify(await code)};`;
+    },
+    watchChange(id) { if (id.replace(/\\/g, '/').endsWith('/' + DOCX_FRAME_SRC)) code = null; },
+  };
+}
+
+// 앱 CSP(index.html meta)의 jsDelivr 스크립트 경로 = 엔진 LIB_SCRIPT_SOURCES(참가자 사이트가 부르는 버전 고정 라이브러리, 미리보기 틀이 앱 CSP를 물려받음).
+// 엔진이 라이브러리 판을 올렸는데 여기를 잊으면 미리보기에서 그 효과가 막히므로 빌드를 멈춤. 호스트 전체(https://cdn.jsdelivr.net)도 다시 넣지 못하게
+function cspLibCheck() {
+  return {
+    name: 'lecpage-csp-lib-check',
+    apply: 'build',
+    async transformIndexHtml(html) {
+      const { LIB_SCRIPT_SOURCES } = await import('../skills/lecpage/engine/src/render/shell.js');
+      const csp = (/http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html) || [])[1] || '';
+      const script = ((/(?:^|;)\s*script-src ([^;]*)/.exec(csp) || [])[1] || '').trim().split(/\s+/);
+      const cdn = script.filter((x) => /^https:\/\/cdn\.jsdelivr\.net(?:\/|$)/.test(x));
+      if (cdn.slice().sort().join(' ') !== LIB_SCRIPT_SOURCES.slice().sort().join(' ')) {
+        throw new Error(`index.html CSP script-src의 jsDelivr 경로가 엔진 LIB_SCRIPT_SOURCES와 다릅니다.\n  지금: ${cdn.join(' ') || '(없음)'}\n  엔진: ${LIB_SCRIPT_SOURCES.join(' ')}`);
+      }
+      return html;
+    },
+  };
+}
+
 // base: './' — GitHub Pages(하위 경로)·Cloudflare·로컬 파일 어디서든 같은 빌드가 동작하게
 // 한글(HWP·HWPX) 그리기 도구 @rhwp/core: 본체 rhwp_bg.wasm(27.9MB)은 배포 한 파일 한도(25MiB)를 넘어 싣지 않고
 // 앱이 jsDelivr의 같은 판에서 받음(src/lib/render-doc.js). 받은 파일을 믿을 기준으로 설치한 판의 SHA-256을 빌드 때 넣음
@@ -232,7 +289,7 @@ function rhwpNoWasmAsset() {
 export default defineConfig({
   base: './',
   define: { __RHWP_WASM_SHA256__: JSON.stringify(rhwpSha256()) },
-  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload(), rhwpNoWasmAsset()],
+  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload(), rhwpNoWasmAsset(), docxFrame(), cspLibCheck()],
   // @hosting: 바로 배포 서버의 거절 규칙(hosting/src/sitecheck.js)을 앱이 그대로 불러 배포 전에 같은 코드로 미리 봄(lib/host-check.js)
   resolve: { alias: { '@engine': here('../skills/lecpage/engine'), '@hosting': here('../hosting/src') } },
   server: { fs: { allow: ['..'] } },

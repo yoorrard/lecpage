@@ -290,7 +290,7 @@ export function StepShare({ p, update, go }) {
   // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있으면 참여 기능은 강사 계정으로 연결(서버가 준 순서: Cloudflare → Supabase)
   const liveOffHere = lecLiveOff(p);
   // 강사가 따로 연결해 둔 서버(시트·Supabase·내 서버)가 있으면 바로 배포에서도 그 서버를 씀(Publish.jsx Instant와 같은 규칙)
-  const ownLive = instantLiveOk(bp.live) && !lecOnly;
+  const ownLive = instantLiveOk(bp.live, info) && !lecOnly;
   const autoHere = autoLive && target === 'lecpage' && !liveOffHere && !ownLive;
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)

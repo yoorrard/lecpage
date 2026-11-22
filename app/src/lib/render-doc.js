@@ -1,6 +1,6 @@
 // 브라우저 안에서 PPTX·DOCX·한글(HWP·HWPX) → 쪽 그림(WebP, 긴 변 1,600px). lecpage 커넥트(이 PC의 PowerPoint 등으로 PDF)가 없을 때 씀.
 // - PPTX: @aiden0z/pptx-renderer(Apache-2.0)가 슬라이드를 HTML·SVG로 그림 → @zumer/snapdom(MIT)이 캔버스로 옮김
-// - DOCX: docx-preview(Apache-2.0)가 쪽(구역)을 그림 → 쪽 높이로 잘라 옮김
+// - DOCX: docx-preview(Apache-2.0)가 쪽(구역)을 그림 → 쪽 높이로 잘라 옮김. 출처 없는 sandbox 틀 안에서(docxPages, build/docx-frame.js)
 // - HWP·HWPX: @rhwp/core(MIT, Rust+WebAssembly)가 쪽마다 캔버스에 바로 그림
 // 실측(2026-11, Chromium·Firefox): 색 배경·도형·사진·표·차트·그라데이션이 LibreOffice로 바꾼 PDF와 거의 같음(r100/doc-render).
 // 한글은 정부 보도자료 4건(HWP 2·HWPX 3, 표·사진·색 상자·2~11쪽)을 한컴이 만든 PDF와 견줘 쪽 수·줄바꿈·표·그림이 같음(r100/hwp).
@@ -51,7 +51,7 @@ async function shoot(el, scale) {
 export async function renderDocPages(name, bytes, { onProgress, signal, maxPages = 400 } = {}) {
   const ext = extOf(name);
   if (!RENDERABLE.has(ext) || typeof document === 'undefined') return [];
-  const host = stage();
+  const host = /^p/.test(ext) ? stage() : null; // DOCX는 sandbox 틀 안, 한글은 캔버스에 바로 그림
   try {
     const draw = /^p/.test(ext) ? pptxPages : /^hw/.test(ext) ? hwpPages : docxPages;
     const shots = await draw(bytes, host, { onProgress, signal, maxPages });
@@ -60,7 +60,7 @@ export async function renderDocPages(name, bytes, { onProgress, signal, maxPages
   } catch (e) {
     console.warn('[render-doc]', e);
     return [];
-  } finally { host.remove(); }
+  } finally { host?.remove(); }
 }
 
 async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
@@ -93,36 +93,64 @@ async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
   return out;
 }
 
-async function docxPages(bytes, host, { onProgress, signal, maxPages }) {
-  const { renderAsync } = await import('docx-preview');
-  const body = document.createElement('div'); host.appendChild(body);
-  await renderAsync(bytes.slice(), body, null, { inWrapper: false, breakPages: true, experimental: true, renderHeaders: true, renderFooters: true, renderComments: false, useBase64URL: true });
-  await document.fonts?.ready; await frame();
-  // 구역(section.docx) 하나가 여러 쪽 길이면 쪽 높이로 자름(docx-preview는 줄 단위로 쪽을 나누지 않음)
-  const parts = [];
-  for (const sec of body.querySelectorAll('section.docx')) {
-    const w = sec.offsetWidth || 794; const pageH = Math.round(w * 1.4142); const h = sec.offsetHeight || pageH;
-    const n = Math.max(1, Math.ceil((h - 8) / pageH));
-    for (let k = 0; k < n; k++) parts.push({ sec, w, pageH, k, n });
-  }
-  const total = Math.min(maxPages, parts.length);
-  const out = [];
-  const scale = Math.min(2, 1240 / Math.max(...parts.map((p) => p.w), 600)); // A4 150dpi 너비쯤
-  for (let i = 0; i < total; i++) {
-    if (signal?.aborted) break;
-    const { sec, w, pageH, k, n } = parts[i];
-    let el = sec;
-    if (n > 1) { // 창(쪽 높이)을 만들어 구역을 위로 밀어 넣고 그 창만 찍음
-      el = document.createElement('div'); el.style.cssText = `width:${w}px;height:${pageH}px;overflow:hidden;position:relative;background:#fff`;
-      const ph = sec.parentNode; const mark = document.createComment(''); ph.insertBefore(mark, sec);
-      sec.style.position = 'absolute'; sec.style.left = '0'; sec.style.top = `${-k * pageH}px`; sec.style.margin = '0';
-      el.appendChild(sec); host.appendChild(el);
-      try { await frame(); const r = await shoot(el, scale); if (r.blob) out.push({ page: i + 1, ...r }); }
-      finally { ph.insertBefore(sec, mark); mark.remove(); sec.style.position = sec.style.left = sec.style.top = sec.style.margin = ''; el.remove(); }
-    } else { const r = await shoot(el, scale); if (r.blob) out.push({ page: i + 1, ...r }); }
-    onProgress?.(i + 1, total);
-  }
-  return out;
+// DOCX: docx-preview는 문서에 적힌 스타일·글꼴 이름을 그대로 CSS로 넣으므로(이스케이프 없음) 앱 화면에서 그리지 않고
+// 출처 없는 sandbox 틀(allow-scripts만, allow-same-origin 없음)에서 그리고 찍음 → 교재의 CSS·글이 앱 화면을 바꾸거나 앱 저장소·연결 토큰에 닿지 못함.
+// 틀 안 코드(build/docx-frame.js + docx-preview + snapdom)는 vite.config.js가 한 덩어리 글로 묶어 둠(virtual:lecpage-docx-frame).
+// 틀은 srcdoc이라 앱 CSP를 물려받음: 인라인 스크립트(script-src 'unsafe-inline')에 기댐 — 미리보기 틀(Preview.jsx)과 같은 처지라 CSP를 바꾸면 함께 옮길 것.
+// 받은 것은 모양을 확인하고(쪽 번호·그림 Blob·크기) 그림만 씀. 틀이 20초 안에 준비되지 않거나 2분 동안 아무 말이 없으면(틀이 멈춤) 그때까지 받은 쪽만
+const DOCX_IDLE = 120000;
+const DOCX_BOOT_WAIT = 20000;
+const DOCX_MAX_BLOB = 30 * 1024 * 1024;
+const DOCX_BOOT = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff;color:#000;font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",sans-serif}</style></head><body><script>
+addEventListener('message',function(e){if(e.source!==parent)return;var d=e.data||{};if(d.type!=='lp-docx-run'||window.lpDocxFrame)return;
+function send(m){try{parent.postMessage(m,'*')}catch(x){parent.postMessage({type:'lp-docx-done',error:String(x&&x.message||x)},'*')}}
+var s=document.createElement('script');s.textContent=d.code;document.head.appendChild(s);
+if(!window.lpDocxFrame||typeof lpDocxFrame.run!=='function'){send({type:'lp-docx-done',error:'frame code did not load'});return}
+lpDocxFrame.run(d.bytes,d.opts||{},send).then(function(){send({type:'lp-docx-done'})},function(x){send({type:'lp-docx-done',error:String(x&&x.message||x)})})});
+parent.postMessage({type:'lp-docx-ready'},'*');
+<\/script></body></html>`;
+
+async function docxPages(bytes, _host, { onProgress, signal, maxPages }) {
+  const { default: code } = await import('virtual:lecpage-docx-frame');
+  if (signal?.aborted) return [];
+  return new Promise((resolve) => {
+    const out = []; const seen = new Set(); let timer = 0; let over = false; let started = false;
+    const f = document.createElement('iframe');
+    f.setAttribute('sandbox', 'allow-scripts');
+    f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.title = 'lecpage-docx';
+    // 그려야 찍을 수 있어 display:none은 안 됨. 화면 밖, 쪽(A4 794px·가로 1123px)이 들어가는 넓이
+    f.style.cssText = 'position:fixed;left:-100000px;top:0;width:1600px;height:1200px;border:0;opacity:0;pointer-events:none';
+    const finish = () => {
+      if (over) return; over = true;
+      clearTimeout(timer); removeEventListener('message', onMsg); signal?.removeEventListener('abort', finish); f.remove();
+      resolve(out.sort((a, b) => a.page - b.page));
+    };
+    const idle = (ms = DOCX_IDLE) => { clearTimeout(timer); timer = setTimeout(finish, ms); };
+    function onMsg(e) {
+      if (over || e.source !== f.contentWindow) return;
+      const d = e.data && typeof e.data === 'object' ? e.data : {};
+      idle();
+      if (d.type === 'lp-docx-ready' && !started) {
+        started = true;
+        const buf = new Uint8Array(bytes).slice().buffer; // 늘 새 사본을 넘김(부른 쪽 바이트는 그대로)
+        f.contentWindow.postMessage({ type: 'lp-docx-run', code, bytes: buf, opts: { maxPages } }, '*', [buf]);
+      } else if (d.type === 'lp-docx-page') {
+        const ok = Number.isInteger(d.page) && d.page >= 1 && d.page <= maxPages && !seen.has(d.page)
+          && d.blob instanceof Blob && d.blob.size > 0 && d.blob.size <= DOCX_MAX_BLOB && /^image\/(webp|png)$/.test(d.blob.type);
+        if (ok) { seen.add(d.page); out.push({ page: d.page, blob: d.blob, isBlank: d.isBlank === true }); }
+      } else if (d.type === 'lp-docx-progress') {
+        if (Number.isInteger(d.done) && Number.isInteger(d.total) && d.total >= 0 && d.total <= maxPages && d.done <= d.total) onProgress?.(d.done, d.total);
+      } else if (d.type === 'lp-docx-done') {
+        if (d.error) console.warn('[render-doc] docx', String(d.error).slice(0, 300));
+        finish();
+      }
+    }
+    addEventListener('message', onMsg);
+    signal?.addEventListener('abort', finish); // [중지]: 그때까지 받은 쪽만
+    idle(DOCX_BOOT_WAIT);
+    f.srcdoc = DOCX_BOOT;
+    document.body.appendChild(f);
+  });
 }
 
 // 한글(HWP·HWPX): rhwp 본체(WebAssembly 27.9MB, 받을 때 약 8.5MB)는 앱 배포의 한 파일 한도(25MiB)를 넘어 jsDelivr에서 같은 판(@rhwp/core 판 고정)을 받음.

@@ -42,7 +42,17 @@ function dataBlob(url) {
   const u = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) u[i] = raw.charCodeAt(i);
   return new Blob([u], { type: m[1] || 'application/octet-stream' });
 }
-function openBlob(blob) { const u = URL.createObjectURL(blob); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60000); }
+// 새 탭에 열어도 스크립트가 돌지 않는 형식만 열고, 그 밖(HTML·SVG·XML 등)은 내려받기로: blob 주소는 앱 출처라
+// 새 탭에서 열린 HTML·SVG의 스크립트가 앱 저장소(키·연수)에 닿을 수 있음(미리보기 틀의 sandbox를 벗어나는 길)
+const OPEN_OK = /^(application\/pdf|image\/(png|jpeg|webp|gif|avif)|audio\/(mpeg|mp4|wav|ogg|webm)|video\/(mp4|webm|ogg)|text\/plain)$/;
+function openBlob(blob, name = '') {
+  const type = String(blob.type || '').split(';')[0].trim().toLowerCase();
+  const safe = OPEN_OK.test(type);
+  const u = URL.createObjectURL(safe ? blob : new Blob([blob], { type: 'application/octet-stream' }));
+  if (safe) window.open(u, '_blank', 'noopener');
+  else { const a = document.createElement('a'); a.href = u; a.download = name || 'file'; document.body.appendChild(a); a.click(); a.remove(); }
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
+}
 
 const ICONS = {
   laptop: <><rect x="4.5" y="4.5" width="15" height="10.5" rx="1.2" /><path d="M2 18.5h20" /></>,
@@ -162,7 +172,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     const key = decodeURIComponent(path || page).replace(/^\/+/, '');
     if (!key || key === page) { post({ type: 'lp-hash', id: h }); return; }
     if (/\.html?$/i.test(key) && f[key] !== undefined) { hash.current = h; setPage(key); return; }
-    if (f[key] !== undefined) { openBlob(fileBlob(key, f[key])); return; }
+    if (f[key] !== undefined) { openBlob(fileBlob(key, f[key]), key.split('/').pop()); return; }
     setNote(`미리보기에서는 열 수 없는 주소예요: ${key}`); setTimeout(() => setNote(''), 4000);
   };
   useEffect(() => {

@@ -7,6 +7,8 @@ import { LIB_SCRIPT_SOURCES } from '../render/shell.js';
 import { contrast } from '../design/color.js';
 import { ENGINE_PAGES } from './paths.js';
 import { FONT_CSS_HOSTS, FRAME_SOURCES } from './assemble.js';
+/** 스크립트 문법 검사(new Function)를 할 수 있는 곳: Node(Skill). 브라우저(앱)는 CSP 'unsafe-eval'이 없어 막힘 */
+const SYNTAX_OK = typeof process !== 'undefined' && !!process.versions?.node && typeof window === 'undefined';
 
 const ENGINE_ASSETS = /^assets\/(lecpage|live|kit|qr|boot|theme|aux-pages|screen|check|console|favicon|event|fx)\.|^assets\/site(-\d+)?-events\.js$/;
 const asText = (v) => (typeof v === 'string' ? v : v instanceof Uint8Array ? new TextDecoder().decode(v) : '');
@@ -126,8 +128,8 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
     if (c < 4.5) add('contrast', c < 3 ? 'error' : 'warn', { file: cssFiles[0] || 'index.html', selector: r.sel.slice(0, 80) }, `"${r.sel.slice(0, 50)}"의 글자(${fg})와 바탕(${bg}) 대비가 ${c.toFixed(2)}:1이에요.`, '4.5:1 이상(큰 제목은 3:1)이 되게 색을 바꿔 주세요.');
   }
 
-  // 스크립트 파일 문법
-  for (const p of jsFiles) {
+  // 스크립트 파일 문법(Node에서만: 앱(브라우저)은 CSP가 new Function을 막아 검사가 되지 않고 위반 보고만 남음. 앱은 그려서 검사에서 스크립트 오류를 봄)
+  for (const p of SYNTAX_OK ? jsFiles : []) {
     const code = asText(files[p]);
     if (/^\s*(import|export)\b/m.test(code) || /\.module\.js$/.test(p)) continue;
     try { new Function(code); } catch (e) { if (e instanceof SyntaxError) add('script-syntax', 'error', { file: p }, `${p}에 문법 오류가 있어요: ${String(e.message).slice(0, 100)}`, '끝이 잘렸거나 괄호·따옴표가 짝이 맞지 않는지 확인해 주세요.'); }
@@ -166,7 +168,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
         else if (src === undefined && t.contentStart !== undefined) {
           const ty = (attr(t, 'type') || '').toLowerCase();
           const code = html.slice(t.contentStart, t.contentEnd);
-          if ((!ty || /javascript|ecmascript/.test(ty)) && code.trim()) { try { new Function(code); } catch (e) { if (e instanceof SyntaxError) add('script-syntax', 'error', W(k, t), `<script>에 문법 오류가 있어요: ${String(e.message).slice(0, 100)}`, '끝이 잘렸거나 괄호·따옴표가 짝이 맞지 않는지 확인해 주세요.'); } }
+          if (SYNTAX_OK && (!ty || /javascript|ecmascript/.test(ty)) && code.trim()) { try { new Function(code); } catch (e) { if (e instanceof SyntaxError) add('script-syntax', 'error', W(k, t), `<script>에 문법 오류가 있어요: ${String(e.message).slice(0, 100)}`, '끝이 잘렸거나 괄호·따옴표가 짝이 맞지 않는지 확인해 주세요.'); } }
           if (ty === 'importmap') add('importmap', 'warn', W(k, t), 'importmap은 CSP에 막혀요.', '상대 경로(./assets/…)로 import해 주세요.');
         }
       }

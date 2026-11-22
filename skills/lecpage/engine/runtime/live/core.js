@@ -824,7 +824,8 @@
           return self._rejoin().then(run);
         }
         attempt++;
-        if (err.retryable !== false && attempt < tries) return sleep(err.retryAfter ? Math.min(10000, err.retryAfter * 1000) : backoff(attempt - 1, 600, 5000)).then(run);
+        // 서버가 10초 넘게 쉬라고 하면(Retry-After) 곧바로 다시 부르지 않음(같은 429에 또 부딪히지 않게): 부른 쪽이 그 오류로 알림
+        if (err.retryable !== false && attempt < tries && !(err.retryAfter > 10)) return sleep(err.retryAfter ? err.retryAfter * 1000 : backoff(attempt - 1, 600, 5000)).then(run);
         self.lastError = err;
         throw err;
       });

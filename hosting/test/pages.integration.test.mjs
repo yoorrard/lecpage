@@ -311,6 +311,18 @@ test('VIEW=pages: 만들기 → 검사·Pages 올리기 → 공개 → 다시 �
     assert.equal(q.status, 201);
     const woke = await waiting;
     assert.ok(Date.now() - t0 < 5000, '글이 올라오면 바로 답'); assert.equal(woke.questions[0].text, '긴 대기 시험');
+    // 다른 출처(Pages 주소)의 런타임도 429의 Retry-After를 읽음(모든 방 응답이 내보냄). 관리자 키가 10번 틀리면 11번째는 429
+    assert.match(snap.headers.get('access-control-expose-headers'), /Retry-After/i);
+    let limited = null;
+    for (let i = 0; i < 12 && !limited; i++) {
+      const r = await fetch(`${lv}/state`, { headers: { origin, 'x-lec-admin': 'wrong-key-' + i } });
+      if (r.status === 429) limited = r; else await r.arrayBuffer();
+    }
+    assert.ok(limited, '틀린 관리자 키가 이어지면 429');
+    assert.ok(Number(limited.headers.get('retry-after')) > 0);
+    assert.equal(limited.headers.get('access-control-allow-origin'), origin);
+    assert.match(limited.headers.get('access-control-expose-headers'), /Retry-After/i, '429에서도 Retry-After를 읽게');
+    assert.ok((await limited.json()).retryAfter > 0, '본문에도 기다릴 초');
   });
 
   await t.test('신고: Pages 주소로도 받음', async () => {

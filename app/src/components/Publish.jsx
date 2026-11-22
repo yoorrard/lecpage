@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
@@ -379,16 +379,10 @@ function LiveNote({ note, where, instant, onInstant }) {
 }
 
 /**
- * 강사가 연결한 참여 기능 서버를 바로 배포한 사이트에서도 쓸 수 있는지. 바로 배포 서버의 사이트 CSP는 강사 계정 서버 모양만 열어 줌
- * (hosting/src/csp.js declaredLive: https의 *.workers.dev·*.supabase.co, 구글 시트). 그 밖의 주소(자기 도메인 Node 서버 등)는 연결이 막힘
+ * 강사가 연결한 참여 기능 서버를 바로 배포한 사이트에서도 쓸 수 있는지(lib/deploy.js, 서버 hosting/src/csp.js liveKind와 같은 규칙).
+ * 강사 계정 서버(*.workers.dev·*.supabase.co·구글 시트)는 늘, 자기 도메인 서버(https 공개 도메인)는 서버가 /api/info ownLive로 받는다고 할 때만
  */
-export function instantLiveOk(live) {
-  if (!live?.url || !['sheets', 'supabase', 'http'].includes(live.provider)) return false;
-  if (live.provider === 'sheets') return /^https:\/\/script\.google\.com\//.test(live.url);
-  let u; try { u = new URL(live.url); } catch { return false; }
-  if (u.protocol !== 'https:' || u.port || u.username) return false;
-  return live.provider === 'supabase' ? /^[a-z0-9]{8,40}\.supabase\.co$/.test(u.hostname) : /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+workers\.dev$/.test(u.hostname);
-}
+export { instantLiveOk };
 
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
 function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
@@ -403,8 +397,8 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
   const lecUrl = info?.live?.url || '';
   const days = info?.capacity?.siteDays || info?.limits?.days || 30;
   // 강사가 따로 연결한 참여 기능 서버(이 바로 배포 서버가 아닌 것). 한 번 확인에 실패했어도(liveOk) 강사가 고른 연결은 덮어쓰지 않음.
-  // 바로 배포한 사이트가 실제로 닿을 수 있는 서버(hosting/src/csp.js declaredLive와 같은 규칙)일 때만 그 서버를 씀
-  const own = instantLiveOk(bp.live) && !sameUrl(bp.live.url, lecUrl);
+  // 바로 배포한 사이트가 실제로 닿을 수 있는 서버(hosting/src/csp.js liveKind와 같은 규칙, 자기 도메인은 서버가 ownLive일 때)일 때만 그 서버를 씀
+  const own = instantLiveOk(bp.live, info) && !sameUrl(bp.live.url, lecUrl);
   const liveOff = lecLiveOff(p); // 바로 배포의 참여 기능 방이 차서 넘긴 적이 있음 → 강사가 연결한 서버가 있으면 그것으로
   // 참여 기능을 이 서버가 맡음(방이 차면 서버가 알려 주고 뺌). 강사가 따로 연결한 서버가 있으면 그것을 그대로 씀(연결을 바로 배포 방으로 덮어쓰지 않게)
   const autoLive = liveOn && !!lecUrl && !own;

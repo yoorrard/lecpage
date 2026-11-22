@@ -236,12 +236,12 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 
 엔진이 만드는 비밀번호 칸 둘(강사 화면의 관리자 키, 암호 잠금 화면의 암호 칸)은 모양(속성)이 정확히 같고 그 쪽에 사이트 스크립트가 없을 때만 받습니다. HTML은 주석·인라인 `<script>`·`<textarea>` 안쪽을 태그로 읽지 않고(돌지 않거나 그려지지 않음), 속성은 브라우저처럼 읽습니다(같은 속성은 처음 것, `&#112;` 같은 문자 참조는 풂, `iframe srcdoc`도 봄).
 
-**내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다. 올라온 `_headers`·meta CSP로는 넓힐 수 없습니다(브라우저는 meta CSP를 겹쳐 더 좁게만 씀). 사이트 쪽 CSP는 엔진 조립이 넣는 meta CSP(`skills/lecpage/engine/src/kit/assemble.js`의 `kitCsp`)와 지시어·출처가 같고 서버는 더 좁게만 둡니다(`default-src 'none'`, 실시간 방은 출처 전체가 아니라 그 방 경로). `test/csp.test.mjs`가 참여 서버 네 가지(이 호스트의 방·강사 계정 Cloudflare·Supabase·구글 시트)로 둘을 비교합니다.
+**내보낼 때**: 모든 HTML에 서버가 정한 CSP를 붙입니다. 올라온 `_headers`·meta CSP로는 넓힐 수 없습니다(브라우저는 meta CSP를 겹쳐 더 좁게만 씀). 사이트 쪽 CSP는 엔진 조립이 넣는 meta CSP(`skills/lecpage/engine/src/kit/assemble.js`의 `kitCsp`)와 지시어·출처가 같고 서버는 더 좁게만 둡니다(`default-src 'none'`, 실시간 방은 출처 전체가 아니라 그 방 경로). `test/csp.test.mjs`가 참여 서버 다섯 가지(이 호스트의 방·강사 계정 Cloudflare·자기 도메인 서버·Supabase·구글 시트)로 둘을 비교합니다.
 
 | | 사이트 쪽(첫 화면·AI가 쓴 쪽) | 보조 쪽(엔진이 만드는 강사·발표·QR 안내문·접속 확인·개인정보 쪽) |
 |---|---|---|
 | `script-src` | `'self'` + 버전을 고정한 라이브러리 경로(엔진 `render/shell.js`의 `LIB_SCRIPT_SOURCES`: gsap·lenis·ogl·supabase-js). 인라인은 막음(엔진 조립이 인라인 `<script>`를 `assets/site.js`·`assets/<쪽>.js`·`*.module.js`로, onclick 같은 속성을 `assets/<쪽>-events.js`로 옮김) | 같음 |
-| `connect-src` | `'self'` + **그 사이트의 실시간 방 경로만**(`…/live/api/<코드>`·같은 경로의 `wss:`·보드 파일 `…/api/<코드>/files/`) + 사이트 자료에 적힌 강사 계정 서버(https의 `*.workers.dev`·`*.supabase.co`, 구글 시트는 Apps Script) | `'self' https: wss:`(접속 확인이 바깥 도구가 열리는지 잼) |
+| `connect-src` | `'self'` + **그 사이트의 실시간 방 경로만**(`…/live/api/<코드>`·같은 경로의 `wss:`·보드 파일 `…/api/<코드>/files/`) + 사이트 자료에 적힌 강사 계정 서버(https의 `*.workers.dev`·`*.supabase.co`, 구글 시트는 Apps Script)나 강사가 자기 도메인에 둔 참여 기능 서버(https, 그 출처 하나. IP 주소·localhost·사내 이름은 받지 않음) | `'self' https: wss:`(접속 확인이 바깥 도구가 열리는지 잼) |
 | `img-src` / `media-src` | `'self' data: blob:` + 방의 보드 파일(강사 계정 서버면 그 출처, 구글 시트면 Apps Script·드라이브) / `'self' blob:` + 보드 파일 + (pages 보기) 이 호스트의 `/s/<id>/`(영상·소리) | `https:` 포함(예전 그대로) |
 | `style-src` / `font-src` | `'self' 'unsafe-inline'` + 글꼴 CSS / `'self' data:` + 글꼴 CDN | 같음 |
 | `frame-src` | `https://www.youtube-nocookie.com https://player.vimeo.com` | `'none'` |

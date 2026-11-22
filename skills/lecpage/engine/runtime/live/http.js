@@ -285,6 +285,9 @@
         }
         // 긴 대기는 쉬는 틈만(바뀐 것이 오면 그 틈 동안 모아 다음 대기에서 받음). 간격 묻기는 바뀐 것 없이 이어지면 늘림
         var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : netErr ? Math.min(30000, 4000 * netErr) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
+        // 서버가 쉬라고 한 시간(Retry-After, 하루 한도·방 붐빔)은 지킴(최대 10분)
+        var ra = r && r.error && +r.error.retryAfter;
+        if (ra > 0) ms = Math.max(ms, Math.min(ra * 1000, 600000));
         schedulePoll(U.jitter(ms, 0.15));
       });
     }
