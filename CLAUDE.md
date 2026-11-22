@@ -5,7 +5,8 @@
 ## 구조(어디를 고치나)
 - `app/` 앱. 만들기 흐름 `src/lib/gen/`(job.js 실행·이어 받기, prompts.js 요청문, providers/ 회사별), 연결 `src/lib/connection.js`·`components/AiPick.jsx`, 미리보기 `components/Preview.jsx`, 랜딩 `src/landing/`, 도움말 `pages/Help.jsx`, 먼저 해보기 `src/data/demo/`.
 - `skills/lecpage/` Skill. `SKILL.md`, `references/`(kit.md 키트 자리 표시, design-library.md 디자인 서재, designs/ 견본 셋: neo-teach·picture-heart·data-pulse), `scripts/`(lecpage.mjs CLI, studio.mjs lecpage 커넥트 다리(파일 lecpage-connect.cmd/.sh, 예전 이름 lecpage-studio.*는 별칭), studio-siwc.mjs ChatGPT 로그인), `engine/`(src/kit 조립·검수, runtime/ 참가자·강사·발표 화면 JS).
-- `hosting/` 바로 배포. 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep` → `hosting/runtime-history.json`에 바뀌는 조각만 남기고 note는 원문 유지.
+- `hosting/` 바로 배포. 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep`(note는 스크립트가 그대로 둠) → 다 바꾼 뒤 `runtime-history.json`에서 지금 판과 같은 조각(안 바뀐 것)은 지우고 note에 날짜·바뀐 파일을 한 줄.
+- 참가자 화면 바닥 부품: 'Made with Lecpage' 표시는 조립이 참가자 쪽 `.lpk-chrome` 맨 앞에 넣음(`kit/widgets.js` madeWith, `runtime/lecpage.js` initMade, `kit.css` .lpk-made). AI 요청문에는 넣지 않음.
 - 문서: `docs/legal/{privacy,terms}.md`, `SECURITY.md`, `README.md`, `docs/operations.md`, `docs/writing.md`(문구·용어표 4절), 조사 기록 `docs/research/`(기록이라 고치지 않음).
 
 ## 사용자(운영자)가 정한 원칙 — 어기지 말 것
@@ -26,6 +27,7 @@
 - `npm test`(엔진·카탈로그) · `npm run examples`(견본 조립·검수) · `npm --prefix app run build` · `node app/scripts/copy-lint.mjs`(고칠 곳 0) · `npm --prefix hosting test`
 - 앱 흐름 e2e·가짜 AI: `bash scripts/verify.sh [--e2e] [--hosting]`(포트 4175·4182 — 동시에 두 개 돌리지 말 것)
 - 가끔 부하 때문에 시간 초과로 실패하는 엔진 시험(리허설·'지금' 띠·따라 넘기기)은 단독으로 다시 돌려 확인
+- 새 컨테이너: `npm --prefix app ci && npm --prefix hosting ci`, PDF 시험은 CI처럼 맨 위에 `npm install --no-save pdfjs-dist@<app 판>`(없으면 PDF 시험 3개가 실패). CPU 4개면 Workflow는 에이전트를 2개씩만 돌림 → 많이 나눌 때는 Agent 도구로 동시에
 - 커밋 꼬리말: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + 세션 줄. 코드·문서·커밋에 모델 이름 금지. main에 push 전 `git fetch && git merge origin/main`(AI 카탈로그 봇이 매일 커밋).
 
 ## 토큰 아끼기(작업 방식)
@@ -35,17 +37,11 @@
 - 긴 세션이 되면 새 세션으로 옮기고 이 파일을 갱신.
 
 ## 아직 사람이 확인할 것
-실제 ChatGPT 계정 로그인(SIWC), 실제 PC의 Claude 브라우저 로그인, 실제 윈도우·맥에서 lecpage 커넥트 실행·경고 창·자동 시작·스스로 새 판 바꾸기(백신이 파일을 잡을 때)·매크로 끈 채 Office·한글 교재 변환(한글 COM·맥 AppleScript 쪽 매크로 설정은 아직 못 끔), 실제 Vercel·Netlify 계정으로 참여 기능(구글 시트·Supabase) 연결 후 배포한 사이트에서 질문·투표 전송, 실제 윈도우·맥 글꼴로 본 한글(HWP) 쪽 그림, Safari·Firefox에서 PPTX·한글 쪽 그림, 휴대폰 실기기에서 랜딩·사이트 스크롤 연출. 요청문 변경(디자인 수준)은 교재 둘에서 한 번씩만 실측함.
+실제 ChatGPT 계정 로그인(SIWC), 실제 PC의 Claude 브라우저 로그인, 실제 윈도우·맥에서 lecpage 커넥트 실행·경고 창·자동 시작(로그인 때 보안 경고가 없는지)·두 번 켜기·스스로 새 판 바꾸기(백신이 파일을 잡을 때)·서명 확인(테스트 키로: 맞는 .sig 설치, 없거나 틀리면 거절, PowerShell 5.1에서 node 검사 인자)·교재 변환(한글: 보통 파일·스크립트 매크로 파일(건너뛰고 앱 그리기)·배포용·암호 파일, 맥: .pptx·.docx는 Office, .ppt·.doc은 Keynote·Pages·LibreOffice), Chrome 로컬 네트워크 권한이 뜬 채 `--new-token` 뒤 다시 짝, 자기 도메인 참여 기능 서버 + 바로 배포 사이트, Safari·Firefox에서 DOCX(sandbox 틀) 그림, 실제 휴대폰(노치·카카오톡 안 브라우저)에서 'Made with Lecpage' 표시·좁은 화면 '지금' 띠, 실제 Chrome의 파일 고르기·끌어 놓기 때 교재 넣기 화면 밀림, axe 접근성 검사, 실제 Vercel·Netlify 계정으로 참여 기능(구글 시트·Supabase) 연결 후 배포한 사이트에서 질문·투표 전송, 실제 윈도우·맥 글꼴로 본 한글(HWP) 쪽 그림, Safari·Firefox에서 PPTX·한글 쪽 그림, 휴대폰 실기기에서 랜딩·사이트 스크롤 연출. 요청문 변경(디자인 수준)은 교재 둘에서 한 번씩만 실측함.
 
-## 다음 세션에 넘긴 일(2026-11-21, 끝나면 이 절을 지우거나 줄일 것)
-런타임(`skills/lecpage/engine/runtime/`)을 바꾸면 먼저 `node hosting/scripts/gen-runtime.mjs --keep`.
-1. 참가자 사이트: 참여 기능 서버에 닿지 않을 때 "참여 기능 서버에 지금 닿지 않아요…"가 위젯마다(최대 4번, 모두 role=status) 붙음 → 한 곳에만(`runtime/lecpage.js` setDown).
-2. 강사 화면 로그인: 사이트 스크립트가 있으면(거의 늘) 꺼진 '이 기기에서 기억하기'와 "직접 쓴 스크립트가 있어…" 문구가 나옴 → 그때는 체크박스를 숨기고 "보안을 위해 관리자 키는 이 탭에만 둬요. 탭을 닫으면 다시 넣어 주세요."
-3. 참여 기능 없이 배포한 사이트의 안내 한 줄(`data-live-off`)이 AI가 만든 카드 안에서 회색 상자로 한 번 더 감싸임 → 바탕·안쪽 여백 없이(`runtime/kit.css`).
-4. 커넥트 짝 덮어쓰기: 아무 사이트나 `lecpage.com/#pair=<가짜>`로 짝을 덮어 연결을 끊을 수 있음(새는 것은 없음) → 새 짝은 `/bridge/status`가 맞을 때만 기존 짝을 바꿈(`app/src/lib/pair.js` capturePairing). [모든 데이터 삭제] 때 커넥트 토큰도 새로(`--new-token`과 같게) 바꾸는 것 검토.
-5. 앱 CSP: `script-src 'unsafe-inline'`을 빌드본 인라인 스크립트 해시로, jsDelivr는 쓰는 패키지 경로로 좁히기(`app/index.html`·`public/_headers`). 미리보기 틀의 `allow-popups-to-escape-sandbox` 필요한지 검토. DOCX 미리 그리기(docx-preview, CSS를 이스케이프하지 않음)를 sandbox 틀 안으로(`app/src/lib/render-doc.js`). 커넥트 첫 화면에 `Cross-Origin-Resource-Policy: same-origin`.
-6. 교재 변환 매크로: 한글(COM) 매크로 보안 설정, 맥 Office(AppleScript)로 옛 형식을 열 때 매크로 끄기(지금은 Keynote·Pages·LibreOffice를 먼저 쓰고 Office는 마지막) — 못 하면 그 길을 빼는 것 검토(`skills/lecpage/scripts/studio-convert.mjs`).
-7. 커넥트 새 판 서명: 묶음에 ed25519 서명 + 공개 키를 실행 파일·`studio-update.mjs`에 박아 확인. 서명 키는 운영자가 GitHub Actions 비밀로 등록해야 함(키를 대화·저장소에 두지 말 것, 운영자에게 할 일 안내).
-8. 앞서 남긴 것: 바로 배포 서버 Retry-After(운영자 수동 배포 필요), 자기 도메인 참여 기능 서버 + 바로 배포(바로 배포 CSP가 막음 → 안내 또는 허용), 커넥트를 두 번 켤 때, 받은 파일 경고(Mark-of-the-Web).
-9. 경험 점검에서 미룬 것: 교재 넣기의 '교재 원본도 참가자가 내려받게'와 공개 범위의 같은 설정 중복(원칙 8: 한 곳에), 교재를 다 읽을 때 화면 밀림(CLS 0.06~0.12), 연결 동의 창의 "[만들기]·요청 글" 문구(바꾸면 모두 다시 동의하게 되니 그 영향까지 판단).
-10. 예비 주소(yoorrard.github.io)에서는 커넥트가 연결되지 않음(다른 Pages와 출처 공유라 뺌). 필요하면 전용 출처로 옮기는 방법을 운영자에게 제안.
+## 다음 세션에 넘긴 일(2026-11-22, 끝나면 이 절을 지우거나 줄일 것)
+1. **전문가 그룹 정밀 실측 점검 이어서**(토큰이 모자라 치명만 보고 멈춤). 9개 시점: 초보 강사(학교·회사·기관)·참가자(휴대폰)·HRD 담당자·디자이너·프런트엔드·백엔드·접근성·보안·UX 라이터. 읽기만 하는 점검 에이전트에게 빌드본(`.out/review-app`, 바로 배포 가짜 `VITE_PUBLISH_API=https://publish.mock.test` 빌드, `.out/<견본>/dist`)·node-server 참여 서버·`tests/e2e/lib.js` 가짜 AI를 주고 1280·390 × 밝게·어둡게로 실측, 포트 범위를 나눠 주고 JSON(제목·심각도·파일:줄·증거·고칠 방법)으로 받음. 이번에 못 본 곳: 앱 전체 화면(디자이너·접근성), 앱 대화상자 초점, 참가자 설문·보드 사진·자료 받기·교재 넘기기·가로 화면·카카오톡·429 안내, Settings 모든 데이터 삭제·내 연수 복제/삭제, 브라우저 뒤로 가기, Vercel·Netlify 토큰 뒤, hosting sitecheck·rewrite·notice·tally·capacity·pages-site, studio.mjs runJob·studio-siwc, Skill CLI(Windows 경로·인코딩), Supabase·시트 제공자, 서명 경로·변환 POST 보안.
+2. 점검에서 찾았지만 미룬 것(확인된 것): ① 여러 날 연수 출석이 사람당 입실·퇴실 하나로 합쳐지고 이수자 명단이 첫날만 봄(node-server `lib/protocol.js` 1103·1134·509, `console.js` 1065) → 날마다 저장·전체 시간으로 이수 계산·CSV에 날짜별 칸 ② 이수자 명단이 이름·소속이 같은 다른 사람을 한 줄로 합침(protocol.js 498) → 참가자마다 한 줄, 같은 이름은 '확인 필요' ③ 다시 만든 뒤에도 [실행 취소]가 남아 새 사이트를 예전 것으로 바꿈(`Studio.jsx` 25-58, 버전 기록으로 복구 가능) ④ 휴대폰에서 'Made with Lecpage' 줄이 꽉 찬 바닥글 아래 바탕색 띠로 보임 ⑤ 강사 화면 320px 가로 넘침(377px), 강사 화면 다크 모드가 안 바뀜 ⑥ 문구: Help '이 주소에 이어서 배포'(실제 '같은 주소로 배포')·자동 시작은 맥·리눅스도 됨·'받기'→'다운로드'·'새 판'과 '새 버전' 섞임·'실시간 서버'→'참여 기능 서버'·운영안내.md 합니다체 섞임·privacy.html '[데이터 모두 지우기]'(실제 [모든 데이터 삭제])·개인정보 안내 8절에 설문 답이 이 기기에 남는 것 ⑦ 바로 배포 카드 '참여 기능까지 바로 켜져요'(/api/info에 live가 없어도), '학교·기관 망' 같은 학교·기관만의 말(Publish.jsx 574, deploy.js) ⑧ 방 요청 한도를 빈·긴 X-Lec-Admin 머리글로 비켜 감(Room.fetch) ⑨ [모든 데이터 삭제]가 IndexedDB `lecpage-gen`을 지우지 않고 도는 작업을 멈추지 않음(확인 안 함) ⑩ sitecheck COOKIE_JS를 `document['coo'+'kie']`로 비켜 감(Pages 보기 쿠키), 커넥트가 배포판에서도 localhost:5173·4173 출처를 믿음.
+3. 앱 CSP `script-src 'unsafe-inline'` → 해시: 미리보기 srcdoc 틀(`Preview.jsx`·`lib/gen/render-check.js`·GalleryDict)을 sandbox URL 틀(`public/frame.html`, 자체 CSP, postMessage로 HTML 받아 씀, `self.origin === 'null'`일 때만)로 옮긴 뒤 빌드 플러그인으로 남은 인라인(homeOnlyPreload) 해시. PPTX 그리기도 sandbox 틀로 옮길 수 있음(echarts 때문에 묶음이 큼).
+4. 남은 위험(작음): 실행 파일이 켜진 커넥트가 있어도 묶음 폴더를 갈아 끼움(실행 파일이 먼저 켜진 커넥트를 살피게), 앱 `findPc`가 6600~6609에 토큰을 바로 보냄(두 단계로), 암호 HWP에 Scripts가 없으면 한글이 4분 기다림(`suspendpassword:true` 실측), 서명한 예전 판으로 내리는 것은 막지 않음.
+5. 운영자 할 일(준비 끝, 운영자가 해야 함): 커넥트 서명 키(docs/operations.md 15절), 바로 배포 서버 배포 확인(Workers Builds `lecpage-sites`: `/api/info`에 `ownLive:true`, 참여 기능 응답에 `access-control-expose-headers: Retry-After, X-Lec-Poll-Ms`), 예비 주소 전용 출처(16절, 만든 뒤 코드에 넣음).
