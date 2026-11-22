@@ -20,7 +20,7 @@ export const ASSET = 'lecpage-connect.tar.gz';
  * 비어 있으면 서명을 확인하지 않음(SHA-256만, 키를 정하기 전과 같음). 하나라도 있으면 <묶음>.sig가 없거나 어느 키로도 맞지 않을 때 바꾸지 않음.
  * 여러 개는 키를 바꾸는 동안 예전 키·새 키를 함께 받으려고
  */
-export const SIGNING_KEYS = [];
+export const SIGNING_KEYS = ['fXeJSCSG_l5AvDuyLpaefYer_g6vv4WdMP-iIOx_85o'];
 /** 공개 키 꼴(base64url 43자) */
 export const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 /** 감독에게 '새 판으로 다시 띄워 줘'를 알리는 종료 코드 */

@@ -16,7 +16,7 @@ set -eu
 main() {
   # 묶음 서명 공개 키(ed25519, base64url, 띄어 써서 여럿). 기준은 skills/lecpage/scripts/studio-update.mjs의 SIGNING_KEYS(같은지 시험이 확인,
   # 넣고 빼기는 scripts/studio-launcher/signing-key.mjs). 비어 있으면 SHA-256만 확인, 있으면 서명(.sig)까지 맞아야 새 판으로 바꿈
-  SIGNING_KEYS=''
+  SIGNING_KEYS='fXeJSCSG_l5AvDuyLpaefYer_g6vv4WdMP-iIOx_85o'
   BASE="${LECPAGE_RELEASE_BASE:-https://github.com/yoorrard/lecpage/releases/download/studio-latest}"
   NDIST="${LECPAGE_NODE_DIST:-https://nodejs.org/dist}"
   case "$(uname -s)" in

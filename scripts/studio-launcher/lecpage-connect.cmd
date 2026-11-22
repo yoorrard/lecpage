@@ -27,7 +27,7 @@ if ($env:LECPAGE_NODE_DIST) { $NDist = $env:LECPAGE_NODE_DIST }
 # 묶음 서명 공개 키(ed25519, base64url). 기준은 skills/lecpage/scripts/studio-update.mjs의 SIGNING_KEYS(같은지 시험이 확인, 넣고 빼기는
 # scripts/studio-launcher/signing-key.mjs). 비어 있으면 SHA-256만 확인, 있으면 서명(.sig)까지 맞아야 바꿈.
 # Windows PowerShell 5.1에는 ed25519가 없어 1)에서 준비한 Node.js로 확인(lecpage-connect.sh와 같은 글. 큰따옴표가 없어 인자로 그대로 넘어감)
-$SigningKeys = @()
+$SigningKeys = @('fXeJSCSG_l5AvDuyLpaefYer_g6vv4WdMP-iIOx_85o')
 $VerifyJs = @'
 const c=require('crypto'),f=require('fs'),e=process.env;let ok=false;try{const d=f.readFileSync(e.LECPAGE_VERIFY_FILE);const s=f.readFileSync(e.LECPAGE_VERIFY_SIG,'utf8').split(/\s+/).filter(Boolean).slice(0,8).map(x=>Buffer.from(x,'base64')).filter(b=>b.length===64);for(const x of String(e.LECPAGE_VERIFY_KEYS||'').split(/\s+/).filter(Boolean)){try{const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});for(const b of s)if(c.verify(null,d,k,b))ok=true}catch(_){}}}catch(_){}process.exit(ok?0:1)
 '@
