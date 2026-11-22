@@ -3,20 +3,24 @@
 //   POST /bridge/convert?name=<파일 이름>  본문: 파일 바이트 → { ok, via, app, pdf: base64 } | { ok:false, error:'no-app'|'convert-failed'|…, message_ko }
 // 순서(그 형식을 만든 프로그램이 가장 정확): Windows PowerPoint·Word·한글(COM) / macOS PowerPoint·Keynote·Word·Pages(AppleScript) / LibreOffice(모든 OS)
 // 프로그램이 없으면 그렇다고 알림(앱은 브라우저 안 그리기나 글자만으로 넘어감). 한 번에 하나씩 바꿈(같은 프로그램을 두 번 열지 않게)
+// 매크로: 매크로를 끄고 여는 길만 씀. Windows Office·LibreOffice는 끄고 엶. 끌 수 없는 한글·macOS PowerPoint·Word는 넘기기 전에 파일을 바이트로 살펴(studio-macro.mjs)
+//   한글은 스크립트 매크로가 빈 틀뿐일 때만, macOS Office는 매크로 없는 .pptx·.docx일 때만 엶. 아니면 그 프로그램을 건너뜀(앱은 브라우저 안 그리기로)
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sofficePath } from './render-slides.mjs';
+import { hwpCheck, macOfficeCheck } from './studio-macro.mjs';
 
 const MB = 1024 * 1024;
 export const CONVERT_LIMIT_MB = 100;
 const TIMEOUT_MS = 4 * 60000;
 
 /**
- * 프로그램마다 여는 형식. 매크로를 담는 형식(pptm·ppsm·potm·docm·dotm 등)은 받지 않음(앱은 그 파일을 글자로만 읽음).
- * 다른 형식도 매크로가 돌지 않게 엶: Office는 AutomationSecurity=3(모두 끔)·읽기 전용, LibreOffice는 매크로 끈 새 프로필
+ * 프로그램마다 여는 형식. 매크로를 담는 형식(pptm·ppsm·potm·docm·dotm 등)은 받지 않음(앱은 그 파일을 브라우저 안에서 그림).
+ * 다른 형식도 매크로가 돌지 않게: Windows Office는 AutomationSecurity=3(모두 끔)·읽기 전용, LibreOffice는 매크로 끈 새 프로필,
+ * 한글·macOS Office는 끄는 설정이 없어 열기 전에 파일을 살핌(safeFor). macOS Office는 .pptx·.ppsx·.potx·.docx만(MAC_OFFICE_EXTS)
  */
 export const APPS = {
   powerpoint: { name: 'PowerPoint', exts: ['pptx', 'ppt', 'ppsx', 'pps', 'potx', 'odp'] },
@@ -29,6 +33,12 @@ export const APPS = {
 /** 매크로를 담는 Office 형식(바꾸지 않음) */
 export const MACRO_EXTS = ['pptm', 'ppsm', 'potm', 'ppam', 'docm', 'dotm', 'xlsm', 'xltm', 'xlam'];
 const MACRO_KO = '매크로가 든 파일(.pptm·.docm 등)은 안전을 위해 이 PC의 프로그램으로 열지 않아요. 그 프로그램에서 PDF나 .pptx·.docx로 저장해 올려 주세요.';
+/** 파일을 살핀 뒤 그 프로그램을 건너뛸 때(다른 프로그램으로도 못 바꾸면 이 글을 돌려줌) */
+export const SKIP_KO = {
+  'hwp-script': '스크립트 매크로가 든 한글 파일이라 안전을 위해 이 PC의 한글로 열지 않았어요. 한글에서 PDF로 저장해 올려 주세요.',
+  'hwp-unreadable': '매크로가 있는지 확인할 수 없는 한글 파일(암호·보안 문서 등)이라 이 PC의 한글로 열지 않았어요. 한글에서 PDF로 저장해 올려 주세요.',
+  'mac-office': 'Mac의 PowerPoint·Word는 매크로를 끄고 열 수 없어서, 매크로 없는 .pptx·.docx만 PDF로 바꿔요. .pptx·.docx나 PDF로 저장해 올려 주세요.',
+};
 /** 운영 체제별 시도 순서 */
 export const ORDER = {
   win32: ['powerpoint', 'word', 'hwp', 'libreoffice'],
@@ -59,16 +69,27 @@ export function detectApps({ platform = process.platform, env = process.env, hom
 
 /**
  * 확장자 → 시도할 프로그램(있는 것만, 순서대로).
- * macOS의 Office는 AppleScript로 열 때 매크로를 끌 수 없어서(Windows는 AutomationSecurity로 끔), 매크로를 담을 수 있는 옛 형식(.ppt·.pps·.doc)은
- * 매크로가 없는 Keynote·Pages·LibreOffice(매크로 끈 새 프로필)를 먼저 쓰고 Office는 마지막에
+ * macOS의 Office는 AppleScript로 열 때 매크로를 끌 수 없어서(Windows는 AutomationSecurity로 끔), VBA를 담을 수 없는 .pptx·.ppsx·.potx·.docx만 엶.
+ * 옛 형식(.ppt·.pps·.doc)·.odp·.odt·.rtf는 Keynote·Pages·LibreOffice(매크로 끈 새 프로필)로. 내용도 열기 전에 다시 살핌(이름만 바꾼 .docm 등: safeFor)
  */
-const LEGACY_EXTS = ['ppt', 'pps', 'doc'];
+export const MAC_OFFICE_EXTS = ['pptx', 'ppsx', 'potx', 'docx'];
+const MAC_OFFICE = ['powerpoint', 'word'];
 export function appsFor(ext, ids, platform = process.platform) {
   const e = String(ext).toLowerCase();
   const list = ids.filter((id) => APPS[id]?.exts.includes(e));
-  if (platform !== 'darwin' || !LEGACY_EXTS.includes(e)) return list;
-  const office = (id) => id === 'powerpoint' || id === 'word';
-  return [...list.filter((id) => !office(id)), ...list.filter(office)];
+  return platform === 'darwin' && !MAC_OFFICE_EXTS.includes(e) ? list.filter((id) => !MAC_OFFICE.includes(id)) : list;
+}
+
+/**
+ * 이 프로그램에 이 파일을 넘겨도 되는지(매크로를 끄지 못하는 프로그램만 살핌) → { ok:true } | { ok:false, error, message_ko, detail }
+ *  - 한글: 스크립트 매크로가 한글이 새 문서마다 넣는 빈 틀뿐일 때만(실제 매크로 → hwp-script, 암호·DRM·모르는 모양 → hwp-unreadable)
+ *  - macOS PowerPoint·Word: 매크로 없는 OOXML 꾸러미일 때만(VBA·macroEnabled·ActiveX·추가 기능·원격 서식 파일 → mac-office)
+ */
+export function safeFor(id, bytes, platform = process.platform) {
+  let r = { ok: true }; let error = '';
+  if (id === 'hwp') { r = hwpCheck(bytes); error = r.why === 'script' ? 'hwp-script' : 'hwp-unreadable'; }
+  else if (platform === 'darwin' && MAC_OFFICE.includes(id)) { r = macOfficeCheck(bytes); error = 'mac-office'; }
+  return r.ok ? { ok: true } : { ok: false, error, message_ko: SKIP_KO[error], detail: r.detail || r.why };
 }
 
 function run(cmd, args, { timeoutMs = TIMEOUT_MS, env } = {}) {
@@ -108,6 +129,7 @@ try {
 } finally { try { $w.AutomationSecurity = $sec } catch {} }
 if ($w.Documents.Count -eq 0) { $w.Quit() }`,
   // 한글: 보안 모듈(FilePathCheckerModule)이 등록돼 있지 않으면 한글이 '파일에 접근하려는 시도' 창을 띄움 → 사람이 [모두 허용]을 누르면 이어짐
+  // 한글 오토메이션에는 매크로 보안을 끄는 설정이 없어서, 스크립트 매크로가 빈 틀뿐인 파일만 여기까지 옴(safeFor → studio-macro.mjs hwpCheck)
   hwp: `$ErrorActionPreference='Stop'
 $h = New-Object -ComObject HWPFrame.HwpObject
 try { $h.RegisterModule('FilePathCheckDLL', 'FilePathCheckerModule') | Out-Null } catch {}
@@ -118,6 +140,7 @@ try {
 } finally { try { $h.Clear(1) } catch {}; $h.Quit() }`,
 };
 // macOS: 앱이 꺼져 있었으면 다 바꾼 뒤 끔. PowerPoint·Word는 샌드박스라 그 앱의 컨테이너 폴더 안에서 열고 씀(파일 접근 창이 뜨지 않게)
+// PowerPoint·Word는 AppleScript로 매크로를 끌 수 없어서 매크로 없는 .pptx·.docx만 여기까지 옴(appsFor·safeFor)
 export const OSA = {
   keynote: `on run argv
 set wasOn to application "Keynote" is running
@@ -177,7 +200,7 @@ function workDir(id, platform, home) {
   return mkdtempSync(join(tmpdir(), 'lecpage-convert-'));
 }
 
-/** 한 프로그램으로 바꾸기 → { ok, pdf?: Buffer, detail } */
+/** 한 프로그램으로 바꾸기 → { ok, pdf?: Buffer, detail }. 매크로 살피기(safeFor)는 convertToPdf가 먼저 함 */
 export async function convertWith(id, name, bytes, { platform = process.platform, home = homedir(), runImpl = run } = {}) {
   const ext = (extname(name).slice(1) || 'bin').toLowerCase();
   const dir = workDir(id, platform, home);
@@ -199,21 +222,43 @@ export async function convertWith(id, name, bytes, { platform = process.platform
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-/** 있는 프로그램을 순서대로 시도 → { ok, via, app, pdf } | { ok:false, error, message_ko, tried } */
+/**
+ * 있는 프로그램을 순서대로 시도 → { ok, via, app, pdf } | { ok:false, error, message_ko, tried }
+ * 매크로를 끄지 못하는 프로그램은 파일을 살핀 뒤에만(safeFor). 건너뛴 프로그램이 있고 나머지로도 못 바꾸면 건너뛴 까닭을 알림
+ */
 export async function convertToPdf(name, bytes, { platform = process.platform, ids, log = () => {}, ...o } = {}) {
   const ext = (extname(name).slice(1) || '').toLowerCase();
   if (MACRO_EXTS.includes(ext)) return { ok: false, error: 'macro', message_ko: MACRO_KO, tried: [] };
-  const list = appsFor(ext, ids || detectApps({ platform }), platform);
-  if (!list.length) return { ok: false, error: 'no-app', message_ko: noAppKo(ext, platform), tried: [] };
-  const tried = [];
+  const have = ids || detectApps({ platform });
+  const list = appsFor(ext, have, platform);
+  if (!list.length) {
+    // macOS에 Office만 있고 .ppt·.doc 같은 형식일 때: '프로그램이 없다'가 아니라 Office로 열지 않는 까닭을
+    const mac = platform === 'darwin' && have.some((id) => MAC_OFFICE.includes(id) && APPS[id].exts.includes(ext));
+    return mac ? { ok: false, error: 'mac-office', message_ko: SKIP_KO['mac-office'], tried: [] } : { ok: false, error: 'no-app', message_ko: noAppKo(ext, platform), tried: [] };
+  }
+  const tried = []; let held = null;
   for (const id of list) {
+    const safe = safeFor(id, bytes, platform);
+    if (!safe.ok) {
+      held ||= safe; tried.push({ id, ok: false, skipped: safe.error });
+      log(`${APPS[id].name}로 열지 않았어요(매크로 확인: ${safe.detail || safe.error}).`.slice(0, 300));
+      continue;
+    }
     const t0 = Date.now();
     const r = await convertWith(id, name, bytes, { platform, ...o }).catch((e) => ({ ok: false, detail: String(e?.message || e) }));
     tried.push({ id, ok: r.ok, ms: Date.now() - t0, ...(r.ok ? {} : { detail: r.detail }) });
     if (r.ok) { log(`교재를 PDF로 바꿨어요: ${APPS[id].name}(${((Date.now() - t0) / 1000).toFixed(1)}초)`); return { ok: true, via: id, app: APPS[id].name, pdf: r.pdf, tried }; }
     log(`${APPS[id].name}로 PDF를 만들지 못했어요: ${r.detail || ''}`.slice(0, 300));
   }
+  if (held) return { ok: false, error: held.error, message_ko: held.message_ko, tried };
   return { ok: false, error: 'convert-failed', message_ko: `이 PC의 ${list.map((id) => APPS[id].name).join('·')}로 PDF를 만들지 못했어요. 그 프로그램에서 직접 PDF로 저장해 올려 주세요.`, tried };
+}
+
+/** 앱에 알릴 형식 → 프로그램 목록. 이 OS에서 그 프로그램으로 여는 형식만(macOS Office는 .pptx·.docx 등만) */
+export function convertibleExts(ids, platform = process.platform) {
+  const exts = {};
+  for (const id of ids) for (const e of APPS[id].exts) if (appsFor(e, [id], platform).length) (exts[e] ||= []).push(id);
+  return exts;
 }
 
 /** 바꿀 프로그램이 없을 때 한 줄 */
@@ -230,9 +275,7 @@ const queue = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => { })
 export async function handleConvert(S, req, res, url, h) {
   if (req.method === 'GET' || req.method === 'HEAD') {
     const ids = detectApps({ fresh: url.searchParams.has('fresh') });
-    const exts = {};
-    for (const id of ids) for (const e of APPS[id].exts) (exts[e] ||= []).push(id);
-    return h.sendJson(res, 200, { ok: true, platform: process.platform, apps: ids.map((id) => ({ id, name: APPS[id].name })), exts, limitMB: CONVERT_LIMIT_MB });
+    return h.sendJson(res, 200, { ok: true, platform: process.platform, apps: ids.map((id) => ({ id, name: APPS[id].name })), exts: convertibleExts(ids), limitMB: CONVERT_LIMIT_MB });
   }
   if (req.method !== 'POST') return h.fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
   const name = String(url.searchParams.get('name') || '').split(/[\\/]/).pop().slice(0, 200);
