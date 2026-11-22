@@ -274,3 +274,15 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 3. 몇 달 뒤: 비밀을 새 키 하나로 바꾼 다음 `node scripts/studio-launcher/signing-key.mjs remove <예전 공개 키>` → 커밋·push.
 
 **키가 샜다고 의심되면**: 새 키를 만들고(`new --out …-2.pem`) 바로 `remove <예전 공개 키>`, 비밀을 새 키 하나로 바꾼 뒤 커밋·push합니다. 예전 목록만 가진 커넥트는 새 판을 받지 못하니(일부러 막음) 관리 화면 팝업 공지로 "lecpage 커넥트를 lecpage.com에서 다시 받아 켜 주세요"를 알립니다. 브라우저로 받는 `.cmd`와 `curl | bash`로 도는 `.sh` 자체는 서명으로 지키지 못하니 GitHub 계정 보안(§6 2단계 인증)이 지킵니다.
+
+## 16. 예비 주소를 전용 출처로 옮기기 (제안, 운영자가 정함)
+
+지금 예비 주소 `https://yoorrard.github.io/lecpage/`는 같은 계정의 다른 GitHub Pages 사이트와 출처(`https://yoorrard.github.io`)를 함께 씁니다. 그 사이트의 스크립트가 같은 출처의 저장소를 읽을 수 있어서, lecpage 커넥트는 이 출처를 믿지 않습니다(`skills/lecpage/scripts/studio.mjs` `APP_ORIGINS`에 없음). 그래서 예비 주소에서는 커넥트가 연결되지 않고 API 키·내 계정 배포만 됩니다. lecpage.com이 멈췄을 때도 커넥트까지 쓰려면 lecpage만 쓰는 출처가 필요합니다.
+
+**제안: 무료 GitHub 조직 `lecpage`의 `https://lecpage.github.io`**(2026-11-22 확인: `lecpage` 이름은 비어 있음. 0원, Cloudflare와 다른 장애 영역 그대로)
+1. 이름부터 잡기: GitHub → New organization → Free → 이름 `lecpage`. 다른 사람이 먼저 만들면 이 길은 쓸 수 없습니다.
+2. 둘 중 하나로 Pages를 그 출처에 둡니다.
+   - (간단) 이 저장소를 조직으로 옮기기: 저장소 Settings → Transfer → `lecpage`. 예비 주소가 `https://lecpage.github.io/lecpage/`가 되고, GitHub가 예전 저장소·릴리스 주소를 새 주소로 넘겨 줍니다. 그래도 코드·문서의 `yoorrard/lecpage`(커넥트 릴리스 주소 `studio-update.mjs` `RELEASE`·실행 파일·README)는 다음 작업에서 새 이름으로 바꿉니다.
+   - (저장소 그대로) 조직에 빈 저장소 `lecpage.github.io`를 만들고, `pages.yml`이 빌드 결과를 그 저장소로 올리게 합니다(그 저장소의 배포 키를 이 저장소 Actions 비밀로). 예비 주소는 `https://lecpage.github.io/`.
+3. 조직에는 다른 Pages 사이트를 만들지 않습니다(출처를 lecpage 혼자 쓰게).
+4. 끝나면 다음 작업에 알려 주세요. 그때 그 출처를 커넥트 `APP_ORIGINS`·바로 배포 `ALLOWED_ORIGINS`(hosting/src/config.js)·`OPERATOR_HOSTS`(app/src/lib/publish-api.js)·처리방침의 예비 주소에 함께 넣습니다. **출처를 만들기 전에는 코드에 넣지 않습니다**(그 이름을 남이 가지면 남의 페이지를 믿게 됨).
