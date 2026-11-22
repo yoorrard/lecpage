@@ -3,16 +3,26 @@
 // 옆 폴더에 푼 뒤 폴더 이름을 바꿔 갈아 끼움(예전 판은 <폴더>.old로 남김) → 같은 인자·같은 포트·같은 짝 맞춤 토큰으로 다시 켬.
 // 다시 켜기: 처음 바꿀 때 이 프로세스가 작은 감독이 되어 새 판을 자식으로 띄우고(같은 창·같은 출력), 자식이 다시 바꾸면 종료 코드 75로
 // 알려 감독이 새로 띄움(프로세스는 늘 둘까지). 새 판이 켜지자마자 실패하면 예전 판으로 되돌려 한 번 더 띄움.
-// 안전: 받는 곳은 고정 주소(https)뿐 · 확인(SHA-256) 전에는 아무것도 바꾸지 않음 · 묶음 밖 경로·링크는 풀지 않음 · 작업 중에는 바꾸지 않음(studio.mjs가 확인)
+// 안전: 받는 곳은 고정 주소(https)뿐 · 확인(SHA-256, 공개 키를 정했으면 ed25519 서명까지) 전에는 아무것도 바꾸지 않음 · 묶음 밖 경로·링크는 풀지 않음 ·
+// 작업 중에는 바꾸지 않음(studio.mjs가 확인)
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync, existsSync, statSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync, unlinkSync, existsSync, statSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 /** 받는 곳(실행 파일 scripts/studio-launcher/*과 같은 릴리스) */
 export const RELEASE = 'https://github.com/yoorrard/lecpage/releases/download/studio-latest';
 export const ASSET = 'lecpage-connect.tar.gz';
+/**
+ * 묶음 서명 공개 키(ed25519 32바이트를 base64url로 = JWK의 x). 이 목록이 기준이고, 실행 파일(scripts/studio-launcher/lecpage-connect.cmd·.sh)에도
+ * 같은 목록을 박아 둠(시험이 같은지 확인). 넣고 빼기는 scripts/studio-launcher/signing-key.mjs(세 곳을 함께 고침, docs/operations.md 15절).
+ * 비어 있으면 서명을 확인하지 않음(SHA-256만, 키를 정하기 전과 같음). 하나라도 있으면 <묶음>.sig가 없거나 어느 키로도 맞지 않을 때 바꾸지 않음.
+ * 여러 개는 키를 바꾸는 동안 예전 키·새 키를 함께 받으려고
+ */
+export const SIGNING_KEYS = [];
+/** 공개 키 꼴(base64url 43자) */
+export const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 /** 감독에게 '새 판으로 다시 띄워 줘'를 알리는 종료 코드 */
 export const RESTART_CODE = 75;
 const MB = 1024 * 1024;
@@ -43,11 +53,31 @@ export async function latestBuild({ base = RELEASE, fetchImpl = globalThis.fetch
   if (!VER_RE.test(v)) throw Object.assign(new Error('판 이름을 읽지 못했어요'), { code: 'version' });
   return v;
 }
-/** 묶음 받기 + SHA-256 확인(실행 파일과 같은 .sha256) → 바이트 */
-export async function downloadVerified({ base = RELEASE, fetchImpl = globalThis.fetch } = {}) {
+/**
+ * ed25519 서명 확인: sigText(<묶음>.sig: base64 서명 한 줄에 하나, 키를 바꾸는 동안은 여럿) 중 하나가 keys 중 하나로 buf에 맞으면 true.
+ * 실행 파일(lecpage-connect.cmd·.sh)도 같은 일을 Node.js로 함(VERIFY_JS)
+ */
+export function verifySignature(buf, sigText, keys = SIGNING_KEYS) {
+  const sigs = String(sigText ?? '').split(/\s+/).filter(Boolean).slice(0, 8).map((x) => Buffer.from(x, 'base64')).filter((b) => b.length === 64);
+  for (const x of keys) {
+    let key; try { key = createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x }, format: 'jwk' }); } catch { continue; }
+    for (const s of sigs) { try { if (edVerify(null, buf, key, s)) return true; } catch { /* 맞지 않음 */ } }
+  }
+  return false;
+}
+/** 서명 실패: 사용자에게는 '받은 새 판 파일이 올바르지 않아요'(studio.mjs updateErrorCode의 package), 기록에는 까닭 */
+const sigError = (m) => Object.assign(new Error(m), { code: 'package', reason: 'signature' });
+/** 묶음 받기 + SHA-256 확인(실행 파일과 같은 .sha256) + 공개 키를 정했으면 서명(.sig) 확인 → 바이트 */
+export async function downloadVerified({ base = RELEASE, fetchImpl = globalThis.fetch, keys = SIGNING_KEYS } = {}) {
   const buf = await get(`${base}/${ASSET}`, fetchImpl);
   const want = String(await get(`${base}/${ASSET}.sha256`, fetchImpl, { text: true, limit: 1024, ms: 15000 })).trim().split(/\s+/)[0].toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(want) || createHash('sha256').update(buf).digest('hex') !== want) throw Object.assign(new Error('받은 파일 확인(SHA-256)에 실패했어요'), { code: 'sha256' });
+  if (keys.length) {
+    const sig = await get(`${base}/${ASSET}.sig`, fetchImpl, { text: true, limit: 4096, ms: 15000 }).catch((e) => {
+      throw e.code === 'http' && e.status === 404 ? sigError('받은 파일의 서명(.sig)이 없어요') : e;
+    });
+    if (!verifySignature(buf, sig, keys)) throw sigError('받은 파일의 서명이 맞지 않아요');
+  }
   return buf;
 }
 
@@ -109,10 +139,10 @@ export async function renameRetry(from, to, { tries = 30 } = {}) {
  * 받기 → 확인 → 옆 폴더(<root>.new)에 풀기 → <root>를 <root>.old로, 새 폴더를 <root>로. 하나라도 안 되면 있던 판 그대로
  * onStage('download'|'install') → { from, to, backup }
  */
-export async function applyUpdate({ root, base = RELEASE, fetchImpl = globalThis.fetch, onStage = () => {} }) {
+export async function applyUpdate({ root, base = RELEASE, fetchImpl = globalThis.fetch, keys = SIGNING_KEYS, onStage = () => {} }) {
   const from = readBuild(root);
   onStage('download');
-  const buf = await downloadVerified({ base, fetchImpl });
+  const buf = await downloadVerified({ base, fetchImpl, keys });
   onStage('install');
   const tmp = `${root}.new`; const old = `${root}.old`;
   rmSync(tmp, { recursive: true, force: true });
@@ -136,6 +166,38 @@ export function restoreBackup(root) {
     renameSync(old, root);
     return true;
   } catch { return false; }
+}
+
+/** 윈도우 실행 파일(lecpage-connect.cmd)의 배치 머리 부분(##PS## 줄 앞). 없으면 null */
+export function batchHead(buf) { const b = Buffer.from(buf); const i = b.indexOf('##PS##'); return i < 0 ? null : b.subarray(0, i); }
+/**
+ * 윈도우 자동 시작용 복사본(LECPAGE_LAUNCHER = %LOCALAPPDATA%\lecpage\lecpage-connect.cmd, 예전 이름 lecpage-studio.cmd가 있으면 그것도)을
+ * 확인을 마친 묶음 안의 실행 파일로 바꿈 → 바꾼 파일 목록. 예전 실행 파일은 서명을 확인하지 않고, 브라우저로 받은 파일을 그대로 복사한 것이라
+ * 다운로드 표시(Zone.Identifier)가 따라와 컴퓨터를 켤 때마다 보안 경고가 뜰 수 있음 → 묶음과 내용이 같은 복사본에서만 그 표시를 지움.
+ * 지금 도는 배치 파일일 수 있어 머리 부분이 같은 것만 바꿈(cmd는 명령을 마칠 때마다 같은 바이트 자리부터 파일을 다시 읽음).
+ * 받은 실행 파일로 켠 묶음에서만(studio.mjs가 켤 때 부름)
+ */
+export function refreshLauncher({ root, env = process.env, platform = process.platform } = {}) {
+  const launcher = env.LECPAGE_LAUNCHER;
+  if (platform !== 'win32' || !launcher || !/\.cmd$/i.test(launcher) || !root || !installedPackage(root)) return [];
+  let body; try { body = readFileSync(join(root, 'lecpage-connect.cmd')); } catch { return []; }
+  const head = batchHead(body);
+  if (!head) return [];
+  const out = [];
+  for (const dst of [launcher, join(dirname(launcher), 'lecpage-studio.cmd')]) {
+    try {
+      if (!existsSync(dst)) continue;
+      const cur = readFileSync(dst);
+      if (!cur.equals(body)) {
+        if (!batchHead(cur)?.equals(head)) continue;
+        writeFileSync(`${dst}.new`, body);
+        renameSync(`${dst}.new`, dst);
+        out.push(dst);
+      }
+      try { unlinkSync(`${dst}:Zone.Identifier`); } catch { /* 표시가 없음 */ }
+    } catch { /* 다음에 켤 때 다시 */ }
+  }
+  return out;
 }
 
 /** 다시 켤 인자: 처음 인자에서 포트·열기·새 토큰을 빼고 같은 포트 + 브라우저 열지 않기(앱이 이미 열려 있고 저절로 다시 붙음) */

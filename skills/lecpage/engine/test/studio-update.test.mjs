@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign as edSign } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
@@ -55,6 +55,9 @@ async function release(files) {
   return { base: `http://127.0.0.1:${srv.address().port}`, hits, close: () => new Promise((r) => srv.close(r)) };
 }
 const sha = (b) => createHash('sha256').update(b).digest('hex');
+/** 시험 때만 만드는 서명 키(저장소·릴리스와 무관) */
+function keyPair() { const { publicKey, privateKey } = generateKeyPairSync('ed25519'); return { x: publicKey.export({ format: 'jwk' }).x, privateKey }; }
+const sigOf = (buf, privateKey) => `${edSign(null, buf, privateKey).toString('base64')}\n`;
 function req(port, method, path, { headers = {}, body } = {}) {
   return new Promise((ok, no) => {
     const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
@@ -252,4 +255,95 @@ test('감독: 75로 끝나면 새 판을 다시 띄움 · 켜자마자 실패하
   assert.equal(spawned[2].env.LECPAGE_CONNECT_SKIP, '2.0.0-bad'); // 되돌린 뒤 저절로 다시 받지 않게
   assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.9.0-good');
   assert.equal(exited, 0);
+});
+
+test('서명 확인(ed25519): 맞는 서명만 · 키를 바꾸는 동안 여러 키·여러 줄 · 이상한 글·키는 거절', () => {
+  const a = keyPair(); const b = keyPair();
+  const buf = Buffer.from('묶음');
+  assert.equal(U.verifySignature(buf, sigOf(buf, a.privateKey), [a.x]), true);
+  assert.equal(U.verifySignature(buf, sigOf(buf, a.privateKey), [b.x]), false, '다른 키');
+  assert.equal(U.verifySignature(Buffer.from('묶음!'), sigOf(buf, a.privateKey), [a.x]), false, '바뀐 묶음');
+  assert.equal(U.verifySignature(buf, sigOf(buf, b.privateKey), [a.x, b.x]), true, '목록의 키 중 하나');
+  assert.equal(U.verifySignature(buf, sigOf(buf, b.privateKey) + sigOf(buf, a.privateKey), [a.x]), true, '여러 줄 중 하나');
+  for (const bad of ['', 'abc', 'A'.repeat(88), null, undefined]) assert.equal(U.verifySignature(buf, bad, [a.x]), false, String(bad));
+  assert.equal(U.verifySignature(buf, sigOf(buf, a.privateKey), []), false, '키가 없으면 맞다고 하지 않음');
+  assert.equal(U.verifySignature(buf, sigOf(buf, a.privateKey), ['not-a-key', a.x]), true, '이상한 키는 건너뜀');
+  assert.ok(Array.isArray(U.SIGNING_KEYS) && U.SIGNING_KEYS.every((k) => U.KEY_RE.test(k)));
+});
+
+test('묶음 받기: 공개 키가 없으면 지금처럼 SHA-256만(.sig를 받지 않음) · 있으면 서명이 맞아야만, 없거나·틀리거나·다른 키면 거절(묶음이 올바르지 않아요)', async () => {
+  const a = keyPair(); const b = keyPair();
+  const gz = pkg('1.2.0-new');
+  const files = { VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` };
+  const rel = await release(files);
+  const sigErr = (re) => (e) => e.code === 'package' && e.reason === 'signature' && re.test(e.message) && St.updateErrorCode(e) === 'package';
+  try {
+    assert.ok((await U.downloadVerified({ base: rel.base, keys: [] })).equals(gz));
+    if (!U.SIGNING_KEYS.length) assert.ok((await U.downloadVerified({ base: rel.base })).equals(gz), '저장소에 공개 키가 없으면 기본도 SHA-256만');
+    assert.ok(!rel.hits.some((h) => h.endsWith('.sig')), '키가 없으면 .sig를 받지 않음');
+    await assert.rejects(U.downloadVerified({ base: rel.base, keys: [a.x] }), sigErr(/서명\(\.sig\)이 없어요/));
+    files['lecpage-connect.tar.gz.sig'] = sigOf(gz, b.privateKey);
+    await assert.rejects(U.downloadVerified({ base: rel.base, keys: [a.x] }), sigErr(/맞지 않아요/), '다른 키의 서명');
+    files['lecpage-connect.tar.gz.sig'] = 'garbage\n';
+    await assert.rejects(U.downloadVerified({ base: rel.base, keys: [a.x] }), sigErr(/맞지 않아요/), '서명이 아닌 글');
+    // 릴리스 파일을 바꿀 수 있는 사람이 묶음과 .sha256을 함께 바꿔도, 비밀 키 없이는 맞는 서명을 만들 수 없음
+    const evil = pkg('6.6.6-evil');
+    Object.assign(files, { 'lecpage-connect.tar.gz': evil, 'lecpage-connect.tar.gz.sha256': `${sha(evil)}  lecpage-connect.tar.gz\n`, 'lecpage-connect.tar.gz.sig': sigOf(gz, a.privateKey) });
+    await assert.rejects(U.downloadVerified({ base: rel.base, keys: [a.x] }), sigErr(/맞지 않아요/), 'SHA-256은 맞지만 서명이 다른 묶음');
+    Object.assign(files, { 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` });
+    assert.ok((await U.downloadVerified({ base: rel.base, keys: [b.x, a.x] })).equals(gz), '키를 바꾸는 동안: 목록의 키 하나로 맞으면 받음');
+    // SHA-256이 틀리면 서명보다 먼저 거절(지금과 같은 까닭)
+    files['lecpage-connect.tar.gz.sha256'] = `${'0'.repeat(64)}\n`;
+    await assert.rejects(U.downloadVerified({ base: rel.base, keys: [a.x] }), (e) => e.code === 'sha256');
+  } finally { await rel.close(); }
+});
+
+test('새 판으로 바꾸기(applyUpdate): 서명이 없거나 맞지 않으면 아무것도 바꾸지 않음(.new·.old도 남지 않음) · 맞으면 바꿈', async () => {
+  const a = keyPair(); const b = keyPair();
+  const gz = pkg('1.2.0-new');
+  const files = { VERSION: '1.2.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` };
+  const rel = await release(files);
+  const root = fakeRoot('1.1.0-old');
+  const untouched = () => {
+    assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.1.0-old');
+    assert.equal(readFileSync(join(root, 'skills', 'lecpage', 'scripts', 'lecpage.mjs'), 'utf8'), '// 예전 판\n');
+    assert.ok(!existsSync(`${root}.new`) && !existsSync(`${root}.old`));
+  };
+  try {
+    const stages = [];
+    await assert.rejects(U.applyUpdate({ root, base: rel.base, keys: [a.x], onStage: (s) => stages.push(s) }), (e) => e.reason === 'signature');
+    assert.deepEqual(stages, ['download'], '확인 전에는 풀지 않음'); untouched();
+    files['lecpage-connect.tar.gz.sig'] = sigOf(gz, b.privateKey);
+    await assert.rejects(U.applyUpdate({ root, base: rel.base, keys: [a.x] }), (e) => e.reason === 'signature'); untouched();
+    files['lecpage-connect.tar.gz.sig'] = sigOf(gz, a.privateKey);
+    const r = await U.applyUpdate({ root, base: rel.base, keys: [a.x] });
+    assert.deepEqual({ from: r.from, to: r.to }, { from: '1.1.0-old', to: '1.2.0-new' });
+    assert.equal(readFileSync(join(root, 'skills', 'lecpage', 'scripts', 'lecpage.mjs'), 'utf8'), '// 새 판\n');
+  } finally { await rel.close(); }
+});
+
+test('윈도우 자동 시작 복사본: 확인을 마친 묶음의 실행 파일로 바꾸고 다운로드 표시를 지움 · 머리 부분이 다르면(도는 중일 수 있음) 그대로 · 윈도우·받은 묶음에서만', () => {
+  const cmd = (tag, head = 'powershell -NoProfile -Command "x"') => Buffer.from(`@echo off\r\nsetlocal\r\n${head}\r\nexit /b %RC%\r\n##PS##\r\n# ${tag}\r\n`);
+  const root = fakeRoot('1.2.0-new');
+  writeFileSync(join(root, 'lecpage-connect.cmd'), cmd('새 판'));
+  const lp = mkdtempSync(join(T, 'lp-win-'));
+  const launcher = join(lp, 'lecpage-connect.cmd'); const legacy = join(lp, 'lecpage-studio.cmd');
+  writeFileSync(launcher, cmd('예전 판'));
+  writeFileSync(`${launcher}:Zone.Identifier`, '[ZoneTransfer]\r\nZoneId=3\r\n'); // 윈도우의 대체 데이터 스트림 이름(여기서는 보통 파일로 흉내)
+  writeFileSync(legacy, cmd('더 예전 판', 'powershell -NoProfile -Command "y"'));
+  const env = { LECPAGE_LAUNCHER: launcher };
+  assert.deepEqual(U.refreshLauncher({ root, env, platform: 'linux' }), [], '윈도우에서만');
+  assert.deepEqual(U.refreshLauncher({ root, env: {}, platform: 'win32' }), [], '받은 실행 파일로 켰을 때만');
+  assert.deepEqual(U.refreshLauncher({ root, env, platform: 'win32' }), [launcher]);
+  assert.ok(readFileSync(launcher).equals(cmd('새 판')));
+  assert.ok(!existsSync(`${launcher}:Zone.Identifier`), '묶음과 같은 내용이 된 복사본의 다운로드 표시를 지움');
+  assert.match(readFileSync(legacy, 'utf8'), /더 예전 판/, '머리 부분이 다르면 바꾸지 않음(도는 중이면 cmd가 엉뚱한 자리를 읽음)');
+  assert.ok(!existsSync(`${launcher}.new`));
+  writeFileSync(`${launcher}:Zone.Identifier`, 'ZoneId=3');
+  assert.deepEqual(U.refreshLauncher({ root, env, platform: 'win32' }), [], '이미 같으면 바꾸지 않음');
+  assert.ok(!existsSync(`${launcher}:Zone.Identifier`), '같은 내용이면 표시만 지움');
+  mkdirSync(join(root, '.git'));
+  writeFileSync(launcher, cmd('예전 판'));
+  assert.deepEqual(U.refreshLauncher({ root, env, platform: 'win32' }), [], '저장소에서 켠 것은 건드리지 않음');
+  assert.equal(U.batchHead(Buffer.from('no marker')), null);
 });

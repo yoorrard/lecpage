@@ -2,6 +2,7 @@
 # 올리는 것(묶기는 scripts/studio-launcher/package.sh, 내 컴퓨터에서도 같은 결과):
 #   lecpage-connect.cmd(Windows, 두 번 눌러 실행) · lecpage-connect.sh / .command(macOS·Linux, 터미널 한 줄) ·
 #   lecpage-connect.zip / .tar.gz(+ .sha256, 실행 파일이 받아 확인 후 씀) · lecpage-connect-mac.zip(선택, lecpage Connect.app) · VERSION(새 판 확인용)
+#   묶음마다 .sig(ed25519 서명): 비밀 CONNECT_SIGNING_KEY가 있을 때. 실행 파일·켜 둔 커넥트는 공개 키를 넣은 판부터 서명이 맞아야만 바꿈(docs/operations.md 15절)
 #   예전 이름 lecpage-studio.*도 같은 내용으로 함께(예전 링크·이미 깔린 실행 파일·켜 둔 자동 시작이 그 이름을 받음)
 # 실행 파일은 Node.js가 없으면 nodejs.org의 LTS를 사용자 폴더에 받고(SHA-256 확인), 이 묶음을 받아 `node lecpage.mjs studio`로 켬.
 name: studio-release
@@ -32,7 +33,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends poppler-utils > /dev/null
           npm install --no-save --no-audit --no-fund --ignore-scripts "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: lecpage 커넥트 시험
-        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs
+        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs skills/lecpage/engine/test/studio-update.test.mjs skills/lecpage/engine/test/studio-sign.test.mjs
   release:
     needs: test
     # main과 v 태그에서만 올림(다른 브랜치에서 손으로 돌려도 올리지 않음)
@@ -47,6 +48,12 @@ jobs:
         with: { node-version: 22 }
       - name: 묶기
         run: sh scripts/studio-launcher/package.sh out
+      # 서명(ed25519, Node.js 내장 crypto만). 비밀 키는 이 단계에만 넘김(올리기 단계·다른 작업에는 없음).
+      # 공개 키를 아직 넣지 않았고 비밀도 없으면 건너뜀. 공개 키가 들어 있는데 비밀이 없거나 맞지 않으면 실패(서명 없는 묶음은 실행 파일이 받지 않음)
+      - name: 서명
+        env:
+          CONNECT_SIGNING_KEY: ${{ secrets.CONNECT_SIGNING_KEY }}
+        run: node scripts/studio-launcher/signing-key.mjs sign out/lecpage-connect.zip out/lecpage-connect.tar.gz out/lecpage-connect-mac.zip out/lecpage-studio.zip out/lecpage-studio.tar.gz
       - name: studio-latest 릴리스 갱신
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,10 +67,13 @@ jobs:
             gh release edit studio-latest --title "lecpage 커넥트(최신)" --notes "$NOTES"
           fi
           cd out
+          # 서명을 건너뛰었으면 .sig가 없음. VERSION은 맨 나중에 따로: 실행 파일은 VERSION이 바뀌어야 받으므로 묶음·.sha256·.sig가 다 바뀐 뒤에 알림
+          SIGS=$(ls *.sig 2>/dev/null || true)
           gh release upload studio-latest \
             lecpage-connect.cmd lecpage-connect.sh lecpage-connect.command \
             lecpage-connect.zip lecpage-connect.zip.sha256 lecpage-connect.tar.gz lecpage-connect.tar.gz.sha256 \
             lecpage-connect-mac.zip lecpage-connect-mac.zip.sha256 \
             lecpage-studio.cmd lecpage-studio.sh lecpage-studio.command \
             lecpage-studio.zip lecpage-studio.zip.sha256 lecpage-studio.tar.gz lecpage-studio.tar.gz.sha256 \
-            VERSION --clobber
+            $SIGS --clobber
+          gh release upload studio-latest VERSION --clobber

@@ -4,7 +4,8 @@
 # 관리자 권한 없이 이 사용자 폴더에만 씀(macOS ~/Library/Application Support/lecpage, Linux ~/.local/share/lecpage).
 # 1) Node.js 22 이상: 있으면 그대로, 없으면 nodejs.org의 LTS(tar.gz, x64·arm64)를 받아 SHA-256 확인 뒤 풂(처음 한 번).
 #    가장 새 LTS가 이 컴퓨터에서 돌지 않으면(오래된 macOS 등) 그다음 LTS로
-# 2) lecpage 커넥트: GitHub 릴리스(studio-latest)의 VERSION이 바뀌었으면 묶음을 받아 SHA-256 확인 뒤 바꿈(못 받으면 있던 판)
+# 2) lecpage 커넥트: GitHub 릴리스(studio-latest)의 VERSION이 바뀌었으면 묶음을 받아 SHA-256(공개 키를 넣었으면 ed25519 서명까지) 확인 뒤 바꿈
+#    (못 받거나 확인에 실패하면 있던 판)
 # 3) 이 파일을 사용자 폴더(lecpage-connect.sh)에 둠: 컴퓨터를 켤 때 켜기(LaunchAgent·autostart)가 이 파일을 부름
 # 4) node lecpage.mjs studio(브라우저로 lecpage.com이 열림). 끄기: Ctrl+C
 # --autostart(컴퓨터를 켤 때): 창 없이 켜지고 기록은 사용자 폴더의 connect.log
@@ -13,6 +14,9 @@ set -eu
 
 # curl … | bash로 돌 때도 끝까지 받은 뒤에 실행되게(중간에 끊기면 아무것도 하지 않음) 모두 main 안에
 main() {
+  # 묶음 서명 공개 키(ed25519, base64url, 띄어 써서 여럿). 기준은 skills/lecpage/scripts/studio-update.mjs의 SIGNING_KEYS(같은지 시험이 확인,
+  # 넣고 빼기는 scripts/studio-launcher/signing-key.mjs). 비어 있으면 SHA-256만 확인, 있으면 서명(.sig)까지 맞아야 새 판으로 바꿈
+  SIGNING_KEYS=''
   BASE="${LECPAGE_RELEASE_BASE:-https://github.com/yoorrard/lecpage/releases/download/studio-latest}"
   NDIST="${LECPAGE_NODE_DIST:-https://nodejs.org/dist}"
   case "$(uname -s)" in
@@ -97,13 +101,20 @@ main() {
 say() { printf '%s\n' "$*"; }
 dl() { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi; }
 sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; else sha256sum "$1" | cut -d' ' -f1; fi; }
+# ed25519 서명 확인(Node.js 내장 crypto): $1 묶음 · $2 .sig(base64 서명 한 줄에 하나) → SIGNING_KEYS 중 하나로 맞으면 0.
+# lecpage-connect.cmd에도 같은 글이 있음(시험이 같은지 확인). 큰따옴표·$·느낌표·역따옴표를 쓰지 않음(셸·PowerShell 5.1이 건드리지 않게)
+VERIFY_JS="const c=require('crypto'),f=require('fs'),e=process.env;let ok=false;try{const d=f.readFileSync(e.LECPAGE_VERIFY_FILE);const s=f.readFileSync(e.LECPAGE_VERIFY_SIG,'utf8').split(/\s+/).filter(Boolean).slice(0,8).map(x=>Buffer.from(x,'base64')).filter(b=>b.length===64);for(const x of String(e.LECPAGE_VERIFY_KEYS||'').split(/\s+/).filter(Boolean)){try{const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});for(const b of s)if(c.verify(null,d,k,b))ok=true}catch(_){}}}catch(_){}process.exit(ok?0:1)"
+sig_ok() { LECPAGE_VERIFY_FILE="$1" LECPAGE_VERIFY_SIG="$2" LECPAGE_VERIFY_KEYS="$SIGNING_KEYS" "$NODE" -e "$VERIFY_JS" >/dev/null 2>&1; }
 node_ok() { "$1" -e 'process.exit(+process.versions.node.split(".")[0] >= 22 ? 0 : 1)' >/dev/null 2>&1; }
-# 묶음 받기 → SHA-256 확인 → 풀어서 바꿈. 하나라도 안 되면 있던 것을 그대로 두고 1(부르는 쪽이 있던 판으로)
+# 묶음 받기 → SHA-256 확인 → (공개 키가 있으면) 서명 확인 → 풀어서 바꿈. 하나라도 안 되면 있던 것을 그대로 두고 1(부르는 쪽이 있던 판으로)
 fetch_app() {
   FT=$(mktemp -d)
   if ! dl "$BASE/lecpage-connect.tar.gz" > "$FT/s.tgz"; then rm -rf "$FT"; return 1; fi
   FW=$(dl "$BASE/lecpage-connect.tar.gz.sha256" | cut -d' ' -f1)
   if [ -z "$FW" ] || [ "$FW" != "$(sha "$FT/s.tgz")" ]; then say "받은 파일 확인(SHA-256)에 실패했어요."; rm -rf "$FT"; return 1; fi
+  if [ -n "$SIGNING_KEYS" ] && ! { dl "$BASE/lecpage-connect.tar.gz.sig" > "$FT/s.sig" && sig_ok "$FT/s.tgz" "$FT/s.sig"; }; then
+    say "받은 파일의 서명을 확인하지 못했어요."; rm -rf "$FT"; return 1
+  fi
   if ! { mkdir "$FT/x" && tar -xzf "$FT/s.tgz" -C "$FT/x" && [ -d "$FT/x/skills" ]; }; then rm -rf "$FT"; return 1; fi
   rm -rf "$1"; mv "$FT/x" "$1"; rm -rf "$FT"
 }

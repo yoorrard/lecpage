@@ -256,3 +256,21 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 | Dependabot PR 정리 | GitHub Pull requests | #4(메이저 넷 묶음)·#5(Node 25) 닫기, #6은 이 저장소가 wrangler 4.158.0으로 올려 대신함(저절로 닫힘) | 한 번 |
 | 유료로 올릴 때만: 구독 + 지출 한도 | Billing → Subscriptions, Billing → Spend Management(Workers·Durable Objects) | 비용 상한. 순서는 `hosting/README.md` §4 | 전환 때 한 번 |
 | (권함) 바로 배포용 두 번째 Cloudflare 계정 | 새 계정 → `npm run setup` → `app/src/lib/publish-api.js` 주소 한 줄 | 남이 올린 사이트 신고로 계정이 막혀도 앱·메일·도메인은 그대로 | 한 번 |
+
+## 15. lecpage 커넥트 서명 키 (처음 한 번, 운영자 PC에서)
+
+릴리스 `studio-latest`의 파일을 바꿀 수 있으면 묶음과 `.sha256`을 함께 바꿀 수 있어서, 워크플로([`.github/workflows/studio-release.yml`](../.github/workflows/studio-release.yml))가 묶음마다 ed25519 서명(`<묶음>.sig`)을 붙이고 실행 파일(`lecpage-connect.cmd`·`.sh`)과 켜 둔 커넥트(`studio-update.mjs`)가 코드에 박은 공개 키로 확인합니다. 공개 키를 넣기 전에는 지금처럼 SHA-256만 확인하고 서명 단계는 건너뜁니다. 넣은 판부터는 서명이 없거나 맞지 않는 묶음을 받지 않고(있던 판으로 켬), 워크플로는 비밀이 없거나 목록에 없는 키면 실패합니다. 도구는 `scripts/studio-launcher/signing-key.mjs`(바깥 패키지 없음, 비밀 키를 화면에 내지 않음)입니다.
+
+**처음 켜기** — 비밀 키는 운영자 PC에서만 만들고 저장소·대화·메신저에 두지 않습니다.
+1. 최신 `main`을 받은 내 PC의 저장소에서 `node scripts/studio-launcher/signing-key.mjs new`. 비밀 키는 `~/.lecpage/connect-signing-key.pem`(이 사용자만 읽음, 있으면 덮지 않음)에, 공개 키는 세 곳(`studio-update.mjs`·`lecpage-connect.cmd`·`.sh`)에 들어갑니다.
+2. GitHub 비밀 등록(파일을 읽어 넘겨 키가 화면에 나오지 않음): macOS·Linux `gh secret set CONNECT_SIGNING_KEY --repo yoorrard/lecpage < ~/.lecpage/connect-signing-key.pem` · Windows PowerShell `Get-Content -Raw "$HOME\.lecpage\connect-signing-key.pem" | gh secret set CONNECT_SIGNING_KEY --repo yoorrard/lecpage`. `gh secret list --repo yoorrard/lecpage`에 이름이 보이면 됩니다.
+3. 세 파일을 커밋해 `main`에 push하고 Actions의 studio-release가 초록인지 봅니다(비밀은 '서명' 단계에만 넘어감).
+4. 확인: `gh release download studio-latest --repo yoorrard/lecpage -p 'lecpage-connect.tar.gz*' -D /tmp/lp-sig` 다음 `node scripts/studio-launcher/signing-key.mjs verify /tmp/lp-sig/lecpage-connect.tar.gz` → "맞아요".
+5. 키 파일은 비밀번호 관리자에 파일로 보관합니다(키를 바꿀 때 예전 키로도 서명해야 이미 깔린 커넥트가 새 판을 받음). 보관한 뒤 PC에서는 지워도 됩니다.
+
+**키 바꾸기**(PC를 바꿀 때 등)
+1. `node scripts/studio-launcher/signing-key.mjs new --out ~/.lecpage/connect-signing-key-2.pem` → 세 파일 커밋·push(새 공개 키를 먼저 퍼뜨림, 서명은 아직 예전 키).
+2. 비밀을 두 키로: `cat ~/.lecpage/connect-signing-key.pem ~/.lecpage/connect-signing-key-2.pem | gh secret set CONNECT_SIGNING_KEY --repo yoorrard/lecpage`(Windows는 `Get-Content -Raw 예전.pem,새.pem | gh secret set …`). 그다음 릴리스부터 두 키로 서명돼 예전 목록만 가진 커넥트도 받습니다.
+3. 몇 달 뒤: 비밀을 새 키 하나로 바꾼 다음 `node scripts/studio-launcher/signing-key.mjs remove <예전 공개 키>` → 커밋·push.
+
+**키가 샜다고 의심되면**: 새 키를 만들고(`new --out …-2.pem`) 바로 `remove <예전 공개 키>`, 비밀을 새 키 하나로 바꾼 뒤 커밋·push합니다. 예전 목록만 가진 커넥트는 새 판을 받지 못하니(일부러 막음) 관리 화면 팝업 공지로 "lecpage 커넥트를 lecpage.com에서 다시 받아 켜 주세요"를 알립니다. 브라우저로 받는 `.cmd`와 `curl | bash`로 도는 `.sh` 자체는 서명으로 지키지 못하니 GitHub 계정 보안(§6 2단계 인증)이 지킵니다.

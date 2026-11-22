@@ -4,8 +4,9 @@
 # 만드는 것(out/):
 #   lecpage-connect.cmd(Windows, CRLF) · lecpage-connect.sh / .command(macOS·Linux) ·
 #   lecpage-connect.zip / .tar.gz(+ .sha256: 실행 파일이 받아 확인 후 씀) · lecpage-connect-mac.zip(+ .sha256, 선택: lecpage Connect.app) · VERSION
+#   서명(.sig)은 여기서 만들지 않음: 워크플로의 서명 단계만 비밀 키를 받음(scripts/studio-launcher/signing-key.mjs sign)
 #   예전 이름 lecpage-studio.{cmd,sh,command,zip,tar.gz}(+ .sha256)도 같은 내용으로(예전 링크·이미 깔린 실행 파일이 받는 이름)
-# 묶음에는 skills/(시험·평가 제외)와 알림 파일, 실행 파일(lecpage-connect.sh: 자동 시작이 부르는 복사본의 원본)을 넣음.
+# 묶음에는 skills/(시험·평가 제외)와 알림 파일, 실행 파일(lecpage-connect.sh·lecpage-connect.cmd: 자동 시작이 부르는 복사본의 원본, 확인을 마친 묶음에서 복사)을 넣음.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
@@ -25,14 +26,15 @@ fi
 rm -rf "$OUT/pkg/skills/lecpage/engine/test" "$OUT/pkg/skills/lecpage/evals"
 find "$OUT/pkg" -name __pycache__ -type d -prune -exec rm -rf {} +
 cp LICENSE NOTICE THIRD_PARTY_NOTICES.md TRADEMARKS.md "$OUT/pkg/"
+# 실행 파일: Windows 배치 파일은 CRLF, macOS·Linux는 그대로(실행 비트)
+sed 's/\r$//; s/$/\r/' scripts/studio-launcher/lecpage-connect.cmd > "$OUT/lecpage-connect.cmd"
+cp "$OUT/lecpage-connect.cmd" "$OUT/pkg/lecpage-connect.cmd"
 cp scripts/studio-launcher/lecpage-connect.sh "$OUT/pkg/lecpage-connect.sh"
 chmod 755 "$OUT/pkg/lecpage-connect.sh"
 printf '%s\n' "$V" > "$OUT/pkg/VERSION"
 printf '%s\n' "$V" > "$OUT/VERSION"
 (cd "$OUT/pkg" && zip -qr ../lecpage-connect.zip . && tar -czf ../lecpage-connect.tar.gz .)
 
-# 실행 파일: Windows 배치 파일은 CRLF, macOS·Linux는 그대로(실행 비트)
-sed 's/\r$//; s/$/\r/' scripts/studio-launcher/lecpage-connect.cmd > "$OUT/lecpage-connect.cmd"
 cp scripts/studio-launcher/lecpage-connect.sh "$OUT/lecpage-connect.sh"
 cp scripts/studio-launcher/lecpage-connect.sh "$OUT/lecpage-connect.command"
 chmod 755 "$OUT/lecpage-connect.sh" "$OUT/lecpage-connect.command"
