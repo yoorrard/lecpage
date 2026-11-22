@@ -17,8 +17,9 @@ export const AI_CARDS = [
 ];
 /**
  * ready: 읽은 교재가 있음(없으면 카드는 보이되 누를 수 없음) · idle(): 연수를 저장소에 다 쓴 뒤(생성 쪽이 읽기 전에) · go(n): 단계 이동
+ * reading: 교재를 읽는 중(교재 칸이 진행을 알림). 그동안은 '교재를 넣으면…' 줄을 넣지 않아 다 읽을 때 이 칸이 밀리지 않음
  */
-export function AiPick({ p, go, idle, ready }) {
+export function AiPick({ p, go, idle, ready, reading = false }) {
   const [conn, setConn] = useState(null); // { openai: {model}|null, … }
   const [keyFor, setKeyFor] = useState(''); // 키 연결 창을 연 회사
   const [swap, setSwap] = useState(''); // 연결된 키의 모델 바꾸기·끊기를 펼친 회사
@@ -49,7 +50,7 @@ export function AiPick({ p, go, idle, ready }) {
         <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
         <ConnBadge demo={!!p.demo} hint={false} />
       </div>
-      {!ready && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
+      {!ready && !reading && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
       <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
       <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
         <summary><b>다른 방법</b><span class="small muted">API 키 · AI 에이전트(Skill)</span></summary>

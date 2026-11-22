@@ -66,8 +66,21 @@ ul.ai-more{margin:-4px 0 0;padding-left:1.2em;display:grid;gap:2px;color:var(--i
 .help-nav a{display:block;padding:7px 12px;border-radius:var(--r-xs);text-decoration:none;color:var(--ink-2);font-weight:550;font-size:.94rem}
 .help-nav a:hover{background:var(--sunk);color:var(--ink)}
 .help-nav a[aria-current="page"]{background:var(--lav-soft);color:var(--lav-ink);font-weight:650}
-.drop-more{display:flex;justify-content:center;padding:14px;border-style:dashed}
+.drop-more{display:flex;justify-content:center;align-items:center;position:relative;overflow:hidden;min-height:54px;padding:14px;border-style:dashed}
 .drop-more b{font-weight:600;font-size:.95rem;color:var(--ink-2)}
+/* 읽는 중: '＋ 교재 추가'와 같은 높이의 한 줄(왼쪽 정렬이라 글이 바뀌어도 자리가 그대로). 긴 파일 이름은 줄이고 하는 일은 남김 */
+.drop-box{position:relative}
+.drop-busy{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
+.drop-busy .mascot{flex:none}
+.drop-busy b{display:flex;min-width:0;white-space:nowrap}
+.drop-busy b>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:pre}
+.drop-busy-f{flex:0 1 auto}
+.drop-busy-s{flex:none;max-width:100%}
+.has-stop .drop-busy{padding-right:64px}
+.drop-stop{position:absolute;right:10px;top:50%;transform:translateY(-50%)}
+.drop-prog{position:absolute;left:0;right:0;bottom:0}
+.drop-prog .progress{height:3px;border-radius:0;background:transparent}
+.drop-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .files{list-style:none;margin:0;padding:0;display:grid}
 .files li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--hair)}
 .files li:last-child{border-bottom:0}

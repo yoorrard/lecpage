@@ -300,6 +300,7 @@ export function StepShare({ p, update, go }) {
   const elsewhere = !!target && target !== 'lecpage';
   const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
+  const originals = (p.files || []).some((f) => f.key && !f.photos && !f.errors?.length); // 자료실에 함께 올릴 교재 원본이 있음(교재 원본 다운로드는 여기 공개 범위에서만 정함)
   const needPw = access === 'password' && !p.sitePassword;
   const notes = checks(p, target === 'lecpage' || (!target && autoLive) ? exp : null); // 보관 기간 알림은 바로 배포에 배포할 때만
   const day = isPastDate(bp.meta?.date) ? null : dayLine(daySt, bp.meta?.date); // 지난 날짜는 '확인할 곳'에서 한 번만 알림
@@ -332,7 +333,7 @@ export function StepShare({ p, update, go }) {
       {liveOn && autoLive && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
       {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 없이 배포</button></div>}
     </> });
-  rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals ? ' · 교재 원본도 다운로드' : ''}`,
+  rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals && originals ? ' · 교재 원본도 다운로드' : ''}`,
     btn: needPw ? null : [open.access ? '접기' : '바꾸기', () => toggle('access')],
     body: (open.access || needPw) && <>
       <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
@@ -348,7 +349,7 @@ export function StepShare({ p, update, go }) {
         </div>
       )}
       {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
-      <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF) 다운로드 허용 <span class="small muted">(저작권을 먼저 확인해 주세요)</span></span></label>
+      {originals && <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본(PPT·PDF) 다운로드 허용 <span class="small muted">(사이트 자료실에 담겨요. 저작권을 먼저 확인해 주세요)</span></span></label>}
     </> });
   const warns = notes.filter((c) => c.k === 'warn').length;
   if (notes.length) rows.push({ k: 'notes', title: '확인할 곳', state: warns ? 'todo' : 'note', line: warns ? `${notes.length}곳 · 배포 전에 확인해 주세요.` : `${notes.length}곳`,

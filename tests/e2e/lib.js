@@ -67,9 +67,9 @@ async function startWithFile(p, files = [FIX + '/workshop.pdf']) {
   await p.waitForFunction(() => !document.querySelector('.drop b')?.textContent.includes('중') && !document.querySelector('.files')?.textContent.includes('읽는 중'), null, { timeout: 90000 });
   await aiReady(p, 30000);
 }
-/** 교재를 다 읽어 AI 선택을 누를 수 있게 됨('교재를 넣으면 선택할 수 있어요'가 사라짐) */
+/** 교재를 다 읽어 AI 선택을 누를 수 있게 됨('교재를 넣으면 선택할 수 있어요'가 없고, 교재 칸의 읽는 중 줄·목록의 '읽는 중'도 끝남) */
 async function aiReady(p, timeout = 90000) {
-  await p.waitForFunction(() => !!document.querySelector('.ai-pick') && !document.querySelector('.ai-pick-wait'), null, { timeout });
+  await p.waitForFunction(() => !!document.querySelector('.ai-pick') && !document.querySelector('.ai-pick-wait') && !document.querySelector('.drop-busy') && !/읽는 중/.test(document.querySelector('.files')?.textContent || ''), null, { timeout });
 }
 /**
  * 정해 둔 답(```html 문서 + ```json 연수 정보)으로 사이트 만들기: API 키(가짜)로 연결하면 가짜 Claude가 이 답을 줌 → 완성 화면까지.

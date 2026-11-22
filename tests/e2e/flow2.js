@@ -1,4 +1,4 @@
-// 배포 흐름(flow2): 교재 원본 다운로드 선택 → 바로 배포 → 다른 곳(가짜 Vercel)에도 배포 → 대표 주소 바꾸기 → QR·강사 화면 링크가 따라감.
+// 배포 흐름(flow2): 공개 범위에서 교재 원본 다운로드 선택 → 바로 배포 → 다른 곳(가짜 Vercel)에도 배포 → 대표 주소 바꾸기 → QR·강사 화면 링크가 따라감.
 // 앱은 VITE_PUBLISH_API=https://publish.mock.test 로 빌드한 것(BASE2). 가짜 Vercel·is.gd는 h2.js(mockAll)
 const L = require('./lib.js');
 const H = require('./h2.js');
@@ -6,6 +6,7 @@ const OUT = process.env.SHOTS || L.OUT;
 const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>교재 흐름 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>교재 흐름 시험</h1><div data-lp="qa"></div></section></main></body></html>\n```';
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+const deployBodies = []; // 바로 배포에 보낸 파일 목록(교재 원본이 files/로 들어갔는지)
 async function instantServer(ctx) {
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
     const u = new URL(r.request().url()); const m = r.request().method();
@@ -14,7 +15,7 @@ async function instantServer(ctx) {
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     if (u.pathname === '/api/info') return json({ ok: true, v: 1, plan: 'free', accepting: true, view: 'pages', keepAlive: true, siteScripts: true, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 } });
     if (u.pathname === '/api/sites' && m === 'POST') return json({ id: 'site1', key: 'k1', url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
-    if (/\/deploys$/.test(u.pathname)) return json({ deploy: 'd1', missing: [] });
+    if (/\/deploys$/.test(u.pathname)) { deployBodies.push(r.request().postData() || ''); return json({ deploy: 'd1', missing: [] }); }
     if (/\/publish$/.test(u.pathname)) return json({ url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
     return json({}, 404);
   });
@@ -28,15 +29,22 @@ async function run(b, width) {
   await p.goto(BASE, { waitUntil: 'load' });
   await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
   await L.aiReady(p);
-  L.ok(`[${tag}] original-download option`, await p.locator('text=교재 원본도 참가자가 내려받게').count() === 1);
+  // 교재 원본 다운로드는 한 곳(배포하기의 공개 범위)에서만 정함: 교재 넣기에는 없음
+  L.ok(`[${tag}] no original-download option on 교재 넣기`, await p.locator('.start-files label:has-text("교재 원본")').count() === 0);
   await L.makeWith(p, ANSWER); await p.click('.st-info button:has-text("이 정보가 맞아요")');
   await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
+  await p.click('.ready-i:has(.ready-t:has-text("공개 범위")) button:has-text("바꾸기")');
+  L.ok(`[${tag}] original-download option in 공개 범위`, await p.locator('.ready-i label:has-text("교재 원본(PPT·PDF) 다운로드 허용") input[type=checkbox]').count() === 1);
+  await p.check('.ready-i label:has-text("교재 원본") input[type=checkbox]');
+  L.ok(`[${tag}] 공개 범위 line shows original download`, /교재 원본도 다운로드/.test(await p.locator('.ready-i:has(.ready-t:has-text("공개 범위"))').innerText()));
+  await p.click('.ready-i:has(.ready-t:has-text("공개 범위")) button:has-text("접기")');
   // 3) 바로 배포: 큰 단추 두 개(바로 배포 · 다른 곳에 배포)
   L.ok(`[${tag}] two mode buttons`, await p.locator('.pub-mode').count() === 2 && /바로 배포/.test(await p.locator('.pub-mode').first().innerText()) && /다른 곳에 배포/.test(await p.locator('.pub-mode').nth(1).innerText()));
   await shot(p, `r100-publish-modes-${tag}`, '.pub-modes');
   await H.publish(p);
   await p.waitForSelector('.success .big-url', { timeout: 60000 });
   L.ok(`[${tag}] instant address`, /s-site1\.example\.pages\.dev/.test(await p.locator('.success .big-url').innerText()));
+  L.ok(`[${tag}] original uploaded to files/ (공개 범위 option)`, /files\/workshop\.pdf/.test(deployBodies.at(-1) || ''), (deployBodies.at(-1) || '').slice(0, 200));
   L.ok(`[${tag}] sites list shows 바로 배포 as 대표`, /바로 배포[\s\S]*대표 주소/.test(await p.locator('.sites').innerText()));
   L.ok(`[${tag}] one primary action in the done card (주소 복사)`, await p.locator('.success .btn-primary:visible').count() === 1 && /주소 복사/.test(await p.locator('.success .btn-primary:visible').innerText()), (await p.locator('.success .btn-primary:visible').allInnerTexts()).join(','));
   await shot(p, `r100-success-${tag}`, '.sites');
