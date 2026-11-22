@@ -147,6 +147,16 @@ export function helpSheet() {
 }
 export const TOAST = '<div class="lp-toast" data-toast role="status" aria-live="polite"></div>';
 
+/** lecpage 로고(app/public/favicon.svg와 같은 그림). 표시의 작은 그림 */
+const LECPAGE_LOGO = '<svg class="lpk-made-logo" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><path d="M33 14C50 12 64 12 79 13L104 37C106 52 106 76 104 93C103 102 96 107 86 107C66 109 46 109 31 107C20 106 14 100 13 90C12 72 12 50 14 33C15 21 21 15 33 14Z" fill="#FEF6F0" stroke="#473C3B" stroke-width="7" stroke-linejoin="round"/><path d="M79 13L79 28C79 34 82 37 88 37L104 37Z" fill="#C0B4E1" stroke="#473C3B" stroke-width="7" stroke-linejoin="round"/><circle cx="44" cy="62" r="6" fill="#473C3B"/><circle cx="71" cy="62" r="6" fill="#473C3B"/><path d="M53 76h9" stroke="#473C3B" stroke-width="6" stroke-linecap="round"/></svg>';
+/**
+ * 'Made with Lecpage' 표시: 엔진 조립이 참가자 쪽마다 키트 부품 묶음(.lpk-chrome) 맨 앞에 넣음(AI 요청문과 상관없이).
+ * 처음에는 숨겨 두고 런타임(lecpage.js initMade)이 이 브라우저에서 닫은 적이 없을 때만 보이고 자리를 잡음(닫으면 다시 안 보임)
+ */
+export function madeWith() {
+  return `<div class="lpk-made" data-lp-made hidden><a class="lpk-made-a" href="https://lecpage.com/" target="_blank" rel="noopener noreferrer">${LECPAGE_LOGO}<span lang="en">Made with Lecpage</span><span class="lp-sr">(새 탭에서 열려요)</span></a><button class="lpk-made-x" type="button" data-lp-made-close aria-label="Made with Lecpage 표시 닫기"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17"/></svg></button></div>`;
+}
+
 // ── 키트 자리 표시 ───────────────────────────────────────────
 /** 쓸 수 있는 자리 표시(data-lp 값) */
 export const KIT_TYPES = ['qa', 'poll', 'board', 'attend', 'survey', 'deck', 'materials', 'join', 'dock', 'now', 'share', 'notebook'];

@@ -59,14 +59,14 @@ async function ask(page, text, nickname) {
   if (await dlg.count()) { await dlg.locator('input[name=nickname]').fill(nickname); await dlg.locator('[type=submit]').click(); }
 }
 
-test('강사 화면: 틀린 키는 늦추고 주소·화면에 남기지 않음, 맞는 키는 이 탭에만(기억하기를 고를 때만 이 기기에, 사이트 스크립트가 있으면 기억하기를 끔)', { skip }, async () => {
+test('강사 화면: 틀린 키는 늦추고 주소·화면에 남기지 않음, 맞는 키는 이 탭에만(기억하기를 고를 때만 이 기기에, 사이트 스크립트가 있으면 기억하기 칸 없이 이 탭에만)', { skip }, async () => {
   const ctx = await browser.newContext();
   try {
     // 사이트에 직접 쓴 스크립트(assets/site.js)가 있음: 같은 주소의 스크립트가 이 기기 저장소를 읽을 수 있어 키는 이 탭에만
     const k = await open(ctx, 'console.html');
-    assert.equal(await k.isDisabled('[data-remember]'), true);
-    assert.equal(await k.isChecked('[data-remember]'), false);
-    assert.match(await k.textContent('[data-remember-hint]'), /직접 쓴 스크립트가 있어 키를 이 탭에만/);
+    // 고를 수 없는 기억하기 칸은 보이지 않고(조립이 뺌), 왜 이 탭에만 두는지 한 줄
+    assert.equal(await k.locator('[data-remember]').count(), 0);
+    assert.match(await k.textContent('[data-remember-hint]'), /보안을 위해 관리자 키는 이 탭에만 둬요/);
     await k.evaluate(() => localStorage.setItem(Object.keys(sessionStorage)[0] || 'lp-admin:/:AUXTEST', 'old-key'));
     await login(k, ADMIN);
     await k.waitForSelector('[data-console-main]:not([hidden]) .lp-con-strip');

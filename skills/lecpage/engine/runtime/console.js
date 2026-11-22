@@ -182,11 +182,12 @@
     };
     say(why); tick(); waitT = setInterval(tick, 500);
   }
-  if (rem && KEY_TAB) {
+  if (KEY_TAB) {
     // 예전에 이 기기에 기억해 둔 키도 지움(사이트 스크립트가 읽을 수 있는 곳)
     try { var l0 = store('localStorage'); if (l0) l0.removeItem(ADMIN_SLOT); } catch (e) { }
-    rem.checked = false; rem.disabled = true;
-    if (remHint) remHint.textContent = '이 사이트에는 직접 쓴 스크립트가 있어 키를 이 탭에만 둬요. 탭을 닫으면 다시 넣어 주세요.';
+    // 기억하기 칸은 숨김(조립이 이미 빼 둠. 예전 판 HTML에 남아 있으면 여기서): 고를 수 없는 칸을 보이지 않음
+    if (rem) { rem.checked = false; rem.disabled = true; var remL = rem.closest ? rem.closest('label') : null; if (remL) remL.hidden = true; }
+    if (remHint) { remHint.textContent = '보안을 위해 관리자 키는 이 탭에만 둬요. 탭을 닫으면 다시 넣어 주세요.'; remHint.removeAttribute('data-warn'); }
   } else if (rem) {
     try { rem.checked = !!(store('localStorage') && store('localStorage').getItem(ADMIN_SLOT)); } catch (e) { }
     var remSay = function () { if (!remHint) return; remHint.textContent = rem.checked ? '이 기기에 남아요. 공용 컴퓨터라면 끄고, 다 쓴 뒤 [나가기]를 눌러 지워 주세요.' : '끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.'; if (rem.checked) remHint.setAttribute('data-warn', ''); else remHint.removeAttribute('data-warn'); };

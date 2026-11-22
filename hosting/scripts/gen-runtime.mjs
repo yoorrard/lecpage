@@ -58,6 +58,11 @@ function readHistory() {
   const j = JSON.parse(readFileSync(HISTORY, 'utf8'));
   return Array.isArray(j.segments) ? j.segments.filter((s) => s && typeof s.sha256 === 'string' && Number.isInteger(s.len) && typeof s.head === 'string') : [];
 }
+/** runtime-history.json의 note(사람이 쓴 기록). --keep이 덮어쓰지 않게 그대로 다시 씀 */
+const DEFAULT_NOTE = '예전 엔진 런타임 조각. 여기 적힌 것도 받습니다. 보안 문제로 막아야 하는 판은 지우세요.';
+function readNote() {
+  try { const n = JSON.parse(readFileSync(HISTORY, 'utf8')).note; return typeof n === 'string' && n.trim() ? n : DEFAULT_NOTE; } catch { return DEFAULT_NOTE; }
+}
 
 /** 엔진이 사이트에 '그대로' 넣는 런타임 파일(engine/src/kit/aux-build.js·protect.js). live.js는 core + 제공자 하나 */
 const WHOLE_FILES = ['boot.js', 'lecpage.js', 'screen.js', 'console.js', 'unlock.js', 'vendor/qrcode.js'];
@@ -108,7 +113,7 @@ function main() {
     const seen = new Set(history.map((s) => s.sha256));
     const add = cur.filter((s) => !seen.has(s.sha256)).map((s) => ({ ...s, kept: today }));
     history = [...history, ...add];
-    writeFileSync(HISTORY, JSON.stringify({ note: '예전 엔진 런타임 조각. 여기 적힌 것도 받습니다. 보안 문제로 막아야 하는 판은 지우세요.', segments: history }, null, 1) + '\n');
+    writeFileSync(HISTORY, JSON.stringify({ note: readNote(), segments: history }, null, 1) + '\n');
     console.log(`runtime-history.json: ${add.length}개 추가(모두 ${history.length}개)`);
   }
 

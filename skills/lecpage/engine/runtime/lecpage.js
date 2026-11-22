@@ -870,11 +870,11 @@
       root.classList.toggle('lp-live-down', on);
       $$('[data-live-down]').forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
       if (!on) return;
-      [$('[data-qa]'), $('[data-board]')].concat($$('[data-poll]'), $$('[data-survey]')).forEach(function (box) {
-        if (!box || !box.parentNode) return;
-        var n = el('p', 'lp-note lp-live-down', DOWN); n.setAttribute('data-live-down', ''); n.setAttribute('role', 'status');
-        box.parentNode.insertBefore(n, box);
-      });
+      // 한 곳에만(화면 읽기 프로그램이 같은 말을 여러 번 읽지 않게): 문서 순서로 첫 참여 칸(질문·보드·투표·설문) 앞
+      var box = $('[data-qa],[data-board],[data-poll],[data-survey]');
+      if (!box || !box.parentNode) return;
+      var n = el('p', 'lp-note lp-live-down', DOWN); n.setAttribute('data-live-down', ''); n.setAttribute('role', 'status');
+      box.parentNode.insertBefore(n, box);
     }
     setStatus('connecting');
     // 이름·소속은 입실할 때만 받음(설계도가 받기로 한 경우). 투표·공감·질문·도움 요청은 창 없이 바로(별명은 서버가 '참가자123'처럼 붙임,
@@ -1539,10 +1539,80 @@
     }
   }
 
+  /* ── 'Made with Lecpage' 표시(엔진 조립이 참가자 쪽에만 넣음) ──────────
+     닫으면 이 브라우저에서는 다시 보이지 않음(저장소를 못 쓰는 곳은 이 화면에서만). 넓은 화면은 왼쪽 아래 구석에 떠 있되
+     그 자리를 다른 떠 있는 것(참여 막대·'지금' 띠·사이트의 아래 고정 단추)이 차지하면 그 위로 비켜 서고, 비킬 자리가 없거나
+     휴대폰(좁거나 낮은 화면)이면 떠 있지 않고 페이지 맨 끝 왼쪽에 한 줄로 놓임(아무것도 가리지 않게) */
+  var MADE_OFF = 'lp-made-off', madeOffMem = false;
+  function initMade() {
+    var made = $('[data-lp-made]'); if (!made) return;
+    var off = madeOffMem; try { off = off || localStorage.getItem(MADE_OFF) === '1'; } catch (e) { }
+    if (off) { made.parentNode.removeChild(made); return; }
+    made.hidden = false;
+    var x = $('[data-lp-made-close]', made);
+    if (x) x.addEventListener('click', function () {
+      madeOffMem = true; try { localStorage.setItem(MADE_OFF, '1'); } catch (e) { }
+      // 닫기 단추에 있던 포커스는 문서 순서로 바로 앞의 누를 곳으로(맨 앞으로 튀지 않게)
+      var had = made.contains(doc.activeElement), prev = null;
+      if (had) $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select,textarea,summary,[tabindex]:not([tabindex="-1"])').forEach(function (n) {
+        if (!made.contains(n) && n.getClientRects().length && (made.compareDocumentPosition(n) & 2)) prev = n;
+      });
+      made.parentNode.removeChild(made);
+      if (prev) { try { prev.focus({ preventScroll: true }); } catch (e) { prev.focus(); } }
+    });
+    var SMALL = window.matchMedia ? matchMedia('(max-width: 600px), (max-height: 520px)') : null;
+    var W = 0, H = 0, timer = 0, last = 0;
+    // 모서리 자리(아래 끝 bottomY)를 차지한 떠 있는 것의 위쪽 끝. 없으면 Infinity
+    // 거르는 것: 이 표시, 화면을 거의 다 덮는 배경·덮개(장식용 고정 배경 등), 안 보이는 것, 위에 붙는 sticky(머리글)
+    function blockerTop(bottomY) {
+      var top = Infinity, xs = [18, 12 + W / 2, 12 + W - 6], ys = [bottomY - 3, bottomY - H / 2, bottomY - H + 3];
+      for (var i = 0; i < xs.length; i++) for (var j = 0; j < ys.length; j++) {
+        var list = doc.elementsFromPoint ? doc.elementsFromPoint(xs[i], ys[j]) : [];
+        for (var k = 0; k < list.length; k++) {
+          var n = list[k]; if (n === root || n === doc.body || made.contains(n)) continue;
+          var cs = getComputedStyle(n), pos = cs.position;
+          if (pos !== 'fixed' && !(pos === 'sticky' && cs.bottom !== 'auto')) continue;
+          if (+cs.opacity < 0.05 || cs.visibility === 'hidden') continue;
+          var r = n.getBoundingClientRect();
+          if (r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.5) continue;
+          if (r.top < top) top = r.top;
+        }
+      }
+      return top;
+    }
+    function place() {
+      timer = 0; last = Date.now();
+      if (!made.parentNode) return;
+      if (SMALL && SMALL.matches) { made.classList.add('is-flow'); return; }
+      // 크기는 떠 있을 때나 맨 끝 한 줄일 때나 같음 → 자리를 바꾸지 않고 잼(맨 끝까지 내린 화면이 튀지 않게)
+      if (!W) { var r0 = made.getBoundingClientRect(); W = r0.width; H = r0.height; if (!W) return; }
+      var base = innerHeight - 12, y = base, t, n = 0;
+      while (n++ < 4 && (t = blockerTop(y)) < y) y = t - 8;
+      var lift = base - y, flow = lift > innerHeight * 0.35;
+      made.classList.toggle('is-flow', flow);
+      made.style.setProperty('--lp-made-lift', (flow ? 0 : Math.round(lift)) + 'px');
+    }
+    // 자주 부르지 않게(스크롤 중에는 0.3초에 한 번 + 멈춘 뒤 한 번)
+    function later() { if (timer) return; var wait = Math.max(0, 300 - (Date.now() - last)); timer = setTimeout(place, wait); }
+    place();
+    addEventListener('resize', function () { W = 0; later(); });
+    addEventListener('scroll', later, { passive: true });
+    if (SMALL && SMALL.addEventListener) SMALL.addEventListener('change', function () { W = 0; later(); });
+    if ('ResizeObserver' in window) { var ro = new ResizeObserver(later); $$('.lpk.lpk-now,[data-dock]').forEach(function (n) { ro.observe(n); }); }
+    if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(function () { W = 0; later(); });
+  }
+  // '지금' 띠(아래에 떠 있음)가 보이는 동안 그 높이만큼 페이지 끝에 자리를 둠(--lp-now-pad, kit.css): 사이트의 마지막 글·맨 끝 표시를 가리지 않게
+  function initNowPad() {
+    var now = $('.lpk.lpk-now:not(.lpk-now--placed)'); if (!now || !('ResizeObserver' in window)) return;
+    new ResizeObserver(function () { var h = now.offsetHeight; root.style.setProperty('--lp-now-pad', (h ? h + 12 : 0) + 'px'); }).observe(now);
+  }
+
   function start() {
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
     $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
+    // 표시·'지금' 띠 자리는 다른 부품이 실패해도 늘(맨 먼저, 따로)
+    try { initNowPad(); initMade(); } catch (e) { }
     drawQRs(); initChrome(); initCal(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initNotebook(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

@@ -754,6 +754,7 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
   const f = ctx.dock;
   const chrome = [
     `<div class="lpk lpk-chrome">`,
+    W.madeWith(), // 'Made with Lecpage'(참가자 쪽에만. 강사·발표 화면·안내문은 보조 쪽이라 이 길을 거치지 않음)
     W.shareDialog({ live, code: ctx.code, codeWord: ctx.words.code }),
     live ? W.joinDialog({ anonymous: ctx.anonymous, collect: data.privacy.collect, consent: data.privacy.consent, official: ctx.done, keep: data.privacy.keep, local: ctx.provider === 'local' }) : '',
     live && !col.dockPlaced ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: col.sharePlaced ? '' : `<button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',

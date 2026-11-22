@@ -37,6 +37,8 @@ function motif(ctx, seed) {
  */
 /** 관리자 키를 잃어버렸을 때 다시 찾는 실제 길(연결한 방식마다 한 줄). 노트북·학교 서버(Node)는 서버가 만든 키 파일,
  *  그 밖(바로 배포·내 Cloudflare·시트·Supabase)은 배포한 브라우저의 lecpage 앱이 기억한 키, Skill로 배포했으면 강사용 폴더의 키 파일 */
+/** 사이트에 직접 쓴 스크립트가 있을 때(키트 siteJs) 강사 화면 로그인의 한 줄. 기억하기 칸 없이(runtime/console.js와 같은 말) */
+export const KEY_TAB_HINT = '보안을 위해 관리자 키는 이 탭에만 둬요. 탭을 닫으면 다시 넣어 주세요.';
 export function keyLostLine(bp) {
   if (servedOverLan(bp)) return '키를 잃어버렸으면: 서버를 켠 컴퓨터의 data/admin-key.txt에 있어요. 서버를 켤 때 직접 정했다면 그 키예요.';
   return '키를 잃어버렸으면: 배포한 브라우저에서 lecpage 앱의 [내 연수] → 이 연수의 [강사 화면]을 누르면 키가 복사돼요. Skill로 배포했다면 강사용 폴더의 관리자-키.txt나 옮겨 둔 비밀번호 관리 앱에 있어요.';
@@ -75,8 +77,8 @@ ${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
 <p class="lp-con-login-lead">배포할 때 받은 관리자 키를 넣으면 질문·투표·타이머를 다룰 수 있어요.</p>
 <label class="lp-con-field" for="lp-key">관리자 키</label>
 <div class="lp-con-keyrow"><input id="lp-key" type="password" name="key" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="200" required aria-describedby="lp-key-msg lp-key-hint"><button class="lp-icon-btn" type="button" data-key-show aria-pressed="false" aria-label="키 보이기">${icon('eye')}</button></div>
-<label class="lp-con-check"><input type="checkbox" name="remember" data-remember><span>이 기기에서 기억하기</span></label>
-<p class="lp-con-hint" id="lp-key-hint" data-remember-hint>끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.</p>
+${bp.kit?.siteJs ? `<p class="lp-con-hint" id="lp-key-hint" data-remember-hint>${KEY_TAB_HINT}</p>` : `<label class="lp-con-check"><input type="checkbox" name="remember" data-remember><span>이 기기에서 기억하기</span></label>
+<p class="lp-con-hint" id="lp-key-hint" data-remember-hint>끄면 이 탭을 닫을 때 잊어요. 공용 컴퓨터에서는 켜지 마세요.</p>`}
 <p class="lp-con-msg" id="lp-key-msg" data-key-msg role="alert"></p>
 <button class="lp-btn lp-btn-primary lp-btn-lg" type="submit" data-key-go>들어가기</button>
 ${prov === 'local' ? '<p class="lp-con-hint">리허설 설정이에요. 아무 키나 넣어도 되고, 기록은 이 브라우저에만 남아요.</p>' : `<p class="lp-con-hint" data-key-lost>${keyLostLine(bp)}</p>`}
