@@ -6,6 +6,7 @@ import { editSite, runInspect, fixIssues, resumeGeneration, forgetGeneration } f
 import { getActiveAI } from '../../lib/ai.js';
 import { outlineOf, htmlPages, moveSection, setHidden, removeSection, renameSection, setText, setImage, setKit, removeKit, addKit } from '../../lib/site-doc.js';
 import { wordsFor, surveyFor } from '@engine/src/words.js';
+import { TEACHER_KEYS } from '@engine/src/kit/index.js';
 import { keepTeacher, recordVersion, restoreLabel, addChat } from '../../lib/site-meta.js';
 import { toast } from '../../lib/util.js';
 import { errorActions } from './Make.jsx';
@@ -22,8 +23,23 @@ import { KIT_LABEL } from '../../lib/kit-fields.js';
 // 휴대폰(~960px)은 한 줄로 쌓고 [수정 | 미리보기]로 바꿔 봄.
 // 바뀌는 것은 모두 버전 기록에 남음(lib/versions.js): AI 수정(생성 쪽이 저장할 때)·직접 수정·연수 정보 수정(change)·실행 취소·복원.
 const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘Z' : 'Ctrl+Z';
-const undos = new Map(); // 연수마다 직접 고친 것 되돌리기(이 탭 안, 최근 30개)
-const stackOf = (pid) => { if (!undos.has(pid)) undos.set(pid, []); return undos.get(pid); };
+// 연수마다 직접 고친 것 되돌리기(이 탭 안, 최근 30개). site·meta: 이 목록이 이어지는 판(마지막으로 직접 고치거나 되돌린 뒤의 것).
+// 완성 화면을 떠나 있어도 목록은 남으므로, 화면을 그릴 때와 고치거나 되돌리기 직전에 지금 판이 그 판인지 봄(claim)
+const undos = new Map();
+const undoOf = (pid) => { if (!undos.has(pid)) undos.set(pid, { list: [], site: null, meta: null }); return undos.get(pid); };
+const json = (v) => JSON.stringify(v ?? null);
+/** 연수 정보에서 강사 값(배포하기 화면이 정하는 참여 기능 방·주소·공개 범위 등)만(teacher) 또는 그것을 뺀 나머지 */
+const metaPart = (m, teacher) => Object.fromEntries(Object.entries(m || {}).filter(([k]) => TEACHER_KEYS.includes(k) === teacher));
+/**
+ * 되돌리기 목록 u가 지금 판(cur)에 이어지는지 확인하고 그 판을 기억함.
+ * 직접 고친 것 말고 다른 일로 사이트·연수 정보가 바뀌었으면(처음부터 다시 만들기·AI 수정·다른 탭·자료 삭제) 목록을 비움: 되돌리다 새 사이트를 예전 것으로 덮지 않게.
+ * 저장소에서 다시 읽어 객체만 새것이면(내용이 같으면) 그대로 둠. 강사 값은 실행 취소가 건드리지 않으므로 견주지 않음
+ */
+function claim(u, cur) {
+  if (u.site === cur.site && u.meta === cur.meta) return;
+  if (u.list.length && !((u.site === cur.site || json(u.site) === json(cur.site)) && (u.meta === cur.meta || json(metaPart(u.meta, false)) === json(metaPart(cur.meta, false))))) u.list.length = 0;
+  u.site = cur.site; u.meta = cur.meta;
+}
 const SLOT = /data-lp\s*=\s*["']?materials\b/;
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 960px)').matches;
 
@@ -52,26 +68,32 @@ export function Studio({ p, update, go, job, idle, reload }) {
   const [, force] = useState(0);
   const quiet = useRef('');
   const working = job.status === 'running' && job.kind && job.kind !== 'make';
-  const stack = stackOf(p.id);
   const ways = useWay(p);
-  // 직접 고친 것만 실행 취소: AI 수정·복원처럼 바깥에서 사이트가 바뀌면 되돌리기 목록을 비움(되돌리다 AI가 고친 것을 잃지 않게)
-  const mine = useRef(p.site);
-  useEffect(() => { if (p.site !== mine.current) { mine.current = p.site; if (stack.length) { stack.length = 0; force((x) => x + 1); } } }, [p.site]);
+  // 직접 고친 것만 실행 취소: AI 수정·다시 만들기처럼 바깥에서 사이트가 바뀌면 되돌리기 목록을 비움(이 화면을 떠나 있던 동안 바뀐 것도. 그릴 때마다 확인)
+  const undoList = undoOf(p.id); claim(undoList, p);
+  const stack = undoList.list;
   /** 직접 고치기(글·섹션·그림·색·연수 정보): 고치기 전 판을 실행 취소에 넣고, 고친 뒤 판을 버전 기록에(잇따른 것은 하나로) */
   const change = useCallback((label, fn, kind = 'edit') => {
     update((cur) => {
       const patch = fn(cur); if (!patch) return {};
+      claim(undoList, cur);
       stack.push({ label, site: cur.site, meta: cur.meta }); if (stack.length > 30) stack.shift();
-      const next = { ...cur, ...patch }; mine.current = next.site;
+      const next = { ...cur, ...patch }; undoList.site = next.site; undoList.meta = next.meta;
       return { ...patch, versions: recordVersion(cur, next, { kind, label }) };
     });
     force((x) => x + 1);
   }, [p.id]);
+  /** 실행 취소: 직접 고치기 전의 사이트·연수 정보로. 강사 값은 지금 것 그대로(고친 뒤 배포하기 화면에서 정한 주소·참여 기능 방을 되돌리지 않게) */
   const undo = () => {
-    const s = stack.pop(); if (!s) { toast('되돌릴 것이 없어요.'); return; }
-    quiet.current = '';
-    update((cur) => { mine.current = s.site; const next = { site: s.site, meta: s.meta }; return { ...next, versions: recordVersion(cur, next, { kind: 'edit', label: '실행 취소' }) }; });
-    setVer((v) => v + 1); force((x) => x + 1); toast(`되돌렸어요: ${s.label}`);
+    let s = null;
+    if (stack.length) update((cur) => {
+      claim(undoList, cur); s = stack.pop(); if (!s) return {};
+      const next = { site: s.site, meta: { ...metaPart(s.meta, false), ...metaPart(cur.meta, true) } }; undoList.site = next.site; undoList.meta = next.meta;
+      return { ...next, versions: recordVersion(cur, next, { kind: 'edit', label: '실행 취소' }) };
+    });
+    force((x) => x + 1);
+    if (!s) { toast('되돌릴 것이 없어요.'); return; }
+    quiet.current = ''; setVer((v) => v + 1); toast(`되돌렸어요: ${s.label}`);
   };
   const undoRef = useRef(undo); undoRef.current = undo;
   useEffect(() => {
@@ -85,7 +107,7 @@ export function Studio({ p, update, go, job, idle, reload }) {
   /** 버전 복원: 그 버전의 사이트로(강사 값은 지금 것), 복원한 것도 새 버전으로 남아 다시 되돌릴 수 있음 */
   const restore = (v) => {
     quiet.current = ''; setVer((n) => n + 1);
-    update((cur) => { const next = { site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta) }; mine.current = next.site; return { ...next, versions: recordVersion(cur, next, { kind: 'restore', label: restoreLabel(v) }) }; });
+    update((cur) => { const next = { site: v.site, meta: keepTeacher(v.meta || cur.meta, cur.meta) }; return { ...next, versions: recordVersion(cur, next, { kind: 'restore', label: restoreLabel(v) }) }; });
     stack.length = 0; force((x) => x + 1); setVers(null); toast(`복원했어요: ${v.label}`);
   };
   const outlines = useMemo(() => htmlPages(p.site).map((pg) => ({ page: pg, label: pg === 'index.html' ? '참가자 화면' : `사이트 · ${pg}`, ...outlineOf(p.site[pg]) })), [p.site]);

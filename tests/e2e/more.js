@@ -1,4 +1,4 @@
-// 새 흐름 e2e: 먼저 해보기(같은 화면), AI 답의 강사 값은 받지 않기, 실패 안내와 이어 하기, 내 PC 연결 프로그램 감지, 예전 방식 연수,
+// 새 흐름 e2e: 먼저 해보기(같은 화면), AI 답의 강사 값은 받지 않기, 실행 취소 목록은 그 사이트의 것만(다시 만들기·AI 수정 뒤에는 빔), 실패 안내와 이어 하기, 내 PC 연결 프로그램 감지, 예전 방식 연수,
 // lecpage 커넥트: Claude 계정 연결(터미널 없이) · 예전 판이면 원문 오류 대신 새 판 안내 · [새 버전으로 바꾸기] → 다시 붙어 이어 하기 ·
 // 하던 일이 없어지면 저절로 다시 보내지 않음 · 모델 목록 실패는 까닭대로 · [모든 데이터 삭제]가 짝·ChatGPT 연결도 지움 · [이 브라우저와 연결] · 기억한 포트에 다른 프로그램
 const L = require('./lib.js');
@@ -54,6 +54,54 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('answer: sections got ids', /id="hello"/.test(pr.site['index.html']));
   L.ok('edit: no copy-paste way in AI 수정', await p.locator('.st-chatway').count() === 0 && !(await p.locator('.st-compose select[aria-label="보낼 곳"] option[value="chat"]').count()));
   await p.screenshot({ path: L.OUT + `${tag}-answer-studio.png` });
+
+  // ── B2. 실행 취소 목록은 그 사이트의 것만: 직접 고친 뒤 처음부터 다시 만들거나, 다른 단계에 있는 동안 AI 수정이 끝나면 [실행 취소]가 새 사이트를 예전 것으로 덮지 않음 ──
+  {
+    const undoBtn = p.locator('.head-tools button:has-text("실행 취소")');
+    const setTitle = async (v) => { await p.fill('#prop-title', v); await p.keyboard.press('Tab'); await p.waitForTimeout(500); };
+    const same = (a, b) => JSON.stringify(a.site) === JSON.stringify(b.site) && a.meta.title === b.meta.title;
+    await setTitle('되돌리기 하나'); await setTitle('되돌리기 둘');
+    L.ok('undo: enabled after direct edits and names the last one', await undoBtn.isEnabled() && /실행 취소: 연수명/.test(await undoBtn.getAttribute('title') || ''));
+    // 교재 넣기로 돌아가 처음부터 다시 만듦(가짜 Claude의 다른 사이트)
+    await p.locator('.stepper a').nth(0).click();
+    await p.waitForSelector('.ai-card:has(h3:text-is("Claude")) button:has-text("Claude로 만들기"):not([disabled])', { timeout: 30000 });
+    await p.click('.ai-card:has(h3:text-is("Claude")) button:has-text("Claude로 만들기")');
+    await p.waitForSelector('.making', { timeout: 20000 });
+    await L.waitStudio(p, 90000);
+    const made = await L.readProject(p, pid);
+    L.ok('undo: site was made again from scratch', !/되돌리기|정해 둔 답/.test(made.meta.title + made.site['index.html']), made.meta.title);
+    L.ok('undo: list emptied by the remake (button disabled)', await undoBtn.isDisabled() && /실행 취소할 것이 없어요/.test(await undoBtn.getAttribute('title') || ''), await undoBtn.getAttribute('title') || '');
+    await p.locator('.step-head h1').click(); await p.keyboard.press('Control+z'); await p.waitForTimeout(700);
+    L.ok('undo: Ctrl+Z after the remake keeps the new site', same(await L.readProject(p, pid), made));
+    // 새 사이트에서 직접 고친 것은 그대로 되돌림
+    await setTitle('다시 만든 뒤 고침');
+    L.ok('undo: enabled again by a direct edit on the new site', await undoBtn.isEnabled() && (await L.readProject(p, pid)).meta.title === '다시 만든 뒤 고침');
+    await undoBtn.click(); await p.waitForTimeout(700);
+    L.ok('undo: direct edit on the new site undone', same(await L.readProject(p, pid), made) && await undoBtn.isDisabled());
+    // 직접 고친 뒤 배포하기 화면에 다녀옴(처음 가면 참여 기능 방 코드가 생김): 목록은 그대로이고, 되돌려도 강사 값(방 코드)은 지금 것 그대로
+    await setTitle('배포하기 전에 고침');
+    await p.locator('.stepper a').nth(2).click(); await p.waitForSelector('.ready-i', { timeout: 20000 }); await p.waitForTimeout(800);
+    const room = (await L.readProject(p, pid)).meta.live?.code || '';
+    await p.locator('.stepper a').nth(1).click(); await L.waitStudio(p);
+    L.ok('undo: list kept after visiting 배포하기', !!room && await undoBtn.isEnabled(), room);
+    await undoBtn.click(); await p.waitForTimeout(700);
+    const kept = await L.readProject(p, pid);
+    L.ok('undo: direct edit undone, room code (teacher value) kept', same(kept, made) && kept.meta.live?.code === room, JSON.stringify(kept.meta.live));
+    // 직접 고친 뒤 AI 수정을 보내고 교재 넣기 화면에 가 있는 동안 AI가 끝냄 → 돌아오면 목록이 비어 있음(AI가 고친 것을 되돌리지 않음)
+    await setTitle('AI 수정 전에 고침');
+    await p.fill('.st-compose textarea', '카드마다 예시 한 줄을 더해 줘');
+    await p.click('.st-compose button:has-text("보내기")');
+    await p.waitForSelector('.st-bubble.is-working', { timeout: 10000 });
+    await p.locator('.stepper a').nth(0).click(); await p.waitForSelector('.ai-pick', { timeout: 20000 });
+    await p.waitForFunction(() => /요청한 대로 고쳤어요/.test(document.querySelector('.toast')?.textContent || ''), null, { timeout: 30000 });
+    await p.waitForTimeout(800);
+    const edited = await L.readProject(p, pid);
+    await p.locator('.stepper a').nth(1).click(); await L.waitStudio(p);
+    L.ok('undo: AI edit finished while on another step', /요청 반영: 카드마다 예시/.test(edited.site['index.html']) && edited.meta.title === 'AI 수정 전에 고침', edited.meta.title);
+    L.ok('undo: list emptied by the AI edit (button disabled)', await undoBtn.isDisabled());
+    await p.locator('.step-head h1').click(); await p.keyboard.press('Control+z'); await p.waitForTimeout(700);
+    L.ok('undo: Ctrl+Z keeps the AI edit', same(await L.readProject(p, pid), edited));
+  }
 
   // ── C. 실패 안내 → 이어서 하기 ──
   await L.startWithFile(p);
