@@ -1,5 +1,8 @@
 // 부하·수용량 시험 도우미: 앱과 같은 순서로 올리기, 참가자 흉내, 하루 숫자 읽기.
-import { bytesOf, manifestOf, sha256 } from './helpers.mjs';
+import { join } from 'node:path';
+import { bytesOf, manifestOf, sha256, REPO } from './helpers.mjs';
+// 앱이 실제로 쓰는 묶음 나누기·본문 만들기
+const { bundlesOf, packBundle } = await import(join(REPO, 'app', 'src', 'lib', 'site-size.js'));
 
 /** 동시에 n개까지 */
 export async function pool(items, n, fn) {
@@ -29,7 +32,7 @@ export async function req(base, method, path, { key, json, raw, headers = {} } =
  * 앱(app/src/lib/deploy.js deployInstant)과 같은 순서: 만들기(예약) → 목록 → 파일 4개씩 → 방 묶기 → 공개(사라진 파일이면 그것만 다시, 2번까지)
  * @returns {Promise<{ ok: boolean, site?: {id,key,url}, step?: string, res?: any, puts: number, calls: number }>}
  */
-export async function appPublish(base, files, { site = null, title = '부하 시험', live = null, booking = null, device = '', caps = null, onCall = () => { } } = {}) {
+export async function appPublish(base, files, { site = null, title = '부하 시험', live = null, booking = null, device = '', caps = null, onCall = () => { }, bundle = null } = {}) {
   let calls = 0; let puts = 0;
   const go = async (...a) => { calls++; const r = await req(base, ...a); onCall(r); return r; };
   let s = site;
@@ -44,7 +47,22 @@ export async function appPublish(base, files, { site = null, title = '부하 시
   if (d.status !== 200) return { ok: false, step: 'deploys', res: d, site: s, calls, puts };
   const upload = async (list) => {
     let bad = null;
-    await pool(list.filter((h) => blobs.has(h)), 4, async (h) => {
+    let single = list.filter((h) => blobs.has(h));
+    // bundle(/api/info의 limits.bundle)을 주면 앱처럼 작은 파일을 요청 하나에 여럿 묶어 보냄(app/src/lib/site-size.js의 같은 함수)
+    if (bundle?.bytes > 0 && bundle.itemBytes > 0) {
+      const groups = bundlesOf(single.filter((h) => blobs.get(h).length <= bundle.itemBytes).map((h) => [h, blobs.get(h).length]), bundle);
+      const again = [];
+      await pool(groups, 2, async (g) => {
+        puts++;
+        const u = await go('PUT', `/api/sites/${s.id}/blobs`, { key: s.key, raw: new Uint8Array(await packBundle(g.map(([h, n]) => [h, n, blobs.get(h)])).arrayBuffer()) });
+        if (u.status !== 200) { if (!bad) bad = u; return; }
+        for (const f of u.body.failed || []) again.push(f.sha256);
+      });
+      if (bad) return bad;
+      const inGroup = new Set(groups.flat().map(([h]) => h));
+      single = [...again, ...single.filter((h) => !inGroup.has(h))];
+    }
+    await pool(single, 4, async (h) => {
       puts++;
       const u = await go('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) });
       if (u.status !== 204 && !bad) bad = u;

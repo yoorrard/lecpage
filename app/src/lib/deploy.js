@@ -545,6 +545,7 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
   }
   progress('완료', 100);
   if (tryKey) instantTries.delete(tryKey);
+  forgetRecords(s.id); // 다시 배포로 방이 바뀌었을 수 있음: 기록 수를 새로 받게
   track('publish', 'instant');
   return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl, ...(liveOff ? { liveOff } : {}), ...(advice ? { advice } : {}) };
 }
@@ -566,15 +567,25 @@ export async function undeployGitHub({ token, repo }) {
   try { await gh(token, 'DELETE', `/repos/${me.login}/${encodeURIComponent(repo)}/pages`); } catch (e) { if (e.status !== 404) throw e; }
 }
 /** 바로 배포한 사이트 지우기 */
-export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });
+export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key }).finally(() => forgetRecords(site.id));
 /**
  * 바로 배포한 사이트의 참여 기록 수(내리기·다시 배포 전에 알려 줄 때). 내용은 받지 않음.
  * @returns {Promise<{ live: boolean, counts?: { participants, attendance, questions, posts, answers, survey }, last?: number }|null>} 못 물어보면 null(망·지워진 사이트·옛 서버)
  */
 export function instantRecords(site) {
   if (!PUBLISH_API || !site?.id || !site?.key) return Promise.resolve(null);
-  return ip('GET', `/api/sites/${site.id}/records`, { key: site.key }).catch(() => null);
+  // 배포하기 화면을 열면 체크리스트와 바로 배포 카드가 같은 것을 함께 물음 → 15초 안의 같은 물음은 한 번만 보냄(서버 요청·객체 요청을 줄임).
+  // 배포·배포 취소 뒤에는 forgetRecords로 버려 바로 새 값을 받음. 못 받은 답(null)은 기억하지 않음
+  const hit = recordsMem.get(site.id);
+  if (hit && Date.now() - hit.at < 15000) return hit.p;
+  const p = ip('GET', `/api/sites/${site.id}/records`, { key: site.key }).catch(() => null).then((r) => { if (!r && recordsMem.get(site.id)?.p === p) recordsMem.delete(site.id); return r; });
+  if (recordsMem.size > 50) recordsMem.clear();
+  recordsMem.set(site.id, { at: Date.now(), p });
+  return p;
 }
+const recordsMem = new Map(); // 사이트 id → { at, p }
+/** 그 사이트의 참여 기록 수를 다시 묻게 함(배포·배포 취소 뒤) */
+export function forgetRecords(id) { if (id) recordsMem.delete(id); else recordsMem.clear(); }
 /** 기록 수 → 한 줄 조각("참가자 12명 · 질문 8개 · 보드 글 3개"). 하나도 없으면 '' */
 export function recordsLine(r) {
   const c = r?.counts; if (!c) return '';

@@ -127,11 +127,18 @@ export class Gate extends DurableObject {
    * 하루 줄 → 그날 쓴 몫(요청 단위). 무료 하루 한도는 Worker 요청·DO 요청·DO duration이 따로라 가장 빠듯한 것:
    * DO 요청 = Worker가 부른 Site·Room(ds·dr) + Gate가 받은 것(g·gt) + Site가 부른 Room(rc), duration = 방이 깨어 있던 초(aw, SSE·방 안 긴 대기) × 0.125GB
    */
-  loadOf(d) {
+  loadOf(d) { return Math.max(this.reqLoad(d), this.rowsLoad(d)); }
+  /** 요청·duration만 본 몫(쓴 행 수는 뺌): Worker가 묻기 간격을 늘릴지 정하는 값 — 행이 빠듯할 때 묻기를 늦춰도 도움이 안 되므로 따로 */
+  reqLoad(d) {
     const doReq = (d.ds || 0) + (d.dr || 0) + (d.g || 0) + (d.gt || 0) + (d.rc || 0);
     const b = this.cfg.dailyRequestBudget || FREE.workerReq;
     return Math.max(d.req || 0, doReq, Math.round((((d.aw || 0) * 0.125) / FREE.doGbs) * b));
   }
+  /**
+   * 쓴 행 수(rw)를 요청 단위로: 무료 하루 10만 행(지우기도 쓴 행)이 따로 있어, 다 차면 그날 모든 쓰기(참여 기능 방의 글·출석 포함)가 실패함.
+   * 사이트(Site)가 배포·지우기 때 쓴 행만 셈(파일 하나에 한 행: 글꼴 조각이 든 사이트는 새 배포 한 번에 수백 행). 방이 쓰는 행은 세지 않으므로 이 몫이 차기 전에 새 사이트부터 넘김
+   */
+  rowsLoad(d) { if (this.cfg.plan === 'paid') return 0; const b = this.cfg.dailyRequestBudget || FREE.workerReq; return Math.round(((d.rw || 0) / FREE.rowsWritten) * b); } // 유료는 하루 행 한도가 없음(달 5천만 행 포함)
   /** 오늘 DO duration 몫(무료 하루 13,000 GB-s의 %) */
   gbsPct(d) { return Math.round(((d.aw || 0) * 0.125 / FREE.doGbs) * 1000) / 10; }
   /** 오늘 줄에 더함(한 줄 쓰기). fn이 있으면 더한 뒤 그 줄을 더 고칠 수 있음(알림 표시) */
@@ -157,11 +164,11 @@ export class Gate extends DurableObject {
     const { alert, req, gbs } = this.addDay(patch, now, (d) => {
       // 앱 익명 이용 합계: 표에 있는 열쇠만, 항목마다 하루 상한까지
       if (this.cfg.stats && s && typeof s === 'object') for (const k of Object.keys(s)) if (APP_KEYS.has(k)) d[k] = Math.min(cap, (d[k] || 0) + clamp(s[k], cap));
-      return { alert: this.budgetAlert(d, now), req: this.loadOf(d), gbs: this.gbsPct(d) };
+      return { alert: this.budgetAlert(d, now), req: this.reqLoad(d), gbs: this.gbsPct(d) };
     });
     if (alert) this.send(alert);
     const b = this.cfg.dailyRequestBudget;
-    // pct: 쓴 몫(세 한도 중 가장 빠듯한 것), gbsPct: DO duration 몫(Worker가 긴 대기를 대신 맡을지·새 SSE를 받을지 정함)
+    // pct: 쓴 몫(요청·DO 요청·duration 중 가장 빠듯한 것. 쓴 행 수는 새 사이트를 받을지(state)에만 들어감), gbsPct: DO duration 몫(Worker가 긴 대기를 대신 맡을지·새 SSE를 받을지 정함)
     return { ok: true, pct: b ? Math.round((req / b) * 1000) / 10 : 0, gbsPct: b ? gbs : 0, paused: this.paused(), state: this.capacity(now).state };
   }
   /** 예산의 ALERT_AT %를 처음 넘은 때 한 번씩 알림 글을 만듦(같은 날 같은 단계는 다시 보내지 않음) */
@@ -185,7 +192,7 @@ export class Gate extends DurableObject {
           : step >= tightAt ? `붐빔: 연수 날짜가 14일 안인 사이트·방만 받고 나머지는 강사 계정으로 넘기고 있어요. ${stopAt}%가 되면 새로 받지 않아요.`
             : `${tightAt}%가 되면 예약한 연수만 받아요.`;
     const load = this.loadOf(d); const gbsReq = Math.round((this.gbsPct(d) / 100) * b);
-    const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : 'DO 요청';
+    const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : this.rowsLoad(d) >= load ? '쓴 행 수(사이트 파일 표)' : 'DO 요청';
     return `[lecpage 바로 배포] 오늘 ${which}이 하루 예산의 ${step}%를 넘었어요(${load.toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} ${paid ? '관리 화면' : '유료 전환 판단: 관리 화면'} ${this.adminLink()}`;
   }
   adminLink() { return this.cfg.adminUrl || '/admin'; }
@@ -356,7 +363,7 @@ export class Gate extends DurableObject {
   /** 상태 API: 오늘과 그날(date)의 남은 몫, 사이트 상태 */
   dayStatus(date, site) {
     const now = Date.now(); const budget = this.cfg.dailyRequestBudget; const today = dayOf(now);
-    const used = this.loadOf(this.dayData(today)); // 세 한도(Worker 요청·DO 요청·duration) 중 가장 빠듯한 것
+    const used = this.loadOf(this.dayData(today)); // 하루 한도(Worker 요청·DO 요청·duration·쓴 행 수) 중 가장 빠듯한 것
     const reserved = this.reservedLeft(now);
     const cap = this.capacity(now);
     const out = {
@@ -460,14 +467,15 @@ export class Gate extends DurableObject {
    * Site·Room이 올리기·가리기·파일 변동 뒤에 알려 줌. 보낸 값만 바꿈. published면 '배포' 수를 셈.
    * wiping: 지우기가 Pages 배포를 다 못 지워 '지우는 중'이 된 때(Site가 알람으로 다시 하고, 끝나면 forget). 방이 깨어 있던 시간(aw)을 알리면 오늘 DO duration 몫(gbsPct)을 돌려줌
    */
-  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, aw, pagesRoot, wiping }) {
+  siteUpdate({ id, bytes, expires, blocked, roomBytes, code, published, pc, pz, rc, rw, aw, pagesRoot, wiping }) {
     const calls = (v) => (Number.isSafeInteger(v) && v > 0 ? Math.min(v, 10000) : 0);
     // Pages 첫 주소 안내 화면: 공개한 Site가 물으면(ask) 한 번만 맡기고, 결과(made·had·failed)를 적어 둠
     const root = pagesRoot === 'ask' ? (published ? this.pagesRootClaim() : false) : (typeof pagesRoot === 'string' ? this.pagesRootDone(pagesRoot) : false);
     // aw: 방이 깨어 있던 초(SSE·방 안 긴 대기). 방 하나가 10분마다·끝날 때 알림
-    const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), pub: published ? 1 : 0, aw: Number.isSafeInteger(aw) && aw > 0 ? Math.min(aw, 86400) : 0 };
+    // rw: 사이트가 지난번 알린 뒤 쓴 행 수(site.js rowsW)
+    const day = { pc: calls(pc), pz: calls(pz), rc: calls(rc), rw: Number.isSafeInteger(rw) && rw > 0 ? Math.min(rw, 100000) : 0, pub: published ? 1 : 0, aw: Number.isSafeInteger(aw) && aw > 0 ? Math.min(aw, 86400) : 0 };
     let gbs = null;
-    if (day.pc || day.pz || day.rc || day.pub || day.aw) gbs = this.addDay(day, Date.now(), (d) => this.gbsPct(d)); // 하루 줄 한 번만 씀
+    if (day.pc || day.pz || day.rc || day.rw || day.pub || day.aw) gbs = this.addDay(day, Date.now(), (d) => this.gbsPct(d)); // 하루 줄 한 번만 씀
     if (day.pz) this.pagesBlocked(); // Cloudflare가 API를 막음: 5분 동안 새 배포를 받지 않고(줄 서기), 운영자에게 알림
     // 방이 SSE를 계속 열어 둘지 정하는 값(room.js). 예산이 없으면(유료에서 0) 보내지 않음
     const share = day.aw && this.cfg.dailyRequestBudget ? { gbsPct: gbs } : {};
@@ -528,8 +536,8 @@ export class Gate extends DurableObject {
     this.addDay({ sa: 1 }, now);
     this.send(`[lecpage 바로 배포] 저장량이 상한의 ${Math.round((total / cap) * 100)}%예요(${(total / 1048576).toFixed(0)}MB / ${(cap / 1048576).toFixed(0)}MB). 다 차면 새 사이트를 받지 않아요. 관리 화면 ${this.adminLink()}`);
   }
-  forget({ id, pc, pz, rc }) {
-    if (pc || pz || rc) this.siteUpdate({ id: '', pc, pz, rc });
+  forget({ id, pc, pz, rc, rw }) {
+    if (pc || pz || rc || rw) this.siteUpdate({ id: '', pc, pz, rc, rw });
     const row = this.sql.exec('SELECT bytes, room_bytes FROM sites WHERE id = ?', id).toArray()[0];
     if (row) { this.sql.exec('DELETE FROM sites WHERE id = ?', id); this.addTot(-1, -row.bytes - row.room_bytes); }
     this.sql.exec('DELETE FROM bookings WHERE site = ?', id);

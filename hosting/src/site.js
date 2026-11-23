@@ -95,7 +95,11 @@ const LIVE_SCAN_PAGES = 30;
 export class Site extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.sql = ctx.storage.sql;
+    // 쓴 행 수를 셈(무료 하루 10만 행, 지우기도 쓴 행): 사이트 파일이 수백 개면(글꼴 조각) 새 배포 한 번에 수백 행이라
+    // Gate가 오늘 몫에 넣을 수 있게 pagesDelta로 알림. exec의 동작은 그대로(돌려준 커서를 그대로 넘김)
+    const raw = ctx.storage.sql;
+    this.rowsW = 0; this.rwSent = 0;
+    this.sql = { exec: (...a) => { const c = raw.exec(...a); const n = c.rowsWritten; if (n > 0) this.rowsW += n; return c; } };
     this.cfg = config(env);
     this.meta = undefined; // undefined = 아직 안 봄, null = 없는 사이트
     this.manifests = new Map(); // 배포 id → 풀어 둔 목록
@@ -177,8 +181,8 @@ export class Site extends DurableObject {
   /** 지난번 알린 뒤 Pages API를 부른 횟수와 방(Room)을 부른 횟수(Gate가 하루 숫자 pc·pz·rc에 더함) */
   pagesDelta() {
     const p = this.pagesClient || { calls: 0, limited: 0 };
-    const d = { pc: p.calls - (this.pcSent || 0), pz: p.limited - (this.pzSent || 0), rc: (this.roomCalls || 0) - (this.rcSent || 0) };
-    this.pcSent = p.calls; this.pzSent = p.limited; this.rcSent = this.roomCalls || 0;
+    const d = { pc: p.calls - (this.pcSent || 0), pz: p.limited - (this.pzSent || 0), rc: (this.roomCalls || 0) - (this.rcSent || 0), rw: this.rowsW - this.rwSent };
+    this.pcSent = p.calls; this.pzSent = p.limited; this.rcSent = this.roomCalls || 0; this.rwSent = this.rowsW;
     return d;
   }
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */

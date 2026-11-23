@@ -41,6 +41,35 @@ test('하루 숫자: Worker가 묶어 보낸 요청 수·갈래·앱 이용 합�
   assert.equal(o.plan, 'free'); assert.equal(o.budget, 1000);
 });
 
+test('쓴 행 수(무료 하루 10만 행): 사이트가 알린 행 수가 오늘 몫에 들어가 새 사이트를 받을지에 쓰이고, 묻기 간격을 정하는 몫(tick의 pct)에는 들지 않음', async () => {
+  const { call } = gate({ DAILY_REQUEST_BUDGET: 100000 });
+  assert.equal((await reserve(call, 'abcdefghjk')).status, 200);
+  // 실제 모양의 사이트 하나: 새 배포에 약 580행(test/cost.test.mjs 실측)
+  assert.equal((await call('POST', 'site', { id: 'abcdefghjk', published: true, rw: 580 })).status, 200);
+  let o = (await call('GET', 'overview')).body;
+  assert.equal(o.today.rw, 580);
+  assert.equal((await call('GET', 'status')).body.capacity.state, 'open');
+  // 하루 10만 행의 46%를 사이트가 씀 → 붐빔(tight), 61% → 새 사이트를 받지 않음(full): 방의 글·출석 쓰기가 실패하기 전에 새 배포부터 넘김
+  await call('POST', 'site', { id: 'abcdefghjk', rw: 46000 - 580 });
+  assert.equal((await call('GET', 'status')).body.capacity.state, 'tight');
+  await call('POST', 'site', { id: 'abcdefghjk', rw: 15000 });
+  const st = (await call('GET', 'status')).body;
+  assert.equal(st.capacity.state, 'full'); assert.equal(st.accepting, false);
+  // Worker에 돌려주는 pct(묻기 간격 권고·덜 급한 일 미루기)는 요청·duration만: 행이 빠듯해도 참가자의 묻기를 늦추지 않음
+  const t = (await call('POST', 'tick', { n: 10, c: { api: 10 } })).body;
+  assert.ok(t.pct < 1, `pct ${t.pct}`); assert.equal(t.state, 'full');
+  // 지울 때(forget)도 그 사이트가 쓴 행을 받음, 한 번에 받는 값은 상한까지, 모양이 틀리면 버림
+  await call('POST', 'forget', { id: 'abcdefghjk', rw: 570 });
+  await call('POST', 'site', { id: '', rw: -5 }); await call('POST', 'site', { id: '', rw: 'x' });
+  o = (await call('GET', 'overview')).body;
+  assert.equal(o.today.rw, 61000 + 570);
+});
+test('쓴 행 수: 유료 요금제에는 하루 행 한도가 없어 몫에 넣지 않음', async () => {
+  const { call } = gate({ PLAN: 'paid', DAILY_REQUEST_BUDGET: 100000 });
+  assert.equal((await reserve(call, 'abcdefghjk')).status, 200);
+  await call('POST', 'site', { id: 'abcdefghjk', rw: 90000 });
+  assert.equal((await call('GET', 'status')).body.capacity.state, 'open');
+});
 test('앱 이용 합계를 끄면(STATS=off) 받지 않음', async () => {
   const { call } = gate({ STATS: 'off' });
   await call('POST', 'tick', { n: 1, s: { 'a:open': 1 } });

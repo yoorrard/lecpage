@@ -105,6 +105,10 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('retry reuses the same site (one new site only)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 배포한 뒤 체크리스트와 바로 배포 카드가 같은 '참여 기록 수'를 함께 묻더라도 서버에는 한 번만 감(전에는 두 번: 요청 하나 + 사이트 객체 요청 하나씩 더 썼음)
+    await p.waitForTimeout(600);
+    const recCalls = st.calls.filter((c) => c === 'GET /api/sites/site1/records').length;
+    L.ok('records asked once per open, not twice', recCalls <= 1, `records calls ${recCalls}`);
     // 배포 취소: 배포한 곳 줄의 [배포 취소] → 확인 → 실제로 지움(DELETE) → 완료 카드가 사라지고 다시 배포할 수 있음
     await p.click('.sites .sites-x');
     await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });

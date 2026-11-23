@@ -6,8 +6,8 @@
 /** Worker가 세는 것. req(전체)는 따로. ds·dr·dg = Worker가 부른 Durable Object(Site·Room·Gate) 요청 수(DO 하루 한도 어림) */
 export const WORKER_KEYS = ['site', 'api', 'live', 'admin', 'err', 'lim', 'edge', 'bot', 'ds', 'dr', 'dg'];
 /** Gate가 스스로 세는 것. g = Gate가 받은 요청(Site·Room이 부른 것 포함, 숫자 모으기 빼고), gt = 숫자 모으기(tick), rc = Site가 부른 Room,
- * pc = Pages API 호출 수, pz = 그중 429 */
-export const GATE_KEYS = ['new', 'room', 'pub', 'rep', 'g', 'gt', 'rc', 'pc', 'pz'];
+ * pc = Pages API 호출 수, pz = 그중 429, rw = 사이트(Site)가 쓴 행 수(무료 하루 10만 행) */
+export const GATE_KEYS = ['new', 'room', 'pub', 'rep', 'g', 'gt', 'rc', 'pc', 'pz', 'rw'];
 
 /** 앱이 보내는 익명 이용 합계: { e, k } → 저장 열쇠. 이 표에 없는 것은 버림 */
 export const APP_EVENTS = {
