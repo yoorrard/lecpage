@@ -5,6 +5,8 @@
 .lpk{
   --_ink:var(--lp-ink,var(--lpk-ink,currentColor));
   --_ac:var(--lp-accent,var(--lpk-accent,var(--_ink)));
+  /* 칠하는 자리(주 단추·고른 보기)의 강조색: 강조색도 글자색도 정하지 않은 사이트에서 currentColor로 내려가면 그 단추의 제 글자색(--_on, 흰색)으로 풀려 흰 바탕에 흰 글자가 됨([입실 확인]이 안 보임) → 끝은 CanvasText(--_on의 끝 Canvas와 늘 대비되는 짝) */
+  --_acf:var(--lp-accent,var(--lpk-accent,var(--lp-ink,var(--lpk-ink,CanvasText))));
   --_on:var(--lp-on-accent,var(--lpk-on-accent,Canvas));
   --_act:color-mix(in oklab,var(--_ac) 62%,var(--_ink));
   --_surf:var(--lp-paper,var(--lpk-surf,transparent));
@@ -27,7 +29,7 @@
    --lp-on-accent를 주면 그 색. 상대 색 문법을 모르는 옛 브라우저는 조립이 연수 정보 theme로 정한 --lpk-on-accent */
 @supports (color:color(from red srgb-linear r g b)){
   .lpk{
-    --_on-auto:color(from var(--lp-accent,var(--lpk-accent)) srgb-linear clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1));
+    --_on-auto:color(from var(--_acf) srgb-linear clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1));
     --_on:var(--lp-on-accent,var(--_on-auto,var(--lpk-on-accent,Canvas)));
   }
 }
@@ -49,8 +51,8 @@
 .lpk .lp-btn:hover{background:var(--_tint);border-color:color-mix(in srgb,var(--_ink) 45%,transparent)}
 .lpk .lp-btn:active{transform:scale(.98)}
 .lpk .lp-btn:disabled{opacity:.55;cursor:not-allowed}
-.lpk .lp-btn-primary{background:var(--_ac);border-color:var(--_ac);color:var(--_on)}
-.lpk .lp-btn-primary:hover{background:color-mix(in srgb,var(--_ac) 86%,var(--_ink));border-color:transparent}
+.lpk .lp-btn-primary{background:var(--_acf);border-color:var(--_acf);color:var(--_on)}
+.lpk .lp-btn-primary:hover{background:color-mix(in srgb,var(--_acf) 86%,var(--_on));border-color:transparent}
 .lpk .lp-btn-sm{min-height:38px;padding:.4em .85em;font-size:.875rem}
 .lpk .lp-icon-btn{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:inherit;cursor:pointer}
 .lpk .lp-icon-btn:hover{background:var(--_tint)}
@@ -82,7 +84,7 @@
 .lpk .lp-qa-item.is-answered{opacity:.72}
 .lpk .lp-qa-list > .lp-empty,.lpk .lp-board-grid > .lp-empty{padding:14px 0}
 .lpk .lp-vote{display:grid;justify-items:center;align-content:start;gap:2px;min-width:3.2em;min-height:44px;padding:6px;border-radius:var(--_rs);border:1.5px solid var(--_line);background:transparent;color:inherit;cursor:pointer;font-weight:700;font-variant-numeric:tabular-nums}
-.lpk .lp-vote[aria-pressed="true"]{background:var(--_ac);border-color:var(--_ac);color:var(--_on)}
+.lpk .lp-vote[aria-pressed="true"]{background:var(--_acf);border-color:var(--_acf);color:var(--_on)}
 .lpk .lp-qa-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:.8rem;color:color-mix(in srgb,var(--_ink) 72%,transparent)}
 
 /* 보드 */
@@ -132,7 +134,7 @@
 /* 퀴즈(정답 공개 뒤) */
 .lpk .lp-bar.is-answer > span{font-weight:800}
 .lpk .lp-bar.is-answer .lp-bar-fill{background:var(--_act)}
-.lpk .lp-bar-tag{display:inline-block;margin-inline-start:.4em;padding:0 .45em;border-radius:4px;background:var(--_ac);color:var(--_on);font-size:.78rem;font-weight:800}
+.lpk .lp-bar-tag{display:inline-block;margin-inline-start:.4em;padding:0 .45em;border-radius:4px;background:var(--_acf);color:var(--_on);font-size:.78rem;font-weight:800}
 .lpk .lp-quiz-me{font-weight:700}
 
 /* 모음(이 기기에만) */
@@ -167,7 +169,7 @@
 .lpk .lp-sv-scale label:first-child{border-radius:var(--_rs) 0 0 var(--_rs)}
 .lpk .lp-sv-scale label:last-child{border-radius:0 var(--_rs) var(--_rs) 0}
 .lpk .lp-sv-scale input{position:absolute;opacity:0;width:1px;height:1px}
-.lpk .lp-sv-scale label:has(input:checked){z-index:1;background:var(--_ac);border-color:var(--_ac);color:var(--_on);box-shadow:none}
+.lpk .lp-sv-scale label:has(input:checked){z-index:1;background:var(--_acf);border-color:var(--_acf);color:var(--_on);box-shadow:none}
 .lpk .lp-sv-scale label:has(input:focus-visible){z-index:2;outline:2px solid var(--_act);outline-offset:2px}
 .lpk .lp-sv-scale label span{display:grid;gap:2px;line-height:1.25}
 .lpk .lp-sv-scale label b{font-size:1.05rem;font-variant-numeric:tabular-nums}
@@ -268,7 +270,7 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 
 /* 실습 단계 끝 */
 .lpk.lpk-step-f{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
-.lpk .lp-btn-check[aria-pressed="true"]{background:var(--_ac);border-color:var(--_ac);color:var(--_on)}
+.lpk .lp-btn-check[aria-pressed="true"]{background:var(--_acf);border-color:var(--_acf);color:var(--_on)}
 .lpk-anchor{display:block;position:relative;height:0;overflow:hidden}
 
 /* 키트가 연수 중에 더하는 칸(즉석 투표·강사가 올린 자료) */

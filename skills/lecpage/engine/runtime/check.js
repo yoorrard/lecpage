@@ -127,5 +127,13 @@
     var fb = function () { toast('복사하지 못했어요. 화면을 찍어 보내 주세요.'); };
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast('결과를 복사했어요. 메신저에 붙여 넣어 보내세요.'); }, fb); else fb(); } catch (e) { fb(); }
   });
+  // 앱의 미리보기(출처 없는 틀)에서는 재지 않음: 저장소와 바깥 주소가 틀 때문에 막혀 '막혔어요'로 잘못 나옴(배포한 사이트는 같은 망에서 모두 열림).
+  // 배포한 사이트에서 확인하라고만 알림
+  if (doc.body && doc.body.getAttribute('data-lp-preview') === '1') {
+    verdict.setAttribute('data-state', 'wait'); big.textContent = '미리보기에서는 확인하지 않아요';
+    sub.textContent = '접속 확인은 배포한 사이트에서 해요. 배포한 뒤 그 주소에서 이 화면을 열어 주세요.';
+    if (run) run.disabled = true;
+    return;
+  }
   go();
 })();

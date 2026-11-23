@@ -99,9 +99,19 @@ test('쪽 제목 뽑기(ingest.py 길): 레퍼런스 교재 PDF에서 엉키던 
 });
 
 // ── 2·3·7. 키트 CSS·런타임 ──────────────────────────────
+test('접속 확인: 앱의 미리보기(출처 없는 틀)에서는 재지 않고 배포한 사이트에서 하라고 알림(틀 때문에 저장소·바깥 주소가 막혀 잘못 알리던 것)', () => {
+  const js = fs.readFileSync(path.join(SKILL, 'engine', 'runtime', 'check.js'), 'utf8');
+  const at = js.indexOf("getAttribute('data-lp-preview') === '1'"); const run = js.lastIndexOf('\n  go();');
+  assert.ok(at > 0 && run > at, '미리보기 표시를 먼저 보고 그다음에 확인을 시작');
+  assert.match(js.slice(at, run), /미리보기에서는 확인하지 않아요[\s\S]*배포한 사이트에서 해요[\s\S]*return;/);
+});
 test('키트 CSS: 강조색 위 글자는 강조색 밝기로(상대 색), --lp-on-accent로 정할 수 있고, 옛 브라우저는 조립 값', () => {
   const css = fs.readFileSync(path.join(SKILL, 'engine', 'runtime', 'kit.css'), 'utf8');
-  assert.match(css, /@supports \(color:color\(from red srgb-linear r g b\)\)\{\s*\.lpk\{\s*--_on-auto:color\(from var\(--lp-accent,var\(--lpk-accent\)\) srgb-linear clamp\(0,\(\.1791 - /);
+  assert.match(css, /@supports \(color:color\(from red srgb-linear r g b\)\)\{\s*\.lpk\{\s*--_on-auto:color\(from var\(--_acf\) srgb-linear clamp\(0,\(\.1791 - /);
+  // 칠하는 자리의 강조색(--_acf)은 currentColor로 내려가지 않음: 강조색·글자색을 정하지 않은 사이트에서 주 단추([입실 확인])가 흰 바탕에 흰 글자가 되던 것
+  assert.match(css, /--_acf:var\(--lp-accent,var\(--lpk-accent,var\(--lp-ink,var\(--lpk-ink,CanvasText\)\)\)\);/);
+  assert.match(css, /\.lpk \.lp-btn-primary\{background:var\(--_acf\);border-color:var\(--_acf\);color:var\(--_on\)\}/);
+  assert.ok(!/background:var\(--_ac\);[^}]*color:var\(--_on\)/.test(css), '글자를 올리는 칠은 모두 --_acf');
   assert.match(css, /--_on:var\(--lp-on-accent,var\(--_on-auto,var\(--lpk-on-accent,Canvas\)\)\)/);
   assert.match(css, /\.lpk \.lp-follow\{[^}]*min-height:44px/);
   // 만족도 다섯 칸: 화면이 넓어도 카드 안에서 칸이 좁으면 '보통이에/요'로 쪼개지지 않게 설문 너비로도 가운데 이름을 숨김
