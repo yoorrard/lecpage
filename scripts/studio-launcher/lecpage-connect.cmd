@@ -33,9 +33,11 @@ $SigningKeys = @('fXeJSCSG_l5AvDuyLpaefYer_g6vv4WdMP-iIOx_85o')
 $VerifyJs = @'
 const c=require('crypto'),f=require('fs'),e=process.env;let ok=false;try{const d=f.readFileSync(e.LECPAGE_VERIFY_FILE);const s=f.readFileSync(e.LECPAGE_VERIFY_SIG,'utf8').split(/\s+/).filter(Boolean).slice(0,8).map(x=>Buffer.from(x,'base64')).filter(b=>b.length===64);for(const x of String(e.LECPAGE_VERIFY_KEYS||'').split(/\s+/).filter(Boolean)){try{const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});for(const b of s)if(c.verify(null,d,k,b))ok=true}catch(_){}}}catch(_){}process.exit(ok?0:1)
 '@
-# 이 PC에 lecpage 커넥트가 켜져 있는지(포트 6600~6649): 토큰 없이 물으면 커넥트는 401 { error:'token' }으로 답함. 토큰은 보내지 않음(lecpage-connect.sh와 같은 글)
+# 이 사용자의 lecpage 커넥트가 켜져 있는지(포트 6600~6649). 토큰은 보내지 않음: 토큰 없이 짝 증명을 물어(/bridge/prove) 이 사용자 폴더의 토큰(studio.json)으로
+# 답이 맞는 커넥트만 내 것으로 봄(같은 PC의 다른 사용자가 켠 커넥트 때문에 내 묶음을 못 바꾸지 않게). 증명 길이 없는 예전 판은 401 { error:'token' }으로 답함 →
+# 누구 것인지 알 수 없어 켜진 것으로 봄(lecpage-connect.sh와 같은 글)
 $RunningJs = @'
-const h=require('http'),m=/^(\d+)-(\d+)/.exec(process.env.LECPAGE_CONNECT_PORTS||'6600-6649')||[0,6600,6649];let n=0,f=false;const fin=()=>process.exit(f?0:1);setTimeout(fin,4000);for(let p=+m[1];p<=+m[2]&&p-m[1]<64;p++){n++;let k=false;const done=()=>{if(k)return;k=true;if(f||--n<=0)fin()};const q=h.get({host:'127.0.0.1',port:p,path:'/bridge/status',timeout:1500},r=>{let b='';r.on('data',d=>{if(b.length<4096)b+=d});r.on('error',done);r.on('end',()=>{try{if(r.statusCode===401&&JSON.parse(b).error==='token')f=true}catch(_){}done()})});q.on('timeout',()=>q.destroy());q.on('error',done)}if(n===0)fin()
+const h=require('http'),c=require('crypto'),f=require('fs'),P=require('path'),o=require('os'),e=process.env,m=/^(\d+)-(\d+)/.exec(e.LECPAGE_CONNECT_PORTS||'6600-6649')||[0,6600,6649];let t='';try{const w=process.platform,d=e.LECPAGE_STUDIO_HOME||(w==='win32'?P.join(e.APPDATA||P.join(o.homedir(),'AppData','Roaming'),'lecpage'):w==='darwin'?P.join(o.homedir(),'Library','Application Support','lecpage'):P.join(e.XDG_CONFIG_HOME||P.join(o.homedir(),'.config'),'lecpage')),k=JSON.parse(f.readFileSync(P.join(d,'studio.json'),'utf8')).token;if(typeof k==='string'&&k.length===64&&/[^0-9a-f]/.test(k)===false)t=k}catch(_){}let n=0,g=false;const fin=()=>process.exit(g?0:1);setTimeout(fin,4000);for(let p=+m[1];p<=+m[2]&&p-m[1]<64;p++){n++;let k=false;const done=()=>{if(k)return;k=true;if(g||--n<=0)fin()},x=c.randomBytes(32).toString('hex'),q=h.get({host:'127.0.0.1',port:p,path:'/bridge/prove?nonce='+x,timeout:1500},r=>{let b='';r.on('data',d=>{if(b.length<4096)b+=d});r.on('error',done);r.on('end',()=>{try{const j=JSON.parse(b);if(r.statusCode===401&&j.error==='token')g=true;if(r.statusCode===200&&t&&j.proof===c.createHmac('sha256',t).update('lecpage-connect-prove:v1:'+p+':'+x).digest('hex'))g=true}catch(_){}done()})});q.on('timeout',()=>q.destroy());q.on('error',done)}if(n===0)fin()
 '@
 $LP = Join-Path $env:LOCALAPPDATA 'lecpage'
 New-Item -ItemType Directory -Force -Path $LP | Out-Null
@@ -62,23 +64,20 @@ function MoveRetry($from, $to) {
 function Head($f) { $t = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($f)); $i = $t.IndexOf('##PS##'); if ($i -lt 0) { '' } else { $t.Substring(0, $i) } }
 # 글 받기. GitHub 릴리스 파일(VERSION·.sha256)은 application/octet-stream이라 .Content가 글이 아닌 바이트 배열로 옴 → UTF-8로 풂
 function GetText($u) { $c = (Invoke-WebRequest -Uri $u -UseBasicParsing).Content; if ($c -is [byte[]]) { $c = [Text.Encoding]::UTF8.GetString($c) }; ([string]$c).Trim() }
-$lock = Join-Path $LP 'prepare.lock'
-$locked = $false
+$lock = Join-Path $LP 'prepare.lck'
+$lockHold = $null
 try {
   Say 'lecpage 커넥트를 준비해요. lecpage를 쓰는 동안 이 창을 열어 두세요.'
   # 준비(Node.js 받기·묶음 바꾸기)는 한 번에 한 창만: 두 번 눌렀을 때 둘이 같은 폴더를 함께 바꾸지 않게 먼저 켠 쪽을 기다림.
-  # 10분 넘은 잠금(먼저 켠 창이 중간에 닫힘)은 치우고 가져감. 잠글 수 없으면 잠금 없이 이어 감
+  # 잠금 파일을 혼자만 열어 둠(FileShare.None): 창을 강제로 닫거나 PC가 꺼져도 그 프로세스가 끝나면 Windows가 풀어 줘서, 남은 잠금 때문에 다음 실행이 기다리지 않음.
+  # 먼저 켠 창이 살아 있는 동안은 10분을 넘겨도 가져가지 않고 안내한 뒤 끝냄(준비가 오래 걸리는 창과 같은 폴더를 함께 바꾸지 않게). 잠글 수 없으면 잠금 없이 이어 감
   $waited = 0
-  while (-not $locked) {
-    try { New-Item -ItemType Directory -Path $lock -ErrorAction Stop | Out-Null; $locked = $true }
+  while (-not $lockHold) {
+    try { $lockHold = [IO.File]::Open($lock, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
     catch {
-      $held = Get-Item -LiteralPath $lock -ErrorAction SilentlyContinue
-      if (-not $held) { break }
-      if ($waited -ge 300 -or ((Get-Date) - $held.LastWriteTime).TotalMinutes -gt 10) {
-        Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $lock) { break }
-        continue
-      }
+      $busy = ($_.Exception -is [IO.IOException]) -or ($_.Exception.InnerException -is [IO.IOException])
+      if (-not $busy) { break }
+      if ($waited -ge 300) { Say '다른 창에서 lecpage 커넥트를 준비하는 데 오래 걸리고 있어요. 그 창이 끝난 뒤 다시 실행해 주세요.'; exit 1 }
       if ($waited -eq 0) { Say '다른 창에서 lecpage 커넥트를 준비하고 있어요. 끝날 때까지 잠시 기다려요.' }
       $waited++
       Start-Sleep -Seconds 2
@@ -141,10 +140,12 @@ try {
       Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force
       Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
       if (-not (Test-Path -LiteralPath (Join-Path $tmp 'skills'))) { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue; throw '받은 묶음에 lecpage 커넥트가 없어요.' }
-      # 서명한 예전 묶음으로 내리지 않음: 있던 묶음에 BUILT가 있는데 받은 것에 없거나 더 앞서면 바꾸지 않음
+      # 서명한 예전 묶음으로 내리지 않음: 있던 묶음에 BUILT가 있는데 받은 것에 없거나 더 앞서면 바꾸지 않음.
+      # 있던 묶음에 BUILT가 없으면(이 확인을 넣기 전 판) 받은 것에는 BUILT가 있어야 함(lecpage-connect.sh의 older와 같은 규칙). 처음 받기는 견주지 않음
       $haveBuilt = Built $app
       $newBuilt = Built $tmp
-      if ($null -ne $haveBuilt -and ($null -eq $newBuilt -or $newBuilt -lt $haveBuilt)) {
+      $haveApp = Test-Path -LiteralPath (Join-Path $app 'skills')
+      if (($null -ne $haveBuilt -and ($null -eq $newBuilt -or $newBuilt -lt $haveBuilt)) -or ($haveApp -and $null -eq $haveBuilt -and $null -eq $newBuilt)) {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
         throw '받은 파일이 지금 버전보다 예전 것이에요.'
       }
@@ -187,7 +188,7 @@ try {
   if ("$env:LECPAGE_ARGS" -match '--autostart') { $a += '--autostart' }
   if ($env:LECPAGE_DRY_RUN) { Say "점검: $node $cli $($a -join ' ') (자동 시작용 복사본: $self)"; exit 0 }
   # 준비가 끝났으니 잠금을 풂(커넥트는 켜 둔 동안 내내 돌므로 그 전에)
-  if ($locked) { Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue; $locked = $false }
+  if ($lockHold) { try { $lockHold.Dispose() } catch { }; $lockHold = $null; Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue }
   & $node $cli @a
   exit $LASTEXITCODE
 } catch {
@@ -196,5 +197,5 @@ try {
   Say "인터넷 연결을 확인하고 이 파일을 다시 실행해 주세요. 계속 안 되면 lecpage.com의 '다른 방법'(API 키)으로 만들 수 있어요."
   exit 1
 } finally {
-  if ($locked) { Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue }
+  if ($lockHold) { try { $lockHold.Dispose() } catch { }; $lockHold = $null; Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue }
 }

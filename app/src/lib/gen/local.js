@@ -3,6 +3,7 @@
 //   이 브라우저에 { token, port }를 기억해 http://127.0.0.1:<포트>/bridge/*를 직접 부름(CORS. Chrome·Edge는 처음 한 번 '로컬 네트워크 접근'을 물음).
 //   (2) 대신 — Safari처럼 그 길이 막힌 브라우저는 PC 프로그램이 보여 주는 http://127.0.0.1:<포트>/ 화면(같은 출처, 앱 HTML의 <meta name="lecpage-bridge">).
 // 모든 요청에 머리글 X-Lecpage-Bridge: <토큰>. 토큰·ChatGPT 로그인 정보는 PC 프로그램 안에 있고, 이 앱은 토큰(짝 맞춤용)만 압니다.
+//   GET /bridge/prove?nonce=<16진수 64자>(토큰 없이) → { ok, proof }: 토큰을 보내기 전에 그 포트가 이 토큰을 아는 커넥트인지 확인(아래 '짝 증명')
 //   GET /bridge/status → { ok, version, build, caps:[…], update:{ can, state, latest, available, error_ko }, platform, agents:[{ id, installed, version, auth, ready, need, note_ko }], chatgpt:{ connected, plan, email, welcome }, autostart }
 //     caps가 없거나 필요한 것이 빠졌으면 이 화면보다 예전 판(앱이 '새 버전으로 바꿔야 해요'를 보여 줌). 예전 판의 없는 경로는 404 not-found
 //   POST /bridge/jobs { agent, kind:'make'|'edit', request, meta, reference, files:[{ name, type, base64 }], site? } → { jobId }
@@ -19,7 +20,7 @@ import { slideSetsOf, setFor, numOf, splitCap, pickPages } from './slide-sets.js
 function metaToken() {
   try { return (typeof document !== 'undefined' && document.querySelector('meta[name="lecpage-bridge"]')?.getAttribute('content')) || ''; } catch { return ''; }
 }
-import { pairing, capturePairing, forgetPairing, justPaired, movePairing, confirmPairing, pendingPairing, acceptPairing, PC_PORTS } from '../pair.js';
+import { pairing, capturePairing, forgetPairing, justPaired, movePairing, confirmPairing, pendingPairing, acceptPairing, PC_PORTS, PAIR } from '../pair.js';
 export { pairing, capturePairing, forgetPairing, justPaired };
 /** 예전 판 lecpage 커넥트(이 화면이 부르는 경로가 없음)일 때 보이는 말 */
 export const OLD_PC = 'lecpage 커넥트를 새 버전으로 바꿔야 해요.';
@@ -46,10 +47,72 @@ export async function lnaPermission() {
   return '';
 }
 
+// ── 짝 증명: 토큰을 보내기 전에 그 포트의 프로그램이 이 토큰을 아는 lecpage 커넥트인지 확인 ──
+// 같은 PC의 다른 프로그램이 가까운 포트에서 커넥트인 척(토큰 없는 물음에 401 token) 답해 짝 맞춤 토큰을 받아 가지 못하게.
+// 커넥트의 GET /bridge/prove?nonce=…(토큰 없이): { proof: HMAC-SHA256(토큰, "lecpage-connect-prove:v1:<포트>:<nonce>") } — scripts/studio.mjs proofOf와 같은 글.
+// 이 길이 없는 예전 판 커넥트는 401 token으로 답함 → 한 번도 증명한 적 없는 짝이면 지금처럼 쓰고, 한 번이라도 증명한 짝이면 받아들이지 않음
+// (가짜가 '예전 판인 척' 하지 못하게). 커넥트가 다시 연 #pair=…로 짝을 새로 기억하면(같은 토큰을 아는 쪽만 할 수 있음) 그 표시는 처음부터.
+const PROOF = 'lecpage:pc-proof';
+const PROOF_MS = 30000; // 한 번 증명한 포트는 이만큼은 다시 묻지 않음
+const proofs = new Map(); // 포트 → { token, until }
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+/** 지금 기억한 짝을 적은 때(pair.js save의 at). 못 읽으면 0 */
+function pairedAt() { try { return +JSON.parse(localStorage.getItem(PAIR) || 'null')?.at || 0; } catch { return 0; } }
+/** 짝 기록을 다시 적은 뒤(쓰던 짝 표시·포트 옮김) 부름: 방금 증명한 짝이면 증명 표시도 다시 적음(그 사이 '증명한 적 없음'으로 보이지 않게) */
+function keepProved(port, token) { const hit = proofs.get(port); if (hit && hit.token === token && hit.until > Date.now()) markProved(token); }
+/** 이 토큰의 짝이 증명한 적 있는지(그 뒤 짝을 새로 기억했으면 아님) */
+function provedBefore(token) {
+  try { const j = JSON.parse(localStorage.getItem(PROOF) || 'null'); return !!j && j.token === token && +j.at >= pairedAt(); } catch { return false; }
+}
+function markProved(token) { try { localStorage.setItem(PROOF, JSON.stringify({ token, at: Date.now() })); } catch { /* 저장 못 하면 이번만 */ } }
+/** 그 포트에 짝 증명을 물음 → 'ok'(이 토큰을 아는 커넥트) | 'old'(증명 길이 없는 예전 판 꼴의 답) | 'no'(커넥트가 아니거나 다른 토큰). 닿지 못하면 throw */
+async function provePc(port, token, signal) {
+  if (!globalThis.crypto?.subtle) return 'old'; // 보안 맥락이 아닌 주소(개발용 http): 확인할 길이 없어 예전처럼
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(32)));
+  const init = { cache: 'no-store', mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback', signal };
+  let r;
+  try { r = await fetch(`http://127.0.0.1:${port}/bridge/prove?nonce=${nonce}`, init); }
+  catch (e) {
+    if (signal?.aborted) throw e;
+    // 증명 길에만 닿지 못함: 토큰 없는 상태 물음에 커넥트 꼴(401 token)로 답하면 예전 판 꼴로 봄(닿지 못하면 꺼진 것 → throw). 토큰은 보내지 않음
+    const s = await fetch(`http://127.0.0.1:${port}/bridge/status`, init);
+    const sj = await s.json().catch(() => null);
+    return s.status === 401 && sj?.error === 'token' ? 'old' : 'no';
+  }
+  const j = await r.json().catch(() => null);
+  if (r.status === 401 && j?.error === 'token') return 'old';
+  if (r.status !== 200 || !j?.ok || typeof j.proof !== 'string') return 'no';
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const want = hex(await crypto.subtle.sign('HMAC', key, enc.encode(`lecpage-connect-prove:v1:${port}:${nonce}`)));
+  return want === j.proof.toLowerCase() ? 'ok' : 'no';
+}
+/** 그 포트에 이 토큰을 보내도 되는지(증명을 받았거나, 증명한 적 없는 짝의 예전 판). 닿지 못하면 throw */
+async function mayTell(port, token, signal) {
+  const hit = proofs.get(port);
+  if (hit && hit.token === token && hit.until > Date.now()) return true;
+  const r = await provePc(port, token, signal);
+  if (r === 'ok') { proofs.set(port, { token, until: Date.now() + PROOF_MS }); markProved(token); return true; }
+  proofs.delete(port);
+  return r === 'old' && !provedBefore(token);
+}
+/** 시험용: 기억한 증명을 비움 */
+export function forgetProofs() { proofs.clear(); }
+
 /** 날 응답(상태 확인은 부르는 쪽). 망 오류만 AiError('local') */
 export async function bridgeRaw(path, init = {}) {
   const c = config();
   if (!c) throw new AiError('local', 'no bridge', { provider: 'local' });
+  if (c.base) {
+    // 다른 출처의 커넥트(127.0.0.1:<포트>)에는 짝 증명을 받은 뒤에만 토큰을 보냄. 127.0.0.1 화면(같은 출처)은 그 커넥트가 준 화면이라 묻지 않음
+    let ok = false;
+    try { ok = await mayTell(c.port, c.token, init.signal || AbortSignal.timeout(6000)); }
+    catch (e) {
+      if (e?.name === 'AbortError' && init.signal?.aborted) throw e;
+      throw Object.assign(new AiError('network', 'lecpage 커넥트가 꺼져 있거나 이 브라우저가 막았어요.', { provider: 'local' }), { off: true });
+    }
+    if (!ok) throw Object.assign(new AiError('network', '이 PC에서 lecpage 커넥트를 확인하지 못했어요. lecpage 커넥트를 끄고 다시 켜 주세요.', { provider: 'local' }), { off: true });
+  }
   try {
     return await fetch(c.base + path, { ...init, headers: { ...(init.headers || {}), 'X-Lecpage-Bridge': c.token }, cache: 'no-store', ...(c.base ? { mode: 'cors', credentials: 'omit', targetAddressSpace: 'loopback' } : {}) });
   } catch (e) {
@@ -101,13 +164,13 @@ export async function pcStatus({ fresh = false, signal } = {}) {
     const r = await call(`/bridge/status${fresh ? '?fresh' : ''}`, { signal: ctl.signal });
     const status = await r.json().catch(() => null);
     if (!status?.ok || !Array.isArray(status.agents)) throw Object.assign(new AiError('network', 'not a lecpage 커넥트', { provider: 'local' }), { off: true }); // 그 포트에 다른 프로그램
-    if (!c.same) confirmPairing(c.token); // 이 토큰에 답함: 이제 다른 토큰의 #pair=로 바로 덮지 않음
+    if (!c.same) { confirmPairing(c.token); keepProved(c.port, c.token); } // 이 토큰에 답함: 이제 다른 토큰의 #pair=로 바로 덮지 않음
     return { state: 'on', status, permission };
   } catch (e) {
     if (signal?.aborted) throw e;
     // 기억한 포트에 없음(꺼짐·그 포트에 다른 프로그램이 답함): 다른 포트에서 켜졌을 수 있음(다른 창이 그 포트를 쓰던 때 켬 등) → 같은 토큰으로 가까운 포트를 살펴 옮김
     const elsewhere = e?.off || (e instanceof AiError && e.status && !e.pcReply);
-    if (!c.same && elsewhere && permission !== 'prompt') { const port = await findPc(c); if (port) { movePairing(port, c.token); return pcStatus({ fresh, signal }); } }
+    if (!c.same && elsewhere && permission !== 'prompt') { const port = await findPc(c); if (port) { movePairing(port, c.token); keepProved(port, c.token); return pcStatus({ fresh, signal }); } }
     if (!c.same && isSafari()) return { state: 'blocked', reason: 'safari', permission };
     if (!c.same && (await lnaPermission()) === 'denied') return { state: 'blocked', reason: 'denied', permission: 'denied' };
     if (e?.status === 401) return { state: 'off', reason: 'token', permission };
@@ -134,13 +197,14 @@ async function isPc(port, ms) {
 let probedAt = 0;
 /**
  * 같은 토큰으로 답하는 lecpage 커넥트의 포트(없으면 0). 15초에 한 번만.
- * 두 단계: 먼저 토큰 없이 물어 커넥트처럼 답하는 포트에만 토큰을 보냄(그 범위의 다른 프로그램에 짝 맞춤 토큰이 가지 않게. 커넥트의 findRunning과 같은 순서)
+ * 두 단계: 먼저 토큰 없이 짝 증명을 물어 이 토큰을 아는 커넥트에만 토큰을 보냄(그 범위의 다른 프로그램이 커넥트인 척 답해도 짝 맞춤 토큰이 가지 않게.
+ * 커넥트의 findRunning과 같은 순서). 증명 길이 없는 예전 판은 증명한 적 없는 짝일 때만 지금처럼(mayTell)
  */
 async function findPc(c) {
   if (Date.now() - probedAt < 15000) return 0;
   probedAt = Date.now();
   const ports = PC_PORTS.filter((p) => p !== c.port);
-  return Promise.any(ports.map((p) => isPc(p, 1500).then(() => askPc(p, c.token, 1500)).then(() => p))).catch(() => 0);
+  return Promise.any(ports.map((p) => mayTell(p, c.token, AbortSignal.timeout(1500)).then((ok) => { if (!ok) throw new Error('no'); return askPc(p, c.token, 1500); }).then(() => p))).catch(() => 0);
 }
 /**
  * 쓰던 짝과 다른 토큰의 #pair=…(capturePairing이 'check'): 그 포트의 lecpage 커넥트가 새 토큰에 답할 때만 짝을 바꿈

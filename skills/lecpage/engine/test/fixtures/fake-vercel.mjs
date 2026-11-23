@@ -26,7 +26,7 @@ if (!argv.includes('--non-interactive') || !arg('-Q')) { console.error('test exp
 
 if (cmd === 'whoami') {
   if (!s.loggedIn) { out({ loggedIn: false, cliVersion: '0.0.0-fake', linkedProject: null }); process.exit(0); }
-  out({ team: null, plan: 'hobby', username: 'teacher', email: 'teacher@example.com', name: null, teams: s.teams || [], linkedProject: null, cliVersion: '0.0.0-fake' });
+  out({ team: null, plan: 'hobby', username: s.user || 'teacher', email: `${s.user || 'teacher'}@example.com`, name: null, teams: s.teams || [], linkedProject: null, cliVersion: '0.0.0-fake' });
   process.exit(0);
 }
 if (cmd === 'login') {
@@ -34,7 +34,13 @@ if (cmd === 'login') {
   for (let i = 0; i < 400; i++) { if (read().approve) { const n = read(); n.loggedIn = true; n.approve = false; write(n); console.error('  Congratulations! You are now signed in.'); process.exit(0); } await sleep(25); }
   console.error('Error: The device code has expired.'); process.exit(1);
 }
-if (cmd === 'logout') { const n = read(); n.loggedIn = false; write(n); console.error('Logged out!'); process.exit(0); }
+if (cmd === 'logout') {
+  if (s.fail?.logout) { console.error(`Error: ${s.fail.logout}`); process.exit(1); } // 망이 끊긴 채 로그아웃(로그인 파일은 그대로 남음)
+  const n = read(); n.loggedIn = false; write(n); console.error('Logged out!'); process.exit(0);
+}
+// 돌린 폴더와 설정 폴더(-Q)에 로그인 파일이 있는 것처럼: 시험이 '로그아웃하면 이 PC의 로그인 파일을 지움'을 봄
+if (s.loggedIn && arg('-Q') && !existsSync(join(arg('-Q'), 'auth.json'))) writeFileSync(join(arg('-Q'), 'auth.json'), '{"token":"fake-vercel-login"}');
+if (process.env.FAKE_VERCEL_CWD) appendFileSync(process.env.FAKE_VERCEL_CWD, [process.cwd(), existsSync(join(process.cwd(), 'package.json')), pos[0] === 'deploy' ? pos[1] : ''].join('\t') + '\n');
 
 if (!s.loggedIn || s.expire) { console.error('Error: No existing credentials found. Please run `vercel login` or pass "--token"'); process.exit(1); }
 // 팀 범위: 하나면 그 팀, 여럿이면 --scope가 있어야 함(없으면 되물음)
@@ -52,7 +58,7 @@ if (cmd === 'api') {
   if (!m) { out({ error: { code: 'not_found', message: 'no route' } }); process.exit(1); }
   const p = pj(m[1]);
   if (!p) { out({ error: { code: 'not_found', message: 'The project was not found.' } }); process.exit(1); }
-  out({ id: p.id, name: m[1], ssoProtection: p.sso ? { deploymentType: 'all_except_custom_domains' } : null, targets: { production: { alias: [`${m[1]}-teacher-projects.vercel.app`, `${m[1]}.vercel.app`] } } });
+  out({ id: p.id, name: m[1], accountId: `team_${team}`, ssoProtection: p.sso ? { deploymentType: 'all_except_custom_domains' } : null, targets: { production: { alias: [`${m[1]}-teacher-projects.vercel.app`, `${m[1]}.vercel.app`] } } });
   process.exit(0);
 }
 if (cmd === 'deploy') {

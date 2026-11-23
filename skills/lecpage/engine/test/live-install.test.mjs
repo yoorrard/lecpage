@@ -140,6 +140,12 @@ test('코드에 든 설치 코드(INSTALL): 붙여 넣고 배포만 하면 연�
   s.props.set('ADMIN_HASH', sha('나중에-바꾼-관리자키-99')); s.props.set('UPLOADS', 'on');
   s.ping();
   assert.equal(s.props.get('ADMIN_HASH'), sha('나중에-바꾼-관리자키-99')); assert.equal(s.props.get('UPLOADS'), 'on');
+  // 시트 메뉴 '한 번에 설치'로 다른 연수의 설치 코드를 넣음(실제 menuInstall) → 다음 ping이 코드에 든 예전 설치 코드로 되돌리지 않음
+  s.ui.none = false; s.ui.answers.push(L.sheetInstallCode({ code: 'MENU42', hash: sha('menu-install-admin-key-7'), uploads: false })); s.g.menuInstall();
+  assert.match(s.ui.alerts.pop(), /설치가 끝났어요/); s.ui.none = true;
+  assert.deepEqual([s.props.get('CODE'), s.props.get('ADMIN_HASH'), s.props.get('UPLOADS')], ['MENU42', sha('menu-install-admin-key-7'), 'off']);
+  assert.equal(s.ping().ok, true);
+  assert.deepEqual([s.props.get('CODE'), s.props.get('ADMIN_HASH'), s.props.get('UPLOADS')], ['MENU42', sha('menu-install-admin-key-7'), 'off'], '메뉴로 넣은 설정이 다음 ping 뒤에도 그대로');
   // 새 연수의 설치 코드로 다시 붙여 넣으면(코드가 바뀜) 그때는 새 값이 걸림
   const s2 = gas(L.withSheetInstall(GS, L.sheetInstallCode({ code: 'NEW777', hash: sha('another-admin-key-000') }))); s2.ui.none = true;
   for (const [k, v] of s.props) s2.props.set(k, v);

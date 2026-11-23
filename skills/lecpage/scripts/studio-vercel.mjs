@@ -15,19 +15,18 @@
 // 실측(2026-11-23, vercel 66.6.0, 터미널 없이): `whoami --json`은 로그인 전 { loggedIn: false }, `login`은 "Visit https://vercel.com/oauth/device?user_code=…"를
 // 찍고 기다림, 팀이 여럿인데 --scope가 없으면 { status: "action_required", reason: "missing_scope", choices: [{ id, name(slug) }] }.
 // 시험: S.vcOpts 또는 LECPAGE_VERCEL(가짜 vercel 명령)·LECPAGE_VERCEL_URL(주소 앞부분)
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, mkdtempSync, chmodSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join, resolve, dirname, sep } from 'node:path';
-import { tmpdir } from 'node:os';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { npxCommand, redact, NAME_RE } from './publish.mjs';
-import { createRunner, safeRel, findJson } from './studio-deploy.mjs';
+import { createRunner, safeRel, findJson, makeWork, writeState } from './studio-deploy.mjs';
 
 /** 고정한 Vercel CLI 판(실측한 판). 올릴 때는 도움말의 플래그(deploy --project·--create-if-missing·--json, project protection disable --sso, project delete --confirm-name)를 다시 확인 */
 export const VERCEL_VER = '66.6.0';
 const MiB = 1024 * 1024;
 /** Vercel 무료 한도(엔진 HOSTS.vercel과 같음): 사이트 100MB·파일 15,000개 */
 export const VC_LIMIT = { fileMB: 100, files: 15000, totalMB: 100 };
-const TMP = 'lecpage-studio-vc-'; // studio.mjs가 켤 때 6시간 넘은 lecpage-studio-* 임시 폴더를 지움
+const TMP = 'lecpage-studio-vc-'; // 작업 폴더 이름 앞부분(이 PC 사용자 폴더 안 work/. 공용 임시 폴더 아래에서 돌리지 않음: studio-deploy.mjs makeWork)
 const ASK_MS = 10 * 60e3;
 const TEAM_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
@@ -52,20 +51,29 @@ const clean = (s) => redact(String(s || '')).replace(/[A-Za-z0-9._%+-]+@[A-Za-z0
 export function explain(raw, fallback = 'failed') {
   const s = String(raw || '');
   const code = /npm (ERR|error)|could not determine executable|E404|ENOENT[^\n]*npx|not recognized as an internal|command not found/i.test(s) ? 'tool'
-    : /No existing credentials|not authenticated|not logged in|invalid token|token is not valid|Please (log ?in|run `?vercel login)|must re-authenticate|\binvalidToken\b|\b401\b/i.test(s) ? 'login-needed'
-      : /ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|fetch failed|network|socket hang up/i.test(s) ? 'network'
-        : /rate.?limit|too many requests|\b429\b|exceeded|quota|upgrade to/i.test(s) ? 'limit'
+    : /No existing credentials|not authenticated|not logged in|invalid token|token is not valid|Please (log ?in|run `?vercel login)|must re-authenticate|\binvalidToken\b|401 Unauthorized|\b(status|code|HTTP)\b[^\n]{0,12}\b401\b/i.test(s) ? 'login-needed'
+      : /ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN|fetch failed|socket hang up|getaddrinfo|network (error|timeout|is unreachable)|UND_ERR_/i.test(s) ? 'network'
+        : /rate.?limit|too many requests|429 Too Many|\b(status|code|HTTP)\b[^\n]{0,12}\b429\b|(limit|quota)[^\n]{0,40}\bexceeded\b|\bexceeded\b[^\n]{0,40}(limit|quota)|upgrade to (pro|a paid)/i.test(s) ? 'limit'
           : fallback;
   return new VcError(code, MSG[code] || MSG.failed, clean(tail(s)));
 }
 
 const stateFile = (S) => join(S.home, 'vercel.json');
 export function loadVcState(S) { try { const j = JSON.parse(readFileSync(stateFile(S), 'utf8')); return j && typeof j === 'object' && !Array.isArray(j) ? j : {}; } catch { return {}; } }
-function saveVcState(S, st) {
-  mkdirSync(S.home, { recursive: true });
-  writeFileSync(stateFile(S), JSON.stringify(st), { mode: 0o600 });
-  try { chmodSync(stateFile(S), 0o600); } catch { /* 윈도우 */ }
+function saveVcState(S, st) { writeState(stateFile(S), st); }
+/**
+ * 이 커넥트가 올린 프로젝트 기록 → [{ name, team, owner, user }].
+ * team: 올릴 때 쓴 팀(--scope, 하나뿐이라 CLI가 저절로 고른 경우 '') · owner: 그 프로젝트가 든 계정 id(프로젝트 정보의 accountId) · user: 올린 로그인(짧은 해시).
+ * 지우기·보호 끄기는 이 범위로만 부름: 기억한 팀이 그사이 바뀌어도 다른 팀에서 '없음'을 보고 지운 것으로 끝내지 않게.
+ * 이름 글자만 있는 기록은 팀·계정·로그인을 모르는 것으로 읽음(지금 고른 팀이 없을 때만 그 '없음'을 믿음: askedThere)
+ */
+export function sitesOf(st) {
+  return (Array.isArray(st?.sites) ? st.sites : []).map((x) => (typeof x === 'string' ? { name: x, team: '', owner: '', user: '' }
+    : x && typeof x === 'object' && typeof x.name === 'string' ? { name: x.name, team: TEAM_RE.test(String(x.team || '')) ? String(x.team) : '', owner: String(x.owner || '').slice(0, 80), user: String(x.user || '').slice(0, 32) } : null)).filter((x) => x && NAME_RE.test(x.name));
 }
+/** 그 로그인(user)이 올린 그 이름의 기록(로그인을 모르는 예전 기록은 누구에게나 맞음) */
+const siteOf = (st, name, user) => sitesOf(st).find((x) => x.name === name && (!x.user || !user || x.user === user)) || null;
+const userTag = (j) => { const id = String(j?.username || j?.email || j?.user?.username || j?.user?.email || ''); return id ? createHash('sha256').update(id).digest('hex').slice(0, 16) : ''; };
 
 export function createVc(S, H) {
   const R = createRunner(S, H, { tmp: TMP, errorOf: (e) => (e instanceof VcError ? { code: e.code, message_ko: e.message_ko, ...(e.detail ? { detail: e.detail } : {}) } : null), cancelled: () => new VcError('cancelled', MSG.cancelled), timeout: () => new VcError('timeout', MSG.timeout), failed: MSG.failed });
@@ -92,7 +100,7 @@ export function createVc(S, H) {
     stop(t);
     const j = jsonOf(r);
     if (j && j.loggedIn === false) return { loggedIn: false };
-    if (j && (j.username || j.email || j.loggedIn === true)) return { loggedIn: true };
+    if (j && (j.username || j.email || j.loggedIn === true)) return { loggedIn: true, user: userTag(j) };
     const e = explain(r.raw, 'tool');
     if (e.code === 'login-needed') return { loggedIn: false };
     throw e;
@@ -122,8 +130,17 @@ export function createVc(S, H) {
     let who = await whoami(t);
     if (!who.loggedIn) { await login(t); phase(t, 'tool'); who = await whoami(t); if (!who.loggedIn) throw new VcError('login-failed', MSG['login-failed']); }
     const st = loadVcState(S);
+    t.user = who.user || '';
     t.scope = TEAM_RE.test(String(st.team || '')) ? st.team : '';
+    t.remember = true; // 팀을 물어 고르면 다음에도 쓰게 기억(이미 올린 프로젝트를 찾느라 고른 팀은 기억하지 않음: withRecord)
   }
+  /** 이미 올린 프로젝트(rec)를 다루는 일: 그 프로젝트를 올린 팀으로 부름. 팀을 모르는 기록이면 지금 범위로 부르되, 물어 고른 팀은 기억하지 않음 */
+  function withRecord(t, rec) { if (rec.team) t.scope = rec.team; else t.remember = false; }
+  /** 프로젝트 정보(pj)가 기록(rec)의 그 프로젝트인지: 둘 다 계정 id를 알면 같아야 함 */
+  const sameProject = (rec, pj) => !(rec.owner && pj.owner && rec.owner !== pj.owner);
+  /** '없음'을 믿어도 되는지: 그 프로젝트를 올린 팀에서 물었을 때만(팀을 모르는 기록은 지금도 팀을 고르지 않은 채일 때만) */
+  const askedThere = (t, rec) => (rec.team ? t.scope === rec.team : !t.scope);
+  const elsewhere = (name) => new VcError('other-scope', `"${name}" 프로젝트를 올린 팀에서 찾지 못했어요. 올릴 때 쓴 Vercel 팀을 골라 다시 눌러 주세요. 그래도 안 되면 Vercel 대시보드에서 프로젝트를 지워 주세요.`);
   /** 팀 범위가 필요한 명령 한 번. 팀이 여럿이면 앱에 물어 기억한 뒤 다시. → { r, j } */
   async function scoped(t, argv, o = {}) {
     for (let i = 0; i < 3; i++) {
@@ -137,7 +154,7 @@ export function createVc(S, H) {
       const pick = String(await ask(t, { kind: 'team', teams }) || '');
       if (!teams.some((x) => x.id === pick)) throw new VcError('failed', MSG.failed);
       t.scope = pick;
-      const st = loadVcState(S); st.team = pick; saveVcState(S, st);
+      if (t.remember !== false) { const st = loadVcState(S); st.team = pick; saveVcState(S, st); }
       phase(t, back === 'team' ? 'tool' : back);
     }
     throw new VcError('failed', MSG.failed);
@@ -145,10 +162,23 @@ export function createVc(S, H) {
   /** 프로젝트 정보(REST 모양 그대로). → { exists, id, sso, hosts } */
   async function project(t, name) {
     const { r, j } = await scoped(t, ['api', `/v9/projects/${name}`]);
-    if (j && j.id && j.name) return { exists: true, id: String(j.id), sso: !!j.ssoProtection, hosts: (Array.isArray(j.targets?.production?.alias) ? j.targets.production.alias : []).map(String) };
+    if (j && j.id && j.name) return { exists: true, id: String(j.id), owner: String(j.accountId || ''), sso: !!j.ssoProtection, hosts: (Array.isArray(j.targets?.production?.alias) ? j.targets.production.alias : []).map(String) };
     const code = String(j?.error?.code || '');
-    if (code === 'not_found' || /\b404\b|not[ _]found/i.test(`${j?.error?.message || ''} ${r.raw}`)) return { exists: false, id: '', sso: false, hosts: [] };
-    throw explain(`${j?.error?.message || j?.message || ''}\n${r.raw}`); // 로그인이 풀렸으면 다음에 누를 때 whoami가 로그인 전으로 답해 로그인 창부터
+    const none = { exists: false, id: '', owner: '', sso: false, hosts: [] };
+    if (code === 'not_found' || Number(j?.error?.status) === 404) return none;
+    // 도구를 못 받음·망·로그인 문제는 '없음'이 아님(npm의 404나 "command not found" 같은 글을 '프로젝트 없음'으로 읽지 않게) → 먼저 가려 던짐
+    const e = explain(`${j?.error?.message || j?.message || ''}\n${r.raw}`);
+    if (e.code !== 'failed') throw e;
+    if (/\b404\b|not[ _]found/i.test(`${j?.error?.message || ''} ${r.raw}`)) return none;
+    throw e; // 로그인이 풀렸으면 다음에 누를 때 whoami가 로그인 전으로 답해 로그인 창부터
+  }
+  /** 그 주소에 lecpage가 조립한 사이트가 있는지(첫 화면의 generator 표시). 닿지 못하거나 로그인 창이 뜨면 false */
+  async function lecpageSite(url) {
+    try {
+      const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return false;
+      return /<meta\s+name="generator"\s+content="lecpage[ "]/i.test((await r.text()).slice(0, 200000));
+    } catch { return false; }
   }
   const sitesOf = (st) => (Array.isArray(st.sites) ? st.sites.filter((x) => typeof x === 'string') : []);
   async function reach(url, tries, want = (r) => r.ok) {
@@ -173,9 +203,17 @@ export function createVc(S, H) {
     d.busy = true;
     await auth(t);
     phase(t, 'site');
-    const mine = sitesOf(loadVcState(S)).includes(name);
+    const rec = siteOf(loadVcState(S), name, t.user);
+    if (rec?.team) { t.scope = rec.team; t.remember = false; } // 이 커넥트가 올린 프로젝트면 올렸던 팀에 다시(기억한 팀이 그사이 바뀌어도 같은 주소로. 기억한 팀은 그대로 둠)
     const before = await project(t, name);
-    if (before.exists && !mine && !again) throw new VcError('name-taken', `내 Vercel에 "${name}"이라는 프로젝트가 이미 있어요. 다른 주소 이름을 적어 주세요.`);
+    const mine = !!rec && sameProject(rec, before);
+    // 이 커넥트가 올린 적 없는 이름이 내 Vercel에 이미 있으면 덮지 않음. '같은 주소로 다시'(again)여도 그 주소에 lecpage 사이트가 있을 때만 덮음:
+    // 앱의 기록(남이 준 연수 파일에도 들어 있을 수 있음)만 믿고 강사의 다른 프로젝트를 덮지 않게
+    if (before.exists && !mine) {
+      if (!again) throw new VcError('name-taken', `내 Vercel에 "${name}"이라는 프로젝트가 이미 있어요. 다른 주소 이름을 적어 주세요.`);
+      const at = before.hosts.find((h) => h === `${name}.vercel.app`) || before.hosts.find((h) => /^[a-z0-9.-]+\.vercel\.app$/i.test(h)) || `${name}.vercel.app`;
+      if (!(await lecpageSite(opts().urlBase ? `${opts().urlBase}${name}/` : `https://${at}/`))) throw new VcError('exists', `내 Vercel에 "${name}"이라는 프로젝트가 이미 있는데, lecpage로 올린 사이트인지 확인하지 못해 덮어쓰지 않았어요. 다른 주소 이름으로 배포해 주세요.`);
+    }
     stop(t);
     const { r: dep, j } = await scoped(t, ['deploy', d.dir, '--prod', '--yes', '--project', name, '--create-if-missing', '--json'], { timeout: 20 * 60e3 });
     if (!dep.ok) {
@@ -185,13 +223,17 @@ export function createVc(S, H) {
     }
     const out = j?.deployment && typeof j.deployment === 'object' ? j.deployment : j || {};
     if (out.readyState && out.readyState !== 'READY') throw new VcError('failed', MSG.failed, clean(String(out.error?.message || out.readyState).slice(0, 200)));
-    const st = loadVcState(S);
-    if (!sitesOf(st).includes(name)) st.sites = [...sitesOf(st), name];
-    if (t.scope) st.team = t.scope;
-    saveVcState(S, st);
     log('Vercel에 사이트를 올렸어요');
     // 참가자에게 줄 주소는 프로젝트 주소(<이름>.vercel.app). 배포마다 생기는 주소는 로그인이 걸릴 수 있어 쓰지 않음(앱의 토큰 길과 같은 규칙)
-    let pj = await project(t, name);
+    let pj = { exists: false, id: '', owner: '', sso: false, hosts: [] };
+    let pjError = null;
+    try { pj = await project(t, name); } catch (e) { pjError = e; }
+    // 올린 기록: 이름 + 올린 팀·계정·로그인(지우기·보호 끄기를 그 범위로만 하게). 프로젝트 정보를 못 읽었어도 기록은 남김(지울 수 있게)
+    const st = loadVcState(S);
+    st.sites = [...sitesOf(st).filter((x) => !(x.name === name && (!x.user || !t.user || x.user === t.user))), { name, team: t.scope || '', owner: pj.owner || rec?.owner || '', user: t.user || '' }];
+    if (t.scope && t.remember !== false) st.team = t.scope;
+    saveVcState(S, st);
+    if (pjError) throw pjError;
     let opened = false;
     if (pj.sso && !before.exists) { opened = await unprotect(t, name); if (opened) pj = { ...pj, sso: false }; }
     const prod = String(out.productionUrl || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -207,9 +249,12 @@ export function createVc(S, H) {
   async function open(t, { name }) {
     await auth(t);
     phase(t, 'open');
-    if (!sitesOf(loadVcState(S)).includes(name)) throw new VcError('not-ours', '이 PC의 lecpage 커넥트로 배포한 사이트가 아니라 여기서 바꿀 수 없어요. Vercel 대시보드에서 Deployment Protection을 꺼 주세요.');
+    const rec = siteOf(loadVcState(S), name, t.user);
+    if (!rec) throw new VcError('not-ours', '이 PC의 lecpage 커넥트로 배포한 사이트가 아니라 여기서 바꿀 수 없어요. Vercel 대시보드에서 Deployment Protection을 꺼 주세요.');
+    withRecord(t, rec);
     const pj = await project(t, name);
-    if (!pj.exists) throw new VcError('gone', '내 Vercel에 이 프로젝트가 없어요. 다시 배포해 주세요.');
+    if (pj.exists && !sameProject(rec, pj)) throw elsewhere(name);
+    if (!pj.exists) throw askedThere(t, rec) ? new VcError('gone', '내 Vercel에 이 프로젝트가 없어요. 다시 배포해 주세요.') : elsewhere(name);
     if (!pj.sso) return { opened: true, already: true };
     if (!(await unprotect(t, name))) throw new VcError('failed', 'Vercel의 배포 보호를 끄지 못했어요. Vercel 대시보드의 Settings → Deployment Protection에서 Vercel Authentication을 꺼 주세요.');
     return { opened: true };
@@ -218,21 +263,30 @@ export function createVc(S, H) {
   async function remove(t, { name }) {
     await auth(t);
     phase(t, 'delete');
-    if (!sitesOf(loadVcState(S)).includes(name)) throw new VcError('not-ours', '이 PC의 lecpage 커넥트로 배포한 사이트가 아니라 여기서 지울 수 없어요. Vercel 대시보드에서 프로젝트를 지워 주세요.');
+    const rec = siteOf(loadVcState(S), name, t.user);
+    if (!rec) throw new VcError('not-ours', '이 PC의 lecpage 커넥트로 배포한 사이트가 아니라 여기서 지울 수 없어요. Vercel 대시보드에서 프로젝트를 지워 주세요.');
+    withRecord(t, rec); // 올렸던 팀에서 찾음
     const pj = await project(t, name);
+    // 같은 이름의 다른 프로젝트(다른 팀의 것)는 지우지 않음. '이미 없음'은 올렸던 팀에서 물었을 때만 믿음(다른 팀에서 본 '없음'을 지운 것으로 끝내지 않게)
+    if (pj.exists && !sameProject(rec, pj)) throw elsewhere(name);
+    if (!pj.exists && !askedThere(t, rec)) throw elsewhere(name);
     if (pj.exists) {
       const { r, j } = await scoped(t, ['project', 'delete', name, '--confirm-name', name]);
       if (!r.ok && (await project(t, name)).exists) throw explain(`${j?.message || ''}\n${r.raw}`);
     }
-    const st = loadVcState(S); st.sites = sitesOf(st).filter((x) => x !== name); saveVcState(S, st);
+    const st = loadVcState(S); st.sites = sitesOf(st).filter((x) => x !== rec && !(x.name === rec.name && x.team === rec.team && x.owner === rec.owner && x.user === rec.user)); saveVcState(S, st);
     log('Vercel에서 사이트를 지웠어요');
     return { deleted: name };
   }
+  /** 이 PC의 Vercel 로그인 지우기(커넥트 전용 폴더의 것). 기억한 팀도 지움. 올린 프로젝트 기록은 올린 로그인과 함께 남아, 다른 로그인으로는 다루지 못함 */
   async function logout(t) {
     phase(t, 'tool');
     const r = await vc(t, ['logout'], { scoped: false });
-    if (!r.ok && !/not (currently )?logged in|No existing credentials/i.test(r.raw)) throw explain(r.raw);
+    // CLI가 끝냈는지와 상관없이 이 커넥트 전용 폴더의 로그인 파일을 지움(도구를 못 받았거나 망이 끊겨도 이 PC에는 남지 않게)
+    const f = join(cfg(), 'auth.json');
+    try { rmSync(f, { force: true }); } catch { /* 아래에서 확인 */ }
     const st = loadVcState(S); delete st.team; saveVcState(S, st);
+    if (!r.ok && !/not (currently )?logged in|No existing credentials/i.test(r.raw) && existsSync(f)) throw explain(r.raw);
     return { loggedOut: true };
   }
   function dropDraft() { const d = c.draft; c.draft = null; if (d) { try { rmSync(d.dir, { recursive: true, force: true }); } catch { /* 넘김 */ } } }
@@ -245,7 +299,7 @@ export function createVc(S, H) {
   c.newDraft = () => {
     if (c.draft?.busy) return null;
     dropDraft();
-    c.draft = { id: randomBytes(8).toString('hex'), dir: mkdtempSync(join(tmpdir(), TMP)), files: 0, bytes: 0, busy: false };
+    c.draft = { id: randomBytes(8).toString('hex'), dir: makeWork(S, `${TMP}site-`, { tool: false }), files: 0, bytes: 0, busy: false };
     return c.draft;
   };
   /** 사이트 파일 하나 받기 → '' | 오류 코드 */

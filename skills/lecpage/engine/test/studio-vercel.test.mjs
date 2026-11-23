@@ -3,13 +3,13 @@
 // 로그인 기다림 → 팀 고르기 → 올리기 → 배포 보호 끄기 → 다시 올리기 → 지우기. 포트는 4421~4429만 씀.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
+import { join, dirname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { startStudio, CAPS } from '../../scripts/studio.mjs';
-import { explain, VERCEL_VER } from '../../scripts/studio-vercel.mjs';
+import { explain, VERCEL_VER, sitesOf } from '../../scripts/studio-vercel.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FAKE = join(HERE, 'fixtures', 'fake-vercel.mjs');
@@ -24,7 +24,8 @@ before(async () => {
     const m = new URL(req.url, 'http://x').pathname.match(/^\/v\/([a-z0-9-]+)\//);
     let s = {}; try { s = JSON.parse(readFileSync(cur.current, 'utf8')); } catch { /* 없음 */ }
     const p = m && s.projects?.[m[1]];
-    res.writeHead(!p ? 404 : p.sso ? 401 : 200, { 'content-type': 'text/plain' }); res.end(p ? 'site' : 'none');
+    // lecpage: 그 프로젝트의 첫 화면이 lecpage가 조립한 사이트(generator 표시)
+    res.writeHead(!p ? 404 : p.sso ? 401 : 200, { 'content-type': 'text/html; charset=utf-8' }); res.end(!p ? 'none' : p.lecpage ? '<!doctype html><meta name="generator" content="lecpage 1.1.0"><title>연수</title>' : 'site');
   });
   await new Promise((ok) => siteServer.listen(SITE_PORT, '127.0.0.1', ok));
 });
@@ -110,7 +111,9 @@ test('처음: 로그인을 기다렸다가 올리고 배포 보호를 끔 → �
     assert.equal(p.files, 3); assert.equal(p.sso, false); assert.equal(p.vercelJson, true);
     assert.ok(!JSON.stringify(d).includes('teacher@example.com'), '계정 메일은 앱에 내보내지 않음');
     const f = join(r.home, 'vercel.json');
-    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).sites, ['maum-class']);
+    const rec = JSON.parse(readFileSync(f, 'utf8')).sites;
+    assert.deepEqual(rec.map((x) => [x.name, x.team, x.owner]), [['maum-class', '', 'team_teacher-projects']], '올린 팀·계정과 함께 기록(팀은 하나뿐이라 고르지 않음)');
+    assert.match(rec[0].user, /^[0-9a-f]{16}$/); assert.ok(!JSON.stringify(rec).includes('teacher@') && !JSON.stringify(rec).includes('"teacher"'), '로그인 이름·메일은 그대로 적지 않음');
     if (process.platform !== 'win32') assert.equal(statSync(f).mode & 0o777, 0o600);
     assert.ok(existsSync(join(r.home, 'vercel-cli')), 'CLI 설정은 커넥트 폴더 안에');
     // 다시 올리기: 강사가 그 사이 보호를 다시 켰어도 건드리지 않음(처음 만들 때만 풂)
@@ -152,13 +155,19 @@ test('팀이 여럿이면 한 번 물어 기억함 · 내 계정에 이미 있�
     const d3 = await r.until();
     assert.equal(d3.error.code, 'name-taken');
     assert.equal(r.state().projects.taken.files, 1, '덮지 않음');
-    // 앱이 '이 연수가 올린 프로젝트'라고 알려 주면(again: 토큰으로 올렸던 프로젝트에 다시) 그 프로젝트에 올리고, 그 뒤로는 이 커넥트가 지울 수 있음
+    // 앱이 '이 연수가 올린 프로젝트'라고 알려 줘도(again) 그 주소에 lecpage 사이트가 없으면 덮지 않음(앱의 기록은 남이 준 연수 파일에도 들어 있을 수 있음)
+    assert.equal((await r.deploy('taken', { again: true })).status, 202);
+    const d3b = await r.until();
+    assert.equal(d3b.error.code, 'exists', JSON.stringify(d3b));
+    assert.equal(r.state().projects.taken.files, 1, '강사의 다른 프로젝트를 덮지 않음');
+    // 그 주소에 lecpage 사이트가 있으면(토큰으로 올렸던 프로젝트에 다시) 그 프로젝트에 올리고, 그 뒤로는 이 커넥트가 지울 수 있음
+    r.patch({ projects: { ...r.state().projects, taken: { ...r.state().projects.taken, lecpage: true } } });
     assert.equal((await r.deploy('taken', { again: true })).status, 202);
     const d4 = await r.until();
     assert.equal(d4.phase, 'done', JSON.stringify(d4));
     assert.equal(r.state().projects.taken.files, 3);
     assert.equal(d4.result.site.opened, false, '이미 있던 프로젝트의 보호 설정은 건드리지 않음');
-    assert.ok(JSON.parse(readFileSync(join(r.home, 'vercel.json'), 'utf8')).sites.includes('taken'));
+    assert.ok(JSON.parse(readFileSync(join(r.home, 'vercel.json'), 'utf8')).sites.some((x) => x.name === 'taken' && x.team === 'beta-team'));
   } finally { await r.close(); }
 });
 
@@ -212,4 +221,64 @@ test('지우기: 이 커넥트가 올린 것만 · 이미 없어도 목록에서
     assert.deepEqual((await r.until()).result, { loggedOut: true });
     assert.equal(r.state().loggedIn, false);
   } finally { await r.close(); }
+});
+
+// ── 독립 검토에서 고친 것 ──────────────────────────────────────────────
+test('지우기·보호 끄기는 올린 팀에서: 기억한 팀이 그사이 바뀌어도 다른 팀의 "없음"을 지운 것으로 끝내지 않음', async () => {
+  const r = await rig({ teams: ['alpha-team', 'beta-team'], sso: false });
+  try {
+    assert.equal((await r.deploy('team-a-site')).status, 202);
+    await r.until((v) => v.ask);
+    assert.equal((await r.post('answer', { team: 'alpha-team' })).status, 200);
+    assert.equal((await r.until()).phase, 'done');
+    const f = join(r.home, 'vercel.json');
+    assert.deepEqual(sitesOf(JSON.parse(readFileSync(f, 'utf8'))).map((x) => [x.name, x.team, x.owner]), [['team-a-site', 'alpha-team', 'team_alpha-team']]);
+    // 그 뒤 다른 연수는 다른 팀에 올려 기억한 팀이 바뀜
+    const st = JSON.parse(readFileSync(f, 'utf8')); st.team = 'beta-team'; writeFileSync(f, JSON.stringify(st));
+    const before = r.vlog().length;
+    assert.equal((await r.post('open', { name: 'team-a-site' })).status, 202);
+    assert.deepEqual((await r.until()).result, { opened: true, already: true });
+    assert.equal((await r.post('delete', { name: 'team-a-site' })).status, 202);
+    const d = await r.until((v) => !v.running || v.ask);
+    assert.ok(!d.ask, '올린 팀을 알고 있어 묻지 않음');
+    assert.deepEqual(d.result, { deleted: 'team-a-site' }, JSON.stringify(d));
+    const log = r.vlog().slice(before);
+    assert.match(log, /project delete @alpha-team/); assert.ok(!/@beta-team/.test(log), '다른 팀에는 묻지 않음');
+    assert.equal(r.state().projects['team-a-site'], undefined, '실제로 지워짐');
+    assert.equal(JSON.parse(readFileSync(f, 'utf8')).team, 'beta-team', '기억한 팀은 그대로');
+    // 팀을 모르는 기록(이름만): 지금 고른 팀에서 없다고 해서 지운 것으로 끝내지 않음
+    r.patch({ projects: { 'old-site': { id: 'prj_7', sso: false, team: 'alpha-team', files: 2 } } });
+    const st2 = JSON.parse(readFileSync(f, 'utf8')); st2.sites = ['old-site']; writeFileSync(f, JSON.stringify(st2));
+    assert.equal((await r.post('delete', { name: 'old-site' })).status, 202);
+    const d2 = await r.until();
+    assert.equal(d2.error.code, 'other-scope', JSON.stringify(d2));
+    assert.ok(r.state().projects['old-site'], '지우지 않음'); assert.ok(sitesOf(JSON.parse(readFileSync(f, 'utf8'))).some((x) => x.name === 'old-site'), '기록도 그대로');
+  } finally { await r.close(); }
+});
+
+test('다른 로그인이 올린 프로젝트는 다루지 않음 · 로그아웃하면 이 PC의 로그인 파일을 지움(CLI가 못 끝내도) · 작업 폴더는 사용자 폴더 안', async () => {
+  const r = await rig({ sso: false });
+  const cwdLog = join(r.home, '..', 'vc-cwd.log'); process.env.FAKE_VERCEL_CWD = cwdLog;
+  try {
+    assert.equal((await r.deploy('mine-site')).status, 202);
+    assert.equal((await r.until()).phase, 'done');
+    const root = realpathSync(join(r.home, 'work'));
+    const rows = readFileSync(cwdLog, 'utf8').trim().split('\n').map((l) => l.split('\t'));
+    for (const [cwd, pkg, dir] of rows) { assert.ok(cwd.startsWith(root + sep), cwd); assert.equal(pkg, 'true'); if (dir) assert.ok(realpathSync(dirname(dir)) === root, `받은 사이트 파일도 사용자 폴더 안: ${dir}`); }
+    assert.deepEqual(readdirSync(root).filter((n) => n.startsWith('lecpage-studio-')), [], '끝나면 치움');
+    assert.equal(r.state().projects['mine-site'].files, 3, '올릴 파일에 작업용 파일이 섞이지 않음');
+    const auth = join(r.home, 'vercel-cli', 'auth.json');
+    assert.ok(existsSync(auth));
+    // 망이 끊겨 CLI가 로그아웃을 못 끝내도 이 PC의 로그인 파일은 지움
+    r.patch({ fail: { logout: 'getaddrinfo ENOTFOUND api.vercel.com' } });
+    assert.equal((await r.post('logout')).status, 202);
+    assert.deepEqual((await r.until()).result, { loggedOut: true });
+    assert.equal(existsSync(auth), false, '로그인 파일이 남지 않음');
+    // 다른 사람이 로그인: 앞사람이 올린 프로젝트는 지우지 못함
+    r.patch({ fail: null, loggedIn: true, user: 'someone-else' });
+    assert.equal((await r.post('delete', { name: 'mine-site' })).status, 202);
+    assert.equal((await r.until()).error.code, 'not-ours');
+    assert.ok(r.state().projects['mine-site']);
+    assert.deepEqual(readdirSync(r.home).filter((n) => /\.tmp$/.test(n)), []);
+  } finally { delete process.env.FAKE_VERCEL_CWD; await r.close(); }
 });

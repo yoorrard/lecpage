@@ -15,7 +15,7 @@
 
 import { createServer, request as httpRequest } from 'node:http';
 import { spawn } from 'node:child_process';
-import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
@@ -36,7 +36,7 @@ const ROOT = resolve(HERE, '..', '..', '..');
  * 이 판이 할 수 있는 것(앱이 /bridge/status의 caps로 보고, 없으면 '새 판으로 바꿔야 해요'를 보여 줌). 새 길을 더하면 여기에도 더함.
  * 이 목록이 없는 예전 판은 status-caps 이전 판(앱은 claude-setup·update가 없는 것으로 봄)
  */
-export const CAPS = ['status-caps', 'page-sets', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update', 'cloudflare', 'vercel'];
+export const CAPS = ['status-caps', 'prove', 'page-sets', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update', 'cloudflare', 'vercel'];
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 
 const MB = 1024 * 1024;
@@ -96,6 +96,22 @@ export function pairToken(home, { fresh = false } = {}) {
 /** 이 PC 사용자 폴더에 둔 짝 맞춤 토큰(없으면 ''). 새로 만들지 않음(이미 켜진 lecpage 커넥트를 찾을 때) */
 export function savedToken(home) {
   try { const t = JSON.parse(readFileSync(join(home, 'studio.json'), 'utf8'))?.token; return typeof t === 'string' && /^[0-9a-f]{64}$/.test(t) ? t : ''; } catch { return ''; }
+}
+/** 이 PC 사용자 폴더에서 짝 증명 길(/bridge/prove)이 있는 판을 켠 적이 있는지(studio.json의 prove). 있으면 켜진 커넥트를 찾을 때 증명하는 것만 받아들임 */
+export function proveSeen(home) {
+  try { return JSON.parse(readFileSync(join(home, 'studio.json'), 'utf8'))?.prove === true; } catch { return false; }
+}
+/** 이 판을 켰음을 적어 둠(proveSeen). 토큰 파일이 있을 때만, 통째로 바꿔 씀 */
+function markProve(home) {
+  const f = join(home, 'studio.json');
+  try {
+    const j = JSON.parse(readFileSync(f, 'utf8'));
+    if (!j || typeof j.token !== 'string' || j.prove === true) return;
+    const tmp = `${f}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ ...j, prove: true }, null, 2) + '\n', { mode: 0o600 });
+    try { chmodSync(tmp, 0o600); } catch { /* 윈도우 */ }
+    renameSync(tmp, f);
+  } catch { /* 적지 못하면 예전처럼(증명 길이 없는 판도 받아들임) */ }
 }
 /**
  * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + LECPAGE_STUDIO_ORIGINS(쉼표) + (개발 때만) 개발 주소.
@@ -670,10 +686,19 @@ function tokenOk(got, want) {
   return timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 /**
+ * 짝 증명(GET /bridge/prove?nonce=<64자 16진수>, 토큰 없이 부름): 이 커넥트가 짝 맞춤 토큰을 안다는 것을 토큰을 내보이지 않고 보임.
+ * 앱·실행 파일은 이 답이 맞을 때만 그 포트에 토큰을 보냄 — 같은 PC의 다른 프로그램이 가까운 포트에서 커넥트인 척(401 token) 답해 토큰을 받아 가지 못하게.
+ * 답: HMAC-SHA256(토큰, "lecpage-connect-prove:v1:<이 커넥트의 포트>:<nonce>"). 포트를 넣어, 가짜가 진짜 커넥트에게 받아 온 답을 제 포트의 답으로 쓰지 못하게 함.
+ * 예전 판에는 이 길이 없어 401 { error:'token' }으로 답함(앱은 한 번이라도 증명한 짝이면 그 답을 받아들이지 않음)
+ */
+export const PROVE_PATH = '/bridge/prove';
+export const proofOf = (token, port, nonce) => createHmac('sha256', String(token)).update(`lecpage-connect-prove:v1:${port}:${nonce}`).digest('hex');
+const NONCE_RE = /^[0-9a-f]{64}$/;
+/**
  * 모든 요청: Host가 127.0.0.1:<포트>와 정확히 같은지(DNS 리바인딩). /bridge/*는 Origin·토큰까지.
  * Origin은 이 주소(같은 출처)나 허용 목록(lecpage.com)과 정확히 같아야 함. 허용한 출처의 사전 요청(OPTIONS)은 { preflight }로 돌려줌(토큰 없이)
  */
-export function checkRequest(req, { hostPort, origin, token, origins }, { bridge }) {
+export function checkRequest(req, { hostPort, origin, token, origins }, { bridge, open = false }) {
   if (req.headers.host !== hostPort) return { status: 421, error: 'host', message_ko: `이 lecpage 커넥트는 http://${hostPort}/ 주소로만 열려요.` };
   if (!bridge) return null;
   const allow = origins || new Set([origin]);
@@ -684,6 +709,7 @@ export function checkRequest(req, { hostPort, origin, token, origins }, { bridge
   if (o === undefined && !['GET', 'HEAD'].includes(req.method)) return { status: 403, error: 'origin', message_ko: '이 요청에는 Origin 머리글이 있어야 해요.' };
   const sfs = req.headers['sec-fetch-site'];
   if (sfs && sfs !== 'same-origin' && sfs !== 'none' && !(o && o !== origin && allow.has(o))) return refuse;
+  if (open) return null; // 짝 증명(/bridge/prove): Host·Origin까지만 보고 토큰 없이 받음
   if (!tokenOk(req.headers['x-lecpage-bridge'], token)) return { status: 401, error: 'token', message_ko: 'lecpage 커넥트와 짝이 맞지 않아요. lecpage 커넥트를 끄고 다시 켜 주세요(lecpage가 저절로 다시 짝을 맞춰요).' };
   return null;
 }
@@ -1047,7 +1073,9 @@ async function runJob(S, job) {
     const md = existsSync(join(work, 'material.md')), links = existsSync(join(work, 'links.md'));
     let shots = []; try { shots = readdirSync(join(work, 'site', 'material')).map((n) => ({ name: n, n: +(/^p-(\d{3,4})\.(webp|png|jpe?g)$/i.exec(n) || [])[1] || 0 })).filter((x) => x.n).sort((a, b) => a.n - b.n); } catch { shots = []; }
     // 교재마다 그려 보낸 쪽 그림(이어 매긴 번호): 미리 읽기가 맞춘 묶음(없으면 앱이 알려 준 그대로) 가운데 실제로 그림이 놓인 것
-    const setsOut = !(appImages && givenSets.length) ? []
+    // (앱 그림이 없고 미리 읽기가 문서형 교재까지 직접 그려 교재마다 이어 매긴 때도 같은 꼴: material.md에 적힌 그대로 작업 지시에도)
+    const drewSets = !appImages && Array.isArray(prep?.given?.sets) && prep.given.sets.length > 1;
+    const setsOut = !((appImages && givenSets.length) || drewSets) ? []
       : (Array.isArray(prep?.given?.sets) ? prep.given.sets.map((x) => ({ owner: String(x?.owner || ''), first: +x?.first || 0, last: +x?.last || 0 })) : givenSets.map((x) => ({ owner: x.name, first: x.first, last: x.first + x.count - 1 })))
         .filter((x) => x.owner && shots.some((sh) => sh.n >= x.first && sh.n <= x.last));
     const owner = setsOut.length === 1 ? setsOut[0].owner : setsOut.length ? '' : prep?.given?.owner || (appImages ? flagged : '');
@@ -1414,8 +1442,19 @@ function pairRedirect(S, req, res, url) {
 async function handle(S, req, res) {
   let url; try { url = new URL(req.url, `http://${S.hostPort}`); } catch { return send(res, 400, 'bad request'); }
   const bridge = url.pathname === '/bridge' || url.pathname.startsWith('/bridge/');
-  const bad = checkRequest(req, S, { bridge });
+  const prove = url.pathname === PROVE_PATH && (req.method === 'GET' || req.method === 'OPTIONS');
+  const bad = checkRequest(req, S, { bridge, open: prove });
   if (bad?.preflight) { res.writeHead(204, { ...BASE_HEADERS, ...corsHeaders(bad.origin) }); return res.end(); }
+  if (prove && !bad) {
+    // 짝 증명: 토큰을 아는지만 답함(토큰·상태는 내보내지 않음). 1분에 240번까지(그 밖은 429)
+    const o = req.headers.origin;
+    if (o && o !== S.origin) for (const [k, v] of Object.entries(corsHeaders(o))) res.setHeader(k, v);
+    const now = Date.now(); const w = S.proveWin && now - S.proveWin.at < 60000 ? S.proveWin : (S.proveWin = { at: now, n: 0 });
+    if (++w.n > 240) return fail(res, 429, 'busy', '요청이 너무 잦아요. 잠시 뒤 다시 해 주세요.');
+    const nonce = String(url.searchParams.get('nonce') || '');
+    if (!NONCE_RE.test(nonce)) return fail(res, 400, 'bad-request', 'nonce는 16진수 64자예요.');
+    return sendJson(res, 200, { ok: true, proof: proofOf(S.token, S.port, nonce) });
+  }
   if (bad) {
     // localhost로 연 경우 같은 컴퓨터의 127.0.0.1 주소로 보냄(저장된 작업이 출처마다 따로라 한 주소로 모음)
     if (bad.error === 'host' && !bridge && req.method === 'GET' && req.headers.host === `localhost:${S.port}`) { res.writeHead(307, { ...BASE_HEADERS, location: `${S.origin}${url.pathname}${url.search}` }); return res.end(); }
@@ -1485,6 +1524,9 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
     if (!ok) throw Object.assign(new Error(`포트 ${PORT_RANGE[0]}~${PORT_RANGE[1]}이 모두 쓰이고 있어요. 다른 lecpage 커넥트 창이 켜져 있으면 그 주소를 쓰거나, --port로 다른 번호를 주세요.`), { friendly: true });
   }
   S.port = server.address().port;
+  if (persist || home) markProve(dirHome); // 이 PC에서 짝 증명 길이 있는 판을 켰음(다음부터 켜진 커넥트를 찾을 때 증명하는 것만 내 것으로 봄)
+  // 지난 실행이 남긴 배포 작업 폴더(이 PC 사용자 폴더 안 work/)를 치움
+  import('./studio-deploy.mjs').then((m) => m.cleanWork(S)).catch(() => { });
   S.hostPort = `127.0.0.1:${S.port}`;
   S.origin = `http://${S.hostPort}`;
   S.origins = allowedOrigins(S.origin, process.env, { dev: existsSync(join(S.root, '.git')) });
@@ -1567,17 +1609,21 @@ function askLocal(port, { method = 'GET', path = '/bridge/status', headers = {},
 }
 /**
  * 이미 켜진 lecpage 커넥트(같은 사용자 = 같은 토큰) → { port, status } | null. 포트 범위를 한꺼번에 살핌.
- * 먼저 토큰 없이 물어 lecpage 커넥트처럼 답하는 포트(401 token)에만 토큰을 보냄(그 범위의 다른 프로그램에 토큰을 보내지 않게).
+ * 먼저 토큰 없이 짝 증명을 물어(/bridge/prove) 이 토큰을 아는 커넥트에만 토큰을 보냄: 그 범위의 다른 프로그램이 커넥트인 척 답해도,
+ * 같은 PC의 다른 사용자가 켠 커넥트여도 토큰이 가지 않음. 증명 길이 없는 예전 판(401 token으로 답함)은 strict가 아닐 때만 지금처럼 받아들임
+ * (strict: 이 PC에서 증명 길이 있는 판을 켠 적이 있음 → 가짜가 예전 판인 척해도 토큰을 보내지 않음).
  * 상태 답은 Claude Code·Codex를 살피느라 늦을 수 있어 길게 기다림
  */
-export async function findRunning(token, { ports, ms = 1200, statusMs = 20000 } = {}) {
+export async function findRunning(token, { ports, ms = 1200, statusMs = 20000, strict = false } = {}) {
   if (!/^[0-9a-f]{64}$/.test(token || '')) return null;
   const list = ports || Array.from({ length: PORT_RANGE[1] - PORT_RANGE[0] + 1 }, (_, i) => PORT_RANGE[0] + i);
   const ctl = new AbortController(); const { signal } = ctl;
   try {
     return await Promise.any(list.map(async (port) => {
-      const a = await askLocal(port, { ms, signal });
-      if (a.status !== 401 || a.json?.error !== 'token') throw new Error('no');
+      const nonce = randomBytes(32).toString('hex');
+      const a = await askLocal(port, { path: `${PROVE_PATH}?nonce=${nonce}`, ms, signal });
+      const proved = a.status === 200 && a.json?.ok === true && typeof a.json.proof === 'string' && tokenOk(a.json.proof, proofOf(token, port, nonce));
+      if (!proved && (strict || a.status !== 401 || a.json?.error !== 'token')) throw new Error('no');
       const b = await askLocal(port, { headers: { 'x-lecpage-bridge': token }, ms: statusMs, signal });
       if (b.status !== 200 || !b.json?.ok || !Array.isArray(b.json.agents)) throw new Error('no');
       return { port, status: b.json };
@@ -1594,7 +1640,8 @@ const launcherCloses = (args = {}) => process.platform === 'win32' && !!process.
  */
 export async function studioAgain({ args = {}, home = studioHome(), root = ROOT, log = () => {}, json = false, closes = launcherCloses(args), open: openImpl = openBrowser, fail = (m) => { throw new Error(m); }, wait = (ms) => new Promise((r) => setTimeout(r, ms)), find = findRunning, ask = askLocal, latest = process.env.LECPAGE_CONNECT_LATEST || '' } = {}) {
   const token = savedToken(home);
-  let run = await find(token);
+  const seen = proveSeen(home); // 이 PC에서 짝 증명 길이 있는 판을 켠 적이 있으면 증명하는 커넥트만 내 것으로 봄
+  let run = await find(token, { strict: seen });
   if (!run) return false;
   if (args['new-token']) { fail(`lecpage 커넥트가 이미 켜져 있어요(http://127.0.0.1:${run.port}/). 켜진 창을 닫은 뒤 다시 --new-token으로 켜 주세요.`); return true; }
   const mine = readBuild(root) || `${VERSION}-dev`;
@@ -1611,7 +1658,7 @@ export async function studioAgain({ args = {}, home = studioHome(), root = ROOT,
       const before = run.status.build; run = null;
       for (let i = 0; i < 120 && !run; i++) {
         await wait(1000);
-        const v = await find(token);
+        const v = await find(token, { strict: seen });
         const u = v?.status.update || {};
         if (v && (u.state === 'error' || (v.status.build !== before && u.state !== 'restart'))) run = v;
       }

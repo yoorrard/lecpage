@@ -63,12 +63,33 @@ function wrangler(argv, { cwd, input } = {}) {
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, out: redact(out), raw: out };
 }
-export const redact = (s) => String(s).replace(/(CLOUDFLARE_API_TOKEN|ONPOD_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***').replace(/\b(op_u_|opk_|op_p_)[A-Za-z0-9_-]{6,}/g, '$1***');
-/** 출력에서 주소 찾기: https://<이름>.<계정>.workers.dev (시험용으로 http://127.0.0.1:포트도) */
+/**
+ * 출력에서 비밀 모양을 가림: JSON 꼴("token": "…", "key": "…" — wrangler auth token --json이 전역 API 키도 이렇게 찍음),
+ * 이름 = 값 꼴(CLOUDFLARE_API_TOKEN=…, Bearer …), Onpod 키
+ */
+export const redact = (s) => String(s)
+  .replace(/("(?:token|key|api_?key|secret|password|access_?token|refresh_?token|oauth_?token)"\s*:\s*")[^"]{6,}(")/gi, '$1***$2')
+  .replace(/(CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|ONPOD_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***')
+  .replace(/\b(op_u_|opk_|op_p_)[A-Za-z0-9_-]{6,}/g, '$1***');
+/**
+ * 출력에서 주소 찾기: https://<이름>.<계정>.workers.dev (시험용으로 http://127.0.0.1:포트/…/<이름>도).
+ * 이름은 주소의 한 마디와 통째로 같아야 함: 이름이 짧을 때 출력에 섞인 다른 주소(대시보드·문서 링크)를 사이트 주소로 고르지 않게
+ */
 export function findUrl(out, name) {
   const esc = name.replace(/[-]/g, '\\-');
-  const m = out.match(new RegExp(`https://${esc}\\.[a-z0-9-]+\\.workers\\.dev`)) || out.match(new RegExp(`https?://[^\\s"']*${esc}[^\\s"']*`));
+  const m = out.match(new RegExp(`https://${esc}\\.[a-z0-9-]+\\.workers\\.dev`)) || out.match(new RegExp(`http://(?:127\\.0\\.0\\.1|localhost)(?::\\d+)?/(?:[^\\s"']*/)?${esc}(?=[/\\s"']|$)[^\\s"']*`));
   return m ? m[0].replace(/[.,)]+$/, '') : '';
+}
+/**
+ * 배포 도구(npx·wrangler)를 돌릴 빈 작업 폴더: 빈 package.json(npm이 여기서 멈춤)과 빈 wrangler.toml(wrangler가 여기서 멈춤)을 둠.
+ * 임시 폴더는 여러 사용자가 함께 쓰는 곳(/tmp) 아래일 수 있어, 그냥 그 아래에서 돌리면 위쪽 폴더에 남이 둔 node_modules·.npmrc·wrangler.toml을 읽음
+ * (실측: 위쪽 wrangler.toml의 [build] command가 실행됨). 폴더는 본인만 드나듦(mkdtemp)
+ */
+export function toolDir(prefix = 'lecpage-run-') {
+  const d = mkdtempSync(join(tmpdir(), prefix));
+  writeFileSync(join(d, 'package.json'), '{"private":true}\n');
+  writeFileSync(join(d, 'wrangler.toml'), '# lecpage: 위쪽 폴더의 wrangler 설정을 읽지 않게 둔 빈 설정\n');
+  return d;
 }
 const lastLines = (s, n = 6) => String(s).trim().split('\n').filter(Boolean).slice(-n).map((l) => '  ' + l.slice(0, 160));
 
@@ -223,7 +244,7 @@ export async function publishCmd(h) {
 
   // 사이트 올리기: 빈 임시 폴더에서(위쪽 폴더의 wrangler.json·jsonc·toml을 읽지 않게)
   if (existsSync(join(dist, '.git')) && !existsSync(join(dist, '.assetsignore'))) copyFileSync(join(SKILL, 'templates', 'deploy', 'cloudflare', '.assetsignore'), join(dist, '.assetsignore'));
-  const tmp = mkdtempSync(join(tmpdir(), 'lecpage-pub-'));
+  const tmp = toolDir('lecpage-pub-'); // 빈 package.json·wrangler.toml이 든 폴더(위쪽 폴더의 것을 읽지 않게)
   const sd = wrangler(['deploy', '--assets', dist, '--name', name, '--compatibility-date', today, ...(args.temporary ? ['--temporary'] : [])], { cwd: tmp });
   rmSync(tmp, { recursive: true, force: true });
   const site = findUrl(sd.raw, name);
@@ -339,7 +360,10 @@ async function publishOnpod(h, { work, state, dist, tdir, bp, dry, notes = [] })
     const who = onpodRun(['whoami']);
     if (!who.ok) { cleanup(); fail('Onpod 로그인이 필요해요. 강사에게 https://console.onpod.ai/signup 가입(구글) → 콘솔 API 키 화면에서 키 만들기를 부탁하고, 그 키를 환경 변수 ONPOD_TOKEN으로 받아 다시 실행해 주세요(대화에 붙여 넣지 않기).\n' + lastLines(who.out, 3).join('\n')); }
   }
-  const dep = onpodRun(['static', 'deploy', stage, '--name', name, '--no-spa', ...(verify ? [] : ['--no-verify'])], { cwd: stage });
+  // 올릴 폴더는 인자로 넘기고, 도구는 빈 package.json이 든 작업 폴더에서 돌림(임시 폴더의 위쪽에 남이 둔 node_modules·.npmrc를 npx가 읽지 않게)
+  const run = toolDir('lecpage-onpod-run-');
+  const dep = onpodRun(['static', 'deploy', stage, '--name', name, '--no-spa', ...(verify ? [] : ['--no-verify'])], { cwd: run });
+  rmSync(run, { recursive: true, force: true });
   cleanup();
   if (!dep.ok) {
     const t = dep.raw;

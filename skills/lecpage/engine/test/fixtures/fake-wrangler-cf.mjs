@@ -21,6 +21,10 @@ console.log(' ⛅️ wrangler 0.0.0-fake\n────────────�
 const s = read();
 const cmd = argv[0] === 'auth' || argv[0] === 'secret' ? `${argv[0]} ${argv[1]}` : argv[0];
 log(`${cmd}${nameOf() ? ' ' + nameOf() : ''}${process.env.CLOUDFLARE_ACCOUNT_ID ? ' @' + process.env.CLOUDFLARE_ACCOUNT_ID.slice(0, 4) : ''}`);
+// 돌린 폴더(시험이 '공용 임시 폴더 아래가 아니고 빈 package.json·wrangler.toml이 있음'을 봄): 폴더 \t package.json 있음 \t wrangler.toml 있음
+if (process.env.FAKE_WRANGLER_CWD) appendFileSync(process.env.FAKE_WRANGLER_CWD, [process.cwd(), existsSync(join(process.cwd(), 'package.json')), existsSync(join(process.cwd(), 'wrangler.toml'))].join('\t') + '\n');
+// 전역 API 키로 로그인된 PC 흉내(환경 변수 CLOUDFLARE_API_KEY): auth token이 키를 그대로 찍음
+if (cmd === 'auth token' && s.apiKey) { console.log(JSON.stringify({ type: 'api_key', key: s.apiKey, email: 'teacher@example.com' }, null, 2)); process.exit(0); }
 
 if (cmd === 'whoami') {
   if (!argv.includes('--json')) die('test expects --json', 2);

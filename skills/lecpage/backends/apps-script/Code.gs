@@ -122,18 +122,22 @@ function menuInstall() {
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var o; try { o = readInstall(r.getResponseText()); } catch (e) { if (e && e.lec) { ui.alert(e.message); return; } throw e; }
   applyInstall(o, installMark(r.getResponseText()));
+  // 코드에 든 설치 코드(INSTALL)가 있으면 '이미 본 것'으로 적어 둠: 다음 연결 확인(ping) 때 그 예전 설정으로 되돌아가지 않게
+  if (INSTALL) PropertiesService.getScriptProperties().setProperty('INSTALL_SEEN', installMark(INSTALL));
   ui.alert('설치가 끝났어요(연수 코드 ' + o.code + ').\n이제 확장 프로그램 → Apps Script에서 배포 → 새 배포 → 웹 앱으로 배포하고, 나온 웹 앱 URL을 lecpage 앱에 붙여 넣어 주세요.');
 }
 /** 코드에 든 설치 코드(INSTALL)를 처음 한 번 적용: 웹 앱의 연결 확인(ping) 때. 시트 메뉴·setup 실행 없이 붙여 넣고 배포만 하면 되게.
- *  이미 적용한 설치 코드는 다시 적용하지 않음(그 뒤 메뉴로 바꾼 관리자 키·연수 코드를 덮지 않음). */
+ *  이미 적용한 설치 코드는 다시 적용하지 않음(그 뒤 메뉴로 바꾼 관리자 키·연수 코드를 덮지 않음).
+ *  INSTALL_SEEN: 코드에 든 설치 코드 가운데 이미 본 것(적용했거나, 그 뒤 메뉴 '한 번에 설치'로 다른 설치 코드를 넣음).
+ *  INSTALLED(마지막으로 적용한 설치 코드)만 보면 메뉴로 넣은 설정이 다음 ping에서 코드의 예전 INSTALL로 되돌아감 */
 function ensureInstalled() {
   if (!INSTALL) return;
   var p = PropertiesService.getScriptProperties(); var mark = installMark(INSTALL);
-  if (p.getProperty('INSTALLED') === mark) return;
+  if (p.getProperty('INSTALL_SEEN') === mark) return;
   var o = readInstall(INSTALL);
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) throw httpErr(503, 'busy', '요청이 몰렸어요. 잠시 후 다시 시도해 주세요.');
-  try { if (p.getProperty('INSTALLED') !== mark) applyInstall(o, mark); } finally { lock.releaseLock(); }
+  try { if (p.getProperty('INSTALL_SEEN') !== mark) { applyInstall(o, mark); p.setProperty('INSTALL_SEEN', mark); } } finally { lock.releaseLock(); }
 }
 function headerOf(name) {
   if (name === 'tombstones') return ['col', 'id', 'code', 'at'];

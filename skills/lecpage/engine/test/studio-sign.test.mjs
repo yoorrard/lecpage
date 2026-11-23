@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync, statSync, cpSync, readdirSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash, generateKeyPairSync, sign as edSign } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, sign as edSign } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import http from 'node:http';
 import * as U from '../../scripts/studio-update.mjs';
@@ -37,10 +37,13 @@ const runningJs = {
   cmd: () => readFileSync(CMD, 'utf8').match(/^\$RunningJs = @'\r?\n([^\r\n]*)\r?\n'@\r?$/m)?.[1],
 };
 /** lecpage 커넥트처럼(또는 다른 프로그램처럼) 답하는 작은 서버 → { port, tokens(받은 토큰 수), close } */
-async function fakeConnect(port, { connect = true } = {}) {
+/** 가짜 커넥트. connect: 토큰 없는 물음에 401 token(증명 길이 없는 예전 판 꼴) · prove: 그 토큰으로 짝 증명에 답함(새 판 꼴) · 둘 다 아니면 다른 프로그램 */
+async function fakeConnect(port, { connect = true, prove = '' } = {}) {
   const got = { tokens: 0 };
   const srv = http.createServer((q, s) => {
     if (q.headers['x-lecpage-bridge']) got.tokens++;
+    const u = new URL(q.url, 'http://x');
+    if (prove && u.pathname === '/bridge/prove') { s.writeHead(200, { 'content-type': 'application/json' }); return s.end(JSON.stringify({ ok: true, proof: createHmac('sha256', prove).update(`lecpage-connect-prove:v1:${srv.address().port}:${u.searchParams.get('nonce')}`).digest('hex') })); }
     if (connect) { s.writeHead(401, { 'content-type': 'application/json' }); return s.end('{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}'); }
     s.writeHead(200, { 'content-type': 'text/html' }); s.end('<!doctype html><title>다른 프로그램</title>');
   });
@@ -283,13 +286,21 @@ test('실행 파일 두 개의 켜진 커넥트 확인 글이 같고, 셸·Power
   assert.ok(js, 'lecpage-connect.sh의 RUNNING_JS');
   assert.equal(runningJs.cmd(), js, 'lecpage-connect.cmd의 $RunningJs가 .sh와 같아야 해요');
   assert.doesNotMatch(js, /["$`!]/); assert.doesNotMatch(js, /\\$/);
-  const run = (ports) => new Promise((ok) => { spawn(process.execPath, ['-e', js], { env: { LECPAGE_CONNECT_PORTS: ports } }).on('exit', ok); });
+  // 이 사용자 폴더의 토큰(studio.json): 짝 증명의 답을 이것으로 확인(토큰은 보내지 않음)
+  const MINE = 'a1'.repeat(32), THEIRS = 'b2'.repeat(32);
+  const home = mkdtempSync(join(T, 'shome-')); writeFileSync(join(home, 'studio.json'), JSON.stringify({ token: MINE }));
+  const empty = mkdtempSync(join(T, 'shome-'));
+  const run = (ports, h = home) => new Promise((ok) => { spawn(process.execPath, ['-e', js], { env: { LECPAGE_CONNECT_PORTS: ports, LECPAGE_STUDIO_HOME: h } }).on('exit', ok); });
   const real = await fakeConnect(0); const other = await fakeConnect(0, { connect: false });
+  const mine = await fakeConnect(0, { prove: MINE }); const theirs = await fakeConnect(0, { prove: THEIRS });
   try {
-    assert.equal(await run(`${real.port}-${real.port}`), 0, '커넥트는 토큰 없는 물음에 401 token');
+    assert.equal(await run(`${real.port}-${real.port}`), 0, '증명 길이 없는 예전 판(401 token)은 누구 것인지 알 수 없어 켜진 것으로 봄');
     assert.equal(await run(`${other.port}-${other.port}`), 1, '다른 프로그램');
-    assert.equal(real.got.tokens + other.got.tokens, 0, '토큰을 보내지 않음');
-  } finally { await real.close(); await other.close(); }
+    assert.equal(await run(`${mine.port}-${mine.port}`), 0, '내 토큰으로 증명하는 커넥트');
+    assert.equal(await run(`${theirs.port}-${theirs.port}`), 1, '같은 PC의 다른 사용자가 켠 커넥트는 내 것이 아님(내 묶음을 바꿀 수 있음)');
+    assert.equal(await run(`${mine.port}-${mine.port}`, empty), 1, '이 사용자 폴더에 토큰이 없으면 내 커넥트일 수 없음');
+    assert.equal(real.got.tokens + other.got.tokens + mine.got.tokens + theirs.got.tokens, 0, '토큰을 보내지 않음');
+  } finally { await real.close(); await other.close(); await mine.close(); await theirs.close(); }
   assert.equal(await run(`${real.port}-${real.port}`), 1, '꺼져 있음');
 });
 
@@ -300,8 +311,16 @@ test('Windows 실행 파일(글로만 확인): 켜진 커넥트가 있으면 갈
   const ex = at('Expand-Archive -LiteralPath $zip');
   ['$haveBuilt = Built $app', "throw '받은 파일이 지금 버전보다 예전 것이에요.'", 'if ($hadApp) { MoveRetry $app $old }', 'try { MoveRetry $tmp $app }', 'Move-Item -LiteralPath $old -Destination $app'].reduce((from, x) => at(x, from) + 1, ex);
   assert.doesNotMatch(ps, /Remove-Item -LiteralPath \$app /, '있던 묶음을 먼저 지우지 않음(반쯤 지운 채 멈추지 않게)');
-  assert.ok(at("if ($locked) { Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue; $locked = $false }") < at('& $node $cli @a'), '커넥트를 켜기 전에 잠금을 풂');
-  assert.match(ps, /\} finally \{\r?\n  if \(\$locked\)/);
+  const free = "if ($lockHold) { try { $lockHold.Dispose() } catch { }; $lockHold = $null; Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue }";
+  assert.ok(at(free) < at('& $node $cli @a'), '커넥트를 켜기 전에 잠금을 풂');
+  assert.match(ps, /\} finally \{\r?\n  if \(\$lockHold\)/);
+  // 준비 잠금: 잠금 파일을 혼자만 열어 둠(프로세스가 죽으면 Windows가 풂 → 강제 종료 뒤 남은 잠금 때문에 기다리지 않음). 살아 있는 잠금은 오래 걸려도 가져가지 않음
+  at('[IO.File]::Open($lock, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)');
+  at("if ($waited -ge 300) { Say '다른 창에서 lecpage 커넥트를 준비하는 데 오래 걸리고 있어요. 그 창이 끝난 뒤 다시 실행해 주세요.'; exit 1 }");
+  assert.doesNotMatch(ps, /\$locked\b/, '예전 잠금 변수가 남지 않음');
+  assert.doesNotMatch(ps, /LastWriteTime/, '잠금 나이로 가져가지 않음');
+  // 있던 묶음에 묶은 때(BUILT)가 없으면 받은 묶음에는 있어야 함(.sh의 older와 같은 규칙)
+  at('($haveApp -and $null -eq $haveBuilt -and $null -eq $newBuilt)');
 });
 
 test('.sh 실행 파일: 서명한 예전 묶음으로 내리지 않음 · 켜진 커넥트가 있으면 묶음을 갈아 끼우지 않음(받지도 않음) · 두 번 켜면 먼저 켠 쪽을 기다림 · 남는 폴더 없음', { skip: !canSh && 'sh·curl·tar가 있는 macOS·Linux에서만', timeout: 120000 }, async () => {
@@ -313,7 +332,7 @@ test('.sh 실행 파일: 서명한 예전 묶음으로 내리지 않음 · 켜�
   const rel = await release(files);
   const h = mkdtempSync(join(T, 'h-')); const lp = lpDir(h);
   const ver = () => readFileSync(join(lp, 'studio', 'VERSION'), 'utf8').trim();
-  const left = () => readdirSync(lp).filter((n) => /launcher|\.lock$/.test(n) && n !== 'lecpage-connect.sh');
+  const left = () => readdirSync(lp).filter((n) => /launcher|\.lock(\.|$)/.test(n) && n !== 'lecpage-connect.sh'); // 잠금·치우다 만 잠금(.stale.)·임시 폴더
   const none = { LECPAGE_CONNECT_PORTS: '1-1' }; // 켜진 커넥트 없음(포트 1은 닫혀 있음)
   const lock = join(lp, 'prepare.lock');
   try {
@@ -354,5 +373,44 @@ test('.sh 실행 파일: 서명한 예전 묶음으로 내리지 않음 · 켜�
     mkdirSync(lock); const past = new Date(Date.now() - 20 * 60e3); utimesSync(lock, past, past);
     r = await runLauncher(keyed, h, rel.base, none);
     assert.equal(r.code, 0, r.out); assert.doesNotMatch(r.out, /다른 창에서/); assert.deepEqual(left(), []);
+    // 잠근 프로세스가 죽었으면(강제 종료) 방금 만든 잠금이어도 기다리지 않고 가져감
+    const dead = spawnSync(process.execPath, ['-e', '']).pid;
+    mkdirSync(lock); writeFileSync(join(lock, 'pid'), `${dead}\n`);
+    const t0 = Date.now();
+    r = await runLauncher(keyed, h, rel.base, none);
+    assert.equal(r.code, 0, r.out); assert.doesNotMatch(r.out, /다른 창에서/); assert.deepEqual(left(), []);
+    assert.ok(Date.now() - t0 < 60000, '10분을 기다리지 않음');
+    // 잠근 프로세스가 살아 있으면 잠금이 오래됐어도(10분 넘음) 가져가지 않고 기다림 → 그 창이 끝나면 이어 감
+    mkdirSync(lock); writeFileSync(join(lock, 'pid'), `${process.pid}\n`); utimesSync(lock, past, past);
+    setTimeout(() => rmSync(lock, { recursive: true, force: true }), 2500);
+    r = await runLauncher(keyed, h, rel.base, none);
+    assert.equal(r.code, 0, r.out); assert.match(r.out, /다른 창에서 lecpage 커넥트를 준비하고 있어요/); assert.deepEqual(left(), []);
+    // 같은 PC의 다른 사용자가 켠 커넥트(짝 증명이 내 토큰과 맞지 않음)는 내 것이 아님 → 지금처럼 바꿈. 내 커넥트(증명이 맞음)면 갈아 끼우지 않음
+    const MINE = 'c3'.repeat(32);
+    mkdirSync(join(h, '.config', 'lecpage'), { recursive: true }); writeFileSync(join(h, '.config', 'lecpage', 'studio.json'), JSON.stringify({ token: MINE }));
+    const shome = { LECPAGE_STUDIO_HOME: join(h, '.config', 'lecpage') };
+    put(bundle('1.3.0-ddd', { built: 1763900600, selfUpdate: true }), '1.3.0-ddd');
+    const theirs = await fakeConnect(0, { prove: 'd4'.repeat(32) });
+    try {
+      r = await runLauncher(keyed, h, rel.base, { ...shome, LECPAGE_CONNECT_PORTS: `${theirs.port}-${theirs.port}` });
+      assert.equal(r.code, 0, r.out); assert.doesNotMatch(r.out, /이미 켜져/); assert.equal(ver(), '1.3.0-ddd'); assert.equal(theirs.got.tokens, 0);
+    } finally { await theirs.close(); }
+    put(bundle('1.4.0-eee', { built: 1763900700, selfUpdate: true }), '1.4.0-eee');
+    const mine = await fakeConnect(0, { prove: MINE });
+    try {
+      r = await runLauncher(keyed, h, rel.base, { ...shome, LECPAGE_CONNECT_PORTS: `${mine.port}-${mine.port}` });
+      assert.equal(r.code, 0, r.out); assert.match(r.out, /이미 켜져 있어요/); assert.equal(ver(), '1.3.0-ddd'); assert.equal(mine.got.tokens, 0);
+    } finally { await mine.close(); }
+    // 있던 묶음에 묶은 때가 없으면(이 확인을 넣기 전 판) 받은 묶음에는 있어야 함: 그 시절의 서명한 묶음을 다시 내놓아도 바꾸지 않음. 처음 받기는 그대로 받음
+    const h2 = mkdtempSync(join(T, 'h-')); const ver2 = () => readFileSync(join(lpDir(h2), 'studio', 'VERSION'), 'utf8').trim();
+    put(bundle('0.9.0-pre'), '0.9.0-pre');
+    r = await runLauncher(keyed, h2, rel.base, none);
+    assert.equal(r.code, 0, r.out); assert.equal(ver2(), '0.9.0-pre', '처음 받기');
+    put(bundle('0.8.0-older'), '0.8.0-older');
+    r = await runLauncher(keyed, h2, rel.base, none);
+    assert.match(r.out, /예전 것이라 바꾸지 않았어요/); assert.equal(ver2(), '0.9.0-pre');
+    put(bundle('1.1.0-bbb', { built: 1763900000 }), '1.1.0-bbb');
+    r = await runLauncher(keyed, h2, rel.base, none);
+    assert.equal(r.code, 0, r.out); assert.equal(ver2(), '1.1.0-bbb', '묶은 때가 있는 판으로는 바꿈');
   } finally { await rel.close(); }
 });

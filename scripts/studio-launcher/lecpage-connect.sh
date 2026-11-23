@@ -124,32 +124,62 @@ sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' 
 VERIFY_JS="const c=require('crypto'),f=require('fs'),e=process.env;let ok=false;try{const d=f.readFileSync(e.LECPAGE_VERIFY_FILE);const s=f.readFileSync(e.LECPAGE_VERIFY_SIG,'utf8').split(/\s+/).filter(Boolean).slice(0,8).map(x=>Buffer.from(x,'base64')).filter(b=>b.length===64);for(const x of String(e.LECPAGE_VERIFY_KEYS||'').split(/\s+/).filter(Boolean)){try{const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});for(const b of s)if(c.verify(null,d,k,b))ok=true}catch(_){}}}catch(_){}process.exit(ok?0:1)"
 sig_ok() { LECPAGE_VERIFY_FILE="$1" LECPAGE_VERIFY_SIG="$2" LECPAGE_VERIFY_KEYS="$SIGNING_KEYS" "$NODE" -e "$VERIFY_JS" >/dev/null 2>&1; }
 node_ok() { "$1" -e 'process.exit(+process.versions.node.split(".")[0] >= 22 ? 0 : 1)' >/dev/null 2>&1; }
-# 이 PC에 lecpage 커넥트가 켜져 있는지(Node.js 내장 http, 포트 6600~6649): 토큰 없이 물으면 커넥트는 401 { error:'token' }으로 답함 → 있으면 0.
-# 토큰은 보내지 않음. lecpage-connect.cmd에도 같은 글이 있음(시험이 같은지 확인). VERIFY_JS처럼 큰따옴표·$·느낌표·역따옴표를 쓰지 않음
-RUNNING_JS="const h=require('http'),m=/^(\d+)-(\d+)/.exec(process.env.LECPAGE_CONNECT_PORTS||'6600-6649')||[0,6600,6649];let n=0,f=false;const fin=()=>process.exit(f?0:1);setTimeout(fin,4000);for(let p=+m[1];p<=+m[2]&&p-m[1]<64;p++){n++;let k=false;const done=()=>{if(k)return;k=true;if(f||--n<=0)fin()};const q=h.get({host:'127.0.0.1',port:p,path:'/bridge/status',timeout:1500},r=>{let b='';r.on('data',d=>{if(b.length<4096)b+=d});r.on('error',done);r.on('end',()=>{try{if(r.statusCode===401&&JSON.parse(b).error==='token')f=true}catch(_){}done()})});q.on('timeout',()=>q.destroy());q.on('error',done)}if(n===0)fin()"
+# 이 사용자의 lecpage 커넥트가 켜져 있는지(Node.js 내장 http·crypto, 포트 6600~6649) → 있으면 0. 토큰은 보내지 않음:
+# 토큰 없이 짝 증명을 물어(/bridge/prove?nonce=…) 이 사용자 폴더의 토큰(studio.json)으로 답이 맞는 커넥트만 내 것으로 봄
+# (같은 PC의 다른 사용자가 켠 커넥트 때문에 내 묶음을 못 바꾸지 않게). 증명 길이 없는 예전 판은 401 { error:'token' }으로 답함 → 누구 것인지 알 수 없어 켜진 것으로 봄.
+# lecpage-connect.cmd에도 같은 글이 있음(시험이 같은지 확인). VERIFY_JS처럼 큰따옴표·$·느낌표·역따옴표를 쓰지 않음
+RUNNING_JS="const h=require('http'),c=require('crypto'),f=require('fs'),P=require('path'),o=require('os'),e=process.env,m=/^(\d+)-(\d+)/.exec(e.LECPAGE_CONNECT_PORTS||'6600-6649')||[0,6600,6649];let t='';try{const w=process.platform,d=e.LECPAGE_STUDIO_HOME||(w==='win32'?P.join(e.APPDATA||P.join(o.homedir(),'AppData','Roaming'),'lecpage'):w==='darwin'?P.join(o.homedir(),'Library','Application Support','lecpage'):P.join(e.XDG_CONFIG_HOME||P.join(o.homedir(),'.config'),'lecpage')),k=JSON.parse(f.readFileSync(P.join(d,'studio.json'),'utf8')).token;if(typeof k==='string'&&k.length===64&&/[^0-9a-f]/.test(k)===false)t=k}catch(_){}let n=0,g=false;const fin=()=>process.exit(g?0:1);setTimeout(fin,4000);for(let p=+m[1];p<=+m[2]&&p-m[1]<64;p++){n++;let k=false;const done=()=>{if(k)return;k=true;if(g||--n<=0)fin()},x=c.randomBytes(32).toString('hex'),q=h.get({host:'127.0.0.1',port:p,path:'/bridge/prove?nonce='+x,timeout:1500},r=>{let b='';r.on('data',d=>{if(b.length<4096)b+=d});r.on('error',done);r.on('end',()=>{try{const j=JSON.parse(b);if(r.statusCode===401&&j.error==='token')g=true;if(r.statusCode===200&&t&&j.proof===c.createHmac('sha256',t).update('lecpage-connect-prove:v1:'+p+':'+x).digest('hex'))g=true}catch(_){}done()})});q.on('timeout',()=>q.destroy());q.on('error',done)}if(n===0)fin()"
 connect_running() { "$NODE" -e "$RUNNING_JS" >/dev/null 2>&1; }
-# 준비 잠금($LOCK 폴더: mkdir은 하나만 성공). 10분 넘은 잠금(먼저 켠 창이 중간에 닫힘)은 치우고 가져감. 잠글 수 없으면 잠금 없이 이어 감
+# 준비 잠금($LOCK 폴더: mkdir은 하나만 성공. 그 안 pid에 잠근 프로세스 번호).
+# 잠근 프로세스가 죽었으면(창을 강제로 닫음·전원이 꺼짐) 바로 가져감. 살아 있으면 끝날 때까지 기다리고, 10분을 넘겨도 가져가지 않고 안내한 뒤 끝냄
+# (준비가 오래 걸리는 창과 같은 폴더를 함께 바꾸지 않게). pid가 없는 잠금(예전 실행 파일이 만든 것)은 10분, 어떤 잠금이든 1시간이 넘으면 버려진 것으로 봄.
+# 잠글 수 없으면 잠금 없이 이어 감
+lock_stale() { # $1 잠금 폴더 → 버려진 것이면 0
+  LPID=$(cat "$1/pid" 2>/dev/null || true)
+  case "$LPID" in
+    ''|*[!0-9]*) [ -n "$(find "$1" -maxdepth 0 -mmin +10 2>/dev/null)" ] ;;
+    *) ! kill -0 "$LPID" 2>/dev/null || [ -n "$(find "$1" -maxdepth 0 -mmin +60 2>/dev/null)" ] ;;
+  esac
+}
 lock_take() {
   LW=0
   while ! mkdir "$LOCK" 2>/dev/null; do
     [ -d "$LOCK" ] || { LOCK=""; return 0; }
-    if [ "$LW" -ge 300 ] || [ -n "$(find "$LOCK" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
-      rmdir "$LOCK" 2>/dev/null || { LOCK=""; return 0; }
+    if lock_stale "$LOCK"; then
+      # 버려진 잠금은 이름을 바꿔 가져간 쪽만 치움(둘이 함께 치우다 방금 생긴 새 잠금을 지우지 않게). 옮기고 보니 살아 있는 잠금이면 되돌림
+      LS="$LOCK.stale.$$"
+      if mv "$LOCK" "$LS" 2>/dev/null; then
+        if lock_stale "$LS"; then rm -rf "$LS"; else mv "$LS" "$LOCK" 2>/dev/null || rm -rf "$LS"; fi
+      else sleep 1; fi
       continue
+    fi
+    if [ "$LW" -ge 300 ]; then
+      say "다른 창에서 lecpage 커넥트를 준비하는 데 오래 걸리고 있어요. 그 창이 끝난 뒤 다시 실행해 주세요."
+      LOCK=""; exit 1
     fi
     [ "$LW" -ne 0 ] || say "다른 창에서 lecpage 커넥트를 준비하고 있어요. 끝날 때까지 잠시 기다려요."
     LW=$((LW + 1)); sleep 2
   done
+  echo "$$" > "$LOCK/pid" 2>/dev/null || true
 }
-lock_free() { if [ -n "${LOCK:-}" ]; then rmdir "$LOCK" 2>/dev/null || true; LOCK=""; fi; }
+lock_free() { if [ -n "${LOCK:-}" ]; then rm -f "$LOCK/pid" 2>/dev/null || true; rmdir "$LOCK" 2>/dev/null || true; LOCK=""; fi; }
 # 받은 묶음($1)이 있던 묶음($2)보다 예전 것인지: 묶음 안의 BUILT(묶은 때, 1970년부터 센 초. 서명에 함께 들어감).
-# 있던 것에 BUILT가 있는데 받은 것에 없거나 더 앞서면 예전 것(0). 있던 것에 없으면(이 확인을 넣기 전 판) 견주지 않음(1)
+# 있던 것에 BUILT가 있는데 받은 것에 없거나 더 앞서면 예전 것(0).
+# 있던 묶음에 BUILT가 없으면(이 확인을 넣기 전 판) 받은 것에는 BUILT가 있어야 함(그 뒤에 묶은 판이라는 표시): 없으면 예전 것(0) —
+# 이 확인이 없던 판의 서명한 묶음을 다시 내놓아 한 번 내리는 것도 막음. 있던 묶음이 아예 없으면(처음 받기) 견주지 않음(1)
+built_of() { # $1 묶음 폴더 → 묶은 때(숫자 9~12자리) 또는 빈 글
+  BV=$(cat "$1/BUILT" 2>/dev/null || true)
+  case "$BV" in ''|*[!0-9]*) BV="" ;; esac
+  if [ -n "$BV" ] && { [ "${#BV}" -lt 9 ] || [ "${#BV}" -gt 12 ]; }; then BV=""; fi
+  printf '%s' "$BV"
+}
 older() {
-  OB=$(cat "$2/BUILT" 2>/dev/null || true); NB=$(cat "$1/BUILT" 2>/dev/null || true)
-  case "$OB" in ''|*[!0-9]*) return 1 ;; esac
-  [ "${#OB}" -ge 9 ] && [ "${#OB}" -le 12 ] || return 1
-  case "$NB" in ''|*[!0-9]*) return 0 ;; esac
-  [ "${#NB}" -ge 9 ] && [ "${#NB}" -le 12 ] || return 0
+  OB=$(built_of "$2"); NB=$(built_of "$1")
+  if [ -z "$OB" ]; then
+    if [ -d "$2/skills" ] && [ -z "$NB" ]; then return 0; fi
+    return 1
+  fi
+  [ -n "$NB" ] || return 0
   [ "$NB" -lt "$OB" ]
 }
 # 묶음 받기 → SHA-256 확인 → (공개 키가 있으면) 서명 확인 → 옆 폴더에 풀기 → 예전 것이 아닌지 확인 → 이름을 바꿔 갈아 끼움.
