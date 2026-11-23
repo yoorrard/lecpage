@@ -32,6 +32,14 @@ function DayLinks({ p, adminKey }) {
 /** list: 연수 목록, once·busyProps: 두 번 눌러도 한 번만(Home), reload: 목록 다시 읽기. 지우기 확인 창도 여기(첫 화면 코드를 가볍게) */
 export function Mine({ list, once, busyProps, reload }) {
   const [del, setDel] = useState(null);
+  const [gone, setGone] = useState(false); // 삭제하는 중(도는 AI 작업을 멈추느라 잠깐 걸릴 수 있음): 두 번 누르지 않게
+  async function remove() {
+    if (gone) return; setGone(true);
+    try { await deleteProject(del.id); toast('삭제했어요.'); } catch { toast('삭제하지 못했어요. 다시 눌러 주세요.'); }
+    setGone(false); setDel(null); await reload();
+    // 누른 줄이 없어져 초점이 사라졌으면(마지막 연수를 지움 등) 본문으로: 키보드·화면 읽기 프로그램이 처음부터 다시 가지 않게
+    setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) document.getElementById('main')?.focus({ preventScroll: true }); }, 60);
+  }
   // 배포한 연수의 강사 화면 관리자 키(바로 배포는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
   const [keys, setKeys] = useState({});
   useEffect(() => {
@@ -75,7 +83,7 @@ export function Mine({ list, once, busyProps, reload }) {
           : <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 필요하면 먼저 파일로 저장해 두세요.</p>}
         <div class="btn-row">
           {live && <button class="btn" onClick={async () => { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('열쇠까지 담아 저장했어요. 남에게 주지 마세요.'); }}>열쇠까지 파일로 저장</button>}
-          <button class="btn btn-danger" onClick={async () => { await deleteProject(del.id); setDel(null); toast('삭제했어요.'); reload(); }}>삭제</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
+          <button class="btn btn-danger" disabled={gone} aria-busy={gone ? 'true' : undefined} onClick={remove}>삭제</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
         </div>
       </Dialog>
     </section>

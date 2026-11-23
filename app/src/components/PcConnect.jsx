@@ -206,7 +206,7 @@ function PairHere() {
 }
 
 /** lecpage 커넥트가 이 화면보다 예전 판: 스스로 바꿀 수 있으면 버튼 하나(받아 바꾸고 같은 연결로 다시 켜짐), 아니면 다시 켜는 법 */
-function ConnectUpdate({ pc, onDone }) {
+export function ConnectUpdate({ pc, onDone }) {
   const u = usePcUpdate();
   async function run() { if (await updatePc() === 'done') { toast('lecpage 커넥트를 새 버전으로 바꿨어요.'); onDone?.(); } }
   if (!pcCanUpdate(pc) || u.state === 'manual') {
@@ -214,7 +214,7 @@ function ConnectUpdate({ pc, onDone }) {
     return (
       <div class="stack connect-old" style={{ gap: '6px' }} role="status">
         <p class="small"><b>lecpage 커넥트를 새 버전으로 바꿔야 해요.</b> {win ? 'lecpage 커넥트 창(작업 표시줄)을 닫고, 받은 lecpage-connect 파일을 다시 두 번 눌러요.' : 'lecpage 커넥트 터미널 창이 있으면 닫고, 받을 때 쓴 한 줄을 터미널에 다시 붙여 넣어요.'} 켤 때 새 버전을 받고 이 화면과 다시 연결돼요.</p>
-        {win ? <div class="btn-row"><a class="btn btn-sm" href={DOWNLOAD.win} download>파일 다시 받기</a></div>
+        {win ? <div class="btn-row"><a class="btn btn-sm" href={DOWNLOAD.win} download>파일 다시 다운로드</a></div>
           : <div class="agent-cmd"><code>{DOWNLOAD.sh}</code><button type="button" class="btn btn-sm" onClick={() => copy(DOWNLOAD.sh, '복사했어요. 터미널에 붙여 넣고 Enter를 눌러요.')}>복사</button></div>}
       </div>
     );
@@ -332,11 +332,11 @@ export function ClaudeTermRow() {
 
 const OS_NAME = { win: 'Windows', mac: 'Mac', linux: 'Linux' };
 /** 운영체제마다 받는 법 하나(지금 기기 것만 펼치고, 나머지는 [다른 운영체제]에 접어 둠) */
-function OsWay({ os, onGet, main = true }) {
+export function OsWay({ os, onGet, main = true }) {
   const btn = main ? 'btn btn-primary' : 'btn btn-sm';
   if (os === 'win') return (
     <div class="stack connect-way" style={{ gap: '8px' }}>
-      <div class="btn-row"><a class={btn} href={DOWNLOAD.win} download onClick={onGet}>lecpage 커넥트 받기 (Windows)</a></div>
+      <div class="btn-row"><a class={btn} href={DOWNLOAD.win} download onClick={onGet}>lecpage 커넥트 다운로드 (Windows)</a></div>
       <ol class="small ai-alt-steps">
         <li>받은 <b>lecpage-connect.cmd</b>를 두 번 눌러 실행해요. 브라우저가 경고하면 [유지]를 눌러요.</li>
         <li>"Windows의 PC 보호" 창이 뜨면 [추가 정보] → [실행]을 눌러요.</li>
@@ -369,7 +369,7 @@ function GetConnect({ onGet }) {
   );
 }
 
-/** 윈도우: 컴퓨터를 켤 때 lecpage 커넥트도 켜기(받은 파일로 켰을 때만) */
+/** 컴퓨터를 켤 때 lecpage 커넥트도 켜기(Windows·macOS·Linux, 받은 파일로 켰을 때만). Windows는 작업 표시줄에 작게, macOS·Linux는 창 없이 켜짐 */
 function Autostart({ st }) {
   const [on, setOn] = useState(!!st?.on);
   const [busy, setBusy] = useState(false);
@@ -377,7 +377,7 @@ function Autostart({ st }) {
   if (!st?.available) return null;
   async function flip(v) {
     setBusy(true);
-    try { const r = await autostart(v); setOn(!!r.on); toast(r.on ? '컴퓨터를 켤 때 lecpage 커넥트도 작게 켜져요.' : '컴퓨터를 켤 때 lecpage 커넥트를 켜지 않아요.'); } catch (e) { toast(e?.message || '설정하지 못했어요. 다시 눌러 주세요.'); }
+    try { const r = await autostart(v); setOn(!!r.on); toast(r.on ? '컴퓨터를 켤 때 lecpage 커넥트도 켜져요.' : '컴퓨터를 켤 때 lecpage 커넥트를 켜지 않아요.'); } catch (e) { toast(e?.message || '설정하지 못했어요. 다시 눌러 주세요.'); }
     setBusy(false);
   }
   return <label class="check small"><input type="checkbox" checked={on} disabled={busy} onChange={(e) => flip(e.currentTarget.checked)} /> 컴퓨터를 켤 때 lecpage 커넥트도 켜기</label>;

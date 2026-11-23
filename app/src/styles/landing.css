@@ -198,3 +198,7 @@
   .ld-fill{animation:none;transform:scaleX(1)}
   .ld-phone,.ld-devices{animation:none}
 }
+/* 터치 화면: 그림 아래 한 줄의 [사이트 열기]는 줄 높이를 바꾸지 않고 누르는 곳만 44px로 */
+@media (pointer: coarse){
+  .ld-cap a{display:inline-block;padding:12px 4px;margin:-12px -4px}
+}

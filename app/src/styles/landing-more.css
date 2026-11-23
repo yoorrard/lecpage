@@ -414,3 +414,7 @@
   .ld-st-steps li::after{transform:none}
   .ld-ex-card:hover .ld-ex-win img,.ld-ex-card:focus-within .ld-ex-win img{transform:none}
 }
+/* 터치 화면: 따로 선 링크는 줄 높이를 바꾸지 않고 누르는 곳만 44px로 */
+@media (pointer: coarse){
+  .ld-free-link a{display:inline-block;padding:10px 0;margin:-10px 0}
+}

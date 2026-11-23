@@ -7,6 +7,8 @@ export function ConsentHost() {
   const a = useConsentAsk();
   const [ok, setOk] = useState(false);
   useEffect(() => { setOk(false); }, [a]);
+  // 창이 열린 채 다른 화면으로 가면(브라우저 뒤로 가기 등) 묻던 것을 '닫음'으로 끝냄: 안 그러면 다음에 들어간 화면에서 누르지도 않은 동의 창이 다시 뜸
+  useEffect(() => () => { answerConsent(false); }, []);
   const t = a && consentText(a.id);
   return (
     <Dialog open={!!t} onClose={() => answerConsent(false)} label={t?.title || '연결'}>

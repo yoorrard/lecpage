@@ -44,7 +44,7 @@ export const STORAGE_MSG = {
 let bc = null;
 try { bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('lecpage') : null; } catch { bc = null; }
 const hear = new Set();
-if (bc) bc.onmessage = (e) => { const m = e.data; if (m && m.id) hear.forEach((f) => f(m)); };
+if (bc) bc.onmessage = (e) => { const m = e.data; if (m?.type === 'wiped') return wipedElsewhere(); if (m && m.id) hear.forEach((f) => f(m)); };
 const tell = (m) => { try { bc?.postMessage(m); } catch { /* 알림만 못 함 */ } };
 /** 다른 탭에서 연수를 저장(type 'saved', at)하거나 지웠을 때(type 'deleted') */
 export function onProjectChange(f) { hear.add(f); return () => hear.delete(f); }
@@ -147,9 +147,21 @@ export const kv = {
   del: (k) => tx('kv', 'readwrite', (s) => req(s.delete(k))),
 };
 
-/** [모든 데이터 삭제]: 이 브라우저의 lecpage 저장소를 통째로 비움(AI 키·배포 토큰·참여 기능 관리자 키·기억한 서버·암호화 열쇠·남은 파일까지) */
+/**
+ * [모든 데이터 삭제]: 이 브라우저의 lecpage 저장소를 통째로 비움(AI 키·배포 토큰·참여 기능 관리자 키·기억한 서버·암호화 열쇠·남은 파일까지).
+ * AI 작업 기록 저장소(IndexedDB lecpage-gen)에 연수 없이 남은 기록도 지우고, 열려 있는 다른 탭에 알림(그 탭은 처음 화면으로 새로 고침)
+ */
 export async function wipeStores() {
   for (const name of ['projects', 'blobs', 'kv']) await tx(name, 'readwrite', (s) => req(s.clear()));
+  await import('./gen/store.js').then(async (m) => {
+    for (const t of [m.jobsDb, m.chatDb]) for (const r of await t.all().catch(() => []) || []) await t.del(r.pid).catch(() => { });
+  }).catch(() => { });
+  tell({ type: 'wiped' });
+}
+/** 다른 탭에서 [모든 데이터 삭제]를 누름: 이 탭의 메모리(AI 키·열어 둔 연수·도는 작업)와 탭 저장소에 남은 것도 버리게 처음 화면으로 새로 고침 */
+function wipedElsewhere() {
+  try { for (const k of Object.keys(sessionStorage)) if (/^(lecpage[:-]|lp-)/.test(k)) sessionStorage.removeItem(k); } catch { /* 저장소가 막힘 */ }
+  try { location.hash = '#/'; location.reload(); } catch { /* 창이 아님(시험) */ }
 }
 
 export async function storageInfo() {

@@ -134,7 +134,7 @@ export function printSiteHtml(p) {
 }
 
 /**
- * 배포하기 화면의 [이 주소에 이어서 배포]: 파일에 담아 온 배포 정보를 이 연수에 씀(같은 주소·같은 참여 기능 방·같은 관리자 키).
+ * 배포하기 화면의 [같은 주소로 배포]: 파일에 담아 온 배포 정보를 이 연수에 씀(같은 주소·같은 참여 기능 방·같은 관리자 키).
  * @returns {object} update()에 넘길 patch
  */
 export function carryPatch(cur) {

@@ -27,8 +27,21 @@ export async function newProject(extra = {}) {
   return p;
 }
 
-/** 프로젝트 지우기(교재·그림 포함) */
-export async function deleteProject(id) { await projects.remove(id); }
+/**
+ * 연수를 지우기 전에: 그 연수의 AI 작업(이 탭·다른 탭)을 멈추고, 멈출 때까지 잠깐(길어야 ms) 기다림.
+ * 멈추지 않고 지우면 작업이 AI를 계속 부르고, 지운 작업 기록(IndexedDB lecpage-gen)을 다시 씀
+ */
+export async function haltJobs(ids, ms = 4000) {
+  let job;
+  try { job = await import('./gen/job.js'); } catch { return; } // 조각을 못 받음(오프라인): 이 탭에서 도는 작업도 없음
+  for (const id of ids) job.stopJob(id); // 이 탭이면 바로 멈추고, 아니면 다른 탭에 알림
+  const until = Date.now() + ms;
+  const busy = async (id) => job.liveView(id)?.status === 'running' || await job.heldElsewhere(id).catch(() => false);
+  for (const id of ids) while (Date.now() < until && await busy(id)) await new Promise((ok) => setTimeout(ok, 100));
+}
+
+/** 프로젝트 지우기(교재·그림·AI 작업 기록 포함). 도는 AI 작업은 먼저 멈춤 */
+export async function deleteProject(id) { await haltJobs([id]); await projects.remove(id); }
 
 /** 프로젝트 복제(교재·그림 포함) */
 export async function duplicateProject(p0) {
@@ -63,7 +76,7 @@ const pastOf = (p) => (p.deploy?.lastUrl ? { url: p.deploy.lastUrl, target: p.de
 /**
  * .lecpage 파일 만들기. 기본은 남에게 건네도 되는 파일: 사이트 열쇠·강사 화면 관리자 키·사이트 암호·배포 토큰은 담지 않고,
  * 예전 주소·보관 기간(pastDeploy)만 담음. withKeys('내 다른 기기에서 이어 배포'를 켬)면 배포 정보와 참여 기능 연결·사이트 암호를 carry에 담아
- * 다른 기기에서도 같은 주소·같은 방으로 다시 배포(연 기기에서 강사가 [이 주소에 이어서 배포]를 눌러야 씀)
+ * 다른 기기에서도 같은 주소·같은 방으로 다시 배포(연 기기에서 강사가 [같은 주소로 배포]를 눌러야 씀)
  */
 export async function exportProjectFile(p, { withKeys = false } = {}) {
   const assets = await blobs.all(p.id);
@@ -86,7 +99,7 @@ function cleanPast(x) {
   if (!x || typeof x !== 'object' || !/^https?:\/\/\S+$/.test(String(x.url || ''))) return undefined;
   return { url: String(x.url).slice(0, 300), target: String(x.target || '').slice(0, 30), at: Number(x.at) || 0, expiresAt: Number(x.expiresAt) || 0, view: x.view === 'pages' ? 'pages' : '' };
 }
-/** 파일에서 받은 배포 정보(열쇠 포함): 모양만 확인해 두고, 쓰는 것은 강사가 배포하기 화면에서 [이 주소에 이어서 배포]를 누를 때 */
+/** 파일에서 받은 배포 정보(열쇠 포함): 모양만 확인해 두고, 쓰는 것은 강사가 배포하기 화면에서 [같은 주소로 배포]를 누를 때 */
 function cleanCarry(c) {
   if (!c || typeof c !== 'object' || !c.deploy || typeof c.deploy !== 'object' || !/^https?:\/\/\S+$/.test(String(c.deploy.lastUrl || ''))) return undefined;
   const l = c.live && typeof c.live === 'object' ? c.live : {};
@@ -120,7 +133,7 @@ export async function openSavedFile(file) {
   location.hash = `#/p/${p.id}/${p.stage || 1}`;
   if (p.reopened) return '이미 연 파일이라 그때 연 연수를 다시 열었어요. 하나 더 만들려면 처음 화면에서 [복제]를 눌러요.';
   if (p.origin === 'skill') return 'AI 에이전트에서 만든 연수를 열었어요.';
-  if (p.carryPending) return '저장한 파일을 열었어요. 배포하기에서 같은 주소에 이어서 배포할 수 있어요.';
+  if (p.carryPending) return '저장한 파일을 열었어요. 배포하기에서 같은 주소로 배포할 수 있어요.';
   if (p.pastDeploy) return '저장한 파일을 열었어요. 이 파일에는 배포 열쇠가 없어서, 여기서 배포하면 새 주소가 생겨요.';
   return '저장한 파일을 열었어요.';
 }

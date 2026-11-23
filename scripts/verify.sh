@@ -45,7 +45,7 @@ if [ $E2E = 1 ]; then
   (npx vite preview --host 127.0.0.1 --port 4175 --strictPort > /dev/null 2>&1 &)
   sleep 4
   cd "$R/tests/e2e"
-  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict; do
+  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict wipe; do
     BASE=http://localhost:4175/ OUT="$O/shots/" timeout 600 node "$t.js" > "$O/log-e2e-$t.txt" 2>&1
     f=$(grep -c "^FAIL" "$O/log-e2e-$t.txt"); p=$(grep -c "^PASS" "$O/log-e2e-$t.txt")
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "TimeoutError\|pageerror\|SCRIPT ERROR" "$O/log-e2e-$t.txt"; then echo "e2e $t: ok ($p pass)"; else echo "e2e $t: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-$t.txt"; fi

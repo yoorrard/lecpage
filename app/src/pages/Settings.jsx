@@ -5,7 +5,7 @@ import { AiConnect } from '../components/AiConnect.jsx';
 import { ConsentHost } from '../components/Consent.jsx';
 import { PROVIDERS, loadKey, forgetKey, forgetAllKeys } from '../lib/ai.js';
 import { storageInfo, askPersist, projects, wipeStores } from '../lib/db.js';
-import { exportProjectFile } from '../lib/project.js';
+import { exportProjectFile, haltJobs } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
 import { HostConnect, KIND } from '../components/Publish.jsx';
 import { StatsSetting } from '../components/StatsSetting.jsx';
@@ -24,6 +24,7 @@ export function Settings() {
   const [keys, setKeys] = useState({});
   const [st, setSt] = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [wiping, setWiping] = useState(false); // 지우는 중(도는 AI 작업을 멈추느라 몇 초 걸릴 수 있음): 한 번 더 눌러 겹쳐 돌지 않게
   const [ai, setAi] = useState(false);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
   const anyAi = Object.values(keys).some((k) => k?.key);
@@ -35,8 +36,17 @@ export function Settings() {
     toast(`연수 ${list.length}개를 파일로 저장했어요.`);
   }
   async function wipe() {
+    if (wiping) return;
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
-    for (const p of await projects.all()) await projects.remove(p.id);
+    setWiping(true);
+    try { await wipeNow(); } catch { toast('다 지우지 못했어요. 다시 눌러 주세요.'); }
+    setConfirmDel(false); setWiping(false); setSt(await storageInfo().catch(() => null));
+  }
+  async function wipeNow() {
+    // 도는 AI 작업(이 탭·다른 탭)을 먼저 멈춤: 지운 뒤에 AI를 더 부르거나 작업 기록을 다시 쓰지 않게
+    const all = await projects.all();
+    await haltJobs(all.map((p) => p.id));
+    for (const p of all) await projects.remove(p.id);
     for (const k of [...Object.keys(PROVIDERS), ...Object.values(KIND).map((x) => 'deploy-' + x)]) await forgetKey(k);
     // lecpage 커넥트: ChatGPT 계정 연결이 있으면 해제하고(공용 PC에서 다음 사람이 강사 구독을 쓰지 않게) 이 브라우저의 짝·고른 연결도 지움
     const pc = bridgeAvailable() ? await logoutPc() : '';
@@ -48,7 +58,6 @@ export function Settings() {
     for (const st of [localStorage, sessionStorage]) { try { for (const k of Object.keys(st)) if (/^(lecpage[:-]|lp-)/.test(k) && !keep.has(k)) st.removeItem(k); } catch { } }
     toast(pc === 'off' ? '모두 지웠어요. 커넥트가 꺼져 있어 ChatGPT 연결은 확인하지 못했어요. 공용 PC라면 커넥트를 켜고 연결을 해제해 주세요.'
       : pc === 'chatgpt' ? '모두 지웠어요. lecpage 커넥트의 ChatGPT 연결도 해제했어요.' : '이 브라우저의 lecpage 데이터를 모두 지웠어요.');
-    setConfirmDel(false); setSt(await storageInfo());
   }
   return (
     <div class="settings">
@@ -64,10 +73,10 @@ export function Settings() {
         <ul class="list-rows">
           {Object.entries(PROVIDERS).filter(([id]) => keys[id]?.key).map(([id, v]) => (
             <li><span><b>{v.name}</b> <span class="small muted">{keys[id].remembered ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만'}</span></span>
-              <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 해제했어요.'); }}>연결 해제</button></li>
+              <button class="btn btn-sm btn-quiet" onClick={async () => { await forgetKey(id); setKeys({ ...keys, [id]: { key: '' } }); toast('연결을 해제했어요.'); setTimeout(() => document.getElementById('set-ai-add')?.focus(), 0); /* 누른 줄이 사라지므로 초점을 아래 연결 버튼으로 */ }}>연결 해제</button></li>
           ))}
           <li><span><b>API 키</b> <span class="small muted">{anyAi ? '다른 회사 키' : '연결 안 됨'}</span></span>
-            <button class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : 'API 키 연결'}</button></li>
+            <button id="set-ai-add" class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : 'API 키 연결'}</button></li>
         </ul>
         <p class="small muted">ChatGPT·Claude 계정 연결은 연수 화면의 AI 선택에서 해요.</p>
         <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Vercel · GitHub Pages · Netlify</span></summary>
@@ -84,7 +93,7 @@ export function Settings() {
         <div class="btn-row">
           {st && !st.persisted && <button class="btn btn-sm" onClick={async () => { const ok = await askPersist(); setSt(await storageInfo()); toast(ok ? '저장 공간을 보호했어요.' : '브라우저가 허락하지 않았어요.'); }}>저장 공간 보호</button>}
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
-          <button class="btn btn-sm btn-danger" onClick={wipe}>{confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
+          <button class="btn btn-sm btn-danger" disabled={wiping} aria-busy={wiping ? 'true' : undefined} onClick={wipe}>{wiping ? '삭제하는 중…' : confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
         </div>
         <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정 포함)도 해제해요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
