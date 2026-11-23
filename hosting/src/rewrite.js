@@ -71,8 +71,9 @@ export function reportLinkHtml(siteId, { inFooter, reportUrl = '/report' }) {
   const href = escAttr(`${reportUrl}?site=${encodeURIComponent(siteId)}`);
   const a = `<a href="${href}" rel="nofollow noopener" target="_blank" data-host-report>신고</a>`;
   if (inFooter) return a;
-  // 바닥글이 없는 화면(접속 확인·개인정보 안내·암호 화면 등): 인쇄할 때는 숨김
-  return `<p data-host-report style="margin:0;padding:10px 16px;text-align:center;font:12px/1.4 system-ui,sans-serif;opacity:.55"><style>@media print{[data-host-report]{display:none}}</style><a href="${href}" rel="nofollow noopener" target="_blank" style="color:inherit">신고</a></p>`;
+  // 바닥글이 없는 화면(접속 확인·개인정보 안내·암호 화면 등): 인쇄할 때는 숨김.
+  // 글자색은 그 사이트의 본문 색 그대로(흐리게 하지 않음): 흐리게(opacity) 하면 사이트 바탕에 따라 대비가 4.5:1 아래로 떨어짐(실제 AI 사이트에서 3.58, axe 실측). 작게만 둠
+  return `<p data-host-report style="margin:0;padding:10px 16px;text-align:center;font:12px/1.4 system-ui,sans-serif"><style>@media print{[data-host-report]{display:none}}</style><a href="${href}" rel="nofollow noopener" target="_blank" style="color:inherit">신고</a></p>`;
 }
 
 /**
