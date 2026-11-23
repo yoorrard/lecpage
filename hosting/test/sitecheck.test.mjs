@@ -214,7 +214,8 @@ test('쿠키 규칙이 보통 사이트를 잘못 막지 않음: AI가 흔히 �
     const text = /\.(?:js|mjs)$/.test(f) ? [readFileSync(f, 'utf8')] : /\.html?$/.test(f) ? [...readFileSync(f, 'utf8').matchAll(/<script\b(?![^>]*\btype\s*=\s*["']?application\/(?:ld\+)?json)[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((x) => x.trim()) : [];
     for (const src of text) { n++; assert.notEqual(js(src.slice(0, OWN_JS_MAX - 1)), 'unsafe_site/cookie', f); }
   }
-  assert.ok(n >= 90, `실제 스크립트 ${n}개`);
+  // app/public/examples는 빌드로 만드는 폴더라 CI처럼 깨끗한 체크아웃에는 없음(그때 72개쯤, 있으면 90개 넘음) → 저장소에 늘 있는 것만으로 바닥을 잡음
+  assert.ok(n >= 60, `실제 스크립트 ${n}개`);
 });
 
 test('쿠키 규칙은 아주 긴 빈칸·이름에서도 금방 끝남(정규식이 같은 곳을 되풀이해 훑지 않음)', () => {
