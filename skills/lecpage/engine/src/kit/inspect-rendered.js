@@ -145,7 +145,11 @@ export function inspectRendered(opts) {
   // 깨진 그림
   Array.prototype.forEach.call(doc.images, function (img) {
     if (!img.getAttribute('src') || img.loading === 'lazy' && !img.complete) return;
-    if (img.complete && img.naturalWidth === 0) add('broken-image', 'error', img, '그림이 열리지 않아요(' + String(img.getAttribute('src')).slice(0, 60) + ').', '그림 경로와 파일을 확인해 주세요.');
+    if (img.complete && img.naturalWidth === 0) {
+      add('broken-image', 'error', img, '그림이 열리지 않아요(' + String(img.getAttribute('src')).slice(0, 60) + ').', '그림 경로와 파일을 확인해 주세요.');
+      // src: 적힌 주소 그대로. 미리보기 틀에서만 못 여는 주소(사이트 파일에는 있는 그림)인지 앱이 가려냄
+      if (count['broken-image'] <= MAX) out[out.length - 1].src = String(img.getAttribute('src')).slice(0, 300);
+    }
   });
   // 누를 곳 크기
   var seenT = 0;

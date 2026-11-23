@@ -32,7 +32,9 @@ function pdfOf(jpgs) {
 const gallery = (n) => Array.from({ length: n }, (_, i) => `<img src="material/p-${String(i + 1).padStart(3, '0')}.webp" alt="${i + 1}쪽" width="160" height="90">`).join('');
 // 문서 맨 뒤(쪽 그림 수십 장 다음)에 놓인 링크·배경·poster: 쪽 그림이 한 장 HTML의 한도를 먼저 써 버려도 이 자리는 깨지지 않아야 함
 const pg = (n) => `material/p-${String(n).padStart(3, '0')}.webp`;
-const extras = (n) => `<section id="more" data-title="더 보기"><h2>더 보기</h2><p><a id="open-last" href="${pg(n)}">마지막 쪽 크게 보기</a></p>`
+// 실제 AI가 쓰는 모양(2026-11-24 실측: 쪽을 고르는 손잡이): 스크립트가 주소를 실행 중에 만들어 넣음. 1쪽은 한 장 HTML에 담긴 쪽이라 '못 담은 그림' 목록에 없음
+const dial = '<p><img id="dialImg" alt="고른 쪽" width="160" height="90"></p><script>(function(){var pad=function(n){return String(n).padStart(3,"0")};setTimeout(function(){var i=document.getElementById("dialImg");i.src="material/p-"+pad(1)+".webp"},0)})();</script>';
+const extras = (n) => `<section id="more" data-title="더 보기"><h2>더 보기</h2>${dial}<p><a id="open-last" href="${pg(n)}">마지막 쪽 크게 보기</a></p>`
   + `<div id="bg" style="width:40px;height:40px;background:url(${pg(1)}) center/cover"></div><video id="vid" poster="${pg(2)}" width="40" height="30"></video></section>`;
 const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>쪽 많은 교재</title></head><body><main><section id="top" data-title="첫 화면"><h1>쪽 많은 교재</h1><p>교재 슬라이드로 봐요.</p></section>'
   + `<section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section><section id="all" data-title="전체 쪽"><h2>전체 쪽</h2>${gallery(n)}</section>${extras(n)}</main></body></html>\n` + '```\n\n```json\n{"title":"쪽 많은 교재","sessions":[{"date":"2026-12-09","start":"14:00","end":"17:00"}]}\n```';
@@ -78,6 +80,9 @@ const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta cha
   for (let i = 0; i < 40 && (s.pending || s.relative || s.broken); i++) { await p.waitForTimeout(250); s = await stat(); }
   ok('preview: every image opens, none left on a site-relative address', s.total >= PAGES * 2 && s.broken === 0 && s.relative === 0, JSON.stringify(s));
   ok('preview: images beyond the budget were handed over as blobs (fixture exceeds the budget)', s.late > 0, JSON.stringify(s));
+  // 스크립트가 만든 주소(1쪽: 한 장 HTML에 담긴 쪽)도 열림 — 실제 AI 사이트에서 "그림이 열리지 않아요(material/p-001.webp)"로 뜨던 것
+  const dialW = await fr.locator('#dialImg').evaluate((i) => new Promise((r) => { const done = () => r({ w: i.naturalWidth, src: (i.currentSrc || i.src || '').slice(0, 5) }); if (i.complete && i.naturalWidth) return done(); i.addEventListener('load', done); setTimeout(done, 5000); }));
+  ok('preview: an image whose address a site script builds at run time (img.src = "material/p-" + n) opens', dialW.w > 0 && dialW.src === 'blob:', JSON.stringify(dialW));
   // 3 교재 슬라이드에서 마지막 쪽으로: 나중에 넣는 주소(img.src = 'material/p-024.webp')도 열림
   const last = await fr.locator('body').evaluate(async (body, n) => {
     const img = document.createElement('img'); img.alt = 'late'; img.width = 10; body.appendChild(img);

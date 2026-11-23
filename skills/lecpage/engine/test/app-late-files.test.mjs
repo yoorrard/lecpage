@@ -25,11 +25,13 @@ test('previewHtml: 크기 한도를 넘어 못 담은 그림을 skipped에 적�
   const none = new Set(); previewHtml(files, 'index.html', { skipped: none }); assert.equal(none.size, 0);
 });
 
-test('lateFilesMsg: 못 담은 그림만 Blob으로(글·모르는 형식은 넘기지 않음), 없으면 null', async () => {
+test('lateFilesMsg: 사이트의 그림을 모두 Blob으로(못 담은 것만이 아님 — 스크립트가 실행 중에 만든 주소도 열리게), 글·모르는 형식은 넘기지 않음', async () => {
   const files = { 'material/p-003.webp': webp(1000, 3), 'material/p-004.webp': webp(800, 4), 'assets/style.css': 'a{}', 'assets/font.woff2': new Uint8Array(10) };
-  assert.equal(late.lateFilesMsg(files, new Set()), null);
-  assert.equal(late.lateFilesMsg(files, new Set(['assets/style.css', 'assets/font.woff2', 'nope.webp'])), null);
-  const m = late.lateFilesMsg(files, new Set(['material/p-003.webp', 'material/p-004.webp', 'assets/style.css']));
+  assert.deepEqual(late.lateFilesMsg({ 'assets/style.css': 'a{}', 'assets/font.woff2': new Uint8Array(10) }, new Set(['assets/style.css', 'nope.webp'])), { type: 'lp-late-files', files: {} }); // 그림이 없어도 보냄('다 받았다')
+  // 한 장 HTML에 다 담긴 사이트(skipped 없음)도 그림은 모두 넘김: AI 스크립트의 img.src = 'material/p-' + 쪽 + '.webp'가 미리보기에서 열림
+  const all = late.lateFilesMsg(files, new Set());
+  assert.deepEqual(Object.keys(all.files).sort(), ['material/p-003.webp', 'material/p-004.webp']);
+  const m = late.lateFilesMsg(files, new Set(['material/p-003.webp', 'assets/style.css', 'nope.webp']));
   assert.equal(m.type, 'lp-late-files');
   assert.deepEqual(Object.keys(m.files).sort(), ['material/p-003.webp', 'material/p-004.webp']);
   assert.ok(m.files['material/p-003.webp'] instanceof Blob);
@@ -37,6 +39,13 @@ test('lateFilesMsg: 못 담은 그림만 Blob으로(글·모르는 형식은 넘
   assert.equal(new Uint8Array(await m.files['material/p-004.webp'].arrayBuffer())[20], 4);
   // 같은 바이트는 Blob을 다시 만들지 않음(폭마다 틀이 둘이어도 한 번)
   assert.equal(late.lateFilesMsg(files, new Set(['material/p-003.webp'])).files['material/p-003.webp'], m.files['material/p-003.webp']);
+});
+
+test('inSite: 사이트 파일에 있는 그림을 가리키는 주소만 참(미리보기에서만 못 여는 그림을 깨졌다고 알리지 않게), 없는 그림·바깥 주소·빈 파일은 거짓', () => {
+  const files = { 'material/p-001.webp': webp(500, 1), 'assets/photo 1.png': new Uint8Array(40), 'material/empty.webp': new Uint8Array(0), 'index.html': '<html>', 'days/a.html': '<html>' };
+  for (const src of ['material/p-001.webp', './material/p-001.webp', 'material/p-001.webp?v=2', '/material/p-001.webp', 'assets/photo%201.png', 'material/../material/p-001.webp']) assert.equal(late.inSite(files, src), true, src);
+  assert.equal(late.inSite(files, '../material/p-001.webp', 'days/a.html'), true);
+  for (const src of ['material/p-999.webp', 'material/empty.webp', 'https://example.com/material/p-001.webp', 'data:image/webp;base64,AA', 'blob:null/abc', '../material/p-001.webp', 'index.html', '', undefined]) assert.equal(late.inSite(files, src), false, String(src));
 });
 
 test('LATE_JS: 틀 안 코드가 부모가 보낸 것만 받고(e.source), 이미 있는 그림·나중에 넣는 주소·열다 실패한 그림을 모두 바꿈', () => {

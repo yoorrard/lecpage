@@ -3,7 +3,7 @@
 // 틀은 격리 틀(public/frame/, ../sandbox-frame.js): 틀 문서가 준비되면 사이트를 넣고, 안쪽 문서가 보낸 것은 틀이 넘겨 줌(앱 CSP에 인라인 스크립트가 없어도 돎)
 import { previewHtml, inspectRenderedScript } from './kit.js';
 import { FRAME_SRC, frameEvent, sendHtml, postInner } from '../sandbox-frame.js';
-import { LATE_JS, lateFilesMsg } from '../late-files.js';
+import { LATE_JS, lateFilesMsg, inSite } from '../late-files.js';
 
 /**
  * files: 조립 결과(assemble().files). widths: 잴 폭들
@@ -26,7 +26,13 @@ export function renderIssues(files, { widths = [1280, 390], timeout = 15000, pag
       const m = e.data && e.data.lpFrame === 'msg' ? e.data.data : null;
       const d = m && typeof m === 'object' ? m : {};
       if (d.type !== 'lp-inspect' || !frames.has(d.id) || e.source !== frames.get(d.id).contentWindow) return;
-      for (const i of Array.isArray(d.issues) ? d.issues : []) if (i && typeof i.message_ko === 'string') all.push({ ...i, where: { ...(i.where || {}), width: i.where?.width || d.width } });
+      for (const i of Array.isArray(d.issues) ? d.issues : []) {
+        if (!i || typeof i.message_ko !== 'string') continue;
+        // 사이트 파일에 실제로 있는 그림은 '열리지 않아요'로 알리지 않음: 미리보기 틀(출처 없는 sandbox)에서만 그 주소로 못 여는 것이고 배포한 사이트에서는 열림.
+        // 틀에 그림을 모두 넘겨 두지만(late-files.js) 그 길로 못 닿는 쓰임(스크립트가 만든 주소 등)이 남아도 강사에게 없는 문제를 고치라고 하지 않게 함. 사이트에 없는 그림은 그대로 알림
+        if (i.id === 'broken-image' && inSite(files, i.src, page)) continue;
+        all.push({ ...i, where: { ...(i.where || {}), width: i.where?.width || d.width } });
+      }
       frames.get(d.id).remove(); frames.delete(d.id);
       if (--left <= 0) finish();
     }

@@ -206,13 +206,14 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
     return () => { removeEventListener('online', on); removeEventListener('offline', off); };
   }, []);
   // 바로 배포 서버의 답(/api/info)을 받기 전에는 배포할 곳을 정하지 않음: 먼저 끝난 망 확인(막힌 곳이 바로 실패하는 학교망)이
-  // 바로 배포를 건너뛴 곳으로 못 박지 않게. 3초가 지나도 안 오면 나머지로 보여 주고, 늦게 오면 그때 다시 고름(강사가 직접 고른 곳은 그대로)
+  // 바로 배포를 건너뛴 곳으로 못 박지 않게. 답은 늦어도 8초 안에 정해지므로(instantInfo가 8초에 그만둠) 그때까지 기다림: 전에는 3초 뒤 나머지를 먼저 보여 줘서
+  // 서버가 잠깐 느릴 때(새 판을 올린 직후 등) 다른 곳의 큰 버튼이 떴다가 답이 오면 바로 배포로 바뀌었음(누를 곳이 눈앞에서 바뀜). 8.5초는 답이 끝내 정해지지 않을 때의 안전망
   const [infoWait, setInfoWait] = useState(!!PUBLISH_API);
   const first = useRef(true);
   useEffect(() => {
     let off = false;
     connectedTargets().then((c) => { if (!off) setConnected(c); });
-    const t = setTimeout(() => { if (!off) setInfoWait(false); }, 3000);
+    const t = setTimeout(() => { if (!off) setInfoWait(false); }, 8500);
     // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
     instantInfo(!first.current).then((i) => { if (off) return; setInstant(i || (PUBLISH_API ? false : null)); setInfoWait(false); clearTimeout(t); });
     first.current = false;

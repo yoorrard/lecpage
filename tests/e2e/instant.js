@@ -18,7 +18,10 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     if (down) return r.abort('connectionrefused'); // 이 망에서 바로 배포 서버에 닿지 않음
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     st.calls.push(`${m} ${u.pathname}`);
-    if (u.pathname === '/api/info') return json({ ok: true, v: 1, plan: 'free', accepting: true, view: siteScripts ? 'pages' : 'worker', keepAlive: !siteScripts, siteScripts, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 }, report: 'https://publish.mock.test/report', ...info });
+    if (u.pathname === '/api/info') {
+      const answer = () => json({ ok: true, v: 1, plan: 'free', accepting: true, view: siteScripts ? 'pages' : 'worker', keepAlive: !siteScripts, siteScripts, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 }, report: 'https://publish.mock.test/report', ...info });
+      return st.infoDelay ? new Promise((res) => setTimeout(res, st.infoDelay)).then(answer) : answer(); // st.infoDelay: 서버가 잠깐 느린 때
+    }
     if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
     if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') {
       // st.gone: 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남)
@@ -350,6 +353,22 @@ async function seed(p, script) {
     const uniq = new Set(Object.values(st.manifests.at(-1) || {}).map((f) => f.sha256)).size;
     L.ok('bundle lost in transit → retried, then one request per file, deploy finishes', st.bundleDropped >= 3 && st.bundles === 0 && st.puts === uniq && uniq > 5, `${st.bundleDropped} dropped, ${st.puts} single for ${uniq} files`);
     L.ok('no page errors ⑮', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑯ 서버 답(/api/info)이 늦게 와도(7초) 그 사이 다른 곳의 큰 버튼을 띄우지 않고 기다렸다가 바로 배포를 고름(전에는 3초 뒤 [Netlify 계정으로 배포]가 떴다가 답이 오면 바뀜)
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    st.infoDelay = 7000;
+    await p.reload({ waitUntil: 'load' }); await p.waitForTimeout(1200);
+    if (!(await p.locator('.publish').count())) { await p.click('.head-tools button:has-text("배포하기")'); }
+    await p.waitForSelector('.publish', { timeout: 30000 }); const t0 = Date.now();
+    await p.waitForTimeout(3800);
+    const mid = await p.evaluate(() => ({ big: document.querySelectorAll('.publish .btn-primary').length, modes: document.querySelectorAll('.pub-mode').length, text: document.querySelector('.publish')?.innerText.replace(/\s+/g, ' ').slice(0, 60) }));
+    L.ok('slow server answer: still waiting at ~4s, no button of another host shown meanwhile', mid.big === 0 && mid.modes === 0 && /확인하는 중/.test(mid.text), JSON.stringify(mid));
+    await p.waitForSelector('.pub-mode-main.is-on', { timeout: 15000 });
+    const end = await p.evaluate(() => ({ on: document.querySelector('.pub-mode.is-on')?.innerText.replace(/\s+/g, ' ').slice(0, 10), big: [...document.querySelectorAll('.publish .btn-primary.btn-lg')].map((e) => e.innerText.trim()).join('|') }));
+    L.ok('slow server answer: instant deploy is the choice once it arrives', /바로 배포/.test(end.on) && end.big === '배포하기' && Date.now() - t0 < 12000, JSON.stringify(end));
+    L.ok('no page errors ⑯', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
