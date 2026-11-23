@@ -217,7 +217,7 @@ export function joinBox({ live = false, code = '', codeWord = '연수 코드' } 
 
 /** 자료실: items([{title, href, desc, kind, size}]) + 강사가 연수 중에 더한 링크(data-live-materials, 런타임이 채움) */
 export function materialsBox(items = [], { inner = '', host = '강사' } = {}) {
-  const row = (m) => { const ext = /^https?:/.test(m.href); return `<li><span class="lp-file-kind">${esc(m.kind || (ext ? '링크' : 'FILE'))}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" href="${esc(m.href)}"${ext ? ' target="_blank" rel="noopener"' : ' download'}>${icon(ext ? 'external' : 'download')}<span>${ext ? '열기' : '다운로드'}</span></a>` : ''}</li>`; };
+  const row = (m) => { const ext = /^https?:/.test(m.href); return `<li><span class="lp-file-kind">${esc(m.kind || (ext ? '링크' : 'FILE'))}</span><div><h3>${esc(m.title)}</h3>${m.desc ? `<p>${esc(m.desc)}</p>` : ''}${m.size ? `<small>${esc(m.size)}</small>` : ''}</div>${m.href ? `<a class="lp-btn lp-btn-ghost lp-btn-sm" href="${esc(m.href)}"${ext ? ' target="_blank" rel="noopener"' : ' download'} aria-label="${esc(`${m.title} ${ext ? '열기' : '다운로드'}`)}">${icon(ext ? 'external' : 'download')}<span>${ext ? '열기' : '다운로드'}</span></a>` : ''}</li>`; };
   return `${inner}${items.length ? `<ul class="lp-materials">${items.map(row).join('')}</ul>` : ''}<ul class="lp-materials lp-materials-live" data-live-materials aria-label="${esc(josa(host, '이', '가'))} 추가한 자료" hidden></ul>${items.length || inner.trim() ? '' : `<p class="lpk-empty" data-lpk-mats-empty>${esc(josa(host, '이', '가'))} 자료를 올리면 여기에 보여요.</p>`}`;
 }
 

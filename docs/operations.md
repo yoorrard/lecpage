@@ -27,7 +27,7 @@ lecpage 웹앱을 올리고 지키는 사람을 위한 문서입니다. 기준�
 | 호스팅 | **Cloudflare Workers 정적 자산**, GitHub 연결(Workers Builds)로 자동 배포. 저장소 맨 위 [`wrangler.jsonc`](../wrangler.jsonc) | 정적 요청 무료·무제한, 상업 이용 가능, `_headers` 적용, 한도에서 과금 대신 오류. Cloudflare가 새 프로젝트는 Pages보다 Workers로 시작하라고 안내 |
 | 도메인 | **lecpage.com**(Cloudflare Registrar, 연 $11.17, 갱신도 같은 값. 2026-11-14 등록) | DNS 작업 없음. Workers 내 도메인은 어차피 Cloudflare 영역이 필요. 2026-11-09 현재 후보 모두 미등록 → 빨리 등록 |
 | 미러 | **GitHub Pages**(`https://yoorrard.github.io/lecpage/`), [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)로 자동 | 이미 연결됨, 0원, Cloudflare와 다른 장애 영역. 헤더를 못 바꿔 보안은 약함 → 예비용 |
-| 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀 |
+| 로그인 | **없음** | 계정을 저장하면 운영자가 개인정보처리자가 됨. 필요한 연결(AI·Vercel·GitHub·Netlify)은 사용자 키·토큰을 그 브라우저에서만 씀. lecpage 커넥트로 하는 Cloudflare·Vercel 배포의 로그인은 그 PC의 공식 도구(wrangler·Vercel CLI)에만 저장됨 |
 | 저장 | IndexedDB(프로젝트·이미지) + `.lecpage` 파일 내보내기/열기 + 저장 공간 보호(persist) | 다른 PC로 옮기기, 공용 PC 정리 |
 | AI | 추천 순서: ChatGPT·Claude 구독 계정 연결(lecpage 커넥트가 lecpage.com과 저절로 짝을 맞추고 그 계정으로 로그인, API 키 없음. 길마다 처음 한 번 연결 동의를 받고 이 브라우저에 기억, [모든 데이터 삭제]로 지움) → 다른 방법(접힘: Claude·GPT API 키, Codex, Agent Skill). 먼저 해보기는 참고 디자인 `neo-teach`의 교재와 사이트 파일을 한 번의 AI 답 꼴로 보여 줌(키 없음, `app/src/data/demo-run.js`). Gemini는 만들기에서 뺌(2026-11-21) | 운영자 AI 비용 0. 구독 로그인은 강사 PC의 lecpage 커넥트가 맡아 로그인 정보가 그 PC에만 있음 |
 | 실시간 | **운영자 공용 중계 없음**. 바로 배포 사이트에 딸린 방만 맡음(§10). 강사 소유 백엔드를 쉽게: 클릭만 하는 50명 이하 연수는 Google Sheets(앱 안 안내 + 연결 확인), 가입 가능한 강사는 Deploy to Cloudflare 버튼 | 아래 §2 |
@@ -151,8 +151,8 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 - Cloudflare가 정적 자산 요금·무료 한도를 바꾸거나 Workers Builds 무료 빌드 시간(월 3,000분)에 가까워짐 → 감시 경로를 줄이고, 그래도 안 되면 미러를 기본으로.
 - 한국 사용자의 첫 접속이 계속 느리다는 신고가 쌓이고 `colo=`가 대부분 해외 → AWS CloudFront 정액제 Free(월 100GB, 서울 엣지) 같은 대안을 측정해 비교.
 - GitHub에서 미러 트래픽 경고 메일이 오거나 후원·유료 기능이 생김 → GitHub Pages 약관(상업 SaaS 금지) 다시 확인.
-- 앱에 팝업 로그인(Google 등)을 넣음 → COOP를 `same-origin-allow-popups`로, CSP에 해당 주소 추가.
-- 앱 CSP를 더 좁히고 싶음 → 미리보기를 **별도 출처**(다른 등록 도메인)로 옮기는 작업을 시작(결정 기록의 M6).
+- 앱에 팝업 로그인(Google 등)을 넣음 → COOP를 `same-origin-allow-popups`로, CSP에 해당 주소 추가. (Netlify 로그인 창은 지금 COOP 그대로 됨: 앱이 그 창을 닫지 못할 뿐이라 "[Authorize]를 누른 뒤 이 탭으로 돌아오면 이어서 진행해요"로 안내함)
+- 앱 CSP: 2026-11-23부터 `script-src`에 `'unsafe-inline'` 없음(인라인 스크립트는 빌드가 잰 해시만, `node app/scripts/csp-check.mjs`). AI가 만든 사이트는 격리 틀(`/frame/`, sandbox·자체 CSP) 안쪽에서만 돎. 더 좁히고 싶음 → 미리보기를 **별도 출처**(다른 등록 도메인)로 옮기는 작업을 시작(결정 기록의 M6).
 - 클릭만 하는 강사가 Sheets 연결에서 계속 실패하고 "설치 없는 실시간" 요청이 압도적 → 공용 중계를 다시 검토하되, 결정 기록 §5.3의 통제(서버 발급 방 ID, Turnstile, 하루 상한, 별명만, 자동 삭제, 신고 창구, 법률 검토)를 모두 갖춘 뒤에만.
 - 도메인 갱신 값이 바뀜 → 다른 등록업체로 이전 검토.
 
@@ -171,13 +171,15 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 | 받는 사이트 | 엔진 템플릿 사이트와 AI가 직접 쓴 사이트(`assets/site.js` 등 사이트 스크립트 포함). 사이트 스크립트는 Pages 보기(사이트마다 다른 출처)에서만 돌고, 이 호스트의 두 번째 주소(`/s/<id>/`)에서는 엔진 스크립트만. 비밀번호 칸·로그인 흉내·바깥으로 보내는 양식·서비스 워커는 올릴 때 거절(앱이 까닭을 그대로 보여 줌). 사이트 쪽 CSP의 연결은 그 사이트의 방만. 규칙 [`hosting/README.md`](../hosting/README.md) §6 |
 | CSP로 못 막는 것 | 사이트 스크립트가 입력값을 주소에 붙여 다른 사이트로 이동시키기, 그 사이트의 방에 적어 두었다가 강사 화면에서 읽기. **신고가 오면 먼저 가리기**(사이트·방이 함께 닫힘, 가려 둔 채로 확인) → 피싱·개인정보 수집이 맞으면 지우기. 같은 수법이 되풀이되면 그 모양을 `hosting/src/sitecheck.js` 거절 규칙에 더함(잘못 걸리는 일이 적은 단순한 규칙만) |
 
+- **한도·횟수 초기화**: 기기당 하루 새 사이트 3개(다시 배포는 세지 않음, 유료 요금제 10개). 모두의 횟수를 0부터 다시 세게 하려면 [`hosting/src/config.js`](../hosting/src/config.js)의 `QUOTA_EPOCH`를 1 올려 배포합니다(하루 전체 상한·방 상한·요청 예산은 그대로). 앱은 `/api/info`의 `limits.sitesPerDevice`·`quota`·`live.accepting`을 읽습니다.
+
 ## 11. 구글 시트 틀 미리 만들어 두기 (선택)
 
 강사가 구글 시트로 참여 기능을 연결할 때 코드를 붙여 넣는 단계를 없애 줍니다.
 1. 운영용 구글 계정으로 새 시트를 만들고 **확장 프로그램 → Apps Script**에 `skills/lecpage/backends/apps-script/Code.gs`를 붙여 넣어 저장합니다(배포는 하지 않습니다).
 2. 시트를 **링크가 있는 모든 사용자 · 뷰어**로 공유하고, 주소 끝의 `/edit…`을 `/copy`로 바꾼 주소를 준비합니다.
 3. 앱을 빌드할 때 `VITE_SHEET_TEMPLATE`에 그 주소를 넣습니다(GitHub Pages 미러는 저장소 변수 `LECPAGE_SHEET_TEMPLATE`).
-- 그러면 앱의 안내가 "시트 사본 만들기 → 웹 앱으로 배포 → 주소 붙여넣기"로 줄어듭니다. `Code.gs`가 바뀌면 틀도 새로 만들어 주소를 바꿉니다.
+- 그러면 앱의 안내가 "시트 사본 만들기 → 메뉴 **lecpage → 한 번에 설치**에 설치 코드 붙여넣기 → 웹 앱으로 배포 → 주소 붙여넣기"로 줄어듭니다. `Code.gs`가 바뀌면 틀의 코드도 새 것으로 바꿉니다(틀 시트의 Apps Script에서 글을 모두 지우고 새 `Code.gs`를 붙여 넣어 저장, 맨 위 `INSTALL`은 비워 둠. 시트를 새로 고쳐 메뉴에 '한 번에 설치'가 보이면 됨). 2026-11-23에 이 메뉴와 날짜별 출석(`days`)이 들어갔으니 그 전에 만든 틀은 한 번 바꿔야 합니다.
 - 틀에는 자료를 넣지 않습니다. 사본은 강사 계정에 만들어지고 운영자는 볼 수 없습니다.
 
 ## 12. AI 정보 매일 갱신 (자동, 2026-11-14부터)
@@ -269,6 +271,8 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 4. 확인: `gh release download studio-latest --repo yoorrard/lecpage -p 'lecpage-connect.tar.gz*' -D /tmp/lp-sig` 다음 `node scripts/studio-launcher/signing-key.mjs verify /tmp/lp-sig/lecpage-connect.tar.gz` → "맞아요".
 5. 키 파일은 비밀번호 관리자에 파일로 보관합니다(키를 바꿀 때 예전 키로도 서명해야 이미 깔린 커넥트가 새 버전을 받음). 보관한 뒤 PC에서는 지워도 됩니다.
 
+**예전 묶음으로 내려가지 않게**: 묶음 안의 `BUILT`(묶은 때, 서명에 포함)가 지금 깔린 것보다 앞서면 실행 파일도 켜 둔 커넥트도 바꾸지 않습니다. 예전 커밋의 워크플로를 다시 돌리면 `BUILT`가 새로 찍혀 그 판으로 되돌릴 수 있습니다(급히 되돌려야 할 때의 길).
+
 **키 바꾸기**(PC를 바꿀 때 등)
 1. `node scripts/studio-launcher/signing-key.mjs new --out ~/.lecpage/connect-signing-key-2.pem` → 세 파일 커밋·push(새 공개 키를 먼저 퍼뜨림, 서명은 아직 예전 키).
 2. 비밀을 두 키로: `cat ~/.lecpage/connect-signing-key.pem ~/.lecpage/connect-signing-key-2.pem | gh secret set CONNECT_SIGNING_KEY --repo yoorrard/lecpage`(Windows는 `Get-Content -Raw 예전.pem,새.pem | gh secret set …`). 그다음 릴리스부터 두 키로 서명돼 예전 목록만 가진 커넥트도 받습니다.
@@ -283,3 +287,11 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 - 저장소 Settings → Pages → Source는 **GitHub Actions**여야 합니다.
 - **조직에는 다른 Pages 사이트(다른 저장소의 Pages)를 만들지 않습니다.** 같은 출처를 쓰게 되어 커넥트 짝 맞춤 토큰이 위험해집니다.
 - 빌드 변수 `LECPAGE_SHEET_TEMPLATE`(구글 시트 틀)는 예비 주소에 넣지 않았습니다(없으면 시트 연결에 코드 붙여넣기 단계가 하나 더 있음). 넣으려면 조직 저장소 Settings → Secrets and variables → Actions → Variables에 같은 이름으로 넣고 `mirror.yml`의 빌드 단계에 `env`로 넘깁니다.
+
+## 17. Netlify 로그인 한 번 연결 (OAuth 앱 `lecpage`, 2026-11-23)
+
+배포하기 화면의 [Netlify 계정으로 배포]는 Netlify의 티켓 방식 로그인(공식 CLI와 같은 방식)을 씁니다. 토큰은 강사 브라우저와 Netlify 사이에서만 오가고 운영자 서버를 거치지 않습니다.
+- 운영자 Netlify 계정에 OAuth 앱 `lecpage`가 등록돼 있습니다(Netlify → User settings → Applications → OAuth applications). 앱에는 **공개 값인 client ID만** 들어 있고([`app/src/lib/netlify-login.js`](../app/src/lib/netlify-login.js)), Secret은 쓰지 않습니다.
+- 그 OAuth 앱을 지우면 로그인 한 번 길이 멈춥니다(접힌 '토큰으로 연결'은 그대로 됨). 새로 등록했으면 client ID를 빌드 변수 `VITE_NETLIFY_CLIENT_ID`에 넣거나 코드의 기본값을 바꿉니다. 빈 값으로 빌드하면 이 길을 감추고 토큰 길만 보입니다.
+- 포크·자체 운영은 자기 OAuth 앱을 등록해 `VITE_NETLIFY_CLIENT_ID`로 넣습니다.
+

@@ -110,12 +110,15 @@ function auxDesign(theme) {
 /** 바탕·글자·강조색 셋으로 보조 쪽 색 묶음 하나(장식색 accent·accent-2·accent-3도 이 셋에서만: 프리셋의 파랑·주황이 섞이지 않게) */
 function auxPalette(bg, fg, accent, dark) {
   const on = (c) => readableOn(c, '#ffffff', '#111111');
+  // 흐린 글자색은 바탕만이 아니라 그 위의 칸(카드·옅게 칠한 줄)에서도 4.5:1이 되게: 대비가 가장 낮아지는 칸 색(바탕에 글자색을 10% 섞은 것)을 기준으로 맞춤.
+  // 강조색은 사이트 색 그대로(바탕에서 4.5:1만 맞춤 — 사이트의 색을 더 바꾸지 않음)
+  const surf = mix(bg, fg, 0.1);
   const prim = isHex(accent) ? ensureContrast(accent, bg, 4.5) : '';
   const key = prim || fg; // 강조색이 없으면 글자색이 장식을 맡음
   const a1 = mix(key, bg, dark ? 0.3 : 0.42), a2 = mix(fg, bg, dark ? 0.22 : 0.18), a3 = mix(key, bg, dark ? 0.55 : 0.72);
   return {
     '--background': bg, '--foreground': fg, '--card': dark ? mix(bg, fg, 0.06) : mix(bg, '#ffffff', 0.6), '--card-foreground': fg,
-    '--muted': mix(bg, fg, 0.06), '--muted-foreground': ensureContrast(mix(fg, bg, 0.35), bg, 4.6), '--secondary': mix(bg, fg, 0.08), '--secondary-foreground': fg,
+    '--muted': mix(bg, fg, 0.06), '--muted-foreground': ensureContrast(mix(fg, bg, 0.35), surf, 4.6), '--secondary': mix(bg, fg, 0.08), '--secondary-foreground': fg,
     '--border': mix(bg, fg, dark ? 0.18 : 0.14), '--surface-2': mix(bg, fg, 0.035),
     ...(prim ? { '--primary': prim, '--primary-foreground': on(prim), '--ring': prim } : {}),
     '--accent': a1, '--accent-foreground': on(a1), '--accent-2': a2, '--accent-2-foreground': on(a2), '--accent-3': a3, '--accent-3-foreground': on(a3),

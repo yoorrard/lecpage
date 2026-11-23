@@ -135,10 +135,14 @@
           if (prev) {
             days1 = U.assign({}, U.seedDays(prev, 'Asia/Seoul')); days1[dk] = at;
             var vs = Object.keys(days1).map(function (k) { return days1[k]; });
-            return save('attendance', U.assign({}, prev, { at: prev.kind === 'out' ? Math.max.apply(null, vs) : Math.min.apply(null, vs), days: days1, byHost: true, updatedAt: t0 }), 'update');
+            // hostDays: 강사가 적은 날(강사 화면이 그 날만 '강사가 적은 시각'으로 표시). byHost만 있는 예전 기록은 있던 날 모두
+            var hd = {}, old0 = prev.hostDays && typeof prev.hostDays === 'object' ? prev.hostDays : prev.byHost ? U.seedDays(prev, 'Asia/Seoul') : {};
+            Object.keys(old0).forEach(function (k) { if (days1[k]) hd[k] = 1; }); hd[dk] = 1;
+            return save('attendance', U.assign({}, prev, { at: prev.kind === 'out' ? Math.max.apply(null, vs) : Math.min.apply(null, vs), days: days1, byHost: true, hostDays: hd, updatedAt: t0 }), 'update');
           }
           days1[dk] = at;
-          return save('attendance', { id: 'a' + U.uid(12), by: doc.by, kind: doc.kind === 'out' ? 'out' : 'in', at: at, days: days1, byHost: true, createdAt: t0, updatedAt: t0 }, 'add');
+          var hd1 = {}; hd1[dk] = 1;
+          return save('attendance', { id: 'a' + U.uid(12), by: doc.by, kind: doc.kind === 'out' ? 'out' : 'in', at: at, days: days1, byHost: true, hostDays: hd1, createdAt: t0, updatedAt: t0 }, 'add');
         }
         var p = col === 'polls' ? null : me();
         var by = p ? p.id : null;

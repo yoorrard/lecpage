@@ -221,7 +221,7 @@ export function StepShare({ p, update, go }) {
   const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => { const li = document.getElementById('live-setup'); li?.scrollIntoView({ block: 'start', behavior: 'smooth' }); (li?.querySelector('.live-way-reco, .live-way-h') || li?.querySelector('.ready-t'))?.focus({ preventScroll: true }); }, 80); };
   async function zip(opts = {}) {
     setBusy('zip');
-    try { const r = await buildFiles({ target: 'zip', ...opts }); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 내려받았어요.'); }
+    try { const r = await buildFiles({ target: 'zip', ...opts }); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 다운로드했어요.'); }
     catch (e) { toast(e.message); }
     setBusy(''); setProg(null);
   }
@@ -245,7 +245,7 @@ export function StepShare({ p, update, go }) {
         files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live, zipName: safeName(p.title) + '.zip' });
       }
       saveFile(safeName(p.title) + '_강사용.zip', E.zipFiles(files), 'application/zip');
-      toast('강사용 파일을 내려받았어요.');
+      toast('강사용 파일을 다운로드했어요.');
     } catch (e) { toast(e.message); }
   }
   function done(url, patch, more) {

@@ -97,9 +97,9 @@ ${ctx.live ? `<dialog class="lp-dialog lp-con-dlg lp-con-phone" data-phone-dialo
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="close">닫기</button></div>
 </form></dialog>` : ''}
 <dialog class="lp-dialog lp-con-dlg" data-purge-dialog aria-labelledby="lp-purge-h"><form method="dialog" class="lp-dialog-in">
-<h2 id="lp-purge-h">모든 기록을 지울까요?</h2>
+<h2 id="lp-purge-h">모든 데이터를 삭제할까요?</h2>
 <p>참가자 명단·출석·질문·투표 응답·보드 글과 올린 파일·도움 요청·설문 응답이 서버에서 지워져요. 지운 뒤에는 되돌릴 수 없어요.</p>
-<p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 내려받으세요.${prov === 'sheets' ? ' 구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.' : ''}</p>
+<p class="lp-small">사이트와 관리자 키는 그대로예요. 필요한 기록은 먼저 CSV로 다운로드하세요.${prov === 'sheets' ? ' 구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.' : ''}</p>
 <div class="lp-compose-f"><button class="lp-btn lp-btn-ghost" value="cancel">닫기</button><button class="lp-btn lp-btn-danger" type="button" data-purge-go>${icon('close')}<span>모두 삭제</span></button></div>
 </form></dialog>
 <noscript><p class="lp-con-noscript">강사 화면은 자바스크립트를 켜야 쓸 수 있어요.</p></noscript>
@@ -378,7 +378,7 @@ export function renderPrivacy(ctx) {
 <h2>2. 처리 항목</h2><p>${collect.join(', ')}, 참가자를 구분하는 임의 번호.</p>
 <p>참여 기록: ${acts.length ? acts.join(', ') : '참여 중 남긴 글'}.</p>${anonQa ? `\n<p>익명 질문은 다른 참가자와 발표 화면에 이름이 보이지 않습니다. 다만 ${local ? '기록' : '서버'}에는 그 임의 번호와 함께 저장됩니다.</p>` : ''}
 <p>주민등록번호·전화번호·생년월일은 받지 않습니다. 질문이나 글에 본인 또는 다른 사람의 개인정보를 적지 마세요.</p>${bp.live.provider === 'http' ? '\n<p>접속할 때 IP 주소가 서버에 전달되며, 잘못된 접근과 도배를 막는 횟수 제한에만 씁니다. IP 주소는 기록으로 남기지 않습니다.</p>' : ''}${bp.audience?.minor ? '\n<p>만 14세 미만 참가자도 쓸 수 있도록 별명만 받습니다. 이름 등 다른 개인정보와 파일은 받지 않습니다.</p>' : ''}
-<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>참여 기록과 올린 파일은 ${keep.short}까지 보관하고, 그 뒤 지체 없이 파기합니다${keep.site ? `(${keep.site})` : ''}. 강사는 그 전에도 강사 화면의 [모든 데이터 삭제]로 바로 지울 수 있습니다. ${eraseFacts(bp).how} 내려받은 명단 파일도 다 쓰면 지웁니다.</p>`}
+<h2>3. 보유 기간과 파기</h2>${local ? '<p>이 사이트는 리허설용 설정이라 참여 기록을 서버로 보내지 않고 이 브라우저 안에만 둡니다. 브라우저의 사이트 데이터를 지우면 함께 지워집니다.</p>' : `<p>참여 기록과 올린 파일은 ${keep.short}까지 보관하고, 그 뒤 지체 없이 파기합니다${keep.site ? `(${keep.site})` : ''}. 강사는 그 전에도 강사 화면의 [모든 데이터 삭제]로 바로 지울 수 있습니다. ${eraseFacts(bp).how} 다운로드한명단 파일도 다 쓰면 지웁니다.</p>`}
 <h2>4. 동의를 거부할 권리</h2><p>동의하지 않아도 안내·교재·실습과 질문·투표는 그대로 쓸 수 있습니다.${pv.collect.includes('name') || pv.collect.includes('school') ? ' 이름·소속을 받는 입실 기록만 남지 않습니다.' : ''}</p>
 <h2>5. 참가자의 권리</h2><p>참가자는 자신의 개인정보를 열람·정정·삭제하거나 처리를 멈춰 달라고 요구할 수 있습니다. 아래 문의처로 연락하면 10일 안에 조치하고 알려 드립니다.${bp.audience?.minor ? ' 만 14세 미만은 법정대리인이 요구할 수 있습니다.' : ''}</p>
 <h2>6. 제3자 제공, 처리 위탁, 국외 이전</h2>${procs.length ? `<p>제3자에게 제공하지 않습니다. 참여 기록을 저장하기 위해 아래 회사에 처리를 맡기며, 이 회사의 서버가 국외에 있을 수 있습니다.</p>${procs.map((p) => `<div class="lp-table-wrap"><table class="lp-table"><tbody>${rows(p).map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('')}</tbody></table></div>`).join('')}` : '<p>제3자에게 제공하지 않고, 처리를 맡기는 곳도 없습니다.</p>'}
@@ -422,13 +422,13 @@ export function opsGuide(ctx) {
     bp.live.features.includes('help') && '도움 요청은 [갈게요] → [해결]로 처리해요.',
     attendSec ? `출석 칸의 [입실 확인]·[퇴실 확인]을 언제 누를지 참가자에게 안내하세요. 연수 시간에는 참가자 첫 화면에도 [출석]이 떠요(이름·소속과 동의만 받아요).${['http', 'local'].includes(prov) ? ' 휴대폰이 없는 분은 강사 화면 [출석 명단]에서 추가하고, 빠뜨린 퇴실·잘못 누른 시각은 그 명단에서 고쳐요.' : ''}` : '연수를 시작할 때 참가자 첫 화면이나 오른쪽 아래의 [출석]을 한 번 누르게 안내하세요. 질문·투표를 하지 않은 사람도 명단에 남아요.',
   ].filter(Boolean) : ['프로젝터에 발표 화면(`screen.html`)이나 첫 화면의 QR을 띄워 접속을 안내하세요. 참가자 화면 위 메뉴의 QR 버튼 → [발표 화면]으로도 열려요.'];
-  const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [CSV 다운로드] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 내려받으세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
+  const survey = sv ? (svIn ? '설문 결과: 강사 화면의 [CSV 다운로드] → [설문 응답].' : sv.url ? `설문 결과: 설문은 바깥 설문 주소(${sv.url})로 받아요. 그 설문을 만든 계정에서 응답을 다운로드하세요(구글 설문지는 [응답] 탭의 ⋮ 메뉴에서 CSV로 받아요).` : '') : '';
   const after = live ? [
     `참가자 명단(별명): 강사 화면의 [CSV 다운로드] → [참가자]. ${attendSec ? '입실·퇴실 시각은 [출석]에 있어요.' : '[출석]을 눌렀거나 질문·투표를 한 사람이 명단에 남아요. 누른 시각은 [출석]에 있어요.'}`,
     survey,
     '질문·투표 결과도 같은 곳에서 CSV로 받아요. 투표 응답 파일의 첫 열에는 질문 글이 들어가요.',
     prov === 'local' ? '연습 모드 기록은 이 브라우저에만 있어요. 실제 연수 전에 강사 화면의 [모든 데이터 삭제]로 지워 두세요.'
-      : `다 받은 뒤 강사 화면의 [모든 데이터 삭제]로 지우세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${keepRule(bp).site ? `(${keepRule(bp).site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 삭제를 켜 둔 경우)' : ''}. 내려받은 CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
+      : `다 받은 뒤 강사 화면의 [모든 데이터 삭제]로 삭제하세요. 그대로 두면 ${keepRule(bp).short}이 지나 서버가 지워요${keepRule(bp).site ? `(${keepRule(bp).site})` : ''}${['sheets', 'supabase'].includes(prov) ? '(자동 삭제를 켜 둔 경우)' : ''}. 다운로드한CSV에도 별명이 들어 있으니 다 쓰면 지워 주세요.`,
     prov === 'sheets' && '구글 시트는 지운 행도 버전 기록에 남아요. 다 쓰면 시트 파일째 지우고 드라이브 휴지통을 비워 주세요.',
     '공용 컴퓨터에서 관리자 키를 기억하게 했다면 강사 화면의 [나가기]를 눌러 이 기기에서 지우세요.',
   ].filter(Boolean) : [survey || '사이트는 그대로 두면 자료 모음으로 쓸 수 있어요.'];

@@ -974,7 +974,12 @@
       if (p.nickname && p.nickname !== this._me.nickname && profile.nickname) {
         return this.update('participants', this._me.id, { nickname: p.nickname }).then(function () {
           self._me.nickname = p.nickname; self._idStore.set(self._ns + ':me', self._me); return { id: self._me.id, token: self._me.token };
-        }, function () { return { id: self._me.id, token: self._me.token }; });
+        }, function (err) {
+          // 서버가 별명을 거절했으면(쓸 수 없는 별명·너무 김 등 4xx) 그대로 알림: 창이 오류 없이 닫히고 글이 '참가자123'으로 올라가지 않게.
+          // 서버에 닿지 못한 것(연결 끊김·5xx)은 예전처럼 넘어감(글은 연결되면 보냄)
+          if (err && err.status >= 400 && err.status < 500) throw err;
+          return { id: self._me.id, token: self._me.token };
+        });
       }
       return Promise.resolve({ id: this._me.id, token: this._me.token });
     }

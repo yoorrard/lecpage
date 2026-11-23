@@ -69,8 +69,11 @@ test('리허설: 발표 화면이 교재 쪽을 강사 화면·참가자와 같�
     await c.keyboard.press('PageUp');
     await s.waitForFunction(() => /p-003\.webp$/.test(document.querySelector('[data-scr-img]').getAttribute('src')), null, { timeout: 5000 });
     // 출석: 참가자 입실(이름·소속·동의) + 휴대폰 없는 사람 손으로 더하기 → 명단, 퇴실 처리
+    // 연수 날이 오기 전의 리허설이면 '연수 날은 ○월 ○일이에요. 그래도 지금 입실을 기록할까요?'를 한 번 물음 → 확인하면 그대로 기록
+    const asked = []; p.on('dialog', (d) => { asked.push(d.message()); d.accept(); });
     await p.bringToFront(); await p.locator('button[data-attend="in"]').first().click();
     await p.fill('[data-join-dialog] input[name="name"]', '김하나'); await p.fill('[data-join-dialog] input[name="school"]', '새온중');
+    assert.ok(asked.length <= 1 && asked.every((m) => /연수 날은 \d+월 \d+일이에요/.test(m)), JSON.stringify(asked));
     await p.check('[data-join-dialog] input[name="consent"]'); await p.click('[data-join-go]');
     await c.bringToFront();
     await c.waitForSelector('#lp-p-att tbody tr:has-text("김하나")', { timeout: 5000 });

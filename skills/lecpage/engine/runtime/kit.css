@@ -105,6 +105,8 @@
 .lpk .lp-post-files{display:grid;gap:6px}
 .lpk .lp-post-files img{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:6px}
 .lpk .lp-post-files :is(audio,video){width:100%}
+.lpk .lp-post-files .lp-post-img{display:block;border-radius:6px;cursor:zoom-in}
+.lpk .lp-post-files .lp-post-img:focus-visible{outline:2px solid var(--_act);outline-offset:2px}
 .lpk .lp-post-f{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;color:color-mix(in srgb,var(--_text) 72%,transparent)}
 .lpk .lp-like{display:inline-flex;align-items:center;gap:4px;min-height:36px;border:0;background:none;color:inherit;font-weight:650;cursor:pointer}
 .lpk .lp-like[aria-pressed="true"]{color:var(--_danger)}
@@ -213,13 +215,29 @@
   .lpk .lp-deck-bar .lp-btn-sm span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lpk .lp-follow{flex-basis:100%}
 }
-.lpk .lp-deck:fullscreen{background:#111;color:#fff;padding:16px;align-content:center}
+/* 전체 화면은 늘 어두운 바탕: 단추·쪽 번호·쪽 제목이 사이트 글자색(밝은 사이트의 어두운 색)을 그대로 쓰면 안 보이므로 키트 색 변수를 밝은 값으로 다시 정함 */
+.lpk .lp-deck:fullscreen{--_ink:#f4f4f5;--_text:#f4f4f5;--_paper:#111;--_surf:#111;--_line:rgba(255,255,255,.34);--_tint:rgba(255,255,255,.12);--_act:color-mix(in oklab,var(--_ac) 30%,#fff);background:#111;color:#f4f4f5;padding:16px;align-content:center}
+.lpk .lp-deck:fullscreen .lp-deck-thumbs button[aria-current="true"]{border-color:#fff}
+/* 전체 화면에서 나가는 단추는 휴대폰에서도 글자를 보임(그림만으로는 나가는 길을 찾기 어려움) */
+.lpk .lp-deck:fullscreen .lp-deck-bar [data-deck-full]{min-width:0;padding:.4em .85em}
+.lpk .lp-deck:fullscreen .lp-deck-bar [data-deck-full] span{position:static;width:auto;height:auto;margin:0;overflow:visible;clip:auto;white-space:nowrap}
 .lpk .lp-deck:fullscreen .lp-slide img{max-height:calc(100vh - 140px);border:0;background:#111}
+/* 전체 화면 중의 '지금' 띠·알림(lecpage.js가 잠시 교재 안으로 옮김, 공지·투표·새 자료·타이머만): 위쪽 가운데에 두고 쪽 그림은 그만큼 줄여 가리지 않게 */
+.lpk .lp-deck:fullscreen .lpk.lpk-now{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto}
+.lpk .lp-deck:fullscreen:has(.lpk-now [data-now]:not([hidden])){padding-top:calc(var(--lp-now-pad,56px) + 8px)}
+.lpk .lp-deck:fullscreen:has(.lpk-now [data-now]:not([hidden])) .lp-slide img{max-height:calc(100vh - 148px - var(--lp-now-pad,56px))}
+.lpk .lp-deck:fullscreen .lp-toast{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 /* 가로로 돌린 휴대폰의 전체 화면(낮은 화면): 쪽 그림을 화면 높이에 맞춰 크게. 아래에서 잘려 보이던 작은 그림 띠는 숨김(쪽은 화살표·밀기·[전체 보기]로) */
 @media (max-height:520px){
   .lpk .lp-deck:fullscreen{padding:8px 12px;gap:4px}
   .lpk .lp-deck:fullscreen .lp-deck-thumbs{display:none}
   .lpk .lp-deck:fullscreen .lp-slide img{max-height:calc(100vh - 96px)}
+  .lpk .lp-deck:fullscreen:has(.lpk-now [data-now]:not([hidden])){padding-top:calc(var(--lp-now-pad,56px) + 4px)}
+  .lpk .lp-deck:fullscreen:has(.lpk-now [data-now]:not([hidden])) .lp-slide img{max-height:calc(100vh - 100px - var(--lp-now-pad,56px))}
+}
+/* 가로로 돌린 휴대폰(낮은 화면)에서 쪽 안의 교재: 쪽 그림과 넘김 단추가 한 화면에 들어오게 그림 높이를 화면에 맞춤(전체 화면이 아닐 때) */
+@media (max-height:520px) and (orientation:landscape){
+  .lpk .lp-deck.is-ready:not(:fullscreen) .lp-slide img{width:auto;max-width:100%;max-height:calc(100vh - 132px);margin-inline:auto}
 }
 dialog.lpk.lp-overview{width:min(1100px,calc(100% - 24px));max-height:calc(100% - 24px);padding:0;border:0;border-radius:var(--_r);background:var(--_paper);color:var(--_text);box-shadow:0 24px 64px rgba(0,0,0,.35)}
 dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
@@ -292,15 +310,15 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 /* 도크가 페이지 끝 글을 가리지 않게: 사이트 CSS는 건드리지 않고 키트 부품 묶음(본문 맨 끝)이 도크 높이만큼 자리를 차지 */
 /* '지금' 띠가 보이면 그 높이(+12px)도 --lp-now-pad로 더함(lecpage.js initNowPad). 맨 끝 'Made with Lecpage' 줄도 이 자리 위에 놓임 */
 html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 24px + var(--lp-now-pad,0px))}
-html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px))}
-.lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 var(--lp-now-pad,0px)}
+/* 도크·띠는 화면 아래 안전 영역(홈 막대)만큼 올라가 있으므로 그만큼 더 비움(노치 휴대폰에서 맨 끝 줄이 도크·띠와 겹치지 않게). 띠가 없으면(--lp-now-pad 0) 더하지 않음 */
+html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px) + env(safe-area-inset-bottom,0px))}
+.lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 calc(var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)))}
 /* 꽉 찬 바닥글 바로 아래면 그 바탕색으로 이어 칠함(lecpage.js initChromeTint가 이 표시와 --lp-chrome-bg를 붙임): 묶음이 사이트 바탕색 띠로 따로 보이지 않게.
    flow-root: 맨 끝 줄('Made with Lecpage')의 위 여백까지 묶음 안에 두어 틈 없이 칠함 */
 .lpk.lpk-chrome.lpk-chrome--tint{display:flow-root;background:var(--lp-chrome-bg,transparent)}
 
 /* ── 'Made with Lecpage' 표시: 작고 차분하게. 사이트 바탕·글자색(--_paper·--_text)을 따라 밝게·어둡게 모두 읽힘 ──
-   넓은 화면은 왼쪽 아래 구석에 떠 있음(참여 막대는 오른쪽, '지금' 띠는 가운데). 자리를 다른 떠 있는 것이 차지하면 lecpage.js가
-   --lp-made-lift만큼 올리고, 휴대폰이거나 비킬 자리가 없으면 .is-flow(페이지 맨 끝 왼쪽에 한 줄, 아무것도 가리지 않음) */
+   화면 폭과 상관없이 .is-flow(페이지 맨 끝 왼쪽에 한 줄, lecpage.js initMade가 붙임): 떠 있으면 넓은 화면에서 본문 글·누를 곳을 덮어서 떠 있는 자리는 쓰지 않음 */
 .lpk.lpk-chrome .lpk-made{position:fixed;z-index:2147482900;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px) + var(--lp-made-lift,0px));display:flex;align-items:center;width:max-content;max-width:calc(100% - 24px);height:30px;margin:0;padding:0 1px 0 0;border:1px solid color-mix(in srgb,var(--_text) 14%,transparent);border-radius:999px;background:color-mix(in srgb,var(--_paper) 86%,transparent);color:color-mix(in srgb,var(--_text) 80%,transparent);box-shadow:0 2px 10px rgba(0,0,0,.08);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;letter-spacing:0;text-transform:none;word-break:normal;animation:lpk-made-in .45s cubic-bezier(.16,1,.3,1) both;transition:bottom .25s cubic-bezier(.16,1,.3,1)}
 .lpk.lpk-chrome .lpk-made-a{display:inline-flex;align-items:center;gap:6px;height:100%;margin:0;padding:0 4px 0 8px;border:0;border-radius:999px;background:none;color:inherit;font:inherit;text-decoration:none;white-space:nowrap;cursor:pointer}
 .lpk.lpk-chrome .lpk-made-a:hover{color:var(--_text)}
@@ -371,7 +389,26 @@ html:has(.lpk-now [data-now]:not([hidden])) .lpk .lp-toast{bottom:calc(var(--lp-
   .lpk .lpk-join-in{justify-content:center}
   .lpk .lp-qr{width:min(200px,60vw)}
 }
+/* 아주 좁은 휴대폰(320px대): 참여 막대가 두 줄이 되지 않게 단추의 그림을 빼고 글만(이름은 그대로 보임) */
+@media (max-width:360px){
+  .lpk .lp-dock{gap:3px;padding:5px}
+  .lpk .lp-btn-dock{gap:0;padding:.4em .62em}
+  .lpk .lp-btn-dock .lp-ic{display:none}
+}
+/* 낮은 화면(작은 휴대폰·가로로 돌린 휴대폰): '지금' 띠의 글은 한 줄만 보이고 나머지는 [더 보기]로(띠와 막대가 화면을 덜 덮게) */
+@media (max-height:600px){
+  .lpk .lp-now:not(.is-open) .lp-now-text b{-webkit-line-clamp:1}
+  .lpk .lp-now:not(.is-open) .lp-now-text span{display:none}
+}
 @media (prefers-reduced-motion:reduce){
   .lpk *{transition:none!important;animation:none!important}
 }
+/* 손가락으로 누르는 기기: 작은 단추·탭의 누르는 크기를 44px로(모양·글자 크기는 그대로) */
+@media (pointer:coarse){
+  .lpk .lp-btn-sm,.lpk .lp-now-more,.lpk .lp-now-cta,.lpk .lp-seg span{min-height:44px}
+  .lpk .lp-now-more,.lpk .lp-tabs button{min-width:44px}
+}
+/* 'Made with Lecpage' 닫기: 보이는 크기(28px)는 그대로 두고 누르는 곳만 위·아래·오른쪽으로 넓힘 */
+.lpk.lpk-chrome .lpk-made-x{position:relative}
+.lpk.lpk-chrome .lpk-made-x::after{content:"";position:absolute;inset:-8px -8px -8px 0}
 @media print{.lpk.lpk-chrome,.lpk.lpk-now{display:none!important}}

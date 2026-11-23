@@ -1,5 +1,5 @@
 // DOCX → 쪽 그림을 그리는 틀 안 코드. vite.config.js(docxFrame)가 docx-preview·snapdom과 함께 한 덩어리 글(전역 lpDocxFrame)로 묶고,
-// app/src/lib/render-doc.js가 출처 없는 sandbox 틀(allow-scripts만, srcdoc)에 넣어 돌립니다.
+// app/src/lib/render-doc.js가 격리 틀(/frame/, sandbox allow-scripts만 — lib/sandbox-frame.js) 안쪽 srcdoc에 넣어 돌립니다(앱 CSP에는 인라인 스크립트 허용이 없음).
 // docx-preview는 문서에 적힌 스타일 이름·글꼴 이름을 그대로 CSS로 넣으므로 앱 화면이 아니라 이 틀 안에서만 그리게 함:
 // 교재의 CSS·글이 앱 화면을 바꾸거나 앱 저장소(교재·키)·연결 토큰에 닿지 못함. 부모에는 쪽 그림(Blob)과 진행만 postMessage로 보냄
 import { renderAsync } from 'docx-preview';

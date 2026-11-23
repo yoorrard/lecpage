@@ -78,12 +78,19 @@ async function open(url, { width = 1280, height = 800, ...o } = {}) {
 const rect = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); if (!n) return null; const r = n.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; }, sel);
 const overlap = (a, b) => !!(a && b && b.width && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom);
 
-test('넓은 화면: 왼쪽 아래 구석에 떠 있고 참여 막대와 겹치지 않음, 누르면 lecpage.com이 새 탭으로, 키보드로 닿음', { skip }, async () => {
+test('넓은 화면: 떠 있지 않고 페이지 맨 끝에 한 줄(본문·누를 곳을 덮지 않음, 참여 막대와 겹치지 않음), 누르면 lecpage.com이 새 탭으로, 키보드로 닿음', { skip }, async () => {
   const { ctx, page } = await open(base + '/');
   try {
+    assert.equal(await page.$eval('[data-lp-made]', (n) => [getComputedStyle(n).position, n.classList.contains('is-flow')].join()), 'relative,true');
+    // 첫 화면에는 없고(본문 글·단추를 덮지 않음) 문서와 함께 움직임(떠다니지 않음)
+    const top0 = await rect(page, '[data-lp-made]');
+    assert.ok(top0.top >= 800, '첫 화면에는 없음 ' + JSON.stringify(top0));
+    await page.evaluate(() => window.scrollTo(0, 600)); await page.waitForTimeout(400);
+    const mid = await rect(page, '[data-lp-made]');
+    assert.ok(Math.abs((top0.top - 600) - mid.top) < 2, '문서와 함께 움직임 ' + JSON.stringify({ top0, mid }));
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await page.waitForTimeout(400);
     const m = await rect(page, '[data-lp-made]');
-    assert.equal(await page.$eval('[data-lp-made]', (n) => getComputedStyle(n).position), 'fixed');
-    assert.ok(m.left <= 16 && 800 - m.bottom <= 16 && m.height <= 32 && m.width < 220, JSON.stringify(m));
+    assert.ok(m.left <= 20 && m.top >= 0 && m.bottom <= 800 && m.height <= 32 && m.width < 220, JSON.stringify(m));
     assert.ok(!overlap(m, await rect(page, '[data-dock]')), '참여 막대와 겹침');
     const [pop] = await Promise.all([page.waitForEvent('popup'), page.click('[data-lp-made] a')]);
     assert.equal(pop.url(), 'https://lecpage.com/');
@@ -98,20 +105,29 @@ test('넓은 화면: 왼쪽 아래 구석에 떠 있고 참여 막대와 겹치�
   } finally { await ctx.close(); }
 });
 
-test('사이트의 아래 고정 막대·\'지금\' 띠가 구석을 차지하면 그 위로 비켜 섬', { skip }, async () => {
+test('사이트의 아래 고정 막대가 있어도 그 위에 떠서 올라타지 않고, \'지금\' 띠가 떠 있어도 맨 끝 줄과 겹치지 않음', { skip }, async () => {
   const { ctx, page } = await open(base + '/bar/');
   try {
-    const bar = await rect(page, '.cta-bar'), m = await rect(page, '[data-lp-made]');
-    assert.ok(m.bottom <= bar.top, `막대 위: ${JSON.stringify({ m, bar })}`);
+    // 사이트가 만든 아래 고정 막대가 있는 판: 떠 있지 않으므로 스크롤하는 동안 막대·본문 어디에도 올라타지 않음(맨 끝 한 줄)
+    assert.equal(await page.$eval('[data-lp-made]', (n) => [getComputedStyle(n).position, n.classList.contains('is-flow')].join()), 'relative,true');
+    const m = await rect(page, '[data-lp-made]');
+    assert.ok(m.top >= 800, '첫 화면에는 없음 ' + JSON.stringify(m));
     await page.close();
   } finally { await ctx.close(); }
-  // '지금' 띠: 중간 너비(띠가 구석까지 닿음)에서 띠를 띄우면 겹치지 않게
+  // '지금' 띠: 중간 너비(띠가 왼쪽 끝까지 닿음)에서 띠를 띄우고 맨 끝까지 내려도 겹치지 않게(묶음이 띠 높이만큼 자리를 비움)
   const o = await open(base + '/', { width: 760, height: 900 });
   try {
-    await o.page.evaluate(() => { const n = document.querySelector('[data-now]'); n.hidden = false; const b = n.querySelector('[data-now-main]'); if (b) b.textContent = '지금: 2부 실습 — 표를 모아 차트로 읽어요'; });
-    await o.page.waitForTimeout(900);
+    // 먼저 맨 끝으로 내린 뒤 띠를 띄움(내리는 동안 투표 칸이 화면을 지나면 런타임이 띠를 다시 그려 억지로 띄운 띠를 감춤)
+    const show = () => o.page.evaluate(() => { const n = document.querySelector('[data-now]'); n.hidden = false; const b = n.querySelector('[data-now-main]'); if (b) b.textContent = '지금: 2부 실습 — 표를 모아 차트로 읽어요'; });
+    await o.page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await o.page.waitForTimeout(500);
+    await show(); await o.page.waitForTimeout(500);
+    // 띠 높이만큼 묶음이 자리를 비우면 문서가 길어짐 → 다시 맨 끝으로
+    await o.page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await o.page.waitForTimeout(400); await show(); await o.page.waitForTimeout(200);
     const now = await rect(o.page, '.lpk.lpk-now'), m = await rect(o.page, '[data-lp-made]');
     assert.ok(now.height > 0, '띠가 보임');
+    assert.ok(m.top >= 0 && m.bottom <= 900, '맨 끝에서 보임 ' + JSON.stringify(m));
     assert.ok(!overlap(m, now), JSON.stringify({ m, now }));
   } finally { await o.ctx.close(); }
 });

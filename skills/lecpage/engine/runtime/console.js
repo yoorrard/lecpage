@@ -299,7 +299,7 @@
     var h1 = el('p', 'lp-con-net-h'), b1 = el('b', '', '발표 화면'); b1.id = 'lp-stage-l'; h1.appendChild(b1); C.stageNow = el('span'); h1.appendChild(C.stageNow); r1.appendChild(h1);
     var act = el('div', 'lp-con-net-act');
     C.qrSw = el('button', 'lp-switch'); C.qrSw.type = 'button'; C.qrSw.setAttribute('role', 'switch'); C.qrSw.setAttribute('data-k', 'qrbig');
-    C.qrSw.appendChild(el('i')); C.qrSw.appendChild(el('span', '', '참여 QR 크게')); C.qrSwS = el('small'); C.qrSw.appendChild(C.qrSwS);
+    C.qrSw.appendChild(el('i')); C.qrSw.appendChild(el('span', '', '참여 QR 크게')); C.qrSwS = el('small'); C.qrSwS.setAttribute('aria-hidden', 'true'); C.qrSw.appendChild(C.qrSwS); // 켜짐·꺼짐 글은 보이기만(상태는 aria-checked가 읽어 줌 — 두 번 읽히지 않게)
     C.qrSw.addEventListener('click', function () { var on = !qrBig(); setState({ ui: { qrBig: on ? true : null } }, on ? '발표 화면에 참여 QR을 크게 띄웠어요.' : '발표 화면의 큰 QR을 내렸어요.'); });
     act.appendChild(C.qrSw);
     C.presOff = btn('발표 화면 끄기', '', function () { try { if (pres) pres.terminate(); } catch (e) { } say2('프로젝터의 발표 화면을 껐어요.'); }, 'presoff'); C.presOff.hidden = true; act.appendChild(C.presOff);
@@ -379,10 +379,29 @@
   var raf = 0; function queue() { if (raf) return; raf = (window.requestAnimationFrame || setTimeout)(function () { raf = 0; render(); }); }
   function setState(patch, ok) { return conn.setState(patch).then(function (s) { state = s || Object.assign(state, patch); queue(); if (ok) toast(ok); }, function (e) { toast('보내지 못했어요: ' + (e && e.message || '연결을 확인해 주세요.')); }); }
   function err(e) { toast('처리하지 못했어요: ' + (e && e.message || '권한이나 연결을 확인해 주세요.')); }
+  // 새 질문은 화면 읽기 프로그램에도 짧게: 목록 전체를 다시 읽지 않게 숨은 한 줄에 몇 초에 한 번 모아서('새 질문 2개'). 처음 불러온 것은 세지 않음
+  var qSeen = {}, qPend = 0, qT = 0, qClr = 0, qT0 = 0;
+  function newsQA(qs) {
+    if (!qT0) qT0 = Date.now();
+    var warm = Date.now() - qT0 < 4000;
+    qs.forEach(function (q) { if (qSeen[q.id]) return; qSeen[q.id] = 1; if (!warm) qPend++; });
+    if (!qPend || qT) return;
+    qT = setTimeout(function () {
+      qT = 0; if (!qPend) return;
+      if (!C.news) { C.news = el('p', 'lp-sr'); C.news.setAttribute('role', 'status'); doc.body.appendChild(C.news); }
+      C.news.textContent = '새 질문 ' + qPend + '개'; qPend = 0;
+      clearTimeout(qClr); qClr = setTimeout(function () { C.news.textContent = ''; }, 5000);
+    }, 2500);
+  }
   /** 다시 그려도 누르던 단추에 초점이 남게(data-k로 찾음) */
   function keep(node, fn) {
-    var a = doc.activeElement, k = a && node.contains(a) && a.getAttribute('data-k'); fn();
-    if (k) { var b = node.querySelector('[data-k="' + k.replace(/"/g, '') + '"]'); if (b) b.focus(); }
+    var a = doc.activeElement, inside = !!(a && a !== doc.body && node.contains(a)), k = inside && a.getAttribute('data-k'); fn();
+    if (!inside) return;
+    var b = k ? node.querySelector('[data-k="' + k.replace(/"/g, '') + '"]') : null;
+    // 누르던 단추가 사라졌으면(닫은 투표·[갈게요]·해결한 도움 요청) 초점이 문서 맨 위로 빠지지 않게: 같은 항목의 다른 단추, 없으면 그 칸의 제목
+    if (!b && k) for (var n = 2; n <= 4 && !b; n++) { var id = k.slice(n).replace(/"/g, ''); if (id.length >= 4) b = node.querySelector('[data-k$="' + id + '"]'); }
+    if (!b && !node.contains(doc.activeElement)) { var pn = node.closest('.lp-con-panel'), h = pn && pn.querySelector('h2'); if (h) { h.setAttribute('tabindex', '-1'); b = h; } }
+    if (b && doc.activeElement !== b) { try { b.focus({ preventScroll: b.tagName === 'H2' }); } catch (e) { b.focus(); } }
   }
 
   // ── 틀 ──
@@ -438,7 +457,7 @@
       if (ON.survey) kpi(vals('survey').length, '설문 응답', '', '#lp-p-data');
     });
     doc.title = (openHelp.length ? '(' + openHelp.length + ') ' : '') + '강사 화면 · ' + (DATA.title || '');
-    if (ON.qa) renderQA(qs);
+    if (ON.qa) { renderQA(qs); newsQA(qs); }
     renderPres();
     if (ON.attend) renderAtt();
     renderPolls();
@@ -460,7 +479,7 @@
   var qaFilter = 'open';
   function lockSwitch(which, label) {
     var b = el('button', 'lp-switch'); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('data-k', 'lock-' + which);
-    b.appendChild(el('i')); b.appendChild(el('span', '', label)); var s = el('small'); b.appendChild(s);
+    b.appendChild(el('i')); b.appendChild(el('span', '', label)); var s = el('small'); s.setAttribute('aria-hidden', 'true'); b.appendChild(s);
     var said = { qa: ['새 질문을 잠갔어요. 참가자 화면에 안내가 떠요.', '질문을 다시 받아요.'], board: ['새 보드 글을 잠갔어요.', '보드 글을 다시 받아요.'], join: ['참여를 닫았어요. 이미 들어온 사람은 그대로 써요.', '참여를 다시 받아요.'] }[which];
     b.addEventListener('click', function () { var lock = !X.locked(state, which); setState(X.lockPatch(which, lock), said[lock ? 0 : 1]); });
     b._sync = function () { var on = !X.locked(state, which); b.setAttribute('aria-checked', String(on)); s.textContent = on ? '켜짐' : '꺼짐'; };
@@ -637,6 +656,18 @@
         var m = el('p', 'lp-con-m'); m.appendChild(el('span', '', ago(p.createdAt))); if (p.files && p.files.length) m.appendChild(el('span', '', '파일 ' + p.files.length + '개'));
         if (p.hidden) m.appendChild(el('em', '', MODERATE ? '확인 기다림' : '숨김')); if (U.hasLink && U.hasLink(p.text)) m.appendChild(el('em', '', '링크 있음'));
         li.appendChild(m);
+        // 올린 파일을 여기서 봄(숨길지·보드에 올릴지 정하려면 내용을 봐야 함): 사진은 작게, 누르면 새 탭에서 전체. 그 밖의 파일은 이름 링크
+        if (p.files && p.files.length) {
+          var fl = el('div', 'lp-con-files');
+          p.files.forEach(function (f, fi) {
+            if (!/^(https?:|blob:)/.test(f.url || '')) return;
+            var fa = el('a'); fa.href = f.url; fa.target = '_blank'; fa.rel = 'noopener';
+            if (String(f.type || '').indexOf('image/') === 0) { var im = el('img'); im.src = f.url; im.loading = 'lazy'; im.alt = (p.nickname || '익명') + ' 님이 올린 사진 ' + (fi + 1) + ' 크게 보기'; fa.appendChild(im); }
+            else { fa.className = 'lp-link'; fa.textContent = f.name || '파일 ' + (fi + 1) + ' 열기'; }
+            fl.appendChild(fa);
+          });
+          if (fl.firstChild) li.appendChild(fl);
+        }
         var a = el('div', 'lp-con-a');
         a.appendChild(btn(p.hidden ? (MODERATE ? '보드에 올리기' : '숨기기 취소') : '숨기기', p.hidden && MODERATE ? 'lp-btn-primary' : '', function () { conn.update('posts', p.id, { hidden: !p.hidden }).catch(err); }, 'ph' + p.id));
         li.appendChild(a); C.bList.appendChild(li);
@@ -710,7 +741,7 @@
   function buildLead() {
     var s3 = runPart('이끌기', 'lead');
     C.follow = el('button', 'lp-switch'); C.follow.type = 'button'; C.follow.setAttribute('role', 'switch'); C.follow.setAttribute('data-k', 'follow');
-    C.follow.appendChild(el('i')); C.follow.appendChild(el('span', '', '강사 따라 넘기기')); C.followS = el('small'); C.follow.appendChild(C.followS);
+    C.follow.appendChild(el('i')); C.follow.appendChild(el('span', '', '강사 따라 넘기기')); C.followS = el('small'); C.followS.setAttribute('aria-hidden', 'true'); C.follow.appendChild(C.followS);
     C.follow.addEventListener('click', toggleFollow);
     s3.appendChild(C.follow);
     if (stations.length) {
@@ -815,7 +846,7 @@
       r.appendChild(f); b.appendChild(r);
       if ((BP.pages || []).length) {
         C.follow2 = el('button', 'lp-switch'); C.follow2.type = 'button'; C.follow2.setAttribute('role', 'switch'); C.follow2.setAttribute('data-k', 'follow2');
-        C.follow2.appendChild(el('i')); C.follow2.appendChild(el('span', '', '참가자 교재도 같은 쪽으로')); C.follow2.appendChild(el('small'));
+        C.follow2.appendChild(el('i')); C.follow2.appendChild(el('span', '', '참가자 교재도 같은 쪽으로')); var f2s = el('small'); f2s.setAttribute('aria-hidden', 'true'); C.follow2.appendChild(f2s);
         C.follow2.addEventListener('click', toggleFollow); P.pres.act.appendChild(C.follow2);
       }
       C.pageHere = el('div', 'lp-con-here'); b.appendChild(C.pageHere);
@@ -871,21 +902,41 @@
   });
 
   // ── 출석 명단: 이름·소속·입실·퇴실(실시간). 휴대폰 없는 사람은 손으로 더하고, 빠뜨린 퇴실·잘못 누른 시각은 고침 ──
+  // 날짜·시각은 모두 연수 기준 시간대(서버·이수 판정과 같은 Asia/Seoul)로: 한국 밖 브라우저에서도 명단의 날짜와 고친 시각이 어긋나지 않게
+  var TZ = 'Asia/Seoul', LU = (window.LecLive && LecLive.util) || null;
+  function dayOfMs(ms) { if (LU) return LU.dayKey(ms, TZ); var d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function hmOf(ms) { if (!ms) return ''; if (LU) return LU.fmtTime(ms, TZ).slice(11, 16); var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
   function fmtAt(ms) {
     if (!ms) return '';
-    var d = new Date(ms), now = new Date(), hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    return d.toDateString() === now.toDateString() ? hm : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+    var day = dayOfMs(ms), hm = hmOf(ms);
+    return day === dayOfMs(now()) ? hm : (+day.slice(5, 7)) + '/' + (+day.slice(8, 10)) + ' ' + hm;
   }
-  function hmOf(ms) { if (!ms) return ''; var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
-  /** 'HH:MM' → 그날(기준 시각이 있으면 그날, 없으면 오늘) 그 시각의 ms */
-  function atOf(hm, base) { var m = /^(\d{1,2}):(\d{2})$/.exec(hm || ''); if (!m) return 0; var d = base ? new Date(base) : new Date(); d.setHours(+m[1], +m[2], 0, 0); return d.getTime(); }
+  /** 'HH:MM' → 그날('YYYY-MM-DD' 또는 기준 시각의 날, 없으면 오늘) 그 시각의 ms */
+  function atOf(hm, base) {
+    if (!/^(\d{1,2}):(\d{2})$/.test(hm || '')) return 0;
+    var day = typeof base === 'string' ? base : dayOfMs(base || now());
+    if (LU) return LU.zonedMs(day, hm, TZ) || 0;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(hm), d = new Date(day + 'T00:00:00'); d.setHours(+m[1], +m[2], 0, 0); return d.getTime();
+  }
+  // 여러 날 연수: 명단이 보여 주고 고치는 날(날짜 고르기). 기본은 오늘이 연수 날이면 오늘, 아니면 지나간 연수 날 중 가장 가까운 날(연수 전이면 첫날)
+  var attDay = '';
+  function dayKeys() { return DAYS.map(function (d) { return d.start.slice(0, 10); }); }
+  function defaultDay() {
+    if (!MULTI) return '';
+    var ks = dayKeys(), t = dayOfMs(now()), past = ks.filter(function (k) { return k <= t; });
+    return ks.indexOf(t) >= 0 ? t : past.length ? past[past.length - 1] : ks[0];
+  }
+  function curDay() { if (!MULTI) return ''; if (attDay && dayKeys().indexOf(attDay) >= 0) return attDay; return defaultDay(); }
+  /** 'YYYY-MM-DD' → '11/24(월)' */
+  function dayLabel(k) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k || ''); if (!m) return k || ''; return (+m[2]) + '/' + (+m[3]) + '(' + '일월화수목금토'.charAt(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()) + ')'; }
+  /** 그 날에 강사가 적은 시각인지: 날짜별 표시(hostDays)가 있으면 그것, 없으면(예전 서버·구글 시트·Supabase) 기록 전체의 표시 */
+  function hostMark(a, day) { if (!a) return false; if (day && a.hostDays && typeof a.hostDays === 'object') return !!a.hostDays[day]; return !!a.byHost; }
   function roster() {
     var m = {};
-    // 여러 날 연수의 연수 날에는 오늘의 입실·퇴실을 보임(날짜별 값이 있는 기록만. 없으면 예전처럼 전체의 첫 입실·마지막 퇴실)
-    var today = MULTI && window.LecLive ? LecLive.util.dayKey(Date.now(), 'Asia/Seoul') : '';
-    if (today && !DAYS.some(function (d) { return d.start.slice(0, 10) === today; })) today = '';
+    // 여러 날 연수에서는 고른 날의 입실·퇴실을 보임(날짜별 값이 있는 기록만. 없으면 예전처럼 전체의 첫 입실·마지막 퇴실)
+    var today = curDay();
     vals('attendance').forEach(function (a) {
-      if (today && a.days && typeof a.days === 'object') { if (!a.days[today]) return; a = LecLive.util.assign({}, a, { at: a.days[today] }); }
+      if (today && a.days && typeof a.days === 'object') { if (!a.days[today]) return; a = LecLive.util.assign({}, a, { at: a.days[today], _doc: a }); }
       var r = m[a.by] || (m[a.by] = {}); r[a.kind === 'out' ? 'out' : 'in'] = a;
     });
     return vals('participants').filter(function (p) { return p.name || m[p.id]; }).map(function (p) { var r = m[p.id] || {}; return { p: p, i: r['in'], o: r.out }; })
@@ -898,6 +949,15 @@
     C.attSum = el('p', 'lp-con-sub'); b.appendChild(C.attSum);
     var fl = el('label', 'lp-con-row'); var fi = el('input', 'lp-in'); fi.type = 'search'; fi.placeholder = '이름·소속으로 찾기'; fi.setAttribute('aria-label', '명단에서 찾기');
     fi.addEventListener('input', function () { attFind = fi.value.trim(); renderAtt(); }); fl.appendChild(fi); b.appendChild(fl);
+    // 여러 날 연수: 날짜를 골라 그 날의 입실·퇴실을 보고 고침(지난 날의 빠진 퇴실도). 하루짜리 연수에는 없음
+    if (MULTI) {
+      var dl = el('label', 'lp-con-row lp-con-day'); dl.appendChild(el('span', '', '날짜'));
+      var ds = el('select', 'lp-in'); ds.setAttribute('aria-label', '명단을 볼 날짜');
+      dayKeys().forEach(function (k, i) { var o = el('option', '', dayLabel(k) + ' · ' + (i + 1) + '일차'); o.value = k; ds.appendChild(o); });
+      ds.value = curDay();
+      ds.addEventListener('change', function () { attDay = ds.value; attEdit = ''; renderAtt(); });
+      dl.appendChild(ds); b.appendChild(dl); C.attDaySel = ds;
+    }
     C.attBox = el('div', 'lp-con-roster'); b.appendChild(C.attBox);
     if (!ROSTER_EDIT) { b.appendChild(el('p', 'lp-con-sub', '이 연결 방식에서는 명단을 여기서 고칠 수 없어요. [기록·정리]에서 출석 CSV를 받아 고쳐 주세요.')); return; }
     var d = el('details', 'lp-con-quick'); var sm = el('summary'); sm.innerHTML = '<svg class="lp-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'; sm.appendChild(el('span', '', '휴대폰 없는 분 추가')); d.appendChild(sm);
@@ -922,14 +982,23 @@
   }
   function setAt(r, kind, ms) {
     var doc0 = kind === 'in' ? r.i : r.o;
-    if (!ms) return doc0 ? conn.remove('attendance', doc0.id).then(function () { delete data.attendance[doc0.id]; }) : Promise.resolve();
+    if (!ms) {
+      if (!doc0) return Promise.resolve();
+      // 여러 날 연수: 기록 하나에 날짜별 값이 함께 있어 이 날만 지울 수는 없음(지우면 다른 날 기록도 사라짐) → 막고 까닭을 알림
+      var whole = doc0._doc || doc0, day = curDay();
+      var others = day && whole.days && typeof whole.days === 'object' ? Object.keys(whole.days).filter(function (k) { return k !== day; }) : [];
+      if (others.length) return Promise.reject(new Error('다른 날의 ' + (kind === 'in' ? '입실' : '퇴실') + ' 기록이 함께 있어 이 날만 지울 수 없어요. 시각을 고쳐 적어 주세요.'));
+      return conn.remove('attendance', doc0.id).then(function () { delete data.attendance[doc0.id]; });
+    }
     if (doc0 && Math.abs((doc0.at || 0) - ms) < 60000) return Promise.resolve();
     return conn.add('attendance', { by: r.p.id, kind: kind, at: ms }).then(function (ad) { if (ad && ad.id) data.attendance[ad.id] = ad; });
   }
   function renderAtt() {
     if (!C.attBox) return;
     var all = roster(), c = rosterCount();
-    C.attSum.textContent = '명단 ' + all.length + '명 · 입실 ' + c.in + ' · 퇴실 ' + c.out + (c.in > c.out && c.out ? ' · 퇴실 전 ' + (c.in - c.out) : '') + '. 참가자가 [입실 확인]·[퇴실 확인]을 누르면 바로 생겨요.';
+    var day = curDay(), isToday = !day || day === dayOfMs(now());
+    if (C.attDaySel && C.attDaySel.value !== day && doc.activeElement !== C.attDaySel) C.attDaySel.value = day;
+    C.attSum.textContent = (day ? dayLabel(day) + ' · ' : '') + '명단 ' + all.length + '명 · 입실 ' + c.in + ' · 퇴실 ' + c.out + (c.in > c.out && c.out ? ' · 퇴실 전 ' + (c.in - c.out) : '') + (isToday ? '. 참가자가 [입실 확인]·[퇴실 확인]을 누르면 바로 생겨요.' : '. 지난 날이에요. 빠진 시각은 [고치기]로 적어요.');
     // 고치는 칸에 적는 중이면 다시 그리지 않음(다른 사람이 입실해도 적던 글이 지워지지 않게)
     var a0 = doc.activeElement; if (attEdit && a0 && C.attBox.contains(a0) && a0.closest('.lp-con-edit')) return;
     var q = attFind.toLowerCase();
@@ -937,20 +1006,27 @@
     keep(C.attBox, function () {
       C.attBox.textContent = '';
       if (!list.length) { C.attBox.appendChild(el('p', 'lp-con-empty', all.length ? '찾는 이름이 없어요.' : '아직 입실한 사람이 없어요.')); return; }
-      var tb = el('table', 'lp-con-tbl'), th = el('thead'), hr = el('tr');
-      ['이름', '소속', '입실', '퇴실', ''].forEach(function (x, k) { var c0 = el('th', '', x); c0.scope = 'col'; if (k === 4) c0.appendChild(el('span', 'lp-sr', '고치기')); hr.appendChild(c0); });
+      // 좁은 칸에서는 CSS가 표를 사람마다 세 줄(이름 / 소속 / 입실·퇴실·단추)로 바꿔 그림(aux-pages.css). 모양을 바꿔도 화면 읽기 프로그램이 표로 읽게 역할을 적어 둠
+      var role = function (n, r0) { n.setAttribute('role', r0); return n; };
+      var tb = role(el('table', 'lp-con-tbl'), 'table'), th = role(el('thead'), 'rowgroup'), hr = role(el('tr'), 'row');
+      tb.setAttribute('aria-label', '출석 명단');
+      ['이름', '소속', '입실', '퇴실', ''].forEach(function (x, k) { var c0 = role(el('th', '', x), 'columnheader'); c0.scope = 'col'; if (k === 4) c0.appendChild(el('span', 'lp-sr', '고치기')); hr.appendChild(c0); });
       th.appendChild(hr); tb.appendChild(th);
-      var bd = el('tbody'); tb.appendChild(bd);
+      var bd = role(el('tbody'), 'rowgroup'); tb.appendChild(bd);
       list.forEach(function (r) {
-        var p = r.p, tr = el('tr'), nmC = el('th', '', p.name || p.nickname || '이름 없음'); nmC.scope = 'row';
+        var p = r.p, tr = role(el('tr'), 'row'), nmC = role(el('th', '', p.name || p.nickname || '이름 없음'), 'rowheader'); nmC.scope = 'row';
         if (p.manual) nmC.appendChild(el('small', '', '직접'));
-        tr.appendChild(nmC); tr.appendChild(el('td', '', p.school || ''));
-        var ti = el('td', 'lp-con-at', r.i ? fmtAt(r.i.at || r.i.createdAt) : '–'), to = el('td', 'lp-con-at', r.o ? fmtAt(r.o.at || r.o.createdAt) : '–');
-        if (r.i && r.i.byHost) ti.title = '강사가 적은 시각'; if (r.o && r.o.byHost) to.title = '강사가 적은 시각';
+        var scC = role(el('td', 'lp-con-sch'), 'cell'), scS = el('span', '', p.school || ''); if (p.school) scS.title = p.school; scC.appendChild(scS);
+        tr.appendChild(nmC); tr.appendChild(scC);
+        var ti = role(el('td', 'lp-con-at', r.i ? fmtAt(r.i.at || r.i.createdAt) : '–'), 'cell'), to = role(el('td', 'lp-con-at', r.o ? fmtAt(r.o.at || r.o.createdAt) : '–'), 'cell');
+        ti.setAttribute('data-l', '입실'); to.setAttribute('data-l', '퇴실');
+        if (r.i && hostMark(r.i._doc || r.i, day)) ti.title = '강사가 적은 시각'; if (r.o && hostMark(r.o._doc || r.o, day)) to.title = '강사가 적은 시각';
         tr.appendChild(ti); tr.appendChild(to);
-        var ac = el('td', 'lp-con-a');
+        var ac = el('td', 'lp-con-a'); ac.setAttribute('role', 'cell');
         if (ROSTER_EDIT) {
-          if (!r.i) ac.appendChild(btn('입실', '', function () { setAt(r, 'in', now()).then(function () { queue(); toast((p.name || p.nickname) + ' 님 입실을 적었어요.'); }, err); }, 'ain' + p.id));
+          // [입실]·[퇴실]은 지금 시각으로 적으므로 오늘을 볼 때만(지난 날은 [고치기]에서 시각을 적음)
+          if (!isToday) { /* 지난 날 */ }
+          else if (!r.i) ac.appendChild(btn('입실', '', function () { setAt(r, 'in', now()).then(function () { queue(); toast((p.name || p.nickname) + ' 님 입실을 적었어요.'); }, err); }, 'ain' + p.id));
           else if (!r.o) ac.appendChild(btn('퇴실', '', function () { setAt(r, 'out', now()).then(function () { queue(); toast((p.name || p.nickname) + ' 님 퇴실을 적었어요.'); }, err); }, 'aout' + p.id));
           ac.appendChild(btn(attEdit === p.id ? '닫기' : '고치기', '', function () { attEdit = attEdit === p.id ? '' : p.id; renderAtt(); }, 'aed' + p.id));
         }
@@ -961,7 +1037,7 @@
     });
   }
   function editRow(r) {
-    var p = r.p, tr = el('tr', 'lp-con-edit'), td = el('td'); td.colSpan = 5;
+    var p = r.p, tr = el('tr', 'lp-con-edit'), td = el('td'); td.colSpan = 5; tr.setAttribute('role', 'row'); td.setAttribute('role', 'cell');
     var f = el('form', 'lp-con-editf'); f.setAttribute('aria-label', (p.name || p.nickname) + ' 고치기');
     var fld = function (label, input) { var l = el('label'); l.appendChild(el('span', '', label)); l.appendChild(input); f.appendChild(l); return input; };
     var nm = null, sc = null;
@@ -977,11 +1053,14 @@
       Promise.all(jobs).then(function () { attEdit = ''; queue(); toast('명단에서 뺐어요.'); }, err);
     }, 'adel' + p.id));
     f.appendChild(row);
-    f.appendChild(el('p', 'lp-con-sub', '시각을 지우면 그 기록을 지워요. 고친 시각은 CSV의 \'강사 입력\' 칸에 표시돼요.'));
+    f.appendChild(el('p', 'lp-con-sub', (curDay() ? dayLabel(curDay()) + '의 시각을 고쳐요. ' : '') + '시각을 지우면 그 기록을 지워요. 고친 시각은 CSV의 \'강사 입력\' 칸에 표시돼요.'));
     f.addEventListener('submit', function (e) {
       e.preventDefault(); sv.disabled = true;
-      var base = (r.i && (r.i.at || r.i.createdAt)) || (r.o && (r.o.at || r.o.createdAt)) || now();
+      // 여러 날 연수면 고른 날의 시각으로 적음(지난 날의 빠진 퇴실을 오늘로 적지 않게). 하루짜리는 있던 기록의 날, 없으면 오늘
+      var base = curDay() || (r.i && (r.i.at || r.i.createdAt)) || (r.o && (r.o.at || r.o.createdAt)) || now();
       var inAt = atOf(ti.value, base), outAt = atOf(to.value, base);
+      if (Math.max(inAt, outAt) > now() + 60000) { sv.disabled = false; toast('아직 오지 않은 시각은 적을 수 없어요.'); (outAt > inAt ? to : ti).focus(); return; }
+      if ((inAt && inAt < now() - 7 * 86400000) || (outAt && outAt < now() - 7 * 86400000)) { sv.disabled = false; toast('일주일이 넘은 날의 시각은 여기서 고칠 수 없어요. [기록·정리]의 출석 CSV에서 고쳐 주세요.'); return; }
       if (inAt && outAt && outAt < inAt) { sv.disabled = false; toast('퇴실 시각이 입실보다 빨라요.'); to.focus(); return; }
       var jobs = [];
       if (nm && (nm.value.trim() !== (p.name || '') || sc.value.trim() !== (p.school || ''))) {
@@ -989,7 +1068,12 @@
         jobs.push(conn.update('participants', p.id, { name: nm.value.trim(), school: sc.value.trim() }).then(function (d) { if (d && d.id) data.participants[d.id] = Object.assign(data.participants[d.id] || {}, d); }));
       }
       jobs.push(setAt(r, 'in', inAt)); jobs.push(setAt(r, 'out', outAt));
-      Promise.all(jobs).then(function () { attEdit = ''; queue(); toast('고쳤어요.'); }, err).then(function () { sv.disabled = false; });
+      Promise.all(jobs).then(function () {
+        attEdit = ''; renderAtt(); toast('고쳤어요.');
+        // 고치는 칸이 닫히면 그 사람의 [고치기]로 초점을 돌려줌(문서 맨 위로 빠지지 않게)
+        var back = C.attBox && C.attBox.querySelector('[data-k="aed' + String(p.id).replace(/"/g, '') + '"]'); if (back) back.focus();
+        queue();
+      }, err).then(function () { sv.disabled = false; });
     });
     td.appendChild(f); tr.appendChild(td); return tr;
   }
@@ -1082,7 +1166,7 @@
           if (x[0] === 'answers') csv = pollNames(csv);
           if (x[0] === 'completion' && !rateOn()) csv = noVerdict(csv);
           save((DATA.title || 'lecpage').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) + '_' + x[1].replace(/[·\s]/g, '') + '.csv', U.csvGuard ? U.csvGuard(csv || '') : csv || '');
-          toast(x[1] + ' 기록을 내려받았어요.');
+          toast(x[1] + ' 기록을 다운로드했어요.');
         }, err);
       }, 'dl' + x[0]));
     });
@@ -1092,9 +1176,9 @@
       : '이수자 명단: 사람마다 입실·퇴실 시각, 머문 시간, 실습 완료, 설문 제출을 적어요. 이수 기준(출석 비율)이 연수 정보에 없어 \'이수\' 칸은 비워 둬요. 기관 기준으로 판단해 주세요.'));
     b.appendChild(s1);
     var s2 = el('div', 'lp-con-sec'); s2.appendChild(el('h3', '', '삭제'));
-    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [모든 데이터 삭제]로 지워 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 삭제를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
+    s2.appendChild(el('p', 'lp-con-sub', LOCAL ? '리허설 기록은 이 브라우저에만 있어요. 실제 연수 전에 지워 두세요.' : '다 쓰면 [모든 데이터 삭제]로 삭제해 주세요. 그대로 두면 ' + ((DATA.privacy || {}).keep || ('마지막 기록 뒤 ' + ((DATA.privacy || {}).retentionDays || 30) + '일')) + '이 지나 지워져요' + (/^(sheets|supabase)$/.test((DATA.live || {}).provider || '') ? '(자동 삭제를 켜 둔 경우)' : '') + '. 내려받은 CSV에도 별명이 들어 있어요.'));
     var dlg = $('[data-purge-dialog]');
-    var del = btn('모든 데이터 삭제', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
+    var del = btn('모든 데이터 삭제', 'lp-btn-danger', function () { if (dlg && dlg.showModal) dlg.showModal(); else if (window.confirm('모든 데이터를 삭제할까요? 되돌릴 수 없어요.')) purge(); }, 'purge');
     var r = el('div', 'lp-con-row'); r.appendChild(del); s2.appendChild(r); b.appendChild(s2);
     var goP = dlg && $('[data-purge-go]', dlg);
     if (goP) goP.addEventListener('click', function () { dlg.close(); purge(); });
@@ -1123,7 +1207,7 @@
     }
     paintJoin(); onLan.push(paintJoin);
   }
-  function purge() { conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); queue(); toast('모든 기록을 지웠어요.'); }, err); }
+  function purge() { conn.purge().then(function () { COLS.forEach(function (k) { data[k] = {}; }); queue(); toast('모든 데이터를 삭제했어요.'); }, err); }
 
   // ── 휴대폰에서 열기: 관리자 키가 든 QR(주소 뒤 #key=, 서버로 가지 않음) ──
   // 누를 때만 보이고 60초 뒤·창을 떠나면·대화상자를 닫으면 가림. 프로젝터에 비칠 수 있어 [QR 보이기]를 한 번 더 누르게 함

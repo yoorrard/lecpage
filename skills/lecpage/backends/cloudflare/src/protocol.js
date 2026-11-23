@@ -1118,11 +1118,15 @@ export class LiveCore {
         const prev = safeJson(existing.data, {});
         const days = attDays(seedDays(prev, this.cfg.timeZone), kind, at, this.cfg.timeZone, true);
         const vals = Object.values(days);
-        const data = { ...prev, kind, at: kind === 'in' ? Math.min(...vals) : Math.max(...vals), days, byHost: true };
+        // hostDays: which days the host wrote (the console marks only those days as host-entered). An older record that only has byHost
+        // counts every day it had as host-entered, as before
+        const marks = isObj(prev.hostDays) ? prev.hostDays : prev.byHost ? Object.fromEntries(Object.keys(seedDays(prev, this.cfg.timeZone)).map((d) => [d, 1])) : {};
+        const hostDays = Object.fromEntries(Object.entries({ ...marks, [dayKey(at, this.cfg.timeZone)]: 1 }).filter(([d]) => d in days));
+        const data = { ...prev, kind, at: kind === 'in' ? Math.min(...vals) : Math.max(...vals), days, byHost: true, hostDays };
         row = this.writeRow(code, 'attendance', existing, data, now); type = 'update';
       } else {
         if (this.count(code, 'attendance') >= this.cfg.maxDocs) throw new HttpError(409, 'collection_full', '이 연수에 쌓인 글이 너무 많아요.');
-        const id = 'a' + randomId(9); const data = { kind, at, days: attDays(null, kind, at, this.cfg.timeZone), byHost: true };
+        const id = 'a' + randomId(9); const data = { kind, at, days: attDays(null, kind, at, this.cfg.timeZone), byHost: true, hostDays: { [dayKey(at, this.cfg.timeZone)]: 1 } };
         this.db.run(`INSERT INTO docs (code, col, id, by, k, cid, data, created_at, updated_at) VALUES (?, 'attendance', ?, ?, ?, NULL, ?, ?, ?)`, code, id, by, k, JSON.stringify(data), now, now);
         row = { code, col: 'attendance', id, by, k, cid: null, data: JSON.stringify(data), created_at: now, updated_at: now };
       }
