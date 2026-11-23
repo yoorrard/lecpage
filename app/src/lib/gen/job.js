@@ -23,7 +23,7 @@ import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.
 import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
-import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, fitSiteImages, PAGE_SETS_CAP, decodeBinary, chatgptModels, bridgeStatus } from './local.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, fitSiteImages, fitSiteForEdit, PAGE_SETS_CAP, decodeBinary, chatgptModels, bridgeStatus } from './local.js';
 import { carryLegacy, recordVersion, aiVersionLabel, addChat, aiReply } from '../site-meta.js';
 import { ensureIds } from '../site-doc.js';
 
@@ -154,6 +154,7 @@ function errorView(e, provider) {
   if (k === 'updating') return { kind: k, title: 'lecpage 커넥트를 새 버전으로 바꾸는 중이에요.', body: '잠시 뒤 다시 해 주세요. [계속 만들기]를 누르면 받은 글은 그대로 이어서 써요.', actions: ['resume'] };
   if (k === 'pc-pair') return { kind: k, title: 'lecpage 커넥트와 짝이 맞지 않아요.', body: 'lecpage 커넥트를 끄고 다시 켜면 이 화면과 다시 짝을 맞춰요. 그다음 [계속 만들기]를 눌러 주세요.', actions: ['resume'] };
   if (k === 'too-big') return { kind: k, title: '교재가 커서 lecpage 커넥트로 보내지 못했어요.', body: e?.message || '교재를 줄이거나 나눠 주세요.', actions: ['connect'] };
+  if (k === 'site-big') return { kind: k, title: '사이트가 커서 lecpage 커넥트로 보내지 못했어요.', body: e?.message || '자료실의 큰 파일을 줄이거나 다른 AI를 골라 주세요.', actions: ['connect'] };
   if (k === 'chatgpt-login') return { kind: k, title: 'ChatGPT 계정 연결이 풀렸어요.', body: 'AI 선택에서 [ChatGPT 계정으로 로그인]을 다시 누르면 하던 단계부터 이어서 만들어요.', actions: ['connect', 'resume'] };
   if (k === 'chatgpt-plan') return { kind: k, title: '이 ChatGPT 계정으로는 쓸 수 없어요.', body: 'ChatGPT Plus·Pro 요금제에서 쓸 수 있어요. 다른 AI를 고르거나 요금제를 바꾼 뒤 다시 로그인해 주세요.', actions: ['connect'] };
   if (k === 'chatgpt-limit') return { kind: k, title: 'ChatGPT 사용 한도에 닿았어요.', body: '한도가 다시 차면 [계속 만들기]를 눌러 주세요. 받은 글은 그대로 이어서 써요. 사용량은 ChatGPT 설정에서 볼 수 있어요.', actions: ['link', 'resume'], link: { href: USAGE_URL, label: 'ChatGPT 사용량 보기' } };
@@ -436,13 +437,22 @@ async function runAgent(ctx, step) {
       only = fit.list;
       if (sets.length < all.length) rec2notes(rec, [`lecpage 커넥트가 예전 버전이라 ${sets[0].name}의 쪽 그림만 보냈어요. 커넥트를 새 버전으로 바꾸면 교재마다 보내요.`]);
       if (fit.cut) rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.list.length}장을 골라 lecpage 커넥트로 보냈어요.`]);
+    } else {
+      // 고치기: 지금 사이트 전체를 보내되, 커넥트의 사이트 한도를 넘으면 교재 쪽 그림만 고르게 줄여 보냄(자료·사진과 사이트 글이 가리키는 쪽 그림은 꼭 보냄).
+      // 보내지 않은 쪽 그림은 저장소에 그대로라(아래에서 받은 것을 담기만 함) 고친 사이트의 교재 슬라이드에는 모든 쪽이 남음. 예전에는 통째로 보내 커넥트가 크기로 거절했음
+      const fit = await fitSiteForEdit(blobs, rec.pid, rec.site || project.site || {}, all, st?.limits || null);
+      if (fit.over) throw new AiError('site-big', `꼭 함께 보내야 하는 사이트 파일(자료·사진과 사이트가 쓰는 쪽 그림)이 ${fit.mb}MB예요. 이 PC의 lecpage 커넥트는 ${+st?.limits?.siteMB || 40}MB까지 받아요. 자료실의 큰 파일을 줄이거나 다른 AI를 골라 주세요.`, { provider: 'local' });
+      only = fit.only;
+      // (고치기의 알림은 작업 기록에만 남음: 사이트와 그 쪽 그림은 그대로라 강사가 할 일이 없음)
+      if (only) rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.sent}장만 lecpage 커넥트로 보냈어요. 사이트의 쪽 그림은 그대로예요.`]);
     }
     // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림). 한도 때문에 원본 대신 같은 이름의 PDF만 간 교재는 말없이 빼지 않고 강사에게 알리고,
     // PDF에 없는 발표자 노트는 글 파일로 함께 보냄(local.js bridgeFiles)
     const files = await bridgeFiles(blobs, rec.pid, project, st?.limits || null, rec.kind === 'make' ? sets : null, (name) => notesText(project.material, [name], 60000),
       // 원본이 커넥트 한도를 넘는 교재: 원본 대신 보낼 글(뽑은 글자 + 발표자 노트 + 글에 주소가 보이지 않는 링크). 쪽 그림은 site로 따로 감
       (name) => [helperText(project.material, [name], 600000), notesText(project.material, [name], 60000), linksText(project.material, [name], 8000)].filter(Boolean).join('\n\n'));
-    if (files.asText?.length) rec2notes(rec, files.asText.map((n) => `${n}: 파일이 커서 원본 대신 쪽 그림과 뽑은 글자로 보냈어요.`));
+    // 그 교재의 쪽 그림이 없으면(글자만 읽은 교재·쪽 그림 몫이 남지 않은 교재) '쪽 그림과'라고 하지 않음
+    if (files.asText?.length) rec2notes(rec, files.asText.map((n) => `${n}: 파일이 커서 원본 대신 ${(files.asTextOnly || []).includes(n) ? '뽑은 글자로' : '쪽 그림과 뽑은 글자로'} 보냈어요.`));
     if (files.dropped?.length) rec2notes(rec, files.dropped.map((n) => `${n}: 파일이 커서 같은 내용의 PDF로 보냈어요${files.notesSent?.includes(n) ? '(발표자 노트는 글로 함께 보냈어요)' : ''}.`));
     return {
       files,

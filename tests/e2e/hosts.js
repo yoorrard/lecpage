@@ -43,6 +43,48 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     ok('netlify redeploy to same site', st.nf.calls.includes('POST /api/v1/sites/site1/deploys'));
     console.log('errors', errs); await ctx.close();
   }
+  // ── 내 계정에 배포할 곳의 파일 하나 한도(GitHub Pages 100MB)를 넘는 교재 원본('교재 원본 다운로드 허용'): 바로 배포처럼 사이트에 넣지 않고 배포하고 한 줄로 알림.
+  //    한도가 없는 곳(Netlify)은 그대로 넣음. 원본 말고는 아무것도 빼지 않음(교재 쪽 그림은 그대로) ──
+  {
+    const { ANSWER } = require('./h3.js');
+    const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }); const st = await mockAll(ctx);
+    const p = await ctx.newPage(); const errs = watch(p);
+    await openShare(p, ANSWER.replace('</main>', '<section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section></main>'));
+    // 넣은 교재(workshop.pdf)의 크기를 150MB로 적고(원본 내용은 그대로: 크기로 걸리는 원본은 읽지도 않고 뺌) '교재 원본 다운로드 허용'을 켬
+    await p.evaluate(async () => {
+      const pid = (location.hash.match(/#\/p\/([^/]+)/) || [])[1];
+      const db = await new Promise((res, rej) => { const q = indexedDB.open('lecpage'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+      await new Promise((res, rej) => {
+        const t = db.transaction('projects', 'readwrite'); const s = t.objectStore('projects'); const g = s.get(pid);
+        g.onsuccess = () => { const rec = g.result; rec.files = rec.files.map((f) => (f.key ? { ...f, size: 150 * 1024 * 1024 } : f)); rec.shareOriginals = true; rec.updatedAt = Date.now() + 5000; s.put(rec); };
+        t.oncomplete = res; t.onerror = () => rej(t.error);
+      });
+    });
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1200);
+    await pick(p, 'GitHub Pages');
+    await p.click('.publish .walk-b button:has-text("이미 가입했어요")');
+    await connect(p, 'github_pat_FAKE_TOKEN_1234567890');
+    await p.waitForSelector('.publish .conn-line');
+    await p.fill('.publish .addr-name input', 'big-orig');
+    await publish(p);
+    await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    const gh = st.gh.repos['big-orig']?.files || [];
+    ok('github + 150MB original: the original is left out, the site and its page images go up', gh.includes('index.html') && !gh.some((k) => k.startsWith('files/')) && gh.filter((k) => /^material\/p-\d+\./.test(k)).length === 13, gh.filter((k) => !/^assets\//.test(k)).join(' ').slice(0, 200));
+    const note = (await p.locator('.success .left-note').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    ok('github + 150MB original: one line on the success card says so (every page is in the deck here)', /^workshop\.pdf\(150MB\)는 커서 사이트에 넣지 않았어요\. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요\.$/.test(note), note.slice(0, 140));
+    // 파일 한도가 없는 곳(Netlify): 원본을 그대로 넣음 → 알리는 줄 없음
+    await pick(p, 'Netlify');
+    await connect(p, 'nfp_FAKE_TOKEN_1234567890');
+    await p.waitForSelector('.publish .conn-line');
+    await p.fill('.publish .addr-name input', 'big-nf');
+    const zipBefore = st.nf.zip || 0;
+    await publish(p);
+    await p.waitForFunction(() => /\.netlify\.app\/$/.test(document.querySelector('.success .big-url')?.textContent || ''), null, { timeout: 60000 }); // 가짜 Netlify는 늘 같은 주소를 줌
+    await p.waitForTimeout(500);
+    ok('netlify (no per-file limit): nothing is left out, no size line', await p.locator('.success .left-note').count() === 0 && (st.nf.zip || 0) !== zipBefore, `zip ${st.nf.zip}B`);
+    ok('no page errors (originals over a host file limit)', errs.length === 0, JSON.stringify(errs).slice(0, 200));
+    await ctx.close();
+  }
   // ── Cloudflare(직접)·파일로 받기 ──
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, acceptDownloads: true }); await mockAll(ctx);

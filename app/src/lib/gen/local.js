@@ -335,7 +335,7 @@ export async function bridgeFiles(blobs, pid, project, limits = null, sets = nul
   const fit = fitFilesInfo(items, limits);
   // 원본도 같은 이름의 PDF도 한도 때문에 못 가는 교재: 앱이 뽑은 글을 .md로(쪽 그림 표시도 그 글 파일에).
   // 이름은 원본과 같은 줄기의 .md, 같은 이름의 .md 교재가 이미 있으면 '(뽑은 글)'을 붙여 겹치지 않게. standsFor(원본 이름)를 함께 보내 커넥트가 작업 지시에 사실대로 적게 함
-  out.asText = [];
+  out.asText = []; out.asTextOnly = []; // asTextOnly: 그 가운데 이 교재의 쪽 그림 없이 글만 간 것(강사에게 사실대로 알리려고)
   const enc = new TextEncoder();
   const mdName = (name) => { const stem = name.replace(/\.[^.]+$/, ''); let n = stem + '.md'; for (let i = 1; names.has(n.toLowerCase()); i++) n = `${stem} (뽑은 글${i > 1 ? ' ' + i : ''}).md`; return n; };
   const makeMd = (x) => {
@@ -344,23 +344,25 @@ export async function bridgeFiles(blobs, pid, project, limits = null, sets = nul
     if (!text && !has) throw tooBig(`'${x.name}' 파일이 커서(${Math.round(x.size / MiB)}MB) lecpage 커넥트로 보낼 수 없어요. 교재를 나눠 넣어 주세요.`);
     const md = mdName(x.name); names.add(md.toLowerCase());
     const head = `# ${x.name}\n\n원본 ${x.name} 파일이 커서(${Math.round(x.size / MiB)}MB) 원본 대신 ${has ? '쪽 그림(work/site/material/)과 ' : ''}코드가 뽑은 글을 보냈어요. 글은 틀리거나 빠질 수 있어요${has ? '. 쪽 그림과 다르면 쪽 그림이 맞아요' : ''}.\n\n`;
-    return { x, md, bytes: enc.encode(head + text + '\n') };
+    return { x, md, has, bytes: enc.encode(head + text + '\n') };
   };
   const mds = fit.asText.map(makeMd);
-  // 대신 보내는 글의 크기도 교재 합계에 들어감: 합계 한도를 넘으면 남은 교재를 큰 것부터 글로 바꿈(커넥트가 "모두 합쳐 …MB까지"로 거절하지 않게)
+  // 대신 보내는 글의 크기도 교재 합계에 들어감: 합계 한도를 넘으면 남은 교재 하나를 더 글로 바꿈(커넥트가 "모두 합쳐 …MB까지"로 거절하지 않게).
+  // 원본을 되도록 많이 보내게, 빼면 넘친 만큼이 풀리는 것 가운데 가장 작은 것을 고름(그런 것이 없으면 가장 큰 것)
   let keep = fit.keep;
   const cap = (+limits?.materialMB || 120) * MiB;
   const sum = () => keep.reduce((n, y) => n + sizeOf(y.v), 0) + mds.reduce((n, m) => n + m.bytes.length, 0);
   const isPdf = (y) => /\.pdf$/i.test(y.name); const moreDropped = [];
   while (sum() > cap && keep.length) {
-    const big = [...keep].sort((a, b) => sizeOf(b.v) - sizeOf(a.v))[0];
+    const over = sum() - cap; const bySize = [...keep].sort((a, b) => sizeOf(a.v) - sizeOf(b.v));
+    const big = bySize.find((y) => sizeOf(y.v) >= over) || bySize[bySize.length - 1];
     keep = keep.filter((y) => y !== big);
     // 같은 이름의 짝(원본↔PDF)이 남아 가면 글로 바꾸지 않고 뺀 것으로만 알림
     if (keep.some((y) => stemOf(y.name) === stemOf(big.name) && isPdf(y) !== isPdf(big) && (isPdf(y) || isPdf(big)))) { moreDropped.push(big.name); continue; }
     mds.push(makeMd({ name: big.name, size: sizeOf(big.v) }));
   }
   const asName = new Set(mds.map((m) => m.x.name));
-  for (const m of mds) { out.push({ name: m.md, type: 'text/markdown', base64: await toBase64(m.bytes), ...mark(m.x.name), standsFor: m.x.name }); out.asText.push(m.x.name); }
+  for (const m of mds) { out.push({ name: m.md, type: 'text/markdown', base64: await toBase64(m.bytes), ...mark(m.x.name), standsFor: m.x.name }); out.asText.push(m.x.name); if (!m.has) out.asTextOnly.push(m.x.name); }
   for (const x of keep) out.push({ name: x.name, type: x.type, base64: await toBase64(x.v), ...mark(x.name) });
   // 한도에 맞추느라 뺀 원본(같은 이름의 PDF만 감): 말없이 빼지 않게 이름을 돌려주고(out.dropped → 강사 안내), PDF에 없는 발표자 노트는
   // 글 파일로 함께 보냄(notesOf(원본 이름) → 글. 같은 이름이라 커넥트의 교재 개수는 그대로, 예전 커넥트는 개수가 넘지 않을 때만)
@@ -381,29 +383,78 @@ export const PAGE_SETS_CAP = 'page-sets';
 /**
  * 커넥트로 보낼 교재 쪽 그림 고르기(새로 만들 때). list: ['material/p-001.webp', …] · sets: 교재마다 묶음 · only: 이 묶음의 그림만(예전 커넥트)
  * 사이트 한도(커넥트 siteMB, 기본 40MB)를 넘으면 교재마다 고르게 골라 줄임(쪽이 적은 교재는 다, 남는 몫은 쪽이 많은 교재에) → { list, total, cut }
+ * 고칠 때(fitSiteForEdit)만 쓰는 것 — must: 꼭 보낼 쪽 번호(Set: 사이트 글이 가리키는 쪽), base: 쪽 그림 말고 함께 가는 사이트 파일의 크기.
+ * over: 꼭 보낼 것만으로도 한도를 넘음(부른 쪽이 보내기 전에 알림)
  */
-export async function fitSiteImages(blobs, pid, list, sets = [], only = null, limits = null) {
+export async function fitSiteImages(blobs, pid, list, sets = [], only = null, limits = null, { must = null, base = 0 } = {}) {
   const inSet = (n, s) => n >= s.first && n < s.first + s.count;
   const all = (list || []).filter((p) => numOf(p) && (!only || only.some((s) => inSet(numOf(p), s))));
-  const max = Math.max(1, (+limits?.siteMB || 40) - 1) * MiB;
+  const max = Math.max(1, (+limits?.siteMB || 40) - 1) * MiB - Math.max(0, +base || 0);
   const size = new Map();
   for (const p of all) size.set(numOf(p), sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null)));
   let total = 0; for (const v of size.values()) total += v;
-  if (total <= max) return { list: all, total: all.length, cut: false };
+  if (total <= max) return { list: all, total: all.length, cut: false, over: false };
+  // 꼭 보낼 쪽은 그대로 두고, 나머지에서만 고름
+  const fixed = new Set([...size.keys()].filter((n) => must?.has(n)));
+  let fixedBytes = 0; for (const n of fixed) fixedBytes += size.get(n);
+  const room = max - fixedBytes;
   // 묶음 밖의 그림(어느 교재 것인지 모름)은 한 묶음으로 봄
-  const nums = [...size.keys()].sort((a, b) => a - b);
+  const nums = [...size.keys()].filter((n) => !fixed.has(n)).sort((a, b) => a - b);
   const groups = (only || sets || []).filter((s) => nums.some((n) => inSet(n, s))).map((s) => nums.filter((n) => inSet(n, s)));
   const rest = nums.filter((n) => !groups.some((g) => g.includes(n))); if (rest.length) groups.push(rest);
-  let cap = Math.floor((all.length * max * 0.95) / total); let keep = new Set();
-  for (let i = 0; i < 8; i++) {
+  let cap = room > 0 && nums.length ? Math.floor((nums.length * room * 0.95) / (total - fixedBytes)) : 0; let keep = new Set(); let sum = 0;
+  for (let i = 0; i < 8 && cap > 0; i++) {
     const shares = splitCap(groups.map((g) => g.length), cap);
     keep = new Set(groups.flatMap((g, k) => pickPages(g.length, shares[k]).map((j) => g[j - 1])));
-    let sum = 0; for (const n of keep) sum += size.get(n);
-    if (sum <= max || cap <= groups.length) break;
-    cap = Math.max(groups.length, Math.floor((cap * max * 0.95) / sum));
+    sum = 0; for (const n of keep) sum += size.get(n);
+    if (sum <= room || cap <= groups.length) break;
+    cap = Math.max(groups.length, Math.floor((cap * room * 0.95) / sum));
   }
-  const out = all.filter((p) => keep.has(numOf(p)));
-  return { list: out, total: all.length, cut: out.length < all.length };
+  // 그래도 넘으면(그림 한 장이 아주 큼) 큰 것부터 더 뺌: 커넥트가 사이트 크기로 거절하지 않게
+  for (const n of [...keep].sort((a, b) => size.get(b) - size.get(a))) { if (sum <= room) break; keep.delete(n); sum -= size.get(n); }
+  const out = all.filter((p) => keep.has(numOf(p)) || fixed.has(numOf(p)));
+  return { list: out, total: all.length, cut: out.length < all.length, over: room < 0 };
+}
+/**
+ * 사이트 글(HTML·CSS·JS)이 가리키는 교재 쪽 번호: 경로로 적은 것(material/p-NNN.webp)과 교재 슬라이드에서 고른 쪽(data-pages="1-10, 12").
+ * 고칠 때 이 쪽들의 그림은 꼭 함께 보냄: 빠지면 커넥트의 검수가 '그림이 사이트에 없어요'로 알리고 AI가 그 자리를 지울 수 있음.
+ * 경로를 코드로 이어 붙여 만드는 사이트('material/p-' + n 같은 꼴)는 어느 쪽을 쓰는지 알 수 없어 all: true(모든 쪽을 보냄)
+ * @returns {{ nums: Set<number>, all: boolean }}
+ */
+export function pagesUsed(site) {
+  const nums = new Set(); let all = false;
+  for (const v of Object.values(site || {})) {
+    if (typeof v !== 'string') continue;
+    for (const m of v.matchAll(/material\/p-(\d{3,4})\.(?:webp|png|jpe?g)/gi)) nums.add(+m[1]);
+    if (/material\/p-\d{0,4}(?:['"`]|\$\{)/i.test(v)) all = true; // 'material/p-' + n · `material/p-${n}`
+    for (const m of v.matchAll(/\sdata-pages\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+      for (const part of String(m[1] ?? m[2] ?? '').split(/[,\s]+/).filter(Boolean)) { // 엔진 kit/widgets.js parsePages와 같은 꼴(번호·범위)
+        const r = /^(\d{1,4})(?:\s*[-~–]\s*(\d{1,4}))?$/.exec(part); if (!r) continue;
+        let a = +r[1], b = r[2] ? +r[2] : a; if (b < a) [a, b] = [b, a];
+        for (let n = a; n <= b && n - a < 2000; n++) nums.add(n);
+      }
+    }
+  }
+  return { nums, all };
+}
+/**
+ * 고칠 때 커넥트로 보낼 사이트 폴더의 바이트 파일 고르기. 지금 사이트(저장소 'site/…') 전체가 커넥트의 사이트 한도 안이면 전부(only: null, 예전 그대로).
+ * 넘으면 교재 쪽 그림만 고르게 줄임: 자료실 파일·사진과 사이트 글이 가리키는 쪽 그림(pagesUsed)은 꼭 보내고, 나머지 쪽 그림에서 고름.
+ * 보내지 않은 쪽 그림은 이 연수의 저장소에 그대로 남음(결과를 받을 때 지우는 것이 없음) → 고친 사이트의 교재 슬라이드에는 모든 쪽이 그대로.
+ * @param site 지금 사이트의 글 파일({ 경로: 글 }) · sets: 쪽 그림 묶음(교재마다 고르게 고르려고)
+ * @returns {Promise<{ only: string[]|null, total: number, sent: number, over: boolean, mb: number }>} only: 보낼 경로(null이면 전부), total·sent: 쪽 그림 장수, over: 꼭 보낼 것만으로 한도를 넘음(mb: 그 크기)
+ */
+export async function fitSiteForEdit(blobs, pid, site, sets = [], limits = null) {
+  const keys = (await blobs.keys(pid).catch(() => [])).filter((k) => k.startsWith('site/')).map((k) => k.slice(5));
+  const pages = keys.filter((k) => k.startsWith('material/') && numOf(k));
+  const others = keys.filter((k) => !pages.includes(k));
+  let base = 0; for (const k of others) base += sizeOf(await blobs.get(pid, 'site/' + k).catch(() => null));
+  const used = pagesUsed(site);
+  const must = used.all ? new Set(pages.map(numOf)) : used.nums;
+  const fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must, base });
+  if (!fit.cut && !fit.over) return { only: null, total: pages.length, sent: pages.length, over: false, mb: 0 };
+  let bytes = base; if (fit.over) for (const p of fit.list) bytes += sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null));
+  return { only: [...others, ...fit.list], total: pages.length, sent: fit.list.length, over: fit.over, mb: Math.ceil(bytes / MiB) };
 }
 const MiB = 1048576;
 const sizeOf = (v) => +(v?.size ?? v?.byteLength ?? v?.length ?? 0) || 0;
@@ -429,8 +480,13 @@ export function fitFilesInfo(items, limits = null) {
   const drops = keep.filter(twin).sort((a, b) => sizeOf(b.v) - sizeOf(a.v));
   const over = () => total(keep) > L.materialMB * MiB || (!L.twinPdf && keep.length > L.files);
   while (over() && drops.length) { const d = drops.shift(); keep = keep.filter((x) => x !== d); }
-  // 그래도 합계를 넘으면 큰 것부터 뺌(그 교재는 글·쪽 그림으로)
-  for (const d of [...keep].sort((a, b) => sizeOf(b.v) - sizeOf(a.v))) { if (total(keep) <= L.materialMB * MiB) break; keep = keep.filter((x) => x !== d); }
+  // 그래도 합계를 넘으면 큰 것부터 들어가는 만큼 보내고(원본을 되도록 많이), 들어가지 않는 것만 뺌(그 교재는 글·쪽 그림으로).
+  // 예: 90MB + 40MB(한도 120MB) → 90MB 원본은 그대로 가고 40MB만 글로
+  if (total(keep) > L.materialMB * MiB) {
+    let room = L.materialMB * MiB; const stay = new Set();
+    for (const d of [...keep].sort((a, b) => sizeOf(b.v) - sizeOf(a.v))) { if (sizeOf(d.v) <= room) { stay.add(d); room -= sizeOf(d.v); } }
+    keep = keep.filter((x) => stay.has(x));
+  }
   // 원본도 같은 이름의 PDF도 가지 못하는 교재: 원본 이름으로(이름이 같은 원본·PDF는 한 교재). 이름만 같은 다른 교재(큰.pptx와 큰.md)는 따로 셈:
   // 같은 이름의 글 교재가 간다고 해서 못 간 원본을 말없이 빼지 않음
   const isPdf = (y) => /\.pdf$/i.test(y.name);

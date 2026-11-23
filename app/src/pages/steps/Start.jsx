@@ -158,7 +158,9 @@ function useIngest(p, update, first = []) {
       metas.push({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext, pages: (whole && /^hw/.test(ext) && shots.length) || material.files?.[0]?.pages || shots.length || 0, errors, ...(warns.length ? { warns } : {}),
         ...(conv?.ok ? { pdf: { key: conv.key, via: conv.via || '', app: conv.app || '' }, note: convNote } : {}),
         ...(textOnly ? { note: TEXT_ONLY_NOTE, howto: /^hw/.test(ext) ? 'hwp' : /^(doc|odt)/.test(ext) ? 'doc' : 'ppt' } : {}),
-        ...(capped && !errors.length ? { note: [convNote, capNote(shots.length)].filter(Boolean).join(' ') } : {}) });
+        ...(capped && !errors.length ? { note: [convNote, capNote(shots.length)].filter(Boolean).join(' ') } : {}),
+        // 쪽 그림을 이 교재의 일부만 그림([중지]를 눌렀거나 쪽 그림 몫이 모자람): 배포 화면이 '교재 슬라이드에서 모든 쪽을 볼 수 있어요'라고 말하지 않게 적어 둠
+        ...(shots.length && (!whole || capped) ? { slidesPart: true } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
       if (!tooBigFile(f) && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
     }
@@ -254,7 +256,9 @@ export function StepStart({ p, update, go, job, idle, reload }) {
     try { toast(await openSaved(saved)); if (empty) setTimeout(() => deleteProject(cur.id), 800); }
     catch (err) { toast(openFailMessage(err)); }
   }
-  const ready = !busy && (p.files || []).some((f) => !f.pending && !f.photos && !f.errors?.length);
+  // 읽다 멈춘 교재가 있으면 만들 수 없음: 그 교재는 쪽 그림·글자가 없어 그대로 만들면 사이트에서 말없이 빠짐 → [이어서 읽기]나 삭제를 먼저 고르게 함
+  const held = !busy && (p.files || []).some(heldRow);
+  const ready = !busy && !held && (p.files || []).some((f) => !f.pending && !f.photos && !f.errors?.length);
   // 읽는 중에는 다 읽은 뒤와 같은 자리에 그림(작은 교재 칸·목록 줄·AI 선택 칸): 다 읽는 순간 화면이 밀리지 않게
   const reading = !!busy || rows.some((f) => f.pending && !heldRow(f)); // 읽다 멈춘 줄([이어서 읽기]를 기다림)은 읽는 중이 아님
   const [busyName, busyWhat] = Array.isArray(busy) ? busy : ['', busy];
@@ -305,7 +309,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
           </Field>
           <DesignPicks p={p} update={update} />
         </section>
-        <AiPick p={p} go={go} idle={idle} ready={ready} reading={reading} />
+        <AiPick p={p} go={go} idle={idle} ready={ready} reading={reading} held={held} />
       </div>
     </>
   );

@@ -1,7 +1,7 @@
 // 프로젝트 만들기·저장·내보내기(.lecpage = 무압축 ZIP: project.json + 자산 파일)
-import { projects, blobs } from './db.js';
+import { projects, blobs, storageKind, STORAGE_MSG } from './db.js';
 import { uid, sha256Hex } from './util.js';
-import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, readStoredZipBlob, storedZipWriter, blobCrc, sameEntries, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
+import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, isSiteAsset, readStoredZip, readStoredZipBlob, storedZipWriter, blobCrc, sameEntries, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
 // 첫 화면(Home·main.jsx)도 이 파일을 쓰므로 엔진·키트는 쓸 때만 불러옴(첫 화면 묶음을 가볍게)
 const siteMeta = () => import('./site-meta.js');
 
@@ -158,6 +158,21 @@ export const OPEN_FAIL = '파일을 열지 못했어요. lecpage에서 저장한
 /** 파일에서 꺼낸 항목(Blob 조각)을 저장소에 담을 값으로: 큰 것은 Blob 그대로(메모리에 올리지 않음), 작은 것은 예전처럼 바이트 */
 const BIG_ENTRY = 32 * 1024 * 1024;
 const storable = async (v) => (v instanceof Blob ? (v.size > BIG_ENTRY ? v : new Uint8Array(await v.arrayBuffer())) : v);
+/**
+ * 연 파일을 저장소에 담음: 파일(그림·교재)을 먼저 담고 연수 기록은 맨 끝에 적음.
+ * 도중에 실패하면(저장 공간이 꽉 참 등) 그때까지 담은 것을 모두 지움 → 반쯤 열린 연수가 목록에 남지 않고, 같은 파일을 다시 열면 '이미 연 파일'이 아니라 처음부터 다시 엶.
+ * 저장 공간·저장 차단이 까닭이면 그 안내를 화면에 그대로 보일 오류(friendly)로 돌려줌(예전에는 '저장한 파일인지 확인해 주세요'로 잘못 알렸음)
+ */
+async function storeOpened(p, entries) {
+  try {
+    for (const [k, v] of entries) await blobs.put(p.id, k, await storable(v));
+    await projects.put(p);
+  } catch (e) {
+    await projects.remove(p.id).catch(() => { }); // 연수 기록(적혔다면)과 그 연수의 파일을 모두 지움
+    const kind = storageKind(e);
+    throw kind ? bad(STORAGE_MSG[kind]) : e;
+  }
+}
 
 export async function importProjectFile(file) {
   let proj, assets = {}, text;
@@ -179,7 +194,8 @@ export async function importProjectFile(file) {
       return importSiteFile(bytes, text);
     }
     proj = j.project;
-    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || /^site\/(material|assets\/img|files)\/[\w.\-가-힣]+\.(webp|png|jpe?g|gif|pdf|pptx|docx|hwpx?)$/i.test(k))) assets[k] = v;
+    // 받는 것: 교재 원본·쪽 그림(isAllowedAsset)과 사이트 폴더의 바이트 파일(isSiteAsset: 쪽 그림·사진·자료실 파일 — 앱이 그 자리에 둘 수 있는 이름·형식 모두)
+    for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || isSiteAsset(k))) assets[k] = v;
     // 저장할 때 한 벌만 담은 교재 쪽 그림(same)을 되살림: 넣을 때 그린 것(assets/slides) ← 사이트용(site/material)
     for (const [dst, src] of sameEntries(j)) if (assets[dst] === undefined && assets[src] !== undefined) assets[dst] = assets[src];
   }
@@ -202,8 +218,7 @@ export async function importProjectFile(file) {
     p.meta = keepTeacher(proj.meta || {}, { access: 'link' });
     p.versions = []; p.gen = undefined;
   }
-  await projects.put(p);
-  for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, await storable(v));
+  await storeOpened(p, Object.entries(assets));
   return p;
 }
 
@@ -232,7 +247,6 @@ async function importSiteFile(files, text) {
   });
   const p = { id, v: 2, ...(materials.length ? { materials } : {}), title: u.title || meta.title || '', createdAt: Date.now(), stage: 2, step: 2, imported: true, origin: 'skill', fileHash, files: srcFiles, info: { ...DEFAULT_INFO }, deploy: {},
     site: { ...site, 'index.html': html }, meta, material: u.material?.pages?.length ? { pages: u.material.pages, files: [] } : null, versions: [{ id: uid(8), at: Date.now(), label: 'AI 에이전트가 만든 버전', site, meta }], ...(u.note ? { notes: [u.note] } : {}) };
-  await projects.put(p);
-  for (const [k, v] of Object.entries(bins)) await blobs.put(id, k, v);
+  await storeOpened(p, Object.entries(bins));
   return p;
 }

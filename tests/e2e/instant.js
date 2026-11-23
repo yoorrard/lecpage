@@ -6,7 +6,7 @@ const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = (script) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>바로 배포 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>바로 배포 시험</h1><div data-lp="qa"></div></section></main>' + (script ? '<script>document.documentElement.classList.add("js")</script>' : '') + '</body></html>\n```\n```json\n{"v":2,"title":"바로 배포 시험","sessions":[{"date":"2027-02-10","start":"10:00","end":"12:00"}],"features":["qa"]}\n```';
 const UNSAFE = 'index.html에 비밀번호 입력 칸이 있어요. 참가자의 비밀번호를 받는 사이트는 바로 배포할 수 없어요.';
 const TOO_LARGE = '사이트가 너무 커요(30MB까지). 큰 영상은 유튜브 링크로 바꿔 주세요.';
-async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {}, reachable = false, takeAll = false, failOne = false, bundleRefuse = 0 }) {
+async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {}, reachable = false, takeAll = false, failOne = false, bundleRefuse = 0, bundleDrop = false }) {
   const st = { calls: [], manifests: [], puts: 0, putBytes: 0, bundles: 0, bundleFiles: 0, resent: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
@@ -34,6 +34,8 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     // 작은 파일 묶음(진짜 서버 hosting/src/site.js uploadBundle과 같은 모양): 머리 길이 4바이트 + 머리 JSON [[sha256, 크기], …] + 내용. /api/info에 limits.bundle을 준 서버만 받음
     if (/^\/api\/sites\/[^/]+\/blobs$/.test(u.pathname) && m === 'PUT') {
       if (!info?.limits?.bundle) return json({ error: { code: 'not_found', message_ko: '없는 주소예요.' } }, 404);
+      // bundleDrop: 묶음이 가는 길에 끊김(망의 올리기 크기 제한·연결 끊김: 답 없이 끊음). 파일 하나씩은 지나감
+      if (bundleDrop) { st.bundleDropped = (st.bundleDropped || 0) + 1; return r.abort('connectionreset'); }
       // bundleRefuse: 운영자가 묶음 한도를 줄인 직후처럼(앱은 예전 한도를 기억 중) 묶음 자체를 거절(413 too_large 또는 400 bad_request)
       if (bundleRefuse) { st.bundleRefused = (st.bundleRefused || 0) + 1; return json({ error: bundleRefuse === 413 ? { code: 'too_large', message_ko: '묶음이 너무 커요.' } : { code: 'bad_request', message_ko: '묶음 모양이 맞지 않아요.' } }, bundleRefuse); }
       const body = r.request().postDataBuffer() || Buffer.alloc(0); const n = body.readUInt32BE(0); const list = JSON.parse(body.subarray(4, 4 + n).toString('utf8'));
@@ -325,6 +327,18 @@ async function seed(p, script) {
     const uniq = new Set(Object.values(st.manifests.at(-1) || {}).map((f) => f.sha256)).size;
     L.ok(`bundle refused with ${code} → falls back to one request per file, deploy finishes`, st.bundleRefused >= 1 && st.bundles === 0 && st.puts === uniq && uniq > 5, `${st.bundleRefused} refused, ${st.puts} single for ${uniq} files`);
     L.ok(`no page errors ⑭ ${code}`, errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑮ 묶음이 가는 길에 끊기면(답 없음) 두 번 더 해 본 뒤 파일마다 올리기로 넘어가 배포는 끝남(묶음 하나 때문에 사이트 전체가 실패하지 않음)
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    const st = await server(ctx, { siteScripts: true, takeAll: true, bundleDrop: true, info: { limits: REAL_LIMITS } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 120000 });
+    const uniq = new Set(Object.values(st.manifests.at(-1) || {}).map((f) => f.sha256)).size;
+    L.ok('bundle lost in transit → retried, then one request per file, deploy finishes', st.bundleDropped >= 3 && st.bundles === 0 && st.puts === uniq && uniq > 5, `${st.bundleDropped} dropped, ${st.puts} single for ${uniq} files`);
+    L.ok('no page errors ⑮', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);

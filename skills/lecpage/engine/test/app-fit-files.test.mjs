@@ -25,8 +25,16 @@ test('fitFilesInfo: 넘치지 않으면 그대로 · 넘치면 같은 이름의 
   // PDF 짝이 없는 큰 파일·합계 초과: 오류로 멈추지 않고 그 교재를 '글·쪽 그림으로 보낼 것'(asText)으로 돌려줌(큰 것부터)
   const one = L.fitFilesInfo([item('큰.pptx', 101), item('안내.docx', 1)]);
   assert.deepEqual(one.keep.map((x) => x.name), ['안내.docx']); assert.deepEqual(one.dropped, []); assert.deepEqual(one.asText, [{ name: '큰.pptx', size: 101 * MiB }]);
+  // 합계 초과: 원본을 되도록 많이 보내게, 큰 것부터 들어가는 만큼 두고 들어가지 않는 것만 글로
   const two = L.fitFilesInfo([item('a.pptx', 70), item('b.pptx', 60)]);
-  assert.deepEqual(two.keep.map((x) => x.name), ['b.pptx']); assert.deepEqual(two.asText.map((x) => x.name), ['a.pptx'], '합계 120MB를 넘어 큰 것부터 뺌');
+  assert.deepEqual(two.keep.map((x) => x.name), ['a.pptx']); assert.deepEqual(two.asText.map((x) => x.name), ['b.pptx'], '합계 120MB: 70MB는 가고 60MB만 글로');
+  const big90 = L.fitFilesInfo([item('A.pdf', 90), item('B.pdf', 40)]);
+  assert.deepEqual(big90.keep.map((x) => x.name), ['A.pdf'], '90MB 원본은 그대로 감(예전에는 큰 것부터 빼서 40MB만 갔음)'); assert.deepEqual(big90.asText.map((x) => x.name), ['B.pdf']);
+  const three = L.fitFilesInfo([item('a.pdf', 50), item('b.pdf', 50), item('c.pdf', 50)]);
+  assert.deepEqual(three.keep.map((x) => x.name), ['a.pdf', 'b.pdf']); assert.deepEqual(three.asText.map((x) => x.name), ['c.pdf']);
+  // 큰 것이 못 들어가도 뒤의 작은 것은 들어감(넣은 순서는 그대로)
+  const mix = L.fitFilesInfo([item('s.pdf', 10), item('x.pdf', 80), item('y.pdf', 70), item('z.pdf', 25)]);
+  assert.deepEqual(mix.keep.map((x) => x.name), ['s.pdf', 'x.pdf', 'z.pdf']); assert.deepEqual(mix.asText.map((x) => x.name), ['y.pdf']);
   // 원본도 같은 이름의 PDF도 큰 교재: 교재 하나로(원본 이름), dropped에는 넣지 않음(PDF가 가지 않으므로)
   const both = L.fitFilesInfo([item('큰.pptx', 300), item('큰.pdf', 150), item('안내.docx', 1)]);
   assert.deepEqual(both.keep.map((x) => x.name), ['안내.docx']); assert.deepEqual(both.dropped, []); assert.deepEqual(both.asText.map((x) => x.name), ['큰.pptx']);
@@ -77,6 +85,11 @@ test('bridgeFiles: 원본이 커넥트 한도를 넘고 같은 이름의 PDF도 
   const out = await L.bridgeFiles(blobs, 'p', project, lim, sets, null, textOf);
   assert.deepEqual(out.map((f) => f.name), ['큰.md', '안내.docx'].sort((a, b) => out.findIndex((f) => f.name === a) - out.findIndex((f) => f.name === b)));
   assert.deepEqual(out.asText, ['큰.pptx']); assert.deepEqual(out.dropped, []);
+  assert.deepEqual(out.asTextOnly, [], '이 교재의 쪽 그림이 함께 감');
+  // 쪽 그림 묶음이 없는 교재(글자만 읽음): 글만 간다고 따로 알림(강사 안내가 '쪽 그림과'라고 하지 않게)
+  const only = await L.bridgeFiles(blobs, 'p', project, lim, [], null, textOf);
+  assert.deepEqual(only.asText, ['큰.pptx']); assert.deepEqual(only.asTextOnly, ['큰.pptx']);
+  assert.doesNotMatch(Buffer.from(only.find((f) => f.name === '큰.md').base64, 'base64').toString('utf8'), /쪽 그림\(work/);
   const mdFile = out.find((f) => f.name === '큰.md');
   assert.equal(mdFile.pageImages, true, '쪽 그림 표시는 그 글 파일에(교재 하나의 것)');
   const md = Buffer.from(mdFile.base64, 'base64').toString('utf8');

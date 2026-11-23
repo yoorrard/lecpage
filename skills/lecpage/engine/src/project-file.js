@@ -1,9 +1,10 @@
 // .lecpage 파일: 앱의 [파일로 저장]·[저장한 파일 열기]와 skill CLI(`lecpage.mjs app`)가 함께 쓰는 형식.
 // 무압축 ZIP 하나에 project.json(연수 하나: 사이트·연수 정보·교재 목록)과 자료(쪽 그림·자료실 파일·교재 원본)를 담아요.
 // AI 에이전트(Skill)가 만든 사이트 파일은 v2 꼴(kit/project-v2.js). 비밀 값(관리자 키·참여 기능 키·사이트 암호)은 담지 않아요.
-// 앱 첫 화면이 이 파일을 읽으므로 다른 엔진 모듈을 불러오지 않아요(가볍게).
+// 앱 첫 화면이 이 파일을 읽으므로 무거운 엔진 모듈을 불러오지 않아요(판 번호와 사이트 파일 이름 규칙만. 둘 다 다른 것을 불러오지 않음).
 
 import { VERSION } from './version.js';
+import { siteFileOk } from './kit/paths.js';
 
 export const PROJECT_FORMAT = 'lecpage-project';
 export const PROJECT_VERSION = 1;
@@ -39,9 +40,22 @@ export const DEFAULT_INFO = {
 export const ALLOWED_ASSET = new RegExp('^(?:'
   + '(?:assets/)?(?:slides|media)/[^/]{1,140}\\.(?:png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx|ppsx|docx|hwpx|xlsx|txt|zip)'
   + '|assets/files/[\\w가-힣ㄱ-ㅎㅏ-ㅣ.\\-()\\[\\] ]{1,140}\\.(?:png|jpe?g|gif|webp|avif|pdf|mp3|m4a|mp4|webm|pptx?|ppsx|docx?|hwpx?|xlsx?|csv|txt|md|zip|key|pages|numbers|odt|odp|ods)'
-  + '|src/[^/]{1,140}\\.(?:pptx|ppsx|pdf|hwpx|docx|txt|md|hwp|ppt|doc)'
+  // 교재 원본: 앱 '교재 넣기'가 읽거나 이 PC의 프로그램으로 PDF로 바꾸는 형식 모두(app/src/lib/convert.js CONVERTIBLE + pdf·txt·md) — 넣은 교재가 저장·열기에서 빠지지 않게
+  + '|src/[^/]{1,140}\\.(?:pptx|ppsx|pptm|potx|ppt|pps|odp|key|pdf|hwpx|hwp|docx|docm|doc|odt|rtf|txt|md)'
   + ')$', 'i');
-export const isAllowedAsset = (k) => typeof k === 'string' && ALLOWED_ASSET.test(k) && !k.includes('..');
+/** 경로에 있으면 안 되는 것: '..'·역슬래시·제어 문자(이름은 앱이 만든 것만 받음) */
+const BAD_PATH_CH = /\.\.|[\\\u0000-\u001f\u007f]/;
+export const isAllowedAsset = (k) => typeof k === 'string' && ALLOWED_ASSET.test(k) && !BAD_PATH_CH.test(k);
+
+/**
+ * 파일에서 받는 사이트 폴더의 바이트 파일('site/…'): 교재 쪽 그림(material/p-NNN)·올린 사진과 AI가 넣은 그림(assets/…)·자료실 파일(files/…).
+ * 앱이 그 자리에 둘 수 있는 것은 모두 받음 — 조립이 받는 사이트 파일 규칙(kit/paths.js siteFileOk: 경로 글자·형식·'..'·숨김 파일·엔진 파일 이름)을 그대로 따름.
+ * 자료실 파일 이름에는 띄어쓰기·괄호가 들어가고(앱이 같은 이름에 ' (2)'를 붙임) 형식도 엑셀·CSV·ZIP·소리·영상까지라, 예전의 좁은 규칙으로는 열 때 말없이 빠졌음.
+ * 글로 된 코드(HTML·CSS·JS·JSON)는 받지 않음: 사이트 글은 project.json 안에 있음. 예전 규칙이 받던 경로(OLD_SITE_BIN)는 그대로 받음
+ */
+const OLD_SITE_BIN = /^site\/(?:material|assets\/img|files)\/[\w.\-가-힣]+\.(?:webp|png|jpe?g|gif|pdf|pptx|docx|hwpx?)$/i;
+export const isSiteAsset = (k) => typeof k === 'string' && k.startsWith('site/') && !BAD_PATH_CH.test(k)
+  && ((siteFileOk(k.slice(5)) && !/\.(?:html?|css|m?js|json)$/i.test(k)) || OLD_SITE_BIN.test(k));
 
 /** 교재 원본의 보관 이름(앱 '교재 넣기'와 같은 규칙: src/<이름>) */
 export const srcKey = (name) => 'src/' + String(name || '').replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);

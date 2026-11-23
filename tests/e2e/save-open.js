@@ -11,6 +11,8 @@ const path = require('path'); const os = require('os'); const { pathToFileURL } 
 const ROOT = path.resolve(__dirname, '../..');
 const ANSWER = '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>저장 왕복</title></head><body><main><section id="top" data-title="첫 화면"><h1>저장 왕복</h1><p>교재 슬라이드로 봐요.</p></section><section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section></main></body></html>\n```\n\n```json\n{"title":"저장 왕복","sessions":[{"date":"2026-12-09","start":"14:00","end":"17:00"}]}\n```';
 const BIG = 40 * 1024 * 1024; // 저장소에 Blob으로 담기는 크기(32MiB 넘음)
+// 앱이 저장소에 둘 수 있는 이름·형식: 자료실 파일(띄어쓰기·괄호·엑셀·CSV·ZIP·소리), 사진(이름에 띄어쓰기·괄호), 매크로 PPT·키노트 원본. 저장 → 열기에서 빠지면 안 됨
+const EXTRA = { 'site/files/실습 자료 (2).xlsx': 'xlsx bytes', 'site/files/명단[최종].csv': 'a,b\n1,2\n', 'site/files/묶음.zip': 'zip bytes', 'site/files/소리.mp3': 'mp3 bytes', 'site/assets/img/내 사진 (1).jpg': 'jpg bytes', 'src/매크로_교재.pptm': 'pptm bytes', 'src/발표.key': 'key bytes' };
 
 /** 그 연수의 저장소 값: { 키: { size, blob(Blob으로 저장됐는지), sha } } */
 const dump = (p, id) => p.evaluate(async (pid) => {
@@ -39,11 +41,18 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   await L.makeWith(p, ANSWER, 120000);
   await L.waitStudio(p, 120000, { folds: false });
   // 저장소에 큰 값(교재 원본 자리)을 하나 더: 32MiB 넘는 값은 Blob으로 담김(Chromium은 한 값 127MiB까지) → 저장·열기도 Blob 조각으로
-  await p.evaluate(async ([id, n]) => {
+  await p.evaluate(async ([id, n, EXTRA]) => {
     const u = new Uint8Array(n); for (let i = 0; i < n; i += 4096) u[i] = (i / 4096) & 255;
     const db = await new Promise((res) => { const q = indexedDB.open('lecpage'); q.onsuccess = () => res(q.result); });
     await new Promise((res, rej) => { const t = db.transaction('blobs', 'readwrite'); t.objectStore('blobs').put(new Blob([u]), id + ':src/big-extra.pdf'); t.oncomplete = res; t.onerror = () => rej(t.error); });
-  }, [pid, BIG]);
+    // 앱이 그 자리에 둘 수 있는 이름·형식(자료실 파일의 띄어쓰기·괄호·엑셀·소리, 사진 이름, 매크로 PPT 원본): 예전에는 열 때 말없이 빠졌음
+    const small = (s) => new TextEncoder().encode(s);
+    await new Promise((res, rej) => {
+      const t = db.transaction('blobs', 'readwrite'); const st = t.objectStore('blobs');
+      for (const [k, v] of Object.entries(EXTRA)) st.put(small(v), id + ':' + k);
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
+  }, [pid, BIG, EXTRA]);
   const before = await dump(p, pid);
   const slides = Object.keys(before).filter((k) => k.startsWith('assets/slides/')); const mats = Object.keys(before).filter((k) => k.startsWith('site/material/'));
   ok('fixture: page images exist twice in the browser (assets/slides and site/material), plus the original and a >32MiB value', slides.length === 13 && mats.length === 13 && !!before['src/workshop.pptx'] && before['src/big-extra.pdf']?.size === BIG && before['src/big-extra.pdf'].blob === true, JSON.stringify({ slides: slides.length, mats: mats.length }));
@@ -69,6 +78,8 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   const diff = Object.keys(before).filter((k) => !k.startsWith('conv/') && (!after[k] || after[k].sha !== before[k].sha || after[k].size !== before[k].size));
   ok('reopened: every stored file comes back byte for byte (originals, both copies of the page images)', pid2 && pid2 !== pid && diff.length === 0, diff.slice(0, 4).join(', '));
   ok('reopened: the >32MiB value is stored as a Blob again (not loaded whole into memory)', after['src/big-extra.pdf']?.blob === true && after['src/big-extra.pdf'].size === BIG);
+  const lostExtra = Object.keys(EXTRA).filter((k) => !after[k] || after[k].sha !== before[k]?.sha);
+  ok('reopened: materials-room files with spaces, brackets and xlsx/csv/zip/mp3 types, a photo and .pptm/.key originals all come back', lostExtra.length === 0, lostExtra.join(', '));
   const fr = q.frameLocator('.pv-device iframe').frameLocator('iframe');
   await fr.locator('img').first().waitFor({ timeout: 30000 });
   let st = { total: 0, broken: 1 };
@@ -83,6 +94,45 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   ok('reopening the same file returns to the same project', L.pidOf(q) === pid2);
   ok('no page errors while saving and reopening', errs.length === 0 && errs2.length === 0, [...errs, ...errs2].slice(0, 2).join(' | '));
   await ctx2.close();
+
+  // ── 1b 열다가 저장 공간이 꽉 참(여섯째 파일부터 담지 못함): 반쯤 열린 연수가 남지 않고, 까닭을 그대로 알리고, 같은 파일을 다시 열면 처음부터 다시 엶 ──
+  {
+    const ctx5 = await b.newContext({ viewport: { width: 1280, height: 900 } });
+    await ctx5.addInitScript(() => {
+      const put = IDBObjectStore.prototype.put; let n = 0;
+      IDBObjectStore.prototype.put = function (...a) {
+        let on = false; try { on = localStorage.getItem('lp-fail-put') === '1'; } catch { /* 저장소가 막힘 */ }
+        if (on && this.name === 'blobs' && ++n > 5) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        return put.apply(this, a);
+      };
+    });
+    const f5 = await ctx5.newPage(); const errs5 = L.watch(f5);
+    await L.mockAi(ctx5, null, { fallback: true });
+    const stored = () => f5.evaluate(() => new Promise((res) => {
+      const q = indexedDB.open('lecpage');
+      q.onsuccess = () => { const t = q.result.transaction(['projects', 'blobs']); const a = t.objectStore('projects').getAllKeys(); const c = t.objectStore('blobs').getAllKeys(); t.oncomplete = () => res({ projects: a.result.length, blobs: c.result.length }); };
+    }));
+    await f5.goto(BASE, { waitUntil: 'load' });
+    await f5.evaluate(() => localStorage.setItem('lp-fail-put', '1'));
+    await f5.setInputFiles('.ld-hero input[type=file][multiple]', file);
+    await f5.waitForFunction(() => /저장 공간이 꽉 찼어요/.test(document.querySelector('.toast')?.textContent || ''), null, { timeout: 60000 }).catch(() => {});
+    const said = (await f5.locator('.toast').first().innerText().catch(() => '')).replace(/\s+/g, ' ');
+    await f5.waitForTimeout(500);
+    const left5 = await stored();
+    ok('open stops midway (storage full): the toast says storage is full, not "is this a lecpage file?"', /저장 공간이 꽉 찼어요/.test(said) && !/저장한 \.lecpage 파일인지/.test(said), said.slice(0, 100));
+    ok('open stops midway: no half-opened project and no stored files are left behind', left5.projects === 0 && left5.blobs === 0 && !/#\/p\//.test(f5.url()), JSON.stringify(left5));
+    await f5.evaluate(() => localStorage.removeItem('lp-fail-put'));
+    await f5.goto(BASE, { waitUntil: 'load' });
+    await f5.setInputFiles('.ld-hero input[type=file][multiple]', file);
+    await f5.waitForFunction(() => /#\/p\/[^/]+\/2/.test(location.hash), null, { timeout: 60000 }).catch(() => {});
+    const said2 = (await f5.locator('.toast').first().innerText().catch(() => '')).replace(/\s+/g, ' ');
+    await f5.waitForTimeout(800);
+    const pid5 = L.pidOf(f5); const again5 = pid5 ? await dump(f5, pid5) : {};
+    const miss5 = Object.keys(before).filter((k) => !k.startsWith('conv/') && again5[k]?.sha !== before[k].sha);
+    ok('opening the same file again imports it from scratch (not "already opened"), with every file', !!pid5 && !/이미 연|이미 열었던/.test(said2) && miss5.length === 0 && (await stored()).projects === 1, `${said2.slice(0, 60)} · missing ${miss5.length}`);
+    ok('no page errors when opening fails midway', errs5.length === 0, errs5.slice(0, 2).join(' | '));
+    await ctx5.close();
+  }
 
   // ── 2 읽다가 멈춘 교재 ──
   const ctx3 = await b.newContext({ viewport: { width: 1280, height: 900 } });
@@ -152,6 +202,26 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   await m.locator('.files li .file-held button:has-text("이어서 읽기")').nth(1).click();
   let both; for (let i = 0; i < 240; i++) { both = await L.readProject(m, pid4); if (!(both.files || []).some((f) => f.pending)) break; await m.waitForTimeout(500); }
   ok('two materials stopped together: one press reads both to the end', both.files.length === 2 && !both.files.some((f) => f.pending || f.tries) && both.files[0].pages === 13 && !!both.material, JSON.stringify(both.files.map((f) => [f.name, f.pages, !!f.pending, f.tries])));
+  // (마) 다 읽은 교재가 있어도 읽다가 멈춘 교재가 남아 있으면 만들 수 없음(그 교재가 사이트에서 말없이 빠지지 않게): 까닭을 AI 선택 칸에 알리고, 그 줄을 삭제하면 다시 만들 수 있음
+  await m.goto('about:blank'); await m.goto(BASE, { waitUntil: 'load' });
+  await m.evaluate((id) => new Promise((res, rej) => {
+    const q2 = indexedDB.open('lecpage'); q2.onsuccess = () => {
+      const t = q2.result.transaction('projects', 'readwrite'); const st = t.objectStore('projects'); const g = st.get(id);
+      g.onsuccess = () => { const pr = g.result; pr.files = pr.files.map((f, i) => (i === 0 ? { ...f, pending: true, tries: 1 } : f)); pr.updatedAt = Date.now() + 5000; st.put(pr); };
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    };
+  }), pid4);
+  await m.goto(`${BASE}#/p/${pid4}/1`, { waitUntil: 'load' });
+  await m.waitForSelector('.files li .file-held', { timeout: 30000 });
+  await m.waitForTimeout(800);
+  const gate = async () => m.evaluate(() => ({ wait: document.querySelector('.ai-pick .ai-pick-wait')?.textContent || '', go: [...document.querySelectorAll('.ai-pick .ai-card-go')].map((x) => x.disabled) }));
+  const g1 = await gate();
+  ok('one material read + one stopped: making is held back, and the AI box says why and what to do', /읽다가 멈춘 교재가 있어요/.test(g1.wait) && /이어서 읽기/.test(g1.wait) && g1.go.length > 0 && g1.go.every(Boolean), JSON.stringify(g1));
+  await m.locator('.files li:has(.file-held) .icon-btn').click();
+  await m.waitForFunction(() => !document.querySelector('.files li .file-held'), null, { timeout: 30000 });
+  await m.waitForTimeout(500);
+  const g2 = await gate();
+  ok('after removing the stopped material: making is possible again with what was read', g2.wait === '' && g2.go.length > 0 && g2.go.every((x) => !x) && (await L.readProject(m, pid4)).files.length === 1, JSON.stringify(g2));
   ok('no page errors with two stopped materials', errs4.length === 0, errs4.slice(0, 2).join(' | '));
   await b.close();
   fs.rmSync(tmp, { recursive: true, force: true });

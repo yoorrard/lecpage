@@ -232,7 +232,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
       {"id":"S13","engine":true,"when":{"$or":[{"maxFileMB":{"gt":25}},{"files":{"gt":1000}}]},"back":["cloudflare"],"note":"추천이 cloudflare였으면 github-pages를 맨 앞으로. 로그인한 wrangler는 2만 개까지"},
       {"id":"S04","engine":true,"when":{"infra":{"any":["aws"]},"skill":["basic","dev"]},"front":["aws-s3-cloudfront"],"alt":["aws-amplify"]},
       {"id":"S05","when":{"infra":{"any":["azure"]},"skill":["basic","dev"]},"front":["azure-swa"]},
-      {"id":"S15","engine":true,"when":{"instant":true,"siteMB":{"lte":40},"maxFileMB":{"lte":20},"files":{"lte":600}},"front":["lecpage"],"note":"앱 전용. keep=long이거나 customDomain이면 둘째 자리"},
+      {"id":"S15","engine":true,"when":{"instant":true,"siteMB":{"lte":300},"maxFileMB":{"lte":20},"files":{"lte":3000}},"front":["lecpage"],"note":"앱 전용. keep=long이거나 customDomain이면 둘째 자리"},
       {"id":"S14","engine":true,"when":{"$or":[{"previous":"<배포할 곳>"},{"connected":{"any":["<배포할 곳>"]}}]},"front":["<그곳>"]}
     ],
     "tail": ["firebase","zip"]

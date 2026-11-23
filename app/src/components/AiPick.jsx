@@ -18,8 +18,11 @@ export const AI_CARDS = [
 /**
  * ready: 읽은 교재가 있음(없으면 카드는 보이되 누를 수 없음) · idle(): 연수를 저장소에 다 쓴 뒤(생성 쪽이 읽기 전에) · go(n): 단계 이동
  * reading: 교재를 읽는 중(교재 칸이 진행을 알림). 그동안은 '교재를 넣으면…' 줄을 넣지 않아 다 읽을 때 이 칸이 밀리지 않음
+ * held: 읽다가 멈춘 교재가 있어 만들 수 없음(그 교재가 사이트에서 말없이 빠지지 않게) → 까닭과 할 일을 이 칸에 한 줄로
  */
-export function AiPick({ p, go, idle, ready, reading = false }) {
+export const HELD_WAIT = '읽다가 멈춘 교재가 있어요. [이어서 읽기]를 누르거나 삭제해 주세요.';
+export function AiPick({ p, go, idle, ready, reading = false, held = false }) {
+  const wait = held ? HELD_WAIT : ''; // 만들 수 없는 까닭(없으면 '교재를 넣으면…')
   const [conn, setConn] = useState(null); // { openai: {model}|null, … }
   const [keyFor, setKeyFor] = useState(''); // 키 연결 창을 연 회사
   const [swap, setSwap] = useState(''); // 연결된 키의 모델 바꾸기·끊기를 펼친 회사
@@ -27,7 +30,7 @@ export function AiPick({ p, go, idle, ready, reading = false }) {
   const recheck = () => aiStatus().then(setConn, () => setConn({}));
   useEffect(() => { recheck(); }, []);
   async function make(provider, st = conn?.[provider]) {
-    if (!ready) { toast('교재를 먼저 넣어 주세요.'); return; }
+    if (!ready) { toast(wait || '교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 키 없이, 이 교재로 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     if (!await askConsent(`key:${provider}`)) return; // 처음 한 번: 동의 → 바로 키 넣기
     if (!st) { afterKey.current = true; setKeyFor(provider); return; }
@@ -50,8 +53,8 @@ export function AiPick({ p, go, idle, ready, reading = false }) {
         <p class="small muted">고른 AI가 교재를 직접 읽고 디자인부터 코드까지 사이트를 만들어요.</p>
         <ConnBadge demo={!!p.demo} hint={false} />
       </div>
-      {!ready && !reading && <p class="small ai-pick-wait" role="status">교재를 넣으면 선택할 수 있어요.</p>}
-      <SubscriptionWay p={p} ready={ready} idle={idle} go={go} />
+      {!ready && !reading && <p class="small ai-pick-wait" role="status">{wait || '교재를 넣으면 선택할 수 있어요.'}</p>}
+      <SubscriptionWay p={p} ready={ready} wait={wait} idle={idle} go={go} />
       <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
         <summary><b>다른 방법</b><span class="small muted">API 키 · AI 에이전트(Skill)</span></summary>
         <div class="ai-cards" role="list">
@@ -71,7 +74,7 @@ export function AiPick({ p, go, idle, ready, reading = false }) {
           })}
         </div>
         <ClaudeTermRow />
-        <CodexRow p={p} ready={ready} idle={idle} go={go} />
+        <CodexRow p={p} ready={ready} wait={wait} idle={idle} go={go} />
         <div class="ai-alts"><AgentWay /></div>
       </details>
       <p class="small muted">교재는 고른 AI 회사로 가요. 참가자 이름 같은 개인정보는 지우고 넣어 주세요.</p>

@@ -49,13 +49,39 @@ test('영상·소리와 웹 문서 합계(서버 maxMediaBytes): 올리기 전�
   assert.equal(instantFit({ bytes: 200 * MB, maxFile: 19 * MB, files: 900 }, lim).ok, true, '합계를 세지 않은 통계(예전 호출)는 막지 않음');
 });
 
-test('알리는 한 줄: 이름과 크기, 교재 슬라이드가 있을 때만 그 말을 덧붙임', () => {
+test('알리는 한 줄: 이름과 크기. "교재 슬라이드에서 모든 쪽을 볼 수 있어요"는 뺀 원본 모두가 그런 교재(full)일 때만 덧붙임', () => {
   const big = { name: '연수 교재.pptx', size: 312 * MB };
-  assert.equal(leftLine([big]), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않아요. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요.');
-  assert.equal(leftLine([big], { slides: false, after: true }), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않았어요.');
-  assert.match(leftLine([big, { name: 'b.pdf', size: 25 * MB }, { name: 'c.pdf', size: 30 * MB }], { after: true }), /^연수 교재\.pptx\(312MB\), b\.pdf\(25MB\) 외 1개는 커서 사이트에 넣지 않았어요\./);
+  assert.equal(leftLine([{ ...big, full: true }]), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않아요. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요.');
+  assert.equal(leftLine([{ ...big, full: true }], { after: true }), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않았어요. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요.');
+  // 확인하지 못했거나(full 없음) 아닌 교재: '넣지 않아요'에서 끝남(사실이 아닌 말을 하지 않음)
+  assert.equal(leftLine([big]), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않아요.');
+  assert.equal(leftLine([{ ...big, full: false }], { after: true }), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않았어요.');
+  // 여럿 가운데 하나라도 아니면 덧붙이지 않음
+  assert.equal(leftLine([{ ...big, full: true }, { name: 'b.hwp', size: 25 * MB, full: false }]), '연수 교재.pptx(312MB), b.hwp(25MB)는 커서 사이트에 넣지 않아요.');
+  assert.match(leftLine([big, { name: 'b.pdf', size: 25 * MB }, { name: 'c.pdf', size: 30 * MB }], { after: true }), /^연수 교재\.pptx\(312MB\), b\.pdf\(25MB\) 외 1개는 커서 사이트에 넣지 않았어요\.$/);
   assert.equal(leftLine([]), ''); assert.equal(leftLine(null), '');
   assert.equal(sizeText(500 * 1024), '500KB'); assert.equal(sizeText(60 * MB), '60MB');
+});
+
+test('slidesCover: 그 교재의 모든 쪽이 사이트의 교재 슬라이드에 있을 때만 true(파일마다)', async () => {
+  const { slidesCover } = await import(join(APP, 'site-size.js'));
+  const nums = Array.from({ length: 30 }, (_, i) => i + 1);
+  const set = { name: 'a.pdf', first: 1, count: 30 };
+  const o = { pageNums: nums, deckAll: true, maxSlides: 400 };
+  assert.equal(slidesCover({ pages: 30 }, set, o), true);
+  assert.equal(slidesCover({ pages: 30 }, set, { ...o, deckAll: false }), false, '쪽을 모두 보여 주는 교재 슬라이드가 없는 사이트');
+  assert.equal(slidesCover({ pages: 30 }, null, o), false, '쪽 그림이 없는 교재(글자만 읽음)');
+  assert.equal(slidesCover({ pages: 45 }, set, o), false, '쪽 그림이 쪽 수보다 적음(그리다 멈춤·몫이 모자람)');
+  assert.equal(slidesCover({ pages: 30, slidesPart: true }, set, o), false, '일부만 그렸다고 적힌 교재');
+  assert.equal(slidesCover({ pages: 0 }, set, o), false, '쪽 수를 모름');
+  assert.equal(slidesCover({ pages: 30 }, set, { ...o, pageNums: nums.filter((n) => n !== 17) }), false, '사이트에 놓이지 않은 쪽이 있음');
+  assert.equal(slidesCover({ pages: 30 }, set, { ...o, pageNums: [] }), false, '사이트에 쪽 그림이 없음');
+  // 둘째 교재(이어 매긴 번호 31~40)
+  const set2 = { name: 'b.pptx', first: 31, count: 10 };
+  assert.equal(slidesCover({ pages: 10 }, set2, { ...o, pageNums: Array.from({ length: 40 }, (_, i) => i + 1) }), true);
+  assert.equal(slidesCover({ pages: 10 }, set2, o), false, '둘째 교재의 쪽 그림은 사이트에 없음(교재를 더 넣고 다시 만들지 않음)');
+  // 쪽 그림 몫의 끝(400)에 닿은 묶음: 뒤가 잘렸을 수 있어 말하지 않음
+  assert.equal(slidesCover({ pages: 100 }, { name: 'c.docx', first: 301, count: 100 }, { ...o, pageNums: Array.from({ length: 400 }, (_, i) => i + 1) }), false);
 });
 
 test('작은 파일 묶기: 묶음 하나는 합계·파일 수 한도 안, 넣은 순서 그대로, 묶음보다 큰 것은 넣지 않음', async () => {

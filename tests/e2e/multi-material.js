@@ -215,6 +215,92 @@ const addFiles = async (p, files) => { await p.setInputFiles('.start-files input
     ok(`화면 오류 없음(커넥트 길, ${modern ? '새' : '예전'} 커넥트)`, errs.length === 0, errs.join(' | ').slice(0, 300));
     await ctx.close();
   }
+  // ── 4) 커넥트 길로 고치기(AI로 수정): 사이트의 쪽 그림이 커넥트의 사이트 한도(limits.siteMB)를 넘으면 쪽 그림만 줄여 보냄(예전에는 통째로 보내 커넥트가 거절).
+  //    사이트 글이 가리키는 쪽 그림은 꼭 보내고, 보내지 않은 쪽 그림은 연수에 그대로 남아 고친 사이트의 교재 슬라이드에 모든 쪽이 있음 ──
+  {
+    const T = 'd'.repeat(64); const PORT = 6621; const jobs = [];
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    await ctx.addInitScript(([tk, port]) => {
+      try { if (!localStorage.getItem('lp-seeded')) { localStorage.setItem('lecpage:pc', JSON.stringify({ token: tk, port, ok: true })); localStorage.setItem('lp-seeded', '1'); } } catch { /* 넘김 */ }
+      const q = navigator.permissions.query.bind(navigator.permissions);
+      navigator.permissions.query = (d) => (/network/.test(d?.name || '') ? Promise.resolve({ state: 'granted' }) : q(d));
+    }, [T, PORT]);
+    // siteMB 2: 사이트 파일을 1MiB까지만 받는 커넥트(시험용으로 작게)
+    const STATUS = JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'jobs', 'claude-setup', 'update', 'page-sets'], update: { can: false, state: 'idle' }, platform: 'win32', port: PORT, chatgpt: { connected: false }, limits: { materialMB: 120, fileMB: 100, files: 20, siteMB: 2, twinPdf: true, minutes: 30 },
+      agents: [{ id: 'claude', name: 'Claude Code', installed: true, version: '2.2.0', auth: 'account', ready: true }, { id: 'codex', installed: false, ready: false }] });
+    // 사이트: 쪽을 고르지 않은 교재 슬라이드(놓인 쪽을 모두 보여 줌) + 5쪽 그림을 경로로 바로 씀
+    const page = (ext, title) => `<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>${title}</title></head><body><main><section id="top" data-title="첫 화면"><h1>${title}</h1><img src="material/p-005.${ext}" alt="5쪽"></section><section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section></main></body></html>`;
+    let ext = 'webp';
+    await L.mockAi(ctx, rhwp);
+    await ctx.route(/^http:\/\/127\.0\.0\.1:66\d\d\//, (r) => {
+      const u = new URL(r.request().url()); const m = r.request().method();
+      const json = (o, status = 200) => r.fulfill({ status, contentType: 'application/json', headers: L.cors, body: typeof o === 'string' ? o : JSON.stringify(o) });
+      if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: L.cors });
+      if (+u.port !== PORT) return r.abort();
+      if (r.request().headers()['x-lecpage-bridge'] !== T) return json({ ok: false, error: 'token' }, 401);
+      if (u.pathname === '/bridge/status') return json(STATUS);
+      if (u.pathname === '/bridge/jobs' && m === 'POST') {
+        const body = JSON.parse(r.request().postData() || '{}'); jobs.push(body);
+        // 진짜 커넥트처럼 사이트 크기를 봄(validateJob: 글과 바이트 합계가 siteMB를 넘으면 거절)
+        const size = Object.values(body.site || {}).reduce((n, v) => n + (typeof v === 'string' ? Buffer.byteLength(v) : Buffer.from(v?.base64 || '', 'base64').length), 0);
+        if (size > 2 * 1024 * 1024) return json({ ok: false, error: 'bad-request', message_ko: '사이트는 모두 합쳐 2MB까지예요.' }, 400);
+        return json({ ok: true, jobId: 'j' + jobs.length }, 202);
+      }
+      if (/^\/bridge\/jobs\/j\d+\/events$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: L.cors, body: 'data: {"type":"step","name":"agent","label_ko":"만드는 중"}\n\ndata: {"type":"done"}\n\n' });
+      if (/^\/bridge\/jobs\/j\d+\/result$/.test(u.pathname)) {
+        const first = Object.keys(jobs[0]?.site || {}).find((k) => /^material\/p-\d+\./.test(k)); if (first) ext = first.split('.').pop();
+        return json({ ok: true, site: { 'index.html': page(ext, jobs.length > 1 ? '고친 제목' : '고치기 시험') }, meta: { title: '고치기 시험', sessions: [{ date: '2026-12-01', start: '10:00', end: '12:00' }], venue: '3층 연수실', instructors: [{ name: '김강사', org: '' }] }, issues: [] });
+      }
+      if (m === 'DELETE') return json({ ok: true });
+      return json({ ok: false, error: 'not-found' }, 404);
+    });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await L.startWithFile(p, [FIX + '/workshop.pptx']);
+    const pid = L.pidOf(p);
+    await saved(p, pid, (x) => (x.slideSets || []).length === 1);
+    const btn = p.locator('.ai-pick button:has-text("Claude로 만들기")').first();
+    const shown = await btn.waitFor({ timeout: 15000 }).then(() => true, () => false);
+    if (!shown) ok('커넥트 길로 고치기: [Claude로 만들기]가 보임', false, (await p.locator('.ai-pick').innerText().catch(() => '')).slice(0, 300));
+    else {
+      await btn.click(); await L.consent(p);
+      await p.waitForSelector('.st-info button:has-text("이 정보가 맞아요")', { timeout: 60000 });
+      await p.click('.st-info button:has-text("이 정보가 맞아요")');
+      await L.waitStudio(p);
+      // 쪽 그림을 장마다 100KB씩 키움(그림 뒤에 덧붙임: 그림은 그대로 열림) → 13장이 1.3MB를 넘어 커넥트의 1MiB에 다 들어가지 않음
+      const sizes = () => p.evaluate((id) => new Promise((res) => {
+        const q = indexedDB.open('lecpage');
+        q.onsuccess = () => { const st = q.result.transaction('blobs').objectStore('blobs'); const out = {}; const c = st.openCursor(IDBKeyRange.bound(id + ':site/material/', id + ':site/material/￿')); c.onsuccess = () => { const cur = c.result; if (!cur) return res(out); out[String(cur.key).slice(id.length + 1)] = cur.value.size ?? cur.value.byteLength ?? 0; cur.continue(); }; };
+      }), pid);
+      await p.evaluate(async (id) => {
+        const db = await new Promise((res) => { const q = indexedDB.open('lecpage'); q.onsuccess = () => res(q.result); });
+        const keys = await new Promise((res) => { const r = db.transaction('blobs').objectStore('blobs').getAllKeys(IDBKeyRange.bound(id + ':site/material/', id + ':site/material/￿')); r.onsuccess = () => res(r.result); });
+        for (const k of keys) {
+          const v = await new Promise((res) => { const r = db.transaction('blobs').objectStore('blobs').get(k); r.onsuccess = () => res(r.result); });
+          const big = new Blob([v, new Uint8Array(100 * 1024)], { type: v.type || '' });
+          await new Promise((res, rej) => { const t = db.transaction('blobs', 'readwrite'); t.objectStore('blobs').put(big, k); t.oncomplete = res; t.onerror = () => rej(t.error); });
+        }
+      }, pid);
+      const before = await sizes();
+      ok('고치기 준비: 사이트의 쪽 그림 13장이 커넥트의 사이트 한도(1MiB)보다 큼', Object.keys(before).length === 13 && Object.values(before).reduce((a, n) => a + n, 0) > 1.25 * 1024 * 1024, JSON.stringify(Object.values(before).slice(0, 3)));
+      await p.fill('.st-compose textarea', '제목을 짧게 고쳐 주세요');
+      await p.click('.st-compose button:has-text("보내기")');
+      for (let i = 0; i < 150 && jobs.length < 2; i++) await p.waitForTimeout(200);
+      await p.waitForSelector('.st-bubble.is-working', { state: 'detached', timeout: 60000 }).catch(() => {});
+      const pr = await saved(p, pid, (x) => /고친 제목/.test(x.site?.['index.html'] || ''), 20000);
+      const job = jobs[1] || {};
+      const sent = Object.keys(job.site || {}).filter((k) => /^material\/p-\d+\./.test(k)).sort();
+      const sentBytes = sent.reduce((n, k) => n + Buffer.from(job.site[k]?.base64 || '', 'base64').length, 0);
+      ok('커넥트로 고치기: 쪽 그림만 줄여 보냄(한도 안), 사이트가 가리키는 5쪽과 첫 쪽은 감', job.kind === 'edit' && sent.length >= 2 && sent.length < 13 && sentBytes <= 1024 * 1024 && sent.some((k) => /p-005\./.test(k)) && sent.some((k) => /p-001\./.test(k)) && typeof job.site['index.html'] === 'string', `${job.kind} ${sent.length}장 ${Math.round(sentBytes / 1024)}KB ${sent.join(' ').slice(0, 120)}`);
+      ok('커넥트로 고치기: 커넥트가 받아 고친 사이트가 돌아옴(예전에는 크기로 거절)', /고친 제목/.test(pr.site?.['index.html'] || ''), String(pr.site?.['index.html'] || '').slice(0, 120));
+      const after = await sizes();
+      ok('커넥트로 고치기: 보내지 않은 쪽 그림도 연수에 그대로(13장, 크기 그대로)', JSON.stringify(after) === JSON.stringify(before), `${Object.keys(after).length}장`);
+      const fr = p.frameLocator('.pv-device iframe').frameLocator('iframe');
+      let slides = 0; for (let i = 0; i < 40 && slides !== 13; i++) { slides = await fr.locator('.lp-slide').count().catch(() => 0); if (slides !== 13) await p.waitForTimeout(250); }
+      ok('커넥트로 고치기: 고친 사이트의 교재 슬라이드에 모든 쪽(13쪽)', slides === 13, String(slides));
+    }
+    ok('화면 오류 없음(커넥트 길로 고치기)', errs.length === 0, errs.join(' | ').slice(0, 300));
+    await ctx.close();
+  }
   await b.close();
   process.exit(summary() ? 1 : 0);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

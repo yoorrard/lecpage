@@ -31,10 +31,15 @@ export function renderIssues(files, { widths = [1280, 390], timeout = 15000, pag
       if (--left <= 0) finish();
     }
     addEventListener('message', onMsg);
-    // 그림이 많아 한 장 HTML에 다 못 담는 사이트(8MB 넘음)는 따로 넘긴 그림이 열릴 때까지 조금 더 기다린 뒤 잼
-    const imgs = Object.entries(files || {}).filter(([k, v]) => /\.(png|jpe?g|webp|gif|avif)$/i.test(k) && v && typeof v !== 'string');
-    const heavy = imgs.reduce((n, [, v]) => n + (v.byteLength || v.size || 0), 0) > 8e6;
-    const delay = heavy ? 600 + Math.min(5000, imgs.length * 12) : 600;
+    // 한 장 HTML은 폭마다 같으므로 한 번만 만듦(검수 스크립트만 폭마다 끼움). skipped: 한 장 HTML에 실제로 못 담아 따로 넘길 그림
+    const skipped = new Set();
+    const base = previewHtml(files, page, { extraHead: LATE_JS, skipped });
+    const lateMsg = lateFilesMsg(files, skipped);
+    const at = base.toLowerCase().lastIndexOf('</body>'); // 엔진 previewHtml의 extraBody와 같은 자리(맨 끝 </body> 앞)
+    const withScript = (s) => (at < 0 ? base + s : base.slice(0, at) + s + base.slice(at));
+    // 따로 넘긴 그림이 있으면 그 그림이 열릴 때까지 조금 더 기다린 뒤 잼: 실제로 못 담은 장수로 정함
+    // (그림 크기 합계로 어림하면, 영상·배경 그림이 몫을 먼저 써서 그림이 밀려난 사이트는 기다리지 않고 재게 됨 → 그림이 1×1인 채로 배치를 잼)
+    const delay = skipped.size ? 600 + Math.min(5000, 400 + skipped.size * 12) : 600;
     // 전체 제한: 재기 전 대기가 늘어난 만큼 더함(그림 많은 사이트가 느린 PC에서 검사 없이 넘어가지 않게). 가벼운 사이트는 예전 그대로
     t = setTimeout(finish, timeout + (delay - 600));
     for (const w of widths) {
@@ -43,9 +48,8 @@ export function renderIssues(files, { widths = [1280, 390], timeout = 15000, pag
       f.setAttribute('sandbox', 'allow-scripts');
       f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.title = 'lecpage-inspect';
       f.style.cssText = `position:fixed;left:-30000px;top:0;width:${w}px;height:${w <= 480 ? 844 : 800}px;border:0;opacity:0;pointer-events:none`;
-      const skipped = new Set();
-      docs.set(id, previewHtml(files, page, { extraHead: LATE_JS, extraBody: inspectRenderedScript({ id, file: page, delay }), skipped }));
-      late.set(id, lateFilesMsg(files, skipped));
+      docs.set(id, withScript(inspectRenderedScript({ id, file: page, delay })));
+      late.set(id, lateMsg);
       f.src = FRAME_SRC;
       frames.set(id, f);
       document.body.appendChild(f);

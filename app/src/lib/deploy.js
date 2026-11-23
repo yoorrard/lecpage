@@ -503,13 +503,19 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
     let single = need;
     if (bun?.bytes > 0 && bun.itemBytes > 0) {
       const groups = bundlesOf(need.filter((h) => blobs.get(h).length <= bun.itemBytes).map((h) => [h, blobs.get(h).length]), bun);
-      const again = []; let off = false;
+      const again = []; let off = false; const lost = new Map(); // 묶음 → 가는 길에 끊긴 횟수
       await pool(groups, 2, async (g) => {
         if (off) { again.push(...g.map(([h]) => h)); return; }
         let res;
         try { res = await queued(() => ip('PUT', `/api/sites/${s.id}/blobs`, { key: s.key, raw: packBundle(g.map(([h, n]) => [h, n, blobs.get(h)])) })); }
-        // 묶음을 받지 않는 서버(404·405)이거나 묶음 한도·모양이 이 앱이 아는 것과 달라졌으면(413·400: 운영자가 한도를 줄인 직후 등) 파일마다 올림 → 진짜 거절이면 그때 까닭이 그대로 나옴
-        catch (e) { if (![404, 405, 413, 400].includes(e.status)) throw e; off = true; again.push(...g.map(([h]) => h)); return; }
+        catch (e) {
+          // 가는 길에 끊긴 묶음(status 0: 망의 올리기 크기 제한·연결 끊김·시간 초과): pool이 두 번 더 해 보고, 그래도 안 되면 배포를 멈추지 않고
+          // 이 묶음과 남은 묶음을 파일마다 올림(묶음 하나가 못 가서 사이트 전체가 실패하지 않게. 파일마다 올리면 끊겨도 그 파일 하나만 다시 감)
+          if (!e.status) { const n = (lost.get(g) || 0) + 1; lost.set(g, n); if (n < 3) throw e; }
+          // 묶음을 받지 않는 서버(404·405)이거나 묶음 한도·모양이 이 앱이 아는 것과 달라졌으면(413·400: 운영자가 한도를 줄인 직후 등) 파일마다 올림 → 진짜 거절이면 그때 까닭이 그대로 나옴
+          else if (![404, 405, 413, 400].includes(e.status)) throw e;
+          off = true; again.push(...g.map(([h]) => h)); return;
+        }
         // 서버가 받지 못했다고 한 파일(내용이 틀림·받을 수 없는 내용)은 아래에서 하나씩 다시 보냄 → 진짜 거절이면 그때 까닭이 그대로 나옴
         const failed = new Set((res.failed || []).map((x) => x.sha256));
         for (const [h] of g) { if (failed.has(h)) again.push(h); else tick(h); }
@@ -700,7 +706,7 @@ export function checkShortUrl(input, siteUrl = '') {
 }
 
 // 크기 한도 도우미(바로 배포 서버의 한도로 보기·큰 교재 원본 빼기·알리는 한 줄)는 site-size.js에(다른 모듈 없이 Node 시험에서도 부를 수 있게)
-export { sizeText, instantFit, fitOriginals, leftLine } from './site-size.js';
+export { sizeText, instantFit, fitOriginals, leftLine, slidesCover } from './site-size.js';
 import { bundlesOf, packBundle } from './site-size.js';
 
 /** 사이트 파일의 크기 정보(올릴 곳 한도 확인용) */

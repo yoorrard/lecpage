@@ -24,8 +24,8 @@ export function ConnBadge({ demo = false, hint = true }) {
   return <p class={`conn-badge small${on ? ' is-on' : ''}`} role="status"><span class={on ? 'dot-ok' : 'dot-off'} aria-hidden="true" />{connLine(pc, conn)}{hint && pc.state === 'off' && <span class="muted"> — lecpage 커넥트를 켜 주세요</span>}</p>;
 }
 
-/** 첫째 카드: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천) */
-export function SubscriptionWay({ p, ready, idle, go }) {
+/** 첫째 카드: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천). wait: 교재가 있는데도 만들 수 없는 까닭(읽다가 멈춘 교재) — 없으면 '교재를 넣으면…' */
+export function SubscriptionWay({ p, ready, wait = '', idle, go }) {
   const { pc, list } = useConnection({ demo: !!p.demo });
   const [open, setOpen] = useState(false); // lecpage 커넥트 받기 안내
   const [pending, setPending] = useState(''); // 로그인 기다리는 계정: 'chatgpt' | 'claude' | 'codex'(끝나면 바로 만들기)
@@ -77,7 +77,7 @@ export function SubscriptionWay({ p, ready, idle, go }) {
   }, [pc]);
 
   async function make(c, auto = false) {
-    if (!ready) { if (auto) setPreferred(c.id); toast(auto ? `${c.label}을 연결했어요. 교재를 넣으면 바로 만들 수 있어요.` : '교재를 먼저 넣어 주세요.'); return; }
+    if (!ready) { if (auto) setPreferred(c.id); toast(auto ? `${c.label}을 연결했어요. ${wait || '교재를 넣으면 바로 만들 수 있어요.'}` : wait || '교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
     if (!await askConsent(consentId(c))) return;
     setPreferred(c.id);
@@ -403,14 +403,14 @@ function Fallback({ p, reason }) {
 }
 
 /** 다른 방법 안의 Codex(이미 설치했거나 쓰고 싶은 사람) */
-export function CodexRow({ p, ready, idle, go }) {
+export function CodexRow({ p, ready, wait = '', idle, go }) {
   const { pc, list } = useConnection({ demo: !!p.demo });
   if (pc.state !== 'on') return null;
   const a = (pc.status?.agents || []).find((x) => x.id === 'codex') || {};
   const c = list.find((x) => x.id === 'codex');
   const old = !!a.installed && a.need === 'install'; // 깔려 있지만 lecpage가 쓰기엔 예전 판
   async function act() {
-    if (c && !ready) { toast('교재를 먼저 넣어 주세요.'); return; }
+    if (c && !ready) { toast(wait || '교재를 먼저 넣어 주세요.'); return; }
     if (!p.demo && !await askConsent('codex')) return;
     if (c) {
       setPreferred('codex');
