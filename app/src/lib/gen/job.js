@@ -16,7 +16,7 @@ import { markBusy } from './busy.js';
 import { adapter } from './providers/index.js';
 import { AiError, BASES, baseFor } from './providers/common.js';
 import * as oa from './oa-trash.js';
-import { preparePageImages, packMaterial, sourceFiles, notesText } from './material.js';
+import { preparePageImages, packMaterial, sourceFiles, notesText, helperText, linksText } from './material.js';
 import * as P from './prompts.js';
 import { extractSections, replaceSections, stitch, balance, trimCss, cssCut, parseSiteAnswer } from './parse.js';
 import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.js';
@@ -439,7 +439,10 @@ async function runAgent(ctx, step) {
     }
     // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림). 한도 때문에 원본 대신 같은 이름의 PDF만 간 교재는 말없이 빼지 않고 강사에게 알리고,
     // PDF에 없는 발표자 노트는 글 파일로 함께 보냄(local.js bridgeFiles)
-    const files = await bridgeFiles(blobs, rec.pid, project, st?.limits || null, rec.kind === 'make' ? sets : null, (name) => notesText(project.material, [name], 60000));
+    const files = await bridgeFiles(blobs, rec.pid, project, st?.limits || null, rec.kind === 'make' ? sets : null, (name) => notesText(project.material, [name], 60000),
+      // 원본이 커넥트 한도를 넘는 교재: 원본 대신 보낼 글(뽑은 글자 + 발표자 노트 + 글에 주소가 보이지 않는 링크). 쪽 그림은 site로 따로 감
+      (name) => [helperText(project.material, [name], 600000), notesText(project.material, [name], 60000), linksText(project.material, [name], 8000)].filter(Boolean).join('\n\n'));
+    if (files.asText?.length) rec2notes(rec, files.asText.map((n) => `${n}: 파일이 커서 원본 대신 쪽 그림과 뽑은 글자로 보냈어요.`));
     if (files.dropped?.length) rec2notes(rec, files.dropped.map((n) => `${n}: 파일이 커서 같은 내용의 PDF로 보냈어요${files.notesSent?.includes(n) ? '(발표자 노트는 글로 함께 보냈어요)' : ''}.`));
     return {
       files,

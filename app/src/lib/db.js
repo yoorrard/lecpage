@@ -120,8 +120,13 @@ export const projects = {
   },
 };
 
+const BLOB_FROM = 32 * 1024 * 1024;
+const bigAsBlob = (v) => ((v instanceof Uint8Array || v instanceof ArrayBuffer) && v.byteLength > BLOB_FROM && typeof Blob !== 'undefined' ? new Blob([v]) : v);
+
 export const blobs = {
-  put: (pid, path, data) => tx('blobs', 'readwrite', (s) => req(s.put(data, pid + ':' + path))),
+  // 큰 바이트(교재 원본 등)는 Blob으로 담음: Chromium은 한 값이 약 127MiB(133,169,152바이트)를 넘으면 받지 않고("serialized … too large"),
+  // Blob은 값 밖에 따로 두어 그 한도에 걸리지 않음(실측 2026-11-24). 꺼낼 때 Blob일 수 있으니 읽는 쪽은 Blob·바이트 둘 다 받음(all()은 바이트로 돌려줌)
+  put: (pid, path, data) => tx('blobs', 'readwrite', (s) => req(s.put(bigAsBlob(data), pid + ':' + path))),
   get: (pid, path) => tx('blobs', 'readonly', (s) => req(s.get(pid + ':' + path))),
   keys: (pid) => tx('blobs', 'readonly', (s) => req(s.getAllKeys(IDBKeyRange.bound(pid + ':', pid + ':￿')))).then((ks) => ks.map((k) => String(k).slice(pid.length + 1))),
   all: async (pid) => {

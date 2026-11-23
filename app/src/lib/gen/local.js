@@ -309,9 +309,11 @@ export function cancelBridgeJob(jobId) { return jobId ? call(`/bridge/jobs/${enc
 const DOC_MIME = { pdf: 'application/pdf', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', doc: 'application/msword', hwp: 'application/x-hwp', hwpx: 'application/hwp+zip', txt: 'text/plain', md: 'text/markdown' };
 /**
  * 보낼 교재 원본(src/*) → files:[{ name, type, base64 }]. 커넥트가 이 PC의 프로그램으로 만든 PDF(conv/*)도 같은 이름의 .pdf로 함께(에이전트가 그림·글을 그대로 읽게).
- * limits(커넥트 /bridge/status의 limits): 한도를 넘으면 fitFiles대로 PDF가 있는 원본부터 빼고, 그래도 넘으면 보내기 전에 AiError('too-big')
+ * limits(커넥트 /bridge/status의 limits): 한도를 넘으면 fitFiles대로 PDF가 있는 원본부터 빼고, 그래도 넘는 교재는 원본 대신
+ * 앱이 뽑은 글(textOf(이름) → 글자·발표자 노트·링크)을 같은 이름의 .md로 보냄(쪽 그림은 site로 따로 감) — 큰 교재도 오류로 멈추지 않게.
+ * 글도 쪽 그림도 없는 교재만 AiError('too-big')
  */
-export async function bridgeFiles(blobs, pid, project, limits = null, sets = null, notesOf = null) {
+export async function bridgeFiles(blobs, pid, project, limits = null, sets = null, notesOf = null, textOf = null) {
   const items = [];
   const list = (project.files || []).filter((x) => x.key && !x.photos);
   const names = new Set(list.map((f) => f.name.toLowerCase()));
@@ -331,6 +333,17 @@ export async function bridgeFiles(blobs, pid, project, limits = null, sets = nul
   const mark = (name) => { const s = S.length ? setFor(S, name) : null; return !s ? {} : { pageImages: S.length === 1 ? true : { first: s.first, count: s.count } }; };
   const out = [];
   const fit = fitFilesInfo(items, limits);
+  // 원본도 같은 이름의 PDF도 한도 때문에 못 가는 교재: 앱이 뽑은 글을 같은 이름의 .md로(쪽 그림 표시도 그 글 파일에)
+  out.asText = [];
+  for (const x of fit.asText) {
+    const text = String(textOf ? textOf(x.name) || '' : '').trim();
+    const has = !!(S.length && setFor(S, x.name));
+    if (!text && !has) throw tooBig(`'${x.name}' 파일이 커서(${Math.round(x.size / MiB)}MB) lecpage 커넥트로 보낼 수 없어요. 교재를 나눠 넣어 주세요.`);
+    const md = x.name.replace(/\.[^.]+$/, '') + '.md';
+    const head = `# ${x.name}\n\n원본 ${x.name} 파일이 커서(${Math.round(x.size / MiB)}MB) 원본 대신 ${has ? '쪽 그림(work/site/material/)과 ' : ''}코드가 뽑은 글을 보냈어요. 글은 틀리거나 빠질 수 있어요${has ? '. 쪽 그림과 다르면 쪽 그림이 맞아요' : ''}.\n\n`;
+    out.push({ name: md, type: 'text/markdown', base64: await toBase64(new TextEncoder().encode(head + text + '\n')), ...mark(x.name) });
+    names.add(md.toLowerCase()); out.asText.push(x.name);
+  }
   for (const x of fit.keep) out.push({ name: x.name, type: x.type, base64: await toBase64(x.v), ...mark(x.name) });
   // 한도에 맞추느라 뺀 원본(같은 이름의 PDF만 감): 말없이 빼지 않게 이름을 돌려주고(out.dropped → 강사 안내), PDF에 없는 발표자 노트는
   // 글 파일로 함께 보냄(notesOf(원본 이름) → 글. 같은 이름이라 커넥트의 교재 개수는 그대로, 예전 커넥트는 개수가 넘지 않을 때만)
@@ -384,7 +397,10 @@ const tooBig = (m) => new AiError('too-big', m, { provider: 'local' });
  * 같은 이름의 PDF가 함께 가는 원본(강의.pptx + 강의.pdf)은 넘칠 때 큰 것부터 빼고 PDF만 보냄. twinPdf(새 커넥트): 그 둘을 개수 하나로 셈
  */
 export function fitFiles(items, limits = null) { return fitFilesInfo(items, limits).keep; }
-/** fitFiles + 한도에 맞추느라 뺀 원본의 이름(같은 이름의 PDF만 감: 말없이 빼지 않게 부르는 쪽이 알림) → { keep, dropped: [이름] } */
+/**
+ * fitFiles + 한도에 맞추느라 뺀 것 → { keep, dropped: [같은 이름의 PDF만 가는 원본의 이름], asText: [{ name, size }] }
+ * asText: 원본도 같은 이름의 PDF도 한도(파일 하나·합계) 때문에 못 가는 교재(큰 것부터 뺌). 부르는 쪽(bridgeFiles)이 앱이 뽑은 글·쪽 그림으로 대신 보냄
+ */
 export function fitFilesInfo(items, limits = null) {
   const L = { files: 20, materialMB: 120, fileMB: 100, ...(limits || {}) };
   const pdfs = new Set(items.filter((x) => /\.pdf$/i.test(x.name)).map((x) => stemOf(x.name)));
@@ -392,14 +408,22 @@ export function fitFilesInfo(items, limits = null) {
   const count = (a) => (L.twinPdf ? new Set(a.map((x) => stemOf(x.name))).size : a.length);
   const total = (a) => a.reduce((n, x) => n + sizeOf(x.v), 0);
   let keep = items.filter((x) => !(twin(x) && sizeOf(x.v) > L.fileMB * MiB));
-  const big = keep.find((x) => sizeOf(x.v) > L.fileMB * MiB);
-  if (big) throw tooBig(`'${big.name}' 파일이 ${L.fileMB}MB를 넘어 lecpage 커넥트로 보낼 수 없어요. 교재를 나눠 넣어 주세요.`);
+  keep = keep.filter((x) => sizeOf(x.v) <= L.fileMB * MiB); // 파일 하나 한도를 넘는 것(같은 이름의 PDF가 없거나 그 PDF도 큼)
   const drops = keep.filter(twin).sort((a, b) => sizeOf(b.v) - sizeOf(a.v));
   const over = () => total(keep) > L.materialMB * MiB || (!L.twinPdf && keep.length > L.files);
   while (over() && drops.length) { const d = drops.shift(); keep = keep.filter((x) => x !== d); }
-  if (count(keep) > L.files) throw tooBig(`교재는 한 번에 ${L.files}개까지 lecpage 커넥트로 보낼 수 있어요(지금 ${count(keep)}개). 교재를 나눠 주세요.`);
-  if (total(keep) > L.materialMB * MiB) throw tooBig(`교재가 모두 합쳐 ${L.materialMB}MB를 넘어 lecpage 커넥트로 보낼 수 없어요. 교재를 줄이거나 나눠 주세요.`);
-  return { keep, dropped: items.filter((x) => !keep.includes(x)).map((x) => x.name) };
+  // 그래도 합계를 넘으면 큰 것부터 뺌(그 교재는 글·쪽 그림으로)
+  for (const d of [...keep].sort((a, b) => sizeOf(b.v) - sizeOf(a.v))) { if (total(keep) <= L.materialMB * MiB) break; keep = keep.filter((x) => x !== d); }
+  // 보낼 파일이 하나도 남지 않은 교재(이름이 같은 원본·PDF는 한 교재): 원본 이름으로
+  const kept = new Set(keep.map((x) => stemOf(x.name))); const seen = new Set(); const asText = [];
+  for (const x of items) {
+    const st = stemOf(x.name); if (kept.has(st) || seen.has(st)) continue; seen.add(st);
+    const own = items.filter((y) => stemOf(y.name) === st); const main = own.find((y) => !/\.pdf$/i.test(y.name)) || own[0];
+    asText.push({ name: main.name, size: sizeOf(main.v) });
+  }
+  const gone = new Set(asText.map((x) => stemOf(x.name)));
+  if (count(keep) + asText.length > L.files) throw tooBig(`교재는 한 번에 ${L.files}개까지 lecpage 커넥트로 보낼 수 있어요(지금 ${count(keep) + asText.length}개). 교재를 나눠 주세요.`);
+  return { keep, dropped: items.filter((x) => !keep.includes(x) && !gone.has(stemOf(x.name))).map((x) => x.name), asText };
 }
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf' };
 /**

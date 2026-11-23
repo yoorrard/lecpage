@@ -6,7 +6,7 @@ import { bridgeAvailable, bridgeRaw, bridgeSameOrigin, lnaPermission } from './g
 export const CONVERTIBLE = new Set(['pptx', 'ppt', 'ppsx', 'pps', 'pptm', 'potx', 'odp', 'key', 'docx', 'doc', 'docm', 'odt', 'rtf', 'hwp', 'hwpx']);
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
 
-let known = null; // { at, exts }
+let known = null; // { at, exts, limitMB }
 /** 커넥트가 바꿀 수 있는 형식 → { pptx: ['powerpoint', …], … } | null(커넥트 없음·꺼짐) */
 export async function connectConverters() {
   if (!bridgeAvailable()) return null;
@@ -22,7 +22,7 @@ export async function connectConverters() {
     const r = await bridgeRaw('/bridge/convert', { signal: ctl.signal });
     if (!r.ok) return null; // 예전 커넥트(이 경로 없음)
     const j = await r.json();
-    known = { at: Date.now(), exts: j.exts || {} };
+    known = { at: Date.now(), exts: j.exts || {}, limitMB: +j.limitMB || 0 };
     return known.exts;
   } catch { return null; } finally { clearTimeout(t); }
 }
@@ -37,6 +37,8 @@ export async function convertWithConnect(name, bytes, { signal } = {}) {
   if (!CONVERTIBLE.has(ext)) return null;
   const exts = await connectConverters();
   if (!exts?.[ext]?.length) return null;
+  // 커넥트가 받는 크기(limitMB, 기본 100MB)를 넘는 교재는 보내지 않고 브라우저 안에서 그림(보내 봐야 거절됨 — 큰 파일을 헛되이 올리지 않게)
+  if (known?.limitMB && (bytes?.byteLength ?? bytes?.size ?? 0) > known.limitMB * 1024 * 1024) return null;
   try {
     const r = await bridgeRaw('/bridge/convert?name=' + encodeURIComponent(name), { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes, signal });
     const j = await r.json().catch(() => ({}));

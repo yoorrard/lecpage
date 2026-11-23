@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { assembleProject, previewHtml } from '../lib/studio.js';
 import { annotate, htmlPages } from '../lib/site-doc.js';
 import { FRAME_SRC, frameEvent, sendHtml, postInner } from '../lib/sandbox-frame.js';
+import { LATE_JS, lateFilesMsg } from '../lib/late-files.js';
 
 // 완성 뒤 미리보기(docs/plan-ai-first.md §8): 조립된 실제 사이트(참여 기능은 연습 모드)를 샌드박스 iframe에.
 // 틀은 격리 틀(public/frame/, lib/sandbox-frame.js)을 주소로 열고 그 안쪽 srcdoc 틀에 사이트를 넣음: 사이트의 인라인 스크립트는 틀 문서의 CSP로 돌고 앱 CSP에는 인라인이 없음.
@@ -146,6 +147,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
   const box = useBox(canvas);
   const setDevice = (v) => { setDeviceRaw(v); store.set('device2', v); };
   const post = (msg) => postInner(frame.current, msg);
+  const late = useRef(null); // 한 장 HTML에 못 담아 안쪽 문서에 따로 넘길 그림({ type: 'lp-late-files', files })
   // 격리 틀: 준비 신호(ready)를 받으면 지금 그림(html)을 보냄. booted: 준비됐다고 알린 틀 창, boots·outerLoads: 틀 문서 읽기와 준비 신호 세기, bootFails: 틀을 못 받은 횟수
   const htmlRef = useRef(''); htmlRef.current = html;
   const booted = useRef(null); const boots = useRef(0); const outerLoads = useRef(0); const bootFails = useRef(0); const onInnerLoad = useRef(null);
@@ -172,7 +174,11 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
         const more = Object.keys(r.files).filter((k) => /\.html?$/i.test(k) && !ENGINE_HTML.has(k) && !k.includes('/')).sort();
         setExtra((x) => (x.join() === more.join() ? x : more));
         const pg = r.files[page] ? page : 'index.html';
-        setHtml(previewHtml(r.files, pg, { extraBody: (pg === 'index.html' ? EDIT_JS : '') + SEL_JS + NAV_JS })); setErr('');
+        // 한 장 HTML에 못 담은 그림(쪽이 많은 교재의 뒤쪽 쪽 그림)은 안쪽 문서가 열린 뒤 따로 넘겨 열리게 함(lib/late-files.js)
+        const skipped = new Set();
+        const one = previewHtml(r.files, pg, { extraHead: LATE_JS, extraBody: (pg === 'index.html' ? EDIT_JS : '') + SEL_JS + NAV_JS, skipped });
+        late.current = lateFilesMsg(r.files, skipped);
+        setHtml(one); setErr('');
         // 실행 취소·복원: 미리보기에서 고친 글은 틀 안에만 있고 그린 글(html)은 고치기 전 그대로라, 되돌린 글이 같으면 srcdoc가 안 바뀜 → 틀을 새로 읽음
         if (drawnVer.current !== ver) { drawnVer.current = ver; setReload((k) => k + 1); }
       } catch (e) { console.error(e); setErr('미리보기를 그리지 못했어요. 새로 고침해 주세요.'); }
@@ -193,7 +199,7 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
       const ev = frameEvent(e, frame.current);
       if (!ev) return;
       if (ev.kind === 'ready') { boots.current += 1; bootFails.current = 0; booted.current = e.source; if (htmlRef.current) show(); return; }
-      if (ev.kind === 'load') { onInnerLoad.current?.(); return; }
+      if (ev.kind === 'load') { if (late.current) post(late.current); onInnerLoad.current?.(); return; }
       const d = ev.data || {};
       if (d.type === 'lp-ready') ready.current += 1;
       else if (d.type === 'lp-y' && typeof d.y === 'number') y.current = d.y;

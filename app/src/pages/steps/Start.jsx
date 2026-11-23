@@ -12,6 +12,7 @@ import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { isV2 } from '../../lib/site-meta.js';
 import { startDemo } from '../../lib/demo.js';
 import { slideSetsOf, setsEnd, addSet, setsFields, numOf, MAX_SLIDES } from '../../lib/gen/slide-sets.js';
+import { tooBigFile, tooBigNote } from '../../lib/material-limits.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
 // (연수 정보는 AI가 교재에서 찾아 사이트와 함께 돌려주고, 완성 뒤 한 번 확인받음). 요청 한 줄은 선택.
@@ -50,11 +51,12 @@ function useIngest(p, update, first = []) {
     // 같은 이름의 교재를 다시 넣음: 예전 것을 새 것으로 바꿈(목록·글·쪽 그림이 두 번 들어가지 않게). 남은 교재와 함께 처음부터 다시 읽어 쪽 그림 번호도 다시 매김
     const again = replace ? [] : (p.files || []).filter((m) => !m.pending && !m.photos && m.key && fileObjs.some((f) => f.name === m.name));
     if (again.length) {
-      const all = await blobs.all(p.id);
-      const rest = (p.files || []).filter((m) => !m.pending && !m.photos && m.key && !again.includes(m) && all[m.key]).map((m) => new File([all[m.key]], m.name));
+      // 남은 교재의 원본만 꺼냄(연수의 모든 파일을 한꺼번에 메모리에 올리지 않게: 큰 교재가 여럿이면 수 GB)
+      const rest = [];
+      for (const m of (p.files || []).filter((x) => !x.pending && !x.photos && x.key && !again.includes(x))) { const v = await blobs.get(p.id, m.key).catch(() => null); if (v) rest.push(new File([v], m.name)); }
       for (const m of again) if (m.pdf?.key) await blobs.remove(p.id, m.pdf.key); // 예전 파일로 만든 PDF는 다시 만듦
       // 새 원본을 먼저 담음: 다시 읽는 중에 창을 닫았다 열어도(이어서 읽기) 예전 파일이 아니라 새 파일을 읽게
-      for (const f of fileObjs) if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
+      for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
       return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos) });
     }
     const metas = replace ? [] : (p.files || []).filter((f) => !f.pending && !f.photos);
@@ -62,7 +64,7 @@ function useIngest(p, update, first = []) {
     const photoRow = (names) => (names.length ? [{ name: names.length > 1 ? `사진 ${names.length}장` : names[0], ext: 'jpg', size: 0, pages: 0, errors: [], photos: names, note: PHOTO_NOTE }] : []);
     // 읽는 동안 창을 닫아도 교재가 남게: 원본을 먼저 담고 목록에 '읽는 중'으로 적어 둠(다시 열면 이어서 읽음)
     if (!replace && fileObjs.length) {
-      for (const f of fileObjs) if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
+      for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
       update({ files: [...metas, ...fileObjs.map((f) => ({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: [], pending: true })), ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
       setExtra([]); // 같은 그림에서 목록이 이어받음
     }
@@ -77,9 +79,9 @@ function useIngest(p, update, first = []) {
       const extOf = (n) => (n.split('.').pop() || '').toLowerCase();
       const rereading = fileObjs.map((f) => {
         const old = (p.files || []).find((m) => m.name === f.name && !m.photos);
-        return f.size <= 100e6
+        return !tooBigFile(f)
           ? { name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: extOf(f.name), pages: 0, errors: [], pending: true, ...(old?.pdf ? { pdf: old.pdf } : {}) }
-          : { name: f.name, size: f.size, ext: extOf(f.name), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] };
+          : { name: f.name, size: f.size, ext: extOf(f.name), pages: 0, errors: [tooBigNote(f)] };
       });
       update({ ...setsFields([]), material: null, files: [...rereading, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
     }
@@ -91,7 +93,7 @@ function useIngest(p, update, first = []) {
     const base = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
     const pdfs = new Set([...fileObjs, ...metas].map((f) => f.name).filter((n) => /\.pdf$/i.test(n)).map(base));
     for (const [i, f] of fileObjs.entries()) {
-      if (f.size > 100e6) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] }); continue; }
+      if (tooBigFile(f)) { metas.push({ name: f.name, size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: [tooBigNote(f)] }); continue; }
       setBusy([f.name, ` 읽는 중 (${i + 1}/${fileObjs.length})`]); setPct(5 + Math.round((i / fileObjs.length) * 10));
       let { material, bytes } = await ing.readFile(f);
       const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -150,7 +152,7 @@ function useIngest(p, update, first = []) {
         ...(textOnly ? { note: TEXT_ONLY_NOTE, howto: /^hw/.test(ext) ? 'hwp' : /^(doc|odt)/.test(ext) ? 'doc' : 'ppt' } : {}),
         ...(capped && !errors.length ? { note: [convNote, capNote(shots.length)].filter(Boolean).join(' ') } : {}) });
       if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
-      if (f.size <= 100e6 && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
+      if (!tooBigFile(f) && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
     }
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
@@ -176,9 +178,8 @@ function useIngest(p, update, first = []) {
     try {
       if (f.key) await blobs.remove?.(p.id, f.key);
       if (f.pdf?.key) await blobs.remove?.(p.id, f.pdf.key); // 커넥트로 만든 PDF
-      const all = await blobs.all(p.id);
       const again = [];
-      for (const m of rest) { const data = all[m.key]; if (data && !m.photos) again.push(new File([data], m.name)); }
+      for (const m of rest) { const data = !m.photos && m.key ? await blobs.get(p.id, m.key).catch(() => null) : null; if (data) again.push(new File([data], m.name)); } // 남은 교재의 원본만(전부를 한꺼번에 메모리에 올리지 않음)
       const keep = rest.filter((m) => m.photos).flatMap((m) => m.photos);
       if (again.length) await ingestAll(again, { replace: true, keep }); // 남은 교재를 다시 읽으며 쪽 그림 번호도 처음부터 다시 매김
       else { await blobs.removePrefix(p.id, 'assets/slides/'); update({ material: null, files: rest.filter((m) => m.photos), ...setsFields([]) }); }
@@ -189,8 +190,8 @@ function useIngest(p, update, first = []) {
   /** 읽는 중에 창을 닫았던 교재(목록에 '읽는 중'으로 남음)·체험 연수의 예시 교재: 담아 둔 원본으로 이어서 읽음 */
   async function resume() {
     const pend = (p.files || []).filter((f) => f.pending && f.key); if (!pend.length || busy) return;
-    const all = await blobs.all(p.id).catch(() => ({}));
-    const again = pend.map((m) => (all[m.key] ? new File([all[m.key]], m.name) : null)).filter(Boolean);
+    const again = [];
+    for (const m of pend) { const v = await blobs.get(p.id, m.key).catch(() => null); if (v) again.push(new File([v], m.name)); }
     if (!again.length) { update({ files: (p.files || []).filter((f) => !f.pending) }); return; }
     setBusy('교재를 이어서 읽는 중이에요…'); setPct(3);
     try { await ingestAll(again); } catch (e) { console.error(e); }

@@ -43,10 +43,15 @@ const MB = 1024 * 1024;
 const num = (v, d) => (Number.isFinite(+v) && +v > 0 ? +v : d);
 export const PORT_RANGE = [6600, 6649];
 export const TMP_PREFIX = 'lecpage-studio-';
-/** 한도. 교재는 엔진의 파일 한도(100MB)와 같게, 모두 합쳐 120MB */
+/**
+ * 한도. 교재는 엔진의 파일 한도(100MB)와 같게, 모두 합쳐 120MB(그보다 큰 교재는 앱이 원본 대신 쪽 그림과 뽑은 글로 보냄).
+ * 사이트 200MB: 앱이 그려 보내는 교재 쪽 그림 400장이 솎이지 않고 다 들어오는 크기(실측 2026-11-24: 사진이 꽉 찬 쪽 그림이 장당 0.4~0.5MB,
+ * 300쪽 119~152MB). 예전 40MB에서는 쪽이 많은 교재의 쪽 그림을 골라 보내야 했음. 본문은 JSON 한 덩어리라 (교재 120 + 사이트 200) × 4/3 ≈ 427MB로
+ * V8 글 한 개의 한계(약 512MB) 안, 받을 때 Node 메모리 약 2GB(실측). 이 값을 넘는 드문 사이트만 앱이 쪽 그림을 고르게 골라 보냄(기록에 남김)
+ */
 export const LIMITS = {
   fileMB: 100, materialMB: num(process.env.LECPAGE_STUDIO_MATERIAL_MB, 120), files: 20,
-  siteMB: 40, siteFiles: 3000, request: 20000, reference: 4000,
+  siteMB: 200, siteFiles: 3000, request: 20000, reference: 4000,
 };
 const bodyLimit = () => Math.ceil(((LIMITS.materialMB + LIMITS.siteMB) * MB * 4) / 3) + MB;
 /** Claude Code 최소 버전: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */
@@ -1254,7 +1259,7 @@ async function handleBridge(S, req, res, url) {
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
     const [ag, auto, hosts] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState(), deployHosts(S)]);
-    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, hosts, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, twinPdf: true, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, hosts, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, siteMB: LIMITS.siteMB, twinPdf: true, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
   // ── 새 판으로 바꾸기: GET(새 판이 있는지) · POST(받아서 바꾸고 같은 포트·토큰으로 다시 켬. 앱은 /bridge/status의 build가 바뀔 때까지 기다림) ──
   if (parts[0] === 'update' && parts.length === 1) {

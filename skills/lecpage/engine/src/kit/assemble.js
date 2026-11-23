@@ -816,15 +816,26 @@ export function previewCsp() {
 }
 /**
  * 조립 결과(files) → 한 장 HTML. CSS·JS는 안으로, 그림·글꼴은 data: 주소로(maxImageBytes까지), 사이트 CSP meta는 미리보기 전용 CSP(previewCsp)로 바꿈.
+ * skipped(Set): maxImageBytes를 넘어 담지 못한 파일 경로를 여기에 적음 — 그 그림은 한 장 HTML만으로는 열리지 않으니 부른 쪽이 틀 안으로 따로 넘겨야 함.
+ *   이때 그림 주소는 `<빈 그림 data: 주소>#lp-late=<경로>`가 됨(넘겨받은 쪽이 그 경로의 그림으로 바꿔 넣음)
  * @param opts { maxImageBytes: 8e6, extraHead: '', extraBody: '', phase: '' } — extraHead·extraBody: 앱이 넣을 글(예: 검수 스크립트), phase: 연수 전·중·후 모습(before|during|after)
  */
-export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, extraHead = '', extraBody = '', phase = '' } = {}) {
+/** 못 담은 그림 자리에 두는 1×1 투명 그림(뒤에 #lp-late=경로를 붙임) */
+export const LATE_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, extraHead = '', extraBody = '', phase = '', skipped = null } = {}) {
   let html = asText(files[page]);
   if (!html) return '<!doctype html><meta charset="utf-8"><p>미리볼 쪽이 없어요.</p>';
   let budget = maxImageBytes;
   const inline = (p) => {
     const data = files[p]; if (data === undefined) return null;
-    const size = enc(data); if (size > budget) return null;
+    const size = enc(data);
+    if (size > budget) {
+      // 한 장 HTML에 못 담은 것. skipped를 준 부른 쪽(앱 lib/late-files.js)은 그 그림을 틀 안으로 따로 넘김: 그때까지 깨진 주소로 열어 보지 않게
+      // 그림은 1×1 빈 그림 주소 뒤에 원래 경로를 붙여 둠(#lp-late=경로). skipped가 없으면 예전처럼 주소를 그대로 둠
+      if (!skipped) return null;
+      skipped.add(p);
+      return /\.(png|jpe?g|webp|gif|avif)$/i.test(p) ? `${LATE_PIXEL}#lp-late=${encodeURI(p)}` : null;
+    }
     budget -= size; return dataUrl(p, data);
   };
   const cssUrls = (css, from) => css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => { const p = resolvePath(u, from); const d = p && !/\.css$/.test(p) ? inline(p) : null; return d ? `url("${d}")` : m; });

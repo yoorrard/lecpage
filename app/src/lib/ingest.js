@@ -3,6 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ingestFile, mergeMaterials, materialToJSON } from '@engine/src/ingest/index.js';
 import { renderPdfPages, slideFileName } from '@engine/src/ingest/render-pdf-browser.js';
+import { FILE_MAX } from './material-limits.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 globalThis.pdfjsLib = pdfjsLib;
@@ -40,7 +41,7 @@ export async function readFile(file) {
 }
 /** 바이트로 읽기(커넥트가 바꿔 준 PDF처럼 파일이 없는 것) */
 export async function readBytes(name, bytes) {
-  const m = await ingestFile(name, bytes, { pdfjsLib, withImages: false, ...PDF_ASSETS });
+  const m = await ingestFile(name, bytes, { pdfjsLib, withImages: false, maxBytes: FILE_MAX, limits: { maxUncompressed: 3 * FILE_MAX, maxEntryBytes: FILE_MAX }, ...PDF_ASSETS });
   return friendlier(m, name, bytes);
 }
 
