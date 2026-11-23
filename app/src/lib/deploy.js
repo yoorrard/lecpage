@@ -329,7 +329,8 @@ export function instantGate(info, { hasSite = false, date = '', start = '', shar
   if (c ? c.state === 'full' : info.accepting === false) {
     return out(false, reason === 'storage' ? `바로 배포 저장 공간이 가득 찼어요. ${MINE}` : `오늘은 바로 배포 자리가 다 찼어요. ${c?.resetAt ? `${koTime(c.resetAt, { now })}에 다시 받아요. ` : ''}${MINE}`);
   }
-  if (share?.left === 0) return out(false, `${share.scope === 'ip' ? '이 인터넷(학교·기관 공유기)' : '이 기기'}에서 오늘 만들 수 있는 새 사이트를 다 썼어요. ${MINE}`);
+  // 이 브라우저에 적어 둔 '오늘 몫 0'만으로 막지 않음(망을 바꿨거나 운영자가 한도를 늘렸을 수 있음): 알리기만 하고 서버가 정함. 정말 다 썼으면 서버의 거절 문구가 카드에 나옴
+  if (share?.left === 0) return out(true, '', `${share.scope === 'ip' ? '이 인터넷(공유기)' : '이 기기'}에서 오늘 만들 수 있는 새 사이트를 다 썼을 수 있어요. 안 되면 아래 [다른 곳에 배포]로 같은 파일을 배포할 수 있어요.`);
   if (c?.state === 'tight') {
     const busy = '오늘은 바로 배포가 붐벼서 연수 날짜가 2주 안인 사이트부터 받아요.';
     if (!date) return out(true, `${busy} 연수 날짜를 넣으면 먼저 받아요.`);

@@ -292,9 +292,21 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       </div>
     );
   }
+  // 바로 배포를 지금 못 쓰면(오늘 몫을 다 씀·서버가 거절·이 망에서 막힘·오늘 자리가 참) 카드를 감추지 않고 누를 수 없게 + 까닭과 할 일 한 줄
+  const instantWhy = !live && PUBLISH_API && instant !== null && !infoWait ? (full || (instant === false ? '이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.' : '')) : '';
   return (
     <div class="stack publish">
-      {live && order.includes('lecpage')
+      {instantWhy && <div class="pub-now pub-modes" role="group" aria-label="배포 방법">
+        <button type="button" class="pub-mode pub-mode-main is-off" aria-disabled="true" aria-describedby="pub-instant-why" onClick={() => document.getElementById('pub-instant-why')?.focus()}>
+          <span class="pub-mode-h"><b>바로 배포</b><em>지금은 쓸 수 없어요</em></span>
+          <small id="pub-instant-why" tabIndex={-1}>{instantWhy}{/내 계정/.test(instantWhy) ? '' : ' 아래에서 다른 곳에 배포하면 같은 파일 그대로예요.'}</small>
+        </button>
+        <div class="pub-mode is-on">
+          <span class="pub-mode-h"><b>다른 곳에 배포</b></span>
+          <small>{order.filter((h) => h !== 'lecpage').map((h) => LABEL[h]).join(' · ')}</small>
+        </div>
+      </div>}
+      {instantWhy ? null : live && order.includes('lecpage')
         ? <div class="pub-now pub-modes" role="group" aria-label="배포 방법">
           <button type="button" class={`pub-mode pub-mode-main${target === 'lecpage' ? ' is-on' : ''}`} aria-pressed={String(target === 'lecpage')} onClick={() => { setPicked('lecpage'); setMore(false); }}>
             <span class="pub-mode-h"><b>바로 배포</b>{best === 'lecpage' && <em>추천</em>}</span>
@@ -321,9 +333,9 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
           {care && <div><dt>알아 둘 점</dt><dd>{care}</dd></div>}
         </dl>}
       </div>}
-      {full && fullHere && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
+      {full && fullHere && !instantWhy && <p class="small" role="status">{full}{/내 계정/.test(full) ? '' : ' 내 계정에 배포하면 같은 파일 그대로예요.'}</p>}
       {moved && <p class="small net-line" role="status">{moved}</p>}
-      {instant === false && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
+      {instant === false && !instantWhy && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
       {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} records={records} freshRoom={freshRoom} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {target === 'vercel' && <Vercel {...ctx} />}

@@ -219,6 +219,13 @@ html.pv-lock{overflow:hidden}
 .pub-modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
 .pub-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:72px;padding:14px 16px;border:1.5px solid var(--line-strong);border-radius:var(--r-sm,12px);background:var(--card);color:var(--ink);font:inherit;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
 .pub-mode:hover{border-color:var(--accent)}
+/* 바로 배포를 지금 못 쓸 때: 감추지 않고 흐리게 + 까닭(글은 또렷하게) */
+.pub-mode.is-off{cursor:default;background:var(--bg-soft,transparent);border-style:dashed}
+.pub-mode.is-off:hover{border-color:var(--line-strong)}
+.pub-mode.is-off .pub-mode-h b{color:var(--muted,inherit)}
+.pub-mode.is-off .pub-mode-h em{font-style:normal;font-size:.8rem;font-weight:600;color:var(--muted,inherit)}
+.pub-mode.is-off small{color:var(--ink)}
+div.pub-mode{cursor:default}
 .pub-mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pub-mode-h{display:inline-flex;align-items:baseline;gap:8px;font-size:1.06rem}
 .pub-mode-h b{font-weight:700}

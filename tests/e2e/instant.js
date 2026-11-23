@@ -5,13 +5,14 @@ const L = require('./lib.js');
 const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = (script) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>바로 배포 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>바로 배포 시험</h1><div data-lp="qa"></div></section></main>' + (script ? '<script>document.documentElement.classList.add("js")</script>' : '') + '</body></html>\n```\n```json\n{"v":2,"title":"바로 배포 시험","sessions":[{"date":"2027-02-10","start":"10:00","end":"12:00"}],"features":["qa"]}\n```';
 const UNSAFE = 'index.html에 비밀번호 입력 칸이 있어요. 참가자의 비밀번호를 받는 사이트는 바로 배포할 수 없어요.';
-async function server(ctx, { siteScripts, unsafe }) {
+async function server(ctx, { siteScripts, unsafe, down }) {
   const st = { calls: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
     const u = new URL(r.request().url()); const m = r.request().method();
     const json = (o, status = 200) => r.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(o) });
     if (u.host !== 'publish.mock.test') return r.abort();
+    if (down) return r.abort('connectionrefused'); // 이 망에서 바로 배포 서버에 닿지 않음
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     st.calls.push(`${m} ${u.pathname}`);
     if (u.pathname === '/api/info') return json({ ok: true, v: 1, plan: 'free', accepting: true, view: siteScripts ? 'pages' : 'worker', keepAlive: !siteScripts, siteScripts, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 }, report: 'https://publish.mock.test/report' });
@@ -36,7 +37,8 @@ async function seed(p, script) {
     await seed(p, true);
     const txt = await p.locator('.publish').innerText();
     L.ok('siteScripts:false → notice up front', /사이트가 직접 쓴 스크립트/.test(txt), txt.slice(0, 200).replace(/\s+/g, ' '));
-    L.ok('siteScripts:false → not picked as the place', !/바로 배포/.test(await p.locator('.pub-now').innerText().catch(() => '')));
+    // 감추지 않고 흐린 카드(누를 수 없음)로 까닭을 보이고, 배포할 곳으로 고르지 않음
+    L.ok('siteScripts:false → 바로 배포 shown disabled, not picked', await p.locator('.pub-mode-main.is-off[aria-disabled="true"]').count() === 1 && await p.locator('.pub-mode-main.is-on').count() === 0);
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-noscripts.png' });
     L.ok('no page errors ①', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
@@ -51,6 +53,15 @@ async function seed(p, script) {
     L.ok('unsafe_site → server message shown as is', (await p.locator('.publish [role=alert]').first().innerText()).includes(UNSAFE), st.calls.join(','));
     await p.locator('.publish [role=alert]').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-unsafe.png' });
     L.ok('no page errors ②', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ③ 이 망에서 바로 배포 서버에 닿지 않음: 바로 배포를 감추지 않고 흐린 카드에 까닭·할 일(핫스팟)을 보임
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); await server(ctx, { siteScripts: true, down: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false); await p.waitForTimeout(2500);
+    const card = await p.locator('.pub-mode-main.is-off').innerText().catch(() => '');
+    L.ok('server unreachable → 바로 배포 card stays, disabled with the reason', /바로 배포/.test(card) && /핫스팟/.test(card), card.replace(/\s+/g, ' ').slice(0, 160));
+    L.ok('server unreachable → other places open below', await p.locator('.pub-pick .pub-opt').count() > 0);
+    L.ok('no page errors ③', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
