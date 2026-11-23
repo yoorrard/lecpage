@@ -115,8 +115,10 @@ async function mockLogin(ctx) {
     await p.click('dialog[open] button:has-text("참여 기능 없이")', { timeout: 8000 });
     await p.waitForSelector('.run-box a:has-text("로그인 창 열기")', { timeout: 15000 });
     const blockedBox = (await p.locator('.run-box').innerText()).replace(/\s+/g, ' ');
+    // 초점은 화면이 그려진 다음 틱에 옮겨짐: 부하가 있어도 흔들리지 않게 잠깐 기다려 확인(끝내 안 오면 실패)
+    const focused = await p.waitForFunction(() => document.activeElement?.classList.contains('run-login'), null, { timeout: 4000 }).then(() => true, () => false);
     ok('popup blocked → says so, and [open the login window] is the primary, focused button', /새 창이 막혔어요\. \[로그인 창 열기\]를 눌러 주세요/.test(blockedBox) && !/새 창에서 Netlify에 로그인하고/.test(blockedBox)
-      && await p.locator('.run-box a.btn-primary:has-text("로그인 창 열기")').count() === 1 && await p.evaluate(() => document.activeElement?.classList.contains('run-login')), blockedBox.slice(0, 120));
+      && await p.locator('.run-box a.btn-primary:has-text("로그인 창 열기")').count() === 1 && focused, blockedBox.slice(0, 120));
     ok('popup blocked → the link opens the same authorize page', /authorize\?response_type=ticket&ticket=tk1abcdefgh/.test(await p.locator('.run-box a:has-text("로그인 창 열기")').getAttribute('href') || ''));
     await p.locator('.run-box').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + '5-blocked-390.png' });
     await p.click('.run-box button:has-text("중지")'); await toastHas(p, /멈췄어요/);

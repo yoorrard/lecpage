@@ -29,6 +29,8 @@ async function mockConnect(ctx) {
     const u = new URL(r.request().url()); const m = r.request().method();
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     const json = (o, status = 200) => r.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(o) });
+    // 짝 증명(/bridge/prove): 증명 길이 없는 예전 판처럼 401 token으로 답함 → 앱이 이 짝에 토큰을 보내도 된다고 봄(진짜 커넥트는 증명으로 답함: engine/test/studio-prove.test.mjs)
+    if (u.pathname === '/bridge/prove') return json({ ok: false, error: 'token' }, 401);
     if (u.pathname === '/bridge/convert' && m === 'GET') return json({ ok: true, platform: 'win32', apps: [{ id: 'powerpoint', name: 'PowerPoint' }], exts: { pptx: ['powerpoint'] } });
     if (u.pathname === '/bridge/convert' && m === 'POST') return json({ ok: true, via: 'powerpoint', app: 'PowerPoint', pdf: fs.readFileSync(path.join(FX, 'workshop.pdf')).toString('base64') });
     return r.abort();
