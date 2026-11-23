@@ -33,7 +33,7 @@ test('CMap 자리를 주지 않으면 같은 PDF에서 글자가 나오지 않�
 test('앱: pdf.js에 CMap·표준 글꼴 자리를 주고, 빌드가 이 PDF에 필요한 한국어 CMap을 같은 출처로 냄', () => {
   const ingest = readFileSync(join(ROOT, 'app/src/lib/ingest.js'), 'utf8');
   assert.match(ingest, /cMapUrl: base \+ 'cmaps\/', cMapPacked: true, standardFontDataUrl/);
-  assert.match(ingest, /ingestFile\(name, bytes, \{ pdfjsLib, withImages: false, \.\.\.PDF_ASSETS \}\)/);
+  assert.match(ingest, /ingestFile\(name, bytes, \{ pdfjsLib, withImages: false, .*\.\.\.PDF_ASSETS \}\)/); // 사이에 읽기 한도(readLimits)가 올 수 있음
   assert.match(ingest, /renderPdfPages\(bytes, \{[^}]*\.\.\.PDF_ASSETS \}\)/);
   const vite = readFileSync(join(ROOT, 'app/vite.config.js'), 'utf8');
   const re = new RegExp(/const KO_CMAP = \/(.+)\/;/.exec(vite)[1]);
