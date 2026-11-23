@@ -17,7 +17,7 @@ import { createServer, request as httpRequest } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
+import { tmpdir, homedir, totalmem } from 'node:os';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSiwc, callbackPage } from './studio-siwc.mjs';
@@ -51,7 +51,8 @@ export const TMP_PREFIX = 'lecpage-studio-';
  */
 export const LIMITS = {
   fileMB: 100, materialMB: num(process.env.LECPAGE_STUDIO_MATERIAL_MB, 120), files: 20,
-  siteMB: 200, siteFiles: 3000, request: 20000, reference: 4000,
+  // 사이트(쪽 그림 포함) 받기: 본문 JSON을 통째로 읽으므로 이 PC의 메모리에 맞춤(200MB 받을 때 Node 메모리 약 2GB를 실측). 넘는 드문 경우는 앱이 쪽 그림을 고르게 줄여 보냄
+  siteMB: num(process.env.LECPAGE_STUDIO_SITE_MB, totalmem() >= 12 * 1024 * MB ? 200 : totalmem() >= 6 * 1024 * MB ? 100 : 40), siteFiles: 3000, request: 20000, reference: 4000,
 };
 const bodyLimit = () => Math.ceil(((LIMITS.materialMB + LIMITS.siteMB) * MB * 4) / 3) + MB;
 /** Claude Code 최소 버전: --restricted(2.1.248)·--permission-prompts(2.1.259)·blockWritesOutsideWorkingDirectories(2.1.314) */

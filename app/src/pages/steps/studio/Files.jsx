@@ -7,10 +7,10 @@ import { FoldHead } from './Parts.jsx';
 
 // 자료(교재 말고 강의에 쓰는 파일): [자료 추가](끌어다 놓기도)로 올리면 사이트의 files/에 들어가고 참가자가 사이트의 자료실에서 받음.
 // 파일은 이 연수 저장소 'site/files/…'(조립이 사이트 파일로 넣음), 목록·이름·설명·순서는 p.materials(조립의 자료실 목록, lib/gen/preview.js ownMaterials).
-// 사이트에 자료실 자리 표시(data-lp="materials")가 없으면 키트가 첫 쪽 끝에 자료 칸을 붙임(engine kit assemble). 한도는 바로 배포와 같게(파일 하나 20MB, 사이트 40MB)
+// 사이트에 자료실 자리 표시(data-lp="materials")가 없으면 키트가 첫 쪽 끝에 자료 칸을 붙임(engine kit assemble). 파일 하나는 바로 배포와 같게 20MB
 
 export const MAX_FILE = 20e6;
-export const MAX_ALL = 30e6; // 자료 모두(사이트 글·교재 쪽 그림이 들어갈 자리를 남김: 바로 배포는 사이트 하나 40MB)
+export const MAX_ALL = 30e6; // 자료 모두. 바로 배포는 사이트 하나 300MB지만 영상·소리는 사이트당 40MB까지라(hosting MAX_MEDIA_BYTES) 자료 합계는 그 안에 들어가게 둠
 const sizeText = (n) => (!(n > 0) ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1e3))}KB`);
 const TYPES = 'PDF·한글·워드·PPT·엑셀·CSV·TXT·ZIP·그림·소리·영상'; // 화면에는 가운뎃점 뒤에서만 줄을 바꿈(앞은 낱말 이음표 U+2060, 뒤는 <wbr>): 줄 첫머리에 '·'가 오지 않게
 

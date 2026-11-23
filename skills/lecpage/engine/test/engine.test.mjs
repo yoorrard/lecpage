@@ -49,7 +49,8 @@ test('올릴 곳 고르기: 앱은 Vercel, 명령을 쓰면 Cloudflare, 연결·
   assert.equal(E.decideHost({ instant: true }).pick, 'lecpage');
   const long = E.decideHost({ instant: true, keep: 'long' });
   assert.equal(long.pick, 'vercel'); assert.equal(long.hosts[1], 'lecpage', '오래 둘 사이트는 본인 계정이 먼저');
-  assert.equal(E.decideHost({ instant: true, siteMB: 60 }).pick, 'vercel', '바로 공개 한도를 넘으면 빼요');
+  assert.equal(E.decideHost({ instant: true, siteMB: 60 }).pick, 'lecpage', '쪽 그림이 많은 사이트(60MB)도 바로 배포(사이트 300MB까지)');
+  assert.notEqual(E.decideHost({ instant: true, siteMB: 350 }).pick, 'lecpage', '바로 배포 한도(300MB)를 넘으면 빼요');
   assert.deepEqual(E.decideHost({ network: 'offline' }).hosts, ['lan', 'zip']);
   assert.equal(E.decideHost({ customDomain: true }).pick, 'cloudflare');
   const bigFile = E.decideHost({ maxFileMB: 40 });

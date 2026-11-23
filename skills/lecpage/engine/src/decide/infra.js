@@ -49,7 +49,7 @@ export const BACKENDS = {
 // 배포할 곳. app = 앱에서 바로 배포(브라우저에서 API를 부를 수 있는 곳), cli = skill이 쓰는 명령(대화 없이 돎).
 // 숫자·약관 근거: docs/research/hosting-2026-11.md (2026-11-11 확인). limit: siteMB(사이트 합계)·fileMB(파일 하나)·files(파일 수)
 export const HOSTS = {
-  lecpage: { name_ko: 'lecpage 주소', cost: '0원', app: true, account: false, limit: { siteMB: 40, fileMB: 20, files: 600 },
+  lecpage: { name_ko: 'lecpage 주소', cost: '0원', app: true, account: false, limit: { siteMB: 300, fileMB: 20, files: 3000 },
     note_ko: '가입 없이 바로 배포해요.',
     atLimit_ko: '방문이 있는 동안은 계속 열려 있어요.', atLimitFree_ko: '무료로 운영되는 서버라 방문이 몰리는 날은 멈출 수 있어요. 본 연수는 내 계정에 배포하는 편이 안전해요.' },
   vercel: { name_ko: 'Vercel', cost: '0원', app: true, account: true, limit: { siteMB: 100, files: 15000 },
