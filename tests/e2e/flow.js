@@ -42,7 +42,7 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   L.ok('studio: one screen (info card + files + chat composer, no tabs)', await p.locator('.st-info.is-todo').count() === 1 && await p.locator('.st-files').count() === 1 && await p.locator('.st-compose textarea').count() === 1 && await p.locator('[role=tablist]').count() === 0);
   await noScroll(p, 'studio');
   await p.screenshot({ path: L.OUT + `${tag}-03-studio.png` });
-  const frame = p.frameLocator('.pv-device iframe');
+  const frame = p.frameLocator('.pv-device iframe').frameLocator('iframe'); // 격리 틀(바깥) 안쪽 srcdoc 틀에 사이트가 있음
   L.ok('studio: preview shows assembled site with kit', await frame.locator('.lpk').count() >= 3, String(await frame.locator('.lpk').count()));
   // 연수 정보: 제목 바꾸면 사이트 글도
   const t0 = await p.inputValue('#prop-title');

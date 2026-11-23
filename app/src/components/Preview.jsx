@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { assembleProject, previewHtml } from '../lib/studio.js';
 import { annotate, htmlPages } from '../lib/site-doc.js';
+import { FRAME_SRC, frameEvent, sendHtml, postInner } from '../lib/sandbox-frame.js';
 
 // 완성 뒤 미리보기(docs/plan-ai-first.md §8): 조립된 실제 사이트(참여 기능은 연습 모드)를 샌드박스 iframe에.
+// 틀은 격리 틀(public/frame/, lib/sandbox-frame.js)을 주소로 열고 그 안쪽 srcdoc 틀에 사이트를 넣음: 사이트의 인라인 스크립트는 틀 문서의 CSP로 돌고 앱 CSP에는 인라인이 없음.
+// 안쪽 문서와는 틀이 넘겨 주는 메시지로만 얘기함(보내기 post → 안쪽 문서, 받기 frameEvent → ready·load·msg).
 // allow-same-origin을 주지 않아 미리보기 안 코드는 앱 저장소(키·연수)에 닿지 못함. 고른 기기의 실제 폭으로 그린 뒤 칸에 맞게 줄여 보여 줌.
 // [글 고치기]를 켜면 미리보기의 글자를 눌러 바로 고치고(번호 data-lpe로 원본의 같은 자리에 씀), 그림을 누르면 바꾸기 창이 열림.
 // 사이트 구성과 서로 가리킴(SEL_JS): 줄에 마우스를 올리면 그 섹션·항목(data-lps·data-lpi)에 테두리, 고르면 그 자리로 옮겨 반짝,
@@ -142,7 +145,17 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
   const want = useRef(null); const wantT = useRef(); const pageRef = useRef(page); pageRef.current = page;
   const box = useBox(canvas);
   const setDevice = (v) => { setDeviceRaw(v); store.set('device2', v); };
-  const post = (msg) => { try { frame.current?.contentWindow?.postMessage(msg, '*'); } catch { } };
+  const post = (msg) => postInner(frame.current, msg);
+  // 격리 틀: 준비 신호(ready)를 받으면 지금 그림(html)을 보냄. booted: 준비됐다고 알린 틀 창, boots·outerLoads: 틀 문서 읽기와 준비 신호 세기, bootFails: 틀을 못 받은 횟수
+  const htmlRef = useRef(''); htmlRef.current = html;
+  const booted = useRef(null); const boots = useRef(0); const outerLoads = useRef(0); const bootFails = useRef(0); const onInnerLoad = useRef(null);
+  const show = () => sendHtml(frame.current, htmlRef.current, { title: '연수 사이트 미리보기' });
+  const bootFailed = () => {
+    // 준비된 적이 있는 틀이면 안쪽 사이트가 틀째로 다른 주소로 떠난 것 → 처음 화면으로. 한 번도 준비되지 않았으면 틀 문서를 못 받은 것 → 두 번 더 해 보고 안내
+    if (booted.current && booted.current === frame.current?.contentWindow) { booted.current = null; setReload((k) => k + 1); setNote('미리보기에서는 이 이동을 따라갈 수 없어 처음 화면으로 돌아왔어요. 배포한 사이트에서는 그대로 움직여요.'); setTimeout(() => setNote(''), 5000); return; }
+    bootFails.current += 1;
+    if (bootFails.current <= 2) setReload((k) => k + 1); else { bootFails.current = 0; setErr('미리보기를 열지 못했어요. 인터넷 연결을 확인하고 새로 고침해 주세요.'); }
+  };
   // 다시 그리기(조립 → 한 파일). 미리보기에서 막 고친 글은 이미 화면에 있으니 다시 그리지 않음
   useEffect(() => {
     if (!p.site) return undefined;
@@ -177,8 +190,11 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
   };
   useEffect(() => {
     const f = (e) => {
-      if (e.source !== frame.current?.contentWindow) return;
-      const d = e.data || {};
+      const ev = frameEvent(e, frame.current);
+      if (!ev) return;
+      if (ev.kind === 'ready') { boots.current += 1; bootFails.current = 0; booted.current = e.source; if (htmlRef.current) show(); return; }
+      if (ev.kind === 'load') { onInnerLoad.current?.(); return; }
+      const d = ev.data || {};
       if (d.type === 'lp-ready') ready.current += 1;
       else if (d.type === 'lp-y' && typeof d.y === 'number') y.current = d.y;
       else if (d.type === 'lp-text' && Number.isInteger(d.n) && typeof d.html === 'string') onText?.(d.n, d.html.slice(0, 20000));
@@ -189,6 +205,25 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
     };
     addEventListener('message', f); return () => removeEventListener('message', f);
   }, [onText, onImage, onPick, page]);
+  // 그림(html)이 바뀌면 준비된 틀에 다시 넣음(예전 srcdoc 바꾸기와 같음: 안쪽 문서를 새로 읽음). 아직 준비 전이면 준비 신호 때 보냄
+  useEffect(() => { if (html && booted.current && booted.current === frame.current?.contentWindow) show(); }, [html]);
+  // 틀 문서의 읽기(load) 신호조차 없을 때(막힘·끊김): 10초 안에 준비되지 않으면 못 받은 것으로
+  const frameOn = !err && !!html && box.w > 0;
+  useEffect(() => {
+    if (!frameOn) return undefined;
+    const el = frame.current;
+    const tm = setTimeout(() => { if (el && el === frame.current && booted.current !== el.contentWindow) bootFailed(); }, 10000);
+    return () => clearTimeout(tm);
+  }, [frameOn, reload]);
+  // 안쪽 문서를 다 읽었을 때(예전 iframe onLoad). 늘 지금 값(editing·page)을 보게 그릴 때마다 새로 둠
+  onInnerLoad.current = () => {
+    // 사이트 스크립트가 주소를 바꿔(location.href=…) 미리보기 문서를 떠났으면(길찾기 스크립트의 신호가 없음) 같은 화면으로 되돌림
+    // 읽을 때마다 하나씩 세어 비교(잇따라 다시 그려도 앞 읽기의 신호를 뒤 것으로 잘못 보지 않게)
+    const my = ++loads.current;
+    setTimeout(() => { if (loads.current !== my) return; if (ready.current < my) { ready.current = my; setReload((k) => k + 1); setNote('미리보기에서는 이 이동을 따라갈 수 없어 처음 화면으로 돌아왔어요. 배포한 사이트에서는 그대로 움직여요.'); setTimeout(() => setNote(''), 5000); } else ready.current = my; }, 900);
+    post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); if (hash.current) { post({ type: 'lp-hash', id: hash.current }); hash.current = ''; } else if (y.current && page === 'index.html') post({ type: 'lp-goto', y: y.current });
+    if (want.current) { const m = want.current; want.current = null; clearTimeout(wantT.current); setTimeout(() => post(m), 60); }
+  };
   useEffect(() => { post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); }, [editing, page]);
   // 섹션·항목으로: 다른 쪽이면 그 쪽을 그린 뒤, 고친 뒤면(after) 다시 그린 다음에(늦으면 1.5초 뒤 바로)
   useEffect(() => {
@@ -237,14 +272,11 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
           {err ? <p class="pv-wait" role="alert">{err}</p> : html && box.w > 0 ? (
             <div class={`pv-device is-${fit ? 'fit' : d.icon}${turned ? ' is-land' : ''}`} style={fit ? undefined : { width: `${Math.round(vw * scale)}px`, height: `${Math.round(vh * scale)}px`, '--s': scale }}>
               <iframe key={reload} ref={frame} onLoad={() => {
-                // 사이트 스크립트가 주소를 바꿔(location.href=…) 미리보기 문서를 떠났으면(길찾기 스크립트의 신호가 없음) 같은 화면으로 되돌림
-                // 읽을 때마다 하나씩 세어 비교(잇따라 다시 그려도 앞 읽기의 신호를 뒤 것으로 잘못 보지 않게)
-                const my = ++loads.current;
-                setTimeout(() => { if (loads.current !== my) return; if (ready.current < my) { ready.current = my; setReload((k) => k + 1); setNote('미리보기에서는 이 이동을 따라갈 수 없어 처음 화면으로 돌아왔어요. 배포한 사이트에서는 그대로 움직여요.'); setTimeout(() => setNote(''), 5000); } else ready.current = my; }, 900);
-                post({ type: 'lp-edit', on: !!editing && page === 'index.html' }); if (hash.current) { post({ type: 'lp-hash', id: hash.current }); hash.current = ''; } else if (y.current && page === 'index.html') post({ type: 'lp-goto', y: y.current });
-                if (want.current) { const m = want.current; want.current = null; clearTimeout(wantT.current); setTimeout(() => post(m), 60); } }}
+                // 틀 문서를 읽었는데 준비 신호가 없으면(0.9초): 틀을 못 받았거나 안쪽 사이트가 틀째로 떠난 것(bootFailed)
+                const my = ++outerLoads.current;
+                setTimeout(() => { if (outerLoads.current !== my) return; if (boots.current < my) { boots.current = my; bootFailed(); } else boots.current = my; }, 900); }}
                 title="연수 사이트 미리보기" tabIndex={focusable ? 0 : -1}
-                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals" srcdoc={html}
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals" src={FRAME_SRC}
                 style={fit ? undefined : { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` }} />
             </div>
           ) : <p class="muted pv-wait">미리보기를 만드는 중…</p>}

@@ -2,6 +2,7 @@
 # 모든 응답(없는 주소의 404 화면 포함)은 다른 사이트가 틀(iframe)에 넣지 못하게 하고, 참고 디자인 사이트(/examples)만 떼어 내고(!)
 # 같은 출처에서 틀에 넣을 수 있게 합니다(규칙은 위에서부터 적용, 떼기는 넓은 규칙 뒤에).
 # 이 CSP는 index.html의 meta CSP에 더해집니다(둘 다 지켜야 함).
+# 앱 화면(/ · /index.html)의 script-src: index.html meta와 같은 값. 빌드가 인라인 스크립트의 해시를 넣어 dist/_headers에 씁니다(vite.config.js cspHashes) — 이 줄을 손으로 고치지 마세요.
 # 앱 HTML의 no-transform: Cloudflare가 HTML을 고치지 못하게 함(웹 분석 스크립트 자동 삽입 등. 처리방침상 분석 없음)
 /*
   X-Content-Type-Options: nosniff
@@ -14,9 +15,11 @@
 
 /
   Cache-Control: no-cache, no-transform
+  Content-Security-Policy: script-src 'self' 'wasm-unsafe-eval'
 
 /index.html
   Cache-Control: no-cache, no-transform
+  Content-Security-Policy: script-src 'self' 'wasm-unsafe-eval'
 
 /404.html
   Cache-Control: no-cache, no-transform
@@ -30,6 +33,16 @@
   Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads; frame-ancestors 'self'; object-src 'none'; base-uri 'self'
   X-Frame-Options: SAMEORIGIN
   Access-Control-Allow-Origin: *
+
+# 격리 틀(/frame/): 앱이 만든 한 장 HTML(사이트 미리보기·디자인 사전·DOCX 그리기)을 안쪽 srcdoc에서 돌리는 빈 문서(src/lib/sandbox-frame.js).
+# 같은 출처의 틀에만 넣을 수 있고 늘 sandbox(allow-same-origin 없음)라 앱 저장소(교재·키)·연결 프로그램 토큰에 닿지 못함. 문서의 CSP(인라인 스크립트 허용)는 그 문서의 meta에 있음.
+# 주소에 판(?v=)이 붙어 문서가 바뀌면 주소도 바뀌므로 오래 캐시(오프라인에서도 미리보기가 열리게)
+/frame/
+  ! Content-Security-Policy
+  ! X-Frame-Options
+  Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals; frame-ancestors 'self'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: SAMEORIGIN
+  Cache-Control: public, max-age=31536000, immutable
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

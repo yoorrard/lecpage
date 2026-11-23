@@ -55,7 +55,8 @@ async function frames(loc, tag, n = 4, gap = 900) {
 }
 /** iframe 안 효과 상태: 프레임(src 없는 srcdoc)을 요소로 찾아 들어감 */
 async function fxIn(frameEl) {
-  const f = await frameEl.contentFrame(); if (!f) return null;
+  const o = await frameEl.contentFrame(); if (!o) return null;
+  const f = /\/frame\//.test(o.url()) ? o.childFrames()[0] : o; if (!f) return null; // 미리보기는 격리 틀(public/frame/) 안쪽 srcdoc 틀에 사이트가 있음
   return f.evaluate(() => (window.LecFX ? { ...window.LecFX.state(), on: [...document.querySelectorAll('.lp-hero [data-fx]')].map((e) => e.getAttribute('data-fx') + ':' + (e.__lecfx ? Object.values(e.__lecfx).map((v) => (v.skipped ? 'skip' : v.dead ? 'dead' : 'on')).join('') : '-')) } : { noFx: true })).catch((e) => ({ err: e.message.slice(0, 60) }));
 }
 /**

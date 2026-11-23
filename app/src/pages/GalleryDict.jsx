@@ -1,9 +1,10 @@
 import { createContext } from 'preact';
-import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { CATEGORIES, ITEMS, catOf, searchItems, srcdocOf } from '../data/design-dict/index.js';
 import { useCart, toggleCart, removeFromCart, clearCart, inCart, CART_MAX } from '../lib/design-cart.js';
 import { newProject } from '../lib/project.js';
 import { toast } from '../lib/util.js';
+import { FRAME_SRC, feedFrame } from '../lib/sandbox-frame.js';
 import '../styles/gallery.css'; // 교재 넣기 화면의 시트에서도 쓰므로 여기서도 불러와요
 
 // 디자인 사전(참고 디자인 화면 아래): 실제로 돌아가는 미리보기 + 검색·분류 + 크게 보기 + 담기(lib/design-cart.js).
@@ -41,9 +42,12 @@ function Frame({ it, live = false, title }) {
     return () => ro.disconnect();
   }, []);
   const s = sz ? Math.min(1, sz.w / BASE_W) : 1;
+  // 미리보기 문서는 격리 틀(public/frame/)의 안쪽 srcdoc 틀에: 틀이 준비되면 넣음(틀을 붙인 바로 뒤에 걸어 둠)
+  const ifr = useRef(null); const on = !!sz; const label = title || `${it.ko} 미리보기`;
+  useLayoutEffect(() => (on && ifr.current ? feedFrame(ifr.current, docOf(it), { allow: 'clipboard-write', title: label }) : undefined), [on, it.id]);
   return (
     <div class="dd-box" ref={box}>
-      {sz && <iframe class="dd-if" srcDoc={docOf(it)} sandbox="allow-scripts" allow="clipboard-write" title={title || `${it.ko} 미리보기`}
+      {sz && <iframe class="dd-if" ref={ifr} src={FRAME_SRC} sandbox="allow-scripts" allow="clipboard-write" title={label}
         tabIndex={live ? 0 : -1} aria-hidden={live ? undefined : 'true'}
         style={{ width: `${sz.w / s}px`, height: `${sz.h / s}px`, transform: s < 1 ? `scale(${s})` : undefined }} />}
     </div>

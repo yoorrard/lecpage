@@ -18,6 +18,21 @@ async function trim(cache) {
   for (const r of assets.slice(0, Math.max(0, assets.length - MAX_ASSETS))) await cache.delete(r);
 }
 const isAsset = (u, scope) => u.pathname.startsWith(scope + 'assets/') && /-[\w-]{8,}\.\w+$/.test(u.pathname);
+// 격리 틀(frame/?v=판, src/lib/sandbox-frame.js): 사이트 미리보기·디자인 사전·DOCX 그리기가 여는 빈 문서. 주소에 판이 붙어 내용이 바뀌면 주소도 바뀌므로 캐시 우선
+// (오프라인에서도 미리보기가 열리게). sandbox 틀의 문서 요청은 브라우저에 따라 서비스 워커를 지나지 않으므로 HTTP 캐시(_headers의 /frame/)도 함께 둠
+const isFrameDoc = (u, scope) => (u.pathname === scope + 'frame/' || u.pathname === scope + 'frame/index.html') && u.searchParams.has('v');
+async function frameDoc(r) {
+  const cache = await caches.open(CACHE);
+  const hit = await cache.match(r.url);
+  if (hit) return hit;
+  const res = await fetch(r);
+  if (okToStore(res)) {
+    const c = res.clone();
+    // 예전 판은 지움(하나만 둠)
+    cache.keys().then((ks) => Promise.all(ks.filter((k) => k.url !== r.url && /\/frame\/(index\.html)?\?/.test(k.url)).map((k) => cache.delete(k)))).then(() => cache.put(r.url, c)).catch(() => { });
+  }
+  return res;
+}
 async function warm(heavy) {
   const base = new URL('./', self.registration.scope);
   const res = await fetch(new URL('sw-warm.json', base), { cache: 'no-store' }).catch(() => null);
@@ -45,6 +60,7 @@ self.addEventListener('fetch', (e) => {
   const u = new URL(r.url);
   if (u.origin !== self.location.origin) return;
   const scope = new URL(self.registration.scope).pathname;
+  if (isFrameDoc(u, scope)) { e.respondWith(frameDoc(r)); return; }
   if (r.mode === 'navigate') {
     const shell = new URL('./', self.registration.scope).href;
     // 앱 화면(첫 화면·index.html)만 오프라인용으로 저장. 예시 사이트·효과 데모·도움말 페이지는 그냥 네트워크로

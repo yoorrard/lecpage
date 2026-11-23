@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 격리 틀: 앱이 만든 한 장 HTML(참가자 사이트 미리보기·그려서 검사·디자인 사전·DOCX 그리기)을 안쪽 srcdoc 틀에 넣어 돌리는 빈 문서.
+     앱은 이 문서를 sandbox 틀(allow-same-origin 없음)로만 열고, 안쪽 문서는 예전처럼 about:srcdoc·출처 없음이라 앱 저장소(교재·키)·연결 토큰에 닿지 못함.
+     안쪽 srcdoc 틀은 앱이 아니라 이 문서의 CSP를 물려받음 → 인라인 스크립트('unsafe-inline')는 여기에만 두고 앱(index.html)은 해시만 허용.
+     이 CSP는 예전 앱 CSP와 같음(미리보기가 그대로 돌게). jsDelivr 스크립트 경로는 엔진 render/shell.js의 LIB_SCRIPT_SOURCES와 같아야 하고 빌드가 확인(vite.config.js cspCheck).
+     쓰는 곳: src/lib/sandbox-frame.js(주소·메시지 규약), 머리글(sandbox·frame-ancestors)은 public/_headers의 /frame/ -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/gsap@3.15.1/ https://cdn.jsdelivr.net/npm/lenis@1.3.27/ https://cdn.jsdelivr.net/npm/ogl@1.0.11/ https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://hangeul.pstatic.net; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' data: blob: https: http://127.0.0.1:*; frame-src 'self' blob: data: about: https://www.youtube-nocookie.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex">
+<!-- 안쪽 문서의 상대 주소 기준을 앱 주소(이 폴더의 위)로: 예전 srcdoc 틀과 같게 -->
+<base href="../">
+<title>lecpage</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;display:block;background:transparent}</style>
+</head>
+<body>
+<script>
+// 규약(src/lib/sandbox-frame.js와 같이 고칠 것)
+//   틀 → 앱: { lpFrame: 'ready' } 준비됨 · { lpFrame: 'load' } 안쪽 문서를 다 읽음 · { lpFrame: 'msg', data } 안쪽 문서가 parent에 보낸 것
+//   앱 → 틀: { lpFrame: 'html', html, allow, title, scheme } 안쪽 문서 넣기(바꾸기) · { lpFrame: 'scheme', scheme } 앱 쪽 틀의 밝게·어둡게가 바뀜 · 그 밖의 메시지는 안쪽 문서로 그대로 넘김
+(function () {
+  // 출처 없는 sandbox 틀 안에서만 돎(주소로 바로 열면 아무것도 하지 않음). 앱과 같은 주소에서 온 부모의 말만 들음
+  if (self.origin !== 'null' || parent === self) return;
+  var APP = location.origin, TO = APP === 'null' ? '*' : APP, inner = null;
+  function buffers(d) { var out = []; if (d && typeof d === 'object') for (var k in d) if (d[k] instanceof ArrayBuffer) out.push(d[k]); return out; }
+  function up(m, tr) { try { parent.postMessage(m, TO, tr || []); } catch (e) { } }
+  // 이 문서의 color-scheme을 앱 쪽 틀(iframe 요소)의 것과 같게: 다르면 브라우저가 틀에 불투명한 바탕을 깔아, 예전(앱 틀에 바로 넣던 때)과 바탕·안쪽 문서의 바탕 판정이 달라짐
+  function scheme(v) { document.documentElement.style.colorScheme = v === 'light' || v === 'dark' ? v : ''; }
+  function show(d) {
+    scheme(d.scheme);
+    if (inner) { inner.srcdoc = d.html; return; }
+    inner = document.createElement('iframe');
+    if (d.allow) inner.setAttribute('allow', String(d.allow));
+    inner.title = String(d.title || '');
+    inner.addEventListener('load', function () { up({ lpFrame: 'load' }); });
+    inner.srcdoc = d.html;
+    document.body.appendChild(inner);
+  }
+  addEventListener('message', function (e) {
+    var d = e.data;
+    if (e.source === parent) {
+      if (e.origin !== APP) return;
+      if (d && d.lpFrame === 'html' && typeof d.html === 'string') { show(d); return; }
+      if (d && d.lpFrame === 'scheme') { scheme(d.scheme); return; }
+      if (inner && inner.contentWindow) { try { inner.contentWindow.postMessage(d, '*', buffers(d)); } catch (x) { } }
+      return;
+    }
+    if (inner && e.source === inner.contentWindow) up({ lpFrame: 'msg', data: d }, buffers(d));
+  });
+  up({ lpFrame: 'ready' });
+})();
+</script>
+</body>
+</html>

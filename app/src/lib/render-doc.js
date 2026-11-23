@@ -7,6 +7,7 @@
 // 그림이 모두 한 가지 색이면(브라우저가 그리지 못함) []를 돌려줌 → 앱은 글자만 보내고 'PDF로 저장해 올리면 더 정확해요'를 보여 줌
 import { snapdom } from '@zumer/snapdom';
 import { version as RHWP_VER } from '@rhwp/core/package.json';
+import { FRAME_SRC, frameEvent, sendHtml, postInner } from './sandbox-frame.js';
 
 const MAX_W = 1600;
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
@@ -96,7 +97,7 @@ async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
 // DOCX: docx-preview는 문서에 적힌 스타일·글꼴 이름을 그대로 CSS로 넣으므로(이스케이프 없음) 앱 화면에서 그리지 않고
 // 출처 없는 sandbox 틀(allow-scripts만, allow-same-origin 없음)에서 그리고 찍음 → 교재의 CSS·글이 앱 화면을 바꾸거나 앱 저장소·연결 토큰에 닿지 못함.
 // 틀 안 코드(build/docx-frame.js + docx-preview + snapdom)는 vite.config.js가 한 덩어리 글로 묶어 둠(virtual:lecpage-docx-frame).
-// 틀은 srcdoc이라 앱 CSP를 물려받음: 인라인 스크립트(script-src 'unsafe-inline')에 기댐 — 미리보기 틀(Preview.jsx)과 같은 처지라 CSP를 바꾸면 함께 옮길 것.
+// 틀은 격리 틀(public/frame/, sandbox-frame.js)의 안쪽 srcdoc 틀: 아래 시작 글(인라인 스크립트)과 넘겨받은 코드는 틀 문서의 CSP로 돌고, 앱 CSP에는 인라인 스크립트가 없음.
 // 받은 것은 모양을 확인하고(쪽 번호·그림 Blob·크기) 그림만 씀. 틀이 20초 안에 준비되지 않거나 2분 동안 아무 말이 없으면(틀이 멈춤) 그때까지 받은 쪽만
 const DOCX_IDLE = 120000;
 const DOCX_BOOT_WAIT = 20000;
@@ -127,13 +128,17 @@ async function docxPages(bytes, _host, { onProgress, signal, maxPages }) {
     };
     const idle = (ms = DOCX_IDLE) => { clearTimeout(timer); timer = setTimeout(finish, ms); };
     function onMsg(e) {
-      if (over || e.source !== f.contentWindow) return;
-      const d = e.data && typeof e.data === 'object' ? e.data : {};
+      if (over) return;
+      const ev = frameEvent(e, f);
+      if (!ev) return;
+      if (ev.kind === 'ready') { idle(DOCX_BOOT_WAIT); sendHtml(f, DOCX_BOOT, { title: 'lecpage-docx' }); return; } // 틀 문서가 준비됨 → 시작 글을 넣음
+      if (ev.kind !== 'msg') return;
+      const d = ev.data && typeof ev.data === 'object' ? ev.data : {};
       idle();
       if (d.type === 'lp-docx-ready' && !started) {
         started = true;
         const buf = new Uint8Array(bytes).slice().buffer; // 늘 새 사본을 넘김(부른 쪽 바이트는 그대로)
-        f.contentWindow.postMessage({ type: 'lp-docx-run', code, bytes: buf, opts: { maxPages } }, '*', [buf]);
+        postInner(f, { type: 'lp-docx-run', code, bytes: buf, opts: { maxPages } }, [buf]);
       } else if (d.type === 'lp-docx-page') {
         const ok = Number.isInteger(d.page) && d.page >= 1 && d.page <= maxPages && !seen.has(d.page)
           && d.blob instanceof Blob && d.blob.size > 0 && d.blob.size <= DOCX_MAX_BLOB && /^image\/(webp|png)$/.test(d.blob.type);
@@ -148,7 +153,7 @@ async function docxPages(bytes, _host, { onProgress, signal, maxPages }) {
     addEventListener('message', onMsg);
     signal?.addEventListener('abort', finish); // [중지]: 그때까지 받은 쪽만
     idle(DOCX_BOOT_WAIT);
-    f.srcdoc = DOCX_BOOT;
+    f.src = FRAME_SRC;
     document.body.appendChild(f);
   });
 }

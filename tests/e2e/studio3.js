@@ -26,7 +26,7 @@ async function build(b, w, h) {
   L.ok(`[${w}] folds: chat composer visible`, w < 960 || await p.locator('.st-composer textarea').isVisible());
   // 미리보기에서 섹션을 누르면 사이트 구성이 저절로 펼쳐짐
   if (w > 960) {
-    await p.frameLocator('.pv-device iframe').locator('section').first().click({ position: { x: 20, y: 20 } }).catch(() => { });
+    await p.frameLocator('.pv-device iframe').frameLocator('iframe').locator('section').first().click({ position: { x: 20, y: 20 } }).catch(() => { });
     await p.waitForTimeout(500);
     L.ok(`[${w}] folds: picking in the preview opens 사이트 구성`, await p.getAttribute('#st-outline-h .st-fold-t', 'aria-expanded') === 'true');
   }
@@ -126,7 +126,7 @@ async function pairing(b) {
 (async () => {
   const b = await L.chromium.launch();
   const { ctx, p, errs, pid } = await build(b, 1280, 860);
-  const frame = p.frameLocator('.pv-device iframe');
+  const frame = p.frameLocator('.pv-device iframe').frameLocator('iframe'); // 격리 틀(바깥) 안쪽 srcdoc 틀에 사이트가 있음
   await shot(p, '1280-01-panel.png');
   // ── 연수 정보: 속성 줄 ──
   // 확인 전에는 [이 정보가 맞아요]가 머리 줄 바로 아래(머리 줄은 접기 버튼 하나라 요약이 다 보임)

@@ -56,7 +56,7 @@ async function sendEdit(p, text) {
   L.ok('date: same date in site text changed (format kept, weekday fixed)', /2026년 12월 22일\(화\)/.test(idx) && !/12월 3일/.test(idx), (idx.match(/2026년 12월 \d+일[^<]{0,6}/g) || []).join(' | '));
   await p.click('.st-info .prop-when button:has-text("완료")');
   L.ok('date: info row shows new date', /12월 22일\(화\)/.test(await p.locator('.st-info').innerText()));
-  const frame = p.frameLocator('.pv-device iframe');
+  const frame = p.frameLocator('.pv-device iframe').frameLocator('iframe'); // 격리 틀(바깥) 안쪽 srcdoc 틀에 사이트가 있음
   for (const [pg, name] of [['screen.html', 'presenter'], ['poster.html', 'poster'], ['console.html', 'console']]) {
     await p.selectOption('.pv-page select', pg); await p.waitForTimeout(1300);
     const t = await frame.locator('html').evaluate((el) => el.outerHTML);

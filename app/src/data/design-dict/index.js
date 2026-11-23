@@ -1,5 +1,5 @@
 // 디자인 사전(참고 디자인 화면, pages/GalleryDict.jsx): 웹 디자인 용어·형식·움직임·글꼴·색·효과를 실제로 돌아가는 작은 미리보기와 함께.
-// 미리보기는 sandbox iframe(srcdoc, allow-scripts만)에서 돌아요. 앱의 CSP를 그대로 물려받아 인라인 스크립트·CSS, 구글 폰트·jsDelivr 글꼴만 씀
+// 미리보기는 sandbox iframe(allow-scripts만)의 격리 틀(public/frame/) 안쪽 srcdoc에서 돌아요. 틀 문서의 CSP를 물려받아 인라인 스크립트·CSS, 구글 폰트·jsDelivr 글꼴만 씀
 // (바깥 그림·스크립트 없음). 글꼴은 구글 폰트 css2의 text=로 그 미리보기에 쓴 글자만 받아 가볍게.
 // 항목: { id, cat, ko, en, desc(한 줄), fit(강의 사이트에 어울릴 때), tech(핵심 기법, AI에게 건넴), tags, f(구글 폰트), links(jsDelivr CSS), css, html, js, scroll(안쪽 스크롤 자동), ptr(손가락 대신 움직이는 포인터) }
 import STYLE from './style.js';

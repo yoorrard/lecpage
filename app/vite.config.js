@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { resolve as resolvePath, join as joinPath } from 'node:path';
 import { createHash } from 'node:crypto';
+import { hashIndexHtml, hashHeaders, checkCsp, directive } from './build/csp.js';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const read = (p) => readFileSync(here(p), 'utf8');
@@ -245,21 +247,40 @@ function docxFrame() {
   };
 }
 
-// 앱 CSP(index.html meta)의 jsDelivr 스크립트 경로 = 엔진 LIB_SCRIPT_SOURCES(참가자 사이트가 부르는 버전 고정 라이브러리, 미리보기 틀이 앱 CSP를 물려받음).
-// 엔진이 라이브러리 판을 올렸는데 여기를 잊으면 미리보기에서 그 효과가 막히므로 빌드를 멈춤. 호스트 전체(https://cdn.jsdelivr.net)도 다시 넣지 못하게
-function cspLibCheck() {
+// 앱 CSP(index.html meta): script-src에 'unsafe-inline'이 없음. 빌드가 남긴 인라인 스크립트(homeOnlyPreload)는 SHA-256 해시로만 허용하고,
+// 같은 값을 dist/_headers의 앱 화면(/ · /index.html) 머리글에도 넣음(Cloudflare. 예비 주소 GitHub Pages는 meta만 씀).
+// 인라인 스크립트가 필요한 것(AI가 만든 사이트 미리보기·그려서 검사·디자인 사전·DOCX 그리기)은 격리 틀(public/frame/index.html, 자체 CSP)의 안쪽 srcdoc에서만 돎(src/lib/sandbox-frame.js).
+// 격리 틀 CSP의 jsDelivr 스크립트 경로 = 엔진 LIB_SCRIPT_SOURCES(참가자 사이트가 부르는 버전 고정 라이브러리): 엔진이 판을 올렸는데 틀을 잊으면
+// 미리보기에서 그 효과가 막히므로 빌드를 멈춤. 검사 규칙은 build/csp.js(checkCsp), 빌드 밖에서는 `node scripts/csp-check.mjs`
+const FRAME_DOC = 'public/frame/index.html';
+// 격리 틀 주소에 붙는 판(?v=): 틀 문서가 바뀌면 달라져, 오래 캐시해도 새 판을 받음
+const frameVer = () => createHash('sha256').update(readFileSync(here(FRAME_DOC))).digest('hex').slice(0, 10);
+function cspHashes() {
+  let outDir = ''; let libs = [];
+  const stop = (bad) => { if (bad.length) throw new Error(`CSP 검사에서 고칠 곳이 있습니다.\n- ${bad.join('\n- ')}`); };
   return {
-    name: 'lecpage-csp-lib-check',
+    name: 'lecpage-csp-hashes',
     apply: 'build',
-    async transformIndexHtml(html) {
-      const { LIB_SCRIPT_SOURCES } = await import('../skills/lecpage/engine/src/render/shell.js');
-      const csp = (/http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html) || [])[1] || '';
-      const script = ((/(?:^|;)\s*script-src ([^;]*)/.exec(csp) || [])[1] || '').trim().split(/\s+/);
-      const cdn = script.filter((x) => /^https:\/\/cdn\.jsdelivr\.net(?:\/|$)/.test(x));
-      if (cdn.slice().sort().join(' ') !== LIB_SCRIPT_SOURCES.slice().sort().join(' ')) {
-        throw new Error(`index.html CSP script-src의 jsDelivr 경로가 엔진 LIB_SCRIPT_SOURCES와 다릅니다.\n  지금: ${cdn.join(' ') || '(없음)'}\n  엔진: ${LIB_SCRIPT_SOURCES.join(' ')}`);
+    configResolved(c) { outDir = resolvePath(c.root, c.build.outDir); },
+    // 소스부터 확인(틀린 채로 오래 묶지 않게)
+    async buildStart() {
+      ({ LIB_SCRIPT_SOURCES: libs } = await import('../skills/lecpage/engine/src/render/shell.js'));
+      stop(checkCsp({ index: read('index.html'), frame: read(FRAME_DOC), headers: read('public/_headers'), libs }));
+    },
+    // 다 쓴 뒤에(Vite는 index.html의 그림 주소를 맨 마지막에 채우므로 인라인 스크립트의 글은 그때 정해짐): 해시를 재서 dist/index.html의 meta와
+    // dist/_headers의 앱 화면 줄에 넣고, 나온 파일로 다시 검사
+    closeBundle() {
+      const fi = joinPath(outDir, 'index.html'); const fh = joinPath(outDir, '_headers');
+      if (!existsSync(fi)) return; // 묶기가 중간에 멈춤
+      const r = hashIndexHtml(readFileSync(fi, 'utf8'));
+      writeFileSync(fi, r.html);
+      let headers;
+      if (existsSync(fh)) {
+        const h = hashHeaders(readFileSync(fh, 'utf8'), directive(r.csp, 'script-src'));
+        if (h.count < 2) throw new Error('_headers: 앱 화면(/ · /index.html)의 Content-Security-Policy: script-src 줄을 찾지 못했습니다.');
+        writeFileSync(fh, h.text); headers = h.text;
       }
-      return html;
+      stop(checkCsp({ index: r.html, frame: readFileSync(joinPath(outDir, 'frame', 'index.html'), 'utf8'), headers, libs, built: true }));
     },
   };
 }
@@ -288,8 +309,8 @@ function rhwpNoWasmAsset() {
 
 export default defineConfig({
   base: './',
-  define: { __RHWP_WASM_SHA256__: JSON.stringify(rhwpSha256()) },
-  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload(), rhwpNoWasmAsset(), docxFrame(), cspLibCheck()],
+  define: { __RHWP_WASM_SHA256__: JSON.stringify(rhwpSha256()), __LP_FRAME_VER__: JSON.stringify(frameVer()) },
+  plugins: [preact(), licensesTxt(), swWarm(), pdfjsAssets(), homeOnlyPreload(), rhwpNoWasmAsset(), docxFrame(), cspHashes()],
   // @hosting: 바로 배포 서버의 거절 규칙(hosting/src/sitecheck.js)을 앱이 그대로 불러 배포 전에 같은 코드로 미리 봄(lib/host-check.js)
   resolve: { alias: { '@engine': here('../skills/lecpage/engine'), '@hosting': here('../hosting/src') } },
   server: { fs: { allow: ['..'] } },
