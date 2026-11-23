@@ -202,15 +202,15 @@ test('개인정보 안내: 바로 배포 서버가 참여 기록을 맡으면 �
 test('운영안내: 연결한 방식(live.provider)을 따르고 QR 안내문을 파일 목록에 넣음', () => {
   const doc = (live) => kit('<div data-lp="qa"></div>', { features: ['qa'] }, { live: { code: 'OPS12345', ...live } }).teacher['운영안내.md'];
   const sheets = doc({ provider: 'sheets', url: 'https://script.google.com/macros/s/x/exec' });
-  assert.match(sheets, /실시간 방식: 구글 시트/);
+  assert.match(sheets, /참여 기능 연결: 구글 시트/);
   assert.match(sheets, /## 운영 방식: 구글 시트/);
-  assert.ok(!/실시간 방식: sheets/.test(sheets));
+  assert.ok(!/참여 기능 연결: sheets/.test(sheets));
   assert.ok(sheets.includes('`poster.html` QR 안내문 인쇄') && sheets.includes('`console.html` 강사 화면'));
   assert.match(doc({ provider: 'supabase', url: 'https://x.supabase.co', anonKey: 'k' }), /## 운영 방식: Supabase/);
-  assert.match(doc({ provider: 'http', url: 'https://live.example.org' }), /실시간 방식: 내 서버·Cloudflare/);
-  assert.match(doc({ provider: 'local' }), /실시간 방식: 이 컴퓨터에서만 시험[\s\S]*참가자 기기끼리는 이어지지 않습니다/);
+  assert.match(doc({ provider: 'http', url: 'https://live.example.org' }), /참여 기능 연결: 내 서버·Cloudflare/);
+  assert.match(doc({ provider: 'local' }), /참여 기능 연결: 이 컴퓨터에서 테스트[\s\S]*참가자 기기끼리는 이어지지 않아요/);
   const none = kit('<p>안내</p>', { features: [] }).teacher['운영안내.md'];
-  assert.match(none, /실시간 방식: 없음/);
+  assert.match(none, /참여 기능 연결: 없음/);
   assert.ok(!none.includes('console.html') && none.includes('poster.html'), '강사 화면이 없으면 목록에서 뺌');
 });
 

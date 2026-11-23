@@ -119,3 +119,56 @@ test('접속 확인: 없어도 되는 곳이 막혀도 \'없어도 연수는 할
     assert.deepEqual(k._errs, []);
   } finally { await ctx.close(); }
 });
+
+test('강사 화면 320px: 들어가기 전(열쇠 칸)·들어간 뒤(접힌 양식을 편 채) 모두 가로로 넘치지 않음', { skip }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 320, height: 640 } });
+  try {
+    const page = await open(ctx, 'console.html');
+    await page.waitForSelector('#lp-key');
+    const wide = () => page.evaluate(() => { const out = []; for (const n of document.querySelectorAll('.lp-con-login-card, .lp-con-login-card *, details.lp-con-quick form, details.lp-con-quick form *')) { const r = n.getBoundingClientRect(); if (r.width && r.right > innerWidth + 1) out.push(n.tagName + '.' + n.className + ' ' + Math.round(r.right)); } return { sw: document.documentElement.scrollWidth, out }; });
+    assert.deepEqual(await wide(), { sw: 320, out: [] }, '들어가기 전');
+    await page.fill('#lp-key', ADMIN); await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-console-main]:not([hidden])');
+    await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(300);
+    assert.deepEqual(await wide(), { sw: 320, out: [] }, '들어간 뒤(즉석 투표·휴대폰 없는 분 추가 양식을 편 채)');
+    assert.deepEqual(page._errs, []);
+  } finally { await ctx.close(); }
+});
+
+test('사이트가 기기의 밝게·어둡게를 따르면 강사·발표·접속 확인 화면도 따름(단추로 고른 값이 먼저). 한쪽 밝기만 있는 사이트는 그 밝기 그대로', { skip }, async () => {
+  // 시험용 사이트: 밝은 바탕(연수 정보 theme) + 어두운 기기용 규칙(prefers-color-scheme: dark)이 있음 → 보조 쪽에 data-theme-os
+  for (const p of ['console.html', 'screen.html', 'check.html']) assert.match(files[p], /<html[^>]*\sdata-theme="light"[^>]*\sdata-theme-os>/, p);
+  // 어두운 기기용 규칙이 없는 사이트는 표시가 없음(밝은 사이트가 기기 설정만으로 어두워지지 않게). 어두운 사이트는 밝은 기기용 규칙이 있을 때만
+  const plain = (css) => ({ 'index.html': `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>시험 연수</title><style>${css}</style></head><body><main><h1>시험 연수</h1><div data-lp="qa"></div></main></body></html>` });
+  const os = (site, theme) => /data-theme-os/.test(bpBuild({ live: { features: ['qa'], provider: 'http', url: 'https://live.example.com', code: 'THEMEOS' } }, { site, meta: theme ? { theme } : {} }).files['console.html']);
+  assert.equal(os(plain('body{background:#fff}')), false);
+  assert.equal(os(plain('@media (prefers-color-scheme:dark){body{background:#111}}')), true);
+  const darkTheme = { accent: '#ff6a3d', ink: '#eef0f6', paper: '#0b0d14' };
+  assert.equal(os(plain('@media (prefers-color-scheme: dark){body{background:#000}}'), darkTheme), false, '어두운 사이트의 어두운 기기용 규칙은 따를 이유가 아님');
+  assert.equal(os(plain('@media (prefers-color-scheme: light){body{background:#fff}}'), darkTheme), true);
+  for (const [scheme, want] of [['dark', 'dark'], ['light', 'light']]) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 750 }, colorScheme: scheme });
+    try {
+      const page = await open(ctx, 'console.html');
+      await page.waitForSelector('#lp-key');
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), want, scheme);
+      const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      if (scheme === 'dark') {
+        assert.notEqual(bg, 'rgb(247, 245, 239)', '어두운 기기에서 바탕이 바뀜');
+        // 열어 둔 채 기기 설정이 바뀌어도 따라감
+        await page.emulateMedia({ colorScheme: 'light' });
+        await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'light');
+        await page.emulateMedia({ colorScheme: 'dark' });
+        await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+        // 단추로 밝게 고르면 그 값이 먼저(다시 열어도, 기기 설정이 바뀌어도)
+        await page.click('[data-theme-toggle]');
+        assert.equal(await page.evaluate(() => [document.documentElement.getAttribute('data-theme'), localStorage.getItem('lp-theme')].join()), 'light,light');
+        await page.emulateMedia({ colorScheme: 'light' }); await page.emulateMedia({ colorScheme: 'dark' });
+        await page.reload(); await page.waitForSelector('#lp-key');
+        assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light');
+      } else assert.equal(bg, 'rgb(247, 245, 239)');
+      assert.deepEqual(page._errs, []);
+    } finally { await ctx.close(); }
+  }
+});

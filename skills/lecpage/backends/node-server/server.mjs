@@ -274,9 +274,9 @@ export async function start(opts = readOptions()) {
   }
   async function readBody(req, max) {
     const len = Number(req.headers['content-length'] || 0);
-    if (len > max) throw new HttpError(413, 'too_large', '요청이 너무 큽니다.', { max });
+    if (len > max) throw new HttpError(413, 'too_large', '요청이 너무 커요.', { max });
     const chunks = []; let n = 0;
-    for await (const c of req) { n += c.length; if (n > max) throw new HttpError(413, 'too_large', '요청이 너무 큽니다.', { max }); chunks.push(c); }
+    for await (const c of req) { n += c.length; if (n > max) throw new HttpError(413, 'too_large', '요청이 너무 커요.', { max }); chunks.push(c); }
     return Buffer.concat(chunks);
   }
   async function readJson(req) {
@@ -288,7 +288,7 @@ export async function start(opts = readOptions()) {
 
   // ---- upload ----
   async function handleUpload(req, res, code, cors) {
-    if (!opts.uploads) throw new HttpError(503, 'uploads_disabled', '이 서버는 파일 올리기를 쓰지 않습니다.');
+    if (!opts.uploads) throw new HttpError(503, 'uploads_disabled', '이 서버는 파일 올리기를 쓰지 않아요.');
     const auth = await core.authorizeUpload(code, headersOf(req), clientIp(req));
     const ct = String(req.headers['content-type'] || '');
     const raw = await readBody(req, auth.maxBytes + 64 * 1024);

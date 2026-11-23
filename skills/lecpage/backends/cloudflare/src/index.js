@@ -373,7 +373,7 @@ export class LiveRoom extends DurableObject {
 
   // ---------------------------------------------------------------- uploads (R2, optional)
   async upload(core, code, request, ip) {
-    if (!this.env.UPLOADS) throw new HttpError(503, 'uploads_disabled', '이 서버는 파일 올리기를 쓰지 않습니다(R2 연결 없음).');
+    if (!this.env.UPLOADS) throw new HttpError(503, 'uploads_disabled', '이 서버는 파일 올리기를 쓰지 않아요(R2 연결 없음).');
     const auth = await core.authorizeUpload(code, request.headers, ip);
     const len = Number(request.headers.get('Content-Length') || 0);
     if (!len) throw new HttpError(411, 'length_required', '파일 크기를 알 수 없습니다.');
@@ -496,9 +496,9 @@ export class Guard extends DurableObject {
 async function readJson(request) {
   if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'DELETE') return null;
   const len = Number(request.headers.get('Content-Length') || 0);
-  if (len > 64 * 1024) throw new HttpError(413, 'too_large', '요청이 너무 큽니다.');
+  if (len > 64 * 1024) throw new HttpError(413, 'too_large', '요청이 너무 커요.');
   const buf = await request.arrayBuffer();
-  if (buf.byteLength > 64 * 1024) throw new HttpError(413, 'too_large', '요청이 너무 큽니다.');
+  if (buf.byteLength > 64 * 1024) throw new HttpError(413, 'too_large', '요청이 너무 커요.');
   if (!buf.byteLength) return {};
   try { return JSON.parse(new TextDecoder().decode(buf)); } catch { throw new HttpError(400, 'invalid_json', 'JSON 형식이 아닙니다.'); }
 }

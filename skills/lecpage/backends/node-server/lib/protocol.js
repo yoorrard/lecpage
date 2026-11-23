@@ -876,7 +876,7 @@ export class LiveCore {
    *  while uploads are allowed. The recorded type and size replace what the client sent. */
   ownFiles(code, t, me, files, postId) {
     if (!files || !files.length) return [];
-    if (!this.uploadsAllowed(code, t)) throw new HttpError(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
+    if (!this.uploadsAllowed(code, t)) throw new HttpError(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.');
     const seen = new Set();
     return files.map((f) => {
       const ref = fileRef(f.url);
@@ -1286,7 +1286,7 @@ export class LiveCore {
     if (!row) throw new HttpError(404, 'not_found', '없는 글입니다.');
     const field = col === 'questions' ? 'votes' : 'likes';
     const cur = safeJson(row.data, {});
-    if (col === 'questions' && cur.status === 'hidden') throw new HttpError(409, 'hidden', '숨겨진 질문입니다.');
+    if (col === 'questions' && cur.status === 'hidden') throw new HttpError(409, 'hidden', '숨겨진 질문이에요.');
     const exists = this.db.get(`SELECT 1 AS x FROM votes WHERE code = ? AND col = ? AND doc = ? AND by = ?`, code, col, row.id, me.id);
     if (exists) return { status: 200, body: { [field]: cur[field] || 0, voted: true, already: true } };
     let nrow;
@@ -1376,14 +1376,14 @@ export class LiveCore {
     const t = this.training(c);
     const me = this.requireParticipant(c, cred);
     if (!t) throw new HttpError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
-    if (!this.uploadsAllowed(c, t)) throw new HttpError(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
+    if (!this.uploadsAllowed(c, t)) throw new HttpError(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.');
     this.limit('upload', me.id, ip);
     return { code: c, me, maxBytes: this.uploadLimit(t), training: t };
   }
   /** head: Uint8Array with the first bytes (≥12) of the file. */
   checkUpload({ size, head, name, maxBytes }) {
     if (size > maxBytes) throw new HttpError(413, 'too_large', `파일은 ${Math.floor(maxBytes / 1048576)}MB까지 올릴 수 있어요.`, { max: maxBytes });
-    if (!size) throw bad('empty', '빈 파일입니다.');
+    if (!size) throw bad('empty', '빈 파일이에요.');
     // The type comes from the bytes only; the declared Content-Type is ignored.
     const type = sniffType(head);
     if (!type) throw new HttpError(415, 'unsupported_type', '이미지(PNG·JPG·GIF·WEBP)·PDF·MP3·MP4만 올릴 수 있어요.');

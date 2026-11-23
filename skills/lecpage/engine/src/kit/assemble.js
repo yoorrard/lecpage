@@ -637,6 +637,12 @@ export function assemble(site, meta0, opts = {}) {
   const aiTexts = [...Object.values(expanded), ...Object.entries(src).filter(([p]) => /\.(css|m?js)$/.test(p)).map(([, v]) => asText(v)), ...Object.values(out).filter((v) => typeof v === 'string')];
   const csp = kitCsp(vb, { live, used: usedSources(aiTexts, { provider: vb.live.provider }) });
   Object.assign(out, built.files);
+  // 사이트가 기기의 밝게·어둡게를 따르면(사이트 CSS에 제 밝기의 반대쪽 prefers-color-scheme 규칙이 있음) 보조 쪽(강사·발표·접속 확인 화면)도 따르게 표시.
+  // boot.js가 data-theme-os를 보고, 단추로 고른 값이 없을 때만 기기 설정을 따름. 한쪽 밝기만 있는 사이트는 지금처럼 그 밝기로
+  const auxMain = /<html[^>]*\sdata-theme="(light|dark)"/.exec(String(built.files['check.html'] || ''))?.[1];
+  if (auxMain && aiTexts.some((t) => new RegExp(`prefers-color-scheme\\s*:\\s*${auxMain === 'dark' ? 'light' : 'dark'}`).test(t))) {
+    for (const p of Object.keys(built.files)) if (/\.html$/.test(p) && typeof out[p] === 'string') out[p] = out[p].replace(/<html(\s[^>]*)?>/, (m) => (m.includes('data-theme-os') ? m : m.replace(/>$/, ' data-theme-os>')));
+  }
   out['assets/theme.css'] = (out['assets/theme.css'] || '') + auxThemeOverride(theme);
   out['assets/kit.css'] = `/* lecpage 키트 ${VERSION} */\n${kitVars(theme)}${col.deckRatio ? `:root{--lpk-deck-ratio:${col.deckRatio}}\n` : ''}${read('kit.css')}`;
   if (!out['assets/lecpage.js']) out['assets/lecpage.js'] = read('lecpage.js');

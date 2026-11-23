@@ -215,6 +215,12 @@
 }
 .lpk .lp-deck:fullscreen{background:#111;color:#fff;padding:16px;align-content:center}
 .lpk .lp-deck:fullscreen .lp-slide img{max-height:calc(100vh - 140px);border:0;background:#111}
+/* 가로로 돌린 휴대폰의 전체 화면(낮은 화면): 쪽 그림을 화면 높이에 맞춰 크게. 아래에서 잘려 보이던 작은 그림 띠는 숨김(쪽은 화살표·밀기·[전체 보기]로) */
+@media (max-height:520px){
+  .lpk .lp-deck:fullscreen{padding:8px 12px;gap:4px}
+  .lpk .lp-deck:fullscreen .lp-deck-thumbs{display:none}
+  .lpk .lp-deck:fullscreen .lp-slide img{max-height:calc(100vh - 96px)}
+}
 dialog.lpk.lp-overview{width:min(1100px,calc(100% - 24px));max-height:calc(100% - 24px);padding:0;border:0;border-radius:var(--_r);background:var(--_paper);color:var(--_text);box-shadow:0 24px 64px rgba(0,0,0,.35)}
 dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 .lpk .lp-overview-h{position:sticky;top:0;display:flex;gap:8px;padding:12px;background:var(--_paper);border-bottom:1px solid var(--_line)}
@@ -288,6 +294,9 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 24px + var(--lp-now-pad,0px))}
 html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px))}
 .lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 var(--lp-now-pad,0px)}
+/* 꽉 찬 바닥글 바로 아래면 그 바탕색으로 이어 칠함(lecpage.js initChromeTint가 이 표시와 --lp-chrome-bg를 붙임): 묶음이 사이트 바탕색 띠로 따로 보이지 않게.
+   flow-root: 맨 끝 줄('Made with Lecpage')의 위 여백까지 묶음 안에 두어 틈 없이 칠함 */
+.lpk.lpk-chrome.lpk-chrome--tint{display:flow-root;background:var(--lp-chrome-bg,transparent)}
 
 /* ── 'Made with Lecpage' 표시: 작고 차분하게. 사이트 바탕·글자색(--_paper·--_text)을 따라 밝게·어둡게 모두 읽힘 ──
    넓은 화면은 왼쪽 아래 구석에 떠 있음(참여 막대는 오른쪽, '지금' 띠는 가운데). 자리를 다른 떠 있는 것이 차지하면 lecpage.js가

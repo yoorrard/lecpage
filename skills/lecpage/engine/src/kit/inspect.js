@@ -87,7 +87,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
   if (meta) {
     const r = readMeta(meta);
     icsMade = (r.meta?.sessions || []).some((x) => x && x.date);
-    for (const e of r.errors) add(`meta-${e.code}`, 'error', { file: 'lecpage.json', selector: e.path }, e.message_ko, e.code === 'v1' ? '새 판은 사이트 폴더(site/)와 lecpage.json(v:2)으로 만들어요.' : 'lecpage.json을 고쳐 주세요(references/kit.md의 꼴).');
+    for (const e of r.errors) add(`meta-${e.code}`, 'error', { file: 'lecpage.json', selector: e.path }, e.message_ko, e.code === 'v1' ? '새 버전은 사이트 폴더(site/)와 lecpage.json(v:2)으로 만들어요.' : 'lecpage.json을 고쳐 주세요(references/kit.md의 꼴).');
     for (const w of r.warnings) if (w.code !== 'teacher-value') add(`meta-${w.code}`, 'warn', { file: 'lecpage.json', selector: w.path }, w.message_ko, w.code === 'title-empty' ? '교재에 적힌 연수 이름을 title에 적어 주세요.' : 'lecpage.json의 꼴을 맞춰 주세요(날짜 YYYY-MM-DD, 시각 HH:MM).');
   }
   if (!files['index.html']) add('no-index', 'error', { file: 'index.html' }, '첫 쪽 index.html이 없어요.', '사이트의 첫 쪽을 site/index.html로 써 주세요.');

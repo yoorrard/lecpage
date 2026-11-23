@@ -1,5 +1,5 @@
 {
- "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 보안 문제로 막아야 하는 판은 지우세요.",
+ "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 2026-11-23: 꽉 찬 바닥글 아래 키트 묶음 색 잇기·개인정보 안내에 맞춘 주석·설문 알림 문구(lecpage.js), 사이트가 기기의 밝게·어둡게를 따르면 보조 쪽도 따르기(boot.js)로 바뀐 lecpage.js·boot.js의 예전 판. 보안 문제로 막아야 하는 판은 지우세요.",
  "segments": [
   {
    "name": "fx/core.js",
@@ -553,6 +553,20 @@
    "head": "/*! lecpage live — provider 'loc",
    "sha256": "0d6e78ea79e4469a46b1dafbabefb015fd59c54dcfa97feb985f796b3b487046",
    "kept": "2026-11-22"
+  },
+  {
+   "name": "boot.js",
+   "len": 1229,
+   "head": "/* lecpage boot: 첫 그리기 전에 테마·움직임",
+   "sha256": "01b7da15d2717b193dda333db044ca81dc1af7921ba852cb62ad3e3784701bce",
+   "kept": "2026-11-23"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 111097,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "37d47a12d4ec82a348ebde2bb49082d8426739f77165770c2ed4f14ecd544832",
+   "kept": "2026-11-23"
   }
  ]
 }

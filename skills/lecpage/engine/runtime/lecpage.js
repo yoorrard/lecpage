@@ -1060,7 +1060,13 @@
     if (bBox) {
       var bf = $('[data-board-form]', bBox), maxFiles = +bBox.getAttribute('data-max-files') || 0;
       $('[data-board-write]', bBox).addEventListener('click', function () { ensureJoin({ nick: true }).then(function () { bf.hidden = false; bf.querySelector('textarea').focus(); }, function () { }); });
-      $('[data-board-cancel]', bBox).addEventListener('click', function () { bf.hidden = true; });
+      // 양식을 닫을 때(닫기·올린 뒤) 초점이 그 안에 있었으면 [글 쓰기] 단추로 돌려줌(숨겨진 양식에 초점이 남아 키보드·화면 낭독기가 자리를 잃지 않게)
+      var closeBoardForm = function () {
+        var a = doc.activeElement, had = !a || a === doc.body || bf.contains(a), w = $('[data-board-write]', bBox);
+        bf.hidden = true;
+        if (had && w) { try { w.focus({ preventScroll: true }); } catch (e) { w.focus(); } }
+      };
+      $('[data-board-cancel]', bBox).addEventListener('click', closeBoardForm);
       $$('[data-cat]', bBox).forEach(function (b) { b.addEventListener('click', function () { cat = b.getAttribute('data-cat'); $$('[data-cat]', bBox).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBoard(); }); });
       bf.addEventListener('submit', function (e) {
         e.preventDefault(); var fd = new FormData(bf), files = (bf.querySelector('input[type=file]') || {}).files || [];
@@ -1068,7 +1074,7 @@
         var btn = bf.querySelector('[type=submit]'); btn.disabled = true; toast('올리는 중이에요…');
         var ups = Array.prototype.slice.call(files).map(function (f) { return conn.upload(f); });
         Promise.all(ups).then(function (fs) { return conn.add('posts', { kind: fd.get('kind') || '', text: (fd.get('text') || '').trim(), nickname: me.nickname, files: fs, license: fd.get('license') || 'own' }); })
-          .then(function (d) { boardNews.mine(d); if (d && d.id) posts[d.id] = d; bf.reset(); bf.hidden = true; drawBoard(); toast(queued(d) ? '연결되면 보드에 올려요.' : d && d.hidden ? '보냈어요. ' + HOST_GA + ' 확인하면 보드에 보여요.' : '올렸어요.'); }, function (err) { toast('올리지 못했어요: ' + (err && err.message || '파일 크기나 종류를 확인해 주세요.')); })
+          .then(function (d) { boardNews.mine(d); if (d && d.id) posts[d.id] = d; bf.reset(); closeBoardForm(); drawBoard(); toast(queued(d) ? '연결되면 보드에 올려요.' : d && d.hidden ? '보냈어요. ' + HOST_GA + ' 확인하면 보드에 보여요.' : '올렸어요.'); }, function (err) { toast('올리지 못했어요: ' + (err && err.message || '파일 크기나 종류를 확인해 주세요.')); })
           .then(function () { btn.disabled = false; });
       });
     }
@@ -1460,7 +1466,7 @@
       s.style.left = Math.round(Math.random() * 30) + 'px'; s.style.setProperty('--dx', (Math.random() * 40 - 20) + 'px');
       host.appendChild(s); setTimeout(function () { s.remove(); }, 2700);
     }
-    // 강사가 [데이터 모두 지우기]: 열린 화면의 목록과 이 기기에 남은 이 연수의 참여 기록(응답·좋아요·출석·설문·신호)을 비움.
+    // 강사가 [모든 데이터 삭제]: 열린 화면의 목록과 이 기기에 남은 이 연수의 참여 기록(응답·좋아요·출석·설문·신호)을 비움.
     // 서버의 참가자 명단도 지워졌으니 이 기기의 참여 정보도 비워, 다음에 참여할 때 별명(입실이면 이름·소속)을 새로 받음
     function onReset() {
       [qs, posts, answers, quick, voted, lastProg].forEach(function (b) { for (var k in b) delete b[k]; });
@@ -1601,6 +1607,49 @@
     if ('ResizeObserver' in window) { var ro = new ResizeObserver(later); $$('.lpk.lpk-now,[data-dock]').forEach(function (n) { ro.observe(n); }); }
     if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(function () { W = 0; later(); });
   }
+  /* 키트 묶음(.lpk-chrome: 맨 끝 'Made with Lecpage' 줄, 참여 막대·'지금' 띠가 가리지 않게 비워 둔 자리)이 꽉 찬 바닥글 아래에
+     사이트 바탕색 띠로 따로 보이지 않게: 바로 위에 틈 없이 닿은 것이 화면 너비를 다 채우고 제 바탕색이 있으면 그 색으로 이어 칠함.
+     사이트 CSS·HTML은 건드리지 않음(묶음에 표시와 색 값만). 닿아 있지 않거나 색을 알 수 없으면(그림·그러데이션뿐) 지금처럼 둠 */
+  function initChromeTint() {
+    var chrome = $('.lpk.lpk-chrome'); if (!chrome || !window.getComputedStyle) return;
+    var timer = 0;
+    function solid(c) {
+      if (!c || c === 'transparent') return '';
+      var a = 1, m;
+      if ((m = /^rgba\((?:[^,]+,){3}\s*([\d.]+)\s*\)$/.exec(c))) a = +m[1];
+      else if ((m = /\/\s*([\d.]+)(%?)\s*\)$/.exec(c))) a = m[2] ? +m[1] / 100 : +m[1];
+      return a >= 0.98 ? c : '';
+    }
+    function inFlow(n) {
+      if (/^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(n.tagName)) return false;
+      var cs = getComputedStyle(n);
+      return cs.display !== 'none' && cs.position !== 'fixed' && cs.position !== 'absolute' && n.getBoundingClientRect().height > 0;
+    }
+    function lastIn(n) { var k = n; while (k && !inFlow(k)) k = k.previousElementSibling; return k; }
+    function paint() {
+      timer = 0;
+      var n = lastIn(chrome.previousElementSibling), color = '', depth = 0;
+      // 표시를 먼저 붙여(flow-root) 묶음의 위 끝이 맨 끝 줄의 위 여백까지 품게 한 뒤, 위에 닿았는지 잼
+      chrome.classList.add('lpk-chrome--tint'); chrome.style.removeProperty('--lp-chrome-bg');
+      var top = chrome.getBoundingClientRect().top, W = root.clientWidth;
+      while (n && depth++ < 8) {
+        var r = n.getBoundingClientRect();
+        if (Math.abs(r.bottom - top) > 1) break; // 사이에 틈이 있거나 옆에 놓임
+        var cs = getComputedStyle(n), full = r.left <= 0.5 && r.right >= W - 0.5, c = solid(cs.backgroundColor);
+        if (c) { if (!full) break; color = c; }
+        else if (full && cs.backgroundImage !== 'none') color = ''; // 색 없이 그림·그러데이션만: 끝 색을 알 수 없음
+        n = lastIn(n.lastElementChild);
+      }
+      if (color) chrome.style.setProperty('--lp-chrome-bg', color); else chrome.classList.remove('lpk-chrome--tint');
+    }
+    function later() { if (!timer) timer = setTimeout(paint, 200); }
+    paint();
+    addEventListener('load', later); addEventListener('resize', later); addEventListener('pageshow', later);
+    if (window.matchMedia) { var mq = matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', later); }
+    // 사이트의 밝게·어둡게 단추(html·body의 class·data-theme 등이 바뀜). style은 보지 않음: 스크롤마다 값을 적는 사이트에서 자주 불리지 않게
+    if ('MutationObserver' in window) { var mo = new MutationObserver(later), opt = { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'data-color-scheme'] }; mo.observe(root, opt); if (doc.body) mo.observe(doc.body, opt); }
+    if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(later);
+  }
   // '지금' 띠(아래에 떠 있음)가 보이는 동안 그 높이만큼 페이지 끝에 자리를 둠(--lp-now-pad, kit.css): 사이트의 마지막 글·맨 끝 표시를 가리지 않게
   function initNowPad() {
     var now = $('.lpk.lpk-now:not(.lpk-now--placed)'); if (!now || !('ResizeObserver' in window)) return;
@@ -1610,9 +1659,10 @@
   function start() {
     // 페이지 안에서만 쓰는 양식은 제출해도 페이지를 다시 불러오지 않게
     doc.addEventListener('submit', function (e) { var f = e.target; if (f && f.matches && f.matches('[data-survey],[data-reflect]')) e.preventDefault(); }, true);
-    $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('실시간 연결이 꺼져 있어 설문을 모을 수 없어요.'); }); });
+    $$('[data-survey]').forEach(function (f) { if (!DATA.live) f.addEventListener('submit', function () { toast('참여 기능이 꺼져 있어 설문을 모을 수 없어요.'); }); });
     // 표시·'지금' 띠 자리는 다른 부품이 실패해도 늘(맨 먼저, 따로)
     try { initNowPad(); initMade(); } catch (e) { }
+    try { initChromeTint(); } catch (e) { }
     drawQRs(); initChrome(); initCal(); initScrollShow(); initPhase(); initPrompts(); initSchedule(); initSessions(); initBody(); initReadiness(); initDeck(); initStations(); initQuiz(); initNotebook(); initPoster(); initLive();
   }
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

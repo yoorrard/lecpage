@@ -66,8 +66,8 @@
 .lp-con-menu small{font-size:var(--fs-xs);line-height:1.45;color:var(--muted-foreground)}
 /* 들어가기 */
 /* 상자는 위에 붙임(가운데 맞춤이면 글꼴이 늦게 와 글 높이가 바뀔 때 상자 전체가 밀림) */
-.lp-con-login{flex:1;display:grid;place-items:start center;padding:clamp(24px,7vh,88px) 16px}
-.lp-con-login-card{display:grid;gap:12px;width:min(460px,100%);padding:clamp(24px,4vw,40px);box-shadow:var(--shadow)}
+.lp-con-login{flex:1;display:grid;grid-template-columns:minmax(0,1fr);place-items:start center;padding:clamp(24px,7vh,88px) 16px} /* 칸 너비를 화면에 묶음: 열쇠 칸(input)의 기본 너비가 320px 화면에서 카드를 밖으로 밀지 않게 */
+.lp-con-login-card{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;width:min(460px,100%);padding:clamp(24px,4vw,40px);box-shadow:var(--shadow)}
 /* 강사용 화면이라는 것과 참가자 길: 열쇠 칸보다 먼저(휴대폰에서도 첫 화면에) */
 .lp-con-for{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin-bottom:6px;padding-bottom:16px;border-bottom:1px solid var(--rule-c);font-size:var(--fs-sm);font-weight:700;line-height:1.5}
 .lp-con-for .lp-btn{flex:none}
@@ -188,7 +188,7 @@ a.lp-con-kpi:hover{background:color-mix(in srgb,var(--foreground) 4%,var(--card)
 .lp-con-quick > summary::-webkit-details-marker{display:none}
 .lp-con-quick > summary .lp-ic{transition:transform var(--dur-2)}
 .lp-con-quick[open] > summary .lp-ic{transform:rotate(45deg)}
-.lp-con-quick form{display:grid;gap:8px;padding-top:4px}
+.lp-con-quick form{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding-top:4px} /* 좁은 화면(360px 아래)에서 입력 칸이 패널 밖으로 나가지 않게 */
 .lp-con-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 /* 투표·퀴즈: 지금 쪽에 묶인 투표, 퀴즈 정답 */
 .lp-con-polls li.is-here{background:color-mix(in srgb,var(--primary) 7%,transparent);margin:0 -8px;padding-inline:8px;border-radius:var(--radius-sm)}

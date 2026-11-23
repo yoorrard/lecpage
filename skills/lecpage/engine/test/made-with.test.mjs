@@ -158,6 +158,37 @@ test('인쇄·동작 줄이기·밝게/어둡게', { skip }, async () => {
   } finally { await ctx.close(); }
 });
 
+test('꽉 찬 바닥글 아래: 키트 묶음(맨 끝 줄·참여 막대 자리)이 바닥글 색으로 이어짐. 틈이 있거나 좁거나 색을 알 수 없으면 그대로', { skip }, async () => {
+  // 사이트 바탕은 밝은 색, 바닥글은 어두운 색(화면 너비를 다 채움)
+  const page = (css, tail) => ({ 'index.html': `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>바닥글 시험</title><style>body{margin:0;background:#fafafa;color:#111}main{padding:16px;min-height:120vh}.ft{background:#123456;color:#fff;padding:32px 16px}.dark .ft{background:#000000}${css}</style></head><body><main><h1>바닥글 시험</h1><div data-lp="qa"></div></main>${tail || '<footer class="ft">바닥글</footer>'}</body></html>` });
+  const cases = {
+    full: ['', '', 'rgb(18, 52, 86)'],
+    wrap: ['', '<div class="wrap"><footer class="ft">바닥글</footer></div>', 'rgb(18, 52, 86)'], // 바탕색 없는 묶음 안의 바닥글
+    gap: ['.ft{margin-bottom:24px}', '', ''], // 바닥글 아래에 사이트 바탕이 보이는 틈
+    narrow: ['.ft{max-width:300px;margin:0 auto}', '', ''], // 화면 너비를 다 채우지 않음
+    grad: ['.ft{background:linear-gradient(#123456,#654321)}', '', ''], // 끝 색을 알 수 없음
+  };
+  for (const [k, [css, tail]] of Object.entries(cases)) writeFiles(path.join(dir, 'ft-' + k), kitBuild({ site: page(css, tail) }).files);
+  for (const [k, [, , want]] of Object.entries(cases)) for (const width of [390, 1280]) {
+    const { ctx, page: pg } = await open(`${base}/ft-${k}/`, { width, height: 800, isMobile: width < 500, hasTouch: width < 500 });
+    try {
+      await pg.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await pg.waitForTimeout(350);
+      const r = await pg.evaluate(() => { const c = document.querySelector('.lpk.lpk-chrome'), f = document.querySelector('.ft'), cr = c.getBoundingClientRect(); return { tint: c.classList.contains('lpk-chrome--tint'), bg: getComputedStyle(c).backgroundColor, gap: Math.round(cr.top - f.getBoundingClientRect().bottom), h: Math.round(cr.height), end: Math.round(document.documentElement.scrollHeight - (cr.bottom + scrollY)) }; });
+      assert.equal(r.tint, !!want, `${k} ${width} ${JSON.stringify(r)}`);
+      if (want) { assert.equal(r.bg, want, `${k} ${width}`); assert.equal(r.gap, 0, '바닥글과 틈 없이 닿음'); assert.ok(r.h > 0 && r.end <= 1, '묶음이 페이지 맨 끝까지 ' + JSON.stringify(r)); }
+      else assert.equal(r.bg, 'rgba(0, 0, 0, 0)', `${k} ${width}`);
+      // 표시 줄은 묶음 안에서 그대로 보이고(휴대폰: 맨 끝 한 줄) 닫을 수 있음
+      if (width === 390) { const m = await rect(pg, '[data-lp-made]'), c = await rect(pg, '.lpk.lpk-chrome'); assert.ok(m.top >= c.top - 29 && m.bottom <= c.bottom, JSON.stringify({ m, c })); }
+      if (k === 'full') {
+        // 사이트가 밝게·어둡게를 바꾸면(html의 class) 바닥글 색을 다시 따라감
+        await pg.evaluate(() => document.documentElement.classList.add('dark')); await pg.waitForTimeout(400);
+        assert.equal(await pg.$eval('.lpk.lpk-chrome', (c) => getComputedStyle(c).backgroundColor), 'rgb(0, 0, 0)');
+      }
+      assert.deepEqual(pg._errs, []);
+    } finally { await ctx.close(); }
+  }
+});
+
 test('참여 기능 서버에 닿지 않으면 안내는 한 곳에만(첫 참여 칸 앞, role=status 하나)', { skip }, async () => {
   const { ctx, page } = await open(base + '/down/');
   try {

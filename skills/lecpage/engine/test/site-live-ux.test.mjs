@@ -86,6 +86,23 @@ test('질문·보드 목록은 알림 영역이 아님: 남의 공감에 목록�
   } finally { await ctx.close(); }
 });
 
+test('보드 글쓰기 양식: 닫거나 올린 뒤 초점이 [글 올리기] 단추로 돌아감(숨겨진 양식에 남지 않음)', { skip }, async () => {
+  const { ctx, p } = await phonePage();
+  try {
+    const act = () => p.evaluate(() => { const a = document.activeElement; return a === document.body ? 'body' : a.hasAttribute('data-board-write') ? 'write' : a.tagName; });
+    await p.focus('[data-board-write]'); await p.keyboard.press('Enter'); await joinIfAsked(p, '초점');
+    await p.waitForSelector('[data-board-form]:not([hidden]) textarea');
+    assert.equal(await act(), 'TEXTAREA', '열면 글 칸으로');
+    await p.focus('[data-board-cancel]'); await p.keyboard.press('Enter');
+    assert.equal(await p.locator('[data-board-form]').isHidden(), true); assert.equal(await act(), 'write', '닫은 뒤');
+    await p.keyboard.press('Enter'); await p.waitForSelector('[data-board-form]:not([hidden]) textarea');
+    await p.fill('[data-board-form] textarea', '초점이 돌아오는지 보는 글'); await p.focus('[data-board-form] button[type=submit]'); await p.keyboard.press('Enter');
+    await p.waitForFunction(() => /초점이 돌아오는지 보는 글/.test(document.querySelector('[data-board-list]').textContent), null, { timeout: 10000 });
+    assert.equal(await p.locator('[data-board-form]').isHidden(), true); assert.equal(await act(), 'write', '올린 뒤');
+    assert.deepEqual(p._errs, []);
+  } finally { await ctx.close(); }
+});
+
 test("'지금' 띠: 긴 공지는 [더 보기]로 펼치고, 끝난 타이머는 '끝났어요' 뒤 사라지며, 연수 중에 더한 자료는 한 번 알림", { skip }, async () => {
   const { ctx, p } = await phonePage();
   try {
