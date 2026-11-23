@@ -71,7 +71,7 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     const gh = st.gh.repos['big-orig']?.files || [];
     ok('github + 150MB original: the original is left out, the site and its page images go up', gh.includes('index.html') && !gh.some((k) => k.startsWith('files/')) && gh.filter((k) => /^material\/p-\d+\./.test(k)).length === 13, gh.filter((k) => !/^assets\//.test(k)).join(' ').slice(0, 200));
     const note = (await p.locator('.success .left-note').innerText().catch(() => '')).replace(/\s+/g, ' ');
-    ok('github + 150MB original: one line on the success card says so (every page is in the deck here)', /^workshop\.pdf\(150MB\)는 커서 사이트에 넣지 않았어요\. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요\.$/.test(note), note.slice(0, 140));
+    ok('github + 150MB original: one line on the success card says so (every page is in the deck here)', /^workshop\.pdf\(150MB\)는 파일이 커서 원본 다운로드에서만 뺐어요\. 교재 슬라이드에는 모든 쪽이 그대로 있어요\.$/.test(note), note.slice(0, 140));
     // 파일 한도가 없는 곳(Netlify): 원본을 그대로 넣음 → 알리는 줄 없음
     await pick(p, 'Netlify');
     await connect(p, 'nfp_FAKE_TOKEN_1234567890');

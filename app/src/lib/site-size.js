@@ -39,14 +39,16 @@ export function fitOriginals(originals, baseBytes = 0, lim = {}) {
 }
 /**
  * 뺀 원본을 알리는 한 줄(배포하기 화면·완료 카드가 같이 씀). left: [{ name, size, full }]
- * '참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요'는 뺀 원본 모두가 그런 교재일 때만 덧붙임(full: slidesCover로 파일마다 확인한 값).
- * 하나라도 아니면(글자만 읽은 교재·쪽 그림을 일부만 그린 교재·교재 슬라이드가 없는 사이트) '넣지 않아요'에서 끝냄
+ * 빠지는 것은 '교재 원본 다운로드'용 파일뿐이라는 것이 읽히게 씀(예전 '커서 사이트에 넣지 않았어요'는 교재 내용이 사이트에서 빠진 것처럼 읽혔음).
+ * '교재 슬라이드에는 모든 쪽이 그대로…'는 뺀 원본 모두가 그런 교재일 때만 덧붙임(full: slidesCover로 파일마다 확인한 값).
+ * 하나라도 아니면(글자만 읽은 교재·쪽 그림을 일부만 그린 교재·교재 슬라이드가 없는 사이트) 첫 문장에서 끝냄
  */
 export function leftLine(left, { after = false } = {}) {
   if (!left?.length) return '';
   const names = left.slice(0, 2).map((o) => `${o.name}(${sizeText(o.size)})`).join(', ') + (left.length > 2 ? ` 외 ${left.length - 2}개` : '');
   // 끝이 '…MB)'·'…KB)'·'… 외 N개'라 조사는 늘 '는'
-  return `${names}는 커서 사이트에 ${after ? '넣지 않았어요' : '넣지 않아요'}.${left.every((o) => o.full === true) ? ' 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요.' : ''}`;
+  const full = left.every((o) => o.full === true);
+  return `${names}는 파일이 커서 원본 다운로드에서${full ? '만' : ''} ${after ? '뺐어요' : '빼요'}.${full ? ` 교재 슬라이드에는 모든 쪽이 그대로 ${after ? '있어요' : '들어가요'}.` : ''}`;
 }
 /**
  * 원본을 사이트에 넣지 않아도 참가자가 그 교재의 모든 쪽을 교재 슬라이드에서 볼 수 있는지(그럴 때만 그렇게 말함).

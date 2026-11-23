@@ -291,7 +291,7 @@ async function seed(p, script) {
     await box.check();
     await p.waitForSelector('.left-note', { timeout: 10000 });
     const pre = (await p.locator('.left-note').first().innerText()).replace(/\s+/g, ' ');
-    L.ok('originals checked + 60MB original → one line next to the checkbox says it will not be put in the site', /workshop\.pdf\(60MB\)는 커서 사이트에 넣지 않아요\./.test(pre) && /교재 슬라이드에서 모든 쪽을 볼 수 있어요/.test(pre) === /data-lp="deck"/.test(ANSWER(false)), pre.slice(0, 120));
+    L.ok('originals checked + 60MB original → one line next to the checkbox says it will not be put in the site', /workshop\.pdf\(60MB\)는 파일이 커서 원본 다운로드에서(만)? 빼요\./.test(pre) && /교재 슬라이드에는 모든 쪽이 그대로 들어가요/.test(pre) === /data-lp="deck"/.test(ANSWER(false)), pre.slice(0, 120));
     await p.click('.publish .btn-primary.btn-lg');
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 120000 });
@@ -299,7 +299,7 @@ async function seed(p, script) {
     const maxFile = Math.max(...Object.values(man).map((f) => f.size));
     L.ok('60MB original is left out of the site (not in the deploy list), deploy succeeds, page images kept', key !== '' && !Object.keys(man).some((k) => k.startsWith('files/')) && maxFile <= REAL_LIMITS.maxFileBytes && Object.keys(man).some((k) => /^material\/p-\d+\./.test(k)), `files: ${Object.keys(man).filter((k) => k.startsWith('files/')).join(',') || '(none)'}, biggest ${Math.round(maxFile / 1024)}KB`);
     const note = (await p.locator('.success .left-note').innerText().catch(() => '')).replace(/\s+/g, ' ');
-    L.ok('after deploy: the line stays on the success card (not a toast)', /workshop\.pdf\(60MB\)는 커서 사이트에 넣지 않았어요\./.test(note), note.slice(0, 120));
+    L.ok('after deploy: the line stays on the success card (not a toast)', /workshop\.pdf\(60MB\)는 파일이 커서 원본 다운로드에서(만)? 뺐어요\./.test(note), note.slice(0, 120));
     await p.waitForTimeout(3500); // 토스트가 사라진 뒤에도 남아 있음
     L.ok('the line is still there after toasts are gone, and survives a reload', await p.locator('.success .left-note').count() === 1 && (await p.reload({ waitUntil: 'load' }), await p.waitForSelector('.success .big-url', { timeout: 30000 }), await p.locator('.success .left-note').count()) === 1);
     await p.locator('.success').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-left-original.png' });
