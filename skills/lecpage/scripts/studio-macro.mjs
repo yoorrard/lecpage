@@ -72,6 +72,9 @@ function hwp5Check(b) {
   const props = Buffer.from(fh).readUInt32LE(36);
   const compressed = !!(props & 1);
   const locked = !!(props & (0x2 | 0x10 | 0x100 | 0x400)); // 암호 · DRM · 공인 인증서 암호화 · 공인 인증서 DRM
+  // 암호(문서 암호·공인 인증서 암호화)를 사람이 넣어야 열리는 파일: 스크립트 스트림이 없어도 한글로 열지 않음.
+  // 창 없이 여는 한글이 암호를 묻는 창에서 멈춰 시간 초과(4분)까지 기다리게 됨. 암호 없이는 어차피 PDF로 바꿀 수 없음
+  if (props & (0x2 | 0x100)) return { ok: false, why: 'unreadable', detail: 'password' };
   for (const [path, e] of cfb.paths) {
     if (e.type !== 2 || !/^scripts\//i.test(path)) continue;
     const name = path.slice(8).toLowerCase();
@@ -125,6 +128,8 @@ function hwpxCheck(b) {
   const zip = new Zip(b);
   const mime = zip.has('mimetype') ? String(zip.text('mimetype') || '').trim() : '';
   if (!/^application\/hwp/i.test(mime) && !zip.has('Contents/content.hpf')) return { ok: false, why: 'unreadable', detail: 'not HWPX' };
+  // 암호를 건 HWPX: 꾸러미 목록(META-INF/manifest.xml)에 암호화 정보(encryption-data)가 적힘 → 한글이 암호를 묻는 창에서 멈추므로 열지 않음
+  if (zip.has('META-INF/manifest.xml') && zip.size('META-INF/manifest.xml') <= SCRIPT_MAX && /<[\w:.-]*encryption-data\b/i.test(zip.text('META-INF/manifest.xml') || '')) return { ok: false, why: 'unreadable', detail: 'password' };
   const scripts = new Set(zip.names().filter((n) => /^scripts\//i.test(n) || /\.js$/i.test(n)));
   // 꾸러미 목록(content.hpf)이 JavaScript로 적은 항목은 이름이 달라도 스크립트로 봄(한컴 OWPML 모델: Scripts/headerScripts.js 등)
   for (const hpf of zip.names().filter((n) => /\.hpf$/i.test(n))) {

@@ -7,7 +7,7 @@
 ## 언제 고르나요
 - 학교·기관이 AWS 계정을 이미 쓰고 있을 때, 서울 리전에 파일을 두고 싶을 때.
 - 고르지 말 것: 개인이 AWS를 처음 만드는 경우(신규 무료 플랜은 6개월 뒤 계정이 닫힘, 카드 필요) → Cloudflare가 더 쉬움.
-- 실시간 서버도 AWS에 두려면 `aws-lightsail-docker.md`(서울).
+- 참여 기능 서버도 AWS에 두려면 `aws-lightsail-docker.md`(서울).
 
 ## 비용 (2026-11 확인. 이번 2026-11-09 재검증에서는 다시 보지 않음 ⚠️)
 | | S3 + CloudFront | Amplify Hosting |

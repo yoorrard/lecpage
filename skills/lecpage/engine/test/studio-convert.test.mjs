@@ -146,6 +146,12 @@ test('한글: 빈 틀이면 한글로, 실제 스크립트 매크로가 있으�
     ['암호 문서(스크립트를 못 읽음)', hwp5({ props: 1 | 2, raw: Buffer.from('암호로 싸인 바이트'.repeat(4)) })], ['스크립트 모양이 깨짐', hwp5({ raw: Buffer.concat([u32(9999), Buffer.from('ab')]) })],
     ['HWPML 같은 모르는 모양', new TextEncoder().encode('<?xml version="1.0"?><HWPML><SCRIPTCODE/></HWPML>')], ['HWP가 아닌 OLE(.doc 등)', writeCfb([['WordDocument', new Uint8Array(64)]])],
   ]) assert.equal(M.hwpCheck(b).why, 'unreadable', what);
+  // 암호 문서에 Scripts 스트림이 없어도 열지 않음(한글이 암호를 묻는 창에서 4분 멈춤). 배포용(4)·DRM 표시만 있는 파일은 지금처럼 봄
+  const noScripts = (props) => writeCfb([['FileHeader', fileHeader(props)], ['DocInfo', new Uint8Array(16)]]);
+  assert.deepEqual(M.hwpCheck(noScripts(1)), { ok: true });
+  assert.deepEqual(M.hwpCheck(noScripts(1 | 2)), { ok: false, why: 'unreadable', detail: 'password' }, '문서 암호');
+  assert.deepEqual(M.hwpCheck(noScripts(1 | 0x100)), { ok: false, why: 'unreadable', detail: 'password' }, '공인 인증서 암호화');
+  assert.deepEqual(M.hwpCheck(noScripts(1 | 4)), { ok: true }, '배포용 문서');
   assert.deepEqual(M.hwpCheck(new TextEncoder().encode('HWP Document File V3.00 \x1a\x01\x02\x03\x04\x05')), { ok: true }, 'HWP 3.0: 스크립트 자리가 없는 형식');
 
   // 실제 흐름: 매크로가 있으면 한글(PowerShell)을 부르지 않고 다음 프로그램, 그래도 못 바꾸면 까닭을 알림
@@ -170,6 +176,10 @@ test('한글: HWPX는 Scripts/ 글과 꾸러미 목록이 JavaScript로 적은 �
   const hpf = new TextDecoder().decode(PLAN_HWPX['Contents/content.hpf']).replace('</opf:manifest>', '<opf:item id="sourcesc" href="Contents/run.txt" media-type="application/x-javascript"/></opf:manifest>');
   assert.equal(M.hwpCheck(hwpx({ 'Contents/content.hpf': new TextEncoder().encode(hpf), 'Contents/run.txt': u16(EVIL) })).why, 'script', '목록이 스크립트라고 적은 다른 이름');
   assert.equal(M.hwpCheck(zipSync({ 'word/document.xml': new Uint8Array(1) })).why, 'unreadable', 'HWPX가 아닌 ZIP');
+  // 암호를 건 HWPX(꾸러미 목록에 암호화 정보): 스크립트가 없어도 열지 않음 · 암호화 정보가 없는 목록은 그대로
+  const manifest = (inner) => new TextEncoder().encode(`<?xml version="1.0" encoding="UTF-8"?><odf:manifest xmlns:odf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><odf:file-entry odf:full-path="Contents/section0.xml" odf:media-type="application/xml">${inner}</odf:file-entry></odf:manifest>`);
+  assert.deepEqual(M.hwpCheck(hwpx({ 'META-INF/manifest.xml': manifest('<odf:encryption-data odf:checksum-type="SHA1"/>') })), { ok: false, why: 'unreadable', detail: 'password' });
+  assert.deepEqual(M.hwpCheck(hwpx({ 'META-INF/manifest.xml': manifest('') })), { ok: true });
 });
 
 test('macOS Office: 매크로 없는 .pptx·.docx 꾸러미만(이름이 아니라 바이트로), 옛 형식은 Office로 열지 않음', async () => {

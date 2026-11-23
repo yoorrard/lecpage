@@ -179,3 +179,31 @@ test('받은 쪽 그림 — 같은 이름의 PDF 짝(이 PC의 프로그램으�
   assert.deepEqual(q.j.given, { owner: 'workshop.pdf', mapped: 13 });
   assert.equal(q.md, null); assert.equal(q.pages.length, 13);
 });
+
+// ── prepare가 직접 그린 쪽 그림(Skill CLI: LibreOffice·pdftoppm이 있는 컴퓨터) ──
+const hasOffice = process.platform !== 'win32' && ['soffice', 'pdftoppm'].every((c) => spawnSync('sh', ['-c', `command -v ${c}`]).status === 0);
+test("그린 쪽 그림 — 워드(문서형): LibreOffice가 그린 실제 쪽 그림을 버리지 않고 씀('부분'과는 차례가 달라 짝은 알리지 않음) · 다른 교재와 함께면 교재마다 이어서 번호", { skip: !hasOffice && 'LibreOffice·pdftoppm이 있는 컴퓨터에서만', timeout: 180000 }, () => {
+  const tools = { PATH: process.env.PATH, HOME: process.env.HOME || T };
+  const img = (work, n) => ['webp', 'png', 'jpg'].some((e) => existsSync(join(work, 'site', 'material', `p-${pad3(n)}.${e}`)));
+  const a = prepare([fx('guide.docx')], { env: tools });
+  assert.equal(a.status, 0, JSON.stringify(a.j)); assert.ok(a.j.images >= 1, '그린 쪽 그림이 site/material에 남음');
+  assert.ok(img(a.work, 1) && !img(a.work, a.j.images + 1));
+  assert.deepEqual(a.j.given, { owner: 'guide.docx', mapped: 0 });
+  assert.deepEqual(a.j.files, [{ name: 'guide.docx', type: 'docx', unit: 'section', pages: 5, images: a.j.images }]);
+  assert.deepEqual(a.pages, [], '부분에는 쪽 번호를 붙이지 않음(그림 번호와 다름)');
+  assert.match(a.md, /쪽 그림은 guide\.docx를 쪽마다 그린 것이라 아래 번호와는 차례가 달라요/);
+  assert.ok(heads(a.md).length === 5 && heads(a.md).every((h) => !/p-\d{3}/.test(h) && !/쪽 그림 없음/.test(h)), heads(a.md).join('|'));
+  assert.match(a.readme, new RegExp(`p-001 ~ p-${pad3(a.j.images)}`));
+  assert.ok(!existsSync(join(a.work, '.lecpage', 'slides')), '임시 그림 폴더는 지움');
+  if (noPdf) return;
+  // PDF(쪽마다 그림) + 워드: PDF 쪽은 번호를 맞추고, 워드의 쪽 그림은 그 뒤에 이어서
+  const b = prepare([fx('guide.docx'), fx('scan.pdf')], { env: tools });
+  assert.equal(b.status, 0, JSON.stringify(b.j));
+  const sets = b.j.given.sets; assert.equal(sets.length, 2, JSON.stringify(b.j.given));
+  const pdf = sets.find((x) => x.owner === 'scan.pdf'); const doc = sets.find((x) => x.owner === 'guide.docx');
+  assert.deepEqual([pdf.count, pdf.mapped], [2, 2]); assert.equal(doc.mapped, 0); assert.ok(doc.count >= 1);
+  assert.equal(new Set([...Array(pdf.count).keys()].map((i) => pdf.first + i).concat([...Array(doc.count).keys()].map((i) => doc.first + i))).size, pdf.count + doc.count, '번호가 겹치지 않음');
+  assert.equal(b.j.images, pdf.count + doc.count); for (let n = 1; n <= b.j.images; n++) assert.ok(img(b.work, n), `p-${pad3(n)}`);
+  assert.deepEqual(b.pages.map((p) => p.page), [pdf.first, pdf.first + 1], 'PDF 쪽만 그림 번호와 맞춤');
+  assert.match(b.md, /쪽 그림은 교재마다 이어서 번호를 매겼어요/);
+});

@@ -28,7 +28,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
   L.ok('demo: no preview while making', await p.locator('.preview, .pv-device').count() === 0);
   await p.screenshot({ path: L.OUT + `${tag}-demo-02-making.png`, fullPage: true });
   await L.waitStudio(p, 90000);
-  const fr = p.frameLocator('.pv-device iframe');
+  const fr = p.frameLocator('.pv-device iframe').frameLocator('iframe'); // 격리 틀(바깥) 안쪽 srcdoc 틀에 사이트가 있음
   L.ok('demo: reference site shown', /기록은 쌓였는데|생성형 AI로|질문이 먼저/.test(await fr.locator('h1').first().innerText()));
   L.ok('demo: page image used', await fr.locator('img[src^="data:image"]').count() >= 1);
   await p.screenshot({ path: L.OUT + `${tag}-demo-03-studio.png` });
@@ -270,7 +270,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     // ChatGPT로 만들기: 모델 목록을 받지 못한 까닭마다 맞는 안내('연결이 풀렸어요'는 진짜로 풀렸을 때만)
     const cases = [
       [null, /lecpage 커넥트가 꺼져 있어요/, 'off'],
-      [{ status: 503, body: { ok: false, error: 'updating', message_ko: 'lecpage 커넥트를 새 판으로 바꾸는 중이에요.' } }, /새 버전으로 바꾸는 중이에요/, 'updating'],
+      [{ status: 503, body: { ok: false, error: 'updating', message_ko: 'lecpage 커넥트를 새 버전으로 바꾸는 중이에요.' } }, /새 버전으로 바꾸는 중이에요/, 'updating'],
       [{ status: 401, body: { ok: false, error: 'token', message_ko: 'lecpage 커넥트와 짝이 맞지 않아요.' } }, /짝이 맞지 않아요/, 'token'],
       [{ status: 503, body: { ok: false, error: 'models-unavailable', message_ko: 'ChatGPT 모델 목록을 받지 못했어요.' } }, /^(?![\s\S]*연결이 풀렸어요)/, '5xx'],
       [{ status: 401, body: { ok: false, error: 'not-connected', message_ko: 'ChatGPT 계정 연결이 풀렸어요.' } }, /ChatGPT 계정 연결이 풀렸어요/, 'not-connected'],
@@ -363,11 +363,17 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     // 이미 '로컬 네트워크 접근'을 허락한 브라우저처럼(묻는 중에는 다른 포트를 살피지 않음)
     await c.addInitScript(() => { const q = navigator.permissions.query.bind(navigator.permissions); navigator.permissions.query = (d) => (/network/.test(d?.name || '') ? Promise.resolve({ state: 'granted' }) : q(d)); });
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+    const leaked8 = [];
     await c.route(/^http:\/\/127\.0\.0\.1:66\d\d\//, (r) => {
       const u = new URL(r.request().url());
       if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
       if (+u.port === 6605) return r.fulfill({ status: 200, contentType: 'text/html', headers: cors, body: '<!doctype html><title>다른 프로그램</title>' });
-      if (+u.port !== 6603 || r.request().headers()['x-lecpage-bridge'] !== TOKEN) return r.abort();
+      // 가까운 포트의 또 다른 프로그램(무엇이든 200으로 답함): 커넥트처럼 답하지 않으므로 짝 맞춤 토큰이 가면 안 됨
+      const tk8 = r.request().headers()['x-lecpage-bridge'] || '';
+      if (+u.port === 6607) { if (tk8) leaked8.push(6607); return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{}' }); }
+      if (+u.port !== 6603) return r.abort();
+      // 진짜 커넥트처럼: 토큰 없는 물음에는 401 token(허용한 출처에는 CORS) → 앱이 이 포트에만 토큰을 보냄
+      if (tk8 !== TOKEN) return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}' });
       return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: false }, agents: [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) });
     });
     const pg = await c.newPage(); const e9 = L.watch(pg);
@@ -375,6 +381,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     await pg.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
     await pg.waitForSelector('.ai-sub button:has-text("ChatGPT 계정으로 로그인")', { timeout: 30000 }).catch(() => {});
     L.ok('foreign server on remembered port: moved to the 커넥트 port', await pg.locator('.ai-sub button:has-text("ChatGPT 계정으로 로그인")').count() === 1 && await pg.evaluate(() => JSON.parse(localStorage.getItem('lecpage:pc') || '{}').port) === 6603);
+    L.ok('foreign server nearby: the pairing token goes only to ports that answer like 커넥트', leaked8.length === 0, JSON.stringify(leaked8));
     L.ok('foreign server: no page errors', e9.length === 0, JSON.stringify(e9));
     await c.close();
   }
@@ -388,7 +395,7 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     await r.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
     await r.click('.ai-sub button:has-text("ChatGPT·Claude 계정으로 연결")');
     const way = r.locator('.ai-sub .connect-way').first();
-    if (os === 'win') L.ok('connect win: one download button', await way.locator('a:has-text("lecpage 커넥트 받기 (Windows)")').count() === 1 && /lecpage-connect\.cmd$/.test(await way.locator('a').getAttribute('href')));
+    if (os === 'win') L.ok('connect win: one download button', await way.locator('a:has-text("lecpage 커넥트 다운로드 (Windows)")').count() === 1 && /lecpage-connect\.cmd$/.test(await way.locator('a').getAttribute('href')));
     else L.ok('connect mac: one terminal line + 3 steps', /lecpage-connect\.sh \| bash/.test(await way.locator('code').innerText()) && await way.locator('li').count() === 3 && /터미널/.test(await way.innerText()));
     L.ok(`connect ${os}: other OS folded`, await r.locator('.ai-sub details.connect-os:not([open])').count() === 1);
     await r.screenshot({ path: L.OUT + `${tag}-connect-${os}.png` });

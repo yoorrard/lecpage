@@ -4,6 +4,8 @@
 // 목표는 사이트가 하는 일(참가자가 강의 중·뒤에 실제로 하는 일)을 먼저: 교재 내용은 교재 넘기기와 강사가 전함.
 // 내 PC의 Claude Code·Codex(skills/lecpage/scripts/studio.mjs taskText)도 같은 뜻의 지시를 씀.
 
+import { imageLines } from './slide-sets.js';
+
 const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const j = (v) => JSON.stringify(v, null, 1);
 
@@ -86,12 +88,16 @@ function askOf({ request, reference, info } = {}) {
  */
 export function buildMaterialPrompt(pack) {
   const files = pack.files.map((f) => `- ${f.name}${f.pages ? ` (${f.pages}쪽)` : ''}: ${f.sent === 'original' ? (f.ext === 'pdf' || !f.via ? '원본 그대로 첨부' : `${f.via}로 만든 PDF로 첨부`) : f.sent === 'twin' ? '같은 이름의 PDF로 함께 첨부' : f.sent === 'images' ? '쪽 그림으로 첨부' : f.sent === 'text' ? '글자만(원본을 보낼 수 없는 형식)' : '보내지 못함'}`).join('\n');
-  const imgs = pack.siteImages.length ? `사이트에 쓸 수 있는 교재 쪽 그림: material/p-001.webp ~ material/p-${String(pack.siteImages.length).padStart(3, '0')}.webp (번호 = 교재 쪽 번호${pack.siteImagesFrom ? `, ${pack.siteImagesFrom}` : ''})` : '교재 쪽 그림은 없어요.';
-  const shots = pack.sentPages.length ? `\n쪽 그림으로 함께 보낸 쪽: ${pack.sentPages.join(', ')}` : '';
+  // 쪽 그림 줄은 있는 그대로: 교재 하나면 예전과 같은 한 줄, 교재마다 그렸으면 어느 번호가 어느 교재의 몇 쪽인지(slide-sets.js imageLines)
+  const multi = (pack.siteSets || []).length > 1;
+  const imgs = imageLines(pack.siteImages, pack.siteSets, pack.siteImagesFrom);
+  const shots = pack.sentPages.length ? `\n쪽 그림으로 함께 보낸 ${multi ? '그림(material/p- 번호)' : '쪽'}: ${pack.sentPages.join(', ')}` : '';
+  // 원본(PDF)으로 보낸 교재에 걸린 링크 주소(자료): PDF에서는 주소가 보이지 않음
+  const links = pack.links ? `\n\n[교재의 글자·단추·그림에 걸린 링크 주소 — PDF에서는 주소가 보이지 않아요. 교재 파일에 적힌 그대로예요]\n${pack.links}` : '';
   // 코드가 뽑은 글자는 원본을 보내지 못한 교재의 쪽만(material.js packMaterial). 원본으로 보낸 교재의 글은 넣지 않음
   const text = pack.text ? `\n\n[원본을 보내지 못한 교재에서 코드가 뽑은 글자 — 틀릴 수 있어요. 쪽 그림과 다르면 쪽 그림이 맞아요]\n${pack.text}` : '';
   const note = pack.notes.length ? `\n참고: ${pack.notes.join(' ')}` : '';
-  return `[교재]\n${files}${shots}\n${imgs}${note}${text}`;
+  return `[교재]\n${files}${shots}\n${imgs}${note}${links}${text}`;
 }
 
 /** 새로 만들기(한 번에): 목표 · 강사 요청 · 강의 기능 · 배포 조건 · 답하는 꼴 */

@@ -4,7 +4,7 @@
 // 다시 켜기: 처음 바꿀 때 이 프로세스가 작은 감독이 되어 새 판을 자식으로 띄우고(같은 창·같은 출력), 자식이 다시 바꾸면 종료 코드 75로
 // 알려 감독이 새로 띄움(프로세스는 늘 둘까지). 새 판이 켜지자마자 실패하면 예전 판으로 되돌려 한 번 더 띄움.
 // 안전: 받는 곳은 고정 주소(https)뿐 · 확인(SHA-256, 공개 키를 정했으면 ed25519 서명까지) 전에는 아무것도 바꾸지 않음 · 묶음 밖 경로·링크는 풀지 않음 ·
-// 작업 중에는 바꾸지 않음(studio.mjs가 확인)
+// 있던 것보다 예전에 묶은 묶음(BUILT)으로는 바꾸지 않음 · 작업 중에는 바꾸지 않음(studio.mjs가 확인)
 import { spawn } from 'node:child_process';
 import { createHash, createPublicKey, verify as edVerify } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
@@ -33,6 +33,15 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 export function readBuild(root) {
   try { const v = readFileSync(join(root, 'VERSION'), 'utf8').trim(); return VER_RE.test(v) ? v : ''; } catch { return ''; }
 }
+/** 묶음을 묶은 때(BUILT: 1970년부터 센 초, scripts/studio-launcher/package.sh가 넣음). 없거나(이 확인을 넣기 전 판) 꼴이 다르면 0 */
+export function readBuilt(root) {
+  try { const v = readFileSync(join(root, 'BUILT'), 'utf8').trim(); return /^\d{9,12}$/.test(v) ? +v : 0; } catch { return 0; }
+}
+/**
+ * 받은 묶음(next)이 있던 묶음(cur)보다 예전 것인지: 있던 것에 BUILT가 있는데 받은 것에 없거나 더 앞섬.
+ * 서명한 예전 묶음을 다시 내놓아 예전 판으로 내리는 것을 막음(BUILT는 묶음 안에 있어 서명에 함께 들어감). 실행 파일(lecpage-connect.cmd·.sh)도 같은 규칙
+ */
+export function olderBundle(next, cur) { const have = readBuilt(cur); return !!have && readBuilt(next) < have; }
 /** 받은 실행 파일이 풀어 둔 묶음에서 도는지(그때만 스스로 바꿈. 저장소·Skill에서 직접 켠 것은 바꾸지 않음) */
 export function installedPackage(root) { return !!readBuild(root) && isDir(join(root, 'skills')) && !existsSync(join(root, '.git')); }
 
@@ -50,7 +59,7 @@ async function get(url, fetchImpl, { text = false, limit = 100 * MB, ms = 120000
 /** 릴리스의 지금 판 이름 */
 export async function latestBuild({ base = RELEASE, fetchImpl = globalThis.fetch } = {}) {
   const v = (await get(`${base}/VERSION`, fetchImpl, { text: true, limit: 1024, ms: 15000 })).trim();
-  if (!VER_RE.test(v)) throw Object.assign(new Error('판 이름을 읽지 못했어요'), { code: 'version' });
+  if (!VER_RE.test(v)) throw Object.assign(new Error('버전 이름을 읽지 못했어요'), { code: 'version' });
   return v;
 }
 /**
@@ -150,6 +159,7 @@ export async function applyUpdate({ root, base = RELEASE, fetchImpl = globalThis
     untarGz(buf, tmp);
     const to = readBuild(tmp);
     if (!to || !existsSync(join(tmp, 'skills', 'lecpage', 'scripts', 'lecpage.mjs'))) throw Object.assign(new Error('받은 묶음에 lecpage 커넥트가 없어요'), { code: 'package' });
+    if (olderBundle(tmp, root)) throw Object.assign(new Error(`받은 묶음(${to})이 지금 버전보다 예전 것이에요`), { code: 'older', to });
     rmSync(old, { recursive: true, force: true });
     await renameRetry(root, old);
     try { await renameRetry(tmp, root); } catch (e) { await renameRetry(old, root).catch(() => {}); throw e; }
@@ -230,7 +240,7 @@ export function supervise({ cli, argv, root, env = process.env, log = () => {}, 
       if (code === RESTART_CODE) { rolled = false; return run(); }
       if (code && !signal && code !== 130 && !rolled && Date.now() - startedAt < 20000) {
         const bad = readBuild(root);
-        if (restoreBackup(root)) { rolled = true; skip = bad; log(`새 판(${bad})이 켜지지 않아 예전 판으로 다시 켜요`); return run(); }
+        if (restoreBackup(root)) { rolled = true; skip = bad; log(`새 버전(${bad})이 켜지지 않아 예전 버전으로 다시 켜요`); return run(); }
       }
       exit(code ?? (signal ? 1 : 0));
     });

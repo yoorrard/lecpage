@@ -6,7 +6,7 @@
 #   lecpage-connect.zip / .tar.gz(+ .sha256: 실행 파일이 받아 확인 후 씀) · lecpage-connect-mac.zip(+ .sha256, 선택: lecpage Connect.app) · VERSION
 #   서명(.sig)은 여기서 만들지 않음: 워크플로의 서명 단계만 비밀 키를 받음(scripts/studio-launcher/signing-key.mjs sign)
 #   예전 이름 lecpage-studio.{cmd,sh,command,zip,tar.gz}(+ .sha256)도 같은 내용으로(예전 링크·이미 깔린 실행 파일이 받는 이름)
-# 묶음에는 skills/(시험·평가 제외)와 알림 파일, 실행 파일(lecpage-connect.sh·lecpage-connect.cmd: 자동 시작이 부르는 복사본의 원본, 확인을 마친 묶음에서 복사)을 넣음.
+# 묶음에는 skills/(시험·평가 제외)와 알림 파일, VERSION·BUILT(판 이름·묶은 때), 실행 파일(lecpage-connect.sh·lecpage-connect.cmd: 자동 시작이 부르는 복사본의 원본, 확인을 마친 묶음에서 복사)을 넣음.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
@@ -49,6 +49,9 @@ cp "$OUT/lecpage-connect.cmd" "$OUT/pkg/lecpage-connect.cmd"
 cp scripts/studio-launcher/lecpage-connect.sh "$OUT/pkg/lecpage-connect.sh"
 chmod 755 "$OUT/pkg/lecpage-connect.sh"
 printf '%s\n' "$V" > "$OUT/pkg/VERSION"
+# 묶은 때(1970년부터 센 초): 받은 묶음이 있던 것보다 예전 것(서명한 예전 묶음을 다시 내놓음)이면 실행 파일·커넥트가 바꾸지 않음.
+# 묶음 안에 있어 SHA-256·서명에 함께 들어감. 판 이름(VERSION)은 같은 semver에 커밋 줄임말만 달라 앞뒤를 가릴 수 없어서 따로 둠
+date -u +%s > "$OUT/pkg/BUILT"
 printf '%s\n' "$V" > "$OUT/VERSION"
 (cd "$OUT/pkg" && zip -qr ../lecpage-connect.zip . && tar -czf ../lecpage-connect.tar.gz .)
 

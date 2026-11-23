@@ -49,6 +49,9 @@ test('짝 맞춤 토큰(이 PC 사용자 폴더에 한 번) · 허용 출처·�
   const o = St.allowedOrigins('http://127.0.0.1:6600', { LECPAGE_STUDIO_ORIGINS: 'http://127.0.0.1:8010, javascript:alert(1)' });
   assert.ok(o.has('https://lecpage.com') && o.has('http://127.0.0.1:6600') && o.has('http://127.0.0.1:8010'));
   assert.ok(!o.has('javascript:alert(1)') && !o.has('http://lecpage.com'));
+  // 개발 주소(Vite 5173·4173)는 받은 묶음(배포판)에서는 믿지 않음: 저장소에서 켰거나(dev) LECPAGE_STUDIO_DEV=1일 때만
+  assert.ok(!o.has('http://localhost:5173') && !o.has('http://localhost:4173') && !St.APP_ORIGINS.some((x) => /localhost/.test(x)));
+  assert.ok(St.allowedOrigins('http://127.0.0.1:6600', {}, { dev: true }).has('http://localhost:5173') && St.allowedOrigins('http://127.0.0.1:6600', { LECPAGE_STUDIO_DEV: '1' }).has('http://localhost:4173'));
   const ok = { host: '127.0.0.1:6600', 'x-lecpage-bridge': 'a'.repeat(64) };
   const S = { hostPort: '127.0.0.1:6600', origin: 'http://127.0.0.1:6600', token: 'a'.repeat(64), origins: o };
   const R = (method, headers) => ({ method, headers });
@@ -386,7 +389,7 @@ test('두 번 켤 때: 같은 토큰으로 켜진 커넥트를 찾아 그것으�
     const newer = mkdtempSync(join(T, 'root-')); writeFileSync(join(newer, 'VERSION'), 'zz-new\n');
     const logs = [];
     assert.equal(await St.studioAgain({ home, root: newer, log: (m) => logs.push(m), open: async () => true }), false);
-    assert.match(logs.join(), /예전 판/);
+    assert.match(logs.join(), /예전 버전 lecpage 커넥트가 켜져 있어요/);
   } finally { await st.close(); other.close(); }
   // 켜진 것이 예전 판이고 스스로 바꿀 수 있으면: 새 판으로 바꾸게 하고(같은 토큰으로 다시 켜짐) 다시 켜진 것을 씀
   const h2 = mkdtempSync(join(T, 'again2-')); const tk = St.pairToken(h2);
@@ -403,6 +406,22 @@ test('두 번 켤 때: 같은 토큰으로 켜진 커넥트를 찾아 그것으�
   // 만드는 중이라 못 바꿈(409 busy): 켜진 판 그대로 씀
   n = 0; const busy = await St.studioAgain({ home: h2, root, find: async () => ({ port: 6611, status: statusOf('b1', 'idle') }), ask: async () => ({ status: 409, json: { error: 'busy' } }), open: async () => true, log: () => {} });
   assert.equal(busy, true);
+  // 실행 파일이 새 판(latest)을 보고도 묶음을 갈아 끼우지 않고 넘김(켜진 커넥트 밑의 파일을 바꾸지 않음): 켜진 것이 이 묶음과 같은 판이어도
+  // 그 판이 아니면 스스로 바꾸게 부탁함(받아 가지 않은 결과가 있으면 바꾸지 않게 keep). 이미 그 판이면 부탁하지 않음
+  const same = mkdtempSync(join(T, 'root3-')); writeFileSync(join(same, 'VERSION'), 'b1\n');
+  const asked = []; n = 0;
+  const find2 = async () => { n++; return n === 1 ? { port: 6612, status: statusOf('b1', 'idle') } : { port: 6612, status: statusOf('b3', 'idle') }; };
+  const ask2 = async (port, o) => { asked.push([o.method, o.path, o.body]); return { status: 202, json: { ok: true } }; };
+  assert.equal(await St.studioAgain({ home: h2, root: same, latest: 'b3', find: find2, ask: ask2, wait: async () => {}, open: async () => true, log: () => {} }), true);
+  assert.deepEqual(asked, [['POST', '/bridge/update', { keep: true }]]);
+  asked.length = 0;
+  assert.equal(await St.studioAgain({ home: h2, root: same, latest: 'b1', find: async () => ({ port: 6612, status: statusOf('b1', 'idle') }), ask: ask2, open: async () => true, log: () => {} }), true);
+  assert.equal(await St.studioAgain({ home: h2, root: same, latest: 'not a version!', find: async () => ({ port: 6612, status: statusOf('b1', 'idle') }), ask: ask2, open: async () => true, log: () => {} }), true);
+  assert.deepEqual(asked, [], '같은 판이거나 판 이름 꼴이 아니면 부탁하지 않음');
+  // 스스로 바꿀 수 없는 커넥트(저장소에서 켬)가 이 묶음과 같은 판이면: 둘째를 띄우지 않고 그대로 씀
+  const cant = { ok: true, build: 'b1', caps: ['status-caps'], update: { can: false }, agents: [] };
+  assert.equal(await St.studioAgain({ home: h2, root: same, latest: 'b3', find: async () => ({ port: 6612, status: cant }), ask: ask2, open: async () => true, log: () => {} }), true);
+  assert.deepEqual(asked, []);
 });
 
 test('보안 머리글: 이 주소의 화면·글은 Cross-Origin-Resource-Policy: same-origin(토큰이 든 첫 화면 포함) · /bridge/*·앱 부품·참고 디자인은 그대로(CORS·미리보기 틀)', async () => {

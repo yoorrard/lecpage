@@ -1,6 +1,6 @@
 # Synology NAS에 올리기 (Container Manager)
 
-> 집·학교의 Synology NAS에서 사이트와 실시간 서버를 Docker로 함께 띄웁니다. 기록이 NAS 안에만 남습니다.
+> 집·학교의 Synology NAS에서 사이트와 참여 기능 서버를 Docker로 함께 띄웁니다. 기록이 NAS 안에만 남습니다.
 
 ## 언제 고르나요
 - Container Manager를 지원하는 Synology NAS(대부분 x86/일부 ARM64 모델, DSM 7.2 이상)가 있을 때 ⚠️ 모델 지원 목록 확인.

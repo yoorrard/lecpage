@@ -16,14 +16,14 @@ import { markBusy } from './busy.js';
 import { adapter } from './providers/index.js';
 import { AiError, BASES, baseFor } from './providers/common.js';
 import * as oa from './oa-trash.js';
-import { preparePageImages, packMaterial, sourceFiles } from './material.js';
+import { preparePageImages, packMaterial, sourceFiles, notesText } from './material.js';
 import * as P from './prompts.js';
 import { extractSections, replaceSections, stitch, balance, trimCss, cssCut, parseSiteAnswer } from './parse.js';
 import { inspect, readMeta, themeFromCss, issuesForAi, siteFileOk } from './kit.js';
 import { extraIssues } from './checks.js';
 import { assembleSite } from './preview.js';
 import { renderIssues } from './render-check.js';
-import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, decodeBinary, chatgptModels, bridgeStatus } from './local.js';
+import { runBridgeJob, cancelBridgeJob, bridgeFiles, bridgeSite, fitSiteImages, PAGE_SETS_CAP, decodeBinary, chatgptModels, bridgeStatus } from './local.js';
 import { carryLegacy, recordVersion, aiVersionLabel, addChat, aiReply } from '../site-meta.js';
 import { ensureIds } from '../site-doc.js';
 
@@ -290,7 +290,7 @@ async function nextModel(ctx) {
   return (list.find((m) => !m.locked && !tried.has(m.id)) || {}).id || null;
 }
 async function repack(ctx) {
-  ctx.pack = await packMaterial(ctx.rec.pid, ctx.project, { provider: ctx.rec.provider, model: ctx.rec.model, level: ctx.level, siteImages: ctx.images.list, siteImagesFrom: ctx.images.from, intro: P.buildMaterialPrompt });
+  ctx.pack = await packMaterial(ctx.rec.pid, ctx.project, { provider: ctx.rec.provider, model: ctx.rec.model, level: ctx.level, siteImages: ctx.images.list, siteImagesFrom: ctx.images.from, siteSets: ctx.images.sets, intro: P.buildMaterialPrompt });
   if (ctx.pack.notes.length) rec2notes(ctx.rec, ctx.pack.notes);
 }
 function rec2notes(rec, notes) { rec.notes = [...new Set([...(rec.notes || []), ...notes])].slice(-12); }
@@ -418,10 +418,27 @@ async function runAgent(ctx, step) {
   const { rec, project } = ctx;
   const request = rec.kind === 'fix' ? `lecpage 검수에서 나온 문제를 고쳐 주세요.\n${issuesForAi(step.issues || [])}` : rec.opts.request;
   // 교재 원본은 files로, 사이트 폴더(새로 만들 때는 교재 쪽 그림, 고칠 때는 지금 사이트 전체)는 site로(연결 프로그램이 work/site/에 그대로 둠)
-  const pack = async () => ({
-    files: await bridgeFiles(blobs, rec.pid, project, (await bridgeStatus().catch(() => null))?.limits || null), // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림)
-    site: { ...(await bridgeSite(blobs, rec.pid, rec.kind === 'make' ? (ctx.images?.list || []) : null)), ...(rec.kind !== 'make' ? rec.site || project.site || {} : {}) },
-  });
+  const pack = async () => {
+    const st = await bridgeStatus().catch(() => null);
+    // 교재마다 그린 쪽 그림(이어 매긴 번호): 그 형식을 모르는 예전 커넥트에는 예전처럼 첫 교재의 쪽 그림만 보냄
+    const all = ctx.images?.sets || [];
+    const sets = all.length > 1 && !(st?.caps || []).includes(PAGE_SETS_CAP) ? all.slice(0, 1) : all;
+    let only = null;
+    if (rec.kind === 'make') {
+      const fit = await fitSiteImages(blobs, rec.pid, ctx.images?.list || [], sets, sets.length < all.length ? sets : null, st?.limits || null);
+      only = fit.list;
+      if (sets.length < all.length) rec2notes(rec, [`lecpage 커넥트가 예전 버전이라 ${sets[0].name}의 쪽 그림만 보냈어요. 커넥트를 새 버전으로 바꾸면 교재마다 보내요.`]);
+      if (fit.cut) rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.list.length}장을 골라 lecpage 커넥트로 보냈어요.`]);
+    }
+    // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림). 한도 때문에 원본 대신 같은 이름의 PDF만 간 교재는 말없이 빼지 않고 강사에게 알리고,
+    // PDF에 없는 발표자 노트는 글 파일로 함께 보냄(local.js bridgeFiles)
+    const files = await bridgeFiles(blobs, rec.pid, project, st?.limits || null, rec.kind === 'make' ? sets : null, (name) => notesText(project.material, [name], 60000));
+    if (files.dropped?.length) rec2notes(rec, files.dropped.map((n) => `${n}: 파일이 커서 같은 내용의 PDF로 보냈어요${files.notesSent?.includes(n) ? '(발표자 노트는 글로 함께 보냈어요)' : ''}.`));
+    return {
+      files,
+      site: { ...(await bridgeSite(blobs, rec.pid, only)), ...(rec.kind !== 'make' ? rec.site || project.site || {} : {}) },
+    };
+  };
   const payload = {
     agent: rec.agent || 'claude', kind: rec.kind === 'make' ? 'make' : 'edit', request, meta: project.meta || {}, reference: rec.opts.reference || null,
     ...(rec.kind === 'edit' && rec.opts.target && rec.opts.target !== 'all' ? { target: rec.opts.target } : {}),

@@ -1,6 +1,6 @@
-# 클라우드에 실시간 서버(node-server) 올리기 — Fly.io · Railway · Render
+# 클라우드에 참여 기능 서버(node-server) 올리기 — Fly.io · Railway · Render
 
-> 내 서버가 없는 개발자가 `node-server`(Docker)를 클라우드에 띄우는 방법입니다. 세 곳 모두 **실시간 서버는 유료**(월 $2~7)이고, 순서는 거의 같습니다. 아래는 Fly.io로 따라 하고, Railway·Render는 다른 점만 적습니다.
+> 내 서버가 없는 개발자가 `node-server`(Docker)를 클라우드에 띄우는 방법입니다. 세 곳 모두 **참여 기능 서버는 유료**(월 $2~7)이고, 순서는 거의 같습니다. 아래는 Fly.io로 따라 하고, Railway·Render는 다른 점만 적습니다.
 > 정적 사이트는 Cloudflare·GitHub Pages에 두고 실시간만 여기에 둡니다(Render는 정적 사이트도 같이 둘 수 있음).
 
 ## 언제 고르나요
@@ -11,7 +11,7 @@
 | | Fly.io | Railway | Render |
 |---|---|---|---|
 | 무료로 해 보기 | 체험 $1(7일, 카드 없이) | 체험 $5(1회), 이후 Free 월 $1 | 정적 사이트 무료. 무료 웹 서비스는 실시간에 못 씀(아래) |
-| 실시간 서버 비용 | 256MB 상시 약 $2.19/30일, 512MB 약 $3.69 + 볼륨 | Hobby 월 $5(사용료 포함) | Starter 월 $7부터 + 디스크 |
+| 참여 기능 서버 비용 | 256MB 상시 약 $2.19/30일, 512MB 약 $3.69 + 볼륨 | Hobby 월 $5(사용료 포함) | Starter 월 $7부터 + 디스크 |
 | 한국에서 가까운 곳 | `nrt`(도쿄). 서울 리전 미확인 ⚠️ | 싱가포르 ⚠️ | 싱가포르 ⚠️ |
 | 데이터 보관 | 볼륨(기계 1대에 붙음) | 볼륨 | 유료 디스크 |
 | 설정 파일 | `templates/deploy/fly/fly.toml` | 대시보드 또는 CLI | `templates/deploy/render/render.yaml` |

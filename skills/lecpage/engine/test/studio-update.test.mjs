@@ -350,3 +350,64 @@ test('윈도우 자동 시작 복사본: 확인을 마친 묶음의 실행 파�
   assert.deepEqual(U.refreshLauncher({ root, env, platform: 'win32' }), [], '저장소에서 켠 것은 건드리지 않음');
   assert.equal(U.batchHead(Buffer.from('no marker')), null);
 });
+
+test('예전에 묶은 묶음으로는 내리지 않음(BUILT): 서명이 맞아도 있던 것보다 앞서거나 BUILT가 없으면 바꾸지 않음 · 같거나 뒤면 바꿈 · 있던 것에 BUILT가 없으면(예전 판) 견주지 않음', async () => {
+  const built = (ver, at) => tarGz([['./', null], ['./VERSION', `${ver}\n`], ...(at ? [['./BUILT', `${at}\n`]] : []), ['./skills/', null], ['./skills/lecpage/scripts/lecpage.mjs', `// ${ver}\n`], ['./lecpage-connect.sh', '#!/bin/sh\n']]);
+  const a = keyPair();
+  const files = {};
+  const put = (gz, ver) => Object.assign(files, { VERSION: `${ver}\n`, 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n`, 'lecpage-connect.tar.gz.sig': sigOf(gz, a.privateKey) });
+  const rel = await release(files, false);
+  const root = fakeRoot('1.1.0-bbb'); writeFileSync(join(root, 'BUILT'), '1763900000\n');
+  const ver = () => readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  try {
+    assert.equal(U.readBuilt(root), 1763900000); assert.equal(U.readBuilt(join(root, 'none')), 0);
+    writeFileSync(join(T, 'BUILT'), 'soon\n'); assert.equal(U.readBuilt(T), 0, '꼴이 다르면 없는 것으로');
+    // 서명한 예전 묶음(더 앞선 BUILT)을 다시 내놓음
+    put(built('1.1.0-aaa', 1763800000), '1.1.0-aaa');
+    await assert.rejects(U.applyUpdate({ root, base: rel.base, keys: [a.x] }), (e) => e.code === 'older');
+    assert.equal(ver(), '1.1.0-bbb'); assert.ok(!existsSync(`${root}.new`) && !existsSync(`${root}.old`), '아무것도 바꾸지 않음');
+    // BUILT를 넣기 전의 묶음(BUILT 없음)도 예전 것
+    put(built('1.0.9-zzz', 0), '1.0.9-zzz');
+    await assert.rejects(U.applyUpdate({ root, base: rel.base, keys: [a.x] }), (e) => e.code === 'older');
+    assert.equal(ver(), '1.1.0-bbb');
+    assert.equal(St.updateErrorCode(Object.assign(new Error('x'), { code: 'older' })), 'older');
+    // 커넥트: 까닭을 알리고, 그 판은 새 판으로 치지 않으며 다시 받지 않음
+    await studio({ root, release: { base: rel.base, keys: [a.x] }, onRestart: () => {} }, async (st, H) => {
+      assert.equal((await req(st.port, 'POST', '/bridge/update', { headers: H, body: {} })).status, 202);
+      const s = await until(st.port, H, (x) => x.update.state === 'error');
+      assert.equal(s.update.error, 'older'); assert.match(s.update.error_ko, /예전 것/); assert.equal(s.update.available, false);
+      const n = rel.hits.filter((x) => x === '/lecpage-connect.tar.gz').length;
+      const again = await req(st.port, 'POST', '/bridge/update', { headers: H, body: {} });
+      assert.equal(again.status, 200); assert.equal(again.json().upToDate, true);
+      st.S.lastUse = 0; await st.autoTick();
+      assert.equal(rel.hits.filter((x) => x === '/lecpage-connect.tar.gz').length, n, '바꾸지 않은 판을 되받지 않음');
+      assert.equal(ver(), '1.1.0-bbb');
+    });
+    // 같은 때·뒤에 묶은 묶음은 바꿈
+    put(built('1.1.0-ccc', 1763900001), '1.1.0-ccc');
+    const r = await U.applyUpdate({ root, base: rel.base, keys: [a.x] });
+    assert.equal(r.to, '1.1.0-ccc'); assert.equal(ver(), '1.1.0-ccc'); assert.equal(U.readBuilt(root), 1763900001);
+    // 있던 묶음에 BUILT가 없으면(이 확인을 넣기 전 판) 견주지 않고 바꿈
+    const old = fakeRoot('1.1.0-old');
+    put(built('1.1.0-aaa', 1763800000), '1.1.0-aaa');
+    assert.equal((await U.applyUpdate({ root: old, base: rel.base, keys: [a.x] })).to, '1.1.0-aaa');
+  } finally { await rel.close(); }
+});
+
+test('실행 파일을 다시 켜며 부탁한 새 판 바꾸기(keep): 받아 가지 않은 결과가 있으면 바꾸지 않음(끝난 작업의 결과를 잃지 않게)', async () => {
+  const gz = pkg('1.3.0-new');
+  const rel = await release({ VERSION: '1.3.0-new\n', 'lecpage-connect.tar.gz': gz, 'lecpage-connect.tar.gz.sha256': `${sha(gz)}  lecpage-connect.tar.gz\n` });
+  const root = fakeRoot('1.1.0-old');
+  try {
+    await studio({ root, release: { base: rel.base }, onRestart: () => {} }, async (st, H) => {
+      const job = { id: 'j3', active: false, status: 'done', result: { ok: true }, endedAt: Date.now(), collected: false, cleanup() {} };
+      st.S.jobs.set(job.id, job);
+      const r = await req(st.port, 'POST', '/bridge/update', { headers: H, body: { keep: true } });
+      assert.equal(r.status, 409); assert.equal(r.json().error, 'busy');
+      assert.equal(readFileSync(join(root, 'VERSION'), 'utf8').trim(), '1.1.0-old');
+      job.collected = true;
+      assert.equal((await req(st.port, 'POST', '/bridge/update', { headers: H, body: { keep: true } })).status, 202, '결과를 받아 간 뒤에는 바꿈');
+      await until(st.port, H, (s) => s.update.state === 'restart');
+    });
+  } finally { await rel.close(); }
+});

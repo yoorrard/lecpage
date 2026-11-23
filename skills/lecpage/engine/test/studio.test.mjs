@@ -358,6 +358,17 @@ test('jobs: 변환·그리기 도구가 없는 PC에서 형식마다 작업 지�
     assert.ok(!/쪽 그림이 없는 교재:/.test(x.got.task));
     assert.match(x.got.md, /쪽 그림이 어느 교재의 몇 쪽인지는 여기 적혀 있지 않아요/);
 
+    // 5-2) 새 앱(교재마다 그려 이어서 번호를 매겨 보냄, pageImages { first, count }): 어느 번호가 어느 교재의 것인지 그대로 · 슬라이드는 쪽마다 맞춤
+    x = await run([file('강의.pptx', fx('workshop.pptx'), { pageImages: { first: 1, count: 13 } }), file('안내.docx', fx('guide.docx'), { pageImages: { first: 14, count: 2 } })], shots(15));
+    assert.equal(x.last.type, 'done', JSON.stringify(x.evs.slice(-2)));
+    assert.match(x.got.task, /\(p-001 ~ p-015, \.webp\) — 교재마다 이어서 번호를 매겼어요\(`강의\.pptx` p-001~p-013, `안내\.docx` p-014~p-015\)\. 사이트에 그대로/);
+    assert.ok(!/쪽 그림이 없는 교재:|넣은 교재 가운데 하나/.test(x.got.task));
+    assert.match(x.got.md, /교재마다 이어서 번호를 매겼어요\(강의\.pptx p-001~p-013, 안내\.docx p-014~p-015\)/);
+    assert.ok(heads(x.got.md).some((h) => /^## p-013 · 강의\.pptx 13쪽/.test(h)) && heads(x.got.md).every((h) => !/^## p-01[45]/.test(h)), '워드의 쪽 그림 번호를 부분에 붙이지 않음');
+    // 묶음 표시가 틀린 값이면(음수·글자) 받지 않고 예전처럼 '모름'으로
+    x = await run([file('강의.pptx', fx('workshop.pptx'), { pageImages: { first: 0, count: 13 } }), file('안내.docx', fx('guide.docx'), { pageImages: 'yes' })], shots(2));
+    assert.match(x.got.task, /넣은 교재 가운데 하나의 쪽 그림이에요\./);
+
     // 6) 읽지 못하는 교재 하나뿐: 어느 파일이 왜 안 됐고 무엇을 하면 되는지 쉬운 말로
     x = await run([file('옛날.ppt', oldPpt)]);
     assert.equal(x.last.type, 'error'); assert.equal(x.last.code, 'prepare');
