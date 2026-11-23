@@ -8,6 +8,7 @@ const ok = (name, cond, extra = '') => console.log(`${cond ? 'PASS' : 'FAIL'} ${
   const st = await mockAll(ctx);
   const p = await ctx.newPage(); const errs = watch(p);
   await openShare(p);
+  await p.click('.pub-opt:has-text("Vercel")'); // 이 흐름은 토큰으로 연결하는 Vercel(커넥트 없이)을 봄. 처음 고른 곳은 로그인 한 번으로 되는 곳
   console.log('targets:', (await p.locator('.pub-opt').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' | '));
   console.log('about:', (await p.locator('.pub-about').innerText()).replace(/\s+/g, ' '));
   ok('limit line shown', await p.locator('.pub-limit').count() === 1);

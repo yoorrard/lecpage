@@ -39,7 +39,7 @@ async function run(b, width) {
   L.ok(`[${tag}] checklist row says what is needed`, /Vercel에 배포하려면 연결해야 해요/.test(await p.locator('#live-setup .ready-s').innerText()));
   await p.locator('.pub-live').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + `live-hosts-notice-${tag}.png` });
   // ZIP도 같은 안내
-  await p.click('.pub-opt:has-text("ZIP")'); await p.waitForTimeout(200);
+  await p.click('.pub-opt:has-text("ZIP 다운로드")'); await p.waitForTimeout(200);
   L.ok(`[${tag}] ZIP gets the notice too`, /ZIP으로 직접 올리면 참여 기능을/.test(await p.locator('.pub-live').innerText().catch(() => '')));
   // [바로 배포로 바꾸기] → 바로 배포(참여 기능 방까지)
   await p.click('.pub-live button:has-text("바로 배포로 바꾸기")'); await p.waitForTimeout(300);

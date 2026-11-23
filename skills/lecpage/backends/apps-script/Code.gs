@@ -1,7 +1,10 @@
 /**
  * lecpage live — Google Apps Script backend (one Google Sheet = one training).
- * Paste into Extensions → Apps Script, run `setup` once, set the admin key from the "lecpage" menu,
- * then Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone). See README.md.
+ * Paste into Extensions → Apps Script, then Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone).
+ * The lecpage app fills INSTALL below when it copies this file (admin key hash, training code, settings), so nothing
+ * else has to be typed: the first ping of the web app applies it. A sheet copied from a template has an empty INSTALL:
+ * paste the app's install code into the menu "lecpage → 한 번에 설치" instead. The older way still works
+ * (run `setup`, then set the admin key from the "lecpage" menu). See README.md.
  *
  * JSON API (sheets.js speaks it; same semantics as HTTP protocol v1, polling only):
  *   GET  ?a=snapshot&code=..&since=..   GET ?a=state&code=..   GET ?a=ping
@@ -15,7 +18,10 @@
  * files this script created for that participant; they are shared only while their post is visible and trashed on
  * remove, purge and retention clean-up.
  */
-var VERSION = '1.0.0';
+var VERSION = '1.1.0';
+// 설치 코드(lpi1.…): lecpage 앱이 이 코드를 복사할 때 채움. 관리자 키의 해시·연수 코드·설정만 들어 있음(키 자체는 없음).
+// 비어 있으면 시트 메뉴 'lecpage → 한 번에 설치'에 붙여 넣음.
+var INSTALL = '';
 var COLS = ['participants', 'attendance', 'progress', 'help', 'questions', 'posts', 'polls', 'answers', 'survey', 'chat'];
 // Anyone with the training code reads these (other people's answers carry their value only after the instructor reveals
 // that poll; the 'signal' light always). Help requests and lab progress are the instructor's; a participant reads their own.
@@ -23,7 +29,7 @@ var PUBLIC_COLS = ['questions', 'posts', 'polls', 'answers', 'chat'];
 var PRIVATE_COLS = ['participants', 'attendance', 'survey', 'help', 'progress'];
 var FIELDS = {
   participants: ['nickname', 'name', 'school', 'consentAt'],
-  attendance: ['kind', 'at'], progress: ['station', 'status', 'at'],
+  attendance: ['kind', 'at', 'days'], progress: ['station', 'status', 'at'], // days: 여러 날 연수의 날짜별 값(맨 끝 칸에 더함, 예전 행은 빈칸)
   help: ['nickname', 'station', 'seat', 'message', 'status', 'assignee'],
   questions: ['text', 'nickname', 'anonymous', 'votes', 'status', 'pinned'],
   posts: ['kind', 'text', 'nickname', 'files', 'license', 'likes', 'hidden'],
@@ -31,7 +37,7 @@ var FIELDS = {
   chat: ['nickname', 'text', 'hidden'],
 };
 var BASE = ['id', 'code', 'by', 'key', 'cid', 'createdAt', 'updatedAt'];
-var TYPES = { createdAt: 'n', updatedAt: 'n', votes: 'n', likes: 'n', at: 'n', consentAt: 'n', anonymous: 'b', pinned: 'b', hidden: 'b', open: 'b', files: 'j', options: 'j', value: 'j', answers: 'j' };
+var TYPES = { createdAt: 'n', updatedAt: 'n', votes: 'n', likes: 'n', at: 'n', consentAt: 'n', anonymous: 'b', pinned: 'b', hidden: 'b', open: 'b', files: 'j', options: 'j', value: 'j', answers: 'j', days: 'j' };
 var LIMITS = { nickname: 20, name: 40, school: 60, question: 500, post: 1000, chat: 300, help: 300, seat: 20, id: 64, kind: 32, pollQuestion: 200, option: 100, answer: 200, notice: 300, timerLabel: 40, license: 40, assignee: 20, cid: 40 };
 var RATE = { write: 90, questions: 8, help: 6, posts: 12, chat: 30, vote: 120, react: 90, upload: 10, join: 600 };
 var AUTH_FAILS = 20;          // wrong admin keys per 10 minutes before the sheet answers 429
@@ -47,6 +53,8 @@ var UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif'
 // ---------------------------------------------------------------- menu & setup (run from the editor / sheet)
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('lecpage')
+    .addItem('한 번에 설치(설치 코드 붙여넣기)', 'menuInstall')
+    .addSeparator()
     .addItem('1. 시트 준비하기', 'setup')
     .addItem('2. 관리자 키 정하기', 'menuSetAdminKey')
     .addItem('연수 코드 고정하기(선택)', 'menuSetCode')
@@ -59,6 +67,19 @@ function onOpen() {
 /** setup('AB12CD') from the editor, or the menu (asks for the code). Fixes the training code of this sheet:
  *  requests with any other code are refused (L11). Without a code the first join or admin call fixes it. */
 function setup(code) {
+  var props = prepareSheets();
+  if (typeof code === 'string' && code.trim()) props.setProperty('CODE', checkCode(code));
+  try {
+    var ui = SpreadsheetApp.getUi();
+    if (!props.getProperty('CODE')) {
+      var r = ui.prompt('연수 코드', '사이트의 연수 코드(영문·숫자, 예: AB12CD)를 적어 주세요. 이 시트는 이 코드만 받습니다.', ui.ButtonSet.OK_CANCEL);
+      if (r.getSelectedButton() === ui.Button.OK && String(r.getResponseText() || '').trim()) props.setProperty('CODE', checkCode(r.getResponseText()));
+    }
+    ui.alert('준비가 끝났어요. 이제 lecpage 메뉴에서 "관리자 키 정하기"를 눌러 주세요.');
+  } catch (e) { if (e && e.lec) throw e; /* run from the editor */ }
+}
+/** 탭(시트)과 머리글을 만듦(있으면 그대로). 화면 없이 부를 수 있음: setup·한 번에 설치·웹 앱의 첫 요청이 함께 씀 */
+function prepareSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   COLS.concat(['tombstones', 'votes', 'files']).forEach(function (name) {
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
@@ -69,15 +90,50 @@ function setup(code) {
   });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('RETENTION_DAYS')) props.setProperty('RETENTION_DAYS', '30');
-  if (typeof code === 'string' && code.trim()) props.setProperty('CODE', checkCode(code));
-  try {
-    var ui = SpreadsheetApp.getUi();
-    if (!props.getProperty('CODE')) {
-      var r = ui.prompt('연수 코드', '사이트의 연수 코드(영문·숫자, 예: AB12CD)를 적어 주세요. 이 시트는 이 코드만 받습니다.', ui.ButtonSet.OK_CANCEL);
-      if (r.getSelectedButton() === ui.Button.OK && String(r.getResponseText() || '').trim()) props.setProperty('CODE', checkCode(r.getResponseText()));
-    }
-    ui.alert('준비가 끝났어요. 이제 lecpage 메뉴에서 "관리자 키 정하기"를 눌러 주세요.');
-  } catch (e) { if (e && e.lec) throw e; /* run from the editor */ }
+  return props;
+}
+/** 설치 코드 읽기: lpi1.<base64url JSON { c 연수 코드, h 관리자 키 SHA-256, u 파일 올리기, m 먼저 확인, r 보관 일수 }>.
+ *  lecpage 앱(app/src/lib/live-install.js sheetInstallCode)이 만듦. 관리자 키 자체는 들어 있지 않음. 틀리면 400 */
+function readInstall(text) {
+  var m = /^lpi1\.([A-Za-z0-9_-]{20,600})$/.exec(String(text || '').replace(/\s+/g, ''));
+  var o = null;
+  if (m) {
+    var b = m[1].replace(/-/g, '+').replace(/_/g, '/'); while (b.length % 4) b += '=';
+    try { o = JSON.parse(Utilities.newBlob(Utilities.base64Decode(b)).getDataAsString('UTF-8')); } catch (e) { o = null; }
+  }
+  if (!isObj(o) || typeof o.h !== 'string' || !/^[0-9a-f]{64}$/.test(o.h)) throw httpErr(400, 'bad_install', '설치 코드가 아니에요. lecpage 앱에서 [설치 코드 복사]를 눌러 다시 붙여 넣어 주세요.');
+  for (var i = 0; i < WEAK_KEYS.length; i++) if (hashEqual(sha256hex(WEAK_KEYS[i]), o.h)) throw httpErr(400, 'weak_key', '예시로 쓰인 관리자 키는 쓸 수 없습니다. lecpage 앱에서 설치 코드를 다시 복사해 주세요.');
+  var r = Math.floor(Number(o.r));
+  return { code: checkCode(o.c), hash: o.h, uploads: o.u === 1 || o.u === true, moderation: o.m === 1 || o.m === true, days: r >= 1 && r <= 365 ? r : 30 };
+}
+/** 설치 코드대로 한 번에: 탭 준비 + 관리자 키(해시) + 연수 코드 + 파일 올리기 + 먼저 확인 + 보관 기간. mark: 적용한 설치 코드 표시 */
+function applyInstall(o, mark) {
+  var p = prepareSheets();
+  p.setProperty('ADMIN_HASH', o.hash); p.setProperty('CODE', o.code);
+  p.setProperty('UPLOADS', o.uploads ? 'on' : 'off');
+  if (o.moderation) p.setProperty('MODERATION', 'on'); else p.deleteProperty('MODERATION');
+  p.setProperty('RETENTION_DAYS', String(o.days));
+  if (mark) p.setProperty('INSTALLED', mark);
+}
+function installMark(text) { return sha256hex(String(text || '').replace(/\s+/g, '')).slice(0, 16); }
+function menuInstall() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('한 번에 설치', 'lecpage 앱에서 복사한 설치 코드를 붙여 넣어 주세요.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var o; try { o = readInstall(r.getResponseText()); } catch (e) { if (e && e.lec) { ui.alert(e.message); return; } throw e; }
+  applyInstall(o, installMark(r.getResponseText()));
+  ui.alert('설치가 끝났어요(연수 코드 ' + o.code + ').\n이제 확장 프로그램 → Apps Script에서 배포 → 새 배포 → 웹 앱으로 배포하고, 나온 웹 앱 URL을 lecpage 앱에 붙여 넣어 주세요.');
+}
+/** 코드에 든 설치 코드(INSTALL)를 처음 한 번 적용: 웹 앱의 연결 확인(ping) 때. 시트 메뉴·setup 실행 없이 붙여 넣고 배포만 하면 되게.
+ *  이미 적용한 설치 코드는 다시 적용하지 않음(그 뒤 메뉴로 바꾼 관리자 키·연수 코드를 덮지 않음). */
+function ensureInstalled() {
+  if (!INSTALL) return;
+  var p = PropertiesService.getScriptProperties(); var mark = installMark(INSTALL);
+  if (p.getProperty('INSTALLED') === mark) return;
+  var o = readInstall(INSTALL);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw httpErr(503, 'busy', '요청이 몰렸어요. 잠시 후 다시 시도해 주세요.');
+  try { if (p.getProperty('INSTALLED') !== mark) applyInstall(o, mark); } finally { lock.releaseLock(); }
 }
 function headerOf(name) {
   if (name === 'tombstones') return ['col', 'id', 'code', 'at'];
@@ -133,7 +189,7 @@ function cleanup() {
 function doGet(e) {
   return respond(function () {
     var p = (e && e.parameter) || {};
-    if (p.a === 'ping') return { ok: true, version: VERSION, protocol: 1 };
+    if (p.a === 'ping') { ensureInstalled(); return { ok: true, version: VERSION, protocol: 1, days: true, ready: !!PropertiesService.getScriptProperties().getProperty('ADMIN_HASH') }; }
     if (p.a === 'state') return getState(normCode(p.code));
     if (p.a === 'snapshot') return snapshot({ code: p.code, since: p.since, rs: p.rs });
     throw httpErr(400, 'bad_action', '알 수 없는 요청입니다.');
@@ -142,7 +198,7 @@ function doGet(e) {
 function doPost(e) {
   return respond(function () {
     var raw = e && e.postData && e.postData.contents;
-    if (!raw || raw.length > 30 * 1024 * 1024) throw httpErr(413, 'too_large', '요청이 너무 큽니다.');
+    if (!raw || raw.length > 30 * 1024 * 1024) throw httpErr(413, 'too_large', '요청이 너무 커요.');
     var b; try { b = JSON.parse(raw); } catch (x) { throw httpErr(400, 'invalid_json', 'JSON 형식이 아닙니다.'); }
     if (!b || typeof b !== 'object') throw httpErr(400, 'invalid_body', '본문이 올바르지 않습니다.');
     switch (b.a) {
@@ -398,7 +454,9 @@ function rows(col) {
   if (memo[col]) return memo[col];
   var sh = sheet(col); var head = headerOf(col);
   var n = sh.getLastRow();
-  var vals = n > 1 ? sh.getRange(2, 1, n - 1, head.length).getValues() : [];
+  // 예전에 만든 시트는 나중에 더한 칸(출석의 days)이 없을 수 있음: 있는 칸까지만 읽고 없는 칸은 빈 값으로
+  var width = Math.min(head.length, sh.getMaxColumns());
+  var vals = n > 1 ? sh.getRange(2, 1, n - 1, width).getValues() : [];
   memo[col] = vals.map(function (r, i) {
     var o = { _row: i + 2 };
     head.forEach(function (h, j) { o[h] = decodeCell(h, r[j]); });
@@ -421,12 +479,39 @@ function encodeCell(h, v) {
   if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
   return typeof v === 'number' ? String(v) : v;
 }
+/** 나중에 더한 칸(출석의 days)이 없는 예전 시트: 쓰기 전에 칸과 머리글을 더함(있던 줄은 그대로) */
+var headOk = {};
+function ensureHead(col, sh, head) {
+  if (headOk[col]) return; headOk[col] = true;
+  var have = sh.getMaxColumns();
+  if (have < head.length) sh.insertColumnsAfter(have, head.length - have);
+  if (String(sh.getRange(1, head.length, 1, 1).getValues()[0][0] || '') === head[head.length - 1]) return;
+  sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+  sh.getRange(1, 1, sh.getMaxRows(), head.length).setNumberFormat('@');
+}
 function writeRow(col, doc) {
   var sh = sheet(col); var head = headerOf(col);
+  if (col === 'attendance') ensureHead(col, sh, head);
   var line = head.map(function (h) { return encodeCell(h, doc[h]); });
   if (doc._row) sh.getRange(doc._row, 1, 1, head.length).setValues([line]);
   else { sh.appendRow(line); doc._row = sh.getLastRow(); if (memo[col]) memo[col].push(doc); }
   return doc;
+}
+/** 출석 기록의 날짜별 값 { 'YYYY-MM-DD': ms }: 입실은 그날 가장 이른 시각, 퇴실은 가장 늦은 시각. 최근 31일만.
+ *  Node 서버(lib/protocol.js attDays·seedDays)와 같은 규칙, 날짜는 Asia/Seoul 기준(fmtTime) */
+function dayKey(ms) { return fmtTime(ms).slice(0, 10); }
+function seedDays(doc) {
+  if (doc && isObj(doc.days)) return doc.days;
+  var o = {}; if (doc && Number(doc.at)) o[dayKey(doc.at)] = Number(doc.at);
+  return o;
+}
+function attDays(prev, kind, at) {
+  var days = {}; if (isObj(prev)) Object.keys(prev).forEach(function (k) { days[k] = Number(prev[k]); });
+  var d = dayKey(at); var cur = days[d];
+  days[d] = !cur ? at : kind === 'in' ? Math.min(cur, at) : Math.max(cur, at);
+  var keys = Object.keys(days).sort();
+  while (keys.length > 31) delete days[keys.shift()];
+  return days;
 }
 var OWN_BY = { answers: 1, progress: 1, help: 1 };
 /** Polls the instructor revealed: state.ui.reveal ('a|b') or an older pollReveal {id: true}. → { id: 1 } */
@@ -548,7 +633,7 @@ function add(b) {
     case 'posts':
       d = { kind: cleanText(doc.kind || 'post', LIMITS.kind, 'kind'), text: cleanText(doc.text, LIMITS.post, 'text', { multiline: true }), files: cleanFiles(doc.files, code, me, ''), license: cleanText(doc.license, LIMITS.license, 'license'), nickname: me.nickname, likes: 0, hidden: moderated(code) };
       if (!d.text && !d.files.length) throw httpErr(400, 'required', 'text 또는 files가 필요합니다.');
-      if (d.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.');
+      if (d.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.');
       break;
     case 'polls': {
       if (doc.options != null && (!Array.isArray(doc.options) || doc.options.length > 20)) throw httpErr(400, 'invalid_value', 'options: 20개까지');
@@ -571,6 +656,8 @@ function add(b) {
   var now = stamp();
   if (col === 'attendance' || col === 'progress') d.at = now;
   var existing = key ? rows(col).filter(function (r) { return r.code === code && r.key === key; })[0] : null;
+  // 여러 날 연수: 날마다 그날의 첫 입실·마지막 퇴실을 따로 남김(at은 예전처럼 전체의 첫 입실·마지막 퇴실). 예전 행은 at 하나로 시작
+  if (col === 'attendance') d.days = attDays(existing ? seedDays(existing) : null, d.kind, now);
   if (existing) {
     // ⑧ a second tap keeps the first check-in and the last check-out
     if (col === 'attendance' && Number(existing.at)) d.at = d.kind === 'in' ? Math.min(Number(existing.at), d.at) : Math.max(Number(existing.at), d.at);
@@ -629,7 +716,7 @@ function update(b) {
       case 'questions.pinned': case 'posts.hidden': case 'polls.open': case 'chat.hidden': cur[k] = cleanBool(v, k, false); break;
       case 'posts.kind': cur.kind = cleanText(v, LIMITS.kind, k, { required: true }); break;
       case 'posts.text': cur.text = cleanText(v, LIMITS.post, k, { multiline: true }); break;
-      case 'posts.files': cur.files = cleanFiles(v, code, me, cur.id); if (cur.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); break;
+      case 'posts.files': cur.files = cleanFiles(v, code, me, cur.id); if (cur.files.length && !uploadsOn(code)) throw httpErr(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.'); break;
       case 'posts.license': cur.license = cleanText(v, LIMITS.license, k); break;
       case 'polls.question': cur.question = cleanText(v, LIMITS.pollQuestion, k, { required: true }); break;
       case 'polls.kind': cur.kind = cleanEnum(v, ['choice', 'word', 'scale'], k); break;
@@ -665,7 +752,7 @@ function vote(b, col, field) {
   var me = participant(code, b.token); rateHit('vote', me.id, RATE.vote);
   var cur = rows(col).filter(function (r) { return r.code === code && r.id === b.id; })[0];
   if (!cur) throw httpErr(404, 'not_found', '없는 글입니다.');
-  if (col === 'questions' && cur.status === 'hidden') throw httpErr(409, 'hidden', '숨겨진 질문입니다.');
+  if (col === 'questions' && cur.status === 'hidden') throw httpErr(409, 'hidden', '숨겨진 질문이에요.');
   var already = rows('votes').some(function (v) { return v.col === col && v.doc === cur.id && v.by === me.id; });
   var r = {};
   if (already) { r[field] = Number(cur[field]) || 0; r.voted = true; r.already = true; return r; }
@@ -721,13 +808,13 @@ function react(b) {
 function upload(b) {
   var props = PropertiesService.getScriptProperties();
   var code = normCode(b.code);
-  if (!uploadsOn(code)) throw httpErr(503, 'uploads_disabled', '이 시트는 파일 올리기를 쓰지 않습니다.');
+  if (!uploadsOn(code)) throw httpErr(503, 'uploads_disabled', '이 시트는 파일 올리기를 쓰지 않아요.');
   var me = participant(code, b.token); rateHit('upload', me.id, RATE.upload);
   var ext = UPLOAD_TYPES[b.type];
   if (!ext) throw httpErr(415, 'unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.');
   var bytes = Utilities.base64Decode(String(b.data || ''));
   var maxMb = Number(props.getProperty('MAX_UPLOAD_MB') || 10);
-  if (!bytes.length) throw httpErr(400, 'empty', '빈 파일입니다.');
+  if (!bytes.length) throw httpErr(400, 'empty', '빈 파일이에요.');
   if (bytes.length > maxMb * 1048576) throw httpErr(413, 'too_large', '파일은 ' + maxMb + 'MB까지 올릴 수 있어요.');
   var head = bytes.slice(0, 12).map(function (x) { return x < 0 ? x + 256 : x; });
   if (sniff(head) !== b.type) throw httpErr(415, 'unsupported_type', '파일 내용이 형식과 맞지 않아요.');
@@ -784,7 +871,11 @@ function exportTable(kind, data) {
     case 'participants': return { columns: ['별명', '이름', '소속', '참여 시각', '동의 시각'], rows: P.map(function (p) { return [p.nickname, p.name, p.school, t(p.createdAt), t(p.consentAt)]; }) };
     case 'attendance': {
       var m = {}; (data.attendance || []).forEach(function (a) { (m[a.by] = m[a.by] || {})[a.kind] = a.at || a.createdAt; });
-      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'], rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt)]; }) };
+      // 여러 날에 걸친 기록이 있으면 날마다의 입실·퇴실을 끝 칸에(예전 기록은 at 하나로) — Node 서버의 출석 CSV와 같은 칸
+      var per = {}; var multi = false;
+      (data.attendance || []).forEach(function (a) { var r = per[a.by] = per[a.by] || {}; var dd = seedDays({ at: a.at || a.createdAt, days: a.days }); Object.keys(dd).forEach(function (d) { (r[d] = r[d] || {})[a.kind] = dd[d]; }); if (Object.keys(r).length > 1) multi = true; });
+      var dayText = function (id) { var r = per[id] || {}; return Object.keys(r).sort().map(function (d) { var v = r[d]; return d.slice(5) + ' ' + (v['in'] ? t(v['in']).slice(11, 16) : '-') + '~' + (v.out ? t(v.out).slice(11, 16) : '-'); }).join(' · '); };
+      return { columns: ['별명', '이름', '소속', '입실', '퇴실', '동의 시각'].concat(multi ? ['날짜별 입실·퇴실'] : []), rows: P.map(function (p) { var r = m[p.id] || {}; return [p.nickname, p.name, p.school, t(r['in']), t(r.out), t(p.consentAt)].concat(multi ? [dayText(p.id)] : []); }) };
     }
     case 'progress': {
       var pr = data.progress || []; var st = uniq(pr.map(function (x) { return x.station; })); var mm = {}; var order = [];

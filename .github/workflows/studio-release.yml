@@ -33,7 +33,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends poppler-utils > /dev/null
           npm install --no-save --no-audit --no-fund --ignore-scripts "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: lecpage 커넥트 시험
-        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs skills/lecpage/engine/test/studio-update.test.mjs skills/lecpage/engine/test/studio-sign.test.mjs skills/lecpage/engine/test/prepare-formats.test.mjs
+        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs skills/lecpage/engine/test/studio-update.test.mjs skills/lecpage/engine/test/studio-sign.test.mjs skills/lecpage/engine/test/prepare-formats.test.mjs skills/lecpage/engine/test/studio-deploy.test.mjs skills/lecpage/engine/test/studio-vercel.test.mjs
   release:
     needs: test
     # main과 v 태그에서만 올림(다른 브랜치에서 손으로 돌려도 올리지 않음)

@@ -4,6 +4,7 @@ import { Sheet, Field, Notice, Progress, Dialog, SecretLine } from '../../compon
 import { Mascot } from '../../components/Mascot.jsx';
 import { QR, qrPng, copyQr } from '../../components/QR.jsx';
 import { LiveSetup, adminKeyFor } from '../../components/LiveSetup.jsx';
+import { useCfWay } from '../../components/CfConnect.jsx';
 import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { assembleProject } from '../../lib/studio.js';
@@ -160,6 +161,7 @@ export function StepShare({ p, update, go }) {
   const dupNew = () => duplicateProject(p).then((n) => { toast('복제했어요. 새 연수로 배포해요.'); location.hash = `#/p/${n.id}/3`; }, () => toast('복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.'));
   // 바로 배포 서버의 방은 바로 배포한 사이트에서만 열림: 다른 곳에 배포할 때는 '연결 전'으로 봄(그대로 넣으면 질문·투표·출석이 보내지지 않음)
   const lecOnly = lecOnlyLive(bp.live, info?.live?.url);
+  const cfWay = useCfWay();
   // 이 컴퓨터(localhost)에서 켠 서버는 참가자 기기에서 닿지 않음: 파일로 받는 ZIP(교실 노트북) 말고는 '연결 전'으로
   const loopLive = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(bp.live?.url || '');
   const liveReady = LIVE_READY(bp.live, p.liveOk) && !(lecOnly && target !== 'lecpage') && !(loopLive && !!target && target !== 'zip');
@@ -292,10 +294,12 @@ export function StepShare({ p, update, go }) {
   // 강사가 따로 연결해 둔 서버(시트·Supabase·내 서버)가 있으면 바로 배포에서도 그 서버를 씀(Publish.jsx Instant와 같은 규칙)
   const ownLive = instantLiveOk(bp.live, info) && !lecOnly;
   const autoHere = autoLive && target === 'lecpage' && !liveOffHere && !ownLive;
-  const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : 'todo';
+  // Cloudflare에 lecpage 커넥트로 배포하면 참여 기능 서버도 내 계정에 함께 생김(Publish.jsx Cloudflare 카드와 같은 조건) → 따로 연결하라고 하지 않음
+  const cfTogether = target === 'cloudflare' && cfWay.way === 'ready' && liveOn && !liveReady && !skipLive && !lecOnly && !p.demo;
+  const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : cfTogether ? 'cf' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
   const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
-  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: p.deploy?.sites?.lecpage ? `${featLine} · 바로 배포한 사이트에서 켜져 있어요.` : `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: p.deploy?.sites?.lecpage ? `${featLine} · 바로 배포한 사이트에서 켜져 있어요.` : `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', cf: `${featLine} · Cloudflare에 배포할 때 내 계정에 서버를 만들어 켜요.`, demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
   // 꺼져 있으면 고를 기능을 바로 보여 줌. 다른 곳에 배포할 때 연결 전이면 배포할 곳 바로 아래 안내가 할 일을 알려 주므로 이 줄은 접어 둠([연결]로 펼침)
   const elsewhere = !!target && target !== 'lecpage';
   const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
@@ -376,6 +380,7 @@ export function StepShare({ p, update, go }) {
       {prog && <div class="stack"><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
       {p.demo ? <p class="small muted">실제로는 여기서 배포할 곳을 골라요. 바로 배포는 가입·토큰이 없어요.</p>
         : <Publish p={p} busy={busy} setBusy={setBusy} setProg={setProg} buildFiles={buildFiles} guard={guard} done={done} zip={zip} again={again} goNow={goNow} onTarget={setTarget} records={records} freshRoom={room === 'fresh'}
+          onTry={(t) => update((cur) => ({ deploy: { ...(cur.deploy || {}), lecpageTry: t || null } }))}
           liveNote={liveOn && !p.demo ? { need: !liveReady && !skipLive, skip: !liveReady && skipLive, lecOnly, feats: featLine, onConnect: goLive, onSkip: () => setSkipLive(true), onUnskip: () => setSkipLive(false) } : null} />}
     </> });
 

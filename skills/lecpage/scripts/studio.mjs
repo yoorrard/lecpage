@@ -36,7 +36,7 @@ const ROOT = resolve(HERE, '..', '..', '..');
  * 이 판이 할 수 있는 것(앱이 /bridge/status의 caps로 보고, 없으면 '새 판으로 바꿔야 해요'를 보여 줌). 새 길을 더하면 여기에도 더함.
  * 이 목록이 없는 예전 판은 status-caps 이전 판(앱은 claude-setup·update가 없는 것으로 봄)
  */
-export const CAPS = ['status-caps', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update'];
+export const CAPS = ['status-caps', 'page-sets', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update', 'cloudflare', 'vercel'];
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 
 const MB = 1024 * 1024;
@@ -98,15 +98,18 @@ export function savedToken(home) {
   try { const t = JSON.parse(readFileSync(join(home, 'studio.json'), 'utf8'))?.token; return typeof t === 'string' && /^[0-9a-f]{64}$/.test(t) ? t : ''; } catch { return ''; }
 }
 /**
- * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + 개발 주소 + LECPAGE_STUDIO_ORIGINS(쉼표).
+ * /bridge/*를 받을 출처: 이 주소(같은 출처) + lecpage.com + LECPAGE_STUDIO_ORIGINS(쉼표) + (개발 때만) 개발 주소.
+ * 개발 주소(DEV_ORIGINS)는 저장소에서 켰거나(.git) LECPAGE_STUDIO_DEV=1일 때만 믿음: 받은 묶음(배포판)에서는 이 PC의 다른 개발 서버
+ * (localhost:5173은 Vite 기본 포트)가 믿는 출처가 되지 않게.
  * 예비 주소는 lecpage 전용 출처 https://lecpage.github.io(GitHub 조직 lecpage, 다른 Pages 사이트를 두지 않음)만 넣음.
  * 예전 예비 주소(https://yoorrard.github.io/lecpage/)는 넣지 않음: 그 출처를 같은 계정의 다른 GitHub Pages 사이트와 함께 써서,
  * 그중 한 곳만 뚫려도 짝 맞춤 토큰을 읽고 이 PC에 닿을 수 있음(docs/operations.md 16절)
  */
-export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'https://lecpage.github.io', 'http://localhost:5173', 'http://localhost:4173'];
-export function allowedOrigins(self, env = process.env) {
+export const APP_ORIGINS = ['https://lecpage.com', 'https://www.lecpage.com', 'https://lecpage.github.io'];
+export const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
+export function allowedOrigins(self, env = process.env, { dev = false } = {}) {
   const extra = String(env.LECPAGE_STUDIO_ORIGINS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter((x) => /^https?:\/\/[^/\s]+$/.test(x));
-  return new Set([self, ...APP_ORIGINS, ...extra]);
+  return new Set([self, ...APP_ORIGINS, ...(dev || env.LECPAGE_STUDIO_DEV === '1' ? DEV_ORIGINS : []), ...extra]);
 }
 
 // ── 보이는 터미널 창에서 공식 명령 실행(설치·로그인) ────────────────────────
@@ -130,7 +133,7 @@ export function terminalScript(agent, action, { platform = process.platform, fil
   const say = (t) => (win ? `Write-Host ${psq(t)}` : `echo ${shq(t)}`);
   const steps = [];
   if (action === 'install') steps.push(say(`lecpage: ${name}를 공식 설치 명령으로 설치해요.`), win ? o.win : o.unix);
-  if (action === 'update' && o.update) steps.push(say(`lecpage: ${name}를 새 판으로 바꿔요.`), `${bin} ${o.update.join(' ')}`);
+  if (action === 'update' && o.update) steps.push(say(`lecpage: ${name}를 새 버전으로 바꿔요.`), `${bin} ${o.update.join(' ')}`);
   if (action === 'login' || action === 'install' || (action === 'update' && needLogin)) steps.push(say(`lecpage: ${name}에 내 계정으로 로그인해요. 열리는 브라우저 창에서 로그인해 주세요.`), `${action === 'install' ? fresh : bin} ${o.login.join(' ')}`);
   return `${steps.join(win ? '; ' : ' && ')}; ${say('lecpage: 다 됐어요. 이 창을 닫고 lecpage 화면으로 돌아가요(저절로 알아봐요).')}`;
 }
@@ -579,6 +582,12 @@ export function pageCorp(h) {
  */
 export const EXAMPLES_HEADERS = { 'content-security-policy': "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads; frame-ancestors 'self'; object-src 'none'; base-uri 'self'", 'x-frame-options': 'SAMEORIGIN', 'access-control-allow-origin': '*' };
 export const isExamplePath = (p) => /^\/?examples\//.test(String(p).replace(/\\/g, '/'));
+/**
+ * 미리보기 격리 틀(/frame/, 앱 public/frame/index.html): 앱 public/_headers의 /frame/ 규칙과 같게 sandbox로 출처를 지워서 보냄.
+ * 받은 머리글에 없어도(예비 주소처럼 머리글을 못 쓰는 곳) 늘 붙임 — 없으면 앱 화면의 X-Frame-Options: DENY가 붙어 미리보기가 막힘
+ */
+export const FRAME_HEADERS = { 'content-security-policy': "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals; frame-ancestors 'self'; object-src 'none'; base-uri 'self'", 'x-frame-options': 'SAMEORIGIN' };
+export const isFramePath = (p) => /^\/?frame\/(index\.html)?$/.test(String(p).replace(/\\/g, '/').split('?')[0]);
 const PASS_HEADERS = ['content-type', 'cache-control', 'content-security-policy', 'x-frame-options', 'x-content-type-options', 'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy', 'cross-origin-embedder-policy', 'cross-origin-resource-policy', 'etag', 'last-modified'];
 
 function fallbackPage(S, why) {
@@ -614,7 +623,7 @@ function serveDist(S, req, res, pathname) {
   if (!isFile(f) && isFile(f + '.html')) f += '.html';
   if (!isFile(f)) { status = 404; f = join(dir, '404.html'); if (!isFile(f)) return send(res, 404, 'not found'); }
   const shell = status === 200 && relative(dir, f) === 'index.html';
-  const h = { 'content-type': typeOf(f), ...headersFor(S.app.rules, pathname), ...(isExamplePath(relative(dir, f)) ? EXAMPLES_HEADERS : {}) };
+  const h = { 'content-type': typeOf(f), ...headersFor(S.app.rules, pathname), ...(isExamplePath(relative(dir, f)) ? EXAMPLES_HEADERS : {}), ...(isFramePath(relative(dir, f)) ? FRAME_HEADERS : {}) };
   if (shell) return send(res, 200, injectToken(readFileSync(f, 'utf8'), S.token), { ...h, ...SHELL_HEADERS });
   const size = statSync(f).size;
   res.writeHead(status, pageCorp({ ...BASE_HEADERS, ...h, 'content-length': size }));
@@ -647,6 +656,7 @@ async function serveRemote(S, req, res, pathname, search) {
   const h = {};
   for (const k of PASS_HEADERS) { const v = r.headers.get(k); if (v) h[k] = v; }
   if (isExamplePath(pathname)) Object.assign(h, EXAMPLES_HEADERS);
+  if (isFramePath(pathname)) Object.assign(h, FRAME_HEADERS);
   if (shell && r.ok) return send(res, 200, injectToken(body.toString('utf8'), S.token), { ...h, ...SHELL_HEADERS });
   if (r.ok && /^\/assets\//.test(pathname) && /immutable/.test(h['cache-control'] || '') && S.app.cacheBytes + body.length < 120 * MB) {
     S.app.cache.set(key, { status: 200, body, headers: h }); S.app.cacheBytes += body.length;
@@ -737,7 +747,10 @@ export async function validateJob(body) {
     for (let i = 2; used.has(n.toLowerCase()); i++) n = `${base}-${i}${ext}`;
     used.add(n.toLowerCase());
     if (PHOTO_EXT.has(ext.slice(1).toLowerCase())) photos.push({ name: n.replace(/[^\w가-힣.\-() ]/g, '-'), bytes }); // 사이트 그림 이름 규칙(kit/paths.js)
-    else materials.push({ name: n, bytes, ...(f.pageImages === true ? { pageImages: true } : {}) }); // pageImages: 앱이 보낸 쪽 그림(site['material/p-NNN'])을 그린 교재
+    else { // pageImages: 앱이 보낸 쪽 그림(site['material/p-NNN'])을 그린 교재. true면 그 교재 하나의 것(1번부터), { first, count }면 교재마다 이어 매긴 번호 가운데 이 교재의 것(caps 'page-sets')
+      const pi = f.pageImages; const okSet = isObj(pi) && Number.isInteger(pi.first) && Number.isInteger(pi.count) && pi.first >= 1 && pi.count >= 1 && pi.first + pi.count <= 10000;
+      materials.push({ name: n, bytes, ...(pi === true ? { pageImages: true } : okSet ? { pageImages: { first: pi.first, count: pi.count } } : {}) });
+    }
   }
   if (materialItems(materials.map((m) => m.name)) + photos.length > LIMITS.files) return tooMany();
   if (kind === 'make' && !materials.length) return bad('교재 파일(PDF·PPTX·HWP 등)을 하나 이상 넣어 주세요.');
@@ -776,10 +789,11 @@ export function taskText({ kind, materials, photos = [], pages = 0, images = 0, 
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const tick = (n) => `\`${n}\``;
-  // 교재 줄은 있는 그대로만(무엇이 있고 무엇이 없는지). 쪽 그림 줄은 실제 그림 파일로 적음: pageImages { first, last, count, exts, sample, multi, given, owner }
+  // 교재 줄은 있는 그대로만(무엇이 있고 무엇이 없는지). 쪽 그림 줄은 실제 그림 파일로 적음: pageImages { first, last, count, exts, sample, multi, given, owner, sets }
+  // sets: 앱이 교재마다 그려 보낸 쪽 그림(이어 매긴 번호) [{ owner, first, last }] — 어느 번호가 어느 교재의 것인지 그대로 적음
   // (예전 인자 pages·images만 주면 1번부터 그 수만큼으로 봄)
   const pi = pageImages || (images ? { first: 1, last: Math.max(pages, images), count: images, exts: ['webp'], sample: 'p-001.webp' } : null);
-  const whose = !pi?.multi ? '' : pi.owner ? `${tick(pi.owner)}의 쪽 그림이에요. ` : pi.given ? '넣은 교재 가운데 하나의 쪽 그림이에요. ' : '';
+  const whose = pi?.sets?.length > 1 ? `교재마다 이어서 번호를 매겼어요(${pi.sets.map((x) => `${tick(x.owner)} p-${pad3(x.first)}~p-${pad3(x.last)}`).join(', ')}). ` : !pi?.multi ? '' : pi.owner ? `${tick(pi.owner)}의 쪽 그림이에요. ` : pi.given ? '넣은 교재 가운데 하나의 쪽 그림이에요. ' : '';
   const imgLine = pi ? `- 교재 쪽 그림: \`work/site/material/\` (p-${pad3(pi.first)} ~ p-${pad3(pi.last)}${pi.count < pi.last - pi.first + 1 ? `, 그중 ${pi.count}장` : ''}, ${pi.exts.map((e) => '.' + e).join('·')}) — ${whose}사이트에 그대로 써도 돼요(\`material/${pi.sample}\`)\n` : '';
   const noImgLine = pi && noImages.length ? `- 쪽 그림이 없는 교재: ${noImages.map(tick).join(', ')}\n` : '';
   const unreadLine = unread.length ? `- 읽지 못한 교재: ${unread.map(tick).join(', ')} — 파일을 열지 못해 내용(글자·쪽 그림)이 없어요.\n` : '';
@@ -995,7 +1009,10 @@ async function runJob(S, job) {
     for (const p of inp.photos) { mkdirSync(join(work, 'site', 'assets', 'img'), { recursive: true }); writeFileSync(join(work, 'site', 'assets', 'img', p.name), p.bytes); }
     for (const [k, v] of Object.entries(inp.site)) { const f = join(work, 'site', ...k.split('/')); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, v); }
     const appImages = Object.keys(inp.site).some((k) => /^material\/p-\d{3,4}\.(webp|png|jpe?g)$/i.test(k));
-    const flagged = job.kind === 'make' ? inp.materials.find((m) => m.pageImages)?.name || '' : ''; // 앱이 알려 준 '쪽 그림을 그린 교재'(고칠 때의 쪽 그림은 예전 교재 것일 수 있어 쓰지 않음)
+    // 앱이 알려 준 '쪽 그림을 그린 교재'(고칠 때의 쪽 그림은 예전 교재 것일 수 있어 쓰지 않음). 교재 하나의 것이면 이름(flagged), 교재마다 그렸으면 묶음(givenSets: 이어 매긴 번호의 어디가 어느 교재 것인지. 같은 이름의 PDF 짝은 한 묶음)
+    const marked = job.kind === 'make' ? inp.materials.filter((m) => m.pageImages) : [];
+    const givenSets = [...new Map(marked.filter((m) => m.pageImages !== true).sort((a, b) => /\.pdf$/i.test(a.name) - /\.pdf$/i.test(b.name)).map((m) => [m.pageImages.first, { name: m.name, first: m.pageImages.first, count: m.pageImages.count }])).values()].sort((a, b) => a.first - b.first);
+    const flagged = givenSets.length ? '' : marked[0]?.name || '';
     let prep = null, lost = []; // prep: 미리 읽기 결과({ files, unread, given, links }) · lost: 내용을 아무도 읽지 못한 교재
     const stemOf = (n) => String(n).normalize('NFC').replace(/\.[^.]+$/, '').toLowerCase();
     if (inp.materials.length) {
@@ -1004,7 +1021,7 @@ async function runJob(S, job) {
       const paths = inp.materials.map((m) => { const f = join(ws, 'material', m.name); writeFileSync(f, m.bytes); return f; });
       // 이 PC에 PDF를 쪽별로 여는 도구(poppler)가 없으면 Claude Code는 PDF를 통째로만 읽고, 통째로는 PDF_WHOLE_MB까지만 읽음(실측) → 그보다 큰 PDF는 코드가 뽑은 글도 둠
       const { pdftoppmPath } = await import('./render-slides.mjs');
-      const env = { ...process.env, LECPAGE_GIVEN_IMAGES: appImages ? '1' : '', LECPAGE_GIVEN_IMAGES_OF: flagged, LECPAGE_PDF_TEXT_MB: pdftoppmPath() ? '' : String(PDF_WHOLE_MB) };
+      const env = { ...process.env, LECPAGE_GIVEN_IMAGES: appImages ? '1' : '', LECPAGE_GIVEN_IMAGES_OF: flagged, LECPAGE_GIVEN_IMAGES_SETS: appImages && givenSets.length ? JSON.stringify(givenSets) : '', LECPAGE_PDF_TEXT_MB: pdftoppmPath() ? '' : String(PDF_WHOLE_MB) };
       const r = await runChild(job, process.execPath, [CLI, 'prepare', ...paths, '-o', work, '--json', ...(appImages ? ['--no-slides'] : [])], { cwd: ws, env });
       if (stopped()) return;
       const j = lastJson(r.out);
@@ -1029,10 +1046,14 @@ async function runJob(S, job) {
     // 작업 지시에 적을 교재 사정: 실제로 놓인 쪽 그림(앱이 그려 보낸 것 또는 prepare가 그린 것), 쪽 그림이 없는 교재, 보조 글자·링크 주소 파일
     const md = existsSync(join(work, 'material.md')), links = existsSync(join(work, 'links.md'));
     let shots = []; try { shots = readdirSync(join(work, 'site', 'material')).map((n) => ({ name: n, n: +(/^p-(\d{3,4})\.(webp|png|jpe?g)$/i.exec(n) || [])[1] || 0 })).filter((x) => x.n).sort((a, b) => a.n - b.n); } catch { shots = []; }
-    const owner = prep?.given?.owner || (appImages ? flagged : '');
-    const pageImages = shots.length ? { first: shots[0].n, last: shots.at(-1).n, count: new Set(shots.map((x) => x.n)).size, exts: [...new Set(shots.map((x) => extname(x.name).slice(1).toLowerCase()))], sample: shots[0].name, multi: materialItems(inp.materials.map((m) => m.name)) > 1, given: appImages, owner } : null;
+    // 교재마다 그려 보낸 쪽 그림(이어 매긴 번호): 미리 읽기가 맞춘 묶음(없으면 앱이 알려 준 그대로) 가운데 실제로 그림이 놓인 것
+    const setsOut = !(appImages && givenSets.length) ? []
+      : (Array.isArray(prep?.given?.sets) ? prep.given.sets.map((x) => ({ owner: String(x?.owner || ''), first: +x?.first || 0, last: +x?.last || 0 })) : givenSets.map((x) => ({ owner: x.name, first: x.first, last: x.first + x.count - 1 })))
+        .filter((x) => x.owner && shots.some((sh) => sh.n >= x.first && sh.n <= x.last));
+    const owner = setsOut.length === 1 ? setsOut[0].owner : setsOut.length ? '' : prep?.given?.owner || (appImages ? flagged : '');
+    const pageImages = shots.length ? { first: shots[0].n, last: shots.at(-1).n, count: new Set(shots.map((x) => x.n)).size, exts: [...new Set(shots.map((x) => extname(x.name).slice(1).toLowerCase()))], sample: shots[0].name, multi: materialItems(inp.materials.map((m) => m.name)) > 1, given: appImages, owner, ...(setsOut.length > 1 ? { sets: setsOut } : {}) } : null;
     const files = Array.isArray(prep?.files) ? prep.files : [];
-    const noImages = pageImages ? files.filter((f) => !f.twin && f.pages > 0 && !f.images && (!appImages || (owner && stemOf(f.name) !== stemOf(owner)))).map((f) => f.name) : [];
+    const noImages = pageImages ? files.filter((f) => !f.twin && f.pages > 0 && !f.images && (!appImages || (setsOut.length > 1 ? !setsOut.some((x) => stemOf(x.owner) === stemOf(f.name)) : owner && stemOf(f.name) !== stemOf(owner)))).map((f) => f.name) : [];
     const pdfText = files.filter((f) => f.text).map((f) => f.name);
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
@@ -1122,22 +1143,25 @@ const UPDATING = new Set(['download', 'install', 'restart']);
 const UPDATE_ERRORS = {
   unavailable: '이 lecpage 커넥트는 스스로 바꿀 수 없어요. lecpage 커넥트를 끄고 다시 켜 주세요.',
   busy: '만드는 중이거나 연결하는 중이에요. 끝난 뒤에 바꿔요.',
-  network: '새 판을 받지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.',
+  network: '새 버전을 받지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.',
   sha256: '받은 파일 확인(SHA-256)에 실패했어요. 잠시 뒤 다시 시도해 주세요.',
-  package: '받은 새 판 파일이 올바르지 않아요. 잠시 뒤 다시 시도해 주세요.',
-  disk: '저장 공간이 부족해 새 판을 풀지 못했어요. 공간을 비운 뒤 다시 시도해 주세요.',
-  files: '파일을 바꾸지 못했어요. lecpage 커넥트를 끄고 다시 켜 주세요(켤 때 새 판을 받아요).',
+  package: '받은 새 버전 파일이 올바르지 않아요. 잠시 뒤 다시 시도해 주세요.',
+  disk: '저장 공간이 부족해 새 버전을 풀지 못했어요. 공간을 비운 뒤 다시 시도해 주세요.',
+  files: '파일을 바꾸지 못했어요. lecpage 커넥트를 끄고 다시 켜 주세요(켤 때 새 버전을 받아요).',
+  older: '받은 파일이 지금 버전보다 예전 것이라 바꾸지 않았어요. 지금 버전 그대로 쓰면 돼요.',
 };
 /** 새 판 받기·바꾸기 실패 → UPDATE_ERRORS의 이름. 망(받기·HTTP·시간 초과) · SHA-256 · 묶음이 이상함 · 저장 공간 · 파일 바꾸기(이 PC 파일 오류) */
 export function updateErrorCode(e) {
   const c = String(e?.code ?? '');
   if (c === 'sha256') return 'sha256';
+  if (c === 'older') return 'older';
   if (['tar', 'package', 'size', 'version'].includes(c) || /^(Z_|ERR_BUFFER|ERR_OUT_OF_RANGE)/.test(c)) return 'package';
   if (c === 'ENOSPC') return 'disk';
   if (/^E[A-Z]+$/.test(c) && e?.syscall) return 'files';
   return 'network';
 }
-const updateView = (S) => ({ can: S.canUpdate, build: S.build, latest: S.upd.latest, available: !!S.upd.latest && S.upd.latest !== S.build, state: S.upd.state, to: S.upd.to || '', ...(S.upd.state === 'error' ? { error: S.upd.error, error_ko: UPDATE_ERRORS[S.upd.error] || UPDATE_ERRORS.network } : {}) });
+// available: 받을 새 판이 있음. 받아 보니 지금 판보다 예전 묶음이라 바꾸지 않은 판(S.upd.refused)은 새 판으로 치지 않음
+const updateView = (S) => ({ can: S.canUpdate, build: S.build, latest: S.upd.latest, available: !!S.upd.latest && S.upd.latest !== S.build && S.upd.latest !== S.upd.refused, state: S.upd.state, to: S.upd.to || '', ...(S.upd.state === 'error' ? { error: S.upd.error, error_ko: UPDATE_ERRORS[S.upd.error] || UPDATE_ERRORS.network } : {}) });
 /** 끝났는데 앱이 결과를 아직 받아 가지 않은 작업(6시간 안). 다시 켜면 메모리의 결과가 없어짐 */
 const UNCOLLECTED_MS = 6 * 3600e3;
 const uncollected = (S) => [...S.jobs.values()].some((j) => !j.active && j.result && !j.collected && Date.now() - (j.endedAt || 0) < UNCOLLECTED_MS);
@@ -1163,24 +1187,26 @@ function startUpdate(S, o = {}) {
   p.then(() => { if (S.updStarting === p) S.updStarting = null; }, () => { if (S.updStarting === p) S.updStarting = null; });
   return p;
 }
-async function startUpdateOnce(S, { auto = false } = {}) {
+async function startUpdateOnce(S, { auto = false, keep = false } = {}) {
+  keep = keep || auto; // 받아 가지 않은 결과가 있으면 바꾸지 않음(저절로·실행 파일을 다시 켠 때)
   if (!S.canUpdate) return { error: 'unavailable' };
   if (UPDATING.has(S.upd.state)) return { started: true };
-  if (busyNow(S, { results: auto })) return { error: 'busy' };
+  if (busyNow(S, { results: keep })) return { error: 'busy' };
   let latest; try { latest = await checkLatest(S, { force: true }); } catch (e) { const code = updateErrorCode(e); S.upd = { ...S.upd, state: 'error', error: code }; return { error: code }; }
-  if (latest === S.build) { S.upd = { ...S.upd, state: 'idle', error: '' }; return { upToDate: true }; }
-  if (busyNow(S, { results: auto })) return { error: 'busy' };
+  if (latest === S.build || latest === S.upd.refused) { S.upd = { ...S.upd, state: 'idle', error: '' }; return { upToDate: true }; }
+  if (busyNow(S, { results: keep })) return { error: 'busy' };
   S.upd = { ...S.upd, state: 'download', error: '', to: latest };
-  S.log(`lecpage 커넥트 새 판(${latest})을 받아요${auto ? '(쓰지 않는 동안 저절로)' : ''}`);
+  S.log(`lecpage 커넥트 새 버전(${latest})을 받아요${auto ? '(쓰지 않는 동안 저절로)' : ''}`);
   // keys: 시험이 가짜 릴리스를 시험용 키로 서명할 때만 넘김(실제로는 늘 코드에 박은 SIGNING_KEYS)
   applyUpdate({ root: S.root, base: S.release.base, fetchImpl: S.release.fetchImpl, ...(Array.isArray(S.release.keys) ? { keys: S.release.keys } : {}), onStage: (st) => { S.upd.state = st; } }).then((r) => {
     S.upd = { ...S.upd, state: 'restart', to: r.to };
-    S.log(`새 판(${r.to})으로 바꿨어요. 같은 주소로 다시 켜요(짝은 그대로)`);
+    S.log(`새 버전(${r.to})으로 바꿨어요. 같은 주소로 다시 켜요(짝은 그대로)`);
     setTimeout(() => { Promise.resolve(S.onRestart?.(r)).catch((e) => S.log(`다시 켜지 못했어요: ${cut(e?.message || e, 200)}`)); }, 400); // 앱이 'restart'를 한 번 볼 틈
   }, (e) => {
     const code = updateErrorCode(e);
-    S.upd = { ...S.upd, state: 'error', error: code, to: '' };
-    S.log(`새 판으로 바꾸지 못했어요(${cut(e.message, 160)}). 있던 판 그대로 써요`);
+    // 받은 묶음이 지금 판보다 예전 것(서명한 예전 묶음을 다시 내놓음): 이 판 이름은 다시 받지 않음(저절로 바꾸기가 3시간마다 되받지 않게)
+    S.upd = { ...S.upd, state: 'error', error: code, to: '', ...(code === 'older' ? { refused: latest } : {}) };
+    S.log(`새 버전으로 바꾸지 못했어요(${cut(e.message, 160)}). 쓰던 버전 그대로 써요`);
   });
   return { started: true };
 }
@@ -1196,13 +1222,15 @@ async function handleBridge(S, req, res, url) {
   if (parts[0] === 'update' && parts.length === 1) {
     if (req.method === 'GET') { await checkLatest(S, { force: url.searchParams.has('fresh') }).catch(() => ''); return sendJson(res, 200, { ok: true, update: updateView(S) }); }
     if (req.method === 'POST') {
-      const r = await startUpdate(S);
+      // keep: 받아 가지 않은 결과가 있으면 바꾸지 않음(실행 파일을 다시 켠 때: 사람이 화면에서 [새 버전으로 바꾸기]를 누른 것이 아니라서, 끝난 작업의 결과를 잃지 않게)
+      let o = {}; try { o = JSON.parse((await readBody(req, 1024)).toString('utf8') || '{}'); } catch { /* 빈 본문 */ }
+      const r = await startUpdate(S, { keep: o?.keep === true });
       if (r.error) return fail(res, r.error === 'unavailable' ? 409 : r.error === 'busy' ? 409 : 502, r.error === 'busy' ? 'busy' : `update-${r.error}`, UPDATE_ERRORS[r.error], { update: updateView(S) });
       return sendJson(res, r.started ? 202 : 200, { ok: true, upToDate: !!r.upToDate, update: updateView(S) });
     }
     return fail(res, 405, 'method', '이 주소에서 받지 않는 요청이에요.');
   }
-  if (UPDATING.has(S.upd.state)) return fail(res, 503, 'updating', 'lecpage 커넥트를 새 판으로 바꾸는 중이에요. 잠깐 뒤에 다시 해 주세요.', { update: updateView(S) });
+  if (UPDATING.has(S.upd.state)) return fail(res, 503, 'updating', 'lecpage 커넥트를 새 버전으로 바꾸는 중이에요. 잠깐 뒤에 다시 해 주세요.', { update: updateView(S) });
   // ── ChatGPT 계정(Sign in with ChatGPT). 토큰은 이 프로그램 안에만: 앱에는 연결 여부·이메일·모델 목록만 ──
   if (parts[0] === 'chatgpt') {
     const sub = parts[1] || '';
@@ -1300,6 +1328,8 @@ async function handleBridge(S, req, res, url) {
     }
   }
   if (parts[0] === 'convert' && parts.length === 1) return (await import('./studio-convert.mjs')).handleConvert(S, req, res, url, { readBody, sendJson, fail }); // 깔린 PowerPoint·한글·Keynote·LibreOffice로 교재 → PDF
+  if (parts[0] === 'cloudflare') return (await import('./studio-deploy.mjs')).handleCloudflare(S, req, res, url, parts, { readBody, sendJson, fail, openBrowser, killTree }); // 내 Cloudflare 계정에 사이트·참여 기능 서버 올리기(로그인 한 번)
+  if (parts[0] === 'vercel') return (await import('./studio-vercel.mjs')).handleVercel(S, req, res, url, parts, { readBody, sendJson, fail, openBrowser, killTree }); // 내 Vercel 계정에 사이트 올리기(공식 CLI 로그인 한 번)
   if (parts[0] !== 'jobs') return fail(res, 404, 'not-found', '없는 주소예요.');
   if (parts.length === 1 && req.method === 'POST') {
     if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) return fail(res, 415, 'content-type', '본문은 application/json이어야 해요.');
@@ -1457,7 +1487,7 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   S.port = server.address().port;
   S.hostPort = `127.0.0.1:${S.port}`;
   S.origin = `http://${S.hostPort}`;
-  S.origins = allowedOrigins(S.origin);
+  S.origins = allowedOrigins(S.origin, process.env, { dev: existsSync(join(S.root, '.git')) });
   S.siwc = createSiwc({ home: S.home, port: S.port, log, ...(fetchImpl ? { fetchImpl } : {}) });
   S.appUrl = (appUrl || process.env.LECPAGE_STUDIO_APP_URL || 'https://lecpage.com').replace(/\/+$/, '');
   try { S.origins.add(new URL(S.appUrl).origin); } catch { /* 잘못된 주소 */ }
@@ -1473,7 +1503,7 @@ export async function startStudio({ port, dist, remote, appUrl, jobMs, log = () 
   const autoTick = async () => {
     if (!S.canUpdate || UPDATING.has(S.upd.state) || busyNow(S, { results: true }) || Date.now() - S.lastUse < 10 * 60e3) return;
     const latest = await checkLatest(S, { force: true }).catch(() => '');
-    if (latest && latest !== S.build && latest !== process.env.LECPAGE_CONNECT_SKIP && Date.now() - S.lastUse >= 10 * 60e3) await startUpdate(S, { auto: true });
+    if (latest && latest !== S.build && latest !== S.upd.refused && latest !== process.env.LECPAGE_CONNECT_SKIP && Date.now() - S.lastUse >= 10 * 60e3) await startUpdate(S, { auto: true });
   };
   const timers = autoUpdate && S.canUpdate ? [setTimeout(autoTick, 2 * 60e3), setInterval(autoTick, 3 * 3600e3)] : [];
   for (const t of timers) t.unref?.();
@@ -1562,18 +1592,22 @@ const launcherCloses = (args = {}) => process.platform === 'win32' && !!process.
  * 스스로 바꿀 수 없는 아주 예전 판이면 지금처럼 새 판을 다른 포트에 켬(앱은 새 포트로 다시 짝).
  * 브라우저는 켤 때처럼 lecpage.com/#pair=…(같은 토큰이라 앱이 그대로 받음)로 엶. 자동 시작(--autostart)·--no-open이면 열지 않음
  */
-export async function studioAgain({ args = {}, home = studioHome(), root = ROOT, log = () => {}, json = false, closes = launcherCloses(args), open: openImpl = openBrowser, fail = (m) => { throw new Error(m); }, wait = (ms) => new Promise((r) => setTimeout(r, ms)), find = findRunning, ask = askLocal } = {}) {
+export async function studioAgain({ args = {}, home = studioHome(), root = ROOT, log = () => {}, json = false, closes = launcherCloses(args), open: openImpl = openBrowser, fail = (m) => { throw new Error(m); }, wait = (ms) => new Promise((r) => setTimeout(r, ms)), find = findRunning, ask = askLocal, latest = process.env.LECPAGE_CONNECT_LATEST || '' } = {}) {
   const token = savedToken(home);
   let run = await find(token);
   if (!run) return false;
   if (args['new-token']) { fail(`lecpage 커넥트가 이미 켜져 있어요(http://127.0.0.1:${run.port}/). 켜진 창을 닫은 뒤 다시 --new-token으로 켜 주세요.`); return true; }
   const mine = readBuild(root) || `${VERSION}-dev`;
-  if (run.status.build && run.status.build !== mine) {
+  // 실행 파일이 새 판(latest)을 보고도 묶음을 갈아 끼우지 않고 넘김(켜진 커넥트 밑의 파일을 바꾸지 않으려고, LECPAGE_CONNECT_LATEST):
+  // 켜진 커넥트가 그 판이 아니면 스스로 바꾸게 부탁함. 만드는 중이면 그대로 쓰고, 한가할 때 저절로 바뀜
+  const stale = !!run.status.build && run.status.build !== mine;
+  const behind = /^[\w.+-]{1,64}$/.test(latest) && !!run.status.build && run.status.build !== latest;
+  if (stale || behind) {
     const can = (run.status.caps || []).includes('update') && run.status.update?.can;
-    if (!can) { log(`예전 판 lecpage 커넥트가 켜져 있어요(http://127.0.0.1:${run.port}/). 그 창은 닫아도 돼요. 새 판을 따로 켜요.`); return false; }
-    const r = await ask(run.port, { method: 'POST', path: '/bridge/update', headers: { 'x-lecpage-bridge': token, origin: `http://127.0.0.1:${run.port}` }, body: {}, ms: 60000 }).catch(() => null);
+    if (!can && stale) { log(`예전 버전 lecpage 커넥트가 켜져 있어요(http://127.0.0.1:${run.port}/). 그 창은 닫아도 돼요. 새 버전을 따로 켜요.`); return false; }
+    const r = !can ? null : await ask(run.port, { method: 'POST', path: '/bridge/update', headers: { 'x-lecpage-bridge': token, origin: `http://127.0.0.1:${run.port}` }, body: { keep: true }, ms: 60000 }).catch(() => null);
     if (r?.status === 202) {
-      log('켜져 있던 lecpage 커넥트를 새 판으로 바꾸는 중이에요(10초쯤)…');
+      log('켜져 있던 lecpage 커넥트를 새 버전으로 바꾸는 중이에요(10초쯤)…');
       const before = run.status.build; run = null;
       for (let i = 0; i < 120 && !run; i++) {
         await wait(1000);
@@ -1624,7 +1658,7 @@ export async function studioCmd(h) {
   const line = (a) => `${a.name} ${a.installed ? `${a.version || '?'} · ${a.loggedIn === false ? '로그인 안 됨' : a.auth === 'subscription' ? (a.id === 'codex' ? 'ChatGPT로 로그인' : '구독으로 로그인') : a.auth === 'api-key' ? 'API 키로' : '로그인 방식 모름'}` : '없음'}`;
   if (json) console.log(JSON.stringify({ ok: true, url, port: st.port, app: S.app.mode, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: { connected: cg.connected, plan: cg.plan } }));
   else console.log([
-    `lecpage 커넥트 ${S.build}${restarted ? ' (새 판으로 다시 켰어요)' : ''}`,
+    `lecpage 커넥트 ${S.build}${restarted ? ' (새 버전으로 다시 켰어요)' : ''}`,
     open === pairUrl ? `  lecpage.com을 열어 이 PC와 짝을 맞춰요. 브라우저가 열리지 않으면 lecpage.com에서 [ChatGPT·Claude 계정으로 연결]을 눌러요.` : open ? `  주소 ${url}  (브라우저가 열리지 않으면 이 주소를 직접 열어 주세요)` : `  켜져 있어요. lecpage.com에서 이어서 해요.`,
     `  Safari 등에서 lecpage.com이 이 PC에 닿지 않으면 이 주소에서 써요: ${url}`,
     `  ChatGPT 계정 ${cg.connected ? `연결됨${cg.plan ? '' : '(요금제 사용 허락 없음)'}` : '연결 안 됨'} / ${line(ag.claude)} / ${line(ag.codex)}`,

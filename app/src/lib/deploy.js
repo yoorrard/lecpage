@@ -15,7 +15,7 @@ export const NETLIFY_TOKEN_URL = 'https://app.netlify.com/user/applications#pers
 /** 인터넷에 닿지 못한 오류(fetch가 던지는 TypeError)를 쉬운 말로 */
 const OFFLINE = '인터넷에 닿지 못했어요. 연결을 확인하고 다시 해 주세요. 기관·회사 망이 막았다면 휴대폰 핫스팟으로 바꿔 보세요.';
 // 학교·기관 망의 차단 화면: API 주소인데 웹 페이지(HTML)가 옴 → 영어·빈 값 대신 같은 안내(인터넷·핫스팟)
-const BLOCKED = '이 망에서 배포할 곳에 닿지 않아요. 학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.';
+const BLOCKED = '이 망에서 배포할 곳에 닿지 않아요. 회사·학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.';
 const blockPage = (r) => r.status < 500 && r.status !== 429 && /text\/html|application\/xhtml/i.test(r.headers?.get?.('content-type') || '');
 async function net(url, init) {
   let r;
@@ -143,13 +143,16 @@ const VC_ERR = {
   409: 'Vercel 프로젝트를 옮기는 중이에요. 잠시 뒤 다시 해 주세요.',
   429: '오늘 배포할 수 있는 횟수를 넘었어요. 내일 다시 하거나 다른 곳에 배포해 주세요.',
 };
+const VC_SCOPE = '이 Vercel 토큰으로는 이 계정에 배포할 수 없어요. 토큰을 만들 때 Scope를 Full Account로 골라 다시 만들어 주세요.';
 async function vc(token, method, path, body, headers = {}) {
   const raw = body instanceof Uint8Array;
   const r = await net(VC + path, { method, headers: { authorization: `Bearer ${token}`, ...(body && !raw ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? (raw ? body : JSON.stringify(body)) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const code = j.error?.code || '';
-    const e = new Error(code === 'missing_files' ? '파일을 더 올려야 해요.' : VC_ERR[r.status] || j.error?.message || `Vercel 오류 ${r.status}`);
+    // 403 + 'scope': 토큰을 만들 때 Scope를 팀 하나로 골랐거나 권한이 좁은 토큰(실측 2026-11-23: "Trying to access resource under scope …") → 무엇을 다시 할지 알려 줌
+    const scope = r.status === 403 && /scope/i.test(j.error?.message || '');
+    const e = new Error(code === 'missing_files' ? '파일을 더 올려야 해요.' : scope ? VC_SCOPE : VC_ERR[r.status] || j.error?.message || `Vercel 오류 ${r.status}`);
     e.status = r.status; e.code = code; e.missing = j.error?.missing || []; throw e;
   }
   return j;
@@ -260,7 +263,7 @@ export function instantInfo(fresh = false) {
     // 느리게 막힌 망(응답 없이 붙잡힘)에서도 8초 안에 '닿지 않음'으로 끝냄. 못 받은 결과(null)는 오래 기억하지 않음(망이 돌아오면 다시 물음)
     const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000);
     infoP = fetch(`${PUBLISH_API}/api/info`, { signal: c.signal }).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.ok ? j : null)).catch(() => null)
-      .finally(() => clearTimeout(t)).then((j) => { if (!j) infoAt = Date.now() - 50000; return j; });
+      .finally(() => clearTimeout(t)).then((j) => { if (!j) infoAt = Date.now() - 50000; else quotaNow = j.quota; return j; });
   }
   return infoP;
 }
@@ -299,12 +302,24 @@ export function deviceId() {
   return deviceMem;
 }
 /** 이 기기의 오늘 남은 새 사이트 몫(서버가 새 사이트를 만들 때 알려 줌). { left, scope: 'device'|'ip' } 또는 null(모름·하루가 바뀜) */
-export function instantShare(now = Date.now()) {
-  try { const s = JSON.parse(localStorage.getItem('lecpage:instant-share') || 'null'); return s && s.until > now && Number.isFinite(s.left) ? s : null; } catch { return null; }
+export function instantShare(now = Date.now(), quota = undefined) {
+  try {
+    const s = JSON.parse(localStorage.getItem('lecpage:instant-share') || 'null');
+    if (!(s && s.until > now && Number.isFinite(s.left))) return null;
+    // 서버가 횟수를 새로 세기 시작했으면(/api/info quota가 적어 둔 것과 다름) 예전에 적어 둔 몫은 버림. quota를 주지 않는 예전 서버는 견주지 않음
+    if (quota !== undefined && quota !== null && s.quota !== quota) { localStorage.removeItem('lecpage:instant-share'); return null; }
+    return s;
+  } catch { return null; }
 }
+let quotaNow; // 마지막으로 받은 /api/info의 quota(횟수 초기화 번호). 몫을 적어 둘 때 같이 적음
 function keepShare(left, scope, until = nextReset()) {
-  try { localStorage.setItem('lecpage:instant-share', JSON.stringify({ left, scope, until })); } catch { /* 몰라도 배포는 됨 */ }
+  try { localStorage.setItem('lecpage:instant-share', JSON.stringify({ left, scope, until, ...(quotaNow !== undefined && quotaNow !== null ? { quota: quotaNow } : {}) })); } catch { /* 몰라도 배포는 됨 */ }
 }
+/**
+ * 바로 배포 서버가 지금 새 참여 기능 방을 여는지(/api/info live). live가 없으면 참여 기능을 쓰지 않는 서버,
+ * accepting이 false면 지금은 방을 열지 않음, onlyBooked면 연수 날짜가 있는 사이트의 방만. 이 값들이 없는 예전 서버는 연다고 봄
+ */
+export const instantLiveOpen = (info, date = '') => !!info?.live?.url && info.live.accepting !== false && (!info.live.onlyBooked || !!date);
 /** 'YYYY-MM-DD' + 'HH:MM'(한국 시간) → 그 시각. 시각이 없으면 오전 10시(서버와 같게) */
 function kstAt(date, time = '') {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || '')); if (!m) return NaN;
@@ -343,7 +358,7 @@ async function ip(method, path, { key, json, raw } = {}) {
   let r;
   try { r = await fetch(PUBLISH_API + path, { method, headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), ...(json ? { 'content-type': 'application/json' } : raw ? { 'content-type': 'application/octet-stream' } : {}) }, body: json ? JSON.stringify(json) : raw }); }
   catch { const e = new Error('바로 배포 서버에 닿지 못했어요. 인터넷을 확인하고 다시 해 주세요.'); e.status = 0; throw e; }
-  if (blockPage(r)) { const e = new Error('이 망에서 바로 배포 서버에 닿지 않아요. 학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.'); e.status = 0; e.blocked = true; throw e; }
+  if (blockPage(r)) { const e = new Error('이 망에서 바로 배포 서버에 닿지 않아요. 회사·학교·기관 망이 막은 것 같아요. 휴대폰 핫스팟으로 바꾼 뒤 다시 해 주세요.'); e.status = 0; e.blocked = true; throw e; }
   const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
   if (!r.ok) {
     const x = j.error || {}; const code = x.code || '';
@@ -390,7 +405,10 @@ export function instantStatus({ date = '', site = '' } = {}) {
  * @returns {Promise<{url, altUrl?, view?, id, key, expiresAt, liveUrl?, liveOff?, advice?}>} altUrl: 학교망에서 첫 주소가 막힐 때 쓸 두 번째 주소,
  *   liveOff: { reason, day, next } 사이트는 바로 배포, 참여 기능은 강사 계정(next 순서), advice: 오래 쓸 사이트면 내 계정을 권함(새로 만들 때)
  */
-/** 배포를 끝내지 못한 바로 배포 사이트(연수마다 하나, 이 탭 동안만): 다시 누르면 새로 만들지 않고 이 사이트에 이어서 올림 */
+/**
+ * 배포를 끝내지 못한 바로 배포 사이트(연수마다 하나): 다시 누르면 새로 만들지 않고 이 사이트에 이어서 올림(실패할 때마다 하루 몫을 쓰지 않게).
+ * 이 탭 동안은 여기에, 새로 고친 뒤에는 부른 쪽이 연수 기록에 남긴 것(onTry로 받아 tried로 다시 줌. 수정 키를 두는 곳과 같은 보관)
+ */
 const instantTries = new Map();
 export async function deployInstant(o) {
   let step = '준비';
@@ -402,12 +420,13 @@ export async function deployInstant(o) {
     throw e;
   }
 }
-async function deployInstantRun({ site, title, files, live = null, booking = null, onLiveOff = null, onProgress = () => { }, tryKey = '' }) {
+async function deployInstantRun({ site, title, files, live = null, booking = null, onLiveOff = null, onProgress = () => { }, tryKey = '', tried = null, onTry = null }) {
   let pct = 2;
   const progress = (step, at = pct) => { pct = at; onProgress({ step, pct }); };
   const queued = inLine(progress);
   progress('준비');
-  const first = site?.id && site?.key ? site : (tryKey && instantTries.get(tryKey)) || null; // 지난번에 만들다 만 사이트
+  // 지난번에 만들다 만 사이트: 이 탭의 기억 → 부른 쪽이 연수 기록에 남겨 둔 것(tried, 새로 고친 뒤에도 같은 사이트를 다시 씀)
+  const first = site?.id && site?.key ? site : (tryKey && instantTries.get(tryKey)) || (tried?.id && tried?.key ? tried : null);
   let s = first;
   let liveOff = null; let advice = null;
   const off = (x) => { liveOff = { reason: x.reason || 'booked', day: x.day || booking?.date || '', next: x.next || x.liveNext || ['cloudflare', 'supabase'] }; };
@@ -424,7 +443,10 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
       throw e;
     }
   };
-  const keep = (x) => { if (tryKey && x?.id && x?.key) instantTries.set(tryKey, { id: x.id, key: x.key, url: x.url, expiresAt: x.expiresAt }); return x; };
+  const keep = (x) => {
+    if (tryKey && x?.id && x?.key) { const t = { id: x.id, key: x.key, url: x.url, expiresAt: x.expiresAt }; instantTries.set(tryKey, t); try { onTry?.(t); } catch { /* 기억 못 해도 배포는 이어 감 */ } }
+    return x;
+  };
   if (!s) s = keep(await newSite());
   let blobs; let manifest;
   /** 올릴 파일 목록(sha256). 참여 기능을 넘겨야 하면 이 서버의 참여 기능을 뺀 파일로 먼저 다시 만듦 */

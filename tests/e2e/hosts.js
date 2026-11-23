@@ -48,6 +48,7 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, acceptDownloads: true }); await mockAll(ctx);
     const p = await ctx.newPage(); const errs = watch(p);
     await openShare(p); await pick(p, 'Cloudflare');
+    await p.click('.publish .run-alt > summary'); // 커넥트가 없으면 켜는 법이 먼저, 직접 배포(ZIP)는 접혀 있음
     console.log('cloudflare steps:', (await p.locator('.publish .walk-h').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' / '));
     const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), (async () => { await p.click('.publish .walk-b button:has-text("사이트 ZIP 다운로드")'); await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {}); })()]);
     const zsize = fs.statSync(await dl.path()).size; ok('zip downloaded', zsize > 100000, `${dl.suggestedFilename()} ${zsize}B`);
@@ -67,18 +68,27 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 }); await mockAll(ctx);
     const p = await ctx.newPage(); const errs = watch(p);
     await openShare(p);
-    if (w === 390) { ok('no overflow @390 before publish', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))); await p.locator('h2:has-text("어디에 공개할까요?"), .ready-t:has-text("올릴 곳"), .ready-t:has-text("배포할 곳")').first().evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.waitForTimeout(200); await p.screenshot({ path: OUT + '390-where.png' }); await p.click('.publish .walk-b button:has-text("이미 가입했어요")'); await p.locator('.publish .walk').evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.screenshot({ path: OUT + '390-token.png' }); }
+    if (w === 390) { ok('no overflow @390 before publish', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))); await p.locator('h2:has-text("어디에 공개할까요?"), .ready-t:has-text("올릴 곳"), .ready-t:has-text("배포할 곳")').first().evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.waitForTimeout(200); await p.screenshot({ path: OUT + '390-where.png' }); await pick(p, 'GitHub Pages'); await p.click('.publish .walk-b button:has-text("이미 가입했어요")'); await p.locator('.publish .walk').evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.screenshot({ path: OUT + '390-token.png' }); }
     if (await p.locator('#live-setup > summary').count()) await p.click('#live-setup > summary'); // 지금 화면은 체크리스트 첫 줄에 펼쳐 있음
     // 다른 곳에 배포할 때는 배포할 곳 바로 아래 안내가 할 일을 알려 주고 이 줄은 접혀 있음 → [연결]로 펼침
     if (await p.locator('#live-setup .ready-h button:text-is("연결")').count()) await p.click('#live-setup .ready-h button:text-is("연결")');
+    // 화면에는 방법 하나만(처음에는 추천). 나머지는 접힌 '다른 방법으로 연결'에서 고르면 그 방법으로 바뀜
+    const WAY = { '구글 시트': 'sheets', Supabase: 'supabase', '내 서버·Cloudflare': 'http' };
+    const pickWay = async (m) => {
+      const b = p.locator(`#live-setup .live-others .live-pick[data-method="${WAY[m]}"]`);
+      if (await b.count()) { if (!(await p.locator('#live-setup .live-others[open]').count())) await p.click('#live-setup .live-others > summary'); await b.click(); }
+      await p.waitForTimeout(200);
+    };
+    ok(`${w} live: recommended way first, others folded`, await p.locator('#live-setup .live-others:not([open])').count() === 1 && !(await p.locator('#live-setup .seg').count()) && /추천: 내 서버\(Cloudflare\)/.test(await p.locator('#live-setup').innerText()));
     for (const m of ['구글 시트', 'Supabase', '내 서버·Cloudflare']) {
-      await p.click(`#live-setup .seg button:has-text("${m}")`); await p.waitForTimeout(200);
+      await pickWay(m);
       const n = await p.locator('#live-setup .walk > li').count();
+      ok(`${w} live ${m}: steps cut down`, n === { '구글 시트': 4, Supabase: 3, '내 서버·Cloudflare': 2 }[m] && await p.locator('#live-setup .live-others:not([open])').count() === 1, String(n));
       for (let i = 0; i < n; i++) { await p.locator('#live-setup .walk-h').nth(i).click(); await p.waitForTimeout(60); }
       ok(`${w} live ${m}: ${n} steps, one open`, await p.locator('#live-setup .walk-b').count() === 1, (await p.locator('#live-setup .walk-h').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' / '));
       ok(`${w} live ${m}: no overflow`, !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
     }
-    await p.click('#live-setup .seg button:has-text("구글 시트")'); await p.waitForTimeout(150);
+    await pickWay('구글 시트');
     await p.locator('#live-setup').evaluate((n) => n.scrollIntoView({ block: 'start' })); await p.waitForTimeout(200); await p.screenshot({ path: OUT + `${w}-live-sheets.png` });
     // 잘못된 주소 → 쉬운 말
     await p.locator('#live-setup .walk-h').last().click();

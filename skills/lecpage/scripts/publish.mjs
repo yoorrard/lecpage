@@ -25,8 +25,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILL = join(HERE, '..');
 const RELAY_SRC = join(SKILL, 'backends', 'cloudflare');
-const WRANGLER_VER = (() => { try { return JSON.parse(readFileSync(join(RELAY_SRC, 'package.json'), 'utf8')).devDependencies.wrangler; } catch { return '4'; } })();
-const NAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const WRANGLER_VER = (() => { try { return JSON.parse(readFileSync(join(RELAY_SRC, 'package.json'), 'utf8')).devDependencies.wrangler; } catch { return '4'; } })();
+export const NAME_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const MiB = 1024 * 1024;
 
 /** 사이트 폴더의 파일 수·가장 큰 파일(숨은 파일 포함: wrangler는 숨은 폴더도 올림) */
@@ -63,9 +63,9 @@ function wrangler(argv, { cwd, input } = {}) {
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, out: redact(out), raw: out };
 }
-const redact = (s) => String(s).replace(/(CLOUDFLARE_API_TOKEN|ONPOD_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***').replace(/\b(op_u_|opk_|op_p_)[A-Za-z0-9_-]{6,}/g, '$1***');
+export const redact = (s) => String(s).replace(/(CLOUDFLARE_API_TOKEN|ONPOD_TOKEN|token|Bearer)\s*[:=]?\s*[A-Za-z0-9_\-.]{20,}/gi, '$1 ***').replace(/\b(op_u_|opk_|op_p_)[A-Za-z0-9_-]{6,}/g, '$1***');
 /** 출력에서 주소 찾기: https://<이름>.<계정>.workers.dev (시험용으로 http://127.0.0.1:포트도) */
-function findUrl(out, name) {
+export function findUrl(out, name) {
   const esc = name.replace(/[-]/g, '\\-');
   const m = out.match(new RegExp(`https://${esc}\\.[a-z0-9-]+\\.workers\\.dev`)) || out.match(new RegExp(`https?://[^\\s"']*${esc}[^\\s"']*`));
   return m ? m[0].replace(/[.,)]+$/, '') : '';

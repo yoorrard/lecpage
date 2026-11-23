@@ -92,6 +92,9 @@ async function openShare(p, example = '마음이 먼저') {
 }
 /** 고른 곳에 토큰으로 연결(순서의 마지막 단계에서 토큰을 넣고 [연결]) */
 async function connect(p, token, scope = '.publish') {
+  // 로그인 한 번이 먼저인 곳(Netlify, 커넥트가 켜진 Vercel)은 토큰 순서가 접힌 '다른 방법: 토큰으로 연결' 안에 있음
+  const alt = p.locator(`${scope} details.run-alt:not([open]) > summary:has-text("토큰으로 연결")`);
+  if (await alt.count()) await alt.first().click();
   await p.click(`${scope} .walk-h:has-text("토큰 붙여넣기")`);
   await p.fill(`${scope} .walk input[type=password]`, token);
   await p.click(`${scope} .walk-b button:has-text("연결")`);

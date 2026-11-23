@@ -308,6 +308,28 @@ test('supabase (2026-11d): sessions survive a lockout; polls keep to options; fi
   spawnSync('sleep', ['0.05']);
   const in2 = psql(`select public.lec_add('SUPAS', ${q(a.token)}, 'attendance', ${j({ kind: 'in' })})`, o);
   assert.equal(in2.at, in1.at);
+  // 여러 날 연수: 날짜별 값 days(오늘 값 하나, 그날 첫 입실). 예전 행(days 없음, 어제 입실)은 at 하나로 시작하고 오늘이 더해짐
+  const kday = (ms) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date(ms));
+  assert.deepEqual(in2.days, { [kday(in1.at)]: in1.at });
+  psql(`update public.lec_attendance set days = null, at = at - interval '1 day' where by = ${q(a.id)} and kind = 'in'`, { role: null });
+  const in3 = psql(`select public.lec_add('SUPAS', ${q(a.token)}, 'attendance', ${j({ kind: 'in' })})`, o);
+  assert.deepEqual(Object.keys(in3.days).sort(), [kday(in1.at - 86400e3), kday(in1.at)].sort(), 'an old row starts from its at; today is added');
+  assert.equal(in3.days[kday(in1.at - 86400e3)], in1.at - 86400e3); assert.equal(in3.at, in1.at - 86400e3, 'at stays the first check-in overall');
+  const out1 = psql(`select public.lec_add('SUPAS', ${q(a.token)}, 'attendance', ${j({ kind: 'out' })})`, o);
+  assert.deepEqual(Object.keys(out1.days), [kday(out1.at)]);
+  // the admin export (what the console builds 이수 from) carries days; a participant reads their own
+  const expAtt = psql(`select public.lec_export('SUPAS', ${q(s.session)}, 'attendance')`, o).attendance.filter((x) => x.by === a.id);
+  assert.equal(expAtt.length, 2); assert.ok(expAtt.every((x) => x.days && typeof x.days === 'object'));
+  assert.equal(psql(`select public.lec_mine('SUPAS', ${q(a.token)})`, o).attendance.find((x) => x.kind === 'in').days[kday(in1.at)] >= in1.at, true);
+  // 31일까지만 남김
+  const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`2026-${String(1 + Math.floor(i / 28)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}`, 1000 + i]));
+  assert.equal(Object.keys(psql(`select lec_private.att_days(${j(many)}, null, 'in', now())`, { role: null })).length, 31);
+  // 예전에 설치한 DB(days 칸 없음)에 새 schema.sql을 다시 실행: 칸이 생기고 있던 줄은 그대로(at 하나로 읽힘), 다음 입실부터 날짜별로 쌓임
+  psql(`alter table public.lec_attendance drop column days`, { role: null });
+  psql('', { role: null, file: schemaFile });
+  assert.equal(psql(`select public.lec_export('SUPAS', ${q(s.session)}, 'attendance')`, o).attendance.find((x) => x.by === a.id && x.kind === 'in').days, null);
+  const in4 = psql(`select public.lec_add('SUPAS', ${q(a.token)}, 'attendance', ${j({ kind: 'in' })})`, o);
+  assert.deepEqual(Object.keys(in4.days).sort(), [kday(in1.at - 86400e3), kday(in1.at)].sort()); assert.equal(in4.at, in1.at - 86400e3);
   // 편의 2: name·school later, with consent
   fails(() => psql(`select public.lec_update('SUPAS', ${q(a.token)}, null, 'participants', ${q(a.id)}, ${j({ name: '홍길동' })})`, o), 'PT400', 'consent_required');
   psql(`select public.lec_update('SUPAS', ${q(a.token)}, null, 'participants', ${q(a.id)}, ${j({ name: '홍길동', school: '한빛초', consent: true })})`, o);

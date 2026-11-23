@@ -45,7 +45,7 @@ if [ $E2E = 1 ]; then
   (npx vite preview --host 127.0.0.1 --port 4175 --strictPort > /dev/null 2>&1 &)
   sleep 4
   cd "$R/tests/e2e"
-  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict wipe; do
+  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict wipe multi-material live-setup netlify-login; do
     BASE=http://localhost:4175/ OUT="$O/shots/" timeout 600 node "$t.js" > "$O/log-e2e-$t.txt" 2>&1
     f=$(grep -c "^FAIL" "$O/log-e2e-$t.txt"); p=$(grep -c "^PASS" "$O/log-e2e-$t.txt")
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "TimeoutError\|pageerror\|SCRIPT ERROR" "$O/log-e2e-$t.txt"; then echo "e2e $t: ok ($p pass)"; else echo "e2e $t: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-$t.txt"; fi
@@ -69,5 +69,14 @@ if [ $E2E = 1 ]; then
     if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-live-hosts.txt"; then echo "e2e live-hosts: ok ($p pass)"; else echo "e2e live-hosts: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-live-hosts.txt"; fi
     pkill -f "vite preview --outDir dist-instant"
   else echo "app build (instant): FAIL"; fi
+  # 내 Cloudflare 계정에 한 번에(실제 커넥트 + 가짜 wrangler·가짜 Cloudflare, 포트 4351·4352)
+  cd "$R/tests/e2e"
+  DIST="$V/app/dist" OUT="$O/shots/" timeout 400 node cf-connect.js > "$O/log-e2e-cf-connect.txt" 2>&1
+  f=$(grep -c "^FAIL" "$O/log-e2e-cf-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-cf-connect.txt")
+  if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-cf-connect.txt"; then echo "e2e cf-connect: ok ($p pass)"; else echo "e2e cf-connect: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-cf-connect.txt"; fi
+  # 내 Vercel 계정에 한 번에(실제 커넥트 + 가짜 vercel CLI, 포트 4433·4434)
+  DIST="$V/app/dist" OUT="$O/shots/" timeout 400 node vc-connect.js > "$O/log-e2e-vc-connect.txt" 2>&1
+  f=$(grep -c "^FAIL" "$O/log-e2e-vc-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-vc-connect.txt")
+  if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-vc-connect.txt"; then echo "e2e vc-connect: ok ($p pass)"; else echo "e2e vc-connect: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-vc-connect.txt"; fi
 fi
 true

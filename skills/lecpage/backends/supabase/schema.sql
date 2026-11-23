@@ -145,6 +145,8 @@ create table if not exists public.lec_attendance (
   unique (training_code, by, kind)
 );
 create index if not exists lec_attendance_rev on public.lec_attendance (training_code, rev);
+-- 여러 날 연수: 날짜별 값 { 'YYYY-MM-DD': ms }(날마다 그날의 첫 입실·마지막 퇴실). 예전 행은 비어 있고 at 하나로 읽힘
+alter table public.lec_attendance add column if not exists days jsonb;
 
 create table if not exists public.lec_progress (
   id uuid primary key default gen_random_uuid(),
@@ -935,6 +937,26 @@ begin
   return jsonb_build_object('id', v_id, 'token', v_token, 'nickname', v_nick, '_flush', lec_private.poke(v_code));
 end $$;
 
+/* 여러 날 연수: 출석의 날짜별 값 { 'YYYY-MM-DD': ms }. 입실은 그날 가장 이른 시각, 퇴실은 가장 늦은 시각, 최근 31일만.
+   예전 행(days 없음)은 그 행의 at 하나로 시작. Node 서버(lib/protocol.js attDays·seedDays)와 같은 규칙, 날짜는 Asia/Seoul 기준 */
+create or replace function lec_private.att_days(p_prev jsonb, p_prev_at timestamptz, p_kind text, p_at timestamptz)
+returns jsonb language plpgsql stable set search_path = '' as $$
+declare
+  d jsonb := case when jsonb_typeof(p_prev) = 'object' then p_prev
+                  when p_prev_at is not null then jsonb_build_object(to_char(p_prev_at at time zone 'Asia/Seoul', 'YYYY-MM-DD'), lec_private.ms(p_prev_at))
+                  else '{}'::jsonb end;
+  k text := to_char(p_at at time zone 'Asia/Seoul', 'YYYY-MM-DD');
+  v bigint := lec_private.ms(p_at);
+  cur bigint;
+begin
+  if jsonb_typeof(d -> k) = 'number' then cur := (d ->> k)::numeric::bigint; end if;
+  d := d || jsonb_build_object(k, case when cur is null or cur = 0 then v when p_kind = 'in' then least(cur, v) else greatest(cur, v) end);
+  if (select count(*) from jsonb_object_keys(d)) > 31 then
+    select coalesce(jsonb_object_agg(x.key, x.value), '{}'::jsonb) into d from (select e.key, e.value from jsonb_each(d) e order by e.key desc limit 31) x;
+  end if;
+  return d;
+end $$;
+
 create or replace function public.lec_add(p_code text, p_token text, p_col text, p_doc jsonb, p_admin text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -981,9 +1003,11 @@ begin
   case p_col
     when 'attendance' then
       -- (8) a second tap keeps the first check-in and the last check-out
-      insert into public.lec_attendance as a (training_code, by, kind, at, cid, rev)
-      values (v_code, p.id, lec_private.jenum(p_doc, 'kind', array['in', 'out']), now(), v_cid, v_rev)
+      -- 여러 날 연수: days에 날마다 그날의 첫 입실·마지막 퇴실을 따로 남김(at은 예전처럼 전체의 첫 입실·마지막 퇴실)
+      insert into public.lec_attendance as a (training_code, by, kind, at, days, cid, rev)
+      values (v_code, p.id, lec_private.jenum(p_doc, 'kind', array['in', 'out']), now(), lec_private.att_days(null, null, 'in', now()), v_cid, v_rev)
       on conflict (training_code, by, kind) do update set at = case when a.kind = 'in' then least(a.at, now()) else greatest(a.at, now()) end,
+        days = lec_private.att_days(a.days, a.at, a.kind, now()),
         cid = excluded.cid, rev = excluded.rev, updated_at = now()
       returning lec_private.out('attendance', to_jsonb(a.*)) into j;
     when 'progress' then
@@ -1007,7 +1031,7 @@ begin
       v_text := lec_private.jtxt(p_doc, 'text', 1000, false, true);
       v_files := lec_private.clean_files(p_doc -> 'files', v_code, p.id, null);
       if v_text = '' and jsonb_array_length(v_files) = 0 then perform lec_private.fail(400, 'required', 'text 또는 files가 필요합니다.'); end if;
-      if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
+      if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.'); end if;
       insert into public.lec_posts as o (training_code, by, kind, text, nickname, files, license, cid, rev)
       values (v_code, p.id, coalesce(nullif(lec_private.jtxt(p_doc, 'kind', 32), ''), 'post'), v_text, p.nickname, v_files, lec_private.jtxt(p_doc, 'license', 40), v_cid, v_rev)
       returning o.id, lec_private.out('posts', to_jsonb(o.*)) into v_id, j;
@@ -1108,7 +1132,7 @@ begin
   end if;
   if p_col = 'posts' and 'files' = any (v_keys) then
     v_files := lec_private.clean_files(p_patch -> 'files', v_code, p.id, v_id);
-    if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
+    if jsonb_array_length(v_files) > 0 and not lec_private.uploads_on(t) then perform lec_private.fail(403, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.'); end if;
     -- files dropped from the post go to the trash; new ones are linked to it
     insert into lec_private.file_trash (path, training_code)
       select lec_private.file_path(e, v_code), v_code from jsonb_array_elements(r -> 'files') e
@@ -1229,7 +1253,7 @@ begin
   v_id := lec_private.to_uuid(p_id);
   execute format('select to_jsonb(x) from public.%I x where x.training_code = $1 and x.id = $2 for update', 'lec_' || p_col) into r using v_code, v_id;
   if r is null then perform lec_private.fail(404, 'not_found', '없는 글입니다.'); end if;
-  if p_col = 'questions' and r ->> 'status' = 'hidden' then perform lec_private.fail(409, 'hidden', '숨겨진 질문입니다.'); end if;
+  if p_col = 'questions' and r ->> 'status' = 'hidden' then perform lec_private.fail(409, 'hidden', '숨겨진 질문이에요.'); end if;
   insert into lec_private.votes (training_code, col, doc, by) values (v_code, p_col, v_id, p.id) on conflict do nothing;
   if not found then return jsonb_build_object(f, (r ->> f)::int, 'voted', true, 'already', true); end if;
   v_rev := lec_private.bump(v_code, true);
@@ -1484,13 +1508,13 @@ declare v_code text := lec_private.code(p_code); t lec_private.trainings; p publ
 begin
   t := lec_private.training(v_code);
   p := lec_private.participant(v_code, p_token);
-  if not lec_private.uploads_on(t) then perform lec_private.fail(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않습니다.'); end if;
+  if not lec_private.uploads_on(t) then perform lec_private.fail(503, 'uploads_disabled', '이 연수는 파일 올리기를 쓰지 않아요.'); end if;
   perform lec_private.hit(p.id::text, 'upload', 10);
   v_ext := case p_type when 'image/png' then 'png' when 'image/jpeg' then 'jpg' when 'image/gif' then 'gif' when 'image/webp' then 'webp'
                        when 'application/pdf' then 'pdf' when 'audio/mpeg' then 'mp3' when 'video/mp4' then 'mp4' end;
   if v_ext is null then perform lec_private.fail(415, 'unsupported_type', '이미지·PDF·MP3·MP4만 올릴 수 있어요.'); end if;
   v_max := least(greatest(coalesce((t.settings ->> 'maxUploadMb')::int, 20), 1), 20)::bigint * 1048576;
-  if p_size is null or p_size <= 0 then perform lec_private.fail(400, 'empty', '빈 파일입니다.'); end if;
+  if p_size is null or p_size <= 0 then perform lec_private.fail(400, 'empty', '빈 파일이에요.'); end if;
   if p_size > v_max then perform lec_private.fail(413, 'too_large', '파일은 ' || (v_max / 1048576) || 'MB까지 올릴 수 있어요.'); end if;
   -- L10: type and size are checked here and again by the Storage insert policy (bucket MIME list, metadata size/type when
   -- Storage provides them). Magic bytes cannot be read from SQL: files are served only with their declared type,
@@ -1566,6 +1590,11 @@ grant select (id, training_code, poll, rev, created_at, updated_at) on public.le
 grant select (id, training_code, by, nickname, text, hidden, cid, rev, created_at, updated_at) on public.lec_chat to anon, authenticated;
 grant select (training_code, data, rev, updated_at) on public.lec_state to anon, authenticated;
 grant select (training_code, col, id, rev) on public.lec_tombstones to anon, authenticated;
+
+-- What this install knows (the lecpage app's connection check reads it to tell an older install apart: an install
+-- from before this function answers 404). days: attendance keeps per-day values (lec_attendance.days).
+create or replace function public.lec_caps()
+returns jsonb language sql immutable set search_path = '' as $$ select jsonb_build_object('schema', 2, 'days', true) $$;
 
 -- Functions: EXECUTE is granted to PUBLIC by default — take it away everywhere, then grant only the API.
 revoke execute on all functions in schema lec_private from public, anon, authenticated;

@@ -32,17 +32,20 @@ function makeGas() {
   const toSigned = (buf) => [...buf].map((b) => (b > 127 ? b - 256 : b));
   function sheetObj(name) {
     const data = [];
+    const self = { cols: 26 }; // 새 시트는 26칸. 실제 시트처럼 없는 칸을 읽고 쓰면 오류
+    const inside = (c, nc) => { if (c - 1 + nc > self.cols) throw new Error(`범위(${c}칸부터 ${nc}칸)가 시트(${self.cols}칸)를 벗어나요`); };
     const range = (r, c, nr, nc) => ({
-      setValues(vals) { vals.forEach((row, i) => { data[r - 1 + i] = data[r - 1 + i] || []; row.forEach((v, j) => { if (typeof v === 'string' && v.startsWith('=')) formulas.push(v); data[r - 1 + i][c - 1 + j] = v; }); }); return this; },
-      getValues() { const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) { let v = (data[r - 1 + i] || [])[c - 1 + j]; if (typeof v === 'string' && v.startsWith("'")) v = v.slice(1); row.push(v ?? ''); } out.push(row); } return out; },
+      setValues(vals) { inside(c, nc); vals.forEach((row, i) => { data[r - 1 + i] = data[r - 1 + i] || []; row.forEach((v, j) => { if (typeof v === 'string' && v.startsWith('=')) formulas.push(v); data[r - 1 + i][c - 1 + j] = v; }); }); return this; },
+      getValues() { inside(c, nc); const out = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) { let v = (data[r - 1 + i] || [])[c - 1 + j]; if (typeof v === 'string' && v.startsWith("'")) v = v.slice(1); row.push(v ?? ''); } out.push(row); } return out; },
       setFontWeight() { return this; }, setNumberFormat() { return this; },
     });
-    return {
+    return Object.assign(self, {
       name, data,
       getRange: range, getLastRow: () => data.length, getMaxRows: () => 1000, setFrozenRows() {},
+      getMaxColumns: () => self.cols, insertColumnsAfter(after, n) { self.cols += n; },
       appendRow(row) { row.forEach((v) => { if (typeof v === 'string' && v.startsWith('=')) formulas.push(v); }); data.push(row.slice()); },
       deleteRow(r) { data.splice(r - 1, 1); }, deleteRows(r, n) { data.splice(r - 1, n); },
-    };
+    });
   }
   const ss = { getSheetByName: (n) => sheets.get(n) || null, insertSheet: (n) => { const s = sheetObj(n); sheets.set(n, s); return s; } };
   const g = {
@@ -271,4 +274,49 @@ test('apps-script (2026-11d): a session survives the sheet-wide lockout; polls k
   await call({ a: 'setState', code, admin: s.session, patch: { ui: { lockJoin: null } } });
   for (const n of ['관리자', '선생님', '운영진', 'аdmin']) assert.equal((await call({ a: 'join', code, nickname: n })).error, 'reserved_nickname', n);
   for (const k of [...gas.cache.keys()]) if (k.startsWith('af:')) gas.cache.delete(k);
+});
+
+test('apps-script (여러 날 연수): 출석에 날짜별 값 days를 남김 — 예전 시트(칸 없음)·예전 행(at만)도 그대로 읽히고, 이수 판정이 Node 서버와 같음', async () => {
+  const code = 'SHEET1';
+  const kst = (ms) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
+  const sh = gas.sheets.get('attendance');
+  // 예전에 만든 시트: 출석 탭에 days 칸이 없음(9칸, 머리글도 9개). 새 코드가 읽을 때 깨지지 않고, 쓸 때 칸과 머리글을 더함
+  sh.cols = 9; sh.data[0] = sh.data[0].slice(0, 9); gas.g.headOk = {}; gas.g.invalidate();
+  assert.equal((await call({ a: 'snapshot', code, since: 0, admin: ADMIN })).ok, true, '칸이 모자란 시트도 읽힘');
+  const me = (await call({ a: 'join', code, nickname: '이틀참가' })).data;
+  const in1 = (await call({ a: 'add', code, token: me.token, col: 'attendance', doc: { kind: 'in' } })).data;
+  const today = kst(Date.now()).slice(0, 10);
+  assert.deepEqual(Object.keys(in1.days), [today]); assert.equal(in1.days[today], in1.at);
+  assert.equal(sh.cols, 10); assert.equal(sh.data[0][9], 'days', '머리글에 days 칸이 생김');
+  await call({ a: 'add', code, token: me.token, col: 'attendance', doc: { kind: 'out' } });
+  // 어제 다녀간 예전 행으로 바꿈: at만 있고 days는 빈칸(코드를 바꾸기 전에 쌓인 줄). 어제 09:00 입실·12:00 퇴실
+  const head = gas.g.headerOf('attendance'); const col = (k) => head.indexOf(k);
+  const yday = kst(Date.now() - 86400e3).slice(0, 10);
+  const at = (d, hm) => Date.parse(`${d}T${hm}:00+09:00`);
+  for (const row of sh.data.slice(1)) if (row[col('by')] === me.id) { row[col('at')] = String(at(yday, row[col('kind')] === 'in' ? '09:00' : '12:00')); row[col('days')] = ''; }
+  gas.g.invalidate();
+  // 오늘 다시 입실·퇴실: 예전 행은 at 하나로 시작하고 오늘 값이 더해짐. at은 전체의 첫 입실·마지막 퇴실
+  const in2 = (await call({ a: 'add', code, token: me.token, col: 'attendance', doc: { kind: 'in' } })).data;
+  assert.deepEqual(Object.keys(in2.days).sort(), [yday, today]); assert.equal(in2.days[yday], at(yday, '09:00')); assert.equal(in2.at, at(yday, '09:00'));
+  const out2 = (await call({ a: 'add', code, token: me.token, col: 'attendance', doc: { kind: 'out' } })).data;
+  assert.equal(out2.days[yday], at(yday, '12:00')); assert.ok(out2.at >= in2.days[today]);
+  // 출석 CSV: 날짜별 입실·퇴실 칸(Node 서버와 같은 칸)
+  const csv = (await call({ a: 'export', code, admin: ADMIN, kind: 'attendance' })).data;
+  assert.match(csv.split('\n')[0], /날짜별 입실·퇴실/); assert.ok(csv.includes(`${yday.slice(5)} 09:00~12:00`));
+  // 이수: 강사 화면이 관리자 스냅숏으로 계산(sheets.js). 같은 자료를 Node 서버 규칙(protocol.js)으로 계산한 것과 같아야 함
+  const W = makeWindow(); const b = W.LecLive.create({ provider: 'sheets', url, code, allowAnyUrl: true, adminKey: ADMIN }); await b.connect();
+  const now = Date.now(); const hm = (ms) => kst(ms).slice(11, 16);
+  // 오늘 연수 시간은 방금 찍은 입실·퇴실을 품게(자정 가까이면 날짜가 넘어가지 않게 그날 안에서)
+  const t0 = hm(Math.max(at(today, '00:00'), now - 3600e3)); const t1 = hm(Math.min(at(today, '23:59'), now + 3600e3));
+  const opts = { rate: 50, days: [{ date: yday, start: '09:00', end: '12:00' }, { date: today, start: t0, end: t1 }] };
+  const table = (await b.exportCsv('completion', opts)).replace(/^\uFEFF/, '').trim().split(/\r?\n/).map((l) => l.split(','));
+  const snap = (await call({ a: 'snapshot', code, since: 0, admin: ADMIN })).data;
+  const P = await import(path.join(skillDir, 'backends/node-server/lib/protocol.js'));
+  const want = P.exportTable('completion', snap, 'Asia/Seoul', opts);
+  assert.deepEqual(table[0], want.columns); assert.ok(want.columns.includes('날짜별 머문 시간(분)'));
+  const mine = table.find((r) => r[0] === '이틀참가'); const wantRow = want.rows.find((r) => r[0] === '이틀참가').map((v) => String(v ?? ''));
+  assert.deepEqual(mine, wantRow);
+  assert.match(mine.join(','), new RegExp(`${yday.slice(5)} 180분`), '어제 3시간이 날짜별 칸에');
+  assert.notEqual(mine.at(-1), '확인 필요', '날마다 입실·퇴실이 있으면 판정이 나옴');
+  b.close();
 });

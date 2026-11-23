@@ -183,6 +183,7 @@ html.pv-lock{overflow:hidden}
 .pub-opt b{font-weight:600}
 .pub-opt em{font-style:normal;font-size:.76rem;font-weight:700;color:var(--lav-deep)}
 .pub-opt i{font-style:normal;font-size:.76rem;font-weight:600;color:var(--ok)}
+.pub-opt i.way{font-weight:500;color:var(--muted)}
 .pub-opt:hover span{border-color:var(--line-strong)}
 .pub-opt input:checked+span{border-color:var(--accent);background:var(--lav-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 .pub-opt input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
@@ -204,6 +205,25 @@ html.pv-lock{overflow:hidden}
 .pub-live p{margin:0}
 .pub-live .btn-row{margin-top:2px}
 .pub-live-skip{margin:0;color:var(--muted)}
+/* 버튼 하나로 배포·연결(OneClick.jsx): 진행 한 줄과 사람이 할 일 하나, 실패는 까닭 + 누를 곳 하나, 접힌 '다른 방법' */
+.run-box{padding:12px 14px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--sunk)}
+.run-box p{margin:0}
+.run-dot{display:inline-block;width:.55em;height:.55em;margin-right:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.run-dot{animation:none}}
+.run-pick{justify-content:flex-start;text-align:left}
+.run-fail:focus{outline:none}
+.run-alt>summary{cursor:pointer;color:var(--muted);padding:4px 0}
+.run-alt>summary:hover{color:var(--ink)}
+.run-alt-body{padding-top:8px}
+.cf-get p{margin:0}
+/* 참여 기능 연결: 지금 보는 방법 한 줄 + 접힌 '다른 방법으로 연결'의 고르는 줄(이름 + 무엇이 필요한지) */
+.live-way-h{margin:0}
+.live-way-h:focus,.live-way-reco:focus{outline:none}
+.live-pick{flex-direction:column;align-items:flex-start;gap:2px;height:auto;min-height:44px;padding-block:8px;white-space:normal}
+/* 이미 연결한 예전 설치에 한 번 할 일(여러 날 연수일 때만): 배포할 곳 아래 안내(.pub-live)와 같은 모양 */
+.live-note{display:grid;gap:6px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--hair));border-left:4px solid var(--accent);border-radius:var(--r-sm);background:var(--lav-soft)}
+.live-note>b{font-size:.95rem}
+.live-note p{margin:0}
 .pub-about>p{margin:0}
 .pub-facts{margin:0;display:grid;gap:4px;color:var(--ink-2)}
 .pub-facts>div{display:grid;grid-template-columns:5em minmax(0,1fr);gap:10px}
@@ -745,9 +765,15 @@ button.st-tag:hover{border-color:var(--accent);color:var(--lav-ink)}
 .ai-status[open] .ai-status-more::after{transform:rotate(-135deg);margin-top:3px}
 .ai-status-body{gap:12px;padding:4px 14px 14px}
 .ai-status .model-pick{margin-top:0}
-/* 쓰던 AI 창: AI 버튼 줄{grid-template-columns:minmax(0,1fr)}
+/* 터치 화면: AI 연결 순서 버튼·글 버튼도 44px 이상(앞 주석이 닫히지 않아 이 규칙이 통째로 빠져 있었음) */
 @media (pointer: coarse){
   .key-dots button,.btn-link{min-height:44px}
+  .key-dots button{min-width:44px;justify-content:center}
+  .help-nav a{display:flex;align-items:center;min-height:44px}
+  details.set-more>summary{min-height:44px}
+  .st-fold-t{min-height:44px}
+  .st-ex .chip{min-height:44px}
+  .st-compose-opts select{min-height:44px}
 }
 /* 도움말: 물음마다 접어 둠 */
 .faq{display:grid;border-top:1px solid var(--hair)}
