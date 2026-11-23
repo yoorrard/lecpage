@@ -6,14 +6,16 @@ export const sizeText = (n) => (n >= MBS ? `${Math.round(n / MBS)}MB` : `${Math.
 /**
  * 바로 배포 서버가 알려 준 한도(/api/info의 limits)로 사이트 크기를 봄. 엔진의 E.checkHost와 같은 꼴({ ok, errors }).
  * 숫자는 서버 것을 그대로 씀(서버 한도가 바뀌어도 앱을 고치지 않게)
- * @param {{ bytes: number, maxFile: number, files: number }} stat siteStat() 결과
- * @param {{ maxBytes?: number, maxFileBytes?: number, maxFiles?: number }} lim
+ * @param {{ bytes: number, maxFile: number, files: number, kept?: number }} stat siteStat() 결과(kept: 웹 문서(HTML)·영상·소리의 합계)
+ * @param {{ maxBytes?: number, maxFileBytes?: number, maxFiles?: number, maxMediaBytes?: number }} lim
  */
 export function instantFit(stat, lim = {}) {
   const errors = []; const up = (n) => Math.ceil(n / MBS); const cap = (n) => Math.floor(n / MBS);
   if (lim.maxBytes && stat.bytes > lim.maxBytes) errors.push(`사이트가 ${up(stat.bytes)}MB예요. 바로 배포에는 ${cap(lim.maxBytes)}MB까지 올릴 수 있어요.`);
   if (lim.maxFileBytes && stat.maxFile > lim.maxFileBytes) errors.push(`${up(stat.maxFile)}MB짜리 파일이 있어요. 바로 배포에는 파일 하나가 ${cap(lim.maxFileBytes)}MB까지예요. 영상은 유튜브 링크로 바꾸면 좋아요.`);
   if (lim.maxFiles && stat.files > lim.maxFiles) errors.push(`파일이 ${stat.files.toLocaleString('en-US')}개예요. 바로 배포에는 ${lim.maxFiles.toLocaleString('en-US')}개까지 올릴 수 있어요.`);
+  // 서버가 따로 보는 합계(hosting MAX_MEDIA_BYTES: 영상·소리와 웹 문서는 사이트마다 이만큼까지). 올리기 전에 알려 하루 몫을 쓰고 거절당하지 않게
+  if (lim.maxMediaBytes && stat.kept > lim.maxMediaBytes) errors.push(`영상·소리 파일과 웹 문서(HTML)가 합쳐 ${up(stat.kept)}MB예요. 바로 배포에는 이 둘을 합쳐 ${cap(lim.maxMediaBytes)}MB까지 올릴 수 있어요. 영상은 유튜브 같은 곳에 올려 링크로 넣으면 좋아요.`);
   return { ok: !errors.length, errors };
 }
 /**

@@ -2,8 +2,9 @@
 //  meta   사이트 정보 한 줄(열쇠 해시, 만든 때, 끝나는 때, 가림, 제목, 저장 크기, 지금 배포, 준비 중인 배포, 묶인 실시간 방 코드)
 //  deploy 배포 목록(경로 → sha256·크기)을 JSON 한 줄로. 지금 것과 준비 중인 것만 남김
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
-//  passet (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠. 내용은 두지 않음
+//  ppack  (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠·크기. 내용은 두지 않음. 묶음 몇 줄로 저장(JSON, 메모리에서 읽고 씀 → pa·writePa)
 //         (작은 파일은 받을 때 메모리에만 두었다가 공개할 때 한 번에 올리고 그때 적음 → deferred)
+//  passet 이 판(2026-11-24) 전에 만든 사이트의 같은 표(파일 하나에 한 줄). 그대로 읽고, 다음에 쓸 때 ppack으로 옮긴 뒤 줄을 지움. 새 사이트에는 만들지 않음
 //  jsk    (VIEW=pages) 받은 .js가 사이트가 직접 쓴 스크립트인지(own=1) 엔진 런타임인지(0). 줄이 없으면 예전 판에서 받은 런타임
 //         내용을 두지 않으므로 공개할 때(보조 쪽 검사)·두 번째 주소로 내보낼 때(직접 쓴 스크립트는 내보내지 않음) 이 표를 봄
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
@@ -84,13 +85,20 @@ const WIPING_MSG = '사이트를 내리는 중이에요. Cloudflare가 잠시 �
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT, live_code TEXT, view TEXT NOT NULL DEFAULT 'worker', pstate TEXT);
-CREATE TABLE IF NOT EXISTS passet (sha TEXT NOT NULL, ext TEXT NOT NULL, phash TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (sha, ext)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS deploy (id TEXT PRIMARY KEY, created INTEGER NOT NULL, bytes INTEGER NOT NULL, stored INTEGER NOT NULL, files TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS blob (sha TEXT NOT NULL, i INTEGER NOT NULL, total INTEGER, data BLOB NOT NULL, PRIMARY KEY (sha, i)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS jsk (sha TEXT PRIMARY KEY, own INTEGER NOT NULL) WITHOUT ROWID;
 `;
 /** 사이트 쪽 HTML에서 실시간 서버 주소를 찾아볼 쪽 수(사이트 자료 lp-data). 엔진 사이트는 6쪽 안팎 */
 const LIVE_SCAN_PAGES = 30;
+/**
+ * (Pages 보기) 자산 표(내용 sha256·확장자 → Pages 열쇠·크기)는 묶음 몇 줄(ppack: i, data = JSON [[sha, ext, phash, size], …])로 저장.
+ * 예전에는 파일 하나에 한 줄(passet)이라 새 사이트 한 번에 수백 줄(글꼴 조각), 3,000개 사이트는 3,000줄을 썼음(무료 하루 10만 줄, 지울 때도 같은 만큼).
+ * 묶음 한 줄은 저장소의 줄 크기 한도(2MB)에 닿지 않게 이 글자 수에서 나눔(3,000개가 약 35만 자라 보통 한 줄)
+ */
+const PACK_CHARS = 900000;
+const PACK_SCHEMA = 'CREATE TABLE IF NOT EXISTS ppack (i INTEGER PRIMARY KEY, data TEXT NOT NULL)';
+const paKey = (sha, ext) => `${sha}|${ext}`;
 
 export class Site extends DurableObject {
   constructor(ctx, env) {
@@ -187,14 +195,84 @@ export class Site extends DurableObject {
   }
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */
   keepsHere(meta, path) { return !this.isPages(meta) || typeOf(path)?.kind === 'html' || isMedia(path); }
-  passet(sha, ext) { return this.sql.exec('SELECT phash FROM passet WHERE sha = ? AND ext = ?', sha, ext).toArray()[0]?.phash || ''; }
+  /**
+   * 자산 표를 메모리로: 묶음(ppack)과, 이 판 전에 만든 사이트의 예전 줄(passet, 파일 하나에 한 줄)을 함께 읽음. 예전 줄은 다음에 쓸 때 묶음으로 옮기고 지움(writePa, 한 거래).
+   * 둘 다 있으면 묶음이 나중 것이라 묶음이 이김(옮기기는 한 거래라 실제로는 겹치지 않음)
+   */
+  pa() {
+    if (this.paMap) return this.paMap;
+    const m = new Map(); let legacy = 0; let chunks = 0;
+    const tables = new Set(this.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('passet', 'ppack')").toArray().map((r) => r.name));
+    if (tables.has('passet')) for (const r of this.sql.exec('SELECT sha, ext, phash, size FROM passet')) { m.set(paKey(r.sha, r.ext), [r.phash, r.size]); legacy++; }
+    if (tables.has('ppack')) {
+      for (const r of this.sql.exec('SELECT data FROM ppack ORDER BY i')) {
+        chunks++;
+        let list = [];
+        try { list = JSON.parse(r.data); } catch { list = []; } // 읽지 못한 묶음: 그 파일들만 다시 받음(missing_blobs)
+        for (const e of Array.isArray(list) ? list : []) if (Array.isArray(e) && typeof e[0] === 'string' && typeof e[2] === 'string') m.set(paKey(e[0], String(e[1] ?? '')), [e[2], +e[3] || 0]);
+      }
+    }
+    this.paMap = m; this.paLegacy = legacy; this.paChunks = chunks; this.paDirty = false; this.paTable = tables.has('ppack');
+    return m;
+  }
+  passet(sha, ext) { return this.pa().get(paKey(sha, ext))?.[0] || ''; }
+  /** 자산 표에 적음(메모리). 저장은 flushPa·writePa가 묶음으로 */
+  paSet(sha, ext, phash, size) {
+    const m = this.pa(); const k = paKey(sha, ext); const cur = m.get(k);
+    if (cur && cur[0] === phash && cur[1] === size) return;
+    m.set(k, [phash, size]); this.paDirty = true;
+  }
+  /** 자산 표에서 뺌(메모리). keep(sha, ext, phash)이 false인 것 */
+  paKeep(keep) {
+    const m = this.pa();
+    for (const [k, v] of m) { const i = k.indexOf('|'); if (!keep(k.slice(0, i), k.slice(i + 1), v[0])) { m.delete(k); this.paDirty = true; } }
+  }
+  /** 묶음 표를 만듦(처음 한 번, 거래 밖에서) */
+  paReady() { if (!this.paTable) { this.sql.exec(PACK_SCHEMA); this.paTable = true; } }
+  /** 바뀐 자산 표를 묶음 줄로 씀(거래 안에서 부름. 먼저 paReady). 예전 줄(passet)이 있으면 같은 거래에서 지움 → 옮기다 끊겨도 한쪽으로만 읽힘 */
+  writePa() {
+    if (!this.paMap || (!this.paDirty && !this.paLegacy)) return;
+    const rows = []; let cur = []; let len = 2;
+    for (const [k, v] of this.paMap) {
+      const i = k.indexOf('|'); const e = [k.slice(0, i), k.slice(i + 1), v[0], v[1]]; const add = k.length + String(v[0]).length + String(v[1]).length + 12;
+      if (len + add > PACK_CHARS && cur.length) { rows.push(cur); cur = []; len = 2; }
+      cur.push(e); len += add;
+    }
+    if (cur.length) rows.push(cur);
+    rows.forEach((r, i) => this.sql.exec('INSERT OR REPLACE INTO ppack (i, data) VALUES (?, ?)', i, JSON.stringify(r)));
+    if (this.paChunks > rows.length) this.sql.exec('DELETE FROM ppack WHERE i >= ?', rows.length);
+    if (this.paLegacy) this.sql.exec('DELETE FROM passet');
+    this.paChunks = rows.length; this.paLegacy = 0; this.paDirty = false;
+  }
+  /** 바뀐 자산 표를 저장(바뀐 것이 없으면 아무것도 쓰지 않음) */
+  flushPa() {
+    if (!this.paMap || !this.paDirty) return;
+    this.paReady();
+    this.ctx.storage.transactionSync(() => this.writePa());
+  }
+  /** 알람 잡기: 쓴 행 하나로 청구됨(Cloudflare 요금 안내) → 쓴 행 수에 넣음 */
+  alarmSet(t) { this.rowsW += 1; return this.ctx.storage.setAlarm(t); }
+  /**
+   * 저장소를 통째로 지움. 지우기도 쓴 행으로 청구되므로(통째 지우기를 줄마다 세는지는 요금 안내에 없어, 세는 쪽으로) 지우기 전 줄 수를 쓴 행 수에 더함.
+   * 자산 표를 묶음으로 쓴 뒤로는 사이트 하나가 열몇 줄이라 넉넉히 세어도 작음
+   */
+  async dropAll() {
+    try {
+      const names = this.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'deploy', 'blob', 'jsk', 'ppack', 'passet', 'gone')").toArray().map((r) => r.name);
+      for (const t of names) this.rowsW += this.sql.exec(`SELECT COUNT(*) AS n FROM ${t}`).one().n;
+    } catch (e) { console.error('row count before deleteAll failed', e?.message); }
+    await this.ctx.storage.deleteAll();
+    this.paReset();
+  }
+  /** 메모리 자산 표를 버림(지웠을 때: 다음에 다시 읽음) */
+  paReset() { this.paMap = null; this.paLegacy = 0; this.paChunks = 0; this.paDirty = false; this.paTable = false; }
   deferredItem(sha, ext) { return this.deferred.get(sha)?.items.find((x) => x.ext === ext) || null; }
   /** Pages 보기: 엔진 런타임 그대로인 .js는 모든 사이트가 같아 Pages 열쇠를 미리 앎(scripts/gen-runtime.mjs) → 올려받지 않음 */
   knownRuntime(files) {
     for (const [path, sha, size] of files) {
       const ph = PAGES_RUNTIME?.[sha];
       if (!ph || rawExt(path) !== 'js' || this.passet(sha, 'js')) continue;
-      this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, 'js', ph, size);
+      this.paSet(sha, 'js', ph, size); // 저장은 이 요청 끝의 sweep이 한 번에(끊겨도 다음 목록 받기 때 다시 채움)
       this.jsOk.add(sha);
     }
   }
@@ -336,7 +414,7 @@ export class Site extends DurableObject {
     if (this.load()) throw new HttpError('bad_request', '이미 있는 주소예요.', { status: 409 });
     this.sql.exec(SCHEMA);
     this.sql.exec('INSERT INTO meta (id, site, key_hash, title, created, expires, view) VALUES (1, ?, ?, ?, ?, ?, ?)', id, keyHash, String(title || ''), created, expires, view === 'pages' ? 'pages' : 'worker');
-    await this.ctx.storage.setAlarm(expires);
+    await this.alarmSet(expires);
     this.meta = undefined;
     this.load();
     return json({ ok: true });
@@ -352,7 +430,8 @@ export class Site extends DurableObject {
       throw new HttpError('rate_limited', '이 사이트를 너무 자주 올렸어요. 잠시 뒤에 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil((this.deployTimes[0] + HOUR_MS - now) / 1000)) } });
     }
     const body = await readJson(request, MANIFEST_MAX);
-    const man = checkManifest(body, this.cfg);
+    // 한도는 이 사이트의 보기로 고름: worker 보기 사이트(파일을 모두 이 객체 저장소에 둠)는 서버가 지금 pages 보기여도 worker 한도까지만
+    const man = checkManifest(body, this.isPages(first) ? this.cfg : { ...this.cfg, maxBytes: Math.min(this.cfg.maxBytes, this.cfg.workerMaxBytes), maxFiles: Math.min(this.cfg.maxFiles, this.cfg.workerMaxFiles) });
     // Pages _headers는 규칙 100개까지(넘는 규칙은 버려짐): 확장자 대소문자 모양이 너무 여러 가지면 올리기 전에 거절(보안 규칙이 빠지지 않게)
     if (this.isPages(first) && headerRules(man.files.map(([p]) => p)).length > PAGES_HEADER_RULES) {
       throw new HttpError('bad_path', '파일 이름 끝(.png 같은 확장자)의 대문자·소문자 모양이 너무 여러 가지예요. 확장자를 소문자로 맞춰 다시 배포해 주세요.');
@@ -471,7 +550,7 @@ export class Site extends DurableObject {
       if (!keep.has(sha)) { this.sql.exec('DELETE FROM blob WHERE sha = ?', sha); this.jsOk.delete(sha); }
     }
     for (const { sha } of this.sql.exec('SELECT sha FROM jsk').toArray()) if (!keep.has(sha)) { this.sql.exec('DELETE FROM jsk WHERE sha = ?', sha); this.jskMem.delete(sha); }
-    if (this.isPages(meta)) for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM passet').toArray()) if (!keep.has(sha)) this.sql.exec('DELETE FROM passet WHERE sha = ?', sha);
+    if (this.isPages(meta)) { this.paKeep((sha) => keep.has(sha)); this.flushPa(); }
     for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.size; }
   }
 
@@ -609,7 +688,8 @@ export class Site extends DurableObject {
           // 큰 파일(512KB 넘는 쪽 그림·사진·글꼴·교재 원본)이 든 사이트는 배포가 끝나지 않았음(2026-11-23 실제 서버에서 확인). 순간 오류면 PagesClient가 한 번 더 하고(twice), 그래도 안 되면 이 파일 받기를 실패로
           await pc.upsertHashes(up.map((x) => x.hash));
         }
-        for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
+        for (const x of items) this.paSet(sha, x.ext, x.hash, size);
+        this.flushPa();
       }
   }
   /**
@@ -625,9 +705,8 @@ export class Site extends DurableObject {
     for (const a of all) if (missing.has(a.x.hash) && !seen.has(a.x.hash)) { seen.add(a.x.hash); up.push(a.x); }
     if (up.length) { await pc.upload(up); await pc.upsertHashes(up.map((x) => x.hash)); }
     if (!this.load()) throw new HttpError('not_found'); // 올리는 사이에 사이트가 지워짐
-    this.ctx.storage.transactionSync(() => {
-      for (const a of all) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', a.sha, a.x.ext, a.x.hash, a.size);
-    });
+    for (const a of all) this.paSet(a.sha, a.x.ext, a.x.hash, a.size);
+    this.flushPa();
     for (const a of all) { const d = this.deferred.get(a.sha); if (d) { this.deferred.delete(a.sha); this.deferredBytes -= d.size; } }
   }
   /**
@@ -715,7 +794,7 @@ export class Site extends DurableObject {
       });
       Object.assign(meta, { current: deployId, pending: null, bytes: man.stored, expires });
       if (prev && prev !== deployId) this.manifests.delete(prev);
-      await this.ctx.storage.setAlarm(expires);
+      await this.alarmSet(expires);
       this.sweep();
       try { await this.gate('POST', 'site', { id: meta.site, bytes: man.stored, expires, published: true, ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
       // 보관 기간이 늘었으니 방에도 알림(못 알려도 방이 끝날 때 사이트에 다시 물어봄)
@@ -779,14 +858,15 @@ export class Site extends DurableObject {
       const maybe = e?.step === 'deployments' && !(e.status >= 400 && e.status < 500);
       mark((s0) => { delete s0.trying; if (maybe) s0.orphan = Date.now(); });
       // 다시 배포하지 않아도 조금 뒤 알람이 그 배포를 찾아 적어 둠(tidyOrphan)
-      if (maybe) { try { await this.ctx.storage.setAlarm(this.alarmAt(meta)); } catch (e2) { console.error('orphan alarm failed', e2?.message); } }
+      if (maybe) { try { await this.alarmSet(this.alarmAt(meta)); } catch (e2) { console.error('orphan alarm failed', e2?.message); } }
       throw await this.pagesFail(e, 'Cloudflare Pages에 배포하지 못했어요. 잠시 뒤 다시 해 주세요.');
     }
     if (lost.length) {
       mark((s0) => { delete s0.trying; }); // 배포를 만들기 전에 멈춤
       // Pages에서 사라진 파일(올린 뒤 오래 배포하지 않은 것): 기록을 지우고 다시 받음
       const lostSet = new Set(lost); const again = new Set();
-      for (const r of this.sql.exec('SELECT sha, ext, phash FROM passet').toArray()) if (lostSet.has(r.phash)) { again.add(r.sha); this.sql.exec('DELETE FROM passet WHERE sha = ? AND ext = ?', r.sha, r.ext); }
+      this.paKeep((sha, ext, phash) => { if (!lostSet.has(phash)) return true; again.add(sha); return false; });
+      this.flushPa();
       throw new HttpError('missing_blobs', undefined, { missing: [...again] });
     }
     if (this.load()?.pending !== deployId) throw new HttpError('not_found', '없는 배포예요. 목록(deploys)부터 다시 보내 주세요.');
@@ -799,17 +879,19 @@ export class Site extends DurableObject {
     st.url = url; st.self = self; st.deps = [deployment.id]; st.hold = []; st.man = { manifest, headers, redirects }; delete st.trying;
     st.depAt = Date.parse(deployment.created_on) || 0; // 이 배포가 생긴 때(Cloudflare가 적은 값. 모르는 배포가 이보다 먼저인지 나중인지 가림)
     const kept = this.keptBytes(meta, man.list);
+    // 같이 올린 작은 파일: 이제 Pages에 있으니 열쇠를 적고 메모리에서 뺌
+    for (const [hash, x] of deferred) this.paSet(x.sha, x.ext, hash, x.size);
+    this.paReady();
     this.ctx.storage.transactionSync(() => {
       this.sql.exec('UPDATE meta SET current = ?, pending = NULL, bytes = ?, expires = ? WHERE id = 1', deployId, kept, expires);
       if (prev && prev !== deployId) this.sql.exec('DELETE FROM deploy WHERE id = ?', prev);
       this.savePs(meta, st);
-      // 같이 올린 작은 파일: 이제 Pages에 있으니 열쇠를 적고 메모리에서 뺌
-      for (const [hash, x] of deferred) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', x.sha, x.ext, hash, x.size);
+      this.writePa();
     });
     for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.size; } }
     Object.assign(meta, { current: deployId, pending: null, bytes: kept, expires });
     if (prev && prev !== deployId) this.manifests.delete(prev);
-    await this.ctx.storage.setAlarm(this.alarmAt(meta));
+    await this.alarmSet(this.alarmAt(meta));
     this.sweep();
     // 지난 배포(각자 고유 주소가 있음)는 지움. 못 지운 것은 다음 공개·지우기 때 다시
     const left = await this.dropDeployments(old.filter((d) => d !== deployment.id));
@@ -963,7 +1045,7 @@ export class Site extends DurableObject {
     this.sql.exec('CREATE TABLE IF NOT EXISTS gone (id INTEGER PRIMARY KEY, why TEXT NOT NULL, until INTEGER NOT NULL)');
     this.sql.exec("INSERT OR REPLACE INTO gone (id, why, until) VALUES (1, 'removed', ?)", until);
     this.goneMark = { why: 'removed', until };
-    await this.ctx.storage.setAlarm(until);
+    await this.alarmSet(until);
   }
   /** 없는 사이트의 까닭: 'removed'(강사가 내림, 보관 기간 안) 또는 ''(보관 기간 끝·없는 주소) */
   goneWhy() {
@@ -985,7 +1067,7 @@ export class Site extends DurableObject {
     if (meta.live_code) { try { await this.room(meta.live_code, 'wipe', { site: id }); } catch (e) { console.error('room wipe failed', e?.message); } }
     if (this.isPages(meta) && !(await this.wipePages(meta, expired, why))) { await this.holdWipe(meta, expired, why); return false; }
     await this.ctx.storage.deleteAlarm();
-    await this.ctx.storage.deleteAll();
+    await this.dropAll();
     this.meta = null; this.manifests.clear(); this.jsOk.clear(); this.jskMem.clear(); this.liveMem.clear(); this.deployTimes = []; this.deferred.clear(); this.deferredBytes = 0;
     if (id) { try { await this.gate('POST', 'forget', { id, ...this.pagesDelta() }); } catch (e) { console.error('gate forget failed', e?.message); } }
     return true;
@@ -1048,14 +1130,18 @@ export class Site extends DurableObject {
     const w = { at: now, n: 0, ...(st.wiping || {}) };
     w.n += 1; w.expired = !!(w.expired || expired); w.last = now; if (why) w.why = why;
     st.wiping = w;
+    const pa = this.pa(); // 예전 줄(passet)·묶음(ppack) 가운데 있는 표만 지움
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM passet'); this.sql.exec('DELETE FROM jsk');
+      this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM jsk');
+      if (this.paLegacy) this.sql.exec('DELETE FROM passet');
+      if (this.paTable) this.sql.exec('DELETE FROM ppack');
+      pa.clear(); this.paLegacy = 0; this.paChunks = 0; this.paDirty = false;
       this.sql.exec('UPDATE meta SET current = NULL, pending = NULL, bytes = 0, live_code = NULL WHERE id = 1');
       this.savePs(meta, st);
     });
     Object.assign(meta, { current: null, pending: null, bytes: 0, live_code: null });
     this.manifests.clear(); this.jsOk.clear(); this.jskMem.clear(); this.liveMem.clear(); this.deferred.clear(); this.deferredBytes = 0;
-    await this.ctx.storage.setAlarm(now + WIPE_RETRY_MS[Math.min(w.n, WIPE_RETRY_MS.length) - 1]);
+    await this.alarmSet(now + WIPE_RETRY_MS[Math.min(w.n, WIPE_RETRY_MS.length) - 1]);
     if (w.n === 1) { try { await this.gate('POST', 'site', { id: meta.site, bytes: 0, wiping: w.at, ...this.pagesDelta() }); } catch (e) { console.error('gate wiping update failed', e?.message); } }
   }
   /** Gate 하루 점검이 부름: 기간이 지났으면(또는 지우는 중이면) 지금 지움. 사이트가 없어졌는지 돌려줌 */
@@ -1065,7 +1151,7 @@ export class Site extends DurableObject {
       if (!meta) return json({ gone: true });
       const w = this.wiping(meta);
       if (w || Date.now() >= meta.expires) await this.wipeAndMark(meta, w ? w.expired : true, w ? w.why || '' : '');
-      else await this.ctx.storage.setAlarm(Math.max(this.alarmAt(meta), Date.now() + 1000));
+      else await this.alarmSet(Math.max(this.alarmAt(meta), Date.now() + 1000));
       return json({ gone: !this.load() });
     });
   }
@@ -1117,7 +1203,7 @@ export class Site extends DurableObject {
     this.sql.exec('UPDATE meta SET expires = ? WHERE id = 1', expires);
     meta.expires = expires;
     this.ctx.waitUntil((async () => {
-      await this.ctx.storage.setAlarm(expires);
+      await this.alarmSet(expires);
       try { await this.gate('POST', 'site', { id: meta.site, expires }); } catch (e) { console.error('gate site update failed', e?.message); }
       if (meta.live_code) { try { await this.room(meta.live_code, 'touch', { site: meta.site, expires }); } catch (e) { console.error('room touch failed', e?.message); } }
     })());
@@ -1132,8 +1218,8 @@ export class Site extends DurableObject {
     try {
       const meta = this.load();
       if (!meta) { // 내린 표시는 보관 기간이 끝나면 지움(그 뒤로는 '보관 기간이 끝났어요')
-        if (this.goneWhy()) await this.ctx.storage.setAlarm(this.goneMark.until);
-        else { await this.ctx.storage.deleteAll(); this.goneMark = undefined; }
+        if (this.goneWhy()) await this.alarmSet(this.goneMark.until);
+        else { await this.dropAll(); this.goneMark = undefined; }
         return;
       }
       const w = this.wiping(meta);
@@ -1143,11 +1229,11 @@ export class Site extends DurableObject {
         const st = this.ps(meta); const at = +st.orphan || 0;
         if (at > 1 && st.tidied !== at && Date.now() >= at + this.settleMs) await this.exclusive(() => this.tidyOrphan());
         const m2 = this.load();
-        if (m2 && !this.wiping(m2)) { const next = this.alarmAt(m2); await this.ctx.storage.setAlarm(next > Date.now() ? next : m2.expires); } // 정리를 못 했어도 알람이 바로 다시 울리지 않게
+        if (m2 && !this.wiping(m2)) { const next = this.alarmAt(m2); await this.alarmSet(next > Date.now() ? next : m2.expires); } // 정리를 못 했어도 알람이 바로 다시 울리지 않게
       }
     } catch (e) {
       console.error('site alarm failed', e?.message);
-      await this.ctx.storage.setAlarm(Date.now() + HOUR_MS);
+      await this.alarmSet(Date.now() + HOUR_MS);
     }
   }
 

@@ -60,7 +60,7 @@
 | 인터넷이 없음 | 강사 노트북(교실 LAN) · ZIP | `deploy/local-lan-classroom.md`, `deploy/zip-usb-offline.md` |
 | 실시간을 내 서버(node-server)로 돌림 | 같은 서버(Caddy/nginx) | `deploy/own-server-nginx-caddy.md`, `deploy/nas-synology.md` |
 | 기관 AWS · Azure 계정 | S3 + CloudFront(콘솔만이면 Amplify) · Azure Static Web Apps | `deploy/aws-s3-cloudfront.md`, `deploy/azure-static-web-apps.md` |
-| (앱 전용, skill은 `app work`로 넘김) '바로 배포'가 켜진 앱, 40MB·600개 안 | lecpage 주소(가입 없음, 참여 기능 포함, 마지막으로 배포한 날부터 정해진 날까지. 붐비는 날은 앱이 같은 파일 그대로 내 계정으로, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 넘김) | 앱 화면 |
+| (앱 전용, skill은 `app work`로 넘김) '바로 배포'가 켜진 앱, 300MB·3,000개·파일 하나 20MB 안 | lecpage 주소(가입 없음, 참여 기능 포함, 마지막으로 배포한 날부터 정해진 날까지. 붐비는 날은 앱이 같은 파일 그대로 내 계정으로, 참여 기능 방만 찼으면 참여 기능만 내 계정으로 넘김) | 앱 화면 |
 
 ### 2.2 실시간
 
@@ -134,7 +134,7 @@
 9. ★ **S12** 사이트 > 100MB(S13에 해당하지 않을 때) → `cloudflare`를 맨 앞으로, `vercel`을 맨 뒤로. `onpod`은 사이트 > 100MB·파일 > 50MB·5,000개 넘음이면 맨 뒤로.
 10. ★ **S04** 기관 AWS 계정 + basic 이상 → `aws-s3-cloudfront`를 맨 앞으로(콘솔만 쓰려면 Amplify 끌어 놓기, 같은 가이드).
 11. **S05** 기관 Azure 계정 + basic 이상 → `azure-swa`.
-12. ★ **S15** (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱이고 사이트가 40MB·파일당 20MB·600개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소. 붐비는 날은 앱이 같은 파일 그대로 다음 곳으로 넘김). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 직접 부르지 않고, 계정이 없는 강사에게 `app work` → 앱의 [배포하기]를 안내합니다.
+12. ★ **S15** (앱 전용) 운영자가 '바로 배포'를 켜 둔 앱이고 사이트가 300MB·파일당 20MB·3,000개 안 → `lecpage`를 맨 앞으로(가입 없이 lecpage 주소. 붐비는 날은 앱이 같은 파일 그대로 다음 곳으로 넘김). 오래 둘 사이트(`keep: long`)나 내 도메인이면, 또는 운영자가 무료 요금제로 돌리는 서버(`instant: 'limited'`, 하루 한도에서 멈출 수 있음)면 둘째 자리. skill은 직접 부르지 않고, 계정이 없는 강사에게 `app work` → 앱의 [배포하기]를 안내합니다.
 13. ★ **S14** 지난번에 올린 곳(`previous`), 이미 연결해 둔 곳(`connected`) → 그곳을 맨 앞으로(강사 할 일 0번). Netlify·Onpod은 이 규칙으로만 앞에 옵니다.
 
 S06(클릭만 → netlify)과 S07(GitHub를 쓰면 → github-pages)은 없앴습니다. S09·S14가 대신합니다.
@@ -277,7 +277,7 @@ skill이 직접 올리고, 주소가 열리는지 확인한 다음 건넵니다.
     "cloudflare-pages-drop": {"target":"cloudflare","guide":"deploy/cloudflare.md#끌어-놓기","headers":"_headers","cost":"0","limits":"ZIP·폴더 끌어 놓기 1,000파일·25MiB/파일, 정적 요청 무제한","domain":"*.pages.dev"},
     "github-pages": {"target":"github-pages","guide":"deploy/github-pages.md","template":"templates/deploy/github-pages/(Actions로 올릴 때만)","headers":"meta(엔진이 넣음)","cost":"0","limits":"사이트 1GB, 파일 100MiB, 월 100GB(권고), 공개 저장소만, 이메일 인증한 계정","domain":"*.github.io"},
     "netlify":      {"target":"netlify","guide":"deploy/netlify.md","headers":"_headers","cost":"0","limits":"월 300크레딧(배포 15 → 한 달 20번, GB당 20, 1만 요청당 2). 2026-07-28 이후 팀은 비공개로 시작(앱 배포는 자동으로 보호를 풂)","domain":"*.netlify.app"},
-    "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 `app work`로 넘김). 40MB·파일당 20MB·600파일, 마지막으로 올린 날부터 60일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
+    "lecpage":      {"target":"(앱 전용)","guide":"앱의 배포하기","headers":"운영자 서버가 정함","cost":"0","limits":"운영자가 켠 앱에서만(skill은 `app work`로 넘김). 300MB·파일당 20MB·3,000파일, 마지막으로 올린 날부터 60일. 그 사이트의 참여 기능도 운영자 서버가 맡음","domain":"<앱 주소>/s/<id>/"},
     "firebase":     {"target":"firebase","guide":"deploy/firebase.md","template":"templates/deploy/firebase/","headers":"firebase.json","cost":"0","limits":"저장 10GB, 전송 월 10GB(넘으면 다음 달까지 꺼짐)","domain":"*.web.app"},
     "aws-s3-cloudfront": {"target":"s3","guide":"deploy/aws-s3-cloudfront.md","template":"templates/deploy/aws/","headers":"cloudfront-policy","cost":"0~소액","limits":"CloudFront 종량제 상시 무료 월 1TB","domain":"*.cloudfront.net"},
     "aws-amplify":  {"target":"s3","guide":"deploy/aws-s3-cloudfront.md#amplify-끌어-놓기","headers":"amplify-console","cost":"GB당 $0.15 전송","domain":"*.amplifyapp.com"},

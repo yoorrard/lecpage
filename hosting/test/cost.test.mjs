@@ -3,7 +3,7 @@
 //  1 새 사이트(참여 기능 방 포함, 앱처럼 작은 파일을 묶어 올림): Worker 요청 열 번 안쪽(파일마다 올리면 570번대), 쓴 행 수가 Gate의 오늘 숫자(rw)에 잡힘
 //  2 다시 배포(글 한 줄): 요청 몇 번, 쓴 행 몇 줄
 //  3 /api/info는 isolate가 기억하는 동안 Gate를 다시 깨우지 않음, /api/status도 같은 물음은 한 번만
-//  4 쓴 행 수가 오늘 몫(loadOf)에 들어감: 무료 하루 10만 행의 60%를 사이트가 쓰면 새 사이트를 넘김(방의 글쓰기를 지킴)
+//  4 쓴 행 수는 Gate의 오늘 숫자(rw)에 잡힘: 무료 하루 10만 행의 85%를 넘으면 새 사이트·새 방을 넘김(gate.test.mjs)
 // COST_OUT=<파일>이면 잰 값을 JSON으로 씀(src/capacity.js UNIT과 docs의 표가 이 값을 씀).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -82,8 +82,8 @@ test('실제 모양의 사이트: 새 배포·다시 배포·배포하기 화면
   assert.ok(first.d.req <= 10, `새 배포의 Worker 요청은 열 번 안쪽: ${first.d.req}`);
   assert.ok(first.d.doReq <= 22, `새 배포의 Durable Object 요청: ${first.d.doReq}`);
   assert.ok(first.d.cfApi <= 12, `Pages API 호출: ${first.d.cfApi}`);
-  // 쓴 행 수: 파일 하나에 한 행(Pages에 올린 파일 표) + 몇 줄. Gate의 오늘 숫자에 잡힘
-  assert.ok(first.d.rw >= 560 && first.d.rw <= 660, `쓴 행 수가 잡힘(파일 573개): ${first.d.rw}`);
+  // 쓴 행 수: Pages에 올린 파일 표를 묶음 몇 줄로 쓰므로 파일이 573개여도 스무 줄 안쪽(예전에는 파일 하나에 한 줄이라 약 580줄). Gate의 오늘 숫자에 잡힘
+  assert.ok(first.d.rw >= 5 && first.d.rw <= 20, `새 배포가 쓴 행 수(파일 573개): ${first.d.rw}`);
 
   // 같은 사이트를 묶지 않고 올리면(예전 앱): 파일마다 요청
   const files0 = realSite('비용 시험 0');
@@ -91,6 +91,7 @@ test('실제 모양의 사이트: 새 배포·다시 배포·배포하기 화면
   assert.ok(old.r.ok, JSON.stringify(old.r.res?.body));
   out.newSiteUnbundled = { ...old.d, puts: old.r.puts, calls: old.r.calls };
   assert.ok(old.d.req >= 500, `파일마다 올리면 요청이 수백 번: ${old.d.req}`);
+  assert.ok(old.d.rw <= 20, `파일마다 올려도(예전 앱) 쓴 행은 스무 줄 안쪽: ${old.d.rw}`);
 
   // 다시 배포(첫 화면 글 한 줄)
   const files2 = { ...files, 'index.html': html('비용 시험 고침') };
@@ -114,6 +115,8 @@ test('실제 모양의 사이트: 새 배포·다시 배포·배포하기 화면
   const del = await measure(e, () => req(base, 'DELETE', `/api/sites/${first.r.site.id}`, { key: first.r.site.key }));
   assert.ok([202, 204].includes(del.r.status), String(del.r.status));
   out.remove = del.d;
+  // 지울 때 쓴 행(지우기도 쓴 행으로 청구됨): 통째 지우기 전에 줄 수를 세어 알림. 묶음으로 쓴 뒤로는 사이트 하나가 스무 줄 안쪽
+  assert.ok(del.d.rw >= 3 && del.d.rw <= 25, `배포 취소가 쓴 행 수: ${del.d.rw}`);
 
   if (process.env.COST_OUT) writeFileSync(process.env.COST_OUT, JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out));

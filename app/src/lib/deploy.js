@@ -508,7 +508,8 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
         if (off) { again.push(...g.map(([h]) => h)); return; }
         let res;
         try { res = await queued(() => ip('PUT', `/api/sites/${s.id}/blobs`, { key: s.key, raw: packBundle(g.map(([h, n]) => [h, n, blobs.get(h)])) })); }
-        catch (e) { if (e.status !== 404 && e.status !== 405) throw e; off = true; again.push(...g.map(([h]) => h)); return; } // 묶음을 받지 않는 서버: 파일마다
+        // 묶음을 받지 않는 서버(404·405)이거나 묶음 한도·모양이 이 앱이 아는 것과 달라졌으면(413·400: 운영자가 한도를 줄인 직후 등) 파일마다 올림 → 진짜 거절이면 그때 까닭이 그대로 나옴
+        catch (e) { if (![404, 405, 413, 400].includes(e.status)) throw e; off = true; again.push(...g.map(([h]) => h)); return; }
         // 서버가 받지 못했다고 한 파일(내용이 틀림·받을 수 없는 내용)은 아래에서 하나씩 다시 보냄 → 진짜 거절이면 그때 까닭이 그대로 나옴
         const failed = new Set((res.failed || []).map((x) => x.sha256));
         for (const [h] of g) { if (failed.has(h)) again.push(h); else tick(h); }
@@ -704,10 +705,15 @@ import { bundlesOf, packBundle } from './site-size.js';
 
 /** 사이트 파일의 크기 정보(올릴 곳 한도 확인용) */
 export function siteStat(files) {
-  let bytes = 0, maxFile = 0, binaries = 0; const names = Object.keys(files);
-  for (const k of names) { const n = typeof files[k] === 'string' ? new TextEncoder().encode(files[k]).length : files[k].byteLength ?? files[k].length ?? 0; bytes += n; if (n > maxFile) maxFile = n; if (!isText(k)) binaries++; }
-  return { bytes, maxFile, files: names.length, binaries };
+  let bytes = 0, maxFile = 0, binaries = 0, kept = 0; const names = Object.keys(files);
+  for (const k of names) {
+    const n = typeof files[k] === 'string' ? new TextEncoder().encode(files[k]).length : files[k].byteLength ?? files[k].length ?? 0;
+    bytes += n; if (n > maxFile) maxFile = n; if (!isText(k)) binaries++;
+    if (KEPT_RE.test(k)) kept += n; // 바로 배포 서버가 따로 합계를 보는 것(웹 문서·영상·소리: hosting keepsHere)
+  }
+  return { bytes, maxFile, files: names.length, binaries, kept };
 }
+const KEPT_RE = /\.(?:html|mp3|m4a|mp4|webm)$/i;
 
 /**
  * 여러 곳에 배포한 기록 합치기(순수 함수). deploy.lastUrl·target은 '지금 대표 주소와 그 곳'이라는 뜻 그대로,

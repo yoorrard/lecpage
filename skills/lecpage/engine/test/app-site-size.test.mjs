@@ -39,6 +39,16 @@ test('서버 한도로 사이트 크기 보기: 숫자는 서버가 준 그대�
   assert.equal(instantFit({ bytes: 9e9, maxFile: 9e9, files: 9e9 }, {}).ok, true, '한도를 모르면 막지 않음(서버가 봄)');
 });
 
+test('영상·소리와 웹 문서 합계(서버 maxMediaBytes): 올리기 전에 알림, 한도를 모르거나 값이 없으면 막지 않음', () => {
+  const lim = { ...LIM, maxMediaBytes: 40 * MB };
+  assert.equal(instantFit({ bytes: 200 * MB, maxFile: 19 * MB, files: 900, kept: 40 * MB }, lim).ok, true, '딱 한도는 올림');
+  const bad = instantFit({ bytes: 200 * MB, maxFile: 19 * MB, files: 900, kept: 40 * MB + 1 }, lim);
+  assert.equal(bad.ok, false); assert.equal(bad.errors.length, 1);
+  assert.match(bad.errors[0], /영상·소리 파일과 웹 문서\(HTML\)가 합쳐 41MB예요\. 바로 배포에는 이 둘을 합쳐 40MB까지/);
+  assert.equal(instantFit({ bytes: 200 * MB, maxFile: 19 * MB, files: 900, kept: 90 * MB }, LIM).ok, true, '서버가 이 한도를 알려 주지 않으면 막지 않음');
+  assert.equal(instantFit({ bytes: 200 * MB, maxFile: 19 * MB, files: 900 }, lim).ok, true, '합계를 세지 않은 통계(예전 호출)는 막지 않음');
+});
+
 test('알리는 한 줄: 이름과 크기, 교재 슬라이드가 있을 때만 그 말을 덧붙임', () => {
   const big = { name: '연수 교재.pptx', size: 312 * MB };
   assert.equal(leftLine([big]), '연수 교재.pptx(312MB)는 커서 사이트에 넣지 않아요. 참가자는 교재 슬라이드에서 모든 쪽을 볼 수 있어요.');

@@ -69,6 +69,11 @@ export const PAGES_LIMITS = { MAX_BYTES: 300 * MB, MAX_FILES: 3000 };
 export const PAGES_SITE_DAYS = 60;
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
 export const NEW_WORK_SHARE = 0.6;
+/**
+ * 쓴 행 수(무료 하루 10만 행, 지우기·알람 잡기도 쓴 행)에서 새 사이트·새 방을 받는 구간. 넘으면 새 일만 강사 계정으로 넘기고, 남은 몫은 진행 중인 연수의 글·출석 쓰기에 둠.
+ * 사이트 하나의 자산 표를 묶음 몇 줄로 쓴 뒤로 새 사이트는 열몇 줄이라(예전 약 580줄) 요청 몫(45%·60%)처럼 일찍 막을 까닭이 없음 → 이 선까지는 막지 않음
+ */
+export const ROWS_STOP_SHARE = 0.85;
 /** 하루 요청 예산에서 덜 급한 요청(앱 이용 합계 받기)까지 받는 구간. 넘으면 Worker가 DO를 부르지 않고 바로 버림 */
 export const EXTRA_WORK_SHARE = 0.85;
 /** 오늘 DO duration 몫(%)이 이만큼이면 새 SSE는 받지 않고(index.js), 이미 열린 SSE도 방이 다음에 알릴 때(10분마다) 닫음(room.js) → 런타임이 긴 대기로 내려감 */
@@ -111,6 +116,9 @@ export function config(env = {}) {
     maxBytes: num(env.MAX_BYTES, view === 'pages' ? PAGES_LIMITS.MAX_BYTES : DEFAULTS.MAX_BYTES),
     maxFileBytes: num(env.MAX_FILE_BYTES, DEFAULTS.MAX_FILE_BYTES),
     maxFiles: num(env.MAX_FILES, view === 'pages' ? PAGES_LIMITS.MAX_FILES : DEFAULTS.MAX_FILES),
+    // worker 보기로 만든 사이트의 한도(서버가 pages 보기로 바뀐 뒤에도 그 사이트는 파일을 모두 객체 저장소에 두므로 예전 한도 그대로. site.js createDeploy)
+    workerMaxBytes: DEFAULTS.MAX_BYTES,
+    workerMaxFiles: DEFAULTS.MAX_FILES,
     // (시험용) 메모리에 모아 올리는 작은 파일의 기준과 합계(site.js DEFER_MAX·DEFER_TOTAL). 운영에서는 기본값 그대로
     deferMax: num(env.DEFER_MAX_BYTES, 0, { min: 0 }),
     deferTotal: num(env.DEFER_TOTAL_BYTES, 0, { min: 0 }),

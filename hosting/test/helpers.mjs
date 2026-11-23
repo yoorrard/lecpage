@@ -124,10 +124,11 @@ export const manifestOf = (files) => Object.fromEntries(Object.entries(files).ma
  * wrangler dev(로컬 workerd)를 띄움. 못 띄우면 Error를 던짐(통합 테스트는 그 까닭을 적고 건너뜀).
  * @param {Record<string,string|number>} vars --var로 넘길 값
  */
-export async function startHost(vars = {}, { timeout = 90000 } = {}) {
+export async function startHost(vars = {}, { timeout = 90000, state: given = '' } = {}) {
   const port = await freePort();
   const inspector = await freePort(); // 기본값(9229)은 다른 wrangler dev와 부딪힘
-  const state = mkdtempSync(join(tmpdir(), 'lecpage-host-'));
+  // given: 저장소 폴더를 정해 주면 그 폴더를 쓰고 끝낼 때 지우지 않음(서버를 껐다 켜며 같은 저장소를 이어 쓰는 시험: pages.legacy.test.mjs)
+  const state = given || mkdtempSync(join(tmpdir(), 'lecpage-host-'));
   const args = [join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), 'dev', '--port', String(port), '--inspector-port', String(inspector), '--ip', '127.0.0.1', '--persist-to', state, '--show-interactive-dev-session=false'];
   for (const [k, v] of Object.entries(vars)) args.push('--var', `${k}:${v}`);
   let log = '';
@@ -140,7 +141,7 @@ export async function startHost(vars = {}, { timeout = 90000 } = {}) {
   const url = `http://127.0.0.1:${port}`;
   const stop = async () => {
     if (exited === null) { child.kill('SIGTERM'); await new Promise((r) => { const t = setTimeout(() => { child.kill('SIGKILL'); r(); }, 5000); child.on('exit', () => { clearTimeout(t); r(); }); }); }
-    rmSync(state, { recursive: true, force: true });
+    if (!given) rmSync(state, { recursive: true, force: true });
     releasePort(port); releasePort(inspector);
   };
   const until = Date.now() + timeout;
@@ -153,7 +154,7 @@ export async function startHost(vars = {}, { timeout = 90000 } = {}) {
     if (Date.now() > until) { await stop(); throw new Error(`wrangler dev가 ${timeout / 1000}초 안에 뜨지 않았어요.\n${log.slice(-1500)}`); }
     await new Promise((r) => setTimeout(r, 250));
   }
-  return { url, stop, log: () => log, pid: child.pid };
+  return { url, stop, log: () => log, pid: child.pid, state };
 }
 
 /** API 한 번 부르기 → { status, headers, body(JSON이면 객체) } */

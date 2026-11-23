@@ -95,11 +95,12 @@ export const PAID = {
 /**
  * 측정한 단위 비용(test/cost.test.mjs·test/scale.test.mjs: VIEW=pages, 로컬 workerd + 흉내 Cloudflare API).
  * 새 사이트는 실제 모양(2026-11-23 운영 실측: 파일 573개 중 537개가 글꼴 조각)을 앱처럼 묶어 올린 값: 올리기 요청 2번(묶음 1 + 큰 그림 1).
- * 쓴 행은 Pages에 올린 파일 표가 파일 하나에 한 행이라 파일 수를 따라감(무료 하루 10만 행, 지우기도 쓴 행). 그 밖의 rows·ms·cpu는 코드에서 어림(색인 포함 글 하나에 4~6행 등)
+ * 쓴 행: Pages에 올린 파일 표를 묶음 몇 줄로 쓰므로(2026-11-24, site.js ppack) 파일 수와 상관없이 사이트 하나가 열몇 줄(예전에는 파일 하나에 한 줄이라 약 580줄).
+ * 무료 하루 10만 행(지우기·알람 잡기도 쓴 행). 그 밖의 rows·ms·cpu는 코드에서 어림(색인 포함 글 하나에 4~6행 등)
  */
 export const UNIT = {
-  newSite: { workerReq: 6, doReq: 12, pagesApi: 10, rows: 600 }, // 만들기·목록·묶음·방 묶기·공개(행: 파일 표 약 570 + Site·Gate 약 15 + 방 표 만들기 약 15)
-  siteGoneRows: 580, // 사이트가 없어질 때(배포 취소·보관 기간 끝) 파일 표를 지우는 행
+  newSite: { workerReq: 6, doReq: 12, pagesApi: 10, rows: 45 }, // 만들기·목록·묶음·방 묶기·공개(행: Site 15(실측, 알람 포함) + Gate 약 15 + 방 표 만들기 약 15)
+  siteGoneRows: 20, // 사이트가 없어질 때(배포 취소·보관 기간 끝): Site 5(실측, 통째 지우기 전 줄 수) + Gate·방 약 15
   republish: { workerReq: 3, doReq: 6, pagesApi: 5, rows: 12 }, // 글 한 줄 고쳐 다시 배포
   appChecks: { workerReq: 3, doReq: 1 }, // /api/info 1번(isolate 20초 기억) + /api/status 2번(공개 전·연수 전날)
   seatRows: 25, // 참가자 한 명이 연수 동안 쓰는 행(들어오기·출석·글 2~3개·투표)

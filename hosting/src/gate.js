@@ -10,7 +10,7 @@
 //    지우지 못한 사이트·AI 정보 파일이 묵음)을 웹훅 하나로 짧게, 월요일에는 '이상 없음' 주간 요약(웹훅이 살아 있다는 표시). 관리 화면 맨 위에도 같은 글
 // Worker와 Site·Room만 부릅니다(바깥에서 직접 닿을 수 없음).
 import { DurableObject } from 'cloudflare:workers';
-import { config, DAY_MS, HOUR_MS, NEW_WORK_SHARE } from './config.js';
+import { config, DAY_MS, HOUR_MS, NEW_WORK_SHARE, ROWS_STOP_SHARE } from './config.js';
 import { HttpError, json, readJson } from './http.js';
 import { sha256Hex, ipBucket } from './ids.js';
 import { WORKER_KEYS, APP_KEYS, paidAdvice } from './tally.js';
@@ -127,7 +127,11 @@ export class Gate extends DurableObject {
    * 하루 줄 → 그날 쓴 몫(요청 단위). 무료 하루 한도는 Worker 요청·DO 요청·DO duration이 따로라 가장 빠듯한 것:
    * DO 요청 = Worker가 부른 Site·Room(ds·dr) + Gate가 받은 것(g·gt) + Site가 부른 Room(rc), duration = 방이 깨어 있던 초(aw, SSE·방 안 긴 대기) × 0.125GB
    */
-  loadOf(d) { return Math.max(this.reqLoad(d), this.rowsLoad(d)); }
+  loadOf(d) {
+    const r = this.reqLoad(d);
+    // 쓴 행 수가 선(ROWS_STOP_SHARE)을 넘으면 '새 일 멈춤' 구간으로 봄(그 전에는 몫에 넣지 않음)
+    return this.rowsFull(d) ? Math.max(r, Math.ceil(NEW_WORK_SHARE * (this.cfg.dailyRequestBudget || FREE.workerReq))) : r;
+  }
   /** 요청·duration만 본 몫(쓴 행 수는 뺌): Worker가 묻기 간격을 늘릴지 정하는 값 — 행이 빠듯할 때 묻기를 늦춰도 도움이 안 되므로 따로 */
   reqLoad(d) {
     const doReq = (d.ds || 0) + (d.dr || 0) + (d.g || 0) + (d.gt || 0) + (d.rc || 0);
@@ -135,10 +139,11 @@ export class Gate extends DurableObject {
     return Math.max(d.req || 0, doReq, Math.round((((d.aw || 0) * 0.125) / FREE.doGbs) * b));
   }
   /**
-   * 쓴 행 수(rw)를 요청 단위로: 무료 하루 10만 행(지우기도 쓴 행)이 따로 있어, 다 차면 그날 모든 쓰기(참여 기능 방의 글·출석 포함)가 실패함.
-   * 사이트(Site)가 배포·지우기 때 쓴 행만 셈(파일 하나에 한 행: 글꼴 조각이 든 사이트는 새 배포 한 번에 수백 행). 방이 쓰는 행은 세지 않으므로 이 몫이 차기 전에 새 사이트부터 넘김
+   * 쓴 행 수(rw)가 하루 무료 행(10만, 지우기·알람 잡기도 쓴 행)의 ROWS_STOP_SHARE를 넘었는지: 다 차면 그날 모든 쓰기(참여 기능 방의 글·출석 포함)가 실패하므로
+   * 넘으면 새 사이트·새 방만 강사 계정으로 넘김. 사이트(Site)가 배포·지우기 때 쓴 행과, 방(Room)이 같은 알림(POST site { id, rw })으로 알려 주는 행을 더한 값.
+   * 유료는 하루 행 한도가 없음(달 5천만 행 포함)
    */
-  rowsLoad(d) { if (this.cfg.plan === 'paid') return 0; const b = this.cfg.dailyRequestBudget || FREE.workerReq; return Math.round(((d.rw || 0) / FREE.rowsWritten) * b); } // 유료는 하루 행 한도가 없음(달 5천만 행 포함)
+  rowsFull(d) { return this.cfg.plan !== 'paid' && (d.rw || 0) >= ROWS_STOP_SHARE * FREE.rowsWritten; }
   /** 오늘 DO duration 몫(무료 하루 13,000 GB-s의 %) */
   gbsPct(d) { return Math.round(((d.aw || 0) * 0.125 / FREE.doGbs) * 1000) / 10; }
   /** 오늘 줄에 더함(한 줄 쓰기). fn이 있으면 더한 뒤 그 줄을 더 고칠 수 있음(알림 표시) */
@@ -192,7 +197,7 @@ export class Gate extends DurableObject {
           : step >= tightAt ? `붐빔: 연수 날짜가 14일 안인 사이트·방만 받고 나머지는 강사 계정으로 넘기고 있어요. ${stopAt}%가 되면 새로 받지 않아요.`
             : `${tightAt}%가 되면 예약한 연수만 받아요.`;
     const load = this.loadOf(d); const gbsReq = Math.round((this.gbsPct(d) / 100) * b);
-    const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : this.rowsLoad(d) >= load ? '쓴 행 수(사이트 파일 표)' : 'DO 요청';
+    const which = load <= (d.req || 0) ? '요청' : gbsReq >= load ? 'DO 시간(duration)' : this.rowsFull(d) && this.reqLoad(d) < load ? '쓴 행 수(무료 하루 10만 행)' : 'DO 요청';
     return `[lecpage 바로 배포] 오늘 ${which}이 하루 예산의 ${step}%를 넘었어요(${load.toLocaleString('en-US')} / ${b.toLocaleString('en-US')}). ${what} ${paid ? '관리 화면' : '유료 전환 판단: 관리 화면'} ${this.adminLink()}`;
   }
   adminLink() { return this.cfg.adminUrl || '/admin'; }

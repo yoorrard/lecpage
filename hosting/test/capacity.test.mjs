@@ -32,11 +32,10 @@ test('사용자 수: 늘수록 비용이 늘고, 참여 기능을 강사 계정�
   assert.equal(a.trainings, 1400); assert.equal(a.peakTrainings, 140);
   assert.ok(['workerReq', 'doReq'].includes(a.first.resource), '참여 기능이 있으면 요청이 먼저 참');
   const siteOnly = scenario({ users: 100000, liveShare: 0 });
-  // 사이트만이면 요청은 거의 안 쓰지만, 실제 사이트는 파일이 수백 개(글꼴 조각)라 파일 표의 쓴 행(무료 하루 10만 행)이 먼저 참:
-  // 파일 표를 묶어 쓰게 바꾸기 전까지는 '훨씬 많이'가 아니라 몇 배(2026-11-23 실측, test/cost.test.mjs)
-  assert.equal(siteOnly.first.resource, 'rows');
+  // 사이트만이면 요청도 쓴 행도 거의 안 씀: 파일 표를 묶음 몇 줄로 쓴 뒤로(2026-11-24) 새 사이트 하나가 수십 줄이라(예전 약 600줄) 쓴 행이 먼저 차지 않음
+  assert.notEqual(siteOnly.first.resource, 'rows');
   assert.ok(siteOnly.paid.total < c.paid.total / 3);
-  assert.ok(freeMaxUsers({ liveShare: 0 }) > 4 * freeMaxUsers(), '사이트만이면 무료로 더 많이');
+  assert.ok(freeMaxUsers({ liveShare: 0 }) > 20 * freeMaxUsers(), '사이트만이면 무료로 훨씬 더 많이');
   assert.ok(freeMaxUsers() > 0);
 });
 

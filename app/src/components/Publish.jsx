@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog, Progress } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantFit, instantLiveOpen, openNetlify, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantFit, instantLiveOpen, forgetRecords, openNetlify, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings, pingLive, adminKeyFor, rememberServer, forgetServer } from './LiveSetup.jsx';
@@ -297,7 +297,8 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
       const r = await buildFiles({ ...opts, ...(auto || {}), target: id, view });
       // 바로 배포는 서버가 알려 준 한도(/api/info)로 봄(엔진의 곳별 표는 다른 곳용). 큰 교재 원본은 buildFiles가 이미 뺐음
       const chk = id === 'lecpage' && instant?.limits ? instantFit(siteStat(r.files), instant.limits) : id === 'lecpage' ? { ok: true, errors: [] } : E.checkHost(id, siteStat(r.files));
-      if (!chk.ok) throw new Error(chk.errors[0]);
+      // 크기 때문에 못 올리는 것은 다시 눌러도 같으므로 '다시 해도 같은 거절'로(바로 배포 카드가 [다른 곳에 배포]로 이끎)
+      if (!chk.ok) throw Object.assign(new Error(chk.errors[0]), id === 'lecpage' ? { code: 'too_large' } : {});
       await up(r.files, setProg, async (o = {}) => (await buildFiles({ ...opts, ...o, target: id, view })).files);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { if (!onFail?.(e)) toast('배포하지 못했어요. ' + e.message); }
@@ -484,7 +485,8 @@ function Undeploy({ p, target, info, records, done, onClose }) {
   // 커넥트가 지우는 동안의 진행(로그인이 풀려 있으면 브라우저 승인을 기다림): 한 줄 + 로그인 창 열기·물음 + [중지]
   const R = useRun();
   useEffect(() => () => R.cancel(), []); // 창이 사라지면(다른 단계로 감) 기다리던 일도 멈춤
-  useEffect(() => { if (lec?.id) instantRecords(lec).then((r) => r && setRec(r)); }, []);
+  // 지우기 전 확인이므로 기억해 둔 수(15초)를 쓰지 않고 지금 수를 새로 물음(방금 올라온 글이 빠진 수로 확인하지 않게)
+  useEffect(() => { if (lec?.id) { forgetRecords(lec.id); instantRecords(lec).then((r) => r && setRec(r)); } }, []);
   const recLine = recordsLine(rec);
   const hasRoom = !!lec && (!!lec.adminKey || !!rec?.live); // 이 사이트에 참여 기능 방이 있음(기록이 지워짐)
   const siteUrl = url.replace(/\/?$/, '/');
