@@ -146,11 +146,14 @@ export async function startHost(vars = {}, { timeout = 90000 } = {}) {
   const until = Date.now() + timeout;
   for (;;) {
     if (exited !== null) { await stop(); throw new Error(`wrangler dev가 끝났어요(코드 ${exited}).\n${log.slice(-1500)}`); }
-    try { const r = await fetch(`${url}/api/info`, { signal: AbortSignal.timeout(2000) }); if (r.ok) break; } catch { /* 아직 */ }
+    // 이 wrangler가 그 포트에서 떴다고 적은 뒤에만 준비된 것으로 봄: 시험 파일 여럿이 함께 돌 때 같은 빈 포트를 받은 다른 시험의 서버가 대신 답하면
+    // (포트는 OS가 고른 것을 닫았다가 다시 여므로 겹칠 수 있음) 그 서버에 올리고 내 흉내 Cloudflare에는 아무것도 없게 됨
+    const mine = log.includes(`Ready on http://127.0.0.1:${port}`);
+    if (mine) { try { const r = await fetch(`${url}/api/info`, { signal: AbortSignal.timeout(2000) }); if (r.ok) break; } catch { /* 아직 */ } }
     if (Date.now() > until) { await stop(); throw new Error(`wrangler dev가 ${timeout / 1000}초 안에 뜨지 않았어요.\n${log.slice(-1500)}`); }
     await new Promise((r) => setTimeout(r, 250));
   }
-  return { url, stop, log: () => log };
+  return { url, stop, log: () => log, pid: child.pid };
 }
 
 /** API 한 번 부르기 → { status, headers, body(JSON이면 객체) } */

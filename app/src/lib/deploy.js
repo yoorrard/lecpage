@@ -495,9 +495,30 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
   }
   const upload = async (list) => {
     const need = list.filter((h) => blobs.has(h)); let done = 0;
-    await pool(need, 4, async (h) => {
+    // 진행 막대는 올린 크기로(쪽 그림 수백 장 사이에 큰 파일이 있어도 멈춘 것처럼 보이지 않게)
+    const total = need.reduce((n, h) => n + blobs.get(h).length, 0) || 1; let sent = 0;
+    const tick = (h) => { done++; sent += blobs.get(h).length; progress(`파일 올리기 ${done}/${need.length}`, 8 + Math.round(sent / total * 80)); };
+    // 작은 파일(글꼴 조각·작은 그림 수백 개)은 요청 하나에 여럿 묶어 보냄: 서버가 받는다고 알려 줄 때만(/api/info limits.bundle). 예전 서버면 파일마다
+    const bun = (await instantInfo())?.limits?.bundle;
+    let single = need;
+    if (bun?.bytes > 0 && bun.itemBytes > 0) {
+      const groups = bundlesOf(need.filter((h) => blobs.get(h).length <= bun.itemBytes).map((h) => [h, blobs.get(h).length]), bun);
+      const again = []; let off = false;
+      await pool(groups, 2, async (g) => {
+        if (off) { again.push(...g.map(([h]) => h)); return; }
+        let res;
+        try { res = await queued(() => ip('PUT', `/api/sites/${s.id}/blobs`, { key: s.key, raw: packBundle(g.map(([h, n]) => [h, n, blobs.get(h)])) })); }
+        catch (e) { if (e.status !== 404 && e.status !== 405) throw e; off = true; again.push(...g.map(([h]) => h)); return; } // 묶음을 받지 않는 서버: 파일마다
+        // 서버가 받지 못했다고 한 파일(내용이 틀림·받을 수 없는 내용)은 아래에서 하나씩 다시 보냄 → 진짜 거절이면 그때 까닭이 그대로 나옴
+        const failed = new Set((res.failed || []).map((x) => x.sha256));
+        for (const [h] of g) { if (failed.has(h)) again.push(h); else tick(h); }
+      });
+      const inGroup = new Set(groups.flat().map(([h]) => h));
+      single = [...again, ...need.filter((h) => !inGroup.has(h))];
+    }
+    await pool(single, 4, async (h) => {
       await queued(() => ip('PUT', `/api/sites/${s.id}/blobs/${h}`, { key: s.key, raw: blobs.get(h) }));
-      done++; progress(`파일 올리기 ${done}/${need.length}`, 8 + Math.round(done / need.length * 80));
+      tick(h);
     });
   };
   await upload(dp.missing || []);
@@ -665,6 +686,10 @@ export function checkShortUrl(input, siteUrl = '') {
   if (siteUrl && bareUrl(u.href) === bareUrl(siteUrl)) return { error: '사이트 주소와 같아요. 줄인 주소를 넣어 주세요.' };
   return { url: u.href };
 }
+
+// 크기 한도 도우미(바로 배포 서버의 한도로 보기·큰 교재 원본 빼기·알리는 한 줄)는 site-size.js에(다른 모듈 없이 Node 시험에서도 부를 수 있게)
+export { sizeText, instantFit, fitOriginals, leftLine } from './site-size.js';
+import { bundlesOf, packBundle } from './site-size.js';
 
 /** 사이트 파일의 크기 정보(올릴 곳 한도 확인용) */
 export function siteStat(files) {

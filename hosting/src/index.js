@@ -13,7 +13,7 @@ import { Tally, MinuteLimiter, appStatKey } from './tally.js';
 import { admin } from './admin.js';
 import { extOf } from './paths.js';
 import { siteUrlOf, siteOriginRe } from './pages-site.js';
-import { Site } from './site.js';
+import { Site, BUNDLE_HEAD_MAX, BUNDLE_FILES } from './site.js';
 import { Gate } from './gate.js';
 import { Room, Guard } from './room.js';
 import { relayWait as relayLive } from '../../skills/lecpage/backends/cloudflare/src/longpoll.js';
@@ -298,7 +298,14 @@ async function route(request, env, ctx, url, cfg, self) {
       view: cfg.view, keepAlive: cfg.keepAlive, siteScripts: cfg.view === 'pages', ownLive: true,
       // sitesPerDevice: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). quota: 한 사람 몫을 다시 세게 한 번호(QUOTA_EPOCH) —
       // 앱이 적어 둔 '오늘 남은 몫'이 이 번호와 다를 때 만든 것이면 버리면 됨(운영자가 횟수를 초기화함)
-      limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days, sitesPerDevice: cfg.sitesPerDevice }, quota: cfg.quotaEpoch,
+      // maxFileBytes: 파일 하나(이보다 큰 교재 원본은 앱이 사이트에 넣지 않고 배포). maxMediaBytes(pages 보기): HTML·영상·소리 합계
+      // bundle: 작은 파일(itemBytes 이하)을 요청 하나에 여럿(합계 bytes·files개까지) 묶어 받음(PUT /api/sites/:id/blobs). 없으면 파일마다 올림
+      limits: {
+        maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days, sitesPerDevice: cfg.sitesPerDevice,
+        ...(cfg.view === 'pages' ? { maxMediaBytes: cfg.maxMediaBytes } : {}),
+        ...(cfg.bundleBytes ? { bundle: { bytes: cfg.bundleBytes, itemBytes: Math.min(cfg.bundleItemBytes, cfg.bundleBytes, cfg.maxFileBytes), files: BUNDLE_FILES } } : {}),
+      },
+      quota: cfg.quotaEpoch,
       report: `${self}/report`,
       // live: 참여 기능(방)을 쓰는 서버일 때만 있음. accepting: 지금 새 방을 열 수 있는지(false면 reason: paused·storage·budget·room_cap. 이미 묶인 방은 그대로 됨),
       // onlyBooked: 붐벼서 연수 날짜가 가까운 사이트의 방만 받는 중. 앱은 이 값으로 '참여 기능까지 바로 켜져요'를 실제와 맞게 보여 줌. 못 물어보면 받는 것으로
@@ -349,6 +356,11 @@ async function route(request, env, ctx, url, cfg, self) {
       if (!SHA256_RE.test(d)) throw new HttpError('bad_request', 'sha256이 맞지 않아요.');
       if (size > cfg.maxFileBytes) throw new HttpError('too_large');
       return forward(`blobs/${d}`);
+    }
+    // 작은 파일 여럿을 요청 하나에(본문 모양·파일마다 하는 일은 site.js uploadBundle). 끄면(BUNDLE_BYTES 0) 없는 주소 — 앱은 /api/info의 limits.bundle이 있을 때만 부름
+    if (c === 'blobs' && parts.length === 3 && method === 'PUT' && cfg.bundleBytes) {
+      if (size > cfg.bundleBytes + BUNDLE_HEAD_MAX + 4) throw new HttpError('too_large', '묶음이 너무 커요.');
+      return forward('bundle');
     }
     throw new HttpError('not_found', '없는 주소예요.');
   }

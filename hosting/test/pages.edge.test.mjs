@@ -40,7 +40,8 @@ test('VIEW=pages 경계·고장: 한도 딱 맞음/넘음, 순간 오류, 답이
   closers.push(cf.stop);
   let h;
   // CF_ORPHAN_SETTLE_MS: 답이 끊긴 '배포 만들기'가 늦게 끝날 수 있다고 보는 시간(실제 5분)을 시험에서는 1.5초로
-  try { h = await host(cf, { MAX_FILES: 40, MAX_FILE_BYTES: 2 * MB, MAX_BYTES: 24 * MB, CF_API_TIMEOUT_MS: 1500, CF_ORPHAN_SETTLE_MS: 1500 }); }
+  // DEFER_MAX_BYTES: 메모리에 모아 올리는 작은 파일의 기준(실제 4MB)을 512KB로 — 700KB짜리를 '받을 때 바로 Pages에 올리는 큰 파일'로 써서 올리기 단계의 고장을 봄
+  try { h = await host(cf, { MAX_FILES: 40, MAX_FILE_BYTES: 2 * MB, MAX_BYTES: 24 * MB, CF_API_TIMEOUT_MS: 1500, CF_ORPHAN_SETTLE_MS: 1500, DEFER_MAX_BYTES: 512 * 1024 }); }
   catch (e) { return t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); }
   closers.push(h.stop);
   const base = h.url;

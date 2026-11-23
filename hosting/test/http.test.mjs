@@ -66,6 +66,10 @@ test('설정: 기본값과 환경 변수', () => {
   assert.equal(d.maxBytes, 40 * 1024 * 1024);
   assert.equal(d.maxFileBytes, 20 * 1024 * 1024);
   assert.equal(d.maxFiles, 600);
+  // pages 보기(파일을 Cloudflare Pages에 둠): 사이트 300MB·3,000개, 파일 하나는 그대로. 이 객체 저장소에 두는 HTML·영상·소리는 사이트당 40MB
+  const pg = config({ VIEW: 'pages', CF_ACCOUNT_ID: 'a'.repeat(32), PAGES_PROJECT: 'p', PAGES_TOKEN: 't'.repeat(24), PAGES_HOST: 'p.pages.dev' });
+  assert.equal(pg.view, 'pages'); assert.equal(pg.maxBytes, 300 * 1024 * 1024); assert.equal(pg.maxFiles, 3000); assert.equal(pg.bundleBytes, 8 * 1024 * 1024); assert.equal(pg.bundleItemBytes, 512 * 1024); assert.equal(config({ BUNDLE_BYTES: '0' }).bundleBytes, 0, '0이면 묶어 받기를 끔'); assert.equal(pg.maxFileBytes, 20 * 1024 * 1024); assert.equal(pg.maxMediaBytes, 40 * 1024 * 1024);
+  assert.equal(config({ VIEW: 'pages', CF_ACCOUNT_ID: 'a'.repeat(32), PAGES_PROJECT: 'p', PAGES_TOKEN: 't'.repeat(24), PAGES_HOST: 'p.pages.dev', MAX_BYTES: '1000', MAX_FILES: '5' }).maxBytes, 1000, '환경 변수가 먼저');
   assert.equal(d.days, 30);
   assert.equal(d.sitesPerHour, 6);
   assert.equal(d.sitesPerDay, 20);

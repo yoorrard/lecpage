@@ -6,8 +6,8 @@ const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = (script) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>바로 배포 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>바로 배포 시험</h1><div data-lp="qa"></div></section></main>' + (script ? '<script>document.documentElement.classList.add("js")</script>' : '') + '</body></html>\n```\n```json\n{"v":2,"title":"바로 배포 시험","sessions":[{"date":"2027-02-10","start":"10:00","end":"12:00"}],"features":["qa"]}\n```';
 const UNSAFE = 'index.html에 비밀번호 입력 칸이 있어요. 참가자의 비밀번호를 받는 사이트는 바로 배포할 수 없어요.';
 const TOO_LARGE = '사이트가 너무 커요(30MB까지). 큰 영상은 유튜브 링크로 바꿔 주세요.';
-async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {}, reachable = false }) {
-  const st = { calls: [] };
+async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {}, reachable = false, takeAll = false, failOne = false }) {
+  const st = { calls: [], manifests: [], puts: 0, putBytes: 0, bundles: 0, bundleFiles: 0, resent: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
     const u = new URL(r.request().url()); const m = r.request().method();
@@ -28,7 +28,20 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     if (/\/publish$/.test(u.pathname) && failPublish > 0) { failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
     if (/\/publish$/.test(u.pathname) && !unsafe) return json({ url: `https://s-${u.pathname.split('/')[3]}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 });
     if (u.pathname === '/api/sites' && m === 'POST') return json({ id: 'site1', key: 'k1', url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
-    if (/\/deploys$/.test(u.pathname)) return json({ deploy: 'd1', missing: [] });
+    // 받은 배포 목록을 적어 둠(시험이 무엇이 올라갔는지 봄). takeAll: 목록의 파일을 모두 올려받는 서버(처음 배포처럼)
+    if (/\/deploys$/.test(u.pathname)) { const files = r.request().postDataJSON()?.files || {}; st.manifests.push(files); return json({ deploy: 'd1', missing: takeAll ? [...new Set(Object.values(files).map((f) => f.sha256))] : [] }); }
+    if (/\/blobs\/[0-9a-f]{64}$/.test(u.pathname) && m === 'PUT') { st.puts++; st.putBytes += (r.request().postDataBuffer() || Buffer.alloc(0)).length; if (st.failedSha === u.pathname.split('/').pop()) st.resent.push(st.failedSha); return r.fulfill({ status: 204, headers: cors }); }
+    // 작은 파일 묶음(진짜 서버 hosting/src/site.js uploadBundle과 같은 모양): 머리 길이 4바이트 + 머리 JSON [[sha256, 크기], …] + 내용. /api/info에 limits.bundle을 준 서버만 받음
+    if (/^\/api\/sites\/[^/]+\/blobs$/.test(u.pathname) && m === 'PUT') {
+      if (!info?.limits?.bundle) return json({ error: { code: 'not_found', message_ko: '없는 주소예요.' } }, 404);
+      const body = r.request().postDataBuffer() || Buffer.alloc(0); const n = body.readUInt32BE(0); const list = JSON.parse(body.subarray(4, 4 + n).toString('utf8'));
+      const total = list.reduce((a, x) => a + x[1], 0);
+      if (4 + n + total !== body.length) return json({ error: { code: 'bad_request', message_ko: '묶음에 적은 크기와 내용의 길이가 달라요.' } }, 400);
+      st.bundles++; st.bundleFiles += list.length; st.putBytes += total;
+      // failOne: 첫 묶음의 첫 파일을 '내용이 달라요'로 돌려줌(앱이 그 파일만 하나씩 다시 보내는지)
+      const failed = failOne && !st.failedSha ? [{ sha256: (st.failedSha = list[0][0]), code: 'bad_request', message_ko: '파일 내용이 sha256과 달라요.' }] : [];
+      return json({ ok: true, got: list.length - failed.length, failed });
+    }
     if (/\/publish$/.test(u.pathname)) return unsafe ? json({ error: { code: 'unsafe_site', message_ko: UNSAFE, rule: 'password', path: 'index.html' } }, 422) : json({ url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
     return json({}, 404);
   });
@@ -192,6 +205,105 @@ async function seed(p, script) {
     L.ok('instant full → exactly one primary button and one message about what to do', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('.publish button.btn-primary:has-text("Netlify 계정으로 배포")').count() === 1 && !/받은 ZIP을 끌어다 놓아요/.test(box), (await p.locator('.publish .btn-primary:visible').allInnerTexts()).join(' | '));
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-full-netlify.png' });
     L.ok('no page errors ⑨', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  // 진짜 서버의 한도(pages 보기): 사이트 300MB·3,000개·파일 하나 20MB, 작은 파일(512KB 이하)은 8MiB씩 묶어 받음
+  const REAL_LIMITS = { maxBytes: 300 * 1024 * 1024, maxFileBytes: 20 * 1024 * 1024, maxFiles: 3000, days: 60, bundle: { bytes: 8 * 1024 * 1024, itemBytes: 512 * 1024, files: 700 } };
+  /** 이 연수의 저장소(IndexedDB)에 파일을 넣음: [경로, 바이트 수][] — 내용은 경로마다 다르게 */
+  const putBlobs = (p, list) => p.evaluate(async (items) => {
+    const pid = (location.hash.match(/#\/p\/([^/]+)/) || [])[1];
+    const db = await new Promise((ok, no) => { const q = indexedDB.open('lecpage'); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+    for (let i = 0; i < items.length; i += 25) {
+      await new Promise((ok, no) => {
+        const t = db.transaction('blobs', 'readwrite'); const s = t.objectStore('blobs');
+        for (const [path, n] of items.slice(i, i + 25)) { const u = new Uint8Array(n); crypto.getRandomValues(u.subarray(0, Math.min(n, 4096))); new TextEncoder().encodeInto(path, u.subarray(0, Math.min(n, 200))); s.put(u, pid + ':' + path); }
+        t.oncomplete = ok; t.onerror = () => no(t.error);
+      });
+    }
+    return pid;
+  }, list);
+  { // ⑩ 큰 사이트(교재 쪽 그림 300장, 45MB: 예전 한도 40MB를 넘음)가 그대로 올라감 — 쪽 그림은 한 장도 빠지지 않음
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    const st = await server(ctx, { siteScripts: true, takeAll: true, info: { limits: REAL_LIMITS } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    const pages = []; for (let i = 14; i <= 313; i++) pages.push([`site/material/p-${String(i).padStart(3, '0')}.webp`, 150 * 1024]);
+    await putBlobs(p, pages);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 180000 });
+    const man = st.manifests.at(-1) || {}; const imgs = Object.keys(man).filter((k) => /^material\/p-\d+\.webp$/.test(k));
+    const bytes = Object.values(man).reduce((n, f) => n + f.size, 0);
+    L.ok('big site (300 added page images, over the old 40MB limit) deploys as is: every page image is in the deploy list', imgs.length >= 300 && bytes > 44 * 1024 * 1024 && Object.keys(man).length < 3000, `${imgs.length} page images, ${Math.round(bytes / 1048576)}MB, ${Object.keys(man).length} files`);
+    const uniq = new Set(Object.values(man).map((f) => f.sha256)).size;
+    L.ok('big site → all files uploaded and the address appears', st.bundleFiles + st.puts === uniq && st.putBytes > 44 * 1024 * 1024 && /example\.pages\.dev/.test(await p.locator('.success .big-url').innerText()), `${st.bundleFiles} in bundles + ${st.puts} single = ${uniq} files, ${Math.round(st.putBytes / 1048576)}MB`);
+    // 작은 파일은 묶어 보냄: 올리기 요청이 파일 수(300개 넘음)가 아니라 열 번 안팎
+    L.ok('big site → small files go in bundles: upload requests are about ten, not one per file', st.bundles >= 1 && st.bundles + st.puts <= 12 && st.bundleFiles >= 300, `${st.bundles} bundle requests + ${st.puts} single for ${uniq} files`);
+    L.ok('big site → nothing was left out, no size note', await p.locator('.success .left-note').count() === 0);
+    L.ok('no page errors ⑩', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑪ '교재 원본 다운로드 허용'을 켰는데 원본이 서버의 파일 한도(20MB)보다 큼(60MB): 원본만 빼고 배포는 성공, 미리 한 줄 + 배포 뒤에도 남는 한 줄
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    const st = await server(ctx, { siteScripts: true, takeAll: true, info: { limits: REAL_LIMITS } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    // 넣은 교재(workshop.pdf)의 원본을 60MB짜리로 바꿈(저장소의 원본 내용과 연수 기록의 크기) → 새로 고쳐 그 연수를 다시 엶
+    const big = 60 * 1024 * 1024;
+    const key = await p.evaluate(async (n) => {
+      const pid = (location.hash.match(/#\/p\/([^/]+)/) || [])[1];
+      const db = await new Promise((ok, no) => { const q = indexedDB.open('lecpage'); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+      const rec = await new Promise((ok, no) => { const q = db.transaction('projects').objectStore('projects').get(pid); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+      const f = (rec.files || []).find((x) => x.key); if (!f) return '';
+      f.size = n;
+      await new Promise((ok, no) => { const t = db.transaction(['projects', 'blobs'], 'readwrite'); t.objectStore('projects').put(rec); const u = new Uint8Array(n); u.set(new TextEncoder().encode('%PDF-1.4 big original'), 0); t.objectStore('blobs').put(u, pid + ':' + f.key); t.oncomplete = ok; t.onerror = () => no(t.error); });
+      return f.key;
+    }, big);
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
+    // 공개 범위 줄을 펼쳐 '교재 원본 다운로드 허용'을 켬 → 체크 옆에 미리 한 줄(큰 원본이 있을 때만)
+    await p.locator('li:has-text("공개 범위") button:has-text("변경"), li:has-text("공개 범위") button:has-text("바꾸기")').first().click().catch(() => {});
+    const box = p.locator('label.check:has-text("교재 원본 다운로드 허용") input');
+    await box.waitFor({ timeout: 10000 });
+    L.ok('before checking: no size line', await p.locator('.left-note').count() === 0);
+    await box.check();
+    await p.waitForSelector('.left-note', { timeout: 10000 });
+    const pre = (await p.locator('.left-note').first().innerText()).replace(/\s+/g, ' ');
+    L.ok('originals checked + 60MB original → one line next to the checkbox says it will not be put in the site', /workshop\.pdf\(60MB\)는 커서 사이트에 넣지 않아요\./.test(pre) && /교재 슬라이드에서 모든 쪽을 볼 수 있어요/.test(pre) === /data-lp="deck"/.test(ANSWER(false)), pre.slice(0, 120));
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 120000 });
+    const man = st.manifests.at(-1) || {};
+    const maxFile = Math.max(...Object.values(man).map((f) => f.size));
+    L.ok('60MB original is left out of the site (not in the deploy list), deploy succeeds, page images kept', key !== '' && !Object.keys(man).some((k) => k.startsWith('files/')) && maxFile <= REAL_LIMITS.maxFileBytes && Object.keys(man).some((k) => /^material\/p-\d+\./.test(k)), `files: ${Object.keys(man).filter((k) => k.startsWith('files/')).join(',') || '(none)'}, biggest ${Math.round(maxFile / 1024)}KB`);
+    const note = (await p.locator('.success .left-note').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    L.ok('after deploy: the line stays on the success card (not a toast)', /workshop\.pdf\(60MB\)는 커서 사이트에 넣지 않았어요\./.test(note), note.slice(0, 120));
+    await p.waitForTimeout(3500); // 토스트가 사라진 뒤에도 남아 있음
+    L.ok('the line is still there after toasts are gone, and survives a reload', await p.locator('.success .left-note').count() === 1 && (await p.reload({ waitUntil: 'load' }), await p.waitForSelector('.success .big-url', { timeout: 30000 }), await p.locator('.success .left-note').count()) === 1);
+    await p.locator('.success').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-left-original.png' });
+    L.ok('no page errors ⑪', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑫ 묶음을 받지 않는 예전 서버(/api/info에 limits.bundle 없음)면 지금처럼 파일마다 올림
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    const { bundle, ...OLD } = REAL_LIMITS; void bundle;
+    const st = await server(ctx, { siteScripts: true, takeAll: true, info: { limits: OLD } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 120000 });
+    const uniq = new Set(Object.values(st.manifests.at(-1) || {}).map((f) => f.sha256)).size;
+    L.ok('old server (no bundle in /api/info) → one request per file, no bundle request', st.bundles === 0 && st.puts === uniq && uniq > 5, `${st.puts} single for ${uniq} files`);
+    L.ok('no page errors ⑫', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑬ 묶음에서 서버가 한 파일만 못 받았다고 하면(내용이 달라요) 그 파일만 하나씩 다시 보내고 배포는 끝남
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    const st = await server(ctx, { siteScripts: true, takeAll: true, failOne: true, info: { limits: REAL_LIMITS } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 120000 });
+    const uniq = new Set(Object.values(st.manifests.at(-1) || {}).map((f) => f.sha256)).size;
+    L.ok('one file refused inside a bundle → only that file is sent again on its own, deploy finishes', !!st.failedSha && st.resent.length === 1 && st.resent[0] === st.failedSha && st.bundles >= 1 && st.bundleFiles + st.puts === uniq + 1, `${st.bundles} bundle(s) with ${st.bundleFiles} files, ${st.puts} single, resent ${st.resent.length}`);
+    L.ok('no page errors ⑬', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);

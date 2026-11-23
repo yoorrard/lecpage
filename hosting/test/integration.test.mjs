@@ -39,7 +39,7 @@ test('바로 배포: 만들기 → 올리기 → 공개 → 고쳐 올리기 →
     const info = await call(base, 'GET', '/api/info');
     assert.equal(info.status, 200);
     const { capacity, ...rest } = info.body;
-    assert.deepEqual(rest, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, siteScripts: false, ownLive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30, sitesPerDevice: 3 }, quota: 2, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10, accepting: true } });
+    assert.deepEqual(rest, { ok: true, v: 1, plan: 'free', accepting: true, view: 'worker', keepAlive: true, siteScripts: false, ownLive: true, limits: { maxBytes: 8000000, maxFileBytes: 3000000, maxFiles: 60, days: 30, sitesPerDevice: 3, bundle: { bytes: 8388608, itemBytes: 524288, files: 700 } }, quota: 2, report: `${base}/report`, live: { url: `${base}/live`, uploads: true, maxUploadMb: 10, accepting: true } });
     // 넘침 신호: 단계·넘길 곳(앱이 배포 화면을 열 때 처음부터 알맞은 길을 고름)
     assert.equal(capacity.state, 'open'); assert.equal(capacity.newSites, true); assert.equal(capacity.reason, null);
     assert.deepEqual(capacity.next, ['cloudflare', 'vercel', 'github', 'netlify']); assert.deepEqual(capacity.liveNext, ['cloudflare', 'supabase']);

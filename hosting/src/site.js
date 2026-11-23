@@ -39,9 +39,17 @@ const RT = new Set(STATIC_RUNTIME || []);
  * 파일마다 Pages API를 1~2번 부르던 것이 공개 한 번에 1번으로 줄어 Cloudflare API 한도(5분에 1,200번)에 덜 닿고, 저장소에 쓰지 않아 행 쓰기(무료 하루 10만)도 늘지 않음.
  * 그사이 이 객체가 내려가 메모리가 비면 공개할 때 missing_blobs로 그 파일만 다시 받음(앱이 알아서 다시 보냄)
  */
-export const DEFER_MAX = 512 * 1024;
-/** 사이트 하나가 메모리에 잠깐 두는 파일 합계(넘으면 받을 때 바로 Pages에 올림) */
-const DEFER_TOTAL = 16 * 1024 * 1024;
+export const DEFER_MAX = 4 * 1024 * 1024;
+/**
+ * 사이트 하나가 메모리에 잠깐 두는 파일 합계. 차면 그때까지 모은 것을 Pages에 한 번에 올리고(flushPool: 확인·올리기·열쇠 적기 3번) 다시 모음.
+ * 예전에는 차고 난 뒤의 파일을 하나씩 올려(파일마다 3번) 쪽 그림 수백 장짜리 사이트가 Cloudflare API 5분 한도(1,200번)에 닿을 수 있었음
+ */
+export const DEFER_TOTAL = 16 * 1024 * 1024;
+/** 묶음 요청(PUT blobs, 파일 여럿)의 머리(파일 목록 JSON) 한도와 파일 수 */
+export const BUNDLE_HEAD_MAX = 64 * 1024;
+export const BUNDLE_FILES = 700;
+/** 묶음 안의 파일 하나만 실패로 돌려주는 오류(그 파일의 내용 문제). 나머지(사이트가 없음·붐빔·Cloudflare 오류)는 요청 전체의 오류 */
+const BUNDLE_FILE_ERRORS = new Set(['bad_request', 'too_large', 'runtime_mismatch', 'script_not_allowed', 'unsafe_site', 'bad_type', 'bad_path']);
 /** Pages 보기에서 올려받지 않는 파일(호스트 정책으로 바꿔 넣음) */
 const PAGES_SKIP = new Set(['robots.txt']);
 /** 공개 한 번에 드는 Pages API 어림(토큰·확인·올리기·열쇠 적기·배포·준비 확인·지난 배포 지우기) */
@@ -101,6 +109,8 @@ export class Site extends DurableObject {
     this.ogCache = new Map(); // 배포 id → 미리보기 카드 그림 경로('' = 없음)
     this.deferred = new Map(); // (Pages 보기) 공개할 때 한 번에 올릴 작은 파일: sha256 → { size, items: [{ ext, hash, parts, contentType }] }. 내용은 parts(base64)만 둠(원본 바이트까지 두면 메모리를 두 배로 씀)
     this.deferredBytes = 0;
+    this.deferMax = this.cfg.deferMax || DEFER_MAX;
+    this.deferTotal = this.cfg.deferTotal || DEFER_TOTAL;
   }
 
   async fetch(request) {
@@ -112,6 +122,7 @@ export class Site extends DurableObject {
         case 'POST init': return await this.init(request);
         case 'POST deploys': return await this.createDeploy(request);
         case 'PUT blobs': return await this.upload(request, arg);
+        case 'PUT bundle': return await this.uploadBundle(request);
         case 'POST publish': return await this.publish(request, arg);
         case 'DELETE site': return await this.remove(request, false);
         case 'DELETE admin-site': return await this.remove(request, true);
@@ -185,9 +196,14 @@ export class Site extends DurableObject {
   }
   /** 이번 배포에 드는 Pages API 어림(Gate의 5분 창): 공개 한 번 + 큰 파일마다 확인·올리기 */
   pagesEstimate(meta, files, missing) {
-    const want = new Set(missing); let big = 0;
-    for (const [path, sha, size] of files) if (want.has(sha) && !this.keepsHere(meta, path) && size > DEFER_MAX) { big++; want.delete(sha); }
-    return PUBLISH_CALLS + BIG_FILE_CALLS * big;
+    const want = new Set(missing); let big = 0; let small = 0;
+    for (const [path, sha, size] of files) {
+      if (!want.has(sha) || this.keepsHere(meta, path)) continue;
+      want.delete(sha);
+      if (size > this.deferMax) big++; else small += size;
+    }
+    // 작은 파일은 DEFER_TOTAL만큼 모일 때마다 한 번에 올림(마지막 남은 것은 공개할 때 같이)
+    return PUBLISH_CALLS + BIG_FILE_CALLS * (big + Math.floor(small / this.deferTotal));
   }
   /** 목록에서 아직 받지 않은 sha256(겹치지 않게, 목록 순서대로). Pages 보기는 Pages에 올린 기록도 봄 */
   missingFor(meta, files, have = this.blobSizes()) {
@@ -344,12 +360,16 @@ export class Site extends DurableObject {
       const have = this.blobSizes();
       for (const [path, sha, size] of man.files) if (have.has(sha) && have.get(sha) !== size) throw new HttpError('bad_request', `size가 맞지 않아요: ${path}`);
       const missing = this.missingFor(meta, man.files, have);
+      const keep = this.keptBytes(meta, man.files);
+      // Pages 보기: 영상·소리는 이 객체 저장소에 둠(Range 요청 때문에) → 사이트 하나가 전체 저장량을 다 쓰지 않게 합계를 따로 봄(HTML은 작아서 같이 셈)
+      if (this.isPages(meta) && keep > this.cfg.maxMediaBytes) {
+        throw new HttpError('too_large', `영상·소리 파일은 모두 합쳐 ${Math.round(this.cfg.maxMediaBytes / 1024 / 1024)}MB까지예요. 영상은 유튜브 같은 곳에 올려 링크로 넣어 주세요.`);
+      }
       // Gate에 한 번만 물음: 운영자 멈춤(다시 배포도 받지 않음, 이미 공개한 판은 그대로 열림) · Pages API 5분 창 · 연수 날짜·인원(그날이 찼으면 올리기 전에 알림, 바뀌면 갈아 끼움) · 저장량
       const chk = await this.gate('POST', 'deploy-check', {
         site: meta.site, booking: body.booking && typeof body.booking === 'object' ? body.booking : null,
         pages: this.isPages(meta) ? this.pagesEstimate(meta, man.files, missing) : 0, split: Array.isArray(body.caps) && body.caps.includes('split'),
       });
-      const keep = this.keptBytes(meta, man.files);
       if (chk.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) {
         // 아직 한 번도 배포하지 않은 사이트(방금 만든 빈 사이트)면 기록을 남기지 않음. 앱은 다음에 새 주소로 다시 만듦
         if (!meta.current) await this.wipe();
@@ -532,15 +552,30 @@ export class Site extends DurableObject {
    * 큰 파일을 여럿 한꺼번에 들고 있지 않게 한 번에 하나씩(Durable Object 메모리 128MB).
    */
   async uploadPages(request, meta, man, sha, size) {
+    if (!this.pagesNeed(meta, man, sha)) { request.body?.cancel().catch(() => { }); return noContent(); }
+    const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => this.takePages(meta, man, sha, size, await readAll(request, size)));
+    try { await run; } catch (e) { throw await this.pagesFail(e, '파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 배포해 주세요.'); }
+    return noContent();
+  }
+  /** (Pages 보기) 이 내용을 더 받아야 하는지: 여기 둘 것도 없고 Pages에 올릴 확장자도 없으면 null */
+  pagesNeed(meta, man, sha) {
     const paths = man.list.filter(([p, s]) => s === sha && !PAGES_SKIP.has(p)).map(([p]) => p);
     const exts = [...new Set(paths.filter((p) => !this.keepsHere(meta, p)).map(rawExt))].filter((e) => !this.passet(sha, e));
     const needBlob = paths.some((p) => this.keepsHere(meta, p)) && !this.hasBlob(sha);
-    if (!needBlob && !exts.length) { request.body?.cancel().catch(() => { }); return noContent(); }
-    const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => {
-      // 작은 파일은 메모리에 두었다가 공개할 때 한 번에 올림. 차례가 왔을 때 정함(나란히 온 요청들이 같은 남은 자리를 보고 합계를 넘기지 않게)
-      const defer = exts.length > 0 && size <= DEFER_MAX && (this.deferred.has(sha) || this.deferredBytes + size <= DEFER_TOTAL);
-      let bytes = await readAll(request, size);
+    return needBlob || exts.length ? { paths, exts, needBlob } : null;
+  }
+  /**
+   * (Pages 보기) 받은 내용 하나를 확인해 여기(blob) 또는 Pages로. pagesQueue 안에서만 부름(한 번에 하나씩: 나란히 온 요청들이 같은 남은 자리를 보고 합계를 넘기지 않게).
+   * 작은 파일(DEFER_MAX 이하)은 메모리에 모아 두었다가 한 번에 올림: 자리가 모자라면 그때까지 모은 것을 먼저 올리고(flushPool), 남은 것은 공개할 때 HTML과 같이
+   * @param {Uint8Array} bytes 요청 본문
+   */
+  async takePages(meta, man, sha, size, bytes) {
+      const need = this.pagesNeed(meta, man, sha);
+      if (!need) return;
+      const { paths, exts, needBlob } = need;
+      const defer = exts.length > 0 && size <= this.deferMax;
       if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== sha) throw new HttpError('bad_request', '파일 내용이 sha256과 달라요.');
+      if (defer && !this.deferred.has(sha) && this.deferredBytes + size > this.deferTotal) await this.flushPool();
       // .js: 엔진 런타임 또는 검사를 마친 사이트 스크립트(표에 적어 둠). CSS: 글자 가림 검사. 걸리면 Pages에 올리지 않음
       const jsPath = man.js.get(sha);
       const own = jsPath ? (await this.classifyJs(meta, sha, bytes, jsPath)) === 'own' : false;
@@ -572,9 +607,78 @@ export class Site extends DurableObject {
         }
         for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
       }
+  }
+  /**
+   * (Pages 보기) 메모리에 모아 둔 작은 파일을 Pages에 한 번에 올리고 열쇠를 적음(확인·올리기·열쇠 적기 3번). pagesQueue 안에서만 부름.
+   * 실패하면 모아 둔 것은 그대로 둠(이번 요청만 실패 → 앱이 다시 보냄. 이미 모은 파일은 다시 받지 않음)
+   */
+  async flushPool() {
+    const all = [...this.deferred].flatMap(([sha, d]) => d.items.map((x) => ({ sha, size: d.size, x })));
+    if (!all.length) return;
+    const pc = this.pc();
+    const missing = new Set(await pc.checkMissing([...new Set(all.map((a) => a.x.hash))]));
+    const seen = new Set(); const up = [];
+    for (const a of all) if (missing.has(a.x.hash) && !seen.has(a.x.hash)) { seen.add(a.x.hash); up.push(a.x); }
+    if (up.length) { await pc.upload(up); await pc.upsertHashes(up.map((x) => x.hash)); }
+    if (!this.load()) throw new HttpError('not_found'); // 올리는 사이에 사이트가 지워짐
+    this.ctx.storage.transactionSync(() => {
+      for (const a of all) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', a.sha, a.x.ext, a.x.hash, a.size);
     });
-    try { await run; } catch (e) { throw await this.pagesFail(e, '파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 배포해 주세요.'); }
-    return noContent();
+    for (const a of all) { const d = this.deferred.get(a.sha); if (d) { this.deferred.delete(a.sha); this.deferredBytes -= d.size; } }
+  }
+  /**
+   * PUT blobs(작은 파일 여럿을 요청 하나에): 본문 = [머리 길이 4바이트(큰 끝)] [머리 JSON: [[sha256, 크기], …]] [내용을 그 순서대로 이어 붙임].
+   * 파일마다 하는 일은 파일 하나를 받을 때(upload)와 같음: 목록에 있는지·크기·sha256·스크립트와 CSS 검사. 이미 받은 파일은 건너뜀.
+   * 한 파일의 내용 문제(sha256이 다름·받을 수 없는 내용)는 그 파일만 failed로 돌려주고 나머지는 받음 → 앱이 그 파일을 하나씩 다시 보내면 그때 까닭이 그대로 나감.
+   * 요청 전체의 문제(묶음 모양이 틀림·사이트가 지워짐·Cloudflare 오류)는 오류 응답: 앞에서 받은 파일은 받은 채로라 다시 배포하면 이어짐
+   * @returns 200 { ok: true, got: 받은 수, failed: [{ sha256, code, message_ko }] }
+   */
+  async uploadBundle(request) {
+    const meta = await this.authed(request);
+    if (meta.blocked) throw new HttpError('blocked');
+    const limit = this.cfg.bundleBytes; const item = Math.min(this.cfg.bundleItemBytes, limit, this.cfg.maxFileBytes);
+    if (!limit) throw new HttpError('not_found', '없는 주소예요.');
+    const man = meta.pending ? this.manifest(meta.pending) : null;
+    if (!man) throw new HttpError('bad_request', '배포 목록에 없는 파일이에요. 목록(deploys)을 먼저 보내 주세요.');
+    const max = limit + BUNDLE_HEAD_MAX + 4;
+    const declared = request.headers.get('content-length');
+    if (declared !== null && Number(declared) > max) throw new HttpError('too_large', '묶음이 너무 커요.');
+    const bad = (why = '묶음 모양이 맞지 않아요.') => new HttpError('bad_request', why);
+    const failed = []; let got = 0;
+    const work = async () => {
+      const body = await readUpTo(request, max);
+      if (body.length < 4) throw bad();
+      const n = new DataView(body.buffer, body.byteOffset, 4).getUint32(0);
+      if (n < 2 || n > BUNDLE_HEAD_MAX || 4 + n > body.length) throw bad();
+      let list;
+      try { list = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body.subarray(4, 4 + n))); } catch { throw bad(); }
+      if (!Array.isArray(list) || !list.length || list.length > BUNDLE_FILES) throw bad();
+      let total = 0; const seen = new Set();
+      for (const it of list) {
+        if (!Array.isArray(it) || typeof it[0] !== 'string' || !SHA256_RE.test(it[0]) || !Number.isSafeInteger(it[1]) || it[1] < 0 || it[1] > item || seen.has(it[0])) throw bad();
+        seen.add(it[0]); total += it[1];
+      }
+      if (total > limit) throw new HttpError('too_large', '묶음이 너무 커요.');
+      if (4 + n + total !== body.length) throw bad('묶음에 적은 크기와 내용의 길이가 달라요.');
+      let o = 4 + n;
+      for (const [sha, size] of list) {
+        const bytes = body.subarray(o, o + size); o += size;
+        try {
+          if (man.shas.get(sha) !== size) throw new HttpError('bad_request', man.shas.has(sha) ? '목록에 적은 크기와 달라요.' : '배포 목록에 없는 파일이에요. 목록(deploys)을 먼저 보내 주세요.');
+          if (this.isPages(meta)) await this.takePages(meta, man, sha, size, bytes);
+          else if (!this.hasBlob(sha)) await this.receive({ body: new Blob([bytes]).stream() }, sha, size, man.js.get(sha));
+          got++;
+        } catch (e) {
+          if (!(e instanceof HttpError) || !BUNDLE_FILE_ERRORS.has(e.code) || e.status >= 500 || e.status === 409) throw e;
+          failed.push({ sha256: sha, code: e.code, message_ko: e.message });
+        }
+      }
+    };
+    // Pages 보기는 다른 올리기와 같은 줄에서(한 번에 하나씩: 메모리에 모으는 합계를 함께 봄), Worker 보기는 바로
+    const pages = this.isPages(meta);
+    const run = pages ? (this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(work)) : work();
+    try { await run; } catch (e) { throw pages ? await this.pagesFail(e, '파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 배포해 주세요.') : e; }
+    return json({ ok: true, got, failed });
   }
 
   // ── 공개 ─────────────────────────────────────────────────────
@@ -1157,6 +1261,28 @@ export class Site extends DurableObject {
 
 /** 요청 본문을 정확히 size바이트까지 읽음(넘거나 모자라면 오류) */
 async function readAll(request, size) {
+  return readInto(request, size);
+}
+/** 본문을 끝까지 읽음(묶음: 길이를 미리 알면 한 번만 잡고, 모르면 모았다가 이어 붙임). max를 넘으면 too_large */
+async function readUpTo(request, max) {
+  const declared = Number(request.headers?.get?.('content-length'));
+  if (Number.isSafeInteger(declared) && declared >= 0 && declared <= max && request.headers.get("content-length") !== null) return readInto(request, declared);
+  const chunks = []; let got = 0;
+  if (request.body) {
+    const reader = request.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      got += value.byteLength;
+      if (got > max) { reader.cancel().catch(() => { }); throw new HttpError('too_large', '묶음이 너무 커요.'); }
+      chunks.push(value);
+    }
+  }
+  const out = new Uint8Array(got); let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+  return out;
+}
+async function readInto(request, size) {
   const out = new Uint8Array(size); let got = 0;
   if (request.body) {
     const reader = request.body.getReader();

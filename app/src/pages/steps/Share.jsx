@@ -9,7 +9,7 @@ import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { assembleProject } from '../../lib/studio.js';
 import { Publish, lecLiveOff, instantLiveOk, LABEL as SITE_LABEL } from '../../components/Publish.jsx';
-import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantLiveOpen, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
+import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantLiveOpen, instantRecords, recordsLine, siteStat, fitOriginals, leftLine, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml } from '../../lib/venue.js';
@@ -111,6 +111,9 @@ function mdToHtml(md, title) {
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · 운영 안내</title><style>body{font:16px/1.7 system-ui,'Malgun Gothic',sans-serif;max-width:46em;margin:32px auto;padding:0 16px;word-break:keep-all}code{background:#f3f0ee;padding:1px 5px;border-radius:5px}</style>${body}</html>`;
 }
 
+/** 사이트에 교재 슬라이드(쪽 그림을 넘겨 보는 자리)가 있는지: 원본을 사이트에 넣지 않았을 때 '교재 슬라이드에서 모든 쪽을 볼 수 있어요'를 사실일 때만 말하려고 */
+const siteHasDeck = (site) => Object.entries(site || {}).some(([k, v]) => /\.html?$/i.test(k) && typeof v === 'string' && /<[a-z][^>]*\sdata-lp\s*=\s*["']deck["']/i.test(v));
+
 export function StepShare({ p, update, go }) {
   const bp = deployView(p);
   const [busy, setBusy] = useState('');
@@ -129,6 +132,7 @@ export function StepShare({ p, update, go }) {
   const [goAgain, setGoAgain] = useState(0); // 확인 창에서 고른 뒤 다시 배포(고른 값이 반영된 다음 그림의 배포 함수로)
   const [askMain, setAskMain] = useState(''); // 참여 기능이 없는 곳을 대표 주소로 바꿀 때 확인
   const builtLive = useRef(null); // 이번에 배포한 사이트에 참여 기능이 들어갔는지(배포한 곳마다 적어 둠)
+  const leftOut = useRef(null); // 이번에 만든 사이트에서 커서 뺀 교재 원본 [{ name, size }](바로 배포만. 배포가 끝나면 연수 기록에 남겨 완료 카드가 알림)
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const built = useRef(''); const again = useRef(null); const goNow = useRef(null);
   // 배포할 곳 칸이 화면에 보이는지: 보이면 맨 위 [배포하기]는 강조하지 않음(그 칸의 버튼이 누를 곳), 안 보이면 그 칸으로 데려가는 길이라 강조
@@ -180,11 +184,23 @@ export function StepShare({ p, update, go }) {
       if (processor && !(privacy?.processors || []).length) privacy = { ...(privacy || {}), processors: [processor] };
     } else if (liveOff || !liveReady) b.live = { ...b.live, provider: liveOff ? 'none' : b.live.provider };
     if (!dry) builtLive.current = (b.live?.features || []).length > 0 && !liveOff && (!!live || LIVE_READY(b.live, p.liveOk));
-    const extra = {}; const materials = [];
+    let extra = {}; let materials = [];
+    // 바로 배포: 서버 한도(파일 하나·사이트 전체)에 걸리는 원본은 사이트에 넣지 않고 배포함(크기 때문에 배포가 실패하지 않게. 교재 쪽 그림·사이트 파일은 빼지 않음)
+    const lim = to === 'lecpage' ? (info || await instantInfo())?.limits || null : null;
+    let orig = []; let left = [];
     if (p.shareOriginals) { // 교재 원본도 내려받게: 자료실(키트 materials)이 이 목록을 보여 줌(사이트의 files/)
-      const all = await blobs.all(p.id);
-      for (const f of p.files || []) { const data = f.key && all[f.key]; if (data) { const path = 'files/' + f.key.slice(4); extra[path] = data; materials.push({ title: f.name, href: path, size: data.length || 0 }); } }
+      // 원본만 하나씩 읽음(연수의 파일을 통째로 읽지 않음). 파일 한도를 넘는 것으로 적혀 있는 원본은 읽지도 않고 뺌(수백 MB를 메모리에 올리지 않게)
+      for (const f of p.files || []) {
+        if (!f.key) continue;
+        if (lim?.maxFileBytes && f.size > lim.maxFileBytes) { left.push({ name: f.name, size: f.size }); continue; }
+        let data = await blobs.get(p.id, f.key);
+        if (data instanceof Blob) data = new Uint8Array(await data.arrayBuffer()); // 큰 원본은 저장소에 Blob으로 들어 있음(db.js)
+        if (data) orig.push({ name: f.name, path: 'files/' + f.key.slice(4), size: data.length || 0, data });
+      }
+      if (lim) { const fit = fitOriginals(orig, 0, lim); orig = fit.keep; left = [...left, ...fit.left]; }
     }
+    const put = () => { extra = {}; materials = []; for (const o of orig) { extra[o.path] = o.data; materials.push({ title: o.name, href: o.path, size: o.size }); } };
+    put();
     const { features } = p.meta || {};
     const meta = { ...(p.meta || {}), features: liveOff ? (features || []).filter((f) => !LIVE_KEYS.includes(f)) : features || [] };
     // 올리는 곳(바로 배포·Vercel·GitHub·Netlify·Cloudflare)에는 대표 주소를 박지 않음: 사이트가 열린 자기 주소로 QR·발표 화면·QR 안내문을 그림
@@ -192,7 +208,17 @@ export function StepShare({ p, update, go }) {
     const hostedTo = !!to && to !== 'zip';
     // 강사 값(참여 기능 방·주소·공개 범위·개인정보)은 조립의 prev로만 넘김(엔진 readMeta 규칙: meta 안의 강사 칸은 버림)
     const prev = { live: { provider: b.live.provider, url: b.live.url, anonKey: b.live.anonKey, code: b.live.code, ...(typeof b.live.uploads === 'boolean' ? { uploads: b.live.uploads } : {}) }, siteUrl: hostedTo ? '' : b.meta.siteUrl || '', shortUrl: hostedTo && to !== p.deploy?.target ? '' : b.meta.shortUrl || '', joinUrl: p.meta?.joinUrl || '', surveyUrl: p.meta?.surveyUrl || '', access: b.access?.mode || 'link', ...(privacy ? { privacy } : {}) };
-    const r = await assembleProject(p, { meta, target: to === 'zip' || !to ? 'zip' : 'hosted', prev, extra, materials, host: hostedTo ? to : '' });
+    const build = () => assembleProject(p, { meta, target: to === 'zip' || !to ? 'zip' : 'hosted', prev, extra, materials, host: hostedTo ? to : '' });
+    let r = await build();
+    // 원본을 넣었더니 사이트 전체 한도를 넘으면: 남은 원본을 큰 것부터 빼고 다시 조립(글꼴·잠금에 쓸 여유 4MB)
+    if (lim?.maxBytes && orig.length && r.files?.['index.html']) {
+      const total = siteStat(r.files).bytes + 4 * 1024 * 1024;
+      if (total > lim.maxBytes) {
+        const fit = fitOriginals(orig, total - orig.reduce((n, o) => n + o.size, 0), lim);
+        if (fit.left.length) { left = [...left, ...fit.left]; orig = fit.keep; put(); r = await build(); }
+      }
+    }
+    if (!dry) leftOut.current = to === 'lecpage' ? left.map((o) => ({ name: o.name, size: o.size })) : [];
     if (!r.files?.['index.html']) throw new Error((r.errors || []).map((e) => e.message_ko).join(' ') || '사이트를 조립하지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.');
     let files = r.files;
     if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
@@ -259,6 +285,9 @@ export function StepShare({ p, update, go }) {
     const siteLive = url ? builtLive.current : null; builtLive.current = null;
     const keepMain = siteLive === false && !!p.deploy?.lastUrl && p.deploy?.target !== to && siteHasLive(p.deploy);
     const lock = url ? { mode: bp.access?.mode || 'link', pw: bp.access?.mode === 'password' ? p.sitePassword || '' : '' } : null;
+    // 커서 사이트에 넣지 않은 교재 원본(바로 배포): 이번 배포의 것으로 갈아 끼움(없으면 지움). 완료 카드가 한 줄로 알림
+    const leftNow = url && to === 'lecpage' && leftOut.current?.length ? leftOut.current : undefined; leftOut.current = null;
+    const withLeft = url && to === 'lecpage' && patch?.lecpage ? { ...patch, lecpage: { ...patch.lecpage, left: leftNow } } : patch;
     const nx = mergeSite(p.deploy, url, to, { live: siteLive, keepMain, lock });
     const moved = !nx.lastUrl || (!!p.deploy?.lastUrl && same(nx.lastUrl) !== same(p.deploy.lastUrl));
     if (moved && bp.meta?.shortUrl) toast('사이트 주소가 바뀌어 짧은 주소를 지웠어요. 다시 만들어 주세요.');
@@ -266,7 +295,7 @@ export function StepShare({ p, update, go }) {
       const m = mergeSite(cur.deploy, url, patch?.target || cur.deploy?.target || '', { live: siteLive, keepMain, lock });
       return {
         pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
-        deploy: { ...(cur.deploy || {}), ...patch, sites: m.sites, lastUrl: m.lastUrl, target: m.target, at: m.at, shortLive: moved ? '' : built.current },
+        deploy: { ...(cur.deploy || {}), ...withLeft, sites: m.sites, lastUrl: m.lastUrl, target: m.target, at: m.at, shortLive: moved ? '' : built.current },
         ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: m.lastUrl, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
         ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
       };
@@ -311,6 +340,9 @@ export function StepShare({ p, update, go }) {
   const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
   const ACCESS = { link: '주소를 받은 사람만', password: '암호를 아는 사람만', public: '누구나' };
   const originals = (p.files || []).some((f) => f.key && !f.photos && !f.errors?.length); // 자료실에 함께 올릴 교재 원본이 있음(교재 원본 다운로드는 여기 공개 범위에서만 정함)
+  // 바로 배포로 올릴 때 서버의 파일 하나 한도를 넘는 원본: 사이트에 넣지 않고 배포하므로(buildFiles) 체크 옆에 미리 한 줄
+  const hasSlides = siteHasDeck(p.site);
+  const bigOrig = p.shareOriginals && target === 'lecpage' && info?.limits?.maxFileBytes ? (p.files || []).filter((f) => f.key && f.size > info.limits.maxFileBytes).map((f) => ({ name: f.name, size: f.size })) : [];
   const needPw = access === 'password' && !p.sitePassword;
   const notes = checks(p, target === 'lecpage' || (!target && autoLive) ? exp : null); // 보관 기간 알림은 바로 배포에 배포할 때만
   const day = isPastDate(bp.meta?.date) ? null : dayLine(daySt, bp.meta?.date); // 지난 날짜는 '확인할 곳'에서 한 번만 알림
@@ -360,6 +392,7 @@ export function StepShare({ p, update, go }) {
       )}
       {access === 'password' && p.sitePassword && E.passwordAdvice(p.sitePassword).level !== 'good' && <p class="small" role="status">{E.passwordAdvice(p.sitePassword).message}</p>}
       {originals && <label class="check"><input type="checkbox" checked={!!p.shareOriginals} onChange={(e) => update({ shareOriginals: e.target.checked })} /><span>교재 원본 다운로드 허용 <span class="small muted">(넣은 교재 파일이 그대로 사이트 자료실에 담겨요. 저작권을 먼저 확인해 주세요)</span></span></label>}
+      {originals && bigOrig.length > 0 && <p class="small muted left-note" role="status">{leftLine(bigOrig, { slides: hasSlides })}</p>}
     </> });
   const warns = notes.filter((c) => c.k === 'warn').length;
   // 꼭 볼 것(warn)이 있으면 펼쳐 두고, 참고만 있으면 한 줄로 접어 둠([보기]로 펼침): 좁은 화면에서 누를 버튼이 멀어지지 않게
@@ -624,6 +657,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">기관·회사 망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           {fontNote && <p class="small" role="status">{fontNote}</p>}
+          {p.deploy.target === 'lecpage' && p.deploy.lecpage?.left?.length > 0 && <p class="small left-note" role="status">{leftLine(p.deploy.lecpage.left, { slides: siteHasDeck(p.site), after: true })}</p>}
           <div class="btn-row">
             <button class="btn btn-primary" onClick={() => copy(shareUrl, '주소를 복사했어요.')}>주소 복사</button>
             <button class="btn" onClick={() => copy(msg, '카톡에 붙여 넣을 안내 문구를 복사했어요.')}>카톡용 안내 문구 복사</button>

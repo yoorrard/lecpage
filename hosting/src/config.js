@@ -2,9 +2,17 @@
 
 const MB = 1024 * 1024;
 export const DEFAULTS = {
-  MAX_BYTES: 40 * MB, // 사이트 하나
-  MAX_FILE_BYTES: 20 * MB, // 파일 하나
+  MAX_BYTES: 40 * MB, // 사이트 하나(worker 보기: 파일을 모두 이 객체 저장소에 둠). pages 보기는 PAGES_LIMITS
+  // 파일 하나. Pages는 파일 하나 25MiB까지고 Site 객체 메모리(128MB)도 빠듯해 더 올리지 않음.
+  // 이보다 큰 교재 원본('교재 원본 다운로드 허용')은 앱이 사이트에 넣지 않고 배포함(참가자는 교재 슬라이드에서 모든 쪽을 봄)
+  MAX_FILE_BYTES: 20 * MB,
   MAX_FILES: 600,
+  // pages 보기에서 이 객체 저장소에 두는 것(HTML·영상·소리(mp3·m4a·mp4·webm))의 합계: 사이트 한도가 커져도 전체 저장량(MAX_TOTAL_BYTES)을 사이트 하나가 다 쓰지 않게 예전 사이트 한도 그대로
+  MAX_MEDIA_BYTES: 40 * MB,
+  // 작은 파일 묶어 받기(PUT /api/sites/:id/blobs): 요청 하나에 BUNDLE_ITEM_BYTES 이하 파일 여럿, 합계 BUNDLE_BYTES까지. 0이면 끔(앱은 /api/info의 limits.bundle이 없으면 파일마다 올림).
+  // 실제 사이트는 파일 573개 중 537개가 글꼴 조각(작은 woff2)이라 파일마다 받으면 새 배포 한 번에 요청 568번 → 묶으면 열 번 안쪽(2026-11-23 운영 실측). 하루 요청 몫(10만)을 참여 기능과 나눠 쓰므로 줄임
+  BUNDLE_BYTES: 8 * MB,
+  BUNDLE_ITEM_BYTES: 512 * 1024,
   SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
@@ -43,13 +51,20 @@ export const PLAN_DEFAULTS = {
   paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 10 },
 };
 /**
- * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청 약 12~25, 저장 약 0.2MB).
+ * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청: 작은 파일을 묶어 받으면 10~20번 — 묶기 전에는 파일 수만큼(보통 사이트 약 570번)이었음, 저장 약 0.2MB).
  * 오래 가는 한도는 저장 공간: 하루 200개 × 60일 × 0.2MB ≈ 2.4GB(무료 5GB, MAX_TOTAL_BYTES 4GB 안)
  */
 export const PAGES_VIEW_DEFAULTS = {
   free: { DAILY_SITE_CAP: 200, DAILY_ROOM_CAP: 100 },
   paid: { DAILY_SITE_CAP: 1000, DAILY_ROOM_CAP: 1000 },
 };
+/**
+ * pages 보기의 사이트 크기 기본값(2026-11-23 40MB·600개 → 300MB·3,000개): 파일은 Cloudflare Pages에 두므로 이 객체 저장소에 들지 않음.
+ * 실제 사이트의 파일 수는 대부분 글꼴 조각(가족 하나가 굵기마다 89개: 보통 사이트 573개 중 537개)이라 600개 한도는 쪽 그림 40장쯤에 걸렸음
+ * → 글꼴 가족 셋(1,300개 안팎)과 교재 쪽 그림(모든 교재 합쳐 400장, 장당 수십~수백 KB)이 함께 들어가는 숫자로.
+ * Pages 한도는 사이트 하나 20,000개·파일 하나 25MiB(developers.cloudflare.com/pages/platform/limits)
+ */
+export const PAGES_LIMITS = { MAX_BYTES: 300 * MB, MAX_FILES: 3000 };
 /** VIEW=pages일 때 보관 기간 기본값(방문으로 늘릴 수 없어 Worker 보기의 30일보다 길게, 마지막으로 배포한 날부터) */
 export const PAGES_SITE_DAYS = 60;
 /** 하루 요청 예산에서 새 사이트·새 방을 받는 구간 */
@@ -93,9 +108,15 @@ export function config(env = {}) {
     // 방문으로 보관 기간 늘리기: 보기가 Worker를 거칠 때만 됨(VIEW=pages면 방문이 Worker에 닿지 않아 '마지막으로 배포한 날부터')
     keepAlive: view === 'worker' && !off(env.KEEP_ALIVE),
     maxSiteDays: num(env.MAX_SITE_DAYS, D.MAX_SITE_DAYS),
-    maxBytes: num(env.MAX_BYTES, DEFAULTS.MAX_BYTES),
+    maxBytes: num(env.MAX_BYTES, view === 'pages' ? PAGES_LIMITS.MAX_BYTES : DEFAULTS.MAX_BYTES),
     maxFileBytes: num(env.MAX_FILE_BYTES, DEFAULTS.MAX_FILE_BYTES),
-    maxFiles: num(env.MAX_FILES, DEFAULTS.MAX_FILES),
+    maxFiles: num(env.MAX_FILES, view === 'pages' ? PAGES_LIMITS.MAX_FILES : DEFAULTS.MAX_FILES),
+    // (시험용) 메모리에 모아 올리는 작은 파일의 기준과 합계(site.js DEFER_MAX·DEFER_TOTAL). 운영에서는 기본값 그대로
+    deferMax: num(env.DEFER_MAX_BYTES, 0, { min: 0 }),
+    deferTotal: num(env.DEFER_TOTAL_BYTES, 0, { min: 0 }),
+    maxMediaBytes: num(env.MAX_MEDIA_BYTES, DEFAULTS.MAX_MEDIA_BYTES),
+    bundleBytes: num(env.BUNDLE_BYTES, DEFAULTS.BUNDLE_BYTES, { min: 0 }),
+    bundleItemBytes: num(env.BUNDLE_ITEM_BYTES, DEFAULTS.BUNDLE_ITEM_BYTES),
     days: num(env.SITE_DAYS, view === 'pages' ? PAGES_SITE_DAYS : DEFAULTS.SITE_DAYS, { int: false, min: 1e-9 }),
     sitesPerHour: num(env.SITES_PER_HOUR, DEFAULTS.SITES_PER_HOUR),
     sitesPerDay: num(env.SITES_PER_DAY, DEFAULTS.SITES_PER_DAY),

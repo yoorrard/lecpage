@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog, Progress } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantLiveOpen, openNetlify, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantFit, instantLiveOpen, openNetlify, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings, pingLive, adminKeyFor, rememberServer, forgetServer } from './LiveSetup.jsx';
@@ -295,7 +295,8 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
     try {
       const view = live?.view || '';
       const r = await buildFiles({ ...opts, ...(auto || {}), target: id, view });
-      const chk = E.checkHost(id, siteStat(r.files));
+      // 바로 배포는 서버가 알려 준 한도(/api/info)로 봄(엔진의 곳별 표는 다른 곳용). 큰 교재 원본은 buildFiles가 이미 뺐음
+      const chk = id === 'lecpage' && instant?.limits ? instantFit(siteStat(r.files), instant.limits) : id === 'lecpage' ? { ok: true, errors: [] } : E.checkHost(id, siteStat(r.files));
       if (!chk.ok) throw new Error(chk.errors[0]);
       await up(r.files, setProg, async (o = {}) => (await buildFiles({ ...opts, ...o, target: id, view })).files);
       window.scrollTo({ top: 0, behavior: 'smooth' });
