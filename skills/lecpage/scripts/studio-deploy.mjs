@@ -18,7 +18,8 @@
 // 시험: S.cfOpts 또는 LECPAGE_WRANGLER(가짜 wrangler) + LECPAGE_CF_API(가짜 API)·LECPAGE_CF_URL(주소 앞부분)
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, mkdtempSync, chmodSync, renameSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve, dirname, sep } from 'node:path';
+import { join, resolve, dirname, sep, win32, posix } from 'node:path';
+import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { npxCommand, prepareRelay, findUrl, redact, NAME_RE, WRANGLER_VER } from './publish.mjs';
 
@@ -92,6 +93,33 @@ export function writeState(file, st) {
   } catch (e) { try { rmSync(tmp, { force: true }); } catch { /* 넘김 */ } throw e; }
 }
 function saveCfState(S, st) { writeState(stateFile(S), st); }
+/** 시험용 가짜(S.cfOpts 또는 환경 변수)인지와 그 값. 실제로는 빈 객체 */
+const cfOptsOf = (S) => S.cfOpts || (process.env.LECPAGE_WRANGLER ? { wrangler: process.env.LECPAGE_WRANGLER, api: process.env.LECPAGE_CF_API || '', urlBase: process.env.LECPAGE_CF_URL || '', open: false, ...(process.env.LECPAGE_CF_LOGIN_FILE ? { loginFiles: [process.env.LECPAGE_CF_LOGIN_FILE] } : {}) } : {});
+/**
+ * wrangler가 이 PC에 로그인을 두는 파일 후보(도구를 실행하지 않고 볼 수 있게. wrangler 4.158 소스의 getGlobalConfigPath·getAuthConfigFilePath와 같은 자리):
+ * ~/.wrangler(예전 자리)와 설정 폴더(XDG_CONFIG_HOME | macOS ~/Library/Preferences | Windows %APPDATA%\xdg.config | 그 밖 ~/.config)의 .wrangler/config/default.toml(암호화해 두는 판은 default.enc)
+ */
+export function wranglerLoginFiles({ env = process.env, platform = process.platform, home = homedir() } = {}) {
+  const P = platform === 'win32' ? win32 : posix;
+  const xdg = env.XDG_CONFIG_HOME || (platform === 'darwin' ? P.join(home, 'Library', 'Preferences') : platform === 'win32' ? P.join(env.APPDATA || P.join(home, 'AppData', 'Roaming'), 'xdg.config') : P.join(home, '.config'));
+  return [P.join(home, '.wrangler'), P.join(xdg, '.wrangler')].flatMap((d) => ['default.toml', 'default.enc'].map((f) => P.join(d, 'config', f)));
+}
+/** 이 PC에 wrangler 로그인 파일이 있는지 → true | false | null(시험용 가짜 wrangler인데 로그인 파일 자리를 주지 않음: 알 수 없으니 도구에 맡김) */
+export function cfLoginFile(S) {
+  const f = cfOptsOf(S);
+  const files = Array.isArray(f.loginFiles) ? f.loginFiles : f.wrangler ? null : wranglerLoginFiles();
+  return files ? files.some((p) => { try { return existsSync(p); } catch { return false; } }) : null;
+}
+/**
+ * 이 PC의 커넥트에 Cloudflare 로그인·관리자 키가 남아 있을 수 있는지(도구를 실행하지 않고 파일로만): /bridge/status의 hosts.cloudflare.
+ * 앱의 [모든 데이터 삭제]가 다른 브라우저에서 한 로그인도 지우게 알림. 이 커넥트가 Cloudflare 로그인을 쓴 적이 있고(login 표시) 로그인 파일이 남아 있거나,
+ * 참여 기능 서버 관리자 키·기억한 계정이 남아 있을 때만 true(강사가 따로 쓰는 wrangler 로그인만 있는 PC는 false: 커넥트가 쓴 적 없는 로그인을 지우지 않게)
+ */
+export function cfHost(S) {
+  const st = loadCfState(S);
+  const kept = !!st.account || Object.values(st.accounts && typeof st.accounts === 'object' ? st.accounts : {}).some((a) => a && a.relay);
+  return kept || (st.login === true && cfLoginFile(S) !== false);
+}
 
 /** 작업 폴더의 뿌리(이 PC 사용자 폴더 안, 본인만 드나듦). 빈 package.json을 둬 그 아래 어디서 npm을 불러도 여기서 멈춤 */
 export function workRoot(S) {
@@ -242,7 +270,7 @@ export function createCf(S, H) {
   const R = createRunner(S, H, { tmp: TMP, files: { 'wrangler.toml': EMPTY_WRANGLER }, errorOf: (e) => (e instanceof CfError ? { code: e.code, message_ko: e.message_ko, ...(e.detail ? { detail: e.detail } : {}) } : null), cancelled: () => new CfError('cancelled', MSG.cancelled), timeout: () => new CfError('timeout', MSG.timeout), failed: MSG.failed });
   const c = { draft: null, auth: null, get task() { return R.task; } };
   const log = (l) => { try { S.log?.(l); } catch { /* 넘김 */ } };
-  const opts = () => S.cfOpts || (process.env.LECPAGE_WRANGLER ? { wrangler: process.env.LECPAGE_WRANGLER, api: process.env.LECPAGE_CF_API || '', urlBase: process.env.LECPAGE_CF_URL || '', open: false } : {});
+  const opts = () => cfOptsOf(S);
   const urlOf = (name, sub) => (opts().urlBase ? `${opts().urlBase}${name}` : `https://${name}.${sub}.workers.dev`);
 
   /** wrangler 한 번: 가짜(시험) 또는 고정 판 npx. 비밀은 input(표준 입력)으로만 */
@@ -300,6 +328,8 @@ export function createCf(S, H) {
     const accounts = (Array.isArray(who.accounts) ? who.accounts : []).filter((x) => x && /^[a-f0-9]{32}$/i.test(String(x.id || ''))).map((x) => ({ id: String(x.id), name: String(x.name || '').slice(0, 120) }));
     if (!accounts.length) throw new CfError('no-account', MSG['no-account']);
     const st = loadCfState(S);
+    // 이 커넥트가 이 PC의 Cloudflare 로그인을 쓰고 있음(logout이 지움): 앱이 [모든 데이터 삭제] 때 지울 로그인이 있는지 알 수 있게(status의 hosts)
+    if (st.login !== true) { st.login = true; saveCfState(S, st); }
     // prefer: 이 일이 가리키는 계정(그 사이트를 올린 계정). 이 로그인으로 쓸 수 있으면 그것, 아니면 하나뿐인 계정·기억한 계정·물어봄
     let id = prefer.find((p) => accounts.some((x) => x.id === p)) || (accounts.length === 1 ? accounts[0].id : accounts.some((x) => x.id === st.account) ? st.account : '');
     if (!id) {
@@ -469,16 +499,21 @@ export function createCf(S, H) {
     phase(t, 'tool');
     c.auth = null;
     forgetKeys();
+    // 이 PC에 wrangler 로그인 파일이 없으면 지울 로그인이 없음: 로그아웃하려고 도구(wrangler)를 새로 받지 않고 바로 끝냄
+    if (cfLoginFile(S) === false) { forgetKeys({ login: true }); return { loggedOut: true }; }
     const r = await wr(t, ['logout']);
-    if (!r.ok && !/not logged in/i.test(r.raw)) throw explain(r.raw);
+    if (!r.ok && !/not logged in/i.test(r.raw)) throw explain(r.raw); // 로그인이 남았으면 login 표시도 남김(앱이 '지우지 못했어요'로 알림)
+    forgetKeys({ login: true });
     return { loggedOut: true };
   }
-  function forgetKeys() {
+  /** 이 PC에 둔 참여 기능 서버 관리자 키·기억한 계정 지우기. login: 이 커넥트가 로그인을 쓰고 있다는 표시도(로그인을 실제로 지운 뒤에만) */
+  function forgetKeys({ login = false } = {}) {
     try {
       const st = loadCfState(S);
       let changed = false;
       for (const a of Object.values(st.accounts && typeof st.accounts === 'object' ? st.accounts : {})) if (a && a.relay) { delete a.relay; changed = true; }
       if (st.account) { delete st.account; changed = true; }
+      if (login && st.login) { delete st.login; changed = true; }
       if (changed) saveCfState(S, st);
     } catch { /* 파일이 없거나 못 씀: 로그아웃은 이어 감 */ }
   }

@@ -15,7 +15,7 @@
 // 실측(2026-11-23, vercel 66.6.0, 터미널 없이): `whoami --json`은 로그인 전 { loggedIn: false }, `login`은 "Visit https://vercel.com/oauth/device?user_code=…"를
 // 찍고 기다림, 팀이 여럿인데 --scope가 없으면 { status: "action_required", reason: "missing_scope", choices: [{ id, name(slug) }] }.
 // 시험: S.vcOpts 또는 LECPAGE_VERCEL(가짜 vercel 명령)·LECPAGE_VERCEL_URL(주소 앞부분)
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve, dirname, sep } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import { npxCommand, redact, NAME_RE } from './publish.mjs';
@@ -73,6 +73,24 @@ export function sitesOf(st) {
 }
 /** 그 로그인(user)이 올린 그 이름의 기록(로그인을 모르는 예전 기록은 누구에게나 맞음) */
 const siteOf = (st, name, user) => sitesOf(st).find((x) => x.name === name && (!x.user || !user || x.user === user)) || null;
+/** 이 커넥트 전용 Vercel CLI 설정 폴더(만들지 않고 자리만) */
+const cfgDir = (S) => join(S.home, 'vercel-cli');
+/** 그 폴더의 로그인 파일에 토큰이 있는지(파일이 있는데 읽지 못하면 있는 것으로 봄) */
+function vcToken(S) {
+  const f = join(cfgDir(S), 'auth.json');
+  if (!existsSync(f)) return false;
+  try { const j = JSON.parse(readFileSync(f, 'utf8')); return !!(j && typeof j === 'object' && typeof j.token === 'string' && j.token); } catch { return true; }
+}
+/** 이 커넥트 폴더에서 Vercel CLI가 한 번이라도 돈 적이 있는지: CLI는 처음 돌 때 설정 폴더에 파일(config.json 등)을 씀(실측, vercel 66.6.0). 비어 있으면 지울 로그인도 없음 */
+function vcEverRan(S) { try { return readdirSync(cfgDir(S)).length > 0; } catch { return false; } }
+/**
+ * 이 PC의 커넥트에 Vercel 로그인이 남아 있을 수 있는지(도구를 실행하지 않고 파일로만): /bridge/status의 hosts.vercel.
+ * 앱의 [모든 데이터 삭제]가 다른 브라우저에서 한 로그인도 지우게 알림. 로그인 파일의 토큰, 이 커넥트가 로그인을 쓰고 있다는 표시(login), 기억한 팀 가운데 하나라도 있으면 true
+ */
+export function vcHost(S) {
+  const st = loadVcState(S);
+  return vcToken(S) || st.login === true || !!st.team;
+}
 const userTag = (j) => { const id = String(j?.username || j?.email || j?.user?.username || j?.user?.email || ''); return id ? createHash('sha256').update(id).digest('hex').slice(0, 16) : ''; };
 
 export function createVc(S, H) {
@@ -81,7 +99,7 @@ export function createVc(S, H) {
   const log = (l) => { try { S.log?.(l); } catch { /* 넘김 */ } };
   const opts = () => S.vcOpts || (process.env.LECPAGE_VERCEL ? { vercel: process.env.LECPAGE_VERCEL, urlBase: process.env.LECPAGE_VERCEL_URL || '', open: false } : {});
   /** CLI가 로그인·설정을 두는 폴더(이 커넥트 전용: 강사가 따로 쓰는 Vercel CLI 로그인은 건드리지 않음) */
-  const cfg = () => { const d = join(S.home, 'vercel-cli'); mkdirSync(d, { recursive: true, mode: 0o700 }); return d; };
+  const cfg = () => { const d = cfgDir(S); mkdirSync(d, { recursive: true, mode: 0o700 }); return d; };
   const { stop, phase, ask } = R;
 
   /** vercel 한 번: 가짜(시험) 또는 고정 판 npx. 늘 비대화형(--non-interactive), 이 커넥트의 설정 폴더(-Q) */
@@ -130,6 +148,8 @@ export function createVc(S, H) {
     let who = await whoami(t);
     if (!who.loggedIn) { await login(t); phase(t, 'tool'); who = await whoami(t); if (!who.loggedIn) throw new VcError('login-failed', MSG['login-failed']); }
     const st = loadVcState(S);
+    // 이 커넥트가 이 PC의 Vercel 로그인을 쓰고 있음(logout이 지움): 앱이 [모든 데이터 삭제] 때 지울 로그인이 있는지 알 수 있게(status의 hosts)
+    if (st.login !== true) { st.login = true; saveVcState(S, st); }
     t.user = who.user || '';
     t.scope = TEAM_RE.test(String(st.team || '')) ? st.team : '';
     t.remember = true; // 팀을 물어 고르면 다음에도 쓰게 기억(이미 올린 프로젝트를 찾느라 고른 팀은 기억하지 않음: withRecord)
@@ -180,7 +200,6 @@ export function createVc(S, H) {
       return /<meta\s+name="generator"\s+content="lecpage[ "]/i.test((await r.text()).slice(0, 200000));
     } catch { return false; }
   }
-  const sitesOf = (st) => (Array.isArray(st.sites) ? st.sites.filter((x) => typeof x === 'string') : []);
   async function reach(url, tries, want = (r) => r.ok) {
     for (let i = 0; i < tries; i++) {
       if (R.task?.cancelled) return false;
@@ -281,12 +300,16 @@ export function createVc(S, H) {
   /** 이 PC의 Vercel 로그인 지우기(커넥트 전용 폴더의 것). 기억한 팀도 지움. 올린 프로젝트 기록은 올린 로그인과 함께 남아, 다른 로그인으로는 다루지 못함 */
   async function logout(t) {
     phase(t, 'tool');
+    const f = join(cfgDir(S), 'auth.json');
+    const forget = (login) => { const st = loadVcState(S); if (!('team' in st) && !(login && 'login' in st)) return; delete st.team; if (login) delete st.login; saveVcState(S, st); };
+    // 이 커넥트 폴더에서 CLI가 돈 적이 없으면 지울 로그인이 없음: 로그아웃하려고 CLI(약 220MB)를 새로 받지 않고 바로 끝냄
+    if (!vcEverRan(S)) { forget(true); return { loggedOut: true }; }
     const r = await vc(t, ['logout'], { scoped: false });
     // CLI가 끝냈는지와 상관없이 이 커넥트 전용 폴더의 로그인 파일을 지움(도구를 못 받았거나 망이 끊겨도 이 PC에는 남지 않게)
-    const f = join(cfg(), 'auth.json');
     try { rmSync(f, { force: true }); } catch { /* 아래에서 확인 */ }
-    const st = loadVcState(S); delete st.team; saveVcState(S, st);
-    if (!r.ok && !/not (currently )?logged in|No existing credentials/i.test(r.raw) && existsSync(f)) throw explain(r.raw);
+    const left = !r.ok && !/not (currently )?logged in|No existing credentials/i.test(r.raw) && existsSync(f);
+    forget(!left); // 로그인 파일이 남았으면 login 표시도 남김(앱이 '지우지 못했어요'로 알림)
+    if (left) throw explain(r.raw);
     return { loggedOut: true };
   }
   function dropDraft() { const d = c.draft; c.draft = null; if (d) { try { rmSync(d.dir, { recursive: true, force: true }); } catch { /* 넘김 */ } } }

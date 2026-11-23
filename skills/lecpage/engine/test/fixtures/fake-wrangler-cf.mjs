@@ -43,7 +43,10 @@ if (cmd === 'login') {
   }
   die('Timed out waiting for authorization code');
 }
-if (cmd === 'logout') { s.loggedIn = false; write(s); console.log('Successfully logged out.'); process.exit(0); }
+if (cmd === 'logout') {
+  if (s.fail?.logout) die(s.fail.logout); // 망이 끊긴 채 로그아웃(로그인은 그대로 남음)
+  s.loggedIn = false; write(s); console.log('Successfully logged out.'); process.exit(0);
+}
 if (!s.loggedIn) die('You are not authenticated. Please run `wrangler login`.');
 if (cmd === 'auth token') { console.log(JSON.stringify({ type: 'oauth', token: s.token }, null, 2)); process.exit(0); }
 if (s.accounts.length > 1 && !process.env.CLOUDFLARE_ACCOUNT_ID) die('More than one account available but unable to select one in non-interactive mode.\nPlease set the appropriate `account_id` in your Wrangler configuration file or assign it to the `CLOUDFLARE_ACCOUNT_ID` environment variable.');

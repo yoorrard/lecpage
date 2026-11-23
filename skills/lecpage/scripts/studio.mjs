@@ -1239,12 +1239,22 @@ async function startUpdateOnce(S, { auto = false, keep = false } = {}) {
   return { started: true };
 }
 
+/**
+ * 이 PC의 커넥트에 내 계정 배포용 로그인이 남아 있을 수 있는지(/bridge/status의 hosts). 도구(wrangler·Vercel CLI)를 실행하지 않고 파일로만 봄.
+ * 앱의 [모든 데이터 삭제]가 다른 브라우저에서 한 로그인도 지우게 하려는 값(true인 곳에 /bridge/<곳>/logout을 부름)
+ */
+async function deployHosts(S) {
+  const pick = async (file, fn) => { try { return (await import(file))[fn](S) === true; } catch { return false; } };
+  const [cloudflare, vercel] = await Promise.all([pick('./studio-deploy.mjs', 'cfHost'), pick('./studio-vercel.mjs', 'vcHost')]);
+  return { cloudflare, vercel };
+}
+
 async function handleBridge(S, req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // ['status'] | ['jobs', id, 'events']
   const current = [...S.jobs.values()].find((j) => j.active) || null;
   if (parts[0] === 'status' && parts.length === 1 && (req.method === 'GET' || req.method === 'HEAD')) {
-    const [ag, auto] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState()]);
-    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, twinPdf: true, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
+    const [ag, auto, hosts] = await Promise.all([statusOf(S, url.searchParams.has('fresh')), autostartState(), deployHosts(S)]);
+    return sendJson(res, 200, { ok: true, version: S.version, build: S.build, caps: CAPS, hosts, update: updateView(S), app: S.app.mode, platform: process.platform, port: S.port, agents: [publicAgent(ag.claude), publicAgent(ag.codex)], chatgpt: S.siwc.status(), autostart: auto, term: S.term ? (({ output, ...v }) => v)(S.term.view()) : null, setup: S.setup ? S.setup.view() : null, job: current ? current.snapshot() : null, limits: { materialMB: LIMITS.materialMB, fileMB: LIMITS.fileMB, files: LIMITS.files, twinPdf: true, minutes: Math.round(S.jobMs / 60000) }, policy_ko: { claude: POLICY_KO.claude, codex: POLICY_KO.codex, chatgpt: POLICY_KO.chatgpt } });
   }
   // ── 새 판으로 바꾸기: GET(새 판이 있는지) · POST(받아서 바꾸고 같은 포트·토큰으로 다시 켬. 앱은 /bridge/status의 build가 바뀔 때까지 기다림) ──
   if (parts[0] === 'update' && parts.length === 1) {

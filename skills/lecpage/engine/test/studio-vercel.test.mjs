@@ -282,3 +282,54 @@ test('다른 로그인이 올린 프로젝트는 다루지 않음 · 로그아�
     assert.deepEqual(readdirSync(r.home).filter((n) => /\.tmp$/.test(n)), []);
   } finally { delete process.env.FAKE_VERCEL_CWD; await r.close(); }
 });
+
+test('사이트를 여럿 올려도 앞서 올린 기록이 남음: 다른 사이트를 올리거나 지운 뒤에도 지울 수 있음', async () => {
+  const r = await rig();
+  try {
+    const names = () => JSON.parse(readFileSync(join(r.home, 'vercel.json'), 'utf8')).sites.map((x) => x.name).sort();
+    assert.equal((await r.deploy('site-a')).status, 202); assert.equal((await r.until()).phase, 'done');
+    assert.equal((await r.deploy('site-b')).status, 202); assert.equal((await r.until()).phase, 'done');
+    assert.equal((await r.deploy('site-c')).status, 202); assert.equal((await r.until()).phase, 'done');
+    assert.deepEqual(names(), ['site-a', 'site-b', 'site-c'], '뒤에 올린 것이 앞의 기록을 지우지 않음');
+    assert.equal((await r.post('delete', { name: 'site-b' })).status, 202);
+    assert.deepEqual((await r.until()).result, { deleted: 'site-b' });
+    assert.deepEqual(names(), ['site-a', 'site-c'], '하나를 지워도 나머지 기록은 그대로');
+    assert.equal((await r.post('delete', { name: 'site-a' })).status, 202);
+    assert.deepEqual((await r.until()).result, { deleted: 'site-a' });
+    assert.equal(r.state().projects['site-a'], undefined);
+    assert.ok(r.state().projects['site-c']);
+    // 다시 올리기(같은 주소로)도 이 커넥트의 것으로 알아봄
+    assert.equal((await r.deploy('site-c', { again: true })).status, 202);
+    assert.equal((await r.until()).phase, 'done');
+    assert.equal(r.state().projects['site-c'].deploys, 2);
+  } finally { await r.close(); }
+});
+
+test('status의 hosts.vercel: 이 커넥트에 지울 로그인이 있을 때만 · CLI가 돈 적 없으면 로그아웃하려고 CLI를 받지 않음', async () => {
+  const r = await rig();
+  try {
+    const hosts = async () => (await (await fetch(`${r.st.url}bridge/status`, { headers: r.H })).json()).hosts;
+    const count = (re) => r.vlog().split('\n').filter((l) => re.test(l)).length;
+    const auth = join(r.home, 'vercel-cli', 'auth.json');
+    assert.deepEqual(await hosts(), { cloudflare: false, vercel: false }, '써 본 적 없는 커넥트');
+    // 써 본 적 없는 커넥트의 로그아웃: CLI를 부르지(새로 받지) 않고 바로 끝남
+    assert.equal((await r.post('logout')).status, 202);
+    assert.deepEqual((await r.until()).result, { loggedOut: true });
+    assert.equal(r.vlog(), '', 'CLI를 부르지 않음');
+    // 배포해 봄 → 이 PC에 로그인 파일과 표시가 있음
+    assert.equal((await r.deploy('host-site')).status, 202);
+    assert.equal((await r.until()).phase, 'done');
+    assert.ok(existsSync(auth));
+    assert.equal(JSON.parse(readFileSync(join(r.home, 'vercel.json'), 'utf8')).login, true);
+    assert.equal((await hosts()).vercel, true);
+    // 로그아웃: CLI를 부르고, 로그인 파일·표시를 지움(올린 기록은 남음)
+    assert.equal((await r.post('logout')).status, 202);
+    assert.deepEqual((await r.until()).result, { loggedOut: true });
+    assert.equal(count(/^logout/), 1);
+    assert.equal(existsSync(auth), false);
+    const st = JSON.parse(readFileSync(join(r.home, 'vercel.json'), 'utf8'));
+    assert.equal(st.login, undefined);
+    assert.deepEqual(st.sites.map((x) => x.name), ['host-site']);
+    assert.equal((await hosts()).vercel, false);
+  } finally { await r.close(); }
+});

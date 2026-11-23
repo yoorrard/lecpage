@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { startStudio, CAPS } from '../../scripts/studio.mjs';
-import { safeRel, findJson, explain, RELAY_NAME, cleanWork, workRoot } from '../../scripts/studio-deploy.mjs';
+import { safeRel, findJson, explain, RELAY_NAME, cleanWork, workRoot, wranglerLoginFiles } from '../../scripts/studio-deploy.mjs';
 import { redact, findUrl, toolDir } from '../../scripts/publish.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -472,5 +472,56 @@ test('배포 도구가 손자 프로세스에 출력을 넘긴 채 끝나도 일
     const d = await r.until((v) => !v.running, 11000);
     assert.equal(d.phase, 'done', JSON.stringify(d));
     assert.ok(Date.now() - t0 < 11000, '손자 프로세스(12초)를 기다리지 않음');
+  } finally { await r.close(); }
+});
+
+test('wrangler 로그인 파일 자리(도구를 실행하지 않고 봄): 예전 자리와 설정 폴더, 운영체제마다', () => {
+  assert.deepEqual(wranglerLoginFiles({ env: {}, platform: 'linux', home: '/home/k' }), [
+    '/home/k/.wrangler/config/default.toml', '/home/k/.wrangler/config/default.enc',
+    '/home/k/.config/.wrangler/config/default.toml', '/home/k/.config/.wrangler/config/default.enc']);
+  assert.ok(wranglerLoginFiles({ env: { XDG_CONFIG_HOME: '/x/cfg' }, platform: 'linux', home: '/home/k' }).includes('/x/cfg/.wrangler/config/default.toml'));
+  assert.ok(wranglerLoginFiles({ env: {}, platform: 'darwin', home: '/Users/k' }).includes('/Users/k/Library/Preferences/.wrangler/config/default.toml'));
+  const win = wranglerLoginFiles({ env: { APPDATA: 'C:\\Users\\k\\AppData\\Roaming' }, platform: 'win32', home: 'C:\\Users\\k' });
+  assert.ok(win.includes('C:\\Users\\k\\.wrangler\\config\\default.toml'));
+  assert.ok(win.includes('C:\\Users\\k\\AppData\\Roaming\\xdg.config\\.wrangler\\config\\default.enc'));
+  assert.ok(wranglerLoginFiles({ env: {}, platform: 'win32', home: 'C:\\Users\\k' }).includes('C:\\Users\\k\\AppData\\Roaming\\xdg.config\\.wrangler\\config\\default.toml'));
+});
+
+test('status의 hosts: 이 커넥트에 지울 로그인·관리자 키가 있을 때만 · 로그인 파일이 없으면 로그아웃하려고 wrangler를 부르지 않음', async () => {
+  const r = await rig();
+  try {
+    const hosts = async () => (await (await fetch(`${r.st.url}bridge/status`, { headers: r.H })).json()).hosts;
+    const count = (re) => r.wlog().split('\n').filter((l) => re.test(l)).length;
+    const state = () => JSON.parse(readFileSync(join(r.home, 'cloudflare.json'), 'utf8'));
+    const login = join(r.home, 'wrangler-default.toml');
+    r.st.S.cfOpts = { ...r.st.S.cfOpts, loginFiles: [login] };
+    assert.deepEqual(await hosts(), { cloudflare: false, vercel: false }, '써 본 적 없는 커넥트');
+    // 강사가 따로 쓰는 wrangler 로그인만 있는 PC: 커넥트가 쓴 적 없는 로그인은 지울 것으로 치지 않음
+    writeFileSync(login, 'oauth_token = "x"\n');
+    assert.equal((await hosts()).cloudflare, false);
+    // 이 커넥트로 참여 기능 서버를 만듦 → 로그인을 쓰고 있고 관리자 키도 이 PC에 있음
+    await r.post('relay', { adminKey: KEY1 });
+    assert.equal((await r.until()).phase, 'done');
+    assert.equal(state().login, true);
+    assert.equal((await hosts()).cloudflare, true);
+    // 로그아웃이 실패하면(망 끊김) 관리자 키는 지워도 로그인이 남았다는 표시는 남음 → 앱이 '지우지 못했어요'로 알릴 수 있음
+    r.patch({ fail: { logout: 'getaddrinfo ENOTFOUND dash.cloudflare.com' } });
+    await r.post('logout');
+    assert.equal((await r.until()).error.code, 'network');
+    assert.ok(!JSON.stringify(state()).includes(KEY1));
+    assert.equal((await hosts()).cloudflare, true, '로그인 파일과 표시가 남음');
+    // 로그아웃 성공: 표시도 지움(가짜 wrangler는 파일을 지우지 않지만, 커넥트가 쓰던 로그인은 이제 없음)
+    r.patch({ fail: null });
+    await r.post('logout');
+    assert.deepEqual((await r.until()).result, { loggedOut: true });
+    assert.equal(state().login, undefined);
+    assert.equal((await hosts()).cloudflare, false);
+    assert.equal(count(/^logout/), 2);
+    // 로그인 파일이 없는 PC: 로그아웃하려고 도구를 부르지(새로 받지) 않고 바로 끝남
+    rmSync(login, { force: true });
+    await r.post('logout');
+    assert.deepEqual((await r.until()).result, { loggedOut: true });
+    assert.equal(count(/^logout/), 2, 'wrangler를 부르지 않음');
+    assert.equal(r.state().loggedIn, false);
   } finally { await r.close(); }
 });

@@ -23,15 +23,18 @@ const cmd = pos[0] === 'project' ? pos.slice(0, pos[1] === 'protection' ? 3 : 2)
 const scope = arg('--scope');
 log(`${cmd}${scope ? ' @' + scope : ''}${arg('--project') ? ' ' + arg('--project') : ''}${cmd === 'api' ? ' ' + pos[1] : ''}`);
 if (!argv.includes('--non-interactive') || !arg('-Q')) { console.error('test expects --non-interactive and -Q'); process.exit(2); }
+// 실제 CLI처럼 로그인하면 설정 폴더(-Q)에 로그인 파일을 둠(커넥트가 '이 PC에 로그인이 있는지'를 이 파일로 봄)
+const keepAuth = () => { if (arg('-Q') && !existsSync(join(arg('-Q'), 'auth.json'))) writeFileSync(join(arg('-Q'), 'auth.json'), '{"token":"fake-vercel-login"}'); };
 
 if (cmd === 'whoami') {
   if (!s.loggedIn) { out({ loggedIn: false, cliVersion: '0.0.0-fake', linkedProject: null }); process.exit(0); }
+  keepAuth();
   out({ team: null, plan: 'hobby', username: s.user || 'teacher', email: `${s.user || 'teacher'}@example.com`, name: null, teams: s.teams || [], linkedProject: null, cliVersion: '0.0.0-fake' });
   process.exit(0);
 }
 if (cmd === 'login') {
   console.error('\n> \n  Visit https://vercel.com/oauth/device?user_code=FAKE-CODE\n');
-  for (let i = 0; i < 400; i++) { if (read().approve) { const n = read(); n.loggedIn = true; n.approve = false; write(n); console.error('  Congratulations! You are now signed in.'); process.exit(0); } await sleep(25); }
+  for (let i = 0; i < 400; i++) { if (read().approve) { const n = read(); n.loggedIn = true; n.approve = false; write(n); keepAuth(); console.error('  Congratulations! You are now signed in.'); process.exit(0); } await sleep(25); }
   console.error('Error: The device code has expired.'); process.exit(1);
 }
 if (cmd === 'logout') {
@@ -39,7 +42,7 @@ if (cmd === 'logout') {
   const n = read(); n.loggedIn = false; write(n); console.error('Logged out!'); process.exit(0);
 }
 // 돌린 폴더와 설정 폴더(-Q)에 로그인 파일이 있는 것처럼: 시험이 '로그아웃하면 이 PC의 로그인 파일을 지움'을 봄
-if (s.loggedIn && arg('-Q') && !existsSync(join(arg('-Q'), 'auth.json'))) writeFileSync(join(arg('-Q'), 'auth.json'), '{"token":"fake-vercel-login"}');
+if (s.loggedIn) keepAuth();
 if (process.env.FAKE_VERCEL_CWD) appendFileSync(process.env.FAKE_VERCEL_CWD, [process.cwd(), existsSync(join(process.cwd(), 'package.json')), pos[0] === 'deploy' ? pos[1] : ''].join('\t') + '\n');
 
 if (!s.loggedIn || s.expire) { console.error('Error: No existing credentials found. Please run `vercel login` or pass "--token"'); process.exit(1); }
