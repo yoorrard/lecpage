@@ -1133,9 +1133,9 @@
       return q && q.question && Array.isArray(q.options) && q.options.length ? { id: q.id, question: q.question, kind: 'choice', options: q.options } : null;
     }
     // 쪽이 여럿인 사이트: 열린 투표가 이 쪽이 아니라 다른 쪽에 적혀 있으면 '지금' 줄이 그 쪽으로 가는 단추를 보임(조립이 #lp-data의 polls에 { id, q, page }를 실음).
-    // 그 쪽에 '#lp-poll'로 들어오면 열린 투표를 바로 화면 안에 보여 줌(wantPoll)
+    // 그 쪽에 '#lp-poll'로 들어오면 열린 투표를 바로 화면 안에 보여 줌(wantPoll). 쪽 이름은 사이트가 받는 꼴 그대로(맨 위의 *.html, 한글 이름 포함 — kit/paths.js SITE_FILE)
     var elsewhere = {};
-    (Array.isArray(DATA.polls) ? DATA.polls : []).forEach(function (x) { if (x && x.id && x.page && typeof x.page === 'string' && /^[\w.-]+\.html$/.test(x.page)) elsewhere[x.id] = x; });
+    (Array.isArray(DATA.polls) ? DATA.polls : []).forEach(function (x) { if (x && x.id && x.page && typeof x.page === 'string' && /^[\w가-힣.\-]{1,100}\.html$/.test(x.page)) elsewhere[x.id] = x; });
     function pollElsewhere() {
       var id = state.openPoll; if (!id || openPoll()) return null;
       return Object.prototype.hasOwnProperty.call(elsewhere, id) ? elsewhere[id] : null;

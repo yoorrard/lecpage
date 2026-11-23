@@ -183,9 +183,8 @@ export async function start(opts = readOptions()) {
   const rooms = new Map(); // code → { sse:Set<res>, ws:Set<ws>, react:Map, timer }
   const room = (code) => { let r = rooms.get(code); if (!r) { r = { sse: new Set(), ws: new Set(), react: new Map(), timer: null, waiters: new Set() }; rooms.set(code, r); } return r; };
   const dropRoom = (code) => { const r = rooms.get(code); if (r && !r.sse.size && !r.ws.size && !r.timer && !r.waiters.size) rooms.delete(code); };
-  // 긴 대기(long-poll): 웹소켓·SSE가 막힌 학교망에서 GET snapshot?since=&wait=초 → 바뀐 것이 없으면 바뀔 때까지(최대 55초) 붙잡았다 답함
-  // 런타임은 20초로 묻고(예전 런타임은 늘 20초), 더 긴 기다림이 되는 망인지는 시험 요청(probe=1)으로 따로 확인한 뒤에만 55·45·30초로 올림. 답마다 상한(waitMax)을 알려 줌
-  const MAX_WAIT_S = 55, MAX_WAITERS = 2000;
+  // 긴 대기(long-poll): 웹소켓·SSE가 막힌 학교망에서 GET snapshot?since=&wait=초 → 바뀐 것이 없으면 바뀔 때까지(최대 25초) 붙잡았다 답함
+  const MAX_WAIT_S = 25, MAX_WAITERS = 2000;
   // 소켓으로 받는 동기화(sync): 소켓 하나에 분당 횟수, 한 메시지로 보내는 가장 긴 답(넘으면 런타임이 HTTP로 받음)
   const SYNC_PER_MIN = 30, SYNC_MAX_CHARS = 512 * 1024;
   const snapshotChanged = (b, since) => !!b && (Object.keys(b).some((k) => Array.isArray(b[k]) && k !== 'removed' && b[k].length) || (b.removed || []).length > 0 || (b.state && b.state.updatedAt > since));
@@ -253,8 +252,6 @@ export async function start(opts = readOptions()) {
     h['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     h['Access-Control-Allow-Headers'] = 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Setup, X-Lec-Filename';
     h['Access-Control-Max-Age'] = '86400';
-    // 런타임이 답을 실어 온 프로토콜을 볼 수 있게(시험 요청은 자기 연결을 따로 쓰는 HTTP/1.1에서만 믿음)
-    h['Timing-Allow-Origin'] = '*';
     return h;
   }
   const originAllowed = (req) => allowAny || !req.headers.origin || opts.origins.includes(req.headers.origin);
@@ -446,14 +443,6 @@ export async function start(opts = readOptions()) {
       if (a === 'ws') throw new HttpError(426, 'upgrade_required', 'WebSocket으로 연결하세요.');
       if (a === 'upload' && parts.length === 2 && req.method === 'POST') return await handleUpload(req, res, code, cors);
       if (a === 'files' && b && parts.length === 3 && (req.method === 'GET' || req.method === 'HEAD')) return await serveFile(req, res, code, b, cors);
-      // 시험 요청(snapshot?since=&wait=초&probe=1): 이 망이 더 긴 기다림을 실어 나르는지 런타임이 실제 묻기와 따로 확인함.
-      // 방에 무슨 일이 생겨도 청한 시간만큼 붙잡았다가 자료 없이 답함(예전 서버는 이 값을 몰라 보통 긴 대기로 답하고, 런타임은 그 답으로는 올리지 않음)
-      if (req.method === 'GET' && a === 'snapshot' && parts.length === 2 && url.searchParams.get('probe') === '1' && Number(url.searchParams.get('wait')) > 0 && Number(url.searchParams.get('since')) > 0) {
-        const t0 = Date.now(); const ms = Math.min(MAX_WAIT_S, Number(url.searchParams.get('wait'))) * 1000;
-        await new Promise((r) => { const t = setTimeout(r, ms); req.on('close', () => { clearTimeout(t); r(); }); });
-        if (req.destroyed || res.writableEnded) return;
-        return send(res, 200, { probe: true, held: Date.now() - t0, waitMax: MAX_WAIT_S }, cors);
-      }
       const body = await readJson(req);
       const call = () => core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req), origin: reqOrigin(req) });
       let out = await call();
@@ -464,8 +453,6 @@ export async function start(opts = readOptions()) {
         if (req.destroyed) return;
         out = await call();
       }
-      // 긴 대기의 상한(초)을 답에 실음: 아는 런타임만 더 긴 기다림을 청함(예전 런타임은 이 칸을 읽지 않음)
-      if (req.method === 'GET' && a === 'snapshot' && parts.length === 2 && out.status === 200 && out.body && typeof out.body === 'object') out.body.waitMax = MAX_WAIT_S;
       if (out.events) broadcast(c, out.events);
       if (out.reaction) addReaction(c, out.reaction);
       if (out.purgedFiles) { await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true }); db.checkpoint(); }

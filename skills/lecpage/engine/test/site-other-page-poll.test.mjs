@@ -20,6 +20,8 @@ const ADMIN = '다른-쪽-투표-시험-관리자키-24'; const CODE = 'TWOPAGE'
 const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const P1 = '<p><a id="go" href="wrap.html">마무리</a></p><div data-lp="qa"></div><section id="s1"><h2>투표</h2><div data-lp="poll" data-id="p1" data-question="첫 투표" data-options=\'["가","나"]\'></div></section>';
 const P2 = '<p><a id="back" href="index.html">처음</a></p><div style="height:1400px"></div><section id="s2"><h2>퀴즈</h2><div data-lp="poll" data-id="p2" data-question="마무리 퀴즈" data-options=\'["하나","둘","셋"]\'></div></section>';
+// 한글 이름의 쪽(사이트가 받는 이름: kit/paths.js SITE_FILE)
+const P3 = '<p><a id="home" href="index.html">처음</a></p><div style="height:900px"></div><section id="s3"><h2>확인</h2><div data-lp="poll" data-id="p3" data-question="실습 확인" data-options=\'["됐어요","아직"]\'></div></section>';
 const meta = { features: ['qa', 'poll'], sessions: [{ date: today, start: '00:00', end: '23:59' }] };
 const build = (site, code) => kitBuild({ site, meta, prev: { live: { provider: 'http', url: '', code } }, today }).files;
 
@@ -27,7 +29,7 @@ let srv, browser, dir;
 before(async () => {
   if (skip) return;
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-two-page-'));
-  const site = tinySite(P1); site['wrap.html'] = tinySite(P2)['index.html'];
+  const site = tinySite(P1); site['wrap.html'] = tinySite(P2)['index.html']; site['실습.html'] = tinySite(P3)['index.html'];
   writeFiles(dir, build(site, CODE));
   writeFiles(path.join(dir, 'one'), build(tinySite(P1.replace('<p><a id="go" href="wrap.html">마무리</a></p>', '')), 'ONEPAGE'));
   srv = await startNodeServer({ adminKey: ADMIN, staticDir: dir });
@@ -54,7 +56,7 @@ test('다른 쪽에 있는 투표가 열리면 이 쪽의 지금 줄이 알리�
   await p.goto(srv.url + '/index.html');
   // 조립: 쪽이 여럿이면 투표가 있는 쪽을 쪽마다 실음(정답·보기는 싣지 않음)
   const polls = await p.evaluate(() => JSON.parse(document.querySelector('#lp-data').textContent).polls);
-  assert.deepEqual(polls, [{ id: 'p1', q: '첫 투표', page: 'index.html' }, { id: 'p2', q: '마무리 퀴즈', page: 'wrap.html' }]);
+  assert.deepEqual(polls, [{ id: 'p1', q: '첫 투표', page: 'index.html' }, { id: 'p2', q: '마무리 퀴즈', page: 'wrap.html' }, { id: 'p3', q: '실습 확인', page: '실습.html' }]);
   // 이 쪽의 투표: 전과 같음
   await put({ openPoll: 'p1' }); await bandIs(p, /첫 투표/);
   let b = await band(p);
@@ -77,12 +79,21 @@ test('다른 쪽에 있는 투표가 열리면 이 쪽의 지금 줄이 알리�
   await p.click('#back'); await p.waitForURL(/index\.html/); await bandIs(p, /마무리 퀴즈/);
   b = await band(p);
   assert.match(b.sub, /응답했어요/); assert.equal(b.cta, '', '답한 뒤에는 갈 단추를 두지 않음');
-  await put({ openPoll: 'p2', revealed: { p2: true } });
-  await p.waitForFunction(() => document.querySelector('[data-now-cta]') && !document.querySelector('[data-now-cta]').hidden, null, { timeout: 8000 }).catch(() => { });
+  // 강사가 결과를 공개(상태의 ui.reveal): [결과 보기]로 그 쪽에
+  await put({ ui: { reveal: 'p2' } });
+  await p.waitForFunction(() => { const a = document.querySelector('[data-now-cta]'); return a && !a.hidden && a.textContent.trim() === '결과 보기'; }, null, { timeout: 8000 });
   b = await band(p);
-  if (b.cta) { assert.equal(b.cta, '결과 보기'); assert.equal(b.href, 'wrap.html#lp-poll'); }
+  assert.equal(b.cta, '결과 보기'); assert.equal(b.href, 'wrap.html#lp-poll'); assert.match(b.sub, /결과를 공개했어요/);
   // 닫으면 줄에서 내려감
-  await put({ openPoll: null }); await p.waitForFunction(() => !/마무리 퀴즈/.test(document.querySelector('[data-now-main]')?.textContent || ''), null, { timeout: 8000 });
+  await put({ openPoll: null, ui: { reveal: null } }); await p.waitForFunction(() => !/마무리 퀴즈/.test(document.querySelector('[data-now-main]')?.textContent || ''), null, { timeout: 8000 });
+  // 한글 이름의 쪽에 있는 투표도 같은 방식으로 알리고, 가면 그 투표가 화면 안에 있음
+  await put({ openPoll: 'p3' }); await bandIs(p, /실습 확인/);
+  b = await band(p);
+  assert.equal(b.cta, '투표하러 가기'); assert.equal(b.href, '실습.html#lp-poll');
+  await p.click('[data-now-cta]'); await p.waitForURL((u) => decodeURIComponent(u.pathname).endsWith('/실습.html'));
+  await p.waitForFunction(() => { const o = document.querySelector('[data-poll-live] input, [data-poll-live] button'); if (!o) return false; const r = o.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }, null, { timeout: 10000 });
+  assert.equal(new URL(p.url()).hash, '');
+  await put({ openPoll: null });
   assert.deepEqual(errs, []);
   await ctx.close();
 });

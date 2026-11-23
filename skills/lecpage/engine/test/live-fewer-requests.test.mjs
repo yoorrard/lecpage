@@ -1,12 +1,12 @@
 // 수업 한 번의 서버 요청 줄이기(2026-11-24). 줄여도 동작은 같아야 함: 바뀐 것은 생기는 즉시 오고, 예전 서버·예전 런타임과 계속 맞음.
-//   ① 긴 대기의 기다림을 올림: 실제 묻기는 확인된 기다림(처음 20초) 그대로 두고, 더 긴 기다림이 되는 망인지는 따로 보내는 시험 요청(probe=1)으로
-//      확인한 뒤에만(서버가 상한을 알려 줄 때만, HTTP/1.1로 올 때만). 알아보는 동안에도 올린 뒤에도 바뀐 것이 늦게 보이는 일이 없음.
-//      확인된 값은 탭·기기에 기억하고, 망이 바뀌었을 수 있으면 버리고 다시 시험함
+//   ① 긴 대기는 전과 똑같음(기다림 20초·시간제한 기다림+10초, 따로 보내는 요청 없음). 시계는 바로 온 답으로만 맞춤:
+//      서버가 붙잡았다 보낸 답의 now는 기다리기 시작한 때일 수 있어(Worker가 대신 기다린 긴 대기) 그것으로 맞추면 타이머가 기다린 만큼 늦게 감
 //   ② 가려진 참가자 화면은 묻기를 쉼(다시 보이면 바로), 강사 화면은 그대로
-//   ③ 웹소켓으로 동기화를 받음(서버의 hello가 caps에 'sync'를 실을 때만), 쪽을 옮겨 온 화면은 상태를 따로 묻지 않음
-//   ④ 서버: 소켓 동기화는 참가자에게 GET snapshot이 주는 것과 같고 관리자 것은 주지 않음, 분당 횟수, 답에 긴 대기 상한(waitMax)
+//   ③ 웹소켓으로 동기화를 받음(서버의 hello가 caps에 'sync'를 실을 때만. 답이 늦으면 HTTP로도 묻고 먼저 온 답 하나만 씀),
+//      쪽을 옮겨 온 화면은 상태를 따로 묻지 않고 소켓부터(hello가 늦으면 상태도 함께 물어, 서버가 닿지 않는 것을 전과 같은 때에 알림)
+//   ④ 서버: 소켓 동기화는 참가자에게 GET snapshot이 주는 것과 같고 관리자 것은 주지 않음, 분당 횟수. 긴 대기는 전과 같음
 // 런타임은 가짜 fetch·가짜 WebSocket으로(브라우저 없이), 서버는 실제 Node 서버로.
-import { test, before, after, describe } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,47 +23,41 @@ function fakeStorage(init = {}) {
 }
 /**
  * 런타임을 넣은 가짜 창. doc.show(v): 보임 상태를 바꾸고 visibilitychange를 알림.
- * session·local: 저장소에 미리 든 값(storage: false면 저장소를 못 쓰는 환경), proto: 답을 실어 온 프로토콜(자원 시간 기록의 nextHopProtocol. null이면 기록이 없는 브라우저),
- * clock.skew(ms): 이 창의 시계를 그만큼 앞당김(1분 가려짐·하루 지남을 기다리지 않고 봄)
+ * session·local: 저장소에 미리 든 값, EventSource: SSE 흉내(없으면 SSE는 곧바로 안 됨)
  */
-function makeWindow({ fetch, WebSocket, session = {}, local = {}, storage = true, proto = 'http/1.1', clock = { skew: 0 } } = {}) {
-  const docOn = {}; const winOn = {}; const observers = [];
+function makeWindow({ fetch, WebSocket, EventSource, session = {}, local = {} } = {}) {
+  const docOn = {}; const winOn = {};
   const doc = { visibilityState: 'visible', addEventListener: (n, f) => { (docOn[n] ||= []).push(f); }, removeEventListener() {}, createElement: () => ({}), head: { appendChild() {} } };
   doc.show = (v) => { doc.visibilityState = v ? 'visible' : 'hidden'; (docOn.visibilitychange || []).forEach((f) => f()); };
-  class SkewDate extends Date { constructor(...a) { if (a.length) super(...a); else super(Date.now() + clock.skew); } static now() { return Date.now() + clock.skew; } }
-  // 요청이 끝나면 조금 뒤에 자원 시간 기록이 옴(브라우저처럼)
-  const timed = fetch && ((url, init) => fetch(url, init).finally(() => { if (proto !== null) setTimeout(() => observers.forEach((cb) => cb({ getEntries: () => [{ name: String(url), nextHopProtocol: proto }] })), 15); }));
   const win = {
-    console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, URL, TextEncoder, TextDecoder, Intl, JSON, Math, Date: SkewDate,
+    console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, URL, TextEncoder, TextDecoder, Intl, JSON, Math, Date,
     crypto: globalThis.crypto, isSecureContext: true, Uint8Array, Array, Object, String, Number, RegExp, Error, AbortController,
-    localStorage: storage ? fakeStorage(local) : null, sessionStorage: storage ? fakeStorage(session) : null, addEventListener: (n, f) => { (winOn[n] ||= []).push(f); }, removeEventListener() {}, fetch: timed, document: doc,
+    localStorage: fakeStorage(local), sessionStorage: fakeStorage(session), addEventListener: (n, f) => { (winOn[n] ||= []).push(f); }, removeEventListener() {}, fetch, document: doc,
     location: { href: 'https://site.example/index.html' }, navigator: {},
   };
-  if (proto !== null) win.PerformanceObserver = function (cb) { this.observe = () => { observers.push(cb); }; this.disconnect = () => {}; };
   if (WebSocket) win.WebSocket = WebSocket;
+  if (EventSource) win.EventSource = EventSource;
   win.window = win; win.globalThis = win;
   vm.createContext(win);
   for (const f of ['core.js', 'http.js']) vm.runInContext(fs.readFileSync(path.join(liveDir, f), 'utf8'), win, { filename: f });
   win.fire = (n, ev) => (winOn[n] || []).forEach((f) => f(ev));
-  win.clock = clock;
-  /** 이 창이 기억한 기다림({ tab, device }) */
-  win.waitMem = () => { const pick = (s) => { if (!s) return null; const k = Object.keys(s.dump()).find((x) => /:wait$/.test(x)); return k ? JSON.parse(s.getItem(k)) : null; }; return { tab: pick(win.sessionStorage), device: pick(win.localStorage) }; };
   return win;
 }
 /**
- * 실시간 방 흉내(묻기 방식): snapshot?wait=를 바뀔 때까지(또는 wait초) 붙잡음. 시험 요청(probe=1)은 바뀌어도 wait초를 다 채우고 { probe: true }로 답함.
- * opt(도중에 바꿀 수 있음) — waitMax: 답에 실을 상한(없으면 예전 서버), silentAt(초): 이만큼 붙잡힌 요청은 망이 답 없이 끊음(답이 영영 오지 않음: 조용히 끊는 프록시),
- * cutAt(초): 이보다 긴 실제 묻기는 cutAfter(ms) 뒤에 망이 끊음(오류가 옴), early(초): 이보다 긴 실제 묻기를 일찍 빈 답으로 돌려줌, probeOld: 시험 요청을 모르는 서버(보통 긴 대기로 답함)
+ * 실시간 방 흉내(묻기 방식): snapshot?wait=를 바뀔 때까지(또는 wait초) 붙잡음. 답의 now는 서버 시계(이 PC 시계 + ahead).
+ * opt(도중에 바꿀 수 있음) — ahead(ms): 서버 시계가 이 창보다 앞선 만큼,
+ * stale: 끝까지 붙잡았다 보내는 답에 기다리기 시작한 때의 now를 실음(긴 대기를 Worker가 대신 기다리는 예전 서버의 답), hang: 긴 대기에 영영 답하지 않음
  */
 function fakeRoom(o = {}) {
-  const opt = { waitMax: 0, silentAt: 0, cutAt: 0, cutAfter: 1200, early: 0, probeOld: false, ...o };
-  let now = 100; const log = []; const waiters = new Set(); const questions = [];
-  const snap = (since) => ({ now, state: { updatedAt: 1 }, questions: questions.filter((q) => q.updatedAt > since), ...(opt.waitMax ? { waitMax: opt.waitMax } : {}) });
+  const opt = { ahead: 0, stale: false, hang: false, ...o };
+  let last = 0; const tick = () => (last = Math.max(Date.now() + opt.ahead, last + 1));
+  const log = []; const waiters = new Set(); const questions = [];
+  const snap = (since) => ({ now: tick(), state: { updatedAt: 1 }, questions: questions.filter((q) => q.updatedAt > since) });
   const gone = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
-  /** ms 동안 붙잡음. 깨울 수 있는 것(wakeable)은 글이 올라오면 바로 → true */
-  const hold = (ms, init, wakeable) => new Promise((r) => {
+  /** ms 동안 붙잡음. 글이 올라오면 바로 → true */
+  const hold = (ms, init) => new Promise((r) => {
     const x = { r: () => r(true), t: setTimeout(() => { waiters.delete(x); r(false); }, ms) };
-    if (wakeable) waiters.add(x);
+    waiters.add(x);
     init.signal?.addEventListener('abort', () => { clearTimeout(x.t); waiters.delete(x); r(false); });
   });
   /** 답이 영영 오지 않음(런타임이 그만둘 때까지) */
@@ -72,244 +66,98 @@ function fakeRoom(o = {}) {
     if (p === '/state') return res({ updatedAt: 1 });
     if (p !== '/snapshot') return res({ error: 'not_found' }, { status: 404 });
     const since = Number(u.searchParams.get('since')) || 0; const w = Number(u.searchParams.get('wait')) || 0;
-    const probe = u.searchParams.get('probe') === '1' && !opt.probeOld;
-    if (w && since > 0 && (probe || !questions.some((q) => q.updatedAt > since))) {
-      if (!probe && opt.cutAt && w >= opt.cutAt) { await sleep(opt.cutAfter); throw new TypeError('network cut'); }
-      if (!probe && opt.early && w >= opt.early) { await sleep(300); return res(snap(since)); }
-      const limit = opt.silentAt && w >= opt.silentAt ? opt.silentAt : 0; const t0 = Date.now();
-      const woke = await hold((limit || w) * 1000, init, !probe);
+    if (w && since > 0 && !questions.some((q) => q.updatedAt > since)) {
+      if (opt.hang) return never(init);
+      const first = snap(since);
+      const woke = await hold(w * 1000, init);
       if (init.signal?.aborted) throw gone();
-      if (limit && !woke) return never(init);
-      if (probe) return res({ probe: true, held: Date.now() - t0, waitMax: opt.waitMax });
+      if (!woke && opt.stale) return res(first);
     }
     return res(snap(since));
   };
   const fetch = async (url, init = {}) => {
     const u = new URL(url); const p = u.pathname.replace(/^.*\/api\/[A-Z0-9]+/, '');
     const h = init.headers || {};
-    const e = { at: Date.now(), p, wait: Number(u.searchParams.get('wait')) || 0, probe: u.searchParams.get('probe') === '1', admin: !!h['X-Lec-Admin'], headers: Object.keys(h).length > 0, done: false, doneAt: 0 };
+    const e = { at: Date.now(), p, query: u.search, wait: Number(u.searchParams.get('wait')) || 0, admin: !!h['X-Lec-Admin'], done: false, doneAt: 0 };
     log.push(e);
     try { return await answer(u, p, init); } finally { e.done = true; e.doneAt = Date.now(); }
   };
-  const push = (text) => { now += 10; questions.push({ id: 'q' + now, text, createdAt: now, updatedAt: now }); for (const x of [...waiters]) { clearTimeout(x.t); waiters.delete(x); x.r(); } };
-  const reals = () => log.filter((x) => x.p === '/snapshot' && x.wait && !x.probe);
+  const push = (text) => { const t = tick(); questions.push({ id: 'q' + t, text, createdAt: t, updatedAt: t }); for (const x of [...waiters]) { clearTimeout(x.t); waiters.delete(x); x.r(); } };
+  const reals = () => log.filter((x) => x.p === '/snapshot' && x.wait);
   return {
-    opt, fetch, log, push, reals, probes: () => log.filter((x) => x.probe),
-    /** 실제 묻기의 기다림들 */
-    waits: () => reals().map((x) => x.wait), snaps: () => log.filter((x) => x.p === '/snapshot' && !x.probe),
-    /** 실제 묻기 하나가 지금 붙잡혀 있는지(기다림 w로) */
-    flying: (w) => { const l = reals().at(-1); return !!l && !l.done && (!w || l.wait === w) && Date.now() - l.at > 150; },
+    opt, fetch, log, push, reals,
+    /** 긴 대기의 기다림들 */
+    waits: () => reals().map((x) => x.wait), snaps: () => log.filter((x) => x.p === '/snapshot'),
+    /** 긴 대기 하나가 지금 붙잡혀 있는지 */
+    flying: () => { const l = reals().at(-1); return !!l && !l.done && Date.now() - l.at > 150; },
   };
 }
+/** 시험이 만든 연결들: 시험이 도중에 실패해도 끝에 모두 닫음(남은 타이머가 시험 과정을 붙잡지 않게) */
+const opened = [];
+const keep = (c) => { opened.push(c); return c; };
+after(() => { for (const c of opened) { try { c.close(); } catch { /* 이미 닫힘 */ } } });
 const poller = (room, extra = {}, win = {}) => {
   const W = makeWindow({ fetch: room.fetch, ...win });
-  const c = W.LecLive.create({ provider: 'http', url: 'https://live.example/live', code: 'WAIT1', transports: ['poll'], pollMs: 2000, waitS: 1, waitSteps: [2, 3], ...extra });
+  const c = keep(W.LecLive.create({ provider: 'http', url: 'https://live.example/live', code: 'WAIT1', transports: ['poll'], pollMs: 2000, waitS: 2, ...extra }));
   return { W, c };
 };
 
-/** 글이 올라온 때부터 이 화면이 받을 때까지(ms). 실제 묻기가 붙잡혀 있는 때를 골라 올림(쉬는 틈에 올리면 전에도 그 틈만큼 걸림) */
-async function reaction(room, c, text, w) {
-  assert.ok(await until(() => room.flying(w), 12000), `실제 묻기가 붙잡혀 있는 때를 잡음(${text})`);
+/** 글이 올라온 때부터 이 화면이 받을 때까지(ms). 긴 대기가 붙잡혀 있는 때를 골라 올림(쉬는 틈에 올리면 그 틈만큼 걸림) */
+async function reaction(room, c, text) {
+  assert.ok(await until(() => room.flying(), 12000), `긴 대기가 붙잡혀 있는 때를 잡음(${text})`);
   const got = new Promise((ok) => { const off = c.on('change:questions', (list) => { if (list.some((q) => q.text === text)) { off && off(); ok(Date.now()); } }); });
   const t0 = Date.now(); room.push(text);
   const at = await Promise.race([got, sleep(4000).then(() => 0)]);
   return at ? at - t0 : Infinity;
 }
 
-// 서로 기대지 않는 시험들(방·창이 따로)이라 함께 돌림: 기다리는 시간이 대부분이라 하나씩 돌리면 4분쯤 걸림
-describe('긴 대기의 기다림 올리기', { concurrency: true }, () => {
-test('긴 대기: 실제 묻기는 확인된 기다림 그대로 두고, 따로 보낸 시험 요청이 제때 온전히 돌아온 뒤에만 올린다. 시험 중에도 올린 뒤에도 바뀐 것은 바로 온다', { timeout: 90000 }, async () => {
-  const room = fakeRoom({ waitMax: 3 });
+test('긴 대기는 전과 같다: 정한 기다림으로만 묻고(따로 보내는 요청·기억 없음), 바뀐 것은 바로 오며, 답이 없으면 기다림+10초에 그만둔다', { timeout: 60000 }, async () => {
+  const room = fakeRoom();
   const { W, c } = poller(room);
   await c.connect();
-  // 조용한 긴 대기가 두 번 온전히 돌아온 뒤에 시험 요청 하나(가장 긴 값부터), 머리글 없이
-  assert.ok(await until(() => room.probes().length === 1, 20000), '시험 요청이 한 번 감');
-  const pr = room.probes()[0];
-  assert.equal(pr.wait, 3); assert.equal(pr.headers, false, '시험 요청은 토큰·키 없이');
-  const first = room.reals().filter((x) => x.at < pr.at);
-  assert.ok(first.length >= 2 && first.every((x) => x.wait === 1), `시험 전의 실제 묻기는 1초씩(${first.map((x) => x.wait)})`);
-  assert.equal(c.netInfo().probe, 3); assert.equal(c.netInfo().wait, 1, '시험 중에도 실제 묻기는 확인된 기다림');
-  // 시험 중에 올라온 글: 실제 묻기가 그 자리에서 받음(시험 요청은 그대로 붙잡혀 있음)
-  const d1 = await reaction(room, c, '시험 중에 온 질문');
-  assert.ok(d1 < 700, `시험 중에도 바로 받음(${d1}ms)`);
-  assert.equal(pr.done, false, '방에 일이 생겨도 시험 요청은 끝까지 붙잡힘');
-  // 시험 요청이 제때 온전히 돌아옴 → 그다음 실제 묻기부터 3초
-  assert.ok(await until(() => c.netInfo().wait === 3, 8000), '시험이 통과한 뒤에 올림');
-  assert.ok(pr.done && pr.doneAt - pr.at >= 2900, `시험 요청은 3초를 다 채움(${pr.doneAt - pr.at}ms)`);
-  assert.ok(room.reals().filter((x) => x.at < pr.doneAt).every((x) => x.wait === 1), '시험이 끝나기 전의 실제 묻기는 모두 1초');
-  // 올린 뒤: 3초 기다리는 도중에 올라온 글도 바로
-  const d2 = await reaction(room, c, '올린 뒤에 온 질문', 3);
-  assert.ok(d2 < 700, `올린 뒤에도 바로 받음(${d2}ms)`);
-  // 처음 통과한 값이 끝: 더 시험하지 않고, 탭과 기기에 기억함
+  assert.ok(await until(() => room.reals().filter((x) => x.done).length >= 2, 20000));
+  const d = await reaction(room, c, '긴 대기 중에 온 질문');
+  assert.ok(d < 700, `바뀐 것은 바로 받음(${d}ms)`);
+  assert.ok(await until(() => room.reals().filter((x) => x.done).length >= 4, 20000));
+  assert.ok(room.waits().every((w) => w === 2), `늘 정한 기다림(${room.waits()})`);
+  assert.ok(room.snaps().every((x) => /^\?since=\d+(&wait=2)?$/.test(x.query)), `snapshot 요청은 since·wait뿐(${[...new Set(room.snaps().map((x) => x.query.replace(/\d{6,}/, 'N')))]})`);
+  assert.deepEqual(room.log.filter((x) => x.p !== '/snapshot').map((x) => x.p), ['/state'], '그 밖의 요청은 처음의 상태 확인 하나');
+  const ni = c.netInfo();
+  assert.deepEqual(Object.keys(ni).sort(), ['every', 'hint', 'longOk', 'provider', 'status', 'transport', 'wait']);
+  assert.equal(ni.transport, 'long'); assert.equal(ni.wait, 2);
+  assert.ok(!Object.keys({ ...W.sessionStorage.dump(), ...W.localStorage.dump() }).some((k) => /:wait$/.test(k)), '기다림을 저장소에 적지 않음');
+  // 답이 영영 오지 않는 긴 대기: 기다림 + 10초에 그만둠(전과 같은 시간제한)
+  assert.ok(await until(() => room.flying(), 12000)); await until(() => !room.flying(), 12000);
+  room.opt.hang = true;
   const n = room.reals().length;
-  assert.ok(await until(() => room.reals().length >= n + 2, 15000));
-  assert.equal(room.probes().length, 1, '시험 요청은 한 번뿐');
-  assert.ok(room.reals().slice(n).every((x) => x.wait === 3));
-  assert.equal(c.netInfo().transport, 'long'); assert.equal(c.netInfo().left, 0);
-  const mem = W.waitMem();
-  assert.equal(mem.tab.w, 3); assert.equal(mem.tab.d, 1); assert.equal(mem.device.w, 3);
+  assert.ok(await until(() => room.reals().length > n, 8000));
+  const hung = room.reals()[n];
+  assert.ok(await until(() => hung.done, 16000), '시간제한이 있음');
+  assert.ok(hung.doneAt - hung.at >= 11500 && hung.doneAt - hung.at <= 13500, `기다림 2초 + 10초 뒤에 그만둠(${hung.doneAt - hung.at}ms)`);
   c.close();
 });
 
-test('긴 대기: 예전 서버(상한을 알려 주지 않음·시험 요청을 모름)에서는 올리지 않는다. 연결 하나를 같이 쓰는 망(h2)·기록이 없는 브라우저·저장소를 못 쓰는 환경에서도', { timeout: 90000 }, async () => {
-  // 상한을 알려 주지 않는 예전 서버: 시험 요청을 보내지 않음
-  const old = fakeRoom({ waitMax: 0 });
-  // 상한은 알려 주지만 시험 요청을 모르는 서버(보통 긴 대기로 답함): 그 답으로는 올리지 않음
-  const half = fakeRoom({ waitMax: 3, probeOld: true });
-  const h2 = fakeRoom({ waitMax: 3 }); const none = fakeRoom({ waitMax: 3 }); const nost = fakeRoom({ waitMax: 3 });
-  const a = poller(old); const b = poller(half); const d = poller(h2, {}, { proto: 'h2' }); const e = poller(none, {}, { proto: null }); const f = poller(nost, {}, { storage: false });
-  await Promise.all([a, b, d, e, f].map((x) => x.c.connect()));
-  assert.ok(await until(() => half.probes().length === 2 && half.probes().every((x) => x.done), 40000), `시험 요청을 모르는 서버: 큰 값부터 하나씩 해 보고 그만둠(${half.probes().map((x) => x.wait)})`);
-  assert.deepEqual(half.probes().map((x) => x.wait), [3, 2]);
-  const n = half.reals().length;
-  assert.ok(await until(() => half.reals().length >= n + 3 && old.reals().length >= 6 && h2.reals().length >= 6 && none.reals().length >= 6 && nost.reals().length >= 6, 30000));
-  for (const [name, r, x] of [['예전 서버', old, a], ['시험 요청을 모르는 서버', half, b], ['h2', h2, d], ['기록 없는 브라우저', none, e], ['저장소 없음', nost, f]]) {
-    assert.ok(r.waits().every((w) => w === 1), `${name}: 실제 묻기는 늘 처음 기다림(${r.waits()})`);
-    assert.equal(x.c.netInfo().wait, 1); assert.equal(x.c.netInfo().transport, 'long', `${name}: 긴 대기는 그대로`);
-  }
-  assert.equal(old.probes().length, 0); assert.equal(h2.probes().length, 0, '연결을 같이 쓰는 망에서는 시험이 뜻이 없어 보내지 않음');
-  assert.equal(none.probes().length, 0); assert.equal(nost.probes().length, 0);
-  assert.equal(half.probes().length, 2, '모두 안 되면 더 시험하지 않음');
-  assert.equal(b.W.waitMem().device.w, 1, '올리지 못한 기기로 기억(하루 동안 다시 시험하지 않음)');
-  assert.equal(d.W.waitMem().device, null, 'h2는 기기에 적지 않음(다른 망에서는 될 수 있음)');
-  [a, b, d, e, f].forEach((x) => x.c.close());
-});
-
-test('긴 대기: 조용히 끊는 망(답 없이 끊음)에서는 시험 요청만 돌아오지 않고, 실제 묻기는 한 번도 늦지 않는다. 올리지 않고 그 기기에 하루 기억한다', { timeout: 120000 }, async () => {
-  // 2초 넘게 붙잡힌 요청은 답이 영영 오지 않는 망. 실제 묻기(1초)는 잘 됨
-  const room = fakeRoom({ waitMax: 3, silentAt: 2 });
-  const { W, c } = poller(room);
-  const statuses = []; c.on('status', (s) => statuses.push(s));
+test('시계: 서버가 붙잡았다 보낸 답으로는 맞추지 않는다(그 답의 now는 기다리기 시작한 때일 수 있음 — 타이머가 기다린 만큼 늦게 가지 않게). 바로 온 답으로는 맞춘다', { timeout: 60000 }, async () => {
+  // 서버 시계가 이 기기보다 5초 앞섬. 끝까지 붙잡았다 보내는 답은 기다리기 시작한 때의 now를 실음(긴 대기를 Worker가 대신 기다리는 예전 서버)
+  const room = fakeRoom({ ahead: 5000, stale: true });
+  const { c } = poller(room);
   await c.connect();
-  const lag = [];
-  assert.ok(await until(() => room.probes().length === 1, 20000));
-  lag.push(await reaction(room, c, '첫 시험 중 1')); await sleep(2500); lag.push(await reaction(room, c, '첫 시험 중 2'));
-  // 첫 시험(3초)은 돌아오지 않음 → 그 값은 버리고, 다시 조용해지면 다음 값(2초)을 시험
-  assert.ok(await until(() => room.probes().length === 2, 40000), '다음 값을 시험');
-  assert.deepEqual(room.probes().map((x) => x.wait), [3, 2]);
-  lag.push(await reaction(room, c, '둘째 시험 중'));
-  assert.ok(await until(() => c.netInfo().left === 0 && !c.netInfo().probe, 30000), '시험을 마침');
-  lag.push(await reaction(room, c, '시험을 마친 뒤'));
-  assert.ok(lag.every((x) => x < 700), `바뀐 것은 늘 바로 옴(${lag}ms)`);
-  assert.ok(room.waits().every((w) => w === 1), `실제 묻기는 한 번도 긴 기다림으로 가지 않음(${room.waits()})`);
-  assert.equal(c.netInfo().wait, 1); assert.equal(c.netInfo().transport, 'long', '긴 대기는 그대로(간격 묻기로 내려가지 않음)');
-  assert.ok(!statuses.includes('offline'), '끊김으로 보이지 않음');
-  assert.equal(W.waitMem().device.w, 1);
+  /** 이 화면이 아는 서버 시각의 오차(ms): 0이면 맞음, 음수면 뒤처짐 */
+  const err = () => c.now() - (Date.now() + room.opt.ahead);
+  assert.ok(Math.abs(err()) < 300, `첫 동기화로 시계를 맞춤(${err()}ms)`);
+  let worst = 0; const iv = setInterval(() => { worst = Math.min(worst, err()); }, 50);
+  assert.ok(await until(() => room.reals().filter((x) => x.done && x.doneAt - x.at >= 1900).length >= 3, 30000), '끝까지 붙잡힌 긴 대기가 세 번 돌아옴');
+  await sleep(300); clearInterval(iv);
+  assert.ok(worst > -300, `붙잡았다 보낸 답이 시계를 뒤로 돌리지 않음(가장 뒤처진 때 ${worst}ms — 그 답으로 맞추면 -2000ms)`);
+  // 바로 온 답(쉬는 틈에 생긴 것을 다음 묻기가 곧바로 받음)으로는 맞춤: 서버 시계가 9초 앞선 것으로 바뀜
+  assert.ok(await until(() => room.flying(), 12000)); assert.ok(await until(() => !room.flying(), 12000));
+  room.opt.ahead = 9000; room.push('쉬는 틈에 온 질문');
+  assert.ok(await until(() => Math.abs(err()) < 300, 8000), `바로 온 답으로 시계를 맞춤(${err()}ms)`);
   c.close();
-  // 같은 기기의 새 탭: 하루 동안 다시 시험하지 않음
-  const again = poller(room, {}, { local: W.localStorage.dump() });
-  let n = room.reals().length; await again.c.connect();
-  assert.ok(await until(() => room.reals().length >= n + 4, 30000));
-  assert.equal(room.probes().length, 2, '새 탭에서도 다시 시험하지 않음');
-  again.c.close();
-  // 하루가 지나면 다시 시험
-  const later = poller(room, {}, { local: W.localStorage.dump(), clock: { skew: 25 * 3600e3 } });
-  n = room.reals().length; await later.c.connect();
-  assert.ok(await until(() => room.probes().length === 3, 30000), '하루 뒤에는 다시 시험');
-  later.c.close();
-});
-
-test('긴 대기: 올린 기다림의 실제 묻기가 끊기면 바로 처음 기다림으로 돌아가 쉬는 틈 없이 다시 묻고, 다시 시험한다. 두 번 끊기면 그 기기에서 하루 동안 올리지 않는다', { timeout: 120000 }, async () => {
-  const room = fakeRoom({ waitMax: 3 });
-  const { W, c } = poller(room);
-  const statuses = []; c.on('status', (s) => statuses.push(s));
-  await c.connect();
-  assert.ok(await until(() => c.netInfo().wait === 3, 30000), '시험이 통과해 3초로 올림');
-  // 이제부터 3초 묻기를 망이 1.2초 뒤에 끊음(오류가 옴)
-  room.opt.cutAt = 3;
-  assert.ok(await until(() => room.reals().some((x) => x.wait === 3 && x.done && x.at > Date.now() - 20000 && room.reals().indexOf(x) < room.reals().length - 1 && room.opt.cutAt), 15000));
-  const cut = room.reals().filter((x) => x.wait === 3).at(-1); const next = room.reals()[room.reals().indexOf(cut) + 1];
-  assert.equal(next.wait, 1, '끊기면 바로 처음 기다림으로');
-  assert.ok(next.at - cut.at < 2300, `쉬는 틈 없이 바로 다시 물음(${next.at - cut.at}ms — 틈을 두면 2900ms 이상)`);
-  assert.equal(c.netInfo().wait, 1); assert.equal(c.netInfo().transport, 'long', '간격 묻기로 내려가지 않음');
-  assert.ok(!statuses.includes('offline'), '끊김으로 보이지 않음');
-  assert.equal(W.waitMem().device.c, 1);
-  // 한 번은 다시 시험함(시험 요청은 잘 돌아옴) → 다시 3초
-  room.opt.cutAt = 0;
-  assert.ok(await until(() => room.probes().length === 2 && c.netInfo().wait === 3, 30000), '다시 시험해 통과하면 다시 올림');
-  // 이번에는 3초 묻기가 일찍 빈 답으로 돌아옴(프록시가 대신 답함) → 두 번째: 이 기기에서는 더 올리지 않음
-  room.opt.early = 3;
-  assert.ok(await until(() => c.netInfo().wait === 1 && c.netInfo().left === 0, 15000));
-  room.opt.early = 0;
-  const n = room.reals().length;
-  assert.ok(await until(() => room.reals().length >= n + 4, 30000));
-  assert.ok(room.reals().slice(n).every((x) => x.wait === 1)); assert.equal(room.probes().length, 2, '더 시험하지 않음');
-  assert.equal(c.netInfo().transport, 'long');
-  const mem = W.waitMem();
-  assert.equal(mem.device.w, 1); assert.equal(mem.device.c, 2);
-  c.close();
-});
-
-test('긴 대기: 확인된 값은 쪽을 옮기거나 새로 고쳐도 다시 시험하지 않고 이어 쓴다. 새 탭은 그 값 하나만 다시 시험하고, 망이 바뀌었을 수 있으면 버리고 다시 시험한다', { timeout: 150000 }, async () => {
-  const room = fakeRoom({ waitMax: 3 });
-  const one = poller(room);
-  await one.c.connect();
-  assert.ok(await until(() => one.c.netInfo().wait === 3 && room.reals().some((x) => x.wait === 3 && x.done), 30000));
-  const session = one.W.sessionStorage.dump(); const local = one.W.localStorage.dump();
-  one.c.close();
-  // ① 같은 탭의 다음 쪽·새로 고침: 첫 긴 대기부터 3초, 시험 요청 없음
-  let n = room.reals().length; let p = room.probes().length;
-  const two = poller(room, {}, { session, local });
-  const st = []; two.c.on('status', (s) => st.push(s));
-  await two.c.connect();
-  assert.ok(await until(() => room.reals().length >= n + 2, 15000));
-  assert.ok(room.reals().slice(n).every((x) => x.wait === 3), `다음 쪽은 확인된 기다림에서 이어감(${room.reals().slice(n).map((x) => x.wait)})`);
-  assert.equal(room.probes().length, p, '쪽을 옮겨도 다시 시험하지 않음');
-  // ② 망이 다시 붙음(online 사건: 망이 바뀌었을 수 있음) → 3초로 보내 둔 묻기를 그만두고 바로 1초로, 다시 시험
-  assert.ok(await until(() => room.flying(3), 12000));
-  n = room.reals().length; const t0 = Date.now(); two.W.fire('online');
-  assert.ok(await until(() => room.reals().length > n, 3000));
-  assert.equal(room.reals()[n].wait, 1); assert.ok(room.reals()[n].at - t0 < 1000, `확인을 버리면 바로 처음 기다림으로 다시 물음(${room.reals()[n].at - t0}ms)`);
-  assert.equal(two.c.netInfo().transport, 'long'); assert.ok(!st.includes('offline'), '끊김으로 보이지 않음');
-  assert.ok(await until(() => room.probes().length === p + 1 && two.c.netInfo().wait === 3, 30000), '다시 시험해 통과하면 다시 올림');
-  assert.equal(room.probes().at(-1).wait, 3);
-  // ③ 1분 넘게 가려졌다 다시 보임(그 사이 망이 바뀌었을 수 있음) → 버리고 다시 시험. 잠깐 가려진 것은 그대로
-  p = room.probes().length;
-  two.W.document.show(false); await sleep(300); two.W.document.show(true); await sleep(300);
-  assert.equal(two.c.netInfo().wait, 3, '잠깐 가려진 것은 그대로');
-  two.W.document.show(false); await sleep(200); two.W.clock.skew += 61000; two.W.document.show(true);
-  assert.ok(await until(() => two.c.netInfo().wait === 1, 3000), '1분 넘게 가려졌다 돌아오면 처음 기다림으로');
-  assert.ok(await until(() => room.probes().length === p + 1 && two.c.netInfo().wait === 3, 40000));
-  two.c.close();
-  // ④ 같은 기기의 새 탭(기기 기억만 있음): 1초로 시작해 기억한 값 하나만 시험한 뒤 올림
-  n = room.reals().length; p = room.probes().length;
-  const three = poller(room, {}, { local: two.W.localStorage.dump() });
-  await three.c.connect();
-  assert.ok(await until(() => three.c.netInfo().wait === 3, 30000));
-  assert.equal(room.probes().length, p + 1); assert.equal(room.probes().at(-1).wait, 3);
-  assert.ok(room.reals().slice(n).filter((x) => x.at < room.probes().at(-1).doneAt).every((x) => x.wait === 1), '시험이 끝나기 전에는 1초');
-  // ⑤ 2분 넘게 묻지 않은 탭(오래 두었다 돌아온 쪽): 기억한 값을 바로 쓰지 않고 다시 시험
-  const stale = three.W.sessionStorage.dump();
-  for (const k of Object.keys(stale)) if (/:wait$/.test(k)) stale[k] = JSON.stringify({ ...JSON.parse(stale[k]), t: Date.now() - 130000 });
-  three.c.close();
-  n = room.reals().length; p = room.probes().length;
-  const four = poller(room, {}, { session: stale, local: three.W.localStorage.dump() });
-  await four.c.connect();
-  assert.ok(await until(() => room.reals().length >= n + 2, 15000));
-  assert.ok(room.reals().slice(n, n + 2).every((x) => x.wait === 1), '오래된 기억은 바로 쓰지 않음');
-  assert.ok(await until(() => room.probes().length === p + 1, 20000));
-  four.c.close();
-});
-
-test('긴 대기: 가려진 동안 끝난 시험은 믿지 않고, 다시 조용해지면 그 값을 다시 시험한다', { timeout: 90000 }, async () => {
-  const room = fakeRoom({ waitMax: 3 });
-  const { W, c } = poller(room);
-  await c.connect();
-  assert.ok(await until(() => room.probes().length === 1, 20000));
-  W.document.show(false);
-  assert.ok(await until(() => room.probes()[0].done, 8000));
-  await sleep(400);
-  W.document.show(true);
-  try {
-    assert.equal(c.netInfo().wait, 1, '가려진 동안 끝난 시험으로는 올리지 않음');
-    assert.ok(await until(() => room.probes().length === 2 && c.netInfo().wait === 3, 40000), '다시 보이고 조용해지면 그 값을 다시 시험');
-    assert.equal(room.probes()[1].wait, 3);
-  } finally { c.close(); }
-});
 });
 
 test('가려진 화면: 참가자는 묻기를 쉬고(5분에 한 번), 다시 보이면 바로 한 번 묻는다. 강사 화면은 가려져도 지금처럼 이어 간다', { timeout: 40000 }, async () => {
-  const room = fakeRoom({ waitMax: 0 });
+  const room = fakeRoom();
   const { W, c } = poller(room, { restHidden: true }); // 참가자 화면(lecpage.js)이 켜는 값
   await c.connect();
   assert.ok(await until(() => room.snaps().length >= 2, 10000));
@@ -326,7 +174,7 @@ test('가려진 화면: 참가자는 묻기를 쉬고(5분에 한 번), 다시 �
   assert.ok(room.snaps().length <= k + 1, '평소의 창 오가기로 묻기가 늘지 않음');
   c.close();
   // 강사 화면(관리자 키): 가려져도 30초 간격으로 이어 감
-  const room2 = fakeRoom({ waitMax: 0 });
+  const room2 = fakeRoom();
   const { W: W3, c: c3 } = poller(room2);
   c3.setAdminKey('강사-키-시험-0001');
   await c3.connect();
@@ -335,7 +183,7 @@ test('가려진 화면: 참가자는 묻기를 쉬고(5분에 한 번), 다시 �
   assert.ok(c3.netInfo().every <= 45000, `강사 화면은 30초쯤(${c3.netInfo().every}ms)`);
   c3.close();
   // 발표 화면처럼 restHidden을 켜지 않은 화면(관리자 키 없이 연 것 포함): 가려져도 전처럼 1분 간격
-  const room3 = fakeRoom({ waitMax: 0 });
+  const room3 = fakeRoom();
   const { W: W4, c: c4 } = poller(room3);
   await c4.connect();
   W4.document.show(false);
@@ -345,31 +193,45 @@ test('가려진 화면: 참가자는 묻기를 쉬고(5분에 한 번), 다시 �
 });
 
 // ── 웹소켓으로 동기화 ─────────────────────────────────────────────
-/** 가짜 WebSocket: 열리면 hello(caps)를 보내고, 받은 메시지를 기록. sync 요청에는 reply가 답함(없으면 답하지 않음) */
-function fakeWsClass({ caps, reply } = {}) {
+/**
+ * 가짜 WebSocket: 열리면 hello(caps)를 보내고(helloAfter ms 뒤. open: false면 영영 열리지 않음), 받은 메시지를 기록.
+ * sync 요청에는 reply가 replyAfter ms 뒤에 답함(없으면 답하지 않음)
+ */
+function fakeWsClass({ caps, reply, helloAfter = 5, replyAfter = 5, open = true } = {}) {
   const socks = [];
   class FakeWS {
     constructor(url) {
       this.url = url; this.readyState = 0; this.sent = []; socks.push(this);
-      setTimeout(() => { this.readyState = 1; this.onopen?.(); this.onmessage?.({ data: JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: 1, ...(caps ? { caps } : {}) }) }); }, 5);
+      if (open) setTimeout(() => { if (this.readyState === 3) return; this.readyState = 1; this.onopen?.(); this.onmessage?.({ data: JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: 1, ...(caps ? { caps } : {}) }) }); }, helloAfter);
     }
     send(m) {
       this.sent.push(m);
       if (m === 'ping') return void setTimeout(() => this.onmessage?.({ data: 'pong' }), 1);
       let o; try { o = JSON.parse(m); } catch { return; }
-      if (o.type === 'sync' && reply) { const r = reply(o); if (r) setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'sync', id: o.id, ...r }) }), 5); }
+      if (o.type === 'sync' && reply) { const r = reply(o); if (r) setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'sync', id: o.id, ...r }) }), replyAfter); }
     }
     close() { this.readyState = 3; this.onclose?.(); }
   }
   return { FakeWS, socks, syncs: () => socks.flatMap((s) => s.sent).filter((m) => /"type":"sync"/.test(m)).map((m) => JSON.parse(m)) };
 }
-const snapDoc = (since) => ({ now: 500, since, full: since === 0, state: { updatedAt: 0, slide: 3 }, questions: since ? [] : [{ id: 'q1', text: '소켓으로 온 질문', createdAt: 400, updatedAt: 400 }], removed: [] });
-function httpRoom() {
+/** 영영 열리지 않는 SSE(막힌 망·닿지 않는 서버) */
+class HangES { close() {} }
+const snapDoc = (since, text = '소켓으로 온 질문') => ({ now: 500, since, full: since === 0, state: { updatedAt: 0, slide: 3 }, questions: since ? [] : [{ id: 'q1', text, createdAt: 400, updatedAt: 400 }], removed: [] });
+/** HTTP 쪽 흉내. snapAfter(ms): snapshot 답이 걸리는 시간, text: 그 답에 실리는 질문(소켓으로 온 답과 가려 보게), dead: 아무 답도 오지 않음(런타임이 그만둘 때까지) */
+function httpRoom({ snapAfter = 0, text, dead = false } = {}) {
   const log = [];
-  const fetch = async (url) => { const u = new URL(url); const p = u.pathname.replace(/^.*\/api\/[A-Z0-9]+/, ''); log.push(p); if (p === '/state') return res({ updatedAt: 0, slide: 3 }); if (p === '/snapshot') return res(snapDoc(Number(u.searchParams.get('since')) || 0)); return res({ error: 'not_found' }, { status: 404 }); };
+  const hang = (init) => new Promise((_, no) => { init?.signal?.addEventListener('abort', () => no(Object.assign(new Error('aborted'), { name: 'AbortError' }))); });
+  const fetch = async (url, init) => {
+    const u = new URL(url); const p = u.pathname.replace(/^.*\/api\/[A-Z0-9]+/, ''); log.push(p);
+    if (dead) return hang(init);
+    if (p === '/state') return res({ updatedAt: 0, slide: 3 });
+    if (p === '/snapshot') { if (snapAfter) await sleep(snapAfter); return res(snapDoc(Number(u.searchParams.get('since')) || 0, text)); }
+    return res({ error: 'not_found' }, { status: 404 });
+  };
   return { fetch, log };
 }
-const wsClient = (W) => W.LecLive.create({ provider: 'http', url: 'https://live.example/live', code: 'SYNC1' });
+const wsClient = (W) => keep(W.LecLive.create({ provider: 'http', url: 'https://live.example/live', code: 'SYNC1' }));
+const syncOk = (o) => ({ ok: true, doc: snapDoc(o.since) });
 
 test('소켓 동기화: 서버가 caps에 sync를 실으면 snapshot을 HTTP로 묻지 않고, 상태도 다시 묻지 않는다. 쪽을 옮겨 온 화면은 요청이 소켓 하나뿐', { timeout: 30000 }, async () => {
   const http = httpRoom(); const ws = fakeWsClass({ caps: ['sync'], reply: (o) => ({ ok: true, doc: snapDoc(o.since) }) });
@@ -431,6 +293,73 @@ test('소켓 동기화: 예전 서버(caps 없음)·답이 없는 소켓·소켓
   assert.equal(w5.syncs().length, 0); c5.close();
 });
 
+test('소켓 동기화: 답이 늦으면 HTTP로도 묻고 먼저 온 온전한 답 하나만 쓴다(늦게 온 소켓 답도 받음). 소켓으로 온 서버 오류(5xx)는 그 자리에서 HTTP로', { timeout: 60000 }, async (t) => {
+  const texts = async (c) => Array.from((await c.list('questions')).map((q) => q.text)); // 가짜 창 안의 배열 → 이쪽 배열(견줄 수 있게)
+  // ① 소켓 답이 5.6초에 옴(느린 망의 큰 답), HTTP 답은 더 늦음(5초에 물어 4초 뒤): 소켓 답을 쓰고, 뒤에 온 HTTP 답은 버림
+  const h1 = httpRoom({ snapAfter: 4000, text: 'HTTP로 온 질문' }); const w1 = fakeWsClass({ caps: ['sync'], reply: syncOk, replyAfter: 5600 });
+  const c1 = wsClient(makeWindow({ fetch: h1.fetch, WebSocket: w1.FakeWS }));
+  let t0 = Date.now(); await c1.connect(); const d1 = Date.now() - t0;
+  assert.ok(d1 >= 5500 && d1 < 7500, `늦게 온 소켓 답을 씀(${d1}ms — HTTP 답만 기다리면 9초)`);
+  assert.deepEqual(h1.log, ['/state', '/snapshot'], '5초에 HTTP로도 물음');
+  assert.deepEqual(await texts(c1), ['소켓으로 온 질문']);
+  await sleep(4000);
+  assert.deepEqual(await texts(c1), ['소켓으로 온 질문'], '뒤에 온 HTTP 답은 합치지 않음(답 하나만)');
+  c1.close();
+  // ② HTTP 답이 먼저 오고 소켓 답이 그 뒤에 옴: HTTP 답을 쓰고, 뒤에 온 소켓 답은 버림
+  const h2 = httpRoom({ text: 'HTTP로 온 질문' }); const w2 = fakeWsClass({ caps: ['sync'], reply: syncOk, replyAfter: 6500 });
+  const c2 = wsClient(makeWindow({ fetch: h2.fetch, WebSocket: w2.FakeWS }));
+  t0 = Date.now(); await c2.connect(); const d2 = Date.now() - t0;
+  assert.ok(d2 >= 4900 && d2 < 6300, `5초에 HTTP로 물어 그 답을 씀(${d2}ms)`);
+  assert.deepEqual(await texts(c2), ['HTTP로 온 질문']);
+  await sleep(2200);
+  assert.deepEqual(await texts(c2), ['HTTP로 온 질문'], '뒤에 온 소켓 답은 합치지 않음');
+  c2.close();
+  // ③ 소켓으로 온 서버 오류(5xx): 기다리지 않고 HTTP로 받음
+  const h3 = httpRoom({ text: 'HTTP로 온 질문' }); const w3 = fakeWsClass({ caps: ['sync'], reply: () => ({ ok: false, error: 'server_error', message: '서버 오류가 났어요.', status: 500 }) });
+  const c3 = wsClient(makeWindow({ fetch: h3.fetch, WebSocket: w3.FakeWS }));
+  t0 = Date.now(); await c3.connect(); const d3 = Date.now() - t0;
+  assert.ok(d3 < 2000, `바로 HTTP로(${d3}ms)`);
+  assert.deepEqual(h3.log, ['/state', '/snapshot']); assert.deepEqual(await texts(c3), ['HTTP로 온 질문']);
+  c3.close();
+  t.diagnostic(`첫 동기화까지 — 늦은 소켓 답 ${d1}ms(HTTP만 기다리면 9초), HTTP가 먼저 ${d2}ms, 소켓의 5xx ${d3}ms`);
+});
+
+test('소켓부터 여는 접속(쪽을 옮겨 온 화면): hello가 늦으면 상태도 함께 물어, 서버가 닿지 않는 것을 상태부터 묻던 때와 같은 때에 알린다', { timeout: 60000 }, async (t) => {
+  // 이 탭에서 방금 전까지 웹소켓이 됨
+  const h0 = httpRoom(); const w0 = fakeWsClass({ caps: ['sync'], reply: syncOk });
+  const W0 = makeWindow({ fetch: h0.fetch, WebSocket: w0.FakeWS }); const c0 = wsClient(W0);
+  await c0.connect(); c0.close();
+  const tab = W0.sessionStorage.dump();
+  // ① hello가 늦게(2.5초) 오는 소켓: 1.5초에 상태를 HTTP로 한 번 묻고, 소켓으로 이어짐(동기화는 소켓으로)
+  const h1 = httpRoom(); const w1 = fakeWsClass({ caps: ['sync'], reply: syncOk, helloAfter: 2500 });
+  const c1 = wsClient(makeWindow({ fetch: h1.fetch, WebSocket: w1.FakeWS, session: tab }));
+  assert.equal((await c1.connect()).transport, 'ws'); assert.deepEqual(h1.log, ['/state']); c1.close();
+  // ② 소켓·SSE가 막힌 망(HTTP는 됨): 상태는 한 번만 묻고 묻기 방식으로 내려감
+  const h2 = httpRoom(); const w2 = fakeWsClass({ open: false });
+  const c2 = wsClient(makeWindow({ fetch: h2.fetch, WebSocket: w2.FakeWS, session: tab }));
+  let t0 = Date.now(); const info = await c2.connect(); const d2 = Date.now() - t0;
+  assert.equal(info.transport, 'poll'); assert.equal(h2.log.filter((p) => p === '/state').length, 1, '상태는 한 번만 물음');
+  assert.ok(d2 < 5500, `소켓을 기다린 4초 뒤 바로 묻기 방식으로(${d2}ms)`);
+  c2.close();
+  // ③ 서버가 닿지 않음(소켓·SSE·HTTP 모두 답이 없음): 처음 '연결 끊김'과 그만두는 때가 상태부터 묻는 접속(전의 방식)과 같음
+  const dead = async (session) => {
+    const h = httpRoom({ dead: true }); const w = fakeWsClass({ open: false });
+    const c = wsClient(makeWindow({ fetch: h.fetch, WebSocket: w.FakeWS, EventSource: HangES, session }));
+    const s0 = Date.now(); let first = 0; c.on('status', (s) => { if (s === 'offline' && !first) first = Date.now() - s0; });
+    await assert.rejects(c.connect());
+    const out = { first, gaveUp: Date.now() - s0, states: h.log.filter((p) => p === '/state').length, sockets: w.socks.length };
+    c.close();
+    return out;
+  };
+  const [old, fast] = await Promise.all([dead({}), dead(tab)]);
+  t.diagnostic(`서버가 닿지 않을 때 — 상태부터 묻는 접속: 처음 끊김 ${old.first}ms·그만둠 ${old.gaveUp}ms, 소켓부터 여는 접속: 처음 끊김 ${fast.first}ms·그만둠 ${fast.gaveUp}ms`);
+  assert.equal(old.sockets, 0); assert.ok(fast.sockets >= 1, '소켓부터 열어 봄');
+  assert.ok(fast.first >= 7500 && fast.first <= 8800, `처음 끊김은 8초쯤(${fast.first}ms)`);
+  assert.ok(Math.abs(fast.first - old.first) < 600, `전과 같은 때(${fast.first}ms · 전 ${old.first}ms)`);
+  assert.ok(Math.abs(fast.gaveUp - old.gaveUp) < 1500, `그만두는 때도 같음(${fast.gaveUp}ms · 전 ${old.gaveUp}ms)`);
+  assert.equal(fast.states, old.states, '상태 확인 요청 수도 같음');
+});
+
 // ── 서버 ─────────────────────────────────────────────────────────
 const ADMIN = '요청-줄이기-시험-관리자키-24';
 let srv;
@@ -462,8 +391,7 @@ test('서버: 소켓 동기화는 참가자에게 GET snapshot이 주는 것과 
   const r = await ws.next((m) => m && m.type === 'sync' && m.id === 'a1');
   const viaHttp = (await A.call('GET', '/snapshot?since=0', { token: me.token })).body;
   assert.equal(r.ok, true);
-  const { waitMax, now: n1, ...h } = viaHttp; const { now: n2, ...s } = r.doc;
-  assert.equal(waitMax, 55, 'HTTP 답에는 긴 대기 상한');
+  const { now: n1, ...h } = viaHttp; const { now: n2, ...s } = r.doc;
   assert.ok(Math.abs(n1 - n2) < 5000);
   assert.deepEqual(s, h, '소켓으로 받은 것 = HTTP로 받은 것');
   assert.equal(r.doc.questions.length, 1); assert.equal(r.doc.attendance.length, 1, '내 출석만'); assert.equal(r.doc.me.id, me.id);
@@ -487,7 +415,7 @@ test('서버: 소켓 동기화는 참가자에게 GET snapshot이 주는 것과 
   ws.close();
 });
 
-test('서버: 긴 대기는 청한 만큼만 붙잡고(예전 런타임의 값은 그대로), 바뀌면 바로 답한다', { timeout: 30000 }, async () => {
+test('서버: 긴 대기는 전과 같다 — 청한 만큼만 붙잡고 바뀌면 바로 답하며, 붙잡았다 보내는 답의 now는 보내는 때의 시각이다', { timeout: 30000 }, async () => {
   const A = api(srv.url, 'SYNCB');
   await A.call('PUT', '/state', { admin: ADMIN, body: { slide: 1 } });
   const me = (await A.call('POST', '/join', { body: { nickname: '가을' } })).body;
@@ -495,29 +423,20 @@ test('서버: 긴 대기는 청한 만큼만 붙잡고(예전 런타임의 값�
   let t0 = Date.now();
   const held = await A.call('GET', `/snapshot?since=${cur}&wait=2`);
   assert.ok(Date.now() - t0 >= 1800 && Date.now() - t0 < 4000, `2초를 청하면 2초(${Date.now() - t0}ms)`);
-  assert.equal(held.body.waitMax, 55);
+  // 런타임은 이 now로 시계를 맞춤(예전 런타임은 붙잡았다 온 답으로도): 기다리기 시작한 때가 아니라 답을 보내는 때여야 타이머가 늦게 가지 않음
+  assert.ok(Math.abs(held.body.now - Date.now()) < 500, `붙잡았다 보낸 답의 now는 보낸 때(${held.body.now - Date.now()}ms)`);
+  assert.deepEqual(Object.keys(held.body).filter((k) => /wait|probe/i.test(k)), [], '답에 기다림에 대한 칸은 없음');
+  assert.equal(held.headers.get('timing-allow-origin'), null);
   t0 = Date.now();
   const p = A.call('GET', `/snapshot?since=${held.body.now}&wait=50`);
   await sleep(400); await A.call('POST', '/questions', { token: me.token, body: { text: '기다리는 중에 올린 질문' } });
   const woke = await p;
-  assert.ok(Date.now() - t0 < 2500, `50초를 청해도 바뀌면 바로(${Date.now() - t0}ms)`);
+  assert.ok(Date.now() - t0 < 2500, `바뀌면 바로(${Date.now() - t0}ms)`);
   assert.equal(woke.body.questions.length, 1);
-  // 시험 요청(probe=1): 방에 글이 올라와도 청한 시간을 다 채우고 자료 없이 답함. 토큰 없이 보내도 됨
+  // 모르는 값이 붙어도(…&probe=1) 보통 긴 대기: 바뀌면 바로, 자료와 함께
   t0 = Date.now();
-  const pr = A.call('GET', `/snapshot?since=${woke.body.now}&wait=2&probe=1&n=1`);
-  await sleep(300); await A.call('POST', '/questions', { token: me.token, body: { text: '시험 요청 중에 올린 질문' } });
-  const probed = await pr;
-  assert.ok(Date.now() - t0 >= 1900 && Date.now() - t0 < 4000, `시험 요청은 끝까지 붙잡음(${Date.now() - t0}ms)`);
-  assert.deepEqual(Object.keys(probed.body).sort(), ['held', 'probe', 'waitMax'], '자료를 싣지 않음');
-  assert.equal(probed.body.probe, true); assert.ok(probed.body.held >= 1900); assert.equal(probed.body.waitMax, 55);
-  // 런타임이 답을 실어 온 프로토콜을 볼 수 있게(다른 출처의 사이트에서도)
-  assert.equal(probed.headers.get('timing-allow-origin'), '*'); assert.equal(woke.headers.get('timing-allow-origin'), '*');
-  // 시험 요청이 붙잡혀 있어도 보통 긴 대기는 전처럼 바뀌면 바로 답함
-  const cur2 = (await A.call('GET', '/snapshot?since=0')).body.now;
-  const pr2 = A.call('GET', `/snapshot?since=${cur2}&wait=3&probe=1&n=2`);
-  t0 = Date.now();
-  const lp = A.call('GET', `/snapshot?since=${cur2}&wait=20`);
-  await sleep(300); await A.call('POST', '/questions', { token: me.token, body: { text: '둘이 같이 기다리는 중' } });
-  assert.equal((await lp).body.questions.length, 1); assert.ok(Date.now() - t0 < 2000);
-  assert.equal((await pr2).body.probe, true);
+  const lp = A.call('GET', `/snapshot?since=${woke.body.now}&wait=20&probe=1`);
+  await sleep(300); await A.call('POST', '/questions', { token: me.token, body: { text: '둘째 질문' } });
+  const r2 = await lp;
+  assert.ok(Date.now() - t0 < 2000); assert.equal(r2.body.questions.length, 1); assert.equal(r2.body.probe, undefined);
 });

@@ -47,8 +47,8 @@ if (!base) {
     assert.equal(w.msgs.filter((m) => m.type === 'auth').length, 3);
   });
 
-  // 2026-11-24: 소켓 하나로 받는 동기화와 긴 대기 상한(요청 수 줄이기). 예전 런타임이 쓰는 것은 그대로
-  test('cloudflare: 소켓 동기화는 GET snapshot과 같은 답이고, 긴 대기는 청한 만큼만 붙잡으며 바뀌면 바로 답한다', { timeout: 40000 }, async () => {
+  // 2026-11-24: 소켓 하나로 받는 동기화(요청 수 줄이기). 예전 런타임이 쓰는 것은 그대로. 긴 대기는 전과 같고, 붙잡았다 보내는 답의 now만 보내는 때의 시각으로
+  test('cloudflare: 소켓 동기화는 GET snapshot과 같은 답이고, 긴 대기는 청한 만큼만 붙잡으며 바뀌면 바로 답한다. 붙잡았다 보낸 답의 now는 보낸 때', { timeout: 40000 }, async () => {
     const a = api(base, 'SYNC' + Math.random().toString(36).slice(2, 7).toUpperCase());
     await a.call('PUT', '/state', { admin: adminKey, body: { slide: 2 } });
     const me = (await a.call('POST', '/join', { body: { nickname: '봄날' } })).body;
@@ -62,8 +62,8 @@ if (!base) {
     w.ws.send(JSON.stringify({ type: 'sync', id: 'a1', since: 0, token: me.token }));
     const r = await w.next((m) => m.type === 'sync' && m.id === 'a1');
     const http = (await a.call('GET', '/snapshot?since=0', { token: me.token })).body;
-    assert.equal(r.ok, true); assert.equal(http.waitMax, 55);
-    const { waitMax, now: n1, ...h } = http; const { now: n2, ...s } = r.doc;
+    assert.equal(r.ok, true);
+    const { now: n1, ...h } = http; const { now: n2, ...s } = r.doc;
     assert.deepEqual(s, h, '소켓으로 받은 것 = HTTP로 받은 것');
     assert.equal(r.doc.me.id, me.id); assert.equal(r.doc.questions.length, 1); assert.equal(r.doc.attendance.length, 1);
     assert.ok(!r.doc.participants || !r.doc.participants.length, '참가자 명단은 주지 않음');
@@ -77,26 +77,19 @@ if (!base) {
     await a.call('POST', '/questions', { token: me.token, body: { text: '둘째 질문' } });
     await w.next((m) => m.type !== 'sync' && m.type !== 'hello' && m.type !== 'pong-text');
     w.close();
-    // 긴 대기
+    // 긴 대기(Worker가 대신 기다림): 끝까지 붙잡았다 보낸 답의 now는 기다리기 시작한 때가 아니라 보낸 때(런타임이 이 값으로 시계를 맞춤)
+    const cur = (await a.call('GET', '/snapshot?since=0', { token: me.token })).body.now;
     let t0 = Date.now();
-    const held = await a.call('GET', `/snapshot?since=${http.now + 5000}&wait=2`);
+    const held = await a.call('GET', `/snapshot?since=${cur}&wait=2`, { token: me.token });
     assert.ok(Date.now() - t0 >= 1800 && Date.now() - t0 < 5000, `2초를 청하면 2초(${Date.now() - t0}ms)`);
+    assert.ok(held.body.now - cur >= 1800, `붙잡았다 보낸 답의 now는 보낸 때(기다리기 시작한 때보다 ${held.body.now - cur}ms 뒤)`);
+    assert.equal(held.body.questions.length, 0); assert.equal(held.body.waitMax, undefined);
     t0 = Date.now();
-    const p = a.call('GET', `/snapshot?since=${held.body.now}&wait=50`);
+    const p = a.call('GET', `/snapshot?since=${held.body.now}&wait=20`, { token: me.token });
     await new Promise((res) => setTimeout(res, 500));
     await a.call('POST', '/questions', { token: me.token, body: { text: '기다리는 중에 올린 질문' } });
     const woke = await p;
-    assert.ok(Date.now() - t0 < 3000, `50초를 청해도 바뀌면 바로(${Date.now() - t0}ms)`);
-    assert.ok(woke.body.questions.length >= 1);
-    // 시험 요청(probe=1): 글이 올라와도 청한 시간을 다 채우고 자료 없이 답함(Worker가 붙잡음, 방에는 묻지 않음)
-    t0 = Date.now();
-    const pr = a.call('GET', `/snapshot?since=${woke.body.now}&wait=2&probe=1&n=1`);
-    await new Promise((res) => setTimeout(res, 300));
-    await a.call('POST', '/questions', { token: me.token, body: { text: '시험 요청 중에 올린 질문' } });
-    const probed = await pr;
-    assert.ok(Date.now() - t0 >= 1900 && Date.now() - t0 < 5000, `시험 요청은 끝까지 붙잡음(${Date.now() - t0}ms)`);
-    assert.deepEqual(Object.keys(probed.body).sort(), ['held', 'probe', 'waitMax']);
-    assert.equal(probed.body.probe, true); assert.equal(probed.body.waitMax, 55);
-    assert.equal(probed.headers.get('timing-allow-origin'), '*'); assert.equal(woke.headers.get('timing-allow-origin'), '*');
+    assert.ok(Date.now() - t0 < 3000, `바뀌면 바로(${Date.now() - t0}ms)`);
+    assert.equal(woke.body.questions.length, 1, '새 now를 다음 물음의 기준으로 써도 그 뒤에 생긴 것을 놓치지 않음');
   });
 }

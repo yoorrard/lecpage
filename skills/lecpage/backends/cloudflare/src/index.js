@@ -19,14 +19,13 @@
 // deletes everything it holds in its alarm. A Guard object per client IP (binding GUARD) counts wrong admin keys and
 // new trainings across all codes.
 // School networks that block WebSockets and SSE poll: GET snapshot?since=<cursor>&wait=<s> is a long-poll. The Worker
-// does the waiting (relayWait) while the object sleeps, so a blocked school costs a request per change or per wait
-// (20 s, up to 55 s where the runtime's probe showed the network carries it), not one every few seconds, and no
-// Durable Object duration. Every snapshot answer carries X-Lec-Poll-Ms
+// does the waiting (relayWait) while the object sleeps, so a blocked school costs a request per change or per 25 s,
+// not one every few seconds, and no Durable Object duration. Every snapshot answer carries X-Lec-Poll-Ms
 // (= max(7000, participants × 60)): the gap the runtime keeps between polls.
 import { DurableObject } from 'cloudflare:workers';
 import { LiveCore, HttpError, errorBody, normCode, sha256hex, keyProblem, isWeakKeyHash, PROTOCOL } from './protocol.js';
 // The entry module may export only handlers and classes (workerd refuses other named exports): helpers live in longpoll.js
-import { MAX_WAIT_S, MAX_WAITERS, snapshotChanged, isLongPoll, pollGapMs, relayWait, isProbe, probeAnswer, TIMING_OK } from './longpoll.js';
+import { MAX_WAIT_S, MAX_WAITERS, snapshotChanged, isLongPoll, pollGapMs, relayWait } from './longpoll.js';
 
 const DAY = 864e5;
 // The snapshot over a socket (wsSync): asks per socket per minute, and the longest answer sent in one message
@@ -179,7 +178,6 @@ export class LiveRoom extends DurableObject {
     const url = new URL(request.url);
     const wait = this.waitMs(request, url);
     if (wait) {
-      if (isProbe(url)) return this.probeWait(wait);
       if (request.headers.get('x-lp-relay') === '1' && (request.headers.get('upgrade') || '').toLowerCase() === 'websocket') return this.relaySocket(request, url);
       return this.longPoll(request, wait);
     }
@@ -205,6 +203,7 @@ export class LiveRoom extends DurableObject {
   /**
    * Relay (the Worker waits, see relayWait): changed already → 200 with the snapshot. Otherwise a hibernatable WebSocket
    * (tag 'wait') whose first message is the snapshot; broadcast() sends 'c' and closes it. The object can sleep meanwhile.
+   * The socket remembers the code and the snapshot's `now`: when the Worker's wait is up it asks for the time now (relayNow).
    */
   async relaySocket(request, url) {
     const mark = this.changes;
@@ -212,12 +211,13 @@ export class LiveRoom extends DurableObject {
     if (first.status !== 200) return first;
     const text = await first.text();
     const since = Number(url.searchParams.get('since')) || 0;
-    let changed = true;
-    try { changed = snapshotChanged(JSON.parse(text), since); } catch { /* answer as is */ }
+    let changed = true; let now = 0;
+    try { const body = JSON.parse(text); changed = snapshotChanged(body, since); now = Number(body && body.now) || 0; } catch { /* answer as is */ }
     if (changed || this.ctx.getWebSockets('wait').length >= MAX_WAITERS) return new Response(text, { status: 200, headers: first.headers });
+    let code = ''; try { code = normCode(decodeURIComponent(url.pathname.slice(5).split('/').filter(Boolean)[0] || '')); } catch { code = ''; }
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server, ['wait']);
-    server.serializeAttachment({ admin: false, wait: true });
+    server.serializeAttachment({ admin: false, wait: true, code, now });
     server.send(text);
     // something was written while the snapshot was made: wake at once
     if (this.changes !== mark) { try { server.send('c'); server.close(1000, 'changed'); } catch { /* closed */ } }
@@ -243,22 +243,25 @@ export class LiveRoom extends DurableObject {
     return this.plainSnapshot(request, url);
   }
   /**
-   * A probe that did not come through the relay (see longpoll.js): held to its end whatever happens in the room, no data.
-   * It counts as a waiter (the object stays awake, the host counts that time) but wake() leaves it alone.
+   * The Worker's wait is up (relayWait sent 'n' on the relay socket): tell it the time now, so the answer it sends carries a
+   * `now` taken when it is sent, not when the wait began (the runtime sets its clock by it). Only if nothing was written
+   * since the snapshot it holds — docs, removals and the state all carry tick() stamps, so "no stamp after that `now`" holds
+   * for every viewer and the new `now` is a safe cursor. Otherwise 'c', as wake() does: the Worker asks once more.
    */
-  async probeWait(wait) {
-    const t0 = Date.now();
-    await new Promise((res) => {
-      const w = { res, probe: true, t: setTimeout(() => { this.waiters.delete(w); res(); this.waitersChanged(); }, wait) };
-      this.waiters.add(w);
-      this.waitersChanged();
-    });
-    return probeAnswer(Date.now() - t0);
+  async relayNow(ws) {
+    try {
+      const att = ws.deserializeAttachment() || {};
+      if (!att.wait) return;
+      const core = await this.core();
+      const code = att.code || '';
+      if (!(att.now > 0) || (core.ready && core._maxStamp(code) > att.now)) { ws.send('c'); ws.close(1000, 'changed'); return; }
+      ws.send('n' + core.tick(code));
+    } catch { /* closed: the Worker answers with the snapshot it has */ }
   }
-  /** Something changed: answer every waiting long-poll (here and through the relay). Probes keep waiting. */
+  /** Something changed: answer every waiting long-poll (here and through the relay). */
   wake() {
-    let had = 0;
-    for (const w of this.waiters) { if (w.probe) continue; clearTimeout(w.t); w.res(); this.waiters.delete(w); had++; }
+    for (const w of this.waiters) { clearTimeout(w.t); w.res(); }
+    const had = this.waiters.size; this.waiters.clear();
     if (had) this.waitersChanged();
     for (const ws of this.ctx.getWebSockets('wait')) { try { ws.send('c'); ws.close(1000, 'changed'); } catch { /* closed */ } }
   }
@@ -287,12 +290,7 @@ export class LiveRoom extends DurableObject {
         return new Response(out.body, { status: out.status, headers: { 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` } });
       }
       // ⑤ polling clients (school networks) keep this gap between polls: longer for big rooms
-      // waitMax: the longest wait this server keeps for a long-poll (seconds). A runtime that knows it may ask for longer waits
-      // than its first 20 s once they prove to come back whole; older runtimes ignore the field and keep asking for 20
-      if (a === 'snapshot' && request.method === 'GET' && out.status === 200) {
-        if (out.body && typeof out.body === 'object') out.body.waitMax = MAX_WAIT_S;
-        return json(out.status, out.body, { 'X-Lec-Poll-Ms': String(pollGapMs(core.count(code, 'participants'))), ...TIMING_OK });
-      }
+      if (a === 'snapshot' && request.method === 'GET' && out.status === 200) return json(out.status, out.body, { 'X-Lec-Poll-Ms': String(pollGapMs(core.count(code, 'participants'))) });
       return json(out.status, out.body);
     } catch (e) {
       return errorResponse(e);
@@ -356,6 +354,7 @@ export class LiveRoom extends DurableObject {
   async webSocketMessage(ws, message) {
     if (typeof message !== 'string' || message.length > 4096) return;
     if (message === 'ping') { ws.send('pong'); return; }
+    if (message === 'n') return this.relayNow(ws);
     let o; try { o = JSON.parse(message); } catch { return; }
     if (o && o.type === 'auth' && typeof o.admin === 'string' && o.admin.length <= 200) {
       const att0 = ws.deserializeAttachment() || {};

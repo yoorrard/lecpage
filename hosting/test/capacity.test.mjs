@@ -26,22 +26,17 @@ test('연수 한 번: 학교망 묻기가 가장 큼, 긴 대기는 요청이 �
   assert.ok(longRelay.doGbs < 20 && longRelay.doReq > longIn.doReq, 'Worker가 대신 기다리면 duration 대신 DO 요청');
 });
 
-test('수업 중 요청 줄이기(2026-11-24 실측): 처음 접속 2번(한 자리 13), 기다림이 55초로 올라간 망의 긴 대기 1분 1.6. 예약 어림은 올라가지 않은 값 그대로', () => {
-  assert.equal(EST.liveBase, 13); assert.equal(EST.pollPerMinLong, 3.4); assert.equal(EST.pollPerMinLongRaised, 1.6);
-  // README §7 '연수 한 번' 표의 값(참가자 40명 + 강사 화면 2자리, 2시간)
+test('수업 중 요청 줄이기(2026-11-24 실측): 처음 접속 2번(한 자리 13). 긴 대기는 전과 같은 1분 3.4', () => {
+  assert.equal(EST.liveBase, 13); assert.equal(EST.pollPerMinLong, 3.4);
+  // README 4절 '연수 한 번' 표의 값(참가자 40명 + 강사 화면 2자리, 2시간)
   const good = trainingCost({ live: true, network: 'good', longPoll: true });
   const school = trainingCost({ live: true, network: 'restricted', longPoll: true });
-  const raised = trainingCost({ live: true, network: 'restricted', longPoll: true, raised: true });
-  const raisedRelay = trainingCost({ live: true, network: 'restricted', longPoll: true, relay: true, raised: true });
   assert.equal(Math.round(good.workerReq), 3985); assert.equal(Math.round(school.workerReq), 17694);
-  assert.equal(Math.round(raised.workerReq), 8622); assert.equal(Math.round(raised.doReq), 8629); assert.equal(Math.round(raisedRelay.doReq), 16693);
-  assert.ok(raised.workerReq < school.workerReq * 0.5, '올라간 망은 요청이 절반 아래');
-  assert.ok(raised.doGbs > 800, '방 안에서 기다리면 방은 그대로 연수 내내 깨어 있음');
-  // 올라가는 망의 몫은 모르므로 예약 어림(그날 받을지 정함)은 올라가지 않은 값으로 둠
+  assert.ok(school.doGbs > 800, '방 안에서 기다리면 방은 연수 내내 깨어 있음');
+  // 예약 어림(그날 받을지 정함)
   assert.equal(estimate({ people: 40, live: true, network: 'restricted', view: 'pages', longPoll: true }), 42 * 13 + Math.round(42 * 120 * 3.4));
-  // 무료로 버티는 크기: 올라가지 않으면 약 90명, 학교망이 모두 올라가면 더 많이
+  // 무료로 버티는 크기: 약 90명
   assert.equal(freeMaxUsers({ longPoll: true }), 90);
-  assert.ok(freeMaxUsers({ longPoll: true, raised: true }) >= 120);
 });
 
 test('사용자 수: 늘수록 비용이 늘고, 참여 기능을 강사 계정으로 넘기면 운영자 몫은 사이트만', () => {

@@ -11,13 +11,9 @@ export const EST = {
   /** 실시간 연결이 막혀 묻기로 바뀐 참가자의 1분당 요청(5초, 빈 응답이 이어지면 10초. 측정 50명 2시간 4~7만 → 3.3~5.8) */
   pollPerMin: 5,
   /** 긴 대기(?wait=20, 바뀐 것이 있으면 바로 답)를 쓰는 런타임일 때. 조용하면 2.4(대기 20초 + 쉬는 5초), 측정(2026-11-13, 웹소켓·SSE 막힘,
-   *  40초마다 글 하나, docs/research/school-network-2026-11.md §9) 1분 3.25 + 처음 연결·실시간 다시 시도 → 3.4. 글이 쉼 없이 오면 쉬는 틈마다 12 */
+   *  40초마다 글 하나, docs/research/school-network-2026-11.md §9) 1분 3.25 + 처음 연결·실시간 다시 시도 → 3.4. 글이 쉼 없이 오면 쉬는 틈마다 12.
+   *  가려진 참가자 화면(휴대폰 화면 꺼짐)은 5분에 한 번만 물음(2026-11-24, 그 전에는 1분에 한 번) — 어림에는 넣지 않음(덜 쓰는 쪽) */
   pollPerMinLong: 3.4,
-  /** 긴 대기의 기다림이 55초로 올라간 망(런타임이 시험 요청 probe=1로 확인한 곳: 답이 HTTP/1.1로 오고 55초를 끊지 않는 망. 2026-11-24).
-   *  같은 조건(웹소켓·SSE 막힘, 40초마다 글 하나)으로 잰 값 1분 1.4(올라가기 전 같은 날 3.0) + 처음 연결·실시간 다시 시도·오르는 동안(약 2분, 시험 요청 1번) → 1.6.
-   *  조용하면 1.0(55초 + 쉬는 5초). 올라가는 망의 몫은 아직 모르므로 예약 어림(estimate)은 올라가지 않은 값(pollPerMinLong)으로 둠.
-   *  가려진 참가자 화면(휴대폰 화면 꺼짐)은 어느 망에서나 5분에 한 번만 물음(그 전에는 1분에 한 번) — 어림에는 넣지 않음(덜 쓰는 쪽) */
-  pollPerMinLongRaised: 1.6,
   /** 실시간 연결이 막혀 묻기로 바뀌는 참가자 몫(앱의 '네트워크' 답). 학교망 restricted는 모두 묻기로 봄 */
   pollShare: { good: 0.2, slow: 0.5, restricted: 1 },
   /** 강사 화면·발표 화면 몫(참가자 몇 명 분) */
@@ -118,11 +114,10 @@ export const UNIT = {
 
 /**
  * 연수 한 번이 드는 몫(Pages 보기). 실시간 연결이 막힌 자리는 묻기(5초, 긴 대기면 1분 2.4번)로 셈.
- * @param {{ people?: number, minutes?: number, live?: boolean, network?: 'good'|'slow'|'restricted', longPoll?: boolean, relay?: boolean, raised?: boolean, republishes?: number }} o
+ * @param {{ people?: number, minutes?: number, live?: boolean, network?: 'good'|'slow'|'restricted', longPoll?: boolean, relay?: boolean, republishes?: number }} o
  *   relay: 긴 대기를 Worker가 대신 기다림(방이 잠듦, 대신 한 번에 DO 요청 2개로 셈)
- *   raised: 긴 대기의 기다림이 55초로 올라간 망(런타임의 시험 요청이 통과한 곳: 답이 HTTP/1.1로 오고 55초를 끊지 않는 망). 기본은 올라가지 않은 것으로 봄(20초)
  */
-export function trainingCost({ people = 40, minutes = DEFAULT_MINUTES, live = false, network = 'good', longPoll = false, relay = false, raised = false, republishes = 1 } = {}) {
+export function trainingCost({ people = 40, minutes = DEFAULT_MINUTES, live = false, network = 'good', longPoll = false, relay = false, republishes = 1 } = {}) {
   const n = people + EST.teacherSeats;
   const out = {
     workerReq: UNIT.newSite.workerReq + republishes * UNIT.republish.workerReq + UNIT.appChecks.workerReq,
@@ -132,7 +127,7 @@ export function trainingCost({ people = 40, minutes = DEFAULT_MINUTES, live = fa
   };
   if (live) {
     const pollers = n * (EST.pollShare[network] ?? EST.pollShare.good);
-    const cycles = pollers * minutes * (longPoll ? (raised ? EST.pollPerMinLongRaised : EST.pollPerMinLong) : EST.pollPerMin);
+    const cycles = pollers * minutes * (longPoll ? EST.pollPerMinLong : EST.pollPerMin);
     const base = n * EST.liveBase;
     out.workerReq += base + cycles;
     out.doReq += base + cycles * (longPoll && relay ? 2 : 1);
@@ -164,16 +159,16 @@ export function costOf(m) {
 /**
  * 사용자 수 → 한 달·가장 바쁜 날 쓰는 몫, 무료 하루 한도 대비(%), 먼저 차는 것, 유료 월 비용.
  * @param {{ users: number, perUser?: number, instantShare?: number, people?: number, liveShare?: number, schoolShare?: number, minutes?: number,
- *   longPoll?: boolean, relay?: boolean, raised?: boolean, peakFactor?: number, workdays?: number, siteDays?: number, republishes?: number }} o
+ *   longPoll?: boolean, relay?: boolean, peakFactor?: number, workdays?: number, siteDays?: number, republishes?: number }} o
  *   perUser: 강사 한 명이 한 달에 하는 연수, instantShare: 그중 바로 배포로 올리는 몫, liveShare: 참여 기능을 쓰는 몫,
  *   schoolShare: 참여 기능 연수 중 학교망(실시간 연결 막힘) 몫, peakFactor: 가장 바쁜 날이 평일 평균의 몇 배
  */
-export function scenario({ users, perUser = 2, instantShare = 0.7, people = 40, liveShare = 0.5, schoolShare = 0.4, minutes = DEFAULT_MINUTES, longPoll = false, relay = false, raised = false, peakFactor = 2, workdays = 20, siteDays = 60, republishes = 1 } = {}) {
+export function scenario({ users, perUser = 2, instantShare = 0.7, people = 40, liveShare = 0.5, schoolShare = 0.4, minutes = DEFAULT_MINUTES, longPoll = false, relay = false, peakFactor = 2, workdays = 20, siteDays = 60, republishes = 1 } = {}) {
   const trainings = users * perUser * instantShare;
   const kinds = [
     { w: 1 - liveShare, c: trainingCost({ people, minutes, live: false, republishes }) },
-    { w: liveShare * (1 - schoolShare), c: trainingCost({ people, minutes, live: true, network: 'good', longPoll, relay, raised, republishes }) },
-    { w: liveShare * schoolShare, c: trainingCost({ people, minutes, live: true, network: 'restricted', longPoll, relay, raised, republishes }) },
+    { w: liveShare * (1 - schoolShare), c: trainingCost({ people, minutes, live: true, network: 'good', longPoll, relay, republishes }) },
+    { w: liveShare * schoolShare, c: trainingCost({ people, minutes, live: true, network: 'restricted', longPoll, relay, republishes }) },
   ];
   const per = {};
   for (const { w, c } of kinds) for (const [k, v] of Object.entries(c)) per[k] = (per[k] || 0) + w * v;

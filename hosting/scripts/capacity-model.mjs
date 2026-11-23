@@ -14,15 +14,11 @@ const fmt = (n) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}
 const usd = (n) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
 
 // 2026-11-13 학교망 대비 뒤 런타임은 긴 대기(?wait=20, 측정 1분 3.4요청)가 기본. 서버는 무료면 방 안에서, 유료면 Worker가 대신 기다림(POLL_RELAY auto)
-// 2026-11-24: 런타임이 시험 요청(probe=1)으로 확인한 망에서는 기다림을 55초로 올림(답이 HTTP/1.1로 오고 55초를 끊지 않는 망. raised).
-// 올라가는 망의 몫은 아직 모르므로 기본 표는 올라가지 않은 것(20초)으로 두고, 올라간 경우를 따로 보임
 const variants = [
-  ['지금 런타임(긴 대기), 무료 기본: 방 안에서 기다림', { longPoll: true }, '긴 대기, 방 안에서'],
-  ['지금 런타임(긴 대기), 유료 기본: Worker가 대신 기다림', { longPoll: true, relay: true }, '긴 대기, Worker가 대신(유료 기본)'],
-  ['긴 대기의 기다림이 55초로 올라간 망, 무료 기본: 방 안에서 기다림', { longPoll: true, raised: true }, '긴 대기 55초, 방 안에서'],
-  ['긴 대기의 기다림이 55초로 올라간 망, 유료 기본: Worker가 대신 기다림', { longPoll: true, relay: true, raised: true }, '긴 대기 55초, Worker가 대신'],
-  ['예전 런타임(묻기 5초)', {}, '예전 런타임(묻기 5초)'],
-  ['참여 기능은 강사 계정으로(사이트만)', { liveShare: 0 }, '사이트만(참여 기능은 강사 계정)'],
+  ['지금 런타임(긴 대기), 무료 기본: 방 안에서 기다림', { longPoll: true }],
+  ['지금 런타임(긴 대기), 유료 기본: Worker가 대신 기다림', { longPoll: true, relay: true }],
+  ['예전 런타임(묻기 5초)', {}],
+  ['참여 기능은 강사 계정으로(사이트만)', { liveShare: 0 }],
 ];
 const out = { assumptions: { perUser: 2, instantShare: 0.7, people: 40, liveShare: 0.5, schoolShare: 0.4, minutes: 120, peakFactor: 2, workdays: 20, siteDays: 60, republishes: 1, ...base }, rows: [] };
 
@@ -45,8 +41,6 @@ const kinds = [
   ['참여 기능, 실시간 연결 됨(20%는 긴 대기, Worker가 대신)', { live: true, network: 'good', longPoll: true, relay: true }],
   ['학교망(모두 긴 대기, 방 안)', { live: true, network: 'restricted', longPoll: true }],
   ['학교망(모두 긴 대기, Worker가 대신)', { live: true, network: 'restricted', longPoll: true, relay: true }],
-  ['학교망(기다림이 55초로 올라간 망, 방 안)', { live: true, network: 'restricted', longPoll: true, raised: true }],
-  ['학교망(기다림이 55초로 올라간 망, Worker가 대신)', { live: true, network: 'restricted', longPoll: true, relay: true, raised: true }],
   ['학교망(예전 런타임 묻기 5초)', { live: true, network: 'restricted' }],
 ];
 for (const [name, o] of kinds) {
@@ -68,8 +62,8 @@ for (const [vname, v] of variants) {
 }
 
 console.log('\n### 비용 곡선(지금 가정, Workers Paid 월 비용)\n');
-console.log(`| 월 활성 강사 | ${variants.map(([, , short]) => short).join(' | ')} |`);
-console.log(`|---|${variants.map(() => '---').join('|')}|`);
+console.log('| 월 활성 강사 | 긴 대기, 방 안에서 | 긴 대기, Worker가 대신(유료 기본) | 예전 런타임(묻기 5초) | 사이트만(참여 기능은 강사 계정) |');
+console.log('|---|---|---|---|---|');
 for (const users of [500, 1000, 3000, 10000, 30000, 100000]) {
   const cells = variants.map(([, v]) => usd(scenario({ ...base, ...v, users }).paid.total));
   console.log(`| ${users.toLocaleString('en-US')} | ${cells.join(' | ')} |`);
