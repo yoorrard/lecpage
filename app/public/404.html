@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<!-- 이 화면의 스크립트는 아래 하나뿐: 그 밖의 스크립트(호스팅이 끼워 넣는 분석 스크립트 등)는 돌지 않게 함. 스크립트를 고치면 해시도 고칠 것(node app/scripts/csp-check.mjs가 확인) -->
+<meta http-equiv="Content-Security-Policy" content="script-src 'sha256-Qn0T3WYRY0bvuxDCGJT9SVmTK7PqB6CNP8w1tWoCxQs='">
 <title>페이지를 찾지 못했어요 · lecpage</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
@@ -22,9 +24,9 @@ a:focus-visible{outline:3px solid #5B49B0;outline-offset:3px}
 <a href="/" data-home>lecpage 처음으로</a>
 </main>
 <script>
-// 깊은 주소(/a/b/c)에서도 처음 화면으로: 늘 사이트 맨 위로. 예비 주소(GitHub Pages)는 /lecpage/ 아래에 있음
+// 깊은 주소(/a/b/c)에서도 처음 화면으로: 늘 사이트 맨 위로. 예전 미러(yoorrard.github.io/lecpage/)만 /lecpage/ 아래, 예비 주소(lecpage.github.io)는 맨 위
 (function () {
-  var base = /\.github\.io$/.test(location.hostname) ? '/lecpage/' : '/';
+  var base = /\.github\.io$/.test(location.hostname) && location.pathname.indexOf('/lecpage/') === 0 ? '/lecpage/' : '/';
   var a = document.querySelector('[data-home]'); if (a) a.setAttribute('href', base);
   var i = document.querySelector('[data-home-src]'); if (i) i.setAttribute('src', base + 'favicon.svg');
 })();

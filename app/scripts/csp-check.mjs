@@ -18,11 +18,27 @@ const report = (name, list) => { if (list.length) { bad += list.length; console.
 const src = { index: read(join(APP, 'index.html')), frame: read(join(APP, 'public', 'frame', 'index.html')), headers: read(join(APP, 'public', '_headers')) };
 report('소스(index.html · public/frame/index.html · public/_headers)', checkCsp({ ...src, libs }));
 
+// 1-2 없는 주소 화면(public/404.html): 제 스크립트만 해시로 허용(호스팅이 끼워 넣는 스크립트가 돌지 않게), HTML을 주는 경로는 no-transform
+const lost = (html) => {
+  const out = []; const allow = directive(metaCsp(html), 'script-src') || [];
+  if (!allow.length) out.push("404.html에 script-src meta가 없어요");
+  if (allow.includes("'unsafe-inline'")) out.push("404.html script-src에 'unsafe-inline'이 있어요");
+  for (const code of inlineScripts(html)) if (!allow.includes(sha256(code))) out.push(`404.html 인라인 스크립트의 해시가 meta에 없어요: ${sha256(code)}`);
+  return out;
+};
+report('소스(public/404.html)', lost(read(join(APP, 'public', '404.html'))));
+{
+  const rule = (path) => { const m = src.headers.split(/\n(?=\S)/).find((b) => b.split('\n')[0].trim() === path); return m || ''; };
+  const need = ['/', '/index.html', '/404.html', '/examples/*', '/frame/'].filter((p) => !/Cache-Control:[^\n]*no-transform/.test(rule(p)));
+  report('HTML을 주는 경로의 no-transform(public/_headers)', need.map((p) => `${p} 규칙의 Cache-Control에 no-transform이 없어요(Cloudflare가 HTML에 스크립트를 끼워 넣을 수 있음)`));
+}
+
 // 2 빌드본
 const dist = process.argv[2] ? resolve(process.argv[2]) : join(APP, 'dist');
 if (existsSync(join(dist, 'index.html'))) {
   const built = { index: read(join(dist, 'index.html')), frame: read(join(dist, 'frame', 'index.html')), headers: existsSync(join(dist, '_headers')) ? read(join(dist, '_headers')) : undefined };
   report(`빌드본(${dist})`, checkCsp({ ...built, libs, built: true }));
+  if (existsSync(join(dist, '404.html'))) report('빌드본(404.html)', lost(read(join(dist, '404.html'))));
   const n = inlineScripts(built.index).length;
   console.log(`  인라인 스크립트 ${n}개 · script-src ${(directive(metaCsp(built.index), 'script-src') || []).join(' ')}`);
 } else if (process.argv[2]) { bad++; console.error(`✗ 빌드본이 없어요: ${dist}`); }

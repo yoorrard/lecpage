@@ -79,7 +79,7 @@ Worker → **Settings → Build → Build watch paths**: 포함 `app/*`, `skills
 - **Workers Caching**: 켜면 캐시된 정적 응답도 요금·한도에 들어갑니다.
 - **`run_worker_first`**: 그 경로가 하루 10만 요청 한도에 들어가고, 넘으면 429가 납니다.
 - 이 둘을 끄고 있으면 정적 요청은 **무료·무제한**이고 한도와 관계없습니다.
-- **Web Analytics**(자동 설정): 끕니다. 처리방침에 분석 도구가 없습니다. 앱 HTML의 `no-transform`이 스크립트 끼워 넣기도 막습니다.
+- **Web Analytics**(자동 설정): 끕니다. 처리방침에 분석 도구가 없습니다. 끄는 곳: Cloudflare 대시보드 → **Web Analytics**(`https://dash.cloudflare.com/?to=/:account/web-analytics`) → `lecpage.com`의 **Manage site** → 자동 설정을 **Disable**(또는 **Delete**). 2026-11-23 운영에서 확인: 이 설정이 켜져 있어 `no-transform`이 없던 HTML(참고 디자인 예시 `/examples/*`, 없는 주소 화면, 미리보기 틀 `/frame/`)에 분석 스크립트(`static.cloudflareinsights.com/beacon.min.js`)가 끼워 넣어지고 있었습니다(앱 첫 화면 `/`에는 없었음). 코드에서도 막아 둡니다: HTML을 주는 경로마다 `Cache-Control`에 `no-transform`([`app/public/_headers`](../app/public/_headers)), 없는 주소 화면은 제 스크립트만 해시로 허용(`node app/scripts/csp-check.mjs`가 확인). 확인: `curl -s -A 'Mozilla/5.0 Chrome' -H 'Accept: text/html' https://lecpage.com/examples/data-pulse/ | grep -c cloudflareinsights`가 0.
 
 ### 3.5 내 도메인 연결
 1. 도메인을 먼저 삽니다(§5).
