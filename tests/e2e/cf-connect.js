@@ -81,7 +81,7 @@ const fake = http.createServer((req, res) => {
       await p.click('#live-setup button:has-text("바꾸기")').catch(() => { });
       await p.waitForTimeout(400);
       const row = (await p.locator('#live-setup').innerText().catch(() => '')).replace(/\s+/g, ' ');
-      ok('app shows participation as connected to my Cloudflare server', /내 서버·Cloudflare에 연결돼 있어요/.test(row) && row.includes(`127.0.0.1:${CF}/w/lecpage-live`), row.slice(0, 200));
+      ok('app shows participation as connected to my Cloudflare server', /참여 기능 서버에 연결돼 있어요/.test(row) && row.includes(`127.0.0.1:${CF}/w/lecpage-live`), row.slice(0, 200));
     }
     const wl = fs.readFileSync(WLOG, 'utf8');
     ok('admin key and token never reach logs', !/[A-Za-z0-9]{5}-[A-Za-z0-9]{5}-[A-Za-z0-9]{5}/.test(wl + lines.join('\n')) && !(wl + lines.join('\n')).includes(TOKEN), wl.replace(/\n/g, ' | ').slice(0, 300));
@@ -116,7 +116,7 @@ const fake = http.createServer((req, res) => {
       await p.click('#live-setup button:has-text("Cloudflare 계정으로 연결")');
       await toastHas(p, /참여 기능 서버에 연결했어요/);
       const row = (await p.locator('#live-setup').innerText()).replace(/\s+/g, ' ');
-      ok('live setup: connected to the existing server without retyping anything', /내 서버·Cloudflare에 연결돼 있어요/.test(row) && read().workers['lecpage-live'].deploys === 1 && admin.length > before, row.slice(0, 160));
+      ok('live setup: connected to the existing server without retyping anything', /참여 기능 서버에 연결돼 있어요/.test(row) && read().workers['lecpage-live'].deploys === 1 && admin.length > before, row.slice(0, 160));
     }
     // 연결 해제: 이 PC의 Cloudflare 로그인을 지움
     await p.locator('.publish').scrollIntoViewIfNeeded();

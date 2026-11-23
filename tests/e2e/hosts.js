@@ -73,17 +73,24 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     // 다른 곳에 배포할 때는 배포할 곳 바로 아래 안내가 할 일을 알려 주고 이 줄은 접혀 있음 → [연결]로 펼침
     if (await p.locator('#live-setup .ready-h button:text-is("연결")').count()) await p.click('#live-setup .ready-h button:text-is("연결")');
     // 화면에는 방법 하나만(처음에는 추천). 나머지는 접힌 '다른 방법으로 연결'에서 고르면 그 방법으로 바뀜
-    const WAY = { '구글 시트': 'sheets', Supabase: 'supabase', '내 서버·Cloudflare': 'http' };
+    const WAY = { '구글 시트': 'sheets', Supabase: 'supabase', 'Cloudflare 참여 기능 서버': 'http' };
     const pickWay = async (m) => {
       const b = p.locator(`#live-setup .live-others .live-pick[data-method="${WAY[m]}"]`);
       if (await b.count()) { if (!(await p.locator('#live-setup .live-others[open]').count())) await p.click('#live-setup .live-others > summary'); await b.click(); }
       await p.waitForTimeout(200);
     };
-    ok(`${w} live: recommended way first, others folded`, await p.locator('#live-setup .live-others:not([open])').count() === 1 && !(await p.locator('#live-setup .seg').count()) && /추천: 내 서버\(Cloudflare\)/.test(await p.locator('#live-setup').innerText()));
-    for (const m of ['구글 시트', 'Supabase', '내 서버·Cloudflare']) {
+    ok(`${w} live: recommended way first, others folded`, await p.locator('#live-setup .live-others:not([open])').count() === 1 && !(await p.locator('#live-setup .seg').count()) && /추천: 구글 시트 · 구글 계정만 있으면 돼요/.test(await p.locator('#live-setup').innerText()));
+    // 커넥트가 없으면 가장 번거로운 길(Cloudflare를 손으로 만들기)을 추천하지 않음: '할 일이 가장 적어요' 같은 말이 없고, 커넥트로 한 번에 되는 길은 접힌 한 줄로
+    ok(`${w} live: no false "least to do" claim, the connector way is one folded line`, !/할 일이 가장 적어요/.test(await p.locator('#live-setup').innerText()) && await p.locator('#live-setup .run-alt:not([open]) > summary:has-text("lecpage 커넥트를 켜면 Cloudflare 로그인 한 번으로")').count() === 1);
+    for (const m of ['구글 시트', 'Supabase', 'Cloudflare 참여 기능 서버']) {
       await pickWay(m);
+      if (m === 'Cloudflare 참여 기능 서버') {
+        // 커넥트가 없을 때 Cloudflare: 누를 곳은 커넥트 받기 하나, 손으로 만드는 순서는 접힌 '다른 방법: 직접 만들기'
+        ok(`${w} live ${m}: one primary (get the connector), manual steps folded`, await p.locator('#live-setup .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('#live-setup .run-alt:not([open]) > summary:has-text("직접 만들기")').count() === 1, (await p.locator('#live-setup .btn-primary:visible').allInnerTexts()).join(' | '));
+        await p.click('#live-setup .run-alt > summary:has-text("직접 만들기")');
+      }
       const n = await p.locator('#live-setup .walk > li').count();
-      ok(`${w} live ${m}: steps cut down`, n === { '구글 시트': 4, Supabase: 3, '내 서버·Cloudflare': 2 }[m] && await p.locator('#live-setup .live-others:not([open])').count() === 1, String(n));
+      ok(`${w} live ${m}: steps cut down`, n === { '구글 시트': 4, Supabase: 3, 'Cloudflare 참여 기능 서버': 2 }[m] && await p.locator('#live-setup .live-others:not([open])').count() === 1, String(n));
       for (let i = 0; i < n; i++) { await p.locator('#live-setup .walk-h').nth(i).click(); await p.waitForTimeout(60); }
       ok(`${w} live ${m}: ${n} steps, one open`, await p.locator('#live-setup .walk-b').count() === 1, (await p.locator('#live-setup .walk-h').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' / '));
       ok(`${w} live ${m}: no overflow`, !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));

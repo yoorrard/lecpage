@@ -102,6 +102,12 @@ const NF_ERR = {
   403: 'Netlify 토큰이 맞지 않거나 기한이 지났어요. 토큰을 다시 만들어 주세요.',
   429: 'Netlify에 요청이 너무 많았어요. 잠시 뒤 다시 해 주세요.',
 };
+/** Netlify: 참가자가 로그인 없이 열 수 있게 팀 기본 접근 제한(sso_login)을 풂. 못 풀면 던짐 */
+export async function openNetlify(token, siteId) {
+  const r = await fetch(`https://api.netlify.com/api/v1/sites/${siteId}`, { method: 'PATCH', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ sso_login: false }) });
+  if (!r.ok) { const e = new Error(NF_ERR[r.status] || `Netlify 오류 ${r.status}`); e.status = r.status; throw e; }
+  return true;
+}
 /** Netlify: 사이트 만들기와 배포를 zip 한 번으로 */
 export async function deployNetlify({ token, siteId, zip, name, onProgress = () => { } }) {
   onProgress({ step: siteId ? '새 버전 배포' : '사이트 만들기', pct: 10 });
@@ -116,21 +122,22 @@ export async function deployNetlify({ token, siteId, zip, name, onProgress = () 
   const deployId = j.deploy_id || j.id;
   // 팀 기본값에 따라 새 사이트에 'Netlify 팀 로그인' 보호(sso_login)가 걸려 참가자에게 로그인 창(401)이 뜸(2026-11 실계정 확인)
   // → 처음 만들 때만 참가자가 열 수 있게 풂(Vercel의 배포 보호 풀기와 같은 뜻)
-  let opened = false;
+  // opened: 걸려 있던 보호를 풀었음 · locked: 걸려 있는데 풀지 못함(카드에 [로그인 없이 열리게 하기]가 남음). 걸린 것이 없던 계정은 둘 다 false(아무 안내도 하지 않음)
+  let opened = false, locked = false;
   if (!siteId && site) {
     try {
       const info = j.sso_login !== undefined ? j : await fetch(`https://api.netlify.com/api/v1/sites/${site}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json());
-      if (info.sso_login) { const p = await fetch(`https://api.netlify.com/api/v1/sites/${site}`, { method: 'PATCH', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ sso_login: false }) }); opened = p.ok; }
-    } catch { /* 풀지 못하면 배포 화면이 주소 확인을 권함 */ }
+      if (info.sso_login) { try { await openNetlify(token, site); opened = true; } catch { locked = true; } }
+    } catch { /* 보호가 걸렸는지 확인하지 못함: 걸렸다고 단정하지 않음 */ }
   }
   for (let i = 0; i < 30; i++) {
     await sleep(2000);
     const s = await fetch(`https://api.netlify.com/api/v1/sites/${site}/deploys/${deployId}`, { headers: { authorization: `Bearer ${token}` } }).then((x) => x.json()).catch(() => ({}));
-    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); track('publish', 'netlify'); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site, opened }; }
+    if (s.state === 'ready') { onProgress({ step: '완료', pct: 100 }); track('publish', 'netlify'); return { url: s.ssl_url || s.url || j.ssl_url, siteId: site, opened, locked }; }
     if (s.state === 'error') throw new Error(s.error_message || 'Netlify에서 사이트를 만들지 못했어요. 잠시 뒤 다시 해 주세요.');
   }
   track('publish', 'netlify');
-  return { url: j.ssl_url || j.url, siteId: site, opened };
+  return { url: j.ssl_url || j.url, siteId: site, opened, locked };
 }
 
 // ── Vercel: 토큰 하나로 파일을 올리고 프로젝트 주소(<이름>.vercel.app)에 배포. 다시 배포하면 같은 주소 ──

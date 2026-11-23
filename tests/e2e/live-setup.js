@@ -62,15 +62,15 @@ const readInstall = (code) => { try { return JSON.parse(Buffer.from(code.slice(5
     const p = await ctx.newPage(); const errs = watch(p);
     await openShare(p); await openLive(p);
     const code = (/연수 코드\s+([A-Z0-9_-]{3,40})/.exec(await text(p)) || [])[1] || '';
-    ok('one way first: recommended, others folded, no method tabs', /추천: 내 서버\(Cloudflare\)/.test(await text(p)) && await p.locator('#live-setup .live-others:not([open])').count() === 1 && !(await p.locator('#live-setup .seg').count()), code);
+    ok('one way first: recommended (Google Sheets without the connector), others folded, no method tabs', /추천: 구글 시트 · 구글 계정만 있으면 돼요/.test(await text(p)) && await p.locator('#live-setup .live-others:not([open])').count() === 1 && !(await p.locator('#live-setup .seg').count()), code);
     await p.click('#live-setup .live-others > summary');
     const picks = await p.locator('#live-setup .live-pick').allInnerTexts();
-    ok('other ways say what each needs', picks.length === 3 && /구글 계정만/.test(picks.join('|')) && /Supabase 계정/.test(picks.join('|')) && /이 컴퓨터에서 테스트/.test(picks.join('|')), picks.join(' | ').replace(/\s+/g, ' '));
+    ok('other ways say what each needs', picks.length === 3 && /Supabase 계정/.test(picks.join('|')) && /Cloudflare 계정/.test(picks.join('|')) && /이 컴퓨터에서 테스트/.test(picks.join('|')) && /이 컴퓨터에서 테스트/.test(picks[2] || ''), picks.join(' | ').replace(/\s+/g, ' '));
     await p.locator('#live-setup').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + '1-others-open.png' });
 
     // 구글 시트: 코드에 설치 코드가 들어 있음
     await pickWay(p, 'sheets');
-    ok('sheets: 4 steps, header names the way', await p.locator('#live-setup .walk > li').count() === 4 && /구글 시트로 연결/.test(await text(p)) && await p.evaluate(() => document.activeElement?.classList.contains('live-way-h')));
+    ok('sheets (the recommended way without the connector): 4 steps', await p.locator('#live-setup .walk > li').count() === 4 && /추천: 구글 시트/.test(await text(p)));
     await step(p, 1); await p.click('#live-setup .walk-b button:has-text("lecpage 코드 복사")'); await p.waitForTimeout(400);
     const gs1 = await clip(p); const inst1 = (/var INSTALL = '(lpi1\.[A-Za-z0-9_-]+)';/.exec(gs1) || [])[1] || '';
     const o1 = readInstall(inst1);
@@ -97,8 +97,13 @@ const readInstall = (code) => { try { return JSON.parse(Buffer.from(code.slice(5
 
     // Supabase: 설치 SQL에 연수 등록까지
     await p.click('#live-setup button:has-text("연결 바꾸기")'); await p.waitForSelector('#live-setup .live-others');
+    // [연결 바꾸기]는 잘못 눌러도 되돌릴 수 있음: [실행 취소] → 방금 연결 그대로
+    ok('[연결 바꾸기] leaves a way back ([실행 취소])', await p.locator('#live-setup button:has-text("실행 취소")').count() === 1);
+    await p.click('#live-setup button:has-text("실행 취소")');
+    ok('[실행 취소] restores the connection', await p.waitForFunction(() => /구글 시트에 연결돼 있어요/.test(document.querySelector('#live-setup')?.textContent || ''), null, { timeout: 8000 }).then(() => true, () => false));
+    await p.click('#live-setup button:has-text("연결 바꾸기")'); await p.waitForSelector('#live-setup .live-others');
     await pickWay(p, 'supabase');
-    ok('supabase: 3 steps', await p.locator('#live-setup .walk > li').count() === 3);
+    ok('supabase: 3 steps, header names the picked way, focus moves to it', await p.locator('#live-setup .walk > li').count() === 3 && /Supabase로 연결/.test(await text(p)) && await p.evaluate(() => document.activeElement?.classList.contains('live-way-h')));
     await step(p, 1); await p.click('#live-setup .walk-b button:has-text("설치 SQL 복사")'); await p.waitForTimeout(600);
     const sql = await clip(p); const last = sql.trim().split('\n').pop();
     const m = /^select lec_private\.init_training_hash\('([A-Z0-9_-]+)', '([0-9a-f]{64})', '(\{.*\})'\);$/.exec(last) || [];

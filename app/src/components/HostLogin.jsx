@@ -21,7 +21,7 @@ export function VcProgress({ view, onCancel }) {
     <RunProgress view={view} phases={VC_PHASE} onCancel={onCancel}
       slow="처음에는 배포 도구를 받느라 1~2분 걸려요."
       login={{ ok: vcLoginOk, hint: '방금 열린 창에서 로그인하고 허용해요. 계정이 없으면 그 창에서 가입해요(무료, 메일이나 GitHub 계정).' }}
-      asks={{ team: (a) => <AskPick label="Vercel 팀" items={a.teams} onPick={(id) => vcAnswer({ team: id })} /> }} />
+      asks={{ team: (a) => <AskPick label="Vercel 팀" lead="배포할 Vercel 팀(계정)을 골라 주세요. 다음부터는 묻지 않아요." items={a.teams} onPick={(id) => vcAnswer({ team: id })} /> }} />
   );
 }
 
@@ -58,6 +58,6 @@ export function nfFail(e, { retry, onToken } = {}) {
   const code = e?.code || '';
   if (code === 'cancelled') return null;
   const again = { label: '다시 시도', onClick: () => retry?.() };
-  if (code === 'failed' && onToken) return { kind: code, t: e.message, action: { label: '토큰으로 연결', onClick: onToken } };
-  return { kind: code || 'failed', t: e?.message || 'Netlify 로그인을 끝내지 못했어요. 다시 눌러 주세요.', action: again };
+  if (code === 'failed' && onToken) return { kind: code, title: '연결하지 못했어요.', t: e.message, action: { label: '토큰으로 연결', onClick: onToken } };
+  return { kind: code || 'failed', title: '연결하지 못했어요.', t: e?.message || 'Netlify 로그인을 끝내지 못했어요. 다시 눌러 주세요.', action: again };
 }

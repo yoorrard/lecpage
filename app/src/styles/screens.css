@@ -273,6 +273,16 @@ div.pub-mode{cursor:default}
 .feat-chips{gap:6px}
 /* 배포 완료: 연수 당일 묶음 */
 .day-kit{display:grid;gap:6px;padding-top:10px;border-top:1px solid color-mix(in srgb,currentColor 14%,transparent)}
+/* 완료 카드에서 나중에 쓸 것(연수 전날 점검·연수 당일)은 접어 둠: 제목 줄에 무엇이 들었는지 한 줄 */
+.day-fold>summary{cursor:pointer;padding:6px 0}
+.day-fold>summary>.muted{margin-left:6px}
+@media (pointer:coarse){.day-fold>summary{padding:11px 0}}
+.day-fold[open]>summary{margin-bottom:6px}
+.day-fold>:not(summary){margin-top:6px}
+/* 배포 진행 줄: 누른 버튼 바로 아래. 초점을 받아도 테두리는 조용히 */
+.pub-prog{gap:6px}
+.pub-prog:focus{outline:none}
+.pub-prog:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--r-xs)}
 .venue-row{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;min-width:0}
 .venue-row .qr{flex:none;border-radius:6px}
 .venue-url{margin:0;word-break:break-all;color:var(--ink-2)}
@@ -362,6 +372,13 @@ dialog.join-big::backdrop{background:var(--bg)}
 @media (max-width:560px){
   .walk-b{padding-left:14px}
   .pub-facts>div{grid-template-columns:minmax(0,1fr);gap:0}
+  /* 좁은 화면: 끝난 줄(✓)의 설명은 한 줄로 줄여 누를 버튼이 멀어지지 않게([바꾸기]로 펼치면 다 보임) */
+  .ready-i.is-done .ready-s,.ready-i.is-note .ready-s{flex:1 1 100%;order:3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;line-clamp:1;overflow:hidden;overflow-wrap:anywhere}
+  .ready-i.is-done .ready-h>.btn,.ready-i.is-note .ready-h>.btn{margin-left:auto}
+  /* 주소 이름 칸: 앞뒤 글(https://·.내계정.workers.dev)이 칸을 밀어 몇 글자만 보이지 않게 줄을 나눔 */
+  .addr-name .affix{flex-wrap:wrap}
+  .field.addr-name .affix input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]){flex:1 1 9em;min-width:9em;min-height:44px}
+  .addr-name .affix input~.affix-t{padding:0 12px 6px 12px;flex:1 1 100%}
   .short-k{flex-basis:100%}
   .short-note{padding-left:0}
   .short-line .affix,.short-line .input{max-width:none}

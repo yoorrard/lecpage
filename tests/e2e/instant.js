@@ -6,12 +6,14 @@ const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = (script) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>바로 배포 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>바로 배포 시험</h1><div data-lp="qa"></div></section></main>' + (script ? '<script>document.documentElement.classList.add("js")</script>' : '') + '</body></html>\n```\n```json\n{"v":2,"title":"바로 배포 시험","sessions":[{"date":"2027-02-10","start":"10:00","end":"12:00"}],"features":["qa"]}\n```';
 const UNSAFE = 'index.html에 비밀번호 입력 칸이 있어요. 참가자의 비밀번호를 받는 사이트는 바로 배포할 수 없어요.';
 const TOO_LARGE = '사이트가 너무 커요(30MB까지). 큰 영상은 유튜브 링크로 바꿔 주세요.';
-async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {} }) {
+async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarge = false, info = {}, reachable = false }) {
   const st = { calls: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
     const u = new URL(r.request().url()); const m = r.request().method();
     const json = (o, status = 200) => r.fulfill({ status, contentType: 'application/json', headers: cors, body: JSON.stringify(o) });
+    // reachable: 다른 배포할 곳의 API가 이 망에서 닿음(막힌 망이 아님). 기본은 예전처럼 모두 끊음(막힌 망)
+    if (reachable && /^api\.(netlify|vercel|github)\.com$/.test(u.host)) return m === 'OPTIONS' ? r.fulfill({ status: 204, headers: cors }) : json({ message: 'unauthorized' }, 401);
     if (u.host !== 'publish.mock.test') return r.abort();
     if (down) return r.abort('connectionrefused'); // 이 망에서 바로 배포 서버에 닿지 않음
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
@@ -48,6 +50,8 @@ async function seed(p, script) {
     L.ok('siteScripts:false → notice up front', /사이트가 직접 쓴 스크립트/.test(txt), txt.slice(0, 200).replace(/\s+/g, ' '));
     // 감추지 않고 흐린 카드(누를 수 없음)로 까닭을 보이고, 배포할 곳으로 고르지 않음
     L.ok('siteScripts:false → 바로 배포 shown disabled, not picked', await p.locator('.pub-mode-main.is-off[aria-disabled="true"]').count() === 1 && await p.locator('.pub-mode-main.is-on').count() === 0);
+    // 이 시험의 망은 다른 곳의 API가 모두 막힌 망: 그래도 저절로 고른 곳의 카드에 누를 큰 버튼은 정확히 하나
+    L.ok('instant unavailable (blocked network) → the picked card still has exactly one primary button', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1, (await p.locator('.publish .btn-primary:visible').allInnerTexts()).join(' | '));
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-noscripts.png' });
     L.ok('no page errors ①', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
@@ -81,6 +85,8 @@ async function seed(p, script) {
     await p.waitForSelector('.publish [role=alert]:has-text("배포를 끝내지 못했어요")', { timeout: 30000 });
     const note = await p.locator('.publish [role=alert]').first().innerText();
     L.ok('failed publish → reason and next step stay on screen, instant not hidden', /응답하지 못해/.test(note) && /다시 배포/.test(note) && await p.locator('.pub-mode-main.is-on').count() === 1, note.replace(/\s+/g, ' ').slice(0, 160));
+    // 큰 버튼은 하나만: 알림의 [다시 배포]가 지금 누를 곳(아래 큰 [배포하기]를 같이 띄우지 않음), 초점은 알림으로
+    L.ok('failed publish → one primary ([다시 배포] in the notice), no second big button, focus on the notice', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('.publish .btn-lg:visible').count() === 0 && await p.evaluate(() => document.activeElement?.getAttribute('role') === 'alert'), `primary ${await p.locator('.publish .btn-primary:visible:not([disabled])').count()} lg ${await p.locator('.publish .btn-lg:visible').count()}`);
     await p.locator('.publish [role=alert]').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-failed.png' });
     await p.click('.publish [role=alert] button:has-text("다시 배포")');
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
@@ -90,6 +96,12 @@ async function seed(p, script) {
     await p.click('.sites .sites-x');
     await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
     L.ok('cancel dialog explains what stays', /다시 배포할 수 있어요/.test(await p.locator('dialog[open]').innerText()));
+    L.ok('cancel dialog title reads naturally', /바로 배포를 취소할까요\?/.test(await p.locator('dialog[open] h2').innerText()) && !/바로 배포 배포를/.test(await p.locator('dialog[open]').innerText()));
+    // [닫기]로 닫으면 초점이 연 버튼([배포 취소])으로 돌아옴(키보드·화면 읽기 프로그램이 길을 잃지 않게)
+    await p.click('dialog[open] button:has-text("닫기")'); await p.waitForTimeout(300);
+    L.ok('closing the cancel dialog returns focus to the button that opened it', await p.evaluate(() => document.activeElement?.classList.contains('sites-x')), await p.evaluate(() => document.activeElement?.tagName + '.' + document.activeElement?.className));
+    await p.click('.sites .sites-x');
+    await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
     await p.screenshot({ path: L.OUT + 'instant-cancel.png' });
     await p.click('dialog[open] button.btn-danger');
     await p.waitForFunction(() => !document.querySelector('.success .big-url'), null, { timeout: 15000 });
@@ -125,6 +137,8 @@ async function seed(p, script) {
     const note = (await p.locator('.publish [role=alert]').first().innerText()).replace(/\s+/g, ' ');
     L.ok('too_large → server message, no "retry continues" promise', note.includes(TOO_LARGE) && !/이어서 해요/.test(note), note.slice(0, 200));
     L.ok('too_large → only [다른 곳에 배포] as the next step', await p.locator('.publish [role=alert] button:has-text("다시 배포")').count() === 0 && await p.locator('.publish [role=alert] button.btn-primary:has-text("다른 곳에 배포")').count() === 1);
+    // 다시 해도 같은 거절: 큰 [배포하기]를 내지 않음(누르면 같은 거절이 되풀이됨). 누를 큰 버튼은 알림의 [다른 곳에 배포] 하나
+    L.ok('too_large → the big [배포하기] is gone, exactly one primary, focus on the notice', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('.publish .btn-lg:visible').count() === 0 && await p.evaluate(() => document.activeElement?.getAttribute('role') === 'alert'));
     L.ok('no page errors ⑥', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   { // ⑧ 지워진(보관 기간이 끝난) 사이트에 다시 배포하다 실패를 거듭해도: 누를 때마다 새 사이트를 만들지 않고, 그 대신 만들다 만 사이트에 이어서(하루 몫을 실패마다 쓰지 않게)
@@ -164,6 +178,20 @@ async function seed(p, script) {
     const whole = (await p.locator('body').innerText()).replace(/\s+/g, ' ');
     L.ok(`live.accepting ${quota === 7}: checklist ${quota === 7 ? 'says' : 'does not say'} "deploys together"`, /바로 배포하면 함께 켜져요/.test(whole) === (quota === 7) && (quota === 7 || /참여 기능 방을 새로 열 수 없어요/.test(whole)), (whole.match(/.{0,40}(함께 켜져요|새로 열 수 없어요).{0,20}/) || [''])[0]);
     L.ok(`no page errors ⑦-${quota}`, errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑨ 오늘 자리가 차서 서버가 넘길 곳의 순서(next: cloudflare → vercel → github → netlify)를 줘도: 커넥트가 없으면 지금 버튼 하나로 되는 Netlify(브라우저 로그인 한 번)가 추천·기본
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    await server(ctx, { siteScripts: true, reachable: true, info: { accepting: false, capacity: { state: 'full', reason: 'sites', resetAt: Date.now() + 6 * 3600e3, next: ['cloudflare', 'vercel', 'github', 'netlify'] } } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.waitForSelector('.pub-opt', { timeout: 15000 }); await p.waitForTimeout(1500);
+    const opts = (await p.locator('.pub-opt').allInnerTexts()).map((t) => t.replace(/\s+/g, ' '));
+    const first = (await p.locator('.pub-opt:has(input:checked)').innerText()).replace(/\s+/g, ' ');
+    L.ok('instant full + server order → the place that works with one button now (Netlify) is picked and recommended, not "connector needed"', /^Netlify/.test(first) && /추천/.test(first) && /로그인 한 번/.test(first) && /^Netlify/.test(opts[0] || ''), opts.join(' | '));
+    const box = (await p.locator('.publish').innerText()).replace(/\s+/g, ' ');
+    L.ok('instant full → exactly one primary button and one message about what to do', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('.publish button.btn-primary:has-text("Netlify 계정으로 배포")').count() === 1 && !/받은 ZIP을 끌어다 놓아요/.test(box), (await p.locator('.publish .btn-primary:visible').allInnerTexts()).join(' | '));
+    await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-full-netlify.png' });
+    L.ok('no page errors ⑨', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);

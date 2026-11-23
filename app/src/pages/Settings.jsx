@@ -7,7 +7,7 @@ import { PROVIDERS, loadKey, forgetKey, forgetAllKeys } from '../lib/ai.js';
 import { storageInfo, askPersist, projects, wipeStores } from '../lib/db.js';
 import { exportProjectFile, haltJobs } from '../lib/project.js';
 import { fmtBytes, saveFile, safeName, toast } from '../lib/util.js';
-import { HostConnect, KIND } from '../components/Publish.jsx';
+import { HostConnect, CfHostRow, KIND } from '../components/Publish.jsx';
 import { StatsSetting } from '../components/StatsSetting.jsx';
 import { ConnBadge } from '../components/PcConnect.jsx';
 import { forgetConsents, bridgeAvailable, setPreferred, refreshPc } from '../lib/connection.js';
@@ -109,9 +109,10 @@ export function Settings() {
             <button id="set-ai-add" class="btn btn-sm" onClick={() => setAi(true)}>{anyAi ? '다른 AI 연결' : 'API 키 연결'}</button></li>
         </ul>
         <p class="small muted">ChatGPT·Claude 계정 연결은 연수 화면의 AI 선택에서 해요.</p>
-        <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Vercel · GitHub Pages · Netlify</span></summary>
+        <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Cloudflare · Netlify · Vercel · GitHub Pages</span></summary>
           <p class="small muted">바로 배포는 연결 없이 돼요. 내 계정의 다른 곳에 배포할 때만 연결해요. <a href="#/help/deploy">배포하는 법</a></p>
-          <ul class="list-rows">{Object.values(KIND).map((k) => <HostConnect kind={k} key={k} />)}</ul>
+          {/* 배포하기 화면과 같은 순서(쉬운 곳이 먼저). Cloudflare는 lecpage 커넥트로 로그인하므로 토큰 연결이 없음 */}
+          <ul class="list-rows"><CfHostRow />{['netlify', 'vercel', 'github'].filter((k) => Object.values(KIND).includes(k)).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         </details>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>

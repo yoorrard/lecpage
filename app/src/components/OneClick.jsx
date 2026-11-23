@@ -8,12 +8,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 /** 물음: 여럿 가운데 하나 고르기(계정·팀·프로젝트). items [{ id, name }] */
 /** 답을 보냈는데 받는 쪽이 받지 못함(커넥트에 닿지 않음·기다리는 물음이 없음): onPick·onName이 준 답으로 가림(null·ok:false·4xx 이상) */
 const notTaken = (r) => r === null || r?.ok === false || r?.status >= 400;
-export function AskPick({ label, items, onPick }) {
+export function AskPick({ label, lead = '', items, onPick }) {
   const [sent, setSent] = useState(false);
   // 답이 가지 못했으면 버튼을 다시 살림(그대로 두면 고를 수도 멈출 수도 없이 기다리게 됨)
   const pick = (id) => { setSent(true); Promise.resolve(onPick(id)).then((r) => { if (notTaken(r)) setSent(false); }, () => setSent(false)); };
   return (
     <div class="stack" style={{ gap: '6px' }} role="group" aria-label={label}>
+      {lead && <p class="small">{lead}</p>}
       {items.map((x) => <button type="button" class="btn btn-sm run-pick" key={x.id} disabled={sent} onClick={() => pick(x.id)}>{x.name || String(x.id).slice(0, 8)}</button>)}
     </div>
   );
@@ -23,11 +24,13 @@ export function AskName({ label, lead, suggest = '', pattern, clean = (v) => v, 
   const [v, setV] = useState(suggest);
   const [sent, setSent] = useState(false);
   useEffect(() => { setSent(false); }, [problem, round]); // 같은 까닭으로 다시 물어도 버튼이 살아나게
-  const ok = pattern.test(v);
-  const go = () => { if (ok && !sent) { setSent(true); Promise.resolve(onName(v)).then((r) => { if (notTaken(r)) setSent(false); }, () => setSent(false)); } };
+  // 끝에 붙은 하이픈(빈칸·기호를 하이픈으로 바꾸다 남은 것)은 보낼 때 떼어 냄: 까닭 없이 [계속]이 꺼져 있지 않게
+  const val = v.replace(/-+$/, '');
+  const ok = pattern.test(val);
+  const go = () => { if (ok && !sent) { setSent(true); Promise.resolve(onName(val)).then((r) => { if (notTaken(r)) setSent(false); }, () => setSent(false)); } };
   return (
     <div class="stack" style={{ gap: '6px' }}>
-      {lead && <p class="small">{typeof lead === 'function' ? lead(v) : lead}</p>}
+      {lead && <p class="small">{typeof lead === 'function' ? lead(val) : lead}</p>}
       <div class="row token-row">
         <input class="input" value={v} maxLength={63} autoComplete="off" autoCapitalize="off" spellcheck={false} aria-label={label} aria-invalid={v && !ok ? 'true' : undefined}
           onInput={(e) => { setV(clean(e.target.value)); setSent(false); }} onKeyDown={(e) => e.key === 'Enter' && go()} />
@@ -43,15 +46,21 @@ export function AskName({ label, lead, suggest = '', pattern, clean = (v) => v, 
  * phases { 단계: 문구 } · slow: 첫 단계가 길어질 때 덧붙일 말 · login: { hint, ok(url) → 열어도 되는 주소인지 } · asks { kind: (ask) → JSX } · onCancel
  */
 export function RunProgress({ view, phases, slow = '', login = null, asks = {}, onCancel }) {
+  const box = useRef(null);
+  const a = view?.running ? view.ask : null;
+  const link = view?.running && view.phase === 'login' && login?.ok?.(view.loginUrl) ? view.loginUrl : '';
+  // 새 창이 막혔으면(view.blocked) 사실대로 알리고 [로그인 창 열기]를 눈에 띄게: 그 버튼이 지금 누를 곳
+  const blocked = !!link && !!view.blocked;
+  // 물음(계정·팀 고르기, 이름 정하기)이 뜨면 첫 선택지·입력 칸으로, 새 창이 막혔으면 [로그인 창 열기]로 초점을 옮김(키보드·화면 읽기 프로그램이 할 일을 바로 만나게)
+  useEffect(() => { if (a) box.current?.querySelector('.run-pick, input')?.focus(); }, [a?.kind, a?.n]);
+  useEffect(() => { if (blocked) box.current?.querySelector('.run-login')?.focus(); }, [blocked]);
   if (!view?.running) return null;
-  const a = view.ask;
-  const link = view.phase === 'login' && login?.ok?.(view.loginUrl) ? view.loginUrl : '';
   return (
-    <div class="run-box stack" style={{ gap: '8px' }} role="status" aria-live="polite" tabIndex={-1}>
-      <p class="small"><span class="run-dot" aria-hidden="true" /><b>{phases[view.phase] || '진행하는 중…'}</b>{slow && view.phase === 'tool' && view.seconds > 6 ? ` ${slow}` : ''}{view.account?.name && !a ? <span class="muted"> · {view.account.name}</span> : null}</p>
+    <div ref={box} class="run-box stack" style={{ gap: '8px' }} role="status" aria-live="polite" tabIndex={-1}>
+      <p class="small"><span class="run-dot" aria-hidden="true" /><b>{blocked ? '새 창이 막혔어요. [로그인 창 열기]를 눌러 주세요.' : phases[view.phase] || '진행하는 중…'}</b>{slow && view.phase === 'tool' && view.seconds > 6 ? ` ${slow}` : ''}{view.account?.name && !a ? <span class="muted"> · {view.account.name}</span> : null}</p>
       {view.phase === 'login' && login && <>
         {login.hint && <p class="small muted">{login.hint}</p>}
-        {link && <div class="btn-row"><a class="btn btn-sm" href={link} target="_blank" rel="noopener">로그인 창 열기</a></div>}
+        {link && <div class="btn-row"><a class={`btn btn-sm run-login${blocked ? ' btn-primary' : ''}`} href={link} target="_blank" rel="noopener">로그인 창 열기</a></div>}
       </>}
       {a && asks[a.kind]?.(a)}
       {onCancel && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={onCancel}>중지</button></div>}

@@ -30,7 +30,12 @@ const REPO = 'https://github.com/yoorrard/lecpage/tree/main/skills/lecpage';
 const CF_DEPLOY = 'https://deploy.workers.cloudflare.com/?url=https://github.com/yoorrard/lecpage/tree/main/skills/lecpage/backends/cloudflare';
 // 운영자가 코드가 든 시트 틀을 공유해 두면(빌드 변수 VITE_SHEET_TEMPLATE, …/copy 주소) 코드 붙여넣기 단계가 사라짐
 const SHEET_TEMPLATE = /^https:\/\/docs\.google\.com\/spreadsheets\//.test(import.meta.env?.VITE_SHEET_TEMPLATE || '') ? import.meta.env.VITE_SHEET_TEMPLATE : '';
-const NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '내 서버·Cloudflare', local: '이 컴퓨터에서만(시험)' };
+// 같은 서버를 화면마다 한 이름으로: '참여 기능 서버'(Cloudflare로 만든 것은 'Cloudflare 참여 기능 서버')
+const NAME = { sheets: '구글 시트', supabase: 'Supabase', http: 'Cloudflare 참여 기능 서버', local: '이 컴퓨터에서 테스트' };
+/** 연결된 곳의 이름: 내 서버(http)는 주소가 Cloudflare(workers.dev)면 'Cloudflare 참여 기능 서버', 그 밖(기관 서버·NAS)은 '참여 기능 서버' */
+export const liveName = (provider, url = '') => (provider === 'http' ? (/\.workers\.dev(\/|$)/i.test(url) ? NAME.http : '참여 기능 서버') : NAME[provider] || '서버');
+// 무료 한도 한 줄(엔진 문구의 '요청' 같은 말을 강사 말로)
+const LIMIT = { http: '무료로 하루 10만 번까지 주고받을 수 있어요. 넘으면 그날은 멈추고, 유료(월 $5)로 바꾸면 이어져요.' };
 // 방법마다 한 줄: 무엇이 필요한지(고르기 전에 읽는 글)
 const NEED = {
   http: 'Cloudflare 계정(무료)이 필요해요. 한 번 만들면 다음 연수부터 저절로 연결돼요.',
@@ -62,7 +67,7 @@ export async function pingLive(live, code) {
     return '구글 시트와 연결했어요.';
   }
   if (live.provider === 'supabase') {
-    if (!live.anonKey) throw new Error('publishable 키를 넣어 주세요.');
+    if (!live.anonKey) throw new Error('Publishable key를 넣어 주세요.');
     if (isSupabaseSecret(live.anonKey)) throw new Error('secret 키예요. 이 키는 넣지 않아요. Publishable key(sb_publishable_…)를 넣어 주세요.');
     let r;
     try { r = await fetch(url + '/rest/v1/rpc/lec_snapshot', { method: 'POST', signal: t, headers: { apikey: live.anonKey, authorization: 'Bearer ' + live.anonKey, 'content-type': 'application/json', 'x-lec-code': code }, body: JSON.stringify({ p_code: code, p_since: 9007199254740991 }) }); }
@@ -139,16 +144,26 @@ export const supabaseFlushMs = (bp) => Math.min(10000, Math.max(2000, Math.round
 export function LiveSetup({ p, update, prefer = null }) {
   const bp = deployView(p); const live = bp.live || {}; const info = p.info || {};
   const code = live.code || '';
-  const reco = E.decideInfra({ size: info.size, features: featuresOf(p), skill: 'click', network: info.network, minor: info.minor, commercial: info.commercial });
   const connected = ['sheets', 'supabase', 'http'].includes(live.provider) && live.url && p.liveOk;
   // 앱에서는 강사가 할 일이 가장 적은 길을 먼저(엔진 TEACHER_STEPS의 app: 시트 23·Supabase 12·내 서버 7번쯤, 그다음 연수부터는 0번).
   // 엔진의 클릭용 규칙(시트)은 skill 초안의 기본값이라 그대로 두고, 앱 화면에서만 내 서버(Cloudflare)를 첫째로
   const pref = [...new Set((prefer || []).map((x) => METHOD_OF[x]).filter((m) => m && m !== 'sheets'))];
-  const appFirst = ['sheets', 'supabase'].includes(reco.backend) || pref[0] === 'http';
-  const recoMethod = pref[0] || (appFirst ? 'http' : METHOD_OF[reco.backend] || 'sheets');
+  // 내 Cloudflare 계정에 한 번에: lecpage 커넥트가 켜져 있으면 로그인 한 번으로 서버를 만들고 바로 연결(주소·관리자 키를 옮겨 적지 않음)
+  const { pc, way } = useCfWay();
+  // 추천은 '지금 이 기기에서 할 일이 가장 적은 길': 커넥트가 켜져 있으면(또는 이 PC에서 짝을 맞춘 적이 있어 켜기만 하면 되면) Cloudflare 로그인 한 번.
+  // 커넥트가 없으면 구글 계정만 있으면 되는 구글 시트(50명 안팎까지). 더 큰 연수는 Supabase(80명까지), 그보다 크면 Cloudflare(커넥트를 켜는 길을 권함).
+  // Cloudflare를 손으로 만드는 길(계정 둘·GitHub 허락·ADMIN_KEY)은 가장 번거로워 추천하지 않고 접힌 '직접 만들기'에. 바로 배포 서버가 참여 기능을 넘기며 준 순서(pref)가 있으면 그 순서를 따름
+  const people = Number(info.size) || 0;
+  const noPc = people > 80 ? 'http' : people > 50 ? 'supabase' : 'sheets';
+  const recoMethod = way === 'ready' || way === 'old' || pc.state === 'off' ? 'http' : pref[0] || noPc;
   const order = [...new Set([...pref, ...(recoMethod === 'http' ? ['http', 'sheets', 'supabase'] : ['sheets', 'supabase', 'http'])])];
-  // 화면에는 방법 하나만: 처음에는 추천, 나머지는 접힌 '다른 방법으로 연결'에서 고르면 그 방법으로 바뀜
-  const [method, setMethod] = useState(connected ? live.provider : recoMethod);
+  // 화면에는 방법 하나만: 처음에는 추천(커넥트가 켜지면 저절로 그쪽으로), 나머지는 접힌 '다른 방법으로 연결'에서 고르면 그 방법으로 바뀜
+  const [picked, setMethod] = useState(connected ? live.provider : '');
+  const method = picked || recoMethod;
+  // 커넥트가 있는지 확인하는 잠깐 동안은 추천을 정하지 않음(구글 시트를 보였다가 Cloudflare로 바뀌지 않게). 2.5초가 지나도 모르면 없는 것으로 보고 진행
+  const [waited, setWaited] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setWaited(true), 2500); return () => clearTimeout(t); }, []);
+  const settling = way === 'wait' && !waited && !picked && !connected;
   const [others, setOthers] = useState(false);
   const wayH = useRef(null);
   const [newKey, setNewKey] = useState(() => randomKey(20)); // 관리자 키(앱이 만듦): ADMIN_KEY 칸에 넣거나, 해시만 설치 코드·설치 SQL에 실음
@@ -171,8 +186,6 @@ export function LiveSetup({ p, update, prefer = null }) {
   const [note, setNote] = useState(''); // 연결은 됐지만 알려 둘 것 한 줄(관리자 키가 이 기기의 것이 아님)
   const [at, setAt] = useState(0); // 지금 보고 있는 단계
   const [tick, setTick] = useState(0); // [다시 확인]을 누를 때마다 예전 설치인지도 다시 봄
-  // 내 Cloudflare 계정에 한 번에: lecpage 커넥트가 켜져 있으면 로그인 한 번으로 서버를 만들고 바로 연결(주소·관리자 키를 옮겨 적지 않음)
-  const { pc, way } = useCfWay();
   const cf = useRun();
   const [cfErr, setCfErr] = useState(null);
   function connectCf(rotate = false) {
@@ -208,14 +221,17 @@ export function LiveSetup({ p, update, prefer = null }) {
       if (next.provider === 'http') (mine ? Promise.resolve(newKey) : adminKeyFor(next.url, code)).then((k) => applyServerSettings(next.url, code, k, bp));
       if (!again) setNote(other ? `${NAME[next.provider]}에 먼저 정해 둔 관리자 키를 그대로 써요. 강사 화면에는 그 키로 들어가요.` : '');
       if (again) setTick((n) => n + 1);
-      const done = quiet ? '지난번에 연결한 내 서버에 연결했어요.' : msg;
+      const done = quiet ? '지난번에 연결한 참여 기능 서버에 연결했어요.' : msg;
       setState({ busy: false, msg: done, ok: true }); toast(done);
     } catch (e) { if (again) update({ liveOk: false }); if (quiet) { setState({ busy: false, msg: '', ok: false }); return; } setState({ busy: false, msg: e.name === 'TimeoutError' ? '시간이 너무 걸려요. 주소를 확인하고 다시 눌러 주세요.' : e.message, ok: false }); }
   }
-  function useLocal() { update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); toast('이 컴퓨터에서만 시험하는 방식으로 바꿨어요.'); }
-  function disconnect() { update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); setState({ busy: false, msg: '', ok: false }); setNote(''); }
+  function useLocal() { update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); toast('이 컴퓨터에서 테스트하는 방식으로 바꿨어요.'); }
+  // [연결 바꾸기]: 연결을 풀고 방법을 다시 고르게 함. 잘못 눌렀으면 [실행 취소]로 방금 연결로 돌아감
+  const [undo, setUndo] = useState(null);
+  function disconnect() { setUndo({ provider: live.provider, url: live.url, anonKey: live.anonKey || '' }); update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, provider: 'local', url: '', anonKey: '' } })), liveOk: false })); setState({ busy: false, msg: '', ok: false }); setNote(''); setMethod(''); setTimeout(() => wayH.current?.focus(), 60); }
+  function restore() { const u = undo; setUndo(null); if (!u) return; setMethod(u.provider); update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, live: { ...b.live, ...u } })), liveOk: true })); toast('연결 해제를 취소했어요.'); }
   function pick(v) {
-    setMethod(v); setAt(0); setOthers(false); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' });
+    setMethod(v); setUndo(null); setAt(0); setOthers(false); setState({ busy: false, msg: '', ok: false }); setDraft({ url: '', anonKey: '' });
     setTimeout(() => wayH.current?.focus(), 0); // 고른 버튼이 사라지므로 초점을 바뀐 방법의 제목으로(키보드·화면 읽기 프로그램)
   }
   const settings = liveSettings(bp);
@@ -253,7 +269,7 @@ export function LiveSetup({ p, update, prefer = null }) {
   /** Supabase에서 복사한 글(Connect 창의 주소·키, 따로따로 복사해도 됨)에서 주소와 publishable 키를 찾아 넣고, 둘 다 있으면 바로 확인 */
   function takeSupabase(text) {
     const f = parseSupabasePaste(text);
-    if (!f.url && !f.key) { setState({ busy: false, ok: false, msg: f.secret ? 'secret 키는 넣지 않아요. Publishable key(sb_publishable_…)를 복사해 주세요.' : '복사한 글에 프로젝트 URL이나 Publishable key가 없어요. 복사한 뒤 다시 눌러 주세요.' }); return false; }
+    if (!f.url && !f.key) { setState({ busy: false, ok: false, msg: f.secret ? 'secret 키는 넣지 않아요. Publishable key(sb_publishable_…)를 복사해 주세요.' : '복사한 글에 Project URL이나 Publishable key가 없어요. 복사한 뒤 다시 눌러 주세요.' }); return false; }
     const next = { url: f.url || draft.url, anonKey: f.key || draft.anonKey };
     setDraft(next);
     if (next.url && next.anonKey) test(false, next.url, 'supabase', false, next.anonKey);
@@ -274,7 +290,7 @@ export function LiveSetup({ p, update, prefer = null }) {
   const sbPaste = (e) => { const x = e.clipboardData?.getData('text') || ''; const f = parseSupabasePaste(x); if (f.secret || (f.url && f.key) || (f.key && e.target.type === 'url') || (f.url && e.target.type !== 'url')) { e.preventDefault(); takeSupabase(x); } };
   const sup = method === 'supabase';
   const need = sup ? !draft.url || !draft.anonKey : !draft.url;
-  const urlLabel = method === 'sheets' ? '웹 앱 URL' : sup ? '프로젝트 URL' : '서버 URL';
+  const urlLabel = method === 'sheets' ? '웹 앱 URL' : sup ? 'Project URL' : '서버 주소';
   const urlHint = method === 'sheets' ? 'https://script.google.com/macros/s/…/exec' : sup ? 'https://xxxx.supabase.co' : 'https://lecpage-live.내계정.workers.dev';
   // 마지막 단계: 주소(와 키) 넣고 연결 확인
   const finish = (
@@ -283,14 +299,14 @@ export function LiveSetup({ p, update, prefer = null }) {
         <Field label={urlLabel} hint={urlHint}>
           <input type="url" value={draft.url} onInput={(e) => setDraft({ ...draft, url: e.target.value })} onPaste={sup ? sbPaste : undefined} placeholder="https://" autoComplete="off" spellcheck={false} />
         </Field>
-        {sup && <Field label="publishable 키"><input value={draft.anonKey} onPaste={sbPaste} placeholder="sb_publishable_…" autoComplete="off" spellcheck={false}
+        {sup && <Field label="Publishable key"><input value={draft.anonKey} onPaste={sbPaste} placeholder="sb_publishable_…" autoComplete="off" spellcheck={false}
           onInput={(e) => { const v = e.target.value; if (isSupabaseSecret(v)) { setDraft({ ...draft, anonKey: '' }); setState({ busy: false, ok: false, msg: 'secret 키는 넣지 않아요. Publishable key(sb_publishable_…)를 복사해 주세요.' }); } else setDraft({ ...draft, anonKey: v }); }} /></Field>}
       </div>
       <div class="btn-row">
         {need && <button class="btn btn-primary" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={pasteUrl}>{state.busy ? '확인하는 중…' : '붙여넣기'}</button>}
         {!need && <button class="btn btn-primary" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(false)}>{state.busy ? '확인하는 중…' : '연결 확인'}</button>}
       </div>
-      {state.msg && !state.busy && <Notice kind={state.ok ? 'ok' : state.soft ? 'lav' : 'bad'}>{state.msg}</Notice>}
+      {state.msg && !state.busy && <Notice kind={state.ok ? 'ok' : state.soft ? 'lav' : 'bad'} role={state.ok || state.soft ? 'status' : 'alert'}>{state.msg}</Notice>}
     </>
   );
   // 구글 화면의 권한 창(내가 붙여 넣은 코드라서 나옴): 누르는 순서
@@ -332,12 +348,12 @@ export function LiveSetup({ p, update, prefer = null }) {
       </> },
     ],
     http: [
-      { t: '내 서버 만들기', body: <>
+      { t: '참여 기능 서버 만들기', body: <>
         <p><a class="btn btn-sm btn-primary" href={CF_DEPLOY} target="_blank" rel="noopener" onClick={() => { copyKey('관리자 키를 복사했어요. ADMIN_KEY 칸에 붙여 넣으세요.'); setAt(1); }}>Cloudflare 열기</a> 누르면 관리자 키가 복사돼요.</p>
-        <p>Cloudflare에 로그인(무료 가입)하고 <b>GitHub 연결을 허락</b>해요. <b>ADMIN_KEY</b> 칸에 붙여 넣고 <b>Deploy</b>를 눌러요. 나온 주소(…workers.dev)를 복사해 돌아와요.</p>
+        <p>Cloudflare에 로그인(무료 가입)해요. 그 화면이 GitHub 계정 연결을 물으면 허락해요. 그 화면의 <b>ADMIN_KEY</b> 칸에 붙여 넣고 <b>Deploy</b> 버튼을 눌러요. 나온 주소(…workers.dev)를 복사해 돌아와요.</p>
         <p class="small muted">한 번 만들면 다음 연수부터는 이 기기에서 저절로 연결돼요. 기관 서버·NAS·노트북은 <a href={`${REPO}/backends/node-server`} target="_blank" rel="noopener">Node 서버 안내</a>를 보세요.</p>
       </> },
-      { t: '서버 URL 붙여넣기', body: finish },
+      { t: '서버 주소 붙여넣기', body: finish },
     ],
   };
   const steps = STEPS[method];
@@ -354,16 +370,19 @@ export function LiveSetup({ p, update, prefer = null }) {
   return (
     <div class="stack">
       {connected ? (
-        <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{NAME[live.provider]}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span>{note && <span class="small">{note}</span>}<div class="btn-row"><button class="btn btn-sm" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
+        <Notice kind="ok"><div class="stack" style={{ gap: '6px', flex: 1 }}><b>{liveName(live.provider, live.url)}에 연결돼 있어요.</b><span class="small mono" style={{ wordBreak: 'break-all' }}>{live.url}</span>{note && <span class="small">{note}</span>}<div class="btn-row"><button class="btn btn-sm" disabled={state.busy} aria-busy={state.busy ? 'true' : undefined} onClick={() => test(true)}>{state.busy ? '확인하는 중…' : '다시 확인'}</button><button class="btn btn-sm btn-quiet" onClick={disconnect}>연결 바꾸기</button></div></div></Notice>
+      ) : settling ? (
+        <p class="small muted" role="status">연결 방법을 확인하는 중…</p>
       ) : method !== recoMethod ? (
         <p class="live-way-h" tabIndex={-1} ref={wayH}><b>{NAME[method]}로 연결</b> · {NEED[method]}</p>
       ) : (
         <Notice kind="lav"><span tabIndex={-1} ref={wayH} class="live-way-reco">{method === 'http'
           ? (way === 'ready'
-            ? <><b>추천: 내 서버(Cloudflare)</b> · 로그인 한 번으로 만들어요. 다음 연수부터는 저절로 연결돼요.</>
-            : <><b>추천: 내 서버(Cloudflare)</b> · 할 일이 가장 적어요. 처음 한 번만 만들면 다음 연수부터는 저절로 연결돼요.</>)
-          : <><b>추천: {NAME[method]}</b> · {pref[0] === method ? NEED[method] : reco.reasons[0]}</>}</span></Notice>
+            ? <><b>추천: {NAME.http}</b> · 로그인 한 번으로 만들어요. 다음 연수부터는 저절로 연결돼요.</>
+            : <><b>추천: {NAME.http}</b> · lecpage 커넥트를 켜면 로그인 한 번으로 만들어요. 다음 연수부터는 저절로 연결돼요.</>)
+          : <><b>추천: {NAME[method]}</b> · {method === 'supabase' && people > 50 ? '50명이 넘는 연수에 맞아요. ' : ''}{NEED[method]}</>}</span></Notice>
       )}
+      {!connected && undo && <p class="small" role="status">{liveName(undo.provider, undo.url)} 연결을 해제했어요. <button type="button" class="btn btn-sm btn-quiet" onClick={restore}>실행 취소</button></p>}
       {connected && state.msg && !state.ok && <Notice kind="bad">{state.msg}</Notice>}
       {connected && oldInstall && (
         <div class="live-note" role="note">
@@ -377,20 +396,24 @@ export function LiveSetup({ p, update, prefer = null }) {
           </div>
         </div>
       )}
-      {!connected && <>
-        {B?.atLimit_ko && <p class="small muted">{B.atLimit_ko}</p>}
+      {!connected && !settling && <>
+        {(LIMIT[method] || B?.atLimit_ko) && <p class="small muted">{LIMIT[method] || B.atLimit_ko}</p>}
         {method === 'http' && way === 'ready'
           ? <OneClickCard
             note={<p class="small">버튼을 누르면 내 Cloudflare 계정에 참여 기능 서버를 만들고 바로 연결해요. 처음 한 번만 브라우저에서 Cloudflare에 로그인(무료 가입)하고 [Allow]를 눌러요.</p>}
             go={{ label: 'Cloudflare 계정으로 연결', on: cf.busy, busy: cf.busy, onLabel: '연결하는 중…', onClick: () => connectCf() }}
             progress={<CfProgress view={cf.view} onCancel={cf.cancel} />}
             fail={cfErr && (cfErr.kind === 'old' ? <ConnectUpdate pc={pc} /> : <RunFail fail={cfErr} onClose={() => setCfErr(null)} />)}
-            alt={{ label: '직접 만들기', body: <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} /> }} />
-          : <>
-            {method === 'http' && way === 'old' && <CfGetConnect pc={pc} way={way} />}
-            <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
-            {method === 'http' && (way === 'none' || way === 'off') && <details class="run-alt"><summary class="small">더 쉬운 방법: 로그인 한 번으로 연결</summary><div class="run-alt-body"><CfGetConnect pc={pc} way={way} what="참여 기능 서버가 만들어지고 바로 연결돼요" /></div></details>}
-          </>}
+            alt={{ label: '다른 방법: 직접 만들기', body: <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} /> }} />
+          : method === 'http' && ['none', 'off', 'old'].includes(way)
+            // 커넥트가 없거나 꺼져 있음: 켜는 것 하나가 누를 곳(켜지면 이 자리에 [Cloudflare 계정으로 연결] 버튼이 나옴). 손으로 만드는 순서는 접어 둠
+            ? <OneClickCard
+              note={<CfGetConnect pc={pc} way={way} lead={false} main what="참여 기능 서버가 만들어지고 바로 연결돼요" soon="켜지면 이 화면에 [Cloudflare 계정으로 연결] 버튼이 저절로 나와요." />}
+              alt={{ label: '다른 방법: 직접 만들기', body: <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} /> }} />
+            : <>
+              <Steps steps={steps} at={Math.min(at, steps.length - 1)} onAt={setAt} label={`${NAME[method]} 연결 순서`} />
+              {method !== 'http' && way === 'none' && <details class="run-alt"><summary class="small">더 쉬운 방법: lecpage 커넥트를 켜면 Cloudflare 로그인 한 번으로 연결돼요</summary><div class="run-alt-body"><CfGetConnect pc={pc} way={way} lead={false} what="참여 기능 서버가 만들어지고 바로 연결돼요" soon="켜지면 이 화면에 [Cloudflare 계정으로 연결] 버튼이 저절로 나와요." /></div></details>}
+            </>}
         <details class="run-alt live-others" open={others} onToggle={(e) => setOthers(e.currentTarget.open)}>
           <summary class="small">다른 방법으로 연결</summary>
           <div class="run-alt-body stack" style={{ gap: '6px' }} role="group" aria-label="다른 연결 방법">
@@ -400,7 +423,7 @@ export function LiveSetup({ p, update, prefer = null }) {
               </button>
             ))}
             <button type="button" class="btn btn-sm run-pick live-pick" data-method="local" onClick={useLocal}>
-              <span><b>이 컴퓨터에서 테스트</b></span><span class="small muted">연결 없이 한 브라우저 안에서만 시험해요.</span>
+              <span><b>이 컴퓨터에서 테스트</b></span><span class="small muted">연결 없이 한 브라우저 안에서만 테스트해요.</span>
             </button>
           </div>
         </details>

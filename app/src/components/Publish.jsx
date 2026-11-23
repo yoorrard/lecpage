@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Dialog } from './ui.jsx';
+import { Dialog, Progress } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantLiveOpen, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantLiveOpen, openNetlify, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, vercelConfig, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings, pingLive, adminKeyFor, rememberServer, forgetServer } from './LiveSetup.jsx';
@@ -27,12 +27,12 @@ const ABOUT = {
   lecpage: { lead: '가입이나 토큰 없이 lecpage 주소로 배포해요.' },
   vercel: { lead: '토큰 하나로 배포하고, 다시 배포해도 주소가 그대로예요.', one: 'Vercel 로그인 한 번으로 배포하고, 다시 배포해도 주소가 그대로예요.' },
   'github-pages': { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '저장소가 공개돼서 사이트 파일을 누구나 볼 수 있어요.' },
-  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.', one: 'Cloudflare 로그인 한 번으로 사이트와 참여 기능을 함께 배포해요. 방문이 많아도 멈추지 않아요.' },
-  netlify: { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', one: 'Netlify 로그인 한 번으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '첫 배포 때 Netlify 팀의 로그인 보호를 자동으로 풀어 참가자가 바로 열어요. 무료는 한 달에 20번쯤 배포할 수 있어요.' },
+  cloudflare: { lead: '받은 ZIP을 끌어다 놓아요. 방문이 많아도 멈추지 않아요.', one: 'Cloudflare 로그인 한 번으로 사이트와 참여 기능을 함께 배포해요. 방문이 많아도 멈추지 않아요.', get: 'lecpage 커넥트를 켜면 Cloudflare 로그인 한 번으로 사이트와 참여 기능을 함께 배포해요. 방문이 많아도 멈추지 않아요.' },
+  netlify: { lead: '토큰으로 배포하고, 다시 배포해도 주소가 그대로예요.', one: 'Netlify 로그인 한 번으로 배포하고, 다시 배포해도 주소가 그대로예요.', care: '참가자가 로그인 없이 열 수 있게 첫 배포 때 Netlify의 접근 제한을 자동으로 풀어요. 무료로 한 달에 20번쯤 배포할 수 있어요.', limit: '무료 몫을 다 쓰면 그달은 사이트가 멈춰요. Netlify에서 충전하면 이어져요.' },
   zip: { lead: '기관 서버·NAS·USB로 나눌 때 써요.' },
 };
 // 배포할 곳 목록에서 곳마다 지금 어떻게 연결하는지 한눈에(연결해 둔 곳은 '연결됨')
-const WAY_BADGE = { login: '로그인 한 번', token: '토큰 연결', pc: '커넥트 필요', manual: 'ZIP 올리기' };
+const WAY_BADGE = { login: '로그인 한 번', token: '토큰 붙여넣기', pc: 'lecpage 커넥트 필요', manual: 'ZIP 올리기' };
 const slug = (d) => 'lecpage-' + (d || new Date().toISOString().slice(0, 10)).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 5);
 const nameHint = (p) => 'training-' + ((deployView(p)?.meta?.date || '').replace(/-/g, '') || 'site');
 const sameUrl = (a, b) => String(a || '').replace(/^https?:\/\//, '').replace(/\/+$/, '') === String(b || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -192,7 +192,7 @@ const Go = ({ on, busy, again, onClick, disabled, name = '배포하기' }) => (
  * buildFiles(opts) → { files }, guard(run, auto, kind): 참여 기능 연결 전이면 먼저 물어봄(kind 'zip': 사이트 ZIP 다운로드), done(url, patch): 주소 저장.
  * again: { current } 지난번에 배포한 곳에 바로 다시 배포하는 함수를 여기에 걸어 둠(성공 카드의 [다시 배포하기]가 부름). 못 하면 null
  */
-export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom, liveNote, onTry }) {
+export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, done, zip, again, goNow, onTarget, records, freshRoom, liveNote, onTry }) {
   const [connectedAll, setConnected] = useState([]); // 토큰이 있는 곳 + 커넥트로 써 본 곳(커넥트가 켜져 있는지는 아래 connected에서 거름)
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
@@ -246,14 +246,15 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   const usable = TARGETS.filter((h) => (h !== 'lecpage' || live) && (h !== 'vercel' || rec.hosts.includes('vercel') || p.deploy?.target === 'vercel'));
   // 바로 배포가 켜져 있으면 첫째(가입·토큰 없이 참여 기능까지). 다른 곳에 배포한 적이 있으면 그곳이 먼저(주소가 그대로)
   const prevHost = p.deploy?.target && p.deploy.target !== 'lecpage' && usable.includes(p.deploy.target) ? [p.deploy.target] : [];
-  const nextFirst = nextHosts.length ? [...rec.hosts.filter((h) => connected.includes(h)), ...nextHosts] : [];
-  const ranked = [...new Set([...rec.hosts.filter((h) => usable.includes(h)), ...usable])].filter((h) => h !== 'lecpage').map((h, i) => [h, i]).sort((a, b) => ease(a[0]) - ease(b[0]) || a[1] - b[1]).map((x) => x[0]);
-  const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...nextFirst.filter((h) => usable.includes(h)), ...ranked, ...usable])];
+  // 바로 배포를 못 써 넘길 때도 '지금 이 기기에서 버튼 하나로 되는 곳'이 먼저(커넥트가 켜져 있으면 Cloudflare, 꺼져 있으면 브라우저 로그인 한 번인 Netlify). 서버가 준 순서(next)는 같은 쉬움 안에서만 따름
+  const nextAt = (h) => { const i = nextHosts.indexOf(h); return i < 0 ? 99 : i; };
+  const ranked = [...new Set([...rec.hosts.filter((h) => usable.includes(h)), ...usable])].filter((h) => h !== 'lecpage').map((h, i) => [h, i]).sort((a, b) => ease(a[0]) - ease(b[0]) || (nextHosts.length ? nextAt(a[0]) - nextAt(b[0]) : 0) || a[1] - b[1]).map((x) => x[0]);
+  const order = [...new Set([...prevHost, ...(live ? ['lecpage'] : []), ...ranked, ...usable])];
   // 추천: 이 망에서 닿는 첫째 곳. 망 확인은 고른 곳을 바꾸지 않고(약한 고름) 추천만 비켜 가게 해서, 바로 배포·지난번 곳이 늦게 와도 그쪽을 따름
   const best = order.find((h) => !netBad[h]) || order[0];
   const [picked, setPicked] = useState(''); // 강사가 직접 고른 곳(망 확인·늦은 답으로 바꾸지 않음)
   const [cancel, setCancel] = useState(''); // 배포 취소 확인 창(배포한 곳 id)
-  useEffect(() => { const on = (e) => { if (p.deploy?.sites?.[e.detail] || (e.detail === 'lecpage' && p.deploy?.lecpage?.id)) setCancel(e.detail); }; addEventListener('lp-undeploy', on); return () => removeEventListener('lp-undeploy', on); });
+  useEffect(() => { const on = (e) => { if (p.deploy?.sites?.[e.detail] || (e.detail === 'lecpage' && p.deploy?.lecpage?.id)) { cancelFrom.current = document.activeElement; setCancel(e.detail); } }; addEventListener('lp-undeploy', on); return () => removeEventListener('lp-undeploy', on); });
   const [more, setMore] = useState(false); // 다른 곳에 배포하기(배포할 곳 목록 펼치기)
   const chosen = picked && order.includes(picked) ? picked : best;
   // 완료 카드의 [다른 곳에도 배포]·[바로 배포로도 배포]: 배포할 곳을 바꿔 이 칸으로 내려옴(이미 배포한 곳이 아닌 곳을 먼저)
@@ -289,7 +290,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
    * 한 곳에 배포하기: 사이트 만들기 → 그곳의 한도 확인 → 배포하기. up(files, setProg, rebuild)가 주소를 저장. onFail(e)가 true면 알림을 띄우지 않음.
    * rebuild(o): auto(바로 배포의 참여 기능)를 빼고 다시 만든 파일(그날 참여 기능 방이 차서 강사 계정으로 넘길 때)
    */
-  const start = (id, up, onFail, auto = null) => guard(async (opts = {}) => {
+  const start = (id, up, onFail, auto = null, asked = null) => { const go = async (opts = {}) => {
     setBusy(id); setProg({ step: '사이트 만드는 중', pct: 1 });
     try {
       const view = live?.view || '';
@@ -300,17 +301,30 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { if (!onFail?.(e)) toast('배포하지 못했어요. ' + e.message); }
     setBusy(''); setProg(null);
-  }, !!auto?.live);
+  };
+  // asked: 참여 기능을 어떻게 할지 이미 물어 답을 받았음(Netlify는 로그인 전에 물음) → 또 묻지 않음
+  return asked ? go(asked) : guard(go, !!auto?.live); };
+  // 누른 버튼이 '배포하는 중'으로 잠기면 초점을 잃음 → 진행 줄로 옮김(키보드·화면 읽기 프로그램이 이어서 읽고, 좁은 화면에서는 진행 줄이 보이게 따라감)
+  useEffect(() => {
+    if (!busy) return undefined;
+    const t = setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || a.disabled || !a.isConnected) document.querySelector('.publish .run-box, .publish .pub-prog')?.focus(); }, 40);
+    return () => clearTimeout(t);
+  }, [busy]);
+  // 배포 취소 창을 닫으면 연 버튼으로 초점을 돌려줌(그 버튼이 사라졌으면 이 칸의 제목으로)
+  const cancelFrom = useRef(null);
+  const closeCancel = () => { setCancel(''); setTimeout(() => { const b = cancelFrom.current; (b && b.isConnected ? b : document.getElementById('pub-h'))?.focus(); }, 60); };
   // 무료 한도를 넘으면 어떻게 되는지(고른 곳마다 한 줄)
   const H = E.HOSTS[target] || {};
   // Cloudflare: 커넥트가 켜져 있으면 로그인 한 번으로 사이트와 참여 기능 서버를 함께 → 참여 기능을 따로 연결하라는 안내(LiveNote) 대신 카드 안의 한 줄
   const cfOne = target === 'cloudflare' && cfWay.way === 'ready';
   const cfLive = cfOne && !!liveNote?.need && !liveNote.lecOnly;
+  // 커넥트가 없거나 꺼져 있고 직접 올린 적도 없음: 카드가 '커넥트 켜기' 하나를 권함(켜면 사이트와 참여 기능 서버를 함께) → 안내도 그 하나로(ZIP 설명·'참여 기능을 따로 연결' 안내를 겹쳐 보이지 않음. 접힌 직접 배포로 가면 ZIP을 받을 때 물음)
+  const cfGet = target === 'cloudflare' && ['none', 'off', 'old'].includes(cfWay.way) && !(p.deploy?.cloudflare?.url && p.deploy.cloudflare.via !== 'connect');
   // 로그인 한 번으로 되는 곳은 그 말로 소개(엔진의 추천 까닭은 토큰 기준이라 맞지 않음)
-  const oneLead = cfOne ? ABOUT.cloudflare.one : wayOf(target) === 'login' || (target === 'vercel' && vcWay.way === 'ready' && vcUsed()) ? ABOUT[target]?.one || '' : '';
+  const oneLead = cfOne ? ABOUT.cloudflare.one : cfGet ? ABOUT.cloudflare.get : wayOf(target) === 'login' || (target === 'vercel' && vcWay.way === 'ready' && vcUsed()) ? ABOUT[target]?.one || '' : '';
   const lead = `${oneLead || (target === rec.pick ? rec.reasons[0] : ABOUT[target]?.lead || H.note_ko)}${rec.warnings[0] && target === rec.pick ? ` ${rec.warnings[0]}` : ''}`;
   // 서버 보기가 Pages면 사이트는 하루 한도와 상관없이 열리고, 무료 서버에서 멈출 수 있는 것은 참여 기능뿐
-  const limit = target === 'lecpage' ? (live?.view === 'pages' ? (live.plan === 'paid' ? '' : '사이트는 늘 열려요. 무료 서버라 참여 기능은 붐비는 날 멈출 수 있어요.') : live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : H.atLimit_ko;
+  const limit = target === 'lecpage' ? (live?.view === 'pages' ? (live.plan === 'paid' ? '' : '사이트는 늘 열려요. 무료 서버라 참여 기능은 붐비는 날 멈출 수 있어요.') : live?.plan === 'paid' ? H.atLimit_ko : H.atLimitFree_ko) : ABOUT[target]?.limit || H.atLimit_ko;
   // 소개 줄에 이미 나온 말(같은 문장이나 '멈추지 않아요'·'늘 열려요'처럼 같은 뜻)은 되풀이하지 않음
   const limitLine = !limit || lead.includes(limit) ? '' : /멈추지 않|늘 열려/.test(lead) ? limit.replace(/^사이트는 늘 열려요\.\s*/, '') : limit;
   const showLimit = true; // 무료 한도를 넘으면 어떻게 되는지는 늘 미리(writing.md 비용 규칙)
@@ -329,6 +343,7 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       <div class="stack publish">
         <p class="small net-line" role="status">인터넷이 끊겨 있어요. 연결되면 배포할 수 있어요. 지금은 사이트 파일(ZIP)만 받을 수 있어요.</p>
         <Manual {...ctx} guard={guard} zip={zip} kind="zip" key="zip" />
+        {prog && <div class="stack pub-prog" tabIndex={-1}><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
       </div>
     );
   }
@@ -357,14 +372,14 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
             <small>{order.filter((h) => h !== 'lecpage').map((h) => LABEL[h]).join(' · ')}</small>
           </button>
         </div>
-        : <p class="pub-now"><span class="pub-now-t"><b>배포할 곳</b></span></p>}
+        : null}
       {(more || target !== 'lecpage' || !(live && order.includes('lecpage'))) && <div class="pub-pick" id="pub-pick" role="radiogroup" aria-label="배포할 곳">
         {order.filter((id) => id !== 'lecpage' || !live).map((id) => (
           <label class="pub-opt" key={id}><input type="radio" name="pub-target" checked={target === id} disabled={!!busy && target !== id} onChange={() => { setPicked(id); }} />
             <span><b>{LABEL[id]}</b>{id === best && <em>추천</em>}{id === 'lecpage' && id !== best && <em>가입 없이</em>}{p.deploy?.sites?.[id] && <i>배포됨</i>}{wayOf(id) === 'on' ? <i>연결됨</i> : WAY_BADGE[wayOf(id)] && <i class="way">{WAY_BADGE[wayOf(id)]}</i>}{netBad[id] && <i class="net-bad">이 망에서 막힘</i>}</span></label>
         ))}
       </div>}
-      {target !== 'lecpage' && liveNote && !cfLive && <LiveNote note={liveNote} where={target} instant={!!(live && order.includes('lecpage') && instantLiveOpen(live, deployView(p)?.meta?.date || ''))} onInstant={() => { setPicked('lecpage'); setMore(false); }} />}
+      {target !== 'lecpage' && liveNote && !cfLive && !(cfGet && !liveNote.lecOnly) && <LiveNote note={liveNote} where={target} instant={!!(live && order.includes('lecpage') && instantLiveOpen(live, deployView(p)?.meta?.date || ''))} onInstant={() => { setPicked('lecpage'); setMore(false); setTimeout(() => document.querySelector('.pub-mode-main')?.focus(), 60); }} />}
       {/* 같은 곳에 다시 배포할 때는 소개·한도·알아 둘 점을 되풀이하지 않음(처음 배포할 때 봤고, 보관 기간은 위 완료 카드에 있음) */}
       {!(p.deploy?.lastUrl && target === p.deploy?.target) && <div class="pub-about">
         <p>{lead}</p>
@@ -378,12 +393,14 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       {instant === false && !instantWhy && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
       {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} freshRoom={freshRoom} onTry={onTry} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
-      {cancel && <Undeploy p={p} target={cancel} info={instant} records={records} done={done} onClose={() => setCancel('')} />}
+      {cancel && <Undeploy p={p} target={cancel} info={instant} records={records} done={done} onClose={closeCancel} />}
       {target === 'vercel' && <Vercel {...ctx} vcWay={vcWay} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
-      {target === 'netlify' && <Netlify {...ctx} />}
+      {target === 'netlify' && <Netlify {...ctx} guard={guard} />}
       {target === 'cloudflare' && <Cloudflare {...ctx} guard={guard} zip={zip} cfWay={cfWay} withLive={cfLive} />}
       {target === 'zip' && <Manual {...ctx} guard={guard} zip={zip} kind="zip" key="zip" />}
+      {/* 진행 줄은 누른 버튼 바로 아래(좁은 화면에서도 버튼과 한 화면에) */}
+      {prog && <div class="stack pub-prog" tabIndex={-1}><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
     </div>
   );
 }
@@ -510,7 +527,7 @@ function Undeploy({ p, target, info, records, done, onClose }) {
   }
   return (
     <Dialog open onClose={() => { if (!busy) onClose(); }} label="배포 취소 확인">
-      <h2 class="h-sub">{manual ? '배포한 곳 목록에서 삭제할까요?' : `${label} 배포를 취소할까요?`}</h2>
+      <h2 class="h-sub">{manual ? '배포한 곳 목록에서 삭제할까요?' : lec ? '바로 배포를 취소할까요?' : `${label} 배포를 취소할까요?`}</h2>
       {url && <p class="small"><b>{label}</b> · <span style={{ wordBreak: 'break-all' }}>{url}</span></p>}
       {manual
         ? <p>{cfSite ? 'lecpage 커넥트가 꺼져 있어 여기서 내릴 수 없어요. 커넥트를 켠 뒤 다시 눌러 주세요. Cloudflare 대시보드에서 사이트를 지웠다면 이 목록에서 삭제해 주세요.' : '직접 배포한 곳은 여기서 내릴 수 없어요. 배포한 곳에서 사이트를 지운 뒤 이 목록에서 삭제해 주세요.'}</p>
@@ -595,25 +612,30 @@ function Instant({ p, busy, start, done, bind, info, gate, freshRoom, onUnavaila
     return true;
   },
   autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형). 참여 기록의 보관 기간은 안내 3(마지막 기록 뒤 N일, 늦어도 사이트와 함께) */ purpose: `강사를 대신해 사이트와 참여 기록 저장(사이트는 마지막 ${info?.keepAlive === false ? '배포' : '배포나 방문'} 뒤 ${days}일 보관)` } } : null);
-  bind(() => run());
+  bind(failed?.final ? null : () => run()); // 다시 해도 같은 거절이면 맨 위 [배포하기]도 같은 거절을 되풀이하지 않게
+  // 까닭 알림이 뜨면 그 알림으로 초점(지금 누를 곳이 그 안에 있음). 알림이 떠 있는 동안 아래 큰 [배포하기]는 감춤(큰 버튼은 하나만)
+  const noteBox = useRef(null);
+  useEffect(() => { if (refused || failed) noteBox.current?.focus(); }, [refused, failed]);
+  const noted = !!refused || (!!failed && busy !== 'lecpage');
+  const closeNote = () => { setRefused(null); setFailed(null); setTimeout(() => document.querySelector('.publish .btn-lg')?.focus(), 40); };
   return (
     <div class="stack">
       {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
       {liveOn && liveOff && !own && <p class="small" role="status">{liveOffLine(liveOff)}</p>}
       {autoLive && !liveOff && !alive && instantLiveOpen(info, bp.meta?.date || '') && <p class="small">질문·보드 같은 참여 기능도 따로 연결할 것 없이 함께 켜져요. 참가자가 남긴 글·파일도 lecpage 서버에 저장돼요.</p>}
-      {refused && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
+      {refused && <div role="alert" class="notice bad" tabIndex={-1} ref={noteBox}><div class="stack" style={{ gap: '6px' }}>
         <b>{refused.pre ? '바로 배포가 받지 않는 내용이 있어 올리지 않았어요.' : '바로 배포가 이 사이트를 받지 않았어요.'}</b>
         <span>{refused.t}</span>
         <span class="small">수정 화면의 꼭 고칠 곳에서 [AI로 수정]을 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
-        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>수정하러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
+        <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>수정하러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={closeNote}>닫기</button></div>
       </div></div>}
-      {failed && busy !== 'lecpage' && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
+      {failed && busy !== 'lecpage' && !refused && <div role="alert" class="notice bad" tabIndex={-1} ref={noteBox}><div class="stack" style={{ gap: '6px' }}>
         <b>{failed.final ? '바로 배포가 이 사이트를 받지 않았어요.' : '배포를 끝내지 못했어요.'}</b>
         <span>{failed.t}{failed.how ? ` ${failed.how}` : ''}</span>
         <span class="small">{failed.final ? '[다른 곳에 배포]로 같은 파일을 그대로 배포할 수 있어요.' : '계속 안 되면 [다른 곳에 배포]로 같은 파일을 그대로 배포할 수 있어요.'}</span>
-        <div class="btn-row">{!failed.final && <button type="button" class="btn btn-sm btn-primary" onClick={() => { setFailed(null); setRefused(null); run(); }}>다시 배포</button>}<button type="button" class={`btn btn-sm${failed.final ? ' btn-primary' : ''}`} onClick={() => window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'other' }))}>다른 곳에 배포</button><button type="button" class="btn btn-sm btn-quiet" onClick={() => setFailed(null)}>닫기</button></div>
+        <div class="btn-row">{!failed.final && <button type="button" class="btn btn-sm btn-primary" onClick={() => { setFailed(null); setRefused(null); run(); }}>다시 배포</button>}<button type="button" class={`btn btn-sm${failed.final ? ' btn-primary' : ''}`} onClick={() => window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'other' }))}>다른 곳에 배포</button><button type="button" class="btn btn-sm btn-quiet" onClick={closeNote}>닫기</button></div>
       </div></div>}
-      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); setFailed(null); run(); }} />
+      {!noted && <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); setFailed(null); run(); }} />}
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
       {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={() => window.dispatchEvent(new CustomEvent('lp-undeploy', { detail: 'lecpage' }))}>배포 취소</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
@@ -675,7 +697,8 @@ function Vercel({ p, busy, start, done, bind, refresh, vcWay }) {
     if (!alive.current) return;
     // 적어 둔 이름이 이 PC의 커넥트가 올린 프로젝트가 아님(다른 PC에서 올렸거나 가져온 연수): 같은 이름의 프로젝트를 덮지 않고 새 이름으로 배포하는 길 하나
     if (same && !fresh && NOT_OURS.includes(e?.code)) { setFail(notOursFail('Vercel', () => { setFresh(true); setName(''); setFail(null); }, mine ? '' : '토큰으로 배포했던 주소를 그대로 쓰려면 아래 [다른 방법: 토큰으로 연결]로 연결해 주세요.')); return; }
-    const f = vcFail(e, { retry, onToken: () => { setFail(null); setAlt(true); } }); if (f) setFail(f); else toast('멈췄어요.');
+    // [토큰으로 연결]은 펼칠 토큰 순서가 있을 때만(커넥트로 올린 프로젝트에는 그 칸이 없음 → [다시 시도])
+    const f = vcFail(e, { retry, onToken: mine ? undefined : () => { setFail(null); setAlt(true); } }); if (f) setFail(f); else toast('멈췄어요.');
     try { console.warn('[lecpage] Vercel 배포 실패', { code: e?.code || '' }); } catch { /* 기록만 */ }
   };
   // 파일로 가져온 연수에 적혀 온 이름(이 PC에서 배포한 적 없음): 그 이름에 배포하기 전에 한 번 물음
@@ -777,10 +800,11 @@ function GitHub({ p, busy, start, done, bind, refresh }) {
       {!t.saved && <p class="small">처음 한 번만 GitHub 토큰을 만들어 붙여 넣어요. 다음부터는 [배포하기]만 눌러요.</p>}
       <Connect t={t} kind="github" onChange={refresh} />
       {t.saved && <>
-        <AddrName label="저장소 이름" pre="내계정.github.io/" value={repo} onInput={setRepo} hint="영문 소문자·숫자·하이픈. 주소에 들어가요." max={80} />
+        <AddrName label="저장소 이름" pre={`${(/^https?:\/\/([^/]+)\//.exec(prev?.url || '') || [])[1] || '내계정.github.io'}/`} value={repo} onInput={setRepo} hint="영문 소문자·숫자·하이픈. 주소에 들어가요." max={80} />
         <Go on={on} busy={busy} again={!!prev} onClick={() => run()} />
       </>}
       {fail && !on && <RunFail fail={fail} onClose={() => setFail(null)} />}
+      {t.saved && prev?.repo && <CancelLine id="github-pages" />}
       <Dialog open={confirm} onClose={() => setConfirm(false)} label="저장소 덮어쓰기 확인">
         <h2 class="h-sub">이미 있는 저장소예요</h2>
         <p>"{repo}" 저장소가 이미 있어요. 배포하면 그 안의 파일이 모두 연수 사이트 파일로 바뀌어요. 다른 이름을 쓰는 게 안전해요.</p>
@@ -814,7 +838,8 @@ function useNetlifyLogin(t, { onChange, onToken } = {}) {
     setFail(null);
     const win = openBlank('Netlify 로그인 창을 여는 중');
     try {
-      const token = await r.run(({ onView, signal }) => netlifyLogin({ win, onView, signal }));
+      // blocked: 새 창이 막힘(브라우저의 팝업 차단) → 진행 줄이 사실대로 알리고 [로그인 창 열기]를 지금 누를 곳으로
+      const token = await r.run(({ onView, signal }) => netlifyLogin({ win, onView: (v) => onView({ ...v, blocked: !win }), signal }));
       if (!token) { try { win?.close(); } catch { /* 넘김 */ } return ''; }
       await checkToken('netlify', token);
       if (!alive.current) return '';
@@ -836,7 +861,7 @@ function useNetlifyLogin(t, { onChange, onToken } = {}) {
  * Netlify: [Netlify 계정으로 배포] 하나(처음에만 새 창에서 로그인·[Authorize], 커넥트 없이 브라우저만으로) → 다음부터는 [배포하기]만.
  * 토큰을 만들어 붙여 넣는 순서는 접힌 '다른 방법'. 로그인 길을 끈 앱(VITE_NETLIFY_CLIENT_ID가 빈 값)에서는 토큰 순서가 그대로 먼저
  */
-function Netlify({ p, busy, start, done, bind, refresh }) {
+function Netlify({ p, busy, start, done, bind, refresh, guard }) {
   const t = useToken('netlify');
   const prev = p.deploy?.netlify;
   const [name, setName] = useState(prev?.name || '');
@@ -844,19 +869,29 @@ function Netlify({ p, busy, start, done, bind, refresh }) {
   const [alt, setAlt] = useState(false);
   const L = useNetlifyLogin(t, { onChange: refresh, onToken: () => { L.setFail(null); setAlt(true); } });
   const nameOk = !name || /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(name);
-  const run = (token) => { setFail(null); start('netlify', async (files, onProgress) => {
+  const run = (token, asked = null) => { setFail(null); start('netlify', async (files, onProgress) => {
     const out = await deployNetlify({ token: typeof token === 'string' && token ? token : t.token, siteId: prev?.siteId, name: prev ? prev.name || '' : name, zip: E.zipFiles(files), onProgress });
-    done(out.url, { netlify: { siteId: out.siteId, url: out.url, name: prev ? prev.name || name : name } });
-    toast(prev && prev.url && out.url !== prev.url ? '지난 사이트가 Netlify에 없어 새 주소로 배포했어요. 새 주소와 QR을 다시 알려 주세요.' : prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 팀 로그인 보호를 껐어요.' : '배포했어요. 주소에 로그인 창이 뜨면 Netlify 프로젝트의 접근 보호를 꺼 주세요.');
+    // locked: 첫 배포 때 계정 기본 접근 제한을 앱이 풀지 못함(드묾) → 카드에 [로그인 없이 열리게 하기]가 남음. 풀 것이 없던 계정에는 아무 말도 하지 않음
+    const locked = out.locked || (!!prev?.locked && prev.siteId === out.siteId);
+    done(out.url, { netlify: { siteId: out.siteId, url: out.url, name: prev ? prev.name || name : name, ...(locked ? { locked: true } : {}) } });
+    toast(prev && prev.url && out.url !== prev.url ? '지난 사이트가 Netlify에 없어 새 주소로 배포했어요. 새 주소와 QR을 다시 알려 주세요.' : prev ? '같은 주소에 다시 배포했어요.' : out.opened ? '배포했어요. 참가자가 로그인 없이 열 수 있게 Netlify의 접근 제한을 풀었어요.' : '배포했어요.');
   }, (e) => {
     if (/must be unique|already/i.test(e.message)) setFail({ kind: 'name-taken', title: '배포하지 못했어요.', t: '이미 쓰는 주소 이름이에요. 다른 이름을 적어 주세요.' });
-    else if (!tokenGone(e, t, refresh)) setFail(deployFail(e, () => run(token)));
+    else if (!tokenGone(e, t, refresh)) setFail(deployFail(e, () => run(token, asked)));
     return true;
-  }); };
+  }, null, asked); };
   /** 버튼 하나: 연결해 뒀으면 바로 배포, 처음이면 로그인(새 창에서 [Authorize]) 뒤 이어서 배포 */
-  async function go() {
+  function go() {
     if (t.saved) { run(); return; }
-    await L.login((token) => run(token));
+    // 참여 기능을 어떻게 할지는 다른 곳처럼 로그인 전에 물음(로그인을 끝낸 뒤에야 묻지 않게). 답은 로그인 뒤 배포에 그대로 넘김
+    guard((opts = {}) => L.login((token) => run(token, opts)));
+  }
+  const [opening, setOpening] = useState(false);
+  async function unlock() {
+    if (opening) return; setOpening(true);
+    try { await openNetlify(t.token, prev.siteId); done(prev.url, { netlify: { ...prev, locked: false } }); toast('이제 로그인 없이 열려요.'); }
+    catch (e) { toast('바꾸지 못했어요. ' + (e.message || '잠시 뒤 다시 눌러 주세요.')); }
+    setOpening(false);
   }
   bind(t.saved && nameOk ? () => run() : null);
   const on = busy === 'netlify';
@@ -876,12 +911,15 @@ function Netlify({ p, busy, start, done, bind, refresh }) {
     <OneClickCard
       note={t.saved
         ? <Connect t={t} kind="netlify" onChange={refresh} />
-        : <p class="small">처음 한 번만 새 창에서 Netlify에 로그인(무료 가입)하고 [Authorize]를 눌러요. 토큰은 이 브라우저에서 Netlify로만 가요. lecpage 운영자는 볼 수 없어요.</p>}
+        : <p class="small">처음 한 번만 새 창에서 Netlify에 로그인(무료 가입)하고 [Authorize]를 눌러요. 로그인 정보는 이 브라우저에만 저장돼요. lecpage 운영자는 볼 수 없어요.</p>}
       fields={nameField}
       go={{ label: t.saved ? '배포하기' : 'Netlify 계정으로 배포', again: !!prev && t.saved, on, busy: busy || L.busy, disabled: !nameOk, onClick: go }}
       progress={<NfProgress view={L.view} onCancel={L.cancel} />}
       fail={shown && <RunFail fail={L.fail || fail} onClose={() => { L.setFail(null); setFail(null); }} />}
-      foot={t.saved && prev?.siteId && <CancelLine id="netlify" />}
+      foot={<>
+        {t.saved && prev?.siteId && prev.locked && <p class="small" role="status">주소를 열면 Netlify 로그인 창이 떠요. <button type="button" class="btn btn-sm" disabled={on || opening} onClick={unlock}>{opening ? '바꾸는 중…' : '로그인 없이 열리게 하기'}</button></p>}
+        {t.saved && prev?.siteId && <CancelLine id="netlify" />}
+      </>}
       alt={!t.saved && { label: '다른 방법: 토큰으로 연결', open: alt, onToggle: setAlt, body: <Connect t={t} kind="netlify" onChange={refresh} /> }} />
   );
 }
@@ -958,7 +996,7 @@ function Cloudflare({ p, busy, start, setBusy, done, bind, guard, zip, cfWay, wi
   if (way !== 'ready') {
     // 커넥트가 없거나 꺼져 있음: 직접 올린 적이 있으면 그 순서를 그대로, 처음이면 켜는 법이 먼저(직접 올리기는 접어 둠). 휴대폰은 직접 올리기만
     if (way === 'mobile' || way === 'wait' || (prev?.url && !mine)) return <div class="stack">{manual}{way !== 'mobile' && way !== 'wait' && <details class="run-alt"><summary class="small">더 쉬운 방법: 로그인 한 번으로 배포</summary><div class="run-alt-body"><CfGetConnect pc={pc} way={way} /></div></details>}</div>;
-    return <OneClickCard note={<CfGetConnect pc={pc} way={way} />} alt={{ label: '직접 배포(ZIP 끌어다 놓기)', body: manual }} />;
+    return <OneClickCard note={<CfGetConnect pc={pc} way={way} lead={false} main soon="켜지면 이 화면에 [Cloudflare 계정으로 배포] 버튼이 저절로 나와요." />} alt={{ label: '다른 방법: 직접 배포(ZIP 끌어다 놓기)', body: manual }} />;
   }
   const on = busy === 'cloudflare';
   return (
@@ -966,7 +1004,7 @@ function Cloudflare({ p, busy, start, setBusy, done, bind, guard, zip, cfWay, wi
       note={used
         ? <p class="small conn-line"><span class="ok-dot" aria-hidden="true" />Cloudflare에 연결돼 있어요.{withLive ? ' 참여 기능 서버도 내 계정에 만들어요.' : ''} <button type="button" class="btn btn-sm btn-quiet" disabled={on} onClick={signOut}>연결 해제</button></p>
         : <p class="small">처음 한 번만 브라우저에서 Cloudflare에 로그인(무료 가입)하고 [Allow]를 눌러요.{withLive ? ' 참여 기능 서버도 내 계정에 만들어요.' : ''}</p>}
-      fields={!mine && <AddrName optional pre="https://" post=".내계정.workers.dev" value={name} onInput={(v) => { setName(cleanName(v)); if (fail?.kind === 'name-taken') setFail(null); }} placeholder={nameHint(p)} invalid={!nameOk} max={63}
+      fields={!mine && <AddrName label="사이트 주소 이름" optional pre="https://" post=".내계정.workers.dev" value={name} onInput={(v) => { setName(cleanName(v)); if (fail?.kind === 'name-taken') setFail(null); }} placeholder={nameHint(p)} invalid={!nameOk} max={63}
         hint={nameOk ? '영문 소문자·숫자·하이픈. 짧을수록 치기 쉬워요. 비워 두면 자동으로 정해요.' : '영문 소문자·숫자로 시작하고 끝나야 해요.'} />}
       go={{ label: used ? '배포하기' : 'Cloudflare 계정으로 배포', again: mine, on, busy, disabled: !nameOk, onClick: () => go() }}
       progress={<CfProgress view={view} onCancel={() => { ctl.current?.abort(); cfCancel(); }} />}
@@ -975,7 +1013,7 @@ function Cloudflare({ p, busy, start, setBusy, done, bind, guard, zip, cfWay, wi
         {mine && !carried && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={() => window.dispatchEvent(new CustomEvent('lp-undeploy', { detail: 'cloudflare' }))}>배포 취소</button></p>}
         <CarriedConfirm open={ask} host="Cloudflare" name={prev?.name || ''} onClose={() => setAsk(false)} onSame={() => { okCarry.current = true; setAsk(false); go(); }} onNew={() => { setAsk(false); setFresh(true); setName(''); }} />
       </>}
-      alt={{ label: '직접 배포(ZIP 끌어다 놓기)', body: manual }} />
+      alt={{ label: '다른 방법: 직접 배포(ZIP 끌어다 놓기)', body: manual }} />
   );
 }
 
@@ -984,7 +1022,9 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const prev = p.deploy?.[kind]?.url || '';
   const [url, setUrl] = useState(prev);
   const [at, setAt] = useState(0);
-  const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(url.trim());
+  // https://를 빼고 적어도 받음(maum.example.org/site → https://maum.example.org/site): 까닭 없이 [주소 저장]이 꺼져 있지 않게
+  const full = /^https?:\/\//i.test(url.trim()) ? url.trim() : url.trim() ? `https://${url.trim()}` : '';
+  const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(full);
   const cf = kind === 'cloudflare';
   const get = { t: '사이트 파일 다운로드', next: false,
     body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); }, false, 'zip')}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
@@ -992,7 +1032,7 @@ function Manual({ p, busy, guard, done, zip, kind }) {
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '배포한 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>
       <div class="row token-row"><input class="input" value={url} onInput={(e) => setUrl(e.target.value)} placeholder="https://" inputMode="url" autoComplete="off" spellcheck={false} aria-label="배포한 사이트 주소" />
-        <button class="btn btn-sm btn-primary" disabled={!ok} onClick={() => { done(siteDir(url), { [kind]: { url: url.trim() } }); toast('주소를 저장했어요.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>주소 저장</button></div>
+        <button class="btn btn-sm btn-primary" disabled={!ok} onClick={() => { setUrl(full); done(siteDir(full), { [kind]: { url: full } }); toast('주소를 저장했어요.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>주소 저장</button></div>
     </> };
   const steps = !cf ? [get,
     { t: '폴더째 옮기기', body: <p>쓸 곳에 폴더째 옮겨요. <span class="links"><a href={`${DOCS}/own-server-nginx-caddy.md`} target="_blank" rel="noopener">회사·학교·기관 서버</a><a href={`${DOCS}/nas-synology.md`} target="_blank" rel="noopener">NAS</a><a href={`${DOCS}/local-lan-classroom.md`} target="_blank" rel="noopener">인터넷 없는 강의실</a><a href={`${DOCS}/zip-usb-offline.md`} target="_blank" rel="noopener">USB</a></span></p> },
@@ -1021,6 +1061,26 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   );
 }
 
+/** 설정의 '연결' 가운데 Cloudflare 줄: 로그인은 lecpage 커넥트가 그 PC에 둠(토큰 연결이 없음). 써 본 적이 있고 커넥트가 켜져 있으면 [연결 해제] */
+export function CfHostRow({ onChange }) {
+  const { way } = useCfWay();
+  const [used, setUsed] = useState(() => cfUsed());
+  const [busy, setBusy] = useState(false);
+  const on = way === 'ready';
+  async function signOut() {
+    setBusy(true);
+    try { await cfRun('logout', {}); markCfUsed(false); setUsed(false); onChange?.(); toast('이 PC의 Cloudflare 로그인을 지웠어요.'); }
+    catch (e) { toast(e.message || '연결을 해제하지 못했어요. 잠시 뒤 다시 해 주세요.'); }
+    setBusy(false);
+  }
+  return (
+    <li>
+      <span><b>Cloudflare</b> <span class="small muted">{used ? (on ? '연결됨 · lecpage 커넥트' : 'lecpage 커넥트를 켜면 연결돼요') : on ? '배포할 때 로그인 한 번' : 'lecpage 커넥트 필요'}</span></span>
+      {used && on && <button class="btn btn-sm btn-quiet" disabled={busy} onClick={signOut}>연결 해제</button>}
+    </li>
+  );
+}
+
 /** 설정의 '연결': 배포할 곳을 미리 연결해 두기. 토큰이 맞는지 확인한 뒤 저장 */
 export function HostConnect({ kind, onChange }) {
   const t = useToken(kind); const g = HOST_GUIDE[kind];
@@ -1029,18 +1089,25 @@ export function HostConnect({ kind, onChange }) {
   // Netlify는 브라우저 로그인 한 번으로(배포하기 화면과 같은 버튼). 토큰 순서는 접힌 '다른 방법'
   const L = useNetlifyLogin(t, { onChange, onToken: () => { L.setFail(null); setAlt(true); } });
   const login = kind === 'netlify' && L.on;
-  const viaPc = kind === 'vercel' && !t.saved && vcUsed(); // 커넥트로 Vercel에 배포해 봄(로그인은 그 PC의 커넥트에)
+  const [vcOn, setVcOn] = useState(() => vcUsed());
+  const viaPc = kind === 'vercel' && !t.saved && vcOn; // 커넥트로 Vercel에 배포해 봄(로그인은 그 PC의 커넥트에)
+  async function pcOut() {
+    try { await vcRun('logout', {}); markVcUsed(false); setVcOn(false); onChange?.(); toast('이 PC의 Vercel 로그인을 지웠어요.'); }
+    catch (e) { toast(e.message || '연결을 해제하지 못했어요. 잠시 뒤 다시 해 주세요.'); }
+  }
   const pcOn = useVcWay().way === 'ready'; // 커넥트가 꺼져 있으면 '연결됨'이라고 하지 않음(지금은 [배포하기]만으로 안 됨)
   return (
     <li>
       <span><b>{g.name}</b> <span class="small muted">{t.saved ? (t.remember ? '연결됨 · 이 기기에 저장' : '연결됨 · 이 탭에서만') : viaPc ? (pcOn ? '연결됨 · lecpage 커넥트' : 'lecpage 커넥트를 켜면 연결돼요') : '연결 안 됨'}</span></span>
-      {t.saved ? <button class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 해제</button> : <button class="btn btn-sm" onClick={() => setOpen(true)}>{viaPc ? '토큰 연결' : '연결'}</button>}
+      {t.saved ? <button class="btn btn-sm btn-quiet" onClick={async () => { await t.forget(); onChange?.(); }}>연결 해제</button>
+        : viaPc && pcOn ? <button class="btn btn-sm btn-quiet" onClick={pcOut}>연결 해제</button>
+          : <button class="btn btn-sm" onClick={() => setOpen(true)}>{viaPc ? '토큰으로 연결' : '연결'}</button>}
       <Dialog open={open} onClose={() => { L.cancel(); setOpen(false); }} label={`${g.name} 연결`}>
         <div class="stack">
           <h2 class="h-sub">{g.name} 연결</h2>
           {open && !t.saved && (login
             ? <OneClickCard
-              note={<p class="small">새 창에서 Netlify에 로그인(무료 가입)하고 [Authorize]를 눌러요. 토큰은 이 브라우저에서 Netlify로만 가요. lecpage 운영자는 볼 수 없어요.</p>}
+              note={<p class="small">새 창에서 Netlify에 로그인(무료 가입)하고 [Authorize]를 눌러요. 로그인 정보는 이 브라우저에만 저장돼요. lecpage 운영자는 볼 수 없어요.</p>}
               go={{ label: 'Netlify 계정으로 연결', onLabel: '연결하는 중…', on: L.busy, busy: L.busy, onClick: () => L.login(() => setOpen(false)) }}
               progress={<NfProgress view={L.view} onCancel={L.cancel} />}
               fail={L.fail && !L.busy && <RunFail fail={L.fail} onClose={() => L.setFail(null)} />}

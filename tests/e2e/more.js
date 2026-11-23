@@ -348,6 +348,8 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
       if (+u.port !== PORT) return r.abort();
       if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
       if (u.pathname === '/pair') return r.fulfill({ status: 302, headers: { location: `${u.searchParams.get('app')}#pair=${TOKEN}&port=${PORT}` } });
+      // 예전 판 커넥트(짝 증명 끝점이 없음): /bridge/prove도 다른 /bridge/* 처럼 토큰 없는 요청에 401 token으로 답함
+      if (u.pathname === '/bridge/prove') return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}' });
       if (u.pathname !== '/bridge/status') return r.abort();
       if (r.request().headers()['x-lecpage-bridge'] !== TOKEN) { probed++; return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token","message_ko":"짝이 맞지 않아요."}' }); }
       return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: true, version: '1.1.0', build: '1.1.0-x', caps: ['status-caps', 'claude-setup', 'update'], update: { can: false, state: 'idle' }, chatgpt: { connected: false }, agents: [{ id: 'claude', installed: false, need: 'install', ready: false }, { id: 'codex', installed: false, ready: false }] }) });

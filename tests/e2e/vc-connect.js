@@ -47,7 +47,7 @@ const pickVercel = async (p) => {
     await p.waitForSelector('.one-click button:has-text("Vercel 계정으로 배포")', { timeout: 15000 });
     const card = (await p.locator('.publish').innerText()).replace(/\s+/g, ' ');
     ok('vercel card: one button, login once, login stays on this PC', /Vercel 로그인 한 번으로 배포/.test(card) && /로그인 정보는 이 PC에만 저장돼요/.test(card), card.slice(0, 220));
-    ok('list shows how each place connects', /로그인 한 번/.test(await p.locator('.pub-opt:has-text("Vercel")').innerText()) && /토큰 연결/.test(await p.locator('.pub-opt:has-text("GitHub Pages")').innerText()));
+    ok('list shows how each place connects', /로그인 한 번/.test(await p.locator('.pub-opt:has-text("Vercel")').innerText()) && /토큰 붙여넣기/.test(await p.locator('.pub-opt:has-text("GitHub Pages")').innerText()));
     ok('token steps are folded away as another way', await p.locator('.publish .run-alt:not([open]) > summary:has-text("토큰으로 연결")').count() === 1 && !(await p.locator('.publish .walk-h').first().isVisible().catch(() => false)));
     await p.fill('.publish .addr-name input', 'maum-vc');
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + '1-card.png' });

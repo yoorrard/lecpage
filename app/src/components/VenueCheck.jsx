@@ -60,7 +60,7 @@ export function VenueBody({ p, url, instantOn }) {
             <div class="btn-row">
               <a class="btn btn-sm" href={check} target="_blank" rel="noopener">접속 확인 열기</a>
               <button type="button" class="btn btn-sm" disabled={!dayBefore(m.date) || past} onClick={ics}>전날 점검 캘린더에 추가</button>
-              <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(check, '접속 확인 주소를 복사했어요.')}>주소 복사</button>
+              <button type="button" class="btn btn-sm btn-quiet" onClick={() => copy(check, '접속 확인 주소를 복사했어요.')}>점검 주소 복사</button>
             </div>
             {!dayBefore(m.date) && <p class="small muted">연수 날짜를 넣으면 전날 점검 일정을 만들 수 있어요.</p>}
             {m.shortUrl && <p class="small muted">짧은 주소({m.shortUrl.replace(/^https:\/\//, '')})도 그곳에서 한 번 열어 보세요. 막혀 있으면 QR(원래 주소)로 안내하면 돼요.</p>}

@@ -12,6 +12,9 @@ export function Steps({ steps, at, onAt, label }) {
     if (first.current) { first.current = false; return; }
     const b = box.current?.querySelector('.walk-b'); if (!b) return;
     const r = b.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) b.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // 누른 버튼·링크가 접힌 단계와 함께 사라져 초점을 잃었으면 새 단계의 제목으로(키보드·화면 읽기 프로그램이 이어서 읽게)
+    const a = document.activeElement;
+    if (!a || a === document.body || !a.isConnected) box.current?.querySelector('li.on > .walk-h')?.focus({ preventScroll: true });
   }, [at]);
   return (
     <ol class="walk" role="list" aria-label={label} ref={box}>

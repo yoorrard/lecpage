@@ -2,7 +2,7 @@
 // 배포하기 화면(Publish.jsx)과 참여 기능 연결(LiveSetup.jsx)이 같이 씀. 통신은 lib/cf-connect.js
 import { useEffect } from 'preact/hooks';
 import { CF_PHASE, CF_CAP, CF_NAME_RE, cfAnswer, cfRun } from '../lib/cf-connect.js';
-import { usePc, pcCan, osName, waitForPairing } from '../lib/connection.js';
+import { usePc, pcCan, osName, waitForPairing, refreshPc } from '../lib/connection.js';
 import { OsWay, ConnectUpdate } from './PcConnect.jsx';
 import { RunProgress, AskPick, AskName } from './OneClick.jsx';
 import { randomKey, sha256Hex } from '../lib/util.js';
@@ -15,13 +15,21 @@ export function useCfWay() {
 }
 
 /** 커넥트가 없거나 꺼져 있을 때: 켜는 법 하나(지금 운영체제). 켜지면 이 화면이 저절로 이어 받음. 예전 판이면 [새 버전으로 바꾸기]. service: 이어 줄 곳 이름(Vercel도 같이 씀) */
-export function CfGetConnect({ pc, way, what = '사이트와 참여 기능이 함께 배포돼요', service = 'Cloudflare' }) {
+export function CfGetConnect({ pc, way, what = '사이트와 참여 기능이 함께 배포돼요', service = 'Cloudflare', main = false, lead = true, soon = '' }) {
   useEffect(() => { waitForPairing(true); return () => waitForPairing(false); }, []);
+  // 짝은 있는데 꺼져 있을 때: 이 안내를 보는 동안 몇 초마다 다시 살펴, 켜지면 누르지 않아도 이 화면이 이어 받음('켜지면 버튼이 저절로 나와요')
+  useEffect(() => {
+    if (way !== 'off') return undefined;
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refreshPc(); }, 4000);
+    return () => clearInterval(t);
+  }, [way]);
   if (way === 'old') return <ConnectUpdate pc={pc} />;
+  // main: 이 칸의 받기 버튼이 지금 누를 곳(카드에 다른 큰 버튼이 없을 때). lead=false: 바로 위에서 같은 말을 이미 했으면 첫 문장을 되풀이하지 않음. soon: 켜진 뒤 무슨 일이 일어나는지 한 줄
   return (
     <div class="stack cf-get" style={{ gap: '8px' }}>
-      <p class="small"><b>lecpage 커넥트를 켜면 {service} 로그인 한 번으로 {what}.</b> {way === 'off' ? 'lecpage 커넥트가 꺼져 있어요. 다시 켜면 이 화면에 버튼이 나와요.' : `이 PC에서 lecpage와 ${service} 사이를 이어 주는 작은 프로그램이에요.`}</p>
-      <OsWay os={osName()} onGet={() => { }} main={false} />
+      <p class="small">{lead && <><b>lecpage 커넥트를 켜면 {service} 로그인 한 번으로 {what}.</b>{' '}</>}{way === 'off' ? 'lecpage 커넥트가 꺼져 있어요. 받아 둔 파일을 다시 실행하거나 아래에서 다시 받아 켜 주세요.' : `lecpage 커넥트는 이 PC에서 lecpage와 ${service} 사이를 이어 주는 작은 프로그램이에요. 받아서 한 번 실행해요.`}</p>
+      <OsWay os={osName()} onGet={() => { }} main={main} />
+      {soon && <p class="small muted">{soon}</p>}
     </div>
   );
 }
@@ -36,9 +44,9 @@ export function CfProgress({ view, onCancel }) {
       slow="처음에는 배포 도구를 받느라 1~2분 걸려요."
       login={{ ok: loginOk, hint: '방금 열린 창에서 로그인해요. 계정이 없으면 그 창의 [Sign up]으로 가입해요(무료, 메일 주소만).' }}
       asks={{
-        account: (a) => <AskPick label="Cloudflare 계정" items={a.accounts} onPick={(id) => cfAnswer({ account: id })} />,
-        subdomain: (a) => <AskName round={a.n} label="주소에 들어갈 이름" suggest={a.suggest} pattern={CF_NAME_RE} clean={cleanSub} problem={SUB_PROBLEM[a.problem] || ''} onName={(v) => cfAnswer({ subdomain: v })}
-          lead={(v) => <>새 Cloudflare 계정이에요. 사이트 주소가 <span class="mono">사이트이름.<b>{v || '이름'}</b>.workers.dev</span>가 돼요. 처음 한 번만 정해요.</>} />,
+        account: (a) => <AskPick label="Cloudflare 계정" lead="배포할 Cloudflare 계정을 골라 주세요. 다음부터는 묻지 않아요." items={a.accounts} onPick={(id) => cfAnswer({ account: id })} />,
+        subdomain: (a) => <AskName round={a.n} label="계정 주소 이름" suggest={a.suggest} pattern={CF_NAME_RE} clean={cleanSub} problem={SUB_PROBLEM[a.problem] || ''} onName={(v) => cfAnswer({ subdomain: v })}
+          lead={(v) => <>새 Cloudflare 계정이에요. <b>계정 주소 이름</b>을 정해 주세요. 이 계정의 모든 사이트 주소 뒤에 붙어요: <span class="mono">사이트이름.<b>{v || '이름'}</b>.workers.dev</span>. 처음 한 번만 정해요.</>} />,
       }} />
   );
 }

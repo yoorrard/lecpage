@@ -56,7 +56,8 @@ export function Tabs({ tabs, value, onChange, label }) {
 
 export function Progress({ pct, label = '진행률' }) { return <div class="progress" role="progressbar" aria-label={label} aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"><i style={{ '--w': `${pct}%` }} /></div>; }
 
-export function Notice({ kind = '', children }) { return <div class={`notice ${kind}`}>{children}</div>; }
+/** 알림 상자. 오류(bad)는 role="alert", 됐다는 알림(ok)은 role="status"로 화면 읽기 프로그램에 읽힘. 늘 떠 있는 설명 상자(lav 등)는 읽히지 않게 역할 없음(role로 따로 줄 수 있음) */
+export function Notice({ kind = '', role, children }) { return <div class={`notice ${kind}`} role={role ?? (kind === 'bad' ? 'alert' : kind === 'ok' ? 'status' : undefined)}>{children}</div>; }
 
 /**
  * 비밀 값 한 줄(강사 화면 관리자 키 등): 처음에는 가려 두고 [보기]·[복사]. 배포 완료 화면을 발표 화면에 비추거나 공유해도 그대로 보이지 않게
