@@ -6,9 +6,15 @@
 - `app/` 앱. 만들기 흐름 `src/lib/gen/`(job.js 실행·이어 받기, prompts.js 요청문, providers/ 회사별), 연결 `src/lib/connection.js`·`components/AiPick.jsx`, 미리보기 `components/Preview.jsx`, 랜딩 `src/landing/`, 도움말 `pages/Help.jsx`, 먼저 해보기 `src/data/demo/`.
 - `skills/lecpage/` Skill. `SKILL.md`, `references/`(kit.md 키트 자리 표시, design-library.md 디자인 서재, designs/ 견본 셋: neo-teach·picture-heart·data-pulse), `scripts/`(lecpage.mjs CLI, studio.mjs lecpage 커넥트 다리(파일 lecpage-connect.cmd/.sh, 예전 이름 lecpage-studio.*는 별칭), studio-siwc.mjs ChatGPT 로그인), `engine/`(src/kit 조립·검수, runtime/ 참가자·강사·발표 화면 JS).
 - 예비 주소 https://lecpage.github.io: 조직 저장소 `lecpage/lecpage.github.io`의 `mirror.yml`이 2시간마다 이 저장소 main을 빌드해 Pages로(`mirror.txt`에 올린 판). Claude GitHub 앱이 그 조직에도 있음. 그 조직에 다른 Pages 사이트를 만들지 말 것(커넥트가 그 출처를 믿음).
-- 배포하기 화면(`components/Publish.jsx`·`lib/deploy.js`): 바로 배포는 실패해도 만든 사이트를 다시 씀(`instantTries`, 실패마다 하루 몫을 쓰지 않게), 실패는 화면에 까닭·[다시 배포]로 남김, 못 쓸 때는 흐린 카드에 까닭. [배포 취소]는 `Undeploy`(바로 배포 삭제·Vercel 프로젝트 삭제·Netlify 사이트 삭제·GitHub Pages 끄기·직접 배포한 곳은 목록에서만).
-- `hosting/` 바로 배포. 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep`(note는 스크립트가 그대로 둠) → 다 바꾼 뒤 `runtime-history.json`에서 지금 판과 같은 조각(안 바뀐 것)은 지우고 note에 날짜·바뀐 파일을 한 줄.
-- 참가자 화면 바닥 부품: 'Made with Lecpage' 표시는 조립이 참가자 쪽 `.lpk-chrome` 맨 앞에 넣음(`kit/widgets.js` madeWith, `runtime/lecpage.js` initMade, `kit.css` .lpk-made). AI 요청문에는 넣지 않음.
+- 배포하기 화면(`components/Publish.jsx`·`lib/deploy.js`): 바로 배포는 실패해도 만든 사이트를 다시 씀(`instantTries` + 새로 고쳐도 남는 `p.deploy.lecpageTry`, 실패마다 하루 몫을 쓰지 않게), 실패는 화면에 까닭과 실제 다음 일 하나(다시 해도 같은 거절이면 [다른 곳에 배포]), 못 쓸 때는 흐린 카드에 까닭. [배포 취소]는 `Undeploy`(바로 배포 삭제·Netlify 사이트 삭제·GitHub Pages 끄기·Vercel/Cloudflare는 토큰 또는 커넥트로 실제 삭제·직접 배포한 곳은 목록에서만).
+- **내 계정 배포·참여 기능 연결은 곳마다 버튼 하나**(공통 카드 `components/OneClick.jsx`: OneClickCard·RunProgress·RunFail·AskPick·useRun, 고른 카드 안의 큰 버튼은 늘 하나 — e2e `one-primary`): Cloudflare `CfConnect.jsx`·`lib/cf-connect.js`(커넥트 + wrangler 로그인 한 번에 사이트와 참여 기능 서버 `lecpage-live`, 계정에 하나·있으면 다시 씀), Vercel `HostLogin.jsx`·`lib/vc-connect.js`(커넥트 + 공식 CLI 로그인), Netlify `lib/netlify-login.js`(브라우저 티켓 로그인, 커넥트 없이. 운영자 OAuth 앱 `lecpage`의 공개 client ID — docs/operations.md 17절), GitHub Pages는 토큰. 토큰 순서는 접힌 '다른 방법'. 커넥트 쪽은 `scripts/studio-deploy.mjs`(일 틀 `createRunner`, `/bridge/cloudflare/*`)·`studio-vercel.mjs`(`/bridge/vercel/*`, CLI 판 고정), 가짜는 `LECPAGE_WRANGLER`·`LECPAGE_VERCEL`. 추천: 커넥트 켜짐 → Cloudflare, 꺼짐 → Netlify.
+- 참여 기능 연결(`components/LiveSetup.jsx`): 추천 하나 + 접힌 [다른 방법으로 연결]. 커넥트(또는 짝 맞춘 적 있음) → Cloudflare 한 번, 없으면 구글 시트(인원 50 넘으면 Supabase, 80 넘으면 Cloudflare). 구글 시트는 설치 코드(`lib/live-install.js` → Code.gs `INSTALL`·메뉴 '한 번에 설치'), Supabase는 설치 SQL + 연수 등록 한 번 + 복사한 글에서 주소·publishable 키 찾기. 예전 설치는 시트 ping의 `days`·Supabase `lec_caps()`로 가려 여러 날 연수일 때만 한 번 바꾸라고 알림.
+- 미리보기·그려서 검사·디자인 사전·DOCX 그리기는 격리 틀(`app/public/frame/`, `lib/sandbox-frame.js`) 안쪽 srcdoc에서 돎. 앱 CSP `script-src`에는 `'unsafe-inline'`이 없고 해시는 빌드가 잼(`app/build/csp.js`, `node app/scripts/csp-check.mjs`). 미리보기 안을 보는 시험은 `.pv-device iframe` 다음에 `.frameLocator('iframe')` 한 단계 더. 엔진 라이브러리 판을 올리면 틀 문서의 jsDelivr 경로도 함께.
+- 교재 쪽 그림은 교재마다 그려 이어서 번호(`project.slideSets`, `lib/gen/slide-sets.js`; 예전 `slidesFrom`·`slidesMade`는 묶음 하나로 읽음). 커넥트에는 `pageImages: true|{ first, count }`(caps `page-sets`), 모든 교재 합쳐 400장.
+- 커넥트 보안: 앱·실행 파일은 상대가 짝 토큰을 아는지 증명(`/bridge/prove`, caps `prove`)한 뒤에만 토큰을 보냄(한 번 증명한 짝은 계속 요구), 배포 도구는 커넥트 전용 폴더(`<home>/work`)에서만 돌림, 개발 주소는 저장소·`LECPAGE_STUDIO_DEV=1`에서만, 묶음의 `BUILT`(묶은 때, 서명에 포함)가 앞서면 예전 묶음이라 바꾸지 않음, 실행 파일은 켜진 커넥트의 묶음을 갈아 끼우지 않음.
+- `hosting/` 바로 배포. 기기당 하루 새 사이트 3(paid 10), 횟수 초기화는 `hosting/src/config.js` `QUOTA_EPOCH`를 1 올려 배포. `/api/info`의 `live.accepting`·`reason`·`onlyBooked`, `limits.sitesPerDevice`, `quota`. Pages API는 호출마다 시간제한·한 번 재시도(배포 만들기 제외), 답이 끊긴 배포는 목록에서 찾아 지우고 안내 화면으로 덮음(`test/pages.edge.test.mjs`, `fake-cf`의 `faults`). 런타임 JS를 바꾸면 **먼저** `node hosting/scripts/gen-runtime.mjs --keep`(note는 스크립트가 그대로 둠) → 다 바꾼 뒤 `runtime-history.json`에서 지금 판과 같은 조각(안 바뀐 것)은 지우고 note에 날짜·바뀐 파일을 한 줄.
+- 참가자 화면 바닥 부품: 'Made with Lecpage' 표시는 조립이 참가자 쪽 `.lpk-chrome` 맨 앞에 넣고 화면 폭과 상관없이 맨 끝 한 줄(`kit/widgets.js` madeWith, `runtime/lecpage.js` initMade, `kit.css` .lpk-made). 꽉 찬 바닥글에 닿으면 그 색으로 이어 칠함(initChromeTint). 보조 쪽(강사·발표·접속 확인)은 사이트가 기기의 밝게·어둡게를 따를 때만 따름(`data-theme-os`). AI 요청문에는 넣지 않음.
+- 출석: 날짜별 값 `days`를 네 백엔드가 모두 저장(구글 시트·Supabase는 2026-11-23부터 — 이미 설치한 강사는 Code.gs 새 버전 배포/schema.sql 재실행이 한 번 필요, 안 하면 여러 날만 '확인 필요'). 강사 화면은 여러 날이면 날짜를 골라 그날 시각을 고침(node-server·cloudflare는 `hostDays`로 '강사가 적은 시각'도 날짜별, 시트·Supabase는 기록 전체에 붙음).
 - 문서: `docs/legal/{privacy,terms}.md`, `SECURITY.md`, `README.md`, `docs/operations.md`, `docs/writing.md`(문구·용어표 4절), 조사 기록 `docs/research/`(기록이라 고치지 않음).
 
 ## 사용자(운영자)가 정한 원칙 — 어기지 말 것
@@ -16,7 +22,7 @@
 2. **강의 사이트 = 강의 운영·참여 도구.** 교재 내용은 교재 슬라이드(쪽 그림, `data-lp="deck"`. 화면 이름은 2026-11-23부터 '교재 슬라이드', AI 요청문 안의 '교재 넘기기'는 그대로 — 바꾸려면 원칙 3대로 실측)와 강사의 강의로 전해짐. 첫 쪽은 짧게, 긴 실습은 따로 쪽으로 나눌 수 있음. 사이트에는 지금 순서·출석·교재 보기·실습 안내와 복사할 원문·질문/투표/보드·자료·과제/설문, 교재 내용은 핵심 한두 줄만. 한 쪽/여러 쪽은 AI가 정함.
 3. 디자인은 그냥 에이전트보다 확실히 나아야 함(기준: 화려하고 세련된 최신 기법·모션, 교재 정체성, AI 티 없음). 새 기능·문구는 **실제 AI로 A/B 실측**해 나아질 때만 남김.
 4. AI 연결: **구독 계정 우선**(**lecpage 커넥트**: Windows는 받아 두 번 누르고 Mac·Linux는 터미널 한 줄 → lecpage.com과 자동 짝 → ChatGPT로 로그인(SIWC, Codex 설치 불필요)·Claude 계정(커넥트가 Claude Code를 자동 설치·브라우저 로그인)), 접힌 '다른 방법'(API 키·Codex·Skill). lecpage 앱 안에서 끝나는 길만 둠: '쓰던 AI로'(바깥 AI 창에 복사·붙여넣기)는 사용자 결정으로 뺐음. Gemini는 만들기에서 뺐음. 길(ChatGPT·Claude 계정·Codex·API 키)마다 처음 한 번 **연결 동의**(체크+[연결], 세 줄 안내; 이 브라우저에 길별로 기억, 글이 바뀌면 다시, [모든 데이터 삭제]로 지움). 정책은 보수적으로 잡지 않고 편의 우선(Claude 구독도 기본 허용).
-5. 배포: 바로 배포는 가입 없이, 사이트를 지우거나 기간이 끝나면 예전 주소 전부를 안내 쪽으로 덮음. Vercel·Netlify는 첫 배포 때 계정 기본 보호(Vercel 배포 보호·Netlify 팀 로그인)를 앱이 자동으로 풂(Make public 안내 금지). ZIP은 바로 내려받음.
+5. 배포: 바로 배포는 가입 없이, 사이트를 지우거나 기간이 끝나면 예전 주소 전부를 안내 쪽으로 덮음. Vercel·Netlify는 첫 배포 때 계정 기본 보호(Vercel 배포 보호·Netlify 팀 로그인)를 앱이 자동으로 풂(Make public 안내 금지, 실제로 못 풀었을 때만 카드에 버튼 하나). ZIP은 바로 내려받음. 바깥 도구 연결(배포할 곳·참여 기능)은 곳마다 버튼 하나·처음에만 로그인이 기준이고, 로그인 정보는 그 브라우저 또는 그 PC의 공식 도구에만 둠(운영자 서버를 거치지 않음).
 6. 강사가 준 교재·사진은 임의로 빼지 않음. 교재에 없는 사실은 지어내지 않음. 강사 값(live·siteUrl·joinUrl·shortUrl·access·surveyUrl·privacy·keepUntil)은 강사에게서만.
 7. 사용자는 앱에서 돈을 내지 않음(AI 비용은 각자 구독·키). 운영비 ≈ 0. 비밀값은 저장소·대화·로그에 남기지 않음(키는 request_credential).
 8. 초보자 기준 UX: 화면마다 누를 곳 하나가 분명하게, 과한 기능 노출 없이.
@@ -27,7 +33,7 @@
 
 ## 검증(합치기 전 한 번)
 - `npm test`(엔진·카탈로그) · `npm run examples`(견본 조립·검수) · `npm --prefix app run build` · `node app/scripts/copy-lint.mjs`(고칠 곳 0) · `npm --prefix hosting test`
-- 앱 흐름 e2e·가짜 AI: `bash scripts/verify.sh [--e2e] [--hosting]`(포트 4175·4182 — 동시에 두 개 돌리지 말 것)
+- 앱 흐름 e2e·가짜 AI: `bash scripts/verify.sh [--e2e] [--hosting]`(포트 4175·4182, 커넥트를 띄우는 e2e는 4351·4352·4433·4434 — 동시에 두 개 돌리지 말 것. e2e 19개: flow·more·share-flow·hosts·studio2·studio3·doc-render·start-dict·wipe·multi-material·live-setup·netlify-login·connect-ui·one-primary·instant·flow2·live-hosts·cf-connect·vc-connect)
 - 가끔 부하 때문에 시간 초과로 실패하는 엔진 시험(리허설·'지금' 띠·따라 넘기기)은 단독으로 다시 돌려 확인
 - 새 컨테이너: `npm --prefix app ci && npm --prefix hosting ci`, PDF 시험은 CI처럼 맨 위에 `npm install --no-save pdfjs-dist@<app 판>`(없으면 PDF 시험 3개가 실패). CPU 4개면 Workflow는 에이전트를 2개씩만 돌림 → 많이 나눌 때는 Agent 도구로 동시에
 - 커밋 꼬리말: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + 세션 줄. 코드·문서·커밋에 모델 이름 금지. main에 push 전 `git fetch && git merge origin/main`(AI 카탈로그 봇이 매일 커밋).
