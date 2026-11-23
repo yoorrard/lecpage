@@ -493,9 +493,10 @@ function Undeploy({ p, target, info, records, done, onClose }) {
   async function go() {
     setBusy(true); setErr('');
     try {
-      let more = null;
+      let more = null, gone = false;
       if (lec) {
-        await deleteInstant(lec);
+        // 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남 — 404): 주소는 이미 닫혀 있으므로 실패가 아님. 목록에서 지우고 그렇게 알림
+        try { await deleteInstant(lec); } catch (e) { if (e.status !== 404) throw e; gone = true; }
         if (lec.adminKey && bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl)) more = { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false };
       } else if (viaCf && !listOnly) {
         const out = await R.run(({ onView, signal }) => cfRun('delete', { name: cfSite.name, relay: cfRelay && withRelay }, { onView, signal }));
@@ -514,7 +515,7 @@ function Undeploy({ p, target, info, records, done, onClose }) {
         else await undeployGitHub({ token, repo: d.github?.repo || '' });
       }
       done('', { target, [DEPLOY_KEY[target] || target]: null, ...(lec ? { lecpageTry: null } : {}) }, more);
-      toast(manual || listOnly ? '배포한 곳 목록에서 삭제했어요.' : '배포를 취소했어요. 이 주소는 더 열리지 않아요.');
+      toast(gone ? '이미 내려간 사이트예요. 배포한 곳 목록에서 삭제했어요.' : manual || listOnly ? '배포한 곳 목록에서 삭제했어요.' : '배포를 취소했어요. 이 주소는 더 열리지 않아요.');
       onClose();
     } catch (e) {
       try { console.warn('[lecpage] 배포 취소 실패', { target, status: e.status ?? '', code: e.code || '' }); } catch { /* 기록만 */ }

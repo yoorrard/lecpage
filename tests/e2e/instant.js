@@ -20,7 +20,11 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     st.calls.push(`${m} ${u.pathname}`);
     if (u.pathname === '/api/info') return json({ ok: true, v: 1, plan: 'free', accepting: true, view: siteScripts ? 'pages' : 'worker', keepAlive: !siteScripts, siteScripts, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 }, report: 'https://publish.mock.test/report', ...info });
     if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
-    if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') { st.deleted = (st.deleted || 0) + 1; return r.fulfill({ status: 204, headers: cors }); }
+    if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') {
+      // st.gone: 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남)
+      if (st.gone) return r.fulfill({ status: 404, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ ok: false, error: 'not_found', message: '사이트를 찾지 못했어요. 보관 기간이 끝났을 수 있어요.' }) });
+      st.deleted = (st.deleted || 0) + 1; return r.fulfill({ status: 204, headers: cors });
+    }
     if (/\/deploys$/.test(u.pathname) && tooLarge) return json({ error: { code: 'too_large', message_ko: TOO_LARGE } }, 413);
     // st.gone: 보관 기간이 끝나 지워진 사이트(그 사이트에 올리려 하면 404) · st.failPublish: 다음 N번의 공개가 서버 오류(시험이 도중에 켬)
     if (/\/deploys$/.test(u.pathname) && st.gone?.has(u.pathname.split('/')[3])) return json({ error: { code: 'not_found', message_ko: '없는 사이트예요.' } }, 404);
@@ -134,6 +138,13 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('redeploy after cancel works (new site)', st.sites === 2 && /s-site2\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 서버에 이미 없는 사이트의 [배포 취소]: '찾지 못했어요'로 막히지 않고 목록에서 지워짐(주소는 이미 닫혀 있음)
+    st.gone = true;
+    await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
+    await p.click('dialog[open] button.btn-danger');
+    await p.waitForFunction(() => !document.querySelector('.success .big-url'), null, { timeout: 15000 }).catch(() => {});
+    L.ok('cancel of a site the server no longer has → cleared from the list, says it was already down', await p.locator('.sites .sites-x').count() === 0 && await p.locator('dialog[open]').count() === 0 && /이미 내려간 사이트예요/.test((await p.locator('.toast').allInnerTexts()).join(' ')), (await p.locator('.toast').allInnerTexts()).join(' / ') + ' | ' + (await p.locator('dialog[open]').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(-80));
+    st.gone = false;
     L.ok('no page errors ④', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   { // ⑤ 실패한 뒤 새로 고쳐도 [배포하기]는 만들다 만 그 사이트를 다시 씀(실패할 때마다 하루 몫을 쓰지 않게: 연수 기록에 남김)
