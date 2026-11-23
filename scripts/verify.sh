@@ -40,15 +40,17 @@ if [ $E2E = 1 ]; then
     echo "e2e: 건너뜀 (playwright 없음: npm i -g playwright 또는 NODE_PATH 지정)"; E2E=0
   fi
 fi
+# e2e 판정: PASS·FAIL 줄만이 아니라 스크립트가 끝까지 돌고 0으로 끝났는지도 봄(rc). 중간에 죽거나 timeout(124)으로 끊기면 남은 단언이 없던 것처럼 보이므로 FAIL
+e2e_rc() { [ "$1" = 0 ] || echo "  끝까지 돌지 못했어요(종료 코드 $1$([ "$1" = 124 ] && echo ', 시간 초과'))"; }
 if [ $E2E = 1 ]; then
   cd "$V/app"
   (npx vite preview --host 127.0.0.1 --port 4175 --strictPort > /dev/null 2>&1 &)
   sleep 4
   cd "$R/tests/e2e"
-  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict wipe multi-material live-setup netlify-login; do
+  for t in flow more share-flow hosts studio2 studio3 doc-render start-dict wipe multi-material live-setup netlify-login connect-ui; do
     BASE=http://localhost:4175/ OUT="$O/shots/" timeout 600 node "$t.js" > "$O/log-e2e-$t.txt" 2>&1
-    f=$(grep -c "^FAIL" "$O/log-e2e-$t.txt"); p=$(grep -c "^PASS" "$O/log-e2e-$t.txt")
-    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "TimeoutError\|pageerror\|SCRIPT ERROR" "$O/log-e2e-$t.txt"; then echo "e2e $t: ok ($p pass)"; else echo "e2e $t: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-$t.txt"; fi
+    rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-$t.txt"); p=$(grep -c "^PASS" "$O/log-e2e-$t.txt")
+    if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "TimeoutError\|pageerror\|SCRIPT ERROR" "$O/log-e2e-$t.txt"; then echo "e2e $t: ok ($p pass)"; else echo "e2e $t: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-$t.txt"; fi
   done
   pkill -f "vite preview --host 127.0.0.1 --port 4175"
   # 바로 배포(가짜 서버 https://publish.mock.test): 거절 문구·사이트 스크립트 안내. 그 주소로 따로 빌드
@@ -57,26 +59,26 @@ if [ $E2E = 1 ]; then
     (npx vite preview --outDir dist-instant --host 127.0.0.1 --port 4182 --strictPort > /dev/null 2>&1 &)
     sleep 4; cd "$R/tests/e2e"
     BASE2=http://localhost:4182/ OUT="$O/shots/" timeout 300 node instant.js > "$O/log-e2e-instant.txt" 2>&1
-    f=$(grep -c "^FAIL" "$O/log-e2e-instant.txt"); p=$(grep -c "^PASS" "$O/log-e2e-instant.txt")
-    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-instant.txt"; then echo "e2e instant: ok ($p pass)"; else echo "e2e instant: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-instant.txt"; fi
+    rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-instant.txt"); p=$(grep -c "^PASS" "$O/log-e2e-instant.txt")
+    if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-instant.txt"; then echo "e2e instant: ok ($p pass)"; else echo "e2e instant: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-instant.txt"; fi
     # 바로 배포 → 다른 곳 배포 → 대표 주소 바꾸기
     BASE2=http://localhost:4182/ BASE=http://localhost:4182/ OUT="$O/shots/" timeout 400 node flow2.js > "$O/log-e2e-flow2.txt" 2>&1
-    f=$(grep -c "^FAIL" "$O/log-e2e-flow2.txt"); p=$(grep -c "^PASS" "$O/log-e2e-flow2.txt")
-    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-flow2.txt"; then echo "e2e flow2: ok ($p pass)"; else echo "e2e flow2: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-flow2.txt"; fi
+    rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-flow2.txt"); p=$(grep -c "^PASS" "$O/log-e2e-flow2.txt")
+    if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-flow2.txt"; then echo "e2e flow2: ok ($p pass)"; else echo "e2e flow2: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-flow2.txt"; fi
     # 참여 기능 × 배포할 곳: 다른 곳 안내, 바로 배포 방을 다른 곳 사이트에 넣지 않음, 대표 주소 지킴
     BASE2=http://localhost:4182/ BASE=http://localhost:4182/ OUT="$O/shots/" timeout 400 node live-hosts.js > "$O/log-e2e-live-hosts.txt" 2>&1
-    f=$(grep -c "^FAIL" "$O/log-e2e-live-hosts.txt"); p=$(grep -c "^PASS" "$O/log-e2e-live-hosts.txt")
-    if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-live-hosts.txt"; then echo "e2e live-hosts: ok ($p pass)"; else echo "e2e live-hosts: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-live-hosts.txt"; fi
+    rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-live-hosts.txt"); p=$(grep -c "^PASS" "$O/log-e2e-live-hosts.txt")
+    if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-live-hosts.txt"; then echo "e2e live-hosts: ok ($p pass)"; else echo "e2e live-hosts: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-live-hosts.txt"; fi
     pkill -f "vite preview --outDir dist-instant"
   else echo "app build (instant): FAIL"; fi
   # 내 Cloudflare 계정에 한 번에(실제 커넥트 + 가짜 wrangler·가짜 Cloudflare, 포트 4351·4352)
   cd "$R/tests/e2e"
   DIST="$V/app/dist" OUT="$O/shots/" timeout 400 node cf-connect.js > "$O/log-e2e-cf-connect.txt" 2>&1
-  f=$(grep -c "^FAIL" "$O/log-e2e-cf-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-cf-connect.txt")
-  if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-cf-connect.txt"; then echo "e2e cf-connect: ok ($p pass)"; else echo "e2e cf-connect: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-cf-connect.txt"; fi
+  rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-cf-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-cf-connect.txt")
+  if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-cf-connect.txt"; then echo "e2e cf-connect: ok ($p pass)"; else echo "e2e cf-connect: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-cf-connect.txt"; fi
   # 내 Vercel 계정에 한 번에(실제 커넥트 + 가짜 vercel CLI, 포트 4433·4434)
   DIST="$V/app/dist" OUT="$O/shots/" timeout 400 node vc-connect.js > "$O/log-e2e-vc-connect.txt" 2>&1
-  f=$(grep -c "^FAIL" "$O/log-e2e-vc-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-vc-connect.txt")
-  if [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-vc-connect.txt"; then echo "e2e vc-connect: ok ($p pass)"; else echo "e2e vc-connect: FAIL ($f)"; grep -m3 "^FAIL\|Error" "$O/log-e2e-vc-connect.txt"; fi
+  rc=$?; f=$(grep -c "^FAIL" "$O/log-e2e-vc-connect.txt"); p=$(grep -c "^PASS" "$O/log-e2e-vc-connect.txt")
+  if [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$p" -gt 0 ] && ! grep -q "SCRIPT ERROR" "$O/log-e2e-vc-connect.txt"; then echo "e2e vc-connect: ok ($p pass)"; else echo "e2e vc-connect: FAIL ($f)"; e2e_rc "$rc"; grep -m3 "^FAIL\|Error" "$O/log-e2e-vc-connect.txt"; fi
 fi
 true

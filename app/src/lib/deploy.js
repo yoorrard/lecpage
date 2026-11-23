@@ -471,10 +471,20 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
   catch (e) {
     // 보관 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
     if (!(first && (e.status === 404 || e.status === 401))) throw e;
+    // 다만 지난번에 그 대신 만들다 만 사이트가 있으면(지워진 사이트를 다시 배포하다 도중에 실패함) 그 사이트에 이어서: 누를 때마다 새로 만들어 하루 몫을 쓰지 않게
+    const alt = [tryKey && instantTries.get(tryKey), tried].find((x) => x?.id && x?.key && x.id !== first.id) || null;
     if (tryKey) instantTries.delete(tryKey);
-    s = keep(await newSite());
-    await prepare();
-    dp = await deploys();
+    dp = null;
+    if (alt) {
+      s = keep(alt);
+      try { dp = await deploys(); }
+      catch (e2) { if (!(e2.status === 404 || e2.status === 401)) throw e2; if (tryKey) instantTries.delete(tryKey); } // 그 사이트도 지워졌으면 아래에서 새로
+    }
+    if (!dp) {
+      s = keep(await newSite());
+      await prepare();
+      dp = await deploys();
+    }
   }
   const upload = async (list) => {
     const need = list.filter((h) => blobs.has(h)); let done = 0;
@@ -510,9 +520,12 @@ async function deployInstantRun({ site, title, files, live = null, booking = nul
   track('publish', 'instant');
   return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl, ...(liveOff ? { liveOff } : {}), ...(advice ? { advice } : {}) };
 }
-/** 배포 취소(Vercel): 이 연수가 만든 프로젝트를 지움(주소가 더 열리지 않음). 이미 없으면 그대로 끝 */
-export async function undeployVercel({ token, projectId }) {
-  try { await vc(token, 'DELETE', `/v9/projects/${encodeURIComponent(projectId)}`); } catch (e) { if (e.status !== 404) throw e; }
+/**
+ * 배포 취소(Vercel): 이 연수가 만든 프로젝트를 지움(주소가 더 열리지 않음). 이미 없으면 그대로 끝.
+ * strict: '없음(404)'도 실패로 돌려줌 — lecpage 커넥트로 올린 프로젝트는 다른 팀에 있을 수 있어, 이 토큰에는 404여도 사이트는 그대로 열림
+ */
+export async function undeployVercel({ token, projectId, strict = false }) {
+  try { await vc(token, 'DELETE', `/v9/projects/${encodeURIComponent(projectId)}`); } catch (e) { if (e.status !== 404 || strict) throw e; }
 }
 /** 배포 취소(Netlify): 이 연수가 만든 사이트를 지움 */
 export async function undeployNetlify({ token, siteId }) {

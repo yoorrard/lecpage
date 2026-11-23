@@ -63,6 +63,9 @@ function warmOffline() {
   warmed = true;
   let heavy = false; try { heavy = !matchMedia('(pointer: coarse)').matches; } catch { }
   navigator.serviceWorker.ready.then((r) => r.active?.postMessage({ type: 'warm', heavy })).catch(() => { });
+  // 미리보기 격리 틀 문서도 한 번 받아 둠(서비스 워커로는 못 담음 → lib/sandbox-frame.js warmFrame). 화면이 한가할 때
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 2500));
+  idle(() => { import('./lib/sandbox-frame.js').then((m) => m.warmFrame()).catch(() => { }); }, { timeout: 6000 });
 }
 
 function useHash() {

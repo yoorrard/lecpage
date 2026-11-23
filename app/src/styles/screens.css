@@ -101,10 +101,6 @@ ul.ai-more{margin:-4px 0 0;padding-left:1.2em;display:grid;gap:2px;color:var(--i
 @media (prefers-reduced-motion:no-preference){.thumb-site.is-tour iframe{transform:scale(var(--s)) translateY(var(--pan,0));transition:transform 9s linear .5s}
 }
 .concept{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--hair);border-radius:var(--r-sm);background:var(--card)}
-/* 느낌이 다른 세 안: 패널에서는 한 줄 셋{display:grid;gap:10px}
-.dots{display:inline-flex;gap:2px}
-.dots i{width:12px;height:12px;border-radius:50%;border:1px solid var(--hair);display:inline-block}
-.range{width:100%;accent-color:var(--accent)}
 
 /* ── 미리보기: 고른 기기 폭으로 그리고 칸에 맞게 줄임 ── */
 .preview{position:sticky;top:80px;display:grid;gap:10px;min-width:0;container:pv / inline-size}
@@ -771,6 +767,10 @@ button.st-tag:hover{border-color:var(--accent);color:var(--lav-ink)}
   .key-dots button{min-width:44px;justify-content:center}
   .help-nav a{display:flex;align-items:center;min-height:44px}
   details.set-more>summary{min-height:44px}
+  /* 접힌 '다른 방법'(배포·연결 카드)·AI 연결의 접힌 줄·연결된 카드의 [연결 해제]: 좁은 줄이라 누르는 높이만 넓힘 */
+  .run-alt>summary{padding-block:12px;min-height:44px;box-sizing:border-box}
+  .ai-more>summary{min-height:44px;padding-block:11px}
+  .ai-card-on .btn-link{min-height:44px;padding:2px 6px}
   .st-fold-t{min-height:44px}
   .st-ex .chip{min-height:44px}
   .st-compose-opts select{min-height:44px}
@@ -841,7 +841,6 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 /* 교재에 맞춘 구성: 1단계 찾은 것·교재에서 찾은 주소, 2단계 이렇게 구성했어요·권하는 기능·싣지 못한 것(components/Structure.jsx) */
 .found{display:grid;gap:6px}
 .found p{margin:0}
-/* AI 결과 띠(결과·교재 지킴이·구성 안내 한 띠): 제목 한 줄,되돌린 곳 한 줄{gap:6px 12px;padding:8px 14px}
 /* 좁은 화면에서 따라다니는 [되돌리기](머리의 버튼이 화면 밖일 때만, 편집 칸 아래쪽에 붙음) */
 
 

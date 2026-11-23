@@ -137,6 +137,32 @@ async function mockLogin(ctx) {
     ok('no script errors (settings)', errs.length === 0, JSON.stringify(errs).slice(0, 300));
     await ctx.close();
   } catch (e) { fails++; console.log('FAIL exception(settings) :: ' + String(e && e.message || e).slice(0, 400)); }
+  // ── 운영 주소의 머리글(Cross-Origin-Opener-Policy: same-origin)에서도: 로그인 창이 Netlify로 넘어가면 앱은 그 창을 닫지 못함(브라우저가 두 창을 끊음) ──
+  //    그래도 로그인 → 연결 → 이어서 배포가 되고, 기다리는 동안 '이 탭으로 돌아오면 이어서'라고 알려야 함
+  try {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 }); const st = await mockAll(ctx); const nf = await mockLogin(ctx);
+    const base = new URL(process.env.BASE || 'http://localhost:4182/');
+    await ctx.route((u) => u.origin === base.origin && (u.pathname === base.pathname || /\/index\.html$/.test(u.pathname)), async (r) => {
+      const resp = await r.fetch();
+      await r.fulfill({ response: resp, headers: { ...resp.headers(), 'cross-origin-opener-policy': 'same-origin' } });
+    });
+    const p = await ctx.newPage(); const errs = watch(p);
+    await openShare(p);
+    await pick(p, 'Netlify');
+    await p.waitForSelector('.one-click button:has-text("Netlify 계정으로 배포")', { timeout: 15000 });
+    const [pop] = await Promise.all([ctx.waitForEvent('page'), p.click('.one-click button:has-text("Netlify 계정으로 배포")')]);
+    await p.waitForSelector('.run-box', { timeout: 15000 });
+    await pop.waitForURL(/app\.netlify\.com\/authorize\?response_type=ticket/, { timeout: 10000 }).catch(() => { });
+    const cut = await p.evaluate(() => crossOriginIsolated === false && document.querySelector('.run-box') !== null) && /app\.netlify\.com\/authorize/.test(pop.url());
+    const hint = (await p.locator('.run-box').innerText()).replace(/\s+/g, ' ');
+    ok('COOP: waiting tells the user to come back to this tab', cut && /이 탭으로 돌아오면 이어서/.test(hint), hint.slice(0, 200));
+    nf.authorized = true; // 새 창에서 [Authorize]
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 8000 }).then((x) => x.click()).catch(() => { });
+    await p.waitForFunction(() => /netlify\.app/.test(document.querySelector('.success .big-url')?.textContent || ''), null, { timeout: 60000 });
+    ok('COOP: authorize → connected and deployed even though the app cannot close the login window', nf.exchanged === 1 && st.nf.calls.some((c) => /^POST \/api\/v1\/sites/.test(c)) && !pop.isClosed(), `exchanged ${nf.exchanged} popClosed ${pop.isClosed()}`);
+    ok('no script errors (COOP)', errs.length === 0, JSON.stringify(errs).slice(0, 300));
+    await ctx.close();
+  } catch (e) { fails++; console.log('FAIL exception(coop) :: ' + String(e && e.message || e).slice(0, 400)); }
   await b.close();
   console.log(`\n${passes} pass, ${fails} fail`);
   process.exit(fails ? 1 : 0);

@@ -20,6 +20,9 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
     if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') { st.deleted = (st.deleted || 0) + 1; return r.fulfill({ status: 204, headers: cors }); }
     if (/\/deploys$/.test(u.pathname) && tooLarge) return json({ error: { code: 'too_large', message_ko: TOO_LARGE } }, 413);
+    // st.gone: 보관 기간이 끝나 지워진 사이트(그 사이트에 올리려 하면 404) · st.failPublish: 다음 N번의 공개가 서버 오류(시험이 도중에 켬)
+    if (/\/deploys$/.test(u.pathname) && st.gone?.has(u.pathname.split('/')[3])) return json({ error: { code: 'not_found', message_ko: '없는 사이트예요.' } }, 404);
+    if (/\/publish$/.test(u.pathname) && st.failPublish > 0) { st.failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
     if (/\/publish$/.test(u.pathname) && failPublish > 0) { failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
     if (/\/publish$/.test(u.pathname) && !unsafe) return json({ url: `https://s-${u.pathname.split('/')[3]}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 });
     if (u.pathname === '/api/sites' && m === 'POST') return json({ id: 'site1', key: 'k1', url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
@@ -124,6 +127,30 @@ async function seed(p, script) {
     L.ok('too_large → only [다른 곳에 배포] as the next step', await p.locator('.publish [role=alert] button:has-text("다시 배포")').count() === 0 && await p.locator('.publish [role=alert] button.btn-primary:has-text("다른 곳에 배포")').count() === 1);
     L.ok('no page errors ⑥', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
+  { // ⑧ 지워진(보관 기간이 끝난) 사이트에 다시 배포하다 실패를 거듭해도: 누를 때마다 새 사이트를 만들지 않고, 그 대신 만들다 만 사이트에 이어서(하루 몫을 실패마다 쓰지 않게)
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    st.gone = new Set(['site1']); st.failPublish = 2; // 그 사이트가 서버에서 지워짐 + 다음 두 번의 공개가 서버 오류
+    const publishes = () => st.calls.filter((c) => /\/publish$/.test(c)).length;
+    const waitPublishes = async (n) => { for (const t0 = Date.now(); publishes() < n && Date.now() - t0 < 30000;) await p.waitForTimeout(150); };
+    await p.locator('.publish .btn-primary.btn-lg').scrollIntoViewIfNeeded();
+    await p.click('.publish .btn-primary.btn-lg'); // [다시 배포하기] → 지워진 사이트(404) → 새 사이트(site2) → 공개 실패
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await waitPublishes(2); await p.waitForSelector('.publish [role=alert]:has-text("배포를 끝내지 못했어요")', { timeout: 30000 });
+    await p.click('.publish [role=alert] button:has-text("다시 배포")'); // 또 지워진 사이트(404) → 만들다 만 site2에 이어서 → 공개 실패
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await waitPublishes(3); await p.waitForSelector('.publish [role=alert]:has-text("배포를 끝내지 못했어요")', { timeout: 30000 });
+    const mid = st.sites;
+    await p.click('.publish [role=alert] button:has-text("다시 배포")'); // 이번에는 공개까지
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForFunction(() => /s-site2\./.test(document.querySelector('.success .big-url')?.textContent || ''), null, { timeout: 60000 }).catch(() => {});
+    L.ok('expired site: repeated failed retries make only one replacement site', mid === 2 && st.sites === 2 && /s-site2\./.test(await p.locator('.success .big-url').innerText().catch(() => '')), `sites ${mid}→${st.sites} publishes ${publishes()}`);
+    L.ok('no page errors ⑧', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+  }
   for (const [quota, want] of [[7, true], [8, false]]) { // ⑦ 적어 둔 '오늘 몫 0'은 서버의 횟수 초기화 번호(quota)가 같을 때만 알림 · 방을 지금 열지 않는 서버면 '참여 기능까지'라고 하지 않음
     const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.addInitScript(() => { try { localStorage.setItem('lecpage:instant-share', JSON.stringify({ left: 0, scope: 'device', until: Date.now() + 3600e3, quota: 7 })); } catch { /* 없음 */ } });
@@ -133,6 +160,9 @@ async function seed(p, script) {
     const txt = (await p.locator('.publish').innerText()).replace(/\s+/g, ' ');
     L.ok(`quota ${quota}: remembered "used up" hint ${want ? 'kept' : 'dropped after the counter reset'}`, /다 썼을 수 있어요/.test(txt) === want, txt.slice(0, 160));
     L.ok(`live.accepting ${quota === 7}: card ${quota === 7 ? 'promises' : 'does not promise'} participation`, /참여 기능까지 바로 켜져요/.test(txt) === (quota === 7));
+    // 배포 준비 체크리스트의 참여 기능 줄도 같은 기준(배포 카드만이 아니라): 방을 새로 열 수 없는 서버면 '함께 켜져요'라고 하지 않음
+    const whole = (await p.locator('body').innerText()).replace(/\s+/g, ' ');
+    L.ok(`live.accepting ${quota === 7}: checklist ${quota === 7 ? 'says' : 'does not say'} "deploys together"`, /바로 배포하면 함께 켜져요/.test(whole) === (quota === 7) && (quota === 7 || /참여 기능 방을 새로 열 수 없어요/.test(whole)), (whole.match(/.{0,40}(함께 켜져요|새로 열 수 없어요).{0,20}/) || [''])[0]);
     L.ok(`no page errors ⑦-${quota}`, errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();

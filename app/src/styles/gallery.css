@@ -19,6 +19,8 @@
 .dd-cats button{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--hair);background:var(--paper);color:var(--ink-2);font:inherit;font-size:.86rem;font-weight:600;cursor:pointer;white-space:nowrap}
 .dd-cats button span{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums;font-size:.8rem}
 .dd-cats button:hover{border-color:var(--line-strong)}
+/* 터치: 알약 모양(32px)은 그대로 두고 누르는 높이만 44px로(위아래 6px씩 보이지 않게 넓힘) */
+@media (pointer: coarse){.dd-cats{padding-block:6px;margin-top:2px}.dd-cats button{position:relative}.dd-cats button::after{content:"";position:absolute;inset:-6px 0}}
 .dd-cats button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .dd-cats button[aria-pressed="true"] span{color:inherit;opacity:.7}
 .dd-cats button:disabled{opacity:.4;cursor:default}

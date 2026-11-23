@@ -12,11 +12,35 @@ import { StatsSetting } from '../components/StatsSetting.jsx';
 import { ConnBadge } from '../components/PcConnect.jsx';
 import { forgetConsents, bridgeAvailable, setPreferred, refreshPc } from '../lib/connection.js';
 import { forgetPairing, bridgeStatus, chatgptLogout } from '../lib/gen/local.js';
+import { CF_CAP, cfRun, cfUsed } from '../lib/cf-connect.js';
+import { VC_CAP, vcRun, vcUsed } from '../lib/vc-connect.js';
 
-/** [모든 데이터 삭제] 전에 lecpage 커넥트의 ChatGPT 계정 연결 해제 → 'chatgpt'(해제함) | ''(연결 없음) | 'off'(커넥트에 닿지 못함). 5초까지만 기다림 */
-async function logoutPc() {
-  const run = (async () => { const s = await bridgeStatus(); if (!s?.chatgpt?.connected) return ''; await chatgptLogout(); return 'chatgpt'; })();
-  return Promise.race([run, new Promise((ok) => setTimeout(() => ok('off'), 5000))]).catch(() => 'off');
+// 커넥트가 이 PC에 따로 쥐고 있는 배포 계정 로그인(공식 도구의 로그인). 이 브라우저 데이터를 지워도 남으므로 [모든 데이터 삭제]가 함께 지움
+const PC_HOSTS = [
+  { id: 'cloudflare', name: 'Cloudflare', cap: CF_CAP, run: cfRun, used: cfUsed, flag: 'lecpage:cf-used' },
+  { id: 'vercel', name: 'Vercel', cap: VC_CAP, run: vcRun, used: vcUsed, flag: 'lecpage:vc-used' },
+];
+/**
+ * [모든 데이터 삭제] 전에 lecpage 커넥트에 남은 로그인 지우기: ChatGPT 계정 연결, 그리고 커넥트로 배포해 본 Cloudflare·Vercel 로그인.
+ * hosts: 지울 곳(이 브라우저가 커넥트로 써 본 곳. 커넥트가 status의 hosts로 '로그인이 있을 수 있음'을 알려 주면 그곳도).
+ * → { off(커넥트에 닿지 못함), chatgpt(해제함), done[이름], left[지우지 못한 곳] }. 모두 합쳐 5초까지만 기다림(커넥트는 시작한 지우기를 끝까지 함)
+ */
+async function logoutPc(hosts) {
+  const out = { off: true, chatgpt: false, done: [], left: [] }; // off: 커넥트의 답을 받기 전에는 '닿지 못함'
+  const run = (async () => {
+    const s = await bridgeStatus();
+    out.off = false;
+    if (s?.chatgpt?.connected) { await chatgptLogout(); out.chatgpt = true; }
+    const caps = s?.caps || [];
+    await Promise.all(PC_HOSTS.filter((h) => hosts.includes(h.id) || s?.hosts?.[h.id]).map(async (h) => {
+      if (!caps.includes(h.cap)) { out.left.push(h); return; }
+      out.left.push(h); // 끝났다는 답을 받기 전에는 '남음'
+      try { await h.run('logout', {}); out.left = out.left.filter((x) => x !== h); out.done.push(h.name); } catch { /* 남음으로 둠 */ }
+    }));
+  })().catch(() => { /* 닿지 못했거나 도중에 끊김: 끝내지 못한 곳은 left에 남아 있음 */ });
+  await Promise.race([run, new Promise((ok) => setTimeout(ok, 5000))]);
+  if (out.off) out.left = PC_HOSTS.filter((h) => hosts.includes(h.id));
+  return { ...out, left: [...out.left] };
 }
 
 export function Settings() {
@@ -48,16 +72,22 @@ export function Settings() {
     await haltJobs(all.map((p) => p.id));
     for (const p of all) await projects.remove(p.id);
     for (const k of [...Object.keys(PROVIDERS), ...Object.values(KIND).map((x) => 'deploy-' + x)]) await forgetKey(k);
-    // lecpage 커넥트: ChatGPT 계정 연결이 있으면 해제하고(공용 PC에서 다음 사람이 강사 구독을 쓰지 않게) 이 브라우저의 짝·고른 연결도 지움
-    const pc = bridgeAvailable() ? await logoutPc() : '';
+    // lecpage 커넥트: ChatGPT 계정 연결과, 커넥트로 배포해 본 Cloudflare·Vercel 로그인을 지우고(공용 PC에서 다음 사람이 강사 구독·계정을 쓰지 않게) 이 브라우저의 짝·고른 연결도 지움
+    const pcHosts = PC_HOSTS.filter((h) => h.used() || all.some((p) => p.deploy?.[h.id]?.via === 'connect')).map((h) => h.id);
+    const pc = bridgeAvailable() ? await logoutPc(pcHosts) : { off: pcHosts.length > 0, chatgpt: false, done: [], left: PC_HOSTS.filter((h) => pcHosts.includes(h.id)) };
     forgetPairing(); setPreferred(''); refreshPc();
     forgetConsents(); clearCart();
     // 남은 것까지: 참여 기능 관리자 키·기억한 서버·고른 모델·암호화 열쇠·쓰다 만 글·미리보기 상태(화면 밝기·익명 통계 끄기만 남김)
     await wipeStores().catch(() => { }); forgetAllKeys();
-    const keep = new Set(['lecpage:theme', 'lecpage:stats-off']);
+    // 커넥트에 남은 로그인을 지우지 못한 곳은 '연결돼 있어요' 표시를 남김: 배포하기 화면의 [연결 해제]로 마저 지울 수 있게(표시까지 지우면 로그인이 남은 줄 모름)
+    const keep = new Set(['lecpage:theme', 'lecpage:stats-off', ...pc.left.map((h) => h.flag)]);
+    for (const h of pc.left) { try { localStorage.setItem(h.flag, '1'); } catch { /* 저장 못 하면 안내만 */ } }
     for (const st of [localStorage, sessionStorage]) { try { for (const k of Object.keys(st)) if (/^(lecpage[:-]|lp-)/.test(k) && !keep.has(k)) st.removeItem(k); } catch { } }
-    toast(pc === 'off' ? '모두 지웠어요. 커넥트가 꺼져 있어 ChatGPT 연결은 확인하지 못했어요. 공용 PC라면 커넥트를 켜고 연결을 해제해 주세요.'
-      : pc === 'chatgpt' ? '모두 지웠어요. lecpage 커넥트의 ChatGPT 연결도 해제했어요.' : '이 브라우저의 lecpage 데이터를 모두 지웠어요.');
+    const leftNames = pc.left.map((h) => h.name).join('·');
+    const doneNames = [pc.chatgpt ? 'ChatGPT' : '', ...pc.done].filter(Boolean).join('·');
+    toast(leftNames ? `모두 지웠어요. 다만 lecpage 커넥트${pc.off ? '가 꺼져 있어' : '에 남은'} ${leftNames} 로그인은 지우지 못했어요. 공용 PC라면 ${pc.off ? '커넥트를 켠 뒤' : '잠시 뒤'} 배포하기 화면의 ${leftNames} 카드에서 [연결 해제]를 눌러 주세요.`
+      : pc.off ? '모두 지웠어요. 커넥트가 꺼져 있어 ChatGPT 연결은 확인하지 못했어요. 공용 PC라면 커넥트를 켜고 연결을 해제해 주세요.'
+        : doneNames ? `모두 지웠어요. lecpage 커넥트의 ${doneNames} 연결도 해제했어요.` : '이 브라우저의 lecpage 데이터를 모두 지웠어요.');
   }
   return (
     <div class="settings">
@@ -95,7 +125,7 @@ export function Settings() {
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
           <button class="btn btn-sm btn-danger" disabled={wiping} aria-busy={wiping ? 'true' : undefined} onClick={wipe}>{wiping ? '삭제하는 중…' : confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
         </div>
-        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정 포함)도 해제해요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정, 커넥트로 배포한 Cloudflare·Vercel 로그인 포함)도 해제해요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
       <ConsentHost />

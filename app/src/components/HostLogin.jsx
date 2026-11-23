@@ -36,15 +36,20 @@ export function vcFail(e, { retry, onToken } = {}) {
   if (code === 'name-taken') return { kind: code, t: e.message };
   const again = { label: '다시 시도', onClick: () => retry?.() };
   if (['login-needed', 'login-failed', 'timeout', 'network', 'off', 'busy', 'no-files', 'not-ready'].includes(code)) return { kind: code, t: e.message, action: again };
+  // 코드가 없는 실패는 Vercel에 가기 전에 앱에서 멈춘 것(공개 범위의 암호가 비었음·사이트가 한도를 넘음 등): 토큰으로 바꿔도 같으므로 까닭을 보여 주고 [다시 시도]
+  if (!code) return { kind: 'failed', title: '배포하지 못했어요.', t: e?.message || '잠시 뒤 다시 시도해 주세요.', action: again };
   // 모르는 실패·한도·팀 없음: 같은 일을 되풀이하기보다 토큰으로 연결하는 길을 열어 줌
   return { kind: code || 'failed', t: e?.message || 'Vercel에서 끝내지 못했어요. 잠시 뒤 다시 시도해 주세요.', more: onToken ? '계속 안 되면 토큰으로 연결해 배포할 수 있어요.' : '', action: onToken ? { label: '토큰으로 연결', onClick: onToken } : again };
 }
 
-/** Netlify 로그인 기다리는 동안: 한 줄 + [로그인 창 열기](팝업이 막혔거나 창을 닫았을 때) + [중지] */
+/**
+ * Netlify 로그인 기다리는 동안: 한 줄 + [로그인 창 열기](팝업이 막혔거나 창을 닫았을 때) + [중지].
+ * 운영 주소에서는 앱이 그 창을 닫을 수 없음(창이 Netlify로 넘어가면 브라우저가 두 창 사이를 끊음: 앱의 COOP same-origin) → '이 탭으로 돌아오면'이라고 사실대로 알림
+ */
 export function NfProgress({ view, onCancel }) {
   return (
     <RunProgress view={view} phases={NF_PHASE} onCancel={onCancel}
-      login={{ ok: NETLIFY_LOGIN_OK, hint: '창이 안 보이면 아래 버튼으로 열어요. 계정이 없으면 그 창에서 가입해요(무료, 메일이나 GitHub 계정).' }} />
+      login={{ ok: NETLIFY_LOGIN_OK, hint: '[Authorize]를 누른 뒤 이 탭으로 돌아오면 이어서 진행해요(그 창은 닫아도 돼요). 창이 안 보이면 아래 버튼으로 열어요. 계정이 없으면 그 창에서 가입해요(무료, 메일이나 GitHub 계정).' }} />
   );
 }
 

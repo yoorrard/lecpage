@@ -36,8 +36,11 @@ export async function haltJobs(ids, ms = 4000) {
   try { job = await import('./gen/job.js'); } catch { return; } // 조각을 못 받음(오프라인): 이 탭에서 도는 작업도 없음
   for (const id of ids) job.stopJob(id); // 이 탭이면 바로 멈추고, 아니면 다른 탭에 알림
   const until = Date.now() + ms;
-  const busy = async (id) => job.liveView(id)?.status === 'running' || await job.heldElsewhere(id).catch(() => false);
+  // 이 탭: 화면 상태가 '멈춤'으로 바뀐 뒤에도 마지막 저장이 끝나야 끝난 것(runningHere). 그 전에 지우면 그 저장이 지운 기록을 되살림
+  const busy = async (id) => job.runningHere(id) || await job.heldElsewhere(id).catch(() => false);
   for (const id of ids) while (Date.now() < until && await busy(id)) await new Promise((ok) => setTimeout(ok, 100));
+  // 기다리는 시간이 지나도록 안 멈춘 작업(느린 기기)이 뒤늦게 저장해도 기록을 다시 쓰지 않게
+  for (const id of ids) job.dropJob(id);
 }
 
 /** 프로젝트 지우기(교재·그림·AI 작업 기록 포함). 도는 AI 작업은 먼저 멈춤 */

@@ -20,6 +20,27 @@ try {
 } catch { /* 예전 브라우저 */ }
 
 /**
+ * 틀 문서를 미리 한 번 열어 브라우저 캐시에 둠: 이 판에서 미리보기를 아직 연 적이 없어도 인터넷이 끊긴 뒤 미리보기·문서 그리기가 열리게.
+ * sandbox 틀의 문서 요청은 서비스 워커를 거치지 않아(Chromium) 브라우저의 HTTP 캐시가 유일한 길이고, 그 캐시는 틀로 연 요청만 채움(fetch로는 안 채워짐).
+ * 보이지 않는 틀로 한 번 열고 바로 치움(틀 문서는 HTML을 받기 전에는 아무것도 하지 않음). 탭마다 한 번
+ */
+let warmedFrame = false;
+export function warmFrame() {
+  if (warmedFrame || typeof document === 'undefined' || navigator.onLine === false) return;
+  warmedFrame = true;
+  try {
+    const el = document.createElement('iframe');
+    el.setAttribute('sandbox', 'allow-scripts'); el.setAttribute('aria-hidden', 'true'); el.tabIndex = -1; el.title = '';
+    el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;visibility:hidden';
+    const done = () => { clearTimeout(t); el.remove(); };
+    const t = setTimeout(done, 15000);
+    el.addEventListener('load', () => setTimeout(done, 200)); el.addEventListener('error', done);
+    el.src = FRAME_SRC;
+    document.body.appendChild(el);
+  } catch { /* 미리 받지 못해도 미리보기를 열 때 받음 */ }
+}
+
+/**
  * 틀에서 온 메시지 풀기. el: 그 틀(iframe). 그 틀이 보낸 것이 아니면 null
  * @returns {{ kind: 'ready' | 'load' } | { kind: 'msg', data: any } | null}
  */

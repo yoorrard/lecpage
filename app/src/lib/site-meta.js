@@ -141,7 +141,11 @@ export function carryPatch(cur) {
   const c = cur.carryPending; if (!c) return {};
   if (c.liveAdminKey && c.live.url) import('./ai.js').then((m) => { const slot = 'live-admin:' + c.live.url.replace(/\/+$/, ''); m.saveKey(slot, c.liveAdminKey, true); if (c.live.code) m.saveKey(slot + '#' + c.live.code, c.liveAdminKey, true); }).catch(() => { });
   const moved = isV2(cur) || cur.blueprint ? patchDeploy(cur, (b) => ({ ...b, live: { ...(b.live || {}), provider: c.live.provider, url: c.live.url, anonKey: c.live.anonKey, ...(c.live.code ? { code: c.live.code } : {}) }, meta: { ...(b.meta || {}), siteUrl: c.deploy.lastUrl } })) : {};
-  return { deploy: c.deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
+  // lecpage 커넥트로 올린 곳(Cloudflare·Vercel)은 이름만 적혀 온 것: 이 PC의 계정에 같은 이름의 다른 사이트가 있으면 덮게 되므로
+  // 'carried'로 표시해 두고, 배포하기 전에 그 이름에 배포할지 한 번 물음(Publish.jsx CarriedConfirm). 배포하고 나면 표시는 없어짐
+  const deploy = { ...c.deploy };
+  for (const h of ['cloudflare', 'vercel']) if (deploy[h]?.via === 'connect' && deploy[h].name) deploy[h] = { ...deploy[h], carried: true };
+  return { deploy, ...moved, liveOk: c.liveOk, ...(c.sitePassword ? { sitePassword: c.sitePassword } : {}), carryPending: undefined, pastDeploy: undefined };
 }
 
 

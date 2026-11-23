@@ -9,7 +9,7 @@ import { loadRuntime, E } from '../../lib/engine.js';
 import { blobs } from '../../lib/db.js';
 import { assembleProject } from '../../lib/studio.js';
 import { Publish, lecLiveOff, instantLiveOk, LABEL as SITE_LABEL } from '../../components/Publish.jsx';
-import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
+import { PUBLISH_API, probeSite, mergeSite, instantInfo, instantLiveOpen, instantRecords, recordsLine, siteStat, shortenUrl, shortName, checkShortUrl, showUrl, SHORTENERS } from '../../lib/deploy.js';
 import { saveFile, safeName, toast, copy, isPastDate, monthDay } from '../../lib/util.js';
 import { VenueBody, RescueKit, useDayStatus, dayLine } from '../../components/VenueCheck.jsx';
 import { kitHtml } from '../../lib/venue.js';
@@ -152,6 +152,7 @@ export function StepShare({ p, update, go }) {
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
   const instantHere = target === 'lecpage' || (!target && autoLive);
   const [daySt] = useDayStatus({ on: !!bp && instantHere && !p.deploy?.lastUrl, date: bp?.meta?.date || '', site: '' });
+  const cfWay = useCfWay(); // 훅은 아래 이른 return보다 앞에(뒤에 두면 훅 순서가 화면마다 달라짐)
   if (!bp || !isV2(p)) return <><StepHead title="배포하기" /><Notice>AI가 사이트를 다 만든 뒤에 배포할 수 있어요.</Notice><div><button class="btn btn-primary" onClick={() => go(1)}>교재 넣고 AI 선택</button></div></>;
   const access = bp.access?.mode || 'link';
   const liveOn = (bp.live?.features || []).length > 0;
@@ -161,7 +162,6 @@ export function StepShare({ p, update, go }) {
   const dupNew = () => duplicateProject(p).then((n) => { toast('복제했어요. 새 연수로 배포해요.'); location.hash = `#/p/${n.id}/3`; }, () => toast('복제하지 못했어요. 설정에서 저장 공간을 확인해 주세요.'));
   // 바로 배포 서버의 방은 바로 배포한 사이트에서만 열림: 다른 곳에 배포할 때는 '연결 전'으로 봄(그대로 넣으면 질문·투표·출석이 보내지지 않음)
   const lecOnly = lecOnlyLive(bp.live, info?.live?.url);
-  const cfWay = useCfWay();
   // 이 컴퓨터(localhost)에서 켠 서버는 참가자 기기에서 닿지 않음: 파일로 받는 ZIP(교실 노트북) 말고는 '연결 전'으로
   const loopLive = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(bp.live?.url || '');
   const liveReady = LIVE_READY(bp.live, p.liveOk) && !(lecOnly && target !== 'lecpage') && !(loopLive && !!target && target !== 'zip');
@@ -294,12 +294,15 @@ export function StepShare({ p, update, go }) {
   // 강사가 따로 연결해 둔 서버(시트·Supabase·내 서버)가 있으면 바로 배포에서도 그 서버를 씀(Publish.jsx Instant와 같은 규칙)
   const ownLive = instantLiveOk(bp.live, info) && !lecOnly;
   const autoHere = autoLive && target === 'lecpage' && !liveOffHere && !ownLive;
+  // 바로 배포 서버가 지금 참여 기능 방을 새로 열 수 있는지(/api/info live.accepting·onlyBooked, Publish.jsx 카드와 같은 기준). 못 열면 '함께 켜져요'라고 하지 않음
+  const autoOpen = instantLiveOpen(info, bp.meta?.date || '');
+  const autoOffer = autoLive && autoOpen; // 다른 곳을 골랐을 때 '바로 배포로 바꾸면 연결 없이 켜져요'라고 권해도 되는지
   // Cloudflare에 lecpage 커넥트로 배포하면 참여 기능 서버도 내 계정에 함께 생김(Publish.jsx Cloudflare 카드와 같은 조건) → 따로 연결하라고 하지 않음
   const cfTogether = target === 'cloudflare' && cfWay.way === 'ready' && liveOn && !liveReady && !skipLive && !lecOnly && !p.demo;
   const liveState = !liveOn ? 'off' : autoHere ? 'auto' : liveReady ? 'ok' : skipLive ? 'skip' : p.demo ? 'demo' : cfTogether ? 'cf' : 'todo';
   // 이수 기준(출석 %)이 사이트에 있는데 출석이 꺼져 있으면 참가자가 출석할 길이 없음(AI 에이전트·교재에서 온 연수에 흔함)
   const official = bp.meta?.admin?.kind === 'official' && !feats.includes('attendance');
-  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: p.deploy?.sites?.lecpage ? `${featLine} · 바로 배포한 사이트에서 켜져 있어요.` : `${featLine} · 바로 배포하면 함께 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', cf: `${featLine} · Cloudflare에 배포할 때 내 계정에 서버를 만들어 켜요.`, demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
+  const liveLine = { off: official ? `이수 기준(출석 ${bp.meta.admin.completionRate || 80}% 이상)이 사이트에 있는데 출석이 꺼져 있어요. [출석·이수 확인]을 켜 주세요.` : '꺼져 있어요. 질문·출석을 쓰려면 아래에서 켜요.', auto: p.deploy?.sites?.lecpage ? `${featLine} · 바로 배포한 사이트에서 켜져 있어요.` : autoOpen ? `${featLine} · 바로 배포하면 함께 켜져요.` : info?.live?.onlyBooked && !bp.meta?.date ? `${featLine} · 연수 날짜를 적으면 바로 배포할 때 함께 켜져요.` : `${featLine} · 지금은 바로 배포의 참여 기능 방을 새로 열 수 없어요. 사이트는 배포되고, 참여 기능은 내 계정에 연결하면 켜져요.`, ok: `${featLine} · ${LIVE_NAME[bp.live?.provider] || '서버'}에 연결돼 있어요.`, skip: '이번에는 참여 기능 없이 배포해요.', cf: `${featLine} · Cloudflare에 배포할 때 내 계정에 서버를 만들어 켜요.`, demo: `${featLine} · 체험에서는 연결하지 않아요.`, todo: lecOnly ? `${featLine} · 바로 배포한 사이트에서만 켜져 있어요.` : `${featLine} · ${target === 'zip' ? '사이트 파일(ZIP)로 직접 올리려면 연결해야 해요.' : target && target !== 'lecpage' ? `${SITE_LABEL[target] || target}에 배포하려면 연결해야 해요.` : '아직 연결 전이에요.'}` }[liveState];
   // 꺼져 있으면 고를 기능을 바로 보여 줌. 다른 곳에 배포할 때 연결 전이면 배포할 곳 바로 아래 안내가 할 일을 알려 주므로 이 줄은 접어 둠([연결]로 펼침)
   const elsewhere = !!target && target !== 'lecpage';
   const liveBody = open.live || liveState === 'off' || (liveState === 'todo' && !elsewhere);
@@ -334,7 +337,7 @@ export function StepShare({ p, update, go }) {
         {FEATURES.map((x) => <button type="button" class="chip" aria-pressed={String(feats.includes(x.value))} title={x.desc} onClick={() => toggleFeat(x.value)}>{x.label}</button>)}
       </div>
       {liveOn && !autoHere && <LiveSetup p={p} update={update} prefer={liveOffHere?.next} />}
-      {liveOn && autoLive && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
+      {liveOn && autoOffer && !autoHere && !liveOffHere && <p class="small muted">아래 배포할 곳을 바로 배포로 바꾸면 따로 연결하지 않아도 켜져요.</p>}
       {liveState === 'todo' && <div class="btn-row"><button type="button" class="btn btn-sm btn-quiet" onClick={() => { setSkipLive(true); setOpen((o) => ({ ...o, live: false })); }}>참여 기능 없이 배포</button></div>}
     </> });
   rows.push({ k: 'access', title: '공개 범위', state: needPw ? 'todo' : 'done', line: `${ACCESS[access]}${p.shareOriginals && originals ? ' · 교재 원본도 다운로드' : ''}`,
@@ -434,10 +437,10 @@ export function StepShare({ p, update, go }) {
       <Dialog open={!!ask} onClose={() => setAsk(null)} label="참여 기능 확인">
         <h2 class="h-sub">{lecOnly ? `${target === 'zip' ? 'ZIP' : SITE_LABEL[target] || '이곳'} 사이트에서는 참여 기능이 꺼져요` : '참여 기능이 아직 연결되지 않았어요'}</h2>
         <p>{lecOnly ? '참여 기능은 바로 배포한 사이트에서만 돼요. 참가자에게는 지금처럼 바로 배포 주소를 알려 주세요.'
-          : '이대로 배포하면 질문·투표·출석이 모이지 않아요.'}{autoLive && elsewhere && !lecOnly ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}</p>
+          : '이대로 배포하면 질문·투표·출석이 모이지 않아요.'}{autoOffer && elsewhere && !lecOnly ? ' 바로 배포는 연결 없이 바로 쓸 수 있어요.' : ''}</p>
         <div class="btn-row">
-          {autoLive && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
-          <button class={`btn${autoLive && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결</button>
+          {autoOffer && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
+          <button class={`btn${autoOffer && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결</button>
           <button class="btn btn-quiet" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포</button>
         </div>
       </Dialog>

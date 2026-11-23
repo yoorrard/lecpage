@@ -299,10 +299,17 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
       if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
       const json = (o) => r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify(o) });
       if (r.request().headers()['x-lecpage-bridge'] !== TOKEN) return r.fulfill({ status: 401, contentType: 'application/json', headers: cors, body: '{"ok":false,"error":"token"}' });
-      if (u.pathname === '/bridge/status') return json({ ok: true, version: '1.1.0', caps: ['status-caps'], chatgpt: { connected: logout === 0, plan: true }, agents: [{ id: 'claude', installed: false }, { id: 'codex', installed: false }] });
+      if (u.pathname === '/bridge/status') return json({ ok: true, version: '1.1.0', caps: ['status-caps', 'cloudflare', 'vercel'], chatgpt: { connected: logout === 0, plan: true }, agents: [{ id: 'claude', installed: false }, { id: 'codex', installed: false }] });
       if (u.pathname === '/bridge/chatgpt' && m === 'DELETE') { logout++; return json({ ok: true, revoked: true, connected: false }); }
+      // 커넥트에 남은 배포 계정 로그인: Cloudflare는 지워지고, Vercel은 다른 일이 돌고 있어 못 지움(409)
+      if (u.pathname === '/bridge/cloudflare/logout' && m === 'POST') { hostOut.cf++; return r.fulfill({ status: 202, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: true, cf: { id: 'j1', kind: 'logout', running: true, phase: 'tool' } }) }); }
+      if (u.pathname === '/bridge/cloudflare' && m === 'GET') return json({ ok: true, cf: { id: 'j1', kind: 'logout', running: false, result: { loggedOut: true } } });
+      if (u.pathname === '/bridge/vercel/logout' && m === 'POST') { hostOut.vc++; return r.fulfill({ status: 409, contentType: 'application/json', headers: cors, body: JSON.stringify({ ok: false, error: 'busy', message_ko: '다른 배포가 돌고 있어요.', vc: { id: 'j9', kind: 'site', running: true } }) }); }
       return r.abort();
     });
+    const hostOut = { cf: 0, vc: 0 };
+    // 이 브라우저에서 커넥트로 Cloudflare·Vercel에 배포해 본 적이 있음
+    await c.addInitScript(() => { try { if (!sessionStorage.getItem('lp-seeded-hosts')) { localStorage.setItem('lecpage:cf-used', '1'); localStorage.setItem('lecpage:vc-used', '1'); sessionStorage.setItem('lp-seeded-hosts', '1'); } } catch { /* 넘김 */ } });
     const pg = await c.newPage(); const e7 = L.watch(pg);
     await pg.goto(L.BASE + '#/settings', { waitUntil: 'load' });
     await pg.waitForSelector('.settings button:has-text("모든 데이터 삭제")', { timeout: 20000 });
@@ -313,6 +320,11 @@ const CUT2 = '<div data-lp="qa"></div></section>\n</main></body></html>\n```\n``
     await pg.click('.settings button:has-text("모든 데이터 삭제")');
     await pg.click('.settings button:has-text("한 번 더 눌러 삭제")');
     await pg.waitForFunction(() => !localStorage.getItem('lecpage:pc'), null, { timeout: 15000 }).catch(() => {});
+    // 커넥트에 남은 배포 계정 로그인도 지움: 지운 곳(Cloudflare)은 표시까지 없애고, 못 지운 곳(Vercel)은 사실대로 알리고 '연결돼 있어요' 표시를 남김(배포하기 화면의 [연결 해제]로 마저 지우게)
+    const wipeToast = await pg.waitForFunction(() => { const t = document.querySelector('.toast')?.textContent || ''; return /모두 지웠어요/.test(t) ? t : ''; }, null, { timeout: 10000 }).then((h) => h.jsonValue(), () => '');
+    const hostLeft = await pg.evaluate(() => ({ cf: localStorage.getItem('lecpage:cf-used'), vc: localStorage.getItem('lecpage:vc-used') }));
+    L.ok('wipe: signs the 커넥트 out of Cloudflare and Vercel too', hostOut.cf === 1 && hostOut.vc === 1, JSON.stringify(hostOut));
+    L.ok('wipe: a host it could not sign out stays marked and is named in the notice', !hostLeft.cf && hostLeft.vc === '1' && /Vercel 로그인은 지우지 못했어요/.test(wipeToast) && /\[연결 해제\]/.test(wipeToast) && !/Cloudflare 로그인은 지우지/.test(wipeToast), JSON.stringify([hostLeft, wipeToast]));
     const left = await pg.evaluate(() => ({ pc: localStorage.getItem('lecpage:pc'), conn: localStorage.getItem('lecpage:conn') }));
     L.ok('wipe: forgets 커넥트 pairing and chosen connection', !left.pc && !left.conn, JSON.stringify(left));
     await pg.waitForTimeout(300);

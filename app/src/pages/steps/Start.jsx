@@ -53,6 +53,8 @@ function useIngest(p, update, first = []) {
       const all = await blobs.all(p.id);
       const rest = (p.files || []).filter((m) => !m.pending && !m.photos && m.key && !again.includes(m) && all[m.key]).map((m) => new File([all[m.key]], m.name));
       for (const m of again) if (m.pdf?.key) await blobs.remove(p.id, m.pdf.key); // 예전 파일로 만든 PDF는 다시 만듦
+      // 새 원본을 먼저 담음: 다시 읽는 중에 창을 닫았다 열어도(이어서 읽기) 예전 파일이 아니라 새 파일을 읽게
+      for (const f of fileObjs) if (f.size <= 100e6) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
       return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos) });
     }
     const metas = replace ? [] : (p.files || []).filter((f) => !f.pending && !f.photos);
@@ -68,7 +70,19 @@ function useIngest(p, update, first = []) {
     const mats = [];
     // 쪽 그림 묶음: 더 넣을 때는 있던 묶음 뒤에 이어 붙이고, 다시 읽을 때(replace)는 처음부터 다시 매김(읽는 중에 창을 닫아도 어긋나지 않게 먼저 비워 적음)
     let sets = replace ? [] : slideSetsOf(p); let ok = 0; let cut = 0;
-    if (replace) { await blobs.removePrefix(p.id, 'assets/slides/'); update(setsFields([]), { now: true }); }
+    if (replace) {
+      await blobs.removePrefix(p.id, 'assets/slides/');
+      // 같은 저장에서 다시 읽을 교재를 '읽는 중'으로 적어 둠(뺀 교재는 목록에서 빠짐, 글도 비움): 다시 읽는 중에 창을 닫거나 새로 고쳐도
+      // 다시 열면 이어서 읽음(resume). 이렇게 적지 않으면 쪽 그림 묶음만 비워진 채 목록은 멀쩡해 보여, AI에게 글자만 감
+      const extOf = (n) => (n.split('.').pop() || '').toLowerCase();
+      const rereading = fileObjs.map((f) => {
+        const old = (p.files || []).find((m) => m.name === f.name && !m.photos);
+        return f.size <= 100e6
+          ? { name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: extOf(f.name), pages: 0, errors: [], pending: true, ...(old?.pdf ? { pdf: old.pdf } : {}) }
+          : { name: f.name, size: f.size, ext: extOf(f.name), pages: 0, errors: ['100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.'] };
+      });
+      update({ ...setsFields([]), material: null, files: [...rereading, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
+    }
     else if (sets.length) { // 읽다 만 교재가 남긴 쪽 그림(묶음에 적히지 않은 뒤 번호)은 지움
       const end = setsEnd(sets);
       for (const k of (await blobs.keys(p.id)).filter((x) => x.startsWith('assets/slides/') && numOf(x) > end)) await blobs.remove(p.id, k);

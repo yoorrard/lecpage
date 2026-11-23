@@ -100,6 +100,16 @@ const addFiles = async (p, files) => { await p.setInputFiles('.start-files input
     await p.reload(); await p.waitForSelector('.start-files .files li'); await L.aiReady(p, 60000);
     pr = await L.readProject(p, pid);
     ok('다시 열기: 묶음이 그대로', JSON.stringify(pr.slideSets) === JSON.stringify(s3));
+    // 교재를 빼고 남은 교재를 다시 읽는 중에 새로 고침: 다시 열면 이어서 읽어 쪽 그림이 남은 교재 것으로 다시 생김(조용히 사라지지 않음)
+    await p.click('.start-files .files li:has-text("ko-cid.pdf") .icon-btn');
+    const mid = await saved(p, pid, (x) => (x.slideSets || []).length === 0 && (x.files || []).some((f) => f.pending), 20000);
+    ok('빼는 중: 다시 읽을 교재를 "읽는 중"으로 적어 둠(뺀 교재는 목록에 없음)', (mid.slideSets || []).length === 0 && (mid.files || []).filter((f) => f.pending).map((f) => f.name).join() === 'guide.docx,plan.hwp' && !(mid.files || []).some((f) => f.name === 'ko-cid.pdf') && !mid.material, JSON.stringify([mid.slideSets, (mid.files || []).map((f) => [f.name, !!f.pending])]));
+    await p.reload(); await p.waitForSelector('.start-files .files li'); await L.aiReady(p, 120000);
+    pr = await saved(p, pid, (x) => (x.slideSets || []).length === 2 && !(x.files || []).some((f) => f.pending), 60000);
+    const s4 = pr.slideSets || []; const total4 = s4.reduce((n, s) => n + s.count, 0);
+    ok('빼는 중에 새로 고침: 다시 열면 남은 교재를 이어서 읽음(묶음·글)', s4.length === 2 && s4[0].name === 'guide.docx' && s4[0].first === 1 && s4[1].name === 'plan.hwp' && s4[1].first === s4[0].count + 1 && (pr.files || []).filter((f) => !f.photos).length === 2 && !!pr.material, JSON.stringify([s4, (pr.files || []).map((f) => [f.name, !!f.pending])]));
+    slides = await blobKeys(p, pid, 'assets/slides/');
+    ok('빼는 중에 새로 고침: 쪽 그림이 1번부터 빠짐없이', total4 > 0 && JSON.stringify(nums(slides)) === JSON.stringify(seq(1, total4)), `${slides.length} / ${total4}`);
     ok('화면 오류 없음(교재 둘)', errs.length === 0, errs.join(' | ').slice(0, 300));
     await ctx.close();
   }

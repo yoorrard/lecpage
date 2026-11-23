@@ -62,7 +62,14 @@ const whenVisible = (signal) => new Promise((res, rej) => {
 
 // ── 기록 저장 ──
 let lastBeat = 0;
+// 이 탭에서 지운 연수: 멈추는 중이던 작업이 늦게 끝나도(느린 저장·멈춤을 기다리는 시간이 지남) 지운 작업 기록을 다시 쓰지 않음
+const dropped = new Set();
+/** 연수를 지울 때(lib/project.js haltJobs): 이 연수의 작업 기록은 이제 쓰지 않음 */
+export function dropJob(pid) { dropped.add(pid); }
+/** 이 탭에서 그 연수의 작업이 아직 도는지(멈추라고 한 뒤 마지막 저장까지 끝나야 false) */
+export const runningHere = (pid) => !!live.get(pid)?.ctrl;
 async function save(rec, { quiet = false } = {}) {
+  if (dropped.has(rec.pid)) return;
   rec.updatedAt = Date.now(); rec.owner = TAB; rec.beat = Date.now(); lastBeat = rec.beat;
   const L = live.get(rec.pid); if (L) L.rec = rec;
   await jobsDb.put(JSON.parse(JSON.stringify(rec)));

@@ -59,6 +59,8 @@ const fake = http.createServer((req, res) => {
     await p.waitForSelector('.one-click button:has-text("Cloudflare 계정으로 배포")', { timeout: 15000 });
     const card = (await p.locator('.publish').innerText()).replace(/\s+/g, ' ');
     const liveOn = /참여 기능 서버도 내 계정에 만들어요/.test(card);
+    // 이 연수는 참여 기능이 켜져 있고 연결 전이므로 서버를 함께 만들어야 함(아래 `liveOn` 조건의 단언들이 건너뛰어지지 않게 여기서 못 박음)
+    ok('participation server is made together with the site', liveOn, card.slice(0, 200));
     ok('cloudflare card: one button, login once', /로그인 한 번으로 사이트와 참여 기능을/.test(card) && /처음 한 번만 브라우저에서 Cloudflare에 로그인/.test(card), card.slice(0, 200));
     ok('no separate "connect participation" box when the relay is made together', !liveOn || await p.locator('.pub-live').count() === 0);
     ok('manual ZIP steps are folded away', await p.locator('.publish .run-alt:not([open])').count() === 1 && !(await p.locator('.publish .walk-h').first().isVisible().catch(() => false)));
