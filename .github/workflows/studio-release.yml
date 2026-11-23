@@ -33,7 +33,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends poppler-utils > /dev/null
           npm install --no-save --no-audit --no-fund --ignore-scripts "pdfjs-dist@$(node -p "require('./app/package.json').dependencies['pdfjs-dist']")"
       - name: lecpage 커넥트 시험
-        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs skills/lecpage/engine/test/studio-update.test.mjs skills/lecpage/engine/test/studio-sign.test.mjs
+        run: node --test skills/lecpage/engine/test/studio.test.mjs skills/lecpage/engine/test/studio-sub.test.mjs skills/lecpage/engine/test/studio-update.test.mjs skills/lecpage/engine/test/studio-sign.test.mjs skills/lecpage/engine/test/prepare-formats.test.mjs
   release:
     needs: test
     # main과 v 태그에서만 올림(다른 브랜치에서 손으로 돌려도 올리지 않음)
@@ -48,13 +48,22 @@ jobs:
         with: { node-version: 22 }
       - name: 묶기
         run: sh scripts/studio-launcher/package.sh out
-      # 강사 PC처럼 묶음만으로(따로 설치한 pdf.js·파이썬 없이) PDF 교재를 읽는지: 못 읽으면 올리지 않음
-      - name: 묶음만으로 PDF 읽기 확인
+      # 강사 PC처럼 묶음만으로(따로 설치한 pdf.js·파이썬·LibreOffice·poppler 없이, PATH에는 node뿐) 받는 교재 형식을 모두 읽는지: 하나라도 못 읽으면 올리지 않음.
+      # 형식마다 읽은 쪽 수가 맞고 읽지 못한 교재가 없어야 하며, 에이전트가 볼 수 없는 걸린 링크 주소(links.md)도 나와야 함(읽기 도구가 묶음에서 빠지면 여기서 걸림)
+      - name: 묶음만으로 교재 읽기 확인(PDF·PPTX·DOCX·HWP·HWPX·글)
         run: |
-          mkdir -p "$RUNNER_TEMP/pc"
+          set -eu
+          mkdir -p "$RUNNER_TEMP/pc" "$RUNNER_TEMP/pc-home"
           tar -xzf out/lecpage-connect.tar.gz -C "$RUNNER_TEMP/pc"
           test -f "$RUNNER_TEMP/pc/node_modules/pdfjs-dist/legacy/build/pdf.mjs"
-          node "$RUNNER_TEMP/pc/skills/lecpage/scripts/lecpage.mjs" prepare skills/lecpage/engine/test/fixtures/ko-cid.pdf -o "$RUNNER_TEMP/pc-work" --json --no-python --no-slides 2>/dev/null | tail -1 | grep -q '"ok":true'
+          NODE_DIR=$(dirname "$(command -v node)")
+          FX=skills/lecpage/engine/test/fixtures
+          for item in ko-cid.pdf:3 workshop.pdf:13 scan.pdf:2 workshop.pptx:13 guide.docx:5 plan.hwp:3 plan.hwpx:3 notes.md:3; do
+            f=${item%%:*}; want=${item##*:}
+            env -i PATH="$NODE_DIR" HOME="$RUNNER_TEMP/pc-home" node "$RUNNER_TEMP/pc/skills/lecpage/scripts/lecpage.mjs" prepare "$FX/$f" -o "$RUNNER_TEMP/pc-work/$f" --json --no-python 2>/dev/null | tail -1 > "$RUNNER_TEMP/pc-out.json" || true
+            node -e 'const [out, f, want] = process.argv.slice(1); let j = null; try { j = JSON.parse(require("fs").readFileSync(out, "utf8")); } catch {} if (!(j && j.ok && j.pages === +want && !(j.unread || []).length)) { console.error(f + ": 묶음만으로 읽지 못했어요 " + JSON.stringify(j).slice(0, 400)); process.exit(1); } console.log(f + ": " + j.pages + "쪽")' "$RUNNER_TEMP/pc-out.json" "$f" "$want"
+          done
+          for f in workshop.pdf workshop.pptx guide.docx plan.hwp plan.hwpx; do grep -q 'https://' "$RUNNER_TEMP/pc-work/$f/links.md"; done
       # 서명(ed25519, Node.js 내장 crypto만). 비밀 키는 이 단계에만 넘김(올리기 단계·다른 작업에는 없음).
       # 공개 키를 아직 넣지 않았고 비밀도 없으면 건너뜀. 공개 키가 들어 있는데 비밀이 없거나 맞지 않으면 실패(서명 없는 묶음은 실행 파일이 받지 않음)
       - name: 서명

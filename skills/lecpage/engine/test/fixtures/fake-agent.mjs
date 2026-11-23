@@ -49,7 +49,8 @@ if (!isRun) { console.error(`fake ${id}: unknown ${argv.join(' ')}`); process.ex
 
 const cwd = process.cwd();
 const task = existsSync('TASK.md') ? readFileSync('TASK.md', 'utf8') : '';
-log({ id, argv, cwd, pid: process.pid, files: readdirSync(cwd), hasApiKey: !!process.env.ANTHROPIC_API_KEY, task });
+const peek = (f) => (existsSync(f) ? readFileSync(f, 'utf8') : null); // 에이전트가 받은 보조 글자·링크 주소(시험이 내용을 확인)
+log({ id, argv, cwd, pid: process.pid, files: readdirSync(cwd), hasApiKey: !!process.env.ANTHROPIC_API_KEY, task, md: peek('work/material.md'), links: peek('work/links.md'), shots: existsSync('work/site/material') ? readdirSync('work/site/material').sort() : [] });
 
 const C = id === 'claude';
 let n = 0;

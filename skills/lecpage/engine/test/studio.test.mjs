@@ -295,6 +295,92 @@ test('jobs: PDF 읽기 도구가 없는 PC에서도 PDF 교재로 만들기가 �
   assert.ok(!evs.some((e) => /pdfjs|npm i|PyMuPDF|python/i.test(JSON.stringify(e.type === 'log' ? '' : e))), '사용자에게 보이는 단계·결과에 개발자 말이 없음');
 });
 
+// 받는 교재 형식 전부를 같은 눈으로(운영자 요청, 2026-11-23): 변환·그리기 도구가 없는 PC(묶음과 Node뿐)에서 에이전트가 실제로 받는 것과
+// 작업 지시가 어긋나지 않는지. 앱이 그려 보낸 쪽 그림의 주인, 쪽 그림이 없는 교재, 읽지 못한 교재, 에이전트가 볼 수 없는 걸린 링크 주소, 통째로 못 여는 큰 PDF.
+// (형식마다 읽히는지·쪽 번호 맞춤의 자세한 경우는 prepare-formats.test.mjs)
+test('jobs: 변환·그리기 도구가 없는 PC에서 형식마다 작업 지시가 있는 그대로(쪽 그림의 주인·없는 것·읽지 못한 교재·걸린 링크 주소·큰 PDF)', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만', timeout: 300000 }, async () => {
+  const st = await launch({ PATH: BIN, LECPAGE_NO_PYTHON: '1' }); // PATH에 가짜 에이전트뿐: LibreOffice·pdftoppm·파이썬을 찾지 못함
+  const { port } = st;
+  const token = await tokenOf(port);
+  const O = { 'x-lecpage-bridge': token, origin: `http://127.0.0.1:${port}` };
+  const fx = (n) => readFileSync(join(HERE, 'fixtures', n));
+  const file = (name, bytes, more = {}) => ({ name, base64: Buffer.from(bytes).toString('base64'), ...more });
+  const shots = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`material/p-${String(i + 1).padStart(3, '0')}.webp`, { base64: 'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==' }]));
+  const oldPpt = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(1200)]); // 예전 파워포인트(.ppt)처럼 보이는 파일
+  const run = async (files, site) => {
+    rmSync(LOG, { force: true });
+    const r = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'claude', kind: 'make', request: '', meta: { title: '' }, files, ...(site ? { site } : {}) } });
+    assert.equal(r.status, 202, r.text);
+    const evs = await events(port, token, r.json().jobId);
+    await req(port, 'DELETE', `/bridge/jobs/${r.json().jobId}`, { headers: O });
+    assert.ok(!evs.some((e) => e.type !== 'log' && /pdfjs|npm i|PyMuPDF|python|LibreOffice|pdftoppm|poppler/i.test(JSON.stringify(e))), '사용자에게 보이는 단계·결과에 개발자 말이 없음');
+    return { evs, last: evs.at(-1), got: readLog().find((l) => l.id === 'claude' && l.argv) };
+  };
+  const heads = (md) => String(md || '').split('\n').filter((l) => l.startsWith('## '));
+  try {
+    // 1) PPTX + 앱이 그려 보낸 쪽 그림: 그 그림 그대로(다시 그리지 않음), 보조 글자의 쪽 번호가 그림 번호와 맞고 '쪽 그림 없음'이라고 하지 않음
+    let x = await run([file('강의.pptx', fx('workshop.pptx'))], shots(13));
+    assert.equal(x.last.type, 'done', JSON.stringify(x.evs.slice(-2)));
+    assert.match(x.got.task, /교재 쪽 그림: `work\/site\/material\/` \(p-001 ~ p-013, \.webp\) — 사이트에 그대로/);
+    assert.match(x.got.task, /`work\/material\.md` \(쪽 그림에 없는 것만 찾아요/);
+    assert.match(x.got.task, /걸린 링크 주소\(쪽 그림과 PDF에서는 보이지 않아요\): `work\/links\.md`/);
+    assert.equal(x.got.shots.length, 13);
+    assert.ok(heads(x.got.md).length === 13 && heads(x.got.md).every((h, i) => h.startsWith(`## p-${String(i + 1).padStart(3, '0')} · 강의.pptx ${i + 1}쪽`)), heads(x.got.md).slice(0, 2).join(' / '));
+    assert.ok(!/쪽 그림 없음/.test(x.got.md));
+    assert.match(x.got.links, /강의\.pptx 8쪽: 제미나이 바로가기 → https:\/\/gemini\.google\.com\//);
+
+    // 2) PPTX만(앱이 쪽 그림을 못 보냄): 쪽 그림 줄이 없고, 보조 글자가 '쪽 그림에 없는 것만'이라고 하지 않음
+    x = await run([file('강의.pptx', fx('workshop.pptx'))]);
+    assert.equal(x.last.type, 'done');
+    assert.ok(!/교재 쪽 그림:/.test(x.got.task), '없는 쪽 그림을 있다고 하지 않음');
+    assert.match(x.got.task, /`work\/material\.md` \(쪽 그림이 없는 교재예요/);
+    assert.match(heads(x.got.md)[0], /\(쪽 그림 없음\)$/);
+
+    // 3) 한글 + 앱 쪽 그림 4장(읽은 '부분'은 3개): 그림 범위는 실제 그림대로, 부분 번호를 그림 번호라고 하지 않음
+    x = await run([file('계획.hwp', fx('plan.hwp'))], shots(4));
+    assert.equal(x.last.type, 'done');
+    assert.match(x.got.task, /\(p-001 ~ p-004, \.webp\)/);
+    assert.ok(heads(x.got.md).every((h) => /^## 계획\.hwp \d번째 부분/.test(h)), heads(x.got.md).join(' / '));
+    assert.match(x.got.md, /계획\.hwp를 쪽마다 그린 것이라 아래 번호와는 차례가 달라요/);
+
+    // 4) 교재 여럿: 쪽 그림은 앱이 알려 준 교재 하나의 것 · 다른 교재는 쪽 그림이 없다고 · 읽지 못한 교재는 말없이 빼지 않음
+    x = await run([file('강의.pptx', fx('workshop.pptx')), file('안내.docx', fx('guide.docx'), { pageImages: true }), file('옛날.ppt', oldPpt)], shots(2));
+    assert.equal(x.last.type, 'done', JSON.stringify(x.evs.slice(-2)));
+    assert.match(x.got.task, /\(p-001 ~ p-002, \.webp\) — `안내\.docx`의 쪽 그림이에요\. 사이트에 그대로/);
+    assert.match(x.got.task, /쪽 그림이 없는 교재: `강의\.pptx`\n/);
+    assert.match(x.got.task, /읽지 못한 교재: `옛날\.ppt` — 파일을 열지 못해/);
+    assert.ok(x.evs.some((e) => e.type === 'log' && /읽지 못한 교재는 빼고 만들어요: 옛날\.ppt/.test(e.text)));
+    assert.ok(heads(x.got.md).every((h) => !/^## p-/.test(h)), '워드의 쪽 그림 번호를 슬라이드에 붙이지 않음');
+
+    // 5) 예전 앱(어느 교재의 쪽 그림인지 알려 주지 않음) + 교재 둘: 모른다고 적음
+    x = await run([file('강의.pptx', fx('workshop.pptx')), file('안내.docx', fx('guide.docx'))], shots(2));
+    assert.match(x.got.task, /\(p-001 ~ p-002, \.webp\) — 넣은 교재 가운데 하나의 쪽 그림이에요\./);
+    assert.ok(!/쪽 그림이 없는 교재:/.test(x.got.task));
+    assert.match(x.got.md, /쪽 그림이 어느 교재의 몇 쪽인지는 여기 적혀 있지 않아요/);
+
+    // 6) 읽지 못하는 교재 하나뿐: 어느 파일이 왜 안 됐고 무엇을 하면 되는지 쉬운 말로
+    x = await run([file('옛날.ppt', oldPpt)]);
+    assert.equal(x.last.type, 'error'); assert.equal(x.last.code, 'prepare');
+    assert.match(x.last.error, /^'옛날\.ppt' 교재를 읽지 못했어요\. 예전 파워포인트 파일\(\.ppt\)은 바로 읽을 수 없어요\..*PDF/);
+    assert.equal(x.got, undefined, '에이전트를 켜지 않음');
+
+    // 7) PDF: 보조 글자는 없고, 원본을 읽어도 나오지 않는 걸린 링크 주소만 따로
+    x = await run([file('연수 교재.pdf', readFileSync(PDF))], shots(13));
+    assert.equal(x.last.type, 'done');
+    assert.ok(!/material\.md/.test(x.got.task) && x.got.md === null, 'PDF 교재면 보조 글자 없음');
+    assert.match(x.got.task, /`work\/links\.md`/);
+    assert.match(x.got.links, /연수 교재\.pdf 11쪽: NotebookLM 열기 → https:\/\/notebooklm\.google\.com\//);
+
+    // 8) 20MB가 넘는 PDF + 쪽별로 여는 도구(poppler)가 없는 PC: Claude Code가 원본을 열지 못하므로(통째로는 20MB까지, 실측) 코드가 뽑은 글을 두고 그대로 알림
+    const big = Buffer.concat([readFileSync(PDF), Buffer.from('\n'), Buffer.alloc(21 * 1024 * 1024, '%pad\n')]);
+    x = await run([file('큰 교재.pdf', big)]);
+    assert.equal(x.last.type, 'done', JSON.stringify(x.evs.slice(-2)));
+    assert.match(x.got.task, /20MB가 넘는 PDF\(`큰 교재\.pdf`\)는 이 PC에서 원본이 열리지 않을 수 있어, 코드가 뽑은 글자를 `work\/material\.md`에 넣었어요/);
+    assert.ok(!/PDF가 아닌 교재에서 코드가 뽑은 글자/.test(x.got.task));
+    assert.equal(heads(x.got.md).length, 13); assert.match(heads(x.got.md)[0], /^## p-001 · 큰 교재\.pdf 1쪽/);
+  } finally { st.p.kill('SIGTERM'); }
+});
+
 test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issues) → DELETE, 에이전트는 빈 임시 폴더·옵션 그대로·검수 명령 실행', { skip: !posix && '셸 스크립트 가짜는 POSIX에서만', timeout: 180000 }, async () => {
   rmSync(LOG, { force: true });
   const st = await launch();

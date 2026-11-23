@@ -251,8 +251,11 @@ export async function bridgeFiles(blobs, pid, project, limits = null) {
       if (c) { items.push({ name: pdfName, type: 'application/pdf', v: c }); names.add(pdfName.toLowerCase()); }
     }
   }
+  // 사이트용 교재 쪽 그림(site['material/p-NNN'])은 교재 하나의 것(넣을 때 마지막으로 그린 교재, project.slidesFrom): 그 교재(와 같은 이름의 PDF 짝)에 표시해
+  // 커넥트가 AI에게 '어느 교재의 쪽 그림인지' 있는 그대로 알리게 함(교재가 여럿일 때 다른 교재의 쪽으로 잘못 읽지 않게). 예전 커넥트는 이 칸을 그냥 넘김
+  const from = project.slidesFrom ? stemOf(project.slidesFrom) : '';
   const out = [];
-  for (const x of fitFiles(items, limits)) out.push({ name: x.name, type: x.type, base64: await toBase64(x.v) });
+  for (const x of fitFiles(items, limits)) out.push({ name: x.name, type: x.type, base64: await toBase64(x.v), ...(from && stemOf(x.name) === from ? { pageImages: true } : {}) });
   return out;
 }
 const MiB = 1048576;

@@ -27,6 +27,25 @@ function pageText(p) {
   const tables = (p.tables || []).map((t) => (t.rows || []).map((r) => (Array.isArray(r) ? r.join(' | ') : '')).join('\n')).filter(Boolean);
   return [...(p.paragraphs || []).map((x) => (typeof x === 'string' ? x : x?.text || '')), ...tables].filter(Boolean).join('\n');
 }
+const PAGE_IMG = /^p-(\d{3,4})\.(webp|png|jpe?g)$/i;
+const stemOf = (n) => String(n || '').normalize('NFC').replace(/\.[^.]+$/, '').toLowerCase();
+/** 교재 안 자리: 슬라이드·PDF는 '3쪽', 한글·워드·글은 제목으로 나눈 '3번째 부분'(실제 쪽이 아님) */
+const placeOf = (p) => (p.unit === 'section' ? `${p.filePage}번째 부분` : `${p.filePage}쪽`);
+/**
+ * 글자·단추·그림에 걸린 링크 가운데 쪽 글에 주소가 보이지 않는 것 → ['이름 → 주소'].
+ * 쪽 그림에는 이름만 보이고, PDF 원본을 읽어도 주소는 나오지 않아(실측) 에이전트가 알 길이 없음
+ */
+function hiddenLinks(p, text) {
+  const out = [], seen = new Set();
+  for (const l of p.links || []) {
+    const url = String(l?.url || '').trim();
+    if (!url || l.from === 'text' || seen.has(url) || text.includes(url)) continue;
+    seen.add(url);
+    const label = String(l.label || '').replace(/\s+/g, ' ').trim();
+    out.push(label && label !== url ? `${label} → ${url}` : url);
+  }
+  return out;
+}
 
 /**
  * ingest 결과 → 쪽 목록(교재 여러 개면 번호를 이어서: 첫 교재 1~12, 둘째 13부터). PPTX와 함께 준 같은 내용의 PDF(renderOf)는 쪽 그림만 그리는 데 써서 쪽을 두 번 세지 않음.
@@ -37,22 +56,75 @@ function ingestPages(m, image = () => '') {
   const renderOnly = new Set((m.files || []).filter((f) => f.renderOf).map((f) => f.id));
   return m.pages.filter((p) => !renderOnly.has(p.file)).map((p, i) => {
     const title = String(p.title || '').trim();
-    return { page: i + 1, file: files[p.file]?.name || '', pdf: files[p.file]?.type === 'pdf', filePage: p.page, title, text: pageText(p), notes: String(p.notes || '').trim(), image: image(i + 1, p) };
+    const f = files[p.file] || {};
+    const text = pageText(p);
+    return { page: i + 1, file: f.name || '', fileId: p.file, pdf: f.type === 'pdf', unit: f.unit || 'page', filePage: p.page, hidden: !!p.hidden, title, text, links: hiddenLinks(p, `${title}\n${text}`), notes: String(p.notes || '').trim(), image: image(i + 1, p) };
   });
+}
+/**
+ * 이미 놓인 쪽 그림(lecpage 커넥트: 앱이 브라우저 안에서 그려 보낸 site/material/p-NNN.*)을 쪽에 맞춤. 앱은 교재 하나의 쪽만 그려 보냄(1번부터).
+ * of: 그 교재 이름(앱이 알려 줄 때). 없으면 교재가 하나(같은 이름의 PDF 짝 포함)일 때만 그 교재로 봄.
+ * 슬라이드·PDF면 쪽마다 번호·그림을 맞추고(숨긴 슬라이드는 그림이 없음), 한글·워드처럼 '부분'으로 읽은 교재나 어느 교재인지 모를 때는 맞추지 않음(틀린 짝을 알리지 않게).
+ * 맞춘 쪽만 page(=그림 번호)·image를 갖고 나머지는 page 0 → { owner: 교재 이름|'', mapped: 맞춘 쪽 수 }
+ */
+function fitGivenImages(m, pages, given, of = '') {
+  for (const p of pages) { p.page = 0; p.image = ''; }
+  const files = (m.files || []).filter((f) => f.type !== 'link');
+  const stems = new Set(files.map((f) => stemOf(f.name)));
+  const want = of ? stemOf(of) : stems.size === 1 ? [...stems][0] : '';
+  const cand = want ? files.filter((f) => stemOf(f.name) === want) : [];
+  if (!cand.length) return { owner: '', mapped: 0 };
+  const pagesOf = (f) => pages.filter((p) => p.fileId === f.id);
+  const visible = (list, skips) => { const v = list.filter((p) => !p.hidden); return skips || (given.length !== list.length && given.length === v.length) ? v : list; };
+  // 같은 이름의 PDF가 있으면 쪽 그림은 그 PDF에서 그린 것(앱: 이 PC의 프로그램으로 만든 PDF·함께 넣은 PDF)
+  const pdf = cand.find((f) => f.type === 'pdf');
+  const deck = pdf?.renderOf ? files.find((f) => f.id === pdf.renderOf) : null;
+  const own = deck || (pdf && pagesOf(pdf).length ? pdf : cand.find((f) => pagesOf(f).length)) || null;
+  const owner = (own || cand.find((f) => f.name === of) || cand[0]).name;
+  if (!own || own.unit === 'section') return { owner, mapped: 0 };
+  const target = deck ? visible(pagesOf(deck), !!pdf.skipsHidden) : own.type === 'pdf' ? pagesOf(own) : visible(pagesOf(own), true); // 브라우저 안에서 그린 PPTX는 숨긴 슬라이드를 건너뜀
+  if (given.some((g) => g.n > target.length)) return { owner, mapped: 0 };
+  for (const g of given) { target[g.n - 1].page = g.n; target[g.n - 1].image = `material/${g.name}`; }
+  return { owner, mapped: given.length };
 }
 /**
  * 보조 글자(material.md): PDF가 아닌 교재(PPTX·HWP·HWPX·DOCX·글)의 쪽만. 쪽 그림에 없는 발표자 노트와, 쪽 그림을 못 그린 쪽의 글을 찾는 데 씀.
  * PDF는 에이전트가 원본을 직접 읽으므로 코드가 뽑은 글을 두지 않음(순서가 섞이거나 틀린 글을 원본 대신 믿지 않게). 담을 쪽이 없으면 ''
+ * 예외 pdfTextMb: 이 크기를 넘는 PDF는 글을 넣음(이 PC의 에이전트가 그 원본을 열지 못할 때 lecpage 커넥트가 정함. 그 PDF의 쪽은 p.pdfText)
+ * given: 쪽 그림을 prepare가 그리지 않고 받은 때({ owner, mapped }). 쪽 번호(p-NNN)는 맞춘 쪽에만 붙이고 '(쪽 그림 없음)'은 적지 않음(모르는 것을 없다고 하지 않게)
  */
-function materialMd(m, pages) {
-  const own = pages.filter((p) => !p.pdf);
+function materialMd(m, pages, { given = null, pdfTextMb = 0 } = {}) {
+  const own = pages.filter((p) => !p.pdf || p.pdfText);
   if (!own.length) return '';
   const names = [...new Set(own.map((p) => p.file))];
-  return [`# 교재 보조 글자 (${names.join(', ')})`, '', `코드가 뽑은 글이라 틀리거나 빠질 수 있어요. 쪽 그림(site/material/p-NNN.webp)과 다르면 쪽 그림이 맞아요. PDF 교재는 여기 없어요(원본을 직접 읽어요).`, '',
-    ...own.flatMap((p) => [`## p-${pad3(p.page)} · ${p.file} ${p.filePage}쪽${p.title ? ` · ${p.title}` : ''}${p.image ? '' : ' (쪽 그림 없음)'}`, '', p.text || '(글자 없음)', ...(p.notes ? ['', `> 발표자 노트: ${p.notes.replace(/\n/g, ' ')}`] : []), ''])].join('\n');
+  const big = [...new Set(own.filter((p) => p.pdfText).map((p) => p.file))];
+  const about = !given ? ''
+    : given.mapped ? ` 쪽 그림은 ${given.owner}의 쪽 차례예요(그 쪽은 제목 앞에 p-NNN을 적었어요).`
+      : given.owner ? ` 쪽 그림은 ${given.owner}를 쪽마다 그린 것이라 아래 번호와는 차례가 달라요.`
+        : ' 쪽 그림이 어느 교재의 몇 쪽인지는 여기 적혀 있지 않아요.';
+  const head = (p) => `## ${p.page ? `p-${pad3(p.page)} · ` : ''}${p.file} ${placeOf(p)}${p.title ? ` · ${p.title}` : ''}${p.hidden ? ' (숨긴 슬라이드)' : ''}${given || p.image ? '' : ' (쪽 그림 없음)'}`;
+  return [`# 교재 보조 글자 (${names.join(', ')})`, '', `코드가 뽑은 글이라 틀리거나 빠질 수 있어요. 쪽 그림(site/material/p-NNN.webp)과 다르면 쪽 그림이 맞아요. PDF 교재는 여기 없어요(원본을 직접 읽어요).${big.length ? ` 다만 ${pdfTextMb}MB가 넘는 PDF(${big.join(', ')})는 글을 함께 넣었어요.` : ''}${about}`, '',
+    ...own.flatMap((p) => [head(p), '', p.text || '(글자 없음)', ...(p.notes ? ['', `> 발표자 노트: ${p.notes.replace(/\n/g, ' ')}`] : []), ''])].join('\n');
+}
+/** 교재에 걸린 링크 주소(links.md): 쪽 글에 주소가 보이지 않는 링크만(PDF 교재도). 없으면 '' */
+function linksMd(pages) {
+  const rows = pages.flatMap((p) => p.links.map((l) => `- ${p.file} ${placeOf(p)}: ${l}`));
+  return rows.length ? ['# 교재에 걸린 링크 주소', '', '글자·단추·그림에 걸려 있어 쪽 그림과 PDF에서는 주소가 보이지 않는 링크예요. 교재 파일에 적힌 그대로예요.', '', ...rows, ''].join('\n') : '';
+}
+/** 읽지 못한 교재(오류가 났거나, 오류는 없어도 읽은 쪽이 하나도 없는 파일: 빈 문서·속이 깨진 파일) → [{ name, code, message_ko }] */
+function unreadFiles(m) {
+  const read = new Set((m.files || []).filter((f) => (m.pages || []).some((p) => p.file === f.id)).map((f) => f.name));
+  const out = [];
+  for (const e of m.errors || []) if (e?.file && !read.has(e.file) && !out.some((x) => x.name === e.file)) out.push({ name: e.file, code: e.code || 'unknown', message_ko: e.message_ko || '' });
+  for (const f of m.files || []) if (f.name && f.type !== 'link' && !read.has(f.name) && !out.some((x) => x.name === f.name)) out.push({ name: f.name, code: 'no-pages', message_ko: '읽을 쪽이 없는 파일이에요. 원본 프로그램에서 다시 저장하거나 PDF로 저장해 올려 주세요.' });
+  return out;
 }
 
-/** prepare <교재…> -o work */
+/**
+ * prepare <교재…> -o work
+ * lecpage 커넥트가 넘기는 환경 변수(사람이 쓰는 옵션 아님): LECPAGE_GIVEN_IMAGES=1(쪽 그림은 이미 site/material에 있음: 앱이 그려 보냄) ·
+ * LECPAGE_GIVEN_IMAGES_OF=<그 교재 이름> · LECPAGE_PDF_TEXT_MB=<숫자>(이 크기를 넘는 PDF는 글을 material.md에: 그 PC의 에이전트가 원본을 못 열 때)
+ */
 export async function prepareCmd(h) {
   const { args, rel, fail, say, writeJson } = h;
   const inputs = args._.map((p) => (/^https?:/i.test(p) ? p : resolve(p)));
@@ -64,8 +136,12 @@ export async function prepareCmd(h) {
   const { tangledTitle } = await imp('src/kit/meta.js');
   const t0 = Date.now();
   const m = await C.ingestPaths(inputs, { withImages: false, today: args.today || undefined, python: !args['no-python'] });
-  if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => e.message_ko))].join(' '));
-  if (!args['no-slides']) await C.attachSlides(m, tmp, join(work, '.lecpage', 'material.json'), { onProgress: (d, t) => { if (Date.now() - t0 > 8000 && d % 10 === 0) console.error(`… 쪽 그림 ${d}${t ? '/' + t : ''}`); } });
+  const unread = unreadFiles(m);
+  if (!m.pages?.length) fail('교재에서 읽은 내용이 없어요. ' + [...new Set((m.errors || []).map((e) => e.message_ko))].join(' '), { unread });
+  // 받은 쪽 그림(커넥트): 그리지 않고 있는 그림을 씀
+  const givenList = process.env.LECPAGE_GIVEN_IMAGES === '1' ? readdirSync(matDir).map((name) => ({ name, n: +(PAGE_IMG.exec(name) || [])[1] || 0 })).filter((g) => g.n > 0).sort((a, b) => a.n - b.n) : [];
+  const drawn = !givenList.length && !args['no-slides'];
+  if (drawn) await C.attachSlides(m, tmp, join(work, '.lecpage', 'material.json'), { onProgress: (d, t) => { if (Date.now() - t0 > 8000 && d % 10 === 0) console.error(`… 쪽 그림 ${d}${t ? '/' + t : ''}`); } });
   // 쪽 번호: 교재 여러 개면 이어서(첫 교재 1~12, 둘째 13부터). 그림은 site/material/p-NNN.webp
   let images = 0;
   const pages = ingestPages(m, (n, p) => {
@@ -77,35 +153,49 @@ export async function prepareCmd(h) {
     return img;
   }).map((p) => ({ ...p, title: tangledTitle(p.title) ? '' : p.title }));
   rmSync(join(work, '.lecpage', 'slides'), { recursive: true, force: true });
-  writeJson(join(work, '.lecpage', 'pages.json'), pages.map(({ page, title, text }) => ({ page, title, text: text.slice(0, 400) })));
+  const given = givenList.length ? fitGivenImages(m, pages, givenList, process.env.LECPAGE_GIVEN_IMAGES_OF || '') : null;
+  if (given) images = givenList.length;
+  const pdfTextMb = Math.max(0, +process.env.LECPAGE_PDF_TEXT_MB || 0);
+  if (pdfTextMb) { const big = new Set((m.files || []).filter((f) => f.type === 'pdf' && (f.size || 0) > pdfTextMb * 1048576).map((f) => f.id)); for (const p of pages) if (big.has(p.fileId)) p.pdfText = true; }
+  const numbered = pages.filter((p) => p.page > 0).sort((a, b) => a.page - b.page); // 받은 쪽 그림이면 맞춘 쪽만(그림 번호 = 쪽 번호)
+  writeJson(join(work, '.lecpage', 'pages.json'), numbered.map(({ page, title, text }) => ({ page, title, text: text.slice(0, 400) })));
   // 교재 목록(앱으로 넘길 때 원본을 함께 담으려고 경로도 적음. 이 컴퓨터 안에서만 씀)
   writeJson(join(work, '.lecpage', 'sources.json'), (m.files || []).filter((f) => f.path).map((f) => ({ name: f.name, type: f.type, pages: f.pages || 0, size: f.size || 0, path: f.path, ...(f.renderOf ? { renderOf: true } : {}) })));
   h.saveState(work, { v: 2, out: 'dist' });
   // 보조 글자(PDF가 아닌 교재만): 쪽 글에 '프롬프트' 같은 꼬리표는 붙이지 않음(무엇이 원문인지는 AI가 쪽 그림과 문맥으로 판단)
-  const md = materialMd(m, pages);
+  const md = materialMd(m, pages, { given, pdfTextMb });
   if (md) writeFileSync(join(work, 'material.md'), md); else rmSync(join(work, 'material.md'), { force: true });
+  const links = linksMd(pages);
+  if (links) writeFileSync(join(work, 'links.md'), links); else rmSync(join(work, 'links.md'), { force: true });
   const metaPath = join(work, 'lecpage.json');
   if (!existsSync(metaPath)) writeJson(metaPath, { v: 2, title: '', subtitle: '', sessions: [], venue: '', mode: 'offline', audience: 'teachers', instructors: [], features: [], theme: {}, facts: [] });
   const originals = inputs.filter((p) => !/^https?:/i.test(p));
-  writeFileSync(join(work, 'README.md'), readmeText({ work, pages, images, originals, md: !!md }));
+  const last = given ? givenList[givenList.length - 1].n : pages.length;
+  writeFileSync(join(work, 'README.md'), readmeText({ work, last, images, originals, md: !!md, links: !!links, unread }));
   const noImg = pages.filter((p) => !p.image && !p.pdf); // PDF 쪽은 원본을 읽으니 셈하지 않음
+  // 교재마다: 읽은 쪽 수(한글·워드·글은 부분 수) · 쪽 그림 수(받은 쪽 그림이 그 교재 것이면 그 장수) · 같은 내용의 PDF 짝(twin)
+  const files = (m.files || []).filter((f) => f.type !== 'link' && !unread.some((u) => u.name === f.name)).map((f) => {
+    const own = pages.filter((p) => p.fileId === f.id);
+    return { name: f.name, type: f.type || '', unit: f.unit || '', pages: own.length, images: given && given.owner === f.name && !given.mapped ? givenList.length : own.filter((p) => p.image).length, ...(f.renderOf ? { twin: true } : {}), ...(own.some((p) => p.pdfText) ? { text: true } : {}) };
+  });
   say([
-    `준비 ${rel(work)}: 교재 ${pages.length}쪽 · 쪽 그림 ${images}장(site/material/)${md ? ' · 보조 글자 material.md(PDF가 아닌 교재)' : ''}`,
-    images < pages.length && !args['no-slides'] && !(m.warnings || []).some((w) => w.code === 'render-failed') ? `주의 쪽 그림을 ${pages.length - images}쪽 만들지 못했어요(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
-    noImg.length && images ? `쪽 그림이 없는 쪽은 material.md의 글로 읽어요(${noImg.slice(0, 3).map((p) => p.page).join('·')}${noImg.length > 3 ? '…' : ''}쪽).` : '',
+    `준비 ${rel(work)}: 교재 ${pages.length}쪽 · 쪽 그림 ${images}장(site/material/)${md ? ' · 보조 글자 material.md(PDF가 아닌 교재)' : ''}${links ? ' · 링크 주소 links.md' : ''}`,
+    ...unread.map((u) => `주의 ${u.name}: 읽지 못했어요(이 교재는 빠졌어요). ${u.message_ko}`),
+    !given && images < pages.length && !args['no-slides'] && !(m.warnings || []).some((w) => w.code === 'render-failed') ? `주의 쪽 그림을 ${pages.length - images}쪽 만들지 못했어요(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
+    !given && noImg.length && images ? `쪽 그림이 없는 쪽은 material.md의 글로 읽어요(${noImg.slice(0, 3).map((p) => p.page).join('·')}${noImg.length > 3 ? '…' : ''}쪽).` : '',
     ...(m.warnings || []).filter((w) => w.code !== 'python-fallback').slice(0, 3).map((w) => `주의 ${w.file ? `${w.file}: ` : ''}${w.message_ko}`),
     `다음 교재 원본·쪽 그림 읽기 → ${rel(join(work, 'site'))}/index.html·${rel(join(work, 'lecpage.json'))} 쓰기 → check ${rel(work)} (이 작업의 경로 요약: ${rel(join(work, 'README.md'))})`,
-  ], { ok: true, work, pages: pages.length, images, readme: join(work, 'README.md') });
+  ], { ok: true, work, pages: pages.length, images, readme: join(work, 'README.md'), files, unread, ...(given ? { given } : {}), ...(links ? { links: true } : {}) });
 }
 
-function readmeText({ work, pages, images, originals, md }) {
-  const range = images ? `p-001 ~ p-${pad3(pages.length)}` : '없음';
+function readmeText({ work, last, images, originals, md, links, unread = [] }) {
+  const range = images ? `p-001 ~ p-${pad3(last)}` : '없음';
   const L = `node ${join(HERE, 'lecpage.mjs')}`;
   return `# 이 작업의 경로
 
 - 교재 원본: ${originals.map((p) => `\`${p}\``).join(', ') || '(주소로 받은 교재)'} — PDF는 원본을 직접 읽어요.
 - 쪽 그림: \`site/material/\` (${range}, 교재 여러 개는 이어서 번호). 사이트에 그대로 써도 돼요(\`material/p-001.webp\`).
-${md ? '- 보조 글자: `material.md` (PDF가 아닌 교재에서 코드가 뽑은 글·발표자 노트. 쪽 그림과 다르면 쪽 그림이 맞아요)\n' : ''}- 강의 기능 자리 표시(쓰고 싶을 때만): \`${join(REF, 'kit.md')}\`
+${md ? '- 보조 글자: `material.md` (PDF가 아닌 교재에서 코드가 뽑은 글·발표자 노트. 쪽 그림과 다르면 쪽 그림이 맞아요)\n' : ''}${links ? '- 링크 주소: `links.md` (글자·단추에 걸려 있어 쪽 그림과 PDF에서는 보이지 않는 주소)\n' : ''}${unread.length ? `- 읽지 못한 교재: ${unread.map((u) => `\`${u.name}\``).join(', ')} (내용이 빠졌어요. PDF로 저장해 다시 주면 읽어요)\n` : ''}- 강의 기능 자리 표시(쓰고 싶을 때만): \`${join(REF, 'kit.md')}\`
 - 쓸 곳: \`site/\`(첫 쪽 \`index.html\`, 나머지 구성은 자유) · 연수 정보 \`lecpage.json\`
 
 ## 확인(원하면)
