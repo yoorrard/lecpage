@@ -21,13 +21,19 @@ function jwtExp(jwt) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** 호출 하나를 기다리는 시간(밀리초). Cloudflare API가 답 없이 멈추면 배포가 끝나지 않으므로 끊고 오류로 돌려줌(앱의 [다시 배포]로 이어짐) */
+export const CALL_TIMEOUT_MS = 20000;
+/** 큰 본문을 보내는 호출(자산 올리기·배포 만들기) */
+export const UPLOAD_TIMEOUT_MS = 90000;
+
 /**
- * @param {{ api?: string, accountId: string, project: string, token: string, fetch?: typeof fetch, now?: () => number, wait?: (ms: number) => Promise<void> }} o
+ * @param {{ api?: string, accountId: string, project: string, token: string, fetch?: typeof fetch, now?: () => number, wait?: (ms: number) => Promise<void>, timeout?: number }} o
+ *   timeout(시험용): 모든 호출을 이 시간에 끊음
  */
 export class PagesClient {
-  constructor({ api = CF_API, accountId, project, token, fetch: f, now = () => Date.now(), wait = sleep }) {
+  constructor({ api = CF_API, accountId, project, token, fetch: f, now = () => Date.now(), wait = sleep, timeout = 0 }) {
     this.api = String(api).replace(/\/+$/, ''); this.accountId = accountId; this.project = project; this.token = token;
-    this.f = f || ((...a) => fetch(...a)); this.now = now; this.wait = wait;
+    this.f = f || ((...a) => fetch(...a)); this.now = now; this.wait = wait; this.timeout = timeout > 0 ? timeout : 0;
     this.jwt = ''; this.jwtUntil = 0;
     /** 부른 횟수(Cloudflare API 속도 제한 어림: 토큰마다 5분에 1,200번)와 그중 429 */
     this.calls = 0; this.limited = 0;
@@ -36,11 +42,12 @@ export class PagesClient {
 
   async call(step, url, init = {}, bearer = this.token) {
     this.calls++;
-    let res;
-    try { res = await this.f(url, { ...init, headers: { authorization: `Bearer ${bearer}`, ...(init.headers || {}) } }); }
-    catch (e) { throw new PagesError(`Cloudflare API에 닿지 못했어요(${step}).`, { step }); }
-    let j = null;
-    try { j = await res.json(); } catch { /* 빈 응답 */ }
+    const { timeout = CALL_TIMEOUT_MS, ...rest } = init;
+    let res; let j = null;
+    try {
+      res = await this.f(url, { ...rest, signal: AbortSignal.timeout(this.timeout || timeout), headers: { authorization: `Bearer ${bearer}`, ...(rest.headers || {}) } });
+      try { j = await res.json(); } catch (e) { if (e?.name === 'TimeoutError' || e?.name === 'AbortError') throw e; /* 빈 응답 */ }
+    } catch (e) { throw new PagesError(`Cloudflare API에 닿지 못했어요(${step}).`, { step }); }
     if (!res.ok || (j && j.success === false)) {
       if (res.status === 429) this.limited++;
       const err = j?.errors?.[0] || {};
@@ -49,19 +56,32 @@ export class PagesClient {
     return j ? j.result : null;
   }
 
+  /**
+   * 다시 보내도 결과가 같은 호출(토큰 받기·자산 확인·올리기·열쇠 적기)만: 닿지 못했거나(시간 초과 포함) 5xx면 잠깐 뒤 한 번 더.
+   * Cloudflare API의 순간 오류로 배포가 실패로 끝나지 않게(wrangler도 자산 올리기를 여러 번 다시 함). 429(계정 API가 5분 막힘)·4xx는 그대로 돌려줌.
+   * 배포 만들기는 다시 하지 않음(두 번 만들어질 수 있음)
+   */
+  async twice(fn) {
+    try { return await fn(); }
+    catch (e) {
+      if (!(e instanceof PagesError) || (e.status && e.status < 500)) throw e;
+      await this.wait(400);
+      return fn();
+    }
+  }
   /** 자산 올리기용 JWT. 만료 1분 전이면 새로 받음 */
   async uploadJwt(force = false) {
     if (!force && this.jwt && this.jwtUntil - this.now() > 60000) return this.jwt;
-    const r = await this.call('upload-token', `${this.base}/upload-token`);
+    const r = await this.twice(() => this.call('upload-token', `${this.base}/upload-token`));
     if (!r || typeof r.jwt !== 'string') throw new PagesError('upload-token 응답에 jwt가 없어요.', { step: 'upload-token' });
     this.jwt = r.jwt; this.jwtUntil = jwtExp(r.jwt) || this.now() + 4 * 60000;
     return this.jwt;
   }
   /** JWT로 부르는 자산 API. 401(만료)이면 JWT를 새로 받아 한 번 더 */
-  async assets(step, path, body) {
+  async assets(step, path, body, timeout = CALL_TIMEOUT_MS) {
     for (let t = 0; ; t++) {
       const jwt = await this.uploadJwt(t > 0);
-      try { return await this.call(step, `${this.api}/pages/assets/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body }, jwt); }
+      try { return await this.twice(() => this.call(step, `${this.api}/pages/assets/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body, timeout }, jwt)); }
       catch (e) { if (t === 0 && (e.status === 401 || e.code === 8000013)) continue; throw e; }
     }
   }
@@ -82,7 +102,7 @@ export class PagesClient {
       chunks.push(`${i ? ',' : ''}{"key":${JSON.stringify(it.hash)},"value":"`, ...it.parts, `","metadata":{"contentType":${JSON.stringify(it.contentType || 'application/octet-stream')}},"base64":true}`);
     });
     chunks.push(']');
-    await this.assets('upload', 'upload', new Blob(chunks));
+    await this.assets('upload', 'upload', new Blob(chunks), UPLOAD_TIMEOUT_MS);
   }
   async upsertHashes(hashes) {
     if (!hashes.length) return;
@@ -100,7 +120,7 @@ export class PagesClient {
     if (message) form.append('commit_message', message.slice(0, 300));
     if (headers) form.append('_headers', new File([headers], '_headers'));
     if (redirects) form.append('_redirects', new File([redirects], '_redirects'));
-    return this.call('deployments', `${this.base}/deployments`, { method: 'POST', body: form });
+    return this.call('deployments', `${this.base}/deployments`, { method: 'POST', body: form, timeout: UPLOAD_TIMEOUT_MS });
   }
   getDeployment(id) { return this.call('deployment', `${this.base}/deployments/${encodeURIComponent(id)}`); }
   /** 준비될 때까지 기다림(1·2·4·8초). 실패면 PagesError, 끝까지 모르면 마지막 상태를 돌려줌 */

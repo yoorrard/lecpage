@@ -8,7 +8,10 @@ export const DEFAULTS = {
   SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
-  SITES_PER_DEVICE: 10, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). 2026-11-23 5→10: 여러 반·여러 과정을 하루에 준비하는 강사
+  SITES_PER_DEVICE: 3, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). 2026-11-23 10→3(운영자 결정: 한 사람 하루 몫으로 3개면 충분). PLAN=paid면 10
+  // 한 사람 몫(기기·IP의 새 사이트 횟수)을 처음부터 다시 세게 하는 번호: 이 값을 1 올려 배포하면 그 순간부터 모두가 새 한도로 0부터 셈(지난 번호의 기록은 날이 지나면 지워짐).
+  // 하루 전체 상한(DAILY_SITE_CAP)·방 상한·요청 예산은 그대로(전체 수용량 보호). 2026-11-23: 2(한도를 3으로 낮추며 이미 쓴 횟수를 0으로)
+  QUOTA_EPOCH: 2,
   SITES_PER_HOUR_SHARED: 30, // 기기 표가 있을 때 같은 IP(학교 공유기 하나에 강사 여럿)의 시간·하루 상한
   SITES_PER_DAY_SHARED: 60,
   DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). worker 보기 기본. pages 보기는 200, PLAN=paid면 300(pages 1000). 차면 앱이 '내 계정에 배포하기'로 안내
@@ -37,7 +40,7 @@ export const PLAN_DEFAULTS = {
   free: {},
   // 유료도 하루 예산을 둠(비용 상한): 100만이면 날마다 다 써도 월 약 $15(기본 $5 포함, capacity.js costOf). 60%부터 새 사이트·새 방은 강사 계정으로.
   // 더 받으려면 DAILY_REQUEST_BUDGET을 올리고, 끄려면 0(그때는 Cloudflare 지출 한도만 남음 → README §4)
-  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 20 },
+  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 10 },
 };
 /**
  * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청 약 12~25, 저장 약 0.2MB).
@@ -97,6 +100,7 @@ export function config(env = {}) {
     sitesPerHour: num(env.SITES_PER_HOUR, DEFAULTS.SITES_PER_HOUR),
     sitesPerDay: num(env.SITES_PER_DAY, DEFAULTS.SITES_PER_DAY),
     sitesPerDevice: num(env.SITES_PER_DEVICE, D.SITES_PER_DEVICE),
+    quotaEpoch: num(env.QUOTA_EPOCH, DEFAULTS.QUOTA_EPOCH),
     sitesPerHourShared: num(env.SITES_PER_HOUR_SHARED, DEFAULTS.SITES_PER_HOUR_SHARED),
     sitesPerDayShared: num(env.SITES_PER_DAY_SHARED, DEFAULTS.SITES_PER_DAY_SHARED),
     pagesApiBudget: num(env.PAGES_API_BUDGET, DEFAULTS.PAGES_API_BUDGET),
@@ -143,7 +147,7 @@ export function config(env = {}) {
 /**
  * VIEW=pages 설정. 넷 다 있어야 켜짐: CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_TOKEN(비밀, Pages Write만), PAGES_HOST('<프로젝트 주소>.pages.dev')
  * PAGES_SITE_URL(선택): 사이트 주소 틀. 기본 'https://{branch}.<PAGES_HOST>/'. CF_API_BASE(시험용): API 주소
- * @returns {{ api: string, accountId: string, project: string, token: string, host: string, siteUrl: string } | null}
+ * @returns {{ api: string, accountId: string, project: string, token: string, host: string, siteUrl: string, timeoutMs: number } | null}
  */
 export function pagesConfig(env) {
   const t = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -154,7 +158,9 @@ export function pagesConfig(env) {
   if (!siteUrl.includes('{branch}') || !/^https?:\/\//.test(siteUrl)) siteUrl = `https://{branch}.${host}/`;
   if (!siteUrl.endsWith('/')) siteUrl += '/';
   const api = /^https?:\/\/[^\s]+$/.test(t(env.CF_API_BASE)) ? t(env.CF_API_BASE).replace(/\/+$/, '') : 'https://api.cloudflare.com/client/v4';
-  return { api, accountId, project, token, host, siteUrl };
+  // CF_API_TIMEOUT_MS(시험용): Pages API 호출 하나를 기다리는 시간. 없으면 pages-api.js 기본값(20초, 올리기 90초)
+  const timeoutMs = Number(env.CF_API_TIMEOUT_MS) > 0 ? Math.floor(Number(env.CF_API_TIMEOUT_MS)) : 0;
+  return { api, accountId, project, token, host, siteUrl, timeoutMs };
 }
 /**
  * ACCESS_TEAM_DOMAIN: "<팀>.cloudflareaccess.com"(https:// 붙여도 됨). 로컬 시험만 http://127.0.0.1:<포트>·http://localhost:<포트>.

@@ -249,7 +249,17 @@ export class Gate extends DurableObject {
   accepting(now = Date.now()) { return this.capacity(now).newSites; }
   status() {
     const now = Date.now(); const cap = this.capacity(now);
-    return { accepting: cap.newSites, paused: cap.state === 'paused', requests: this.dayData(dayOf(now)).req || 0, budget: this.cfg.dailyRequestBudget, reserved: this.reservedLeft(now), capacity: this.publicCapacity(cap) };
+    return { accepting: cap.newSites, paused: cap.state === 'paused', requests: this.dayData(dayOf(now)).req || 0, budget: this.cfg.dailyRequestBudget, reserved: this.reservedLeft(now), capacity: this.publicCapacity(cap), rooms: this.roomsNow(now) };
+  }
+  /**
+   * 지금 새 참여 기능 방을 열 수 있는지(room()과 같은 기준. /api/info의 live.accepting). 이미 묶인 방은 이것과 상관없이 그대로 됨.
+   * accepting false면 reason: paused(운영자 멈춤)·storage(저장 공간)·budget(오늘 요청 몫)·room_cap(오늘 새 방 상한).
+   * onlyBooked: 붐벼서 연수 날짜가 가까운(NEAR_DAYS 안) 사이트의 방만 받는 중. 그날 방이 차서 넘긴 예약(booked)은 사이트마다 달라 여기 없음
+   */
+  roomsNow(now = Date.now()) {
+    const cap = this.capacity(now, { forRoom: true });
+    const reason = cap.state === 'paused' ? 'paused' : cap.reason === 'storage' || cap.reason === 'budget' ? cap.reason : !cap.newRooms ? 'room_cap' : '';
+    return reason ? { accepting: false, reason, resetAt: cap.resetAt } : { accepting: true, ...(cap.onlyBooked ? { onlyBooked: true } : {}) };
   }
   /** 앱에 주는 단계(넘길 곳 포함) */
   publicCapacity(cap) {
@@ -377,10 +387,15 @@ export class Gate extends DurableObject {
     return out;
   }
 
+  /**
+   * 한 사람 몫(새 사이트의 기기·IP 횟수) 열쇠에 넣는 번호. config의 QUOTA_EPOCH를 올려 배포하면 열쇠가 바뀌어 모두 0부터 다시 셈.
+   * 1(처음)은 예전 열쇠 그대로. 하루 전체 상한(site:all)과 신고 횟수에는 넣지 않음
+   */
+  quotaTag() { const e = this.cfg.quotaEpoch; return e > 1 ? `e${e}:` : ''; }
   /** 횟수 제한 열쇠. IP는 그대로 두지 않고 시간 구간과 함께 해시해 둠(구간이 지나면 지움) */
   async windows(kind, ip, now) {
     const hour = Math.floor(now / HOUR_MS); const day = dayOf(now);
-    const who = (await sha256Hex(`${kind}|${ipBucket(ip)}|${day}`)).slice(0, 24);
+    const who = (kind === 'site' ? this.quotaTag() : '') + (await sha256Hex(`${kind}|${ipBucket(ip)}|${day}`)).slice(0, 24);
     return {
       hour: { k: `${kind}:h:${who}:${hour}`, exp: (hour + 1) * HOUR_MS },
       day: { k: `${kind}:d:${who}:${day}`, exp: (day + 1) * DAY_MS },
@@ -394,7 +409,7 @@ export class Gate extends DurableObject {
   /** 기기 하나의 하루 몫 열쇠(기기 표를 그대로 두지 않고 날짜와 함께 해시) */
   async deviceWindow(dev, now) {
     const day = dayOf(now);
-    return { k: `site:dev:${(await sha256Hex(`dev|${dev}|${day}`)).slice(0, 24)}:${day}`, exp: (day + 1) * DAY_MS };
+    return { k: `site:dev:${this.quotaTag()}${(await sha256Hex(`dev|${dev}|${day}`)).slice(0, 24)}:${day}`, exp: (day + 1) * DAY_MS };
   }
 
   /** 새 사이트 자리 잡기: 횟수·저장량을 보고 목록에 올림 */

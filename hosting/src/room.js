@@ -87,9 +87,18 @@ export class Room extends LiveRoom {
     if (!b) return liveError(404, 'unknown_training', '아직 준비되지 않은 연수 코드입니다.');
     if (b.blocked) return liveError(403, 'blocked', '신고가 들어와 잠시 가려 둔 연수예요.');
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
-    const wait = request.headers.has('x-lec-admin') ? 0 : await this.overBudget(b);
+    const wait = (await this.fromTeacher(request, b)) ? 0 : await this.overBudget(b);
     if (wait) return liveError(429, 'room_busy', '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', { 'retry-after': String(wait) }, { retryAfter: wait });
     return super.fetch(request); // 긴 대기도 LiveRoom이 맡음
+  }
+  /**
+   * 강사 화면의 요청인지: X-Lec-Admin이 이 방의 관리자 키(또는 강사 세션)와 맞을 때만. 강사 요청은 방 요청 상한에 세지 않음(넘쳐도 기록을 받아 갈 수 있게).
+   * 머리글만 붙인 요청(빈 값·아무 글자·아주 긴 값)은 참가자 요청과 똑같이 셈: 머리글 하나로 상한을 비켜 가지 못하게
+   */
+  async fromTeacher(request, b) {
+    const h = request.headers.get('x-lec-admin');
+    if (!h || h.length > 600) return false;
+    try { const core = await this.core(); return core.isAdmin(core.trainingOrNull(b.code), await core.credentials(request.headers)) === true; } catch { return false; }
   }
   /** 방마다 요청 상한(live/host.js RoomBudget): 받으면 0, 넘쳤으면 기다릴 초. 참가자 수는 방의 셈(메모리, 들어올 때마다 맞춰짐)을 그대로 써서 한꺼번에 들어와도 따라감 */
   async overBudget(b) {

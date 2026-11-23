@@ -128,7 +128,8 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `APP_ORIGINS` | (없음) | `ALLOWED_ORIGINS`에 더할 앱 주소(설정 스크립트 `--app-origin`이 비밀 값으로) |
 | `DAILY_REQUEST_BUDGET` | 100000 | 하루 요청 예산(무료 요금제 한도). 넘침 단계(§4 넘침 처리): 45%부터 연수 날짜가 14일 안인 사이트·방만, 60%부터 새 사이트·새 방을 받지 않고(`rate_limited`) 남은 몫은 이미 배포한 사이트·진행 중인 연수에 씁니다. `/api/info`의 `capacity`가 단계·까닭·넘길 곳을 알려 앱이 '내 계정에 배포하기'로 안내합니다. `paid` 기본 1000000: 날마다 다 써도 월 약 $15(기본 $5 포함)인 비용 상한. 0이면 끔(그때는 Cloudflare 지출 한도만 남음) |
 | `SITES_PER_HOUR` / `SITES_PER_DAY` | 6 / 20 | 같은 IP에서 새 사이트(앱이 기기 표를 보내지 않을 때. 학교는 IP 하나를 같이 씁니다) |
-| `SITES_PER_DEVICE` | 10 (`paid`: 20) | 앱이 기기 표(`device`)를 보내면 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음) |
+| `SITES_PER_DEVICE` | 3 (`paid`: 10) | 앱이 기기 표(`device`)를 보내면 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음) |
+| `QUOTA_EPOCH` | 2 | 한 사람 몫(기기·IP의 새 사이트 횟수)을 다시 세게 하는 번호. 1 올려 배포하면 그 순간부터 모두가 0부터 셈(하루 전체 상한·방 상한·요청 예산은 그대로) |
 | `SITES_PER_HOUR_SHARED` / `SITES_PER_DAY_SHARED` | 30 / 60 | 기기 표가 있을 때 같은 IP의 상한(강사 연수에서 여럿이 공유기 하나를 써도 막히지 않게, 기기 표를 바꿔 가며 쓰는 것은 묶음) |
 | `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | `pages` 보기 200 / 100 (`paid`: 1000 / 1000), `worker` 보기 30 / 30 (`paid`: 300 / 300) | 하루에 새로 만드는 사이트, 실시간 방(전체). 차면 API가 `rate_limited`(`reason: 'daily_cap'`·`'room_cap'`, 저장 공간이 차면 `full`)로 답하고 앱은 '내 계정에 배포하기'로 안내합니다. `pages` 보기는 새 사이트 하나가 Worker 요청 약 17·저장 약 0.2MB라 크게 둠(오래 가는 한도는 저장: 200개 × 60일 ≈ 2.4GB) |
 | `PAGES_API_BUDGET` | 900 | Pages API를 5분에 이만큼까지(Cloudflare API 한도 토큰마다 5분 1,200번의 75%). 넘칠 배포는 `rate_limited` + `reason: 'pages_api'` + `retry-after`로 줄을 세움. 넘으면 그 토큰의 모든 API가 5분 막히기 때문 |
@@ -189,13 +190,15 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `full` | 60% 이상, 하루 상한, 저장 공간, Pages API 줄 서기 | 강사 계정으로(`reason`: `budget`·`daily_cap`·`storage`·`pages_api`) |
 | `paused` | 운영자 [새 배포 멈추기] | 강사 계정으로 |
 
-- **공정 몫**: 계정이 없으므로 앱이 보내는 기기 표(`device`)로 기기마다 하루 10개, 같은 IP는 넉넉히(시간 30·하루 60). 기기 표가 없는 예전 앱은 IP마다 시간 6·하루 20. 거절 오류에 `scope: 'you'`(이 기기·주소만 막힘)와 `'everyone'`(오늘 모두)을 나눠 줍니다.
+- **공정 몫**: 계정이 없으므로 앱이 보내는 기기 표(`device`)로 기기마다 하루 3개(다시 배포는 세지 않음), 같은 IP는 넉넉히(시간 30·하루 60). 기기 표가 없는 예전 앱은 IP마다 시간 6·하루 20. 거절 오류에 `scope: 'you'`(이 기기·주소만 막힘)와 `'everyone'`(오늘 모두)을 나눠 줍니다.
 - **예약형 수용량**: 앱이 배포할 때 보낸 날짜·시간·인원·네트워크로 그날 어림을 쌓아 두고, 그날 어림이 하루 예산의 70%(`BOOK_SHARE`)를 넘으면 **그날이 아니라 만들 때** 알립니다(`reason: 'booked'`). 앱이 `caps: ['split']`을 보내면 사이트는 받고 **참여 기능 방만** 강사 계정으로 넘기라고 알리고(`live: { ok: false, next: ['cloudflare','supabase'] }`), 예전 앱에는 예전처럼 사이트까지 거절해 처음부터 내 계정으로 안내하게 합니다.
 - **오래 쓸 사이트**: 예약 없이 만든 사이트에는 `advice: { code: 'long_term' }`("내 계정에 배포하면 기간 제한이 없어요")를 같이 줍니다(막지는 않음. 바로 배포는 체험·단기 연수에 가장 좋음).
 - **Pages API 줄 서기**: 5분 창이 차면 `reason: 'pages_api'`와 `retry-after`(1~5분). 그래도 Cloudflare가 429를 주면 5분 동안 새 배포를 줄 세우고 운영자에게 알립니다.
 - 넘길 곳(`next`): `cloudflare`·`vercel`·`github`·`netlify`(앱이 사이트 크기·인원으로 순서를 다시 정함), 참여 기능(`liveNext`): `cloudflare`·`supabase`. 같은 사이트 파일 그대로라 품질이 같습니다.
 
-**요청을 줄이는 장치**: `pages` 보기는 엔진 런타임 `.js`의 Pages 열쇠를 배포 때 미리 계산해 사이트마다 다시 받지 않고, 512KB 아래 파일은 배포 때 HTML과 한 번에 Pages에 올립니다. Gate는 목록·방 묶기 확인을 한 번에 받고 저장량 합계를 메모리로 셉니다(사이트 표를 매번 훑지 않음). `/api/info`는 isolate 20초·브라우저 30초 기억. `worker` 보기는 런타임 정적 사본(`/rt/`)·내용 지문(`?v=`)·1년 캐시(§6).
+**요청을 줄이는 장치**: `pages` 보기는 엔진 런타임 `.js`의 Pages 열쇠를 배포 때 미리 계산해 사이트마다 다시 받지 않고, 512KB 아래 파일은 배포 때 HTML과 한 번에 Pages에 올립니다. Gate는 목록·방 묶기 확인을 한 번에 받고 저장량 합계를 메모리로 셉니다(사이트 표를 매번 훑지 않음). `/api/info`는 isolate 20초·브라우저 30초 기억.
+
+**Cloudflare API가 흔들릴 때**(`pages` 보기): Pages API 호출은 하나에 20초(자산 올리기·배포 만들기 90초)까지만 기다리고, 다시 보내도 결과가 같은 호출(토큰·자산 확인·올리기·열쇠 적기)은 닿지 못했거나 5xx면 한 번 더 합니다. 그래도 안 되면 502(`error.step`에 어느 호출인지)로 끝내고, 앱의 [다시 배포]가 같은 사이트에 올린 데부터 이어 갑니다(하루 몫을 다시 쓰지 않음). 배포 만들기는 다시 하지 않습니다(두 번 만들어질 수 있음). 배포 만들기의 답이 끊겨 Cloudflare에만 배포가 생겼을 수 있을 때는 적어 두었다가(사이트 상태의 `orphan`·`trying`) 사이트를 내리거나 기간이 끝날 때 그 주소를 안내 화면으로 꼭 덮습니다. 429(계정 API가 5분 막힘)는 `rate_limited`·`reason: 'pages_api'`로 알리고 5분 동안 새 배포를 줄 세웁니다. `worker` 보기는 런타임 정적 사본(`/rt/`)·내용 지문(`?v=`)·1년 캐시(§6).
 
 **유료 전환(Workers Paid 월 $5)**: 관리 화면 맨 위 한 줄이 권합니다(§10). `worker` 보기는 하루 한도에 닿으면 사이트까지 멈추므로 여러 강사에게 열어 둘 서버면 처음부터. `pages` 보기는 사이트가 멈추지 않으므로 참여 기능(특히 학교망 연수)이 많은 날이 이어질 때. `PLAN=paid`면 하루 상한 1,000·긴 대기를 Worker가 대신하고, `MAX_TOTAL_BYTES`도 그때 올립니다. 순서:
 1. 대시보드에서 Workers Paid 구독
@@ -261,7 +264,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 - Pages 열쇠는 wrangler와 같은 blake3(base64 + 확장자)입니다([`src/blake3.js`](src/blake3.js), blake3-wasm과 맞춰 시험). 형식(`content-type`)은 확장자 표로 정해 올립니다.
 - HTML은 배포할 때 한 번 손봐(위. 신고 링크는 이 호스트의 `/report`, 미리보기 카드 주소는 Pages 주소) 올리고, 응답 머리글은 서버가 만든 `_headers`로만 정합니다(사이트 쪽·보조 쪽 CSP·nosniff·noindex·SVG 가둠·내려받기 형식·강사 화면 틀 막기, Pages 기본 `Access-Control-Allow-Origin: *`는 뗌). `robots.txt`는 호스트 정책으로 바꾸고, `404.html`이 없으면 넣습니다(없으면 Pages가 모든 주소에 첫 화면을 보여 줌). 사이트가 보낸 `_headers`·`_redirects`는 쓰지 않습니다.
 - **영상·소리(mp3·m4a·mp4·webm)는 Pages에 올리지 않고** Durable Object에 두어 Worker가 Range(206)까지 맞춰 내보냅니다. Pages·Workers 정적 자산은 Range 요청에 200을 주는데 Safari(아이폰)가 영상을 틀 때 Range가 필요합니다(공식 문서). Pages 주소로 오면 `_redirects`가 `/s/<id>/…`로 넘깁니다.
-- 사이트마다 출처(`s-<id>.….pages.dev`)가 갈려 브라우저 저장소를 같이 쓰지 않고, 한 사이트가 피싱 신고로 막혀도 다른 사이트는 그대로입니다. 다만 모두 같은 '사이트'(등록 가능 도메인 `<프로젝트>.pages.dev`)라 SameSite 쿠키는 함께 갑니다(lecpage는 쿠키를 쓰지 않음).
+- 사이트마다 출처(`s-<id>.….pages.dev`)가 갈려 브라우저 저장소를 같이 쓰지 않고, 한 사이트가 피싱 신고로 막혀도 다른 사이트는 그대로입니다. 다만 모두 같은 '사이트'(등록 가능 도메인 `<프로젝트>.pages.dev`)라 SameSite 쿠키는 함께 갑니다(lecpage는 쿠키를 쓰지 않음). 그래서 사이트 스크립트의 쿠키 쓰기를 올릴 때 거절합니다([`src/sitecheck.js`](src/sitecheck.js): `document.cookie = …`, 이어 붙인 이름·변수 이름·다른 이름으로 받은 `document`·`Reflect.set`·글자 코드 같은 돌려 쓴 모양까지). 이 검사는 실수와 흔한 우회를 거르는 것이고, 마음먹고 숨긴 코드까지 다 막지는 못합니다(`pages.dev` 아래에서는 사이트마다 쿠키 도메인을 나눌 수 없음). 누군가 큰 쿠키를 그 도메인에 붙이는 사이트를 올리면 그 사이트에 들른 방문자는 다른 바로 배포 사이트가 열리지 않을 수 있으니, 신고가 오면 그 사이트를 지우고 방문자에게는 `pages.dev` 쿠키 삭제(또는 두 번째 주소 `/s/<id>/`)를 안내하세요.
 - 가리기: 그 브랜치에 '가려 둔 사이트' 화면만 배포합니다(지난 배포는 풀 때 다시 쓰려고 둠. 배포마다 생기는 고유 주소 `<해시>.….pages.dev`는 앱·서버가 어디에도 내보내지 않음). 풀기: 마지막 배포 목록으로 다시 배포하고 안내 화면 배포를 지움. 기간 끝: 그 브랜치에 '보관 기간이 끝났어요' 화면 하나만 남기고 나머지를 지움(주소가 Cloudflare 영어 404가 되지 않게). 강사가 내림(사이트 열쇠): 그 브랜치에 '강사가 사이트를 내렸어요' 화면 하나만 남기고 나머지를 지움. 운영자 지우기: 그 브랜치 배포를 모두 지움(가장 최근 배포를 못 지우면 '보관 기간이 끝났어요' 화면만 남김). 확실히 내려야 하면 가리지 말고 지우세요.
 - 같은 사이트를 이 호스트의 `/s/<id>/`로도 엽니다(학교망에서 pages.dev가 막혔을 때 쓰는 두 번째 주소. Worker가 Pages에서 가져와 같은 머리글로 내보내고, 이 주소로 연 방문은 Worker 요청에 듦). 이 주소에서는 사이트 스크립트가 돌지 않아 사이트가 직접 만든 움직임·버튼은 동작하지 않고, 엔진 키트(질문·투표 등)는 그대로 동작합니다.
 - 강사 화면에 운영자 공지 띠를 붙이지 않습니다(정적 배포라 보는 때에 끼울 수 없음). 앱 공지는 그대로입니다.
@@ -306,7 +309,7 @@ CORS는 `ALLOWED_ORIGINS`의 출처만. 브라우저가 다른 출처에서 보�
 
 | 요청 | 답 |
 |---|---|
-| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, capacity, view: 'pages'\|'worker', keepAlive, siteScripts, limits: { maxBytes, maxFileBytes, maxFiles, days }, report, live?: { url, uploads, maxUploadMb } }` · `capacity: { state: 'open'\|'tight'\|'full'\|'paused', reason, newSites, newRooms, onlyBooked, pct, resetAt, retryAt?, message_ko?, next, liveNext, siteDays }`(§4 넘침 처리) · 30초 캐시 |
+| `GET /api/info` | `{ ok, v: 1, plan, accepting, paused?, capacity, view: 'pages'\|'worker', keepAlive, siteScripts, limits: { maxBytes, maxFileBytes, maxFiles, days, sitesPerDevice }, quota(= `QUOTA_EPOCH`), report, live?: { url, uploads, maxUploadMb, accepting, reason?, resetAt?, onlyBooked? } }` · `live.accepting`: 지금 새 참여 기능 방을 열 수 있는지(false면 `reason`: `paused`·`storage`·`budget`·`room_cap`, 이미 묶인 방은 그대로 됨), `live.onlyBooked`: 붐벼서 연수 날짜가 14일 안인 사이트의 방만 받는 중 · `capacity: { state: 'open'\|'tight'\|'full'\|'paused', reason, newSites, newRooms, onlyBooked, pct, resetAt, retryAt?, message_ko?, next, liveNext, siteDays }`(§4 넘침 처리) · 30초 캐시 |
 | `GET /api/status?date=YYYY-MM-DD&site=<id>` | `{ ok, view, plan, live, accepting, paused, capacity, budget, today: { date, until, used, reserved, pct }, day?: { date, trainings, people, est, live, budget, pct, room, ok }, site?: { id, state: 'open'\|'blocked'\|'gone', url, expiresAt, live: { code, state }, booking: { …, liveDenied?, liveNext? } } }` · 배포 전·연수 전날 점검용, 1분 캐시 |
 | `POST /api/sites` `{ title?, booking?, device?, caps? }` | `201 { id, key, url, expiresAt, altUrl?, view?, share: { scope: 'device'\|'ip', left }, live?, advice? }` · `expiresAt`은 밀리초 숫자 · `key`는 이때 한 번만 · `booking: { date, start?, end?, people, network: 'good'\|'slow'\|'restricted', live }`(한국 시간) · `device`: 앱이 기기에 둔 무작위 값(영문·숫자·`_-` 16~64자, 공정 몫) · `caps: ['split']`: 그날 방이 차면 사이트는 받고 `live: { ok: false, reason: 'booked', next }`로 참여 기능만 넘김(없으면 `429` + `reason: 'booked'`, `day`) · `advice: { code: 'long_term' }`: 예약 없는 사이트 |
 | `POST /api/sites/:id/deploys` `{ files: { "<경로>": { sha256, size } }, booking?, caps? }` | `{ deploy, missing: [sha256…], live? }` · Pages API 5분 창이 차면 `429` + `reason: 'pages_api'` |

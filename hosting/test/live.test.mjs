@@ -195,6 +195,31 @@ test('방 쓰기: 묶기 → 참여 → 질문 → 강사가 봄. 운영자 열�
   assert.equal((await call('GET', '/api/AB12CD/snapshot', { admin: KEY2 })).body.participants.length, 1);
 });
 
+test('방 요청 상한: 맞는 관리자 키(강사 화면)만 세지 않고, 머리글만 붙인 요청(빈 값·틀린 키·아주 긴 값)은 참가자처럼 셈', async () => {
+  const { room, call, bind } = makeRoom();
+  assert.equal((await bind()).status, 200);
+  const hit = room.hostBudget.hit.bind(room.hostBudget);
+  let full = false; let counted = 0;
+  room.hostBudget.hit = (o) => { counted++; return full ? 30 : hit(o); };
+  const snap = (headers) => room.fetch(new Request('https://sites.example/api/AB12CD/snapshot', { headers: { 'cf-connecting-ip': '203.0.113.9', ...headers } }));
+  assert.equal((await snap({})).status, 200); assert.equal(counted, 1, '참가자 요청은 셈');
+  assert.equal((await snap({ 'x-lec-admin': encodeURIComponent(KEY) })).status, 200); assert.equal(counted, 1, '맞는 관리자 키는 세지 않음');
+  full = true; // 방 몫을 다 씀
+  assert.equal((await snap({})).status, 429);
+  for (const [name, v] of [['빈 값', ''], ['틀린 키', 'wrong-key-000000000000'], ['아주 긴 값', 'x'.repeat(5000)], ['세션 모양만', 'lps1.' + 'a'.repeat(43)]]) {
+    const r = await snap({ 'x-lec-admin': v });
+    assert.equal(r.status, 429, `${name}: 상한을 비켜 가지 못함`);
+    assert.equal((await r.json()).error, 'room_busy');
+    assert.ok(Number(r.headers.get('retry-after')) > 0);
+  }
+  const teacher = await snap({ 'x-lec-admin': encodeURIComponent(KEY) });
+  assert.equal(teacher.status, 200, '방 몫이 차도 강사는 기록을 받아 갈 수 있음');
+  // 강사 세션(관리자 키로 받은 표)도 강사 요청
+  const login = await call('POST', '/api/AB12CD/session', { admin: KEY });
+  assert.ok(login.body?.session, JSON.stringify(login.body));
+  assert.equal((await snap({ 'x-lec-admin': login.body.session })).status, 200, '강사 세션');
+});
+
 test('보드 파일: R2 없이 올리고, 글에 붙은 동안만 보임. 저장량을 Gate에 알림', async () => {
   const { call, bind, GATE_NS, room } = makeRoom();
   await bind();

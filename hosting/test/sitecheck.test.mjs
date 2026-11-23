@@ -160,6 +160,24 @@ test('쿠키 쓰기는 사이트 스크립트에서 거절(읽기·localStorage�
   for (const ok of ['const c = document.cookie;', 'if (document.cookie == "") {}', 'document.cookie.split(";")', "localStorage.setItem('theme', 'dark')", '// 쿠키는 쓰지 않아요', 'const cookie = 1; cookie === 1']) assert.equal(js(ok), 'ok', ok);
 });
 
+test('쿠키 쓰기를 돌려 쓴 모양도 거절하고(이어 붙인 이름·변수 이름·다른 이름의 document·Reflect/Object·글자 코드), 보통 코드는 그대로 받음', () => {
+  for (const bad of [
+    "document['coo' + 'kie'] = 'a=1; domain=lecpage-view.pages.dev'", // CLAUDE.md 2-⑩의 우회
+    'const k = "coo" + "kie"; document[k] = v', 'document[`coo${"kie"}`] = v', 'document?.[k] += v', 'document [ atob("Y29va2ll") ] = v',
+    'const d = document; d.cookie = v', 'window.document.cookie = v', 'self["document"].cookie = v', "top.document['cookie'] = v", 'this.doc.cookie ||= v',
+    "document['\\x63ookie'] = v", "d['\\u0063ookie'] = v", 'd.\\u0063ookie = v', "d['\\u{63}ookie'] = v",
+    "Reflect.set(document, 'coo' + 'kie', v)", 'Object.assign(document, { [k]: v })', 'Object.defineProperty(document, k, { value: v })', 'Object.defineProperties(document, o)', 'Reflect.defineProperty(document, k, o)',
+    "cookieStore['set']('a', '1')", 'cookieStore?.[m](a)',
+  ]) assert.equal(js(bad), 'unsafe_site/cookie', bad);
+  for (const ok of [
+    "document['title'] = '연수'", 'document["title"] = t', 'document.title = t', "document['body'].className = 'dark'", 'document.documentElement.dataset.theme = t',
+    'if (document[hidden]) pause()', 'const v = document[k]', 'document[k] === v', 'document[k] == null', 'document.querySelectorAll(".a")[0].value = v', 'list[document.title] = 1',
+    'Object.assign(document.documentElement.style, { color: c })', 'Object.assign(el.style, s)', 'Object.defineProperty(obj, "cookie", { value: 1 })', 'Reflect.set(state, key, v)',
+    'const cookies = []; cookies.push(1)', 'obj.cookieName = "a"', 'x.cookies = []', 'if (a.cookie === b) {}', 'const { cookie } = document', "const s = '\\x41\\u0042'; el.textContent = s",
+    "// document['coo' + 'kie'] 는 쓰지 않아요\nconst note = '쿠키 없이 localStorage만 써요'",
+  ]) assert.equal(js(ok), 'ok', ok);
+});
+
 test('listProblems: 앱이 배포 전에 서버와 같은 규칙으로 파일마다 모음(위치 at으로 섹션을 찾음)', () => {
   const html = '<!doctype html><html><head><title>t</title></head><body><section id="intro"><p>안녕</p></section><section id="login"><input placeholder="아이디"><button>로그인</button></section></body></html>';
   const files = {

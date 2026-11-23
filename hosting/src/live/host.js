@@ -139,7 +139,7 @@ export function translate(e) {
 // 사이트 스크립트(AI가 쓴 코드)가 방 주소를 1초마다 직접 부르는 실수 하나가 그날 무료 예산(요청 10만)을 수십 분 만에 쓸 수 있음.
 // 그래서 방(연수 코드)마다 분·하루 요청 수를 셈. 정상 연수는 넉넉히: 참가자 한 명이 연수 내내 묻기로 받아도(긴 대기 1분 3.4번, capacity.js EST)
 // 하루 몫(1,500)이 6시간을 넘고, 1분 몫(20)은 글이 쉼 없이 올 때(12)보다 큼. 하루 상한은 하루 예산의 70%(예약 몫 BOOK_SHARE와 같음)를 넘지 않음.
-// 강사 화면(관리자 키를 붙인 요청)은 세지 않음(넘쳐도 기록을 받아 갈 수 있게). 날은 UTC 0시(무료 한도가 다시 차는 때)에 바뀜
+// 강사 화면(이 방의 관리자 키·강사 세션이 맞는 요청, room.js fromTeacher)은 세지 않음(넘쳐도 기록을 받아 갈 수 있게). 머리글만 붙인 요청은 셈. 날은 UTC 0시(무료 한도가 다시 차는 때)에 바뀜
 export const ROOM_CAP = { dayBase: 20000, dayPerPerson: 1500, dayShare: 0.7, minuteBase: 600, minutePerPerson: 20 };
 /** 참가자 수 → { day, minute }. budget: 서버의 하루 요청 예산(0이면 끔) */
 export function roomCaps(people, { budget = 0 } = {}) {

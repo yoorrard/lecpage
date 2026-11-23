@@ -52,12 +52,13 @@ test('기본 한도: pages 보기는 새 사이트·방 상한이 큼(새 사이
   assert.deepEqual([p.view, p.dailySiteCap, p.dailyRoomCap], ['pages', 200, 100]);
   assert.deepEqual([pp.dailySiteCap, pp.dailyRoomCap, pp.dailyRequestBudget], [1000, 1000, 1000000], '유료도 하루 예산(비용 상한)이 있음');
   assert.deepEqual([wp.dailySiteCap, wp.dailyRoomCap], [300, 300]);
-  assert.deepEqual([p.sitesPerDevice, pp.sitesPerDevice, p.sitesPerHourShared, p.sitesPerDayShared, p.pagesApiBudget], [10, 20, 30, 60, 900]);
+  assert.deepEqual([p.sitesPerDevice, pp.sitesPerDevice, p.sitesPerHourShared, p.sitesPerDayShared, p.pagesApiBudget], [3, 10, 30, 60, 900]);
+  assert.deepEqual([w.quotaEpoch, config({ QUOTA_EPOCH: '5' }).quotaEpoch, config({ QUOTA_EPOCH: 'x' }).quotaEpoch], [2, 5, 2], '한 사람 몫을 다시 세게 하는 번호');
   assert.equal(config({ DAILY_SITE_CAP: '7', ...pagesEnv }).dailySiteCap, 7, '운영자가 정한 값이 먼저');
   assert.deepEqual([config({}).pollRelay, config({ PLAN: 'paid' }).pollRelay, config({ POLL_RELAY: 'on' }).pollRelay, config({ PLAN: 'paid', POLL_RELAY: 'off' }).pollRelay], ['auto', 'auto', true, false], 'auto: 유료면 늘, 무료면 duration 50%부터(index.js가 그때그때)');
 });
 
-test('공정 몫: 기기 표가 있으면 기기마다 하루 10개, 같은 학교 IP는 넉넉히(강사 연수에 여럿이 한 공유기)', async () => {
+test('공정 몫: 기기 표가 있으면 기기마다 하루 3개(시험은 2개로), 같은 학교 IP는 넉넉히(강사 연수에 여럿이 한 공유기)', async () => {
   const { call } = gate({ SITES_PER_DEVICE: 2 });
   const dev = (k) => `device-${k}-0123456789abcdef`;
   const a1 = await reserve(call, { device: dev(1) });
@@ -75,6 +76,51 @@ test('공정 몫: 기기 표가 있으면 기기마다 하루 10개, 같은 학�
   assert.equal((await reserve(call, { ip: '198.51.100.9' })).status, 200, '다른 IP는 됨');
 });
 
+test('새 방을 열 수 있는지(/api/info live.accepting): 평소 true, 오늘 방 상한이 차면 false(room_cap) — 사이트는 그대로 받음. Pages API 대기는 방과 상관없음', async () => {
+  const { g, call } = gate({ DAILY_ROOM_CAP: 2 });
+  assert.deepEqual((await call('GET', 'status')).body.rooms, { accepting: true });
+  for (const code of ['ROOMA1', 'ROOMB2']) { const s = await reserve(call, {}); assert.equal(s.status, 200); assert.equal((await call('POST', 'room', { id: (await call('GET', 'sites')).body.sites[0].id, code })).status, 200); }
+  const st = (await call('GET', 'status')).body;
+  assert.equal(st.rooms.accepting, false); assert.equal(st.rooms.reason, 'room_cap'); assert.ok(st.rooms.resetAt > Date.now());
+  assert.equal(st.accepting, true, '새 사이트는 받음(참여 기능만 강사 계정으로)');
+  assert.equal((await call('POST', 'room', {})).body.error.reason, 'room_cap', '실제로 방을 열어도 같은 까닭으로 거절');
+  // Pages API가 잠시 막혀 새 사이트를 줄 세우는 동안에도 방은 열 수 있음(방은 Pages API를 쓰지 않음)
+  const g2 = gate(); g2.g.pagesHold = Date.now() + 60000;
+  const s2 = (await g2.call('GET', 'status')).body;
+  assert.equal(s2.accepting, false); assert.equal(s2.capacity.reason, 'pages_api'); assert.deepEqual(s2.rooms, { accepting: true });
+  void g;
+});
+
+test('한 사람 몫 초기화(QUOTA_EPOCH): 번호를 올려 배포하면 예전 번호로 다 쓴 기기·IP도 새 한도(하루 3개)로 0부터, 4번째는 막힘', async () => {
+  // 같은 저장소(같은 Gate)를 예전 판(번호 1, 기기마다 10개)과 새 판(번호 2, 3개)이 차례로 씀
+  const ctx = fakeCtx(); ctx.waitUntil = () => { };
+  const open = (env) => {
+    const g = new Gate(ctx, { DAILY_REQUEST_BUDGET: 100000, ...env });
+    return async (o = {}) => { const res = await g.fetch(new Request('http://gate/reserve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ip: '203.0.113.7', id: id(), created: Date.now(), expires: Date.now() + 864e5, title: 't', ...o }) })); return { status: res.status, body: await res.json() }; };
+  };
+  const dev = 'device-reset-0123456789abcdef';
+  const old = open({ QUOTA_EPOCH: '1', SITES_PER_DEVICE: '10', SITES_PER_HOUR_SHARED: '10', SITES_PER_DAY_SHARED: '10' });
+  for (let k = 0; k < 10; k++) assert.equal((await old({ device: dev })).status, 200, `예전 판 ${k + 1}번째`);
+  assert.equal((await old({ device: dev })).body.error?.reason, 'device', '예전 판에서 기기 몫을 다 씀');
+  assert.equal((await old({ device: 'device-other-0123456789abcdef' })).body.error?.reason, 'ip_hour', '예전 판에서 이 IP 몫도 다 씀');
+  // 새 판: 기본값 그대로(QUOTA_EPOCH 2, 기기마다 3개)
+  const now = open({});
+  const first = await now({ device: dev });
+  assert.equal(first.status, 200, '다 썼던 기기가 새 판에서 다시 됨'); assert.deepEqual(first.body.share, { scope: 'device', left: 2 }, '남은 몫도 새 한도로 셈');
+  assert.equal((await now({ device: dev })).status, 200);
+  const third = await now({ device: dev });
+  assert.equal(third.status, 200); assert.deepEqual(third.body.share, { scope: 'device', left: 0 });
+  const over = await now({ device: dev });
+  assert.equal(over.status, 429); assert.equal(over.body.error.reason, 'device'); assert.match(over.body.error.message_ko, /이미 만든 사이트는 다시 배포할 수 있어요/);
+  assert.equal((await now({ device: 'device-other-0123456789abcdef' })).status, 200, '같은 IP의 다른 기기도 IP 몫이 0부터');
+  // 하루 전체 상한은 그대로 이어 셈(전체 수용량 보호): 예전 판 10 + 새 판 4
+  assert.equal(ctx.storage.sql.exec("SELECT n FROM rl WHERE k LIKE 'site:all:%'").toArray()[0].n, 14);
+  // 기기 표가 없는 길(IP마다)도 새 번호로 0부터
+  const oldIp = open({ QUOTA_EPOCH: '1', SITES_PER_HOUR: '1' });
+  assert.equal((await oldIp({ ip: '198.51.100.20' })).status, 200); assert.equal((await oldIp({ ip: '198.51.100.20' })).body.error?.reason, 'ip_hour');
+  assert.equal((await now({ ip: '198.51.100.20' })).status, 200);
+});
+
 test('공정 몫: 기기 표가 있어도 같은 IP는 시간 30개·하루 60개까지(기기 표를 바꿔 가며 쓰는 것 막기)', async () => {
   const { call } = gate({ SITES_PER_HOUR_SHARED: 3, SITES_PER_DAY_SHARED: 4 });
   for (let k = 0; k < 3; k++) assert.equal((await reserve(call, { device: `rotating-device-${k}-xxxxxxxx` })).status, 200);
@@ -88,6 +134,7 @@ test('tight(붐빔): 연수 날짜가 2주 안인 사이트·방만 받고, 예�
   const info = (await call('GET', 'status')).body;
   assert.equal(info.capacity.state, 'tight'); assert.equal(info.accepting, true, '예전 앱에는 받는다고(예약하면 되므로)');
   assert.deepEqual(info.capacity.next, NEXT_HOSTS); assert.deepEqual(info.capacity.liveNext, NEXT_LIVE);
+  assert.deepEqual(info.rooms, { accepting: true, onlyBooked: true }, '방도 연수 날짜가 가까운 사이트만(앱의 /api/info live.onlyBooked)');
   const plain = await reserve(call, {});
   assert.equal(plain.status, 429); assert.equal(plain.body.error.reason, 'tight'); assert.equal(plain.body.error.scope, 'everyone');
   assert.match(plain.body.error.message_ko, /연수 날짜가 14일 안/);
@@ -115,6 +162,8 @@ test('full: 새 사이트·새 방은 거절(까닭·다시 될 때·넘길 곳)
   const sid = (await call('GET', 'sites')).body.sites[0].id;
   const room = await call('POST', 'room', { id: sid });
   assert.equal(room.status, 429); assert.deepEqual(room.body.error.liveNext, NEXT_LIVE);
+  const st = (await call('GET', 'status')).body;
+  assert.equal(st.rooms.accepting, false); assert.equal(st.rooms.reason, 'budget'); assert.ok(st.rooms.resetAt > Date.now(), '앱이 미리 앎(/api/info live.accepting): 지금은 새 방을 못 엶');
   const chk = await call('POST', 'deploy-check', { site: sid, pages: 7 });
   assert.equal(chk.status, 200, '이미 있는 사이트는 다시 올릴 수 있음(연수 당일 고치기)');
 });

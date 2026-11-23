@@ -296,9 +296,13 @@ async function route(request, env, ctx, url, cfg, self) {
       // siteScripts: 사이트가 직접 쓴 스크립트(assets/site.js 등)를 받는지(pages 보기만. README §6)
       // ownLive: 사이트가 적은 자기 도메인의 https 참여 기능 서버도 사이트 CSP에 엶(csp.js liveKind 'own'). 앱은 이 값이 있을 때만 그 서버를 그대로 씀
       view: cfg.view, keepAlive: cfg.keepAlive, siteScripts: cfg.view === 'pages', ownLive: true,
-      limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days },
+      // sitesPerDevice: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). quota: 한 사람 몫을 다시 세게 한 번호(QUOTA_EPOCH) —
+      // 앱이 적어 둔 '오늘 남은 몫'이 이 번호와 다를 때 만든 것이면 버리면 됨(운영자가 횟수를 초기화함)
+      limits: { maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days, sitesPerDevice: cfg.sitesPerDevice }, quota: cfg.quotaEpoch,
       report: `${self}/report`,
-      ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb } } : {}),
+      // live: 참여 기능(방)을 쓰는 서버일 때만 있음. accepting: 지금 새 방을 열 수 있는지(false면 reason: paused·storage·budget·room_cap. 이미 묶인 방은 그대로 됨),
+      // onlyBooked: 붐벼서 연수 날짜가 가까운 사이트의 방만 받는 중. 앱은 이 값으로 '참여 기능까지 바로 켜져요'를 실제와 맞게 보여 줌. 못 물어보면 받는 것으로
+      ...(cfg.live ? { live: { url: `${self}${LIVE_PREFIX}`, uploads: cfg.liveUploads, maxUploadMb: cfg.liveMaxUploadMb, accepting: s?.rooms ? s.rooms.accepting !== false : true, ...(s?.rooms?.accepting === false ? { reason: s.rooms.reason, resetAt: s.rooms.resetAt } : {}), ...(s?.rooms?.onlyBooked ? { onlyBooked: true } : {}) } } : {}),
     }, 200, { 'cache-control': 'public, max-age=30' });
   }
 

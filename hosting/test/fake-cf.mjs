@@ -85,11 +85,18 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     tokens: [],
     zones: [], rulesets: new Map(), domains: [],
     tokenOk: true,
+    // 시험: 고장 끼워 넣기. { on: 'upload-token'|'check-missing'|'upload'|'upsert-hashes'|'deployments'(만들기)|'deployment'(보기)|'delete', status(기본 500), times(기본 1),
+    //   after: true(일은 하고 답만 실패 — 답이 끊긴 경우), hang: 밀리초(답하기 전에 기다림), stage: 'failure'(만든 배포가 실패 상태) }
+    faults: [],
   };
-  const deploymentsOf = (branch, project = 'lecpage-view') => [...state.deployments.values()].filter((d) => d.branch === branch && d.project === project).sort((a, b) => a.created - b.created);
+  const stepOf = (m, p) => (p.endsWith('/upload-token') ? 'upload-token' : p.startsWith('/pages/assets/') ? p.slice('/pages/assets/'.length)
+    : /\/deployments$/.test(p) && m === 'POST' ? 'deployments' : /\/deployments\/[^/]+$/.test(p) ? (m === 'DELETE' ? 'delete' : 'deployment') : '');
+  // 실패한 배포(stage 'failure')는 브랜치 별칭을 가져가지 않음
+  const deploymentsOf = (branch, project = 'lecpage-view') => [...state.deployments.values()].filter((d) => d.branch === branch && d.project === project && d.stage !== 'failure').sort((a, b) => a.created - b.created);
 
   async function read(req) { const chunks = []; for await (const c of req) chunks.push(c); return Buffer.concat(chunks); }
   function send(res, status, body, headers = {}) {
+    if (res.lpFault) { status = res.lpFault.status || 500; body = fail(res.lpFault.code || 0, 'fake fault (after)'); res.lpFault = null; }
     const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
     res.writeHead(status, { 'content-type': typeof body === 'object' && !Buffer.isBuffer(body) ? 'application/json' : 'text/plain; charset=utf-8', ...headers });
     res.end(data);
@@ -99,6 +106,14 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     const p = url.pathname.replace(/^\/client\/v4/, '');
     const m = req.method;
     state.calls.push([m, p]);
+    const fault = state.faults.find((x) => x.on === stepOf(m, p) && (x.times ?? 1) > 0);
+    if (fault) {
+      fault.times = (fault.times ?? 1) - 1;
+      if (fault.hang) await new Promise((r) => setTimeout(r, fault.hang));
+      if (fault.stage) res.lpStage = fault.stage;
+      else if (fault.after) res.lpFault = fault; // 아래에서 일은 그대로 하고 send가 실패로 답함
+      else return send(res, fault.status || 500, fail(fault.code || 0, 'fake fault'));
+    }
     // 흉내 wrangler가 배포를 알림(시험 전용)
     if (p === '/__fake/scripts' && m === 'POST') {
       const x = JSON.parse(body.toString('utf8'));
@@ -150,6 +165,7 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
         const id = randomUUID();
         const branch = f.branch || state.projects.get(proj).production_branch;
         const d = { id, branch, manifest, headers: f._headers || '', redirects: f._redirects || '', project: proj, created: Date.now() + state.deployments.size };
+        if (res.lpStage) d.stage = res.lpStage;
         state.deployments.set(id, d);
         return send(res, 200, ok(view(d)));
       }
@@ -233,7 +249,7 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
   function view(d) {
     const pr = state.projects.get(d.project);
     const sub = pr.subdomain;
-    return { id: d.id, url: `https://${d.id.slice(0, 8)}.${sub}`, aliases: d.branch === pr.production_branch ? [`https://${sub}`] : [`https://${d.branch}.${sub}`], environment: d.branch === pr.production_branch ? 'production' : 'preview', deployment_trigger: { metadata: { branch: d.branch } }, latest_stage: { name: 'deploy', status: 'success' }, created_on: new Date(d.created).toISOString() };
+    return { id: d.id, url: `https://${d.id.slice(0, 8)}.${sub}`, aliases: d.branch === pr.production_branch ? [`https://${sub}`] : [`https://${d.branch}.${sub}`], environment: d.branch === pr.production_branch ? 'production' : 'preview', deployment_trigger: { metadata: { branch: d.branch } }, latest_stage: { name: 'deploy', status: d.stage || 'success' }, created_on: new Date(d.created).toISOString() };
   }
 
   /** 보기: 브랜치의 마지막 배포 */

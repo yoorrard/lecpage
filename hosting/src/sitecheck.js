@@ -224,8 +224,21 @@ const SW_RE = /serviceWorker['"`\]\s]*(?:\?\.|\.|\[\s*['"`])\s*register\b/;
 const PW_JS = [/\.type\s*=\s*['"`]\s*password\s*['"`]/i, /setAttribute\s*\(\s*['"`]type['"`]\s*,\s*['"`]\s*password\s*['"`]/i, /<input\b[^<>]{0,300}?\btype\s*=\s*\\?["'`]?\s*password\b/i];
 const MASK_JS = /-webkit-text-security\s*:\s*(?!none\b)[a-z]|webkitTextSecurity|WebkitTextSecurity/;
 // 쿠키 쓰기: 모든 바로 배포 사이트가 lecpage-view.pages.dev 아래라, 큰 쿠키를 그 도메인에 붙이면 같은 방문자에게 다른 사이트가 열리지 않을 수 있음.
-// 읽기(document.cookie를 =로 받지 않는 것)는 그대로 둠. cookieStore.set·delete도 막음
-const COOKIE_JS = [/\bdocument\s*(?:\?\.|\.)\s*cookie\s*(?:\+|\|\||&&|\?\?)?=(?!=)/, /\bdocument\s*\[\s*['"`]cookie['"`]\s*\]\s*(?:\+|\|\||&&|\?\?)?=(?!=)/, /\bcookieStore\s*(?:\?\.|\.)\s*(?:set|delete)\s*\(/, /\bdefineProperty\s*\(\s*document\s*,\s*['"`]cookie['"`]/];
+// 읽기(document.cookie를 =로 받지 않는 것)는 그대로 둠. cookieStore.set·delete도 막음.
+// 돌려 쓴 모양도 막음: 글자를 이어 붙인 이름(document['coo' + 'kie'] = …)·변수 이름(document[k] = …)·다른 이름으로 받은 document(d.cookie = …)·
+// Reflect.set / Object.assign / defineProperty(document, …)·글자 코드(\x63ookie). 이름이 글자 그대로인 보통 대입(document['title'] = …)은 그대로 둠.
+// 이 검사는 실수와 흔한 우회를 걸러 낼 뿐, 마음먹고 숨긴 코드(새 틀의 document 등)까지 다 막지는 못함: pages.dev 아래에서는 사이트끼리 쿠키 도메인을 나눌 수 없어
+// (사이트마다 다른 등록 도메인이 있어야 함) 나머지는 신고·가리기로 대응(README §6)
+const ASSIGN = '\\s*(?:\\+|\\|\\||&&|\\?\\?)?=(?!=)';
+const COOKIE_JS = [
+  new RegExp(`(?:\\?\\.|\\.)\\s*cookie${ASSIGN}`), // 어느 객체든 .cookie = (document를 다른 이름으로 받은 것 포함)
+  new RegExp(`\\[\\s*['"\`]cookie['"\`]\\s*\\]${ASSIGN}`), // …['cookie'] =
+  new RegExp(`\\bdocument\\s*(?:\\?\\.)?\\s*\\[(?!\\s*(['"\`])[\\w$-]*\\1\\s*\\])[^\\]\\n]{0,200}\\]${ASSIGN}`), // document[글자 그대로가 아닌 이름] =
+  /\bcookieStore\s*(?:\?\.|\.)\s*(?:set|delete)\s*\(/, /\bcookieStore\s*(?:\?\.)?\s*\[/,
+  /\b(?:Reflect\s*\.\s*set|Object\s*\.\s*assign|Object\s*\.\s*definePropert(?:y|ies)|Reflect\s*\.\s*defineProperty)\s*\(\s*document\s*,/,
+];
+/** 글자 코드로 쓴 글자(\x63, \u0063, \u{63})를 풀어 봄: 'cookie'를 코드로 적어 검사를 비켜 가지 못하게 */
+const unescapeJs = (s) => (s.indexOf('\\') < 0 ? s : s.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|u\{([0-9a-fA-F]{1,6})\})/g, (m, a, b2, c) => { const n = parseInt(a || b2 || c, 16); return n >= 0x20 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : m; }));
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
 /**
@@ -239,7 +252,8 @@ export function checkOwnScript(bytes, path) {
   if (SW_RE.test(text)) throw unsafe('service_worker', path);
   if (PW_JS.some((re) => re.test(text))) throw unsafe('password', path);
   if (MASK_JS.test(text)) throw unsafe('masked', path);
-  if (COOKIE_JS.some((re) => re.test(text))) throw unsafe('cookie', path);
+  const plain = unescapeJs(text);
+  if (COOKIE_JS.some((re) => re.test(plain))) throw unsafe('cookie', path);
   return text;
 }
 

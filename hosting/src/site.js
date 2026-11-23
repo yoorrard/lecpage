@@ -46,8 +46,12 @@ const DEFER_TOTAL = 16 * 1024 * 1024;
 const PAGES_SKIP = new Set(['robots.txt']);
 /** 공개 한 번에 드는 Pages API 어림(토큰·확인·올리기·열쇠 적기·배포·준비 확인·지난 배포 지우기) */
 const PUBLISH_CALLS = 7;
+/** 큰 파일(DEFER_MAX 넘는 것) 하나를 받을 때 드는 Pages API(확인·올리기·열쇠 적기). Gate의 5분 창이 실제보다 적게 세지 않게 */
+const BIG_FILE_CALLS = 3;
 /** 예전 배포에만 있던 경로를 적어 두는 수(안내 화면 배포가 덮음. Pages 배포 한 번의 파일 수 한도보다 훨씬 작게) */
 const PAST_PATHS = 2000;
+/** 그 경로들의 글자 수 합 상한(오래된 것부터 버림): 사이트 상태 한 줄(pstate)이 저장소의 줄 크기 한도(2MB)에 닿지 않게. 보통 사이트는 수천 자라 닿지 않음 */
+const PAST_CHARS = 200000;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
@@ -83,7 +87,7 @@ export class Site extends DurableObject {
     this.liveTimes = [];
     this.queue = Promise.resolve();
     this.ogCache = new Map(); // 배포 id → 미리보기 카드 그림 경로('' = 없음)
-    this.deferred = new Map(); // (Pages 보기) 공개할 때 한 번에 올릴 작은 파일: sha256 → { bytes, items: [{ ext, hash, parts, contentType }] }
+    this.deferred = new Map(); // (Pages 보기) 공개할 때 한 번에 올릴 작은 파일: sha256 → { size, items: [{ ext, hash, parts, contentType }] }. 내용은 parts(base64)만 둠(원본 바이트까지 두면 메모리를 두 배로 씀)
     this.deferredBytes = 0;
   }
 
@@ -144,7 +148,7 @@ export class Site extends DurableObject {
   pc() {
     const p = this.cfg.pagesCfg;
     if (!p) throw new HttpError('bad_request', 'Pages 설정(PAGES_TOKEN 등)이 없어 이 사이트를 다룰 수 없어요. 운영자에게 알려 주세요.', { status: 503 });
-    if (!this.pagesClient) this.pagesClient = new PagesClient({ api: p.api, accountId: p.accountId, project: p.project, token: p.token });
+    if (!this.pagesClient) this.pagesClient = new PagesClient({ api: p.api, accountId: p.accountId, project: p.project, token: p.token, timeout: p.timeoutMs });
     return this.pagesClient;
   }
   /** 지난번 알린 뒤 Pages API를 부른 횟수와 방(Room)을 부른 횟수(Gate가 하루 숫자 pc·pz·rc에 더함) */
@@ -171,7 +175,7 @@ export class Site extends DurableObject {
   pagesEstimate(meta, files, missing) {
     const want = new Set(missing); let big = 0;
     for (const [path, sha, size] of files) if (want.has(sha) && !this.keepsHere(meta, path) && size > DEFER_MAX) { big++; want.delete(sha); }
-    return PUBLISH_CALLS + 2 * big;
+    return PUBLISH_CALLS + BIG_FILE_CALLS * big;
   }
   /** 목록에서 아직 받지 않은 sha256(겹치지 않게, 목록 순서대로). Pages 보기는 Pages에 올린 기록도 봄 */
   missingFor(meta, files, have = this.blobSizes()) {
@@ -432,7 +436,7 @@ export class Site extends DurableObject {
     }
     for (const { sha } of this.sql.exec('SELECT sha FROM jsk').toArray()) if (!keep.has(sha)) { this.sql.exec('DELETE FROM jsk WHERE sha = ?', sha); this.jskMem.delete(sha); }
     if (this.isPages(meta)) for (const { sha } of this.sql.exec('SELECT DISTINCT sha FROM passet').toArray()) if (!keep.has(sha)) this.sql.exec('DELETE FROM passet WHERE sha = ?', sha);
-    for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.bytes.length; }
+    for (const [sha, d] of this.deferred) if (!keep.has(sha)) { this.deferred.delete(sha); this.deferredBytes -= d.size; }
   }
 
   // ── 파일 받기 ────────────────────────────────────────────────
@@ -518,12 +522,12 @@ export class Site extends DurableObject {
   async uploadPages(request, meta, man, sha, size) {
     const paths = man.list.filter(([p, s]) => s === sha && !PAGES_SKIP.has(p)).map(([p]) => p);
     const exts = [...new Set(paths.filter((p) => !this.keepsHere(meta, p)).map(rawExt))].filter((e) => !this.passet(sha, e));
-    // 작은 파일은 메모리에 두었다가 공개할 때 한 번에 올림
-    const defer = exts.length > 0 && size <= DEFER_MAX && this.deferredBytes + size <= DEFER_TOTAL;
     const needBlob = paths.some((p) => this.keepsHere(meta, p)) && !this.hasBlob(sha);
     if (!needBlob && !exts.length) { request.body?.cancel().catch(() => { }); return noContent(); }
     const run = this.pagesQueue = (this.pagesQueue || Promise.resolve()).catch(() => { }).then(async () => {
-      const bytes = await readAll(request, size);
+      // 작은 파일은 메모리에 두었다가 공개할 때 한 번에 올림. 차례가 왔을 때 정함(나란히 온 요청들이 같은 남은 자리를 보고 합계를 넘기지 않게)
+      const defer = exts.length > 0 && size <= DEFER_MAX && (this.deferred.has(sha) || this.deferredBytes + size <= DEFER_TOTAL);
+      let bytes = await readAll(request, size);
       if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== sha) throw new HttpError('bad_request', '파일 내용이 sha256과 달라요.');
       // .js: 엔진 런타임 또는 검사를 마친 사이트 스크립트(표에 적어 둠). CSS: 글자 가림 검사. 걸리면 Pages에 올리지 않음
       const jsPath = man.js.get(sha);
@@ -541,8 +545,9 @@ export class Site extends DurableObject {
           this.sql.exec('INSERT OR REPLACE INTO blob (sha, i, total, data) VALUES (?, 0, ?, ?)', sha, size, bytes.slice(0, CHUNK));
         });
       }
-      if (defer && !this.deferred.has(sha)) { this.deferred.set(sha, { bytes, items }); this.deferredBytes += bytes.length; }
+      if (defer && !this.deferred.has(sha)) { this.deferred.set(sha, { size, items }); this.deferredBytes += size; }
       else if (defer) { const d = this.deferred.get(sha); for (const x of items) if (!d.items.some((y) => y.ext === x.ext)) d.items.push(x); }
+      bytes = null; // 아래에서 Pages에 올리는 동안 원본을 붙들지 않음(큰 파일 하나가 원본 + base64 + 보내는 본문으로 메모리를 세 번 쓰지 않게)
       if (exts.length && !defer) {
         const pc = this.pc();
         const missing = new Set(await pc.checkMissing(items.map((x) => x.hash)));
@@ -550,14 +555,13 @@ export class Site extends DurableObject {
         if (up.length) {
           await pc.upload(up);
           // 올린 열쇠를 등록(upsert-hashes): Pages는 등록한 열쇠만 '있다'고 답함. 올리기만 하면 공개할 때 check-missing이 다시 '없음'이라 해서
-          // 큰 파일(512KB 넘는 쪽 그림·사진·글꼴·교재 원본)이 든 사이트는 배포가 끝나지 않았음(2026-11-23 실제 서버에서 확인). 한 번 더 해 보고 안 되면 이 파일 받기를 실패로
-          const hashes = up.map((x) => x.hash);
-          try { await pc.upsertHashes(hashes); } catch { await new Promise((r) => setTimeout(r, 500)); await pc.upsertHashes(hashes); }
+          // 큰 파일(512KB 넘는 쪽 그림·사진·글꼴·교재 원본)이 든 사이트는 배포가 끝나지 않았음(2026-11-23 실제 서버에서 확인). 순간 오류면 PagesClient가 한 번 더 하고(twice), 그래도 안 되면 이 파일 받기를 실패로
+          await pc.upsertHashes(up.map((x) => x.hash));
         }
         for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
       }
     });
-    try { await run; } catch (e) { throw await this.pagesFail(e, `파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 해 주세요. (${e?.step || ''})`); }
+    try { await run; } catch (e) { throw await this.pagesFail(e, '파일을 Cloudflare Pages에 올리지 못했어요. 잠시 뒤 다시 배포해 주세요.'); }
     return noContent();
   }
 
@@ -635,7 +639,7 @@ export class Site extends DurableObject {
       const d = this.deferredItem(sha, rawExt(path));
       if (!d) { lostHere.add(sha); continue; }
       manifest[`/${path}`] = d.hash; paths.push(path);
-      if (!deferred.has(d.hash)) { deferred.set(d.hash, { sha, ext: d.ext, size: this.deferred.get(sha).bytes.length }); extra.push(d); }
+      if (!deferred.has(d.hash)) { deferred.set(d.hash, { sha, ext: d.ext, size: this.deferred.get(sha).size }); extra.push(d); }
     }
     if (lostHere.size) throw new HttpError('missing_blobs', undefined, { missing: [...lostHere] });
     const te = new TextEncoder();
@@ -644,8 +648,18 @@ export class Site extends DurableObject {
     const headers = headersFile(paths, { csp: this.cspCtx(meta, deployId, man, self), fontsHashed: fontsHashed(man.list) });
     const redirects = redirectsFile(media, `${self}/s/${id}/`);
     const pc = this.pc();
-    const { deployment, lost } = await this.pagesCall(() => deploySite(pc, { branch: branchOf(id), manifest, extra, headers, redirects, message: `lecpage ${id}` }));
+    // 우리가 id를 모르는 배포가 Cloudflare에 생길 수 있는 때를 적어 둠 → 내릴 때 그 주소를 안내 화면으로 꼭 덮음(wipePages).
+    //  trying: 배포를 만드는 중(이 객체가 도중에 내려가면 남음 → 다음 공개 때 orphan으로). orphan: 배포 만들기가 답 없이 끊겼거나 5xx(생겼을 수 있음)
+    const mark = (fn) => { const s0 = this.ps(meta); const before = JSON.stringify([s0.trying, s0.orphan]); fn(s0); if (JSON.stringify([s0.trying, s0.orphan]) !== before) this.savePs(meta, s0); };
+    mark((s0) => { if (s0.trying) s0.orphan = 1; s0.trying = 1; });
+    let deployment; let lost;
+    try { ({ deployment, lost } = await deploySite(pc, { branch: branchOf(id), manifest, extra, headers, redirects, message: `lecpage ${id}` })); }
+    catch (e) {
+      mark((s0) => { delete s0.trying; if (e?.step === 'deployments' && !(e.status >= 400 && e.status < 500)) s0.orphan = 1; });
+      throw await this.pagesFail(e, 'Cloudflare Pages에 배포하지 못했어요. 잠시 뒤 다시 해 주세요.');
+    }
     if (lost.length) {
+      mark((s0) => { delete s0.trying; }); // 배포를 만들기 전에 멈춤
       // Pages에서 사라진 파일(올린 뒤 오래 배포하지 않은 것): 기록을 지우고 다시 받음
       const lostSet = new Set(lost); const again = new Set();
       for (const r of this.sql.exec('SELECT sha, ext, phash FROM passet').toArray()) if (lostSet.has(r.phash)) { again.add(r.sha); this.sql.exec('DELETE FROM passet WHERE sha = ? AND ext = ?', r.sha, r.ext); }
@@ -657,7 +671,8 @@ export class Site extends DurableObject {
     const old = [...st.deps, ...st.hold];
     // 예전 배포에만 있던 경로도 적어 둠: 지우거나 가릴 때 안내 화면이 그 주소까지 덮게(Pages가 남겨 둔 예전 파일이 나오지 않게, placeholder)
     st.past = [...new Set([...(st.past || []), ...Object.keys(st.man?.manifest || {})])].filter((x) => !(x in manifest)).slice(-PAST_PATHS);
-    st.url = url; st.self = self; st.deps = [deployment.id]; st.hold = []; st.man = { manifest, headers, redirects };
+    for (let room = PAST_CHARS, i = st.past.length - 1; i >= 0; i--) { room -= st.past[i].length; if (room < 0) { st.past = st.past.slice(i + 1); break; } }
+    st.url = url; st.self = self; st.deps = [deployment.id]; st.hold = []; st.man = { manifest, headers, redirects }; delete st.trying;
     const kept = this.keptBytes(meta, man.list);
     this.ctx.storage.transactionSync(() => {
       this.sql.exec('UPDATE meta SET current = ?, pending = NULL, bytes = ?, expires = ? WHERE id = 1', deployId, kept, expires);
@@ -666,7 +681,7 @@ export class Site extends DurableObject {
       // 같이 올린 작은 파일: 이제 Pages에 있으니 열쇠를 적고 메모리에서 뺌
       for (const [hash, x] of deferred) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', x.sha, x.ext, hash, x.size);
     });
-    for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.bytes.length; } }
+    for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.size; } }
     Object.assign(meta, { current: deployId, pending: null, bytes: kept, expires });
     if (prev && prev !== deployId) this.manifests.delete(prev);
     await this.ctx.storage.setAlarm(expires);
@@ -695,7 +710,9 @@ export class Site extends DurableObject {
       try { await this.gate('POST', 'site', { id: this.load()?.site || '', ...this.pagesDelta() }); } catch { /* 다음 알림 때 */ }
       return new HttpError('rate_limited', '배포하는 사람이 한꺼번에 많아 Cloudflare가 잠시 쉬게 했어요. 2~5분 뒤 다시 배포해 주세요. 이미 배포한 사이트는 그대로 열려요.', { reason: 'pages_api', scope: 'everyone', retryAt: Date.now() + 300e3, headers: { 'retry-after': '300' } });
     }
-    return new HttpError('bad_request', message, { status: 502 });
+    // step: 어느 호출에서 막혔는지(운영자가 원인을 볼 때. 사람이 읽는 글에는 넣지 않음)
+    // reason은 넣지 않음: 앱은 reason이 있으면 '붐빔'으로 보고 내 계정 배포로 넘김. 이것은 잠깐의 실패라 [다시 배포]로 이어져야 함
+    return new HttpError('bad_request', message, { status: 502, step: String(e.step) });
   }
   /** 배포들을 지움(별칭이 걸린 것도). 못 지운 id를 돌려줌 */
   async dropDeployments(ids) {
@@ -800,13 +817,15 @@ export class Site extends DurableObject {
     const st = this.ps(meta);
     const removed = why === 'removed';
     let gone = st.gone || '';
+    // orphan: 만들었는지 모르는 배포가 있을 수 있음(publishPages). 우리가 아는 배포를 다 지우면 그 주소가 그 배포로 돌아갈 수 있으니 안내 화면을 꼭 올려 덮음
+    const orphan = !!(st.orphan || st.trying);
     const all = [...st.deps, ...st.hold].filter((d) => d && d !== gone);
-    let left = (expired || removed) && !gone ? all : await this.dropDeployments(all);
-    if (left.length && !gone) { try { gone = await this.placeholder(meta, removed ? removedHtml() : goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); } }
+    let left = (expired || removed || orphan) && !gone ? all : await this.dropDeployments(all);
+    if ((left.length || orphan) && !gone) { try { gone = await this.placeholder(meta, removed ? removedHtml() : goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); } }
     if (left.length) left = await this.dropDeployments(left);
     st.deps = []; st.hold = left; st.gone = gone; this.savePs(meta, st);
     if (left.length) console.error('pages deployments left', meta.site, left.length);
-    return !left.length;
+    return !left.length && !(orphan && !gone);
   }
   /**
    * 지우는 중으로 둠: 여기 파일·배포 목록은 지금 지우고(저장량 0, 두 번째 주소는 404, 고치기·방은 닫힘) 사이트 줄과 남은 Pages 배포 id만 남김.
