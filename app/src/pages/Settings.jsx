@@ -56,8 +56,13 @@ export function Settings() {
   const applyTheme = (t) => { setTheme(t); document.documentElement.dataset.theme = t; try { localStorage.setItem('lecpage:theme', t); } catch { } };
   async function exportAll() {
     const list = await projects.all();
-    for (const p of list) saveFile(safeName(p.title) + '.lecpage', await exportProjectFile(p), 'application/zip');
-    toast(`연수 ${list.length}개를 파일로 저장했어요.`);
+    // 하나씩 저장: 너무 커서 파일 하나로 못 담는 연수는 건너뛰고 이름을 알림(저장했다고 잘못 알리지 않게)
+    let done = 0; const skipped = [];
+    for (const p of list) {
+      try { saveFile(safeName(p.title) + '.lecpage', await exportProjectFile(p), 'application/zip'); done++; }
+      catch (e) { console.error(e); skipped.push(p.title || '이름 없는 연수'); }
+    }
+    toast(skipped.length ? `연수 ${done}개를 파일로 저장했어요. 저장하지 못한 연수: ${skipped.join(', ')}` : `연수 ${list.length}개를 파일로 저장했어요.`);
   }
   async function wipe() {
     if (wiping) return;

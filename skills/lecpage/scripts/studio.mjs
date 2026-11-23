@@ -781,7 +781,9 @@ export async function validateJob(body) {
     if (PHOTO_EXT.has(ext.slice(1).toLowerCase())) photos.push({ name: n.replace(/[^\w가-힣.\-() ]/g, '-'), bytes }); // 사이트 그림 이름 규칙(kit/paths.js)
     else { // pageImages: 앱이 보낸 쪽 그림(site['material/p-NNN'])을 그린 교재. true면 그 교재 하나의 것(1번부터), { first, count }면 교재마다 이어 매긴 번호 가운데 이 교재의 것(caps 'page-sets')
       const pi = f.pageImages; const okSet = isObj(pi) && Number.isInteger(pi.first) && Number.isInteger(pi.count) && pi.first >= 1 && pi.count >= 1 && pi.first + pi.count <= 10000;
-      materials.push({ name: n, bytes, ...(pi === true ? { pageImages: true } : okSet ? { pageImages: { first: pi.first, count: pi.count } } : {}) });
+      // standsFor: 원본이 커서 앱이 대신 보낸 '뽑은 글'(.md)이 가리키는 원본 이름 → 작업 지시에 교재 원본이 아니라 그 사실대로 적음
+      const sf = typeof f.standsFor === 'string' && /\.md$/i.test(n) ? cut(f.standsFor.replace(/[\r\n`]+/g, ' ').trim(), 120) : '';
+      materials.push({ name: n, bytes, ...(pi === true ? { pageImages: true } : okSet ? { pageImages: { first: pi.first, count: pi.count } } : {}), ...(sf ? { standsFor: sf } : {}) });
     }
   }
   if (materialItems(materials.map((m) => m.name)) + photos.length > LIMITS.files) return tooMany();
@@ -817,7 +819,7 @@ const picksOf = (ref) => { let j = null; try { j = JSON.parse(String(ref || ''))
  * 원칙: 디자인·구성·읽는 법·확인 방법은 에이전트가 정함. lecpage는 목표 한 줄, 강사 요청, 배포에 꼭 필요한 조건,
  * 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 확인 명령만 알려 줌(앱의 키 경로 지시 app/src/lib/gen/prompts.js와 같은 뜻)
  */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0 }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0, standIns = [] }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const tick = (n) => `\`${n}\``;
@@ -827,6 +829,10 @@ export function taskText({ kind, materials, photos = [], pages = 0, images = 0, 
   const pi = pageImages || (images ? { first: 1, last: Math.max(pages, images), count: images, exts: ['webp'], sample: 'p-001.webp' } : null);
   const whose = pi?.sets?.length > 1 ? `교재마다 이어서 번호를 매겼어요(${pi.sets.map((x) => `${tick(x.owner)} p-${pad3(x.first)}~p-${pad3(x.last)}`).join(', ')}). ` : !pi?.multi ? '' : pi.owner ? `${tick(pi.owner)}의 쪽 그림이에요. ` : pi.given ? '넣은 교재 가운데 하나의 쪽 그림이에요. ' : '';
   const imgLine = pi ? `- 교재 쪽 그림: \`work/site/material/\` (p-${pad3(pi.first)} ~ p-${pad3(pi.last)}${pi.count < pi.last - pi.first + 1 ? `, 그중 ${pi.count}장` : ''}, ${pi.exts.map((e) => '.' + e).join('·')}) — ${whose}사이트에 그대로 써도 돼요(\`material/${pi.sample}\`)\n` : '';
+  // 원본이 커서 앱이 대신 보낸 글(standIns [{ name, for }]): 교재 원본 줄에 넣지 않고 있는 그대로 따로 적음
+  const standNames = new Set(standIns.map((x) => x.name));
+  const originals = materials.filter((m) => !standNames.has(m));
+  const standLine = standIns.length ? `- 원본 대신 받은 글: ${standIns.map((x) => `${tick('material/' + x.name)}(원본 ${tick(x.for)}는 커서 받지 못했어요)`).join(', ')} — 앱이 원본에서 뽑은 글자·발표자 노트·링크라 틀리거나 빠질 수 있어요.\n` : '';
   const noImgLine = pi && noImages.length ? `- 쪽 그림이 없는 교재: ${noImages.map(tick).join(', ')}\n` : '';
   const unreadLine = unread.length ? `- 읽지 못한 교재: ${unread.map(tick).join(', ')} — 파일을 열지 못해 내용(글자·쪽 그림)이 없어요.\n` : '';
   const mdLine = md ? `- PDF가 아닌 교재에서 코드가 뽑은 글자·발표자 노트: \`work/material.md\` (${pi ? '쪽 그림에 없는 것만 찾아요. 쪽 그림과 다르면 쪽 그림이 맞아요' : '쪽 그림이 없는 교재예요. 교재 속 그림은 이 글에 없어요'})\n` : '';
@@ -847,7 +853,7 @@ ${edit ? '강사가 lecpage 앱에서 만든 강의 사이트를 아래 요청�
 ${ask || '(따로 없음)'}
 ${target ? `\n고칠 곳: \`id="${target}"\`인 부분만 고치고 다른 곳은 그대로 둬요.\n` : ''}
 ## 폴더
-${materials.length ? `- 교재 원본: ${materials.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${imgLine}${noImgLine}${unreadLine}${mdLine}${pdfLine}${linksLine}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : `- 쓸 곳: \`work/site/\` (첫 쪽은 \`index.html\`, 나머지 파일 구성은 자유)
+${originals.length ? `- 교재 원본: ${originals.map((m) => `\`material/${m}\``).join(', ')}\n` : ''}${standLine}${imgLine}${noImgLine}${unreadLine}${mdLine}${pdfLine}${linksLine}${photos.length ? `- 강사가 넣은 사진: ${photos.map((p) => `\`work/site/assets/img/${p}\``).join(', ')}\n` : ''}${edit ? '- 지금 사이트: `work/site/` · 연수 정보: `work/lecpage.json`\n' : `- 쓸 곳: \`work/site/\` (첫 쪽은 \`index.html\`, 나머지 파일 구성은 자유)
 - 연수 정보: \`work/lecpage.json\` — 다 만든 뒤 교재에서 찾은 것만 채워요(제목 title, 날짜·시간 sessions [{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}], 장소 venue, 강사 instructors [{"name","org"}]). 이미 적힌 값은 강사가 정한 거라 지켜요.
 `}${library ? '- 디자인 서재: `design-library.md` — 노릴 수준, 컨셉에서 장면으로, 첫 화면 기법(셰이더·움직이는 글자·스크롤 이야기·3D), 글꼴 짝, AI 티 점검표. 필요하면 참고(따를 의무 없음)\n' : ''}
 ## 배포 조건 (이것만은 꼭)
@@ -1092,7 +1098,7 @@ async function runJob(S, job) {
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library }));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 커넥트가 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;

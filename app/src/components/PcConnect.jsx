@@ -388,7 +388,7 @@ function Fallback({ p, reason }) {
   const url = pcOrigin();
   const saved = useRef(false);
   async function save() {
-    try { saveFile(fileName(p), await exportProjectFile(p), 'application/zip'); saved.current = true; toast('파일로 저장했어요. lecpage 커넥트 화면에서 [저장한 파일 열기]로 열어요.'); } catch { toast('파일로 저장하지 못했어요. 위쪽 [파일로 저장]으로 저장해 주세요.'); }
+    try { saveFile(fileName(p), await exportProjectFile(p), 'application/zip'); saved.current = true; toast('파일로 저장했어요. lecpage 커넥트 화면에서 [저장한 파일 열기]로 열어요.'); } catch (e) { toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 위쪽 [파일로 저장]으로 저장해 주세요.'); }
   }
   return (
     <div class="stack" style={{ gap: '8px' }}>

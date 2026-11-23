@@ -112,7 +112,8 @@ export function Project({ id, step }) {
   // 배포한 연수면 한 번 물음: 남에게 줄 파일(기본, 열쇠 없음) / 내 다른 기기에서 같은 주소로 이어 배포(열쇠 포함)
   async function saveProjectFile(keys = false) {
     setSaveAsk(false);
-    const z = await exportProjectFile(p, { withKeys: keys }); saveFile(safeName(p.title) + '.lecpage', z, 'application/zip');
+    let z; try { z = await exportProjectFile(p, { withKeys: keys }); } catch (e) { console.error(e); toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 저장 공간을 확인하고 다시 눌러 주세요.'); return; }
+    saveFile(safeName(p.title) + '.lecpage', z, 'application/zip');
     toast(keys ? '열쇠까지 담아 저장했어요. 다른 기기에서 열면 같은 주소에 이어 배포해요.' : '연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.');
   }
   /** [파일로 저장]: 배포한 연수면 열쇠를 담을지 먼저 물음 */

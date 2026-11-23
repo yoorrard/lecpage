@@ -13,21 +13,37 @@ const mimeOf = (path) => MIME[(String(path).split('.').pop() || '').toLowerCase(
  * - 이미 있는 그림(엔진이 `빈 그림#lp-late=경로`로 적어 둔 것, 경로를 그대로 쓴 것)의 주소를 바꾸고
  * - 그 뒤 코드가 img.src·setAttribute('src')로 같은 경로를 넣으면 바로 바꿔 넣음(교재 슬라이드가 쪽을 넘길 때)
  * - 글로 끼워 넣은 <img>(innerHTML)가 열다 실패하면 그때 바꿈
+ * - srcset(<img>·<source>)과 <video poster>에 적힌 같은 경로도 바꿈(엔진은 이 자리에 빈 그림을 넣지 않고 주소를 그대로 둠)
+ * - 스크립트가 링크 주소(a.href: 틀 문서 기준의 절대 주소)를 그림 주소로 쓸 때(크게 보기)도 같은 경로로 알아봄
  */
 export const LATE_JS = `<script>(function(){
 var U=Object.create(null);
-function norm(v){v=String(v==null?'':v);var m=/#lp-late=(.+)$/.exec(v);if(m){try{return decodeURI(m[1])}catch(e){return m[1]}}if(!v||/^(data:|blob:|https?:|\\/\\/|#|about:|javascript:)/i.test(v))return '';return v.replace(/^(\\.\\/)+/,'').replace(/[?#].*$/,'')}
-function map(v){var k=norm(v);return k&&U[k]?U[k]:v}
+var B='';try{B=String(document.baseURI||'').replace(/[?#].*$/,'').replace(/[^\\/]*$/,'')}catch(e){}
+function dec(v){try{return decodeURI(v)}catch(e){return v}}
+function norm(v){v=String(v==null?'':v);var m=/#lp-late=(.+)$/.exec(v);if(m)return dec(m[1]);
+if(B&&v.indexOf(B)===0)v=v.slice(B.length);
+if(!v||/^(data:|blob:|https?:|\\/\\/|#|about:|javascript:)/i.test(v))return '';return v.replace(/^(\\.\\/)+/,'').replace(/[?#].*$/,'')}
+function hit(v){var k=norm(v);return k?(U[k]||U[dec(k)]||''):''}
+function map(v){return hit(v)||v}
 var D=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
 var set=function(el,v){if(D&&D.set)D.set.call(el,v);else el.setAttribute('src',v)};
 try{if(D&&D.set)Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:D.enumerable,get:function(){return D.get.call(this)},set:function(v){D.set.call(this,map(v))}})}catch(e){}
 var SA=Element.prototype.setAttribute;
 Element.prototype.setAttribute=function(n,v){return SA.call(this,n,this.tagName==='IMG'&&String(n).toLowerCase()==='src'?map(v):v)};
-function fix(img){var k=norm(img.getAttribute('src'));if(k&&U[k]){set(img,U[k]);return true}return false}
+function fixSet(el){var v=el.getAttribute('srcset');if(!v)return;var t=v.replace(/^\\s+|\\s+$/g,'').split(/\\s+/),out=[],cur=null,ch=false;
+function push(u,d){var h=hit(u);if(h){u=h;ch=true}out.push(d?u+' '+d:u)}
+for(var i=0;i<t.length;i++){var x=t[i];if(!x)continue;
+if(cur===null){if(x.length>1&&x.charAt(x.length-1)===',')push(x.slice(0,-1),'');else cur=x}
+else{var m=/^([^,]*),(.*)$/.exec(x);if(m){push(cur,m[1]);cur=m[2]||null}else{push(cur,x);cur=null}}}
+if(cur!==null)push(cur,'');if(ch)SA.call(el,'srcset',out.join(', '))}
+function fix(img){var h=hit(img.getAttribute('src'));if(h)set(img,h);fixSet(img);return !!h}
+function fixAll(){var a=document.images,i;for(i=0;i<a.length;i++)fix(a[i]);
+var s=document.querySelectorAll('source[srcset]');for(i=0;i<s.length;i++)fixSet(s[i]);
+var v=document.querySelectorAll('video[poster]');for(i=0;i<v.length;i++){var h=hit(v[i].getAttribute('poster'));if(h)SA.call(v[i],'poster',h)}}
 addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='IMG')fix(t)},true);
 addEventListener('message',function(e){var d=e.data;if(e.source!==parent||!d||d.type!=='lp-late-files'||!d.files)return;
 for(var k in d.files){if(!U[k]){try{U[k]=URL.createObjectURL(d.files[k])}catch(x){}}}
-var a=document.images;for(var i=0;i<a.length;i++)fix(a[i]);
+fixAll();
 try{parent.postMessage({type:'lp-late-done',n:Object.keys(d.files).length},'*')}catch(x){}});
 })();<\/script>`;
 

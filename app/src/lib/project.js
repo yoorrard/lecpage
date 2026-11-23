@@ -1,8 +1,7 @@
 // 프로젝트 만들기·저장·내보내기(.lecpage = 무압축 ZIP: project.json + 자산 파일)
 import { projects, blobs } from './db.js';
 import { uid, sha256Hex } from './util.js';
-import { zipFiles } from '@engine/src/zip-write.js';
-import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
+import { DEFAULT_INFO, ALLOWED_ASSET, isAllowedAsset, readStoredZip, readStoredZipBlob, storedZipWriter, blobCrc, sameEntries, PROJECT_FORMAT, PROJECT_VERSION } from '@engine/src/project-file.js';
 // 첫 화면(Home·main.jsx)도 이 파일을 쓰므로 엔진·키트는 쓸 때만 불러옴(첫 화면 묶음을 가볍게)
 const siteMeta = () => import('./site-meta.js');
 
@@ -66,8 +65,8 @@ export async function duplicateProject(p0) {
   p.liveOk = false;
   delete p.demo;
   await projects.put(p);
-  const assets = await blobs.all(p0.id);
-  for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);
+  // 파일은 하나씩 옮김(연수의 모든 파일을 한꺼번에 메모리에 올리지 않음). 큰 교재는 저장소의 Blob 그대로
+  for (const k of await blobs.keys(p0.id)) { const v = await blobs.get(p0.id, k); if (v != null) await blobs.put(id, k, v); }
   return p;
 }
 
@@ -82,7 +81,7 @@ const pastOf = (p) => (p.deploy?.lastUrl ? { url: p.deploy.lastUrl, target: p.de
  * 다른 기기에서도 같은 주소·같은 방으로 다시 배포(연 기기에서 강사가 [같은 주소로 배포]를 눌러야 씀)
  */
 export async function exportProjectFile(p, { withKeys = false } = {}) {
-  const assets = await blobs.all(p.id);
+  const keys = (await blobs.keys(p.id)).sort();
   let carry;
   if (withKeys && p.deploy?.lastUrl) {
     const live = (await siteMeta()).deployView(p)?.live || {};
@@ -92,9 +91,23 @@ export async function exportProjectFile(p, { withKeys = false } = {}) {
     carry = { deploy: p.deploy, live: { provider: live.provider || 'none', url: live.url || '', anonKey: live.anonKey || '', code: live.code || '' }, liveOk: !!p.liveOk, sitePassword: p.sitePassword || '', ...(liveAdminKey ? { liveAdminKey } : {}) };
   }
   const project = { ...p, deploy: undefined, sitePassword: undefined, carry: undefined, carryPending: undefined, fileHash: undefined, pastDeploy: pastOf(p) || p.pastDeploy || undefined, ...(carry ? { carry } : {}) };
-  const files = { 'project.json': JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project }, null, 2) };
-  for (const [k, v] of Object.entries(assets)) files[k] = v;
-  return zipFiles(files);
+  // 파일은 하나씩 꺼내 Blob 조각으로 이음(연수의 모든 파일을 한꺼번에 메모리에 올리지 않음: 큰 교재가 여럿이면 수 GB).
+  // 교재 쪽 그림은 넣을 때 그린 것(assets/slides)과 사이트용(site/material)이 같은 내용이면 사이트용 한 벌만 담고 짝(same)을 적어 둠 → 열 때 되살림
+  const w = storedZipWriter();
+  const isSlide = (k) => /^assets\/slides\/slide-\d+\.\w+$/.test(k);
+  const twinKey = (k) => { const m = /^(?:assets\/slides\/slide|site\/material\/p)-(\d+)\.(\w+)$/.exec(k); return m ? `${+m[1]}.${m[2].toLowerCase()}` : ''; };
+  const mat = new Map(); const same = {};
+  for (const k of [...keys.filter((x) => !isSlide(x)), ...keys.filter(isSlide)]) {
+    if (k.startsWith('conv/')) continue; // 커넥트가 만든 PDF: 여는 쪽이 받지 않는 자리라 담지 않음(다시 만들 수 있음)
+    const v = await blobs.get(p.id, k); if (v == null) continue;
+    const data = v instanceof Blob ? v : new Blob([v]);
+    const sum = await blobCrc(data);
+    if (isSlide(k)) { const t = mat.get(twinKey(k)); if (t && t.crc === sum.crc && t.size === sum.size) { same[k] = t.key; continue; } }
+    else if (k.startsWith('site/material/') && twinKey(k)) mat.set(twinKey(k), { ...sum, key: k });
+    await w.add(k, data, sum);
+  }
+  await w.add('project.json', JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, project, ...(Object.keys(same).length ? { same } : {}) }, null, 2));
+  return w.finish();
 }
 
 /** 파일에서 받은 예전 배포 표시(글자·숫자만) */
@@ -142,24 +155,33 @@ export async function openSavedFile(file) {
 }
 export const OPEN_FAIL = '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.';
 
+/** 파일에서 꺼낸 항목(Blob 조각)을 저장소에 담을 값으로: 큰 것은 Blob 그대로(메모리에 올리지 않음), 작은 것은 예전처럼 바이트 */
+const BIG_ENTRY = 32 * 1024 * 1024;
+const storable = async (v) => (v instanceof Blob ? (v.size > BIG_ENTRY ? v : new Uint8Array(await v.arrayBuffer())) : v);
+
 export async function importProjectFile(file) {
-  const buf = await file.arrayBuffer();
   let proj, assets = {}, text;
   if (/\.json$/i.test(file.name)) {
-    text = new TextDecoder().decode(buf);
+    text = new TextDecoder().decode(await file.arrayBuffer());
     const j = JSON.parse(text);
     if (j.format === PROJECT_FORMAT) proj = j.project;
     // 설계도(JSON)만 담은 파일은 예전 방식: 열지 않고 새로 만드는 길로
     else throw bad('예전 방식의 설계도 파일이라 열 수 없어요. 교재를 넣고 AI로 새로 만들어 주세요.');
   } else {
-    const files = readStoredZip(buf);
+    // 머리만 읽고 내용은 파일의 조각으로 둠(큰 교재가 든 파일을 메모리에 통째로 올리지 않음). 담을 때 하나씩 읽음
+    const files = await readStoredZipBlob(file);
     const pj = files['project.json']; if (!pj) throw bad('lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 만든 .lecpage 파일을 넣어 주세요.');
-    text = new TextDecoder().decode(pj);
+    text = await pj.text();
     const j = JSON.parse(text);
     // AI 에이전트(Skill `lecpage app`)가 만든 사이트 파일(.lecpage v2: project.json + site/… + src/…) → 완성 화면으로 바로
-    if (j?.format === PROJECT_FORMAT && +j.version === 2 && j.kind === 'site') return importSiteFile(files, text);
+    if (j?.format === PROJECT_FORMAT && +j.version === 2 && j.kind === 'site') {
+      const bytes = {}; for (const [k, v] of Object.entries(files)) bytes[k] = new Uint8Array(await v.arrayBuffer());
+      return importSiteFile(bytes, text);
+    }
     proj = j.project;
     for (const [k, v] of Object.entries(files)) if (k !== 'project.json' && (isAllowedAsset(k) || /^site\/(material|assets\/img|files)\/[\w.\-가-힣]+\.(webp|png|jpe?g|gif|pdf|pptx|docx|hwpx?)$/i.test(k))) assets[k] = v;
+    // 저장할 때 한 벌만 담은 교재 쪽 그림(same)을 되살림: 넣을 때 그린 것(assets/slides) ← 사이트용(site/material)
+    for (const [dst, src] of sameEntries(j)) if (assets[dst] === undefined && assets[src] !== undefined) assets[dst] = assets[src];
   }
   // 같은 파일을 두 번 열면 같은 이름 연수가 둘 생기지 않게 그때 연 연수를 다시 엶(따로 하나 더 쓰려면 [복제])
   const fileHash = await sha256Hex(text).catch(() => '');
@@ -181,7 +203,7 @@ export async function importProjectFile(file) {
     p.versions = []; p.gen = undefined;
   }
   await projects.put(p);
-  for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, v);
+  for (const [k, v] of Object.entries(assets)) await blobs.put(id, k, await storable(v));
   return p;
 }
 

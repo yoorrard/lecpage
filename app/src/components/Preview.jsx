@@ -41,7 +41,7 @@ function fileBlob(path, v) {
   return new Blob([], { type });
 }
 function dataBlob(url) {
-  const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(url) || [];
+  const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(String(url).replace(/#.*$/s, '')) || []; // 주소 뒤 '#…'(조각 표시)는 내용이 아님
   const raw = m[2] ? atob(m[3] || '') : decodeURIComponent(m[3] || '');
   const u = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) u[i] = raw.charCodeAt(i);
   return new Blob([u], { type: m[1] || 'application/octet-stream' });
@@ -206,7 +206,12 @@ export function SitePreview({ p, ver = 0, editing, setEditing, onText, onImage, 
       else if (d.type === 'lp-text' && Number.isInteger(d.n) && typeof d.html === 'string') onText?.(d.n, d.html.slice(0, 20000));
       else if (d.type === 'lp-img' && Number.isInteger(d.n)) { setFull(false); onImage?.(d.n); }
       else if (d.type === 'lp-nav' && typeof d.path === 'string') openPath(d.path, typeof d.hash === 'string' ? d.hash : '');
-      else if (d.type === 'lp-open' && typeof d.url === 'string' && /^data:/.test(d.url)) openBlob(dataBlob(d.url));
+      else if (d.type === 'lp-open' && typeof d.url === 'string' && /^data:/.test(d.url)) {
+        // 한 장 HTML에 못 담은 그림 자리(빈 그림#lp-late=경로)로 가는 링크면 사이트 파일의 실제 그림을 엶
+        const lateAt = /#lp-late=(.+)$/.exec(d.url);
+        if (lateAt) { let path = lateAt[1]; try { path = decodeURI(path); } catch { /* 그대로 */ } openPath(path, ''); }
+        else { try { openBlob(dataBlob(d.url)); } catch (e) { console.warn('[preview] open', e); } }
+      }
       else if (d.type === 'lp-pick' && typeof d.key === 'string') onPick?.({ page, key: d.key.slice(0, 200), item: Number.isInteger(d.item) ? d.item : null });
     };
     addEventListener('message', f); return () => removeEventListener('message', f);

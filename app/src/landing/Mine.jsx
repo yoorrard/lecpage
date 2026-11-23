@@ -82,7 +82,7 @@ export function Mine({ list, once, busyProps, reload }) {
           </>
           : <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 필요하면 먼저 파일로 저장해 두세요.</p>}
         <div class="btn-row">
-          {live && <button class="btn" onClick={async () => { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('열쇠까지 담아 저장했어요. 남에게 주지 마세요.'); }}>열쇠까지 파일로 저장</button>}
+          {live && <button class="btn" onClick={async () => { try { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('열쇠까지 담아 저장했어요. 남에게 주지 마세요.'); } catch (e) { console.error(e); toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 저장 공간을 확인하고 다시 눌러 주세요.'); } }}>열쇠까지 파일로 저장</button>}
           <button class="btn btn-danger" disabled={gone} aria-busy={gone ? 'true' : undefined} onClick={remove}>삭제</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
         </div>
       </Dialog>

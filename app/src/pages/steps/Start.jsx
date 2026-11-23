@@ -12,7 +12,7 @@ import { openSaved, openFailMessage } from '../../lib/open-saved.js';
 import { isV2 } from '../../lib/site-meta.js';
 import { startDemo } from '../../lib/demo.js';
 import { slideSetsOf, setsEnd, addSet, setsFields, numOf, MAX_SLIDES } from '../../lib/gen/slide-sets.js';
-import { tooBigFile, tooBigNote } from '../../lib/material-limits.js';
+import { tooBigFile, tooBigNote, OLD_MAX_MB, MB } from '../../lib/material-limits.js';
 
 // 1단계 교재 넣기(docs/plan-ai-first.md §2): 읽은 교재(파일·쪽 수)와 AI 고르기만. 연수 정보 칸·교재에서 찾은 요약·기본 초안은 없음
 // (연수 정보는 AI가 교재에서 찾아 사이트와 함께 돌려주고, 완성 뒤 한 번 확인받음). 요청 한 줄은 선택.
@@ -24,6 +24,11 @@ const PHOTO_NOTE = '사진은 교재로 읽지 않아요. 사이트에 실으려
 // 쪽 그림을 만들지 못하고 글자만 읽은 교재(예전 형식, 그리기 도구를 못 받은 한글 등, 커넥트 없음): PDF로 저장하는 법을 그 줄에서 바로
 const TEXT_ONLY_NOTE = '글자만 읽었어요. PDF로 저장해 함께 올리면 그림·디자인까지 읽어 더 정확해요.';
 // 쪽 그림은 모든 교재를 합쳐 MAX_SLIDES장까지(교재 슬라이드가 보여 주는 쪽 수): 몫이 남지 않은 교재는 그 줄에 있는 그대로 알림
+// 읽다가 끝을 보지 못한 교재(읽는 중에 탭이 죽거나 창을 닫음): 줄에 시도 횟수(tries)를 남겨, 한 번 끝을 못 본 뒤에는 열 때마다 저절로 다시 읽지 않음(큰 교재가 탭을 거듭 죽이지 않게)
+// 예전 한도(100MB)보다 큰 교재는 처음 읽기부터 한 번으로 셈(읽다 죽으면 다시 열 때 바로 물음). 작은 교재는 지금처럼 한 번은 저절로 이어 읽음
+const firstTries = (f) => (f.size > OLD_MAX_MB * MB ? 1 : 0);
+const heldRow = (f) => !!f?.pending && !!f.key && (f.tries || 0) >= 1;
+const HELD_NOTE = '읽다가 멈췄어요. 이 기기에서 읽기에 큰 교재일 수 있어요.';
 const capNote = (made) => `쪽 그림은 모든 교재를 합쳐 ${MAX_SLIDES}장까지 만들어요. 이 교재는 ${made ? `앞 ${made}쪽만 그렸어요.` : '쪽 그림 없이 읽어요.'}`;
 const HOWTO = {
   ppt: [['PowerPoint', '파일 → 내보내기 → PDF/XPS 문서 만들기'], ['Keynote', '파일 → 내보내기 → PDF'], ['구글 프레젠테이션', '파일 → 다운로드 → PDF 문서']],
@@ -45,9 +50,12 @@ function useIngest(p, update, first = []) {
   const [stop, setStop] = useState(null); // 쪽 그림을 만드는 동안: [중지](그때까지 만든 그림은 씀)
   const [extra, setExtra] = useState(() => incomingRows(first)); // 원본을 담아 목록에 적기 전까지 보일 줄
   const [gone, setGone] = useState(null); // ✕로 뺀 교재: 남은 교재를 다시 읽는 동안에도 목록에서 먼저 뺌
-  async function ingestAll(fileObjs0, { replace = false, keep = null } = {}) {
+  async function ingestAll(fileObjs0, { replace = false, keep = null, tries = null } = {}) {
     const photos = fileObjs0.filter((f) => PHOTO.test(f.name));
     const fileObjs = fileObjs0.filter((f) => !PHOTO.test(f.name));
+    // 읽다 멈춘 채 남은 다른 교재(이번에 읽지 않는 것)는 그 줄 그대로 둠: 다른 교재를 넣거나 빼도 목록에서 사라지거나 저절로 다시 읽히지 않게
+    const held = (p.files || []).filter((m) => m.pending && m.key && !fileObjs.some((f) => f.name === m.name));
+    const triesOf = (f) => (tries == null ? firstTries(f) : tries);
     // 같은 이름의 교재를 다시 넣음: 예전 것을 새 것으로 바꿈(목록·글·쪽 그림이 두 번 들어가지 않게). 남은 교재와 함께 처음부터 다시 읽어 쪽 그림 번호도 다시 매김
     const again = replace ? [] : (p.files || []).filter((m) => !m.pending && !m.photos && m.key && fileObjs.some((f) => f.name === m.name));
     if (again.length) {
@@ -57,7 +65,7 @@ function useIngest(p, update, first = []) {
       for (const m of again) if (m.pdf?.key) await blobs.remove(p.id, m.pdf.key); // 예전 파일로 만든 PDF는 다시 만듦
       // 새 원본을 먼저 담음: 다시 읽는 중에 창을 닫았다 열어도(이어서 읽기) 예전 파일이 아니라 새 파일을 읽게
       for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
-      return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos) });
+      return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos), tries });
     }
     const metas = replace ? [] : (p.files || []).filter((f) => !f.pending && !f.photos);
     const keepPhotos = keep || (replace ? [] : (p.files || []).filter((f) => f.photos).flatMap((f) => f.photos));
@@ -65,7 +73,7 @@ function useIngest(p, update, first = []) {
     // 읽는 동안 창을 닫아도 교재가 남게: 원본을 먼저 담고 목록에 '읽는 중'으로 적어 둠(다시 열면 이어서 읽음)
     if (!replace && fileObjs.length) {
       for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
-      update({ files: [...metas, ...fileObjs.map((f) => ({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: [], pending: true })), ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
+      update({ files: [...metas, ...fileObjs.map((f) => ({ name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: (f.name.split('.').pop() || '').toLowerCase(), pages: 0, errors: [], pending: true, ...(triesOf(f) ? { tries: triesOf(f) } : {}) })), ...held, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
       setExtra([]); // 같은 그림에서 목록이 이어받음
     }
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
@@ -80,10 +88,10 @@ function useIngest(p, update, first = []) {
       const rereading = fileObjs.map((f) => {
         const old = (p.files || []).find((m) => m.name === f.name && !m.photos);
         return !tooBigFile(f)
-          ? { name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: extOf(f.name), pages: 0, errors: [], pending: true, ...(old?.pdf ? { pdf: old.pdf } : {}) }
+          ? { name: f.name, key: 'src/' + safe(f.name), size: f.size, ext: extOf(f.name), pages: 0, errors: [], pending: true, ...(triesOf(f) ? { tries: triesOf(f) } : {}), ...(old?.pdf ? { pdf: old.pdf } : {}) }
           : { name: f.name, size: f.size, ext: extOf(f.name), pages: 0, errors: [tooBigNote(f)] };
       });
-      update({ ...setsFields([]), material: null, files: [...rereading, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
+      update({ ...setsFields([]), material: null, files: [...rereading, ...held, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])] }, { now: true });
     }
     else if (sets.length) { // 읽다 만 교재가 남긴 쪽 그림(묶음에 적히지 않은 뒤 번호)은 지움
       const end = setsEnd(sets);
@@ -156,7 +164,7 @@ function useIngest(p, update, first = []) {
     }
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
-    update({ material: merged, files: [...metas, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], ...setsFields(sets) });
+    update({ material: merged, files: [...metas, ...held, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], ...setsFields(sets) });
     const bad = fileObjs.length - ok;
     const ph = photos.length ? ' 사진은 사이트를 만든 뒤 넣어요.' : '';
     toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
@@ -174,27 +182,47 @@ function useIngest(p, update, first = []) {
   }
   async function removeFile(i) {
     const f = p.files[i]; const rest = p.files.filter((_, k) => k !== i);
+    // 읽다 멈춘 교재(아직 쪽 그림 묶음에 적히지 않음): 그 줄과 담아 둔 원본만 지움. 남은 교재를 다시 읽을 까닭이 없음
+    if (heldRow(f)) {
+      try { await blobs.remove?.(p.id, f.key); if (f.pdf?.key) await blobs.remove?.(p.id, f.pdf.key); } catch (e) { console.error(e); }
+      update({ files: rest }, { now: true }); toast(`뺐어요: ${f.name}`); return;
+    }
     setBusy('교재 목록을 다시 읽는 중…'); setPct(5); setGone(f);
     try {
       if (f.key) await blobs.remove?.(p.id, f.key);
       if (f.pdf?.key) await blobs.remove?.(p.id, f.pdf.key); // 커넥트로 만든 PDF
       const again = [];
-      for (const m of rest) { const data = !m.photos && m.key ? await blobs.get(p.id, m.key).catch(() => null) : null; if (data) again.push(new File([data], m.name)); } // 남은 교재의 원본만(전부를 한꺼번에 메모리에 올리지 않음)
+      // 남은 교재의 원본만(전부를 한꺼번에 메모리에 올리지 않음). 읽다 멈춘 교재는 다시 읽지 않고 그 줄 그대로 둠(ingestAll의 held)
+      for (const m of rest) { const data = !m.photos && !m.pending && m.key ? await blobs.get(p.id, m.key).catch(() => null) : null; if (data) again.push(new File([data], m.name)); }
       const keep = rest.filter((m) => m.photos).flatMap((m) => m.photos);
       if (again.length) await ingestAll(again, { replace: true, keep }); // 남은 교재를 다시 읽으며 쪽 그림 번호도 처음부터 다시 매김
-      else { await blobs.removePrefix(p.id, 'assets/slides/'); update({ material: null, files: rest.filter((m) => m.photos), ...setsFields([]) }); }
+      else { await blobs.removePrefix(p.id, 'assets/slides/'); update({ material: null, files: rest.filter((m) => m.photos || (m.pending && m.key)), ...setsFields([]) }); }
       toast(`뺐어요: ${f.name}`);
     } catch (e) { console.error(e); toast(STORAGE_MSG[storageKind(e)] || '교재 목록을 다시 읽지 못했어요. 새로 고침한 뒤 다시 해 주세요.'); }
     setBusy(''); setPct(0); setGone(null);
   }
-  /** 읽는 중에 창을 닫았던 교재(목록에 '읽는 중'으로 남음)·체험 연수의 예시 교재: 담아 둔 원본으로 이어서 읽음 */
-  async function resume() {
+  /**
+   * 읽는 중에 창을 닫았던 교재(목록에 '읽는 중'으로 남음)·체험 연수의 예시 교재: 담아 둔 원본으로 이어서 읽음.
+   * 한 번 끝을 못 본 교재(tries)는 저절로 다시 읽지 않고 그 줄에서 [이어서 읽기]·[삭제]를 고르게 함(force: 강사가 [이어서 읽기]를 누름).
+   * 읽기 전에 시도 횟수를 그 줄에 먼저 적어 둠(읽다 탭이 죽어도 다음에 열 때 알 수 있게)
+   */
+  async function resume(force = false) {
     const pend = (p.files || []).filter((f) => f.pending && f.key); if (!pend.length || busy) return;
+    if (!force && pend.some(heldRow)) {
+      // 함께 읽다 멈춘 다른 줄도 같은 모습으로: '읽는 중'으로 남아 기다리게 하지 않고, 어느 줄에서든 [이어서 읽기]·삭제를 고르게
+      if (pend.some((f) => !heldRow(f))) update({ files: (p.files || []).map((f) => (f.pending && f.key && !heldRow(f) ? { ...f, tries: 1 } : f)) }, { now: true });
+      return;
+    }
     const again = [];
     for (const m of pend) { const v = await blobs.get(p.id, m.key).catch(() => null); if (v) again.push(new File([v], m.name)); }
     if (!again.length) { update({ files: (p.files || []).filter((f) => !f.pending) }); return; }
     setBusy('교재를 이어서 읽는 중이에요…'); setPct(3);
-    try { await ingestAll(again); } catch (e) { console.error(e); }
+    try { await ingestAll(again, { tries: pend.reduce((n, f) => Math.max(n, f.tries || 0), 0) + 1 }); }
+    catch (e) {
+      console.error(e);
+      if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 눌러 주세요.');
+      else if (!e.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 끝까지 읽지 못했어요. 그 줄에서 [이어서 읽기]나 삭제를 눌러 주세요.');
+    }
     setBusy(''); setPct(0);
   }
   // 목록에 보일 줄: 뺀 교재는 먼저 빼고, 넣는 중인 교재는 사진 줄 앞에(목록에 적을 때와 같은 순서)
@@ -228,7 +256,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
   }
   const ready = !busy && (p.files || []).some((f) => !f.pending && !f.photos && !f.errors?.length);
   // 읽는 중에는 다 읽은 뒤와 같은 자리에 그림(작은 교재 칸·목록 줄·AI 선택 칸): 다 읽는 순간 화면이 밀리지 않게
-  const reading = !!busy || rows.some((f) => f.pending);
+  const reading = !!busy || rows.some((f) => f.pending && !heldRow(f)); // 읽다 멈춘 줄([이어서 읽기]를 기다림)은 읽는 중이 아님
   const [busyName, busyWhat] = Array.isArray(busy) ? busy : ['', busy];
   const has = isV2(p);
   const running = job.status === 'running' || job.status === 'paused';
@@ -267,7 +295,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
             <ul class="files" ref={listRef} aria-label="읽은 교재">
               {rows.map((f, i) => (
                 <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
-                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? ' · 읽는 중' : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{f.howto && HOWTO[f.howto] && <details class="small file-howto"><summary>PDF로 저장하는 법</summary><ul>{HOWTO[f.howto].map(([app, how]) => <li><b>{app}</b>: {how}</li>)}</ul></details>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
+                  <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? (heldRow(f) && !busy ? ' · 읽다가 멈춤' : ' · 읽는 중') : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{heldRow(f) && !busy && <div class="small file-held" role="status">{HELD_NOTE} <button type="button" class="btn btn-sm" onClick={() => resume(true)}>이어서 읽기</button></div>}{f.howto && HOWTO[f.howto] && <details class="small file-howto"><summary>PDF로 저장하는 법</summary><ul>{HOWTO[f.howto].map(([app, how]) => <li><b>{app}</b>: {how}</li>)}</ul></details>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
                   <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 삭제`} title="삭제">✕</button></li>
               ))}
             </ul>

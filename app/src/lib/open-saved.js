@@ -7,10 +7,15 @@ import { kv, projects } from './db.js';
 
 const NOT_OURS = "lecpage에서 저장한 파일이 아니에요. lecpage의 [파일로 저장]으로 받은 .lecpage 파일을 열어 주세요.";
 
+// 큰 파일(큰 교재가 든 연수)은 통째로 읽지 않음: 크기 + 끝 4MiB로 지문을 냄.
+// 끝에는 ZIP 목록(항목마다 이름·크기·CRC)과 맨 뒤에 담는 project.json이 있어 내용이 다르면 지문도 달라요
+const FP_WHOLE = 64 * 1024 * 1024, FP_TAIL = 4 * 1024 * 1024;
 async function fingerprint(file) {
   try {
-    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
-    return Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('');
+    const big = file.size > FP_WHOLE;
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', await (big ? file.slice(file.size - FP_TAIL) : file).arrayBuffer()));
+    const hex = Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('');
+    return big ? `t${file.size}-${hex}` : hex;
   } catch { return ''; }
 }
 

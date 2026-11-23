@@ -30,8 +30,12 @@ function pdfOf(jpgs) {
   return Buffer.concat(parts);
 }
 const gallery = (n) => Array.from({ length: n }, (_, i) => `<img src="material/p-${String(i + 1).padStart(3, '0')}.webp" alt="${i + 1}쪽" width="160" height="90">`).join('');
+// 문서 맨 뒤(쪽 그림 수십 장 다음)에 놓인 링크·배경·poster: 쪽 그림이 한 장 HTML의 한도를 먼저 써 버려도 이 자리는 깨지지 않아야 함
+const pg = (n) => `material/p-${String(n).padStart(3, '0')}.webp`;
+const extras = (n) => `<section id="more" data-title="더 보기"><h2>더 보기</h2><p><a id="open-last" href="${pg(n)}">마지막 쪽 크게 보기</a></p>`
+  + `<div id="bg" style="width:40px;height:40px;background:url(${pg(1)}) center/cover"></div><video id="vid" poster="${pg(2)}" width="40" height="30"></video></section>`;
 const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>쪽 많은 교재</title></head><body><main><section id="top" data-title="첫 화면"><h1>쪽 많은 교재</h1><p>교재 슬라이드로 봐요.</p></section>'
-  + `<section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section><section id="all" data-title="전체 쪽"><h2>전체 쪽</h2>${gallery(n)}</section></main></body></html>\n` + '```\n\n```json\n{"title":"쪽 많은 교재","sessions":[{"date":"2026-12-09","start":"14:00","end":"17:00"}]}\n```';
+  + `<section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section><section id="all" data-title="전체 쪽"><h2>전체 쪽</h2>${gallery(n)}</section>${extras(n)}</main></body></html>\n` + '```\n\n```json\n{"title":"쪽 많은 교재","sessions":[{"date":"2026-12-09","start":"14:00","end":"17:00"}]}\n```';
 
 (async () => {
   const b = await chromium.launch();
@@ -87,8 +91,30 @@ const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta cha
     const out = [img.naturalWidth, viaAttr.naturalWidth, viaHtml.querySelector('img').naturalWidth]; img.remove(); viaAttr.remove(); viaHtml.remove(); return out;
   }, PAGES);
   ok('preview: a page image set later (img.src, setAttribute, inserted HTML) opens too', last.every((w) => w > 0), JSON.stringify(last));
+  // 4 링크·배경·poster·srcset: 빈 그림으로 바뀌지 않음
+  const more = await fr.locator('body').evaluate(async (body, n) => {
+    const bg = getComputedStyle(document.getElementById('bg')).backgroundImage; const poster = document.getElementById('vid').getAttribute('poster') || '';
+    const href = document.getElementById('open-last').getAttribute('href') || '';
+    // srcset에 적은 뒤쪽 쪽 그림: 열다 막히면 틀 안 코드가 따로 받은 그림으로 바꿈
+    const im = document.createElement('img'); im.alt = 'set'; im.width = 10; body.appendChild(im);
+    im.setAttribute('srcset', `material/p-${String(n).padStart(3, '0')}.webp 1x, material/p-${String(n - 1).padStart(3, '0')}.webp 2x`);
+    await new Promise((r) => { im.onload = r; setTimeout(r, 4000); });
+    // 스크립트가 링크 주소를 그림 주소로 씀(크게 보기): a.href는 틀 문서 기준의 절대 주소
+    const zoom = document.createElement('img'); zoom.alt = 'zoom'; zoom.width = 10; body.appendChild(zoom); zoom.src = document.getElementById('open-last').href;
+    await new Promise((r) => { zoom.onload = r; zoom.onerror = r; setTimeout(r, 4000); });
+    const out = { bg: bg.slice(0, 22), poster: poster.slice(0, 16), href, srcset: im.naturalWidth, srcsetAttr: (im.getAttribute('srcset') || '').slice(0, 5), zoom: zoom.naturalWidth };
+    im.remove(); zoom.remove(); return out;
+  }, PAGES);
+  ok('preview: background image and video poster placed after many page images are inlined (not blank)', /^url\("data:image\/webp/.test(more.bg) && /^data:image\/webp/.test(more.poster), JSON.stringify(more));
+  ok('preview: a link to a late page image keeps its address (no blank pixel)', more.href === pg(PAGES), more.href.slice(0, 60));
+  ok('preview: srcset naming late page images opens from the handed-over blobs', more.srcset > 0 && more.srcsetAttr === 'blob:', JSON.stringify(more));
+  ok('preview: a script using the link address as an image (zoom) opens it', more.zoom > 0, JSON.stringify(more));
+  const [pop] = await Promise.all([p.waitForEvent('popup', { timeout: 10000 }).catch(() => null), fr.locator('#open-last').click()]);
+  await p.waitForTimeout(300);
+  ok('preview: clicking that link opens the real image in a new tab', !!pop && /^blob:/.test(pop.url()), pop ? pop.url().slice(0, 30) : 'no popup');
+  if (pop) await pop.close().catch(() => {});
   // 글로 끼워 넣은 <img src="material/…">는 브라우저가 먼저 열어 보다 막힌 뒤(콘솔에 CSP 한 줄) 바뀜: 위 3에서 일부러 만든 그 한 줄만 빼고 오류 없음
-  const real = errs.filter((e) => !new RegExp(`material/p-${String(PAGES - 2).padStart(3, '0')}\\.webp`).test(e));
+  const real = errs.filter((e) => !new RegExp(`material/p-0*(${PAGES - 2}|${PAGES - 1}|${PAGES})\\.webp`).test(e)); // 3·4에서 일부러 막힌 주소로 열어 본 것(끼워 넣은 글·srcset)만 뺌
   ok('no page errors (static page images never try a blocked address)', real.length === 0, real.slice(0, 2).join(' | '));
   await b.close();
   summary();

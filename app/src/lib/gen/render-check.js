@@ -13,8 +13,8 @@ export function renderIssues(files, { widths = [1280, 390], timeout = 15000, pag
   if (typeof document === 'undefined' || !document.body) return Promise.resolve([]);
   return new Promise((resolve) => {
     const all = []; const frames = new Map(); const docs = new Map(); const late = new Map(); let left = widths.length; let done = false;
+    let t = 0;
     const finish = () => { if (done) return; done = true; removeEventListener('message', onMsg); clearTimeout(t); for (const f of frames.values()) f.remove(); resolve(all); };
-    const t = setTimeout(finish, timeout);
     function onMsg(e) {
       // 틀이 준비됨 → 그 틀의 사이트를 넣음
       for (const [id, f] of frames) {
@@ -35,6 +35,8 @@ export function renderIssues(files, { widths = [1280, 390], timeout = 15000, pag
     const imgs = Object.entries(files || {}).filter(([k, v]) => /\.(png|jpe?g|webp|gif|avif)$/i.test(k) && v && typeof v !== 'string');
     const heavy = imgs.reduce((n, [, v]) => n + (v.byteLength || v.size || 0), 0) > 8e6;
     const delay = heavy ? 600 + Math.min(5000, imgs.length * 12) : 600;
+    // 전체 제한: 재기 전 대기가 늘어난 만큼 더함(그림 많은 사이트가 느린 PC에서 검사 없이 넘어가지 않게). 가벼운 사이트는 예전 그대로
+    t = setTimeout(finish, timeout + (delay - 600));
     for (const w of widths) {
       const id = 'lp-insp-' + w + '-' + Math.random().toString(36).slice(2, 8);
       const f = document.createElement('iframe');

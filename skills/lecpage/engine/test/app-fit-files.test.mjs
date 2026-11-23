@@ -94,3 +94,41 @@ test('bridgeFiles: 원본이 커넥트 한도를 넘고 같은 이름의 PDF도 
   const img = await L.bridgeFiles(blobs, 'p', project, lim, sets, null, () => '');
   assert.match(Buffer.from(img.find((f) => f.name === '큰.md').base64, 'base64').toString('utf8'), /쪽 그림\(work\/site\/material\/\)과/);
 });
+
+test('bridgeFiles: 원본 대신 보내는 글 — 같은 이름의 .md 교재와 겹치지 않고, 원본 이름(standsFor)을 알리며, 글 크기도 합계에 넣음 · 작업 지시는 사실대로', async () => {
+  const L = await local();
+  const { taskText } = await import('../../scripts/studio.mjs');
+  // ① 같은 줄기의 .md 교재가 이미 있음 → '(뽑은 글)'을 붙임
+  const store = new Map([['src/큰.pptx', new Uint8Array(3 * MiB)], ['src/큰.md', new Uint8Array(10)]]);
+  const blobs = { get: async (pid, k) => store.get(k) || null, keys: async () => [...store.keys()] };
+  const project = { files: [{ name: '큰.pptx', key: 'src/큰.pptx', ext: 'pptx' }, { name: '큰.md', key: 'src/큰.md', ext: 'md' }] };
+  const lim = { files: 20, materialMB: 120, fileMB: 2, twinPdf: true };
+  const out = await L.bridgeFiles(blobs, 'p', project, lim, [{ name: '큰.pptx', first: 1, count: 5 }], null, () => '글');
+  const names = out.map((f) => f.name);
+  assert.equal(new Set(names.map((n) => n.toLowerCase())).size, names.length, '이름이 겹치지 않음: ' + names.join(', '));
+  const stand = out.find((f) => f.standsFor);
+  assert.equal(stand.name, '큰 (뽑은 글).md'); assert.equal(stand.standsFor, '큰.pptx'); assert.equal(stand.pageImages, true);
+  assert.ok(names.includes('큰.md'), '강사가 넣은 큰.md는 그대로 감');
+  // 커넥트가 받고(validateJob), 작업 지시에는 교재 원본이 아니라 '원본 대신 받은 글'로 적힘
+  const job = await validateJob({ agent: 'claude', kind: 'make', request: '', files: JSON.parse(JSON.stringify(out)) });
+  assert.equal(job.error, undefined, job.error);
+  const m = job.materials.find((x) => x.standsFor);
+  assert.equal(m.standsFor, '큰.pptx');
+  const task = taskText({ kind: 'make', materials: job.materials.map((x) => x.name), standIns: job.materials.filter((x) => x.standsFor).map((x) => ({ name: x.name, for: x.standsFor })), images: 5, pages: 5 });
+  const orig = task.split('\n').find((l) => l.startsWith('- 교재 원본:')) || '';
+  assert.match(orig, /material\/큰\.md/); assert.doesNotMatch(orig, /뽑은 글/, '대신 보낸 글은 교재 원본 줄에 없음');
+  assert.match(task, /- 원본 대신 받은 글: `material\/큰 \(뽑은 글\)\.md`\(원본 `큰\.pptx`는 커서 받지 못했어요\)/);
+  // standsFor가 없는 예전 앱의 요청은 예전 그대로(따로 적는 줄 없음)
+  assert.doesNotMatch(taskText({ kind: 'make', materials: ['a.pdf'], images: 1, pages: 1 }), /원본 대신 받은 글/);
+  // ② 글 크기도 합계에: 남은 교재가 합계 한도에 바짝 붙어 있으면 큰 것부터 글로 바꿔 한도 안에 들게 함(커넥트가 합계로 거절하지 않게)
+  const store2 = new Map([['src/a.pptx', new Uint8Array(3 * MiB)], ['src/b.docx', new Uint8Array(1 * MiB + 900 * 1024)], ['src/c.docx', new Uint8Array(100)]]);
+  const blobs2 = { get: async (pid, k) => store2.get(k) || null, keys: async () => [...store2.keys()] };
+  const project2 = { files: [{ name: 'a.pptx', key: 'src/a.pptx', ext: 'pptx' }, { name: 'b.docx', key: 'src/b.docx', ext: 'docx' }, { name: 'c.docx', key: 'src/c.docx', ext: 'docx' }] };
+  const lim2 = { files: 20, materialMB: 2, fileMB: 2, twinPdf: true }; // 합계 2MB(시험용): a는 파일 한도로 글이 되고, 그 글(300KB)과 b(1.9MB)를 더하면 2MB를 넘음
+  const out2 = await L.bridgeFiles(blobs2, 'p', project2, lim2, [], null, (name) => (name === 'a.pptx' ? '가'.repeat(100 * 1024) : '나'.repeat(1000)));
+  const total = out2.reduce((n, f) => n + Buffer.from(f.base64, 'base64').length, 0);
+  assert.ok(total <= 2 * MiB, `합계 ${total}바이트가 한도 안`);
+  assert.deepEqual(out2.asText.sort(), ['a.pptx', 'b.docx']); assert.ok(out2.some((f) => f.name === 'c.docx'));
+  const job2 = await validateJob({ agent: 'claude', kind: 'make', request: '', files: JSON.parse(JSON.stringify(out2)) }, { ...lim2 }).catch(() => null);
+  if (job2) assert.equal(job2.error, undefined, job2.error);
+});

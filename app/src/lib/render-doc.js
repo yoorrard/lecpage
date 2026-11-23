@@ -8,7 +8,7 @@
 import { snapdom } from '@zumer/snapdom';
 import { version as RHWP_VER } from '@rhwp/core/package.json';
 import { FRAME_SRC, frameEvent, sendHtml, postInner } from './sandbox-frame.js';
-import { FILE_MAX } from './material-limits.js';
+import { pptxZipLimits } from './material-limits.js';
 
 const MAX_W = 1600;
 const extOf = (name) => (String(name || '').split('.').pop() || '').toLowerCase();
@@ -68,8 +68,9 @@ export async function renderDocPages(name, bytes, { onProgress, signal, maxPages
 async function pptxPages(bytes, host, { onProgress, signal, maxPages }) {
   const { PptxViewer, parseZip, buildPresentation, RECOMMENDED_ZIP_LIMITS } = await import('@aiden0z/pptx-renderer');
   // 그리기 도구의 권장 한도(그림·영상 합계 192MiB, 풀린 크기 256MiB, 항목 하나 32MiB)는 사진이 많은 큰 교재에서 걸려 글자만 읽게 됨
-  // → 교재 넣기 한도(material-limits.js)에 맞춰 넓힘. 압축 폭탄은 엔진 읽기(ingest)가 먼저 거름(풀린 크기 합계·항목 수)
-  const files = await parseZip(bytes.slice().buffer, { ...RECOMMENDED_ZIP_LIMITS, maxEntryUncompressedBytes: FILE_MAX, maxTotalUncompressedBytes: Math.round(FILE_MAX * 1.25), maxMediaBytes: FILE_MAX });
+  // → 잰 조건의 기기에서만 PPTX 넣기 한도(material-limits.js)에 맞춰 넓힘. 그 밖의 기기는 권장 한도 그대로: 넘으면 예전처럼 쪽 그림 없이 글자만 읽음(탭이 죽지 않게).
+  // 압축 폭탄은 엔진 읽기(ingest)가 먼저 거름(풀린 크기 합계·항목 수)
+  const files = await parseZip(bytes.slice().buffer, { ...RECOMMENDED_ZIP_LIMITS, ...(pptxZipLimits() || {}) });
   const pres = buildPresentation(files);
   const viewer = new PptxViewer(host, { fitMode: 'none' });
   viewer.load(pres);
