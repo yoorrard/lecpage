@@ -7,6 +7,7 @@
 //   5. POST /accounts/{계정}/pages/projects/{프로젝트}/deployments (multipart: manifest, branch, _headers, _redirects)
 //   6. GET  …/deployments/{id} 로 준비될 때까지(latest_stage deploy/success)
 //   지우기: DELETE …/deployments/{id}?force=true (별칭이 걸린 미리보기 배포도 지움)
+//   목록: GET …/deployments?env=preview&page=N (최근 것부터. 우리가 id를 모르는 배포를 찾을 때만)
 // 2~4는 JWT로, 나머지는 API 토큰(Pages Write)으로 부릅니다. 브라우저에서 부를 수 없습니다(CORS 머리글 없음).
 // JWT를 앱(브라우저)에 주지 않습니다: 열쇠가 내용과 맞는지를 Pages가 확인하지 않으면 남의 파일을 바꿔치기할 수 있어서, 내용 검사는 늘 이쪽에서 합니다.
 
@@ -139,6 +140,11 @@ export class PagesClient {
   deleteDeployment(id, force = true) {
     return this.call('delete', `${this.base}/deployments/${encodeURIComponent(id)}${force ? '?force=true' : ''}`, { method: 'DELETE' });
   }
+  /**
+   * 프로젝트의 미리보기 배포 목록 한 쪽(최근에 만든 것부터, 한 쪽 25개). 브랜치로 거르는 인자가 없어 받은 쪽에서 고름
+   * (배포마다 deployment_trigger.metadata.branch · created_on). 답이 끊긴 '배포 만들기'가 남긴 배포를 찾을 때만 부름(Site.strays)
+   */
+  listDeployments(page = 1) { return this.call('deployments-list', `${this.base}/deployments?env=preview&page=${Math.max(1, Math.floor(page) || 1)}`); }
   getProject() { return this.call('project', this.base); }
 }
 

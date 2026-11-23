@@ -90,7 +90,7 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
     faults: [],
   };
   const stepOf = (m, p) => (p.endsWith('/upload-token') ? 'upload-token' : p.startsWith('/pages/assets/') ? p.slice('/pages/assets/'.length)
-    : /\/deployments$/.test(p) && m === 'POST' ? 'deployments' : /\/deployments\/[^/]+$/.test(p) ? (m === 'DELETE' ? 'delete' : 'deployment') : '');
+    : /\/deployments$/.test(p) ? (m === 'POST' ? 'deployments' : 'deployments-list') : /\/deployments\/[^/]+$/.test(p) ? (m === 'DELETE' ? 'delete' : 'deployment') : '');
   // 실패한 배포(stage 'failure')는 브랜치 별칭을 가져가지 않음
   const deploymentsOf = (branch, project = 'lecpage-view') => [...state.deployments.values()].filter((d) => d.branch === branch && d.project === project && d.stage !== 'failure').sort((a, b) => a.created - b.created);
 
@@ -169,7 +169,13 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
         state.deployments.set(id, d);
         return send(res, 200, ok(view(d)));
       }
-      if (rest === '/deployments' && m === 'GET') return send(res, 200, ok([...state.deployments.values()].filter((d) => d.project === proj).map(view)));
+      // 목록: 실제처럼 최근에 만든 것부터, 한 쪽 25개(page), env=preview면 본 배포(production 브랜치)는 뺌. 브랜치로 거르는 인자는 없음
+      if (rest === '/deployments' && m === 'GET') {
+        const prodBranch = state.projects.get(proj).production_branch; const env = url.searchParams.get('env');
+        const all = [...state.deployments.values()].filter((d) => d.project === proj && (!env || (env === 'preview') === (d.branch !== prodBranch))).sort((a, b) => b.created - a.created);
+        const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+        return send(res, 200, ok(all.slice((page - 1) * 25, page * 25).map(view)));
+      }
       if ((mm = /^\/deployments\/([^/]+)$/.exec(rest))) {
         const d = state.deployments.get(mm[1]);
         if (!d) return send(res, 404, fail(8000009, 'Deployment not found'));

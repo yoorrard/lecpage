@@ -60,6 +60,18 @@ const MANIFEST_MAX = 1024 * 1024;
  * 두 번째 주소·방·고치기는 바로 닫히고, Gate 목록과 관리 화면에 '지우는 중'으로 남음. 6시간이 지나도 안 되면 하루 점검이 웹훅으로 한 번 알림
  */
 export const WIPE_RETRY_MS = [60e3, 10 * 60e3, HOUR_MS, 6 * HOUR_MS, DAY_MS];
+/**
+ * 답이 끊긴 '배포 만들기'(우리는 실패로 알지만 Cloudflare에는 생겼을 수 있음, pstate.orphan = 그때)가 늦게 끝날 수 있다고 보는 시간.
+ * 우리가 기다리는 시간(90초)과 Cloudflare 쪽 처리 시간을 넉넉히 넘김. 이 시간이 지나기 전에는 '모르는 배포가 더 생길 수 있음'으로 다룸
+ * (Pages는 브랜치 주소를 그 브랜치의 가장 최근 배포에 붙이므로, 내린 뒤에 늦게 생긴 배포가 안내 화면 대신 나올 수 있음 → 이 시간이 지난 뒤 한 번 더 확인)
+ */
+const ORPHAN_SETTLE_MS = 5 * 60e3;
+/** 모르는 배포를 찾을 때 보는 배포 목록 쪽 수(한 쪽 25개, 최근 것부터). 생긴 직후에 찾으므로 몇 쪽이면 닿음. 못 닿으면 표시를 남겨 내릴 때 안내 화면으로 덮음 */
+const STRAY_PAGES = 4;
+/** 내릴 때 목록을 못 받아도(Cloudflare 오류) 이만큼만 다시 해 보고 끝냄(주소는 이미 안내 화면으로 덮여 있음) */
+const STRAY_TRIES = 3;
+/** 시각 비교 여유(우리 시계로 적은 때(orphan)와 Cloudflare가 적은 created_on을 견줄 때) */
+const STRAY_SKEW_MS = 5000;
 const WIPING_MSG = '사이트를 내리는 중이에요. Cloudflare가 잠시 답하지 않아 서버가 몇 분 안에 다시 해서 지워요. 이 주소는 그동안에도 고치거나 다시 배포할 수 없어요.';
 
 const SCHEMA = `
@@ -650,12 +662,16 @@ export class Site extends DurableObject {
     const pc = this.pc();
     // 우리가 id를 모르는 배포가 Cloudflare에 생길 수 있는 때를 적어 둠 → 내릴 때 그 주소를 안내 화면으로 꼭 덮음(wipePages).
     //  trying: 배포를 만드는 중(이 객체가 도중에 내려가면 남음 → 다음 공개 때 orphan으로). orphan: 배포 만들기가 답 없이 끊겼거나 5xx(생겼을 수 있음)
+    //  둘 다 그때의 시각(예전 판은 1). 모르는 배포는 strays가 목록에서 찾아 정리함(tidyOrphan·wipePages)
     const mark = (fn) => { const s0 = this.ps(meta); const before = JSON.stringify([s0.trying, s0.orphan]); fn(s0); if (JSON.stringify([s0.trying, s0.orphan]) !== before) this.savePs(meta, s0); };
-    mark((s0) => { if (s0.trying) s0.orphan = 1; s0.trying = 1; });
+    mark((s0) => { if (s0.trying) s0.orphan = Math.max(+s0.orphan || 0, +s0.trying || 1); s0.trying = Date.now(); });
     let deployment; let lost;
     try { ({ deployment, lost } = await deploySite(pc, { branch: branchOf(id), manifest, extra, headers, redirects, message: `lecpage ${id}` })); }
     catch (e) {
-      mark((s0) => { delete s0.trying; if (e?.step === 'deployments' && !(e.status >= 400 && e.status < 500)) s0.orphan = 1; });
+      const maybe = e?.step === 'deployments' && !(e.status >= 400 && e.status < 500);
+      mark((s0) => { delete s0.trying; if (maybe) s0.orphan = Date.now(); });
+      // 다시 배포하지 않아도 조금 뒤 알람이 그 배포를 찾아 적어 둠(tidyOrphan)
+      if (maybe) { try { await this.ctx.storage.setAlarm(this.alarmAt(meta)); } catch (e2) { console.error('orphan alarm failed', e2?.message); } }
       throw await this.pagesFail(e, 'Cloudflare Pages에 배포하지 못했어요. 잠시 뒤 다시 해 주세요.');
     }
     if (lost.length) {
@@ -673,6 +689,7 @@ export class Site extends DurableObject {
     st.past = [...new Set([...(st.past || []), ...Object.keys(st.man?.manifest || {})])].filter((x) => !(x in manifest)).slice(-PAST_PATHS);
     for (let room = PAST_CHARS, i = st.past.length - 1; i >= 0; i--) { room -= st.past[i].length; if (room < 0) { st.past = st.past.slice(i + 1); break; } }
     st.url = url; st.self = self; st.deps = [deployment.id]; st.hold = []; st.man = { manifest, headers, redirects }; delete st.trying;
+    st.depAt = Date.parse(deployment.created_on) || 0; // 이 배포가 생긴 때(Cloudflare가 적은 값. 모르는 배포가 이보다 먼저인지 나중인지 가림)
     const kept = this.keptBytes(meta, man.list);
     this.ctx.storage.transactionSync(() => {
       this.sql.exec('UPDATE meta SET current = ?, pending = NULL, bytes = ?, expires = ? WHERE id = 1', deployId, kept, expires);
@@ -684,11 +701,13 @@ export class Site extends DurableObject {
     for (const x of deferred.values()) { const d = this.deferred.get(x.sha); if (d) { this.deferred.delete(x.sha); this.deferredBytes -= d.size; } }
     Object.assign(meta, { current: deployId, pending: null, bytes: kept, expires });
     if (prev && prev !== deployId) this.manifests.delete(prev);
-    await this.ctx.storage.setAlarm(expires);
+    await this.ctx.storage.setAlarm(this.alarmAt(meta));
     this.sweep();
     // 지난 배포(각자 고유 주소가 있음)는 지움. 못 지운 것은 다음 공개·지우기 때 다시
     const left = await this.dropDeployments(old.filter((d) => d !== deployment.id));
     if (left.length) { const s2 = this.ps(meta); s2.hold = left; this.savePs(meta, s2); }
+    // 답이 끊긴 '배포 만들기'가 남긴 배포(우리가 id를 모름)가 있을 수 있으면 지금 찾아 지움(공개 응답은 기다리지 않음. 방금 생긴 것이라 목록 앞쪽에 있음)
+    if (this.ps(meta).orphan) this.ctx.waitUntil(this.exclusive(() => this.tidyOrphan()).catch((e) => console.error('orphan tidy failed', e?.message)));
     let g = null;
     try { g = await this.gate('POST', 'site', { id, bytes: kept, expires, published: true, pagesRoot: 'ask', ...this.pagesDelta() }); } catch (e) { console.error('gate site update failed', e?.message); }
     if (g?.pagesRoot) this.ctx.waitUntil(this.pagesRoot()); // 공개 응답은 기다리지 않음
@@ -720,6 +739,60 @@ export class Site extends DurableObject {
     for (const d of ids) { try { await this.pc().deleteDeployment(d, true); } catch (e) { if (e?.status !== 404) { left.push(d); console.error('pages delete failed', e?.step, e?.status, e?.code); } } }
     return left;
   }
+  get settleMs() { return this.cfg.pagesCfg?.settleMs || ORPHAN_SETTLE_MS; }
+  /** 모르는 배포가 생겼을 수 있는 때(없으면 0). 예전 판이 적은 표시(1)는 '언제인지 모름'(1) */
+  orphanAt(st) { return Math.max(+st.orphan || 0, +st.trying || 0); }
+  /** 다음 알람: 보관 기간 끝. 모르는 배포를 아직 정리하지 못했으면 그보다 먼저 한 번(생길 수 있는 시간이 지난 직후, tidyOrphan) */
+  alarmAt(meta) {
+    const st = this.ps(meta); const at = +st.orphan || 0;
+    return at > 1 && st.tidied !== at ? Math.min(meta.expires, at + this.settleMs + 1000) : meta.expires;
+  }
+  /**
+   * 이 사이트 브랜치에 있는, 우리가 id를 모르는 배포를 찾음(답이 끊긴 '배포 만들기'가 남긴 것). known: 아는 배포 id, since: 생겼을 수 있는 때.
+   * 배포 목록(최근에 만든 것부터)을 STRAY_PAGES쪽까지 봄. 돌려줌: { found: [{ id, at(생긴 때, 모르면 0) }], scanned: since보다 앞선 데까지(또는 끝까지) 봤는지 }.
+   * 목록을 못 받으면 던짐(PagesError)
+   */
+  async strays(meta, known, since) {
+    const branch = branchOf(meta.site); const skip = new Set((known || []).filter(Boolean)); const found = [];
+    const mine = (d) => d?.deployment_trigger?.metadata?.branch === branch;
+    for (let page = 1; page <= STRAY_PAGES; page++) {
+      const list = await this.pc().listDeployments(page);
+      if (!Array.isArray(list) || !list.length) return { found, scanned: true };
+      let oldest = Infinity;
+      for (const d of list) {
+        const at = Date.parse(d?.created_on) || 0;
+        if (at && at < oldest) oldest = at;
+        if (d?.id && !skip.has(d.id) && mine(d)) { skip.add(d.id); found.push({ id: String(d.id), at }); }
+      }
+      // 최근 것부터 나오므로 이 쪽에서 가장 오래된 것이 since보다 앞서면 더 볼 것이 없음(since를 모르면 STRAY_PAGES쪽까지만 봄)
+      if (since > 1 && oldest < since - this.settleMs - STRAY_SKEW_MS) return { found, scanned: true };
+    }
+    return { found, scanned: false };
+  }
+  /**
+   * 공개해 둔(또는 공개하다 만) 사이트에서 모르는 배포를 정리. 다음 공개 직후와, 생길 수 있는 시간이 지난 뒤 알람에서 한 번 부름(내릴 때는 wipePages가 함).
+   * 지금 배포보다 먼저 생긴 것은 지움(그 배포의 고유 주소에 내용이 남지 않게). 나중에 생긴 것은 브랜치 주소가 거기 붙어 있을 수 있어 지금은 지우지 않고
+   * id만 적어 둠(hold → 다음 공개·내릴 때 지움). 생길 수 있는 시간이 지났고 그때까지의 목록을 다 봤으면 표시(orphan)를 지움.
+   * 다 못 봤으면 표시를 남김 → 내릴 때 안내 화면으로 꼭 덮음
+   */
+  async tidyOrphan() {
+    const meta = this.load();
+    if (!meta || this.wiping(meta) || !this.isPages(meta) || !this.cfg.pagesCfg) return;
+    const st = this.ps(meta); const at = +st.orphan || 0;
+    if (at <= 1) return; // 언제인지 모르는 예전 표시: 목록에서 찾을 길이 없음(내릴 때 안내 화면으로 덮음)
+    const settled = Date.now() >= at + this.settleMs;
+    let r = null;
+    try { r = await this.strays(meta, [...st.deps, ...st.hold, st.gone], at); } catch (e) { console.error('pages stray list failed', e?.step, e?.status, e?.code); }
+    const cur = st.deps.length ? +st.depAt || 0 : 0; // 둘 다 Cloudflare가 적은 created_on이라 그대로 견줌. 모르면 '먼저'로 보지 않음
+    const older = r ? r.found.filter((d) => cur && d.at && d.at < cur) : [];
+    const left = older.length ? await this.dropDeployments(older.map((d) => d.id)) : [];
+    const gone = new Set(older.map((d) => d.id).filter((d) => !left.includes(d)));
+    const s2 = this.ps(meta);
+    if (r) s2.hold = [...new Set([...s2.hold, ...r.found.map((d) => d.id).filter((d) => !gone.has(d))])];
+    if (settled) { if (r?.scanned) delete s2.orphan; else s2.tidied = at; } // 다 못 봤으면 알람으로 다시 하지 않음(표시는 남김)
+    this.savePs(meta, s2);
+    try { await this.gate('POST', 'site', { id: meta.site, ...this.pagesDelta() }); } catch { /* 다음 알림 때 */ }
+  }
   /**
    * 브랜치에 안내 화면 하나만 배포(가림·지움). 배포 id.
    * 사이트에 있던 경로(지금·예전 배포)를 모두 안내 화면으로 채움: Pages는 지금 배포에 없는 경로를 예전에 내보낸 파일로 답해 줌
@@ -729,6 +802,8 @@ export class Site extends DurableObject {
     const st = this.ps(meta);
     const paths = [...Object.keys(st.man?.manifest || {}), ...(st.past || [])];
     const { deployment } = await this.pagesCall(() => this.noticeDeploy(branchOf(meta.site), html, 'lecpage notice', paths));
+    // 이 안내 화면이 생긴 때(Cloudflare가 적은 값. 못 읽으면 조금 앞당겨 잡아, 비슷한 때 생긴 모르는 배포를 '나중'으로 봄)
+    this.noticeAt = Date.parse(deployment.created_on) || Date.now() - STRAY_SKEW_MS;
     return deployment.id;
   }
   /** 안내 화면 한 장(index.html = 404.html)만 있는 배포. paths: 같은 안내 화면으로 채울 경로('/…') */
@@ -818,14 +893,42 @@ export class Site extends DurableObject {
     const removed = why === 'removed';
     let gone = st.gone || '';
     // orphan: 만들었는지 모르는 배포가 있을 수 있음(publishPages). 우리가 아는 배포를 다 지우면 그 주소가 그 배포로 돌아갈 수 있으니 안내 화면을 꼭 올려 덮음
-    const orphan = !!(st.orphan || st.trying);
+    const at = this.orphanAt(st); const orphan = at > 0;
+    const html = removed ? removedHtml() : goneHtml();
     const all = [...st.deps, ...st.hold].filter((d) => d && d !== gone);
     let left = (expired || removed || orphan) && !gone ? all : await this.dropDeployments(all);
-    if ((left.length || orphan) && !gone) { try { gone = await this.placeholder(meta, removed ? removedHtml() : goneHtml()); } catch (e) { console.error('pages wipe placeholder failed', e?.message); } }
+    if ((left.length || orphan) && !gone) { try { gone = await this.placeholder(meta, html); st.goneAt = this.noticeAt; } catch (e) { console.error('pages wipe placeholder failed', e?.message); } }
     if (left.length) left = await this.dropDeployments(left);
+    // 모르는 배포를 목록에서 찾아 지움: 안내 화면이 브랜치 주소를 덮어도 그 배포의 고유 주소(<해시>.…pages.dev)에는 내용이 남아 있으므로.
+    // 안내 화면이 올라가 있을 때만(그 브랜치의 가장 최근 배포를 지워도 주소가 비지 않게)
+    let wait = false;
+    if (orphan && gone) {
+      const settle = this.settleMs;
+      const fresh = at > 1 && Date.now() < at + settle; // 늦게 끝난 '배포 만들기'가 아직 더 생길 수 있음
+      let r = null;
+      try { r = await this.strays(meta, [gone], at); } catch (e) { console.error('pages stray list failed', e?.step, e?.status, e?.code); }
+      if (r?.found.length) {
+        // 안내 화면보다 나중에 생긴 배포는 브랜치 주소를 가져갔을 수 있음(Pages는 브랜치 주소를 가장 최근 배포에 붙임) → 지운 뒤 안내 화면을 다시 올림
+        if (r.found.some((d) => !d.at || d.at >= (+st.goneAt || 0))) st.late = 1;
+        left = [...left, ...(await this.dropDeployments(r.found.map((d) => d.id)))];
+      }
+      // 목록을 못 받았고 안내 화면을 '더 생길 수 있는 동안'에 올렸으면: 그 뒤에 생긴 배포가 있었을 수 있으니 한 번 다시 올림
+      if (!r && !fresh && at > 1 && (+st.goneAt || 0) < at + settle + STRAY_SKEW_MS) st.late = 1;
+      if (st.late && !left.length) {
+        try {
+          const again = await this.placeholder(meta, html); const old = gone;
+          gone = again; st.goneAt = this.noticeAt; delete st.late;
+          left = await this.dropDeployments([old]);
+        } catch (e) { console.error('pages wipe placeholder (again) failed', e?.message); }
+      }
+      if (!fresh) st.strayN = (st.strayN || 0) + 1;
+      // 더 생길 수 있는 동안은 기다렸다가 한 번 더 확인(holdWipe의 알람). 그 뒤에도 목록을 못 받았거나 안내 화면을 다시 못 올렸으면 STRAY_TRIES번까지만 다시 함
+      // (그 뒤로는 끝냄: 브랜치 주소는 안내 화면으로 덮여 있음). 언제인지 모르는 예전 표시(1)는 기다리지 않음
+      wait = at > 1 && (fresh || ((!r || !!st.late) && st.strayN < STRAY_TRIES));
+    }
     st.deps = []; st.hold = left; st.gone = gone; this.savePs(meta, st);
     if (left.length) console.error('pages deployments left', meta.site, left.length);
-    return !left.length && !(orphan && !gone);
+    return !left.length && !(orphan && !gone) && !wait;
   }
   /**
    * 지우는 중으로 둠: 여기 파일·배포 목록은 지금 지우고(저장량 0, 두 번째 주소는 404, 고치기·방은 닫힘) 사이트 줄과 남은 Pages 배포 id만 남김.
@@ -854,7 +957,7 @@ export class Site extends DurableObject {
       if (!meta) return json({ gone: true });
       const w = this.wiping(meta);
       if (w || Date.now() >= meta.expires) await this.wipeAndMark(meta, w ? w.expired : true, w ? w.why || '' : '');
-      else await this.ctx.storage.setAlarm(meta.expires);
+      else await this.ctx.storage.setAlarm(Math.max(this.alarmAt(meta), Date.now() + 1000));
       return json({ gone: !this.load() });
     });
   }
@@ -927,7 +1030,13 @@ export class Site extends DurableObject {
       }
       const w = this.wiping(meta);
       if (w || Date.now() >= meta.expires) await this.exclusive(() => this.wipeAndMark(meta, w ? w.expired : true, w ? w.why || '' : ''));
-      else await this.ctx.storage.setAlarm(meta.expires);
+      else {
+        // 보관 기간 전에 울린 알람: 답이 끊긴 '배포 만들기'가 남긴 배포를 정리할 때(alarmAt)
+        const st = this.ps(meta); const at = +st.orphan || 0;
+        if (at > 1 && st.tidied !== at && Date.now() >= at + this.settleMs) await this.exclusive(() => this.tidyOrphan());
+        const m2 = this.load();
+        if (m2 && !this.wiping(m2)) { const next = this.alarmAt(m2); await this.ctx.storage.setAlarm(next > Date.now() ? next : m2.expires); } // 정리를 못 했어도 알람이 바로 다시 울리지 않게
+      }
     } catch (e) {
       console.error('site alarm failed', e?.message);
       await this.ctx.storage.setAlarm(Date.now() + HOUR_MS);

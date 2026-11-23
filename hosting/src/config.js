@@ -147,7 +147,7 @@ export function config(env = {}) {
 /**
  * VIEW=pages 설정. 넷 다 있어야 켜짐: CF_ACCOUNT_ID, PAGES_PROJECT, PAGES_TOKEN(비밀, Pages Write만), PAGES_HOST('<프로젝트 주소>.pages.dev')
  * PAGES_SITE_URL(선택): 사이트 주소 틀. 기본 'https://{branch}.<PAGES_HOST>/'. CF_API_BASE(시험용): API 주소
- * @returns {{ api: string, accountId: string, project: string, token: string, host: string, siteUrl: string, timeoutMs: number } | null}
+ * @returns {{ api: string, accountId: string, project: string, token: string, host: string, siteUrl: string, timeoutMs: number, settleMs: number } | null}
  */
 export function pagesConfig(env) {
   const t = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -160,7 +160,9 @@ export function pagesConfig(env) {
   const api = /^https?:\/\/[^\s]+$/.test(t(env.CF_API_BASE)) ? t(env.CF_API_BASE).replace(/\/+$/, '') : 'https://api.cloudflare.com/client/v4';
   // CF_API_TIMEOUT_MS(시험용): Pages API 호출 하나를 기다리는 시간. 없으면 pages-api.js 기본값(20초, 올리기 90초)
   const timeoutMs = Number(env.CF_API_TIMEOUT_MS) > 0 ? Math.floor(Number(env.CF_API_TIMEOUT_MS)) : 0;
-  return { api, accountId, project, token, host, siteUrl, timeoutMs };
+  // CF_ORPHAN_SETTLE_MS(시험용): 답이 끊긴 '배포 만들기'가 Cloudflare에서 늦게 끝날 수 있다고 보는 시간. 없으면 site.js 기본값(5분)
+  const settleMs = Number(env.CF_ORPHAN_SETTLE_MS) > 0 ? Math.floor(Number(env.CF_ORPHAN_SETTLE_MS)) : 0;
+  return { api, accountId, project, token, host, siteUrl, timeoutMs, settleMs };
 }
 /**
  * ACCESS_TEAM_DOMAIN: "<팀>.cloudflareaccess.com"(https:// 붙여도 됨). 로컬 시험만 http://127.0.0.1:<포트>·http://localhost:<포트>.

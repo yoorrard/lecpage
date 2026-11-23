@@ -3,7 +3,8 @@
 //  1 한도 경계(파일 수·파일 하나·사이트 전체): 딱 맞으면 되고, 넘으면 올리기 전에 까닭과 함께 거절
 //  2 메모리에 두는 작은 파일 합계(16MB)를 넘는 사이트도 한 번에 공개
 //  3 Cloudflare API의 순간 오류(5xx·답 없음)는 서버가 한 번 더 해서 강사에게 보이지 않음. 이어지는 오류는 502로 끝나고 다시 하면 이어서 됨
-//  4 배포 만들기의 답이 끊긴 경우(Cloudflare에는 생겼는데 우리는 모름): 다시 하면 되고, 내리면 그 주소가 안내 화면으로 덮임
+//  4 배포 만들기의 답이 끊긴 경우(Cloudflare에는 생겼는데 우리는 모름): 다시 하면 되고, 그 배포는 목록에서 찾아 지우며, 내리면 그 주소가 안내 화면으로 덮임.
+//    내린 뒤에 늦게 생긴 배포가 주소를 가져가도 조금 뒤 다시 확인해 되돌림. 목록을 못 받아도 내리기는 끝남
 //  5 같은 배포를 동시에 두 번 공개, 다시 배포(같은 파일·일부만 바뀜·파일이 줄어듦), 내린 뒤 새로 만들기
 //  6 Cloudflare가 429로 막으면 까닭(pages_api)·다시 될 때와 함께 거절(앱이 줄을 섬)
 import { test, after } from 'node:test';
@@ -38,12 +39,26 @@ test('VIEW=pages 경계·고장: 한도 딱 맞음/넘음, 순간 오류, 답이
   const cf = await startFakeCf();
   closers.push(cf.stop);
   let h;
-  try { h = await host(cf, { MAX_FILES: 40, MAX_FILE_BYTES: 2 * MB, MAX_BYTES: 24 * MB, CF_API_TIMEOUT_MS: 1500 }); }
+  // CF_ORPHAN_SETTLE_MS: 답이 끊긴 '배포 만들기'가 늦게 끝날 수 있다고 보는 시간(실제 5분)을 시험에서는 1.5초로
+  try { h = await host(cf, { MAX_FILES: 40, MAX_FILE_BYTES: 2 * MB, MAX_BYTES: 24 * MB, CF_API_TIMEOUT_MS: 1500, CF_ORPHAN_SETTLE_MS: 1500 }); }
   catch (e) { return t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); }
   closers.push(h.stop);
   const base = h.url;
   const make = async (title = '경계') => { const r = await call(base, 'POST', '/api/sites', { json: { title } }); assert.equal(r.status, 201, JSON.stringify(r.body)); return r.body; };
   const callsOf = (step) => cf.state.calls.filter(([, p]) => p.endsWith(step)).length;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (fn, ms = 6000) => { const t0 = Date.now(); for (;;) { if (await fn()) return true; if (Date.now() - t0 > ms) return false; await wait(150); } };
+  const listCalls = () => cf.state.calls.filter(([m, p]) => m === 'GET' && p.endsWith('/deployments')).length;
+  /**
+   * 내리기. 답이 끊긴 '배포 만들기'가 있은 지 얼마 안 됐으면 서버는 '지우는 중'(202)으로 두고 조금 뒤 다시 확인함(실제로는 알람, 여기서는 다시 불러서).
+   * 다 지울 때까지 다시 부름. 처음 답·마지막 답·부른 횟수
+   */
+  const takeDown = async (path, key) => {
+    const first = await call(base, 'DELETE', path, { key });
+    let last = first; let n = 1;
+    while (last.status === 202 && n < 14) { await wait(600); last = await call(base, 'DELETE', path, { key }); n++; }
+    return { first: first.status, last: last.status, n };
+  };
 
   await t.test('파일 수: 40개는 되고 41개는 올리기 전에 까닭과 함께 거절', async () => {
     const files = { 'index.html': html('파일 수') };
@@ -127,37 +142,98 @@ test('VIEW=pages 경계·고장: 한도 딱 맞음/넘음, 순간 오류, 답이
     assert.equal((await get(again.body.url)).status, 200);
   });
 
-  await t.test('배포 만들기의 답이 끊김(Cloudflare에는 생김): 다시 하면 되고, 한 번도 못 끝낸 사이트를 내려도 그 주소는 안내 화면', async () => {
+  await t.test('배포 만들기의 답이 끊김(Cloudflare에는 생김): 다시 하면 되고 모르는 배포는 찾아 지움, 한 번도 못 끝낸 사이트를 내려도 그 주소는 안내 화면', async () => {
     // (가) 다시 해서 끝낸 뒤 내리기
-    const site = await make();
+    const site = await make(); const branch = `s-${site.id}`;
     cf.state.faults.push({ on: 'deployments', status: 502, times: 1, after: true });
     const files = { 'index.html': html('끊긴 답 비밀 내용'), 'assets/img/a.webp': webp(30000) };
     const bad = await deploy(base, site, files);
     assert.equal(bad.step, 'publish'); assert.equal(bad.status, 502);
-    assert.equal(cf.deploymentsOf(`s-${site.id}`).length, 1, 'Cloudflare에는 배포가 생겼음(우리는 id를 모름)');
+    assert.equal(cf.deploymentsOf(branch).length, 1, 'Cloudflare에는 배포가 생겼음(우리는 id를 모름)');
     const ok = await deploy(base, site, files);
     assert.equal(ok.status, 200);
-    assert.equal((await call(base, 'DELETE', `/api/sites/${site.id}`, { key: site.key })).status, 204);
+    // 다음 성공 배포 직후: 모르는 배포를 목록에서 찾아 지움(그 배포의 고유 주소 <해시>.…pages.dev에 내용이 남지 않게)
+    assert.ok(await until(() => cf.deploymentsOf(branch).length === 1), `모르는 배포를 지움(남은 배포 ${cf.deploymentsOf(branch).length}개)`);
+    assert.match((await get(site.url)).text, /끊긴 답 비밀 내용/, '공개한 사이트는 그대로 열림');
+    const down = await takeDown(`/api/sites/${site.id}`, site.key);
+    assert.ok([204, 404].includes(down.last), JSON.stringify(down));
     const gone = await get(site.url);
     assert.match(gone.text, /강사가 사이트를 내렸어요/); assert.doesNotMatch(gone.text, /끊긴 답 비밀 내용/);
-    // (나) 한 번도 끝내지 못하고 내리기: 우리가 아는 배포가 없어도 그 주소를 안내 화면으로 덮음
-    const site2 = await make();
+    assert.equal(cf.deploymentsOf(branch).length, 1, '안내 화면 하나만 남음');
+    // (나) 한 번도 끝내지 못하고 내리기: 우리가 아는 배포가 없어도 그 주소를 안내 화면으로 덮고, 모르는 배포는 찾아 지움
+    const site2 = await make(); const branch2 = `s-${site2.id}`;
     cf.state.faults.push({ on: 'deployments', status: 502, times: 1, after: true });
     const bad2 = await deploy(base, site2, { 'index.html': html('둘째 비밀 내용') });
     assert.equal(bad2.status, 502);
     assert.match((await get(site2.url)).text, /둘째 비밀 내용/, '답은 끊겼지만 Cloudflare 쪽 주소에는 내용이 나감');
-    assert.equal((await call(base, 'DELETE', `/api/sites/${site2.id}`, { key: site2.key })).status, 204);
+    const first2 = await call(base, 'DELETE', `/api/sites/${site2.id}`, { key: site2.key });
+    assert.ok([202, 204].includes(first2.status), JSON.stringify(first2.body));
     const gone2 = await get(site2.url);
-    assert.match(gone2.text, /강사가 사이트를 내렸어요/); assert.doesNotMatch(gone2.text, /둘째 비밀 내용/);
+    assert.match(gone2.text, /강사가 사이트를 내렸어요/, '처음 내릴 때 바로 안내 화면'); assert.doesNotMatch(gone2.text, /둘째 비밀 내용/);
+    assert.equal(cf.deploymentsOf(branch2).length, 1, '내용이 든 모르는 배포는 바로 지움(안내 화면 하나만)');
+    if (first2.status === 202) assert.ok([204, 404].includes((await takeDown(`/api/sites/${site2.id}`, site2.key)).last));
+    assert.match((await get(site2.url)).text, /강사가 사이트를 내렸어요/);
     // (다) 운영자가 지울 때도(안내 화면 없이 배포만 지우던 길) 모르는 배포로 돌아가지 않음
     const site3 = await make();
     cf.state.faults.push({ on: 'deployments', status: 502, times: 1, after: true });
     const f3 = { 'index.html': html('셋째 비밀 내용') };
     assert.equal((await deploy(base, site3, f3)).status, 502);
     assert.equal((await deploy(base, site3, f3)).status, 200);
-    const del = await call(base, 'DELETE', `/api/admin/sites/${site3.id}`, { key: ADMIN });
-    assert.ok([200, 204].includes(del.status), JSON.stringify(del.body));
+    const del = await takeDown(`/api/admin/sites/${site3.id}`, ADMIN);
+    assert.ok([200, 202, 204].includes(del.first) && [200, 204, 404].includes(del.last), JSON.stringify(del));
     assert.doesNotMatch((await get(site3.url)).text, /셋째 비밀 내용/);
+    assert.ok(cf.deploymentsOf(`s-${site3.id}`).length <= 1, '내용이 든 배포가 남지 않음');
+  });
+
+  await t.test('늦게 끝난 배포 만들기: 내린 뒤에 Cloudflare에 생겨 브랜치 주소를 가져가도, 조금 뒤 다시 확인해 지우고 안내 화면으로 되돌림', async () => {
+    const site = await make(); const branch = `s-${site.id}`;
+    assert.equal((await deploy(base, site, { 'index.html': html('처음 내용') })).status, 200);
+    // 우리는 1.5초에 끊고(답 없음 → 실패로 앎), 흉내 Cloudflare는 2.6초 뒤에 그 배포를 만듦
+    cf.state.faults.push({ on: 'deployments', hang: 2600, times: 1, after: true });
+    const bad = await deploy(base, site, { 'index.html': html('늦게 끝난 비밀 내용') });
+    assert.equal(bad.status, 502);
+    const first = await call(base, 'DELETE', `/api/sites/${site.id}`, { key: site.key });
+    assert.equal(first.status, 202, '더 생길 수 있는 동안은 지우는 중으로 두고 조금 뒤 다시 확인');
+    assert.match((await get(site.url)).text, /강사가 사이트를 내렸어요/);
+    // 늦게 생긴 배포가 브랜치 주소를 가져감(Pages는 브랜치 주소를 가장 최근 배포에 붙임). 다시 확인하지 않으면 내린 사이트 내용이 이대로 남음
+    assert.ok(await until(async () => cf.deploymentsOf(branch).length === 2, 5000), '흉내 Cloudflare가 늦게 배포를 만듦');
+    const down = await takeDown(`/api/sites/${site.id}`, site.key);
+    assert.ok([204, 404].includes(down.last), JSON.stringify(down));
+    const gone = await get(site.url);
+    assert.match(gone.text, /강사가 사이트를 내렸어요/); assert.doesNotMatch(gone.text, /늦게 끝난 비밀 내용/);
+    assert.equal(cf.deploymentsOf(branch).length, 1, '안내 화면 하나만 남음(늦게 생긴 배포는 지움)');
+    assert.equal(cf.state.faults.filter((x) => x.times > 0).length, 0, '고장을 실제로 지나감');
+  });
+
+  await t.test('내릴 때 배포 목록을 못 받아도(Cloudflare 오류) 내리기는 끝남: 주소는 안내 화면, 몇 번만 다시 해 봄', async () => {
+    const site = await make();
+    cf.state.faults.push({ on: 'deployments', status: 502, times: 1, after: true });
+    assert.equal((await deploy(base, site, { 'index.html': html('목록 실패 비밀 내용') })).status, 502);
+    cf.state.faults.push({ on: 'deployments-list', status: 500, times: 99 });
+    const down = await takeDown(`/api/sites/${site.id}`, site.key);
+    cf.state.faults = cf.state.faults.filter((x) => x.on !== 'deployments-list');
+    assert.ok([204, 404].includes(down.last), `끝없이 다시 하지 않음: ${JSON.stringify(down)}`);
+    const gone = await get(site.url);
+    assert.match(gone.text, /강사가 사이트를 내렸어요/); assert.doesNotMatch(gone.text, /목록 실패 비밀 내용/);
+  });
+
+  await t.test('다시 배포하지 않아도 조금 뒤 서버가 스스로(알람) 모르는 배포를 찾아 적어 둠 → 내리면 한 번에 함께 지움', async () => {
+    const site = await make(); const branch = `s-${site.id}`;
+    assert.equal((await deploy(base, site, { 'index.html': html('알람 처음 내용') })).status, 200);
+    cf.state.faults.push({ on: 'deployments', status: 502, times: 1, after: true });
+    assert.equal((await deploy(base, site, { 'index.html': html('알람 비밀 내용') })).status, 502);
+    assert.equal(cf.deploymentsOf(branch).length, 2, '지금 배포 + 모르는 배포');
+    const before = listCalls();
+    await wait(3400); // 생길 수 있는 시간(1.5초) + 1초 뒤에 알람이 울림
+    assert.ok(listCalls() > before, '알람이 배포 목록을 봄');
+    assert.equal(cf.deploymentsOf(branch).length, 2, '지금 배포보다 나중에 생긴 것은 주소가 붙어 있을 수 있어 지우지 않고 적어만 둠');
+    const mid = listCalls();
+    const first = await call(base, 'DELETE', `/api/sites/${site.id}`, { key: site.key });
+    assert.equal(first.status, 204, '정리가 끝났으니 내리기는 한 번에 끝남');
+    assert.equal(listCalls(), mid, '알람이 이미 적어 둬서 내릴 때는 목록을 다시 보지 않음(적어 둔 id로 지움)');
+    const gone = await get(site.url);
+    assert.match(gone.text, /강사가 사이트를 내렸어요/); assert.doesNotMatch(gone.text, /알람 (처음|비밀) 내용/);
+    assert.equal(cf.deploymentsOf(branch).length, 1, '안내 화면 하나만 남음');
   });
 
   await t.test('Cloudflare가 배포를 실패 상태로 돌려줌: 502로 끝나고 다시 공개하면 됨', async () => {

@@ -221,22 +221,82 @@ export function checkCss(css, path) {
 
 // 사이트가 직접 쓴 스크립트. 서비스 워커는 CSP(worker-src 'none')가 막지만, 고칠 곳을 바로 알려 주려고 올릴 때 거절
 const SW_RE = /serviceWorker['"`\]\s]*(?:\?\.|\.|\[\s*['"`])\s*register\b/;
-const PW_JS = [/\.type\s*=\s*['"`]\s*password\s*['"`]/i, /setAttribute\s*\(\s*['"`]type['"`]\s*,\s*['"`]\s*password\s*['"`]/i, /<input\b[^<>]{0,300}?\btype\s*=\s*\\?["'`]?\s*password\b/i];
+const PW_JS = [/\.type\s*=\s*['"`]\s*password\s*['"`]/i, /setAttribute\s*\(\s*['"`]type['"`]\s*,\s*['"`]\s*password\s*['"`]/i, /<input\b[^<>]{0,300}?\btype\s*=\s*(?:\\?["'`]\s*)?password\b/i];
 const MASK_JS = /-webkit-text-security\s*:\s*(?!none\b)[a-z]|webkitTextSecurity|WebkitTextSecurity/;
 // 쿠키 쓰기: 모든 바로 배포 사이트가 lecpage-view.pages.dev 아래라, 큰 쿠키를 그 도메인에 붙이면 같은 방문자에게 다른 사이트가 열리지 않을 수 있음.
-// 읽기(document.cookie를 =로 받지 않는 것)는 그대로 둠. cookieStore.set·delete도 막음.
-// 돌려 쓴 모양도 막음: 글자를 이어 붙인 이름(document['coo' + 'kie'] = …)·변수 이름(document[k] = …)·다른 이름으로 받은 document(d.cookie = …)·
-// Reflect.set / Object.assign / defineProperty(document, …)·글자 코드(\x63ookie). 이름이 글자 그대로인 보통 대입(document['title'] = …)은 그대로 둠.
+// 읽기(document.cookie를 =로 받지 않는 것)는 그대로 둠. 확실한 쿠키 쓰기만 거절함(보통 사이트를 잘못 막지 않게, cookieWrite):
+//  ① document.cookie = … · document['cookie'] = …(window.document·self['document']·ownerDocument·contentDocument·(document) 포함) · cookieStore.set/delete
+//  ② document[식] = … 인데 그 식이 눈에 보이게 'cookie'를 만드는 것(document['coo' + 'kie'] = …, 글자 코드 \x63ookie),
+//     또는 식에 변수가 있고 같은 파일에 'cookie'라는 글자(이어 붙인 "coo" + "kie", base64 포함)가 따로 있는 것(const k = 'cookie'; document[k] = …)
+//  ③ document를 다른 이름으로 받아 쓰는 것: const d = document; d.cookie = … (선언·대입·구조 분해·바로 부르는 함수의 인자)
+//  ④ Reflect.set / Object.assign / defineProperty(document, …)
+// 그대로 두는 것: document['on' + evt] = fn 같은 이벤트 속성 대입, document[k] = v(파일 어디에도 'cookie'가 없음), opts.cookie = … 같은 보통 객체의 cookie 칸.
 // 이 검사는 실수와 흔한 우회를 걸러 낼 뿐, 마음먹고 숨긴 코드(새 틀의 document 등)까지 다 막지는 못함: pages.dev 아래에서는 사이트끼리 쿠키 도메인을 나눌 수 없어
 // (사이트마다 다른 등록 도메인이 있어야 함) 나머지는 신고·가리기로 대응(README §6)
 const ASSIGN = '\\s*(?:\\+|\\|\\||&&|\\?\\?)?=(?!=)';
-const COOKIE_JS = [
-  new RegExp(`(?:\\?\\.|\\.)\\s*cookie${ASSIGN}`), // 어느 객체든 .cookie = (document를 다른 이름으로 받은 것 포함)
-  new RegExp(`\\[\\s*['"\`]cookie['"\`]\\s*\\]${ASSIGN}`), // …['cookie'] =
-  new RegExp(`\\bdocument\\s*(?:\\?\\.)?\\s*\\[(?!\\s*(['"\`])[\\w$-]*\\1\\s*\\])[^\\]\\n]{0,200}\\]${ASSIGN}`), // document[글자 그대로가 아닌 이름] =
-  /\bcookieStore\s*(?:\?\.|\.)\s*(?:set|delete)\s*\(/, /\bcookieStore\s*(?:\?\.)?\s*\[/,
+const QUOTE = '[\'"`]';
+// 정규식은 빈칸이 아주 길어도 한 번만 훑게 씀(\\s* 둘 사이에 없어도 되는 것을 두지 않음: document + 빈칸 1MB에서 멈추지 않게)
+const DOC = `(?:\\b(?:document|ownerDocument|contentDocument)|\\[\\s*${QUOTE}document${QUOTE}\\s*\\])(?:\\s*\\))*`; // document · x.ownerDocument · self['document'] · (document)
+const COOKIE_DIRECT = [
+  new RegExp(`${DOC}\\s*(?:\\?\\.|\\.)\\s*cookie${ASSIGN}`), // document.cookie =
+  new RegExp(`${DOC}\\s*(?:\\?\\.\\s*)?\\[\\s*(${QUOTE})cookie\\1\\s*\\]${ASSIGN}`), // document['cookie'] =
+  /\bcookieStore\s*(?:\?\.|\.)\s*(?:set|delete)\s*\(/, /\bcookieStore\s*(?:\?\.\s*)?\[/,
   /\b(?:Reflect\s*\.\s*set|Object\s*\.\s*assign|Object\s*\.\s*definePropert(?:y|ies)|Reflect\s*\.\s*defineProperty)\s*\(\s*document\s*,/,
+  /\b(?:Document|HTMLDocument)\s*\.\s*prototype\b[^;\n]{0,120}cookie/, /__lookupSetter__\s*\(\s*['"`]cookie/, // cookie 속성의 쓰기 함수를 꺼내 부르는 것
+  /\bwith\s*\(\s*document\s*\)[^]{0,300}?\bcookie\s*\+?=(?!=)/, // with (document) { cookie = … }
 ];
+const DOC_DYNAMIC = new RegExp(`${DOC}\\s*(?:\\?\\.\\s*)?\\[([^\\]\\n]{1,200})\\]${ASSIGN}`, 'g'); // document[식] =
+const NAME_COOKIE = new RegExp(`\\b([A-Za-z_][\\w$]*)\\s*(?:(?:\\?\\.|\\.)\\s*cookie|(?:\\?\\.\\s*)?\\[\\s*(${QUOTE})cookie\\2\\s*\\])${ASSIGN}`, 'g'); // 이름.cookie = · 이름['cookie'] =
+const DOC_NAMES = new Set(['document', 'ownerDocument', 'contentDocument']);
+const ALIAS_DECL = /(?:^|[^\w$.])([A-Za-z_$][\w$]*)\s*=\s*(?:(?:window|self|globalThis|top|parent)\s*\.\s*)?document\b(?!\s*[.(\[?])/g; // d = document
+const LITERAL_KEY = new RegExp(`^\\s*(${QUOTE})[\\w$-]*\\1\\s*$`);
+/** 식에서 따옴표·더하기·틀 글자(\`…\${}\`)·빈칸을 걷어 내 이어 붙인 글자를 봄: 'coo' + 'kie' → cookie */
+const squash = (expr) => expr.replace(/[\s'"`+${}()]/g, '');
+/** 파일에 'cookie'라는 글자가 따로 있는지("coo" + "kie"처럼 바로 이어 붙인 것과 base64 Y29va2ll 포함) */
+const hasCookieWord = (text) => /(['"`])(?:cookie|Y29va2ll)\1/.test(text.replace(/(['"`])\s*\+\s*(['"`])/g, ''));
+const reEsc = (s) => s.replace(/[$]/g, '\\$&');
+/** name이 document를 받은 다른 이름인지: 선언·대입(d = document, this.doc = document) · 구조 분해({ document: d }) · 바로 부르는 함수의 인자((function (w, d) {…})(window, document)) */
+function isDocAlias(name, text) {
+  const n = reEsc(name);
+  if (new RegExp(`(?:^|[^\\w$])${n}\\s*=\\s*(?:(?:window|self|globalThis|top|parent)\\s*\\.\\s*)?(?:document|[\\w$.]{1,80}\\.(?:ownerDocument|contentDocument))\\b(?!\\s*[.(\\[?])`).test(text)) return true;
+  if (new RegExp(`\\bdocument\\s*:\\s*${n}\\b(?!\\s*[.(\\[])`).test(text)) return true;
+  // 바로 부르는 함수: 부를 때 document가 놓인 자리와 같은 자리의 매개변수 이름
+  const at = new Set();
+  for (const m of text.matchAll(/\}(?:\s*\))?\s*(?:\.call\s*)?\(\s*([^()]{0,300})\)/g)) m[1].split(',').forEach((x, i) => { if (/^(?:(?:window|self|globalThis)\s*\.\s*)?document$/.test(x.trim())) at.add(i); });
+  if (!at.size) return false;
+  for (const m of text.matchAll(/(?:[(!+~-]|\bvoid\s)\s*(?:async\s+)?function\b[^(]{0,60}\(([^)]{0,300})\)|\(\s*(?:async\s*)?\(([^)]{0,300})\)\s*=>/g)) {
+    const params = (m[1] ?? m[2] ?? '').split(',').map((x) => x.trim());
+    for (const i of at) if (params[i] === name || params[i - 1] === name) return true; // .call(this, document)는 한 자리 밀림
+  }
+  return false;
+}
+/** 스크립트(글자 코드를 푼 것)에 쿠키 쓰기가 있는지 */
+function cookieWrite(text) {
+  if (COOKIE_DIRECT.some((re) => re.test(text))) return true;
+  let word = null; const cookieWord = () => (word ??= hasCookieWord(text));
+  /** 대괄호 안 식이 쿠키 이름을 만드는지: 눈에 보이게 이어 붙였거나, 변수가 있고 파일에 'cookie' 글자가 따로 있음 */
+  const dynamicKey = (expr) => {
+    if (LITERAL_KEY.test(expr)) return /^\s*['"`]cookie['"`]\s*$/.test(expr); // document['title'] = … 같은 글자 그대로의 이름은 그대로 둠
+    if (/cookie/i.test(squash(expr))) return true;
+    return /[A-Za-z_$]/.test(expr.replace(new RegExp(`(${QUOTE})(?:\\\\.|(?!\\1)[^\\\\\\n])*\\1`, 'g'), '')) && cookieWord();
+  };
+  for (const m of text.matchAll(DOC_DYNAMIC)) if (dynamicKey(m[1])) return true;
+  // document를 받은 다른 이름[식] = … 도 같은 기준으로(const d = document; d['coo' + 'kie'] = …)
+  const aliases = new Set();
+  for (const m of text.matchAll(ALIAS_DECL)) { if (!DOC_NAMES.has(m[1])) aliases.add(m[1]); if (aliases.size >= 8) break; }
+  for (const name of aliases) {
+    for (const m of text.matchAll(new RegExp(`(?:^|[^\\w$.])${reEsc(name)}\\s*(?:\\?\\.\\s*)?\\[([^\\]\\n]{1,200})\\]${ASSIGN}`, 'g'))) if (dynamicKey(m[1])) return true;
+  }
+  const seen = new Set();
+  for (const m of text.matchAll(NAME_COOKIE)) {
+    const name = m[1];
+    if (DOC_NAMES.has(name) || seen.has(name)) continue; // document류는 위에서 봄
+    seen.add(name);
+    if (isDocAlias(name, text)) return true;
+    if (seen.size > 40) break; // 이름이 아주 많은 파일(묶은 라이브러리): 그만 봄
+  }
+  return false;
+}
 /** 글자 코드로 쓴 글자(\x63, \u0063, \u{63})를 풀어 봄: 'cookie'를 코드로 적어 검사를 비켜 가지 못하게 */
 const unescapeJs = (s) => (s.indexOf('\\') < 0 ? s : s.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|u\{([0-9a-fA-F]{1,6})\})/g, (m, a, b2, c) => { const n = parseInt(a || b2 || c, 16); return n >= 0x20 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : m; }));
 const utf8 = new TextDecoder('utf-8', { fatal: true });
@@ -253,7 +313,7 @@ export function checkOwnScript(bytes, path) {
   if (PW_JS.some((re) => re.test(text))) throw unsafe('password', path);
   if (MASK_JS.test(text)) throw unsafe('masked', path);
   const plain = unescapeJs(text);
-  if (COOKIE_JS.some((re) => re.test(plain))) throw unsafe('cookie', path);
+  if (cookieWrite(plain)) throw unsafe('cookie', path);
   return text;
 }
 

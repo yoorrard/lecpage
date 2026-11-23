@@ -5,6 +5,9 @@ import { checkHtml, checkCss, checkOwnScript, scanHtml, pageData, decodeEntities
 import { HttpError } from '../src/http.js';
 import { isRuntimeJs } from '../src/runtime.js';
 import { buildSite, aiSite, AI_SITE_JS } from './helpers.mjs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const te = new TextEncoder(); const td = new TextDecoder();
 /** 걸리면 'code/rule', 통과하면 'ok' */
@@ -160,14 +163,18 @@ test('쿠키 쓰기는 사이트 스크립트에서 거절(읽기·localStorage�
   for (const ok of ['const c = document.cookie;', 'if (document.cookie == "") {}', 'document.cookie.split(";")', "localStorage.setItem('theme', 'dark')", '// 쿠키는 쓰지 않아요', 'const cookie = 1; cookie === 1']) assert.equal(js(ok), 'ok', ok);
 });
 
-test('쿠키 쓰기를 돌려 쓴 모양도 거절하고(이어 붙인 이름·변수 이름·다른 이름의 document·Reflect/Object·글자 코드), 보통 코드는 그대로 받음', () => {
+test('쿠키 쓰기를 돌려 쓴 모양도 거절하고(이어 붙인 이름·cookie 글자를 담은 변수·다른 이름의 document·Reflect/Object·글자 코드), 보통 코드는 그대로 받음', () => {
   for (const bad of [
     "document['coo' + 'kie'] = 'a=1; domain=lecpage-view.pages.dev'", // CLAUDE.md 2-⑩의 우회
-    'const k = "coo" + "kie"; document[k] = v', 'document[`coo${"kie"}`] = v', 'document?.[k] += v', 'document [ atob("Y29va2ll") ] = v',
-    'const d = document; d.cookie = v', 'window.document.cookie = v', 'self["document"].cookie = v', "top.document['cookie'] = v", 'this.doc.cookie ||= v',
-    "document['\\x63ookie'] = v", "d['\\u0063ookie'] = v", 'd.\\u0063ookie = v', "d['\\u{63}ookie'] = v",
+    'const k = "coo" + "kie"; document[k] = v', 'document[`coo${"kie"}`] = v', "const k = 'cookie'; document?.[k] += v", 'document [ atob("Y29va2ll") ] = v',
+    'const d = document; d.cookie = v', 'let d; d = window.document; d.cookie += v', 'window.document.cookie = v', 'self["document"].cookie = v', "top.document['cookie'] = v", '(document).cookie = v', '(0, document).cookie = v',
+    'this.doc = document; this.doc.cookie ||= v', 'const { document: d } = window; d.cookie = v', 'el.ownerDocument.cookie = v', 'frame.contentDocument.cookie = v',
+    '!function (w, d) { d.cookie = "a=1" }(window, document)', '(function (d) { d["cookie"] = v })(document)', '((w, d) => { d.cookie = v })(window, document)', '(function (d) { d.cookie = v }).call(this, document)',
+    "document['\\x63ookie'] = v", "const d = document; d['\\u0063ookie'] = v", 'const d = document; d.\\u0063ookie = v', "var d = document; d['\\u{63}ookie'] = v",
     "Reflect.set(document, 'coo' + 'kie', v)", 'Object.assign(document, { [k]: v })', 'Object.defineProperty(document, k, { value: v })', 'Object.defineProperties(document, o)', 'Reflect.defineProperty(document, k, o)',
     "cookieStore['set']('a', '1')", 'cookieStore?.[m](a)',
+    "var d = document; d['coo' + 'kie'] = v", "const k = 'cookie'; const doc = window.document; doc[k] = v", "window['document']['coo' + 'kie'] = v",
+    "with (document) { cookie = 'a=1' }", "Object.getOwnPropertyDescriptor(Document.prototype, 'cookie').set.call(document, v)", "document.__lookupSetter__('cookie').call(document, v)",
   ]) assert.equal(js(bad), 'unsafe_site/cookie', bad);
   for (const ok of [
     "document['title'] = '연수'", 'document["title"] = t', 'document.title = t', "document['body'].className = 'dark'", 'document.documentElement.dataset.theme = t',
@@ -176,6 +183,49 @@ test('쿠키 쓰기를 돌려 쓴 모양도 거절하고(이어 붙인 이름·�
     'const cookies = []; cookies.push(1)', 'obj.cookieName = "a"', 'x.cookies = []', 'if (a.cookie === b) {}', 'const { cookie } = document', "const s = '\\x41\\u0042'; el.textContent = s",
     "// document['coo' + 'kie'] 는 쓰지 않아요\nconst note = '쿠키 없이 localStorage만 써요'",
   ]) assert.equal(js(ok), 'ok', ok);
+});
+
+test('쿠키 규칙이 보통 사이트를 잘못 막지 않음: AI가 흔히 쓰는 모양 30여 가지와 저장소의 실제 스크립트(견본·참고 디자인·런타임·엔진)', () => {
+  // 이벤트 속성 대입, 변수로 고른 속성, 설정 객체의 cookie 칸, document를 인자·다른 이름으로 쓰지만 쿠키는 안 쓰는 코드
+  const fine = [
+    "document['on' + evt] = handler", 'document["on" + type.toLowerCase()] = null', 'document[`on${name}`] = fn', 'document[prop] = value', 'document?.[key] ||= fallback',
+    "['click', 'keydown'].forEach((t) => { document['on' + t] = wake })", 'const hiddenProp = "webkitHidden"; if (document[hiddenProp]) stop(); document[handlerName] = onChange',
+    'opts.cookie = true', 'config.cookie = { sameSite: "lax" }', 'this.cookie = cfg.cookie', "state['cookie'] = false", 'settings.cookie ||= null', 'req.headers.cookie = ""', 'a.b.c.cookie = 1',
+    'const d = document; d.title = t; d.body.classList.add("ready")', 'const doc = document; doc.getElementById("a").textContent = s; const o = {}; o.cookie = 1',
+    '(function (w, d) { d.documentElement.lang = "ko"; w.opts = {}; w.opts.cookie = 0 })(window, document)', '!function (e, t) { t.title = "a" }(window, document)',
+    'new MutationObserver(cb).observe(document, { subtree: true }); function init(opts) { opts.cookie = false }', '$(document).ready(function (e) { e.cookie = 1 })',
+    'const consent = { cookie: false }; consent.cookie = localStorage.getItem("c") === "1"', "const banner = document.querySelector('#cookie-banner'); banner.hidden = true",
+    "const label = 'cookie'; const row = table[label]; el.dataset[label] = '1'", "const names = ['cookie', 'storage']; names.forEach((n) => { info[n] = typeof window[n] })",
+    'const hasCookie = navigator.cookieEnabled; el.textContent = document.cookie ? "있음" : "없음"', 'const all = document.cookie.split("; ").map((x) => x.split("="))',
+    'document.addEventListener("visibilitychange", () => { document.title = document.hidden ? "…" : t })', 'window.document.title = t; self.document.body.dataset.k = v',
+    'Object.assign(document.body.style, { margin: 0 }); Object.defineProperty(model, key, { value: 1 })', 'const el = document.createElement("div"); el.cookie = 1; el["cookie"] = 2',
+    "let k = 'theme'; document.documentElement[k] = v; root.style[k] = v", 'for (const k in handlers) document.documentElement[k] = handlers[k]',
+    "fetch(url, { credentials: 'omit' }); const cookieless = true; store.cookie = cookieless",
+    "const d = document; d['on' + evt] = fn; d[prop] = v", 'with (Math) { x = cos(1) }', 'const proto = Document.prototype; const has = "hidden" in proto',
+  ];
+  for (const ok of fine) assert.equal(js(ok), 'ok', ok);
+  assert.ok(fine.length >= 30, String(fine.length));
+  // 저장소의 실제 스크립트: .js 파일과 HTML 안 <script> 블록. 쿠키 규칙에 걸리는 것이 하나도 없어야 함(다른 규칙은 여기서 보지 않음)
+  const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+  const dirs = ['skills/lecpage/references/designs', 'skills/lecpage/engine/runtime', 'app/public/examples', 'skills/lecpage/engine/src', 'skills/lecpage/backends/node-server', 'skills/lecpage/backends/cloudflare/src', 'app/src/data/demo'];
+  const walk = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.name === 'node_modules' ? [] : e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)])) : []);
+  let n = 0;
+  for (const f of dirs.flatMap((d) => walk(join(ROOT, d)))) {
+    const text = /\.(?:js|mjs)$/.test(f) ? [readFileSync(f, 'utf8')] : /\.html?$/.test(f) ? [...readFileSync(f, 'utf8').matchAll(/<script\b(?![^>]*\btype\s*=\s*["']?application\/(?:ld\+)?json)[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((x) => x.trim()) : [];
+    for (const src of text) { n++; assert.notEqual(js(src.slice(0, OWN_JS_MAX - 1)), 'unsafe_site/cookie', f); }
+  }
+  assert.ok(n >= 90, `실제 스크립트 ${n}개`);
+});
+
+test('쿠키 규칙은 아주 긴 빈칸·이름에서도 금방 끝남(정규식이 같은 곳을 되풀이해 훑지 않음)', () => {
+  const S = ' '.repeat(900 * 1024);
+  const cases = [
+    'document' + S, 'document )' + S, 'window["document"]' + S + '[', 'cookieStore' + S, 'abc' + S + '.x', 'var ' + 'a'.repeat(900 * 1024) + ' = 1;',
+    'o.cookie = 1; }' + S + '(window, document)', 'o.cookie = 1; })' + S, 'const d = document; d' + S + '[k]', 'o.cookie = 1;' + '(function (x) {})'.repeat(20000) + '}(window, document)',
+    ('document' + ' '.repeat(2000) + ';').repeat(400), 'with (document) {' + 'x = 1;'.repeat(100000) + '}',
+    'el.innerHTML = "<input type=' + ' '.repeat(250) + 'x" + "' + S + '"', 'x.type =' + S + '1',
+  ];
+  for (const src of cases) { const t0 = Date.now(); assert.equal(js(src), 'ok', src.slice(0, 40)); assert.ok(Date.now() - t0 < 2000, `${src.slice(0, 30)}… ${Date.now() - t0}ms`); }
 });
 
 test('listProblems: 앱이 배포 전에 서버와 같은 규칙으로 파일마다 모음(위치 at으로 섹션을 찾음)', () => {
