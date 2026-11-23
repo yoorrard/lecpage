@@ -329,7 +329,7 @@ export function StepShare({ p, update, go }) {
         ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: m.lastUrl, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
         ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
       };
-    });
+    }, { now: true }); // 배포·배포 취소의 결과(주소·사이트 열쇠)는 바로 저장: 곧바로 창이 닫히거나 죽어도 배포한 사이트를 다시 다룰 수 있게
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
   function setPrimary(t, sure = false) {
