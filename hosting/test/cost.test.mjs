@@ -15,7 +15,7 @@ import { startFakeCf, ACCOUNT, TOKEN } from './fake-cf.mjs';
 import { req, appPublish, today, diff, settle, liveFor } from './load-helpers.mjs';
 
 const ADMIN = 'cost-admin-' + randomBytes(12).toString('hex');
-const KEYS = ['req', 'api', 'live', 'ds', 'dr', 'dg', 'g', 'gt', 'rc', 'pc', 'rw', 'new', 'pub'];
+const KEYS = ['req', 'api', 'live', 'ds', 'dr', 'dg', 'g', 'gt', 'rc', 'pc', 'rw', 'gw', 'new', 'pub'];
 const te = new TextEncoder();
 const closers = [];
 after(async () => { for (const c of closers.reverse()) await c(); });
@@ -61,6 +61,8 @@ async function measure(e, fn) {
   const a = await today(e.base, ADMIN);
   const d = diff(a, b, KEYS);
   d.req -= 1; d.api -= 1; d.dg -= 1; d.g -= 1; // today() 자신
+  // rw = 사이트·방이 알린 쓴 행. Gate가 스스로 쓴 행(gw: 하루 줄·사이트 줄)은 따로 둠 — 이 시험은 TALLY_EVERY=1이라 요청마다 하루 줄을 쓰지만 운영에서는 요청 50번에 한 번
+  d.rw -= d.gw;
   d.cfApi = e.cf.state.calls.length - pc0;
   d.doReq = d.ds + d.dr + d.g + d.rc; // 숫자 모으기(gt)는 따로: 운영에서는 요청 50번이나 30초에 한 번
   return { d, r };

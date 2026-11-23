@@ -42,31 +42,52 @@ test('하루 숫자: Worker가 묶어 보낸 요청 수·갈래·앱 이용 합�
 });
 
 test('쓴 행 수(무료 하루 10만 행): 사이트가 알린 행 수가 오늘 몫에 들어가 새 사이트를 받을지에 쓰이고, 묻기 간격을 정하는 몫(tick의 pct)에는 들지 않음', async () => {
-  const { call } = gate({ DAILY_REQUEST_BUDGET: 100000 });
+  const { call, g, ctx } = gate({ DAILY_REQUEST_BUDGET: 100000 });
   assert.equal((await reserve(call, 'abcdefghjk')).status, 200);
+  const day = async () => (await call('GET', 'overview')).body.today;
   // 실제 모양의 사이트 하나: 예전 형식(파일 하나에 한 줄)은 새 배포에 약 580행, 묶음으로 쓴 뒤로는 열몇 줄(test/cost.test.mjs 실측)
-  assert.equal((await call('POST', 'site', { id: 'abcdefghjk', published: true, rw: 580 })).status, 200);
-  let o = (await call('GET', 'overview')).body;
-  assert.equal(o.today.rw, 580);
+  assert.equal((await call('POST', 'site', { id: 'abcdefghjk', bytes: 2048, published: true, rw: 580 })).status, 200);
+  let d = await day();
+  assert.equal(d.rw - d.gw, 580, '사이트가 알린 행(rw에서 Gate 몫 gw를 뺀 것)');
+  // Gate가 스스로 쓴 행도 rw에 들어감: 자리 잡기의 하루 줄(1) + 이 알림의 하루 줄(1). 방금 고친 사이트 줄(1)은 다음 하루 줄을 쓸 때 더함
+  assert.equal(d.gw, 2); assert.equal(g.ownRows, 1);
   assert.equal((await call('GET', 'status')).body.capacity.state, 'open');
+  // 오늘 쓴 행을 n으로 맞추는 알림: 알린 값 + 그 알림의 하루 줄 1(+ 아직 더하지 않은 사이트 줄)
+  const upTo = async (n) => { const cur = (await day()).rw; await call('POST', 'site', { id: 'abcdefghjk', rw: n - cur - 1 - g.ownRows }); assert.equal((await day()).rw, n); };
   // 하루 10만 행의 61%까지는 막지 않음(예전에는 45%에서 붐빔·60%에서 넘김이라 빡빡했음), 85%를 넘으면 새 사이트·새 방을 받지 않음(full): 남은 몫은 진행 중인 연수의 글·출석 쓰기에
-  await call('POST', 'site', { id: 'abcdefghjk', rw: 46000 - 580 });
+  await upTo(46000);
   assert.equal((await call('GET', 'status')).body.capacity.state, 'open');
-  await call('POST', 'site', { id: 'abcdefghjk', rw: 15000 });
+  await upTo(61000);
   assert.equal((await call('GET', 'status')).body.capacity.state, 'open', '61%: 아직 받음');
-  await call('POST', 'site', { id: 'abcdefghjk', rw: 23999 });
-  assert.equal((await call('GET', 'status')).body.capacity.state, 'open', '84.999%: 아직 받음');
+  await upTo(84998);
+  assert.equal((await call('GET', 'status')).body.capacity.state, 'open', '84.998%: 아직 받음');
+  // 행 수만 알리는 보고(방이 쓴 행 300개마다 보냄)는 하루 줄 하나만 씀: 사이트 줄은 바뀐 것이 없어 쓰지 않음
+  const w0 = ctx.sql.writes;
   await call('POST', 'site', { id: 'abcdefghjk', rw: 1 });
+  assert.equal(ctx.sql.writes - w0, 1, '쓴 행 수만 알리면 하루 줄만 씀');
+  assert.equal((await day()).rw, 85000, '알린 1행 + Gate의 하루 줄 1행');
   const st = (await call('GET', 'status')).body;
   assert.equal(st.capacity.state, 'full'); assert.equal(st.accepting, false);
+  // 방이 깨어 있던 시간만 알리는 보고도 같음. 값이 바뀌는 보고(저장 크기)는 사이트 줄도 쓰고, 그 줄은 다음 하루 줄에 Gate 몫으로 더해짐
+  const w1 = ctx.sql.writes;
+  await call('POST', 'site', { id: 'abcdefghjk', aw: 60 });
+  assert.equal(ctx.sql.writes - w1, 1); assert.equal(g.ownRows, 0);
+  await call('POST', 'site', { id: 'abcdefghjk', roomBytes: 4096 });
+  assert.equal(ctx.sql.writes - w1, 2, '사이트 줄 하나(하루 줄은 쓰지 않음)'); assert.equal(g.ownRows, 1);
+  await call('POST', 'site', { id: 'abcdefghjk', roomBytes: 4096 });
+  assert.equal(ctx.sql.writes - w1, 2, '같은 값을 다시 알리면 쓰지 않음');
   // Worker에 돌려주는 pct(묻기 간격 권고·덜 급한 일 미루기)는 요청·duration만: 행이 빠듯해도 참가자의 묻기를 늦추지 않음
+  const gw0 = (await day()).gw;
   const t = (await call('POST', 'tick', { n: 10, c: { api: 10 } })).body;
   assert.ok(t.pct < 1, `pct ${t.pct}`); assert.equal(t.state, 'full');
+  assert.equal((await day()).gw, gw0 + 2, '숫자 모으기의 하루 줄 1행 + 앞에서 고친 사이트 줄 1행'); assert.equal(g.ownRows, 0);
   // 지울 때(forget)도 그 사이트가 쓴 행을 받음, 한 번에 받는 값은 상한까지, 모양이 틀리면 버림
+  d = await day(); const rep0 = d.rw - d.gw;
   await call('POST', 'forget', { id: 'abcdefghjk', rw: 570 });
   await call('POST', 'site', { id: '', rw: -5 }); await call('POST', 'site', { id: '', rw: 'x' });
-  o = (await call('GET', 'overview')).body;
-  assert.equal(o.today.rw, 85000 + 570);
+  d = await day();
+  assert.equal(d.rw - d.gw, rep0 + 570);
+  assert.ok(d.rw > 85000 + 570);
 });
 test('쓴 행 수: 유료 요금제에는 하루 행 한도가 없어 몫에 넣지 않음', async () => {
   const { call } = gate({ PLAN: 'paid', DAILY_REQUEST_BUDGET: 100000 });

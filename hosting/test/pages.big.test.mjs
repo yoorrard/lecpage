@@ -67,7 +67,9 @@ test('VIEW=pages 큰 사이트: 300MB·3,000개가 한 번에 올라가고, Page
   assert.equal(Object.keys(files).length, 3000); assert.equal(Object.values(files).reduce((n, v) => n + v.length, 0), 300 * MB);
 
   const site = await make();
-  await settle(); const rw0 = (await today(base, ADMIN)).rw || 0;
+  // 사이트가 알린 쓴 행(rw에서 Gate가 스스로 쓴 gw를 뺌: 이 시험은 TALLY_EVERY=1이라 요청 3,000번마다 하루 줄을 쓰지만 운영에서는 요청 50번에 한 번)
+  const siteRows = async () => { const d = await today(base, ADMIN); return (d.rw || 0) - (d.gw || 0); };
+  await settle(); const rw0 = await siteRows();
   const rss0 = rssOf(h.pid); let peak = rss0;
   const watch = setInterval(() => { peak = Math.max(peak, rssOf(h.pid)); }, 400);
   const calls0 = pagesCalls(); const t0 = Date.now();
@@ -79,7 +81,7 @@ test('VIEW=pages 큰 사이트: 300MB·3,000개가 한 번에 올라가고, Page
   assert.equal(Object.keys(dep.manifest).filter((p) => p.startsWith('/material/p-')).length, 400);
   assert.equal(Object.keys(dep.manifest).filter((p) => p.startsWith('/assets/img/s-')).length, SMALL);
   // 쓴 행 수: 파일 3,000개를 올려도 수십 줄(큰 파일을 받을 때마다·작은 파일을 모아 올릴 때마다 묶음 한 줄). 파일 하나에 한 줄이던 때는 3,000줄이 넘었음
-  await settle(800); const rows = ((await today(base, ADMIN)).rw || 0) - rw0;
+  await settle(800); const rows = (await siteRows()) - rw0;
   assert.ok(rows > 0 && rows <= 90, `파일 3,000개 사이트가 쓴 행 수: ${rows}`);
   assert.equal(cf.state.badHash?.length || 0, 0, 'Pages 열쇠가 내용과 맞음');
   for (const p of ['material/p-001.webp', 'material/p-400.webp', `assets/img/s-${SMALL - 1}.webp`, 'files/big-17.pdf']) {

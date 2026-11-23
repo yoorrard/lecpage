@@ -26,6 +26,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const CALL_TIMEOUT_MS = 20000;
 /** 큰 본문을 보내는 호출(자산 올리기·배포 만들기) */
 export const UPLOAD_TIMEOUT_MS = 90000;
+/**
+ * 자산 올리기 한 번에 싣는 파일 수. wrangler(pages deploy)가 한 번에 2,000개까지만 보냄(MAX_BUCKET_FILE_COUNT) → 같은 선에서 나눔.
+ * 사이트 한도가 3,000개가 된 뒤로 작은 파일(평균 8KB 아래)만 2,000개 넘게 모이면 한 번에 그보다 많이 실릴 수 있었음. 크기로 나누는 것(deploySite 30MB·모아 올리기 16MB)은 그대로
+ */
+export const UPLOAD_MAX_FILES = 2000;
 
 /**
  * @param {{ api?: string, accountId: string, project: string, token: string, fetch?: typeof fetch, now?: () => number, wait?: (ms: number) => Promise<void>, timeout?: number }} o
@@ -94,10 +99,15 @@ export class PagesClient {
   }
   /**
    * @param {{ hash: string, parts: string[], contentType: string }[]} items parts = base64 조각(합치면 전체)
-   * 본문을 글자열 하나로 만들지 않고 Blob으로 이어 붙임(큰 파일도 메모리를 두 번 쓰지 않게)
+   * 본문을 글자열 하나로 만들지 않고 Blob으로 이어 붙임(큰 파일도 메모리를 두 번 쓰지 않게).
+   * 파일이 UPLOAD_MAX_FILES개를 넘으면 그만큼씩 나눠 차례로 보냄
    */
   async upload(items) {
     if (!items.length) return;
+    if (items.length > UPLOAD_MAX_FILES) {
+      for (let i = 0; i < items.length; i += UPLOAD_MAX_FILES) await this.upload(items.slice(i, i + UPLOAD_MAX_FILES));
+      return;
+    }
     const chunks = ['['];
     items.forEach((it, i) => {
       chunks.push(`${i ? ',' : ''}{"key":${JSON.stringify(it.hash)},"value":"`, ...it.parts, `","metadata":{"contentType":${JSON.stringify(it.contentType || 'application/octet-stream')}},"base64":true}`);

@@ -4,7 +4,8 @@
 //  blob   파일 내용. sha256별로 1MiB씩 나눈 줄. 0번 줄은 내용이 맞는지 확인한 뒤 맨 나중에 쓰므로 "0번 줄이 있다 = 다 올라왔다"
 //  ppack  (VIEW=pages) Pages에 올린 파일: sha256·확장자 → Pages 열쇠·크기. 내용은 두지 않음. 묶음 몇 줄로 저장(JSON, 메모리에서 읽고 씀 → pa·writePa)
 //         (작은 파일은 받을 때 메모리에만 두었다가 공개할 때 한 번에 올리고 그때 적음 → deferred)
-//  passet 이 판(2026-11-24) 전에 만든 사이트의 같은 표(파일 하나에 한 줄). 그대로 읽고, 다음에 쓸 때 ppack으로 옮긴 뒤 줄을 지움. 새 사이트에는 만들지 않음
+//  passet 이 판(2026-11-24) 전에 만든 사이트의 같은 표(파일 하나에 한 줄). 그대로 읽고, 다음에 쓸 때 ppack으로 옮긴 뒤 표를 비움(dropLegacy: 줄마다 지우지 않고 표째로).
+//         새 사이트에도 빈 표를 만들어 둠: 이 판 전의 코드는 이 표가 있다고 보고 읽으므로, 예전 판으로 되돌려도 새 사이트가 그대로 다뤄지게(빈 표 = 파일을 다시 받음)
 //  jsk    (VIEW=pages) 받은 .js가 사이트가 직접 쓴 스크립트인지(own=1) 엔진 런타임인지(0). 줄이 없으면 예전 판에서 받은 런타임
 //         내용을 두지 않으므로 공개할 때(보조 쪽 검사)·두 번째 주소로 내보낼 때(직접 쓴 스크립트는 내보내지 않음) 이 표를 봄
 // 표는 사이트를 만들 때(init)만 생깁니다. 없는 주소로 들어온 요청은 읽기만 하고 아무것도 쓰지 않습니다.
@@ -83,8 +84,11 @@ const STRAY_TRIES = 3;
 const STRAY_SKEW_MS = 5000;
 const WIPING_MSG = '사이트를 내리는 중이에요. Cloudflare가 잠시 답하지 않아 서버가 몇 분 안에 다시 해서 지워요. 이 주소는 그동안에도 고치거나 다시 배포할 수 없어요.';
 
+/** 예전 자산 표(파일 하나에 한 줄). 2026-11-23까지의 판(운영 5029d91)이 쓰던 모양 그대로: 그 판은 이 표가 없으면 읽다가 멈춤 */
+const PASSET_SCHEMA = 'CREATE TABLE IF NOT EXISTS passet (sha TEXT NOT NULL, ext TEXT NOT NULL, phash TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (sha, ext)) WITHOUT ROWID';
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK (id = 1), site TEXT NOT NULL, key_hash TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, block_reason TEXT NOT NULL DEFAULT '', bytes INTEGER NOT NULL DEFAULT 0, current TEXT, pending TEXT, live_code TEXT, view TEXT NOT NULL DEFAULT 'worker', pstate TEXT);
+${PASSET_SCHEMA};
 CREATE TABLE IF NOT EXISTS deploy (id TEXT PRIMARY KEY, created INTEGER NOT NULL, bytes INTEGER NOT NULL, stored INTEGER NOT NULL, files TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS blob (sha TEXT NOT NULL, i INTEGER NOT NULL, total INTEGER, data BLOB NOT NULL, PRIMARY KEY (sha, i)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS jsk (sha TEXT PRIMARY KEY, own INTEGER NOT NULL) WITHOUT ROWID;
@@ -105,6 +109,7 @@ export class Site extends DurableObject {
     super(ctx, env);
     // 쓴 행 수를 셈(무료 하루 10만 행, 지우기도 쓴 행): 사이트 파일이 수백 개면(글꼴 조각) 새 배포 한 번에 수백 행이라
     // Gate가 오늘 몫에 넣을 수 있게 pagesDelta로 알림. exec의 동작은 그대로(돌려준 커서를 그대로 넘김)
+    // (문장 여럿을 한 번에 실행하면 커서가 마지막 문장의 행만 알려 줌 — 표를 만드는 SCHEMA뿐이고 몇 줄이라 따로 세지 않음)
     const raw = ctx.storage.sql;
     this.rowsW = 0; this.rwSent = 0;
     this.sql = { exec: (...a) => { const c = raw.exec(...a); const n = c.rowsWritten; if (n > 0) this.rowsW += n; return c; } };
@@ -196,16 +201,17 @@ export class Site extends DurableObject {
   /** 여기(Durable Object)에 내용을 두는 파일인지: Worker 보기는 전부, Pages 보기는 HTML(원본)과 영상·소리 */
   keepsHere(meta, path) { return !this.isPages(meta) || typeOf(path)?.kind === 'html' || isMedia(path); }
   /**
-   * 자산 표를 메모리로: 묶음(ppack)과, 이 판 전에 만든 사이트의 예전 줄(passet, 파일 하나에 한 줄)을 함께 읽음. 예전 줄은 다음에 쓸 때 묶음으로 옮기고 지움(writePa, 한 거래).
-   * 둘 다 있으면 묶음이 나중 것이라 묶음이 이김(옮기기는 한 거래라 실제로는 겹치지 않음)
+   * 자산 표를 메모리로: 묶음(ppack)과, 이 판 전에 만든 사이트의 예전 줄(passet, 파일 하나에 한 줄)을 함께 읽음. 예전 줄은 다음에 쓸 때 묶음으로 옮기고 표를 비움(writePa, 한 거래).
+   * 둘 다 있으면 묶음이 나중 것이라 묶음이 이김(옮기기는 한 거래라 실제로는 겹치지 않음).
+   * 읽은 줄은 다 꺼내 둠(toArray): 읽는 커서가 열린 채로 남아 있으면 그 표를 지우지(dropLegacy) 못함
    */
   pa() {
     if (this.paMap) return this.paMap;
     const m = new Map(); let legacy = 0; let chunks = 0;
     const tables = new Set(this.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('passet', 'ppack')").toArray().map((r) => r.name));
-    if (tables.has('passet')) for (const r of this.sql.exec('SELECT sha, ext, phash, size FROM passet')) { m.set(paKey(r.sha, r.ext), [r.phash, r.size]); legacy++; }
+    if (tables.has('passet')) for (const r of this.sql.exec('SELECT sha, ext, phash, size FROM passet').toArray()) { m.set(paKey(r.sha, r.ext), [r.phash, r.size]); legacy++; }
     if (tables.has('ppack')) {
-      for (const r of this.sql.exec('SELECT data FROM ppack ORDER BY i')) {
+      for (const r of this.sql.exec('SELECT data FROM ppack ORDER BY i').toArray()) {
         chunks++;
         let list = [];
         try { list = JSON.parse(r.data); } catch { list = []; } // 읽지 못한 묶음: 그 파일들만 다시 받음(missing_blobs)
@@ -229,7 +235,13 @@ export class Site extends DurableObject {
   }
   /** 묶음 표를 만듦(처음 한 번, 거래 밖에서) */
   paReady() { if (!this.paTable) { this.sql.exec(PACK_SCHEMA); this.paTable = true; } }
-  /** 바뀐 자산 표를 묶음 줄로 씀(거래 안에서 부름. 먼저 paReady). 예전 줄(passet)이 있으면 같은 거래에서 지움 → 옮기다 끊겨도 한쪽으로만 읽힘 */
+  /**
+   * 예전 줄(passet)을 한꺼번에 비움(거래 안에서 부름): 표를 지우고 빈 표로 다시 만듦. 거래가 되돌려지면 예전 줄도 그대로 돌아옴.
+   * 줄마다 지우면(DELETE) 줄 수만큼 쓴 행으로 청구되지만(실측: 300줄 = 300행, 보통 사이트 약 580줄) 표 지우기는 0행·다시 만들기 2행.
+   * 빈 표를 남기는 까닭은 PASSET_SCHEMA(예전 판으로 되돌렸을 때)
+   */
+  dropLegacy() { this.sql.exec('DROP TABLE passet'); this.sql.exec(PASSET_SCHEMA); }
+  /** 바뀐 자산 표를 묶음 줄로 씀(거래 안에서 부름. 먼저 paReady). 예전 줄(passet)이 있으면 같은 거래에서 비움 → 옮기다 끊겨도 한쪽으로만 읽힘 */
   writePa() {
     if (!this.paMap || (!this.paDirty && !this.paLegacy)) return;
     const rows = []; let cur = []; let len = 2;
@@ -241,7 +253,7 @@ export class Site extends DurableObject {
     if (cur.length) rows.push(cur);
     rows.forEach((r, i) => this.sql.exec('INSERT OR REPLACE INTO ppack (i, data) VALUES (?, ?)', i, JSON.stringify(r)));
     if (this.paChunks > rows.length) this.sql.exec('DELETE FROM ppack WHERE i >= ?', rows.length);
-    if (this.paLegacy) this.sql.exec('DELETE FROM passet');
+    if (this.paLegacy) this.dropLegacy();
     this.paChunks = rows.length; this.paLegacy = 0; this.paDirty = false;
   }
   /** 바뀐 자산 표를 저장(바뀐 것이 없으면 아무것도 쓰지 않음) */
@@ -254,11 +266,13 @@ export class Site extends DurableObject {
   alarmSet(t) { this.rowsW += 1; return this.ctx.storage.setAlarm(t); }
   /**
    * 저장소를 통째로 지움. 지우기도 쓴 행으로 청구되므로(통째 지우기를 줄마다 세는지는 요금 안내에 없어, 세는 쪽으로) 지우기 전 줄 수를 쓴 행 수에 더함.
-   * 자산 표를 묶음으로 쓴 뒤로는 사이트 하나가 열몇 줄이라 넉넉히 세어도 작음
+   * 자산 표를 묶음으로 쓴 뒤로는 사이트 하나가 열몇 줄이라 넉넉히 세어도 작음.
+   * 예전 줄(passet, 파일 하나에 한 줄)이 남은 사이트는 그 표를 먼저 표째로 비움(dropLegacy): 통째 지우기가 그 줄들을 줄마다 지우지 않게, 세는 수에도 들지 않게
    */
   async dropAll() {
     try {
       const names = this.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'deploy', 'blob', 'jsk', 'ppack', 'passet', 'gone')").toArray().map((r) => r.name);
+      if (names.includes('passet') && this.sql.exec('SELECT 1 FROM passet LIMIT 1').toArray().length) this.ctx.storage.transactionSync(() => this.dropLegacy());
       for (const t of names) this.rowsW += this.sql.exec(`SELECT COUNT(*) AS n FROM ${t}`).one().n;
     } catch (e) { console.error('row count before deleteAll failed', e?.message); }
     await this.ctx.storage.deleteAll();
@@ -430,8 +444,10 @@ export class Site extends DurableObject {
       throw new HttpError('rate_limited', '이 사이트를 너무 자주 올렸어요. 잠시 뒤에 다시 해 주세요.', { headers: { 'retry-after': String(Math.ceil((this.deployTimes[0] + HOUR_MS - now) / 1000)) } });
     }
     const body = await readJson(request, MANIFEST_MAX);
-    // 한도는 이 사이트의 보기로 고름: worker 보기 사이트(파일을 모두 이 객체 저장소에 둠)는 서버가 지금 pages 보기여도 worker 한도까지만
-    const man = checkManifest(body, this.isPages(first) ? this.cfg : { ...this.cfg, maxBytes: Math.min(this.cfg.maxBytes, this.cfg.workerMaxBytes), maxFiles: Math.min(this.cfg.maxFiles, this.cfg.workerMaxFiles) });
+    // 한도는 이 사이트의 보기로 고름: worker 보기 사이트(파일을 모두 이 객체 저장소에 둠)는 서버가 지금 pages 보기여도 worker 한도까지만.
+    // 서버가 worker 보기면 운영자가 정한 한도(MAX_BYTES·MAX_FILES) 그대로 — /api/info가 알려 주는 숫자와 같게
+    const workerSiteOnPages = !this.isPages(first) && this.cfg.view === 'pages';
+    const man = checkManifest(body, workerSiteOnPages ? { ...this.cfg, maxBytes: Math.min(this.cfg.maxBytes, this.cfg.workerMaxBytes), maxFiles: Math.min(this.cfg.maxFiles, this.cfg.workerMaxFiles) } : this.cfg);
     // Pages _headers는 규칙 100개까지(넘는 규칙은 버려짐): 확장자 대소문자 모양이 너무 여러 가지면 올리기 전에 거절(보안 규칙이 빠지지 않게)
     if (this.isPages(first) && headerRules(man.files.map(([p]) => p)).length > PAGES_HEADER_RULES) {
       throw new HttpError('bad_path', '파일 이름 끝(.png 같은 확장자)의 대문자·소문자 모양이 너무 여러 가지예요. 확장자를 소문자로 맞춰 다시 배포해 주세요.');
@@ -1130,10 +1146,10 @@ export class Site extends DurableObject {
     const w = { at: now, n: 0, ...(st.wiping || {}) };
     w.n += 1; w.expired = !!(w.expired || expired); w.last = now; if (why) w.why = why;
     st.wiping = w;
-    const pa = this.pa(); // 예전 줄(passet)·묶음(ppack) 가운데 있는 표만 지움
+    const pa = this.pa(); // 예전 줄(passet)·묶음(ppack) 가운데 있는 표만 비움(예전 줄은 표째로: dropLegacy)
     this.ctx.storage.transactionSync(() => {
       this.sql.exec('DELETE FROM blob'); this.sql.exec('DELETE FROM deploy'); this.sql.exec('DELETE FROM jsk');
-      if (this.paLegacy) this.sql.exec('DELETE FROM passet');
+      if (this.paLegacy) this.dropLegacy();
       if (this.paTable) this.sql.exec('DELETE FROM ppack');
       pa.clear(); this.paLegacy = 0; this.paChunks = 0; this.paDirty = false;
       this.sql.exec('UPDATE meta SET current = NULL, pending = NULL, bytes = 0, live_code = NULL WHERE id = 1');

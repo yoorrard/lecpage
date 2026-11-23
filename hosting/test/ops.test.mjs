@@ -313,6 +313,35 @@ test('알람 처리가 실패하면 1시간 뒤로 스스로 다시 잡음(공�
   assert.equal(site.load(), null);
 });
 
+test('예전 자산 줄(passet) 옮기기: 줄마다 지우지 않고 표째로 비우고, 옮기는 거래가 되돌려지면 예전 줄이 그대로 남음. 새 사이트에도 빈 passet 표가 있음', async () => {
+  const ctx = fakeCtx(); ctx.waitUntil = () => { };
+  const site = new Site(ctx, { GATE: fakeNamespace(() => ({ ok: true })), ROOM: fakeNamespace(() => ({ ok: true })) });
+  await site.fetch(new Request('http://site/init', { method: 'POST', body: JSON.stringify({ id: 'pppppppppp', keyHash: sha('k'), title: '', created: 1, expires: Date.now() + DAY, view: 'pages' }) }));
+  const n = (t) => ctx.sql.exec(`SELECT COUNT(*) AS n FROM ${t}`).one().n;
+  // 이 판 전의 코드(운영 5029d91)는 passet 표가 있다고 보고 읽음 → 예전 판으로 되돌려도 새 사이트가 '없는 표'로 멈추지 않게 빈 표를 만들어 둠
+  assert.ok(ctx.sql.tables().includes('passet'), '새 사이트에도 passet 표가 있음'); assert.equal(n('passet'), 0);
+  // 예전 판이 쓰던 줄 50개(파일 하나에 한 줄)
+  const ph = (s) => sha(s).slice(0, 32);
+  for (let i = 0; i < 50; i++) ctx.sql.exec('INSERT INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha(`f${i}`), 'woff2', ph(`p${i}`), 9000);
+  const seen = []; const exec = ctx.sql.exec;
+  ctx.sql.exec = (q, ...p) => { seen.push(q); return exec.call(ctx.sql, q, ...p); };
+  assert.equal(site.pa().size, 50); assert.equal(site.passet(sha('f7'), 'woff2'), ph('p7'));
+  // 옮기는 거래가 도중에 되돌려지면: 묶음은 없고 예전 줄 50개가 그대로(표를 지운 것도 되돌려짐)
+  site.paSet(sha('new'), 'webp', ph('pnew'), 100); site.paReady();
+  assert.throws(() => ctx.storage.transactionSync(() => { site.writePa(); throw new Error('끊김'); }), /끊김/);
+  assert.equal(n('passet'), 50, '되돌려진 뒤에도 예전 줄이 그대로'); assert.equal(n('ppack'), 0);
+  // 다시 읽어 옮김: 묶음 한 줄에 51개, 예전 표는 빈 표로 남음
+  site.paReset();
+  assert.equal(site.pa().size, 50);
+  site.paSet(sha('new'), 'webp', ph('pnew'), 100); site.flushPa();
+  assert.equal(n('passet'), 0); assert.equal(n('ppack'), 1);
+  assert.equal(JSON.parse(ctx.sql.exec('SELECT data FROM ppack').one().data).length, 51);
+  assert.ok(seen.some((q) => /DROP TABLE passet/.test(q)), '예전 표를 표째로 비움');
+  assert.ok(!seen.some((q) => /DELETE FROM passet/.test(q)), '줄마다 지우지 않음(줄 수만큼 쓴 행으로 청구됨: 실측 300줄 = 300행)');
+  site.paReset();
+  assert.equal(site.pa().size, 51); assert.equal(site.passet(sha('f7'), 'woff2'), ph('p7')); assert.equal(site.paLegacy, 0);
+});
+
 test('저장 공간이 배포 직전에 차면(507) 방금 만든 빈 사이트 기록을 남기지 않음. 이미 배포한 사이트는 그대로', async () => {
   const ctx = fakeCtx(); ctx.waitUntil = () => { };
   const GATE = fakeNamespace(({ path }) => (path === '/deploy-check' ? { sites: 9, bytes: 4096 * MB, paused: false } : { ok: true }));

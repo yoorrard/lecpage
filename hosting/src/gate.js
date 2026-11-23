@@ -140,17 +140,24 @@ export class Gate extends DurableObject {
   }
   /**
    * 쓴 행 수(rw)가 하루 무료 행(10만, 지우기·알람 잡기도 쓴 행)의 ROWS_STOP_SHARE를 넘었는지: 다 차면 그날 모든 쓰기(참여 기능 방의 글·출석 포함)가 실패하므로
-   * 넘으면 새 사이트·새 방만 강사 계정으로 넘김. 사이트(Site)가 배포·지우기 때 쓴 행과, 방(Room)이 같은 알림(POST site { id, rw })으로 알려 주는 행을 더한 값.
+   * 넘으면 새 사이트·새 방만 강사 계정으로 넘김. 사이트(Site)가 배포·지우기 때 쓴 행과, 방(Room)이 같은 알림(POST site { id, rw })으로 알려 주는 행,
+   * Gate가 스스로 쓴 행(하루 줄·사이트 줄, addDay의 gw)을 더한 값.
    * 유료는 하루 행 한도가 없음(달 5천만 행 포함)
    */
   rowsFull(d) { return this.cfg.plan !== 'paid' && (d.rw || 0) >= ROWS_STOP_SHARE * FREE.rowsWritten; }
   /** 오늘 DO duration 몫(무료 하루 13,000 GB-s의 %) */
   gbsPct(d) { return Math.round(((d.aw || 0) * 0.125 / FREE.doGbs) * 1000) / 10; }
-  /** 오늘 줄에 더함(한 줄 쓰기). fn이 있으면 더한 뒤 그 줄을 더 고칠 수 있음(알림 표시) */
+  /**
+   * 오늘 줄에 더함(한 줄 쓰기). fn이 있으면 더한 뒤 그 줄을 더 고칠 수 있음(알림 표시).
+   * Gate가 스스로 쓴 행도 오늘 쓴 행(rw)에 넣음: 이 하루 줄(1행) + 지난번 뒤로 고친 사이트 줄(ownRows, siteUpdate). gw = 그 가운데 Gate 몫(rw − gw = 사이트·방이 알린 행).
+   * 숫자 모으기(tick)는 요청 50번에 한 번이라 하루 10만 요청이면 2,000행쯤. 그 밖의 Gate 쓰기(자리 잡기·예약·공지 등 새 사이트 하나에 열 줄 안팎)는 세지 않음
+   */
   addDay(patch, now = Date.now(), fn = null) {
     const day = dayOf(now);
     const d = this.dayData(day);
     for (const [k, v] of Object.entries(patch)) if (v) d[k] = (d[k] || 0) + v;
+    const own = 1 + (this.ownRows || 0); this.ownRows = 0;
+    d.rw = (d.rw || 0) + own; d.gw = (d.gw || 0) + own;
     const after = fn ? fn(d) : null;
     this.sql.exec('INSERT INTO daily (day, data) VALUES (?, ?) ON CONFLICT (day) DO UPDATE SET data = excluded.data', day, JSON.stringify(d));
     return after;
@@ -492,8 +499,13 @@ export class Gate extends DurableObject {
     // 가린 때: 처음 가릴 때 적고, 풀면 지움(관리 화면의 '가림 · N일째'와 하루 점검의 30일 기한)
     const bat = nbk ? (row.blocked && row.blocked_at ? row.blocked_at : Date.now()) : 0;
     const nw = Number.isSafeInteger(wiping) && wiping > 0 ? row.wiping || wiping : row.wiping;
-    this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ?, room_bytes = ?, code = ?, blocked_at = ?, wiping = ? WHERE id = ?',
-      nb, int(expires, row.expires), nbk, nr, typeof code === 'string' ? code : row.code, bat, nw, id);
+    const ne = int(expires, row.expires); const nc = typeof code === 'string' ? code : row.code;
+    // 사이트 줄은 바뀐 값이 있을 때만 씀: 숫자만 알리는 보고(방의 rw·aw, 사이트의 pc·rc)는 줄이 그대로라 쓰지 않음(방은 쓴 행 300개마다 알리므로 그때마다 한 줄을 더 쓰지 않게).
+    // 쓴 줄은 Gate가 스스로 쓴 행으로 세어 다음 하루 줄에 더함(addDay)
+    if (nb !== row.bytes || ne !== row.expires || nbk !== row.blocked || nr !== row.room_bytes || nc !== row.code || bat !== row.blocked_at || nw !== row.wiping) {
+      this.sql.exec('UPDATE sites SET bytes = ?, expires = ?, blocked = ?, room_bytes = ?, code = ?, blocked_at = ?, wiping = ? WHERE id = ?', nb, ne, nbk, nr, nc, bat, nw, id);
+      this.ownRows = (this.ownRows || 0) + 1;
+    }
     this.addTot(0, nb + nr - row.bytes - row.room_bytes);
     const total = this.usage().bytes;
     if (bytes !== undefined || roomBytes !== undefined) this.storageAlert(total);

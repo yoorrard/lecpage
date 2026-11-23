@@ -6,6 +6,8 @@
 //  4 예전 방식(파일마다 PUT)과 섞여도 됨: 묶음을 모르는 예전 앱은 그대로 올림
 //  5 묶음에 넣을 수 없는 것(목록에 없는 파일·한도보다 큰 파일·너무 큰 묶음)은 거절, BUNDLE_BYTES 0이면 끝점도 /api/info의 표시도 없음
 //  6 Worker 보기(파일을 이 객체에 둠)에서도 같은 끝점으로 받음
+//  7 작은 파일이 2,000개를 넘는 사이트: Pages 자산 올리기 한 번에 2,000개까지만 실음(흉내 Pages는 그보다 많으면 거절)
+//  8 묶음 하나를 받는 도중에 모아 둔 파일이 여러 번 차도(그때마다 Pages에 올림) 끝까지 받음. 빈 파일·같은 내용의 다른 이름·확장자도 그대로
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -203,6 +205,25 @@ test('작은 파일 묶어 받기(VIEW=pages): 실제 모양 사이트의 올리
     const fin = await deployBundled(base, site, files, { limits });
     assert.equal(fin.status, 200, JSON.stringify(fin.body).slice(0, 300));
   });
+
+  await t.test('작은 파일이 2,000개를 넘는 사이트: Pages 자산 올리기 한 번에 2,000개까지만 실어 보내고 끝까지 공개됨', async () => {
+    // 200바이트짜리 2,100개(420KB)는 모으는 자리(16MB)에 다 들어가 공개할 때 한꺼번에 올라감 → 나누지 않으면 올리기 한 번에 2,100개가 넘게 실림.
+    // wrangler는 한 번에 2,000개까지만 보내므로 같은 선에서 나눔(pages-api.js UPLOAD_MAX_FILES). 흉내 Pages는 2,000개를 넘는 올리기를 400으로 거절함
+    const files = { 'index.html': html('작은 파일 많이') };
+    for (let i = 0; i < 2100; i++) files[`assets/fonts/t-${i}.woff2`] = blob(200);
+    const site = await make('작은 파일 많이');
+    const u0 = (cf.state.uploads || []).length;
+    const r = await deployBundled(base, site, files, { limits });
+    assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+    assert.equal(r.failed.length, 0);
+    const ups = cf.state.uploads.slice(u0);
+    assert.ok(ups.length >= 2, `올리기를 나눠 보냄: ${JSON.stringify(ups)}`);
+    assert.ok(Math.max(...ups) <= 2000, `한 번에 2,000개까지: ${JSON.stringify(ups)}`);
+    assert.ok(ups.reduce((a, n) => a + n, 0) >= 2100, `모두 올라감: ${JSON.stringify(ups)}`);
+    const dep = cf.deploymentsOf(`s-${site.id}`).at(-1);
+    assert.equal(Object.keys(dep.manifest).filter((p) => p.startsWith('/assets/fonts/t-')).length, 2100);
+    for (const p of ['assets/fonts/t-0.woff2', 'assets/fonts/t-1999.woff2', 'assets/fonts/t-2000.woff2', 'assets/fonts/t-2099.woff2']) await opens(r.body.url, p, bytesOf(files[p]));
+  });
 });
 
 test('묶어 받기를 끈 서버(BUNDLE_BYTES 0)와 Worker 보기', { timeout: 300000 }, async (t) => {
@@ -238,5 +259,44 @@ test('묶어 받기를 끈 서버(BUNDLE_BYTES 0)와 Worker 보기', { timeout: 
     assert.equal(css.status, 200); assert.equal(await css.text(), 'main{max-width:50rem}');
     const font = await fetch(`${r.body.url}assets/fonts/f-39.woff2`);
     assert.equal(font.status, 200); assert.equal(sha256(new Uint8Array(await font.arrayBuffer())), sha256(files['assets/fonts/f-39.woff2']));
+  });
+  await t.test('묶음 하나를 받는 도중에 모아 둔 파일이 여러 번 참(VIEW=pages): 그때마다 Pages에 올리고 이어 받음. 빈 파일·같은 내용의 다른 이름·확장자도 그대로 열림', async () => {
+    const cf = await startFakeCf();
+    closers.push(cf.stop);
+    // 모으는 자리를 300KB로 줄임(운영 기본은 16MB): 50KB 그림 30장이 든 묶음 하나를 받는 동안 다섯 번쯤 참
+    let h;
+    try { h = await pagesHost(cf, { DEFER_TOTAL_BYTES: 300 * 1024, DEFER_MAX_BYTES: 200 * 1024 }); } catch (e) { return t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); }
+    closers.push(h.stop);
+    const site = (await call(h.url, 'POST', '/api/sites', { json: { title: '모으다 참' } })).body;
+    const same = blob(40 * 1024, 'RIFF');
+    const files = {
+      'index.html': html('모으다 참'), 'assets/site.css': 'main{max-width:40rem}', 'assets/empty.txt': new Uint8Array(0), 'assets/empty.css': new Uint8Array(0),
+      'assets/a.png': same, 'assets/a.webp': same, 'assets/copy/a.webp': same, 'assets/UP.PNG': same,
+    };
+    for (let i = 0; i < 30; i++) files[`material/p-${i}.webp`] = blob(50 * 1024, 'RIFF');
+    const manifest = manifestOf(files);
+    const blobs = new Map(Object.entries(files).map(([p, v]) => [manifest[p].sha256, bytesOf(v)]));
+    const d = await call(h.url, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifest } });
+    assert.equal(d.status, 200, JSON.stringify(d.body).slice(0, 300));
+    assert.equal(d.body.missing.length, 34, '첫 화면 + CSS + 빈 내용 하나(빈 파일 둘이 같은 내용) + 같은 내용 하나 + 그림 30장');
+    // 모두 묶음 하나에(1.5MB)
+    const u0 = (cf.state.uploads || []).length;
+    const raw = new Uint8Array(await packBundle(d.body.missing.map((x) => [x, blobs.get(x).length, blobs.get(x)])).arrayBuffer());
+    const up = await call(h.url, 'PUT', `/api/sites/${site.id}/blobs`, { key: site.key, raw });
+    assert.equal(up.status, 200, JSON.stringify(up.body).slice(0, 300));
+    assert.deepEqual([up.body.got, up.body.failed.length], [34, 0]);
+    const mid = cf.state.uploads.length - u0;
+    assert.ok(mid >= 3, `묶음 하나를 받는 동안 모은 것을 Pages에 ${mid}번 올림`);
+    const p = await call(h.url, 'POST', `/api/sites/${site.id}/deploys/${d.body.deploy}/publish`, { key: site.key });
+    assert.equal(p.status, 200, JSON.stringify(p.body).slice(0, 300));
+    assert.equal(cf.state.badHash?.length || 0, 0, 'Pages 열쇠가 내용과 맞음');
+    for (const [path, v] of Object.entries(files)) {
+      if (path === 'index.html') continue; // 첫 화면은 서버가 손봐서 올림
+      const r = await fetch(`${p.body.url}${path}`); const b = new Uint8Array(await r.arrayBuffer());
+      assert.equal(r.status, 200, path); assert.equal(sha256(b), sha256(bytesOf(v)), `${path} 내용이 올린 것과 같음`);
+    }
+    // 같은 내용으로 다시: 도중에 올린 것도 공개할 때 올린 것도 모두 받은 것으로 적혀 있음
+    const d2 = await call(h.url, 'POST', `/api/sites/${site.id}/deploys`, { key: site.key, json: { files: manifest } });
+    assert.equal(d2.status, 200); assert.deepEqual(d2.body.missing, []);
   });
 });

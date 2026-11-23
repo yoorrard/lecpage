@@ -131,6 +131,10 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
       state.known = state.known || new Set();
       if (p === '/pages/assets/check-missing') return send(res, 200, ok((j.hashes || []).filter((h) => state.loseAssets || !state.assets.has(h) || !state.known.has(h))));
       if (p === '/pages/assets/upload') {
+        // 한 번에 2,000개까지만 받음: wrangler(pages deploy)가 한 번에 보내는 가장 많은 수(MAX_BUCKET_FILE_COUNT). 실제 API가 더 받는지는 확인하지 않았으므로
+        // 서버(pages-api.js UPLOAD_MAX_FILES)가 그 선을 넘겨 보내지 않는지 여기서 봄. uploads: 올리기 한 번마다 실린 파일 수
+        (state.uploads = state.uploads || []).push(Array.isArray(j) ? j.length : 0);
+        if (!Array.isArray(j) || j.length > 2000) return send(res, 400, fail(8000096, 'too many assets in one upload (fake limit 2000)'));
         for (const it of j) {
           if (!/^[0-9a-f]{32}$/.test(it.key) || it.base64 !== true) return send(res, 400, fail(8000096, 'bad asset'));
           state.assets.set(it.key, { b64: it.value, bytes: Buffer.from(it.value, 'base64'), contentType: it.metadata?.contentType || '' });
