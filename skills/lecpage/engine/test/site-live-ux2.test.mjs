@@ -39,7 +39,8 @@ after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmS
 const A = (code = 'UXTWO') => api(srv.url, code);
 const put = (body, code) => A(code).call('PUT', '/state', { admin: ADMIN, body });
 async function page(url, { width = 390, height = 844, mobile = true, live = true } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  // 기기 시간대도 날짜 기준(Asia/Seoul)과 같게: 아니면 한국 0~9시(UTC로는 전날)에 사이트가 연수 날을 내일로 봄
+  const ctx = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, timezoneId: 'Asia/Seoul' });
   const p = await ctx.newPage(); p._errs = []; p.on('pageerror', (e) => p._errs.push(String(e)));
   await p.goto(viaLan(srv.url) + url);
   if (live) await p.waitForFunction(() => document.querySelector('[data-live-status]')?.getAttribute('data-state') === 'live', null, { timeout: 15000 });
