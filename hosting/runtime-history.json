@@ -1,5 +1,5 @@
 {
- "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 2026-11-23: 꽉 찬 바닥글 아래 키트 묶음 색 잇기·개인정보 안내에 맞춘 주석·설문 알림 문구(lecpage.js), 사이트가 기기의 밝게·어둡게를 따르면 보조 쪽도 따르기(boot.js)로 바뀐 lecpage.js·boot.js의 예전 판. 2026-11-23(2): 참가자·강사 화면 실측 고침('지금' 줄 [투표하기]·교재 전체 화면·여러 날 출석 명단의 날짜 고르기·보드 사진 보기·별명 거절 알림·초점)으로 바뀐 lecpage.js·console.js·live/core.js·live/local.js의 예전 판. 보안 문제로 막아야 하는 판은 지우세요.",
+ "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 2026-11-23: 꽉 찬 바닥글 아래 키트 묶음 색 잇기·개인정보 안내에 맞춘 주석·설문 알림 문구(lecpage.js), 사이트가 기기의 밝게·어둡게를 따르면 보조 쪽도 따르기(boot.js)로 바뀐 lecpage.js·boot.js의 예전 판. 2026-11-23(2): 참가자·강사 화면 실측 고침('지금' 줄 [투표하기]·교재 전체 화면·여러 날 출석 명단의 날짜 고르기·보드 사진 보기·별명 거절 알림·초점)으로 바뀐 lecpage.js·console.js·live/core.js·live/local.js의 예전 판. 2026-11-24(조각의 kept는 UTC 날짜라 2026-11-23): 수업 중 요청 줄이기(소켓 하나로 받는 첫 동기화·시험 요청으로 확인한 뒤 긴 대기의 기다림 올리기·가려진 화면 쉬기)와 다른 쪽 투표를 '지금' 줄에 알리기로 바뀐 lecpage.js·live/core.js·live/http.js의 예전 판. 보안 문제로 막아야 하는 판은 지우세요.",
  "segments": [
   {
    "name": "fx/core.js",
@@ -587,6 +587,27 @@
    "len": 13672,
    "head": "/*! lecpage live — provider 'loc",
    "sha256": "9da6f536f220bc6f1f9a4bd39c1d27d870c54ae8e118dc09846dda71c6a5f273",
+   "kept": "2026-11-23"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 118515,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "b91c9bf2bdf457042407b28112ff7ed7a593d95df18b850a64384dc248cc22c7",
+   "kept": "2026-11-23"
+  },
+  {
+   "name": "live/core.js",
+   "len": 81653,
+   "head": "/*! lecpage live core — window.L",
+   "sha256": "044f9d9d61283638b30a9e83fc98d22c507f3eed3db62b399e4971312db77a60",
+   "kept": "2026-11-23"
+  },
+  {
+   "name": "live/http.js",
+   "len": 22565,
+   "head": "/*! lecpage live — provider 'htt",
+   "sha256": "5fdc87f1365fcf8c0f10e75e1d3382b98ea6d53a1dd6eaffb4787b5e09b9fe0e",
    "kept": "2026-11-23"
   }
  ]

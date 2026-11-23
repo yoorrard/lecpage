@@ -183,8 +183,11 @@ export async function start(opts = readOptions()) {
   const rooms = new Map(); // code → { sse:Set<res>, ws:Set<ws>, react:Map, timer }
   const room = (code) => { let r = rooms.get(code); if (!r) { r = { sse: new Set(), ws: new Set(), react: new Map(), timer: null, waiters: new Set() }; rooms.set(code, r); } return r; };
   const dropRoom = (code) => { const r = rooms.get(code); if (r && !r.sse.size && !r.ws.size && !r.timer && !r.waiters.size) rooms.delete(code); };
-  // 긴 대기(long-poll): 웹소켓·SSE가 막힌 학교망에서 GET snapshot?since=&wait=초 → 바뀐 것이 없으면 바뀔 때까지(최대 25초) 붙잡았다 답함
-  const MAX_WAIT_S = 25, MAX_WAITERS = 2000;
+  // 긴 대기(long-poll): 웹소켓·SSE가 막힌 학교망에서 GET snapshot?since=&wait=초 → 바뀐 것이 없으면 바뀔 때까지(최대 55초) 붙잡았다 답함
+  // 런타임은 20초로 묻고(예전 런타임은 늘 20초), 더 긴 기다림이 되는 망인지는 시험 요청(probe=1)으로 따로 확인한 뒤에만 55·45·30초로 올림. 답마다 상한(waitMax)을 알려 줌
+  const MAX_WAIT_S = 55, MAX_WAITERS = 2000;
+  // 소켓으로 받는 동기화(sync): 소켓 하나에 분당 횟수, 한 메시지로 보내는 가장 긴 답(넘으면 런타임이 HTTP로 받음)
+  const SYNC_PER_MIN = 30, SYNC_MAX_CHARS = 512 * 1024;
   const snapshotChanged = (b, since) => !!b && (Object.keys(b).some((k) => Array.isArray(b[k]) && k !== 'removed' && b[k].length) || (b.removed || []).length > 0 || (b.state && b.state.updatedAt > since));
   function wake(code) { const r = rooms.get(code); if (!r) return; for (const w of r.waiters) w(); r.waiters.clear(); }
   function holdFor(req, code, ms) {
@@ -250,6 +253,8 @@ export async function start(opts = readOptions()) {
     h['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     h['Access-Control-Allow-Headers'] = 'Content-Type, X-Lec-Token, X-Lec-Admin, X-Lec-Setup, X-Lec-Filename';
     h['Access-Control-Max-Age'] = '86400';
+    // 런타임이 답을 실어 온 프로토콜을 볼 수 있게(시험 요청은 자기 연결을 따로 쓰는 HTTP/1.1에서만 믿음)
+    h['Timing-Allow-Origin'] = '*';
     return h;
   }
   const originAllowed = (req) => allowAny || !req.headers.origin || opts.origins.includes(req.headers.origin);
@@ -441,6 +446,14 @@ export async function start(opts = readOptions()) {
       if (a === 'ws') throw new HttpError(426, 'upgrade_required', 'WebSocket으로 연결하세요.');
       if (a === 'upload' && parts.length === 2 && req.method === 'POST') return await handleUpload(req, res, code, cors);
       if (a === 'files' && b && parts.length === 3 && (req.method === 'GET' || req.method === 'HEAD')) return await serveFile(req, res, code, b, cors);
+      // 시험 요청(snapshot?since=&wait=초&probe=1): 이 망이 더 긴 기다림을 실어 나르는지 런타임이 실제 묻기와 따로 확인함.
+      // 방에 무슨 일이 생겨도 청한 시간만큼 붙잡았다가 자료 없이 답함(예전 서버는 이 값을 몰라 보통 긴 대기로 답하고, 런타임은 그 답으로는 올리지 않음)
+      if (req.method === 'GET' && a === 'snapshot' && parts.length === 2 && url.searchParams.get('probe') === '1' && Number(url.searchParams.get('wait')) > 0 && Number(url.searchParams.get('since')) > 0) {
+        const t0 = Date.now(); const ms = Math.min(MAX_WAIT_S, Number(url.searchParams.get('wait'))) * 1000;
+        await new Promise((r) => { const t = setTimeout(r, ms); req.on('close', () => { clearTimeout(t); r(); }); });
+        if (req.destroyed || res.writableEnded) return;
+        return send(res, 200, { probe: true, held: Date.now() - t0, waitMax: MAX_WAIT_S }, cors);
+      }
       const body = await readJson(req);
       const call = () => core.handle({ method: req.method, code, rest: parts.slice(1), query: url.searchParams, headers: headersOf(req), body, ip: clientIp(req), origin: reqOrigin(req) });
       let out = await call();
@@ -451,6 +464,8 @@ export async function start(opts = readOptions()) {
         if (req.destroyed) return;
         out = await call();
       }
+      // 긴 대기의 상한(초)을 답에 실음: 아는 런타임만 더 긴 기다림을 청함(예전 런타임은 이 칸을 읽지 않음)
+      if (req.method === 'GET' && a === 'snapshot' && parts.length === 2 && out.status === 200 && out.body && typeof out.body === 'object') out.body.waitMax = MAX_WAIT_S;
       if (out.events) broadcast(c, out.events);
       if (out.reaction) addReaction(c, out.reaction);
       if (out.purgedFiles) { await fsp.rm(path.join(opts.data, 'uploads', c), { recursive: true, force: true }); db.checkpoint(); }
@@ -508,13 +523,33 @@ export async function start(opts = readOptions()) {
               if (body.error !== 'session_expired') w.close(1008, 'auth');
             }
           });
+        } else if (o && o.type === 'sync') {
+          // 소켓으로 받는 동기화: 참가자에게 GET snapshot이 주는 것과 같음(관리자 보기는 아님). 쪽 이동·다시 연결 때의 HTTP 요청 하나를 아낌
+          // { type:'sync', id, since, token? } → { type:'sync', id, ok:true, doc } | { type:'sync', id, ok:false, error, message, status, retryAfter }
+          const id = typeof o.id === 'string' || typeof o.id === 'number' ? String(o.id).slice(0, 40) : '';
+          const reply = (x) => { if (w.open) w.send(JSON.stringify({ type: 'sync', id, ...x })); };
+          try {
+            const now = Date.now(); const cnt = w.attachment.syncs || (w.attachment.syncs = { t: now, n: 0 });
+            if (now - cnt.t >= 60000) { cnt.t = now; cnt.n = 0; }
+            if (++cnt.n > SYNC_PER_MIN) return reply({ ok: false, error: 'rate_limited', message: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', status: 429, retryAfter: Math.max(1, Math.ceil((cnt.t + 60000 - now) / 1000)) });
+            const token = typeof o.token === 'string' && o.token.length <= 200 ? o.token : null;
+            const out = await core.handle({ method: 'GET', code, rest: ['snapshot'], query: new URLSearchParams({ since: String(Math.max(0, Number(o.since) || 0)) }), headers: { get: (n) => (String(n).toLowerCase() === 'x-lec-token' ? token : null) }, body: null, ip, origin: reqOrigin(req) });
+            if (out.status !== 200 || !out.body) return reply({ ok: false, error: 'unsupported', status: out.status || 500 });
+            const text = JSON.stringify({ type: 'sync', id, ok: true, doc: out.body });
+            if (text.length > SYNC_MAX_CHARS) return reply({ ok: false, error: 'too_big', status: 413 });
+            if (w.open) w.send(text);
+          } catch (e) {
+            const { status, body, retryAfter } = errorBody(e);
+            reply({ ok: false, error: body.error, message: body.message, status, retryAfter });
+          }
         } else if (o && o.type === 'ping') w.send(JSON.stringify({ type: 'pong', now: Date.now() }));
       },
       onClose: (w) => { r.ws.delete(w); dropRoom(code); if (!freed) { freed = true; freeSocket(ip); } },
     });
     if (!ws) { if (!freed) { freed = true; freeSocket(ip); } return; }
     r.ws.add(ws);
-    ws.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL }));
+    // caps: 이 서버가 소켓으로도 해 주는 것(예전 런타임은 읽지 않음). 'sync' = 동기화(위)
+    ws.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL, caps: ['sync'] }));
   });
 
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(opts.port, opts.host, resolve); });

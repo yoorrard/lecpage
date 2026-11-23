@@ -798,7 +798,7 @@
     var self = this;
     COLS.forEach(function (c) { self._docs[c] = {}; });
     this._state = defaultState();
-    this._cursor = 0;
+    this._cursor = 0; this._gotState = false;
     this._mine = {}; local.del(this._ns + ':mine');
     this._emitChange({ type: 'reset', col: null, doc: null });
     COLS.forEach(function (c) { self._bus.emit('change:' + c, [], { type: 'reset', col: c }); });
@@ -922,7 +922,7 @@
     else job = this._listAll(since);
     this._syncing = job.then(function (snap) {
       var n = self._applySnapshot(snap, since === 0);
-      if (since === 0) self._synced = true;
+      if (since === 0) { self._synced = true; if (snap && snap.state && typeof snap.state === 'object') self._gotState = true; }
       return { changes: n };
     }).catch(function (err) {
       self.lastError = err;
@@ -1227,7 +1227,8 @@
   };
   C.getState = function () {
     var self = this;
-    if (this._online() && this._state.updatedAt) return Promise.resolve(this._state);
+    // 첫 동기화가 상태까지 받아 왔으면(강사가 아직 아무것도 바꾸지 않아 updatedAt이 없는 방 포함) 다시 묻지 않음: 그 뒤 바뀌는 것은 실시간·묻기가 가져옴
+    if (this._online() && (this._state.updatedAt || this._gotState)) return Promise.resolve(this._state);
     return this._call('getState', []).then(function (st) { self._setState(st); return self._state; });
   };
   C.setState = function (patch) {

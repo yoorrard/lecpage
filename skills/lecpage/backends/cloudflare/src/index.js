@@ -19,15 +19,20 @@
 // deletes everything it holds in its alarm. A Guard object per client IP (binding GUARD) counts wrong admin keys and
 // new trainings across all codes.
 // School networks that block WebSockets and SSE poll: GET snapshot?since=<cursor>&wait=<s> is a long-poll. The Worker
-// does the waiting (relayWait) while the object sleeps, so a blocked school costs a request per change or per 25 s,
-// not one every few seconds, and no Durable Object duration. Every snapshot answer carries X-Lec-Poll-Ms
+// does the waiting (relayWait) while the object sleeps, so a blocked school costs a request per change or per wait
+// (20 s, up to 55 s where the runtime's probe showed the network carries it), not one every few seconds, and no
+// Durable Object duration. Every snapshot answer carries X-Lec-Poll-Ms
 // (= max(7000, participants × 60)): the gap the runtime keeps between polls.
 import { DurableObject } from 'cloudflare:workers';
 import { LiveCore, HttpError, errorBody, normCode, sha256hex, keyProblem, isWeakKeyHash, PROTOCOL } from './protocol.js';
 // The entry module may export only handlers and classes (workerd refuses other named exports): helpers live in longpoll.js
-import { MAX_WAIT_S, MAX_WAITERS, snapshotChanged, isLongPoll, pollGapMs, relayWait } from './longpoll.js';
+import { MAX_WAIT_S, MAX_WAITERS, snapshotChanged, isLongPoll, pollGapMs, relayWait, isProbe, probeAnswer, TIMING_OK } from './longpoll.js';
 
 const DAY = 864e5;
+// The snapshot over a socket (wsSync): asks per socket per minute, and the longest answer sent in one message
+// (bigger answers go over HTTP: a WebSocket message has a size limit)
+const SYNC_PER_MIN = 30;
+const SYNC_MAX_CHARS = 512 * 1024;
 const enc = new TextEncoder();
 const list = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -120,6 +125,8 @@ export class LiveRoom extends DurableObject {
     this.pingTimer = null;
     this.corePromise = null;
     this.wsFails = new WeakMap(); // wrong auth messages per socket (messages may be handled concurrently)
+    this.wsSyncs = new WeakMap(); // snapshots asked over a socket in this minute (wsSync)
+    this.rowsWritten = 0;
     this.waiters = new Set(); // long-polls waiting inside this object (requests that did not come through the relay)
     this.changes = 0; // broadcasts so far (a relay socket opened while a snapshot was made wakes at once)
     // Answered by the runtime without waking the object (no duration charge).
@@ -130,10 +137,12 @@ export class LiveRoom extends DurableObject {
     if (!this.corePromise) {
       this.corePromise = (async () => {
         const env = this.env; const sql = this.ctx.storage.sql;
+        // rowsWritten: rows this object wrote since it woke (a host may report it: the free plan counts written rows per day)
+        const rows = (cur) => { const list = cur.toArray(); const n = cur.rowsWritten; if (n > 0) this.rowsWritten += n; return list; };
         const db = {
-          all: (q, ...p) => sql.exec(q, ...p).toArray(),
-          get: (q, ...p) => sql.exec(q, ...p).toArray()[0],
-          run: (q, ...p) => { sql.exec(q, ...p).toArray(); },
+          all: (q, ...p) => rows(sql.exec(q, ...p)),
+          get: (q, ...p) => rows(sql.exec(q, ...p))[0],
+          run: (q, ...p) => { rows(sql.exec(q, ...p)); },
           tx: (fn) => this.ctx.storage.transactionSync(fn),
         };
         // one Guard object per client IP counts wrong admin keys and new trainings across every code
@@ -170,6 +179,7 @@ export class LiveRoom extends DurableObject {
     const url = new URL(request.url);
     const wait = this.waitMs(request, url);
     if (wait) {
+      if (isProbe(url)) return this.probeWait(wait);
       if (request.headers.get('x-lp-relay') === '1' && (request.headers.get('upgrade') || '').toLowerCase() === 'websocket') return this.relaySocket(request, url);
       return this.longPoll(request, wait);
     }
@@ -232,10 +242,23 @@ export class LiveRoom extends DurableObject {
     if (no) return no;
     return this.plainSnapshot(request, url);
   }
-  /** Something changed: answer every waiting long-poll (here and through the relay). */
+  /**
+   * A probe that did not come through the relay (see longpoll.js): held to its end whatever happens in the room, no data.
+   * It counts as a waiter (the object stays awake, the host counts that time) but wake() leaves it alone.
+   */
+  async probeWait(wait) {
+    const t0 = Date.now();
+    await new Promise((res) => {
+      const w = { res, probe: true, t: setTimeout(() => { this.waiters.delete(w); res(); this.waitersChanged(); }, wait) };
+      this.waiters.add(w);
+      this.waitersChanged();
+    });
+    return probeAnswer(Date.now() - t0);
+  }
+  /** Something changed: answer every waiting long-poll (here and through the relay). Probes keep waiting. */
   wake() {
-    for (const w of this.waiters) { clearTimeout(w.t); w.res(); }
-    const had = this.waiters.size; this.waiters.clear();
+    let had = 0;
+    for (const w of this.waiters) { if (w.probe) continue; clearTimeout(w.t); w.res(); this.waiters.delete(w); had++; }
     if (had) this.waitersChanged();
     for (const ws of this.ctx.getWebSockets('wait')) { try { ws.send('c'); ws.close(1000, 'changed'); } catch { /* closed */ } }
   }
@@ -264,7 +287,12 @@ export class LiveRoom extends DurableObject {
         return new Response(out.body, { status: out.status, headers: { 'Content-Type': out.contentType, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `attachment; filename="${out.filename || 'export.csv'}"` } });
       }
       // ⑤ polling clients (school networks) keep this gap between polls: longer for big rooms
-      if (a === 'snapshot' && request.method === 'GET' && out.status === 200) return json(out.status, out.body, { 'X-Lec-Poll-Ms': String(pollGapMs(core.count(code, 'participants'))) });
+      // waitMax: the longest wait this server keeps for a long-poll (seconds). A runtime that knows it may ask for longer waits
+      // than its first 20 s once they prove to come back whole; older runtimes ignore the field and keep asking for 20
+      if (a === 'snapshot' && request.method === 'GET' && out.status === 200) {
+        if (out.body && typeof out.body === 'object') out.body.waitMax = MAX_WAIT_S;
+        return json(out.status, out.body, { 'X-Lec-Poll-Ms': String(pollGapMs(core.count(code, 'participants'))), ...TIMING_OK });
+      }
       return json(out.status, out.body);
     } catch (e) {
       return errorResponse(e);
@@ -284,10 +312,47 @@ export class LiveRoom extends DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, ['ip:' + String(ip).slice(0, 64)]);
-    server.serializeAttachment({ admin: false, code, ip, fails: 0 });
-    server.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL }));
+    let origin = ''; try { origin = new URL(request.url).origin; } catch { origin = ''; }
+    server.serializeAttachment({ admin: false, code, ip, fails: 0, origin });
+    // caps: what this server also does over the socket (older runtimes ignore it). 'sync' = the snapshot (wsSync)
+    server.send(JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: PROTOCOL, caps: ['sync'] }));
     return new Response(null, { status: 101, webSocket: client });
   }
+  /**
+   * The snapshot over the socket: what GET snapshot answers a participant (never an admin view), without the HTTP request
+   * a page change or a reconnect would make (an incoming socket message is billed as 1/20 of a request).
+   * { type:'sync', id, since, token? } → { type:'sync', id, ok:true, doc } | { type:'sync', id, ok:false, error, message, status, retryAfter }.
+   * Same rules as the HTTP route (core.handle: read throttle per IP, the token decides the private docs), at most
+   * SYNC_PER_MIN per socket, and a host may refuse (syncGate). An answer too big for one message → 'too_big' (the runtime asks over HTTP).
+   */
+  async wsSync(ws, o) {
+    const id = typeof o.id === 'string' || typeof o.id === 'number' ? String(o.id).slice(0, 40) : '';
+    const reply = (x) => { try { ws.send(JSON.stringify({ type: 'sync', id, ...x })); } catch { /* closed */ } };
+    try {
+      const att = ws.deserializeAttachment() || {};
+      if (att.closing || att.wait) return;
+      const now = Date.now(); const c = this.wsSyncs.get(ws) || { t: now, n: 0 };
+      if (now - c.t >= 60000) { c.t = now; c.n = 0; }
+      c.n++; this.wsSyncs.set(ws, c);
+      if (c.n > SYNC_PER_MIN) return reply({ ok: false, error: 'rate_limited', message: '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.', status: 429, retryAfter: Math.max(1, Math.ceil((c.t + 60000 - now) / 1000)) });
+      const no = await this.syncGate(att);
+      if (no) return reply({ ok: false, ...no });
+      const core = await this.core();
+      const token = typeof o.token === 'string' && o.token.length <= 200 ? o.token : null;
+      const headers = { get: (n) => (String(n).toLowerCase() === 'x-lec-token' ? token : null) };
+      const query = new URLSearchParams({ since: String(Math.max(0, Number(o.since) || 0)) });
+      const out = await core.handle({ method: 'GET', code: att.code || '', rest: ['snapshot'], query, headers, body: null, ip: att.ip || '', origin: att.origin || '' });
+      if (out.status !== 200 || !out.body) return reply({ ok: false, error: 'unsupported', status: out.status || 500 });
+      const text = JSON.stringify({ type: 'sync', id, ok: true, doc: out.body });
+      if (text.length > SYNC_MAX_CHARS) return reply({ ok: false, error: 'too_big', status: 413 });
+      ws.send(text);
+    } catch (e) {
+      const { status, body, retryAfter } = errorBody(e);
+      reply({ ok: false, error: body.error, message: body.message, status, retryAfter });
+    }
+  }
+  /** A host may refuse a sync over the socket (room hidden, gone, or over its request budget). → null | { error, message, status, retryAfter } */
+  async syncGate() { return null; }
   async webSocketMessage(ws, message) {
     if (typeof message !== 'string' || message.length > 4096) return;
     if (message === 'ping') { ws.send('pong'); return; }
@@ -315,7 +380,8 @@ export class LiveRoom extends DurableObject {
           ws.send(JSON.stringify({ type: 'auth', ok: false, error: body.error, message: body.message, retryAfter })); if (!keep) ws.close(1008, 'auth');
         } catch { /* closed */ }
       }
-    } else if (o && o.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now: Date.now() }));
+    } else if (o && o.type === 'sync') await this.wsSync(ws, o);
+    else if (o && o.type === 'ping') ws.send(JSON.stringify({ type: 'pong', now: Date.now() }));
   }
   async webSocketClose(ws, code, reason) {
     try { ws.close(code, reason); } catch { /* already closed */ }

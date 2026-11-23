@@ -1,7 +1,7 @@
 // 수용량 모형: 공식 요금으로 월 비용, 사용자 수별 쓰는 몫·먼저 차는 것, 관리 화면 추세(언제 무료가 차나·권하는 행동)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { costOf, scenario, freeMaxUsers, trainingCost, forecast, FREE, PAID } from '../src/capacity.js';
+import { costOf, scenario, freeMaxUsers, trainingCost, forecast, estimate, EST, FREE, PAID } from '../src/capacity.js';
 
 test('유료 월 비용: 포함분 안이면 $5, 넘는 만큼 공식 요금', () => {
   assert.equal(costOf({}).total, 5);
@@ -24,6 +24,24 @@ test('연수 한 번: 학교망 묻기가 가장 큼, 긴 대기는 요청이 �
   assert.ok(longIn.workerReq < school.workerReq * 0.75, '긴 대기(측정 1분 3.4)는 묻기 5초보다 적음');
   assert.ok(longIn.doGbs > 800, '방 안 긴 대기는 연수 내내 깨어 있음(2시간 ≈ 900 GB-s)');
   assert.ok(longRelay.doGbs < 20 && longRelay.doReq > longIn.doReq, 'Worker가 대신 기다리면 duration 대신 DO 요청');
+});
+
+test('수업 중 요청 줄이기(2026-11-24 실측): 처음 접속 2번(한 자리 13), 기다림이 55초로 올라간 망의 긴 대기 1분 1.6. 예약 어림은 올라가지 않은 값 그대로', () => {
+  assert.equal(EST.liveBase, 13); assert.equal(EST.pollPerMinLong, 3.4); assert.equal(EST.pollPerMinLongRaised, 1.6);
+  // README §7 '연수 한 번' 표의 값(참가자 40명 + 강사 화면 2자리, 2시간)
+  const good = trainingCost({ live: true, network: 'good', longPoll: true });
+  const school = trainingCost({ live: true, network: 'restricted', longPoll: true });
+  const raised = trainingCost({ live: true, network: 'restricted', longPoll: true, raised: true });
+  const raisedRelay = trainingCost({ live: true, network: 'restricted', longPoll: true, relay: true, raised: true });
+  assert.equal(Math.round(good.workerReq), 3985); assert.equal(Math.round(school.workerReq), 17694);
+  assert.equal(Math.round(raised.workerReq), 8622); assert.equal(Math.round(raised.doReq), 8629); assert.equal(Math.round(raisedRelay.doReq), 16693);
+  assert.ok(raised.workerReq < school.workerReq * 0.5, '올라간 망은 요청이 절반 아래');
+  assert.ok(raised.doGbs > 800, '방 안에서 기다리면 방은 그대로 연수 내내 깨어 있음');
+  // 올라가는 망의 몫은 모르므로 예약 어림(그날 받을지 정함)은 올라가지 않은 값으로 둠
+  assert.equal(estimate({ people: 40, live: true, network: 'restricted', view: 'pages', longPoll: true }), 42 * 13 + Math.round(42 * 120 * 3.4));
+  // 무료로 버티는 크기: 올라가지 않으면 약 90명, 학교망이 모두 올라가면 더 많이
+  assert.equal(freeMaxUsers({ longPoll: true }), 90);
+  assert.ok(freeMaxUsers({ longPoll: true, raised: true }) >= 120);
 });
 
 test('사용자 수: 늘수록 비용이 늘고, 참여 기능을 강사 계정으로 넘기면 운영자 몫은 사이트만', () => {

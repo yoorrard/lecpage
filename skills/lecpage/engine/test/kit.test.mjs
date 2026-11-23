@@ -253,6 +253,28 @@ test('정적 검수: 구조·키트 표시·금지 패턴·깨진 경로·대비
   assert.ok(K.inspect(ics, { ...META, sessions: [] }).some((x) => x.id === 'broken-link'));
 });
 
+test('정적 검수의 크기 알림: 바로 배포 한도(사이트 300MB·파일 하나 20MB)를 넘을 때만, 사실과 할 수 있는 일만 알린다(꼭 고칠 곳이 아님)', () => {
+  const MB = 1024 * 1024;
+  const page = new Uint8Array(Math.round(0.51 * MB)); // 쪽 그림 한 장(같은 바이트를 여러 이름으로: 검수는 크기만 봄)
+  const base = { 'index.html': '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>연수</title></head><body><main><h1>연수</h1><section id="a"><h2>가</h2><p>글</p></section></main></body></html>' };
+  const pages = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`material/p-${String(i + 1).padStart(3, '0')}.webp`, page]));
+  const sizeIssues = (files) => K.inspect(files, { v: 2, title: '연수' }).filter((x) => x.id === 'site-too-big' || x.id === 'file-too-big');
+  // 200쪽 교재(쪽 그림 102MB): 알리지 않음(전에는 60MB를 넘으면 '꼭 고칠 곳'으로 쪽 그림을 줄이라고 했음 — 강사가 고칠 수 없음)
+  assert.deepEqual(sizeIssues({ ...base, ...pages(200) }), []);
+  // 파일 하나: 20MB까지는 알리지 않고, 넘으면 사실만(살필 곳). '배포할 수 없어요'라고 하지 않음(다른 곳에는 올릴 수 있음)
+  assert.deepEqual(sizeIssues({ ...base, 'files/guide.pdf': new Uint8Array(20 * MB) }), []);
+  const one = sizeIssues({ ...base, 'files/guide.pdf': new Uint8Array(23 * MB) });
+  assert.equal(one.length, 1); assert.equal(one[0].id, 'file-too-big'); assert.equal(one[0].level, 'warn');
+  assert.equal(one[0].message_ko, 'files/guide.pdf가 23.0MB예요. 바로 배포는 파일 하나가 20MB까지예요.');
+  assert.match(one[0].fix_hint_ko, /GitHub Pages\(파일 하나 100MB까지\)/);
+  // 사이트 합계: 300MB를 넘을 때만, 무엇이 큰지와 할 수 있는 일
+  const big = sizeIssues({ ...base, ...pages(560), 'files/a.zip': new Uint8Array(19 * MB) }); // 쪽 그림 286MB + 자료 19MB
+  assert.equal(big.length, 1); assert.equal(big[0].id, 'site-too-big'); assert.equal(big[0].level, 'warn');
+  assert.match(big[0].message_ko, /^사이트 전체가 30\dMB예요\(교재 쪽 그림 28\dMB, 자료 파일 19MB\)\. 바로 배포는 300MB까지예요\.$/);
+  assert.match(big[0].fix_hint_ko, /GitHub Pages\(900MB까지\)에 배포하거나 ZIP으로/);
+  for (const x of [...one, ...big]) assert.ok(!/줄여|배포할 수 없어요/.test(x.message_ko + x.fix_hint_ko), x.message_ko + ' ' + x.fix_hint_ko);
+});
+
 test('.lecpage v2 왕복: 사이트·연수 정보·쪽 제목·원본, 비밀은 빼고 / 앱이 저장한 파일도 엶 / 예전 방식 연수는 교재·연수 정보만 옮김', () => {
   const site = fullSite();
   const meta = { ...META, live: { provider: 'supabase', url: 'https://p.supabase.co', anonKey: 'secret-anon', code: 'ABCD1234' } };

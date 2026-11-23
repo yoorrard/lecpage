@@ -18,6 +18,8 @@ export { Guard, MAX_WAIT_S, snapshotChanged };
 
 const DAY = 864e5;
 const MB = 1024 * 1024;
+/** 방이 쓴 행을 Gate에 알리는 단위(행). Gate 요청은 쓴 행 이만큼에 하나꼴 */
+export const ROWS_UNIT = 300;
 
 /** 실시간 규칙의 오류 모양({ error, message }). extra: 본문에 덧붙일 값(429의 retryAfter: 머리글을 못 읽는 곳에서도 런타임이 기다릴 초를 앎) */
 function liveError(status, error, message, headers = {}, extra = {}) {
@@ -89,7 +91,42 @@ export class Room extends LiveRoom {
     if (Date.now() >= b.expires && !(await this.stillAlive(b))) return liveError(404, 'unknown_training', '보관 기간이 끝난 연수예요.');
     const wait = (await this.fromTeacher(request, b)) ? 0 : await this.overBudget(b);
     if (wait) return liveError(429, 'room_busy', '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', { 'retry-after': String(wait) }, { retryAfter: wait });
-    return super.fetch(request); // 긴 대기도 LiveRoom이 맡음
+    const res = await super.fetch(request); // 긴 대기도 LiveRoom이 맡음
+    this.rowsDue(b);
+    return res;
+  }
+  /**
+   * 소켓으로 온 동기화(LiveRoom.wsSync)도 HTTP 요청과 같은 문을 지남: 묶인 사이트가 살아 있고 가려지지 않았으며 방 요청 상한 안일 때만.
+   * 거절하면 런타임이 HTTP 때와 같은 오류로 다룸
+   */
+  async syncGate() {
+    const b = this.hostBind.get();
+    if (!b) return { error: 'unknown_training', message: '아직 준비되지 않은 연수 코드입니다.', status: 404 };
+    if (b.blocked) return { error: 'blocked', message: '신고가 들어와 잠시 가려 둔 연수예요.', status: 403 };
+    if (Date.now() >= b.expires && !(await this.stillAlive(b))) return { error: 'unknown_training', message: '보관 기간이 끝난 연수예요.', status: 404 };
+    const wait = await this.overBudget(b);
+    if (wait) return { error: 'room_busy', message: '이 연수 방에 요청이 너무 많이 와서 잠시 멈췄어요. 사이트가 같은 요청을 너무 자주 보내는지 확인해 주세요.', status: 429, retryAfter: wait };
+    return null;
+  }
+
+  // ── 쓴 행 수 ─────────────────────────────────────────────────
+  // 무료 요금제는 하루에 쓴 행 수(모든 객체 합쳐 10만)에 한도가 있음. 방이 쓴 행(글·출석·투표 답)을 Gate에 알려 전체 몫에 넣음.
+  // 방은 조용하면 10초쯤 뒤 잠들어 기억(this.rowsWritten)이 지워지므로 쌓아 두었다가 알릴 수 없고, 쓸 때마다 알리면 Gate 요청이 배로 늚.
+  // 그래서 요청이 끝날 때마다 그 사이 쓴 n행을 ROWS_UNIT행 단위로 어림해 알림: ROWS_UNIT이 넘는 몫은 그대로, 나머지는 (나머지 ÷ ROWS_UNIT)의 확률로 한 단위.
+  // 기댓값이 실제 쓴 행과 같고(덜 세지도 더 세지도 않음), Gate 요청은 쓴 행 ROWS_UNIT개에 하나꼴. 하루 6만 행이면 오차는 7%쯤
+  rowsDue(b) {
+    const n = (this.rowsWritten || 0) - (this.rowsSeen || 0);
+    if (!(n > 0) || !b) return;
+    this.rowsSeen = this.rowsWritten;
+    const whole = Math.floor(n / ROWS_UNIT);
+    const rw = (whole + ((this.rowsRand || Math.random)() < (n - whole * ROWS_UNIT) / ROWS_UNIT ? 1 : 0)) * ROWS_UNIT;
+    if (rw) this.ctx.waitUntil?.(this.reportRows(b.site, rw));
+  }
+  async reportRows(site, rw) {
+    try {
+      const gate = this.hostEnv.GATE.get(this.hostEnv.GATE.idFromName('gate'));
+      await gate.fetch('http://gate/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: site, rw }) });
+    } catch (e) { console.error('room rows report failed', e?.message); }
   }
   /**
    * 강사 화면의 요청인지: X-Lec-Admin이 이 방의 관리자 키(또는 강사 세션)와 맞을 때만. 강사 요청은 방 요청 상한에 세지 않음(넘쳐도 기록을 받아 갈 수 있게).
@@ -237,6 +274,7 @@ export class Room extends LiveRoom {
       const b = this.hostBind.get();
       if (b && Date.now() >= b.expires && !(await this.stillAlive(b)) && !this.hostBind.get()) return; // 사이트가 없어져 방을 비움
       await super.alarm();
+      this.rowsDue(b); // 정리하며 지운 행도 쓴 행
       // 오래 쓰지 않아 LiveRoom이 스스로 비웠을 수 있음
       this.hostBind.reset();
       if (this.hostBucket) this.hostBucket.ready = false;

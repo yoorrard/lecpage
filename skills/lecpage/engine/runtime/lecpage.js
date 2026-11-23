@@ -846,7 +846,8 @@
   function initLive() {
     if (!DATA.live || !window.LecLive || !$('[data-dock]') && !$('[data-qa]') && !$('[data-board]') && !$('[data-survey]')) return;
     var conn;
-    try { conn = LecLive.create(DATA.live); } catch (e) { return; }
+    // restHidden: 가려진 참가자 화면(휴대폰 화면 꺼짐·다른 탭)은 묻기를 쉬고, 다시 보이면 바로 이어 감(실시간 연결이 막힌 망에서만 해당)
+    try { conn = LecLive.create(Object.assign({}, DATA.live, { restHidden: true })); } catch (e) { return; }
     var me = store.get('me', null), feats = DATA.live.features || [];
     var dock = $('[data-dock]'), dot = $('[data-live-status]');
     var qs = {}, posts = {}, answers = {}, state = {}, voted = store.get('voted', {});
@@ -1131,6 +1132,15 @@
       var q = quick[id];
       return q && q.question && Array.isArray(q.options) && q.options.length ? { id: q.id, question: q.question, kind: 'choice', options: q.options } : null;
     }
+    // 쪽이 여럿인 사이트: 열린 투표가 이 쪽이 아니라 다른 쪽에 적혀 있으면 '지금' 줄이 그 쪽으로 가는 단추를 보임(조립이 #lp-data의 polls에 { id, q, page }를 실음).
+    // 그 쪽에 '#lp-poll'로 들어오면 열린 투표를 바로 화면 안에 보여 줌(wantPoll)
+    var elsewhere = {};
+    (Array.isArray(DATA.polls) ? DATA.polls : []).forEach(function (x) { if (x && x.id && x.page && typeof x.page === 'string' && /^[\w.-]+\.html$/.test(x.page)) elsewhere[x.id] = x; });
+    function pollElsewhere() {
+      var id = state.openPoll; if (!id || openPoll()) return null;
+      return Object.prototype.hasOwnProperty.call(elsewhere, id) ? elsewhere[id] : null;
+    }
+    var wantPoll = false; try { wantPoll = location.hash === '#lp-poll'; } catch (e) { wantPoll = false; }
     // 투표 칸이 없는 사이트에서 즉석 투표가 열리면 마무리 앞에 칸을 만듦(자료 링크와 같은 방식)
     function ensurePollBox() {
       if (pollBox) return pollBox;
@@ -1426,7 +1436,7 @@
       // 끝난 연수: 남은 공지·타이머·투표 대신 맨 위 '종료' 줄만(initPhase)
       if (root.getAttribute('data-phase') === 'after') { clearInterval(timerIv); if (!nowEl.hidden) { nowEl.hidden = true; fitScrollPad(); } return; }
       var main = '', sub = '', where = '', cta = null, sts = DATA.stations || [];
-      var p = openPoll(), fm = freshMat();
+      var p = openPoll(), op = p ? null : pollElsewhere(), fm = freshMat();
       var si = state.step ? sts.map(function (x) { return x.id; }).indexOf(state.step) : -1;
       if (si >= 0 && stApi) {
         where = (si + 1) + '번 실습 · ' + sts[si].name;
@@ -1443,6 +1453,13 @@
         // 투표 칸을 이미 보고 있으면 그리 가는 단추는 빼고(같은 것 두 번) 실습·쪽 단추만
         var pollCta = !pollVis && (mine === null ? '투표하기' : shown ? '결과 보기' : '');
         if (pollCta) cta = { label: pollCta, href: '#' + pollSecId(), poll: true };
+      } else if (op) {
+        // 다른 쪽에 있는 투표가 열림: 같은 글·같은 순서로 알리고, 단추는 그 쪽으로(이 쪽의 실습·쪽 단추보다 먼저)
+        var mine2 = store.get('ans:' + op.id, null), shown2 = X.revealed(state, op.id);
+        main = '투표: ' + (op.q || '');
+        sub = mine2 === null ? where : [shown2 ? '' + HOST_GA + ' 결과를 공개했어요' : '응답했어요 · 결과는 ' + HOST_GA + ' 공개하면 보여요', where].filter(Boolean).join(' · ');
+        var goCta = mine2 === null ? '투표하러 가기' : shown2 ? '결과 보기' : '';
+        if (goCta) cta = { label: goCta, href: op.page + '#lp-poll' };
       } else if (fm) {
         main = '새 자료: ' + fm.title; sub = where;
         cta = { label: '자료 열기', href: fm.url, ext: true };
@@ -1450,7 +1467,7 @@
       var notice = state.notice && state.notice.text;
       if (notice) { sub = main; main = notice; }
       // 교재 전체 화면 중에는 공지·투표·새 자료·타이머만(강사가 보는 쪽은 이미 화면에 있음 — 쪽 그림을 덜 가리게)
-      if (deckFull && !notice && !p && !fm) { main = ''; sub = ''; cta = null; }
+      if (deckFull && !notice && !p && !op && !fm) { main = ''; sub = ''; cta = null; }
       var t = runningTimer();
       nowEl.classList.toggle('has-notice', !!notice);
       if (notice && state.notice.level) nowEl.setAttribute('data-level', state.notice.level); else nowEl.removeAttribute('data-level');
@@ -1508,6 +1525,12 @@
         if (state.slide && deckApi && deckApi.follow()) deckApi.go(state.slide);
       }
       checkSignalReset(); drawPoll(); drawMats(); drawNow(); drawLocks();
+      // 다른 쪽의 '지금' 줄 [투표하러 가기]로 들어옴: 열린 투표가 이 쪽에 있으면 한 번만 화면 안으로(주소의 표시는 지움)
+      if (wantPoll && pollBox && openPoll()) {
+        wantPoll = false;
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 미리보기 틀 등 */ }
+        setTimeout(showPoll, 0);
+      }
     }
     // 강사가 질문·보드를 잠그면 쓰는 칸을 막고 까닭을 보임(서버도 같은 규칙으로 거절)
     function drawLocks() {

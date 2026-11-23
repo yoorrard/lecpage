@@ -384,6 +384,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       let id = W.kitSlug(attr(t, 'data-id'), `p${col.polls.length + 1}`); while (col.polls.some((p) => p.id === id)) id += '-' + (col.polls.length + 1);
       const item = { id, question: q || `투표 ${col.polls.length + 1}`, kind, options: kind === 'word' ? [] : options };
       col.polls.push(item);
+      (col.pollPage || (col.pollPage = {}))[id] = page; // 이 투표가 적힌 쪽(다른 쪽에서 열린 투표를 '지금' 줄이 알려 줄 때 씀)
       // 교재 쪽(data-page: 강사 화면이 쪽 순서로 보이고 그 쪽에서 바로 열게)·퀴즈 정답(data-answer: 보기 번호나 보기 글. 강사 화면에만 두고 공개할 때 보냄)
       const pv = attr(t, 'data-page'), av = attr(t, 'data-answer'), extra = {};
       if (pv !== undefined) { if (/^\s*\d{1,4}\s*$/.test(pv) && +pv >= 1) extra.page = +pv; else warn('poll-page', `${where}의 data-page는 교재 쪽 번호(숫자)로 써 주세요.`); }
@@ -636,6 +637,8 @@ export function assemble(site, meta0, opts = {}) {
   const sctx = { bp: vb, words, design: built.design, live };
   ctx.phaseText = endedText(vb, words);
   const data = siteData(sctx);
+  // 쪽이 여럿이면 투표가 어느 쪽에 있는지 쪽마다 실음: 강사가 다른 쪽의 투표를 열어도 '지금' 줄이 [투표하러 가기]로 알려 줌(runtime/lecpage.js). 한 쪽짜리 사이트는 지금 그대로
+  if (pages.length > 1 && col.polls.length) data.polls = col.polls.map((x) => ({ id: x.id, q: x.question, page: (col.pollPage || {})[x.id] || '' })).filter((x) => x.page);
   // CSP: 사이트가 실제로 부르는 바깥 곳만(허용 목록 라이브러리·글꼴 CDN·영상 틀)
   const aiTexts = [...Object.values(expanded), ...Object.entries(src).filter(([p]) => /\.(css|m?js)$/.test(p)).map(([, v]) => asText(v)), ...Object.values(out).filter((v) => typeof v === 'string')];
   const csp = kitCsp(vb, { live, used: usedSources(aiTexts, { provider: vb.live.provider }) });
@@ -826,21 +829,40 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
   let html = asText(files[page]);
   if (!html) return '<!doctype html><meta charset="utf-8"><p>미리볼 쪽이 없어요.</p>';
   let budget = maxImageBytes;
-  const inline = (p) => {
+  // 담는 순서: CSS url()·poster·srcset·링크처럼 틀 안에서 나중에 주소를 바꿔 주기 어려운 자리(hard)를 먼저 담고,
+  // <img src>와 교재 슬라이드 목록(soft: 틀 안 코드가 주소를 바꿔 줌)·그림으로 가는 링크(link: 못 담으면 주소 그대로 — 앱이 새 탭에 엶)는 남은 크기만큼만 담음.
+  // 그래서 쪽 그림이 많은 교재에서도 꾸밈 그림·배경이 빠지지 않음.
+  // 먼저 한 번 훑어(measuring) hard 자리의 크기를 더해 두고(reserve), 두 번째에 실제로 담음
+  let reserve = 0; let measuring = true;
+  const IMG = /\.(png|jpe?g|webp|gif|avif)$/i;
+  const inline = (p, kind = 'hard') => {
+    const soft = kind === 'soft';
     const data = files[p]; if (data === undefined) return null;
     const size = enc(data);
-    if (size > budget) {
-      // 한 장 HTML에 못 담은 것. skipped를 준 부른 쪽(앱 lib/late-files.js)은 그 그림을 틀 안으로 따로 넘김: 그때까지 깨진 주소로 열어 보지 않게
-      // 그림은 1×1 빈 그림 주소 뒤에 원래 경로를 붙여 둠(#lp-late=경로). skipped가 없으면 예전처럼 주소를 그대로 둠
-      if (!skipped) return null;
-      skipped.add(p);
-      return /\.(png|jpe?g|webp|gif|avif)$/i.test(p) ? `${LATE_PIXEL}#lp-late=${encodeURI(p)}` : null;
+    if (measuring) { if (kind === 'hard') reserve += size; return null; }
+    if (kind === 'link') { // 링크: 못 담으면 주소를 그대로 두고, 그 그림을 따로 넘겨 스크립트가 a.href를 그림 주소로 쓸 때(크게 보기)도 열리게 함
+      if (size > budget - reserve) { if (skipped && IMG.test(p)) skipped.add(p); return null; }
+      budget -= size; return dataUrl(p, data);
     }
+    if (soft) {
+      if (size > budget - reserve) {
+        // 한 장 HTML에 못 담은 것. skipped를 준 부른 쪽(앱 lib/late-files.js)은 그 그림을 틀 안으로 따로 넘김: 그때까지 깨진 주소로 열어 보지 않게
+        // 그림은 1×1 빈 그림 주소 뒤에 원래 경로를 붙여 둠(#lp-late=경로). skipped가 없으면 예전처럼 주소를 그대로 둠
+        if (!skipped) return null;
+        skipped.add(p);
+        return IMG.test(p) ? `${LATE_PIXEL}#lp-late=${encodeURI(p)}` : null;
+      }
+      budget -= size; return dataUrl(p, data);
+    }
+    reserve = Math.max(0, reserve - size);
+    // hard 자리가 한도를 넘으면 주소를 그대로 둠(빈 그림으로 바꾸지 않음): 링크는 예전처럼 앱이 새 탭에 열고, srcset·poster는 따로 넘긴 그림으로 틀 안 코드가 바꿈
+    if (size > budget) { if (skipped && IMG.test(p)) skipped.add(p); return null; }
     budget -= size; return dataUrl(p, data);
   };
   const cssUrls = (css, from) => css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => { const p = resolvePath(u, from); const d = p && !/\.css$/.test(p) ? inline(p) : null; return d ? `url("${d}")` : m; });
   const escClose = (s) => String(s).replace(/<\/(script)/gi, '<\\/$1');
-  const tags = scanTags(html); const edits = [];
+  const tags = scanTags(html);
+  const walk = () => { const edits = [];
   for (let k = 0; k < tags.length; k++) {
     const t = tags[k]; if (t.kind !== 'open') continue;
     if (t.name === 'meta' && (attr(t, 'http-equiv') || '').toLowerCase() === 'content-security-policy') { edits.push({ start: t.start, end: t.end, text: '' }); continue; }
@@ -859,14 +881,16 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
     for (const a of ['src', 'poster', 'href']) {
       const v = attr(t, a); if (!v || (a === 'href' && !/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(v))) continue;
       const p = resolvePath(v, page); if (!p || /\.(css|js|html)$/.test(p)) continue;
-      const d = inline(p); if (d) set[a] = d;
+      const d = inline(p, a === 'href' ? 'link' : a === 'src' && t.name === 'img' ? 'soft' : 'hard'); if (d) set[a] = d; // <img src>만 soft(틀 안 코드가 나중에 바꿔 줌)
     }
     const ss = attr(t, 'srcset');
     if (ss) set.srcset = ss.split(',').map((x) => { const [u, ...rest] = x.trim().split(/\s+/); const p = resolvePath(u, page); const d = p && inline(p); return [d || u, ...rest].join(' '); }).join(', ');
     if (t.attrs.some((a) => a.name === 'style' && /url\(/.test(a.value))) set.style = cssUrls(attr(t, 'style'), page);
     if (Object.keys(set).length) edits.push({ start: t.start, end: t.end, text: rewriteOpen(t, { set }) });
   }
-  html = applyEdits(html, edits);
+  return edits; };
+  walk(); measuring = false; // 첫 번째는 hard 자리의 크기만 잼(고치지 않음)
+  html = applyEdits(html, walk());
   // 참가자 쪽의 lecpage.js는 QR(assets/qr.js)을 필요할 때 따로 불러요. 미리보기 틀(한 장 HTML)에서는 그 주소가 열리지 않으니 미리 안에 담아 둠
   if (files['assets/qr.js'] !== undefined && /\bassets\/lecpage\.js\b/.test(asText(files[page])) && !/\bassets\/qr\.js\b/.test(asText(files[page]))) {
     const qr = `<script>${escClose(asText(files['assets/qr.js']))}</script>`;
@@ -876,7 +900,7 @@ export function previewHtml(files, page = 'index.html', { maxImageBytes = 8e6, e
   html = html.replace(/(<script type="application\/json" id="lp-blueprint">)([\s\S]*?)(<\/script>)/, (m, a, json, b) => {
     let bp; try { bp = JSON.parse(json); } catch { return m; }
     if (!Array.isArray(bp.deck) || !bp.deck.length) return m;
-    bp.deck = bp.deck.map((x) => { const p = Array.isArray(x) && resolvePath(String(x[1] || ''), page); const d = p && inline(p); return d ? [x[0], d, x[2]] : x; });
+    bp.deck = bp.deck.map((x) => { const p = Array.isArray(x) && resolvePath(String(x[1] || ''), page); const d = p && inline(p, 'soft'); return d ? [x[0], d, x[2]] : x; });
     return a + JSON.stringify(bp).replace(/</g, '\\u003c') + b;
   });
   const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${escAttr(previewCsp())}">`;

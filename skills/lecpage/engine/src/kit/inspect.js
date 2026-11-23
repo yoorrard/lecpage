@@ -7,6 +7,9 @@ import { LIB_SCRIPT_SOURCES } from '../render/shell.js';
 import { contrast } from '../design/color.js';
 import { ENGINE_PAGES } from './paths.js';
 import { FONT_CSS_HOSTS, FRAME_SOURCES } from './assemble.js';
+import { HOSTS } from '../decide/infra.js';
+/** 크기 알림의 기준: 바로 배포의 한도(사이트 300MB·파일 하나 20MB), 그보다 넉넉한 곳(GitHub Pages 900MB·100MB) */
+const INSTANT = HOSTS.lecpage.limit, ROOMY = HOSTS['github-pages'];
 /** 스크립트 문법 검사(new Function)를 할 수 있는 곳: Node(Skill). 브라우저(앱)는 CSP 'unsafe-eval'이 없어 막힘 */
 const SYNTAX_OK = typeof process !== 'undefined' && !!process.versions?.node && typeof window === 'undefined';
 
@@ -93,16 +96,23 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
   if (!files['index.html']) add('no-index', 'error', { file: 'index.html' }, '첫 쪽 index.html이 없어요.', '사이트의 첫 쪽을 site/index.html로 써 주세요.');
 
   // 파일 크기·형식
-  let total = 0;
+  let total = 0; const part = { pages: 0, files: 0 };
   for (const p of paths) {
     const n = size(files[p]); total += n;
     if (/\.svg$/i.test(p)) add('svg-file', 'warn', { file: p }, `SVG 파일(${p})은 사이트에 넣지 않아요.`, '그림은 png·jpg·webp로, 아이콘은 HTML 안에 <svg>로 바로 써 주세요.');
     if (/\.html$/.test(p) && n > 400 * KB) add('file-size', 'warn', { file: p }, `${p}가 ${Math.round(n / KB)}KB로 커요. 휴대폰이나 느린 망에서 느려요.`, '긴 글은 나누고, 그림은 HTML 안(data:)이 아니라 파일로 두세요.');
     else if (/\.(png|jpe?g|webp|gif|avif)$/i.test(p) && n > 1.5 * MB) add('file-size', 'warn', { file: p }, `그림 ${p}가 ${(n / MB).toFixed(1)}MB예요.`, '1600px 폭 안팎의 webp로 줄여 주세요.');
     else if (/\.(css|m?js)$/.test(p) && !ENGINE_ASSETS.test(p) && n > 300 * KB) add('file-size', 'warn', { file: p }, `${p}가 ${Math.round(n / KB)}KB예요.`, '쓰지 않는 규칙·코드를 빼 주세요.');
-    if (n > 15 * MB) add('file-too-big', 'error', { file: p }, `${p}가 ${(n / MB).toFixed(1)}MB라 배포할 수 없어요.`, '15MB 아래로 줄이거나 바깥 주소(영상 서비스 등)로 이어 주세요.');
+    if (/^material\//.test(p)) part.pages += n; else if (/^files\//.test(p)) part.files += n;
+    // 큰 파일: 바로 배포의 한도(파일 하나 20MB)를 넘는다는 사실만 알림. 강사가 넣은 자료일 수 있어 '꼭 고칠 곳'으로 올리지 않고,
+    // 다른 곳에는 올릴 수 있으므로 '배포할 수 없어요'라고 하지 않음(곳마다 되는지는 배포 화면이 checkHost로 다시 봄. 교재 원본은 바로 배포가 알아서 빼고 올림)
+    if (n > INSTANT.fileMB * MB) add('file-too-big', 'warn', { file: p }, `${p}가 ${(n / MB).toFixed(1)}MB예요. 바로 배포는 파일 하나가 ${INSTANT.fileMB}MB까지예요.`, `그대로 두려면 ${ROOMY.name_ko}(파일 하나 ${ROOMY.limit.fileMB}MB까지)에 배포해요. 바로 배포하려면 바깥 주소(영상 서비스·공유 링크)로 이어 주세요.`);
   }
-  if (total > 60 * MB) add('site-too-big', 'error', { file: '' }, `사이트 전체가 ${Math.round(total / MB)}MB예요.`, '교재 쪽 그림·사진을 줄여 60MB 아래로 맞춰 주세요.');
+  // 사이트 합계: 바로 배포의 한도(300MB)를 넘을 때만, 무엇이 큰지와 할 수 있는 일을 알림. 교재 쪽 그림을 줄이라고 하지 않음(강사가 준 교재는 빼지 않음)
+  if (total > INSTANT.siteMB * MB) {
+    const big = [[part.pages, '교재 쪽 그림'], [part.files, '자료 파일'], [total - part.pages - part.files, '그 밖의 파일']].filter(([n]) => n >= MB).sort((a, b) => b[0] - a[0]).map(([n, name]) => `${name} ${Math.round(n / MB)}MB`).join(', ');
+    add('site-too-big', 'warn', { file: '' }, `사이트 전체가 ${Math.round(total / MB)}MB예요(${big}). 바로 배포는 ${INSTANT.siteMB}MB까지예요.`, `${ROOMY.name_ko}(${ROOMY.limit.siteMB}MB까지)에 배포하거나 ZIP으로 받아 직접 올릴 수 있어요. 자료실의 큰 파일은 바깥 주소로 이어도 돼요.`);
+  }
 
   // CSS: 키트 변수·글자/바탕 대비
   const inlineCss = pages.map((p) => [...asText(files[p]).matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n')).join('\n');
