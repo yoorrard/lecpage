@@ -673,6 +673,7 @@ function Sites({ p, onPrimary, busy }) {
               <span class="sites-t"><b>{t === 'zip' ? '직접 올린 곳' : SITE_LABEL[t] || t}</b>{main && <em>대표 주소</em>}{liveOn && s.live === false && <i class="sites-nolive">참여 기능 없음</i>}</span>
               <a class="sites-u small" href={s.url} target="_blank" rel="noopener">{showUrl(s.url)}</a>
               {!main && <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => onPrimary(t)} aria-label={`${SITE_LABEL[t] || t} 주소를 대표 주소로 쓰기`}>대표 주소로 쓰기</button>}
+              <button type="button" class="btn btn-sm btn-quiet sites-x" disabled={!!busy} aria-haspopup="dialog" onClick={() => window.dispatchEvent(new CustomEvent('lp-undeploy', { detail: t }))} aria-label={`${t === 'zip' ? '직접 올린 곳' : SITE_LABEL[t] || t} 배포 취소`}>배포 취소</button>
             </li>
           );
         })}

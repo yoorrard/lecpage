@@ -8,7 +8,7 @@ export const DEFAULTS = {
   SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
-  SITES_PER_DEVICE: 5, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음)
+  SITES_PER_DEVICE: 10, // 앱이 기기 표(device)를 보내면: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). 2026-11-23 5→10: 여러 반·여러 과정을 하루에 준비하는 강사
   SITES_PER_HOUR_SHARED: 30, // 기기 표가 있을 때 같은 IP(학교 공유기 하나에 강사 여럿)의 시간·하루 상한
   SITES_PER_DAY_SHARED: 60,
   DAILY_SITE_CAP: 30, // 하루에 만들 수 있는 새 사이트(전체). worker 보기 기본. pages 보기는 200, PLAN=paid면 300(pages 1000). 차면 앱이 '내 계정에 배포하기'로 안내
@@ -37,7 +37,7 @@ export const PLAN_DEFAULTS = {
   free: {},
   // 유료도 하루 예산을 둠(비용 상한): 100만이면 날마다 다 써도 월 약 $15(기본 $5 포함, capacity.js costOf). 60%부터 새 사이트·새 방은 강사 계정으로.
   // 더 받으려면 DAILY_REQUEST_BUDGET을 올리고, 끄려면 0(그때는 Cloudflare 지출 한도만 남음 → README §4)
-  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 10 },
+  paid: { DAILY_SITE_CAP: 300, DAILY_ROOM_CAP: 300, DAILY_REQUEST_BUDGET: 1000000, SITES_PER_DEVICE: 20 },
 };
 /**
  * pages 보기의 하루 상한 기본값: 방문이 하루 한도에 들지 않아 새 사이트 하나가 드는 몫이 작음(Worker 요청 약 12~25, 저장 약 0.2MB).

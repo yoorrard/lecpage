@@ -112,7 +112,9 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
       if (!auth.startsWith('Bearer ') || auth.slice(7) === TOKEN) return send(res, 401, fail(8000013, 'Authorization failed'));
       if (state.jwtExpired) { state.jwtExpired = false; return send(res, 401, fail(8000013, 'Authorization failed')); }
       const j = JSON.parse(body.toString('utf8') || 'null');
-      if (p === '/pages/assets/check-missing') return send(res, 200, ok((j.hashes || []).filter((h) => state.loseAssets || !state.assets.has(h))));
+      // 실제 Cloudflare와 같게: 올린 뒤 upsert-hashes로 등록한 열쇠만 '있음'(올리기만 한 것은 다음 확인에서 '없음'. 2026-11-23 실제 서버에서 확인)
+      state.known = state.known || new Set();
+      if (p === '/pages/assets/check-missing') return send(res, 200, ok((j.hashes || []).filter((h) => state.loseAssets || !state.assets.has(h) || !state.known.has(h))));
       if (p === '/pages/assets/upload') {
         for (const it of j) {
           if (!/^[0-9a-f]{32}$/.test(it.key) || it.base64 !== true) return send(res, 400, fail(8000096, 'bad asset'));
@@ -121,7 +123,7 @@ export function startFakeCf({ port = 0, host = '127.0.0.1', log = false } = {}) 
         state.loseAssets = false;
         return send(res, 200, ok(null));
       }
-      if (p === '/pages/assets/upsert-hashes') return send(res, 200, ok(null));
+      if (p === '/pages/assets/upsert-hashes') { for (const h of j.hashes || []) if (state.assets.has(h)) state.known.add(h); return send(res, 200, ok(null)); }
     }
     if (auth !== `Bearer ${TOKEN}` || !state.tokenOk) return send(res, 403, fail(10000, 'Authentication error'));
     let mm;

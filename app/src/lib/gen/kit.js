@@ -12,7 +12,7 @@ export function kitRuntime() {
   if (!rt) rt = import('../runtime-files.js').then((m) => m.runtime).catch((e) => { rt = null; throw e; });
   return rt;
 }
-/** 교재 쪽 제목(교재 넘기기 검색용): project.material.pages → [{ page, title, text }] (첫 교재 파일 기준) */
+/** 교재 쪽 제목(교재 슬라이드 검색용): project.material.pages → [{ page, title, text }] (첫 교재 파일 기준) */
 export function materialPages(project) {
   const m = project?.material; if (!m?.pages?.length) return [];
   const first = (m.files || []).find((f) => !f.renderOf)?.id;

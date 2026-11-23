@@ -9,7 +9,7 @@ import '../styles/gallery.css';
 // 고르면 새 연수의 '참고 디자인'에 적고, AI에게 그 분위기 설명(mood)을 건네 내 교재에 맞게 옮기게 함.
 // 아래는 디자인 사전(GalleryDict.jsx, 미리보기 묶음이 커서 견본을 먼저 그린 뒤 따로 받음).
 const PAGES = [['index.html', '참가자 화면'], ['console.html', '강사 화면'], ['screen.html', '발표 화면'], ['poster.html', 'QR 안내문']];
-const KIT_KO = { attend: '출석', poll: '투표', quiz: '퀴즈', word: '낱말 투표', board: '나눔 보드', deck: '교재 넘기기', qa: '질문', survey: '만족도 조사', materials: '자료실', notebook: '모음', join: '접속 QR' };
+const KIT_KO = { attend: '출석', poll: '투표', quiz: '퀴즈', word: '낱말 투표', board: '나눔 보드', deck: '교재 슬라이드', qa: '질문', survey: '만족도 조사', materials: '자료실', notebook: '모음', join: '접속 QR' };
 /** notes.json의 kit(예: 'poll(quiz×3, data-answer)', 'step×3(펼침면)') → '출석 · 퀴즈 · 실습 3단계 · …'(같은 이름은 한 번) */
 const kitLine = (kit = []) => [...new Set(kit.map((k) => {
   const st = /^step×(\d+)/.exec(k); if (st) return `실습 ${st[1]}단계`;

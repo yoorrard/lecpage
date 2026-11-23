@@ -231,8 +231,8 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
           deckCount++;
           const want = parsePages(attr(t, 'data-pages'));
           const miss = (want.length ? want : []).filter((n) => !material.includes(n));
-          if (!material.length) add('kit-deck-pages', 'error', W(k, t), '교재 쪽 그림(material/p-NNN.webp)이 없어 교재 넘기기를 채울 수 없어요.', 'lecpage prepare로 쪽 그림을 만들거나 deck 자리 표시를 빼 주세요.');
-          else if (miss.length) add('kit-deck-pages', 'error', W(k, t), `교재 넘기기의 ${miss.slice(0, 6).join(', ')}${miss.length > 6 ? ' …' : ''}쪽 그림이 없어요.`, `data-pages를 있는 쪽(${material[0]}~${material[material.length - 1]}) 안으로 맞춰 주세요.`);
+          if (!material.length) add('kit-deck-pages', 'error', W(k, t), '교재 쪽 그림(material/p-NNN.webp)이 없어 교재 슬라이드를 채울 수 없어요.', 'lecpage prepare로 쪽 그림을 만들거나 deck 자리 표시를 빼 주세요.');
+          else if (miss.length) add('kit-deck-pages', 'error', W(k, t), `교재 슬라이드의 ${miss.slice(0, 6).join(', ')}${miss.length > 6 ? ' …' : ''}쪽 그림이 없어요.`, `data-pages를 있는 쪽(${material[0]}~${material[material.length - 1]}) 안으로 맞춰 주세요.`);
         }
         const el = elementAt(tags, k, html);
         if (lp !== 'materials' && textOf(html.slice(el.innerStart, el.innerEnd)).length > 0) add('kit-inner', 'warn', W(k, t), `data-lp="${lp}" 안에 적은 글은 조립 때 지워져요.`, '설명은 자리 표시 바깥(위)에 써 주세요.');
@@ -246,7 +246,7 @@ export function inspect(files = {}, meta = null, { maxPerRule = 12 } = {}) {
       }
     }
   }
-  if (deckCount > 1) add('kit-deck-many', 'warn', { file: pages[0] || '' }, `교재 넘기기(data-lp="deck")가 ${deckCount}개예요. 강사 따라 넘기기는 첫 번째만 돼요.`, '교재 넘기기는 하나만 두세요.');
+  if (deckCount > 1) add('kit-deck-many', 'warn', { file: pages[0] || '' }, `교재 슬라이드(data-lp="deck")가 ${deckCount}개예요. 강사 따라 넘기기는 첫 번째만 돼요.`, '교재 슬라이드는 하나만 두세요.');
 
   // 기능과 자리 표시
   if (meta) {

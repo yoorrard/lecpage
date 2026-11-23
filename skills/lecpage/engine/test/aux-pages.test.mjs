@@ -22,7 +22,7 @@ let srv, browser, site;
 
 /** 레퍼런스 사이트(data-lab)를 이 참여 기능 서버로 조립(kit-site.mjs) */
 const blueprint = (live) => ({ live: { features: ['qa', 'help', 'progress', 'board', 'poll', 'reactions', 'signal'], ...live } });
-/** 교재 일부만 담은 사이트(쪽 번호가 띄엄띄엄): 교재 넘기기 자리에 고른 쪽만 */
+/** 교재 일부만 담은 사이트(쪽 번호가 띄엄띄엄): 교재 슬라이드 자리에 고른 쪽만 */
 const DECK = [1, 2, 4, 8, 9, 11, 13, 15, 18];
 const sparse = () => { const s = refSite(); s['index.html'] = s['index.html'].replace('data-lp="deck" data-pages="1-18"', `data-lp="deck" data-pages="${DECK.join(',')}"`); return s; };
 before(async () => {
@@ -213,7 +213,7 @@ test('따라 넘기기: 교재 일부만 담은 사이트(1·2·4·8…쪽)도 �
     await p.waitForFunction(() => ['live', 'polling'].includes(document.querySelector('[data-live-status]')?.getAttribute('data-state')), null, { timeout: 10000 });
     const inp = c.locator('#lp-p-pres input[aria-label^="갈 쪽"]');
     assert.equal(await inp.getAttribute('aria-label'), `갈 쪽(1~${pages[pages.length - 1]})`);
-    // 참가자 교재 넘기기가 있으면 '강사 따라 넘기기'가 처음부터 켜짐
+    // 참가자 교재 슬라이드가 있으면 '강사 따라 넘기기'가 처음부터 켜짐
     await c.waitForFunction(() => LecLive.current().state.follow === true, null, { timeout: 5000 });
     assert.equal(await c.getAttribute('[data-k="follow"]', 'aria-checked'), 'true');
     const shown = () => p.evaluate(() => document.querySelector('.lp-slide.is-active')?.getAttribute('data-page'));

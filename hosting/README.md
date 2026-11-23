@@ -128,7 +128,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `APP_ORIGINS` | (없음) | `ALLOWED_ORIGINS`에 더할 앱 주소(설정 스크립트 `--app-origin`이 비밀 값으로) |
 | `DAILY_REQUEST_BUDGET` | 100000 | 하루 요청 예산(무료 요금제 한도). 넘침 단계(§4 넘침 처리): 45%부터 연수 날짜가 14일 안인 사이트·방만, 60%부터 새 사이트·새 방을 받지 않고(`rate_limited`) 남은 몫은 이미 배포한 사이트·진행 중인 연수에 씁니다. `/api/info`의 `capacity`가 단계·까닭·넘길 곳을 알려 앱이 '내 계정에 배포하기'로 안내합니다. `paid` 기본 1000000: 날마다 다 써도 월 약 $15(기본 $5 포함)인 비용 상한. 0이면 끔(그때는 Cloudflare 지출 한도만 남음) |
 | `SITES_PER_HOUR` / `SITES_PER_DAY` | 6 / 20 | 같은 IP에서 새 사이트(앱이 기기 표를 보내지 않을 때. 학교는 IP 하나를 같이 씁니다) |
-| `SITES_PER_DEVICE` | 5 (`paid`: 10) | 앱이 기기 표(`device`)를 보내면 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음) |
+| `SITES_PER_DEVICE` | 10 (`paid`: 20) | 앱이 기기 표(`device`)를 보내면 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음) |
 | `SITES_PER_HOUR_SHARED` / `SITES_PER_DAY_SHARED` | 30 / 60 | 기기 표가 있을 때 같은 IP의 상한(강사 연수에서 여럿이 공유기 하나를 써도 막히지 않게, 기기 표를 바꿔 가며 쓰는 것은 묶음) |
 | `DAILY_SITE_CAP` / `DAILY_ROOM_CAP` | `pages` 보기 200 / 100 (`paid`: 1000 / 1000), `worker` 보기 30 / 30 (`paid`: 300 / 300) | 하루에 새로 만드는 사이트, 실시간 방(전체). 차면 API가 `rate_limited`(`reason: 'daily_cap'`·`'room_cap'`, 저장 공간이 차면 `full`)로 답하고 앱은 '내 계정에 배포하기'로 안내합니다. `pages` 보기는 새 사이트 하나가 Worker 요청 약 17·저장 약 0.2MB라 크게 둠(오래 가는 한도는 저장: 200개 × 60일 ≈ 2.4GB) |
 | `PAGES_API_BUDGET` | 900 | Pages API를 5분에 이만큼까지(Cloudflare API 한도 토큰마다 5분 1,200번의 75%). 넘칠 배포는 `rate_limited` + `reason: 'pages_api'` + `retry-after`로 줄을 세움. 넘으면 그 토큰의 모든 API가 5분 막히기 때문 |
@@ -189,7 +189,7 @@ curl -s -X DELETE -H "$A" $H/api/admin/sites/<id>         # 지우기(파일·�
 | `full` | 60% 이상, 하루 상한, 저장 공간, Pages API 줄 서기 | 강사 계정으로(`reason`: `budget`·`daily_cap`·`storage`·`pages_api`) |
 | `paused` | 운영자 [새 배포 멈추기] | 강사 계정으로 |
 
-- **공정 몫**: 계정이 없으므로 앱이 보내는 기기 표(`device`)로 기기마다 하루 5개, 같은 IP는 넉넉히(시간 30·하루 60). 기기 표가 없는 예전 앱은 IP마다 시간 6·하루 20. 거절 오류에 `scope: 'you'`(이 기기·주소만 막힘)와 `'everyone'`(오늘 모두)을 나눠 줍니다.
+- **공정 몫**: 계정이 없으므로 앱이 보내는 기기 표(`device`)로 기기마다 하루 10개, 같은 IP는 넉넉히(시간 30·하루 60). 기기 표가 없는 예전 앱은 IP마다 시간 6·하루 20. 거절 오류에 `scope: 'you'`(이 기기·주소만 막힘)와 `'everyone'`(오늘 모두)을 나눠 줍니다.
 - **예약형 수용량**: 앱이 배포할 때 보낸 날짜·시간·인원·네트워크로 그날 어림을 쌓아 두고, 그날 어림이 하루 예산의 70%(`BOOK_SHARE`)를 넘으면 **그날이 아니라 만들 때** 알립니다(`reason: 'booked'`). 앱이 `caps: ['split']`을 보내면 사이트는 받고 **참여 기능 방만** 강사 계정으로 넘기라고 알리고(`live: { ok: false, next: ['cloudflare','supabase'] }`), 예전 앱에는 예전처럼 사이트까지 거절해 처음부터 내 계정으로 안내하게 합니다.
 - **오래 쓸 사이트**: 예약 없이 만든 사이트에는 `advice: { code: 'long_term' }`("내 계정에 배포하면 기간 제한이 없어요")를 같이 줍니다(막지는 않음. 바로 배포는 체험·단기 연수에 가장 좋음).
 - **Pages API 줄 서기**: 5분 창이 차면 `reason: 'pages_api'`와 `retry-after`(1~5분). 그래도 Cloudflare가 429를 주면 5분 동안 새 배포를 줄 세우고 운영자에게 알립니다.

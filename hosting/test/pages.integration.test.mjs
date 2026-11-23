@@ -398,3 +398,38 @@ test('VIEW=pages: 보관 기간이 끝나면 배포를 모두 지우고 그 주�
   assert.match(js.text, /이 사이트는 보관 기간이 끝났어요/, '사이트 파일 대신 안내 화면'); assert.match(js.headers.get('content-type') || '', /text\/html/);
   assert.equal((await get(site.altUrl)).status, 404, '두 번째 주소도 없음');
 });
+
+// 2026-11-23 실제 서버에서 찾음: 512KB를 넘는 파일(큰 쪽 그림·사진·글꼴·교재 원본)은 받을 때 바로 Pages에 올리는데, 올리기만 하고
+// 등록(upsert-hashes)하지 않아 공개할 때마다 '없는 파일'로 나와 배포가 끝나지 않았음(작은 파일만 있는 사이트는 됨). 가짜 Cloudflare도 실제처럼 고침
+test('VIEW=pages: 큰 파일(512KB 넘는 그림·교재 원본)이 든 사이트도 다시 올리기 없이 한 번에 공개됨', async (t) => {
+  if (!existsSync(join(HOSTING, 'node_modules', 'wrangler', 'bin', 'wrangler.js'))) return t.skip('wrangler가 설치되지 않았어요');
+  const cf = await startFakeCf();
+  closers.push(cf.stop);
+  let h;
+  try {
+    h = await startHost({
+      ADMIN_KEY: ADMIN, SITES_PER_HOUR: 100, SITES_PER_DAY: 1000, CATALOG_URL: 'off',
+      VIEW: 'pages', CF_ACCOUNT_ID: ACCOUNT, PAGES_PROJECT: 'lecpage-view', PAGES_TOKEN: TOKEN, PAGES_HOST: `127.0.0.1:${cf.port}`,
+      PAGES_SITE_URL: `${cf.url}/__view/{branch}/`, CF_API_BASE: cf.api,
+    });
+  } catch (e) { return t.skip(`workerd를 띄우지 못함: ${String(e.message).split('\n')[0]}`); }
+  closers.push(h.stop);
+  const base = h.url;
+  const noise = (n, head) => { const b = new Uint8Array(n); for (let i = 0; i < n; i++) b[i] = (i * 2654435761) >>> 24; b.set(head, 0); return b; };
+  const webp = (n) => noise(n, new TextEncoder().encode('RIFF\0\0\0\0WEBPVP8 '));
+  const pdf = (n) => noise(n, new TextEncoder().encode('%PDF-1.4\n'));
+  const files = {
+    'index.html': '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>큰 파일</title></head><body><main><h1>큰 파일</h1><img src="assets/img/big.webp" alt=""><a href="files/교재 원본.pdf">교재</a></main></body></html>',
+    'assets/img/small.webp': webp(40 * 1024), // 작은 파일(공개할 때 한 번에)
+    'assets/img/big.webp': webp(600 * 1024), // 512KB 넘음(받을 때 바로 Pages로)
+    'files/교재 원본.pdf': pdf(2 * 1024 * 1024),
+  };
+  const site = (await call(base, 'POST', '/api/sites', { json: { title: '큰 파일' } })).body;
+  const r = await deploy(base, site, files);
+  assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+  assert.equal(r.again, 0, '없는 파일이라며 다시 올리게 하지 않음');
+  // 두 번째 사이트가 같은 큰 파일을 쓰면 다시 올리지 않고도 공개됨(등록돼 있음)
+  const site2 = (await call(base, 'POST', '/api/sites', { json: { title: '큰 파일 2' } })).body;
+  const r2 = await deploy(base, site2, { ...files, 'index.html': files['index.html'].replace('<h1>큰 파일</h1>', '<h1>둘째</h1>') });
+  assert.equal(r2.status, 200); assert.equal(r2.again, 0);
+});

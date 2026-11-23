@@ -7,7 +7,7 @@
 | 질문·투표·나눔 보드·출석·설문 | 키트 자리 표시 | `<div data-lp="qa">` 등(`kit.md`). 연습은 `preview`, 실제로는 배포할 때 참여 기능 서버 연결 |
 | 투표를 그 자리에서 띄우기 | 강사 화면 투표 칸의 **즉석 투표** | 질문 한 줄 + 보기 → [바로 띄우기]. 참가자 화면에는 첫 투표 자리에 떠요(그래서 투표를 쓸 연수면 자리 표시를 하나 둬요) |
 | 실습 진행 현황·도움 요청 | 실습 단계 자리 표시 | `<section data-lp-step="s1" data-title="…">`에 [완료 체크]·[도움 요청]이 붙고 강사 화면이 셈 |
-| 교재 넘기기(강사 따라) | 교재 넘기기 자리 표시 | `<div data-lp="deck" data-pages="1-12">`. 쪽 그림은 `prepare`가 만든 것 |
+| 교재 슬라이드(강사 따라) | 교재 슬라이드 자리 표시 | `<div data-lp="deck" data-pages="1-12">`. 쪽 그림은 `prepare`가 만든 것 |
 | 자료 나눠 주기 | 자료실 자리 표시 | 파일은 `site/files/`, `<div data-lp="materials" data-items='[…]'>` |
 | 프롬프트 복사 단추 | 키트 런타임 | `<button type="button" data-copy-text="프롬프트 원문">복사</button>`(복사하고 알림을 띄움) |
 | QR 안내문(인쇄)·발표 화면 접속 안내 | `poster.html`·`screen.html` | 배포 뒤 `handouts <주소>` → `QR-안내문.pdf`·`발표화면.png`(`publish`가 자동으로 함) |

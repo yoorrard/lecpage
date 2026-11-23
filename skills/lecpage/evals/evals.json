@@ -76,7 +76,7 @@
       "expectations": [
         "lecpage.mjs doctor를 실행했다",
         "설치 없이 되는 길(PowerPoint에서 PDF로 저장해 prepare 교재.pptx 교재.pdf)을 먼저 안내했다",
-        "사이트 만들기를 멈추지 않았다(쪽 그림 없이도 material.md로 쓰고, 교재 넘기기 자리 표시는 쪽 그림이 생긴 뒤에)"
+        "사이트 만들기를 멈추지 않았다(쪽 그림 없이도 material.md로 쓰고, 교재 슬라이드 자리 표시는 쪽 그림이 생긴 뒤에)"
       ]
     }
   ]

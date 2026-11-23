@@ -56,7 +56,7 @@ test('앱: 그림으로 된 PDF 알림(no-text)은 교재 줄에 띄우지 않�
   assert.doesNotMatch(start, /글자를 거의 읽지 못했어요/);
 });
 
-test('글자 코드표가 없는 PDF에서 기호로 바뀐 제목은 비움(교재 넘기기 검색·강사 화면 쪽 목록)', async () => {
+test('글자 코드표가 없는 PDF에서 기호로 바뀐 제목은 비움(교재 슬라이드 검색·강사 화면 쪽 목록)', async () => {
   const { tangledTitle } = await import('../src/kit/meta.js');
   for (const t of [',-', ':0;<=', 'AI >?/@', './0']) assert.equal(tangledTitle(t), true, t);
   for (const t of ['실습 1. 제미나이로 영상 요약하기', 'C++ <iostream> 기초', 'Q&A', '#해시태그 수업', 'PART 1', '"인공지능" 이해하기']) assert.equal(tangledTitle(t), false, t);

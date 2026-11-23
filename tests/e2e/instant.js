@@ -5,7 +5,7 @@ const L = require('./lib.js');
 const BASE = process.env.BASE2 || 'http://localhost:6302/';
 const ANSWER = (script) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>바로 배포 시험</title></head><body><main><section id="a" data-title="첫 화면"><h1>바로 배포 시험</h1><div data-lp="qa"></div></section></main>' + (script ? '<script>document.documentElement.classList.add("js")</script>' : '') + '</body></html>\n```\n```json\n{"v":2,"title":"바로 배포 시험","sessions":[{"date":"2027-02-10","start":"10:00","end":"12:00"}],"features":["qa"]}\n```';
 const UNSAFE = 'index.html에 비밀번호 입력 칸이 있어요. 참가자의 비밀번호를 받는 사이트는 바로 배포할 수 없어요.';
-async function server(ctx, { siteScripts, unsafe, down }) {
+async function server(ctx, { siteScripts, unsafe, down, failPublish = 0 }) {
   const st = { calls: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
@@ -16,6 +16,10 @@ async function server(ctx, { siteScripts, unsafe, down }) {
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     st.calls.push(`${m} ${u.pathname}`);
     if (u.pathname === '/api/info') return json({ ok: true, v: 1, plan: 'free', accepting: true, view: siteScripts ? 'pages' : 'worker', keepAlive: !siteScripts, siteScripts, limits: { maxBytes: 30e6, maxFileBytes: 10e6, maxFiles: 400, days: 60 }, report: 'https://publish.mock.test/report' });
+    if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
+    if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') { st.deleted = (st.deleted || 0) + 1; return r.fulfill({ status: 204, headers: cors }); }
+    if (/\/publish$/.test(u.pathname) && failPublish > 0) { failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
+    if (/\/publish$/.test(u.pathname) && !unsafe) return json({ url: `https://s-${u.pathname.split('/')[3]}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 });
     if (u.pathname === '/api/sites' && m === 'POST') return json({ id: 'site1', key: 'k1', url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
     if (/\/deploys$/.test(u.pathname)) return json({ deploy: 'd1', missing: [] });
     if (/\/publish$/.test(u.pathname)) return unsafe ? json({ error: { code: 'unsafe_site', message_ko: UNSAFE, rule: 'password', path: 'index.html' } }, 422) : json({ url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
@@ -62,6 +66,34 @@ async function seed(p, script) {
     L.ok('server unreachable → 바로 배포 card stays, disabled with the reason', /바로 배포/.test(card) && /핫스팟/.test(card), card.replace(/\s+/g, ' ').slice(0, 160));
     L.ok('server unreachable → other places open below', await p.locator('.pub-pick .pub-opt').count() > 0);
     L.ok('no page errors ③', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ④ 배포가 중간에 실패(서버 오류) → 까닭이 화면에 남고 [다시 배포]는 같은 사이트에 이어서(새 사이트를 또 만들지 않음) → 배포 취소 → 다시 배포
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true, failPublish: 1 });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.publish [role=alert]:has-text("배포를 끝내지 못했어요")', { timeout: 30000 });
+    const note = await p.locator('.publish [role=alert]').first().innerText();
+    L.ok('failed publish → reason and next step stay on screen, instant not hidden', /응답하지 못해/.test(note) && /다시 배포/.test(note) && await p.locator('.pub-mode-main.is-on').count() === 1, note.replace(/\s+/g, ' ').slice(0, 160));
+    await p.locator('.publish [role=alert]').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-failed.png' });
+    await p.click('.publish [role=alert] button:has-text("다시 배포")');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    L.ok('retry reuses the same site (one new site only)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 배포 취소: 배포한 곳 줄의 [배포 취소] → 확인 → 실제로 지움(DELETE) → 완료 카드가 사라지고 다시 배포할 수 있음
+    await p.click('.sites .sites-x');
+    await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
+    L.ok('cancel dialog explains what stays', /다시 배포할 수 있어요/.test(await p.locator('dialog[open]').innerText()));
+    await p.screenshot({ path: L.OUT + 'instant-cancel.png' });
+    await p.click('dialog[open] button.btn-danger');
+    await p.waitForFunction(() => !document.querySelector('.success .big-url'), null, { timeout: 15000 });
+    L.ok('cancel → site really deleted and deploy record cleared', st.deleted === 1 && await p.locator('.sites .sites-x').count() === 0, `deleted ${st.deleted}`);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    L.ok('redeploy after cancel works (new site)', st.sites === 2 && /s-site2\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    L.ok('no page errors ④', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   await b.close();
   process.exit(L.summary() ? 1 : 0);

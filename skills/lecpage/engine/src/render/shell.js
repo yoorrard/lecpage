@@ -180,7 +180,7 @@ export function appShell(ctx, { title, page, bodyClass, inner, scripts = [], blu
   // pages: 교재의 실제 쪽 번호(교재 일부만 담으면 1,2,4,8…). 강사 화면은 이 번호를 보내고 참가자 화면은 같은 번호(data-page)로 찾음
   // 퀴즈 정답(answer)은 강사 화면에만: 발표 화면·참가자 화면은 강사가 공개할 때 상태(ui.ans)로 받음
   const pollItems = (s) => (page === 'console' ? s.items : s.items.map(({ answer, ...p }) => p));
-  // deck: 발표 화면이 크게 띄우고 강사 화면이 미리 보는 교재 쪽 그림 [쪽, 그림 경로, 쪽 제목](교재 넘기기가 없어도 교재 쪽 그림이 있으면)
+  // deck: 발표 화면이 크게 띄우고 강사 화면이 미리 보는 교재 쪽 그림 [쪽, 그림 경로, 쪽 제목](교재 슬라이드가 없어도 교재 쪽 그림이 있으면)
   const bpData = blueprint ? jsonScript('lp-blueprint', { sections: bp.sections.map((s) => ({ id: s.id, type: s.type, title: s.title, items: s.type === 'poll' ? pollItems(s) : undefined, slides: s.type === 'deck' ? s.slides.length : undefined, moderation: s.type === 'board' ? !!s.moderation : undefined, allowFiles: s.type === 'board' ? boardFiles(s, bp) : undefined })), stations: (bp.sections.find((s) => s.type === 'stations')?.items || []).map((x) => ({ id: x.id, name: x.name, title: x.title, ...(x.minutes ? { minutes: x.minutes } : {}) })), pages: (bp.sections.find((s) => s.type === 'deck')?.slides || []).map((x) => x.page), ...(bp.kit?.deck?.length ? { deck: bp.kit.deck } : {}) }) : '';
   return `<!doctype html>
 <html lang="ko" ${attrs({ ...htmlAttrs(ctx.design), 'data-motion': '1', 'data-page': page })}>

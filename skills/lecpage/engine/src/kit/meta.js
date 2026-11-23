@@ -119,7 +119,7 @@ export function themeFromCss(css = '') {
 /**
  * 교재에서 뽑은 쪽 제목이 엉켰는지: 제목 줄에 표 머리(열 글자 A B C …)·번호 조각이 섞이면 한 글자짜리 영문·숫자 낱말이 셋 이상 생김.
  * 글자 코드표가 없는 PDF는 한글이 ASCII 기호로 나옴(글자 없는 제목·기호가 4할 넘는 제목).
- * 엉킨 제목보다 빈 제목이 나음(교재 넘기기 캡션·강사 화면 쪽 목록). ingest(pdf.js·ingest.py)와 조립이 같은 규칙
+ * 엉킨 제목보다 빈 제목이 나음(교재 슬라이드 캡션·강사 화면 쪽 목록). ingest(pdf.js·ingest.py)와 조립이 같은 규칙
  */
 export function tangledTitle(t) {
   const s = String(t || '').trim();
@@ -132,7 +132,7 @@ export function tangledTitle(t) {
 }
 
 /**
- * 쪽 제목 고치기(lecpage.json pages): [{ page, title }] — 교재 넘기기 캡션·강사 화면 쪽 목록에 쓰는 제목.
+ * 쪽 제목 고치기(lecpage.json pages): [{ page, title }] — 교재 슬라이드 캡션·강사 화면 쪽 목록에 쓰는 제목.
  * 교재에서 뽑은 제목(prepare)이 엉키면 AI가 쪽 그림을 보고 고침. 쓴 쪽만 바뀌고, 빈 글이면 제목 없음
  */
 export function cleanPages(v, warn = () => {}) {

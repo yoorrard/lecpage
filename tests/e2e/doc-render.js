@@ -1,4 +1,4 @@
-// 교재 형식마다(PPTX·DOCX·HWP·HWPX·한글 PDF·그림으로 된 PDF) 넣기 → 쪽 그림(교재 넘기기) → AI에게 보내는 것(가짜 Claude가 받은 요청을 기록) → 조립한 사이트의 교재 쪽 그림.
+// 교재 형식마다(PPTX·DOCX·HWP·HWPX·한글 PDF·그림으로 된 PDF) 넣기 → 쪽 그림(교재 슬라이드) → AI에게 보내는 것(가짜 Claude가 받은 요청을 기록) → 조립한 사이트의 교재 쪽 그림.
 // 그림으로 된 PDF(스캔본)는 경고 없이 원본 그대로 AI에게 감. PPTX·DOCX·한글은 브라우저 안에서 그린 쪽 그림 + 보조 글자.
 // 한글 그리기 도구 본체(jsDelivr의 @rhwp/core rhwp_bg.wasm)는 설치한 파일로 대신 답함(바깥 망 없이). 못 받으면 글자 + 'PDF로 저장하는 법'.
 // 사용: BASE=http://localhost:4175/ node doc-render.js  (FIX2: 시험 교재 폴더, 기본 skills/lecpage/engine/test/fixtures)

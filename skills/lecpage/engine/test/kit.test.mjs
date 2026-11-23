@@ -77,7 +77,7 @@ test('키트: 자리 표시를 런타임이 아는 마크업으로 펼치고, �
   assert.equal(r.collected.deck.join(','), '1,2');
 });
 
-test('교재 넘기기: 쪽 그림이 16:9가 아니면(A4 세로 자료집) 키트 CSS가 그 비율로, 16:9·모르는 그림은 그대로', () => {
+test('교재 슬라이드: 쪽 그림이 16:9가 아니면(A4 세로 자료집) 키트 CSS가 그 비율로, 16:9·모르는 그림은 그대로', () => {
   // VP8X 머리(가로 909 · 세로 1287): 너비-1·높이-1을 3바이트 little-endian으로
   const a4 = new Uint8Array([82, 73, 70, 70, 22, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 88, 10, 0, 0, 0, 0, 0, 0, 0, 0x8c, 3, 0, 6, 5, 0]);
   const png169 = new Uint8Array(30); png169.set([0x89, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 5, 0, 0, 0, 2, 0xd0]); // 1280×720
@@ -421,7 +421,7 @@ test('강의 진행 키트: 교재 쪽에 묶은 투표·퀴즈 정답(강사 �
   assert.deepEqual(cp.map((p) => [p.id, p.page, p.answer]), [['chart', 2, 1], ['n', undefined, 1], ['bad', undefined, undefined]]);
   assert.ok(!JSON.stringify(scr).includes('"answer"'));
   assert.deepEqual(con.stations.map((s) => s.minutes), [30, undefined]);
-  // 교재 넘기기 자리가 없어도 발표 화면은 교재 쪽 그림을 띄움
+  // 교재 슬라이드 자리가 없어도 발표 화면은 교재 쪽 그림을 띄움
   assert.deepEqual(scr.deck.map((x) => x[0]), [1, 2, 3]); assert.equal(scr.deck[0][1], 'material/p-001.webp');
   assert.match(r.files['screen.html'], /data-scr-deck aria-label="교재" hidden>/, '시작 전에는 참여 안내(로비), 넘기면 교재(screen.js)'); assert.match(r.files['screen.html'], /data-keys-dialog/);
   // 앱 미리보기(한 장 HTML)에서도 발표 화면의 교재 쪽 그림이 열림

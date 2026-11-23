@@ -23,7 +23,7 @@ export const FONT_CSS_HOSTS = ['fonts.googleapis.com', 'cdn.jsdelivr.net', 'hang
 export const FRAME_SOURCES = ['https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
 const enc = (v) => (typeof v === 'string' ? new TextEncoder().encode(v).length : v?.byteLength || 0);
 const asText = (v) => (typeof v === 'string' ? v : v instanceof Uint8Array || v instanceof ArrayBuffer ? new TextDecoder().decode(v) : '');
-/** 그림 머리만 읽어 크기(webp·png·jpeg). 모르면 null — 교재 넘기기가 A4 세로 교재를 16:9 칸에 작게 넣지 않게 비율을 알려 줌 */
+/** 그림 머리만 읽어 크기(webp·png·jpeg). 모르면 null — 교재 슬라이드가 A4 세로 교재를 16:9 칸에 작게 넣지 않게 비율을 알려 줌 */
 function imageSize(v) {
   const b = v instanceof ArrayBuffer ? new Uint8Array(v) : v instanceof Uint8Array ? v : null;
   if (!b || b.length < 30) return null;
@@ -442,7 +442,7 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       if (missing.length) warn('deck-missing', `${where}: 교재 쪽 그림이 없는 쪽이 있어요(${missing.slice(0, 8).join(', ')}${missing.length > 8 ? ' …' : ''}). material/p-NNN.webp를 확인해 주세요.`);
       pages = pages.filter((p) => avail.includes(p));
       if (!pages.length) { warn('deck-empty', `${where}: 보여 줄 교재 쪽 그림이 없어요.`); return { html: '<p class="lp-note">교재 쪽 그림을 준비하면 여기서 넘겨 볼 수 있어요.</p>' }; }
-      if (col.deck.length) { warn('deck-many', `${where}: 교재 넘기기는 한 사이트에 하나만 강사를 따라 넘겨요.`); }
+      if (col.deck.length) { warn('deck-many', `${where}: 교재 슬라이드는 한 사이트에 하나만 강사를 따라 넘겨요.`); }
       const info = ctx.pageInfo;
       const list = pages.map((p) => ({ page: p, src: ctx.pageSrc(p), title: info[p]?.title || '', text: info[p]?.text || '' }));
       if (!col.deck.length) col.deck = list;
@@ -616,7 +616,7 @@ export function assemble(site, meta0, opts = {}) {
   }
 
   // 기능과 자리 표시가 맞는지
-  for (const [feat, has, label] of [['qa', col.qa, '질문'], ['board', col.board.length, '보드'], ['survey', col.survey.length, '설문'], ['deck', col.deck.length, '교재 넘기기'], ['attendance', col.attend, '출석']]) {
+  for (const [feat, has, label] of [['qa', col.qa, '질문'], ['board', col.board.length, '보드'], ['survey', col.survey.length, '설문'], ['deck', col.deck.length, '교재 슬라이드'], ['attendance', col.attend, '출석']]) {
     if (meta.features.includes(feat) && !has && feat !== 'attendance') warn('feature-no-slot', `features에 ${feat}가 있는데 ${label} 자리 표시(data-lp)가 없어요.`);
   }
 
@@ -647,11 +647,11 @@ export function assemble(site, meta0, opts = {}) {
   const noindex = meta.access !== 'public';
   for (const p of pages) out[p] = finishPage(expanded[p], p, { ctx, col, data, csp, noindex, live, meta, title: meta.title, hasIcon: false });
 
-  // 사이트 파일(쪽 말고) 그대로. 교재 쪽 그림은 쓰는 쪽만(교재 넘기기·전체 보기·<img>·링크·CSS·스크립트가 가리키는 쪽): 배포 용량·안 보여 줄 쪽을 줄임.
+  // 사이트 파일(쪽 말고) 그대로. 교재 쪽 그림은 쓰는 쪽만(교재 슬라이드·전체 보기·<img>·링크·CSS·스크립트가 가리키는 쪽): 배포 용량·안 보여 줄 쪽을 줄임.
   // 미리보기(앱 화면)는 그대로 다 둠. 스크립트가 쪽 그림 주소를 이어 붙여 만들면(material/p- 뒤에 숫자가 없음) 다 둠
   const usedText = [...pages.map((p) => out[p]), ...Object.entries(src).filter(([p]) => /\.(css|m?js|json)$/.test(p)).map(([, v]) => asText(v)), ...Object.entries(out).filter(([p, v]) => typeof v === 'string' && /\.(css|m?js)$/.test(p)).map(([, v]) => v)].join('\n');
   const keepAll = preview || /material\/p-(?!\d{3,4}\.)/.test(usedText.replace(/material\/p-NNN/g, ''));
-  // 발표 화면·강사 화면이 띄우는 교재 쪽(교재 넘기기 자리가 없으면 교재 전체)도 쓰는 쪽
+  // 발표 화면·강사 화면이 띄우는 교재 쪽(교재 슬라이드 자리가 없으면 교재 전체)도 쓰는 쪽
   const usedPages = new Set([...col.deck.map((x) => x.page), ...(vb.kit?.deck || []).map((x) => +x[0]), ...[...usedText.matchAll(/material\/p-(\d{3,4})\.(?:webp|png|jpe?g)/gi)].map((m) => +m[1])]);
   const droppedPages = [];
   for (const [p, v] of Object.entries(src)) {
@@ -700,7 +700,7 @@ export function assemble(site, meta0, opts = {}) {
 
 /**
  * 보조 쪽 모양(normAux가 아는 칸만 남김)에 키트가 모은 것을 더함: 투표의 교재 쪽·퀴즈 정답, 실습 시간(분),
- * 발표 화면이 띄울 교재 쪽 그림(교재 넘기기가 있으면 그 쪽들, 없으면 교재 쪽 그림 전부), 모음 위젯·사이트 스크립트 여부.
+ * 발표 화면이 띄울 교재 쪽 그림(교재 슬라이드가 있으면 그 쪽들, 없으면 교재 쪽 그림 전부), 모음 위젯·사이트 스크립트 여부.
  * shell.js(#lp-data·#lp-blueprint)가 읽음. 정답은 강사 화면에만 실림
  */
 function kitExtras(vb, col, { siteJs, materialPages, pageSrc, pageInfo }) {

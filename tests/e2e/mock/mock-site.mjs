@@ -16,7 +16,7 @@ export const PLAN = {
     { id: 'concepts', title: '프롬프트의 네 요소', purpose: '핵심 개념', outline: ['역할·목표·형식·조건(3~4쪽)'], widgets: [], pages: [3, 4], images: ['material/p-003.webp'] },
     { id: 'practice', title: '실습: 학습지 만들기', purpose: '따라 하는 단계', outline: ['1단계 접속(5쪽)', '2단계 프롬프트(6쪽)', '3단계 다듬기(7쪽)'], widgets: ['board'], pages: [5, 6, 7] },
     { id: 'share', title: '생각 나누기', purpose: '투표와 질문', outline: ['어떤 자료를 만들고 싶나요(8쪽)'], widgets: ['poll', 'qa'], pages: [8] },
-    { id: 'deck', title: '교재 보기', purpose: '강사 따라 교재 넘기기', outline: ['교재 1~13쪽'], widgets: ['deck'], pages: [1, 13] },
+    { id: 'deck', title: '교재 보기', purpose: '강사 따라 교재 슬라이드', outline: ['교재 1~13쪽'], widgets: ['deck'], pages: [1, 13] },
     { id: 'wrap', title: '자료실과 설문', purpose: '마무리', outline: ['자료 내려받기(12쪽)', '설문(13쪽)'], widgets: ['materials', 'survey'], pages: [12, 13] },
   ],
 };

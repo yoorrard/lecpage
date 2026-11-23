@@ -24,7 +24,7 @@ export default [
 @keyframes grow{from{transform:scaleX(0)}}
 @keyframes rise{from{opacity:0;transform:translateY(8vmin) scale(.94)}}
 @keyframes zoom{from{opacity:0;transform:scale(.6);letter-spacing:.2em}}`,
-    html: `<div class="sc"><div class="pb"></div><div class="big">실습 3단계</div><div class="it"><b>1. 교재 열기</b><span>교재 넘기기에서 12쪽을 펴요</span></div><div class="it"><b>2. 예시 복사</b><span>복사 버튼으로 원문을 가져와요</span></div><div class="it"><b>3. 바꿔 쓰기</b><span>대상과 분량을 바꿔 다시 물어요</span></div><div class="it"><b>4. 보드에 붙이기</b><span>가장 좋은 답을 나눠요</span></div><div class="big">끝!</div></div>`,
+    html: `<div class="sc"><div class="pb"></div><div class="big">실습 3단계</div><div class="it"><b>1. 교재 열기</b><span>교재 슬라이드에서 12쪽을 펴요</span></div><div class="it"><b>2. 예시 복사</b><span>복사 버튼으로 원문을 가져와요</span></div><div class="it"><b>3. 바꿔 쓰기</b><span>대상과 분량을 바꿔 다시 물어요</span></div><div class="it"><b>4. 보드에 붙이기</b><span>가장 좋은 답을 나눠요</span></div><div class="big">끝!</div></div>`,
     js: `autoScroll(document.querySelector('.sc'));`,
   },
   {

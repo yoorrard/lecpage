@@ -547,7 +547,13 @@ export class Site extends DurableObject {
         const pc = this.pc();
         const missing = new Set(await pc.checkMissing(items.map((x) => x.hash)));
         const up = items.filter((x) => missing.has(x.hash));
-        if (up.length) await pc.upload(up);
+        if (up.length) {
+          await pc.upload(up);
+          // 올린 열쇠를 등록(upsert-hashes): Pages는 등록한 열쇠만 '있다'고 답함. 올리기만 하면 공개할 때 check-missing이 다시 '없음'이라 해서
+          // 큰 파일(512KB 넘는 쪽 그림·사진·글꼴·교재 원본)이 든 사이트는 배포가 끝나지 않았음(2026-11-23 실제 서버에서 확인). 한 번 더 해 보고 안 되면 이 파일 받기를 실패로
+          const hashes = up.map((x) => x.hash);
+          try { await pc.upsertHashes(hashes); } catch { await new Promise((r) => setTimeout(r, 500)); await pc.upsertHashes(hashes); }
+        }
         for (const x of items) this.sql.exec('INSERT OR REPLACE INTO passet (sha, ext, phash, size) VALUES (?, ?, ?, ?)', sha, x.ext, x.hash, size);
       }
     });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Dialog } from './ui.jsx';
 import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
-import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
+import { deployGitHub, deployNetlify, deployVercel, deployInstant, deleteInstant, undeployVercel, undeployNetlify, undeployGitHub, instantInfo, instantLiveOk, instantGate, instantShare, instantRecords, recordsLine, openVercel, checkToken, tokenLooksWrong, siteStat, vercelName, PUBLISH_API, GITHUB_TOKEN_URL, NETLIFY_TOKEN_URL, VERCEL_TOKEN_URL } from '../lib/deploy.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
 import { toast, randomKey, sha256Hex, copy } from '../lib/util.js';
 import { liveSettings } from './LiveSetup.jsx';
@@ -222,6 +222,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
   // 추천: 이 망에서 닿는 첫째 곳. 망 확인은 고른 곳을 바꾸지 않고(약한 고름) 추천만 비켜 가게 해서, 바로 배포·지난번 곳이 늦게 와도 그쪽을 따름
   const best = order.find((h) => !netBad[h]) || order[0];
   const [picked, setPicked] = useState(''); // 강사가 직접 고른 곳(망 확인·늦은 답으로 바꾸지 않음)
+  const [cancel, setCancel] = useState(''); // 배포 취소 확인 창(배포한 곳 id)
+  useEffect(() => { const on = (e) => { if (p.deploy?.sites?.[e.detail] || (e.detail === 'lecpage' && p.deploy?.lecpage?.id)) setCancel(e.detail); }; addEventListener('lp-undeploy', on); return () => removeEventListener('lp-undeploy', on); });
   const [more, setMore] = useState(false); // 다른 곳에 배포하기(배포할 곳 목록 펼치기)
   const chosen = picked && order.includes(picked) ? picked : best;
   // 완료 카드의 [다른 곳에도 배포]·[바로 배포로도 배포]: 배포할 곳을 바꿔 이 칸으로 내려옴(이미 배포한 곳이 아닌 곳을 먼저)
@@ -337,7 +339,8 @@ export function Publish({ p, busy, setBusy, setProg, buildFiles, guard, done, zi
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && !instantWhy && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
-      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} records={records} freshRoom={freshRoom} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} freshRoom={freshRoom} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {cancel && <Undeploy p={p} target={cancel} info={instant} records={records} done={done} onClose={() => setCancel('')} />}
       {target === 'vercel' && <Vercel {...ctx} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
       {target === 'netlify' && <Netlify {...ctx} />}
@@ -396,12 +399,72 @@ function LiveNote({ note, where, instant, onInstant }) {
  */
 export { instantLiveOk };
 
+/** 배포한 곳의 기록 칸 이름(p.deploy.<이름>) */
+const DEPLOY_KEY = { lecpage: 'lecpage', vercel: 'vercel', 'github-pages': 'github', netlify: 'netlify', cloudflare: 'cloudflare', zip: 'zip' };
+/**
+ * 배포 취소: 배포한 곳 하나를 실제로 내림. 바로 배포는 사이트를 지우고(주소에 '강사가 사이트를 내렸어요'), Vercel·Netlify는 이 연수가 만든 프로젝트·사이트를 지우고,
+ * GitHub Pages는 Pages를 끔(저장소는 내 GitHub에 남음). 직접 올린 곳(Cloudflare·ZIP)은 앱이 내릴 수 없어 목록에서만 뺌. 연수와 만든 사이트는 그대로라 다시 배포할 수 있음
+ */
+function Undeploy({ p, target, info, records, done, onClose }) {
+  const d = p.deploy || {}; const bp = deployView(p);
+  const lec = target === 'lecpage' ? d.lecpage : null;
+  const kind = KIND[target]; const manual = !lec && !kind;
+  const label = LABEL[target] === 'ZIP 다운로드' ? '직접 올린 곳' : LABEL[target] || target;
+  const url = String(d.sites?.[target]?.url || lec?.url || '');
+  const lecUrl = info?.live?.url || '';
+  const [rec, setRec] = useState(lec ? records || null : null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  useEffect(() => { if (lec?.id) instantRecords(lec).then((r) => r && setRec(r)); }, []);
+  const recLine = recordsLine(rec);
+  const hasRoom = !!lec && (!!lec.adminKey || !!rec?.live); // 이 사이트에 참여 기능 방이 있음(기록이 지워짐)
+  const siteUrl = url.replace(/\/?$/, '/');
+  async function go() {
+    setBusy(true); setErr('');
+    try {
+      let more = null;
+      if (lec) {
+        await deleteInstant(lec);
+        if (lec.adminKey && bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl)) more = { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false };
+      } else if (kind) {
+        const { key: token } = await loadKey('deploy-' + kind);
+        if (!token) throw new Error(`${label} 토큰이 이 브라우저에 없어요. 창을 닫고 아래 [다른 곳에 배포]에서 ${label} 토큰을 다시 연결한 뒤 눌러 주세요.`);
+        if (target === 'vercel') await undeployVercel({ token, projectId: d.vercel?.projectId || d.vercel?.name || '' });
+        else if (target === 'netlify') await undeployNetlify({ token, siteId: d.netlify?.siteId || '' });
+        else await undeployGitHub({ token, repo: d.github?.repo || '' });
+      }
+      done('', { target, [DEPLOY_KEY[target] || target]: null }, more);
+      toast(manual ? '배포한 곳 목록에서 삭제했어요.' : '배포를 취소했어요. 이 주소는 더 열리지 않아요.');
+      onClose();
+    } catch (e) {
+      try { console.warn('[lecpage] 배포 취소 실패', { target, status: e.status ?? '', code: e.code || '' }); } catch { /* 기록만 */ }
+      setErr(e.status === 401 || e.status === 403 ? `${label} 토큰의 권한이 모자라거나 기한이 지났어요. 아래 [다른 곳에 배포]에서 다시 연결한 뒤 눌러 주세요.` : e.message || '배포를 취소하지 못했어요. 잠시 뒤 다시 해 주세요.');
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open onClose={() => { if (!busy) onClose(); }} label="배포 취소 확인">
+      <h2 class="h-sub">{manual ? '배포한 곳 목록에서 삭제할까요?' : `${label} 배포를 취소할까요?`}</h2>
+      {url && <p class="small"><b>{label}</b> · <span style={{ wordBreak: 'break-all' }}>{url}</span></p>}
+      {manual
+        ? <p>직접 배포한 곳은 여기서 내릴 수 없어요. 배포한 곳에서 사이트를 지운 뒤 이 목록에서 삭제해 주세요.</p>
+        : <p>{lec ? "주소와 QR이 바로 끊기고 되돌릴 수 없어요. 참가자에게는 '강사가 사이트를 내렸어요'가 보여요." : target === 'github-pages' ? '이 주소가 더 열리지 않아요. 저장소와 파일은 내 GitHub에 남아요.' : `이 주소가 더 열리지 않아요. 내 ${label}에서 이 사이트가 지워져요.`}</p>}
+      <p class="small">연수와 만든 사이트는 그대로 남아 언제든 다시 배포할 수 있어요.</p>
+      {hasRoom && <p>참가자가 남긴 기록{recLine ? `(${recLine})` : '(출석·질문·보드·설문)'}도 함께 지워져요. 이수 처리에 쓸 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</p>}
+      {err && <p class="notice bad" role="alert">{err}</p>}
+      <div class="btn-row">
+        <button class="btn btn-quiet" data-autofocus disabled={busy} onClick={onClose}>닫기</button>
+        {hasRoom && <a class="btn" href={siteUrl + 'console.html'} target="_blank" rel="noopener" onClick={() => lec.adminKey && copy(lec.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
+        <button class="btn btn-danger" disabled={busy} onClick={go}>{busy ? '취소하는 중…' : manual ? '목록에서 삭제' : '배포 취소'}</button>
+      </div>
+    </Dialog>
+  );
+}
+
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, onUnavailable }) {
+function Instant({ p, busy, start, done, bind, info, gate, freshRoom, onUnavailable }) {
   const prev = p.deploy?.lecpage;
   const [refused, setRefused] = useState(null); // 바로 배포가 거절한 까닭 { t: 서버 문구 그대로, pre: 올리기 전에 미리 본 것 }
-  const [ask, setAsk] = useState(false); // [사이트 삭제] 확인 창
-  const [rec, setRec] = useState(null); // 그 창에 보일 참여 기록 수(열 때 한 번 물음)
+  const [failed, setFailed] = useState(null); // 배포를 끝내지 못함 { t: 까닭, how: 할 일 }(까닭을 화면에 남기고 [다시 배포]로 이어 감)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
   const bp = deployView(p);
@@ -429,7 +492,8 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     const m = bp.meta || {};
     const booking = m.date ? { date: m.date, start: m.start || '', end: m.end || '', people: p.info?.size || 30, network: p.info?.network || 'good', live: autoLive } : null;
     // 그날 참여 기능 방이 차면 사이트는 그대로 배포: 강사가 연결한 서버가 있으면 그것으로, 없으면 참여 기능을 뺀 사이트로(연결한 뒤 다시 배포)
-    const out = await deployInstant({ site: prev, title: p.title, files, live, booking, onProgress, onLiveOff: () => rebuild(own ? {} : { liveOff: true }) });
+    setFailed(null);
+    const out = await deployInstant({ site: prev, tryKey: p.id, title: p.title, files, live, booking, onProgress, onLiveOff: () => rebuild(own ? {} : { liveOff: true }) });
     const lecLive = autoLive && !out.liveOff;
     const off = out.liveOff ? { ...out.liveOff, at: Date.now() } : !lecLive && liveOff && own ? liveOff : null; // 연결한 서버로 넘긴 동안은 그대로 기억
     const wasLec = bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl);
@@ -447,20 +511,17 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
     // 붐빔(서버가 까닭을 줌: 오늘 모두 / 이 기기·이 인터넷만)·저장 공간이 참: 서버 문구 그대로 두고 내 계정에 배포하는 길로(넘길 곳은 서버가 준 순서).
     // 줄 서기(pages_api)는 deployInstant가 이미 기다렸다가 다시 했음. 까닭 없는 rate_limited(이 사이트를 너무 자주 올림)는 알림만
     if ((e.reason && e.reason !== 'pages_api') || e.code === 'full') { onUnavailable?.({ t: e.message, next: e.next }); return true; }
-    if (e.status === 0 || e.status >= 500) { onUnavailable?.({ t: '바로 배포 서버에 지금 닿지 않아요.' }); return true; }
-    return false;
+    // 그 밖(인터넷이 끊김·서버 오류·파일을 다 못 올림 등): 다른 곳으로 말없이 넘기지 않고 까닭과 할 일을 화면에 남김. 만들던 사이트는 그대로 두어 [다시 배포]가 이어서 함
+    const again = '[다시 배포]를 누르면 올린 데부터 이어서 해요.';
+    setFailed(e.status === 0 ? { t: e.message, how: e.blocked ? '' : `인터넷이 다시 연결되면 ${again}` }
+      : e.status >= 500 ? { t: '바로 배포 서버가 지금 응답하지 못해 배포가 멈췄어요.', how: `잠시 뒤 ${again}` }
+      : e.code === 'missing_blobs' ? { t: '파일을 다 올리지 못했어요.', how: again }
+      : e.code === 'runtime_mismatch' ? { t: e.message, how: '' }
+      : { t: e.message || '배포를 끝내지 못했어요.', how: again });
+    return true;
   },
   autoLive ? { live: { provider: 'http', url: lecUrl, anonKey: '', ...(newCode ? { code: newCode } : {}) }, processor: { name: 'lecpage 운영자(바로 배포 서버 · Cloudflare)', contact: 'hello@lecpage.com', country: '미국 등 Cloudflare 데이터센터가 있는 국가', /* copy-ok: 개인정보 처리방침 표의 칸(법률 문서라 명사형). 참여 기록의 보관 기간은 안내 3(마지막 기록 뒤 N일, 늦어도 사이트와 함께) */ purpose: `강사를 대신해 사이트와 참여 기록 저장(사이트는 마지막 ${info?.keepAlive === false ? '배포' : '배포나 방문'} 뒤 ${days}일 보관)` } } : null);
   bind(() => run());
-  async function remove() {
-    setAsk(false);
-    try { await deleteInstant(prev); done('', { lecpage: null }, prev.adminKey && bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl) ? { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false } : null); toast('사이트를 삭제했어요.'); }
-    catch (e) { toast('삭제하지 못했어요. ' + e.message); }
-  }
-  const askRemove = () => { setRec(records || null); setAsk(true); instantRecords(prev).then((r) => r && setRec(r)); };
-  const recLine = recordsLine(rec);
-  const hasRoom = !!prev?.adminKey || !!rec?.live; // 이 사이트에 참여 기능 방이 있음(기록이 지워짐)
-  const siteUrl = String(prev?.url || p.deploy?.lastUrl || '').replace(/\/?$/, '/');
   return (
     <div class="stack">
       {gate?.note && busy !== 'lecpage' && <p class="small" role="status">{gate.note}</p>}
@@ -472,20 +533,16 @@ function Instant({ p, busy, start, done, bind, info, gate, records, freshRoom, o
         <span class="small">수정 화면의 꼭 고칠 곳에서 [AI로 수정]을 누르거나, 미리보기에서 직접 고친 뒤 다시 배포해 주세요.</span>
         <div class="btn-row"><a class="btn btn-sm btn-primary" href={`#/p/${p.id}/2`} onClick={() => { try { sessionStorage.setItem('lecpage:studio-tab', 'check'); } catch { } }}>수정하러 가기</a><button type="button" class="btn btn-sm btn-quiet" onClick={() => setRefused(null)}>닫기</button></div>
       </div></div>}
-      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); run(); }} />
+      {failed && busy !== 'lecpage' && <div role="alert" class="notice bad"><div class="stack" style={{ gap: '6px' }}>
+        <b>배포를 끝내지 못했어요.</b>
+        <span>{failed.t}{failed.how ? ` ${failed.how}` : ''}</span>
+        <span class="small">계속 안 되면 [다른 곳에 배포]로 같은 파일을 그대로 배포할 수 있어요.</span>
+        <div class="btn-row"><button type="button" class="btn btn-sm btn-primary" onClick={() => { setFailed(null); setRefused(null); run(); }}>다시 배포</button><button type="button" class="btn btn-sm" onClick={() => window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'other' }))}>다른 곳에 배포</button><button type="button" class="btn btn-sm btn-quiet" onClick={() => setFailed(null)}>닫기</button></div>
+      </div></div>}
+      <Go on={busy === 'lecpage'} busy={busy} again={!!alive} onClick={() => { setRefused(null); setFailed(null); run(); }} />
       {gate?.hint && <p class="small muted">{gate.hint}</p>}
-      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={askRemove}>사이트 삭제</button></p>}
+      {alive && <p class="small muted">다시 배포해도 주소는 그대로예요. <button type="button" class="btn btn-sm btn-quiet" aria-haspopup="dialog" onClick={() => window.dispatchEvent(new CustomEvent('lp-undeploy', { detail: 'lecpage' }))}>배포 취소</button></p>}
       {alive && prev.longTerm && !bp.meta?.date && <p class="small muted">오래 쓸 사이트면 내 계정에 배포하세요. 기간 제한이 없어요(바로 배포는 {days}일).</p>}
-      <Dialog open={ask} onClose={() => setAsk(false)} label="사이트 삭제 확인">
-        <h2 class="h-sub">사이트를 삭제할까요?</h2>
-        <p>주소와 QR이 바로 끊기고 되돌릴 수 없어요. 참가자에게는 '강사가 사이트를 내렸어요'가 보여요.</p>
-        {hasRoom && <p>참가자가 남긴 기록{recLine ? `(${recLine})` : '(출석·질문·보드·설문)'}도 함께 지워져요. 이수 처리에 쓸 출석·설문은 먼저 강사 화면에서 CSV로 받아 두세요.</p>}
-        <div class="btn-row">
-          <button class="btn btn-quiet" data-autofocus onClick={() => setAsk(false)}>닫기</button>
-          {hasRoom && <a class="btn" href={siteUrl + 'console.html'} target="_blank" rel="noopener" onClick={() => prev.adminKey && copy(prev.adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면 열기</a>}
-          <button class="btn btn-danger" onClick={remove}>사이트 삭제</button>
-        </div>
-      </Dialog>
     </div>
   );
 }

@@ -390,12 +390,25 @@ export function instantStatus({ date = '', site = '' } = {}) {
  * @returns {Promise<{url, altUrl?, view?, id, key, expiresAt, liveUrl?, liveOff?, advice?}>} altUrl: 학교망에서 첫 주소가 막힐 때 쓸 두 번째 주소,
  *   liveOff: { reason, day, next } 사이트는 바로 배포, 참여 기능은 강사 계정(next 순서), advice: 오래 쓸 사이트면 내 계정을 권함(새로 만들 때)
  */
-export async function deployInstant({ site, title, files, live = null, booking = null, onLiveOff = null, onProgress = () => { } }) {
+/** 배포를 끝내지 못한 바로 배포 사이트(연수마다 하나, 이 탭 동안만): 다시 누르면 새로 만들지 않고 이 사이트에 이어서 올림 */
+const instantTries = new Map();
+export async function deployInstant(o) {
+  let step = '준비';
+  const onProgress = o.onProgress || (() => { });
+  try { return await deployInstantRun({ ...o, onProgress: (x) => { if (x?.step) step = x.step; onProgress(x); } }); }
+  catch (e) {
+    // 어디서 멈췄는지(개발자용 기록. 키·파일 내용은 적지 않음). 화면에는 Publish.jsx가 쉬운 말로 보임
+    try { e.step = e.step || step; console.warn('[lecpage] 바로 배포 실패', { step: e.step, code: e.code || '', status: e.status ?? '', reason: e.reason || '' }); } catch { /* 기록만 */ }
+    throw e;
+  }
+}
+async function deployInstantRun({ site, title, files, live = null, booking = null, onLiveOff = null, onProgress = () => { }, tryKey = '' }) {
   let pct = 2;
   const progress = (step, at = pct) => { pct = at; onProgress({ step, pct }); };
   const queued = inLine(progress);
   progress('준비');
-  let s = site?.id && site?.key ? site : null;
+  const first = site?.id && site?.key ? site : (tryKey && instantTries.get(tryKey)) || null; // 지난번에 만들다 만 사이트
+  let s = first;
   let liveOff = null; let advice = null;
   const off = (x) => { liveOff = { reason: x.reason || 'booked', day: x.day || booking?.date || '', next: x.next || x.liveNext || ['cloudflare', 'supabase'] }; };
   const newSite = async () => {
@@ -411,7 +424,8 @@ export async function deployInstant({ site, title, files, live = null, booking =
       throw e;
     }
   };
-  if (!s) s = await newSite();
+  const keep = (x) => { if (tryKey && x?.id && x?.key) instantTries.set(tryKey, { id: x.id, key: x.key, url: x.url, expiresAt: x.expiresAt }); return x; };
+  if (!s) s = keep(await newSite());
   let blobs; let manifest;
   /** 올릴 파일 목록(sha256). 참여 기능을 넘겨야 하면 이 서버의 참여 기능을 뺀 파일로 먼저 다시 만듦 */
   const prepare = async () => {
@@ -434,8 +448,9 @@ export async function deployInstant({ site, title, files, live = null, booking =
   try { dp = await deploys(); }
   catch (e) {
     // 보관 기간이 끝나 지워진 사이트면 새 주소로 다시 만듦
-    if (!(site && (e.status === 404 || e.status === 401))) throw e;
-    s = await newSite();
+    if (!(first && (e.status === 404 || e.status === 401))) throw e;
+    if (tryKey) instantTries.delete(tryKey);
+    s = keep(await newSite());
     await prepare();
     dp = await deploys();
   }
@@ -469,8 +484,23 @@ export async function deployInstant({ site, title, files, live = null, booking =
     }
   }
   progress('완료', 100);
+  if (tryKey) instantTries.delete(tryKey);
   track('publish', 'instant');
   return { url: out.url || s.url, ...(out.altUrl ? { altUrl: out.altUrl } : {}), ...(out.view ? { view: out.view } : {}), id: s.id, key: s.key, expiresAt: out.expiresAt || s.expiresAt || 0, liveUrl, ...(liveOff ? { liveOff } : {}), ...(advice ? { advice } : {}) };
+}
+/** 배포 취소(Vercel): 이 연수가 만든 프로젝트를 지움(주소가 더 열리지 않음). 이미 없으면 그대로 끝 */
+export async function undeployVercel({ token, projectId }) {
+  try { await vc(token, 'DELETE', `/v9/projects/${encodeURIComponent(projectId)}`); } catch (e) { if (e.status !== 404) throw e; }
+}
+/** 배포 취소(Netlify): 이 연수가 만든 사이트를 지움 */
+export async function undeployNetlify({ token, siteId }) {
+  const r = await net(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+  if (!r.ok && r.status !== 404) { const e = new Error(NF_ERR[r.status] || `Netlify 오류 ${r.status}`); e.status = r.status; throw e; }
+}
+/** 배포 취소(GitHub Pages): Pages만 끔(주소가 더 열리지 않음). 저장소와 파일은 내 GitHub에 그대로 남음 */
+export async function undeployGitHub({ token, repo }) {
+  const me = await gh(token, 'GET', '/user');
+  try { await gh(token, 'DELETE', `/repos/${me.login}/${encodeURIComponent(repo)}/pages`); } catch (e) { if (e.status !== 404) throw e; }
 }
 /** 바로 배포한 사이트 지우기 */
 export const deleteInstant = (site) => ip('DELETE', `/api/sites/${site.id}`, { key: site.key });

@@ -43,7 +43,7 @@ export default [
 .bd{padding:.8vmin 0 3vmin}.bd b{font-size:3.2vmin}.bd p{margin:.4vmin 0 0;font-size:2.4vmin;color:#777}
 .cp{margin-top:1.2vmin;display:flex;align-items:center;gap:1.4vmin;background:#fff;border:1px solid #e5dfd3;border-radius:1.2vmin;padding:1.2vmin 1.6vmin;font:2.2vmin ui-monospace,monospace;color:#444}
 .cp span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp i{font-style:normal;font-family:'IBM Plex Sans KR';font-weight:600;color:#1c1b1a}`,
-    html: `<div class="w"><div class="st dn"><div class="n"><b>1</b></div><div class="bd"><b>교재 12쪽 펴기</b><p>교재 넘기기에서 강사를 따라가요</p></div></div><div class="st on"><div class="n"><b>2</b></div><div class="bd"><b>예시 프롬프트 붙여 넣기</b><div class="cp"><span>너는 중학교 과학 교사야. 1학년 첫 시간…</span><i>복사</i></div></div></div><div class="st"><div class="n"><b>3</b></div><div class="bd"><b>결과를 보드에 붙이기</b><p>가장 좋은 답 한 개만</p></div></div></div>`,
+    html: `<div class="w"><div class="st dn"><div class="n"><b>1</b></div><div class="bd"><b>교재 12쪽 펴기</b><p>교재 슬라이드에서 강사를 따라가요</p></div></div><div class="st on"><div class="n"><b>2</b></div><div class="bd"><b>예시 프롬프트 붙여 넣기</b><div class="cp"><span>너는 중학교 과학 교사야. 1학년 첫 시간…</span><i>복사</i></div></div></div><div class="st"><div class="n"><b>3</b></div><div class="bd"><b>결과를 보드에 붙이기</b><p>가장 좋은 답 한 개만</p></div></div></div>`,
     js: `var ss=document.querySelectorAll('.st'),k=1;function go(){ss.forEach(function(s,i){s.classList.toggle('dn',i<k);s.classList.toggle('on',i===k);s.querySelector('.n b').textContent=i<k?'✓':i+1})}go();if(!RM)setInterval(function(){k=(k+1)%4;go()},1500);`,
   },
   {
@@ -110,7 +110,7 @@ small{font-size:2.4vmin;color:#aaa}
   {
     id: 'deck-strip', ko: '교재 쪽 띠', en: 'Slide Strip / Follow Along',
     desc: '교재 쪽 그림을 띠로 늘어놓고 강사가 설명하는 쪽을 따라 표시가 움직여요.',
-    fit: "교재 넘기기와 함께: '교재 8쪽' 태그를 누르면 그 쪽으로, 강사 따라가기를 켜면 저절로.",
+    fit: "교재 슬라이드와 함께: '교재 8쪽' 태그를 누르면 그 쪽으로, 강사 따라가기를 켜면 저절로.",
     tech: '쪽 그림 가로 띠(scroll-snap) + 지금 쪽 테두리·확대 + scrollIntoView({inline:"center"}) + "교재 N쪽" 꼬리표 링크',
     tags: ['교재', '쪽 그림', '따라가기', '띠'],
     f: F,

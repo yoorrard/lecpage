@@ -12,7 +12,7 @@ export const SAVE = '바쁜 강사님의 시간과 토큰을 아껴드립니다'
 const LOOKS = ['편집·잡지', '스위스 격자', '포스터·움직이는 글자', '리소그래프', '셰이더 빛·유체', '네온·유리', '3D 공간', '생성 예술',
   '손그림 공책', '설계도', '데이터 시각화', '콜라주', '픽셀 아케이드', '칠판', '지도·답사', '따뜻한 미니멀'];
 // 강의 엔진이 사이트에 끼우는 것(engine/src/kit)과 함께 만드는 화면. 아이콘은 icons.jsx
-const MODS = [['deck', '교재 넘기기'], ['check', '출석'], ['chat', '질문'], ['bars', '투표'], ['quiz', '퀴즈'], ['board', '나눔 보드'],
+const MODS = [['deck', '교재 슬라이드'], ['check', '출석'], ['chat', '질문'], ['bars', '투표'], ['quiz', '퀴즈'], ['board', '나눔 보드'],
   ['steps', '실습 단계'], ['copy', '프롬프트 복사'], ['folder', '자료실'], ['heart', '만족도 조사'], ['monitor', '발표 화면'], ['console', '강사 화면']];
 // 미리보기 칸의 예시(대표 사례 '질문이 먼저, AI는 그다음'의 교재 쪽·투표 그대로, 질문 글과 수는 보여 주기용 예시)
 const DECK = [1, 3, 5]; // 넘겨 보일 교재 쪽(showcases.js SLIDES 안의 쪽)
@@ -26,7 +26,7 @@ function Words({ text }) {
 }
 
 /**
- * 강의 엔진 미리보기(꾸밈, aria-hidden): 실제 사이트에 들어가는 기능 넷을 작게 — 교재 넘기기 · 투표 · 질문 · 출석.
+ * 강의 엔진 미리보기(꾸밈, aria-hidden): 실제 사이트에 들어가는 기능 넷을 작게 — 교재 슬라이드 · 투표 · 질문 · 출석.
  * 화면에 들어오면 막대·고리·수가 한 번 차오르고(is-in), 보이는 동안만 교재 쪽이 3초마다 넘어가요. 동작 줄이기면 끝 모습으로 멈춤.
  */
 function EngineDemo() {
@@ -44,7 +44,7 @@ function EngineDemo() {
     <div class="ld-eng" ref={box} aria-hidden="true">
       <div class="ld-eng-col">
         <div class="ld-ui ld-ui-deck">
-          <p class="ld-ui-h"><Ic n="deck" />교재 넘기기<span class="ld-ui-live">강사 따라</span></p>
+          <p class="ld-ui-h"><Ic n="deck" />교재 슬라이드<span class="ld-ui-live">강사 따라</span></p>
           <div class="ld-ui-slides">{DECK.map((n, j) => { const s = shot(`slide-${n}`); return <img class={j === k ? 'is-on' : ''} src={s.src} width={s.w} height={s.h} alt="" loading="lazy" decoding="async" key={n} />; })}</div>
           <p class="ld-ui-pg"><i style={{ '--v': pg / 17 }} /><b>{pg}</b> / 17</p>
         </div>

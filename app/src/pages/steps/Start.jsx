@@ -83,7 +83,7 @@ function useIngest(p, update, first = []) {
         }
       }
       const errors = (material.errors || []).map((e) => e.message_ko);
-      // 쪽 그림(교재 넘기기·AI에게 보낼 그림): PDF·커넥트가 만든 PDF는 pdf.js로, PPTX·DOCX·한글은 브라우저 안에서 그림
+      // 쪽 그림(교재 슬라이드·AI에게 보낼 그림): PDF·커넥트가 만든 PDF는 pdf.js로, PPTX·DOCX·한글은 브라우저 안에서 그림
       const pdfBytes = errors.length ? null : ext === 'pdf' ? bytes : conv?.ok ? conv.pdf : null;
       let shots = []; let whole = false; // whole: 끝까지 그림(중지 없이)
       if (pdfBytes || (!errors.length && !twin && ing.canRenderDoc(f.name))) {

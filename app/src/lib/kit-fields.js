@@ -2,7 +2,7 @@
 // 속성 ↔ 입력 값만 바꾸는 순수 함수(DOM 없음, 노드 시험 engine/test/app-studio.test.mjs에서 바로 부름).
 // 읽기(readKit)는 조립(engine kit/assemble.js)이 읽는 규칙과 같게, 쓰기(writeKit)는 바꿀 속성만 { 이름: 값 | null(뺌) }으로.
 
-export const KIT_LABEL = { poll: '투표', qa: '질문', board: '나눔 보드', attend: '출석', survey: '설문', deck: '교재 넘기기', materials: '자료실', join: '접속 QR', share: 'QR 공유', notebook: '모음', dock: '참여 막대', now: '지금 줄', step: '실습 단계' };
+export const KIT_LABEL = { poll: '투표', qa: '질문', board: '나눔 보드', attend: '출석', survey: '설문', deck: '교재 슬라이드', materials: '자료실', join: '접속 QR', share: 'QR 공유', notebook: '모음', dock: '참여 막대', now: '지금 줄', step: '실습 단계' };
 /** 설정 칸이 있는 것(나머지는 이름표만) */
 export const SETTABLE = new Set(['poll', 'board', 'survey', 'deck', 'materials', 'step']);
 /** [＋ 기능 넣기]로 섹션 끝에 넣을 수 있는 것 */

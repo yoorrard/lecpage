@@ -14,7 +14,7 @@
 | AI가 하는 일 | lecpage가 하는 일 |
 |---|---|
 | 교재 원본·쪽 그림을 읽고 내용·흐름·디자인 의도를 이해 | 교재를 AI가 읽기 좋은 꼴로 건넴(원본 PDF 그대로, 쪽 그림, 보조 글자) |
-| 강의 흐름·페이지 구성·필요한 기능 결정 | 강의 전용 기능 모음(키트): 질문·투표·보드·출석·설문·도움 요청·반응·타이머·공지·교재 넘기기·자료실·접속 QR |
+| 강의 흐름·페이지 구성·필요한 기능 결정 | 강의 전용 기능 모음(키트): 질문·투표·보드·출석·설문·도움 요청·반응·타이머·공지·교재 슬라이드·자료실·접속 QR |
 | 디자인·HTML·CSS·JS 작성, 고치기 | 조립: 키트 끼우기·보안 정책(CSP)·응답 머리글·강사 화면·발표 화면·QR 안내문·접속 확인·개인정보 안내·일정 파일 |
 | (선택) 레퍼런스에서 영감 | 레퍼런스: 완성도 높은 강의 사이트 사례(참고용, 따를 의무 없음) |
 | 검수 결과를 보고 스스로 고침 | 검수: 깨진 곳·넘침·대비·빈 칸·키트 표시 오류 → AI에게 돌려줌 |
@@ -59,7 +59,7 @@ lecpage.json        연수 정보·참여 기능 설정(아래)
 - **강사 값**: `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`에 더해 `surveyUrl`(기관 설문)·`privacy`(받을 정보·보관 기간)·`keepUntil`도. AI 답·남이 준 파일에 있어도 버리고 이전 값(`prev`)을 지킴(엔진 `keepTeacherLinks`와 같은 규칙, `kit/meta.js` `keepTeacherValues`). Skill은 강사 값을 `work/lecpage.teacher.json`에 따로 둠.
 - `live` 꼴은 v1과 같음: `{ provider:'local'|'http'|'supabase'|'sheets', url, code, anonKey, anonymous?, pollMs?, uploads? }`. 없으면 기능이 켜져 있을 때 `local`(이 기기 안 연습, v1과 같음).
 - 날짜 `YYYY-MM-DD`(달력에 있는 날)·시각 `HH:MM`. `2026.12.3`·`9:00`은 고쳐 받고, 틀리면 그 칸만 비우고 알림. `mode`는 `hybrid`도 `blended`로 받음.
-- 선택 칸(AI): `organizer`·`contact`·`description`·`admin{kind,hours,completionRate}`(직무연수 이수 기준)·`theme.radius`·`theme.fontHeading`(제목 글꼴: 보조 쪽 제목에도)·`pages:[{page,title}]`(쪽 제목 고치기: 교재에서 뽑은 제목 위에 덮어 교재 넘기기 캡션·강사 화면 쪽 목록에 씀, 쓴 쪽만·빈 글이면 제목 없음). `features`에는 `signal`·`progress`도 쓸 수 있음.
+- 선택 칸(AI): `organizer`·`contact`·`description`·`admin{kind,hours,completionRate}`(직무연수 이수 기준)·`theme.radius`·`theme.fontHeading`(제목 글꼴: 보조 쪽 제목에도)·`pages:[{page,title}]`(쪽 제목 고치기: 교재에서 뽑은 제목 위에 덮어 교재 슬라이드 캡션·강사 화면 쪽 목록에 씀, 쓴 쪽만·빈 글이면 제목 없음). `features`에는 `signal`·`progress`도 쓸 수 있음.
 - `theme`은 AI가 고른 색·글꼴. 강사 화면·발표 화면·QR 안내문이 이 색을 이어받음(밝은·어두운 바탕에 맞는 기본 틀 + 강조색·바탕·글자색·본문·제목 글꼴, 장식색도 이 셋을 섞은 색만, 밝게·어둡게 단추의 반대쪽은 바탕과 글자를 맞바꿈). `theme`이 비면 사이트 CSS의 `--lp-*`(`--lp-font-heading` 포함) 값을 씀.
 
 ## 4. 강의 전용 기능 키트 (약속 B)
@@ -71,7 +71,7 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 <div data-lp="board" data-prompt="…"></div>       보드(글·사진)
 <div data-lp="attend"></div>                      출석(입실·퇴실)
 <div data-lp="survey" data-questions='[…]'></div> 설문(별점·객관식·주관식)
-<div data-lp="deck" data-pages="1-12"></div>      교재 넘기기(강사 따라 넘기기)
+<div data-lp="deck" data-pages="1-12"></div>      교재 슬라이드(강사 따라 넘기기)
 <div data-lp="materials"></div>                   자료실(강사가 올린 파일·링크)
 <div data-lp="join"></div>                        접속 QR·코드
 <div data-lp="share"></div>                       QR 공유 단추(대화상자)
@@ -79,7 +79,7 @@ AI는 사이트 어디에나 **자리 표시**를 넣고, 조립이 그 자리�
 ```
 - 속성(조립 뒤에는 빠짐): 투표 `data-kind="choice|word|scale"`·`data-id`(강사 화면 아이디, 없으면 p1·p2…), 보드 `data-categories='["…"]'`·`data-files="0~8"`·`data-moderation`, 설문 `data-questions='[{"q","kind":"scale|choice|text","options"}]'`(없으면 기본 문항), 교재 `data-pages`(없으면 있는 쪽 전부), 자료실 `data-items='[{"title","href","desc"}]'`(+ 앱이 넘기는 `materials`).
 - 자리 표시 요소는 그대로 두고(class·id·배치는 AI 것) 안을 채움: `class="lpk lpk-w lpk-<종류>"`, 아이디가 없으면 `id="lpk-<종류>"`. 안에 쓴 글은 지움(자료실만 남김). 실습 단계에는 `class="lp-st" data-st` + `#st-<아이디>` 앵커 + 끝에 [완료 체크]·[도움 요청].
-- 투표 자리는 여럿 둘 수 있음(열린 투표는 그 문항이 적힌 자리에, 즉석 투표는 첫 자리). 보드·교재 넘기기는 실시간으로 첫 자리 하나만.
+- 투표 자리는 여럿 둘 수 있음(열린 투표는 그 문항이 적힌 자리에, 즉석 투표는 첫 자리). 보드·교재 슬라이드는 실시간으로 첫 자리 하나만.
 - 참여 막대(도크: 출석·질문·도움 요청·반응)와 '지금' 띠(공지·타이머·투표 알림)는 `features`에 있으면 조립이 자동으로 붙임. AI가 `<div data-lp="dock">`·`<div data-lp="now">`로 자리를 정할 수도 있음. 저절로 붙은 '지금' 띠는 화면 아래(도크 바로 위)에 떠서 사이트 머리를 가리지 않음.
 - 키트 모양은 사이트 CSS 변수 `--lp-accent --lp-ink --lp-paper --lp-font --lp-radius`를 따름(없으면 `theme` 값, 그것도 없으면 주변 글자색·글꼴). 강조색 위 글자는 강조색 밝기로 흰색·검정을 고름(상대 색 문법, `--lp-on-accent`로 정할 수 있음). 키트 CSS는 `.lpk` 아래에만 적용돼 AI의 CSS를 건드리지 않음.
 - 실습 진행 표시(선택): `data-st-link`(단계 링크)·`data-st-count`(끝낸 수)·`data-st-progress`(막대, 최대는 단계 수)를 런타임이 채움.
@@ -98,7 +98,7 @@ inspectRendered(page|window) → issues[]    // 그려서 검사(Playwright·브
 // issue: { id, level:'error'|'warn', where:{ file, selector, section }, message_ko, fix_hint_ko }
 previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미리보기·숨은 틀(CSS·JS·그림을 안으로, CSP meta 뺌)
 ```
-- 구현(`engine/src/kit/`, `E.kit.*`): `prev` = 강사 값, `material.pages` = 쪽 제목(교재 넘기기 검색), `materials` = 앱 자료실 목록. `collected` = 모은 투표·실습 단계·교재 쪽 등(앱 목록 화면용).
+- 구현(`engine/src/kit/`, `E.kit.*`): `prev` = 강사 값, `material.pages` = 쪽 제목(교재 슬라이드 검색), `materials` = 앱 자료실 목록. `collected` = 모은 투표·실습 단계·교재 쪽 등(앱 목록 화면용).
 - 그려서 검사는 의존성 없는 함수 `inspectRendered({ doc, file })`(+ 글 `inspectRenderedSource`, 숨은 틀용 `inspectRenderedScript({ id })` → 부모에 `{type:'lp-inspect', id, width, issues}`), Playwright 도우미 `inspectPage(page, url, { widths:[390,1280], shots })`. `where.width`가 붙음.
 - 보조 쪽·`#lp-data`·`#lp-blueprint`는 연수 정보와 모은 것으로 보조 쪽 모양을 만들어 `kit/aux-build.js`(`normAux`·`buildAux`)가 보조 쪽 렌더러(`render/aux-pages.js`)로 그림. 처음에는 예전 엔진의 `build`를 빌려 썼고, 템플릿을 지울 때 보조 쪽에 필요한 부분만 옮김(2026-11-20).
 - CSP(AI 쪽): `script-src 'self'`+고정 라이브러리 · `style-src 'self' 'unsafe-inline'`+글꼴 CDN · `img-src 'self' data: blob:`+참여 서버(보드 사진) · `connect-src 'self'`+참여 서버 · `frame-src` youtube-nocookie·vimeo · `form-action 'none'` · `object-src`·`worker-src 'none'` · `base-uri 'none'`. `file:`은 USB·ZIP으로 열 때를 위해 엔진처럼 둠. `_headers`는 이 CSP를 AI 쪽 경로(`/`·`/index.html`·`/<쪽>`)에만 붙이고, 보조 쪽은 엔진 CSP(접속 확인은 바깥 도구를 재야 해서 `connect-src https:`)를 그대로.
@@ -148,7 +148,7 @@ previewHtml(files, page, { extraHead, extraBody }) → 한 장 HTML   // 앱 미
 - 고칠 때도 같은 창: 고칠 섹션 HTML만 담은 요청 글 → 답의 섹션만 갈아 끼움.
 
 ## 8. 완성 뒤 편집 화면
-> 상태(2026-11-21): 탭 없이 한 화면(`app/src/pages/steps/Studio.jsx`, `studio/*`)이에요. 미리보기 + 오른쪽 한 칸에 연수 정보(늘 보이는 속성 줄, 눌러서 바로 고침) · 꼭 고칠 곳 한 줄(배포에서 막히거나 화면이 깨지는 것만, [AI로 수정]) · 사이트 구성(쪽별 섹션 목록: 끌기·↑↓·숨기기·이름 바꾸기·AI로 수정·삭제, 섹션 안 투표·설문·보드·교재 넘기기·자료실 링크·실습 단계 설정과 [＋ 기능 넣기]) · 자료(올린 파일이 사이트 자료실 다운로드로) · 색·글꼴 · AI 수정 대화(기록 유지). 검수 탭·목록 탭·수정 요청 탭은 없앴고, 바뀔 때마다 버전 기록에 남아요(최근 20개, 새것이 앞, `app/src/lib/versions.js`).
+> 상태(2026-11-21): 탭 없이 한 화면(`app/src/pages/steps/Studio.jsx`, `studio/*`)이에요. 미리보기 + 오른쪽 한 칸에 연수 정보(늘 보이는 속성 줄, 눌러서 바로 고침) · 꼭 고칠 곳 한 줄(배포에서 막히거나 화면이 깨지는 것만, [AI로 수정]) · 사이트 구성(쪽별 섹션 목록: 끌기·↑↓·숨기기·이름 바꾸기·AI로 수정·삭제, 섹션 안 투표·설문·보드·교재 슬라이드·자료실 링크·실습 단계 설정과 [＋ 기능 넣기]) · 자료(올린 파일이 사이트 자료실 다운로드로) · 색·글꼴 · AI 수정 대화(기록 유지). 검수 탭·목록 탭·수정 요청 탭은 없앴고, 바뀔 때마다 버전 기록에 남아요(최근 20개, 새것이 앞, `app/src/lib/versions.js`).
 - **미리보기**(실제 조립 결과, 참여 기능은 연습 모드) + **목록**(사이트의 `<section>`: 순서 바꾸기·숨기기·지우기·이름) + **글 고치기**(미리보기에서 글자를 눌러 바로) + **그림 바꾸기**(교재 쪽 그림·올린 사진) + **색·글꼴**(`--lp-*` 변수) + **수정 요청**(고를 섹션 또는 전체 → AI) + **검수**(문제 목록, [AI에게 고쳐 달라기]) + **연수 정보**(AI가 찾은 사실과 쪽 번호, 고치면 사이트 글도 함께).
 - 되돌리기: 판 기록(AI가 만든 판·고친 판).
 
