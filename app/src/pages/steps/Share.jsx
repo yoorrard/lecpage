@@ -152,15 +152,20 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 배포하기
   // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset). 다만 그 칸 안에 대화 창이 열려 있는 동안은 잠금을 미룸:
   // 잠긴 칸 안의 창은 눌리지 않으면서 화면을 막고(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름), 억지로 닫으면 도는 일(배포 취소·로그인)의 진행·묻는 칸·실패 까닭이 사라지고 다시 열 수도 없음.
-  // 열린 창은 그 자체로 나머지 화면을 막으니 그 창의 일만 끝낼 수 있고, 창이 닫히는 대로 잠금(0.3초마다 봄 — 창은 닫힘 알림 없이 사라지기도 함)
+  // 열린 창은 그 자체로 나머지 화면을 막으니 그 창의 일만 끝낼 수 있고, 창이 닫히는 대로 잠금.
+  // 창이 열리고 닫히는 것(open 속성)·사라지는 것(닫힘 알림 없이 화면에서 빠지기도 함)을 지켜보다 바뀌면 바로 다시 그림
   const dlgIn = () => typeof document !== 'undefined' && !!document.querySelector('fieldset.plain-fieldset dialog[open]');
   const [, setTick] = useState(0);
   const seenDlg = useRef(false); seenDlg.current = !!stale && dlgIn();
   const locked = !!stale && !seenDlg.current;
   useEffect(() => {
-    if (!stale) return undefined;
-    const t = setInterval(() => { if (dlgIn() !== seenDlg.current) setTick((n) => n + 1); }, 300);
-    return () => clearInterval(t);
+    const el = stale && typeof MutationObserver !== 'undefined' ? document.querySelector('fieldset.plain-fieldset') : null;
+    if (!el) return undefined;
+    const check = () => { if (dlgIn() !== seenDlg.current) setTick((n) => n + 1); };
+    const mo = new MutationObserver(check);
+    mo.observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    check(); // 그린 때와 지켜보기 시작한 때 사이에 바뀐 것
+    return () => mo.disconnect();
   }, [stale]);
   const staleNow = useRef(false); staleNow.current = !!stale; // 기다린 뒤에 다시 볼 때(guard의 after)
   const alive = useRef(true); useEffect(() => () => { alive.current = false; }, []);
@@ -394,6 +399,8 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
   function setPrimary(t, sure = false) {
+    // 저장이 멈춘 탭에서는 바꾸지 않음: 바꾼 값이 저장되지 않는데 '바꿨어요'만 뜨던 것(칸 밖의 확인 창에서 누를 수 있었음)
+    if (staleNow.current) { setAskMain(''); toast('다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누른 뒤 다시 해 주세요.'); return; }
     const s = p.deploy?.sites?.[t]; if (!s?.url || t === p.deploy?.target) return;
     if (!sure && s.live === false && liveOn && siteHasLive(p.deploy)) { setAskMain(t); return; } // 참여 기능 없는 곳으로 바꾸기 전에 확인
     update((cur) => ({
@@ -576,7 +583,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
         <div class="btn-row">
           {autoOffer && elsewhere && !lecOnly && <button class="btn btn-primary" onClick={() => { setAsk(null); window.dispatchEvent(new CustomEvent('lp-pub-pick', { detail: 'lecpage' })); }}>바로 배포로 바꾸기</button>}
           <button class={`btn${autoOffer && elsewhere && !lecOnly ? '' : ' btn-primary'}`} onClick={() => { setAsk(null); goLive(); }}>참여 기능 연결</button>
-          <button class="btn btn-quiet" onClick={() => { const run = ask; setAsk(null); setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포</button>
+          <button class="btn btn-quiet" onClick={() => { const run = ask; setAsk(null); if (staleNow.current) { toast('다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누른 뒤 배포해 주세요.'); return; } setSkipLive(true); run({ liveOff: true }); }}>참여 기능 없이 배포</button>
         </div>
       </Dialog>
       <Dialog open={!!askMain} onClose={() => setAskMain('')} label="대표 주소 확인">

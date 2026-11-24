@@ -520,7 +520,7 @@ async function seed(p, script) {
     await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
     const changed3 = await addFile('셋째 메모.txt');
     await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(900);
-    const held = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]'), closeOk: !document.querySelector('dialog[open] button[disabled]') }));
+    const held = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]'), closeOk: !document.querySelector('dialog[open] button:disabled') }));
     L.ok('a dialog open when this tab stopped saving stays usable (not closed, not locked)', changed3 && held.band && held.open === 1 && !held.inert && held.closeOk, JSON.stringify({ changed3, ...held }));
     await p.click('dialog[open] button:has-text("닫기")');
     await p.waitForSelector('fieldset.plain-fieldset[inert]', { timeout: 5000 }).catch(() => {});
