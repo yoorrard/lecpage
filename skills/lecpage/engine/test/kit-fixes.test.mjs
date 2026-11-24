@@ -487,6 +487,13 @@ test('브라우저: 암호로 잠근 사이트 — 암호를 넣어 연 뒤 새�
     const tab = await page.context().newPage(); await tab.goto(base, { waitUntil: 'commit' });
     const d = await opened(tab);
     assert.deepEqual([d.ready, d.locked, d.slides, d.first], ['complete', 0, 2, 1], '새 탭(기억하기): ' + JSON.stringify(d));
+    // 잠근 강사 화면·발표 화면도 같은 열쇠로 풀려 제 화면이 뜸(강사 화면은 관리자 키 칸, 발표 화면은 제 틀)
+    await tab.goto(base + 'console.html', { waitUntil: 'commit' });
+    await tab.waitForSelector('#lp-key', { timeout: 15000 });
+    assert.equal(await tab.locator('#lp-locked,[data-lp-lock]').count(), 0, '강사 화면이 풀림');
+    await tab.goto(base + 'screen.html', { waitUntil: 'commit' });
+    await tab.waitForFunction(() => document.readyState === 'complete' && !document.querySelector('#lp-locked') && document.body && document.body.children.length > 0, null, { timeout: 15000 });
+    assert.equal(await tab.locator('#lp-locked,[data-lp-lock]').count(), 0, '발표 화면이 풀림');
     assert.deepEqual(errs, [], '쪽 오류 없음');
   });
 });

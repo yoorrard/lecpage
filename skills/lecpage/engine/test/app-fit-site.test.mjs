@@ -113,3 +113,21 @@ test('작업 지시: 앱이 쪽 그림을 골라 보냈으면 "배포한 사이�
   assert.doesNotMatch(taskText({ kind: 'make', materials: ['big.pdf'], pageImages: { ...pi, count: 300 }, request: '', kept: 300 }), /배포한 사이트에는|그중/);
 });
 
+
+// 실제 AI 300쪽 사이트(2026-11-24 밤): 새 안내를 받은 AI가 교재 슬라이드를 data-pages="1-300"으로 적자, 메모리 적은 PC(40MB)에서는
+// AI 수정이 '꼭 함께 보내야 하는 사이트 파일이 142MB'로 거절됐음(모든 쪽을 가리키면 줄이지 않던 규칙). 커넥트가 받지 않은 번호에 빈 자리 그림을 두게 되어(caps 'pages-kept')
+// 그런 사이트도 골라 보냄 — 그림 주소로 하나하나 적힌 쪽만 꼭 보냄. 예전 커넥트는 전과 같이 알리고 멈춤
+test('fitSiteForEdit(loose): 사이트가 모든 쪽을 범위·코드로 가리켜도 골라 보내고, 그림 주소로 적힌 쪽은 꼭 보냄 — 예전 커넥트는 그대로 over', async () => {
+  const L = await local();
+  const { blobs } = fake(100, 100, { 'site/files/a.pdf': new Uint8Array(1024) });
+  const site = { 'index.html': '<div data-lp="deck" data-pages="1-100"></div><img src="material/p-042.webp" alt="">', 'assets/site.js': "img.src = 'material/p-' + pad(n) + '.webp';" };
+  const used = L.pagesUsed(site);
+  assert.equal(used.all, true); assert.equal(used.nums.size, 100); assert.deepEqual([...used.direct], [42]);
+  const old = await L.fitSiteForEdit(blobs, 'p', site, [], { siteMB: 5 });
+  assert.equal(old.over, true, '예전 커넥트: 모든 쪽을 가리키면 줄이지 않고 알림');
+  const loose = await L.fitSiteForEdit(blobs, 'p', site, [], { siteMB: 5 }, { loose: true });
+  assert.equal(loose.over, false); assert.equal(loose.total, 100); assert.equal(loose.last, 100);
+  assert.ok(loose.sent < 100 && loose.sent >= 25, String(loose.sent));
+  assert.ok(loose.only.includes('material/p-042.webp') && loose.only.includes('files/a.pdf'), '그림 주소로 적힌 쪽·자료실 파일은 꼭 감');
+  assert.ok(loose.only.includes('material/p-001.webp') && loose.only.includes('material/p-100.webp'), '처음·끝 쪽도 감');
+});

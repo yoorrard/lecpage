@@ -478,6 +478,21 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   assert.ok(!/material\.md/.test(cr.task), '교재 없이 고치면 보조 글자 줄 없음');
   assert.ok(!cr.files.includes('.env'));
 
+  // 고치기 + 앱이 쪽 그림을 골라 보냄(pagesKept): 받지 않은 번호에 빈 자리 그림을 두고(사이트가 모든 쪽을 가리켜도 확인이 걸리지 않게) 작업 지시에 그대로 알림. 결과에는 넣지 않음
+  rmSync(LOG, { force: true });
+  const pg = site['material/p-001.webp'];
+  const eK = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'codex', kind: 'edit', request: '제목을 짧게 해 주세요', meta: R.meta, pagesKept: 6, site: { 'index.html': R.site['index.html'], 'assets/style.css': R.site['assets/style.css'], 'material/p-001.webp': pg, 'material/p-006.webp': pg } } });
+  assert.equal(eK.status, 202, eK.text);
+  const evK = await events(port, token, eK.json().jobId);
+  assert.equal(evK.at(-1).type, 'done', JSON.stringify(evK.slice(-3)));
+  const crK = readLog().find((l) => l.id === 'codex' && l.argv);
+  assert.deepEqual((crK.shots || []).filter((n) => /^p-\d+\./.test(n)).sort(), ['p-001.webp', 'p-002.webp', 'p-003.webp', 'p-004.webp', 'p-005.webp', 'p-006.webp'], '에이전트가 볼 때는 모든 번호에 그림이 있음');
+  assert.match(crK.task, /p-001 ~ p-006, 그중 2장, \.webp\).*여기에는 2장만 받았고\(나머지 번호에는 빈 자리 그림을 두었어요\), 배포한 사이트에는 p-001~p-006 모든 쪽 그림이 들어가요/);
+  const RK = (await req(port, 'GET', `/bridge/jobs/${eK.json().jobId}/result`, { headers: O })).json();
+  assert.deepEqual(Object.keys(RK.site).filter((k) => k.startsWith('material/')).sort(), ['material/p-001.webp', 'material/p-006.webp'], '빈 자리 그림은 결과에 없음(앱의 진짜 그림을 덮지 않음)');
+  assert.ok(!(RK.dropped || []).some((x) => /material\/p-00[2-5]/.test(x)), '뺐다고 알리지도 않음');
+  assert.ok(St.CAPS.includes('pages-kept'), '앱이 이 커넥트에는 골라 보내도 된다고 앎');
+
   // 에이전트가 사이트를 못 쓰면 오류, 허용 밖 도구가 켜져 있으면 멈춤
   const fail1 = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'claude', kind: 'edit', request: '[fake:nosite]', site: { 'index.html': '<!doctype html>' } } });
   // 고치기는 index.html이 이미 있어 "못 씀"이 아니라 끝까지 감 → 새로 만들기로 시험

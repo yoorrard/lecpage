@@ -423,10 +423,10 @@ export async function fitSiteImages(blobs, pid, list, sets = [], only = null, li
  * @returns {{ nums: Set<number>, all: boolean }}
  */
 export function pagesUsed(site) {
-  const nums = new Set(); let all = false;
+  const nums = new Set(); const direct = new Set(); let all = false; // direct: 그림 주소로 하나하나 적힌 쪽(범위·코드로 가리킨 것 말고)
   for (const v of Object.values(site || {})) {
     if (typeof v !== 'string') continue;
-    for (const m of v.matchAll(/material\/p-(\d{3,4})\.(?:webp|png|jpe?g)/gi)) nums.add(+m[1]);
+    for (const m of v.matchAll(/material\/p-(\d{3,4})\.(?:webp|png|jpe?g)/gi)) { nums.add(+m[1]); direct.add(+m[1]); }
     if (/material\/p-\d{0,4}(?:['"`]|\$\{)/i.test(v)) all = true; // 'material/p-' + n · `material/p-${n}`
     for (const m of v.matchAll(/\sdata-pages\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
       for (const part of String(m[1] ?? m[2] ?? '').split(/[,\s]+/).filter(Boolean)) { // 엔진 kit/widgets.js parsePages와 같은 꼴(번호·범위)
@@ -436,7 +436,7 @@ export function pagesUsed(site) {
       }
     }
   }
-  return { nums, all };
+  return { nums, all, direct };
 }
 /**
  * 고칠 때 커넥트로 보낼 사이트 폴더의 바이트 파일 고르기. 지금 사이트(저장소 'site/…') 전체가 커넥트의 사이트 한도 안이면 전부(only: null, 예전 그대로).
@@ -445,13 +445,15 @@ export function pagesUsed(site) {
  * @param site 지금 사이트의 글 파일({ 경로: 글 }) · sets: 쪽 그림 묶음(교재마다 고르게 고르려고)
  * @returns {Promise<{ only: string[]|null, total: number, sent: number, over: boolean, mb: number }>} only: 보낼 경로(null이면 전부), total·sent: 쪽 그림 장수, over: 꼭 보낼 것만으로 한도를 넘음(mb: 그 크기)
  */
-export async function fitSiteForEdit(blobs, pid, site, sets = [], limits = null) {
+export async function fitSiteForEdit(blobs, pid, site, sets = [], limits = null, { loose = false } = {}) {
   const keys = (await blobs.keys(pid).catch(() => [])).filter((k) => k.startsWith('site/')).map((k) => k.slice(5));
   const pages = keys.filter((k) => k.startsWith('material/') && numOf(k));
   const others = keys.filter((k) => !pages.includes(k));
   let base = 0; for (const k of others) base += sizeOf(await blobs.get(pid, 'site/' + k).catch(() => null));
   const used = pagesUsed(site);
-  const must = used.all ? new Set(pages.map(numOf)) : used.nums;
+  // loose(커넥트 caps 'pages-kept'): 받지 않은 쪽 번호에 커넥트가 빈 자리 그림을 두므로, 범위(data-pages="1-300")나 스크립트가 만든 주소로 모든 쪽을 가리켜도 골라 보냄.
+  // 그림 주소로 하나하나 적힌 쪽만 꼭 보냄. 예전 커넥트는 전과 같이(모든 쪽을 가리키면 줄이지 않고 over로 알림)
+  const must = loose ? used.direct : used.all ? new Set(pages.map(numOf)) : used.nums;
   const fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must, base });
   if (!fit.cut && !fit.over) return { only: null, total: pages.length, sent: pages.length, over: false, mb: 0, last: fit.last };
   let bytes = base; if (fit.over) for (const p of fit.list) bytes += sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null));

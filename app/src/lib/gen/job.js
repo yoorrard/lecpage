@@ -440,7 +440,7 @@ async function runAgent(ctx, step) {
     } else {
       // 고치기: 지금 사이트 전체를 보내되, 커넥트의 사이트 한도를 넘으면 교재 쪽 그림만 고르게 줄여 보냄(자료·사진과 사이트 글이 가리키는 쪽 그림은 꼭 보냄).
       // 보내지 않은 쪽 그림은 저장소에 그대로라(아래에서 받은 것을 담기만 함) 고친 사이트의 교재 슬라이드에는 모든 쪽이 남음. 예전에는 통째로 보내 커넥트가 크기로 거절했음
-      const fit = await fitSiteForEdit(blobs, rec.pid, rec.site || project.site || {}, all, st?.limits || null);
+      const fit = await fitSiteForEdit(blobs, rec.pid, rec.site || project.site || {}, all, st?.limits || null, { loose: (st?.caps || []).includes('pages-kept') });
       if (fit.over) throw new AiError('site-big', `꼭 함께 보내야 하는 사이트 파일(자료·사진과 사이트가 쓰는 쪽 그림)이 ${fit.mb}MB예요. 이 PC의 lecpage 커넥트는 ${+st?.limits?.siteMB || 40}MB까지 받아요. 자료실의 큰 파일을 줄이거나 다른 AI를 골라 주세요.`, { provider: 'local' });
       only = fit.only;
       // (고치기의 알림은 작업 기록에만 남음: 사이트와 그 쪽 그림은 그대로라 강사가 할 일이 없음)

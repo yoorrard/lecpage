@@ -36,7 +36,7 @@ const ROOT = resolve(HERE, '..', '..', '..');
  * 이 판이 할 수 있는 것(앱이 /bridge/status의 caps로 보고, 없으면 '새 판으로 바꿔야 해요'를 보여 줌). 새 길을 더하면 여기에도 더함.
  * 이 목록이 없는 예전 판은 status-caps 이전 판(앱은 claude-setup·update가 없는 것으로 봄)
  */
-export const CAPS = ['status-caps', 'prove', 'page-sets', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update', 'cloudflare', 'vercel'];
+export const CAPS = ['status-caps', 'prove', 'page-sets', 'pages-kept', 'chatgpt', 'jobs', 'agents-terminal', 'claude-setup', 'convert', 'autostart', 'update', 'cloudflare', 'vercel'];
 const imp = (p) => import(pathToFileURL(join(ENGINE, p)).href);
 
 const MB = 1024 * 1024;
@@ -821,7 +821,7 @@ const picksOf = (ref) => { let j = null; try { j = JSON.parse(String(ref || ''))
  * 원칙: 디자인·구성·읽는 법·확인 방법은 에이전트가 정함. lecpage는 목표 한 줄, 강사 요청, 배포에 꼭 필요한 조건,
  * 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 확인 명령만 알려 줌(앱의 키 경로 지시 app/src/lib/gen/prompts.js와 같은 뜻)
  */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0, standIns = [], kept = 0 }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0, standIns = [], kept = 0, holes = false }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const tick = (n) => `\`${n}\``;
@@ -832,7 +832,7 @@ export function taskText({ kind, materials, photos = [], pages = 0, images = 0, 
   const whose = pi?.sets?.length > 1 ? `교재마다 이어서 번호를 매겼어요(${pi.sets.map((x) => `${tick(x.owner)} p-${pad3(x.first)}~p-${pad3(x.last)}`).join(', ')}). ` : !pi?.multi ? '' : pi.owner ? `${tick(pi.owner)}의 쪽 그림이에요. ` : pi.given ? '넣은 교재 가운데 하나의 쪽 그림이에요. ' : '';
   // 앱이 크기 때문에 쪽 그림을 골라 보낸 때(kept: 배포한 사이트의 마지막 쪽 번호): 받은 것만 있다고 적으면 AI가 '사이트에서 열리는 쪽은 N장뿐'이라고 사이트에 적음
   // (2026-11-24 실제 AI 300쪽 사이트: 78장만 열린다고 적고 나머지를 흐리게 함 — 실제로는 300쪽이 모두 배포됨). 사실을 그대로 한 줄
-  const keptNote = pi && kept > 0 && pi.count < kept ? `. 크기 때문에 여기에는 ${pi.count}장만 받았고, 배포한 사이트에는 p-${pad3(1)}~p-${pad3(kept)} 모든 쪽 그림이 들어가요` : '';
+  const keptNote = pi && kept > 0 && pi.count < kept ? `. 크기 때문에 여기에는 ${pi.count}장만 받았고${holes ? '(나머지 번호에는 빈 자리 그림을 두었어요)' : ''}, 배포한 사이트에는 p-${pad3(1)}~p-${pad3(kept)} 모든 쪽 그림이 들어가요` : '';
   const imgLine = pi ? `- 교재 쪽 그림: \`work/site/material/\` (p-${pad3(pi.first)} ~ p-${pad3(pi.last)}${pi.count < pi.last - pi.first + 1 ? `, 그중 ${pi.count}장` : ''}, ${pi.exts.map((e) => '.' + e).join('·')}) — ${whose}사이트에 그대로 써도 돼요(\`material/${pi.sample}\`)${keptNote}\n` : '';
   // 원본이 커서 앱이 대신 보낸 글(standIns [{ name, for }]): 교재 원본 줄에 넣지 않고 있는 그대로 따로 적음
   const standNames = new Set(standIns.map((x) => x.name));
@@ -917,6 +917,13 @@ export function secretShapes(site, { home = homedir(), ws = '' } = {}) {
  */
 const DOC_EXT = /\.(pdf|pptx?|ppsx|docx?|hwpx?|xlsx?|zip|key|pages|numbers|odt|odp|ods)$/i;
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
+/** 빈 자리 그림(1×1 WebP): 고칠 때 앱이 보내지 않은 쪽 번호에 잠깐 둠(작업 지시가 그렇게 알림). 결과에는 넣지 않음 */
+const HOLE_IMAGE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
+/** 두었던 빈 자리 그림을 지움(그대로인 것만 — 에이전트가 그 이름으로 다른 그림을 썼으면 남겨, 아래 '강사가 주지 않은 파일' 검사가 거름) */
+function dropHoles(job) {
+  for (const f of job.holes || []) { try { if (readFileSync(f).equals(HOLE_IMAGE)) rmSync(f, { force: true }); } catch { /* 이미 없음 */ } }
+  job.holes = [];
+}
 const MAGIC = (() => {
   const at = (b, off, sig) => b.length >= off + sig.length && sig.every((x, i) => b[off + i] === (typeof x === 'string' ? x.charCodeAt(0) : x));
   const str = (t) => [...t];
@@ -1097,13 +1104,17 @@ async function runJob(S, job) {
         .filter((x) => x.owner && shots.some((sh) => sh.n >= x.first && sh.n <= x.last));
     const owner = setsOut.length === 1 ? setsOut[0].owner : setsOut.length ? '' : prep?.given?.owner || (appImages ? flagged : '');
     const pageImages = shots.length ? { first: shots[0].n, last: shots.at(-1).n, count: new Set(shots.map((x) => x.n)).size, exts: [...new Set(shots.map((x) => extname(x.name).slice(1).toLowerCase()))], sample: shots[0].name, multi: materialItems(inp.materials.map((m) => m.name)) > 1, given: appImages, owner, ...(setsOut.length > 1 ? { sets: setsOut } : {}) } : null;
+    // 고치기 + 앱이 쪽 그림을 골라 보낸 때(pagesKept): 받지 않은 쪽 번호에 빈 자리 그림(1×1)을 둠. 사이트가 모든 쪽을 가리켜도(data-pages="1-300"·스크립트가 만든 주소)
+    // 이 폴더의 확인(check)이 '쪽 그림이 없어요'·깨진 그림으로 알리지 않고, 에이전트가 그것을 고치려고 쪽을 줄이지 않게. 결과를 모으기 전에 지움(아래 dropHoles) — 앱에는 진짜 그림이 그대로 있음
+    const holeNums = []; if (job.kind === 'edit' && inp.pagesKept && shots.length) { const have = new Set(shots.map((x) => x.n)); for (let n = 1; n <= inp.pagesKept; n++) if (!have.has(n)) holeNums.push(n); }
     const files = Array.isArray(prep?.files) ? prep.files : [];
     const noImages = pageImages ? files.filter((f) => !f.twin && f.pages > 0 && !f.images && (!appImages || (setsOut.length > 1 ? !setsOut.some((x) => stemOf(x.owner) === stemOf(f.name)) : owner && stemOf(f.name) !== stemOf(owner)))).map((f) => f.name) : [];
     const pdfText = files.filter((f) => f.text).map((f) => f.name);
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library, kept: inp.pagesKept || 0 }));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library, kept: inp.pagesKept || 0, holes: holeNums.length > 0 }));
+    if (holeNums.length) { const ext = extname(shots[0].name) || '.webp'; for (const n of holeNums) { const f = join(work, 'site', 'material', `p-${String(n).padStart(3, '0')}${ext}`); writeFileSync(f, HOLE_IMAGE); (job.holes ||= []).push(f); } }
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 커넥트가 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;
@@ -1135,6 +1146,7 @@ async function runJob(S, job) {
     if (cj?.issues) issues = cj.issues;
     else if (cj?.errors) issues = cj.errors.map((e) => ({ id: 'assemble-error', level: 'error', where: { file: 'site/index.html', selector: '', section: '' }, message_ko: e.message_ko || String(e), fix_hint_ko: '' }));
     else if (cj?.error) issues = [{ id: 'check-failed', level: 'error', where: { file: '', selector: '', section: '' }, message_ko: cj.error, fix_hint_ko: '' }];
+    dropHoles(job);
     const { site, dropped } = readSiteDir(join(work, 'site'), siteFileOk);
     // 비밀처럼 보이는 글(키·토큰·이 PC의 경로)이 있으면 받지 않음: 앱 미리보기를 거쳐 배포되면 누구나 보게 됨
     const leaks = secretShapes(site, { ws: root });
