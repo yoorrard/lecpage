@@ -510,11 +510,21 @@ async function seed(p, script) {
     const shown = await p.locator('.success .big-url').count();
     await p.waitForTimeout(1500);
     L.ok('deploy finishes while another tab saved: the result is shown', changed2 && bandMid === 1 && (st.sites || 0) === before + 1 && shown === 1, `changed2 ${changed2} band ${bandMid} sites ${st.sites || 0} shown ${shown}`);
-    await other.close();
     await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.success .big-url, .publish', { timeout: 30000 }); await p.waitForTimeout(1500);
     const after = await p.evaluate(() => ({ url: document.querySelector('.success .big-url')?.textContent.trim() || '', files: document.body.innerText.includes('둘째 메모') }));
     const proj = await L.readProject(p, L.pidOf(p));
     L.ok('after a reload the deploy record is still there (address and site key), and the other tab\'s change too', /s-site1\./.test(after.url) && !!proj.deploy?.lecpage?.key && (proj.site?.['files/둘째 메모.txt'] !== undefined || (proj.meta?.materials || proj.materials || []).some?.((m) => /둘째 메모/.test(m.name || m.title || '')) || JSON.stringify(proj).includes('둘째 메모')), JSON.stringify({ url: after.url, key: !!proj.deploy?.lecpage?.key, other: JSON.stringify(proj).includes('둘째 메모') }));
+    // 대화 창이 열린 채 저장이 멈추면(다른 탭이 저장): 잠긴 칸 안의 대화 창이 화면을 막은 채 남지 않고 닫힘 → 빨간 띠의 [다시 불러오기]를 누를 수 있음
+    if (await other.locator('.save-band').count()) { await other.click('.save-band .btn-primary'); await other.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); await other.waitForSelector('.st-panel', { timeout: 30000 }); }
+    await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
+    const changed3 = await addFile('셋째 메모.txt');
+    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(600);
+    const stuck = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length }));
+    const canReload = stuck.band ? await p.click('.save-band .btn-primary', { timeout: 5000 }).then(() => true, () => false) : false;
+    if (canReload) await p.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {});
+    L.ok('a dialog that was open when this tab stopped saving is closed, and [이 탭으로 다시 불러오기] can be pressed', changed3 && stuck.band && stuck.open === 0 && canReload && await p.locator('.save-band').count() === 0, JSON.stringify({ changed3, ...stuck, canReload }));
+    L.ok('the site was not cancelled by the closed dialog', (st.calls || []).filter((c) => /^DELETE \/api\/sites\/site1$/.test(c)).length === 0 && await p.locator('.success .big-url').count() === 1);
+    await other.close();
     L.ok('no page errors ⑲', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   { // ⑳ 공개 범위를 암호로 한 사이트도 바로 배포됨: 올리기 전 검사가 잠금 풀기 스크립트(assets/unlock.js)를 사이트 스크립트로 보고 막지 않음

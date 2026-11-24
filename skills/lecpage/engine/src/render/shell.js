@@ -61,7 +61,8 @@ export function liveOrigins(bp) {
  * live.provider가 'http'이고 주소가 비었거나(같은 주소) http면 그렇다고 봄(CSP가 그 http·ws 주소를 엶).
  * upgrade-insecure-requests는 meta CSP에 넣지 않음: 사이트 파일을 http로만 여는 곳(기관 내부망 서버·NAS, 교실 LAN, Safari의 http://localhost 미리보기)에서
  * 같은 주소의 CSS·JS·그림까지 https로 바꿔 받아 사이트가 통째로 깨짐(ZIP을 내부망 서버에 올린 사이트가 글만 남던 까닭).
- * https로만 내보내는 곳은 응답 머리글로 붙임: _headers(Netlify·Cloudflare·Vercel, kit/assemble.js), 바로 배포 서버(hosting/src/csp.js), Node 서버(https일 때)
+ * https로만 내보내는 곳은 응답 머리글로 붙임: _headers의 참가자 쪽 CSP(Netlify·Cloudflare·Vercel, kit/assemble.js — 보조 쪽은 http 자원이 없어 붙이지 않음),
+ * 바로 배포 서버(hosting/src/csp.js), Node 서버(https일 때)
  */
 export function servedOverLan(bp) {
   if (bp.live?.provider !== 'http') return false;

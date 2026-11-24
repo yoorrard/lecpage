@@ -33,7 +33,7 @@ function sse(text) {
 }
 const MODELS = JSON.stringify({ data: [{ id: 'claude-test-1', display_name: 'Claude (시험)' }] });
 /** AI 회사 API를 가짜로 답함: 키 확인·모델 목록 + Claude 생성 스트림(실제 AI 호출 없음). 재시도 기다림은 짧게(시험 손잡이) */
-async function mockAi(ctx, extra, { fallback = false } = {}) {
+async function mockAi(ctx, extra, { fallback = process.env.E2E_REMOTE === '1' } = {}) { // E2E_REMOTE=1: 운영 주소(BASE=https://…)로 돌릴 때 앱 파일·CDN은 그대로 받고 AI 요청만 가짜로
   await ctx.addInitScript(() => { globalThis.__lpGenTest = { backoff: 0.01, saveMs: 300 }; });
   await ctx.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (r) => {
     const u = r.request().url();

@@ -141,7 +141,7 @@ function coverOf(p, pageNums) {
  */
 const hostFileLimit = (to) => { const l = E.HOSTS[to]?.limit; const mb = l?.fileMB || l?.siteMB; return mb ? { maxFileBytes: mb * 1024 * 1024 } : null; };
 
-export function StepShare({ p, update, go, stale, stopped, storeNow }) {
+export function StepShare({ p, update, go, stale, stopped, storeNow, idle }) {
   const bp = deployView(p);
   const [busy, setBusy] = useState('');
   const [prog, setProg] = useState(null);
@@ -150,6 +150,8 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
   const [autoLive, setAutoLive] = useState(false); // 운영자의 바로 배포 서버가 참여 기능까지 맡는지
   const [target, setTarget] = useState(''); // 지금 고른 배포할 곳(Publish가 알려 줌)
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 배포하기
+  // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset) — 그때 그 안에 열려 있던 대화 창은 잠긴 채 화면을 막으니(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름) 닫아 둠
+  useEffect(() => { if (stale) for (const d of document.querySelectorAll('fieldset.plain-fieldset dialog[open]')) { try { d.close(); } catch { /* 이미 닫힘 */ } } }, [stale]);
   const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
   const [fontNote, setFontNote] = useState(''); // 글꼴을 사이트에 담지 못했을 때 한 줄
   const [info, setInfoSrv] = useState(null); // 바로 배포 서버의 /api/info(보관 기간·하루 한도)
@@ -275,7 +277,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
   /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 없이 배포]를 골랐으면 묻지 않고 참여 기능 없이. kind 'zip': 사이트 ZIP 다운로드 */
   function guard(run, auto = false, kind = '') {
     // 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안(Project.jsx의 빨간 띠)에는 배포하지 않음: 배포한 주소와 수정 키를 저장하지 못해,
-    // 새로 고치면 그 사이트를 다시 배포하거나 취소할 길이 없어짐(주소만 열린 채 남음). 사이트 ZIP 다운로드는 저장할 것이 없어 그대로
+    // 새로 고치면 그 사이트를 다시 배포하거나 취소할 길이 없어짐(주소만 열린 채 남음). 사이트 ZIP 다운로드는 저장할 것이 없어 여기서는 막지 않지만, 화면의 배포 칸은 통째로 잠겨 있어 [다시 불러오기] 뒤에 받음
     if (stale && kind !== 'zip') { toast('다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누른 뒤 배포해 주세요.'); return; }
     // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
     // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
@@ -371,7 +373,9 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
     update(result, { now: true }); // 배포·배포 취소의 결과(주소·사이트 열쇠)는 바로 저장: 곧바로 창이 닫히거나 죽어도 배포한 사이트를 다시 다룰 수 있게
     // 배포가 도는 사이(몇 초~1분) 다른 탭이 이 연수를 저장하면 이 탭은 저장을 멈춤(덮어쓰지 않게) → 위 저장이 버려져, 다시 불러오면 방금 배포한 주소·수정 키가 사라졌음.
     // 그때는 결과만 저장소의 지금 판(다른 탭이 고친 것) 위에 바로 얹음: 다른 탭의 고친 내용도, 이 배포 기록도 남음
-    if (stopped?.() && storeNow) storeNow(result).then(() => toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'), () => { });
+    // (다른 탭에서 연수를 지웠으면 얹을 곳이 없어 아무것도 하지 않음. 충돌을 위 저장을 쓰다가 알게 되는 때도 있어 다 쓴 뒤에 한 번 더 봄 — 같은 결과를 두 번 얹어도 값이 같음)
+    const keep = () => { if (stopped?.() === 'changed' && storeNow) storeNow(result).then((saved) => { if (saved) toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'); }, () => { }); };
+    if (stopped?.() === 'changed') keep(); else if (idle) idle().then(keep, () => { });
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
   function setPrimary(t, sure = false) {

@@ -1134,13 +1134,13 @@ async function runJob(S, job) {
     if (holeNums.length) {
       // 가장 가까운 번호의 진짜 쪽과 같은 비율(여러 교재가 섞여 비율이 달라도 그 교재의 것에 가깝게). 이름의 끝은 받은 그림과 같게(내용은 PNG — 브라우저와 조립은 내용으로 읽음)
       const { imageSize } = await imp('src/kit/assemble.js');
-      const ext = extname(shots[0].name) || '.webp', made = new Map(); job.holeShas = new Set();
+      const made = new Map(); job.holeShas = new Set();
       const sizeOf = (sh) => { if (!sh.size) { try { sh.size = imageSize(new Uint8Array(readFileSync(join(work, 'site', 'material', sh.name)))) || { w: 16, h: 9 }; } catch { sh.size = { w: 16, h: 9 }; } } return sh.size; };
       for (const n of holeNums) {
         const near = shots.reduce((a, x) => (Math.abs(x.n - n) < Math.abs(a.n - n) ? x : a), shots[0]); const z = sizeOf(near);
         const h = Math.max(1, Math.min(640, Math.round(160 * z.h / Math.max(1, z.w)))), key = `160x${h}`;
         if (!made.has(key)) { const img = holeImage(160, h); made.set(key, img); job.holeShas.add(sha256(img)); }
-        const f = join(work, 'site', 'material', `p-${String(n).padStart(3, '0')}${ext}`); writeFileSync(f, made.get(key)); (job.holes ||= []).push(f);
+        const f = join(work, 'site', 'material', `p-${String(n).padStart(3, '0')}${extname(near.name) || '.webp'}`); writeFileSync(f, made.get(key)); (job.holes ||= []).push(f);
       }
     }
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];

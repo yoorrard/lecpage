@@ -32,8 +32,6 @@ export function storageKind(e) {
   if (!e) return '';
   if (e.storage === 'blocked' || blocked) return 'blocked';
   if (e.name === 'QuotaExceededError' || e.code === 22 || /quota|storage.*full|disk.*full/i.test(String(e.message || ''))) return 'quota';
-  // 파일(Blob) 저장을 막는 창(일부 브라우저의 사생활 보호 창): 저장소는 열리지만 교재·쪽 그림을 넣을 때 거절됨
-  if (/Blob\/File data|preparing Blob/i.test(String(e.message || ''))) return 'blocked';
   return '';
 }
 export const STORAGE_MSG = {

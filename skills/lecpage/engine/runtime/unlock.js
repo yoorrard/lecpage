@@ -48,8 +48,11 @@
         if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', late); else late();
       });
     };
+    // 풀린 글은 한 번만 씀: 기억한 열쇠로 저절로 푸는 사이(쪽을 다 받기를 기다리는 동안) 암호를 또 넣어도 두 번 쓰지 않게
+    var written = false;
     var open = function (key, raw, remember) {
-      return decrypt(key, blob).then(function (buf) { return parsed().then(function () { return buf; }); }).then(function (buf) {
+      return decrypt(key, blob).then(function (buf) { if (written) return null; written = true; return parsed().then(function () { return buf; }); }).then(function (buf) {
+        if (!buf) return;
         saveKey(P.salt, raw, remember);
         var html = new TextDecoder().decode(buf);
         // 풀린 글은 서버가 살펴볼 수 없으므로 여기서 한 번 더 거름: 다른 곳으로 넘기는 meta refresh와 base는 뺌(스크립트는 CSP가 막음)
