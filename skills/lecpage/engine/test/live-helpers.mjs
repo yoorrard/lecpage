@@ -472,7 +472,9 @@ export function protocolSuite(name, ctx, { uploads = true, ws = true } = {}) {
     assert.equal(noConsent.status, 400); assert.equal(noConsent.body.error, 'consent_required');
     const added = await a.call('POST', '/participants', { admin: c.adminKey, body: { name: '박세나', school: '새온초', consent: true } });
     assert.equal(added.status, 201); assert.equal(added.body.manual, true); assert.equal(added.body.name, '박세나'); assert.ok(added.body.consentAt > 0);
-    const at = Date.now() - 30 * 60e3;
+    // 고칠 시각(at + 5분)이 같은 날(한국 시각)에 있게: 자정을 사이에 두면 다른 날의 입실이 되어 덮어쓰지 않음(00:25~00:30에 돌면 실패하던 것)
+    const kstDay = (t) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+    let at = Date.now() - 30 * 60e3; if (kstDay(at) !== kstDay(at + 5 * 60e3)) at -= 10 * 60e3;
     const in1 = await a.call('POST', '/attendance', { admin: c.adminKey, body: { by: added.body.id, kind: 'in', at } });
     assert.equal(in1.status, 201); assert.equal(in1.body.at, at); assert.equal(in1.body.byHost, true); assert.equal(in1.body.by, added.body.id);
     // 고치기: 같은 사람·같은 종류는 덮어씀(첫 입실을 지키는 참가자 규칙과 달리 강사가 적은 시각 그대로)

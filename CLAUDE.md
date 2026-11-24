@@ -39,7 +39,7 @@
 ## 검증(합치기 전 한 번)
 - `npm test`(엔진·카탈로그) · `npm run examples`(견본 조립·검수) · `npm --prefix app run build` · `node app/scripts/copy-lint.mjs`(고칠 곳 0) · `npm --prefix hosting test`
 - 앱 흐름 e2e·가짜 AI: `bash scripts/verify.sh [--e2e] [--hosting]`(포트 4175·4182, 커넥트를 띄우는 e2e는 4351·4352·4433·4434 — 동시에 두 개 돌리지 말 것. e2e 21개: flow·more·share-flow·hosts·studio2·studio3·doc-render·start-dict·wipe·multi-material·live-setup·netlify-login·connect-ui·one-primary·late-images·save-open·instant·flow2·live-hosts·cf-connect·vc-connect. 한 개만 따로 돌릴 때는 빌드를 다른 포트(4190대)로 띄우고 `BASE=http://localhost:<포트>/`)
-- 가끔 부하 때문에 시간 초과로 실패하는 엔진 시험(리허설·'지금' 띠·따라 넘기기·입실)은 단독으로 다시 돌려 확인. 전체 검증이 도는 동안 실제 에이전트·브라우저 수십 개 같은 무거운 일을 함께 돌리지 말 것
+- 가끔 부하 때문에 시간 초과로 실패하는 엔진 시험(리허설·'지금' 띠·따라 넘기기·입실)은 단독으로 다시 돌려 확인. 전체 검증이 도는 동안 실제 에이전트·브라우저 수십 개 같은 무거운 일을 함께 돌리지 말 것. 시각에 기대는 시험은 날짜 경계를 피할 것(강사가 출석 시각을 고치는 시험이 한국 시각 00:25~00:30에만 실패해 `baacaac`의 CI가 한 번 빨갰음 — 고침)
 - 새 컨테이너: `npm --prefix app ci && npm --prefix hosting ci`, PDF 시험은 CI처럼 맨 위에 `npm install --no-save pdfjs-dist@<app 판>`(없으면 PDF 시험 3개가 실패). CPU 4개면 Workflow는 에이전트를 2개씩만 돌림 → 많이 나눌 때는 Agent 도구로 동시에
 - 커밋 꼬리말: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + 세션 줄. 코드·문서·커밋에 모델 이름 금지. main에 push 전 `git fetch && git merge origin/main`(AI 카탈로그 봇이 매일 커밋).
 
