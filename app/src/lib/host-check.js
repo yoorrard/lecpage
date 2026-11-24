@@ -4,8 +4,11 @@
 import { listProblems } from '@hosting/sitecheck.js';
 import { ENGINE_FILES } from '@engine/src/kit/paths.js';
 
+// 암호로 잠근 사이트에 lecpage가 넣는 잠금 풀기 스크립트(engine/src/protect.js). 조립이 아니라 잠글 때 들어가는 파일이라 ENGINE_FILES에는 없음.
+// 이것을 사이트 스크립트로 보면 잠근 강사·발표·안내문 쪽마다 '보조 쪽의 사이트 스크립트'로 걸려, 암호 사이트는 바로 배포를 올리기도 전에 막혔음(2026-11-20~24)
+const LOCK_FILES = new Set(['assets/unlock.js']);
 /** 엔진 런타임이 아닌 .js(사이트가 직접 쓴 스크립트·조립이 옮긴 인라인 스크립트) */
-export const isOwnScript = (path) => /\.m?js$/i.test(path) && !ENGINE_FILES.has(path);
+export const isOwnScript = (path) => /\.m?js$/i.test(path) && !ENGINE_FILES.has(path) && !LOCK_FILES.has(path);
 
 /** 조립 결과 → 서버 규칙에 걸리는 곳(파일마다 처음 하나) */
 export function hostProblems(files) {

@@ -500,6 +500,23 @@ async function seed(p, script) {
     L.ok('after [이 탭으로 다시 불러오기] the deploy goes through', (st.sites || 0) === before + 1 && await p.locator('.success .big-url').count() === 1, `sites ${st.sites || 0}`);
     L.ok('no page errors ⑲', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
+  { // ⑳ 공개 범위를 암호로 한 사이트도 바로 배포됨: 올리기 전 검사가 잠금 풀기 스크립트(assets/unlock.js)를 사이트 스크립트로 보고 막지 않음
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, true);
+    await p.locator('xpath=//*[normalize-space(text())="공개 범위"]/ancestor::*[.//button[normalize-space()="바꾸기"]][1]//button[normalize-space()="바꾸기"]').first().click();
+    await p.waitForSelector('input[name=access]', { timeout: 8000 });
+    await p.locator('input[name=access]').nth(1).check(); await p.waitForTimeout(400);
+    await p.fill('input[autocomplete="new-password"]', '봄비연필운동장9'); await p.waitForTimeout(1200);
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    const res = await Promise.race([p.waitForSelector('.success .big-url', { timeout: 40000 }).then(() => 'ok'), p.waitForSelector('.publish [role=alert]', { timeout: 40000 }).then(() => 'alert')]).catch(() => 'timeout');
+    const alertText = res === 'alert' ? (await p.locator('.publish [role=alert]').allInnerTexts()).join(' ').replace(/\s+/g, ' ').slice(0, 160) : '';
+    L.ok('password site: the pre-upload check does not refuse it (unlock.js is lecpage\'s own file)', res === 'ok', `${res} ${alertText}`);
+    const man = st.manifests[st.manifests.length - 1] || {}; const paths = Object.keys(man.files || man);
+    L.ok('password site: the uploaded site is the locked one (unlock.js and encrypted page images)', paths.includes('assets/unlock.js') && paths.some((x) => /\.enc$/.test(x)), paths.filter((x) => /unlock|\.enc$/.test(x)).slice(0, 4).join(','));
+    L.ok('no page errors ⑳', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });
