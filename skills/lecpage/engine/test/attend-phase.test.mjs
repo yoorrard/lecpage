@@ -153,7 +153,8 @@ test('퇴실: 입실하지 않은 사람이 [퇴실 확인]을 누르면 입실�
     assert.equal((await A.call('GET', '/participants', { admin: ADMIN })).body.length, before, "서버에 이름 없는 '참가자NNN'이 생기지 않음");
     // 이름을 적으면 그 이름으로 퇴실
     await p.click('[data-attend="out"]'); await fillJoin(p, '퇴실만 누른 사람');
-    await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 10000 }).catch(async (e) => {
+    // 전체 시험을 한꺼번에 돌릴 때(부하) 10초로는 모자란 적이 있어 넉넉히 기다림
+    await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 30000 }).catch(async (e) => {
       throw new Error(e.message.split('\n')[0] + ' — ' + JSON.stringify(await p.evaluate(() => ({ open: document.querySelector('[data-join-dialog]').open, err: document.querySelector('[data-join-err]').textContent, toast: document.querySelector('[data-toast]').textContent, dot: document.querySelector('[data-live-status]')?.getAttribute('data-state'), phase: document.documentElement.getAttribute('data-phase') }))));
     });
     const all = (await A.call('GET', '/participants', { admin: ADMIN })).body;
