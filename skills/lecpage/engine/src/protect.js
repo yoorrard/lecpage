@@ -66,7 +66,7 @@ body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--
 </head>
 <body>
 <main class="lk">
-<form data-lp-lock>
+<form data-lp-lock method="dialog">
   <h1>${esc(title)}</h1>
   <p>연수에서 안내받은 암호를 넣어 주세요. 안내 QR로 들어오면 저절로 열려요.</p>
   <label>암호<input type="password" name="pw" autocomplete="current-password" required></label>

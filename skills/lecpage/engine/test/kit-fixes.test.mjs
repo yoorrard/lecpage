@@ -545,3 +545,52 @@ test('브라우저: 교재 비율과 다른 쪽의 작은 미리보기·전체 �
     if (ov.length) assert.deepEqual(ov, [['', 'cover'], ['', 'cover'], ['is-own', 'contain']], '전체 보기 ' + JSON.stringify(ov));
   });
 });
+
+// 스크립트가 붙기 전에 양식을 보내면(느린 망·암호 사이트를 막 푼 직후) 쪽이 굳던 것: 브라우저가 양식을 직접 보내려 하고 보안 정책이 막으면서 쪽 읽기가 멈춰
+// 스크립트가 끝내 돌지 않았음(운영의 강사 화면: 관리자 키를 붙여 넣고 바로 [들어가기] → 새로 고치기 전까지 먹지 않음). 양식이 아무 데도 보내지 않게(method="dialog") 함
+test('엔진이 만드는 대화 창 밖의 양식은 직접 보내지 않음(method="dialog"): 질문·보드·설문·모음·관리자 키·암호 잠금', async () => {
+  const site = { 'index.html': PAGE('<section><h2>질문</h2><div data-lp="qa"></div><div data-lp="board"></div><div data-lp="survey"></div><div data-lp="notebook"></div></section>') };
+  const r = K.assemble(site, { ...META, features: ['qa', 'board', 'survey', 'help', 'poll'] }, { runtime: rt });
+  const forms = (html) => [...String(html).matchAll(/<form\b[^>]*>/g)].map((m) => m[0]);
+  const outside = (html) => { const out = []; const re = /<(\/?)(dialog|form)\b[^>]*>/g; let depth = 0, m; while ((m = re.exec(html))) { if (m[2] === 'dialog') depth += m[1] ? -1 : 1; else if (!m[1] && depth === 0) out.push(m[0]); } return out; };
+  for (const p of ['index.html', 'console.html']) {
+    const o = outside(String(r.files[p]));
+    assert.ok(o.length >= 1, p + ': 양식이 있음 ' + forms(r.files[p]).length);
+    for (const f of o) assert.match(f, /\smethod="dialog"/, `${p}: ${f.slice(0, 80)}`);
+  }
+  const locked = await E.protectSite(r.files, '봄비연필운동장', { runtime: rt, title: '시험 연수', crypto: webcrypto, iterations: 1000 });
+  assert.match(String(locked['index.html']), /<form data-lp-lock method="dialog">/);
+});
+
+test('브라우저: 스크립트가 뜨기 전에 [들어가기]·[질문 올리기]를 눌러도 쪽이 굳지 않음(뜬 뒤에 누르면 됨, 주소에 키가 붙지 않음)', { skip, timeout: 120000 }, async () => {
+  const site = { 'index.html': PAGE('<section><h2>질문</h2><div data-lp="qa"></div></section>') };
+  const r = K.assemble(site, META, { runtime: rt });
+  await withSite(r.files, async (page, base) => {
+    const bad = []; page.on('console', (m) => { if (/form-action|Content Security Policy/i.test(m.text())) bad.push(m.text().slice(0, 80)); });
+    // 스크립트를 늦게 줌(느린 망): HTML과 양식은 먼저 보임
+    const slow = async (route) => { await new Promise((ok) => setTimeout(ok, 1800)); await route.continue(); };
+    await page.route('**/assets/console.js', slow); await page.route('**/assets/lecpage.js', slow);
+    // ① 강사 화면: 키를 넣고 바로 Enter·[들어가기]
+    await page.goto(base + 'console.html', { waitUntil: 'commit' });
+    await page.waitForSelector('#lp-key');
+    await page.fill('#lp-key', 'abcde-fghij-klmno-pqrst');
+    await page.keyboard.press('Enter');
+    await page.evaluate(() => document.querySelector('[data-key-go]').click());
+    await page.waitForFunction(() => document.readyState === 'complete', null, { timeout: 15000 });
+    assert.ok(!/key=/.test(page.url()), '주소에 키가 붙지 않음: ' + page.url());
+    assert.deepEqual(bad, [], '브라우저가 양식을 직접 보내려 하지 않음');
+    // 스크립트가 뜬 뒤 누르면 강사 화면이 답함(연습 모드는 아무 키로나 들어가고, 아니면 키가 맞지 않다고 알림 — 어느 쪽이든 굳지 않음)
+    await page.click('[data-key-go]');
+    await page.waitForFunction(() => { const m = document.querySelector('[data-console-main]'); const msg = (document.querySelector('[data-key-msg]') || {}).textContent || ''; return (m && !m.hidden) || msg.trim().length > 0; }, null, { timeout: 15000 });
+    // ② 참가자 화면: 질문을 적고 바로 [질문 올리기]
+    await page.goto(base + '?phase=during', { waitUntil: 'commit' });
+    await page.waitForSelector('[data-qa-form] textarea');
+    await page.fill('[data-qa-form] textarea', '일찍 누른 질문');
+    await page.evaluate(() => document.querySelector('[data-qa-form] [type=submit]').click());
+    await page.waitForFunction(() => document.readyState === 'complete' && document.documentElement.classList.contains('lp-dock-on'), null, { timeout: 15000 });
+    assert.deepEqual(bad, []);
+    await page.fill('[data-qa-form] textarea', '스크립트가 뜬 뒤 올린 질문');
+    await page.click('[data-qa-form] [type=submit]');
+    await page.waitForFunction(() => document.body.innerText.includes('스크립트가 뜬 뒤 올린 질문') && !document.querySelector('[data-qa-form] textarea').value, null, { timeout: 15000 });
+  });
+});

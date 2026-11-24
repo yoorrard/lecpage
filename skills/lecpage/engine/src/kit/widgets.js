@@ -22,10 +22,14 @@ export const liveOffNote = (kind) => `<p class="lp-note" data-live-off>${LIVE_OF
 export const LIVE_OFF = liveOffNote('qa');
 const liveOff = (live) => (live ? '' : LIVE_OFF);
 
+// 대화 창 밖의 양식에는 method="dialog": 스크립트가 붙기 전에(느린 망에서 HTML만 먼저 뜬 때·암호 사이트를 막 푼 직후) 누르면 브라우저가 양식을 직접 보내려 하고,
+// 보안 정책(form-action 'none')이 그것을 막으면서 쪽 읽기가 멈춰 스크립트가 끝내 돌지 않았음 — 새로 고치기 전까지 단추가 먹지 않음(2026-11-24 운영의 강사 화면에서 확인:
+// 관리자 키를 붙여 넣고 바로 [들어가기]). method="dialog"는 대화 창 밖에서는 아무 데도 보내지 않아, 일찍 누른 것은 그냥 지나가고 스크립트가 붙은 뒤 누르면 됨.
+// 강사 화면의 관리자 키 양식(render/aux-pages.js)·암호 잠금 양식(protect.js)도 같음. 대화 창 안의 양식(참여·도움 요청)은 스크립트가 연 뒤에만 보이므로 그대로
 /** 질문 받기(공감순·최신순) */
 export function qaBox({ id = 'qa', anonymous = true, live = true } = {}) {
   return `<div class="lp-qa" data-qa>
-<form class="lp-compose" data-qa-form><label class="lp-sr" for="${esc(id)}-q">질문</label><textarea id="${esc(id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 적어 주세요.${anonymous ? ' 이름은 보이지 않아요.' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
+<form class="lp-compose" data-qa-form method="dialog"><label class="lp-sr" for="${esc(id)}-q">질문</label><textarea id="${esc(id)}-q" name="text" rows="2" maxlength="500" placeholder="궁금한 점을 적어 주세요.${anonymous ? ' 이름은 보이지 않아요.' : ''}" required></textarea><div class="lp-compose-f"><small data-count>0 / 500</small><button class="lp-btn lp-btn-primary" type="submit">${icon('up')}<span>질문 올리기</span></button></div></form>
 <div class="lp-tabs" role="group" aria-label="정렬"><button type="button" aria-pressed="true" data-sort="votes">공감순</button><button type="button" aria-pressed="false" data-sort="new">최신순</button></div>
 <p class="lp-sr" role="status" data-list-news></p>
 <ul class="lp-qa-list" data-qa-list><li class="lp-empty">아직 질문이 없어요. 첫 질문을 올려 주세요.</li></ul>
@@ -37,7 +41,7 @@ export const DEFAULT_BOARD_CATS = [{ id: 'work', label: '결과물' }, { id: 're
 export function boardBox({ cats = DEFAULT_BOARD_CATS, files = false, maxFiles = 0, moderation = false, notice = '', live = true } = {}) {
   return `<div class="lp-board" data-board data-max-files="${files ? maxFiles : 0}" data-moderation="${moderation ? 1 : 0}">
 <div class="lp-board-bar"><div class="lp-tabs" role="group" aria-label="보드 분류"><button type="button" aria-pressed="true" data-cat="">전체</button>${cats.map((c) => `<button type="button" aria-pressed="false" data-cat="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div><button class="lp-btn lp-btn-primary" type="button" data-board-write>${icon('sparkle')}<span>글 올리기</span></button></div>
-<form class="lp-compose lp-board-form" data-board-form hidden>
+<form class="lp-compose lp-board-form" data-board-form method="dialog" hidden>
   <fieldset class="lp-seg"><legend class="lp-sr">분류</legend>${cats.map((c, i) => `<label><input type="radio" name="kind" value="${esc(c.id)}"${i ? '' : ' checked'}><span>${esc(c.label)}</span></label>`).join('')}</fieldset>
   <label><span class="lp-sr">내용</span><textarea name="text" rows="3" maxlength="1000" placeholder="나누고 싶은 내용을 적어 주세요" required></textarea></label>
   ${files ? `<label class="lp-file"><span>사진·PDF·음악·영상 (${maxFiles}개까지)</span><input type="file" name="files" multiple accept="image/*,application/pdf,audio/mpeg,video/mp4"></label>` : ''}
@@ -78,7 +82,7 @@ export function surveyForm(s, { named = false } = {}) {
     const opts = q.kind === 'choice' ? q.options : (q.options.length >= 2 ? q.options : SCALE_KO);
     return `<li><fieldset class="lp-sv-${q.kind === 'choice' ? 'choice' : 'scale'}" data-sv-key="${key}">${legend}<div class="lp-sv-opts">${opts.map((o, k) => `<label><input type="radio" name="${name}" value="${esc(q.kind === 'scale' ? String(k + 1) : o)}"><span>${q.kind === 'scale' ? `<b>${k + 1}</b><i>${esc(o)}</i>` : esc(o)}</span></label>`).join('')}</div></fieldset></li>`;
   }).join('');
-  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. ${named ? '입실할 때 적은 이름·소속과 함께 강사에게 모여요.' : '별명으로만 모여요.'}</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
+  return `<form class="lp-survey-form" data-survey="${esc(s.id)}" method="dialog" novalidate><ol class="lp-sv-list">${qs}</ol><div class="lp-compose-f"><small data-sv-state role="status">다시 내면 고쳐져요. ${named ? '입실할 때 적은 이름·소속과 함께 강사에게 모여요.' : '별명으로만 모여요.'}</small><button class="lp-btn lp-btn-primary" type="submit">제출하기</button></div></form>`;
 }
 
 /** '지금' 줄: 실시간 상태(열린 투표·공지·타이머·강사가 보는 실습/쪽). 보여 줄 게 없으면 숨김 */
@@ -238,7 +242,7 @@ export function stepFooter() {
 export function notebookBox({ id = 'lpk-nb' } = {}) {
   return `<div class="lp-nb" data-notebook>
 <p class="lp-small">이 사이트에서 복사한 프롬프트가 여기에 모여요. 이 기기에만 저장돼요.</p>
-<form class="lp-compose" data-nb-form><label class="lp-sr" for="${esc(id)}-t">메모</label><textarea id="${esc(id)}-t" name="text" rows="2" maxlength="4000" placeholder="고친 프롬프트나 메모를 적어 담아요" required></textarea><div class="lp-compose-f"><small data-nb-count></small><button class="lp-btn lp-btn-primary" type="submit">${icon('check')}<span>담기</span></button></div></form>
+<form class="lp-compose" data-nb-form method="dialog"><label class="lp-sr" for="${esc(id)}-t">메모</label><textarea id="${esc(id)}-t" name="text" rows="2" maxlength="4000" placeholder="고친 프롬프트나 메모를 적어 담아요" required></textarea><div class="lp-compose-f"><small data-nb-count></small><button class="lp-btn lp-btn-primary" type="submit">${icon('check')}<span>담기</span></button></div></form>
 <p class="lp-sr" role="status" data-nb-news></p>
 <ol class="lp-nb-list" data-nb-list><li class="lp-empty">아직 담은 글이 없어요. 프롬프트의 [복사]를 누르면 여기에 모여요.</li></ol>
 <div class="lp-ctas lp-nb-f"><button class="lp-btn lp-btn-primary" type="button" data-nb-save disabled>${icon('download')}<span>.txt 다운로드</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-copy disabled>${icon('copy')}<span>모두 복사</span></button><button class="lp-btn lp-btn-ghost" type="button" data-nb-clear disabled>${icon('close')}<span>모두 삭제</span></button></div>

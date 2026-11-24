@@ -70,7 +70,7 @@ ${act('data-help-open', '도움말', '연수 전·중·후에 할 일', 'chat')}
 <div class="lp-con-me">${themeBtn()}<button class="lp-btn lp-btn-ghost lp-btn-sm" type="button" data-logout hidden>${icon('logout')}<span>나가기</span></button></div>
 </div></header>
 <section class="lp-con-login" data-admin-box aria-labelledby="lp-login-h">
-<form class="lp-card lp-con-login-card" data-admin-form novalidate>
+<form class="lp-card lp-con-login-card" data-admin-form method="dialog" novalidate>
 <p class="lp-con-for"><span>강사용 화면이에요. 참가자라면</span><a class="lp-btn lp-btn-ghost lp-btn-sm" href="index.html">참가자 화면으로${icon('arrow')}</a></p>
 <div class="lp-con-login-mark" aria-hidden="true">${motif(ctx, 'login')}</div>
 <h2 id="lp-login-h">관리자 키</h2>
