@@ -236,7 +236,7 @@ async function seed(p, script) {
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-full-netlify.png' });
     L.ok('no page errors ⑨', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
-  // ⑩ 보관 기간(60일)보다 먼 연수: 알려 주는 '다시 배포할 날'은 지워지는 날보다 앞(지워진 뒤 다시 배포하면 새 주소라 QR이 끊김). 한 번으로 닿지 않으면 그렇게 말함.
+  // ⑰ 보관 기간(60일)보다 먼 연수: 알려 주는 '다시 배포할 날'은 지워지는 날보다 앞(지워진 뒤 다시 배포하면 새 주소라 QR이 끊김). 한 번으로 닿지 않으면 그렇게 말함.
   //    체크리스트와 배포 완료 카드가 같은 말 · 참여 기능 방까지 켠 바로 배포는 '내 연수' 목록에 [강사 화면]이 있음(배포한 강사 화면의 '키를 잃어버렸으면' 안내가 가리키는 곳)
   for (const [days, reach] of [[78, true], [150, false]]) {
     const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
@@ -266,9 +266,9 @@ async function seed(p, script) {
       const href = await p.locator('.ld-mine a:has-text("강사 화면")').getAttribute('href', { timeout: 5000 }).catch(() => '');
       L.ok('instant deploy with its own participation room → [강사 화면] on the 내 연수 row', /s-site1\.example\.pages\.dev\/console\.html$/.test(href || ''), String(href));
     }
-    L.ok(`no page errors ⑩-${days}`, errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+    L.ok(`no page errors ⑰-${days}`, errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
-  { // ⑪ 올리는 중에 인터넷이 끊김: '이 망에서 닿지 않아요·핫스팟'으로 바뀌거나 큰 버튼이 다른 곳(Netlify)으로 넘어가지 않고, 끊겼다는 것과 [다시 배포]가 이어서 한다는 것만. 다시 연결되면 같은 사이트에 이어서
+  { // ⑱ 올리는 중에 인터넷이 끊김: '이 망에서 닿지 않아요·핫스팟'으로 바뀌거나 큰 버튼이 다른 곳(Netlify)으로 넘어가지 않고, 끊겼다는 것과 [다시 배포]가 이어서 한다는 것만. 다시 연결되면 같은 사이트에 이어서
     const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true, takeAll: true, reachable: true });
     const p = await ctx.newPage(); const errs = L.watch(p);
     await seed(p, false);
@@ -292,7 +292,7 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('back online: [다시 배포] finishes on the same site (no second site)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
-    L.ok('no page errors ⑪', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+    L.ok('no page errors ⑱', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   // 진짜 서버의 한도(pages 보기): 사이트 300MB·3,000개·파일 하나 20MB, 작은 파일(512KB 이하)은 8MiB씩 묶어 받음
   const REAL_LIMITS = { maxBytes: 300 * 1024 * 1024, maxFileBytes: 20 * 1024 * 1024, maxFiles: 3000, days: 60, bundle: { bytes: 8 * 1024 * 1024, itemBytes: 512 * 1024, files: 700 } };
